@@ -1,11 +1,11 @@
 export default async function menudown(prefix, botName = "MeuBot", userName = "Usuário", {
-    header = `╭┈⊰ 🌸 『 *${botName}* 』\n┊Olá, #user#!\n╰─┈┈┈┈┈◜❁◞┈┈┈┈┈─╯`,
-    menuTopBorder = "╭┈",
-    bottomBorder = "╰─┈┈┈┈┈◜❁◞┈┈┈┈┈─╯",
+    header = `╭──────────────────────────────────────────────╮⊰ 🌸 『 *${botName}* 』\n│Olá, #user#!\n╰──────────────────────────────────────────────╯`,
+    menuTopBorder = "╭──────────────────────────────────────────────╮",
+    bottomBorder = "╰──────────────────────────────────────────────╯",
     menuTitleIcon = "🍧ฺꕸ▸",
     menuItemIcon = "•.̇𖥨֗🍓⭟",
     separatorIcon = "❁",
-    middleBorder = "┊",
+    middleBorder = "│",
     searchMenuTitle = "🔍 PESQUISAS & CONSULTAS",
     audioMenuTitle = "🎵 MÚSICA & ÁUDIO", 
     videoMenuTitle = "🎬 VÍDEOS & STREAMING",
@@ -16,7 +16,8 @@ export default async function menudown(prefix, botName = "MeuBot", userName = "U
     const formattedHeader = header.replace(/#user#/g, userName);
     return `${formattedHeader}
 
-${menuTopBorder}${separatorIcon} *${searchMenuTitle}*
+${menuTopBorder}
+│ ${searchMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}google
 ${middleBorder}${menuItemIcon}${prefix}noticias
@@ -25,7 +26,8 @@ ${middleBorder}${menuItemIcon}${prefix}dicionario
 ${middleBorder}${menuItemIcon}${prefix}wikipedia
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${audioMenuTitle}*
+${menuTopBorder}
+│ ${audioMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}letra
 ${middleBorder}${menuItemIcon}${prefix}play
@@ -35,12 +37,14 @@ ${middleBorder}${menuItemIcon}${prefix}spotify
 ${middleBorder}${menuItemIcon}${prefix}soundcloud
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${videoMenuTitle}*
+${menuTopBorder}
+│ ${videoMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}playvid
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${downloadMenuTitle}*
+${menuTopBorder}
+│ ${downloadMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}tiktok
 ${middleBorder}${menuItemIcon}${prefix}instagram
@@ -52,12 +56,14 @@ ${middleBorder}${menuItemIcon}${prefix}mediafire
 ${middleBorder}${menuItemIcon}${prefix}twitter
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${mediaMenuTitle}*
+${menuTopBorder}
+│ ${mediaMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}pinterest
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${gamesMenuTitle}*
+${menuTopBorder}
+│ ${gamesMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}mcplugin
 ${bottomBorder}

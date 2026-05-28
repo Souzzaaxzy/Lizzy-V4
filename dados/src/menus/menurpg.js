@@ -1,11 +1,11 @@
 export default async function menurpg(prefix, botName = "MeuBot", userName = "Usuário", {
-    header = `╭┈⊰ ⚔️ 『 *MODO RPG* 』\n┊Olá, #user#!\n╰─┈┈┈┈┈◜⚔️◞┈┈┈┈┈─╯`,
-    menuTopBorder = "╭┈",
+    header = `╭──────────────────────────────────────────────╮⊰ ⚔️ 『 *MODO RPG* 』\n│Olá, #user#!\n╰─┈┈┈┈┈◜⚔️◞┈┈┈┈┈─╯`,
+    menuTopBorder = "╭──────────────────────────────────────────────╮",
     bottomBorder = "╰─┈┈┈┈┈◜⚔️◞┈┈┈┈┈─╯",
     menuTitleIcon = "⚔️ฺꕸ▸",
     menuItemIcon = "•.̇𖥨֗✨⭟",
     separatorIcon = "⚔️",
-    middleBorder = "┊",
+    middleBorder = "│",
     profileMenuTitle = "👤 PERFIL & STATUS",
     economyMenuTitle = "💰 ECONOMIA & FINANÇAS",
     activitiesMenuTitle = "🎯 ATIVIDADES DIÁRIAS",
@@ -28,7 +28,8 @@ export default async function menurpg(prefix, botName = "MeuBot", userName = "Us
   const h = header.replace(/#user#/g, userName);
     return `${h} 
 
-${menuTopBorder}${separatorIcon} *${profileMenuTitle}*
+${menuTopBorder}
+│ ${profileMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}perfilrpg
 ${middleBorder}${menuItemIcon}${prefix}carteira
@@ -40,7 +41,8 @@ ${middleBorder}${menuItemIcon}${prefix}equipamentos
 ${middleBorder}${menuItemIcon}${prefix}conquistas
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${evolutionMenuTitle}*
+${menuTopBorder}
+│ ${evolutionMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}evoluir
 ${middleBorder}${menuItemIcon}${prefix}prestige
@@ -49,7 +51,8 @@ ${middleBorder}${menuItemIcon}${prefix}reivindicar
 ${middleBorder}${menuItemIcon}${prefix}speedup
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${economyMenuTitle}*
+${menuTopBorder}
+│ ${economyMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}dep <valor|all>
 ${middleBorder}${menuItemIcon}${prefix}sacar <valor|all>
@@ -65,14 +68,16 @@ ${middleBorder}${menuItemIcon}${prefix}desafiosemanal
 ${middleBorder}${menuItemIcon}${prefix}desafiomensal
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${investmentMenuTitle}*
+${menuTopBorder}
+│ ${investmentMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}investir
 ${middleBorder}${menuItemIcon}${prefix}investir <ação> <qtd>
 ${middleBorder}${menuItemIcon}${prefix}sell <ação> <qtd>
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${gamblingMenuTitle}*
+${menuTopBorder}
+│ ${gamblingMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}dados <valor>
 ${middleBorder}${menuItemIcon}${prefix}coinflip <cara|coroa> <valor>
@@ -88,7 +93,8 @@ ${middleBorder}${menuItemIcon}${prefix}leilao
 ${middleBorder}${menuItemIcon}${prefix}topriqueza
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${activitiesMenuTitle}*
+${menuTopBorder}
+│ ${activitiesMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}diario
 ${middleBorder}${menuItemIcon}${prefix}work
@@ -108,7 +114,8 @@ ${middleBorder}${menuItemIcon}${prefix}vendercomida <item>
 ${middleBorder}${menuItemIcon}${prefix}sementes
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${adventureMenuTitle}*
+${menuTopBorder}
+│ ${adventureMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}explore
 ${middleBorder}${menuItemIcon}${prefix}masmorra
@@ -116,7 +123,8 @@ ${middleBorder}${menuItemIcon}${prefix}bossrpg
 ${middleBorder}${menuItemIcon}${prefix}eventos
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *🏰 DUNGEONS & RAIDS*
+${menuTopBorder}
+│ 🏰 DUNGEONS & RAIDS
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}dungeon - Listar dungeons
 ${middleBorder}${menuItemIcon}${prefix}dungeon criar <tipo>
@@ -125,13 +133,15 @@ ${middleBorder}${menuItemIcon}${prefix}dungeon iniciar
 ${middleBorder}${menuItemIcon}${prefix}dungeon sair
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *⚔️ CLASSES & PROFISSÕES*
+${menuTopBorder}
+│ ⚔️ CLASSES & PROFISSÕES
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}class - Ver classes
 ${middleBorder}${menuItemIcon}${prefix}class <nome> - Escolher
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *🏠 HOUSING*
+${menuTopBorder}
+│ 🏠 HOUSING
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}casa - Ver sua casa
 ${middleBorder}${menuItemIcon}${prefix}casa comprar <tipo>
@@ -139,7 +149,8 @@ ${middleBorder}${menuItemIcon}${prefix}casa coletar
 ${middleBorder}${menuItemIcon}${prefix}casa decorar <item>
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *🛒 MERCADO DE JOGADORES*
+${menuTopBorder}
+│ 🛒 MERCADO DE JOGADORES
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}auction - Ver itens
 ${middleBorder}${menuItemIcon}${prefix}auction vender <item> <preço>
@@ -155,7 +166,8 @@ ${middleBorder}${menuItemIcon}${prefix}meusan
 ${middleBorder}${menuItemIcon}${prefix}cancelar <nº>
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${combatMenuTitle}*
+${menuTopBorder}
+│ ${combatMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}duelrpg @user
 ${middleBorder}${menuItemIcon}${prefix}arena
@@ -166,7 +178,8 @@ ${middleBorder}${menuItemIcon}${prefix}guerra
 ${middleBorder}${menuItemIcon}${prefix}desafio
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${craftingMenuTitle}*
+${menuTopBorder}
+│ ${craftingMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}forge <item>
 ${middleBorder}${menuItemIcon}${prefix}enchant
@@ -176,7 +189,8 @@ ${middleBorder}${menuItemIcon}${prefix}materiais
 ${middleBorder}${menuItemIcon}${prefix}precos
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${socialMenuTitle}*
+${menuTopBorder}
+│ ${socialMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}casar @user
 ${middleBorder}${menuItemIcon}${prefix}divorciar
@@ -190,7 +204,8 @@ ${middleBorder}${menuItemIcon}${prefix}baterrpg @user
 ${middleBorder}${menuItemIcon}${prefix}proteger @user
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${familyMenuTitle}*
+${menuTopBorder}
+│ ${familyMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}familia
 ${middleBorder}${menuItemIcon}${prefix}adotaruser @user
@@ -198,7 +213,8 @@ ${middleBorder}${menuItemIcon}${prefix}deserdar @user
 ${middleBorder}${menuItemIcon}${prefix}arvore
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${guildMenuTitle}*
+${menuTopBorder}
+│ ${guildMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}criarcla <nome>
 ${middleBorder}${menuItemIcon}${prefix}cla
@@ -210,13 +226,15 @@ ${middleBorder}${menuItemIcon}${prefix}expulsar @user
 ${middleBorder}${menuItemIcon}${prefix}rmconvite @user
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${questMenuTitle}*
+${menuTopBorder}
+│ ${questMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}missoes
 ${middleBorder}${menuItemIcon}${prefix}conquistas
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${petsMenuTitle}*
+${menuTopBorder}
+│ ${petsMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}pets
 ${middleBorder}${menuItemIcon}${prefix}adotar <pet>
@@ -230,18 +248,21 @@ ${middleBorder}${menuItemIcon}${prefix}equippet <nº> <nome do item>
 ${middleBorder}${menuItemIcon}${prefix}unequippet <nº> <slot?>
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${reputationMenuTitle}*
+${menuTopBorder}
+│ ${reputationMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}rep
 ${middleBorder}${menuItemIcon}${prefix}vote @user
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${eventsMenuTitle}*
+${menuTopBorder}
+│ ${eventsMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}eventos
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${premiumMenuTitle}*
+${menuTopBorder}
+│ ${premiumMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}lojapremium
 ${middleBorder}${menuItemIcon}${prefix}comprarpremium <item>
@@ -255,7 +276,8 @@ ${middleBorder}${menuItemIcon}${prefix}doar <valor>
 ${middleBorder}${menuItemIcon}${prefix}presente @user <item>
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${adminMenuTitle}*
+${menuTopBorder}
+│ ${adminMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}rpgadd @user <valor>
 ${middleBorder}${menuItemIcon}${prefix}rpgremove @user <valor>

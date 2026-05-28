@@ -4,12 +4,12 @@ import { groupVipCommandsByCategory, getVipStats } from '../utils/vipCommandsMan
  * Gera o menu VIP dinamicamente baseado nos comandos cadastrados
  */
 async function menuVIP(prefix, botName = "MeuBot", userName = "Usuário", {
-  header = `╭┈⊰ 🌸 『 *${botName}* 』\n┊Olá, #user#!\n╰─┈┈┈┈┈◜❁◞┈┈┈┈┈─╯`,
-  menuTopBorder = "╭┈",
-  bottomBorder = "╰─┈┈┈┈┈◜❁◞┈┈┈┈┈─╯",
+  header = `╭──────────────────────────────────────────────╮⊰ 🌸 『 *${botName}* 』\n│Olá, #user#!\n╰──────────────────────────────────────────────╯`,
+  menuTopBorder = "╭──────────────────────────────────────────────╮",
+  bottomBorder = "╰──────────────────────────────────────────────╯",
   menuItemIcon = "•.̇𖥨֗🍓⭟",
   separatorIcon = "❁",
-  middleBorder = "┊"
+  middleBorder = "│"
 } = {}) {
   try {
     const grouped = groupVipCommandsByCategory();
@@ -21,7 +21,8 @@ async function menuVIP(prefix, botName = "MeuBot", userName = "Usuário", {
 `;
 
     if (stats.active === 0) {
-      menu += `${menuTopBorder}${separatorIcon} *👑 COMANDOS VIP*
+      menu += `${menuTopBorder}
+│ 👑 COMANDOS VIP
 ${middleBorder}
 ${middleBorder}📭 Nenhum comando cadastrado
 ${middleBorder}
@@ -33,14 +34,16 @@ ${bottomBorder}
     }
 
     Object.entries(grouped).forEach(([categoryKey, categoryData]) => {
-      menu += `${menuTopBorder}${separatorIcon} *${categoryData.label}*\n${middleBorder}\n`;
+      menu += `${menuTopBorder}
+│ ${categoryData.label}\n${middleBorder}\n`;
       categoryData.commands.forEach((cmd) => {
         menu += `${middleBorder}${menuItemIcon}${prefix}${cmd.command}\n`;
       });
       menu += `${bottomBorder}\n\n`;
     });
 
-    menu += `${menuTopBorder}${separatorIcon} *ℹ️ INFORMAÇÕES VIP*
+    menu += `${menuTopBorder}
+│ ℹ️ INFORMAÇÕES VIP
 ${middleBorder}
 ${middleBorder}• Comandos: ${stats.active}
 ${middleBorder}• Categorias: ${stats.categories}
@@ -57,18 +60,19 @@ ${bottomBorder}
 }
 
 async function menuVIPInfo(prefix, botName = "MeuBot", userName = "Usuário", {
-  header = `╭┈⊰ 🌸 『 *${botName}* 』\n┊Olá, #user#!\n╰─┈┈┈┈┈◜❁◞┈┈┈┈┈─╯`,
-  menuTopBorder = "╭┈",
-  bottomBorder = "╰─┈┈┈┈┈◜❁◞┈┈┈┈┈─╯",
+  header = `╭──────────────────────────────────────────────╮⊰ 🌸 『 *${botName}* 』\n│Olá, #user#!\n╰──────────────────────────────────────────────╯`,
+  menuTopBorder = "╭──────────────────────────────────────────────╮",
+  bottomBorder = "╰──────────────────────────────────────────────╯",
   separatorIcon = "❁",
-  middleBorder = "┊"
+  middleBorder = "│"
 } = {}) {
   const stats = getVipStats();
   const formattedHeader = header.replace(/#user#/g, userName);
   
   let info = `${formattedHeader}
 
-${menuTopBorder}${separatorIcon} *📊 ESTATÍSTICAS*
+${menuTopBorder}
+│ 📊 ESTATÍSTICAS
 ${middleBorder}
 ${middleBorder}• Ativos: ${stats.active}
 ${middleBorder}• Inativos: ${stats.inactive}
@@ -76,14 +80,16 @@ ${middleBorder}• Total: ${stats.total}
 ${middleBorder}• Categorias: ${stats.categories}
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *💎 COMO SER VIP*
+${menuTopBorder}
+│ 💎 COMO SER VIP
 ${middleBorder}
 ${middleBorder}1. Contate o dono
 ${middleBorder}2. ${prefix}dono
 ${middleBorder}3. Solicite acesso VIP
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *✨ BENEFÍCIOS*
+${menuTopBorder}
+│ ✨ BENEFÍCIOS
 ${middleBorder}
 ${middleBorder}✅ Comandos exclusivos
 ${middleBorder}✅ Sem limites
@@ -96,12 +102,12 @@ ${bottomBorder}
 }
 
 async function listVIPCommands(prefix, botName = "MeuBot", userName = "Usuário", {
-  header = `╭┈⊰ 🌸 『 *${botName}* 』\n┊Olá, #user#!\n╰─┈┈┈┈┈◜❁◞┈┈┈┈┈─╯`,
-  menuTopBorder = "╭┈",
-  bottomBorder = "╰─┈┈┈┈┈◜❁◞┈┈┈┈┈─╯",
+  header = `╭──────────────────────────────────────────────╮⊰ 🌸 『 *${botName}* 』\n│Olá, #user#!\n╰──────────────────────────────────────────────╯`,
+  menuTopBorder = "╭──────────────────────────────────────────────╮",
+  bottomBorder = "╰──────────────────────────────────────────────╯",
   menuItemIcon = "•.̇𖥨֗🍓⭟",
   separatorIcon = "❁",
-  middleBorder = "┊"
+  middleBorder = "│"
 } = {}) {
   const grouped = groupVipCommandsByCategory();
   const stats = getVipStats();
@@ -117,7 +123,8 @@ Categorias: download, diversao, utilidade, ia, editor, info, outros`;
   
   let list = `${formattedHeader}
 
-${menuTopBorder}${separatorIcon} *👑 COMANDOS VIP*
+${menuTopBorder}
+│ 👑 COMANDOS VIP
 ${middleBorder}
 ${middleBorder}Total: ${stats.active}
 ${middleBorder}Categorias: ${stats.categories}
@@ -126,7 +133,8 @@ ${bottomBorder}
 `;
 
   Object.entries(grouped).forEach(([categoryKey, categoryData]) => {
-    list += `${menuTopBorder}${separatorIcon} *${categoryData.label}*\n${middleBorder}\n`;
+    list += `${menuTopBorder}
+│ ${categoryData.label}\n${middleBorder}\n`;
     categoryData.commands.forEach((cmd) => {
       list += `${middleBorder}${menuItemIcon}${cmd.command}\n`;
       list += `${middleBorder}   └─ ${cmd.description}\n`;

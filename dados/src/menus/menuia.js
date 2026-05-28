@@ -1,11 +1,11 @@
 export default async function menuIa(prefix, botName = "MeuBot", userName = "Usuário", {
-    header = `╭┈⊰ 🌸 『 *${botName}* 』\n┊Olá, #user#!\n╰─┈┈┈┈┈◜❁◞┈┈┈┈┈─╯`,
-    menuTopBorder = "╭┈",
-    bottomBorder = "╰─┈┈┈┈┈◜❁◞┈┈┈┈┈─╯",
+    header = `╭──────────────────────────────────────────────╮⊰ 🌸 『 *${botName}* 』\n│Olá, #user#!\n╰──────────────────────────────────────────────╯`,
+    menuTopBorder = "╭──────────────────────────────────────────────╮",
+    bottomBorder = "╰──────────────────────────────────────────────╯",
     menuTitleIcon = "🍧ฺꕸ▸",
     menuItemIcon = "•.̇𖥨֗🍓⭟",
     separatorIcon = "❁",
-    middleBorder = "┊",
+    middleBorder = "│",
     chatBotMenuTitle = "🤖 CHATBOTS INTELIGENTES",
     textMenuTitle = "✍️ GERAÇÃO DE TEXTO",
     toolsMenuTitle = "🛠️ FERRAMENTAS DE IA"
@@ -13,7 +13,8 @@ export default async function menuIa(prefix, botName = "MeuBot", userName = "Usu
     const formattedHeader = header.replace(/#user#/g, userName);
     return `${formattedHeader}
 
-${menuTopBorder}${separatorIcon} *${chatBotMenuTitle}*
+${menuTopBorder}
+│ ${chatBotMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}gemma
 ${middleBorder}${menuItemIcon}${prefix}gemma2
@@ -32,7 +33,8 @@ ${middleBorder}${menuItemIcon}${prefix}kimi
 ${middleBorder}${menuItemIcon}${prefix}kimik2
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${textMenuTitle}*
+${menuTopBorder}
+│ ${textMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}cog
 ${middleBorder}${menuItemIcon}${prefix}mistral
@@ -45,7 +47,8 @@ ${middleBorder}${menuItemIcon}${prefix}swallow
 ${middleBorder}${menuItemIcon}${prefix}falcon
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${toolsMenuTitle}*
+${menuTopBorder}
+│ ${toolsMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}ideias
 ${middleBorder}${menuItemIcon}${prefix}explicar
@@ -56,12 +59,14 @@ ${middleBorder}${menuItemIcon}${prefix}resumirchat <qtd>
 ${middleBorder}${menuItemIcon}${prefix}recomendar <tipo> <gênero>
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *💬 DEBATES & ARGUMENTAÇÃO*
+${menuTopBorder}
+│ 💬 DEBATES & ARGUMENTAÇÃO
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}debater <tema>
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *📖 HISTÓRIAS INTERATIVAS*
+${menuTopBorder}
+│ 📖 HISTÓRIAS INTERATIVAS
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}aventura <gênero>
 ${middleBorder}${menuItemIcon}${prefix}aventura escolha <1/2/3>

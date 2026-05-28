@@ -1,11 +1,11 @@
 async function menuDono(prefix, botName = "MeuBot", userName = "Usuário", {
-    header = `╭┈⊰ 🌸 『 *${botName}* 』\n┊Olá, #user#!\n╰─┈┈┈┈┈◜❁◞┈┈┈┈┈─╯`,
-    menuTopBorder = "╭┈",
-    bottomBorder = "╰─┈┈┈┈┈◜❁◞┈┈┈┈┈─╯",
+    header = `╭──────────────────────────────────────────────╮⊰ 🌸 『 *${botName}* 』\n│Olá, #user#!\n╰──────────────────────────────────────────────╯`,
+    menuTopBorder = "╭──────────────────────────────────────────────╮",
+    bottomBorder = "╰──────────────────────────────────────────────╯",
     menuTitleIcon = "🍧ฺꕸ▸",
     menuItemIcon = "•.̇𖥨֗🍓⭟",
     separatorIcon = "❁",
-    middleBorder = "┊",
+    middleBorder = "│",
     botConfigMenuTitle = "🤖 CONFIGURAÇÕES DO BOT",
     menuDesignMenuTitle = "🎨 DESIGN & APARÊNCIA",
     automationMenuTitle = "⚙️ SISTEMA & AUTOMAÇÃO",
@@ -22,12 +22,14 @@ async function menuDono(prefix, botName = "MeuBot", userName = "Usuário", {
     const formattedHeader = header.replace(/#user#/g, userName);
     return `${formattedHeader}
 
-${menuTopBorder}${separatorIcon} *📚 INÍCIO*
+${menuTopBorder}
+│ 📚 INÍCIO
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}tutorial
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${botConfigMenuTitle}*
+${menuTopBorder}
+│ ${botConfigMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}prefixo
 ${middleBorder}${menuItemIcon}${prefix}numerodono
@@ -44,7 +46,8 @@ ${middleBorder}${menuItemIcon}${prefix}lermais
 ${middleBorder}${menuItemIcon}${prefix}personalizargrupo
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${menuDesignMenuTitle}*
+${menuTopBorder}
+│ ${menuDesignMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}designmenu
 ${middleBorder}${menuItemIcon}${prefix}setborda
@@ -57,7 +60,8 @@ ${middleBorder}${menuItemIcon}${prefix}setheader
 ${middleBorder}${menuItemIcon}${prefix}resetdesign
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${automationMenuTitle}*
+${menuTopBorder}
+│ ${automationMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}addauto
 ${middleBorder}${menuItemIcon}${prefix}addautomidia
@@ -71,7 +75,8 @@ ${middleBorder}${menuItemIcon}${prefix}listnopref
 ${middleBorder}${menuItemIcon}${prefix}delnopref
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${commandCustomMenuTitle}*
+${menuTopBorder}
+│ ${commandCustomMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}addcmd
 ${middleBorder}${menuItemIcon}${prefix}addcmdmidia
@@ -88,14 +93,16 @@ ${middleBorder}${menuItemIcon}${prefix}listblackglobal
 ${middleBorder}${menuItemIcon}${prefix}rmblackglobal
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${commandLimitingMenuTitle}*
+${menuTopBorder}
+│ ${commandLimitingMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}cmdlimitar
 ${middleBorder}${menuItemIcon}${prefix}cmddeslimitar
 ${middleBorder}${menuItemIcon}${prefix}cmdlimites
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${userManagementMenuTitle}*
+${menuTopBorder}
+│ ${userManagementMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}addsubdono
 ${middleBorder}${menuItemIcon}${prefix}delsubdono
@@ -115,7 +122,8 @@ ${middleBorder}${menuItemIcon}${prefix}unbangp
 ${middleBorder}${menuItemIcon}${prefix}listbangp
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${rentalSystemMenuTitle}*
+${menuTopBorder}
+│ ${rentalSystemMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}modoaluguel
 ${middleBorder}${menuItemIcon}${prefix}addaluguel
@@ -131,7 +139,8 @@ ${middleBorder}${menuItemIcon}${prefix}setdiv
 ${middleBorder}${menuItemIcon}${prefix}divulgar
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${subBotsMenuTitle}*
+${menuTopBorder}
+│ ${subBotsMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}addsubbot
 ${middleBorder}${menuItemIcon}${prefix}removesubbot
@@ -141,7 +150,8 @@ ${middleBorder}
 ${middleBorder}🔑 Sub-bot use: ${prefix}gerarcodigo
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${vipSystemMenuTitle}*
+${menuTopBorder}
+│ ${vipSystemMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}addcmdvip
 ${middleBorder}${menuItemIcon}${prefix}removecmdvip
@@ -152,7 +162,8 @@ ${middleBorder}${menuItemIcon}${prefix}menuvip
 ${middleBorder}${menuItemIcon}${prefix}infovip
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${botControlMenuTitle}*
+${menuTopBorder}
+│ ${botControlMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}atualizar
 ${middleBorder}${menuItemIcon}${prefix}reiniciar
@@ -168,7 +179,8 @@ ${middleBorder}${menuItemIcon}${prefix}listblocks
 ${middleBorder}${menuItemIcon}${prefix}antibanmarcar
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${monitoringMenuTitle}*
+${menuTopBorder}
+│ ${monitoringMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}listagp
 ${middleBorder}${menuItemIcon}${prefix}antipv
@@ -189,7 +201,8 @@ ${middleBorder}${menuItemIcon}${prefix}nuke
 ${middleBorder}${menuItemIcon}${prefix}msgprefix
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${broadcastMenuTitle}*
+${menuTopBorder}
+│ ${broadcastMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuTitleIcon} *Transmissão em Grupos:*
 ${middleBorder}${menuItemIcon}${prefix}tm

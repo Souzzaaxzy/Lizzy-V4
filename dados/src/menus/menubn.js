@@ -1,11 +1,11 @@
 export default async function menubn(prefix, botName = "MeuBot", userName = "Usuário", isLiteMode = false, {
-    header = `╭┈⊰ 🌸 『 *${botName}* 』\n┊Olá, #user#!\n╰─┈┈┈┈┈◜❁◞┈┈┈┈┈─╯`,
-    menuTopBorder = "╭┈",
-    bottomBorder = "╰─┈┈┈┈┈◜❁◞┈┈┈┈┈─╯",
+    header = `╭──────────────────────────────────────────────╮⊰ 🌸 『 *${botName}* 』\n│Olá, #user#!\n╰──────────────────────────────────────────────╯`,
+    menuTopBorder = "╭──────────────────────────────────────────────╮",
+    bottomBorder = "╰──────────────────────────────────────────────╯",
     menuTitleIcon = "🍧ฺꕸ▸",
     menuItemIcon = "•.̇𖥨֗🍓⭟",
     separatorIcon = "❁",
-    middleBorder = "┊",
+    middleBorder = "│",
     gamesMenuTitle = "🎮 JOGOS & DIVERSÃO 🎲",
     phrasesMenuTitle = "💬 FRASES & TEXTOS 📜",
     interactionsMenuTitle = "💬 INTERAÇÕES SOCIAIS 🤝",
@@ -19,7 +19,8 @@ export default async function menubn(prefix, botName = "MeuBot", userName = "Usu
     const formattedHeader = header.replace(/#user#/g, userName);
     let menuContent = `${formattedHeader}
 
-${menuTopBorder}${separatorIcon} *${gamesMenuTitle}*
+${menuTopBorder}
+│ ${gamesMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}tictactoe @user
 ${middleBorder}${menuItemIcon}${prefix}connect4 @user
@@ -50,7 +51,8 @@ ${middleBorder}${menuItemIcon}${prefix}sn
 ${middleBorder}${menuItemIcon}${prefix}ppt${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}suicidio`}
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${phrasesMenuTitle}*
+${menuTopBorder}
+│ ${phrasesMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}conselho
 ${middleBorder}${menuItemIcon}${prefix}conselhobiblico
@@ -63,7 +65,8 @@ ${middleBorder}${menuItemIcon}${prefix}reflexao
 ${middleBorder}${menuItemIcon}${prefix}fato
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${interactionsMenuTitle}*
+${menuTopBorder}
+│ ${interactionsMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}chute
 ${middleBorder}${menuItemIcon}${prefix}chutar
@@ -87,7 +90,8 @@ ${bottomBorder}
 `;
     if (!isLiteMode) {
         menuContent += `
-${menuTopBorder}${separatorIcon} *${hotInteractionsMenuTitle}*
+${menuTopBorder}
+│ ${hotInteractionsMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}surubao
 ${middleBorder}${menuItemIcon}${prefix}sexo
@@ -102,7 +106,8 @@ ${bottomBorder}
 `;
     }
     menuContent += `
-${menuTopBorder}${separatorIcon} *${maleFunMenuTitle}*
+${menuTopBorder}
+│ ${maleFunMenuTitle}
 ${middleBorder}
 ${isLiteMode ? '' : `${middleBorder}${menuItemIcon}${prefix}gay\n`}${middleBorder}${menuItemIcon}${prefix}burro
 ${middleBorder}${menuItemIcon}${prefix}inteligente
@@ -117,7 +122,8 @@ ${middleBorder}${menuItemIcon}${prefix}pobre${isLiteMode ? '' : `\n${middleBorde
 ${middleBorder}${menuItemIcon}${prefix}safado
 ${middleBorder}${menuItemIcon}${prefix}vesgo
 
-${menuTopBorder}${separatorIcon} *${relationshipMenuTitle}*
+${menuTopBorder}
+│ ${relationshipMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}brincadeira
 ${middleBorder}${menuItemIcon}${prefix}namoro
@@ -216,7 +222,8 @@ ${middleBorder}${menuItemIcon}${prefix}vencedor
 ${middleBorder}${menuItemIcon}${prefix}senhor
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${femaleFunMenuTitle}*
+${menuTopBorder}
+│ ${femaleFunMenuTitle}
 ${middleBorder}
 ${isLiteMode ? '' : `${middleBorder}${menuItemIcon}${prefix}lesbica\n`}${middleBorder}${menuItemIcon}${prefix}burra
 ${middleBorder}${menuItemIcon}${prefix}inteligente
@@ -342,7 +349,8 @@ ${middleBorder}${menuItemIcon}${prefix}vencedora
 ${middleBorder}${menuItemIcon}${prefix}senhora
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${maleRanksMenuTitle}*
+${menuTopBorder}
+│ ${maleRanksMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}rankgay
 ${middleBorder}${menuItemIcon}${prefix}rankburro
@@ -370,7 +378,8 @@ ${middleBorder}${menuItemIcon}${prefix}rankpoderoso
 ${middleBorder}${menuItemIcon}${prefix}rankvencedor
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${femaleRanksMenuTitle}*
+${menuTopBorder}
+│ ${femaleRanksMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}ranklesbica
 ${middleBorder}${menuItemIcon}${prefix}rankburra

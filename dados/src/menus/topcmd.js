@@ -1,11 +1,11 @@
 async function menuTopCmd(prefix, botName = "MeuBot", userName = "Usuário", topCommands = [], {
-    header = `╭┈⊰ 🌸 『 *${botName}* 』\n┊Olá, #user#!\n╰─┈┈┈┈┈◜❁◞┈┈┈┈┈─╯`,
-    menuTopBorder = "╭┈",
-    bottomBorder = "╰─┈┈┈┈┈◜❁◞┈┈┈┈┈─╯",
+    header = `╭──────────────────────────────────────────────╮⊰ 🌸 『 *${botName}* 』\n│Olá, #user#!\n╰──────────────────────────────────────────────╯`,
+    menuTopBorder = "╭──────────────────────────────────────────────╮",
+    bottomBorder = "╰──────────────────────────────────────────────╯",
     menuTitleIcon = "🍧ฺꕸ▸",
     menuItemIcon = "•.̇𖥨֗🍓⭟",
     separatorIcon = "❁",
-    middleBorder = "┊",
+    middleBorder = "│",
     topCommandsMenuTitle = "MAIS USADOS",
     infoSectionTitle = "Informações"
 } = {}) {
@@ -13,7 +13,8 @@ async function menuTopCmd(prefix, botName = "MeuBot", userName = "Usuário", top
     if (!topCommands || topCommands.length === 0) {
         return `${formattedHeader}
 
-${menuTopBorder}${separatorIcon} *${topCommandsMenuTitle}*
+${menuTopBorder}
+│ ${topCommandsMenuTitle}
 ${middleBorder}
 ${middleBorder} Nenhum comando foi registrado ainda.
 ${middleBorder} Use ${prefix}menu para ver a lista
@@ -30,7 +31,8 @@ ${bottomBorder}
     return `
 ${formattedHeader}
 
-${menuTopBorder}${separatorIcon} *Top ${topCommands.length} Comandos*
+${menuTopBorder}
+│ Top ${topCommands.length} Comandos
 ${commandsList}
 ${middleBorder}
 ${middleBorder}╭─▸ *${infoSectionTitle}:*

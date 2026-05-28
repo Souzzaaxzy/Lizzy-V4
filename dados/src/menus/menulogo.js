@@ -1,18 +1,19 @@
 export default async function menuLogos(prefix, botName = "MeuBot", userName = "Usuário", {
-    header = `╭┈⊰ 🌸 『 *${botName}* 』\n┊Olá, #user#!\n╰─┈┈┈┈┈◜❁◞┈┈┈┈┈─╯`,
-    menuTopBorder = "╭┈",
-    bottomBorder = "╰─┈┈┈┈┈◜❁◞┈┈┈┈┈─╯",
+    header = `╭──────────────────────────────────────────────╮⊰ 🌸 『 *${botName}* 』\n│Olá, #user#!\n╰──────────────────────────────────────────────╯`,
+    menuTopBorder = "╭──────────────────────────────────────────────╮",
+    bottomBorder = "╰──────────────────────────────────────────────╯",
     menuTitleIcon = "🍧ฺꕸ▸",
     menuItemIcon = "•.̇𖥨֗🍓⭟",
     separatorIcon = "❁",
-    middleBorder = "┊",
+    middleBorder = "│",
     Logos1txtTitle = "🎨 LOGOTIPOS 1TXT",
     Logos2txtTitle = "🖼 LOGOTIPOS 2TXT"
 } = {}) {
     const formattedHeader = header.replace(/#user#/g, userName);
     return `${formattedHeader}
 
-${menuTopBorder}${separatorIcon} *${Logos1txtTitle}*
+${menuTopBorder}
+│ ${Logos1txtTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}amongus
 ${middleBorder}${menuItemIcon}${prefix}royal
@@ -50,7 +51,8 @@ ${middleBorder}${menuItemIcon}${prefix}pubgavatar
 ${middleBorder}${menuItemIcon}${prefix}comics
 ${bottomBorder}
 
-${menuTopBorder}${separatorIcon} *${Logos2txtTitle}*
+${menuTopBorder}
+│ ${Logos2txtTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}pornhub
 ${middleBorder}${menuItemIcon}${prefix}avengers
