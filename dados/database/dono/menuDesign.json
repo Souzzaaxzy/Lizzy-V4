@@ -1,9 +1,9 @@
 {
-  "header": "╭┈⊰ 💜 『 *{botName}* 』\n┊Olá, {userName}!\n╰─┈┈┈┈┈◜❁◞┈┈┈┈┈─╯",
+  "header": "╭┈⊰ 👾 『 *{botName}* 』\n┊ola, {userName}!\n╰─┈┈┈┈┈◜❁◞┈┈┈┈┈─╯",
   "menuTopBorder": "╭┈",
   "bottomBorder": "╰─┈┈┈┈┈◜❁◞┈┈┈┈┈─╯",
   "menuTitleIcon": "🍧ฺꕸ▸",
-  "menuItemIcon": "💜",
+  "menuItemIcon": "👾",
   "separatorIcon": "❁",
   "middleBorder": "┊"
 }
