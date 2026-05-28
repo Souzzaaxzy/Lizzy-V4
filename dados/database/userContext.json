@@ -1,0 +1,244 @@
+{
+  "278696501993618@lid_nazuna": {
+    "userId": "278696501993618@lid_nazuna",
+    "nome": "Dev Tokyo",
+    "apelidos": [],
+    "preferencias": {
+      "assuntos_favoritos": [],
+      "gostos": [],
+      "nao_gostos": [],
+      "hobbies": [],
+      "estilo_conversa": "usa apelidos carinhosos como 'bb'",
+      "usa_emojis": true,
+      "formal": false
+    },
+    "informacoes_pessoais": {
+      "idade": null,
+      "localizacao": null,
+      "profissao": null,
+      "relacionamento": null,
+      "familia": []
+    },
+    "historico_conversa": {
+      "total_mensagens": 5,
+      "primeira_conversa": "2026-03-20T19:12:09.000Z",
+      "ultima_conversa": "2026-05-28T00:16:30.000Z",
+      "frequencia_interacao": "muito_baixa",
+      "topicos_recentes": []
+    },
+    "padroes_comportamento": {
+      "horarios_ativos": {
+        "11": 1,
+        "16": 2,
+        "21": 2
+      },
+      "dias_semana_ativos": {
+        "sexta-feira": 2,
+        "domingo": 1,
+        "quinta-feira": 1,
+        "quarta-feira": 1
+      },
+      "humor_comum": "neutro",
+      "tipo_mensagens": {
+        "perguntas": 0,
+        "afirmacoes": 0,
+        "emocoes": 0,
+        "comandos": 0
+      }
+    },
+    "relacionamento_nazuna": {
+      "nivel_intimidade": 1,
+      "apelido_nazuna": null,
+      "memorias_especiais": [],
+      "conversas_marcantes": [],
+      "sentimento": "neutro"
+    },
+    "notas_importantes": [
+      {
+        "texto": "Primeira conversa com Dev tokyo, iniciou com um simples 'oii'",
+        "data": "2026-03-20T19:12:12.000Z",
+        "relevancia": "alta"
+      },
+      {
+        "texto": "Dev tokyo não conhece a Nazuna, primeira interação entre eles",
+        "data": "2026-03-20T19:12:25.000Z",
+        "relevancia": "alta"
+      },
+      {
+        "texto": "Dev Tokyo usou 'bb' na primeira mensagem - estilo bem direto e informal",
+        "data": "2026-05-01T00:34:50.000Z",
+        "relevancia": "alta"
+      }
+    ],
+    "ultima_atualizacao": "2026-05-28T00:16:30.000Z"
+  },
+  "278696501993618@lid_ia": {
+    "userId": "278696501993618@lid_ia",
+    "nome": "Dev Tokyo",
+    "apelidos": [],
+    "preferencias": {
+      "assuntos_favoritos": [],
+      "gostos": [],
+      "nao_gostos": [],
+      "hobbies": [],
+      "estilo_conversa": "casual",
+      "usa_emojis": true,
+      "formal": false
+    },
+    "informacoes_pessoais": {
+      "idade": null,
+      "localizacao": null,
+      "profissao": null,
+      "relacionamento": null,
+      "familia": []
+    },
+    "historico_conversa": {
+      "total_mensagens": 1,
+      "primeira_conversa": "2026-04-27T01:10:28.000Z",
+      "ultima_conversa": "2026-04-27T01:10:28.000Z",
+      "frequencia_interacao": "muito_baixa",
+      "topicos_recentes": []
+    },
+    "padroes_comportamento": {
+      "horarios_ativos": {
+        "22": 1
+      },
+      "dias_semana_ativos": {
+        "domingo": 1
+      },
+      "humor_comum": "neutro",
+      "tipo_mensagens": {
+        "perguntas": 0,
+        "afirmacoes": 0,
+        "emocoes": 0,
+        "comandos": 0
+      }
+    },
+    "relacionamento_nazuna": {
+      "nivel_intimidade": 1,
+      "apelido_nazuna": null,
+      "memorias_especiais": [],
+      "conversas_marcantes": [],
+      "sentimento": "neutro"
+    },
+    "notas_importantes": [
+      {
+        "texto": "[contexto_tecnico] curioso sobre IDs numéricos de mensagens",
+        "data": "2026-04-27T01:10:34.000Z",
+        "relevancia": "alta"
+      }
+    ],
+    "ultima_atualizacao": "2026-04-27T01:10:34.000Z"
+  },
+  "278696501993618@lid_suporte": {
+    "userId": "278696501993618@lid_suporte",
+    "nome": "Dev Tokyo",
+    "apelidos": [],
+    "preferencias": {
+      "assuntos_favoritos": [],
+      "gostos": [],
+      "nao_gostos": [],
+      "hobbies": [],
+      "estilo_conversa": "casual",
+      "usa_emojis": true,
+      "formal": false
+    },
+    "informacoes_pessoais": {
+      "idade": null,
+      "localizacao": null,
+      "profissao": null,
+      "relacionamento": null,
+      "familia": []
+    },
+    "historico_conversa": {
+      "total_mensagens": 33,
+      "primeira_conversa": "2026-04-27T01:17:57.000Z",
+      "ultima_conversa": "2026-04-27T02:53:05.000Z",
+      "frequencia_interacao": "muito_alta",
+      "topicos_recentes": []
+    },
+    "padroes_comportamento": {
+      "horarios_ativos": {
+        "22": 13,
+        "23": 20
+      },
+      "dias_semana_ativos": {
+        "domingo": 33
+      },
+      "humor_comum": "neutro",
+      "tipo_mensagens": {
+        "perguntas": 0,
+        "afirmacoes": 0,
+        "emocoes": 0,
+        "comandos": 0
+      }
+    },
+    "relacionamento_nazuna": {
+      "nivel_intimidade": 1,
+      "apelido_nazuna": null,
+      "memorias_especiais": [],
+      "conversas_marcantes": [],
+      "sentimento": "neutro"
+    },
+    "notas_importantes": [
+      {
+        "texto": "primeira interação, domingo à noite",
+        "data": "2026-04-27T01:18:01.000Z",
+        "relevancia": "alta"
+      }
+    ],
+    "ultima_atualizacao": "2026-04-27T02:53:05.000Z"
+  },
+  "239329066659887@lid_nazuna": {
+    "userId": "239329066659887@lid_nazuna",
+    "nome": "tavares",
+    "apelidos": [],
+    "preferencias": {
+      "assuntos_favoritos": [],
+      "gostos": [],
+      "nao_gostos": [],
+      "hobbies": [],
+      "estilo_conversa": "casual",
+      "usa_emojis": true,
+      "formal": false
+    },
+    "informacoes_pessoais": {
+      "idade": null,
+      "localizacao": null,
+      "profissao": null,
+      "relacionamento": null,
+      "familia": []
+    },
+    "historico_conversa": {
+      "total_mensagens": 2,
+      "primeira_conversa": "2026-05-28T00:18:28.000Z",
+      "ultima_conversa": "2026-05-28T00:19:18.000Z",
+      "frequencia_interacao": "baixa",
+      "topicos_recentes": []
+    },
+    "padroes_comportamento": {
+      "horarios_ativos": {
+        "21": 2
+      },
+      "dias_semana_ativos": {
+        "quarta-feira": 2
+      },
+      "humor_comum": "neutro",
+      "tipo_mensagens": {
+        "perguntas": 0,
+        "afirmacoes": 0,
+        "emocoes": 0,
+        "comandos": 0
+      }
+    },
+    "relacionamento_nazuna": {
+      "nivel_intimidade": 1,
+      "apelido_nazuna": null,
+      "memorias_especiais": [],
+      "conversas_marcantes": [],
+      "sentimento": "neutro"
+    },
+    "notas_importantes": [],
+    "ultima_atualizacao": "2026-05-28T00:19:18.000Z"
+  }
+}
