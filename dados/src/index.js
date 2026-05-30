@@ -6346,7 +6346,7 @@ if (isCmd && command && !isOwner) {
 
             let text = `╭━━━⊱ ${categories[targetType].emoji} *LOJA: ${categories[targetType].name}* ⊱━━━╮\n│\n`;
             for (const [k, it] of items) {
-              const rarityEmoji = it.rarity === 'Mítico' ? '🟣' : it.rarity === 'Lendário' ? '🟡' : it.rarity === 'Épico' ? '🟣' : it.rarity === 'Raro' ? '🔵' : it.rarity === 'Incomum' ? '🟢' : '⚪';
+              const rarityEmoji = it.rarity === 'Mítico' ? '🔴' : it.rarity === 'Lendário' ? '🟡' : it.rarity === 'Épico' ? '🟣' : it.rarity === 'Raro' ? '🔵' : it.rarity === 'Incomum' ? '🟢' : '⚪';
               text += `│ ${rarityEmoji} *${it.name}*\n`;
               text += `│ 💰 Preço: ${fmt(it.price)}\n`;
               if (it.effect) {
@@ -6356,6 +6356,7 @@ if (isCmd && command && !isOwner) {
                 if (it.effect.special) text += `│ ✨: ${it.effect.special}\n`;
                 if (it.effect.bonus) text += `│ 🎁: ${it.effect.bonus}\n`;
               }
+              if (it.powerReq) text += `│ 📋 Poder Req.: ${it.powerReq}\n`;
               text += `│ 🆔 ID: \`${k}\`\n│\n`;
             }
             text += `╰━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n💡 Compre com: ${prefix}comprar <id_do_item>`;
