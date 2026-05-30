@@ -30961,12 +30961,18 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
             );
           }
 
-          // Relação (dados reais)
+          // Relação (dados reais do RPG)
           let relacao = 'Solteiro(a)';
           try {
             const activePair = relationshipManager.getActivePairForUser(sender);
-            if (activePair) {
-              relacao = activePair.status || 'Solteiro(a)';
+            if (activePair && activePair.pair?.status) {
+              if (activePair.pair.status === 'casamento') {
+                relacao = '💍 Casado(a)';
+              } else if (activePair.pair.status === 'namoro') {
+                relacao = '💞 Namorando';
+              } else if (activePair.pair.status === 'brincadeira') {
+                relacao = '🎈 Brincadeira';
+              }
             }
           } catch (error) {
             console.warn('Erro ao obter relacionamento:', error.message);
