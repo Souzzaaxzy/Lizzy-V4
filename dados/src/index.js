@@ -6095,8 +6095,29 @@ if (isCmd && command && !isOwner) {
               }
             }
 
+            // Força o recálculo dos bônus no padrão original do Nazuna antes de exibir
+            recalcEquipmentBonuses(me, econ.shop);
+            const combatStats = calculateCombatStats(me, econ);
+            
             let text = `╭━━━⊱ ⚔️ *PERFIL RPG* ⚔️ ⊱━━━╮\n`;
             text += `│ ${pushname}\n`;
+            text += `╰━━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n`;
+            
+            text += `╭━━━⊱ 📊 *STATUS REAIS* ⊱━━━╮\n`;
+            text += `│ ⚔️ Ataque: ${combatStats.attack} (+${me.attackBonus || 0})\n`;
+            text += `│ 🛡️ Defesa: ${combatStats.defense} (+${me.defenseBonus || 0})\n`;
+            text += `│ ❤️ Vida: ${combatStats.hp} (+${me.hpBonus || 0})\n`;
+            text += `╰━━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n`;
+            
+            const equips = me.equipments || {};
+            const shop = econ.shop || {};
+            text += `╭━━━⊱ 🛡️ *EQUIPAMENTOS* ⊱━━━╮\n`;
+            text += `│ ⚔️ Arma: ${equips.weapon ? shop[equips.weapon]?.name : 'Nenhuma'}\n`;
+            text += `│ 🛡️ Armadura: ${equips.armor ? shop[equips.armor]?.name : 'Nenhuma'}\n`;
+            text += `│ 🛡️ Escudo: ${equips.shield ? shop[equips.shield]?.name : 'Nenhum'}\n`;
+            text += `│ 💍 Acessório: ${equips.accessory ? shop[equips.accessory]?.name : 'Nenhum'}\n`;
+            text += `│ 🩸 Elmo: ${equips.helmet ? shop[equips.helmet]?.name : 'Nenhum'}\n`;
+            text += `│ 👢 Botas: ${equips.boots ? shop[equips.boots]?.name : 'Nenhuma'}\n`;
             text += `╰━━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n`;
 
             text += `📊 *NÍVEL & EXPERIÊNCIA*\n`;
@@ -6116,11 +6137,12 @@ if (isCmd && command && !isOwner) {
             text += `├ Clã: ${clanInfo}\n`;
             text += `└ Casa: ${houseInfo}\n\n`;
 
+            const totalPower = (me.power || 100) + (me.attackBonus || 0) + ((me.classeBonuses && me.classeBonuses.attack) || 0);
             text += `⚔️ *COMBATE*\n`;
             text += `├ Vitórias: ${battlesWon}\n`;
             text += `├ Derrotas: ${battlesLost}\n`;
             text += `├ Win Rate: ${winRate}%\n`;
-            text += `└ Poder: ${me.power || 100}\n\n`;
+            text += `└ Poder: ${totalPower}\n\n`;
 
             text += `🛠️ *HABILIDADES (TOP 3)*\n`;
             topSkills.forEach((sk, i) => {
@@ -6250,67 +6272,142 @@ if (isCmd && command && !isOwner) {
           }
 
           if (sub === 'loja' || sub === 'lojarps') {
-            const items = Object.entries(econ.shop || {});
-            if (items.length === 0) return reply('❌ A loja está vazia no momento.');
-            let text = '╭━━━⊱ 🛍️ *LOJA DE ITENS* 🛍️ ⊱━━━╮\n│\n';
-            for (const [k, it] of items) {
-              text += `│ 🔹 *${k}*\n│   ${it.name} — ${fmt(it.price)}\n│\n`;
+            const shop = econ.shop || {};
+            const categories = {
+              weapon: { emoji: '⚔️', name: 'ARMAS' },
+              armor: { emoji: '🛡️', name: 'ARMADURAS' },
+              shield: { emoji: '🛡️', name: 'ESCUDOS' },
+              helmet: { emoji: '🩸', name: 'ELMOS' },
+              accessory: { emoji: '💍', name: 'ACESSÓRIOS' },
+              boots: { emoji: '👢', name: 'BOTAS' },
+              tool: { emoji: '⛏️', name: 'FERRAMENTAS' },
+              consumable: { emoji: '🧪', name: 'CONSUMÍVEIS' }
+            };
+
+            const catArg = args[0];
+            if (!catArg || !['armas', 'armaduras', 'escudos', 'elmos', 'acessorios', 'botas', 'ferramentas', 'consumiveis'].includes(catArg)) {
+              let text = `╭━━━⊱ 🛍️ *LOJA KAISERBOT* 🛍️ ⊱━━━╮\n│\n`;
+              text += `│ Olá *${pushname}*! Escolha uma categoria:\n│\n`;
+              text += `│ ⚔️ *${prefix}loja armas*\n`;
+              text += `│ 🛡️ *${prefix}loja armaduras*\n`;
+              text += `│ 🛡️ *${prefix}loja escudos*\n`;
+              text += `│ 🩸 *${prefix}loja elmos*\n`;
+              text += `│ 💍 *${prefix}loja acessorios*\n`;
+              text += `│ 👢 *${prefix}loja botas*\n`;
+              text += `│ ⛏️ *${prefix}loja ferramentas*\n`;
+              text += `│ 🧪 *${prefix}loja consumiveis*\n│\n`;
+              text += `╰━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n💡 Use ${prefix}adotar para ver os pets!\n💡 Compre com: ${prefix}comprar <nome_do_item>`;
+              return reply(text);
             }
-            text += `╰━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n💡 Compre com: ${prefix}comprar <item>`;
+
+            const mapping = { 
+              armas: 'weapon', 
+              armaduras: 'armor', 
+              escudos: 'shield',
+              elmos: 'helmet',
+              acessorios: 'accessory', 
+              botas: 'boots', 
+              ferramentas: 'tool', 
+              consumiveis: 'consumable'
+            };
+            const targetType = mapping[catArg];
+            const rarityOrder = { 'Mítico': 6, 'Lendário': 5, 'Épico': 4, 'Raro': 3, 'Incomum': 2, 'Comum': 1 };
+            
+            const items = Object.entries(shop)
+              .filter(([k, it]) => it.type === targetType)
+              .sort((a, b) => {
+                // Primeiro ordena por preço
+                if (a[1].price !== b[1].price) return a[1].price - b[1].price;
+                // Se o preço for igual, ordena por raridade
+                return (rarityOrder[b[1].rarity] || 0) - (rarityOrder[a[1].rarity] || 0);
+              });
+
+            if (items.length === 0) return reply(`❌ Não há itens na categoria ${catArg} no momento.`);
+
+            let text = `╭━━━⊱ ${categories[targetType].emoji} *LOJA: ${categories[targetType].name}* ⊱━━━╮\n│\n`;
+            for (const [k, it] of items) {
+              const rarityEmoji = it.rarity === 'Mítico' ? '🟣' : it.rarity === 'Lendário' ? '🟡' : it.rarity === 'Épico' ? '🟣' : it.rarity === 'Raro' ? '🔵' : it.rarity === 'Incomum' ? '🟢' : '⚪';
+              text += `│ ${rarityEmoji} *${it.name}*\n`;
+              text += `│ 💰 Preço: ${fmt(it.price)}\n`;
+              if (it.effect) {
+                if (it.effect.attack) text += `│ ⚔️ ATK: +${it.effect.attack}\n`;
+                if (it.effect.defense) text += `│ 🛡️ DEF: +${it.effect.defense}\n`;
+                if (it.effect.hp) text += `│ ❤️ HP: +${it.effect.hp}\n`;
+                if (it.effect.special) text += `│ ✨: ${it.effect.special}\n`;
+                if (it.effect.bonus) text += `│ 🎁: ${it.effect.bonus}\n`;
+              }
+              text += `│ 🆔 ID: \`${k}\`\n│\n`;
+            }
+            text += `╰━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n💡 Compre com: ${prefix}comprar <id_do_item>`;
             return reply(text);
           }
+
           if (sub === 'comprar' || sub === 'buy') {
             const rawKey = (args[0] || '');
-            if (!rawKey) return reply(`╭━━━⊱ 🛒 *COMPRAR* 🛒 ⊱━━━╮
-│
-│ ❌ Informe o item desejado
-│
-│ 📝 *Exemplo:*
-│ ${prefix}comprar pickaxe_bronze
-│
-│ 🛍️ Ver loja: ${prefix}loja
-│
-╰━━━━━━━━━━━━━━━━━━━━╯`);
-            // Normaliza a busca do item ignorando acentos e underscores
-            const key = findKeyIgnoringAccents(econ.shop || {}, rawKey) || normalizeParam(rawKey).replace(/\s+/g, '_');
-            const it = (econ.shop || {})[key];
+            if (!rawKey) return reply(`╭━━━⊱ 🛒 *COMPRAR* 🛒 ⊱━━━╮\n│\n│ ❌ Informe o ID do item\n│\n│ 📝 *Exemplo:*\n│ ${prefix}comprar espada_de_ferro\n│\n│ 🛍️ Ver loja: ${prefix}loja\n│\n╰━━━━━━━━━━━━━━━━━━━━╯`);
+            
+            const normalizeStr = (str) => str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+            const inputName = normalizeStr(rawKey);
+            const shop = econ.shop || {};
+            
+            const key = Object.keys(shop).find(k => normalizeStr(k) === inputName || normalizeStr(shop[k].name) === inputName);
+            const it = shop[key];
             if (!it) return reply(`❌ Item não encontrado.\n\n🛍️ Veja a loja com ${prefix}loja`);
             if (me.wallet < it.price) return reply('❌ Saldo insuficiente na carteira.');
+            
             me.wallet -= it.price;
-            // Se for ferramenta (picareta), equipa automaticamente
+
+            // Lógica de Equipamento Automático (Slots Unificados)
+            const equipTypes = ['weapon', 'armor', 'accessory', 'boots', 'helmet', 'shield', 'equipment'];
+            if (equipTypes.includes(it.type)) {
+              // Identifica o slot correto (alguns itens tem it.type='equipment' e o slot em it.slot)
+              const slot = it.slot || it.type;
+              if (slot === 'equipment') return reply('❌ Erro: Este item não possui um slot definido.');
+
+              me.equipments = me.equipments || me.equipment || { weapon: null, armor: null, accessory: null, boots: null, helmet: null, shield: null };
+              const oldItemKey = me.equipments[slot];
+              
+              // Se já tinha algo, volta pro inventário
+              if (oldItemKey) {
+                me.inventory[oldItemKey] = (me.inventory[oldItemKey] || 0) + 1;
+              }
+              
+              // Adiciona o novo item ao inventário e equipa
+              me.inventory[key] = (me.inventory[key] || 0) + 1;
+              me.equipments[slot] = key;
+              me.equipment = me.equipments; // Sincroniza os campos
+              
+              // Chama a função original de recálculo para garantir que todos os campos (power, attackBonus, etc) sejam atualizados
+              recalcEquipmentBonuses(me, econ.shop);
+              
+              saveEconomy(econ);
+              return reply(`╭━━━⊱ ✅ *COMPRA & EQUIPE* ✅ ⊱━━━╮\n│\n│ ✨ Item: *${it.name}*\n│ 💰 Valor: *${fmt(it.price)}*\n│ 🛡️ Slot: *${slot.toUpperCase()}*\n│\n│ ✅ Comprado e equipado com sucesso!\n│ 📊 Seu poder agora é: *${me.power || 0}*\n│\n╰━━━━━━━━━━━━━━━━━━━━━━╯`);
+            }
+
+            // Ferramentas (Picaretas)
             if (it.type === 'tool' && it.toolType === 'pickaxe') {
               me.tools = me.tools || {};
               me.tools.pickaxe = { tier: it.tier, dur: it.durability, max: it.durability, key };
               saveEconomy(econ);
-              return reply(`╭━━━⊱ ✅ *COMPRA* ✅ ⊱━━━╮
-│
-│ 🛠️ Você comprou e equipou:
-│ ${it.name}
-│
-│ ⚙️ Durabilidade: ${it.durability}
-│
-╰━━━━━━━━━━━━━━━━━━━━╯`);
+              return reply(`╭━━━⊱ ✅ *COMPRA* ✅ ⊱━━━╮\n│\n│ 🛠️ Você comprou e equipou:\n│ ${it.name}\n│\n│ ⚙️ Durabilidade: ${it.durability}\n│\n╰━━━━━━━━━━━━━━━━━━━━╯`);
             }
-            // Caso contrário, vai para o inventário
+
+            // Caso contrário (Consumíveis, Pets, etc), vai para o inventário
             me.inventory[key] = (me.inventory[key] || 0) + 1;
             saveEconomy(econ);
-            return reply(`╭━━━⊱ ✅ *COMPRA* ✅ ⊱━━━╮
-│
-│ 🎒 Você comprou:
-│ ${it.name}
-│
-│ 💰 Preço: ${fmt(it.price)}
-│
-╰━━━━━━━━━━━━━━━━━━━━╯`);
+            return reply(`╭━━━⊱ ✅ *COMPRA* ✅ ⊱━━━╮\n│\n│ 🎒 Você comprou:\n│ ${it.name}\n│\n│ 💰 Preço: ${fmt(it.price)}\n│\n╰━━━━━━━━━━━━━━━━━━━━╯`);
           }
 
           if (sub === 'inventario' || sub === 'inv') {
+            recalcEquipmentBonuses(me, econ.shop);
             const entries = Object.entries(me.inventory || {}).filter(([, q]) => q > 0);
             let text = '╭━━━⊱ 🎒 *INVENTÁRIO* 🎒 ⊱━━━╮\n│\n';
+            text += `│ ⚔️ Poder: *${me.power || 0}*\n│\n`;
             if (entries.length > 0) {
               for (const [k, q] of entries) {
                 const it = (econ.shop || {})[k];
-                text += `│ 📦 ${it?.name || k} x${q}\n`;
+                const rarity = it?.rarity ? ` [${it.rarity}]` : '';
+                text += `│ 📦 ${it?.name || k}${rarity} x${q}\n`;
               }
             } else {
               text += '│ 📭 (vazio)\n';
@@ -7524,10 +7621,13 @@ if (isCmd && command && !isOwner) {
               me.exp -= nextLevelXp;
               me.level += 1;
               leveledUp = true;
+              // Sincroniza o poder com o nível
+              me.power = 100 + (me.level * 15);
             }
             if (me.level >= 100) {
               me.level = 100;
               me.exp = 0;
+              me.power = 100 + (100 * 15);
             }
 
             saveEconomy(econ);
@@ -7790,7 +7890,12 @@ if (isCmd && command && !isOwner) {
           dragao: { emoji: '🐉', name: 'Dragão', type: 'dragao', hp: 150, attack: 25, defense: 15, speed: 12, cost: 15000, desc: 'Poderoso e raro', element: 'fire' },
           fenix: { emoji: '🔥', name: 'Fênix', type: 'fenix', hp: 120, attack: 20, defense: 12, speed: 20, cost: 10000, desc: 'Imortal e místico', element: 'fire' },
           tigre: { emoji: '🐯', name: 'Tigre', type: 'tigre', hp: 110, attack: 18, defense: 11, speed: 16, cost: 7000, desc: 'Feroz e forte', element: 'normal' },
-          aguia: { emoji: '🦅', name: 'Águia', type: 'aguia', hp: 90, attack: 22, defense: 8, speed: 25, cost: 6000, desc: 'Ágil e preciso', element: 'wind' }
+          aguia: { emoji: '🦅', name: 'Águia', type: 'aguia', hp: 90, attack: 22, defense: 8, speed: 25, cost: 6000, desc: 'Ágil e preciso', element: 'wind' },
+          nyx: { emoji: '🐾', name: 'Nyx, o Devorador de Estrelas', type: 'nyx', hp: 200, attack: 40, defense: 25, speed: 30, cost: 500000, desc: 'Pet cósmico que aumenta o dano continuamente.', element: 'dark', rarity: 'Mítico' },
+          chrony: { emoji: '🐾', name: 'Chrony, a Aranha do Tempo', type: 'chrony', hp: 160, attack: 30, defense: 20, speed: 50, cost: 350000, desc: 'Aranha brilhante capaz de distorcer o tempo.', element: 'time', rarity: 'Lendário' },
+          abyron: { emoji: '🐾', name: 'Abyron, o Olho do Abismo', type: 'abyron', hp: 180, attack: 35, defense: 15, speed: 25, cost: 200000, desc: 'Revela inimigos e reduz a defesa de monstros.', element: 'dark', rarity: 'Épico' },
+          seraph: { emoji: '🐾', name: 'Seraph, o Anjo Fragmentado', type: 'seraph', hp: 250, attack: 20, defense: 45, speed: 20, cost: 400000, desc: 'Cria barreiras protetoras durante combates.', element: 'light', rarity: 'Lendário' },
+          vex: { emoji: '🐾', name: 'Vex, o Parasita Rubro', type: 'vex', hp: 150, attack: 45, defense: 10, speed: 35, cost: 150000, desc: 'Rouba vida dos inimigos e fortalece o portador.', element: 'blood', rarity: 'Épico' }
         };
 
         // Normaliza o parâmetro ignorando acentos
@@ -8698,7 +8803,8 @@ if (isCmd && command && !isOwner) {
         }
 
         const dungeon = availableDungeons[index];
-        const userPower = (me.power || 100) + (me.attackBonus || 0);
+        const userStats = calculateCombatStats(me, econ);
+        const userPower = userStats.attack;
         const success = Math.random() < (0.7 - (dungeon.diff * 0.1) + (userPower / 1000));
 
         me.lastDungeon = now;
@@ -8719,10 +8825,13 @@ if (isCmd && command && !isOwner) {
             me.level++;
             levelsGained++;
             leveledUp = true;
+            // Sincroniza o poder com o nível
+            me.power = 100 + (me.level * 15);
           }
           if (me.level >= 100) {
             me.level = 100;
             me.exp = 0;
+            me.power = 100 + (100 * 15);
           }
 
           // Atualiza missão de dungeon
@@ -8810,10 +8919,11 @@ if (isCmd && command && !isOwner) {
         ];
 
         const boss = bosses[Math.floor(Math.random() * bosses.length)];
-        const playerPower = (me.power || 100) + (me.level || 1) * 10;
+        const playerStats = calculateCombatStats(me, econ);
+        const playerPower = playerStats.attack;
 
         let bossHp = boss.hp;
-        let playerHp = 100 + (me.level || 1) * 5;
+        let playerHp = playerStats.hp;
         let turns = 0;
         const maxTurns = 15;
 
@@ -8835,7 +8945,7 @@ if (isCmd && command && !isOwner) {
           }
 
           // Boss ataca
-          const bossDmg = Math.max(5, boss.attack - Math.floor(playerPower * 0.1) + Math.floor(Math.random() * 20));
+          const bossDmg = Math.max(5, boss.attack - playerStats.defense * 0.2 + Math.floor(Math.random() * 20));
           playerHp -= bossDmg;
 
           turns++;
@@ -8949,14 +9059,17 @@ if (isCmd && command && !isOwner) {
           return reply(`⏰ Você está cansado! Aguarde ${remaining} minutos para outro duelo.`);
         }
 
-        // Calcular stats
-        const myPower = (me.power || 100) + (me.attackBonus || 0);
-        const myDefense = (me.defenseBonus || 0) + 50;
-        const oppPower = (opponent.power || 100) + (opponent.attackBonus || 0);
-        const oppDefense = (opponent.defenseBonus || 0) + 50;
+        // Calcular stats unificados (Base + Level + Equipamentos + Classe)
+        const myStats = calculateCombatStats(me, econ);
+        const oppStats = calculateCombatStats(opponent, econ);
 
-        let myHp = 200 + ((me.level || 1) * 10);
-        let oppHp = 200 + ((opponent.level || 1) * 10);
+        const myPower = myStats.attack;
+        const myDefense = myStats.defense;
+        const oppPower = oppStats.attack;
+        const oppDefense = oppStats.defense;
+
+        let myHp = myStats.hp;
+        let oppHp = oppStats.hp;
 
         let text = `╭━━━⊱ ⚔️ *DUELO* ⊱━━━╮\n`;
         text += `│ ${pushname} VS @${target.split('@')[0]}\n`;
@@ -9004,10 +9117,13 @@ if (isCmd && command && !isOwner) {
             me.exp -= nextLevelXp;
             me.level++;
             leveledUp = true;
+            // Sincroniza o poder com o nível
+            me.power = 100 + (me.level * 15);
           }
           if (me.level >= 100) {
             me.level = 100;
             me.exp = 0;
+            me.power = 100 + (100 * 15);
           }
 
           // Atualiza missão de duelo
