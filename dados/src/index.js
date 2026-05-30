@@ -6375,6 +6375,11 @@ if (isCmd && command && !isOwner) {
             if (!it) return reply(`❌ Item não encontrado.\n\n🛍️ Veja a loja com ${prefix}loja`);
             if (me.wallet < it.price) return reply('❌ Saldo insuficiente na carteira.');
             
+            // Verificar requisição de poder
+            if (it.powerReq && me.power < it.powerReq) {
+              return reply(`❌ Poder insuficiente!\n\n⚔️ Seu poder: ${me.power || 0}\n📋 Poder requisitado: ${it.powerReq}\n\n💪 Você precisa de mais ${it.powerReq - (me.power || 0)} de poder para comprar este item.`);
+            }
+            
             me.wallet -= it.price;
 
             // Lógica de Equipamento Automático (Slots Unificados)
