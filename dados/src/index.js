@@ -249,7 +249,6 @@ import {
   isMenuLerMaisEnabled,
   setMenuLerMais,
   getMenuLerMaisText,
-  calculateCombatStats,
 } from './utils/database.js';
 import { parseCustomCommandMeta, buildUsageFromParams, parseArgsFromString, escapeRegExp, validateParamValue } from './utils/helpers.js';
 import {
@@ -6098,7 +6097,6 @@ if (isCmd && command && !isOwner) {
 
             // Força o recálculo dos bônus no padrão original do Nazuna antes de exibir
             recalcEquipmentBonuses(me, econ.shop);
-            const combatStats = calculateCombatStats(me, econ);
             
             let text = `╭━━━⊱ ⚔️ *PERFIL RPG* ⚔️ ⊱━━━╮\n`;
             text += `│ ${pushname}\n`;
@@ -8804,7 +8802,6 @@ if (isCmd && command && !isOwner) {
         }
 
         const dungeon = availableDungeons[index];
-        const userStats = calculateCombatStats(me, econ);
         const userPower = userStats.attack;
         const success = Math.random() < (0.7 - (dungeon.diff * 0.1) + (userPower / 1000));
 
@@ -8920,7 +8917,6 @@ if (isCmd && command && !isOwner) {
         ];
 
         const boss = bosses[Math.floor(Math.random() * bosses.length)];
-        const playerStats = calculateCombatStats(me, econ);
         const playerPower = playerStats.attack;
 
         let bossHp = boss.hp;
@@ -9061,8 +9057,6 @@ if (isCmd && command && !isOwner) {
         }
 
         // Calcular stats unificados (Base + Level + Equipamentos + Classe)
-        const myStats = calculateCombatStats(me, econ);
-        const oppStats = calculateCombatStats(opponent, econ);
 
         const myPower = myStats.attack;
         const myDefense = myStats.defense;
