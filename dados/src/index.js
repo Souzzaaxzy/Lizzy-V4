@@ -7898,6 +7898,8 @@ case 'perfilrpg':
         text += `• ${prefix}batalha <número> @user\n\n`;
         text += `💡 Seus pets perdem fome e humor com o tempo!`;
 
+        return reply(text);
+        break;
         }
         break;
       case 'dueloquiz':
