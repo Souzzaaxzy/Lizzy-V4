@@ -4269,7 +4269,7 @@ if (  isGroup &&  groupData.antistickerplus &&  !isGroupAdmin &&  !isOwner &&  !
 
         if (antitoxic && antitoxic.isEnabled && antitoxic.isEnabled(from) && body && ia) {
           const aiFunction = (prompt) => {
-            return ia.makeCognimaRequest('qwen/qwen3-235b-a22b', prompt, null)
+            return ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', prompt, null)
               .then(response => response?.data?.choices?.[0]?.message?.content || '');
           };
 
@@ -13104,7 +13104,7 @@ if (isCmd && command && !isOwner) {
       case 'qwen3':
         if (!q) return reply(`🤔 Qual sua dúvida para o Qwen? Informe a pergunta após o comando! Exemplo: ${prefix}${command} quem descobriu o Brasil? 🌍`);
         reply(`⏳ Só um segundinho, estou consultando o Qwen... ✨`).then(() => {
-          ia.makeCognimaRequest('qwen/qwen3-235b-a22b', q, null).then((response) => {
+          ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
           }).catch((e) => {
             console.error('Erro na API Qwen:', e);
@@ -13273,7 +13273,7 @@ if (isCmd && command && !isOwner) {
         if (!q) return reply(`🤔 Qual sua dúvida para o Swallow? Informe a pergunta após o comando! Exemplo: ${prefix}${command} quem descobriu o Brasil? 🌍`);
 
         reply(`⏳ Só um segundinho, estou consultando o Swallow... ✨`).then(() => {
-          ia.makeCognimaRequest('qwen/qwen3-235b-a22b', q, null).then((response) => {
+          ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
           }).catch((e) => {
             console.error('Erro na API Swallow:', e);
@@ -13342,7 +13342,7 @@ if (isCmd && command && !isOwner) {
 
         reply('⏳ Aguarde enquanto preparo um resumo bem caprichado... ✨').then(() => {
           const prompt = `Resuma o seguinte texto em poucos parágrafos, de forma clara e objetiva, destacando as informações mais importantes:\n\n${q}`;
-          ia.makeCognimaRequest('qwen/qwen3-235b-a22b', prompt, null).then((response) => {
+          ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', prompt, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
           }).catch((e) => {
             console.error('Erro ao resumir texto:', e);
@@ -13376,7 +13376,7 @@ if (isCmd && command && !isOwner) {
               return;
             }
             const prompt = `Resuma o seguinte conteúdo extraído de uma página web em poucos parágrafos, de forma clara e objetiva, destacando os pontos principais:\n\n${cleanText.substring(0, 5000)}`;
-            ia.makeCognimaRequest('qwen/qwen3-235b-a22b', prompt, null).then((iaResponse) => {
+            ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', prompt, null).then((iaResponse) => {
               reply(formatAIResponse(iaResponse.data.choices[0].message.content));
             }).catch((e) => {
               console.error('Erro ao resumir URL (IA):', e.message);
@@ -13405,7 +13405,7 @@ if (isCmd && command && !isOwner) {
 
         reply('⏳ Um segundinho, estou pensando em ideias incríveis... ✨').then(() => {
           const prompt = `Gere 15 ideias criativas e detalhadas para o seguinte tema: ${q}`;
-          ia.makeCognimaRequest('qwen/qwen3-235b-a22b', prompt, null).then((response) => {
+          ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', prompt, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
           }).catch((e) => {
             console.error('Erro ao gerar ideias:', e);
@@ -13424,7 +13424,7 @@ if (isCmd && command && !isOwner) {
 
         reply('⏳ Um momentinho, estou preparando uma explicação bem clara... ✨').then(() => {
           const prompt = `Explique o seguinte conceito de forma simples e clara, como se fosse para alguém sem conhecimento prévio: ${q}`;
-          ia.makeCognimaRequest('qwen/qwen3-235b-a22b', prompt, null).then((response) => {
+          ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', prompt, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
           }).catch((e) => {
             console.error('Erro ao explicar conceito:', e);
@@ -13443,7 +13443,7 @@ if (isCmd && command && !isOwner) {
 
         reply('⏳ Aguarde enquanto dou um polimento no seu texto... ✨').then(() => {
           const prompt = `Corrija os erros gramaticais, ortográficos e de estilo no seguinte texto, mantendo o significado original: ${q}`;
-          ia.makeCognimaRequest('qwen/qwen3-235b-a22b', prompt, null).then((response) => {
+          ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', prompt, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
           }).catch((e) => {
             console.error('Erro ao corrigir texto:', e);
@@ -13597,7 +13597,7 @@ Faça um resumo conciso mas completo, destacando o que é mais relevante.`;
 
 Seja criativo e original. Não use clichês. A história deve ser envolvente do início ao fim.`;
 
-          const response = await ia.makeCognimaRequest('qwen/qwen3-235b-a22b', prompt, null);
+          const response = await ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', prompt, null);
           await reply(`📖✨ *Sua História*\n\n${formatAIResponse(response.data.choices[0].message.content)}`);
         } catch (e) {
           console.error('Erro ao gerar história:', e);
@@ -13654,7 +13654,7 @@ Para cada recomendação, forneça:
 
 Seja específico e recomende opções variadas (populares e menos conhecidas). Formate de forma clara e organizada.`;
 
-          const response = await ia.makeCognimaRequest('qwen/qwen3-235b-a22b', prompt, null);
+          const response = await ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', prompt, null);
           await reply(`${tipoInfo.emoji} *Recomendações de ${tipoInfo.nome.charAt(0).toUpperCase() + tipoInfo.nome.slice(1)}*\n\n${formatAIResponse(response.data.choices[0].message.content)}`);
         } catch (e) {
           console.error('Erro ao gerar recomendações:', e);
@@ -15693,7 +15693,7 @@ Exemplo: ${prefix}tradutor espanhol | Olá mundo! ✨`);
           const texto = partes.slice(1).join('|').trim();
           reply('Aguarde um momentinho... ☀️').then(() => {
             const prompt = `Traduza o seguinte texto para ${idioma}:\n\n${texto}\n\nForneça apenas a tradução, sem explicações adicionais.`;
-            ia.makeCognimaRequest('qwen/qwen3-235b-a22b', prompt, null).then((bahz) => {
+            ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', prompt, null).then((bahz) => {
               reply(`🌐✨ *Prontinho! Sua tradução para ${idioma.toUpperCase()} está aqui:*\n\n${formatAIResponse(bahz.data.choices[0].message.content)}`);
             }).catch((e) => {
               console.error("Erro ao traduzir texto:", e);
@@ -15828,7 +15828,7 @@ Exemplo: ${prefix}tradutor espanhol | Olá mundo! ✨`);
           }).catch(() => {
             console.log("API primária do dicionário falhou, tentando IA...");
             const prompt = `Defina a palavra "${palavra}" em português de forma completa e fofa. Inclua a classe gramatical, os principais significados e um exemplo de uso em uma frase curta e bonitinha.`;
-            ia.makeCognimaRequest('qwen/qwen3-235b-a22b', prompt, null).then((bahz) => {
+            ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', prompt, null).then((bahz) => {
               reply(formatAIResponse(bahz.data.choices[0].message.content));
             }).catch((e) => {
               console.error("Erro geral ao buscar no dicionário:", e);
@@ -30096,7 +30096,7 @@ Use ${prefix}horoscopo <signo> para ver a previsão!`);
 
         // Função wrapper para a IA
         const aiFunctionDebate = (prompt) => {
-          return ia.makeCognimaRequest('qwen/qwen3-235b-a22b', prompt, null)
+          return ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', prompt, null)
             .then(response => response?.data?.choices?.[0]?.message?.content || '');
         };
 
@@ -30120,7 +30120,7 @@ Use ${prefix}horoscopo <signo> para ver a previsão!`);
 
         // Função wrapper para a IA
         const aiFunctionStory = (prompt) => {
-          return ia.makeCognimaRequest('qwen/qwen3-235b-a22b', prompt, null)
+          return ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', prompt, null)
             .then(response => response?.data?.choices?.[0]?.message?.content || '');
         };
 
