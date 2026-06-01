@@ -9813,6 +9813,7 @@ if (isCmd && command && !isOwner) {
           if (!myParty) return reply('❌ Você não é líder de nenhuma party!');
 
           const dg = dungeons[myParty.type];
+          if (!dg) return reply('❌ Erro: Dungeon inválida.');
 
           if (myParty.members.length < 2) {
             return reply(`❌ Você precisa de pelo menos 2 membros para iniciar!`);
@@ -9820,13 +9821,17 @@ if (isCmd && command && !isOwner) {
 
           // Calcular poder total do grupo
           let poderTotal = 0;
-          myParty.members.forEach(member => {
+          for (const member of myParty.members) {
             const user = getEcoUser(econ, member);
-            poderTotal += (user.power || 100) + ((user.level || 1) * 10);
-          });
+            if (!user) continue; // Pula se o usuário não existir
+            
+            // Recalcula o poder para garantir que bônus de itens contem
+            recalcEquipmentBonuses(user, econ.shop);
+            poderTotal += (user.power || 100);
+          }
 
           // Poder do boss
-          const poderBoss = dg.level * 100 + dg.players * 50;
+          const poderBoss = (dg.level || 1) * 100 + (dg.players || 2) * 50;
 
           // Calcular chance de vitória
           const chance = Math.min(95, Math.max(20, (poderTotal / poderBoss) * 50 + 25));
@@ -9836,7 +9841,9 @@ if (isCmd && command && !isOwner) {
           text += `👥 *PARTY:*\n`;
           myParty.members.forEach(m => {
             const u = getEcoUser(econ, m);
-            text += `• @${m.split('@')[0]} (Nv.${u.level || 1})\n`;
+            if (u) {
+              text += `• @${m.split('@')[0]} (Nv.${u.level || 1})\n`;
+            }
           });
           text += `\n⚔️ Poder Total: ${poderTotal}\n`;
           text += `👹 Boss: ${dg.boss}\n\n`;
