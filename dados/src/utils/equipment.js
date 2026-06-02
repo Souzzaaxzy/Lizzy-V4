@@ -24,7 +24,7 @@ export function recalcEquipmentBonuses(user, shop = {}) {
     const item = shop[itemId];
     if (!item) continue;
     
-    // Suporte para múltiplos formatos de bônus (KaiserBot e Nazuna)
+    // Suporte para múltiplos formatos de bônus (KaiserBot e Kaiser)
     const eff = item.effect || {};
     
     // Ataque
