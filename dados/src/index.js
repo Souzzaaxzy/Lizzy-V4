@@ -11223,7 +11223,10 @@ if (isCmd && command && !isOwner) {
         const targetData = getEcoUser(econ, target);
 
         targetData.level = newLevel;
-        targetData.power = 100 + (newLevel * 15);
+        // Sincroniza poder e bônus
+        recalcEquipmentBonuses(targetData, econ.shop);
+        const stats = calculateCombatStats(targetData, econ);
+        targetData.power = stats.power;
         saveEconomy(econ);
 
         return reply(`╭━━━⊱ ✅ *NÍVEL DEFINIDO* ⊱━━━╮\n│\n│ 👤 @${target.split('@')[0]}\n│ 📊 Nível: ${newLevel}\n│ ⚔️ Poder: ${targetData.power}\n│\n╰━━━━━━━━━━━━━━━━━━━━━━━━━╯`, { mentions: [target] });
@@ -11247,6 +11250,8 @@ if (isCmd && command && !isOwner) {
 
         targetData.inventory = targetData.inventory || {};
         targetData.inventory[itemArgs] = (targetData.inventory[itemArgs] || 0) + qty;
+        // Se for um equipamento, força o recálculo
+        recalcEquipmentBonuses(targetData, econ.shop);
         saveEconomy(econ);
 
         return reply(`╭━━━⊱ ✅ *ITEM ADICIONADO* ⊱━━━╮\n│\n│ 👤 @${target.split('@')[0]}\n│ 📦 Item: ${itemArgs}\n│ 🔢 Quantidade: +${qty}\n│\n╰━━━━━━━━━━━━━━━━━━━━━━━━━╯`, { mentions: [target] });
