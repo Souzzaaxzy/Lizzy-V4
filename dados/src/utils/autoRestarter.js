@@ -21,7 +21,7 @@ class AutoRestarter {
             'UnhandledPromiseRejectionWarning'
         ];
         this.logFile = path.join(__dirname, '../../../logs/auto-restart.log');
-        this.pidFile = path.join(__dirname, '../../../nazuna.pid');
+        this.pidFile = path.join(__dirname, '../../../kaiser.pid');
         this.isShuttingDown = false;
         this.childProcess = null;
         
@@ -213,7 +213,7 @@ class AutoRestarter {
             }
 
             // Limpa arquivos temporários
-            const tempDirs = ['/tmp/nazuna-*', './temp/*'];
+            const tempDirs = ['/tmp/kaiser-*', './temp/*'];
             
             for (const tempPattern of tempDirs) {
                 try {
@@ -311,8 +311,8 @@ class AutoRestarter {
                 stdio: ['ignore', 'inherit', 'inherit'],
                 env: {
                     ...process.env,
-                    NAZUNA_RESTARTED: 'true',
-                    NAZUNA_RESTART_COUNT: this.restartCount.toString()
+                    KAISER_RESTARTED: 'true',
+                    KAISER_RESTART_COUNT: this.restartCount.toString()
                 }
             });
 
@@ -419,9 +419,9 @@ class AutoRestarter {
             });
 
             // Verifica se foi reiniciado
-            if (process.env.NAZUNA_RESTARTED === 'true') {
+            if (process.env.KAISER_RESTARTED === 'true') {
                 await this.logEvent('restart_success', {
-                    previousRestartCount: process.env.NAZUNA_RESTART_COUNT || 'unknown'
+                    previousRestartCount: process.env.KAISER_RESTART_COUNT || 'unknown'
                 });
             }
         } catch (error) {

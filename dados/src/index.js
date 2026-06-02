@@ -507,7 +507,7 @@ const {
 } = modules.default;
 
 
-async function createGroupMessage(NazunaSock, groupMetadata, participants, settings, isWelcome = true) {
+async function createGroupMessage(KaiserSock, groupMetadata, participants, settings, isWelcome = true) {
   const globalJson = JSON.parse(
     fs.readFileSync(DATABASE_DIR + '/global.json', 'utf-8')
   );
@@ -536,7 +536,7 @@ async function createGroupMessage(NazunaSock, groupMetadata, participants, setti
     let profilePicUrl = 'https://raw.githubusercontent.com/nazuninha/uploads/main/outros/1747053564257_bzswae.bin';
 
     if (participants.length === 1) {
-      profilePicUrl = await NazunaSock.profilePictureUrl(participants[0], 'image')
+      profilePicUrl = await KaiserSock.profilePictureUrl(participants[0], 'image')
         .catch(() => profilePicUrl);
     }
 
@@ -4467,7 +4467,7 @@ if (  isGroup &&  groupData.antistickerplus &&  !isGroupAdmin &&  !isOwner &&  !
         }
 
         // Obter a personalidade atual do grupo
-        const personality = groupData.assistentePersonality || 'nazuna';
+        const personality = groupData.assistentePersonality || 'kaiser';
 
         ia.makeAssistentRequest({
           mensagens: [jSoNzIn]
@@ -6120,7 +6120,7 @@ if (isCmd && command && !isOwner) {
               }
             }
 
-            // Força o recálculo dos bônus no padrão original do Nazuna antes de exibir
+            // Força o recálculo dos bônus no padrão original do Kaiser antes de exibir
             recalcEquipmentBonuses(me, econ.shop);
             const combatStats = calculateCombatStats(me, econ);
             
@@ -9892,7 +9892,7 @@ if (isCmd && command && !isOwner) {
               const u = getEcoUser(econ, m);
               u.wallet += Math.floor(dg.reward / myParty.members.length);
               
-              // Sincroniza xp e exp (Nazuna usa exp, Kaiser estava usando xp)
+              // Sincroniza xp e exp (Kaiser usa exp, Kaiser estava usando xp)
               u.exp = (u.exp || 0) + Math.floor(dg.xp / myParty.members.length);
               u.xp = u.exp;
 
@@ -15915,7 +15915,7 @@ Exemplo: ${prefix}tradutor espanhol | Olá mundo! ✨`);
         try {
           if (!isOwner || isOwner && isSubOwner) return reply("🚫 Apenas o Dono principal pode utilizar esse comando!");
           if (!fs.existsSync(pathz.join(__dirname, '..', 'database', 'updateSave.json'))) return reply('❌ Sua versão não tem suporte a esse sistema ainda.');
-          const AtualCom = await axios.get('https://api.github.com/repos/devcrician/nazuna/commits?per_page=1', {
+          const AtualCom = await axios.get('https://api.github.com/repos/devcrician/kaiser/commits?per_page=1', {
             headers: {
               Accept: 'application/vnd.github+json'
             }
@@ -15924,7 +15924,7 @@ Exemplo: ${prefix}tradutor espanhol | Olá mundo! ✨`);
             total
           } = JSON.parse(fs.readFileSync(pathz.join(__dirname, '..', 'database', 'updateSave.json'), 'utf-8'));
           if (AtualCom > total) {
-            const TextZin = await VerifyUpdate('devcrician/nazuna', AtualCom - total);
+            const TextZin = await VerifyUpdate('devcrician/kaiser', AtualCom - total);
             await reply(TextZin);
           } else {
             await reply('Você ja esta utilizando a versão mais recente da bot.');
@@ -18702,7 +18702,7 @@ case 'addaluguel':
           if (!q) return reply(`❌️ *Forma incorreta, use está como exemplo:* ${prefix + command} https://instagram.com/hiudyyy_`);
           const shortResponse = await axios.post("https://spoo.me/api/v1/shorten", {
             long_url: q,
-            alias: `nazuna_${Math.floor(10000 + Math.random() * 90000)}`
+            alias: `kaiser_${Math.floor(10000 + Math.random() * 90000)}`
           });
           reply(`✅ *Link encurtado com sucesso!*\n\n🔗 *Link curto:* ${shortResponse.data.short_url}\n📎 *Link original:* ${shortResponse.data.long_url}`);
         } catch (e) {
@@ -18714,7 +18714,7 @@ case 'addaluguel':
       case 'gerarnick':
       case 'nickgenerator':
         try {
-          if (!q) return reply(`🎮 *GERADOR DE NICK*\n\n📝 *Como usar:*\n• Digite o nick após o comando\n• Ex: ${prefix}nick nazuna`);
+          if (!q) return reply(`🎮 *GERADOR DE NICK*\n\n📝 *Como usar:*\n• Digite o nick após o comando\n• Ex: ${prefix}nick kaiser`);
           var datzn;
           datzn = await styleText(q);
           await reply(datzn.join('\n'));
@@ -19019,7 +19019,7 @@ case 'addaluguel':
           if (!datz.ok) return reply(datz.msg);
           return axios.post("https://spoo.me/api/v1/shorten", {
             long_url: datz.url,
-            alias: `nazuna_${Math.floor(10000 + Math.random() * 90000)}`
+            alias: `kaiser_${Math.floor(10000 + Math.random() * 90000)}`
           }).then((shortLinkPlugin) => {
             return nazu.sendMessage(from, {
               image: { url: datz.image },
@@ -19891,7 +19891,7 @@ case 'pin':
           if (fileSizeBytes > maxSize) {
             const shortLinkGdrive = await axios.post("https://spoo.me/api/v1/shorten", {
               long_url: downloadUrl,
-              alias: `nazuna_${Math.floor(10000 + Math.random() * 90000)}`
+              alias: `kaiser_${Math.floor(10000 + Math.random() * 90000)}`
             });
             return reply(`📁 *Arquivo encontrado!*\n\n📄 *Nome:* ${fileName}\n📊 *Tamanho:* ${fileSize}\n📋 *Tipo:* ${mimetype}\n\n⚠️ *Arquivo muito grande para enviar!*\nO limite do WhatsApp é 100MB.\n\n🔗 *Link direto:*\n${shortLinkGdrive.data.short_url}`);
           }
@@ -19988,7 +19988,7 @@ case 'pin':
           if (fileSizeBytes > maxSize) {
             const shortLinkMf = await axios.post("https://spoo.me/api/v1/shorten", {
               long_url: downloadUrl,
-              alias: `nazuna_${Math.floor(10000 + Math.random() * 90000)}`
+              alias: `kaiser_${Math.floor(10000 + Math.random() * 90000)}`
             });
             return reply(`📁 *Arquivo encontrado!*\n\n📄 *Nome:* ${fileName}\n📊 *Tamanho:* ${fileSize}\n📅 *Upload:* ${uploadDate || 'N/A'}\n📋 *Tipo:* ${extension || mimetype}\n\n⚠️ *Arquivo muito grande para enviar!*\nO limite do WhatsApp é 100MB.\n\n🔗 *Link direto:*\n${shortLinkMf.data.short_url}`);
           }
@@ -20363,7 +20363,7 @@ case 'download-bot':
       from,
       {
         document: zipBuffer,
-        fileName: 'nazuna-bot.zip',
+        fileName: 'kaiser-bot.zip',
         mimetype: 'application/zip',
         caption:
           `📦 *Código-fonte do ${nomebot}*\n\n` +
@@ -20465,7 +20465,7 @@ break;
 │ 🔄 *Atualizado:* ${updatedAt}
 │ 📤 *Último push:* ${pushedAt}
 │
-│ ⏱️ *Nazuna vem sendo ativamente*
+│ ⏱️ *Kaiser vem sendo ativamente*
 │ *mantida há:* ${tempoAtivo}
 │
 │ 🔗 *Links:*
@@ -20875,7 +20875,7 @@ Exemplo: ${prefix}msgprefix Use #prefixo# antes do comando!
 
 🔹 *Nome do Bot*
 Use: ${prefix}nomebot <nome>
-Exemplo: ${prefix}nomebot Nazuna
+Exemplo: ${prefix}nomebot Kaiser
 • Altera o nome exibido nos menus
 • Use nomes curtos e memoráveis
 
@@ -22427,7 +22427,7 @@ ${prefix}${command} 1a0b5879-bc22-4f4a
       case 'nome-bot':
         try {
           if (!isOwner) return reply("Este comando é exclusivo para o meu dono!");
-          if (!q) return reply(`Por favor, digite o novo nome do bot.\nExemplo: ${prefix}${command} Nazuna`);
+          if (!q) return reply(`Por favor, digite o novo nome do bot.\nExemplo: ${prefix}${command} Kaiser`);
           let config = JSON.parse(fs.readFileSync(CONFIG_FILE));
           config.nomebot = q;
           writeJsonFile(CONFIG_FILE, config);
@@ -23738,7 +23738,7 @@ ${prefix}togglecmdvip premium_ia off`);
       case 'blackpink':
         try {
           const [texto1, texto2] = q.split('/').map(i => i.trim());
-          if (!texto1 || !texto2) return reply(`❌ Cadê os textos?\nExemplo: ${prefix + command} Nazuna/Bot`);
+          if (!texto1 || !texto2) return reply(`❌ Cadê os textos?\nExemplo: ${prefix + command} Kaiser/Bot`);
 
           const modelo = command; // O próprio comando é o modelo
 
@@ -25126,7 +25126,7 @@ case 'sfundo':
         {
           sticker: buffer,
           author: `${pushname}\n${nomebot}\n${nomedono}`,
-          packname: 'Nazuna Bot - Stickers',
+          packname: 'Kaiser Bot - Stickers',
           type: 'image'
         },
         {
@@ -29064,7 +29064,7 @@ case 'assistent':
       if (!groupData.assistente) {
         delete groupData.assistentePersonality;
       } else {
-        groupData.assistentePersonality = groupData.assistentePersonality || 'nazuna';
+        groupData.assistentePersonality = groupData.assistentePersonality || 'kaiser';
       }
 
       fs.writeFileSync(groupFilePath, JSON.stringify(groupData, null, 2));
@@ -29072,13 +29072,13 @@ case 'assistent':
       const statusMsg = groupData.assistente
         ? `✅ *Assistente ativada com sucesso!*\n\n` +
         `🤖 *Personalidade atual:* ${
-          groupData.assistentePersonality === 'nazuna' ? 'Nazuna (Padrão)' :
+          groupData.assistentePersonality === 'kaiser' ? 'Kaiser (Padrão)' :
           groupData.assistentePersonality === 'humana' ? 'Humana' :
           groupData.assistentePersonality === 'pro' ? 'Pro (Comandos)' :
           'IA Normal'
         }\n\n` +
         `💡 *Trocar personalidade:*\n` +
-        `• ${prefix}assistente nazuna\n` +
+        `• ${prefix}assistente kaiser\n` +
         `• ${prefix}assistente humana\n` +
         `• ${prefix}assistente ia\n` +
         `• ${prefix}assistente pro\n\n` +
@@ -29090,10 +29090,10 @@ case 'assistent':
 
     const personality = q.toLowerCase().trim();
 
-    if (!['nazuna', 'humana', 'ia', 'pro'].includes(personality)) {
+    if (!['kaiser', 'humana', 'ia', 'pro'].includes(personality)) {
       return reply(`❌ *Personalidade inválida!*\n\n` +
         `Escolha uma das opções:\n` +
-        `• ${prefix}assistente nazuna\n` +
+        `• ${prefix}assistente kaiser\n` +
         `• ${prefix}assistente humana\n` +
         `• ${prefix}assistente ia\n` +
         `• ${prefix}assistente pro`);
@@ -29104,7 +29104,7 @@ case 'assistent':
     fs.writeFileSync(groupFilePath, JSON.stringify(groupData, null, 2));
 
     const personalityNames = {
-      'nazuna': '🌙 *Nazuna* - Vampira tsundere',
+      'kaiser': '🌙 *Kaiser* - Vampira tsundere',
       'humana': '👤 *Humana* - Age como pessoa real',
       'ia': '🤖 *IA Normal* - Direta e objetiva',
       'pro': '⚡ *Pro* - Executa comandos'
