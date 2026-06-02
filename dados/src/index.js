@@ -19102,7 +19102,7 @@ case 'addaluguel':
 
           // Usando .then em vez de await para a pesquisa do YouTube
           youtube.search(q)
-            .then((result) => {
+            .then(async (result) => {
               if (!result.ok) return reply(`${result.msg}`);
               videoInfo = result;
               videoUrl = result.data.url;
