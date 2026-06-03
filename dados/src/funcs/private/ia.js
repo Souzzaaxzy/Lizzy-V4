@@ -1392,12 +1392,12 @@ async function makeCognimaRequest(modelo, texto, systemPrompt = null, historico 
 
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
-      // Usar OpenAI API (compativel com modelos OpenAI)
+      // Usar NVIDIA NIM API (compatível com OpenAI)
       const response = await axios.post(
-        'https://api.openai.com/v1/chat/completions',
+        'https://integrate.api.nvidia.com/v1/chat/completions',
         {
           messages,
-          model: 'gpt-4.1-mini',
+          model: modelo || 'gpt-4o-mini',
           temperature: 0.7,
           max_tokens: 2000
         },

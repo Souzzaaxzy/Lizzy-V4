@@ -15918,11 +15918,12 @@ Exemplo: ${prefix}tradutor espanhol | Olá mundo! ✨`);
           }).catch(() => {
             console.log("API primária do dicionário falhou, tentando IA...");
             const prompt = `Defina a palavra "${palavra}" em português de forma completa e fofa. Inclua a classe gramatical, os principais significados e um exemplo de uso em uma frase curta e bonitinha.`;
-            ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', prompt, null).then((bahz) => {
+            ia.makeCognimaRequest('meta/llama-3.1-8b-instruct', prompt, null).then((bahz) => {
               reply(formatAIResponse(bahz.data.choices[0].message.content));
             }).catch((e) => {
-              console.error("Erro geral ao buscar no dicionário:", e);
-              reply("❌ Palavra não encontrada. Verifique a ortografia e tente novamente.");
+              // Erro silencioso no console para não poluir o chat
+              console.error("Erro geral ao buscar no dicionário (IA Fallback):", e.message);
+              reply("❌ Não consegui encontrar o significado desta palavra no momento. Verifique a ortografia ou tente novamente mais tarde.");
             });
           });
         });
