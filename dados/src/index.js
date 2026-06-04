@@ -25127,7 +25127,7 @@ ${prefix}togglecmdvip premium_ia off`);
         saveElections(elections);
 
         const allParticipants = participants.map(p => p.id);
-        let text = `🏛️ *ELEIÇÃO PARA MODERADOR INICIADA!*\n\n`;
+        let text = `🏛️ *ELEIÇÃO PARA ALPHA INICIADA!* 🐺\n\n`;
         text += `Todos os membros estão convidados a participar.\n\n`;
         text += `📢 Para se candidatar, envie:\n`;
         text += `*"${prefix}cand"*\n\n`;

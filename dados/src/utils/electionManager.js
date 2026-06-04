@@ -46,7 +46,7 @@ class ElectionManager {
           const pollOptions = election.candidates.map(c => c.name);
           const msg = await this.nazu.sendMessage(election.groupId, {
             poll: {
-              name: '🗳️ VOTAÇÃO PARA MODERADOR',
+              name: '🗳️ VOTAÇÃO PARA ALPHA 🐺',
               values: pollOptions,
               selectableCount: 1
             }
@@ -96,7 +96,7 @@ class ElectionManager {
     saveMandates(mandates);
 
     let text = `🏆 *RESULTADO DA ELEIÇÃO*\n\n`;
-    text += `👑 Moderador eleito: @${winner.id.split('@')[0]}\n\n`;
+    text += `👑 Alpha eleito: @${winner.id.split('@')[0]} 🐺\n\n`;
     text += `🎉 Parabéns! Seu mandato dura ${config.mandato}.`;
 
     await this.nazu.sendMessage(groupId, { text, mentions: [winner.id] });
@@ -105,15 +105,15 @@ class ElectionManager {
       const groupFile = path.join(__dirname, '..', '..', 'database', 'grupos', `${groupId}.json`);
       if (fs.existsSync(groupFile)) {
         const groupData = JSON.parse(fs.readFileSync(groupFile, 'utf8'));
-        if (!groupData.moderators) groupData.moderators = [];
-        if (!groupData.moderators.includes(winner.id)) {
-          groupData.moderators.push(winner.id);
+        if (!groupData.alphas) groupData.alphas = [];
+        if (!groupData.alphas.includes(winner.id)) {
+          groupData.alphas.push(winner.id);
           fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
         }
       }
     } catch (e) {
-      console.error('Erro ao promover moderador:', e);
-      await this.nazu.sendMessage(groupId, { text: '⚠️ Não consegui adicionar o vencedor à lista de moderadores automaticamente.' });
+      console.error('Erro ao promover Alpha:', e);
+      await this.nazu.sendMessage(groupId, { text: '⚠️ Não consegui adicionar o vencedor à lista de Alphas automaticamente.' });
     }
   }
 
@@ -127,7 +127,7 @@ class ElectionManager {
       if (new Date(mandate.endDate) < now) {
         changed = true;
         await this.nazu.sendMessage(mandate.groupId, { 
-          text: `⌛ O mandato de @${mandate.userId.split('@')[0]} terminou.\n\nO cargo de moderador temporário foi removido automaticamente.`,
+          text: `⌛ O mandato de @${mandate.userId.split('@')[0]} terminou.\n\nO cargo de Alpha temporário foi removido automaticamente. 🐺`,
           mentions: [mandate.userId]
         });
         
@@ -135,13 +135,13 @@ class ElectionManager {
           const groupFile = path.join(__dirname, '..', '..', 'database', 'grupos', `${mandate.groupId}.json`);
           if (fs.existsSync(groupFile)) {
             const groupData = JSON.parse(fs.readFileSync(groupFile, 'utf8'));
-            if (groupData.moderators) {
-              groupData.moderators = groupData.moderators.filter(m => m !== mandate.userId);
+            if (groupData.alphas) {
+              groupData.alphas = groupData.alphas.filter(m => m !== mandate.userId);
               fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
             }
           }
         } catch (e) {
-          console.error('Erro ao remover moderador:', e);
+          console.error('Erro ao remover Alpha:', e);
         }
         
         mandates.splice(i, 1);
