@@ -7029,26 +7029,30 @@ if (isCmd && command && !isOwner) {
               if (!me.stats) me.stats = {};
               me.stats.totalCrimes = (me.stats.totalCrimes || 0) + 1;
               saveEconomy(econ);
-              return reply(`╭━━━⊱ 🕵️ *CRIME* 🕵️ ⊱━━━╮
-│
-│ ✅ Crime bem-sucedido!
-│ 💰 Lucrou: ${fmt(gain)}
-│
-│ ⚠️ Cuidado para não ser pego!
-│
-╰━━━━━━━━━━━━━━━━━━━━━╯`);
+              return reply(`╭─────────────────────⭓\n` +
+              `│      🕵️ 𝗞𝗔𝗜𝗦𝗘𝗥 𝗖𝗥𝗜𝗠𝗘 🕵️\n` +
+              `├─────────────────────⭓\n` +
+              `│\n` +
+              `│ ✅ Crime bem-sucedido!\n` +
+              `│ 💰 Lucrou » ${fmt(gain)}\n` +
+              `│\n` +
+              `│ ⚠️ Cuidado para não ser pego!\n` +
+              `│\n` +
+              `╰─────────────────────⭓`);
             } else {
-              const fine = 200 + Math.floor(Math.random() * 401); // multa maior: 200-600 (era 120-320)
+              const fine = 200 + Math.floor(Math.random() * 401);
               const pay = Math.min(me.wallet, fine);
               me.wallet -= pay;
-              me.cooldowns.crime = Date.now() + 30 * 60 * 1000; // 30 min (era 10 min)
+              me.cooldowns.crime = Date.now() + 30 * 60 * 1000;
               saveEconomy(econ);
-              return reply(`╭━━━⊱ 🚔 *PEGO!* 🚔 ⊱━━━╮
-│
-│ ❌ Você foi pego pela polícia!
-│ 💸 Multa: ${fmt(pay)}
-│
-╰━━━━━━━━━━━━━━━━━━━━╯`);
+              return reply(`╭─────────────────────⭓\n` +
+              `│      🚔 𝗞𝗔𝗜𝗦𝗘𝗥 𝗖𝗥𝗜𝗠𝗘 🚔\n` +
+              `├─────────────────────⭓\n` +
+              `│\n` +
+              `│ ❌ Você foi pego pela polícia!\n` +
+              `│ 💸 Multa » ${fmt(pay)}\n` +
+              `│\n` +
+              `╰─────────────────────⭓`);
             }
           }
 
@@ -7494,7 +7498,16 @@ if (isCmd && command && !isOwner) {
             me.stats.totalWork = (me.stats.totalWork || 0) + 1;
             me.stats.workCount = (me.stats.workCount || 0) + 1;
             saveEconomy(econ);
-            return reply(`💼 Você trabalhou e recebeu ${fmt(total)} ${bonus > 0 ? `(bônus ${fmt(bonus)})` : ''}!`);
+            return reply(`╭─────────────────────⭓\n` +
+              `│      ⚒️ 𝗞𝗔𝗜𝗦𝗘𝗥 𝗪𝗢𝗥𝗞 ⚒️\n` +
+              `├─────────────────────⭓\n` +
+              `│\n` +
+              `│ ✅ Trabalho concluído!\n` +
+              `│ 💰 Salário » ${fmt(base)}\n` +
+              `│ ✨ Bônus » +${fmt(bonus)}\n` +
+              `│ 📊 Total » ${fmt(total)}\n` +
+              `│\n` +
+              `╰─────────────────────⭓`);
           }
 
           // ===== Mercado entre usuários =====
@@ -7756,21 +7769,23 @@ if (isCmd && command && !isOwner) {
 
             saveEconomy(econ);
 
-            let text = `╭━━━⊱ 🎁 *RECOMPENSA DIÁRIA* ⊱━━━╮\n`;
-            text += `│\n`;
-            text += `│ 💰 Base: +${fmt(baseReward)}\n`;
-            text += `│ 🔥 Streak (${me.streak.count}x): +${fmt(streakBonus)}\n`;
+            let text = `╭─────────────────────⭓\n` +
+              `│      🎁 𝗞𝗔𝗜𝗦𝗘𝗥 𝗗𝗔𝗜𝗟𝗬 🎁\n` +
+              `├─────────────────────⭓\n` +
+              `│\n` +
+              `│ 💰 Base » +${fmt(baseReward)}\n` +
+              `│ 🔥 Streak » +${fmt(streakBonus)}\n`;
             if (extraBonus > 0) {
-              text += `│ ✨ Bônus: +${fmt(extraBonus)}\n`;
+              text += `│ ✨ Bônus » +${fmt(extraBonus)}\n`;
             }
-            text += `│ ━━━━━━━━━━━━━━\n`;
-            text += `│ 💵 Total: *${fmt(finalReward)}*\n`;
-            text += `│ ⚡ XP: +${xpGain}\n`;
-            text += `│\n`;
-            text += `│ 🔥 Sequência: *${me.streak.count} dia${me.streak.count !== 1 ? 's' : ''}*\n`;
-            text += `│ 🏆 Recorde: ${me.streak.record} dia${me.streak.record !== 1 ? 's' : ''}\n`;
-            text += `│\n`;
-            text += `╰━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
+            text += `├─────────────────────⭓\n` +
+              `│ 💵 Total » *${fmt(finalReward)}*\n` +
+              `│ ⚡ XP » +${xpGain}\n` +
+              `│\n` +
+              `│ 🔥 Sequência » ${me.streak.count} dias\n` +
+              `│ 🏆 Recorde » ${me.streak.record} dias\n` +
+              `│\n` +
+              `╰─────────────────────⭓`;
 
             if (bonusMessage) {
               text += bonusMessage;
