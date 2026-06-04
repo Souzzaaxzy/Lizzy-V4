@@ -25159,24 +25159,37 @@ ${prefix}togglecmdvip premium_ia off`);
         const args = q.split(' ');
         const subCmd = args[0].toLowerCase();
 
-        if (subCmd === 'ver') {
-          let text = `⚙️ *Configurações da eleição*\n\n`;
-          text += `⏳ Candidaturas: ${config.candidatura} minutos\n`;
-          text += `🗳️ Votação: ${config.votacao} minutos\n`;
-          text += `👑 Mandato: ${config.mandato} dias`;
+        if (subCmd === 'ver' || !q) {
+          let text = `⚙️ *CONFIGURAÇÕES DA ELEIÇÃO*\n\n`;
+          text += `⏳ *Candidatura:* ${config.candidatura} minutos\n`;
+          text += `🗳️ *Votação:* ${config.votacao} minutos\n`;
+          text += `👑 *Mandato:* ${config.mandato} dias\n\n`;
+          text += `💡 *Para alterar, use:*\n`;
+          text += `> ${prefix}tempeleicao candidatura <minutos>\n`;
+          text += `> ${prefix}tempeleicao votacao <minutos>\n`;
+          text += `> ${prefix}tempeleicao mandato <dias>`;
           return reply(text);
         }
 
         const value = parseInt(args[1]);
-        if (isNaN(value) || value <= 0) return reply('❌ Informe um valor numérico válido.');
+        if (isNaN(value) || value <= 0) return reply('❌ Informe um valor numérico válido maior que zero.');
 
-        if (subCmd === 'candidatura') config.candidatura = value;
-        else if (subCmd === 'votacao' || subCmd === 'votação') config.votacao = value;
-        else if (subCmd === 'mandato') config.mandato = value;
-        else return reply('❌ Subcomando inválido. Use: candidatura, votacao ou mandato.');
+        let msg = '';
+        if (subCmd === 'candidatura') {
+          config.candidatura = value;
+          msg = `✅ Tempo de candidatura definido para ${value} minutos.`;
+        } else if (subCmd === 'votacao' || subCmd === 'votação') {
+          config.votacao = value;
+          msg = `✅ Tempo de votação definido para ${value} minutos.`;
+        } else if (subCmd === 'mandato') {
+          config.mandato = value;
+          msg = `✅ Duração do mandato definida para ${value} dias.`;
+        } else {
+          return reply('❌ Subcomando inválido. Use: candidatura, votacao ou mandato.');
+        }
 
         saveElectionConfig(config);
-        return reply(`✅ Configuração de ${subCmd} atualizada para ${value}.`);
+        return reply(msg);
         break;
       }
 
