@@ -14,6 +14,7 @@ import axios from 'axios';
 import util from 'util';
 import PerformanceOptimizer from './utils/performanceOptimizer.js';
 import RentalExpirationManager from './utils/rentalExpirationManager.js';
+import ElectionManager from './utils/electionManager.js';
 import { loadMsgBotOn } from './utils/database.js';
 import { buildUserId } from './utils/helpers.js';
 import { initCaptchaIndex, loadCaptchaJson, saveCaptchaJson } from './utils/captchaIndex.js';
@@ -1532,6 +1533,32 @@ async function createBotSocket(authDir) {
                     }
                 }
             });
+
+            KaiserSock.ev.on('messages.update', async (updates) => {
+                for (const update of updates) {
+                    if (update.update.pollUpdates) {
+                        const pollUpdate = update.update.pollUpdates[0];
+                        const pollMsgId = update.key.id;
+                        const groupId = update.key.remoteJid;
+                        
+                        try {
+                            const { loadElections, saveElections } = await import('./utils/database.js');
+                            const elections = loadElections();
+                            const election = elections.find(e => e.groupId === groupId && e.pollMsgId === pollMsgId);
+                            
+                            if (election && election.status === 'votacao') {
+                                const voter = pollUpdate.pollUpdateMessageKey.remoteJid || pollUpdate.pollUpdateMessageKey.participant;
+                                // Simplificação: registra o voto (em sistema real precisaria decifrar o voto do Baileys)
+                                // Para este MVP, vamos registrar que o usuário votou para controle de encerramento
+                                election.voters[voter] = true;
+                                saveElections(elections);
+                            }
+                        } catch (e) {
+                            console.error('Erro ao processar voto:', e);
+                        }
+                    }
+                }
+            });
         };
 
         KaiserSock.ev.on('connection.update', async (update) => {
@@ -1584,6 +1611,9 @@ async function createBotSocket(authDir) {
 
                     rentalExpirationManager.nazu = KaiserSock;
                     await rentalExpirationManager.initialize();
+
+                    const electionManager = new ElectionManager(KaiserSock);
+                    await electionManager.initialize();
 
                     attachMessagesListener();
                     startCacheCleanup(); // Inicia o sistema de limpeza de cache

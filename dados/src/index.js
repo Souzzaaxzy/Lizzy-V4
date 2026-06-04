@@ -25100,6 +25100,86 @@ ${prefix}togglecmdvip premium_ia off`);
         }
         break;
 
+      case 'eleicao':
+      case 'eleição': {
+        if (!isGroup) return reply('❌ Este comando só pode ser usado em grupos.');
+        if (!isGroupAdmin) return reply('❌ Apenas administradores podem iniciar uma eleição.');
+
+        const elections = loadElections();
+        if (elections.find(e => e.groupId === from)) return reply('❌ Já existe uma eleição em andamento neste grupo.');
+
+        const config = loadElectionConfig();
+        const election = {
+          groupId: from,
+          status: 'candidatura',
+          candidates: [],
+          startTime: Date.now(),
+          duration: config.candidatura * 60 * 1000,
+          voters: {}
+        };
+
+        elections.push(election);
+        saveElections(elections);
+
+        const allParticipants = participants.map(p => p.id);
+        let text = `🏛️ *ELEIÇÃO PARA MODERADOR INICIADA!*\n\n`;
+        text += `Todos os membros estão convidados a participar.\n\n`;
+        text += `📢 Para se candidatar, envie:\n`;
+        text += `*"${prefix}cand"*\n\n`;
+        text += `⏳ Tempo para candidaturas: ${config.candidatura} minutos.\n\n`;
+        text += `Boa sorte a todos!`;
+
+        await nazu.sendMessage(from, { text, mentions: allParticipants });
+        break;
+      }
+
+      case 'cand':
+      case 'candidatar': {
+        if (!isGroup) return reply('❌ Este comando só pode ser usado em grupos.');
+        
+        const elections = loadElections();
+        const election = elections.find(e => e.groupId === from);
+        
+        if (!election) return reply('❌ Não há nenhuma eleição em andamento.');
+        if (election.status !== 'candidatura') return reply('❌ O período de candidaturas já encerrou.');
+        
+        if (election.candidates.find(c => c.id === sender)) return reply('❌ Você já está na lista de candidatos!');
+
+        election.candidates.push({ id: sender, name: pushname });
+        saveElections(elections);
+
+        return reply(`✅ @${sender.split('@')[0]} foi adicionado à lista de candidatos.`, { mentions: [sender] });
+        break;
+      }
+
+      case 'tempeleicao': {
+        if (!isGroupAdmin) return reply('❌ Apenas administradores podem configurar a eleição.');
+        
+        const config = loadElectionConfig();
+        const args = q.split(' ');
+        const subCmd = args[0].toLowerCase();
+
+        if (subCmd === 'ver') {
+          let text = `⚙️ *Configurações da eleição*\n\n`;
+          text += `⏳ Candidaturas: ${config.candidatura} minutos\n`;
+          text += `🗳️ Votação: ${config.votacao} minutos\n`;
+          text += `👑 Mandato: ${config.mandato} dias`;
+          return reply(text);
+        }
+
+        const value = parseInt(args[1]);
+        if (isNaN(value) || value <= 0) return reply('❌ Informe um valor numérico válido.');
+
+        if (subCmd === 'candidatura') config.candidatura = value;
+        else if (subCmd === 'votacao' || subCmd === 'votação') config.votacao = value;
+        else if (subCmd === 'mandato') config.mandato = value;
+        else return reply('❌ Subcomando inválido. Use: candidatura, votacao ou mandato.');
+
+        saveElectionConfig(config);
+        return reply(`✅ Configuração de ${subCmd} atualizada para ${value}.`);
+        break;
+      }
+
       case 'diagnosticrpg':
       case 'repairdb':
       case 'fixdb': {

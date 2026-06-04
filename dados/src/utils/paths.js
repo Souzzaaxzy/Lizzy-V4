@@ -54,6 +54,9 @@ const MENU_AUDIO_FILE = path.join(DONO_DIR, 'menuAudio.json');
 const MENU_LERMAIS_FILE = path.join(DONO_DIR, 'menuLerMais.json');
 const SUPPORT_TICKETS_FILE = path.join(DATABASE_DIR, 'supportTickets.json');
 const MOMENTS_FILE = path.join(DATABASE_DIR, 'moments.json');
+const ELECTIONS_FILE = path.join(DATABASE_DIR, 'elections.json');
+const MANDATES_FILE = path.join(DATABASE_DIR, 'mandates.json');
+const ELECTION_CONFIG_FILE = path.join(DATABASE_DIR, 'electionConfig.json');
 
 // Detecta se é sub-bot e ajusta o caminho do config
 const CONFIG_FILE = process.env.CONFIG_PATH || path.join(SRC_DIR, 'config.json');
@@ -106,6 +109,9 @@ export {
   MENU_LERMAIS_FILE,
   SUPPORT_TICKETS_FILE,
   MOMENTS_FILE,
+  ELECTIONS_FILE,
+  MANDATES_FILE,
+  ELECTION_CONFIG_FILE,
   CONFIG_FILE,
   PACKAGE_JSON_PATH
 };

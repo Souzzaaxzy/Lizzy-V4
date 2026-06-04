@@ -45,6 +45,9 @@ import {
   MENU_LERMAIS_FILE,
   SUPPORT_TICKETS_FILE,
   MOMENTS_FILE,
+  ELECTIONS_FILE,
+  MANDATES_FILE,
+  ELECTION_CONFIG_FILE,
   CONFIG_FILE
 } from './paths.js';
 
@@ -282,6 +285,9 @@ _Para desativar esta mensagem de inicialização, use o comando *msgboton*_`
 });
 ensureJsonFileExists(CUSTOM_REACTS_FILE, { reacts: [] });
 ensureJsonFileExists(REMINDERS_FILE, { reminders: [] });
+ensureJsonFileExists(ELECTIONS_FILE, []);
+ensureJsonFileExists(MANDATES_FILE, []);
+ensureJsonFileExists(ELECTION_CONFIG_FILE, { candidatura: 10, votacao: 15, mandato: 7 });
 ensureJsonFileExists(CMD_NOT_FOUND_FILE, {
   enabled: true,
   message: '❌ Comando não encontrado! Tente {prefix}menu para ver todos os comandos disponíveis.',
@@ -429,6 +435,15 @@ const saveMsgPrefix = (message) => {
     return false;
   }
 };
+
+const loadElections = () => loadJsonFile(ELECTIONS_FILE, []);
+const saveElections = (data) => saveJsonFileSafe(ELECTIONS_FILE, data);
+
+const loadMandates = () => loadJsonFile(MANDATES_FILE, []);
+const saveMandates = (data) => saveJsonFileSafe(MANDATES_FILE, data);
+
+const loadElectionConfig = () => loadJsonFile(ELECTION_CONFIG_FILE, { candidatura: 10, votacao: 15, mandato: 7 });
+const saveElectionConfig = (data) => saveJsonFileSafe(ELECTION_CONFIG_FILE, data);
 
 const loadMsgBotOn = () => {
   // Carrega config para verificar o número do dono
@@ -3508,6 +3523,13 @@ export {
   addMoment,
   getMoments,
   deleteMoment,
+  // Sistema de Eleição
+  loadElections,
+  saveElections,
+  loadMandates,
+  saveMandates,
+  loadElectionConfig,
+  saveElectionConfig,
 };
 
 // ===== Sistema de Momentos (Salvamento de mensagens) =====
@@ -3591,4 +3613,13 @@ const deleteMoment = (groupId, momentIndex) => {
     console.error('❌ Erro ao deletar momento:', error);
     return { success: false, message: 'Erro ao deletar momento' };
   }
+};
+
+export {
+  loadElections,
+  saveElections,
+  loadMandates,
+  saveMandates,
+  loadElectionConfig,
+  saveElectionConfig
 };
