@@ -24211,12 +24211,20 @@ ${prefix}togglecmdvip premium_ia off`);
           var menc;
           menc = [];
           let blad;
-          blad = `*🏆 Rank dos ${blue67.length < 10 ? blue67.length : 10} mais ativos do grupo:*\n`;
-          for (i6 = 0; i6 < (blue67.length < 10 ? blue67.length : 10); i6++) {
+          const limit = Math.min(blue67.length, 5);
+          blad = `╭━━━〔 🏆 TOP ${limit} ATIVOS 〕━━━╮\n\n`;
+          const medalhas = ['🥇', '🥈', '🥉', '🏅', '🎖️'];
+          
+          for (i6 = 0; i6 < limit; i6++) {
             if (blue67[i6].id) {
-              if (i6 != null) {
-                blad += `\n*🏅 ${i6 + 1}º Lugar:* @${getUserName(blue67[i6].id)}\n- mensagens encaminhadas: *${blue67[i6].msg}*\n- comandos executados: *${blue67[i6].cmd}*\n- Figurinhas encaminhadas: *${blue67[i6].figu}*\n`;
-              }
+              const medalha = medalhas[i6] || '🔹';
+              const userMsg = blue67[i6].msg || 0;
+              const userCmd = blue67[i6].cmd || 0;
+              const userFigu = blue67[i6].figu || 0;
+              
+              blad += `${medalha} @${getUserName(blue67[i6].id)}\n`;
+              blad += `└ 📩${userMsg} • 🤖${userCmd} • 🖼️${userFigu}\n\n`;
+              
               if (!groupData.mark) {
                 groupData.mark = {};
               }
@@ -24225,6 +24233,7 @@ ${prefix}togglecmdvip premium_ia off`);
               }
             }
           }
+          blad += `╰━━━〔 ⭐ KAISER BOT ⭐ 〕━━━╯`;
           await nazu.sendMessage(from, {
             text: blad,
             mentions: menc
