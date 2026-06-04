@@ -3615,11 +3615,4 @@ const deleteMoment = (groupId, momentIndex) => {
   }
 };
 
-export {
-  loadElections,
-  saveElections,
-  loadMandates,
-  saveMandates,
-  loadElectionConfig,
-  saveElectionConfig
-};
+
