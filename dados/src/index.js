@@ -2370,6 +2370,18 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     const isAssistente = groupData.assistente;
     const isModoLite = isGroup && isModoLiteActive(groupData, modoLiteGlobal);
 
+    // Lógica para apagar mensagens de usuários mutados automaticamente
+    if (isGroup && (isMuted || isMuted2) && !isGroupAdmin && !isOwner) {
+      if (isBotAdmin) {
+        try {
+          await nazu.sendMessage(from, { delete: info.key });
+          return; // Interrompe o processamento para que o bot não responda nada
+        } catch (e) {
+          console.error("Erro ao apagar mensagem de usuário mutado:", e);
+        }
+      }
+    }
+
     if (type === 'reactionMessage') {
       await processReactionMessage();
       return;
@@ -29548,30 +29560,27 @@ case 'assistent':
       case 'mutar':
         try {
           if (!isGroup) return sendKaiserWarning("Este comando só pode ser usado em grupos.");
-          if (!isGroupAdmin) return reply("você precisa ser adm 💔");
-          if (!isBotAdmin) return sendKaiserWarning("Eu preciso ser administrador para realizar esta ação.");
-          if (!menc_os2) return reply("Marque alguém 🙄");
-          const groupFilePath = __dirname + `/../database/grupos/${from}.json`;
-          let groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : {
-            mutedUsers: {}
-          };
+          if (!isGroupAdmin) return reply("Você precisa ser administrador para usar este comando. 💔");
+          if (!isBotAdmin) return sendKaiserWarning("Eu preciso ser administrador para apagar as mensagens.");
+          if (!menc_os2) return reply("Marque alguém para mutar. 🙄");
+          
+          const targetId = await normalizeUserId(nazu, menc_os2);
+          if (idInArray(targetId, groupAdmins) || targetId === nmrdn) {
+            return reply("❌ Não posso mutar administradores ou o dono.");
+          }
 
           groupData.mutedUsers = groupData.mutedUsers || {};
-          const targetId = await normalizeUserId(nazu, menc_os2);
           groupData.mutedUsers[targetId] = true;
-          if (targetId !== menc_os2) {
-            groupData.mutedUsers[menc_os2] = true;
-          }
-          fs.writeFileSync(groupFilePath, JSON.stringify(groupData));
+          
+          persistGroupData();
+          
           await nazu.sendMessage(from, {
-            text: `✅ @${getUserName(menc_os2)} foi mutado. Se enviar mensagens, será banido.`,
+            text: `🔇 @${getUserName(menc_os2)} foi mutado!\n\nSuas mensagens serão apagadas automaticamente até que seja desmutado.`,
             mentions: [menc_os2]
-          }, {
-            quoted: info
-          });
+          }, { quoted: info });
         } catch (e) {
           console.error(e);
-          reply("ocorreu um erro 💔");
+          reply("Ocorreu um erro ao mutar o usuário. 💔");
         }
         break;
       case 'desmute':
@@ -29579,30 +29588,24 @@ case 'assistent':
       case 'unmute':
         try {
           if (!isGroup) return sendKaiserWarning("Este comando só pode ser usado em grupos.");
-          if (!isGroupAdmin) return reply("você precisa ser adm 💔");
-          if (!menc_os2) return reply("Marque alguém 🙄");
-          const groupFilePath = __dirname + `/../database/grupos/${from}.json`;
-          let groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : {
-            mutedUsers: {}
-          };
+          if (!isGroupAdmin) return reply("Você precisa ser administrador para usar este comando. 💔");
+          if (!menc_os2) return reply("Marque alguém para desmutar. 🙄");
 
-          groupData.mutedUsers = groupData.mutedUsers || {};
           const targetId = await normalizeUserId(nazu, menc_os2);
-          const removed = removeUserFromMap(groupData.mutedUsers, targetId) || removeUserFromMap(groupData.mutedUsers, menc_os2);
+          const removed = removeUserFromMap(groupData.mutedUsers, targetId);
+          
           if (removed) {
-            fs.writeFileSync(groupFilePath, JSON.stringify(groupData));
+            persistGroupData();
             await nazu.sendMessage(from, {
-              text: `✅ @${getUserName(menc_os2)} foi desmutado e pode enviar mensagens novamente.`,
+              text: `🔊 @${getUserName(menc_os2)} foi desmutado e agora pode enviar mensagens normalmente.`,
               mentions: [menc_os2]
-            }, {
-              quoted: info
-            });
+            }, { quoted: info });
           } else {
-            reply('❌ Este usuário não está mutado.');
+            reply(`❌ O usuário @${getUserName(menc_os2)} não estava mutado.`, { mentions: [menc_os2] });
           }
         } catch (e) {
           console.error(e);
-          reply("ocorreu um erro 💔");
+          reply("Ocorreu um erro ao desmutar o usuário. 💔");
         }
         break;
       case 'mute2':
