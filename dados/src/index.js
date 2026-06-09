@@ -26216,11 +26216,16 @@ break;
           try {
             const res = await smmApi.getServices();
             if (Array.isArray(res)) {
-              const categories = [...new Set(res.map(s => s.category))];
-              let text = `📋 *CATEGORIAS SMM*\n\n`;
-              text += `Para ver os serviços, use: *${prefix}smm [nome_da_categoria]*\n\n`;
-              categories.forEach(cat => {
-                text += `📁 ${cat}\n`;
+              // Extrai o nome principal antes do primeiro pipe ou caractere especial
+              const mainCategories = [...new Set(res.map(s => {
+                const name = s.category.split('|')[0].split('-')[0].trim();
+                return name;
+              }))].filter(name => name && name !== '📁');
+              
+              let text = `📋 *PLATAFORMAS DISPONÍVEIS*\n\n`;
+              text += `Para ver os serviços, use: *${prefix}smm [nome]*\n\n`;
+              mainCategories.forEach(cat => {
+                text += `⭐ ${cat}\n`;
               });
               return reply(text);
             } else {
@@ -26231,20 +26236,33 @@ break;
           }
         }
 
-        // Busca por categoria específica
-        if (q.trim().length > 4) {
+        // Busca por categoria específica ou rede social
+        if (q.trim().length >= 3 && subCmd !== 'pedido' && subCmd !== 'status' && subCmd !== 'setkey') {
           try {
             const res = await smmApi.getServices();
             if (Array.isArray(res)) {
-              const categoryName = q.trim().toLowerCase();
-              const filtered = res.filter(s => s.category.toLowerCase().includes(categoryName));
+              const searchTerm = q.trim().toLowerCase();
+              // Filtra serviços onde a categoria contém o termo buscado
+              const filtered = res.filter(s => s.category.toLowerCase().includes(searchTerm));
               
               if (filtered.length > 0) {
-                let text = `📦 *SERVIÇOS: ${filtered[0].category.toUpperCase()}*\n\n`;
-                filtered.slice(0, 30).forEach(s => {
-                  text += `🆔 *ID:* ${s.service}\n📝 *Nome:* ${s.name}\n💰 *Preço:* ${s.rate} por 1000\n\n`;
-                });
-                if (filtered.length > 30) text += `... (exibindo apenas os 30 primeiros)`;
+                // Agrupa por subcategoria para não ficar repetitivo
+                let text = `📦 *RESULTADOS PARA: ${searchTerm.toUpperCase()}*\n\n`;
+                let currentCat = '';
+                let count = 0;
+
+                for (const s of filtered) {
+                  if (count >= 40) break; // Limite de 40 serviços por vez
+                  if (currentCat !== s.category) {
+                    currentCat = s.category;
+                    text += `\n📂 *${currentCat}*\n`;
+                  }
+                  text += `🆔 ID: ${s.service} - R$ ${s.rate} (1k)\n`;
+                  count++;
+                }
+                
+                if (filtered.length > 40) text += `\n... (mais ${filtered.length - 40} serviços encontrados)`;
+                text += `\n\n💡 Use *${prefix}smm pedido [ID] [LINK] [QTD]* para comprar.`;
                 return reply(text);
               }
             }
