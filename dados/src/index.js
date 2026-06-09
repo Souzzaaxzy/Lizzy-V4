@@ -305,6 +305,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = pathz.dirname(__filename);
 const OWNER_ONLY_MESSAGE = '🚫 Este comando é apenas para o dono do bot!';
 
+// Armazenamento temporário para pedidos SMM pendentes de confirmação
+const pendingSmmOrders = new Map();
+
 const react = async (emoji, sock, messageKey, fromJid) => {
   if (messageKey && sock && fromJid) {
     await sock.sendMessage(fromJid, { react: { text: emoji, key: messageKey } });
@@ -26276,7 +26279,6 @@ break;
         }
 
         if (subCmd === 'pedido') {
-          // Captura os argumentos ignorando espaços extras
           const serviceId = arg[1];
           const link = arg[2];
           const quantity = arg[3];
@@ -26286,20 +26288,67 @@ break;
           }
 
           try {
-            // Garante que serviceId e quantity sejam números para a API
-            const res = await smmApi.addOrder({
+            const services = await smmApi.getServices();
+            const service = services.find(s => s.service === serviceId);
+            
+            if (!service) {
+              return reply(`❌ ID de serviço ${serviceId} não encontrado. Verifique o ID usando ${prefix}smm [nome].`);
+            }
+
+            const totalCost = (parseFloat(service.rate) / 1000) * parseInt(quantity);
+            
+            // Salva o pedido pendente
+            pendingSmmOrders.set(sender, {
               service: parseInt(serviceId),
               link: link.trim(),
-              quantity: parseInt(quantity)
+              quantity: parseInt(quantity),
+              name: service.name,
+              cost: totalCost.toFixed(2),
+              timestamp: Date.now()
+            });
+
+            let msg = `📝 *RESUMO DO PEDIDO*\n\n`;
+            msg += `📦 *Serviço:* ${service.name}\n`;
+            msg += `🆔 *ID:* ${serviceId}\n`;
+            msg += `🔗 *Link:* ${link}\n`;
+            msg += `🔢 *Quantidade:* ${quantity}\n`;
+            msg += `💸 *Valor Total:* R$ ${totalCost.toFixed(2)}\n\n`;
+            msg += `⚠️ *Deseja confirmar a compra?*\n`;
+            msg += `Digite *${prefix}smm confirmar* para finalizar o pedido.`;
+            
+            return reply(msg);
+          } catch (e) {
+            return reply(`❌ Erro ao processar resumo: ${e.message}`);
+          }
+        }
+
+        if (subCmd === 'confirmar') {
+          const pending = pendingSmmOrders.get(sender);
+          
+          if (!pending) {
+            return reply(`❌ Você não tem nenhum pedido pendente de confirmação.`);
+          }
+
+          // Expira em 5 minutos
+          if (Date.now() - pending.timestamp > 300000) {
+            pendingSmmOrders.delete(sender);
+            return reply(`❌ Seu pedido pendente expirou. Por favor, faça o pedido novamente.`);
+          }
+
+          try {
+            const res = await smmApi.addOrder({
+              service: pending.service,
+              link: pending.link,
+              quantity: pending.quantity
             });
 
             if (res && res.order) {
-              return reply(`✅ *PEDIDO REALIZADO COM SUCESSO!*\n\n` +
-                `📦 *Serviço ID:* ${serviceId}\n` +
-                `🔢 *Quantidade:* ${quantity}\n` +
-                `🆔 *ID do Pedido:* ${res.order}\n\n` +
-                `📊 Status: Pendente\n` +
-                `💡 _Use ${prefix}smm status ${res.order} para acompanhar a atualização real._`);
+              pendingSmmOrders.delete(sender);
+              return reply(`✅ *PEDIDO FINALIZADO COM SUCESSO!*\n\n` +
+                `📦 *Serviço:* ${pending.name}\n` +
+                `🆔 *ID do Pedido:* ${res.order}\n` +
+                `💸 *Custo:* R$ ${pending.cost}\n\n` +
+                `💡 _Use ${prefix}smm status ${res.order} para acompanhar._`);
             } else {
               const errorMsg = res.error || (res.errors ? JSON.stringify(res.errors) : 'Erro desconhecido');
               return reply(`❌ Erro no pedido: ${errorMsg}`);
