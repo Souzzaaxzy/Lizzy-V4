@@ -26288,7 +26288,11 @@ break;
             });
 
             if (res.order) {
-              return reply(`✅ *PEDIDO REALIZADO*\n\n🆔 ID do Pedido: ${res.order}`);
+              return reply(`✅ *PEDIDO REALIZADO COM SUCESSO!*\n\n` +
+                `📦 *Serviço ID:* ${serviceId}\n` +
+                `🔢 *Quantidade:* ${quantity}\n` +
+                `🆔 *ID do Pedido:* ${res.order}\n\n` +
+                `💡 _Use ${prefix}smm status ${res.order} para acompanhar._`);
             } else {
               return reply(`❌ Erro no pedido: ${res.error || 'Erro desconhecido'}`);
             }
