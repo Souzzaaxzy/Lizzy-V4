@@ -9,6 +9,8 @@ import {
   makeCacheableSignalKeyStore
 } from 'baileys';
 
+import dotenv from 'dotenv';
+dotenv.config();
 
 import { exec, execSync, spawn } from 'child_process';
 import { promisify } from 'util';
@@ -22595,6 +22597,71 @@ ${prefix}${command} 1a0b5879-bc22-4f4a
         } catch (e) {
           console.error(e);
           await reply("🐝 Ops! Ocorreu um erro inesperado. Tente novamente em alguns instantes, por favor! 🥺");
+        }
+        break;
+
+      case 'setnvkey':
+      case 'setnvidia':
+      case 'nvkey':
+        try {
+          if (!isOwnerOrSub) return reply("🚫 Este comando é exclusivo para o dono do bot!");
+
+          if (!q) {
+            const currentKey = process.env.NVIDIA_API_KEY || '';
+            const maskedKey = currentKey ? currentKey.substring(0, 8) + '...' + currentKey.substring(currentKey.length - 4) : 'Não configurada';
+            return reply(`🔑 *Configurar NVIDIA API Key*
+
+Key atual: \`${maskedKey}\`
+
+📝 *Como obter sua key:*
+1. Acesse: https://ngc.nvidia.com/
+2. Crie uma conta ou faça login
+3. Vá em Setup > API Key
+4. Copie sua chave
+
+💡 *Uso:*
+${prefix}setnvkey sua_chave_aqui
+
+⚠️ A key será salva no arquivo .env`);
+          }
+
+          // Validar formato básico da key (começa com nvapi-)
+          if (!q.startsWith('nvapi-')) {
+            return reply(`❌ Formato inválido! A NVIDIA API Key deve começar com "nvapi-"\n\nExemplo: ${prefix}setnvkey nvapi-xxxxxxxxxxxxx`);
+          }
+
+          // Salvar no .env
+          const envPath = pathz.join(__dirname, '../../.env');
+          let envContent = '';
+          
+          if (fs.existsSync(envPath)) {
+            envContent = fs.readFileSync(envPath, 'utf-8');
+          }
+
+          // Substituir ou adicionar a linha NVIDIA_API_KEY
+          const keyLine = `NVIDIA_API_KEY=${q}`;
+          const keyRegex = /^NVIDIA_API_KEY=.*$/gm;
+          
+          if (keyRegex.test(envContent)) {
+            envContent = envContent.replace(keyRegex, keyLine);
+          } else {
+            envContent += envContent.endsWith('\n') ? keyLine : '\n' + keyLine;
+          }
+
+          fs.writeFileSync(envPath, envContent);
+
+          // Atualizar variável em memória
+          process.env.NVIDIA_API_KEY = q;
+
+          await reply(`✅ *NVIDIA API Key configurada com sucesso!*
+
+🔑 Key: \`${q.substring(0, 15)}...${q.substring(q.length - 4)}\`
+
+⚠️ *Importante:* Para aplicar completamente, reinicie o bot com ${prefix}restart`);
+
+        } catch (e) {
+          console.error(e);
+          await reply("🐝 Ops! Ocorreu um erro inesperado. Tente novamente!");
         }
         break;
 
