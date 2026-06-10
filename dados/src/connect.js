@@ -580,6 +580,15 @@ async function handleGroupParticipantsUpdate(KaiserSock, inf) {
 
                 const entradaPorLink = !inf.author || inf.participants.includes(inf.author);
 
+                // ═══════════════════════════════════════════════════════════════
+                // 🤖 EVENTO NPC - NOVO MEMBRO ENTROU
+                // ═══════════════════════════════════════════════════════════════
+                for (const participant of inf.participants) {
+                  const userName = participant.split('@')[0];
+                  npcManager?.recordEvent('novo_membro', participant, `${userName} entrou no grupo`);
+                }
+                // ═══════════════════════════════════════════════════════════════
+
 
                 for (const participant of inf.participants) {
 
@@ -735,6 +744,15 @@ async function handleGroupParticipantsUpdate(KaiserSock, inf) {
             }
 
             case 'remove': {
+                // ═══════════════════════════════════════════════════════════════
+                // 🤖 EVENTO NPC - MEMBRO SAIU/FOI REMOVIDO
+                // ═══════════════════════════════════════════════════════════════
+                for (const participant of inf.participants) {
+                  const userName = participant.split('@')[0];
+                  npcManager?.recordEvent('membro_saiu', participant, `${userName} saiu ou foi removido do grupo`);
+                }
+                // ═══════════════════════════════════════════════════════════════
+
                 if (groupSettings.exit?.enabled) {
                     const message = await createGroupMessage(
                         KaiserSock,
@@ -752,6 +770,15 @@ async function handleGroupParticipantsUpdate(KaiserSock, inf) {
 
             case 'promote':
             case 'demote': {
+                // ═══════════════════════════════════════════════════════════════
+                // 🤖 EVENTO NPC - TROCA DE CARGO ADM
+                // ═══════════════════════════════════════════════════════════════
+                for (const user of inf.participants) {
+                  const userNum = user.split('@')[0];
+                  const action = inf.action === 'promote' ? 'virou ADM' : 'deixou de ser ADM';
+                  npcManager?.recordEvent('troca_cargo', user, `${userNum} ${action}`);
+                }
+                // ═══════════════════════════════════════════════════════════════
 
                 if (!groupSettings?.x9) return;
 

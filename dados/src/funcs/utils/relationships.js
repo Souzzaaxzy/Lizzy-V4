@@ -433,6 +433,14 @@ class RelationshipManager {
       if (!pair.stages.brincadeira) {
         pair.stages.brincadeira = { ...stageEntry };
       }
+      // ═══════════════════════════════════════════════════════════════
+      // 🤖 EVENTO NPC - CASAMENTO
+      // ═══════════════════════════════════════════════════════════════
+      try {
+        const npcMod = await import('../utils/npcManager.js');
+        npcMod.default?.recordEvent('casamento', request.requesterRaw, 
+          `${request.requesterRaw.split('@')[0]} casou com ${request.targetRaw.split('@')[0]}! 💍`);
+      } catch (e) { /* NPC não disponível */ }
     }
 
     pair.users = [this._normalizeId(request.requesterRaw), this._normalizeId(request.targetRaw)];

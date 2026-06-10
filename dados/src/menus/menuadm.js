@@ -208,5 +208,17 @@ ${middleBorder} ${menuItemIcon}${prefix}fotomenugrupo
 ${middleBorder} ${menuItemIcon}${prefix}nomegp
 ${middleBorder} ${menuItemIcon}${prefix}infoperso
 ${bottomBorder}
+
+${menuTopBorder}
+│ 🤖 SISTEMA DE NPCs
+${middleBorder}
+${middleBorder} ${menuItemIcon}${prefix}npc on
+${middleBorder} ${menuItemIcon}${prefix}npc off
+${middleBorder} ${menuItemIcon}${prefix}npc status
+${middleBorder} ${menuItemIcon}${prefix}npc cooldown <segundos>
+${middleBorder} ${menuItemIcon}${prefix}npc jornal on
+${middleBorder} ${menuItemIcon}${prefix}npc jornal off
+${middleBorder} ${menuItemIcon}${prefix}npc config
+${bottomBorder}
 `;
 }

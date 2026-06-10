@@ -39,6 +39,7 @@ import { removeBg, upscale } from './funcs/utils/imagetools.js';
 import spotifyModule from './funcs/downloads/spotify.js';
 import captchaIndex, { initCaptchaIndex, addCaptcha, removeCaptcha, getCaptcha, hasPendingCaptcha } from './utils/captchaIndex.js';
 import CaptchaIndex from './utils/captchaIndex.js';
+import npcManager from './utils/npcManager.js';
 import fsPromises from 'fs/promises';
 import {
   formatUptime,
@@ -945,6 +946,40 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
   let config = loadJsonFile(CONFIG_FILE, {});
   ensureDatabaseIntegrity({ log: Boolean(config?.debug) });
 
+  // ═══════════════════════════════════════════════════════════════
+  // 🤖 NPC NEWSPAPER CRON JOB - Agenda diário às 20h
+  // ═══════════════════════════════════════════════════════════════
+  // Executa uma vez quando o bot inicia
+  if (npcManager?.config?.jornalEnabled) {
+    setTimeout(async () => {
+      try {
+        const news = await npcManager.generateDailyNews();
+        if (news) {
+          // Envia para todos os grupos (implemente conforme necessário)
+          console.log('[NPC] Kaiser News gerado com sucesso');
+        }
+      } catch (e) {
+        console.error('[NPC] Erro ao gerar jornal:', e.message);
+      }
+    }, 10000); // Espera 10s após iniciar
+  }
+
+  // Agenda execução diária às 20h
+  cron.schedule('0 20 * * *', async () => {
+    if (npcManager?.config?.jornalEnabled) {
+      try {
+        const news = await npcManager.generateDailyNews();
+        if (news) {
+          console.log('[NPC] Kaiser News diário enviado');
+        }
+      } catch (e) {
+        console.error('[NPC] Erro no jornal diário:', e.message);
+      }
+    }
+  }, { scheduled: true, timezone: 'America/Sao_Paulo' });
+  // ═══════════════════════════════════════════════════════════════
+  ensureDatabaseIntegrity({ log: Boolean(config?.debug) });
+  
   // Verificação e correção do prefixo reservado $ ao inicializar
   if (config.prefixo === '$') {
     config.prefixo = '/';
@@ -30013,6 +30048,65 @@ case 'assistent':
           reply("Ocorreu um erro ao desmutar o usuário. 💔");
         }
         break;
+      // ═══════════════════════════════════════════════════════════════
+      // 🤖 SISTEMA DE NPCs
+      // ═══════════════════════════════════════════════════════════════
+      case 'npc':
+        try {
+          if (!isGroupAdmin) return reply("Apenas administradores podem usar este comando. 💔");
+
+          const subCmd = args[0]?.toLowerCase();
+          const value = args[1];
+
+          if (!subCmd || subCmd === 'status') {
+            const status = npcManager.getStatus();
+            return reply(`🤖 *STATUS DOS NPCs*\n\n` +
+              `• Ativo: ${status.ativo ? '✅ Sim' : '❌ Não'}\n` +
+              `• Cooldown: ${status.cooldown}\n` +
+              `• Jornal: ${status.jornal}\n` +
+              `• Eventos registrados: ${status.eventosRegistrados}`);
+          }
+
+          switch (subCmd) {
+            case 'on':
+              return reply(`✅ ${npcManager.toggle(true)}`);
+
+            case 'off':
+              return reply(`❌ ${npcManager.toggle(false)}`);
+
+            case 'cooldown':
+              if (!value || isNaN(parseInt(value))) {
+                return reply(`📝 Uso: ${prefix}npc cooldown <segundos>\nExemplo: ${prefix}npc cooldown 30`);
+              }
+              return reply(`⏱️ ${npcManager.setCooldown(parseInt(value))}`);
+
+            case 'jornal':
+              if (value === 'on') return reply(`📰 ${npcManager.toggleJornal(true)}`);
+              if (value === 'off') return reply(`📰 ${npcManager.toggleJornal(false)}`);
+              return reply(`📝 Uso: ${prefix}npc jornal on/off`);
+
+            case 'config':
+              const st = npcManager.getStatus();
+              return reply(`⚙️ *CONFIGURAÇÃO DOS NPCs*\n\n` +
+                `• Sistema: ${st.ativo ? 'Ativado' : 'Desativado'}\n` +
+                `• Intervalo entre falas: ${st.cooldown}\n` +
+                `• Kaiser News: ${st.jornal}\n` +
+                `• Total de eventos: ${st.eventosRegistrados}`);
+
+            default:
+              return reply(`📝 *Comandos NPC:*\n` +
+                `• ${prefix}npc on/off - Ativar/desativar\n` +
+                `• ${prefix}npc status - Ver status\n` +
+                `• ${prefix}npc cooldown <seg> - Intervalo\n` +
+                `• ${prefix}npc jornal on/off - Jornal diário\n` +
+                `• ${prefix}npc config - Ver configurações`);
+          }
+        } catch (e) {
+          console.error('Erro no comando npc:', e);
+          reply("Erro ao processar comando NPC. 💔");
+        }
+        break;
+
       case 'mute2':
       case 'mutar2':
         try {
@@ -32936,6 +33030,10 @@ ${groupData.rules.length}. ${q}`);
           await reply(`✅ @${getUserName(alphaToAdd)} foi promovido a Alpha do grupo! 🐺`, {
             mentions: [alphaToAdd]
           });
+          // ═══════════════════════════════════════════════════════════════
+          // 🤖 EVENTO NPC - USUÁRIO VIRAL ALPHA
+          // ═══════════════════════════════════════════════════════════════
+          npcManager?.recordEvent('novo_alpha', alphaToAdd, `${getUserName(alphaToAdd)} virou Alpha!`);
         } catch (e) {
           console.error('Erro no comando addalpha:', e);
           await reply("Ocorreu um erro ao adicionar Alpha 💔");
