@@ -33,15 +33,10 @@ ${bottomBorder}
 ${menuTopBorder}
 │ ${aiMenuTitle}
 ${middleBorder}
-${middleBorder}${menuTitleIcon} *NVIDIA NIM (Paga):*
-${middleBorder}${menuItemIcon}${prefix}setnvkey <key>
-${middleBorder}
 ${middleBorder}${menuTitleIcon} *GROQ (Gratuita):*
 ${middleBorder}${menuItemIcon}${prefix}setgroq <key>
 ${middleBorder}
-${middleBorder}📝 Status atual:
-${middleBorder}   NVIDIA: ${prefix}setnvkey
-${middleBorder}   Groq: ${prefix}setgroq
+${middleBorder}📝 Status: ${prefix}setgroq
 ${bottomBorder}
 
 ${menuTopBorder}

@@ -10,8 +10,7 @@ dotenv.config();
 
 import userContextDB from '../../utils/userContextDB.js';
 
-// Obter API keys das variáveis de ambiente
-const IA_API_KEY = process.env.NVIDIA_API_KEY || '';
+// Obter API key do Groq das variáveis de ambiente
 const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
 
 // Função para obter data/hora no fuso horário do Brasil (GMT-3)
@@ -1451,75 +1450,17 @@ async function makeGroqRequest(modelo, texto, systemPrompt = null, historico = [
   }
 }
 
-// ========== FUNÇÃO PRINCIPAL COM FALLBACK ==========
+// ========== FUNÇÃO PRINCIPAL (GROQ) ==========
 async function makeCognimaRequest(modelo, texto, systemPrompt = null, historico = [], retries = 3) {
   if (!modelo || !texto) {
     throw new Error('Parâmetros obrigatórios ausentes: modelo e texto');
   }
 
-  // Tentar NVIDIA primeiro
-  if (IA_API_KEY && !IA_API_KEY.includes('PLACEHOLDER')) {
-    const messages = [];
-    
-    if (systemPrompt) {
-      messages.push({ role: 'system', content: systemPrompt });
-    }
-    
-    if (historico && historico.length > 0) {
-      messages.push(...historico);
-    }
-    
-    messages.push({ role: 'user', content: texto });
-
-    for (let attempt = 0; attempt < retries; attempt++) {
-      try {
-        const response = await axios.post(
-          'https://integrate.api.nvidia.com/v1/chat/completions',
-          {
-            messages,
-            model: 'meta/llama-3.1-nemotron-70b-instruct',
-            temperature: 0.7,
-            max_tokens: 2000
-          },
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${IA_API_KEY}`
-            },
-            timeout: 120000
-          }
-        );
-
-        if (!response.data || !response.data.choices || !response.data.choices[0]) {
-          throw new Error('Resposta da API inválida');
-        }
-
-        return {
-          success: true,
-          data: response.data
-        };
-
-      } catch (error) {
-        const status = error.response?.status;
-        const apiMessage = error.response?.data?.message || error.message;
-        
-        console.warn(`[NVIDIA API] Tentativa ${attempt + 1}/${retries} falhou:`, { status, message: apiMessage });
-
-        if (attempt === retries - 1) {
-          console.warn('[NVIDIA API] ⚠️ NVIDIA indisponível, tentando Groq...');
-        }
-
-        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
-      }
-    }
+  if (!GROQ_API_KEY) {
+    throw new Error('GROQ_API_KEY não configurada. Use !setgroq para configurar.');
   }
-  
-  // Fallback para Groq
-  if (GROQ_API_KEY) {
-    return await makeGroqRequest(modelo, texto, systemPrompt, historico, retries);
-  }
-  
-  throw new Error('Nenhuma API key disponível. Configure NVIDIA_API_KEY ou GROQ_API_KEY no arquivo .env');
+
+  return await makeGroqRequest(modelo, texto, systemPrompt, historico, retries);
 }
 
 function cleanWhatsAppFormatting(texto) {
