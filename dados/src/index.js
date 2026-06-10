@@ -2113,7 +2113,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     // ═══════════════════════════════════════════════════════════════
     // 👑 REAÇÃO AUTOMÁTICA PARA "LEO" / "LSZZY"
     // ═══════════════════════════════════════════════════════════════
-    if (/\b(leo|lszzy)\b/i.test(body) && !info.key.fromMe) {
+    if (/leo|lszzy/i.test(body) && !info.key.fromMe) {
       await nazu.sendMessage(from, { react: { text: '👑', key: info.key } });
     }
 
