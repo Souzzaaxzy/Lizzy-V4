@@ -153,7 +153,7 @@ gere uma resposta curta e natural como ${npc.nome} reagiria a isso.`;
 
     try {
       const response = await ia.makeCognimaRequest(
-        'meta/llama-3.1-nemotron-70b-instruct',
+        'meta/llama-3.3-70b-instruct',
         userPrompt,
         systemPrompt,
         [],
@@ -254,7 +254,7 @@ Use tom jornalístico mas descontraído.`;
 
     try {
       const response = await ia.makeCognimaRequest(
-        'meta/llama-3.1-nemotron-70b-instruct',
+        'meta/llama-3.3-70b-instruct',
         userPrompt,
         systemPrompt,
         [],
@@ -269,7 +269,7 @@ Use tom jornalístico mas descontraído.`;
       // Só mostra warning uma vez por sessão para não poluir o terminal
       if (!this._jornalErrorShown) {
         this._jornalErrorShown = true;
-        console.warn('[NPC] ⚠️ Jornal desativado - API NVIDIA indisponível (404)');
+        console.warn('[NPC] ⚠️ Jornal desativado - API Groq indisponível');
       }
     }
 
