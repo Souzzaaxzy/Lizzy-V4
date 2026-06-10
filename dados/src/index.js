@@ -20,51 +20,6 @@ import { parseHTML } from 'linkedom';
 import axios from 'axios';
 import pathz from 'path';
 import fs from 'fs';
-
-const originalWriteFileSync = fs.writeFileSync;
-const originalWriteFile = fs.writeFile;
-
-function isAluguelFile(file) {
-  return typeof file === 'string' && file.includes('alugueis');
-}
-
-// 🔴 intercepta writeFileSync
-fs.writeFileSync = function (file, data, ...args) {
-  if (isAluguelFile(file)) {
-    console.log('\n🚨🚨🚨 WRITE DETECTADO (SYNC) 🚨🚨🚨');
-    console.log('📁 Arquivo:', file);
-
-    try {
-      const parsed = JSON.parse(data);
-      console.log('📊 Conteúdo que vai salvar:\n', JSON.stringify(parsed, null, 2));
-    } catch {
-      console.log('📊 Conteúdo bruto:', data);
-    }
-
-    console.trace('📍 STACK TRACE (quem chamou):');
-  }
-
-  return originalWriteFileSync.call(this, file, data, ...args);
-};
-
-// 🔴 intercepta writeFile async também
-fs.writeFile = function (file, data, ...args) {
-  if (isAluguelFile(file)) {
-    console.log('\n🚨🚨🚨 WRITE DETECTADO (ASYNC) 🚨🚨🚨');
-    console.log('📁 Arquivo:', file);
-
-    try {
-      const parsed = JSON.parse(data);
-      console.log('📊 Conteúdo que vai salvar:\n', JSON.stringify(parsed, null, 2));
-    } catch {
-      console.log('📊 Conteúdo bruto:', data);
-    }
-
-    console.trace('📍 STACK TRACE (quem chamou):');
-  }
-
-  return originalWriteFile.call(this, file, data, ...args);
-};
 import { readFile, writeFile } from 'fs/promises';
 import os from 'os';
 import https from 'https';
@@ -339,6 +294,56 @@ const formatAIResponse = (text) => {
     .replace(/\n{3,}/g, '\n\n')               // Limita quebras de linha
     .trim();
 };
+
+// ═══════════════════════════════════════════════════════════════
+// 🚦 SISTEMA DE THROTTLING PARA COMANDOS
+// ═══════════════════════════════════════════════════════════════
+const commandThrottle = new Map(); // userId -> { count, timestamp }
+
+const checkThrottle = (userId) => {
+  const now = Date.now();
+  const userData = commandThrottle.get(userId) || { count: 0, timestamp: now };
+  
+  // Reset a cada 5 segundos
+  if (now - userData.timestamp > 5000) {
+    userData.count = 0;
+    userData.timestamp = now;
+  }
+  
+  userData.count++;
+  commandThrottle.set(userId, userData);
+  
+  // Máximo 3 comandos por 5 segundos
+  return userData.count <= 3;
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 📝 CACHE PARA GROUP DATA (evita ler arquivo toda vez)
+// ═══════════════════════════════════════════════════════════════
+const groupDataCache = new Map(); // groupId -> { data, timestamp }
+const GROUP_CACHE_TTL = 5000; // 5 segundos
+
+const getCachedGroupData = (groupId, loadFn) => {
+  const cached = groupDataCache.get(groupId);
+  const now = Date.now();
+  
+  if (cached && (now - cached.timestamp) < GROUP_CACHE_TTL) {
+    return Promise.resolve(cached.data);
+  }
+  
+  return loadFn().then(data => {
+    groupDataCache.set(groupId, { data, timestamp: now });
+    return data;
+  });
+};
+
+const invalidateGroupCache = (groupId) => {
+  groupDataCache.delete(groupId);
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 🔄 FUNÇÕES DE UTILIDADE
+// ═══════════════════════════════════════════════════════════════
 
 const writeJsonFile = (filePath, data) => {
   try {
@@ -2095,6 +2100,15 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     };
     const groupPrefix = groupData.customPrefix || prefixo;
     var isCmd = body.trim().startsWith(groupPrefix);
+
+    // Otimização: Throttle de comandos (máximo 3 por 5 segundos)
+    if (isCmd && !info.key.fromMe) {
+      if (!checkThrottle(sender)) {
+        // Limpa cache do throttle antigo para não bloquear sempre
+        commandThrottle.delete(sender);
+        return reply('⚡ Calma aí! Você está enviando comandos rápido demais. Aguarde alguns segundos. 😅');
+      }
+    }
 
     // Suporte para "! comando" (com espaço após o prefixo)
     const bodyWithoutPrefix = body.trim().slice(groupPrefix.length).trimStart();
