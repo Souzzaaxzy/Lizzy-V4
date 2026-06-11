@@ -301,7 +301,7 @@ const formatAIResponse = (text) => {
 // 🎵 LAYOUT DO PLAYER DE MÚSICA (Ajustado para imagem)
 // ═══════════════════════════════════════════════════════════════
 const formatMusicPlayer = (title, artist, duration = null, progress = null, volume = null) => {
-  const maxWidth = 42;  // Tamanho que se encaixa na imagem
+  const maxWidth = 42;
   
   const createProgressBar = (progressPercent) => {
     const filled = Math.round((progressPercent / 100) * maxWidth);
@@ -327,26 +327,30 @@ const formatMusicPlayer = (title, artist, duration = null, progress = null, volu
   const innerWidth = maxWidth;
   const pad = (str, len) => str + ' '.repeat(Math.max(0, len - str.length));
   const line = (content) => `│ ${pad(content, innerWidth)} │\n`;
+  const spacer = () => `│${' '.repeat(innerWidth + 2)}│\n`;
   
   let player = `├${'─'.repeat(innerWidth + 2)}┤\n`;
   player += `│ ${pad('iPhone', innerWidth)} │\n`;
-  player += line('');
+  player += spacer();
   player += `│ ${titleDisplay} 🅴 │\n`;
   player += line(artistDisplay);
-  player += line('');
+  player += spacer();
   player += `│ ${progressBarStr} │\n`;
-  player += line('');
+  player += spacer();
+  player += spacer();  // Espaço extra acima do play
   
-  // Botões centralizados
+  // Botões alinhados à direita (sincronizado com ◉)
   const controls = '◀◀    ❚❚    ▶▶';
-  const ctrlSpaces = Math.floor((innerWidth - controls.length) / 2);
-  player += `│${' '.repeat(ctrlSpaces)}${controls}${' '.repeat(innerWidth - ctrlSpaces - controls.length)}│\n`;
-  player += `│${' '.repeat(innerWidth - 3)}◉   │\n`;
-  player += line('');
+  const ctrlPadding = innerWidth - controls.length - 3; // 3 = espaço do ◉
+  player += `│${' '.repeat(ctrlPadding)}${controls}   ◉ │\n`;
+  
+  player += spacer();
+  player += spacer();  // Espaço extra abaixo do play
+  player += spacer();
   
   if (volume !== null) {
     player += `│ 🔊 ${volumeBarStr} 🔊 │\n`;
-    player += line('');
+    player += spacer();
   }
   
   player += `╰${'─'.repeat(innerWidth + 2)}╯`;
