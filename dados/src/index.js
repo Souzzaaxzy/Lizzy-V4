@@ -298,15 +298,10 @@ const formatAIResponse = (text) => {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// 🎵 LAYOUT DO PLAYER DE MÚSICA
+// 🎵 LAYOUT DO PLAYER DE MÚSICA (iPhone Style)
 // ═══════════════════════════════════════════════════════════════
 const formatMusicPlayer = (title, artist, duration = null, progress = null, volume = null) => {
-  const maxWidth = 42;
-  
-  // Barras maiores (usam toda a largura)
-  const createProgressBar = (progressPercent) => {
-    return '█'.repeat(maxWidth);
-  };
+  const maxWidth = 44; // Largura total do player
   
   const truncate = (text, maxLen) => {
     if (!text || typeof text !== 'string') return '';
@@ -317,41 +312,70 @@ const formatMusicPlayer = (title, artist, duration = null, progress = null, volu
   const safeTitle = title || 'Música';
   const safeArtist = artist || 'Artista';
   
-  const titleDisplay = truncate(safeTitle, maxWidth - 3);
+  const titleDisplay = truncate(safeTitle, maxWidth - 6);
   const artistDisplay = truncate(safeArtist, maxWidth);
   
-  const progressBarStr = createProgressBar(progress !== null ? progress : 0);
-  const volumeBarStr = createProgressBar(volume !== null ? volume : 75);
+  // Calcular tempos
+  const totalSeconds = duration || 194; // padrão: 3:14 = 194 segundos
+  const currentSeconds = progress !== null ? Math.floor(totalSeconds * progress) : 72; // padrão: 2:04 = 124 segundos
+  const remainingSeconds = totalSeconds - currentSeconds;
+  
+  const formatTime = (secs) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+  
+  const currentTimeStr = formatTime(currentSeconds);
+  const remainingTimeStr = `-${formatTime(remainingSeconds)}`;
+  
+  // Calcular posição na barra
+  const barWidth = 22; // largura da barra entre os tempos
+  const filledBars = Math.floor((currentSeconds / totalSeconds) * barWidth);
+  const emptyBars = barWidth - filledBars;
+  
+  const progressBar = '█'.repeat(filledBars) + '▓'.repeat(emptyBars);
+  
+  // Barra de volume
+  const volPercent = volume !== null ? volume : 75;
+  const volFilled = Math.floor((volPercent / 100) * 23);
+  const volEmpty = 23 - volFilled;
+  const volumeBar = '█'.repeat(volFilled) + '▓'.repeat(volEmpty);
   
   const innerWidth = maxWidth;
   const pad = (str, len) => str + ' '.repeat(Math.max(0, len - str.length));
-  const line = (content) => `│ ${pad(content, innerWidth)} │\n`;
   const spacer = () => `│${' '.repeat(innerWidth + 2)}│\n`;
   
   let player = `├${'─'.repeat(innerWidth + 2)}┤\n`;
   player += `│ ${pad('iPhone', innerWidth)} │\n`;
   player += spacer();
-  player += `│ ${titleDisplay} 🅴 │\n`;
-  player += line(artistDisplay);
+  
+  // Título com emoji posicionado à direita
+  const emoji = ' 🅴 ';
+  const titleWithEmoji = titleDisplay + emoji;
+  player += `│ ${pad(titleWithEmoji, innerWidth)} │\n`;
+  
+  // Artista alinhado à esquerda
+  player += `│ ${pad(artistDisplay, innerWidth)} │\n`;
   player += spacer();
-  player += `│ ${progressBarStr} │\n`;  // Barra cheia
+  
+  // Barra de progresso com tempos
+  const progressLine = `${currentTimeStr} ${progressBar} ${remainingTimeStr}`;
+  player += `│ ${progressLine} │\n`;
   player += spacer();
   player += spacer();
   
-  // Controles CENTRALIZADOS
-  const controls = '◀◀    ❚❚    ▶▶';
+  // Controles centralizados
+  const controls = '◀◀      ❚❚      ▶▶';
   const ctrlSpaces = Math.floor((innerWidth - controls.length) / 2);
   player += `│${' '.repeat(ctrlSpaces)}${controls}${' '.repeat(innerWidth - ctrlSpaces - controls.length)}│\n`;
-  player += `│${' '.repeat(innerWidth - 3)}◉   │\n`;
+  player += `│${' '.repeat(innerWidth - 2)}◉   │\n`;
   
   player += spacer();
-  player += spacer();
-  player += spacer();
   
-  if (volume !== null) {
-    player += `│ 🔊 ${volumeBarStr} 🔊 │\n`;  // Barra cheia
-    player += spacer();
-  }
+  // Barra de volume
+  player += `│ 🔊 ${pad(volumeBar, 23)} 🔊 │\n`;
+  player += spacer();
   
   player += `╰${'─'.repeat(innerWidth + 2)}╯`;
   
@@ -19465,7 +19489,7 @@ case 'addaluguel':
               const playerLayout = formatMusicPlayer(
                 videoInfo.data.title,
                 videoInfo.data.author.name,
-                Math.floor(videoInfo.data.seconds / 60),
+                videoInfo.data.seconds,
                 0,
                 75
               );
@@ -19561,7 +19585,7 @@ case 'addaluguel':
           const playerLayout = formatMusicPlayer(
             downloadResult.title,
             Array.isArray(downloadResult.artists) ? downloadResult.artists.join(', ') : downloadResult.artists,
-            downloadResult.duration || null,
+            downloadResult.duration ? Math.floor(downloadResult.duration / 1000) : null,
             0,
             75
           );
@@ -19844,7 +19868,7 @@ case 'pin':
               const playerLayout = formatMusicPlayer(
                 result.track.title,
                 result.artist || 'Artista desconhecido',
-                Math.floor(result.track.duration / 60),
+                result.track.duration,
                 0,
                 75
               );
