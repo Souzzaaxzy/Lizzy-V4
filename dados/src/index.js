@@ -298,12 +298,11 @@ const formatAIResponse = (text) => {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// 🎵 LAYOUT DO PLAYER DE MÚSICA (Sincronizado com capa)
+// 🎵 LAYOUT DO PLAYER DE MÚSICA (Exatamente como a imagem)
 // ═══════════════════════════════════════════════════════════════
 const formatMusicPlayer = (title, artist, duration = null, progress = null, volume = null) => {
-  // Ajustado para ficar proporcional à largura da imagem (~500-600px)
-  const maxWidth = 52;
-  const padding = '                                        '; // 40 espaços para alinhamento
+  // Largura do player
+  const maxWidth = 44;
   
   // Função para criar linha de progresso
   const createProgressBar = (progressPercent) => {
@@ -323,43 +322,33 @@ const formatMusicPlayer = (title, artist, duration = null, progress = null, volu
   const safeTitle = title || 'Música desconhecida';
   const safeArtist = artist || 'Artista desconhecido';
   
-  const titleDisplay = truncate(safeTitle, maxWidth);
+  const titleDisplay = truncate(safeTitle, maxWidth - 6);
   const artistDisplay = truncate(safeArtist, maxWidth);
   
-  let progressBar = '';
-  let timeDisplay = '';
-  
-  if (duration && progress !== null) {
-    const progressPercent = Math.min(100, Math.max(0, progress));
-    progressBar = createProgressBar(progressPercent);
-    
-    // Calcular tempos
-    const currentTime = Math.floor((progressPercent / 100) * duration);
-    const remainingTime = duration - currentTime;
-    
-    const formatTime = (s) => {
-      const m = Math.floor(s / 60);
-      const sec = s % 60;
-      return `${m}:${sec.toString().padStart(2, '0')}`;
-    };
-    
-    const currentStr = formatTime(currentTime);
-    const remainingStr = '-' + formatTime(remainingTime);
-    
-    timeDisplay = `${currentStr} ${progressBar} ${remainingStr}`;
+  // Barra de progresso (sem tempos)
+  let progressBarStr = '';
+  if (progress !== null) {
+    progressBarStr = createProgressBar(progress);
+  } else {
+    // Barra vazia quando não tem progresso
+    progressBarStr = createProgressBar(0);
   }
   
-  // Layout do player - proporcional à imagem
-  const innerWidth = maxWidth; // 52 caracteres de conteúdo
+  // Layout do player - exatamente como na imagem
+  const innerWidth = maxWidth;
   
   // Helper para criar linha com espaçamento dinâmico
-  const line = (content, rightAlign = '') => {
-    const spaces = innerWidth - content.length - rightAlign.length;
-    return `│ ${content}${' '.repeat(Math.max(0, spaces))}${rightAlign} │\n`;
+  const line = (content) => {
+    return `│ ${content}${' '.repeat(Math.max(0, innerWidth - content.length))} │\n`;
+  };
+  
+  const lineWithEmoji = (content, emoji) => {
+    const spaces = innerWidth - content.length - 1;
+    return `│ ${content}${' '.repeat(Math.max(0, spaces))}${emoji} │\n`;
   };
   
   let player = `├${'─'.repeat(innerWidth + 2)}┤\n`;
-  player += line('iPhone', '🅴');
+  player += lineWithEmoji('iPhone', '🅴');
   player += line('');
   
   // Título
@@ -370,10 +359,10 @@ const formatMusicPlayer = (title, artist, duration = null, progress = null, volu
   
   player += line('');
   
-  if (timeDisplay) {
-    player += line(timeDisplay);
-    player += line('');
-  }
+  // Barra de progresso (só a barra, sem tempos)
+  player += line(progressBarStr);
+  
+  player += line('');
   
   // Controles centralizados
   const controls = '◀◀      ❚❚      ▶▶';
