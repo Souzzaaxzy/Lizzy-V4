@@ -362,7 +362,7 @@ const formatMusicPlayer = (title, artist, duration = null, progress = null, volu
   // Controles com 4 espaços extras para a direita
   const controls = '◀◀      ❚❚      ▶▶';
   const ctrlExtraSpaces = 4;
-  player += `            ${controls}${' '.repeat(innerWidth - controls.length - ctrlExtraSpaces)}\n`;
+  player += `                         ${controls}${' '.repeat(innerWidth - controls.length - ctrlExtraSpaces)}\n`;
   player += `                                         ◉   \n`;
   
   player += spacer();
