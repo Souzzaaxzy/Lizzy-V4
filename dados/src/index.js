@@ -298,6 +298,79 @@ const formatAIResponse = (text) => {
 };
 
 // ═══════════════════════════════════════════════════════════════
+// 🎵 LAYOUT DO PLAYER DE MÚSICA
+// ═══════════════════════════════════════════════════════════════
+const formatMusicPlayer = (title, artist, duration = null, progress = null, volume = null) => {
+  const maxWidth = 43;
+  
+  // Função para criar linha de progresso
+  const createProgressBar = (progressPercent) => {
+    const filled = Math.round((progressPercent / 100) * maxWidth);
+    const empty = maxWidth - filled;
+    return '█'.repeat(filled) + '▓'.repeat(Math.min(empty, 1)) + '░'.repeat(Math.max(empty - 1, 0));
+  };
+  
+  // Truncar texto para caber
+  const truncate = (text, maxLen) => {
+    if (text.length <= maxLen) return text;
+    return text.substring(0, maxLen - 3) + '...';
+  };
+  
+  const titleDisplay = truncate(title, maxWidth - 6);
+  const artistDisplay = truncate(artist, maxWidth);
+  
+  let progressBar = '';
+  let timeDisplay = '';
+  
+  if (duration && progress !== null) {
+    const progressPercent = Math.min(100, Math.max(0, progress));
+    progressBar = createProgressBar(progressPercent);
+    
+    // Calcular tempos
+    const currentTime = Math.floor((progressPercent / 100) * duration);
+    const remainingTime = duration - currentTime;
+    
+    const formatTime = (s) => {
+      const m = Math.floor(s / 60);
+      const sec = s % 60;
+      return `${m}:${sec.toString().padStart(2, '0')}`;
+    };
+    
+    const currentStr = formatTime(currentTime);
+    const remainingStr = '-' + formatTime(remainingTime);
+    
+    timeDisplay = `${currentStr} ${progressBar} ${remainingStr}`;
+  }
+  
+  // Layout do player
+  let player = `├─────────────────────────────────────────┤\n`;
+  player += `│ iPhone                                   │\n`;
+  player += `│                                          │\n`;
+  player += `│ ${titleDisplay}                        🅴  │\n`;
+  player += `│ ${artistDisplay}                       │\n`;
+  player += `│                                          │\n`;
+  
+  if (timeDisplay) {
+    player += `│ ${timeDisplay} │\n`;
+    player += `│                                          │\n`;
+  }
+  
+  player += `│            ◀◀      ❚❚      ▶▶               │\n`;
+  player += `│                                        ◉     │\n`;
+  player += `│                                          │\n`;
+  
+  if (volume !== null) {
+    const volBar = createProgressBar(volume);
+    player += `│ 🔊 ${volBar} 🔊            │\n`;
+    player += `│                                          │\n`;
+  }
+  
+  player += `╰─────────────────────────────────────────╯`;
+  
+  return player;
+};
+
+// ═══════════════════════════════════════════════════════════════
 // 🚦 SISTEMA DE THROTTLING PARA COMANDOS
 // ═══════════════════════════════════════════════════════════════
 const commandThrottle = new Map(); // userId -> { count, timestamp }
@@ -19400,30 +19473,20 @@ case 'addaluguel':
                 ? videoInfo.data.views.toLocaleString('pt-BR')
                 : videoInfo.data.views;
 
-              const description = videoInfo.data.description
-                ? videoInfo.data.description.slice(0, 100) + (videoInfo.data.description.length > 100 ? '...' : '')
-                : 'Sem descrição disponível';
+              // Novo layout do player de música
+              const playerLayout = formatMusicPlayer(
+                videoInfo.data.title,
+                videoInfo.data.author.name,
+                Math.floor(videoInfo.data.seconds / 60),
+                0,
+                75
+              );
 
-              const caption = `╭─────────────────────⭓\n` +
-                `│      🎵 𝗞𝗔𝗜𝗦𝗘𝗥 🎵\n` +
-                `├─────────────────────⭓\n` +
-                `│\n` +
-                `│ 🎶 ${videoInfo.data.title}\n` +
-                `│ 🎤 ${videoInfo.data.author.name}\n` +
-                `│\n` +
-                `├─────────────────────⭓\n` +
-                `│ ⏱️ Duração   » ${videoInfo.data.timestamp}\n` +
-                `│ 👀 Views     » ${views}\n` +
-                `│ 📅 Lançado   » ${videoInfo.data.ago}\n` +
-                `│ 🔗 Link      » ${videoInfo.data.url}\n` +
-                `│\n` +
-                `╰─────────────────────⭓\n\n` +
-                `🎧 𝗕𝗼𝗮 𝗮𝘂𝗱𝗶çã𝗼!`;
+              const caption = `🎵 *${videoInfo.data.title}*\n👤 ${videoInfo.data.author.name}\n\n${playerLayout}\n\n🎧 *Boa audiÃ§ao!*`;
 
               nazu.sendMessage(from, {
                 image: { url: videoInfo.data.thumbnail },
-                caption,
-                footer: `${nomebot} • Versão ${botVersion}`
+                caption
               }, { quoted: info }).catch((sendErr) => console.error('Erro ao enviar mensagem de resultado (busca):', sendErr));
 
               await nazu.sendMessage(from, { react: { text: '⏳', key: info.key } });
@@ -19506,14 +19569,26 @@ case 'addaluguel':
             return reply(`❌ ${downloadResult.msg}`);
           }
 
-          const caption = `🎵 *Música Baixada do Spotify!* 🎵\n\n` +
-            `📌 *Título:* ${downloadResult.title}\n` +
-            `👤 *Artista(s):* ${Array.isArray(downloadResult.artists) ? downloadResult.artists.join(', ') : downloadResult.artists}\n` +
-            `${downloadResult.year ? `📅 *Ano:* ${downloadResult.year}\n` : ''}` +
-            `🎧 *Enviando áudio...*`;
+          // Novo layout do player de música
+          const playerLayout = formatMusicPlayer(
+            downloadResult.title,
+            Array.isArray(downloadResult.artists) ? downloadResult.artists.join(', ') : downloadResult.artists,
+            downloadResult.duration || null,
+            0,
+            75
+          );
+
+          const caption = `🎵 *${downloadResult.title}*\n👤 ${Array.isArray(downloadResult.artists) ? downloadResult.artists.join(', ') : downloadResult.artists}\n\n${playerLayout}\n\n🎧 *Boa audiÃ§ao!*`;
 
           try {
-            await reply(caption);
+            if (downloadResult.image) {
+              await nazu.sendMessage(from, {
+                image: { url: downloadResult.image },
+                caption
+              }, { quoted: info });
+            } else {
+              await reply(caption);
+            }
           } catch (err) {
             console.error('Erro ao enviar caption:', err);
           }
@@ -19619,12 +19694,16 @@ case 'pin':
 
           const track = searchResult.results[0];
 
-          const searchCaption = `🎵 *Música Encontrada!* 🎵\n\n` +
-            `🔍 *Busca:* ${q}\n\n` +
-            `📌 *Título:* ${track.name}\n` +
-            `🔗 *Link:* ${track.song_link}\n` +
-            `⏳ *Duração:* ${track.duration}\n\n` +
-            `📥 *Baixando...*`;
+          // Novo layout do player de música
+          const playerLayout = formatMusicPlayer(
+            track.name,
+            track.artist || 'Artista desconhecido',
+            null,
+            0,
+            75
+          );
+
+          const searchCaption = `🎵 *${track.name}*\n👤 ${track.artist || 'Artista desconhecido'}\n\n${playerLayout}\n\n⏳ *Baixando...*`;
 
           await reply(searchCaption);
           await nazu.sendMessage(from, { react: { text: '⏳', key: info.key } });
@@ -19690,16 +19769,26 @@ case 'pin':
                 return reply(`❌ Erro: ${result.msg}`);
               }
 
-              const caption = `🎵 *Música Baixada com Sucesso!* 🎵\n\n` +
-                `📌 *Título:* ${result.title}\n` +
-                `👤 *Artista:* ${result.artist}\n\n` +
-                `🎧 *Enviando áudio...*`;
+              // Novo layout do player de música
+              const playerLayout = formatMusicPlayer(
+                result.title,
+                result.artist || 'Artista desconhecido',
+                null,
+                0,
+                75
+              );
+
+              const caption = `🎵 *${result.title}*\n👤 ${result.artist || 'Artista desconhecido'}\n\n${playerLayout}\n\n🎧 *Enviando áudio...*`;
 
               try {
-                await nazu.sendMessage(from, {
-                  image: { url: result.thumbnail },
-                  caption
-                }, { quoted: info });
+                if (result.thumbnail) {
+                  await nazu.sendMessage(from, {
+                    image: { url: result.thumbnail },
+                    caption
+                  }, { quoted: info });
+                } else {
+                  await reply(caption);
+                }
               } catch (imgErr) {
                 console.error('Erro ao enviar thumbnail do SoundCloud:', imgErr);
               }
@@ -19763,34 +19852,26 @@ case 'pin':
                 return reply(`❌ Erro: ${result.msg}`);
               }
 
-              const formatDuration = (seconds) => {
-                const mins = Math.floor(seconds / 60);
-                const secs = seconds % 60;
-                return `${mins}:${secs.toString().padStart(2, '0')}`;
-              };
+              // Novo layout do player de música
+              const playerLayout = formatMusicPlayer(
+                result.track.title,
+                result.artist || 'Artista desconhecido',
+                Math.floor(result.track.duration / 60),
+                0,
+                75
+              );
 
-              const formatNumber = (num) => {
-                if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-                if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
-                return num.toString();
-              };
-
-              const caption = `🎵 *Música Encontrada!* 🎵\n\n` +
-                `🔍 *Busca:* ${result.query}\n\n` +
-                `📌 *Título:* ${result.track.title}\n` +
-                `👤 *Artista:* ${result.artist}\n` +
-                `⏱️ *Duração:* ${formatDuration(result.track.duration)}\n` +
-                `▶️ *Reproduções:* ${formatNumber(result.track.playback_count)}\n` +
-                `❤️ *Curtidas:* ${formatNumber(result.track.likes_count)}\n` +
-                `🎼 *Gênero:* ${result.track.genre || 'Desconhecido'}\n` +
-                `🔗 *Link:* ${result.track.permalink_url}\n\n` +
-                `🎧 *Baixando e processando...*`;
+              const caption = `🎵 *${result.track.title}*\n👤 ${result.artist || 'Artista desconhecido'}\n\n${playerLayout}\n\n🎧 *Baixando e processando...*`;
 
               try {
-                await nazu.sendMessage(from, {
-                  image: { url: result.thumbnail },
-                  caption
-                }, { quoted: info });
+                if (result.thumbnail) {
+                  await nazu.sendMessage(from, {
+                    image: { url: result.thumbnail },
+                    caption
+                  }, { quoted: info });
+                } else {
+                  await reply(caption);
+                }
               } catch (imgErr) {
                 console.error('Erro ao enviar thumbnail do SoundCloud:', imgErr);
               }
