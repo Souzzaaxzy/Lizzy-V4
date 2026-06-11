@@ -298,15 +298,14 @@ const formatAIResponse = (text) => {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// 🎵 LAYOUT DO PLAYER DE MÚSICA (Ajustado para imagem)
+// 🎵 LAYOUT DO PLAYER DE MÚSICA
 // ═══════════════════════════════════════════════════════════════
 const formatMusicPlayer = (title, artist, duration = null, progress = null, volume = null) => {
   const maxWidth = 42;
   
+  // Barras maiores (usam toda a largura)
   const createProgressBar = (progressPercent) => {
-    const filled = Math.round((progressPercent / 100) * maxWidth);
-    const empty = maxWidth - filled;
-    return '█'.repeat(filled) + '▓'.repeat(Math.min(empty, 1)) + '░'.repeat(Math.max(empty - 1, 0));
+    return '█'.repeat(maxWidth);
   };
   
   const truncate = (text, maxLen) => {
@@ -335,21 +334,22 @@ const formatMusicPlayer = (title, artist, duration = null, progress = null, volu
   player += `│ ${titleDisplay} 🅴 │\n`;
   player += line(artistDisplay);
   player += spacer();
-  player += `│ ${progressBarStr} │\n`;
+  player += `│ ${progressBarStr} │\n`;  // Barra cheia
   player += spacer();
-  player += spacer();  // Espaço extra acima do play
+  player += spacer();
   
-  // Botões alinhados à direita (sincronizado com ◉)
+  // Controles CENTRALIZADOS
   const controls = '◀◀    ❚❚    ▶▶';
-  const ctrlPadding = innerWidth - controls.length - 3; // 3 = espaço do ◉
-  player += `│${' '.repeat(ctrlPadding)}${controls}   ◉ │\n`;
+  const ctrlSpaces = Math.floor((innerWidth - controls.length) / 2);
+  player += `│${' '.repeat(ctrlSpaces)}${controls}${' '.repeat(innerWidth - ctrlSpaces - controls.length)}│\n`;
+  player += `│${' '.repeat(innerWidth - 3)}◉   │\n`;
   
   player += spacer();
-  player += spacer();  // Espaço extra abaixo do play
+  player += spacer();
   player += spacer();
   
   if (volume !== null) {
-    player += `│ 🔊 ${volumeBarStr} 🔊 │\n`;
+    player += `│ 🔊 ${volumeBarStr} 🔊 │\n`;  // Barra cheia
     player += spacer();
   }
   
