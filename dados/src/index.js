@@ -307,7 +307,7 @@ const formatAIResponse = (text) => {
 // 🎵 LAYOUT DO PLAYER DE MÚSICA (iPhone Style)
 // ═══════════════════════════════════════════════════════════════
 const formatMusicPlayer = (title, artist, duration = null, progress = null, volume = null) => {
-  const maxWidth = 44;
+  const maxWidth = 42;
   
   const truncate = (text, maxLen) => {
     if (!text || typeof text !== 'string') return '';
@@ -318,27 +318,17 @@ const formatMusicPlayer = (title, artist, duration = null, progress = null, volu
   const safeTitle = title || 'Música';
   const safeArtist = artist || 'Artista';
   
-  const titleDisplay = truncate(safeTitle, maxWidth - 6);
+  const titleDisplay = truncate(safeTitle, maxWidth - 5);
   const artistDisplay = truncate(safeArtist, maxWidth);
   
   const totalSeconds = duration || 194;
   const currentSeconds = progress !== null ? Math.floor(totalSeconds * progress) : 72;
-  const remainingSeconds = totalSeconds - currentSeconds;
   
-  const formatTime = (secs) => {
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  };
-  
-  const currentTimeStr = formatTime(currentSeconds);
-  const remainingTimeStr = `-${formatTime(remainingSeconds)}`;
-  
-  const barWidth = 32;
+  const barWidth = 40;
   const filledBars = Math.floor((currentSeconds / totalSeconds) * barWidth);
   const emptyBars = barWidth - filledBars;
   
-  const progressBar = '─'.repeat(filledBars) + '●' + '─'.repeat(emptyBars);
+  const progressBar = '─'.repeat(filledBars) + '●' + '─'.repeat(Math.max(0, emptyBars - 1));
   
   const volPercent = volume !== null ? volume : 75;
   const volFilled = Math.floor((volPercent / 100) * 30);
@@ -347,41 +337,34 @@ const formatMusicPlayer = (title, artist, duration = null, progress = null, volu
   
   const innerWidth = maxWidth;
   const pad = (str, len) => str + ' '.repeat(Math.max(0, len - str.length));
-  const line = (content) => ` ${pad(content, innerWidth)} \n`;
-  const spacer = () => ` ${' '.repeat(innerWidth + 2)} \n`;
+  const line = (content) => `${pad(content, innerWidth)}`;
+  const spacer = () => ' '.repeat(innerWidth + 2);
   
   const emoji = '🅴';
   
+  // Montar o layout linha por linha
   let player = '';
   
-  // Linha do título com emoji (centralizado com espaços extras à direita)
+  // Linha 1: iPhone (com espaços à direita)
+  player += ` ${line('iPhone')}\n`;
+  
+  // Linha 2: Nome da música + emoji
   const titleWithEmoji = titleDisplay + ' ' + emoji;
-  player += line(titleWithEmoji);
+  player += ` ${line(titleWithEmoji)}\n`;
   
-  // Linha do artista
-  player += line(artistDisplay);
+  // Linha 3: Artista
+  player += ` ${line(artistDisplay)}\n`;
   
-  // Espaço extra
-  player += spacer();
+  // Linha 4: Barra de progresso
+  player += ` ${line(progressBar)}\n`;
   
-  // Barra de progresso
-  const progressLine = progressBar;
-  player += line(progressLine);
-  
-  // Espaço extra
-  player += spacer();
-  
-  // Controles centralizados
+  // Linha 5: Controles
   const controls = '⇆  ◁  ❚❚  ▷  ↻';
-  const ctrlPadding = Math.max(0, Math.floor((innerWidth - controls.length) / 2));
-  player += `${' '.repeat(ctrlPadding + 1)}${controls}${' '.repeat(innerWidth - ctrlPadding - controls.length + 1)}\n`;
+  player += `${' '.repeat(innerWidth - controls.length + 1)}${controls}\n`;
   
-  // Espaço extra
-  player += spacer();
-  
-  // Barra de volume
+  // Linha 6: Barra de volume
   const volumeLine = `🔈  ${volumeBar}  🔊`;
-  player += ` ${pad(volumeLine, innerWidth)} \n`;
+  player += ` ${line(volumeLine)}`;
   
   return player;
 };
