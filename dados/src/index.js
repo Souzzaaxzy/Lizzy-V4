@@ -32297,26 +32297,28 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
           }
           
           // Enviar para transcrição
-          const FormData = (await import('form-data')).default;
+          const FormData = require('form-data');
           const form = new FormData();
-          form.append('file', audioBuffer, { filename: 'audio.mp3', contentType: 'audio/mpeg' });
+          form.append('file', Buffer.from(audioBuffer), { filename: 'audio.mp3', contentType: 'audio/mpeg' });
           form.append('model', 'whisper-large-v3');
           
-          const response = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
-            },
-            body: form
-          });
+          const response = await axios.post(
+            'https://api.groq.com/openai/v1/audio/transcriptions',
+            form,
+            {
+              headers: {
+                ...form.getHeaders(),
+                'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
+              }
+            }
+          );
           
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            console.error('Erro na API Groq:', errorData);
+          const result = response.data;
+          
+          if (result.error) {
+            console.error('Erro na API Groq:', result.error);
             return reply("❌ Erro ao transcrever o áudio. Tente novamente.");
           }
-          
-          const result = await response.json();
           const transcription = result.text || '';
           
           if (!transcription || transcription.trim() === '') {
