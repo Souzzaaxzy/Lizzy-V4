@@ -10,6 +10,13 @@ import {
 } from 'baileys';
 
 import dotenv from 'dotenv';
+// Suprimir warnings de execuções perdidas do node-cron
+const originalWarn = console.warn;
+console.warn = (...args) => {
+  if (args[0] && args[0].includes && args[0].includes('missed execution')) return;
+  originalWarn.apply(console, args);
+};
+
 dotenv.config();
 
 import { exec, execSync, spawn } from 'child_process';
@@ -24,8 +31,7 @@ import { readFile, writeFile } from 'fs/promises';
 import os from 'os';
 import https from 'https';
 import crypto from 'crypto';
-import cron from 'node-cron';
-import { fileURLToPath } from 'url';
+import cron from 'node-cron';import { fileURLToPath } from 'url';
 import RentalExpirationManager from './utils/rentalExpirationManager.js';
 import { PerformanceOptimizer, getPerformanceOptimizer } from './utils/performanceOptimizer.js';
 import { recalcEquipmentBonuses } from './utils/equipment.js';
