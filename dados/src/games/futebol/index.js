@@ -212,8 +212,8 @@ export async function handleFutCommand(args, messageInfo, reply) {
         return reply('❌ Nenhum desafio pendente para você!');
       }
       
-      const match = db.matches.find(m => m.id === challengeId);
-      if (!match) {
+      const matchData = db.matches.find(m => m.id === challengeId);
+      if (!matchData) {
         return reply('❌ Desafio não encontrado ou expirado!');
       }
       
