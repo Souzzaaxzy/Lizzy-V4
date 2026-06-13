@@ -183,8 +183,8 @@ class FootballDB {
         goalsAgainst: 0
       },
       economy: {
-        fcCoins: 50000,
-        totalEarned: 50000,
+        fcCoins: 250000,
+        totalEarned: 250000,
         totalSpent: 0
       },
       energy: {
