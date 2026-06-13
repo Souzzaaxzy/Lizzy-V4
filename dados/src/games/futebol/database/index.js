@@ -1478,6 +1478,23 @@ class FootballDB {
       player.soloStats.draws++;
     }
 
+    // ATUALIZAR ESTATÍSTICAS GLOBAIS (perfil do jogador)
+    if (!player.stats) {
+      player.stats = { matches: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0 };
+    }
+    player.stats.matches++;
+    player.stats.goalsFor += playerGoals;
+    player.stats.goalsAgainst += enemyGoals;
+    if (result === 'win') {
+      player.stats.wins++;
+      this.updateReputation(userId, 1);
+    } else if (result === 'loss') {
+      player.stats.losses++;
+      this.updateReputation(userId, -0.5);
+    } else {
+      player.stats.draws++;
+    }
+
     // Calcular recompensas
     const config = this.soloConfig[difficulty] || this.soloConfig.normal;
     let xpReward, coinsReward;
@@ -1958,6 +1975,46 @@ class FootballDB {
         // Reputação -1 por derrota
         this.updateReputation(player2Id, -1);
       }
+    }
+  }
+
+  // Atualiza estatísticas globais E solo (para modos Solo)
+  updateGlobalStats(userId, goalsFor, goalsAgainst, result) {
+    const player = this.players[userId];
+    if (!player) return;
+
+    // Estatísticas globais
+    if (!player.stats) {
+      player.stats = { matches: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0 };
+    }
+    player.stats.matches++;
+    player.stats.goalsFor += goalsFor;
+    player.stats.goalsAgainst += goalsAgainst;
+
+    if (result === 'win') {
+      player.stats.wins++;
+    } else if (result === 'loss') {
+      player.stats.losses++;
+    } else {
+      player.stats.draws++;
+    }
+
+    // Estatísticas solo
+    if (!player.soloStats) {
+      player.soloStats = { victories: 0, draws: 0, losses: 0, streak: 0, bestStreak: 0, totalPlayed: 0 };
+    }
+    player.soloStats.totalPlayed++;
+    if (result === 'win') {
+      player.soloStats.victories++;
+      player.soloStats.streak++;
+      if (player.soloStats.streak > player.soloStats.bestStreak) {
+        player.soloStats.bestStreak = player.soloStats.streak;
+      }
+    } else if (result === 'loss') {
+      player.soloStats.losses++;
+      player.soloStats.streak = 0;
+    } else {
+      player.soloStats.draws++;
     }
   }
 

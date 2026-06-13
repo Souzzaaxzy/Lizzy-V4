@@ -521,13 +521,20 @@ ${player.mvpCount > 0 ? `⭐ *MVPs:* ${player.mvpCount}` : ''}
 • XP: ${xpInfo.currentXP}/${xpNeeded}
 • 💎 Pontos Evolução: ${xpInfo.evolutionPoints}
 
-🏅 *ESTATÍSTICAS:*
+🏅 *ESTATÍSTICAS GLOBAIS:*
 • Partidas: ${player.stats.matches}
 • Vitórias: ${player.stats.wins}
 • Empates: ${player.stats.draws}
 • Derrotas: ${player.stats.losses}
 • Gols marcados: ${player.stats.goalsFor}
 • Gols sofridos: ${player.stats.goalsAgainst}
+${player.soloStats ? `• Sequência Solo: ${player.soloStats.streak} (Melhor: ${player.soloStats.bestStreak})` : ''}
+
+🏏 *FUT SOLO:*
+${player.soloStats ? `• Vitórias: ${player.soloStats.victories}
+• Derrotas: ${player.soloStats.losses}
+• Empates: ${player.soloStats.draws}
+• Total: ${player.soloStats.totalPlayed}` : '• Nenhuma partida solo'}
 
 🏟️ *CLUBE:* ${clubInfo}
 💪 *Habilidades:* ${skillsText}
