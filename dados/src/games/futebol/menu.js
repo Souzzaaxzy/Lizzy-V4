@@ -149,71 +149,181 @@ export function getMenuAdminFut() {
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 👤 *JOGADORES*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💰 addcoins   → addcoins @user [valor]
-💸 remcoins   → remcoins @user [valor]
-🎮 setovr     → setovr @user [1-99]
-⚡ setenergy  → setenergy @user [0-200]
-🏆 setdiv     → setdiv @user [bronze...]
-👑 resetplayer → resetplayer @user
-⭐ addmvp     → addmvp @user [qtd]
+
+💰 *addcoins*
+📝 Adiciona FC Coins a um jogador
+📌 Use: *!fut admin addcoins @user [valor]*
+📌 Ex: *!fut admin addcoins @usuario 5000*
+
+💸 *remcoins*
+📝 Remove FC Coins de um jogador
+📌 Use: *!fut admin remcoins @user [valor]*
+📌 Ex: *!fut admin remcoins @usuario 1000*
+
+🎮 *setovr*
+📝 Define o Overall (OVR) de um jogador
+📌 Use: *!fut admin setovr @user [1-99]*
+📌 Ex: *!fut admin setovr @usuario 85*
+
+⚡ *setenergy*
+📝 Define a energia de um jogador
+📌 Use: *!fut admin setenergy @user [0-200]*
+📌 Ex: *!fut admin setenergy @usuario 150*
+
+🏆 *setdiv*
+📝 Define a divisão de um jogador
+📌 Use: *!fut admin setdiv @user [bronze/prata/ouro/elite/lenda/mestre/pro/worldclass/topglobal]
+📌 Ex: *!fut admin setdiv @usuario ouro*
+
+👑 *resetplayer*
+📝 Reseta completamente um jogador
+📌 Use: *!fut admin resetplayer @user*
+📌 Ex: *!fut admin resetplayer @usuario*
+
+⭐ *addmvp*
+📝 Adiciona MVPs a um jogador
+📌 Use: *!fut admin addmvp @user [quantidade]*
+📌 Ex: *!fut admin addmvp @usuario 5*
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⭐ *XP & EVOLUÇÃO*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📈 addxp     → addxp @user [valor]
-🎯 setlevel  → setlevel @user [1-100]
-💎 setevo    → setevo @user [pontos]
-➕ addevo    → addevo @user [pontos]
-🔄 resetxp   → resetxp @user
+
+📈 *addxp*
+📝 Adiciona XP a um jogador
+📌 Use: *!fut admin addxp @user [valor]*
+📌 Ex: *!fut admin addxp @usuario 500*
+
+🎯 *setlevel*
+📝 Define o nível de XP de um jogador
+📌 Use: *!fut admin setlevel @user [1-100]*
+📌 Ex: *!fut admin setlevel @usuario 25*
+
+💎 *setevo*
+📝 Define pontos de evolução de um jogador
+📌 Use: *!fut admin setevo @user [pontos]*
+📌 Ex: *!fut admin setevo @usuario 100*
+
+➕ *addevo*
+📝 Adiciona pontos de evolução a um jogador
+📌 Use: *!fut admin addevo @user [pontos]*
+📌 Ex: *!fut admin addevo @usuario 50*
+
+🔄 *resetxp*
+📝 Reseta todo o XP de um jogador
+📌 Use: *!fut admin resetxp @user*
+📌 Ex: *!fut admin resetxp @usuario*
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🎯 *ATRIBUTOS*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚡ settreino → settreino @user [attr] [valor]
+
+⚡ *settreino*
+📝 Define o valor de um atributo treinado
+📌 Use: *!fut admin settreino @user [attr] [valor]*
+📌 Attrs: pac, sho, pas, dri, def, phy
+📌 Ex: *!fut admin settreino @usuario pac 80*
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🌟 *REPUTAÇÃO*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📊 setrep    → setrep @user [0-100]
-➕ addrep    → addrep @user [±valor]
+
+📊 *setrep*
+📝 Define a reputação de um jogador (0-100)
+📌 Use: *!fut admin setrep @user [0-100]*
+📌 Ex: *!fut admin setrep @usuario 75*
+
+➕ *addrep*
+📝 Adiciona ou remove reputação
+📌 Use: *!fut admin addrep @user [±valor]*
+📌 Ex: *!fut admin addrep @usuario +10*
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🏆 *TEMPORADA*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📋 season        → Ver status
-🔄 season reset  → Resetar
-⚙️ season config → Configurar
+
+📋 *season*
+📝 Mostra o status atual da temporada
+
+🔄 *season reset*
+📝 Reseta todos os dados da temporada
+
+⚙️ *season config*
+📝 Configura os parâmetros da temporada
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🎁 *CÓDIGOS*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🎫 criar      → codigo criar [COD] [C] [X] [U] [H]
-🎲 misterio   → codigo misterioso [min] [max]
-📋 listar     → codigo listar
-📜 log        → codigo log
-❌ desativar  → codigo desativar [COD]
+
+🎫 *codigo criar*
+📝 Cria um código promocional
+📌 Use: *!fut admin codigo criar [CODIGO] [COINS] [XP] [USOS] [HORAS]*
+📌 Ex: *!fut admin codigo criar VIP2026 5000 200 50 48*
+
+🎲 *codigo misterioso*
+📝 Cria código com valores aleatórios
+📌 Use: *!fut admin codigo misterioso [MINC] [MAXC] [MINX] [MAXX] [USOS]*
+📌 Ex: *!fut admin codigo misterioso 1000 5000 50 200 10*
+
+📋 *codigo listar*
+📝 Lista todos os códigos ativos
+
+📜 *codigo log*
+📝 Mostra o histórico de uso dos códigos
+
+❌ *codigo desativar*
+📝 Desativa um código promocional
+📌 Use: *!fut admin codigo desativar [CODIGO]*
+📌 Ex: *!fut admin codigo desativar VIP2026*
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🏆 *TORNEIOS*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-➕ criar     → torneio criar [NOME|TIPO|MAX|ENT|PRE|TRO]
-▶️ iniciar   → torneio iniciar [ID]
-⚽ jogar     → torneio jogar [ID]
-👁️ ver       → torneio ver [ID]
-❌ cancelar  → torneio cancelar [ID]
-📋 listar    → torneio listar
+
+➕ *torneio criar*
+📝 Cria um novo torneio
+📌 Use: *!fut admin torneio criar [NOME]|[TIPO]|[MAX]|[ENTRADA]|[PREMIO]|[TROFÉU]*
+📌 Ex: *!fut admin torneio criar Copa Legends|x1|16|1000|10000|Campeão*
+
+▶️ *torneio iniciar*
+📝 Inicia um torneio (muda para fase de jogos)
+📌 Use: *!fut admin torneio iniciar [ID]*
+
+⚽ *torneio jogar*
+📝 Processa a próxima partida do torneio
+📌 Use: *!fut admin torneio jogar [ID]*
+
+👁️ *torneio ver*
+📝 Mostra detalhes de um torneio
+📌 Use: *!fut admin torneio ver [ID]*
+
+❌ *torneio cancelar*
+📝 Cancela um torneio
+📌 Use: *!fut admin torneio cancelar [ID]*
+
+📋 *torneio listar*
+📝 Lista todos os torneios
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 *FUT SOLO*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔄 setsolo   → setsolo @user reset
+
+🔄 *setsolo*
+📝 Reseta o ranking solo de um jogador
+📌 Use: *!fut admin setsolo @user reset*
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 💥 *RESET GERAL*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚠️ resetall   → Resetar tudo
-🏠 clubes     → Resetar clubes
-⚔️ x1reset   → Limpar X1 pendentes`;
+
+⚠️ *resetall*
+📝 Reseta TODOS os dados do sistema de futebol
+
+🏠 *clubes reset*
+📝 Reseta todos os clubes
+
+⚔️ *x1reset*
+📝 Limpa todos os X1 pendentes`;
 }
 
 // ═══════════════════════════════════════════════════════════════

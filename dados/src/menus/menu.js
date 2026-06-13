@@ -21,7 +21,6 @@ ${middleBorder} ${menuItemIcon}${prefix}menubn
 ${middleBorder} ${menuItemIcon}${prefix}menudono
 ${middleBorder} ${menuItemIcon}${prefix}menumemb
 ${middleBorder} ${menuItemIcon}${prefix}menufut
-${middleBorder} ${menuItemIcon}${prefix}futadm
 ${middleBorder} ${menuItemIcon}${prefix}ferramentas
 ${middleBorder} ${menuItemIcon}${prefix}menufig
 ${middleBorder} ${menuItemIcon}${prefix}alteradores
