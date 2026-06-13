@@ -32340,7 +32340,7 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
       case 'futebol':
         try {
           // Se for comando !menufut sem subcomando, mostra o menu com GIF
-          if (command === 'menufut' && args.length === 1) {
+          if (command === 'menufut' && args.length === 0) {
             const { getMenuFut } = await import('./games/futebol/menu.js');
             const futGifPath = __dirname + '/../midias/menufut.gif';
             const futImagePath = __dirname + '/../midias/menufut.jpg';
