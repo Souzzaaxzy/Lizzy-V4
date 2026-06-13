@@ -32336,18 +32336,29 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
         break;
       case 'menufut':
         try {
+          console.log('🔥 Comando menufut acionado!');
           const { getMenuFut } = await import('./games/futebol/menu.js');
           const futGifPath = pathz.join(__dirname, '..', 'midias', 'menufut.gif');
           const futImagePath = pathz.join(__dirname, '..', 'midias', 'menufut.jpg');
           const futVideoPath = pathz.join(__dirname, '..', 'midias', 'menufut.mp4');
 
+          console.log('📁 Paths:', { futGifPath, futImagePath, futVideoPath });
+          console.log('📁 __dirname:', __dirname);
+          console.log('📁 GIF exists:', fs.existsSync(futGifPath));
+          console.log('📁 Image exists:', fs.existsSync(futImagePath));
+          console.log('📁 Video exists:', fs.existsSync(futVideoPath));
+
           const useVideo = fs.existsSync(futVideoPath);
           const mediaPath = useVideo ? futVideoPath : (fs.existsSync(futGifPath) ? futGifPath : (fs.existsSync(futImagePath) ? futImagePath : null));
+
+          console.log('📁 Selected mediaPath:', mediaPath);
 
           if (mediaPath && fs.existsSync(mediaPath)) {
             const mediaBuffer = fs.readFileSync(mediaPath);
             const menuText = getMenuFut(pushname);
             const lerMaisPrefix = getMenuLerMaisText ? getMenuLerMaisText() : '';
+
+            console.log('📤 Enviando mídia...');
 
             await nazu.sendMessage(from, {
               [useVideo ? 'video' : 'image']: mediaBuffer,
@@ -32357,7 +32368,10 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
             }, {
               quoted: info
             });
+
+            console.log('✅ Mídia enviada com sucesso!');
           } else {
+            console.log('⚠️ Mídia não encontrada, enviando apenas texto');
             reply(getMenuFut(pushname));
           }
         } catch (e) {
