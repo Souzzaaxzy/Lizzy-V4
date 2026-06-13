@@ -6124,6 +6124,16 @@ if (isCmd && command && !isOwnerOrSub) {
         break;
       }
 
+      case 'fut': {
+        try {
+          await handleFutCommand(args, { sender, senderName, from, nazu, isGroup, groupAdmins, isOwner, prefix }, reply);
+        } catch (error) {
+          console.error('Erro no comando fut:', error);
+          reply("❌ Erro ao processar comando de futebol.");
+        }
+        break;
+      }
+
       case 'lembrete':
       case 'lembrar': {
         try {
