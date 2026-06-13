@@ -218,8 +218,6 @@ class FootballDB {
         current: 0, // -5 a +5
         history: [] // últimas 10 partidas
       },
-      // Sistema de Conquistas
-      achievements: [],
       unlockedTitles: ['Novato'],
       equippedTitle: null,
       // Sistema de MVP
@@ -1424,7 +1422,6 @@ class FootballDB {
       case 'normal':
         enemyOVR = playerOVR + Math.floor(Math.random() * 5) - 2; // -2 a +2
         break;
-      case 'dificil':
       case 'dificil':
         enemyOVR = playerOVR + Math.floor(Math.random() * 5) + 3; // +3 a +7
         break;
