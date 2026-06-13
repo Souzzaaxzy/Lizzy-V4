@@ -32336,47 +32336,41 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
         break;
       case 'menufut':
         try {
-          console.log('🔥 Comando menufut acionado!');
           const { getMenuFut } = await import('./games/futebol/menu.js');
-          const futGifPath = pathz.join(__dirname, '..', 'midias', 'menufut.gif');
-          const futImagePath = pathz.join(__dirname, '..', 'midias', 'menufut.jpg');
-          const futVideoPath = pathz.join(__dirname, '..', 'midias', 'menufut.mp4');
-
-          console.log('📁 Paths:', { futGifPath, futImagePath, futVideoPath });
-          console.log('📁 __dirname:', __dirname);
-          console.log('📁 GIF exists:', fs.existsSync(futGifPath));
-          console.log('📁 Image exists:', fs.existsSync(futImagePath));
-          console.log('📁 Video exists:', fs.existsSync(futVideoPath));
-
+          const futGifPath = __dirname + '/../midias/menufut.gif';
+          const futImagePath = __dirname + '/../midias/menufut.jpg';
+          const futVideoPath = __dirname + '/../midias/menufut.mp4';
+          const isGif = fs.existsSync(futGifPath);
           const useVideo = fs.existsSync(futVideoPath);
-          const mediaPath = useVideo ? futVideoPath : (fs.existsSync(futGifPath) ? futGifPath : (fs.existsSync(futImagePath) ? futImagePath : null));
+          const hasImage = fs.existsSync(futImagePath);
+          const mediaPath = useVideo ? futVideoPath : (isGif ? futGifPath : futImagePath);
+          const mediaBuffer = fs.readFileSync(mediaPath);
+          const menuText = getMenuFut(pushname);
+          const lerMaisPrefix = getMenuLerMaisText();
 
-          console.log('📁 Selected mediaPath:', mediaPath);
-
-          if (mediaPath && fs.existsSync(mediaPath)) {
-            const mediaBuffer = fs.readFileSync(mediaPath);
-            const menuText = getMenuFut(pushname);
-            const lerMaisPrefix = getMenuLerMaisText ? getMenuLerMaisText() : '';
-
-            console.log('📤 Enviando mídia...');
-
+          if (isGif) {
+            // GIFs animados usam video com gifPlayback
             await nazu.sendMessage(from, {
-              [useVideo ? 'video' : 'image']: mediaBuffer,
+              video: mediaBuffer,
               caption: lerMaisPrefix + menuText,
-              gifPlayback: useVideo || mediaPath.endsWith('.gif'),
-              mimetype: useVideo ? 'video/mp4' : (mediaPath.endsWith('.gif') ? 'image/gif' : 'image/jpeg')
+              gifPlayback: true,
+              mimetype: 'image/gif'
             }, {
               quoted: info
             });
-
-            console.log('✅ Mídia enviada com sucesso!');
           } else {
-            console.log('⚠️ Mídia não encontrada, enviando apenas texto');
-            reply(getMenuFut(pushname));
+            await nazu.sendMessage(from, {
+              [useVideo ? 'video' : 'image']: mediaBuffer,
+              caption: lerMaisPrefix + menuText,
+              gifPlayback: false,
+              mimetype: useVideo ? 'video/mp4' : 'image/jpeg'
+            }, {
+              quoted: info
+            });
           }
-        } catch (e) {
-          console.error('Erro no comando menufut:', e);
-          reply("ocorreu um erro 💔");
+        } catch (error) {
+          console.error('Erro ao enviar menufut:', error);
+          reply(getMenuFut(pushname));
         }
         break;
       case 'perfil':
