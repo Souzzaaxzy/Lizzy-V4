@@ -667,6 +667,19 @@ class FootballDB {
     const player = this.players[userId];
     if (!player) return { success: false, error: 'Jogador não encontrado' };
     
+    // Verificar cooldown de 30 minutos
+    const cooldownMs = 30 * 60 * 1000; // 30 minutos
+    const lastCommand = player.lastRestCommand || 0;
+    
+    if (Date.now() - lastCommand < cooldownMs) {
+      const remainingMs = cooldownMs - (Date.now() - lastCommand);
+      const remainingMin = Math.ceil(remainingMs / 60000);
+      return { 
+        success: false, 
+        error: `⏳ Cooldown ativo!\n\nAguarde ${remainingMin} minuto(s) para descansar novamente.\n\n💡 Dica: A energia recupera automaticamente com o tempo!` 
+      };
+    }
+    
     const maxEnergy = player.energy?.max || 200;
     const currentEnergy = player.energy?.current || 0;
     
@@ -679,6 +692,7 @@ class FootballDB {
     
     player.energy.current = maxEnergy;
     player.energy.lastRest = Date.now();
+    player.lastRestCommand = Date.now();
     
     this.save();
     
