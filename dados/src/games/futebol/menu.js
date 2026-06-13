@@ -128,16 +128,7 @@ export function getMenuFut(playerName = 'Jogador') {
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⚠️ *ADMINISTRAÇÃO*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💰 AddCoins → !fut admin addcoins @user [valor]
-💸 RemCoins → !fut admin remcoins @user [valor]
-🎮 SetOVR   → !fut admin setovr @user [1-99]
-⚡ SetEnergy → !fut admin setenergy @user [0-200]
-🏆 SetDiv   → !fut admin setdiv @user [divisão]
-👑 Reset    → !fut admin resetplayer @user
-📈 AddXP    → !fut admin addxp @user [valor]
-🔧 SetTreino → !fut admin settreino @user [attr] [val]
-🎁 Códigos  → !fut admin codigo criar/listar/desativar
-🏆 Torneio  → !fut admin torneio criar/iniciar/jogar
+🔧 Use *!fut admin* para ver todos os comandos
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 💡 Use *!fut entrar* para começar!`;

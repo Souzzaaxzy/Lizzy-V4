@@ -6101,36 +6101,27 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'menufut': {
         try {
           const { getMenuFut } = await import('./games/futebol/menu.js');
-          const futGifPath = __dirname + '/../midias/menufut.gif';
           const futImagePath = __dirname + '/../midias/menufut.jpg';
           const futVideoPath = __dirname + '/../midias/menufut.mp4';
-          const useVideo = fs.existsSync(futVideoPath);
-          const isGif = fs.existsSync(futGifPath);
-          const mediaPath = useVideo ? futVideoPath : (isGif ? futGifPath : futImagePath);
+          const futGifPath = __dirname + '/../midias/menufut.gif';
+          
+          // Prioridade: MP4 > GIF > JPG
+          const hasVideo = fs.existsSync(futVideoPath);
+          const hasGif = fs.existsSync(futGifPath);
+          const mediaPath = hasVideo ? futVideoPath : (hasGif ? futGifPath : futImagePath);
           const mediaBuffer = fs.readFileSync(mediaPath);
           const menuText = getMenuFut(pushname);
           const lerMaisPrefix = getMenuLerMaisText();
 
-          if (isGif) {
-            // GIFs precisam ser enviados como video com gifPlayback: true
-            await nazu.sendMessage(from, {
-              video: mediaBuffer,
-              caption: lerMaisPrefix + menuText,
-              gifPlayback: true,
-              mimetype: 'video/mp4'
-            }, {
-              quoted: info
-            });
-          } else {
-            await nazu.sendMessage(from, {
-              [useVideo ? 'video' : 'image']: mediaBuffer,
-              caption: lerMaisPrefix + menuText,
-              gifPlayback: false,
-              mimetype: useVideo ? 'video/mp4' : 'image/jpeg'
-            }, {
-              quoted: info
-            });
-          }
+          // Envia como video (MP4 ou GIF animado)
+          await nazu.sendMessage(from, {
+            video: mediaBuffer,
+            caption: lerMaisPrefix + menuText,
+            gifPlayback: !hasVideo, // true só se for GIF
+            mimetype: 'video/mp4'
+          }, {
+            quoted: info
+          });
         } catch (error) {
           console.error('Erro ao enviar menufut:', error);
           reply("❌ Erro ao carregar menufut");
