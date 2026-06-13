@@ -32339,36 +32339,41 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
       case 'football':
       case 'futebol':
         try {
-          // DEBUG: Log command and args
-          console.log('FUT COMMAND DEBUG:', { command, args, argsLength: args.length });
-          // Se for comando !menufut sem subcomando, mostra o menu com GIF
-          if (command === 'menufut' && args.length === 0) {
+          // Se não tem argumentos, mostra o menu de futebol
+          if (args.length === 0) {
             const { getMenuFut } = await import('./games/futebol/menu.js');
-            const futGifPath = __dirname + '/../midias/menufut.gif';
-            const futImagePath = __dirname + '/../midias/menufut.jpg';
-            const futVideoPath = __dirname + '/../midias/menufut.mp4';
+            
+            // Só envia GIF se for especificamente o comando !menufut
+            if (command === 'menufut') {
+              const futGifPath = __dirname + '/../midias/menufut.gif';
+              const futImagePath = __dirname + '/../midias/menufut.jpg';
+              const futVideoPath = __dirname + '/../midias/menufut.mp4';
 
-            const useVideo = fs.existsSync(futVideoPath);
-            const mediaPath = useVideo ? futVideoPath : (fs.existsSync(futGifPath) ? futGifPath : (fs.existsSync(futImagePath) ? futImagePath : null));
+              const useVideo = fs.existsSync(futVideoPath);
+              const mediaPath = useVideo ? futVideoPath : (fs.existsSync(futGifPath) ? futGifPath : (fs.existsSync(futImagePath) ? futImagePath : null));
 
-            if (mediaPath && fs.existsSync(mediaPath)) {
-              const mediaBuffer = fs.readFileSync(mediaPath);
-              const menuText = getMenuFut(pushname);
-              const lerMaisPrefix = getMenuLerMaisText ? getMenuLerMaisText() : '';
+              if (mediaPath && fs.existsSync(mediaPath)) {
+                const mediaBuffer = fs.readFileSync(mediaPath);
+                const menuText = getMenuFut(pushname);
+                const lerMaisPrefix = getMenuLerMaisText ? getMenuLerMaisText() : '';
 
-              await nazu.sendMessage(from, {
-                [useVideo ? 'video' : 'image']: mediaBuffer,
-                caption: lerMaisPrefix + menuText,
-                gifPlayback: useVideo || mediaPath.endsWith('.gif'),
-                mimetype: useVideo ? 'video/mp4' : (mediaPath.endsWith('.gif') ? 'image/gif' : 'image/jpeg')
-              }, {
-                quoted: info
-              });
-              return;
-            } else {
-              return reply(getMenuFut(pushname));
+                await nazu.sendMessage(from, {
+                  [useVideo ? 'video' : 'image']: mediaBuffer,
+                  caption: lerMaisPrefix + menuText,
+                  gifPlayback: useVideo || mediaPath.endsWith('.gif'),
+                  mimetype: useVideo ? 'video/mp4' : (mediaPath.endsWith('.gif') ? 'image/gif' : 'image/jpeg')
+                }, {
+                  quoted: info
+                });
+                return;
+              }
             }
+            
+            // Mostra menu texto
+            return reply(getMenuFut(pushname));
           }
+          
+          // Se tem argumentos, passa para o handler normal
           await handleFut(args, {
             sender,
             senderName: pushname,
