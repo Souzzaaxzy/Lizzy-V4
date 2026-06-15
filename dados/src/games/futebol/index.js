@@ -531,7 +531,6 @@ const checkAdmin = async () => {
     case 'futresetall':
       return processAdminCommand(command, args);
 
-    // ENTRAR  switch (command) {
     // ═══════════════════════════════════════════════════════════════
     // ENTRAR
     // ═══════════════════════════════════════════════════════════════
