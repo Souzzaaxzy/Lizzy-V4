@@ -360,7 +360,7 @@ export async function handleFutCommand(args, messageInfo, reply) {
       }
       
       default:
-        return sendReply(`❌ Comando '${action}' não reconhecido!\n\nUse *!fut admin* para ver todos os comandos.`);
+        return sendReply(`❌ Comando '${action}' não reconhecido!\n\nUse *!futadmin* para ver todos os comandos.`);
     }
   };
   
@@ -1363,6 +1363,7 @@ Exemplo: *!fut codigo ELITE2026*
     // ═══════════════════════════════════════════════════════════════
     
     case 'admin':
+    case 'futadmin':
     case 'futaddcoins':
     case 'futremcoins':
     case 'futsetdiv':
@@ -1382,7 +1383,7 @@ Exemplo: *!fut codigo ELITE2026*
     case 'futaddmvp':
     case 'futsetrep':
     case 'futaddrep':
-      return processAdminCommand(command, args);
+      return processAdminCommand('admin', args);
     
     // ═══════════════════════════════════════════════════════════════
     // COMANDO INVÁLIDO
