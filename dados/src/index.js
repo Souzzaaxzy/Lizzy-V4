@@ -22982,7 +22982,7 @@ ${prefix}${command} 1a0b5879-bc22-4f4a
       case 'reagir':
         try {
           if (!isGroup) return reply("Este comando só pode ser usado em grupos 💔");
-          if (!isGroupAdmin) return reply("Apenas administradores podem usar este comando. 💔");
+          if (!isOwnerOrSub) return reply("Apenas o dono ou sub-dono pode usar este comando. 💔");
 
           const args = q.trim().split(' ');
           const subCmd = args[0]?.toLowerCase();
@@ -30464,7 +30464,7 @@ case 'assistent':
       case 'npc':
         try {
           if (!isGroup) return reply("Este comando só pode ser usado em grupos 💔");
-          if (!isGroupAdmin) return reply("Apenas administradores podem usar este comando. 💔");
+          if (!isOwnerOrSub) return reply("Apenas o dono ou sub-dono pode usar este comando. 💔");
 
           const subCmd = args[0]?.toLowerCase();
           const value = args[1];
