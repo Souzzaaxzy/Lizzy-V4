@@ -33404,15 +33404,27 @@ break;
             responseText = GamezinData[command]?.replaceAll('#nome#', `@${getUserName(targetUser)}`) || `Voce acabou de dar um(a) ${command} no(a) @${getUserName(targetUser)}`;
           }
           let media = gamesData.games2[command];
+          // Resolver caminho absoluto para mídias locais
+          const resolveMediaPath = (url) => {
+            if (url.startsWith('./')) {
+              return path.join(__dirname, '../../', url.substring(2));
+            }
+            return url;
+          };
+
           if (media?.image) {
+            const imagePath = resolveMediaPath(media.image);
+            const imageBuffer = fs.readFileSync(imagePath);
             await nazu.sendMessage(from, {
-              image: media.image,
+              image: imageBuffer,
               caption: responseText,
               mentions: [targetUser]
             });
           } else if (media?.video) {
+            const videoPath = resolveMediaPath(media.video);
+            const videoBuffer = fs.readFileSync(videoPath);
             await nazu.sendMessage(from, {
-              video: media.video,
+              video: videoBuffer,
               caption: responseText,
               mentions: [targetUser],
               gifPlayback: true
