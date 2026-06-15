@@ -6127,6 +6127,39 @@ if (isCmd && command && !isOwnerOrSub) {
 
       case 'fut':
       case 'futadmin':
+      case 'futaddcoins':
+      case 'futremcoins':
+      case 'futsetovr':
+      case 'futsetenergy':
+      case 'futsetdiv':
+      case 'futaddmvp':
+      case 'futresetplayer':
+      case 'futaddxp':
+      case 'futsetlevel':
+      case 'futsetevo':
+      case 'futaddevo':
+      case 'futresetxp':
+      case 'futsettreino':
+      case 'futsetrep':
+      case 'futaddrep':
+      case 'futseason':
+      case 'futseasonreset':
+      case 'futseasonconfig':
+      case 'futcodigocriar':
+      case 'futcodigomisterioso':
+      case 'futcodigolistar':
+      case 'futcodigolog':
+      case 'futcodigodesativar':
+      case 'futtorneiocriar':
+      case 'futtorneioiniciar':
+      case 'futtorneiojogar':
+      case 'futtorneiover':
+      case 'futtorneiocancelar':
+      case 'futtorneiolistar':
+      case 'futsetsolo':
+      case 'futresetx1':
+      case 'futclubereset':
+      case 'futresetall':
       case 'football':
       case 'futebol':
         try {
