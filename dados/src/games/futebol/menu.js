@@ -128,7 +128,10 @@ export function getMenuFut(playerName = 'Jogador') {
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⚠️ *ADMINISTRAÇÃO*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔧 Use *!fut admin* para ver todos os comandos
+⚙️ !futadmin
+Painel administrativo do Futebol Global
+
+🔒 Exclusivo para administradores
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 💡 Use *!fut entrar* para começar!`;
