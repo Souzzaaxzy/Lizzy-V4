@@ -554,20 +554,6 @@ Ex: *!futtorneiocriar Copa Elite x1 16 500 5000*`);
         break;
       }
       
-      case 'futadmin': {
-        // Verificar se é admin
-        const isAdmin = await checkAdmin();
-        if (!isAdmin) {
-          return sendReply(getAccessDeniedMessage());
-        }
-        // Verificar se tem subcomando de categoria
-        const category = args[1]?.toLowerCase();
-        if (category) {
-          return sendReply(getAdminCategoryMenu(category, senderName));
-        }
-        return sendReply(getAdminMenuFut(senderName));
-      }
-
       case 'help':
       case 'ajuda':
       case undefined: {
