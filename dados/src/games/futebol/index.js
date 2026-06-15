@@ -549,7 +549,7 @@ Ex: *!futtorneiocriar Copa Elite x1 16 500 5000*`);
         break;
       }
       
-      case 'admin':
+      case 'futadmin':
       case 'help':
       case 'ajuda':
       case undefined: {
@@ -1579,7 +1579,6 @@ Exemplo: *!fut codigo ELITE2026*
     // COMANDOS ADMIN INDEPENDENTES
     // ═══════════════════════════════════════════════════════════════
     
-    case 'admin':
     case 'futadmin':
     case 'futaddcoins':
     case 'futremcoins':
