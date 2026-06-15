@@ -364,28 +364,8 @@ export async function handleFutCommand(args, messageInfo, reply) {
         return sendReply('❌ Você não está registrado!');
       }
       
-      const xpInfo = db.getXPInfo(sender);
-      const xpNeeded = db.getXPForLevel(xpInfo.level);
-      const barLength = 15;
-      const filled = Math.round((xpInfo.currentXP / xpNeeded) * barLength);
-      const bar = '█'.repeat(filled) + '░'.repeat(barLength - filled);
-      
-      let xpText = `⭐ *XP FUTEBOL*\n\n`;
-      xpText += `📊 Nível: ${xpInfo.level}\n`;
-      xpText += `${bar}\n`;
-      xpText += `${xpInfo.currentXP}/${xpNeeded} XP\n\n`;
-      xpText += `💎 Pontos de Evolução: ${xpInfo.evolutionPoints}\n`;
-      xpText += `📈 XP Total: ${xpInfo.totalXP}\n`;
-      
-      if (xpInfo.xpBonus > 0) {
-        xpText += `\n🎯 Bônus: +${xpInfo.xpBonus}% (Aprendizado Rápido)`;
-      }
-      
-      if (xpInfo.evolutionPoints > 0) {
-        xpText += `\n\n💡 Use *!fut evoluir [atributo] [pontos]* para melhorar!`;
-      }
-      
-      return sendReply(xpText);
+      const { getXPMessage } = await import('./menu.js');
+      return sendReply(getXPMessage(player));
     
     case 'evoluir':
       if (!player) {

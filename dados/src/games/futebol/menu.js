@@ -925,4 +925,77 @@ function getSkillSlots(divId) {
   return slots[divId] || 1;
 }
 
+// ═══════════════════════════════════════════════════════════════
+// XP GLOBAL - SISTEMA REFORMULADO
+// ═══════════════════════════════════════════════════════════════
+
+export function getXPMessage(player) {
+  const xpInfo = db.getXPInfo(player.id);
+  if (!xpInfo) {
+    return '❌ Não foi possível obter informações de XP.';
+  }
+  
+  const divEmoji = DIVISIONS_EMOJI[xpInfo.division] || '🏆';
+  const divName = getDivisionName(xpInfo.division);
+  
+  // Construir detalhes de bônus
+  let bonusDetails = '';
+  if (xpInfo.xpBonus > 0) {
+    bonusDetails = `\n🎁 *Bônus Ativo:* +${xpInfo.xpBonus}%`;
+  }
+  
+  // Barra de progresso
+  const progressBar = xpInfo.progressBar || generateProgressBar(xpInfo.currentXP, xpInfo.xpNeeded);
+  
+  return `
+⚡ *XP FUTEBOL GLOBAL* ⚡
+
+🏆 *NÍVEL:* ${xpInfo.level}
+${divEmoji} *Divisão:* ${divName} ${xpInfo.divisionBonus > 0 ? `(+${xpInfo.divisionBonus}% XP)` : ''}
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+📊 *PROGRESSO*
+━━━━━━━━━━━━━━━━━━━━━━━━
+${progressBar}
+✨ XP: ${xpInfo.currentXP.toLocaleString()} / ${xpInfo.xpNeeded.toLocaleString()}
+📈 Para próximo nível: ${xpInfo.xpRemaining.toLocaleString()} XP
+🎯 Progresso: ${xpInfo.progress}%
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+💎 *RECOMPENSAS*
+━━━━━━━━━━━━━━━━━━━━━━━━
+🔓 Pontos de Evolução: ${xpInfo.evolutionPoints}
+🌟 XP Total Acumulado: ${xpInfo.totalXP.toLocaleString()}${bonusDetails}
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+📋 *ESTATÍSTICAS DE XP*
+━━━━━━━━━━━━━━━━━━━━━━━━
+⚽ Partidas Jogadas: ${xpInfo.matchesPlayed}
+🎮 Partidas Solo: ${xpInfo.soloMatches}
+⚔️ X1: ${xpInfo.x1Matches}
+🏆 Torneios: ${xpInfo.tournamentMatches}
+🔥 Sequência Atual: ${xpInfo.winStreak} vitórias
+${xpInfo.form > 0 ? `📈 Forma: +${xpInfo.form}` : ''}
+
+━━━━━━━━━━━━━━━━━━━━━━━━
+💡 *COMO GANHAR XP:*
+━━━━━━━━━━━━━━━━━━━━━━━━
+✅ Vitória: +XP (base + bônus)
+⚽ Gol marcado: +3 XP
+🧤 Clean Sheet: +5 XP
+🎯 Participação: +2 XP
+🏆 Torneio: +20% bônus
+⚔️ Rivalidade: +25% bônus
+🔥 Sequência: até +40% bônus
+
+💎 *Evolua seu jogador!*`;
+}
+
+function generateProgressBar(current, max, size = 20) {
+  const percentage = current / max;
+  const filled = Math.round(percentage * size);
+  const empty = size - filled;
+  return '█'.repeat(filled) + '░'.repeat(empty);
+}
+
 export { getDivisionName, getSkillSlots, DIVISIONS_EMOJI, ATTR_NAMES };

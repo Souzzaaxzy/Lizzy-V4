@@ -943,54 +943,137 @@ class FootballDB {
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // SISTEMA DE XP E NÍVEIS
+  // SISTEMA DE XP E NÍVEIS - REFORMULADO
   // ═══════════════════════════════════════════════════════════════
 
-  // Calcular XP necessário para o próximo nível
-  getXPForLevel(level) {
-    // Progressão: nível * 100 + (nível - 1) * 20
-    // Nível 1→2: 100, 2→3: 140, 3→4: 180, etc.
-    return Math.floor(level * 100 + (level - 1) * 20);
+  // Bônus de XP por divisão
+  getDivisionXPBonus(divisionId) {
+    const bonuses = {
+      bronze_3: 0, bronze_2: 0.05, bronze_1: 0.10,
+      prata_3: 0.15, prata_2: 0.20, prata_1: 0.25,
+      ouro_3: 0.30, ouro_2: 0.35, ouro_1: 0.40,
+      elite_3: 0.45, elite_2: 0.50, elite_1: 0.55,
+      lenda_3: 0.60, lenda_2: 0.65, lenda_1: 0.70,
+      mestre_3: 0.75, mestre_2: 0.80, mestre_1: 0.85,
+      pro_3: 0.90, pro_2: 0.95, pro_1: 1.00,
+      worldclass_2: 1.10, worldclass_1: 1.20,
+      topglobal: 1.30
+    };
+    return bonuses[divisionId] || 0;
   }
 
-  // Calcular bônus de XP baseado nas habilidades
+  // Calcular XP necessário para o próximo nível (progressão suave e escalável)
+  getXPForLevel(level) {
+    if (level < 1) level = 1;
+    
+    // Fórmula: nível^1.8 * 50 + 50
+    // Nível 1→2: ~100 XP
+    // Nível 10: ~1.580 XP
+    // Nível 25: ~7.800 XP
+    // Nível 50: ~35.350 XP
+    // Nível 100: ~158.000 XP
+    // Nível 200: ~707.000 XP
+    return Math.floor(Math.pow(level, 1.8) * 50 + 50);
+  }
+
+  // Calcular bônus total de XP baseado em habilidades e divisão
   getXPBonus(player) {
-    let bonus = 0;
+    let bonus = 1.0;
+    
+    // Bônus de habilidade (Veterano)
     if (player.skills) {
+      const veterano = player.skills.find(s => s.id === 'veterano');
+      if (veterano) {
+        bonus += veterano.level * 0.10; // +10% por nível
+      }
+      
+      // Bônus de habilidade (Aprendizado Rápido)
       const aprendizado = player.skills.find(s => s.id === 'aprendizado_rapido');
       if (aprendizado) {
-        bonus = aprendizado.level * 5; // +5% por nível
+        bonus += aprendizado.level * 0.05; // +5% por nível
       }
     }
-    return bonus / 100; // Retorna multiplicador (1.05, 1.10, 1.15)
+    
+    // Bônus de divisão
+    if (player.division?.id) {
+      bonus += this.getDivisionXPBonus(player.division.id);
+    }
+    
+    // Bônus de streak de vitórias (até +20%)
+    if (player.soloStats?.winStreak >= 3) {
+      bonus += Math.min(player.soloStats.winStreak * 0.02, 0.20);
+    }
+    
+    // Bônus de forma positiva (até +10%)
+    if (player.form?.current > 0) {
+      bonus += Math.min(player.form.current * 0.02, 0.10);
+    }
+    
+    return bonus;
   }
 
-  // Adicionar XP a um jogador
-  addXP(userId, amount) {
+  // Calcular XP final com todos os bônus aplicados
+  calculateXPWithBonuses(userId, baseXP, options = {}) {
+    const player = this.players[userId];
+    if (!player) return baseXP;
+    
+    let bonus = this.getXPBonus(player);
+    
+    // Bônus por dificuldade (solo)
+    if (options.difficulty) {
+      const difficultyBonus = { normal: 1.0, dificil: 1.25, extremo: 1.5 };
+      bonus *= (difficultyBonus[options.difficulty] || 1.0);
+    }
+    
+    // Bônus de rivalidade
+    if (options.rivalry) {
+      bonus *= 1.25;
+    }
+    
+    // Bônus de torneio/campeonato
+    if (options.tournament) {
+      bonus *= 1.20;
+    }
+    
+    // Bônus de primeira vitória do dia
+    if (options.firstWinOfDay && !player.dailyReward?.hasWonToday) {
+      bonus *= 1.25;
+    }
+    
+    return Math.floor(baseXP * bonus);
+  }
+
+  // Adicionar XP a um jogador (sistema centralizado)
+  addXP(userId, amount, options = {}) {
     const player = this.players[userId];
     if (!player) return { success: false, error: 'Jogador não encontrado' };
     if (!player.xp) {
       player.xp = { level: 1, currentXP: 0, evolutionPoints: 0, totalXP: 0 };
     }
-
-    // Aplicar bônus de habilidade
-    const bonus = this.getXPBonus(player);
-    const finalAmount = Math.floor(amount * bonus);
+    
+    // Aplicar todos os bônus
+    const finalAmount = options.noBonus 
+      ? amount 
+      : this.calculateXPWithBonuses(userId, amount, options);
+    
+    const bonusMultiplier = finalAmount / amount;
     
     player.xp.totalXP += finalAmount;
     player.xp.currentXP += finalAmount;
 
     const result = {
       success: true,
+      baseXP: amount,
       xpGained: finalAmount,
-      bonusApplied: bonus > 1 ? Math.round((bonus - 1) * 100) : 0
+      bonusMultiplier: bonusMultiplier,
+      bonusPercentage: Math.round((bonusMultiplier - 1) * 100)
     };
 
-    // Verificar subida de nível
+    // Verificar subida de nível (sem limite máximo)
     const xpNeeded = this.getXPForLevel(player.xp.level);
     const levelsGained = [];
 
-    while (player.xp.currentXP >= xpNeeded && player.xp.level < 100) {
+    while (player.xp.currentXP >= xpNeeded) {
       player.xp.currentXP -= xpNeeded;
       player.xp.level++;
       
@@ -1020,11 +1103,26 @@ class FootballDB {
   // Verificar marcos de nível e dar recompensas
   checkLevelMilestone(player, level) {
     const milestones = {
+      5: { coins: 500, message: '🌱 Nível 5! +500 FC Coins' },
       10: { coins: 1000, message: '🏆 Nível 10! +1.000 FC Coins' },
+      15: { coins: 1500, message: '⭐ Nível 15! +1.500 FC Coins' },
+      20: { coins: 2000, message: '🎯 Nível 20! +2.000 FC Coins' },
       25: { coins: 2500, message: '⭐ Nível 25! +2.500 FC Coins' },
+      30: { coins: 3500, message: '🔥 Nível 30! +3.500 FC Coins' },
+      40: { coins: 4500, message: '⚡ Nível 40! +4.500 FC Coins' },
       50: { coins: 5000, message: '👑 Nível 50! +5.000 FC Coins' },
-      75: { coins: 10000, message: '🌟 Nível 75! +10.000 FC Coins' },
-      100: { coins: 25000, message: '💎 Nível 100! +25.000 FC Coins - LENDÁRIO!' }
+      60: { coins: 7500, message: '💎 Nível 60! +7.500 FC Coins' },
+      70: { coins: 10000, message: '🌟 Nível 70! +10.000 FC Coins' },
+      75: { coins: 12500, message: '🌟 Nível 75! +12.500 FC Coins' },
+      80: { coins: 15000, message: '💫 Nível 80! +15.000 FC Coins' },
+      90: { coins: 20000, message: '⚡ Nível 90! +20.000 FC Coins' },
+      100: { coins: 25000, message: '💎 Nível 100! +25.000 FC Coins - LENDÁRIO!' },
+      125: { coins: 35000, message: '🔥 Nível 125! +35.000 FC Coins' },
+      150: { coins: 50000, message: '👑 Nível 150! +50.000 FC Coins' },
+      200: { coins: 75000, message: '⭐ Nível 200! +75.000 FC Coins - ÉPICO!' },
+      250: { coins: 100000, message: '🌟 Nível 250! +100.000 FC Coins - LENDÁRIO!' },
+      300: { coins: 150000, message: '💎 Nível 300! +150.000 FC Coins - MITOLÓGICO!' },
+      500: { coins: 300000, message: '🏆 Nível 500! +300.000 FC Coins - LENDA ABSOLUTA!' }
     };
 
     if (milestones[level]) {
@@ -1073,7 +1171,7 @@ class FootballDB {
     };
   }
 
-  // Obter informações de XP
+  // Obter informações detalhadas de XP
   getXPInfo(userId) {
     const player = this.players[userId];
     if (!player) return null;
@@ -1083,17 +1181,45 @@ class FootballDB {
 
     const xpNeeded = this.getXPForLevel(player.xp.level);
     const bonus = this.getXPBonus(player);
+    const nextLevelXP = this.getXPForLevel(player.xp.level + 1);
+    
+    // Calcular XP total acumulado até o próximo nível
+    let totalXPToNextLevel = player.xp.currentXP;
+    
+    // Calcular XP restante para o próximo nível
+    const xpRemaining = xpNeeded - player.xp.currentXP;
 
     return {
       level: player.xp.level,
       currentXP: player.xp.currentXP,
       xpNeeded: xpNeeded,
+      xpRemaining: xpRemaining,
+      nextLevelXP: nextLevelXP,
       progress: Math.round((player.xp.currentXP / xpNeeded) * 100),
+      progressBar: this.generateProgressBar(player.xp.currentXP, xpNeeded, 20),
       evolutionPoints: player.xp.evolutionPoints,
       totalXP: player.xp.totalXP,
       xpBonus: bonus > 1 ? Math.round((bonus - 1) * 100) : 0,
-      ovr: player.ovr
+      bonusMultiplier: bonus,
+      ovr: player.ovr,
+      division: player.division?.id || 'bronze_3',
+      divisionBonus: Math.round(this.getDivisionXPBonus(player.division?.id) * 100),
+      winStreak: player.soloStats?.winStreak || 0,
+      form: player.form?.current || 0,
+      // Estatísticas de XP
+      matchesPlayed: player.stats?.matches || 0,
+      soloMatches: player.soloStats?.totalPlayed || 0,
+      x1Matches: player.x1Stats?.matches || 0,
+      tournamentMatches: player.tournamentStats?.matches || 0
     };
+  }
+  
+  // Gerar barra de progresso visual
+  generateProgressBar(current, max, size = 20) {
+    const percentage = current / max;
+    const filled = Math.round(percentage * size);
+    const empty = size - filled;
+    return '█'.repeat(filled) + '░'.repeat(empty);
   }
 
   // Resetar XP de um jogador
@@ -1423,12 +1549,12 @@ class FootballDB {
   // FUT SOLO
   // ═══════════════════════════════════════════════════════════════
 
-  // Configurações do Fut Solo
+  // Configurações do Fut Solo (XP base - bônus aplicados no addXP)
   soloConfig = {
-    normal: { xpWin: 6, coinsWin: 200, xpDraw: 3, coinsDraw: 100, xpLoss: 1, coinsLoss: 50 },
-    dificil: { xpWin: 8, coinsWin: 300, xpDraw: 4, coinsDraw: 150, xpLoss: 2, coinsLoss: 75 },
-    extremo: { xpWin: 12, coinsWin: 500, xpDraw: 6, coinsDraw: 250, xpLoss: 3, coinsLoss: 100 },
-    streakBonus: { 3: 0.10, 5: 0.20, 10: 0.35 }
+    normal: { xpWin: 25, coinsWin: 200, xpDraw: 12, coinsDraw: 100, xpLoss: 8, coinsLoss: 50 },
+    dificil: { xpWin: 40, coinsWin: 300, xpDraw: 20, coinsDraw: 150, xpLoss: 12, coinsLoss: 75 },
+    extremo: { xpWin: 60, coinsWin: 500, xpDraw: 30, coinsDraw: 250, xpLoss: 18, coinsLoss: 100 },
+    streakBonus: { 3: 0.10, 5: 0.20, 10: 0.35, 20: 0.50 }
   };
 
   // Simular partida Fut Solo
@@ -1450,13 +1576,13 @@ class FootballDB {
     
     switch (difficulty) {
       case 'normal':
-        enemyOVR = playerOVR + Math.floor(Math.random() * 5) - 2; // -2 a +2
+        enemyOVR = playerOVR + Math.floor(Math.random() * 5) - 2;
         break;
       case 'dificil':
-        enemyOVR = playerOVR + Math.floor(Math.random() * 5) + 3; // +3 a +7
+        enemyOVR = playerOVR + Math.floor(Math.random() * 5) + 3;
         break;
       case 'extremo':
-        enemyOVR = playerOVR + Math.floor(Math.random() * 8) + 8; // +8 a +15
+        enemyOVR = playerOVR + Math.floor(Math.random() * 8) + 8;
         break;
       default:
         enemyOVR = playerOVR;
@@ -1525,35 +1651,48 @@ class FootballDB {
       player.stats.draws++;
     }
 
-    // Calcular recompensas
+    // Calcular recompensas base
     const config = this.soloConfig[difficulty] || this.soloConfig.normal;
-    let xpReward, coinsReward;
+    let baseXPReward, coinsReward;
 
     if (result === 'win') {
-      xpReward = config.xpWin;
+      baseXPReward = config.xpWin;
       coinsReward = config.coinsWin;
     } else if (result === 'draw') {
-      xpReward = config.xpDraw;
+      baseXPReward = config.xpDraw;
       coinsReward = config.coinsDraw;
     } else {
-      xpReward = config.xpLoss;
+      baseXPReward = config.xpLoss;
       coinsReward = config.coinsLoss;
     }
 
-    // Bônus de sequência
+    // Bônus de sequência (apenas para coins, XP já tem bônus no sistema)
     let streakBonus = 0;
     for (const [streak, bonus] of Object.entries(this.soloConfig.streakBonus)) {
       if (player.soloStats.streak >= parseInt(streak)) {
         streakBonus = bonus;
       }
     }
-
-    xpReward = Math.floor(xpReward * (1 + streakBonus));
     coinsReward = Math.floor(coinsReward * (1 + streakBonus));
 
-    // Adicionar XP
-    const xpResult = this.addXP(userId, xpReward);
+    // Adicionar XP com bônus de dificuldade
+    const xpResult = this.addXP(userId, baseXPReward, { difficulty });
 
+    // XP BÔNUS por gol marcado (sistema centralizado)
+    const goalXP = this.addGoalXP(userId, playerGoals, 'solo');
+    
+    // XP BÔNUS por clean sheet (zero gol sofrido)
+    let cleanSheetXP = 0;
+    if (enemyGoals === 0 && playerGoals > 0) {
+      cleanSheetXP = this.addCleanSheetXP(userId, 'solo');
+    }
+    
+    // XP BÔNUS por participação (sempre ganha algo)
+    const participationXP = this.addParticipationXP(userId, 'solo');
+    
+    // XP total gained
+    const totalXP = xpResult.xpGained + goalXP + cleanSheetXP + participationXP;
+    
     // Adicionar coins
     player.economy.fcCoins += coinsReward;
     player.economy.totalEarned += coinsReward;
@@ -1566,6 +1705,7 @@ class FootballDB {
       this.checkAchievements(userId, 'solo_win', player.soloStats.victories);
     }
     this.checkAchievements(userId, 'match', player.soloStats.totalPlayed);
+    this.checkAchievements(userId, 'goals', player.stats.goalsFor);
     
     // Atualizar missões semanais
     this.updateWeeklyMission(userId, 'solo');
@@ -1583,8 +1723,14 @@ class FootballDB {
       enemyGoals: enemyGoals,
       enemyOVR: enemyOVR,
       difficulty: difficulty,
+      baseXP: baseXPReward,
       xpGained: xpResult.xpGained,
-      xpBonus: xpResult.bonusApplied,
+      goalXP: goalXP,
+      cleanSheetXP: cleanSheetXP,
+      participationXP: participationXP,
+      totalXP: totalXP,
+      xpBonusPercentage: xpResult.bonusPercentage,
+      bonusDetails: this.getXPBonusDetails(player),
       coinsGained: coinsReward,
       streak: player.soloStats.streak,
       streakBonus: Math.round(streakBonus * 100),
@@ -1592,6 +1738,108 @@ class FootballDB {
       newLevel: xpResult.leveledUp ? xpResult.levelsGained : null,
       evolutionPoints: xpResult.leveledUp ? xpResult.totalEvolutionPoints : null
     };
+  }
+  
+  // XP por gol marcado (sistema centralizado)
+  addGoalXP(userId, goals, matchType = 'general') {
+    if (goals <= 0) return 0;
+    const xpPerGoal = 3;
+    const xp = goals * xpPerGoal;
+    const result = this.addXP(userId, xp, { noBonus: false });
+    return result.xpGained;
+  }
+  
+  // XP por assistência
+  addAssistXP(userId, assists, matchType = 'general') {
+    if (assists <= 0) return 0;
+    const xpPerAssist = 2;
+    const xp = assists * xpPerAssist;
+    const result = this.addXP(userId, xp, { noBonus: false });
+    return result.xpGained;
+  }
+  
+  // XP por defesa/clean sheet
+  addCleanSheetXP(userId, matchType = 'general') {
+    const xp = 5;
+    const result = this.addXP(userId, xp);
+    return result.xpGained;
+  }
+  
+  // XP por partida disputada (mesmo sem vitória)
+  addParticipationXP(userId, matchType = 'general') {
+    const xp = 2;
+    const result = this.addXP(userId, xp, { noBonus: false });
+    return result.xpGained;
+  }
+  
+  // XP por conquista desbloqueada
+  addAchievementXP(userId, achievementId) {
+    const achievementXP = {
+      first_win: 15, first_goal: 10, first_title: 25,
+      streak_3: 20, streak_5: 30, streak_10: 50,
+      div_bronze: 10, div_prata: 20, div_ouro: 35,
+      div_elite: 50, div_lenda: 75, div_mestre: 100,
+      div_pro: 150, div_worldclass: 200, div_topglobal: 300
+    };
+    const xp = achievementXP[achievementId] || 10;
+    const result = this.addXP(userId, xp);
+    return result.xpGained;
+  }
+  
+  // XP por missão concluída
+  addMissionXP(userId, missionType, missionLevel = 1) {
+    const baseXP = 5 + (missionLevel * 3);
+    const result = this.addXP(userId, baseXP);
+    return result.xpGained;
+  }
+  
+  // XP por título conquistado
+  addTitleXP(userId, titleLevel = 1) {
+    const baseXP = titleLevel * 25;
+    const result = this.addXP(userId, baseXP);
+    return result.xpGained;
+  }
+  
+  // XP por participar de torneio
+  addTournamentParticipationXP(userId) {
+    const xp = 15;
+    const result = this.addXP(userId, xp, { tournament: true });
+    return result.xpGained;
+  }
+  
+  // XP por vencer torneio
+  addTournamentWinXP(userId, tournamentSize = 8) {
+    const baseXP = 50 + (tournamentSize * 5);
+    const result = this.addXP(userId, baseXP, { tournament: true });
+    return result.xpGained;
+  }
+  
+  // Detalhes dos bônus de XP
+  getXPBonusDetails(player) {
+    const details = [];
+    
+    if (player.division?.id) {
+      const divBonus = this.getDivisionXPBonus(player.division.id);
+      if (divBonus > 0) details.push({ type: 'Divisão', bonus: Math.round(divBonus * 100) });
+    }
+    
+    if (player.skills) {
+      const veterano = player.skills.find(s => s.id === 'veterano');
+      if (veterano) details.push({ type: 'Veterano', bonus: veterano.level * 10 });
+      
+      const aprendizado = player.skills.find(s => s.id === 'aprendizado_rapido');
+      if (aprendizado) details.push({ type: 'Aprendizado', bonus: aprendizado.level * 5 });
+    }
+    
+    if (player.soloStats?.winStreak >= 3) {
+      details.push({ type: 'Sequência', bonus: Math.min(player.soloStats.winStreak * 2, 20) });
+    }
+    
+    if (player.form?.current > 0) {
+      details.push({ type: 'Forma', bonus: Math.min(player.form.current * 2, 10) });
+    }
+    
+    return details;
   }
 
   // Obter ranking solo
@@ -1922,14 +2170,50 @@ class FootballDB {
     };
     
     // Adicionar XP aos jogadores (com bônus de rivalidade)
-    const baseXP = rivalryMatch ? 20 : 15;
-    const baseXPLoss = rivalryMatch ? 8 : 5;
-    const xpWinner = this.addXP(p1.id, score1 > score2 ? baseXP : baseXPLoss);
-    const xpLoser = this.addXP(p2.id, score1 > score2 ? baseXPLoss : baseXP);
+    const baseXP = rivalryMatch ? 30 : 20;
+    const baseXPLoss = rivalryMatch ? 12 : 8;
+    
+    // XP para o vencedor
+    const winnerId = score1 > score2 ? p1.id : p2.id;
+    const loserId = score1 > score2 ? p2.id : p1.id;
+    const winnerGoals = score1 > score2 ? score1 : score2;
+    const loserGoals = score1 > score2 ? score2 : score1;
+    
+    // Adicionar XP com bônus de rivalidade
+    const xpWinner = this.addXP(winnerId, baseXP, { rivalry: rivalryMatch });
+    const xpLoser = this.addXP(loserId, baseXPLoss, { rivalry: rivalryMatch });
+    
+    // XP Bônus por gol
+    const goalXPWinner = this.addGoalXP(winnerId, winnerGoals, 'x1');
+    const goalXPLoser = this.addGoalXP(loserId, loserGoals, 'x1');
+    
+    // XP Bônus por clean sheet
+    let cleanSheetXPWinner = 0;
+    if (loserGoals === 0 && winnerGoals > 0) {
+      cleanSheetXPWinner = this.addCleanSheetXP(winnerId, 'x1');
+    }
+    
+    // XP por participação
+    const participationXPWinner = this.addParticipationXP(winnerId, 'x1');
+    const participationXPLoser = this.addParticipationXP(loserId, 'x1');
     
     match.xpRewards = {
-      winner: { xp: xpWinner.xpGained, leveledUp: xpWinner.leveledUp },
-      loser: { xp: xpLoser.xpGained, leveledUp: xpLoser.leveledUp }
+      winner: { 
+        xp: xpWinner.xpGained, 
+        goalXP: goalXPWinner, 
+        cleanSheetXP: cleanSheetXPWinner,
+        participationXP: participationXPWinner,
+        totalXP: xpWinner.xpGained + goalXPWinner + cleanSheetXPWinner + participationXPWinner,
+        leveledUp: xpWinner.leveledUp 
+      },
+      loser: { 
+        xp: xpLoser.xpGained, 
+        goalXP: goalXPLoser, 
+        cleanSheetXP: 0,
+        participationXP: participationXPLoser,
+        totalXP: xpLoser.xpGained + goalXPLoser + participationXPLoser,
+        leveledUp: xpLoser.leveledUp 
+      }
     };
     
     // Atualizar forma
