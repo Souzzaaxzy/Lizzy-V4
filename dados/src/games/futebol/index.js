@@ -1351,9 +1351,9 @@ Exemplo: *!fut codigo ELITE2026*
           return sendReply(`✅ Adicionados *${rep} pontos* de reputação para @${targetUser.split('@')[0]}!\n\n📊 Reputação: ${addRepPlayer.reputation}`);
         }
         
+        case 'admin':
         case 'help':
-        case 'ajuda':
-        case undefined: {
+        case 'ajuda': {
           return sendReply(`⚙️ *COMANDOS ADMINISTRATIVOS*
 
 💰 *!futaddcoins @user [valor]* - Adicionar coins
@@ -1378,7 +1378,7 @@ Exemplo: *!fut codigo ELITE2026*
         }
         
         default:
-          return sendReply(`❌ Comando '${action}' não reconhecido!\n\nUse *!fut admin* para ver todos os comandos.`);
+          return sendReply(`❌ Comando '${action || command}' não reconhecido!\n\nUse *!fut admin* para ver todos os comandos.`);
       }
     };
     
@@ -1386,6 +1386,7 @@ Exemplo: *!fut codigo ELITE2026*
     // COMANDOS ADMIN INDEPENDENTES
     // ═══════════════════════════════════════════════════════════════
     
+    case 'admin':
     case 'futaddcoins':
     case 'futremcoins':
     case 'futsetdiv':
