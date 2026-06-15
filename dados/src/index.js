@@ -6182,7 +6182,8 @@ if (isCmd && command && !isOwnerOrSub) {
               command === 'futtorneiover' || command === 'futtorneiocancelar' || command === 'futtorneiolistar' ||
               command === 'futsetsolo' || command === 'futresetx1' || command === 'futclubereset' ||
               command === 'futresetall') {
-            futArgs = [command];
+            // Incluir comando + argumentos originais
+            futArgs = args.length > 0 ? [command, ...args] : [command];
           }
 
           // Enviar GIF/menu do fut junto com a resposta
