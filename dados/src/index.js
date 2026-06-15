@@ -6126,6 +6126,7 @@ if (isCmd && command && !isOwnerOrSub) {
       }
 
       case 'fut':
+      case 'futadmin':
       case 'football':
       case 'futebol':
         try {

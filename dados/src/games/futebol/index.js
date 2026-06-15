@@ -1637,6 +1637,11 @@ export async function handleFut(args, messageInfo, reply) {
   console.log('[FUT] Comando:', command, 'Args:', args);
   
   if (!player && command !== 'entrar' && command !== 'registrar') {
+
+  // !futadmin abre o menu admin diretamente
+  if (command === 'futadmin') {
+    return handleFutCommand(['futadmin'], messageInfo, reply);
+  }
     // Redirecionar para comando de entrada
     return handleFutCommand(['entrar'], messageInfo, reply);
   }
