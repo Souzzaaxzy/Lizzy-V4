@@ -33432,12 +33432,22 @@ break;
             const videoPath = resolveMediaPath(typeof media.video === 'object' ? media.video.url : media.video);
             if (fs.existsSync(videoPath)) {
               const videoBuffer = fs.readFileSync(videoPath);
-              await nazu.sendMessage(from, {
-                video: videoBuffer,
-                caption: responseText,
-                mentions: [targetUser],
-                gifPlayback: true
-              });
+              // Enviar como image se for GIF (evita bug do WhatsApp)
+              const isGif = videoPath.toLowerCase().endsWith('.gif');
+              if (isGif) {
+                await nazu.sendMessage(from, {
+                  image: videoBuffer,
+                  caption: responseText,
+                  mentions: [targetUser]
+                });
+              } else {
+                await nazu.sendMessage(from, {
+                  video: videoBuffer,
+                  caption: responseText,
+                  mentions: [targetUser],
+                  gifPlayback: true
+                });
+              }
             } else {
               await nazu.sendMessage(from, {
                 text: responseText,
