@@ -33415,7 +33415,14 @@ break;
 
           if (media?.image) {
             const imagePath = resolveMediaPath(typeof media.image === 'object' ? media.image.url : media.image);
-            if (fs.existsSync(imagePath)) {
+            if (imagePath.startsWith('http')) {
+              // URL externa - enviar diretamente
+              await nazu.sendMessage(from, {
+                image: { url: imagePath },
+                caption: responseText,
+                mentions: [targetUser]
+              });
+            } else if (fs.existsSync(imagePath)) {
               const imageBuffer = fs.readFileSync(imagePath);
               await nazu.sendMessage(from, {
                 image: imageBuffer,
@@ -33430,7 +33437,15 @@ break;
             }
           } else if (media?.video) {
             const videoPath = resolveMediaPath(typeof media.video === 'object' ? media.video.url : media.video);
-            if (fs.existsSync(videoPath)) {
+            if (videoPath.startsWith('http')) {
+              // URL externa - enviar diretamente
+              await nazu.sendMessage(from, {
+                video: { url: videoPath },
+                caption: responseText,
+                mentions: [targetUser],
+                gifPlayback: true
+              });
+            } else if (fs.existsSync(videoPath)) {
               const videoBuffer = fs.readFileSync(videoPath);
               await nazu.sendMessage(from, {
                 video: videoBuffer,
