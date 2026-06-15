@@ -1354,44 +1354,36 @@ Exemplo: *!fut codigo ELITE2026*
         case 'help':
         case 'ajuda':
         case undefined: {
-          return sendReply(`⚙️ *COMANDOS ADMINISTRATIVOS*\n\n`
-            + `💰 *!futaddcoins @user [valor]* - Adicionar coins\n`
-            + `💸 *!futremcoins @user [valor]* - Remover coins\n`
-            + `⭐ *!futaddxp @user [valor]* - Adicionar XP\n`
-            + `📊 *!futsetlevel @user [nível]* - Definir nível\n`
-            + `💎 *!futsetevo @user [pts]* - Definir pontos de evolução\n`
-            + `➕ *!futaddevo @user [pts]* - Adicionar pontos de evolução\n`
-            + `🎮 *!futsetovr @user [1-99]* - Definir OVR\n`
-            + `⚡ *!futsetenergy @user [0-200]* - Definir energia\n`
-            + `🏆 *!futsetdiv @user [divisão]* - Definir divisão\n`
-            + `⭐ *!futsetrep @user [valor]* - Definir reputação\n`
-            + `➕ *!futaddrep @user [valor]* - Adicionar reputação\n`
-            + `🎯 *!futsettreino @user [attr] [1-99]* - Definir atributo\n`
-            + `⭐ *!futaddmvp @user [qtd]* - Adicionar MVP\n`
-            + `📊 *!futsetrep @user [valor]* - Definir reputação\n`
-            + `🎮 *!futsetsolo @user reset* - Resetar stats solo\n`
-            + `🔄 *!futresetxp @user* - Resetar XP\n`
-            + `🗑️ *!futresetplayer @user* - Resetar jogador\n`
-            + `⚠️ *!futresetall* - Resetar TODOS\n`
-            + `⚽ *!futresetx1* - Limpar X1 pendentes\n`
-            + `🏟️ *!futclubereset* - Resetar clubes\n\n`
-            + `⚠️ *Aliases legados (serão removidos):*\n`
-            + `• !fut admin addcoins (use !futaddcoins)\n`
-            + `• !fut admin setovr (use !futsetovr)\n`
-            + `• etc.`);
+          return sendReply(`⚙️ *COMANDOS ADMINISTRATIVOS*
+
+💰 *!futaddcoins @user [valor]* - Adicionar coins
+💸 *!futremcoins @user [valor]* - Remover coins
+⭐ *!futaddxp @user [valor]* - Adicionar XP
+📊 *!futsetlevel @user [nível]* - Definir nível
+💎 *!futsetevo @user [pts]* - Definir pontos de evolução
+➕ *!futaddevo @user [pts]* - Adicionar pontos de evolução
+🎮 *!futsetovr @user [1-99]* - Definir OVR
+⚡ *!futsetenergy @user [0-200]* - Definir energia
+🏆 *!futsetdiv @user [divisão]* - Definir divisão
+⭐ *!futsetrep @user [valor]* - Definir reputação
+➕ *!futaddrep @user [valor]* - Adicionar reputação
+🎯 *!futsettreino @user [attr] [1-99]* - Definir atributo
+⭐ *!futaddmvp @user [qtd]* - Adicionar MVP
+🎮 *!futsetsolo @user reset* - Resetar stats solo
+🔄 *!futresetxp @user* - Resetar XP
+🗑️ *!futresetplayer @user* - Resetar jogador
+⚠️ *!futresetall* - Resetar TODOS
+⚽ *!futresetx1* - Limpar X1 pendentes
+🏟️ *!futclubereset* - Resetar clubes`);
         }
         
         default:
-          return sendReply(`❌ Comando admin '${action}' não reconhecido!\n\nUse *!fut admin* para ver todos os comandos.`);
+          return sendReply(`❌ Comando '${action}' não reconhecido!\n\nUse *!fut admin* para ver todos os comandos.`);
       }
     };
     
-    // Processar comando admin legado
-    case 'admin':
-      return processAdminCommand(subCommand, args);
-    
     // ═══════════════════════════════════════════════════════════════
-    // NOVOS COMANDOS ADMIN INDEPENDENTES
+    // COMANDOS ADMIN INDEPENDENTES
     // ═══════════════════════════════════════════════════════════════
     
     case 'futaddcoins':
