@@ -1357,6 +1357,82 @@ async function createBotSocket(authDir) {
 
         KaiserSock.ev.on('creds.update', saveCreds);
 
+        // ================================================
+        // DETECÇÃO DE CANAIS (NEWSLETTERS / WhatsApp Channels)
+        // ================================================
+        
+        // Função para detectar se é JID de newsletter
+        const isNewsletterJid = (jid) => {
+            return jid && (
+                jid.endsWith('@newsletter') || 
+                jid.includes('newsletter') ||
+                // JIDs antigos podem ter formato diferente
+                (jid.includes('s.whatsapp.net') && false) // placeholder, atualize se necessário
+            );
+        };
+
+        // Função para log de canal detectado
+        const logNewsletterJid = (jid, nome = null) => {
+            console.log('\n📢 Canal detectado:');
+            console.log(`   JID: ${jid}`);
+            if (nome) {
+                console.log(`   Nome: ${nome}`);
+            }
+            console.log(`   Timestamp: ${new Date().toISOString()}`);
+            console.log('=========================================\n');
+        };
+
+        // Evento: quando chats são sincronizados/atualizados (inclui canais)
+        KaiserSock.ev.on('chats.upsert', async (chats) => {
+            if (!chats || chats.length === 0) return;
+            
+            for (const chat of chats) {
+                const jid = chat.id || chat.jid;
+                const name = chat.name || chat.subject || (chat.metadata && chat.metadata.subject);
+                
+                // Verificar se é newsletter
+                if (jid && (jid.endsWith('@newsletter'))) {
+                    logNewsletterJid(jid, name);
+                }
+            }
+        });
+
+        // Evento: quando recebe mensagens de canais
+        KaiserSock.ev.on('messages.upsert', async ({ messages, type }) => {
+            for (const msg of messages) {
+                const jid = msg.key?.remoteJid;
+                
+                if (jid && jid.endsWith('@newsletter')) {
+                    // Buscar nome do canal se disponível
+                    let channelName = null;
+                    try {
+                        const chat = await KaiserSock.groupMetadata(jid).catch(() => null);
+                        if (chat && chat.subject) {
+                            channelName = chat.subject;
+                        }
+                    } catch (e) {
+                        // Não conseguiu pegar metadata
+                    }
+                    
+                    logNewsletterJid(jid, channelName);
+                    
+                    // Log da mensagem do canal
+                    if (DEBUG_MODE) {
+                        console.log('\n🐛 ========== NEWSLETTER MESSAGE ==========');
+                        console.log('📢 Canal:', jid);
+                        if (channelName) console.log('📝 Nome:', channelName);
+                        console.log('💬 Tipo:', msg.message?.messageContextInfo?.deviceListMutedVersion ? 'Muted' : 'Normal');
+                        console.log('📊 Message ID:', msg.key?.id);
+                        console.log('===========================================\n');
+                    }
+                }
+            }
+        });
+
+        // Evento: connection.update - detectar newsletterjid
+        // Nota: O newsletterJid é enviado no update quando o bot interage com canais
+        // Este log é apenas informativo, o JID real é capturado nas mensagens
+
         KaiserSock.ev.on('groups.update', async (updates) => {
             if (!Array.isArray(updates) || updates.length === 0) return;
 
@@ -1641,8 +1717,17 @@ async function createBotSocket(authDir) {
             const {
                 connection,
                 lastDisconnect,
-                qr
+                qr,
+                newsletterJid // JID do canal quando o bot interage com newsletters
             } = update;
+
+            // Log do newsletterJid se disponível
+            if (newsletterJid) {
+                console.log('\n📢 Newsletter JID detectado:');
+                console.log(`   JID: ${newsletterJid}`);
+                console.log('=========================================\n');
+            }
+
             if (qr && !KaiserSock.authState.creds.registered && !codeMode) {
                 console.log('🔗 QR Code gerado para autenticação:');
                 qrcode.generate(qr, {
