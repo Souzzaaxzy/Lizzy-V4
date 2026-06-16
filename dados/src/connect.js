@@ -1364,7 +1364,7 @@ async function createBotSocket(authDir) {
         // Função para detectar se é JID de newsletter
         const isNewsletterJid = (jid) => {
             return jid && (
-                jid.endsWith('@newsletter') || 
+                isJidNewsletter(jid) || 
                 jid.includes('newsletter') ||
                 // JIDs antigos podem ter formato diferente
                 (jid.includes('s.whatsapp.net') && false) // placeholder, atualize se necessário
@@ -1391,7 +1391,7 @@ async function createBotSocket(authDir) {
                 const name = chat.name || chat.subject || (chat.metadata && chat.metadata.subject);
                 
                 // Verificar se é newsletter
-                if (jid && (jid.endsWith('@newsletter'))) {
+                if (jid && (isJidNewsletter(jid))) {
                     logNewsletterJid(jid, name);
                 }
             }
@@ -1402,7 +1402,7 @@ async function createBotSocket(authDir) {
             for (const msg of messages) {
                 const jid = msg.key?.remoteJid;
                 
-                if (jid && jid.endsWith('@newsletter')) {
+                if (jid && isJidNewsletter(jid)) {
                     // Buscar nome do canal se disponível
                     let channelName = null;
                     try {
