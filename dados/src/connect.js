@@ -1356,60 +1356,42 @@ async function createBotSocket(authDir) {
         }
 
         KaiserSock.ev.on('creds.update', saveCreds);
-
         // ================================================
-        // DETECÇÃO DE CANAIS (NEWSLETTERS / WhatsApp Channels)
+        // DETECÇÃO DE CANAIS (WhatsApp Newsletter)
+        // Usa chats.upsert e chats.update - NÃO interfere no messages.upsert
         // ================================================
         
-        // Função para detectar se é JID de newsletter
-        const isNewsletterJid = (jid) => {
-            return jid && (
-                isJidNewsletter(jid) || 
-                jid.includes('newsletter') ||
-                // JIDs antigos podem ter formato diferente
-                (jid.includes('s.whatsapp.net') && false) // placeholder, atualize se necessário
-            );
-        };
-
-        // Função para log de canal detectado
-        const logNewsletterJid = (jid, nome = null) => {
-            console.log('\n📢 Canal detectado:');
-            console.log(`   JID: ${jid}`);
-            if (nome) {
-                console.log(`   Nome: ${nome}`);
-            }
-            console.log(`   Timestamp: ${new Date().toISOString()}`);
-            console.log('=========================================\n');
-        };
-
-        // Evento: quando chats são sincronizados/atualizados (inclui canais)
+        // Detectar canais na sincronização de chats
         KaiserSock.ev.on('chats.upsert', async (chats) => {
             if (!chats || chats.length === 0) return;
             
             for (const chat of chats) {
                 const jid = chat.id || chat.jid;
-                const name = chat.name || chat.subject || (chat.metadata && chat.metadata.subject);
                 
-                // Verificar se é newsletter
-                if (jid && (isJidNewsletter(jid))) {
-                    logNewsletterJid(jid, name);
+                if (jid && (isJidNewsletter(jid) || jid.includes('@newsletter'))) {
+                    console.log('\n📢 CANAL DETECTADO');
+                    console.log('JID:', jid);
+                    console.log('===========================');
+                }
+            }
+        });
+        
+        // Detectar canais em atualizações de chats
+        KaiserSock.ev.on('chats.update', async (updates) => {
+            if (!updates || updates.length === 0) return;
+            
+            for (const chat of updates) {
+                const jid = chat.id || chat.jid;
+                
+                if (jid && (isJidNewsletter(jid) || jid.includes('@newsletter'))) {
+                    console.log('\n📢 CANAL ATUALIZADO');
+                    console.log('JID:', jid);
+                    console.log('===========================');
                 }
             }
         });
 
-        // Newsletter detection - detecta canais do WhatsApp
-        KaiserSock.ev.on('messages.upsert', async ({ messages, type }) => {
-            for (const msg of messages) {
-                const jid = msg.key?.remoteJid;
-                
-                if (jid && (isJidNewsletter(jid) || jid.endsWith('@newsletter'))) {
-                    console.log('\n📢 CANAL DETECTADO');
-                    console.log('JID:', jid);
-                    console.log('===========================');
-                    continue;
-                }
-            }
-        });
+        // ================================================
 
 
         // Evento: connection.update - detectar newsletterjid
