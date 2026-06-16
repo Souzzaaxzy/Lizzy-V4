@@ -1571,6 +1571,10 @@ async function createBotSocket(authDir) {
 
             KaiserSock.ev.on('messages.upsert', async (m) => {
                 if (!m.messages || !Array.isArray(m.messages)) return;
+                
+                // DEBUG: Ver todos os JIDs que chegam
+                const jids = m.messages.map(msg => msg?.key?.remoteJid).filter(Boolean);
+                console.log('[DEBUG messages.upsert] type:', m.type, 'JIDs:', jids);
 
 
                 if (m.type === 'append') {
