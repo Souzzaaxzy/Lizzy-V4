@@ -678,6 +678,19 @@ async function createGroupMessage(KaiserSock, groupMetadata, participants, setti
     delete message.text;
   }
 
+  // Adicionar link do canal na mensagem
+  const channelUrl = globalJson.channel?.welcomeUrl || globalJson.channelLink;
+  if (channelUrl && isWelcome) {
+    const originalText = message.text || message.caption || '';
+    const channelLink = '\\n\\n📢 *Ver Canal:* ' + channelUrl;
+
+    if (message.caption) {
+      message.caption = originalText + channelLink;
+    } else {
+      message.text = originalText + channelLink;
+    }
+  }
+
   return message;
 }
 
