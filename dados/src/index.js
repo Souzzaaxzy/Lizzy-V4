@@ -30417,6 +30417,62 @@ case 'assistent':
         }
         break;
         
+
+      case 'setcanal':
+        try {
+          if (!isGroup) return sendKaiserWarning("Este comando só pode ser usado em grupos.");
+          if (!isGroupAdmin) return reply("você precisa ser adm 💔");
+          const groupFilePath = __dirname + `/../database/grupos/${from}.json`;
+
+          if (!q) {
+            const canalAtual = groupData.canal || 'Nenhum';
+            return reply(`📢 *Configuração do Canal*\n\nCanal atual: ${canalAtual}\n\n📌 *Como usar:*\n${prefixo}setcanal <JID do canal>\n\nExemplo:\n${prefixo}setcanal 185208267632774@lid\n\n🔴 *Remover canal:*\n${prefixo}delcanal`);
+          }
+
+          if (!q.includes('@newsletter') && !q.includes('@lid')) {
+            return reply(`❌ JID inválido! O JID deve conter @newsletter ou @lid.\n\nExemplo:\n${prefixo}setcanal 185208267632774@lid`);
+          }
+
+          groupData.canal = q;
+          fs.writeFileSync(groupFilePath, JSON.stringify(groupData));
+          reply(`✅ *Canal configurado com sucesso!*\n\n📢 Canal: ${q}\n\nA mensagem de boas-vindas terá o botão "Ver Canal".`);
+        } catch (e) {
+          console.error(e);
+          await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
+        }
+        break;
+
+      case 'delcanal':
+        try {
+          if (!isGroup) return sendKaiserWarning("Este comando só pode ser usado em grupos.");
+          if (!isGroupAdmin) return reply("você precisa ser adm 💔");
+          const groupFilePath = __dirname + `/../database/grupos/${from}.json`;
+
+          if (!groupData.canal) {
+            return reply(`ℹ️ Nenhum canal configurado neste grupo.`);
+          }
+
+          const canalAntigo = groupData.canal;
+          delete groupData.canal;
+          fs.writeFileSync(groupFilePath, JSON.stringify(groupData));
+          reply(`🗑️ *Canal removido!*\n\nCanal removido: ${canalAntigo}`);
+        } catch (e) {
+          console.error(e);
+          await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
+        }
+        break;
+
+      case 'vercanal':
+        try {
+          if (!isGroup) return sendKaiserWarning("Este comando só pode ser usado em grupos.");
+
+          const canalAtual = groupData.canal || 'Nenhum';
+          reply(`📢 *Canal do Grupo*\n\nCanal configurado: ${canalAtual}\n\n⚙️ *Gerenciar canal:*\n• ${prefixo}setcanal <JID> - Definir canal\n• ${prefixo}delcanal - Remover canal`);
+        } catch (e) {
+          console.error(e);
+          await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
+        }
+        break;
       case 'mute':
       case 'mutar':
         try {
