@@ -16524,7 +16524,7 @@ Exemplo: ${prefix}tradutor espanhol | Olá mundo! ◈`);
         try {
           if (!isOwnerOrSub) return sendAbyssWarning("Apenas o Dono ou Subdono pode utilizar esse comando!");
           if (!fs.existsSync(pathz.join(__dirname, '..', 'database', 'updateSave.json'))) return reply('❌ Sua versão não tem suporte a esse sistema ainda.');
-          const AtualCom = await axios.get('https://api.github.com/repos/devcrician/kaiser/commits?per_page=1', {
+          const AtualCom = await axios.get('https://api.github.com/repos/Souzzaaxzy/Abyss/commits?per_page=1', {
             headers: {
               Accept: 'application/vnd.github+json'
             }
@@ -16533,7 +16533,7 @@ Exemplo: ${prefix}tradutor espanhol | Olá mundo! ◈`);
             total
           } = JSON.parse(fs.readFileSync(pathz.join(__dirname, '..', 'database', 'updateSave.json'), 'utf-8'));
           if (AtualCom > total) {
-            const TextZin = await VerifyUpdate('devcrician/kaiser', AtualCom - total);
+            const TextZin = await VerifyUpdate('Souzzaaxzy/Abyss', AtualCom - total);
             await reply(TextZin);
           } else {
             await reply('Você ja esta utilizando a versão mais recente da bot.');
