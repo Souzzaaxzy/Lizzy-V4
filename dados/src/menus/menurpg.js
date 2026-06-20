@@ -271,7 +271,7 @@ ${middleBorder}${menuItemIcon}${prefix}propriedades
 ${middleBorder}${menuItemIcon}${prefix}cprop <id>
 ${middleBorder}${menuItemIcon}${prefix}cprops
 ${middleBorder}${menuItemIcon}${prefix}tributos
-${middleBorder}${menuItemIcon}${prefix}meustats
+${middleBorder}${menuItemIcon}${prefix}me
 ${middleBorder}${menuItemIcon}${prefix}doar <valor>
 ${middleBorder}${menuItemIcon}${prefix}presente @user <item>
 ${bottomBorder}

@@ -6696,7 +6696,7 @@ if (isCmd && command && !isOwnerOrSub) {
               `│ ⭐ Reputação: ${reputation}  ☯️ Karma: ${karma}\n` +
               `│\n` +
               `╰─────────────────────⭓\n\n` +
-              `◈ *Use !meustats para detalhes técnicos.*`;
+              `◈ *Use !me para detalhes técnicos.*`;
 
             return reply(text, { mentions: [sender, ...mentions] });
           }
@@ -12808,7 +12808,7 @@ if (isCmd && command && !isOwnerOrSub) {
       }
 
       // Estatísticas pessoais detalhadas
-      case 'meustats':
+      case 'me':
       case 'mystats':
       case 'statsrpg': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
