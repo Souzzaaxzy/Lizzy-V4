@@ -33323,19 +33323,18 @@ break;
           let responses = fs.existsSync(__dirname + '/funcs/json/gamestext.json') ? JSON.parse(fs.readFileSync(__dirname + '/funcs/json/gamestext.json')) : {};
           const responseText = responses[command].replaceAll('#nome#', targetName).replaceAll('#level#', level) || `📊 ${targetName} tem *${level}%* de ${command}! 🔥`;
           const media = gamesData.games[command];
+          const resolvePath = (url) => typeof url === 'string' && url.startsWith('./') ? path.join(__dirname, url.substring(2)) : url;
           if (media?.image) {
-            await nazu.sendMessage(from, {
-              image: media.image,
-              caption: responseText,
-              mentions: [target]
-            });
+            const imgPath = resolvePath(typeof media.image === 'object' ? media.image.url : media.image);
+            const imgBuffer = imgPath.startsWith('http') ? { url: imgPath } : fs.readFileSync(imgPath);
+            await nazu.sendMessage(from, { image: imgBuffer, caption: responseText, mentions: [target] });
           } else if (media?.video) {
-            await nazu.sendMessage(from, {
-              video: media.video,
-              caption: responseText,
-              mentions: [target],
-              gifPlayback: true
-            });
+            const vidPath = resolvePath(typeof media.video === 'object' ? media.video.url : media.video);
+            if (vidPath.startsWith('http')) {
+              await nazu.sendMessage(from, { video: { url: vidPath }, caption: responseText, mentions: [target], gifPlayback: true });
+            } else {
+              await nazu.sendMessage(from, { video: fs.readFileSync(vidPath), caption: responseText, mentions: [target], gifPlayback: true });
+            }
           } else {
             await nazu.sendMessage(from, {
               text: responseText,
@@ -33447,19 +33446,18 @@ break;
           let responses = fs.existsSync(__dirname + '/funcs/json/gamestext2.json') ? JSON.parse(fs.readFileSync(__dirname + '/funcs/json/gamestext2.json')) : {};
           const responseText = responses[command].replaceAll('#nome#', targetName).replaceAll('#level#', level) || `📊 ${targetName} tem *${level}%* de ${command}! 🔥`;
           const media = gamesData.games[command];
+          const resolvePath = (url) => typeof url === 'string' && url.startsWith('./') ? path.join(__dirname, url.substring(2)) : url;
           if (media?.image) {
-            await nazu.sendMessage(from, {
-              image: media.image,
-              caption: responseText,
-              mentions: [target]
-            });
+            const imgPath = resolvePath(typeof media.image === 'object' ? media.image.url : media.image);
+            const imgBuffer = imgPath.startsWith('http') ? { url: imgPath } : fs.readFileSync(imgPath);
+            await nazu.sendMessage(from, { image: imgBuffer, caption: responseText, mentions: [target] });
           } else if (media?.video) {
-            await nazu.sendMessage(from, {
-              video: media.video,
-              caption: responseText,
-              mentions: [target],
-              gifPlayback: true
-            });
+            const vidPath = resolvePath(typeof media.video === 'object' ? media.video.url : media.video);
+            if (vidPath.startsWith('http')) {
+              await nazu.sendMessage(from, { video: { url: vidPath }, caption: responseText, mentions: [target], gifPlayback: true });
+            } else {
+              await nazu.sendMessage(from, { video: fs.readFileSync(vidPath), caption: responseText, mentions: [target], gifPlayback: true });
+            }
           } else {
             await nazu.sendMessage(from, {
               text: responseText,
