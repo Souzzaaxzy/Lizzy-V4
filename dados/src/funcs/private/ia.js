@@ -1007,7 +1007,7 @@ Você analisa mensagens em linguagem natural e identifica se o usuário está so
 
 **👤 PERFIL & STATUS:**
 - \`perfil\` - Ver seu perfil
-- \`meustatus\` - Ver seu status
+- \`me\` - Ver seu status
 - \`ping\` - Latência do bot
 - \`statusbot\` - Status do bot
 - \`statusgp\` - Status do grupo

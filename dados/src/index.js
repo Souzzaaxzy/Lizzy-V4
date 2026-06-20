@@ -25232,7 +25232,7 @@ ${prefix}togglecmdvip premium_ia off`);
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
         }
         break;
-      case 'meustatus':
+      case 'me':
         try {
           let groupMessages = 0;
           let groupCommands = 0;

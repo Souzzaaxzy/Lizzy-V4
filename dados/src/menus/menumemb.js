@@ -19,7 +19,7 @@ ${menuTopBorder}
 │ ${perfilMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}perfil
-${middleBorder}${menuItemIcon}${prefix}meustatus
+${middleBorder}${menuItemIcon}${prefix}me
 ${bottomBorder}
 
 ${menuTopBorder}
