@@ -6624,7 +6624,7 @@ if (isCmd && command && !isOwnerOrSub) {
             let relationshipEmoji = '';
             const mentions = [];
 
-            const activePair = relationshipManager.getActivePairForUser(sender);
+            const activePair = relationshipManager.getActivePairForUser(sender, from);
             if (activePair && activePair.partnerId) {
               // Verificar se é relacionamento múltiplo
               if (activePair.allPartners && Array.isArray(activePair.allPartners)) {
@@ -11106,7 +11106,7 @@ if (isCmd && command && !isOwnerOrSub) {
         text += `╰━━━━━━━━━━━━━━━━━━━━╯\n\n`;
 
         // Buscar relacionamento ativo do sistema de relacionamentos
-        const activePair = relationshipManager.getActivePairForUser(sender);
+        const activePair = relationshipManager.getActivePairForUser(sender, from);
         if (activePair && activePair.partnerId) {
           let relationshipEmoji = '💍';
           let relationshipType = 'Cônjuge';
@@ -11187,7 +11187,7 @@ if (isCmd && command && !isOwnerOrSub) {
         ].filter(Boolean);
 
         // Adiciona o parceiro do sistema de relacionamentos nas menções
-        const activePairForMentions = relationshipManager.getActivePairForUser(sender);
+        const activePairForMentions = relationshipManager.getActivePairForUser(sender, from);
         if (activePairForMentions && activePairForMentions.partnerId) {
           if (activePairForMentions.allPartners && Array.isArray(activePairForMentions.allPartners)) {
             mentions.push(...activePairForMentions.allPartners);
@@ -11245,7 +11245,7 @@ if (isCmd && command && !isOwnerOrSub) {
         targetUser.family.parents.push(sender);
 
         // Se tiver parceiro(a) no sistema de relacionamentos, adicionar como pai/mãe também
-        const activePair = relationshipManager.getActivePairForUser(sender);
+        const activePair = relationshipManager.getActivePairForUser(sender, from);
         if (activePair && activePair.partnerId) {
           const spouseData = getEcoUser(econ, activePair.partnerId);
           if (!spouseData.family) spouseData.family = { spouse: null, children: [], parents: [], siblings: [] };
@@ -11298,7 +11298,7 @@ if (isCmd && command && !isOwnerOrSub) {
         }
 
         // Se tiver parceiro(a) no sistema de relacionamentos, remover como pai/mãe também
-        const activePair = relationshipManager.getActivePairForUser(sender);
+        const activePair = relationshipManager.getActivePairForUser(sender, from);
         if (activePair && activePair.partnerId) {
           const spouseData = getEcoUser(econ, activePair.partnerId);
           if (spouseData.family && spouseData.family.children) {
@@ -11365,7 +11365,7 @@ if (isCmd && command && !isOwnerOrSub) {
         text += `👤 *Você:* ${pushname}\n`;
 
         // Buscar relacionamento ativo do sistema de relacionamentos
-        const activePair = relationshipManager.getActivePairForUser(sender);
+        const activePair = relationshipManager.getActivePairForUser(sender, from);
         if (activePair && activePair.partnerId) {
           const relationshipEmoji = activePair.pair?.status === 'casamento' ? '💍' :
             activePair.pair?.status === 'namoro' ? '💞' : '🎈';
@@ -11413,7 +11413,7 @@ if (isCmd && command && !isOwnerOrSub) {
         ].filter(Boolean);
 
         // Adiciona o parceiro do sistema de relacionamentos nas menções
-        const activePairForMentions = relationshipManager.getActivePairForUser(sender);
+        const activePairForMentions = relationshipManager.getActivePairForUser(sender, from);
         if (activePairForMentions && activePairForMentions.partnerId) {
           allMembers.push(activePairForMentions.partnerId);
         }
@@ -32180,7 +32180,7 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
           await reply('❌ O modo brincadeira está desligado neste grupo.');
           break;
         }
-        const result = relationshipManager.disbandGroupRelationship(sender, sender);
+        const result = relationshipManager.disbandGroupRelationship(sender, sender, from);
         if (!result.success) {
           await reply(result.message);
           break;
@@ -32201,7 +32201,7 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
           await reply('❌ O modo brincadeira está desligado neste grupo.');
           break;
         }
-        const result = relationshipManager.disbandGroupRelationship(sender, sender);
+        const result = relationshipManager.disbandGroupRelationship(sender, sender, from);
         if (!result.success) {
           await reply(result.message);
           break;
@@ -32226,7 +32226,7 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
         }
 
         if (!userOne || !userTwo) {
-          const activePair = relationshipManager.getActivePairForUser(sender);
+          const activePair = relationshipManager.getActivePairForUser(sender, from);
           if (!activePair) {
             await reply('❌ Você não marcou ninguém e não possui relacionamento ativo no momento.');
             break;
@@ -32312,7 +32312,7 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
           userOne = sender;
           userTwo = menc_os2;
         } else {
-          const activePair = relationshipManager.getActivePairForUser(sender);
+          const activePair = relationshipManager.getActivePairForUser(sender, from);
           if (!activePair) {
             await reply('❌ Você não marcou ninguém e não possui relacionamento ativo para encerrar.');
             break;
@@ -32408,7 +32408,7 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
           userOne = sender;
           userTwo = menc_os2;
         } else {
-          const activePair = relationshipManager.getActivePairForUser(sender);
+          const activePair = relationshipManager.getActivePairForUser(sender, from);
           if (!activePair) {
             await reply('❌ Você não marcou ninguém e não possui relacionamento ativo para consultar o histórico.');
             break;
@@ -32810,7 +32810,7 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
           // Relação (dados reais do RPG)
           let relacao = 'Solteiro(a)';
           try {
-            const activePair = relationshipManager.getActivePairForUser(sender);
+            const activePair = relationshipManager.getActivePairForUser(sender, from);
             if (activePair && activePair.pair?.status) {
               if (activePair.pair.status === 'casamento') {
                 relacao = '💍 Casado(a)';

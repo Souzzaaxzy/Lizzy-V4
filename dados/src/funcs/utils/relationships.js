@@ -751,28 +751,28 @@ class RelationshipManager {
       return { success: false, message: '❌ Já existe um pedido de grupo pendente neste grupo.' };
     }
 
-    // Verifica se o solicitante já está em outro relacionamento
-    const requesterActivePair = this.getActivePairForUser(requesterId);
+    // Verifica se o solicitante já está em outro relacionamento NESTE GRUPO
+    const requesterActivePair = this.getActivePairForUser(requesterId, groupId);
     if (requesterActivePair) {
       const partnerName = getUserName(requesterActivePair.partnerId);
       const currentConfig = TYPE_CONFIG[requesterActivePair.pair.status];
       return {
         success: false,
-        message: `❌ Você já está em ${currentConfig.inviteLabel} com @${partnerName}. Termine esse relacionamento primeiro!`,
+        message: `❌ Você já está em ${currentConfig.inviteLabel} com @${partnerName} neste grupo. Termine esse relacionamento primeiro!`,
         mentions: [requesterActivePair.partnerId]
       };
     }
 
-    // Verifica se algum dos alvos já está em relacionamento
+    // Verifica se algum dos alvos já está em relacionamento NESTE GRUPO
     for (const targetId of targetIds) {
-      const targetActivePair = this.getActivePairForUser(targetId);
+      const targetActivePair = this.getActivePairForUser(targetId, groupId);
       if (targetActivePair) {
         const partnerName = getUserName(targetActivePair.partnerId);
         const targetName = getUserName(targetId);
         const currentConfig = TYPE_CONFIG[targetActivePair.pair.status];
         return {
           success: false,
-          message: `❌ @${targetName} já está em ${currentConfig.inviteLabel} com @${partnerName}!`,
+          message: `❌ @${targetName} já está em ${currentConfig.inviteLabel} com @${partnerName} neste grupo!`,
           mentions: [targetId, targetActivePair.partnerId]
         };
       }
@@ -890,8 +890,8 @@ class RelationshipManager {
     const allUsers = [pending.requesterRaw, ...pending.targets.map(t => t.raw)];
     const normalizedUsers = allUsers.map(u => this._normalizeId(u));
 
-    // Criar chave única para o grupo (ordenada alfabeticamente)
-    const groupKey = normalizedUsers.sort().join('::');
+    // Criar chave única incluindo o groupId (relacionamento por grupo)
+    const groupKey = `${pending.groupId}::${normalizedUsers.sort().join('::')}`;
 
     const pair = {
       users: allUsers, // Mantém a ordem original com JIDs
@@ -933,7 +933,8 @@ class RelationshipManager {
   }
 
   // Encontra o relacionamento ativo de um usuário (função melhorada para múltiplos)
-  getActivePairForUser(userId) {
+  // Se groupId for fornecido, busca apenas nesse grupo
+  getActivePairForUser(userId, groupId = null) {
     const normalized = this._normalizeId(userId);
     if (!normalized) return null;
 
@@ -941,6 +942,11 @@ class RelationshipManager {
     
     for (const [key, pair] of Object.entries(data.pairs)) {
       if (!pair || !Array.isArray(pair.users) || !pair.status || !TYPE_CONFIG[pair.status]) continue;
+      
+      // Se groupId foi fornecido, verifica se o relacionamento é desse grupo
+      if (groupId && !key.startsWith(`${groupId}::`)) {
+        continue;
+      }
       
       // Verifica se é um tipo de relacionamento múltiplo
       if (TYPE_CONFIG[pair.status]?.multipleParticipants) {
@@ -955,7 +961,8 @@ class RelationshipManager {
             pair,
             partnerId: otherUsers.join(','), // Retorna todos os parceiros separados por vírgula
             allPartners: otherUsers,
-            userId: pair.users[index]
+            userId: pair.users[index],
+            groupId: groupId
           };
         }
       } else {
@@ -970,7 +977,8 @@ class RelationshipManager {
             key,
             pair,
             partnerId,
-            userId: pair.users[index]
+            userId: pair.users[index],
+            groupId: groupId
           };
         }
       }
@@ -980,10 +988,10 @@ class RelationshipManager {
   }
 
   // Termina relacionamento de grupo (trisal ou quadrisal)
-  disbandGroupRelationship(userId, triggeredBy) {
-    const userActivePair = this.getActivePairForUser(userId);
+  disbandGroupRelationship(userId, triggeredBy, groupId = null) {
+    const userActivePair = this.getActivePairForUser(userId, groupId);
     if (!userActivePair) {
-      return { success: false, message: '❌ Você não está em nenhum relacionamento múltiplo (trisal ou quadrisal).' };
+      return { success: false, message: '❌ Você não está em nenhum relacionamento múltiplo (trisal ou quadrisal) neste grupo.' };
     }
 
     const pair = userActivePair.pair;
