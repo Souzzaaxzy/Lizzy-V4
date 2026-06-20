@@ -2182,28 +2182,46 @@ ${rewards.messages.length > 0 ? rewards.messages.map(m => `🎉 ${m}`).join('\n'
   removePlayerFromClub(clubId, playerId) {
     const club = this.clubs[clubId];
     if (!club) return false;
-    
+
     const playerIndex = club.players.findIndex(p => p.id === playerId);
     if (playerIndex === -1) return false;
-    
+
     const member = club.players[playerIndex];
-    
-    // Presidente não pode sair assim
-    if (member.role === 'President') {
-      return { success: false, error: 'Presidente não pode sair. Transfira a presidência ou dissolva o clube.' };
+    const isPresident = member.role === 'President';
+    const playersRemaining = club.players.length - 1;
+
+    if (isPresident && playersRemaining > 0) {
+      const nextPresident = club.players.find(p => p.id !== playerId);
+      if (nextPresident) {
+        nextPresident.role = 'President';
+        club.president = { id: nextPresident.id, name: nextPresident.name };
+        if (this.players[nextPresident.id]) {
+          this.players[nextPresident.id].role = 'President';
+        }
+      }
     }
-    
+
     club.players.splice(playerIndex, 1);
-    club.economy.weeklyCosts -= member.salary;
-    
+
+    if (!isPresident) {
+      club.economy.weeklyCosts -= member.salary;
+    }
+
     if (this.players[playerId]) {
       this.players[playerId].currentClub = null;
       this.players[playerId].salary = 0;
       this.players[playerId].weeklySalary = 0;
+      this.players[playerId].role = null;
     }
-    
+
+    if (club.players.length === 0) {
+      delete this.clubs[clubId];
+      this.save();
+      return { success: true, clubDeleted: true };
+    }
+
     this.save();
-    return { success: true };
+    return { success: true, presidentTransferred: isPresident };
   }
 
   isClubComplete(clubId) {
@@ -2954,6 +2972,23 @@ ${rewards.messages.length > 0 ? rewards.messages.map(m => `🎉 ${m}`).join('\n'
     
     this.save();
   }
+
+  renameClub(clubId, newName) {
+    const club = this.clubs[clubId];
+    if (!club) return { success: false, error: 'Clube não encontrado' };
+    
+    const existingClub = Object.values(this.clubs).find(c => 
+      c.name.toLowerCase() === newName.toLowerCase() && c.id !== clubId
+    );
+    if (existingClub) {
+      return { success: false, error: 'Já existe um clube com este nome!' };
+    }
+    
+    club.name = newName;
+    this.save();
+    return { success: true };
+  }
+
 
   getTopGlobal(limit = 10) {
     return this.globalRanking.players.slice(0, limit);

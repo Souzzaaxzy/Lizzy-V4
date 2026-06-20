@@ -1270,6 +1270,42 @@ Exemplo: *!fut codigo ELITE2026*
       
       return sendReply(getClubMessage(club, db.players));
     
+    
+    case 'renomear':
+      if (!player) {
+        return sendReply('❌ Você não está registrado!');
+      }
+
+      if (!player.currentClub) {
+        return sendReply('❌ Você não está em nenhum clube!');
+      }
+
+      const clubToRename = db.getClub(player.currentClub);
+      if (!clubToRename) {
+        return sendReply('❌ Clube não encontrado!');
+      }
+
+      if (clubToRename.president.id !== sender) {
+        return sendReply('❌ Apenas o presidente pode renomear o clube!');
+      }
+
+      const newClubName = args.slice(1).join(' ').trim();
+      if (!newClubName || newClubName.length < 3) {
+        return sendReply(`❌ Nome do clube deve ter pelo menos 3 caracteres!
+📌 Use: *!fut clube renomear [novo nome]*`);
+      }
+
+      if (newClubName.length > 30) {
+        return sendReply('❌ Nome do clube deve ter no máximo 30 caracteres!');
+      }
+
+      const renameResult = db.renameClub(player.currentClub, newClubName);
+      if (!renameResult.success) {
+        return sendReply(`❌ ${renameResult.error}`);
+      }
+
+      return sendReply(`✅ Clube renomeado para *${newClubName}* com sucesso!`);
+
     case 'membros':
     case 'jogadores':
       if (!player) {
@@ -1308,8 +1344,15 @@ Exemplo: *!fut codigo ELITE2026*
       if (!leaveResult.success) {
         return sendReply(`❌ ${leaveResult.error}`);
       }
-      
-      return sendReply('✅ Você saiu do clube!');
+
+      let msg = '✅ Você saiu do clube!';
+      if (leaveResult.clubDeleted) {
+        msg = '✅ Você saiu do clube! O clube foi removido por não ter mais membros.';
+      } else if (leaveResult.presidentTransferred) {
+        msg = '✅ Você saiu do clube! A presidência foi transferida automaticamente.';
+      }
+
+      return sendReply(msg);
     
     // ═══════════════════════════════════════════════════════════════
     // NEGOCIAÇÕES
