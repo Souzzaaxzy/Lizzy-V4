@@ -4487,10 +4487,27 @@ if (  isGroup &&  groupData.antistickerplus &&  !isGroupAdmin &&  !isOwner &&  !
     }
 
 
+    // Configurar callback de expiração para trisal/quadrisal
+    if (relationshipManager && !relationshipManager.onExpirationEvents) {
+      relationshipManager.onExpirationEvents = async (event) => {
+        if (event.type === 'group_expired' && event.message) {
+          try {
+            await nazu.sendMessage(event.groupId, {
+              text: event.message,
+              mentions: event.mentions || []
+            });
+          } catch (expError) {
+            console.warn('[RELATIONSHIP] Erro ao enviar mensagem de expiração:', expError.message);
+          }
+        }
+      };
+    }
+
     if (isGroup) {
       try {
         if (relationshipManager && relationshipManager.hasPendingRequest && relationshipManager.processResponse) {
           try {
+            // Respostas para relacionamentos 1-1 (ficante, namoro, casamento)
             if (relationshipManager.hasPendingRequest(from) && body) {
               const relResponse = await relationshipManager.processResponse(from, sender, body);
               if (relResponse) {
@@ -4499,6 +4516,26 @@ if (  isGroup &&  groupData.antistickerplus &&  !isGroupAdmin &&  !isOwner &&  !
                     text: relResponse.message,
                     mentions: relResponse.mentions || []
                   });
+                }
+              }
+            }
+
+            // Respostas para relacionamentos de grupo (trisal, quadrisal)
+            if (relationshipManager.hasPendingGroupRequest && relationshipManager.processGroupResponse) {
+              if (relationshipManager.hasPendingGroupRequest(from) && body) {
+                const groupResponse = await relationshipManager.processGroupResponse(from, sender, body);
+                if (groupResponse) {
+                  if (groupResponse.success && groupResponse.message) {
+                    await nazu.sendMessage(from, {
+                      text: groupResponse.message,
+                      mentions: groupResponse.mentions || []
+                    });
+                  } else if (!groupResponse.success && groupResponse.message) {
+                    await nazu.sendMessage(from, {
+                      text: groupResponse.message,
+                      mentions: groupResponse.mentions || []
+                    });
+                  }
                 }
               }
             }

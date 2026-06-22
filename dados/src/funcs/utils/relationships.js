@@ -872,11 +872,13 @@ class RelationshipManager {
 
     // Ainda faltam aceitar
     const remaining = allTargets.filter(t => !pending.acceptedTargets.includes(t));
-    const remainingNames = remaining.map(t => `@${getUserName(t)}`).join(', ');
-    
+    const accepted = pending.acceptedTargets.length;
+    const total = allTargets.length;
+    const remainingNames = remaining.map(t => `• @${getUserName(t)}`).join('\n');
+
     return {
       success: true,
-      message: `${config.emoji} @${getUserName(responderId)} aceitou o pedido de ${config.label.toLowerCase()}!\n\n⏳ Aguardando: ${remainingNames}`,
+      message: `✅ @${getUserName(responderId)} aceitou o pedido de ${config.label.toLowerCase()}.\n\n⏳ Ainda aguardando:\n${remainingNames}\n\n📊 Progresso: ${accepted}/${total} aceitações concluídas.`,
       mentions: [responderId, pending.requesterRaw, ...remaining]
     };
   }
@@ -1069,9 +1071,32 @@ class RelationshipManager {
       }
     }
     // Limpa pedidos de grupo expirados (trisal/quadrisal)
+    const expiredEvents = [];
     for (const [groupId, request] of this.pendingGroupRequests.entries()) {
       if (request.expiresAt && request.expiresAt <= now) {
+        // Prepara evento de expiração antes de deletar
+        const config = TYPE_CONFIG[request.type];
+        const accepted = request.acceptedTargets || [];
+        const allTargets = request.targets.map(t => t.id);
+        const notResponded = allTargets.filter(t => !accepted.includes(t));
+        
+        if (notResponded.length > 0) {
+          const notRespondedNames = notResponded.map(t => `• @${getUserName(t)}`).join('\n');
+          expiredEvents.push({
+            groupId,
+            type: 'group_expired',
+            message: `⌛ O tempo para aceitar o pedido de ${config.label.toLowerCase()} expirou.\n\n❌ Os seguintes membros não aceitaram a solicitação:\n${notRespondedNames}\n\nSolicitação cancelada.`,
+            mentions: [request.requesterRaw, ...notResponded]
+          });
+        }
+        
         this.pendingGroupRequests.delete(groupId);
+      }
+    }
+    // Emite eventos de expiração para serem processados
+    if (expiredEvents.length > 0 && this.onExpirationEvents) {
+      for (const event of expiredEvents) {
+        this.onExpirationEvents(event);
       }
     }
     // Limpa pedidos de traição expirados
@@ -1080,6 +1105,11 @@ class RelationshipManager {
         this.pendingBetrayals.delete(key);
       }
     }
+  }
+
+  // Define callback para eventos de expiração
+  onExpirationEvents(event) {
+    // Será sobrescrito pelo index.js
   }
 
   // Verifica se há pedido de traição pendente
