@@ -1469,19 +1469,19 @@ Exemplo: *!fut codigo ELITE2026*
       }
       
       // Buscar negociação por shortId do clube (6 dígitos) ou ID completo
-      let negotiation;
+      let targetNegotiation;
       if (/^\d{6}$/.test(negId)) {
-        negotiation = db.getNegotiationByClubShortId(negId, sender);
-        if (!negotiation) {
+        targetNegotiation = db.getNegotiationByClubShortId(negId, sender);
+        if (!targetNegotiation) {
           return sendReply(`❌ Nenhuma proposta do clube #${negId} encontrada para você!`);
         }
       } else {
-        negotiation = db.getNegotiation(negId);
+        targetNegotiation = db.getNegotiation(negId);
       }
-      if (!negotiation) {
+      if (!targetNegotiation) {
         return sendReply("❌ Proposta não encontrada!");
       }
-      const acceptResult = db.acceptNegotiation(negotiation.id);
+      const acceptResult = db.acceptNegotiation(targetNegotiation.id);
       if (!acceptResult.success) {
         return sendReply(`❌ ${acceptResult.error}`);
       }
