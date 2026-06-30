@@ -4739,7 +4739,7 @@ if (  isGroup &&  groupData.antistickerplus &&  !isGroupAdmin &&  !isOwner &&  !
     // ═══════════════════════════════════════════════════════════════
     // REAÇÃO POR NOME - Reagir automaticamente quando alguém menciona um nome (POR GRUPO)
     // ═══════════════════════════════════════════════════════════════
-    if (isGroup && !info.key.fromMe && !isCmd) {
+    if (isGroup && !isCmd) {
       const reaction = nameReactions.checkMessage(budy2, from);
       if (reaction) {
         try {
