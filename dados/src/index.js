@@ -2586,7 +2586,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     const isNewsletter = !!(info.message?.newsletterAnnouncementMessage || info.message?.newsletterAdminInviteMessage || type === 'newsletterAnnouncementMessage');
     
     if (isGroup && isAntiStts && (isStatusV2 || isNewsletter)) {
-      if (!isOwnerOrSub) {
+      if (!isOwnerOrSub && !isUserWhitelisted(sender, 'antistts')) {
         try {
           if (isBotAdmin) {
             await nazu.sendMessage(from, { delete: info.key }).catch(() => {});
@@ -2604,7 +2604,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     }
 
     // Verificação para mensagens encaminhadas de canais
-    if (isGroup && isAntiStts && !isOwnerOrSub && info.message?.extendedTextMessage?.contextInfo?.isForwarded) {
+    if (isGroup && isAntiStts && !isOwnerOrSub && !isUserWhitelisted(sender, 'antistts') && info.message?.extendedTextMessage?.contextInfo?.isForwarded) {
        const context = info.message.extendedTextMessage.contextInfo;
        if (context.participant?.endsWith('@newsletter') || context.remoteJid?.endsWith('@newsletter')) {
           try {
@@ -2623,26 +2623,24 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
 
     // Lógica Anti-Pagamento (antipagamento/antirequest)
     if (isAntirequestPaymentMessage && isBotAdmin && (type === 'requestPaymentMessage' || type === 'sendPaymentMessage' || type === 'viewOnceMessageV2Extension' || type === 'viewOnceMessageV2' || type === 'viewOnceMessage')) {
-      if (!info.key.fromMe) {
-        if (isGroupAdmin) {
-          await nazu.sendMessage(from, { text: 'O ban já ia cantar kkkkk cê deu sorte que é admin 🤪' }, { quoted: info });
-        } else {
-          await nazu.sendMessage(from, {
-            text: `🚫❌ @${sender.split('@')[0]} ❌🚫\n\n⚠️ *Mensagem de pagamento ou visualização única não é permitida aqui!* ⚠️\n\nVocê foi removido do grupo.`,
-            mentions: [sender]
-          }, { quoted: info });
+      if (!info.key.fromMe && !isGroupAdmin && !isUserWhitelisted(sender, 'antipagamento')) {
+        await nazu.sendMessage(from, {
+          text: `🚫❌ @${sender.split('@')[0]} ❌🚫\n\n⚠️ *Mensagem de pagamento ou visualização única não é permitida aqui!* ⚠️\n\nVocê foi removido do grupo.`,
+          mentions: [sender]
+        }, { quoted: info });
           
-          if (groupData.legenda_documento && groupData.legenda_documento !== "0") {
-            await nazu.sendMessage(from, { text: groupData.legenda_documento }, { quoted: info });
-          }
-          
-          setTimeout(async () => {
-            await nazu.sendMessage(from, { delete: { remoteJid: from, fromMe: false, id: info.key.id, participant: sender } }).catch(() => {});
-          }, 1500);
-          
-          await nazu.groupParticipantsUpdate(from, [sender], 'remove').catch(e => console.error('Erro ao remover por pagamento:', e));
-          return;
+        if (groupData.legenda_documento && groupData.legenda_documento !== "0") {
+          await nazu.sendMessage(from, { text: groupData.legenda_documento }, { quoted: info });
         }
+          
+        setTimeout(async () => {
+          await nazu.sendMessage(from, { delete: { remoteJid: from, fromMe: false, id: info.key.id, participant: sender } }).catch(() => {});
+        }, 1500);
+          
+        await nazu.groupParticipantsUpdate(from, [sender], 'remove').catch(e => console.error('Erro ao remover por pagamento:', e));
+        return;
+      } else if (!info.key.fromMe && isGroupAdmin) {
+        await nazu.sendMessage(from, { text: 'O ban já ia cantar kkkkk cê deu sorte que é admin 🤪' }, { quoted: info });
       }
     }
     if (isGroup && isButtonMessage && isAntiBtn && !isGroupAdmin) {
