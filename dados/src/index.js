@@ -34178,7 +34178,7 @@ ${prefix}wl.add @usuario | antilink,antistatus`);
             return reply('⚠️ Nenhum anti válido foi especificado. Use o formato: antilink,antistatus,antiporn');
           }
 
-          const validAntis = ['antilink', 'antilinkgp', 'antilinkhard', 'antilinksoft', 'antiporn', 'antistatus', 'antistts', 'antipagamento', 'antibtn', 'antidoc', 'antiloc', 'antifig'];
+          const validAntis = ['antilink', 'antilinkgp', 'antilinkhard', 'antilinksoft', 'antiporn', 'antistatus', 'antistts', 'antipagamento', 'antibtn', 'antidoc', 'antiloc', 'antifig', 'antilinkcanal'];
           const invalidAntis = antis.filter(a => !validAntis.includes(a));
 
           if (invalidAntis.length > 0) {
