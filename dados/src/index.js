@@ -5706,39 +5706,6 @@ if (isCmd && command && !isOwnerOrSub) {
 }
 
 
-    // ═══════════════════════════════════════════════════════════════
-    // FUNÇÕES AUXILIARES PARA FIXAR/DESFIXAR MENSAGENS
-    // ═══════════════════════════════════════════════════════════════
-    function getPinnedMessage(gid) {
-      const pinned = groupData?.pinnedMessage;
-      if (!pinned || !pinned.messageId) return null;
-      return pinned;
-    }
-    
-    function savePinnedMessage(gid, pinnedData) {
-      if (!groupData) return false;
-      groupData.pinnedMessage = pinnedData;
-      writeJsonFile(buildGroupFilePath(gid), groupData);
-      return true;
-    }
-    
-    function removePinnedMessage(gid) {
-      if (!groupData) return false;
-      delete groupData.pinnedMessage;
-      writeJsonFile(buildGroupFilePath(gid), groupData);
-      return true;
-    }
-    
-    async function pinMessageChat(nazuConn, jid, pin = true) {
-      try {
-        await nazuConn.chatModify({ pin }, jid);
-        return true;
-      } catch (e) {
-        console.error('Erro ao modificar chat (pin):', e.message);
-        return false;
-      }
-    }
-
     switch (command) {
 
       case 'roles':
@@ -31296,111 +31263,8 @@ ${prefix}nota buscar <termo> - Busca nas notas`);
         }
         break;
 
-      // ═══════════════════════════════════════════════════════════════
-      // FIXAR MENSAGEM - Comandos para fixar e desfixar
-      // ═══════════════════════════════════════════════════════════════
-      case 'fixar':
-      case 'pinmsg':
-      case 'pinmessage':
-        if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
-        if (!isGroupAdmin) return reply("◈ Apenas administradores podem fixar mensagens.");
-        
-        try {
-          // Verificar se já existe mensagem fixada
-          const existingPinned = getPinnedMessage(from);
-          if (existingPinned) {
-            return reply("⚠️ Já existe uma mensagem fixada. Use *" + prefixo + "desfixar* primeiro.");
-          }
-          // Verificar se há mensagem respondida
-          const quotedMsg = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-          const quotedKey = info.message?.extendedTextMessage?.contextInfo?.quotedMessage?.quotedMessageKey;
-          
-          // Determinar o período de fixação
-          let duration = 604800; // Padrão: 7 dias (em segundos)
-          let text = q;
-          
-          // Parsear o período
-          if (q && q.includes('grupo')) {
-            const timeMatch = q.match(/grupo\s+(\d+)\s*d/i);
-            if (timeMatch) {
-              const days = parseInt(timeMatch[1]);
-              if (days === 24 || days === 1) {
-                duration = 86400; // 24 horas
-              } else if (days === 7) {
-                duration = 604800; // 7 dias
-              } else if (days === 30) {
-                duration = 2592000; // 30 dias
-              } else {
-                return reply(`❌ Período inválido! Use: 24h, 7d ou 30d\n\nExemplo: ${prefix}fixar mensagem grupo 7d`);
-              }
-              text = q.replace(/grupo\s+\d+\s*d/gi, '').trim();
-            }
-          }
-          
-          if (quotedMsg && quotedKey) {
-            // Fixar mensagem respondida
-            const messageId = quotedKey?.id || info.message?.extendedTextMessage?.contextInfo?.stanzaId;
-            await pinMessageChat(nazu, from, true).catch(() => {});
-            savePinnedMessage(from, { messageId: messageId, pinnedBy: sender, pinnedAt: Date.now() });
-            
-            const durationText = duration === 86400 ? '24 horas' : duration === 604800 ? '7 dias' : '30 dias';
-            return reply(`✅ *Mensagem fixada com sucesso!*\n\n⏰ Duração: ${durationText}`);
-          } else if (text) {
-            // Criar nova mensagem e fixar
-            const sentMsg = await nazu.sendMessage(from, { text: text }, { quoted: info });
-            const messageKey = sentMsg?.key;
-            
-            if (messageKey) {
-              await pinMessageChat(nazu, from, true).catch(() => {});
-              savePinnedMessage(from, { messageId: messageKey.id, pinnedBy: sender, pinnedAt: Date.now() });
-              
-              const durationText = duration === 86400 ? '24 horas' : duration === 604800 ? '7 dias' : '30 dias';
-              return reply(`✅ *Mensagem criada e fixada!*\n\n📌 Conteúdo: ${text}\n⏰ Duração: ${durationText}`);
-            } else {
-              return reply("❌ Erro ao criar mensagem para fixação.");
-            }
-          } else {
-            return reply(`❌ Você precisa responder a uma mensagem ou informar o texto.\n\n*Uso:*\n${prefix}fixar <texto> [grupo <tempo>]\n${prefix}fixar (responder mensagem)\n\n*Tempos:* grupo 24h, grupo 7d, grupo 30d\n\n*Exemplo:* ${prefix}fixar Olá, pessoal! grupo 7d`);
-          }
-        } catch (e) {
-          console.error('Erro ao fixar mensagem:', e);
-          return reply("❌ Erro ao fixar mensagem.");
-        }
-        break;
-        
-      case 'desfixar':
-      case 'unpinmsg':
-      case 'unpinmessage':
-      case 'desfixarmsg':
-        if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
-        if (!isGroupAdmin) return reply("◈ Apenas administradores podem desfixar mensagens.");
-
-        try {
-          // Verificar se existe mensagem fixada
-          const existingPinned = getPinnedMessage(from);
-          
-          if (!existingPinned) {
-            return reply("⚠️ Não há mensagem fixada neste grupo.");
-          }
-
-          const quotedMsg = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-          const quotedKey = info.message?.extendedTextMessage?.contextInfo?.quotedMessage?.quotedMessageKey;
-          const quotedMessageId = quotedKey?.id || info.message?.extendedTextMessage?.contextInfo?.stanzaId;
-
-          // Se respondeu a uma mensagem, verificar se é a fixada
-          if (quotedMessageId && quotedMessageId !== existingPinned.messageId) {
-            return reply("⚠️ Esta mensagem não está fixada. Responda à mensagem correta.");
-          }
-
-          await pinMessageChat(nazu, from, false).catch(() => {});
-          removePinnedMessage(from);
-
-          return reply("✅ *Mensagem desfixada com sucesso!*");
-        } catch (e) {
-          console.error('Erro ao desfixar mensagem:', e);
-          return reply("❌ Não foi possível desfixar a mensagem.");
-        }
-        break;
+      // COMANDOS DE FIXAR/DESFIXAR FORAM REMOVIDOS
+      // A API do WhatsApp não suporta fixar mensagens individuais em grupos
 
       case 'notas':
       case 'notes':
