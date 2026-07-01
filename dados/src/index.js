@@ -31264,7 +31264,35 @@ ${prefix}nota buscar <termo> - Busca nas notas`);
         break;
 
       // ═══════════════════════════════════════════════════════════════
-      // FIXAR MENSAGEM - Fixar e desfixar mensagens no grupo
+      // FIXAR MENSAGEM - Funções auxiliares
+      const getPinnedMessage = (gid) => {
+        const pinned = groupData?.pinnedMessage;
+        if (!pinned || !pinned.messageId) return null;
+        return pinned;
+      };
+      const savePinnedMessage = (gid, pinnedData) => {
+        if (!groupData) return false;
+        groupData.pinnedMessage = pinnedData;
+        writeJsonFile(buildGroupFilePath(gid), groupData);
+        return true;
+      };
+      const removePinnedMessage = (gid) => {
+        if (!groupData) return false;
+        delete groupData.pinnedMessage;
+        writeJsonFile(buildGroupFilePath(gid), groupData);
+        return true;
+      };
+      const pinMessageChat = async (nazuConn, jid, pin = true) => {
+        try {
+          await nazuConn.chatModify({ pin }, jid);
+          return true;
+        } catch (e) {
+          console.error('Erro ao modificar chat (pin):', e.message);
+          return false;
+        }
+      };
+      
+      // FIXAR MENSAGEM - Comandos para fixar e desfixar
       // ═══════════════════════════════════════════════════════════════
       case 'fixar':
       case 'pinmsg':
@@ -31273,6 +31301,11 @@ ${prefix}nota buscar <termo> - Busca nas notas`);
         if (!isGroupAdmin) return reply("◈ Apenas administradores podem fixar mensagens.");
         
         try {
+          // Verificar se já existe mensagem fixada
+          const existingPinned = getPinnedMessage(from);
+          if (existingPinned) {
+            return reply("⚠️ Já existe uma mensagem fixada. Use *" + prefixo + "desfixar* primeiro.");
+          }
           // Verificar se há mensagem respondida
           const quotedMsg = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
           const quotedKey = info.message?.extendedTextMessage?.contextInfo?.quotedMessage?.quotedMessageKey;
@@ -31301,15 +31334,9 @@ ${prefix}nota buscar <termo> - Busca nas notas`);
           
           if (quotedMsg && quotedKey) {
             // Fixar mensagem respondida
-            const messageTimestamp = quotedKey?.timestamp ? parseInt(quotedKey.timestamp) : Math.floor(Date.now() / 1000);
-            const messageKey = {
-              remoteJid: from,
-              id: quotedKey?.id || info.message?.extendedTextMessage?.contextInfo?.stanzaId,
-              fromMe: quotedKey?.fromMe || false,
-              participant: quotedKey?.participant || sender
-            };
-            
-            await nazu.pinMessage(from, messageKey, true, duration).catch(() => {});
+            const messageId = quotedKey?.id || info.message?.extendedTextMessage?.contextInfo?.stanzaId;
+            await pinMessageChat(nazu, from, true).catch(() => {});
+            savePinnedMessage(from, { messageId: messageId, pinnedBy: sender, pinnedAt: Date.now() });
             
             const durationText = duration === 86400 ? '24 horas' : duration === 604800 ? '7 dias' : '30 dias';
             return reply(`✅ *Mensagem fixada com sucesso!*\n\n⏰ Duração: ${durationText}`);
@@ -31319,7 +31346,8 @@ ${prefix}nota buscar <termo> - Busca nas notas`);
             const messageKey = sentMsg?.key;
             
             if (messageKey) {
-              await nazu.pinMessage(from, messageKey, true, duration).catch(() => {});
+              await pinMessageChat(nazu, from, true).catch(() => {});
+              savePinnedMessage(from, { messageId: messageKey.id, pinnedBy: sender, pinnedAt: Date.now() });
               
               const durationText = duration === 86400 ? '24 horas' : duration === 604800 ? '7 dias' : '30 dias';
               return reply(`✅ *Mensagem criada e fixada!*\n\n📌 Conteúdo: ${text}\n⏰ Duração: ${durationText}`);
@@ -31343,26 +31371,29 @@ ${prefix}nota buscar <termo> - Busca nas notas`);
         if (!isGroupAdmin) return reply("◈ Apenas administradores podem desfixar mensagens.");
 
         try {
-          const quotedMsg = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-          const quotedKey = info.message?.extendedTextMessage?.contextInfo?.quotedMessage?.quotedMessageKey;
-
-          if (!quotedMsg || !quotedKey) {
-            return reply(`❌ Você precisa responder à mensagem fixada que deseja desfixar.\n\n*Uso:*\n${prefix}desfixar (responder mensagem fixada)`);
+          // Verificar se existe mensagem fixada
+          const existingPinned = getPinnedMessage(from);
+          
+          if (!existingPinned) {
+            return reply("⚠️ Não há mensagem fixada neste grupo.");
           }
 
-          const messageKey = {
-            remoteJid: from,
-            id: quotedKey?.id || info.message?.extendedTextMessage?.contextInfo?.stanzaId,
-            fromMe: quotedKey?.fromMe || false,
-            participant: quotedKey?.participant || sender
-          };
+          const quotedMsg = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+          const quotedKey = info.message?.extendedTextMessage?.contextInfo?.quotedMessage?.quotedMessageKey;
+          const quotedMessageId = quotedKey?.id || info.message?.extendedTextMessage?.contextInfo?.stanzaId;
 
-          await nazu.pinMessage(from, messageKey, false).catch(() => {});
+          // Se respondeu a uma mensagem, verificar se é a fixada
+          if (quotedMessageId && quotedMessageId !== existingPinned.messageId) {
+            return reply("⚠️ Esta mensagem não está fixada. Responda à mensagem correta.");
+          }
+
+          await pinMessageChat(nazu, from, false).catch(() => {});
+          removePinnedMessage(from);
 
           return reply("✅ *Mensagem desfixada com sucesso!*");
         } catch (e) {
           console.error('Erro ao desfixar mensagem:', e);
-          return reply("❌ Não foi possível desfixar a mensagem. Verifique se há alguma mensagem fixada.");
+          return reply("❌ Não foi possível desfixar a mensagem.");
         }
         break;
 
