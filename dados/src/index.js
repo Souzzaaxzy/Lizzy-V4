@@ -22945,28 +22945,19 @@ case 'addcmd-subdono':
       case 'prefixo':
       case 'prefix':
         try {
-          if (!isOwnerOrSub) return reply("Este comando é exclusivo para o meu dono!");
-          if (!q) return reply(`⚙️ *Configuração de Prefixo*\n\n📝 *Como usar:*\n• Digite o novo prefixo após o comando\n• Ex: ${prefix}${command} /\n• Ex: ${prefix}${command} !\n\n✅ O prefixo do bot será atualizado para o valor especificado!`);
-
-          let newPrefix = q.trim();
-
-          // Bloqueia o uso de $ como prefixo e converte automaticamente para /
-          if (newPrefix === '$') {
-            newPrefix = '/';
-            await reply(`⚠️ O símbolo "$" é reservado e não pode ser usado como prefixo.\n✅ Prefixo alterado automaticamente para "/" globalmente!`);
+          // Busca o prefixo do grupo ou o prefixo global padrão
+          let currentPrefix;
+          
+          if (isGroup) {
+            currentPrefix = groupData.customPrefix || config.prefixo || '!';
+          } else {
+            currentPrefix = config.prefixo || '!';
           }
-
-          let config = JSON.parse(fs.readFileSync(CONFIG_FILE));
-          config.prefixo = newPrefix;
-          writeJsonFile(CONFIG_FILE, config);
-
-          // Se não foi convertido, envia mensagem normal
-          if (newPrefix !== '/') {
-            await reply(`Prefixo alterado com sucesso para "${newPrefix}"!`);
-          }
+          
+          return reply(`📌 Prefixo atual deste grupo: ${currentPrefix}`);
         } catch (e) {
           console.error(e);
-          await reply("🐝 Ops! Ocorreu um erro inesperado. Tente novamente em alguns instantes, por favor! 🥺");
+          return reply("🐝 Ops! Ocorreu um erro ao buscar o prefixo. Tente novamente!");
         }
         break;
 
