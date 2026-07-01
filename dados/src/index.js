@@ -4656,7 +4656,8 @@ if (  isGroup &&  groupData.antistickerplus &&  !isGroupAdmin &&  !isOwner &&  !
 
         // Responder quando alguém manda só "prefixo" no chat
         if (isGroup && !isCmd && budy2 && budy2.trim().toLowerCase() === 'prefixo') {
-          await reply(`🌌 Esse é o meu prefixo atual: *${prefix}*\n\nUse o poder do void! 😊`);
+          const currentPrefix = groupData.customPrefix || config.prefixo || '!';
+          await reply(`📌 Prefixo atual deste grupo: ${currentPrefix}`);
         }
 
         if (isGroup && antipalavra && body && !isCmd) {
@@ -22940,24 +22941,6 @@ case 'addcmd-subdono':
         } catch (e) {
           console.error(e);
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
-        }
-        break;
-      case 'prefixo':
-      case 'prefix':
-        try {
-          // Busca o prefixo do grupo ou o prefixo global padrão
-          let currentPrefix;
-          
-          if (isGroup) {
-            currentPrefix = groupData.customPrefix || config.prefixo || '!';
-          } else {
-            currentPrefix = config.prefixo || '!';
-          }
-          
-          return reply(`📌 Prefixo atual deste grupo: ${currentPrefix}`);
-        } catch (e) {
-          console.error(e);
-          return reply("🐝 Ops! Ocorreu um erro ao buscar o prefixo. Tente novamente!");
         }
         break;
 
