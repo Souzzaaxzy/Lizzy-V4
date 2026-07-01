@@ -2562,21 +2562,19 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       }
     };
 
-    if (isGroup && isStatusMention && isAntiStatus && !isGroupAdmin) {
-      if (!isUserWhitelisted(sender, 'antistatus')) {
-        if (isBotAdmin) {
-          await nazu.sendMessage(from, {
-            delete: {
-              remoteJid: from,
-              fromMe: false,
-              id: info.key.id,
-              participant: sender
-            }
-          });
-          await nazu.groupParticipantsUpdate(from, [sender], 'remove');
-        } else {
-          await reply("⚠️ Não posso remover o usuário porque não sou administrador.");
-        }
+    if (isGroup && isStatusMention && isAntiStatus && !isGroupAdmin && !isUserWhitelisted(sender, 'antistatus')) {
+      if (isBotAdmin) {
+        await nazu.sendMessage(from, {
+          delete: {
+            remoteJid: from,
+            fromMe: false,
+            id: info.key.id,
+            participant: sender
+          }
+        });
+        await nazu.groupParticipantsUpdate(from, [sender], 'remove');
+      } else {
+        await reply("⚠️ Não posso remover o usuário porque não sou administrador.");
       }
     }
 
@@ -2589,26 +2587,24 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     );
     const isNewsletter = !!(info.message?.newsletterAnnouncementMessage || info.message?.newsletterAdminInviteMessage || type === 'newsletterAnnouncementMessage');
     
-    if (isGroup && isAntiStts && (isStatusV2 || isNewsletter)) {
-      if (!isOwnerOrSub && !isUserWhitelisted(sender, 'antistts') && !isGroupAdmin) {
-        try {
-          if (isBotAdmin) {
-            await nazu.sendMessage(from, { delete: info.key }).catch(() => {});
-            await nazu.sendMessage(from, {
-              text: `🚨 *SISTEMA ANTI-ATAQUE*\n\nO membro @${sender.split('@')[0]} tentou postar um status/canal no grupo e foi removido para proteger o grupo.`,
-              mentions: [sender]
-            });
-            await nazu.groupParticipantsUpdate(from, [sender], 'remove');
-          }
-          return;
-        } catch (err) {
-          console.error(`[ANTI-STATUS] Erro ao processar banimento:`, err.message);
+    if (isGroup && isAntiStts && (isStatusV2 || isNewsletter) && !isOwnerOrSub && !isUserWhitelisted(sender, 'antistts') && !isGroupAdmin) {
+      try {
+        if (isBotAdmin) {
+          await nazu.sendMessage(from, { delete: info.key }).catch(() => {});
+          await nazu.sendMessage(from, {
+            text: `🚨 *SISTEMA ANTI-ATAQUE*\n\nO membro @${sender.split('@')[0]} tentou postar um status/canal no grupo e foi removido para proteger o grupo.`,
+            mentions: [sender]
+          });
+          await nazu.groupParticipantsUpdate(from, [sender], 'remove');
         }
+        return;
+      } catch (err) {
+        console.error(`[ANTI-STATUS] Erro ao processar banimento:`, err.message);
       }
     }
 
     // Verificação para mensagens encaminhadas de canais
-    if (isGroup && isAntiStts && !isOwnerOrSub && !isUserWhitelisted(sender, 'antistts') && info.message?.extendedTextMessage?.contextInfo?.isForwarded) {
+    if (isGroup && isAntiStts && info.message?.extendedTextMessage?.contextInfo?.isForwarded && !isOwnerOrSub && !isUserWhitelisted(sender, 'antistts')) {
        const context = info.message.extendedTextMessage.contextInfo;
        if (context.participant?.endsWith('@newsletter') || context.remoteJid?.endsWith('@newsletter')) {
           try {
@@ -2626,26 +2622,22 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     }
 
     // Lógica Anti-Pagamento (antipagamento/antirequest)
-    if (isAntirequestPaymentMessage && isBotAdmin && (type === 'requestPaymentMessage' || type === 'sendPaymentMessage' || type === 'viewOnceMessageV2Extension' || type === 'viewOnceMessageV2' || type === 'viewOnceMessage')) {
-      if (!info.key.fromMe && !isGroupAdmin && !isUserWhitelisted(sender, 'antipagamento')) {
-        await nazu.sendMessage(from, {
-          text: `🚫❌ @${sender.split('@')[0]} ❌🚫\n\n⚠️ *Mensagem de pagamento ou visualização única não é permitida aqui!* ⚠️\n\nVocê foi removido do grupo.`,
-          mentions: [sender]
-        }, { quoted: info });
-          
-        if (groupData.legenda_documento && groupData.legenda_documento !== "0") {
-          await nazu.sendMessage(from, { text: groupData.legenda_documento }, { quoted: info });
-        }
-          
-        setTimeout(async () => {
-          await nazu.sendMessage(from, { delete: { remoteJid: from, fromMe: false, id: info.key.id, participant: sender } }).catch(() => {});
-        }, 1500);
-          
-        await nazu.groupParticipantsUpdate(from, [sender], 'remove').catch(e => console.error('Erro ao remover por pagamento:', e));
-        return;
-      } else if (!info.key.fromMe && isGroupAdmin) {
-        await nazu.sendMessage(from, { text: 'O ban já ia cantar kkkkk cê deu sorte que é admin 🤪' }, { quoted: info });
+    if (isAntirequestPaymentMessage && isBotAdmin && (type === 'requestPaymentMessage' || type === 'sendPaymentMessage' || type === 'viewOnceMessageV2Extension' || type === 'viewOnceMessageV2' || type === 'viewOnceMessage') && !info.key.fromMe && !isGroupAdmin && !isUserWhitelisted(sender, 'antipagamento')) {
+      await nazu.sendMessage(from, {
+        text: `🚫❌ @${sender.split('@')[0]} ❌🚫\n\n⚠️ *Mensagem de pagamento ou visualização única não é permitida aqui!* ⚠️\n\nVocê foi removido do grupo.`,
+        mentions: [sender]
+      }, { quoted: info });
+
+      if (groupData.legenda_documento && groupData.legenda_documento !== "0") {
+        await nazu.sendMessage(from, { text: groupData.legenda_documento }, { quoted: info });
       }
+
+      setTimeout(async () => {
+        await nazu.sendMessage(from, { delete: { remoteJid: from, fromMe: false, id: info.key.id, participant: sender } }).catch(() => {});
+      }, 1500);
+
+      await nazu.groupParticipantsUpdate(from, [sender], 'remove').catch(e => console.error('Erro ao remover por pagamento:', e));
+      return;
     }
     if (isGroup && isButtonMessage && isAntiBtn && !isGroupAdmin) {
       if (!isUserWhitelisted(sender, 'antibtn')) {
