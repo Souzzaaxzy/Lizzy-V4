@@ -17555,38 +17555,95 @@ Exemplo: ${prefix}tradutor espanhol | Olá mundo! ◈`);
       case 'upgrade':
         if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
         
-        // Instância singleton doUpdateCommand
+        // Instância singleton do UpdateCommand
         if (!global.updateCommandInstance) {
           global.updateCommandInstance = new UpdateCommand();
         }
         
         const updateCmd = global.updateCommandInstance;
+        const confirmParam = q?.toLowerCase().trim() === 'sim';
         
-        // Envia mensagem inicial
-        reply('🔄 *Verificando atualizações...*').then(async () => {
+        // Sem confirmação - mostra preview
+        if (!confirmParam) {
+          await reply('🔄 *Verificando atualizações...*');
+          
           try {
-            const result = await updateCmd.execute();
+            const projectRoot = pathz.join(__dirname, '../..');
             
-            if (!result.success) {
-              await reply(result.message);
-              return;
+            await execAsync('git fetch origin main', { cwd: projectRoot, timeout: 15000 });
+            
+            const { stdout: gitLog } = await execAsync(
+              'git log HEAD..origin/main --oneline', 
+              { cwd: projectRoot, timeout: 10000 }
+            );
+            
+            const { stdout: filesChanged } = await execAsync(
+              'git diff --name-status origin/main',
+              { cwd: projectRoot, timeout: 10000 }
+            );
+            
+            const commitsList = gitLog.trim().split('\n').filter(c => c);
+            
+            if (commitsList.length === 0) {
+              return reply('✅ *O bot já está na versão mais recente!*\n\nNão há atualizações disponíveis no momento.');
             }
             
-            if (result.needsRestart) {
-              // Envia mensagem de sucesso e reinicia
-              await reply(result.message + '\n\n' + updateCmd.testFlag);
-              setTimeout(() => {
-                console.log('[UPDATE] Reiniciando bot após atualização...');
-                process.exit(0);
-              }, 3000);
-            } else {
-              await reply(result.message);
-            }
+            let msg = `🔔 *ATUALIZAÇÕES DISPONÍVEIS*\n\n`;
+            msg += `📊 *${commitsList.length} commit(s) novo(s)*\n\n`;
+            msg += `*Commits:*\n`;
+            commitsList.slice(0, 5).forEach(c => {
+              msg += `▸ ${c}\n`;
+            });
+            
+            // Contar arquivos
+            const files = filesChanged.trim().split('\n').filter(f => f);
+            let added = 0, modified = 0, removed = 0;
+            files.forEach(f => {
+              const status = f.charAt(0);
+              if (status === 'A') added++;
+              else if (status === 'M') modified++;
+              else if (status === 'D') removed++;
+            });
+            
+            msg += `\n📁 *Arquivos:*\n`;
+            msg += `▸ 🆕 Adicionados: ${added}\n`;
+            msg += `▸ 📝 Modificados: ${modified}\n`;
+            msg += `▸ 🗑️ Removidos: ${removed}\n`;
+            
+            msg += `\n${prefix}update sim\n*para confirmar a atualização*`;
+            
+            await reply(msg);
+            
           } catch (error) {
-            console.error('Erro no comando update:', error);
-            await reply(`❌ *Erro inesperado*\n\n${error.message}`);
+            console.error('Erro ao verificar updates:', error);
+            await reply(`❌ *Erro ao verificar atualizações*\n\n${error.message}`);
           }
-        });
+          break;
+        }
+        
+        // Com confirmação - executar atualização
+        await reply('🚀 *INICIANDO ATUALIZAÇÃO...*');
+        
+        try {
+          const result = await updateCmd.execute();
+          
+          if (!result.success) {
+            await reply(result.message);
+            return;
+          }
+          
+          await reply(result.message);
+          
+          if (result.needsRestart) {
+            setTimeout(() => {
+              console.log('[UPDATE] Reiniciando bot...');
+              process.exit(0);
+            }, 3000);
+          }
+        } catch (error) {
+          console.error('Erro no comando update:', error);
+          await reply(`❌ *Erro inesperado*\n\n${error.message}`);
+        }
         break;
 
       case 'listaralugueis':
