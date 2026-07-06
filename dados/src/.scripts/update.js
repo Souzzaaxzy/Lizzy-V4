@@ -201,7 +201,47 @@ async function createBackup() {
   }
 }
 
+async function fetchCommitsInfo() {
+  printInfo('🔍 Verificando commits disponíveis...');
+  
+  try {
+    // Extrair owner e repo da URL github_ofc
+    const ghUrlMatch = config.github_ofc?.match(/github\.com\/([^/]+)\/([^/.]+)/);
+    const ghOwner = ghUrlMatch ? ghUrlMatch[1] : 'Souzzaaxzy';
+    const ghRepo = ghUrlMatch ? ghUrlMatch[2] : 'Abyss';
+    
+    const response = await fetch(`https://api.github.com/repos/${ghOwner}/${ghRepo}/commits?per_page=10`, {
+      headers: { Accept: 'application/vnd.github+json' },
+    });
+    
+    if (!response.ok) {
+      printWarning(`⚠️ Não foi possível buscar commits: ${response.status}`);
+      return;
+    }
+    
+    const commits = await response.json();
+    
+    if (commits.length > 0) {
+      printMessage('📋 *Commits disponíveis:*');
+      commits.slice(0, 5).forEach((commit, i) => {
+        const shortHash = commit.sha.substring(0, 7);
+        const date = new Date(commit.commit.author.date).toLocaleDateString('pt-BR');
+        const message = commit.commit.message.split('\n')[0].substring(0, 60);
+        printDetail(`  ${i + 1}. [\`${shortHash}\`] ${message} (${date})`);
+      });
+      
+      // Trigger especial para o index.js mostrar no chat
+      printMessage(`CommitsFound: ${commits.length} commits disponíveis`);
+    }
+  } catch (error) {
+    printWarning(`⚠️ Erro ao buscar commits: ${error.message}`);
+  }
+}
+
 async function downloadUpdate() {
+  // Buscar info dos commits antes de baixar
+  await fetchCommitsInfo();
+  
   printMessage('📥 Baixando a versão mais recente do Nazuna...');
 
   try {

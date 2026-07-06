@@ -17373,6 +17373,7 @@ Exemplo: ${prefix}tradutor espanhol | Olá mundo! ◈`);
             'Criando backup': '📁 Criando backup dos arquivos importantes...',
             'Backup salvo': '✅ Backup criado com sucesso!',
             'Baixando a versão': '📥 Baixando atualização do GitHub...',
+            'CommitsFound:': null, // Handler especial abaixo
             'Download concluído': '✅ Download concluído!\n\n🧹 Limpando arquivos antigos...',
             'Limpeza concluída': '✅ Limpeza concluída!\n\n🚀 Aplicando atualização...',
             'Atualização aplicada': '✅ Atualização aplicada!\n\n📂 Restaurando dados preservados...',
@@ -17413,9 +17414,33 @@ Exemplo: ${prefix}tradutor espanhol | Olá mundo! ◈`);
             console.log('UPDATE:', output);
             outputBuffer += output;
 
+            // Verifica trigger especial de commits
+            if (output.includes('CommitsFound:')) {
+              // Extrai commits do buffer
+              const commitsMatch = outputBuffer.match(/CommitsFound: (\d+) commits disponíveis/);
+              const commitDetails = [];
+              
+              // Extrai linhas de commits do buffer
+              const lines = outputBuffer.split('\n');
+              for (const line of lines) {
+                const match = line.match(/\d+\. \[`([^`]+)`\] (.+?) \((\d{2}\/\d{2}\/\d{4})\)/);
+                if (match) {
+                  commitDetails.push({ hash: match[1], message: match[2], date: match[3] });
+                }
+              }
+              
+              if (commitDetails.length > 0) {
+                let commitsMsg = `📋 *Commits que serão atualizados (${commitsMatch ? commitsMatch[1] : commitDetails.length}):*\n`;
+                commitDetails.slice(0, 5).forEach(c => {
+                  commitsMsg += `▸ [\`${c.hash}\`] ${c.message}\n`;
+                });
+                queueUpdate('CommitsFound:', commitsMsg);
+              }
+            }
+
             // Verifica cada trigger e enfileira a mensagem correspondente
             for (const [trigger, message] of Object.entries(updateMessages)) {
-              if (output.includes(trigger)) {
+              if (trigger !== 'CommitsFound:' && output.includes(trigger) && message) {
                 queueUpdate(trigger, message);
               }
             }
