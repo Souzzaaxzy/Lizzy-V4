@@ -9,30 +9,12 @@ const execAsync = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PROJECT_ROOT = path.resolve(__dirname, '../../..');
+const MAIN_BRANCH = 'main';
 
 class UpdateCommand {
   constructor() {
     this.isUpdating = false;
     this.processing = false;
-    this.currentBranch = null;
-  }
-
-  /**
-   * Obtém o branch atual
-   */
-  async getCurrentBranch() {
-    if (this.currentBranch) return this.currentBranch;
-    
-    try {
-      const { stdout } = await execAsync('git branch --show-current', { 
-        cwd: PROJECT_ROOT,
-        timeout: 5000
-      });
-      this.currentBranch = stdout.trim() || 'main';
-      return this.currentBranch;
-    } catch (error) {
-      return 'main';
-    }
   }
 
   /**
@@ -72,8 +54,6 @@ class UpdateCommand {
    */
   async checkForUpdates() {
     try {
-      const branch = await this.getCurrentBranch();
-      
       await execAsync('git fetch origin', { 
         cwd: PROJECT_ROOT,
         timeout: 30000
@@ -86,7 +66,7 @@ class UpdateCommand {
         return { hasUpdates: false };
       }
 
-      const { stdout } = await execAsync(`git log HEAD..origin/${branch} --oneline`, { 
+      const { stdout } = await execAsync(`git log HEAD..origin/${MAIN_BRANCH} --oneline`, { 
         cwd: PROJECT_ROOT,
         timeout: 10000
       });
@@ -104,15 +84,13 @@ class UpdateCommand {
    */
   async getChangesInfo() {
     try {
-      const branch = await this.getCurrentBranch();
-      
       const { stdout: diffSummary } = await execAsync(
-        `git diff --stat origin/${branch}`,
+        `git diff --stat origin/${MAIN_BRANCH}`,
         { cwd: PROJECT_ROOT, timeout: 30000 }
       );
 
       const { stdout: filesChanged } = await execAsync(
-        `git diff --name-status origin/${branch}`,
+        `git diff --name-status origin/${MAIN_BRANCH}`,
         { cwd: PROJECT_ROOT, timeout: 30000 }
       );
 
@@ -159,9 +137,8 @@ class UpdateCommand {
    */
   async checkPackageJsonChanged() {
     try {
-      const branch = await this.getCurrentBranch();
       const { stdout } = await execAsync(
-        `git diff --name-status origin/${branch} -- package.json package-lock.json yarn.lock`,
+        `git diff --name-status origin/${MAIN_BRANCH} -- package.json package-lock.json yarn.lock`,
         { cwd: PROJECT_ROOT, timeout: 10000 }
       );
       return stdout.trim().length > 0;
@@ -174,12 +151,10 @@ class UpdateCommand {
    * Executa git pull com tratamento de erros
    */
   async performPull() {
-    const branch = await this.getCurrentBranch();
-    
     return new Promise((resolve, reject) => {
       const output = [];
       
-      const gitProcess = spawn('git', ['pull', 'origin', branch], {
+      const gitProcess = spawn('git', ['pull', 'origin', MAIN_BRANCH], {
         cwd: PROJECT_ROOT,
         shell: os.platform() === 'win32',
         env: { ...process.env }
