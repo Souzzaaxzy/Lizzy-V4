@@ -17527,7 +17527,6 @@ Exemplo: ${prefix}tradutor espanhol | Olá mundo! ◈`);
         break;
 
       case 'update':
-      case 'atualizar':
       case 'upgrade':
         if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
         
