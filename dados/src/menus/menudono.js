@@ -122,6 +122,19 @@ ${middleBorder}${menuItemIcon}${prefix}cmdlimites
 ${bottomBorder}
 
 ${menuTopBorder}
+│ 🔒 BLOQUEIO NO PRIVADO
+${middleBorder}
+${middleBorder}${menuItemIcon}${prefix}blockmenupv
+${middleBorder}${menuItemIcon}${prefix}unblockmenupv
+${middleBorder}${menuItemIcon}${prefix}blockcmdpv
+${middleBorder}${menuItemIcon}${prefix}unblockcmdpv
+${middleBorder}${menuItemIcon}${prefix}listblockpv
+${middleBorder}
+${middleBorder}📝 Bloqueia menus/comandos no PV
+${middleBorder}   Funcionam apenas em grupos
+${bottomBorder}
+
+${menuTopBorder}
 │ ${userManagementMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}addsubdono
