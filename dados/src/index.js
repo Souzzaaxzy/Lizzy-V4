@@ -3147,6 +3147,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
             msg: isCmd ? 0 : 1,
             cmd: isCmd ? 1 : 0,
             figu: type === "stickerMessage" ? 1 : 0,
+            apagadas: 0,
             pushname: pushname || 'Usuário Desconhecido',
             firstSeen: new Date().toISOString(),
             lastActivity: new Date().toISOString()
@@ -16817,14 +16818,9 @@ O texto será extraído *exatamente* como está na imagem, sem resumir ou traduz
           const totalMessages = userContador?.msg || 0;
           const totalCommands = userContador?.cmd || 0;
           const totalFigus = userContador?.figu || 0;
+          const msgsApagadas = userContador?.apagadas || 0;
           const firstSeen = userContador?.firstSeen ? new Date(userContador.firstSeen) : null;
           const lastActivity = userContador?.lastActivity ? new Date(userContador.lastActivity) : null;
-
-          // Msgs apagadas
-          let msgsApagadas = 0;
-          if (groupData.trashMessages) {
-            msgsApagadas = groupData.trashMessages.filter(m => m.sender === targetUser).length;
-          }
 
           // Calcular frequência baseada na atividade
           let frequencia = '⚪';

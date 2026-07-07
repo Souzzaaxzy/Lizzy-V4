@@ -1314,6 +1314,74 @@ async function createBotSocket(authDir) {
                     }
                 }
             });
+
+            // Handler para detectar mensagens apagadas
+            AbyssSock.ev.on('messages.delete', async (keys) => {
+                try {
+                    for (const key of keys) {
+                        const groupId = key.remoteJid;
+                        const senderId = key.participant || key.remoteJid;
+                        
+                        // Ignorar se não for grupo ou se for o próprio bot
+                        if (!groupId || !groupId.endsWith('@g.us')) continue;
+                        if (senderId === AbyssSock.user?.id) continue;
+                        
+                        const { 
+                            normalizeGroupId, 
+                            buildGroupFilePath, 
+                            writeJsonFile 
+                        } = await import('./utils/paths.js');
+                        const fs = await import('fs');
+                        
+                        const normId = normalizeGroupId(groupId);
+                        if (!normId) continue;
+                        
+                        const filePath = buildGroupFilePath(normId);
+                        
+                        // Criar arquivo se não existir
+                        if (!fs.existsSync(filePath)) {
+                            fs.writeFileSync(filePath, JSON.stringify({}, null, 2));
+                        }
+                        
+                        let groupData = {};
+                        try {
+                            const content = fs.readFileSync(filePath, 'utf-8');
+                            groupData = JSON.parse(content);
+                        } catch (e) {
+                            groupData = {};
+                        }
+                        
+                        // Inicializar contador se não existir
+                        groupData.contador = groupData.contador || [];
+                        const userIndex = groupData.contador.findIndex(u => u.id === senderId);
+                        
+                        if (userIndex !== -1) {
+                            // Usuário existe, incrementar apagadas
+                            if (!groupData.contador[userIndex].apagadas) {
+                                groupData.contador[userIndex].apagadas = 0;
+                            }
+                            groupData.contador[userIndex].apagadas++;
+                        } else {
+                            // Criar entrada para o usuário
+                            groupData.contador.push({
+                                id: senderId,
+                                msg: 0,
+                                cmd: 0,
+                                figu: 0,
+                                apagadas: 1,
+                                pushname: 'Usuário',
+                                firstSeen: new Date().toISOString(),
+                                lastActivity: new Date().toISOString()
+                            });
+                        }
+                        
+                        writeJsonFile(filePath, groupData);
+                        console.log(`[DELETED] Mensagem apagada por ${senderId} em ${groupId}`);
+                    }
+                } catch (e) {
+                    console.error('[DELETED] Erro ao processar mensagem deletada:', e);
+                }
+            });
         };
 
         AbyssSock.ev.on('connection.update', async (update) => {
