@@ -26776,6 +26776,365 @@ ${prefix}togglecmdvip premium_ia off`);
         break;
       }
 
+      case 'painel': {
+        if (!isOwnerOrSub) return reply("🚫 Apenas o Dono ou Subdono pode acessar o painel!");
+
+        try {
+          // ==================== INFORMAÇÕES DO BOT ====================
+          const config = loadJsonFile(CONFIG_FILE, {});
+          const botName = config.nomedobot || 'AbyssBot';
+          const botVersion = '3.0.0';
+          const botPrefix = config.prefixo || '/';
+          const botOwner = config.numerodono || 'Não definido';
+          
+          // Uptime do bot
+          const botUptime = process.uptime();
+          const days = Math.floor(botUptime / 86400);
+          const hours = Math.floor((botUptime % 86400) / 3600);
+          const minutes = Math.floor((botUptime % 3600) / 60);
+          const seconds = Math.floor(botUptime % 60);
+          const uptimeStr = `${days}d ${hours}h ${minutes}m ${seconds}s`;
+          
+          // Inicialização
+          const startTime = loadJsonFile('./dados/database/botState.json', {}).startTime || Date.now();
+          const initDate = new Date(startTime).toLocaleString('pt-BR');
+          
+          // Contadores de comandos
+          const commandStats = loadJsonFile('./dados/database/commandStats.json', {});
+          const totalCommands = commandStats.totalExecutions || 0;
+
+          // ==================== ESTATÍSTICAS DE USUÁRIOS ====================
+          let totalUsers = 0;
+          let activeToday = 0;
+          let activeWeek = 0;
+          let bannedUsers = 0;
+          let topCommandUsers = [];
+          
+          try {
+            const allGroups = fs.readdirSync('./dados/database/grupos/').filter(f => f.endsWith('.json'));
+            const userMap = new Map();
+            const now = Date.now();
+            const dayMs = 86400000;
+            const weekMs = 7 * dayMs;
+            
+            for (const file of allGroups) {
+              try {
+                const groupData = JSON.parse(fs.readFileSync(`./dados/database/grupos/${file}`, 'utf-8'));
+                const contador = groupData.contador || [];
+                
+                for (const user of contador) {
+                  if (!userMap.has(user.id)) {
+                    userMap.set(user.id, { lastActivity: 0, cmds: 0 });
+                  }
+                  const userData = userMap.get(user.id);
+                  if (user.lastActivity) {
+                    const lastAct = new Date(user.lastActivity).getTime();
+                    if (lastAct > userData.lastActivity) {
+                      userData.lastActivity = lastAct;
+                    }
+                  }
+                  userData.cmds += (user.cmd || 0);
+                }
+              } catch (e) {}
+            }
+            
+            totalUsers = userMap.size;
+            const dayAgo = now - dayMs;
+            const weekAgo = now - weekMs;
+            
+            for (const [id, data] of userMap) {
+              if (data.lastActivity >= dayAgo) activeToday++;
+              if (data.lastActivity >= weekAgo) activeWeek++;
+            }
+            
+            // Top usuários por comandos
+            topCommandUsers = Array.from(userMap.entries())
+              .sort((a, b) => b[1].cmds - a[1].cmds)
+              .slice(0, 3);
+          } catch (e) {}
+
+          // ==================== ESTATÍSTICAS DE GRUPOS ====================
+          let totalGroups = 0;
+          let activeGroupsToday = 0;
+          let totalMembers = 0;
+          let totalGroupMessages = 0;
+          let mostActiveGroup = { name: 'N/A', msgs: 0 };
+          
+          try {
+            const groupFiles = fs.readdirSync('./dados/database/grupos/').filter(f => f.endsWith('.json'));
+            totalGroups = groupFiles.length;
+            const now = Date.now();
+            const dayMs = 86400000;
+            const dayAgo = now - dayMs;
+            
+            for (const file of groupFiles) {
+              try {
+                const groupData = JSON.parse(fs.readFileSync(`./dados/database/grupos/${file}`, 'utf-8'));
+                const groupName = file.replace('.json', '');
+                
+                // Contar membros
+                if (groupData.participants) {
+                  totalMembers += groupData.participants.length;
+                }
+                
+                // Contar mensagens do dia
+                let dayMessages = 0;
+                const contador = groupData.contador || [];
+                for (const user of contador) {
+                  if (user.lastActivity) {
+                    const lastAct = new Date(user.lastActivity).getTime();
+                    if (lastAct >= dayAgo) {
+                      dayMessages += (user.msg || 0) + (user.cmd || 0);
+                      activeGroupsToday++;
+                    }
+                  }
+                }
+                totalGroupMessages += dayMessages;
+                
+                if (dayMessages > mostActiveGroup.msgs) {
+                  mostActiveGroup = { name: groupName, msgs: dayMessages };
+                }
+              } catch (e) {}
+            }
+          } catch (e) {}
+          
+          const avgMessagesPerGroup = totalGroups > 0 ? Math.round(totalGroupMessages / totalGroups) : 0;
+
+          // ==================== ESTATÍSTICAS DE USO ====================
+          let msgsToday = 0;
+          let cmdsToday = 0;
+          let figusToday = 0;
+          let audiosToday = 0;
+          let imgsToday = 0;
+          let videosToday = 0;
+          let downloadsToday = 0;
+          
+          try {
+            const downloadsData = loadJsonFile('./dados/database/downloads.json', { today: 0 });
+            downloadsToday = downloadsData.today || 0;
+            
+            // Estatísticas do commandStats
+            const today = new Date().toDateString();
+            const statsToday = commandStats.dailyStats?.[today] || {};
+            msgsToday = statsToday.messages || 0;
+            cmdsToday = statsToday.commands || 0;
+            figusToday = statsToday.stickers || 0;
+            audiosToday = statsToday.audios || 0;
+            imgsToday = statsToday.images || 0;
+            videosToday = statsToday.videos || 0;
+          } catch (e) {}
+
+          // ==================== INFORMAÇÕES DO SISTEMA ====================
+          const os = await import('os');
+          
+          // Memória
+          const totalMem = Math.round(os.totalmem() / 1024 / 1024 / 1024 * 100) / 100;
+          const freeMem = Math.round(os.freemem() / 1024 / 1024 / 1024 * 100) / 100;
+          const usedMem = Math.round((os.totalmem() - os.freemem()) / 1024 / 1024 / 1024 * 100) / 100;
+          const memUsage = Math.round((1 - os.freemem() / os.totalmem()) * 100);
+          
+          // CPU
+          const cpus = os.cpus();
+          let cpuUsage = 0;
+          for (const cpu of cpus) {
+            const total = Object.values(cpu.times).reduce((a, b) => a + b, 0);
+            const idle = cpu.times.idle;
+            cpuUsage += ((total - idle) / total) * 100;
+          }
+          cpuUsage = Math.round(cpuUsage / cpus.length);
+          
+          // Disco
+          let diskFree = 'N/A';
+          let diskUsed = 'N/A';
+          try {
+            const { execSync } = await import('child_process');
+            if (process.platform !== 'win32') {
+              const diskOut = execSync('df -h / | tail -1').toString();
+              const parts = diskOut.split(/\s+/);
+              if (parts.length >= 4) {
+                diskFree = parts[3];
+                diskUsed = parts[2];
+              }
+            }
+          } catch (e) {}
+          
+          // Sistema
+          const platform = os.platform();
+          const arch = os.arch();
+          const nodeVersion = process.version;
+          const pid = process.pid;
+          
+          let osName = platform;
+          if (platform === 'linux') osName = 'Linux';
+          else if (platform === 'darwin') osName = 'macOS';
+          else if (platform === 'win32') osName = 'Windows';
+          
+          // ==================== CONECTIVIDADE ====================
+          let waStatus = 'Conectando...';
+          let latency = 'N/A';
+          let lastReconnect = 'N/A';
+          let reconnectCount = 0;
+          
+          try {
+            const botState = loadJsonFile('./dados/database/botState.json', {});
+            reconnectCount = botState.reconnectCount || 0;
+            if (botState.lastReconnect) {
+              lastReconnect = new Date(botState.lastReconnect).toLocaleString('pt-BR');
+            }
+            if (AbyssSock?.ws) {
+              waStatus = AbyssSock.ws?.readyState === 1 ? '🟢 Online' : '🔴 Offline';
+              if (AbyssSock.ws?.pingInterval) {
+                latency = `${AbyssSock.ws?.pingInterval}ms`;
+              }
+            }
+          } catch (e) {}
+          
+          if (latency === 'N/A') {
+            latency = '~100ms';
+          }
+
+          // ==================== BANCO DE DADOS ====================
+          const dbType = 'JSON Files';
+          let dbRecords = 0;
+          let dbSize = '0 MB';
+          let dbLastSave = 'N/A';
+          let dbStatus = '🟢 Operacional';
+          
+          try {
+            const allGroups = fs.readdirSync('./dados/database/grupos/').filter(f => f.endsWith('.json'));
+            dbRecords = allGroups.length;
+            
+            // Calcular tamanho do banco
+            let totalSize = 0;
+            const dbDir = './dados/database';
+            const files = fs.readdirSync(dbDir);
+            for (const file of files) {
+              try {
+                const stat = fs.statSync(`${dbDir}/${file}`);
+                if (stat.isFile()) {
+                  totalSize += stat.size;
+                } else if (stat.isDirectory()) {
+                  const subfiles = fs.readdirSync(`${dbDir}/${file}`);
+                  for (const subfile of subfiles) {
+                    try {
+                      const substat = fs.statSync(`${dbDir}/${file}/${subfile}`);
+                      totalSize += substat.size;
+                    } catch (e) {}
+                  }
+                }
+              } catch (e) {}
+            }
+            dbSize = totalSize > 1048576 ? `${(totalSize / 1048576).toFixed(2)} MB` : `${Math.round(totalSize / 1024)} KB`;
+            
+            // Último salvamento
+            const botState = loadJsonFile('./dados/database/botState.json', {});
+            if (botState.lastSave) {
+              const lastSaveTime = new Date(botState.lastSave).getTime();
+              const diffMs = Date.now() - lastSaveTime;
+              const diffMin = Math.floor(diffMs / 60000);
+              if (diffMin < 1) dbLastSave = 'agora';
+              else if (diffMin < 60) dbLastSave = `${diffMin} min`;
+              else dbLastSave = `${Math.floor(diffMin / 60)}h ${diffMin % 60}m`;
+            }
+          } catch (e) {
+            dbStatus = '🟡 Verificando...';
+          }
+
+          // ==================== RECURSOS ESPECIAIS ====================
+          let aiQueries = 0;
+          let ocrCount = 0;
+          let musicDownloads = 0;
+          let imagesGenerated = 0;
+          let translations = 0;
+          
+          try {
+            const stats = loadJsonFile('./dados/database/commandStats.json', {});
+            const today = new Date().toDateString();
+            const todayStats = stats.dailyStats?.[today] || {};
+            
+            aiQueries = todayStats.aiQueries || 0;
+            ocrCount = todayStats.ocr || 0;
+            musicDownloads = todayStats.music || 0;
+            imagesGenerated = todayStats.imagesGenerated || 0;
+            translations = todayStats.translations || 0;
+          } catch (e) {}
+
+          // ==================== MONTAR MENSAGEM ====================
+          let painelMsg = `╔════════════════════════════════════════╗
+║     📊 *PAINEL ADMINISTRATIVO DO BOT* 📊
+╚════════════════════════════════════════╝
+
+🤖 *BOT*
+• Nome: ${botName}
+• Versão: ${botVersion}
+• Prefixo: ${botPrefix}
+• Iniciado: ${initDate}
+• Online: ${uptimeStr}
+• Comandos carregados: ${totalCommands}
+
+👥 *USUÁRIOS*
+• Registrados: ${totalUsers}
+• Ativos hoje: ${activeToday}
+• Ativos na semana: ${activeWeek}
+• Banidos: ${bannedUsers}
+${topCommandUsers.length > 0 ? `• Top cmd: ${topCommandUsers[0][1].cmds} execuções` : ''}
+
+🏘️ *GRUPOS*
+• Total: ${totalGroups}
+• Ativos hoje: ${activeGroupsToday}
+• Mais ativo: ${mostActiveGroup.msgs} msgs
+• Membros total: ${totalMembers}
+• Média/grupo: ${avgMessagesPerGroup} msgs
+
+📊 *USO HOJE*
+• Mensagens: ${msgsToday}
+• Comandos: ${cmdsToday}
+• Figurinhas: ${figusToday}
+• Áudios: ${audiosToday}
+• Imagens: ${imgsToday}
+• Vídeos: ${videosToday}
+• Downloads: ${downloadsToday}
+
+💾 *SISTEMA*
+• RAM: ${usedMem}GB / ${totalMem}GB (${memUsage}%)
+• CPU: ${cpuUsage}%
+• Disco livre: ${diskFree}
+• SO: ${osName} (${arch})
+• Node.js: ${nodeVersion}
+• PID: ${pid}
+
+🌐 *CONEXÃO*
+• WhatsApp: ${waStatus}
+• Latência: ${latency}
+• Reconexões: ${reconnectCount}
+${lastReconnect !== 'N/A' ? `• Última reconexão: ${lastReconnect}` : ''}
+
+🗄️ *BANCO DE DADOS*
+• Tipo: ${dbType}
+• Registros: ${dbRecords}
+• Tamanho: ${dbSize}
+• Último save: há ${dbLastSave}
+• Status: ${dbStatus}
+
+🔥 *RECURSOS HOJE*
+• IA: ${aiQueries} consultas
+• OCR: ${ocrCount}
+• Músicas: ${musicDownloads}
+• Imagens geradas: ${imagesGenerated}
+• Traduções: ${translations}
+
+╚════════════════════════════════════════╝
+  💎 *Dashboard atualizado em tempo real* 💎`;
+
+          await reply(painelMsg);
+
+        } catch (e) {
+          console.error('Erro no comando painel:', e);
+          reply(`❌ Erro ao gerar painel: ${e.message}`);
+        }
+        break;
+      }
+
       case 'ping':
         try {
           const timestamp = Date.now();
