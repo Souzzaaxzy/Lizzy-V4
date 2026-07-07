@@ -1317,8 +1317,10 @@ async function createBotSocket(authDir) {
 
             // Handler para detectar mensagens apagadas
             AbyssSock.ev.on('messages.delete', async (keys) => {
+                console.log('[DEBUG DELETE] Evento messages.delete recebido:', JSON.stringify(keys));
                 try {
                     for (const key of keys) {
+                        console.log('[DEBUG DELETE] Processando key:', JSON.stringify(key));
                         const groupId = key.remoteJid;
                         const senderId = key.participant || key.remoteJid;
                         
