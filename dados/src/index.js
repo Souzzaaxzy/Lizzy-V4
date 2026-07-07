@@ -139,7 +139,6 @@ import { fileURLToPath } from 'url';
 import RentalExpirationManager from './utils/rentalExpirationManager.js';
 import * as blockPv from './utils/blockPv.js';
 import * as blockGroupMenu from './utils/blockGroupMenu.js';
-import userContextDB from './utils/userContextDB.js';
 
 blockPv.loadBlockPvData();
 blockGroupMenu.loadBlockGroupData();
@@ -3161,14 +3160,6 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       } catch (error) {
         console.error("Erro no sistema de contagem de mensagens:", error);
       }
-    }
-    
-    // Registrar interação no userContextDB (histórico real)
-    try {
-      const tipoMsg = isCmd ? 'comandos' : 'afirmacoes';
-      userContextDB.registerInteraction(sender, body || '', tipoMsg);
-    } catch (error) {
-      // Silencioso - não afetar o fluxo principal
     }
 
     if (isGroup && groupData.levelingEnabled) {
@@ -16812,6 +16803,8 @@ O texto será extraído *exatamente* como está na imagem, sem resumir ou traduz
       case 'historico':
       case 'history':
         try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+
           let targetUser = sender;
           if (menc_os2 && menc_os2 !== sender) {
             targetUser = menc_os2;
@@ -16819,16 +16812,31 @@ O texto será extraído *exatamente* como está na imagem, sem resumir ou traduz
 
           const targetId = getUserName(targetUser);
 
-          // Dados REAIS do userContextDB
-          const userContext = userContextDB.getUserContext(targetUser);
-          const totalMessages = userContext.historico_conversa.total_mensagens || 0;
-          const primeiraConversa = userContext.historico_conversa.primeira_conversa ? new Date(userContext.historico_conversa.primeira_conversa) : null;
-          const ultimaConversa = userContext.historico_conversa.ultima_conversa ? new Date(userContext.historico_conversa.ultima_conversa) : null;
-          const frequencia = userContext.historico_conversa.frequencia_interacao || 'baixa';
-          
-          // Dados de comandos do usuário
-          const tipoMsgs = userContext.padroes_comportamento?.tipo_mensagens || {};
-          const totalCommands = tipoMsgs.comandos || 0;
+          // Dados REAIS do contador do grupo (mesmo do !checkativo e !rankativos)
+          const userContador = (groupData.contador || []).find(u => u.id === targetUser);
+          const totalMessages = userContador?.msg || 0;
+          const totalCommands = userContador?.cmd || 0;
+          const totalFigus = userContador?.figu || 0;
+          const firstSeen = userContador?.firstSeen ? new Date(userContador.firstSeen) : null;
+          const lastActivity = userContador?.lastActivity ? new Date(userContador.lastActivity) : null;
+
+          // Msgs apagadas
+          let msgsApagadas = 0;
+          if (groupData.trashMessages) {
+            msgsApagadas = groupData.trashMessages.filter(m => m.sender === targetUser).length;
+          }
+
+          // Calcular frequência baseada na atividade
+          let frequencia = '⚪';
+          if (lastActivity) {
+            const now = Date.now();
+            const diffHours = (now - lastActivity.getTime()) / (1000 * 60 * 60);
+            if (diffHours < 1) frequencia = '🔴';
+            else if (diffHours < 6) frequencia = '🟠';
+            else if (diffHours < 24) frequencia = '🟡';
+            else if (diffHours < 72) frequencia = '🟢';
+            else frequencia = '⚪';
+          }
 
           // Dados de leveling
           const levelingData = loadLevelingSafe();
@@ -16877,26 +16885,11 @@ O texto será extraído *exatamente* como está na imagem, sem resumir ou traduz
             cargoEmoji = '⚡';
           }
 
-          // Msgs apagadas
-          let msgsApagadas = 0;
-          if (groupData.trashMessages) {
-            msgsApagadas = groupData.trashMessages.filter(m => m.sender === targetUser).length;
-          }
-
           // Data de entrada
           let dataEntrada = '-';
-          if (primeiraConversa) {
-            dataEntrada = primeiraConversa.toLocaleDateString('pt-BR');
+          if (firstSeen) {
+            dataEntrada = firstSeen.toLocaleDateString('pt-BR');
           }
-
-          // Frequência
-          const freqEmoji = {
-            'muito_baixa': '⚪',
-            'baixa': '🟢',
-            'media': '🟡',
-            'alta': '🟠',
-            'muito_alta': '🔴'
-          };
 
           // Barra XP
           const filledBars = Math.floor(xpProgress / 10);
@@ -16908,9 +16901,10 @@ O texto será extraído *exatamente* como está na imagem, sem resumir ou traduz
 │ 📊 *ATIVIDADE*
 │ 💬 Msgs: \`${totalMessages}\`
 │ ⚒️ Cmds: \`${totalCommands}\`
+│ 🖼️ Figus: \`${totalFigus}\`
 │ 🗑️ Apagadas: \`${msgsApagadas}\`
 │ 📅 Entrada: \`${dataEntrada}\`
-│ 🔥 Frequência: ${freqEmoji[frequencia] || '⚪'}
+│ 🔥 Frequência: ${frequencia}
 │
 │ ⭐ *LEVELING*
 │ ⭐ Level: \`${userLevel}\` | XP: \`${userXp}/${xpForNext}\`
