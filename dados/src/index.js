@@ -137,7 +137,9 @@ import crypto from 'crypto';
 import cron from 'node-cron';import { fileURLToPath } from 'url';
 import RentalExpirationManager from './utils/rentalExpirationManager.js';
     blockPv.loadBlockPvData();
+    blockGroupMenu.loadBlockGroupData();
 import * as blockPv from './utils/blockPv.js';
+import * as blockGroupMenu from './utils/blockGroupMenu.js';
 import { PerformanceOptimizer, getPerformanceOptimizer } from './utils/performanceOptimizer.js';
 import { recalcEquipmentBonuses } from './utils/equipment.js';
 import UpdateCommand from './utils/updateCommand.js';
@@ -22118,7 +22120,84 @@ break;
           await reply("❌ Ocorreu um erro ao carregar o menu de ferramentas");
         }
         break;
-      case 'menuadm':
+            case 'blockmenugp': {
+        try {
+          if (!isGroup) return reply("⚠️ Este comando só funciona em grupos!");
+          if (!isGroupAdmin) return reply("🚫 Apenas administradores podem bloquear menus!");
+          
+          if (!q) {
+            let menusList = "📋 *Menus disponíveis para bloquear:*\n\n";
+            for (const [key, data] of Object.entries(blockGroupMenu.menuCommandsMap)) {
+              menusList += "• " + data.menuName + "\n";
+            }
+            return reply(menusList + "\n📝 Use: !blockmenugp <nomemenu>");
+          }
+          
+          const menuKey = q.toLowerCase().replace(/ /g, '');
+          
+          if (!blockGroupMenu.menuExists(menuKey)) {
+            return reply("❌ Menu inexistente. Use !blockmenugp para ver a lista.");
+          }
+          
+          if (blockGroupMenu.blockMenuInGroup(from, menuKey)) {
+            const menuName = blockGroupMenu.menuCommandsMap[menuKey]?.menuName || menuKey;
+            return reply("✅ Menu \"" + menuName + "\" bloqueado neste grupo!\n\nOs comandos deste menu não funcionam mais aqui.");
+          } else {
+            return reply("⚠️ Este menu já está bloqueado neste grupo.");
+          }
+        } catch (e) {
+          console.error('Erro em blockmenugp:', e);
+          reply("❌ Erro ao bloquear menu.");
+        }
+        break;
+      }
+
+      case 'unblockmenugp': {
+        try {
+          if (!isGroup) return reply("⚠️ Este comando só funciona em grupos!");
+          if (!isGroupAdmin) return reply("🚫 Apenas administradores podem desbloquear menus!");
+          
+          if (!q) {
+            const blockList = blockGroupMenu.listGroupBlockedMenus(from);
+            if (blockList.length === 0) {
+              return reply("📋 Nenhum menu bloqueado neste grupo.\n\nUse !blockmenugp <menu> para bloquear.");
+            }
+            return reply("📋 *Menus bloqueados neste grupo:*\n\n" + blockList.join("\n") + "\n\nUse !unblockmenugp <menu> para desbloquear.");
+          }
+          
+          const menuKey = q.toLowerCase().replace(/ /g, '');
+          
+          if (blockGroupMenu.unblockMenuInGroup(from, menuKey)) {
+            return reply("✅ Menu desbloqueado neste grupo!\n\nOs comandos deste menu voltam a funcionar.");
+          } else {
+            return reply("⚠️ Este menu não estava bloqueado neste grupo.");
+          }
+        } catch (e) {
+          console.error('Erro em unblockmenugp:', e);
+          reply("❌ Erro ao desbloquear menu.");
+        }
+        break;
+      }
+
+      case 'listblockmenugp': {
+        try {
+          if (!isGroup) return reply("⚠️ Este comando só funciona em grupos!");
+          
+          const blockList = blockGroupMenu.listGroupBlockedMenus(from);
+          
+          if (blockList.length === 0) {
+            return reply("📋 Nenhum menu está bloqueado neste grupo.");
+          }
+          
+          await reply("📋 *Menus bloqueados neste grupo:*\n\n" + blockList.join("\n"));
+        } catch (e) {
+          console.error('Erro em listblockmenugp:', e);
+          reply("❌ Erro ao listar bloqueios.");
+        }
+        break;
+      }
+
+case 'menuadm':
       case 'menuadmin':
       case 'menuadmins':
       case 'admmenu':

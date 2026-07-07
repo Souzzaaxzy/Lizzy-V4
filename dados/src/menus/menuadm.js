@@ -59,6 +59,19 @@ ${menuTopBorder}
 ${middleBorder}
 ${middleBorder} ${menuItemIcon}${prefix}blockuser
 ${middleBorder} ${menuItemIcon}${prefix}unblockuser
+${middleBorder} ${menuItemIcon}${prefix}listblockuser
+${middleBorder} ${menuItemIcon}${prefix}blockcmdgp
+${middleBorder} ${menuItemIcon}${prefix}unblockcmdgp
+${middleBorder} ${menuItemIcon}${prefix}blockmenugp
+${middleBorder} ${menuItemIcon}${prefix}unblockmenugp
+${middleBorder} ${menuItemIcon}${prefix}listblockmenugp
+${middleBorder}
+${middleBorder} 📝 Bloqueia menus inteiros no grupo
+${bottomBorder}
+
+${menuTopBorder}
+│ 🛡️ CONTROLE DE ACESSO (antigo)
+${middleBorder}
 ${middleBorder} ${menuItemIcon}${prefix}listblocksgp
 ${middleBorder} ${menuItemIcon}${prefix}addblacklist
 ${middleBorder} ${menuItemIcon}${prefix}delblacklist
