@@ -16788,9 +16788,9 @@ O texto será extraído *exatamente* como está na imagem, sem resumir ou traduz
           // Carregar dados
           const levelingData = loadLevelingSafe();
           const econ = loadEconomy();
-          const cmdStats = JSON.parse(fsSync.readFileSync(pathz.join(process.cwd(), 'dados', 'database', 'commandStats.json'), 'utf-8'));
+          const cmdStats = JSON.parse(fs.readFileSync(pathz.join(process.cwd(), 'dados', 'database', 'commandStats.json'), 'utf-8'));
           const userCtxPath = pathz.join(process.cwd(), 'dados', 'database', 'userContext.json');
-          const userCtx = JSON.parse(fsSync.readFileSync(userCtxPath, 'utf-8'));
+          const userCtx = JSON.parse(fs.readFileSync(userCtxPath, 'utf-8'));
           
           // Dados de level
           const levelUser = levelingData.users?.[targetUser] || {};
@@ -25911,9 +25911,9 @@ ${prefix}togglecmdvip premium_ia off`);
           // Carregar dados
           const levelingData = loadLevelingSafe();
           const econ = loadEconomy();
-          const cmdStats = JSON.parse(fsSync.readFileSync(pathz.join(process.cwd(), 'dados', 'database', 'commandStats.json'), 'utf-8'));
+          const cmdStats = JSON.parse(fs.readFileSync(pathz.join(process.cwd(), 'dados', 'database', 'commandStats.json'), 'utf-8'));
           const userCtxPath = pathz.join(process.cwd(), 'dados', 'database', 'userContext.json');
-          const userCtx = JSON.parse(fsSync.readFileSync(userCtxPath, 'utf-8'));
+          const userCtx = JSON.parse(fs.readFileSync(userCtxPath, 'utf-8'));
           
           // Dados de level
           const levelUser = levelingData.users?.[targetUser] || {};
