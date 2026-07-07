@@ -16784,6 +16784,8 @@ O texto será extraído *exatamente* como está na imagem, sem resumir ou traduz
           
           const targetId = getUserName(targetUser);
           // Ler commandStats com tratamento de erro
+          const levelingData = loadLevelingSafe();
+          const econ = loadEconomy();
           let cmdStats = { commands: {} };
           try {
             const cmdStatsPath = pathz.join(process.cwd(), 'dados', 'database', 'commandStats.json');
