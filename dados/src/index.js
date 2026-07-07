@@ -136,6 +136,8 @@ import https from 'https';
 import crypto from 'crypto';
 import cron from 'node-cron';import { fileURLToPath } from 'url';
 import RentalExpirationManager from './utils/rentalExpirationManager.js';
+    blockPv.loadBlockPvData();
+import * as blockPv from './utils/blockPv.js';
 import { PerformanceOptimizer, getPerformanceOptimizer } from './utils/performanceOptimizer.js';
 import { recalcEquipmentBonuses } from './utils/equipment.js';
 import UpdateCommand from './utils/updateCommand.js';
@@ -5951,6 +5953,19 @@ if (isCmd && command && !isOwnerOrSub) {
   }
 }
 
+
+    // Verificar bloqueio de PV
+    if (!isGroup) {
+      const blockCheck = blockPv.isCommandBlockedInPV(command);
+      if (blockCheck.blocked) {
+        if (blockCheck.reason === 'menu') {
+          await reply("❌ Este menu está desativado para conversas privadas.\n\nUse este comando em um grupo.");
+        } else {
+          await reply("❌ Este comando está indisponível em conversas privadas.\n\nUse-o em um grupo.");
+        }
+        return;
+      }
+    }
 
     switch (command) {
 
@@ -21789,6 +21804,144 @@ break;
           reply('❌ Erro ao processar o comando. Tente novamente.');
         }
         break;
+      case 'blockmenupv': {
+        try {
+          if (!isOwnerOrSub) return reply("🚫 Este comando é exclusivo para o dono do bot!");
+          
+          if (!q) {
+            let menusList = "📋 Menus disponíveis:\n";
+            for (const [key, data] of Object.entries(blockPv.menuCommandsMap)) {
+              menusList += "• " + data.menuName + "\n";
+            }
+            return reply(menusList);
+          }
+          
+          const menuKey = q.toLowerCase().replace(/ /g, '');
+          
+          if (!blockPv.menuExists(menuKey)) {
+            return reply("❌ Menu inexistente. Use !blockmenupv para ver a lista.");
+          }
+          
+          if (blockPv.blockMenuInPV(menuKey)) {
+            const menuName = blockPv.menuCommandsMap[menuKey]?.menuName || menuKey;
+            return reply("✅ Menu \"" + menuName + "\" bloqueado no PV!");
+          } else {
+            return reply("⚠️ Este menu já está bloqueado no PV.");
+          }
+        } catch (e) {
+          console.error('Erro em blockmenupv:', e);
+          reply("❌ Erro ao bloquear menu.");
+        }
+        break;
+      }
+
+      case 'unblockmenupv': {
+        try {
+          if (!isOwnerOrSub) return reply("🚫 Este comando é exclusivo para o dono do bot!");
+          
+          if (!q) {
+            const blockList = blockPv.listBlockPV();
+            if (blockList.menus.length === 0) {
+              return reply("📋 Nenhum menu bloqueado no PV.");
+            }
+            return reply("📋 Menus bloqueados:\n" + blockList.menus.join("\n"));
+          }
+          
+          const menuKey = q.toLowerCase().replace(/ /g, '');
+          
+          if (blockPv.unblockMenuInPV(menuKey)) {
+            return reply("✅ Menu desbloqueado no PV!");
+          } else {
+            return reply("⚠️ Este menu não estava bloqueado.");
+          }
+        } catch (e) {
+          console.error('Erro em unblockmenupv:', e);
+          reply("❌ Erro ao desbloquear menu.");
+        }
+        break;
+      }
+
+      case 'blockcmdpv': {
+        try {
+          if (!isOwnerOrSub) return reply("🚫 Este comando é exclusivo para o dono do bot!");
+          
+          if (!q) {
+            return reply("📋 Use: !blockcmdpv <comando>\nExemplo: !blockcmdpv play");
+          }
+          
+          const cmdName = q.toLowerCase().replace(/ /g, '');
+          
+          if (!blockPv.commandExists(cmdName)) {
+            return reply("❌ Comando inexistente.");
+          }
+          
+          if (blockPv.blockCommandInPV(cmdName)) {
+            return reply("✅ Comando \"" + cmdName + "\" bloqueado no PV!");
+          } else {
+            return reply("⚠️ Este comando já está bloqueado no PV.");
+          }
+        } catch (e) {
+          console.error('Erro em blockcmdpv:', e);
+          reply("❌ Erro ao bloquear comando.");
+        }
+        break;
+      }
+
+      case 'unblockcmdpv': {
+        try {
+          if (!isOwnerOrSub) return reply("🚫 Este comando é exclusivo para o dono do bot!");
+          
+          if (!q) {
+            const blockList = blockPv.listBlockPV();
+            if (blockList.commands.length === 0) {
+              return reply("📋 Nenhum comando bloqueado no PV.");
+            }
+            return reply("📋 Comandos bloqueados:\n" + blockList.commands.join("\n"));
+          }
+          
+          const cmdName = q.toLowerCase().replace(/ /g, '');
+          
+          if (blockPv.unblockCommandInPV(cmdName)) {
+            return reply("✅ Comando \"" + cmdName + "\" desbloqueado no PV!");
+          } else {
+            return reply("⚠️ Este comando não estava bloqueado.");
+          }
+        } catch (e) {
+          console.error('Erro em unblockcmdpv:', e);
+          reply("❌ Erro ao desbloquear comando.");
+        }
+        break;
+      }
+
+      case 'listblockpv':
+      case 'listblock': {
+        try {
+          if (!isOwnerOrSub) return reply("🚫 Este comando é exclusivo para o dono do bot!");
+          
+          const blockList = blockPv.listBlockPV();
+          
+          if (blockList.menus.length === 0 && blockList.commands.length === 0) {
+            return reply("📋 Nenhum menu ou comando está bloqueado no PV.");
+          }
+          
+          let msg = "📋 Bloqueios no Privado\n\n";
+          
+          if (blockList.menus.length > 0) {
+            msg += "📂 Menus bloqueados:\n" + blockList.menus.join("\n") + "\n\n";
+          }
+          
+          if (blockList.commands.length > 0) {
+            msg += "⌨️ Comandos bloqueados:\n" + blockList.commands.join("\n");
+          }
+          
+          await reply(msg);
+        } catch (e) {
+          console.error('Erro em listblockpv:', e);
+          reply("❌ Erro ao listar bloqueios.");
+        }
+        break;
+      }
+
       case 'menu':
       case 'help':
       case 'comandos':
