@@ -16774,52 +16774,25 @@ O texto será extraído *exatamente* como está na imagem, sem resumir ou traduz
       case 'historico':
       case 'history':
         try {
-          // Determinar usuário alvo
           let targetUser = sender;
-          
-          // Se mencionou alguém, usar o mencionado
           if (menc_os2 && menc_os2 !== sender) {
             targetUser = menc_os2;
           }
-          
+
           const targetId = getUserName(targetUser);
           const targetName = `@${targetId}`;
-          // Ler commandStats com tratamento de erro
+
           const levelingData = loadLevelingSafe();
-          const econ = loadEconomy();
-          let cmdStats = { commands: {} };
-          try {
-            const cmdStatsPath = pathz.join(process.cwd(), 'dados', 'database', 'commandStats.json');
-            const cmdStatsContent = fs.readFileSync(cmdStatsPath, 'utf-8') || '';
-            if (cmdStatsContent && cmdStatsContent.trim() && cmdStatsContent.trim().startsWith('{')) {
-              cmdStats = JSON.parse(cmdStatsContent);
-            }
-          } catch (e) {
-            console.warn('Erro ao ler commandStats:', e.message);
-          }
-          
-          // Ler userContext com tratamento de erro
-          let userCtx = {};
-          try {
-            const userCtxPath = pathz.join(process.cwd(), 'dados', 'database', 'userContext.json');
-            const userCtxContent = fs.readFileSync(userCtxPath, 'utf-8') || '';
-            if (userCtxContent && userCtxContent.trim() && userCtxContent.trim().startsWith('{')) {
-              userCtx = JSON.parse(userCtxContent);
-            }
-          } catch (e) {
-            console.warn('Erro ao ler userContext:', e.message);
-          }
-          
-          // Dados de level
-          const levelUser = levelingData.users?.[targetUser] || {};
+          const levelUser = getLevelingUser(levelingData, targetUser);
           const userLevel = levelUser.level || 0;
           const userXp = levelUser.xp || 0;
-          
-          // XP necessário para próximo level
+          const totalMessages = levelUser.messages || 0;
+          const totalCommands = levelUser.commands || 0;
+          const lastMessageTime = levelUser.lastMessage ? new Date(levelUser.lastMessage) : null;
+
           const xpForNext = userLevel * 500 + 500;
           const xpProgress = userXp > 0 ? Math.min(100, Math.floor((userXp / xpForNext) * 100)) : 0;
-          
-          // Patente
+
           const patents = levelingData.patents || [];
           let patent = 'Iniciante';
           for (let i = patents.length - 1; i >= 0; i--) {
@@ -16828,51 +16801,27 @@ O texto será extraído *exatamente* como está na imagem, sem resumir ou traduz
               break;
             }
           }
-          
-          // Dados de economia
-          const econUser = econ.users?.[targetUser] || {};
-          const balance = econUser.balance || 0;
+
+          const econ = loadEconomy();
+          const econUser = getEcoUser(econ, targetUser);
+          const balance = econUser.wallet || 0;
           const bank = econUser.bank || 0;
           const totalCoins = balance + bank;
-          
-          // Warns
+
           const userWarns = groupData.warnings?.[targetUser]?.count || 0;
-          
-          // Contar comandos do usuário
-          let totalCommands = 0;
-          if (cmdStats.commands) {
-            for (const cmd in cmdStats.commands) {
-              if (cmdStats.commands[cmd].users?.[targetUser]) {
-                totalCommands += cmdStats.commands[cmd].users[targetUser];
-              }
-            }
-          }
-          
-          // User context (se existir)
-          const ctxKeys = Object.keys(userCtx).filter(k => k.startsWith(targetUser.split('@')[0] + '@'));
-          let ctxData = null;
-          if (ctxKeys.length > 0) {
-            ctxData = userCtx[ctxKeys[0]];
-          }
-          
-          // Primeira mensagem
-          const primeiraMsg = ctxData?.historico_conversa?.primeira_conversa || null;
-          const ultimaMsg = ctxData?.historico_conversa?.ultima_conversa || null;
-          
-          // Cargo no grupo
-          let cargo = '👤 Membro';
+
+          let cargo = 'Membro';
           if (isOwnerOrSub && targetUser === sender) {
-            cargo = '👑 Dono';
+            cargo = 'Dono';
           } else if (idInArray(targetUser, groupAdmins)) {
-            cargo = '🛡️ Admin';
+            cargo = 'Admin';
           } else if (groupData.alphas?.includes(targetUser)) {
-            cargo = '🐺 Alpha';
+            cargo = 'Alpha';
           } else if (groupData.moderators?.includes(targetUser)) {
-            cargo = '⚡ Moderador';
+            cargo = 'Moderador';
           }
-          
-          // Data de entrada no grupo
-          let dataEntrada = 'Não registrado';
+
+          let dataEntrada = 'Nao registrado';
           try {
             const groupInfo = await nazu.groupMetadata(from);
             const member = groupInfo.participants.find(p => p.id === targetUser);
@@ -16880,81 +16829,53 @@ O texto será extraído *exatamente* como está na imagem, sem resumir ou traduz
               const joinDate = new Date(member.joinedAt * 1000);
               dataEntrada = joinDate.toLocaleDateString('pt-BR');
             }
-          } catch (e) {
-            // Não disponível
-          }
-          
-          // Tempo no grupo
-          let tempoNoGrupo = 'Não registrado';
-          if (primeiraMsg) {
-            const firstDate = new Date(primeiraMsg);
-            const now = new Date();
-            const diffDays = Math.floor((now - firstDate) / (1000 * 60 * 60 * 24));
-            if (diffDays > 0) {
-              tempoNoGrupo = `${diffDays} dia(s)`;
-            }
-          }
-          
-          // Contar mensagens da lixeira
+          } catch (e) { }
+
           let msgsApagadas = 0;
           if (groupData.trashMessages) {
             msgsApagadas = groupData.trashMessages.filter(m => m.sender === targetUser).length;
           }
-          
-          // Formatar datas
-          const formatDate = (dateStr) => {
-            if (!dateStr) return 'Não registrado';
-            try {
-              const date = new Date(dateStr);
-              return date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-            } catch {
-              return 'Não registrado';
-            }
-          };
-          
-          // Montar mensagem
-          let msg = `╔═〔 📊 HISTÓRICO 〕═╗
 
-👤 *${targetName}*
+          const formatDate = (date) => {
+            if (!date) return 'Nao registrado';
+            try {
+              return date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            } catch { return 'Nao registrado'; }
+          };
+
+          let msg = `*=*=*= HISTORICO =*=*=
+
+@${targetId}
 ${cargo}
 
-┌─📋 INFORMAÇÕES
-│ 📅 Entrada: ${dataEntrada}
-│ ⏱️ Tempo: ${tempoNoGrupo}
-│ 🏅 Patente: ${patent}
-└──────────────┘
+*INFO*
+Entrada: ${dataEntrada}
+Patente: ${patent}
 
-┌─💬 ATIVIDADE
-│ 💬 Mensagens: ${ctxData?.historico_conversa?.total_mensagens || 0}
-│ ⌨️ Comandos: ${totalCommands}
-│ 🗑️ Apagadas: ${msgsApagadas}
-│ 🕐 Última: ${formatDate(ultimaMsg)}
-│ 📝 Primeiro cmd: ${formatDate(primeiraMsg)}
-└──────────────┘
+*ATIVIDADE*
+Mensagens: ${totalMessages}
+Comandos: ${totalCommands}
+Apagadas: ${msgsApagadas}
+Ultima: ${formatDate(lastMessageTime)}
 
-┌─⭐ NÍVEL
-│ ⭐ Level: ${userLevel}
-│ 📈 XP: ${userXp}/${xpForNext}
-│ ${'▰'.repeat(Math.floor(xpProgress/10))}${'▱'.repeat(10 - Math.floor(xpProgress/10))} ${xpProgress}%
-└──────────────┘
+*NIVEL*
+Level: ${userLevel}
+XP: ${userXp}/${xpForNext}
+Progresso: ${xpProgress}%
 
-┌─💰 MOEDAS
-│ 💰 Carteira: ${balance.toLocaleString()}
-│ 🏦 Banco: ${bank.toLocaleString()}
-│ 💎 Total: ${totalCoins.toLocaleString()}
-└──────────────┘
+*MOEDAS*
+Carteira: ${balance.toLocaleString()}
+Banco: ${bank.toLocaleString()}
+Total: ${totalCoins.toLocaleString()}
 
-┌─⚠️ STATUS
-│ ⚠️ Warns: ${userWarns}/5
-└──────────────┘
+*STATUS*
+Warns: ${userWarns}/5`;
 
-╚══════════════╝`;
-          
-          await reply(msg);
-          
+          await reply(msg, { mentions: [targetUser] });
+
         } catch (e) {
           console.error('Erro no comando historico:', e);
-          reply(`❌ Erro ao buscar histórico: ${e.message}`);
+          reply(`Erro ao buscar historico: ${e.message}`);
         }
         break;
       case 'tradutor':
