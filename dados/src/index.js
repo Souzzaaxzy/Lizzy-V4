@@ -3130,6 +3130,11 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
         const userIndex = groupData.contador.findIndex(user => user.id === sender);
         if (userIndex !== -1) {
           const userData = groupData.contador[userIndex];
+          
+          // Inicializar campos novos se não existirem (migração)
+          if (userData.audios === undefined) userData.audios = 0;
+          if (userData.midias === undefined) userData.midias = 0;
+          
           if (isCmd) {
             userData.cmd = (userData.cmd || 0) + 1;
           } else if (type === "stickerMessage") {
