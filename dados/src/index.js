@@ -16780,7 +16780,6 @@ O texto será extraído *exatamente* como está na imagem, sem resumir ou traduz
           }
 
           const targetId = getUserName(targetUser);
-          const targetName = `@${targetId}`;
 
           // Dados do contador do grupo (igual ao !checkativo)
           const userContador = (groupData.contador || []).find(u => u.id === targetUser);
@@ -16816,17 +16815,19 @@ O texto será extraído *exatamente* como está na imagem, sem resumir ou traduz
 
           const userWarns = groupData.warnings?.[targetUser]?.count || 0;
 
-          let cargo = 'Membro';
+          // Cargo no grupo
+          let cargo = '👤 Membro';
           if (isOwnerOrSub && targetUser === sender) {
-            cargo = 'Dono';
+            cargo = '👑 Dono';
           } else if (idInArray(targetUser, groupAdmins)) {
-            cargo = 'Admin';
+            cargo = '🛡️ Admin';
           } else if (groupData.alphas?.includes(targetUser)) {
-            cargo = 'Alpha';
+            cargo = '🐺 Alpha';
           } else if (groupData.moderators?.includes(targetUser)) {
-            cargo = 'Moderador';
+            cargo = '⚡ Moderador';
           }
 
+          // Data de entrada
           let dataEntrada = 'Nao registrado';
           try {
             const groupInfo = await nazu.groupMetadata(from);
@@ -16837,11 +16838,13 @@ O texto será extraído *exatamente* como está na imagem, sem resumir ou traduz
             }
           } catch (e) { }
 
+          // Msgs apagadas
           let msgsApagadas = 0;
           if (groupData.trashMessages) {
             msgsApagadas = groupData.trashMessages.filter(m => m.sender === targetUser).length;
           }
 
+          // Formatar data
           const formatDate = (date) => {
             if (!date) return 'Nao registrado';
             try {
@@ -16849,34 +16852,53 @@ O texto será extraído *exatamente* como está na imagem, sem resumir ou traduz
             } catch { return 'Nao registrado'; }
           };
 
-          let msg = `*=*=*= HISTORICO =*=*=
+          // Barra de progresso XP
+          const filledBars = Math.floor(xpProgress / 10);
+          const emptyBars = 10 - filledBars;
+          const xpBar = '▰'.repeat(filledBars) + '▱'.repeat(emptyBars);
 
-@${targetId}
-${cargo}
-
-*INFO*
-Entrada: ${dataEntrada}
-Patente: ${patent}
-
-*ATIVIDADE*
-Mensagens: ${totalMessages}
-Comandos: ${totalCommands}
-Figurinhas: ${totalStickers}
-Apagadas: ${msgsApagadas}
-Ultima msg: ${formatDate(lastActivity)}
-
-*NIVEL*
-Level: ${userLevel}
-XP: ${userXp}/${xpForNext}
-Progresso: ${xpProgress}%
-
-*MOEDAS*
-Carteira: ${balance.toLocaleString()}
-Banco: ${bank.toLocaleString()}
-Total: ${totalCoins.toLocaleString()}
-
-*STATUS*
-Warns: ${userWarns}/5`;
+          let msg = `╔══════════════════════╗
+║   📊 HISTORICO 📊    ║
+╠══════════════════════╣
+║                      ║
+║  👤 @${targetId}     ║
+║  ${cargo}              ║
+║                      ║
+╠══════════════════════╣
+║  📋 INFORMACOES       ║
+╠══════════════════════╣
+║  📅 Entrada: ${dataEntrada.padEnd(12)}║
+║  🏅 Patente: ${patent.padEnd(12)}║
+║                      ║
+╠══════════════════════╣
+║  💬 ATIVIDADE        ║
+╠══════════════════════╣
+║  💬 Msgs: ${str(totalMessages).padEnd(14)}║
+║  ⚒️ Cmds: ${str(totalCommands).padEnd(14)}║
+║  🎨 Figus: ${str(totalStickers).padEnd(14)}║
+║  🗑️ Apagadas: ${str(msgsApagadas).padEnd(10)}║
+║  🕐 Ultima: ${formatDate(lastActivity).substring(0, 16).padEnd(16)}║
+║                      ║
+╠══════════════════════╣
+║  ⭐ NIVEL             ║
+╠══════════════════════╣
+║  ⭐ Level: ${str(userLevel).padEnd(15)}║
+║  📈 XP: ${(userXp + '/' + xpForNext).padEnd(17)}║
+║  ${xpBar} ${String(xpProgress).padStart(3)}%  ║
+║                      ║
+╠══════════════════════╣
+║  💰 MOEDAS           ║
+╠══════════════════════╣
+║  💰 Carteira: ${String(balance.toLocaleString()).padEnd(11)}║
+║  🏦 Banco: ${String(bank.toLocaleString()).padEnd(14)}║
+║  💎 Total: ${String(totalCoins.toLocaleString()).padEnd(15)}║
+║                      ║
+╠══════════════════════╣
+║  ⚠️ STATUS           ║
+╠══════════════════════╣
+║  ⚠️ Warns: ${userWarns}/5             ║
+║                      ║
+╚══════════════════════╝`;
 
           await reply(msg, { mentions: [targetUser] });
 
