@@ -16783,11 +16783,6 @@ O texto será extraído *exatamente* como está na imagem, sem resumir ou traduz
           }
           
           const targetId = getUserName(targetUser);
-          const targetName = `@${targetId}`;
-          
-          // Carregar dados
-          const levelingData = loadLevelingSafe();
-          const econ = loadEconomy();
           // Ler commandStats com tratamento de erro
           let cmdStats = { commands: {} };
           try {
@@ -25926,186 +25921,60 @@ ${prefix}togglecmdvip premium_ia off`);
         break;
       case 'me':
         try {
-          const targetUser = sender;
-          const levelingData = loadLevelingSafe();
-          const econ = loadEconomy();
-          
-          // Ler commandStats com tratamento de erro
-          let cmdStats = { commands: {} };
-          try {
-            const cmdStatsPath = pathz.join(process.cwd(), 'dados', 'database', 'commandStats.json');
-            const cmdStatsContent = fs.readFileSync(cmdStatsPath, 'utf-8') || '';
-            if (cmdStatsContent && cmdStatsContent.trim() && cmdStatsContent.trim().startsWith('{')) {
-              cmdStats = JSON.parse(cmdStatsContent);
-            }
-          } catch (e) {
-            console.warn('Erro ao ler commandStats:', e.message);
-          }
-          
-          // Ler userContext com tratamento de erro
-          let userCtx = {};
-          try {
-            const userCtxPath = pathz.join(process.cwd(), 'dados', 'database', 'userContext.json');
-            const userCtxContent = fs.readFileSync(userCtxPath, 'utf-8') || '';
-            if (userCtxContent && userCtxContent.trim() && userCtxContent.trim().startsWith('{')) {
-              userCtx = JSON.parse(userCtxContent);
-            }
-          } catch (e) {
-            console.warn('Erro ao ler userContext:', e.message);
-          }
-          
-          // Dados de level
-          const levelUser = levelingData.users?.[targetUser] || {};
-          const userLevel = levelUser.level || 0;
-          const userXp = levelUser.xp || 0;
-          
-          // XP necessário para próximo level
-          const xpForNext = userLevel * 500 + 500;
-          const xpProgress = userXp > 0 ? Math.min(100, Math.floor((userXp / xpForNext) * 100)) : 0;
-          
-          // Patente
-          const patents = levelingData.patents || [];
-          let patent = 'Iniciante';
-          for (let i = patents.length - 1; i >= 0; i--) {
-            if (userLevel >= patents[i].minLevel) {
-              patent = patents[i].name;
-              break;
-            }
-          }
-          
-          // Dados de economia
-          const econUser = econ.users?.[targetUser] || {};
-          const balance = econUser.balance || 0;
-          const bank = econUser.bank || 0;
-          const totalCoins = balance + bank;
-          
-          // Warns
-          const userWarns = groupData.warnings?.[targetUser]?.count || 0;
-          
-          // Contar comandos do usuário
-          let totalCommands = 0;
-          if (cmdStats.commands) {
-            for (const cmd in cmdStats.commands) {
-              if (cmdStats.commands[cmd].users?.[targetUser]) {
-                totalCommands += cmdStats.commands[cmd].users[targetUser];
-              }
-            }
-          }
-          
-          // User context (se existir)
-          const ctxKeys = Object.keys(userCtx).filter(k => k.startsWith(targetUser.split('@')[0] + '@'));
-          let ctxData = null;
-          if (ctxKeys.length > 0) {
-            ctxData = userCtx[ctxKeys[0]];
-          }
-          
-          // Primeira mensagem
-          const primeiraMsg = ctxData?.historico_conversa?.primeira_conversa || null;
-          const ultimaMsg = ctxData?.historico_conversa?.ultima_conversa || null;
-          
-          // Cargo no grupo
-          let cargo = '👤 Membro';
-          if (isOwnerOrSub) {
-            cargo = '👑 Dono';
-          } else if (isGroupAdmin) {
-            cargo = '🛡️ Admin';
-          } else if (groupData.alphas?.includes(targetUser)) {
-            cargo = '🐺 Alpha';
-          } else if (groupData.moderators?.includes(targetUser)) {
-            cargo = '⚡ Moderador';
-          }
-          
-          // Contador do grupo
           let groupMessages = 0;
+          let groupCommands = 0;
           let groupStickers = 0;
           if (isGroup && groupData.contador && Array.isArray(groupData.contador)) {
-            const userData = groupData.contador.find(u => u.id === targetUser);
+            const userData = groupData.contador.find(u => u.id === sender);
             if (userData) {
               groupMessages = userData.msg || 0;
+              groupCommands = userData.cmd || 0;
               groupStickers = userData.figu || 0;
             }
           }
-          
-          // Tempo no grupo
-          let tempoNoGrupo = 'Não registrado';
-          if (primeiraMsg) {
-            const firstDate = new Date(primeiraMsg);
-            const now = new Date();
-            const diffDays = Math.floor((now - firstDate) / (1000 * 60 * 60 * 24));
-            if (diffDays > 0) {
-              tempoNoGrupo = `${diffDays} dia(s)`;
-            }
-          }
-          
-          // Contar mensagens da lixeira
-          let msgsApagadas = 0;
-          if (groupData.trashMessages) {
-            msgsApagadas = groupData.trashMessages.filter(m => m.sender === targetUser).length;
-          }
-          
-          // Formatar datas
-          const formatDate = (dateStr) => {
-            if (!dateStr) return 'Não registrado';
+          let totalMessages = 0;
+          let totalCommands = 0;
+          let totalStickers = 0;
+          const groupFiles = fs.readdirSync(GRUPOS_DIR).filter(file => file.endsWith('.json'));
+          for (const file of groupFiles) {
             try {
-              const date = new Date(dateStr);
-              return date.toLocaleDateString('pt-BR');
-            } catch {
-              return 'Não registrado';
+              const groupData = JSON.parse(fs.readFileSync(pathz.join(GRUPOS_DIR, file)));
+              if (groupData.contador && Array.isArray(groupData.contador)) {
+                const userData = groupData.contador.find(u => u.id === sender);
+                if (userData) {
+                  totalMessages += userData.msg || 0;
+                  totalCommands += userData.cmd || 0;
+                  totalStickers += userData.figu || 0;
+                }
+              }
+            } catch (e) {
+              console.error(`Erro ao ler ${file}:`, e);
             }
-          };
-          
+          }
           const userName = pushname || getUserName(sender);
+          const userStatus = isOwnerOrSub ? 'Dono' : isPremium ? 'Premium' : isGroupAdmin ? 'Admin' : 'Membro';
           let profilePic = null;
           try {
             profilePic = await nazu.profilePictureUrl(sender, 'image');
           } catch (e) { }
-          
-          const statusMessage = `╔═〔 📊 MEU PERFIL 〕═╗
-
-👤 *${userName}*
-${cargo}
-
-┌─📋 INFORMAÇÕES
-│ 📅 No grupo há: ${tempoNoGrupo}
-│ 🏅 Patente: ${patent}
-└──────────────┘
-
-┌─💬 ATIVIDADE
-│ 💬 Mensagens: ${ctxData?.historico_conversa?.total_mensagens || 0}
-│ ⌨️ Comandos: ${totalCommands}
-│ 🗑️ Apagadas: ${msgsApagadas}
-│ 🕐 Última: ${formatDate(ultimaMsg)}
-└──────────────┘
-
-┌─⭐ NÍVEL
-│ ⭐ Level: ${userLevel}
-│ 📈 XP: ${userXp}/${xpForNext}
-│ ${'▰'.repeat(Math.floor(xpProgress/10))}${'▱'.repeat(10 - Math.floor(xpProgress/10))} ${xpProgress}%
-└──────────────┘
-
-┌─💰 MOEDAS
-│ 💰 Carteira: ${balance.toLocaleString()}
-│ 🏦 Banco: ${bank.toLocaleString()}
-│ 💎 Total: ${totalCoins.toLocaleString()}
-└──────────────┘
-
-┌─⚠️ STATUS
-│ ⚠️ Warns: ${userWarns}/5
-└──────────────┘
-
-◈ *Bot*: ${nomebot} by ${nomedono} ◈`;
-          
+          const statusMessage = `📊 *Meu Status - ${userName}* 📊\n\n👤 *Nome*: ${userName}\n📱 *Número*: @${getUserName(sender)}\n⭐ *Status*: ${userStatus}\n\n${isGroup ? `\n📌 *No Grupo: ${groupName}*\n💬 Mensagens: ${groupMessages}\n⚒️ Comandos: ${groupCommands}\n🎨 Figurinhas: ${groupStickers}\n` : ''}\n\n🌐 *Geral (Todos os Grupos)*\n💬 Mensagens: ${totalMessages}\n⚒️ Comandos: ${totalCommands}\n🎨 Figurinhas: ${totalStickers}\n\n◈ *Bot*: ${nomebot} by ${nomedono} ◈`;
           if (profilePic) {
             await nazu.sendMessage(from, {
-              image: { url: profilePic },
+              image: {
+                url: profilePic
+              },
               caption: statusMessage,
               mentions: [sender]
-            }, { quoted: info });
+            }, {
+              quoted: info
+            });
           } else {
             await nazu.sendMessage(from, {
               text: statusMessage,
               mentions: [sender]
-            }, { quoted: info });
+            }, {
+              quoted: info
+            });
           }
         } catch (e) {
           console.error(e);
