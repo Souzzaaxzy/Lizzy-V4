@@ -16873,16 +16873,16 @@ O texto será extraído *exatamente* como está na imagem, sem resumir ou traduz
 ╠══════════════════════╣
 ║  💬 ATIVIDADE        ║
 ╠══════════════════════╣
-║  💬 Msgs: ${str(totalMessages).padEnd(14)}║
-║  ⚒️ Cmds: ${str(totalCommands).padEnd(14)}║
-║  🎨 Figus: ${str(totalStickers).padEnd(14)}║
-║  🗑️ Apagadas: ${str(msgsApagadas).padEnd(10)}║
+║  💬 Msgs: ${String(totalMessages).padEnd(14)}║
+║  ⚒️ Cmds: ${String(totalCommands).padEnd(14)}║
+║  🎨 Figus: ${String(totalStickers).padEnd(14)}║
+║  🗑️ Apagadas: ${String(msgsApagadas).padEnd(10)}║
 ║  🕐 Ultima: ${formatDate(lastActivity).substring(0, 16).padEnd(16)}║
 ║                      ║
 ╠══════════════════════╣
 ║  ⭐ NIVEL             ║
 ╠══════════════════════╣
-║  ⭐ Level: ${str(userLevel).padEnd(15)}║
+║  ⭐ Level: ${String(userLevel).padEnd(15)}║
 ║  📈 XP: ${(userXp + '/' + xpForNext).padEnd(17)}║
 ║  ${xpBar} ${String(xpProgress).padStart(3)}%  ║
 ║                      ║
