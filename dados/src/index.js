@@ -134,12 +134,15 @@ import { readFile, writeFile } from 'fs/promises';
 import os from 'os';
 import https from 'https';
 import crypto from 'crypto';
-import cron from 'node-cron';import { fileURLToPath } from 'url';
+import cron from 'node-cron';
+import { fileURLToPath } from 'url';
 import RentalExpirationManager from './utils/rentalExpirationManager.js';
-    blockPv.loadBlockPvData();
-    blockGroupMenu.loadBlockGroupData();
 import * as blockPv from './utils/blockPv.js';
 import * as blockGroupMenu from './utils/blockGroupMenu.js';
+import userContextDB from './utils/userContextDB.js';
+
+blockPv.loadBlockPvData();
+blockGroupMenu.loadBlockGroupData();
 import { PerformanceOptimizer, getPerformanceOptimizer } from './utils/performanceOptimizer.js';
 import { recalcEquipmentBonuses } from './utils/equipment.js';
 import UpdateCommand from './utils/updateCommand.js';
@@ -3158,6 +3161,14 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       } catch (error) {
         console.error("Erro no sistema de contagem de mensagens:", error);
       }
+    }
+    
+    // Registrar interação no userContextDB (histórico real)
+    try {
+      const tipoMsg = isCmd ? 'comandos' : 'afirmacoes';
+      userContextDB.registerInteraction(sender, body || '', tipoMsg);
+    } catch (error) {
+      // Silencioso - não afetar o fluxo principal
     }
 
     if (isGroup && groupData.levelingEnabled) {
@@ -16808,12 +16819,16 @@ O texto será extraído *exatamente* como está na imagem, sem resumir ou traduz
 
           const targetId = getUserName(targetUser);
 
-          // Dados do contador do grupo (igual ao !checkativo)
-          const userContador = (groupData.contador || []).find(u => u.id === targetUser);
-          const totalMessages = userContador?.msg || 0;
-          const totalCommands = userContador?.cmd || 0;
-          const totalStickers = userContador?.figu || 0;
-          const lastActivity = userContador?.lastActivity ? new Date(userContador.lastActivity) : null;
+          // Dados REAIS do userContextDB
+          const userContext = userContextDB.getUserContext(targetUser);
+          const totalMessages = userContext.historico_conversa.total_mensagens || 0;
+          const primeiraConversa = userContext.historico_conversa.primeira_conversa ? new Date(userContext.historico_conversa.primeira_conversa) : null;
+          const ultimaConversa = userContext.historico_conversa.ultima_conversa ? new Date(userContext.historico_conversa.ultima_conversa) : null;
+          const frequencia = userContext.historico_conversa.frequencia_interacao || 'baixa';
+          
+          // Dados de comandos do usuário
+          const tipoMsgs = userContext.padroes_comportamento?.tipo_mensagens || {};
+          const totalCommands = tipoMsgs.comandos || 0;
 
           // Dados de leveling
           const levelingData = loadLevelingSafe();
@@ -16854,16 +16869,11 @@ O texto será extraído *exatamente* como está na imagem, sem resumir ou traduz
             cargo = '⚡ Moderador';
           }
 
-          // Data de entrada
+          // Data de entrada no bot (do userContext)
           let dataEntrada = 'Nao registrado';
-          try {
-            const groupInfo = await nazu.groupMetadata(from);
-            const member = groupInfo.participants.find(p => p.id === targetUser);
-            if (member?.joinedAt) {
-              const joinDate = new Date(member.joinedAt * 1000);
-              dataEntrada = joinDate.toLocaleDateString('pt-BR');
-            }
-          } catch (e) { }
+          if (primeiraConversa) {
+            dataEntrada = primeiraConversa.toLocaleDateString('pt-BR');
+          }
 
           // Msgs apagadas
           let msgsApagadas = 0;
@@ -16878,6 +16888,16 @@ O texto será extraído *exatamente* como está na imagem, sem resumir ou traduz
               return date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
             } catch { return 'Nao registrado'; }
           };
+
+          // Frequência formatada
+          const freqMap = {
+            'muito_baixa': '⬜⬜⬜⬜⬜',
+            'baixa': '🟩⬜⬜⬜⬜',
+            'media': '🟩🟩⬜⬜⬜',
+            'alta': '🟩🟩🟩⬜⬜',
+            'muito_alta': '🟩🟩🟩🟩🟩'
+          };
+          const freqBar = freqMap[frequencia] || '⬜⬜⬜⬜⬜';
 
           // Barra de progresso XP
           const filledBars = Math.floor(xpProgress / 10);
@@ -16902,9 +16922,9 @@ O texto será extraído *exatamente* como está na imagem, sem resumir ou traduz
 ╠══════════════════════╣
 ║  💬 Msgs: ${String(totalMessages).padEnd(14)}║
 ║  ⚒️ Cmds: ${String(totalCommands).padEnd(14)}║
-║  🎨 Figus: ${String(totalStickers).padEnd(14)}║
+║  📊 Freq: ${freqBar}        ║
 ║  🗑️ Apagadas: ${String(msgsApagadas).padEnd(10)}║
-║  🕐 Ultima: ${formatDate(lastActivity).substring(0, 16).padEnd(16)}║
+║  🕐 Ultima: ${formatDate(ultimaConversa).substring(0, 14).padEnd(16)}║
 ║                      ║
 ╠══════════════════════╣
 ║  ⭐ NIVEL             ║
