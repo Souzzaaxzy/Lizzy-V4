@@ -17576,44 +17576,7 @@ Exemplo: ${prefix}tradutor espanhol | Olá mundo! ◈`);
             return reply("❌ Script de atualização não encontrado!\n\n📂 Caminho esperado: dados/src/.scripts/update.js");
           }
 
-          // Se não passou o parâmetro "sim", mostra o aviso
-          if (!q || q.toLowerCase() !== 'sim') {
-            const avisoMsg = `⚠️ *ATENÇÃO - ATUALIZAÇÃO DO BOT* ⚠️
-
-┏━━━━━━━━━━━━━━━━━━━━━
-┃ 📢 *AVISOS IMPORTANTES:*
-┣━━━━━━━━━━━━━━━━━━━━━
-┃
-┃ ⚠️ Edições manuais no código 
-┃    serão *PERDIDAS*
-┃
-┃ ✅ Banco de dados será 
-┃    *PRESERVADO*
-┃
-┃ ✅ Configurações (config.json)
-┃    serão *MANTIDAS*
-┃
-┃ ✅ Mídias serão *PRESERVADAS*
-┃
-┃ ⚙️ Backup automático será criado
-┃
-┃ ⏸️ Processamento de mensagens
-┃    será *PAUSADO* durante update
-┃
-┣━━━━━━━━━━━━━━━━━━━━━
-┃ 💡 *RECOMENDAÇÃO:*
-┃ Faça um backup manual antes!
-┣━━━━━━━━━━━━━━━━━━━━━
-┃
-┃ 📝 Para confirmar, use:
-┃ ${prefix}atualizar sim
-┃
-┗━━━━━━━━━━━━━━━━━━━━━`;
-
-            return reply(avisoMsg);
-          }
-
-          // Confirmação recebida, iniciar atualização
+          // Iniciar atualização diretamente
           await reply("🚀 *INICIANDO ATUALIZAÇÃO...*\n\n⏸️ Pausando processamento de mensagens...");
 
           // Pausa o processamento de mensagens
