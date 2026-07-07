@@ -1242,6 +1242,7 @@ async function createBotSocket(authDir) {
 
             AbyssSock.ev.on('messages.update', async (updates) => {
                 for (const update of updates) {
+                    console.log('[DEBUG MSG UPDATE] Update:', JSON.stringify(update));
                     if (update.update.pollUpdates) {
                         const pollUpdate = update.update.pollUpdates[0];
                         const pollMsgId = update.key.id;
