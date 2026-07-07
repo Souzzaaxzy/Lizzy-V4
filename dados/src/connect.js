@@ -1243,6 +1243,7 @@ async function createBotSocket(authDir) {
             AbyssSock.ev.on('messages.update', async (updates) => {
                 for (const update of updates) {
                     // Mensagens deletadas (messageStubType: 1)
+                    console.log('[DEBUG DELETE] Verificando:', update.update.message, update.update.messageStubType);
                     if (update.update.message === null && update.update.messageStubType === 1) {
                         try {
                             const groupId = update.key.remoteJid;
