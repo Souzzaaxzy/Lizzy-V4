@@ -16783,6 +16783,7 @@ O texto será extraído *exatamente* como está na imagem, sem resumir ou traduz
           }
           
           const targetId = getUserName(targetUser);
+          const targetName = `@${targetId}`;
           // Ler commandStats com tratamento de erro
           const levelingData = loadLevelingSafe();
           const econ = loadEconomy();
@@ -25934,50 +25935,15 @@ ${prefix}togglecmdvip premium_ia off`);
               groupStickers = userData.figu || 0;
             }
           }
-          let totalMessages = 0;
-          let totalCommands = 0;
-          let totalStickers = 0;
-          const groupFiles = fs.readdirSync(GRUPOS_DIR).filter(file => file.endsWith('.json'));
-          for (const file of groupFiles) {
-            try {
-              const groupData = JSON.parse(fs.readFileSync(pathz.join(GRUPOS_DIR, file)));
-              if (groupData.contador && Array.isArray(groupData.contador)) {
-                const userData = groupData.contador.find(u => u.id === sender);
-                if (userData) {
-                  totalMessages += userData.msg || 0;
-                  totalCommands += userData.cmd || 0;
-                  totalStickers += userData.figu || 0;
-                }
-              }
-            } catch (e) {
-              console.error(`Erro ao ler ${file}:`, e);
-            }
-          }
           const userName = pushname || getUserName(sender);
           const userStatus = isOwnerOrSub ? 'Dono' : isPremium ? 'Premium' : isGroupAdmin ? 'Admin' : 'Membro';
-          let profilePic = null;
-          try {
-            profilePic = await nazu.profilePictureUrl(sender, 'image');
-          } catch (e) { }
-          const statusMessage = `📊 *Meu Status - ${userName}* 📊\n\n👤 *Nome*: ${userName}\n📱 *Número*: @${getUserName(sender)}\n⭐ *Status*: ${userStatus}\n\n${isGroup ? `\n📌 *No Grupo: ${groupName}*\n💬 Mensagens: ${groupMessages}\n⚒️ Comandos: ${groupCommands}\n🎨 Figurinhas: ${groupStickers}\n` : ''}\n\n🌐 *Geral (Todos os Grupos)*\n💬 Mensagens: ${totalMessages}\n⚒️ Comandos: ${totalCommands}\n🎨 Figurinhas: ${totalStickers}\n\n◈ *Bot*: ${nomebot} by ${nomedono} ◈`;
-          if (profilePic) {
-            await nazu.sendMessage(from, {
-              image: {
-                url: profilePic
-              },
-              caption: statusMessage,
-              mentions: [sender]
-            }, {
-              quoted: info
-            });
-          } else {
-            await nazu.sendMessage(from, {
-              text: statusMessage,
-              mentions: [sender]
-            }, {
-              quoted: info
-            });
-          }
+          const statusMessage = `📊 *Meu Status - ${userName}* 📊\n\n👤 *Nome*: ${userName}\n📱 *Número*: @${getUserName(sender)}\n⭐ *Status*: ${userStatus}\n\n${isGroup ? `📌 *No Grupo: ${groupName}*\n💬 Mensagens: ${groupMessages}\n⚒️ Comandos: ${groupCommands}\n🎨 Figurinhas: ${groupStickers}\n` : ''}\n\n◈ *Bot*: ${nomebot} by ${nomedono} ◈`;
+          await nazu.sendMessage(from, {
+            text: statusMessage,
+            mentions: [sender]
+          }, {
+            quoted: info
+          });
         } catch (e) {
           console.error(e);
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
