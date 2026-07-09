@@ -23499,7 +23499,7 @@ Precisa de ajuda? Entre em contato:
           if (!isOwnerOrSub) return reply("Este comando é apenas para o meu dono 💔");
           if (!q && !isImage && !isVideo && !isQuotedImage && !isQuotedVideo) return reply('Digite ou marque uma imagem/vídeo! Exemplo: ' + prefix + 'tm Olá a todos!');
 
-          const cabecalho = `╔══════════════════════\n║  📡 *TRANSMISSÃO DA BOT* 📡\n╚══════════════════════\n\n`;
+          const cabecalho = `╔══════════════════════\n║  📡 *TRANSMISSÃO DO ${nomebot}* 📡\n╚══════════════════════\n\n`;
           const genSuffix = () => Math.floor(100 + Math.random() * 900).toString();
 
           let baseMessage = {};
@@ -25582,7 +25582,7 @@ ${prefix}togglecmdvip premium_ia off`);
             return reply("📊 Ainda não há indicações registradas no sistema.");
           }
 
-          let mensagem = '🏆 *TOP INDICAÇÕES DA BOT* 🏆\n\n';
+          let mensagem = `🏆 *TOP INDICAÇÕES DO ${nomebot}* 🏆\n\n`;
           mensagem += '═══════════════════\n\n';
 
           const topEmojis = ['🥇', '🥈', '🥉'];
