@@ -6242,36 +6242,23 @@ if (isCmd && command && !isOwnerOrSub) {
           }
           
           // Faz parse dos argumentos
-          // Formato: número mensagem
-          // O número é identificado por ter apenas dígitos no final
+          // Formato: número mensagem (número no início)
           const parts = q.trim().split(/\s+/);
           
           if (parts.length < 2) {
             return reply(`❌ Formato inválido!\n\n📝 *Como usar:* ${prefix}confessarn (número) (mensagem)\n\n📌 *Exemplo:*\n${prefix}confessarn 5511999999999 Você é especial!`);
           }
           
-          // Encontra o número (último argumento que é apenas dígitos)
-          let numberIndex = -1;
-          for (let i = parts.length - 1; i >= 0; i--) {
-            if (/^\d+$/.test(parts[i])) {
-              numberIndex = i;
-              break;
-            }
-          }
-          
-          if (numberIndex === -1) {
-            return reply(`❌ Informe um número válido no formato:\n5511999999999`);
-          }
-          
-          const number = parts[numberIndex];
+          // O número é o PRIMEIRO argumento
+          const number = parts[0];
           
           // Valida o número
           if (!isValidPhoneNumber(number)) {
-            return reply(`❌ Informe um número válido no formato:\n5511999999999`);
+            return reply(`❌ Número inválido! Use o formato:\n5511999999999`);
           }
           
-          // Separa a mensagem
-          const message = parts.slice(0, numberIndex).join(' ').trim();
+          // A mensagem é tudo depois do número
+          const message = parts.slice(1).join(' ').trim();
           
           // Verifica mensagem
           if (!message || message.trim().length === 0) {
