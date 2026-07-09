@@ -2014,6 +2014,20 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     });
 
     const type = getContentType(info.message);
+    
+    // Verificação robusta de tipo de mensagem para mídias
+    const message = info.message || {};
+    const hasAudio = message.audioMessage || 
+                     message.pttMessage;
+    const hasVideo = message.videoMessage || 
+                     message.viewOnceMessage?.message?.videoMessage ||
+                     message.viewOnceMessageV2?.message?.videoMessage ||
+                     message.viewOnceMessageV2Extension?.message?.videoMessage;
+    const hasImage = message.imageMessage || 
+                     message.viewOnceMessage?.message?.imageMessage ||
+                     message.viewOnceMessageV2?.message?.imageMessage ||
+                     message.viewOnceMessageV2Extension?.message?.imageMessage;
+    const hasSticker = message.stickerMessage;
 
     // ==================== CONFIG ====================
     const activeIntervals = new Map();
@@ -3178,16 +3192,16 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
           // Não verificar meta se o comando for para definir meta
           const skipGoalCheck = ['setdiario', 'setsemanal'].includes(command);
           
-          // Detectar tipo de mensagem
+          // Detectar tipo de mensagem (usando verificação robusta)
           let messageType = 'text';
-          if (type === "stickerMessage") {
+          if (hasSticker) {
             messageType = 'sticker';
-          } else if (type === "audioMessage") {
+          } else if (hasAudio) {
             messageType = 'audio';
-          } else if (type === "imageMessage") {
-            messageType = 'image';
-          } else if (type === "videoMessage") {
+          } else if (hasVideo) {
             messageType = 'video';
+          } else if (hasImage) {
+            messageType = 'image';
           }
           
           const userName = pushname || sender.split('@')[0];
