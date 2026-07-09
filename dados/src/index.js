@@ -26366,6 +26366,144 @@ ${prefix}togglecmdvip premium_ia off`);
         }
         break;
         
+      case 'recorde':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          
+          const records = msgCounter.getGroupRecords(from);
+          const now = new Date();
+          const year = now.getFullYear();
+          
+          // Formatar data do recorde diário
+          const formatDailyDate = (dateStr) => {
+            if (!dateStr) return '---';
+            const [y, m, d] = dateStr.split('-');
+            return `${d}/${m}/${y}`;
+          };
+          
+          // Formatar período do recorde semanal
+          const formatWeeklyPeriod = (start, end) => {
+            if (!start || !end) return '---';
+            const [ys, ms, ds] = start.split('-');
+            const [ye, me, de] = end.split('-');
+            return `${ds}/${ms} - ${de}/${me}`;
+          };
+          
+          let message = `╭━━━〔 🏆 RECORDES DO GRUPO 〕━━━╮\n`;
+          message += `┃ 👥 Grupo: ${groupName || 'Grupo'}\n`;
+          message += `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯\n`;
+          message += `┃\n`;
+          message += `📅 RECORDE DIÁRIO\n`;
+          message += `━━━━━━━━━━━━━━\n`;
+          
+          if (records.daily && records.daily.total > 0) {
+            message += `┃ 🥇 Data: ${formatDailyDate(records.daily.date)}\n`;
+            message += `┃ 💬 Mensagens: ${records.daily.total.toLocaleString('pt-BR')}\n`;
+          } else {
+            message += `┃ Nenhum recorde registrado.\n`;
+          }
+          
+          message += `┃\n`;
+          message += `━━━━━━━━━━━━━━\n`;
+          message += `┃\n`;
+          message += `🔥 RECORDE SEMANAL\n`;
+          message += `━━━━━━━━━━━━━━\n`;
+          
+          if (records.weekly && records.weekly.total > 0) {
+            message += `┃ 🥇 Período: ${formatWeeklyPeriod(records.weekly.weekStart, records.weekly.weekEnd)}\n`;
+            message += `┃ 💬 Mensagens: ${records.weekly.total.toLocaleString('pt-BR')}\n`;
+          } else {
+            message += `┃ Nenhum recorde registrado.\n`;
+          }
+          
+          message += `┃\n`;
+          message += `━━━━━━━━━━━━━━\n`;
+          message += `┃\n`;
+          message += `┃ 📊 Dados registrados pelo sistema\n`;
+          message += `┃\n`;
+          message += `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
+          
+          await reply(message);
+        } catch (e) {
+          console.error('[RECORDE] Erro:', e);
+          await reply("❌ Ocorreu um erro ao buscar os recordes. Tente novamente.");
+        }
+        break;
+        
+      case 'merecorde':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          
+          const userRecords = msgCounter.getUserRecords(from, sender);
+          const userName = pushname || sender.split('@')[0];
+          const now = new Date();
+          const year = now.getFullYear();
+          
+          // Formatar data
+          const formatDate = (dateStr) => {
+            if (!dateStr) return '---';
+            const [y, m, d] = dateStr.split('-');
+            return `${d}/${m}/${y}`;
+          };
+          
+          // Formatar período semanal
+          const formatWeeklyPeriod = (start, end) => {
+            if (!start || !end) return '---';
+            const [ys, ms, ds] = start.split('-');
+            const [ye, me, de] = end.split('-');
+            return `${ds}/${ms} - ${de}/${me}`;
+          };
+          
+          const hasDailyRecord = userRecords.daily && userRecords.daily.total > 0;
+          const hasWeeklyRecord = userRecords.weekly && userRecords.weekly.total > 0;
+          
+          if (!hasDailyRecord && !hasWeeklyRecord) {
+            return reply(`╭━━━〔 👤 MEUS RECORDES 〕━━━╮\n┃\n┃ 👤 Usuário: @${userName.split(' ')[0]}\n┃ 👥 Grupo: ${groupName || 'Grupo'}\n╰━━━━━━━━━━━━━━━━━━━━╯\n┃\n┃ ⚠️ Você ainda não possui\n┃ recordes registrados.\n┃\n┃ 💡 Continue ativo para\n┃ bater seus recordes!\n┃\n╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`);
+          }
+          
+          let message = `╭━━━〔 👤 MEUS RECORDES 〕━━━╮\n`;
+          message += `┃ 👤 Usuário: @${userName.split(' ')[0]}\n`;
+          message += `┃ 👥 Grupo: ${groupName || 'Grupo'}\n`;
+          message += `╰━━━━━━━━━━━━━━━━━━━━╯\n`;
+          message += `┃\n`;
+          
+          if (hasDailyRecord) {
+            const dailyMedia = (userRecords.daily.stickers || 0) + (userRecords.daily.images || 0) + (userRecords.daily.videos || 0);
+            message += `📅 MAIOR DIA\n`;
+            message += `━━━━━━━━━━━━━━\n`;
+            message += `┃ 💬 Mensagens: ${userRecords.daily.total.toLocaleString('pt-BR')}\n`;
+            message += `┃ 🖼️ Mídias: ${dailyMedia}\n`;
+            message += `┃ 🎵 Áudios: ${userRecords.daily.audios || 0}\n`;
+            message += `┃ 🎭 Figurinhas: ${userRecords.daily.stickers || 0}\n`;
+            message += `┃ 📆 Data: ${formatDate(userRecords.daily.date)}\n`;
+            message += `┃\n`;
+          }
+          
+          if (hasWeeklyRecord) {
+            const weeklyMedia = (userRecords.weekly.stickers || 0) + (userRecords.weekly.images || 0) + (userRecords.weekly.videos || 0);
+            message += `🔥 MAIOR SEMANA\n`;
+            message += `━━━━━━━━━━━━━━\n`;
+            message += `┃ 💬 Mensagens: ${userRecords.weekly.total.toLocaleString('pt-BR')}\n`;
+            message += `┃ 🖼️ Mídias: ${weeklyMedia}\n`;
+            message += `┃ 🎵 Áudios: ${userRecords.weekly.audios || 0}\n`;
+            message += `┃ 🎭 Figurinhas: ${userRecords.weekly.stickers || 0}\n`;
+            message += `┃ 📆 Período: ${formatWeeklyPeriod(userRecords.weekly.weekStart, userRecords.weekly.weekEnd)}\n`;
+            message += `┃\n`;
+          }
+          
+          message += `━━━━━━━━━━━━━━\n`;
+          message += `┃\n`;
+          message += `┃ 📈 Histórico pessoal de atividade\n`;
+          message += `┃\n`;
+          message += `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
+          
+          await reply(message);
+        } catch (e) {
+          console.error('[MERECORDE] Erro:', e);
+          await reply("❌ Ocorreu um erro ao buscar seus recordes. Tente novamente.");
+        }
+        break;
+        
       case 'estdia':
         try {
           if (!isGroup) return reply("◈ Este comando só funciona em grupos.");

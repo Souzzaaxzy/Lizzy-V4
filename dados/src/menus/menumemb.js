@@ -73,6 +73,8 @@ ${middleBorder}${menuItemIcon}${prefix}topdiario
 ${middleBorder}${menuItemIcon}${prefix}topsemanal
 ${middleBorder}${menuItemIcon}${prefix}mediario
 ${middleBorder}${menuItemIcon}${prefix}mesemanal
+${middleBorder}${menuItemIcon}${prefix}recorde
+${middleBorder}${menuItemIcon}${prefix}merecorde
 ${middleBorder}${menuItemIcon}${prefix}vermetas
 ${bottomBorder}
 

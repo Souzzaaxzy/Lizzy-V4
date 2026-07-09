@@ -95,6 +95,17 @@ const initGroupCounter = (groupId) => {
         dailyGoal: null,
         weeklyGoal: null
       },
+      records: {
+        daily: {
+          total: 0,
+          date: null
+        },
+        weekly: {
+          total: 0,
+          weekStart: null,
+          weekEnd: null
+        }
+      },
       lastUpdate: new Date().toISOString()
     };
     saveMsgCounterData(data);
@@ -112,7 +123,11 @@ const initUserCounter = (groupData, userId, userName) => {
       stickers: 0,
       images: 0,
       videos: 0,
-      audios: 0
+      audios: 0,
+      personalRecord: {
+        daily: { total: 0, date: null },
+        weekly: { total: 0, weekStart: null, weekEnd: null }
+      }
     };
   }
   
@@ -268,6 +283,9 @@ const incrementMessageCount = (groupId, userId, userName, messageType = 'text') 
   data.groups[groupId] = groupData;
   
   saveMsgCounterData(data);
+  
+  // Atualizar recordes após salvar
+  updateRecords(groupId, userId);
   
   return {
     dailyTotal: groupData.daily.total,
@@ -778,6 +796,133 @@ const getTopUsersByDate = (groupId, dateStr, limit = 3) => {
 };
 
 // ═══════════════════════════════════════════════════════════════
+// 🏆 SISTEMA DE RECORDES
+// ═══════════════════════════════════════════════════════════════
+
+const updateRecords = (groupId, userId) => {
+  const data = loadMsgCounterData();
+  const groupData = data.groups[groupId];
+  
+  if (!groupData) return;
+  
+  const today = getDateInfo();
+  
+  // Atualizar recorde diário do grupo
+  if (groupData.daily.total > (groupData.records.daily.total || 0)) {
+    groupData.records.daily = {
+      total: groupData.daily.total,
+      date: today.date
+    };
+  }
+  
+  // Atualizar recorde semanal do grupo
+  if (groupData.weekly.total > (groupData.records.weekly.total || 0)) {
+    // Calcular fim da semana
+    const weekEnd = new Date(today.date);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+    const weekEndStr = `${weekEnd.getFullYear()}-${String(weekEnd.getMonth() + 1).padStart(2, '0')}-${String(weekEnd.getDate()).padStart(2, '0')}`;
+    
+    groupData.records.weekly = {
+      total: groupData.weekly.total,
+      weekStart: today.weekStart,
+      weekEnd: weekEndStr
+    };
+  }
+  
+  // Atualizar recorde pessoal do usuário
+  const userData = groupData.daily.users[userId];
+  if (userData) {
+    if (!userData.personalRecord) {
+      userData.personalRecord = {
+        daily: { total: 0, date: null },
+        weekly: { total: 0, weekStart: null, weekEnd: null }
+      };
+    }
+    
+    // Recorde pessoal diário
+    if (userData.count > (userData.personalRecord.daily.total || 0)) {
+      userData.personalRecord.daily = {
+        total: userData.count,
+        date: today.date,
+        stickers: userData.stickers || 0,
+        images: userData.images || 0,
+        videos: userData.videos || 0,
+        audios: userData.audios || 0
+      };
+    }
+  }
+  
+  // Atualizar recorde pessoal semanal (usar weekly do usuário)
+  const weeklyUserData = groupData.weekly.users[userId];
+  if (weeklyUserData) {
+    if (!weeklyUserData.personalRecord) {
+      weeklyUserData.personalRecord = {
+        daily: { total: 0, date: null },
+        weekly: { total: 0, weekStart: null, weekEnd: null }
+      };
+    }
+    
+    if (weeklyUserData.count > (weeklyUserData.personalRecord.weekly.total || 0)) {
+      const weekEnd = new Date(today.date);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      const weekEndStr = `${weekEnd.getFullYear()}-${String(weekEnd.getMonth() + 1).padStart(2, '0')}-${String(weekEnd.getDate()).padStart(2, '0')}`;
+      
+      weeklyUserData.personalRecord.weekly = {
+        total: weeklyUserData.count,
+        weekStart: today.weekStart,
+        weekEnd: weekEndStr,
+        stickers: weeklyUserData.stickers || 0,
+        images: weeklyUserData.images || 0,
+        videos: weeklyUserData.videos || 0,
+        audios: weeklyUserData.audios || 0
+      };
+    }
+  }
+  
+  saveMsgCounterData(data);
+};
+
+const getGroupRecords = (groupId) => {
+  const data = loadMsgCounterData();
+  const groupData = data.groups[groupId];
+  
+  if (!groupData) {
+    return {
+      daily: { total: 0, date: null },
+      weekly: { total: 0, weekStart: null, weekEnd: null }
+    };
+  }
+  
+  return groupData.records || {
+    daily: { total: 0, date: null },
+    weekly: { total: 0, weekStart: null, weekEnd: null }
+  };
+};
+
+const getUserRecords = (groupId, userId) => {
+  const data = loadMsgCounterData();
+  const groupData = data.groups[groupId];
+  
+  if (!groupData) {
+    return {
+      daily: { total: 0, date: null, stickers: 0, images: 0, videos: 0, audios: 0 },
+      weekly: { total: 0, weekStart: null, weekEnd: null, stickers: 0, images: 0, videos: 0, audios: 0 }
+    };
+  }
+  
+  const userData = groupData.daily.users[userId];
+  const weeklyUserData = groupData.weekly.users[userId];
+  
+  const dailyRecord = userData?.personalRecord?.daily || { total: 0, date: null, stickers: 0, images: 0, videos: 0, audios: 0 };
+  const weeklyRecord = weeklyUserData?.personalRecord?.weekly || { total: 0, weekStart: null, weekEnd: null, stickers: 0, images: 0, videos: 0, audios: 0 };
+  
+  return {
+    daily: dailyRecord,
+    weekly: weeklyRecord
+  };
+};
+
+// ═══════════════════════════════════════════════════════════════
 // 📤 EXPORTAÇÃO
 // ═══════════════════════════════════════════════════════════════
 
@@ -808,7 +953,10 @@ export {
   cleanInactiveUsers,
   getStatsByDate,
   saveDayToHistory,
-  getTopUsersByDate
+  getTopUsersByDate,
+  updateRecords,
+  getGroupRecords,
+  getUserRecords
 };
 
 // Export default as an object with all functions
@@ -839,7 +987,10 @@ const msgCounterExports = {
   cleanInactiveUsers,
   getStatsByDate,
   saveDayToHistory,
-  getTopUsersByDate
+  getTopUsersByDate,
+  updateRecords,
+  getGroupRecords,
+  getUserRecords
 };
 
 export default msgCounterExports;
