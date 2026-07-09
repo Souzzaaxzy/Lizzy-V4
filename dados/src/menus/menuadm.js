@@ -55,6 +55,16 @@ ${middleBorder} ${menuItemIcon}${prefix}checkativo
 ${bottomBorder}
 
 ${menuTopBorder}
+│ 🎯 METAS DE MENSAGENS
+${middleBorder}
+${middleBorder} ${menuItemIcon}${prefix}setdiario <número>
+${middleBorder} ${menuItemIcon}${prefix}setsemanal <número>
+${middleBorder} ${menuItemIcon}${prefix}vermetas
+${middleBorder}
+${middleBorder} 📊 Exibe metas do grupo
+${bottomBorder}
+
+${menuTopBorder}
 │ 🔒 CONTROLE DE ACESSO
 ${middleBorder}
 ${middleBorder} ${menuItemIcon}${prefix}blockuser

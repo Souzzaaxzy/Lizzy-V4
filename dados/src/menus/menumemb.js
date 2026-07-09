@@ -73,8 +73,6 @@ ${middleBorder}${menuItemIcon}${prefix}topsemanal
 ${middleBorder}${menuItemIcon}${prefix}mediario
 ${middleBorder}${menuItemIcon}${prefix}mesemanal
 ${middleBorder}${menuItemIcon}${prefix}vermetas
-${middleBorder}${menuItemIcon}${prefix}setdiario [número] (admin)
-${middleBorder}${menuItemIcon}${prefix}setsemanal [número] (admin)
 ${bottomBorder}
 
 ${menuTopBorder}
