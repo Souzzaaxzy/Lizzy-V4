@@ -4858,7 +4858,7 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
         });
         const messageType = isCmd ? 'COMANDO' : 'MENSAGEM';
         const context = isGroup ? 'GRUPO' : 'PRIVADO';
-        const messagePreview = isCmd ? `${prefix}${command}${q ? ` ${q.substring(0, 25)}${q.length > 25 ? '...' : ''}` : ''}` : budy2.substring(0, 35) + (budy2.length > 35 ? '...' : '');
+        const messagePreview = isCmd ? `${groupPrefix}${command}${q ? ` ${q.substring(0, 25)}${q.length > 25 ? '...' : ''}` : ''}` : budy2.substring(0, 35) + (budy2.length > 35 ? '...' : '');
         console.log('┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓');
         console.log(`┃ ${messageType} [${context}]${' '.repeat(36 - messageType.length - context.length)}`);
         console.log('┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫');
@@ -5245,7 +5245,7 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
             if (respAssist.isCommand && respAssist.command) {
               // Se falta algo para executar o comando, avisa o usuário
               if (respAssist.falta) {
-                reply(`⚠️ Para executar *${prefix}${respAssist.command}*, preciso que você informe: ${respAssist.falta}`);
+                reply(`⚠️ Para executar *${groupPrefix}${respAssist.command}*, preciso que você informe: ${respAssist.falta}`);
                 return;
               }
 
@@ -5300,7 +5300,7 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
                 simulatedArgs = `@${mentionNumber} ${simulatedArgs}`.trim();
               }
 
-              const simulatedBody = `${prefix}${simulatedCommand} ${simulatedArgs}`.trim();
+              const simulatedBody = `${groupPrefix}${simulatedCommand} ${simulatedArgs}`.trim();
 
               // Clonar o objeto info original mantendo estrutura completa
               const fakeMessage = JSON.parse(JSON.stringify(info));
@@ -5439,7 +5439,7 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
                   hasQuotedAudio ? '🎵 (marcado)' : hasQuotedSticker ? '🎭 (marcado)' : '';
 
               nazu.sendMessage(from, {
-                text: `🤖 *Executando:* ${prefix}${simulatedCommand}${simulatedArgs ? ' ' + simulatedArgs : ''}${mediaInfo ? '\n📎 Mídia: ' + mediaInfo : ''}`
+                text: `🤖 *Executando:* ${groupPrefix}${simulatedCommand}${simulatedArgs ? ' ' + simulatedArgs : ''}${mediaInfo ? '\n📎 Mídia: ' + mediaInfo : ''}`
               }, { quoted: info }).then(() => {
                 // Emitir novamente o evento de mensagem com o objeto completo
                 nazu.ev.emit('messages.upsert', {
@@ -6073,9 +6073,9 @@ Este comando está disponível apenas para usuários VIP/Premium!
 
 📞 *Como ser VIP?*
 Entre em contato com o dono do bot:
-• Use: ${prefix}dono
+• Use: ${groupPrefix}dono
 
-◈ Use ${prefix}menuvip para ver todos os comandos VIP disponíveis!`);
+◈ Use ${groupPrefix}menuvip para ver todos os comandos VIP disponíveis!`);
         return;
       }
     }
@@ -6143,7 +6143,7 @@ if (isCmd && command && !isOwnerOrSub) {
           
           // Verifica se há argumentos
           if (!q || q.trim().length === 0) {
-            return reply(`📝 *Como usar:* ${prefix}confessar (seu nome) (número) (mensagem)\n\n📌 *Exemplo:*\n${prefix}confessar João 5511999999999 Oi! Você é incrível!`);
+            return reply(`📝 *Como usar:* ${groupPrefix}confessar (seu nome) (número) (mensagem)\n\n📌 *Exemplo:*\n${groupPrefix}confessar João 5511999999999 Oi! Você é incrível!`);
           }
           
           // Faz parse dos argumentos
@@ -6152,7 +6152,7 @@ if (isCmd && command && !isOwnerOrSub) {
           const parts = q.trim().split(/\s+/);
           
           if (parts.length < 3) {
-            return reply(`❌ Formato inválido!\n\n📝 *Como usar:* ${prefix}confessar (seu nome) (número) (mensagem)\n\n📌 *Exemplo:*\n${prefix}confessar João 5511999999999 Oi! Você é incrível!`);
+            return reply(`❌ Formato inválido!\n\n📝 *Como usar:* ${groupPrefix}confessar (seu nome) (número) (mensagem)\n\n📌 *Exemplo:*\n${groupPrefix}confessar João 5511999999999 Oi! Você é incrível!`);
           }
           
           // Encontra o número (último argumento que é apenas dígitos)
@@ -6240,7 +6240,7 @@ if (isCmd && command && !isOwnerOrSub) {
           
           // Verifica se há argumentos
           if (!q || q.trim().length === 0) {
-            return reply(`📝 *Como usar:* ${prefix}confessarn (número) (mensagem)\n\n📌 *Exemplo:*\n${prefix}confessarn 5511999999999 Você é especial!`);
+            return reply(`📝 *Como usar:* ${groupPrefix}confessarn (número) (mensagem)\n\n📌 *Exemplo:*\n${groupPrefix}confessarn 5511999999999 Você é especial!`);
           }
           
           // Faz parse dos argumentos
@@ -6248,7 +6248,7 @@ if (isCmd && command && !isOwnerOrSub) {
           const parts = q.trim().split(/\s+/);
           
           if (parts.length < 2) {
-            return reply(`❌ Formato inválido!\n\n📝 *Como usar:* ${prefix}confessarn (número) (mensagem)\n\n📌 *Exemplo:*\n${prefix}confessarn 5511999999999 Você é especial!`);
+            return reply(`❌ Formato inválido!\n\n📝 *Como usar:* ${groupPrefix}confessarn (número) (mensagem)\n\n📌 *Exemplo:*\n${groupPrefix}confessarn 5511999999999 Você é especial!`);
           }
           
           // O número é o PRIMEIRO argumento
@@ -6801,7 +6801,7 @@ if (isCmd && command && !isOwnerOrSub) {
           
           const mediaPath = fs.existsSync(futGifPath) ? futGifPath : futImagePath;
           const mediaBuffer = fs.readFileSync(mediaPath);
-          const menuText = getMenuFut(pushname);
+          const menuText = getMenuFut(pushname, groupPrefix);
           const lerMaisPrefix = getMenuLerMaisText();
 
           await nazu.sendMessage(from, {
@@ -6905,7 +6905,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'lembrete':
       case 'lembrar': {
         try {
-          if (!q) return reply(`📅 *Como usar o comando lembrete:*\n\n💡 *Exemplos:*\n• ${prefix}lembrete em 30m beber água\n• ${prefix}lembrete 15/09 18:30 reunião\n• ${prefix}lembrete amanhã 08:00 acordar`);
+          if (!q) return reply(`📅 *Como usar o comando lembrete:*\n\n💡 *Exemplos:*\n• ${groupPrefix}lembrete em 30m beber água\n• ${groupPrefix}lembrete 15/09 18:30 reunião\n• ${groupPrefix}lembrete amanhã 08:00 acordar`);
           const parsed = parseReminderInput(q);
           if (!parsed) return reply('❌ Não consegui entender a data/hora. Exemplos:\n- em 10m tomar remédio\n- 25/12 09:00 ligar para a família\n- hoje 21:15 estudar');
           const { at, message } = parsed;
@@ -6971,7 +6971,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'removerlembrete': {
         try {
           const idArg = (q || '').trim();
-          if (!idArg) return reply(`🗑️ *Uso do comando apagalembrete:*\n\n📝 *Formato:* ${prefix}apagalembrete <id|tudo>\n\n💡 *Exemplos:*\n• ${prefix}apagalembrete 123456\n• ${prefix}apagalembrete tudo`);
+          if (!idArg) return reply(`🗑️ *Uso do comando apagalembrete:*\n\n📝 *Formato:* ${groupPrefix}apagalembrete <id|tudo>\n\n💡 *Exemplos:*\n• ${groupPrefix}apagalembrete 123456\n• ${groupPrefix}apagalembrete tudo`);
           // Otimização: Cache de reminders
           let list = await optimizer.memoize(
             'reminders:all',
@@ -7102,7 +7102,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'resetrpg':
         {
           if (!isGroup) return reply('◈ Os comandos RPG funcionam apenas em grupos.');
-          if (!groupData.modorpg) return reply(`◈ *Modo RPG desativado!*\n\n⚙️ Este recurso está disponível apenas quando o Modo RPG está ativado.\n🔐 *Administradores* podem ativar com: ${prefix}modorpg\n\n💡 Use ${prefix}menurpg para ver todos os comandos!`);
+          if (!groupData.modorpg) return reply(`◈ *Modo RPG desativado!*\n\n⚙️ Este recurso está disponível apenas quando o Modo RPG está ativado.\n🔐 *Administradores* podem ativar com: ${groupPrefix}modorpg\n\n💡 Use ${groupPrefix}menurpg para ver todos os comandos!`);
           const econ = loadEconomy();
           const changedEconomy = ensureEconomyDefaults(econ);
           const me = getEcoUser(econ, sender);
@@ -7116,7 +7116,7 @@ if (isCmd && command && !isOwnerOrSub) {
           if (['ranklevel', 'ranklvl', 'rankinglevel', 'levels', 'toplevels'].includes(sub)) {
             // Se estiver em grupo, usamos o ranking do grupo (RPG)
             if (isGroup) {
-              if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+              if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
               const levelingData = loadLevelingSafe();
               const userEntries = Object.entries(levelingData.users || {});
               const groupUsers = userEntries.filter(([id, data]) => AllgroupMembers.includes(id));
@@ -7431,7 +7431,7 @@ if (isCmd && command && !isOwnerOrSub) {
               `│\n` +
               `├─────────────────────⭓\n` +
               `│ 📝 Exemplo:\n` +
-              `│ ${prefix}${sub} @user 100\n` +
+              `│ ${groupPrefix}${sub} @user 100\n` +
               `│\n` +
               `╰─────────────────────⭓`);
             const amount = parseAmount(args.slice(-1)[0], me.wallet);
@@ -7474,15 +7474,15 @@ if (isCmd && command && !isOwnerOrSub) {
             if (!catArg || !['armas', 'armaduras', 'escudos', 'elmos', 'acessorios', 'botas', 'ferramentas', 'consumiveis'].includes(catArg)) {
               let text = `╭━━━⊱ 🛍️ *LOJA ${nomebot.toUpperCase()}* 🛍️ ⊱━━━╮\n│\n`;
               text += `│ 🌌 *${pushname}*! Escolha uma categoria:\n│\n`;
-              text += `│ ◈ *${prefix}loja armas*\n`;
-              text += `│ ⚙️ *${prefix}loja armaduras*\n`;
-              text += `│ ⚙️ *${prefix}loja escudos*\n`;
-              text += `│ 🩸 *${prefix}loja elmos*\n`;
-              text += `│ 💍 *${prefix}loja acessorios*\n`;
-              text += `│ 👢 *${prefix}loja botas*\n`;
-              text += `│ ⛏️ *${prefix}loja ferramentas*\n`;
-              text += `│ 🧪 *${prefix}loja consumiveis*\n│\n`;
-              text += `╰━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n💡 Use ${prefix}adotar para ver os pets!\n💡 Compre com: ${prefix}comprar <nome_do_item>`;
+              text += `│ ◈ *${groupPrefix}loja armas*\n`;
+              text += `│ ⚙️ *${groupPrefix}loja armaduras*\n`;
+              text += `│ ⚙️ *${groupPrefix}loja escudos*\n`;
+              text += `│ 🩸 *${groupPrefix}loja elmos*\n`;
+              text += `│ 💍 *${groupPrefix}loja acessorios*\n`;
+              text += `│ 👢 *${groupPrefix}loja botas*\n`;
+              text += `│ ⛏️ *${groupPrefix}loja ferramentas*\n`;
+              text += `│ 🧪 *${groupPrefix}loja consumiveis*\n│\n`;
+              text += `╰━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n💡 Use ${groupPrefix}adotar para ver os pets!\n💡 Compre com: ${groupPrefix}comprar <nome_do_item>`;
               return reply(text);
             }
 
@@ -7525,13 +7525,13 @@ if (isCmd && command && !isOwnerOrSub) {
               if (it.powerReq) text += `│ 📋 Poder Req.: ${it.powerReq}\n`;
               text += `│ 🆔 ID: \`${k}\`\n│\n`;
             }
-            text += `╰━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n💡 Compre com: ${prefix}comprar <id_do_item>`;
+            text += `╰━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n💡 Compre com: ${groupPrefix}comprar <id_do_item>`;
             return reply(text);
           }
 
           if (sub === 'comprar' || sub === 'buy') {
             const rawKey = (args[0] || '');
-            if (!rawKey) return reply(`╭━━━⊱ 🛒 *COMPRAR* 🛒 ⊱━━━╮\n│\n│ ❌ Informe o ID do item\n│\n│ 📝 *Exemplo:*\n│ ${prefix}comprar espada_de_ferro\n│\n│ 🛍️ Ver loja: ${prefix}loja\n│\n╰━━━━━━━━━━━━━━━━━━━━╯`);
+            if (!rawKey) return reply(`╭━━━⊱ 🛒 *COMPRAR* 🛒 ⊱━━━╮\n│\n│ ❌ Informe o ID do item\n│\n│ 📝 *Exemplo:*\n│ ${groupPrefix}comprar espada_de_ferro\n│\n│ 🛍️ Ver loja: ${groupPrefix}loja\n│\n╰━━━━━━━━━━━━━━━━━━━━╯`);
             
             const normalizeStr = (str) => str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
             const inputName = normalizeStr(rawKey);
@@ -7539,7 +7539,7 @@ if (isCmd && command && !isOwnerOrSub) {
             
             const key = Object.keys(shop).find(k => normalizeStr(k) === inputName || normalizeStr(shop[k].name) === inputName);
             const it = shop[key];
-            if (!it) return reply(`❌ Item não encontrado.\n\n🛍️ Veja a loja com ${prefix}loja`);
+            if (!it) return reply(`❌ Item não encontrado.\n\n🛍️ Veja a loja com ${groupPrefix}loja`);
             if (me.wallet < it.price) return reply('❌ Saldo insuficiente na carteira.');
             
             // Verificar requisição de poder
@@ -7626,7 +7626,7 @@ if (isCmd && command && !isOwnerOrSub) {
           if (sub === 'materiais') {
             const mats = me.materials || {};
             const keys = Object.keys(mats).filter(k => mats[k] > 0);
-            if (keys.length === 0) return reply('╭━━━⊱ ⛏️ *MATERIAIS* ⛏️ ⊱━━━╮\n│\n│ 📭 Você não possui materiais\n│\n│ ⛏️ Mine para coletar!\n│ Use: ' + prefix + 'minerar\n│\n╰━━━━━━━━━━━━━━━━━━━━━━╯');
+            if (keys.length === 0) return reply('╭━━━⊱ ⛏️ *MATERIAIS* ⛏️ ⊱━━━╮\n│\n│ 📭 Você não possui materiais\n│\n│ ⛏️ Mine para coletar!\n│ Use: '+ groupPrefix + 'minerar\n│\n╰━━━━━━━━━━━━━━━━━━━━━━╯');
             let text = '╭━━━⊱ ⛏️ *MATERIAIS* ⛏️ ⊱━━━╮\n│\n';
             for (const k of keys) text += `│ 💎 ${k}: ${mats[k]}\n`;
             text += '│\n╰━━━━━━━━━━━━━━━━━━━━━━╯';
@@ -7655,17 +7655,17 @@ if (isCmd && command && !isOwnerOrSub) {
             if (!matKey) return reply(`╭━━━⊱ 💰 *VENDER MATERIAIS* 💰 ⊱━━━╮
 │
 │ 📝 *Uso:*
-│ ${prefix}vender <material> <qtd|all>
+│ ${groupPrefix}vender <material> <qtd|all>
 │
 │ 💡 *Exemplo:*
-│ ${prefix}vender ferro 10
-│ ${prefix}vender ouro all
+│ ${groupPrefix}vender ferro 10
+│ ${groupPrefix}vender ouro all
 │
-│ 💱 Ver preços: ${prefix}precos
+│ 💱 Ver preços: ${groupPrefix}precos
 │
 ╰━━━━━━━━━━━━━━━━━━━━━━━━━╯`);
             const price = (econ.materialsPrices || {})[matKey];
-            if (!price) return reply(`❌ Material inválido.\n\n💱 Veja preços com ${prefix}precos`);
+            if (!price) return reply(`❌ Material inválido.\n\n💱 Veja preços com ${groupPrefix}precos`);
             const have = me.materials?.[matKey] || 0;
             if (have <= 0) return reply('❌ Você não possui esse material.');
             const qtyArg = args[1] || 'all';
@@ -7688,7 +7688,7 @@ if (isCmd && command && !isOwnerOrSub) {
 │
 │ ❌ Você não tem picareta equipada
 │
-│ 🛍️ Compre uma: ${prefix}loja
+│ 🛍️ Compre uma: ${groupPrefix}loja
 │
 ╰━━━━━━━━━━━━━━━━━━━━━━╯`);
             const kits = me.inventory?.repairkit || 0;
@@ -7697,7 +7697,7 @@ if (isCmd && command && !isOwnerOrSub) {
 │ ❌ Você não tem Kit de Reparos
 │
 │ 🛒 Compre com:
-│ ${prefix}comprar repairkit
+│ ${groupPrefix}comprar repairkit
 │
 ╰━━━━━━━━━━━━━━━━━━━━━━━━╯`);
             const repair = econ.shop?.repairkit?.effect?.repair || 40;
@@ -7742,7 +7742,7 @@ if (isCmd && command && !isOwnerOrSub) {
             text += `│\n│ 🎁 Prêmio: ${fmt(ch.reward)}\n`;
             if (ch.claimed) text += `│ ✅ (coletado)\n`;
             text += '│\n╰━━━━━━━━━━━━━━━━━━━━━━━━╯';
-            if (isChallengeCompleted(me) && !ch.claimed) text += `\n\n💡 Use: ${prefix}desafio coletar`;
+            if (isChallengeCompleted(me) && !ch.claimed) text += `\n\n💡 Use: ${groupPrefix}desafio coletar`;
             return reply(text);
           }
 
@@ -7853,10 +7853,10 @@ if (isCmd && command && !isOwnerOrSub) {
 │
 │ ❌ Informe a vaga desejada
 │
-│ 📋 Ver vagas: ${prefix}vagas
+│ 📋 Ver vagas: ${groupPrefix}vagas
 │
 │ 💡 Exemplo:
-│ ${prefix}emprego vendedor
+│ ${groupPrefix}emprego vendedor
 │
 ╰━━━━━━━━━━━━━━━━━━━━━╯`);
 
@@ -7872,7 +7872,7 @@ if (isCmd && command && !isOwnerOrSub) {
             // Normaliza a busca da vaga ignorando acentos
             const key = findKeyIgnoringAccents(jobCatalog, rawKey) || normalizeParam(rawKey);
             const job = jobCatalog[key];
-            if (!job) return reply('❌ Vaga inexistente. Use ' + prefix + 'vagas para ver disponíveis.');
+            if (!job) return reply('❌ Vaga inexistente. Use '+ groupPrefix + 'vagas para ver disponíveis.');
 
             // If economy file had no jobCatalog, persist defaults so future queries find them
             if (!econ.jobCatalog || Object.keys(econ.jobCatalog).length === 0) {
@@ -7886,7 +7886,7 @@ if (isCmd && command && !isOwnerOrSub) {
 │ 💼 Emprego: ${job.name}
 │ 💰 Ganhos: ${fmt(job.min)}-${fmt(job.max)}
 │
-│ 🏢 Use ${prefix}trabalhar
+│ 🏢 Use ${groupPrefix}trabalhar
 │    para receber seu salário!
 │
 ╰━━━━━━━━━━━━━━━━━━━━━━━╯`);
@@ -7898,7 +7898,7 @@ if (isCmd && command && !isOwnerOrSub) {
 │
 │ ✅ Você pediu demissão
 │
-│ 💼 Veja novas vagas: ${prefix}vagas
+│ 💼 Veja novas vagas: ${groupPrefix}vagas
 │
 ╰━━━━━━━━━━━━━━━━━━━━━━╯`);
           }
@@ -8042,11 +8042,11 @@ if (isCmd && command && !isOwnerOrSub) {
                     const materials = Object.entries(recipe.requires).map(([mat, qty]) => `${mat} x${qty}`).join(', ');
                     text += `   📦 Materiais: ${materials}\n`;
                   }
-                  text += `   💡 Forjar: ${prefix}forjar ${key}\n\n`;
+                  text += `   💡 Forjar: ${groupPrefix}forjar ${key}\n\n`;
                 }
               }
 
-              text += `💡 *Dica:* Use ${prefix}materiais para ver seus materiais disponíveis`;
+              text += `💡 *Dica:* Use ${groupPrefix}materiais para ver seus materiais disponíveis`;
               return reply(text);
             }
 
@@ -8058,7 +8058,7 @@ if (isCmd && command && !isOwnerOrSub) {
               const reqs = rec.requires || {};
               // Verifica materiais
               for (const [mk, mq] of Object.entries(reqs)) {
-                if ((me.materials?.[mk] || 0) < mq) return reply(`Faltam materiais: ${mk} x${mq}. Veja ${prefix}materiais.`);
+                if ((me.materials?.[mk] || 0) < mq) return reply(`Faltam materiais: ${mk} x${mq}. Veja ${groupPrefix}materiais.`);
               }
               // Verifica gold
               const goldCost = rec.gold || 0;
@@ -8162,9 +8162,9 @@ if (isCmd && command && !isOwnerOrSub) {
               text += `  💰 Custo: ${fmt(rec.gold)}\n`;
               text += `  💵 Venda: ${fmt(rec.sellPrice)}\n`;
               text += `  ⚡ Energia: +${rec.energy}\n`;
-              text += `  🍳 Cozinhar: ${prefix}cozinhar ${key}\n\n`;
+              text += `  🍳 Cozinhar: ${groupPrefix}cozinhar ${key}\n\n`;
             }
-            text += `💡 *Dica:* Plante ingredientes com ${prefix}plantar`;
+            text += `💡 *Dica:* Plante ingredientes com ${groupPrefix}plantar`;
             return reply(text);
           }
 
@@ -8186,12 +8186,12 @@ if (isCmd && command && !isOwnerOrSub) {
             }
 
             if (!recipeKey) {
-              return reply(`👨‍🍳 *SISTEMA DE COZINHA*\n\n📖 Veja as receitas disponíveis: ${prefix}receitas\n🍳 Cozinhar: ${prefix}cozinhar <receita>\n\n💡 Exemplo: ${prefix}cozinhar pao`);
+              return reply(`👨‍🍳 *SISTEMA DE COZINHA*\n\n📖 Veja as receitas disponíveis: ${groupPrefix}receitas\n🍳 Cozinhar: ${groupPrefix}cozinhar <receita>\n\n💡 Exemplo: ${groupPrefix}cozinhar pao`);
             }
 
             const recipe = econ.cookingRecipes[recipeKey];
             if (!recipe) {
-              return reply(`❌ Receita não encontrada! Use ${prefix}receitas para ver todas as receitas disponíveis.`);
+              return reply(`❌ Receita não encontrada! Use ${groupPrefix}receitas para ver todas as receitas disponíveis.`);
             }
 
             // Verifica cooldown
@@ -8209,7 +8209,7 @@ if (isCmd && command && !isOwnerOrSub) {
             me.ingredients = me.ingredients || {};
             for (const [ing, qty] of Object.entries(recipe.requires)) {
               if ((me.ingredients[ing] || 0) < qty) {
-                return reply(`📦 Ingredientes insuficientes! Você precisa de ${ing} x${qty}, mas tem apenas x${me.ingredients[ing] || 0}.\n\n🌱 Plante ingredientes com ${prefix}plantar`);
+                return reply(`📦 Ingredientes insuficientes! Você precisa de ${ing} x${qty}, mas tem apenas x${me.ingredients[ing] || 0}.\n\n🌱 Plante ingredientes com ${groupPrefix}plantar`);
               }
             }
 
@@ -8236,7 +8236,7 @@ if (isCmd && command && !isOwnerOrSub) {
 
             saveEconomy(econ);
 
-            return reply(`👨‍🍳 *COZINHA CONCLUÍDA!*\n\n${recipe.name} preparado com sucesso!\n⚡ Energia: +${recipe.energy}\n💵 Valor de venda: ${fmt(recipe.sellPrice)}\n\n🍴 Use ${prefix}comer ${recipeKey} para consumir\n💰 Use ${prefix}vendercomida ${recipeKey} para vender`);
+            return reply(`👨‍🍳 *COZINHA CONCLUÍDA!*\n\n${recipe.name} preparado com sucesso!\n⚡ Energia: +${recipe.energy}\n💵 Valor de venda: ${fmt(recipe.sellPrice)}\n\n🍴 Use ${groupPrefix}comer ${recipeKey} para consumir\n💰 Use ${groupPrefix}vendercomida ${recipeKey} para vender`);
           }
 
           // ===== SISTEMA DE PLANTAÇÃO =====
@@ -8268,9 +8268,9 @@ if (isCmd && command && !isOwnerOrSub) {
             }
 
             text += `\n💡 *Comandos:*\n`;
-            text += `🌱 Plantar: ${prefix}plantar <semente>\n`;
-            text += `🌾 Colher: ${prefix}colher\n`;
-            text += `📦 Sementes: ${prefix}sementes\n`;
+            text += `🌱 Plantar: ${groupPrefix}plantar <semente>\n`;
+            text += `🌾 Colher: ${groupPrefix}colher\n`;
+            text += `📦 Sementes: ${groupPrefix}sementes\n`;
 
             return reply(text);
           }
@@ -8306,14 +8306,14 @@ if (isCmd && command && !isOwnerOrSub) {
                 text += `  ⏱️ Tempo: ${mins} min\n`;
                 text += `  🌾 Colheita: ${yieldText}\n\n`;
               }
-              text += `🌱 Plantar: ${prefix}plantar <semente>\n`;
-              text += `💡 Exemplo: ${prefix}plantar trigo`;
+              text += `🌱 Plantar: ${groupPrefix}plantar <semente>\n`;
+              text += `💡 Exemplo: ${groupPrefix}plantar trigo`;
               return reply(text);
             }
 
             const seed = econ.seeds[seedKey];
             if (!seed) {
-              return reply(`❌ Semente não encontrada! Use ${prefix}plantar para ver as sementes disponíveis.`);
+              return reply(`❌ Semente não encontrada! Use ${groupPrefix}plantar para ver as sementes disponíveis.`);
             }
 
             // Inicializa fazenda do usuário
@@ -8321,7 +8321,7 @@ if (isCmd && command && !isOwnerOrSub) {
 
             // Verifica se tem espaço
             if (me.farm.plots.length >= me.farm.maxPlots) {
-              return reply(`🌾 Todos os seus terrenos estão ocupados! Aguarde a colheita ou expanda sua fazenda.\n\n🌾 Use ${prefix}colher para colher plantas prontas`);
+              return reply(`🌾 Todos os seus terrenos estão ocupados! Aguarde a colheita ou expanda sua fazenda.\n\n🌾 Use ${groupPrefix}colher para colher plantas prontas`);
             }
 
             // Verifica gold
@@ -8346,14 +8346,14 @@ if (isCmd && command && !isOwnerOrSub) {
             saveEconomy(econ);
 
             const mins = Math.floor(seed.growTime / 60000);
-            return reply(`🌱 ${seed.name} plantado com sucesso!\n\n⏱️ Estará pronto para colher em ${mins} minutos.\n🌾 Terrenos ocupados: ${me.farm.plots.length}/${me.farm.maxPlots}\n\n💡 Use ${prefix}horta para ver suas plantações`);
+            return reply(`🌱 ${seed.name} plantado com sucesso!\n\n⏱️ Estará pronto para colher em ${mins} minutos.\n🌾 Terrenos ocupados: ${me.farm.plots.length}/${me.farm.maxPlots}\n\n💡 Use ${groupPrefix}horta para ver suas plantações`);
           }
 
           if (sub === 'colher' || sub === 'harvest') {
             me.farm = me.farm || { plots: [], maxPlots: 4, lastExpansion: 0 };
 
             if (me.farm.plots.length === 0) {
-              return reply(`🌾 Você não tem nada plantado!\n\n🌱 Use ${prefix}plantar <semente> para começar a cultivar.`);
+              return reply(`🌾 Você não tem nada plantado!\n\n🌱 Use ${groupPrefix}plantar <semente> para começar a cultivar.`);
             }
 
             const now = Date.now();
@@ -8362,7 +8362,7 @@ if (isCmd && command && !isOwnerOrSub) {
             if (readyPlots.length === 0) {
               const nextReady = Math.min(...me.farm.plots.map(p => p.readyAt));
               const timeLeft = Math.ceil((nextReady - now) / 60000);
-              return reply(`⏳ Nenhuma planta está pronta para colher ainda.\n\n🕐 Próxima colheita em: ${timeLeft} minuto(s)\n\n💡 Use ${prefix}horta para ver o status de todas as plantações`);
+              return reply(`⏳ Nenhuma planta está pronta para colher ainda.\n\n🕐 Próxima colheita em: ${timeLeft} minuto(s)\n\n💡 Use ${groupPrefix}horta para ver o status de todas as plantações`);
             }
 
             // Colhe todas as plantas prontas
@@ -8396,7 +8396,7 @@ if (isCmd && command && !isOwnerOrSub) {
 
             harvestedText = harvestedText.slice(0, -2); // Remove última vírgula
 
-            return reply(`🌾 *COLHEITA CONCLUÍDA!*\n\n✅ Plantas colhidas: ${readyPlots.length}\n📦 Ingredientes obtidos:\n${harvestedText}\n\n💵 Valor estimado: ${fmt(totalValue)}\n🌱 Terrenos livres: ${me.farm.maxPlots - me.farm.plots.length}/${me.farm.maxPlots}\n\n👨‍🍳 Use ${prefix}receitas para ver o que pode cozinhar!`);
+            return reply(`🌾 *COLHEITA CONCLUÍDA!*\n\n✅ Plantas colhidas: ${readyPlots.length}\n📦 Ingredientes obtidos:\n${harvestedText}\n\n💵 Valor estimado: ${fmt(totalValue)}\n🌱 Terrenos livres: ${me.farm.maxPlots - me.farm.plots.length}/${me.farm.maxPlots}\n\n👨‍🍳 Use ${groupPrefix}receitas para ver o que pode cozinhar!`);
           }
 
           // ===== COMANDOS COMPLEMENTARES DE COZINHA =====
@@ -8405,14 +8405,14 @@ if (isCmd && command && !isOwnerOrSub) {
             const entries = Object.entries(me.ingredients).filter(([, qty]) => qty > 0);
 
             if (entries.length === 0) {
-              return reply(`📦 *INGREDIENTES*\n\nVocê não possui ingredientes.\n\n🌱 Plante com ${prefix}plantar para conseguir ingredientes!`);
+              return reply(`📦 *INGREDIENTES*\n\nVocê não possui ingredientes.\n\n🌱 Plante com ${groupPrefix}plantar para conseguir ingredientes!`);
             }
 
             let text = '📦 *MEUS INGREDIENTES*\n\n';
             for (const [ing, qty] of entries) {
               text += `• ${ing}: x${qty}\n`;
             }
-            text += `\n👨‍🍳 Use ${prefix}receitas para ver o que pode cozinhar`;
+            text += `\n👨‍🍳 Use ${groupPrefix}receitas para ver o que pode cozinhar`;
             return reply(text);
           }
 
@@ -8424,7 +8424,7 @@ if (isCmd && command && !isOwnerOrSub) {
             if (!foodKey) {
               const entries = Object.entries(me.cookedFood).filter(([, qty]) => qty > 0);
               if (entries.length === 0) {
-                return reply(`🍽️ Você não tem comida preparada.\n\n👨‍🍳 Cozinhe algo com ${prefix}cozinhar`);
+                return reply(`🍽️ Você não tem comida preparada.\n\n👨‍🍳 Cozinhe algo com ${groupPrefix}cozinhar`);
               }
 
               let text = '🍽️ *COMIDAS PREPARADAS*\n\n';
@@ -8436,13 +8436,13 @@ if (isCmd && command && !isOwnerOrSub) {
                   text += `  💵 Valor: ${fmt(recipe.sellPrice)}\n\n`;
                 }
               }
-              text += `🍴 Comer: ${prefix}comer <comida>\n`;
-              text += `💰 Vender: ${prefix}vendercomida <comida>`;
+              text += `🍴 Comer: ${groupPrefix}comer <comida>\n`;
+              text += `💰 Vender: ${groupPrefix}vendercomida <comida>`;
               return reply(text);
             }
 
             if (!me.cookedFood[foodKey] || me.cookedFood[foodKey] <= 0) {
-              return reply(`❌ Você não tem ${foodKey} preparado.\n\n👨‍🍳 Cozinhe com ${prefix}cozinhar ${foodKey}`);
+              return reply(`❌ Você não tem ${foodKey} preparado.\n\n👨‍🍳 Cozinhe com ${groupPrefix}cozinhar ${foodKey}`);
             }
 
             const recipe = econ.cookingRecipes?.[foodKey];
@@ -8470,7 +8470,7 @@ if (isCmd && command && !isOwnerOrSub) {
             me.cookedFood = me.cookedFood || {};
 
             if (!foodKey) {
-              return reply(`💰 *VENDER COMIDA*\n\nUse: ${prefix}vendercomida <comida>\n\n💡 Veja suas comidas com ${prefix}comer`);
+              return reply(`💰 *VENDER COMIDA*\n\nUse: ${groupPrefix}vendercomida <comida>\n\n💡 Veja suas comidas com ${groupPrefix}comer`);
             }
 
             const qty = parseInt(args[1]) || 1;
@@ -8517,9 +8517,9 @@ if (isCmd && command && !isOwnerOrSub) {
               text += `  💰 Custo: ${fmt(seed.cost)}\n`;
               text += `  ⏱️ Crescimento: ${mins} min\n`;
               text += `  🌾 Colheita: ${yieldText}\n`;
-              text += `  🌱 Plantar: ${prefix}plantar ${key}\n\n`;
+              text += `  🌱 Plantar: ${groupPrefix}plantar ${key}\n\n`;
             }
-            text += `💡 *Dica:* Use ${prefix}horta para ver suas plantações`;
+            text += `💡 *Dica:* Use ${groupPrefix}horta para ver suas plantações`;
             return reply(text);
           }
 
@@ -8527,7 +8527,7 @@ if (isCmd && command && !isOwnerOrSub) {
             const cd = me.cooldowns?.mine || 0;
             if (Date.now() < cd) return reply(`⏳ Aguarde ${timeLeft(cd)} para minerar novamente.`);
             const pk = getActivePickaxe(me);
-            if (!pk) return reply(`⛏️ Você precisa de uma picareta para minerar. Compre na ${prefix}loja (ex: ${prefix}comprar pickaxe_bronze) ou repare com ${prefix}reparar.`);
+            if (!pk) return reply(`⛏️ Você precisa de uma picareta para minerar. Compre na ${groupPrefix}loja (ex: ${groupPrefix}comprar pickaxe_bronze) ou repare com ${groupPrefix}reparar.`);
             // Cálculo de ouro com base na picareta e bônus (BALANCEADO)
             const tierMult = PICKAXE_TIER_MULT[pk.tier] || 1.0;
             const base = 100 + Math.floor(Math.random() * 101); // 100-200 (AUMENTADO)
@@ -8604,7 +8604,7 @@ if (isCmd && command && !isOwnerOrSub) {
           if (sub === 'listar') {
             // listar item <key> <qtd> <preco> | listar mat <material> <qtd> <preco>
             const kind = (args[0] || '').toLowerCase();
-            if (!['item', 'mat', 'material'].includes(kind)) return reply(`Use: ${prefix}listar item <key> <qtd> <preco> | ${prefix}listar mat <material> <qtd> <preco>`);
+            if (!['item', 'mat', 'material'].includes(kind)) return reply(`Use: ${groupPrefix}listar item <key> <qtd> <preco> | ${groupPrefix}listar mat <material> <qtd> <preco>`);
             const qty = parseInt(args[2]); const price = parseInt(args[3]);
             if (!isFinite(qty) || qty <= 0 || !isFinite(price) || price <= 0) return reply('Quantidade e preço inválidos.');
             if (kind === 'item') {
@@ -8682,7 +8682,7 @@ if (isCmd && command && !isOwnerOrSub) {
             return reply(text);
           }
           if (sub === 'comprarpropriedade' || sub === 'cprop') {
-            const key = (args[0] || '').toLowerCase(); if (!key) return reply(`Use: ${prefix}comprarpropriedade <tipo>`);
+            const key = (args[0] || '').toLowerCase(); if (!key) return reply(`Use: ${groupPrefix}comprarpropriedade <tipo>`);
             const prop = (econ.propertiesCatalog || {})[key]; if (!prop) return reply('Propriedade inexistente.');
             if (me.properties?.[key]?.owned) return reply('Você já possui essa propriedade.');
             if (me.wallet < prop.price) return reply('Saldo insuficiente.');
@@ -8731,7 +8731,7 @@ if (isCmd && command && !isOwnerOrSub) {
             let text = `🏅 Desafio ${sub === 'desafiosemanal' ? 'Semanal' : 'Mensal'}\n\n`;
             for (const t of (show.tasks || [])) text += `• ${labels[t.type] || t.type}: ${t.progress || 0}/${t.target}\n`;
             text += `\nPrêmio: ${fmt(show.reward)} ${show.claimed ? '(coletado)' : ''}`;
-            if (isPeriodCompleted(show) && !show.claimed) text += `\nUse: ${prefix}${sub} coletar`;
+            if (isPeriodCompleted(show) && !show.claimed) text += `\nUse: ${groupPrefix}${sub} coletar`;
             if ((args[0] || '').toLowerCase() === 'coletar') {
               if (show.claimed) return reply('Você já coletou este prêmio.');
               if (!isPeriodCompleted(show)) return reply('Complete todas as tarefas para coletar.');
@@ -8903,7 +8903,7 @@ if (isCmd && command && !isOwnerOrSub) {
 
 
 
-          return reply('Comando RPG inválido. Use ' + prefix + 'menurpg para ver todos os comandos.');
+          return reply('Comando RPG inválido. Use '+ groupPrefix + 'menurpg para ver todos os comandos.');
         }
 
       // ==================== NOVOS COMANDOS RPG ====================
@@ -8913,7 +8913,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'gear':
       case 'equip': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -8941,9 +8941,9 @@ if (isCmd && command && !isOwnerOrSub) {
           `│ ◈ Poder Total » ${me.power || 100}\n` +
           `╰─────────────────────⭓\n\n` +
           `💡 *Dicas:*\n` +
-          `• Use ${prefix}forjar para criar equipamentos\n` +
-          `• Use ${prefix}encantar para melhorar\n` +
-          `• Use ${prefix}inventario para ver itens`;
+          `• Use ${groupPrefix}forjar para criar equipamentos\n` +
+          `• Use ${groupPrefix}encantar para melhorar\n` +
+          `• Use ${groupPrefix}inventario para ver itens`;
 
         return reply(text);
       }
@@ -8953,7 +8953,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'achievements':
       case 'medalhas': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -9006,7 +9006,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'pets':
       case 'meuspets': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -9094,11 +9094,11 @@ if (isCmd && command && !isOwnerOrSub) {
         }
 
         text += `🌌 *COMANDOS DISPONÍVEIS:*\n`;
-        text += `• ${prefix}alimentar <número>\n`;
-        text += `• ${prefix}treinar <número>\n`;
-        text += `• ${prefix}evoluir <número>\n`;
-        text += `• ${prefix}renomear <número> <nome>\n`;
-        text += `• ${prefix}batalha <número> @user\n\n`;
+        text += `• ${groupPrefix}alimentar <número>\n`;
+        text += `• ${groupPrefix}treinar <número>\n`;
+        text += `• ${groupPrefix}evoluir <número>\n`;
+        text += `• ${groupPrefix}renomear <número> <nome>\n`;
+        text += `• ${groupPrefix}batalha <número> @user\n\n`;
         text += `💡 Seus pets perdem fome e humor com o tempo!`;
 
         return reply(text);
@@ -9108,7 +9108,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'adotar':
       case 'adopt': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -9179,7 +9179,7 @@ if (isCmd && command && !isOwnerOrSub) {
         text += `│ ${pet.desc}\n`;
         text += `│\n`;
         text += `╰━━━━━━━━━━━━━━━━━━━━╯\n\n`;
-        text += `💡 Use ${prefix}pets para ver seus companheiros\n`;
+        text += `💡 Use ${groupPrefix}pets para ver seus companheiros\n`;
         text += `⚠️ Lembre-se: seus pets precisam de cuidados regulares!`;
 
         // 🤖 EVENTO NPC - ADOÇÃO DE PET
@@ -9192,7 +9192,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'alimentar':
       case 'feed': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -9204,7 +9204,7 @@ if (isCmd && command && !isOwnerOrSub) {
 
         const index = parseInt(q) - 1;
         if (isNaN(index) || index < 0 || index >= me.pets.length) {
-          return reply(`❌ Pet inválido! Use ${prefix}pets para ver seus pets e escolha um número.`);
+          return reply(`❌ Pet inválido! Use ${groupPrefix}pets para ver seus pets e escolha um número.`);
         }
 
 	        const pet = me.pets[index];
@@ -9255,7 +9255,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'treinar':
       case 'train': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -9267,7 +9267,7 @@ if (isCmd && command && !isOwnerOrSub) {
 
         const index = parseInt(q) - 1;
         if (isNaN(index) || index < 0 || index >= me.pets.length) {
-          return reply(`❌ Pet inválido! Use ${prefix}pets para ver seus pets.`);
+          return reply(`❌ Pet inválido! Use ${groupPrefix}pets para ver seus pets.`);
         }
 
         const pet = me.pets[index];
@@ -9333,7 +9333,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'evoluirpet':
       case 'evolve': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -9343,7 +9343,7 @@ if (isCmd && command && !isOwnerOrSub) {
 
         const index = parseInt(q) - 1;
         if (isNaN(index) || index < 0 || index >= me.pets.length) {
-          return reply(`❌ Pet inválido! Use ${prefix}pets para ver seus pets.`);
+          return reply(`❌ Pet inválido! Use ${groupPrefix}pets para ver seus pets.`);
         }
 
         const pet = me.pets[index];
@@ -9395,7 +9395,7 @@ if (isCmd && command && !isOwnerOrSub) {
         const hasStoneInItems = me.items?.evolution_stone && me.items.evolution_stone >= 1;
 
         if (!hasStoneInInventory && !hasStoneInItems) {
-          return reply(`❌ Você precisa de uma *Pedra da Evolução* para evoluir seu pet!\n\n🛒 Compre na ${prefix}loja ou ganhe em batalhas de pets.`);
+          return reply(`❌ Você precisa de uma *Pedra da Evolução* para evoluir seu pet!\n\n🛒 Compre na ${groupPrefix}loja ou ganhe em batalhas de pets.`);
         }
 
         // Consome a pedra (verifica onde está)
@@ -9454,7 +9454,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'renomearpet':
       case 'renamepet': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -9496,7 +9496,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'batalhapet':
       case 'petbattle': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -9509,7 +9509,7 @@ if (isCmd && command && !isOwnerOrSub) {
           return reply(`⏰ Você acabou de batalhar. Aguarde *${remaining} minutos*.`);
         }
 
-        if (!target) return reply(`❌ Marque alguém para batalhar!\n\n💡 Uso: ${prefix}batalha <número> @user`);
+        if (!target) return reply(`❌ Marque alguém para batalhar!\n\n💡 Uso: ${groupPrefix}batalha <número> @user`);
         if (target === sender) return reply('❌ Você não pode batalhar contra si mesmo!');
 
         const opponent = getEcoUser(econ, target);
@@ -9523,7 +9523,7 @@ if (isCmd && command && !isOwnerOrSub) {
         const myIndex = parseInt(args[0]) - 1;
 
         if (isNaN(myIndex) || myIndex < 0 || myIndex >= me.pets.length) {
-          return reply(`❌ Pet inválido! Use ${prefix}pets para ver.`);
+          return reply(`❌ Pet inválido! Use ${groupPrefix}pets para ver.`);
         }
 
         const myPet = me.pets[myIndex];
@@ -9719,13 +9719,13 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'apostarpet':
       case 'petbet': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
         const target = (menc_jid2 && menc_jid2[0]) || null;
 
-        if (!target) return reply(`❌ Marque alguém para apostar!\n\n💡 Uso: ${prefix}apostarpet <valor> <nº pet> @user`);
+        if (!target) return reply(`❌ Marque alguém para apostar!\n\n💡 Uso: ${groupPrefix}apostarpet <valor> <nº pet> @user`);
         if (target === sender) return reply('❌ Você não pode apostar contra si mesmo!');
 
         const argsArr = q.split(' ');
@@ -9742,7 +9742,7 @@ if (isCmd && command && !isOwnerOrSub) {
         if (!opponent.pets || opponent.pets.length === 0) return reply('❌ Seu oponente não tem pets!');
 
         if (isNaN(petIndex) || petIndex < 0 || petIndex >= me.pets.length) {
-          return reply(`❌ Pet inválido! Use ${prefix}pets para ver seus pets.`);
+          return reply(`❌ Pet inválido! Use ${groupPrefix}pets para ver seus pets.`);
         }
 
         const myPet = me.pets[petIndex];
@@ -9787,7 +9787,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'equippet':
       case 'equiparpet': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -9800,9 +9800,9 @@ if (isCmd && command && !isOwnerOrSub) {
 
         if (!me.pets || me.pets.length === 0) return reply('🐾 Você não tem pets!');
         if (isNaN(petIndex) || petIndex < 0 || petIndex >= me.pets.length) {
-          return reply(`❌ Pet inválido!\n\n💡 Uso: ${prefix}equippet <nº pet> <item>`);
+          return reply(`❌ Pet inválido!\n\n💡 Uso: ${groupPrefix}equippet <nº pet> <item>`);
         }
-        if (!itemId) return reply(`❌ Informe o item!\n\n💡 Uso: ${prefix}equippet <nº pet> <item>`);
+        if (!itemId) return reply(`❌ Informe o item!\n\n💡 Uso: ${groupPrefix}equippet <nº pet> <item>`);
 
         const pet = me.pets[petIndex];
 
@@ -9859,7 +9859,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'unequippet':
       case 'desequiparpet': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -9868,7 +9868,7 @@ if (isCmd && command && !isOwnerOrSub) {
 
         if (!me.pets || me.pets.length === 0) return reply('🐾 Você não tem pets!');
         if (isNaN(petIndex) || petIndex < 0 || petIndex >= me.pets.length) {
-          return reply(`❌ Pet inválido!\n\n💡 Uso: ${prefix}unequippet <nº pet>`);
+          return reply(`❌ Pet inválido!\n\n💡 Uso: ${groupPrefix}unequippet <nº pet>`);
         }
 
         const pet = me.pets[petIndex];
@@ -9889,7 +9889,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'equipar':
       case 'equip': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -9899,7 +9899,7 @@ if (isCmd && command && !isOwnerOrSub) {
 
         const itemId = q?.toLowerCase().trim();
         if (!itemId) {
-          return reply(`❌ Informe o item para equipar!\n\n💡 Uso: ${prefix}equipar <item>\n📦 Veja seus itens: ${prefix}inventario`);
+          return reply(`❌ Informe o item para equipar!\n\n💡 Uso: ${groupPrefix}equipar <item>\n📦 Veja seus itens: ${groupPrefix}inventario`);
         }
 
         // Procura o item no inventário
@@ -9912,7 +9912,7 @@ if (isCmd && command && !isOwnerOrSub) {
         }
 
         if (!foundItemId) {
-          return reply(`❌ Item não encontrado no inventário!\n\n💡 Use ${prefix}inventario para ver seus itens`);
+          return reply(`❌ Item não encontrado no inventário!\n\n💡 Use ${groupPrefix}inventario para ver seus itens`);
         }
 
         const item = econ.shop[foundItemId];
@@ -9952,7 +9952,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'desequipar':
       case 'unequip': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -9962,7 +9962,7 @@ if (isCmd && command && !isOwnerOrSub) {
 
         const slotName = q?.toLowerCase().trim();
         if (!slotName) {
-          let text = `❌ Informe o slot para desequipar!\n\n💡 Uso: ${prefix}desequipar <slot>\n`;
+          let text = `❌ Informe o slot para desequipar!\n\n💡 Uso: ${groupPrefix}desequipar <slot>\n`;
           text += `📦 Slots disponíveis: arma, armadura, elmo, botas, escudo, acessório`;
           return reply(text);
         }
@@ -10003,7 +10003,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'dungeonsolo':
       case 'dg': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -10039,7 +10039,7 @@ if (isCmd && command && !isOwnerOrSub) {
             text += `└─────────────────\n\n`;
           });
 
-          text += `💡 Use ${prefix}masmorra <número>`;
+          text += `💡 Use ${groupPrefix}masmorra <número>`;
           return reply(text);
         }
 
@@ -10148,7 +10148,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'bossrpg':
       case 'bossfight': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -10222,7 +10222,7 @@ if (isCmd && command && !isOwnerOrSub) {
           battleLog += `│ ${boss.emoji} *${boss.name}* foi mais forte!\n`;
           battleLog += `│\n`;
           battleLog += `│ 💡 Fique mais forte e tente novamente!\n`;
-          battleLog += `│ 📈 Use ${prefix}evoluir para melhorar\n`;
+          battleLog += `│ 📈 Use ${groupPrefix}evoluir para melhorar\n`;
           battleLog += `╰━━━━━━━━━━━━━━━━━━━━╯`;
         }
 
@@ -10235,7 +10235,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'events':
       case 'eventosrpg': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const now = new Date();
         const dayOfWeek = now.getDay();
@@ -10294,13 +10294,13 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'duelorpg':
       case 'duelrpg': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
 
         const target = (menc_jid2 && menc_jid2[0]) || null;
-        if (!target) return reply(`❌ Marque alguém para duelar!\n\n💡 Exemplo: ${prefix}duelarrpg @user`);
+        if (!target) return reply(`❌ Marque alguém para duelar!\n\n💡 Exemplo: ${groupPrefix}duelarrpg @user`);
         if (target === sender) return reply('❌ Você não pode duelar consigo mesmo!');
 
         const opponent = getEcoUser(econ, target);
@@ -10436,7 +10436,7 @@ if (isCmd && command && !isOwnerOrSub) {
       // Sistema de Arena
       case 'arena': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -10472,7 +10472,7 @@ if (isCmd && command && !isOwnerOrSub) {
             text += `└─────────────────\n\n`;
           });
 
-          text += `💡 Use ${prefix}arena <número>`;
+          text += `💡 Use ${groupPrefix}arena <número>`;
           return reply(text);
         }
 
@@ -10543,13 +10543,13 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'encantar':
       case 'enchant': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
 
         if (!me.equipment || !me.equipment.weapon) {
-          return reply(`❌ Você não tem uma arma equipada!\n\n💡 Use ${prefix}equipar para equipar uma arma`);
+          return reply(`❌ Você não tem uma arma equipada!\n\n💡 Use ${groupPrefix}equipar para equipar uma arma`);
         }
 
         const weapon = me.equipment.weapon;
@@ -10573,7 +10573,7 @@ if (isCmd && command && !isOwnerOrSub) {
           text += `│ 🎲 Chance: ${Math.max(30, 90 - (enchantLevel * 6))}%\n`;
           text += `└─────────────────\n\n`;
           text += `⚠️ Falha pode destruir a arma!\n\n`;
-          text += `💡 Use ${prefix}encantar confirmar`;
+          text += `💡 Use ${groupPrefix}encantar confirmar`;
           return reply(text);
         }
 
@@ -10621,7 +10621,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'desmontar':
       case 'dismantle': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -10644,7 +10644,7 @@ if (isCmd && command && !isOwnerOrSub) {
             }
           }
 
-          text += `\n💡 Use ${prefix}desmontar <nome do item>`;
+          text += `\n💡 Use ${groupPrefix}desmontar <nome do item>`;
           return reply(text);
         }
 
@@ -10689,7 +10689,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'class':
       case 'profissao': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -10715,7 +10715,7 @@ if (isCmd && command && !isOwnerOrSub) {
             text += `   ◈ ${data.skill}: ${data.skillDesc}\n\n`;
           }
 
-          text += `💡 Use: ${prefix}classe <nome>\n`;
+          text += `💡 Use: ${groupPrefix}classe <nome>\n`;
           text += `⚠️ Custo: 50.000 (trocar classe)`;
 
           return reply(text);
@@ -10750,7 +10750,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'house':
       case 'lar': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -10797,9 +10797,9 @@ if (isCmd && command && !isOwnerOrSub) {
             }
 
             text += `\n💡 *Comandos:*\n`;
-            text += `• ${prefix}casa coletar - Coletar renda\n`;
-            text += `• ${prefix}casa decorar <item>\n`;
-            text += `• ${prefix}casa upgrade`;
+            text += `• ${groupPrefix}casa coletar - Coletar renda\n`;
+            text += `• ${groupPrefix}casa decorar <item>\n`;
+            text += `• ${groupPrefix}casa upgrade`;
           } else {
             text += `❌ Você não tem uma casa!\n\n`;
             text += `🏘️ *CASAS DISPONÍVEIS:*\n\n`;
@@ -10807,7 +10807,7 @@ if (isCmd && command && !isOwnerOrSub) {
               text += `${data.emoji} *${data.name}*\n`;
               text += `   💰 ${data.price.toLocaleString()} | 📦 +${data.bonus.storage}\n\n`;
             }
-            text += `💡 Use: ${prefix}casa comprar <tipo>`;
+            text += `💡 Use: ${groupPrefix}casa comprar <tipo>`;
           }
 
           return reply(text);
@@ -10869,7 +10869,7 @@ if (isCmd && command && !isOwnerOrSub) {
               text += `${data.emoji} *${data.name}* ${owned}\n`;
               text += `   💰 ${data.price.toLocaleString()} | +${data.value} ${data.bonus}\n\n`;
             }
-            text += `💡 Use: ${prefix}casa decorar <nome>`;
+            text += `💡 Use: ${groupPrefix}casa decorar <nome>`;
             return reply(text);
           }
 
@@ -10886,7 +10886,7 @@ if (isCmd && command && !isOwnerOrSub) {
           return reply(`🎨 *DECORAÇÃO ADICIONADA*\n\n${dec.emoji} ${dec.name}\n◈ +${dec.value} ${dec.bonus}`);
         }
 
-        return reply(`💡 Use: ${prefix}casa para ver opções`);
+        return reply(`💡 Use: ${groupPrefix}casa para ver opções`);
       }
 
       // ═══════════════════════════════════════════════════════════════
@@ -10896,7 +10896,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'masmorra':
       case 'raid': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -10935,9 +10935,9 @@ if (isCmd && command && !isOwnerOrSub) {
           }
 
           text += `💡 *Comandos:*\n`;
-          text += `• ${prefix}dungeon criar <tipo>\n`;
-          text += `• ${prefix}dungeon entrar <id>\n`;
-          text += `• ${prefix}dungeon iniciar`;
+          text += `• ${groupPrefix}dungeon criar <tipo>\n`;
+          text += `• ${groupPrefix}dungeon entrar <id>\n`;
+          text += `• ${groupPrefix}dungeon iniciar`;
 
           return reply(text);
         }
@@ -10970,7 +10970,7 @@ if (isCmd && command && !isOwnerOrSub) {
           // Verificar se já está em uma party
           for (const [id, party] of Object.entries(econ.dungeonParties)) {
             if (party.members.includes(sender)) {
-              return reply(`❌ Você já está em uma party!\n\n💡 Use ${prefix}dungeon sair para sair`);
+              return reply(`❌ Você já está em uma party!\n\n💡 Use ${groupPrefix}dungeon sair para sair`);
             }
           }
 
@@ -10986,7 +10986,7 @@ if (isCmd && command && !isOwnerOrSub) {
           };
 
           saveEconomy(econ);
-          return reply(`╭━━━⊱ 🎉 *PARTY CRIADA* ⊱━━━╮\n\n${dg.emoji} *${dg.name}*\n\n🆔 ID: \`${partyId.slice(-8)}\`\n👥 Membros: 1/${dg.players}\n👹 Boss: ${dg.boss}\n\n💡 Outros jogadores podem usar:\n${prefix}dungeon entrar ${partyId.slice(-8)}\n\n╰━━━━━━━━━━━━━━━━━━━━╯`);
+          return reply(`╭━━━⊱ 🎉 *PARTY CRIADA* ⊱━━━╮\n\n${dg.emoji} *${dg.name}*\n\n🆔 ID: \`${partyId.slice(-8)}\`\n👥 Membros: 1/${dg.players}\n👹 Boss: ${dg.boss}\n\n💡 Outros jogadores podem usar:\n${groupPrefix}dungeon entrar ${partyId.slice(-8)}\n\n╰━━━━━━━━━━━━━━━━━━━━╯`);
         }
 
 
@@ -10994,7 +10994,7 @@ if (isCmd && command && !isOwnerOrSub) {
         // Entrar em party
         if (sub === 'entrar') {
           const partyInput = args[1];
-          if (!partyInput) return reply(`💡 Use: ${prefix}dungeon entrar <id da party>`);
+          if (!partyInput) return reply(`💡 Use: ${groupPrefix}dungeon entrar <id da party>`);
 
           // Encontrar party
           let partyId = null;
@@ -11039,7 +11039,7 @@ if (isCmd && command && !isOwnerOrSub) {
           party.members.push(sender);
 
           saveEconomy(econ);
-          return reply(`✅ Você entrou na party!\n\n${dg.emoji} *${dg.name}*\n👥 Membros: ${party.members.length}/${party.maxMembers}\n\n${party.members.length >= party.maxMembers ? `🌌 Party completa! Líder pode usar ${prefix}dungeon iniciar` : '⏳ Aguardando mais membros...'}`);
+          return reply(`✅ Você entrou na party!\n\n${dg.emoji} *${dg.name}*\n👥 Membros: ${party.members.length}/${party.maxMembers}\n\n${party.members.length >= party.maxMembers ? `🌌 Party completa! Líder pode usar ${groupPrefix}dungeon iniciar` : '⏳ Aguardando mais membros...'}`);
         }
 
         // Iniciar dungeon
@@ -11179,7 +11179,7 @@ if (isCmd && command && !isOwnerOrSub) {
           return reply('❌ Você não está em nenhuma party!');
         }
 
-        return reply(`💡 Use ${prefix}dungeon para ver comandos`);
+        return reply(`💡 Use ${groupPrefix}dungeon para ver comandos`);
       }
 
       // ═══════════════════════════════════════════════════════════════
@@ -11189,7 +11189,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'auction':
       case 'leilaoplayer': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -11217,9 +11217,9 @@ if (isCmd && command && !isOwnerOrSub) {
           }
 
           text += `\n💡 *Comandos:*\n`;
-          text += `• ${prefix}mercadoplayer vender <item> <preço>\n`;
-          text += `• ${prefix}mercadoplayer comprar <nº>\n`;
-          text += `• ${prefix}mercadoplayer meus`;
+          text += `• ${groupPrefix}mercadoplayer vender <item> <preço>\n`;
+          text += `• ${groupPrefix}mercadoplayer comprar <nº>\n`;
+          text += `• ${groupPrefix}mercadoplayer meus`;
 
           return reply(text);
         }
@@ -11230,7 +11230,7 @@ if (isCmd && command && !isOwnerOrSub) {
           const preco = parseInt(args[2]);
 
           if (!itemName || !preco || preco < 100) {
-            return reply(`💡 Use: ${prefix}mercadoplayer vender <item> <preço>\n\n⚠️ Preço mínimo: 100`);
+            return reply(`💡 Use: ${groupPrefix}mercadoplayer vender <item> <preço>\n\n⚠️ Preço mínimo: 100`);
           }
 
           if (!me.inventory || !me.inventory[itemName] || me.inventory[itemName] <= 0) {
@@ -11304,7 +11304,7 @@ if (isCmd && command && !isOwnerOrSub) {
             text += `   💰 ${item.price.toLocaleString()}\n\n`;
           });
 
-          text += `💡 Use ${prefix}mercadoplayer cancelar <nº> para cancelar`;
+          text += `💡 Use ${groupPrefix}mercadoplayer cancelar <nº> para cancelar`;
 
           return reply(text);
         }
@@ -11331,7 +11331,7 @@ if (isCmd && command && !isOwnerOrSub) {
           return reply(`✅ Anúncio cancelado! ${listing.name} devolvido ao inventário.`);
         }
 
-        return reply(`💡 Use ${prefix}mercadoplayer para ver comandos`);
+        return reply(`💡 Use ${groupPrefix}mercadoplayer para ver comandos`);
       }
 
       // Sistema de Missões
@@ -11339,7 +11339,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'quests':
       case 'missao': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -11395,7 +11395,7 @@ if (isCmd && command && !isOwnerOrSub) {
           if (claimed) {
             text += `│ ✅ Reivindicado!\n`;
           } else if (completed) {
-            text += `│ ✅ Completo! Use ${prefix}reivindicar\n`;
+            text += `│ ✅ Completo! Use ${groupPrefix}reivindicar\n`;
           } else {
             text += `│ ⏳ Em andamento\n`;
           }
@@ -11416,7 +11416,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'war':
       case 'guerracla': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -11448,12 +11448,12 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'criarcla':
       case 'criarclã': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
 
-        if (!q) return reply(`❗ Use: ${prefix}criarcla <nome do clã>`);
+        if (!q) return reply(`❗ Use: ${groupPrefix}criarcla <nome do clã>`);
         if (me.clan) return reply('❌ Você já pertence a um clã!');
 
         const clanName = q.trim();
@@ -11485,7 +11485,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'cla':
       case 'claninfo': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -11499,7 +11499,7 @@ if (isCmd && command && !isOwnerOrSub) {
           clanObj = econ.clans[qTrim] || Object.values(econ.clans || {}).find(c => c.name && normalizeClanName(c.name) === qNormalized);
         }
 
-        if (!clanObj) return reply('❌ Clã não encontrado. Você pode usar: ' + prefix + 'criarcla <nome>');
+        if (!clanObj) return reply('❌ Clã não encontrado. Você pode usar: '+ groupPrefix + 'criarcla <nome>');
 
         let text = `╭━━━⊱ 🏰 *INFORMAÇÕES DO CLÃ* ⊱━━━╮\n`;
         text += `│ Nome: *${clanObj.name}*\n`;
@@ -11528,7 +11528,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'invite':
       case 'convite': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -11541,7 +11541,7 @@ if (isCmd && command && !isOwnerOrSub) {
         // Apenas líder pode convidar por enquanto
         if (clan.leader !== sender) return reply('🌌 Apenas o líder do clã pode convidar novos membros!');
         const target = (menc_jid2 && menc_jid2[0]) || null;
-        if (!target) return reply(`❗ Marque um membro para convidar. Ex: ${prefix}convidar @user`);
+        if (!target) return reply(`❗ Marque um membro para convidar. Ex: ${groupPrefix}convidar @user`);
         if (target === sender) return reply('❌ Você não pode convidar você mesmo!');
 
         const targetUser = getEcoUser(econ, target);
@@ -11555,7 +11555,7 @@ if (isCmd && command && !isOwnerOrSub) {
 
         // Notificar no grupo com menção se possível
         await reply(`📨 Convite enviado para @${target.split('@')[0]}!
-  Use ${prefix}aceitarconvite ${clan.id} para aceitar.`, { mentions: [target] });
+  Use ${groupPrefix}aceitarconvite ${clan.id} para aceitar.`, { mentions: [target] });
         break;
       }
 
@@ -11563,7 +11563,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'rmconvite':
       case 'removerconvite': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
         const econ2 = loadEconomy();
         const me2 = getEcoUser(econ2, sender);
         if (!me2.clan) return reply('❌ Você não faz parte de nenhum clã.');
@@ -11571,7 +11571,7 @@ if (isCmd && command && !isOwnerOrSub) {
         if (!clan2) { me2.clan = null; saveEconomy(econ2); return reply('❌ Seu clã não foi encontrado.'); }
         if (clan2.leader !== sender) return reply('🌌 Apenas o líder pode remover convites.');
         const target2 = (menc_jid2 && menc_jid2[0]) || null;
-        if (!target2) return reply(`❗ Marque um usuário para remover o convite. Ex: ${prefix}rmconvite @user`);
+        if (!target2) return reply(`❗ Marque um usuário para remover o convite. Ex: ${groupPrefix}rmconvite @user`);
         if (!Array.isArray(clan2.pendingInvites) || !clan2.pendingInvites.includes(target2)) return reply('❌ Este usuário não tem um convite pendente para o seu clã.');
         clan2.pendingInvites = clan2.pendingInvites.filter(id => id !== target2);
         saveEconomy(econ2);
@@ -11583,7 +11583,7 @@ if (isCmd && command && !isOwnerOrSub) {
       // Sair do clã
       case 'sair': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -11638,7 +11638,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'aceitarconvite':
       case 'aceitarrpg': {
         if (!isGroup) return reply('◈ Comandos de clã só funcionam em grupos com Modo RPG.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -11649,7 +11649,7 @@ if (isCmd && command && !isOwnerOrSub) {
         let clanObj = null;
         if (!q) {
           if (clansWithInvite.length === 1) clanObj = clansWithInvite[0];
-          else return reply('🔎 Você possui múltiplos convites. Use: ' + prefix + 'aceitarconvite <clanId>');
+          else return reply('🔎 Você possui múltiplos convites. Use: '+ groupPrefix + 'aceitarconvite <clanId>');
         } else {
           const qLower = q.trim().toLowerCase();
           clanObj = econ.clans[q] || Object.values(econ.clans || {}).find(c => (c.name || '').toLowerCase() === qLower);
@@ -11669,7 +11669,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'recusarconvite':
       case 'recusar': {
         if (!isGroup) return reply('◈ Comandos de clã só funcionam em grupos com Modo RPG.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
         const clansWithInvite = Object.values(econ.clans || {}).filter(c => Array.isArray(c.pendingInvites) && c.pendingInvites.includes(sender));
@@ -11677,7 +11677,7 @@ if (isCmd && command && !isOwnerOrSub) {
         let clanObj = null;
         if (!q) {
           if (clansWithInvite.length === 1) clanObj = clansWithInvite[0];
-          else return reply('🔎 Você possui múltiplos convites. Use: ' + prefix + 'recusarconvite <clanId>');
+          else return reply('🔎 Você possui múltiplos convites. Use: '+ groupPrefix + 'recusarconvite <clanId>');
         } else {
           const qLower = q.trim().toLowerCase();
           clanObj = econ.clans[q] || Object.values(econ.clans || {}).find(c => (c.name || '').toLowerCase() === qLower);
@@ -11692,7 +11692,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'expulsar':
       case 'kickcla': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
         if (!me.clan) return reply('❌ Você não faz parte de nenhum clã.');
@@ -11700,7 +11700,7 @@ if (isCmd && command && !isOwnerOrSub) {
         if (!clan) { me.clan = null; saveEconomy(econ); return reply('❌ Seu clã não foi encontrado.'); }
         if (clan.leader !== sender) return reply('🌌 Apenas o líder pode expulsar membros.');
         const target = (menc_jid2 && menc_jid2[0]) || null;
-        if (!target) return reply(`❗ Marque um membro para expulsar. Ex: ${prefix}expulsar @user`);
+        if (!target) return reply(`❗ Marque um membro para expulsar. Ex: ${groupPrefix}expulsar @user`);
         if (target === sender) return reply('❌ Você não pode se expulsar como líder. Use sair para demitir-se e transferir liderança.');
         if (!clan.members || !clan.members.includes(target)) return reply('❌ Este usuário não é membro do seu clã.');
         clan.members = clan.members.filter(m => m !== target);
@@ -11718,7 +11718,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'familia':
       case 'family': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -11801,8 +11801,8 @@ if (isCmd && command && !isOwnerOrSub) {
           text += `\n`;
         }
 
-        text += `💡 Use ${prefix}adotaruser @user para adotar\n`;
-        text += `💡 Use ${prefix}arvore para ver árvore genealógica`;
+        text += `💡 Use ${groupPrefix}adotaruser @user para adotar\n`;
+        text += `💡 Use ${groupPrefix}arvore para ver árvore genealógica`;
 
         const mentions = [
           ...(me.family.parents || []),
@@ -11828,13 +11828,13 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'adotaruser':
       case 'adotarfilho': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
 
         const target = (menc_jid2 && menc_jid2[0]) || null;
-        if (!target) return reply(`❌ Marque alguém para adotar!\n\n💡 Exemplo: ${prefix}adotaruser @user`);
+        if (!target) return reply(`❌ Marque alguém para adotar!\n\n💡 Exemplo: ${groupPrefix}adotaruser @user`);
         if (target === sender) return reply('❌ Você não pode se adotar!');
 
         const targetUser = getEcoUser(econ, target);
@@ -11894,13 +11894,13 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'desherdar':
       case 'removerfilho': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
 
         const target = (menc_jid2 && menc_jid2[0]) || null;
-        if (!target) return reply(`❌ Marque alguém para deserdar!\n\n💡 Exemplo: ${prefix}deserdar @user`);
+        if (!target) return reply(`❌ Marque alguém para deserdar!\n\n💡 Exemplo: ${groupPrefix}deserdar @user`);
         if (target === sender) return reply('❌ Você não pode se deserdar!');
 
         const targetUser = getEcoUser(econ, target);
@@ -11937,7 +11937,7 @@ if (isCmd && command && !isOwnerOrSub) {
         text += `╰━━━━━━━━━━━━━━━━━━━━╯\n\n`;
         text += `😢 ${pushname} deserdou @${target.split('@')[0]}!\n\n`;
         text += `👨‍👩‍👧‍👦 Agora você tem ${me.family.children.length} filho(s)!\n\n`;
-        text += `💡 Use ${prefix}familia para ver sua família atualizada.`;
+        text += `💡 Use ${groupPrefix}familia para ver sua família atualizada.`;
 
         saveEconomy(econ);
         return reply(text, { mentions: [target] });
@@ -11947,7 +11947,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'arvore':
       case 'familytree': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -12050,7 +12050,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'torneio':
       case 'tournament': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -12075,10 +12075,10 @@ if (isCmd && command && !isOwnerOrSub) {
             tournament.prize = 50000;
 
             saveEconomy(econ);
-            return reply(`╭━━━⊱ 🏆 *TORNEIO ABERTO!* ⊱━━━╮\n╰━━━━━━━━━━━━━━━━━━━━╯\n\n◈ Um torneio foi iniciado!\n\n💰 Prêmio: ${tournament.prize.toLocaleString()}\n⏰ Inscrições abertas!\n\n💡 Use ${prefix}torneio entrar`);
+            return reply(`╭━━━⊱ 🏆 *TORNEIO ABERTO!* ⊱━━━╮\n╰━━━━━━━━━━━━━━━━━━━━╯\n\n◈ Um torneio foi iniciado!\n\n💰 Prêmio: ${tournament.prize.toLocaleString()}\n⏰ Inscrições abertas!\n\n💡 Use ${groupPrefix}torneio entrar`);
           }
 
-          return reply(`❌ Não há torneio ativo!\n\n💡 Admins: Use ${prefix}torneio criar`);
+          return reply(`❌ Não há torneio ativo!\n\n💡 Admins: Use ${groupPrefix}torneio criar`);
         }
 
         // Entrar no torneio
@@ -12159,7 +12159,7 @@ if (isCmd && command && !isOwnerOrSub) {
         if (tournament.participants.length > 10) {
           text += `... e mais ${tournament.participants.length - 10}\n`;
         }
-        text += `\n💡 Use ${prefix}torneio entrar`;
+        text += `\n💡 Use ${groupPrefix}torneio entrar`;
 
         return reply(text, { mentions: tournament.participants.slice(0, 10) });
         break;
@@ -12169,10 +12169,10 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'abracarrpg':
       case 'hugrpg': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const target = (menc_jid2 && menc_jid2[0]) || null;
-        if (!target) return reply(`❌ Marque alguém para abraçar!\n\n💡 Exemplo: ${prefix}abracar @user`);
+        if (!target) return reply(`❌ Marque alguém para abraçar!\n\n💡 Exemplo: ${groupPrefix}abracar @user`);
         if (target === sender) return reply('❌ Você não pode se abraçar!');
 
         const actions = [
@@ -12189,10 +12189,10 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'beijarrpg':
       case 'kissrpg': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const target = (menc_jid2 && menc_jid2[0]) || null;
-        if (!target) return reply(`❌ Marque alguém para beijar!\n\n💡 Exemplo: ${prefix}beijarrpg @user`);
+        if (!target) return reply(`❌ Marque alguém para beijar!\n\n💡 Exemplo: ${groupPrefix}beijarrpg @user`);
         if (target === sender) return reply('❌ Você não pode se beijar!');
 
         const actions = [
@@ -12210,10 +12210,10 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'taparpg':
       case 'slaprpg': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const target = (menc_jid2 && menc_jid2[0]) || null;
-        if (!target) return reply(`❌ Marque alguém para dar um tapa!\n\n💡 Exemplo: ${prefix}baterrpg @user`);
+        if (!target) return reply(`❌ Marque alguém para dar um tapa!\n\n💡 Exemplo: ${groupPrefix}baterrpg @user`);
         if (target === sender) return reply('❌ Você não pode bater em si mesmo!');
 
         const actions = [
@@ -12230,13 +12230,13 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'proteger':
       case 'protect': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
 
         const target = (menc_jid2 && menc_jid2[0]) || null;
-        if (!target) return reply(`❌ Marque alguém para proteger!\n\n💡 Exemplo: ${prefix}proteger @user`);
+        if (!target) return reply(`❌ Marque alguém para proteger!\n\n💡 Exemplo: ${groupPrefix}proteger @user`);
         if (target === sender) return reply('❌ Você não pode se proteger assim!');
 
         const protectCost = 2000;
@@ -12269,7 +12269,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'rep':
       case 'reputation': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -12298,7 +12298,7 @@ if (isCmd && command && !isOwnerOrSub) {
         const rank = ranks[Math.min(repLevel, ranks.length - 1)];
 
         text += `🏅 Classificação: *${rank}*\n\n`;
-        text += `💡 Use ${prefix}votar @user para dar reputação`;
+        text += `💡 Use ${groupPrefix}votar @user para dar reputação`;
 
         saveEconomy(econ);
         return reply(text);
@@ -12308,13 +12308,13 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'votar':
       case 'vote': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
 
         const target = (menc_jid2 && menc_jid2[0]) || null;
-        if (!target) return reply(`❌ Marque alguém para votar!\n\n💡 Exemplo: ${prefix}votar @user`);
+        if (!target) return reply(`❌ Marque alguém para votar!\n\n💡 Exemplo: ${groupPrefix}votar @user`);
         if (target === sender) return reply('❌ Você não pode votar em si mesmo!');
 
         if (!me.lastVote) me.lastVote = {};
@@ -12416,7 +12416,7 @@ if (isCmd && command && !isOwnerOrSub) {
         
 
         const target = (menc_jid2 && menc_jid2[0]) || null;
-        if (!target) return reply(`❌ Marque um usuário!\n\n💡 Uso: ${prefix}rpgadd @user <valor>`);
+        if (!target) return reply(`❌ Marque um usuário!\n\n💡 Uso: ${groupPrefix}rpgadd @user <valor>`);
 
         const amount = parseInt(args[args.length - 1]) || 0;
         if (amount <= 0) return reply('❌ Informe um valor válido maior que 0!');
@@ -12437,7 +12437,7 @@ if (isCmd && command && !isOwnerOrSub) {
         
 
         const target = (menc_jid2 && menc_jid2[0]) || null;
-        if (!target) return reply(`❌ Marque um usuário!\n\n💡 Uso: ${prefix}rpgremove @user <valor>`);
+        if (!target) return reply(`❌ Marque um usuário!\n\n💡 Uso: ${groupPrefix}rpgremove @user <valor>`);
 
         const amount = parseInt(args[args.length - 1]) || 0;
         if (amount <= 0) return reply('❌ Informe um valor válido maior que 0!');
@@ -12459,7 +12459,7 @@ if (isCmd && command && !isOwnerOrSub) {
         
 
         const target = (menc_jid2 && menc_jid2[0]) || null;
-        if (!target) return reply(`❌ Marque um usuário!\n\n💡 Uso: ${prefix}rpgsetlevel @user <nivel>`);
+        if (!target) return reply(`❌ Marque um usuário!\n\n💡 Uso: ${groupPrefix}rpgsetlevel @user <nivel>`);
 
         const newLevel = parseInt(args[args.length - 1]) || 0;
         if (newLevel < 1 || newLevel > 1000) return reply('❌ Nível deve ser entre 1 e 1000!');
@@ -12483,7 +12483,7 @@ if (isCmd && command && !isOwnerOrSub) {
         
 
         const target = (menc_jid2 && menc_jid2[0]) || null;
-        if (!target) return reply(`❌ Marque um usuário!\n\n💡 Uso: ${prefix}rpgadditem @user <item> <quantidade>`);
+        if (!target) return reply(`❌ Marque um usuário!\n\n💡 Uso: ${groupPrefix}rpgadditem @user <item> <quantidade>`);
 
         const itemArgs = args.filter(a => !a.startsWith('@')).slice(0, -1).join('_').toLowerCase();
         const qty = parseInt(args[args.length - 1]) || 1;
@@ -12508,7 +12508,7 @@ if (isCmd && command && !isOwnerOrSub) {
         
 
         const target = (menc_jid2 && menc_jid2[0]) || null;
-        if (!target) return reply(`❌ Marque um usuário!\n\n💡 Uso: ${prefix}rpgremoveitem @user <item> <quantidade>`);
+        if (!target) return reply(`❌ Marque um usuário!\n\n💡 Uso: ${groupPrefix}rpgremoveitem @user <item> <quantidade>`);
 
         const itemArgs = args.slice(0, -1).join('_').toLowerCase();
         const qty = parseInt(args[args.length - 1]) || 1;
@@ -12531,7 +12531,7 @@ if (isCmd && command && !isOwnerOrSub) {
         
 
         const target = (menc_jid2 && menc_jid2[0]) || null;
-        if (!target) return reply(`❌ Marque um usuário!\n\n💡 Uso: ${prefix}rpgresetplayer @user`);
+        if (!target) return reply(`❌ Marque um usuário!\n\n💡 Uso: ${groupPrefix}rpgresetplayer @user`);
 
         const econ = loadEconomy();
 
@@ -12551,7 +12551,7 @@ if (isCmd && command && !isOwnerOrSub) {
 
         const confirmArg = (args[0] || '').toLowerCase();
         if (confirmArg !== 'confirmar') {
-          return reply(`⚠️ *ATENÇÃO: RESET GLOBAL DO RPG*\n\n🗑️ Este comando irá APAGAR TODOS os dados do sistema RPG!\n\n❌ Esta ação é IRREVERSÍVEL!\n\n✅ Para confirmar, use:\n${prefix}rpgresetglobal confirmar`);
+          return reply(`⚠️ *ATENÇÃO: RESET GLOBAL DO RPG*\n\n🗑️ Este comando irá APAGAR TODOS os dados do sistema RPG!\n\n❌ Esta ação é IRREVERSÍVEL!\n\n✅ Para confirmar, use:\n${groupPrefix}rpgresetglobal confirmar`);
         }
 
         const econ = loadEconomy();
@@ -12616,7 +12616,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'premiumshop':
       case 'lojadeluxo': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const premiumItems = [
           { id: 'titulo_lendario', name: '🏅 Título Lendário', price: 500000, desc: 'Título exclusivo no perfil' },
@@ -12639,7 +12639,7 @@ if (isCmd && command && !isOwnerOrSub) {
           text += `${item.name}\n`;
           text += `   💰 ${item.price.toLocaleString()} moedas\n`;
           text += `   📝 ${item.desc}\n`;
-          text += `   🛒 ${prefix}comprarpremium ${item.id}\n\n`;
+          text += `   🛒 ${groupPrefix}comprarpremium ${item.id}\n\n`;
         });
 
         return reply(text);
@@ -12649,10 +12649,10 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'comprarpremium':
       case 'buypremium': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const rawItemId = (args[0] || '');
-        if (!rawItemId) return reply(`❌ Informe o item!\n\n💡 Uso: ${prefix}comprarpremium <item>\n🛒 Veja a loja: ${prefix}lojapremium`);
+        if (!rawItemId) return reply(`❌ Informe o item!\n\n💡 Uso: ${groupPrefix}comprarpremium <item>\n🛒 Veja a loja: ${groupPrefix}lojapremium`);
 
         const premiumItems = {
           'titulo_lendario': { name: '🏅 Título Lendário', price: 500000 },
@@ -12670,7 +12670,7 @@ if (isCmd && command && !isOwnerOrSub) {
         // Normaliza a busca do item ignorando acentos
         const itemId = findKeyIgnoringAccents(premiumItems, rawItemId) || normalizeParam(rawItemId).replace(/\s+/g, '_');
         const item = premiumItems[itemId];
-        if (!item) return reply(`❌ Item não encontrado!\n\n🛒 Veja a loja: ${prefix}lojapremium`);
+        if (!item) return reply(`❌ Item não encontrado!\n\n🛒 Veja a loja: ${groupPrefix}lojapremium`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -12698,7 +12698,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'roleta':
       case 'roulette': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -12710,7 +12710,7 @@ if (isCmd && command && !isOwnerOrSub) {
         const bet = parseInt(args[0]) || 0;
         const rawChoice = (args[1] || '');
 
-        if (bet <= 0) return reply(`🎰 *ROLETA*\n\n💡 Uso: ${prefix}roleta <valor> <cor>\n\nCores: vermelho, preto, verde\n\n🔴 Vermelho: 1.5x\n⚫ Preto: 1.5x\n🟢 Verde (0): 5x`);
+        if (bet <= 0) return reply(`🎰 *ROLETA*\n\n💡 Uso: ${groupPrefix}roleta <valor> <cor>\n\nCores: vermelho, preto, verde\n\n🔴 Vermelho: 1.5x\n⚫ Preto: 1.5x\n🟢 Verde (0): 5x`);
 
         // Normaliza a cor escolhida
         const colorMap = {
@@ -12778,7 +12778,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'bj':
       case '21': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -12788,7 +12788,7 @@ if (isCmd && command && !isOwnerOrSub) {
         if (Date.now() < cdBJ) return reply(`⏳ Aguarde ${timeLeft(cdBJ)} para jogar blackjack novamente.`);
 
         const bet = parseInt(args[0]) || 0;
-        if (bet <= 0) return reply(`🃏 *BLACKJACK*\n\n💡 Uso: ${prefix}blackjack <valor>\n\n📜 Regras: Chegue mais perto de 21 sem passar!`);
+        if (bet <= 0) return reply(`🃏 *BLACKJACK*\n\n💡 Uso: ${groupPrefix}blackjack <valor>\n\n📜 Regras: Chegue mais perto de 21 sem passar!`);
         if (bet > me.wallet) return reply('❌ Saldo insuficiente!');
 
         // BLACKJACK NERFADO: Dealer tem cartas viciadas
@@ -12884,7 +12884,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'slotmachine':
       case 'cacaniquel': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -12894,7 +12894,7 @@ if (isCmd && command && !isOwnerOrSub) {
         if (Date.now() < cdSlots2) return reply(`⏳ Aguarde ${timeLeft(cdSlots2)} para jogar slots novamente.`);
 
         const bet = parseInt(args[0]) || 0;
-        if (bet <= 0) return reply(`🎰 *CAÇA-NÍQUEIS*\n\n💡 Uso: ${prefix}slots <valor>\n\n🎲 Alinhe 3 símbolos iguais para ganhar!`);
+        if (bet <= 0) return reply(`🎰 *CAÇA-NÍQUEIS*\n\n💡 Uso: ${groupPrefix}slots <valor>\n\n🎲 Alinhe 3 símbolos iguais para ganhar!`);
         if (bet > me.wallet) return reply('❌ Saldo insuficiente!');
 
         // SLOTS NERFADO: Cada posição tem preferência por símbolos diferentes
@@ -12965,7 +12965,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'lottery':
       case 'mega': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -12999,7 +12999,7 @@ if (isCmd && command && !isOwnerOrSub) {
           text += `📅 Próximo sorteio: ${nextDraw}\n\n`;
           text += `🎫 Seus bilhetes: ${myTickets}\n`;
           text += `💵 Preço: ${ticketPrice.toLocaleString()}/bilhete\n\n`;
-          text += `💡 Use ${prefix}loteria comprar <qtd>`;
+          text += `💡 Use ${groupPrefix}loteria comprar <qtd>`;
 
           return reply(text);
         }
@@ -13021,7 +13021,7 @@ if (isCmd && command && !isOwnerOrSub) {
           return reply(`╭━━━⊱ 🎫 *BILHETES COMPRADOS* ⊱━━━╮\n\n🎟️ Quantidade: ${qty}\n💰 Total: -${totalCost.toLocaleString()}\n\n🎫 Seus bilhetes: ${econ.lottery.tickets[sender]}\n💰 Jackpot atual: ${econ.lottery.jackpot.toLocaleString()}\n\n╰━━━━━━━━━━━━━━━━━━━━╯`);
         }
 
-        return reply(`❌ Subcomando inválido!\n\n💡 Use:\n${prefix}loteria - Ver informações\n${prefix}loteria comprar <qtd> - Comprar bilhetes`);
+        return reply(`❌ Subcomando inválido!\n\n💡 Use:\n${groupPrefix}loteria - Ver informações\n${groupPrefix}loteria comprar <qtd> - Comprar bilhetes`);
       }
 
       // Corrida de cavalos
@@ -13029,7 +13029,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'horserace':
       case 'cavalos': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -13039,7 +13039,7 @@ if (isCmd && command && !isOwnerOrSub) {
 
         if (bet <= 0 || horse < 1 || horse > 5) {
           let text = `╭━━━⊱ 🏇 *CORRIDA DE CAVALOS* ⊱━━━╮\n\n`;
-          text += `💡 Uso: ${prefix}corrida <valor> <cavalo 1-5>\n\n`;
+          text += `💡 Uso: ${groupPrefix}corrida <valor> <cavalo 1-5>\n\n`;
           text += `🐴 Cavalos:\n`;
           text += `1. 🟤 Trovão (1.5x) - Favorito\n`;
           text += `2. ⚪ Relâmpago (2x)\n`;
@@ -13096,7 +13096,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'leilaorpg':
       case 'leiloar': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -13107,7 +13107,7 @@ if (isCmd && command && !isOwnerOrSub) {
 
         if (!sub || sub === 'ver') {
           if (econ.auctions.length === 0) {
-            return reply(`🏛️ Nenhum leilão ativo!\n\n💡 Use ${prefix}leilao criar <item> <preço> para criar um leilão`);
+            return reply(`🏛️ Nenhum leilão ativo!\n\n💡 Use ${groupPrefix}leilao criar <item> <preço> para criar um leilão`);
           }
 
           let text = `╭━━━⊱ 🏛️ *LEILÕES ATIVOS* ⊱━━━╮\n\n`;
@@ -13120,7 +13120,7 @@ if (isCmd && command && !isOwnerOrSub) {
             text += `   ⏰ Termina em: ${endsIn} min\n\n`;
           });
 
-          text += `💡 ${prefix}leilao dar <nº> <valor>\n`;
+          text += `💡 ${groupPrefix}leilao dar <nº> <valor>\n`;
           text += `╰━━━━━━━━━━━━━━━━━━━━╯`;
 
           saveEconomy(econ);
@@ -13132,7 +13132,7 @@ if (isCmd && command && !isOwnerOrSub) {
           const price = parseInt(args[2]) || 0;
 
           if (!item || price < 1000) {
-            return reply(`❌ Use: ${prefix}leilao criar <item> <preço_inicial>\n\n📌 Preço mínimo: 1.000`);
+            return reply(`❌ Use: ${groupPrefix}leilao criar <item> <preço_inicial>\n\n📌 Preço mínimo: 1.000`);
           }
 
           if (!me.inventory || !me.inventory[item] || me.inventory[item] < 1) {
@@ -13192,7 +13192,7 @@ if (isCmd && command && !isOwnerOrSub) {
           return reply(`╭━━━⊱ 🏛️ *LANCE DADO* ⊱━━━╮\n\n📦 Item: ${auction.item}\n💰 Seu lance: ${bidAmount.toLocaleString()}\n🏆 Você é o maior lance!\n\n╰━━━━━━━━━━━━━━━━━━━━╯`);
         }
 
-        return reply(`❌ Subcomando inválido!\n\n💡 Use:\n${prefix}leilao - Ver leilões\n${prefix}leilao criar <item> <preço>\n${prefix}leilao dar <nº> <valor>`);
+        return reply(`❌ Subcomando inválido!\n\n💡 Use:\n${groupPrefix}leilao - Ver leilões\n${groupPrefix}leilao criar <item> <preço>\n${groupPrefix}leilao dar <nº> <valor>`);
       }
 
       // Ranking de riqueza global
@@ -13229,7 +13229,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'buff':
       case 'impulsionar': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -13267,14 +13267,14 @@ if (isCmd && command && !isOwnerOrSub) {
             text += `${boost.name}\n`;
             text += `   💰 ${boost.price.toLocaleString()}\n`;
             text += `   ⏰ ${boost.duration / 60000} minutos\n`;
-            text += `   🛒 ${prefix}boost ${id}\n\n`;
+            text += `   🛒 ${groupPrefix}boost ${id}\n\n`;
           }
 
           return reply(text);
         }
 
         const boost = boosts[sub];
-        if (!boost) return reply(`❌ Boost não encontrado!\n\n💡 Use ${prefix}boost para ver disponíveis`);
+        if (!boost) return reply(`❌ Boost não encontrado!\n\n💡 Use ${groupPrefix}boost para ver disponíveis`);
 
         if (me.wallet < boost.price) {
           return reply(`❌ Saldo insuficiente!\n\n💰 Necessário: ${boost.price.toLocaleString()}\n💼 Sua carteira: ${me.wallet.toLocaleString()}`);
@@ -13298,7 +13298,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'impostos':
       case 'taxes': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -13355,7 +13355,7 @@ if (isCmd && command && !isOwnerOrSub) {
 
           if (dueAmount > 0) {
             text += `⚠️ Pague seus tributos!\n`;
-            text += `💡 Use ${prefix}tributos pagar\n\n`;
+            text += `💡 Use ${groupPrefix}tributos pagar\n\n`;
             text += `❌ Penalidade: -20% trabalho se não pagar`;
           } else {
             text += `✅ Tributos em dia!`;
@@ -13388,7 +13388,7 @@ if (isCmd && command && !isOwnerOrSub) {
           return reply(`╭━━━⊱ ✅ *TRIBUTOS PAGOS* ⊱━━━╮\n\n💸 Valor: -${dueAmount.toLocaleString()}\n📅 Próximo: Em 1 dia\n\n✅ Você está em dia!\n\n╰━━━━━━━━━━━━━━━━━━━━╯`);
         }
 
-        return reply(`❌ Subcomando inválido!\n\n💡 Use:\n${prefix}tributos - Ver situação\n${prefix}tributos pagar - Pagar tributos`);
+        return reply(`❌ Subcomando inválido!\n\n💡 Use:\n${groupPrefix}tributos - Ver situação\n${groupPrefix}tributos pagar - Pagar tributos`);
       }
 
       // Sistema de Doação
@@ -13396,13 +13396,13 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'donate':
       case 'doacao': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
 
         const amount = parseInt(args[0]) || 0;
-        if (amount < 1000) return reply(`💝 *DOAÇÃO*\n\n💡 Uso: ${prefix}doar <valor>\n\n📌 Mínimo: 1.000 moedas\n◈ Ganhe karma e reputação por doar!`);
+        if (amount < 1000) return reply(`💝 *DOAÇÃO*\n\n💡 Uso: ${groupPrefix}doar <valor>\n\n📌 Mínimo: 1.000 moedas\n◈ Ganhe karma e reputação por doar!`);
 
         if (me.wallet < amount) return reply('❌ Saldo insuficiente!');
 
@@ -13432,13 +13432,13 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'presente':
       case 'gift': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
 
         const target = (menc_jid2 && menc_jid2[0]) || null;
-        if (!target) return reply(`🎁 *PRESENTE*\n\n💡 Uso: ${prefix}presente @user <item> <quantidade>\n\n📦 Envie itens do seu inventário para outros jogadores!`);
+        if (!target) return reply(`🎁 *PRESENTE*\n\n💡 Uso: ${groupPrefix}presente @user <item> <quantidade>\n\n📦 Envie itens do seu inventário para outros jogadores!`);
         if (target === sender) return reply('❌ Você não pode enviar presentes para si mesmo!');
 
         const item = (args[0] || '').toLowerCase();
@@ -13467,7 +13467,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'mystats':
       case 'statsrpg': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -13527,7 +13527,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'evolucao':
       case 'prestige': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -13588,7 +13588,7 @@ if (isCmd && command && !isOwnerOrSub) {
             text += `• Família, clã e relacionamento\n`;
             text += `• Itens premium\n`;
             text += `• Conquistas\n\n`;
-            text += `💡 Use ${prefix}evoluir confirmar`;
+            text += `💡 Use ${groupPrefix}evoluir confirmar`;
           } else {
             text += `❌ *Complete todos os requisitos!*\n`;
             text += `💡 Dica: Trabalhe, batalhe e conquiste!`;
@@ -13670,7 +13670,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'investir':
       case 'invest': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -13729,8 +13729,8 @@ if (isCmd && command && !isOwnerOrSub) {
             text += `└─────────────────\n\n`;
           }
 
-          text += `💡 Use ${prefix}investir <ação> <quantidade>\n`;
-          text += `💡 Use ${prefix}sell <ação> <quantidade>`;
+          text += `💡 Use ${groupPrefix}investir <ação> <quantidade>\n`;
+          text += `💡 Use ${groupPrefix}sell <ação> <quantidade>`;
 
           saveEconomy(econ);
           return reply(text);
@@ -13771,7 +13771,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'vender':
       case 'sell': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -13812,7 +13812,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'dados':
       case 'dice': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -13881,7 +13881,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'coinflip':
       case 'moeda': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -13894,7 +13894,7 @@ if (isCmd && command && !isOwnerOrSub) {
         const bet = parseInt(args[1]) || 0;
 
         if (!choice) {
-          return reply(`💡 Use ${prefix}coinflip <cara|coroa> <valor>\n\n📝 Aceita: cara, coroa, heads, tails`);
+          return reply(`💡 Use ${groupPrefix}coinflip <cara|coroa> <valor>\n\n📝 Aceita: cara, coroa, heads, tails`);
         }
 
         if (bet < 100) return reply('💰 Aposta mínima: 100 moedas');
@@ -13935,7 +13935,7 @@ if (isCmd && command && !isOwnerOrSub) {
 
       case 'crash': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -13991,7 +13991,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'streak':
       case 'serie': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -14053,13 +14053,13 @@ if (isCmd && command && !isOwnerOrSub) {
 
         if (hasReward) {
           text += `🎁 Recompensa disponível!\n`;
-          text += `💡 Use ${prefix}reivindicar`;
+          text += `💡 Use ${groupPrefix}reivindicar`;
         } else {
           const nextReward = rewards.find(days => me.streak.current < days);
           if (nextReward) {
             const daysLeft = nextReward - me.streak.current;
             text += `💡 Próxima recompensa em ${daysLeft} dias!\n`;
-            text += `Use ${prefix}diario todos os dias para manter seu streak!`;
+            text += `Use ${groupPrefix}diario todos os dias para manter seu streak!`;
           } else {
             text += `🏆 Você desbloqueou todas as recompensas!\n`;
             text += `Continue mantendo seu streak!`;
@@ -14074,7 +14074,7 @@ if (isCmd && command && !isOwnerOrSub) {
       case 'reivindicar':
       case 'claim': {
         if (!isGroup) return reply('◈ Este comando funciona apenas em grupos com Modo RPG ativo.');
-        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${prefix}modorpg para ativar.`);
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
 
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
@@ -14158,7 +14158,7 @@ if (isCmd && command && !isOwnerOrSub) {
           if (hasStreakReward) {
             hasAvailableRewards = true;
             availableText += `🔥 Recompensas de Streak disponíveis!\n`;
-            availableText += `💡 Use ${prefix}streak para ver seu progresso\n\n`;
+            availableText += `💡 Use ${groupPrefix}streak para ver seu progresso\n\n`;
           }
 
           // Verifica missões
@@ -14169,14 +14169,14 @@ if (isCmd && command && !isOwnerOrSub) {
             if (availableQuests.length > 0) {
               hasAvailableRewards = true;
               availableText += `📜 ${availableQuests.length} missão(ões) completa(s)!\n`;
-              availableText += `💡 Use ${prefix}missao para ver detalhes\n\n`;
+              availableText += `💡 Use ${groupPrefix}missao para ver detalhes\n\n`;
             }
           }
 
           if (!hasAvailableRewards) {
             return reply('❌ Você não tem recompensas disponíveis!\n\n💡 Complete missões diárias ou mantenha seu streak para ganhar recompensas.');
           } else {
-            return reply(availableText + `💡 Use ${prefix}reivindicar novamente para coletar!`);
+            return reply(availableText + `💡 Use ${groupPrefix}reivindicar novamente para coletar!`);
           }
         }
         break;
@@ -14389,7 +14389,7 @@ if (isCmd && command && !isOwnerOrSub) {
         break;
       //INTELIGENCIA ARTIFICIAL
       case 'gemma':
-        if (!q) return reply(`🤔 Qual sua dúvida para o Gemma? Informe a pergunta após o comando! Exemplo: ${prefix}${command} quem descobriu o Brasil? 🌍`);
+        if (!q) return reply(`🤔 Qual sua dúvida para o Gemma? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
         reply(`⏳ Só um segundinho, estou consultando o Gemma... ◈`).then(() => {
           ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
@@ -14406,7 +14406,7 @@ if (isCmd && command && !isOwnerOrSub) {
         break;
       case 'phi':
       case 'phi3':
-        if (!q) return reply(`🤔 Qual sua dúvida para o Phi? Informe a pergunta após o comando! Exemplo: ${prefix}${command} quem descobriu o Brasil? 🌍`);
+        if (!q) return reply(`🤔 Qual sua dúvida para o Phi? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
         reply(`⏳ Só um segundinho, estou consultando o Phi... ◈`).then(() => {
           ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
@@ -14422,7 +14422,7 @@ if (isCmd && command && !isOwnerOrSub) {
         });
         break;
       case 'qwen2':
-        if (!q) return reply(`🤔 Qual sua dúvida para o Qwen2? Informe a pergunta após o comando! Exemplo: ${prefix}${command} quem descobriu o Brasil? 🌍`);
+        if (!q) return reply(`🤔 Qual sua dúvida para o Qwen2? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
         reply(`⏳ Só um segundinho, estou consultando o Qwen2... ◈`).then(() => {
           ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
@@ -14439,7 +14439,7 @@ if (isCmd && command && !isOwnerOrSub) {
         break;
       case 'qwen':
       case 'qwen3':
-        if (!q) return reply(`🤔 Qual sua dúvida para o Qwen? Informe a pergunta após o comando! Exemplo: ${prefix}${command} quem descobriu o Brasil? 🌍`);
+        if (!q) return reply(`🤔 Qual sua dúvida para o Qwen? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
         reply(`⏳ Só um segundinho, estou consultando o Qwen... ◈`).then(() => {
           ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
@@ -14456,7 +14456,7 @@ if (isCmd && command && !isOwnerOrSub) {
         break;
       case 'llama':
       case 'llama3':
-        if (!q) return reply(`🤔 Qual sua dúvida para o Llama? Informe a pergunta após o comando! Exemplo: ${prefix}${command} quem descobriu o Brasil? 🌍`);
+        if (!q) return reply(`🤔 Qual sua dúvida para o Llama? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
         reply(`⏳ Só um segundinho, estou consultando o Llama... ◈`).then(() => {
           ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
@@ -14472,7 +14472,7 @@ if (isCmd && command && !isOwnerOrSub) {
         break;
       case 'baichuan':
       case 'baichuan2':
-        if (!q) return reply(`🤔 Qual sua dúvida para o Baichuan? Informe a pergunta após o comando! Exemplo: ${prefix}${command} quem descobriu o Brasil? 🌍`);
+        if (!q) return reply(`🤔 Qual sua dúvida para o Baichuan? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
         reply(`⏳ Só um segundinho, estou consultando o Baichuan... ◈`).then(() => {
           ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
@@ -14487,7 +14487,7 @@ if (isCmd && command && !isOwnerOrSub) {
         });
         break;
       case 'marin':
-        if (!q) return reply(`🤔 Qual sua dúvida para o Marin? Informe a pergunta após o comando! Exemplo: ${prefix}${command} quem descobriu o Brasil? 🌍`);
+        if (!q) return reply(`🤔 Qual sua dúvida para o Marin? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
 
         reply(`⏳ Só um segundinho, estou consultando o Marin... ◈`).then(() => {
           ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
@@ -14504,7 +14504,7 @@ if (isCmd && command && !isOwnerOrSub) {
         break;
       case 'kimi':
       case 'kimik2':
-        if (!q) return reply(`🤔 Qual sua dúvida para o Kimi? Informe a pergunta após o comando! Exemplo: ${prefix}${command} quem descobriu o Brasil? 🌍`);
+        if (!q) return reply(`🤔 Qual sua dúvida para o Kimi? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
 
         reply(`⏳ Só um segundinho, estou consultando o Kimi... ◈`).then(() => {
           ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
@@ -14521,7 +14521,7 @@ if (isCmd && command && !isOwnerOrSub) {
         });
         break;
       case 'mistral':
-        if (!q) return reply(`🤔 Qual sua dúvida para o Mistral? Informe a pergunta após o comando! Exemplo: ${prefix}${command} quem descobriu o Brasil? 🌍`);
+        if (!q) return reply(`🤔 Qual sua dúvida para o Mistral? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
 
         reply(`⏳ Só um segundinho, estou consultando o Mistral... ◈`).then(() => {
           ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
@@ -14538,7 +14538,7 @@ if (isCmd && command && !isOwnerOrSub) {
         });
         break;
       case 'magistral':
-        if (!q) return reply(`🤔 Qual sua dúvida para o Magistral? Informe a pergunta após o comando! Exemplo: ${prefix}${command} quem descobriu o Brasil? 🌍`);
+        if (!q) return reply(`🤔 Qual sua dúvida para o Magistral? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
 
         reply(`⏳ Só um segundinho, estou consultando o Magistral... ◈`).then(() => {
           ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
@@ -14556,7 +14556,7 @@ if (isCmd && command && !isOwnerOrSub) {
         break;
       case 'rakutenai':
       case 'rocket':
-        if (!q) return reply(`🤔 Qual sua dúvida para o RakutenAI? Informe a pergunta após o comando! Exemplo: ${prefix}${command} quem descobriu o Brasil? 🌍`);
+        if (!q) return reply(`🤔 Qual sua dúvida para o RakutenAI? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
 
         reply(`⏳ Só um segundinho, estou consultando o RakutenAI... ◈`).then(() => {
           ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
@@ -14573,7 +14573,7 @@ if (isCmd && command && !isOwnerOrSub) {
         });
         break;
       case 'yi':
-        if (!q) return reply(`🤔 Qual sua dúvida para o Yi? Informe a pergunta após o comando! Exemplo: ${prefix}${command} quem descobriu o Brasil? 🌍`);
+        if (!q) return reply(`🤔 Qual sua dúvida para o Yi? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
 
         reply(`⏳ Só um segundinho, estou consultando o Yi... ◈`).then(() => {
           ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
@@ -14590,7 +14590,7 @@ if (isCmd && command && !isOwnerOrSub) {
         });
         break;
       case 'gemma2':
-        if (!q) return reply(`🤔 Qual sua dúvida para o Gemma2? Informe a pergunta após o comando! Exemplo: ${prefix}${command} quem descobriu o Brasil? 🌍`);
+        if (!q) return reply(`🤔 Qual sua dúvida para o Gemma2? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
 
         reply(`⏳ Só um segundinho, estou consultando o Gemma2... ◈`).then(() => {
           ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
@@ -14607,7 +14607,7 @@ if (isCmd && command && !isOwnerOrSub) {
         });
         break;
       case 'swallow':
-        if (!q) return reply(`🤔 Qual sua dúvida para o Swallow? Informe a pergunta após o comando! Exemplo: ${prefix}${command} quem descobriu o Brasil? 🌍`);
+        if (!q) return reply(`🤔 Qual sua dúvida para o Swallow? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
 
         reply(`⏳ Só um segundinho, estou consultando o Swallow... ◈`).then(() => {
           ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
@@ -14624,7 +14624,7 @@ if (isCmd && command && !isOwnerOrSub) {
         });
         break;
       case 'falcon':
-        if (!q) return reply(`🤔 Qual sua dúvida para o Falcon? Informe a pergunta após o comando! Exemplo: ${prefix}${command} quem descobriu o Brasil? 🌍`);
+        if (!q) return reply(`🤔 Qual sua dúvida para o Falcon? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
 
         reply(`⏳ Só um segundinho, estou consultando o Falcon... ◈`).then(() => {
           ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
@@ -14641,7 +14641,7 @@ if (isCmd && command && !isOwnerOrSub) {
         });
         break;
       case 'qwencoder':
-        if (!q) return reply(`🤔 Qual sua dúvida para o Qwencoder? Informe a pergunta após o comando! Exemplo: ${prefix}${command} quem descobriu o Brasil? 🌍`);
+        if (!q) return reply(`🤔 Qual sua dúvida para o Qwencoder? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
 
         reply(`⏳ Só um segundinho, estou consultando o Qwencoder... ◈`).then(() => {
           ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
@@ -14658,7 +14658,7 @@ if (isCmd && command && !isOwnerOrSub) {
         });
         break;
       case 'codegemma':
-        if (!q) return reply(`🤔 Qual sua dúvida para o CodeGemma? Informe a pergunta após o comando! Exemplo: ${prefix}${command} quem descobriu o Brasil? 🌍`);
+        if (!q) return reply(`🤔 Qual sua dúvida para o CodeGemma? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
 
         reply(`⏳ Só um segundinho, estou consultando o CodeGemma... ◈`).then(() => {
           ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
@@ -14675,7 +14675,7 @@ if (isCmd && command && !isOwnerOrSub) {
         });
         break;
       case 'resumir':
-        if (!q) return reply(`📝 *Resumidor de Texto*\n\n💡 *Como usar:*\n• Envie o texto que deseja resumir após o comando\n• Ex: ${prefix}resumir [seu texto aqui]\n\n◈ O texto será resumido de forma clara e objetiva!`);
+        if (!q) return reply(`📝 *Resumidor de Texto*\n\n💡 *Como usar:*\n• Envie o texto que deseja resumir após o comando\n• Ex: ${groupPrefix}resumir [seu texto aqui]\n\n◈ O texto será resumido de forma clara e objetiva!`);
 
         reply('⏳ Aguarde enquanto preparo um resumo bem caprichado... ◈').then(() => {
           const prompt = `Resuma o seguinte texto em poucos parágrafos, de forma clara e objetiva, destacando as informações mais importantes:\n\n${q}`;
@@ -14693,10 +14693,10 @@ if (isCmd && command && !isOwnerOrSub) {
         });
         break;
       case 'resumirurl':
-        if (!q) return reply(`🌐 Quer resumir uma página? Envie a URL após o comando ${prefix}resumirurl! Exemplo: ${prefix}resumirurl https://exemplo.com/artigo 😊`);
+        if (!q) return reply(`🌐 Quer resumir uma página? Envie a URL após o comando ${groupPrefix}resumirurl! Exemplo: ${groupPrefix}resumirurl https://exemplo.com/artigo 😊`);
 
         if (!q.startsWith('http://') && !q.startsWith('https://')) {
-          return reply(`🚫 Ops, parece que a URL é inválida! Certifique-se de incluir http:// ou https://. Exemplo: ${prefix}resumirurl https://exemplo.com/artigo 😊`);
+          return reply(`🚫 Ops, parece que a URL é inválida! Certifique-se de incluir http:// ou https://. Exemplo: ${groupPrefix}resumirurl https://exemplo.com/artigo 😊`);
         }
         reply('⏳ Aguarde enquanto busco e resumo a página para você... ◈').then(() => {
           axios.get(q, {
@@ -14738,7 +14738,7 @@ if (isCmd && command && !isOwnerOrSub) {
         break;
       case 'ideias':
       case 'ideia':
-        if (!q) return reply(`💡 Quer ideias criativas? Diga o tema após o comando ${prefix}ideias! Exemplo: ${prefix}ideias nomes para um aplicativo de receitas 😊`);
+        if (!q) return reply(`💡 Quer ideias criativas? Diga o tema após o comando ${groupPrefix}ideias! Exemplo: ${groupPrefix}ideias nomes para um aplicativo de receitas 😊`);
 
         reply('⏳ Um segundinho, estou pensando em ideias incríveis... ◈').then(() => {
           const prompt = `Gere 15 ideias criativas e detalhadas para o seguinte tema: ${q}`;
@@ -14757,7 +14757,7 @@ if (isCmd && command && !isOwnerOrSub) {
         break;
       case 'explicar':
       case 'explique':
-        if (!q) return reply(`🤓 Quer entender algo? Diga o que deseja explicar após o comando ${prefix}explicar! Exemplo: ${prefix}explicar o que é inteligência artificial 😊`);
+        if (!q) return reply(`🤓 Quer entender algo? Diga o que deseja explicar após o comando ${groupPrefix}explicar! Exemplo: ${groupPrefix}explicar o que é inteligência artificial 😊`);
 
         reply('⏳ Um momentinho, estou preparando uma explicação bem clara... ◈').then(() => {
           const prompt = `Explique o seguinte conceito de forma simples e clara, como se fosse para alguém sem conhecimento prévio: ${q}`;
@@ -14776,7 +14776,7 @@ if (isCmd && command && !isOwnerOrSub) {
         break;
       case 'corrigir':
       case 'correcao':
-        if (!q) return reply(`✍️ Quer corrigir um texto? Envie o texto após o comando ${prefix}corrigir! Exemplo: ${prefix}corrigir Eu foi no mercado e comprei frutas. 😊`);
+        if (!q) return reply(`✍️ Quer corrigir um texto? Envie o texto após o comando ${groupPrefix}corrigir! Exemplo: ${groupPrefix}corrigir Eu foi no mercado e comprei frutas. 😊`);
 
         reply('⏳ Aguarde enquanto dou um polimento no seu texto... ◈').then(() => {
           const prompt = `Corrija os erros gramaticais, ortográficos e de estilo no seguinte texto, mantendo o significado original: ${q}`;
@@ -14894,7 +14894,7 @@ Faça um resumo conciso mas completo, destacando o que é mais relevante.`;
 
 
         if (!q) {
-          return reply(`📖 *Gerador de Histórias*\n\n💡 *Como usar:*\n• ${prefix}historia <gênero> <tema opcional>\n\n📚 *Gêneros disponíveis:*\n• fantasia, terror, romance, ficção científica, aventura, mistério, comédia, drama, ação, suspense\n\n◈ *Exemplos:*\n• ${prefix}historia fantasia dragões\n• ${prefix}historia terror casa abandonada\n• ${prefix}historia romance escola\n• ${prefix}historia ficção científica viagem no tempo`);
+          return reply(`📖 *Gerador de Histórias*\n\n💡 *Como usar:*\n• ${groupPrefix}historia <gênero> <tema opcional>\n\n📚 *Gêneros disponíveis:*\n• fantasia, terror, romance, ficção científica, aventura, mistério, comédia, drama, ação, suspense\n\n◈ *Exemplos:*\n• ${groupPrefix}historia fantasia dragões\n• ${groupPrefix}historia terror casa abandonada\n• ${groupPrefix}historia romance escola\n• ${groupPrefix}historia ficção científica viagem no tempo`);
         }
 
         const generos = {
@@ -14958,7 +14958,7 @@ Seja criativo e original. Não use clichês. A história deve ser envolvente do 
 
 
         if (!q) {
-          return reply(`🎬 *Recomendador de Mídia*\n\n💡 *Como usar:*\n• ${prefix}recomendar <tipo> <gênero/preferência>\n\n📺 *Tipos disponíveis:*\n• anime, jogo, musica, livro\n\n◈ *Exemplos:*\n• ${prefix}recomendar anime ação\n• ${prefix}recomendar jogo rpg\n• ${prefix}recomendar musica rock\n• ${prefix}recomendar livro fantasia`);
+          return reply(`🎬 *Recomendador de Mídia*\n\n💡 *Como usar:*\n• ${groupPrefix}recomendar <tipo> <gênero/preferência>\n\n📺 *Tipos disponíveis:*\n• anime, jogo, musica, livro\n\n◈ *Exemplos:*\n• ${groupPrefix}recomendar anime ação\n• ${groupPrefix}recomendar jogo rpg\n• ${groupPrefix}recomendar musica rock\n• ${groupPrefix}recomendar livro fantasia`);
         }
 
         const tipos = {
@@ -15033,7 +15033,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
 
           // Validar tamanho do chute
           if (chute.length !== tamanhoEsperado) {
-            return reply(`❌ A palavra deve ter ${tamanhoEsperado} letras!\n\n💡 Você tem um jogo ativo com palavra de ${tamanhoEsperado} letras.\n\n📝 Chute: ${prefix}wordle [palavra de ${tamanhoEsperado} letras]`);
+            return reply(`❌ A palavra deve ter ${tamanhoEsperado} letras!\n\n💡 Você tem um jogo ativo com palavra de ${tamanhoEsperado} letras.\n\n📝 Chute: ${groupPrefix}wordle [palavra de ${tamanhoEsperado} letras]`);
           }
 
           game.tentativas++;
@@ -15093,14 +15093,14 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
             return reply(`😢 *GAME OVER!*\n\n${game.historico.join('\n')}\n\n❌ Suas tentativas acabaram!\n\nA palavra era: *${game.palavra.toUpperCase()}*`);
           }
 
-          return reply(`🎯 *WORDLE* (${game.tentativas}/6)\n\n${game.historico.join('\n')}\n\n💡 Continue chutando com: ${prefix}wordle [palavra de ${tamanhoEsperado} letras]`);
+          return reply(`🎯 *WORDLE* (${game.tentativas}/6)\n\n${game.historico.join('\n')}\n\n💡 Continue chutando com: ${groupPrefix}wordle [palavra de ${tamanhoEsperado} letras]`);
         }
 
         // Novo jogo
         if (global.wordleGames[gameKey]) {
           const game = global.wordleGames[gameKey];
           const tamanho = game.palavra.length;
-          return reply(`🌌 *Jogo em andamento!*\n\n${game.historico.length > 0 ? game.historico.join('\n') + '\n\n' : ''}Tentativas: ${game.tentativas}/6\n📏 Tamanho: ${tamanho} letras\n\n💡 Chute uma palavra de ${tamanho} letras:\n${prefix}wordle [palavra]\n\n🔄 Para desistir: ${prefix}wordle desistir`);
+          return reply(`🌌 *Jogo em andamento!*\n\n${game.historico.length > 0 ? game.historico.join('\n') + '\n\n' : ''}Tentativas: ${game.tentativas}/6\n📏 Tamanho: ${tamanho} letras\n\n💡 Chute uma palavra de ${tamanho} letras:\n${groupPrefix}wordle [palavra]\n\n🔄 Para desistir: ${groupPrefix}wordle desistir`);
         }
 
         if (args[0] === 'desistir' && global.wordleGames[gameKey]) {
@@ -15126,7 +15126,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
           iniciado: Date.now()
         };
 
-        await reply(`🌌 *WORDLE - Adivinhe a Palavra!*\n\n📝 Tente adivinhar a palavra de ${tamanhoEscolhido} letras!\n\n🟩 = Letra certa no lugar certo\n🟨 = Letra certa no lugar errado\n⬛ = Letra não existe\n\n💡 Você tem 6 tentativas!\n\n*Chute com:* ${prefix}wordle [palavra de ${tamanhoEscolhido} letras]`);
+        await reply(`🌌 *WORDLE - Adivinhe a Palavra!*\n\n📝 Tente adivinhar a palavra de ${tamanhoEscolhido} letras!\n\n🟩 = Letra certa no lugar certo\n🟨 = Letra certa no lugar errado\n⬛ = Letra não existe\n\n💡 Você tem 6 tentativas!\n\n*Chute com:* ${groupPrefix}wordle [palavra de ${tamanhoEscolhido} letras]`);
         break;
       }
 
@@ -15180,7 +15180,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
         // Quiz ativo - mostrar pergunta atual
         if (global.quizGames[quizKey] && args.length === 0) {
           const game = global.quizGames[quizKey];
-          return reply(`❓ *QUIZ* (${game.categoria})\n\n${game.pergunta}\n\n💡 Responda com: ${prefix}quiz [resposta]\n🔄 Pular: ${prefix}quiz pular`);
+          return reply(`❓ *QUIZ* (${game.categoria})\n\n${game.pergunta}\n\n💡 Responda com: ${groupPrefix}quiz [resposta]\n🔄 Pular: ${groupPrefix}quiz pular`);
         }
 
         // Pular pergunta
@@ -15192,7 +15192,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
 
         // Mostrar categorias
         if (!args[0]) {
-          const categoriasList = Object.keys(quizDB).map(cat => `• ${prefix}quiz ${cat}`).join('\n');
+          const categoriasList = Object.keys(quizDB).map(cat => `• ${groupPrefix}quiz ${cat}`).join('\n');
           return reply(`❓ *QUIZ - Teste seus conhecimentos!*\n\n📚 *Categorias disponíveis:*\n${categoriasList}\n\n💡 Responda rápido para ganhar mais pontos!`);
         }
 
@@ -15214,7 +15214,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
           iniciado: Date.now()
         };
 
-        await reply(`❓ *QUIZ* (${categoria})\n\n${perguntaEscolhida.p}\n\n💡 Responda com: ${prefix}quiz [resposta]\n⏱️ Responda rápido para mais pontos!`);
+        await reply(`❓ *QUIZ* (${categoria})\n\n${perguntaEscolhida.p}\n\n💡 Responda com: ${groupPrefix}quiz [resposta]\n⏱️ Responda rápido para mais pontos!`);
         break;
       }
 
@@ -15255,7 +15255,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
         // Mostrar dica
         if (args[0] === 'dica' && global.forcaGames[forcaKey]) {
           const game = global.forcaGames[forcaKey];
-          return reply(`${desenhoForca[game.erros]}\n\n🎯 *FORCA*\n\n📝 ${game.progresso.join(' ')}\n\n💡 *Dica:* ${game.dica}\n❌ Letras erradas: ${game.letrasErradas.join(', ') || 'Nenhuma'}\n⚠️ Erros: ${game.erros}/6\n\n💬 Chute com: ${prefix}forca [letra]\n🔤 Ou chute a palavra: ${prefix}forca [palavra]`);
+          return reply(`${desenhoForca[game.erros]}\n\n🎯 *FORCA*\n\n📝 ${game.progresso.join(' ')}\n\n💡 *Dica:* ${game.dica}\n❌ Letras erradas: ${game.letrasErradas.join(', ') || 'Nenhuma'}\n⚠️ Erros: ${game.erros}/6\n\n💬 Chute com: ${groupPrefix}forca [letra]\n🔤 Ou chute a palavra: ${groupPrefix}forca [palavra]`);
         }
 
         // Chutar letra ou palavra
@@ -15274,7 +15274,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
                 delete global.forcaGames[forcaKey];
                 return reply(`${desenhoForca[6]}\n\n🌌 *GAME OVER!*\n\n❌ A palavra era: *${game.palavra.toUpperCase()}*`);
               }
-              return reply(`${desenhoForca[game.erros]}\n\n❌ Palavra errada! (+2 erros)\n\n📝 ${game.progresso.join(' ')}\n\n❌ Letras erradas: ${game.letrasErradas.join(', ') || 'Nenhuma'}\n⚠️ Erros: ${game.erros}/6\n\n💡 Use ${prefix}forca dica para ver a dica`);
+              return reply(`${desenhoForca[game.erros]}\n\n❌ Palavra errada! (+2 erros)\n\n📝 ${game.progresso.join(' ')}\n\n❌ Letras erradas: ${game.letrasErradas.join(', ') || 'Nenhuma'}\n⚠️ Erros: ${game.erros}/6\n\n💡 Use ${groupPrefix}forca dica para ver a dica`);
             }
           }
 
@@ -15282,7 +15282,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
           const letra = chute[0];
 
           if (game.letrasCorretas.includes(letra) || game.letrasErradas.includes(letra)) {
-            return reply(`⚠️ Você já chutou a letra "${letra.toUpperCase()}"!\n\n📝 ${game.progresso.join(' ')}\n\n❌ Letras erradas: ${game.letrasErradas.join(', ') || 'Nenhuma'}\n\n💡 Use ${prefix}forca dica para ver a dica`);
+            return reply(`⚠️ Você já chutou a letra "${letra.toUpperCase()}"!\n\n📝 ${game.progresso.join(' ')}\n\n❌ Letras erradas: ${game.letrasErradas.join(', ') || 'Nenhuma'}\n\n💡 Use ${groupPrefix}forca dica para ver a dica`);
           }
 
           const palavraNorm = normalizar(game.palavra.toLowerCase());
@@ -15302,7 +15302,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
               return reply(`🎉 *PARABÉNS!*\n\n📝 ${game.progresso.join(' ')}\n\n✅ Vocês descobriram a palavra!\n🏆 *${game.palavra.toUpperCase()}*`);
             }
 
-            return reply(`${desenhoForca[game.erros]}\n\n✅ Letra "${letra.toUpperCase()}" correta!\n\n📝 ${game.progresso.join(' ')}\n\n❌ Letras erradas: ${game.letrasErradas.join(', ') || 'Nenhuma'}\n⚠️ Erros: ${game.erros}/6\n\n💡 Use ${prefix}forca dica para ver a dica`);
+            return reply(`${desenhoForca[game.erros]}\n\n✅ Letra "${letra.toUpperCase()}" correta!\n\n📝 ${game.progresso.join(' ')}\n\n❌ Letras erradas: ${game.letrasErradas.join(', ') || 'Nenhuma'}\n⚠️ Erros: ${game.erros}/6\n\n💡 Use ${groupPrefix}forca dica para ver a dica`);
           } else {
             game.letrasErradas.push(letra.toUpperCase());
             game.erros++;
@@ -15312,7 +15312,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
               return reply(`${desenhoForca[6]}\n\n🌌 *GAME OVER!*\n\n❌ A palavra era: *${game.palavra.toUpperCase()}*`);
             }
 
-            return reply(`${desenhoForca[game.erros]}\n\n❌ Letra "${letra.toUpperCase()}" errada!\n\n📝 ${game.progresso.join(' ')}\n\n❌ Letras erradas: ${game.letrasErradas.join(', ')}\n⚠️ Erros: ${game.erros}/6\n\n💡 Use ${prefix}forca dica para ver a dica`);
+            return reply(`${desenhoForca[game.erros]}\n\n❌ Letra "${letra.toUpperCase()}" errada!\n\n📝 ${game.progresso.join(' ')}\n\n❌ Letras erradas: ${game.letrasErradas.join(', ')}\n⚠️ Erros: ${game.erros}/6\n\n💡 Use ${groupPrefix}forca dica para ver a dica`);
           }
         }
 
@@ -15326,7 +15326,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
         // Jogo ativo
         if (global.forcaGames[forcaKey] && args.length === 0) {
           const game = global.forcaGames[forcaKey];
-          return reply(`${desenhoForca[game.erros]}\n\n🎯 *FORCA*\n\n📝 ${game.progresso.join(' ')}\n\n❌ Letras erradas: ${game.letrasErradas.join(', ') || 'Nenhuma'}\n⚠️ Erros: ${game.erros}/6\n\n💬 Chute com: ${prefix}forca [letra]\n🔤 Ou chute a palavra: ${prefix}forca [palavra]\n💡 Ver dica: ${prefix}forca dica\n🏳️ Desistir: ${prefix}forca desistir`);
+          return reply(`${desenhoForca[game.erros]}\n\n🎯 *FORCA*\n\n📝 ${game.progresso.join(' ')}\n\n❌ Letras erradas: ${game.letrasErradas.join(', ') || 'Nenhuma'}\n⚠️ Erros: ${game.erros}/6\n\n💬 Chute com: ${groupPrefix}forca [letra]\n🔤 Ou chute a palavra: ${groupPrefix}forca [palavra]\n💡 Ver dica: ${groupPrefix}forca dica\n🏳️ Desistir: ${groupPrefix}forca desistir`);
         }
 
         // Novo jogo
@@ -15343,7 +15343,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
           iniciado: Date.now()
         };
 
-        await reply(`${desenhoForca[0]}\n\n🎯 *FORCA - Novo Jogo!*\n\n📝 ${progresso.join(' ')}\n\n💬 Chute uma letra: ${prefix}forca [letra]\n🔤 Ou chute a palavra: ${prefix}forca [palavra]\n💡 Ver dica: ${prefix}forca dica\n🏳️ Desistir: ${prefix}forca desistir`);
+        await reply(`${desenhoForca[0]}\n\n🎯 *FORCA - Novo Jogo!*\n\n📝 ${progresso.join(' ')}\n\n💬 Chute uma letra: ${groupPrefix}forca [letra]\n🔤 Ou chute a palavra: ${groupPrefix}forca [palavra]\n💡 Ver dica: ${groupPrefix}forca dica\n🏳️ Desistir: ${groupPrefix}forca desistir`);
         break;
       }
 
@@ -15392,7 +15392,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
             created: Date.now()
           };
 
-          return reply(`⚡ *DESAFIO DE DIGITAÇÃO*\n\n@${sender.split('@')[0]} desafiou @${menc_os2.split('@')[0]} para uma corrida de digitação!\n\n💡 O desafiado deve usar: ${prefix}digitar aceitar\n⏱️ O desafio expira em 60 segundos.`, { mentions: [sender, menc_os2] });
+          return reply(`⚡ *DESAFIO DE DIGITAÇÃO*\n\n@${sender.split('@')[0]} desafiou @${menc_os2.split('@')[0]} para uma corrida de digitação!\n\n💡 O desafiado deve usar: ${groupPrefix}digitar aceitar\n⏱️ O desafio expira em 60 segundos.`, { mentions: [sender, menc_os2] });
         }
 
         // Aceitar desafio
@@ -15439,7 +15439,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
               resultados: {}
             };
 
-            await reply(`⚡ *CORRIDA DE DIGITAÇÃO INICIADA!*\n\n📝 *Digite exatamente esta frase:*\n\n"${fraseEscolhida}"\n\n⏱️ Quem digitar primeiro e corretamente vence!\n\n💡 Digite: ${prefix}digitar ${fraseEscolhida}`, { mentions: [challenge.challenger, challenge.challenged] });
+            await reply(`⚡ *CORRIDA DE DIGITAÇÃO INICIADA!*\n\n📝 *Digite exatamente esta frase:*\n\n"${fraseEscolhida}"\n\n⏱️ Quem digitar primeiro e corretamente vence!\n\n💡 Digite: ${groupPrefix}digitar ${fraseEscolhida}`, { mentions: [challenge.challenger, challenge.challenged] });
           }, delay);
 
           return reply(`✅ Desafio aceito! A frase será enviada em ${delay / 1000} segundos... ⏱️`, { mentions: [challenge.challenger] });
@@ -15539,7 +15539,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
         }
 
         // Mostrar ajuda
-        return reply(`⚡ *CORRIDA DE DIGITAÇÃO*\n\n💡 *Como jogar:*\n\n1️⃣ Desafie alguém:\n${prefix}digitar @usuario\n\n2️⃣ O desafiado aceita:\n${prefix}digitar aceitar\n\n3️⃣ Digite a frase exatamente como aparecer!\n\n🏆 Quem digitar primeiro e corretamente vence!\n\n⚠️ Proteção anti-cópia: mínimo de 3 segundos`);
+        return reply(`⚡ *CORRIDA DE DIGITAÇÃO*\n\n💡 *Como jogar:*\n\n1️⃣ Desafie alguém:\n${groupPrefix}digitar @usuario\n\n2️⃣ O desafiado aceita:\n${groupPrefix}digitar aceitar\n\n3️⃣ Digite a frase exatamente como aparecer!\n\n🏆 Quem digitar primeiro e corretamente vence!\n\n⚠️ Proteção anti-cópia: mínimo de 3 segundos`);
       }
 
       // ═══════════════════════════════════════════════════════════════
@@ -15682,7 +15682,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
             created: Date.now()
           };
 
-          return reply(`🚢 *DESAFIO DE BATALHA NAVAL*\n\n@${sender.split('@')[0]} desafiou @${menc_os2.split('@')[0]} para uma batalha naval!\n\n💡 O desafiado deve usar: ${prefix}batalhanaval aceitar\n⏱️ O desafio expira em 60 segundos.`, { mentions: [sender, menc_os2] });
+          return reply(`🚢 *DESAFIO DE BATALHA NAVAL*\n\n@${sender.split('@')[0]} desafiou @${menc_os2.split('@')[0]} para uma batalha naval!\n\n💡 O desafiado deve usar: ${groupPrefix}batalhanaval aceitar\n⏱️ O desafio expira em 60 segundos.`, { mentions: [sender, menc_os2] });
         }
 
         // Aceitar desafio
@@ -15724,7 +15724,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
 
           delete global.navalChallenges[gameKey];
 
-          return reply(`🚢 *BATALHA NAVAL INICIADA!*\n\n@${challenge.challenger.split('@')[0]} vs @${challenge.challenged.split('@')[0]}\n\n🎯 É a vez de @${challenge.challenger.split('@')[0]} atirar!\n\n💡 Use: ${prefix}batalhanaval [coordenada]\n📌 Exemplo: ${prefix}batalhanaval A5`, { mentions: [challenge.challenger, challenge.challenged] });
+          return reply(`🚢 *BATALHA NAVAL INICIADA!*\n\n@${challenge.challenger.split('@')[0]} vs @${challenge.challenged.split('@')[0]}\n\n🎯 É a vez de @${challenge.challenger.split('@')[0]} atirar!\n\n💡 Use: ${groupPrefix}batalhanaval [coordenada]\n📌 Exemplo: ${groupPrefix}batalhanaval A5`, { mentions: [challenge.challenger, challenge.challenged] });
         }
 
         // Processar tiro
@@ -15742,7 +15742,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
 
           const coordenada = parseCoordenada(args[0].toUpperCase());
           if (!coordenada) {
-            return reply(`❌ Coordenada inválida! Use formato: A1, B5, J10, etc.\n\n💡 Exemplo: ${prefix}batalhanaval A5`);
+            return reply(`❌ Coordenada inválida! Use formato: A1, B5, J10, etc.\n\n💡 Exemplo: ${groupPrefix}batalhanaval A5`);
           }
 
           // Determinar qual tabuleiro atacar e qual tabuleiro de tiros atualizar
@@ -15873,7 +15873,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
 
           resposta += `\n📊 *Seu tabuleiro de tiros:*\n\`\`\`${formatarTabuleiro(tirosJogador)}\`\`\`\n\n`;
           resposta += `⏭️ Agora é a vez de @${oponente.split('@')[0]}!\n`;
-          resposta += `💡 Use: ${prefix}batalhanaval [coordenada]`;
+          resposta += `💡 Use: ${groupPrefix}batalhanaval [coordenada]`;
 
           return reply(resposta, { mentions: [jogadorAtual, oponente] });
         }
@@ -15906,13 +15906,13 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
           status += `\n🌊 Intactos: ${naviosIntactosStatus.length}\n\n`;
 
           status += `📊 *Seu tabuleiro de tiros:*\n\`\`\`${formatarTabuleiro(tirosJogador)}\`\`\`\n\n`;
-          status += `💡 Use: ${prefix}batalhanaval [coordenada]\n📌 Exemplo: ${prefix}batalhanaval A5`;
+          status += `💡 Use: ${groupPrefix}batalhanaval [coordenada]\n📌 Exemplo: ${groupPrefix}batalhanaval A5`;
 
           return reply(status, { mentions: [game.jogador1, game.jogador2] });
         }
 
         // Mostrar ajuda
-        return reply(`🚢 *BATALHA NAVAL*\n\n💡 *Como jogar:*\n\n1️⃣ Desafie alguém:\n${prefix}batalhanaval @usuario\n\n2️⃣ O desafiado aceita:\n${prefix}batalhanaval aceitar\n\n3️⃣ Atire em coordenadas:\n${prefix}batalhanaval A5\n\n🎯 Objetivo: Afundar todos os navios do oponente!\n\n📌 Coordenadas: A-J (colunas) e 1-10 (linhas)\n💥 = Acerto | ❌ = Água`);
+        return reply(`🚢 *BATALHA NAVAL*\n\n💡 *Como jogar:*\n\n1️⃣ Desafie alguém:\n${groupPrefix}batalhanaval @usuario\n\n2️⃣ O desafiado aceita:\n${groupPrefix}batalhanaval aceitar\n\n3️⃣ Atire em coordenadas:\n${groupPrefix}batalhanaval A5\n\n🎯 Objetivo: Afundar todos os navios do oponente!\n\n📌 Coordenadas: A-J (colunas) e 1-10 (linhas)\n💥 = Acerto | ❌ = Água`);
       }
 
       // ═══════════════════════════════════════════════════════════════
@@ -15968,10 +15968,10 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
             msg += `${idx + 1}. ${cat}\n`;
           });
           msg += `\n💡 *Como jogar:*\n`;
-          msg += `Use: ${prefix}stop [categoria] [palavra]\n\n`;
+          msg += `Use: ${groupPrefix}stop [categoria] [palavra]\n\n`;
           msg += `📌 *Exemplo:*\n`;
-          msg += `${prefix}stop Nome Ana\n`;
-          msg += `${prefix}stop País Argentina\n\n`;
+          msg += `${groupPrefix}stop Nome Ana\n`;
+          msg += `${groupPrefix}stop País Argentina\n\n`;
           msg += `⏱️ Tempo limite: 5 minutos\n`;
           msg += `🏆 Quem completar todas as categorias primeiro vence!`;
 
@@ -16135,8 +16135,8 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
 
         const categoriasCompletas = game.respostas[sender] ? Object.keys(game.respostas[sender]).length : 0;
         status += `\n📊 *Seu progresso:* ${categoriasCompletas}/${game.categorias.length}\n\n`;
-        status += `💡 Use: ${prefix}stop [categoria] [palavra]\n`;
-        status += `📌 Exemplo: ${prefix}stop Nome Ana`;
+        status += `💡 Use: ${groupPrefix}stop [categoria] [palavra]\n`;
+        status += `📌 Exemplo: ${groupPrefix}stop Nome Ana`;
 
         return reply(status);
       }
@@ -16189,14 +16189,14 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
               delete global.anagramaGames[gameKey];
               return reply(`😢 *GAME OVER!*\n\n❌ Você esgotou suas tentativas!\n\n📝 A palavra era: *${game.palavra.toUpperCase()}*\n💡 Dica: ${game.dica}`);
             }
-            return reply(`❌ Resposta incorreta!\n\n🔀 Anagrama: ${game.embaralhada}\n💡 Dica: ${game.dica}\n📊 Tentativas: ${game.tentativas}/5\n\n💡 Tente novamente: ${prefix}anagrama [palavra]`);
+            return reply(`❌ Resposta incorreta!\n\n🔀 Anagrama: ${game.embaralhada}\n💡 Dica: ${game.dica}\n📊 Tentativas: ${game.tentativas}/5\n\n💡 Tente novamente: ${groupPrefix}anagrama [palavra]`);
           }
         }
 
         // Verificar se há jogo ativo
         if (global.anagramaGames[gameKey]) {
           const game = global.anagramaGames[gameKey];
-          return reply(`🔀 *ANAGRAMA*\n\n📝 Anagrama: *${game.embaralhada.toUpperCase()}*\n💡 Dica: ${game.dica}\n📊 Tentativas: ${game.tentativas}/5\n\n💡 Descubra a palavra: ${prefix}anagrama [palavra]`);
+          return reply(`🔀 *ANAGRAMA*\n\n📝 Anagrama: *${game.embaralhada.toUpperCase()}*\n💡 Dica: ${game.dica}\n📊 Tentativas: ${game.tentativas}/5\n\n💡 Descubra a palavra: ${groupPrefix}anagrama [palavra]`);
         }
 
         // Iniciar novo jogo
@@ -16211,7 +16211,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
           iniciado: Date.now()
         };
 
-        await reply(`🔀 *ANAGRAMA - Novo Jogo!*\n\n📝 Anagrama: *${palavraEmbaralhada.toUpperCase()}*\n💡 Dica: ${palavraEscolhida.dica}\n\n🎯 Descubra a palavra original!\n💡 Use: ${prefix}anagrama [palavra]\n📊 Você tem 5 tentativas`);
+        await reply(`🔀 *ANAGRAMA - Novo Jogo!*\n\n📝 Anagrama: *${palavraEmbaralhada.toUpperCase()}*\n💡 Dica: ${palavraEscolhida.dica}\n\n🎯 Descubra a palavra original!\n💡 Use: ${groupPrefix}anagrama [palavra]\n📊 Você tem 5 tentativas`);
         break;
       }
 
@@ -16254,7 +16254,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
           const numPerguntas = parseInt(args.find(arg => !isNaN(parseInt(arg)))) || 5;
 
           if (numPerguntas < 3 || numPerguntas > 20) {
-            return reply('❌ Número de perguntas inválido! Use entre 3 e 20 perguntas.\n\n💡 Exemplo: ${prefix}dueloquiz @usuario 10');
+            return reply('❌ Número de perguntas inválido! Use entre 3 e 20 perguntas.\n\n💡 Exemplo: ${groupPrefix}dueloquiz @usuario 10');
           }
 
           if (global.dueloQuizChallenges[gameKey] || global.dueloQuizGames[gameKey]) {
@@ -16269,7 +16269,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
             created: Date.now()
           };
 
-          return reply(`◈ *DESAFIO DE QUIZ*\n\n@${sender.split('@')[0]} desafiou @${menc_os2.split('@')[0]} para um duelo de ${numPerguntas} perguntas!\n\n💡 O desafiado deve usar: ${prefix}dueloquiz aceitar\n⏱️ O desafio expira em 60 segundos.`, { mentions: [sender, menc_os2] });
+          return reply(`◈ *DESAFIO DE QUIZ*\n\n@${sender.split('@')[0]} desafiou @${menc_os2.split('@')[0]} para um duelo de ${numPerguntas} perguntas!\n\n💡 O desafiado deve usar: ${groupPrefix}dueloquiz aceitar\n⏱️ O desafio expira em 60 segundos.`, { mentions: [sender, menc_os2] });
         }
 
         // Aceitar desafio
@@ -16334,7 +16334,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
           delete global.dueloQuizChallenges[gameKey];
 
           const primeiraPergunta = perguntasSelecionadas[0];
-          return reply(`◈ *DUELO DE QUIZ INICIADO!*\n\n@${challenge.challenger.split('@')[0]} vs @${challenge.challenged.split('@')[0]}\n\n📊 ${challenge.numPerguntas} perguntas\n\n🎯 *Pergunta 1/${challenge.numPerguntas}*\n📂 Categoria: ${primeiraPergunta.categoria}\n\n❓ ${primeiraPergunta.pergunta.p}\n\n💡 É a vez de @${challenge.challenger.split('@')[0]} responder!\nUse: ${prefix}dueloquiz [resposta]`, { mentions: [challenge.challenger, challenge.challenged] });
+          return reply(`◈ *DUELO DE QUIZ INICIADO!*\n\n@${challenge.challenger.split('@')[0]} vs @${challenge.challenged.split('@')[0]}\n\n📊 ${challenge.numPerguntas} perguntas\n\n🎯 *Pergunta 1/${challenge.numPerguntas}*\n📂 Categoria: ${primeiraPergunta.categoria}\n\n❓ ${primeiraPergunta.pergunta.p}\n\n💡 É a vez de @${challenge.challenger.split('@')[0]} responder!\nUse: ${groupPrefix}dueloquiz [resposta]`, { mentions: [challenge.challenger, challenge.challenged] });
         }
 
         // Processar resposta
@@ -16400,7 +16400,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
           respostaMsg += `📂 Categoria: ${proximaPergunta.categoria}\n\n`;
           respostaMsg += `❓ ${proximaPergunta.pergunta.p}\n\n`;
           respostaMsg += `💡 É a vez de @${game.turno.split('@')[0]} responder!\n`;
-          respostaMsg += `Use: ${prefix}dueloquiz [resposta]`;
+          respostaMsg += `Use: ${groupPrefix}dueloquiz [resposta]`;
 
           return reply(respostaMsg, { mentions: [game.jogador1, game.jogador2] });
         }
@@ -16416,13 +16416,13 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
           status += `📂 Categoria: ${perguntaAtual.categoria}\n\n`;
           status += `❓ ${perguntaAtual.pergunta.p}\n\n`;
           status += `⏭️ Turno: @${game.turno.split('@')[0]}\n`;
-          status += `💡 Use: ${prefix}dueloquiz [resposta]`;
+          status += `💡 Use: ${groupPrefix}dueloquiz [resposta]`;
 
           return reply(status, { mentions: [game.jogador1, game.jogador2] });
         }
 
         // Mostrar ajuda
-        return reply(`◈ *DUELO DE QUIZ*\n\n💡 *Como jogar:*\n\n1️⃣ Desafie alguém:\n${prefix}dueloquiz @usuario [número]\n\n2️⃣ O desafiado aceita:\n${prefix}dueloquiz aceitar\n\n3️⃣ Respondam as perguntas alternadamente!\n\n🏆 Quem acertar mais perguntas vence!\n\n📌 Exemplo: ${prefix}dueloquiz @usuario 10`);
+        return reply(`◈ *DUELO DE QUIZ*\n\n💡 *Como jogar:*\n\n1️⃣ Desafie alguém:\n${groupPrefix}dueloquiz @usuario [número]\n\n2️⃣ O desafiado aceita:\n${groupPrefix}dueloquiz aceitar\n\n3️⃣ Respondam as perguntas alternadamente!\n\n🏆 Quem acertar mais perguntas vence!\n\n📌 Exemplo: ${groupPrefix}dueloquiz @usuario 10`);
       }
 
       // ═══════════════════════════════════════════════════════════════
@@ -16552,7 +16552,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
           );
 
           if (!palavraEncontrada) {
-            return reply(`❌ "${args.join(' ')}" não está na lista de palavras!\n\n📋 Palavras encontradas: ${game.palavrasEncontradas.length}/${game.palavras.length}\n💡 Tente novamente: ${prefix}cacapalavras [palavra]`);
+            return reply(`❌ "${args.join(' ')}" não está na lista de palavras!\n\n📋 Palavras encontradas: ${game.palavrasEncontradas.length}/${game.palavras.length}\n💡 Tente novamente: ${groupPrefix}cacapalavras [palavra]`);
           }
 
           // Verificar se já encontrou
@@ -16570,7 +16570,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
             return reply(`🎉 *PARABÉNS!*\n\n✅ Você encontrou todas as palavras!\n\n📋 Palavras: ${game.palavras.join(', ')}\n⏱️ Tempo: ${tempoDecorrido}s\n🏆 Excelente trabalho!`);
           }
 
-          return reply(`✅ *PALAVRA ENCONTRADA!*\n\n📝 "${palavraEncontrada}"\n\n📋 Progresso: ${game.palavrasEncontradas.length}/${game.palavras.length}\n💡 Continue procurando: ${prefix}cacapalavras [palavra]`);
+          return reply(`✅ *PALAVRA ENCONTRADA!*\n\n📝 "${palavraEncontrada}"\n\n📋 Progresso: ${game.palavrasEncontradas.length}/${game.palavras.length}\n💡 Continue procurando: ${groupPrefix}cacapalavras [palavra]`);
         }
 
         // Verificar se há jogo ativo
@@ -16587,7 +16587,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
             status += 'Nenhuma ainda\n\n';
           }
           status += `\`\`\`${formatarGrade(game.grade)}\`\`\`\n\n`;
-          status += `💡 Use: ${prefix}cacapalavras [palavra]`;
+          status += `💡 Use: ${groupPrefix}cacapalavras [palavra]`;
           return reply(status);
         }
 
@@ -16629,7 +16629,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
         msg += `📋 Encontre ${palavrasSelecionadas.length} palavras escondidas na grade!\n\n`;
         msg += `\`\`\`${formatarGrade(grade)}\`\`\`\n\n`;
         msg += `🔎 Procure palavras na horizontal, vertical ou diagonal!\n`;
-        msg += `💡 Use: ${prefix}cacapalavras [palavra]\n`;
+        msg += `💡 Use: ${groupPrefix}cacapalavras [palavra]\n`;
         msg += `📌 Dica: As palavras têm de ${configDificuldade.tamanhoMin} a ${configDificuldade.tamanhoMax} letras`;
 
         await reply(msg);
@@ -16644,7 +16644,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
       case 'urlsafe':
       case 'linkseguro': {
         if (!q) {
-          return reply(`⚙️ *Verificador de Links*\n\n💡 *Como usar:*\n• ${prefix}verificarurl <link>\n\n◈ Verifica se um link é seguro ou malicioso usando a API FishFish.\n\n📌 *Exemplo:*\n${prefix}verificarurl exemplo.com`);
+          return reply(`⚙️ *Verificador de Links*\n\n💡 *Como usar:*\n• ${groupPrefix}verificarurl <link>\n\n◈ Verifica se um link é seguro ou malicioso usando a API FishFish.\n\n📌 *Exemplo:*\n${groupPrefix}verificarurl exemplo.com`);
         }
 
         // Limpar a URL
@@ -16706,7 +16706,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
       case 'weather':
       case 'previsao': {
         if (!q) {
-          return reply(`🌤️ *Previsão do Tempo*\n\n💡 *Como usar:*\n• ${prefix}clima <cidade>\n\n📌 *Exemplos:*\n• ${prefix}clima São Paulo\n• ${prefix}clima Rio de Janeiro\n• ${prefix}clima Tokyo`);
+          return reply(`🌤️ *Previsão do Tempo*\n\n💡 *Como usar:*\n• ${groupPrefix}clima <cidade>\n\n📌 *Exemplos:*\n• ${groupPrefix}clima São Paulo\n• ${groupPrefix}clima Rio de Janeiro\n• ${groupPrefix}clima Tokyo`);
         }
 
         await reply('🌤️ Consultando previsão do tempo... ⏳');
@@ -16825,7 +16825,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
           const horaBrasil = agora.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', second: '2-digit' });
           const dataBrasil = agora.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
 
-          return reply(`🕐 *Horário Atual*\n\n🇧🇷 *Brasil (Brasília):*\n⏰ ${horaBrasil}\n📅 ${dataBrasil}\n\n💡 *Ver outro fuso:*\n${prefix}hora <local>\n\n▸ *Locais disponíveis:*\nbrasil, eua, japao, china, coreia, londres, paris, portugal, dubai, australia, argentina...`);
+          return reply(`🕐 *Horário Atual*\n\n🇧🇷 *Brasil (Brasília):*\n⏰ ${horaBrasil}\n📅 ${dataBrasil}\n\n💡 *Ver outro fuso:*\n${groupPrefix}hora <local>\n\n▸ *Locais disponíveis:*\nbrasil, eua, japao, china, coreia, londres, paris, portugal, dubai, australia, argentina...`);
         }
 
         const local = normalizar(q.toLowerCase().replace(/\s+/g, ''));
@@ -16881,7 +16881,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
         if (subCmd === 'definir' || subCmd === 'set') {
           const data = args[1];
           if (!data || !/^\d{1,2}\/\d{1,2}$/.test(data)) {
-            return reply(`🎂 *Definir Aniversário*\n\n💡 Use: ${prefix}aniversario definir DD/MM\n\n📌 Exemplo: ${prefix}aniversario definir 25/12`);
+            return reply(`🎂 *Definir Aniversário*\n\n💡 Use: ${groupPrefix}aniversario definir DD/MM\n\n📌 Exemplo: ${groupPrefix}aniversario definir 25/12`);
           }
 
           const [dia, mes] = data.split('/').map(Number);
@@ -16934,7 +16934,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
             .slice(0, 10);
 
           if (aniversariantes.length === 0) {
-            return reply(`🎂 *Sistema de Aniversários*\n\nNenhum aniversário registrado!\n\n💡 *Comandos:*\n• ${prefix}aniversario definir DD/MM\n• ${prefix}aniversario mes\n• ${prefix}aniversario proximos`);
+            return reply(`🎂 *Sistema de Aniversários*\n\nNenhum aniversário registrado!\n\n💡 *Comandos:*\n• ${groupPrefix}aniversario definir DD/MM\n• ${groupPrefix}aniversario mes\n• ${groupPrefix}aniversario proximos`);
           }
 
           let lista = '🎂 *Próximos Aniversários*\n\n';
@@ -16944,12 +16944,12 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
             lista += `${emoji} ${data.dia.toString().padStart(2, '0')}/${data.mes.toString().padStart(2, '0')} - ${data.nome} ${status}\n`;
           });
 
-          lista += `\n💡 *Comandos:*\n• ${prefix}aniversario definir DD/MM\n• ${prefix}aniversario mes`;
+          lista += `\n💡 *Comandos:*\n• ${groupPrefix}aniversario definir DD/MM\n• ${groupPrefix}aniversario mes`;
 
           return reply(lista);
         }
 
-        return reply(`🎂 *Sistema de Aniversários*\n\n💡 *Comandos:*\n• ${prefix}aniversario - Ver próximos\n• ${prefix}aniversario definir DD/MM\n• ${prefix}aniversario mes\n• ${prefix}aniversario proximos`);
+        return reply(`🎂 *Sistema de Aniversários*\n\n💡 *Comandos:*\n• ${groupPrefix}aniversario - Ver próximos\n• ${groupPrefix}aniversario definir DD/MM\n• ${groupPrefix}aniversario mes\n• ${groupPrefix}aniversario proximos`);
       }
 
       // ═══════════════════════════════════════════════════════════════
@@ -17004,7 +17004,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
       }
 
       case 'cog':
-        if (!q) return reply(`📢 Ei, falta a pergunta! Me diga o que quer saber após o comando ${prefix}cog! 😴`);
+        if (!q) return reply(`📢 Ei, falta a pergunta! Me diga o que quer saber após o comando ${groupPrefix}cog! 😴`);
 
         reply('⏳ Um momentinho, estou pensando na melhor resposta... 🌟').then(() => {
           ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
@@ -17028,7 +17028,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
 
 Responda (marque) uma *imagem que contenha texto* com o comando:
 
-${prefix}ocr
+${groupPrefix}ocr
 
 O texto será extraído *exatamente* como está na imagem, sem resumir ou traduzir.
 ⚠️ Marque uma imagem com texto visível.`);
@@ -17244,14 +17244,14 @@ O texto será extraído *exatamente* como está na imagem, sem resumir ou traduz
         break;
       case 'tradutor':
       case 'translator':
-        if (!q) return reply(`🌍 Quer traduzir algo? Me diga o idioma e o texto assim: ${prefix}${command} idioma | texto
-Exemplo: ${prefix}tradutor inglês | Bom dia! 😊`);
+        if (!q) return reply(`🌍 Quer traduzir algo? Me diga o idioma e o texto assim: ${groupPrefix}${command} idioma | texto
+Exemplo: ${groupPrefix}tradutor inglês | Bom dia! 😊`);
 
         {
           const partes = q.split('|');
           if (partes.length < 2) {
-            return reply(`Formato incorreto! 😅 Use: ${prefix}tradutor idioma | texto
-Exemplo: ${prefix}tradutor espanhol | Olá mundo! ◈`);
+            return reply(`Formato incorreto! 😅 Use: ${groupPrefix}tradutor idioma | texto
+Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
           }
           const idioma = partes[0].trim();
           const texto = partes.slice(1).join('|').trim();
@@ -17267,7 +17267,7 @@ Exemplo: ${prefix}tradutor espanhol | Olá mundo! ◈`);
         }
         break;
       case 'qrcode':
-        if (!q) return reply(`📲 *Gerador de QR Code*\n\n💡 *Como usar:*\n• Envie o texto ou link após o comando\n• Ex: ${prefix}qrcode https://exemplo.com\n• Ex: ${prefix}qrcode Seu texto aqui\n\n◈ O QR Code será gerado instantaneamente!`);
+        if (!q) return reply(`📲 *Gerador de QR Code*\n\n💡 *Como usar:*\n• Envie o texto ou link após o comando\n• Ex: ${groupPrefix}qrcode https://exemplo.com\n• Ex: ${groupPrefix}qrcode Seu texto aqui\n\n◈ O QR Code será gerado instantaneamente!`);
         reply('Aguarde um momentinho... ☀️').then(() => {
           const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(q)}`;
           return nazu.sendMessage(from, {
@@ -17280,7 +17280,7 @@ Exemplo: ${prefix}tradutor espanhol | Olá mundo! ◈`);
         });
         break;
       case 'wikipedia':
-        if (!q) return reply(`📚 O que você quer pesquisar na Wikipédia? Me diga o termo após o comando ${prefix}wikipedia! 😊`);
+        if (!q) return reply(`📚 O que você quer pesquisar na Wikipédia? Me diga o termo após o comando ${groupPrefix}wikipedia! 😊`);
         reply("📚 Consultando a Wikipédia... Só um instante! ⏳");
         try {
           let found = false;
@@ -17364,7 +17364,7 @@ Exemplo: ${prefix}tradutor espanhol | Olá mundo! ◈`);
         break;
       case 'dicionario':
       case 'dictionary':
-        if (!q) return reply(`📔 Qual palavra você quer procurar no dicionário? Me diga após o comando ${prefix}${command}! 😊`);
+        if (!q) return reply(`📔 Qual palavra você quer procurar no dicionário? Me diga após o comando ${groupPrefix}${command}! 😊`);
 
         reply("📔 Procurando no dicionário... Aguarde um pouquinho! ⏳").then(() => {
           const palavra = q.trim().toLowerCase();
@@ -17486,7 +17486,7 @@ Exemplo: ${prefix}tradutor espanhol | Olá mundo! ◈`);
               return reply("❌ Número inválido! Use um número completo (ex: 5511999998888)");
             }
           } else {
-            return reply(`📝 *Como usar:*\n\n1️⃣ Marque o usuário: ${prefix}addsubdono @usuario\n2️⃣ Ou digite o número: ${prefix}addsubdono 5511999998888`);
+            return reply(`📝 *Como usar:*\n\n1️⃣ Marque o usuário: ${groupPrefix}addsubdono @usuario\n2️⃣ Ou digite o número: ${groupPrefix}addsubdono 5511999998888`);
           }
 
           const result = await addSubdono(targetUserId, numerodono, nazu);
@@ -17565,7 +17565,7 @@ Exemplo: ${prefix}tradutor espanhol | Olá mundo! ◈`);
               }
             }
           } else {
-            return reply(`📝 *Como usar:*\n\n1️⃣ Marque o usuário: ${prefix}remsubdono @usuario\n2️⃣ Digite o número: ${prefix}remsubdono 5511999998888\n3️⃣ Use o índice da lista: ${prefix}remsubdono 1`);
+            return reply(`📝 *Como usar:*\n\n1️⃣ Marque o usuário: ${groupPrefix}remsubdono @usuario\n2️⃣ Digite o número: ${groupPrefix}remsubdono 5511999998888\n3️⃣ Use o índice da lista: ${groupPrefix}remsubdono 1`);
           }
 
           const result = await removeSubdono(targetUserId, nazu);
@@ -17611,7 +17611,7 @@ Exemplo: ${prefix}tradutor espanhol | Olá mundo! ◈`);
           const subBotManager = await import('./utils/subBotManager.js');
 
           if (!q || !q.trim()) {
-            return reply(`📝 *Como usar:*\n\n${prefix}addsubbot <número>\n\n*Exemplo:*\n${prefix}addsubbot 5511999999999\n\n⚠️ O número deve incluir o código do país (Brasil: 55)`);
+            return reply(`📝 *Como usar:*\n\n${groupPrefix}addsubbot <número>\n\n*Exemplo:*\n${groupPrefix}addsubbot 5511999999999\n\n⚠️ O número deve incluir o código do país (Brasil: 55)`);
           }
 
           const phoneNumber = q.trim().replace(/\D/g, '');
@@ -17669,7 +17669,7 @@ Exemplo: ${prefix}tradutor espanhol | Olá mundo! ◈`);
               msg += `   📱 *Número:* ${bot.phoneNumber}\n`;
               msg += `   🔌 *Status:* ${bot.status}\n\n`;
             });
-            msg += `\n💡 *Use:* ${prefix}removesubbot <número>\n\n*Exemplo:*\n${prefix}removesubbot 1`;
+            msg += `\n💡 *Use:* ${groupPrefix}removesubbot <número>\n\n*Exemplo:*\n${groupPrefix}removesubbot 1`;
 
             return reply(msg);
           }
@@ -17710,7 +17710,7 @@ Exemplo: ${prefix}tradutor espanhol | Olá mundo! ◈`);
           }
 
           if (result.subbots.length === 0) {
-            return reply(`📋 *Nenhum sub-bot cadastrado.*\n\n💡 Use ${prefix}addsubbot <número> para adicionar um sub-bot.`);
+            return reply(`📋 *Nenhum sub-bot cadastrado.*\n\n💡 Use ${groupPrefix}addsubbot <número> para adicionar um sub-bot.`);
           }
 
           let msg = `🤖 *Sub-Bots Ativos* 🤖\n`;
@@ -17746,7 +17746,7 @@ Exemplo: ${prefix}tradutor espanhol | Olá mundo! ◈`);
           const subBotManager = await import('./utils/subBotManager.js');
 
           if (!q || !q.trim()) {
-            return reply(`📝 *Como usar:*\n\n${prefix}conectarsubbot <id>\n\n*Exemplo:*\n${prefix}conectarsubbot subbot_1234567890_abc123\n\n💡 Use \`${prefix}listarsubbots\` para ver os IDs`);
+            return reply(`📝 *Como usar:*\n\n${groupPrefix}conectarsubbot <id>\n\n*Exemplo:*\n${groupPrefix}conectarsubbot subbot_1234567890_abc123\n\n💡 Use \`${groupPrefix}listarsubbots\` para ver os IDs`);
           }
 
           const botId = q.trim();
@@ -17823,7 +17823,7 @@ Exemplo: ${prefix}tradutor espanhol | Olá mundo! ◈`);
       case 'viewmsg':
         try {
           if (!isOwnerOrSub) return reply(OWNER_ONLY_MESSAGE);
-          if (!q) return reply(`Use: ${prefix}viewmsg [on/off]`);
+          if (!q) return reply(`Use: ${groupPrefix}viewmsg [on/off]`);
           const botStateFile = DATABASE_DIR + '/botState.json';
           let botState = loadJsonFile(botStateFile, {
             status: 'on',
@@ -17863,7 +17863,7 @@ Exemplo: ${prefix}tradutor espanhol | Olá mundo! ◈`);
             }
           } else {
             const currentStatus = isRentalModeActive() ? 'ATIVADO' : 'DESATIVADO';
-            await reply(`🤔 Uso: ${prefix}modoaluguel on|off\nStatus atual: ${currentStatus}`);
+            await reply(`🤔 Uso: ${groupPrefix}modoaluguel on|off\nStatus atual: ${currentStatus}`);
           }
         } catch (e) {
           console.error("Erro no comando modoaluguel:", e);
@@ -18149,7 +18149,7 @@ Exemplo: ${prefix}tradutor espanhol | Olá mundo! ◈`);
             msg += `▸ 📝 Modificados: ${modified}\n`;
             msg += `▸ 🗑️ Removidos: ${removed}\n`;
             
-            msg += `\n${prefix}update sim\n*para confirmar a atualização*`;
+            msg += `\n${groupPrefix}update sim\n*para confirmar a atualização*`;
             
             await reply(msg);
             
@@ -18322,7 +18322,7 @@ Exemplo: ${prefix}tradutor espanhol | Olá mundo! ◈`);
       case 'dayfree':
         try {
           if (!isOwnerOrSub) return reply('❌ Este comando é exclusivo para o dono ou subdonos.');
-          if (!q) return reply(`Uso: ${prefix}${command} <dias> [motivo opcional]\nEx: ${prefix}adddiasaluguel 7 Manutenção compensatória`);
+          if (!q) return reply(`Uso: ${groupPrefix}${command} <dias> [motivo opcional]\nEx: ${groupPrefix}adddiasaluguel 7 Manutenção compensatória`);
           const parts = q.split(' ');
           const extraDays = parseInt(parts[0]);
           if (isNaN(extraDays) || extraDays <= 0) return reply('O primeiro argumento deve ser um número positivo de dias.');
@@ -18396,7 +18396,7 @@ case 'addaluguel':
             console.log('📅 Aluguel por dias:', durationDays);
         } else {
             console.log('❌ Duração inválida:', durationArg);
-            return reply(`🤔 Duração inválida. Use um número de dias (ex: 30) ou a palavra "permanente".\nExemplo: ${prefix}addaluguel 30`);
+            return reply(`🤔 Duração inválida. Use um número de dias (ex: 30) ou a palavra "permanente".\nExemplo: ${groupPrefix}addaluguel 30`);
         }
 
         console.log('📤 Enviando para setGroupRental...');
@@ -18498,9 +18498,9 @@ case 'addaluguel':
           message += `│\n`;
           message += `╰━━━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n`;
           message += `💡 *Comandos disponíveis:*\n`;
-          message += `• ${prefix}removeraluguel <id>\n`;
-          message += `• ${prefix}estenderaluguel <id> <dias>\n`;
-          message += `• ${prefix}infoaluguel <id>`;
+          message += `• ${groupPrefix}removeraluguel <id>\n`;
+          message += `• ${groupPrefix}estenderaluguel <id> <dias>\n`;
+          message += `• ${groupPrefix}infoaluguel <id>`;
 
           await reply(message);
         } catch (e) {
@@ -18520,11 +18520,11 @@ case 'addaluguel':
           if (!targetGroupId && isGroup) {
             targetGroupId = from;
           } else if (!targetGroupId) {
-            return reply(`💡 *Uso:* ${prefix}removeraluguel [id_do_grupo]\n\n📝 Use dentro de um grupo ou informe o ID.\n💡 Use ${prefix}listaraluguel para ver os IDs.`);
+            return reply(`💡 *Uso:* ${groupPrefix}removeraluguel [id_do_grupo]\n\n📝 Use dentro de um grupo ou informe o ID.\n💡 Use ${groupPrefix}listaraluguel para ver os IDs.`);
           }
 
           if (!targetGroupId.trim()) {
-            return reply(`💡 *Uso:* ${prefix}removeraluguel [id_do_grupo]\n\n📝 Use dentro de um grupo ou informe o ID.`);
+            return reply(`💡 *Uso:* ${groupPrefix}removeraluguel [id_do_grupo]\n\n📝 Use dentro de um grupo ou informe o ID.`);
           }
 
           // Normaliza o ID do grupo
@@ -18535,7 +18535,7 @@ case 'addaluguel':
           const rentalData = loadRentalData();
 
           if (!rentalData.groups || !rentalData.groups[targetGroupId]) {
-            return reply(`❌ Este grupo não possui aluguel ativo.\n\n💡 Use ${prefix}listaraluguel para ver os grupos com aluguel.`);
+            return reply(`❌ Este grupo não possui aluguel ativo.\n\n💡 Use ${groupPrefix}listaraluguel para ver os grupos com aluguel.`);
           }
 
           // Busca informações do grupo antes de remover
@@ -18599,7 +18599,7 @@ case 'addaluguel':
           }
           // Nenhum argumento válido
           else {
-            return reply(`💡 *Uso:* ${prefix}estenderaluguel <dias> (no grupo)\nou\n${prefix}estenderaluguel <id_do_grupo> <dias>\n\n📝 *Exemplo:*\n${prefix}estenderaluguel 7 (no grupo)\n${prefix}estenderaluguel 5511999999999 7\n\n💡 Use ${prefix}listaraluguel para ver os IDs.`);
+            return reply(`💡 *Uso:* ${groupPrefix}estenderaluguel <dias> (no grupo)\nou\n${groupPrefix}estenderaluguel <id_do_grupo> <dias>\n\n📝 *Exemplo:*\n${groupPrefix}estenderaluguel 7 (no grupo)\n${groupPrefix}estenderaluguel 5511999999999 7\n\n💡 Use ${groupPrefix}listaraluguel para ver os IDs.`);
           }
 
           if (isNaN(daysToAdd) || daysToAdd <= 0) {
@@ -18666,7 +18666,7 @@ case 'addaluguel':
           // Se não passou ID, usa o grupo atual
           if (!targetGroupId || targetGroupId === '') {
             if (!isGroup) {
-              return reply(`💡 *Uso:* ${prefix}infoaluguel <id_do_grupo>\n\n📝 Ou use este comando dentro do grupo para ver o status dele.`);
+              return reply(`💡 *Uso:* ${groupPrefix}infoaluguel <id_do_grupo>\n\n📝 Ou use este comando dentro do grupo para ver o status dele.`);
             }
             targetGroupId = from;
           } else {
@@ -18680,7 +18680,7 @@ case 'addaluguel':
           const rental = rentalData.groups?.[targetGroupId];
 
           if (!rental) {
-            return reply(`❌ Este grupo não possui aluguel ativo.\n\n💡 Use ${prefix}addaluguel para adicionar.`);
+            return reply(`❌ Este grupo não possui aluguel ativo.\n\n💡 Use ${groupPrefix}addaluguel para adicionar.`);
           }
 
           // Busca informações do grupo
@@ -18738,8 +18738,8 @@ case 'addaluguel':
           }
 
           message += `\n\n💡 *Comandos disponíveis:*\n`;
-          message += `• ${prefix}estenderaluguel ${targetGroupId} <dias>\n`;
-          message += `• ${prefix}removeraluguel ${targetGroupId}`;
+          message += `• ${groupPrefix}estenderaluguel ${targetGroupId} <dias>\n`;
+          message += `• ${groupPrefix}removeraluguel ${targetGroupId}`;
 
           await reply(message);
         } catch (e) {
@@ -18758,7 +18758,7 @@ case 'addaluguel':
           let durationDays = null;
           let targetGroupId = null;
           if (!durationArg) {
-            return reply(`🤔 Uso: ${prefix}gerarcodigobr <dias|permanente> [id_do_grupo_opcional]`);
+            return reply(`🤔 Uso: ${groupPrefix}gerarcodigobr <dias|permanente> [id_do_grupo_opcional]`);
           }
           if (durationArg === 'permanente') {
             durationDays = 'permanent';
@@ -20166,7 +20166,7 @@ case 'addaluguel':
       case 'addblackglobal':
         try {
           if (!isOwnerOrSub) return reply("Apenas o dono pode adicionar usuários à blacklist global.");
-          if (!menc_os2 && !q) return reply(`Marque o usuário ou forneça o número (ex: ${prefix}addblackglobal @usuario motivo).`);
+          if (!menc_os2 && !q) return reply(`Marque o usuário ou forneça o número (ex: ${groupPrefix}addblackglobal @usuario motivo).`);
           const reason = q ? (q.includes('@') || !menc_os2) ? (args.length > 1 ? args.slice(1).join(' ') : 'Não especificado') : q.trim() : 'Não especificado';
           let targetUser = menc_os2 || (q.split(' ')[0].includes('@') ? q.split(' ')[0] : (isValidJid(q.split(' ')[0]) || isValidLid(q.split(' ')[0])) ? q.split(' ')[0] : null);
 
@@ -20213,7 +20213,7 @@ case 'addaluguel':
       case 'rmblackglobal':
         try {
           if (!isOwnerOrSub) return reply("Apenas o dono pode remover usuários da blacklist global.");
-          if (!menc_os2 && !q) return reply(`Marque o usuário ou forneça o número (ex: ${prefix}remblackglobal @usuario).`);
+          if (!menc_os2 && !q) return reply(`Marque o usuário ou forneça o número (ex: ${groupPrefix}remblackglobal @usuario).`);
           let targetUser = menc_os2 || (q.split(' ')[0].includes('@') ? q.split(' ')[0] : (isValidJid(q.split(' ')[0]) || isValidLid(q.split(' ')[0])) ? q.split(' ')[0] : null);
           if (!targetUser && q) {
             const cleanNumber = q.split(' ')[0].replace(/\D/g, '');
@@ -20290,7 +20290,7 @@ case 'addaluguel':
       case 'gerarnick':
       case 'nickgenerator':
         try {
-          if (!q) return reply(`🌌 *GERADOR DE NICK*\n\n📝 *Como usar:*\n• Digite o nick após o comando\n• Ex: ${prefix}nick abyss`);
+          if (!q) return reply(`🌌 *GERADOR DE NICK*\n\n📝 *Como usar:*\n• Digite o nick após o comando\n• Ex: ${groupPrefix}nick abyss`);
           var datzn;
           datzn = await styleText(q);
           await reply(datzn.join('\n'));
@@ -20349,7 +20349,7 @@ case 'addaluguel':
       case 'scanlink':
       case 'urlscan':
         try {
-          if (!q) return reply(`⚙️ *Verificador de Links*\n\n❌ Por favor, envie um link ou domínio para verificar.\n\n📝 *Uso:* ${prefix}${command} <link>\n\n📌 *Exemplos:*\n${prefix}${command} google.com\n${prefix}${command} https://exemplo.com/pagina`);
+          if (!q) return reply(`⚙️ *Verificador de Links*\n\n❌ Por favor, envie um link ou domínio para verificar.\n\n📝 *Uso:* ${groupPrefix}${command} <link>\n\n📌 *Exemplos:*\n${groupPrefix}${command} google.com\n${groupPrefix}${command} https://exemplo.com/pagina`);
 
           // Extrair domínio do link
           let urlToCheck = q.trim();
@@ -20428,7 +20428,7 @@ case 'addaluguel':
       case 'fusohorario':
       case 'horariomundial':
         try {
-          if (!q) return reply(`🕐 *Consulta de Horário Mundial*\n\n📝 *Uso:* ${prefix}${command} <cidade/país>\n\n📌 *Exemplos:*\n${prefix}${command} tokyo\n${prefix}${command} new york\n${prefix}${command} london\n${prefix}${command} são paulo\n\n💡 *Dica:* Use nomes em inglês para melhores resultados!`);
+          if (!q) return reply(`🕐 *Consulta de Horário Mundial*\n\n📝 *Uso:* ${groupPrefix}${command} <cidade/país>\n\n📌 *Exemplos:*\n${groupPrefix}${command} tokyo\n${groupPrefix}${command} new york\n${groupPrefix}${command} london\n${groupPrefix}${command} são paulo\n\n💡 *Dica:* Use nomes em inglês para melhores resultados!`);
 
           const location = q.trim();
 
@@ -20524,7 +20524,7 @@ case 'addaluguel':
       case 'tempo2':
       case 'weather2':
       case 'previsao2':
-        if (!q) return reply(`🌤️ *Previsão do Tempo*\n\n📝 *Uso:* ${prefix}${command} <cidade>\n\n📌 *Exemplos:*\n${prefix}${command} São Paulo\n${prefix}${command} Tokyo\n${prefix}${command} New York`);
+        if (!q) return reply(`🌤️ *Previsão do Tempo*\n\n📝 *Uso:* ${groupPrefix}${command} <cidade>\n\n📌 *Exemplos:*\n${groupPrefix}${command} São Paulo\n${groupPrefix}${command} Tokyo\n${groupPrefix}${command} New York`);
 
         const city = q.trim();
 
@@ -20839,7 +20839,7 @@ case 'addaluguel':
 case 'pinterest':
 case 'pin':
   try {
-    if (!q) return reply('Digite o termo para pesquisar no Pinterest. Exemplo: ' + prefix + 'pinterest gatinhos');
+    if (!q) return reply('Digite o termo para pesquisar no Pinterest. Exemplo: '+ groupPrefix + 'pinterest gatinhos');
 
     const PIN_URL_REGEX = /^(?:https?:\/\/)?(?:[a-zA-Z0-9-]+\.)?pinterest\.\w{2,6}(?:\.\w{2})?\/pin\/([0-9a-zA-Z]+)|^https?:\/\/pin\.it\/[a-zA-Z0-9]+/i;
 
@@ -21262,7 +21262,7 @@ case 'pin':
       case 'ttk':
       case 'tkk':
         try {
-          if (!q) return reply(`Digite um nome ou o link de um vídeo.\n> Ex: ${prefix}${command} Gato`);
+          if (!q) return reply(`Digite um nome ou o link de um vídeo.\n> Ex: ${groupPrefix}${command} Gato`);
 
           // Verificar se tem API key
 
@@ -21392,7 +21392,7 @@ case 'pin':
       case 'instavideo':
       case 'igstory':
         try {
-          if (!q) return reply(`Digite um link do Instagram.\n> Ex: ${prefix}${command} https://www.instagram.com/reel/DFaq_X7uoiT/?igsh=M3Q3N2ZyMWU1M3Bo`);
+          if (!q) return reply(`Digite um link do Instagram.\n> Ex: ${groupPrefix}${command} https://www.instagram.com/reel/DFaq_X7uoiT/?igsh=M3Q3N2ZyMWU1M3Bo`);
 
           await nazu.sendMessage(from, { react: { text: '🔍', key: info.key } });
 
@@ -21434,7 +21434,7 @@ case 'pin':
         break;
       case 'kwai':
         try {
-          if (!q) return reply(`Digite um link do kwai.\n> Ex: ${prefix}${command} https://kwai-video.com/p/q0fr2CRm`);
+          if (!q) return reply(`Digite um link do kwai.\n> Ex: ${groupPrefix}${command} https://kwai-video.com/p/q0fr2CRm`);
 
 
           await nazu.sendMessage(from, { react: { text: '🔍', key: info.key } });
@@ -21465,7 +21465,7 @@ case 'pin':
       case 'drive':
       case 'gd':
         try {
-          if (!q) return reply(`📁 *Google Drive Download*\n\n❌ Por favor, envie o link do arquivo do Google Drive.\n\n📝 *Uso:* ${prefix}${command} <link>\n\n📌 *Formatos suportados:*\n• https://drive.google.com/file/d/ID/view\n• https://drive.google.com/open?id=ID\n• https://drive.google.com/uc?id=ID`);
+          if (!q) return reply(`📁 *Google Drive Download*\n\n❌ Por favor, envie o link do arquivo do Google Drive.\n\n📝 *Uso:* ${groupPrefix}${command} <link>\n\n📌 *Formatos suportados:*\n• https://drive.google.com/file/d/ID/view\n• https://drive.google.com/open?id=ID\n• https://drive.google.com/uc?id=ID`);
 
           // Validar se é um link do Google Drive
           const gdriveRegex = /(?:https?:\/\/)?(?:drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?id=)|docs\.google\.com\/(?:document|spreadsheets|presentation)\/d\/)([a-zA-Z0-9_-]+)/i;
@@ -21551,7 +21551,7 @@ case 'pin':
       case 'mediafire':
       case 'mf':
         try {
-          if (!q) return reply(`📁 *MediaFire Download*\n\n❌ Por favor, envie o link do arquivo do MediaFire.\n\n📝 *Uso:* ${prefix}${command} <link>\n\n📌 *Exemplo:*\n${prefix}${command} https://www.mediafire.com/file/abc123/arquivo.zip/file`);
+          if (!q) return reply(`📁 *MediaFire Download*\n\n❌ Por favor, envie o link do arquivo do MediaFire.\n\n📝 *Uso:* ${groupPrefix}${command} <link>\n\n📌 *Exemplo:*\n${groupPrefix}${command} https://www.mediafire.com/file/abc123/arquivo.zip/file`);
 
           // Validar se é um link do MediaFire
           const mediafireRegex = /(?:https?:\/\/)?(?:www\.)?mediafire\.com\/(?:file|view|download)\/([a-zA-Z0-9]+)/i;
@@ -21652,7 +21652,7 @@ case 'pin':
       case 'x':
       case 'xdl':
         try {
-          if (!q) return reply(`🐦 *Twitter/X Download*\n\n❌ Por favor, envie o link do tweet.\n\n📝 *Uso:* ${prefix}${command} <link>\n\n📌 *Formatos suportados:*\n• https://twitter.com/user/status/ID\n• https://x.com/user/status/ID`);
+          if (!q) return reply(`🐦 *Twitter/X Download*\n\n❌ Por favor, envie o link do tweet.\n\n📝 *Uso:* ${groupPrefix}${command} <link>\n\n📌 *Formatos suportados:*\n• https://twitter.com/user/status/ID\n• https://x.com/user/status/ID`);
 
           // Validar se é um link do Twitter/X
           const twitterRegex = /(?:https?:\/\/)?(?:www\.)?(?:twitter\.com|x\.com)\/(?:\w+\/status|i\/status)\/(\d+)/i;
@@ -21725,7 +21725,7 @@ case 'pin':
       case 'buscar':
       case 'search':
         try {
-          if (!q) return reply(`🔍 *Pesquisa Web*\n\n❌ Digite o que deseja pesquisar.\n\n📝 *Uso:* ${prefix}${command} <termo>\n\n📌 *Exemplo:*\n${prefix}${command} inteligência artificial`);
+          if (!q) return reply(`🔍 *Pesquisa Web*\n\n❌ Digite o que deseja pesquisar.\n\n📝 *Uso:* ${groupPrefix}${command} <termo>\n\n📌 *Exemplo:*\n${groupPrefix}${command} inteligência artificial`);
 
           await reply('🔍 Pesquisando...');
 
@@ -21756,7 +21756,7 @@ case 'pin':
       case 'news':
       case 'noticia':
         try {
-          if (!q) return reply(`📰 *Pesquisa de Notícias*\n\n❌ Digite o que deseja pesquisar.\n\n📝 *Uso:* ${prefix}${command} <termo>\n\n📌 *Exemplo:*\n${prefix}${command} tecnologia brasil`);
+          if (!q) return reply(`📰 *Pesquisa de Notícias*\n\n❌ Digite o que deseja pesquisar.\n\n📝 *Uso:* ${groupPrefix}${command} <termo>\n\n📌 *Exemplo:*\n${groupPrefix}${command} tecnologia brasil`);
 
           await reply('📰 Buscando notícias...');
 
@@ -21804,10 +21804,10 @@ case 'pin':
 brat texto | cor_fundo | cor_texto | blur
 
 📌 Exemplos:
-${prefix}brat Vex API
-• ${prefix}brat Vex API | black
-• ${prefix}brat Vex API | black | white
-• ${prefix}brat Vex API | purple | white | 3
+${groupPrefix}brat Vex API
+• ${groupPrefix}brat Vex API | black
+• ${groupPrefix}brat Vex API | black | white
+• ${groupPrefix}brat Vex API | purple | white | 3
 
 ⚡ Padrão:
 Se não definir cores:
@@ -21865,10 +21865,10 @@ Se não definir cores:
 bratvid texto | cor_fundo | cor_texto | bpm
 
 📌 Exemplos:
-${prefix}bratvid vex api
-• ${prefix}bratvid vex api | purple
-• ${prefix}bratvid vex api | purple | white
-• ${prefix}bratvid vex api | black | white | 140
+${groupPrefix}bratvid vex api
+• ${groupPrefix}bratvid vex api | purple
+• ${groupPrefix}bratvid vex api | purple | white
+• ${groupPrefix}bratvid vex api | black | white | 140
 
 🎨 Parâmetros:
 - bg = cor do fundo (ex: purple, %23FF0000)
@@ -22074,7 +22074,7 @@ break;
 │
 ╰━━━━━━━━━━━━━━━━━━━━━━━━━╯
 
-> Use *${prefix}zipbot* para baixar o código!`;
+> Use *${groupPrefix}zipbot* para baixar o código!`;
 
               reply(gitInfo);
             }).catch((e) => {
@@ -22287,7 +22287,7 @@ break;
 ┃ ⚡ Ping: ${pingMs}ms
 ╰━━━━━━━━━━━━━━━━━━━╯`;
           
-          const menuText = await menu(prefix, customBotName, pushname, {
+          const menuText = await menu(groupPrefix, customBotName, pushname, {
             ...customDesign,
             header
           });
@@ -22422,7 +22422,7 @@ break;
       case 'gamemenu':
         try {
           const customDesign = getMenuDesignWithDefaults(nomebot, pushname);
-          let menuContent = await menubn(prefix, nomebot, pushname, isModoLite, customDesign);
+          let menuContent = await menubn(groupPrefix, nomebot, pushname, isModoLite, customDesign);
           await sendMenuWithMedia('brincadeiras', async () => menuContent);
         } catch (error) {
           console.error('Erro ao enviar menu de brincadeiras:', error);
@@ -22561,13 +22561,13 @@ case 'menuadm':
         const subcommand = args[0]?.toLowerCase();
 
         if (!subcommand) {
-          return reply(`📝 *Uso do ${prefix}configcmdnotfound:*\n\n` +
-            `• ${prefix}configcmdnotfound activate - Ativar mensagens de comando não encontrado\n` +
-            `• ${prefix}configcmdnotfound deactivate - Desativar mensagens de comando não encontrado\n` +
-            `• ${prefix}configcmdnotfound set <mensagem> - Definir mensagem personalizada\n` +
-            `• ${prefix}configcmdnotfound style <estilo> - Definir estilo (friendly, formal, casual, emoji)\n` +
-            `• ${prefix}configcmdnotfound preview - Pré-visualizar mensagem atual\n` +
-            `• ${prefix}configcmdnotfound reset - Restaurar configurações padrão\n\n` +
+          return reply(`📝 *Uso do ${groupPrefix}configcmdnotfound:*\n\n` +
+            `• ${groupPrefix}configcmdnotfound activate - Ativar mensagens de comando não encontrado\n` +
+            `• ${groupPrefix}configcmdnotfound deactivate - Desativar mensagens de comando não encontrado\n` +
+            `• ${groupPrefix}configcmdnotfound set <mensagem> - Definir mensagem personalizada\n` +
+            `• ${groupPrefix}configcmdnotfound style <estilo> - Definir estilo (friendly, formal, casual, emoji)\n` +
+            `• ${groupPrefix}configcmdnotfound preview - Pré-visualizar mensagem atual\n` +
+            `• ${groupPrefix}configcmdnotfound reset - Restaurar configurações padrão\n\n` +
             `📌 *Variáveis disponíveis:*\n` +
             `{command} - Comando digitado\n` +
             `{prefix} - Prefixo do bot\n` +
@@ -22685,7 +22685,7 @@ case 'menuadm':
             break;
 
           default:
-            reply('❌ Subcomando inválido! Use ' + prefix + 'configcmdnotfound para ver a lista de comandos disponíveis.');
+            reply('❌ Subcomando inválido! Use '+ groupPrefix + 'configcmdnotfound para ver a lista de comandos disponíveis.');
         }
         break;
 
@@ -22726,37 +22726,37 @@ Bem-vindo ao guia completo de configuração e personalização! Vamos aprender 
 ━━━━━━━━━━━━━━━━━━━━
 
 🔹 *Alterando o Prefixo*
-Use: ${prefix}prefixo <novo_prefixo>
-Exemplo: ${prefix}prefixo .
+Use: ${groupPrefix}prefixo <novo_prefixo>
+Exemplo: ${groupPrefix}prefixo .
 • Define qual símbolo inicia os comandos
 • Pode ser: ! . / # $ ou qualquer caractere
 
 🔹 *Mensagem de Prefixo*
-Use: ${prefix}msgprefix <mensagem>
-Exemplo: ${prefix}msgprefix Use #prefixo# antes do comando!
+Use: ${groupPrefix}msgprefix <mensagem>
+Exemplo: ${groupPrefix}msgprefix Use #prefixo# antes do comando!
 • Mensagem mostrada quando esquecem o prefixo
 • Use #prefixo# onde o prefixo deve aparecer
-• Para desativar: ${prefix}msgprefix off
+• Para desativar: ${groupPrefix}msgprefix off
 
 🔹 *Nome do Bot*
-Use: ${prefix}nomebot <nome>
-Exemplo: ${prefix}nomebot Abyss
+Use: ${groupPrefix}nomebot <nome>
+Exemplo: ${groupPrefix}nomebot Abyss
 • Altera o nome exibido nos menus
 • Use nomes curtos e memoráveis
 
 🔹 *Nome do Dono*
-Use: ${prefix}nomedono <nome>
-Exemplo: ${prefix}nomedono João
+Use: ${groupPrefix}nomedono <nome>
+Exemplo: ${groupPrefix}nomedono João
 • Seu nome nos créditos do bot
 
 🔹 *Número do Dono*
-Use: ${prefix}numerodono <número>
-Exemplo: ${prefix}numerodono 5511999999999
+Use: ${groupPrefix}numerodono <número>
+Exemplo: ${groupPrefix}numerodono 5511999999999
 • Formato: DDI + DDD + número
 • Usado para permissões de dono
 
 🔹 *Mensagem de Comando Não Encontrado*
-Use: ${prefix}configcmdnotfound <ação>
+Use: ${groupPrefix}configcmdnotfound <ação>
 Ações disponíveis:
 • activate - Ativar mensagens personalizadas
 • deactivate - Desativar mensagens
@@ -22772,10 +22772,10 @@ Variáveis disponíveis:
 {botName} - Nome do bot
 {userName} - Nome do usuário
 
-Exemplo: ${prefix}configcmdnotfound set ❌ {command} não existe! Veja: {prefix}menu
+Exemplo: ${groupPrefix}configcmdnotfound set ❌ {command} não existe! Veja: {prefix}menu
 
 🔹 *Personalização de Grupos*
-Use: ${prefix}personalizargrupo
+Use: ${groupPrefix}personalizargrupo
 • Ativa/desativa personalização por grupo
 • Quando ativo, admins podem:
   - Mudar foto do menu do grupo
@@ -22786,53 +22786,53 @@ Use: ${prefix}personalizargrupo
 ━━━━━━━━━━━━━━━━━━━━
 
 🎨 *Design do Menu*
-Use: ${prefix}designmenu
+Use: ${groupPrefix}designmenu
 • Mostra design atual
 
 🔹 *Personalizando Elementos:*
 
 • Borda Superior:
-  ${prefix}setborda ╭━━━⊱ ⊰━━━╮
+  ${groupPrefix}setborda ╭━━━⊱ ⊰━━━╮
 
 • Borda Inferior:
-  ${prefix}setbordafim ╰━━━⊱ ⊰━━━╯
+  ${groupPrefix}setbordafim ╰━━━⊱ ⊰━━━╯
 
 • Borda do Meio:
-  ${prefix}setbordameio │
+  ${groupPrefix}setbordameio │
 
 • Ícone de Itens:
-  ${prefix}setitem ➤
+  ${groupPrefix}setitem ➤
 
 • Separador:
-  ${prefix}setseparador ❖
+  ${groupPrefix}setseparador ❖
 
 • Ícone de Título:
-  ${prefix}settitulo ✦
+  ${groupPrefix}settitulo ✦
 
 • Cabeçalho Personalizado:
-  ${prefix}setheader ╭━━━❖ Olá, #user# ❖━━━╮
+  ${groupPrefix}setheader ╭━━━❖ Olá, #user# ❖━━━╮
 
 🔄 *Resetar Design*
-Use: ${prefix}resetdesign
+Use: ${groupPrefix}resetdesign
 • Volta ao design padrão
 
 📸 *Mídia do Menu*
 
-• Foto do Menu: ${prefix}fotomenu
+• Foto do Menu: ${groupPrefix}fotomenu
   Responda uma imagem
   
-• Vídeo do Menu: ${prefix}videomenu
+• Vídeo do Menu: ${groupPrefix}videomenu
   Responda um vídeo
   
-• Áudio do Menu: ${prefix}audiomenu
+• Áudio do Menu: ${groupPrefix}audiomenu
   Responda um áudio
-  Para remover: ${prefix}audiomenu off
+  Para remover: ${groupPrefix}audiomenu off
   
-• Foto do Bot (perfil): ${prefix}fotobot
+• Foto do Bot (perfil): ${groupPrefix}fotobot
   Responda uma imagem
 
 📱 *"Ler Mais" nos Menus*
-Use: ${prefix}lermais
+Use: ${groupPrefix}lermais
 • Ativa/desativa caracteres invisíveis no início do menu
 • Quando ativo, WhatsApp mostra "Ler mais"
 • Deixa os menus mais limpos na prévia
@@ -22844,32 +22844,32 @@ Use: ${prefix}lermais
 ◈ *Criar Comandos Personalizados*
 
 🔹 *Comando de Texto:*
-${prefix}addcmd <nome> | <resposta>
-Exemplo: ${prefix}addcmd oi | Olá! Tudo bem?
+${groupPrefix}addcmd <nome> | <resposta>
+Exemplo: ${groupPrefix}addcmd oi | Olá! Tudo bem?
 
 🔹 *Comando com Mídia:*
-${prefix}addcmdmidia <nome> | <legenda>
+${groupPrefix}addcmdmidia <nome> | <legenda>
 • Responda uma imagem/vídeo/áudio
-Exemplo: ${prefix}addcmdmidia bemvindo | Seja bem-vindo!
+Exemplo: ${groupPrefix}addcmdmidia bemvindo | Seja bem-vindo!
 
 🔹 *Gerenciar Comandos:*
-• Listar: ${prefix}listcmd
-• Deletar: ${prefix}delcmd <nome>
-• Testar: ${prefix}testcmd <nome>
-• Definir resposta: ${prefix}setcmdmsg (mesmo que configcmdnotfound)
+• Listar: ${groupPrefix}listcmd
+• Deletar: ${groupPrefix}delcmd <nome>
+• Testar: ${groupPrefix}testcmd <nome>
+• Definir resposta: ${groupPrefix}setcmdmsg (mesmo que configcmdnotfound)
 
 🔀 *Sistema de Alias*
-• Adicionar: ${prefix}addalias <comando_existente> | <novo_nome>
-  Exemplo: ${prefix}addalias sticker | fig
-• Listar: ${prefix}listalias
-• Remover: ${prefix}delalias <alias>
+• Adicionar: ${groupPrefix}addalias <comando_existente> | <novo_nome>
+  Exemplo: ${groupPrefix}addalias sticker | fig
+• Listar: ${groupPrefix}listalias
+• Remover: ${groupPrefix}delalias <alias>
 
 🚫 *Limitar Comandos*
-• Limitar: ${prefix}cmdlimitar <comando> <max_usos> <tempo_em_segundos>
-  Exemplo: ${prefix}cmdlimitar gpt 3 60
+• Limitar: ${groupPrefix}cmdlimitar <comando> <max_usos> <tempo_em_segundos>
+  Exemplo: ${groupPrefix}cmdlimitar gpt 3 60
   (3 usos a cada 60 segundos)
-• Deslimitar: ${prefix}cmddeslimitar <comando>
-• Ver limites: ${prefix}cmdlimites
+• Deslimitar: ${groupPrefix}cmddeslimitar <comando>
+• Ver limites: ${groupPrefix}cmdlimites
 
 ━━━━━━━━━━━━━━━━━━━━
 4️⃣ *AUTOMAÇÃO E RESPOSTAS*
@@ -22878,47 +22878,47 @@ Exemplo: ${prefix}addcmdmidia bemvindo | Seja bem-vindo!
 🤖 *Respostas Automáticas*
 
 🔹 *Resposta de Texto:*
-${prefix}addauto <palavra> | <resposta>
-Exemplo: ${prefix}addauto oi | Olá! Como posso ajudar?
+${groupPrefix}addauto <palavra> | <resposta>
+Exemplo: ${groupPrefix}addauto oi | Olá! Como posso ajudar?
 
 🔹 *Resposta com Mídia:*
-${prefix}addautomidia <palavra> | <legenda>
+${groupPrefix}addautomidia <palavra> | <legenda>
 • Responda uma imagem/vídeo
 • A mídia será enviada quando alguém digitar a palavra
 
 🔹 *Gerenciar:*
-• Listar: ${prefix}listauto
-• Deletar: ${prefix}delauto <palavra>
+• Listar: ${groupPrefix}listauto
+• Deletar: ${groupPrefix}delauto <palavra>
 
 😊 *Reações Automáticas*
-• Adicionar: ${prefix}addreact <palavra> <emoji>
-  Exemplo: ${prefix}addreact obrigado 🙏
-• Listar: ${prefix}listreact
-• Deletar: ${prefix}delreact <id>
+• Adicionar: ${groupPrefix}addreact <palavra> <emoji>
+  Exemplo: ${groupPrefix}addreact obrigado 🙏
+• Listar: ${groupPrefix}listreact
+• Deletar: ${groupPrefix}delreact <id>
 
 🔓 *Comandos Sem Prefixo*
-• Adicionar: ${prefix}addnopref <comando>
-  Exemplo: ${prefix}addnopref menu
-• Listar: ${prefix}listnopref
-• Deletar: ${prefix}delnopref <comando>
+• Adicionar: ${groupPrefix}addnopref <comando>
+  Exemplo: ${groupPrefix}addnopref menu
+• Listar: ${groupPrefix}listnopref
+• Deletar: ${groupPrefix}delnopref <comando>
 
 ⏰ *Mensagens Automáticas (em grupos)*
 📌 Comando só funciona em grupos!
 
-• Adicionar: ${prefix}automsg add HH:MM | descrição
+• Adicionar: ${groupPrefix}automsg add HH:MM | descrição
   Responda uma mensagem (texto/imagem/vídeo/áudio/documento/sticker)
-  Exemplo: ${prefix}automsg add 08:00 | Bom dia!
+  Exemplo: ${groupPrefix}automsg add 08:00 | Bom dia!
   
-• Listar: ${prefix}automsg list
+• Listar: ${groupPrefix}automsg list
   Mostra todas as mensagens automáticas do grupo
   
-• Deletar: ${prefix}automsg del <id>
+• Deletar: ${groupPrefix}automsg del <id>
   Remove uma mensagem automática
   
-• Ativar: ${prefix}automsg on <id>
+• Ativar: ${groupPrefix}automsg on <id>
   Ativa uma mensagem desativada
   
-• Desativar: ${prefix}automsg off <id>
+• Desativar: ${groupPrefix}automsg off <id>
   Desativa sem deletar
 
 💡 As mensagens serão enviadas no horário definido, todos os dias!
@@ -22928,90 +22928,90 @@ ${prefix}addautomidia <palavra> | <legenda>
 ━━━━━━━━━━━━━━━━━━━━
 
 🌌 *Sub-Donos*
-• Adicionar: ${prefix}addsubdono @usuario
-• Remover: ${prefix}delsubdono @usuario
-• Listar: ${prefix}listasubdonos
+• Adicionar: ${groupPrefix}addsubdono @usuario
+• Remover: ${groupPrefix}delsubdono @usuario
+• Listar: ${groupPrefix}listasubdonos
 • Sub-donos têm acesso a comandos de dono
 
 💎 *Usuários Premium*
-• Adicionar: ${prefix}addpremium @usuario
-• Remover: ${prefix}delpremium @usuario
-• Listar: ${prefix}listprem
-• Resetar gold: ${prefix}resetgold @usuario
+• Adicionar: ${groupPrefix}addpremium @usuario
+• Remover: ${groupPrefix}delpremium @usuario
+• Listar: ${groupPrefix}listprem
+• Resetar gold: ${groupPrefix}resetgold @usuario
   (Remove todo ouro/pontos do usuário)
 
 🎁 *Sistema de Indicações*
-• Adicionar indicação: ${prefix}addindicacao @usuario
+• Adicionar indicação: ${groupPrefix}addindicacao @usuario
   Adiciona +1 indicação ao usuário
   
-• Ver ranking: ${prefix}topindica
+• Ver ranking: ${groupPrefix}topindica
   Mostra top 10 usuários com mais indicações
   
-• Remover indicações: ${prefix}delindicacao @usuario [quantidade]
+• Remover indicações: ${groupPrefix}delindicacao @usuario [quantidade]
   Se não especificar quantidade, remove todas
-  Exemplo: ${prefix}delindicacao @usuario 5
+  Exemplo: ${groupPrefix}delindicacao @usuario 5
   Remove 5 indicações
 
 🚫 *Blacklist Global*
-• Banir: ${prefix}addblackglobal @usuario | motivo
-  ou: ${prefix}addblackglobal 5511999999999 | motivo
-• Desbanir: ${prefix}rmblackglobal @usuario
-  ou: ${prefix}rmblackglobal 5511999999999
-• Listar: ${prefix}listblackglobal
+• Banir: ${groupPrefix}addblackglobal @usuario | motivo
+  ou: ${groupPrefix}addblackglobal 5511999999999 | motivo
+• Desbanir: ${groupPrefix}rmblackglobal @usuario
+  ou: ${groupPrefix}rmblackglobal 5511999999999
+• Listar: ${groupPrefix}listblackglobal
 • Usuário banido é removido automaticamente dos grupos
 
 🚷 *Banimento de Grupos*
-• Banir grupo: ${prefix}bangp
+• Banir grupo: ${groupPrefix}bangp
   Bane o grupo atual
-• Desbanir: ${prefix}unbangp <id_grupo>
-• Listar: ${prefix}listbangp
+• Desbanir: ${groupPrefix}unbangp <id_grupo>
+• Listar: ${groupPrefix}listbangp
 
 ⚙️ *Bloqueios Específicos*
-• Bloquear comando: ${prefix}blockcmdg <comando> <grupo_id>
-• Bloquear usuário: ${prefix}blockuserg @usuario <grupo_id>
-• Desbloquear comando: ${prefix}unblockcmdg <comando> <grupo_id>
-• Desbloquear usuário: ${prefix}unblockuserg @usuario <grupo_id>
-• Listar bloqueios: ${prefix}listblocks
+• Bloquear comando: ${groupPrefix}blockcmdg <comando> <grupo_id>
+• Bloquear usuário: ${groupPrefix}blockuserg @usuario <grupo_id>
+• Desbloquear comando: ${groupPrefix}unblockcmdg <comando> <grupo_id>
+• Desbloquear usuário: ${groupPrefix}unblockuserg @usuario <grupo_id>
+• Listar bloqueios: ${groupPrefix}listblocks
 
 ━━━━━━━━━━━━━━━━━━━━
 6️⃣ *SISTEMA DE ALUGUEL*
 ━━━━━━━━━━━━━━━━━━━━
 
 💰 *Configuração Inicial*
-1. Ativar sistema: ${prefix}modoaluguel on
-2. Configurar divulgação: ${prefix}setdiv (responda mensagem)
+1. Ativar sistema: ${groupPrefix}modoaluguel on
+2. Configurar divulgação: ${groupPrefix}setdiv (responda mensagem)
 
 📝 *Gerenciar Aluguéis*
 
 • Adicionar aluguel:
-  ${prefix}addaluguel <dias> <id_grupo>
-  Exemplo: ${prefix}addaluguel 30 120363...@g.us
+  ${groupPrefix}addaluguel <dias> <id_grupo>
+  Exemplo: ${groupPrefix}addaluguel 30 120363...@g.us
 
 • Gerar código de ativação:
-  ${prefix}gerarcod <dias> <quantidade>
-  Exemplo: ${prefix}gerarcod 30 5
+  ${groupPrefix}gerarcod <dias> <quantidade>
+  Exemplo: ${groupPrefix}gerarcod 30 5
 
 • Estender aluguel:
-  ${prefix}estenderaluguel <dias> <id_grupo>
+  ${groupPrefix}estenderaluguel <dias> <id_grupo>
 
 • Ver informações:
-  ${prefix}infoaluguel <id_grupo>
+  ${groupPrefix}infoaluguel <id_grupo>
 
 • Listar todos:
-  ${prefix}listaraluguel
-  ou ${prefix}listaluguel
+  ${groupPrefix}listaraluguel
+  ou ${groupPrefix}listaluguel
 
 • Remover aluguel:
-  ${prefix}removeraluguel <id_grupo>
+  ${groupPrefix}removeraluguel <id_grupo>
 
 • Limpar vencidos:
-  ${prefix}limparaluguel
+  ${groupPrefix}limparaluguel
 
 • Dia grátis:
-  ${prefix}dayfree <id_grupo>
+  ${groupPrefix}dayfree <id_grupo>
 
 🎁 *Divulgação Automática*
-Use: ${prefix}divulgar
+Use: ${groupPrefix}divulgar
 • Envia mensagem de divulgação em todos os grupos
 
 ━━━━━━━━━━━━━━━━━━━━
@@ -23023,25 +23023,25 @@ Use: ${prefix}divulgar
 📱 *Para o Dono Principal:*
 
 1. Adicionar sub-bot:
-   ${prefix}addsubbot <numero> | <nome>
-   Exemplo: ${prefix}addsubbot 5511988887777 | Bot Auxiliar
+   ${groupPrefix}addsubbot <numero> | <nome>
+   Exemplo: ${groupPrefix}addsubbot 5511988887777 | Bot Auxiliar
 
 2. Gerar código de conexão:
-   ${prefix}gerarcodigo <numero>
+   ${groupPrefix}gerarcodigo <numero>
 
 3. Listar sub-bots:
-   ${prefix}listarsubbots
+   ${groupPrefix}listarsubbots
 
 4. Remover sub-bot:
-   ${prefix}removesubbot <numero>
+   ${groupPrefix}removesubbot <numero>
 
 5. Conectar manualmente:
-   ${prefix}conectarsubbot <numero>
+   ${groupPrefix}conectarsubbot <numero>
 
 📱 *Para o Sub-Bot:*
 
 1. Receba o código do dono
-2. Use: ${prefix}conectar <código>
+2. Use: ${groupPrefix}conectar <código>
 3. Pronto! Seu sub-bot está conectado
 
 ℹ️ *Informações Importantes:*
@@ -23056,26 +23056,26 @@ Use: ${prefix}divulgar
 💎 *Comandos Exclusivos VIP*
 
 • Tornar comando VIP:
-  ${prefix}addcmdvip <comando>
-  Exemplo: ${prefix}addcmdvip gpt4
+  ${groupPrefix}addcmdvip <comando>
+  Exemplo: ${groupPrefix}addcmdvip gpt4
 
 • Remover restrição:
-  ${prefix}removecmdvip <comando>
+  ${groupPrefix}removecmdvip <comando>
 
 • Listar comandos VIP:
-  ${prefix}listcmdvip
+  ${groupPrefix}listcmdvip
 
 • Ativar/Desativar sistema:
-  ${prefix}togglecmdvip
+  ${groupPrefix}togglecmdvip
 
 • Estatísticas:
-  ${prefix}statsvip
+  ${groupPrefix}statsvip
 
 • Menu VIP personalizado:
-  ${prefix}menuvip
+  ${groupPrefix}menuvip
 
 • Informações VIP de usuário:
-  ${prefix}infovip @usuario
+  ${groupPrefix}infovip @usuario
 
 ━━━━━━━━━━━━━━━━━━━━
 9️⃣ *CONTROLE E MANUTENÇÃO*
@@ -23084,31 +23084,31 @@ Use: ${prefix}divulgar
 🔧 *Controle do Bot*
 
 • Atualizar bot:
-  ${prefix}atualizar
+  ${groupPrefix}atualizar
   Baixa e aplica atualizações do repositório
 
 • Reiniciar:
-  ${prefix}reiniciar
+  ${groupPrefix}reiniciar
   Reinicia o bot completamente
 
 • Entrar em grupo:
-  ${prefix}entrar <link>
+  ${groupPrefix}entrar <link>
   Faz o bot entrar em um grupo via link
 
 • Sair de grupo:
-  ${prefix}sairgp
+  ${groupPrefix}sairgp
   Bot sai do grupo atual
 
 • Virar ADM:
-  ${prefix}seradm
+  ${groupPrefix}seradm
   Bot vira administrador (você deve promovê-lo)
 
 • Virar membro:
-  ${prefix}sermembro
+  ${groupPrefix}sermembro
   Remove privilégios de admin do bot
 
 ⚙️ *Proteção Anti-Ban*
-Use: ${prefix}antibanmarcar <ação>
+Use: ${groupPrefix}antibanmarcar <ação>
 Ações: on, off, status
 
 Protege o bot de banimento ao usar comandos de marcação em massa (hidetag, marcar, etc) em grupos com 150+ membros.
@@ -23120,19 +23120,19 @@ Protege o bot de banimento ao usar comandos de marcação em massa (hidetag, mar
 🧹 *Limpeza e Manutenção*
 
 • Limpar banco de dados:
-  ${prefix}limpardb
+  ${groupPrefix}limpardb
   Remove dados antigos/desnecessários
 
 • Limpar ranking de grupos:
-  ${prefix}limparrankg
+  ${groupPrefix}limparrankg
   Reseta rankings de todos os grupos
 
 • Reviver QR Code:
-  ${prefix}reviverqr
+  ${groupPrefix}reviverqr
   Gera novo QR para reconexão
 
 • Nuke (CUIDADO!):
-  ${prefix}nuke
+  ${groupPrefix}nuke
   Limpa TUDO - use apenas se necessário
 
 ━━━━━━━━━━━━━━━━━━━━
@@ -23142,65 +23142,65 @@ Protege o bot de banimento ao usar comandos de marcação em massa (hidetag, mar
 📊 *Monitoramento de Grupos*
 
 • Listar todos os grupos:
-  ${prefix}listagp
+  ${groupPrefix}listagp
   Mostra todos os grupos onde o bot está
 
 • Visualização de mensagens:
-  ${prefix}viewmsg on/off
+  ${groupPrefix}viewmsg on/off
   Ativa/desativa o status de visualização do bot
 
 🤖 *Monitoramento de IA*
 
 • Status da IA:
-  ${prefix}iastatus
+  ${groupPrefix}iastatus
   Estatísticas de uso da IA
 
 • Limpar cache de IA:
-  ${prefix}iaclear
+  ${groupPrefix}iaclear
   Limpa histórico de conversas da IA
 
 • Recuperar IA:
-  ${prefix}iarecovery
+  ${groupPrefix}iarecovery
   Recupera IA de erros
 
 💻 *Desenvolvimento*
 
 • Ver cases disponíveis:
-  ${prefix}cases
+  ${groupPrefix}cases
   Lista todos os comandos disponíveis
 
 • Ver código de comando:
-  ${prefix}getcase <comando>
+  ${groupPrefix}getcase <comando>
   Mostra o código-fonte do comando
 
 ⚙️ *Controles de Privacidade*
 
 • Anti-PV - Nível 1:
-  ${prefix}antipv
+  ${groupPrefix}antipv
   Ignora mensagens no privado
 
 • Anti-PV - Nível 2:
-  ${prefix}antipv2
+  ${groupPrefix}antipv2
   Responde e bloqueia automaticamente
 
 • Anti-PV - Nível 3:
-  ${prefix}antipv3
+  ${groupPrefix}antipv3
   Bloqueia imediatamente
 
 • Anti-PV - Nível 4:
-  ${prefix}antipv4
+  ${groupPrefix}antipv4
   Modo ultra-restritivo
 
 • Mensagem do Anti-PV:
-  ${prefix}antipvmsg <texto>
+  ${groupPrefix}antipvmsg <texto>
   Personaliza mensagem de bloqueio
 
 • Anti-spam de comandos:
-  ${prefix}antispamcmd
+  ${groupPrefix}antispamcmd
   Ativa/desativa proteção anti-spam
 
 🌍 *Modo Lite Global*
-Use: ${prefix}modoliteglobal
+Use: ${groupPrefix}modoliteglobal
 • Ativa/desativa filtro de conteúdo inapropriado
 • Quando ativo, filtra conteúdo adulto em todos os grupos
 • Ideal para ambientes familiares
@@ -23212,21 +23212,21 @@ Use: ${prefix}modoliteglobal
 📡 *Enviar Mensagens em Massa*
 
 🔹 *Transmissão em Grupos:*
-${prefix}tm <mensagem>
+${groupPrefix}tm <mensagem>
 • Envia mensagem para todos os grupos
 • Use com responsabilidade
 • Pode incluir texto, imagens, vídeos
 
-Exemplo: ${prefix}tm Novidade! Bot atualizado 🎉
+Exemplo: ${groupPrefix}tm Novidade! Bot atualizado 🎉
 
 🔹 *Transmissão Privada:*
-${prefix}tm2 <mensagem>
+${groupPrefix}tm2 <mensagem>
 • Envia para usuários inscritos no PV
-• Usuários se inscrevem com: ${prefix}inscrevertm
+• Usuários se inscrevem com: ${groupPrefix}inscrevertm
 • Só funciona no privado do usuário
 
 📊 *Status da Transmissão:*
-${prefix}statustm
+${groupPrefix}statustm
 • Ver quantos usuários estão inscritos
 • Estatísticas de envios
 • Última transmissão realizada
@@ -23252,7 +23252,7 @@ ${prefix}statustm
 
 ⚠️ *Avisos Importantes:*
 
-• Comando ${prefix}nuke deleta TUDO - use com cuidado!
+• Comando ${groupPrefix}nuke deleta TUDO - use com cuidado!
 • Anti-PV níveis 3 e 4 bloqueiam todos no privado
 • Transmissões em massa podem resultar em ban
 • Sempre teste novos comandos em grupos pequenos
@@ -23276,7 +23276,7 @@ Precisa de ajuda? Entre em contato:
 5. Teste tudo em um grupo privado
 6. Adicione o bot aos seus grupos!
 
-📚 Use ${prefix}tutorial a qualquer momento para consultar este guia novamente.
+📚 Use ${groupPrefix}tutorial a qualquer momento para consultar este guia novamente.
 
 🎉 *Aproveite seu bot ${nomebot}!*`;
 
@@ -23358,7 +23358,7 @@ Precisa de ajuda? Entre em contato:
           const menuText = typeof menuFunction === 'function' ?
             (typeof menuFunction.then === 'function' ?
               await menuFunction :
-              await menuFunction(prefix, customBotName, pushname, customDesign)) :
+              await menuFunction(groupPrefix, customBotName, pushname, customDesign)) :
             'Menu não disponível';
 
           const lerMaisPrefix = getMenuLerMaisText();
@@ -23408,7 +23408,7 @@ Precisa de ajuda? Entre em contato:
       case 'antipvmsg':
         try {
           if (!isOwnerOrSub) return reply(OWNER_ONLY_MESSAGE);
-          if (!q) return reply(`Por favor, forneça a nova mensagem para o antipv. Exemplo: ${prefix}antipvmessage Comandos no privado estão desativados!`);
+          if (!q) return reply(`Por favor, forneça a nova mensagem para o antipv. Exemplo: ${groupPrefix}antipvmessage Comandos no privado estão desativados!`);
           const antipvFile = DATABASE_DIR + '/antipv.json';
           let antipvData = loadJsonFile(antipvFile, {
             mode: 'off',
@@ -23436,7 +23436,7 @@ Precisa de ajuda? Entre em contato:
       case 'entrar':
         try {
           if (!isOwnerOrSub) return reply("Este comando é apenas para o meu dono 💔");
-          if (!q || !q.includes('chat.whatsapp.com')) return reply('Digite um link de convite válido! Exemplo: ' + prefix + 'entrar https://chat.whatsapp.com/...');
+          if (!q || !q.includes('chat.whatsapp.com')) return reply('Digite um link de convite válido! Exemplo: '+ groupPrefix + 'entrar https://chat.whatsapp.com/...');
           const code = q.split('https://chat.whatsapp.com/')[1];
           await nazu.groupAcceptInvite(code).then(res => {
             reply(`✅ Entrei no grupo com sucesso!`);
@@ -23463,7 +23463,7 @@ Precisa de ajuda? Entre em contato:
             }
           } else {
             // Se não forneceu ID, usa o grupo atual
-            if (!isGroup) return reply('❌ Você precisa estar em um grupo ou fornecer o ID do grupo! Exemplo: ' + prefix + 'sairgp 120363123456789012@g.us');
+            if (!isGroup) return reply('❌ Você precisa estar em um grupo ou fornecer o ID do grupo! Exemplo: '+ groupPrefix + 'sairgp 120363123456789012@g.us');
             groupId = from;
           }
 
@@ -23497,7 +23497,7 @@ Precisa de ajuda? Entre em contato:
       case 'tm':
         try {
           if (!isOwnerOrSub) return reply("Este comando é apenas para o meu dono 💔");
-          if (!q && !isImage && !isVideo && !isQuotedImage && !isQuotedVideo) return reply('Digite ou marque uma imagem/vídeo! Exemplo: ' + prefix + 'tm Olá a todos!');
+          if (!q && !isImage && !isVideo && !isQuotedImage && !isQuotedVideo) return reply('Digite ou marque uma imagem/vídeo! Exemplo: '+ groupPrefix + 'tm Olá a todos!');
 
           const cabecalho = `╔══════════════════════\n║  📡 *TRANSMISSÃO DO ${nomebot}* 📡\n╚══════════════════════\n\n`;
           const genSuffix = () => Math.floor(100 + Math.random() * 900).toString();
@@ -23601,7 +23601,7 @@ Precisa de ajuda? Entre em contato:
           // Inscreve o usuário
           transmissao.subscribe(sender, pushname || 'Usuário');
 
-          reply(`🎉 *Inscrição confirmada!*\n\nVocê agora receberá as transmissões da bot diretamente no seu privado.\n\n💡 *Como funciona:*\n• Você receberá mensagens importantes da equipe\n• Para cancelar, use: ${prefix}desinscrever\n\n◈ Obrigado por se inscrever!`);
+          reply(`🎉 *Inscrição confirmada!*\n\nVocê agora receberá as transmissões da bot diretamente no seu privado.\n\n💡 *Como funciona:*\n• Você receberá mensagens importantes da equipe\n• Para cancelar, use: ${groupPrefix}desinscrever\n\n◈ Obrigado por se inscrever!`);
         } catch (e) {
           console.error('[INSCREVERTM ERROR]', e);
           await reply("❌ Ocorreu um erro ao processar sua inscrição. Tente novamente mais tarde.");
@@ -23622,7 +23622,7 @@ Precisa de ajuda? Entre em contato:
           // Remove a inscrição
           transmissao.unsubscribe(sender);
 
-          reply(`✅ *Inscrição cancelada!*\n\nVocê não receberá mais as transmissões.\n\n💡 Para se inscrever novamente, use: ${prefix}inscrevertm`);
+          reply(`✅ *Inscrição cancelada!*\n\nVocê não receberá mais as transmissões.\n\n💡 Para se inscrever novamente, use: ${groupPrefix}inscrevertm`);
         } catch (e) {
           console.error('[DESINSCREVER ERROR]', e);
           await reply("❌ Ocorreu um erro ao processar sua solicitação.");
@@ -23632,7 +23632,7 @@ Precisa de ajuda? Entre em contato:
       case 'tm2':
         try {
           if (!isOwnerOrSub) return reply("🚫 Este comando é apenas para o meu dono 💔");
-          if (!q && !isImage && !isVideo && !isQuotedImage && !isQuotedVideo) return reply('Digite ou marque uma imagem/vídeo! Exemplo: ' + prefix + 'tm2 Olá inscritos!');
+          if (!q && !isImage && !isVideo && !isQuotedImage && !isQuotedVideo) return reply('Digite ou marque uma imagem/vídeo! Exemplo: '+ groupPrefix + 'tm2 Olá inscritos!');
 
           // Obtém lista de inscritos
           const subscribers = transmissao.getSubscribers();
@@ -23842,7 +23842,7 @@ Precisa de ajuda? Entre em contato:
       case 'getcase':
         if (!isOwnerOrSub) return reply("Este comando é apenas para o meu dono");
         try {
-          if (!q) return reply('❌ Digite o nome do comando. Exemplo: ' + prefix + 'getcase menu');
+          if (!q) return reply('❌ Digite o nome do comando. Exemplo: '+ groupPrefix + 'getcase menu');
           var caseCode;
           caseCode = (fs.readFileSync(__dirname + "/index.js", "utf-8").match(new RegExp(`case\\s*["'\`]${q}["'\`]\\s*:[\\s\\S]*?break\\s*;?`, "i")) || [])[0];
           await nazu.sendMessage(from, {
@@ -23883,7 +23883,7 @@ Precisa de ajuda? Entre em contato:
         try {
           const cmdToBlock = q?.toLowerCase().split(' ')[0];
           const reason = q?.split(' ').slice(1).join(' ') || 'Sem motivo informado';
-          if (!cmdToBlock) return reply('❌ Informe o comando a bloquear! Ex.: ' + prefix + 'blockcmd sticker');
+          if (!cmdToBlock) return reply('❌ Informe o comando a bloquear! Ex.: '+ groupPrefix + 'blockcmd sticker');
           const blockFile = pathz.join(DATABASE_DIR, 'globalBlocks.json');
           globalBlocks.commands = globalBlocks.commands || {};
           globalBlocks.commands[cmdToBlock] = {
@@ -23901,7 +23901,7 @@ Precisa de ajuda? Entre em contato:
         if (!isOwnerOrSub) return reply("Este comando é apenas para o meu dono");
         try {
           const cmdToUnblock = q?.toLowerCase().split(' ')[0];
-          if (!cmdToUnblock) return reply('❌ Informe o comando a desbloquear! Ex.: ' + prefix + 'unblockcmd sticker');
+          if (!cmdToUnblock) return reply('❌ Informe o comando a desbloquear! Ex.: '+ groupPrefix + 'unblockcmd sticker');
           const blockFile = pathz.join(DATABASE_DIR, 'globalBlocks.json');
           if (!globalBlocks.commands || !globalBlocks.commands[cmdToUnblock]) {
             return reply(`❌ O comando *${cmdToUnblock}* não está bloqueado!`);
@@ -24017,7 +24017,7 @@ case 'addcmd-subdono':
     let txt = `📜 *Comandos liberados para subdonos:*\n\n`;
 
     txt += subOwnerCommands
-      .map((cmd, i) => `${i + 1}. ${prefix}${cmd}`)
+      .map((cmd, i) => `${i + 1}. ${groupPrefix}${cmd}`)
       .join('\n');
 
     await reply(txt);
@@ -24123,8 +24123,8 @@ case 'nomedono':
         `⚙️ *Configuração do Nome do Dono*\n\n` +
         `📝 *Como usar:*\n` +
         `• Digite o novo nome após o comando\n` +
-        `• Ex: ${prefix}${command} Tokyo\n` +
-        `• Ex: ${prefix}${command} Vex Tech Solutions\n\n` +
+        `• Ex: ${groupPrefix}${command} Tokyo\n` +
+        `• Ex: ${groupPrefix}${command} Vex Tech Solutions\n\n` +
         `✅ O nome do dono será atualizado!`
       );
     }
@@ -24170,11 +24170,11 @@ break;
       case 'numero-dono':
         try {
           if (!isOwnerOrSub) return reply("Este comando é exclusivo para o meu dono!");
-          if (!q) return reply(`Por favor, digite o novo número do dono.\nExemplo: ${prefix}${command} +553285076326`);
+          if (!q) return reply(`Por favor, digite o novo número do dono.\nExemplo: ${groupPrefix}${command} +553285076326`);
           let config = JSON.parse(fs.readFileSync(CONFIG_FILE));
           config.numerodono = q;
           writeJsonFile(CONFIG_FILE, config);
-          await reply(`Número do dono salvo\n\nAgora pelo número do novo dono\n- utilize o comando ${prefix}verificardono\n- Para gerar o lid e terminar a configuração!`);
+          await reply(`Número do dono salvo\n\nAgora pelo número do novo dono\n- utilize o comando ${groupPrefix}verificardono\n- Para gerar o lid e terminar a configuração!`);
         } catch (e) {
           console.error(e);
           await reply("🐝 Ops! Ocorreu um erro inesperado. Tente novamente em alguns instantes, por favor! 🥺");
@@ -24242,7 +24242,7 @@ break;
             return reply(`Por favor, digite a nova apikey
 
 Exemplo:
-${prefix}${command} 1a0b5879-bc22-4f4a
+${groupPrefix}${command} 1a0b5879-bc22-4f4a
 
 ⚠️ Você pega sua api-key no site ${site_vex}
 💸 Não esqueça de contratar um plano para ela funcionar!`);
@@ -24298,11 +24298,11 @@ ${prefix}${command} 1a0b5879-bc22-4f4a
 ${listText}
 
 💡 *Comandos:*
-${prefix}reacao add <nome> <emoji> - Adicionar
-${prefix}reacao excluir <nome> - Remover
-${prefix}reacao toggle - Ativar/Desativar
+${groupPrefix}reacao add <nome> <emoji> - Adicionar
+${groupPrefix}reacao excluir <nome> - Remover
+${groupPrefix}reacao toggle - Ativar/Desativar
 
-📌 *Exemplo:* ${prefix}reacao add leo 🌌`);
+📌 *Exemplo:* ${groupPrefix}reacao add leo 🌌`);
           }
 
           // !reacao toggle
@@ -24317,7 +24317,7 @@ ${prefix}reacao toggle - Ativar/Desativar
             const emoji = args[2];
             
             if (!nome || !emoji) {
-              return reply(`❌ Uso: ${prefix}reacao add <nome> <emoji>\n\n📌 Exemplo: ${prefix}reacao add leo 🌌`);
+              return reply(`❌ Uso: ${groupPrefix}reacao add <nome> <emoji>\n\n📌 Exemplo: ${groupPrefix}reacao add leo 🌌`);
             }
             
             if (nameReactions.add(from, nome, emoji)) {
@@ -24332,7 +24332,7 @@ ${prefix}reacao toggle - Ativar/Desativar
             const nome = args[1];
             
             if (!nome) {
-              return reply(`❌ Uso: ${prefix}reacao excluir <nome>\n\n📌 Exemplo: ${prefix}reacao excluir leo`);
+              return reply(`❌ Uso: ${groupPrefix}reacao excluir <nome>\n\n📌 Exemplo: ${groupPrefix}reacao excluir leo`);
             }
             
             if (nameReactions.remove(from, nome)) {
@@ -24343,7 +24343,7 @@ ${prefix}reacao toggle - Ativar/Desativar
           }
 
           // Comando não reconhecido
-          return reply(`❌ Comando não reconhecido.\n\nUse: ${prefix}reacao para ver ajuda`);
+          return reply(`❌ Comando não reconhecido.\n\nUse: ${groupPrefix}reacao para ver ajuda`);
 
         } catch (e) {
           console.error(e);
@@ -24371,7 +24371,7 @@ Key atual: \`${maskedKey}\`
 4. Copie sua chave
 
 💡 *Uso:*
-${prefix}setgroq sua_chave_aqui
+${groupPrefix}setgroq sua_chave_aqui
 
 ⚠️ Groq é gratuito com 30 req/min!`);
 
@@ -24405,7 +24405,7 @@ ${prefix}setgroq sua_chave_aqui
 🔑 Key: \`${q.substring(0, 8)}...${q.substring(q.length - 4)}\`
 
 ✅ *GRÁTIS!* Limite: 30 req/min
-⚠️ *Importante:* Para aplicar completamente, reinicie o bot com ${prefix}restart`);
+⚠️ *Importante:* Para aplicar completamente, reinicie o bot com ${groupPrefix}restart`);
 
         } catch (e) {
           console.error(e);
@@ -24418,7 +24418,7 @@ ${prefix}setgroq sua_chave_aqui
       case 'nome-bot':
         try {
           if (!isOwnerOrSub) return reply("Este comando é exclusivo para o meu dono!");
-          if (!q) return reply(`Por favor, digite o novo nome do bot.\nExemplo: ${prefix}${command} Abyss`);
+          if (!q) return reply(`Por favor, digite o novo nome do bot.\nExemplo: ${groupPrefix}${command} Abyss`);
           
           let config = JSON.parse(fs.readFileSync(CONFIG_FILE));
           const nomeAntigo = config.nomebot;
@@ -24486,12 +24486,12 @@ ${prefix}setgroq sua_chave_aqui
               ? `ℹ️ *Áudio do menu está ATIVO*\n\n` +
               `🎵 Um áudio está configurado para ser enviado com o menu.\n\n` +
               `📝 *Comandos disponíveis:*\n` +
-              `• ${prefix}${command} - Enviar/marcar áudio para configurar\n` +
-              `• ${prefix}${command} off - Remover o áudio\n` +
-              `• ${prefix}${command} del - Remover o áudio`
-              : `❌ *Envie ou marque um áudio* com o comando: ${prefix}${command}\n\n` +
+              `• ${groupPrefix}${command} - Enviar/marcar áudio para configurar\n` +
+              `• ${groupPrefix}${command} off - Remover o áudio\n` +
+              `• ${groupPrefix}${command} del - Remover o áudio`
+              : `❌ *Envie ou marque um áudio* com o comando: ${groupPrefix}${command}\n\n` +
               `🎵 Este áudio será enviado junto com o menu principal.\n\n` +
-              `💡 Para remover depois, use: ${prefix}${command} off`;
+              `💡 Para remover depois, use: ${groupPrefix}${command} off`;
 
             return reply(statusMsg);
           }
@@ -24508,7 +24508,7 @@ ${prefix}setgroq sua_chave_aqui
 
           await reply('✅ *Áudio do menu configurado com sucesso!*\n\n' +
             '🎵 O áudio será enviado junto com o menu principal.\n\n' +
-            `💡 Para remover, use: ${prefix}${command} off`);
+            `💡 Para remover, use: ${groupPrefix}${command} off`);
         } catch (e) {
           console.error('Erro no comando audiomenu:', e);
           await reply("❌ Ocorreu um erro ao configurar o áudio do menu 💔");
@@ -24546,7 +24546,7 @@ ${prefix}setgroq sua_chave_aqui
       case 'avatarbot':
         try {
           if (!isOwnerOrSub) return reply("Este comando é apenas para o meu dono 💔");
-          if (!isQuotedImage && !isImage) return reply('❌ Envie ou marque uma imagem para definir como foto de perfil do bot.\n\n📝 *Uso:* Envie uma imagem com o comando ou responda uma imagem com ' + prefix + 'fotobot');
+          if (!isQuotedImage && !isImage) return reply('❌ Envie ou marque uma imagem para definir como foto de perfil do bot.\n\n📝 *Uso:* Envie uma imagem com o comando ou responda uma imagem com '+ groupPrefix + 'fotobot');
 
           const messageToUse = isQuotedImage ? quotedMessageContent : info.message;
           const mediaInfo = getMediaInfo(messageToUse);
@@ -24581,8 +24581,8 @@ ${prefix}setgroq sua_chave_aqui
           const statusMsg = newState
             ? `✅ *Sistema de Personalização Ativado!*\n\n` +
             `Agora os donos dos grupos podem:\n` +
-            `📸 Mudar a foto do menu (${prefix}fotomenugrupo)\n` +
-            `✏️ Mudar o nome do bot (${prefix}nomegrupo)\n\n` +
+            `📸 Mudar a foto do menu (${groupPrefix}fotomenugrupo)\n` +
+            `✏️ Mudar o nome do bot (${groupPrefix}nomegrupo)\n\n` +
             `💡 As personalizações só afetam o grupo onde foram configuradas.`
             : `❌ *Sistema de Personalização Desativado!*\n\n` +
             `Os donos dos grupos não podem mais personalizar o bot.`;
@@ -24606,8 +24606,8 @@ ${prefix}setgroq sua_chave_aqui
 
           if (!isQuotedImage && !isImage) {
             return reply(`❌ Envie ou marque uma imagem para definir como foto do menu deste grupo.\n\n` +
-              `📝 *Uso:* Envie uma imagem com o comando ou responda uma imagem com ${prefix}fotomenugrupo\n\n` +
-              `💡 Para remover a personalização, use: ${prefix}removerfotomenu`);
+              `📝 *Uso:* Envie uma imagem com o comando ou responda uma imagem com ${groupPrefix}fotomenugrupo\n\n` +
+              `💡 Para remover a personalização, use: ${groupPrefix}removerfotomenu`);
           }
 
           const messageToUse = isQuotedImage ? quotedMessageContent : info.message;
@@ -24623,7 +24623,7 @@ ${prefix}setgroq sua_chave_aqui
           setGroupCustomPhoto(from, customPhotoPath);
 
           await reply(`✅ *Foto do menu personalizada com sucesso!*\n\n` +
-            `🎨 Esta foto será exibida apenas neste grupo quando alguém usar o comando ${prefix}menu`);
+            `🎨 Esta foto será exibida apenas neste grupo quando alguém usar o comando ${groupPrefix}menu`);
         } catch (e) {
           console.error('Erro no comando fotomenugrupo:', e);
           await reply("❌ Ocorreu um erro ao personalizar a foto do menu 💔");
@@ -24666,9 +24666,9 @@ ${prefix}setgroq sua_chave_aqui
 
           if (!q) {
             return reply(`📝 *Definir nome personalizado do bot neste grupo*\n\n` +
-              `Uso: ${prefix}nomegrupo <nome>\n\n` +
-              `Exemplo: ${prefix}nomegrupo MeuBot\n\n` +
-              `💡 Para remover a personalização, use: ${prefix}removernome`);
+              `Uso: ${groupPrefix}nomegrupo <nome>\n\n` +
+              `Exemplo: ${groupPrefix}nomegrupo MeuBot\n\n` +
+              `💡 Para remover a personalização, use: ${groupPrefix}removernome`);
           }
 
           const customName = q.trim();
@@ -24724,10 +24724,10 @@ ${prefix}setgroq sua_chave_aqui
           if (!customization || (!customization.customName && !customization.customPhoto)) {
             return reply(`ℹ️ *Este grupo não possui personalizações.*\n\n` +
               `📌 Comandos disponíveis para admins:\n` +
-              `• ${prefix}nomegrupo <nome> - Personalizar nome do bot\n` +
-              `• ${prefix}fotomenugrupo - Personalizar foto do menu\n` +
-              `• ${prefix}removernome - Remover nome personalizado\n` +
-              `• ${prefix}removerfotomenu - Remover foto personalizada`);
+              `• ${groupPrefix}nomegrupo <nome> - Personalizar nome do bot\n` +
+              `• ${groupPrefix}fotomenugrupo - Personalizar foto do menu\n` +
+              `• ${groupPrefix}removernome - Remover nome personalizado\n` +
+              `• ${groupPrefix}removerfotomenu - Remover foto personalizada`);
           }
 
           let msg = `🎨 *Personalizações deste Grupo*\n\n`;
@@ -24740,7 +24740,7 @@ ${prefix}setgroq sua_chave_aqui
             msg += `📸 *Foto de menu:* Personalizada\n`;
           }
 
-          msg += `\n💡 Admins podem usar ${prefix}removernome ou ${prefix}removerfotomenu para resetar.`;
+          msg += `\n💡 Admins podem usar ${groupPrefix}removernome ou ${groupPrefix}removerfotomenu para resetar.`;
 
           await reply(msg);
         } catch (e) {
@@ -24948,14 +24948,14 @@ ${prefix}setgroq sua_chave_aqui
 ┊ 🔸 *Ícone do Título:* ${currentDesign.menuTitleIcon}
 ┊
 ┊ 📝 *Comandos disponíveis:*
-┊ ${prefix}setborda - Alterar borda superior
-┊ ${prefix}setbordafim - Alterar borda inferior  
-┊ ${prefix}setbordameio - Alterar borda do meio
-┊ ${prefix}setitem - Alterar ícone dos itens
-┊ ${prefix}setseparador - Alterar ícone separador
-┊ ${prefix}settitulo - Alterar ícone do título
-┊ ${prefix}setheader - Alterar cabeçalho
-┊ ${prefix}resetdesign - Resetar para padrão
+┊ ${groupPrefix}setborda - Alterar borda superior
+┊ ${groupPrefix}setbordafim - Alterar borda inferior  
+┊ ${groupPrefix}setbordameio - Alterar borda do meio
+┊ ${groupPrefix}setitem - Alterar ícone dos itens
+┊ ${groupPrefix}setseparador - Alterar ícone separador
+┊ ${groupPrefix}settitulo - Alterar ícone do título
+┊ ${groupPrefix}setheader - Alterar cabeçalho
+┊ ${groupPrefix}resetdesign - Resetar para padrão
 ┊
 ╰─┈┈┈┈┈◜◈◞┈┈┈┈┈─╯`;
 
@@ -25199,7 +25199,7 @@ ${prefix}setgroq sua_chave_aqui
           });
         } catch (error) {
           console.error('Erro ao enviar menu VIP:', error);
-          await reply(`❌ Erro ao carregar menu VIP. Use ${prefix}infovip para mais informações.`);
+          await reply(`❌ Erro ao carregar menu VIP. Use ${groupPrefix}infovip para mais informações.`);
         }
         break;
 
@@ -25225,7 +25225,7 @@ ${prefix}setgroq sua_chave_aqui
             return reply(`📝 *Como adicionar comandos VIP:*
 
 *Formato:*
-${prefix}addcmdvip <comando> | <descrição> | <categoria>
+${groupPrefix}addcmdvip <comando> | <descrição> | <categoria>
 
 *Categorias disponíveis:*
 • download - Downloads
@@ -25237,16 +25237,16 @@ ${prefix}addcmdvip <comando> | <descrição> | <categoria>
 • outros - Outros
 
 *Exemplo:*
-${prefix}addcmdvip premium_ia | IA do Abismo exclusiva | ia
-${prefix}addcmdvip premium_ia | IA do Abismo exclusiva | ia | premium_ia <pergunta>
+${groupPrefix}addcmdvip premium_ia | IA do Abismo exclusiva | ia
+${groupPrefix}addcmdvip premium_ia | IA do Abismo exclusiva | ia | premium_ia <pergunta>
 
 *Adicionar todos de um menu:*
-${prefix}addcmdvip <nomeMenu> all
+${groupPrefix}addcmdvip <nomeMenu> all
 
 *Exemplos:*
-${prefix}addcmdvip menubuscas all
-${prefix}addcmdvip menuadm all
-${prefix}addcmdvip menudown all`);
+${groupPrefix}addcmdvip menubuscas all
+${groupPrefix}addcmdvip menuadm all
+${groupPrefix}addcmdvip menudown all`);
           }
 
           // Verifica se é para adicionar todos os comandos de um menu
@@ -25283,10 +25283,10 @@ ${prefix}addcmdvip menudown all`);
               const menuText = await menuFunction(prefix, nomebot, pushname, customDesign);
 
               // Extrai comandos do menu usando regex
-              // O menu já foi processado, então ${prefix} foi substituído pelo prefixo real
+              // O menu já foi processado, então ${groupPrefix} foi substituído pelo prefixo real
               const commands = new Set();
 
-              // Padrão 1: Procura por ${prefix}comando (caso ainda não tenha sido substituído)
+              // Padrão 1: Procura por ${groupPrefix}comando (caso ainda não tenha sido substituído)
               const templatePattern = new RegExp(`\\$\\{prefix\\}([a-zA-Z0-9_]+)(?:\\s*<[^>]*>)?`, 'g');
               let match;
               while ((match = templatePattern.exec(menuText)) !== null) {
@@ -25332,7 +25332,7 @@ ${prefix}addcmdvip menudown all`);
                 }
               }
 
-              // Padrão 4: Procura por ${prefix}comando.sub (template)
+              // Padrão 4: Procura por ${groupPrefix}comando.sub (template)
               const templateDotPattern = new RegExp(`\\$\\{prefix\\}([a-zA-Z0-9_]+(?:\\.[a-zA-Z0-9_]+)+)`, 'g');
               while ((match = templateDotPattern.exec(menuText)) !== null) {
                 const cmd = match[1];
@@ -25345,8 +25345,8 @@ ${prefix}addcmdvip menudown all`);
                 // Debug: mostra um trecho do menu para ajudar a identificar o problema
                 const menuPreview = menuText.substring(0, 500).replace(/\n/g, '\\n');
                 console.log(`[DEBUG] Menu "${menuName}" gerado (primeiros 500 chars):`, menuPreview);
-                console.log(`[DEBUG] Prefix usado: "${prefix}"`);
-                return reply(`❌ Nenhum comando encontrado no menu "${menuName}"!\n\n*Debug:* Prefixo usado: "${prefix}"\nVerifique o console para mais detalhes.`);
+                console.log(`[DEBUG] Prefix usado: "${groupPrefix}"`);
+                return reply(`❌ Nenhum comando encontrado no menu "${menuName}"!\n\n*Debug:* Prefixo usado: "${groupPrefix}"\nVerifique o console para mais detalhes.`);
               }
 
               const commandsArray = Array.from(commands).sort();
@@ -25381,7 +25381,7 @@ ${prefix}addcmdvip menudown all`);
 • ⏭️ Já existiam: ${skipped}
 • 📦 Total encontrados: ${commandsArray.length}
 
-💡 Use ${prefix}listcmdvip para ver todos os comandos VIP.`);
+💡 Use ${groupPrefix}listcmdvip para ver todos os comandos VIP.`);
             } catch (error) {
               console.error(`Erro ao processar menu ${menuName}:`, error);
               return reply(`❌ Erro ao processar o menu "${menuName}": ${error.message}`);
@@ -25392,7 +25392,7 @@ ${prefix}addcmdvip menudown all`);
           const parts = q.split('|').map(p => p.trim());
 
           if (parts.length < 2) {
-            return reply('❌ Formato inválido! Use:\n' + prefix + 'addcmdvip <comando> | <descrição> | <categoria>');
+            return reply('❌ Formato inválido! Use:\n'+ groupPrefix + 'addcmdvip <comando> | <descrição> | <categoria>');
           }
 
           const cmdName = parts[0];
@@ -25424,10 +25424,10 @@ ${prefix}addcmdvip menudown all`);
             return reply(`📝 *Como remover comandos VIP:*
 
 *Formato:*
-${prefix}removecmdvip <comando>
+${groupPrefix}removecmdvip <comando>
 
 *Exemplo:*
-${prefix}removecmdvip premium_ia`);
+${groupPrefix}removecmdvip premium_ia`);
           }
 
           const cmdName = q.trim();
@@ -25472,11 +25472,11 @@ ${prefix}removecmdvip premium_ia`);
             return reply(`📝 *Como ativar/desativar comandos VIP:*
 
 *Formato:*
-${prefix}togglecmdvip <comando> <on/off>
+${groupPrefix}togglecmdvip <comando> <on/off>
 
 *Exemplo:*
-${prefix}togglecmdvip premium_ia on
-${prefix}togglecmdvip premium_ia off`);
+${groupPrefix}togglecmdvip premium_ia on
+${groupPrefix}togglecmdvip premium_ia off`);
           }
 
           const cmdName = args[0].trim();
@@ -25528,7 +25528,7 @@ ${prefix}togglecmdvip premium_ia off`);
           }
 
           statsText += `\n━━━━━━━━━━━━━━━━\n\n`;
-          statsText += `💡 Use ${prefix}listcmdvip para ver todos os comandos`;
+          statsText += `💡 Use ${groupPrefix}listcmdvip para ver todos os comandos`;
 
           await reply(statsText);
         } catch (error) {
@@ -27583,7 +27583,7 @@ ${prefix}togglecmdvip premium_ia off`);
           const useVideo = fs.existsSync(menuVideoPath);
           const mediaPath = useVideo ? menuVideoPath : menuImagePath;
           const mediaBuffer = fs.readFileSync(mediaPath);
-          const menuText = await menuTopCmd(prefix, nomebot, pushname, topCommands);
+          const menuText = await menuTopCmd(groupPrefix, nomebot, pushname, topCommands);
           await nazu.sendMessage(from, {
             [useVideo ? 'video' : 'image']: mediaBuffer,
             caption: menuText,
@@ -27600,7 +27600,7 @@ ${prefix}togglecmdvip premium_ia off`);
       case 'cmdinfo':
       case 'comandoinfo':
         try {
-          if (!q) return reply(`📊 *Estatísticas de Comandos*\n\n📝 *Como usar:*\n• Especifique o comando após o comando\n• Ex: ${prefix}cmdinfo menu\n• Ex: ${prefix}cmdinfo ping\n\n📈 Visualize estatísticas detalhadas de uso do comando!`);
+          if (!q) return reply(`📊 *Estatísticas de Comandos*\n\n📝 *Como usar:*\n• Especifique o comando após o comando\n• Ex: ${groupPrefix}cmdinfo menu\n• Ex: ${groupPrefix}cmdinfo ping\n\n📈 Visualize estatísticas detalhadas de uso do comando!`);
           const cmdName = q.startsWith(prefix) ? q.slice(prefix.length) : q;
           if (!commandStats || typeof commandStats.getCommandStats !== 'function') {
             console.warn('[COMMANDSTATS] getCommandStats not available');
@@ -27614,7 +27614,7 @@ ${prefix}togglecmdvip premium_ia off`);
             return `${index + 1}º @${getUserName(user.userId)} - ${user.count} usos`;
           }).join('\n') : 'Nenhum usuário registrado';
           const lastUsed = new Date(stats.lastUsed).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-          const infoMessage = `📊 *Estatísticas do Comando: ${prefix}${stats.name}* 📊\n\n` + `📈 *Total de Usos*: ${stats.count}\n` + `👥 *Usuários Únicos*: ${stats.uniqueUsers}\n` + `🕒 *Último Uso*: ${lastUsed}\n\n` + `🏆 *Top Usuários*:\n${topUsersText}\n\n` + `◈ *Bot*: ${nomebot} by ${nomedono} ◈`;
+          const infoMessage = `📊 *Estatísticas do Comando: ${groupPrefix}${stats.name}* 📊\n\n` + `📈 *Total de Usos*: ${stats.count}\n` + `👥 *Usuários Únicos*: ${stats.uniqueUsers}\n` + `🕒 *Último Uso*: ${lastUsed}\n\n` + `🏆 *Top Usuários*:\n${topUsersText}\n\n` + `◈ *Bot*: ${nomebot} by ${nomedono} ◈`;
           await nazu.sendMessage(from, {
             text: infoMessage,
             mentions: stats.topUsers.map(u => u.userId)
@@ -27801,7 +27801,7 @@ ${prefix}togglecmdvip premium_ia off`);
         let text = `🏛️ *ELEIÇÃO PARA ALPHA INICIADA!* 🐺\n\n`;
         text += `Todos os membros estão convidados a participar.\n\n`;
         text += `📢 Para se candidatar, envie:\n`;
-        text += `*"${prefix}cand"*\n\n`;
+        text += `*"${groupPrefix}cand"*\n\n`;
         text += `⏳ Tempo para candidaturas: ${config.candidatura} minutos.\n\n`;
         text += `Boa sorte a todos!`;
 
@@ -27869,9 +27869,9 @@ ${prefix}togglecmdvip premium_ia off`);
           text += `🗳️ *Votação:* ${config.votacao} minutos\n`;
           text += `🌌 *Mandato:* ${formatMandate(config.mandato)}\n\n`;
           text += `💡 *Para alterar, use:*\n`;
-          text += `> ${prefix}tempeleicao candidatura <minutos>\n`;
-          text += `> ${prefix}tempeleicao votacao <minutos>\n`;
-          text += `> ${prefix}tempeleicao mandato <valor><m/h/d>\n`;
+          text += `> ${groupPrefix}tempeleicao candidatura <minutos>\n`;
+          text += `> ${groupPrefix}tempeleicao votacao <minutos>\n`;
+          text += `> ${groupPrefix}tempeleicao mandato <valor><m/h/d>\n`;
           text += `_Ex: !tempeleicao mandato 30m, 12h ou 7d_`;
           return reply(text);
         }
@@ -28173,7 +28173,7 @@ ${prefix}togglecmdvip premium_ia off`);
 │    converter em imagem!
 │
 │ 💡 Responda uma figurinha com:
-│ ${prefix}toimg
+│ ${groupPrefix}toimg
 │
 ╰━━━━━━━━━━━━━━━━━━━━━━╯`);
         try {
@@ -28206,7 +28206,7 @@ case 'sfundo':
 
     if (!imgMsg) {
       return reply(
-        `❌ Marque uma imagem para remover o fundo.\n\n💡 Uso: ${prefix}${command}`
+        `❌ Marque uma imagem para remover o fundo.\n\n💡 Uso: ${groupPrefix}${command}`
       );
     }
 
@@ -28294,7 +28294,7 @@ break;
             info.message?.viewOnceMessageV2?.message?.imageMessage;
 
           if (!upscaleImgMsg) {
-            return reply(`❌ Marque uma imagem para melhorar a qualidade.\n\n💡 Uso: ${prefix}${command}`);
+            return reply(`❌ Marque uma imagem para melhorar a qualidade.\n\n💡 Uso: ${groupPrefix}${command}`);
           }
 
           reply('⏳ Melhorando a imagem, aguarde...');
@@ -28372,7 +28372,7 @@ packname: `${nomebot}`,            type: 'image'
           emoji1 = q.split(`/`)[0];
           var emoji2;
           emoji2 = q.split(`/`)[1];
-          if (!q || !emoji1 || !emoji2) return reply(`Formato errado, utilize:\n${prefix}${command} emoji1/emoji2\nEx: ${prefix}${command} 🤓/🙄`);
+          if (!q || !emoji1 || !emoji2) return reply(`Formato errado, utilize:\n${groupPrefix}${command} emoji1/emoji2\nEx: ${groupPrefix}${command} 🤓/🙄`);
           var datzc;
           datzc = await emojiMix(emoji1, emoji2);
           await sendSticker(nazu, from, {
@@ -28615,7 +28615,7 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
           let author = "";
           let packname = "";
           if (!q) {
-            return reply(`Formato errado, utilize:\n${prefix}${command} Autor/Pack\nEx: ${prefix}${command} By:/Hiudy`);
+            return reply(`Formato errado, utilize:\n${groupPrefix}${command} Autor/Pack\nEx: ${groupPrefix}${command} By:/Hiudy`);
           }
           if (q.includes("/")) {
             author = q.split("/")[0] || "";
@@ -28625,7 +28625,7 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
             author = "";
           }
           if (!packname) {
-            return reply(`Formato errado, utilize:\n${prefix}${command} Autor/Pack\nEx: ${prefix}${command} By:/Hiudy`);
+            return reply(`Formato errado, utilize:\n${groupPrefix}${command} Autor/Pack\nEx: ${groupPrefix}${command} By:/Hiudy`);
           }
           const encmediats = await getFileBuffer(
             info.message.extendedTextMessage.contextInfo.quotedMessage.stickerMessage,
@@ -28649,7 +28649,7 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
           let author = "";
           let pack = "";
           if (!q) {
-            return reply(`Formato errado, utilize:\n${prefix}${command} Autor/Pack\nEx: ${prefix}${command} By:/Hiudy`);
+            return reply(`Formato errado, utilize:\n${groupPrefix}${command} Autor/Pack\nEx: ${groupPrefix}${command} By:/Hiudy`);
           }
           if (q.includes("/")) {
             author = q.split("/")[0] || "";
@@ -28659,7 +28659,7 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
             author = "";
           }
           if (!pack) {
-            return reply(`Formato errado, utilize:\n${prefix}${command} Autor/Pack\nEx: ${prefix}${command} By:/Hiudy`);
+            return reply(`Formato errado, utilize:\n${groupPrefix}${command} Autor/Pack\nEx: ${groupPrefix}${command} By:/Hiudy`);
           }
           const filePath = pathz.join(USERS_DIR, 'take.json');
           const dataTake = fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, 'utf-8')) : {};
@@ -28701,7 +28701,7 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
       case 'stickerpack':
       case 'packfig':
         try {
-          if (!q) return reply(`🎨 *Gerador de Figurinhas*\n\n🔢 *Como usar:*\n• Escolha quantas figurinhas deseja (1-15)\n• Ex: ${prefix}figurinhas 10\n• Ex: ${prefix}figurinhas 5\n\n◈ As figurinhas serão enviadas uma por uma!\n${isGroup ? '📬 *Nota:* Em grupos, as figurinhas serão enviadas no seu privado!' : ''}`);
+          if (!q) return reply(`🎨 *Gerador de Figurinhas*\n\n🔢 *Como usar:*\n• Escolha quantas figurinhas deseja (1-15)\n• Ex: ${groupPrefix}figurinhas 10\n• Ex: ${groupPrefix}figurinhas 5\n\n◈ As figurinhas serão enviadas uma por uma!\n${isGroup ? '📬 *Nota:* Em grupos, as figurinhas serão enviadas no seu privado!' : ''}`);
 
           const quantidade = parseInt(q);
 
@@ -28773,7 +28773,7 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
       case 'mention':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
-          if (!q) return reply(`📢 *Configuração de Marcações*\n\n🔧 Escolha como deseja ser mencionado:\n\n✅ *${prefix}mention all* → Marcado em tudo (marcações e jogos).\n📢 *${prefix}mention marca* → Apenas em marcações de administradores.\n🌌 *${prefix}mention games* → Somente em jogos do bot.\n🚫 *${prefix}mention 0* → Não será mencionado em nenhuma ocasião.`);
+          if (!q) return reply(`📢 *Configuração de Marcações*\n\n🔧 Escolha como deseja ser mencionado:\n\n✅ *${groupPrefix}mention all* → Marcado em tudo (marcações e jogos).\n📢 *${groupPrefix}mention marca* → Apenas em marcações de administradores.\n🌌 *${groupPrefix}mention games* → Somente em jogos do bot.\n🚫 *${groupPrefix}mention 0* → Não será mencionado em nenhuma ocasião.`);
           let options = {
             all: '◈ Você agora será mencionado em todas as interações do bot, incluindo marcações de administradores e os jogos!',
             marca: '📢 A partir de agora, você será mencionado apenas quando um administrador marcar.',
@@ -28788,7 +28788,7 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
             fs.writeFileSync(buildGroupFilePath(from), JSON.stringify(groupData, null, 2));
             return reply(`*${options[q.toLowerCase()]}*`);
           }
-          reply(`❌ Opção inválida! Use *${prefix}mention* para ver as opções.`);
+          reply(`❌ Opção inválida! Use *${groupPrefix}mention* para ver as opções.`);
         } catch (e) {
           console.error(e);
           reply("ocorreu um erro 💔");
@@ -29053,7 +29053,7 @@ break;
 
         if (subCmd === 'setkey') {
           const newKey = arg[1];
-          if (!newKey) return reply(`❌ Uso correto: ${prefix}smm setkey [SUA_CHAVE_API]`);
+          if (!newKey) return reply(`❌ Uso correto: ${groupPrefix}smm setkey [SUA_CHAVE_API]`);
           
           try {
             let config = JSON.parse(fs.readFileSync(CONFIG_FILE));
@@ -29093,7 +29093,7 @@ break;
               }))].filter(name => name && name !== '📁');
               
               let text = `📋 *PLATAFORMAS DISPONÍVEIS*\n\n`;
-              text += `Para ver os serviços, use: *${prefix}smm [nome]*\n\n`;
+              text += `Para ver os serviços, use: *${groupPrefix}smm [nome]*\n\n`;
               mainCategories.forEach(cat => {
                 text += `⭐ ${cat}\n`;
               });
@@ -29133,7 +29133,7 @@ break;
                 text += servicesText;
                 
                 // Mensagem de truncamento removida
-                text += `\n\n💡 Use *${prefix}smm pedido [ID] [LINK] [QTD]* para comprar.`;
+                text += `\n\n💡 Use *${groupPrefix}smm pedido [ID] [LINK] [QTD]* para comprar.`;
                 return reply(text);
               }
             }
@@ -29149,7 +29149,7 @@ break;
           const quantity = arg[3];
 
           if (!serviceIdRaw || !link || !quantity) {
-            return reply(`❌ Uso correto: ${prefix}smm pedido [ID_SERVICO] [LINK] [QUANTIDADE]`);
+            return reply(`❌ Uso correto: ${groupPrefix}smm pedido [ID_SERVICO] [LINK] [QUANTIDADE]`);
           }
 
           try {
@@ -29158,7 +29158,7 @@ break;
             const service = services.find(s => String(s.service) === serviceIdRaw);
             
             if (!service) {
-              return reply(`❌ ID de serviço ${serviceIdRaw} não encontrado. Verifique o ID usando ${prefix}smm [nome].`);
+              return reply(`❌ ID de serviço ${serviceIdRaw} não encontrado. Verifique o ID usando ${groupPrefix}smm [nome].`);
             }
 
             const totalCost = (parseFloat(service.rate) / 1000) * parseInt(quantity);
@@ -29180,7 +29180,7 @@ break;
             msg += `🔢 *Quantidade:* ${quantity}\n`;
             msg += `💸 *Valor Total:* R$ ${totalCost.toFixed(2)}\n\n`;
             msg += `⚠️ *Deseja confirmar a compra?*\n`;
-            msg += `Digite *${prefix}smm confirmar* para finalizar o pedido.`;
+            msg += `Digite *${groupPrefix}smm confirmar* para finalizar o pedido.`;
             
             return reply(msg);
           } catch (e) {
@@ -29214,7 +29214,7 @@ break;
                 `📦 *Serviço:* ${pending.name}\n` +
                 `🆔 *ID do Pedido:* ${res.order}\n` +
                 `💸 *Custo:* R$ ${pending.cost}\n\n` +
-                `💡 _Use ${prefix}smm status ${res.order} para acompanhar._`);
+                `💡 _Use ${groupPrefix}smm status ${res.order} para acompanhar._`);
             } else {
               const errorMsg = res.error || (res.errors ? JSON.stringify(res.errors) : 'Erro desconhecido');
               return reply(`❌ Erro no pedido: ${errorMsg}`);
@@ -29261,12 +29261,12 @@ break;
         }
 
         let help = `🤖 *COMANDOS SMM*\n\n`;
-        help += `💰 *${prefix}smm saldo* - Ver seu saldo no site\n`;
-        help += `📋 *${prefix}smm servicos* - Ver categorias de serviços\n`;
-        help += `🔍 *${prefix}smm [NOME]* - Ver serviços de uma categoria\n`;
-        help += `📦 *${prefix}smm pedido [ID] [LINK] [QTD]* - Criar novo pedido\n`;
-        help += `📊 *${prefix}smm status [ID]* - Ver status de um pedido\n`;
-        help += `🔑 *${prefix}smm setkey [CHAVE]* - Configurar sua API Key`;
+        help += `💰 *${groupPrefix}smm saldo* - Ver seu saldo no site\n`;
+        help += `📋 *${groupPrefix}smm servicos* - Ver categorias de serviços\n`;
+        help += `🔍 *${groupPrefix}smm [NOME]* - Ver serviços de uma categoria\n`;
+        help += `📦 *${groupPrefix}smm pedido [ID] [LINK] [QTD]* - Criar novo pedido\n`;
+        help += `📊 *${groupPrefix}smm status [ID]* - Ver status de um pedido\n`;
+        help += `🔑 *${groupPrefix}smm setkey [CHAVE]* - Configurar sua API Key`;
         return reply(help);
       }
 
@@ -29470,7 +29470,7 @@ break;
         if (!isGroupAdmin) return reply("Comando restrito a Administradores 💔");
 
         if (!q) {
-          return reply(`📝 *Configurar Mensagem do Bam*\n\nUse: ${prefix}setbammsg <mensagem>\n\n*Variável disponível:*\n#user# - Será substituído pelo nome do usuário\n\n*Exemplo:*\n${prefix}setbammsg 😂 Era só uma pegadinha #user#!\n\nPara ver a mensagem atual: ${prefix}verbammsg\nPara resetar: ${prefix}resetbammsg`);
+          return reply(`📝 *Configurar Mensagem do Bam*\n\nUse: ${groupPrefix}setbammsg <mensagem>\n\n*Variável disponível:*\n#user# - Será substituído pelo nome do usuário\n\n*Exemplo:*\n${groupPrefix}setbammsg 😂 Era só uma pegadinha #user#!\n\nPara ver a mensagem atual: ${groupPrefix}verbammsg\nPara resetar: ${groupPrefix}resetbammsg`);
         }
 
         try {
@@ -29490,7 +29490,7 @@ break;
         try {
           const defaultMsg = `😂 *ERA MEME!*\n\n#user#, relaxa, era só uma brincadeira! 🤣\n\nVocê não vai ser banido... dessa vez! 😎`;
           const currentMsg = groupData.bamMessage || defaultMsg;
-          await reply(`📝 *Mensagem Atual do Bam:*\n\n${currentMsg}\n\n${!groupData.bamMessage ? '⚠️ Usando mensagem padrão\n\n' : ''}Para editar: ${prefix}setbammsg <nova_mensagem>`);
+          await reply(`📝 *Mensagem Atual do Bam:*\n\n${currentMsg}\n\n${!groupData.bamMessage ? '⚠️ Usando mensagem padrão\n\n' : ''}Para editar: ${groupPrefix}setbammsg <nova_mensagem>`);
         } catch (e) {
           console.error('Erro no verbammsg:', e);
           reply("ocorreu um erro 💔");
@@ -29505,7 +29505,7 @@ break;
         try {
           delete groupData.bamMessage;
           persistGroupData();
-          await reply(`✅ Mensagem do bam resetada para o padrão!\n\nUse ${prefix}verbammsg para ver a mensagem padrão.`);
+          await reply(`✅ Mensagem do bam resetada para o padrão!\n\nUse ${groupPrefix}verbammsg para ver a mensagem padrão.`);
         } catch (e) {
           console.error('Erro no resetbammsg:', e);
           reply("ocorreu um erro 💔");
@@ -29577,9 +29577,9 @@ break;
             msg += `${index + 1}. @${number}\n`;
           });
           msg += `\n💡 Comandos disponíveis:\n`;
-          msg += `• ${prefix}aprovar @usuario - Aceitar uma solicitação\n`;
-          msg += `• ${prefix}aprovar all - Aceitar TODAS\n`;
-          msg += `• ${prefix}recusarsolic @usuario - Recusar solicitação`;
+          msg += `• ${groupPrefix}aprovar @usuario - Aceitar uma solicitação\n`;
+          msg += `• ${groupPrefix}aprovar all - Aceitar TODAS\n`;
+          msg += `• ${groupPrefix}recusarsolic @usuario - Recusar solicitação`;
 
           await reply(msg, { mentions: requests.map(r => r.jid) });
         } catch (e) {
@@ -29655,7 +29655,7 @@ break;
           }
 
           if (!menc_jid2 || menc_jid2.length === 0) {
-            return reply(`❌ Marque alguém ou use "all" para aprovar todos.\n\n💡 Exemplos:\n• ${prefix}aprovar @usuario\n• ${prefix}aprovar all\n\nUse ${prefix}solicitacoes para ver pendentes.`);
+            return reply(`❌ Marque alguém ou use "all" para aprovar todos.\n\n💡 Exemplos:\n• ${groupPrefix}aprovar @usuario\n• ${groupPrefix}aprovar all\n\nUse ${groupPrefix}solicitacoes para ver pendentes.`);
           }
 
           const usersToApprove = menc_jid2;
@@ -29705,7 +29705,7 @@ break;
           if (!isBotAdmin) return sendAbyssWarning("Eu preciso ser administrador para realizar esta ação.");
 
           if (!menc_jid2 || menc_jid2.length === 0) {
-            return reply(`❌ Marque alguém ou mencione números.\n\n💡 Exemplo: ${prefix}recusarsolic @usuario\n\nUse ${prefix}solicitacoes para ver pendentes.`);
+            return reply(`❌ Marque alguém ou mencione números.\n\n💡 Exemplo: ${groupPrefix}recusarsolic @usuario\n\nUse ${groupPrefix}solicitacoes para ver pendentes.`);
           }
 
           const usersToReject = menc_jid2;
@@ -29766,7 +29766,7 @@ break;
             if (groupData.captchaEnabled) {
               msg += `🔐 *Captcha ativo:* Novos membros precisarão resolver uma conta no PV antes de serem aceitos.\n\n`;
             } else {
-              msg += `💡 Quer adicionar segurança? Use ${prefix}captchasolic para ativar verificação por captcha.\n\n`;
+              msg += `💡 Quer adicionar segurança? Use ${groupPrefix}captchasolic para ativar verificação por captcha.\n\n`;
             }
           } else {
             msg += `📝 Solicitações precisarão ser aprovadas manualmente pelos administradores.`;
@@ -29808,7 +29808,7 @@ break;
 
 
             if (!groupData.autoAcceptRequests) {
-              msg += `⚠️ *Atenção:* Para o captcha funcionar automaticamente, ative também:\n${prefix}autoaceitarsolic`;
+              msg += `⚠️ *Atenção:* Para o captcha funcionar automaticamente, ative também:\n${groupPrefix}autoaceitarsolic`;
             } else {
               msg += `✅ Auto-aceitar já está ativo! O captcha será usado automaticamente.`;
             }
@@ -30020,7 +30020,7 @@ break;
               `├─────────────────────⭓\n` +
               `│ ⚙️ Anti-Link: ${groupData.antilink ? 'Ativo ✅' : 'Inativo ❌'}\n` +
               `│ 🚫 Anti-Flood: ${groupData.antiflood ? 'Ativo ✅' : 'Inativo ❌'}\n` +
-              `│ ⚙️ Prefixo: ${prefix}\n` +
+              `│ ⚙️ Prefixo: ${groupPrefix}\n` +
               `│\n` +
               `╰─────────────────────⭓`;
               
@@ -30088,11 +30088,11 @@ break;
           // Validate time format with enhanced validation
           const timeValidation = validateTimeFormat(rawArg);
           if (!timeValidation.valid) {
-            return reply(`⏰ ${timeValidation.error}\nExemplo: ${prefix}opengp 07:30`);
+            return reply(`⏰ ${timeValidation.error}\nExemplo: ${groupPrefix}opengp 07:30`);
           }
           const normalizedTime = normalizeScheduleTime(rawArg);
           if (!normalizedTime) {
-            return reply(`⏰ Não consegui entender o horário informado. Use o formato HH:MM, por exemplo ${prefix}opengp 07:30`);
+            return reply(`⏰ Não consegui entender o horário informado. Use o formato HH:MM, por exemplo ${groupPrefix}opengp 07:30`);
           }
 
           // Save the schedule
@@ -30146,11 +30146,11 @@ break;
           // Validate time format with enhanced validation
           const timeValidation = validateTimeFormat(rawArg);
           if (!timeValidation.valid) {
-            return reply(`⏰ ${timeValidation.error}\nExemplo: ${prefix}closegp 22:30`);
+            return reply(`⏰ ${timeValidation.error}\nExemplo: ${groupPrefix}closegp 22:30`);
           }
           const normalizedTime = normalizeScheduleTime(rawArg);
           if (!normalizedTime) {
-            return reply(`⏰ Não consegui entender o horário informado. Use o formato HH:MM, por exemplo ${prefix}closegp 22:30`);
+            return reply(`⏰ Não consegui entender o horário informado. Use o formato HH:MM, por exemplo ${groupPrefix}closegp 22:30`);
           }
 
           // Save the schedule
@@ -30455,10 +30455,10 @@ A mensagem será enviada todos os dias às ${normalizedTime} (horário de São P
           if (q) {
             participantes = q.split(',').map(n => n.trim()).filter(n => n);
             if (participantes.length !== 16) {
-              return reply(`❌ Forneça exatamente 16 nomes! Você forneceu ${participantes.length}. Exemplo: ${prefix}${command} nome1,nome2,...,nome16`);
+              return reply(`❌ Forneça exatamente 16 nomes! Você forneceu ${participantes.length}. Exemplo: ${groupPrefix}${command} nome1,nome2,...,nome16`);
             }
           } else {
-            return reply(`❌ Forneça exatamente 16 nomes! Você forneceu 0. Exemplo: ${prefix}${command} nome1,nome2,...,nome16`);
+            return reply(`❌ Forneça exatamente 16 nomes! Você forneceu 0. Exemplo: ${groupPrefix}${command} nome1,nome2,...,nome16`);
           }
           participantes = participantes.sort(() => Math.random() - 0.5);
           const grupo1 = participantes.slice(0, 8);
@@ -30502,7 +30502,7 @@ A mensagem será enviada todos os dias às ${normalizedTime} (horário de São P
         break;
       case 'sorteionum':
         try {
-          if (!q) return reply(`Por favor, forneça um intervalo de números. Exemplo: ${prefix}sorteionum 1-50`);
+          if (!q) return reply(`Por favor, forneça um intervalo de números. Exemplo: ${groupPrefix}sorteionum 1-50`);
           const [min, max] = q.split('-').map(n => parseInt(n.trim()));
           if (isNaN(min) || isNaN(max) || min >= max) return reply('❌ Intervalo inválido! Use o formato: min-max (ex.: 1-50).');
           const numeroSorteado = Math.floor(Math.random() * (max - min + 1)) + min;
@@ -30514,7 +30514,7 @@ A mensagem será enviada todos os dias às ${normalizedTime} (horário de São P
         break;
       case 'sorteionome':
         try {
-          if (!q) return reply(`Por favor, forneça os nomes para o sorteio. Exemplo: ${prefix}sorteionome 4/nick1,nick2,nick3,... ou ${prefix}sorteionome nick1,nick2,nick3,...`);
+          if (!q) return reply(`Por favor, forneça os nomes para o sorteio. Exemplo: ${groupPrefix}sorteionome 4/nick1,nick2,nick3,... ou ${groupPrefix}sorteionome nick1,nick2,nick3,...`);
           let numVencedores = 1;
           let numGrupos = 1;
           let nomes = [];
@@ -30889,13 +30889,13 @@ break;
           const groups = Array.isArray(config.groups) ? config.groups : [];
 
           const helpText = `📣 *DIVULGAÇÃO DO DONO (NOVO)*\n\n` +
-            `• ${prefix}divdono add [id] (no grupo ou com ID)\n` +
-            `• ${prefix}divdono rem <id>\n` +
-            `• ${prefix}divdono list\n` +
-            `• ${prefix}divdono msg <texto>\n` +
-            `• ${prefix}divdono send [texto] (usa msg salva)\n` +
-            `• ${prefix}divdono time <HH:MM|off>\n` +
-            `• ${prefix}divdono status`;
+            `• ${groupPrefix}divdono add [id] (no grupo ou com ID)\n` +
+            `• ${groupPrefix}divdono rem <id>\n` +
+            `• ${groupPrefix}divdono list\n` +
+            `• ${groupPrefix}divdono msg <texto>\n` +
+            `• ${groupPrefix}divdono send [texto] (usa msg salva)\n` +
+            `• ${groupPrefix}divdono time <HH:MM|off>\n` +
+            `• ${groupPrefix}divdono status`;
 
           if (!sub || sub === 'help') {
             return reply(helpText);
@@ -30904,7 +30904,7 @@ break;
           if (sub === 'add' || sub === 'registrar' || sub === 'register') {
             let targetGroupId = rest;
             if (!targetGroupId && isGroup) targetGroupId = from;
-            if (!targetGroupId) return reply(`💡 Use: ${prefix}divdono add [id_do_grupo]`);
+            if (!targetGroupId) return reply(`💡 Use: ${groupPrefix}divdono add [id_do_grupo]`);
 
             if (!targetGroupId.includes('@g.us')) {
               targetGroupId += '@g.us';
@@ -30923,7 +30923,7 @@ break;
           }
 
           if (sub === 'rem' || sub === 'remove' || sub === 'del') {
-            if (!rest) return reply(`💡 Use: ${prefix}divdono rem <id_do_grupo>`);
+            if (!rest) return reply(`💡 Use: ${groupPrefix}divdono rem <id_do_grupo>`);
             let targetGroupId = rest.trim();
             if (!targetGroupId.includes('@g.us')) {
               targetGroupId += '@g.us';
@@ -30979,7 +30979,7 @@ break;
             if (!rest) {
               const status = config.schedule?.enabled ? 'ativado' : 'desativado';
               const time = config.schedule?.time || '—';
-              return reply(`⏰ *Agendamento:* ${status}\n🕒 Horário: ${time}\n💡 Use ${prefix}divdono time HH:MM ou off`);
+              return reply(`⏰ *Agendamento:* ${status}\n🕒 Horário: ${time}\n💡 Use ${groupPrefix}divdono time HH:MM ou off`);
             }
 
             if (['off', 'desligar', 'desativar'].includes(rest.toLowerCase())) {
@@ -31256,10 +31256,10 @@ Qualquer solicitação de pagamento será ${groupData.antirequest ? 'bloqueada e
           if (!isGroup) return reply("◈ Este comando só funciona em grupos 💔");
           if (!isGroupAdmin) return reply("Apenas administradores podem usar este comando 🚫");
           if (!q) {
-            return reply(`📝 Configure o limite de mensagens! Exemplo: ${prefix}limitmessage 5 1m ban\n` + `Formato: ${prefix}limitmessage <quantidade> <tempo> <ação>\n` + `Tempo: s (segundos), m (minutos), h (horas)\n` + `Ação: ban (banimento direto) ou adv (advertências)`);
+            return reply(`📝 Configure o limite de mensagens! Exemplo: ${groupPrefix}limitmessage 5 1m ban\n` + `Formato: ${groupPrefix}limitmessage <quantidade> <tempo> <ação>\n` + `Tempo: s (segundos), m (minutos), h (horas)\n` + `Ação: ban (banimento direto) ou adv (advertências)`);
           }
           if (args.length !== 3) {
-            return reply("  ❌ Formato inválido! Use: " + `${prefix}limitmessage <quantidade> <tempo> <ação>`);
+            return reply("  ❌ Formato inválido! Use: " + `${groupPrefix}limitmessage <quantidade> <tempo> <ação>`);
           }
           const limit = parseInt(args[0]);
           const timeInput = args[1].toLowerCase();
@@ -31378,12 +31378,12 @@ Qualquer solicitação de pagamento será ${groupData.antirequest ? 'bloqueada e
           const filePath = DATABASE_DIR + '/antispam.json';
           const cfg = antiSpamGlobal || {};
           const usage = `Uso:
-${prefix}antispamcmd on <limite> <intervalo_s> <bloqueio_s>
-${prefix}antispamcmd off
-${prefix}antispamcmd status
+${groupPrefix}antispamcmd on <limite> <intervalo_s> <bloqueio_s>
+${groupPrefix}antispamcmd off
+${groupPrefix}antispamcmd status
 Exemplos:
-• ${prefix}antispamcmd on 5 10 600
-• ${prefix}antispamcmd off`;
+• ${groupPrefix}antispamcmd on 5 10 600
+• ${groupPrefix}antispamcmd off`;
           if (!q) return reply(usage);
           const parts = q.trim().split(/\s+/);
           const sub = parts[0].toLowerCase();
@@ -31603,7 +31603,7 @@ case 'bemvindo2':
               delete groupData.welcome.image; // limpa imagem antiga se tiver
               writeJsonFile(buildGroupFilePath(from), groupData);
 
-              await reply(`✅ Foto de boas-vindas ATIVADA!\n\nUse o comando ${prefix}set-fotobv para configurar a imagem de boas-vindas.`);
+              await reply(`✅ Foto de boas-vindas ATIVADA!\n\nUse o comando ${groupPrefix}set-fotobv para configurar a imagem de boas-vindas.`);
 
             } else if (action === 'off' || action === 'desativar') {
 
@@ -31615,7 +31615,7 @@ case 'bemvindo2':
             } else {
 
               const status = groupData.welcome.photo ? 'ATIVADO' : 'DESATIVADO';
-              await reply(`🤔 Uso: ${prefix}fotobv on|off\nStatus atual: ${status}`);
+              await reply(`🤔 Uso: ${groupPrefix}fotobv on|off\nStatus atual: ${status}`);
 
             }
 
@@ -31675,7 +31675,7 @@ case 'bemvindo2':
 
               await reply(
                 `🤔 Uso:\n` +
-                `${prefix}set-fotobv api\n` +
+                `${groupPrefix}set-fotobv api\n` +
                 `ou envie/marque uma imagem com o comando\n\n` +
                 `📊 Atual: ${type}`
               );
@@ -31713,7 +31713,7 @@ case 'set-bannerbv':
 
 
           if (!isQuotedImage && !isImage) {
-            return reply(`📌 Marque ou envie uma imagem\n\nEx: ${prefix}set-bannnerbv`);
+            return reply(`📌 Marque ou envie uma imagem\n\nEx: ${groupPrefix}set-bannnerbv`);
           }
 
 
@@ -31834,7 +31834,7 @@ case 'set-bannerbv':
             statusMsg += `\n💡 Comandos afetados: marcar, hidetag, divulgar, etc.`;
             reply(statusMsg);
           } else {
-            reply(`❌ Uso incorreto!\n\n*Opções:*\n• ${prefix}antibanmarcar on - Ativar proteção\n• ${prefix}antibanmarcar off - Desativar proteção\n• ${prefix}antibanmarcar status - Ver status`);
+            reply(`❌ Uso incorreto!\n\n*Opções:*\n• ${groupPrefix}antibanmarcar on - Ativar proteção\n• ${groupPrefix}antibanmarcar off - Desativar proteção\n• ${groupPrefix}antibanmarcar status - Ver status`);
           }
         } catch (e) {
           console.error(e);
@@ -31888,7 +31888,7 @@ case 'set-bannerbv':
         {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
           if (!isGroupAdmin) return reply("você precisa ser adm 💔");
-          if (!q) return reply(`📝 Para configurar a mensagem de saída, use:\n${prefix}${command} <mensagem>\n\nVocê pode usar:\n#numerodele# - Menciona quem saiu\n#nomedogp# - Nome do grupo\n#membros# - Total de membros\n#desc# - Descrição do grupo`);
+          if (!q) return reply(`📝 Para configurar a mensagem de saída, use:\n${groupPrefix}${command} <mensagem>\n\nVocê pode usar:\n#numerodele# - Menciona quem saiu\n#nomedogp# - Nome do grupo\n#membros# - Total de membros\n#desc# - Descrição do grupo`);
           try {
             if (!groupData.exit) {
 
@@ -31955,7 +31955,7 @@ case 'set-bannerbv':
         try {
           if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
           if (!isGroupAdmin) return reply("Apenas administradores podem usar este comando.");
-          if (!q) return reply(`Uso: ${prefix}addparceria @usuário limite ou marcando uma mensagem com ${prefix}addparceria limite`);
+          if (!q) return reply(`Uso: ${groupPrefix}addparceria @usuário limite ou marcando uma mensagem com ${groupPrefix}addparceria limite`);
           let userId, limit;
           if (menc_os2) {
 
@@ -32097,7 +32097,7 @@ case 'set-bannerbv':
               }
             }
           }
-          if (!targetUser) return reply(`Marque o usuário ou forneça o número (ex: ${prefix}addblacklist 5511999998888 motivo).`);
+          if (!targetUser) return reply(`Marque o usuário ou forneça o número (ex: ${groupPrefix}addblacklist 5511999998888 motivo).`);
           const reason = q ? (q.includes('@') || !menc_os2) ? (args.length > 1 ? args.slice(1).join(' ') : 'Motivo não informado') : q.trim() : 'Motivo não informado';
           const groupFilePath = buildGroupFilePath(from);
           let groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : {
@@ -32150,7 +32150,7 @@ case 'set-bannerbv':
               }
             }
           }
-          if (!targetUser) return reply(`Marque o usuário ou forneça o número (ex: ${prefix}delblacklist 5511999998888).`);
+          if (!targetUser) return reply(`Marque o usuário ou forneça o número (ex: ${groupPrefix}delblacklist 5511999998888).`);
           const groupFilePath = buildGroupFilePath(from);
           let groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : {
             blacklist: {}
@@ -32342,7 +32342,7 @@ case 'set-bannerbv':
             `Usuário: ${userMention}\n` +
             (reason ? `Mensagem: ${reason}\n` : '') +
             `Fila: ${ahead} na frente\n\n` +
-            `Para aceitar, envie no meu PV:\n${prefix}ticketaceitar ${ticket.id}`;
+            `Para aceitar, envie no meu PV:\n${groupPrefix}ticketaceitar ${ticket.id}`;
 
           const adminsToNotify = Array.isArray(groupAdmins) ? groupAdmins : [];
           for (const adminId of adminsToNotify) {
@@ -32572,9 +32572,9 @@ case 'antistickerplus':
     const tutorial = `
 📘 Como usar:
 
-${prefix}antistickerplus → liga/desliga
-${prefix}antistickerplus apagar → apaga mensagem
-${prefix}antistickerplus remover → remove usuário e apaga mensagem 
+${groupPrefix}antistickerplus → liga/desliga
+${groupPrefix}antistickerplus apagar → apaga mensagem
+${groupPrefix}antistickerplus remover → remove usuário e apaga mensagem 
 
 ⚠️ Apenas um modo pode ficar ativo por vez.
 `;
@@ -32706,10 +32706,10 @@ case 'assistent':
           'IA Normal'
         }\n\n` +
         `💡 *Trocar personalidade:*\n` +
-        `• ${prefix}assistente abyss\n` +
-        `• ${prefix}assistente humana\n` +
-        `• ${prefix}assistente ia\n` +
-        `• ${prefix}assistente pro\n\n` +
+        `• ${groupPrefix}assistente abyss\n` +
+        `• ${groupPrefix}assistente humana\n` +
+        `• ${groupPrefix}assistente ia\n` +
+        `• ${groupPrefix}assistente pro\n\n` +
         `🧠 A IA aprende com base nos padrões de conversa.`
         : `❌ *Assistente desativada!*`;
 
@@ -32721,10 +32721,10 @@ case 'assistent':
     if (!['abyss', 'humana', 'ia', 'pro'].includes(personality)) {
       return reply(`❌ *Personalidade inválida!*\n\n` +
         `Escolha uma das opções:\n` +
-        `• ${prefix}assistente abyss\n` +
-        `• ${prefix}assistente humana\n` +
-        `• ${prefix}assistente ia\n` +
-        `• ${prefix}assistente pro`);
+        `• ${groupPrefix}assistente abyss\n` +
+        `• ${groupPrefix}assistente humana\n` +
+        `• ${groupPrefix}assistente ia\n` +
+        `• ${groupPrefix}assistente pro`);
     }
 
     groupData.assistente = true;
@@ -32887,20 +32887,20 @@ case 'assistent':
 
             case 'cooldown':
               if (!value || isNaN(parseInt(value))) {
-                return reply(`📝 Uso: ${prefix}npc cooldown <segundos>\nExemplo: ${prefix}npc cooldown 30`);
+                return reply(`📝 Uso: ${groupPrefix}npc cooldown <segundos>\nExemplo: ${groupPrefix}npc cooldown 30`);
               }
               return reply(`⏱️ ${npcManager.setCooldown(parseInt(value), from)}`);
 
             case 'chance':
               if (!value || isNaN(parseInt(value))) {
-                return reply(`📝 Uso: ${prefix}npc chance <porcentagem>\nExemplo: ${prefix}npc chance 50`);
+                return reply(`📝 Uso: ${groupPrefix}npc chance <porcentagem>\nExemplo: ${groupPrefix}npc chance 50`);
               }
               return reply(`🎯 ${npcManager.setResponseChance(parseInt(value) / 100, from)}`);
 
             case 'jornal':
               if (value === 'on') return reply(`📰 ${npcManager.toggleJornal(true, from)}`);
               if (value === 'off') return reply(`📰 ${npcManager.toggleJornal(false, from)}`);
-              return reply(`📝 Uso: ${prefix}npc jornal on/off`);
+              return reply(`📝 Uso: ${groupPrefix}npc jornal on/off`);
 
             case 'config':
               const st = npcManager.getStatus(from);
@@ -32913,12 +32913,12 @@ case 'assistent':
 
             default:
               return reply(`📝 *Comandos NPC:*\n` +
-                `• ${prefix}npc on/off - Ativar/desativar\n` +
-                `• ${prefix}npc status - Ver status\n` +
-                `• ${prefix}npc cooldown <seg> - Intervalo\n` +
-                `• ${prefix}npc chance <%> - Chance de resposta\n` +
-                `• ${prefix}npc jornal on/off - Jornal diário\n` +
-                `• ${prefix}npc config - Ver configurações`);
+                `• ${groupPrefix}npc on/off - Ativar/desativar\n` +
+                `• ${groupPrefix}npc status - Ver status\n` +
+                `• ${groupPrefix}npc cooldown <seg> - Intervalo\n` +
+                `• ${groupPrefix}npc chance <%> - Chance de resposta\n` +
+                `• ${groupPrefix}npc jornal on/off - Jornal diário\n` +
+                `• ${groupPrefix}npc config - Ver configurações`);
           }
         } catch (e) {
           console.error('Erro no comando npc:', e);
@@ -32995,7 +32995,7 @@ case 'assistent':
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
           if (!isGroupAdmin) return reply("🚫 Você precisa ser administrador para usar este comando.");
           if (!isBotAdmin) return sendAbyssWarning("⚠️ Eu preciso ser administrador para apagar mensagens.");
-          if (!menc_os2) return reply(`📝 *Como usar:* ${prefix}mutet @usuário <tempo>\n\n⏱️ *Exemplos:*\n• ${prefix}mutet @user 30s\n• ${prefix}mutet @user 15m\n• ${prefix}mutet @user 2h\n• ${prefix}mutet @user 7d\n\n🕐 *Unidades:* s=segundos, m=minutos, h=horas, d=dias`);
+          if (!menc_os2) return reply(`📝 *Como usar:* ${groupPrefix}mutet @usuário <tempo>\n\n⏱️ *Exemplos:*\n• ${groupPrefix}mutet @user 30s\n• ${groupPrefix}mutet @user 15m\n• ${groupPrefix}mutet @user 2h\n• ${groupPrefix}mutet @user 7d\n\n🕐 *Unidades:* s=segundos, m=minutos, h=horas, d=dias`);
           
           // Obter o ID do usuário normalizado
           const tempMuteTargetId = await normalizeUserId(nazu, menc_os2);
@@ -33019,14 +33019,14 @@ case 'assistent':
           const existingMute = getTempMuteInfo(from, tempMuteTargetId, idsMatch);
           if (existingMute) {
             const remaining = formatTimeRemaining(existingMute.remaining);
-            return reply(`⚠️ @${getUserName(menc_os2)} já está mutado por mais ${remaining}.\n\n🕐 Aguarde o mute expirar ou use ${prefix}unmutet @usuário para remover.`, {
+            return reply(`⚠️ @${getUserName(menc_os2)} já está mutado por mais ${remaining}.\n\n🕐 Aguarde o mute expirar ou use ${groupPrefix}unmutet @usuário para remover.`, {
               mentions: [menc_os2]
             });
           }
           
           // Verificar se o mute permanente existe
           if (isUserInMap(groupData.mutedUsers, tempMuteTargetId)) {
-            return reply(`⚠️ @${getUserName(menc_os2)} já está mutado permanentemente.\n\n🗑️ Use ${prefix}desmute @usuário para remover o mute permanente primeiro.`, {
+            return reply(`⚠️ @${getUserName(menc_os2)} já está mutado permanentemente.\n\n🗑️ Use ${groupPrefix}desmute @usuário para remover o mute permanente primeiro.`, {
               mentions: [menc_os2]
             });
           }
@@ -33034,7 +33034,7 @@ case 'assistent':
           // Parse do tempo
           const timeInput = args.find(arg => /^\d+[smhd]$/i.test(arg.trim()));
           if (!timeInput) {
-            return reply(`❌ Tempo inválido!\n\n📝 *Formato:* ${prefix}mutet @usuário <tempo>\n\n⏱️ *Exemplos:*\n• ${prefix}mutet @user 30s\n• ${prefix}mutet @user 15m\n• ${prefix}mutet @user 2h\n• ${prefix}mutet @user 7d\n\n🕐 *Unidades:* s=segundos, m=minutos, h=horas, d=dias`);
+            return reply(`❌ Tempo inválido!\n\n📝 *Formato:* ${groupPrefix}mutet @usuário <tempo>\n\n⏱️ *Exemplos:*\n• ${groupPrefix}mutet @user 30s\n• ${groupPrefix}mutet @user 15m\n• ${groupPrefix}mutet @user 2h\n• ${groupPrefix}mutet @user 7d\n\n🕐 *Unidades:* s=segundos, m=minutos, h=horas, d=dias`);
           }
           
           const durationMs = parseTimeToMs(timeInput);
@@ -33076,7 +33076,7 @@ case 'assistent':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
           if (!isGroupAdmin) return reply("🚫 Você precisa ser administrador para usar este comando.");
-          if (!menc_os2) return reply("📝 *Como usar:* ${prefix}unmutet @usuário");
+          if (!menc_os2) return reply("📝 *Como usar:* ${groupPrefix}unmutet @usuário");
           
           const tempUnmuteTargetId = await normalizeUserId(nazu, menc_os2);
           
@@ -33104,7 +33104,7 @@ case 'assistent':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
           if (!isGroupAdmin) return reply("você precisa ser adm 💔");
-          if (!q) return reply(`❌ Digite o comando que deseja bloquear. Exemplo: ${prefix}blockcmd sticker`);
+          if (!q) return reply(`❌ Digite o comando que deseja bloquear. Exemplo: ${groupPrefix}blockcmd sticker`);
           const groupFilePath = __dirname + `/../database/grupos/${from}.json`;
           let groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : {
             blockedCommands: {}
@@ -33124,7 +33124,7 @@ case 'assistent':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
           if (!isGroupAdmin) return reply("você precisa ser adm 💔");
-          if (!q) return reply(`❌ Digite o comando que deseja desbloquear. Exemplo: ${prefix}unblockcmd sticker`);
+          if (!q) return reply(`❌ Digite o comando que deseja desbloquear. Exemplo: ${groupPrefix}unblockcmd sticker`);
           const groupFilePath = __dirname + `/../database/grupos/${from}.json`;
           let groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : {
             blockedCommands: {}
@@ -33172,7 +33172,7 @@ case 'assistent':
           if (!connect4 || typeof connect4.invitePlayer !== 'function') {
             return reply("Sistema Connect4 temporariamente indisponível.");
           }
-          if (!menc_os2) return reply(`❌ Marque alguém para desafiar!\n\nUso: ${prefix}connect4 @usuario`);
+          if (!menc_os2) return reply(`❌ Marque alguém para desafiar!\n\nUso: ${groupPrefix}connect4 @usuario`);
           const result = await connect4.invitePlayer(from, sender, menc_os2);
           await nazu.sendMessage(from, { text: result.message, mentions: result.mentions });
           break;
@@ -33190,17 +33190,17 @@ case 'assistent':
         if (!subCmdUno || subCmdUno === 'help' || subCmdUno === 'ajuda') {
           return reply(`🎴 *UNO - Comandos*
 
-${prefix}uno criar - Cria uma nova partida
-${prefix}uno entrar - Entra em uma partida
-${prefix}uno iniciar - Inicia a partida (criador)
-${prefix}uno jogar <n°> - Joga uma carta pelo número
-${prefix}uno jogar <n°> <cor> - Joga coringa com cor
-${prefix}uno comprar - Compra uma carta
-${prefix}uno mao - Ver sua mão (envia no PV)
-${prefix}uno uno - Grita UNO!
-${prefix}uno status - Ver status da partida
-${prefix}uno cancelar - Cancela a partida (host/admin)
-${prefix}uno sair - Sair da partida
+${groupPrefix}uno criar - Cria uma nova partida
+${groupPrefix}uno entrar - Entra em uma partida
+${groupPrefix}uno iniciar - Inicia a partida (criador)
+${groupPrefix}uno jogar <n°> - Joga uma carta pelo número
+${groupPrefix}uno jogar <n°> <cor> - Joga coringa com cor
+${groupPrefix}uno comprar - Compra uma carta
+${groupPrefix}uno mao - Ver sua mão (envia no PV)
+${groupPrefix}uno uno - Grita UNO!
+${groupPrefix}uno status - Ver status da partida
+${groupPrefix}uno cancelar - Cancela a partida (host/admin)
+${groupPrefix}uno sair - Sair da partida
 
 *Cores:* vermelho/azul/verde/amarelo
 *Especiais:* +2, reverso, pular, coringa, +4
@@ -33250,14 +33250,14 @@ ${prefix}uno sair - Sair da partida
           case 'jogar':
           case 'play': {
             const cartaArg = args.slice(1).join(' ').trim();
-            if (!cartaArg) return reply(`❌ Especifique a carta!\n\nUso: ${prefix}uno jogar <número>\nExemplo: ${prefix}uno jogar 3\n\nUse "mão" no PV para ver suas cartas numeradas.`);
+            if (!cartaArg) return reply(`❌ Especifique a carta!\n\nUso: ${groupPrefix}uno jogar <número>\nExemplo: ${groupPrefix}uno jogar 3\n\nUse "mão" no PV para ver suas cartas numeradas.`);
 
             // Parse: pode ser só número ou número + cor (para coringas)
             const parts = cartaArg.split(/\s+/);
             const cardIndex = parseInt(parts[0]);
             const chosenColor = parts[1]?.toLowerCase();
 
-            if (isNaN(cardIndex)) return reply(`❌ Use o número da carta!\n\nExemplo: ${prefix}uno jogar 3`);
+            if (isNaN(cardIndex)) return reply(`❌ Use o número da carta!\n\nExemplo: ${groupPrefix}uno jogar 3`);
 
             const result = uno.playCard(from, sender, cardIndex, chosenColor);
             if (result.success) {
@@ -33332,7 +33332,7 @@ ${prefix}uno sair - Sair da partida
             return reply('✅ Nenhum timeout detectado.');
           }
           default:
-            return reply(`❌ Subcomando desconhecido. Use ${prefix}uno ajuda`);
+            return reply(`❌ Subcomando desconhecido. Use ${groupPrefix}uno ajuda`);
         }
         break;
 
@@ -33359,7 +33359,7 @@ ${prefix}uno sair - Sair da partida
             const result = memoria.makeMove(from, sender, pos);
             return reply(result.message);
           }
-          return reply(`🌌 Jogo em andamento! Use um número de 1-16 para revelar uma carta.\nOu ${prefix}memoria sair para desistir.`);
+          return reply(`🌌 Jogo em andamento! Use um número de 1-16 para revelar uma carta.\nOu ${groupPrefix}memoria sair para desistir.`);
         }
 
         if (subCmdMemory === 'sair') {
@@ -33394,11 +33394,11 @@ ${prefix}uno sair - Sair da partida
         if (!tipoBox) {
           return reply(`🎁 *Sistema de Caixas*
 
-${prefix}caixa diaria - Abre caixa diária grátis
-${prefix}caixa rara - Abre caixa rara (500 gold)
-${prefix}caixa lendaria - Abre caixa lendária (2000 gold)
+${groupPrefix}caixa diaria - Abre caixa diária grátis
+${groupPrefix}caixa rara - Abre caixa rara (500 gold)
+${groupPrefix}caixa lendaria - Abre caixa lendária (2000 gold)
 
-Use ${prefix}inventario para ver seus itens!`);
+Use ${groupPrefix}inventario para ver seus itens!`);
         }
 
         // Precisa do sistema de economia para caixas pagas
@@ -33431,12 +33431,12 @@ Use ${prefix}inventario para ver seus itens!`);
       case 'presentebn':
       case 'giftbn':
         if (!gifts) return reply("Sistema de presentes temporariamente indisponível.");
-        if (!menc_os2) return reply(`❌ Marque alguém para enviar um presente!\n\nUso: ${prefix}presente @user <tipo>\nTipos: rosa, chocolate, anel, coracao, estrela...`);
+        if (!menc_os2) return reply(`❌ Marque alguém para enviar um presente!\n\nUso: ${groupPrefix}presente @user <tipo>\nTipos: rosa, chocolate, anel, coracao, estrela...`);
 
         const tipoGift = args[1]?.toLowerCase();
         if (!tipoGift) {
           const tipos = gifts.getGiftTypes();
-          return reply(`🎁 *Tipos de Presente*\n\n${tipos}\n\nUso: ${prefix}presente @user <tipo>`);
+          return reply(`🎁 *Tipos de Presente*\n\n${tipos}\n\nUso: ${groupPrefix}presente @user <tipo>`);
         }
 
         const resultGift = gifts.sendGift(sender, menc_os2, tipoGift);
@@ -33484,7 +33484,7 @@ Use ${prefix}inventario para ver seus itens!`);
           return reply(resultRepMinus.message);
         }
 
-        return reply(`❌ Uso: ${prefix}rep + @user ou ${prefix}rep - @user`);
+        return reply(`❌ Uso: ${groupPrefix}rep + @user ou ${groupPrefix}rep - @user`);
         break;
 
       case 'toprep':
@@ -33497,7 +33497,7 @@ Use ${prefix}inventario para ver seus itens!`);
       case 'denunciar':
       case 'report':
         if (!reputation) return reply("Sistema de reputação temporariamente indisponível.");
-        if (!menc_os2) return reply(`❌ Marque quem você quer denunciar!\n\nUso: ${prefix}denunciar @user <motivo>`);
+        if (!menc_os2) return reply(`❌ Marque quem você quer denunciar!\n\nUso: ${groupPrefix}denunciar @user <motivo>`);
 
         const motivoDenuncia = args.slice(1).join(' ');
         if (!motivoDenuncia) return reply("❌ Informe o motivo da denúncia!");
@@ -33521,7 +33521,7 @@ Use ${prefix}inventario para ver seus itens!`);
       case 'qrcodebn':
       case 'gerarqrbn':
         if (!qrcode) return reply("Sistema de QR Code temporariamente indisponível.");
-        if (!q) return reply(`❌ Digite o texto/link para gerar o QR Code!\n\nUso: ${prefix}qrcode <texto ou link>`);
+        if (!q) return reply(`❌ Digite o texto/link para gerar o QR Code!\n\nUso: ${groupPrefix}qrcode <texto ou link>`);
 
         const resultQRCode = await qrcode.generateQRCode(q, 300, prefix);
         if (resultQRCode.success) {
@@ -33571,12 +33571,12 @@ Use ${prefix}inventario para ver seus itens!`);
         if (!subCmdNote) {
           return reply(`📝 *Sistema de Notas*
 
-${prefix}nota add <texto> - Adiciona uma nota
-${prefix}notas - Lista suas notas
-${prefix}nota ver <id> - Ver nota específica
-${prefix}nota del <id> - Deleta uma nota
-${prefix}nota fixar <id> - Fixa/desfixa nota
-${prefix}nota buscar <termo> - Busca nas notas`);
+${groupPrefix}nota add <texto> - Adiciona uma nota
+${groupPrefix}notas - Lista suas notas
+${groupPrefix}nota ver <id> - Ver nota específica
+${groupPrefix}nota del <id> - Deleta uma nota
+${groupPrefix}nota fixar <id> - Fixa/desfixa nota
+${groupPrefix}nota buscar <termo> - Busca nas notas`);
         }
 
         switch (subCmdNote) {
@@ -33610,7 +33610,7 @@ ${prefix}nota buscar <termo> - Busca nas notas`);
             return reply(resultNoteSearch.message);
           }
           default:
-            return reply(`❌ Subcomando desconhecido. Use ${prefix}nota para ver ajuda.`);
+            return reply(`❌ Subcomando desconhecido. Use ${groupPrefix}nota para ver ajuda.`);
         }
         break;
 
@@ -33668,7 +33668,7 @@ ${prefix}nota buscar <termo> - Busca nas notas`);
           response += `\n`;
         });
         
-        response += `\n📌 Use *${prefix}restaurar <número>* para restaurar uma mensagem.`;
+        response += `\n📌 Use *${groupPrefix}restaurar <número>* para restaurar uma mensagem.`;
         
         // Obter participants para mentions
         const participants = [];
@@ -33697,7 +33697,7 @@ ${prefix}nota buscar <termo> - Busca nas notas`);
         }
         
         if (!args[0]) {
-          return reply(`📝 *Restaurar Mensagem*\n\nInforme o número da mensagem da lixeira.\n\nExemplo:\n${prefix}restaurar 3`);
+          return reply(`📝 *Restaurar Mensagem*\n\nInforme o número da mensagem da lixeira.\n\nExemplo:\n${groupPrefix}restaurar 3`);
         }
         
         const index = parseInt(args[0]) - 1;
@@ -33806,19 +33806,19 @@ ${prefix}nota buscar <termo> - Busca nas notas`);
         if (!q) {
           return reply(`🧮 *Calculadora Científica*
 
-${prefix}calc <expressão> - Calcula expressão
-${prefix}calc converter <valor> <de> <para>
+${groupPrefix}calc <expressão> - Calcula expressão
+${groupPrefix}calc converter <valor> <de> <para>
 
 *Operadores:* + - * / ^ % !
 *Funções:* sin, cos, tan, sqrt, log, abs, ceil, floor
 *Constantes:* pi, e, phi
 
 *Exemplos:*
-${prefix}calc 2+2*3
-${prefix}calc sqrt(144)
-${prefix}calc sin(45)
-${prefix}calc 5!
-${prefix}calc converter 100 km mi`);
+${groupPrefix}calc 2+2*3
+${groupPrefix}calc sqrt(144)
+${groupPrefix}calc sin(45)
+${groupPrefix}calc 5!
+${groupPrefix}calc converter 100 km mi`);
         }
 
         if (args[0]?.toLowerCase() === 'converter' || args[0]?.toLowerCase() === 'convert') {
@@ -33826,7 +33826,7 @@ ${prefix}calc converter 100 km mi`);
           const de = args[2]?.toLowerCase();
           const para = args[3]?.toLowerCase();
           if (isNaN(valor) || !de || !para) {
-            return reply(`❌ Uso: ${prefix}calc converter <valor> <de> <para>\nExemplo: ${prefix}calc converter 100 km mi`);
+            return reply(`❌ Uso: ${groupPrefix}calc converter <valor> <de> <para>\nExemplo: ${groupPrefix}calc converter 100 km mi`);
           }
           const result = calculator.convert(valor, de, para);
           return reply(result.message);
@@ -33846,13 +33846,13 @@ ${prefix}calc converter 100 km mi`);
 Use IA para resolver problemas passo a passo!
 
 💡 *Uso:*
-${prefix}resolver <problema>
+${groupPrefix}resolver <problema>
 
 📝 *Exemplos:*
-${prefix}resolver Derive x² + 3x - 5
-${prefix}resolver integre x² dx
-${prefix}resolver Resolva: 2x + 4 = 10
-${prefix}resolver Qual a área de um círculo de raio 5?`);
+${groupPrefix}resolver Derive x² + 3x - 5
+${groupPrefix}resolver integre x² dx
+${groupPrefix}resolver Resolva: 2x + 4 = 10
+${groupPrefix}resolver Qual a área de um círculo de raio 5?`);
         }
 
         try {
@@ -33898,7 +33898,7 @@ Resolva passo a passo e explique cada etapa.`;
 
         const inicioCut = args[0];
         const fimCut = args[1];
-        if (!inicioCut || !fimCut) return reply(`❌ Informe início e fim!\n\nUso: ${prefix}cortaraudio <inicio> <fim>\nExemplo: ${prefix}cortaraudio 0:10 0:30`);
+        if (!inicioCut || !fimCut) return reply(`❌ Informe início e fim!\n\nUso: ${groupPrefix}cortaraudio <inicio> <fim>\nExemplo: ${groupPrefix}cortaraudio 0:10 0:30`);
 
         try {
           const mediaMsgCut = quotedMsgCut?.audioMessage || info.message?.audioMessage;
@@ -33933,7 +33933,7 @@ Resolva passo a passo e explique cada etapa.`;
         if (!hasAudioSpeed) return reply("❌ Responda a um áudio para alterar velocidade!");
 
         const vel = parseFloat(args[0]);
-        if (isNaN(vel) || vel < 0.5 || vel > 3) return reply(`❌ Velocidade inválida!\n\nUso: ${prefix}velocidade <0.5-3.0>\nExemplo: ${prefix}velocidade 1.5`);
+        if (isNaN(vel) || vel < 0.5 || vel > 3) return reply(`❌ Velocidade inválida!\n\nUso: ${groupPrefix}velocidade <0.5-3.0>\nExemplo: ${groupPrefix}velocidade 1.5`);
 
         try {
           const mediaMsgSpeed = quotedMsgSpeed?.audioMessage || info.message?.audioMessage;
@@ -34000,7 +34000,7 @@ Resolva passo a passo e explique cada etapa.`;
         if (!hasAudioBass) return reply("❌ Responda a um áudio para adicionar bass!");
 
         const levelBass = parseInt(args[0]) || 10;
-        if (levelBass < 1 || levelBass > 20) return reply(`❌ Nível de bass inválido!\n\nUso: ${prefix}bass <1-20>\nExemplo: ${prefix}bass 15`);
+        if (levelBass < 1 || levelBass > 20) return reply(`❌ Nível de bass inválido!\n\nUso: ${groupPrefix}bass <1-20>\nExemplo: ${groupPrefix}bass 15`);
 
         try {
           const mediaMsgBass = quotedMsgBass?.audioMessage || info.message?.audioMessage;
@@ -34072,7 +34072,7 @@ Resolva passo a passo e explique cada etapa.`;
           const inicioVid = args[0];
           const fimVid = args[1];
           if (!inicioVid || !fimVid) {
-            return reply(`❌ Informe início e fim!\n\nUso: ${prefix}cortarvideo <inicio> <fim>\nExemplo: ${prefix}cortarvideo 0:10 0:30`);
+            return reply(`❌ Informe início e fim!\n\nUso: ${groupPrefix}cortarvideo <inicio> <fim>\nExemplo: ${groupPrefix}cortarvideo 0:10 0:30`);
           }
 
           await reply('🎬 Cortando vídeo... Por favor, aguarde alguns segundos.');
@@ -34178,7 +34178,7 @@ Resolva passo a passo e explique cada etapa.`;
 ♒ *Aquário* (20/01 - 18/02)
 ♓ *Peixes* (19/02 - 20/03)
 
-Use ${prefix}horoscopo <signo> para ver a previsão!`);
+Use ${groupPrefix}horoscopo <signo> para ver a previsão!`);
         break;
 
       // ═══════════════════════════════════════════════════════════════
@@ -34187,7 +34187,7 @@ Use ${prefix}horoscopo <signo> para ver a previsão!`);
       case 'debater':
       case 'debate':
         if (!iaExpanded) return reply("Sistema de debate temporariamente indisponível.");
-        if (!q) return reply(`💬 *Debater*\n\nUso: ${prefix}debater <tema>\n\nExemplo: ${prefix}debater redes sociais fazem bem ou mal`);
+        if (!q) return reply(`💬 *Debater*\n\nUso: ${groupPrefix}debater <tema>\n\nExemplo: ${groupPrefix}debater redes sociais fazem bem ou mal`);
 
         reply("💬 Analisando argumentos...");
 
@@ -34223,10 +34223,10 @@ Use ${prefix}horoscopo <signo> para ver a previsão!`);
         if (!subCmdStory) {
           return reply(`📖 *História Interativa*
 
-${prefix}aventura <gênero> - Inicia uma história
-${prefix}aventura escolha <1/2/3> - Faz uma escolha
-${prefix}aventura status - Ver status atual
-${prefix}aventura sair - Abandona a história
+${groupPrefix}aventura <gênero> - Inicia uma história
+${groupPrefix}aventura escolha <1/2/3> - Faz uma escolha
+${groupPrefix}aventura status - Ver status atual
+${groupPrefix}aventura sair - Abandona a história
 
 *Gêneros:* fantasia, terror, romance, aventura, ficção, mistério`);
         }
@@ -34297,7 +34297,7 @@ ${prefix}aventura sair - Abandona a história
         if (subCmdToxic === 'config') {
           const acao = args[1]?.toLowerCase();
           if (!acao || !['avisar', 'apagar', 'mute'].includes(acao)) {
-            return reply(`❌ Ação inválida!\n\nUso: ${prefix}antitoxic config <avisar/apagar/mute>`);
+            return reply(`❌ Ação inválida!\n\nUso: ${groupPrefix}antitoxic config <avisar/apagar/mute>`);
           }
           const result = antitoxic.setAntitoxicAction(from, acao);
           return reply(result.message);
@@ -34306,7 +34306,7 @@ ${prefix}aventura sair - Abandona a história
         if (subCmdToxic === 'sensibilidade' || subCmdToxic === 'threshold') {
           const nivel = parseInt(args[1]);
           if (isNaN(nivel) || nivel < 0 || nivel > 100) {
-            return reply(`❌ Nível inválido!\n\nUso: ${prefix}antitoxic sensibilidade <0-100>\nMenor = mais sensível`);
+            return reply(`❌ Nível inválido!\n\nUso: ${groupPrefix}antitoxic sensibilidade <0-100>\nMenor = mais sensível`);
           }
           const result = antitoxic.setAntitoxicThreshold(from, nivel);
           return reply(result.message);
@@ -34314,10 +34314,10 @@ ${prefix}aventura sair - Abandona a história
 
         return reply(`⚠️ *Antitoxic - Configuração*
 
-${prefix}antitoxic on - Ativa
-${prefix}antitoxic off - Desativa
-${prefix}antitoxic config <ação> - Define ação (avisar/apagar/mute)
-${prefix}antitoxic sensibilidade <0-100> - Define sensibilidade
+${groupPrefix}antitoxic on - Ativa
+${groupPrefix}antitoxic off - Desativa
+${groupPrefix}antitoxic config <ação> - Define ação (avisar/apagar/mute)
+${groupPrefix}antitoxic sensibilidade <0-100> - Define sensibilidade
 
 ⚠️ Este sistema usa IA e pode cometer erros!`);
         break;
@@ -34349,7 +34349,7 @@ ${prefix}antitoxic sensibilidade <0-100> - Define sensibilidade
         if (subCmdAntipalavra === 'add' || subCmdAntipalavra === 'adicionar') {
           const palavra = args.slice(1).join(' ').trim();
           if (!palavra) {
-            return reply(`❌ Você precisa especificar a palavra!\n\nUso: ${prefix}antipalavra add <palavra>`);
+            return reply(`❌ Você precisa especificar a palavra!\n\nUso: ${groupPrefix}antipalavra add <palavra>`);
           }
           const result = antipalavra.addPalavraBlacklist(from, palavra);
           return reply(result.message);
@@ -34359,7 +34359,7 @@ ${prefix}antitoxic sensibilidade <0-100> - Define sensibilidade
         if (subCmdAntipalavra === 'del' || subCmdAntipalavra === 'remover' || subCmdAntipalavra === 'remove') {
           const palavra = args.slice(1).join(' ').trim();
           if (!palavra) {
-            return reply(`❌ Você precisa especificar a palavra!\n\nUso: ${prefix}antipalavra del <palavra>`);
+            return reply(`❌ Você precisa especificar a palavra!\n\nUso: ${groupPrefix}antipalavra del <palavra>`);
           }
           const result = antipalavra.removePalavraBlacklist(from, palavra);
           return reply(result.message);
@@ -34402,25 +34402,25 @@ ${prefix}antitoxic sensibilidade <0-100> - Define sensibilidade
 
 *Comandos disponíveis:*
 
-${prefix}antipalavra on
+${groupPrefix}antipalavra on
 └ Ativa o sistema
 
-${prefix}antipalavra off
+${groupPrefix}antipalavra off
 └ Desativa o sistema
 
-${prefix}antipalavra add <palavra>
+${groupPrefix}antipalavra add <palavra>
 └ Adiciona palavra à blacklist
 
-${prefix}antipalavra del <palavra>
+${groupPrefix}antipalavra del <palavra>
 └ Remove palavra da blacklist
 
-${prefix}antipalavra list
+${groupPrefix}antipalavra list
 └ Lista todas as palavras
 
-${prefix}antipalavra clear
+${groupPrefix}antipalavra clear
 └ Limpa toda a blacklist
 
-${prefix}antipalavra stats
+${groupPrefix}antipalavra stats
 └ Mostra estatísticas
 
 ⚠️ *IMPORTANTE:*
@@ -34435,9 +34435,9 @@ Membros que falarem palavras da blacklist serão BANIDOS AUTOMATICAMENTE do grup
           if (!isModoBn) return reply('❌ O modo brincadeira está off nesse grupo! Pede pro admin ativar a diversão! 🎉');
           if (!q) return reply(`🎲 Me conta algo para eu calcular as chances! 📊
 
-📝 *Exemplo:* ${prefix}chance chover pizza hoje
-🚀 *Exemplo:* ${prefix}chance eu virar milionário
-💖 *Exemplo:* ${prefix}chance encontrar o amor`);
+📝 *Exemplo:* ${groupPrefix}chance chover pizza hoje
+🚀 *Exemplo:* ${groupPrefix}chance eu virar milionário
+💖 *Exemplo:* ${groupPrefix}chance encontrar o amor`);
           const chance = Math.floor(Math.random() * 101);
           const emojis = ['🎯', '📊', '🎲', '◈', '🔮', '🍀', '🎆'];
           const emoji = emojis[Math.floor(Math.random() * emojis.length)];
@@ -34463,10 +34463,10 @@ ${chance >= 80 ? '🚀 Uau! Apostaria minhas fichas nisso!' : chance >= 60 ? '�
           if (!q) return reply(`🔮 Me conta o que você quer que eu preveja! 🌠
 
 📝 *Exemplos:*
-• ${prefix}quando vou ficar rico
-• ${prefix}quando vou encontrar o amor
-• ${prefix}quando vou viajar
-• ${prefix}quando vou ser famoso`);
+• ${groupPrefix}quando vou ficar rico
+• ${groupPrefix}quando vou encontrar o amor
+• ${groupPrefix}quando vou viajar
+• ${groupPrefix}quando vou ser famoso`);
           const tempos = [
             'hoje à noite 🌙', 'amanhã de manhã 🌅', 'na próxima semana 📅',
             'no próximo mês 🌕', 'no próximo ano 🎆', 'em 2025 🚀',
@@ -34787,7 +34787,7 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
         );
 
         if (groupCouples.length === 0) {
-          await reply('💔 Não há casais neste grupo ainda!\n\n💡 Use ' + prefix + 'casar @pessoa para se casar!');
+          await reply('💔 Não há casais neste grupo ainda!\n\n💡 Use '+ groupPrefix + 'casar @pessoa para se casar!');
           break;
         }
 
@@ -35012,7 +35012,7 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
 │    encontrar um par!
 │
 │ 💡 *Exemplo:*
-│ ${prefix}shipo @fulano
+│ ${groupPrefix}shipo @fulano
 │
 ╰━━━━━━━━━━━━━━━━━━━━╯`);
           if (AllgroupMembers.length < 2) return reply('❌ Preciso de pelo menos 2 membros no grupo!');
@@ -35070,10 +35070,10 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
           if (!q) return reply(`🎱 Faça uma pergunta para o oráculo! 🔮
 
 📝 *Exemplos:*
-• ${prefix}sn Vou ganhar na loteria?
-• ${prefix}sn Devo confesar meus sentimentos?
-• ${prefix}sn Vale a pena investir em Bitcoin?
-• ${prefix}sn Vou passar na prova?`);
+• ${groupPrefix}sn Vou ganhar na loteria?
+• ${groupPrefix}sn Devo confesar meus sentimentos?
+• ${groupPrefix}sn Vale a pena investir em Bitcoin?
+• ${groupPrefix}sn Vou passar na prova?`);
           const respostasPositivas = [
             'Sim! 🎉', 'Claro que sim! 😎', 'Com certeza! ◈', 'Pode apostar! 🎯',
             'Sem dúvida! 👍', 'Obviamente! 😌', 'É isso aí! 🚀', 'Vai dar certo! 🍀'
@@ -35410,7 +35410,7 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
 
       case 'ppt':
         try {
-          if (!q) return reply(`🌌 *Pedra, Papel ou Tesoura*\n\n💡 *Como jogar:*\n• Escolha sua jogada após o comando\n• Ex: ${prefix}ppt pedra\n• Ex: ${prefix}ppt papel\n• Ex: ${prefix}ppt tesoura\n\n🎲 Vamos ver quem ganha!`);
+          if (!q) return reply(`🌌 *Pedra, Papel ou Tesoura*\n\n💡 *Como jogar:*\n• Escolha sua jogada após o comando\n• Ex: ${groupPrefix}ppt pedra\n• Ex: ${groupPrefix}ppt papel\n• Ex: ${groupPrefix}ppt tesoura\n\n🎲 Vamos ver quem ganha!`);
           const escolhas = ['pedra', 'papel', 'tesoura'];
           if (!escolhas.includes(q.toLowerCase())) return reply('Escolha inválida! Use: pedra, papel ou tesoura.');
           const botEscolha = escolhas[Math.floor(Math.random() * 3)];
@@ -36348,7 +36348,7 @@ Motivo: ${reason}`;
         try {
           if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
           if (!isGroupAdmin) return reply("Apenas administradores podem adicionar regras.");
-          if (!q) return reply(`📝 Por favor, forneça o texto da regra. Ex: ${prefix}addregra Proibido spam.`);
+          if (!q) return reply(`📝 Por favor, forneça o texto da regra. Ex: ${groupPrefix}addregra Proibido spam.`);
 
           groupData.rules = groupData.rules || [];
           groupData.rules.push(q);
@@ -36365,12 +36365,12 @@ ${groupData.rules.length}. ${q}`);
         try {
           if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
           if (!isGroupAdmin) return reply("Apenas administradores podem remover regras.");
-          if (!q || isNaN(parseInt(q))) return reply(`🔢 Por favor, forneça o número da regra a ser removida. Ex: ${prefix}delregra 3`);
+          if (!q || isNaN(parseInt(q))) return reply(`🔢 Por favor, forneça o número da regra a ser removida. Ex: ${groupPrefix}delregra 3`);
 
           groupData.rules = groupData.rules || [];
           const ruleNumber = parseInt(q);
           if (ruleNumber < 1 || ruleNumber > groupData.rules.length) {
-            return reply(`❌ Número de regra inválido. Use ${prefix}regras para ver a lista. Atualmente existem ${groupData.rules.length} regras.`);
+            return reply(`❌ Número de regra inválido. Use ${groupPrefix}regras para ver a lista. Atualmente existem ${groupData.rules.length} regras.`);
           }
           const removedRule = groupData.rules.splice(ruleNumber - 1, 1);
           fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
@@ -36384,7 +36384,7 @@ ${groupData.rules.length}. ${q}`);
         try {
           if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
           if (!isGroupAdmin) return reply("Apenas administradores podem adicionar moderadores.");
-          if (!menc_os2) return reply(`Marque o usuário que deseja promover a moderador. Ex: ${prefix}addmod @usuario`);
+          if (!menc_os2) return reply(`Marque o usuário que deseja promover a moderador. Ex: ${groupPrefix}addmod @usuario`);
           const modToAdd = menc_os2;
           if (groupData.moderators.includes(modToAdd)) {
             return reply(`@${getUserName(modToAdd)} já é um moderador.`, {
@@ -36405,7 +36405,7 @@ ${groupData.rules.length}. ${q}`);
         try {
           if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
           if (!isGroupAdmin) return reply("Apenas administradores podem remover moderadores.");
-          if (!menc_os2) return reply(`Marque o usuário que deseja remover de moderador. Ex: ${prefix}delmod @usuario`);
+          if (!menc_os2) return reply(`Marque o usuário que deseja remover de moderador. Ex: ${groupPrefix}delmod @usuario`);
           const modToRemove = menc_os2;
           const modIndex = groupData.moderators.indexOf(modToRemove);
           if (modIndex === -1) {
@@ -36449,7 +36449,7 @@ ${groupData.rules.length}. ${q}`);
         try {
           if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
           if (!isGroupAdmin) return reply("Apenas administradores podem adicionar Alphas.");
-          if (!menc_os2) return reply(`Marque o usuário que deseja promover a Alpha. Ex: ${prefix}addalpha @usuario`);
+          if (!menc_os2) return reply(`Marque o usuário que deseja promover a Alpha. Ex: ${groupPrefix}addalpha @usuario`);
           const alphaToAdd = menc_os2;
           if (groupData.alphas.includes(alphaToAdd)) {
             return reply(`@${getUserName(alphaToAdd)} já é um Alpha.`, {
@@ -36475,7 +36475,7 @@ ${groupData.rules.length}. ${q}`);
         try {
           if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
           if (!isGroupAdmin) return reply("Apenas administradores podem remover Alphas.");
-          if (!menc_os2) return reply(`Marque o usuário que deseja remover de Alpha. Ex: ${prefix}delalpha @usuario`);
+          if (!menc_os2) return reply(`Marque o usuário que deseja remover de Alpha. Ex: ${groupPrefix}delalpha @usuario`);
           const alphaToRemove = menc_os2;
           const alphaIndex = groupData.alphas.indexOf(alphaToRemove);
           if (alphaIndex === -1) {
@@ -36520,14 +36520,14 @@ ${groupData.rules.length}. ${q}`);
         try {
           if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
           if (!isGroupAdmin) return reply("Apenas administradores podem gerenciar permissões de moderador.");
-          if (!q) return reply(`Por favor, especifique o comando para permitir aos moderadores. Ex: ${prefix}grantmodcmd ban`);
+          if (!q) return reply(`Por favor, especifique o comando para permitir aos moderadores. Ex: ${groupPrefix}grantmodcmd ban`);
           const cmdToAllow = q.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replaceAll(prefix, "");
           if (groupData.allowedModCommands.includes(cmdToAllow)) {
             return reply(`Comando "${cmdToAllow}" já está permitido para moderadores.`);
           }
           groupData.allowedModCommands.push(cmdToAllow);
           fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
-          await reply(`✅ Moderadores agora podem usar o comando: ${prefix}${cmdToAllow}`);
+          await reply(`✅ Moderadores agora podem usar o comando: ${groupPrefix}${cmdToAllow}`);
         } catch (e) {
           console.error('Erro no comando grantmodcmd:', e);
           await reply("Ocorreu um erro ao permitir comando para moderadores 💔");
@@ -36538,7 +36538,7 @@ ${groupData.rules.length}. ${q}`);
         try {
           if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
           if (!isGroupAdmin) return reply("Apenas administradores podem gerenciar permissões de moderador.");
-          if (!q) return reply(`Por favor, especifique o comando para proibir aos moderadores. Ex: ${prefix}revokemodcmd ban`);
+          if (!q) return reply(`Por favor, especifique o comando para proibir aos moderadores. Ex: ${groupPrefix}revokemodcmd ban`);
           const cmdToDeny = q.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replaceAll(prefix, "");
           const cmdIndex = groupData.allowedModCommands.indexOf(cmdToDeny);
           if (cmdIndex === -1) {
@@ -36546,7 +36546,7 @@ ${groupData.rules.length}. ${q}`);
           }
           groupData.allowedModCommands.splice(cmdIndex, 1);
           fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
-          await reply(`✅ Moderadores não podem mais usar o comando: ${prefix}${cmdToDeny}`);
+          await reply(`✅ Moderadores não podem mais usar o comando: ${groupPrefix}${cmdToDeny}`);
         } catch (e) {
           console.error('Erro no comando revokemodcmd:', e);
           await reply("Ocorreu um erro ao proibir comando para moderadores 💔");
@@ -36560,7 +36560,7 @@ ${groupData.rules.length}. ${q}`);
           }
           let cmdsMessage = `🔧 *Comandos Permitidos para Moderadores em ${groupName}* 🔧\n\n`;
           groupData.allowedModCommands.forEach(cmd => {
-            cmdsMessage += `➥ ${prefix}${cmd}\n`;
+            cmdsMessage += `➥ ${groupPrefix}${cmd}\n`;
           });
           await reply(cmdsMessage);
         } catch (e) {
@@ -36574,14 +36574,14 @@ ${groupData.rules.length}. ${q}`);
         try {
           if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
           if (!isGroupAdmin) return reply("Apenas administradores podem gerenciar permissões de Alpha.");
-          if (!q) return reply(`Por favor, especifique o comando para permitir aos Alphas. Ex: ${prefix}grantalphacmd ban`);
+          if (!q) return reply(`Por favor, especifique o comando para permitir aos Alphas. Ex: ${groupPrefix}grantalphacmd ban`);
           const cmdToAllow = q.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replaceAll(prefix, "");
           if (groupData.allowedAlphaCommands.includes(cmdToAllow)) {
             return reply(`Comando "${cmdToAllow}" já está permitido para Alphas.`);
           }
           groupData.allowedAlphaCommands.push(cmdToAllow);
           fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
-          await reply(`✅ Alphas agora podem usar o comando: ${prefix}${cmdToAllow}`);
+          await reply(`✅ Alphas agora podem usar o comando: ${groupPrefix}${cmdToAllow}`);
         } catch (e) {
           console.error('Erro no comando grantalphacmd:', e);
           await reply("Ocorreu um erro ao permitir comando para Alphas 💔");
@@ -36593,7 +36593,7 @@ ${groupData.rules.length}. ${q}`);
         try {
           if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
           if (!isGroupAdmin) return reply("Apenas administradores podem gerenciar permissões de Alpha.");
-          if (!q) return reply(`Por favor, especifique o comando para proibir aos Alphas. Ex: ${prefix}revokealphacmd ban`);
+          if (!q) return reply(`Por favor, especifique o comando para proibir aos Alphas. Ex: ${groupPrefix}revokealphacmd ban`);
           const cmdToDeny = q.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replaceAll(prefix, "");
           const cmdIndex = groupData.allowedAlphaCommands.indexOf(cmdToDeny);
           if (cmdIndex === -1) {
@@ -36601,7 +36601,7 @@ ${groupData.rules.length}. ${q}`);
           }
           groupData.allowedAlphaCommands.splice(cmdIndex, 1);
           fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
-          await reply(`✅ Alphas não podem mais usar o comando: ${prefix}${cmdToDeny}`);
+          await reply(`✅ Alphas não podem mais usar o comando: ${groupPrefix}${cmdToDeny}`);
         } catch (e) {
           console.error('Erro no comando revokealphacmd:', e);
           await reply("Ocorreu um erro ao proibir comando para Alphas 💔");
@@ -36616,7 +36616,7 @@ ${groupData.rules.length}. ${q}`);
           }
           let cmdsMessage = `🔧 *Comandos Permitidos para Alphas em ${groupName}* 🔧\n\n`;
           groupData.allowedAlphaCommands.forEach(cmd => {
-            cmdsMessage += `➥ ${prefix}${cmd}\n`;
+            cmdsMessage += `➥ ${groupPrefix}${cmd}\n`;
           });
           await reply(cmdsMessage);
         } catch (e) {
@@ -36635,13 +36635,13 @@ ${groupData.rules.length}. ${q}`);
           if (!menc_os2) {
             const availableAntis = ['antilink', 'antilinkgp', 'antilinkhard', 'antilinksoft', 'antilinkcanal', 'antiporn', 'antistatus', 'antistts', 'antipagamento', 'antibtn', 'antidoc', 'antiloc', 'antifig', 'antistickerplus', 'antipalavra'];
             return reply(`📋 *Uso do comando:*
-${prefix}wl.add @usuario | anti1,anti2,anti3
+${groupPrefix}wl.add @usuario | anti1,anti2,anti3
 
 *Antis disponíveis:*
 ${availableAntis.map(a => `• ${a}`).join('\n')}
 
 *Exemplo:*
-${prefix}wl.add @usuario | antilink,antistatus,antiporn`);
+${groupPrefix}wl.add @usuario | antilink,antistatus,antiporn`);
           }
 
           const userId = menc_os2;
@@ -36653,7 +36653,7 @@ ${prefix}wl.add @usuario | antilink,antistatus,antiporn`);
             return reply(`⚠️ Especifique os antis após o |
 
 *Exemplo:*
-${prefix}wl.add @usuario | antilink,antistatus`);
+${groupPrefix}wl.add @usuario | antilink,antistatus`);
           }
 
           const antis = antisString.split(',').map(a => a.trim().toLowerCase()).filter(a => a.length > 0 && !a.includes('@'));
@@ -36694,7 +36694,7 @@ ${prefix}wl.add @usuario | antilink,antistatus`);
           if (!isGroupAdmin) return reply("Apenas administradores podem remover usuários da whitelist.");
 
           if (!menc_os2) {
-            return reply(`⚠️ Marque o usuário que deseja remover da whitelist.\n\nEx: ${prefix}wl.remove @usuario`);
+            return reply(`⚠️ Marque o usuário que deseja remover da whitelist.\n\nEx: ${groupPrefix}wl.remove @usuario`);
           }
 
           const userId = menc_os2;
@@ -36759,7 +36759,7 @@ ${prefix}wl.add @usuario | antilink,antistatus`);
         try {
           if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
           if (!isGroupAdmin) return reply("Apenas administradores podem configurar isso.");
-          if (!args[0]) return reply(`Uso: ${prefix}minmessage <mínimo de dígitos> <ban/adv> ou ${prefix}minmessage off`);
+          if (!args[0]) return reply(`Uso: ${groupPrefix}minmessage <mínimo de dígitos> <ban/adv> ou ${groupPrefix}minmessage off`);
           if (args[0].toLowerCase() === 'off') {
             delete groupData.minMessage;
             fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
@@ -36768,7 +36768,7 @@ ${prefix}wl.add @usuario | antilink,antistatus`);
             const minDigits = parseInt(args[0]);
             const action = args[1]?.toLowerCase();
             if (isNaN(minDigits) || minDigits < 1 || !['ban', 'adv'].includes(action)) {
-              return reply(`Formato inválido. Use: ${prefix}minmessage <número positivo> <ban/adv>`);
+              return reply(`Formato inválido. Use: ${groupPrefix}minmessage <número positivo> <ban/adv>`);
             }
             groupData.minMessage = { minDigits, action };
             fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
@@ -36797,7 +36797,7 @@ ${prefix}wl.add @usuario | antilink,antistatus`);
       case 'msgprefix':
         try {
           if (!isOwnerOrSub) return reply('Apenas o dono pode configurar isso.');
-          if (!q) return reply('Uso: ' + prefix + 'msgprefix off ou ' + prefix + 'msgprefix texto aqui #prefixo#');
+          if (!q) return reply('Uso: '+ groupPrefix + 'msgprefix off ou '+ groupPrefix + 'msgprefix texto aqui #prefixo#');
           const newMsg = q.trim().toLowerCase() === 'off' ? false : q;
           if (saveMsgPrefix(newMsg)) {
             await reply(newMsg ? `✅ Mensagem prefix configurada: ${newMsg.replace('#prefixo#', prefix)}` : '✅ Mensagem prefix desativada.');
@@ -36832,7 +36832,7 @@ ${prefix}wl.add @usuario | antilink,antistatus`);
       case 'addreact':
         try {
           if (!isOwnerOrSub) return reply('Apenas o dono pode adicionar reacts.');
-          if (args.length < 2) return reply('Uso: ' + prefix + 'addreact trigger emoji');
+          if (args.length < 2) return reply('Uso: '+ groupPrefix + 'addreact trigger emoji');
           const trigger = args[0];
           const emoji = args[1];
           const result = addCustomReact(trigger, emoji);
@@ -36846,7 +36846,7 @@ ${prefix}wl.add @usuario | antilink,antistatus`);
       case 'delreact':
         try {
           if (!isOwnerOrSub) return reply('Apenas o dono pode remover reacts.');
-          if (!q) return reply('Uso: ' + prefix + 'delreact id');
+          if (!q) return reply('Uso: '+ groupPrefix + 'delreact id');
           const result = deleteCustomReact(q.trim());
           await reply(result.message);
         } catch (e) {
@@ -37048,13 +37048,13 @@ ${prefix}wl.add @usuario | antilink,antistatus`);
               `┃   🤖 *AUTO HORÁRIOS*     ┃\n` +
               `┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n` +
               `📋 *Comandos disponíveis:*\n\n` +
-              `🟢 \`${prefix}autohorarios on\`\n` +
+              `🟢 \`${groupPrefix}autohorarios on\`\n` +
               `   ▸ Liga o envio automático\n\n` +
-              `🔴 \`${prefix}autohorarios off\`\n` +
+              `🔴 \`${groupPrefix}autohorarios off\`\n` +
               `   ▸ Desliga o envio automático\n\n` +
-              `📊 \`${prefix}autohorarios status\`\n` +
+              `📊 \`${groupPrefix}autohorarios status\`\n` +
               `   ▸ Verifica status atual\n\n` +
-              `🔗 \`${prefix}autohorarios link [URL]\`\n` +
+              `🔗 \`${groupPrefix}autohorarios link [URL]\`\n` +
               `   ▸ Define link de apostas\n` +
               `   ▸ Sem URL remove o link\n\n` +
               `⏰ *Funcionamento:*\n` +
@@ -37166,10 +37166,10 @@ ${prefix}wl.add @usuario | antilink,antistatus`);
 • Local: ${stats.config.logFile}
 
 🔧 **Comandos Disponíveis:**
-• ${prefix}rentalstats - Ver estatísticas
-• ${prefix}rentaltest - Testar sistema manualmente
-• ${prefix}rentalconfig - Configurar sistema
-• ${prefix}rentalclean - Limpar logs antigos`;
+• ${groupPrefix}rentalstats - Ver estatísticas
+• ${groupPrefix}rentaltest - Testar sistema manualmente
+• ${groupPrefix}rentalconfig - Configurar sistema
+• ${groupPrefix}rentalclean - Limpar logs antigos`;
 
         await reply(message);
         break;
@@ -37191,7 +37191,7 @@ ${prefix}wl.add @usuario | antilink,antistatus`);
 
       case 'rentalconfig':
         if (!isOwnerOrSub) return reply(OWNER_ONLY_MESSAGE);
-        if (!q) return reply(`Uso: ${prefix}rentalconfig <opção> <valor>\n\nOpções disponíveis:\n• interval <cron-expression>\n• warning <dias>\n• final <dias>\n• cleanup <horas>\n• notifications <on|off>\n• autocleanup <on|off>\n\nExemplo: ${prefix}rentalconfig warning 7`);
+        if (!q) return reply(`Uso: ${groupPrefix}rentalconfig <opção> <valor>\n\nOpções disponíveis:\n• interval <cron-expression>\n• warning <dias>\n• final <dias>\n• cleanup <horas>\n• notifications <on|off>\n• autocleanup <on|off>\n\nExemplo: ${groupPrefix}rentalconfig warning 7`);
 
         const [option, value] = q.split(' ', 2);
 
@@ -37230,7 +37230,7 @@ ${prefix}wl.add @usuario | antilink,antistatus`);
               break;
 
             default:
-              await reply(`❌ Opção inválida: ${option}\nUse ${prefix}rentalconfig para ver as opções disponíveis.`);
+              await reply(`❌ Opção inválida: ${option}\nUse ${groupPrefix}rentalconfig para ver as opções disponíveis.`);
           }
         } catch (error) {
           console.error('❌ Error updating rental config:', error);

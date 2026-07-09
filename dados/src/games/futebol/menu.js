@@ -38,7 +38,7 @@ const ATTR_NAMES_SHORT = {
 // MENU PRINCIPAL - ESTILIZADO
 // ═══════════════════════════════════════════════════════════════
 
-export function getMenuFut(playerName = 'Jogador') {
+export function getMenuFut(playerName = 'Jogador', prefix = '!') {
   return `
 ⚽ ━━━━━━━━━━━━━━━━━━━━━━━━━━━ ┐
    *FUTEBOL GLOBAL* 🏆
@@ -49,100 +49,100 @@ export function getMenuFut(playerName = 'Jogador') {
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📋 *PERFIL*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-👤 Perfil    → !fut perfil
-📊 Stats     → !fut stats
-💰 Saldo     → !fut saldo
-⚡ Energia   → !fut energia
+👤 Perfil    → ${prefix}fut perfil
+📊 Stats     → ${prefix}fut stats
+💰 Saldo     → ${prefix}fut saldo
+⚡ Energia   → ${prefix}fut energia
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⚽ *TREINO*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🏋️ Treinar  → !fut tre pac/sho/pas/dri/def/phy
-😴 Descansar → !fut descansar
+🏋️ Treinar  → ${prefix}fut tre pac/sho/pas/dri/def/phy
+😴 Descansar → ${prefix}fut descansar
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⚔️ *PARTIDAS*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🎮 X1        → !fut x1 @usuario
-✅ Aceitar   → !fut ax1
-❌ Recusar   → !fut rx1
-🎯 Solo      → !fut solo [normal/dificil/extremo]
-🔥 Rivalidade → !fut rivalidade @user
+🎮 X1        → ${prefix}fut x1 @usuario
+✅ Aceitar   → ${prefix}fut ax1
+❌ Recusar   → ${prefix}fut rx1
+🎯 Solo      → ${prefix}fut solo [normal/dificil/extremo]
+🔥 Rivalidade → ${prefix}fut rivalidade @user
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🏆 *TORNEIOS*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📋 Ver       → !fut torneio
-🎫 Entrar    → !fut torneio entrar [ID]
+📋 Ver       → ${prefix}fut torneio
+🎫 Entrar    → ${prefix}fut torneio entrar [ID]
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 *RANKINGS*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🥇 Divisões   → !fut divisoes
-📈 Ranking    → !fut ranking
-🌍 Top Global → !fut topglobal
-⚽ Clubes     → !fut rankingclubes
-⭐ Solo       → !fut soloscore
+🥇 Divisões   → ${prefix}fut divisoes
+📈 Ranking    → ${prefix}fut ranking
+🌍 Top Global → ${prefix}fut topglobal
+⚽ Clubes     → ${prefix}fut rankingclubes
+⭐ Solo       → ${prefix}fut soloscore
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⭐ *EVOLUÇÃO*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📊 XP        → !fut xp
-💎 Evoluir   → !fut evoluir [attr] [pts]
-🎯 Atributos → !fut atributos
-🛒 Habilidades → !fut hab
+📊 XP        → ${prefix}fut xp
+💎 Evoluir   → ${prefix}fut evoluir [attr] [pts]
+🎯 Atributos → ${prefix}fut atributos
+🛒 Habilidades → ${prefix}fut hab
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⚙️ *CLUBE*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🏗️ Criar     → !fut criar [nome]
-📋 Meu Clube → !fut clube
-👥 Membros   → !fut membros
-🚪 Sair         → !fut sair
-✏️ Renomear     → !fut renomearclube [nome]
-💼 Proposta  → !fut prop @user [salário]
+🏗️ Criar     → ${prefix}fut criar [nome]
+📋 Meu Clube → ${prefix}fut clube
+👥 Membros   → ${prefix}fut membros
+🚪 Sair         → ${prefix}fut sair
+✏️ Renomear     → ${prefix}fut renomearclube [nome]
+💼 Proposta  → ${prefix}fut prop @user [salário]
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 💼 *NEGOCIAÇÕES*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📨 Ver       → !fut negs
-✅ Aceitar   → !fut ace [id]
-❌ Recusar   → !fut repro [id]
+📨 Ver       → ${prefix}fut negs
+✅ Aceitar   → ${prefix}fut ace [id]
+❌ Recusar   → ${prefix}fut repro [id]
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🎁 *RECOMPENSAS*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📦 Diária    → !fut diaria
-📅 Semanal   → !fut semanal
-🎫 Código    → !fut codigo [CODIGO]
+📦 Diária    → ${prefix}fut diaria
+📅 Semanal   → ${prefix}fut semanal
+🎫 Código    → ${prefix}fut codigo [CODIGO]
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🏅 *EXTRAS*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔥 Forma      → !fut forma
-🏆 Conquistas → !fut conquistas
-👑 Títulos    → !fut titulos
-🏅 Temporada  → !fut temporada
-⭐ Reputação  → !fut reputacao
-⚔️ Rivalidades → !fut rivalidades
+🔥 Forma      → ${prefix}fut forma
+🏆 Conquistas → ${prefix}fut conquistas
+👑 Títulos    → ${prefix}fut titulos
+🏅 Temporada  → ${prefix}fut temporada
+⭐ Reputação  → ${prefix}fut reputacao
+⚔️ Rivalidades → ${prefix}fut rivalidades
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⚠️ *ADMINISTRAÇÃO*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚙️ !futadmin
+⚙️ ${prefix}futadmin
 Painel administrativo do Futebol Global
 
 🔒 Exclusivo para administradores
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 Use *!fut entrar* para começar!`;
+💡 Use *${prefix}fut entrar* para começar!`;
 }
 
 // ═══════════════════════════════════════════════════════════════
 // MENU ADMIN - ESTILIZADO
 // ═══════════════════════════════════════════════════════════════
 
-export function getMenuAdminFut() {
+export function getMenuAdminFut(prefix = '!') {
   return `
 🔧 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ┐
    ADMINISTRAÇÃO FUTEBOL GLOBAL ⚙️
@@ -157,15 +157,15 @@ export function getMenuAdminFut() {
 
 💰 *addcoins* - Adicionar FC Coins
 📝 Adiciona FC Coins diretamente ao saldo do jogador.
-📌 Uso: !fut admin addcoins @usuario [valor]
-📌 Exemplo: !fut admin addcoins @player 50000
+📌 Uso: ${prefix}fut admin addcoins @usuario [valor]
+📌 Exemplo: ${prefix}fut admin addcoins @player 50000
 📌 Valor mínimo: 1 | Sem máximo
 ⚠️ Afeta: compras, treinos, torneios, clubes
 
 💸 *remcoins* - Remover FC Coins
 📝 Remove FC Coins do saldo do jogador.
-📌 Uso: !fut admin remcoins @usuario [valor]
-📌 Exemplo: !fut admin remcoins @player 10000
+📌 Uso: ${prefix}fut admin remcoins @usuario [valor]
+📌 Exemplo: ${prefix}fut admin remcoins @player 10000
 ⚠️ Não pode remover mais do que o jogador possui!
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -175,28 +175,28 @@ export function getMenuAdminFut() {
 🎮 *setovr* - Definir Overall (OVR)
 📝 Altera manualmente o OVR do jogador.
 ⚠️ Ignora progressão normal por XP e treinos.
-📌 Uso: !fut admin setovr @usuario [1-99]
-📌 Exemplo: !fut admin setovr @player 85
+📌 Uso: ${prefix}fut admin setovr @usuario [1-99]
+📌 Exemplo: ${prefix}fut admin setovr @player 85
 📌 Faixa permitida: 1 a 99
 ⚠️ Afeta: X1, Solo, Clubes, Torneios, Rankings
 
 ⚡ *setenergy* - Definir Energia
 📝 Define a energia atual do jogador.
-📌 Uso: !fut admin setenergy @usuario [0-200]
-📌 Exemplo: !fut admin setenergy @player 200
+📌 Uso: ${prefix}fut admin setenergy @usuario [0-200]
+📌 Exemplo: ${prefix}fut admin setenergy @player 200
 📌 Faixa permitida: 0 a 200
 
 🏆 *setdiv* - Definir Divisão
 📝 Move o jogador para uma divisão específica.
-📌 Uso: !fut admin setdiv @usuario [divisão]
+📌 Uso: ${prefix}fut admin setdiv @usuario [divisão]
 📌 Divisões: bronze_3, prata_2, ouro_1, elite_3, lenda_2, mestre_1, pro_3, worldclass_1, topglobal
-📌 Exemplo: !fut admin setdiv @player ouro_1
+📌 Exemplo: ${prefix}fut admin setdiv @player ouro_1
 ⚠️ Afeta: Rankings, desbloqueios, habilidades
 
 ⭐ *addmvp* - Adicionar MVP
 📝 Adiciona MVPs ao contador do jogador.
-📌 Uso: !fut admin addmvp @usuario [quantidade]
-📌 Exemplo: !fut admin addmvp @player 10
+📌 Uso: ${prefix}fut admin addmvp @usuario [quantidade]
+📌 Exemplo: ${prefix}fut admin addmvp @player 10
 📌 Recompensa: +100 FC Coins e +3 reputação por MVP
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -215,8 +215,8 @@ export function getMenuAdminFut() {
 • Estatísticas Solo/X1
 • Clubes e Propostas
 • Reputação (volta a 50)
-📌 Uso: !fut admin resetplayer @usuario
-📌 Exemplo: !fut admin resetplayer @player
+📌 Uso: ${prefix}fut admin resetplayer @usuario
+📌 Exemplo: ${prefix}fut admin resetplayer @player
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⭐ XP & EVOLUÇÃO
@@ -224,31 +224,31 @@ export function getMenuAdminFut() {
 
 📈 *addxp* - Adicionar XP
 📝 Adiciona XP ao jogador (pode subir nível).
-📌 Uso: !fut admin addxp @usuario [valor]
-📌 Exemplo: !fut admin addxp @player 5000
+📌 Uso: ${prefix}fut admin addxp @usuario [valor]
+📌 Exemplo: ${prefix}fut admin addxp @player 5000
 📌 Cada nível ganha +2 pontos de evolução
 
 🎯 *setlevel* - Definir Nível
 📝 Define o nível do jogador diretamente.
-📌 Uso: !fut admin setlevel @usuario [1-100]
-📌 Exemplo: !fut admin setlevel @player 50
+📌 Uso: ${prefix}fut admin setlevel @usuario [1-100]
+📌 Exemplo: ${prefix}fut admin setlevel @player 50
 ⚠️ Zera o XP atual e dá pontos de evolução
 
 💎 *setevo* - Definir Pontos de Evolução
 📝 Define a quantidade de pontos de evolução.
-📌 Uso: !fut admin setevo @usuario [pontos]
-📌 Exemplo: !fut admin setevo @player 200
+📌 Uso: ${prefix}fut admin setevo @usuario [pontos]
+📌 Exemplo: ${prefix}fut admin setevo @player 200
 
 ➕ *addevo* - Adicionar Pontos de Evolução
 📝 Adiciona pontos de evolução ao jogador.
-📌 Uso: !fut admin addevo @usuario [pontos]
-📌 Exemplo: !fut admin addevo @player 50
+📌 Uso: ${prefix}fut admin addevo @usuario [pontos]
+📌 Exemplo: ${prefix}fut admin addevo @player 50
 
 🔄 *resetxp* - Resetar XP
 📝 Reseta todo o sistema de XP do jogador.
 ⚠️ Zera nível (volta a 1), XP e pontos de evolução.
-📌 Uso: !fut admin resetxp @usuario
-📌 Exemplo: !fut admin resetxp @player
+📌 Uso: ${prefix}fut admin resetxp @usuario
+📌 Exemplo: ${prefix}fut admin resetxp @player
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🎯 ATRIBUTOS
@@ -256,9 +256,9 @@ export function getMenuAdminFut() {
 
 ⚡ *settreino* - Definir Atributo
 📝 Define o valor de um atributo específico.
-📌 Uso: !fut admin settreino @usuario [attr] [valor]
+📌 Uso: ${prefix}fut admin settreino @usuario [attr] [valor]
 📌 Atributos: pac (velocidade), sho (finalização), pas (passe), dri (drible), def (defesa), phy (físico)
-📌 Exemplo: !fut admin settreino @player pac 99
+📌 Exemplo: ${prefix}fut admin settreino @player pac 99
 📌 Valor permitido: 1 a 99
 ⚠️ Recalcula OVR automaticamente
 
@@ -268,8 +268,8 @@ export function getMenuAdminFut() {
 
 📊 *setrep* - Definir Reputação
 📝 Define a reputação do jogador (0-100).
-📌 Uso: !fut admin setrep @usuario [0-100]
-📌 Exemplo: !fut admin setrep @player 90
+📌 Uso: ${prefix}fut admin setrep @usuario [0-100]
+📌 Exemplo: ${prefix}fut admin setrep @player 90
 📌 Impacto:
 • 90+: ⭐ Lendário (+2% bônus)
 • 75-89: 🌟 Profissional (+1% bônus)
@@ -280,8 +280,8 @@ export function getMenuAdminFut() {
 
 ➕ *addrep* - Ajustar Reputação
 📝 Adiciona ou remove reputação.
-📌 Uso: !fut admin addrep @usuario [+/-valor]
-📌 Exemplo: !fut admin addrep @player +20
+📌 Uso: ${prefix}fut admin addrep @usuario [+/-valor]
+📌 Exemplo: ${prefix}fut admin addrep @player +20
 📌 Limite: 0 a 100
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -290,7 +290,7 @@ export function getMenuAdminFut() {
 
 📋 *season* - Status da Temporada
 📝 Mostra informações da temporada atual.
-📌 Uso: !fut admin season
+📌 Uso: ${prefix}fut admin season
 📌 Exibe: número, datas, rankings, recompensas
 
 🔄 *season reset* - Resetar Temporada
@@ -306,11 +306,11 @@ export function getMenuAdminFut() {
 • OVR e Atributos
 • Divisão
 • Conquistas gerais
-📌 Uso: !fut admin season reset
+📌 Uso: ${prefix}fut admin season reset
 
 ⚙️ *season config* - Configurar Temporada
 📝 Define os parâmetros da nova temporada.
-📌 Uso: !fut admin season config [opções]
+📌 Uso: ${prefix}fut admin season config [opções]
 📌 Opções: duração, recompensas, bônus
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -319,41 +319,41 @@ export function getMenuAdminFut() {
 
 🎫 *codigo criar* - Criar Código
 📝 Cria um código promocional com recompensas fixas.
-📌 Uso: !fut admin codigo criar [CODIGO] [COINS] [XP] [USOS] [HORAS]
+📌 Uso: ${prefix}fut admin codigo criar [CODIGO] [COINS] [XP] [USOS] [HORAS]
 📌 Parâmetros:
 • CODIGO: Nome do código (até 10 caracteres)
 • COINS: FC Coins da recompensa
 • XP: XP da recompensa
 • USOS: Vezes que pode ser usado
 • HORAS: Tempo até expirar (0 = nunca)
-📌 Exemplo: !fut admin codigo criar VIP2026 5000 200 50 48
+📌 Exemplo: ${prefix}fut admin codigo criar VIP2026 5000 200 50 48
 📌 Resultado: Código VIP2026 dá 5.000 coins + 200 XP
          Pode ser usado 50 vezes
          Expira em 48 horas
 
 🎲 *codigo misterioso* - Criar Código Aleatório
 📝 Cria código com valores aleatórios.
-📌 Uso: !fut admin codigo misterioso [MINC] [MAXC] [MINX] [MAXX] [USOS]
+📌 Uso: ${prefix}fut admin codigo misterioso [MINC] [MAXC] [MINX] [MAXX] [USOS]
 📌 Parâmetros:
 • MINC/MAXC: Range de coins
 • MINX/MAXX: Range de XP
 • USOS: Limite de usos
-📌 Exemplo: !fut admin codigo misterioso 1000 5000 50 200 10
+📌 Exemplo: ${prefix}fut admin codigo misterioso 1000 5000 50 200 10
 📌 Cada resgate terá valores aleatórios no range
 
 📋 *codigo listar* - Listar Códigos
 📝 Lista todos os códigos promocionais ativos.
-📌 Uso: !fut admin codigo listar
+📌 Uso: ${prefix}fut admin codigo listar
 
 📜 *codigo log* - Histórico de Uso
 📝 Mostra quem usou cada código.
-📌 Uso: !fut admin codigo log [código]
-📌 Exemplo: !fut admin codigo log VIP2026
+📌 Uso: ${prefix}fut admin codigo log [código]
+📌 Exemplo: ${prefix}fut admin codigo log VIP2026
 
 ❌ *codigo desativar* - Desativar Código
 📝 Desativa um código sem apagar o histórico.
-📌 Uso: !fut admin codigo desativar [CODIGO]
-📌 Exemplo: !fut admin codigo desativar VIP2026
+📌 Uso: ${prefix}fut admin codigo desativar [CODIGO]
+📌 Exemplo: ${prefix}fut admin codigo desativar VIP2026
 ⚠️ Código desativado não pode ser reativado!
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -369,7 +369,7 @@ export function getMenuAdminFut() {
 
 ➕ *torneio criar* - Criar Torneio
 📝 Cria um novo torneio.
-📌 Uso: !fut admin torneio criar [NOME]|[TIPO]|[MAX]|[ENTRADA]|[PREMIO]|[TROFÉU]
+📌 Uso: ${prefix}fut admin torneio criar [NOME]|[TIPO]|[MAX]|[ENTRADA]|[PREMIO]|[TROFÉU]
 📌 Parâmetros:
 • NOME: Nome do torneio
 • TIPO: x1, 5v5, ou draft
@@ -377,34 +377,34 @@ export function getMenuAdminFut() {
 • ENTRADA: FC Coins para participar
 • PREMIO: FC Coins para o campeão
 • TROFÉU: Título do campeão
-📌 Exemplo: !fut admin torneio criar Copa Legends|x1|16|1000|10000|Campeão da Copa
+📌 Exemplo: ${prefix}fut admin torneio criar Copa Legends|x1|16|1000|10000|Campeão da Copa
 📌 Resultado: Torneio com 16 jogadores, entrada 1.000,
          prêmio 10.000 para o campeão "Campeão da Copa"
 
 ▶️ *torneio iniciar* - Iniciar Torneio
 📝 Fecha inscrições e gera o chaveamento.
 ⚠️ Após iniciar, ninguém mais pode entrar!
-📌 Uso: !fut admin torneio iniciar [ID]
-📌 Exemplo: !fut admin torneio iniciar tourney_123
+📌 Uso: ${prefix}fut admin torneio iniciar [ID]
+📌 Exemplo: ${prefix}fut admin torneio iniciar tourney_123
 
 ⚽ *torneio jogar* - Processar Partida
 📝 Simula a próxima partida do torneio.
-📌 Uso: !fut admin torneio jogar [ID]
-📌 Exemplo: !fut admin torneio jogar tourney_123
+📌 Uso: ${prefix}fut admin torneio jogar [ID]
+📌 Exemplo: ${prefix}fut admin torneio jogar tourney_123
 ⚠️ Execute uma vez por partida!
 
 👁️ *torneio ver* - Ver Torneio
 📝 Mostra detalhes e chaveamento atual.
-📌 Uso: !fut admin torneio ver [ID]
+📌 Uso: ${prefix}fut admin torneio ver [ID]
 
 ❌ *torneio cancelar* - Cancelar Torneio
 📝 Cancela o torneio e devolve entradas.
 ⚠️ Devolve FC Coins aos participantes!
-📌 Uso: !fut admin torneio cancelar [ID]
+📌 Uso: ${prefix}fut admin torneio cancelar [ID]
 
 📋 *torneio listar* - Listar Torneios
 📝 Lista todos os torneios (ativos e finalizados).
-📌 Uso: !fut admin torneio listar
+📌 Uso: ${prefix}fut admin torneio listar
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 FUT SOLO
@@ -412,8 +412,8 @@ export function getMenuAdminFut() {
 
 🔄 *setsolo* - Resetar Solo
 📝 Reseta as estatísticas Solo do jogador.
-📌 Uso: !fut admin setsolo @usuario reset
-📌 Exemplo: !fut admin setsolo @player reset
+📌 Uso: ${prefix}fut admin setsolo @usuario reset
+📌 Exemplo: ${prefix}fut admin setsolo @player reset
 ⚠️ Zera: vitórias, derrotas, sequência, melhor sequência
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -433,19 +433,19 @@ export function getMenuAdminFut() {
 • TODOS os X1 pendentes
 • TODO o histórico
 • TODAS as conquistas
-📌 Uso: !fut admin resetall
+📌 Uso: ${prefix}fut admin resetall
 📌 CONFIRMAÇÃO NECESSÁRIA: Este comando requer
          confirmação adicional antes de executar.
 
 🏠 *clubes reset* - Resetar Clubes
 ⚠️ Remove TODOS os clubes e limpa currentClub dos jogadores.
-📌 Uso: !fut admin clubes reset
+📌 Uso: ${prefix}fut admin clubes reset
 
 ⚔️ *x1reset* - Limpar X1
 📝 Cancela todos os desafios X1 pendentes.
-📌 Uso: !fut admin x1reset
+📌 Uso: ${prefix}fut admin x1reset
 `;
-}export function getEnterMessage(playerName) {
+}export function getEnterMessage(playerName, prefix = '!') {
   return `
 ⚽ *BEM-VINDO AO FUTEBOL GLOBAL!* ⚽
 
@@ -463,10 +463,10 @@ Parabéns, ${playerName}! Você entrou no mundo do futebol!
 ⚡ Energia: 200/200
 
 📌 *COMANDOS:*
-• !fut treinar [atributo] - Treinar
-• !fut descansar - Recuperar energia
-• !fut x1 @usuario - Jogar partida
-• !fut criarclube - Criar um clube
+• ${prefix}fut treinar [atributo] - Treinar
+• ${prefix}fut descansar - Recuperar energia
+• ${prefix}fut x1 @usuario - Jogar partida
+• ${prefix}fut criarclube - Criar um clube
 
 Boa sorte! 🏆`;
 }
@@ -1068,7 +1068,7 @@ export { getDivisionName, getSkillSlots, DIVISIONS_EMOJI, ATTR_NAMES };
 // 📋 MENU ADMINISTRATIVO DO FUTEBOL GLOBAL
 // ═══════════════════════════════════════════════════════════════
 
-export function getAdminMenuFut(senderName) {
+export function getAdminMenuFut(senderName, prefix = '!') {
   return `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⚽ *FUTEBOL GLOBAL - PAINEL ADMIN* ⚽
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1080,76 +1080,76 @@ export function getAdminMenuFut(senderName) {
 💰 MOEDAS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-• *!futaddcoins* - Adicionar coins
-• *!futremcoins* - Remover coins
+• *${prefix}futaddcoins* - Adicionar coins
+• *${prefix}futremcoins* - Remover coins
 
 📖 Como usar:
-• *!futaddcoins @usuario 5000*
+• *${prefix}futaddcoins @usuario 5000*
   └ Adiciona 5.000 FC Coins
 
-• *!futremcoins @usuario 5000*
+• *${prefix}futremcoins @usuario 5000*
   └ Remove 5.000 FC Coins
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 👤 JOGADORES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-• *!futsetovr* - Definir overall
-• *!futsetenergy* - Definir energia
-• *!futsetdiv* - Definir divisão
-• *!futaddmvp* - Adicionar MVP
-• *!futresetplayer* - Resetar jogador
+• *${prefix}futsetovr* - Definir overall
+• *${prefix}futsetenergy* - Definir energia
+• *${prefix}futsetdiv* - Definir divisão
+• *${prefix}futaddmvp* - Adicionar MVP
+• *${prefix}futresetplayer* - Resetar jogador
 
 📖 Como usar:
-• *!futsetovr @usuario 85*
+• *${prefix}futsetovr @usuario 85*
   └ Define OVR do jogador (1-99)
 
-• *!futsetenergy @usuario 200*
+• *${prefix}futsetenergy @usuario 200*
   └ Define energia maxima (0-200)
 
-• *!futsetdiv @usuario ouro_1*
+• *${prefix}futsetdiv @usuario ouro_1*
   └ Define a divisão do jogador
 
-• *!futaddmvp @usuario 10*
+• *${prefix}futaddmvp @usuario 10*
   └ Adiciona MVPs ao jogador
 
-• *!futresetplayer @usuario*
+• *${prefix}futresetplayer @usuario*
   └ Reseta jogador completamente
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⭐ XP E EVOLUÇÃO
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-• *!futaddxp* - Adicionar XP
-• *!futsetlevel* - Definir nível
-• *!futsetevo* - Definir pontos evo
-• *!futaddevo* - Adicionar pontos evo
-• *!futresetxp* - Resetar XP
+• *${prefix}futaddxp* - Adicionar XP
+• *${prefix}futsetlevel* - Definir nível
+• *${prefix}futsetevo* - Definir pontos evo
+• *${prefix}futaddevo* - Adicionar pontos evo
+• *${prefix}futresetxp* - Resetar XP
 
 📖 Como usar:
-• *!futaddxp @usuario 5000*
+• *${prefix}futaddxp @usuario 5000*
   └ Adiciona XP ao jogador
 
-• *!futsetlevel @usuario 50*
+• *${prefix}futsetlevel @usuario 50*
   └ Define nível direto
 
-• *!futsetevo @usuario 200*
+• *${prefix}futsetevo @usuario 200*
   └ Define pontos de evolução
 
-• *!futaddevo @usuario 50*
+• *${prefix}futaddevo @usuario 50*
   └ Adiciona pontos de evolução
 
-• *!futresetxp @usuario*
+• *${prefix}futresetxp @usuario*
   └ Reseta XP para nível 1
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🎯 ATRIBUTOS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-• *!futsettreino* - Definir atributo
+• *${prefix}futsettreino* - Definir atributo
 
 📖 Como usar:
-• *!futsettreino @usuario pac 99*
+• *${prefix}futsettreino @usuario pac 99*
 
 ⚡ Atributos disponíveis:
 • pac - Velocidade
@@ -1163,14 +1163,14 @@ export function getAdminMenuFut(senderName) {
 🌟 REPUTAÇÃO
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-• *!futsetrep* - Definir reputação
-• *!futaddrep* - Adicionar reputação
+• *${prefix}futsetrep* - Definir reputação
+• *${prefix}futaddrep* - Adicionar reputação
 
 📖 Como usar:
-• *!futsetrep @usuario 90*
+• *${prefix}futsetrep @usuario 90*
   └ Define reputação fixa (0-100)
 
-• *!futaddrep @usuario 10*
+• *${prefix}futaddrep @usuario 10*
   └ Adiciona pontos de reputação
 
 💡 Reputação afeta negociações e
@@ -1180,84 +1180,84 @@ export function getAdminMenuFut(senderName) {
 🏆 TEMPORADAS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-• *!futseason* - Ver temporada atual
-• *!futseasonreset* - Resetar temporada
-• *!futseasonconfig* - Configurar temporada
+• *${prefix}futseason* - Ver temporada atual
+• *${prefix}futseasonreset* - Resetar temporada
+• *${prefix}futseasonconfig* - Configurar temporada
 
 📖 Como usar:
-• *!futseason*
+• *${prefix}futseason*
   └ Mostra informações da temporada
 
-• *!futseasonreset*
+• *${prefix}futseasonreset*
   └ Reseta rankings e divisões
 
-• *!futseasonconfig 30 sim*
+• *${prefix}futseasonconfig 30 sim*
   └ Configura: 30 dias, reseta divisões
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🎁 CÓDIGOS PROMOCIONAIS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-• *!futcodigocriar* - Criar código
-• *!futcodigomisterioso* - Criar código aleatório
-• *!futcodigolistar* - Listar códigos
-• *!futcodigolog* - Ver log de uso
-• *!futcodigodesativar* - Desativar código
+• *${prefix}futcodigocriar* - Criar código
+• *${prefix}futcodigomisterioso* - Criar código aleatório
+• *${prefix}futcodigolistar* - Listar códigos
+• *${prefix}futcodigolog* - Ver log de uso
+• *${prefix}futcodigodesativar* - Desativar código
 
 📖 Como usar:
-• *!futcodigocriar normal 1000 100*
+• *${prefix}futcodigocriar normal 1000 100*
   └ Cria código: 1000 coins, 100 XP
 
-• *!futcodigocriar titulo 500 50 Lendario*
+• *${prefix}futcodigocriar titulo 500 50 Lendario*
   └ Cria código com título
 
-• *!futcodigomisterioso 100 5000*
+• *${prefix}futcodigomisterioso 100 5000*
   └ Código com recompensas aleatórias
 
-• *!futcodigolistar*
+• *${prefix}futcodigolistar*
   └ Lista todos os códigos
 
-• *!futcodigolog CODIGO123*
+• *${prefix}futcodigolog CODIGO123*
   └ Ver quem usou o código
 
-• *!futcodigodesativar CODIGO123*
+• *${prefix}futcodigodesativar CODIGO123*
   └ Desativa o código
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🏆 TORNEIOS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-• *!futtorneiocriar* - Criar torneio
-• *!futtorneioiniciar* - Iniciar torneio
-• *!futtorneiover* - Ver torneio
-• *!futtorneiocancelar* - Cancelar torneio
-• *!futtorneiolistar* - Listar torneios
+• *${prefix}futtorneiocriar* - Criar torneio
+• *${prefix}futtorneioiniciar* - Iniciar torneio
+• *${prefix}futtorneiover* - Ver torneio
+• *${prefix}futtorneiocancelar* - Cancelar torneio
+• *${prefix}futtorneiolistar* - Listar torneios
 
 📖 Fluxo completo:
-1️⃣ *!futtorneiocriar Copa Elite x1 16 500 5000*
+1️⃣ *${prefix}futtorneiocriar Copa Elite x1 16 500 5000*
    └ Nome: Copa Elite | Tipo: X1 | Max: 16
    └ Entrada: 500 | Prêmio: 5000
 
-2️⃣ *!futtorneiolistar*
+2️⃣ *${prefix}futtorneiolistar*
    └ Ver ID do torneio criado
 
-3️⃣ *!futtorneioiniciar 1*
+3️⃣ *${prefix}futtorneioiniciar 1*
    └ Inicia o torneio (ID 1)
 
-4️⃣ *!futtorneiover 1*
+4️⃣ *${prefix}futtorneiover 1*
    └ Acompanhar andamento
 
-5️⃣ *!futtorneiocancelar 1*
+5️⃣ *${prefix}futtorneiocancelar 1*
    └ Cancelar se necessário
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 FUT SOLO
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-• *!futsetsolo* - Resetar stats solo
+• *${prefix}futsetsolo* - Resetar stats solo
 
 📖 Como usar:
-• *!futsetsolo @usuario reset*
+• *${prefix}futsetsolo @usuario reset*
 
 ⚡ Stats resetadas:
 • Vitórias, empates, derrotas
@@ -1268,10 +1268,10 @@ export function getAdminMenuFut(senderName) {
 ⚔️ X1
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-• *!futresetx1* - Limpar X1 pendentes
+• *${prefix}futresetx1* - Limpar X1 pendentes
 
 📖 Como usar:
-• *!futresetx1*
+• *${prefix}futresetx1*
 
 ⚡ Cancela todos os desafios X1
    que estão aguardando resposta
@@ -1280,10 +1280,10 @@ export function getAdminMenuFut(senderName) {
 🏟️ CLUBES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-• *!futclubereset* - Resetar clubes
+• *${prefix}futclubereset* - Resetar clubes
 
 📖 Como usar:
-• *!futclubereset*
+• *${prefix}futclubereset*
 
 ⚡ Remove todos os clubes e
    desvincula jogadores
@@ -1292,10 +1292,10 @@ export function getAdminMenuFut(senderName) {
 ☠️ ⚠️⚠️ RESET GLOBAL ⚠️⚠️ ☠️
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-• *!futresetall* - RESETAR TUDO
+• *${prefix}futresetall* - RESETAR TUDO
 
 📖 Como usar:
-• *!futresetall*
+• *${prefix}futresetall*
 
 ⚠️⚠️⚠️ *PERIGO EXTREMO* ⚠️⚠️⚠️
 
@@ -1310,6 +1310,6 @@ Este comando IRÁ APAGAR:
 ⚠️ Esta ação NÃO pode ser desfeita!
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📚 USE *!futadmin* PARA VER ESTE MENU
+📚 USE *${prefix}futadmin* PARA VER ESTE MENU
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
 }
