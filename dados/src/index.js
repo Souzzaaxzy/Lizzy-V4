@@ -26185,10 +26185,11 @@ ${prefix}togglecmdvip premium_ia off`);
           if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
           
           const stats = msgCounter.getGroupStats(from);
-          const userCount = Object.keys(stats.daily.users).length;
+          const userCount = Object.keys(stats.daily.users || {}).length;
           const today = new Date();
           const dateStr = today.toLocaleDateString('pt-BR');
-          const totalMedia = (stats.daily.stickers || 0) + (stats.daily.images || 0) + (stats.daily.videos || 0);
+          // Mídias = apenas imagens e vídeos (sem stickers)
+          const totalMedia = (stats.daily.images || 0) + (stats.daily.videos || 0);
           
           let message = `╭━━━〔 📅 ESTATÍSTICAS DIÁRIAS 〕━━━╮\n`;
           message += `┃ 👥 Grupo: ${groupName || 'Grupo'}\n`;
@@ -26196,7 +26197,7 @@ ${prefix}togglecmdvip premium_ia off`);
           message += `┃\n`;
           message += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
           message += `┃\n`;
-          message += `┃ 💬 Total de mensagens: ${stats.daily.total.toLocaleString('pt-BR')}\n`;
+          message += `┃ 💬 Total de mensagens: ${(stats.daily.total || 0).toLocaleString('pt-BR')}\n`;
           message += `┃ 🎭 Figurinhas: ${stats.daily.stickers || 0}\n`;
           message += `┃ 🖼️ Mídias (fotos/vídeos): ${totalMedia}\n`;
           message += `┃ 🎵 Áudios: ${stats.daily.audios || 0}\n`;
@@ -26204,7 +26205,7 @@ ${prefix}togglecmdvip premium_ia off`);
           message += `┃ 👥 Usuários ativos: ${userCount}\n`;
           
           if (stats.settings.dailyGoal) {
-            const progress = Math.min(100, Math.round((stats.daily.total / stats.settings.dailyGoal) * 100));
+            const progress = Math.min(100, Math.round(((stats.daily.total || 0) / stats.settings.dailyGoal) * 100));
             const bar = '█'.repeat(Math.floor(progress / 10)) + '░'.repeat(10 - Math.floor(progress / 10));
             message += `┃\n`;
             message += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
@@ -26228,8 +26229,9 @@ ${prefix}togglecmdvip premium_ia off`);
           if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
           
           const stats = msgCounter.getGroupStats(from);
-          const userCount = Object.keys(stats.weekly.users).length;
-          const totalMedia = (stats.weekly.stickers || 0) + (stats.weekly.images || 0) + (stats.weekly.videos || 0);
+          const userCount = Object.keys(stats.weekly.users || {}).length;
+          // Mídias = apenas imagens e vídeos (sem stickers)
+          const totalMedia = (stats.weekly.images || 0) + (stats.weekly.videos || 0);
           
           let message = `╭━━━〔 📆 ESTATÍSTICAS SEMANAIS 〕━━━╮\n`;
           message += `┃ 👥 Grupo: ${groupName || 'Grupo'}\n`;
@@ -26237,7 +26239,7 @@ ${prefix}togglecmdvip premium_ia off`);
           message += `┃\n`;
           message += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
           message += `┃\n`;
-          message += `┃ 💬 Total de mensagens: ${stats.weekly.total.toLocaleString('pt-BR')}\n`;
+          message += `┃ 💬 Total de mensagens: ${(stats.weekly.total || 0).toLocaleString('pt-BR')}\n`;
           message += `┃ 🎭 Figurinhas: ${stats.weekly.stickers || 0}\n`;
           message += `┃ 🖼️ Mídias (fotos/vídeos): ${totalMedia}\n`;
           message += `┃ 🎵 Áudios: ${stats.weekly.audios || 0}\n`;
@@ -26245,7 +26247,7 @@ ${prefix}togglecmdvip premium_ia off`);
           message += `┃ 👥 Usuários ativos: ${userCount}\n`;
           
           if (stats.settings.weeklyGoal) {
-            const progress = Math.min(100, Math.round((stats.weekly.total / stats.settings.weeklyGoal) * 100));
+            const progress = Math.min(100, Math.round(((stats.weekly.total || 0) / stats.settings.weeklyGoal) * 100));
             const bar = '█'.repeat(Math.floor(progress / 10)) + '░'.repeat(10 - Math.floor(progress / 10));
             message += `┃\n`;
             message += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
@@ -26288,7 +26290,8 @@ ${prefix}togglecmdvip premium_ia off`);
             const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
             topUsers.forEach((user, index) => {
               const position = index + 1;
-              const totalMedia = (user.stickers || 0) + (user.images || 0) + (user.videos || 0);
+              // Mídias = apenas imagens e vídeos (sem stickers)
+              const totalMedia = (user.images || 0) + (user.videos || 0);
               message += `┃ ${medals[index]} #${position} @${user.name.split(' ')[0]}\n`;
               message += `┃    💬 Msgs: ${user.count.toLocaleString('pt-BR')}\n`;
               message += `┃    🎭 Figs: ${user.stickers || 0}\n`;
@@ -26301,7 +26304,7 @@ ${prefix}togglecmdvip premium_ia off`);
           message += `┃\n`;
           message += `━━━━━━━━━━━━━━━━━━━━\n`;
           message += `┃\n`;
-          message += `┃ 💬 Total hoje: ${stats.daily.total.toLocaleString('pt-BR')} msgs\n`;
+          message += `┃ 💬 Total hoje: ${(stats.daily.total || 0).toLocaleString('pt-BR')} msgs\n`;
           message += `┃ 👥 Participantes: ${Object.keys(stats.daily.users || {}).length}\n`;
           if (userRank.rank > 0 && userRank.rank > 5) {
             message += `┃ 📍 Sua posição: #${userRank.rank}\n`;
@@ -26338,7 +26341,8 @@ ${prefix}togglecmdvip premium_ia off`);
             const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
             topUsers.forEach((user, index) => {
               const position = index + 1;
-              const totalMedia = (user.stickers || 0) + (user.images || 0) + (user.videos || 0);
+              // Mídias = apenas imagens e vídeos (sem stickers)
+              const totalMedia = (user.images || 0) + (user.videos || 0);
               message += `┃ ${medals[index]} #${position} @${user.name.split(' ')[0]}\n`;
               message += `┃    💬 Msgs: ${user.count.toLocaleString('pt-BR')}\n`;
               message += `┃    🎭 Figs: ${user.stickers || 0}\n`;
@@ -26351,7 +26355,7 @@ ${prefix}togglecmdvip premium_ia off`);
           message += `┃\n`;
           message += `━━━━━━━━━━━━━━━━━━━━━━━\n`;
           message += `┃\n`;
-          message += `┃ 💬 Total semana: ${stats.weekly.total.toLocaleString('pt-BR')} msgs\n`;
+          message += `┃ 💬 Total semana: ${(stats.weekly.total || 0).toLocaleString('pt-BR')} msgs\n`;
           message += `┃ 👥 Participantes: ${Object.keys(stats.weekly.users || {}).length}\n`;
           if (userRank.rank > 0 && userRank.rank > 5) {
             message += `┃ 📍 Sua posição: #${userRank.rank}\n`;
@@ -26617,12 +26621,13 @@ ${prefix}togglecmdvip premium_ia off`);
             message += `┃\n`;
           }
           
+          const totalMidias = (detailedRank.images || 0) + (detailedRank.videos || 0);
           message += `┃ 🏅 Posição: #${detailedRank.rank} de ${detailedRank.total}\n`;
           message += `┃\n`;
           message += `┃ 💬 Mensagens: ${detailedRank.count.toLocaleString('pt-BR')}\n`;
-          message += `┃ 🎭 Figurinhas: ${detailedRank.stickers}\n`;
-          message += `┃ 🖼️ Mídias: ${(detailedRank.images || 0) + (detailedRank.videos || 0)}\n`;
-          message += `┃ 🎵 Áudios: ${detailedRank.audios}\n`;
+          message += `┃ 🎭 Figurinhas: ${detailedRank.stickers || 0}\n`;
+          message += `┃ 🖼️ Mídias: ${totalMidias}\n`;
+          message += `┃ 🎵 Áudios: ${detailedRank.audios || 0}\n`;
           message += `┃\n`;
           
           if (detailedRank.nextUser && !detailedRank.isLeader) {
@@ -26676,12 +26681,13 @@ ${prefix}togglecmdvip premium_ia off`);
             message += `┃\n`;
           }
           
+          const totalMidias = (detailedRank.images || 0) + (detailedRank.videos || 0);
           message += `┃ 🏅 Posição: #${detailedRank.rank} de ${detailedRank.total}\n`;
           message += `┃\n`;
           message += `┃ 💬 Mensagens: ${detailedRank.count.toLocaleString('pt-BR')}\n`;
-          message += `┃ 🎭 Figurinhas: ${detailedRank.stickers}\n`;
-          message += `┃ 🖼️ Mídias: ${(detailedRank.images || 0) + (detailedRank.videos || 0)}\n`;
-          message += `┃ 🎵 Áudios: ${detailedRank.audios}\n`;
+          message += `┃ 🎭 Figurinhas: ${detailedRank.stickers || 0}\n`;
+          message += `┃ 🖼️ Mídias: ${totalMidias}\n`;
+          message += `┃ 🎵 Áudios: ${detailedRank.audios || 0}\n`;
           message += `┃\n`;
           
           if (detailedRank.nextUser && !detailedRank.isLeader) {
@@ -26716,7 +26722,8 @@ ${prefix}togglecmdvip premium_ia off`);
           const userName = pushname || sender.split('@')[0];
           const today = new Date();
           const dateStr = today.toLocaleDateString('pt-BR');
-          const totalMedia = (userStats.daily.stickers || 0) + (userStats.daily.images || 0) + (userStats.daily.videos || 0);
+          // Mídias = apenas imagens e vídeos (sem stickers)
+          const totalMedia = (userStats.daily.images || 0) + (userStats.daily.videos || 0);
           
           let message = `╭━━━〔 📊 SUAS ESTATÍSTICAS 〕━━━╮\n`;
           message += `┃\n`;
@@ -26754,7 +26761,8 @@ ${prefix}togglecmdvip premium_ia off`);
           const userStats = msgCounter.getUserStats(from, sender);
           const userRank = msgCounter.getUserRank(from, sender, 'weekly');
           const userName = pushname || sender.split('@')[0];
-          const totalMedia = (userStats.weekly.stickers || 0) + (userStats.weekly.images || 0) + (userStats.weekly.videos || 0);
+          // Mídias = apenas imagens e vídeos (sem stickers)
+          const totalMedia = (userStats.weekly.images || 0) + (userStats.weekly.videos || 0);
           
           let message = `╭━━━〔 📊 SUAS ESTATÍSTICAS SEMANAIS 〕━━━╮\n`;
           message += `┃\n`;
