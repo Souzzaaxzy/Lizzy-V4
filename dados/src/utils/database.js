@@ -49,6 +49,7 @@ import {
   MANDATES_FILE,
   ELECTION_CONFIG_FILE,
   MSG_COUNTER_FILE,
+  PREFIX_MEDIA_FILE,
   CONFIG_FILE
 } from './paths.js';
 
@@ -248,6 +249,7 @@ ensureJsonFileExists(LEVELING_FILE, {
   }]
 });
 ensureJsonFileExists(MSGPREFIX_FILE, { message: false });
+ensureJsonFileExists(PREFIX_MEDIA_FILE, { mediaPath: null, mediaType: null });
 
 // Carrega config para verificar o número do dono
 import { fileURLToPath } from 'url';
@@ -3272,6 +3274,73 @@ const removeGroupCustomPhoto = (groupId) => {
 
 // ============== SISTEMA DE ÁUDIO DO MENU ==============
 
+// ============== SISTEMA DE MÍDIA DA RESPOSTA PREFIXO ==============
+
+const loadPrefixMedia = () => {
+  ensureJsonFileExists(PREFIX_MEDIA_FILE, { mediaPath: null, mediaType: null });
+  return loadJsonFile(PREFIX_MEDIA_FILE);
+};
+
+const savePrefixMedia = (data) => {
+  fs.writeFileSync(PREFIX_MEDIA_FILE, JSON.stringify(data, null, 2));
+};
+
+const isPrefixMediaEnabled = () => {
+  const data = loadPrefixMedia();
+  return data.mediaPath && fs.existsSync(data.mediaPath);
+};
+
+const getPrefixMediaPath = () => {
+  const data = loadPrefixMedia();
+  if (data.mediaPath && fs.existsSync(data.mediaPath)) {
+    return data.mediaPath;
+  }
+  return null;
+};
+
+const getPrefixMediaType = () => {
+  const data = loadPrefixMedia();
+  return data.mediaType || null;
+};
+
+const setPrefixMedia = (mediaPath, mediaType) => {
+  const data = loadPrefixMedia();
+
+  // Remove mídia anterior se existir
+  if (data.mediaPath && fs.existsSync(data.mediaPath)) {
+    try {
+      fs.unlinkSync(data.mediaPath);
+    } catch (error) {
+      console.error('Erro ao remover mídia anterior do prefixo:', error);
+    }
+  }
+
+  data.mediaPath = mediaPath;
+  data.mediaType = mediaType;
+  savePrefixMedia(data);
+  return true;
+};
+
+const removePrefixMedia = () => {
+  const data = loadPrefixMedia();
+
+  // Remove o arquivo físico se existir
+  if (data.mediaPath && fs.existsSync(data.mediaPath)) {
+    try {
+      fs.unlinkSync(data.mediaPath);
+    } catch (error) {
+      console.error('Erro ao remover mídia do prefixo:', error);
+    }
+  }
+
+  data.mediaPath = null;
+  data.mediaType = null;
+  savePrefixMedia(data);
+  return true;
+};
+
+// ============== SISTEMA DE ÁUDIO DO MENU ==============
+
 const loadMenuAudio = () => {
   ensureJsonFileExists(MENU_AUDIO_FILE, { enabled: false, audioPath: null });
   return loadJsonFile(MENU_AUDIO_FILE);
@@ -3514,6 +3583,14 @@ export {
   isMenuLerMaisEnabled,
   setMenuLerMais,
   getMenuLerMaisText,
+  // Sistema de Mídia da Resposta Prefixo
+  loadPrefixMedia,
+  savePrefixMedia,
+  isPrefixMediaEnabled,
+  getPrefixMediaPath,
+  getPrefixMediaType,
+  setPrefixMedia,
+  removePrefixMedia,
   // Funções de combate
   calculateCombatStats,
   // Sistema de Momentos

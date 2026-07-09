@@ -58,6 +58,7 @@ const ELECTIONS_FILE = path.join(DATABASE_DIR, 'elections.json');
 const MANDATES_FILE = path.join(DATABASE_DIR, 'mandates.json');
 const ELECTION_CONFIG_FILE = path.join(DATABASE_DIR, 'electionConfig.json');
 const MSG_COUNTER_FILE = path.join(DATABASE_DIR, 'msgcounter.json');
+const PREFIX_MEDIA_FILE = path.join(DONO_DIR, 'prefixMedia.json');
 
 // Detecta se é sub-bot e ajusta o caminho do config
 const CONFIG_FILE = process.env.CONFIG_PATH || path.join(SRC_DIR, 'config.json');
@@ -114,6 +115,7 @@ export {
   MANDATES_FILE,
   ELECTION_CONFIG_FILE,
   MSG_COUNTER_FILE,
+  PREFIX_MEDIA_FILE,
   CONFIG_FILE,
   PACKAGE_JSON_PATH
 };
