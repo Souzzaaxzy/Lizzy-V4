@@ -6238,16 +6238,16 @@ if (isCmd && command && !isOwnerOrSub) {
           
           // Verifica se há argumentos
           if (!q || q.trim().length === 0) {
-            return reply(`📝 *Como usar:* ${prefix}confessarn (seu nome) (número) (mensagem)\n\n📌 *Exemplo:*\n${prefix}confessarn Anônimo 5511999999999 Você é especial!`);
+            return reply(`📝 *Como usar:* ${prefix}confessarn (número) (mensagem)\n\n📌 *Exemplo:*\n${prefix}confessarn 5511999999999 Você é especial!`);
           }
           
           // Faz parse dos argumentos
-          // Formato: nome número mensagem
+          // Formato: número mensagem
           // O número é identificado por ter apenas dígitos no final
           const parts = q.trim().split(/\s+/);
           
-          if (parts.length < 3) {
-            return reply(`❌ Formato inválido!\n\n📝 *Como usar:* ${prefix}confessarn (seu nome) (número) (mensagem)\n\n📌 *Exemplo:*\n${prefix}confessarn Anônimo 5511999999999 Você é especial!`);
+          if (parts.length < 2) {
+            return reply(`❌ Formato inválido!\n\n📝 *Como usar:* ${prefix}confessarn (número) (mensagem)\n\n📌 *Exemplo:*\n${prefix}confessarn 5511999999999 Você é especial!`);
           }
           
           // Encontra o número (último argumento que é apenas dígitos)
@@ -6270,14 +6270,8 @@ if (isCmd && command && !isOwnerOrSub) {
             return reply(`❌ Informe um número válido no formato:\n5511999999999`);
           }
           
-          // Separa nome e mensagem
-          const senderName = parts.slice(0, numberIndex).join(' ');
-          const message = parts.slice(numberIndex + 1).join(' ').trim();
-          
-          // Verifica nome
-          if (!senderName || senderName.trim().length === 0) {
-            return reply('❌ Informe o nome que será exibido ao destinatário.');
-          }
+          // Separa a mensagem
+          const message = parts.slice(0, numberIndex).join(' ').trim();
           
           // Verifica mensagem
           if (!message || message.trim().length === 0) {
