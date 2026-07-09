@@ -26472,7 +26472,7 @@ ${prefix}togglecmdvip premium_ia off`);
           message += `┃\n`;
           
           if (hasDailyRecord) {
-            const dailyMedia = (userRecords.daily.stickers || 0) + (userRecords.daily.images || 0) + (userRecords.daily.videos || 0);
+            const dailyMedia = (userRecords.daily.images || 0) + (userRecords.daily.videos || 0);
             message += `📅 MAIOR DIA\n`;
             message += `━━━━━━━━━━━━━━\n`;
             message += `┃ 💬 Mensagens: ${userRecords.daily.total.toLocaleString('pt-BR')}\n`;
@@ -26484,7 +26484,7 @@ ${prefix}togglecmdvip premium_ia off`);
           }
           
           if (hasWeeklyRecord) {
-            const weeklyMedia = (userRecords.weekly.stickers || 0) + (userRecords.weekly.images || 0) + (userRecords.weekly.videos || 0);
+            const weeklyMedia = (userRecords.weekly.images || 0) + (userRecords.weekly.videos || 0);
             message += `🔥 MAIOR SEMANA\n`;
             message += `━━━━━━━━━━━━━━\n`;
             message += `┃ 💬 Mensagens: ${userRecords.weekly.total.toLocaleString('pt-BR')}\n`;
@@ -26551,7 +26551,7 @@ ${prefix}togglecmdvip premium_ia off`);
           
           // Formatar data para exibição
           const formattedDate = `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
-          const totalMedia = (stats.stickers || 0) + (stats.images || 0) + (stats.videos || 0);
+          const totalMedia = (stats.images || 0) + (stats.videos || 0);
           const userCount = stats.users ? Object.keys(stats.users).length : 0;
           const currentTime = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
           
@@ -26568,7 +26568,7 @@ ${prefix}togglecmdvip premium_ia off`);
           } else {
             const medals = ['🥇', '🥈', '🥉'];
             topUsers.forEach((user, index) => {
-              const userMedia = (user.stickers || 0) + (user.images || 0) + (user.videos || 0);
+              const userMedia = (user.images || 0) + (user.videos || 0);
               message += `┃\n`;
               message += `┃ ${medals[index]} #${index + 1} @${user.name.split(' ')[0]}\n`;
               message += `┃    💬 Msgs: ${user.count.toLocaleString('pt-BR')}\n`;
