@@ -17,6 +17,7 @@ import RentalExpirationManager from './utils/rentalExpirationManager.js';
 import ElectionManager from './utils/electionManager.js';
 import { loadMsgBotOn } from './utils/database.js';
 import { buildUserId } from './utils/helpers.js';
+import msgCounter from './utils/msgCounter.js';
 // ATENÇÃO: Se o seu arquivo se chama 'index-2(2).js', RENOMEIE PARA 'index.js'
 // ou mude o caminho abaixo para './index-2(2).js'
 import { handleGroupParticipantsUpdate } from './index.js';
@@ -1482,6 +1483,10 @@ async function createBotSocket(authDir) {
 
                     const electionManager = new ElectionManager(AbyssSock);
                     await electionManager.initialize();
+
+                    // Inicializa o sistema de contador de mensagens com reset automático
+                    msgCounter.initResetScheduler(AbyssSock);
+                    console.log('✅ Sistema de contador de mensagens inicializado');
 
                     attachMessagesListener();
                     startCacheCleanup(); // Inicia o sistema de limpeza de cache

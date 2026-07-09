@@ -58,9 +58,23 @@ ${middleBorder}${menuItemIcon}${prefix}rankativo
 ${middleBorder}${menuItemIcon}${prefix}rankinativo
 ${middleBorder}${menuItemIcon}${prefix}rankativos
 ${middleBorder}${menuItemIcon}${prefix}atividade
-${middleBorder}${menuItemIcon}${prefix}checkativo
+${middleBorder}${menuItemIcon}${prefix}checkativo / meativo
 ${middleBorder}${menuItemIcon}${prefix}totalcmd
 ${middleBorder}${menuItemIcon}${prefix}topcmd
+${bottomBorder}
+
+${menuTopBorder}
+│ 📊 ESTATÍSTICAS DE MENSAGENS
+${middleBorder}
+${middleBorder}${menuItemIcon}${prefix}msgdiario
+${middleBorder}${menuItemIcon}${prefix}msgsemanal
+${middleBorder}${menuItemIcon}${prefix}topdiario
+${middleBorder}${menuItemIcon}${prefix}topsemanal
+${middleBorder}${menuItemIcon}${prefix}mediario
+${middleBorder}${menuItemIcon}${prefix}mesemanal
+${middleBorder}${menuItemIcon}${prefix}vermetas
+${middleBorder}${menuItemIcon}${prefix}setdiario [número] (admin)
+${middleBorder}${menuItemIcon}${prefix}setsemanal [número] (admin)
 ${bottomBorder}
 
 ${menuTopBorder}

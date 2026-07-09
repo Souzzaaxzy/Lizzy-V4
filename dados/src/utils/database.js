@@ -48,6 +48,7 @@ import {
   ELECTIONS_FILE,
   MANDATES_FILE,
   ELECTION_CONFIG_FILE,
+  MSG_COUNTER_FILE,
   CONFIG_FILE
 } from './paths.js';
 

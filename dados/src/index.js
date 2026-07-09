@@ -157,6 +157,7 @@ import captchaIndex, { initCaptchaIndex, addCaptcha, removeCaptcha, getCaptcha, 
 import CaptchaIndex from './utils/captchaIndex.js';
 import npcManager from './utils/npcManager.js';
 import nameReactions from './utils/nameReactions.js';
+import msgCounter from './utils/msgCounter.js';
 import fsPromises from 'fs/promises';
 import {
   formatUptime,
@@ -3168,6 +3169,50 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
         // Otimização: Invalida cache quando groupData é salvo
         if (isGroup) {
           optimizer.invalidateGroup(from);
+        }
+        
+        // ═══════════════════════════════════════════════════════════════
+        // 📊 SISTEMA DE CONTADOR DE MENSAGENS (NOVO)
+        // ═══════════════════════════════════════════════════════════════
+        try {
+          const userName = pushname || sender.split('@')[0];
+          const counts = msgCounter.incrementMessageCount(from, sender, userName);
+          
+          // Verificar se alguma meta foi atingida
+          const goalsResult = msgCounter.checkGoals(from);
+          
+          if (goalsResult.daily.reached) {
+            const stats = msgCounter.getGroupStats(from);
+            const goalMsg = `╭━━━〔 🎉 META DIÁRIA ATINGIDA! 〕━━━╮\n` +
+              `┃\n` +
+              `┃ 🎯 O grupo alcançou a meta de\n` +
+              `┃ ${stats.settings.dailyGoal.toLocaleString('pt-BR')} mensagens hoje!\n` +
+              `┃\n` +
+              `┃ 💬 Total: ${counts.dailyTotal.toLocaleString('pt-BR')} mensagens\n` +
+              `┃\n` +
+              `┃ Obrigado pela participação de todos! 🚀\n` +
+              `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
+            
+            await nazu.sendMessage(from, { text: goalMsg });
+          }
+          
+          if (goalsResult.weekly.reached) {
+            const stats = msgCounter.getGroupStats(from);
+            const goalMsg = `╭━━━〔 🎉 META SEMANAL ATINGIDA! 〕━━━╮\n` +
+              `┃\n` +
+              `┃ 🎯 O grupo alcançou a meta de\n` +
+              `┃ ${stats.settings.weeklyGoal.toLocaleString('pt-BR')} mensagens\n` +
+              `┃ nesta semana!\n` +
+              `┃\n` +
+              `┃ 💬 Total: ${counts.weeklyTotal.toLocaleString('pt-BR')} mensagens\n` +
+              `┃\n` +
+              `┃ Parabéns a todos que participaram! 🏆\n` +
+              `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
+            
+            await nazu.sendMessage(from, { text: goalMsg });
+          }
+        } catch (msgCounterError) {
+          console.error('❌ Erro no sistema de contador de mensagens:', msgCounterError.message);
         }
       } catch (error) {
         console.error("Erro no sistema de contagem de mensagens:", error);
@@ -25982,6 +26027,7 @@ ${prefix}togglecmdvip premium_ia off`);
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
         }
         break;
+      case 'meativo':
       case 'checkativo':
         try {
           if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
@@ -26112,6 +26158,316 @@ ${prefix}togglecmdvip premium_ia off`);
           await reply("❌ Ocorreu um erro ao mostrar a atividade. Tente novamente.");
         }
         break;
+      
+      // ═══════════════════════════════════════════════════════════════
+      // 📊 SISTEMA DE CONTADOR DE MENSAGENS - NOVOS COMANDOS
+      // ═══════════════════════════════════════════════════════════════
+      
+      case 'msgdiario':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          
+          const stats = msgCounter.getGroupStats(from);
+          const userCount = Object.keys(stats.daily.users).length;
+          
+          let message = `╭━━━〔 📅 ESTATÍSTICAS DIÁRIAS 〕━━━╮\n`;
+          message += `┃\n`;
+          message += `┃ 💬 Mensagens hoje: ${stats.daily.total.toLocaleString('pt-BR')}\n`;
+          message += `┃ 👥 Usuários ativos: ${userCount}\n`;
+          
+          if (stats.settings.dailyGoal) {
+            const progress = Math.min(100, Math.round((stats.daily.total / stats.settings.dailyGoal) * 100));
+            const bar = '█'.repeat(Math.floor(progress / 10)) + '░'.repeat(10 - Math.floor(progress / 10));
+            message += `┃\n`;
+            message += `┃ 🎯 Meta: ${stats.settings.dailyGoal.toLocaleString('pt-BR')}\n`;
+            message += `┃ 📊 [${bar}] ${progress}%\n`;
+          }
+          
+          message += `┃\n`;
+          message += `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
+          
+          await reply(message);
+        } catch (e) {
+          console.error('[MSGDIARIO] Erro:', e);
+          await reply("❌ Ocorreu um erro ao buscar as estatísticas. Tente novamente.");
+        }
+        break;
+        
+      case 'msgsemanal':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          
+          const stats = msgCounter.getGroupStats(from);
+          const userCount = Object.keys(stats.weekly.users).length;
+          
+          let message = `╭━━━〔 📆 ESTATÍSTICAS SEMANAIS 〕━━━╮\n`;
+          message += `┃\n`;
+          message += `┃ 💬 Mensagens na semana: ${stats.weekly.total.toLocaleString('pt-BR')}\n`;
+          message += `┃ 👥 Usuários ativos: ${userCount}\n`;
+          
+          if (stats.settings.weeklyGoal) {
+            const progress = Math.min(100, Math.round((stats.weekly.total / stats.settings.weeklyGoal) * 100));
+            const bar = '█'.repeat(Math.floor(progress / 10)) + '░'.repeat(10 - Math.floor(progress / 10));
+            message += `┃\n`;
+            message += `┃ 🎯 Meta: ${stats.settings.weeklyGoal.toLocaleString('pt-BR')}\n`;
+            message += `┃ 📊 [${bar}] ${progress}%\n`;
+          }
+          
+          message += `┃\n`;
+          message += `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
+          
+          await reply(message);
+        } catch (e) {
+          console.error('[MSGSEMANAL] Erro:', e);
+          await reply("❌ Ocorreu um erro ao buscar as estatísticas. Tente novamente.");
+        }
+        break;
+        
+      case 'topdiario':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          
+          const topUsers = msgCounter.getTopUsers(from, 'daily', 5);
+          const userRank = msgCounter.getUserRank(from, sender, 'daily');
+          
+          let message = `╭━━━〔 🏆 TOP 5 DIÁRIO 〕━━━╮\n`;
+          message += `┃\n`;
+          
+          if (topUsers.length === 0) {
+            message += `┃ Nenhuma mensagem hoje ainda.\n`;
+            message += `┃ Seja o primeiro a mandar! 💪\n`;
+          } else {
+            const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
+            topUsers.forEach((user, index) => {
+              message += `┃ ${medals[index]} ${user.name}\n`;
+              message += `┃    └─ 💬 ${user.count.toLocaleString('pt-BR')} mensagens\n`;
+            });
+            
+            if (userRank.rank > 0 && userRank.rank <= 10) {
+              message += `┃\n`;
+              message += `┃ 📍 Sua posição: #${userRank.rank}\n`;
+            }
+          }
+          
+          message += `┃\n`;
+          message += `╰━━━━━━━━━━━━━━━━━━━━╯`;
+          
+          await reply(message);
+        } catch (e) {
+          console.error('[TOPDIARIO] Erro:', e);
+          await reply("❌ Ocorreu um erro ao buscar o ranking. Tente novamente.");
+        }
+        break;
+        
+      case 'topsemanal':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          
+          const topUsers = msgCounter.getTopUsers(from, 'weekly', 5);
+          const userRank = msgCounter.getUserRank(from, sender, 'weekly');
+          
+          let message = `╭━━━〔 🏆 TOP 5 SEMANAL 〕━━━╮\n`;
+          message += `┃\n`;
+          
+          if (topUsers.length === 0) {
+            message += `┃ Nenhuma mensagem esta semana.\n`;
+            message += `┃ Vamos começar! 🚀\n`;
+          } else {
+            const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
+            topUsers.forEach((user, index) => {
+              message += `┃ ${medals[index]} ${user.name}\n`;
+              message += `┃    └─ 💬 ${user.count.toLocaleString('pt-BR')} mensagens\n`;
+            });
+            
+            if (userRank.rank > 0 && userRank.rank <= 10) {
+              message += `┃\n`;
+              message += `┃ 📍 Sua posição: #${userRank.rank}\n`;
+            }
+          }
+          
+          message += `┃\n`;
+          message += `╰━━━━━━━━━━━━━━━━━━━━━╯`;
+          
+          await reply(message);
+        } catch (e) {
+          console.error('[TOPSEMANAL] Erro:', e);
+          await reply("❌ Ocorreu um erro ao buscar o ranking. Tente novamente.");
+        }
+        break;
+        
+      case 'mediario':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          
+          const userStats = msgCounter.getUserStats(from, sender);
+          const userRank = msgCounter.getUserRank(from, sender, 'daily');
+          const userName = pushname || sender.split('@')[0];
+          
+          let message = `╭━━━〔 📅 SEU DIÁRIO 〕━━━╮\n`;
+          message += `┃\n`;
+          message += `┃ 👤 ${userName}\n`;
+          message += `┃\n`;
+          message += `┃ 💬 Mensagens hoje: ${userStats.daily.count.toLocaleString('pt-BR')}\n`;
+          
+          if (userRank.rank > 0) {
+            message += `┃ 🏆 Ranking: #${userRank.rank}\n`;
+          }
+          
+          message += `┃\n`;
+          message += `╰━━━━━━━━━━━━━━━━╯`;
+          
+          await reply(message);
+        } catch (e) {
+          console.error('[MEDIARIO] Erro:', e);
+          await reply("❌ Ocorreu um erro ao buscar suas estatísticas. Tente novamente.");
+        }
+        break;
+        
+      case 'mesemanal':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          
+          const userStats = msgCounter.getUserStats(from, sender);
+          const userRank = msgCounter.getUserRank(from, sender, 'weekly');
+          const userName = pushname || sender.split('@')[0];
+          
+          let message = `╭━━━〔 📆 SEU SEMANAL 〕━━━╮\n`;
+          message += `┃\n`;
+          message += `┃ 👤 ${userName}\n`;
+          message += `┃\n`;
+          message += `┃ 💬 Mensagens na semana: ${userStats.weekly.count.toLocaleString('pt-BR')}\n`;
+          
+          if (userRank.rank > 0) {
+            message += `┃ 🏆 Ranking: #${userRank.rank}\n`;
+          }
+          
+          message += `┃\n`;
+          message += `╰━━━━━━━━━━━━━━━━━╯`;
+          
+          await reply(message);
+        } catch (e) {
+          console.error('[MESEMANAL] Erro:', e);
+          await reply("❌ Ocorreu um erro ao buscar suas estatísticas. Tente novamente.");
+        }
+        break;
+        
+      case 'setdiario':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          
+          // Verificar se é admin ou dono
+          const isAdmin = isGroupAdmins || isBotAdmin;
+          const isOwner = sender === numerodono;
+          
+          if (!isAdmin && !isOwner) {
+            return reply("◈ Apenas admins podem definir metas.");
+          }
+          
+          const args = body.trim().split(' ');
+          const goalValue = parseInt(args[1]);
+          
+          if (isNaN(goalValue) || goalValue < 1) {
+            return reply(`◈ Uso incorreto!\n\n📝 Exemplo: *${groupPrefix}setdiario 10000*\n\n💡 Defina uma meta diária de mensagens para o grupo.`);
+          }
+          
+          msgCounter.setDailyGoal(from, goalValue);
+          
+          const message = `╭━━━〔 🎯 META DIÁRIA DEFINIDA 〕━━━╮\n`;
+          message += `┃\n`;
+          message += `┃ ✅ Meta diária configurada!\n`;
+          message += `┃\n`;
+          message += `┃ 🎯 Meta: ${goalValue.toLocaleString('pt-BR')} mensagens\n`;
+          message += `┃\n`;
+          message += `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
+          
+          await reply(message);
+        } catch (e) {
+          console.error('[SETDIARIO] Erro:', e);
+          await reply("❌ Ocorreu um erro ao definir a meta. Tente novamente.");
+        }
+        break;
+        
+      case 'setsemanal':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          
+          // Verificar se é admin ou dono
+          const isAdmin = isGroupAdmins || isBotAdmin;
+          const isOwner = sender === numerodono;
+          
+          if (!isAdmin && !isOwner) {
+            return reply("◈ Apenas admins podem definir metas.");
+          }
+          
+          const args = body.trim().split(' ');
+          const goalValue = parseInt(args[1]);
+          
+          if (isNaN(goalValue) || goalValue < 1) {
+            return reply(`◈ Uso incorreto!\n\n📝 Exemplo: *${groupPrefix}setsemanal 50000*\n\n💡 Defina uma meta semanal de mensagens para o grupo.`);
+          }
+          
+          msgCounter.setWeeklyGoal(from, goalValue);
+          
+          const message = `╭━━━〔 🎯 META SEMANAL DEFINIDA 〕━━━╮\n`;
+          message += `┃\n`;
+          message += `┃ ✅ Meta semanal configurada!\n`;
+          message += `┃\n`;
+          message += `┃ 🎯 Meta: ${goalValue.toLocaleString('pt-BR')} mensagens\n`;
+          message += `┃\n`;
+          message += `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
+          
+          await reply(message);
+        } catch (e) {
+          console.error('[SETSEMANAL] Erro:', e);
+          await reply("❌ Ocorreu um erro ao definir a meta. Tente novamente.");
+        }
+        break;
+        
+      case 'vermetas':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          
+          const stats = msgCounter.getGroupStats(from);
+          
+          let message = `╭━━━〔 🎯 METAS DO GRUPO 〕━━━╮\n`;
+          message += `┃\n`;
+          
+          // Meta diária
+          if (stats.settings.dailyGoal) {
+            const progress = Math.min(100, Math.round((stats.daily.total / stats.settings.dailyGoal) * 100));
+            const bar = '█'.repeat(Math.floor(progress / 10)) + '░'.repeat(10 - Math.floor(progress / 10));
+            message += `┃ 📅 Meta Diária\n`;
+            message += `┃ Meta: ${stats.settings.dailyGoal.toLocaleString('pt-BR')}\n`;
+            message += `┃ Atual: ${stats.daily.total.toLocaleString('pt-BR')}\n`;
+            message += `┃ [${bar}] ${progress}%\n`;
+          } else {
+            message += `┃ 📅 Meta Diária: Não definida\n`;
+          }
+          
+          message += `┃\n`;
+          
+          // Meta semanal
+          if (stats.settings.weeklyGoal) {
+            const progress = Math.min(100, Math.round((stats.weekly.total / stats.settings.weeklyGoal) * 100));
+            const bar = '█'.repeat(Math.floor(progress / 10)) + '░'.repeat(10 - Math.floor(progress / 10));
+            message += `┃ 📆 Meta Semanal\n`;
+            message += `┃ Meta: ${stats.settings.weeklyGoal.toLocaleString('pt-BR')}\n`;
+            message += `┃ Atual: ${stats.weekly.total.toLocaleString('pt-BR')}\n`;
+            message += `┃ [${bar}] ${progress}%\n`;
+          } else {
+            message += `┃ 📆 Meta Semanal: Não definida\n`;
+          }
+          
+          message += `┃\n`;
+          message += `╰━━━━━━━━━━━━━━━━━━━━━━━━╯`;
+          
+          await reply(message);
+        } catch (e) {
+          console.error('[VERMETAS] Erro:', e);
+          await reply("❌ Ocorreu um erro ao buscar as metas. Tente novamente.");
+        }
+        break;
+        
       case 'totalcmd':
       case 'totalcomando':
         try {
