@@ -72,6 +72,10 @@ const initGroupCounter = (groupId) => {
       daily: {
         date: today.date,
         total: 0,
+        stickers: 0,
+        images: 0,
+        videos: 0,
+        audios: 0,
         users: {},
         goalReached: false,
         goalNotificationSent: false
@@ -79,6 +83,10 @@ const initGroupCounter = (groupId) => {
       weekly: {
         weekStart: today.weekStart,
         total: 0,
+        stickers: 0,
+        images: 0,
+        videos: 0,
+        audios: 0,
         users: {},
         goalReached: false,
         goalNotificationSent: false
@@ -100,14 +108,22 @@ const initUserCounter = (groupData, userId, userName) => {
   if (!groupData.daily.users[userId]) {
     groupData.daily.users[userId] = {
       name: userName || 'Usuário',
-      count: 0
+      count: 0,
+      stickers: 0,
+      images: 0,
+      videos: 0,
+      audios: 0
     };
   }
   
   if (!groupData.weekly.users[userId]) {
     groupData.weekly.users[userId] = {
       name: userName || 'Usuário',
-      count: 0
+      count: 0,
+      stickers: 0,
+      images: 0,
+      videos: 0,
+      audios: 0
     };
   }
   
@@ -178,7 +194,7 @@ const isNewWeek = (lastReset) => {
 // 📝 CONTAGEM DE MENSAGENS
 // ═══════════════════════════════════════════════════════════════
 
-const incrementMessageCount = (groupId, userId, userName) => {
+const incrementMessageCount = (groupId, userId, userName, messageType = 'text') => {
   const data = loadMsgCounterData();
   const groupData = initGroupCounter(groupId);
   const today = getDateInfo();
@@ -188,6 +204,10 @@ const incrementMessageCount = (groupId, userId, userName) => {
     groupData.daily = {
       date: today.date,
       total: 0,
+      stickers: 0,
+      images: 0,
+      videos: 0,
+      audios: 0,
       users: {},
       goalReached: false,
       goalNotificationSent: false
@@ -199,6 +219,10 @@ const incrementMessageCount = (groupId, userId, userName) => {
     groupData.weekly = {
       weekStart: today.weekStart,
       total: 0,
+      stickers: 0,
+      images: 0,
+      videos: 0,
+      audios: 0,
       users: {},
       goalReached: false,
       goalNotificationSent: false
@@ -216,6 +240,29 @@ const incrementMessageCount = (groupId, userId, userName) => {
   groupData.weekly.total += 1;
   groupData.weekly.users[userId].count += 1;
   groupData.weekly.users[userId].name = userName || groupData.weekly.users[userId].name;
+  
+  // Incrementar tipo específico
+  if (messageType === 'sticker') {
+    groupData.daily.stickers += 1;
+    groupData.daily.users[userId].stickers += 1;
+    groupData.weekly.stickers += 1;
+    groupData.weekly.users[userId].stickers += 1;
+  } else if (messageType === 'image') {
+    groupData.daily.images += 1;
+    groupData.daily.users[userId].images += 1;
+    groupData.weekly.images += 1;
+    groupData.weekly.users[userId].images += 1;
+  } else if (messageType === 'video') {
+    groupData.daily.videos += 1;
+    groupData.daily.users[userId].videos += 1;
+    groupData.weekly.videos += 1;
+    groupData.weekly.users[userId].videos += 1;
+  } else if (messageType === 'audio') {
+    groupData.daily.audios += 1;
+    groupData.daily.users[userId].audios += 1;
+    groupData.weekly.audios += 1;
+    groupData.weekly.users[userId].audios += 1;
+  }
   
   groupData.lastUpdate = new Date().toISOString();
   data.groups[groupId] = groupData;
