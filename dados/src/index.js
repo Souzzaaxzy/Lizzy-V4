@@ -160,6 +160,18 @@ import nameReactions from './utils/nameReactions.js';
 import msgCounter from './utils/msgCounter.js';
 import fsPromises from 'fs/promises';
 import {
+  parseTimeToMs,
+  formatTimeRemaining,
+  isUserTempMuted,
+  addTempMute,
+  removeTempMute,
+  getTempMuteInfo,
+  startCleanupScheduler,
+  setMuteExpiredCallback,
+  shouldSendWarning,
+  clearWarningCooldown
+} from './utils/tempMute.js';
+import {
   formatUptime,
   normalizar,
   isGroupId,
@@ -1305,6 +1317,9 @@ setInterval(() => {
   saveJidLidCache();
 }, 5 * 60 * 1000);
 
+// Inicializa o sistema de cleanup de mutes temporários
+startCleanupScheduler();
+
 // ═══════════════════════════════════════════════════════════════
 // 🤖 NPC NEWSPAPER CRON JOB - Registrado uma única vez ao iniciar o bot
 // ═══════════════════════════════════════════════════════════════
@@ -1339,6 +1354,20 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
   // Log de início de processamento para debug paralelo
   const msgId = info?.key?.id?.slice(-6) || 'unknown';
   const from = info?.key?.remoteJid || 'unknown';
+  
+  // Configura callback para notificar expiração de mutes temporários
+  setMuteExpiredCallback(async (groupId, userId, muteInfo) => {
+    try {
+      const userName = await getUserName(userId);
+      await nazu.sendMessage(groupId, {
+        text: `🔊 O mute temporário de @${userName} expirou. Ele agora pode enviar mensagens normalmente.`,
+        mentions: [userId]
+      });
+      console.log(`[TEMPMUTE] Mute expirado: ${userId} no grupo ${groupId}`);
+    } catch (e) {
+      console.error('[TEMPMUTE] Erro ao notificar expiração:', e);
+    }
+  });
 
   let config = loadJsonFile(CONFIG_FILE, {});
   ensureDatabaseIntegrity({ log: Boolean(config?.debug) });
@@ -2712,6 +2741,8 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     const isAntiPorn = groupData.antiporn;
     const isMuted = isUserInMap(groupData.mutedUsers, sender);
     const isMuted2 = isUserInMap(groupData.mutedUsers2, sender);
+    const tempMuteStatus = isUserTempMuted(from, sender, idsMatch);
+    const isTempMuted = tempMuteStatus.muted;
     const isAntiLinkGp = groupData.antilinkgp;
     const isAntiLinkCanal = groupData.antilinkcanal;
     const isAntiLinkSoft = groupData.antilinksoft;
@@ -2725,10 +2756,21 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     const isModoLite = isGroup && isModoLiteActive(groupData, modoLiteGlobal);
 
     // Lógica para apagar mensagens de usuários mutados automaticamente
-    if (isGroup && (isMuted || isMuted2) && !isGroupAdmin && !isOwner) {
+    if (isGroup && (isMuted || isMuted2 || isTempMuted) && !isGroupAdmin && !isOwner) {
       if (isBotAdmin) {
         try {
           await nazu.sendMessage(from, { delete: info.key });
+          
+          // Se for mute temporário, enviar aviso (com cooldown para evitar spam)
+          if (isTempMuted && shouldSendWarning(sender, from, 30000)) {
+            const remaining = tempMuteStatus.remaining;
+            const formattedTime = formatTimeRemaining(remaining);
+            await nazu.sendMessage(from, {
+              text: `🔇 @${getUserName(sender)}, você está mutado por mais ${formattedTime}.`,
+              mentions: [sender]
+            });
+          }
+          
           return; // Interrompe o processamento para que o bot não responda nada
         } catch (e) {
           console.error("Erro ao apagar mensagem de usuário mutado:", e);
@@ -5236,7 +5278,7 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
 
               // Lista de comandos que precisam de menção (@user)
               const commandsNeedMention = ['ban', 'ban2', 'kick', 'promover', 'rebaixar', 'mute', 'desmute',
-                'mute2', 'desmute2', 'adv', 'rmadv', 'userinfo', 'perfil', 'rep', 'presente', 'denunciar',
+                'mute2', 'desmute2', 'mutet', 'unmutet', 'adv', 'rmadv', 'userinfo', 'perfil', 'rep', 'presente', 'denunciar',
                 'blockuser', 'unblockuser', 'addblacklist', 'delblacklist', 'addmod', 'delmod'];
 
               // Se o comando precisa de menção e temos uma menção/quoted, adiciona ao args
@@ -32745,6 +32787,120 @@ case 'assistent':
           reply("ocorreu um erro 💔");
         }
         break;
+
+      // ═══════════════════════════════════════════════════════════════
+      // 🔇 SISTEMA DE MUTE TEMPORÁRIO
+      // ═══════════════════════════════════════════════════════════════
+      case 'mutet':
+        try {
+          if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
+          if (!isGroupAdmin) return reply("🚫 Você precisa ser administrador para usar este comando.");
+          if (!isBotAdmin) return sendAbyssWarning("⚠️ Eu preciso ser administrador para apagar mensagens.");
+          if (!menc_os2) return reply(`📝 *Como usar:* ${prefix}mutet @usuário <tempo>\n\n⏱️ *Exemplos:*\n• ${prefix}mutet @user 30s\n• ${prefix}mutet @user 15m\n• ${prefix}mutet @user 2h\n• ${prefix}mutet @user 7d\n\n🕐 *Unidades:* s=segundos, m=minutos, h=horas, d=dias`);
+          
+          // Obter o ID do usuário normalizado
+          const tempMuteTargetId = await normalizeUserId(nazu, menc_os2);
+          const botNumber = nazu.user?.id?.replace(':null', '') || '';
+          const botLid = botNumber.includes('@lid') ? botNumber.split('@')[0] : null;
+          
+          // Verificações de proteção
+          if (idsMatch(tempMuteTargetId, botNumber) || (botLid && idsMatch(tempMuteTargetId, botLid + '@lid'))) {
+            return reply("❌ Não posso mutar a mim mesmo.");
+          }
+          
+          if (idInArray(tempMuteTargetId, groupAdmins) || idInArray(tempMuteTargetId.replace('@lid', '').replace('@s.whatsapp.net', ''), groupAdmins?.map(a => a.replace('@lid', '').replace('@s.whatsapp.net', '')))) {
+            return reply("❌ Não posso mutar administradores.");
+          }
+          
+          if (tempMuteTargetId === nmrdn || tempMuteTargetId.replace('@lid', '').replace('@s.whatsapp.net', '') === nmrdn?.replace('@lid', '').replace('@s.whatsapp.net', '')) {
+            return reply("❌ Não posso mutar o dono do grupo.");
+          }
+          
+          // Verificar se já está temporariamente mutado
+          const existingMute = getTempMuteInfo(from, tempMuteTargetId, idsMatch);
+          if (existingMute) {
+            const remaining = formatTimeRemaining(existingMute.remaining);
+            return reply(`⚠️ @${getUserName(menc_os2)} já está mutado por mais ${remaining}.\n\n🕐 Aguarde o mute expirar ou use ${prefix}unmutet @usuário para remover.`, {
+              mentions: [menc_os2]
+            });
+          }
+          
+          // Verificar se o mute permanente existe
+          if (isUserInMap(groupData.mutedUsers, tempMuteTargetId)) {
+            return reply(`⚠️ @${getUserName(menc_os2)} já está mutado permanentemente.\n\n🗑️ Use ${prefix}desmute @usuário para remover o mute permanente primeiro.`, {
+              mentions: [menc_os2]
+            });
+          }
+          
+          // Parse do tempo
+          const timeInput = args.find(arg => /^\d+[smhd]$/i.test(arg.trim()));
+          if (!timeInput) {
+            return reply(`❌ Tempo inválido!\n\n📝 *Formato:* ${prefix}mutet @usuário <tempo>\n\n⏱️ *Exemplos:*\n• ${prefix}mutet @user 30s\n• ${prefix}mutet @user 15m\n• ${prefix}mutet @user 2h\n• ${prefix}mutet @user 7d\n\n🕐 *Unidades:* s=segundos, m=minutos, h=horas, d=dias`);
+          }
+          
+          const durationMs = parseTimeToMs(timeInput);
+          if (!durationMs || durationMs < 1000) {
+            return reply("❌ O tempo deve ser de pelo menos 1 segundo.");
+          }
+          
+          // Aplicar mute
+          const adminName = getUserName(sender);
+          const result = addTempMute(from, tempMuteTargetId, sender, adminName, timeInput);
+          
+          if (!result.success) {
+            return reply("❌ Erro ao aplicar mute temporário. Tente novamente.");
+          }
+          
+          const expiresAt = new Date(result.endTime);
+          const expiresAtStr = expiresAt.toLocaleString('pt-BR', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          });
+          
+          const formattedDuration = formatTimeRemaining(durationMs);
+          
+          await nazu.sendMessage(from, {
+            text: `╭━━━〔 🔇 MUTE TEMPORÁRIO 〕━━━╮\n┃\n┃ 👤 Usuário: @${getUserName(menc_os2)}\n┃ 👮 Aplicado por: @${adminName}\n┃ ⏳ Duração: ${formattedDuration}\n┃ 🕒 Expira em: ${expiresAtStr}\n┃\n╰━━━━━━━━━━━━━━━━━━━━╯`,
+            mentions: [menc_os2, sender]
+          }, { quoted: info });
+          
+        } catch (e) {
+          console.error('Erro no comando mutet:', e);
+          reply("❌ Ocorreu um erro ao mutar o usuário. Tente novamente.");
+        }
+        break;
+        
+      case 'unmutet':
+        try {
+          if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
+          if (!isGroupAdmin) return reply("🚫 Você precisa ser administrador para usar este comando.");
+          if (!menc_os2) return reply("📝 *Como usar:* ${prefix}unmutet @usuário");
+          
+          const tempUnmuteTargetId = await normalizeUserId(nazu, menc_os2);
+          
+          const result = removeTempMute(from, tempUnmuteTargetId, idsMatch);
+          
+          if (result.success) {
+            const adminName = getUserName(sender);
+            await nazu.sendMessage(from, {
+              text: `╭━━━〔 🔊 MUTE REMOVIDO 〕━━━╮\n┃\n┃ 👤 Usuário: @${getUserName(menc_os2)}\n┃ 👮 Removido por: @${adminName}\n┃\n╰━━━━━━━━━━━━━━━━━━━━╯`,
+              mentions: [menc_os2, sender]
+            }, { quoted: info });
+          } else {
+            reply(`❌ Este usuário (@${getUserName(menc_os2)}) não possui mute temporário ativo.`, {
+              mentions: [menc_os2]
+            });
+          }
+          
+        } catch (e) {
+          console.error('Erro no comando unmutet:', e);
+          reply("❌ Ocorreu um erro ao desmutar o usuário. Tente novamente.");
+        }
+        break;
+        
       case 'blockcmd':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
