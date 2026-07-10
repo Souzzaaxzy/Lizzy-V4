@@ -35536,6 +35536,9 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
           const randomHumor =
             humors[Math.floor(Math.random() * humors.length)];
 
+          // Path para imagem padrão local
+          const defaultProfilePic = __dirname + '/../midias/menu.jpg';
+
           let profilePic;
 
           try {
@@ -35545,8 +35548,7 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
               `Falha ao obter foto do perfil de ${targetName}:`,
               error.message
             );
-            profilePic =
-              'https://i.imgur.com/6QZ6W63.jpeg';
+            profilePic = defaultProfilePic;
           }
 
           // BIO
@@ -35628,15 +35630,26 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
 
 ╚══════════════╝`;
 
-          await nazu.sendMessage(
-            from,
-            {
-              image: { url: profilePic },
-              caption: perfilText,
-              mentions: [target]
-            },
-            { quoted: info }
-          );
+          // Envia a mensagem com a imagem do perfil
+          try {
+            await nazu.sendMessage(
+              from,
+              {
+                image: { url: profilePic },
+                caption: perfilText,
+                mentions: [target]
+              },
+              { quoted: info }
+            );
+          } catch (sendError) {
+            console.error('Erro ao enviar imagem do perfil:', sendError.message);
+            // Se falhar ao enviar com imagem, tenta enviar apenas texto
+            await nazu.sendMessage(
+              from,
+              { text: perfilText, mentions: [target] },
+              { quoted: info }
+            );
+          }
 
         } catch (error) {
           console.error('Erro ao processar comando perfil:', error);
