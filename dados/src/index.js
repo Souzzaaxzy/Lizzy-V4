@@ -34987,33 +34987,61 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
           break;
         }
 
-        const allRelationships = relationshipManager.getAllRelationships ? relationshipManager.getAllRelationships() : [];
-        const groupCouples = allRelationships.filter(rel =>
-          rel.type === 'casamento' &&
-          AllgroupMembers.includes(rel.user1) &&
-          AllgroupMembers.includes(rel.user2)
-        );
+        const groupRelationships = relationshipManager.getGroupRelationships(AllgroupMembers);
 
-        if (groupCouples.length === 0) {
-          await reply('💔 Não há casais neste grupo ainda!\n\n💡 Use '+ groupPrefix + 'casar @pessoa para se casar!');
+        if (groupRelationships.length === 0) {
+          await reply('💔 Ainda não existem casais registrados neste grupo.\n\n💡 Use ' + groupPrefix + 'casar @pessoa para se casar!');
           break;
         }
 
-        let text = `╭━━━⊱ 💕 *CASAIS DO GRUPO* ⊱━━━╮\n│\n`;
+        const RELATIONSHIP_EMOJIS = {
+          'ficante': '🎈',
+          'namoro': '💕',
+          'casamento': '💍',
+          'trisal': '💞',
+          'quadrisal': '💜'
+        };
+
+        const RELATIONSHIP_LABELS = {
+          'ficante': 'Ficando',
+          'namoro': 'Namorando',
+          'casamento': 'Casados',
+          'trisal': 'Trisal',
+          'quadrisal': 'Quadrisal'
+        };
+
+        let text = `╭━━━⊱ 💕 *RELACIONAMENTOS DO GRUPO* ⊱━━━╮\n`;
+        text += `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n`;
         const mentions = [];
 
-        groupCouples.forEach((couple, i) => {
-          const user1Name = couple.user1.split('@')[0];
-          const user2Name = couple.user2.split('@')[0];
-          const startDate = couple.startDate ? new Date(couple.startDate).toLocaleDateString('pt-BR') : 'N/A';
-
-          text += `│ ${i + 1}. @${user1Name} 💍 @${user2Name}\n`;
-          text += `│    📅 Desde: ${startDate}\n│\n`;
-          mentions.push(couple.user1, couple.user2);
+        groupRelationships.forEach((rel) => {
+          const emoji = RELATIONSHIP_EMOJIS[rel.type] || rel.emoji;
+          const label = RELATIONSHIP_LABELS[rel.type] || rel.label;
+          
+          if (rel.users.length === 2) {
+            // Relacionamento de 2 pessoas
+            const user1Name = '@' + rel.users[0].split('@')[0];
+            const user2Name = '@' + rel.users[1].split('@')[0];
+            
+            text += `${user1Name} ${emoji} ${user2Name}\n`;
+            text += `${emoji} ${label}\n`;
+            text += `📅 ${rel.days} dia${rel.days !== 1 ? 's' : ''}\n`;
+          } else {
+            // Relacionamento em grupo (trisal/quadrisal)
+            const userNames = rel.users.map(u => '@' + u.split('@')[0]);
+            text += userNames.join(` ${emoji} `) + '\n';
+            text += `${emoji} ${label}\n`;
+            text += `📅 ${rel.days} dia${rel.days !== 1 ? 's' : ''}\n`;
+          }
+          
+          text += `━━━━━━━━━━━━━━\n\n`;
+          
+          rel.users.forEach(u => {
+            if (!mentions.includes(u)) mentions.push(u);
+          });
         });
 
-        text += `╰━━━━━━━━━━━━━━━━━━━━━━╯\n`;
-        text += `\n💕 Total: ${groupCouples.length} casal(is)`;
+        text += `💕 Total: ${groupRelationships.length} relacionamento(s)`;
 
         await nazu.sendMessage(from, { text, mentions }, { quoted: info });
         break;

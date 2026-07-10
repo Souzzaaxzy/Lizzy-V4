@@ -1394,6 +1394,77 @@ class RelationshipManager {
       betrayalCount: betrayals.length
     };
   }
+
+  getGroupRelationships(groupMembers = []) {
+    const data = this._loadData();
+    const relationships = [];
+    const seen = new Set();
+    
+    for (const [key, pair] of Object.entries(data.pairs)) {
+      if (!pair || !pair.status || !TYPE_CONFIG[pair.status]) continue;
+      if (pair.terminatedAt) continue; // Ignora relacionamentos terminados
+      
+      const config = TYPE_CONFIG[pair.status];
+      
+      // Se tem participantes múltiplos (trisal/quadrisal), adiciona como grupo
+      if (config.multipleParticipants) {
+        if (!pair.users || pair.users.length < config.minParticipants) continue;
+        
+        // Verificar se todos os membros estão no grupo
+        const allInGroup = pair.users.every(user => 
+          groupMembers.length === 0 || groupMembers.includes(user)
+        );
+        
+        if (allInGroup) {
+          const since = pair.stages?.[pair.status]?.since;
+          const days = since ? Math.floor((Date.now() - new Date(since).getTime()) / (1000 * 60 * 60 * 24)) : 0;
+          
+          relationships.push({
+            type: pair.status,
+            label: config.label,
+            emoji: config.emoji,
+            users: pair.users,
+            since: since,
+            days: days
+          });
+        }
+        continue;
+      }
+      
+      // Relacionamentos de 2 pessoas
+      if (!pair.users || pair.users.length !== 2) continue;
+      
+      const [user1, user2] = pair.users;
+      const pairKey = [user1, user2].sort().join('::');
+      
+      // Evitar duplicatas
+      if (seen.has(pairKey)) continue;
+      seen.add(pairKey);
+      
+      // Verificar se ambos estão no grupo
+      const user1InGroup = groupMembers.length === 0 || groupMembers.includes(user1);
+      const user2InGroup = groupMembers.length === 0 || groupMembers.includes(user2);
+      
+      if (user1InGroup && user2InGroup) {
+        const since = pair.stages?.[pair.status]?.since;
+        const days = since ? Math.floor((Date.now() - new Date(since).getTime()) / (1000 * 60 * 60 * 24)) : 0;
+        
+        relationships.push({
+          type: pair.status,
+          label: config.label,
+          emoji: config.emoji,
+          users: [user1, user2],
+          since: since,
+          days: days
+        });
+      }
+    }
+    
+    // Ordenar por dias (maior para menor)
+    relationships.sort((a, b) => b.days - a.days);
+    
+    return relationships;
+  }
 }
 
 export default new RelationshipManager();
