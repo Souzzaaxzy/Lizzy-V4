@@ -71,7 +71,7 @@ async function loadModules() {
             connect4Mod, unoMod, memoriaMod, achievementsMod, giftsMod,
             reputationMod, qrcodeMod, notesMod, calculatorMod, audioEditMod,
             transmissaoMod, gdriveMod, mediafireMod, twitterMod, searchMod,
-            imagetoolsMod, freefireMod, smmApiMod
+            imagetoolsMod, freefireMod, smmApiMod, adoptionMod
         ] = await Promise.all([
             import('./utils/gerarnick.js'),
             import('./utils/logotipos.js'),
@@ -101,6 +101,7 @@ async function loadModules() {
             import('./utils/imagetools.js'),
             import('./utils/freefire.js'),
             import('./smmApi.js'),
+            import('./utils/adoptionManager.js'),
         ]);
 
         modules.styleText = styleTextMod.default ?? styleTextMod;
@@ -131,6 +132,7 @@ async function loadModules() {
         modules.imagetools = imagetoolsMod.default ?? imagetoolsMod;
         modules.freefire = freefireMod.default ?? freefireMod;
         modules.smmApi = smmApiMod.default ?? smmApiMod;
+        modules.adoptionManager = adoptionMod.default ?? adoptionMod;
 
         if (modules.stickerModule && modules.stickerModule.sendSticker) {
             modules.sendSticker = modules.stickerModule.sendSticker;

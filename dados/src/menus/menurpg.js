@@ -286,6 +286,7 @@ ${middleBorder}${menuItemIcon}${prefix}rpgadditem @user <item> <qtd>
 ${middleBorder}${menuItemIcon}${prefix}rpgremoveitem @user <item> <qtd>
 ${middleBorder}${menuItemIcon}${prefix}rpgresetplayer @user
 ${middleBorder}${menuItemIcon}${prefix}rpgresetglobal confirmar
+${middleBorder}${menuItemIcon}${prefix}resetadot @user
 ${middleBorder}${menuItemIcon}${prefix}rpgstats
 ${bottomBorder}`
 }

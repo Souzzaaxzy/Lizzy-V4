@@ -730,6 +730,7 @@ const {
   VerifyUpdate,
   temuScammer,
   relationshipManager,
+  adoptionManager,
   spotify,
   soundcloud,
   facebook,
@@ -4946,6 +4947,24 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
             }
           } catch (relError) {
             console.warn('[RELATIONSHIP] Error processing relationship response:', relError.message);
+          }
+        }
+
+        // Tratamento de respostas de adoção
+        if (adoptionManager && adoptionManager.hasPendingRequest) {
+          try {
+            if (adoptionManager.hasPendingRequest(from) && body) {
+              const adoptionResponse = adoptionManager.processResponse(from, sender, body);
+              // Somente responde se for uma resposta válida do alvo (não null)
+              if (adoptionResponse && adoptionResponse.message) {
+                await nazu.sendMessage(from, {
+                  text: adoptionResponse.message,
+                  mentions: adoptionResponse.mentions || []
+                });
+              }
+            }
+          } catch (adoptionError) {
+            console.warn('[ADOPTION] Error processing adoption response:', adoptionError.message);
           }
         }
 
@@ -11877,46 +11896,36 @@ if (isCmd && command && !isOwnerOrSub) {
           return reply('❌ Esta pessoa já é seu filho(a)!');
         }
 
-        // Verificar se já tem pais
+        // Verificar se já tem pais (máximo 2)
         if (targetUser.family.parents && targetUser.family.parents.length >= 2) {
           return reply('❌ Esta pessoa já tem 2 pais/mães!');
         }
 
-        // Custo da adoção
+        // Verificar se já tem um pedido pendente
+        const pendingCheck = adoptionManager._getPendingRequestForTarget(from, target);
+        if (pendingCheck) {
+          return reply('⚠️ Este usuário já possui um pedido de adoção pendente. Aguarde a resposta.');
+        }
+
+        // Verificar se já existe uma solicitação neste grupo
+        if (adoptionManager.hasPendingRequest(from)) {
+          return reply('⚠️ Já existe uma solicitação de adoção pendente neste grupo.');
+        }
+
+        // Custo da adoção (verificação apenas - não cobra ainda)
         const adoptCost = 10000;
         if (me.wallet < adoptCost) {
           return reply(`💰 Você precisa de ${adoptCost.toLocaleString()} moedas para adotar!`);
         }
 
-        me.wallet -= adoptCost;
-
-        // Adicionar aos filhos
-        if (!me.family.children) me.family.children = [];
-        me.family.children.push(target);
-
-        // Adicionar aos pais
-        if (!targetUser.family.parents) targetUser.family.parents = [];
-        targetUser.family.parents.push(sender);
-
-        // Se tiver parceiro(a) no sistema de relacionamentos, adicionar como pai/mãe também
-        const activePair = relationshipManager.getActivePairForUser(sender, from);
-        if (activePair && activePair.partnerId) {
-          const spouseData = getEcoUser(econ, activePair.partnerId);
-          if (!spouseData.family) spouseData.family = { spouse: null, children: [], parents: [], siblings: [] };
-          if (!spouseData.family.children) spouseData.family.children = [];
-          spouseData.family.children.push(target);
-          targetUser.family.parents.push(activePair.partnerId);
+        // Criar solicitação de adoção com confirmação
+        const requestResult = adoptionManager.createAdoptionRequest(from, sender, target);
+        
+        if (!requestResult.success) {
+          return reply(requestResult.message);
         }
 
-        let text = `╭━━━⊱ 👶 *ADOÇÃO* ⊱━━━╮\n`;
-        text += `╰━━━━━━━━━━━━━━━━━━━━╯\n\n`;
-        text += `🎉 Parabéns!\n\n`;
-        text += `${pushname} adotou @${target.split('@')[0]}!\n\n`;
-        text += `💰 Custo: ${adoptCost.toLocaleString()}\n`;
-        text += `👨‍👩‍👧‍👦 Agora você tem ${me.family.children.length} filho(s)!`;
-
-        saveEconomy(econ);
-        return reply(text, { mentions: [target] });
+        return reply(requestResult.message, { mentions: requestResult.mentions });
         break;
       }
 
@@ -11970,6 +11979,57 @@ if (isCmd && command && !isOwnerOrSub) {
         text += `💡 Use ${groupPrefix}familia para ver sua família atualizada.`;
 
         saveEconomy(econ);
+        return reply(text, { mentions: [target] });
+        break;
+      }
+
+      case 'resetadot': {
+        if (!isGroupAdmin) return reply("◈ Este comando é apenas para administradores do grupo.");
+        
+        if (!isGroup) return reply('◈ Este comando funciona apenas em grupos.');
+        if (!groupData.modorpg) return reply(`◈ Modo RPG desativado! Use ${groupPrefix}modorpg para ativar.`);
+
+        const target = (menc_jid2 && menc_jid2[0]) || null;
+        if (!target) return reply(`❌ Marque o usuário para resetar a adoção!\n\n💡 Exemplo: ${groupPrefix}resetadot @user`);
+
+        const econ = loadEconomy();
+        const targetUser = getEcoUser(econ, target);
+
+        if (!targetUser.family) {
+          targetUser.family = { spouse: null, children: [], parents: [], siblings: [] };
+        }
+
+        // Buscar todos os usuários para encontrar quem tem este usuário como filho
+        let resetCount = 0;
+        for (const userId in econ.users) {
+          const userData = econ.users[userId];
+          if (userData && userData.family && userData.family.children) {
+            if (userData.family.children.includes(target)) {
+              userData.family.children = userData.family.children.filter(child => child !== target);
+              resetCount++;
+            }
+          }
+        }
+
+        // Limpar pais do usuário alvo
+        if (targetUser.family.parents && targetUser.family.parents.length > 0) {
+          targetUser.family.parents = [];
+        }
+
+        // Remover qualquer solicitação pendente de adoção para este usuário
+        adoptionManager.resetAdoption(from, target);
+
+        saveEconomy(econ);
+
+        let text = `╭━━━⊱ ✅ *RESET DE ADOÇÃO* ⊱━━━╮\n`;
+        text += `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n`;
+        text += `✅ A árvore genealógica de adoção de @${target.split('@')[0]} foi resetada com sucesso.\n\n`;
+        text += `📋 *Ações realizadas:*\n`;
+        text += `• Removidos ${resetCount} vínculo(s) de adoção (pais)\n`;
+        text += `• Removida(s) conexão(ões) com filho(s)\n`;
+        text += `• Solicitação pendente cancelada (se houver)\n\n`;
+        text += `💡 Relacionamentos e casamentos permanecem intactos.`;
+
         return reply(text, { mentions: [target] });
         break;
       }
