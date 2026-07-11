@@ -158,6 +158,7 @@ import CaptchaIndex from './utils/captchaIndex.js';
 import npcManager from './utils/npcManager.js';
 import nameReactions from './utils/nameReactions.js';
 import msgCounter from './utils/msgCounter.js';
+import { saveWelcomeImage, loadWelcomeImage, deleteWelcomeImage, isLocalImagePath } from './utils/welcomeImages.js';
 import fsPromises from 'fs/promises';
 import {
   parseTimeToMs,
@@ -811,9 +812,20 @@ async function createGroupMessage(AbyssSock, groupMetadata, participants, settin
       console.log(`\x1b[33m[CREATE MESSAGE]\x1b[0m Falha ao gerar card via API, enviando apenas texto.`);
     }
   } else if (settings.photoType === 'custom' && settings.image) {
-    message.image = { url: settings.image };
-    message.caption = text;
-    delete message.text;
+    if (isLocalImagePath(settings.image)) {
+      const loadResult = await loadWelcomeImage(settings.image);
+      if (loadResult.success && loadResult.buffer) {
+        message.image = loadResult.buffer;
+        message.caption = text;
+        delete message.text;
+      } else {
+        console.error(`\x1b[33m[CREATE MESSAGE]\x1b[0m Falha ao carregar imagem local: ${loadResult.error || 'Erro desconhecido'}`);
+      }
+    } else {
+      message.image = { url: settings.image };
+      message.caption = text;
+      delete message.text;
+    }
   } else if (settings.photoType !== 'none' && globalJson.welcomecard?.fundo) {
     message.image = { url: globalJson.welcomecard.fundo };
     message.caption = text;
@@ -31810,7 +31822,12 @@ case 'bemvindo2':
 
 
               groupData.welcome.photoType = 'api';
-              delete groupData.welcome.image; // limpa imagem antiga se tiver
+              if (groupData.welcome.image) {
+                if (isLocalImagePath(groupData.welcome.image)) {
+                  await deleteWelcomeImage(groupData.welcome.image);
+                }
+                delete groupData.welcome.image; // limpa imagem antiga se tiver
+              }
               writeJsonFile(buildGroupFilePath(from), groupData);
 
               await reply(`✅ Foto de boas-vindas ATIVADA!\n\nUse o comando ${groupPrefix}set-fotobv para configurar a imagem de boas-vindas.`);
@@ -31853,7 +31870,12 @@ case 'bemvindo2':
             if (action === 'api') {
 
               groupData.welcome.photoType = 'api';
-              delete groupData.welcome.image;
+              if (groupData.welcome.image) {
+                if (isLocalImagePath(groupData.welcome.image)) {
+                  await deleteWelcomeImage(groupData.welcome.image);
+                }
+                delete groupData.welcome.image;
+              }
 
               writeJsonFile(buildGroupFilePath(from), groupData);
 
@@ -31866,13 +31888,32 @@ case 'bemvindo2':
                 ? info.message.extendedTextMessage.contextInfo.quotedMessage.imageMessage
                 : info.message.imageMessage;
 
-              const media = await getFileBuffer(imgMessage, 'image');
-              const uploadResult = await upload(media);
+              if (!imgMessage) {
+                return reply("❌ Não foi possível obter a imagem. Tente novamente.");
+              }
 
-              if (!uploadResult) throw new Error('Falha ao fazer upload da imagem');
+              const media = await getFileBuffer(imgMessage, 'image').catch(err => {
+                console.error('[set-fotobv] Erro ao baixar imagem:', err.message);
+                return null;
+              });
+
+              if (!media) {
+                return reply("❌ Falha ao baixar a imagem. Verifique se a mídia está disponível e tente novamente.");
+              }
+
+              const saveResult = await saveWelcomeImage(from, media);
+
+              if (!saveResult.success) {
+                console.error('[set-fotobv] Erro ao salvar imagem localmente:', saveResult.error);
+                return reply(`❌ Falha ao salvar a imagem: ${saveResult.error || 'Erro desconhecido'}`);
+              }
+
+              if (groupData.welcome.image) {
+                await deleteWelcomeImage(groupData.welcome.image);
+              }
 
               groupData.welcome.photoType = 'custom';
-              groupData.welcome.image = uploadResult;
+              groupData.welcome.image = saveResult.path;
 
               writeJsonFile(buildGroupFilePath(from), groupData);
 
@@ -32063,6 +32104,11 @@ case 'set-bannerbv':
             welcome: {}
           };
           if (!groupData.welcome?.image) return reply("❌ Não há imagem de boas-vindas configurada.");
+          
+          if (isLocalImagePath(groupData.welcome.image)) {
+            await deleteWelcomeImage(groupData.welcome.image);
+          }
+          
           delete groupData.welcome.image;
           fs.writeFileSync(groupFilePath, JSON.stringify(groupData, null, 2));
           reply("✅ A imagem de boas-vindas foi removida com sucesso!");
