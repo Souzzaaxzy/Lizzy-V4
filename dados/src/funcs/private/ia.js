@@ -44,6 +44,139 @@ let userInteractions = {};
 function updateApiKeyStatus() { return true; }
 function getApiKeyStatus() { return { isValid: true }; }
 
+// ========== SISTEMA DE VARIÁVEIS DINÂMICAS ==========
+
+// Cache para informações do bot (atualizado em cada chamada)
+let cachedBotInfo = null;
+let lastBotInfoLoad = 0;
+const BOT_INFO_CACHE_TTL = 5000; // 5 segundos
+
+/**
+ * Obtém informações dinâmicas do bot (nome, dono, etc) do arquivo de configuração
+ * @returns {Object} Informações do bot
+ */
+function getDynamicBotInfo() {
+  const now = Date.now();
+  
+  // Usar cache se ainda válido
+  if (cachedBotInfo && (now - lastBotInfoLoad) < BOT_INFO_CACHE_TTL) {
+    return cachedBotInfo;
+  }
+  
+  try {
+    // Tentar carregar do config.json
+    const possiblePaths = [
+      path.join(process.cwd(), 'dados', 'src', 'config.json'),
+      path.join(process.cwd(), 'src', 'config.json'),
+      path.join(__dirname, '..', '..', 'config.json')
+    ];
+    
+    for (const configPath of possiblePaths) {
+      if (fs.existsSync(configPath)) {
+        const configData = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+        cachedBotInfo = {
+          nomeBot: configData.nomebot || 'Abyss',
+          nomeDono: configData.nomedono || 'Dono',
+          numeroDono: configData.numerodono || '',
+          prefixo: configData.prefixo || '!'
+        };
+        lastBotInfoLoad = now;
+        return cachedBotInfo;
+      }
+    }
+  } catch (e) {
+    console.warn('[IA] Erro ao carregar info do bot:', e.message);
+  }
+  
+  // Retornar valores padrão se não conseguir carregar
+  return {
+    nomeBot: 'Abyss',
+    nomeDono: 'Dono',
+    numeroDono: '',
+    prefixo: '!'
+  };
+}
+
+/**
+ * Substitui variáveis dinâmicas no texto
+ * @param {string} text - Texto com variáveis
+ * @param {Object} context - Contexto adicional (nomegrupo, etc)
+ * @returns {string} Texto com variáveis substituídas
+ */
+function replaceDynamicVariables(text, context = {}) {
+  const botInfo = getDynamicBotInfo();
+  
+  const replacements = {
+    '{nomedobot}': botInfo.nomeBot,
+    '{nomedodono}': botInfo.nomeDono,
+    '{numerododono}': botInfo.numeroDono,
+    '{nomedoBot}': botInfo.nomeBot,
+    '{nomeDoBot}': botInfo.nomeBot,
+    '{prefixo}': botInfo.prefixo,
+    '{nomegrupo}': context.nomeGrupo || context.groupName || '',
+    '{nomedoGrupo}': context.nomeGrupo || context.groupName || ''
+  };
+  
+  let result = text;
+  for (const [variable, value] of Object.entries(replacements)) {
+    result = result.replace(new RegExp(variable.replace(/[{}]/g, '\\$&'), 'gi'), value || '');
+  }
+  
+  return result;
+}
+
+/**
+ * Verifica se uma mensagem menciona o nome do bot
+ * @param {string} messageText - Texto da mensagem
+ * @param {Object} context - Contexto adicional
+ * @returns {Object} { mentioned: boolean, cleanedText: string }
+ */
+function checkBotNameMention(messageText, context = {}) {
+  if (!messageText || typeof messageText !== 'string') {
+    return { mentioned: false, cleanedText: messageText || '' };
+  }
+  
+  const botInfo = getDynamicBotInfo();
+  const botName = botInfo.nomeBot;
+  
+  if (!botName) {
+    return { mentioned: false, cleanedText: messageText };
+  }
+  
+  // Criar regex case-insensitive para o nome do bot
+  const escapedName = botName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const mentionRegex = new RegExp(`^${escapedName}[\\s,!.:;?]*|\\s+${escapedName}[\\s,!.:;?]*`, 'gi');
+  
+  const mentioned = mentionRegex.test(messageText);
+  const cleanedText = messageText.replace(mentionRegex, '').trim();
+  
+  return { mentioned, cleanedText };
+}
+
+/**
+ * Verifica se a mensagem menciona o bot por @menção
+ * @param {string} messageText - Texto da mensagem
+ * @param {Array} mentionedJids - Lista de JIDs mencionados
+ * @param {string} botNumber - Número do bot
+ * @returns {boolean}
+ */
+function hasBotMention(messageText, mentionedJids = [], botNumber = '') {
+  // Verificar menção por @
+  if (mentionedJids && mentionedJids.length > 0) {
+    const botShort = botNumber.split('@')[0].split(':')[0];
+    for (const jid of mentionedJids) {
+      const jidShort = jid.split('@')[0].split(':')[0];
+      if (jidShort === botShort) {
+        return true;
+      }
+    }
+  }
+  
+  // Verificar menção por nome
+  const { mentioned } = checkBotNameMention(messageText);
+  return mentioned;
+}
+
 // ========== PERSONALIDADES DISPONÍVEIS ==========
 
 const ASSISTANT_PROMPT_ABYSS = `
@@ -1794,7 +1927,7 @@ function clearConversationData(maxAge = 7 * 24 * 60 * 60 * 1000) {
 
 async function processUserMessages(data, nazu = null, ownerNumber = null, personality = 'abyss') {
   try {
-    const { mensagens } = data;
+    const { mensagens, extraContext = {} } = data;
     if (!mensagens || !Array.isArray(mensagens)) {
       throw new Error('Mensagens são obrigatórias e devem ser um array');
     }
@@ -1816,6 +1949,9 @@ async function processUserMessages(data, nazu = null, ownerNumber = null, person
     }
 
     const respostas = [];
+    
+    // Obter informações dinâmicas do bot
+    const botInfo = getDynamicBotInfo();
     
     // Contexto temporal - usando horário do Brasil
     const now = new Date();
@@ -1848,6 +1984,35 @@ async function processUserMessages(data, nazu = null, ownerNumber = null, person
         selectedPrompt = ASSISTANT_PROMPT_ABYSS;
       }
       
+      // Substituir variáveis dinâmicas no prompt
+      selectedPrompt = replaceDynamicVariables(selectedPrompt, {
+        nomeGrupo: extraContext.groupName || msgValidada.nome_grupo || '',
+        groupName: extraContext.groupName || msgValidada.nome_grupo || ''
+      });
+      
+      // Contexto expandido com informações do bot e grupo
+      const contextoExpandido = {
+        // Informações do bot
+        nome_bot: botInfo.nomeBot,
+        nome_dono: botInfo.nomeDono,
+        numero_dono: botInfo.numeroDono,
+        prefixo: botInfo.prefixo,
+        // Informações do grupo
+        nome_grupo: extraContext.groupName || msgValidada.nome_grupo || '',
+        id_grupo: extraContext.groupId || msgValidada.id_grupo || '',
+        // Informações do usuário
+        nome_usuario: msgValidada.nome_enviou,
+        id_usuario: msgValidada.id_enviou,
+        // Informações temporais
+        horario: hour,
+        noite: isNightTime,
+        data: brazilTime.toLocaleDateString('pt-BR'),
+        dia_semana: brazilTime.toLocaleDateString('pt-BR', { weekday: 'long' }),
+        data_hora: getFormattedBrazilDateTime(),
+        // Ambiente
+        plataforma: 'WhatsApp'
+      };
+      
       // Para personalidade 'pro', passa contexto simplificado com info de mídia e menções
       // Apenas a mensagem do usuário para identificar comandos
       const userInput = personality === 'pro' ? {
@@ -1869,6 +2034,16 @@ async function processUserMessages(data, nazu = null, ownerNumber = null, person
           noite: isNightTime,
           data: brazilTime.toLocaleDateString('pt-BR'),
           diaSemana: brazilTime.toLocaleDateString('pt-BR', { weekday: 'long' })
+        },
+        contexto_bot: {
+          nome: botInfo.nomeBot,
+          nome_dono: botInfo.nomeDono,
+          numero_dono: botInfo.numeroDono,
+          prefixo: botInfo.prefixo
+        },
+        contexto_grupo: {
+          nome: extraContext.groupName || msgValidada.nome_grupo || '',
+          id: extraContext.groupId || msgValidada.id_grupo || ''
         }
       };
 
@@ -3182,5 +3357,10 @@ export {
   getAbyssFarewell,
   // Sistema de contexto de usuário
   userContextDB,
-  processLearning
+  processLearning,
+  // Sistema de variáveis dinâmicas
+  getDynamicBotInfo,
+  replaceDynamicVariables,
+  checkBotNameMention,
+  hasBotMention
 };

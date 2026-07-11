@@ -5201,9 +5201,22 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
     }
 
     const _botShort = (nazu && nazu.user && (nazu.user.id || nazu.user.lid)) ? String((nazu.user.id || nazu.user.lid).split(':')[0]) : '';
+    
+    // Verificar se a mensagem menciona o bot (por @ ou por nome)
+    const mencoesNaMensagem = info.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+    const hasMentionByAt = _botShort && budy2.includes(_botShort);
+    const hasMentionByName = ia.checkBotNameMention ? ia.checkBotNameMention(budy2).mentioned : false;
+    const shouldActivateAssistant = hasMentionByAt || hasMentionByName || (menc_os2 && menc_os2 == botNumber);
+    
     // Não processar pela assistente se a mensagem veio do PRO (evita loop infinito)
-    if (!info.key.fromMe && isAssistente && !isCmd && !info._fromPro && ((_botShort && budy2.includes(_botShort)) || (menc_os2 && menc_os2 == botNumber))) {
-      if (budy2.replaceAll('@' + _botShort, '').length > 2) {
+    if (!info.key.fromMe && isAssistente && !isCmd && !info._fromPro && shouldActivateAssistant) {
+      // Limpar o texto da mensagem (remover menção do bot)
+      let textoLimpo = budy2.replaceAll('@' + _botShort, '').trim();
+      if (hasMentionByName && ia.checkBotNameMention) {
+        textoLimpo = ia.checkBotNameMention(textoLimpo).cleanedText;
+      }
+      
+      if (textoLimpo.length > 2 || hasMentionByAt) {
         // Detectar tipo de mídia da mensagem atual
         const tipoMidiaAtual = info.message?.imageMessage ? 'imagem' :
           info.message?.videoMessage ? 'video' :
@@ -5219,9 +5232,6 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
               quotedMessageContent?.pttMessage ? 'audio' :
                 quotedMessageContent?.stickerMessage ? 'sticker' :
                   quotedMessageContent?.documentMessage ? 'documento' : null;
-
-        // Detectar menções na mensagem
-        const mencoesNaMensagem = info.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
 
         // Obter todos os possíveis identificadores do bot para filtrar
         const botLid = nazu.user?.lid ? nazu.user.lid.split(':')[0] : null;
@@ -5241,7 +5251,7 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
         const primeiraMencao = mencoesFiltradas.length > 0 ? mencoesFiltradas[0] : null;
 
         const jSoNzIn = {
-          texto: budy2.replaceAll('@' + _botShort, '').trim(),
+          texto: textoLimpo,
           id_enviou: sender,
           nome_enviou: pushname,
           id_grupo: isGroup ? from : false,
@@ -5295,9 +5305,16 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
 
         // Obter a personalidade atual do grupo
         const personality = groupData.assistentePersonality || 'abyss';
+        
+        // Contexto adicional para passar à IA
+        const extraContext = {
+          groupName: groupName || '',
+          groupId: from || ''
+        };
 
         ia.makeAssistentRequest({
-          mensagens: [jSoNzIn]
+          mensagens: [jSoNzIn],
+          extraContext
         }, nazu, nmrdn, personality).then((respAssist) => {
           if (respAssist.erro === 'Sistema de IA temporariamente desativado') {
             return;
