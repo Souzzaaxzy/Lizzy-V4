@@ -50,6 +50,8 @@ import {
   ELECTION_CONFIG_FILE,
   MSG_COUNTER_FILE,
   PREFIX_MEDIA_FILE,
+  MENU_MEDIA_GROUPS_FILE,
+  MENU_GROUPS_MEDIA_DIR,
   CONFIG_FILE
 } from './paths.js';
 
@@ -57,6 +59,7 @@ ensureDirectoryExists(GRUPOS_DIR);
 ensureDirectoryExists(USERS_DIR);
 ensureDirectoryExists(DONO_DIR);
 ensureDirectoryExists(PARCERIAS_DIR);
+ensureDirectoryExists(MENU_GROUPS_MEDIA_DIR);
 ensureJsonFileExists(ANTIFLOOD_FILE);
 ensureJsonFileExists(CMD_LIMIT_FILE, {
   commands: {},
@@ -3606,6 +3609,92 @@ export {
   saveMandates,
   loadElectionConfig,
   saveElectionConfig,
+  // Sistema de Mídia de Menu por Grupo
+  loadMenuMediaGroups,
+  saveMenuMediaGroups,
+  getGroupMenuMedia,
+  setGroupMenuMedia,
+  removeGroupMenuMedia,
+};
+
+// ===== Sistema de Mídia de Menu por Grupo =====
+const loadMenuMediaGroups = () => {
+  ensureJsonFileExists(MENU_MEDIA_GROUPS_FILE, {});
+  return loadJsonFile(MENU_MEDIA_GROUPS_FILE, {});
+};
+
+const saveMenuMediaGroups = (data) => {
+  try {
+    ensureDirectoryExists(DATABASE_DIR);
+    fs.writeFileSync(MENU_MEDIA_GROUPS_FILE, JSON.stringify(data, null, 2));
+    return true;
+  } catch (error) {
+    console.error('❌ Erro ao salvar mídia de menu por grupo:', error);
+    return false;
+  }
+};
+
+const getGroupMenuMedia = (groupId) => {
+  const data = loadMenuMediaGroups();
+  const groupMedia = data[groupId];
+  if (groupMedia && groupMedia.file && fs.existsSync(groupMedia.file)) {
+    return groupMedia;
+  }
+  return null;
+};
+
+const setGroupMenuMedia = (groupId, mediaType, mediaPath) => {
+  try {
+    const data = loadMenuMediaGroups();
+    
+    // Se já existe mídia anterior, remove o arquivo antigo
+    if (data[groupId] && data[groupId].file && fs.existsSync(data[groupId].file)) {
+      // Só remove se for um tipo diferente ou arquivo diferente
+      if (data[groupId].file !== mediaPath) {
+        try {
+          fs.unlinkSync(data[groupId].file);
+        } catch (e) {
+          console.error('Erro ao remover mídia antiga:', e);
+        }
+      }
+    }
+    
+    data[groupId] = {
+      type: mediaType,
+      file: mediaPath,
+      timestamp: Date.now()
+    };
+    
+    saveMenuMediaGroups(data);
+    return true;
+  } catch (error) {
+    console.error('❌ Erro ao definir mídia de menu para o grupo:', error);
+    return false;
+  }
+};
+
+const removeGroupMenuMedia = (groupId) => {
+  try {
+    const data = loadMenuMediaGroups();
+    
+    if (data[groupId] && data[groupId].file) {
+      // Remove o arquivo físico
+      if (fs.existsSync(data[groupId].file)) {
+        try {
+          fs.unlinkSync(data[groupId].file);
+        } catch (e) {
+          console.error('Erro ao remover arquivo de mídia:', e);
+        }
+      }
+    }
+    
+    delete data[groupId];
+    saveMenuMediaGroups(data);
+    return true;
+  } catch (error) {
+    console.error('❌ Erro ao remover mídia de menu do grupo:', error);
+    return false;
+  }
 };
 
 // ===== Sistema de Momentos (Salvamento de mensagens) =====

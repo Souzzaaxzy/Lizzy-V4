@@ -360,6 +360,10 @@ import {
   getPrefixMediaType,
   setPrefixMedia,
   removePrefixMedia,
+  // Sistema de Mídia de Menu por Grupo
+  getGroupMenuMedia,
+  setGroupMenuMedia,
+  removeGroupMenuMedia,
   // Funções de combate
   calculateCombatStats,
   // Sistema de Momentos
@@ -403,7 +407,8 @@ import {
   MODO_LITE_FILE,
   JID_LID_CACHE_FILE,
   MASS_MENTION_LIMIT_FILE,
-  MASS_MENTION_CONFIG_FILE
+  MASS_MENTION_CONFIG_FILE,
+  MENU_GROUPS_MEDIA_DIR
 } from './utils/paths.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -22384,35 +22389,47 @@ break;
         try {
           // Verifica se o grupo tem personalização
           let customBotName = nomebot;
-          let customMediaPath = null;
 
           if (isGroup && isGroupCustomizationEnabled()) {
             const groupCustom = getGroupCustomization(from);
-            if (groupCustom) {
-              if (groupCustom.customName) {
-                customBotName = groupCustom.customName;
-              }
-              if (groupCustom.customPhoto && fs.existsSync(groupCustom.customPhoto)) {
-                customMediaPath = groupCustom.customPhoto;
-              }
+            if (groupCustom && groupCustom.customName) {
+              customBotName = groupCustom.customName;
             }
           }
 
-          // Define a mídia a ser usada
+          // Define a mídia a ser usada (prioridade: grupo > global > padrão)
           let mediaPath, useVideo, mediaBuffer;
+          let groupMenuMedia = null;
 
-          if (customMediaPath) {
-            // Usa a foto personalizada do grupo
-            mediaPath = customMediaPath;
-            useVideo = false;
+          // 1º Prioridade: Mídia personalizada do grupo (sistema !fotomenug/!videomenug)
+          if (isGroup) {
+            groupMenuMedia = getGroupMenuMedia(from);
+          }
+
+          if (groupMenuMedia) {
+            // Usa a mídia personalizada do grupo
+            mediaPath = groupMenuMedia.file;
+            useVideo = groupMenuMedia.type === 'video';
             mediaBuffer = fs.readFileSync(mediaPath);
           } else {
-            // Usa a mídia padrão
+            // 2º Prioridade: Mídia global padrão
             const menuVideoPath = __dirname + '/../midias/menu.mp4';
             const menuImagePath = __dirname + '/../midias/menu.jpg';
-            useVideo = fs.existsSync(menuVideoPath);
-            mediaPath = useVideo ? menuVideoPath : menuImagePath;
-            mediaBuffer = fs.readFileSync(mediaPath);
+            
+            // Verifica se existe mídia global
+            const hasGlobalVideo = fs.existsSync(menuVideoPath);
+            const hasGlobalImage = fs.existsSync(menuImagePath);
+            
+            if (hasGlobalVideo || hasGlobalImage) {
+              useVideo = hasGlobalVideo;
+              mediaPath = useVideo ? menuVideoPath : menuImagePath;
+              mediaBuffer = fs.readFileSync(mediaPath);
+            } else {
+              // 3º Prioridade: Comportamento padrão (sem mídia)
+              mediaPath = null;
+              useVideo = false;
+              mediaBuffer = null;
+            }
           }
 
           const customDesign = getMenuDesignWithDefaults(customBotName, pushname);
@@ -22458,6 +22475,22 @@ break;
                 quoted: info
               }).then(async () => {
                 // Depois envia o menu
+                if (mediaBuffer) {
+                  await nazu.sendMessage(from, {
+                    [useVideo ? 'video' : 'image']: mediaBuffer,
+                    caption: lerMaisPrefix + menuText,
+                    gifPlayback: useVideo,
+                    mimetype: useVideo ? 'video/mp4' : 'image/jpeg'
+                  }, {
+                    quoted: info
+                  });
+                } else {
+                  await reply(lerMaisPrefix + menuText);
+                }
+              });
+            } else {
+              // Se não tem áudio válido, envia só o menu
+              if (mediaBuffer) {
                 await nazu.sendMessage(from, {
                   [useVideo ? 'video' : 'image']: mediaBuffer,
                   caption: lerMaisPrefix + menuText,
@@ -22466,9 +22499,13 @@ break;
                 }, {
                   quoted: info
                 });
-              });
-            } else {
-              // Se não tem áudio válido, envia só o menu
+              } else {
+                await reply(lerMaisPrefix + menuText);
+              }
+            }
+          } else {
+            // Se áudio não está ativo, envia só o menu
+            if (mediaBuffer) {
               await nazu.sendMessage(from, {
                 [useVideo ? 'video' : 'image']: mediaBuffer,
                 caption: lerMaisPrefix + menuText,
@@ -22477,17 +22514,9 @@ break;
               }, {
                 quoted: info
               });
+            } else {
+              await reply(lerMaisPrefix + menuText);
             }
-          } else {
-            // Se áudio não está ativo, envia só o menu
-            await nazu.sendMessage(from, {
-              [useVideo ? 'video' : 'image']: mediaBuffer,
-              caption: lerMaisPrefix + menuText,
-              gifPlayback: useVideo,
-              mimetype: useVideo ? 'video/mp4' : 'image/jpeg'
-            }, {
-              quoted: info
-            });
           }
         } catch (error) {
           console.error('Erro ao enviar menu:', error);
@@ -23465,38 +23494,44 @@ Precisa de ajuda? Entre em contato:
         async function sendMenuWithMedia(menuType, menuFunction) {
           // Verifica se o grupo tem personalização
           let customBotName = nomebot;
-          let customMediaPath = null;
 
           if (isGroup && isGroupCustomizationEnabled()) {
             const groupCustom = getGroupCustomization(from);
-            if (groupCustom) {
-              if (groupCustom.customName) {
-                customBotName = groupCustom.customName;
-              }
-              if (groupCustom.customPhoto && fs.existsSync(groupCustom.customPhoto)) {
-                customMediaPath = groupCustom.customPhoto;
-              }
+            if (groupCustom && groupCustom.customName) {
+              customBotName = groupCustom.customName;
             }
           }
 
-          // Define a mídia a ser usada
+          // Define a mídia a ser usada (prioridade: grupo > global > padrão)
           let mediaPath, useVideo, mediaBuffer, isGif = false;
+          let groupMenuMedia = null;
 
-          if (customMediaPath) {
-            // Usa a foto personalizada do grupo
-            mediaPath = customMediaPath;
-            useVideo = false;
-            isGif = false;
+          // 1º Prioridade: Mídia personalizada do grupo (sistema !fotomenug/!videomenug)
+          if (isGroup) {
+            groupMenuMedia = getGroupMenuMedia(from);
+          }
+
+          if (groupMenuMedia) {
+            // Usa a mídia personalizada do grupo
+            mediaPath = groupMenuMedia.file;
+            useVideo = groupMenuMedia.type === 'video';
+            isGif = groupMenuMedia.type === 'video' && mediaPath.endsWith('.gif');
             mediaBuffer = fs.readFileSync(mediaPath);
           } else {
-            // Usa o vídeo oficial do Abyss (menu.mp4)
+            // 2º Prioridade: Mídia global padrão
             const menuVideoPath = __dirname + '/../midias/menu.mp4';
             const menuImagePath = __dirname + '/../midias/menu.jpg';
-            if (fs.existsSync(menuVideoPath)) {
+            
+            // Verifica se existe mídia global
+            const hasGlobalVideo = fs.existsSync(menuVideoPath);
+            const hasGlobalImage = fs.existsSync(menuImagePath);
+            
+            if (hasGlobalVideo) {
               mediaPath = menuVideoPath;
               useVideo = true;
+              isGif = mediaPath.endsWith('.gif');
               mediaBuffer = fs.readFileSync(mediaPath);
-            } else if (fs.existsSync(menuImagePath)) {
+            } else if (hasGlobalImage) {
               mediaPath = menuImagePath;
               useVideo = false;
               mediaBuffer = fs.readFileSync(mediaPath);
@@ -23515,13 +23550,18 @@ Precisa de ajuda? Entre em contato:
 
           const lerMaisPrefix = getMenuLerMaisText();
 
-          await nazu.sendMessage(from, {
-            [useVideo ? 'video' : 'image']: mediaBuffer,
-            caption: lerMaisPrefix + menuText,
-            gifPlayback: useVideo
-          }, {
-            quoted: info
-          });
+          // Envia o menu com ou sem mídia
+          if (mediaBuffer) {
+            await nazu.sendMessage(from, {
+              [useVideo ? 'video' : 'image']: mediaBuffer,
+              caption: lerMaisPrefix + menuText,
+              gifPlayback: isGif
+            }, {
+              quoted: info
+            });
+          } else {
+            await reply(lerMaisPrefix + menuText);
+          }
         }
       case 'antipv3':
         try {
@@ -24607,6 +24647,111 @@ ${groupPrefix}setgroq sua_chave_aqui
           var buffer = await getFileBuffer(isVideo2 ? boij : boij2, isVideo2 ? 'video' : 'image');
           fs.writeFileSync(__dirname + '/../midias/menu.' + (isVideo2 ? 'mp4' : 'jpg'), buffer);
           await reply('✅ Mídia do menu atualizada com sucesso.');
+        } catch (e) {
+          console.error(e);
+          reply("ocorreu um erro 💔");
+        }
+        break;
+
+      // ========== SISTEMA DE MÍDIA DE MENU POR GRUPO ==========
+      case 'fotomenug':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos!");
+          if (!isGroupAdmin && !isOwnerOrSub) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+
+          // Verificar se respondeu uma imagem
+          var RSMImageGroup = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+          var imageDataGroup = RSMImageGroup?.imageMessage || info.message?.imageMessage || RSMImageGroup?.viewOnceMessageV2?.message?.imageMessage || info.message?.viewOnceMessageV2?.message?.imageMessage || info.message?.viewOnceMessage?.message?.imageMessage || RSMImageGroup?.viewOnceMessage?.message?.imageMessage;
+
+          if (!imageDataGroup) {
+            return reply(`❌ Responda uma imagem para definir a foto do menu.`);
+          }
+
+          try {
+            // Baixa a imagem
+            const imageBuffer = await getFileBuffer(imageDataGroup, 'image');
+
+            // Salva no diretório do grupo
+            ensureDirectoryExists(MENU_GROUPS_MEDIA_DIR);
+            const imagePath = pathz.join(MENU_GROUPS_MEDIA_DIR, `${from}.jpg`);
+            fs.writeFileSync(imagePath, imageBuffer);
+
+            // Salva no banco de dados
+            const saved = setGroupMenuMedia(from, 'image', imagePath);
+
+            if (saved) {
+              await reply(`✅ Foto do menu deste grupo definida com sucesso!\n\nAgora todos os menus enviados neste grupo utilizarão esta imagem.`);
+            } else {
+              await reply("❌ Não foi possível salvar a mídia.");
+            }
+          } catch (e) {
+            console.error('Erro ao salvar foto do menu do grupo:', e);
+            await reply("❌ Não foi possível salvar a mídia.");
+          }
+        } catch (e) {
+          console.error(e);
+          reply("ocorreu um erro 💔");
+        }
+        break;
+
+      case 'videomenug':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos!");
+          if (!isGroupAdmin && !isOwnerOrSub) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+
+          // Verificar se respondeu um vídeo/GIF
+          var RSVideoGroup = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+          var videoDataGroup = RSVideoGroup?.videoMessage || info.message?.videoMessage || RSVideoGroup?.viewOnceMessageV2?.message?.videoMessage || info.message?.viewOnceMessageV2?.message?.videoMessage || info.message?.viewOnceMessage?.message?.videoMessage || RSVideoGroup?.viewOnceMessage?.message?.videoMessage;
+
+          if (!videoDataGroup) {
+            return reply(`❌ Responda um vídeo ou GIF para definir o vídeo do menu.`);
+          }
+
+          try {
+            // Baixa o vídeo
+            const videoBuffer = await getFileBuffer(videoDataGroup, 'video');
+
+            // Salva no diretório do grupo
+            ensureDirectoryExists(MENU_GROUPS_MEDIA_DIR);
+            const videoPath = pathz.join(MENU_GROUPS_MEDIA_DIR, `${from}.mp4`);
+            fs.writeFileSync(videoPath, videoBuffer);
+
+            // Salva no banco de dados
+            const saved = setGroupMenuMedia(from, 'video', videoPath);
+
+            if (saved) {
+              await reply(`✅ Vídeo/GIF do menu deste grupo definido com sucesso!\n\nTodos os menus enviados neste grupo utilizarão este vídeo.`);
+            } else {
+              await reply("❌ Não foi possível salvar a mídia.");
+            }
+          } catch (e) {
+            console.error('Erro ao salvar vídeo do menu do grupo:', e);
+            await reply("❌ Não foi possível salvar a mídia.");
+          }
+        } catch (e) {
+          console.error(e);
+          reply("ocorreu um erro 💔");
+        }
+        break;
+
+      case 'removermediamenugrupo':
+      case 'removerfotomenug':
+      case 'removervideomenug':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos!");
+          if (!isGroupAdmin && !isOwnerOrSub) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+
+          const groupMedia = getGroupMenuMedia(from);
+          if (!groupMedia) {
+            return reply("ℹ️ Este grupo não possui mídia personalizada para o menu.");
+          }
+
+          const removed = removeGroupMenuMedia(from);
+          if (removed) {
+            await reply("✅ Mídia do menu deste grupo removida com sucesso!\n\nOs menus voltarão a usar a mídia global.");
+          } else {
+            await reply("❌ Não foi possível remover a mídia.");
+          }
         } catch (e) {
           console.error(e);
           reply("ocorreu um erro 💔");

@@ -216,6 +216,9 @@ ${middleBorder} ${menuItemIcon}${prefix}rmfotobv
 ${middleBorder} ${menuItemIcon}${prefix}fotosaiu
 ${middleBorder} ${menuItemIcon}${prefix}rmfotosaiu
 ${middleBorder} ${menuItemIcon}${prefix}setprefix
+${middleBorder} ${menuItemIcon}${prefix}fotomenug (responder img)
+${middleBorder} ${menuItemIcon}${prefix}videomenug (responder víd)
+${middleBorder} ${menuItemIcon}${prefix}removermediamenugrupo
 ${bottomBorder}
 
 ${menuTopBorder}
