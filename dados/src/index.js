@@ -29808,6 +29808,115 @@ break;
         }
         break;
 
+      case 'bbn':
+        try {
+          if (!isGroup) return sendAbyssWarning("◈ Este comando só funciona em grupos!");
+          if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+          if (!isBotAdmin) return reply("Preciso ser administrador para realizar esta ação.");
+
+          // Extrair todos os usuários mencionados
+          const mentionedUsers = info.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+
+          if (mentionedUsers.length === 0) {
+            return reply(`◈ *Como usar o comando ${groupPrefix}bbn:*\n\n` +
+              `➤ Marque usuários: ${groupPrefix}bbn @user1 @user2 @user3\n\n` +
+              `_Este comando bane múltiplos usuários e adiciona à blacklist._`);
+          }
+
+          // Filtrar usuários válidos
+          let usersToProcess = [...mentionedUsers];
+
+          // Remover dono do bot da lista
+          if (usersToProcess.includes(nmrdn)) {
+            usersToProcess = usersToProcess.filter(u => u !== nmrdn);
+            await reply("⚠️ O dono do bot não pode ser banido.");
+          }
+
+          // Remover o bot da lista
+          if (usersToProcess.includes(botNumber)) {
+            usersToProcess = usersToProcess.filter(u => u !== botNumber);
+            await reply("⚠️ Eu não posso me banir! 😅");
+          }
+
+          // Remover administradores do grupo
+          const adminsToSkip = [];
+          for (const user of usersToProcess) {
+            if (groupAdmins.includes(user)) {
+              adminsToSkip.push(user);
+            }
+          }
+          usersToProcess = usersToProcess.filter(u => !groupAdmins.includes(u));
+
+          if (adminsToSkip.length > 0) {
+            await reply("⚠️ Não posso agir contra administradores do grupo: " + adminsToSkip.map(u => '@' + u.split('@')[0]).join(', '), { mentions: adminsToSkip });
+          }
+
+          if (usersToProcess.length === 0) {
+            return reply("❌ Nenhum usuário válido para processar.");
+          }
+
+          // Variáveis para controle
+          let bannedCount = 0;
+          let blacklistedCount = 0;
+          let alreadyBlacklistedCount = 0;
+          const bannedUsers = [];
+
+          // Carregar dados do grupo para blacklist
+          const groupFilePath = buildGroupFilePath(from);
+          let bbnGroupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : { blacklist: {} };
+          bbnGroupData.blacklist = bbnGroupData.blacklist || {};
+
+          // Banir todos os usuários
+          const result = await nazu.groupParticipantsUpdate(from, usersToProcess, 'remove');
+
+          // Processar resultados
+          for (let i = 0; i < result.length; i++) {
+            const user = usersToProcess[i];
+            if (result[i].status === "200" || result[i].status === 200) {
+              bannedCount++;
+              bannedUsers.push(user);
+
+              // Adicionar à blacklist
+              if (!bbnGroupData.blacklist[user]) {
+                bbnGroupData.blacklist[user] = {
+                  reason: 'BBN - Ban em massa + Blacklist',
+                  timestamp: Date.now()
+                };
+                blacklistedCount++;
+              } else {
+                alreadyBlacklistedCount++;
+              }
+            }
+          }
+
+          // Salvar blacklist
+          if (blacklistedCount > 0) {
+            fs.writeFileSync(groupFilePath, JSON.stringify(bbnGroupData, null, 2));
+          }
+
+          // Montar mensagem de sucesso
+          let successMsg = `🚫 *AÇÃO EM MASSA CONCLUÍDA*\n\n`;
+          successMsg += `✅ Banidos: ${bannedCount}\n`;
+          successMsg += `📋 Adicionados à blacklist: ${blacklistedCount}\n`;
+
+          if (alreadyBlacklistedCount > 0) {
+            successMsg += `⚠️ Já estavam na blacklist: ${alreadyBlacklistedCount}\n`;
+          }
+
+          if (q && q.length > 0) {
+            successMsg += `\n📝 Motivo: ${q}`;
+          }
+
+          successMsg += `\n\n👥 Usuários afetados:\n${bannedUsers.map(u => '• @' + u.split('@')[0]).join('\n')}`;
+
+          reply(successMsg, { mentions: bannedUsers });
+
+        } catch (e) {
+          console.error(e);
+          reply("Ocorreu um erro 💔");
+        }
+        break;
+
       case 'bam':
       case 'banfake':
         if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");

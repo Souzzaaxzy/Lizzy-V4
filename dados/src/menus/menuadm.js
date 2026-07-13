@@ -31,6 +31,7 @@ ${menuTopBorder}
 ${middleBorder}
 ${middleBorder} ${menuItemIcon}${prefix}ban
 ${middleBorder} ${menuItemIcon}${prefix}bann @user1 @user2
+${middleBorder} ${menuItemIcon}${prefix}bbn @user1 @user2 @user3
 ${middleBorder} ${menuItemIcon}${prefix}roletaban
 ${middleBorder} ${menuItemIcon}${prefix}ban2
 	${middleBorder} ${menuItemIcon}${prefix}enquete
