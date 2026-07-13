@@ -29134,6 +29134,140 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
           reply("ocorreu um erro 💔");
         }
         break;
+
+      case 'dbb':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos!");
+          if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+          if (!isBotAdmin) return reply("Preciso ser administrador para realizar esta ação.");
+
+          // Identificar o alvo: menção primeiro, depois reply
+          const mentionedJids = info.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+          const quotedParticipant = info.message?.extendedTextMessage?.contextInfo?.participant;
+
+          let targetUser = null;
+
+          // Prioridade 1: Usuário mencionado
+          if (mentionedJids && mentionedJids.length > 0) {
+            targetUser = mentionedJids[0];
+          }
+          // Prioridade 2: Usuário da mensagem respondida
+          else if (quotedParticipant) {
+            targetUser = quotedParticipant;
+          }
+
+          // Se nenhum alvo foi identificado
+          if (!targetUser) {
+            return reply(`◈ *Como usar o comando ${groupPrefix}dbb:*\n\n` +
+              `➤ Marque alguém: ${groupPrefix}dbb @usuario\n` +
+              `➤ Ou responda a mensagem de alguém: ${groupPrefix}dbb\n\n` +
+              `_Este comando remove a mensagem, bane o usuário e adiciona à blacklist._`);
+          }
+
+          // Obter o participant da mensagem marcada para delete
+          let stanzaId = info.message?.extendedTextMessage?.contextInfo?.stanzaId || info.key?.id;
+          let participantForDelete = quotedParticipant || targetUser;
+
+          // Obter stanzaId para delete
+          if (info.message?.extendedTextMessage) {
+            stanzaId = info.message.extendedTextMessage.contextInfo.stanzaId;
+            participantForDelete = info.message.extendedTextMessage.contextInfo.participant || quotedParticipant || targetUser;
+          } else if (info.message?.viewOnceMessage) {
+            stanzaId = info.key.id;
+            participantForDelete = info.key.participant || quotedParticipant || targetUser;
+          }
+
+          // Verificar proteções (mesmas do comando !db)
+          const targetRole = groupData?.usuarios?.[normalizeUserId(targetUser)]?.funcao;
+          const targetIsAdmin = groupMetadata?.participants?.find(p => p.id === targetUser)?.admin;
+
+          if (targetIsAdmin || targetRole === 'admin') {
+            return reply("⚠️ Não posso agir contra um administrador!");
+          }
+
+          if (targetUser === numerodono || isSubdono(targetUser)) {
+            return reply("⚠️ Não posso agir contra o dono ou sub-dono!");
+          }
+
+          // Variáveis para controle de sucesso
+          let msgDeleted = false;
+          let userBanned = false;
+          let userBlacklisted = false;
+
+          // 1. Apagar a mensagem
+          try {
+            await nazu.sendMessage(from, {
+              delete: {
+                remoteJid: from,
+                fromMe: false,
+                id: stanzaId,
+                participant: participantForDelete
+              }
+            });
+            msgDeleted = true;
+          } catch (deleteError) {
+            console.error('Erro ao apagar mensagem (dbb):', deleteError);
+          }
+
+          // 2. Banir o usuário
+          try {
+            await nazu.groupParticipantsUpdate(from, [targetUser], 'remove');
+            userBanned = true;
+          } catch (banError) {
+            console.error('Erro ao banir usuário (dbb):', banError);
+          }
+
+          // 3. Adicionar à blacklist
+          try {
+            const groupFilePath = buildGroupFilePath(from);
+            let dbbGroupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : { blacklist: {} };
+            dbbGroupData.blacklist = dbbGroupData.blacklist || {};
+
+            // Só adiciona se não estiver já na blacklist
+            if (!dbbGroupData.blacklist[targetUser]) {
+              dbbGroupData.blacklist[targetUser] = {
+                reason: 'DBB - Delete, Ban e Blacklist',
+                timestamp: Date.now()
+              };
+              fs.writeFileSync(groupFilePath, JSON.stringify(dbbGroupData, null, 2));
+              userBlacklisted = true;
+            } else {
+              userBlacklisted = true; // Já estava na blacklist
+            }
+          } catch (blError) {
+            console.error('Erro ao adicionar à blacklist (dbb):', blError);
+          }
+
+          // 4. Apagar a própria mensagem do comando
+          try {
+            await nazu.sendMessage(from, {
+              delete: {
+                remoteJid: from,
+                fromMe: false,
+                id: info.key.id,
+                participant: sender
+              }
+            });
+          } catch (selfDeleteError) {
+            // Ignora erro ao apagar própria mensagem
+          }
+
+          // Montar mensagem de sucesso
+          const targetUserName = getUserName(targetUser) || targetUser.split('@')[0];
+          let successMsg = `🚫 *Ação concluída com sucesso!*\n\n`;
+          successMsg += `${msgDeleted ? '✅' : '❌'} Mensagem apagada.\n`;
+          successMsg += `${userBanned ? '✅' : '❌'} Usuário removido do grupo.\n`;
+          successMsg += `${userBlacklisted ? '✅' : '❌'} Usuário adicionado à blacklist.\n\n`;
+          successMsg += `👤 Alvo: @${targetUserName}`;
+
+          await reply(successMsg, { mentions: [targetUser] });
+
+        } catch (error) {
+          console.error('Erro no comando dbb:', error);
+          reply("Ocorreu um erro 💔");
+        }
+        break;
+
       case 'blockuser':
         if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
         if (!isGroupAdmin) return reply("você precisa ser adm 💔");

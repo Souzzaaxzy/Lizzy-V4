@@ -38,6 +38,7 @@ ${middleBorder} ${menuItemIcon}${prefix}ban2
 	${middleBorder} ${menuItemIcon}${prefix}tester (marcar enquete)
 ${middleBorder} ${menuItemIcon}${prefix}bam (ban fake)
 ${middleBorder} ${menuItemIcon}${prefix}setbammsg
+${middleBorder} ${menuItemIcon}${prefix}dbb (@user ou reply)
 ${middleBorder} ${menuItemIcon}${prefix}promover
 ${middleBorder} ${menuItemIcon}${prefix}rebaixar
 ${middleBorder} ${menuItemIcon}${prefix}mute
