@@ -20919,12 +20919,29 @@ case 'addaluguel':
           let searchMsgKey = null;
 
           // =============================================
+          // FUNÇÃO PARA APAGAR MENSAGEM DE ERRO
+          // =============================================
+          const deleteSearchMsg = async () => {
+            if (searchMsgKey) {
+              await nazu.sendMessage(from, { delete: searchMsgKey }).catch(() => {});
+            }
+          };
+
+          // =============================================
           // NOVO FLUXO: 1° ETAPA - MENSAGEM DE PESQUISA
           // =============================================
           const searchMsg = await nazu.sendMessage(from, {
             text: `🔎 Procurando "${q}"...\n\n⏳ Obtendo informações da música...`
           }, { quoted: info });
           searchMsgKey = searchMsg.key;
+
+          // =============================================
+          // FUNÇÃO PARA ENVIAR ERRO
+          // =============================================
+          const sendPlayError = async (msg) => {
+            await deleteSearchMsg();
+            await nazu.sendMessage(from, { text: msg }, { quoted: info }).catch(() => {});
+          };
 
           if (q.includes('youtube.com') || q.includes('youtu.be')) {
             // É um link direto
@@ -20933,15 +20950,12 @@ case 'addaluguel':
             youtube.mp3(videoUrl, 128)
               .then(async (dlRes) => {
                 if (!dlRes.ok) {
-                  // Não apaga a mensagem de pesquisa em caso de erro
-                  return nazu.sendMessage(from, { text: `❌ Erro ao baixar o áudio: ${dlRes.msg}` }, { quoted: info });
+                  return sendPlayError(`❌ Não foi possível baixar este vídeo.\n\n💡 Tente buscar por nome ao invés de usar o link.`);
                 }
 
                 try {
                   // Apagar mensagem de pesquisa
-                  if (searchMsgKey) {
-                    await nazu.sendMessage(from, { delete: searchMsgKey }).catch(() => {});
-                  }
+                  await deleteSearchMsg();
 
                   // Extrair video ID para thumbnail
                   const videoId = videoUrl.match(/(?:v=|youtu\.be\/)([^&]+)/)?.[1] || '';
@@ -20963,6 +20977,7 @@ case 'addaluguel':
 
                 } catch (audioError) {
                   if (String(audioError).includes("ENOSPC") || String(audioError).includes("size")) {
+                    await deleteSearchMsg();
                     await nazu.sendMessage(from, { text: '📦 Arquivo muito grande para enviar como áudio, enviando como documento...' }, { quoted: info });
                     await nazu.sendMessage(from, {
                       document: dlRes.buffer,
@@ -20971,16 +20986,16 @@ case 'addaluguel':
                     }, { quoted: info });
                   } else {
                     console.error('Erro ao enviar áudio (link direto):', audioError);
-                    nazu.sendMessage(from, { text: '❌ Ocorreu um erro ao enviar o áudio.' }, { quoted: info });
+                    await sendPlayError('❌ Ocorreu um erro ao enviar o áudio.');
                   }
                 }
               })
               .catch((downloadError) => {
                 console.error('Erro no download (link direto):', downloadError);
                 if (String(downloadError).includes("age")) {
-                  nazu.sendMessage(from, { text: `🔞 Este conteúdo possui restrição de idade e não pode ser baixado.` }, { quoted: info });
+                  sendPlayError(`🔞 Este conteúdo possui restrição de idade e não pode ser baixado.`);
                 } else {
-                  nazu.sendMessage(from, { text: `❌ Ocorreu um erro ao baixar o áudio: ${downloadError.message}` }, { quoted: info });
+                  sendPlayError(`❌ Não foi possível baixar este vídeo.\n\n💡 Tente buscar por nome ao invés de usar o link.`);
                 }
               });
 
@@ -20989,7 +21004,7 @@ case 'addaluguel':
 
           if (!youtube || typeof youtube.search !== 'function') {
             console.warn('[YOUTUBE] search function not available');
-            return reply(`❌ Sistema de busca do YouTube não está disponível no momento.`);
+            return sendPlayError(`❌ Sistema de busca do YouTube temporariamente indisponível.\n\nTente novamente mais tarde.`);
           }
 
           // =============================================
@@ -20998,37 +21013,31 @@ case 'addaluguel':
           youtube.search(q)
             .then(async (result) => {
               if (!result.ok) {
-                // Não apaga a mensagem de pesquisa em caso de erro
-                return reply(`${result.msg}`);
+                return sendPlayError(`❌ ${result.msg || 'Não foi possível encontrar esta música.'}\n\n💡 Verifique o nome e tente novamente.`);
               }
 
               videoInfo = result;
               videoUrl = result.data.url;
 
               if (videoInfo.data.seconds > 1800) {
-                // Não apaga a mensagem de pesquisa em caso de erro
-                return reply(`⚠️ Este vídeo é muito longo (${videoInfo.data.timestamp}).\nPor favor, escolha um vídeo com menos de 30 minutos.`);
+                return sendPlayError(`⚠️ Este vídeo é muito longo (${videoInfo.data.timestamp}).\nPor favor, escolha um vídeo com menos de 30 minutos.`);
               }
 
               // =============================================
-              // 3° ETAPA - ENVIAR ÁUDIO
+              // DOWNLOAD DO ÁUDIO
               // =============================================
-              // Download do áudio
               youtube.mp3(videoUrl, 128)
                 .then(async (dlRes) => {
                   if (!dlRes.ok) {
-                    // Erro no download - NÃO apaga a mensagem de pesquisa
-                    return;
+                    return sendPlayError(`❌ Não foi possível baixar esta música.\n\nTente outra música.`);
                   }
 
                   try {
                     // Apagar mensagem de pesquisa ANTES de enviar
-                    if (searchMsgKey) {
-                      await nazu.sendMessage(from, { delete: searchMsgKey }).catch(() => {});
-                    }
+                    await deleteSearchMsg();
 
                     // =============================================
-                    // 4° ETAPA - ENVIAR INFORMAÇÕES DA MÚSICA
+                    // ENVIAR INFORMAÇÕES DA MÚSICA
                     // =============================================
                     const videoId = videoInfo.data.id || '';
                     const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
@@ -21083,7 +21092,7 @@ case 'addaluguel':
                     });
 
                     // =============================================
-                    // 3° ETAPA - ENVIAR ÁUDIO
+                    // ENVIAR ÁUDIO
                     // =============================================
                     await nazu.sendMessage(from, {
                       audio: dlRes.buffer,
@@ -21095,6 +21104,7 @@ case 'addaluguel':
 
                   } catch (audioError) {
                     if (String(audioError).includes("ENOSPC") || String(audioError).includes("size")) {
+                      await deleteSearchMsg();
                       await nazu.sendMessage(from, { text: '📦 Arquivo muito grande para enviar como áudio, enviando como documento...' }, { quoted: info });
                       await nazu.sendMessage(from, {
                         document: dlRes.buffer,
@@ -21103,25 +21113,24 @@ case 'addaluguel':
                       }, { quoted: info });
                     } else {
                       console.error('Erro ao enviar áudio (busca):', audioError);
-                      nazu.sendMessage(from, { text: '❌ Ocorreu um erro ao enviar o áudio.' }, { quoted: info });
+                      await sendPlayError('❌ Ocorreu um erro ao enviar o áudio.');
                     }
                   }
                 })
                 .catch((downloadError) => {
                   console.error('Erro no download (busca):', downloadError);
                   if (downloadError.message?.includes('API key inválida')) {
-                    nazu.sendMessage(from, { text: '🤖 *Sistema de YouTube temporariamente indisponível*' }, { quoted: info });
+                    sendPlayError(`🤖 Sistema de YouTube temporariamente indisponível.\n\nTente novamente em alguns minutos.`);
                   } else if (String(downloadError).includes("age")) {
-                    nazu.sendMessage(from, { text: `🔞 Este conteúdo possui restrição de idade e não pode ser baixado.` }, { quoted: info });
+                    sendPlayError(`🔞 Este conteúdo possui restrição de idade e não pode ser baixado.`);
                   } else {
-                    nazu.sendMessage(from, { text: `❌ Ocorreu um erro ao baixar o áudio: ${downloadError.message}` }, { quoted: info });
+                    sendPlayError(`❌ Não foi possível baixar esta música.\n\nTente outra música.`);
                   }
                 });
             })
             .catch((error) => {
               console.error('Erro ao buscar vídeo no YouTube:', error);
-              // Não apaga a mensagem de pesquisa em caso de erro
-              return reply(`❌ Erro ao buscar vídeo: ${error.message}`);
+              sendPlayError(`❌ Não foi possível encontrar esta música.\n\n💡 Verifique o nome e tente novamente.`);
             });
 
           // Retornar após iniciar a pesquisa em modo promisse para não continuar executando o bloco
