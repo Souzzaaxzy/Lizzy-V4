@@ -24,11 +24,23 @@ export default async function menugames(prefix, botName = "MeuBot", userName = "
 │ ▸ ${prefix}ffguilda <ID da guilda>
 │   Ver informações da guilda
 │
-│ ▸ ${prefix}ffban <UID>
-│   Verificar status de banimento
+╰──────────────────────────────────────────────╯
+
+╭──────────────────────────────────────────────╮
+│ 👑 CLASH ROYALE
+╰──────────────────────────────────────────────╯
 │
-│ ▸ ${prefix}ffwishlist <UID>
-│   Ver lista de desejos/itens
+│ ▸ ${prefix}crperfil <#TAG>
+│   Ver perfil do jogador
+│
+│ ▸ ${prefix}crbatalhas <#TAG>
+│   Ver batalhas recentes
+│
+│ ▸ ${prefix}crclan <#TAG>
+│   Ver informações do clã
+│
+│ ▸ ${prefix}crranking
+│   Ver top jogadores/clãs
 │
 ╰──────────────────────────────────────────────╯
 
@@ -37,7 +49,6 @@ export default async function menugames(prefix, botName = "MeuBot", userName = "
 ╰──────────────────────────────────────────────╯
 │
 │ 🎯 Valorant
-│ 👑 Clash Royale
 │ ⭐ Brawl Stars
 │ 🟦 Roblox
 │ 🪂 PUBG
