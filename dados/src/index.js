@@ -449,6 +449,64 @@ const formatAIResponse = (text) => {
 };
 
 // ═══════════════════════════════════════════════════════════════
+// 🎵 FUNÇÕES AUXILIARES PARA FORMATAR DADOS
+// ═══════════════════════════════════════════════════════════════
+
+// Formata segundos para duração legível (ex: 4 minutos e 19 segundos)
+const formatDuration = (seconds) => {
+  if (!seconds || isNaN(seconds)) return 'Não informado';
+  
+  const horas = Math.floor(seconds / 3600);
+  const minutos = Math.floor((seconds % 3600) / 60);
+  const segs = seconds % 60;
+  
+  let resultado = [];
+  if (horas > 0) resultado.push(`${horas} hora${horas > 1 ? 's' : ''}`);
+  if (minutos > 0) resultado.push(`${minutos} minuto${minutos > 1 ? 's' : ''}`);
+  if (segs > 0 || resultado.length === 0) resultado.push(`${segs} segundo${segs > 1 ? 's' : ''}`);
+  
+  return resultado.join(', ');
+};
+
+// Formata data do YouTube para formato brasileiro (ex: 15 de julho de 2011)
+const formatDate = (dateString) => {
+  if (!dateString) return 'Não informado';
+  
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return 'Não informado';
+    
+    const meses = [
+      'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+      'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
+    ];
+    
+    const dia = date.getDate();
+    const mes = meses[date.getMonth()];
+    const ano = date.getFullYear();
+    
+    return `${dia} de ${mes} de ${ano}`;
+  } catch (e) {
+    return 'Não informado';
+  }
+};
+
+// Resumo da descrição para apenas uma linha
+const summarizeDescription = (description) => {
+  if (!description) return 'Não informado';
+  
+  // Remove quebras de linha e tabs
+  let summary = description.replace(/[\n\r\t]+/g, ' ').trim();
+  
+  // Limita a ~100 caracteres
+  if (summary.length > 100) {
+    summary = summary.substring(0, 97) + '...';
+  }
+  
+  return summary || 'Não informado';
+};
+
+// ═══════════════════════════════════════════════════════════════
 // 🎵 LAYOUT DO PLAYER DE MÚSICA (iPhone Style)
 // ═══════════════════════════════════════════════════════════════
 const formatMusicPlayer = (title, artist, duration = null, progress = null, volume = null) => {
@@ -20782,23 +20840,47 @@ case 'addaluguel':
 
           let videoUrl;
           let videoInfo;
+          let searchMsgKey = null;
+
+          // =============================================
+          // NOVO FLUXO: 1° ETAPA - MENSAGEM DE PESQUISA
+          // =============================================
+          const searchMsg = await nazu.sendMessage(from, {
+            text: `🔎 Procurando "${q}"...\n\n⏳ Obtendo informações da música...`
+          }, { quoted: info });
+          searchMsgKey = searchMsg.key;
 
           if (q.includes('youtube.com') || q.includes('youtu.be')) {
+            // É um link direto
             videoUrl = q;
-            await react('🔍', nazu, info.key, from);
 
-            await nazu.sendMessage(from, { react: { text: '⏳', key: info.key } });
             youtube.mp3(videoUrl, 128)
               .then(async (dlRes) => {
-                if (!dlRes.ok)
+                if (!dlRes.ok) {
+                  // Não apaga a mensagem de pesquisa em caso de erro
                   return nazu.sendMessage(from, { text: `❌ Erro ao baixar o áudio: ${dlRes.msg}` }, { quoted: info });
+                }
 
                 try {
-                  await nazu.sendMessage(from, {
+                  // Apagar mensagem de pesquisa (2° ETAPA)
+                  if (searchMsgKey) {
+                    await nazu.sendMessage(from, { delete: searchMsgKey }).catch(() => {});
+                  }
+
+                  // 3° ETAPA - Envio do áudio
+                  const audioMsg = await nazu.sendMessage(from, {
                     audio: dlRes.buffer,
                     mimetype: 'audio/mpeg'
                   }, { quoted: info });
-                  await nazu.sendMessage(from, { react: { text: '✅', key: info.key } });
+
+                  // 4° ETAPA - Informações da música (respondendo ao áudio)
+                  const musicCaption = `🎵 *${dlRes.filename || 'Música'}*\n\n✨ Aproveite sua música! 💜`;
+
+                  await nazu.sendMessage(from, {
+                    image: { url: 'https://img.youtube.com/vi/' + (videoUrl.match(/(?:v=|youtu\.be\/)([^&]+)/)?.[1] || '') + '/maxresdefault.jpg' },
+                    caption: musicCaption
+                  }, { quoted: audioMsg }).catch(() => {});
+
                 } catch (audioError) {
                   if (String(audioError).includes("ENOSPC") || String(audioError).includes("size")) {
                     await nazu.sendMessage(from, { text: '📦 Arquivo muito grande para enviar como áudio, enviando como documento...' }, { quoted: info });
@@ -20830,49 +20912,110 @@ case 'addaluguel':
             return reply(`❌ Sistema de busca do YouTube não está disponível no momento.`);
           }
 
-          // Reação de pesquisa
-          await nazu.sendMessage(from, { react: { text: '🔍', key: info.key } });
-
-          // Usando .then em vez de await para a pesquisa do YouTube
+          // =============================================
+          // FLUXO DE BUSCA POR NOME
+          // =============================================
           youtube.search(q)
             .then(async (result) => {
-              if (!result.ok) return reply(`${result.msg}`);
+              if (!result.ok) {
+                // Não apaga a mensagem de pesquisa em caso de erro
+                return reply(`${result.msg}`);
+              }
+
               videoInfo = result;
               videoUrl = result.data.url;
 
-              if (videoInfo.data.seconds > 1800) return reply(`⚠️ Este vídeo é muito longo (${videoInfo.data.timestamp}).\nPor favor, escolha um vídeo com menos de 30 minutos.`);
+              if (videoInfo.data.seconds > 1800) {
+                // Não apaga a mensagem de pesquisa em caso de erro
+                return reply(`⚠️ Este vídeo é muito longo (${videoInfo.data.timestamp}).\nPor favor, escolha um vídeo com menos de 30 minutos.`);
+              }
 
-              const views = typeof videoInfo.data.views === 'number'
-                ? videoInfo.data.views.toLocaleString('pt-BR')
-                : videoInfo.data.views;
+              // =============================================
+              // 2° ETAPA - APAGAR MENSAGEM DE PESQUISA
+              // =============================================
+              if (searchMsgKey) {
+                await nazu.sendMessage(from, { delete: searchMsgKey }).catch(() => {});
+              }
 
-              // Novo layout do player de música
-              const playerLayout = formatMusicPlayer(
-                videoInfo.data.title,
-                videoInfo.data.author.name,
-                videoInfo.data.seconds,
-                0,
-                75
-              );
+              // =============================================
+              // 3° ETAPA - ENVIAR ÁUDIO
+              // =============================================
+              const audioMsg = await nazu.sendMessage(from, {
+                audio: Buffer.alloc(1), // Placeholder - será substituído
+                mimetype: 'audio/mpeg'
+              }, { quoted: info });
 
-              const caption = `${playerLayout}\n\n🎧 *Boa audição!*`;
-
-              nazu.sendMessage(from, {
-                image: { url: videoInfo.data.thumbnail },
-                caption
-              }, { quoted: info }).catch((sendErr) => console.error('Erro ao enviar mensagem de resultado (busca):', sendErr));
-
-              await nazu.sendMessage(from, { react: { text: '⏳', key: info.key } });
+              // Download do áudio
               youtube.mp3(videoUrl, 128)
                 .then(async (dlRes) => {
-                  if (!dlRes.ok) return nazu.sendMessage(from, { text: `❌ Erro ao baixar o áudio: ${dlRes.msg}` }, { quoted: info });
+                  if (!dlRes.ok) {
+                    // Erro no download
+                    return;
+                  }
 
                   try {
+                    // Enviar o áudio real (substitui o placeholder ou envia novo)
                     await nazu.sendMessage(from, {
                       audio: dlRes.buffer,
                       mimetype: 'audio/mpeg'
                     }, { quoted: info });
+
+                    // =============================================
+                    // 4° ETAPA - ENVIAR INFORMAÇÕES DA MÚSICA
+                    // =============================================
+                    const videoId = videoInfo.data.id || '';
+                    const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+
+                    const musicInfo = {
+                      title: videoInfo.data.title || 'Música',
+                      artist: videoInfo.data.author?.name || videoInfo.data.author || 'Não informado',
+                      description: videoInfo.data.description || videoInfo.data.meta || 'Não informado',
+                      date: videoInfo.data.publishDate || videoInfo.data.uploadDate || videoInfo.data.date || null,
+                      duration: videoInfo.data.seconds || 0,
+                      url: videoUrl
+                    };
+
+                    const musicCaption = `🎵 *${musicInfo.title}*\n\n` +
+                      `👤 Artista: ${musicInfo.artist}\n\n` +
+                      `📝 Descrição:\n${summarizeDescription(musicInfo.description)}\n\n` +
+                      `📅 Lançamento: ${formatDate(musicInfo.date)}\n\n` +
+                      `⏱️ Duração: ${formatDuration(musicInfo.duration)}\n\n` +
+                      `🔗 YouTube:\n${musicInfo.url}\n\n` +
+                      `────────────────────────\n\n` +
+                      `✨ Aproveite sua música! 💜`;
+
+                    // Envia a thumbnail como resposta ao áudio
+                    await nazu.sendMessage(from, {
+                      image: { url: thumbnailUrl },
+                      caption: musicCaption
+                    }, { quoted: info }).catch(async (thumbErr) => {
+                      // Se falhar a thumbnail, tenta com qualidade menor
+                      console.log('Tentando thumbnail com qualidade menor...');
+                      const fallbackUrls = [
+                        `https://img.youtube.com/vi/${videoId}/sddefault.jpg`,
+                        `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+                        `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+                        videoInfo.data.thumbnail
+                      ];
+
+                      for (const url of fallbackUrls) {
+                        if (url) {
+                          try {
+                            await nazu.sendMessage(from, {
+                              image: { url },
+                              caption: musicCaption
+                            }, { quoted: info });
+                            break;
+                          } catch (e) {
+                            continue;
+                          }
+                        }
+                      }
+                    });
+
+                    // Reação de sucesso
                     await nazu.sendMessage(from, { react: { text: '✅', key: info.key } });
+
                   } catch (audioError) {
                     if (String(audioError).includes("ENOSPC") || String(audioError).includes("size")) {
                       await nazu.sendMessage(from, { text: '📦 Arquivo muito grande para enviar como áudio, enviando como documento...' }, { quoted: info });
@@ -20900,6 +21043,7 @@ case 'addaluguel':
             })
             .catch((error) => {
               console.error('Erro ao buscar vídeo no YouTube:', error);
+              // Não apaga a mensagem de pesquisa em caso de erro
               return reply(`❌ Erro ao buscar vídeo: ${error.message}`);
             });
 
