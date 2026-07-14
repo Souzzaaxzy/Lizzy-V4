@@ -33290,7 +33290,7 @@ break;
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
           if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
 
-          // Identificar o alvo: menção primeiro, depois reply
+          // Identificar o alvo: menção primeiro, reply, depois número de telefone
           const mentionedJids = info.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
           const quotedParticipant = info.message?.extendedTextMessage?.contextInfo?.participant;
 
@@ -33304,12 +33304,28 @@ break;
           else if (quotedParticipant) {
             targetUser = quotedParticipant;
           }
+          // Prioridade 3: Número de telefone no texto
+          else if (q) {
+            // Limpar o número - remover espaços, traços, parênteses
+            let phoneNumber = q.replace(/[\s\-\(\)]/g, '');
+            
+            // Verificar se é um número de telefone válido (mínimo 10 dígitos)
+            if (/^\d{10,15}$/.test(phoneNumber)) {
+              // Adicionar @s.whatsapp.net se não tiver
+              if (!phoneNumber.includes('@')) {
+                // Remover qualquer 0 no início se houver
+                phoneNumber = phoneNumber.replace(/^0+/, '');
+                targetUser = `${phoneNumber}@s.whatsapp.net`;
+              }
+            }
+          }
 
           // Se nenhum alvo foi identificado
           if (!targetUser) {
             return reply(`◈ *Como usar o comando ${groupPrefix}getpp:*\n\n` +
               `➤ Marque alguém: ${groupPrefix}getpp @usuario\n` +
-              `➤ Ou responda a mensagem de alguém: ${groupPrefix}getpp\n\n` +
+              `➤ Responda mensagem: ${groupPrefix}getpp\n` +
+              `➤ Número de telefone: ${groupPrefix}getpp 5511999999999\n\n` +
               `_Este comando é exclusivo para administradores._`);
           }
 
