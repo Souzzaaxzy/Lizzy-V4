@@ -3,138 +3,120 @@
  */
 
 export default async function menugames(prefix, botName = "MeuBot", userName = "Usuário") {
-    return `╭──────────────────────────────────────────────╮
-│              🎮 ${botName} - GAMES              ║
-╰──────────────────────────────────────────────╯
+    return `╭━━━〔 🎮 ${botName} • 𝐆𝐀𝐌𝐄𝐒 〕━━━⬣
+┃ 🕹️ Consulte perfis, rankings e estatísticas
+┃ de diversos jogos em um só lugar.
+╰━━━━━━━━━━━━━━━━━━━━━━━━━━⬣
 
-╭──────────────────────────────────────────────╮
-│ 🔥 FREE FIRE
-╰──────────────────────────────────────────────╯
-│
-│ ▸ ${prefix}ffperfil <UID>
-│   Ver perfil completo do jogador
-│
-│ ▸ ${prefix}ffstats <UID>
-│   Ver estatísticas detalhadas
-│
-│ ▸ ${prefix}ffguilda <ID da guilda>
-│   Ver informações da guilda
-│
-╰──────────────────────────────────────────────╯
 
-╭──────────────────────────────────────────────╮
-│ 👑 CLASH ROYALE
-╰──────────────────────────────────────────────╯
+╭─❖ 🔥 FREE FIRE
+│ ➜ ${prefix}ffperfil <UID>
+│    ╰ Ver perfil completo
 │
-│ ▸ ${prefix}crperfil <#TAG>
-│   Ver perfil do jogador
+│ ➜ ${prefix}ffstats <UID>
+│    ╰ Estatísticas detalhadas
 │
-│ ▸ ${prefix}crbatalhas <#TAG>
-│   Ver batalhas recentes
-│
-│ ▸ ${prefix}crclan <#TAG>
-│   Ver informações do clã
-│
-│ ▸ ${prefix}crranking
-│   Ver top jogadores/clãs
-│
-╰──────────────────────────────────────────────╯
+│ ➜ ${prefix}ffguilda <ID>
+│    ╰ Informações da guilda
+╰──────────────────────────⬣
 
-╭──────────────────────────────────────────────╮
-│ ⭐ BRAWL STARS
-╰──────────────────────────────────────────────╯
-│
-│ ▸ ${prefix}bsperfil <#TAG>
-│   Ver perfil do jogador
-│
-│ ▸ ${prefix}bsbatalhas <#TAG>
-│   Ver batalhas recentes
-│
-│ ▸ ${prefix}bsclube <#TAG>
-│   Ver informações do clube
-│
-│ ▸ ${prefix}bsranking
-│   Ver top jogadores/clubes
-│
-╰──────────────────────────────────────────────╯
 
-╭──────────────────────────────────────────────╮
-│ 🏰 CLASH OF CLANS
-╰──────────────────────────────────────────────╯
+╭─❖ 👑 CLASH ROYALE
+│ ➜ ${prefix}crperfil <#TAG>
+│    ╰ Perfil do jogador
 │
-│ ▸ ${prefix}cocperfil <#TAG>
-│   Ver perfil do jogador
+│ ➜ ${prefix}crbatalhas <#TAG>
+│    ╰ Batalhas recentes
 │
-│ ▸ ${prefix}cocclan <#TAG>
-│   Ver informações do clã
+│ ➜ ${prefix}crclan <#TAG>
+│    ╰ Informações do clã
 │
-│ ▸ ${prefix}cocguerra <#TAG>
-│   Ver status da guerra
-│
-│ ▸ ${prefix}cocranking
-│   Ver top jogadores/clãs
-│
-╰──────────────────────────────────────────────╯
+│ ➜ ${prefix}crranking
+│    ╰ Ranking global
+╰──────────────────────────⬣
 
-╭──────────────────────────────────────────────╮
-│ 🎮 ROBLOX
-╰──────────────────────────────────────────────╯
-│
-│ ▸ ${prefix}rbxperfil <username>
-│   Ver perfil do jogador
-│
-│ ▸ ${prefix}rbxstatus <username>
-│   Ver status online/offline
-│
-│ ▸ ${prefix}rbxjogos <username>
-│   Ver jogos favoritos
-│
-╰──────────────────────────────────────────────╯
 
-╭──────────────────────────────────────────────╮
-│ 🎯 VALORANT
-╰──────────────────────────────────────────────╯
+╭─❖ ⭐ BRAWL STARS
+│ ➜ ${prefix}bsperfil <#TAG>
+│    ╰ Perfil do jogador
 │
-│ ▸ ${prefix}vaperfil Nome#TAG
-│   Ver perfil do jogador
+│ ➜ ${prefix}bsbatalhas <#TAG>
+│    ╰ Histórico de batalhas
 │
-│ ▸ ${prefix}vamatches Nome#TAG
-│   Ver partidas recentes
+│ ➜ ${prefix}bsclube <#TAG>
+│    ╰ Informações do clube
 │
-│ ▸ ${prefix}varanking
-│   Ver top jogadores
-│
-╰──────────────────────────────────────────────╯
+│ ➜ ${prefix}bsranking
+│    ╰ Ranking global
+╰──────────────────────────⬣
 
-╭──────────────────────────────────────────────╮
-│ 👑 LEAGUE OF LEGENDS
-╰──────────────────────────────────────────────╯
-│
-│ ▸ ${prefix}lolperfil <nome>
-│   Ver perfil do invocador
-│
-│ ▸ ${prefix}lolchallenger
-│   Ver top challenger
-│
-│ ▸ ${prefix}lolmaster
-│   Ver top master
-│
-╰──────────────────────────────────────────────╯
 
-╭──────────────────────────────────────────────╮
-│ 🎪 PUBG
-╰──────────────────────────────────────────────╯
+╭─❖ 🏰 CLASH OF CLANS
+│ ➜ ${prefix}cocperfil <#TAG>
+│    ╰ Perfil do jogador
 │
-│ ▸ ${prefix}pubgperfil <nome>
-│   Ver perfil do jogador
+│ ➜ ${prefix}cocclan <#TAG>
+│    ╰ Informações do clã
 │
-│ ▸ ${prefix}pubgstats <nome>
-│   Ver estatísticas detalhadas
+│ ➜ ${prefix}cocguerra <#TAG>
+│    ╰ Guerra atual
 │
-│ ▸ ${prefix}pubgmatch <nome>
-│   Ver partidas recentes
-│
-╰──────────────────────────────────────────────╯
+│ ➜ ${prefix}cocranking
+│    ╰ Ranking global
+╰──────────────────────────⬣
 
-💡 Use ${prefix}ajuda <comando> para mais informações.`;
+
+╭─❖ 🎮 ROBLOX
+│ ➜ ${prefix}rbxperfil <username>
+│    ╰ Perfil do usuário
+│
+│ ➜ ${prefix}rbxstatus <username>
+│    ╰ Status online/offline
+│
+│ ➜ ${prefix}rbxjogos <username>
+│    ╰ Jogos favoritos
+╰──────────────────────────⬣
+
+
+╭─❖ 🎯 VALORANT
+│ ➜ ${prefix}vaperfil <Nome#TAG>
+│    ╰ Perfil competitivo
+│
+│ ➜ ${prefix}vamatches <Nome#TAG>
+│    ╰ Partidas recentes
+│
+│ ➜ ${prefix}varanking
+│    ╰ Top jogadores
+╰──────────────────────────⬣
+
+
+╭─❖ 👑 LEAGUE OF LEGENDS
+│ ➜ ${prefix}lolperfil <Nome>
+│    ╰ Perfil do invocador
+│
+│ ➜ ${prefix}lolchallenger
+│    ╰ Top Challenger
+│
+│ ➜ ${prefix}lolmaster
+│    ╰ Top Master
+╰──────────────────────────⬣
+
+
+╭─❖ 🎪 PUBG
+│ ➜ ${prefix}pubgperfil <Nome>
+│    ╰ Perfil do jogador
+│
+│ ➜ ${prefix}pubgstats <Nome>
+│    ╰ Estatísticas completas
+│
+│ ➜ ${prefix}pubgmatch <Nome>
+│    ╰ Últimas partidas
+╰──────────────────────────⬣
+
+
+╭━━━━━━━━━━━━━━━━━━━━━━━━━━⬣
+┃ 💡 Dica:
+┃ Use *${prefix}ajuda <comando>* para
+┃ visualizar exemplos e detalhes.
+╰━━━━━━━━━━━━━━━━━━━━━━━━━━⬣`;
 }
