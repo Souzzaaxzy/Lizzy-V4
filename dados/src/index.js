@@ -20862,24 +20862,28 @@ case 'addaluguel':
                 }
 
                 try {
-                  // Apagar mensagem de pesquisa (2° ETAPA)
+                  // Apagar mensagem de pesquisa
                   if (searchMsgKey) {
                     await nazu.sendMessage(from, { delete: searchMsgKey }).catch(() => {});
                   }
 
-                  // 3° ETAPA - Envio do áudio
-                  const audioMsg = await nazu.sendMessage(from, {
+                  // Extrair video ID para thumbnail
+                  const videoId = videoUrl.match(/(?:v=|youtu\.be\/)([^&]+)/)?.[1] || '';
+                  const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+                  const musicCaption = `🎵 *${dlRes.filename || 'Música'}*\n\n✨ Aproveite a música @${pushname}!`;
+
+                  // Enviar thumbnail com informações
+                  await nazu.sendMessage(from, {
+                    image: { url: thumbnailUrl },
+                    caption: musicCaption,
+                    mentions: [sender]
+                  }, { quoted: info }).catch(() => {});
+
+                  // Enviar áudio
+                  await nazu.sendMessage(from, {
                     audio: dlRes.buffer,
                     mimetype: 'audio/mpeg'
                   }, { quoted: info });
-
-                  // 4° ETAPA - Informações da música (respondendo ao áudio)
-                  const musicCaption = `🎵 *${dlRes.filename || 'Música'}*\n\n✨ Aproveite sua música! 💜`;
-
-                  await nazu.sendMessage(from, {
-                    image: { url: 'https://img.youtube.com/vi/' + (videoUrl.match(/(?:v=|youtu\.be\/)([^&]+)/)?.[1] || '') + '/maxresdefault.jpg' },
-                    caption: musicCaption
-                  }, { quoted: audioMsg }).catch(() => {});
 
                 } catch (audioError) {
                   if (String(audioError).includes("ENOSPC") || String(audioError).includes("size")) {
@@ -20942,16 +20946,10 @@ case 'addaluguel':
                   }
 
                   try {
-                    // Apagar mensagem de pesquisa ANTES de enviar o áudio
+                    // Apagar mensagem de pesquisa ANTES de enviar
                     if (searchMsgKey) {
                       await nazu.sendMessage(from, { delete: searchMsgKey }).catch(() => {});
                     }
-
-                    // Enviar o áudio
-                    await nazu.sendMessage(from, {
-                      audio: dlRes.buffer,
-                      mimetype: 'audio/mpeg'
-                    }, { quoted: info });
 
                     // =============================================
                     // 4° ETAPA - ENVIAR INFORMAÇÕES DA MÚSICA
@@ -20977,7 +20975,7 @@ case 'addaluguel':
                       `────────────────────────\n\n` +
                       `✨ Aproveite a música @${pushname}!`;
 
-                    // Envia a thumbnail como resposta ao áudio
+                    // Envia a thumbnail com informações
                     await nazu.sendMessage(from, {
                       image: { url: thumbnailUrl },
                       caption: musicCaption,
@@ -21007,6 +21005,14 @@ case 'addaluguel':
                         }
                       }
                     });
+
+                    // =============================================
+                    // 3° ETAPA - ENVIAR ÁUDIO
+                    // =============================================
+                    await nazu.sendMessage(from, {
+                      audio: dlRes.buffer,
+                      mimetype: 'audio/mpeg'
+                    }, { quoted: info });
 
                     // Reação de sucesso
                     await nazu.sendMessage(from, { react: { text: '✅', key: info.key } });
