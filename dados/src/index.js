@@ -24821,16 +24821,17 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
         }
         break;
 
+      case 'keyriot':
       case 'keyvalorant':
+      case 'keylol':
         try {
           if (!isOwnerOrSub) return reply("🚫 Este comando é exclusivo para o dono do bot!");
-          if (!q) return reply(`❌ Uso: ${prefix}keyvalorant <api_key>\n\nExemplo: ${prefix}keyvalorant SUA_API_KEY_AQUI`);
-          
+          if (!q) return reply(`❌ Uso: ${prefix}keyriot <api_key>\n\n📋 Usado para: Valorant e League of Legends\n🔗 Registrar em: https://developer.riotgames.com`);
           
           const saved = setApiKey('valorant', q);
           
           if (saved) {
-            await reply("✅ API Key do Valorant salva com sucesso!");
+            await reply("✅ API Key da Riot salva com sucesso!\n📋 Usado para: Valorant e League of Legends");
           } else {
             await reply("❌ Erro ao salvar a API Key.");
           }
@@ -24840,21 +24841,65 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
         }
         break;
 
+      case 'delkeyriot':
       case 'delkeyvalorant':
+      case 'delkeylol':
         try {
           if (!isOwnerOrSub) return reply("🚫 Este comando é exclusivo para o dono do bot!");
-          
           
           const currentKey = getApiKey('valorant');
           
           if (!currentKey) {
-            return reply("ℹ️ Não há API Key do Valorant configurada.");
+            return reply("ℹ️ Não há API Key da Riot configurada.");
           }
           
           const deleted = deleteApiKey('valorant');
           
           if (deleted) {
-            await reply("✅ API Key do Valorant removida com sucesso!");
+            await reply("✅ API Key da Riot removida com sucesso!");
+          } else {
+            await reply("❌ Erro ao remover a API Key.");
+          }
+        } catch (e) {
+          console.error(e);
+          reply("🐝 Ops! Ocorreu um erro inesperado!");
+        }
+        break;
+
+      case 'keysupercell':
+      case 'keyclash':
+        try {
+          if (!isOwnerOrSub) return reply("🚫 Este comando é exclusivo para o dono do bot!");
+          if (!q) return reply(`❌ Uso: ${prefix}keysupercell <api_key>\n\n📋 Usado para: Clash Royale, Brawl Stars e Clash of Clans\n🔗 Registrar em: https://developer.clashroyale.com`);
+          
+          const saved = setApiKey('clashroyale', q);
+          
+          if (saved) {
+            await reply("✅ API Key da Supercell salva com sucesso!\n📋 Usado para: Clash Royale, Brawl Stars e Clash of Clans");
+          } else {
+            await reply("❌ Erro ao salvar a API Key.");
+          }
+        } catch (e) {
+          console.error(e);
+          reply("🐝 Ops! Ocorreu um erro inesperado!");
+        }
+        break;
+
+      case 'delkeysupercell':
+      case 'delkeyclash':
+        try {
+          if (!isOwnerOrSub) return reply("🚫 Este comando é exclusivo para o dono do bot!");
+          
+          const currentKey = getApiKey('clashroyale');
+          
+          if (!currentKey) {
+            return reply("ℹ️ Não há API Key da Supercell configurada.");
+          }
+          
+          const deleted = deleteApiKey('clashroyale');
+          
+          if (deleted) {
+            await reply("✅ API Key da Supercell removida com sucesso!");
           } else {
             await reply("❌ Erro ao remover a API Key.");
           }
@@ -24868,13 +24913,12 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
       case 'keyclashroyale':
         try {
           if (!isOwnerOrSub) return reply("🚫 Este comando é exclusivo para o dono do bot!");
-          if (!q) return reply(`❌ Uso: ${prefix}keycr <api_key>\n\nExemplo: ${prefix}keycr SUA_API_KEY_AQUI`);
-          
+          if (!q) return reply(`❌ Uso: ${prefix}keycr <api_key>\n\n📋 Use ${prefix}keysupercell para ver todos os jogos\n🔗 Registrar em: https://developer.clashroyale.com`);
           
           const saved = setApiKey('clashroyale', q);
           
           if (saved) {
-            await reply("✅ API Key do Clash Royale salva com sucesso!");
+            await reply("✅ API Key do Clash Royale salva com sucesso!\n📋 Usado para: Clash Royale, Brawl Stars e Clash of Clans");
           } else {
             await reply("❌ Erro ao salvar a API Key.");
           }
@@ -24889,17 +24933,16 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
         try {
           if (!isOwnerOrSub) return reply("🚫 Este comando é exclusivo para o dono do bot!");
           
-          
           const currentKey = getApiKey('clashroyale');
           
           if (!currentKey) {
-            return reply("ℹ️ Não há API Key do Clash Royale configurada.");
+            return reply("ℹ️ Não há API Key da Supercell configurada.");
           }
           
           const deleted = deleteApiKey('clashroyale');
           
           if (deleted) {
-            await reply("✅ API Key do Clash Royale removida com sucesso!");
+            await reply("✅ API Key da Supercell removida com sucesso!");
           } else {
             await reply("❌ Erro ao remover a API Key.");
           }
@@ -26032,20 +26075,31 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
         try {
           if (!isOwnerOrSub) return reply("🚫 Este comando é exclusivo para o dono do bot!");
           
-          
-          const keysStatus = getAllApiKeysStatus();
-          
           let msg = "🔑 *STATUS DAS APIs DE GAMES*\n\n";
           
-          for (const key of keysStatus) {
-            if (key.configured) {
-              msg += `${key.name}: ✅ ${key.maskedKey}\n`;
-            } else {
-              msg += `${key.name}: ❌ Não configurada\n`;
-            }
-          }
+          // Free Fire
+          const ffKey = getApiKey('freefire');
+          msg += `🔥 *FREE FIRE*\n`;
+          msg += `   ${ffKey ? '✅ Configurada' : '❌ Não configurada'}\n`;
+          msg += `   Comando: ${prefix}keyff <api_key>\n\n`;
           
-          msg += "\n📝 Para configurar: !keyff <api_key>";
+          // Riot (Valorant + LoL)
+          const riotKey = getApiKey('valorant');
+          msg += `🎯 *RIOT GAMES* (Valorant + LoL)\n`;
+          msg += `   ${riotKey ? '✅ Configurada' : '❌ Não configurada'}\n`;
+          msg += `   Comando: ${prefix}keyriot <api_key>\n\n`;
+          
+          // Supercell (Clash Royale + Brawl Stars + Clash of Clans)
+          const supercellKey = getApiKey('clashroyale');
+          msg += `👑 *SUPERCELL* (Clash Royale + Brawl Stars + Clash of Clans)\n`;
+          msg += `   ${supercellKey ? '✅ Configurada' : '❌ Não configurada'}\n`;
+          msg += `   Comando: ${prefix}keysupercell <api_key>\n\n`;
+          
+          // PUBG
+          const pubgKey = getApiKey('pubg');
+          msg += `🎪 *PUBG*\n`;
+          msg += `   ${pubgKey ? '✅ Configurada' : '❌ Não configurada'}\n`;
+          msg += `   Comando: ${prefix}keypubg <api_key>`;
           
           await reply(msg);
         } catch (e) {
