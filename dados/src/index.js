@@ -34,6 +34,16 @@ import {
   normalizeTag as crNormalizeTag
 } from './apis/clashroyale.js';
 
+// Brawl Stars API
+import {
+  getPlayer as bsGetPlayer,
+  getPlayerBattles as bsGetPlayerBattles,
+  getClub as bsGetClub,
+  getTopPlayers as bsGetTopPlayers,
+  getTopClubs as bsGetTopClubs,
+  getBrawler as bsGetBrawler
+} from './apis/brawlstars.js';
+
 import { 
   setApiKey, 
   deleteApiKey, 
@@ -25071,6 +25081,168 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
         } catch (e) {
           console.error(e);
           reply("🐝 Ops! Ocorreu um erro inesperado!");
+        }
+        break;
+
+      case 'bsperfil':
+      case 'bsplayer':
+        try {
+          const playerTag = q.trim().replace(/^#/, '');
+          if (!playerTag) {
+            return reply(`❌ Uso: ${prefix}bsperfil <#TAG>\n\nExemplo: ${prefix}bsperfil PJYGQRY\n\n💡 Não precisa do # no início!`);
+          }
+
+          await react('🔍', nazu, info.key, from);
+          
+          const result = await bsGetPlayer(playerTag);
+          
+          if (!result.ok) {
+            await react('❌', nazu, info.key, from);
+            return reply(result.msg);
+          }
+
+          const p = result.data;
+          
+          const perfilMsg = `⭐ *BRAWL STARS - PERFIL*\n\n` +
+            `🏷️ Tag: ${p.tag}\n` +
+            `📛 Nome: ${p.name}\n` +
+            `🏆 Troféus: ${p.trophies?.toLocaleString('pt-BR')}\n` +
+            `⭐ Melhor: ${p.highestTrophies?.toLocaleString('pt-BR')}\n` +
+            `📊 Nível: ${p.expLevel}\n` +
+            `🎮 Vitórias: ${p.wins?.toLocaleString('pt-BR')}\n` +
+            `💔 Derrotas: ${p.losses?.toLocaleString('pt-BR')}\n` +
+            `📈 Taxa de Vitória: ${p.winRate}%\n` +
+            `👑 Vitória Solo: ${p.soloVictories?.toLocaleString('pt-BR')}\n` +
+            `👥 Vitória Dupla: ${p.duoVictories?.toLocaleString('pt-BR')}\n` +
+            `🛡️ Clube: ${p.club?.name || 'Sem clube'}`;
+
+          await reply(perfilMsg);
+          await react('✅', nazu, info.key, from);
+        } catch (e) {
+          console.error('Erro no comando bsperfil:', e);
+          await react('❌', nazu, info.key, from);
+          reply("❌ Ocorreu um erro ao buscar o perfil.");
+        }
+        break;
+
+      case 'bsbatalhas':
+      case 'bsbattles':
+        try {
+          const playerTag = q.trim().replace(/^#/, '');
+          if (!playerTag) {
+            return reply(`❌ Uso: ${prefix}bsbatalhas <#TAG>\n\nExemplo: ${prefix}bsbatalhas PJYGQRY\n\n💡 Não precisa do # no início!`);
+          }
+
+          await react('⚔️', nazu, info.key, from);
+          
+          const result = await bsGetPlayerBattles(playerTag, 5);
+          
+          if (!result.ok) {
+            await react('❌', nazu, info.key, from);
+            return reply(result.msg);
+          }
+
+          const battles = result.data;
+          
+          if (battles.length === 0) {
+            return reply("📭 Este jogador não tem batalhas recentes.");
+          }
+
+          let battlesMsg = `⚔️ *BRAWL STARS - BATALHAS*\n\n`;
+          
+          battles.forEach((battle, i) => {
+            const emoji = battle.isVictory ? '✅' : '❌';
+            const date = new Date(battle.timestamp).toLocaleDateString('pt-BR');
+            battlesMsg += `${emoji} ${battle.mode} (${battle.type})\n`;
+            battlesMsg += `   🏆 Troféus: ${battle.trophyChange > 0 ? '+' : ''}${battle.trophyChange}\n`;
+            battlesMsg += `   📅 ${date}\n\n`;
+          });
+
+          battlesMsg += `📊 Use ${prefix}bsperfil ${playerTag} para ver o perfil completo.`;
+
+          await reply(battlesMsg);
+          await react('✅', nazu, info.key, from);
+        } catch (e) {
+          console.error('Erro no comando bsbatalhas:', e);
+          await react('❌', nazu, info.key, from);
+          reply("❌ Ocorreu um erro ao buscar as batalhas.");
+        }
+        break;
+
+      case 'bsclube':
+      case 'bsclub':
+        try {
+          const clubTag = q.trim().replace(/^#/, '');
+          if (!clubTag) {
+            return reply(`❌ Uso: ${prefix}bsclube <#TAG>\n\nExemplo: ${prefix}bsclube GGQJ0RY\n\n💡 Não precisa do # no início!`);
+          }
+
+          await react('🏰', nazu, info.key, from);
+          
+          const result = await bsGetClub(clubTag);
+          
+          if (!result.ok) {
+            await react('❌', nazu, info.key, from);
+            return reply(result.msg);
+          }
+
+          const c = result.data;
+          
+          const clubMsg = `🏰 *BRAWL STARS - CLUBE*\n\n` +
+            `🏷️ Tag: ${c.tag}\n` +
+            `📛 Nome: ${c.name}\n` +
+            `📝 ${c.description}\n` +
+            `🏆 Pontuação: ${c.trophies?.toLocaleString('pt-BR')}\n` +
+            `🎯 Troféus Necessários: ${c.requiredTrophies?.toLocaleString('pt-BR')}\n` +
+            `👥 Membros: ${c.members}`;
+
+          await reply(clubMsg);
+          await react('✅', nazu, info.key, from);
+        } catch (e) {
+          console.error('Erro no comando bsclube:', e);
+          await react('❌', nazu, info.key, from);
+          reply("❌ Ocorreu um erro ao buscar o clube.");
+        }
+        break;
+
+      case 'bsranking':
+      case 'bstop':
+        try {
+          await react('🏆', nazu, info.key, from);
+          
+          const [playersResult, clubsResult] = await Promise.all([
+            bsGetTopPlayers(5),
+            bsGetTopClubs(5)
+          ]);
+          
+          let rankingMsg = `🏆 *BRAWL STARS - RANKINGS*\n\n`;
+          
+          rankingMsg += `⭐ *TOP 5 JOGADORES*\n`;
+          if (playersResult.ok && playersResult.data.length > 0) {
+            playersResult.data.forEach((p, i) => {
+              const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+              rankingMsg += `${medal} ${p.name} - ${p.trophies?.toLocaleString('pt-BR')} troféus\n`;
+            });
+          } else {
+            rankingMsg += `❌ Não foi possível carregar o ranking.\n`;
+          }
+          
+          rankingMsg += `\n🏰 *TOP 5 CLUBES*\n`;
+          if (clubsResult.ok && clubsResult.data.length > 0) {
+            clubsResult.data.forEach((c, i) => {
+              const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+              rankingMsg += `${medal} ${c.name} - ${c.trophies?.toLocaleString('pt-BR')} pontos\n`;
+            });
+          } else {
+            rankingMsg += `❌ Não foi possível carregar o ranking.\n`;
+          }
+          
+          await reply(rankingMsg);
+          await react('✅', nazu, info.key, from);
+        } catch (e) {
+          console.error('Erro no comando bsranking:', e);
+          await react('❌', nazu, info.key, from);
+          reply("❌ Ocorreu um erro ao buscar o ranking.");
         }
         break;
 

@@ -8,10 +8,6 @@ export default async function menugames(prefix, botName = "MeuBot", userName = "
 ╰──────────────────────────────────────────────╯
 
 ╭──────────────────────────────────────────────╮
-│ ◈ Menu Games - Comandos de Jogos             │
-╰──────────────────────────────────────────────╯
-
-╭──────────────────────────────────────────────╮
 │ 🔥 FREE FIRE
 ╰──────────────────────────────────────────────╯
 │
@@ -45,13 +41,20 @@ export default async function menugames(prefix, botName = "MeuBot", userName = "
 ╰──────────────────────────────────────────────╯
 
 ╭──────────────────────────────────────────────╮
-│ 📌 Em breve
+│ ⭐ BRAWL STARS
 ╰──────────────────────────────────────────────╯
 │
-│ 🎯 Valorant
-│ ⭐ Brawl Stars
-│ 🟦 Roblox
-│ 🪂 PUBG
+│ ▸ ${prefix}bsperfil <#TAG>
+│   Ver perfil do jogador
+│
+│ ▸ ${prefix}bsbatalhas <#TAG>
+│   Ver batalhas recentes
+│
+│ ▸ ${prefix}bsclube <#TAG>
+│   Ver informações do clube
+│
+│ ▸ ${prefix}bsranking
+│   Ver top jogadores/clubes
 │
 ╰──────────────────────────────────────────────╯
 
