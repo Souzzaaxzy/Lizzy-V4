@@ -73,6 +73,16 @@ const getProfile = async (playerId, region = 'br') => {
 
   } catch (error) {
     console.error('Erro ao buscar perfil Free Fire:', error);
+    
+    // Verificar se é erro de servidor
+    const isServerError = error.message.includes('503') || 
+                          error.message.includes('502') || 
+                          error.message.includes('Major Login Failed');
+    
+    if (isServerError) {
+      return { ok: false, msg: '🔧 Os servidores da Garena estão temporariamente fora do ar. Tente novamente em alguns minutos.' };
+    }
+    
     return { ok: false, msg: '❌ O serviço do Free Fire está indisponível. Tente novamente.' };
   }
 };
