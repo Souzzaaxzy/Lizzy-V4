@@ -1,11 +1,14 @@
 /**
  * Free Fire API Module
  * Utiliza a Free Fire Community API
+ * ES Modules compatible
  */
+
+import { getApiKey as dbGetApiKey } from '../utils/database.js';
 
 // Cache para armazenar respostas (5 minutos)
 const cache = new Map();
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
+const CACHE_DURATION = 5 * 60 * 1000;
 
 // Limpa cache antigo periodicamente
 setInterval(() => {
@@ -15,18 +18,12 @@ setInterval(() => {
       cache.delete(key);
     }
   }
-}, 60000); // Limpa a cada minuto
+}, 60000);
 
-/**
- * Salva dados no cache
- */
 const setCache = (key, data) => {
   cache.set(key, { data, timestamp: Date.now() });
 };
 
-/**
- * Recupera dados do cache
- */
 const getCache = (key) => {
   const cached = cache.get(key);
   if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
@@ -36,21 +33,14 @@ const getCache = (key) => {
   return null;
 };
 
-/**
- * Obtém a API Key do Free Fire
- */
 const getApiKey = () => {
   try {
-    const { getApiKey } = require('../utils/database.js');
-    return getApiKey('freefire');
+    return dbGetApiKey('freefire');
   } catch (e) {
     return null;
   }
 };
 
-/**
- * Faz requisição para a API com timeout
- */
 const fetchWithTimeout = async (url, options = {}, timeout = 10000) => {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -68,9 +58,6 @@ const fetchWithTimeout = async (url, options = {}, timeout = 10000) => {
   }
 };
 
-/**
- * Formata segundos para duração legível
- */
 const formatDuration = (seconds) => {
   if (!seconds || isNaN(seconds)) return 'Não informado';
   
@@ -86,9 +73,6 @@ const formatDuration = (seconds) => {
   return resultado.join(' ');
 };
 
-/**
- * Formata data para o padrão brasileiro
- */
 const formatDate = (dateString) => {
   if (!dateString) return 'Não informado';
   
@@ -106,9 +90,6 @@ const formatDate = (dateString) => {
   }
 };
 
-/**
- * Resumo da descrição para apenas uma linha
- */
 const summarizeDescription = (description) => {
   if (!description) return 'Não informado';
   
@@ -121,24 +102,17 @@ const summarizeDescription = (description) => {
   return summary || 'Não informado';
 };
 
-/**
- * Verifica se a API Key está configurada
- */
 const isApiConfigured = () => {
   const apiKey = getApiKey();
   return apiKey && apiKey.key;
 };
 
-/**
- * Obtém informações do perfil de um jogador
- */
 const getProfile = async (playerId) => {
   const apiKey = getApiKey();
   if (!apiKey) {
     return { ok: false, msg: '❌ A API Key do Free Fire ainda não foi configurada pelo proprietário do bot.' };
   }
 
-  // Verifica cache
   const cacheKey = `profile_${playerId}`;
   const cached = getCache(cacheKey);
   if (cached) {
@@ -178,10 +152,7 @@ const getProfile = async (playerId) => {
       rank: data.brRank || null,
       csRank: data.csRank || null,
       pet: data.pet || null,
-      bio: data.bio || null,
-      clanPoints: data.clanPoints || null,
-      clanLevel: data.clanLevel || null,
-      clanRole: data.clanRole || null
+      bio: data.bio || null
     };
 
     setCache(cacheKey, profile);
@@ -196,16 +167,12 @@ const getProfile = async (playerId) => {
   }
 };
 
-/**
- * Obtém estatísticas detalhadas de um jogador
- */
 const getStats = async (playerId) => {
   const apiKey = getApiKey();
   if (!apiKey) {
     return { ok: false, msg: '❌ A API Key do Free Fire ainda não foi configurada pelo proprietário do bot.' };
   }
 
-  // Verifica cache
   const cacheKey = `stats_${playerId}`;
   const cached = getCache(cacheKey);
   if (cached) {
@@ -234,36 +201,30 @@ const getStats = async (playerId) => {
     const stats = data.stats || data;
 
     const statsFormatted = {
-      // Battle Royale
       brMatches: stats.brMatches || stats.matches || stats.games || null,
       brWins: stats.brWins || stats.wins || null,
       brKills: stats.brKills || stats.kills || null,
       brDeaths: stats.brDeaths || stats.deaths || null,
       brKd: stats.brKd || stats.kd || null,
       brHeadshots: stats.brHeadshots || stats.headshots || null,
-      stats.brHeadshotRate: stats.brHeadshotRate || stats.headshotRate || null,
-      // Classic
+      brHeadshotRate: stats.brHeadshotRate || stats.headshotRate || null,
       csMatches: stats.csMatches || stats.csGames || null,
       csWins: stats.csWins || null,
       csKills: stats.csKills || null,
-      // Geral
       wins: stats.wins || stats.brWins || null,
       losses: stats.losses || stats.deaths || null,
       gamesPlayed: stats.gamesPlayed || stats.matches || stats.brMatches || null,
       playTime: stats.playTime || stats.timePlayed || formatDuration(stats.secondsPlayed),
       secondsPlayed: stats.secondsPlayed || null,
-      // Temporada
       season: data.season || null,
       currentRank: data.currentRank || null,
       maxRank: data.maxRank || null
     };
 
-    // Calcula K/D se não vier da API
     if (!statsFormatted.brKd && statsFormatted.brKills && statsFormatted.brDeaths) {
       statsFormatted.brKd = (statsFormatted.brKills / Math.max(1, statsFormatted.brDeaths)).toFixed(2);
     }
 
-    // Calcula taxa de headshot se não vier da API
     if (!statsFormatted.brHeadshotRate && statsFormatted.brHeadshots && statsFormatted.brKills) {
       statsFormatted.brHeadshotRate = ((statsFormatted.brHeadshots / Math.max(1, statsFormatted.brKills)) * 100).toFixed(1);
     }
@@ -280,16 +241,12 @@ const getStats = async (playerId) => {
   }
 };
 
-/**
- * Obtém informações da guilda/clã
- */
 const getGuild = async (guildId) => {
   const apiKey = getApiKey();
   if (!apiKey) {
     return { ok: false, msg: '❌ A API Key do Free Fire ainda não foi configurada pelo proprietário do bot.' };
   }
 
-  // Verifica cache
   const cacheKey = `guild_${guildId}`;
   const cached = getCache(cacheKey);
   if (cached) {
@@ -325,11 +282,7 @@ const getGuild = async (guildId) => {
       maxMembers: data.maxMembers || 50,
       level: data.level || data.guildLevel || null,
       slogan: data.slogan || data.description || null,
-      region: data.region || null,
-      xp: data.xp || null,
-      rank: data.rank || null,
-      totalWins: data.totalWins || null,
-      createdAt: data.createdAt || null
+      region: data.region || null
     };
 
     setCache(cacheKey, guild);
@@ -344,16 +297,12 @@ const getGuild = async (guildId) => {
   }
 };
 
-/**
- * Verifica status de banimento
- */
 const checkBan = async (playerId) => {
   const apiKey = getApiKey();
   if (!apiKey) {
     return { ok: false, msg: '❌ A API Key do Free Fire ainda não foi configurada pelo proprietário do bot.' };
   }
 
-  // Verifica cache
   const cacheKey = `ban_${playerId}`;
   const cached = getCache(cacheKey);
   if (cached) {
@@ -393,16 +342,12 @@ const checkBan = async (playerId) => {
   }
 };
 
-/**
- * Obtém wishlist/itens do jogador
- */
 const getWishlist = async (playerId) => {
   const apiKey = getApiKey();
   if (!apiKey) {
     return { ok: false, msg: '❌ A API Key do Free Fire ainda não foi configurada pelo proprietário do bot.' };
   }
 
-  // Verifica cache
   const cacheKey = `wishlist_${playerId}`;
   const cached = getCache(cacheKey);
   if (cached) {
@@ -418,7 +363,6 @@ const getWishlist = async (playerId) => {
       if (response.status === 404) {
         return { ok: false, msg: '❌ UID não encontrado.' };
       }
-      // Se a API não suportar wishlist, retorna vazio
       if (response.status === 400 || response.status === 500) {
         return { ok: true, data: { items: [], skins: [], emotes: [], collections: [], recentItems: [], count: 0 } };
       }
@@ -434,7 +378,7 @@ const getWishlist = async (playerId) => {
     const wishlist = {
       items: result.data?.items || [],
       skins: result.data?.skins || [],
-      emotes: result.data?.emotes || [],
+      emotes: result.data?.emote || [],
       collections: result.data?.collections || [],
       recentItems: result.data?.recentItems || [],
       count: result.data?.count || 0
@@ -447,7 +391,6 @@ const getWishlist = async (playerId) => {
     if (error.name === 'AbortError') {
       return { ok: false, msg: '❌ A consulta demorou mais que o esperado.' };
     }
-    // Se a API não suportar wishlist, retorna vazio
     if (error.message.includes('400') || error.message.includes('500')) {
       return { ok: true, data: { items: [], skins: [], emotes: [], collections: [], recentItems: [], count: 0 } };
     }
@@ -456,7 +399,7 @@ const getWishlist = async (playerId) => {
   }
 };
 
-module.exports = {
+export {
   isApiConfigured,
   getProfile,
   getStats,

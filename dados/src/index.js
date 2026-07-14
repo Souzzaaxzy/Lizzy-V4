@@ -13,6 +13,24 @@ import { handleFut, handleFutCommand } from './games/futebol/index.js';
 
 import dotenv from 'dotenv';
 
+// Imports para sistema de Games
+import { 
+  getProfile as ffGetProfile, 
+  getStats as ffGetStats, 
+  getGuild as ffGetGuild, 
+  checkBan as ffCheckBan, 
+  getWishlist as ffGetWishlist, 
+  isApiConfigured as ffIsApiConfigured,
+  formatDate as ffFormatDate
+} from './apis/freefire.js';
+
+import { 
+  setApiKey, 
+  deleteApiKey, 
+  getApiKey, 
+  getAllApiKeysStatus 
+} from './utils/database.js';
+
 
 // Suprimir warnings de execuções perdidas do node-cron
 const originalWarn = console.warn;
@@ -20970,7 +20988,7 @@ case 'addaluguel':
                     const musicCaption = `🎵 *${musicInfo.title}*\n\n` +
                       `👤 Artista: ${musicInfo.artist}\n\n` +
                       `📝 Descrição:\n${summarizeDescription(musicInfo.description)}\n\n` +
-                      `📅 Lançamento: ${formatDate(musicInfo.date)}\n\n` +
+                      `📅 Lançamento: ${ffFormatDate(musicInfo.date)}\n\n` +
                       `⏱️ Duração: ${formatDuration(musicInfo.duration)}\n\n` +
                       `🔗 YouTube:\n${musicInfo.url}\n\n` +
                       `────────────────────────\n\n` +
@@ -24707,7 +24725,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
           if (!isOwnerOrSub) return reply("🚫 Este comando é exclusivo para o dono do bot!");
           if (!q) return reply(`❌ Uso: ${prefix}keyff <api_key>\n\nExemplo: ${prefix}keyff SUA_API_KEY_AQUI`);
           
-          const { setApiKey } = require('./utils/database.js');
+          
           const saved = setApiKey('freefire', q);
           
           if (saved) {
@@ -24726,7 +24744,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
         try {
           if (!isOwnerOrSub) return reply("🚫 Este comando é exclusivo para o dono do bot!");
           
-          const { deleteApiKey, getApiKey } = require('./utils/database.js');
+          
           const currentKey = getApiKey('freefire');
           
           if (!currentKey) {
@@ -24751,7 +24769,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
           if (!isOwnerOrSub) return reply("🚫 Este comando é exclusivo para o dono do bot!");
           if (!q) return reply(`❌ Uso: ${prefix}keyvalorant <api_key>\n\nExemplo: ${prefix}keyvalorant SUA_API_KEY_AQUI`);
           
-          const { setApiKey } = require('./utils/database.js');
+          
           const saved = setApiKey('valorant', q);
           
           if (saved) {
@@ -24769,7 +24787,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
         try {
           if (!isOwnerOrSub) return reply("🚫 Este comando é exclusivo para o dono do bot!");
           
-          const { deleteApiKey, getApiKey } = require('./utils/database.js');
+          
           const currentKey = getApiKey('valorant');
           
           if (!currentKey) {
@@ -24795,7 +24813,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
           if (!isOwnerOrSub) return reply("🚫 Este comando é exclusivo para o dono do bot!");
           if (!q) return reply(`❌ Uso: ${prefix}keycr <api_key>\n\nExemplo: ${prefix}keycr SUA_API_KEY_AQUI`);
           
-          const { setApiKey } = require('./utils/database.js');
+          
           const saved = setApiKey('clashroyale', q);
           
           if (saved) {
@@ -24814,7 +24832,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
         try {
           if (!isOwnerOrSub) return reply("🚫 Este comando é exclusivo para o dono do bot!");
           
-          const { deleteApiKey, getApiKey } = require('./utils/database.js');
+          
           const currentKey = getApiKey('clashroyale');
           
           if (!currentKey) {
@@ -24840,7 +24858,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
           if (!isOwnerOrSub) return reply("🚫 Este comando é exclusivo para o dono do bot!");
           if (!q) return reply(`❌ Uso: ${prefix}keybs <api_key>\n\nExemplo: ${prefix}keybs SUA_API_KEY_AQUI`);
           
-          const { setApiKey } = require('./utils/database.js');
+          
           const saved = setApiKey('brawlstars', q);
           
           if (saved) {
@@ -24859,7 +24877,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
         try {
           if (!isOwnerOrSub) return reply("🚫 Este comando é exclusivo para o dono do bot!");
           
-          const { deleteApiKey, getApiKey } = require('./utils/database.js');
+          
           const currentKey = getApiKey('brawlstars');
           
           if (!currentKey) {
@@ -24884,7 +24902,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
           if (!isOwnerOrSub) return reply("🚫 Este comando é exclusivo para o dono do bot!");
           if (!q) return reply(`❌ Uso: ${prefix}keyroblox <api_key>\n\nExemplo: ${prefix}keyroblox SUA_API_KEY_AQUI`);
           
-          const { setApiKey } = require('./utils/database.js');
+          
           const saved = setApiKey('roblox', q);
           
           if (saved) {
@@ -24902,7 +24920,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
         try {
           if (!isOwnerOrSub) return reply("🚫 Este comando é exclusivo para o dono do bot!");
           
-          const { deleteApiKey, getApiKey } = require('./utils/database.js');
+          
           const currentKey = getApiKey('roblox');
           
           if (!currentKey) {
@@ -24927,7 +24945,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
           if (!isOwnerOrSub) return reply("🚫 Este comando é exclusivo para o dono do bot!");
           if (!q) return reply(`❌ Uso: ${prefix}keypubg <api_key>\n\nExemplo: ${prefix}keypubg SUA_API_KEY_AQUI`);
           
-          const { setApiKey } = require('./utils/database.js');
+          
           const saved = setApiKey('pubg', q);
           
           if (saved) {
@@ -24945,7 +24963,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
         try {
           if (!isOwnerOrSub) return reply("🚫 Este comando é exclusivo para o dono do bot!");
           
-          const { deleteApiKey, getApiKey } = require('./utils/database.js');
+          
           const currentKey = getApiKey('pubg');
           
           if (!currentKey) {
@@ -24969,7 +24987,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
         try {
           if (!isOwnerOrSub) return reply("🚫 Este comando é exclusivo para o dono do bot!");
           
-          const { getAllApiKeysStatus } = require('./utils/database.js');
+          
           const keysStatus = getAllApiKeysStatus();
           
           let msg = "🔑 *STATUS DAS APIs DE GAMES*\n\n";
@@ -25380,15 +25398,15 @@ ${groupPrefix}setgroq sua_chave_aqui
             return reply(`❌ Uso: ${prefix}ffperfil <UID>\n\nExemplo: ${prefix}ffperfil 123456789`);
           }
 
-          const { getProfile, isApiConfigured } = require('./apis/freefire.js');
           
-          if (!isApiConfigured()) {
+          
+          if (!ffIsApiConfigured()) {
             return reply("❌ A API Key do Free Fire ainda não foi configurada pelo proprietário do bot.");
           }
 
           await react('🔍', nazu, info.key, from);
           
-          const result = await getProfile(uid);
+          const result = await ffGetProfile(uid);
           
           if (!result.ok) {
             await react('❌', nazu, info.key, from);
@@ -25438,15 +25456,15 @@ ${groupPrefix}setgroq sua_chave_aqui
             return reply(`❌ Uso: ${prefix}ffstats <UID>\n\nExemplo: ${prefix}ffstats 123456789`);
           }
 
-          const { getStats, isApiConfigured, formatDuration } = require('./apis/freefire.js');
           
-          if (!isApiConfigured()) {
+          
+          if (!ffIsApiConfigured()) {
             return reply("❌ A API Key do Free Fire ainda não foi configurada pelo proprietário do bot.");
           }
 
           await react('🔍', nazu, info.key, from);
           
-          const result = await getStats(uid);
+          const result = await ffGetStats(uid);
           
           if (!result.ok) {
             await react('❌', nazu, info.key, from);
@@ -25484,15 +25502,15 @@ ${groupPrefix}setgroq sua_chave_aqui
             return reply(`❌ Uso: ${prefix}ffguilda <ID da guilda>\n\nExemplo: ${prefix}ffguilda 123456`);
           }
 
-          const { getGuild, isApiConfigured } = require('./apis/freefire.js');
           
-          if (!isApiConfigured()) {
+          
+          if (!ffIsApiConfigured()) {
             return reply("❌ A API Key do Free Fire ainda não foi configurada pelo proprietário do bot.");
           }
 
           await react('🔍', nazu, info.key, from);
           
-          const result = await getGuild(guildId);
+          const result = await ffGetGuild(guildId);
           
           if (!result.ok) {
             await react('❌', nazu, info.key, from);
@@ -25527,15 +25545,15 @@ ${groupPrefix}setgroq sua_chave_aqui
             return reply(`❌ Uso: ${prefix}ffban <UID>\n\nExemplo: ${prefix}ffban 123456789`);
           }
 
-          const { checkBan, isApiConfigured, formatDate } = require('./apis/freefire.js');
           
-          if (!isApiConfigured()) {
+          
+          if (!ffIsApiConfigured()) {
             return reply("❌ A API Key do Free Fire ainda não foi configurada pelo proprietário do bot.");
           }
 
           await react('🔍', nazu, info.key, from);
           
-          const result = await checkBan(uid);
+          const result = await ffCheckBan(uid);
           
           if (!result.ok) {
             await react('❌', nazu, info.key, from);
@@ -25547,7 +25565,7 @@ ${groupPrefix}setgroq sua_chave_aqui
           if (b.isBanned) {
             const banMsg = `🔴 *STATUS: BANNIDO*\n\n` +
               `🆔 UID: ${uid}\n` +
-              `📅 Data: ${formatDate(b.bannedAt)}\n` +
+              `📅 Data: ${ffFormatDate(b.bannedAt)}\n` +
               `📝 Motivo: ${b.reason || 'Não informado'}`;
             await reply(banMsg);
           } else {
@@ -25570,15 +25588,15 @@ ${groupPrefix}setgroq sua_chave_aqui
             return reply(`❌ Uso: ${prefix}ffwishlist <UID>\n\nExemplo: ${prefix}ffwishlist 123456789`);
           }
 
-          const { getWishlist, isApiConfigured } = require('./apis/freefire.js');
           
-          if (!isApiConfigured()) {
+          
+          if (!ffIsApiConfigured()) {
             return reply("❌ A API Key do Free Fire ainda não foi configurada pelo proprietário do bot.");
           }
 
           await react('🔍', nazu, info.key, from);
           
-          const result = await getWishlist(uid);
+          const result = await ffGetWishlist(uid);
           
           if (!result.ok) {
             await react('❌', nazu, info.key, from);
@@ -27810,7 +27828,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
             message += `┃ 🖼️ Mídias: ${dailyMedia}\n`;
             message += `┃ 🎵 Áudios: ${userRecords.daily.audios || 0}\n`;
             message += `┃ 🎭 Figurinhas: ${userRecords.daily.stickers || 0}\n`;
-            message += `┃ 📆 Data: ${formatDate(userRecords.daily.date)}\n`;
+            message += `┃ 📆 Data: ${ffFormatDate(userRecords.daily.date)}\n`;
             message += `┃\n`;
           }
           
