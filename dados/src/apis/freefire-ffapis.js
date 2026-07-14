@@ -285,23 +285,38 @@ class FreeFireAPI {
     return session;
   }
 
-  async loginWithRandomCredential() {
+  async loginWithRandomCredential(maxRetries = 3) {
     const cred = this.credentialManager.getRandomCredential();
     if (!cred) {
       throw new Error('No credentials available');
     }
-    return this.login(cred.uid, cred.password);
+    
+    let lastError;
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        return await this.login(cred.uid, cred.password);
+      } catch (error) {
+        lastError = error;
+        console.log(`[FFAPIS] Login attempt ${i + 1} failed: ${error.message}`);
+        
+        // Se for erro de servidor (5xx), esperar e tentar novamente
+        if (error.message.includes('503') || error.message.includes('502') || error.message.includes('timeout')) {
+          const waitTime = (i + 1) * 2000;
+          console.log(`[FFAPIS] Waiting ${waitTime}ms before retry...`);
+          await this.sleep(waitTime);
+        } else {
+          // Se for outro erro, não tentar novamente
+          break;
+        }
+      }
+    }
+    
+    throw lastError;
   }
 
   async ensureSession() {
     if (!this.session.isValid()) {
-      try {
-        await this.loginWithRandomCredential();
-      } catch (error) {
-        console.log('[FFAPIS] Login failed, trying guest register...');
-        // Guest register não implementado - precisa de UID/GUID
-        throw error;
-      }
+      await this.loginWithRandomCredential();
     }
   }
 
@@ -338,7 +353,7 @@ class FreeFireAPI {
     }
   }
 
-  async getPlayerProfile(uid) {
+  async getPlayerProfile(uid, retries = 3) {
     await this.waitForCooldown();
     await this.ensureSession();
 
@@ -366,8 +381,16 @@ class FreeFireAPI {
     } catch (error) {
       if (error.message.includes('401') || error.message.includes('Unauthorized')) {
         this.session.token = null;
-        return this.getPlayerProfile(uid);
+        return this.getPlayerProfile(uid, 0); // Não retry após re-login
       }
+      
+      // Retry em caso de erro de servidor
+      if (retries > 0 && (error.message.includes('503') || error.message.includes('timeout'))) {
+        console.log(`[FFAPIS] Server error, retrying... (${retries} left)`);
+        await this.sleep(2000);
+        return this.getPlayerProfile(uid, retries - 1);
+      }
+      
       throw new Error(`Get Profile Failed: ${error.message}`);
     }
   }
