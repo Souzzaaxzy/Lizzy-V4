@@ -96,6 +96,7 @@ ${menuTopBorder}
 │ ${hotInteractionsMenuTitle}
 ${middleBorder}
 ${middleBorder}${menuItemIcon}${prefix}surubao
+${middleBorder}${menuItemIcon}${prefix}siririca
 ${middleBorder}${menuItemIcon}${prefix}sexo
 ${middleBorder}${menuItemIcon}${prefix}beijob
 ${middleBorder}${menuItemIcon}${prefix}beijarb
