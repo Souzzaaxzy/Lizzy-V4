@@ -146,17 +146,21 @@ const getPlayer = async (summonerName) => {
     return { ok: true, data };
 
   } catch (error) {
+    console.error('Erro LoL:', error.response?.status, error.message);
+    
     if (error.response?.status === 404) {
-      return { ok: false, msg: '❌ Invocador não encontrado.' };
+      return { ok: false, msg: `❌ Invocador "${summonerName}" não encontrado.\n\n💡 Verifique se o nome está correto e se está na região BR.` };
     }
     if (error.response?.status === 403) {
-      return { ok: false, msg: '❌ API Key inválida ou sem permissão.' };
+      return { ok: false, msg: '❌ API Key inválida ou sem permissão na API do LoL.\n💡 Use !keyriot <sua_key> para configurar.' };
     }
     if (error.response?.status === 429) {
-      return { ok: false, msg: '❌ Limite de requisições excedido.' };
+      return { ok: false, msg: '❌ Limite de requisições excedido. Tente novamente em alguns minutos.' };
     }
-    console.error('Erro ao buscar invocador LoL:', error.message);
-    return { ok: false, msg: '❌ Erro ao buscar dados do invocador.' };
+    if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+      return { ok: false, msg: '❌ Não foi possível conectar à API da Riot. Tente novamente.' };
+    }
+    return { ok: false, msg: `❌ Erro: ${error.message}` };
   }
 };
 
