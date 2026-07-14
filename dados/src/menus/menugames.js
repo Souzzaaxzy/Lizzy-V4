@@ -121,5 +121,20 @@ export default async function menugames(prefix, botName = "MeuBot", userName = "
 │
 ╰──────────────────────────────────────────────╯
 
+╭──────────────────────────────────────────────╮
+│ 🎪 PUBG
+╰──────────────────────────────────────────────╯
+│
+│ ▸ ${prefix}pubgperfil <nome>
+│   Ver perfil do jogador
+│
+│ ▸ ${prefix}pubgstats <nome>
+│   Ver estatísticas detalhadas
+│
+│ ▸ ${prefix}pubgmatch <nome>
+│   Ver partidas recentes
+│
+╰──────────────────────────────────────────────╯
+
 💡 Use ${prefix}ajuda <comando> para mais informações.`;
 }

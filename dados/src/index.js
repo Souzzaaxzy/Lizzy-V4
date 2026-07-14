@@ -75,6 +75,12 @@ import {
   getMasterPlayers as lolGetMaster
 } from './apis/lol.js';
 
+// PUBG API
+import {
+  getPlayer as pubgGetPlayer,
+  getRecentMatches as pubgGetMatches
+} from './apis/pubg.js';
+
 import { 
   setApiKey, 
   deleteApiKey, 
@@ -25876,6 +25882,149 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
         } catch (e) {
           console.error(e);
           reply("🐝 Ops! Ocorreu um erro inesperado!");
+        }
+        break;
+
+      // ============ PUBG ============
+      case 'pubgperfil':
+      case 'pubgplayer':
+        try {
+          const playerName = q.trim();
+          if (!playerName) {
+            return reply(`❌ Uso: ${prefix}pubgperfil <nome>\n\nExemplo: ${prefix}pubgperfil Shroud\n\n💡 Use o nome exato do jogador!`);
+          }
+
+          await react('🎮', nazu, info.key, from);
+          
+          const result = await pubgGetPlayer(playerName);
+          
+          if (!result.ok) {
+            await react('❌', nazu, info.key, from);
+            return reply(result.msg);
+          }
+
+          const p = result.data;
+          const stats = p.stats;
+          
+          let perfilMsg = `🎮 *PUBG - PERFIL*\n\n` +
+            `📛 Nome: ${p.name}\n\n`;
+          
+          if (stats) {
+            perfilMsg += `📊 *ESTATÍSTICAS*\n`;
+            perfilMsg += `🎯 Kills: ${stats.kills?.toLocaleString('pt-BR')}\n`;
+            perfilMsg += `💀 Deaths: ${stats.deaths?.toLocaleString('pt-BR')}\n`;
+            perfilMsg += `📈 K/D: ${stats.kd}\n`;
+            perfilMsg += `🏆 Vitórias: ${stats.wins?.toLocaleString('pt-BR')}\n`;
+            perfilMsg += `🎮 Partidas: ${stats.gamesPlayed?.toLocaleString('pt-BR')}\n`;
+            perfilMsg += `📊 Taxa de Vitória: ${stats.winRate}%\n`;
+            perfilMsg += `💀 Headshot: ${stats.headshotRate}%\n`;
+            perfilMsg += `🎯 Kills de Longa Distância: ${stats.longestKill}m\n`;
+            perfilMsg += `🚗 Kills de Veículos: ${stats.vehicleKills || 0}\n`;
+            perfilMsg += `📍 Distância Percorrida: ${stats.walkDistance}km (solo) + ${stats.rideDistance}km (veículo)\n`;
+            perfilMsg += `⏱️ Tempo Médio de Sobrevivência: ${stats.avgSurvivalTime} min\n`;
+          } else {
+            perfilMsg += `📊 Estatísticas não disponíveis para este jogador.\n`;
+            if (p.message) {
+              perfilMsg += `💡 ${p.message}\n`;
+            }
+          }
+
+          await reply(perfilMsg);
+          await react('✅', nazu, info.key, from);
+        } catch (e) {
+          console.error('Erro no comando pubgperfil:', e);
+          await react('❌', nazu, info.key, from);
+          reply("❌ Ocorreu um erro ao buscar o perfil.");
+        }
+        break;
+
+      case 'pubgstats':
+        try {
+          const playerName = q.trim();
+          if (!playerName) {
+            return reply(`❌ Uso: ${prefix}pubgstats <nome>\n\nExemplo: ${prefix}pubgstats Shroud`);
+          }
+
+          await react('📊', nazu, info.key, from);
+          
+          const result = await pubgGetPlayer(playerName);
+          
+          if (!result.ok) {
+            await react('❌', nazu, info.key, from);
+            return reply(result.msg);
+          }
+
+          const p = result.data;
+          const stats = p.stats;
+          
+          let statsMsg = `📊 *PUBG - ESTATÍSTICAS*\n\n` +
+            `📛 Jogador: ${p.name}\n\n`;
+          
+          if (stats) {
+            statsMsg += `🎯 *GERAL*\n`;
+            statsMsg += `Kills: ${stats.kills}\n`;
+            statsMsg += `Deaths: ${stats.deaths}\n`;
+            statsMsg += `K/D: ${stats.kd}\n`;
+            statsMsg += `Headshot Rate: ${stats.headshotRate}%\n\n`;
+            
+            statsMsg += `🏆 *VITÓRIAS*\n`;
+            statsMsg += `Wins: ${stats.wins}\n`;
+            statsMsg += `Win Rate: ${stats.winRate}%\n\n`;
+            
+            statsMsg += `🗺️ *DISTÂNCIA*\n`;
+            statsMsg += `Solo: ${stats.walkDistance}km\n`;
+            statsMsg += `Veículo: ${stats.rideDistance}km`;
+          } else {
+            statsMsg += `Estatísticas detalhadas não disponíveis.`;
+          }
+
+          await reply(statsMsg);
+          await react('✅', nazu, info.key, from);
+        } catch (e) {
+          console.error('Erro no comando pubgstats:', e);
+          await react('❌', nazu, info.key, from);
+          reply("❌ Ocorreu um erro ao buscar as estatísticas.");
+        }
+        break;
+
+      case 'pubgmatch':
+        try {
+          const playerName = q.trim();
+          if (!playerName) {
+            return reply(`❌ Uso: ${prefix}pubgmatch <nome>\n\nExemplo: ${prefix}pubgmatch Shroud`);
+          }
+
+          await react('⚔️', nazu, info.key, from);
+          
+          const result = await pubgGetMatches(playerName);
+          
+          if (!result.ok) {
+            await react('❌', nazu, info.key, from);
+            return reply(result.msg);
+          }
+
+          const matches = result.data;
+          
+          let matchMsg = `⚔️ *PUBG - PARTIDAS*\n\n` +
+            `📛 Jogador: ${playerName}\n\n`;
+          
+          if (matches.length > 0) {
+            matchMsg += `📅 *Últimas ${matches.length} partidas*\n`;
+            matches.forEach((match, i) => {
+              matchMsg += `\n🎮 Partida ${i + 1}\n`;
+              matchMsg += `🆔 ${match.id}\n`;
+            });
+            matchMsg += `\n\n💡 Use o ID para buscar detalhes da partida.`;
+          } else {
+            matchMsg += `📭 Nenhuma partida encontrada.`;
+          }
+
+          await reply(matchMsg);
+          await react('✅', nazu, info.key, from);
+        } catch (e) {
+          console.error('Erro no comando pubgmatch:', e);
+          await react('❌', nazu, info.key, from);
+          reply("❌ Ocorreu um erro ao buscar as partidas.");
         }
         break;
 
