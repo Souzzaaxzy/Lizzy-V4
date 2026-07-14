@@ -24,6 +24,16 @@ import {
   formatDate as ffFormatDate
 } from './apis/freefire.js';
 
+// Clash Royale API
+import {
+  getPlayer as crGetPlayer,
+  getPlayerBattles as crGetPlayerBattles,
+  getClan as crGetClan,
+  getTopPlayers as crGetTopPlayers,
+  getTopClans as crGetTopClans,
+  normalizeTag as crNormalizeTag
+} from './apis/clashroyale.js';
+
 import { 
   setApiKey, 
   deleteApiKey, 
@@ -24849,6 +24859,173 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
         } catch (e) {
           console.error(e);
           reply("🐝 Ops! Ocorreu um erro inesperado!");
+        }
+        break;
+
+      case 'crperfil':
+      case 'crplayer':
+        try {
+          const playerTag = q.trim().replace(/^#/, '');
+          if (!playerTag) {
+            return reply(`❌ Uso: ${prefix}crperfil <#TAG>\n\nExemplo: ${prefix}crperfil J0VU9CGP\n\n💡 Não precisa do # no início!`);
+          }
+
+          await react('🔍', nazu, info.key, from);
+          
+          const result = await crGetPlayer(playerTag);
+          
+          if (!result.ok) {
+            await react('❌', nazu, info.key, from);
+            return reply(result.msg);
+          }
+
+          const p = result.data;
+          
+          const perfilMsg = `👑 *CLASH ROYALE - PERFIL*\n\n` +
+            `🏷️ Tag: ${p.tag}\n` +
+            `📛 Nome: ${p.name}\n` +
+            `🏆 Troféus: ${p.trophies?.toLocaleString('pt-BR')}\n` +
+            `⭐ Melhor: ${p.bestTrophies?.toLocaleString('pt-BR')}\n` +
+            `📊 Nível: ${p.level}\n` +
+            `🎮 Vitórias: ${p.wins?.toLocaleString('pt-BR')}\n` +
+            `💔 Derrotas: ${p.losses?.toLocaleString('pt-BR')}\n` +
+            `📈 Taxa de Vitória: ${p.winRate}%\n` +
+            `👑 Três Coroas: ${p.threeCrownWins?.toLocaleString('pt-BR')}\n` +
+            `🎴 Cartas: ${p.cardsFound}\n` +
+            `⭐ Carta Favorita: ${p.currentFavouriteCard}\n` +
+            `🏰 Arena: ${p.arena?.name || 'N/A'}\n` +
+            `🛡️ Clã: ${p.clan?.name || 'Sem clã'}${p.clan?.role ? ` (${p.clan.role})` : ''}`;
+
+          await reply(perfilMsg);
+          await react('✅', nazu, info.key, from);
+        } catch (e) {
+          console.error('Erro no comando crperfil:', e);
+          await react('❌', nazu, info.key, from);
+          reply("❌ Ocorreu um erro ao buscar o perfil.");
+        }
+        break;
+
+      case 'crbatalhas':
+      case 'crbattles':
+        try {
+          const playerTag = q.trim().replace(/^#/, '');
+          if (!playerTag) {
+            return reply(`❌ Uso: ${prefix}crbatalhas <#TAG>\n\nExemplo: ${prefix}crbatalhas J0VU9CGP\n\n💡 Não precisa do # no início!`);
+          }
+
+          await react('⚔️', nazu, info.key, from);
+          
+          const result = await crGetPlayerBattles(playerTag, 5);
+          
+          if (!result.ok) {
+            await react('❌', nazu, info.key, from);
+            return reply(result.msg);
+          }
+
+          const battles = result.data;
+          
+          if (battles.length === 0) {
+            return reply("📭 Este jogador não tem batalhas recentes.");
+          }
+
+          let battlesMsg = `⚔️ *CLASH ROYALE - BATALHAS*\n\n`;
+          
+          battles.forEach((battle, i) => {
+            const emoji = battle.result === 'victory' ? '✅' : battle.result === 'defeat' ? '❌' : '🔄';
+            const date = new Date(battle.timestamp).toLocaleDateString('pt-BR');
+            battlesMsg += `${emoji} ${battle.mode}\n`;
+            battlesMsg += `   🏆 ${battle.crowns.team} x ${battle.crowns.opponent}\n`;
+            battlesMsg += `   📅 ${date}\n\n`;
+          });
+
+          battlesMsg += `📊 Use ${prefix}crperfil ${playerTag} para ver o perfil completo.`;
+
+          await reply(battlesMsg);
+          await react('✅', nazu, info.key, from);
+        } catch (e) {
+          console.error('Erro no comando crbatalhas:', e);
+          await react('❌', nazu, info.key, from);
+          reply("❌ Ocorreu um erro ao buscar as batalhas.");
+        }
+        break;
+
+      case 'crclan':
+      case 'crclube':
+        try {
+          const clanTag = q.trim().replace(/^#/, '');
+          if (!clanTag) {
+            return reply(`❌ Uso: ${prefix}crclan <#TAG>\n\nExemplo: ${prefix}crclan YYGG9YQG\n\n💡 Não precisa do # no início!`);
+          }
+
+          await react('🏰', nazu, info.key, from);
+          
+          const result = await crGetClan(clanTag);
+          
+          if (!result.ok) {
+            await react('❌', nazu, info.key, from);
+            return reply(result.msg);
+          }
+
+          const c = result.data;
+          
+          const clanMsg = `🏰 *CLASH ROYALE - CLÃ*\n\n` +
+            `🏷️ Tag: ${c.tag}\n` +
+            `📛 Nome: ${c.name}\n` +
+            `📝 ${c.description}\n` +
+            `🏆 Pontuação: ${c.clanScore?.toLocaleString('pt-BR')}\n` +
+            `⚔️ Troféus de Guerra: ${c.clanWarTrophies?.toLocaleString('pt-BR')}\n` +
+            `📍 Localização: ${c.location}\n` +
+            `👥 Membros: ${c.memberCount}\n` +
+            `🎯 Liga de Guerra: ${c.warLeague}\n` +
+            `📊 Doações/Semana: ${c.donationsPerWeek?.toLocaleString('pt-BR')}`;
+
+          await reply(clanMsg);
+          await react('✅', nazu, info.key, from);
+        } catch (e) {
+          console.error('Erro no comando crclan:', e);
+          await react('❌', nazu, info.key, from);
+          reply("❌ Ocorreu um erro ao buscar o clã.");
+        }
+        break;
+
+      case 'crranking':
+      case 'crtop':
+        try {
+          await react('🏆', nazu, info.key, from);
+          
+          const [playersResult, clansResult] = await Promise.all([
+            crGetTopPlayers(5),
+            crGetTopClans(5)
+          ]);
+          
+          let rankingMsg = `🏆 *CLASH ROYALE - RANKINGS*\n\n`;
+          
+          rankingMsg += `👑 *TOP 5 JOGADORES*\n`;
+          if (playersResult.ok && playersResult.data.length > 0) {
+            playersResult.data.forEach((p, i) => {
+              const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+              rankingMsg += `${medal} ${p.name} - ${p.trophies?.toLocaleString('pt-BR')} troféus\n`;
+            });
+          } else {
+            rankingMsg += `❌ Não foi possível carregar o ranking.\n`;
+          }
+          
+          rankingMsg += `\n🏰 *TOP 5 CLÃS*\n`;
+          if (clansResult.ok && clansResult.data.length > 0) {
+            clansResult.data.forEach((c, i) => {
+              const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+              rankingMsg += `${medal} ${c.name} - ${c.clanScore?.toLocaleString('pt-BR')} pontos\n`;
+            });
+          } else {
+            rankingMsg += `❌ Não foi possível carregar o ranking.\n`;
+          }
+          
+          await reply(rankingMsg);
+          await react('✅', nazu, info.key, from);
+        } catch (e) {
+          console.error('Erro no comando crranking:', e);
+          await react('❌', nazu, info.key, from);
+          reply("❌ Ocorreu um erro ao buscar o ranking.");
         }
         break;
 

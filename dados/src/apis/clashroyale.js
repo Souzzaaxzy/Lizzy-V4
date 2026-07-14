@@ -5,10 +5,10 @@
  */
 
 import axios from 'axios';
+import { getApiKey as dbGetApiKey } from '../utils/database.js';
 
 // Configuração da API
 const API_BASE_URL = 'https://api.clashroyale.com/v1';
-const API_KEY = process.env.CLASH_ROYALE_API_KEY || '';
 
 // Cache para armazenar respostas (5 minutos)
 const cache = new Map();
@@ -37,17 +37,28 @@ const getCache = (key) => {
   return null;
 };
 
+// Obter API Key do banco de dados
+const getApiKey = () => {
+  try {
+    const keyData = dbGetApiKey('clashroyale');
+    return keyData?.key || null;
+  } catch (e) {
+    return null;
+  }
+};
+
 // Verificar se a API está configurada
 const isApiConfigured = () => {
-  return !!API_KEY;
+  return !!getApiKey();
 };
 
 // Criar cliente axios com headers
 const createClient = () => {
+  const apiKey = getApiKey();
   return axios.create({
     baseURL: API_BASE_URL,
     headers: {
-      'Authorization': `Bearer ${API_KEY}`,
+      'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json'
     },
     timeout: 15000
