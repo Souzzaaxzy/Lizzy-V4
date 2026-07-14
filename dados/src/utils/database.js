@@ -52,7 +52,8 @@ import {
   PREFIX_MEDIA_FILE,
   MENU_MEDIA_GROUPS_FILE,
   MENU_GROUPS_MEDIA_DIR,
-  CONFIG_FILE
+  CONFIG_FILE,
+  API_KEYS_FILE
 } from './paths.js';
 
 ensureDirectoryExists(GRUPOS_DIR);
