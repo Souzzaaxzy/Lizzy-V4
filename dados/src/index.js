@@ -53,6 +53,14 @@ import {
   getTopClans as cocGetTopClans
 } from './apis/clashofclans.js';
 
+// Roblox API (pública, sem key)
+import {
+  getPlayer as robloxGetPlayer,
+  getUserPresence as robloxGetPresence,
+  getFavoriteGames as robloxGetFavorites,
+  searchUsers as robloxSearch
+} from './apis/roblox.js';
+
 import { 
   setApiKey, 
   deleteApiKey, 
@@ -25468,6 +25476,136 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
         } catch (e) {
           console.error(e);
           reply("🐝 Ops! Ocorreu um erro inesperado!");
+        }
+        break;
+
+      // ============ ROBLOX ============
+      case 'rbxperfil':
+      case 'rbxplayer':
+      case 'roblox':
+        try {
+          const username = q.trim();
+          if (!username) {
+            return reply(`❌ Uso: ${prefix}rbxperfil <username>\n\nExemplo: ${prefix}rbxperfil Roblox\n\n💡 Pode usar nome de usuário ou ID!`);
+          }
+
+          await react('🔍', nazu, info.key, from);
+          
+          const result = await robloxGetPlayer(username);
+          
+          if (!result.ok) {
+            await react('❌', nazu, info.key, from);
+            return reply(result.msg);
+          }
+
+          const p = result.data;
+          
+          const createdDate = new Date(p.createdAt).toLocaleDateString('pt-BR');
+          
+          const perfilMsg = `🎮 *ROBLOX - PERFIL*\n\n` +
+            `📛 Nome: ${p.displayName}\n` +
+            `👤 Username: @${p.username}\n` +
+            `🆔 ID: ${p.id}\n` +
+            `📝 ${p.description}\n` +
+            `📅 Criado em: ${createdDate}\n` +
+            `🚫 Banido: ${p.isBanned ? 'Sim ❌' : 'Não ✅'}`;
+
+          await reply(perfilMsg);
+          await react('✅', nazu, info.key, from);
+        } catch (e) {
+          console.error('Erro no comando rbxperfil:', e);
+          await react('❌', nazu, info.key, from);
+          reply("❌ Ocorreu um erro ao buscar o perfil.");
+        }
+        break;
+
+      case 'rbxstatus':
+      case 'rbxpresence':
+        try {
+          const username = q.trim();
+          if (!username) {
+            return reply(`❌ Uso: ${prefix}rbxstatus <username>\n\nExemplo: ${prefix}rbxstatus Roblox`);
+          }
+
+          await react('🎮', nazu, info.key, from);
+          
+          const playerResult = await robloxGetPlayer(username);
+          
+          if (!playerResult.ok) {
+            await react('❌', nazu, info.key, from);
+            return reply(playerResult.msg);
+          }
+
+          const userId = playerResult.data.id;
+          const presenceResult = await robloxGetPresence(userId);
+          
+          if (!presenceResult.ok) {
+            await react('❌', nazu, info.key, from);
+            return reply(presenceResult.msg);
+          }
+
+          const presence = presenceResult.data;
+          
+          const statusMsg = `🎮 *ROBLOX - STATUS*\n\n` +
+            `📛 Jogador: ${playerResult.data.displayName}\n` +
+            `👤 @${playerResult.data.username}\n\n` +
+            `📊 Status: ${presence.status}` +
+            (presence.lastLocation && presence.lastLocation !== 'Offline' ? `\n🎯 Local: ${presence.lastLocation}` : '');
+
+          await reply(statusMsg);
+          await react('✅', nazu, info.key, from);
+        } catch (e) {
+          console.error('Erro no comando rbxstatus:', e);
+          await react('❌', nazu, info.key, from);
+          reply("❌ Ocorreu um erro ao buscar o status.");
+        }
+        break;
+
+      case 'rbxjogos':
+      case 'rbxfav':
+        try {
+          const username = q.trim();
+          if (!username) {
+            return reply(`❌ Uso: ${prefix}rbxjogos <username>\n\nExemplo: ${prefix}rbxjogos Roblox`);
+          }
+
+          await react('🎮', nazu, info.key, from);
+          
+          const playerResult = await robloxGetPlayer(username);
+          
+          if (!playerResult.ok) {
+            await react('❌', nazu, info.key, from);
+            return reply(playerResult.msg);
+          }
+
+          const userId = playerResult.data.id;
+          const gamesResult = await robloxGetFavorites(userId);
+          
+          if (!gamesResult.ok) {
+            await react('❌', nazu, info.key, from);
+            return reply(gamesResult.msg);
+          }
+
+          const games = gamesResult.data;
+          
+          let jogosMsg = `🎮 *ROBLOX - JOGOS*\n\n` +
+            `📛 Jogador: ${playerResult.data.displayName}\n\n`;
+          
+          if (games.length > 0) {
+            games.slice(0, 5).forEach((game, i) => {
+              jogosMsg += `🎯 ${game.name}\n`;
+              jogosMsg += `   👥 Jogando: ${game.playing?.toLocaleString('pt-BR')}\n\n`;
+            });
+          } else {
+            jogosMsg += `📭 Nenhum jogo favorito encontrado.`;
+          }
+
+          await reply(jogosMsg);
+          await react('✅', nazu, info.key, from);
+        } catch (e) {
+          console.error('Erro no comando rbxjogos:', e);
+          await react('❌', nazu, info.key, from);
+          reply("❌ Ocorreu um erro ao buscar os jogos.");
         }
         break;
 

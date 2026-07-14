@@ -76,5 +76,20 @@ export default async function menugames(prefix, botName = "MeuBot", userName = "
 │
 ╰──────────────────────────────────────────────╯
 
+╭──────────────────────────────────────────────╮
+│ 🎮 ROBLOX
+╰──────────────────────────────────────────────╯
+│
+│ ▸ ${prefix}rbxperfil <username>
+│   Ver perfil do jogador
+│
+│ ▸ ${prefix}rbxstatus <username>
+│   Ver status online/offline
+│
+│ ▸ ${prefix}rbxjogos <username>
+│   Ver jogos favoritos
+│
+╰──────────────────────────────────────────────╯
+
 💡 Use ${prefix}ajuda <comando> para mais informações.`;
 }
