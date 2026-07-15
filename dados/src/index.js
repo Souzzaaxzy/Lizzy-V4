@@ -34838,6 +34838,11 @@ case 'set-bannerbv':
           if (menc_os2 === botNumber) return reply("❌ Não posso advertir a mim mesma!");
           
           // Verificar se o alvo é moderador ou alpha
+          const groupFilePath = buildGroupFilePath(from);
+          let groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : {
+            warnings: {}
+          };
+          
           const isTargetModeratorAdv = groupData.moderators?.includes(menc_os2);
           const isTargetAlphaAdv = groupData.alphas?.includes(menc_os2);
           const isSenderModeratorAdv = groupData.moderators?.includes(sender);
@@ -34853,11 +34858,7 @@ case 'set-bannerbv':
             }
           }
           const reason = q ? (q.includes('@') || !menc_os2) ? (args.length > 1 ? args.slice(1).join(' ') : 'Motivo não informado') : q.trim() : 'Motivo não informado';
-          const groupFilePath = buildGroupFilePath(from);
-          let groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : {
-            warnings: {}
-          };
-
+          
           groupData.warnings = groupData.warnings || {};
 
           groupData.warnings[menc_os2] = groupData.warnings[menc_os2] || [];
