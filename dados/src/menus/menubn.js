@@ -34,7 +34,7 @@ export default async function menubn(prefix, botName = "MeuBot", userName = "Usu
 │ 👀 ${prefix}sn
 │ ✋ ${prefix}ppt
 │ 🛑 ${prefix}stop
-${isLiteMode ? '' : '│ 💀 ${prefix}suicidio'}
+│ 💀 ${prefix}suicidio
 ╰──────────────
 
 
@@ -92,7 +92,7 @@ ${isLiteMode ? '' : `╭─❖ 🔞 INTERAÇÕES "PICANTES"
 
 `}╭─❖ 😆 BRINCADEIRAS MASCULINAS
 │ 📏 ${prefix}medirpau
-${isLiteMode ? '' : '│ 🏳️ ${prefix}gay\n'}
+│ 🏳️ ${prefix}gay
 │ 🧠 ${prefix}burro
 │ 🧠 ${prefix}burra
 │ 🧠 ${prefix}inteligente
@@ -100,7 +100,8 @@ ${isLiteMode ? '' : '│ 🏳️ ${prefix}gay\n'}
 │ 🥷 ${prefix}otaria
 │ 💍 ${prefix}fiel
 │ 💔 ${prefix}infiel
-${isLiteMode ? '' : '│ 🐂 ${prefix}corno\n│ 🐄 ${prefix}corna\n'}
+│ 🐂 ${prefix}corno
+│ 🐄 ${prefix}corna
 │ 🐂 ${prefix}gado
 │ 🐄 ${prefix}gada
 │ 😎 ${prefix}gostoso
@@ -110,14 +111,21 @@ ${isLiteMode ? '' : '│ 🐂 ${prefix}corno\n│ 🐄 ${prefix}corna\n'}
 │ 💰 ${prefix}rico
 │ 💰 ${prefix}rica
 │ 💸 ${prefix}pobre
-${isLiteMode ? '' : '│ 🍆 ${prefix}pirocudo\n│ 🍆 ${prefix}bucetuda\n│ ⚫ ${prefix}nazista\n│ 🦹 ${prefix}ladrao\n│ 🦹 ${prefix}ladra\n│ 🚫 ${prefix}homofobico\n│ 🚫 ${prefix}homofobica\n│ ⚫ ${prefix}racista\n'}
+│ 🍆 ${prefix}pirocudo
+│ 🍆 ${prefix}bucetuda
+│ ⚫ ${prefix}nazista
+│ 🦹 ${prefix}ladrao
+│ 🦹 ${prefix}ladra
+│ 🚫 ${prefix}homofobico
+│ 🚫 ${prefix}homofobica
+│ ⚫ ${prefix}racista
 │ 😈 ${prefix}safado
 │ 😈 ${prefix}safada
 │ 👁️ ${prefix}vesgo
 │ 👁️ ${prefix}vesga
 │ 🍺 ${prefix}bebado
 │ 🍺 ${prefix}bebada
-${isLiteMode ? '' : '│ 😤 ${prefix}machista\n'}
+│ 😤 ${prefix}machista
 │ 😴 ${prefix}chato
 │ 😴 ${prefix}chata
 │ 🍀 ${prefix}sortudo
@@ -167,7 +175,7 @@ ${isLiteMode ? '' : '│ 😤 ${prefix}machista\n'}
 │ 🌟 ${prefix}mito
 │ 👑 ${prefix}padrao
 │ 😂 ${prefix}comedia
-${isLiteMode ? '' : '│ 🧠 ${prefix}psicopata\n'}
+│ 🧠 ${prefix}psicopata
 │ 🔥 ${prefix}ateia
 │ 🗺️ ${prefix}aventureira
 │ 🤪 ${prefix}bagunceira
@@ -265,7 +273,21 @@ ${isLiteMode ? '' : '│ 🧠 ${prefix}psicopata\n'}
 │ 👨 ${prefix}senhor
 │ 👸 ${prefix}senhora
 │ 💼 ${prefix}responsavel
-${isLiteMode ? '' : '│ 👅 ${prefix}talarico\n│ 👅 ${prefix}talarica\n│ 🇧🇷 ${prefix}bolsonarista\n│ 🟢 ${prefix}petista\n│ 🔴 ${prefix}comunista\n│ 🟠 ${prefix}lulista\n│ 💔 ${prefix}traidor\n│ 💔 ${prefix}traidora\n│ 🤠 ${prefix}bandido\n│ 🤠 ${prefix}bandida\n│ 🐕 ${prefix}cachorro\n│ 🐕 ${prefix}cachorra\n│ 😩 ${prefix}vagabundo\n│ 😩 ${prefix}vagabunda\n│ 🕵 ${prefix}pilantra\n'}
+│ 👅 ${prefix}talarico
+│ 👅 ${prefix}talarica
+│ 🇧🇷 ${prefix}bolsonarista
+│ 🟢 ${prefix}petista
+│ 🔴 ${prefix}comunista
+│ 🟠 ${prefix}lulista
+│ 💔 ${prefix}traidor
+│ 💔 ${prefix}traidora
+│ 🤠 ${prefix}bandido
+│ 🤠 ${prefix}bandida
+│ 🐕 ${prefix}cachorro
+│ 🐕 ${prefix}cachorra
+│ 😩 ${prefix}vagabundo
+│ 😩 ${prefix}vagabunda
+│ 🕵 ${prefix}pilantra
 ╰──────────────
 
 
