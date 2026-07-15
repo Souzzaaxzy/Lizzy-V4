@@ -1,22 +1,16 @@
-export default async function menuedits(prefix, botName = "MeuBot", userName = "Usuário", {
-    header = `╭──────────────────────────────────────────────╮⊰ 🌸 『 *${botName}* 』\n│Olá, #user#!\n╰──────────────────────────────────────────────╯`,
-    menuTopBorder = "╭──────────────────────────────────────────────╮",
-    bottomBorder = "╰──────────────────────────────────────────────╯",
-    menuTitleIcon = "◈",
-    menuItemIcon = "▸",
-    separatorIcon = "❁",
-    middleBorder = "│"
-} = {}) {
-    const formattedHeader = header.replace(/#user#/g, userName);
-    return `${formattedHeader}
+export default async function menuEdits(prefix, botName = "MeuBot", userName = "Usuário") {
+    return `╭━━━〔 🎬 ${botName} • 𝐄𝐃𝐈𝐓𝐒 & 𝐄𝐅𝐄𝐈𝐓𝐎𝐒 〕━━━╮
+┃ 👋 Olá, @${userName}
+┃ 🎨 Edite imagens com efeitos rápidos
+┃ ✨ Transforme suas fotos facilmente
+╰━━━━━━━━━━━━━━━━━━━━━━━━━╯
 
-${menuTopBorder}
-│ MENU EDITS
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}jornal
-${middleBorder}${menuItemIcon}${prefix}cinema
-${middleBorder}${menuItemIcon}${prefix}blackwhite
-${middleBorder}${menuItemIcon}${prefix}desfoque
-${middleBorder}${menuItemIcon}${prefix}wojakreaction
-${bottomBorder}`;
+
+╭─❖ 🖼️ EDIÇÕES DE IMAGEM
+│ 📰 ${prefix}jornal
+│ 🎬 ${prefix}cinema
+│ ⚫ ${prefix}blackwhite
+│ 🌫️ ${prefix}desfoque
+│ 😐 ${prefix}wojakreaction
+╰──────────────`;
 }
