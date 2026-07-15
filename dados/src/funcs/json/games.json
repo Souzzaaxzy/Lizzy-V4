@@ -86,8 +86,8 @@
     "explodir": { "video": { "url": "http://hobsidian.shop/uploads/templates-api/aafe0b007a36530343df.mp4" } },
     "tomate": { "video": { "url": "http://hobsidian.shop/uploads/templates-api/00a41d865241fa72c877.mp4" } },
     "punheta": { "video": { "url": "./midias/punheta.mp4" } },
-    "surubao": { "video": { "url": "./midias/surubao.mp4" } },
-    "sexo": { "video": { "url": "./midias/sexo.mp4" } },
-    "siririca": { "video": { "url": "./midias/siririca.mp4" } }
+    "surubao": { "video": { "url": "./midias/punheta.mp4" } },
+    "sexo": { "video": { "url": "./midias/punheta.mp4" } },
+    "siririca": { "video": { "url": "./midias/punheta.mp4" } }
   }
 }
