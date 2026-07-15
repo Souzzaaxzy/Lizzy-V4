@@ -1,71 +1,47 @@
-export default async function menudown(prefix, botName = "MeuBot", userName = "Usuário", {
-    header = `╭──────────────────────────────────────────────╮⊰ 🌸 『 *${botName}* 』\n│Olá, #user#!\n╰──────────────────────────────────────────────╯`,
-    menuTopBorder = "╭──────────────────────────────────────────────╮",
-    bottomBorder = "╰──────────────────────────────────────────────╯",
-    menuTitleIcon = "◈",
-    menuItemIcon = "▸",
-    separatorIcon = "❁",
-    middleBorder = "│",
-    searchMenuTitle = "🔍 PESQUISAS & CONSULTAS",
-    audioMenuTitle = "🎵 MÚSICA & ÁUDIO", 
-    videoMenuTitle = "🎬 VÍDEOS & STREAMING",
-    downloadMenuTitle = "📥 DOWNLOADS",
-    mediaMenuTitle = "📱 MÍDIAS SOCIAIS",
-    gamesMenuTitle = "🎮 GAMING & APPS"
-} = {}) {
-    const formattedHeader = header.replace(/#user#/g, userName);
-    return `${formattedHeader}
+export default async function menuDown(prefix, botName = "MeuBot", userName = "Usuário") {
+    return `╭━━━〔 🌐 ${botName} • 𝐏𝐄𝐒𝐐𝐔𝐈𝐒𝐀𝐒 & 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃𝐒 〕━━━╮
+┃ 👋 Olá, @${userName}
+┃ 🌍 Pesquisa, músicas e downloads
+┃ ⚡ Tudo em um só lugar
+╰━━━━━━━━━━━━━━━━━━━━━━━━━╯
 
-${menuTopBorder}
-│ ${searchMenuTitle}
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}google
-${middleBorder}${menuItemIcon}${prefix}noticias
-${middleBorder}${menuItemIcon}${prefix}apps
-${middleBorder}${menuItemIcon}${prefix}dicionario
-${middleBorder}${menuItemIcon}${prefix}wikipedia
-${bottomBorder}
 
-${menuTopBorder}
-│ ${audioMenuTitle}
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}letra
-${middleBorder}${menuItemIcon}${prefix}play
-${middleBorder}${menuItemIcon}${prefix}play2
+╭─❖ 🔍 PESQUISAS & CONSULTAS
+│ 🌐 ${prefix}google
+│ 📰 ${prefix}noticias
+│ 📱 ${prefix}apps
+│ 📖 ${prefix}dicionario
+│ 📚 ${prefix}wikipedia
+╰──────────────
 
-${middleBorder}${menuItemIcon}${prefix}spotify
-${middleBorder}${menuItemIcon}${prefix}soundcloud
-${bottomBorder}
 
-${menuTopBorder}
-│ ${videoMenuTitle}
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}playvid
-${bottomBorder}
+╭─❖ 🎵 MÚSICA & ÁUDIO
+│ 🎼 ${prefix}letra
+│ ▶️ ${prefix}play
+│ 🎧 ${prefix}play2
+│ 🟢 ${prefix}spotify
+│ ☁️ ${prefix}soundcloud
+╰──────────────
 
-${menuTopBorder}
-│ ${downloadMenuTitle}
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}tiktok
-${middleBorder}${menuItemIcon}${prefix}instagram
-${middleBorder}${menuItemIcon}${prefix}kwai
-${middleBorder}${menuItemIcon}${prefix}igstory
-${middleBorder}${menuItemIcon}${prefix}facebook
-${middleBorder}${menuItemIcon}${prefix}gdrive
-${middleBorder}${menuItemIcon}${prefix}mediafire
-${middleBorder}${menuItemIcon}${prefix}twitter
-${bottomBorder}
 
-${menuTopBorder}
-│ ${mediaMenuTitle}
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}pinterest
-${bottomBorder}
+╭─❖ 🎬 VÍDEOS & STREAMING
+│ 🎥 ${prefix}playvid
+╰──────────────
 
-${menuTopBorder}
-│ ${gamesMenuTitle}
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}mcplugin
-${bottomBorder}
-`;
+
+╭─❖ 📥 DOWNLOADS
+│ 🎵 ${prefix}tiktok
+│ 📸 ${prefix}instagram
+│ 🎬 ${prefix}kwai
+│ 📖 ${prefix}igstory
+│ 👍 ${prefix}facebook
+│ ☁️ ${prefix}gdrive
+│ 📦 ${prefix}mediafire
+│ 🐦 ${prefix}twitter
+╰──────────────
+
+
+╭─❖ 📱 MÍDIAS SOCIAIS
+│ 📌 ${prefix}pinterest
+╰──────────────`;
 }
