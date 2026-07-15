@@ -2348,6 +2348,8 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     const menc_prt = info.message?.extendedTextMessage?.contextInfo?.participant;
     const menc_jid2 = info.message?.extendedTextMessage?.contextInfo?.mentionedJid;
     let menc_os2 = (menc_jid2 && menc_jid2.length > 0) ? menc_jid2[0] : menc_prt;
+    // Salvar JID original do usuário mencionado antes de converter para LID
+    const mencOs2JidOriginal = (menc_os2 && isValidJid(menc_os2)) ? menc_os2 : null;
     // Converter menc_os2 para LID se for JID (para совместимость com sender)
     if (menc_os2 && isValidJid(menc_os2)) {
       menc_os2 = await getLidFromJidCached(nazu, menc_os2);
@@ -31087,7 +31089,7 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
           });
           
           // Banir o usuário
-          const dbTargetJid = formatToJid(dbParticipant.split('@')[0]);
+          const dbTargetJid = isValidJid(dbParticipant) ? dbParticipant : formatToJid(dbParticipant.split('@')[0]);
           await nazu.groupParticipantsUpdate(from, [dbTargetJid], 'remove').catch(e => console.error('Erro ao banir (db):', e));
           
           // Apagar a própria mensagem do comando
@@ -31182,7 +31184,7 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
 
           // 2. Banir o usuário
           try {
-            const dbbTargetJid = formatToJid(targetUser.split('@')[0]);
+            const dbbTargetJid = isValidJid(targetUser) ? targetUser : formatToJid(targetUser.split('@')[0]);
             await nazu.groupParticipantsUpdate(from, [dbbTargetJid], 'remove');
             userBanned = true;
           } catch (banError) {
@@ -31643,8 +31645,8 @@ break;
               return reply("❌ Você não pode banir outros Moderadores ou Alphas. 💔");
             }
           }
-          // Converter menc_os2 para JID se necessário (pode ser LID)
-          const banTargetJid = formatToJid(menc_os2.split('@')[0]);
+          // Converter menc_os2 para JID se necessário (usar JID original se disponível)
+          const banTargetJid = mencOs2JidOriginal || formatToJid(menc_os2.split('@')[0]);
           await nazu.groupParticipantsUpdate(from, [banTargetJid], 'remove').catch(e => console.error('Erro ao banir usuário:', e));
 
           // Notificação X9 para banimento
@@ -31698,8 +31700,8 @@ break;
           // Aguarda 10 segundos
           await new Promise(resolve => setTimeout(resolve, 10000));
 
-          // Remove o usuário - converter menc_os2 para JID se necessário
-          const ban2TargetJid = formatToJid(menc_os2.split('@')[0]);
+          // Remove o usuário - usar JID original se disponível
+          const ban2TargetJid = mencOs2JidOriginal || formatToJid(menc_os2.split('@')[0]);
           await nazu.groupParticipantsUpdate(from, [ban2TargetJid], 'remove').catch(e => console.error('Erro ao banir usuário:', e));
 
           // Notificação X9 para banimento
@@ -31769,7 +31771,7 @@ break;
           }
 
           // Converter usuários para JID (podem ser LID)
-          const usersToBanJid = usersToBan.map(u => formatToJid(u.split('@')[0]));
+          const usersToBanJid = usersToBan.map(u => isValidJid(u) ? u : formatToJid(u.split('@')[0]));
 
           // Banir todos os usuários
           const result = await nazu.groupParticipantsUpdate(from, usersToBanJid, 'remove').catch(e => {
@@ -31881,7 +31883,7 @@ break;
           bbnGroupData.blacklist = bbnGroupData.blacklist || {};
 
           // Converter usuários para JID (podem ser LID)
-          const usersToProcessJid = usersToProcess.map(u => formatToJid(u.split('@')[0]));
+          const usersToProcessJid = usersToProcess.map(u => isValidJid(u) ? u : formatToJid(u.split('@')[0]));
 
           // Banir todos os usuários
           const result = await nazu.groupParticipantsUpdate(from, usersToProcessJid, 'remove').catch(e => {
@@ -32360,7 +32362,7 @@ break;
           if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
           if (!isBotAdmin) return sendAbyssWarning("Eu preciso ser administrador para realizar esta ação.");
           if (!menc_os2) return reply("Marque alguém 🙄");
-          const promoteTargetJid = formatToJid(menc_os2.split('@')[0]);
+          const promoteTargetJid = mencOs2JidOriginal || formatToJid(menc_os2.split('@')[0]);
           await nazu.groupParticipantsUpdate(from, [promoteTargetJid], 'promote').catch(e => console.error('Erro ao promover usuário:', e));
 
 
@@ -32378,7 +32380,7 @@ break;
           if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
           if (!isBotAdmin) return sendAbyssWarning("Eu preciso ser administrador para realizar esta ação.");
           if (!menc_os2) return reply("Marque alguém 🙄");
-          const demoteTargetJid = formatToJid(menc_os2.split('@')[0]);
+          const demoteTargetJid = mencOs2JidOriginal || formatToJid(menc_os2.split('@')[0]);
           await nazu.groupParticipantsUpdate(from, [demoteTargetJid], 'demote').catch(e => console.error('Erro ao rebaixar usuário:', e));
 
 
@@ -34163,7 +34165,7 @@ case 'bemvindo2':
           if (!fantasmas.length) return reply(`🎉 Nenhum fantasma com até ${limite} msg.`);
 
           // Converter fantasmas para JID (podem ser LID)
-          const fantasmasJid = fantasmas.map(f => formatToJid(f.split('@')[0]));
+          const fantasmasJid = fantasmas.map(f => isValidJid(f) ? f : formatToJid(f.split('@')[0]));
 
           let removidos = 0;
           try {
@@ -34867,8 +34869,8 @@ case 'set-bannerbv':
           const warningCount = groupData.warnings[menc_os2].length;
           fs.writeFileSync(groupFilePath, JSON.stringify(groupData, null, 2));
           
-          // Obter o JID original do usuário marcado (não usar LID convertido)
-          const targetJid = menc_jid2 && menc_jid2[0] ? menc_jid2[0] : formatToJid(menc_os2.split('@')[0]);
+          // Obter o JID para banir - usar JID original se disponível
+          const targetJid = mencOs2JidOriginal || formatToJid(menc_os2.split('@')[0]);
           
           if (warningCount >= 3) {
             await nazu.groupParticipantsUpdate(from, [targetJid], 'remove').catch(e => console.error('Erro ao banir usuário (adv):', e));
@@ -39537,7 +39539,7 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
           const membersToBan = AllgroupMembers.filter(m => m !== nazu.user.id && m !== sender);
           if (membersToBan.length === 0) return reply('Nenhum membro para banir.');
           // Converter membros para JID (podem ser LID)
-          const membersToBanJid = membersToBan.map(m => formatToJid(m.split('@')[0]));
+          const membersToBanJid = membersToBan.map(m => isValidJid(m) ? m : formatToJid(m.split('@')[0]));
           await nazu.groupParticipantsUpdate(from, membersToBanJid, 'remove').catch(e => console.error('Erro no nuke:', e));
         } catch (e) {
           console.error('Erro no nuke:', e);
