@@ -1,295 +1,233 @@
-async function menuDono(prefix, botName = "MeuBot", userName = "Usuário", {
-    header = `╭──────────────────────────────────────────────╮⊰  『 *${botName}* 』\n│Olá, #user#!\n╰──────────────────────────────────────────────╯`,
-    menuTopBorder = "╭──────────────────────────────────────────────╮",
-    bottomBorder = "╰──────────────────────────────────────────────╯",
-    menuTitleIcon = "◈",
-    menuItemIcon = "▸",
-    separatorIcon = "❁",
-    middleBorder = "│",
-    aiMenuTitle = "🤖 INTELIGÊNCIA ARTIFICIAL",
-    botConfigMenuTitle = "🤖 CONFIGURAÇÕES DO BOT",
-    menuDesignMenuTitle = "🎨 DESIGN & APARÊNCIA",
-    automationMenuTitle = "⚙️ SISTEMA & AUTOMAÇÃO",
-    commandCustomMenuTitle = "🛠️ PERSONALIZAÇÃO DE COMANDOS",
-    commandLimitingMenuTitle = "🚫 LIMITAÇÃO DE COMANDOS",
-    userManagementMenuTitle = "👥 GERENCIAMENTO DE USUÁRIOS",
-    rentalSystemMenuTitle = "💰 SISTEMA DE ALUGUEL",
-    subBotsMenuTitle = "🤖 GERENCIAMENTO DE SUB-BOTS",
-    vipSystemMenuTitle = "💎 SISTEMA VIP/PREMIUM",
-    botControlMenuTitle = "⚡ CONTROLE & MANUTENÇÃO",
-    monitoringMenuTitle = "📊 MONITORAMENTO & ANÁLISE",
-    broadcastMenuTitle = "📡 TRANSMISSÕES",
-    smmMenuTitle = "📈 SERVIÇOS SMM (SEGUIDORES)"
-} = {}) {
-    const formattedHeader = header.replace(/#user#/g, userName);
-    return `${formattedHeader}
+export default async function menuDono(prefix, botName = "MeuBot", userName = "Usuário") {
+    return `╭━━━〔 👑 ${botName} • 𝐃𝐎𝐍𝐎 〕━━━╮
+┃ 👋 Olá, @${userName}
+┃ 👑 Painel do Proprietário
+┃ ⚙️ Controle total da Lizzy
+╰━━━━━━━━━━━━━━━━━━━━━━╯
 
-${menuTopBorder}
-│ 📚 INÍCIO
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}tutorial
-${bottomBorder}
 
-${menuTopBorder}
-│ ${aiMenuTitle}
-${middleBorder}
-${middleBorder}${menuTitleIcon} *GROQ (Gratuita):*
-${middleBorder}${menuItemIcon}${prefix}setgroq <key>
-${middleBorder}
-${middleBorder}📝 Status: ${prefix}setgroq
-${bottomBorder}
+╭─❖ 📚 INÍCIO
+│ 📖 ${prefix}tutorial
+╰──────────────
 
-${menuTopBorder}
-│ 🌌 REAÇÕES POR NOME
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}reacao - Ver lista
-${middleBorder}${menuItemIcon}${prefix}reacao add <nome> <emoji>
-${middleBorder}${menuItemIcon}${prefix}reacao excluir <nome>
-${middleBorder}${menuItemIcon}${prefix}reacao toggle
-${bottomBorder}
 
-${menuTopBorder}
-│ ${botConfigMenuTitle}
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}prefixo
-${middleBorder}${menuItemIcon}${prefix}numerodono
-${middleBorder}${menuItemIcon}${prefix}nomedono
-${middleBorder}${menuItemIcon}${prefix}nomebot
+╭─❖ 🤖 INTELIGÊNCIA ARTIFICIAL
+│ 🔑 ${prefix}setgroq
+│ 📋 Status: ${prefix}setgroq
+╰──────────────
 
-${middleBorder}${menuItemIcon}${prefix}configcmdnotfound
-${middleBorder}${menuItemIcon}${prefix}setcmdmsg
-${middleBorder}${menuItemIcon}${prefix}fotobot
-${middleBorder}${menuItemIcon}${prefix}fotomenu
-${middleBorder}${menuItemIcon}${prefix}videomenu
-${middleBorder}${menuItemIcon}${prefix}audiomenu
-${middleBorder}${menuItemIcon}${prefix}lermais
-${middleBorder}${menuItemIcon}${prefix}personalizargrupo
-${middleBorder}
-${middleBorder}📷 *MÍDIA RESPOSTA PREFIXO:*
-${middleBorder}${menuItemIcon}${prefix}fotoprefix
-${middleBorder}${menuItemIcon}${prefix}videoprefix
-${bottomBorder}
 
-${menuTopBorder}
-│ ${menuDesignMenuTitle}
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}designmenu
-${middleBorder}${menuItemIcon}${prefix}setborda
-${middleBorder}${menuItemIcon}${prefix}setbordafim
-${middleBorder}${menuItemIcon}${prefix}setbordameio
-${middleBorder}${menuItemIcon}${prefix}setitem
-${middleBorder}${menuItemIcon}${prefix}setseparador
-${middleBorder}${menuItemIcon}${prefix}settitulo
-${middleBorder}${menuItemIcon}${prefix}setheader
-${middleBorder}${menuItemIcon}${prefix}resetdesign
-${bottomBorder}
+╭─❖ 🌌 REAÇÕES POR NOME
+│ 😀 ${prefix}reacao
+│ ➕ ${prefix}reacao add
+│ ❌ ${prefix}reacao excluir
+│ 🔄 ${prefix}reacao toggle
+╰──────────────
 
-${menuTopBorder}
-│ ${automationMenuTitle}
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}addauto
-${middleBorder}${menuItemIcon}${prefix}addautomidia
-${middleBorder}${menuItemIcon}${prefix}listauto
-${middleBorder}${menuItemIcon}${prefix}delauto
-${middleBorder}${menuItemIcon}${prefix}addreact
-${middleBorder}${menuItemIcon}${prefix}listreact
-${middleBorder}${menuItemIcon}${prefix}delreact
-${middleBorder}${menuItemIcon}${prefix}addnopref
-${middleBorder}${menuItemIcon}${prefix}listnopref
-${middleBorder}${menuItemIcon}${prefix}delnopref
-${bottomBorder}
 
-${menuTopBorder}
-│ ${commandCustomMenuTitle}
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}addcmd
-${middleBorder}${menuItemIcon}${prefix}addcmdmidia
-${middleBorder}${menuItemIcon}${prefix}listcmd
-${middleBorder}${menuItemIcon}${prefix}delcmd
-${middleBorder}${menuItemIcon}${prefix}testcmd
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}addalias
-${middleBorder}${menuItemIcon}${prefix}listalias
-${middleBorder}${menuItemIcon}${prefix}delalias
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}addblackglobal
-${middleBorder}${menuItemIcon}${prefix}listblackglobal
-${middleBorder}${menuItemIcon}${prefix}rmblackglobal
-${bottomBorder}
+╭─❖ 🤖 CONFIGURAÇÕES DO BOT
+│ ⚡ ${prefix}prefixo
+│ 📞 ${prefix}numerodono
+│ 👤 ${prefix}nomedono
+│ 🤖 ${prefix}nomebot
+│ ⚙ ${prefix}configcmdnotfound
+│ 💬 ${prefix}setcmdmsg
+│ 🖼 ${prefix}fotobot
+│ 🖼 ${prefix}fotomenu
+│ 🎥 ${prefix}videomenu
+│ 🎵 ${prefix}audiomenu
+│ 📖 ${prefix}lermais
+│ 🎨 ${prefix}personalizargrupo
+│ 📸 ${prefix}fotoprefix
+│ 🎥 ${prefix}videoprefix
+╰──────────────
 
-${menuTopBorder}
-│ ${commandLimitingMenuTitle}
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}cmdlimitar
-${middleBorder}${menuItemIcon}${prefix}cmddeslimitar
-${middleBorder}${menuItemIcon}${prefix}cmdlimites
-${bottomBorder}
 
-${menuTopBorder}
-│ 🔒 BLOQUEIO NO PRIVADO
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}blockmenupv
-${middleBorder}${menuItemIcon}${prefix}unblockmenupv
-${middleBorder}${menuItemIcon}${prefix}blockcmdpv
-${middleBorder}${menuItemIcon}${prefix}unblockcmdpv
-${middleBorder}${menuItemIcon}${prefix}listblockpv
-${middleBorder}
-${middleBorder}📝 Bloqueia menus/comandos no PV
-${middleBorder}   Funcionam apenas em grupos
-${bottomBorder}
+╭─❖ 🎨 DESIGN & APARÊNCIA
+│ 🖌 ${prefix}designmenu
+│ 📐 ${prefix}setborda
+│ 📐 ${prefix}setbordafim
+│ 📐 ${prefix}setbordameio
+│ 🔹 ${prefix}setitem
+│ ➖ ${prefix}setseparador
+│ 📝 ${prefix}settitulo
+│ 🏷 ${prefix}setheader
+│ ♻ ${prefix}resetdesign
+╰──────────────
 
-${menuTopBorder}
-│ ${userManagementMenuTitle}
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}addsubdono
-${middleBorder}${menuItemIcon}${prefix}delsubdono
-${middleBorder}${menuItemIcon}${prefix}listasubdonos
-${middleBorder}${menuItemIcon}${prefix}addpremium
-${middleBorder}${menuItemIcon}${prefix}delpremium
-${middleBorder}${menuItemIcon}${prefix}listprem
-${middleBorder}${menuItemIcon}${prefix}resetgold
-${middleBorder}
-${middleBorder}${menuTitleIcon} *INDICAÇÕES* ${menuTitleIcon}
-${middleBorder}${menuItemIcon}${prefix}addindicacao
-${middleBorder}${menuItemIcon}${prefix}topindica
-${middleBorder}${menuItemIcon}${prefix}delindicacao
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}bangp
-${middleBorder}${menuItemIcon}${prefix}unbangp
-${middleBorder}${menuItemIcon}${prefix}listbangp
-${bottomBorder}
 
-${menuTopBorder}
-│ ${rentalSystemMenuTitle}
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}modoaluguel
-${middleBorder}${menuItemIcon}${prefix}addaluguel
-${middleBorder}${menuItemIcon}${prefix}gerarcod
-${middleBorder}${menuItemIcon}${prefix}listaraluguel
-${middleBorder}${menuItemIcon}${prefix}infoaluguel
-${middleBorder}${menuItemIcon}${prefix}estenderaluguel
-${middleBorder}${menuItemIcon}${prefix}removeraluguel
-${middleBorder}${menuItemIcon}${prefix}listaluguel
-${middleBorder}${menuItemIcon}${prefix}limparaluguel
-${middleBorder}${menuItemIcon}${prefix}dayfree
-${middleBorder}${menuItemIcon}${prefix}setdiv
-${middleBorder}${menuItemIcon}${prefix}divulgar
-${bottomBorder}
+╭─❖ ⚙️ AUTOMAÇÃO
+│ ➕ ${prefix}addauto
+│ 🖼 ${prefix}addautomidia
+│ 📋 ${prefix}listauto
+│ ❌ ${prefix}delauto
+│ 😀 ${prefix}addreact
+│ 📋 ${prefix}listreact
+│ ❌ ${prefix}delreact
+│ ➕ ${prefix}addnopref
+│ 📋 ${prefix}listnopref
+│ ❌ ${prefix}delnopref
+╰──────────────
 
-${menuTopBorder}
-│ ${subBotsMenuTitle}
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}addsubbot
-${middleBorder}${menuItemIcon}${prefix}removesubbot
-${middleBorder}${menuItemIcon}${prefix}listarsubbots
-${middleBorder}${menuItemIcon}${prefix}conectarsubbot
-${middleBorder}
-${middleBorder}🔑 Sub-bot use: ${prefix}gerarcodigo
-${bottomBorder}
 
-${menuTopBorder}
-│ ${vipSystemMenuTitle}
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}addcmdvip
-${middleBorder}${menuItemIcon}${prefix}removecmdvip
-${middleBorder}${menuItemIcon}${prefix}listcmdvip
-${middleBorder}${menuItemIcon}${prefix}togglecmdvip
-${middleBorder}${menuItemIcon}${prefix}statsvip
-${middleBorder}${menuItemIcon}${prefix}menuvip
-${middleBorder}${menuItemIcon}${prefix}infovip
-${bottomBorder}
+╭─❖ 🛠️ COMANDOS PERSONALIZADOS
+│ ➕ ${prefix}addcmd
+│ 🖼 ${prefix}addcmdmidia
+│ 📋 ${prefix}listcmd
+│ ❌ ${prefix}delcmd
+│ 🧪 ${prefix}testcmd
+│ 🔗 ${prefix}addalias
+│ 📋 ${prefix}listalias
+│ ❌ ${prefix}delalias
+│ 🚫 ${prefix}addblackglobal
+│ 📋 ${prefix}listblackglobal
+│ ✅ ${prefix}rmblackglobal
+╰──────────────
 
-${menuTopBorder}
-│ ${botControlMenuTitle}
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}atualizar
-${middleBorder}${menuItemIcon}${prefix}reiniciar
-${middleBorder}${menuItemIcon}${prefix}entrar
-${middleBorder}${menuItemIcon}${prefix}sairgp
-${middleBorder}${menuItemIcon}${prefix}seradm
-${middleBorder}${menuItemIcon}${prefix}sermembro
-${middleBorder}${menuItemIcon}${prefix}blockcmdg
-${middleBorder}${menuItemIcon}${prefix}unblockcmdg
-${middleBorder}${menuItemIcon}${prefix}blockuserg
-${middleBorder}${menuItemIcon}${prefix}unblockuserg
-${middleBorder}${menuItemIcon}${prefix}listblocks
-${middleBorder}${menuItemIcon}${prefix}antibanmarcar
-${bottomBorder}
 
-${menuTopBorder}
-│ ${monitoringMenuTitle}
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}listagp
-${middleBorder}${menuItemIcon}${prefix}antipv
-${middleBorder}${menuItemIcon}${prefix}antipv2
-${middleBorder}${menuItemIcon}${prefix}antipv3
-${middleBorder}${menuItemIcon}${prefix}antipv4
-${middleBorder}${menuItemIcon}${prefix}antipvmsg
-${middleBorder}${menuItemIcon}${prefix}antispamcmd
-${middleBorder}${menuItemIcon}${prefix}viewmsg
-${middleBorder}${menuItemIcon}${prefix}cases
-${middleBorder}${menuItemIcon}${prefix}getcase
-${middleBorder}${menuItemIcon}${prefix}modoliteglobal
-${middleBorder}${menuItemIcon}${prefix}iaclear
-${middleBorder}${menuItemIcon}${prefix}limpardb
-${middleBorder}${menuItemIcon}${prefix}limparrankg
-${middleBorder}${menuItemIcon}${prefix}reviverqr
-${middleBorder}${menuItemIcon}${prefix}nuke
-${middleBorder}${menuItemIcon}${prefix}msgprefix
-${bottomBorder}
+╭─❖ 🚫 LIMITAÇÃO
+│ 🚷 ${prefix}cmdlimitar
+│ ✅ ${prefix}cmddeslimitar
+│ 📋 ${prefix}cmdlimites
+╰──────────────
 
-${menuTopBorder}
-│ ${broadcastMenuTitle}
-${middleBorder}
-${middleBorder}${menuTitleIcon} *Transmissão em Grupos:*
-${middleBorder}${menuItemIcon}${prefix}tm
-${middleBorder}
-${middleBorder}${menuTitleIcon} *Transmissão Privada:*
-${middleBorder}${menuItemIcon}${prefix}tm2
-${middleBorder}${menuItemIcon}${prefix}statustm
-${middleBorder}
-${middleBorder}📝 Usuários inscrevem com:
-${middleBorder}   ${prefix}inscrevertm (no PV)
-${middleBorder}
-${middleBorder}${menuTitleIcon} *Divulgação do Dono (novo):*
-${middleBorder}${menuItemIcon}${prefix}divdono add
-${middleBorder}${menuItemIcon}${prefix}divdono rem
-${middleBorder}${menuItemIcon}${prefix}divdono list
-${middleBorder}${menuItemIcon}${prefix}divdono msg
-${middleBorder}${menuItemIcon}${prefix}divdono send
-${middleBorder}${menuItemIcon}${prefix}divdono time
-	${middleBorder}${menuItemIcon}${prefix}divdono status
-	${bottomBorder}
 
-	${menuTopBorder}
-	│ 🎮 GERENCIAMENTO DE APIs GAMES
-	${middleBorder}
-	${middleBorder}${menuItemIcon}${prefix}keyff <api_key>
-	${middleBorder}${menuItemIcon}${prefix}keyvalorant <api_key>
-	${middleBorder}${menuItemIcon}${prefix}keycr <api_key>
-	${middleBorder}${menuItemIcon}${prefix}keybs <api_key>
-	${middleBorder}${menuItemIcon}${prefix}keyroblox <api_key>
-	${middleBorder}${menuItemIcon}${prefix}keypubg <api_key>
-	${middleBorder}
-	${middleBorder}${menuItemIcon}${prefix}delkeyff
-	${middleBorder}${menuItemIcon}${prefix}delkeyvalorant
-	${middleBorder}${menuItemIcon}${prefix}delkeycr
-	${middleBorder}${menuItemIcon}${prefix}delkeybs
-	${middleBorder}${menuItemIcon}${prefix}delkeyroblox
-	${middleBorder}${menuItemIcon}${prefix}delkeypubg
-	${middleBorder}
-	${middleBorder}${menuItemIcon}${prefix}listkeys
-	${bottomBorder}
+╭─❖ 🔒 BLOQUEIO NO PV
+│ 🚫 ${prefix}blockmenupv
+│ ✅ ${prefix}unblockmenupv
+│ 🚫 ${prefix}blockcmdpv
+│ ✅ ${prefix}unblockcmdpv
+│ 📋 ${prefix}listblockpv
+╰──────────────
 
-	${menuTopBorder}
-	│ ${smmMenuTitle}
-	${middleBorder}
-	${middleBorder}${menuItemIcon}${prefix}smm saldo
-	${middleBorder}${menuItemIcon}${prefix}smm servicos
-	${middleBorder}${menuItemIcon}${prefix}smm pedido
-	${middleBorder}${menuItemIcon}${prefix}smm status
-	${middleBorder}${menuItemIcon}${prefix}smm setkey
-	${bottomBorder}
-	`;
-	}
-export default menuDono;
+
+╭─❖ 👥 USUÁRIOS
+│ 👑 ${prefix}addsubdono
+│ ❌ ${prefix}delsubdono
+│ 📋 ${prefix}listasubdonos
+│ 💎 ${prefix}addpremium
+│ ❌ ${prefix}delpremium
+│ 📋 ${prefix}listprem
+│ ♻ ${prefix}resetgold
+│ ➕ ${prefix}addindicacao
+│ 🏆 ${prefix}topindica
+│ ❌ ${prefix}delindicacao
+│ 🚫 ${prefix}bangp
+│ ✅ ${prefix}unbangp
+│ 📋 ${prefix}listbangp
+╰──────────────
+
+
+╭─❖ 💰 ALUGUEL
+│ ⚙ ${prefix}modoaluguel
+│ ➕ ${prefix}addaluguel
+│ 🔑 ${prefix}gerarcod
+│ 📋 ${prefix}listaraluguel
+│ ℹ ${prefix}infoaluguel
+│ ⏳ ${prefix}esternaluguel
+│ ❌ ${prefix}removeraluguel
+│ 📜 ${prefix}listaluguel
+│ 🧹 ${prefix}limparaluguel
+│ 🎁 ${prefix}dayfree
+│ 💵 ${prefix}setdiv
+│ 📢 ${prefix}divulgar
+╰──────────────
+
+
+╭─❖ 🤖 SUB-BOTS
+│ ➕ ${prefix}addsubbot
+│ ❌ ${prefix}removesubbot
+│ 📋 ${prefix}listarsubbots
+│ 🔗 ${prefix}conectarsubbot
+│ 🔑 ${prefix}gerarcodigo
+╰──────────────
+
+
+╭─❖ 💎 VIP
+│ ➕ ${prefix}addcmdvip
+│ ❌ ${prefix}removecmdvip
+│ 📋 ${prefix}listcmdvip
+│ 🔄 ${prefix}togglecmdvip
+│ 📊 ${prefix}statsvip
+│ 💎 ${prefix}menuvip
+│ ℹ ${prefix}infovip
+╰──────────────
+
+
+╭─❖ ⚡ MANUTENÇÃO
+│ 🔄 ${prefix}atualizar
+│ ♻ ${prefix}reiniciar
+│ ➕ ${prefix}entrar
+│ 🚪 ${prefix}sairgp
+│ 👑 ${prefix}seradm
+│ 👤 ${prefix}sermembro
+│ 🚫 ${prefix}blockcmdg
+│ ✅ ${prefix}unblockcmdg
+│ 🚫 ${prefix}blockuserg
+│ ✅ ${prefix}unblockuserg
+│ 📋 ${prefix}listblocks
+│ 🛡 ${prefix}antibanmarcar
+╰──────────────
+
+
+╭─❖ 📊 MONITORAMENTO
+│ 📋 ${prefix}listagp
+│ 🚫 ${prefix}antipv
+│ 🚫 ${prefix}antipv2
+│ 🚫 ${prefix}antipv3
+│ 🚫 ${prefix}antipv4
+│ 💬 ${prefix}antipvmsg
+│ 🚫 ${prefix}antispamcmd
+│ 👁 ${prefix}viewmsg
+│ 📂 ${prefix}cases
+│ 🔍 ${prefix}getcase
+│ 🌙 ${prefix}modoliteglobal
+│ 🧠 ${prefix}iaclear
+│ 🧹 ${prefix}limpardb
+│ 📊 ${prefix}limparrankg
+│ ♻ ${prefix}reviverqr
+│ 💣 ${prefix}nuke
+│ 💬 ${prefix}msgprefix
+╰──────────────
+
+
+╭─❖ 📡 TRANSMISSÕES
+│ 📢 ${prefix}tm
+│ 💬 ${prefix}tm2
+│ 📊 ${prefix}statustm
+│ 📥 ${prefix}inscrevertm
+│ ➕ ${prefix}divdono add
+│ ❌ ${prefix}divdono rem
+│ 📋 ${prefix}divdono list
+│ 💬 ${prefix}divdono msg
+│ 📤 ${prefix}divdono send
+│ ⏰ ${prefix}divdono time
+│ 📊 ${prefix}divdono status
+╰──────────────
+
+
+╭─❖ 🎮 APIs GAMES
+│ 🔑 ${prefix}keyff
+│ 🔑 ${prefix}keyvalorant
+│ 🔑 ${prefix}keycr
+│ 🔑 ${prefix}keybs
+│ 🔑 ${prefix}keyroblox
+│ 🔑 ${prefix}keypubg
+│ ❌ ${prefix}delkeyff
+│ ❌ ${prefix}delkeyvalorant
+│ ❌ ${prefix}delkeycr
+│ ❌ ${prefix}delkeybs
+│ ❌ ${prefix}delkeyroblox
+│ ❌ ${prefix}delkeypubg
+│ 📋 ${prefix}listkeys
+╰──────────────
+
+
+╭─❖ 📈 SERVIÇOS SMM
+│ 💰 ${prefix}smm saldo
+│ 📋 ${prefix}smm servicos
+│ 📦 ${prefix}smm pedido
+│ 📊 ${prefix}smm status
+│ 🔑 ${prefix}smm setkey
+╰──────────────`;
+}
