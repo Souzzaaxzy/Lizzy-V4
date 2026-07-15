@@ -1,121 +1,95 @@
-export default async function menuMembros(prefix, botName = "MeuBot", userName = "Usuário", {
-    header = `╭──────────────────────────────────────────────╮⊰ 🌸 『 *${botName}* 』\n│Olá, #user#!\n╰──────────────────────────────────────────────╯`,
-    menuTopBorder = "╭──────────────────────────────────────────────╮",
-    bottomBorder = "╰──────────────────────────────────────────────╯",
-    menuTitleIcon = "◈",
-    menuItemIcon = "▸",
-    separatorIcon = "❁",
-    middleBorder = "│",
-    perfilMenuTitle = "👤 PERFIL & ESTATÍSTICAS",
-    botStatusMenuTitle = "🤖 STATUS DO BOT",
-    personalMenuTitle = "⚙️ CONFIGURAÇÕES PESSOAIS",
-    rankMenuTitle = "🏆 RANKINGS & GAMIFICAÇÃO",
-    gamingMenuTitle = "🎮 CONTEÚDO GAMER"
-} = {}) {
-    const formattedHeader = header.replace(/#user#/g, userName);
-    return `${formattedHeader}
+export default async function menuMembros(prefix, botName = "MeuBot", userName = "Usuário") {
+    return `╭━━━〔 👥 ${botName} • 𝐌𝐄𝐌𝐁𝐑𝐎𝐒 〕━━━╮
+┃ 👋 Olá, @${userName}
+┃ 👤 Painel do Membro
+┃ ✨ Recursos da comunidade
+╰━━━━━━━━━━━━━━━━━━━━━━╯
 
-${menuTopBorder}
-│ ${perfilMenuTitle}
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}perfil
-${middleBorder}${menuItemIcon}${prefix}me
-${bottomBorder}
 
-${menuTopBorder}
-│ ${botStatusMenuTitle}
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}ping
-${middleBorder}${menuItemIcon}${prefix}statusbot
-${middleBorder}${menuItemIcon}${prefix}statusgp
-${middleBorder}${menuItemIcon}${prefix}regras
-${middleBorder}${menuItemIcon}${prefix}zipbot
-${middleBorder}${menuItemIcon}${prefix}gitbot
-${middleBorder}${menuItemIcon}${prefix}transcrever (responda um áudio)
-${bottomBorder}
+╭─❖ 👤 PERFIL & ESTATÍSTICAS
+│ 👤 ${prefix}perfil
+│ 🙋 ${prefix}me
+╰──────────────
 
-${menuTopBorder}
-│ ${personalMenuTitle}
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}mention
-${middleBorder}${menuItemIcon}${prefix}afk
-${middleBorder}${menuItemIcon}${prefix}voltei
-${bottomBorder}
 
-${menuTopBorder}
-│ 👬 INTERAÇÃO SOCIAL
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}roles
-${middleBorder}${menuItemIcon}${prefix}role.vou
-${middleBorder}${menuItemIcon}${prefix}role.nvou
-${middleBorder}${menuItemIcon}${prefix}role.confirmados
-${bottomBorder}
+╭─❖ 🤖 STATUS DO BOT
+│ 📶 ${prefix}ping
+│ 🤖 ${prefix}statusbot
+│ 👥 ${prefix}statusgp
+│ 📜 ${prefix}regras
+│ 📦 ${prefix}zipbot
+│ 🌐 ${prefix}gitbot
+│ 🎙 ${prefix}transcrever
+╰──────────────
 
-${menuTopBorder}
-│ ${rankMenuTitle}
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}rankativo
-${middleBorder}${menuItemIcon}${prefix}rankinativo
-${middleBorder}${menuItemIcon}${prefix}rankativos
-${middleBorder}${menuItemIcon}${prefix}atividade
-${middleBorder}${menuItemIcon}${prefix}checkativo / meativo
-${middleBorder}${menuItemIcon}${prefix}totalcmd
-${middleBorder}${menuItemIcon}${prefix}topcmd
-${bottomBorder}
 
-${menuTopBorder}
-│ 📊 ESTATÍSTICAS DE MENSAGENS
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}msgdiario
-${middleBorder}${menuItemIcon}${prefix}msgsemanal
-${middleBorder}${menuItemIcon}${prefix}estdia DD/MM
-${middleBorder}${menuItemIcon}${prefix}topdiario
-${middleBorder}${menuItemIcon}${prefix}topsemanal
-${middleBorder}${menuItemIcon}${prefix}mediario
-${middleBorder}${menuItemIcon}${prefix}mesemanal
-${middleBorder}${menuItemIcon}${prefix}pdiario
-${middleBorder}${menuItemIcon}${prefix}psemanal
-${middleBorder}${menuItemIcon}${prefix}recorde
-${middleBorder}${menuItemIcon}${prefix}merecorde
-${middleBorder}${menuItemIcon}${prefix}vermetas
-${bottomBorder}
+╭─❖ ⚙️ CONFIGURAÇÕES PESSOAIS
+│ 📢 ${prefix}mention
+│ 🌙 ${prefix}afk
+│ ☀️ ${prefix}voltei
+╰──────────────
 
-${menuTopBorder}
-│  CONQUISTAS & PRESENTES
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}conquistas
-${middleBorder}${menuItemIcon}${prefix}caixa diaria
-${middleBorder}${menuItemIcon}${prefix}caixa rara
-${middleBorder}${menuItemIcon}${prefix}caixa lendaria
-${middleBorder}${menuItemIcon}${prefix}presente @user <tipo>
-${middleBorder}${menuItemIcon}${prefix}inv
-${bottomBorder}
 
-${menuTopBorder}
-│ ⭐ REPUTAÇÃO & DENÚNCIAS
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}rep + @user
-${middleBorder}${menuItemIcon}${prefix}rep - @user
-${middleBorder}${menuItemIcon}${prefix}rep @user
-${middleBorder}${menuItemIcon}${prefix}toprep
-${middleBorder}${menuItemIcon}${prefix}denunciar @user <motivo>
-${middleBorder}${menuItemIcon}${prefix}denuncias
-${bottomBorder}
+╭─❖ 👥 INTERAÇÃO SOCIAL
+│ 🎭 ${prefix}roles
+│ ✅ ${prefix}role.vou
+│ ❌ ${prefix}role.nvou
+│ 📋 ${prefix}role.confirmados
+╰──────────────
 
-${menuTopBorder}
-│ 📸 MOMENTOS DO GRUPO
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}salvarm
-${middleBorder}${menuItemIcon}${prefix}moment
-${middleBorder}${menuItemIcon}${prefix}m [número]
-${middleBorder}${menuItemIcon}${prefix}apm [número]
-${bottomBorder}
 
-${menuTopBorder}
-│ ${gamingMenuTitle}
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}likeff
-${middleBorder}${menuItemIcon}${prefix}infoff
-${bottomBorder}
-`;
+╭─❖ 🏆 RANKINGS & GAMIFICAÇÃO
+│ 🥇 ${prefix}rankativo
+│ 💤 ${prefix}rankinativo
+│ 📊 ${prefix}rankativos
+│ 📈 ${prefix}atividade
+│ 👤 ${prefix}checkativo
+│ 📋 ${prefix}meativo
+│ ⚡ ${prefix}totalcmd
+│ 🔥 ${prefix}topcmd
+╰──────────────
+
+
+╭─❖ 📊 ESTATÍSTICAS
+│ 📅 ${prefix}msgdiario
+│ 📆 ${prefix}msgsemanal
+│ 📈 ${prefix}estdia
+│ 🏅 ${prefix}topdiario
+│ 🏆 ${prefix}topsemanal
+│ 👤 ${prefix}mediario
+│ 👤 ${prefix}mesemanal
+│ 🎯 ${prefix}pdiario
+│ 🎯 ${prefix}psemanal
+│ 💎 ${prefix}recorde
+│ ⭐ ${prefix}merecorde
+│ 🎯 ${prefix}vermetas
+╰──────────────
+
+
+╭─❖ 🎁 CONQUISTAS & INVENTÁRIO
+│ 🏅 ${prefix}conquistas
+│ 📦 ${prefix}caixa diaria
+│ 🎁 ${prefix}caixa rara
+│ 👑 ${prefix}caixa lendaria
+│ 🎀 ${prefix}presente
+│ 🎒 ${prefix}inv
+╰──────────────
+
+
+╭─❖ ⭐ REPUTAÇÃO
+│ 👍 ${prefix}rep +
+│ 👎 ${prefix}rep -
+│ 👤 ${prefix}rep
+│ 🏆 ${prefix}toprep
+│ 🚨 ${prefix}denunciar
+│ 📋 ${prefix}denuncias
+╰──────────────
+
+
+╭─❖ 📸 MOMENTOS
+│ 💾 ${prefix}salvarm
+│ 🖼 ${prefix}moment
+│ 🔎 ${prefix}m
+│ 🗑 ${prefix}apm
+╰──────────────`;
 }
