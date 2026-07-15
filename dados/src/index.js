@@ -29508,22 +29508,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           const userStatus = isOwnerOrSub ? 'Dono' : isPremium ? 'Premium' : isGroupAdmin ? 'Admin' : 'Membro';
           const statusMessage = `📊 *Meu Status - ${userName}* 📊\n\n👤 *Nome*: ${userName}\n📱 *Número*: @${getUserName(sender)}\n⭐ *Status*: ${userStatus}\n\n${isGroup ? `\n📌 *No Grupo: ${groupName}*\n💬 Mensagens: ${groupMessages}\n⚒️ Comandos: ${groupCommands}\n🎨 Figurinhas: ${groupStickers}\n` : ''}\n\n🌐 *Geral (Todos os Grupos)*\n💬 Mensagens: ${totalMessages}\n⚒️ Comandos: ${totalCommands}\n🎨 Figurinhas: ${totalStickers}\n\n◈ *Bot*: ${nomebot} by ${nomedono} ◈`;
           
-          // Buscar foto com timeout de 5 segundos (não bloqueia o bot)
-          const getProfilePic = () => new Promise((resolve) => {
-            const timeout = setTimeout(() => resolve(null), 5000);
-            nazu.profilePictureUrl(sender, 'image')
-              .then(pic => { clearTimeout(timeout); resolve(pic); })
-              .catch(() => { clearTimeout(timeout); resolve(null); });
-          });
-          
-          nazu.sendMessage(from, { text: statusMessage, mentions: [sender] }, { quoted: info });
-          
-          // Buscar foto e reenviar com imagem se conseguir (não bloqueia)
-          getProfilePic().then(profilePic => {
-            if (profilePic) {
-              nazu.sendMessage(from, { image: { url: profilePic }, caption: statusMessage, mentions: [sender] }, { quoted: info }).catch(() => {});
-            }
-          });
+          await nazu.sendMessage(from, { text: statusMessage, mentions: [sender] }, { quoted: info });
         } catch (e) {
           console.error(e);
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
