@@ -1,419 +1,295 @@
-export default async function menubn(prefix, botName = "MeuBot", userName = "Usuário", isLiteMode = false, {
-    header = `╭──────────────────────────────────────────────╮⊰ 🌸 『 *${botName}* 』\n│Olá, #user#!\n╰──────────────────────────────────────────────╯`,
-    menuTopBorder = "╭──────────────────────────────────────────────╮",
-    bottomBorder = "╰──────────────────────────────────────────────╯",
-    menuTitleIcon = "◈",
-    menuItemIcon = "▸",
-    separatorIcon = "❁",
-    middleBorder = "│",
-    gamesMenuTitle = "🎮 JOGOS & DIVERSÃO 🎲",
-    phrasesMenuTitle = "💬 FRASES & TEXTOS 📜",
-    interactionsMenuTitle = "💬 INTERAÇÕES SOCIAIS 🤝",
-    relationshipMenuTitle = "💞 RELACIONAMENTOS ❤️",
-    hotInteractionsMenuTitle = '🔥 INTERAÇÕES "PICANTES" 😏',
-    maleFunMenuTitle = "🎯 BRINCADEIRAS MASCULINAS 🔥",
-    femaleFunMenuTitle = "💅 BRINCADEIRAS FEMININAS 👸",
-    maleRanksMenuTitle = "🏆 RANKINGS MASCULINOS 🌌",
-    femaleRanksMenuTitle = "👸 RANKINGS FEMININOS 💎"
-} = {}) {
-    const formattedHeader = header.replace(/#user#/g, userName);
-    let menuContent = `${formattedHeader}
+export default async function menubn(prefix, botName = "MeuBot", userName = "Usuário", isLiteMode = false) {
+    return `╭━━━〔 🎮 ${botName} • 𝐁𝐑𝐈𝐍𝐂𝐀𝐃𝐄𝐈𝐑𝐀𝐒 〕━━━╮
+┃ 👋 Olá, @${userName}
+┃ 🎮 Modo Brincadeira Ativo
+┃ ✨ Comandos de diversão
+╰━━━━━━━━━━━━━━━━━━━━━━━━━╯
 
-${menuTopBorder}
-│ ${gamesMenuTitle}
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}tictactoe @user
-${middleBorder}${menuItemIcon}${prefix}connect4 @user
-${middleBorder}${menuItemIcon}${prefix}uno criar
-${middleBorder}${menuItemIcon}${prefix}uno entrar
-${middleBorder}${menuItemIcon}${prefix}uno jogar <n°>
-${middleBorder}${menuItemIcon}${prefix}uno cancelar
-${middleBorder}${menuItemIcon}${prefix}memoria
-${middleBorder}${menuItemIcon}${prefix}memoria ranking
-${middleBorder}${menuItemIcon}${prefix}wordle
-${middleBorder}${menuItemIcon}${prefix}quiz <categoria>
-${middleBorder}${menuItemIcon}${prefix}forca
-${middleBorder}${menuItemIcon}${prefix}digitar @usuario
-${middleBorder}${menuItemIcon}${prefix}batalhanaval @usuario
-${middleBorder}${menuItemIcon}${prefix}stop
-${middleBorder}${menuItemIcon}${prefix}anagrama
-${middleBorder}${menuItemIcon}${prefix}dueloquiz @usuario [número]
-${middleBorder}${menuItemIcon}${prefix}cacapalavras [dificuldade]
-${middleBorder}${menuItemIcon}${prefix}jogodavelha
-${middleBorder}${menuItemIcon}${prefix}eununca
-${middleBorder}${menuItemIcon}${prefix}vab
-${middleBorder}${menuItemIcon}${prefix}chance
-${middleBorder}${menuItemIcon}${prefix}quando
-${middleBorder}${menuItemIcon}${prefix}sorte
-${middleBorder}${menuItemIcon}${prefix}casal
-${middleBorder}${menuItemIcon}${prefix}shipo
-${middleBorder}${menuItemIcon}${prefix}sn
-${middleBorder}${menuItemIcon}${prefix}ppt${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}suicidio`}
-${bottomBorder}
 
-${menuTopBorder}
-│ ${phrasesMenuTitle}
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}conselho
-${middleBorder}${menuItemIcon}${prefix}conselhobiblico
-${middleBorder}${menuItemIcon}${prefix}cantada
-${middleBorder}${menuItemIcon}${prefix}piada
-${middleBorder}${menuItemIcon}${prefix}charada
-${middleBorder}${menuItemIcon}${prefix}motivacional
-${middleBorder}${menuItemIcon}${prefix}elogio
-${middleBorder}${menuItemIcon}${prefix}reflexao
-${middleBorder}${menuItemIcon}${prefix}fato
-${bottomBorder}
+╭─❖ 🎮 JOGOS & DIVERSÃO
+│ 🎯 ${prefix}tictactoe
+│ 🎮 ${prefix}connect4
+│ 🃏 ${prefix}uno criar
+│ 🃏 ${prefix}uno entrar
+│ 🃏 ${prefix}uno jogar
+│ 🃏 ${prefix}uno cancelar
+│ 🧠 ${prefix}memoria
+│ 🏆 ${prefix}memoria ranking
+│ 📝 ${prefix}wordle
+│ ❓ ${prefix}quiz
+│ 🎭 ${prefix}forca
+│ ⌨️ ${prefix}digitar
+│ 🚢 ${prefix}batalhanaval
+│ 🛑 ${prefix}stop
+│ 🔀 ${prefix}anagrama
+│ ⚔️ ${prefix}dueloquiz
+│ 🔤 ${prefix}cacapalavras
+│ ❌ ${prefix}jogodavelha
+│ 🎉 ${prefix}eununca
+│ 💭 ${prefix}vab
+│ 🎲 ${prefix}chance
+│ ⏳ ${prefix}quando
+│ 🍀 ${prefix}sorte
+│ 💕 ${prefix}casal
+│ 💘 ${prefix}shipo
+│ 👀 ${prefix}sn
+│ ✋ ${prefix}ppt
+│ ${isLiteMode ? '' : `💀 ${prefix}suicidio\n`}╰──────────────
 
-${menuTopBorder}
-│ ${interactionsMenuTitle}
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}confessar
-${middleBorder}${menuItemIcon}${prefix}confessarn
-${middleBorder}${menuItemIcon}${prefix}chute
-${middleBorder}${menuItemIcon}${prefix}chutar
-${middleBorder}${menuItemIcon}${prefix}tapa
-${middleBorder}${menuItemIcon}${prefix}soco
-${middleBorder}${menuItemIcon}${prefix}socar
-${middleBorder}${menuItemIcon}${prefix}explodir
-${middleBorder}${menuItemIcon}${prefix}tomate
-${middleBorder}${menuItemIcon}${prefix}abraco
-${middleBorder}${menuItemIcon}${prefix}abracar
-${middleBorder}${menuItemIcon}${prefix}morder
-${middleBorder}${menuItemIcon}${prefix}mordida
-${middleBorder}${menuItemIcon}${prefix}lamber
-${middleBorder}${menuItemIcon}${prefix}lambida
-${middleBorder}${menuItemIcon}${prefix}beijo
-${middleBorder}${menuItemIcon}${prefix}beijar
-${middleBorder}${menuItemIcon}${prefix}mata
-${middleBorder}${menuItemIcon}${prefix}matar
-${middleBorder}${menuItemIcon}${prefix}cafune
-${bottomBorder}
-`;
-    if (!isLiteMode) {
-        menuContent += `
-${menuTopBorder}
-│ ${hotInteractionsMenuTitle}
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}surubao
-${middleBorder}${menuItemIcon}${prefix}siririca
-${middleBorder}${menuItemIcon}${prefix}sexo
-${middleBorder}${menuItemIcon}${prefix}beijob
-${middleBorder}${menuItemIcon}${prefix}beijarb
-${middleBorder}${menuItemIcon}${prefix}tapar
-${middleBorder}${menuItemIcon}${prefix}punheta
-${middleBorder}${menuItemIcon}${prefix}goza
-${middleBorder}${menuItemIcon}${prefix}gozar
-${middleBorder}${menuItemIcon}${prefix}mamar
-${middleBorder}${menuItemIcon}${prefix}mamada
-${bottomBorder}
-`;
-    }
-    menuContent += `
-${menuTopBorder}
-│ ${maleFunMenuTitle}
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}medirpau
-${isLiteMode ? '' : `${middleBorder}${menuItemIcon}${prefix}gay\n`}${middleBorder}${menuItemIcon}${prefix}burro
-${middleBorder}${menuItemIcon}${prefix}inteligente
-${middleBorder}${menuItemIcon}${prefix}otaku
-${middleBorder}${menuItemIcon}${prefix}fiel
-${middleBorder}${menuItemIcon}${prefix}infiel${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}corno`}
-${middleBorder}${menuItemIcon}${prefix}gado
-${middleBorder}${menuItemIcon}${prefix}gostoso
-${middleBorder}${menuItemIcon}${prefix}feio
-${middleBorder}${menuItemIcon}${prefix}rico
-${middleBorder}${menuItemIcon}${prefix}pobre${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}pirocudo${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}nazista`}${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}ladrao`}`}
-${middleBorder}${menuItemIcon}${prefix}safado
-${middleBorder}${menuItemIcon}${prefix}vesgo
 
-${menuTopBorder}
-│ ${relationshipMenuTitle}
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}ficante
-${middleBorder}${menuItemIcon}${prefix}namoro
-${middleBorder}${menuItemIcon}${prefix}casamento
-${middleBorder}${menuItemIcon}${prefix}trisal
-${middleBorder}${menuItemIcon}${prefix}quadrisal
-${middleBorder}${menuItemIcon}${prefix}relacionamento
-${middleBorder}${menuItemIcon}${prefix}terminar
-${middleBorder}${menuItemIcon}${prefix}terminartrisal
-${middleBorder}${menuItemIcon}${prefix}terminarquadrisal
-${middleBorder}${menuItemIcon}${prefix}trair
-${middleBorder}${menuItemIcon}${prefix}historicotraicao
-${bottomBorder}
-${middleBorder}${menuItemIcon}${prefix}bebado${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}machista${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}homofobico${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}racista`}`}`}
-${middleBorder}${menuItemIcon}${prefix}chato
-${middleBorder}${menuItemIcon}${prefix}sortudo
-${middleBorder}${menuItemIcon}${prefix}azarado
-${middleBorder}${menuItemIcon}${prefix}forte
-${middleBorder}${menuItemIcon}${prefix}fraco
-${middleBorder}${menuItemIcon}${prefix}pegador
-${middleBorder}${menuItemIcon}${prefix}otario
-${middleBorder}${menuItemIcon}${prefix}macho
-${middleBorder}${menuItemIcon}${prefix}bobo
-${middleBorder}${menuItemIcon}${prefix}nerd
-${middleBorder}${menuItemIcon}${prefix}preguicoso
-${middleBorder}${menuItemIcon}${prefix}trabalhador
-${middleBorder}${menuItemIcon}${prefix}brabo
-${middleBorder}${menuItemIcon}${prefix}lindo
-${middleBorder}${menuItemIcon}${prefix}malandro
-${middleBorder}${menuItemIcon}${prefix}simpatico
-${middleBorder}${menuItemIcon}${prefix}engracado
-${middleBorder}${menuItemIcon}${prefix}charmoso
-${middleBorder}${menuItemIcon}${prefix}misterioso
-${middleBorder}${menuItemIcon}${prefix}carinhoso
-${middleBorder}${menuItemIcon}${prefix}desumilde
-${middleBorder}${menuItemIcon}${prefix}humilde
-${middleBorder}${menuItemIcon}${prefix}ciumento
-${middleBorder}${menuItemIcon}${prefix}corajoso
-${middleBorder}${menuItemIcon}${prefix}covarde
-${middleBorder}${menuItemIcon}${prefix}esperto${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}talarico`}
-${middleBorder}${menuItemIcon}${prefix}chorao
-${middleBorder}${menuItemIcon}${prefix}brincalhao${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}bolsonarista${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}petista${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}comunista${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}lulista${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}traidor${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}bandido${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}cachorro${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}vagabundo${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}pilantra`}`}`}`}`}`}`}`}`}
-${middleBorder}${menuItemIcon}${prefix}mito
-${middleBorder}${menuItemIcon}${prefix}padrao
-${middleBorder}${menuItemIcon}${prefix}comedia${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}psicopata`}
-${middleBorder}${menuItemIcon}${prefix}fortao
-${middleBorder}${menuItemIcon}${prefix}global
-${middleBorder}${menuItemIcon}${prefix}humilde
-${middleBorder}${menuItemIcon}${prefix}independente
-${middleBorder}${menuItemIcon}${prefix}infantil
-${middleBorder}${menuItemIcon}${prefix}inseguro
-${middleBorder}${menuItemIcon}${prefix}introvertido
-${middleBorder}${menuItemIcon}${prefix}irresponsavel
-${middleBorder}${menuItemIcon}${prefix}lider
-${middleBorder}${menuItemIcon}${prefix}liberal
-${middleBorder}${menuItemIcon}${prefix}local
-${middleBorder}${menuItemIcon}${prefix}maduro
-${middleBorder}${menuItemIcon}${prefix}magrelo
-${middleBorder}${menuItemIcon}${prefix}malandro
-${middleBorder}${menuItemIcon}${prefix}misterioso
-${middleBorder}${menuItemIcon}${prefix}mito
-${middleBorder}${menuItemIcon}${prefix}moderno
-${middleBorder}${menuItemIcon}${prefix}nerd
-${middleBorder}${menuItemIcon}${prefix}nervoso
-${middleBorder}${menuItemIcon}${prefix}offline
-${middleBorder}${menuItemIcon}${prefix}online
-${middleBorder}${menuItemIcon}${prefix}otimista
-${middleBorder}${menuItemIcon}${prefix}padrao
-${middleBorder}${menuItemIcon}${prefix}patriotico
-${middleBorder}${menuItemIcon}${prefix}pessimista
-${middleBorder}${menuItemIcon}${prefix}pratico
-${middleBorder}${menuItemIcon}${prefix}programador
-${middleBorder}${menuItemIcon}${prefix}rainha
-${middleBorder}${menuItemIcon}${prefix}realista
-${middleBorder}${menuItemIcon}${prefix}religioso
-${middleBorder}${menuItemIcon}${prefix}responsavel
-${middleBorder}${menuItemIcon}${prefix}romantico
-${middleBorder}${menuItemIcon}${prefix}rural
-${middleBorder}${menuItemIcon}${prefix}saudavel
-${middleBorder}${menuItemIcon}${prefix}seguidor
-${middleBorder}${menuItemIcon}${prefix}serio
-${middleBorder}${menuItemIcon}${prefix}social
-${middleBorder}${menuItemIcon}${prefix}solitario
-${middleBorder}${menuItemIcon}${prefix}sonhador
-${middleBorder}${menuItemIcon}${prefix}sorte
-${middleBorder}${menuItemIcon}${prefix}supersticioso
-${middleBorder}${menuItemIcon}${prefix}tecnologico
-${middleBorder}${menuItemIcon}${prefix}tradicional
-${middleBorder}${menuItemIcon}${prefix}urbano
-${middleBorder}${menuItemIcon}${prefix}viajante
-${middleBorder}${menuItemIcon}${prefix}visionario
-${middleBorder}${menuItemIcon}${prefix}zueiro
-${middleBorder}${menuItemIcon}${prefix}billionario
-${middleBorder}${menuItemIcon}${prefix}gamer
-${middleBorder}${menuItemIcon}${prefix}programador
-${middleBorder}${menuItemIcon}${prefix}visionario
-${middleBorder}${menuItemIcon}${prefix}billionario
-${middleBorder}${menuItemIcon}${prefix}poderoso
-${middleBorder}${menuItemIcon}${prefix}vencedor
-${middleBorder}${menuItemIcon}${prefix}senhor
-${bottomBorder}
+╭─❖ 💬 FRASES & TEXTOS
+│ 💡 ${prefix}conselho
+│ 📖 ${prefix}conselhobiblico
+│ 💘 ${prefix}cantada
+│ 😄 ${prefix}piada
+│ 🧩 ${prefix}charada
+│ ⭐ ${prefix}motivacional
+│ 🌟 ${prefix}elogio
+│ 🪞 ${prefix}reflexao
+│ 📰 ${prefix}fato
+╰──────────────
 
-${menuTopBorder}
-│ ${femaleFunMenuTitle}
-${middleBorder}
-${isLiteMode ? '' : `${middleBorder}${menuItemIcon}${prefix}lesbica\n`}${middleBorder}${menuItemIcon}${prefix}burra
-${middleBorder}${menuItemIcon}${prefix}inteligente
-${middleBorder}${menuItemIcon}${prefix}otaku
-${middleBorder}${menuItemIcon}${prefix}fiel
-${middleBorder}${menuItemIcon}${prefix}infiel${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}corna`}
-${middleBorder}${menuItemIcon}${prefix}gada
-${middleBorder}${menuItemIcon}${prefix}gostosa
-${middleBorder}${menuItemIcon}${prefix}feia
-${middleBorder}${menuItemIcon}${prefix}rica
-${middleBorder}${menuItemIcon}${prefix}pobre${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}bucetuda${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}nazista${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}ladra`}`}`}
-${middleBorder}${menuItemIcon}${prefix}safada
-${middleBorder}${menuItemIcon}${prefix}vesga
-${middleBorder}${menuItemIcon}${prefix}bebada${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}machista${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}homofobica${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}racista`}`}`}
-${middleBorder}${menuItemIcon}${prefix}chata
-${middleBorder}${menuItemIcon}${prefix}sortuda
-${middleBorder}${menuItemIcon}${prefix}azarada
-${middleBorder}${menuItemIcon}${prefix}forte
-${middleBorder}${menuItemIcon}${prefix}fraca
-${middleBorder}${menuItemIcon}${prefix}pegadora
-${middleBorder}${menuItemIcon}${prefix}otaria
-${middleBorder}${menuItemIcon}${prefix}boba
-${middleBorder}${menuItemIcon}${prefix}nerd
-${middleBorder}${menuItemIcon}${prefix}preguicosa
-${middleBorder}${menuItemIcon}${prefix}trabalhadora
-${middleBorder}${menuItemIcon}${prefix}braba
-${middleBorder}${menuItemIcon}${prefix}linda
-${middleBorder}${menuItemIcon}${prefix}malandra
-${middleBorder}${menuItemIcon}${prefix}simpatica
-${middleBorder}${menuItemIcon}${prefix}engracada
-${middleBorder}${menuItemIcon}${prefix}charmosa
-${middleBorder}${menuItemIcon}${prefix}misteriosa
-${middleBorder}${menuItemIcon}${prefix}carinhosa
-${middleBorder}${menuItemIcon}${prefix}desumilde
-${middleBorder}${menuItemIcon}${prefix}humilde
-${middleBorder}${menuItemIcon}${prefix}ciumenta
-${middleBorder}${menuItemIcon}${prefix}corajosa
-${middleBorder}${menuItemIcon}${prefix}covarde
-${middleBorder}${menuItemIcon}${prefix}esperta${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}talarica`}
-${middleBorder}${menuItemIcon}${prefix}chorona
-${middleBorder}${menuItemIcon}${prefix}brincalhona${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}bolsonarista${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}petista${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}comunista${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}lulista${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}traidora${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}bandida${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}cachorra${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}vagabunda${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}pilantra`}`}`}`}`}`}`}`}`}
-${middleBorder}${menuItemIcon}${prefix}mito
-${middleBorder}${menuItemIcon}${prefix}padrao
-${middleBorder}${menuItemIcon}${prefix}comedia${isLiteMode ? '' : `\n${middleBorder}${menuItemIcon}${prefix}psicopata`}
-${middleBorder}${menuItemIcon}${prefix}ateia
-${middleBorder}${menuItemIcon}${prefix}aventureira
-${middleBorder}${menuItemIcon}${prefix}bagunceira
-${middleBorder}${menuItemIcon}${prefix}calma
-${middleBorder}${menuItemIcon}${prefix}caseira
-${middleBorder}${menuItemIcon}${prefix}cetica
-${middleBorder}${menuItemIcon}${prefix}confiante
-${middleBorder}${menuItemIcon}${prefix}conservadora
-${middleBorder}${menuItemIcon}${prefix}cosmopolita
-${middleBorder}${menuItemIcon}${prefix}covarde
-${middleBorder}${menuItemIcon}${prefix}criativa
-${middleBorder}${menuItemIcon}${prefix}dependente
-${middleBorder}${menuItemIcon}${prefix}desumilde
-${middleBorder}${menuItemIcon}${prefix}digital
-${middleBorder}${menuItemIcon}${prefix}dorminhoca
-${middleBorder}${menuItemIcon}${prefix}doente
-${middleBorder}${menuItemIcon}${prefix}economica
-${middleBorder}${menuItemIcon}${prefix}engracada
-${middleBorder}${menuItemIcon}${prefix}esperta
-${middleBorder}${menuItemIcon}${prefix}estudiosa
-${middleBorder}${menuItemIcon}${prefix}extrovertida
-${middleBorder}${menuItemIcon}${prefix}fofoqueira
-${middleBorder}${menuItemIcon}${prefix}fortona
-${middleBorder}${menuItemIcon}${prefix}fraca
-${middleBorder}${menuItemIcon}${prefix}gastadora
-${middleBorder}${menuItemIcon}${prefix}global
-${middleBorder}${menuItemIcon}${prefix}humilde
-${middleBorder}${menuItemIcon}${prefix}independente
-${middleBorder}${menuItemIcon}${prefix}infantil
-${middleBorder}${menuItemIcon}${prefix}insegura
-${middleBorder}${menuItemIcon}${prefix}introvertida
-${middleBorder}${menuItemIcon}${prefix}irresponsavel
-${middleBorder}${menuItemIcon}${prefix}lider
-${middleBorder}${menuItemIcon}${prefix}liberal
-${middleBorder}${menuItemIcon}${prefix}local
-${middleBorder}${menuItemIcon}${prefix}madura
-${middleBorder}${menuItemIcon}${prefix}magrela
-${middleBorder}${menuItemIcon}${prefix}misteriosa
-${middleBorder}${menuItemIcon}${prefix}mito
-${middleBorder}${menuItemIcon}${prefix}moderna
-${middleBorder}${menuItemIcon}${prefix}nervosa
-${middleBorder}${menuItemIcon}${prefix}offline
-${middleBorder}${menuItemIcon}${prefix}online
-${middleBorder}${menuItemIcon}${prefix}otimista
-${middleBorder}${menuItemIcon}${prefix}padrao
-${middleBorder}${menuItemIcon}${prefix}patriotica
-${middleBorder}${menuItemIcon}${prefix}pessimista
-${middleBorder}${menuItemIcon}${prefix}pratica
-${middleBorder}${menuItemIcon}${prefix}programadora
-${middleBorder}${menuItemIcon}${prefix}rainha
-${middleBorder}${menuItemIcon}${prefix}realista
-${middleBorder}${menuItemIcon}${prefix}religiosa
-${middleBorder}${menuItemIcon}${prefix}romantica
-${middleBorder}${menuItemIcon}${prefix}rural
-${middleBorder}${menuItemIcon}${prefix}saudavel
-${middleBorder}${menuItemIcon}${prefix}sedentaria
-${middleBorder}${menuItemIcon}${prefix}seguidora
-${middleBorder}${menuItemIcon}${prefix}seria
-${middleBorder}${menuItemIcon}${prefix}simpatica
-${middleBorder}${menuItemIcon}${prefix}social
-${middleBorder}${menuItemIcon}${prefix}solitaria
-${middleBorder}${menuItemIcon}${prefix}sonhadora
-${middleBorder}${menuItemIcon}${prefix}sorte
-${middleBorder}${menuItemIcon}${prefix}supersticiosa
-${middleBorder}${menuItemIcon}${prefix}tecnologica
-${middleBorder}${menuItemIcon}${prefix}tradicional
-${middleBorder}${menuItemIcon}${prefix}urbana
-${middleBorder}${menuItemIcon}${prefix}vencedora
-${middleBorder}${menuItemIcon}${prefix}viajante
-${middleBorder}${menuItemIcon}${prefix}visionaria
-${middleBorder}${menuItemIcon}${prefix}zueira
-${middleBorder}${menuItemIcon}${prefix}bilionaria
-${middleBorder}${menuItemIcon}${prefix}gamer
-${middleBorder}${menuItemIcon}${prefix}programadora
-${middleBorder}${menuItemIcon}${prefix}visionaria
-${middleBorder}${menuItemIcon}${prefix}bilionaria
-${middleBorder}${menuItemIcon}${prefix}poderosa
-${middleBorder}${menuItemIcon}${prefix}vencedora
-${middleBorder}${menuItemIcon}${prefix}senhora
-${bottomBorder}
 
-${menuTopBorder}
-│ ${maleRanksMenuTitle}
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}rankgay
-${middleBorder}${menuItemIcon}${prefix}rankburro
-${middleBorder}${menuItemIcon}${prefix}rankinteligente
-${middleBorder}${menuItemIcon}${prefix}rankotaku
-${middleBorder}${menuItemIcon}${prefix}rankfiel
-${middleBorder}${menuItemIcon}${prefix}rankinfiel
-${middleBorder}${menuItemIcon}${prefix}rankcorno
-${middleBorder}${menuItemIcon}${prefix}rankgado
-${middleBorder}${menuItemIcon}${prefix}rankgostoso
-${middleBorder}${menuItemIcon}${prefix}rankrico
-${middleBorder}${menuItemIcon}${prefix}rankpobre
-${middleBorder}${menuItemIcon}${prefix}rankforte
-${middleBorder}${menuItemIcon}${prefix}rankpegador
-${middleBorder}${menuItemIcon}${prefix}rankmacho
-${middleBorder}${menuItemIcon}${prefix}ranknerd
-${middleBorder}${menuItemIcon}${prefix}ranktrabalhador
-${middleBorder}${menuItemIcon}${prefix}rankbrabo
-${middleBorder}${menuItemIcon}${prefix}ranklindo
-${middleBorder}${menuItemIcon}${prefix}rankmalandro
-${middleBorder}${menuItemIcon}${prefix}rankengracado
-${middleBorder}${menuItemIcon}${prefix}rankcharmoso
-${middleBorder}${menuItemIcon}${prefix}rankvisionario
-${middleBorder}${menuItemIcon}${prefix}rankpoderoso
-${middleBorder}${menuItemIcon}${prefix}rankvencedor
-${bottomBorder}
+╭─❖ 👋 INTERAÇÕES SOCIAIS
+│ 💭 ${prefix}confessar
+│ 💭 ${prefix}confessarn
+│ 👊 ${prefix}chute
+│ 👊 ${prefix}chutar
+│ 👋 ${prefix}tapa
+│ 👊 ${prefix}soco
+│ 👊 ${prefix}socar
+│ 💥 ${prefix}explodir
+│ 🍅 ${prefix}tomate
+│ 🤗 ${prefix}abraco
+│ 🤗 ${prefix}abracar
+│ 😮 ${prefix}morder
+│ 😮 ${prefix}mordida
+│ 👅 ${prefix}lamber
+│ 👅 ${prefix}lambida
+│ 💋 ${prefix}beijo
+│ 💋 ${prefix}beijar
+│ ⚔️ ${prefix}mata
+│ ⚔️ ${prefix}matar
+│ 💆 ${prefix}cafune
+╰──────────────
 
-${menuTopBorder}
-│ ${femaleRanksMenuTitle}
-${middleBorder}
-${middleBorder}${menuItemIcon}${prefix}ranklesbica
-${middleBorder}${menuItemIcon}${prefix}rankburra
-${middleBorder}${menuItemIcon}${prefix}rankinteligente
-${middleBorder}${menuItemIcon}${prefix}rankotaku
-${middleBorder}${menuItemIcon}${prefix}rankfiel
-${middleBorder}${menuItemIcon}${prefix}rankinfiel
-${middleBorder}${menuItemIcon}${prefix}rankcorna
-${middleBorder}${menuItemIcon}${prefix}rankgada
-${middleBorder}${menuItemIcon}${prefix}rankgostosa
-${middleBorder}${menuItemIcon}${prefix}rankrica
-${middleBorder}${menuItemIcon}${prefix}rankpobre
-${middleBorder}${menuItemIcon}${prefix}rankforte
-${middleBorder}${menuItemIcon}${prefix}rankpegadora
-${middleBorder}${menuItemIcon}${prefix}ranknerd
-${middleBorder}${menuItemIcon}${prefix}ranktrabalhadora
-${middleBorder}${menuItemIcon}${prefix}rankbraba
-${middleBorder}${menuItemIcon}${prefix}ranklinda
-${middleBorder}${menuItemIcon}${prefix}rankmalandra
-${middleBorder}${menuItemIcon}${prefix}rankengracada
-${middleBorder}${menuItemIcon}${prefix}rankcharmosa
-${middleBorder}${menuItemIcon}${prefix}rankvisionaria
-${middleBorder}${menuItemIcon}${prefix}rankpoderosa
-${middleBorder}${menuItemIcon}${prefix}rankvencedora
-${bottomBorder}
-`;
-    return menuContent;
+
+${isLiteMode ? '' : `╭─❖ 🔞 INTERAÇÕES "PICANTES"
+│ 🔥 ${prefix}surubao
+│ 🍑 ${prefix}siririca
+│ 🔥 ${prefix}sexo
+│ 💋 ${prefix}beijob
+│ 💋 ${prefix}beijarb
+│ 👋 ${prefix}tapar
+│ ✋ ${prefix}punheta
+│ 🚀 ${prefix}goza
+│ 🚀 ${prefix}gozar
+│ 🍼 ${prefix}mamar
+│ 🍼 ${prefix}mamada
+╰──────────────
+
+
+`}╭─❖ 😆 BRINCADEIRAS MASCULINAS
+│ 📏 ${prefix}medirpau
+│ ${isLiteMode ? '' : `🏳️ ${prefix}gay\n│ `}🧠 ${prefix}burro
+│ 🧠 ${prefix}inteligente
+│ 🥷 ${prefix}otaku
+│ 💍 ${prefix}fiel
+│ 💔 ${prefix}infiel${isLiteMode ? '' : `\n│ 🐂 ${prefix}corno`}
+│ 🐂 ${prefix}gado
+│ 😎 ${prefix}gostoso
+│ 😖 ${prefix}feio
+│ 💰 ${prefix}rico
+│ 💸 ${prefix}pobre${isLiteMode ? '' : `\n│ 🍆 ${prefix}pirocudo${isLiteMode ? '' : `\n│ ⚫ ${prefix}nazista`}${isLiteMode ? '' : `\n│ 🦹 ${prefix}ladrao`}`}
+│ 😈 ${prefix}safado
+│ 👁️ ${prefix}vesgo
+╰──────────────
+
+
+╭─❖ 💑 RELACIONAMENTOS
+│ 💌 ${prefix}ficante
+│ 💍 ${prefix}namoro
+│ 💒 ${prefix}casamento
+│ 💍💍💍 ${prefix}trisal
+│ 💍💍💍💍 ${prefix}quadrisal
+│ 💕 ${prefix}relacionamento
+│ 💔 ${prefix}terminar
+│ 💔 ${prefix}terminartrisal
+│ 💔 ${prefix}terminarquadrisal
+│ 🤥 ${prefix}trair
+│ 📜 ${prefix}historicotraicao
+╰──────────────
+
+
+╭─❖ 😜 TEXTO + BRINCADEIRAS
+│ 🍺 ${prefix}bebado${isLiteMode ? '' : `\n│ 😤 ${prefix}machista${isLiteMode ? '' : `\n│ 🚫 ${prefix}homofobico${isLiteMode ? '' : `\n│ ⚫ ${prefix}racista`}`}`}
+│ 😴 ${prefix}chato
+│ 🍀 ${prefix}sortudo
+│ 😱 ${prefix}azarado
+│ 💪 ${prefix}forte
+│ 😩 ${prefix}fraco
+│ 😏 ${prefix}pegador
+│ 🤡 ${prefix}otario
+│ 😤 ${prefix}macho
+│ 😵 ${prefix}bobo
+│ 🤓 ${prefix}nerd
+│ 😴 ${prefix}preguicoso
+│ ⚡ ${prefix}trabalhador
+│ 🦁 ${prefix}brabo
+│ 😍 ${prefix}lindo
+│ 🦊 ${prefix}malandro
+│ 😊 ${prefix}simpatico
+╰──────────────
+
+
+╭─❖ 👩 BRINCADEIRAS FEMININAS
+│ 💅 ${prefix}engracada
+│ ✨ ${prefix}charmosa
+│ 🔮 ${prefix}misteriosa
+│ 🥰 ${prefix}carinhosa
+│ 😌 ${prefix}desumilde
+│ 😊 ${prefix}humilde
+│ 😤 ${prefix}ciumenta
+│ 💪 ${prefix}corajosa
+│ 😨 ${prefix}covarde
+│ 🧠 ${prefix}esperta${isLiteMode ? '' : `\n│ 👅 ${prefix}talarica`}
+│ 😢 ${prefix}chorona
+│ 😜 ${prefix}brincalhona${isLiteMode ? '' : `\n│ 🇧🇷 ${prefix}bolsonarista${isLiteMode ? '' : `\n│ 🟢 ${prefix}petista${isLiteMode ? '' : `\n│ 🔴 ${prefix}comunista${isLiteMode ? '' : `\n│ 🟠 ${prefix}lulista${isLiteMode ? '' : `\n│ 💔 ${prefix}traidora${isLiteMode ? '' : `\n│ 🤠 ${prefix}bandida${isLiteMode ? '' : `\n│ 🐕 ${prefix}cachorra${isLiteMode ? '' : `\n│ 😩 ${prefix}vagabunda${isLiteMode ? '' : `\n│ 🕵 ${prefix}pilantra`}`}`}`}`}`}`}`}`}
+│ 🌟 ${prefix}mito
+│ 👑 ${prefix}padrao
+│ 😂 ${prefix}comedia${isLiteMode ? '' : `\n│ 🧠 ${prefix}psicopata`}
+│ 🔥 ${prefix}ateia
+│ 🗺️ ${prefix}aventureira
+│ 🤪 ${prefix}bagunceira
+│ 😌 ${prefix}calma
+│ 🏠 ${prefix}caseira
+│ 🤔 ${prefix}cetica
+│ 😎 ${prefix}confiante
+│ 🏛️ ${prefix}conservadora
+│ 🌍 ${prefix}cosmopolita
+│ 😨 ${prefix}covarde
+│ 🎨 ${prefix}criativa
+│ �依赖 ${prefix}dependente
+│ 😌 ${prefix}desumilde
+│ 📱 ${prefix}digital
+│ 😴 ${prefix}dorminhoca
+│ 🤒 ${prefix}doente
+│ 💰 ${prefix}economica
+│ 😂 ${prefix}engracada
+│ 🧠 ${prefix}esperta
+│ 📚 ${prefix}estudiosa
+│ 🗣️ ${prefix}extrovertida
+│ 🗣️ ${prefix}fofoqueira
+│ 💪 ${prefix}fortona
+│ 😩 ${prefix}fraca
+│ 💸 ${prefix}gastadora
+│ 🌍 ${prefix}global
+│ 😊 ${prefix}humilde
+│ 💪 ${prefix}independente
+│ 👶 ${prefix}infantil
+│ 😟 ${prefix}insegura
+│ 🤫 ${prefix}introvertida
+│ 😕 ${prefix}irresponsavel
+│ 👑 ${prefix}lider
+│ ⚖️ ${prefix}liberal
+│ 📍 ${prefix}local
+│ 👩 ${prefix}madura
+│ 🦴 ${prefix}magrela
+│ 🔮 ${prefix}misteriosa
+│ 🌟 ${prefix}mito
+│ 📱 ${prefix}moderna
+│ 😠 ${prefix}nervosa
+│ 📴 ${prefix}offline
+│ 💬 ${prefix}online
+│ 😊 ${prefix}otimista
+│ 👑 ${prefix}padrao
+│ 🇧🇷 ${prefix}patriotica
+│ 😞 ${prefix}pessimista
+│ ⚡ ${prefix}pratica
+│ 💻 ${prefix}programadora
+│ 👸 ${prefix}rainha
+│ 😌 ${prefix}realista
+│ ✝️ ${prefix}religiosa
+│ 💕 ${prefix}romantica
+│ 🌾 ${prefix}rural
+│ 🥗 ${prefix}saudavel
+│ 🏋️ ${prefix}sedentaria
+│ 👣 ${prefix}seguidora
+│ 😐 ${prefix}seria
+│ 😊 ${prefix}simpatica
+│ 👥 ${prefix}social
+│ 🌙 ${prefix}solitaria
+│ 💭 ${prefix}sonhadora
+│ 🍀 ${prefix}sorte
+│🔮 ${prefix}supersticiosa
+│ 💻 ${prefix}tecnologica
+│ 🏛️ ${prefix}tradicional
+│ 🏙️ ${prefix}urbana
+│ 🏆 ${prefix}vencedora
+│ ✈️ ${prefix}viajante
+│ 🔭 ${prefix}visionaria
+│ 🤪 ${prefix}zueira
+│ 💎 ${prefix}bilionaria
+│ 🎮 ${prefix}gamer
+│ 💻 ${prefix}programadora
+│ 🔭 ${prefix}visionaria
+│ 💎 ${prefix}bilionaria
+│ 💪 ${prefix}poderosa
+│ 🏆 ${prefix}vencedora
+│ 👸 ${prefix}senhora
+╰──────────────
+
+
+╭─❖ 🏆 RANKINGS MASCULINOS
+│ 🏳️ ${prefix}rankgay
+│ 🧠 ${prefix}rankburro
+│ 🧠 ${prefix}rankinteligente
+│ 🥷 ${prefix}rankotaku
+│ 💍 ${prefix}rankfiel
+│ 💔 ${prefix}rankinfiel
+│ 🐂 ${prefix}rankcorno
+│ 🐂 ${prefix}rankgado
+│ 😎 ${prefix}rankgostoso
+│ 💰 ${prefix}rankrico
+│ 💸 ${prefix}rankpobre
+│ 💪 ${prefix}rankforte
+│ 😏 ${prefix}rankpegador
+│ 😤 ${prefix}rankmacho
+│ 🤓 ${prefix}ranknerd
+│ ⚡ ${prefix}ranktrabalhador
+│ 🦁 ${prefix}rankbrabo
+│ 😍 ${prefix}ranklindo
+│ 🦊 ${prefix}rankmalandro
+│ 😂 ${prefix}rankengracado
+│ 🔭 ${prefix}rankvisionario
+│ 💪 ${prefix}rankpoderoso
+│ 🏆 ${prefix}rankvencedor
+╰──────────────
+
+
+╭─❖ 🏆 RANKINGS FEMININOS
+│ 🏳️ ${prefix}ranklesbica
+│ 🧠 ${prefix}rankburra
+│ 🧠 ${prefix}rankinteligente
+│ 🥷 ${prefix}rankotaku
+│ 💍 ${prefix}rankfiel
+│ 💔 ${prefix}rankinfiel
+│ 🐄 ${prefix}rankcorna
+│ 🐄 ${prefix}rankgada
+│ 😍 ${prefix}rankgostosa
+│ 💰 ${prefix}rankrica
+│ 💸 ${prefix}rankpobre
+│ 💪 ${prefix}rankforte
+│ 😏 ${prefix}rankpegadora
+│ 🤓 ${prefix}ranknerd
+│ ⚡ ${prefix}ranktrabalhadora
+│ 🦁 ${prefix}rankbraba
+│ 😍 ${prefix}ranklinda
+│ 🦊 ${prefix}rankmalandra
+│ 😂 ${prefix}rankengracada
+│ ✨ ${prefix}rankcharmosa
+│ 🔭 ${prefix}rankvisionaria
+│ 💪 ${prefix}rankpoderosa
+│ 🏆 ${prefix}rankvencedora
+╰──────────────`;
 }
