@@ -31645,8 +31645,8 @@ break;
               return reply("❌ Você não pode banir outros Moderadores ou Alphas. 💔");
             }
           }
-          // Converter menc_os2 para JID se necessário (usar JID original se disponível)
-          const banTargetJid = mencOs2JidOriginal || formatToJid(menc_os2.split('@')[0]);
+          // Obter JID - usar JID original ou o próprio menc_os2 (que pode ser LID válido)
+          const banTargetJid = mencOs2JidOriginal || menc_os2;
           await nazu.groupParticipantsUpdate(from, [banTargetJid], 'remove').catch(e => console.error('Erro ao banir usuário:', e));
 
           // Notificação X9 para banimento
@@ -31700,8 +31700,8 @@ break;
           // Aguarda 10 segundos
           await new Promise(resolve => setTimeout(resolve, 10000));
 
-          // Remove o usuário - usar JID original se disponível
-          const ban2TargetJid = mencOs2JidOriginal || formatToJid(menc_os2.split('@')[0]);
+          // Remove o usuário - usar JID original ou o próprio menc_os2 (que pode ser LID válido)
+          const ban2TargetJid = mencOs2JidOriginal || menc_os2;
           await nazu.groupParticipantsUpdate(from, [ban2TargetJid], 'remove').catch(e => console.error('Erro ao banir usuário:', e));
 
           // Notificação X9 para banimento
@@ -32362,7 +32362,7 @@ break;
           if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
           if (!isBotAdmin) return sendAbyssWarning("Eu preciso ser administrador para realizar esta ação.");
           if (!menc_os2) return reply("Marque alguém 🙄");
-          const promoteTargetJid = mencOs2JidOriginal || formatToJid(menc_os2.split('@')[0]);
+          const promoteTargetJid = mencOs2JidOriginal || menc_os2;
           await nazu.groupParticipantsUpdate(from, [promoteTargetJid], 'promote').catch(e => console.error('Erro ao promover usuário:', e));
 
 
@@ -32380,7 +32380,7 @@ break;
           if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
           if (!isBotAdmin) return sendAbyssWarning("Eu preciso ser administrador para realizar esta ação.");
           if (!menc_os2) return reply("Marque alguém 🙄");
-          const demoteTargetJid = mencOs2JidOriginal || formatToJid(menc_os2.split('@')[0]);
+          const demoteTargetJid = mencOs2JidOriginal || menc_os2;
           await nazu.groupParticipantsUpdate(from, [demoteTargetJid], 'demote').catch(e => console.error('Erro ao rebaixar usuário:', e));
 
 
@@ -34869,8 +34869,8 @@ case 'set-bannerbv':
           const warningCount = groupData.warnings[menc_os2].length;
           fs.writeFileSync(groupFilePath, JSON.stringify(groupData, null, 2));
           
-          // Obter o JID para banir - usar JID original se disponível
-          const targetJid = mencOs2JidOriginal || formatToJid(menc_os2.split('@')[0]);
+          // Obter o JID para banir - usar JID original ou o próprio menc_os2 (que pode ser LID válido)
+          const targetJid = mencOs2JidOriginal || menc_os2;
           
           if (warningCount >= 3) {
             await nazu.groupParticipantsUpdate(from, [targetJid], 'remove').catch(e => console.error('Erro ao banir usuário (adv):', e));
