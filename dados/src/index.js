@@ -38333,12 +38333,17 @@ break;
             mencts.push(menb);
           }
           
-          // Carregar gamesData para usar a mídia do comando sexo
+          // Carregar gamesData para usar a mídia do comando surubao
           let gamesDataSurubao = fs.existsSync(__dirname + '/funcs/json/games.json') ? JSON.parse(fs.readFileSync(__dirname + '/funcs/json/games.json')) : { games2: {} };
-          const surubaoMedia = gamesDataSurubao.games2['sexo'];
+          const surubaoMedia = gamesDataSurubao.games2['surubao'];
+          const resolveMediaPath = (url) => {
+            if (typeof url === 'string' && url.startsWith('./')) {
+              return path.join(__dirname, url.substring(1));
+            }
+            return url;
+          };
           if (surubaoMedia?.video) {
-            const videoPath = surubaoMedia.video.url;
-            
+            const videoPath = resolveMediaPath(surubaoMedia.video.url);
             if (videoPath.startsWith('http')) {
               await nazu.sendMessage(from, {
                 video: { url: videoPath },
@@ -38346,8 +38351,8 @@ break;
                 mentions: mencts,
                 gifPlayback: true
               });
-            } else if (fs.existsSync(path.join(__dirname, '../' + videoPath.replace('./', '')))) {
-              const videoBuffer = fs.readFileSync(path.join(__dirname, '../' + videoPath.replace('./', '')));
+            } else if (fs.existsSync(videoPath)) {
+              const videoBuffer = fs.readFileSync(videoPath);
               await nazu.sendMessage(from, {
                 video: videoBuffer,
                 caption: ABC,
