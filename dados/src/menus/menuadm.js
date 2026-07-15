@@ -46,6 +46,8 @@ ${middleBorder} ${menuItemIcon}${prefix}mute
 ${middleBorder} ${menuItemIcon}${prefix}desmute
 ${middleBorder} ${menuItemIcon}${prefix}mute2
 ${middleBorder} ${menuItemIcon}${prefix}desmute2
+${middleBorder} ${menuItemIcon}${prefix}mutet (@user tempo)
+${middleBorder} ${menuItemIcon}${prefix}unmutet (@user)
 ${middleBorder} ${menuItemIcon}${prefix}adv
 ${middleBorder} ${menuItemIcon}${prefix}rmadv
 ${middleBorder} ${menuItemIcon}${prefix}listadv
