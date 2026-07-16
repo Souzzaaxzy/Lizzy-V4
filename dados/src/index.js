@@ -2349,7 +2349,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     const menc_jid2 = info.message?.extendedTextMessage?.contextInfo?.mentionedJid;
     let menc_os2 = (menc_jid2 && menc_jid2.length > 0) ? menc_jid2[0] : menc_prt;
     // Salvar JID original do usuário mencionado antes de converter para LID
-    const mencOs2JidOriginal = (menc_os2 && isValidJid(menc_os2)) ? menc_os2 : null;
+    const mencOs2JidOriginal = menc_os2; // Sempre salvar o valor original
     // Converter menc_os2 para LID se for JID (para совместимость com sender)
     if (menc_os2 && isValidJid(menc_os2)) {
       menc_os2 = await getLidFromJidCached(nazu, menc_os2);
