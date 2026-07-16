@@ -3540,7 +3540,8 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
         const result = await nazu.sendMessage(from, messageContent, sendOptions);
         return result;
       } catch (error) {
-        console.error("Erro ao enviar mensagem:", error);
+        console.error(`[REPLY ERROR] to: ${from}, text: ${text?.substring(0, 50)}...`);
+        console.error("[REPLY ERROR] Details:", error.message || error);
         return null;
       }
     }
