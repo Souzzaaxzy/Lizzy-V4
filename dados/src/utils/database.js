@@ -118,6 +118,7 @@ ensureJsonFileExists(DONO_DIVULGACAO_FILE, {
   schedule: {
     enabled: false,
     time: null,
+    times: [],
     lastRun: null
   },
   stats: {
@@ -832,6 +833,7 @@ const loadDonoDivulgacao = () => {
     schedule: {
       enabled: false,
       time: null,
+      times: [],
       lastRun: null
     },
     stats: {

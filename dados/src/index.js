@@ -4338,12 +4338,16 @@ Código: *${roleCode}*`,
     let donoDivulgacaoWorkerStarted = global.donoDivulgacaoWorkerStarted || false;
     let donoDivulgacaoCronJob = global.donoDivulgacaoCronJob || null;
 
+    const donoDivulgacaoCronJobs = [];
+
     const unscheduleDonoDivulgacaoJob = () => {
-      if (donoDivulgacaoCronJob && typeof donoDivulgacaoCronJob.stop === 'function') {
-        try { donoDivulgacaoCronJob.stop(); } catch (e) { }
+      for (const job of donoDivulgacaoCronJobs) {
+        if (job && typeof job.stop === 'function') {
+          try { job.stop(); } catch (e) { }
+        }
       }
-      donoDivulgacaoCronJob = null;
-      global.donoDivulgacaoCronJob = null;
+      donoDivulgacaoCronJobs.length = 0;
+      global.donoDivulgacaoCronJobs = [];
     };
 
     const runDonoDivulgacaoSend = async (nazuInstance, messageText, source = 'manual') => {
@@ -4399,8 +4403,6 @@ Código: *${roleCode}*`,
       const [hh, mm] = normalized.split(':');
       if (typeof hh === 'undefined' || typeof mm === 'undefined') return false;
 
-      unscheduleDonoDivulgacaoJob();
-
       const cronExpr = `${parseInt(mm, 10)} ${parseInt(hh, 10)} * * *`;
       try {
         const task = cron.schedule(cronExpr, async () => {
@@ -4408,8 +4410,8 @@ Código: *${roleCode}*`,
             const config = loadDonoDivulgacao();
             const schedule = config.schedule || {};
 
-            if (!schedule.enabled || !schedule.time) return;
-            const targetTime = normalizeScheduleTime(schedule.time);
+            if (!schedule.enabled || !schedule.times || schedule.times.length === 0) return;
+            const targetTime = normalizeScheduleTime(timeStr);
             if (!targetTime) return;
 
             const today = getTodayStr();
@@ -4417,7 +4419,8 @@ Código: *${roleCode}*`,
 
             const result = await runDonoDivulgacaoSend(nazuInstance, null, 'auto');
             if (result.success) {
-              schedule.lastRun = { date: today, time: targetTime };
+              schedule.lastRun = schedule.lastRun || {};
+              schedule.lastRun[targetTime] = { date: today, time: targetTime };
               config.schedule = schedule;
               saveDonoDivulgacao(config);
             }
@@ -4427,12 +4430,22 @@ Código: *${roleCode}*`,
         }, { timezone: 'America/Sao_Paulo' });
 
         task.start();
-        donoDivulgacaoCronJob = task;
-        global.donoDivulgacaoCronJob = task;
+        donoDivulgacaoCronJobs.push(task);
+        global.donoDivulgacaoCronJobs = donoDivulgacaoCronJobs;
         return true;
       } catch (e) {
         console.error('[DivDono] Falha ao agendar job', cronExpr, e);
         return false;
+      }
+    };
+
+    const scheduleAllDonoDivulgacaoJobs = (nazuInstance) => {
+      unscheduleDonoDivulgacaoJob();
+      const config = loadDonoDivulgacao();
+      if (config.schedule?.enabled && config.schedule?.times) {
+        for (const time of config.schedule.times) {
+          scheduleDonoDivulgacaoJob(time, nazuInstance);
+        }
       }
     };
 
@@ -4442,10 +4455,7 @@ Código: *${roleCode}*`,
         donoDivulgacaoWorkerStarted = true;
         global.donoDivulgacaoWorkerStarted = true;
 
-        const config = loadDonoDivulgacao();
-        if (config.schedule?.enabled && config.schedule?.time) {
-          scheduleDonoDivulgacaoJob(config.schedule.time, nazuInstance);
-        }
+        scheduleAllDonoDivulgacaoJobs(nazuInstance);
       } catch (e) {
         console.error('[DivDono] Erro ao iniciar worker:', e);
       }
@@ -33647,18 +33657,24 @@ break;
           if (sub === 'time' || sub === 'hora' || sub === 'agendar') {
             if (!rest) {
               const status = config.schedule?.enabled ? 'ativado' : 'desativado';
-              const time = config.schedule?.time || '—';
-              return reply(`⏰ *Agendamento:* ${status}\n🕒 Horário: ${time}\n💡 Use ${groupPrefix}divdono time HH:MM ou off`);
+              const times = config.schedule?.times || [];
+              
+              let timesText = 'Nenhum horário configurado';
+              if (times.length > 0) {
+                timesText = times.map((t, i) => `${i + 1}. ${t}`).join('\n');
+              }
+              
+              return reply(`⏰ *Agendamento:* ${status}\n\n📋 Horários configurados:\n${timesText}\n\n💡 Use: ${groupPrefix}divdono addtime HH:MM\n💡 Remova: ${groupPrefix}divdono deltime <número>`);
             }
 
             if (['off', 'desligar', 'desativar'].includes(rest.toLowerCase())) {
               config.schedule = config.schedule || {};
               config.schedule.enabled = false;
-              config.schedule.time = null;
+              config.schedule.times = [];
               config.schedule.lastRun = null;
               saveDonoDivulgacao(config);
               unscheduleDonoDivulgacaoJob();
-              return reply('✅ Agendamento diário desativado.');
+              return reply('✅ Agendamento diário desativado e horários removidos.');
             }
 
             const normalized = normalizeScheduleTime(rest);
@@ -33666,29 +33682,97 @@ break;
               return reply('❌ Formato inválido. Use HH:MM (ex: 09:30).');
             }
 
+            // Adicionar horário à lista
+            const times = config.schedule?.times || [];
+            if (times.length >= 7) {
+              return reply('❌ Limite máximo de 7 horários atingido. Use !divdono deltime para remover um horário.');
+            }
+            if (times.includes(normalized)) {
+              return reply('⚠️ Este horário já está configurado.');
+            }
+
             config.schedule = config.schedule || {};
             config.schedule.enabled = true;
-            config.schedule.time = normalized;
-            config.schedule.lastRun = null;
+            config.schedule.times = [...times, normalized];
             saveDonoDivulgacao(config);
-            scheduleDonoDivulgacaoJob(normalized, nazu);
+            scheduleAllDonoDivulgacaoJobs(nazu);
 
-            return reply(`✅ Agendamento diário definido para ${normalized} (horário de São Paulo).`);
+            return reply(`✅ Horário ${normalized} adicionado.\n📋 Total: ${config.schedule.times.length}/7`);
+          }
+
+          if (sub === 'addtime') {
+            if (!rest) {
+              return reply(`💡 Use: ${groupPrefix}divdono addtime HH:MM`);
+            }
+            
+            const normalized = normalizeScheduleTime(rest);
+            if (!normalized) {
+              return reply('❌ Formato inválido. Use HH:MM (ex: 09:30).');
+            }
+
+            const times = config.schedule?.times || [];
+            if (times.length >= 7) {
+              return reply('❌ Limite máximo de 7 horários atingido. Use !divdono deltime para remover um horário.');
+            }
+            if (times.includes(normalized)) {
+              return reply('⚠️ Este horário já está configurado.');
+            }
+
+            config.schedule = config.schedule || {};
+            config.schedule.enabled = true;
+            config.schedule.times = [...times, normalized];
+            saveDonoDivulgacao(config);
+            scheduleAllDonoDivulgacaoJobs(nazu);
+
+            return reply(`✅ Horário ${normalized} adicionado.\n📋 Total: ${config.schedule.times.length}/7`);
+          }
+
+          if (sub === 'deltime' || sub === 'removetime') {
+            if (!rest) {
+              return reply(`💡 Use: ${groupPrefix}divdono deltime <número>`);
+            }
+            
+            const index = parseInt(rest, 10);
+            if (isNaN(index) || index < 1) {
+              return reply('❌ Número inválido. Use: !divdono deltime <número>');
+            }
+
+            const times = config.schedule?.times || [];
+            if (index > times.length) {
+              return reply(`❌ Número inválido. Há ${times.length} horário(s) configurado(s).`);
+            }
+
+            const removedTime = times[index - 1];
+            const newTimes = times.filter((_, i) => i !== index - 1);
+            
+            config.schedule.times = newTimes;
+            if (newTimes.length === 0) {
+              config.schedule.enabled = false;
+            }
+            saveDonoDivulgacao(config);
+            scheduleAllDonoDivulgacaoJobs(nazu);
+
+            return reply(`✅ Horário ${removedTime} removido.\n📋 Total: ${newTimes.length}/7`);
           }
 
           if (sub === 'status') {
             const schedule = config.schedule || {};
             const status = schedule.enabled ? 'ativado' : 'desativado';
-            const time = schedule.time || '—';
+            const times = schedule.times || [];
             const msgPreview = (config.message || '').trim();
             const lastAuto = config.stats?.lastAuto ? new Date(config.stats.lastAuto).toLocaleString('pt-BR') : '—';
             const lastManual = config.stats?.lastManual ? new Date(config.stats.lastManual).toLocaleString('pt-BR') : '—';
 
+            let timesText = 'Nenhum';
+            if (times.length > 0) {
+              timesText = times.map((t, i) => `${i + 1}. ${t}`).join('\n');
+            }
+
             let text = `📣 *STATUS DIVULGAÇÃO DO DONO*\n\n`;
             text += `📌 Grupos: ${groups.length}\n`;
             text += `🕒 Agendamento: ${status}\n`;
-            text += `⏰ Horário: ${time}\n`;
-            text += `🧾 Mensagem: ${msgPreview ? msgPreview.slice(0, 120) + (msgPreview.length > 120 ? '...' : '') : 'Nenhuma'}\n`;
+            text += `⏰ Horários (${times.length}/7):\n${timesText}\n`;
+            text += `🧾 Mensagem: ${msgPreview ? msgPreview.slice(0, 80) + (msgPreview.length > 80 ? '...' : '') : 'Nenhuma'}\n`;
             text += `📨 Total enviado: ${config.stats?.totalSent || 0}\n`;
             text += `🗓️ Último manual: ${lastManual}\n`;
             text += `🤖 Último automático: ${lastAuto}`;
