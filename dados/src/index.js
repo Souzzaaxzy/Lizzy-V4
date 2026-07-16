@@ -4350,8 +4350,9 @@ Código: *${roleCode}*`,
       const config = loadDonoDivulgacao();
       const groups = Array.isArray(config.groups) ? config.groups : [];
       const text = (messageText || config.message || '').trim();
+      const hasImage = config.imagePath && fs.existsSync(config.imagePath);
 
-      if (!text) {
+      if (!text && !hasImage) {
         return { success: false, message: '❌ Nenhuma mensagem configurada para divulgar.' };
       }
       if (groups.length === 0) {
@@ -4367,7 +4368,12 @@ Código: *${roleCode}*`,
           continue;
         }
         try {
-          await nazuInstance.sendMessage(groupId, { text });
+          if (hasImage) {
+            const imageBuffer = fs.readFileSync(config.imagePath);
+            await nazuInstance.sendMessage(groupId, { image: imageBuffer, caption: text || '' });
+          } else {
+            await nazuInstance.sendMessage(groupId, { text });
+          }
           sent++;
         } catch (e) {
           failed++;
@@ -33577,11 +33583,56 @@ break;
           }
 
           if (sub === 'msg' || sub === 'mensagem') {
-            if (!rest) {
+            const quotedImage = quotedMessageContent?.imageMessage;
+            const quotedCaption = quotedImage?.caption || '';
+
+            if (!rest && !quotedImage) {
               const current = (config.message || '').trim() || 'Nenhuma mensagem salva.';
-              return reply(`📝 *Mensagem atual:*\n${current}`);
+              const hasImage = config.imagePath ? '\n📷 Imagem anexada' : '';
+              return reply(`📝 *Mensagem atual:*\n${current}${hasImage}`);
+            }
+
+            // Se há imagem marcada (com ou sem caption)
+            if (quotedImage) {
+              try {
+                const imageBuffer = await getFileBuffer(quotedImage, 'image');
+                const imageDir = pathz.join(__dirname, '..', 'database', 'dono', 'divulgacao_img');
+                ensureDirectoryExists(imageDir);
+
+                // Remove imagem anterior se existir
+                if (config.imagePath && fs.existsSync(config.imagePath)) {
+                  try { fs.unlinkSync(config.imagePath); } catch (e) { }
+                }
+
+                const fileName = `div_${Date.now()}.jpg`;
+                const imagePath = pathz.join(imageDir, fileName);
+                fs.writeFileSync(imagePath, imageBuffer);
+
+                config.message = quotedCaption || rest || '';
+                config.imagePath = imagePath;
+                saveDonoDivulgacao(config);
+
+                const infoMsg = quotedCaption ? ' com legenda' : '';
+                return reply(`✅ Mensagem${infoMsg} de divulgação salva com imagem.`);
+              } catch (e) {
+                console.error('Erro ao salvar imagem da mensagem marcada:', e);
+                // Fallback: salva apenas texto
+                config.message = rest || quotedCaption || '';
+                if (config.imagePath && fs.existsSync(config.imagePath)) {
+                  try { fs.unlinkSync(config.imagePath); } catch (e2) { }
+                }
+                config.imagePath = null;
+                saveDonoDivulgacao(config);
+                return reply('✅ Mensagem de divulgação salva (sem imagem).');
+              }
+            }
+
+            // Modo texto normal (limpa imagem se tinha)
+            if (config.imagePath && fs.existsSync(config.imagePath)) {
+              try { fs.unlinkSync(config.imagePath); } catch (e) { }
             }
             config.message = rest;
+            config.imagePath = null;
             saveDonoDivulgacao(config);
             return reply('✅ Mensagem de divulgação salva com sucesso.');
           }

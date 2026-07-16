@@ -114,6 +114,7 @@ ensureJsonFileExists(GLOBAL_BLACKLIST_FILE, {
 ensureJsonFileExists(DONO_DIVULGACAO_FILE, {
   groups: [],
   message: '',
+  imagePath: null,
   schedule: {
     enabled: false,
     time: null,
@@ -827,6 +828,7 @@ const loadDonoDivulgacao = () => {
   return loadJsonFile(DONO_DIVULGACAO_FILE, {
     groups: [],
     message: '',
+    imagePath: null,
     schedule: {
       enabled: false,
       time: null,
