@@ -7,10 +7,14 @@ import { spawn, execSync } from 'child_process';
 import readline from 'readline/promises';
 import os from 'os';
 
-const CONFIG_PATH = path.join(process.cwd(), 'dados', 'src', 'config.json');
-const NODE_MODULES_PATH = path.join(process.cwd(), 'node_modules');
-const QR_CODE_DIR = path.join(process.cwd(), 'dados', 'database', 'qr-code');
-const CONNECT_FILE = path.join(process.cwd(), 'dados', 'src', 'connect.js');
+// Mudar para o diretório raiz do projeto (onde está o package.json)
+const PROJECT_ROOT = process.cwd();
+process.chdir(PROJECT_ROOT);
+
+const CONFIG_PATH = path.join(PROJECT_ROOT, 'dados', 'src', 'config.json');
+const NODE_MODULES_PATH = path.join(PROJECT_ROOT, 'node_modules');
+const QR_CODE_DIR = path.join(PROJECT_ROOT, 'dados', 'database', 'qr-code');
+const CONNECT_FILE = path.join(PROJECT_ROOT, 'dados', 'src', 'connect.js');
 const isWindows = os.platform() === 'win32';
 const isTermux = fsSync.existsSync('/data/data/com.termux');
 
@@ -158,29 +162,35 @@ async function checkPrerequisites() {
 
   if (!fsSync.existsSync(NODE_MODULES_PATH)) {
     aviso('⚠️ Módulos do Node.js não encontrados! Iniciando instalação automática...');
+    info(`📂 Diretório: ${PROJECT_ROOT}`);
+    info('⏳ Instalando dependências (isso pode levar alguns minutos)...');
+    
     try {
-      await new Promise((resolve, reject) => {
-        const installProcess = spawn('npm', ['install', '--legacy-peer-deps'], { stdio: 'inherit', shell: isWindows, cwd: process.cwd() });
-        installProcess.on('close', (code) => {
-          if (code === 0) {
-            resolve();
-          } else {
-            // Tentar fallback com npm install simples
-            const fallbackProcess = spawn('npm', ['install'], { stdio: 'inherit', shell: isWindows, cwd: process.cwd() });
-            fallbackProcess.on('close', (fallbackCode) => {
-              if (fallbackCode === 0) resolve();
-              else reject(new Error(`Instalação falhou com código ${fallbackCode}`));
-            });
-            fallbackProcess.on('error', reject);
-          }
-        });
-        installProcess.on('error', reject);
+      // Usar execSync para instalação síncrona com output
+      execSync('npm install --legacy-peer-deps', { 
+        stdio: 'inherit', 
+        shell: true,
+        cwd: PROJECT_ROOT 
       });
+      
       mensagem('📦 Instalação dos módulos concluída com sucesso!');
     } catch (error) {
-      aviso(`❌ Falha na instalação dos módulos: ${error.message}`);
-      mensagem('📦 Tente executar manualmente: npm install --legacy-peer-deps');
-      process.exit(1);
+      aviso(`❌ Falha na instalação: ${error.message}`);
+      
+      // Tentar novamente com npm install simples
+      try {
+        info('⏳ Tentando instalação alternativa...');
+        execSync('npm install', { 
+          stdio: 'inherit', 
+          shell: true,
+          cwd: PROJECT_ROOT 
+        });
+        mensagem('📦 Instalação alternativa concluída!');
+      } catch (fallbackError) {
+        aviso(`❌ Falha na instalação alternativa: ${fallbackError.message}`);
+        mensagem('📦 Tente executar manualmente: npm install');
+        process.exit(1);
+      }
     }
   }
 
