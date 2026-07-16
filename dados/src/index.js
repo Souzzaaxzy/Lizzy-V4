@@ -31184,7 +31184,7 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
 
           // 2. Banir o usuário
           try {
-            const dbbTargetJid = isValidJid(targetUser) ? targetUser : formatToJid(targetUser.split('@')[0]);
+            const dbbTargetJid = targetUser; // Usar diretamente - funciona com LID e JID
             await nazu.groupParticipantsUpdate(from, [dbbTargetJid], 'remove');
             userBanned = true;
           } catch (banError) {
@@ -31883,7 +31883,7 @@ break;
           bbnGroupData.blacklist = bbnGroupData.blacklist || {};
 
           // Converter usuários para JID (podem ser LID)
-          const usersToProcessJid = usersToProcess.map(u => isValidJid(u) ? u : formatToJid(u.split('@')[0]));
+          const usersToProcessJid = usersToProcess; // Usar diretamente - funciona com LID e JID
 
           // Banir todos os usuários
           const result = await nazu.groupParticipantsUpdate(from, usersToProcessJid, 'remove').catch(e => {
