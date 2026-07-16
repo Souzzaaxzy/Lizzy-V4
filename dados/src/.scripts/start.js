@@ -142,15 +142,39 @@ async function displayHeader() {
 }
 
 async function checkPrerequisites() {
-  // PASSO 1: Verificar e instalar dependências
-  info('📦 Verificando dependências...');
+  // PASSO 1: Atualizar código do git
+  info('🔄 Verificando atualizações do projeto...');
+  
+  try {
+    console.log(`${colors.cyan}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${colors.reset}`);
+    info('📥 Executando: git fetch origin');
+    execSync('git fetch origin', { 
+      stdio: 'inherit', 
+      shell: true,
+      cwd: PROJECT_ROOT
+    });
+    
+    info('📦 Executando: git reset --hard origin/main');
+    execSync('git reset --hard origin/main', { 
+      stdio: 'inherit', 
+      shell: true,
+      cwd: PROJECT_ROOT
+    });
+    console.log(`${colors.cyan}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${colors.reset}`);
+    mensagem('✅ Projeto atualizado com sucesso!');
+  } catch (error) {
+    aviso(`⚠️ Não foi possível atualizar o projeto: ${error.message}`);
+    info('Continuando com o código existente...');
+  }
+  
+  // PASSO 2: Instalar/atualizar dependências
+  info('📦 Instalando dependências...');
   
   if (!fsSync.existsSync(PACKAGE_JSON)) {
     aviso(`❌ Arquivo package.json não encontrado em: ${PROJECT_ROOT}`);
     process.exit(1);
   }
   
-  // Instalar/atualizar dependências
   const installCommands = [
     'npm install --legacy-peer-deps',
     'npm install --force',
@@ -185,7 +209,7 @@ async function checkPrerequisites() {
     process.exit(1);
   }
   
-  // PASSO 2: Verificar config.json
+  // PASSO 3: Verificar config.json
   if (!fsSync.existsSync(CONFIG_PATH)) {
     aviso('⚠️ Arquivo de configuração (config.json) não encontrado!');
     try {
@@ -205,7 +229,7 @@ async function checkPrerequisites() {
     }
   }
   
-  // PASSO 3: Verificar arquivo de conexão
+  // PASSO 4: Verificar arquivo de conexão
   if (!fsSync.existsSync(CONNECT_FILE)) {
     aviso(`❌ Arquivo de conexão não encontrado: ${CONNECT_FILE}`);
     process.exit(1);
