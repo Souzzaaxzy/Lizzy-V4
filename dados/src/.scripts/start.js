@@ -13,8 +13,18 @@ const NODE_MODULES_PATH = path.join(PROJECT_ROOT, 'node_modules');
 const QR_CODE_DIR = path.join(PROJECT_ROOT, 'dados', 'database', 'qr-code');
 const CONNECT_FILE = path.join(PROJECT_ROOT, 'dados', 'src', 'connect.js');
 const PACKAGE_JSON = path.join(PROJECT_ROOT, 'package.json');
+const BACKUP_DIR = path.join(PROJECT_ROOT, '.backup_temp');
 const isWindows = os.platform() === 'win32';
 const isTermux = fsSync.existsSync('/data/data/com.termux');
+
+// Diretórios a fazer backup/restore
+const BACKUP_DIRS = [
+  'dados/database',
+  'dados/midias'
+];
+const BACKUP_FILES = [
+  'dados/src/config.json'
+];
 
 const colors = {
   reset: '\x1b[0m',
@@ -30,6 +40,89 @@ const mensagem = (text) => console.log(`${colors.green}${text}${colors.reset}`);
 const aviso = (text) => console.log(`${colors.red}${text}${colors.reset}`);
 const info = (text) => console.log(`${colors.cyan}${text}${colors.reset}`);
 const separador = () => console.log(`${colors.blue}============================================${colors.reset}`);
+
+// ============ FUNÇÕES DE BACKUP/RESTORE ============
+
+async function createBackup() {
+  info('💾 Criando backup dos dados...');
+  
+  try {
+    // Criar diretório de backup
+    await fs.mkdir(BACKUP_DIR, { recursive: true });
+    
+    // Copiar diretórios
+    for (const dir of BACKUP_DIRS) {
+      const source = path.join(PROJECT_ROOT, dir);
+      const dest = path.join(BACKUP_DIR, dir);
+      
+      if (fsSync.existsSync(source)) {
+        await fs.mkdir(path.dirname(dest), { recursive: true });
+        await fs.cp(source, dest, { recursive: true });
+        info(`  ✅ ${dir}/`);
+      }
+    }
+    
+    // Copiar arquivos
+    for (const file of BACKUP_FILES) {
+      const source = path.join(PROJECT_ROOT, file);
+      const dest = path.join(BACKUP_DIR, file);
+      
+      if (fsSync.existsSync(source)) {
+        await fs.mkdir(path.dirname(dest), { recursive: true });
+        await fs.copyFile(source, dest);
+        info(`  ✅ ${file}`);
+      }
+    }
+    
+    mensagem('💾 Backup criado com sucesso!');
+  } catch (error) {
+    aviso(`⚠️ Erro ao criar backup: ${error.message}`);
+  }
+}
+
+async function restoreBackup() {
+  info('📦 Restaurando dados do backup...');
+  
+  try {
+    // Restaurar diretórios
+    for (const dir of BACKUP_DIRS) {
+      const source = path.join(BACKUP_DIR, dir);
+      const dest = path.join(PROJECT_ROOT, dir);
+      
+      if (fsSync.existsSync(source)) {
+        await fs.mkdir(path.dirname(dest), { recursive: true });
+        await fs.cp(source, dest, { recursive: true });
+        info(`  ✅ ${dir}/`);
+      }
+    }
+    
+    // Restaurar arquivos
+    for (const file of BACKUP_FILES) {
+      const source = path.join(BACKUP_DIR, file);
+      const dest = path.join(PROJECT_ROOT, file);
+      
+      if (fsSync.existsSync(source)) {
+        await fs.mkdir(path.dirname(dest), { recursive: true });
+        await fs.copyFile(source, dest);
+        info(`  ✅ ${file}`);
+      }
+    }
+    
+    mensagem('📦 Backup restaurado com sucesso!');
+  } catch (error) {
+    aviso(`⚠️ Erro ao restaurar backup: ${error.message}`);
+  }
+}
+
+async function cleanupBackup() {
+  try {
+    if (fsSync.existsSync(BACKUP_DIR)) {
+      await fs.rm(BACKUP_DIR, { recursive: true, force: true });
+    }
+  } catch (error) {
+    // Ignora erros na limpeza
+  }
+}
 
 const getVersion = () => {
   try {
@@ -142,32 +235,40 @@ async function displayHeader() {
 }
 
 async function checkPrerequisites() {
-  // PASSO 1: Atualizar código do git
-  info('🔄 Verificando atualizações do projeto...');
+  // PASSO 1: Fazer backup ANTES do git reset
+  info('💾 Fazendo backup dos dados...');
+  await createBackup();
+  
+  // PASSO 2: Atualizar código do git
+  info('🔄 Atualizando projeto...');
   
   try {
     console.log(`${colors.cyan}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${colors.reset}`);
-    info('📥 Executando: git fetch origin');
+    info('📥 git fetch origin');
     execSync('git fetch origin', { 
       stdio: 'inherit', 
       shell: true,
       cwd: PROJECT_ROOT
     });
     
-    info('📦 Executando: git reset --hard origin/main');
+    info('📦 git reset --hard origin/main');
     execSync('git reset --hard origin/main', { 
       stdio: 'inherit', 
       shell: true,
       cwd: PROJECT_ROOT
     });
     console.log(`${colors.cyan}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${colors.reset}`);
-    mensagem('✅ Projeto atualizado com sucesso!');
+    mensagem('✅ Projeto atualizado!');
   } catch (error) {
-    aviso(`⚠️ Não foi possível atualizar o projeto: ${error.message}`);
-    info('Continuando com o código existente...');
+    aviso(`⚠️ Erro ao atualizar: ${error.message}`);
   }
   
-  // PASSO 2: Instalar/atualizar dependências
+  // PASSO 3: Restaurar backup DEPOIS do git reset
+  info('📦 Restaurando dados...');
+  await restoreBackup();
+  await cleanupBackup();
+  
+  // PASSO 4: Instalar/atualizar dependências
   info('📦 Instalando dependências...');
   
   if (!fsSync.existsSync(PACKAGE_JSON)) {
@@ -209,7 +310,7 @@ async function checkPrerequisites() {
     process.exit(1);
   }
   
-  // PASSO 3: Verificar config.json
+  // PASSO 5: Verificar config.json
   if (!fsSync.existsSync(CONFIG_PATH)) {
     aviso('⚠️ Arquivo de configuração (config.json) não encontrado!');
     try {
@@ -229,7 +330,7 @@ async function checkPrerequisites() {
     }
   }
   
-  // PASSO 4: Verificar arquivo de conexão
+  // PASSO 6: Verificar arquivo de conexão
   if (!fsSync.existsSync(CONNECT_FILE)) {
     aviso(`❌ Arquivo de conexão não encontrado: ${CONNECT_FILE}`);
     process.exit(1);
