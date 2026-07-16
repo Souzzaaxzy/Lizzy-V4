@@ -210,7 +210,7 @@ async function installNodeDependencies() {
     }
 
     try {
-        await runCommandWithSpinner('npm install --no-optional --force --no-bin-links', 'Executando npm install...');
+        await runCommandWithSpinner('npm install --legacy-peer-deps', 'Executando npm install...');
         print.message('✅ Dependências instaladas com sucesso via NPM.');
         return { name: 'Node Dependencies (npm)', status: `${colors.green}✅ Instalado com sucesso${colors.reset}` };
     } catch (npmError) {
