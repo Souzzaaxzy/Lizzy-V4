@@ -16,14 +16,26 @@ export async function handleRestaurar(sock, info, body, prefix, sender, isOwner,
     return reply('⚠️ Apenas o Dono pode usar este comando!');
   }
 
-  // Verifica se há arquivo anexado
+  // Verifica se há arquivo anexado na mensagem atual ou na quotada
   const messageContent = info.message;
-  const hasDocument = messageContent?.documentMessage;
-  const hasImage = messageContent?.imageMessage;
-  const hasVideo = messageContent?.videoMessage;
-  const hasAudio = messageContent?.audioMessage;
+  const quotedContent = messageContent?.extendedTextMessage?.contextInfo?.quotedMessage
+    || messageContent?.imageMessage?.contextInfo?.quotedMessage
+    || messageContent?.videoMessage?.contextInfo?.quotedMessage
+    || messageContent?.audioMessage?.contextInfo?.quotedMessage;
 
-  if (!hasDocument && !hasImage && !hasVideo && !hasAudio) {
+  // Verifica mensagem atual
+  let docMsg = messageContent?.documentMessage;
+  let imgMsg = messageContent?.imageMessage;
+  let vidMsg = messageContent?.videoMessage;
+  let audMsg = messageContent?.audioMessage;
+
+  // Verifica mensagem quotada
+  if (!docMsg) docMsg = quotedContent?.documentMessage;
+  if (!imgMsg) imgMsg = quotedContent?.imageMessage;
+  if (!vidMsg) vidMsg = quotedContent?.videoMessage;
+  if (!audMsg) audMsg = quotedContent?.audioMessage;
+
+  if (!docMsg && !imgMsg && !vidMsg && !audMsg) {
     return reply(`📋 *COMANDO: Restaurar Backup*\n\n`
       + `Envie o arquivo de backup junto com o comando.\n\n`
       + `📌 *Formatos aceitos:* .zip, .tar.gz, .rar\n\n`
@@ -35,8 +47,8 @@ export async function handleRestaurar(sock, info, body, prefix, sender, isOwner,
     await reply('🔄 *INICIANDO RESTAURAÇÃO...*\n\n'
       + '⏳ Baixando arquivo de backup...');
 
-    // Determina o tipo de mensagem
-    const mediaMessage = hasDocument || hasImage || hasVideo || hasAudio;
+    // Determina o tipo de mensagem e faz download
+    const mediaMessage = docMsg || imgMsg || vidMsg || audMsg;
     const fileName = mediaMessage?.fileName || `backup_${Date.now()}.zip`;
 
     // Diretório temporário
@@ -53,16 +65,16 @@ export async function handleRestaurar(sock, info, body, prefix, sender, isOwner,
     const ext = path.extname(fileName).toLowerCase();
     const tempFile = path.join(tempDir, `backup${ext}`);
 
-    // Download
+    // Download - usa a mensagem quotada se disponível
     let stream;
-    if (hasDocument) {
-      stream = await downloadContentFromMessage(info.message.documentMessage, 'document');
-    } else if (hasImage) {
-      stream = await downloadContentFromMessage(info.message.imageMessage, 'image');
-    } else if (hasVideo) {
-      stream = await downloadContentFromMessage(info.message.videoMessage, 'video');
-    } else if (hasAudio) {
-      stream = await downloadContentFromMessage(info.message.audioMessage, 'audio');
+    if (docMsg) {
+      stream = await downloadContentFromMessage(docMsg, 'document');
+    } else if (imgMsg) {
+      stream = await downloadContentFromMessage(imgMsg, 'image');
+    } else if (vidMsg) {
+      stream = await downloadContentFromMessage(vidMsg, 'video');
+    } else if (audMsg) {
+      stream = await downloadContentFromMessage(audMsg, 'audio');
     }
 
     const buffer = Buffer.concat(await stream.toArray());
@@ -79,28 +91,30 @@ export async function handleRestaurar(sock, info, body, prefix, sender, isOwner,
         execSync(`unzip -o "${tempFile}" -d "${restoreDir}"`, { stdio: 'pipe' });
         extracted = true;
       } catch (e) {
-        // Tenta com Python
-        try {
-          execSync(`python3 -c "import zipfile; zipfile.ZipFile('${tempFile}').extractall('${restoreDir}}')"`, { stdio: 'pipe' });
-          extracted = true;
-        } catch (e2) {}
+        console.error('Unzip error:', e.message);
       }
     } else if (ext === '.gz' || ext === '.tgz' || ext === '.tar.gz') {
       try {
         execSync(`tar -xzf "${tempFile}" -C "${restoreDir}"`, { stdio: 'pipe' });
         extracted = true;
-      } catch (e) {}
+      } catch (e) {
+        console.error('Tar error:', e.message);
+      }
     } else if (ext === '.rar') {
       try {
         execSync(`unrar x -o+ "${tempFile}" "${restoreDir}"`, { stdio: 'pipe' });
         extracted = true;
-      } catch (e) {}
+      } catch (e) {
+        console.error('Unrar error:', e.message);
+      }
     } else {
       // Tenta como zip por padrão
       try {
         execSync(`unzip -o "${tempFile}" -d "${restoreDir}"`, { stdio: 'pipe' });
         extracted = true;
-      } catch (e) {}
+      } catch (e) {
+        console.error('Default unzip error:', e.message);
+      }
     }
 
     if (!extracted) {
@@ -131,7 +145,7 @@ export async function handleRestaurar(sock, info, body, prefix, sender, isOwner,
         fs.mkdirSync(path.dirname(dest), { recursive: true });
         fs.cpSync(source, dest);
         restored++;
-        await reply(`  ✅ ${dir}/`);
+        await reply(`✅ ${dir}/`);
       }
     }
 
@@ -143,7 +157,7 @@ export async function handleRestaurar(sock, info, body, prefix, sender, isOwner,
         fs.mkdirSync(path.dirname(dest), { recursive: true });
         fs.copyFileSync(source, dest);
         restored++;
-        await reply(`  ✅ ${file}`);
+        await reply(`✅ ${file}`);
       }
     }
 
