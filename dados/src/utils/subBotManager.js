@@ -1,4 +1,4 @@
-import a, { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, makeCacheableSignalKeyStore } from 'whaileys';
+import a, { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, makeCacheableSignalKeyStore } from 'baileys';
 const makeWASocket = a.default;
 import { Boom } from '@hapi/boom';
 import NodeCache from 'node-cache';
