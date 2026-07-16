@@ -160,14 +160,26 @@ async function checkPrerequisites() {
     aviso('⚠️ Módulos do Node.js não encontrados! Iniciando instalação automática...');
     try {
       await new Promise((resolve, reject) => {
-        const installProcess = spawn('npm', ['run', 'config:install'], { stdio: 'inherit', shell: isWindows });
-        installProcess.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`Instalação falhou com código ${code}`))));
+        const installProcess = spawn('npm', ['install', '--legacy-peer-deps'], { stdio: 'inherit', shell: isWindows, cwd: process.cwd() });
+        installProcess.on('close', (code) => {
+          if (code === 0) {
+            resolve();
+          } else {
+            // Tentar fallback com npm install simples
+            const fallbackProcess = spawn('npm', ['install'], { stdio: 'inherit', shell: isWindows, cwd: process.cwd() });
+            fallbackProcess.on('close', (fallbackCode) => {
+              if (fallbackCode === 0) resolve();
+              else reject(new Error(`Instalação falhou com código ${fallbackCode}`));
+            });
+            fallbackProcess.on('error', reject);
+          }
+        });
         installProcess.on('error', reject);
       });
       mensagem('📦 Instalação dos módulos concluída com sucesso!');
     } catch (error) {
       aviso(`❌ Falha na instalação dos módulos: ${error.message}`);
-      mensagem('📦 Tente executar manualmente: npm run config:install');
+      mensagem('📦 Tente executar manualmente: npm install --legacy-peer-deps');
       process.exit(1);
     }
   }
