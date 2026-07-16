@@ -118,5 +118,11 @@ export default async function menugames(prefix, botName = "MeuBot", userName = "
 ┃ 💡 Dica:
 ┃ Use *${prefix}ajuda <comando>* para
 ┃ visualizar exemplos e detalhes.
-╰━━━━━━━━━━━━━━━━━━━━━━━━━━⬣`;
+╰━━━━━━━━━━━━━━━━━━━━━━━━━━⬣
+
+╭─────────────────╮
+│ 📢 Canal Oficial da Lizzy
+│ https://whatsapp.com/channel/0029Vb8VWbG3WHTWX9ZPnj0Y
+╰─────────────────╯
+`;
 }

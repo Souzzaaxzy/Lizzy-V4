@@ -97,5 +97,11 @@ export default async function menuFut(prefix, botName = "MeuBot", userName = "Us
 ┃ ⚽ Use ${prefix}fut entrar
 ┃ 🏆 Comece sua carreira
 ┃ 🌍 Domine o Futebol Global
-╰━━━━━━━━━━━━━━━━━━━━━━╯`;
+╰━━━━━━━━━━━━━━━━━━━━━━╯
+
+╭─────────────────╮
+│ 📢 Canal Oficial da Lizzy
+│ https://whatsapp.com/channel/0029Vb8VWbG3WHTWX9ZPnj0Y
+╰─────────────────╯
+`;
 }

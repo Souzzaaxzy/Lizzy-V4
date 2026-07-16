@@ -69,5 +69,11 @@ export default async function menuFerramentas(prefix, botName = "MeuBot", userNa
 │ ❌ ${prefix}apagalembrete
 │ 🎂 ${prefix}aniversario
 │ 📊 ${prefix}estatisticas
-╰──────────────`;
+╰──────────────
+
+╭─────────────────╮
+│ 📢 Canal Oficial da Lizzy
+│ https://whatsapp.com/channel/0029Vb8VWbG3WHTWX9ZPnj0Y
+╰─────────────────╯
+`;
 }

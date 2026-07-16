@@ -55,5 +55,11 @@ export default async function menuLogo(prefix, botName = "MeuBot", userName = "U
 │ 👾 ${prefix}amongus
 │ ❤️ ${prefix}deadpool
 │ 🩷 ${prefix}blackpink
-╰──────────────`;
+╰──────────────
+
+╭─────────────────╮
+│ 📢 Canal Oficial da Lizzy
+│ https://whatsapp.com/channel/0029Vb8VWbG3WHTWX9ZPnj0Y
+╰─────────────────╯
+`;
 }

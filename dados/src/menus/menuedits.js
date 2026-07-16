@@ -12,5 +12,11 @@ export default async function menuEdits(prefix, botName = "MeuBot", userName = "
 │ ⚫ ${prefix}blackwhite
 │ 🌫️ ${prefix}desfoque
 │ 😐 ${prefix}wojakreaction
-╰──────────────`;
+╰──────────────
+
+╭─────────────────╮
+│ 📢 Canal Oficial da Lizzy
+│ https://whatsapp.com/channel/0029Vb8VWbG3WHTWX9ZPnj0Y
+╰─────────────────╯
+`;
 }

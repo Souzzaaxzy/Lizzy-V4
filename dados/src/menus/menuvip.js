@@ -12,5 +12,11 @@ export default async function menuVip(prefix, botName = "MeuBot", userName = "Us
 │ 💡 Dono pode adicionar novos
 │ ⚙️ Use:
 │ 📍 !addcmdvip
-╰──────────────`;
+╰──────────────
+
+╭─────────────────╮
+│ 📢 Canal Oficial da Lizzy
+│ https://whatsapp.com/channel/0029Vb8VWbG3WHTWX9ZPnj0Y
+╰─────────────────╯
+`;
 }

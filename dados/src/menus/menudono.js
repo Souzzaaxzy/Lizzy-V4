@@ -229,5 +229,11 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 │ 📦 ${prefix}smm pedido
 │ 📊 ${prefix}smm status
 │ 🔑 ${prefix}smm setkey
-╰──────────────`;
+╰──────────────
+
+╭─────────────────╮
+│ 📢 Canal Oficial da Lizzy
+│ https://whatsapp.com/channel/0029Vb8VWbG3WHTWX9ZPnj0Y
+╰─────────────────╯
+`;
 }

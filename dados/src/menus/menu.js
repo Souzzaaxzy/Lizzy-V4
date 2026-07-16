@@ -38,5 +38,11 @@ export default async function menu(prefix, botName = "MeuBot", userName = "Usuá
 │ 🎮 ${prefix}menurpg
 │ 💎 ${prefix}menuvip
 │ 🎯 ${prefix}menugames
-╰──────────────`;
+╰──────────────
+
+╭─────────────────╮
+│ 📢 Canal Oficial da Lizzy
+│ https://whatsapp.com/channel/0029Vb8VWbG3WHTWX9ZPnj0Y
+╰─────────────────╯
+`;
 }
