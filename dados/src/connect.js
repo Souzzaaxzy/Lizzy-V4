@@ -1076,24 +1076,8 @@ async function createBotSocket(authDir) {
                     let mensagem = null;
                     let mention = [];
 
-                    // Obter autor da alteração de várias fontes possíveis
-                    let author = ev.subjectOwner || ev.descOwner || ev.inviteOwner || null;
-                    
-                    // Se não encontrou o autor no evento, tentar obter dos metadados do grupo
-                    if (!author) {
-                        try {
-                            const meta = await AbyssSock.groupMetadata(groupId).catch(() => null);
-                            if (meta?.participants) {
-                                const admins = meta.participants.filter(p => p.admin);
-                                if (admins.length > 0) {
-                                    // Pegar o último admin como provável autor
-                                    author = admins[admins.length - 1].id;
-                                }
-                            }
-                        } catch (e) {
-                            console.log('[X9] Não foi possível obter metadata para identificar autor');
-                        }
-                    }
+                    // Obter autor da alteração diretamente do evento
+                    const author = ev.subjectOwner || ev.descOwner || ev.inviteOwner || null;
                     
                     // Formatar texto e menção do autor
                     let authorText = '';
@@ -1102,6 +1086,8 @@ async function createBotSocket(authDir) {
                         authorText = `@${authorNum}`;
                         mention.push(author);
                         console.log('[X9] Autor identificado:', authorNum);
+                    } else {
+                        console.log('[X9] Autor não identificado no evento - não será mencionado');
                     }
 
                     // 📸 FOTO ALTERADA
