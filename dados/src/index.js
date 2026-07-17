@@ -1733,6 +1733,11 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   }
 
+  // Função sleep para delays assíncronos
+  function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
   // ═══════════════════════════════════════════════════════════════════
   // FIM DAS FUNÇÕES AUXILIARES DO RPG
   // ═══════════════════════════════════════════════════════════════════
@@ -31074,6 +31079,101 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
           });
         } catch (error) {
           reply("Ocorreu um erro ao apagar as mensagens 💔");
+        }
+        break;
+
+      case 'dp':
+        if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+        if (!menc_prt) return reply("Marque uma mensagem.");
+        let dpStanzaId, dpParticipant;
+        if (info.message.extendedTextMessage) {
+          dpStanzaId = info.message.extendedTextMessage.contextInfo.stanzaId;
+          dpParticipant = info.message.extendedTextMessage.contextInfo.participant || menc_prt;
+        } else if (info.message.viewOnceMessage) {
+          dpStanzaId = info.key.id;
+          dpParticipant = info.key.participant || menc_prt;
+        }
+        
+        // Verificar se é uma mensagem de pagamento
+        const dpQuotedMessage = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+        
+        if (dpQuotedMessage?.requestPaymentMessage) {
+          // Lógica especial para mensagens de pagamento
+          try {
+            const msgcagada = await nazu.sendMessage(from, { text: '' });
+            const idEditada = msgcagada.key.id;
+            
+            if (!idEditada) throw new Error('falha ao gerar ID');
+            
+            await nazu.sendMessage(from, {
+              text: '🗑️ Mensagem de pagamento removida',
+              edit: { id: idEditada }
+            }, { messageId: dpStanzaId });
+            
+            await sleep(500);
+            
+            await nazu.sendMessage(from, {
+              delete: {
+                remoteJid: from,
+                id: dpStanzaId,
+                fromMe: false,
+                participant: menc_prt
+              }
+            });
+            
+            await sleep(500);
+            
+            try {
+              await nazu.sendMessage(from, {
+                delete: {
+                  remoteJid: from,
+                  id: idEditada,
+                  fromMe: true
+                }
+              });
+            } catch (e) {
+              try {
+                await nazu.sendMessage(from, {
+                  delete: {
+                    remoteJid: from,
+                    id: idEditada,
+                    fromMe: false,
+                    participant: nazu.user.id
+                  }
+                });
+              } catch (err) {
+                console.log('Falha ao apagar editada:', err.message);
+              }
+            }
+            
+            reply("✅ Mensagem de pagamento deletada com sucesso!");
+            
+          } catch (error) {
+            console.error('Erro ao deletar payment:', error);
+            reply("❌ Erro ao tentar deletar mensagem de pagamento");
+          }
+        } else {
+          // Método normal para mensagens comuns
+          try {
+            await nazu.sendMessage(from, {
+              delete: {
+                remoteJid: from,
+                fromMe: false,
+                id: dpStanzaId,
+                participant: dpParticipant
+              }
+            });
+            await nazu.sendMessage(from, {
+              delete: {
+                remoteJid: from,
+                fromMe: false,
+                id: info.key.id,
+                participant: sender
+              }
+            });
+          } catch (error) {
+            reply("Ocorreu um erro ao apagar as mensagens 💔");
+          }
         }
         break;
 
