@@ -1046,40 +1046,79 @@ async function createBotSocket(authDir) {
                 try {
                     const groupId = ev.id;
 
-                    // 🔹 Buscar config do grupo (se você tiver banco/json)
+                    // 🔹 Buscar config do grupo
                     const groupData = await getGroupData(groupId).catch(() => null);
-
                     if (!groupData?.x9) return; // X9 desligado
 
                     let mensagem = null;
+                    let mention = [];
+
+                    // Obter autor da alteração (se disponível)
+                    const author = ev.subjectOwner || ev.descOwner || ev.inviteOwner || null;
+                    const authorText = author ? `@${author.split('@')[0]}` : null;
+                    if (author) mention.push(author);
 
                     // 📸 FOTO ALTERADA
                     if (ev.imgUrl || ev.picUrl) {
-                        mensagem = `📸 *X9 Report:* A foto do grupo foi alterada!`;
-                        console.log('[DEBUG] Foto alterada detectada');
+                        mensagem = `📸 *X9 Report:* A foto do grupo foi alterada!${authorText ? ` por ${authorText}` : ''}`;
+                        console.log('[X9] Foto alterada');
                     }
 
                     // 📝 NOME ALTERADO
                     else if (ev.subject) {
-                        mensagem = `📝 *X9 Report:* Nome do grupo alterado para:\n*${ev.subject}*`;
-                        console.log('[DEBUG] Nome alterado:', ev.subject);
+                        mensagem = `📝 *X9 Report:* Nome do grupo alterado!${authorText ? ` por ${authorText}` : ''}\n🔸 Novo nome: *${ev.subject}*`;
+                        console.log('[X9] Nome alterado:', ev.subject);
                     }
 
                     // 📜 DESCRIÇÃO ALTERADA
                     else if (ev.desc) {
-                        mensagem = `📜 *X9 Report:* Descrição do grupo foi alterada!`;
-                        console.log('[DEBUG] Descrição alterada');
+                        const descText = ev.desc.substring(0, 200) + (ev.desc.length > 200 ? '...' : '');
+                        mensagem = `📜 *X9 Report:* Descrição do grupo alterada!${authorText ? ` por ${authorText}` : ''}\n📝 Nova descrição: ${descText}`;
+                        console.log('[X9] Descrição alterada');
+                    }
+
+                    // 🔗 LINK DE CONVITE ALTERADO
+                    else if (ev.inviteCode) {
+                        mensagem = `🔗 *X9 Report:* Link de convite do grupo foi alterado!${authorText ? ` por ${authorText}` : ''}`;
+                        console.log('[X9] Link alterado');
+                    }
+
+                    // 🔒 GRUPO BLOQUEADO/DESBLOQUEADO
+                    else if (ev.announce !== undefined) {
+                        if (ev.announce === true) {
+                            mensagem = `🔒 *X9 Report:* Grupo foi *bloqueado*!${authorText ? ` por ${authorText}` : ''}\n📌 Apenas administradores podem enviar mensagens.`;
+                        } else {
+                            mensagem = `🔓 *X9 Report:* Grupo foi *desbloqueado*!${authorText ? ` por ${authorText}` : ''}\n📌 Todos os membros podem enviar mensagens.`;
+                        }
+                        console.log('[X9] Announce alterado:', ev.announce);
+                    }
+
+                    // ✏️ RESTRIÇÃO DE EDIÇÃO ALTERADA
+                    else if (ev.restrict !== undefined) {
+                        if (ev.restrict === true) {
+                            mensagem = `✏️ *X9 Report:* Edição do grupo foi *restrita*!${authorText ? ` por ${authorText}` : ''}\n📌 Apenas administradores podem editar informações.`;
+                        } else {
+                            mensagem = `✏️ *X9 Report:* Edição do grupo foi *liberada*!${authorText ? ` por ${authorText}` : ''}\n📌 Todos os membros podem editar informações.`;
+                        }
+                        console.log('[X9] Restrict alterado:', ev.restrict);
+                    }
+
+                    // 👥 TAMANHO DO GRUPO MUDOU (membros foram adicionados/removidos)
+                    else if (ev.size !== undefined) {
+                        console.log('[X9] Tamanho do grupo:', ev.size);
+                        // Não envia mensagem só por mudança de tamanho (já coberto por group-participants.update)
                     }
 
                     if (mensagem) {
-                        await AbyssSock.sendMessage(groupId, {
-                            text: mensagem
-                        }).catch(err => {
+                        const msgOptions = { text: mensagem };
+                        if (mention.length > 0) {
+                            msgOptions.mentions = mention;
+                        }
+                        await AbyssSock.sendMessage(groupId, msgOptions).catch(err => {
                             console.error(`❌ Erro ao enviar X9: ${err.message}`);
                         });
                     }
 
-                    // 🔹 Atualiza metadata (opcional)
                     if (DEBUG_MODE) {
                         const meta = await AbyssSock.groupMetadata(groupId).catch(() => null);
                         if (meta) {
@@ -1088,7 +1127,7 @@ async function createBotSocket(authDir) {
                     }
 
                 } catch (e) {
-//                    console.error(`❌ Erro no groups.update (${ev.id}): ${e.message}`);
+                    console.error(`❌ Erro no groups.update: ${e.message}`);
                 }
             });
 
