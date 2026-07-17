@@ -1076,10 +1076,33 @@ async function createBotSocket(authDir) {
                     let mensagem = null;
                     let mention = [];
 
-                    // Obter autor da alteração (se disponível)
-                    const author = ev.subjectOwner || ev.descOwner || ev.inviteOwner || null;
-                    const authorText = author ? `@${author.split('@')[0]}` : null;
-                    if (author) mention.push(author);
+                    // Obter autor da alteração de várias fontes possíveis
+                    let author = ev.subjectOwner || ev.descOwner || ev.inviteOwner || null;
+                    
+                    // Se não encontrou o autor no evento, tentar obter dos metadados do grupo
+                    if (!author) {
+                        try {
+                            const meta = await AbyssSock.groupMetadata(groupId).catch(() => null);
+                            if (meta?.participants) {
+                                const admins = meta.participants.filter(p => p.admin);
+                                if (admins.length > 0) {
+                                    // Pegar o último admin como provável autor
+                                    author = admins[admins.length - 1].id;
+                                }
+                            }
+                        } catch (e) {
+                            console.log('[X9] Não foi possível obter metadata para identificar autor');
+                        }
+                    }
+                    
+                    // Formatar texto e menção do autor
+                    let authorText = '';
+                    if (author) {
+                        const authorNum = author.split('@')[0];
+                        authorText = `@${authorNum}`;
+                        mention.push(author);
+                        console.log('[X9] Autor identificado:', authorNum);
+                    }
 
                     // 📸 FOTO ALTERADA
                     if (ev.imgUrl || ev.picUrl) {
@@ -1154,9 +1177,11 @@ async function createBotSocket(authDir) {
                     }
 
                     if (mensagem) {
+                        console.log('[X9] Enviando mensagem:', mensagem);
+                        console.log('[X9] Menções:', mention);
                         const msgOptions = { text: mensagem };
                         if (mention.length > 0) {
-                            msgOptions.mentions = mention;
+                            msgOptions.mentions = [...new Set(mention)]; // Remove duplicatas
                         }
                         await AbyssSock.sendMessage(groupId, msgOptions).catch(err => {
                             console.error(`❌ Erro ao enviar X9: ${err.message}`);
