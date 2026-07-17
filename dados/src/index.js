@@ -31127,46 +31127,11 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
           stanzaId = info.key.id;
           participant = info.key.participant || menc_prt;
         }
-        try {
-          // Apaga a mensagem marcada
-          await nazu.sendMessage(from, {
-            delete: {
-              remoteJid: from,
-              fromMe: false,
-              id: stanzaId,
-              participant: participant
-            }
-          });
-          // Apaga a própria mensagem do comando
-          await nazu.sendMessage(from, {
-            delete: {
-              remoteJid: from,
-              fromMe: false,
-              id: info.key.id,
-              participant: sender
-            }
-          });
-        } catch (error) {
-          reply("Ocorreu um erro ao apagar as mensagens 💔");
-        }
-        break;
-
-      case 'dp':
-        if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
-        if (!menc_prt) return reply("Marque uma mensagem.");
-        let dpStanzaId, dpParticipant;
-        if (info.message.extendedTextMessage) {
-          dpStanzaId = info.message.extendedTextMessage.contextInfo.stanzaId;
-          dpParticipant = info.message.extendedTextMessage.contextInfo.participant || menc_prt;
-        } else if (info.message.viewOnceMessage) {
-          dpStanzaId = info.key.id;
-          dpParticipant = info.key.participant || menc_prt;
-        }
         
         // Verificar se é uma mensagem de pagamento
-        const dpQuotedMessage = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+        const quotedMessage = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
         
-        if (dpQuotedMessage?.requestPaymentMessage) {
+        if (quotedMessage?.requestPaymentMessage) {
           // Lógica especial para mensagens de pagamento
           try {
             const msgcagada = await nazu.sendMessage(from, { text: '' });
@@ -31177,14 +31142,14 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
             await nazu.sendMessage(from, {
               text: '🗑️ Mensagem de pagamento removida',
               edit: { id: idEditada }
-            }, { messageId: dpStanzaId });
+            }, { messageId: stanzaId });
             
             await sleep(500);
             
             await nazu.sendMessage(from, {
               delete: {
                 remoteJid: from,
-                id: dpStanzaId,
+                id: stanzaId,
                 fromMe: false,
                 participant: menc_prt
               }
@@ -31215,6 +31180,20 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
               }
             }
             
+            // Apaga a própria mensagem do comando
+            try {
+              await nazu.sendMessage(from, {
+                delete: {
+                  remoteJid: from,
+                  fromMe: false,
+                  id: info.key.id,
+                  participant: sender
+                }
+              });
+            } catch (e) {
+              console.log('Falha ao apagar mensagem do comando:', e.message);
+            }
+            
             reply("✅ Mensagem de pagamento deletada com sucesso!");
             
           } catch (error) {
@@ -31228,8 +31207,8 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
               delete: {
                 remoteJid: from,
                 fromMe: false,
-                id: dpStanzaId,
-                participant: dpParticipant
+                id: stanzaId,
+                participant: participant
               }
             });
             await nazu.sendMessage(from, {

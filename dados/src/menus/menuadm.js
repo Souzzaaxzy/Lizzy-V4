@@ -75,7 +75,6 @@ export default async function menuadm(prefix, botName = "MeuBot", userName = "Us
 
 ╭─❖ 💬 GESTÃO DO GRUPO
 │ 🗑 ${prefix}del
-│ 🧹 ${prefix}dp
 │ 🧹 ${prefix}limpar
 │ 📢 ${prefix}marcar
 │ 👻 ${prefix}hidetag
