@@ -1077,7 +1077,12 @@ async function createBotSocket(authDir) {
                     let mention = [];
 
                     // Obter autor da alteração diretamente do evento
-                    const author = ev.subjectOwner || ev.descOwner || ev.inviteOwner || null;
+                    let author = ev.subjectOwner || ev.descOwner || ev.inviteOwner || null;
+                    
+                    // Para link de convite, tentar obter autor de outras fontes
+                    if (!author && ev.inviteCode) {
+                        author = ev.author || null;
+                    }
                     
                     // Formatar texto e menção do autor
                     let authorText = '';
@@ -1116,7 +1121,8 @@ async function createBotSocket(authDir) {
                     // 🔗 LINK DE CONVITE ALTERADO
                     else if (ev.inviteCode) {
                         mensagem = `🔗 *X9 Report:* Link de convite do grupo foi redefinido!${authorText ? ` por ${authorText}` : ''}`;
-                        console.log('[X9] Link alterado');
+                        console.log('[X9] Link alterado:', ev.inviteCode);
+                        console.log('[X9] Autor do link:', author || 'não identificado');
                     }
 
                     // 🔒 GRUPO BLOQUEADO/DESBLOQUEADO
