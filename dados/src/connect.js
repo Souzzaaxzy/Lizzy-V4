@@ -339,7 +339,71 @@ async function getGroupData(groupId) {
     }
 }
 
- /*
+/**
+ * Verifica se uma mensagem contém qualquer referência a pagamentos
+ * e exibe logs detalhados se encontrar
+ * @param {object} msg - Objeto da mensagem
+ * @param {string} source - Origem do log (ex: 'messages.upsert', 'messages.update')
+ */
+function logPaymentMessage(msg, source = 'unknown') {
+    if (!msg || typeof msg !== 'object') return;
+    
+    const msgStr = JSON.stringify(msg);
+    
+    // Verificar se a mensagem contém alguma referência a "payment"
+    if (!msgStr.toLowerCase().includes('payment')) return;
+    
+    // Encontrar todas as chaves que contêm "payment"
+    const paymentKeys = [];
+    const findPaymentKeys = (obj, prefix = '') => {
+        if (obj && typeof obj === 'object') {
+            for (const key of Object.keys(obj)) {
+                const fullKey = prefix ? `${prefix}.${key}` : key;
+                if (key.toLowerCase().includes('payment')) {
+                    paymentKeys.push(fullKey);
+                }
+                // Não recursar em objetos grandes para evitar logs excessivos
+                if (key.toLowerCase().includes('payment') || 
+                    (typeof obj[key] === 'object' && obj[key] !== null && 
+                     JSON.stringify(obj[key]).length < 2000)) {
+                    findPaymentKeys(obj[key], fullKey);
+                }
+            }
+        }
+    };
+    findPaymentKeys(msg);
+    
+    console.log('\n');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('🔔 PAYMENT MESSAGE DETECTADA!');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log(`📍 Origem: ${source}`);
+    console.log(`🕐 Horário: ${new Date().toISOString()}`);
+    console.log(`🆔 Message ID: ${msg.key?.id || 'N/A'}`);
+    console.log(`👥 JID (Destinatário): ${msg.key?.remoteJid || 'N/A'}`);
+    console.log(`👤 Remetente: ${msg.key?.participant || msg.key?.from || 'N/A'}`);
+    console.log(`📋 Tipo da mensagem: ${msg.message?.messageContextInfo?.messageSecretRequestMessage ? 'SecretMessage' : 
+                 msg.message?.protocolMessage?.type === 5 ? 'PaymentInvite' : 
+                 Object.keys(msg.message || {}).find(k => k.toLowerCase().includes('payment')) || 'Unknown'}`);
+    console.log(`🔑 Chaves com 'payment':`, paymentKeys.length > 0 ? paymentKeys : ['(dentro de objetos aninhados)']);
+    console.log('───────────────────────────────────────────────────────────');
+    console.log('📦 JSON Completo da Mensagem:');
+    console.log('───────────────────────────────────────────────────────────');
+    
+    try {
+        console.log(JSON.stringify(msg, null, 2));
+    } catch (e) {
+        console.log('[JSON muito grande ou circular - exibindo resumido]');
+        console.log('Keys:', Object.keys(msg));
+        if (msg.message) {
+            console.log('Message Keys:', Object.keys(msg.message));
+        }
+    }
+    
+    console.log('═══════════════════════════════════════════════════════════\n');
+}
+
+/*
  CORREÇÃO: Cache em memória para a blacklist global.
  Antes, o arquivo era lido do disco em CADA evento de participante, gerando
  centenas de leituras por minuto em grupos ativos e saturando o disco.
@@ -1308,6 +1372,10 @@ async function createBotSocket(authDir) {
             AbyssSock.ev.on('messages.upsert', async (m) => {
                 if (!m.messages || !Array.isArray(m.messages)) return;
 
+                // Log de mensagens de pagamento para análise
+                for (const msg of m.messages) {
+                    logPaymentMessage(msg, 'messages.upsert');
+                }
 
                 if (m.type === 'append') {
                     const isJoinRequest = m.messages.some(info => info?.messageStubType === 172);
@@ -1343,6 +1411,9 @@ async function createBotSocket(authDir) {
 
             AbyssSock.ev.on('messages.update', async (updates) => {
                 for (const update of updates) {
+                    // Log de mensagens de pagamento para análise
+                    logPaymentMessage(update, 'messages.update');
+                    
                     // Mensagens deletadas (messageStubType: 1)
                     if (update.update.message === null && update.update.messageStubType === 1) {
                         try {
@@ -1426,6 +1497,9 @@ async function createBotSocket(authDir) {
             AbyssSock.ev.on('messages.upsert', async (m) => {
                 if (m.type !== 'notify') return;
                 for (const info of m.messages) {
+                    // Log de mensagens de pagamento para análise
+                    logPaymentMessage(info, 'messages.upsert.reaction');
+                    
                     const type = Object.keys(info.message || {})[0];
                     if (type === 'reactionMessage') {
                         const reaction = info.message.reactionMessage;
