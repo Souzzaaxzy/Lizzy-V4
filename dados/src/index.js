@@ -205,10 +205,25 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
                 // Obter metadata do grupo para verificar quem promoveu
                 let authorText = '';
                 if (groupMetadata?.participants) {
-                    const adminList = groupMetadata.participants.filter(p => p.admin);
-                    if (adminList.length > 0) {
-                        // Último admin da lista é geralmente quem fez a ação
-                        const admin = adminList[adminList.length - 1];
+                    // Obter lista atual de admins para identificar quem fez a ação
+                    const currentAdmins = groupMetadata.participants.filter(p => p.admin);
+                    
+                    // Tentar encontrar quem não era admin mas agora é nos participantes afetados
+                    const newlyPromoted = promotedIds.filter(pid => 
+                        !currentAdmins.some(a => a.id === pid || a.id.includes(pid.split('@')[0]))
+                    );
+                    
+                    // Obter todos os números de admins atuais
+                    const adminNumbers = currentAdmins.map(a => a.id.split('@')[0]);
+                    
+                    // Filtrar admins que não estão na lista de recém-promovidos (provável autor)
+                    const possibleAuthors = currentAdmins.filter(a => 
+                        !newlyPromoted.some(np => np.includes(a.id.split('@')[0]))
+                    );
+                    
+                    if (possibleAuthors.length > 0) {
+                        // Pegar o primeiro admin disponível como provável autor
+                        const admin = possibleAuthors[0];
                         authorText = ` por @${admin.id.split('@')[0]}`;
                         if (!mentions.includes(admin.id)) {
                             mentions.push(admin.id);
@@ -240,9 +255,15 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
                 // Obter metadata do grupo para verificar quem rebaixou
                 let authorText = '';
                 if (groupMetadata?.participants) {
-                    const adminList = groupMetadata.participants.filter(p => p.admin);
-                    if (adminList.length > 0) {
-                        const admin = adminList[adminList.length - 1];
+                    const currentAdmins = groupMetadata.participants.filter(p => p.admin);
+                    
+                    // Obter admins atuais que não foram rebaixados (provável autor)
+                    const possibleAuthors = currentAdmins.filter(a => 
+                        !demotedIds.some(d => d.includes(a.id.split('@')[0]))
+                    );
+                    
+                    if (possibleAuthors.length > 0) {
+                        const admin = possibleAuthors[0];
                         authorText = ` por @${admin.id.split('@')[0]}`;
                         if (!mentions.includes(admin.id)) {
                             mentions.push(admin.id);
