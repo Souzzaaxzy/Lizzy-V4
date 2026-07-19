@@ -1293,10 +1293,12 @@ async function createBotSocket(authDir) {
             }
             
             // Garante que o ID correto seja passado se estiver em 'jid'
+            // Inclui 'author' para identificar quem fez a ação (promoção/rebaixamento)
             const updateData = {
                 id: inf.id || inf.jid,
                 participants: inf.participants,
-                action: inf.action
+                action: inf.action,
+                author: inf.author || null
             };
 
             // Chama o handler centralizado do index.js que corrigimos

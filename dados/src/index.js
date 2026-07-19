@@ -112,9 +112,9 @@ function formatMessageText(template, replacements) {
  * Função para lidar com eventos de participantes do grupo (Boas-vindas)
  * Adicionada para corrigir o problema do bot não enviar bem-vindo.
  */
-export const handleGroupParticipantsUpdate = async (nazu, { id, participants, action }) => {
+export const handleGroupParticipantsUpdate = async (nazu, { id, participants, action, author }) => {
     // Log incondicional para diagnóstico no terminal do usuário
-    console.log(`\x1b[36m[PARTICIPANTS UPDATE]\x1b[0m Evento: \x1b[33m${action}\x1b[0m | Grupo: \x1b[32m${id}\x1b[0m | Membros: ${participants.length}`);
+    console.log(`\x1b[36m[PARTICIPANTS UPDATE]\x1b[0m Evento: \x1b[33m${action}\x1b[0m | Grupo: \x1b[32m${id}\x1b[0m | Membros: ${participants.length}${author ? ` | Autor: ${author}` : ''}`);
     
     try {
         // 1. Tentar obter metadata com retry ou fallback
@@ -199,35 +199,18 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
             if (groupSettings.x9) {
                 console.log(`\x1b[34m[PARTICIPANTS UPDATE]\x1b[0m Preparando X9 para promoção de admins`);
                 
+                // Participantes que foram promovidos (alvos da ação)
                 const promotedIds = participants.map(p => typeof p === 'string' ? p : (p.id || p.jid || p.toString()));
                 const mentions = [...promotedIds];
                 
-                // Obter metadata do grupo para verificar quem promoveu
+                // Usar o author diretamente do evento se disponível
                 let authorText = '';
-                if (groupMetadata?.participants) {
-                    // Obter lista atual de admins para identificar quem fez a ação
-                    const currentAdmins = groupMetadata.participants.filter(p => p.admin);
-                    
-                    // Tentar encontrar quem não era admin mas agora é nos participantes afetados
-                    const newlyPromoted = promotedIds.filter(pid => 
-                        !currentAdmins.some(a => a.id === pid || a.id.includes(pid.split('@')[0]))
-                    );
-                    
-                    // Obter todos os números de admins atuais
-                    const adminNumbers = currentAdmins.map(a => a.id.split('@')[0]);
-                    
-                    // Filtrar admins que não estão na lista de recém-promovidos (provável autor)
-                    const possibleAuthors = currentAdmins.filter(a => 
-                        !newlyPromoted.some(np => np.includes(a.id.split('@')[0]))
-                    );
-                    
-                    if (possibleAuthors.length > 0) {
-                        // Pegar o primeiro admin disponível como provável autor
-                        const admin = possibleAuthors[0];
-                        authorText = ` por @${admin.id.split('@')[0]}`;
-                        if (!mentions.includes(admin.id)) {
-                            mentions.push(admin.id);
-                        }
+                if (author) {
+                    // author é quem realizou a ação de promoção
+                    const authorId = typeof author === 'string' ? author : (author.id || author.jid || author.toString());
+                    authorText = ` por @${authorId.split('@')[0]}`;
+                    if (!mentions.includes(authorId)) {
+                        mentions.push(authorId);
                     }
                 }
                 
@@ -249,25 +232,18 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
             if (groupSettings.x9) {
                 console.log(`\x1b[34m[PARTICIPANTS UPDATE]\x1b[0m Preparando X9 para rebaixamento de admins`);
                 
+                // Participantes que foram rebaixados (alvos da ação)
                 const demotedIds = participants.map(p => typeof p === 'string' ? p : (p.id || p.jid || p.toString()));
                 const mentions = [...demotedIds];
                 
-                // Obter metadata do grupo para verificar quem rebaixou
+                // Usar o author diretamente do evento se disponível
                 let authorText = '';
-                if (groupMetadata?.participants) {
-                    const currentAdmins = groupMetadata.participants.filter(p => p.admin);
-                    
-                    // Obter admins atuais que não foram rebaixados (provável autor)
-                    const possibleAuthors = currentAdmins.filter(a => 
-                        !demotedIds.some(d => d.includes(a.id.split('@')[0]))
-                    );
-                    
-                    if (possibleAuthors.length > 0) {
-                        const admin = possibleAuthors[0];
-                        authorText = ` por @${admin.id.split('@')[0]}`;
-                        if (!mentions.includes(admin.id)) {
-                            mentions.push(admin.id);
-                        }
+                if (author) {
+                    // author é quem realizou a ação de rebaixamento
+                    const authorId = typeof author === 'string' ? author : (author.id || author.jid || author.toString());
+                    authorText = ` por @${authorId.split('@')[0]}`;
+                    if (!mentions.includes(authorId)) {
+                        mentions.push(authorId);
                     }
                 }
                 
