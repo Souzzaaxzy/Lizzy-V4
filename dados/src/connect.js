@@ -1411,6 +1411,18 @@ function logNewsletterEvent(msg, source) {
                 for (const msg of m.messages) {
                     // Log de eventos de newsletter
                     logNewsletterEvent(msg, 'messages.upsert');
+                    
+                    // DEBUG: Logar TODAS as mensagens para ver estrutura de newsletter
+                    const msgRemoteJid = msg?.key?.remoteJid || msg?.remoteJid || '';
+                    if (msgRemoteJid.includes('@newsletter') || msgRemoteJid.includes('newsletter') || msg?.newsletterJid) {
+                        console.log('\n' + '='.repeat(60));
+                        console.log('📢📢📢 NOVA MENSAGEM DE NEWSLETTER DETECTADA 📢📢📢');
+                        console.log('='.repeat(60));
+                        console.log('remoteJid encontrado:', msgRemoteJid);
+                        console.log('newsletterJid:', msg?.newsletterJid);
+                        console.log(util.inspect(msg, { depth: null, showHidden: true, colors: true }));
+                        console.log('='.repeat(60));
+                    }
                 
                     logPaymentMessage(msg, 'messages.upsert');
                 }
