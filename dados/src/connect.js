@@ -1103,67 +1103,7 @@ async function createBotSocket(authDir) {
             console.log('📲 Envie este código no WhatsApp para autenticar o bot.');
         }
 
-        // ======================================================
-// 📢 DETECTOR DE NEWSLETTERS (Canais do WhatsApp)
-// Adaptado para Baileys v7.x
-// ======================================================
-function printNewsletter(titulo, obj) {
-    const texto = util.inspect(obj, {
-        depth: null,
-        colors: true,
-        compact: false,
-        maxArrayLength: null,
-        maxStringLength: null
-    });
-
-    if (
-        texto.includes("@newsletter") ||
-        texto.includes("newsletter") ||
-        texto.includes("Newsletter") ||
-        texto.includes("forwardedNewsletterMessageInfo")
-    ) {
-        console.log("\n==================================================");
-        console.log("📢 NEWSLETTER DETECTADA");
-        console.log("==================================================");
-        console.log("EVENTO:", titulo);
-        console.log("==================================================\n");
-        console.log(texto);
-        console.log("\n==================================================\n");
-    }
-}
-
-// Capturar TODOS os eventos processados
-AbyssSock.ev.process(async (events) => {
-    for (const [eventName, data] of Object.entries(events)) {
-        printNewsletter(eventName, data);
-    }
-});
-
-// Logar mensagens de newsletter no messages.upsert
-const originalMessagesUpsert = AbyssSock.ev.on.bind(AbyssSock.ev);
-AbyssSock.ev.on('messages.upsert', async ({ messages, type }) => {
-    for (const msg of messages) {
-        const msgStr = JSON.stringify(msg) || '';
-        if (
-            msg?.key?.remoteJid?.endsWith("@newsletter") ||
-            msgStr.includes("@newsletter") ||
-            msgStr.includes("newsletter")
-        ) {
-            console.log("\n==================================================");
-            console.log("📢📢📢 MENSAGEM DE NEWSLETTER DETECTADA 📢📢📢");
-            console.log("==================================================");
-            console.log("remoteJid:", msg?.key?.remoteJid);
-            console.log("participant:", msg?.key?.participant);
-            console.log("id:", msg?.key?.id);
-            console.log(util.inspect(msg, { depth: null, colors: true, compact: false }));
-            console.log("==================================================\n");
-        }
-    }
-});
-
-console.log("✅ Detector de Newsletters iniciado.");
-
-AbyssSock.ev.on('creds.update', saveCreds);
+        AbyssSock.ev.on('creds.update', saveCreds);
 
         AbyssSock.ev.on('groups.update', async (updates) => {
             if (!Array.isArray(updates) || updates.length === 0) return;
@@ -1434,56 +1374,8 @@ AbyssSock.ev.on('creds.update', saveCreds);
             AbyssSock.ev.on('messages.upsert', async (m) => {
                 if (!m.messages || !Array.isArray(m.messages)) return;
 
-                // Newsletter logger definido abaixo
-
-function logNewsletterEvent(msg, source) {
-    try {
-        // Verificar se é um evento relacionado a newsletter
-        const msgStr = JSON.stringify(msg) || '';
-        
-        const isNewsletter = 
-            msgStr.includes('@newsletter') ||
-            msg?.newsletterJid ||
-            msg?.key?.remoteJid?.includes('@newsletter') ||
-            msg?.message?.newsletterAdminInviteMessage ||
-            msg?.message?.newsletterAnnouncementMessage ||
-            msg?.message?.forwardedNewsletterMessageInfo ||
-            msg?.messageStubType === 172 ||
-            msg?.messageStubParameters?.some(p => p && p.includes('@newsletter')) ||
-            (msg?.key && JSON.stringify(msg.key).includes('@newsletter')) ||
-            (msg?.message && JSON.stringify(msg.message).includes('@newsletter'));
-        
-        if (!isNewsletter) return;
-        
-        console.log('\n' + '='.repeat(60));
-        console.log('📢 NEWSLETTER/CANAL DETECTADO - Source: ' + source);
-        console.log('='.repeat(60));
-        console.log(util.inspect(msg, { depth: null, showHidden: true, colors: true }));
-        console.log('='.repeat(60));
-    } catch (e) {
-        // Silencioso - não quebrar o fluxo
-    }
-}
-
-// ======================================================
-
-// Log de mensagens de pagamento para análise
+                // Log de mensagens de pagamento para análise
                 for (const msg of m.messages) {
-                    // Log de eventos de newsletter
-                    logNewsletterEvent(msg, 'messages.upsert');
-                    
-                    // DEBUG: Logar TODAS as mensagens para ver estrutura de newsletter
-                    const msgRemoteJid = msg?.key?.remoteJid || msg?.remoteJid || '';
-                    if (msgRemoteJid.includes('@newsletter') || msgRemoteJid.includes('newsletter') || msg?.newsletterJid) {
-                        console.log('\n' + '='.repeat(60));
-                        console.log('📢📢📢 NOVA MENSAGEM DE NEWSLETTER DETECTADA 📢📢📢');
-                        console.log('='.repeat(60));
-                        console.log('remoteJid encontrado:', msgRemoteJid);
-                        console.log('newsletterJid:', msg?.newsletterJid);
-                        console.log(util.inspect(msg, { depth: null, showHidden: true, colors: true }));
-                        console.log('='.repeat(60));
-                    }
-                
                     logPaymentMessage(msg, 'messages.upsert');
                 }
 
@@ -1714,76 +1606,7 @@ function logNewsletterEvent(msg, source) {
             });
         };
 
-        
-// ======================================================
-// 📢 LISTENERS PARA NEWSLETTERS/CANAIS
-// ======================================================
-AbyssSock.ev.on('chats.update', (updates) => {
-    for (const chat of updates) {
-        if (chat.jid && chat.jid.includes('@newsletter')) {
-            console.log('\n' + '='.repeat(60));
-            console.log('📢 NEWSLETTER CHAT UPDATE');
-            console.log('='.repeat(60));
-            console.log(util.inspect(chat, { depth: null, showHidden: true, colors: true }));
-            console.log('='.repeat(60));
-        }
-    }
-});
-
-AbyssSock.ev.on('contacts.update', (updates) => {
-    for (const contact of updates) {
-        if (contact.jid && contact.jid.includes('@newsletter')) {
-            console.log('\n' + '='.repeat(60));
-            console.log('📢 NEWSLETTER CONTACT UPDATE');
-            console.log('='.repeat(60));
-            console.log(util.inspect(contact, { depth: null, showHidden: true, colors: true }));
-            console.log('='.repeat(60));
-        }
-    }
-});
-
-AbyssSock.ev.on('labels.edit', (label) => {
-    if (label.jid && label.jid.includes('@newsletter')) {
-        console.log('\n' + '='.repeat(60));
-        console.log('📢 NEWSLETTER LABEL EDIT');
-        console.log('='.repeat(60));
-        console.log(util.inspect(label, { depth: null, showHidden: true, colors: true }));
-        console.log('='.repeat(60));
-    }
-});
-
-// Capturar QUALQUER evento que tenha @newsletter
-// Logar TODOS os eventos brevemente (para debug)
-const originalEmit = AbyssSock.ev.emit;
-AbyssSock.ev.emit = function(event, ...args) {
-    // Logar evento e seus args sem filtro (apenas os primeiros 100 chars)
-    const argsPreview = args.map(a => {
-        if (typeof a === 'object') {
-            const str = JSON.stringify(a);
-            return str ? str.substring(0, 150) + (str.length > 150 ? '...' : '') : String(a);
-        }
-        return String(a).substring(0, 150);
-    }).join(', ');
-    
-    if (!event.startsWith('connection') && !event.startsWith('creds')) {
-        console.log('[EVENTO] ' + event + ' -> ' + argsPreview.substring(0, 200));
-    }
-    
-    // Log detalhado apenas para eventos que parecem ser de newsletter
-    const argsStr = JSON.stringify(args) || '';
-    if (argsStr.includes('@newsletter') || event.includes('newsletter')) {
-        console.log('\n' + '='.repeat(60));
-        console.log('📢 NEWSLETTER EVENT: ' + event);
-        console.log('='.repeat(60));
-        console.log(util.inspect(args, { depth: null, showHidden: true, colors: true }));
-        console.log('='.repeat(60));
-    }
-    
-    return originalEmit.apply(this, [event, ...args]);
-};
-// ======================================================
-
-AbyssSock.ev.on('connection.update', async (update) => {
+        AbyssSock.ev.on('connection.update', async (update) => {
             const {
                 connection,
                 lastDisconnect,
