@@ -6511,14 +6511,22 @@ Entre em contato com o dono do bot:
 if (isCmd && command && !isOwner) {
   try {
     const subOwnerFile = pathz.join(DATABASE_DIR, 'subOwnerCommands.json');
-    let subOwnerCommands = [];
+    let baseSubOwnerCommands = [];
     if (fs.existsSync(subOwnerFile)) {
-      subOwnerCommands = JSON.parse(fs.readFileSync(subOwnerFile, 'utf-8'));
+      baseSubOwnerCommands = JSON.parse(fs.readFileSync(subOwnerFile, 'utf-8'));
     }
-    if (subOwnerCommands.includes(command)) {
-      if (!canUseOwnerCmd(command)) {
-        return reply('🚫 Você não tem permissão para usar este comando!');
+    // Verificar se é um comando de subdono
+    if (baseSubOwnerCommands.includes(command)) {
+      // Subdono pode usar comandos da lista base
+      if (!isSubOwner) {
+        return reply('🚫 Apenas o Dono pode usar este comando!');
       }
+    } else if (isSubOwner) {
+      // Subdono tentando usar comando FORA da lista base
+      // Verificar se tem permissão extra via grantsubcmd
+      if (!hasSubOwnerCmdPerm(sender, command)) {
+        return reply(`🚫 Você não tem permissão para usar: ${prefix}${command}`);
+}
     }
   } catch (e) {
     console.error('Erro ao verificar lista de comandos de subdonos:', e);
