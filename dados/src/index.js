@@ -30172,25 +30172,45 @@ ${groupPrefix}togglecmdvip premium_ia off`);
             for (const sub of subdonosList) {
               let subNum = sub.replace(/@s\.whatsapp\.net|@lid/g, '');
               let subName = '';
+              let displayNum = subNum;
               
-              // Tentar obter o nome e número real do subdono
-              try {
-                const cleanSub = sub.replace(/@s\.whatsapp\.net|@lid/g, '');
-                const subNameResult = await nazu.getName(sub);
-                if (subNameResult && subNameResult !== cleanSub) {
-                  subName = ` (${subNameResult})`;
-                }
-                // Se for LID, tentar obter o JID real
-                if (sub.includes('@lid')) {
-                  const [waResult] = await nazu.onWhatsApp(cleanSub);
-                  if (waResult && waResult.jid) {
-                    subNum = waResult.jid.replace(/@s\.whatsapp\.net/g, '');
+              // Se for LID, tentar obter o JID real com número
+              if (sub.includes('@lid')) {
+                try {
+                  const cleanSub = sub.replace(/@lid/g, '');
+                  // Tentar obter contato do WhatsApp
+                  const contacts = nazu.store?.contacts || {};
+                  const contactKey = Object.keys(contacts).find(k => k.includes(cleanSub) || k === cleanSub);
+                  if (contactKey && contacts[contactKey]) {
+                    const contact = contacts[contactKey];
+                    if (contact.notify) {
+                      displayNum = contact.notify.replace(/@s\.whatsapp\.net|@lid/g, '');
+                    } else if (contact.verifiedName) {
+                      displayNum = contact.verifiedName;
+                    }
                   }
+                  // Se não encontrou, tentar via onWhatsApp
+                  if (displayNum === cleanSub) {
+                    const results = await nazu.onWhatsApp(cleanSub + '@s.whatsapp.net');
+                    if (results && results[0]?.jid) {
+                      displayNum = results[0].jid.replace(/@s\.whatsapp\.net/g, '');
+                    }
+                  }
+                } catch (e) {
+                  // Manter subNum original se falhar
+                }
+              }
+              
+              // Obter nome se disponível
+              try {
+                const subNameResult = await nazu.getName(sub);
+                if (subNameResult && subNameResult !== subNum && subNameResult !== displayNum) {
+                  subName = ` (${subNameResult})`;
                 }
               } catch (e) {}
               
               subdonosText += `
-│    • wa.me/${subNum}${subName}`;
+│    • wa.me/${displayNum}${subName}`;
             }
           }
           
