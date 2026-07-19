@@ -33703,36 +33703,38 @@ break;
 
           // Lista de todos os sistemas anti disponíveis
           const antiSystems = [
-            { key: 'antilinkhard', name: 'Antilink Hard', desc: 'Bloqueia qualquer link' },
-            { key: 'antilinksoft', name: 'Antilink Soft', desc: 'Remove mensagens com links' },
-            { key: 'antilinkgp', name: 'Antilink Grupo', desc: 'Bloqueia links de outros grupos' },
-            { key: 'antilinkcanal', name: 'Antilink Canal', desc: 'Bloqueia links de canais' },
-            { key: 'antiflood', name: 'Antiflood', desc: 'Previne flood de comandos' },
-            { key: 'antispamcmd', name: 'Antispam', desc: 'Previne spam de comandos' },
-            { key: 'antiporn', name: 'Antiporn', desc: 'Bloqueia conteúdo adulto' },
-            { key: 'antifig', name: 'Antifig', desc: 'Bloqueia figurinhas', isObject: true, subKey: 'enabled' },
-            { key: 'antibtn', name: 'Antibotão', desc: 'Bloqueia botões' },
-            { key: 'antidoc', name: 'Antidoc', desc: 'Bloqueia documentos' },
-            { key: 'antiloc', name: 'Antiloc', desc: 'Bloqueia localizações' },
-            { key: 'antistatus', name: 'Antistatus', desc: 'Bloqueia menções a status' },
-            { key: 'antiStts', name: 'Antistts', desc: 'Bloqueia status de texto' },
-            { key: 'antidel', name: 'Antidelete', desc: 'Recupera mensagens apagadas' },
-            { key: 'antirequest', name: 'Antipagamento', desc: 'Bloqueia solicitações de pagamento' },
-            { key: 'antistickerplus', name: 'Antistickerplus', desc: 'Anti sticker avançado', isObject: true },
-            { key: 'antifake', name: 'Antifake', desc: 'Bloqueia números fake' },
-            { key: 'antigore', name: 'Antigore', desc: 'Bloqueia conteúdo gore' },
+            { key: 'antilinkhard', name: 'Antilink Hard', isObject: false },
+            { key: 'antilinksoft', name: 'Antilink Soft', isObject: false },
+            { key: 'antilinkgp', name: 'Antilink Grupo', isObject: false },
+            { key: 'antilinkcanal', name: 'Antilink Canal', isObject: false },
+            { key: 'antiflood', name: 'Antiflood', isFile: true, file: 'antiflood' },
+            { key: 'antispam', name: 'Antispam', isFile: true, file: 'antispam' },
+            { key: 'antiporn', name: 'Antiporn', isObject: false },
+            { key: 'antifig', name: 'Antifig', isObject: true, subKey: 'enabled' },
+            { key: 'antibtn', name: 'Antibotão', isObject: false },
+            { key: 'antidoc', name: 'Antidoc', isObject: false },
+            { key: 'antiloc', name: 'Antiloc', isObject: false },
+            { key: 'antistatus', name: 'Antistatus', isObject: false },
+            { key: 'antiStts', name: 'Antistts', isObject: false },
+            { key: 'antidel', name: 'Antidelete', isObject: false },
+            { key: 'antirequest', name: 'Antipagamento', isObject: false },
+            { key: 'antistickerplus', name: 'Antistickerplus', isObject: true },
+            { key: 'antifake', name: 'Antifake', isObject: false },
+            { key: 'antigore', name: 'Antigore', isObject: false },
           ];
 
           // Verificar status de cada sistema
           let activeCount = 0;
           let inactiveCount = 0;
-          const activeList = [];
-          const inactiveList = [];
+          const allAntis = [];
 
           antiSystems.forEach(system => {
             let isActive = false;
 
-            if (system.isObject) {
+            if (system.isFile) {
+              const fileData = JSON.parse(fs.readFileSync(DATABASE_DIR + `/${system.file}.json`, 'utf-8'));
+              isActive = fileData[from]?.enabled;
+            } else if (system.isObject) {
               const obj = groupData[system.key];
               isActive = obj && (system.subKey ? obj[system.subKey] : Object.keys(obj).some(k => obj[k]));
             } else {
@@ -33741,57 +33743,36 @@ break;
 
             if (isActive) {
               activeCount++;
-              activeList.push(`🟢 ${system.name}`);
+              allAntis.push({ name: system.name, active: true });
             } else {
               inactiveCount++;
-              inactiveList.push(`🔴 ${system.name}`);
+              allAntis.push({ name: system.name, active: false });
             }
           });
 
-          // Verificar antiflood do arquivo
-          const antifloodData = JSON.parse(fs.readFileSync(DATABASE_DIR + '/antiflood.json', 'utf-8'));
-          const isAntiFloodActive = antifloodData[from]?.enabled;
-          if (isAntiFloodActive) {
-            activeCount++;
-            activeList.push('🟢 Antiflood');
-          } else {
-            inactiveCount++;
-            inactiveList.push('🔴 Antiflood');
-          }
-
-          // Verificar antispam
-          const antispamData = JSON.parse(fs.readFileSync(DATABASE_DIR + '/antispam.json', 'utf-8'));
-          const isAntiSpamActive = antispamData[from]?.enabled;
-          if (isAntiSpamActive) {
-            activeCount++;
-            activeList.push('🟢 Antispam');
-          } else {
-            inactiveCount++;
-            inactiveList.push('🔴 Antispam');
-          }
-
           const totalCount = activeCount + inactiveCount;
           const groupName = groupMetadata?.subject || 'Grupo Desconhecido';
+
+          // Montar lista de todos os antis
+          const antisList = allAntis.map(a => a.active ? `🟢 ${a.name}` : `🔴 ${a.name}`).join('\n┃ ');
 
           // Montar painel
           const painel = `╭━━━━━━━━━━━━━━━━━━━━━━━⬣
 ┃        🛡️ 𝗣𝗔𝗜𝗡𝗘𝗟 𝗔𝗡𝗧𝗜𝗦
 ╰━━━━━━━━━━━━━━━━━━━━━━━⬣
 
-
-      📍 ${groupName}
-
-
 ╭━━━━━━━━━━━━━━━━━━━━━━━⬣
-┃ ${activeList.slice(0, 10).join('\n┃ ')}
+┃             ${groupName}
 ╰━━━━━━━━━━━━━━━━━━━━━━━⬣
 
-${inactiveList.length > 0 ? `╭━━━━━━━━━━━━━━━━━━━━━━━⬣
-┃ ${inactiveList.slice(0, 10).join('\n┃ ')}
-╰━━━━━━━━━━━━━━━━━━━━━━━⬣` : ''}
+╭━━━━━━━━━━━━━━━━━━━━━━━⬣
+┃ ${antisList}
+╰━━━━━━━━━━━━━━━━━━━━━━━⬣
 
 🟢 ➜ Ativado
 🔴 ➜ Desativado
+
+
 
 
 📊 Total de Antis: ${totalCount}
