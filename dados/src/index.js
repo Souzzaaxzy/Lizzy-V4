@@ -6508,7 +6508,7 @@ Entre em contato com o dono do bot:
 
 
 // ==================== VERIFICAÇÃO DE COMANDOS PARA SUBDONOS ====================
-if (isCmd && command && !isOwnerOrSub) {
+if (isCmd && command && !isOwner) {
   try {
     const subOwnerFile = pathz.join(DATABASE_DIR, 'subOwnerCommands.json');
     let subOwnerCommands = [];
@@ -6516,8 +6516,8 @@ if (isCmd && command && !isOwnerOrSub) {
       subOwnerCommands = JSON.parse(fs.readFileSync(subOwnerFile, 'utf-8'));
     }
     if (subOwnerCommands.includes(command)) {
-      if (!isSubOwner) {
-        return reply('🚫 Apenas donos e subdonos podem usar este comando!');
+      if (!canUseOwnerCmd(command)) {
+        return reply('🚫 Você não tem permissão para usar este comando!');
       }
     }
   } catch (e) {
