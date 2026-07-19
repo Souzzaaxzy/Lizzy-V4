@@ -33696,6 +33696,116 @@ break;
         }
         break;
 
+      case 'antis':
+        try {
+          if (!isGroup) return reply("Este comando só pode ser usado em grupos! 💔");
+          if (!isGroupAdmin) return reply("Você precisa ser administrador para usar este comando! 💔");
+
+          // Lista de todos os sistemas anti disponíveis
+          const antiSystems = [
+            { key: 'antilinkhard', name: 'Antilink Hard', desc: 'Bloqueia qualquer link' },
+            { key: 'antilinksoft', name: 'Antilink Soft', desc: 'Remove mensagens com links' },
+            { key: 'antilinkgp', name: 'Antilink Grupo', desc: 'Bloqueia links de outros grupos' },
+            { key: 'antilinkcanal', name: 'Antilink Canal', desc: 'Bloqueia links de canais' },
+            { key: 'antiflood', name: 'Antiflood', desc: 'Previne flood de comandos' },
+            { key: 'antispamcmd', name: 'Antispam', desc: 'Previne spam de comandos' },
+            { key: 'antiporn', name: 'Antiporn', desc: 'Bloqueia conteúdo adulto' },
+            { key: 'antifig', name: 'Antifig', desc: 'Bloqueia figurinhas', isObject: true, subKey: 'enabled' },
+            { key: 'antibtn', name: 'Antibotão', desc: 'Bloqueia botões' },
+            { key: 'antidoc', name: 'Antidoc', desc: 'Bloqueia documentos' },
+            { key: 'antiloc', name: 'Antiloc', desc: 'Bloqueia localizações' },
+            { key: 'antistatus', name: 'Antistatus', desc: 'Bloqueia menções a status' },
+            { key: 'antiStts', name: 'Antistts', desc: 'Bloqueia status de texto' },
+            { key: 'antidel', name: 'Antidelete', desc: 'Recupera mensagens apagadas' },
+            { key: 'antirequest', name: 'Antipagamento', desc: 'Bloqueia solicitações de pagamento' },
+            { key: 'antistickerplus', name: 'Antistickerplus', desc: 'Anti sticker avançado', isObject: true },
+            { key: 'antifake', name: 'Antifake', desc: 'Bloqueia números fake' },
+            { key: 'antigore', name: 'Antigore', desc: 'Bloqueia conteúdo gore' },
+          ];
+
+          // Verificar status de cada sistema
+          let activeCount = 0;
+          let inactiveCount = 0;
+          const activeList = [];
+          const inactiveList = [];
+
+          antiSystems.forEach(system => {
+            let isActive = false;
+
+            if (system.isObject) {
+              const obj = groupData[system.key];
+              isActive = obj && (system.subKey ? obj[system.subKey] : Object.keys(obj).some(k => obj[k]));
+            } else {
+              isActive = !!groupData[system.key];
+            }
+
+            if (isActive) {
+              activeCount++;
+              activeList.push(`🟢 ${system.name}`);
+            } else {
+              inactiveCount++;
+              inactiveList.push(`🔴 ${system.name}`);
+            }
+          });
+
+          // Verificar antiflood do arquivo
+          const antifloodData = JSON.parse(fs.readFileSync(DATABASE_DIR + '/antiflood.json', 'utf-8'));
+          const isAntiFloodActive = antifloodData[from]?.enabled;
+          if (isAntiFloodActive) {
+            activeCount++;
+            activeList.push('🟢 Antiflood');
+          } else {
+            inactiveCount++;
+            inactiveList.push('🔴 Antiflood');
+          }
+
+          // Verificar antispam
+          const antispamData = JSON.parse(fs.readFileSync(DATABASE_DIR + '/antispam.json', 'utf-8'));
+          const isAntiSpamActive = antispamData[from]?.enabled;
+          if (isAntiSpamActive) {
+            activeCount++;
+            activeList.push('🟢 Antispam');
+          } else {
+            inactiveCount++;
+            inactiveList.push('🔴 Antispam');
+          }
+
+          const totalCount = activeCount + inactiveCount;
+          const groupName = groupMetadata?.subject || 'Grupo Desconhecido';
+
+          // Montar painel
+          const painel = `╭━━━━━━━━━━━━━━━━━━━━━━━⬣
+┃        🛡️ 𝗣𝗔𝗜𝗡𝗘𝗟 𝗔𝗡𝗧𝗜𝗦
+╰━━━━━━━━━━━━━━━━━━━━━━━⬣
+
+
+      📍 ${groupName}
+
+
+╭━━━━━━━━━━━━━━━━━━━━━━━⬣
+┃ ${activeList.slice(0, 10).join('\n┃ ')}
+╰━━━━━━━━━━━━━━━━━━━━━━━⬣
+
+${inactiveList.length > 0 ? `╭━━━━━━━━━━━━━━━━━━━━━━━⬣
+┃ ${inactiveList.slice(0, 10).join('\n┃ ')}
+╰━━━━━━━━━━━━━━━━━━━━━━━⬣` : ''}
+
+🟢 ➜ Ativado
+🔴 ➜ Desativado
+
+
+📊 Total de Antis: ${totalCount}
+🟢 Ativos: ${activeCount}
+🔴 Desativados: ${inactiveCount}`;
+
+          await reply(painel);
+
+        } catch (e) {
+          console.error(e);
+          await reply("Ocorreu um erro 💔");
+        }
+        break;
+
       case 'divdono':
         try {
           if (!isOwnerOrSub) return reply("Apenas o dono do bot pode usar este comando.");

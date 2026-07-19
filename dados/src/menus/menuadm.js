@@ -145,6 +145,7 @@ export default async function menuadm(prefix, botName = "MeuBot", userName = "Us
 ╭─❖ 🔒 SEGURANÇA
 │ 🌊 ${prefix}antiflood
 │ 🕵 ${prefix}x9
+│ 🛡️ ${prefix}antis
 │ 📄 ${prefix}antidoc
 │ 📍 ${prefix}antiloc
 │ 🖼 ${prefix}antifig
