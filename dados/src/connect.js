@@ -1374,10 +1374,7 @@ async function createBotSocket(authDir) {
             AbyssSock.ev.on('messages.upsert', async (m) => {
                 if (!m.messages || !Array.isArray(m.messages)) return;
 
-                // ======================================================
-// 📢 LOG DE NEWSLETTERS/CANAIS DO WHATSAPP
-// ======================================================
-const util = require('util');
+                // Newsletter logger definido abaixo
 
 function logNewsletterEvent(msg, source) {
     try {
