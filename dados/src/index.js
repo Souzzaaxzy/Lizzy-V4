@@ -196,67 +196,90 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
         
         // 5. X9 - Lógica de PROMOÇÃO (novos admins)
         else if (action === 'promote') {
-            if (groupSettings.x9) {
-                console.log(`\x1b[34m[PARTICIPANTS UPDATE]\x1b[0m Preparando X9 para promoção de admins`);
+            const hasX9 = groupSettings.x9;
+            const hasAntiRoubo = groupSettings.antiRoubo?.enabled;
+            
+            if (hasX9 || hasAntiRoubo) {
+                console.log(`\x1b[34m[PARTICIPANTS UPDATE]\x1b[0m Preparando X9/AntiRoubo para promoção de admins`);
                 
-                // Participantes que foram promovidos (alvos da ação)
                 const promotedIds = participants.map(p => typeof p === 'string' ? p : (p.id || p.jid || p.toString()));
-                const mentions = [...promotedIds];
+                let mentions = [...promotedIds];
                 
-                // Usar o author diretamente do evento se disponível
                 let authorText = '';
+                let authorId = null;
                 if (author) {
-                    // author é quem realizou a ação de promoção
-                    const authorId = typeof author === 'string' ? author : (author.id || author.jid || author.toString());
+                    authorId = typeof author === 'string' ? author : (author.id || author.jid || author.toString());
                     authorText = ` por @${authorId.split('@')[0]}`;
                     if (!mentions.includes(authorId)) {
                         mentions.push(authorId);
                     }
                 }
                 
-                const msgText = `⬆️ *X9 Report:* ${promotedIds.map(p => `@${p.split('@')[0]}`).join(', ')} foi(ram) *promovido(s) a administrador*!${authorText}`;
+                // ANTI ROUBO
+                if (hasAntiRoubo && authorId) {
+                    const groupCreator = groupMetadata?.creator || groupMetadata?.owner;
+                    const isGroupCreator = groupCreator && (authorId.includes(groupCreator.split('@')[0]) || authorId === groupCreator);
+                    const isAuthorized = groupSettings.antiRoubo?.authorizedUsers?.some(u => authorId.includes(u.split('@')[0]) || u === authorId);
+                    
+                    if (!isGroupCreator && !isAuthorized) {
+                        console.log(`\x1b[31m[ANTI ROUBO]\x1b[0m Autor não autorizado tentou promover: ${authorId}`);
+                        try {
+                            await nazu.groupParticipantsUpdate(id, [authorId], 'demote').catch(e => console.error('Erro ao rebaixar autor:', e));
+                            const alertMsg = `🚫 *Promoções e rebaixamentos são protegidos neste grupo.*\n\nO administrador @${authorId.split('@')[0]} não possui permissão para alterar a administração e foi rebaixado automaticamente.`;
+                            await nazu.sendMessage(id, { text: alertMsg, mentions: [authorId] }).catch(e => {});
+                        } catch (e) {}
+                    }
+                }
                 
-                await nazu.sendMessage(id, {
-                    text: msgText,
-                    mentions
-                }).catch(err => {
-                    console.error(`\x1b[31m[ERRO X9]\x1b[0m Falha ao enviar promoção: ${err.message}`);
-                });
-                
-                console.log(`\x1b[32m[PARTICIPANTS UPDATE]\x1b[0m X9 de promoção enviado.`);
+                if (hasX9) {
+                    const msgText = `⬆️🐺 *X9 Report:* ${promotedIds.map(p => `@${p.split('@')[0]}`).join(', ')} foi(ram) *promovido(s) a administrador*!${authorText}`;
+                    await nazu.sendMessage(id, { text: msgText, mentions }).catch(err => {});
+                    console.log(`\x1b[32m[PARTICIPANTS UPDATE]\x1b[0m X9 de promoção enviado.`);
+                }
             }
         }
-        
         // 6. X9 - Lógica de REBAIXAMENTO (remover admin)
         else if (action === 'demote') {
-            if (groupSettings.x9) {
-                console.log(`\x1b[34m[PARTICIPANTS UPDATE]\x1b[0m Preparando X9 para rebaixamento de admins`);
+            const hasX9 = groupSettings.x9;
+            const hasAntiRoubo = groupSettings.antiRoubo?.enabled;
+            
+            if (hasX9 || hasAntiRoubo) {
+                console.log(`\x1b[34m[PARTICIPANTS UPDATE]\x1b[0m Preparando X9/AntiRoubo para rebaixamento de admins`);
                 
-                // Participantes que foram rebaixados (alvos da ação)
                 const demotedIds = participants.map(p => typeof p === 'string' ? p : (p.id || p.jid || p.toString()));
-                const mentions = [...demotedIds];
+                let mentions = [...demotedIds];
                 
-                // Usar o author diretamente do evento se disponível
                 let authorText = '';
+                let authorId = null;
                 if (author) {
-                    // author é quem realizou a ação de rebaixamento
-                    const authorId = typeof author === 'string' ? author : (author.id || author.jid || author.toString());
+                    authorId = typeof author === 'string' ? author : (author.id || author.jid || author.toString());
                     authorText = ` por @${authorId.split('@')[0]}`;
                     if (!mentions.includes(authorId)) {
                         mentions.push(authorId);
                     }
                 }
                 
-                const msgText = `⬇️ *X9 Report:* ${demotedIds.map(p => `@${p.split('@')[0]}`).join(', ')} foi(ram) *rebaixado(s) de administrador*!${authorText}`;
+                // ANTI ROUBO
+                if (hasAntiRoubo && authorId) {
+                    const groupCreator = groupMetadata?.creator || groupMetadata?.owner;
+                    const isGroupCreator = groupCreator && (authorId.includes(groupCreator.split('@')[0]) || authorId === groupCreator);
+                    const isAuthorized = groupSettings.antiRoubo?.authorizedUsers?.some(u => authorId.includes(u.split('@')[0]) || u === authorId);
+                    
+                    if (!isGroupCreator && !isAuthorized) {
+                        console.log(`\x1b[31m[ANTI ROUBO]\x1b[0m Autor não autorizado tentou rebaixar: ${authorId}`);
+                        try {
+                            await nazu.groupParticipantsUpdate(id, [authorId], 'demote').catch(e => console.error('Erro ao rebaixar autor:', e));
+                            const alertMsg = `🚫 *Promoções e rebaixamentos são protegidos neste grupo.*\n\nO administrador @${authorId.split('@')[0]} não possui permissão para alterar a administração e foi rebaixado automaticamente.`;
+                            await nazu.sendMessage(id, { text: alertMsg, mentions: [authorId] }).catch(e => {});
+                        } catch (e) {}
+                    }
+                }
                 
-                await nazu.sendMessage(id, {
-                    text: msgText,
-                    mentions
-                }).catch(err => {
-                    console.error(`\x1b[31m[ERRO X9]\x1b[0m Falha ao enviar rebaixamento: ${err.message}`);
-                });
-                
-                console.log(`\x1b[32m[PARTICIPANTS UPDATE]\x1b[0m X9 de rebaixamento enviado.`);
+                if (hasX9) {
+                    const msgText = `⬇️🐺 *X9 Report:* ${demotedIds.map(p => `@${p.split('@')[0]}`).join(', ')} foi(ram) *rebaixado(s) de administrador*!${authorText}`;
+                    await nazu.sendMessage(id, { text: msgText, mentions }).catch(err => {});
+                    console.log(`\x1b[32m[PARTICIPANTS UPDATE]\x1b[0m X9 de rebaixamento enviado.`);
+                }
             }
         }
     } catch (e) {
@@ -34339,6 +34362,163 @@ break;
           groupData.antistatus = !groupData.antistatus;
           fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
           await reply(`✅ Anti Status ${groupData.antistatus ? 'ativado' : 'desativado'}!`);
+        } catch (e) {
+          console.error(e);
+          await reply("Ocorreu um erro 💔");
+        }
+        break;
+      case 'antiroubo':
+        try {
+          if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
+          
+          const args = body.trim().toLowerCase().split(' ');
+          
+          if (args.length === 1 || args[1] === 'menu') {
+            // Mostrar menu do antiroubo
+            const status = groupData.antiRoubo?.enabled ? '🟢 ATIVO' : '🔴 INATIVO';
+            
+            // Obter dono do grupo
+            let ownerName = 'Não detectado';
+            try {
+              const metadata = await nazu.groupMetadata(from);
+              if (metadata?.creator) {
+                const ownerNum = metadata.creator.split('@')[0];
+                const ownerInfo = await nazu.getName(metadata.creator);
+                ownerName = ownerInfo ? `${ownerInfo} (@${ownerNum})` : `@${ownerNum}`;
+              }
+            } catch (e) {}
+            
+            // Lista de autorizados
+            const authUsers = groupData.antiRoubo?.authorizedUsers || [];
+            let authList = '*Nenhum usuário autorizado*';
+            if (authUsers.length > 0) {
+              authList = authUsers.map(u => `• @${u.split('@')[0]}`).join('\n');
+            }
+            
+            const menuText = `╭━━━〔 🛡️ ANTI ROUBO 〕━━━╮
+│
+│ 📊 *Status:* ${status}
+│
+│ 👑 *Dono do Grupo:*
+│ ${ownerName}
+│
+│ 👥 *Usuários Permitidos:*
+│ ${authList}
+│
+━━━━━━━━━━━━━━
+│
+│ ⚙️ *Comandos*
+│
+│ 🟢 ${prefix}antiroubo on
+│ 🔴 ${prefix}antiroubo off
+│
+│ 👤 ${prefix}perm @usuário
+│ 👤 ${prefix}delp @usuário
+│
+╰━━━━━━━━━━━━━━━━━━━━╯`;
+            
+            await reply(menuText);
+          } else if (args[1] === 'on') {
+            if (!isGroupAdmin) return reply("Você precisa ser admin 💔");
+            if (!isBotAdmin) return reply("Preciso ser admin para isso 💔");
+            
+            if (!groupData.antiRoubo) groupData.antiRoubo = {};
+            groupData.antiRoubo.enabled = true;
+            groupData.antiRoubo.authorizedUsers = groupData.antiRoubo.authorizedUsers || [];
+            fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
+            
+            await reply("✅ *Anti Roubo de Administração ativado.*\n\nPromoções e rebaixamentos só poderão ser feitos pelo Dono do Grupo ou usuários autorizados.");
+          } else if (args[1] === 'off') {
+            if (!isGroupAdmin) return reply("Você precisa ser admin 💔");
+            
+            if (groupData.antiRoubo) {
+              groupData.antiRoubo.enabled = false;
+            }
+            fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
+            
+            await reply("❌ *Anti Roubo de Administração desativado.*");
+          } else {
+            await reply(`❌ Uso incorreto!\n\nUse:\n• ${prefix}antiroubo - menu\n• ${prefix}antiroubo on/off`);
+          }
+        } catch (e) {
+          console.error(e);
+          await reply("Ocorreu um erro 💔");
+        }
+        break;
+      case 'perm':
+        try {
+          if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
+          if (!isOwner) return reply("Apenas o Dono do Bot pode usar este comando!");
+          
+          const mentioned = info.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+          const quoted = info.message?.extendedTextMessage?.contextInfo?.quotedMessage?.conversation;
+          
+          if (!mentioned && !quoted) {
+            return reply(`❌ Marque um usuário ou responda uma mensagem.\n\nExemplo: ${prefix}perm @usuario`);
+          }
+          
+          const userJid = mentioned || (quoted ? quoted.split('\n')[0].replace(/[^0-9]/g, '') + '@s.whatsapp.net' : null);
+          
+          if (!userJid) {
+            return reply("❌ Não consegui identificar o usuário.");
+          }
+          
+          const userNum = userJid.split('@')[0];
+          
+          // Verificar se já está na lista
+          if (!groupData.antiRoubo) groupData.antiRoubo = {};
+          if (!groupData.antiRoubo.authorizedUsers) groupData.antiRoubo.authorizedUsers = [];
+          
+          const alreadyAuth = groupData.antiRoubo.authorizedUsers.some(u => u.includes(userNum) || userNum.includes(u.split('@')[0]));
+          
+          if (alreadyAuth) {
+            return reply(`⚠️ @${userNum} já está autorizado.`, { mentions: [userJid] });
+          }
+          
+          groupData.antiRoubo.authorizedUsers.push(userJid);
+          if (!groupData.antiRoubo.enabled) groupData.antiRoubo.enabled = true;
+          fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
+          
+          await reply(`✅ @${userNum} adicionado à lista de autorizados do Anti Roubo!`, { mentions: [userJid] });
+        } catch (e) {
+          console.error(e);
+          await reply("Ocorreu um erro 💔");
+        }
+        break;
+      case 'delp':
+        try {
+          if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
+          if (!isOwner) return reply("Apenas o Dono do Bot pode usar este comando!");
+          
+          const mentioned = info.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+          const quoted = info.message?.extendedTextMessage?.contextInfo?.quotedMessage?.conversation;
+          
+          if (!mentioned && !quoted) {
+            return reply(`❌ Marque um usuário ou responda uma mensagem.\n\nExemplo: ${prefix}delp @usuario`);
+          }
+          
+          const userJid = mentioned || (quoted ? quoted.split('\n')[0].replace(/[^0-9]/g, '') + '@s.whatsapp.net' : null);
+          
+          if (!userJid) {
+            return reply("❌ Não consegui identificar o usuário.");
+          }
+          
+          const userNum = userJid.split('@')[0];
+          
+          if (!groupData.antiRoubo?.authorizedUsers) {
+            return reply("⚠️ A lista de autorizados está vazia.");
+          }
+          
+          const idx = groupData.antiRoubo.authorizedUsers.findIndex(u => u.includes(userNum) || userNum.includes(u.split('@')[0]));
+          
+          if (idx === -1) {
+            return reply(`⚠️ @${userNum} não está na lista de autorizados.`, { mentions: [userJid] });
+          }
+          
+          groupData.antiRoubo.authorizedUsers.splice(idx, 1);
+          fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
+          
+          await reply(`✅ @${userNum} removido da lista de autorizados!`, { mentions: [userJid] });
         } catch (e) {
           console.error(e);
           await reply("Ocorreu um erro 💔");
