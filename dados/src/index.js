@@ -18724,7 +18724,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
         }
         break;
 
-case 'getchanneljid':
+      case 'getchanneljid':
         if (!isOwner) return reply("🚫 Apenas o Dono do Bot pode usar este comando!");
 
         try {
@@ -18743,25 +18743,30 @@ case 'getchanneljid':
 
           const channelId = match[2];
 
-          if (typeof nazu.newsletterMetadata !== 'function') {
-            return reply("⚠️ A versão atual do Baileys não oferece suporte à API de newsletters.\n\nTente atualizar o Baileys para uma versão mais recente.");
+          // Verificar se a API de newsletter existe no Baileys
+          const hasNewsletterAPI = typeof nazu.newsletterMetadata === 'function';
+
+          if (!hasNewsletterAPI) {
+            return reply("⚠️ *Limitação detectada*\n\nA implementação atual do Baileys utilizada neste projeto não possui suporte para obter o Newsletter JID a partir de um link público de canal.\n\nO método newsletterMetadata() não está disponível na versão instalada.");
           }
 
+          // Tentar obter metadados do canal
           let newsletterData;
           try {
+            // O newsletterMetadata pode aceitar diferentes formatos
             newsletterData = await nazu.newsletterMetadata(channelId);
           } catch (err) {
-            try {
-              newsletterData = await nazu.newsletterMetadata(channelId + '@newsletter');
-            } catch (err2) {
-              return reply("❌ Não foi possível localizar esse canal.\n\nVerifique se o link está correto e se o canal existe.");
-            }
+            newsletterData = null;
           }
 
-          const name = newsletterData?.name || 'Não disponível';
-          const jid = newsletterData?.jid || channelId + '@newsletter';
-          const subscribers = newsletterData?.subscribers || newsletterData?.subscribersCount || '?';
-          const description = newsletterData?.description || newsletterData?.about || 'Sem descrição';
+          if (!newsletterData || !newsletterData.jid) {
+            return reply("❌ *Não foi possível localizar esse canal.*\n\nVerifique se o link está correto e se o canal existe.\n\nNota: O Baileys disponível não conseguiu obter os dados deste canal.");
+          }
+
+          const name = newsletterData.name || 'Não disponível';
+          const jid = newsletterData.jid;
+          const subscribers = newsletterData.subscribers || newsletterData.subscribersCount || '?';
+          const description = newsletterData.description || newsletterData.about || 'Sem descrição';
           const inviteUrl = 'https://whatsapp.com/channel/' + channelId;
 
           const response = '╭━━━〔 📢 DADOS DO CANAL 〕━━━╮\n' +
@@ -18784,6 +18789,8 @@ case 'getchanneljid':
           reply("❌ Ocorreu um erro ao buscar os dados do canal.");
         }
         break;
+
+
 
       case 'reiniciar':
       case 'restart':
