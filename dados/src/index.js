@@ -30160,11 +30160,29 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           if (subdonosList && subdonosList.length > 0) {
             subdonosText = `│
 │ 👑 *Subdonos:*`;
-            subdonosList.forEach(sub => {
-              const subNum = sub.replace(/@s\.whatsapp\.net|@lid/g, '');
+            for (const sub of subdonosList) {
+              let subNum = sub.replace(/@s\.whatsapp\.net|@lid/g, '');
+              let subName = '';
+              
+              // Tentar obter o nome e número real do subdono
+              try {
+                const cleanSub = sub.replace(/@s\.whatsapp\.net|@lid/g, '');
+                const subNameResult = await nazu.getName(sub);
+                if (subNameResult && subNameResult !== cleanSub) {
+                  subName = ` (${subNameResult})`;
+                }
+                // Se for LID, tentar obter o JID real
+                if (sub.includes('@lid')) {
+                  const [waResult] = await nazu.onWhatsApp(cleanSub);
+                  if (waResult && waResult.jid) {
+                    subNum = waResult.jid.replace(/@s\.whatsapp\.net/g, '');
+                  }
+                }
+              } catch (e) {}
+              
               subdonosText += `
-│    • wa.me/${subNum}`;
-            });
+│    • wa.me/${subNum}${subName}`;
+            }
           }
           
           const TextinDonoInfo = `╭━━━⊱ 🌌 *DONO DO BOT* 🌌 ⊱━━━╮
