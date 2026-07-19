@@ -17923,7 +17923,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
         }
         break;
       case 'addsubdono':
-        if (!canUseOwnerCmd(command)) return reply("🚫 Você não tem permissão para usar este comando!");
+        if (!isOwner) return reply("🚫 Apenas o Dono pode adicionar subdonos!");
         // Permissão estendida para subdonos
         // if (isSubOwner && !isOwner) return reply("🚫 Subdonos não podem adicionar outros subdonos!");
         try {
@@ -17997,7 +17997,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
       case 'remsubdono':
       case 'rmsubdono':
       case 'delsubdono':
-        if (!canUseOwnerCmd(command)) return reply("🚫 Você não tem permissão para usar este comando!");
+        if (!isOwner) return reply("🚫 Apenas o Dono pode remover subdonos!");
         // Permissão estendida para subdonos
         // if (isSubOwner && !isOwner) return reply("🚫 Subdonos não podem remover outros subdonos!");
         try {
