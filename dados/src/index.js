@@ -39951,7 +39951,7 @@ ${groupData.rules.length}. ${q}`);
         }
         break;
 
-      case 'revokesubcmd':
+      case 'delsubcmd':
         try {
           if (!isOwner) return reply("Apenas o dono do bot pode gerenciar permissões de subdono.");
           if (!q) return reply(`📝 *Uso:* ${prefix}revokesubcmd <comando> @usuário`);
