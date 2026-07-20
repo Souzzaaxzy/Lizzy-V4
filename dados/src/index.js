@@ -18271,61 +18271,76 @@ case 'addaluguel':
       case 'addblackglobal':
         try {
           if (!isOwner) return reply("Apenas o dono pode adicionar usuários à blacklist global.");
-          if (!menc_os2 && !q) return reply(`Marque o usuário ou forneça o número (ex: ${groupPrefix}addblackglobal @usuario motivo).`);
+          if (!menc_os2 && !q) return reply(`Marque o(s) usuário(s) ou forneça o número (ex: ${groupPrefix}addblackglobal @usuario @usuario2 motivo).`);
           const reason = q ? (q.includes('@') || !menc_os2) ? (args.length > 1 ? args.slice(1).join(' ') : 'Não especificado') : q.trim() : 'Não especificado';
-          let targetUser = menc_os2 || (q.split(' ')[0].includes('@') ? q.split(' ')[0] : (isValidJid(q.split(' ')[0]) || isValidLid(q.split(' ')[0])) ? q.split(' ')[0] : null);
-          // Se informou apenas número, tenta obter LID via onWhatsApp/cache
-          if (!targetUser && q) {
-            const cleanNumber = q.split(' ')[0].replace(/\D/g, '');
-            if (cleanNumber.length >= 10) {
-              const candidateJid = buildUserId(cleanNumber, config);
-              // Se estamos em grupo, tentar buscar participando via metadata
-              if (isGroup && groupMetadata?.participants) {
-                const participant = groupMetadata.participants.find(p => p.id === candidateJid || p.lid === candidateJid || (p.lid && p.lid.includes(cleanNumber)));
-                if (participant && participant.lid) {
-                  targetUser = participant.lid;
-                }
-              }
-              if (!targetUser) {
-                // Tenta usar cache/onWhatsApp, mas permite JID como fallback
-                try {
-                  const lid = await getLidFromJidCached(nazu, candidateJid);
-                  if (lid && lid.includes('@lid')) {
-                    targetUser = lid;
-                  } else {
-                    targetUser = candidateJid;
+          
+          // Coleta todos os usuários mencionados
+          let targetUsers = [];
+          if (menc_os2) {
+            targetUsers = Array.isArray(menc_os2) ? menc_os2 : [menc_os2];
+          }
+          
+          // Se informou número(s) no texto
+          if (q) {
+            const parts = q.split(' ').filter(p => !p.startsWith('@') && p.trim());
+            for (const part of parts) {
+              const cleanNumber = part.replace(/\D/g, '');
+              if (cleanNumber.length >= 10) {
+                const candidateJid = buildUserId(cleanNumber, config);
+                if (isGroup && groupMetadata?.participants) {
+                  const participant = groupMetadata.participants.find(p => 
+                    p.id === candidateJid || p.lid === candidateJid || (p.lid && p.lid.includes(cleanNumber))
+                  );
+                  if (participant?.lid) targetUsers.push(participant.lid);
+                  else if (participant?.id) targetUsers.push(participant.id);
+                } else {
+                  try {
+                    const lid = await getLidFromJidCached(nazu, candidateJid);
+                    targetUsers.push(lid && lid.includes('@lid') ? lid : candidateJid);
+                  } catch (err) {
+                    targetUsers.push(candidateJid);
                   }
-                } catch (err) {
-                  console.log('Erro ao obter LID via onWhatsApp:', err?.message || err);
-                  targetUser = candidateJid;
                 }
               }
-            } else {
-              return reply('❌ Número inválido! Use um número completo (ex: 5511999998888)');
             }
           }
-          // Adiciona à blacklist global
-          const result = await addGlobalBlacklist(targetUser, reason, pushname, nazu);
-          await reply(result.message, {
-            mentions: [targetUser]
-          });
-          // Se está em grupo, bane o usuário imediatamente
-          if (isGroup && targetUser && result.success) {
-            try {
-              // Tenta obter o JID completo para banir
-              let banId = targetUser;
+          
+          if (targetUsers.length === 0) return reply(`Marque o(s) usuário(s) ou forneça o número (ex: ${groupPrefix}addblackglobal @usuario).`);
+          
+          // Adiciona todos à blacklist global
+          const results = [];
+          for (const targetUser of targetUsers) {
+            const result = await addGlobalBlacklist(targetUser, reason, pushname, nazu);
+            results.push({ user: targetUser, ...result });
+          }
+          
+          const added = results.filter(r => r.success);
+          const already = results.filter(r => !r.success);
+          
+          let msg = '';
+          if (added.length > 0) msg += `✅ *${added.length} adicionado(s) à blacklist global*\n`;
+          if (already.length > 0) msg += `⚠️ *${already.length} já estava(m) na blacklist*\n`;
+          if (reason !== 'Não especificado') msg += `\n📝 Motivo: ${reason}`;
+          await reply(msg);
+          
+          // Se está em grupo, bane os usuários adicionados
+          if (isGroup && added.length > 0) {
+            const idsToBan = [];
+            for (const r of added) {
+              let banId = r.user;
               if (groupMetadata?.participants) {
                 const participant = groupMetadata.participants.find(p => 
-                  idsMatch(p.id, targetUser) || idsMatch(p.lid, targetUser)
+                  idsMatch(p.id, r.user) || idsMatch(p.lid, r.user)
                 );
                 if (participant?.id) banId = participant.id;
               }
-              await nazu.groupParticipantsUpdate(from, [banId], 'remove');
-              await reply(`🚫 @${getUserName(targetUser)} foi removido do grupo.`, {
-                mentions: [banId]
-              });
+              idsToBan.push(banId);
+            }
+            try {
+              await nazu.groupParticipantsUpdate(from, idsToBan, 'remove');
+              await reply(`🚫 ${added.length} usuário(s) removido(s) do grupo.`);
             } catch (banErr) {
-              console.error('Erro ao banir usuário:', banErr.message);
+              console.error('Erro ao banir usuários:', banErr.message);
             }
           }
         } catch (e) {
@@ -18336,39 +18351,55 @@ case 'addaluguel':
       case 'rmblackglobal':
         try {
           if (!isOwner) return reply("Apenas o dono pode remover usuários da blacklist global.");
-          if (!menc_os2 && !q) return reply(`Marque o usuário ou forneça o número (ex: ${groupPrefix}remblackglobal @usuario).`);
-          let targetUser = menc_os2 || (q.split(' ')[0].includes('@') ? q.split(' ')[0] : (isValidJid(q.split(' ')[0]) || isValidLid(q.split(' ')[0])) ? q.split(' ')[0] : null);
-          if (!targetUser && q) {
-            const cleanNumber = q.split(' ')[0].replace(/\D/g, '');
-            if (cleanNumber.length >= 10) {
-              const candidateJid = buildUserId(cleanNumber, config);
-              if (isGroup && groupMetadata?.participants) {
-                const participant = groupMetadata.participants.find(p => p.id === candidateJid || p.lid === candidateJid || (p.lid && p.lid.includes(cleanNumber)));
-                if (participant && participant.lid) {
-                  targetUser = participant.lid;
-                }
-              }
-              if (!targetUser) {
-                try {
-                  const lid = await getLidFromJidCached(nazu, candidateJid);
-                  if (lid && lid.includes('@lid')) {
-                    targetUser = lid;
-                  } else {
-                    targetUser = candidateJid;
+          if (!menc_os2 && !q) return reply(`Marque o(s) usuário(s) ou forneça o número (ex: ${groupPrefix}remblackglobal @usuario @usuario2).`);
+          
+          // Coleta todos os usuários mencionados
+          let targetUsers = [];
+          if (menc_os2) {
+            targetUsers = Array.isArray(menc_os2) ? menc_os2 : [menc_os2];
+          }
+          
+          // Se informou número(s) no texto
+          if (q) {
+            const parts = q.split(' ').filter(p => !p.startsWith('@') && p.trim());
+            for (const part of parts) {
+              const cleanNumber = part.replace(/\D/g, '');
+              if (cleanNumber.length >= 10) {
+                const candidateJid = buildUserId(cleanNumber, config);
+                if (isGroup && groupMetadata?.participants) {
+                  const participant = groupMetadata.participants.find(p => 
+                    p.id === candidateJid || p.lid === candidateJid || (p.lid && p.lid.includes(cleanNumber))
+                  );
+                  if (participant?.lid) targetUsers.push(participant.lid);
+                  else if (participant?.id) targetUsers.push(participant.id);
+                } else {
+                  try {
+                    const lid = await getLidFromJidCached(nazu, candidateJid);
+                    targetUsers.push(lid && lid.includes('@lid') ? lid : candidateJid);
+                  } catch (err) {
+                    targetUsers.push(candidateJid);
                   }
-                } catch (err) {
-                  console.log('Erro ao obter LID via onWhatsApp:', err?.message || err);
-                  targetUser = candidateJid;
                 }
               }
-            } else {
-              return reply('❌ Número inválido! Use um número completo (ex: 5511999998888)');
             }
           }
-          const result = await removeGlobalBlacklist(targetUser, nazu);
-          await reply(result.message, {
-            mentions: [targetUser]
-          });
+          
+          if (targetUsers.length === 0) return reply(`Marque o(s) usuário(s) ou forneça o número (ex: ${groupPrefix}remblackglobal @usuario).`);
+          
+          // Remove todos da blacklist global
+          const results = [];
+          for (const targetUser of targetUsers) {
+            const result = await removeGlobalBlacklist(targetUser, nazu);
+            results.push({ user: targetUser, ...result });
+          }
+          
+          const removed = results.filter(r => r.success);
+          const notFound = results.filter(r => !r.success);
+          
+          let msg = '';
+          if (removed.length > 0) msg += `👋 *${removed.length} removido(s) da blacklist global*\n`;
+          if (notFound.length > 0) msg += `⚠️ *${notFound.length} não estava(m) na blacklist*\n`;
+          await reply(msg);
         } catch (e) {
           console.error('Erro no comando remblackglobal:', e);
           await reply("Ocorreu um erro ao remover da blacklist global 💔");
@@ -30932,62 +30963,84 @@ case 'set-bannerbv':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
           if (!isGroupAdmin) return reply("Você precisa ser administrador 💔");
-          let targetUser = menc_os2 || null;
-          if (!targetUser && q && q.trim()) {
-            const firstArg = q.trim().split(/\s+/)[0];
-            if ((isValidJid(firstArg) || isValidLid(firstArg)) && firstArg.includes('@')) {
-              targetUser = firstArg;
-            } else {
-              const cleanNumber = firstArg.replace(/\D/g, '');
+          
+          // Coleta todos os usuários mencionados
+          let targetUsers = [];
+          if (menc_os2) {
+            targetUsers = Array.isArray(menc_os2) ? menc_os2 : [menc_os2];
+          }
+          
+          // Se informou número(s) no texto
+          if (q) {
+            const parts = q.split(' ').filter(p => !p.startsWith('@') && p.trim());
+            for (const part of parts) {
+              const cleanNumber = part.replace(/\D/g, '');
               if (cleanNumber.length >= 10) {
                 const candidateJid = buildUserId(cleanNumber, config);
                 if (groupMetadata?.participants) {
-                  const participant = groupMetadata.participants.find(p => p.id === candidateJid || p.lid === candidateJid || (p.lid && p.lid.includes(cleanNumber)));
-                  if (participant?.lid) targetUser = participant.lid;
-                  else if (participant?.id) targetUser = participant.id;
-                }
-                if (!targetUser) {
+                  const participant = groupMetadata.participants.find(p => 
+                    p.id === candidateJid || p.lid === candidateJid || (p.lid && p.lid.includes(cleanNumber))
+                  );
+                  if (participant?.lid) targetUsers.push(participant.lid);
+                  else if (participant?.id) targetUsers.push(participant.id);
+                } else {
                   try {
                     const lid = await getLidFromJidCached(nazu, candidateJid);
-                    targetUser = lid && lid.includes('@lid') ? lid : candidateJid;
+                    targetUsers.push(lid && lid.includes('@lid') ? lid : candidateJid);
                   } catch (err) {
-                    targetUser = candidateJid;
+                    targetUsers.push(candidateJid);
                   }
                 }
               }
             }
           }
-          if (!targetUser) return reply(`Marque o usuário ou forneça o número (ex: ${groupPrefix}addblacklist 5511999998888 motivo).`);
+          
+          if (targetUsers.length === 0) return reply(`Marque o(s) usuário(s) (ex: ${groupPrefix}addblacklist @usuario @usuario2).`);
+          
           const reason = q ? (q.includes('@') || !menc_os2) ? (args.length > 1 ? args.slice(1).join(' ') : 'Motivo não informado') : q.trim() : 'Motivo não informado';
           const groupFilePath = buildGroupFilePath(from);
-          let groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : {
-            blacklist: {}
-          };
+          let groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : { blacklist: {} };
           groupData.blacklist = groupData.blacklist || {};
-          if (groupData.blacklist[targetUser]) return reply("❌ Este usuário já está na blacklist.");
-          groupData.blacklist[targetUser] = {
-            reason,
-            timestamp: Date.now()
-          };
-          fs.writeFileSync(groupFilePath, JSON.stringify(groupData, null, 2));
-          reply(`✅ @${getUserName(targetUser)} foi adicionado à blacklist.\nMotivo: ${reason}`, {
-            mentions: [targetUser]
-          });
-          // Bane o usuário imediatamente do grupo
-          try {
-            let banId = targetUser;
-            if (groupMetadata?.participants) {
-              const participant = groupMetadata.participants.find(p => 
-                idsMatch(p.id, targetUser) || idsMatch(p.lid, targetUser)
-              );
-              if (participant?.id) banId = participant.id;
+          
+          const added = [];
+          const already = [];
+          
+          for (const targetUser of targetUsers) {
+            if (groupData.blacklist[targetUser]) {
+              already.push(targetUser);
+            } else {
+              groupData.blacklist[targetUser] = { reason, timestamp: Date.now() };
+              added.push(targetUser);
             }
-            await nazu.groupParticipantsUpdate(from, [banId], 'remove');
-            await reply(`🚫 @${getUserName(targetUser)} foi removido do grupo.`, {
-              mentions: [banId]
-            });
-          } catch (banErr) {
-            console.error('Erro ao banir usuário:', banErr.message);
+          }
+          
+          fs.writeFileSync(groupFilePath, JSON.stringify(groupData, null, 2));
+          
+          let msg = '';
+          if (added.length > 0) msg += `✅ *${added.length} adicionado(s) à blacklist*\n`;
+          if (already.length > 0) msg += `⚠️ *${already.length} já estava(m) na blacklist*\n`;
+          if (reason !== 'Motivo não informado') msg += `\n📝 Motivo: ${reason}`;
+          await reply(msg);
+          
+          // Bane os usuários adicionados
+          if (added.length > 0) {
+            const idsToBan = [];
+            for (const user of added) {
+              let banId = user;
+              if (groupMetadata?.participants) {
+                const participant = groupMetadata.participants.find(p => 
+                  idsMatch(p.id, user) || idsMatch(p.lid, user)
+                );
+                if (participant?.id) banId = participant.id;
+              }
+              idsToBan.push(banId);
+            }
+            try {
+              await nazu.groupParticipantsUpdate(from, idsToBan, 'remove');
+              await reply(`🚫 ${added.length} usuário(s) removido(s) do grupo.`);
+            } catch (banErr) {
+              console.error('Erro ao banir usuários:', banErr.message);
+            }
           }
         } catch (e) {
           console.error(e);
@@ -30999,43 +31052,62 @@ case 'set-bannerbv':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
           if (!isGroupAdmin) return reply("Você precisa ser administrador 💔");
-          let targetUser = menc_os2 || null;
-          if (!targetUser && q && q.trim()) {
-            const firstArg = q.trim().split(/\s+/)[0];
-            if ((isValidJid(firstArg) || isValidLid(firstArg)) && firstArg.includes('@')) {
-              targetUser = firstArg;
-            } else {
-              const cleanNumber = firstArg.replace(/\D/g, '');
+          
+          // Coleta todos os usuários mencionados
+          let targetUsers = [];
+          if (menc_os2) {
+            targetUsers = Array.isArray(menc_os2) ? menc_os2 : [menc_os2];
+          }
+          
+          // Se informou número(s) no texto
+          if (q) {
+            const parts = q.split(' ').filter(p => !p.startsWith('@') && p.trim());
+            for (const part of parts) {
+              const cleanNumber = part.replace(/\D/g, '');
               if (cleanNumber.length >= 10) {
                 const candidateJid = buildUserId(cleanNumber, config);
                 if (groupMetadata?.participants) {
-                  const participant = groupMetadata.participants.find(p => p.id === candidateJid || p.lid === candidateJid || (p.lid && p.lid.includes(cleanNumber)));
-                  if (participant?.lid) targetUser = participant.lid;
-                  else if (participant?.id) targetUser = participant.id;
-                }
-                if (!targetUser) {
+                  const participant = groupMetadata.participants.find(p => 
+                    p.id === candidateJid || p.lid === candidateJid || (p.lid && p.lid.includes(cleanNumber))
+                  );
+                  if (participant?.lid) targetUsers.push(participant.lid);
+                  else if (participant?.id) targetUsers.push(participant.id);
+                } else {
                   try {
                     const lid = await getLidFromJidCached(nazu, candidateJid);
-                    targetUser = lid && lid.includes('@lid') ? lid : candidateJid;
+                    targetUsers.push(lid && lid.includes('@lid') ? lid : candidateJid);
                   } catch (err) {
-                    targetUser = candidateJid;
+                    targetUsers.push(candidateJid);
                   }
                 }
               }
             }
           }
-          if (!targetUser) return reply(`Marque o usuário ou forneça o número (ex: ${groupPrefix}delblacklist 5511999998888).`);
+          
+          if (targetUsers.length === 0) return reply(`Marque o(s) usuário(s) (ex: ${groupPrefix}delblacklist @usuario @usuario2).`);
+          
           const groupFilePath = buildGroupFilePath(from);
-          let groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : {
-            blacklist: {}
-          };
+          let groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : { blacklist: {} };
           groupData.blacklist = groupData.blacklist || {};
-          if (!groupData.blacklist[targetUser]) return reply("❌ Este usuário não está na blacklist.");
-          delete groupData.blacklist[targetUser];
+          
+          const removed = [];
+          const notFound = [];
+          
+          for (const targetUser of targetUsers) {
+            if (groupData.blacklist[targetUser]) {
+              delete groupData.blacklist[targetUser];
+              removed.push(targetUser);
+            } else {
+              notFound.push(targetUser);
+            }
+          }
+          
           fs.writeFileSync(groupFilePath, JSON.stringify(groupData, null, 2));
-          reply(`✅ @${getUserName(targetUser)} foi removido da blacklist.`, {
-            mentions: [targetUser]
-          });
+          
+          let msg = '';
+          if (removed.length > 0) msg += `👋 *${removed.length} removido(s) da blacklist*\n`;
+          if (notFound.length > 0) msg += `⚠️ *${notFound.length} não estava(m) na blacklist*\n`;
+          await reply(msg);
         } catch (e) {
           console.error(e);
           reply("Ocorreu um erro 💔");
