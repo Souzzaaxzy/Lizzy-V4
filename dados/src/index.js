@@ -18724,6 +18724,28 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
         }
         break;
 
+      case 'jidcanal':
+        if (!isOwner) return reply('Só o dono pode usar esse comando.');
+        if (!q) return reply('Envie o link do canal.');
+
+        const invite = q.split('/').pop().trim();
+
+        try {
+            const data = await nazu.newsletterMetadata('invite', invite);
+
+            let txt = `📢 *${data.name}*
+
+`;
+            txt += `🆔 JID:
+${data.id}`;
+
+            reply(txt);
+        } catch (e) {
+            console.log(e);
+            reply('Não consegui obter o JID desse canal.');
+        }
+        break;
+
       case 'reiniciar':
       case 'restart':
       case 'reboot':
