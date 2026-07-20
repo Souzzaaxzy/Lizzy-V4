@@ -18285,34 +18285,22 @@ case 'addaluguel':
           
           // Procura números no texto (separados por |)
           if (q) {
-            const parts = q.split(/[|\s]+/);
+            // Primeiro tenta separar por |
+            let parts = q.includes('|') ? q.split('|') : [q];
             const potentialReasonParts = [];
             
             for (const part of parts) {
-              const cleanNumber = part.replace(/\D/g, '');
+              const cleanNumber = part.trim().replace(/\D/g, '');
               // Se tem 8+ dígitos, é número
               if (cleanNumber.length >= 8) {
-                const candidateJid = buildUserId(cleanNumber, config);
-                if (isGroup && groupMetadata?.participants) {
-                  const participant = groupMetadata.participants.find(p => 
-                    p.id === candidateJid || p.lid === candidateJid || (p.lid && p.lid.includes(cleanNumber))
-                  );
-                  if (participant?.lid) targetUsers.push(participant.lid);
-                  else if (participant?.id) targetUsers.push(participant.id);
-                } else {
-                  try {
-                    const lid = await getLidFromJidCached(nazu, candidateJid);
-                    targetUsers.push(lid && lid.includes('@lid') ? lid : candidateJid);
-                  } catch (err) {
-                    targetUsers.push(candidateJid);
-                  }
-                }
+                const candidateJid = cleanNumber + '@s.whatsapp.net';
+                targetUsers.push(candidateJid);
               } else if (part.trim()) {
-                potentialReasonParts.push(part);
+                potentialReasonParts.push(part.trim());
               }
             }
             
-            // O que sobrar são motivos (se houver mais de um argumento)
+            // O que sobrar são motivos
             if (potentialReasonParts.length > 0) {
               reason = potentialReasonParts.join(' ');
               reasonSet = true;
@@ -18375,26 +18363,15 @@ case 'addaluguel':
           
           // Procura números no texto (separados por |)
           if (q) {
-            const parts = q.split(/[|\s]+/);
+            // Primeiro tenta separar por |
+            let parts = q.includes('|') ? q.split('|') : [q];
+            
             for (const part of parts) {
-              const cleanNumber = part.replace(/\D/g, '');
-              // Aceita números com 8+ dígitos (com ou sem código do país)
+              const cleanNumber = part.trim().replace(/\D/g, '');
+              // Aceita números com 8+ dígitos
               if (cleanNumber.length >= 8) {
-                const candidateJid = buildUserId(cleanNumber, config);
-                if (isGroup && groupMetadata?.participants) {
-                  const participant = groupMetadata.participants.find(p => 
-                    p.id === candidateJid || p.lid === candidateJid || (p.lid && p.lid.includes(cleanNumber))
-                  );
-                  if (participant?.lid) targetUsers.push(participant.lid);
-                  else if (participant?.id) targetUsers.push(participant.id);
-                } else {
-                  try {
-                    const lid = await getLidFromJidCached(nazu, candidateJid);
-                    targetUsers.push(lid && lid.includes('@lid') ? lid : candidateJid);
-                  } catch (err) {
-                    targetUsers.push(candidateJid);
-                  }
-                }
+                const candidateJid = cleanNumber + '@s.whatsapp.net';
+                targetUsers.push(candidateJid);
               }
             }
           }
