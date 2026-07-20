@@ -121,8 +121,6 @@ export default async function menugames(prefix, botName = "MeuBot", userName = "
 ╰━━━━━━━━━━━━━━━━━━━━━━━━━━⬣
 
 ╭─────────────────╮
-│ 📢 Canal Oficial da Lizzy
-│ https://whatsapp.com/channel/0029Vb8VWbG3WHTWX9ZPnj0Y
 ╰─────────────────╯
 `;
 }

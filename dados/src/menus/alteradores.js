@@ -102,8 +102,6 @@ ${middleBorder} ${menuItemIcon}${prefix}lowpass
 ${bottomBorder}
 
 ╭─────────────────╮
-│ 📢 Canal Oficial da Lizzy
-│ https://whatsapp.com/channel/0029Vb8VWbG3WHTWX9ZPnj0Y
 ╰─────────────────╯
 `;
 }

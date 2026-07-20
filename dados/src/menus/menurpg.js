@@ -241,7 +241,5 @@ export default async function menuRpg(prefix, botName = "MeuBot", userName = "Us
 ╰──────────────`;
 
 ╭─────────────────╮
-│ 📢 Canal Oficial da Lizzy
-│ https://whatsapp.com/channel/0029Vb8VWbG3WHTWX9ZPnj0Y
 ╰─────────────────╯`;
 }

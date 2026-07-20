@@ -43,8 +43,6 @@ export default async function menuIa(prefix, botName = "MeuBot", userName = "Usu
 ╰──────────────
 
 ╭─────────────────╮
-│ 📢 Canal Oficial da Lizzy
-│ https://whatsapp.com/channel/0029Vb8VWbG3WHTWX9ZPnj0Y
 ╰─────────────────╯
 `;
 }

@@ -3799,7 +3799,8 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
             isForwarded: true,
             externalAdReply: {
               showAdAttribution: true
-            }
+            },
+            ...gerarContextNewsletter()
           };
         }
         if (!noQuote) {
@@ -7400,7 +7401,8 @@ switch (command) {
             gifPlayback: true,
             mimetype: 'video/mp4'
           }, {
-            quoted: info
+            quoted: info,
+            contextInfo: { ...gerarContextNewsletter() }
           });
         } catch (error) {
           console.error('Erro ao enviar menufut:', error);
@@ -23114,13 +23116,14 @@ break;
                 // Depois envia o menu
                 if (mediaBuffer) {
                   await nazu.sendMessage(from, {
-                    [useVideo ? 'video' : 'image']: mediaBuffer,
-                    caption: lerMaisPrefix + menuText,
-                    gifPlayback: useVideo,
-                    mimetype: useVideo ? 'video/mp4' : 'image/jpeg'
-                  }, {
-                    quoted: info
-                  });
+                [useVideo ? 'video' : 'image']: mediaBuffer,
+                caption: lerMaisPrefix + menuText,
+                gifPlayback: useVideo,
+                mimetype: useVideo ? 'video/mp4' : 'image/jpeg'
+              }, {
+                quoted: info,
+                contextInfo: { ...gerarContextNewsletter() }
+              });
                 } else {
                   await reply(lerMaisPrefix + menuText);
                 }
@@ -23129,13 +23132,14 @@ break;
               // Se não tem áudio válido, envia só o menu
               if (mediaBuffer) {
                 await nazu.sendMessage(from, {
-                  [useVideo ? 'video' : 'image']: mediaBuffer,
-                  caption: lerMaisPrefix + menuText,
-                  gifPlayback: useVideo,
-                  mimetype: useVideo ? 'video/mp4' : 'image/jpeg'
-                }, {
-                  quoted: info
-                });
+                [useVideo ? 'video' : 'image']: mediaBuffer,
+                caption: lerMaisPrefix + menuText,
+                gifPlayback: useVideo,
+                mimetype: useVideo ? 'video/mp4' : 'image/jpeg'
+              }, {
+                quoted: info,
+                contextInfo: { ...gerarContextNewsletter() }
+              });
               } else {
                 await reply(lerMaisPrefix + menuText);
               }
@@ -23149,7 +23153,8 @@ break;
                 gifPlayback: useVideo,
                 mimetype: useVideo ? 'video/mp4' : 'image/jpeg'
               }, {
-                quoted: info
+                quoted: info,
+                contextInfo: { ...gerarContextNewsletter() }
               });
             } else {
               await reply(lerMaisPrefix + menuText);
@@ -24205,7 +24210,8 @@ Precisa de ajuda? Entre em contato:
               caption: lerMaisPrefix + menuText,
               gifPlayback: isGif
             }, {
-              quoted: info
+              quoted: info,
+              contextInfo: { ...gerarContextNewsletter() }
             });
           } else {
             await reply(lerMaisPrefix + menuText);
@@ -30184,7 +30190,8 @@ ${groupPrefix}togglecmdvip premium_ia off`);
             gifPlayback: useVideo,
             mimetype: useVideo ? 'video/mp4' : 'image/jpeg'
           }, {
-            quoted: info
+            quoted: info,
+            contextInfo: { ...gerarContextNewsletter() }
           });
         } catch (e) {
           console.error(e);
