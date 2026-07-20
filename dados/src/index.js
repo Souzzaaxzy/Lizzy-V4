@@ -6698,7 +6698,22 @@ if (isCmd && command && !isOwner) {
       }
     }
 
-    switch (command) {
+    // ======================================================
+// Função para adicionar contexto de Newsletter nas mensagens
+function gerarContextNewsletter() {
+    if ("120363410980452460@newsletter" === "0@newsletter") {
+        return {};
+    }
+    return {
+        forwardedNewsletterMessageInfo: {
+            newsletterJid: "120363410980452460@newsletter",
+            newsletterName: "Lizzy"
+        }
+    };
+}
+// ======================================================
+
+switch (command) {
 
       // ═══════════════════════════════════════════════════════════════
       // 💌 SISTEMA DE CONFISSÕES
@@ -32541,50 +32556,23 @@ break;
             groupPic = await nazu.profilePictureUrl(from, 'image');
           } catch (e) {}
           
-          // Enviar mensagem com botao Ver Canal
-          const linkMsg = await generateWAMessageFromContent(from, {
-            viewOnceMessage: {
-              message: {
-                messageContextInfo: {
-                  deviceListMetadata: {},
-                  deviceListMetadataVersion: 2
-                },
-                interactiveMessage: {
-                  header: {
-                    title: "📬 Link do Grupo",
-                    hasMediaAttachment: false
-                  },
-                  body: {
-                    text: "👉 Toque para entrar no grupo\n\n" + groupLink
-                  },
-                  footer: {
-                    text: "Abyss Bot"
-                  },
-                  contextInfo: {
-                    forwardedNewsletterMessageInfo: {
-                      newsletterJid: "120363410980452460@newsletter",
-                      newsletterName: "Lizzy"
-                    }
-                  },
-                  headerType: 1,
-                  nativeFlowMessage: {
-                    buttons: [
-                      {
-                        name: "cta_url",
-                        buttonParamsJson: JSON.stringify({
-                          display_text: "📢 Ver Canal",
-                          url: "https://whatsapp.com/channel/0029Vb8VWbG3WHTWX9ZPnj0Y",
-                          merchant_url: "https://whatsapp.com/channel/0029Vb8VWbG3WHTWX9ZPnj0Y"
-                        })
-                      }
-                    ]
-                  }
-                }
+          await nazu.sendMessage(from, {
+            text: groupLink,
+            contextInfo: {
+              externalAdReply: {
+                title: "📬 Link do Grupo",
+                body: "👉 Toque para entrar no grupo",
+                thumbnailUrl: groupPic,
+                sourceUrl: groupLink,
+                mediaType: 1,
+                renderLargerThumbnail: false,
+              },
+              forwardedNewsletterMessageInfo: {
+                newsletterJid: "120363410980452460@newsletter",
+                newsletterName: "Lizzy",
               }
             }
-          }, {});
-          
-          await nazu.relayMessage(from, linkMsg.message, { messageId: linkMsg.key.id });
+          });
         } catch (e) {
           console.error(e);
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
