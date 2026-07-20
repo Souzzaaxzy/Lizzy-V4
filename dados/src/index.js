@@ -18290,8 +18290,8 @@ case 'addaluguel':
             
             for (const part of parts) {
               const cleanNumber = part.replace(/\D/g, '');
-              // Se tem 10+ dígitos, é número
-              if (cleanNumber.length >= 10) {
+              // Se tem 8+ dígitos, é número
+              if (cleanNumber.length >= 8) {
                 const candidateJid = buildUserId(cleanNumber, config);
                 if (isGroup && groupMetadata?.participants) {
                   const participant = groupMetadata.participants.find(p => 
@@ -18378,8 +18378,8 @@ case 'addaluguel':
             const parts = q.split(/[|\s]+/);
             for (const part of parts) {
               const cleanNumber = part.replace(/\D/g, '');
-              // Aceita números com 10+ dígitos (com ou sem código do país)
-              if (cleanNumber.length >= 10) {
+              // Aceita números com 8+ dígitos (com ou sem código do país)
+              if (cleanNumber.length >= 8) {
                 const candidateJid = buildUserId(cleanNumber, config);
                 if (isGroup && groupMetadata?.participants) {
                   const participant = groupMetadata.participants.find(p => 
