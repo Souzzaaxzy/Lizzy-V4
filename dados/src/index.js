@@ -151,13 +151,29 @@ function hasAntiRouboLock(groupId) {
 function checkGlobalBlacklist(userId) {
   try {
     const globalBlacklist = loadGlobalBlacklist();
-    if (!globalBlacklist || !globalBlacklist.users) return null;
+    console.log(`\x1b[35m[BLACKLIST DEBUG]\x1b[0m checkGlobalBlacklist - userId: ${userId}`);
+    console.log(`\x1b[35m[BLACKLIST DEBUG]\x1b[0m checkGlobalBlacklist - globalBlacklist: ${JSON.stringify(globalBlacklist)}`);
+    
+    if (!globalBlacklist || !globalBlacklist.users) {
+      console.log(`\x1b[35m[BLACKLIST DEBUG]\x1b[0m checkGlobalBlacklist - blacklist vazia ou inválida`);
+      return null;
+    }
+    
+    const blacklistKeys = Object.keys(globalBlacklist.users);
+    console.log(`\x1b[35m[BLACKLIST DEBUG]\x1b[0m checkGlobalBlacklist - chaves na blacklist: ${JSON.stringify(blacklistKeys)}`);
     
     // Verifica correspondência por chave exata ou por idsMatch
-    const foundKey = Object.keys(globalBlacklist.users).find(k => idsMatch(k, userId));
+    const foundKey = blacklistKeys.find(k => {
+      const match = idsMatch(k, userId);
+      console.log(`\x1b[35m[BLACKLIST DEBUG]\x1b[0m idsMatch('${k}', '${userId}'): ${match}`);
+      return match;
+    });
+    
     if (foundKey) {
+      console.log(`\x1b[35m[BLACKLIST DEBUG]\x1b[0m checkGlobalBlacklist - ENCONTRADO! Chave: ${foundKey}`);
       return globalBlacklist.users[foundKey];
     }
+    console.log(`\x1b[35m[BLACKLIST DEBUG]\x1b[0m checkGlobalBlacklist - NÃO encontrado`);
     return null;
   } catch (e) {
     console.error('[BLACKLIST] Erro ao verificar blacklist global:', e.message);
@@ -317,11 +333,14 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
             
             // Normaliza IDs dos participantes
             const participantIds = participants.map(p => normalizeParticipantId(p));
+            console.log(`\x1b[33m[BLACKLIST DEBUG]\x1b[0m Participantes que entraram: ${JSON.stringify(participantIds)}`);
             
             // Verifica cada participante contra blacklists
             const usersToBan = [];
             for (const participantId of participantIds) {
+                console.log(`\x1b[33m[BLACKLIST DEBUG]\x1b[0m Verificando usuário: ${participantId}`);
                 const banInfo = shouldBanForBlacklist(participantId, id);
+                console.log(`\x1b[33m[BLACKLIST DEBUG]\x1b[0m Resultado da verificação: ${JSON.stringify(banInfo)}`);
                 if (banInfo) {
                     usersToBan.push({
                         id: participantId,
@@ -329,6 +348,8 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
                     });
                 }
             }
+            
+            console.log(`\x1b[33m[BLACKLIST DEBUG]\x1b[0m Total de usuários para banir: ${usersToBan.length}`);
             
             // Banir usuários encontrados na blacklist
             if (usersToBan.length > 0) {
@@ -339,6 +360,7 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
                 
                 try {
                     // Executa o banimento
+                    console.log(`\x1b[33m[BLACKLIST DEBUG]\x1b[0m Chamando groupParticipantsUpdate com IDs: ${JSON.stringify(idsToBan)}`);
                     await nazu.groupParticipantsUpdate(id, idsToBan, 'remove');
                     console.log(`\x1b[32m[BLACKLIST]\x1b[0m Usuários banidos automaticamente por blacklist`);
                     
