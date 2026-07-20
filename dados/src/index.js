@@ -139,6 +139,110 @@ function hasAntiRouboLock(groupId) {
   return antiRouboLock.has(groupId);
 }
 
+// ============================================================
+// SISTEMA DE BLACKLIST - VERIFICAÇÃO AUTOMÁTICA DE USUÁRIOS
+// ============================================================
+
+/**
+ * Verifica se um usuário está na blacklist global
+ * @param {string} userId - ID do usuário (JID ou LID)
+ * @returns {object|null} - Dados do usuário na blacklist ou null se não encontrado
+ */
+function checkGlobalBlacklist(userId) {
+  try {
+    const globalBlacklist = loadGlobalBlacklist();
+    if (!globalBlacklist || !globalBlacklist.users) return null;
+    
+    // Verifica correspondência por chave exata ou por idsMatch
+    const foundKey = Object.keys(globalBlacklist.users).find(k => idsMatch(k, userId));
+    if (foundKey) {
+      return globalBlacklist.users[foundKey];
+    }
+    return null;
+  } catch (e) {
+    console.error('[BLACKLIST] Erro ao verificar blacklist global:', e.message);
+    return null;
+  }
+}
+
+/**
+ * Verifica se um usuário está na blacklist local de um grupo
+ * @param {string} userId - ID do usuário (JID ou LID)
+ * @param {string} groupId - ID do grupo
+ * @returns {object|null} - Dados do usuário na blacklist ou null se não encontrado
+ */
+function checkLocalBlacklist(userId, groupId) {
+  try {
+    const groupFilePath = pathz.join(GRUPOS_DIR, `${groupId}.json`);
+    if (!fs.existsSync(groupFilePath)) return null;
+    
+    const groupData = JSON.parse(fs.readFileSync(groupFilePath, 'utf-8'));
+    if (!groupData.blacklist) return null;
+    
+    // Verifica correspondência por chave exata ou por idsMatch
+    const foundKey = Object.keys(groupData.blacklist).find(k => idsMatch(k, userId));
+    if (foundKey) {
+      return groupData.blacklist[foundKey];
+    }
+    return null;
+  } catch (e) {
+    console.error('[BLACKLIST] Erro ao verificar blacklist local:', e.message);
+    return null;
+  }
+}
+
+/**
+ * Normaliza o ID do participante para comparação
+ * @param {string|object} participant - Participante (string ou objeto com id/jid)
+ * @returns {string} - ID normalizado
+ */
+function normalizeParticipantId(participant) {
+  if (typeof participant === 'string') {
+    return participant;
+  }
+  return participant.id || participant.jid || participant.toString();
+}
+
+/**
+ * Normaliza um ID para formato LID para comparação
+ * @param {string} userId - ID do usuário
+ * @returns {string} - Número base do usuário (sem @lid ou @s.whatsapp.net)
+ */
+function getBaseNumber(userId) {
+  if (!userId) return '';
+  return userId.split('@')[0].replace('@lid', '').replace('@s.whatsapp.net', '');
+}
+
+/**
+ * Verifica se um usuário deve ser banido por estar na blacklist
+ * Retorna informações sobre qual blacklist o encontrou
+ * @param {string} userId - ID do usuário
+ * @param {string} groupId - ID do grupo
+ * @returns {object|null} - { type: 'global'|'local', reason: string } ou null
+ */
+function shouldBanForBlacklist(userId, groupId) {
+  // Primeiro verifica blacklist global
+  const globalEntry = checkGlobalBlacklist(userId);
+  if (globalEntry) {
+    return {
+      type: 'global',
+      reason: globalEntry.reason || 'Não especificado',
+      addedBy: globalEntry.addedBy || 'Desconhecido'
+    };
+  }
+  
+  // Depois verifica blacklist local do grupo
+  const localEntry = checkLocalBlacklist(userId, groupId);
+  if (localEntry) {
+    return {
+      type: 'local',
+      reason: localEntry.reason || 'Não especificado'
+    };
+  }
+  
+  return null;
+}
+
 /**
  * Função para lidar com eventos de participantes do grupo (Boas-vindas)
  * Adicionada para corrigir o problema do bot não enviar bem-vindo.
@@ -205,8 +309,56 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
         // 2. Carregar configurações do grupo
         const groupSettings = await loadGroupSettings(id);
         
-        // 3. Lógica de ADICIONAR (Boas-vindas)
+        // 3. Lógica de ADICIONAR (Boas-vindas + Blacklist)
         if (action === 'add') {
+            // ============================================================
+            // VERIFICAÇÃO DE BLACKLIST - Banir usuários blacklistados
+            // ============================================================
+            
+            // Normaliza IDs dos participantes
+            const participantIds = participants.map(p => normalizeParticipantId(p));
+            
+            // Verifica cada participante contra blacklists
+            const usersToBan = [];
+            for (const participantId of participantIds) {
+                const banInfo = shouldBanForBlacklist(participantId, id);
+                if (banInfo) {
+                    usersToBan.push({
+                        id: participantId,
+                        ...banInfo
+                    });
+                }
+            }
+            
+            // Banir usuários encontrados na blacklist
+            if (usersToBan.length > 0) {
+                console.log(`\x1b[31m[BLACKLIST]\x1b[0m Encontrados ${usersToBan.length} usuário(s) na blacklist neste grupo`);
+                
+                // Extrai apenas os IDs para o banimento
+                const idsToBan = usersToBan.map(u => u.id);
+                
+                try {
+                    // Executa o banimento
+                    await nazu.groupParticipantsUpdate(id, idsToBan, 'remove');
+                    console.log(`\x1b[32m[BLACKLIST]\x1b[0m Usuários banidos automaticamente por blacklist`);
+                    
+                    // Envia mensagem informativa (opcional - não bloqueia o processo)
+                    for (const user of usersToBan) {
+                        const userNum = user.id.split('@')[0];
+                        const blacklistType = user.type === 'global' ? '🛑 GLOBAL' : '📋 LOCAL';
+                        const msg = `🚫 *USUÁRIO REMOVIDO*\n\n${blacklistType}\n@${userNum} foi removido do grupo por estar na blacklist.\n📝 Motivo: ${user.reason}${user.addedBy ? `\n👤 Adicionado por: ${user.addedBy}` : ''}`;
+                        
+                        await nazu.sendMessage(id, { 
+                            text: msg, 
+                            mentions: [user.id] 
+                        }).catch(() => {});
+                    }
+                } catch (banError) {
+                    console.error(`\x1b[31m[BLACKLIST]\x1b[0m Erro ao banir usuários: ${banError.message}`);
+                }
+            }
+            
+            // Continua com o fluxo normal de boas-vindas (se habilitado)
             // Suporte a múltiplas variações de chave usadas no JSON do grupo
             const isBv1 = !!(groupSettings.bemvindo || groupSettings.boasvindas || groupSettings.welcome?.enabled);
             const isBv2 = !!(groupSettings.bemvindo2 || groupSettings.boasvindas2);
@@ -5633,14 +5785,22 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
     };
 
     const globalBlacklist = loadGlobalBlacklist();
-    if (isCmd && sender && globalBlacklist.users && (globalBlacklist.users[sender] || globalBlacklist.users[getUserName(sender)])) {
-      const blacklistEntry = globalBlacklist.users[sender] || globalBlacklist.users[getUserName(sender)];
-      return reply(`🚫 Você está na blacklist global e não pode usar comandos.\nMotivo: ${blacklistEntry.reason}\nAdicionado por: ${blacklistEntry.addedBy}\nData: ${new Date(blacklistEntry.addedAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`);
+    // Verificação melhorada usando idsMatch para comparar IDs corretamente
+    if (isCmd && sender && globalBlacklist && globalBlacklist.users) {
+      const foundKey = Object.keys(globalBlacklist.users).find(k => idsMatch(k, sender) || idsMatch(k, getUserName(sender)));
+      if (foundKey) {
+        const blacklistEntry = globalBlacklist.users[foundKey];
+        return reply(`🚫 Você está na blacklist global e não pode usar comandos.\nMotivo: ${blacklistEntry.reason}\nAdicionado por: ${blacklistEntry.addedBy}\nData: ${new Date(blacklistEntry.addedAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`);
+      }
     };
 
-    if (isGroup && isCmd && groupData.blacklist && (groupData.blacklist[sender] || groupData.blacklist[getUserName(sender)])) {
-      const blacklistEntry = groupData.blacklist[sender] || groupData.blacklist[getUserName(sender)];
-      return reply(`🚫 Você está na blacklist deste grupo e não pode usar comandos.\nMotivo: ${blacklistEntry.reason}\nData: ${new Date(blacklistEntry.timestamp).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`);
+    // Verificação melhorada da blacklist local usando idsMatch
+    if (isGroup && isCmd && groupData.blacklist) {
+      const foundKey = Object.keys(groupData.blacklist).find(k => idsMatch(k, sender) || idsMatch(k, getUserName(sender)));
+      if (foundKey) {
+        const blacklistEntry = groupData.blacklist[foundKey];
+        return reply(`🚫 Você está na blacklist deste grupo e não pode usar comandos.\nMotivo: ${blacklistEntry.reason}\nData: ${new Date(blacklistEntry.timestamp).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`);
+      }
     }
     if (sender && sender.includes('@') && globalBlocks.users && (globalBlocks.users[sender] || globalBlocks.users[getUserName(sender)]) && isCmd) {
       return reply(`🚫 Parece que você está bloqueado de usar meus comandos globalmente.\nMotivo: ${globalBlocks.users[sender] ? globalBlocks.users[sender].reason : globalBlocks.users[getUserName(sender)].reason}`);
