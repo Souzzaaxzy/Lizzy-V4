@@ -26910,8 +26910,8 @@ ${groupPrefix}togglecmdvip premium_ia off`);
             return reply(`❌ Responda a uma figurinha animada utilizando:\n${groupPrefix}togif`);
           }
           
-          // Verificar se é sticker animado
-          const isAnimated = quotedSticker.isLottie === true;
+          // Verificar se é sticker animado (isLottie ou duration > 0)
+          const isAnimated = quotedSticker.isLottie === true || (quotedSticker.duration && quotedSticker.duration > 0);
           
           if (!isAnimated) {
             return reply("❌ Essa figurinha não é animada.");
