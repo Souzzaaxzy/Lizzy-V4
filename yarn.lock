@@ -2,6 +2,11 @@
 # yarn lockfile v1
 
 
+"@adiwajshing/keyed-db@^0.2.4":
+  version "0.2.4"
+  resolved "https://registry.npmjs.org/@adiwajshing/keyed-db/-/keyed-db-0.2.4.tgz"
+  integrity sha512-yprSnAtj80/VKuDqRcFFLDYltoNV8tChNwFfIgcf6PGD4sjzWIBgs08pRuTqGH5mk5wgL6PBRSsMCZqtZwzFEw==
+
 "@borewit/text-codec@^0.2.1", "@borewit/text-codec@^0.2.2":
   version "0.2.2"
   resolved "https://registry.npmjs.org/@borewit/text-codec/-/text-codec-0.2.2.tgz"
@@ -57,6 +62,25 @@
   version "9.3.0"
   resolved "https://registry.npmjs.org/@hapi/hoek/-/hoek-9.3.0.tgz"
   integrity sha512-/c6rf4UJlmHlC9b5BaNvzAcFv7HZ2QHaV0D4/HNlBdvFnvQq8RI4kYdhyPCl7Xj+oWvTWQ8ujhqS53LIgAe6KQ==
+
+"@itsliaaa/baileys@^0.3.18-final":
+  version "0.3.18-final"
+  resolved "https://registry.npmjs.org/@itsliaaa/baileys/-/baileys-0.3.18-final.tgz"
+  integrity sha512-2cZpWxOplclFMiNipwk6qIu3ttV7rgsIs+WVhcTxsaTUZDYJyMbAZAR0vBCbhbbIwnYMOTNgf6vRif2h2jcpgA==
+  dependencies:
+    "@adiwajshing/keyed-db" "^0.2.4"
+    "@cacheable/node-cache" "^1.4.0"
+    "@hapi/boom" "^9.1.3"
+    async-mutex "^0.5.0"
+    fflate "^0.8.2"
+    libsignal "^6.0.0"
+    lru-cache "^11.2.6"
+    music-metadata "^11.12.3"
+    p-queue "^9.1.0"
+    pino "^9.6.0"
+    protobufjs "^7.5.6"
+    whatsapp-rust-bridge "0.5.5"
+    ws "^8.19.0"
 
 "@jimp/core@1.6.1":
   version "1.6.1"
@@ -428,23 +452,6 @@
   version "16.9.1"
   resolved "https://registry.npmjs.org/@types/node/-/node-16.9.1.tgz"
   integrity sha512-QpLcX9ZSsq3YYUUnD3nFDY8H7wctAhQj/TFKL8Ya8v5fMm3CFXxo8zStsLAl780ltoYoo1WvKUVGBQK+1ifr7g==
-
-"@whiskeysockets/baileys@^7.0.0-rc13":
-  version "7.0.0-rc13"
-  resolved "https://registry.npmjs.org/@whiskeysockets/baileys/-/baileys-7.0.0-rc13.tgz"
-  integrity sha512-8JPc8gaaCRykkjW2jxLGQ7/RZGrc7awO7WU+QJocf58eSUI9jAdcuYLynzhAbyU4UWvJJsHImZ+5E/JaZj5ypA==
-  dependencies:
-    "@cacheable/node-cache" "^1.4.0"
-    "@hapi/boom" "^9.1.3"
-    async-mutex "^0.5.0"
-    libsignal "^6.0.0"
-    lru-cache "^11.1.0"
-    music-metadata "^11.12.3"
-    p-queue "^9.0.0"
-    pino "^9.6"
-    protobufjs "^7.5.6"
-    whatsapp-rust-bridge "0.5.4"
-    ws "^8.13.0"
 
 agent-base@6:
   version "6.0.2"
@@ -864,6 +871,11 @@ exif-parser@^0.1.12:
   resolved "https://registry.npmjs.org/exif-parser/-/exif-parser-0.1.12.tgz"
   integrity sha512-c2bQfLNbMzLPmzQuOr8fy0csy84WmwnER81W88DzTp9CYNPJ6yzOj2EZAh9pywYpqHnshVLHQJ8WzldAyfY+Iw==
 
+fflate@^0.8.2:
+  version "0.8.3"
+  resolved "https://registry.npmjs.org/fflate/-/fflate-0.8.3.tgz"
+  integrity sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==
+
 file-type@^21.3.3, file-type@^21.3.4:
   version "21.3.4"
   resolved "https://registry.npmjs.org/file-type/-/file-type-21.3.4.tgz"
@@ -1169,7 +1181,7 @@ long@^5.3.2:
   resolved "https://registry.npmjs.org/long/-/long-5.3.2.tgz"
   integrity sha512-mNAgZ1GmyNhD7AuqnTG3/VQ26o760+ZYBPKjPvugO8+nLbYfX6TVpJPseBvopbdY+qpZ/lKUnmEc1LeZYS3QAA==
 
-lru-cache@^11.1.0:
+lru-cache@^11.2.6:
   version "11.5.2"
   resolved "https://registry.npmjs.org/lru-cache/-/lru-cache-11.5.2.tgz"
   integrity sha512-4pfM1Ff0x50o0tQwb5ucw/RzNyD0/YJME6IVcStalZuMWxdt3sR3huStTtxz4PUmvZfRguvDejasvQ2kifR11g==
@@ -1321,7 +1333,7 @@ onetime@^5.1.0:
   dependencies:
     mimic-fn "^2.1.0"
 
-p-queue@^9.0.0:
+p-queue@^9.1.0:
   version "9.3.2"
   resolved "https://registry.npmjs.org/p-queue/-/p-queue-9.3.2.tgz"
   integrity sha512-pCsnA4piiqkrwAJ555Xh/lc717SijJrTBr96P1q6BRnUdm2XPB4v91oiXVAUr5HbIbXW4D8kIslfJUE28Rud6A==
@@ -1425,7 +1437,7 @@ pino@^10.1.0:
     sonic-boom "^4.0.1"
     thread-stream "^4.0.0"
 
-pino@^9.6:
+pino@^9.6.0:
   version "9.14.0"
   resolved "https://registry.npmjs.org/pino/-/pino-9.14.0.tgz"
   integrity sha512-8OEwKp5juEvb/MjpIc4hjqfgCNysrS94RIOMXYvpYCdm/jglrKEiAYmiumbmGhCvs+IcInsphYDFwqrjr7398w==
@@ -1696,10 +1708,10 @@ utif2@^4.1.0:
   dependencies:
     pako "^1.0.11"
 
-whatsapp-rust-bridge@0.5.4:
-  version "0.5.4"
-  resolved "https://registry.npmjs.org/whatsapp-rust-bridge/-/whatsapp-rust-bridge-0.5.4.tgz"
-  integrity sha512-yYO1qSs0Fe7tGtnxOFHomocUD6IZtoAgmA4oDFyGIRZ67D3QZk3w7swA6XXFXNQngiyrg2k7tul6IrM3eUFh7A==
+whatsapp-rust-bridge@0.5.5:
+  version "0.5.5"
+  resolved "https://registry.npmjs.org/whatsapp-rust-bridge/-/whatsapp-rust-bridge-0.5.5.tgz"
+  integrity sha512-Io1qmIEi1FTXTMhN1KmZS35BHHvwRbKHUUcN/Rn6pJUU/Mk469BcWpmFEJY0a6cYu3SHwBsqzC/0IXDj+SUvgA==
 
 whatwg-encoding@^3.1.1:
   version "3.1.1"
@@ -1725,7 +1737,7 @@ win-guid@^0.2.1:
   resolved "https://registry.npmjs.org/win-guid/-/win-guid-0.2.1.tgz"
   integrity sha512-gEIQU4mkgl2OPeoNrWflcJFJ3Ae2BPd4eCsHHA/XikslkIVms/nHhvnvzIZV7VLmBvtFlDOzLt9rrZT+n6D67A==
 
-ws@^8.13.0:
+ws@^8.19.0:
   version "8.21.1"
   resolved "https://registry.npmjs.org/ws/-/ws-8.21.1.tgz"
   integrity sha512-+0NTnW77fFN/DjQi6k/Sq/Yvk4Sgajw7urW8V+asjXnRgDs9gyGkdb7EzgfhA4goXsRIZKE28fzIXBHEzhuiWw==
