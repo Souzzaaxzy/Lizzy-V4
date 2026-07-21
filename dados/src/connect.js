@@ -1262,51 +1262,18 @@ async function createBotSocket(authDir) {
 
         // Listener para solicitações de entrada em grupos (join requests)
         AbyssSock.ev.on('group.join-request', async (inf) => {
-            if (DEBUG_MODE) {
-                console.log('\n🐛 ========== GROUP JOIN REQUEST ==========');
-                console.log('📅 Timestamp:', new Date().toISOString());
-                console.log('🆔 Group ID:', inf.id);
-                console.log('⚡ Action:', inf.action);
-                console.log('👤 Participant:', inf.participant);
-                console.log('📱 Participant Phone:', inf.participantPn);
-                console.log('👮 Author:', inf.author);
-                console.log('📝 Method:', inf.method);
-                console.log('📦 Full event data:', JSON.stringify(inf, null, 2));
-                console.log('🐛 ===========================================\n');
-            }
             await handleGroupJoinRequest(AbyssSock, inf);
-        });
-        
-        // Listener adicional para eventos de participantes (como approve/reject de solicitações)
-        AbyssSock.ev.on('groups.upsert', async (groupUpdates) => {
-            if (DEBUG_MODE) {
-                console.log('\n🐛 ========== GROUPS UPSERT ==========');
-                console.log('📦 Updates:', JSON.stringify(groupUpdates, null, 2));
-                console.log('🐛 ===================================\n');
-            }
         });
 
 
 
         AbyssSock.ev.on('group-participants.update', async (inf) => {
-            console.log(`[SOCKET EVENT] group-participants.update disparado: ${inf.action} em ${inf.id}`);
-            if (DEBUG_MODE) {
-                console.log('\n🐛 ========== GROUP PARTICIPANTS UPDATE ==========');
-                console.log('📅 Timestamp:', new Date().toISOString());
-                console.log('🆔 Group ID:', inf.id || inf.jid || 'unknown');
-                console.log('⚡ Action:', inf.action);
-                console.log('👥 Participants:', inf.participants);
-                console.log(' Author:', inf.author || 'N/A');
-                console.log('🐛 ================================================\n');
-            }
-            
             // Verificar X9 para registro de solicitações aceitas
             const groupId = inf.id || inf.jid;
             if (groupId && inf.action === 'add' && inf.author) {
                 try {
                     const groupSettings = await loadGroupSettings(groupId);
                     if (groupSettings.x9) {
-                        // Alguém foi adicionado ao grupo por um admin
                         const data = new Date();
                         const dataFormatada = data.toLocaleDateString('pt-BR');
                         const horaFormatada = data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -1334,13 +1301,9 @@ async function createBotSocket(authDir) {
                             });
                         }
                     }
-                } catch (logError) {
-                    console.error('Erro ao enviar mensagem X9:', logError.message);
-                }
+                } catch (e) {}
             }
             
-            // Garante que o ID correto seja passado se estiver em 'jid'
-            // Inclui 'author' para identificar quem fez a ação (promoção/rebaixamento)
             const updateData = {
                 id: inf.id || inf.jid,
                 participants: inf.participants,
@@ -1348,11 +1311,8 @@ async function createBotSocket(authDir) {
                 author: inf.author || null
             };
 
-            // Chama o handler centralizado do index.js que corrigimos
             if (typeof handleGroupParticipantsUpdate === 'function') {
                 await handleGroupParticipantsUpdate(AbyssSock, updateData, numerodono);
-            } else {
-                console.error('\x1b[31m[ERRO CRÍTICO]\x1b[0m handleGroupParticipantsUpdate não foi importado corretamente de index.js');
             }
         });
 
