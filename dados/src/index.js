@@ -4,11 +4,13 @@ import {
   downloadContentFromMessage,
   generateWAMessageFromContent,
   generateWAMessage,
+  generateForwardMessageContent,
   getContentType,
   useMultiFileAuthState,
   DisconnectReason,
   fetchLatestBaileysVersion,
-  makeCacheableSignalKeyStore
+  makeCacheableSignalKeyStore,
+  generateMessageID
 } from 'baileys';
 import { handleFut, handleFutCommand } from './games/futebol/index.js';
 import dotenv from 'dotenv';
@@ -27400,16 +27402,28 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
             webpBuffer = await writeExif(webpBuffer, { packname: pack, author });
           }
 
-          // Criar a mensagem usando generateWAMessageFromContent
-          const msg = await generateWAMessageFromContent(from, {
-            stickerMessage: webpBuffer
-          }, {
+          // Criar uma mensagem mock para usar com generateForwardMessageContent
+          const mockMessage = {
+            message: {
+              stickerMessage: webpBuffer
+            },
+            key: {
+              remoteJid: from,
+              fromMe: false,
+              id: generateMessageID()
+            }
+          };
+
+          // Gerar conteúdo de mensagem encaminhada
+          const forwardedContent = await generateForwardMessageContent(mockMessage, true);
+
+          // Criar a mensagem real com generateWAMessageFromContent
+          const msg = await generateWAMessageFromContent(from, forwardedContent, {
             userJid: nazu.user.id,
             quoted: info
           });
 
-          // Injetar forwardedNewsletterMessageInfo DIRETAMENTE na stickerMessage
-          // Isso faz o WhatsApp mostrar o cartão do canal + "Ver canal"
+          // Injetar forwardedNewsletterMessageInfo diretamente na stickerMessage
           if (msg.message?.stickerMessage) {
             msg.message.stickerMessage.forwardedNewsletterMessageInfo = {
               newsletterJid: "120363410980452460@newsletter",
@@ -27419,12 +27433,11 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
               storyAttributeHeaderText: "",
               isNewsletterGCC: false
             };
-            // Flags que fazem o WhatsApp renderizar como mensagem de canal
             msg.message.stickerMessage.forwardingScore = 999;
             msg.message.stickerMessage.isForwarded = true;
           }
 
-          // Enviar via relayMessage para preservar as info do canal
+          // Enviar via relayMessage
           await nazu.relayMessage(from, msg.message, { messageId: msg.key.id });
         } catch (e) {
           console.error(e);
