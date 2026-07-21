@@ -35039,7 +35039,7 @@ break;
                 video: { url: videoPath },
                 caption: responseText,
                 mentions: [targetUser],
-                gifPlayback: isCustomGif
+                gifPlayback: true
               });
             } else if (fs.existsSync(videoPath)) {
               const videoBuffer = fs.readFileSync(videoPath);
@@ -35047,7 +35047,7 @@ break;
                 video: videoBuffer,
                 caption: responseText,
                 mentions: [targetUser],
-                gifPlayback: isCustomGif
+                gifPlayback: true
               });
             } else {
               await nazu.sendMessage(from, {
