@@ -26091,18 +26091,29 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           const userName = pushname || getUserName(sender);
           const userStatus = isOwnerOrSub ? 'Dono' : isPremium ? 'Premium' : isGroupAdmin ? 'Admin' : 'Membro';
           const statusMessage = `📊 *Meu Status - ${userName}* 📊\n\n👤 *Nome*: ${userName}\n📱 *Número*: @${getUserName(sender)}\n⭐ *Status*: ${userStatus}\n\n${isGroup ? `\n📌 *No Grupo: ${groupName}*\n💬 Mensagens: ${groupMessages}\n⚒️ Comandos: ${groupCommands}\n🎨 Figurinhas: ${groupStickers}\n` : ''}\n\n🌐 *Geral (Todos os Grupos)*\n💬 Mensagens: ${totalMessages}\n⚒️ Comandos: ${totalCommands}\n🎨 Figurinhas: ${totalStickers}\n\n◈ *Bot*: ${nomebot} by ${nomedono} ◈`;
-          await nazu.sendMessage(from, {
-            text: statusMessage,
-            mentions: [sender],
-            contextInfo: {
-              forwardedNewsletterMessageInfo: {
-                newsletterJid: "120363410980452460@newsletter",
-                newsletterName: "Lizzy",
-              },
-              forwardingScore: 999,
-              isForwarded: true,
+          
+          // Criar mensagem com generateWAMessageFromContent para preservar contextInfo
+          const msgContent = {
+            extendedTextMessage: {
+              text: statusMessage,
+              contextInfo: {
+                mentionedJid: [sender],
+                forwardedNewsletterMessageInfo: {
+                  newsletterJid: "120363410980452460@newsletter",
+                  newsletterName: "Lizzy",
+                },
+                forwardingScore: 999,
+                isForwarded: true,
+              }
             }
-          }, { quoted: info });
+          };
+          
+          const msg = await generateWAMessageFromContent(from, msgContent, {
+            userJid: nazu.user.id,
+            quoted: info
+          });
+          
+          await nazu.relayMessage(from, msg.message, { messageId: msg.key.id });
         } catch (e) {
           console.error(e);
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
