@@ -19609,32 +19609,68 @@ case 'pin':
             .then(async (datinha) => {
               if (!datinha.ok) return reply(datinha.msg);
               
-              // Função para enviar vídeo com botão CTA URL
-              const sendVideoWithButton = async (videoData, index) => {
+              // Função para formatar números (ex: 1000 -> 1K, 1000000 -> 1M)
+              const formatNumber = (num) => {
+                if (!num) return '0';
+                if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+                if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+                return num.toString();
+              };
+              
+              // Função para buscar thumbnail como buffer
+              const fetchThumbnail = async (url) => {
+                try {
+                  const response = await fetch(url);
+                  const arrayBuffer = await response.arrayBuffer();
+                  return Buffer.from(arrayBuffer);
+                } catch (e) {
+                  console.error('Erro ao buscar thumbnail:', e.message);
+                  return null;
+                }
+              };
+              
+              // Função para enviar vídeo com preview rico do TikTok
+              const sendVideoWithRichPreview = async (videoData, index) => {
                 const url = videoData.urls?.[0];
                 if (!url) return;
                 
                 const title = videoData.title || '';
-                const link = videoData.link || '';
+                // Use o link oficial ou a URL original do TikTok
+                const link = videoData.link || (isTikTokUrl ? q : '');
+                const cover = videoData.cover || '';
+                const views = videoData.views || 0;
+                const author = videoData.author || videoData.username || '';
                 
-                // Criar mensagem com botão CTA URL usando sendInteractiveMessage
+                // Formatar visualizações
+                const viewsText = views ? `${formatNumber(views)} visualizações` : '';
+                
+                // Criar corpo da mensagem do externalAdReply
+                const adBody = viewsText ? `🎬 ${viewsText}` : '🎵 TikTok';
+                
                 try {
-                  await sendInteractiveMessage(nazu, from, {
+                  // Buscar thumbnail
+                  let thumbnailBuffer = null;
+                  if (cover) {
+                    thumbnailBuffer = await fetchThumbnail(cover);
+                  }
+                  
+                  // Enviar vídeo com externalAdReply (preview rico)
+                  await nazu.sendMessage(from, {
                     video: { url },
                     caption: title ? `📹 ${title}` : undefined,
-                    interactiveButtons: [
-                      {
-                        name: "cta_url",
-                        buttonParamsJson: JSON.stringify({
-                          display_text: "🔗 Abrir no TikTok",
-                          url: link
-                        })
+                    contextInfo: {
+                      externalAdReply: {
+                        title: '🎵 TikTok',
+                        body: adBody,
+                        thumbnail: thumbnailBuffer,
+                        largeThumbnail: true,
+                        url: link || url
                       }
-                    ]
+                    }
                   }, { quoted: info });
                 } catch (videoErr) {
-                  // Se falhar com botões, tenta enviar só o vídeo
-                  console.error('Erro ao enviar vídeo com botão:', videoErr.message);
+                  // Se falhar com externalAdReply, tenta enviar só o vídeo
+                  console.error('Erro ao enviar vídeo com preview rico:', videoErr.message);
                   await nazu.sendMessage(from, {
                     video: { url },
                     caption: title ? `📹 ${title}` : undefined
@@ -19648,7 +19684,7 @@ case 'pin':
                 // Enviar até 3 vídeos
                 const videosToSend = results.slice(0, 3);
                 for (let i = 0; i < videosToSend.length; i++) {
-                  await sendVideoWithButton(videosToSend[i], i);
+                  await sendVideoWithRichPreview(videosToSend[i], i);
                   // Pequeno delay entre envios
                   if (i < videosToSend.length - 1) {
                     await new Promise(resolve => setTimeout(resolve, 500));
@@ -19658,7 +19694,7 @@ case 'pin':
                 // Compatibilidade com formato antigo (um vídeo)
                 const urlz = datinha.urls?.[0];
                 if (urlz) {
-                  await sendVideoWithButton(datinha, 0);
+                  await sendVideoWithRichPreview(datinha, 0);
                 }
               }
               
