@@ -25340,9 +25340,18 @@ ${groupPrefix}togglecmdvip premium_ia off`);
             }
           }
           blad += `╰━━━〔 ⭐ ${nomebot} ⭐ 〕━━━╯`;
+          const newsletterRank = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
           await nazu.sendMessage(from, {
             text: blad,
-            mentions: menc
+            mentions: menc,
+            contextInfo: newsletterRank
           }, {
             quoted: info
           });
@@ -25560,7 +25569,15 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           }
           message += `┃\n`;
           message += `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
-          await reply(message);
+          const newsletterMsgDiario = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          await nazu.sendMessage(from, { text: message }, { contextInfo: newsletterMsgDiario, quoted: info });
         } catch (e) {
           console.error('[MSGDIARIO] Erro:', e);
           await reply("❌ Ocorreu um erro ao buscar as estatísticas. Tente novamente.");
@@ -25596,7 +25613,15 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           }
           message += `┃\n`;
           message += `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
-          await reply(message);
+          const newsletterMsgSemanal = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          await nazu.sendMessage(from, { text: message }, { contextInfo: newsletterMsgSemanal, quoted: info });
         } catch (e) {
           console.error('[MSGSEMANAL] Erro:', e);
           await reply("❌ Ocorreu um erro ao buscar as estatísticas. Tente novamente.");
@@ -25926,7 +25951,15 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           message += `┃ para subir no ranking!\n`;
           message += `┃\n`;
           message += `╰━━━━━━━━━━━━━━━━━━━━╯`;
-          await reply(message);
+          const newsletterPdiario = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          await nazu.sendMessage(from, { text: message }, { contextInfo: newsletterPdiario, quoted: info });
         } catch (e) {
           console.error('[PDIARIO] Erro:', e);
           await reply("❌ Ocorreu um erro ao buscar sua posição. Tente novamente.");
@@ -25977,7 +26010,15 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           message += `┃ subir no ranking!\n`;
           message += `┃\n`;
           message += `╰━━━━━━━━━━━━━━━━━━━━╯`;
-          await reply(message);
+          const newsletterPsemanal = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          await nazu.sendMessage(from, { text: message }, { contextInfo: newsletterPsemanal, quoted: info });
         } catch (e) {
           console.error('[PSEMANAL] Erro:', e);
           await reply("❌ Ocorreu um erro ao buscar sua posição. Tente novamente.");
@@ -26012,7 +26053,15 @@ ${groupPrefix}togglecmdvip premium_ia off`);
             message += `┃\n`;
           }
           message += `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
-          await reply(message);
+          const newsletterMediario = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          await nazu.sendMessage(from, { text: message }, { contextInfo: newsletterMediario, quoted: info });
         } catch (e) {
           console.error('[MEDIARIO] Erro:', e);
           await reply("❌ Ocorreu um erro ao buscar suas estatísticas. Tente novamente.");
@@ -26045,7 +26094,15 @@ ${groupPrefix}togglecmdvip premium_ia off`);
             message += `┃\n`;
           }
           message += `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
-          await reply(message);
+          const newsletterMesemanal = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          await nazu.sendMessage(from, { text: message }, { contextInfo: newsletterMesemanal, quoted: info });
         } catch (e) {
           console.error('[MESEMANAL] Erro:', e);
           await reply("❌ Ocorreu um erro ao buscar suas estatísticas. Tente novamente.");
