@@ -26091,29 +26091,25 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           const userName = pushname || getUserName(sender);
           const userStatus = isOwnerOrSub ? 'Dono' : isPremium ? 'Premium' : isGroupAdmin ? 'Admin' : 'Membro';
           const statusMessage = `📊 *Meu Status - ${userName}* 📊\n\n👤 *Nome*: ${userName}\n📱 *Número*: @${getUserName(sender)}\n⭐ *Status*: ${userStatus}\n\n${isGroup ? `\n📌 *No Grupo: ${groupName}*\n💬 Mensagens: ${groupMessages}\n⚒️ Comandos: ${groupCommands}\n🎨 Figurinhas: ${groupStickers}\n` : ''}\n\n🌐 *Geral (Todos os Grupos)*\n💬 Mensagens: ${totalMessages}\n⚒️ Comandos: ${totalCommands}\n🎨 Figurinhas: ${totalStickers}\n\n◈ *Bot*: ${nomebot} by ${nomedono} ◈`;
-          
-          // Criar mensagem com generateWAMessageFromContent para preservar contextInfo
-          const msgContent = {
-            extendedTextMessage: {
-              text: statusMessage,
-              contextInfo: {
-                mentionedJid: [sender],
-                forwardedNewsletterMessageInfo: {
-                  newsletterJid: "120363410980452460@newsletter",
-                  newsletterName: "Lizzy",
-                },
-                forwardingScore: 999,
-                isForwarded: true,
-              }
+          await nazu.sendMessage(from, {
+            text: statusMessage,
+            contextInfo: {
+              externalAdReply: {
+                title: "📬 Lizzy Stickers",
+                body: "👉 Toque para ver o canal",
+                thumbnailUrl: "https://whatsapp.com/channel/0029VagWCLiBPvJQDtwSlY1g",
+                sourceUrl: "https://whatsapp.com/channel/0029VagWCLiBPvJQDtwSlY1g",
+                mediaType: 1,
+                renderLargerThumbnail: false,
+              },
+              forwardedNewsletterMessageInfo: {
+                newsletterJid: "120363410980452460@newsletter",
+                newsletterName: "Lizzy",
+              },
+              forwardingScore: 999,
+              isForwarded: true,
             }
-          };
-          
-          const msg = await generateWAMessageFromContent(from, msgContent, {
-            userJid: nazu.user.id,
-            quoted: info
-          });
-          
-          await nazu.relayMessage(from, msg.message, { messageId: msg.key.id });
+          }, { quoted: info });
         } catch (e) {
           console.error(e);
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
