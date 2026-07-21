@@ -11,7 +11,7 @@ import {
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
   generateMessageID
-} from 'baileys';
+} from '@whiskeysockets/baileys';
 import { handleFut, handleFutCommand } from './games/futebol/index.js';
 import dotenv from 'dotenv';
 // Imports para sistema de Games
