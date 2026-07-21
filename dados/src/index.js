@@ -19624,9 +19624,8 @@ case 'pin':
                     caption: title ? `📹 ${title}` : undefined,
                     buttons: [
                       {
-                        buttonId: `tiktok_url_${index}`,
-                        buttonText: { displayText: '📲 Ver no TikTok' },
-                        type: 1,
+                        buttonText: { displayText: '🔗 Abrir no TikTok' },
+                        type: 2,
                         url: link
                       }
                     ],
