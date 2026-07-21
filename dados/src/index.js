@@ -20068,10 +20068,18 @@ Se não definir cores:
           if (!datinha?.ok) {
             return reply(datinha?.msg || 'Erro ao gerar o sticker Brat. 😕');
           }
+          const newsletterContextBrat = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
           await nazu.sendMessage(from, {
             sticker: { url: datinha.url },
             mimetype: 'image/webp'
-          }, { quoted: info });
+          }, { quoted: info, contextInfo: newsletterContextBrat });
           console.log(`[comando brat] ✅ Sticker enviado para: "${texto}"`);
         } catch (e) {
           console.error('Erro no comando brat:', e);
@@ -20118,10 +20126,18 @@ Se não definir cores, a API usa padrão automaticamente.`
           if (!datinha?.ok) {
             return reply(datinha?.msg || 'Erro ao gerar o sticker animado Brat. 😕');
           }
+          const newsletterContextBratVid = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
           await nazu.sendMessage(from, {
             sticker: { url: datinha.url },
             mimetype: 'image/webp'
-          }, { quoted: info });
+          }, { quoted: info, contextInfo: newsletterContextBratVid });
           console.log(`[comando bratvid] ✅ Sticker enviado: "${texto}"`);
         } catch (e) {
           console.error('Erro no comando bratvid:', e);
