@@ -27392,14 +27392,34 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
             pack
           } = dataTake[sender];
           const encmediats = await getFileBuffer(info.message.extendedTextMessage.contextInfo.quotedMessage.stickerMessage, 'sticker');
-          await sendSticker(nazu, from, {
-            sticker: `data:image/jpeg;base64,${encmediats.toString('base64')}`,
-            author: pack,
-            packname: author,
-            rename: true
-          }, {
-            quoted: info
-          });
+          
+          // Criar figurinha com novo pack/author (sem enviar)
+          const { convertToWebp, writeExif } = await import('./funcs/utils/sticker.js');
+          const buffer = Buffer.from(encmediats);
+          let webpBuffer = await convertToWebp(buffer, false, false);
+          if (pack || author) {
+            webpBuffer = await writeExif(webpBuffer, { packname: pack, author: author });
+          }
+          
+          // Enviar figurinha com contextInfo do canal (igual ao !linkgp)
+          await nazu.sendMessage(from, {
+            sticker: webpBuffer,
+            contextInfo: {
+              externalAdReply: {
+                title: "📬 Lizzy Stickers",
+                body: "👉 Toque para ver o canal",
+                sourceUrl: "https://whatsapp.com/channel/0029VagWCLiBPvJQDtwSlY1g",
+                mediaType: 1,
+                renderLargerThumbnail: false,
+              },
+              forwardedNewsletterMessageInfo: {
+                newsletterJid: "120363410980452460@newsletter",
+                newsletterName: "Lizzy",
+              },
+              forwardingScore: 999,
+              isForwarded: true,
+            }
+          }, { quoted: info });
         } catch (e) {
           console.error(e);
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
