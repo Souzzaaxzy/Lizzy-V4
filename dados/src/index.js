@@ -18874,21 +18874,58 @@ case 'addaluguel':
           let videoUrl;
           let videoInfo;
           let searchMsgKey = null;
+          let animationInterval = null;
           // =============================================
           // FUNÇÃO PARA APAGAR MENSAGEM DE ERRO
           // =============================================
           const deleteSearchMsg = async () => {
+            if (animationInterval) {
+              clearInterval(animationInterval);
+              animationInterval = null;
+            }
             if (searchMsgKey) {
               await nazu.sendMessage(from, { delete: searchMsgKey }).catch(() => {});
             }
           };
           // =============================================
+          // FUNÇÃO DE ANIMAÇÃO DE BUSCA
+          // =============================================
+          const animationFrames = [
+            '🔎 Buscando resultados...\n▰▰▱▱▱▱▱▱▱▱',
+            '🔎 Buscando resultados...\n▱▰▰▱▱▱▱▱▱▱',
+            '🔎 Buscando resultados...\n▱▱▰▰▱▱▱▱▱▱',
+            '🔎 Buscando resultados...\n▱▱▱▰▰▱▱▱▱▱',
+            '🔎 Buscando resultados...\n▱▱▱▱▰▰▱▱▱▱',
+            '🔎 Buscando resultados...\n▱▱▱▱▱▰▰▱▱▱',
+            '🔎 Buscando resultados...\n▱▱▱▱▱▱▰▰▱▱',
+            '🔎 Buscando resultados...\n▱▱▱▱▱▱▱▰▰▱',
+            '🔎 Buscando resultados...\n▱▱▱▱▱▱▱▱▰▰',
+            '🔎 Buscando resultados...\n▰▱▱▱▱▱▱▱▱▰'
+          ];
+          let currentFrame = 0;
+          // =============================================
           // NOVO FLUXO: 1° ETAPA - MENSAGEM DE PESQUISA
           // =============================================
           const searchMsg = await nazu.sendMessage(from, {
-            text: `🔎 Procurando "${q}"...\n\n⏳ Obtendo informações da música...`
+            text: animationFrames[0]
           }, { quoted: info });
           searchMsgKey = searchMsg.key;
+          // Iniciar animação
+          animationInterval = setInterval(async () => {
+            currentFrame = (currentFrame + 1) % animationFrames.length;
+            try {
+              await nazu.sendMessage(from, {
+                text: animationFrames[currentFrame],
+                edit: searchMsgKey
+              });
+            } catch (e) {
+              // Se falhar ao editar, para a animação
+              if (animationInterval) {
+                clearInterval(animationInterval);
+                animationInterval = null;
+              }
+            }
+          }, 300);
           // =============================================
           // FUNÇÃO PARA ENVIAR ERRO
           // =============================================
