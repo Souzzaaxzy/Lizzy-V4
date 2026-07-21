@@ -26901,13 +26901,19 @@ ${groupPrefix}togglecmdvip premium_ia off`);
         break;
       case 'togif':
         try {
-          const quotedSticker = info.message?.extendedTextMessage?.contextInfo?.quotedMessage?.stickerMessage;
+          const quotedMsg = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+          
+          // Verificar sticker normal ou lottie
+          const quotedSticker = quotedMsg?.stickerMessage || quotedMsg?.lottieStickerMessage?.message?.stickerMessage;
           
           if (!quotedSticker) {
             return reply(`❌ Responda a uma figurinha animada utilizando:\n${groupPrefix}togif`);
           }
           
-          if (!quotedSticker.isLottie) {
+          // Verificar se é sticker animado
+          const isAnimated = quotedSticker.isLottie === true;
+          
+          if (!isAnimated) {
             return reply("❌ Essa figurinha não é animada.");
           }
           
