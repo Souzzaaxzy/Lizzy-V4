@@ -18570,22 +18570,21 @@ case 'addaluguel':
             return reply(`❌ Esse comando não existe.\n\nComandos disponíveis:\n${validCommands.join(', ')}`);
           }
           
-          // Verificar se respondeu um GIF
-          const RSGif = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-          const gifData = RSGif?.videoMessage || info.message?.videoMessage;
+          // Verificar se respondeu uma mídia (foto, vídeo ou GIF)
+          const quotedMsg = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+          const mediaData = quotedMsg?.videoMessage || quotedMsg?.imageMessage || info.message?.videoMessage || info.message?.imageMessage;
           
-          if (!gifData) {
-            return reply(`❌ Responda a um GIF utilizando:\n${groupPrefix}setgif ${cmdName}`);
+          if (!mediaData) {
+            return reply(`❌ Responda a uma foto, vídeo ou GIF utilizando:\n${groupPrefix}setgif ${cmdName}`);
           }
           
-          // Verificar se é realmente um GIF (mimetype)
-          const isGif = gifData.mimetype?.includes('gif');
-          if (!isGif) {
-            return reply(`❌ A mensagem respondida precisa ser um GIF.`);
-          }
+          // Verificar o tipo de mídia
+          const isVideo = mediaData.mimetype?.includes('video');
+          const isImage = mediaData.mimetype?.includes('image');
+          const isGif = mediaData.mimetype?.includes('gif');
           
-          // Baixar o GIF
-          const gifBuffer = await getFileBuffer(gifData, 'video');
+          // Baixar a mídia
+          const mediaBuffer = await getFileBuffer(mediaData, isVideo ? 'video' : 'image');
           
           // Salvar no arquivo games.json
           const gamesFilePath = path.join(__dirname, 'funcs/json/games.json');
@@ -18595,21 +18594,30 @@ case 'addaluguel':
             gamesData.games2 = {};
           }
           
-          // Salva o GIF - usa URL temporária do catbox ou salva localmente
+          // Salva a mídia - faz upload para o catbox
           try {
-            // Faz upload do GIF para o catbox
-            const catboxUrl = await upload(gifBuffer);
+            const catboxUrl = await upload(mediaBuffer);
             
-            gamesData.games2[cmdName] = {
-              video: { url: catboxUrl },
-              isGif: true
-            };
+            if (isImage && !isGif) {
+              // Salvar como imagem
+              gamesData.games2[cmdName] = {
+                image: { url: catboxUrl }
+              };
+            } else {
+              // Salvar como vídeo/GIF
+              gamesData.games2[cmdName] = {
+                video: { url: catboxUrl },
+                isGif: isGif
+              };
+            }
             
             fs.writeFileSync(gamesFilePath, JSON.stringify(gamesData, null, 2));
-            await reply(`✅ GIF do comando "${cmdName}" atualizado com sucesso!`);
+            
+            const tipoMedia = isImage && !isGif ? 'imagem' : (isGif ? 'GIF' : 'vídeo');
+            await reply(`✅ ${tipoMedia} do comando "${cmdName}" atualizada com sucesso!`);
           } catch (uploadErr) {
-            console.error('Erro ao fazer upload do GIF:', uploadErr);
-            await reply("❌ Ocorreu um erro ao salvar o GIF.");
+            console.error('Erro ao fazer upload da mídia:', uploadErr);
+            await reply("❌ Ocorreu um erro ao salvar a mídia.");
           }
         } catch (e) {
           console.error(e);
