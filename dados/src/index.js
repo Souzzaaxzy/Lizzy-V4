@@ -19617,19 +19617,20 @@ case 'pin':
                 const title = videoData.title || '';
                 const link = videoData.link || '';
                 
-                // Criar mensagem com botão CTA URL
+                // Criar mensagem com botão CTA URL usando sendInteractiveMessage
                 try {
-                  await nazu.sendMessage(from, {
+                  await sendInteractiveMessage(nazu, from, {
                     video: { url },
                     caption: title ? `📹 ${title}` : undefined,
-                    buttons: [
+                    interactiveButtons: [
                       {
-                        buttonText: { displayText: '🔗 Abrir no TikTok' },
-                        type: 2,
-                        url: link
+                        name: "cta_url",
+                        buttonParamsJson: JSON.stringify({
+                          display_text: "🔗 Abrir no TikTok",
+                          url: link
+                        })
                       }
-                    ],
-                    headerType: 4
+                    ]
                   }, { quoted: info });
                 } catch (videoErr) {
                   // Se falhar com botões, tenta enviar só o vídeo
