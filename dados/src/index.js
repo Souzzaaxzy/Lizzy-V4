@@ -26094,12 +26094,20 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           await nazu.sendMessage(from, {
             text: statusMessage,
             contextInfo: {
-              forwardingScore: 100000,
-              isForwarded: true,
+              externalAdReply: {
+                title: "📬 Lizzy Stickers",
+                body: "👉 Toque para ver o canal",
+                thumbnailUrl: "https://whatsapp.com/channel/0029VagWCLiBPvJQDtwSlY1g",
+                sourceUrl: "https://whatsapp.com/channel/0029VagWCLiBPvJQDtwSlY1g",
+                mediaType: 1,
+                renderLargerThumbnail: false,
+              },
               forwardedNewsletterMessageInfo: {
                 newsletterJid: "120363410980452460@newsletter",
-                newsletterName: "Lizzy"
-              }
+                newsletterName: "Lizzy",
+              },
+              forwardingScore: 999,
+              isForwarded: true,
             }
           });
         } catch (e) {
@@ -28489,12 +28497,20 @@ break;
           await nazu.sendMessage(from, {
             text: groupLink,
             contextInfo: {
-              forwardingScore: 100000,
-              isForwarded: true,
+              externalAdReply: {
+                title: "📬 Link do Grupo",
+                body: "👉 Toque para entrar no grupo",
+                thumbnailUrl: groupPic,
+                sourceUrl: groupLink,
+                mediaType: 1,
+                renderLargerThumbnail: false,
+              },
               forwardedNewsletterMessageInfo: {
                 newsletterJid: "120363410980452460@newsletter",
-                newsletterName: "Lizzy"
-              }
+                newsletterName: "Lizzy",
+              },
+              forwardingScore: 999,
+              isForwarded: true,
             }
           });
         } catch (e) {
