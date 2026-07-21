@@ -19609,7 +19609,7 @@ case 'pin':
             .then(async (datinha) => {
               if (!datinha.ok) return reply(datinha.msg);
               
-              // Função para enviar vídeo com botão CTA URL nativo
+              // Função para enviar vídeo com botão (formato que o WhatsApp suporta)
               const sendVideoWithButton = async (videoData, index) => {
                 const url = videoData.urls?.[0];
                 if (!url) return;
@@ -19618,19 +19618,19 @@ case 'pin':
                 const link = videoData.link || (isTikTokUrl ? q : '');
                 
                 try {
-                  // Enviar vídeo com botão CTA usando InteractiveMessage
-                  await sendInteractiveMessage(nazu, from, {
+                  // Enviar vídeo com botão (formato suportado pelo WhatsApp)
+                  await nazu.sendMessage(from, {
                     video: { url },
                     caption: title || '',
-                    interactiveButtons: [
+                    footer: link ? `🔗 ${link}` : undefined,
+                    buttons: [
                       {
-                        name: "cta_url",
-                        buttonParamsJson: JSON.stringify({
-                          display_text: "🔗 Abrir no TikTok",
-                          url: link || url
-                        })
+                        buttonId: `tiktok_${index}`,
+                        buttonText: { displayText: '🔗 Abrir no TikTok' },
+                        type: 1
                       }
-                    ]
+                    ],
+                    headerType: 4 // VIDEO
                   }, { quoted: info });
                 } catch (videoErr) {
                   console.error('Erro ao enviar vídeo com botão:', videoErr.message);
