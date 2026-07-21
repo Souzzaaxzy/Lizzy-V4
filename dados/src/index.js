@@ -19163,10 +19163,36 @@ case 'pin':
         : 'Nenhuma imagem encontrada para o termo pesquisado. 😕'
       );
     }
-    const itemsToSend = datinha.urls.slice(0, 3);
-    for (const url of itemsToSend) {
+    // Pegar até 5 imagens
+    const itemsToSend = datinha.urls.slice(0, 5);
+    
+    // Criar album com 5 imagens e descrições "busca 1", "busca 2", etc.
+    if (itemsToSend.length > 1) {
+      // Enviar como album (múltiplas imagens em uma mensagem)
+      try {
+        const mediaMessages = itemsToSend.map((url, index) => ({
+          image: { url },
+          caption: `🔍 busca ${index + 1}`
+        }));
+        
+        await nazu.sendMessage(from, {
+          text: isPinUrl ? '📌 Download do Pinterest' : `📌 Resultados da pesquisa por "${searchTerm}"`,
+          media: mediaMessages
+        }, { quoted: info });
+      } catch (albumErr) {
+        // Se falhar com album, enviar imagens individualmente
+        console.error('Erro ao enviar album, enviando individualmente:', albumErr.message);
+        for (let i = 0; i < itemsToSend.length; i++) {
+          await nazu.sendMessage(from, {
+            image: { url: itemsToSend[i] },
+            caption: `🔍 busca ${i + 1}`
+          }, { quoted: info });
+        }
+      }
+    } else {
+      // Se for apenas 1 imagem, enviar normalmente
       await nazu.sendMessage(from, {
-        image: { url },
+        image: { url: itemsToSend[0] },
         caption: isPinUrl
           ? '📌 Download do Pinterest'
           : `📌 Resultado da pesquisa por "${searchTerm}"`
