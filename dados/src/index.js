@@ -19609,66 +19609,19 @@ case 'pin':
             .then(async (datinha) => {
               if (!datinha.ok) return reply(datinha.msg);
               
-              // Função para formatar números (ex: 1000 -> 1K, 1000000 -> 1M)
-              const formatNumber = (num) => {
-                if (!num) return '0';
-                if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-                if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
-                return num.toString();
-              };
-              
-              // Função para buscar thumbnail como buffer
-              const fetchThumbnail = async (url) => {
-                try {
-                  const response = await fetch(url);
-                  const arrayBuffer = await response.arrayBuffer();
-                  return Buffer.from(arrayBuffer);
-                } catch (e) {
-                  console.error('Erro ao buscar thumbnail:', e.message);
-                  return null;
-                }
-              };
-              
-              // Função para enviar vídeo com card estilo compartilhamento oficial do TikTok
-              const sendVideoWithRichPreview = async (videoData, index) => {
+              // Função para enviar vídeo com botão CTA URL nativo
+              const sendVideoWithButton = async (videoData, index) => {
                 const url = videoData.urls?.[0];
                 if (!url) return;
                 
                 const title = videoData.title || '';
                 const link = videoData.link || (isTikTokUrl ? q : '');
-                const cover = videoData.cover || '';
-                const views = videoData.views || 0;
-                const viewsText = views ? `${formatNumber(views)} visualizações` : '';
                 
                 try {
-                  // Buscar thumbnail
-                  let thumbnailBuffer = null;
-                  if (cover) {
-                    thumbnailBuffer = await fetchThumbnail(cover);
-                  }
-                  
-                  // Enviar vídeo com card de preview rico
-                  // Primeiro envia o vídeo com caption estilizada
-                  await nazu.sendMessage(from, {
-                    video: { url },
-                    caption: title,
-                    contextInfo: {
-                      externalAdReply: {
-                        title: '🎬 TikTok',
-                        body: viewsText || 'TikTok',
-                        thumbnail: thumbnailBuffer,
-                        largeThumbnail: true,
-                        url: link || url,
-                        showAdAttribution: true
-                      }
-                    }
-                  }, { quoted: info });
-                  
-                  // Enviar card com informações do TikTok usando sendInteractiveMessage
-                  const cardMessage = `👁️ *${viewsText}*\n🎬 *TikTok*`;
-                  
+                  // Enviar vídeo com botão CTA usando InteractiveMessage
                   await sendInteractiveMessage(nazu, from, {
-                    text: cardMessage,
+                    video: { url },
+                    caption: title || '',
                     interactiveButtons: [
                       {
                         name: "cta_url",
@@ -19679,13 +19632,12 @@ case 'pin':
                       }
                     ]
                   }, { quoted: info });
-                  
                 } catch (videoErr) {
-                  console.error('Erro ao enviar vídeo com preview:', videoErr.message);
+                  console.error('Erro ao enviar vídeo com botão:', videoErr.message);
                   // Fallback: enviar só o vídeo
                   await nazu.sendMessage(from, {
                     video: { url },
-                    caption: title || 'TikTok'
+                    caption: title ? `📹 ${title}\n\n🔗 ${link}` : `🔗 ${link}`
                   }, { quoted: info });
                 }
               };
@@ -19696,7 +19648,7 @@ case 'pin':
                 // Enviar até 3 vídeos
                 const videosToSend = results.slice(0, 3);
                 for (let i = 0; i < videosToSend.length; i++) {
-                  await sendVideoWithRichPreview(videosToSend[i], i);
+                  await sendVideoWithButton(videosToSend[i], i);
                   // Pequeno delay entre envios
                   if (i < videosToSend.length - 1) {
                     await new Promise(resolve => setTimeout(resolve, 500));
@@ -19706,7 +19658,7 @@ case 'pin':
                 // Compatibilidade com formato antigo (um vídeo)
                 const urlz = datinha.urls?.[0];
                 if (urlz) {
-                  await sendVideoWithRichPreview(datinha, 0);
+                  await sendVideoWithButton(datinha, 0);
                 }
               }
               
