@@ -27393,22 +27393,27 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
           } = dataTake[sender];
           const encmediats = await getFileBuffer(info.message.extendedTextMessage.contextInfo.quotedMessage.stickerMessage, 'sticker');
           
-          // ContextInfo do canal (igual ao !linkgp)
-          const channelContextInfo = {
-            externalAdReply: {
+          // ContextInfo do canal usando proto (igual ao !linkgp)
+          const { proto } = await import('baileys');
+          
+          const contextInfo = proto.MessageContextInfo.create({
+            externalAdReply: proto.IExternalAdReply.create({
               title: "📬 Lizzy Stickers",
               body: "👉 Toque para ver o canal",
+              thumbnailUrl: "https://whatsapp.com/channel/0029VagWCLiBPvJQDtwSlY1g",
+              thumbnail: Buffer.from(""),
               sourceUrl: "https://whatsapp.com/channel/0029VagWCLiBPvJQDtwSlY1g",
               mediaType: 1,
               renderLargerThumbnail: false,
-            },
-            forwardedNewsletterMessageInfo: {
+            }),
+            forwardedNewsletterMessageInfo: proto.IForwardedNewsletterMessageInfo.create({
               newsletterJid: "120363410980452460@newsletter",
               newsletterName: "Lizzy",
-            },
+              serverMessageId: -1,
+            }),
             forwardingScore: 999,
             isForwarded: true,
-          };
+          });
           
           await sendSticker(nazu, from, {
             sticker: `data:image/jpeg;base64,${encmediats.toString('base64')}`,
@@ -27417,7 +27422,7 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
             rename: true
           }, {
             quoted: info,
-            contextInfo: channelContextInfo
+            contextInfo: contextInfo
           });
         } catch (e) {
           console.error(e);
