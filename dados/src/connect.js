@@ -594,36 +594,23 @@ async function handleGroupJoinRequest(AbyssSock, inf) {
 
         if (!from || !participantJid) return;
 
-        // Registrar eventos de approve/reject
-        if (inf.action === 'approve') {
-            if (DEBUG_MODE) console.log(`[Group Logs] Solicitude aprovada por ${inf.author} para ${participantJid} no grupo ${from}`);
-            // Importar dinamicamente para evitar circular
+        // Registrar eventos de approve/reject apenas se X9 estiver ativado
+        if (inf.action === 'approve' || inf.action === 'reject') {
             try {
-                const { addGroupEvent } = await import('./funcs/utils/groupLogs.js');
-                addGroupEvent(from, {
-                    type: 'request_approved',
-                    victimJid: participantJid,
-                    authorJid: inf.author
-                });
+                const groupSettings = await loadGroupSettings(from);
+                if (groupSettings.x9) {
+                    if (DEBUG_MODE) console.log(`[Group Logs] Solicitude ${inf.action} por ${inf.author} para ${participantJid} no grupo ${from}`);
+                    const { addGroupEvent } = await import('./funcs/utils/groupLogs.js');
+                    addGroupEvent(from, {
+                        type: inf.action === 'approve' ? 'request_approved' : 'request_rejected',
+                        victimJid: participantJid,
+                        authorJid: inf.author
+                    });
+                }
             } catch (logError) {
-                console.error('Erro ao registrar log de aprovação:', logError.message);
+                console.error('Erro ao registrar log:', logError.message);
             }
-            return; // Não processar como nova solicitação
-        }
-
-        if (inf.action === 'reject') {
-            if (DEBUG_MODE) console.log(`[Group Logs] Solicitude rejeitada por ${inf.author} para ${participantJid} no grupo ${from}`);
-            try {
-                const { addGroupEvent } = await import('./funcs/utils/groupLogs.js');
-                addGroupEvent(from, {
-                    type: 'request_rejected',
-                    victimJid: participantJid,
-                    authorJid: inf.author
-                });
-            } catch (logError) {
-                console.error('Erro ao registrar log de rejeição:', logError.message);
-            }
-            return; // Não processar como nova solicitação
+            // Não retorna - continua o fluxo normal
         }
 
         if (typeof participantJid === "object") {

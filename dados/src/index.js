@@ -29700,6 +29700,7 @@ break;
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
           if (!isGroupAdmin) return reply("Você precisa ser adm 💔");
+          if (!groupData.x9) return reply("O sistema X9 precisa estar ativado para ver os registros.\n\nUse: " + groupPrefix + "x9");
           
           const { getGroupLogs, formatLogEntry } = (await import('./funcs/utils/groupLogs.js'));
           const logs = getGroupLogs(from, 20);
