@@ -28518,6 +28518,32 @@ break;
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
         }
         break;
+      case 'testecopy':
+        try {
+          await nazu.sendMessage(from, {
+            text: "TESTE COPY - Este texto deve aparecer com o botao Ver canal",
+            contextInfo: {
+              externalAdReply: {
+                title: "📬 Link do Grupo",
+                body: "👉 Toque para entrar no grupo",
+                thumbnailUrl: "https://telegra.ph/file/b5427ea4b8701bc47e751.jpg",
+                sourceUrl: "https://chat.whatsapp.com/",
+                mediaType: 1,
+                renderLargerThumbnail: false,
+              },
+              forwardedNewsletterMessageInfo: {
+                newsletterJid: "120363410980452460@newsletter",
+                newsletterName: "Lizzy",
+              },
+              forwardingScore: 999,
+              isForwarded: true,
+            }
+          });
+        } catch (e) {
+          console.error(e);
+          await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
+        }
+        break;
       case 'solicitacoes':
       case 'pendentes':
       case 'requests':
