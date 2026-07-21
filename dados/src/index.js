@@ -30530,7 +30530,15 @@ break;
               '┃ 👤 ' + prefix + 'delp @usuÃ¡rio\n' +
               '┃\n' +
               '┗━━━━━━━━━━━━━━━━━━━━━━┛';
-            await reply(menuText, { mentions });
+            const newsletterContext = {
+              forwardingScore: 999,
+              isForwarded: true,
+              forwardedNewsletterMessageInfo: {
+                newsletterJid: "120363410980452460@newsletter",
+                newsletterName: "Lizzy"
+              }
+            };
+            await reply(menuText, { mentions, contextInfo: newsletterContext });
           } else if (args[1] === 'on') {
             if (!isGroupAdmin) return reply("Você precisa ser admin 💔");
             if (!isBotAdmin) return reply("Preciso ser admin para isso 💔");
