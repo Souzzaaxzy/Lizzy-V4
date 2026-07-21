@@ -386,13 +386,29 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
                         }
                         const msg = `🚫 *Promoções e rebaixamentos são protegidos.*
 @${authorNum} não possui permissão e foi rebaixado.`;
-                        await nazu.sendMessage(id, { text: msg, mentions: [authorId] }).catch(e => console.error(`\x1b[31m[ANTI-ROUBO]\x1b[0m Erro ao enviar mensagem: ${e.message}`));
+                        const newsletterCtxAnti2 = {
+                            forwardingScore: 999,
+                            isForwarded: true,
+                            forwardedNewsletterMessageInfo: {
+                                newsletterJid: "120363410980452460@newsletter",
+                                newsletterName: "Lizzy"
+                            }
+                        };
+                        await nazu.sendMessage(id, { text: msg, mentions: [authorId], contextInfo: newsletterCtxAnti2 }).catch(e => console.error(`\x1b[31m[ANTI-ROUBO]\x1b[0m Erro ao enviar mensagem: ${e.message}`));
                         console.log(`\x1b[32m[ANTI-ROUBO]\x1b[0m Reversão concluída para ${action} por @${authorNum}`);
                     }
                 }
                 if (hasX9) {
+                    const newsletterCtxX9 = {
+                        forwardingScore: 999,
+                        isForwarded: true,
+                        forwardedNewsletterMessageInfo: {
+                            newsletterJid: "120363410980452460@newsletter",
+                            newsletterName: "Lizzy"
+                        }
+                    };
                     const msgText = `⬆️🐺 *X9 Report:* ${promotedIds.map(p => `@${p.split('@')[0]}`).join(', ')} foi(ram) *promovido(s) a administrador*!${authorText}`;
-                    await nazu.sendMessage(id, { text: msgText, mentions }).catch(err => {});
+                    await nazu.sendMessage(id, { text: msgText, mentions, contextInfo: newsletterCtxX9 }).catch(err => {});
                     console.log(`\x1b[32m[PARTICIPANTS UPDATE]\x1b[0m X9 de promoção enviado.`);
                 }
             }
@@ -438,13 +454,29 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
                         }
                         const msg = `🚫 *Promoções e rebaixamentos são protegidos.*
 @${authorNum} não possui permissão e foi rebaixado.`;
-                        await nazu.sendMessage(id, { text: msg, mentions: [authorId] }).catch(e => console.error(`\x1b[31m[ANTI-ROUBO]\x1b[0m Erro ao enviar mensagem: ${e.message}`));
+                        const newsletterCtxAnti = {
+                            forwardingScore: 999,
+                            isForwarded: true,
+                            forwardedNewsletterMessageInfo: {
+                                newsletterJid: "120363410980452460@newsletter",
+                                newsletterName: "Lizzy"
+                            }
+                        };
+                        await nazu.sendMessage(id, { text: msg, mentions: [authorId], contextInfo: newsletterCtxAnti }).catch(e => console.error(`\x1b[31m[ANTI-ROUBO]\x1b[0m Erro ao enviar mensagem: ${e.message}`));
                         console.log(`\x1b[32m[ANTI-ROUBO]\x1b[0m Reversão concluída para ${action} por @${authorNum}`);
                     }
                 }
                 if (hasX9) {
+                    const newsletterCtxX9Demote = {
+                        forwardingScore: 999,
+                        isForwarded: true,
+                        forwardedNewsletterMessageInfo: {
+                            newsletterJid: "120363410980452460@newsletter",
+                            newsletterName: "Lizzy"
+                        }
+                    };
                     const msgText = `⬇️🐺 *X9 Report:* ${demotedIds.map(p => `@${p.split('@')[0]}`).join(', ')} foi(ram) *rebaixado(s) de administrador*!${authorText}`;
-                    await nazu.sendMessage(id, { text: msgText, mentions }).catch(err => {});
+                    await nazu.sendMessage(id, { text: msgText, mentions, contextInfo: newsletterCtxX9Demote }).catch(err => {});
                     console.log(`\x1b[32m[PARTICIPANTS UPDATE]\x1b[0m X9 de rebaixamento enviado.`);
                 }
             }
@@ -28374,9 +28406,18 @@ break;
           // Notificação X9 para banimento
           if (groupData.x9) {
             const reason = q && q.length > 0 ? `\n📝 Motivo: ${q}` : '';
+            const newsletterX9 = {
+              forwardingScore: 999,
+              isForwarded: true,
+              forwardedNewsletterMessageInfo: {
+                newsletterJid: "120363410980452460@newsletter",
+                newsletterName: "Lizzy"
+              }
+            };
             await nazu.sendMessage(from, {
               text: `🚪 *X9 Report:* @${menc_os2.split('@')[0]} foi removido(a) do grupo por @${sender.split('@')[0]}.${reason}`,
               mentions: [menc_os2, sender],
+              contextInfo: newsletterX9
             }).catch(err => console.error(`❌ Erro ao enviar X9: ${err.message}`));
           }
           reply(`✅ Usuário banido com sucesso!${q && q.length > 0 ? '\n\nMotivo: ' + q : ''}`);
@@ -28421,9 +28462,18 @@ break;
           // Notificação X9 para banimento
           if (groupData.x9) {
             const reason = q && q.length > 0 ? `\n📝 Motivo: ${q}` : '';
+            const newsletterX9Ban2 = {
+              forwardingScore: 999,
+              isForwarded: true,
+              forwardedNewsletterMessageInfo: {
+                newsletterJid: "120363410980452460@newsletter",
+                newsletterName: "Lizzy"
+              }
+            };
             await nazu.sendMessage(from, {
               text: `🚪 *X9 Report:* @${menc_os2.split('@')[0]} foi removido(a) do grupo por @${sender.split('@')[0]}.${reason}`,
               mentions: [menc_os2, sender],
+              contextInfo: newsletterX9Ban2
             }).catch(err => console.error(`❌ Erro ao enviar X9: ${err.message}`));
           }
           await nazu.sendMessage(from, {
@@ -29040,9 +29090,18 @@ break;
           await nazu.groupUpdateSubject(from, newName);
           // Notificação X9 para mudança de nome
           if (groupData.x9) {
+            const newsletterX9Name = {
+              forwardingScore: 999,
+              isForwarded: true,
+              forwardedNewsletterMessageInfo: {
+                newsletterJid: "120363410980452460@newsletter",
+                newsletterName: "Lizzy"
+              }
+            };
             await nazu.sendMessage(from, {
               text: `✏️ *X9 Report:* Nome do grupo alterado por @${sender.split('@')[0]}\n\n🔹 Anterior: *${oldName}*\n🔸 Novo: *${newName}*`,
               mentions: [sender],
+              contextInfo: newsletterX9Name
             }).catch(err => console.error(`❌ Erro ao enviar X9: ${err.message}`));
           }
           reply(`✅ Nome do grupo alterado para: *${newName}*`);
@@ -29065,9 +29124,18 @@ break;
           await nazu.groupUpdateDescription(from, newDesc);
           // Notificação X9 para mudança de descrição
           if (groupData.x9) {
+            const newsletterX9Desc = {
+              forwardingScore: 999,
+              isForwarded: true,
+              forwardedNewsletterMessageInfo: {
+                newsletterJid: "120363410980452460@newsletter",
+                newsletterName: "Lizzy"
+              }
+            };
             await nazu.sendMessage(from, {
               text: `📝 *X9 Report:* Descrição do grupo alterada por @${sender.split('@')[0]}`,
               mentions: [sender],
+              contextInfo: newsletterX9Desc
             }).catch(err => console.error(`❌ Erro ao enviar X9: ${err.message}`));
           }
           reply(`✅ Descrição do grupo alterada!`);
@@ -29172,9 +29240,18 @@ break;
             await nazu.groupSettingUpdate(from, 'not_announcement');
             // Notificação X9 para abertura do grupo
             if (groupData.x9) {
+              const newsletterX9Open = {
+                forwardingScore: 999,
+                isForwarded: true,
+                forwardedNewsletterMessageInfo: {
+                  newsletterJid: "120363410980452460@newsletter",
+                  newsletterName: "Lizzy"
+                }
+              };
               await nazu.sendMessage(from, {
                 text: `🔓 *X9 Report:* Grupo aberto por @${sender.split('@')[0]}. Agora todos podem enviar mensagens.`,
                 mentions: [sender],
+                contextInfo: newsletterX9Open
               }).catch(err => console.error(`❌ Erro ao enviar X9: ${err.message}`));
             }
             await reply('Grupo aberto.');
@@ -29182,9 +29259,18 @@ break;
             await nazu.groupSettingUpdate(from, 'announcement');
             // Notificação X9 para fechamento do grupo
             if (groupData.x9) {
+              const newsletterX9Close = {
+                forwardingScore: 999,
+                isForwarded: true,
+                forwardedNewsletterMessageInfo: {
+                  newsletterJid: "120363410980452460@newsletter",
+                  newsletterName: "Lizzy"
+                }
+              };
               await nazu.sendMessage(from, {
                 text: `⚙️ *X9 Report:* Grupo fechado por @${sender.split('@')[0]}. Apenas ADMs podem enviar mensagens.`,
                 mentions: [sender],
+                contextInfo: newsletterX9Close
               }).catch(err => console.error(`❌ Erro ao enviar X9: ${err.message}`));
             }
             await reply('Grupo fechado.');
