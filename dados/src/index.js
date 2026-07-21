@@ -19609,7 +19609,7 @@ case 'pin':
             .then(async (datinha) => {
               if (!datinha.ok) return reply(datinha.msg);
               
-              // Função para enviar vídeo com botão CTA
+              // Função para enviar vídeo com botão CTA URL
               const sendVideoWithButton = async (videoData, index) => {
                 const url = videoData.urls?.[0];
                 if (!url) return;
@@ -19617,27 +19617,27 @@ case 'pin':
                 const title = videoData.title || '';
                 const link = videoData.link || '';
                 
-                // Criar mensagem interativa com botão CTA
+                // Criar mensagem com botão CTA URL
                 try {
                   await nazu.sendMessage(from, {
                     video: { url },
                     caption: title ? `📹 ${title}` : undefined,
-                    footer: link ? `🔗 ${link}` : undefined,
                     buttons: [
                       {
-                        buttonId: `tiktok_${index}`,
+                        buttonId: `tiktok_url_${index}`,
                         buttonText: { displayText: '📲 Ver no TikTok' },
-                        type: 1
+                        type: 1,
+                        url: link
                       }
                     ],
                     headerType: 4
                   }, { quoted: info });
                 } catch (videoErr) {
-                  // Se falhar com botões, tenta enviar só o vídeo com caption
+                  // Se falhar com botões, tenta enviar só o vídeo
                   console.error('Erro ao enviar vídeo com botão:', videoErr.message);
                   await nazu.sendMessage(from, {
                     video: { url },
-                    caption: title ? `📹 ${title}\n\n🔗 ${link}` : undefined
+                    caption: title ? `📹 ${title}` : undefined
                   }, { quoted: info });
                 }
               };
