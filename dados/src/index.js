@@ -26089,26 +26089,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           const userName = pushname || getUserName(sender);
           const userStatus = isOwnerOrSub ? 'Dono' : isPremium ? 'Premium' : isGroupAdmin ? 'Admin' : 'Membro';
           const statusMessage = `📊 *Meu Status - ${userName}* 📊\n\n👤 *Nome*: ${userName}\n📱 *Número*: @${getUserName(sender)}\n⭐ *Status*: ${userStatus}\n\n${isGroup ? `\n📌 *No Grupo: ${groupName}*\n💬 Mensagens: ${groupMessages}\n⚒️ Comandos: ${groupCommands}\n🎨 Figurinhas: ${groupStickers}\n` : ''}\n\n🌐 *Geral (Todos os Grupos)*\n💬 Mensagens: ${totalMessages}\n⚒️ Comandos: ${totalCommands}\n🎨 Figurinhas: ${totalStickers}\n\n◈ *Bot*: ${nomebot} by ${nomedono} ◈`;
-          await nazu.sendMessage(from, {
-            text: statusMessage,
-            mentions: [sender],
-            contextInfo: {
-              externalAdReply: {
-                title: "📬 Lizzy Stickers",
-                body: "👉 Toque para ver o canal",
-                thumbnailUrl: "https://whatsapp.com/channel/0029VagWCLiBPvJQDtwSlY1g",
-                sourceUrl: "https://whatsapp.com/channel/0029VagWCLiBPvJQDtwSlY1g",
-                mediaType: 1,
-                renderLargerThumbnail: false,
-              },
-              forwardedNewsletterMessageInfo: {
-                newsletterJid: "120363410980452460@newsletter",
-                newsletterName: "Lizzy",
-              },
-              forwardingScore: 999,
-              isForwarded: true,
-            }
-          }, { quoted: info });
+          await nazu.sendMessage(from, { text: statusMessage, mentions: [sender] }, { quoted: info });
         } catch (e) {
           console.error(e);
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
@@ -27419,36 +27400,35 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
             webpBuffer = await writeExif(webpBuffer, { packname: pack, author });
           }
 
-          // Usar generateWAMessageFromContent para criar a mensagem com forwardedNewsletterMessageInfo
-          const stickerMessageContent = {
-            sticker: webpBuffer
-          };
-
-          const msg = await generateWAMessageFromContent(from, stickerMessageContent, {
+          // Criar a mensagem usando generateWAMessageFromContent
+          const msg = await generateWAMessageFromContent(from, {
+            stickerMessage: webpBuffer
+          }, {
             userJid: nazu.user.id,
             quoted: info
           });
 
-          // Inserir forwardedNewsletterMessageInfo DIRETAMENTE na stickerMessage
-          // Este é o método usado por bots que simulam mensagens de canal forwarding
+          // Injetar forwardedNewsletterMessageInfo DIRETAMENTE na stickerMessage
+          // Isso faz o WhatsApp mostrar o cartão do canal + "Ver canal"
           if (msg.message?.stickerMessage) {
             msg.message.stickerMessage.forwardedNewsletterMessageInfo = {
               newsletterJid: "120363410980452460@newsletter",
-              newsletterName: "Lizzy"
+              newsletterName: "Lizzy",
+              serverMessageId: 1,
+              pttHeaderEnabled: false,
+              storyAttributeHeaderText: "",
+              isNewsletterGCC: false
             };
+            // Flags que fazem o WhatsApp renderizar como mensagem de canal
+            msg.message.stickerMessage.forwardingScore = 999;
+            msg.message.stickerMessage.isForwarded = true;
           }
 
-          // Enviar via relayMessage (necessário para preservar os dados do canal)
+          // Enviar via relayMessage para preservar as info do canal
           await nazu.relayMessage(from, msg.message, { messageId: msg.key.id });
         } catch (e) {
           console.error(e);
-          // Fallback: tentar enviar normalmente se relayMessage falhar
-          try {
-            await nazu.sendMessage(from, { sticker: webpBuffer }, { quoted: info });
-          } catch (fallbackError) {
-            console.error('Fallback também falhou:', fallbackError);
-            await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
-          }
+          await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
         }
         break;
       case 'figurinhas':
