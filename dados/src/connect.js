@@ -594,23 +594,55 @@ async function handleGroupJoinRequest(AbyssSock, inf) {
 
         if (!from || !participantJid) return;
 
-        // Registrar eventos de approve/reject apenas se X9 estiver ativado
+        // Enviar mensagem estilizada se X9 estiver ativado
         if (inf.action === 'approve' || inf.action === 'reject') {
             try {
                 const groupSettings = await loadGroupSettings(from);
                 if (groupSettings.x9) {
-                    if (DEBUG_MODE) console.log(`[Group Logs] Solicitude ${inf.action} por ${inf.author} para ${participantJid} no grupo ${from}`);
-                    const { addGroupEvent } = await import('./funcs/utils/groupLogs.js');
-                    addGroupEvent(from, {
-                        type: inf.action === 'approve' ? 'request_approved' : 'request_rejected',
-                        victimJid: participantJid,
-                        authorJid: inf.author
+                    if (DEBUG_MODE) console.log(`[X9] Solicitude ${inf.action} por ${inf.author} para ${participantJid}`);
+                    
+                    const data = new Date();
+                    const dataFormatada = data.toLocaleDateString('pt-BR');
+                    const horaFormatada = data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                    
+                    const isApproved = inf.action === 'approve';
+                    const autorNum = inf.author?.split('@')[0] || 'desconhecido';
+                    const vitimaNum = participantJid.split('@')[0];
+                    
+                    const mensagem = isApproved 
+                        ? `╭━━━〔 📥 SOLICITAÇÃO 〕━━━╮
+┃
+┃ ✅ *SOLICITAÇÃO ACEITA*
+┃
+┃ 👮 *Autor:* @${autorNum}
+┃
+┃ 👤 *Vítima:* @${vitimaNum}
+┃
+┃ 📅 *Data:* ${dataFormatada}
+┃ 🕒 *Hora:* ${horaFormatada}
+┃
+╰━━━━━━━━━━━━━━━━━━━━━━━╯`
+                        : `╭━━━〔 📥 SOLICITAÇÃO 〕━━━╮
+┃
+┃ ❌ *SOLICITAÇÃO REJEITADA*
+┃
+┃ 👮 *Autor:* @${autorNum}
+┃
+┃ 👤 *Vítima:* @${vitimaNum}
+┃
+┃ 📅 *Data:* ${dataFormatada}
+┃ 🕒 *Hora:* ${horaFormatada}
+┃
+╰━━━━━━━━━━━━━━━━━━━━━━━╯`;
+                    
+                    await AbyssSock.sendMessage(from, {
+                        text: mensagem,
+                        mentions: [inf.author, participantJid]
                     });
                 }
             } catch (logError) {
-                console.error('Erro ao registrar log:', logError.message);
+                console.error('Erro ao enviar mensagem X9:', logError.message);
             }
-            // Não retorna - continua o fluxo normal
         }
 
         if (typeof participantJid === "object") {

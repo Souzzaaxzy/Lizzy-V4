@@ -29694,50 +29694,6 @@ break;
           await reply("Ocorreu um erro 💔");
         }
         break;
-      case 'x9logs':
-      case 'x9registro':
-      case 'logsx9':
-        try {
-          if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!isGroupAdmin) return reply("Você precisa ser adm 💔");
-          if (!groupData.x9) return reply("O sistema X9 precisa estar ativado para ver os registros.\n\nUse: " + groupPrefix + "x9");
-          
-          const { getGroupLogs, formatLogEntry } = (await import('./funcs/utils/groupLogs.js'));
-          const logs = getGroupLogs(from, 20);
-          
-          if (logs.length === 0) {
-            return reply(`╭━━━〔 📋 REGISTROS 〕━━━╮
-┃
-┃ 📭 Nenhum registro encontrado.
-┃
-┃ 💡 Os registros de solicitações
-┃    de entrada aparecerão aqui.
-┃
-╰━━━━━━━━━━━━━━━━━━━━╯`);
-          }
-          
-          let response = `╭━━━〔 📋 REGISTROS 〕━━━╮
-┃
-┃ 📊 Total: ${logs.length} registros
-┃
-╰━━━━━━━━━━━━━━━━━━━━╯\n\n`;
-          
-          const allMentions = [];
-          
-          for (const log of logs) {
-            const { text, mentions } = formatLogEntry(log);
-            response += text + '\n\n';
-            if (mentions) allMentions.push(...mentions);
-          }
-          
-          const uniqueMentions = [...new Set(allMentions)];
-          await reply(response, { mentions: uniqueMentions });
-          
-        } catch (e) {
-          console.error(e);
-          await reply("Ocorreu um erro 💔");
-        }
-        break;
       case 'antis':
         try {
           if (!isGroup) return reply("Este comando só pode ser usado em grupos! 💔");
