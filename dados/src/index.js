@@ -19629,7 +19629,7 @@ case 'pin':
                 }
               };
               
-              // Função para enviar vídeo com preview rico do TikTok
+              // Função para enviar vídeo com preview estilo compartilhamento oficial do TikTok
               const sendVideoWithRichPreview = async (videoData, index) => {
                 const url = videoData.urls?.[0];
                 if (!url) return;
@@ -19639,13 +19639,9 @@ case 'pin':
                 const link = videoData.link || (isTikTokUrl ? q : '');
                 const cover = videoData.cover || '';
                 const views = videoData.views || 0;
-                const author = videoData.author || videoData.username || '';
                 
                 // Formatar visualizações
                 const viewsText = views ? `${formatNumber(views)} visualizações` : '';
-                
-                // Criar corpo da mensagem do externalAdReply
-                const adBody = viewsText ? `🎬 ${viewsText}` : '🎵 TikTok';
                 
                 try {
                   // Buscar thumbnail
@@ -19654,26 +19650,36 @@ case 'pin':
                     thumbnailBuffer = await fetchThumbnail(cover);
                   }
                   
-                  // Enviar vídeo com externalAdReply (preview rico)
+                  // Criar preview estilo compartilhamento oficial do TikTok
+                  // Usando matchedText para simular link preview nativo
+                  const captionWithInfo = title ? `${title}\n\n👁️ ${viewsText}\n🎬 TikTok` : `👁️ ${viewsText}\n🎬 TikTok`;
+                  
                   await nazu.sendMessage(from, {
                     video: { url },
-                    caption: title ? `📹 ${title}` : undefined,
+                    caption: captionWithInfo,
                     contextInfo: {
+                      // Isso força o WhatsApp a mostrar como preview de link
+                      matchedText: link || url,
+                      previewType: 'VIDEO',
+                      // Thumbnail para o preview
+                      thumbnailUrl: cover,
+                      // Informações do externalAdReply para o card
                       externalAdReply: {
-                        title: '🎵 TikTok',
-                        body: adBody,
+                        title: '🎬 TikTok',
+                        body: viewsText || 'TikTok',
                         thumbnail: thumbnailBuffer,
                         largeThumbnail: true,
-                        url: link || url
+                        url: link || url,
+                        showAdAttribution: false
                       }
                     }
                   }, { quoted: info });
                 } catch (videoErr) {
-                  // Se falhar com externalAdReply, tenta enviar só o vídeo
-                  console.error('Erro ao enviar vídeo com preview rico:', videoErr.message);
+                  // Se falhar, tenta enviar só o vídeo
+                  console.error('Erro ao enviar vídeo com preview:', videoErr.message);
                   await nazu.sendMessage(from, {
                     video: { url },
-                    caption: title ? `📹 ${title}` : undefined
+                    caption: title || 'TikTok'
                   }, { quoted: info });
                 }
               };
