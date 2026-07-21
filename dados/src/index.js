@@ -19513,25 +19513,61 @@ case 'pin':
           tiktokPromise
             .then(async (datinha) => {
               if (!datinha.ok) return reply(datinha.msg);
-              const urlz = datinha.urls?.[0];
-              if (urlz) {
-                await nazu.sendMessage(from, {
-                  [datinha.type]: {
-                    url: urlz
+              
+              // Função para enviar vídeo com botão CTA
+              const sendVideoWithButton = async (videoData, index) => {
+                const url = videoData.urls?.[0];
+                if (!url) return;
+                
+                const title = videoData.title || '';
+                const link = videoData.link || '';
+                
+                // Criar mensagem interativa com botão CTA
+                try {
+                  await nazu.sendMessage(from, {
+                    video: { url },
+                    caption: title ? `📹 ${title}` : undefined,
+                    footer: link ? `🔗 ${link}` : undefined,
+                    buttons: [
+                      {
+                        buttonId: `tiktok_${index}`,
+                        buttonText: { displayText: '📲 Ver no TikTok' },
+                        type: 1
+                      }
+                    ],
+                    headerType: 4
+                  }, { quoted: info });
+                } catch (videoErr) {
+                  // Se falhar com botões, tenta enviar só o vídeo com caption
+                  console.error('Erro ao enviar vídeo com botão:', videoErr.message);
+                  await nazu.sendMessage(from, {
+                    video: { url },
+                    caption: title ? `📹 ${title}\n\n🔗 ${link}` : undefined
+                  }, { quoted: info });
+                }
+              };
+              
+              // Verificar se tem múltiplos resultados (search)
+              const results = datinha.results;
+              if (results && results.length > 0) {
+                // Enviar até 3 vídeos
+                const videosToSend = results.slice(0, 3);
+                for (let i = 0; i < videosToSend.length; i++) {
+                  await sendVideoWithButton(videosToSend[i], i);
+                  // Pequeno delay entre envios
+                  if (i < videosToSend.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
                   }
-                }, {
-                  quoted: info
-                });
-                await nazu.sendMessage(from, { react: { text: '✅', key: info.key } });
+                }
+              } else {
+                // Compatibilidade com formato antigo (um vídeo)
+                const urlz = datinha.urls?.[0];
+                if (urlz) {
+                  await sendVideoWithButton(datinha, 0);
+                }
               }
-              if (datinha.audio) await nazu.sendMessage(from, {
-                audio: {
-                  url: datinha.audio
-                },
-                mimetype: 'audio/mp4'
-              }, {
-                quoted: info
-              });
+              
+              await nazu.sendMessage(from, { react: { text: '✅', key: info.key } });
             })
             .catch(async (e) => {
               console.error('Erro no comando TikTok (promise):', e);

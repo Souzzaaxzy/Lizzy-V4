@@ -77,10 +77,25 @@ async function search(query) {
       return { ok: false, msg: 'Nenhum vídeo encontrado' }
     }
 
+    // Get up to 3 videos
+    const results = data.results.slice(0, 3).map(video => ({
+      criador: 'null',
+      title: video.title,
+      urls: [video.no_watermark],
+      type: 'video',
+      mime: 'video/mp4',
+      audio: video.music?.play || null,
+      cover: video.cover,
+      link: video.link,
+      views: video.views
+    }))
+
+    // For backwards compatibility, also keep the single result format
     const video = data.results[0]
 
     const result = {
-      criador: 'null',
+      results: results,
+      creator: 'null',
       title: video.title,
       urls: [video.no_watermark],
       type: 'video',
