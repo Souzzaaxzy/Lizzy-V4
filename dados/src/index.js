@@ -30036,7 +30036,15 @@ break;
           if (!isBotAdmin) return reply("Eu preciso ser adm para isso 💔");
           groupData.antilinkhard = !groupData.antilinkhard;
           fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
-          await reply(`✅ Antilinkhard ${groupData.antilinkhard ? 'ativado' : 'desativado'}! Qualquer link enviado resultará em banimento.`);
+          const newsletterAnti1 = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          await nazu.sendMessage(from, { text: `✅ Antilinkhard ${groupData.antilinkhard ? 'ativado' : 'desativado'}! Qualquer link enviado resultará em banimento.` }, { contextInfo: newsletterAnti1, quoted: info });
         } catch (e) {
           console.error(e);
           await reply("Ocorreu um erro 💔");
@@ -30049,7 +30057,15 @@ break;
           if (!isBotAdmin) return reply("Eu preciso ser adm para isso 💔");
           groupData.x9 = !groupData.x9;
           fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
-          await reply(`✅ X9 ${groupData.x9 ? 'ativado' : 'desativado'}! Vou contar toda a verdade agora.`);
+          const newsletterX9 = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          await nazu.sendMessage(from, { text: `✅ X9 ${groupData.x9 ? 'ativado' : 'desativado'}! Vou contar toda a verdade agora.` }, { contextInfo: newsletterX9, quoted: info });
         } catch (e) {
           console.error(e);
           await reply("Ocorreu um erro 💔");
@@ -30522,7 +30538,15 @@ break;
           if (!isBotAdmin) return reply("Eu preciso ser adm para isso 💔");
           groupData.antibtn = !groupData.antibtn;
           fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
-          await reply(`✅ Anti Botão ${groupData.antibtn ? 'ativado' : 'desativado'}!`);
+          const newsletterBtn = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          await nazu.sendMessage(from, { text: `✅ Anti Botão ${groupData.antibtn ? 'ativado' : 'desativado'}!` }, { contextInfo: newsletterBtn, quoted: info });
         } catch (e) {
           console.error(e);
           await reply("Ocorreu um erro 💔");
@@ -30561,7 +30585,15 @@ break;
           if (!isBotAdmin) return reply("Eu preciso ser adm para isso 💔");
           groupData.antistatus = !groupData.antistatus;
           fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
-          await reply(`✅ Anti Status ${groupData.antistatus ? 'ativado' : 'desativado'}!`);
+          const newsletterStts = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          await nazu.sendMessage(from, { text: `✅ Anti Status ${groupData.antistatus ? 'ativado' : 'desativado'}!` }, { contextInfo: newsletterStts, quoted: info });
         } catch (e) {
           console.error(e);
           await reply("Ocorreu um erro 💔");
@@ -30632,14 +30664,30 @@ break;
             groupData.antiRoubo.enabled = true;
             groupData.antiRoubo.authorizedUsers = groupData.antiRoubo.authorizedUsers || [];
             fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
-            await reply("✅ *Anti Roubo de Administração ativado.*\n\nPromoções e rebaixamentos só poderão ser feitos pelo Dono do Grupo ou usuários autorizados.");
+            const newsletterAntiRoubo = {
+              forwardingScore: 999,
+              isForwarded: true,
+              forwardedNewsletterMessageInfo: {
+                newsletterJid: "120363410980452460@newsletter",
+                newsletterName: "Lizzy"
+              }
+            };
+            await nazu.sendMessage(from, { text: "✅ *Anti Roubo de Administração ativado.*\n\nPromoções e rebaixamentos só poderão ser feitos pelo Dono do Grupo ou usuários autorizados." }, { contextInfo: newsletterAntiRoubo, quoted: info });
           } else if (args[1] === 'off') {
             if (!isGroupAdmin) return reply("Você precisa ser admin 💔");
             if (groupData.antiRoubo) {
               groupData.antiRoubo.enabled = false;
             }
             fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
-            await reply("❌ *Anti Roubo de Administração desativado.*");
+            const newsletterAntiRouboOff = {
+              forwardingScore: 999,
+              isForwarded: true,
+              forwardedNewsletterMessageInfo: {
+                newsletterJid: "120363410980452460@newsletter",
+                newsletterName: "Lizzy"
+              }
+            };
+            await nazu.sendMessage(from, { text: "❌ *Anti Roubo de Administração desativado.*" }, { contextInfo: newsletterAntiRouboOff, quoted: info });
           } else {
             await reply(`❌ Uso incorreto!\n\nUse:\n• ${prefix}antiroubo - menu\n• ${prefix}antiroubo on/off`);
           }
@@ -30790,7 +30838,15 @@ break;
           if (!isBotAdmin) return reply("Eu preciso ser adm para isso 💔");
           groupData.antidoc = !groupData.antidoc;
           fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
-          await reply(`✅ Antidoc ${groupData.antidoc ? 'ativado' : 'desativado'}! Documentos enviados resultarão em banimento.`);
+          const newsletterDoc = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          await nazu.sendMessage(from, { text: `✅ Antidoc ${groupData.antidoc ? 'ativado' : 'desativado'}! Documentos enviados resultarão em banimento.` }, { contextInfo: newsletterDoc, quoted: info });
         } catch (e) {
           console.error(e);
           await reply("Ocorreu um erro 💔");
@@ -30942,7 +30998,15 @@ Qualquer solicitação de pagamento será ${groupData.antirequest ? 'bloqueada e
             antifloodData[from].interval = interval;
           }
           fs.writeFileSync(pathz.join(DATABASE_DIR, 'antiflood.json'), JSON.stringify(antifloodData, null, 2));
-          await reply(`✅ Antiflood ${antifloodData[from].enabled ? `ativado com intervalo de ${antifloodData[from].interval} segundos` : 'desativado'}!`);
+          const newsletterFlood = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          await nazu.sendMessage(from, { text: `✅ Antiflood ${antifloodData[from].enabled ? `ativado com intervalo de ${antifloodData[from].interval} segundos` : 'desativado'}!` }, { contextInfo: newsletterFlood, quoted: info });
         } catch (e) {
           console.error(e);
           await reply("Ocorreu um erro 💔");
@@ -31013,7 +31077,15 @@ Exemplos:
           if (isGroup) {
             optimizer.invalidateGroup(from);
           }
-          await reply(`✅ Antiloc ${groupData.antiloc ? 'ativado' : 'desativado'}! Localizações enviadas resultarão em banimento.`);
+          const newsletterLoc = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          await nazu.sendMessage(from, { text: `✅ Antiloc ${groupData.antiloc ? 'ativado' : 'desativado'}! Localizações enviadas resultarão em banimento.` }, { contextInfo: newsletterLoc, quoted: info });
         } catch (e) {
           console.error(e);
           await reply("Ocorreu um erro 💔");
@@ -31578,7 +31650,15 @@ case 'set-bannerbv':
           groupData.antifig.enabled = !groupData.antifig.enabled;
           fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
           const status = groupData.antifig.enabled ? "ativado" : "desativado";
-          await reply(`✅ Antifig ${status}! Figurinhas ${groupData.antifig.enabled ? "serão apagadas e o remetente receberá advertências" : "agora são permitidas"}.`);
+          const newsletterFig = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          await nazu.sendMessage(from, { text: `✅ Antifig ${status}! Figurinhas ${groupData.antifig.enabled ? "serão apagadas e o remetente receberá advertências" : "agora são permitidas"}.` }, { contextInfo: newsletterFig, quoted: info });
         } catch (e) {
           console.error('Erro no comando antifig:', e);
           await reply("Ocorreu um erro ao gerenciar o antifig 💔");
@@ -32213,8 +32293,16 @@ ${groupPrefix}antistickerplus remover → remove usuário e apaga mensagem
           };
           groupData.antiporn = !groupData.antiporn;
           fs.writeFileSync(groupFilePath, JSON.stringify(groupData));
+          const newsletterAnti = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
           const message = groupData.antiporn ? `✅ *Antiporn foi ativado com sucesso!*\n\nAgora, se alguém enviar conteúdo adulto (NSFW), será banido automaticamente. Mantenha o grupo seguro e adequado! ⚙️` : `✅ *Antiporn foi desativado.*\n\nConteúdo adulto não será mais bloqueado. Use com responsabilidade! ⚠️`;
-          reply(`${message}`);
+          await nazu.sendMessage(from, { text: message }, { contextInfo: newsletterAnti, quoted: info });
         } catch (e) {
           console.error(e);
           reply("ocorreu um erro 💔");
