@@ -408,10 +408,10 @@ async function cleanOldFiles(options = {}) {
     if (fsSync.existsSync(dadosDir)) {
       printDetail('📂 Preservando diretório de dados...');
       
-      // Only remove specific files that need updating, not the entire dados directory
+      // Only remove config.json (will be restored from backup)
+      // DO NOT remove .scripts - it's the update script itself!
       const filesToClean = [
         'src/config.json',  // This will be restored from backup
-        'src/.scripts',     // Old scripts that will be replaced
       ];
       
       for (const fileToClean of filesToClean) {
@@ -440,18 +440,30 @@ async function applyUpdate() {
   printMessage('🚀 Aplicando atualização...');
 
   try {
-    // Copiar arquivos do repositório, EXCETO o diretório dados para não perder configurações
+    // Copiar arquivos do repositório, EXCETO o diretório dados (exceto .scripts que é o update script)
     const filesToCopy = await fs.readdir(TEMP_DIR);
     
     for (const file of filesToCopy) {
-      // Pular o diretório dados - ele será restaurado do backup
-      if (file === 'dados') {
-        printDetail('📂 Preservando diretório dados (será restaurado do backup)...');
-        continue;
-      }
-      
       const srcPath = path.join(TEMP_DIR, file);
       const destPath = path.join(process.cwd(), file);
+      
+      if (file === 'dados') {
+        // Para o diretório dados, preservar tudo exceto copiar .scripts (que é o script de update)
+        const tempDadosDir = path.join(TEMP_DIR, 'dados');
+        const scriptsPath = path.join(tempDadosDir, 'src', '.scripts');
+        const destScriptsPath = path.join(process.cwd(), 'dados', 'src', '.scripts');
+        
+        // Copiar .scripts (script de update)
+        if (fsSync.existsSync(scriptsPath)) {
+          printDetail('📂 Atualizando script de atualização...');
+          await fs.mkdir(path.dirname(destScriptsPath), { recursive: true });
+          await fs.cp(scriptsPath, destScriptsPath, { recursive: true });
+        }
+        
+        // Preservar o resto do dados (não copiar)
+        printDetail('📂 Preservando dados do usuário...');
+        continue;
+      }
       
       if (fsSync.statSync(srcPath).isDirectory()) {
         await fs.cp(srcPath, destPath, { recursive: true });
