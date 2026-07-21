@@ -18491,7 +18491,7 @@ case 'addaluguel':
       // COMANDOS DO DONO - ADD/DEL CASE
       case 'addcase':
         try {
-          if (!SoDono) return reply("Apenas o dono pode usar este comando.");
+          if (!isOwner) return reply("Apenas o dono pode usar este comando.");
           if (!q) return reply(`⚙️ *Adicionar Case*\n\n📝 Use: ${groupPrefix}addcase case 'nome': { ... }`);
           
           const newCase = q.trim();
@@ -18530,7 +18530,7 @@ case 'addaluguel':
         break;
       case 'delcase':
         try {
-          if (!SoDono) return reply("Apenas o dono pode usar este comando.");
+          if (!isOwner) return reply("Apenas o dono pode usar este comando.");
           if (!q) return reply(`⚙️ *Deletar Case*\n\n📝 Use: ${groupPrefix}delcase nome_da_case`);
           
           const caseName = q.trim().toLowerCase();
@@ -18557,7 +18557,7 @@ case 'addaluguel':
       // SET GIF PARA COMANDOS DE BRINCADEIRA
       case 'setgif':
         try {
-          if (!SoDono) return reply("❌ Apenas o dono do bot pode utilizar este comando.");
+          if (!isOwner) return reply("❌ Apenas o dono do bot pode utilizar este comando.");
           
           if (!q) return reply(`❌ Informe o nome do comando.\n\nExemplo:\n${groupPrefix}setgif tapa`);
           
