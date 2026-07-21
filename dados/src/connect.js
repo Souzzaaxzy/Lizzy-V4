@@ -594,6 +594,37 @@ async function handleGroupJoinRequest(AbyssSock, inf) {
 
         if (!from || !participantJid) return;
 
+        // Registrar eventos de approve/reject
+        if (inf.action === 'approve') {
+            if (DEBUG_MODE) console.log(`[Group Logs] Solicitude aprovada por ${inf.author} para ${participantJid} no grupo ${from}`);
+            // Importar dinamicamente para evitar circular
+            try {
+                const { addGroupEvent } = await import('./funcs/utils/groupLogs.js');
+                addGroupEvent(from, {
+                    type: 'request_approved',
+                    victimJid: participantJid,
+                    authorJid: inf.author
+                });
+            } catch (logError) {
+                console.error('Erro ao registrar log de aprovação:', logError.message);
+            }
+            return; // Não processar como nova solicitação
+        }
+
+        if (inf.action === 'reject') {
+            if (DEBUG_MODE) console.log(`[Group Logs] Solicitude rejeitada por ${inf.author} para ${participantJid} no grupo ${from}`);
+            try {
+                const { addGroupEvent } = await import('./funcs/utils/groupLogs.js');
+                addGroupEvent(from, {
+                    type: 'request_rejected',
+                    victimJid: participantJid,
+                    authorJid: inf.author
+                });
+            } catch (logError) {
+                console.error('Erro ao registrar log de rejeição:', logError.message);
+            }
+            return; // Não processar como nova solicitação
+        }
 
         if (typeof participantJid === "object") {
             Object.assign(typeIds, {
