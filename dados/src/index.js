@@ -19609,6 +19609,14 @@ case 'pin':
             .then(async (datinha) => {
               if (!datinha.ok) return reply(datinha.msg);
               
+              // Função para formatar números (ex: 1000 -> 1K, 1000000 -> 1M)
+              const formatNumber = (num) => {
+                if (!num) return '0';
+                if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+                if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+                return num.toString();
+              };
+              
               // Função para enviar vídeo com botão CTA URL
               const sendVideoWithButton = async (videoData, index) => {
                 const url = videoData.urls?.[0];
@@ -19616,12 +19624,19 @@ case 'pin':
                 
                 const title = videoData.title || '';
                 const link = videoData.link || (isTikTokUrl ? q : '');
+                const views = videoData.views || 0;
+                
+                // Formatar visualizações
+                const viewsText = views ? `${formatNumber(views)} visualizações` : '';
+                
+                // Criar caption com título e visualizações
+                const caption = title ? `${title}\n\n👁️ ${viewsText}` : `👁️ ${viewsText}`;
                 
                 try {
                   // Enviar vídeo com botão CTA URL (nativeFlow)
                   await nazu.sendMessage(from, {
                     video: { url },
-                    caption: title || '',
+                    caption: caption,
                     buttons: [
                       {
                         name: "cta_url",
