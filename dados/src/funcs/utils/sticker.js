@@ -186,7 +186,7 @@ const sendSticker = async (nazu, jid, {
   packname = "",
   author = "",
   forceSquare = false
-}, { quoted } = {}) => {
+}, { quoted, contextInfo } = {}) => {
   if (!["image", "video"].includes(type)) {
     throw new Error('Tipo deve ser "image" ou "video"');
   }
@@ -201,7 +201,12 @@ const sendSticker = async (nazu, jid, {
     webpBuffer = await writeExif(webpBuffer, { packname, author });
   }
 
-  await nazu.sendMessage(jid, { sticker: webpBuffer }, { quoted });
+  const messageOptions = { quoted };
+  if (contextInfo) {
+    messageOptions.contextInfo = contextInfo;
+  }
+
+  await nazu.sendMessage(jid, { sticker: webpBuffer }, messageOptions);
   return webpBuffer;
 };
 
