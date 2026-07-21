@@ -34276,6 +34276,14 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
 💞 Relação » ${relacao}
 🎖️ Cargo » ${cargo}
 ╚══════════════╝`;
+          const newsletterContext = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
           // Envia a mensagem com a imagem do perfil
           try {
             await nazu.sendMessage(
@@ -34285,7 +34293,7 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
                 caption: perfilText,
                 mentions: [target]
               },
-              { quoted: info }
+              { quoted: info, contextInfo: newsletterContext }
             );
           } catch (sendError) {
             console.error('Erro ao enviar imagem do perfil:', sendError.message);
@@ -34298,22 +34306,32 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
                   caption: perfilText,
                   mentions: [target]
                 },
-                { quoted: info }
+                { quoted: info, contextInfo: newsletterContext }
               );
             } catch (fallbackError) {
               console.error('Erro ao enviar com fallback:', fallbackError.message);
               // Se falhar tudo, tenta enviar apenas texto
               await nazu.sendMessage(
                 from,
-                { text: perfilText, mentions: [target] },
+                { text: perfilText, mentions: [target], contextInfo: newsletterContext },
                 { quoted: info }
               );
             }
           }
         } catch (error) {
           console.error('Erro ao processar comando perfil:', error);
-          await reply(
-            'Ocorreu um erro ao gerar o perfil 💔'
+          const newsletterContext = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          await nazu.sendMessage(
+            from,
+            { text: 'Ocorreu um erro ao gerar o perfil 💔', contextInfo: newsletterContext },
+            { quoted: info }
           );
         }
         break;
