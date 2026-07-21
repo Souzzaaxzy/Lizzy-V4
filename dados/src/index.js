@@ -19629,18 +19629,15 @@ case 'pin':
                 }
               };
               
-              // Função para enviar vídeo com preview estilo compartilhamento oficial do TikTok
+              // Função para enviar vídeo com card estilo compartilhamento oficial do TikTok
               const sendVideoWithRichPreview = async (videoData, index) => {
                 const url = videoData.urls?.[0];
                 if (!url) return;
                 
                 const title = videoData.title || '';
-                // Use o link oficial ou a URL original do TikTok
                 const link = videoData.link || (isTikTokUrl ? q : '');
                 const cover = videoData.cover || '';
                 const views = videoData.views || 0;
-                
-                // Formatar visualizações
                 const viewsText = views ? `${formatNumber(views)} visualizações` : '';
                 
                 try {
@@ -19650,33 +19647,42 @@ case 'pin':
                     thumbnailBuffer = await fetchThumbnail(cover);
                   }
                   
-                  // Criar preview estilo compartilhamento oficial do TikTok
-                  // Usando matchedText para simular link preview nativo
-                  const captionWithInfo = title ? `${title}\n\n👁️ ${viewsText}\n🎬 TikTok` : `👁️ ${viewsText}\n🎬 TikTok`;
-                  
+                  // Enviar vídeo com card de preview rico
+                  // Primeiro envia o vídeo com caption estilizada
                   await nazu.sendMessage(from, {
                     video: { url },
-                    caption: captionWithInfo,
+                    caption: title,
                     contextInfo: {
-                      // Isso força o WhatsApp a mostrar como preview de link
-                      matchedText: link || url,
-                      previewType: 'VIDEO',
-                      // Thumbnail para o preview
-                      thumbnailUrl: cover,
-                      // Informações do externalAdReply para o card
                       externalAdReply: {
                         title: '🎬 TikTok',
                         body: viewsText || 'TikTok',
                         thumbnail: thumbnailBuffer,
                         largeThumbnail: true,
                         url: link || url,
-                        showAdAttribution: false
+                        showAdAttribution: true
                       }
                     }
                   }, { quoted: info });
+                  
+                  // Enviar card com informações do TikTok usando sendInteractiveMessage
+                  const cardMessage = `👁️ *${viewsText}*\n🎬 *TikTok*`;
+                  
+                  await sendInteractiveMessage(nazu, from, {
+                    text: cardMessage,
+                    interactiveButtons: [
+                      {
+                        name: "cta_url",
+                        buttonParamsJson: JSON.stringify({
+                          display_text: "🔗 Abrir no TikTok",
+                          url: link || url
+                        })
+                      }
+                    ]
+                  }, { quoted: info });
+                  
                 } catch (videoErr) {
-                  // Se falhar, tenta enviar só o vídeo
                   console.error('Erro ao enviar vídeo com preview:', videoErr.message);
+                  // Fallback: enviar só o vídeo
                   await nazu.sendMessage(from, {
                     video: { url },
                     caption: title || 'TikTok'
