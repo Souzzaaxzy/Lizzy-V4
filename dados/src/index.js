@@ -18597,7 +18597,9 @@ case 'addaluguel':
           // Salvar localmente na pasta database/gifs
           const ext = isImage && !isGif ? 'jpg' : (isGif ? 'gif' : 'mp4');
           const mediaPath = `./database/gifs/${cmdName}.${ext}`;
-          const fullPath = path.join(__dirname, mediaPath);
+          const gifsDir = path.join(__dirname, './database/gifs');
+          const fullPath = path.join(gifsDir, `${cmdName}.${ext}`);
+          fs.mkdirSync(gifsDir, { recursive: true });
           fs.writeFileSync(fullPath, mediaBuffer);
           
           // Salvar no games.json com o caminho local (formato esperado pelo bot)
