@@ -18594,31 +18594,29 @@ case 'addaluguel':
             gamesData.games2 = {};
           }
           
-          // Salva a mídia - faz upload para o catbox
-          try {
-            const catboxUrl = await upload(mediaBuffer);
-            
-            if (isImage && !isGif) {
-              // Salvar como imagem
-              gamesData.games2[cmdName] = {
-                image: { url: catboxUrl }
-              };
-            } else {
-              // Salvar como vídeo/GIF
-              gamesData.games2[cmdName] = {
-                video: { url: catboxUrl },
-                isGif: isGif
-              };
-            }
-            
-            fs.writeFileSync(gamesFilePath, JSON.stringify(gamesData, null, 2));
-            
-            const tipoMedia = isImage && !isGif ? 'imagem' : (isGif ? 'GIF' : 'vídeo');
-            await reply(`✅ ${tipoMedia} do comando "${cmdName}" atualizada com sucesso!`);
-          } catch (uploadErr) {
-            console.error('Erro ao fazer upload da mídia:', uploadErr);
-            await reply("❌ Ocorreu um erro ao salvar a mídia.");
+          // Salvar localmente na pasta database/gifs
+          const ext = isImage && !isGif ? 'jpg' : (isGif ? 'gif' : 'mp4');
+          const mediaPath = `./database/gifs/${cmdName}.${ext}`;
+          const fullPath = path.join(__dirname, mediaPath);
+          fs.writeFileSync(fullPath, mediaBuffer);
+          
+          // Salvar no games.json com o caminho local (formato esperado pelo bot)
+          if (isImage && !isGif) {
+            gamesData.games2[cmdName] = {
+              image: { url: mediaPath },
+              isGif: false
+            };
+          } else {
+            gamesData.games2[cmdName] = {
+              video: { url: mediaPath },
+              isGif: isGif
+            };
           }
+          
+          fs.writeFileSync(gamesFilePath, JSON.stringify(gamesData, null, 2));
+          
+          const tipoMedia = isImage && !isGif ? 'imagem' : (isGif ? 'GIF' : 'vídeo');
+          await reply(`✅ ${tipoMedia} do comando "${cmdName}" atualizada com sucesso!`);
         } catch (e) {
           console.error(e);
           await reply("❌ Ocorreu um erro interno.");
