@@ -1153,10 +1153,15 @@ async function createBotSocket(authDir) {
 
             console.log(`\n🔔 [GROUPS UPDATE] Recebido evento com ${updates.length} atualização(ões)`);
 
+            // Obter ID do bot para filtrar eventos gerados pelo próprio bot
+            const botJid = AbyssSock.user?.id || '';
+            const botNum = botJid.split(':')[0]?.replace('@s.whatsapp.net', '') || '';
+
             if (DEBUG_MODE) {
                 console.log('\n🐛 ========== GROUPS UPDATE ==========');
                 console.log('📅 Timestamp:', new Date().toISOString());
                 console.log('📊 Number of updates:', updates.length);
+                console.log('🤖 Bot JID:', botJid);
 
                 updates.forEach((update, index) => {
                     console.log(`\n--- Update ${index + 1} ---`);
@@ -1172,6 +1177,46 @@ async function createBotSocket(authDir) {
                 try {
                     const groupId = ev.id;
 
+                    // 🔹 Verificação de segurança: Ignorar eventos do próprio bot
+                    // O WhatsApp pode gerar eventos "fantasma" quando o bot faz operações de grupo
+                    const author = ev.subjectOwner || ev.descOwner || ev.inviteOwner || ev.author || null;
+                    if (author) {
+                        const authorNum = author.split('@')[0]?.replace('@s.whatsapp.net', '') || '';
+                        if (authorNum === botNum) {
+                            console.log(`[X9] Ignorando evento gerado pelo próprio bot (${botNum})`);
+                            return;
+                        }
+                    }
+
+                    // 🔹 Verificação: Ignorar eventos sem autor para operações de mudança
+                    // Eventos internos do WhatsApp ou do bot não têm autor identificado
+                    const hasRealChange = ev.subject || ev.desc !== undefined || ev.imgUrl || ev.picUrl || ev.inviteCode || ev.announce !== undefined || ev.restrict !== undefined || ev.ephemeralDuration !== undefined;
+                    
+                    if (!author && hasRealChange) {
+                        // Se não tem autor mas tem mudança, pode ser evento interno - verificar se é mudança real
+                        console.log('[X9] Evento sem autor detectado - verificando se é mudança real...');
+                        
+                        // Para nome, verificar se realmente mudou
+                        if (ev.subject) {
+                            const currentMeta = await AbyssSock.groupMetadata(groupId).catch(() => null);
+                            const currentName = currentMeta?.subject || '';
+                            if (currentName === ev.subject || !ev.subject) {
+                                console.log('[X9] Ignorando evento de nome sem mudança real (possível evento interno)');
+                                return;
+                            }
+                        }
+                        
+                        // Para descrição
+                        if (ev.desc !== undefined) {
+                            const currentMeta = await AbyssSock.groupMetadata(groupId).catch(() => null);
+                            const currentDesc = currentMeta?.desc || '';
+                            if (currentDesc === (ev.desc || '')) {
+                                console.log('[X9] Ignorando evento de descrição sem mudança real');
+                                return;
+                            }
+                        }
+                    }
+
                     // 🔹 Buscar config do grupo
                     const groupData = await getGroupData(groupId).catch(() => null);
                     if (!groupData?.x9) {
@@ -1182,14 +1227,6 @@ async function createBotSocket(authDir) {
                     console.log(`[GROUPS UPDATE] X9 ativado para ${groupId} - processando evento`);
                     let mensagem = null;
                     let mention = [];
-
-                    // Obter autor da alteração diretamente do evento
-                    let author = ev.subjectOwner || ev.descOwner || ev.inviteOwner || null;
-                    
-                    // Para link de convite, tentar obter autor de outras fontes
-                    if (!author && ev.inviteCode) {
-                        author = ev.author || null;
-                    }
                     
                     // Formatar texto e menção do autor
                     let authorText = '';
