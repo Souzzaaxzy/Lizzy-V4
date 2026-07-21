@@ -1210,19 +1210,42 @@ async function createBotSocket(authDir) {
 
                     // 📝 NOME ALTERADO
                     else if (ev.subject) {
-                        mensagem = `📝 *X9 Report:* Nome do grupo alterado!${authorText ? ` por ${authorText}` : ''}\n🔸 Novo nome: *${ev.subject}*`;
-                        console.log('[X9] Nome alterado:', ev.subject);
+                        // Verificar se realmente houve mudança comparando com nome atual
+                        const currentMeta = await AbyssSock.groupMetadata(groupId).catch(() => null);
+                        const currentName = currentMeta?.subject || null;
+                        
+                        // Só envia notificação se o nome realmente mudou
+                        if (currentName && currentName !== ev.subject) {
+                            mensagem = `📝 *X9 Report:* Nome do grupo alterado!${authorText ? ` por ${authorText}` : ''}\n🔹 Anterior: *${currentName}*\n🔸 Novo: *${ev.subject}*`;
+                            console.log('[X9] Nome alterado:', ev.subject, '(anterior:', currentName + ')');
+                        } else {
+                            console.log('[X9] Nome do grupo já é o mesmo - ignorando evento');
+                        }
                     }
 
                     // 📜 DESCRIÇÃO ALTERADA
                     else if (ev.desc !== undefined) {
+                        // Verificar se realmente houve mudança comparando com descrição atual
+                        const currentMeta = await AbyssSock.groupMetadata(groupId).catch(() => null);
+                        const currentDesc = currentMeta?.desc || null;
+                        
+                        // Se desc foi removida (ev.desc === null), só notifica se havia descrição antes
                         if (ev.desc === null) {
-                            mensagem = `📜 *X9 Report:* A descrição do grupo foi *removida*!${authorText ? ` por ${authorText}` : ''}`;
-                        } else {
+                            if (currentDesc) {
+                                mensagem = `📜 *X9 Report:* A descrição do grupo foi *removida*!${authorText ? ` por ${authorText}` : ''}`;
+                                console.log('[X9] Descrição removida');
+                            } else {
+                                console.log('[X9] Descrição já estava vazia - ignorando evento');
+                            }
+                        } 
+                        // Se desc foi alterada, só notifica se realmente mudou
+                        else if (currentDesc !== ev.desc) {
                             const descText = ev.desc.substring(0, 200) + (ev.desc.length > 200 ? '...' : '');
                             mensagem = `📜 *X9 Report:* Descrição do grupo alterada!${authorText ? ` por ${authorText}` : ''}\n📝 Nova descrição: ${descText}`;
+                            console.log('[X9] Descrição alterada');
+                        } else {
+                            console.log('[X9] Descrição do grupo já é a mesma - ignorando evento');
                         }
-                        console.log('[X9] Descrição alterada');
                     }
 
                     // 🔗 LINK DE CONVITE ALTERADO
