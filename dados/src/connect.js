@@ -592,25 +592,42 @@ async function handleGroupJoinRequest(AbyssSock, inf) {
         const from = inf.id;
         let participantJid = inf.participantPn || inf.participant;
 
-        if (!from || !participantJid) return;
+        console.log('[JOIN-REQUEST] Evento recebido:', JSON.stringify(inf, null, 2));
+
+        if (!from || !participantJid) {
+            console.log('[JOIN-REQUEST] Dados insuficientes - from:', from, 'participant:', participantJid);
+            return;
+        }
 
         // Detectar approve/reject de solicitação
         if (inf.action === 'approve' || inf.action === 'reject') {
+            console.log('[JOIN-REQUEST] Ação detectada:', inf.action);
+            
             const groupSettings = await loadGroupSettings(from);
-            if (groupSettings.x9 && inf.author) {
+            console.log('[JOIN-REQUEST] X9 ativo?', groupSettings?.x9, 'Autor:', inf.author);
+            
+            if (groupSettings?.x9) {
                 const data = new Date();
                 const dataFormatada = data.toLocaleDateString('pt-BR');
                 const horaFormatada = data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-                const autorNum = inf.author?.split('@')[0] || 'desconhecido';
-                const vitimaNum = participantJid?.split('@')[0] || 'desconhecido';
+                
+                // Tentar obter o autor de múltiplas fontes
+                const autor = inf.author || inf.actor || inf.requestAuthor || null;
+                const autorNum = autor?.split('@')[0]?.replace('@s.whatsapp.net', '') || 'desconhecido';
+                const vitimaNum = participantJid?.split('@')[0]?.replace('@s.whatsapp.net', '') || 'desconhecido';
+                
                 const isApprove = inf.action === 'approve';
+                
+                // Se não tem autor identificado, ainda assim notifica (pode ser aprovação automática do WhatsApp)
+                const autorText = autorNum !== 'desconhecido' ? `@${autorNum}` : 'Sistema';
+                const mentionList = autor ? [autor, participantJid].filter(Boolean) : [participantJid].filter(Boolean);
                 
                 const mensagem = isApprove
                     ? `╭━━━〔 📥 SOLICITAÇÃO 〕━━━╮
 ┃
 ┃ ✅ *SOLICITAÇÃO ACEITA*
 ┃
-┃ 👮 *Autor:* @${autorNum}
+┃ 👮 *Autor:* ${autorText}
 ┃
 ┃ 👤 *Vítima:* @${vitimaNum}
 ┃
@@ -622,7 +639,7 @@ async function handleGroupJoinRequest(AbyssSock, inf) {
 ┃
 ┃ ❌ *SOLICITAÇÃO REJEITADA*
 ┃
-┃ 👮 *Autor:* @${autorNum}
+┃ 👮 *Autor:* ${autorText}
 ┃
 ┃ 👤 *Vítima:* @${vitimaNum}
 ┃
@@ -631,10 +648,14 @@ async function handleGroupJoinRequest(AbyssSock, inf) {
 ┃
 ╰━━━━━━━━━━━━━━━━━━━━━━━╯`;
                 
+                console.log('[JOIN-REQUEST] Enviando notificação X9...');
                 await AbyssSock.sendMessage(from, {
                     text: mensagem,
-                    mentions: [inf.author, participantJid]
+                    mentions: mentionList
+                }).catch(err => {
+                    console.error('[JOIN-REQUEST] Erro ao enviar mensagem:', err.message);
                 });
+                console.log('[JOIN-REQUEST] Notificação X9 enviada com sucesso!');
             }
             return;
         }
