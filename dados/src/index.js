@@ -27937,6 +27937,102 @@ break;
         }
         break;
       }
+      case 'dia': {
+        try {
+          if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
+          if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+          
+          const newsletterContext = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          
+          const members = AllgroupMembers || [];
+          const message = `☀️ _BOM DIAAA!!_ 🔥\n\n𝐂𝐇𝐀𝐌𝐀𝐍𝐃𝐎 🚨 ᴛᴏᴅᴀ ᴀ 𝐓𝐑𝐎𝐏𝐀 ᴅᴏ 𝐆𝐑𝐔𝐏𝐎 😈🔥, ᴏs 𝐀𝐓𝐈𝐕𝐎𝐒⚡, ᴏs 𝐌𝐈𝐓𝐀𝐃𝐎𝐑𝐄𝐒🏆, ᴏs 𝐑𝐈𝐒𝐀𝐃𝐄𝐈𝐑𝐎𝐒🤣 e ᴏs 𝐐𝐔𝐄 𝐍Ã𝐎 𝐃𝐎𝐑𝐌𝐄𝐌 🫡☕\n\n𝐌𝐄𝐌𝐁𝐑𝐎 ᴄᴏᴍᴜ𝐦 🫵🏻 𝐉Á 𝐋𝐄𝐕𝐀𝐍𝐓𝐀 𝐃𝐀 𝐂𝐀𝐌𝐀 🛌💀, porque o 𝐃𝐈𝐀 começou ☀️🔥`;
+          
+          await nazu.sendMessage(from, {
+            text: message,
+            mentions: members
+          }, {
+            contextInfo: newsletterContext
+          }).catch(err => {
+            console.error('Erro ao enviar mensagem dia:', err);
+            reply("❌ Erro ao tentar enviar a mensagem.");
+          });
+        } catch (e) {
+          console.error(e);
+          reply("❌ Ocorreu um erro ao executar o comando.");
+        }
+        break;
+      }
+      case 'tarde': {
+        try {
+          if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
+          if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+          
+          const newsletterContext = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          
+          const members = AllgroupMembers || [];
+          const message = `🌤️ _BOA TARDEEE!!_ 🔥\n\n𝐀𝐓𝐄𝐍ÇÃ𝐎 🚨 ᴛᴏᴅᴀ ᴀ 𝐁𝐀𝐍𝐃𝐀 ᴅᴏ 𝐆𝐑𝐔𝐏𝐎 😎💥, ᴏs 𝐂𝐇𝐀𝐓𝐄𝐈𝐑𝐎𝐒🗣️, ᴏs 𝐅𝐀𝐙𝐄𝐃𝐎𝐑𝐄𝐒 𝐃𝐄 𝐌𝐄𝐌𝐄🤣, ᴏs 𝐕𝐈𝐂𝐈𝐀𝐃𝐎𝐒 𝐍𝐎 𝐙𝐀𝐏📱🔥\n\n𝐌𝐄𝐌𝐁𝐑𝐎 ᴄᴏᴍᴜ𝐦 🫵🏻 𝐒𝐄 𝐌𝐀𝐍𝐈𝐅𝐄𝐒𝐓𝐀 😤⚡\n\nNão fica só olhando 👀, participa dessa bagunça🤣🔥`;
+          
+          await nazu.sendMessage(from, {
+            text: message,
+            mentions: members
+          }, {
+            contextInfo: newsletterContext
+          }).catch(err => {
+            console.error('Erro ao enviar mensagem tarde:', err);
+            reply("❌ Erro ao tentar enviar a mensagem.");
+          });
+        } catch (e) {
+          console.error(e);
+          reply("❌ Ocorreu um erro ao executar o comando.");
+        }
+        break;
+      }
+      case 'noite': {
+        try {
+          if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
+          if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+          
+          const newsletterContext = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          
+          const members = AllgroupMembers || [];
+          const message = `🌙 _BOA NOITEEE!!_ 🌌🔥\n\n𝐂𝐇𝐀𝐌𝐀𝐍𝐃𝐎 🚨 ᴏs 𝐍𝐎𝐂𝐓𝐔𝐑𝐍𝐎𝐒 🌙, ᴏs 𝐕𝐈𝐑𝐀𝐃𝐎𝐒 𝐃𝐀 𝐌𝐀𝐃𝐑𝐔𝐆𝐀𝐃𝐀 🌚🔥, ᴏs 𝐐𝐔𝐄 𝐍Ã𝐎 𝐒𝐀𝐈𝐌 𝐃𝐎 𝐆𝐑𝐔𝐏𝐎 📲🤣\n\n𝐌𝐄𝐌𝐁𝐑𝐎 ᴄᴏᴍᴜ𝐦 🫵🏻 𝐕𝐀𝐈 𝐃𝐎𝐑𝐌𝐈𝐑 😴💤 ou vai ficar 𝐅𝐈𝐂𝐀𝐍𝐃𝐎 𝐎𝐍𝐋𝐈𝐍𝐄 👀🔥?\n\nQue a noite seja tranquila 🌌 e o spam continue amanhã 😈⚡`;
+          
+          await nazu.sendMessage(from, {
+            text: message,
+            mentions: members
+          }, {
+            contextInfo: newsletterContext
+          }).catch(err => {
+            console.error('Erro ao enviar mensagem noite:', err);
+            reply("❌ Erro ao tentar enviar a mensagem.");
+          });
+        } catch (e) {
+          console.error(e);
+          reply("❌ Ocorreu um erro ao executar o comando.");
+        }
+        break;
+      }
       case 'smm': {
         // VERSÃO ATUALIZADA - SEM LIMITES E COM NOMES COMPLETOS
         if (!isOwner) return reply('❌ Este comando é restrito ao dono do bot.');

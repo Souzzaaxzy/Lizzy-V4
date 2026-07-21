@@ -228,6 +228,13 @@ export default async function menuadm(prefix, botName = "MeuBot", userName = "Us
 │ ⚙ ${prefix}npc config
 ╰──────────────
 
+
+╭─❖ ☀️ SAUDAÇÕES EM GRUPO
+│ 🌅 ${prefix}dia
+│ 🌤️ ${prefix}tarde
+│ 🌙 ${prefix}noite
+╰──────────────
+
 ╭─────────────────╮
 ╰─────────────────╯
 `;
