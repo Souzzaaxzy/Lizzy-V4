@@ -31921,9 +31921,10 @@ case 'set-bannerbv':
           if (!isGroupAdmin) return reply("Você precisa ser administrador 💔");
           
           // Coleta todos os usuários mencionados
-          let targetUsers = [];
+          const targetUsers = new Set();
           if (menc_os2) {
-            targetUsers = Array.isArray(menc_os2) ? menc_os2 : [menc_os2];
+            const mentioned = Array.isArray(menc_os2) ? menc_os2 : [menc_os2];
+            mentioned.forEach(u => targetUsers.add(u));
           }
           
           // Se informou número(s) no texto
@@ -31932,26 +31933,26 @@ case 'set-bannerbv':
             for (const part of parts) {
               const cleanNumber = part.replace(/[@\s\-()]/g, '').replace(/\D/g, '');
               if (cleanNumber.length >= 10) {
-                const candidateJid = buildUserId(cleanNumber, config);
+                // Simplified: add directly as JID
                 if (groupMetadata?.participants) {
                   const participant = groupMetadata.participants.find(p => 
                     p.id === candidateJid || p.lid === candidateJid || (p.lid && p.lid.includes(cleanNumber))
                   );
-                  if (participant?.lid) targetUsers.push(participant.lid);
-                  else if (participant?.id) targetUsers.push(participant.id);
+                  if (participant?.lid) targetUsers.add(participant.lid);
+                  else if (participant?.id) targetUsers.add(participant.id);
                 } else {
                   try {
                     const lid = await getLidFromJidCached(nazu, candidateJid);
-                    targetUsers.push(lid && lid.includes('@lid') ? lid : candidateJid);
+                    targetUsers.add(lid && lid.includes('@lid') ? lid : candidateJid);
                   } catch (err) {
-                    targetUsers.push(candidateJid);
+                    targetUsers.add(candidateJid);
                   }
                 }
               }
             }
           }
           
-          if (targetUsers.length === 0) return reply(`❌ Uso: ${groupPrefix}addblacklist <número>\\n\\nExemplo: ${groupPrefix}addblacklist 5511987654321\\n\\nOu marque: ${groupPrefix}addblacklist @usuario`);
+          if (targetUsers.size === 0) return reply(`❌ Uso: ${groupPrefix}addblacklist <número>\\n\\nExemplo: ${groupPrefix}addblacklist 5511987654321\\n\\nOu marque: ${groupPrefix}addblacklist @usuario`);
           
           const reason = q ? (q.includes('@') || !menc_os2) ? (args.length > 1 ? args.slice(1).join(' ') : 'Motivo não informado') : q.trim() : 'Motivo não informado';
           const groupFilePath = buildGroupFilePath(from);
