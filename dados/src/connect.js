@@ -594,8 +594,15 @@ async function handleGroupJoinRequest(AbyssSock, inf) {
 
         if (!from || !participantJid) return;
 
-// Detectar approve/reject de solicitacao
-        if (inf.action === 'approve' || inf.action === 'reject') {
+// Detectar approve/reject de solicitacao - múltiplas formas de detecção
+        const action = inf.action || inf.requestMethod || inf.method || null;
+        const isApproveAction = action === 'approve' || action === 'Approve' || action === 'approved';
+        const isRejectAction = action === 'reject' || action === 'Reject' || action === 'rejected' || action === 'reject';
+        
+        console.log('[JOIN REQUEST] Action detection:', { action, isApproveAction, isRejectAction });
+        
+        if (isApproveAction || isRejectAction) {
+            console.log(`[JOIN REQUEST] ${isApproveAction ? 'APPROVE' : 'REJECT'} detected!`);
             console.log(`[JOIN REQUEST] ${inf.action.toUpperCase()} detected for group ${from}`);
             console.log('[JOIN REQUEST] Full event data:', JSON.stringify(inf, null, 2));
             
@@ -614,9 +621,9 @@ async function handleGroupJoinRequest(AbyssSock, inf) {
                 const vitima = participantJid || inf.participant || inf.requestingUserJid || inf.requestingUser || null;
                 const vitimaNum = vitima?.split('@')[0]?.replace('@s.whatsapp.net', '') || 'desconhecido';
 
-                const isApprove = inf.action === 'approve';
+                const isApprove = isApproveAction;
 
-                console.log(`[JOIN REQUEST] Autor: ${autorNum}, Vtima: ${vitimaNum}, Acao: ${inf.action}`);
+                console.log(`[JOIN REQUEST] Autor: ${autorNum}, Vtima: ${vitimaNum}, Acao: ${action}`);
 
                 const autorText = autorNum !== 'desconhecido' ? `@${autorNum}` : 'Sistema';
                 const mentionList = [];
@@ -1428,7 +1435,10 @@ async function createBotSocket(authDir) {
 
         // Listener para solicitações de entrada em grupos (join requests)
         AbyssSock.ev.on('group.join-request', async (inf) => {
-            console.log('Join Request Event:', inf);
+            console.log('╔══════════════════════════════════════╗');
+            console.log('║  🔔 JOIN REQUEST EVENT DETECTED     ║');
+            console.log('╚══════════════════════════════════════╝');
+            console.log('Full Event Data:', JSON.stringify(inf, null, 2));
             
             const { id: groupId, author, participant, action, method } = inf;
             
