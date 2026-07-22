@@ -23,13 +23,11 @@ import msgCounter from './utils/msgCounter.js';
 import { handleGroupParticipantsUpdate } from './index.js';
 import { initCaptchaIndex, loadCaptchaJson, saveCaptchaJson } from './utils/captchaIndex.js';
 import CaptchaIndex from './utils/captchaIndex.js';
-// X9 System - Sistema moderno de solicitações de entrada
+// X9 System - Sistema de solicitações de entrada
 import { 
-    processNewJoinRequest, 
-    processX9ButtonCallback, 
-    processWhatsAppNativeAction,
+    processNewJoinRequest,
+    notifyWhatsAppApproval,
     isGroupAdmin,
-    isX9ButtonCallback,
     cleanupX9System
 } from './utils/x9System.js';
 const __filename = fileURLToPath(import.meta.url);
@@ -683,8 +681,22 @@ async function handleWhatsAppNativeAction(AbyssSock, inf) {
         
         if (!groupSettings?.x9) return;
         
-        // Processa via novo sistema X9
-        await processWhatsAppNativeAction(AbyssSock, inf, groupSettings);
+        const targetParticipant = participant || (participants && participants[0]);
+        const adminJid = author || authorPn;
+        
+        if (!targetParticipant || !adminJid) return;
+        
+        // Normaliza JID
+        let participantJid = targetParticipant;
+        if (typeof participantJid === 'object') {
+            participantJid = participantJid.pn || participantJid.lid || participantJid.id || targetParticipant;
+        }
+        if (!participantJid.includes('@')) {
+            participantJid = `${participantJid}@s.whatsapp.net`;
+        }
+        
+        // Processa notificação
+        await notifyWhatsAppApproval(AbyssSock, groupId, participantJid, adminJid);
         
     } catch (error) {
         console.error(`❌ Erro em handleWhatsAppNativeAction: ${error.message}`);
@@ -1764,74 +1776,6 @@ async function createBotSocket(authDir) {
                 }
             });
         };
-
-        // ═══════════════════════════════════════════════════════════════
-        // X9 SYSTEM - Handler de Callbacks de Botões
-        // ═══════════════════════════════════════════════════════════════
-        AbyssSock.ev.on('messages.upsert', async (m) => {
-            if (!m.messages || !Array.isArray(m.messages)) return;
-            
-            for (const info of m.messages) {
-                // Verifica se é uma resposta de botão (callback)
-                const messageType = Object.keys(info.message || {})[0];
-                
-                // Buttons Response (legacy format)
-                if (messageType === 'buttonsResponseMessage') {
-                    const buttonResponse = info.message.buttonsResponseMessage;
-                    const selectedButtonId = buttonResponse?.selectedButtonId;
-                    const senderJid = info.key.participant || info.key.remoteJid;
-                    const groupId = info.key.remoteJid;
-                    
-                    console.log(`[X9] Button callback detectado: ${selectedButtonId} de ${senderJid}`);
-                    
-                    // Verifica se é um callback do X9
-                    if (selectedButtonId && selectedButtonId.startsWith('x9_')) {
-                        try {
-                            // Verifica se é admin
-                            const adminCheck = await isGroupAdmin(AbyssSock, groupId, senderJid);
-                            
-                            if (!adminCheck) {
-                                console.log(`[X9] Usuário ${senderJid} não é admin, ignorando callback`);
-                                continue;
-                            }
-                            
-                            // Processa o callback
-                            await processX9ButtonCallback(AbyssSock, info, { selectedButtonId }, senderJid, adminCheck);
-                        } catch (error) {
-                            console.error(`[X9] Erro ao processar callback:`, error);
-                        }
-                    }
-                }
-                
-                // Template Button Reply (novo formato)
-                if (messageType === 'templateButtonReplyMessage') {
-                    const templateResponse = info.message.templateButtonReplyMessage;
-                    const selectedId = templateResponse?.selectedId;
-                    const senderJid = info.key.participant || info.key.remoteJid;
-                    const groupId = info.key.remoteJid;
-                    
-                    console.log(`[X9] Template button callback detectado: ${selectedId} de ${senderJid}`);
-                    
-                    // Verifica se é um callback do X9
-                    if (selectedId && selectedId.startsWith('x9_')) {
-                        try {
-                            // Verifica se é admin
-                            const adminCheck = await isGroupAdmin(AbyssSock, groupId, senderJid);
-                            
-                            if (!adminCheck) {
-                                console.log(`[X9] Usuário ${senderJid} não é admin, ignorando callback`);
-                                continue;
-                            }
-                            
-                            // Processa o callback
-                            await processX9ButtonCallback(AbyssSock, info, { selectedButtonId: selectedId }, senderJid, adminCheck);
-                        } catch (error) {
-                            console.error(`[X9] Erro ao processar template callback:`, error);
-                        }
-                    }
-                }
-            }
-        });
 
         AbyssSock.ev.on('connection.update', async (update) => {
             const {

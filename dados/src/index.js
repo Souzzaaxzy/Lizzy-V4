@@ -521,6 +521,8 @@ import CaptchaIndex from './utils/captchaIndex.js';
 import npcManager from './utils/npcManager.js';
 import nameReactions from './utils/nameReactions.js';
 import msgCounter from './utils/msgCounter.js';
+// X9 System - Integração com comandos de aprovação
+import { processNewJoinRequest, updateCardOnApprove, updateCardOnReject, notifyWhatsAppApproval, findRequestByNumber, x9Store } from './utils/x9System.js';
 import { saveWelcomeImage, loadWelcomeImage, deleteWelcomeImage, isLocalImagePath } from './utils/welcomeImages.js';
 import fsPromises from 'fs/promises';
 import {
@@ -28991,17 +28993,15 @@ break;
               try {
                 await nazu.groupRequestParticipantsUpdate(from, [req.jid], 'approve');
                 approved.push(req.jid);
+                
+                // X9 System: Atualiza card se existir
+                if (groupData.x9) {
+                  await updateCardOnApprove(nazu, from, req.jid, sender).catch(() => {});
+                }
               } catch (err) {
                 failed.push(req.jid);
                 console.error(`Erro ao aprovar ${req.jid}:`, err);
               }
-            }
-            // Notificação X9 para aprovação em massa
-            if (groupData.x9 && approved.length > 0) {
-              await nazu.sendMessage(from, {
-                text: `✅ *X9 Report:* ${approved.length} solicitações foram aprovadas em massa por @${sender.split('@')[0]}.`,
-                mentions: [sender],
-              }).catch(err => console.error(`❌ Erro ao enviar X9: ${err.message}`));
             }
             let responseMsg = `✅ *Aprovação em Massa Concluída!*\n\n`;
             responseMsg += `✅ Aprovados: ${approved.length}\n`;
@@ -29018,12 +29018,12 @@ break;
             try {
               await nazu.groupRequestParticipantsUpdate(from, [user], 'approve');
               approved.push(user);
-              // Notificação X9 para aprovação de solicitação
+              
+              // X9 System: Atualiza card se existir
               if (groupData.x9) {
-                await nazu.sendMessage(from, {
-                  text: `✅ *X9 Report:* Solicitação de @${user.split('@')[0]} foi aprovada por @${sender.split('@')[0]}.`,
-                  mentions: [user, sender],
-                }).catch(err => console.error(`❌ Erro ao enviar X9: ${err.message}`));
+                await updateCardOnApprove(nazu, from, user, sender).catch(err => {
+                  console.log('[X9] Card não encontrado para:', user);
+                });
               }
             } catch (err) {
               failed.push(user);
@@ -29062,12 +29062,10 @@ break;
             try {
               await nazu.groupRequestParticipantsUpdate(from, [user], 'reject');
               rejected.push(user);
-              // Notificação X9 para recusa de solicitação
+              
+              // X9 System: Atualiza card se existir
               if (groupData.x9) {
-                await nazu.sendMessage(from, {
-                  text: `❌ *X9 Report:* Solicitação de @${user.split('@')[0]} foi recusada por @${sender.split('@')[0]}.`,
-                  mentions: [user, sender],
-                }).catch(err => console.error(`❌ Erro ao enviar X9: ${err.message}`));
+                await updateCardOnReject(nazu, from, user, sender).catch(() => {});
               }
             } catch (err) {
               failed.push(user);
