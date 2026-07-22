@@ -1155,7 +1155,11 @@ async function createBotSocket(authDir) {
 
         AbyssSock.ev.on('creds.update', saveCreds);
 
-        AbyssSock.ev.on('groups.update', async (updates) => {
+            // Cooldown para evitar notificações duplicadas do X9 (em ms)
+            const X9_COOLDOWN = 3000; // 3 segundos
+            const lastX9Event = {}; // Armazena último evento por grupo
+
+            AbyssSock.ev.on('groups.update', async (updates) => {
             if (!Array.isArray(updates) || updates.length === 0) return;
 
             console.log(`\n🔔 [GROUPS UPDATE] Recebido evento com ${updates.length} atualização(ões)`);
@@ -1187,17 +1191,34 @@ async function createBotSocket(authDir) {
                     // 🔹 Verificação de segurança: Ignorar eventos do próprio bot
                     // O WhatsApp pode gerar eventos "fantasma" quando o bot faz operações de grupo
                     const author = ev.subjectOwner || ev.descOwner || ev.inviteOwner || ev.author || null;
+                    let authorNum = null;
                     if (author) {
-                        const authorNum = author.split('@')[0]?.replace('@s.whatsapp.net', '') || '';
+                        authorNum = author.split('@')[0]?.replace('@s.whatsapp.net', '') || '';
                         if (authorNum === botNum) {
                             console.log(`[X9] Ignorando evento gerado pelo próprio bot (${botNum})`);
                             return;
                         }
                     }
 
-                    // 🔹 Verificação: Ignorar eventos sem autor para operações de mudança
-                    // Eventos internos do WhatsApp ou do bot não têm autor identificado
+                    // 🔹 NOVA VERIFICAÇÃO: Ignorar eventos gerados por operações internas do bot
+                    // Quando o bot executa comandos como !infobot, pode gerar eventos "fantasma"
+                    // Verificamos se o evento tem authorNum mas não é uma mudança real (possível evento interno)
                     const hasRealChange = ev.subject || ev.desc !== undefined || ev.imgUrl || ev.picUrl || ev.inviteCode || ev.announce !== undefined || ev.restrict !== undefined || ev.ephemeralDuration !== undefined;
+                    
+                    // Se tem author mas é o número do bot, ignore
+                    if (authorNum === botNum) {
+                        console.log(`[X9] Ignorando evento do próprio bot (${botNum})`);
+                        return;
+                    }
+
+                    // 🔹 COOLDOWN: Verificar se o último evento foi recente (evita duplicatas)
+                    const eventKey = `${groupId}_${Object.keys(ev).join('_')}`;
+                    const now = Date.now();
+                    if (lastX9Event[groupId] && (now - lastX9Event[groupId]) < X9_COOLDOWN) {
+                        console.log(`[X9] Ignorando evento em cooldown para ${groupId}`);
+                        return;
+                    }
+                    lastX9Event[groupId] = now;
                     
                     if (!author && hasRealChange) {
                         // Se não tem autor mas tem mudança, pode ser evento interno - verificar se é mudança real
@@ -1257,6 +1278,12 @@ async function createBotSocket(authDir) {
                         // Verificar se realmente houve mudança comparando com nome atual
                         const currentMeta = await AbyssSock.groupMetadata(groupId).catch(() => null);
                         const currentName = currentMeta?.subject || null;
+
+                        // Se não há author, verificar se é evento interno (comparar valores)
+                        if (!author && currentName === ev.subject) {
+                            console.log('[X9] Ignorando evento de nome sem mudança real (possível evento interno do WhatsApp)');
+                            return;
+                        }
                         
                         // Só envia notificação se o nome realmente mudou
                         if (currentName && currentName !== ev.subject) {
@@ -1274,6 +1301,12 @@ async function createBotSocket(authDir) {
                         const currentDesc = currentMeta?.desc || null;
                         
                         // Se desc foi removida (ev.desc === null), só notifica se havia descrição antes
+
+                        // Se não há author, verificar se é evento interno (comparar valores)
+                        if (!author && currentDesc === (ev.desc || '')) {
+                            console.log('[X9] Ignorando evento de descrição sem mudança real (possível evento interno do WhatsApp)');
+                            return;
+                        }
                         if (ev.desc === null) {
                             if (currentDesc) {
                                 mensagem = `📜 *X9 Report:* A descrição do grupo foi *removida*!${authorText ? ` por ${authorText}` : ''}`;
