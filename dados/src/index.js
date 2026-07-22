@@ -30791,19 +30791,12 @@ break;
               '┃ 👤 ' + prefix + 'delp @usuÃ¡rio\n' +
               '┃\n' +
               '┗━━━━━━━━━━━━━━━━━━━━━━┛';
-            const newsletterContext = {
-              forwardingScore: 999,
-              isForwarded: true,
-              externalAdReply: {
-                title: "📢 Canal Lizzy",
-                body: "Ver canal",
-                showAdAttribution: false,
-              },
-              forwardedNewsletterMessageInfo: {
-                newsletterJid: "120363410980452460@newsletter",
-                newsletterName: "Lizzy"
-              }
+            const adReply = {
+              title: "📢 Canal Lizzy",
+              body: "Ver canal",
+              showAdAttribution: false,
             };
+            const newsletterContext = gerarContextNewsletter(adReply);
             await reply(menuText, { mentions, contextInfo: newsletterContext });
           } else if (args[1] === 'on') {
             if (!isGroupAdmin) return reply("Você precisa ser admin 💔");
