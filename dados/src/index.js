@@ -30632,7 +30632,15 @@ break;
           if (!isBotAdmin) return reply("Eu preciso ser adm para isso 💔");
           groupData.antifoton = !groupData.antifoton;
           fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
-          await reply(groupData.antifoton ? "🟢 Fotos normais agora serão apagadas." : "🔴 Fotos normais não serão mais apagadas.");
+          const newsletterCtx = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          await nazu.sendMessage(from, { text: groupData.antifoton ? "🟢 Fotos normais agora serão apagadas." : "🔴 Fotos normais não serão mais apagadas." }, { contextInfo: newsletterCtx, quoted: info });
         } catch (e) {
           console.error(e);
           await reply("Ocorreu um erro 💔");
@@ -30645,7 +30653,15 @@ break;
           if (!isBotAdmin) return reply("Eu preciso ser adm para isso 💔");
           groupData.antiaudio = !groupData.antiaudio;
           fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
-          await reply(groupData.antiaudio ? "🟢 Áudios agora serão apagados." : "🔴 Áudios não serão mais apagados.");
+          const newsletterCtx = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          await nazu.sendMessage(from, { text: groupData.antiaudio ? "🟢 Áudios agora serão apagados." : "🔴 Áudios não serão mais apagados." }, { contextInfo: newsletterCtx, quoted: info });
         } catch (e) {
           console.error(e);
           await reply("Ocorreu um erro 💔");
@@ -32254,7 +32270,15 @@ case 'set-bannerbv':
           groupData.antilinkgp = !groupData.antilinkgp;
           fs.writeFileSync(groupFilePath, JSON.stringify(groupData));
           const message = groupData.antilinkgp ? `✅ *Antilinkgp foi ativado com sucesso!*\n\nAgora, se alguém enviar links de outros grupos, será banido automaticamente. Mantenha o grupo seguro! ⚙️` : `✅ *Antilinkgp foi desativado.*\n\nLinks de outros grupos não serão mais bloqueados. Use com cuidado! ⚠️`;
-          reply(`${message}`);
+          const newsletterCtx = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          await nazu.sendMessage(from, { text: message }, { contextInfo: newsletterCtx, quoted: info });
         } catch (e) {
           console.error(e);
           reply("ocorreu um erro 💔");
@@ -32332,7 +32356,15 @@ ${groupPrefix}antistickerplus remover → remove usuário e apaga mensagem
           groupData.antilinkcanal = !groupData.antilinkcanal;
           fs.writeFileSync(groupFilePath, JSON.stringify(groupData));
           const message = groupData.antilinkcanal ? `✅ *Antilinkcanal foi ativado com sucesso!*\n\nAgora, se alguém enviar links de canais do WhatsApp, será banido automaticamente. Mantenha o grupo seguro! ⚙️` : `✅ *Antilinkcanal foi desativado.*\n\nLinks de canais não serão mais bloqueados. Use com cuidado! ⚠️`;
-          reply(`${message}`);
+          const newsletterCtx = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          await nazu.sendMessage(from, { text: message }, { contextInfo: newsletterCtx, quoted: info });
         } catch (e) {
           console.error(e);
           reply("ocorreu um erro 💔");
@@ -32349,7 +32381,15 @@ ${groupPrefix}antistickerplus remover → remove usuário e apaga mensagem
           groupData.antilinksoft = !groupData.antilinksoft;
           fs.writeFileSync(groupFilePath, JSON.stringify(groupData));
           const message = groupData.antilinksoft ? `✅ *Antilinksoft foi ativado com sucesso!*\n\nAgora, se alguém enviar links, a mensagem será apagada automaticamente (sem banir o usuário).` : `✅ *Antilinksoft foi desativado.*\n\nLinks não serão mais bloqueados.`;
-          reply(`${message}`);
+          const newsletterCtx = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          await nazu.sendMessage(from, { text: message }, { contextInfo: newsletterCtx, quoted: info });
         } catch (e) {
           console.error(e);
           reply("ocorreu um erro 💔");
@@ -33824,44 +33864,52 @@ ${groupPrefix}antitoxic sensibilidade <0-100> - Define sensibilidade
         if (!isGroup) return reply("❌ ◈ Este comando é só para grupos!");
         if (!isGroupAdmin) return reply("❌ Apenas administradores podem usar este comando!");
         if (!antipalavra) return reply("❌ Sistema antipalavra temporariamente indisponível.");
+        const newsletterCtx = {
+          forwardingScore: 999,
+          isForwarded: true,
+          forwardedNewsletterMessageInfo: {
+            newsletterJid: "120363410980452460@newsletter",
+            newsletterName: "Lizzy"
+          }
+        };
         const subCmdAntipalavra = args[0]?.toLowerCase();
         // Ativa o sistema
         if (subCmdAntipalavra === 'on' || subCmdAntipalavra === 'ativar') {
           const result = antipalavra.enableAntipalavra(from);
-          return reply(result.message);
+          return await nazu.sendMessage(from, { text: result.message }, { contextInfo: newsletterCtx, quoted: info });
         }
         // Desativa o sistema
         if (subCmdAntipalavra === 'off' || subCmdAntipalavra === 'desativar') {
           const result = antipalavra.disableAntipalavra(from);
-          return reply(result.message);
+          return await nazu.sendMessage(from, { text: result.message }, { contextInfo: newsletterCtx, quoted: info });
         }
         // Adiciona palavra à blacklist
         if (subCmdAntipalavra === 'add' || subCmdAntipalavra === 'adicionar') {
           const palavra = args.slice(1).join(' ').trim();
           if (!palavra) {
-            return reply(`❌ Você precisa especificar a palavra!\n\nUso: ${groupPrefix}antipalavra add <palavra>`);
+            return await nazu.sendMessage(from, { text: `❌ Você precisa especificar a palavra!\n\nUso: ${groupPrefix}antipalavra add <palavra>` }, { contextInfo: newsletterCtx, quoted: info });
           }
           const result = antipalavra.addPalavraBlacklist(from, palavra);
-          return reply(result.message);
+          return await nazu.sendMessage(from, { text: result.message }, { contextInfo: newsletterCtx, quoted: info });
         }
         // Remove palavra da blacklist
         if (subCmdAntipalavra === 'del' || subCmdAntipalavra === 'remover' || subCmdAntipalavra === 'remove') {
           const palavra = args.slice(1).join(' ').trim();
           if (!palavra) {
-            return reply(`❌ Você precisa especificar a palavra!\n\nUso: ${groupPrefix}antipalavra del <palavra>`);
+            return await nazu.sendMessage(from, { text: `❌ Você precisa especificar a palavra!\n\nUso: ${groupPrefix}antipalavra del <palavra>` }, { contextInfo: newsletterCtx, quoted: info });
           }
           const result = antipalavra.removePalavraBlacklist(from, palavra);
-          return reply(result.message);
+          return await nazu.sendMessage(from, { text: result.message }, { contextInfo: newsletterCtx, quoted: info });
         }
         // Lista todas as palavras
         if (subCmdAntipalavra === 'list' || subCmdAntipalavra === 'lista' || subCmdAntipalavra === 'listar') {
           const result = antipalavra.listPalavrasBlacklist(from);
-          return reply(result.message);
+          return await nazu.sendMessage(from, { text: result.message }, { contextInfo: newsletterCtx, quoted: info });
         }
         // Limpa a blacklist
         if (subCmdAntipalavra === 'clear' || subCmdAntipalavra === 'limpar') {
           const result = antipalavra.clearBlacklist(from);
-          return reply(result.message);
+          return await nazu.sendMessage(from, { text: result.message }, { contextInfo: newsletterCtx, quoted: info });
         }
         // Estatísticas
         if (subCmdAntipalavra === 'stats' || subCmdAntipalavra === 'estatisticas') {
@@ -33878,10 +33926,10 @@ ${groupPrefix}antitoxic sensibilidade <0-100> - Define sensibilidade
               msg += `${index + 1}. "${item.palavra}" - ${item.detections}x\n`;
             });
           }
-          return reply(msg);
+          return await nazu.sendMessage(from, { text: msg }, { contextInfo: newsletterCtx, quoted: info });
         }
         // Menu de ajuda
-        return reply(`🚫 *ANTIPALAVRA - SISTEMA DE BLACKLIST*
+        return await nazu.sendMessage(from, { text: `🚫 *ANTIPALAVRA - SISTEMA DE BLACKLIST*
 *Comandos disponíveis:*
 ${groupPrefix}antipalavra on
 └ Ativa o sistema
@@ -33899,7 +33947,7 @@ ${groupPrefix}antipalavra stats
 └ Mostra estatísticas
 ⚠️ *IMPORTANTE:*
 Membros que falarem palavras da blacklist serão BANIDOS AUTOMATICAMENTE do grupo!
-💡 *Dica:* O sistema ignora acentos e maiúsculas/minúsculas na detecção.`);
+💡 *Dica:* O sistema ignora acentos e maiúsculas/minúsculas na detecção.` }, { contextInfo: newsletterCtx, quoted: info });
         break;
       case 'chance':
         try {
