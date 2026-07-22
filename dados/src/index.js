@@ -19290,18 +19290,17 @@ case 'pin':
     // Pegar até 5 imagens
     const itemsToSend = datinha.urls.slice(0, 5);
     
-    // Enviar imagens individualmente rapidamente (álbum)
+    // Enviar imagens em álbum usando album do Baileys
     if (itemsToSend.length > 1) {
-      await reply(isPinUrl ? '📌 Download do Pinterest' : `📌 Resultados da pesquisa por "${searchTerm}"`);
+      const albumMessages = itemsToSend.map((url, index) => ({
+        image: { url },
+        caption: `🔍 busca ${index + 1}`
+      }));
       
-      // Enviar imagens rapidamente para criar álbum
-      for (const url of itemsToSend) {
-        const index = itemsToSend.indexOf(url) + 1;
-        await nazu.sendMessage(from, { 
-          image: { url }, 
-          caption: `🔍 busca ${index}`
-        });
-      }
+      await nazu.sendMessage(from, {
+        text: isPinUrl ? '📌 Download do Pinterest' : `📌 Resultados da pesquisa por "${searchTerm}"`,
+        album: albumMessages
+      });
     } else {
       // Se for apenas 1 imagem, enviar normalmente
       await nazu.sendMessage(from, {
