@@ -1184,6 +1184,8 @@ async function createBotSocket(authDir) {
             // Cooldown para evitar notificações duplicadas do X9 (em ms)
             const X9_COOLDOWN = 3000; // 3 segundos
             const lastX9Event = {}; // Armazena último evento por grupo
+            const lastKnownGroupName = {}; // Armazena último nome conhecido do grupo
+            const lastKnownGroupDesc = {}; // Armazena última descrição conhecida do grupo
 
             AbyssSock.ev.on('groups.update', async (updates) => {
             if (!Array.isArray(updates) || updates.length === 0) return;
@@ -1273,57 +1275,41 @@ async function createBotSocket(authDir) {
                         await notifyGroupChange(AbyssSock, groupId, 'photo_changed', author);
                     }
 
-                    // 📝 NOME ALTERADO
+                                        // 📝 NOME ALTERADO
                     else if (ev.subject) {
-                        // Verificar se realmente houve mudança comparando com nome atual
-                        const currentMeta = await AbyssSock.groupMetadata(groupId).catch(() => null);
-                        const currentName = currentMeta?.subject || null;
-
-                        // Se não há author, verificar se é evento interno (comparar valores)
-                        if (!author && currentName === ev.subject) {
-                            console.log('[X9] Ignorando evento de nome sem mudança real (possível evento interno do WhatsApp)');
-                            return;
-                        }
-                        
-                        // Só envia notificação se o nome realmente mudou
-                        if (currentName && currentName !== ev.subject) {
+                        // Verificar se o nome realmente mudou desde o último evento
+                        const previousName = lastKnownGroupName[groupId];
+                        if (previousName !== ev.subject) {
+                            console.log('[X9] Nome alterado de "', previousName, '" para "', ev.subject, '"');
                             await notifyGroupChange(AbyssSock, groupId, 'name_changed', author, {
-                                oldName: currentName,
+                                oldName: previousName || '(vazio)',
                                 newName: ev.subject
                             });
+                            lastKnownGroupName[groupId] = ev.subject;
                         } else {
-                            console.log('[X9] Nome do grupo já é o mesmo - ignorando evento');
+                            console.log('[X9] Nome já é o mesmo, ignorando');
                         }
                     }
 
                     // 📜 DESCRIÇÃO ALTERADA
                     else if (ev.desc !== undefined) {
-                        // Verificar se realmente houve mudança comparando com descrição atual
-                        const currentMeta = await AbyssSock.groupMetadata(groupId).catch(() => null);
-                        const currentDesc = currentMeta?.desc || null;
+                        const previousDesc = lastKnownGroupDesc[groupId];
+                        const newDesc = ev.desc;
                         
-                        // Se desc foi removida (ev.desc === null), só notifica se havia descrição antes
-
-                        // Se não há author, verificar se é evento interno (comparar valores)
-                        if (!author && currentDesc === (ev.desc || '')) {
-                            console.log('[X9] Ignorando evento de descrição sem mudança real (possível evento interno do WhatsApp)');
-                            return;
-                        }
-                        if (ev.desc === null) {
-                            if (currentDesc) {
+                        if (previousDesc !== newDesc) {
+                            if (newDesc === null) {
+                                console.log('[X9] Descrição removida');
                                 await notifyGroupChange(AbyssSock, groupId, 'desc_removed', author);
                             } else {
-                                console.log('[X9] Descrição já estava vazia - ignorando evento');
+                                const descText = newDesc.substring(0, 200) + (newDesc.length > 200 ? '...' : '');
+                                console.log('[X9] Descrição alterada');
+                                await notifyGroupChange(AbyssSock, groupId, 'desc_changed', author, {
+                                    newDesc: descText
+                                });
                             }
-                        } 
-                        // Se desc foi alterada, só notifica se realmente mudou
-                        else if (currentDesc !== ev.desc) {
-                            const descText = ev.desc.substring(0, 200) + (ev.desc.length > 200 ? '...' : '');
-                            await notifyGroupChange(AbyssSock, groupId, 'desc_changed', author, {
-                                newDesc: descText
-                            });
+                            lastKnownGroupDesc[groupId] = newDesc;
                         } else {
-                            console.log('[X9] Descrição do grupo já é a mesma - ignorando evento');
+                            console.log('[X9] Descrição já é a mesma, ignorando');
                         }
                     }
 
