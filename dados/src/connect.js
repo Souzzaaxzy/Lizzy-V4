@@ -1214,8 +1214,10 @@ async function createBotSocket(authDir) {
                 try {
                     const groupId = ev.id;
 
+                    console.log('[X9] ========== GROUPS UPDATE ==========');
+                    console.log('[X9] Full event:', JSON.stringify(ev, null, 2));
+
                     // 🔹 Verificação de segurança: Ignorar eventos do próprio bot
-                    // O WhatsApp pode gerar eventos "fantasma" quando o bot faz operações de grupo
                     const author = ev.subjectOwner || ev.descOwner || ev.inviteOwner || ev.author || null;
                     let authorNum = null;
                     if (author) {
@@ -1226,50 +1228,26 @@ async function createBotSocket(authDir) {
                         }
                     }
 
-                    // 🔹 NOVA VERIFICAÇÃO: Ignorar eventos gerados por operações internas do bot
-                    // Quando o bot executa comandos como !infobot, pode gerar eventos "fantasma"
-                    // Verificamos se o evento tem authorNum mas não é uma mudança real (possível evento interno)
+                    // 🔹 Verificar se é uma mudança real
                     const hasRealChange = ev.subject || ev.desc !== undefined || ev.imgUrl || ev.picUrl || ev.inviteCode || ev.announce !== undefined || ev.restrict !== undefined || ev.ephemeralDuration !== undefined;
                     
-                    // Se tem author mas é o número do bot, ignore
-                    if (authorNum === botNum) {
-                        console.log(`[X9] Ignorando evento do próprio bot (${botNum})`);
+                    console.log('[X9] hasRealChange:', hasRealChange);
+                    console.log('[X9] author:', author);
+                    console.log('[X9] authorNum:', authorNum);
+                    console.log('[X9] botNum:', botNum);
+
+                    if (!hasRealChange) {
+                        console.log('[X9] Não há mudança real, ignorando');
                         return;
                     }
 
                     // 🔹 COOLDOWN: Verificar se o último evento foi recente (evita duplicatas)
-                    const eventKey = `${groupId}_${Object.keys(ev).join('_')}`;
                     const now = Date.now();
                     if (lastX9Event[groupId] && (now - lastX9Event[groupId]) < X9_COOLDOWN) {
                         console.log(`[X9] Ignorando evento em cooldown para ${groupId}`);
                         return;
                     }
                     lastX9Event[groupId] = now;
-                    
-                    if (!author && hasRealChange) {
-                        // Se não tem autor mas tem mudança, pode ser evento interno - verificar se é mudança real
-                        console.log('[X9] Evento sem autor detectado - verificando se é mudança real...');
-                        
-                        // Para nome, verificar se realmente mudou
-                        if (ev.subject) {
-                            const currentMeta = await AbyssSock.groupMetadata(groupId).catch(() => null);
-                            const currentName = currentMeta?.subject || '';
-                            if (currentName === ev.subject || !ev.subject) {
-                                console.log('[X9] Ignorando evento de nome sem mudança real (possível evento interno)');
-                                return;
-                            }
-                        }
-                        
-                        // Para descrição
-                        if (ev.desc !== undefined) {
-                            const currentMeta = await AbyssSock.groupMetadata(groupId).catch(() => null);
-                            const currentDesc = currentMeta?.desc || '';
-                            if (currentDesc === (ev.desc || '')) {
-                                console.log('[X9] Ignorando evento de descrição sem mudança real');
-                                return;
-                            }
-                        }
-                    }
 
                     // 🔹 Buscar config do grupo
                     const groupData = await getGroupData(groupId).catch(() => null);
@@ -1277,30 +1255,17 @@ async function createBotSocket(authDir) {
                         console.log(`[GROUPS UPDATE] X9 desativado para ${groupId} - ignorando evento`);
                         return;
                     }
-
+                    
                     console.log(`[GROUPS UPDATE] X9 ativado para ${groupId} - processando evento`);
-                    let mensagem = null;
-                    let mention = [];
-
-                    // Newsletter header para todas as mensagens X9
-                    const newsletterCtx = {
-                        forwardingScore: 999,
-                        isForwarded: true,
-                        forwardedNewsletterMessageInfo: {
-                            newsletterJid: "120363410980452460@newsletter",
-                            newsletterName: "Lizzy"
-                        }
-                    };
                     
                     // Formatar texto e menção do autor
                     let authorText = '';
                     if (author) {
                         const authorNum = author.split('@')[0];
                         authorText = `@${authorNum}`;
-                        mention.push(author);
                         console.log('[X9] Autor identificado:', authorNum);
                     } else {
-                        console.log('[X9] Autor não identificado no evento - não será mencionado');
+                        console.log('[X9] Autor não identificado no evento');
                     }
 
                     // 📸 FOTO ALTERADA
