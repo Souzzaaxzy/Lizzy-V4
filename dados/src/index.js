@@ -19687,16 +19687,7 @@ case 'pin':
                       })
                     }
                   ],
-                  headerType: 4, // VIDEO
-                  contextInfo: {
-                    forwardedNewsletterMessageInfo: {
-                      newsletterJid: '120363420762648535@newsletter',
-                      newsletterName: 'Lizzy Bot',
-                      serverMessageId: -1
-                    },
-                    forwardingScore: 999,
-                    isForwarded: true
-                  }
+                  contextInfo: { forwardingScore: 999, isForwarded: true }
                 });
               };
 
@@ -19710,22 +19701,6 @@ case 'pin':
                 if (i < videosToSend.length - 1) {
                   await new Promise(resolve => setTimeout(resolve, 500));
                 }
-              }
-
-              if (videosToSend.length > 0) {
-                const buttons = videosToSend.map((v, i) => ({
-                  name: "cta_url",
-                  buttonParamsJson: JSON.stringify({
-                    display_text: `🔗 Abrir Vídeo ${i + 1}`,
-                    url: v.link || q
-                  })
-                }));
-
-                await nazu.sendMessage(from, {
-                  text: `📱 *${videosToSend.length} vídeo(s) enviado(s)*\n\nClique nos botões abaixo para abrir no TikTok:`,
-                  footer: '📱 TikTok',
-                  buttons: buttons
-                });
               }
 
               await nazu.sendMessage(from, { react: { text: '✅', key: info.key } });
