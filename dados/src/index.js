@@ -2313,6 +2313,25 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     const isGoingEmoji = (emoji) => typeof emoji === 'string' && emoji.includes(ROLE_GOING_BASE);
     const isNotGoingEmoji = (emoji) => typeof emoji === 'string' && emoji.includes(ROLE_NOT_GOING_BASE);
     const isButtonMessage = info.message.interactiveMessage || info.message.templateButtonReplyMessage || info.message.buttonsMessage || info.message.interactiveResponseMessage || info.message.listResponseMessage || info.message.buttonsResponseMessage ? true : false;
+    
+    // Processar cliques nos botões de solicitações de entrada
+    if (isButtonMessage) {
+      const buttonId = info.message.buttonsResponseMessage?.selectedButtonId || 
+                       info.message.templateButtonReplyMessage?.selectedId ||
+                       info.message.interactiveResponseMessage?.nativeFlowResponseMessage?.params?.id;
+      
+      if (buttonId && (buttonId.startsWith('accept_') || buttonId.startsWith('deny_'))) {
+        // Importar e processar o clique do botão
+        try {
+          const { processJoinRequestButtonClick } = await import('../connect.js');
+          await processJoinRequestButtonClick(nazu, info, buttonId, sender, from);
+          return; // Não processar como comando
+        } catch (err) {
+          console.error('Erro ao processar botão de solicitação:', err.message);
+        }
+      }
+    }
+    
     const isStatusMention = JSON.stringify(info.message).includes('groupStatusMentionMessage');
     const getMessageText = message => {
       if (!message) return '';

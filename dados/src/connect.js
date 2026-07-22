@@ -586,165 +586,324 @@ export async function saveGroupSettings(groupId, settings) {
         console.error(`❌ Erro ao salvar settings de ${groupId}:`, error);
     }
 }
+// ==========================================
+// NOVO SISTEMA DE SOLICITAÇÕES DE ENTRADA X9
+// ==========================================
+
+// Cache para rastrear solicitações processadas
+const joinRequestCache = new Map();
+
+// Função para verificar se o evento já foi processado
+function isJoinRequestProcessed(groupId, participantJid, action) {
+    const key = `${groupId}_${participantJid}_${action}`;
+    if (joinRequestCache.has(key)) {
+        const timestamp = joinRequestCache.get(key);
+        // Considerar processado se menos de 30 segundos passou
+        if (Date.now() - timestamp < 30000) {
+            return true;
+        }
+        joinRequestCache.delete(key);
+    }
+    return false;
+}
+
+// Função para marcar evento como processado
+function markJoinRequestProcessed(groupId, participantJid, action) {
+    const key = `${groupId}_${participantJid}_${action}`;
+    joinRequestCache.set(key, Date.now());
+    
+    // Limpar cache antigo (manter apenas últimos 100)
+    if (joinRequestCache.size > 100) {
+        const oldestKey = joinRequestCache.keys().next().value;
+        joinRequestCache.delete(oldestKey);
+    }
+}
+
+// Função para formatar número com DDI
+function formatPhoneNumber(jid) {
+    const number = jid?.split('@')[0] || '';
+    // Adicionar formato internacional
+    if (number.startsWith('55')) {
+        return `+${number.slice(0, 2)} ${number.slice(2, 4)} ${number.slice(4)}`;
+    }
+    return number;
+}
+
+// Função para obter foto de perfil
+async function getProfilePicture(sock, jid) {
+    try {
+        const url = await sock.profilePictureUrl(jid, 'image');
+        return url;
+    } catch {
+        return null;
+    }
+}
+
+// Função para obter nome do usuário
+async function getUserName(sock, jid) {
+    try {
+        const name = await sock.getName(jid);
+        return name || null;
+    } catch {
+        return null;
+    }
+}
+
+// Função para verificar se é admin
+async function isGroupAdmin(sock, groupJid, userJid) {
+    try {
+        const metadata = await sock.groupMetadata(groupJid);
+        const participant = metadata?.participants?.find(p => p.id === userJid);
+        return participant?.admin === 'admin' || participant?.admin === 'superadmin';
+    } catch {
+        return false;
+    }
+}
+
+// Função para enviar mensagem com botões de solicitação
+async function sendJoinRequestMessage(sock, groupJid, participantJid, requestData) {
+    const { foto, nome, origem, horario } = requestData;
+    
+    const numeroFormatado = formatPhoneNumber(participantJid);
+    const participantNum = participantJid.split('@')[0];
+    
+    // Criar mensagem formatada
+    const mensagem = `╭━━━〔 🔎 X9 • SOLICITAÇÃO DE ENTRADA 〕━━━⬣
+┃ 👤 Nome: ${nome || 'Não disponível'}
+┃ 📞 Número: ${numeroFormatado}
+┃ 🌍 Origem: ${origem || 'Aprovação pendente'}
+┃ 🕒 Horário: ${horario}
+╰━━━━━━━━━━━━━━━━━━⬣
+
+Deseja aprovar esta solicitação?`;
+
+    // Enviar mensagem com foto (se disponível)
+    if (foto) {
+        await sock.sendMessage(groupJid, {
+            image: { url: foto },
+            caption: mensagem,
+            buttons: [
+                { 
+                    buttonId: `accept_${participantNum}_${groupJid.split('@')[0]}`, 
+                    buttonText: { displayText: '🟢 Aceitar' },
+                    type: 1
+                },
+                { 
+                    buttonId: `deny_${participantNum}_${groupJid.split('@')[0]}`, 
+                    buttonText: { displayText: '🔴 Negar' },
+                    type: 1
+                }
+            ],
+            headerType: 1
+        });
+    } else {
+        await sock.sendMessage(groupJid, {
+            text: mensagem,
+            buttons: [
+                { 
+                    buttonId: `accept_${participantNum}_${groupJid.split('@')[0]}`, 
+                    buttonText: { displayText: '🟢 Aceitar' },
+                    type: 1
+                },
+                { 
+                    buttonId: `deny_${participantNum}_${groupJid.split('@')[0]}`, 
+                    buttonText: { displayText: '🔴 Negar' },
+                    type: 1
+                }
+            ]
+        });
+    }
+}
+
+// Função para processar clique no botão
+async function processJoinRequestButton(sock, message, buttonId, senderJid, groupJid) {
+    try {
+        // Verificar se é admin
+        const isAdmin = await isGroupAdmin(sock, groupJid, senderJid);
+        if (!isAdmin) {
+            // Não fazer nada se não for admin
+            return;
+        }
+        
+        // Verificar se já foi processado
+        if (isJoinRequestProcessed(groupJid, buttonId, 'button_click')) {
+            return;
+        }
+        
+        const [action, participantNum, groupNum] = buttonId.split('_');
+        const participantJid = `${participantNum}@s.whatsapp.net`;
+        
+        if (action === 'accept') {
+            // Aprovar solicitação
+            await sock.groupRequestParticipantsUpdate(groupJid, [participantJid], 'approve');
+            
+            // Obter nome do participante
+            const participantName = await getUserName(sock, participantJid);
+            const adminName = await getUserName(sock, senderJid);
+            
+            // Editar mensagem para mostrar aprovação
+            const resposta = `✅ Solicitação aprovada por @${senderJid.split('@')[0]}.`;
+            
+            await sock.sendMessage(groupJid, {
+                text: resposta,
+                mentions: [senderJid]
+            });
+            
+            console.log(`[X9] Solicitação aprovada por ${senderJid}`);
+            
+        } else if (action === 'deny') {
+            // Rejeitar solicitação
+            await sock.groupRequestParticipantsUpdate(groupJid, [participantJid], 'reject');
+            
+            // Obter nome do participante
+            const adminName = await getUserName(sock, senderJid);
+            
+            // Editar mensagem para mostrar rejeição
+            const resposta = `❌ Solicitação negada por @${senderJid.split('@')[0]}.`;
+            
+            await sock.sendMessage(groupJid, {
+                text: resposta,
+                mentions: [senderJid]
+            });
+            
+            console.log(`[X9] Solicitação negada por ${senderJid}`);
+        }
+        
+        // Marcar como processado
+        markJoinRequestProcessed(groupJid, participantJid, 'button_click');
+        
+    } catch (error) {
+        console.error('[X9] Erro ao processar botão:', error.message);
+    }
+}
+
+// Função para notificar aprovação/rejeição nativa
+async function sendNativeApprovalNotification(sock, groupJid, participantJid, action, authorJid) {
+    try {
+        const participantName = await getUserName(sock, participantJid);
+        const authorName = await getUserName(sock, authorJid);
+        const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        
+        let mensagem;
+        if (action === 'approve' || action === 'add') {
+            mensagem = `╭━━━〔 ✅ X9 • SOLICITAÇÃO APROVADA 〕━━━⬣
+┃ 👤 Solicitante: ${participantName || 'Não disponível'}
+┃ 👮 Aprovado por: @${authorJid.split('@')[0]}
+┃ 🕒 Horário: ${hora}
+╰━━━━━━━━━━━━━━━━━━⬣`;
+        } else {
+            mensagem = `╭━━━〔 ❌ X9 • SOLICITAÇÃO NEGADA 〕━━━⬣
+┃ 👤 Solicitante: ${participantName || 'Não disponível'}
+┃ 👮 Negado por: @${authorJid.split('@')[0]}
+┃ 🕒 Horário: ${hora}
+╰━━━━━━━━━━━━━━━━━━⬣`;
+        }
+        
+        await sock.sendMessage(groupJid, {
+            text: mensagem,
+            mentions: [authorJid]
+        });
+        
+    } catch (error) {
+        console.error('[X9] Erro ao enviar notificação:', error.message);
+    }
+}
+
+// ==========================================
+// FUNÇÃO PRINCIPAL handleGroupJoinRequest
+// ==========================================
 async function handleGroupJoinRequest(AbyssSock, inf) {
     try {
-        const typeIds = { id: '', lid: '', participant: '' };
         const from = inf.id;
         let participantJid = inf.participantPn || inf.participant;
 
         if (!from || !participantJid) return;
 
-// Detectar approve/reject de solicitacao - múltiplas formas de detecção
+        // Tratar participantJid como objeto
+        if (typeof participantJid === "object") {
+            participantJid = participantJid.pn || participantJid.lid;
+        }
+
+        if (!participantJid) return;
+
+        // Detectar tipo de ação
         const action = inf.action || inf.requestMethod || inf.method || null;
-        const isApproveAction = action === 'approve' || action === 'Approve' || action === 'approved';
-        const isRejectAction = action === 'reject' || action === 'Reject' || action === 'rejected' || action === 'reject';
+        const isApproveAction = action === 'approve' || action === 'Approve' || action === 'approved' || action === 'add';
+        const isRejectAction = action === 'reject' || action === 'Reject' || action === 'rejected' || action === 'remove';
         
-        console.log('[JOIN REQUEST] Action detection:', { action, isApproveAction, isRejectAction });
+        console.log('[X9] Action detected:', { action, isApproveAction, isRejectAction });
+
+        // Carregar configurações do grupo
+        const groupSettings = await loadGroupSettings(from);
         
+        // Se X9 não estiver habilitado, sair
+        if (!groupSettings?.x9) return;
+
+        // Se for aprovação ou rejeição nativa (não pelos botões)
         if (isApproveAction || isRejectAction) {
-            console.log(`[JOIN REQUEST] ${isApproveAction ? 'APPROVE' : 'REJECT'} detected!`);
-            console.log(`[JOIN REQUEST] ${inf.action.toUpperCase()} detected for group ${from}`);
-            console.log('[JOIN REQUEST] Full event data:', JSON.stringify(inf, null, 2));
-            
-            const groupSettings = await loadGroupSettings(from);
-
-            if (groupSettings?.x9) {
-                const data = new Date();
-                const dataFormatada = data.toLocaleDateString('pt-BR');
-                const horaFormatada = data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-
-                // Melhor deteccao do autor - tenta multiplas fontes
-                const autor = inf.author || inf.actor || inf.requestAuthor || inf.requestingUserJid || inf.requestingUser || null;
-                const autorNum = autor?.split('@')[0]?.replace('@s.whatsapp.net', '') || 'desconhecido';
-                
-                // Melhor deteccao da vtima (quem solicitou)
-                const vitima = participantJid || inf.participant || inf.requestingUserJid || inf.requestingUser || null;
-                const vitimaNum = vitima?.split('@')[0]?.replace('@s.whatsapp.net', '') || 'desconhecido';
-
-                const isApprove = isApproveAction;
-
-                console.log(`[JOIN REQUEST] Autor: ${autorNum}, Vtima: ${vitimaNum}, Acao: ${action}`);
-
-                const autorText = autorNum !== 'desconhecido' ? `@${autorNum}` : 'Sistema';
-                const mentionList = [];
-                if (autor) mentionList.push(autor);
-                if (vitima) mentionList.push(vitima);
-
-                // Newsletter header
-                const newsletterCtx = {
-                    forwardingScore: 999,
-                    isForwarded: true,
-                    forwardedNewsletterMessageInfo: {
-                        newsletterJid: "120363410980452460@newsletter",
-                        newsletterName: "Lizzy"
-                    }
-                };
-
-                const mensagem = isApprove
-                    ? `╭━━━〔 📥 SOLICITAÇÃO 〕━━━╮
-┃
-┃ ✅ *SOLICITAÇÃO ACEITA*
-┃
-┃ 👮 *Autor:* ${autorText}
-┃
-┃ 👤 *Vítima:* @${vitimaNum}
-┃
-┃ 📅 *Data:* ${dataFormatada}
-┃ 🕒 *Hora:* ${horaFormatada}
-┃
-╰━━━━━━━━━━━━━━━━━━━━━━━╯`
-                    : `╭━━━〔 📥 SOLICITAÇÃO 〕━━━╮
-┃
-┃ ❌ *SOLICITAÇÃO REJEITADA*
-┃
-┃ 👮 *Autor:* ${autorText}
-┃
-┃ 👤 *Vítima:* @${vitimaNum}
-┃
-┃ 📅 *Data:* ${dataFormatada}
-┃ 🕒 *Hora:* ${horaFormatada}
-┃
-╰━━━━━━━━━━━━━━━━━━━━━━━╯`;
-
-                await AbyssSock.sendMessage(from, {
-                    text: mensagem,
-                    mentions: mentionList,
-                    contextInfo: newsletterCtx
-                }).catch(err => console.error('[JOIN REQUEST] Erro ao enviar mensagem X9:', err.message));
+            // Verificar se já foi processado recentemente
+            if (isJoinRequestProcessed(from, participantJid, action)) {
+                return;
             }
+            
+            const authorJid = inf.author || inf.actor || inf.requestingUserJid || null;
+            
+            // Enviar notificação de aprovação/rejeição
+            await sendNativeApprovalNotification(AbyssSock, from, participantJid, action, authorJid);
+            
+            // Marcar como processado
+            markJoinRequestProcessed(from, participantJid, action);
+            
             return;
         }
 
-        if (typeof participantJid === "object") {
-            Object.assign(typeIds, {
-                id: participantJid?.pn?.endsWith("s.whatsapp.net") ? participantJid?.pn : '',
-                lid: participantJid?.pn?.endsWith("lid") ? participantJid?.pn : participantJid?.lid,
-            });
-            participantJid = participantJid.pn || participantJid.lid;
-        } else {
-            typeIds.lid = participantJid.endsWith("lid") ? participantJid : '';
-            typeIds.id = participantJid.endsWith("s.whatsapp.net") ? participantJid : '';
-        }
-
-        typeIds.participant = participantJid;
-
-
-        global.CAPTCHA_LOCK.add(participantJid);
-
-        if (typeIds.lid) {
-            global.CAPTCHA_LOCK.add(typeIds.lid);
-
-        }
-        if (typeIds.id) {
-            global.CAPTCHA_LOCK.add(typeIds.id);
-
-        }
-
-        const groupSettings = await loadGroupSettings(from);
-
-
+        // Se for solicitação de entrada (nova)
+        // Verificar auto-accept
         if (groupSettings.autoAcceptRequests) {
             await AbyssSock.groupRequestParticipantsUpdate(from, [participantJid], 'approve');
-            if (!groupSettings.captchaEnabled) return;
+            return;
         }
 
-
-        if (groupSettings.captchaEnabled) {
-
-            const num1 = Math.floor(Math.random() * 10) + 1;
-            const num2 = Math.floor(Math.random() * 10) + 1;
-            const answer = num1 + num2;
-            const timeAt = 5 * 60 * 1000;
-            const expiresAt = Date.now() + timeAt;
-
-            const numero = participantJid.split('@')[0];
-
-            const foto = await AbyssSock.profilePictureUrl(participantJid, 'image')
-                .catch(() => 'sem foto');
-
-            const waInfo = await AbyssSock.onWhatsApp(participantJid)
-                .catch(() => null);
-
-            let nome = inf.participant;
-            try {
-                nome = await AbyssSock.getName(participantJid);
-            } catch { }
-
-            const metadata = await AbyssSock.groupMetadata(from).catch(() => null);
-            const participanteMeta = metadata?.participants?.find(p => p.id === participantJid);
-
-
-
-            CaptchaIndex.add(typeIds, from, answer, expiresAt, nome);
-
-            await AbyssSock.sendMessage(from, {
-                text: `🔐 *VERIFICAÇÃO DE SEGURANÇA*\n\n🌌 Viajante @${numero}!\n\nPara confirmar que não é uma sombra, resolva:\n❓ *${num1} + ${num2} = ?*\n\n⏱️ Você tem 5 minutos ou será removido.`,
-                mentions: [participantJid]
-            });
+        // Verificar se já foi processado
+        if (isJoinRequestProcessed(from, participantJid, 'new_request')) {
+            return;
         }
+
+        // Obter dados do solicitante
+        const [foto, nome] = await Promise.all([
+            getProfilePicture(AbyssSock, participantJid),
+            getUserName(AbyssSock, participantJid)
+        ]);
+
+        // Determinar origem
+        const origem = inf.method === 'invite_link' ? 'Link de convite' : 
+                      inf.method === 'linked_group_join' ? 'Grupo vinculado' : 
+                      'Aprovação pendente';
+
+        const horario = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+        // Enviar mensagem com botões
+        await sendJoinRequestMessage(AbyssSock, from, participantJid, {
+            foto,
+            nome,
+            origem,
+            horario
+        });
+
+        // Marcar como processado
+        markJoinRequestProcessed(from, participantJid, 'new_request');
+
+        console.log(`[X9] Solicitação enviada para ${participantJid}`);
 
     } catch (error) {
         console.error(`❌ Erro em handleGroupJoinRequest: ${error.message}`);
+    }
+}
+
+// Exportar função para processar botões de solicitações
+export async function processJoinRequestButtonClick(sock, message, buttonId, senderJid, groupJid) {
+    if (buttonId.startsWith('accept_') || buttonId.startsWith('deny_')) {
+        await processJoinRequestButton(sock, message, buttonId, senderJid, groupJid);
     }
 }
 
