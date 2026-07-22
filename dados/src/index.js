@@ -19664,40 +19664,48 @@ case 'pin':
               
               // Função para enviar card do TikTok com vídeo, descrição e botão
               const sendTikTokCard = async (videoData, index) => {
-                const link = videoData.link || (isTikTokUrl ? q : '');
-                const videoUrl = videoData.urls?.[0];
-                if (!link || !videoUrl) return;
-                
-                const title = videoData.title || '';
-                const views = videoData.views || 0;
-                const viewsText = views ? `${formatNumber(views)} visualizações` : '';
-                
-                // Criar caption com título e visualizações
-                const caption = title ? `${title}\n\n👁️ ${viewsText}` : `👁️ ${viewsText}`;
-                
-                // Enviar vídeo com botão CTA URL
-                await nazu.sendMessage(from, {
-                  video: { url: videoUrl },
-                  caption: caption,
-                  footer: '📱 TikTok',
-                  buttons: [
-                    {
-                      name: "cta_url",
-                      buttonParamsJson: JSON.stringify({
-                        display_text: "📱 Abrir no TikTok",
-                        url: link
-                      })
-                    }
-                  ],
-                  headerType: 4 // VIDEO
-                });
+                try {
+                  const link = videoData.link || '';
+                  const videoUrl = videoData.urls?.[0] || videoData.url;
+                  if (!link || !videoUrl) {
+                    console.log('Dados do vídeo:', JSON.stringify(videoData, null, 2));
+                    return;
+                  }
+                  
+                  const title = videoData.title || '';
+                  const views = videoData.views || 0;
+                  const viewsText = views ? `${formatNumber(views)} visualizações` : '';
+                  
+                  // Criar caption com título e visualizações
+                  const caption = title ? `${title}\n\n👁️ ${viewsText}` : `👁️ ${viewsText}`;
+                  
+                  // Enviar vídeo com botão CTA URL correto
+                  await nazu.sendMessage(from, {
+                    video: { url: videoUrl },
+                    caption: caption,
+                    footer: '📱 TikTok',
+                    buttons: [
+                      {
+                        name: "cta_url",
+                        buttonParamsJson: JSON.stringify({
+                          display_text: "🔗 Abrir no TikTok",
+                          url: link,
+                          merchant_url: link
+                        })
+                      }
+                    ],
+                    headerType: 4
+                  }, { quoted: info });
+                } catch (err) {
+                  console.error('Erro ao enviar card TikTok:', err.message);
+                }
               };
               
               // Verificar se tem múltiplos resultados (search)
               const results = datinha.results;
               if (results && results.length > 0) {
-                // Enviar até 5 cards com thumbnail e botão
-                const videosToSend = results.slice(0, 5);
+                // Enviar até 3 cards com thumbnail e botão
+                const videosToSend = results.slice(0, 3);
                 for (let i = 0; i < videosToSend.length; i++) {
                   await sendTikTokCard(videosToSend[i], i);
                   // Pequeno delay entre envios
