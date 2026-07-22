@@ -20181,8 +20181,9 @@ Se não definir cores:
           };
           await nazu.sendMessage(from, {
             sticker: { url: datinha.url },
-            mimetype: 'image/webp'
-          }, { quoted: info, contextInfo: newsletterContextBrat });
+            mimetype: 'image/webp',
+            contextInfo: newsletterContextBrat
+          }, { quoted: info });
           console.log(`[comando brat] ✅ Sticker enviado para: "${texto}"`);
         } catch (e) {
           console.error('Erro no comando brat:', e);
@@ -20239,8 +20240,9 @@ Se não definir cores, a API usa padrão automaticamente.`
           };
           await nazu.sendMessage(from, {
             sticker: { url: datinha.url },
-            mimetype: 'image/webp'
-          }, { quoted: info, contextInfo: newsletterContextBratVid });
+            mimetype: 'image/webp',
+            contextInfo: newsletterContextBratVid
+          }, { quoted: info });
           console.log(`[comando bratvid] ✅ Sticker enviado: "${texto}"`);
         } catch (e) {
           console.error('Erro no comando bratvid:', e);
