@@ -41,21 +41,28 @@ function getCountryCode(number) {
     return 'XX';
 }
 
-// Template do card - simplificado
-const X9_CARD_TEMPLATE = `╭━━━〔 🔎 NOVA SOLICITAÇÃO 〕━━━⬣
-┃ 📞 +{numero}
-┃ 🕒 {hora}
-╰━━━━━━━━━━━━━━━━━━⬣`;
+// Template do card
+const X9_CARD_TEMPLATE = `╭━━━〔 🔎 X9 • NOVA SOLICITAÇÃO 〕━━━⬣
+┃ 👤 Nome: @{numero}
+┃ 📞 Lid: {lid}
+┃ 🌍 Origem: {origem}
+┃ 🕒 Horário: {hora}
+┃ 📌 Status: Aguardando aprovação
+╰━━━━━━━━━━━━━━━━━━━━━━━━━━⬣`;
 
-const X9_APPROVED_TEMPLATE = `╭━━━〔 ✅ APROVADO POR @{admin} 〕━━━⬣
-┃ 📞 +{numero}
-┃ 🕒 {hora}
-╰━━━━━━━━━━━━━━━━━━⬣`;
+const X9_APPROVED_TEMPLATE = `╭━━━〔 ✅ X9 • SOLICITAÇÃO APROVADA 〕━━━⬣
+┃ 👤 Solicitante: @{numero}
+┃ 👮 Aprovado por: @{admin}
+┃ 🕒 Horário: {hora}
+┃ 📌 Status: Concluído
+╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━⬣`;
 
-const X9_REJECTED_TEMPLATE = `╭━━━〔 ❌ NEGADO POR @{admin} 〕━━━⬣
-┃ 📞 +{numero}
-┃ 🕒 {hora}
-╰━━━━━━━━━━━━━━━━━━⬣`;
+const X9_REJECTED_TEMPLATE = `╭━━━〔 ❌ X9 • SOLICITAÇÃO NEGADA 〕━━━⬣
+┃ 👤 Solicitante: @{numero}
+┃ 👮 Negado por: @{admin}
+┃ 🕒 Horário: {hora}
+┃ 📌 Status: Negado
+╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━⬣`;
 
 // Substitui variáveis no template
 function parseTemplate(template, vars) {
@@ -186,12 +193,22 @@ export async function processNewJoinRequest(sock, eventData, groupSettings) {
     
     // Extrai o JID do participante
     let participantJid = normalizeJid(participant);
+    let participantLid = '';
+    
     if (!participantJid && participantPn) {
         participantJid = normalizeJid(participantPn);
     }
     if (!participantJid) {
         const authorJid = normalizeJid(author || authorPn);
         if (authorJid) participantJid = authorJid;
+    }
+    
+    // Extrai o LID se existir (participant pode ter formato {pn, lid})
+    if (typeof participant === 'object' && participant) {
+        if (participant.lid) participantLid = participant.lid;
+        else if (participantPn && typeof participantPn === 'object' && participantPn.lid) {
+            participantLid = participantPn.lid;
+        }
     }
     
     if (!groupId || !participantJid) {
@@ -218,6 +235,7 @@ export async function processNewJoinRequest(sock, eventData, groupSettings) {
         groupId,
         participantJid,
         participantNumber,
+        participantLid,
         time: formatTime(now),
         status: 'pending'
     };
@@ -225,9 +243,11 @@ export async function processNewJoinRequest(sock, eventData, groupSettings) {
     x9Store.add(groupId, participantJid, data);
     markProcessed(key);
     
-    // Template simplificado
+    // Template
     const vars = {
         numero: participantNumber,
+        lid: participantLid || 'N/A',
+        origem: getOrigin(method),
         hora: formatTime(now)
     };
     
@@ -237,7 +257,8 @@ export async function processNewJoinRequest(sock, eventData, groupSettings) {
     
     try {
         const sent = await sock.sendMessage(groupId, {
-            text: cardText
+            text: cardText,
+            mentions: [participantJid]
         });
         
         if (sent?.key?.id) {
@@ -286,7 +307,7 @@ export async function updateCardOnApprove(sock, groupId, participantJid, adminJi
     try {
         const sent = await sock.sendMessage(groupId, {
             text: approvedText,
-            mentions: [adminJid]
+            mentions: [participantJid, adminJid]
         });
         
         x9Store.update(groupId, participantJid, { status: 'approved' });
@@ -332,7 +353,7 @@ export async function updateCardOnReject(sock, groupId, participantJid, adminJid
     try {
         const sent = await sock.sendMessage(groupId, {
             text: rejectedText,
-            mentions: [adminJid]
+            mentions: [participantJid, adminJid]
         });
         
         x9Store.update(groupId, participantJid, { status: 'rejected' });
@@ -355,14 +376,8 @@ export async function notifyWhatsAppApproval(sock, groupId, participantJid, admi
     const adminNumber = adminJid.replace(/@.*$/, '');
     
     const vars = {
-        nome: req.participantName || 'Usuário',
         numero: req.participantNumber,
-        pais: req.country || 'Desconhecido',
-        paiscod: req.paiscod || '',
         hora: formatTime(now),
-        data: '',
-        origem: '',
-        grupo: groupId,
         admin: adminNumber
     };
     
@@ -371,7 +386,7 @@ export async function notifyWhatsAppApproval(sock, groupId, participantJid, admi
     try {
         await sock.sendMessage(groupId, {
             text: notification,
-            mentions: [adminJid, participantJid]
+            mentions: [participantJid, adminJid]
         });
         
         x9Store.update(groupId, participantJid, { status: 'approved' });
