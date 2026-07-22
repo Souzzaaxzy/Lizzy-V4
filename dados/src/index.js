@@ -19665,35 +19665,32 @@ case 'pin':
               };
 
               const sendTikTokVideo = async (videoData, index) => {
-                const url = videoData.urls?.[0];
-                if (!url) return;
+                const link = videoData.link || (isTikTokUrl ? q : '');
+                const videoUrl = videoData.urls?.[0];
+                if (!link || !videoUrl) return;
 
                 const title = videoData.title || '';
-                const link = videoData.link || (isTikTokUrl ? q : '');
+                const views = videoData.views || 0;
+                const viewsText = views ? `${formatNumber(views)} visualizações` : '';
 
-                try {
-                  // Enviar vídeo com botão CTA usando InteractiveMessage
-                  await sendInteractiveMessage(nazu, from, {
-                    video: { url },
-                    caption: title || '',
-                    interactiveButtons: [
-                      {
-                        name: "cta_url",
-                        buttonParamsJson: JSON.stringify({
-                          display_text: "🔗 Abrir no TikTok",
-                          url: link || url
-                        })
-                      }
-                    ]
-                  }, { quoted: info });
-                } catch (videoErr) {
-                  console.error('Erro ao enviar vídeo com botão:', videoErr.message);
-                  // Fallback: enviar só o vídeo
-                  await nazu.sendMessage(from, {
-                    video: { url },
-                    caption: title ? `📹 ${title}\n\n🔗 ${link}` : `🔗 ${link}`
-                  }, { quoted: info });
-                }
+                const caption = title ? `${title}\n\n👁️ ${viewsText}` : `👁️ ${viewsText}`;
+
+                // Enviar vídeo com botão CTA URL
+                await nazu.sendMessage(from, {
+                  video: { url: videoUrl },
+                  caption: caption,
+                  footer: '📱 TikTok',
+                  buttons: [
+                    {
+                      name: "cta_url",
+                      buttonParamsJson: JSON.stringify({
+                        display_text: "📱 Abrir no TikTok",
+                        url: link
+                      })
+                    }
+                  ],
+                  headerType: 4 // VIDEO
+                });
               };
 
               const results = datinha.results;
