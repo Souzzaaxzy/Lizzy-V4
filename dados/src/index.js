@@ -27306,60 +27306,6 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
         }
         break;
-      case 'togif':
-        try {
-          // Verificar sticker da mensagem citada
-          const quotedSticker = quotedMessageContent?.stickerMessage;
-
-          if (!quotedSticker) {
-            return reply(`❌ Responda a uma figurinha animada utilizando:\n${groupPrefix}togif`);
-          }
-
-          // Verificar se é sticker animado (duration > 0)
-          const isAnimated = quotedSticker.duration && quotedSticker.duration > 0;
-
-          if (!isAnimated) {
-            return reply("❌ Essa figurinha não é animada.");
-          }
-
-          await reply("⏳ Convertendo figurinha em vídeo...");
-
-          const stickerBuffer = await getFileBuffer(quotedSticker, 'sticker');
-
-          const tempDir = path.join(__dirname, '..', 'database', 'tmp');
-          if (!fs.existsSync(tempDir)) {
-            fs.mkdirSync(tempDir, { recursive: true });
-          }
-
-          const inputFile = path.join(tempDir, `${Date.now()}_sticker.webp`);
-          const outputFile = path.join(tempDir, `${Date.now()}_sticker.mp4`);
-
-          fs.writeFileSync(inputFile, stickerBuffer);
-
-          // Converter webp animado para mp4
-          await new Promise((resolve, reject) => {
-            exec(`ffmpeg -hide_banner -loglevel error -i "${inputFile}" -c:v libx264 -pix_fmt yuv420p -r 10 -y "${outputFile}"`, (err) => {
-              if (err) reject(err);
-              else resolve();
-            });
-          });
-
-          const videoBuffer = fs.readFileSync(outputFile);
-
-          await nazu.sendMessage(from, {
-            video: videoBuffer,
-            caption: "✅ Conversão concluída."
-          }, { quoted: info });
-
-          // Limpar arquivos temporários
-          fs.unlinkSync(inputFile);
-          fs.unlinkSync(outputFile);
-
-        } catch (error) {
-          console.error('Erro no comando togif:', error);
-          await reply("❌ Não foi possível converter essa figurinha para vídeo.");
-        }
-        break;
 case 'removebg':
 case 'rmbg':
 case 'sbg':
