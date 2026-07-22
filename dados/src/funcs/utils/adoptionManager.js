@@ -1,4 +1,4 @@
-import { loadEconomy, saveEconomy } from '../../utils/database.js';
+import { loadEconomy, saveEconomy, getEcoUser } from '../../utils/database.js';
 
 const REQUEST_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -163,8 +163,8 @@ class AdoptionManager {
 
   async _applyAdoption(request) {
     const econ = loadEconomy();
-    const adopterData = econ.users[request.requesterRaw];
-    const childData = econ.users[request.targetRaw];
+    const adopterData = getEcoUser(econ, request.requesterRaw);
+    const childData = getEcoUser(econ, request.targetRaw);
     
     if (!adopterData || !childData) {
       return { success: false, message: '❌ Erro ao processar adoção. Dados não encontrados.' };
