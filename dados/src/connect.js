@@ -678,22 +678,10 @@ async function sendJoinRequestMessage(sock, groupJid, participantJid, requestDat
 
 Deseja aprovar esta solicitação?`;
 
-    // Usar interactive message com nativeFlow para evitar resposta no chat
+    // Formato correto de botões para @itsliaaa/baileys
     const buttons = [
-        {
-            name: "quick_reply",
-            buttonParamsJson: JSON.stringify({
-                display_text: "🟢 Aceitar",
-                id: `x9_accept_${participantNum}_${groupNum}`
-            })
-        },
-        {
-            name: "quick_reply",
-            buttonParamsJson: JSON.stringify({
-                display_text: "🔴 Negar",
-                id: `x9_deny_${participantNum}_${groupNum}`
-            })
-        }
+        { text: '🟢 Aceitar', id: `x9_accept_${participantNum}_${groupNum}` },
+        { text: '🔴 Negar', id: `x9_deny_${participantNum}_${groupNum}` }
     ];
 
     // Enviar mensagem com foto (se disponível)
