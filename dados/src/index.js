@@ -19674,41 +19674,30 @@ case 'pin':
                 const videoUrl = videoData.urls?.[0] || '';
                 const caption = title ? `${title}\n\n👁️ ${viewsText}` : `👁️ ${viewsText}`;
 
-                // Enviar vídeo com botão CTA usando generateWAMessageFromContent
-                const msg = await generateWAMessageFromContent(from, {
-                  videoMessage: {
-                    url: videoUrl,
-                    mimetype: 'video/mp4',
-                    caption: caption,
-                    fileLength: '9999999999999',
-                    height: 420,
-                    width: 420
-                  },
-                  viewOnceLink: true
-                }, { userJid: nazu.user.id });
-
-                // Adicionar botão CTA via contextInfo
-                msg.message.videoMessage.contextInfo = {
-                  forwardingScore: 999,
-                  isForwarded: true,
-                  forwardedNewsletterMessageInfo: {
-                    newsletterJid: '120363420762648535@newsletter',
-                    newsletterName: 'Lizzy Bot',
-                    serverMessageId: -1
-                  },
-                  buttons: [
+                // Enviar vídeo com templateButtons (botão URL)
+                await nazu.sendMessage(from, {
+                  video: { url: videoUrl },
+                  caption: caption,
+                  mimetype: 'video/mp4',
+                  footer: '📱 TikTok',
+                  templateButtons: [
                     {
-                      buttonId: 'tiktok_url',
-                      buttonText: { displayText: '🔗 Abrir no TikTok' },
-                      type: 1
+                      urlButton: {
+                        displayText: '🔗 Abrir no TikTok',
+                        url: link
+                      }
                     }
                   ],
                   contextInfo: {
-                    mentionedJid: []
+                    forwardingScore: 999,
+                    isForwarded: true,
+                    forwardedNewsletterMessageInfo: {
+                      newsletterJid: '120363420762648535@newsletter',
+                      newsletterName: 'Lizzy Bot',
+                      serverMessageId: -1
+                    }
                   }
-                };
-
-                await nazu.relayMessage(from, msg.message, { messageId: msg.key.id });
+                });
               };
 
               const results = datinha.results;
