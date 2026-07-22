@@ -19290,16 +19290,17 @@ case 'pin':
     // Pegar até 5 imagens
     const itemsToSend = datinha.urls.slice(0, 5);
     
-    // Enviar imagens em álbum usando album do Baileys
+    // Enviar imagens usando carousel (cards) do Baileys
     if (itemsToSend.length > 1) {
-      const albumMessages = itemsToSend.map((url, index) => ({
+      const cards = itemsToSend.map((url, index) => ({
         image: { url },
-        caption: `🔍 busca ${index + 1}`
+        caption: `🔍 busca ${index + 1}`,
+        footer: '📌 Pinterest'
       }));
       
       await nazu.sendMessage(from, {
         text: isPinUrl ? '📌 Download do Pinterest' : `📌 Resultados da pesquisa por "${searchTerm}"`,
-        album: albumMessages
+        cards: cards
       });
     } else {
       // Se for apenas 1 imagem, enviar normalmente
