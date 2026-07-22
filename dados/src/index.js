@@ -19678,7 +19678,7 @@ case 'pin':
                   caption: caption,
                   mimetype: 'video/mp4',
                   footer: '📱 TikTok',
-                  buttons: [
+                  interactiveButtons: [
                     {
                       name: "cta_url",
                       buttonParamsJson: JSON.stringify({
