@@ -19674,50 +19674,43 @@ case 'pin':
                 const videoUrl = videoData.urls?.[0] || '';
                 const caption = title ? `${title}\n\n👁️ ${viewsText}` : `👁️ ${viewsText}`;
 
-                // Enviar vídeo com botão CTA usando generateWAMessageFromContent
+                // Enviar vídeo primeiro, depois o botão CTA
+                await nazu.sendMessage(from, {
+                  video: { url: videoUrl },
+                  caption: caption,
+                  mimetype: 'video/mp4'
+                });
+
+                // Enviar botão CTA como mensagem interativa separada
                 const msg = await generateWAMessageFromContent(from, {
-                  viewOnceMessage: {
-                    message: {
-                      interactiveMessage: {
-                        header: {
-                          hasMediaAttachment: true,
-                          videoMessage: {
-                            url: videoUrl,
-                            mimetype: 'video/mp4',
-                            caption: caption,
-                            mediaKey: undefined,
-                            fileLength: undefined,
-                            height: undefined,
-                            width: undefined,
-                            interactiveAnnotations: []
-                          }
-                        },
-                        body: { text: '' },
-                        footer: { text: '📱 TikTok' },
-                        contextInfo: {
-                          forwardingScore: 999,
-                          isForwarded: true,
-                          forwardedNewsletterMessageInfo: {
-                            newsletterJid: '120363420762648535@newsletter',
-                            newsletterName: 'Lizzy Bot',
-                            serverMessageId: -1
-                          }
-                        },
-                        nativeFlowMessage: {
-                          buttons: [
-                            {
-                              name: "cta_url",
-                              buttonParamsJson: JSON.stringify({
-                                display_text: "🔗 Abrir no TikTok",
-                                url: link
-                              })
-                            }
-                          ]
-                        }
+                  interactiveMessage: {
+                    header: {
+                      hasMediaAttachment: false,
+                    },
+                    body: { text: '🔗 *Abrir vídeo no TikTok*' },
+                    footer: { text: '📱 TikTok' },
+                    contextInfo: {
+                      forwardingScore: 999,
+                      isForwarded: true,
+                      forwardedNewsletterMessageInfo: {
+                        newsletterJid: '120363420762648535@newsletter',
+                        newsletterName: 'Lizzy Bot',
+                        serverMessageId: -1
                       }
+                    },
+                    nativeFlowMessage: {
+                      buttons: [
+                        {
+                          name: "cta_url",
+                          buttonParamsJson: JSON.stringify({
+                            display_text: "🔗 Abrir no TikTok",
+                            url: link
+                          })
+                        }
+                      ]
                     }
                   }
-                }, {});
+                }, { userJid: nazu.user.id });
 
                 await nazu.relayMessage(from, msg.message, { messageId: msg.key.id });
               };
