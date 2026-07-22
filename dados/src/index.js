@@ -747,6 +747,8 @@ import {
 } from './utils/database.js';
 import { parseCustomCommandMeta, buildUsageFromParams, parseArgsFromString, escapeRegExp, validateParamValue } from './utils/helpers.js';
 import {
+
+
   PACKAGE_JSON_PATH,
   CONFIG_FILE,
   DATABASE_DIR,
@@ -19672,23 +19674,52 @@ case 'pin':
                 const videoUrl = videoData.urls?.[0] || '';
                 const caption = title ? `${title}\n\n👁️ ${viewsText}` : `👁️ ${viewsText}`;
 
-                // Enviar vídeo com botão CTA e marcação oficial Meta
-                await nazu.sendMessage(from, {
-                  video: { url: videoUrl },
-                  caption: caption,
-                  mimetype: 'video/mp4',
-                  footer: '📱 TikTok',
-                  interactiveButtons: [
-                    {
-                      name: "cta_url",
-                      buttonParamsJson: JSON.stringify({
-                        display_text: "🔗 Abrir no TikTok",
-                        url: link
-                      })
+                // Enviar vídeo com botão CTA usando generateWAMessageFromContent
+                const msg = await generateWAMessageFromContent(from, {
+                  viewOnceMessage: {
+                    message: {
+                      interactiveMessage: {
+                        header: {
+                          hasMediaAttachment: true,
+                          videoMessage: {
+                            url: videoUrl,
+                            mimetype: 'video/mp4',
+                            caption: caption,
+                            mediaKey: undefined,
+                            fileLength: undefined,
+                            height: undefined,
+                            width: undefined,
+                            interactiveAnnotations: []
+                          }
+                        },
+                        body: { text: '' },
+                        footer: { text: '📱 TikTok' },
+                        contextInfo: {
+                          forwardingScore: 999,
+                          isForwarded: true,
+                          forwardedNewsletterMessageInfo: {
+                            newsletterJid: '120363420762648535@newsletter',
+                            newsletterName: 'Lizzy Bot',
+                            serverMessageId: -1
+                          }
+                        },
+                        nativeFlowMessage: {
+                          buttons: [
+                            {
+                              name: "cta_url",
+                              buttonParamsJson: JSON.stringify({
+                                display_text: "🔗 Abrir no TikTok",
+                                url: link
+                              })
+                            }
+                          ]
+                        }
+                      }
                     }
-                  ],
-                  contextInfo: { forwardingScore: 999, isForwarded: true }
-                });
+                  }
+                }, {});
+
+                await nazu.relayMessage(from, msg.message, { messageId: msg.key.id });
               };
 
               const results = datinha.results;
@@ -37250,8 +37281,35 @@ function getDiskSpaceInfo() {
       usedGb: 'N/A',
       percentUsed: 'N/A'
     };
+
+
   }
 }
+// Função para enviar mensagens com botões interativos (CTA URL)
+async function sendInteractiveMessage(sock, jid, options, extra = {}) {
+  const { text, footer, interactiveButtons } = options;
+  
+  const msg = await generateWAMessageFromContent(jid, {
+    viewOnceMessage: {
+      message: {
+        interactiveMessage: {
+          header: {
+            hasMediaAttachment: false,
+          },
+          body: { text: text },
+          footer: { text: footer || '' },
+          nativeFlowMessage: {
+            buttons: interactiveButtons || []
+          }
+        }
+      }
+    }
+  }, extra);
+  
+  await sock.relayMessage(jid, msg.message, { messageId: msg.key.id });
+  return msg;
+}
+
 export default NazuninhaBotExec;
 /*
  * ═══════════════════════════════════════════════════════════════
@@ -37264,6 +37322,8 @@ export default NazuninhaBotExec;
  * a conexão com o Baileys:
  *
  * import { handleGroupParticipantsUpdate } from './index.js';
+
+}
  *
  * // Dentro da função de conexão, após criar o socket (nazu/sock):
  * nazu.ev.on('group-participants.update', async (update) => {
