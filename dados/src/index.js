@@ -19662,54 +19662,27 @@ case 'pin':
                 return num.toString();
               };
               
-              // Função para enviar vídeo com botão CTA URL
-              const sendVideoWithButton = async (videoData, index) => {
-                const url = videoData.urls?.[0];
-                if (!url) return;
+              // Função para enviar link do TikTok (WhatsApp gera preview rico automaticamente)
+              const sendTikTokLink = async (videoData, index) => {
+                const link = videoData.link || (isTikTokUrl ? q : '');
+                if (!link) return;
                 
                 const title = videoData.title || '';
-                const link = videoData.link || (isTikTokUrl ? q : '');
                 const views = videoData.views || 0;
-                
-                // Formatar visualizações
                 const viewsText = views ? `${formatNumber(views)} visualizações` : '';
                 
-                // Criar caption com título e visualizações
-                const caption = title ? `${title}\n\n👁️ ${viewsText}` : `👁️ ${viewsText}`;
-                
-                try {
-                  // Enviar vídeo com botão CTA URL (nativeFlow)
-                  await nazu.sendMessage(from, {
-                    video: { url },
-                    caption: caption,
-                    buttons: [
-                      {
-                        name: "cta_url",
-                        buttonParamsJson: JSON.stringify({
-                          display_text: "🔗 Abrir no TikTok",
-                          url: link || url
-                        })
-                      }
-                    ],
-                    headerType: 4 // VIDEO
-                  }, { quoted: info });
-                } catch (videoErr) {
-                  console.error('Erro ao enviar vídeo com botão CTA:', videoErr.message);
-                  // Fallback: enviar só o vídeo
-                  await nazu.sendMessage(from, {
-                    video: { url },
-                    caption: title ? `📹 ${title}\n\n🔗 ${link}` : `🔗 ${link}`
-                  }, { quoted: info });
-                }
+                // Enviar apenas o link - WhatsApp gera preview rico automaticamente
+                const text = link;
+                await nazu.sendMessage(from, { text }, { quoted: info });
               };
               
               // Verificar se tem múltiplos resultados (search)
               const results = datinha.results;
               if (results && results.length > 0) {
-                // Enviar até 5 vídeos individualmente
+                // Enviar até 5 links (WhatsApp gera preview rico automaticamente)
                 const videosToSend = results.slice(0, 5);
                 for (let i = 0; i < videosToSend.length; i++) {
-                  await sendVideoWithButton(videosToSend[i], i);
+                  await sendTikTokLink(videosToSend[i], i);
                   // Pequeno delay entre envios
                   if (i < videosToSend.length - 1) {
                     await new Promise(resolve => setTimeout(resolve, 500));
@@ -19719,7 +19692,7 @@ case 'pin':
                 // Compatibilidade com formato antigo (um vídeo)
                 const urlz = datinha.urls?.[0];
                 if (urlz) {
-                  await sendVideoWithButton(datinha, 0);
+                  await sendTikTokLink(datinha, 0);
                 }
               }
               
