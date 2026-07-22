@@ -843,7 +843,7 @@ async function handleGroupJoinRequest(AbyssSock, inf) {
         const action = inf?.action || inf?.requestMethod || inf?.method || null;
         const isApproveAction = action === 'approve' || action === 'Approve' || action === 'approved' || action === 'add';
         const isRejectAction = action === 'reject' || action === 'Reject' || action === 'rejected' || action === 'remove';
-        const isNewRequest = action === 'created' || action === null;
+        const isNewRequest = action === 'created' || action === null || action === 'invite' || action === 'join';
         
         console.log('[X9] Action detected:', { action, isApproveAction, isRejectAction, isNewRequest });
 
@@ -871,45 +871,46 @@ async function handleGroupJoinRequest(AbyssSock, inf) {
             return;
         }
 
-        // Se for solicitação de entrada (nova)
-        // Verificar auto-accept
-        if (groupSettings.autoAcceptRequests) {
-            await AbyssSock.groupRequestParticipantsUpdate(from, [participantJid], 'approve');
+        // Se for nova solicitação de entrada
+        if (isNewRequest) {
+            // Verificar auto-accept
+            if (groupSettings.autoAcceptRequests) {
+                await AbyssSock.groupRequestParticipantsUpdate(from, [participantJid], 'approve');
+                return;
+            }
+
+            // Verificar se já foi processado
+            if (isJoinRequestProcessed(from, participantJid, 'new_request')) {
+                return;
+            }
+            
+            // Obter dados do solicitante
+            const [foto, nome] = await Promise.all([
+                getProfilePicture(AbyssSock, participantJid),
+                getUserName(AbyssSock, participantJid)
+            ]);
+
+            // Determinar origem
+            const method = inf?.method || '';
+            const origem = method === 'invite_link' ? 'Link de convite' : 
+                          method === 'linked_group_join' ? 'Grupo vinculado' : 
+                          'Aprovação pendente';
+
+            const horario = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+            // Enviar mensagem com botões
+            await sendJoinRequestMessage(AbyssSock, from, participantJid, {
+                foto,
+                nome,
+                origem,
+                horario
+            });
+
+            // Marcar como processado
+            markJoinRequestProcessed(from, participantJid, 'new_request');
+
+            console.log(`[X9] Solicitação enviada para ${participantJid}`);
             return;
-        }
-
-        // Verificar se já foi processado
-        if (isJoinRequestProcessed(from, participantJid, 'new_request')) {
-            return;
-        }
-
-        // Obter dados do solicitante
-        const [foto, nome] = await Promise.all([
-            getProfilePicture(AbyssSock, participantJid),
-            getUserName(AbyssSock, participantJid)
-        ]);
-
-        // Determinar origem
-        const method = inf?.method || '';
-        const origem = method === 'invite_link' ? 'Link de convite' : 
-                      method === 'linked_group_join' ? 'Grupo vinculado' : 
-                      'Aprovação pendente';
-
-        const horario = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-
-        // Enviar mensagem com botões
-        await sendJoinRequestMessage(AbyssSock, from, participantJid, {
-            foto,
-            nome,
-            origem,
-            horario
-        });
-
-        // Marcar como processado
-        markJoinRequestProcessed(from, participantJid, 'new_request');
-
-        console.log(`[X9] Solicitação enviada para ${participantJid}`);
-
     } catch (error) {
         console.error(`❌ Erro em handleGroupJoinRequest: ${error.message}`, error.stack);
     }
