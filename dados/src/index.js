@@ -19294,14 +19294,14 @@ case 'pin':
     if (itemsToSend.length > 1) {
       // Enviar como album (múltiplas imagens em uma mensagem)
       try {
-        const mediaMessages = itemsToSend.map((url, index) => ({
+        const messages = itemsToSend.map((url, index) => ({
           image: { url },
           caption: `🔍 busca ${index + 1}`
         }));
         
         await nazu.sendMessage(from, {
           text: isPinUrl ? '📌 Download do Pinterest' : `📌 Resultados da pesquisa por "${searchTerm}"`,
-          media: mediaMessages
+          messages: messages
         }, { quoted: info });
       } catch (albumErr) {
         // Se falhar com album, enviar imagens individualmente
