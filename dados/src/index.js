@@ -19674,47 +19674,31 @@ case 'pin':
                 const videoUrl = videoData.urls?.[0] || '';
                 const caption = title ? `${title}\n\n👁️ ${viewsText}` : `👁️ ${viewsText}`;
 
-                // Enviar vídeo primeiro
-                const videoMsg = await nazu.sendMessage(from, {
+                // Enviar vídeo com botão usando o formato do README
+                await nazu.sendMessage(from, {
                   video: { url: videoUrl },
                   caption: caption,
-                  mimetype: 'video/mp4'
-                });
-
-                // Delay antes do botão
-                await new Promise(r => setTimeout(r, 300));
-
-                // Enviar botão CTA respondendo ao vídeo
-                const msg = await generateWAMessageFromContent(from, {
-                  interactiveMessage: {
-                    header: { hasMediaAttachment: false },
-                    body: { text: '🔗 *Clique abaixo para abrir no TikTok*' },
-                    footer: { text: '📱 TikTok' },
-                    contextInfo: {
-                      forwardingScore: 999,
-                      isForwarded: true,
-                      forwardedNewsletterMessageInfo: {
-                        newsletterJid: '120363420762648535@newsletter',
-                        newsletterName: 'Lizzy Bot',
-                        serverMessageId: -1
-                      }
-                    },
-                    nativeFlowMessage: {
-                      buttons: [
-                        {
-                          name: "cta_url",
-                          buttonParamsJson: JSON.stringify({
-                            display_text: "🔗 Abrir no TikTok",
-                            url: link
-                          })
-                        }
-                      ]
+                  mimetype: 'video/mp4',
+                  footer: '📱 TikTok',
+                  contextInfo: {
+                    forwardingScore: 999,
+                    isForwarded: true,
+                    forwardedNewsletterMessageInfo: {
+                      newsletterJid: '120363420762648535@newsletter',
+                      newsletterName: 'Lizzy Bot',
+                      serverMessageId: -1
                     }
-                  }
-                }, { userJid: nazu.user.id });
-
-                // Responder ao vídeo
-                await nazu.relayMessage(from, msg.message, { messageId: msg.key.id, quoted: videoMsg });
+                  },
+                  buttons: [
+                    {
+                      name: "cta_url",
+                      buttonParamsJson: JSON.stringify({
+                        display_text: "🔗 Abrir no TikTok",
+                        url: link
+                      })
+                    }
+                  ]
+                });
               };
 
               const results = datinha.results;
