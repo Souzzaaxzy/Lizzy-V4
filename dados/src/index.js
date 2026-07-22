@@ -2312,10 +2312,25 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     const ROLE_NOT_GOING_BASE = 'рҹӨ·';
     const isGoingEmoji = (emoji) => typeof emoji === 'string' && emoji.includes(ROLE_GOING_BASE);
     const isNotGoingEmoji = (emoji) => typeof emoji === 'string' && emoji.includes(ROLE_NOT_GOING_BASE);
-    const isButtonMessage = info.message.interactiveMessage || info.message.templateButtonReplyMessage || info.message.buttonsMessage || info.message.interactiveResponseMessage || info.message.listResponseMessage || info.message.buttonsResponseMessage ? true : false;
+    // Verificar se é mensagem de botão (inclui nativeFlow)
+    const hasInteractiveMessage = !!info.message.interactiveMessage;
+    const hasButtonsResponse = !!info.message.buttonsResponseMessage;
+    const hasTemplateReply = !!info.message.templateButtonReplyMessage;
+    const hasInteractiveResponse = !!info.message.interactiveResponseMessage;
+    const hasListResponse = !!info.message.listResponseMessage;
+    
+    if (hasInteractiveMessage || hasButtonsResponse || hasTemplateReply || hasInteractiveResponse || hasListResponse) {
+      console.log('[X9] Mensagem de botão detectada:', { 
+        hasInteractiveMessage, 
+        hasButtonsResponse, 
+        hasTemplateReply,
+        hasInteractiveResponse,
+        fullMessage: JSON.stringify(info.message, null, 2).substring(0, 500)
+      });
+    }
     
     // Processar cliques nos botões de solicitações de entrada
-    if (isButtonMessage) {
+    if (hasInteractiveMessage || hasButtonsResponse || hasTemplateReply || hasInteractiveResponse || hasListResponse) {
       let buttonId = '';
       
       // Tentar extrair buttonId de diferentes formatos

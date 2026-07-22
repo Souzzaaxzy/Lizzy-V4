@@ -660,7 +660,7 @@ async function isGroupAdmin(sock, groupJid, userJid) {
     }
 }
 
-// Função para enviar mensagem com botões de solicitação (usando nativeFlow para evitar resposta no chat)
+// Função para enviar mensagem com botões de solicitação (usando interactiveMessage com nativeFlow)
 async function sendJoinRequestMessage(sock, groupJid, participantJid, requestData) {
     const { foto, nome, origem, horario } = requestData;
     
@@ -678,27 +678,39 @@ async function sendJoinRequestMessage(sock, groupJid, participantJid, requestDat
 
 Deseja aprovar esta solicitação?`;
 
-    // Formato correto de botões para @itsliaaa/baileys
-    const buttons = [
-        { text: '🟢 Aceitar', id: `x9_accept_${participantNum}_${groupNum}` },
-        { text: '🔴 Negar', id: `x9_deny_${participantNum}_${groupNum}` }
-    ];
+    // Usar interactiveMessage com nativeFlow para evitar resposta no chat
+    const interactiveMessage = {
+        body: { text: mensagem },
+        footer: { text: 'X9 • Sistema de Moderação' },
+        nativeFlow: {
+            buttons: [
+                {
+                    name: "quick_reply",
+                    buttonParamsJson: JSON.stringify({
+                        display_text: "🟢 Aceitar",
+                        id: `x9_accept_${participantNum}_${groupNum}`
+                    })
+                },
+                {
+                    name: "quick_reply",
+                    buttonParamsJson: JSON.stringify({
+                        display_text: "🔴 Negar",
+                        id: `x9_deny_${participantNum}_${groupNum}`
+                    })
+                }
+            ]
+        }
+    };
 
     // Enviar mensagem com foto (se disponível)
     if (foto) {
         await sock.sendMessage(groupJid, {
             image: { url: foto },
-            caption: mensagem,
-            footer: 'X9 • Sistema de Moderação',
-            buttons: buttons,
+            ...interactiveMessage,
             headerType: 1
         });
     } else {
-        await sock.sendMessage(groupJid, {
-            text: mensagem,
-            footer: 'X9 • Sistema de Moderação',
-            buttons: buttons
-        });
+        await sock.sendMessage(groupJid, interactiveMessage);
     }
 }
 
