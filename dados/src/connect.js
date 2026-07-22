@@ -824,24 +824,28 @@ async function sendNativeApprovalNotification(sock, groupJid, participantJid, ac
 // ==========================================
 async function handleGroupJoinRequest(AbyssSock, inf) {
     try {
-        const from = inf.id;
-        let participantJid = inf.participantPn || inf.participant;
+        const from = inf?.id;
+        let participantJid = inf?.participantPn || inf?.participant;
 
-        if (!from || !participantJid) return;
+        if (!from || !participantJid) {
+            console.log('[X9] Dados insuficientes:', { from, participantJid, inf });
+            return;
+        }
 
         // Tratar participantJid como objeto
-        if (typeof participantJid === "object") {
+        if (typeof participantJid === "object" && participantJid !== null) {
             participantJid = participantJid.pn || participantJid.lid;
         }
 
         if (!participantJid) return;
 
         // Detectar tipo de ação
-        const action = inf.action || inf.requestMethod || inf.method || null;
+        const action = inf?.action || inf?.requestMethod || inf?.method || null;
         const isApproveAction = action === 'approve' || action === 'Approve' || action === 'approved' || action === 'add';
         const isRejectAction = action === 'reject' || action === 'Reject' || action === 'rejected' || action === 'remove';
+        const isNewRequest = action === 'created' || action === null;
         
-        console.log('[X9] Action detected:', { action, isApproveAction, isRejectAction });
+        console.log('[X9] Action detected:', { action, isApproveAction, isRejectAction, isNewRequest });
 
         // Carregar configurações do grupo
         const groupSettings = await loadGroupSettings(from);
@@ -856,7 +860,7 @@ async function handleGroupJoinRequest(AbyssSock, inf) {
                 return;
             }
             
-            const authorJid = inf.author || inf.actor || inf.requestingUserJid || null;
+            const authorJid = inf?.author || inf?.actor || inf?.requestingUserJid || null;
             
             // Enviar notificação de aprovação/rejeição
             await sendNativeApprovalNotification(AbyssSock, from, participantJid, action, authorJid);
@@ -886,8 +890,9 @@ async function handleGroupJoinRequest(AbyssSock, inf) {
         ]);
 
         // Determinar origem
-        const origem = inf.method === 'invite_link' ? 'Link de convite' : 
-                      inf.method === 'linked_group_join' ? 'Grupo vinculado' : 
+        const method = inf?.method || '';
+        const origem = method === 'invite_link' ? 'Link de convite' : 
+                      method === 'linked_group_join' ? 'Grupo vinculado' : 
                       'Aprovação pendente';
 
         const horario = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -906,7 +911,7 @@ async function handleGroupJoinRequest(AbyssSock, inf) {
         console.log(`[X9] Solicitação enviada para ${participantJid}`);
 
     } catch (error) {
-        console.error(`❌ Erro em handleGroupJoinRequest: ${error.message}`);
+        console.error(`❌ Erro em handleGroupJoinRequest: ${error.message}`, error.stack);
     }
 }
 

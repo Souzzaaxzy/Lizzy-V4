@@ -2318,8 +2318,9 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     const hasTemplateReply = !!info.message.templateButtonReplyMessage;
     const hasInteractiveResponse = !!info.message.interactiveResponseMessage;
     const hasListResponse = !!info.message.listResponseMessage;
+    const isButtonMessage = hasInteractiveMessage || hasButtonsResponse || hasTemplateReply || hasInteractiveResponse || hasListResponse;
     
-    if (hasInteractiveMessage || hasButtonsResponse || hasTemplateReply || hasInteractiveResponse || hasListResponse) {
+    if (isButtonMessage) {
       console.log('[X9] Mensagem de botão detectada:', { 
         hasInteractiveMessage, 
         hasButtonsResponse, 
@@ -2330,7 +2331,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     }
     
     // Processar cliques nos botões de solicitações de entrada
-    if (hasInteractiveMessage || hasButtonsResponse || hasTemplateReply || hasInteractiveResponse || hasListResponse) {
+    if (isButtonMessage) {
       let buttonId = '';
       
       // Tentar extrair buttonId de diferentes formatos
