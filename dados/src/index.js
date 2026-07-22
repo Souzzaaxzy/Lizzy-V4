@@ -31047,10 +31047,18 @@ break;
           groupData.antirequest = !groupData.antirequest; 
           fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2)); 
           const newState = groupData.antirequest ? '*ATIVADO*' : '*DESATIVADO*';
-          await reply(`
+          const newsletterCtxReq = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          await nazu.sendMessage(from, { text: `
 ✔️ O recurso *Antirequest/Antiviewonce* foi ${newState} com sucesso.
 Qualquer solicitação de pagamento será ${groupData.antirequest ? 'bloqueada e o membro será removido.' : 'permitida.'}
-          `);
+          ` }, { contextInfo: newsletterCtxReq, quoted: info });
         } catch (e) {
           console.error(e);
           await reply("❌ Ocorreu um erro interno ao tentar alterar a configuração.");
