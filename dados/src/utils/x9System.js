@@ -601,8 +601,19 @@ export async function updateCardOnReject(sock, groupId, participantJid, adminJid
  * Envia notificação quando aprovado via WhatsApp (sem comando)
  */
 export async function notifyWhatsAppApproval(sock, groupId, participantJid, adminJid) {
+    console.log('[X9] notifyWhatsAppApproval called');
+    console.log('[X9] groupId:', groupId);
+    console.log('[X9] participantJid:', participantJid);
+    console.log('[X9] adminJid:', adminJid);
+    console.log('[X9] Store keys:', [...x9Store.requests.keys()]);
+    
     const req = x9Store.get(groupId, participantJid);
-    if (!req || req.status !== 'pending') return null;
+    console.log('[X9] Found request:', req ? 'SIM' : 'NÃO');
+    
+    if (!req || req.status !== 'pending') {
+        console.log('[X9] Request not found or not pending');
+        return null;
+    }
 
     const now = new Date();
     const adminNumber = adminJid ? adminJid.replace(/@.*$/, '') : 'Admin';
@@ -614,6 +625,7 @@ export async function notifyWhatsAppApproval(sock, groupId, participantJid, admi
     };
 
     const notification = parseTemplate(X9_APPROVED_TEMPLATE, vars);
+    console.log('[X9] Sending notification:', notification);
 
     try {
         await sock.sendMessage(groupId, {
@@ -622,7 +634,7 @@ export async function notifyWhatsAppApproval(sock, groupId, participantJid, admi
         });
 
         x9Store.update(groupId, participantJid, { status: 'approved' });
-        console.log('[X9] Notificação enviada via WhatsApp');
+        console.log('[X9] ✅ Notificação enviada via WhatsApp');
     } catch (error) {
         console.error('[X9] Erro na notificação:', error.message);
     }

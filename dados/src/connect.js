@@ -674,26 +674,59 @@ async function handleWhatsAppNativeAction(AbyssSock, inf) {
     try {
         const { id: groupId, action, author, authorPn, participant, participants } = inf;
         
+        console.log('[X9] ========== WHATSAPP NATIVE HANDLER ==========');
+        console.log('[X9] Full inf:', JSON.stringify(inf, null, 2));
+        
         if (!groupId) return;
         
         // Carrega configurações
         const groupSettings = await loadGroupSettings(groupId);
         
-        if (!groupSettings?.x9) return;
+        if (!groupSettings?.x9) {
+            console.log('[X9] X9 desativado neste grupo');
+            return;
+        }
         
         const targetParticipant = participant || (participants && participants[0]);
         const adminJid = author || authorPn;
         
-        if (!targetParticipant || !adminJid) return;
+        console.log('[X9] targetParticipant:', targetParticipant);
+        console.log('[X9] adminJid:', adminJid);
         
-        // Normaliza JID
-        let participantJid = targetParticipant;
-        if (typeof participantJid === 'object') {
-            participantJid = participantJid.pn || participantJid.lid || participantJid.id || targetParticipant;
+        if (!targetParticipant || !adminJid) {
+            console.log('[X9] Dados insuficientes');
+            return;
         }
-        if (!participantJid.includes('@')) {
-            participantJid = `${participantJid}@s.whatsapp.net`;
+        
+        // Normaliza JID - PRIORIDADE: pn > id > number (nunca usa lid!)
+        let participantJid;
+        if (typeof targetParticipant === 'object') {
+            participantJid = targetParticipant.pn || targetParticipant.id || targetParticipant.number;
+        } else {
+            participantJid = targetParticipant;
         }
+        
+        // Se não encontrou número ou é LID, tenta outras propriedades
+        if (!participantJid || typeof participantJid !== 'string') {
+            participantJid = targetParticipant.pn || targetParticipant.id || targetParticipant.number;
+        }
+        
+        // Limpa e normaliza
+        if (typeof participantJid === 'string') {
+            participantJid = participantJid.split('@')[0];
+            // Verifica se é apenas números
+            if (/^\d+$/.test(participantJid)) {
+                participantJid = `${participantJid}@s.whatsapp.net`;
+            } else {
+                console.log('[X9] JID não é número válido, ignorando');
+                return;
+            }
+        } else {
+            console.log('[X9] participantJid inválido');
+            return;
+        }
+        
+        console.log('[X9] Final participantJid:', participantJid);
         
         // Processa notificação
         await notifyWhatsAppApproval(AbyssSock, groupId, participantJid, adminJid);
