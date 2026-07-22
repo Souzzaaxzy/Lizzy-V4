@@ -1284,6 +1284,16 @@ async function createBotSocket(authDir) {
                     console.log(`[GROUPS UPDATE] X9 ativado para ${groupId} - processando evento`);
                     let mensagem = null;
                     let mention = [];
+
+                    // Newsletter header para todas as mensagens X9
+                    const newsletterCtx = {
+                        forwardingScore: 999,
+                        isForwarded: true,
+                        forwardedNewsletterMessageInfo: {
+                            newsletterJid: "120363410980452460@newsletter",
+                            newsletterName: "Lizzy"
+                        }
+                    };
                     
                     // Formatar texto e menção do autor
                     let authorText = '';
@@ -1407,7 +1417,7 @@ async function createBotSocket(authDir) {
                     if (mensagem) {
                         console.log('[X9] Enviando mensagem:', mensagem);
                         console.log('[X9] Menções:', mention);
-                        const msgOptions = { text: mensagem };
+                        const msgOptions = { text: mensagem, contextInfo: newsletterCtx };
                         if (mention.length > 0) {
                             msgOptions.mentions = [...new Set(mention)]; // Remove duplicatas
                         }
