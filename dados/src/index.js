@@ -19665,32 +19665,37 @@ case 'pin':
               };
 
               const sendTikTokVideo = async (videoData, index) => {
-                const link = videoData.link || (isTikTokUrl ? q : '');
-                const videoUrl = videoData.urls?.[0];
-                if (!link || !videoUrl) return;
+                const url = videoData.urls?.[0];
+                if (!url) return;
 
                 const title = videoData.title || '';
+                const link = videoData.link || (isTikTokUrl ? q : '');
                 const views = videoData.views || 0;
                 const viewsText = views ? `${formatNumber(views)} visualizações` : '';
-
                 const caption = title ? `${title}\n\n👁️ ${viewsText}` : `👁️ ${viewsText}`;
 
-                // Enviar vídeo com botão CTA URL
-                await nazu.sendMessage(from, {
-                  video: { url: videoUrl },
-                  caption: caption,
-                  footer: '📱 TikTok',
-                  buttons: [
-                    {
-                      name: "cta_url",
-                      buttonParamsJson: JSON.stringify({
-                        display_text: "📱 Abrir no TikTok",
-                        url: link
-                      })
-                    }
-                  ],
-                  headerType: 4 // VIDEO
-                });
+                try {
+                  await nazu.sendMessage(from, {
+                    video: { url },
+                    caption: caption,
+                    buttons: [
+                      {
+                        name: "cta_url",
+                        buttonParamsJson: JSON.stringify({
+                          display_text: "🔗 Abrir no TikTok",
+                          url: link || url
+                        })
+                      }
+                    ],
+                    headerType: 4 // VIDEO
+                  }, { quoted: info });
+                } catch (videoErr) {
+                  console.error('Erro ao enviar vídeo com botão CTA:', videoErr.message);
+                  await nazu.sendMessage(from, {
+                    video: { url },
+                    caption: title ? `📹 ${title}\n\n🔗 ${link}` : `🔗 ${link}`
+                  }, { quoted: info });
+                }
               };
 
               const results = datinha.results;
