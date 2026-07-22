@@ -761,8 +761,8 @@ export async function notifyGroupChange(sock, groupId, changeType, adminJid, ext
     console.log('[X9] adminJid:', adminJid);
     
     const now = new Date();
-    const adminNumber = adminJid ? adminJid.replace(/@.*$/, '') : '';
-    const adminText = adminNumber ? `@${adminNumber}` : 'Admin';
+    // adminJid já contém @s.whatsapp.net, então usa direto
+    const adminText = adminJid || 'Admin';
     
     let template;
     const vars = {
