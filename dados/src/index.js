@@ -27309,53 +27309,87 @@ ${groupPrefix}togglecmdvip premium_ia off`);
       case 'togif':
         try {
           const quotedMsg = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-          
+
           // Verificar sticker normal ou lottie
           const quotedSticker = quotedMsg?.stickerMessage || quotedMsg?.lottieStickerMessage?.message?.stickerMessage;
-          
+
           if (!quotedSticker) {
             return reply(`❌ Responda a uma figurinha animada utilizando:\n${groupPrefix}togif`);
           }
-          
+
           // Verificar se é sticker animado (isLottie ou duration > 0)
           const isAnimated = quotedSticker.isLottie === true || (quotedSticker.duration && quotedSticker.duration > 0);
-          
+
           if (!isAnimated) {
             return reply("❌ Essa figurinha não é animada.");
           }
-          
+
           await reply("⏳ Convertendo figurinha em GIF...");
-          
+
           const stickerBuffer = await getFileBuffer(quotedSticker, 'sticker');
-          
+
           const tempDir = path.join(__dirname, '..', 'database', 'tmp');
           if (!fs.existsSync(tempDir)) {
             fs.mkdirSync(tempDir, { recursive: true });
           }
-          
+
           const inputFile = path.join(tempDir, `${Date.now()}_sticker.webp`);
           const outputFile = path.join(tempDir, `${Date.now()}_sticker.gif`);
-          
+          const tempDir2 = path.join(tempDir, `${Date.now()}_frames`);
+
           fs.writeFileSync(inputFile, stickerBuffer);
-          
+          fs.mkdirSync(tempDir2, { recursive: true });
+
+          // Extrair frames do webp animado
           await new Promise((resolve, reject) => {
-            exec(`ffmpeg -hide_banner -loglevel error -i "${inputFile}" -vf "split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse" -loop 0 "${outputFile}"`, (err) => {
+            exec(`ffmpeg -hide_banner -loglevel error -i "${inputFile}" -vsync 0 "${tempDir2}/frame_%03d.png"`, (err) => {
               if (err) reject(err);
               else resolve();
             });
           });
-          
+
+          // Verificar se extraiu frames
+          const frames = fs.readdirSync(tempDir2).filter(f => f.endsWith(".png"));
+          if (frames.length === 0) {
+            fs.rmSync(tempDir2, { recursive: true, force: true });
+            fs.unlinkSync(inputFile);
+            throw new Error("Não foi possível extrair frames");
+          }
+
+          // Ordenar frames
+          frames.sort();
+
+          // Gerar paleta para GIF melhor
+          const framePattern = path.join(tempDir2, "frame_%03d.png");
+          await new Promise((resolve, reject) => {
+            exec(`ffmpeg -hide_banner -loglevel error -framerate 10 -i "${framePattern}" -vf "palettegen=stats_mode=diff" "${tempDir}/palette.png"`, (err) => {
+              if (err) reject(err);
+              else resolve();
+            });
+          });
+
+          // Converter para GIF usando a paleta
+          await new Promise((resolve, reject) => {
+            exec(`ffmpeg -hide_banner -loglevel error -framerate 10 -i "${framePattern}" -i "${tempDir}/palette.png" -lavfi "paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" -loop 0 "${outputFile}"`, (err) => {
+              if (err) reject(err);
+              else resolve();
+            });
+          });
+
           const gifBuffer = fs.readFileSync(outputFile);
-          
+
           await nazu.sendMessage(from, {
             video: gifBuffer,
             gifPlayback: true,
             caption: "✅ Conversão concluída."
           }, { quoted: info });
-          
+
+          // Limpar arquivos temporários
           fs.unlinkSync(inputFile);
           fs.unlinkSync(outputFile);
-          
+          fs.unlinkSync(`${tempDir}/palette.png`);
+          fs.rmSync(tempDir2, { recursive: true, force: true });
+
         } catch (error) {
           console.error('Erro no comando togif:', error);
           await reply("❌ Não foi possível converter essa figurinha para GIF.");
