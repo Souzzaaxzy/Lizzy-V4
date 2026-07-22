@@ -19672,23 +19672,22 @@ case 'pin':
                 const link = videoData.link || (isTikTokUrl ? q : '');
 
                 try {
-                  // Enviar vídeo com botão CTA URL (nativeFlow)
+                  // Enviar vídeo com botão (formato suportado pelo WhatsApp)
                   await nazu.sendMessage(from, {
                     video: { url },
                     caption: title || '',
+                    footer: link ? `🔗 ${link}` : undefined,
                     buttons: [
                       {
-                        name: "cta_url",
-                        buttonParamsJson: JSON.stringify({
-                          display_text: "🔗 Abrir no TikTok",
-                          url: link || url
-                        })
+                        buttonId: `tiktok_${index}`,
+                        buttonText: { displayText: '🔗 Abrir no TikTok' },
+                        type: 1
                       }
                     ],
                     headerType: 4 // VIDEO
                   }, { quoted: info });
                 } catch (videoErr) {
-                  console.error('Erro ao enviar vídeo com botão CTA:', videoErr.message);
+                  console.error('Erro ao enviar vídeo com botão:', videoErr.message);
                   // Fallback: enviar só o vídeo
                   await nazu.sendMessage(from, {
                     video: { url },
