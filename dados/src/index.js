@@ -19674,7 +19674,7 @@ case 'pin':
                 const videoUrl = videoData.urls?.[0] || '';
                 const caption = title ? `${title}\n\n👁️ ${viewsText}` : `👁️ ${viewsText}`;
 
-                // Enviar vídeo com botão usando o formato do README
+                // Enviar vídeo com interactiveButtons
                 await nazu.sendMessage(from, {
                   video: { url: videoUrl },
                   caption: caption,
@@ -19687,7 +19687,7 @@ case 'pin':
                       serverMessageId: -1
                     }
                   },
-                  buttons: [
+                  interactiveButtons: [
                     {
                       name: "cta_url",
                       buttonParamsJson: JSON.stringify({
