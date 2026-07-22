@@ -469,9 +469,44 @@ export async function processNewJoinRequest(sock, eventData, groupSettings) {
  * Envia card de aprovação mostrando quem aprovou
  */
 export async function updateCardOnApprove(sock, groupId, participantJid, adminJid) {
-    const req = x9Store.get(groupId, participantJid);
+    // Normaliza o JID para garantir consistência
+    const normalizedJid = normalizeJid(participantJid);
+    
+    console.log(`[X9] Aprovando: ${participantJid} -> ${normalizedJid}`);
+    
+    const req = x9Store.get(groupId, normalizedJid);
     if (!req) {
         console.log('[X9] Requisição não encontrada no store');
+        // Tenta encontrar pela chave antiga ou por número
+        const number = (normalizedJid || participantJid).replace(/@.*$/, '');
+        const altReq = x9Store.getByParticipantNumber(number);
+        if (altReq) {
+            console.log('[X9] Encontrou requisição pelo número');
+            const reqJid = altReq.participantJid;
+            // Deleta card original
+            if (altReq.messageId) {
+                try {
+                    await sock.sendMessage(groupId, { 
+                        delete: { id: altReq.messageId, remoteJid: groupId, fromMe: true } 
+                    });
+                } catch (e) {}
+            }
+            // Envia mensagem de aprovação
+            const now = new Date();
+            const adminNumber = adminJid.replace(/@.*$/, '');
+            const vars = {
+                admin: adminNumber,
+                numero: altReq.participantNumber,
+                hora: formatTime(now)
+            };
+            const approvedText = parseTemplate(X9_APPROVED_TEMPLATE, vars);
+            const sent = await sock.sendMessage(groupId, {
+                text: approvedText,
+                mentions: [reqJid, adminJid]
+            });
+            x9Store.update(groupId, reqJid, { status: 'approved' });
+            return sent;
+        }
         return null;
     }
     
@@ -499,10 +534,10 @@ export async function updateCardOnApprove(sock, groupId, participantJid, adminJi
     try {
         const sent = await sock.sendMessage(groupId, {
             text: approvedText,
-            mentions: [participantJid, adminJid]
+            mentions: [normalizedJid, adminJid]
         });
         
-        x9Store.update(groupId, participantJid, { status: 'approved' });
+        x9Store.update(groupId, normalizedJid, { status: 'approved' });
         console.log(`[X9] ✅ Aprovado por ${adminNumber}`);
         return sent;
     } catch (error) {
@@ -515,9 +550,44 @@ export async function updateCardOnApprove(sock, groupId, participantJid, adminJi
  * Envia card de rejeição mostrando quem rejeitou
  */
 export async function updateCardOnReject(sock, groupId, participantJid, adminJid) {
-    const req = x9Store.get(groupId, participantJid);
+    // Normaliza o JID para garantir consistência
+    const normalizedJid = normalizeJid(participantJid);
+    
+    console.log(`[X9] Rejeitando: ${participantJid} -> ${normalizedJid}`);
+    
+    const req = x9Store.get(groupId, normalizedJid);
     if (!req) {
         console.log('[X9] Requisição não encontrada no store');
+        // Tenta encontrar pela chave antiga ou por número
+        const number = (normalizedJid || participantJid).replace(/@.*$/, '');
+        const altReq = x9Store.getByParticipantNumber(number);
+        if (altReq) {
+            console.log('[X9] Encontrou requisição pelo número');
+            const reqJid = altReq.participantJid;
+            // Deleta card original
+            if (altReq.messageId) {
+                try {
+                    await sock.sendMessage(groupId, { 
+                        delete: { id: altReq.messageId, remoteJid: groupId, fromMe: true } 
+                    });
+                } catch (e) {}
+            }
+            // Envia mensagem de rejeição
+            const now = new Date();
+            const adminNumber = adminJid.replace(/@.*$/, '');
+            const vars = {
+                admin: adminNumber,
+                numero: altReq.participantNumber,
+                hora: formatTime(now)
+            };
+            const rejectedText = parseTemplate(X9_REJECTED_TEMPLATE, vars);
+            const sent = await sock.sendMessage(groupId, {
+                text: rejectedText,
+                mentions: [reqJid, adminJid]
+            });
+            x9Store.update(groupId, reqJid, { status: 'rejected' });
+            return sent;
+        }
         return null;
     }
     
@@ -545,10 +615,10 @@ export async function updateCardOnReject(sock, groupId, participantJid, adminJid
     try {
         const sent = await sock.sendMessage(groupId, {
             text: rejectedText,
-            mentions: [participantJid, adminJid]
+            mentions: [normalizedJid, adminJid]
         });
         
-        x9Store.update(groupId, participantJid, { status: 'rejected' });
+        x9Store.update(groupId, normalizedJid, { status: 'rejected' });
         console.log(`[X9] ❌ Rejeitado por ${adminNumber}`);
         return sent;
     } catch (error) {
