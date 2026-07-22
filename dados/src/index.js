@@ -19672,19 +19672,30 @@ case 'pin':
                 const videoUrl = videoData.urls?.[0] || '';
                 const caption = title ? `${title}\n\n👁️ ${viewsText}` : `👁️ ${viewsText}`;
 
+                // Enviar vídeo com botão CTA e marcação oficial Meta
                 await nazu.sendMessage(from, {
                   video: { url: videoUrl },
                   caption: caption,
                   mimetype: 'video/mp4',
-                  contextInfo: {
-                    isForwarded: true,
-                    forwardingScore: 999,
-                    externalAdReply: {
-                      title: 'TikTok',
-                      body: title || 'Vídeo do TikTok',
-                      thumbnailUrl: videoData.cover || '',
-                      videoUrl: link
+                  footer: '📱 TikTok',
+                  buttons: [
+                    {
+                      name: "cta_url",
+                      buttonParamsJson: JSON.stringify({
+                        display_text: "🔗 Abrir no TikTok",
+                        url: link
+                      })
                     }
+                  ],
+                  headerType: 4, // VIDEO
+                  contextInfo: {
+                    forwardedNewsletterMessageInfo: {
+                      newsletterJid: '120363420762648535@newsletter',
+                      newsletterName: 'Lizzy Bot',
+                      serverMessageId: -1
+                    },
+                    forwardingScore: 999,
+                    isForwarded: true
                   }
                 });
               };
