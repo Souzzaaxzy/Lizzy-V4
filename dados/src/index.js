@@ -27692,6 +27692,14 @@ packname: `${nomebot}`,
           var isVideo2 = !!boij;
           if (isVideo2 && boij.seconds > 9.9) return reply(`O vídeo precisa ter no máximo 9.9 segundos para ser convertido em figurinha.`);
           var buffer = await getFileBuffer(isVideo2 ? boij : boij2, isVideo2 ? 'video' : 'image');
+          const newsletterCtxSticker = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
           await sendSticker(nazu, from, {
             sticker: buffer,
             author: `${pushname}`,
@@ -27699,7 +27707,8 @@ packname: `${nomebot}`,
             type: isVideo2 ? 'video' : 'image',
             forceSquare: true
           }, {
-            quoted: info
+            quoted: info,
+            contextInfo: newsletterCtxSticker
           });
         } catch (e) {
           console.error(e);
@@ -27718,12 +27727,21 @@ packname: `${nomebot}`,
           var isVideo2 = !!boij;
           if (isVideo2 && boij.seconds > 9.9) return reply(`O vídeo precisa ter no máximo 9.9 segundos para ser convertido em figurinha.`);
           var buffer = await getFileBuffer(isVideo2 ? boij : boij2, isVideo2 ? 'video' : 'image');
+          const newsletterCtxSticker2 = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
           await sendSticker(nazu, from, {
             sticker: buffer,
 author: `『${pushname}』`,
 packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
           }, {
-            quoted: info
+            quoted: info,
+            contextInfo: newsletterCtxSticker2
           });
         } catch (e) {
           console.error(e);
