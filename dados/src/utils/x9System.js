@@ -5,83 +5,196 @@
  * ═══════════════════════════════════════════════════════════════
  */
 
-const COUNTRY_CODES = {
-    '244': 'Angola 🇦🇴', 
-    '55': 'Brasil 🇧🇷', 
-    '351': 'Portugal 🇵🇹',
-    '34': 'Espanha 🇪🇸', 
-    '1': 'EUA/Canadá 🇺🇸🇨🇦', 
-    '44': 'UK 🇬🇧',
-    '49': 'Alemanha 🇩🇪', 
-    '39': 'Itália 🇮🇹', 
-    '33': 'França 🇫🇷',
-    '54': 'Argentina 🇦🇷', 
-    '56': 'Chile 🇨🇱', 
-    '57': 'Colômbia 🇨🇴',
-    '51': 'Peru 🇵🇪', 
-    '52': 'México 🇲🇽', 
-    '225': 'Costa do Marfim 🇨🇮',
-    '234': 'Nigéria 🇳🇬', 
-    '27': 'África do Sul 🇿🇦', 
-    '966': 'Arábia Saudita 🇸🇦',
-    '971': 'Emirados 🇦🇪', 
-    '62': 'Indonésia 🇮🇩', 
-    '63': 'Filipinas 🇵🇭',
-    '81': 'Japão 🇯🇵', 
-    '82': 'Coreia 🇰🇷', 
-    '86': 'China 🇨🇳',
-    '91': 'Índia 🇮🇳', 
-    '61': 'Austrália 🇦🇺', 
+// Lista completa de DDIs por país
+const DDI_LIST = {
+    // África
+    '244': 'Angola 🇦🇴',
     '258': 'Moçambique 🇲🇿',
-    '233': 'Gana 🇬🇭', 
-    '254': 'Quênia 🇰🇪', 
+    '233': 'Gana 🇬🇭',
+    '254': 'Quênia 🇰🇪',
     '255': 'Tanzânia 🇹🇿',
-    '216': 'Tunísia 🇹🇳', 
-    '213': 'Argélia 🇩🇿', 
+    '234': 'Nigéria 🇳🇬',
+    '27': 'África do Sul 🇿🇦',
+    '225': 'Costa do Marfim 🇨🇮',
+    '216': 'Tunísia 🇹🇳',
+    '213': 'Argélia 🇩🇿',
     '212': 'Marrocos 🇲🇦',
-    '20': 'Egito 🇪🇬', 
-    '90': 'Turquia 🇹🇷', 
-    '7': 'Rússia 🇷🇺',
+    '20': 'Egito 🇪🇬',
+    '249': 'Sudão 🇸🇩',
+    '252': 'Somália 🇸🇴',
+    '251': 'Etiópia 🇪🇹',
+    '245': 'Guiné-Bissau 🇬🇼',
+    
+    // América
+    '55': 'Brasil 🇧🇷',
+    '1': 'EUA/Canadá 🇺🇸🇨🇦',
+    '54': 'Argentina 🇦🇷',
+    '56': 'Chile 🇨🇱',
+    '57': 'Colômbia 🇨🇴',
+    '51': 'Peru 🇵🇪',
+    '52': 'México 🇲🇽',
+    '598': 'Uruguai 🇺🇾',
+    '595': 'Paraguai 🇵🇾',
+    '593': 'Equador 🇪🇨',
+    '591': 'Bolívia 🇧🇴',
+    '507': 'Panamá 🇵🇦',
+    '503': 'El Salvador 🇸🇻',
+    '502': 'Guatemala 🇬🇹',
+    '504': 'Honduras 🇭🇳',
+    '505': 'Nicarágua 🇳🇮',
+    '506': 'Costa Rica 🇨🇷',
+    
+    // Ásia
+    '81': 'Japão 🇯🇵',
+    '82': 'Coreia do Sul 🇰🇷',
+    '86': 'China 🇨🇳',
+    '91': 'Índia 🇮🇳',
+    '92': 'Paquistão 🇵🇰',
+    '60': 'Malásia 🇲🇾',
+    '62': 'Indonésia 🇮🇩',
+    '63': 'Filipinas 🇵🇭',
     '65': 'Singapura 🇸🇬',
-    '60': 'Malásia 🇲🇾', 
-    '66': 'Tailândia 🇹🇭', 
+    '66': 'Tailândia 🇹🇭',
     '84': 'Vietnã 🇻🇳',
-    '98': 'Irã 🇮🇷', 
-    '92': 'Paquistão 🇵🇰', 
-    '880': 'Bangladesh 🇧🇩',
-    '94': 'Sri Lanka 🇱🇰', 
-    '977': 'Nepal 🇳🇵', 
     '95': 'Myanmar 🇲🇲',
-    '856': 'Laos 🇱🇦', 
-    '855': 'Camboja 🇰🇭', 
+    '856': 'Laos 🇱🇦',
+    '855': 'Camboja 🇰🇭',
+    '880': 'Bangladesh 🇧🇩',
+    '94': 'Sri Lanka 🇱🇰',
+    '977': 'Nepal 🇳🇵',
+    '98': 'Irã 🇮🇷',
+    '962': 'Jordânia 🇯🇴',
+    '966': 'Arábia Saudita 🇸🇦',
+    '971': 'Emirados 🇦🇪',
+    '972': 'Israel 🇮🇱',
+    '973': 'Bahrein 🇧🇭',
+    '974': 'Catar 🇶🇦',
+    '975': 'Butão 🇧🇹',
+    '976': 'Mongólia 🇲🇳',
+    '992': 'Tajiquistão 🇹🇯',
+    '993': 'Turcomenistão 🇹🇲',
+    '994': 'Azerbaijão 🇦🇿',
+    '995': 'Geórgia 🇬🇪',
+    '996': 'Quirguistão 🇰🇬',
+    '998': 'Uzbequistão 🇺🇿',
+    
+    // Europa
+    '7': 'Rússia 🇷🇺',
+    '20': 'Egito 🇪🇬',
+    '30': 'Grécia 🇬🇷',
+    '31': 'Países Baixos 🇳🇱',
+    '32': 'Bélgica 🇧🇪',
+    '33': 'França 🇫🇷',
+    '34': 'Espanha 🇪🇸',
+    '36': 'Hungria 🇭🇺',
+    '39': 'Itália 🇮🇹',
+    '40': 'Romênia 🇷🇴',
+    '41': 'Suíça 🇨🇭',
+    '43': 'Áustria 🇦🇹',
+    '44': 'Reino Unido 🇬🇧',
+    '45': 'Dinamarca 🇩🇰',
+    '46': 'Suécia 🇸🇪',
+    '47': 'Noruega 🇳🇴',
+    '48': 'Polônia 🇵🇱',
+    '49': 'Alemanha 🇩🇪',
+    '351': 'Portugal 🇵🇹',
+    '352': 'Luxemburgo 🇱🇺',
+    '353': 'Irlanda 🇮🇪',
+    '354': 'Islândia 🇮🇸',
+    '355': 'Albânia 🇦🇱',
+    '356': 'Malta 🇲🇹',
+    '357': 'Chipre 🇨🇾',
+    '358': 'Finlândia 🇫🇮',
+    '359': 'Bulgária 🇧🇬',
+    '370': 'Lituânia 🇱🇹',
+    '371': 'Letônia 🇱🇻',
+    '372': 'Estônia 🇪🇪',
+    '373': 'Moldávia 🇲🇩',
+    '375': 'Bielorrússia 🇧🇾',
+    '376': 'Andorra 🇦🇩',
+    '377': 'Mônaco 🇲🇨',
+    '378': 'San Marino 🇸🇲',
+    '380': 'Ucrânia 🇺🇦',
+    '381': 'Sérvia 🇷🇸',
+    '382': 'Montenegro 🇲🇪',
+    '383': 'Kosovo 🇽🇰',
+    '385': 'Croácia 🇭🇷',
+    '386': 'Eslovênia 🇸🇮',
+    '387': 'Bósnia 🇧🇦',
+    '389': 'Macedônia 🇲🇰',
+    '420': 'República Tcheca 🇨🇿',
+    '421': 'Eslováquia 🇸🇰',
+    '423': 'Liechtenstein 🇱🇮',
+    '358': 'Åland Islands 🇦🇽',
+    
+    // Oceania
+    '61': 'Austrália 🇦🇺',
+    '64': 'Nova Zelândia 🇳🇿',
+    '675': 'Papua Nova Guiné 🇵🇬',
+    '676': 'Tonga 🇹🇴',
+    '677': 'Ilhas Salomão 🇸🇧',
+    '678': 'Vanuatu 🇻🇺',
+    '679': 'Fiji 🇫🇯',
+    '680': 'Palau 🇵🇼',
+    '681': 'Wallis e Futuna 🇼🇫',
+    '682': 'Cook Islands 🇨🇰',
+    '683': 'Niue 🇳🇺',
+    '685': 'Samoa 🇼🇸',
+    '686': 'Kiribati 🇰🇮',
+    '687': 'Nova Caledônia 🇳🇨',
+    '688': 'Tuvalu 🇹🇻',
+    '689': 'Polinésia Francesa 🇵🇫',
+    '850': 'Coreia do Norte 🇰🇵',
+    
+    // outros
     '670': 'Timor-Leste 🇹🇱',
+    '500': 'Malvinas 🇫🇰',
+    '508': 'São Pedro e Miquelão 🇵🇲',
+    '590': 'Guadalupe 🇬🇵',
+    '594': 'Guiana Francesa 🇬🇫',
+    '596': 'Martinica 🇲🇶',
+    '687': 'Nova Caledônia 🇳🇨',
 };
 
-// Ordem de prioridade dos DDIs (do maior para o menor)
+// Ordem de prioridade: DDIs de 3 dígitos primeiro, depois 2 dígitos, depois 1 dígito
 const DDI_PRIORITY = [
-    '966', '971', '880', '856', '855', '855', '670', '977', '94', 
-    '351', '258', '255', '254', '252', '251', '249', '245', '244', 
-    '233', '225', '216', '213', '212', '98', '95', '92', '91', 
-    '90', '86', '84', '82', '81', '66', '65', '63', '62', '61', 
-    '60', '56', '55', '54', '52', '51', '49', '44', '39', '34', 
-    '33', '27', '25', '20', '7', '1'
+    // 3 dígitos
+    '966', '971', '880', '856', '855', '677', '676', '675', '670',
+    '596', '594', '590', '508', '500', '423', '421', '420', '389',
+    '387', '385', '383', '382', '381', '380', '378', '377', '376',
+    '375', '373', '372', '371', '370', '359', '358', '357', '356',
+    '355', '354', '353', '352', '351', '258', '255', '254', '252',
+    '251', '249', '245', '244', '234', '233', '225', '216', '213',
+    '212', '208', '205', '203', '202', '201', '200', '98', '95',
+    '94', '93', '92', '91', '90', '86', '85', '84', '82', '81',
+    // 2 dígitos
+    '65', '64', '63', '62', '61', '60', '56', '55', '54', '53',
+    '52', '51', '49', '48', '47', '46', '45', '44', '43', '42',
+    '41', '40', '39', '36', '34', '33', '32', '31', '30', '20',
+    // 1 dígito
+    '7', '1'
 ];
 
 function getCountryFromNumber(number) {
     if (!number) return 'Desconhecido 🌐';
     
-    // Extrai apenas números e remove zeros iniciais
+    // Extrai apenas números
     let clean = number.replace(/\D/g, '');
     
-    // Se começa com 00 (código internacional), remove
+    // Se começa com 00, remove
     if (clean.startsWith('00')) {
         clean = clean.substring(2);
     }
     
-    // Tenta encontrar o DDI na lista de prioridade
+    // Se começa com +, remove
+    if (clean.startsWith('+')) {
+        clean = clean.substring(1);
+    }
+    
+    // Procura o DDI na lista de prioridade
     for (const ddi of DDI_PRIORITY) {
         if (clean.startsWith(ddi)) {
-            return COUNTRY_CODES[ddi] || 'Desconhecido 🌐';
+            return DDI_LIST[ddi] || 'Desconhecido 🌐';
         }
     }
     
