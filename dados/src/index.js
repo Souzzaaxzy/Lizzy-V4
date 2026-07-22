@@ -19662,7 +19662,7 @@ case 'pin':
                 return num.toString();
               };
               
-              // Função para enviar link do TikTok com linkPreview forçado
+              // Função para enviar link do TikTok com externalAdReply (preview rico com thumbnail)
               const sendTikTokLink = async (videoData, index) => {
                 const link = videoData.link || (isTikTokUrl ? q : '');
                 if (!link) return;
@@ -19670,15 +19670,19 @@ case 'pin':
                 const title = videoData.title || '';
                 const views = videoData.views || 0;
                 const viewsText = views ? `${formatNumber(views)} visualizações` : '';
+                const thumbnail = videoData.cover || videoData.thumbnail || '';
                 
-                // Enviar link com linkPreview forçado para gerar preview rico
-                const text = `🔗 ${link}`;
+                // Enviar link com externalAdReply para preview rico
+                const text = link;
                 await nazu.sendMessage(from, { 
                   text,
-                  linkPreview: {
-                    matchedText: link,
-                    title: title || 'TikTok',
-                    description: viewsText || 'Vídeo do TikTok'
+                  externalAdReply: {
+                    title: title ? title.substring(0, 50) : 'TikTok',
+                    body: viewsText || 'Vídeo do TikTok',
+                    thumbnailUrl: thumbnail,
+                    url: link,
+                    mediaType: 2, // 2 = video
+                    matchMode: 1
                   }
                 }, { quoted: info });
               };
