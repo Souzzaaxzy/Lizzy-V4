@@ -19706,29 +19706,15 @@ case 'pin':
               // Verificar se tem múltiplos resultados (search)
               const results = datinha.results;
               if (results && results.length > 0) {
-                // Enviar até 5 vídeos em carousel
+                // Enviar até 5 vídeos individualmente
                 const videosToSend = results.slice(0, 5);
-                
-                const cards = videosToSend.map((videoData, index) => {
-                  const url = videoData.urls?.[0];
-                  const title = videoData.title || '';
-                  const link = videoData.link || (isTikTokUrl ? q : '');
-                  const views = videoData.views || 0;
-                  const viewsText = views ? `${formatNumber(views)} visualizações` : '';
-                  const caption = title ? `${title}\n\n👁️ ${viewsText}` : `👁️ ${viewsText}`;
-                  
-                  return {
-                    video: { url },
-                    caption: caption,
-                    footer: '📱 TikTok',
-                    nativeFlow: []
-                  };
-                });
-                
-                await nazu.sendMessage(from, {
-                  text: isTikTokUrl ? '📱 Download do TikTok' : `📱 Resultados da pesquisa por "${q}"`,
-                  cards: cards
-                });
+                for (let i = 0; i < videosToSend.length; i++) {
+                  await sendVideoWithButton(videosToSend[i], i);
+                  // Pequeno delay entre envios
+                  if (i < videosToSend.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                  }
+                }
               } else {
                 // Compatibilidade com formato antigo (um vídeo)
                 const urlz = datinha.urls?.[0];
