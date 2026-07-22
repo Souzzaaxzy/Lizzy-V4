@@ -594,24 +594,45 @@ async function handleGroupJoinRequest(AbyssSock, inf) {
 
         if (!from || !participantJid) return;
 
-        // Detectar approve/reject de solicitação
+// Detectar approve/reject de solicitacao
         if (inf.action === 'approve' || inf.action === 'reject') {
-            const groupSettings = await loadGroupSettings(from);
+            console.log(`[JOIN REQUEST] ${inf.action.toUpperCase()} detected for group ${from}`);
+            console.log('[JOIN REQUEST] Full event data:', JSON.stringify(inf, null, 2));
             
+            const groupSettings = await loadGroupSettings(from);
+
             if (groupSettings?.x9) {
                 const data = new Date();
                 const dataFormatada = data.toLocaleDateString('pt-BR');
                 const horaFormatada = data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-                
-                const autor = inf.author || inf.actor || inf.requestAuthor || null;
+
+                // Melhor deteccao do autor - tenta multiplas fontes
+                const autor = inf.author || inf.actor || inf.requestAuthor || inf.requestingUserJid || inf.requestingUser || null;
                 const autorNum = autor?.split('@')[0]?.replace('@s.whatsapp.net', '') || 'desconhecido';
-                const vitimaNum = participantJid?.split('@')[0]?.replace('@s.whatsapp.net', '') || 'desconhecido';
                 
+                // Melhor deteccao da vtima (quem solicitou)
+                const vitima = participantJid || inf.participant || inf.requestingUserJid || inf.requestingUser || null;
+                const vitimaNum = vitima?.split('@')[0]?.replace('@s.whatsapp.net', '') || 'desconhecido';
+
                 const isApprove = inf.action === 'approve';
-                
+
+                console.log(`[JOIN REQUEST] Autor: ${autorNum}, Vtima: ${vitimaNum}, Acao: ${inf.action}`);
+
                 const autorText = autorNum !== 'desconhecido' ? `@${autorNum}` : 'Sistema';
-                const mentionList = autor ? [autor, participantJid].filter(Boolean) : [participantJid].filter(Boolean);
-                
+                const mentionList = [];
+                if (autor) mentionList.push(autor);
+                if (vitima) mentionList.push(vitima);
+
+                // Newsletter header
+                const newsletterCtx = {
+                    forwardingScore: 999,
+                    isForwarded: true,
+                    forwardedNewsletterMessageInfo: {
+                        newsletterJid: "120363410980452460@newsletter",
+                        newsletterName: "Lizzy"
+                    }
+                };
+
                 const mensagem = isApprove
                     ? `╭━━━〔 📥 SOLICITAÇÃO 〕━━━╮
 ┃
@@ -637,11 +658,12 @@ async function handleGroupJoinRequest(AbyssSock, inf) {
 ┃ 🕒 *Hora:* ${horaFormatada}
 ┃
 ╰━━━━━━━━━━━━━━━━━━━━━━━╯`;
-                
+
                 await AbyssSock.sendMessage(from, {
                     text: mensagem,
-                    mentions: mentionList
-                }).catch(() => {});
+                    mentions: mentionList,
+                    contextInfo: newsletterCtx
+                }).catch(err => console.error('[JOIN REQUEST] Erro ao enviar mensagem X9:', err.message));
             }
             return;
         }
