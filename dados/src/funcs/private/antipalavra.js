@@ -390,7 +390,8 @@ const checkMessage = (groupId, messageText) => {
         }
     }
     
-    return null;
+    console.log(`[ANTIPALAVRA] Nenhuma palavra encontrada`);
+        return null;
 };
 
 /**
