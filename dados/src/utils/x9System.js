@@ -5,28 +5,73 @@
  * ═══════════════════════════════════════════════════════════════
  */
 
+import { parsePhoneNumber, getCountryCallingCode, getExampleNumber } from 'libphonenumber-js';
+
 const COUNTRY_CODES = {
     '244': 'Angola 🇦🇴', '55': 'Brasil 🇧🇷', '351': 'Portugal 🇵🇹',
-    '34': 'Espanha 🇪🇸', '1': 'EUA 🇺🇸', '44': 'UK 🇬🇧',
+    '34': 'Espanha 🇪🇸', '1': 'EUA/Canadá 🇺🇸🇨🇦', '44': 'UK 🇬🇧',
     '49': 'Alemanha 🇩🇪', '39': 'Itália 🇮🇹', '33': 'França 🇫🇷',
     '54': 'Argentina 🇦🇷', '56': 'Chile 🇨🇱', '57': 'Colômbia 🇨🇴',
     '51': 'Peru 🇵🇪', '52': 'México 🇲🇽', '225': 'Costa do Marfim 🇨🇮',
     '234': 'Nigéria 🇳🇬', '27': 'África do Sul 🇿🇦', '966': 'Arábia Saudita 🇸🇦',
     '971': 'Emirados 🇦🇪', '62': 'Indonésia 🇮🇩', '63': 'Filipinas 🇵🇭',
     '81': 'Japão 🇯🇵', '82': 'Coreia 🇰🇷', '86': 'China 🇨🇳',
-    '91': 'Índia 🇮🇳', '61': 'Austrália 🇦🇺',
+    '91': 'Índia 🇮🇳', '61': 'Austrália 🇦🇺', '258': 'Moçambique 🇲🇿',
+    '233': 'Gana 🇬🇭', '254': 'Quênia 🇰🇪', '255': 'Tanzânia 🇹🇿',
+    '216': 'Tunísia 🇹🇳', '213': 'Argélia 🇩🇿', '212': 'Marrocos 🇲🇦',
+    '20': 'Egito 🇪🇬', '90': 'Turquia 🇹🇷', '7': 'Rússia 🇷🇺',
+    '81': 'Japão 🇯🇵', '86': 'China 🇨🇳', '65': 'Singapura 🇸🇬',
+    '60': 'Malásia 🇲🇾', '66': 'Tailândia 🇹🇭', '84': 'Vietnã 🇻🇳',
+    '98': 'Irã 🇮🇷', '92': 'Paquistão 🇵🇰', '880': 'Bangladesh 🇧🇩',
+    '94': 'Sri Lanka 🇱🇰', '977': 'Nepal 🇳🇵', '95': 'Myanmar 🇲🇲',
+    '856': 'Laos 🇱🇦', '855': 'Camboja 🇰🇭', '670': 'Timor-Leste 🇹🇱',
+};
+
+// Mapeamento de códigos de país para libphonenumber-js
+const ISO_TO_DDI = {
+    'AO': '244', 'BR': '55', 'PT': '351', 'ES': '34', 'US': '1', 'CA': '1',
+    'GB': '44', 'DE': '49', 'IT': '39', 'FR': '33', 'AR': '54', 'CL': '56',
+    'CO': '57', 'PE': '51', 'MX': '52', 'NG': '234', 'ZA': '27', 'SA': '966',
+    'AE': '971', 'ID': '62', 'PH': '63', 'JP': '81', 'KR': '82', 'CN': '86',
+    'IN': '91', 'AU': '61', 'MZ': '258', 'GH': '233', 'KE': '254', 'TZ': '255',
+    'TN': '216', 'DZ': '213', 'MA': '212', 'EG': '20', 'TR': '90', 'RU': '7',
+    'SG': '65', 'MY': '60', 'TH': '66', 'VN': '84', 'IR': '98', 'PK': '92',
+    'BD': '880', 'LK': '94', 'NP': '977', 'MM': '95', 'LA': '856', 'KH': '855',
+    'TL': '670'
 };
 
 function getCountryFromNumber(number) {
-    if (!number) return 'Desconhecido 🌍';
+    if (!number) return 'Desconhecido 🌐';
+    
+    // Extrai apenas números
     const clean = number.replace(/\D/g, '');
+    
+    // Primeiro tenta com libphonenumber-js
+    try {
+        // Tenta parsear como número internacional
+        const phoneNumber = parsePhoneNumber(clean, 'XX'); // XX como fallback
+        
+        if (phoneNumber && phoneNumber.country) {
+            const countryCode = phoneNumber.country; // Ex: 'BR', 'AO', 'US'
+            const ddi = ISO_TO_DDI[countryCode] || phoneNumber.countryCallingCode;
+            
+            if (ddi && COUNTRY_CODES[ddi]) {
+                return COUNTRY_CODES[ddi];
+            }
+        }
+    } catch (e) {
+        // Fallback para método antigo
+    }
+    
+    // Fallback: método antigo por DDI
     const ddi3 = clean.substring(0, 3);
     if (COUNTRY_CODES[ddi3]) return COUNTRY_CODES[ddi3];
     const ddi2 = clean.substring(0, 2);
     if (COUNTRY_CODES[ddi2]) return COUNTRY_CODES[ddi2];
     const ddi1 = clean.substring(0, 1);
     if (COUNTRY_CODES[ddi1]) return COUNTRY_CODES[ddi1];
-    return 'Desconhecido 🌍';
+    
+    return 'Desconhecido 🌐';
 }
 
 function getCountryCode(number) {
@@ -44,8 +89,7 @@ function getCountryCode(number) {
 // Template do card
 const X9_CARD_TEMPLATE = `╭━━━〔 🔎 X9 • NOVA SOLICITAÇÃO 〕━━━⬣
 ┃ 👤 Nome: @{numero}
-┃ 📞 Lid: {lid}
-┃ 🌍 Origem: {origem}
+┃ 🌍 País: {pais}
 ┃ 🕒 Horário: {hora}
 ┃ 📌 Status: Aguardando aprovação
 ╰━━━━━━━━━━━━━━━━━━━━━━━━━━⬣`;
@@ -193,7 +237,6 @@ export async function processNewJoinRequest(sock, eventData, groupSettings) {
     
     // Extrai o JID do participante
     let participantJid = normalizeJid(participant);
-    let participantLid = '';
     
     if (!participantJid && participantPn) {
         participantJid = normalizeJid(participantPn);
@@ -201,14 +244,6 @@ export async function processNewJoinRequest(sock, eventData, groupSettings) {
     if (!participantJid) {
         const authorJid = normalizeJid(author || authorPn);
         if (authorJid) participantJid = authorJid;
-    }
-    
-    // Extrai o LID se existir
-    if (typeof participant === 'object' && participant) {
-        if (participant.lid) participantLid = participant.lid;
-        else if (participantPn && typeof participantPn === 'object' && participantPn.lid) {
-            participantLid = participantPn.lid;
-        }
     }
     
     if (!groupId || !participantJid) {
@@ -230,12 +265,15 @@ export async function processNewJoinRequest(sock, eventData, groupSettings) {
     const now = new Date();
     const participantNumber = participantJid.replace(/@.*$/, '');
     
+    // Detecta o país pelo DDI
+    const pais = getCountryFromNumber(participantNumber);
+    
     // Armazena dados
     const data = {
         groupId,
         participantJid,
         participantNumber,
-        participantLid,
+        pais,
         time: formatTime(now),
         status: 'pending'
     };
@@ -246,8 +284,7 @@ export async function processNewJoinRequest(sock, eventData, groupSettings) {
     // Template
     const vars = {
         numero: participantNumber,
-        lid: participantLid || 'N/A',
-        origem: getOrigin(method),
+        pais: pais,
         hora: formatTime(now)
     };
     
