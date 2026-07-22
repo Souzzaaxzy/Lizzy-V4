@@ -19675,7 +19675,7 @@ case 'pin':
                 // Criar caption com título e visualizações
                 const caption = title ? `${title}\n\n👁️ ${viewsText}` : `👁️ ${viewsText}`;
                 
-                // Enviar imagem com botão CTA URL e contextInfo
+                // Enviar imagem com botão CTA URL
                 await nazu.sendMessage(from, {
                   image: { url: thumbnail },
                   caption: caption,
@@ -19689,15 +19689,7 @@ case 'pin':
                       })
                     }
                   ],
-                  headerType: 1, // IMAGE
-                  contextInfo: {
-                    externalAdReply: {
-                      title: title ? title.substring(0, 25) : 'TikTok',
-                      body: viewsText || 'Vídeo do TikTok',
-                      thumbnailUrl: thumbnail,
-                      url: link
-                    }
-                  }
+                  headerType: 1 // IMAGE
                 }, { quoted: info });
               };
               
