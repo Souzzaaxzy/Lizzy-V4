@@ -19662,8 +19662,8 @@ case 'pin':
                 return num.toString();
               };
               
-              // Função para enviar link do TikTok com externalAdReply (preview rico com thumbnail)
-              const sendTikTokLink = async (videoData, index) => {
+              // Função para enviar card do TikTok com thumbnail, descrição e botão
+              const sendTikTokCard = async (videoData, index) => {
                 const link = videoData.link || (isTikTokUrl ? q : '');
                 if (!link) return;
                 
@@ -19672,28 +19672,34 @@ case 'pin':
                 const viewsText = views ? `${formatNumber(views)} visualizações` : '';
                 const thumbnail = videoData.cover || videoData.thumbnail || '';
                 
-                // Enviar link com externalAdReply para preview rico
-                const text = link;
-                await nazu.sendMessage(from, { 
-                  text,
-                  externalAdReply: {
-                    title: title ? title.substring(0, 50) : 'TikTok',
-                    body: viewsText || 'Vídeo do TikTok',
-                    thumbnailUrl: thumbnail,
-                    url: link,
-                    mediaType: 2, // 2 = video
-                    matchMode: 1
-                  }
+                // Criar caption com título e visualizações
+                const caption = title ? `${title}\n\n👁️ ${viewsText}` : `👁️ ${viewsText}`;
+                
+                // Enviar imagem com botão CTA URL
+                await nazu.sendMessage(from, {
+                  image: { url: thumbnail },
+                  caption: caption,
+                  footer: '📱 TikTok',
+                  buttons: [
+                    {
+                      name: "cta_url",
+                      buttonParamsJson: JSON.stringify({
+                        display_text: "📱 Abrir no TikTok",
+                        url: link
+                      })
+                    }
+                  ],
+                  headerType: 1 // IMAGE
                 }, { quoted: info });
               };
               
               // Verificar se tem múltiplos resultados (search)
               const results = datinha.results;
               if (results && results.length > 0) {
-                // Enviar até 5 links (WhatsApp gera preview rico automaticamente)
+                // Enviar até 5 cards com thumbnail e botão
                 const videosToSend = results.slice(0, 5);
                 for (let i = 0; i < videosToSend.length; i++) {
-                  await sendTikTokLink(videosToSend[i], i);
+                  await sendTikTokCard(videosToSend[i], i);
                   // Pequeno delay entre envios
                   if (i < videosToSend.length - 1) {
                     await new Promise(resolve => setTimeout(resolve, 500));
@@ -19703,7 +19709,7 @@ case 'pin':
                 // Compatibilidade com formato antigo (um vídeo)
                 const urlz = datinha.urls?.[0];
                 if (urlz) {
-                  await sendTikTokLink(datinha, 0);
+                  await sendTikTokCard(datinha, 0);
                 }
               }
               
