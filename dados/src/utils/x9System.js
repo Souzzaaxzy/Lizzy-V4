@@ -469,77 +469,67 @@ export async function processNewJoinRequest(sock, eventData, groupSettings) {
  * Envia card de aprovação mostrando quem aprovou
  */
 export async function updateCardOnApprove(sock, groupId, participantJid, adminJid) {
-    // Normaliza o JID para garantir consistência
-    const normalizedJid = normalizeJid(participantJid);
-    
-    console.log(`[X9] Aprovando: ${participantJid} -> ${normalizedJid}`);
-    
-    const req = x9Store.get(groupId, normalizedJid);
-    if (!req) {
-        console.log('[X9] Requisição não encontrada no store');
-        // Tenta encontrar pela chave antiga ou por número
-        const number = (normalizedJid || participantJid).replace(/@.*$/, '');
-        const altReq = x9Store.getByParticipantNumber(number);
-        if (altReq) {
-            console.log('[X9] Encontrou requisição pelo número');
-            const reqJid = altReq.participantJid;
-            // Deleta card original
-            if (altReq.messageId) {
-                try {
-                    await sock.sendMessage(groupId, { 
-                        delete: { id: altReq.messageId, remoteJid: groupId, fromMe: true } 
-                    });
-                } catch (e) {}
-            }
-            // Envia mensagem de aprovação
-            const now = new Date();
-            const adminNumber = adminJid.replace(/@.*$/, '');
-            const vars = {
-                admin: adminNumber,
-                numero: altReq.participantNumber,
-                hora: formatTime(now)
-            };
-            const approvedText = parseTemplate(X9_APPROVED_TEMPLATE, vars);
-            const sent = await sock.sendMessage(groupId, {
-                text: approvedText,
-                mentions: [reqJid, adminJid]
-            });
-            x9Store.update(groupId, reqJid, { status: 'approved' });
-            return sent;
-        }
-        return null;
-    }
-    
-    const now = new Date();
-    const adminNumber = adminJid.replace(/@.*$/, '');
-    
-    // Deleta mensagem original se existir
-    if (req.messageId) {
-        try {
-            await sock.sendMessage(groupId, { 
-                delete: { id: req.messageId, remoteJid: groupId, fromMe: true } 
-            });
-        } catch (e) {}
-    }
-    
-    // Envia mensagem de aprovação com quem aprovou
-    const vars = {
-        admin: adminNumber,
-        numero: req.participantNumber,
-        hora: formatTime(now)
-    };
-    
-    const approvedText = parseTemplate(X9_APPROVED_TEMPLATE, vars);
-    
     try {
+        // Normaliza o JID para garantir consistência
+        const normalizedJid = normalizeJid(participantJid);
+        const cleanJid = (normalizedJid || participantJid || '').replace(/@.+$/, '');
+        
+        console.log(`[X9] ========== APROVANDO ==========`);
+        console.log(`[X9] Input JID: ${participantJid}`);
+        console.log(`[X9] Normalized: ${normalizedJid}`);
+        console.log(`[X9] Clean: ${cleanJid}`);
+        console.log(`[X9] Group: ${groupId}`);
+        console.log(`[X9] Admin: ${adminJid}`);
+        
+        // Tenta buscar no store com diferentes formatos
+        let req = x9Store.get(groupId, normalizedJid);
+        if (!req) req = x9Store.get(groupId, participantJid);
+        if (!req) req = x9Store.getByParticipantNumber(cleanJid);
+        
+        console.log(`[X9] Store request found:`, req ? 'SIM' : 'NÃO');
+        
+        if (!req) {
+            console.log('[X9] Requisição não encontrada no store');
+            console.log('[X9] Store keys:', [...x9Store.requests.keys()]);
+            return null;
+        }
+        
+        console.log(`[X9] Request data:`, JSON.stringify(req));
+        
+        const now = new Date();
+        const adminNumber = adminJid.replace(/@.*$/, '');
+        
+        // Deleta mensagem original se existir
+        if (req.messageId) {
+            try {
+                await sock.sendMessage(groupId, { 
+                    delete: { id: req.messageId, remoteJid: groupId, fromMe: true } 
+                });
+                console.log('[X9] Card original deletado');
+            } catch (e) {
+                console.log('[X9] Erro ao deletar card:', e.message);
+            }
+        }
+        
+        // Envia mensagem de aprovação com quem aprovou
+        const vars = {
+            admin: adminNumber,
+            numero: req.participantNumber,
+            hora: formatTime(now)
+        };
+        
+        const approvedText = parseTemplate(X9_APPROVED_TEMPLATE, vars);
+        console.log(`[X9] Enviando card: ${approvedText}`);
+        
         const sent = await sock.sendMessage(groupId, {
             text: approvedText,
-            mentions: [normalizedJid, adminJid]
+            mentions: [req.participantJid, adminJid]
         });
         
-        x9Store.update(groupId, normalizedJid, { status: 'approved' });
+        x9Store.update(groupId, req.participantJid, { status: 'approved' });
         console.log(`[X9] ✅ Aprovado por ${adminNumber}`);
         return sent;
+        
     } catch (error) {
         console.error('[X9] Erro ao enviar aprovação:', error.message);
         return null;
@@ -550,77 +540,57 @@ export async function updateCardOnApprove(sock, groupId, participantJid, adminJi
  * Envia card de rejeição mostrando quem rejeitou
  */
 export async function updateCardOnReject(sock, groupId, participantJid, adminJid) {
-    // Normaliza o JID para garantir consistência
-    const normalizedJid = normalizeJid(participantJid);
-    
-    console.log(`[X9] Rejeitando: ${participantJid} -> ${normalizedJid}`);
-    
-    const req = x9Store.get(groupId, normalizedJid);
-    if (!req) {
-        console.log('[X9] Requisição não encontrada no store');
-        // Tenta encontrar pela chave antiga ou por número
-        const number = (normalizedJid || participantJid).replace(/@.*$/, '');
-        const altReq = x9Store.getByParticipantNumber(number);
-        if (altReq) {
-            console.log('[X9] Encontrou requisição pelo número');
-            const reqJid = altReq.participantJid;
-            // Deleta card original
-            if (altReq.messageId) {
-                try {
-                    await sock.sendMessage(groupId, { 
-                        delete: { id: altReq.messageId, remoteJid: groupId, fromMe: true } 
-                    });
-                } catch (e) {}
-            }
-            // Envia mensagem de rejeição
-            const now = new Date();
-            const adminNumber = adminJid.replace(/@.*$/, '');
-            const vars = {
-                admin: adminNumber,
-                numero: altReq.participantNumber,
-                hora: formatTime(now)
-            };
-            const rejectedText = parseTemplate(X9_REJECTED_TEMPLATE, vars);
-            const sent = await sock.sendMessage(groupId, {
-                text: rejectedText,
-                mentions: [reqJid, adminJid]
-            });
-            x9Store.update(groupId, reqJid, { status: 'rejected' });
-            return sent;
-        }
-        return null;
-    }
-    
-    const now = new Date();
-    const adminNumber = adminJid.replace(/@.*$/, '');
-    
-    // Deleta mensagem original
-    if (req.messageId) {
-        try {
-            await sock.sendMessage(groupId, { 
-                delete: { id: req.messageId, remoteJid: groupId, fromMe: true } 
-            });
-        } catch (e) {}
-    }
-    
-    // Envia mensagem de rejeição com quem rejeitou
-    const vars = {
-        admin: adminNumber,
-        numero: req.participantNumber,
-        hora: formatTime(now)
-    };
-    
-    const rejectedText = parseTemplate(X9_REJECTED_TEMPLATE, vars);
-    
     try {
+        // Normaliza o JID para garantir consistência
+        const normalizedJid = normalizeJid(participantJid);
+        const cleanJid = (normalizedJid || participantJid || '').replace(/@.+$/, '');
+        
+        console.log(`[X9] ========== REJEITANDO ==========`);
+        console.log(`[X9] Input JID: ${participantJid}`);
+        console.log(`[X9] Normalized: ${normalizedJid}`);
+        console.log(`[X9] Clean: ${cleanJid}`);
+        
+        // Tenta buscar no store com diferentes formatos
+        let req = x9Store.get(groupId, normalizedJid);
+        if (!req) req = x9Store.get(groupId, participantJid);
+        if (!req) req = x9Store.getByParticipantNumber(cleanJid);
+        
+        if (!req) {
+            console.log('[X9] Requisição não encontrada no store');
+            console.log('[X9] Store keys:', [...x9Store.requests.keys()]);
+            return null;
+        }
+        
+        const now = new Date();
+        const adminNumber = adminJid.replace(/@.*$/, '');
+        
+        // Deleta mensagem original
+        if (req.messageId) {
+            try {
+                await sock.sendMessage(groupId, { 
+                    delete: { id: req.messageId, remoteJid: groupId, fromMe: true } 
+                });
+            } catch (e) {}
+        }
+        
+        // Envia mensagem de rejeição
+        const vars = {
+            admin: adminNumber,
+            numero: req.participantNumber,
+            hora: formatTime(now)
+        };
+        
+        const rejectedText = parseTemplate(X9_REJECTED_TEMPLATE, vars);
+        
         const sent = await sock.sendMessage(groupId, {
             text: rejectedText,
-            mentions: [normalizedJid, adminJid]
+            mentions: [req.participantJid, adminJid]
         });
         
-        x9Store.update(groupId, normalizedJid, { status: 'rejected' });
+        x9Store.update(groupId, req.participantJid, { status: 'rejected' });
         console.log(`[X9] ❌ Rejeitado por ${adminNumber}`);
         return sent;
+        
     } catch (error) {
         console.error('[X9] Erro ao enviar rejeição:', error.message);
         return null;

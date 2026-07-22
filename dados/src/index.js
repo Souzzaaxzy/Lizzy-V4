@@ -28996,7 +28996,9 @@ break;
                 
                 // X9 System: Envia card de aprovação
                 if (groupData.x9) {
-                  await updateCardOnApprove(nazu, from, req.jid, sender).catch(() => {});
+                  await updateCardOnApprove(nazu, from, req.jid, sender).catch(err => {
+                    console.log('[X9] Erro ao aprovar:', err.message);
+                  });
                 }
               } catch (err) {
                 failed.push(req.jid);
@@ -29027,7 +29029,7 @@ break;
               // X9 System: Envia card de aprovação
               if (groupData.x9) {
                 await updateCardOnApprove(nazu, from, user, sender).catch(err => {
-                  console.log('[X9] Card não encontrado para:', user);
+                  console.log('[X9] Erro ao aprovar:', err.message);
                 });
               }
             } catch (err) {
@@ -29075,7 +29077,9 @@ break;
               
               // X9 System: Envia card de rejeição
               if (groupData.x9) {
-                await updateCardOnReject(nazu, from, user, sender).catch(() => {});
+                await updateCardOnReject(nazu, from, user, sender).catch(err => {
+                  console.log('[X9] Erro ao rejeitar:', err.message);
+                });
               }
             } catch (err) {
               failed.push(user);
