@@ -19290,17 +19290,19 @@ case 'pin':
     // Pegar até 5 imagens
     const itemsToSend = datinha.urls.slice(0, 5);
     
-    // Enviar imagens individualmente em sequência
+    // Enviar imagens em álbum (agrupadas)
     if (itemsToSend.length > 1) {
       // Primeiro envia o texto inicial
       await reply(isPinUrl ? '📌 Download do Pinterest' : `📌 Resultados da pesquisa por "${searchTerm}"`);
       
-      // Enviar imagens individualmente em sequência rápida
+      // Enviar imagens em sequência rápida para criar álbum
       for (let i = 0; i < itemsToSend.length; i++) {
         await nazu.sendMessage(from, {
           image: { url: itemsToSend[i] },
           caption: `🔍 busca ${i + 1}`
-        }, { quoted: info });
+        });
+        // Pequeno delay para criar álbum
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
     } else {
       // Se for apenas 1 imagem, enviar normalmente
@@ -19309,7 +19311,7 @@ case 'pin':
         caption: isPinUrl
           ? '📌 Download do Pinterest'
           : `📌 Resultado da pesquisa por "${searchTerm}"`
-      }, { quoted: info });
+      });
     }
   } catch (e) {
     console.error('Erro no comando pinterest:', e);
