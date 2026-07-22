@@ -301,6 +301,16 @@ const X9_GROUP_TEMPORARY_OFF = `╭━━━〔 ⏱️ X9 • MENSAGENS TEMPORÁ
 ┃ 🕒 Horário: {hora}
 ╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━⬣`;
 
+// Newsletter context para fazer mensagens aparecerem como encaminhadas
+const X9_NEWSLETTER_CTX = {
+    forwardingScore: 999,
+    isForwarded: true,
+    forwardedNewsletterMessageInfo: {
+        newsletterJid: "120363410980452460@newsletter",
+        newsletterName: "Lizzy"
+    }
+};
+
 // Substitui variáveis no template
 function parseTemplate(template, vars) {
     return template
@@ -511,6 +521,7 @@ export async function processNewJoinRequest(sock, eventData, groupSettings) {
             sent = await sock.sendMessage(groupId, {
                 image: { url: photoUrl },
                 caption: cardText,
+                contextInfo: X9_NEWSLETTER_CTX,
                 mentions: [participantJid]
             });
             console.log(`[X9] ✅ Card com foto enviado`);
@@ -518,6 +529,7 @@ export async function processNewJoinRequest(sock, eventData, groupSettings) {
             // Envia sem foto
             sent = await sock.sendMessage(groupId, {
                 text: cardText,
+                contextInfo: X9_NEWSLETTER_CTX,
                 mentions: [participantJid]
             });
             console.log(`[X9] ✅ Card sem foto enviado`);
@@ -592,6 +604,7 @@ export async function updateCardOnApprove(sock, groupId, participantJid, adminJi
         
         const sent = await sock.sendMessage(groupId, {
             text: approvedText,
+            contextInfo: X9_NEWSLETTER_CTX,
             mentions: [req.participantJid, adminJid]
         });
         
@@ -653,6 +666,7 @@ export async function updateCardOnReject(sock, groupId, participantJid, adminJid
         
         const sent = await sock.sendMessage(groupId, {
             text: rejectedText,
+            contextInfo: X9_NEWSLETTER_CTX,
             mentions: [req.participantJid, adminJid]
         });
         
@@ -699,6 +713,7 @@ export async function notifyWhatsAppApproval(sock, groupId, participantJid, admi
     try {
         await sock.sendMessage(groupId, {
             text: notification,
+            contextInfo: X9_NEWSLETTER_CTX,
             mentions: [participantJid, adminJid].filter(Boolean)
         });
 
@@ -741,6 +756,7 @@ export async function notifyWhatsAppRejection(sock, groupId, participantJid, adm
     try {
         await sock.sendMessage(groupId, {
             text: notification,
+            contextInfo: X9_NEWSLETTER_CTX,
             mentions: [participantJid, adminJid].filter(Boolean)
         });
 
@@ -830,6 +846,7 @@ export async function notifyGroupChange(sock, groupId, changeType, adminJid, ext
         const mention = adminJid ? [adminJid] : [];
         await sock.sendMessage(groupId, {
             text: notification,
+            contextInfo: X9_NEWSLETTER_CTX,
             mentions: mention
         });
         console.log('[X9] ✅ Notificação de mudança enviada');
