@@ -198,8 +198,17 @@ class AdoptionManager {
       childData.family.parents.push(request.requesterRaw);
     }
     
-    saveEconomy(econ);
-    
+
+    // Salvar e verificar se foi bem sucedido
+    const saved = saveEconomy(econ);
+    if (!saved) {
+      console.error('[ADOPTION] Erro ao salvar economia após adoção');
+      return {
+        success: false,
+        message: '❌ Erro ao salvar os dados da adoção. Tente novamente.'
+      };
+    }
+
     const adopterName = request.requesterRaw.split('@')[0];
     const childName = request.targetRaw.split('@')[0];
     
