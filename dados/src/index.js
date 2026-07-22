@@ -2958,10 +2958,18 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       try {
         if (isBotAdmin) {
           await nazu.sendMessage(from, { delete: info.key }).catch(() => {});
+          const newsletterCtxAntiStts = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
           await nazu.sendMessage(from, {
             text: `🚨 *SISTEMA ANTI-ATAQUE*\n\nO membro @${sender.split('@')[0]} tentou postar um status/canal no grupo e foi removido para proteger o grupo.`,
             mentions: [sender]
-          });
+          }, { contextInfo: newsletterCtxAntiStts });
           const senderJidAntiStts = sender;
           await nazu.groupParticipantsUpdate(from, [senderJidAntiStts], 'remove').catch(e => console.error('Erro ao remover (antistts):', e));
         }
@@ -2990,10 +2998,18 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     }
     // Lógica Anti-Pagamento (antipagamento/antirequest)
     if (isAntirequestPaymentMessage && isBotAdmin && (type === 'requestPaymentMessage' || type === 'sendPaymentMessage' || type === 'viewOnceMessageV2Extension' || type === 'viewOnceMessageV2' || type === 'viewOnceMessage') && !info.key.fromMe && !isGroupAdmin && !isUserWhitelisted(sender, 'antipagamento')) {
+      const newsletterCtxPayment = {
+        forwardingScore: 999,
+        isForwarded: true,
+        forwardedNewsletterMessageInfo: {
+          newsletterJid: "120363410980452460@newsletter",
+          newsletterName: "Lizzy"
+        }
+      };
       await nazu.sendMessage(from, {
         text: `🚫❌ @${sender.split('@')[0]} ❌🚫\n\n⚠️ *Mensagem de pagamento ou visualização única não é permitida aqui!* ⚠️\n\nVocê foi removido do grupo.`,
         mentions: [sender]
-      }, { quoted: info });
+      }, { contextInfo: newsletterCtxPayment, quoted: info });
       if (groupData.legenda_documento && groupData.legenda_documento !== "0") {
         await nazu.sendMessage(from, { text: groupData.legenda_documento }, { quoted: info });
       }
@@ -3052,7 +3068,15 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
               participant: sender
             }
           });
-          await nazu.sendMessage(from, { text: "🎤 Áudios não estão permitidos neste chat." });
+          const newsletterCtxAudio = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          await nazu.sendMessage(from, { text: "🎤 Áudios não estão permitidos neste chat." }, { contextInfo: newsletterCtxAudio });
         } catch (e) {
           console.error("Erro ao apagar mensagem (antiaudio):", e);
         }
@@ -4448,7 +4472,15 @@ Código: *${roleCode}*`,
               const isHentai = scores.Hentai >= hentaiThreshold;
               if (isPorn || isHentai) {
                 const reason = isPorn ? 'Pornografia' : 'Hentai';
-                await reply(`🚨 Conteúdo impróprio detectado! (${reason})`);
+                const newsletterCtxPorn = {
+              forwardingScore: 999,
+              isForwarded: true,
+              forwardedNewsletterMessageInfo: {
+                newsletterJid: "120363410980452460@newsletter",
+                newsletterName: "Lizzy"
+              }
+            };
+            await nazu.sendMessage(from, { text: `🚨 Conteúdo impróprio detectado! (${reason})` }, { contextInfo: newsletterCtxPorn });
                 if (isBotAdmin) {
                   try {
                     await nazu.sendMessage(from, {
@@ -4456,19 +4488,13 @@ Código: *${roleCode}*`,
                     });
                     const senderJidAntiPorn = sender;
                     await nazu.groupParticipantsUpdate(from, [senderJidAntiPorn], 'remove').catch(e => console.error('Erro ao remover (antiporn):', e));
-                    await reply(`🔞 @${getUserName(sender)}, conteúdo impróprio detectado. Você foi removido do grupo.`, {
-                      mentions: [sender]
-                    });
+                    await nazu.sendMessage(from, { text: `🔞 @${getUserName(sender)}, conteúdo impróprio detectado. Você foi removido do grupo.`, mentions: [sender] }, { contextInfo: newsletterCtxPorn });
                   } catch (adminError) {
                     console.error(`Erro ao remover usuário por anti-porn: ${adminError}`);
-                    await reply(`⚠️ Não consegui remover @${getUserName(sender)} automaticamente após detectar conteúdo impróprio. Admins, por favor, verifiquem!`, {
-                      mentions: [sender]
-                    });
+                    await nazu.sendMessage(from, { text: `⚠️ Não consegui remover @${getUserName(sender)} automaticamente após detectar conteúdo impróprio. Admins, por favor, verifiquem!`, mentions: [sender] }, { contextInfo: newsletterCtxPorn });
                   }
                 } else {
-                  await reply(`@${getUserName(sender)} enviou conteúdo impróprio (${reason}), mas não posso removê-lo sem ser admin.`, {
-                    mentions: [sender]
-                  });
+                  await nazu.sendMessage(from, { text: `@${getUserName(sender)} enviou conteúdo impróprio (${reason}), mas não posso removê-lo sem ser admin.`, mentions: [sender] }, { contextInfo: newsletterCtxPorn });
                 }
               }
             } else {
@@ -4492,9 +4518,15 @@ Código: *${roleCode}*`,
         });
         const senderJidAntiLoc = sender;
         await nazu.groupParticipantsUpdate(from, [senderJidAntiLoc], 'remove').catch(e => console.error('Erro ao remover (antiloc):', e));
-        await reply(`🗺️ @${getUserName(sender)}, localização não permitida. Você foi removido do grupo.`, {
-          mentions: [sender]
-        });
+        const newsletterCtxLoc = {
+          forwardingScore: 999,
+          isForwarded: true,
+          forwardedNewsletterMessageInfo: {
+            newsletterJid: "120363410980452460@newsletter",
+            newsletterName: "Lizzy"
+          }
+        };
+        await nazu.sendMessage(from, { text: `🗺️ @${getUserName(sender)}, localização não permitida. Você foi removido do grupo.`, mentions: [sender] }, { contextInfo: newsletterCtxLoc });
       }
     }
     if (isGroup && antifloodData[from]?.enabled && isCmd && !isGroupAdmin) {
@@ -4523,9 +4555,15 @@ Código: *${roleCode}*`,
         });
         const senderJidAntiDoc = sender;
         await nazu.groupParticipantsUpdate(from, [senderJidAntiDoc], 'remove').catch(e => console.error('Erro ao remover (antidoc):', e));
-        await reply(`📄 @${getUserName(sender)}, documentos não são permitidos. Você foi removido do grupo.`, {
-          mentions: [sender]
-        });
+        const newsletterCtxDoc = {
+          forwardingScore: 999,
+          isForwarded: true,
+          forwardedNewsletterMessageInfo: {
+            newsletterJid: "120363410980452460@newsletter",
+            newsletterName: "Lizzy"
+          }
+        };
+        await nazu.sendMessage(from, { text: `📄 @${getUserName(sender)}, documentos não são permitidos. Você foi removido do grupo.`, mentions: [sender] }, { contextInfo: newsletterCtxDoc });
       }
     }
     if (isGroup && groupData.autodl && budy2.includes('http') && !isCmd) {
@@ -4781,9 +4819,15 @@ packname: `${nomebot}`,            type: isVideo ? 'video' : 'image',
                 participant: sender
               }
             });
-            await reply(`🔗 @${getUserName(sender)}, links não são permitidos. Você foi removido do grupo.`, {
-              mentions: [sender]
-            });
+            const newsletterCtxLinkSoft = {
+              forwardingScore: 999,
+              isForwarded: true,
+              forwardedNewsletterMessageInfo: {
+                newsletterJid: "120363410980452460@newsletter",
+                newsletterName: "Lizzy"
+              }
+            };
+            await nazu.sendMessage(from, { text: `🔗 @${getUserName(sender)}, links não são permitidos. Você foi removido do grupo.`, mentions: [sender] }, { contextInfo: newsletterCtxLinkSoft });
           } else {
             await nazu.sendMessage(from, {
               delete: {
@@ -4793,9 +4837,7 @@ packname: `${nomebot}`,            type: isVideo ? 'video' : 'image',
                 participant: sender
               }
             });
-            await reply(`🔗 Atenção, @${getUserName(sender)}! Links não são permitidos. Não consigo remover você, mas evite enviar links.`, {
-              mentions: [sender]
-            });
+            await nazu.sendMessage(from, { text: `🔗 Atenção, @${getUserName(sender)}! Links não são permitidos. Não consigo remover você, mas evite enviar links.`, mentions: [sender] }, { contextInfo: newsletterCtxLinkSoft });
           }
           return;
         } catch (error) {
@@ -4827,10 +4869,15 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
         });
       }
       if (groupData.antistickerplus_remover) {
-        await reply(
-          `🚫 @${getUserName(sender)}, este grupo não permite esse tipo de figurinha do whatsapp plus.`,
-          { mentions: [sender] }
-        );
+        const newsletterCtxSticker = {
+          forwardingScore: 999,
+          isForwarded: true,
+          forwardedNewsletterMessageInfo: {
+            newsletterJid: "120363410980452460@newsletter",
+            newsletterName: "Lizzy"
+          }
+        };
+        await nazu.sendMessage(from, { text: `🚫 @${getUserName(sender)}, este grupo não permite esse tipo de figurinha do whatsapp plus.`, mentions: [sender] }, { contextInfo: newsletterCtxSticker });
       }
       if (groupData.antistickerplus_remover && isBotAdmin) {
         const senderJidAntiSticker = sender;
