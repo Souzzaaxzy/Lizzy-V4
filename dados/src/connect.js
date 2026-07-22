@@ -675,7 +675,6 @@ async function handleWhatsAppNativeAction(AbyssSock, inf) {
         const { id: groupId, action, author, authorPn, participant, participants } = inf;
         
         console.log('[X9] ========== WHATSAPP NATIVE HANDLER ==========');
-        console.log('[X9] Full inf:', JSON.stringify(inf, null, 2));
         
         if (!groupId) return;
         
@@ -690,25 +689,28 @@ async function handleWhatsAppNativeAction(AbyssSock, inf) {
         const targetParticipant = participant || (participants && participants[0]);
         const adminJid = author || authorPn;
         
-        console.log('[X9] targetParticipant:', targetParticipant);
-        console.log('[X9] adminJid:', adminJid);
-        
         if (!targetParticipant || !adminJid) {
             console.log('[X9] Dados insuficientes');
             return;
         }
         
-        // Normaliza JID - PRIORIDADE: pn > id > number (nunca usa lid!)
+        // Normaliza JID - USA phoneNumber (que contém o número real!)
         let participantJid;
         if (typeof targetParticipant === 'object') {
-            participantJid = targetParticipant.pn || targetParticipant.id || targetParticipant.number;
+            // phoneNumber já vem com @s.whatsapp.net
+            if (targetParticipant.phoneNumber) {
+                participantJid = targetParticipant.phoneNumber;
+            } else if (targetParticipant.pn) {
+                participantJid = targetParticipant.pn.includes('@') 
+                    ? targetParticipant.pn 
+                    : `${targetParticipant.pn}@s.whatsapp.net`;
+            } else if (targetParticipant.id && !targetParticipant.id.includes('@lid')) {
+                participantJid = targetParticipant.id.includes('@') 
+                    ? targetParticipant.id 
+                    : `${targetParticipant.id}@s.whatsapp.net`;
+            }
         } else {
             participantJid = targetParticipant;
-        }
-        
-        // Se não encontrou número ou é LID, tenta outras propriedades
-        if (!participantJid || typeof participantJid !== 'string') {
-            participantJid = targetParticipant.pn || targetParticipant.id || targetParticipant.number;
         }
         
         // Limpa e normaliza
@@ -718,7 +720,7 @@ async function handleWhatsAppNativeAction(AbyssSock, inf) {
             if (/^\d+$/.test(participantJid)) {
                 participantJid = `${participantJid}@s.whatsapp.net`;
             } else {
-                console.log('[X9] JID não é número válido, ignorando');
+                console.log('[X9] JID não é número válido:', participantJid);
                 return;
             }
         } else {
