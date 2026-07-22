@@ -19668,30 +19668,22 @@ case 'pin':
               const sendTikTokCard = async (videoData, index) => {
                 const link = videoData.link || (isTikTokUrl ? q : '');
                 if (!link) return;
-                
+
                 const title = videoData.title || '';
                 const views = videoData.views || 0;
                 const viewsText = views ? `${formatNumber(views)} visualizações` : '';
-                const thumbnail = videoData.cover || videoData.thumbnail || '';
-                
+                const videoUrl = videoData.urls?.[0] || '';
+
                 // Criar caption com título e visualizações
-                const caption = title ? `${title}\n\n👁️ ${viewsText}` : `👁️ ${viewsText}`;
-                
-                // Enviar imagem com botão CTA URL
+                const caption = title ? `${title}
+
+👁️ ${viewsText}` : `👁️ ${viewsText}`;
+
+                // Enviar vídeo
                 await nazu.sendMessage(from, {
-                  image: { url: thumbnail },
+                  video: { url: videoUrl },
                   caption: caption,
-                  footer: '📱 TikTok',
-                  buttons: [
-                    {
-                      name: "cta_url",
-                      buttonParamsJson: JSON.stringify({
-                        display_text: "📱 Abrir no TikTok",
-                        url: link
-                      })
-                    }
-                  ],
-                  headerType: 1 // IMAGE
+                  mimetype: 'video/mp4'
                 });
               };
               
