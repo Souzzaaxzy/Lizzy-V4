@@ -7006,7 +7006,15 @@ switch (command) {
         if (isGroup) {
           optimizer.invalidateGroup(from);
         }
-        await reply(`◈ Modo RPG ${groupData.modorpg ? 'ATIVADO' : 'DESATIVADO'} neste grupo.\n\n${groupData.modorpg ? '🌌 Agora os membros podem usar todos os comandos RPG!' : '⚙️ Comandos RPG desativados.'}`);
+        const newsletterCtxRpg = {
+          forwardingScore: 999,
+          isForwarded: true,
+          forwardedNewsletterMessageInfo: {
+            newsletterJid: "120363410980452460@newsletter",
+            newsletterName: "Lizzy"
+          }
+        };
+        await nazu.sendMessage(from, { text: `◈ Modo RPG ${groupData.modorpg ? 'ATIVADO' : 'DESATIVADO'} neste grupo.\n\n${groupData.modorpg ? '🌌 Agora os membros podem usar todos os comandos RPG!' : '⚙️ Comandos RPG desativados.'}` }, { contextInfo: newsletterCtxRpg, quoted: info });
         break;
       }
       case 'perfilrpg':
@@ -30936,7 +30944,15 @@ break;
           if (!isBotAdmin) return reply("Eu preciso ser adm para isso 💔");
           groupData.antidel = !groupData.antidel;
           fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
-          await reply(`✅ Antidelete ${groupData.antidel ? 'ativado' : 'desativado'}!`);
+          const newsletterCtxDel = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          await nazu.sendMessage(from, { text: `✅ Antidelete ${groupData.antidel ? 'ativado' : 'desativado'}!` }, { contextInfo: newsletterCtxDel, quoted: info });
         } catch (e) {
           console.error(e);
           await reply("Ocorreu um erro 💔");
@@ -30958,10 +30974,18 @@ break;
             '🎵 Spotify',
             '🔊 SoundCloud'
           ];
+          const newsletterCtxDl = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
           const statusMsg = groupData.autodl
             ? `✅ *AutoDL Ativado!*\n\n📥 Links das seguintes plataformas serão baixados automaticamente:\n\n${platforms.join('\n')}\n\n💡 Basta enviar o link que eu baixo para você!`
             : `❌ *AutoDL Desativado*\n\n⏸️ Links não serão mais baixados automaticamente.`;
-          await reply(statusMsg);
+          await nazu.sendMessage(from, { text: statusMsg }, { contextInfo: newsletterCtxDl, quoted: info });
         } catch (e) {
           console.error(e);
           await reply("Ocorreu um erro 💔");
@@ -30991,18 +31015,26 @@ break;
       case 'antistts': {
         if (!isGroup) return reply("❌ ◈ Este comando só funciona em grupos.");
         if (!isGroupAdmin) return reply("❌ Apenas administradores podem usar este comando.");
-        if (args[0] === 'on') {
+        const newsletterCtxStts = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          if (args[0] === 'on') {
           if (groupData.antiStts === true) return reply("⚠️ O Anti-Status já está ativado.");
           groupData.antiStts = true;
           fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
-          reply("✅ *Anti-Status Ativado!* Agora o bot removerá quem postar status no grupo.");
+          await nazu.sendMessage(from, { text: "✅ *Anti-Status Ativado!* Agora o bot removerá quem postar status no grupo." }, { contextInfo: newsletterCtxStts, quoted: info });
         } else if (args[0] === 'off') {
           if (groupData.antiStts === false) return reply("⚠️ O Anti-Status já está desativado.");
           groupData.antiStts = false;
           fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
-          reply("✅ *Anti-Status Desativado!* O bot não removerá mais quem postar status no grupo.");
+          await nazu.sendMessage(from, { text: "✅ *Anti-Status Desativado!* O bot não removerá mais quem postar status no grupo." }, { contextInfo: newsletterCtxStts, quoted: info });
         } else {
-          reply(`❓ *Como usar:* \n\n${groupPrefix}antistts on (para ativar)\n${groupPrefix}antistts off (para desativar)\n\n*Status atual:* ${groupData.antiStts !== false ? 'Ativado' : 'Desativado'}`);
+          await nazu.sendMessage(from, { text: `❓ *Como usar:* \n\n${groupPrefix}antistts on (para ativar)\n${groupPrefix}antistts off (para desativar)\n\n*Status atual:* ${groupData.antiStts !== false ? 'Ativado' : 'Desativado'}` }, { contextInfo: newsletterCtxStts, quoted: info });
         }
         break;
       }
@@ -31241,10 +31273,18 @@ Exemplos:
             groupData.modobrincadeira = !groupData.modobrincadeira;
           }
           writeJsonFile(groupFilePath, groupData);
+          const newsletterCtxBrinc = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
           if (groupData.modobrincadeira) {
-            await reply('🎉 *Modo de Brincadeiras ativado!* Agora o grupo está no modo de brincadeiras. Divirta-se!');
+            await nazu.sendMessage(from, { text: '🎉 *Modo de Brincadeiras ativado!* Agora o grupo está no modo de brincadeiras. Divirta-se!' }, { contextInfo: newsletterCtxBrinc, quoted: info });
           } else {
-            await reply('⚠️ *Modo de Brincadeiras desativado!* O grupo não está mais no modo de brincadeiras.');
+            await nazu.sendMessage(from, { text: '⚠️ *Modo de Brincadeiras desativado!* O grupo não está mais no modo de brincadeiras.' }, { contextInfo: newsletterCtxBrinc, quoted: info });
           }
         } catch (e) {
           console.error(e);
@@ -31267,10 +31307,18 @@ Exemplos:
             groupData.bemvindo = !groupData.bemvindo;
           }
           writeJsonFile(groupFilePath, groupData);
+          const newsletterCtxBv = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
           if (groupData.bemvindo) {
-            await reply(`◈ *Boas-vindas do Void ativadas!* Agora, novas almas serão consumidas com uma mensagem personalizada.\n📝 Para configurar a mensagem, use: *${prefixo}legendabv*\n⚠️ O *bemvindo2* foi desativado automaticamente para evitar duplicidade.`);
+            await nazu.sendMessage(from, { text: `◈ *Boas-vindas do Void ativadas!* Agora, novas almas serão consumidas com uma mensagem personalizada.\n📝 Para configurar a mensagem, use: *${prefixo}legendabv*\n⚠️ O *bemvindo2* foi desativado automaticamente para evitar duplicidade.` }, { contextInfo: newsletterCtxBv, quoted: info });
           } else {
-            await reply('⚠️ *Boas-vindas desativadas!* O grupo não enviará mais mensagens para novos membros.');
+            await nazu.sendMessage(from, { text: '⚠️ *Boas-vindas desativadas!* O grupo não enviará mais mensagens para novos membros.' }, { contextInfo: newsletterCtxBv, quoted: info });
           }
         } catch (e) {
           console.error(e);
@@ -31291,10 +31339,18 @@ case 'bemvindo2':
             groupData.bemvindo2 = !groupData.bemvindo2;
           }
           writeJsonFile(groupFilePath, groupData);
+          const newsletterCtxBv2 = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
           if (groupData.bemvindo2) {
-            await reply(`◈ *Boas-vindas do Void ativadas!* Agora, novas almas serão consumidas com uma mensagem personalizada.\n📝 Para configurar a mensagem, use: *${prefixo}legendabv2*\n*Esse bem vindo não tem foto!*\n⚠️ O *bemvindo* foi desativado automaticamente para evitar duplicidade.`);
+            await nazu.sendMessage(from, { text: `◈ *Boas-vindas do Void ativadas!* Agora, novas almas serão consumidas com uma mensagem personalizada.\n📝 Para configurar a mensagem, use: *${prefixo}legendabv2*\n*Esse bem vindo não tem foto!*\n⚠️ O *bemvindo* foi desativado automaticamente para evitar duplicidade.` }, { contextInfo: newsletterCtxBv2, quoted: info });
           } else {
-            await reply('⚠️ *Boas-vindas desativadas!* O grupo não enviará mais mensagens para novos membros.\n*Esse bem vindo não tem foto!*');
+            await nazu.sendMessage(from, { text: '⚠️ *Boas-vindas desativadas!* O grupo não enviará mais mensagens para novos membros.\n*Esse bem vindo não tem foto!*' }, { contextInfo: newsletterCtxBv2, quoted: info });
           }
         } catch (e) {
           console.error(e);
@@ -31772,7 +31828,15 @@ case 'set-bannerbv':
           if (isGroup) {
             optimizer.invalidateGroup(from);
           }
-          await reply(`⚽ Modo Futebol ${groupData.modofut ? 'ATIVADO' : 'DESATIVADO'} neste grupo.\n\n${groupData.modofut ? '🏆 Agora os membros podem usar todos os comandos de futebol!' : '⚙️ Comandos de futebol desativados.'}`);
+          const newsletterCtxFut = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          await nazu.sendMessage(from, { text: `⚽ Modo Futebol ${groupData.modofut ? 'ATIVADO' : 'DESATIVADO'} neste grupo.\n\n${groupData.modofut ? '🏆 Agora os membros podem usar todos os comandos de futebol!' : '⚙️ Comandos de futebol desativados.'}` }, { contextInfo: newsletterCtxFut, quoted: info });
         } catch (e) {
           console.error('Erro no comando modofut:', e);
           await reply("Ocorreu um erro ao alterar o modo de futebol 💔");
@@ -32476,7 +32540,15 @@ ${groupPrefix}antistickerplus remover → remove usuário e apaga mensagem
           let groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : {};
           groupData.autoSticker = !groupData.autoSticker;
           fs.writeFileSync(groupFilePath, JSON.stringify(groupData, null, 2));
-          reply(`✅ Auto figurinhas ${groupData.autoSticker ? 'ativadas' : 'desativadas'}! ${groupData.autoSticker ? 'Todas as imagens e vídeos serão convertidos em figurinhas.' : ''}`);
+          const newsletterCtxStk = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          await nazu.sendMessage(from, { text: `✅ Auto figurinhas ${groupData.autoSticker ? 'ativadas' : 'desativadas'}! ${groupData.autoSticker ? 'Todas as imagens e vídeos serão convertidos em figurinhas.' : ''}` }, { contextInfo: newsletterCtxStk, quoted: info });
         } catch (e) {
           console.error(e);
           reply("Ocorreu um erro 💔");
@@ -32491,7 +32563,15 @@ ${groupPrefix}antistickerplus remover → remove usuário e apaga mensagem
           let groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : {};
           groupData.autorepo = !groupData.autorepo;
           fs.writeFileSync(groupFilePath, JSON.stringify(groupData, null, 2));
-          reply(`✅ Auto resposta ${groupData.autorepo ? 'ativada' : 'desativada'}!`);
+          const newsletterCtxAuto = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          await nazu.sendMessage(from, { text: `✅ Auto resposta ${groupData.autorepo ? 'ativada' : 'desativada'}!` }, { contextInfo: newsletterCtxAuto, quoted: info });
         } catch (e) {
           console.error(e);
           reply("Ocorreu um erro 💔");
@@ -32567,8 +32647,16 @@ case 'assistent':
           };
           groupData.antigore = !groupData.antigore;
           fs.writeFileSync(groupFilePath, JSON.stringify(groupData));
+          const newsletterCtxGore = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
           const message = groupData.antigore ? `✅ *Antigore foi ativado com sucesso!*\n\nAgora, se alguém enviar conteúdo gore, será banido automaticamente. Mantenha o grupo seguro e saudável! ⚙️` : `✅ *Antigore foi desativado.*\n\nConteúdo gore não será mais bloqueado. Use com cuidado! ⚠️`;
-          reply(`${message}`);
+          await nazu.sendMessage(from, { text: message }, { contextInfo: newsletterCtxGore, quoted: info });
         } catch (e) {
           console.error(e);
           reply("ocorreu um erro 💔");
