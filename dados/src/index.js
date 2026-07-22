@@ -30794,6 +30794,11 @@ break;
             const newsletterContext = {
               forwardingScore: 999,
               isForwarded: true,
+              externalAdReply: {
+                title: "📢 Canal Lizzy",
+                body: "Ver canal",
+                showAdAttribution: false,
+              },
               forwardedNewsletterMessageInfo: {
                 newsletterJid: "120363410980452460@newsletter",
                 newsletterName: "Lizzy"
