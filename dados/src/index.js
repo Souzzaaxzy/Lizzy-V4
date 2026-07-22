@@ -19106,26 +19106,16 @@ case 'addaluguel':
               clearInterval(animationInterval);
               animationInterval = null;
             }
+            // Apaga a mensagem de animação
             if (searchMsgKey) {
-              try {
-                // Edita a mensagem do loop para "Música encontrada!"
-                await nazu.sendMessage(from, {
-                  text: '✅ Música encontrada!',
-                  edit: searchMsgKey
-                });
-              } catch (e) {
-                // Se falhar ao editar, apaga e envia nova
-                await nazu.sendMessage(from, { delete: searchMsgKey }).catch(() => {});
-                await nazu.sendMessage(from, { text: '✅ Música encontrada!' }, { quoted: info });
-              }
+              await nazu.sendMessage(from, { delete: searchMsgKey }).catch(() => {});
             }
+            // Envia "Música encontrada!"
+            const foundMsg = await nazu.sendMessage(from, { text: '✅ Música encontrada!' }, { quoted: info });
             // Espera 2 segundos
             await new Promise(resolve => setTimeout(resolve, 2000));
             // Apaga a mensagem
-            if (searchMsgKey) {
-              await nazu.sendMessage(from, { delete: searchMsgKey }).catch(() => {});
-              searchMsgKey = null;
-            }
+            await nazu.sendMessage(from, { delete: foundMsg.key }).catch(() => {});
           };
           // =============================================
           // FUNÇÃO DE ANIMAÇÃO DE BUSCA
