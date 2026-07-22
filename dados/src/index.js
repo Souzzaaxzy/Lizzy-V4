@@ -19690,7 +19690,7 @@ case 'pin':
                     }
                   ],
                   headerType: 1 // IMAGE
-                }, { quoted: info });
+                });
               };
               
               // Verificar se tem múltiplos resultados (search)
