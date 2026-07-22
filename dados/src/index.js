@@ -19099,28 +19099,32 @@ case 'addaluguel':
           let searchMsgKey = null;
           let animationInterval = null;
           // =============================================
-          // FUNÇÃO PARA FINALIZAR ANIMAÇÃO
+          // FUNÇÃO PARA MOSTRAR "MÚSICA ENCONTRADA" E APAGAR
           // =============================================
-          let foundMsgKey = null;
-          const finalizeSearchMsg = async () => {
+          const showFoundAndDelete = async () => {
             if (animationInterval) {
               clearInterval(animationInterval);
               animationInterval = null;
             }
-            // Apaga a mensagem de busca
+            if (searchMsgKey) {
+              try {
+                // Edita a mensagem do loop para "Música encontrada!"
+                await nazu.sendMessage(from, {
+                  text: '✅ Música encontrada!',
+                  edit: searchMsgKey
+                });
+              } catch (e) {
+                // Se falhar ao editar, apaga e envia nova
+                await nazu.sendMessage(from, { delete: searchMsgKey }).catch(() => {});
+                await nazu.sendMessage(from, { text: '✅ Música encontrada!' }, { quoted: info });
+              }
+            }
+            // Espera 2 segundos
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            // Apaga a mensagem
             if (searchMsgKey) {
               await nazu.sendMessage(from, { delete: searchMsgKey }).catch(() => {});
               searchMsgKey = null;
-            }
-          };
-          // Mostrar "Música encontrada!" e apagar após 2 segundos
-          const showFoundMessage = async () => {
-            const foundMsg = await nazu.sendMessage(from, { text: '✅ Música encontrada!' }, { quoted: info });
-            foundMsgKey = foundMsg.key;
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            if (foundMsgKey) {
-              await nazu.sendMessage(from, { delete: foundMsgKey }).catch(() => {});
-              foundMsgKey = null;
             }
           };
           // =============================================
@@ -19166,7 +19170,7 @@ case 'addaluguel':
           // FUNÇÃO PARA ENVIAR ERRO
           // =============================================
           const sendPlayError = async (msg) => {
-            await finalizeSearchMsg();
+            await showFoundAndDelete();
             await nazu.sendMessage(from, { text: msg }, { quoted: info }).catch(() => {});
           };
           if (q.includes('youtube.com') || q.includes('youtu.be')) {
@@ -19179,8 +19183,7 @@ case 'addaluguel':
                 }
                 try {
                   // Apagar mensagem de pesquisa e mostrar "Música encontrada!"
-                  await finalizeSearchMsg();
-                  await showFoundMessage();
+                  await showFoundAndDelete();
                   // Extrair video ID para thumbnail
                   const videoId = videoUrl.match(/(?:v=|youtu\.be\/)([^&]+)/)?.[1] || '';
                   const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
@@ -19198,7 +19201,7 @@ case 'addaluguel':
                   }, { quoted: info });
                 } catch (audioError) {
                   if (String(audioError).includes("ENOSPC") || String(audioError).includes("size")) {
-                    await finalizeSearchMsg();
+                    await showFoundAndDelete();
                     await nazu.sendMessage(from, { text: '📦 Arquivo muito grande para enviar como áudio, enviando como documento...' }, { quoted: info });
                     await nazu.sendMessage(from, {
                       document: dlRes.buffer,
@@ -19248,8 +19251,7 @@ case 'addaluguel':
                   }
                   try {
                     // Apagar mensagem de busca e mostrar "Música encontrada!"
-                    await finalizeSearchMsg();
-                    await showFoundMessage();
+                    await showFoundAndDelete();
                     // =============================================
                     // ENVIAR INFORMAÇÕES DA MÚSICA
                     // =============================================
@@ -19311,7 +19313,7 @@ case 'addaluguel':
                     await nazu.sendMessage(from, { react: { text: '✅', key: info.key } });
                   } catch (audioError) {
                     if (String(audioError).includes("ENOSPC") || String(audioError).includes("size")) {
-                      await finalizeSearchMsg();
+                      await showFoundAndDelete();
                       await nazu.sendMessage(from, { text: '📦 Arquivo muito grande para enviar como áudio, enviando como documento...' }, { quoted: info });
                       await nazu.sendMessage(from, {
                         document: dlRes.buffer,
