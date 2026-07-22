@@ -27308,17 +27308,15 @@ ${groupPrefix}togglecmdvip premium_ia off`);
         break;
       case 'togif':
         try {
-          const quotedMsg = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-
-          // Verificar sticker normal ou lottie
-          const quotedSticker = quotedMsg?.stickerMessage || quotedMsg?.lottieStickerMessage?.message?.stickerMessage;
+          // Verificar sticker da mensagem citada
+          const quotedSticker = quotedMessageContent?.stickerMessage;
 
           if (!quotedSticker) {
             return reply(`❌ Responda a uma figurinha animada utilizando:\n${groupPrefix}togif`);
           }
 
-          // Verificar se é sticker animado (isLottie ou duration > 0)
-          const isAnimated = quotedSticker.isLottie === true || (quotedSticker.duration && quotedSticker.duration > 0);
+          // Verificar se é sticker animado (duration > 0)
+          const isAnimated = quotedSticker.duration && quotedSticker.duration > 0;
 
           if (!isAnimated) {
             return reply("❌ Essa figurinha não é animada.");
