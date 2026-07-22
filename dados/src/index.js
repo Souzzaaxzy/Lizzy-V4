@@ -31928,9 +31928,9 @@ case 'set-bannerbv':
           
           // Se informou número(s) no texto
           if (q) {
-            const parts = q.split(' ').filter(p => !p.startsWith('@') && p.trim());
+            const parts = q.split(' ').filter(p => p.trim());
             for (const part of parts) {
-              const cleanNumber = part.replace(/\D/g, '');
+              const cleanNumber = part.replace(/[@\s\-()]/g, '').replace(/\D/g, '');
               if (cleanNumber.length >= 10) {
                 const candidateJid = buildUserId(cleanNumber, config);
                 if (groupMetadata?.participants) {
@@ -31951,7 +31951,7 @@ case 'set-bannerbv':
             }
           }
           
-          if (targetUsers.length === 0) return reply(`Marque o(s) usuário(s) (ex: ${groupPrefix}addblacklist @usuario @usuario2).`);
+          if (targetUsers.length === 0) return reply(`❌ Uso: ${groupPrefix}addblacklist <número>\\n\\nExemplo: ${groupPrefix}addblacklist 5511987654321\\n\\nOu marque: ${groupPrefix}addblacklist @usuario`);
           
           const reason = q ? (q.includes('@') || !menc_os2) ? (args.length > 1 ? args.slice(1).join(' ') : 'Motivo não informado') : q.trim() : 'Motivo não informado';
           const groupFilePath = buildGroupFilePath(from);
