@@ -19099,16 +19099,27 @@ case 'addaluguel':
           let searchMsgKey = null;
           let animationInterval = null;
           // =============================================
-          // FUNÇÃO PARA APAGAR MENSAGEM DE ERRO
+          // FUNÇÃO PARA FINALIZAR ANIMAÇÃO
           // =============================================
-          const deleteSearchMsg = async () => {
+          const finalizeSearchMsg = async () => {
             if (animationInterval) {
               clearInterval(animationInterval);
               animationInterval = null;
             }
             if (searchMsgKey) {
-              await nazu.sendMessage(from, { delete: searchMsgKey }).catch(() => {});
+              try {
+                await nazu.sendMessage(from, {
+                  text: '✅ Música encontrada!',
+                  edit: searchMsgKey
+                });
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                await nazu.sendMessage(from, { delete: searchMsgKey }).catch(() => {});
+              } catch (e) {
+                // Se falhar, apenas apaga
+                await nazu.sendMessage(from, { delete: searchMsgKey }).catch(() => {});
+              }
             }
+            searchMsgKey = null;
           };
           // =============================================
           // FUNÇÃO DE ANIMAÇÃO DE BUSCA
@@ -19153,7 +19164,7 @@ case 'addaluguel':
           // FUNÇÃO PARA ENVIAR ERRO
           // =============================================
           const sendPlayError = async (msg) => {
-            await deleteSearchMsg();
+            await finalizeSearchMsg();
             await nazu.sendMessage(from, { text: msg }, { quoted: info }).catch(() => {});
           };
           if (q.includes('youtube.com') || q.includes('youtu.be')) {
@@ -19166,7 +19177,7 @@ case 'addaluguel':
                 }
                 try {
                   // Apagar mensagem de pesquisa
-                  await deleteSearchMsg();
+                  await finalizeSearchMsg();
                   // Extrair video ID para thumbnail
                   const videoId = videoUrl.match(/(?:v=|youtu\.be\/)([^&]+)/)?.[1] || '';
                   const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
@@ -19184,7 +19195,7 @@ case 'addaluguel':
                   }, { quoted: info });
                 } catch (audioError) {
                   if (String(audioError).includes("ENOSPC") || String(audioError).includes("size")) {
-                    await deleteSearchMsg();
+                    await finalizeSearchMsg();
                     await nazu.sendMessage(from, { text: '📦 Arquivo muito grande para enviar como áudio, enviando como documento...' }, { quoted: info });
                     await nazu.sendMessage(from, {
                       document: dlRes.buffer,
@@ -19234,7 +19245,7 @@ case 'addaluguel':
                   }
                   try {
                     // Apagar mensagem de pesquisa ANTES de enviar
-                    await deleteSearchMsg();
+                    await finalizeSearchMsg();
                     // =============================================
                     // ENVIAR INFORMAÇÕES DA MÚSICA
                     // =============================================
@@ -19296,7 +19307,7 @@ case 'addaluguel':
                     await nazu.sendMessage(from, { react: { text: '✅', key: info.key } });
                   } catch (audioError) {
                     if (String(audioError).includes("ENOSPC") || String(audioError).includes("size")) {
-                      await deleteSearchMsg();
+                      await finalizeSearchMsg();
                       await nazu.sendMessage(from, { text: '📦 Arquivo muito grande para enviar como áudio, enviando como documento...' }, { quoted: info });
                       await nazu.sendMessage(from, {
                         document: dlRes.buffer,
