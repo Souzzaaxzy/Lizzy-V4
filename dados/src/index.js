@@ -19662,7 +19662,7 @@ case 'pin':
                 return num.toString();
               };
               
-              // Função para enviar link do TikTok (WhatsApp gera preview rico automaticamente)
+              // Função para enviar link do TikTok com linkPreview forçado
               const sendTikTokLink = async (videoData, index) => {
                 const link = videoData.link || (isTikTokUrl ? q : '');
                 if (!link) return;
@@ -19671,9 +19671,16 @@ case 'pin':
                 const views = videoData.views || 0;
                 const viewsText = views ? `${formatNumber(views)} visualizações` : '';
                 
-                // Enviar apenas o link - WhatsApp gera preview rico automaticamente
-                const text = link;
-                await nazu.sendMessage(from, { text }, { quoted: info });
+                // Enviar link com linkPreview forçado para gerar preview rico
+                const text = `🔗 ${link}`;
+                await nazu.sendMessage(from, { 
+                  text,
+                  linkPreview: {
+                    matchedText: link,
+                    title: title || 'TikTok',
+                    description: viewsText || 'Vídeo do TikTok'
+                  }
+                }, { quoted: info });
               };
               
               // Verificar se tem múltiplos resultados (search)
