@@ -19664,31 +19664,48 @@ case 'pin':
               };
               // Função para enviar card do TikTok com nativeFlow (botão integrado como "ver canal")
               const sendTikTokCard = async (videoData, index) => {
-                const link = videoData.link || '';
-                const thumbnail = videoData.cover || videoData.thumbnail || '';
-                if (!link || !thumbnail) return;
-                
-                const title = videoData.title || '';
-                const views = videoData.views || 0;
-                const viewsText = views ? `${formatNumber(views)} visualizações` : '';
-                
-                // Criar caption com título e visualizações
-                const caption = title ? `${title}\n\n👁️ ${viewsText}` : `👁️ ${viewsText}`;
-                
-                // Enviar card com nativeFlow (botão integrado como "ver canal")
-                await nazu.sendMessage(from, {
-                  text: link,
-                  cards: [{
-                    image: { url: thumbnail },
-                    caption: caption,
-                    footer: '📱 TikTok',
-                    nativeFlow: [{
-                      text: '🔗 Abrir no TikTok',
-                      url: link,
-                      useWebview: false
+                try {
+                  const link = videoData.link || '';
+                  const thumbnail = videoData.cover || videoData.thumbnail || '';
+                  
+                  console.log('Dados do vídeo:', JSON.stringify(videoData, null, 2));
+                  
+                  if (!link) return;
+                  if (!thumbnail) {
+                    // Se não tiver thumbnail, enviar só o link
+                    await nazu.sendMessage(from, { text: link }, { quoted: info });
+                    return;
+                  }
+                  
+                  const title = videoData.title || '';
+                  const views = videoData.views || 0;
+                  const viewsText = views ? `${formatNumber(views)} visualizações` : '';
+                  
+                  // Criar caption com título e visualizações
+                  const caption = title ? `${title}\n\n👁️ ${viewsText}` : `👁️ ${viewsText}`;
+                  
+                  // Enviar card com nativeFlow (botão integrado como "ver canal")
+                  await nazu.sendMessage(from, {
+                    text: link,
+                    cards: [{
+                      image: { url: thumbnail },
+                      caption: caption,
+                      footer: '📱 TikTok',
+                      nativeFlow: [{
+                        text: '🔗 Abrir no TikTok',
+                        url: link,
+                        useWebview: false
+                      }]
                     }]
-                  }]
-                }, { quoted: info });
+                  }, { quoted: info });
+                } catch (err) {
+                  console.error('Erro ao enviar card TikTok:', err.message);
+                  // Fallback: enviar só o link
+                  const link = videoData.link || '';
+                  if (link) {
+                    await nazu.sendMessage(from, { text: link }, { quoted: info });
+                  }
+                }
               };
 
               
