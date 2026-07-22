@@ -19108,15 +19108,10 @@ case 'addaluguel':
             }
             if (searchMsgKey) {
               try {
-                await nazu.sendMessage(from, {
-                  text: '✅ Música encontrada!',
-                  edit: searchMsgKey
-                });
-                await new Promise(resolve => setTimeout(resolve, 2000));
+                // Apaga a mensagem de busca
                 await nazu.sendMessage(from, { delete: searchMsgKey }).catch(() => {});
               } catch (e) {
-                // Se falhar, apenas apaga
-                await nazu.sendMessage(from, { delete: searchMsgKey }).catch(() => {});
+                // Ignora erro ao deletar
               }
             }
             searchMsgKey = null;
