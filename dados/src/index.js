@@ -19662,22 +19662,22 @@ case 'pin':
                 return num.toString();
               };
               
-              // Função para enviar card do TikTok com thumbnail, descrição e botão
+              // Função para enviar card do TikTok com vídeo, descrição e botão
               const sendTikTokCard = async (videoData, index) => {
                 const link = videoData.link || (isTikTokUrl ? q : '');
-                if (!link) return;
+                const videoUrl = videoData.urls?.[0];
+                if (!link || !videoUrl) return;
                 
                 const title = videoData.title || '';
                 const views = videoData.views || 0;
                 const viewsText = views ? `${formatNumber(views)} visualizações` : '';
-                const thumbnail = videoData.cover || videoData.thumbnail || '';
                 
                 // Criar caption com título e visualizações
                 const caption = title ? `${title}\n\n👁️ ${viewsText}` : `👁️ ${viewsText}`;
                 
-                // Enviar imagem com botão CTA URL
+                // Enviar vídeo com botão CTA URL
                 await nazu.sendMessage(from, {
-                  image: { url: thumbnail },
+                  video: { url: videoUrl },
                   caption: caption,
                   footer: '📱 TikTok',
                   buttons: [
@@ -19689,7 +19689,7 @@ case 'pin':
                       })
                     }
                   ],
-                  headerType: 1 // IMAGE
+                  headerType: 4 // VIDEO
                 });
               };
               
