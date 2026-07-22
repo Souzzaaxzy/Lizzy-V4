@@ -19101,20 +19101,27 @@ case 'addaluguel':
           // =============================================
           // FUNÇÃO PARA FINALIZAR ANIMAÇÃO
           // =============================================
+          let foundMsgKey = null;
           const finalizeSearchMsg = async () => {
             if (animationInterval) {
               clearInterval(animationInterval);
               animationInterval = null;
             }
+            // Apaga a mensagem de busca
             if (searchMsgKey) {
-              try {
-                // Apaga a mensagem de busca
-                await nazu.sendMessage(from, { delete: searchMsgKey }).catch(() => {});
-              } catch (e) {
-                // Ignora erro ao deletar
-              }
+              await nazu.sendMessage(from, { delete: searchMsgKey }).catch(() => {});
+              searchMsgKey = null;
             }
-            searchMsgKey = null;
+          };
+          // Mostrar "Música encontrada!" e apagar após 2 segundos
+          const showFoundMessage = async () => {
+            const foundMsg = await nazu.sendMessage(from, { text: '✅ Música encontrada!' }, { quoted: info });
+            foundMsgKey = foundMsg.key;
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            if (foundMsgKey) {
+              await nazu.sendMessage(from, { delete: foundMsgKey }).catch(() => {});
+              foundMsgKey = null;
+            }
           };
           // =============================================
           // FUNÇÃO DE ANIMAÇÃO DE BUSCA
@@ -19171,8 +19178,9 @@ case 'addaluguel':
                   return sendPlayError(`❌ Não foi possível baixar este vídeo.\n\n💡 Tente buscar por nome ao invés de usar o link.`);
                 }
                 try {
-                  // Apagar mensagem de pesquisa
+                  // Apagar mensagem de pesquisa e mostrar "Música encontrada!"
                   await finalizeSearchMsg();
+                  await showFoundMessage();
                   // Extrair video ID para thumbnail
                   const videoId = videoUrl.match(/(?:v=|youtu\.be\/)([^&]+)/)?.[1] || '';
                   const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
@@ -19239,8 +19247,9 @@ case 'addaluguel':
                     return sendPlayError(`❌ Não foi possível baixar esta música.\n\nTente outra música.`);
                   }
                   try {
-                    // Apagar mensagem de pesquisa ANTES de enviar
+                    // Apagar mensagem de busca e mostrar "Música encontrada!"
                     await finalizeSearchMsg();
+                    await showFoundMessage();
                     // =============================================
                     // ENVIAR INFORMAÇÕES DA MÚSICA
                     // =============================================
