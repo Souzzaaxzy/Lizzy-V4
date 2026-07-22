@@ -19674,23 +19674,46 @@ case 'pin':
                 const videoUrl = videoData.urls?.[0] || '';
                 const caption = title ? `${title}\n\n👁️ ${viewsText}` : `👁️ ${viewsText}`;
 
-                // Enviar vídeo com botão CTA na mesma mensagem
-                await sendInteractiveMessage(nazu, from, {
-                  text: '',
-                  footer: '📱 TikTok',
-                  media: videoUrl,
-                  mediaType: 'video',
+                // Enviar vídeo primeiro (funciona corretamente)
+                await nazu.sendMessage(from, {
+                  video: { url: videoUrl },
                   caption: caption,
-                  interactiveButtons: [
-                    {
-                      name: "cta_url",
-                      buttonParamsJson: JSON.stringify({
-                        display_text: "🔗 Abrir no TikTok",
-                        url: link
-                      })
+                  mimetype: 'video/mp4'
+                });
+
+                // Pequeno delay antes do botão
+                await new Promise(r => setTimeout(r, 300));
+
+                // Enviar botão CTA como mensagem interativa
+                const msg = await generateWAMessageFromContent(from, {
+                  interactiveMessage: {
+                    header: { hasMediaAttachment: false },
+                    body: { text: '🔗 *Clique abaixo para abrir no TikTok*' },
+                    footer: { text: '📱 TikTok' },
+                    contextInfo: {
+                      forwardingScore: 999,
+                      isForwarded: true,
+                      forwardedNewsletterMessageInfo: {
+                        newsletterJid: '120363420762648535@newsletter',
+                        newsletterName: 'Lizzy Bot',
+                        serverMessageId: -1
+                      }
+                    },
+                    nativeFlowMessage: {
+                      buttons: [
+                        {
+                          name: "cta_url",
+                          buttonParamsJson: JSON.stringify({
+                            display_text: "🔗 Abrir no TikTok",
+                            url: link
+                          })
+                        }
+                      ]
                     }
-                  ]
+                  }
                 }, { userJid: nazu.user.id });
+
+                await nazu.relayMessage(from, msg.message, { messageId: msg.key.id });
               };
 
               const results = datinha.results;
