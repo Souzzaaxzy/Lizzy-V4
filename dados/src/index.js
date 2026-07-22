@@ -19648,24 +19648,21 @@ case 'pin':
       case 'tkk':
         try {
           if (!q) return reply(`Digite um nome ou o link de um vídeo.\n> Ex: ${groupPrefix}${command} Gato`);
-          // Verificar se tem API key
           await nazu.sendMessage(from, { react: { text: '🔍', key: info.key } });
           let isTikTokUrl = q.includes('tiktok');
           const tiktokPromise = isTikTokUrl ? tiktok.dl(q) : tiktok.search(q);
           tiktokPromise
             .then(async (datinha) => {
               if (!datinha.ok) return reply(datinha.msg);
-              
-              // Função para formatar números (ex: 1000 -> 1K, 1000000 -> 1M)
+
               const formatNumber = (num) => {
                 if (!num) return '0';
                 if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
                 if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
                 return num.toString();
               };
-              
-              // Função para enviar card do TikTok com thumbnail, descrição e botão
-              const sendTikTokCard = async (videoData, index) => {
+
+              const sendTikTokVideo = async (videoData, index) => {
                 const link = videoData.link || (isTikTokUrl ? q : '');
                 if (!link) return;
 
@@ -19673,40 +19670,53 @@ case 'pin':
                 const views = videoData.views || 0;
                 const viewsText = views ? `${formatNumber(views)} visualizações` : '';
                 const videoUrl = videoData.urls?.[0] || '';
+                const caption = title ? `${title}\n\n👁️ ${viewsText}` : `👁️ ${viewsText}`;
 
-                // Criar caption com título e visualizações
-                const caption = title ? `${title}
-
-👁️ ${viewsText}` : `👁️ ${viewsText}`;
-
-                // Enviar vídeo
                 await nazu.sendMessage(from, {
                   video: { url: videoUrl },
                   caption: caption,
-                  mimetype: 'video/mp4'
+                  mimetype: 'video/mp4',
+                  contextInfo: {
+                    isForwarded: true,
+                    forwardingScore: 999,
+                    externalAdReply: {
+                      title: 'TikTok',
+                      body: title || 'Vídeo do TikTok',
+                      thumbnailUrl: videoData.cover || '',
+                      videoUrl: link
+                    }
+                  }
                 });
               };
-              
-              // Verificar se tem múltiplos resultados (search)
+
               const results = datinha.results;
-              if (results && results.length > 0) {
-                // Enviar até 5 cards com thumbnail e botão
-                const videosToSend = results.slice(0, 5);
-                for (let i = 0; i < videosToSend.length; i++) {
-                  await sendTikTokCard(videosToSend[i], i);
-                  // Pequeno delay entre envios
-                  if (i < videosToSend.length - 1) {
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                  }
-                }
-              } else {
-                // Compatibilidade com formato antigo (um vídeo)
-                const urlz = datinha.urls?.[0];
-                if (urlz) {
-                  await sendTikTokCard(datinha, 0);
+              const videosToSend = (results && results.length > 0)
+                ? results.slice(0, 3)
+                : (datinha.urls?.[0] ? [datinha] : []);
+
+              for (let i = 0; i < videosToSend.length; i++) {
+                await sendTikTokVideo(videosToSend[i], i);
+                if (i < videosToSend.length - 1) {
+                  await new Promise(resolve => setTimeout(resolve, 500));
                 }
               }
-              
+
+              if (videosToSend.length > 0) {
+                const buttons = videosToSend.map((v, i) => ({
+                  name: "cta_url",
+                  buttonParamsJson: JSON.stringify({
+                    display_text: `🔗 Abrir Vídeo ${i + 1}`,
+                    url: v.link || q
+                  })
+                }));
+
+                await nazu.sendMessage(from, {
+                  text: `📱 *${videosToSend.length} vídeo(s) enviado(s)*\n\nClique nos botões abaixo para abrir no TikTok:`,
+                  footer: '📱 TikTok',
+                  buttons: buttons
+                });
+              }
+
               await nazu.sendMessage(from, { react: { text: '✅', key: info.key } });
             })
             .catch(async (e) => {
@@ -19719,6 +19729,7 @@ case 'pin':
           reply("❌ Ocorreu um erro ao processar sua solicitação. Por favor, tente novamente mais tarde.");
         }
         break;
+
       case 'facebook':
       case 'fb':
       case 'fbdl':
