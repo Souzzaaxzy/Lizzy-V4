@@ -28231,8 +28231,7 @@ break;
           
           await nazu.sendMessage(from, {
             text: message,
-            mentions: members
-          }, {
+            mentions: members,
             contextInfo: newsletterContext
           }).catch(err => {
             console.error('Erro ao enviar mensagem dia:', err);
@@ -28263,8 +28262,7 @@ break;
           
           await nazu.sendMessage(from, {
             text: message,
-            mentions: members
-          }, {
+            mentions: members,
             contextInfo: newsletterContext
           }).catch(err => {
             console.error('Erro ao enviar mensagem tarde:', err);
@@ -28295,8 +28293,7 @@ break;
           
           await nazu.sendMessage(from, {
             text: message,
-            mentions: members
-          }, {
+            mentions: members,
             contextInfo: newsletterContext
           }).catch(err => {
             console.error('Erro ao enviar mensagem noite:', err);
