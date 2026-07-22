@@ -19784,6 +19784,14 @@ case 'pin':
           if (!q) return reply(`Digite um nome ou o link de um vídeo.\n> Ex: ${groupPrefix}${command} Gato`);
           await nazu.sendMessage(from, { react: { text: '🔍', key: info.key } });
           let isTikTokUrl = q.includes('tiktok');
+          const newsletterCtxTikTok = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
           const tiktokPromise = isTikTokUrl ? tiktok.dl(q) : tiktok.search(q);
           tiktokPromise
             .then(async (datinha) => {
@@ -19810,6 +19818,7 @@ case 'pin':
                   await nazu.sendMessage(from, {
                     video: { url },
                     caption: caption,
+                    contextInfo: newsletterCtxTikTok,
                     buttons: [
                       {
                         name: "cta_url",
@@ -19825,7 +19834,8 @@ case 'pin':
                   console.error('Erro ao enviar vídeo com botão CTA:', videoErr.message);
                   await nazu.sendMessage(from, {
                     video: { url },
-                    caption: title ? `📹 ${title}\n\n🔗 ${link}` : `🔗 ${link}`
+                    caption: title ? `📹 ${title}\n\n🔗 ${link}` : `🔗 ${link}`,
+                    contextInfo: newsletterCtxTikTok
                   }, { quoted: info });
                 }
               };
