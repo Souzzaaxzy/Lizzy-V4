@@ -27,6 +27,7 @@ import CaptchaIndex from './utils/captchaIndex.js';
 import { 
     processNewJoinRequest,
     notifyWhatsAppApproval,
+    notifyWhatsAppRejection,
     isGroupAdmin,
     cleanupX9System
 } from './utils/x9System.js';
@@ -675,6 +676,7 @@ async function handleWhatsAppNativeAction(AbyssSock, inf) {
         const { id: groupId, action, author, authorPn, participant, participants } = inf;
         
         console.log('[X9] ========== WHATSAPP NATIVE HANDLER ==========');
+        console.log('[X9] Action:', action);
         
         if (!groupId) return;
         
@@ -730,8 +732,12 @@ async function handleWhatsAppNativeAction(AbyssSock, inf) {
         
         console.log('[X9] Final participantJid:', participantJid);
         
-        // Processa notificação
-        await notifyWhatsAppApproval(AbyssSock, groupId, participantJid, adminJid);
+        // Processa baseado na ação
+        if (action === 'approve') {
+            await notifyWhatsAppApproval(AbyssSock, groupId, participantJid, adminJid);
+        } else if (action === 'reject') {
+            await notifyWhatsAppRejection(AbyssSock, groupId, participantJid, adminJid);
+        }
         
     } catch (error) {
         console.error(`❌ Erro em handleWhatsAppNativeAction: ${error.message}`);
@@ -1496,13 +1502,25 @@ async function createBotSocket(authDir) {
             };
 
             // Verificar se é uma aprovação via WhatsApp (não via bot)
-            // Isso detecta quando um admin usa a interface oficial para aprovar
             if (inf.action === 'add' && inf.participants && inf.participants.length > 0) {
                 console.log('[GROUP PARTICIPANTS UPDATE] Native WhatsApp approval detected:', inf.participants);
-                // Usa o novo handler para notificações nativas
                 await handleWhatsAppNativeAction(AbyssSock, {
                     id: inf.id || inf.jid,
                     action: 'approve',
+                    author: inf.author || inf.authorPn,
+                    authorPn: inf.authorPn,
+                    participant: inf.participants[0],
+                    participants: inf.participants
+                });
+            }
+            
+            // Verificar se é uma rejeição via WhatsApp (não via bot)
+            // Action 'remove' indica que alguém foi removido/rejeitado
+            if (inf.action === 'remove' && inf.participants && inf.participants.length > 0) {
+                console.log('[GROUP PARTICIPANTS UPDATE] Native WhatsApp rejection detected:', inf.participants);
+                await handleWhatsAppNativeAction(AbyssSock, {
+                    id: inf.id || inf.jid,
+                    action: 'reject',
                     author: inf.author || inf.authorPn,
                     authorPn: inf.authorPn,
                     participant: inf.participants[0],

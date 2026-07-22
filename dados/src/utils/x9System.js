@@ -641,6 +641,48 @@ export async function notifyWhatsAppApproval(sock, groupId, participantJid, admi
 }
 
 /**
+ * Envia notificação quando rejeitado via WhatsApp (sem comando)
+ */
+export async function notifyWhatsAppRejection(sock, groupId, participantJid, adminJid) {
+    console.log('[X9] notifyWhatsAppRejection called');
+    console.log('[X9] groupId:', groupId);
+    console.log('[X9] participantJid:', participantJid);
+    console.log('[X9] adminJid:', adminJid);
+    
+    const req = x9Store.get(groupId, participantJid);
+    console.log('[X9] Found request:', req ? 'SIM' : 'NÃO');
+    
+    if (!req || req.status !== 'pending') {
+        console.log('[X9] Request not found or not pending');
+        return null;
+    }
+
+    const now = new Date();
+    const adminNumber = adminJid ? adminJid.replace(/@.*$/, '') : 'Admin';
+
+    const vars = {
+        numero: req.participantNumber,
+        hora: formatTime(now),
+        admin: adminNumber
+    };
+
+    const notification = parseTemplate(X9_REJECTED_TEMPLATE, vars);
+    console.log('[X9] Sending notification:', notification);
+
+    try {
+        await sock.sendMessage(groupId, {
+            text: notification,
+            mentions: [participantJid, adminJid].filter(Boolean)
+        });
+
+        x9Store.update(groupId, participantJid, { status: 'rejected' });
+        console.log('[X9] ✅ Rejeição enviada via WhatsApp');
+    } catch (error) {
+        console.error('[X9] Erro na notificação:', error.message);
+    }
+}
+
+/**
  * Verifica se é admin do grupo
  */
 export async function isGroupAdmin(sock, groupId, userJid) {
