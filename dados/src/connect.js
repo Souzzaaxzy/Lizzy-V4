@@ -18,11 +18,20 @@ import ElectionManager from './utils/electionManager.js';
 import { loadMsgBotOn } from './utils/database.js';
 import { buildUserId } from './utils/helpers.js';
 import msgCounter from './utils/msgCounter.js';
-// ATENÇÃO: Se o seu arquivo se chama 'index-2(2).js', RENOMEIE PARA 'index.js'
+// ATENÇÃO: Se o seu arquivo se chamado 'index-2(2).js', RENOMEIE PARA 'index.js'
 // ou mude o caminho abaixo para './index-2(2).js'
 import { handleGroupParticipantsUpdate } from './index.js';
 import { initCaptchaIndex, loadCaptchaJson, saveCaptchaJson } from './utils/captchaIndex.js';
 import CaptchaIndex from './utils/captchaIndex.js';
+// X9 System - Sistema moderno de solicitações de entrada
+import { 
+    processNewJoinRequest, 
+    processX9ButtonCallback, 
+    processWhatsAppNativeAction,
+    isGroupAdmin,
+    isX9ButtonCallback,
+    cleanupX9System
+} from './utils/x9System.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const modules = await import('./funcs/exports.js');
@@ -586,6 +595,11 @@ export async function saveGroupSettings(groupId, settings) {
         console.error(`❌ Erro ao salvar settings de ${groupId}:`, error);
     }
 }
+
+/**
+ * Handle Group Join Request - NOVO SISTEMA X9
+ * Substituído para usar o sistema moderno com botões interativos
+ */
 async function handleGroupJoinRequest(AbyssSock, inf) {
     try {
         const typeIds = { id: '', lid: '', participant: '' };
@@ -594,87 +608,7 @@ async function handleGroupJoinRequest(AbyssSock, inf) {
 
         if (!from || !participantJid) return;
 
-// Detectar approve/reject de solicitacao - múltiplas formas de detecção
-        const action = inf.action || inf.requestMethod || inf.method || null;
-        const isApproveAction = action === 'approve' || action === 'Approve' || action === 'approved';
-        const isRejectAction = action === 'reject' || action === 'Reject' || action === 'rejected' || action === 'reject';
-        
-        console.log('[JOIN REQUEST] Action detection:', { action, isApproveAction, isRejectAction });
-        
-        if (isApproveAction || isRejectAction) {
-            console.log(`[JOIN REQUEST] ${isApproveAction ? 'APPROVE' : 'REJECT'} detected!`);
-            console.log(`[JOIN REQUEST] ${inf.action.toUpperCase()} detected for group ${from}`);
-            console.log('[JOIN REQUEST] Full event data:', JSON.stringify(inf, null, 2));
-            
-            const groupSettings = await loadGroupSettings(from);
-
-            if (groupSettings?.x9) {
-                const data = new Date();
-                const dataFormatada = data.toLocaleDateString('pt-BR');
-                const horaFormatada = data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-
-                // Melhor deteccao do autor - tenta multiplas fontes
-                const autor = inf.author || inf.actor || inf.requestAuthor || inf.requestingUserJid || inf.requestingUser || null;
-                const autorNum = autor?.split('@')[0]?.replace('@s.whatsapp.net', '') || 'desconhecido';
-                
-                // Melhor deteccao da vtima (quem solicitou)
-                const vitima = participantJid || inf.participant || inf.requestingUserJid || inf.requestingUser || null;
-                const vitimaNum = vitima?.split('@')[0]?.replace('@s.whatsapp.net', '') || 'desconhecido';
-
-                const isApprove = isApproveAction;
-
-                console.log(`[JOIN REQUEST] Autor: ${autorNum}, Vtima: ${vitimaNum}, Acao: ${action}`);
-
-                const autorText = autorNum !== 'desconhecido' ? `@${autorNum}` : 'Sistema';
-                const mentionList = [];
-                if (autor) mentionList.push(autor);
-                if (vitima) mentionList.push(vitima);
-
-                // Newsletter header
-                const newsletterCtx = {
-                    forwardingScore: 999,
-                    isForwarded: true,
-                    forwardedNewsletterMessageInfo: {
-                        newsletterJid: "120363410980452460@newsletter",
-                        newsletterName: "Lizzy"
-                    }
-                };
-
-                const mensagem = isApprove
-                    ? `╭━━━〔 📥 SOLICITAÇÃO 〕━━━╮
-┃
-┃ ✅ *SOLICITAÇÃO ACEITA*
-┃
-┃ 👮 *Autor:* ${autorText}
-┃
-┃ 👤 *Vítima:* @${vitimaNum}
-┃
-┃ 📅 *Data:* ${dataFormatada}
-┃ 🕒 *Hora:* ${horaFormatada}
-┃
-╰━━━━━━━━━━━━━━━━━━━━━━━╯`
-                    : `╭━━━〔 📥 SOLICITAÇÃO 〕━━━╮
-┃
-┃ ❌ *SOLICITAÇÃO REJEITADA*
-┃
-┃ 👮 *Autor:* ${autorText}
-┃
-┃ 👤 *Vítima:* @${vitimaNum}
-┃
-┃ 📅 *Data:* ${dataFormatada}
-┃ 🕒 *Hora:* ${horaFormatada}
-┃
-╰━━━━━━━━━━━━━━━━━━━━━━━╯`;
-
-                await AbyssSock.sendMessage(from, {
-                    text: mensagem,
-                    mentions: mentionList,
-                    contextInfo: newsletterCtx
-                }).catch(err => console.error('[JOIN REQUEST] Erro ao enviar mensagem X9:', err.message));
-            }
-            return;
-        }
-
+        // Normaliza participantJid se for objeto
         if (typeof participantJid === "object") {
             Object.assign(typeIds, {
                 id: participantJid?.pn?.endsWith("s.whatsapp.net") ? participantJid?.pn : '',
@@ -685,55 +619,34 @@ async function handleGroupJoinRequest(AbyssSock, inf) {
             typeIds.lid = participantJid.endsWith("lid") ? participantJid : '';
             typeIds.id = participantJid.endsWith("s.whatsapp.net") ? participantJid : '';
         }
-
         typeIds.participant = participantJid;
 
-
+        // Adiciona ao lock de CAPTCHA
         global.CAPTCHA_LOCK.add(participantJid);
+        if (typeIds.lid) global.CAPTCHA_LOCK.add(typeIds.lid);
+        if (typeIds.id) global.CAPTCHA_LOCK.add(typeIds.id);
 
-        if (typeIds.lid) {
-            global.CAPTCHA_LOCK.add(typeIds.lid);
-
-        }
-        if (typeIds.id) {
-            global.CAPTCHA_LOCK.add(typeIds.id);
-
-        }
-
+        // Carrega configurações do grupo
         const groupSettings = await loadGroupSettings(from);
 
-
+        // AUTO-ACCEPT: Se ativado, aprova automaticamente
         if (groupSettings.autoAcceptRequests) {
             await AbyssSock.groupRequestParticipantsUpdate(from, [participantJid], 'approve');
             if (!groupSettings.captchaEnabled) return;
         }
 
-
+        // CAPTCHA: Se ativado, envia verificação
         if (groupSettings.captchaEnabled) {
-
             const num1 = Math.floor(Math.random() * 10) + 1;
             const num2 = Math.floor(Math.random() * 10) + 1;
             const answer = num1 + num2;
-            const timeAt = 5 * 60 * 1000;
-            const expiresAt = Date.now() + timeAt;
-
+            const expiresAt = Date.now() + (5 * 60 * 1000);
             const numero = participantJid.split('@')[0];
-
-            const foto = await AbyssSock.profilePictureUrl(participantJid, 'image')
-                .catch(() => 'sem foto');
-
-            const waInfo = await AbyssSock.onWhatsApp(participantJid)
-                .catch(() => null);
 
             let nome = inf.participant;
             try {
                 nome = await AbyssSock.getName(participantJid);
-            } catch { }
-
-            const metadata = await AbyssSock.groupMetadata(from).catch(() => null);
-            const participanteMeta = metadata?.participants?.find(p => p.id === participantJid);
-
-
+            } catch {}
 
             CaptchaIndex.add(typeIds, from, answer, expiresAt, nome);
 
@@ -741,10 +654,40 @@ async function handleGroupJoinRequest(AbyssSock, inf) {
                 text: `🔐 *VERIFICAÇÃO DE SEGURANÇA*\n\n🌌 Viajante @${numero}!\n\nPara confirmar que não é uma sombra, resolva:\n❓ *${num1} + ${num2} = ?*\n\n⏱️ Você tem 5 minutos ou será removido.`,
                 mentions: [participantJid]
             });
+            return;
+        }
+
+        // X9 SYSTEM: Se X9 ativado, processa com novos botões
+        if (groupSettings.x9) {
+            await processNewJoinRequest(AbyssSock, inf, groupSettings);
+            return;
         }
 
     } catch (error) {
         console.error(`❌ Erro em handleGroupJoinRequest: ${error.message}`);
+    }
+}
+
+/**
+ * Wrapper para processar eventos de aprovação/rejeição via WhatsApp
+ * Detecta ações feitas na interface oficial do WhatsApp
+ */
+async function handleWhatsAppNativeAction(AbyssSock, inf) {
+    try {
+        const { id: groupId, action, author, authorPn, participant, participants } = inf;
+        
+        if (!groupId) return;
+        
+        // Carrega configurações
+        const groupSettings = await loadGroupSettings(groupId);
+        
+        if (!groupSettings?.x9) return;
+        
+        // Processa via novo sistema X9
+        await processWhatsAppNativeAction(AbyssSock, inf, groupSettings);
+        
+    } catch (error) {
+        console.error(`❌ Erro em handleWhatsAppNativeAction: ${error.message}`);
     }
 }
 
@@ -1443,15 +1386,17 @@ async function createBotSocket(authDir) {
 
 
 
-        // Listener para solicitações de entrada em grupos (join requests)
+        // Listener para solicitações de entrada em grupos (join requests) - NOVO X9 SYSTEM
         AbyssSock.ev.on('group.join-request', async (inf) => {
             console.log('╔══════════════════════════════════════╗');
             console.log('║  🔔 JOIN REQUEST EVENT DETECTED     ║');
+            console.log('║  🔎 X9 System v2.0                  ║');
             console.log('╚══════════════════════════════════════╝');
             console.log('Full Event Data:', JSON.stringify(inf, null, 2));
             
             const { id: groupId, author, participant, action, method } = inf;
             
+            // Salva registro da solicitação para histórico
             if (groupId) {
                 try {
                     const groupFile = path.join(DATABASE_DIR, 'grupos', `${groupId}.json`);
@@ -1461,12 +1406,10 @@ async function createBotSocket(authDir) {
                         groupData = JSON.parse(fs.readFileSync(groupFile, 'utf-8'));
                     }
                     
-                    // Inicializar array de solicitações se não existir
                     if (!groupData.joinRequests) {
                         groupData.joinRequests = [];
                     }
                     
-                    // Adicionar registro da solicitação
                     const registro = {
                         autor: author || null,
                         vitima: participant || null,
@@ -1479,7 +1422,6 @@ async function createBotSocket(authDir) {
                     
                     groupData.joinRequests.push(registro);
                     
-                    // Manter apenas os últimos 100 registros
                     if (groupData.joinRequests.length > 100) {
                         groupData.joinRequests = groupData.joinRequests.slice(-100);
                     }
@@ -1495,6 +1437,7 @@ async function createBotSocket(authDir) {
 
 
 
+        // Listener para atualizações de participantes - AGORA USA NOVO X9 SYSTEM
         AbyssSock.ev.on('group-participants.update', async (inf) => {
             console.log('[GROUP PARTICIPANTS UPDATE] Event:', JSON.stringify(inf, null, 2));
             
@@ -1505,20 +1448,19 @@ async function createBotSocket(authDir) {
                 author: inf.author || null
             };
 
-            // Verificar se é uma aprovação/rejeição de solicitação de entrada
-            // Quando um admin aprova uma solicitação, o WhatsApp pode enviar como "add"
+            // Verificar se é uma aprovação via WhatsApp (não via bot)
+            // Isso detecta quando um admin usa a interface oficial para aprovar
             if (inf.action === 'add' && inf.participants && inf.participants.length > 0) {
-                console.log('[GROUP PARTICIPANTS UPDATE] Possible approval detected:', inf.participants);
-                // Repassar para handleGroupJoinRequest também para verificar se é aprovação
-                if (typeof handleGroupJoinRequest === 'function') {
-                    await handleGroupJoinRequest(AbyssSock, {
-                        id: inf.id || inf.jid,
-                        action: 'approve',
-                        author: inf.author,
-                        participant: inf.participants[0],
-                        requestingUserJid: inf.participants[0]
-                    });
-                }
+                console.log('[GROUP PARTICIPANTS UPDATE] Native WhatsApp approval detected:', inf.participants);
+                // Usa o novo handler para notificações nativas
+                await handleWhatsAppNativeAction(AbyssSock, {
+                    id: inf.id || inf.jid,
+                    action: 'approve',
+                    author: inf.author || inf.authorPn,
+                    authorPn: inf.authorPn,
+                    participant: inf.participants[0],
+                    participants: inf.participants
+                });
             }
 
             if (typeof handleGroupParticipantsUpdate === 'function') {
@@ -1822,6 +1764,74 @@ async function createBotSocket(authDir) {
                 }
             });
         };
+
+        // ═══════════════════════════════════════════════════════════════
+        // X9 SYSTEM - Handler de Callbacks de Botões
+        // ═══════════════════════════════════════════════════════════════
+        AbyssSock.ev.on('messages.upsert', async (m) => {
+            if (!m.messages || !Array.isArray(m.messages)) return;
+            
+            for (const info of m.messages) {
+                // Verifica se é uma resposta de botão (callback)
+                const messageType = Object.keys(info.message || {})[0];
+                
+                // Buttons Response (legacy format)
+                if (messageType === 'buttonsResponseMessage') {
+                    const buttonResponse = info.message.buttonsResponseMessage;
+                    const selectedButtonId = buttonResponse?.selectedButtonId;
+                    const senderJid = info.key.participant || info.key.remoteJid;
+                    const groupId = info.key.remoteJid;
+                    
+                    console.log(`[X9] Button callback detectado: ${selectedButtonId} de ${senderJid}`);
+                    
+                    // Verifica se é um callback do X9
+                    if (selectedButtonId && selectedButtonId.startsWith('x9_')) {
+                        try {
+                            // Verifica se é admin
+                            const adminCheck = await isGroupAdmin(AbyssSock, groupId, senderJid);
+                            
+                            if (!adminCheck) {
+                                console.log(`[X9] Usuário ${senderJid} não é admin, ignorando callback`);
+                                continue;
+                            }
+                            
+                            // Processa o callback
+                            await processX9ButtonCallback(AbyssSock, info, { selectedButtonId }, senderJid, adminCheck);
+                        } catch (error) {
+                            console.error(`[X9] Erro ao processar callback:`, error);
+                        }
+                    }
+                }
+                
+                // Template Button Reply (novo formato)
+                if (messageType === 'templateButtonReplyMessage') {
+                    const templateResponse = info.message.templateButtonReplyMessage;
+                    const selectedId = templateResponse?.selectedId;
+                    const senderJid = info.key.participant || info.key.remoteJid;
+                    const groupId = info.key.remoteJid;
+                    
+                    console.log(`[X9] Template button callback detectado: ${selectedId} de ${senderJid}`);
+                    
+                    // Verifica se é um callback do X9
+                    if (selectedId && selectedId.startsWith('x9_')) {
+                        try {
+                            // Verifica se é admin
+                            const adminCheck = await isGroupAdmin(AbyssSock, groupId, senderJid);
+                            
+                            if (!adminCheck) {
+                                console.log(`[X9] Usuário ${senderJid} não é admin, ignorando callback`);
+                                continue;
+                            }
+                            
+                            // Processa o callback
+                            await processX9ButtonCallback(AbyssSock, info, { selectedButtonId: selectedId }, senderJid, adminCheck);
+                        } catch (error) {
+                            console.error(`[X9] Erro ao processar template callback:`, error);
+                        }
+                    }
+                }
+            }
+        });
 
         AbyssSock.ev.on('connection.update', async (update) => {
             const {
@@ -2137,6 +2147,10 @@ async function gracefulShutdown(signal) {
             clearInterval(cacheCleanupInterval);
             cacheCleanupInterval = null;
         }
+
+        // Finaliza X9 System
+        cleanupX9System();
+        console.log('✅ X9 System finalizado');
 
         // Finaliza fila de mensagens
         await messageQueue.shutdown();
