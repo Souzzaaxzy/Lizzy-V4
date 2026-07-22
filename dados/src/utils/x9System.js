@@ -148,8 +148,9 @@ function buildCard(data) {
 
 function buildApprovedCard(data) {
     const { participantName, participantNumber, adminNumber, time } = data;
+    const name = participantName && participantName !== participantNumber ? participantName : participantNumber;
     return `╭━━━〔 ✅ APROVADO 〕━━━⬣
-┃ 👤 ${participantName || participantNumber}
+┃ 👤 ${name}
 ┃ 👮 @${adminNumber}
 ┃ 🕒 ${time}
 ╰━━━━━━━━━━━━━━━━━━⬣`;
@@ -157,8 +158,9 @@ function buildApprovedCard(data) {
 
 function buildRejectedCard(data) {
     const { participantName, participantNumber, adminNumber, time } = data;
+    const name = participantName && participantName !== participantNumber ? participantName : participantNumber;
     return `╭━━━〔 ❌ NEGADO 〕━━━⬣
-┃ 👤 ${participantName || participantNumber}
+┃ 👤 ${name}
 ┃ 👮 @${adminNumber}
 ┃ 🕒 ${time}
 ╰━━━━━━━━━━━━━━━━━━⬣`;
@@ -213,13 +215,16 @@ export async function processNewJoinRequest(sock, eventData, groupSettings) {
     
     console.log(`[X9] Participant: ${participantNumber} -> ${participantJid}`);
     
-    // Tenta obter nome do perfil
-    let participantName = participantNumber;
+    // Tenta obter nome do perfil - só usa se for diferente do número
+    let participantName = 'Usuário Desconhecido';
     try {
         const name = await sock.getName(participantJid);
-        if (name && name !== participantJid && name !== participantNumber) {
+        // Só usa o nome se for um nome real (não for apenas números)
+        if (name && name !== participantJid && name !== participantNumber && !/^\d+$/.test(name)) {
             participantName = name;
             console.log(`[X9] Nome encontrado: ${name}`);
+        } else {
+            console.log(`[X9] Nome não disponível: ${name || 'vazio'}`);
         }
     } catch (e) {
         console.log('[X9] Não conseguiu obter nome:', e.message);
