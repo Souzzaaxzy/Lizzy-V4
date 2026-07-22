@@ -32423,11 +32423,17 @@ case 'antistickerplus':
         groupData.antistickerplus_apagar = false;
       }
       fs.writeFileSync(groupFilePath, JSON.stringify(groupData));
-      return reply(
-        groupData.antistickerplus_remover
+      const newsletterCtxStickerRem = {
+        forwardingScore: 999,
+        isForwarded: true,
+        forwardedNewsletterMessageInfo: {
+          newsletterJid: "120363410980452460@newsletter",
+          newsletterName: "Lizzy"
+        }
+      };
+      return await nazu.sendMessage(from, { text: groupData.antistickerplus_remover
           ? "✅ Remoção ativada. Usuários que enviarem esse tipo de figurinha serão removidos."
-          : "❌ Remoção desativada."
-      );
+          : "❌ Remoção desativada." }, { contextInfo: newsletterCtxStickerRem, quoted: info });
     }
     if (option === "apagar") {
       groupData.antistickerplus_apagar = !groupData.antistickerplus_apagar;
@@ -32435,11 +32441,17 @@ case 'antistickerplus':
         groupData.antistickerplus_remover = false;
       }
       fs.writeFileSync(groupFilePath, JSON.stringify(groupData));
-      return reply(
-        groupData.antistickerplus_apagar
+      const newsletterCtxStickerAp = {
+        forwardingScore: 999,
+        isForwarded: true,
+        forwardedNewsletterMessageInfo: {
+          newsletterJid: "120363410980452460@newsletter",
+          newsletterName: "Lizzy"
+        }
+      };
+      return await nazu.sendMessage(from, { text: groupData.antistickerplus_apagar
           ? "✅ Apagar mensagem ativado. Mensagens serão apagadas."
-          : "❌ Apagar mensagem desativado."
-      );
+          : "❌ Apagar mensagem desativado." }, { contextInfo: newsletterCtxStickerAp, quoted: info });
     }
     groupData.antistickerplus = !groupData.antistickerplus;
     if (!groupData.antistickerplus_remover && !groupData.antistickerplus_apagar) {
@@ -32456,7 +32468,15 @@ ${groupPrefix}antistickerplus apagar → apaga mensagem
 ${groupPrefix}antistickerplus remover → remove usuário e apaga mensagem 
 ⚠️ Apenas um modo pode ficar ativo por vez.
 `;
-    reply(`${message}\n${tutorial}`);
+    const newsletterCtxStickerPlus = {
+      forwardingScore: 999,
+      isForwarded: true,
+      forwardedNewsletterMessageInfo: {
+        newsletterJid: "120363410980452460@newsletter",
+        newsletterName: "Lizzy"
+      }
+    };
+    await nazu.sendMessage(from, { text: `${message}\n${tutorial}` }, { contextInfo: newsletterCtxStickerPlus, quoted: info });
   } catch (e) {
     console.error(e);
     reply("ocorreu um erro 💔");
