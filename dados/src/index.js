@@ -19681,8 +19681,6 @@ case 'pin':
                   mimetype: 'video/mp4',
                   footer: '📱 TikTok',
                   contextInfo: {
-                    forwardingScore: 999,
-                    isForwarded: true,
                     forwardedNewsletterMessageInfo: {
                       newsletterJid: '120363420762648535@newsletter',
                       newsletterName: 'Lizzy Bot',
