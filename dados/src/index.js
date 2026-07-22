@@ -2969,7 +2969,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
           await nazu.sendMessage(from, {
             text: `🚨 *SISTEMA ANTI-ATAQUE*\n\nO membro @${sender.split('@')[0]} tentou postar um status/canal no grupo e foi removido para proteger o grupo.`,
             mentions: [sender]
-          }, { contextInfo: newsletterCtxAntiStts });
+          , contextInfo: newsletterCtxAntiStts });
           const senderJidAntiStts = sender;
           await nazu.groupParticipantsUpdate(from, [senderJidAntiStts], 'remove').catch(e => console.error('Erro ao remover (antistts):', e));
         }
@@ -3009,7 +3009,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       await nazu.sendMessage(from, {
         text: `🚫❌ @${sender.split('@')[0]} ❌🚫\n\n⚠️ *Mensagem de pagamento ou visualização única não é permitida aqui!* ⚠️\n\nVocê foi removido do grupo.`,
         mentions: [sender]
-      }, { contextInfo: newsletterCtxPayment, quoted: info });
+      , contextInfo: newsletterCtxPayment, quoted: info });
       if (groupData.legenda_documento && groupData.legenda_documento !== "0") {
         await nazu.sendMessage(from, { text: groupData.legenda_documento }, { quoted: info });
       }
@@ -3076,7 +3076,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
               newsletterName: "Lizzy"
             }
           };
-          await nazu.sendMessage(from, { text: "🎤 Áudios não estão permitidos neste chat." }, { contextInfo: newsletterCtxAudio });
+          await nazu.sendMessage(from, { text: "🎤 Áudios não estão permitidos neste chat." , contextInfo: newsletterCtxAudio });
         } catch (e) {
           console.error("Erro ao apagar mensagem (antiaudio):", e);
         }
@@ -4480,7 +4480,7 @@ Código: *${roleCode}*`,
                 newsletterName: "Lizzy"
               }
             };
-            await nazu.sendMessage(from, { text: `🚨 Conteúdo impróprio detectado! (${reason})` }, { contextInfo: newsletterCtxPorn });
+            await nazu.sendMessage(from, { text: `🚨 Conteúdo impróprio detectado! (${reason})` , contextInfo: newsletterCtxPorn });
                 if (isBotAdmin) {
                   try {
                     await nazu.sendMessage(from, {
@@ -4488,13 +4488,13 @@ Código: *${roleCode}*`,
                     });
                     const senderJidAntiPorn = sender;
                     await nazu.groupParticipantsUpdate(from, [senderJidAntiPorn], 'remove').catch(e => console.error('Erro ao remover (antiporn):', e));
-                    await nazu.sendMessage(from, { text: `🔞 @${getUserName(sender)}, conteúdo impróprio detectado. Você foi removido do grupo.`, mentions: [sender] }, { contextInfo: newsletterCtxPorn });
+                    await nazu.sendMessage(from, { text: `🔞 @${getUserName(sender)}, conteúdo impróprio detectado. Você foi removido do grupo.`, mentions: [sender] , contextInfo: newsletterCtxPorn });
                   } catch (adminError) {
                     console.error(`Erro ao remover usuário por anti-porn: ${adminError}`);
-                    await nazu.sendMessage(from, { text: `⚠️ Não consegui remover @${getUserName(sender)} automaticamente após detectar conteúdo impróprio. Admins, por favor, verifiquem!`, mentions: [sender] }, { contextInfo: newsletterCtxPorn });
+                    await nazu.sendMessage(from, { text: `⚠️ Não consegui remover @${getUserName(sender)} automaticamente após detectar conteúdo impróprio. Admins, por favor, verifiquem!`, mentions: [sender] , contextInfo: newsletterCtxPorn });
                   }
                 } else {
-                  await nazu.sendMessage(from, { text: `@${getUserName(sender)} enviou conteúdo impróprio (${reason}), mas não posso removê-lo sem ser admin.`, mentions: [sender] }, { contextInfo: newsletterCtxPorn });
+                  await nazu.sendMessage(from, { text: `@${getUserName(sender)} enviou conteúdo impróprio (${reason}), mas não posso removê-lo sem ser admin.`, mentions: [sender] , contextInfo: newsletterCtxPorn });
                 }
               }
             } else {
@@ -4526,7 +4526,7 @@ Código: *${roleCode}*`,
             newsletterName: "Lizzy"
           }
         };
-        await nazu.sendMessage(from, { text: `🗺️ @${getUserName(sender)}, localização não permitida. Você foi removido do grupo.`, mentions: [sender] }, { contextInfo: newsletterCtxLoc });
+        await nazu.sendMessage(from, { text: `🗺️ @${getUserName(sender)}, localização não permitida. Você foi removido do grupo.`, mentions: [sender] , contextInfo: newsletterCtxLoc });
       }
     }
     if (isGroup && antifloodData[from]?.enabled && isCmd && !isGroupAdmin) {
@@ -4563,7 +4563,7 @@ Código: *${roleCode}*`,
             newsletterName: "Lizzy"
           }
         };
-        await nazu.sendMessage(from, { text: `📄 @${getUserName(sender)}, documentos não são permitidos. Você foi removido do grupo.`, mentions: [sender] }, { contextInfo: newsletterCtxDoc });
+        await nazu.sendMessage(from, { text: `📄 @${getUserName(sender)}, documentos não são permitidos. Você foi removido do grupo.`, mentions: [sender] , contextInfo: newsletterCtxDoc });
       }
     }
     if (isGroup && groupData.autodl && budy2.includes('http') && !isCmd) {
@@ -4827,7 +4827,7 @@ packname: `${nomebot}`,            type: isVideo ? 'video' : 'image',
                 newsletterName: "Lizzy"
               }
             };
-            await nazu.sendMessage(from, { text: `🔗 @${getUserName(sender)}, links não são permitidos. Você foi removido do grupo.`, mentions: [sender] }, { contextInfo: newsletterCtxLinkSoft });
+            await nazu.sendMessage(from, { text: `🔗 @${getUserName(sender)}, links não são permitidos. Você foi removido do grupo.`, mentions: [sender] , contextInfo: newsletterCtxLinkSoft });
           } else {
             await nazu.sendMessage(from, {
               delete: {
@@ -4837,7 +4837,7 @@ packname: `${nomebot}`,            type: isVideo ? 'video' : 'image',
                 participant: sender
               }
             });
-            await nazu.sendMessage(from, { text: `🔗 Atenção, @${getUserName(sender)}! Links não são permitidos. Não consigo remover você, mas evite enviar links.`, mentions: [sender] }, { contextInfo: newsletterCtxLinkSoft });
+            await nazu.sendMessage(from, { text: `🔗 Atenção, @${getUserName(sender)}! Links não são permitidos. Não consigo remover você, mas evite enviar links.`, mentions: [sender] , contextInfo: newsletterCtxLinkSoft });
           }
           return;
         } catch (error) {
@@ -4877,7 +4877,7 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
             newsletterName: "Lizzy"
           }
         };
-        await nazu.sendMessage(from, { text: `🚫 @${getUserName(sender)}, este grupo não permite esse tipo de figurinha do whatsapp plus.`, mentions: [sender] }, { contextInfo: newsletterCtxSticker });
+        await nazu.sendMessage(from, { text: `🚫 @${getUserName(sender)}, este grupo não permite esse tipo de figurinha do whatsapp plus.`, mentions: [sender] , contextInfo: newsletterCtxSticker });
       }
       if (groupData.antistickerplus_remover && isBotAdmin) {
         const senderJidAntiSticker = sender;
@@ -7014,7 +7014,7 @@ switch (command) {
             newsletterName: "Lizzy"
           }
         };
-        await nazu.sendMessage(from, { text: `◈ Modo RPG ${groupData.modorpg ? 'ATIVADO' : 'DESATIVADO'} neste grupo.\n\n${groupData.modorpg ? '🌌 Agora os membros podem usar todos os comandos RPG!' : '⚙️ Comandos RPG desativados.'}` }, { contextInfo: newsletterCtxRpg, quoted: info });
+        await nazu.sendMessage(from, { text: `◈ Modo RPG ${groupData.modorpg ? 'ATIVADO' : 'DESATIVADO'} neste grupo.\n\n${groupData.modorpg ? '🌌 Agora os membros podem usar todos os comandos RPG!' : '⚙️ Comandos RPG desativados.'}` , contextInfo: newsletterCtxRpg, quoted: info });
         break;
       }
       case 'perfilrpg':
@@ -25648,7 +25648,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
               newsletterName: "Lizzy"
             }
           };
-          await nazu.sendMessage(from, { text: message }, { contextInfo: newsletterMsgDiario, quoted: info });
+          await nazu.sendMessage(from, { text: message , contextInfo: newsletterMsgDiario, quoted: info });
         } catch (e) {
           console.error('[MSGDIARIO] Erro:', e);
           await reply("❌ Ocorreu um erro ao buscar as estatísticas. Tente novamente.");
@@ -25692,7 +25692,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
               newsletterName: "Lizzy"
             }
           };
-          await nazu.sendMessage(from, { text: message }, { contextInfo: newsletterMsgSemanal, quoted: info });
+          await nazu.sendMessage(from, { text: message , contextInfo: newsletterMsgSemanal, quoted: info });
         } catch (e) {
           console.error('[MSGSEMANAL] Erro:', e);
           await reply("❌ Ocorreu um erro ao buscar as estatísticas. Tente novamente.");
@@ -26030,7 +26030,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
               newsletterName: "Lizzy"
             }
           };
-          await nazu.sendMessage(from, { text: message }, { contextInfo: newsletterPdiario, quoted: info });
+          await nazu.sendMessage(from, { text: message , contextInfo: newsletterPdiario, quoted: info });
         } catch (e) {
           console.error('[PDIARIO] Erro:', e);
           await reply("❌ Ocorreu um erro ao buscar sua posição. Tente novamente.");
@@ -26089,7 +26089,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
               newsletterName: "Lizzy"
             }
           };
-          await nazu.sendMessage(from, { text: message }, { contextInfo: newsletterPsemanal, quoted: info });
+          await nazu.sendMessage(from, { text: message , contextInfo: newsletterPsemanal, quoted: info });
         } catch (e) {
           console.error('[PSEMANAL] Erro:', e);
           await reply("❌ Ocorreu um erro ao buscar sua posição. Tente novamente.");
@@ -26132,7 +26132,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
               newsletterName: "Lizzy"
             }
           };
-          await nazu.sendMessage(from, { text: message }, { contextInfo: newsletterMediario, quoted: info });
+          await nazu.sendMessage(from, { text: message , contextInfo: newsletterMediario, quoted: info });
         } catch (e) {
           console.error('[MEDIARIO] Erro:', e);
           await reply("❌ Ocorreu um erro ao buscar suas estatísticas. Tente novamente.");
@@ -26173,7 +26173,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
               newsletterName: "Lizzy"
             }
           };
-          await nazu.sendMessage(from, { text: message }, { contextInfo: newsletterMesemanal, quoted: info });
+          await nazu.sendMessage(from, { text: message , contextInfo: newsletterMesemanal, quoted: info });
         } catch (e) {
           console.error('[MESEMANAL] Erro:', e);
           await reply("❌ Ocorreu um erro ao buscar suas estatísticas. Tente novamente.");
@@ -30169,7 +30169,7 @@ break;
               newsletterName: "Lizzy"
             }
           };
-          await nazu.sendMessage(from, { text: `✅ Antilinkhard ${groupData.antilinkhard ? 'ativado' : 'desativado'}! Qualquer link enviado resultará em banimento.` }, { contextInfo: newsletterAnti1, quoted: info });
+          await nazu.sendMessage(from, { text: `✅ Antilinkhard ${groupData.antilinkhard ? 'ativado' : 'desativado'}! Qualquer link enviado resultará em banimento.` , contextInfo: newsletterAnti1, quoted: info });
         } catch (e) {
           console.error(e);
           await reply("Ocorreu um erro 💔");
@@ -30190,7 +30190,7 @@ break;
               newsletterName: "Lizzy"
             }
           };
-          await nazu.sendMessage(from, { text: `✅ X9 ${groupData.x9 ? 'ativado' : 'desativado'}! Vou contar toda a verdade agora.` }, { contextInfo: newsletterX9, quoted: info });
+          await nazu.sendMessage(from, { text: `✅ X9 ${groupData.x9 ? 'ativado' : 'desativado'}! Vou contar toda a verdade agora.` , contextInfo: newsletterX9, quoted: info });
         } catch (e) {
           console.error(e);
           await reply("Ocorreu um erro 💔");
@@ -30671,7 +30671,7 @@ break;
               newsletterName: "Lizzy"
             }
           };
-          await nazu.sendMessage(from, { text: `✅ Anti Botão ${groupData.antibtn ? 'ativado' : 'desativado'}!` }, { contextInfo: newsletterBtn, quoted: info });
+          await nazu.sendMessage(from, { text: `✅ Anti Botão ${groupData.antibtn ? 'ativado' : 'desativado'}!` , contextInfo: newsletterBtn, quoted: info });
         } catch (e) {
           console.error(e);
           await reply("Ocorreu um erro 💔");
@@ -30692,7 +30692,7 @@ break;
               newsletterName: "Lizzy"
             }
           };
-          await nazu.sendMessage(from, { text: groupData.antifoton ? "🟢 Fotos normais agora serão apagadas." : "🔴 Fotos normais não serão mais apagadas." }, { contextInfo: newsletterCtx, quoted: info });
+          await nazu.sendMessage(from, { text: groupData.antifoton ? "🟢 Fotos normais agora serão apagadas." : "🔴 Fotos normais não serão mais apagadas." , contextInfo: newsletterCtx, quoted: info });
         } catch (e) {
           console.error(e);
           await reply("Ocorreu um erro 💔");
@@ -30713,7 +30713,7 @@ break;
               newsletterName: "Lizzy"
             }
           };
-          await nazu.sendMessage(from, { text: groupData.antiaudio ? "🟢 Áudios agora serão apagados." : "🔴 Áudios não serão mais apagados." }, { contextInfo: newsletterCtx, quoted: info });
+          await nazu.sendMessage(from, { text: groupData.antiaudio ? "🟢 Áudios agora serão apagados." : "🔴 Áudios não serão mais apagados." , contextInfo: newsletterCtx, quoted: info });
         } catch (e) {
           console.error(e);
           await reply("Ocorreu um erro 💔");
@@ -30734,7 +30734,7 @@ break;
               newsletterName: "Lizzy"
             }
           };
-          await nazu.sendMessage(from, { text: `✅ Anti Status ${groupData.antistatus ? 'ativado' : 'desativado'}!` }, { contextInfo: newsletterStts, quoted: info });
+          await nazu.sendMessage(from, { text: `✅ Anti Status ${groupData.antistatus ? 'ativado' : 'desativado'}!` , contextInfo: newsletterStts, quoted: info });
         } catch (e) {
           console.error(e);
           await reply("Ocorreu um erro 💔");
@@ -30813,7 +30813,7 @@ break;
                 newsletterName: "Lizzy"
               }
             };
-            await nazu.sendMessage(from, { text: "✅ *Anti Roubo de Administração ativado.*\n\nPromoções e rebaixamentos só poderão ser feitos pelo Dono do Grupo ou usuários autorizados." }, { contextInfo: newsletterAntiRoubo, quoted: info });
+            await nazu.sendMessage(from, { text: "✅ *Anti Roubo de Administração ativado.*\n\nPromoções e rebaixamentos só poderão ser feitos pelo Dono do Grupo ou usuários autorizados." , contextInfo: newsletterAntiRoubo, quoted: info });
           } else if (args[1] === 'off') {
             if (!isGroupAdmin) return reply("Você precisa ser admin 💔");
             if (groupData.antiRoubo) {
@@ -30828,7 +30828,7 @@ break;
                 newsletterName: "Lizzy"
               }
             };
-            await nazu.sendMessage(from, { text: "❌ *Anti Roubo de Administração desativado.*" }, { contextInfo: newsletterAntiRouboOff, quoted: info });
+            await nazu.sendMessage(from, { text: "❌ *Anti Roubo de Administração desativado.*" , contextInfo: newsletterAntiRouboOff, quoted: info });
           } else {
             await reply(`❌ Uso incorreto!\n\nUse:\n• ${prefix}antiroubo - menu\n• ${prefix}antiroubo on/off`);
           }
@@ -30949,7 +30949,7 @@ break;
               newsletterName: "Lizzy"
             }
           };
-          await nazu.sendMessage(from, { text: `✅ Antidelete ${groupData.antidel ? 'ativado' : 'desativado'}!` }, { contextInfo: newsletterCtxDel, quoted: info });
+          await nazu.sendMessage(from, { text: `✅ Antidelete ${groupData.antidel ? 'ativado' : 'desativado'}!` , contextInfo: newsletterCtxDel, quoted: info });
         } catch (e) {
           console.error(e);
           await reply("Ocorreu um erro 💔");
@@ -30982,7 +30982,7 @@ break;
           const statusMsg = groupData.autodl
             ? `✅ *AutoDL Ativado!*\n\n📥 Links das seguintes plataformas serão baixados automaticamente:\n\n${platforms.join('\n')}\n\n💡 Basta enviar o link que eu baixo para você!`
             : `❌ *AutoDL Desativado*\n\n⏸️ Links não serão mais baixados automaticamente.`;
-          await nazu.sendMessage(from, { text: statusMsg }, { contextInfo: newsletterCtxDl, quoted: info });
+          await nazu.sendMessage(from, { text: statusMsg , contextInfo: newsletterCtxDl, quoted: info });
         } catch (e) {
           console.error(e);
           await reply("Ocorreu um erro 💔");
@@ -31003,7 +31003,7 @@ break;
               newsletterName: "Lizzy"
             }
           };
-          await nazu.sendMessage(from, { text: `✅ Antidoc ${groupData.antidoc ? 'ativado' : 'desativado'}! Documentos enviados resultarão em banimento.` }, { contextInfo: newsletterDoc, quoted: info });
+          await nazu.sendMessage(from, { text: `✅ Antidoc ${groupData.antidoc ? 'ativado' : 'desativado'}! Documentos enviados resultarão em banimento.` , contextInfo: newsletterDoc, quoted: info });
         } catch (e) {
           console.error(e);
           await reply("Ocorreu um erro 💔");
@@ -31024,14 +31024,14 @@ break;
           if (groupData.antiStts === true) return reply("⚠️ O Anti-Status já está ativado.");
           groupData.antiStts = true;
           fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
-          await nazu.sendMessage(from, { text: "✅ *Anti-Status Ativado!* Agora o bot removerá quem postar status no grupo." }, { contextInfo: newsletterCtxStts, quoted: info });
+          await nazu.sendMessage(from, { text: "✅ *Anti-Status Ativado!* Agora o bot removerá quem postar status no grupo." , contextInfo: newsletterCtxStts, quoted: info });
         } else if (args[0] === 'off') {
           if (groupData.antiStts === false) return reply("⚠️ O Anti-Status já está desativado.");
           groupData.antiStts = false;
           fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
-          await nazu.sendMessage(from, { text: "✅ *Anti-Status Desativado!* O bot não removerá mais quem postar status no grupo." }, { contextInfo: newsletterCtxStts, quoted: info });
+          await nazu.sendMessage(from, { text: "✅ *Anti-Status Desativado!* O bot não removerá mais quem postar status no grupo." , contextInfo: newsletterCtxStts, quoted: info });
         } else {
-          await nazu.sendMessage(from, { text: `❓ *Como usar:* \n\n${groupPrefix}antistts on (para ativar)\n${groupPrefix}antistts off (para desativar)\n\n*Status atual:* ${groupData.antiStts !== false ? 'Ativado' : 'Desativado'}` }, { contextInfo: newsletterCtxStts, quoted: info });
+          await nazu.sendMessage(from, { text: `❓ *Como usar:* \n\n${groupPrefix}antistts on (para ativar)\n${groupPrefix}antistts off (para desativar)\n\n*Status atual:* ${groupData.antiStts !== false ? 'Ativado' : 'Desativado'}` , contextInfo: newsletterCtxStts, quoted: info });
         }
         break;
       }
@@ -31055,7 +31055,7 @@ break;
           await nazu.sendMessage(from, { text: `
 ✔️ O recurso *Antirequest/Antiviewonce* foi ${newState} com sucesso.
 Qualquer solicitação de pagamento será ${groupData.antirequest ? 'bloqueada e o membro será removido.' : 'permitida.'}
-          ` }, { contextInfo: newsletterCtxReq, quoted: info });
+          ` , contextInfo: newsletterCtxReq, quoted: info });
         } catch (e) {
           console.error(e);
           await reply("❌ Ocorreu um erro interno ao tentar alterar a configuração.");
@@ -31179,7 +31179,7 @@ Qualquer solicitação de pagamento será ${groupData.antirequest ? 'bloqueada e
               newsletterName: "Lizzy"
             }
           };
-          await nazu.sendMessage(from, { text: `✅ Antiflood ${antifloodData[from].enabled ? `ativado com intervalo de ${antifloodData[from].interval} segundos` : 'desativado'}!` }, { contextInfo: newsletterFlood, quoted: info });
+          await nazu.sendMessage(from, { text: `✅ Antiflood ${antifloodData[from].enabled ? `ativado com intervalo de ${antifloodData[from].interval} segundos` : 'desativado'}!` , contextInfo: newsletterFlood, quoted: info });
         } catch (e) {
           console.error(e);
           await reply("Ocorreu um erro 💔");
@@ -31258,7 +31258,7 @@ Exemplos:
               newsletterName: "Lizzy"
             }
           };
-          await nazu.sendMessage(from, { text: `✅ Antiloc ${groupData.antiloc ? 'ativado' : 'desativado'}! Localizações enviadas resultarão em banimento.` }, { contextInfo: newsletterLoc, quoted: info });
+          await nazu.sendMessage(from, { text: `✅ Antiloc ${groupData.antiloc ? 'ativado' : 'desativado'}! Localizações enviadas resultarão em banimento.` , contextInfo: newsletterLoc, quoted: info });
         } catch (e) {
           console.error(e);
           await reply("Ocorreu um erro 💔");
@@ -31287,9 +31287,9 @@ Exemplos:
             }
           };
           if (groupData.modobrincadeira) {
-            await nazu.sendMessage(from, { text: '🎉 *Modo de Brincadeiras ativado!* Agora o grupo está no modo de brincadeiras. Divirta-se!' }, { contextInfo: newsletterCtxBrinc, quoted: info });
+            await nazu.sendMessage(from, { text: '🎉 *Modo de Brincadeiras ativado!* Agora o grupo está no modo de brincadeiras. Divirta-se!' , contextInfo: newsletterCtxBrinc, quoted: info });
           } else {
-            await nazu.sendMessage(from, { text: '⚠️ *Modo de Brincadeiras desativado!* O grupo não está mais no modo de brincadeiras.' }, { contextInfo: newsletterCtxBrinc, quoted: info });
+            await nazu.sendMessage(from, { text: '⚠️ *Modo de Brincadeiras desativado!* O grupo não está mais no modo de brincadeiras.' , contextInfo: newsletterCtxBrinc, quoted: info });
           }
         } catch (e) {
           console.error(e);
@@ -31321,9 +31321,9 @@ Exemplos:
             }
           };
           if (groupData.bemvindo) {
-            await nazu.sendMessage(from, { text: `◈ *Boas-vindas do Void ativadas!* Agora, novas almas serão consumidas com uma mensagem personalizada.\n📝 Para configurar a mensagem, use: *${prefixo}legendabv*\n⚠️ O *bemvindo2* foi desativado automaticamente para evitar duplicidade.` }, { contextInfo: newsletterCtxBv, quoted: info });
+            await nazu.sendMessage(from, { text: `◈ *Boas-vindas do Void ativadas!* Agora, novas almas serão consumidas com uma mensagem personalizada.\n📝 Para configurar a mensagem, use: *${prefixo}legendabv*\n⚠️ O *bemvindo2* foi desativado automaticamente para evitar duplicidade.` , contextInfo: newsletterCtxBv, quoted: info });
           } else {
-            await nazu.sendMessage(from, { text: '⚠️ *Boas-vindas desativadas!* O grupo não enviará mais mensagens para novos membros.' }, { contextInfo: newsletterCtxBv, quoted: info });
+            await nazu.sendMessage(from, { text: '⚠️ *Boas-vindas desativadas!* O grupo não enviará mais mensagens para novos membros.' , contextInfo: newsletterCtxBv, quoted: info });
           }
         } catch (e) {
           console.error(e);
@@ -31353,9 +31353,9 @@ case 'bemvindo2':
             }
           };
           if (groupData.bemvindo2) {
-            await nazu.sendMessage(from, { text: `◈ *Boas-vindas do Void ativadas!* Agora, novas almas serão consumidas com uma mensagem personalizada.\n📝 Para configurar a mensagem, use: *${prefixo}legendabv2*\n*Esse bem vindo não tem foto!*\n⚠️ O *bemvindo* foi desativado automaticamente para evitar duplicidade.` }, { contextInfo: newsletterCtxBv2, quoted: info });
+            await nazu.sendMessage(from, { text: `◈ *Boas-vindas do Void ativadas!* Agora, novas almas serão consumidas com uma mensagem personalizada.\n📝 Para configurar a mensagem, use: *${prefixo}legendabv2*\n*Esse bem vindo não tem foto!*\n⚠️ O *bemvindo* foi desativado automaticamente para evitar duplicidade.` , contextInfo: newsletterCtxBv2, quoted: info });
           } else {
-            await nazu.sendMessage(from, { text: '⚠️ *Boas-vindas desativadas!* O grupo não enviará mais mensagens para novos membros.\n*Esse bem vindo não tem foto!*' }, { contextInfo: newsletterCtxBv2, quoted: info });
+            await nazu.sendMessage(from, { text: '⚠️ *Boas-vindas desativadas!* O grupo não enviará mais mensagens para novos membros.\n*Esse bem vindo não tem foto!*' , contextInfo: newsletterCtxBv2, quoted: info });
           }
         } catch (e) {
           console.error(e);
@@ -31841,7 +31841,7 @@ case 'set-bannerbv':
               newsletterName: "Lizzy"
             }
           };
-          await nazu.sendMessage(from, { text: `⚽ Modo Futebol ${groupData.modofut ? 'ATIVADO' : 'DESATIVADO'} neste grupo.\n\n${groupData.modofut ? '🏆 Agora os membros podem usar todos os comandos de futebol!' : '⚙️ Comandos de futebol desativados.'}` }, { contextInfo: newsletterCtxFut, quoted: info });
+          await nazu.sendMessage(from, { text: `⚽ Modo Futebol ${groupData.modofut ? 'ATIVADO' : 'DESATIVADO'} neste grupo.\n\n${groupData.modofut ? '🏆 Agora os membros podem usar todos os comandos de futebol!' : '⚙️ Comandos de futebol desativados.'}` , contextInfo: newsletterCtxFut, quoted: info });
         } catch (e) {
           console.error('Erro no comando modofut:', e);
           await reply("Ocorreu um erro ao alterar o modo de futebol 💔");
@@ -31863,7 +31863,7 @@ case 'set-bannerbv':
               newsletterName: "Lizzy"
             }
           };
-          await nazu.sendMessage(from, { text: `✅ Antifig ${status}! Figurinhas ${groupData.antifig.enabled ? "serão apagadas e o remetente receberá advertências" : "agora são permitidas"}.` }, { contextInfo: newsletterFig, quoted: info });
+          await nazu.sendMessage(from, { text: `✅ Antifig ${status}! Figurinhas ${groupData.antifig.enabled ? "serão apagadas e o remetente receberá advertências" : "agora são permitidas"}.` , contextInfo: newsletterFig, quoted: info });
         } catch (e) {
           console.error('Erro no comando antifig:', e);
           await reply("Ocorreu um erro ao gerenciar o antifig 💔");
@@ -32394,7 +32394,7 @@ case 'set-bannerbv':
               newsletterName: "Lizzy"
             }
           };
-          await nazu.sendMessage(from, { text: message }, { contextInfo: newsletterCtx, quoted: info });
+          await nazu.sendMessage(from, { text: message , contextInfo: newsletterCtx, quoted: info });
         } catch (e) {
           console.error(e);
           reply("ocorreu um erro 💔");
@@ -32430,7 +32430,7 @@ case 'antistickerplus':
       };
       return await nazu.sendMessage(from, { text: groupData.antistickerplus_remover
           ? "✅ Remoção ativada. Usuários que enviarem esse tipo de figurinha serão removidos."
-          : "❌ Remoção desativada." }, { contextInfo: newsletterCtxStickerRem, quoted: info });
+          : "❌ Remoção desativada." , contextInfo: newsletterCtxStickerRem, quoted: info });
     }
     if (option === "apagar") {
       groupData.antistickerplus_apagar = !groupData.antistickerplus_apagar;
@@ -32448,7 +32448,7 @@ case 'antistickerplus':
       };
       return await nazu.sendMessage(from, { text: groupData.antistickerplus_apagar
           ? "✅ Apagar mensagem ativado. Mensagens serão apagadas."
-          : "❌ Apagar mensagem desativado." }, { contextInfo: newsletterCtxStickerAp, quoted: info });
+          : "❌ Apagar mensagem desativado." , contextInfo: newsletterCtxStickerAp, quoted: info });
     }
     groupData.antistickerplus = !groupData.antistickerplus;
     if (!groupData.antistickerplus_remover && !groupData.antistickerplus_apagar) {
@@ -32473,7 +32473,7 @@ ${groupPrefix}antistickerplus remover → remove usuário e apaga mensagem
         newsletterName: "Lizzy"
       }
     };
-    await nazu.sendMessage(from, { text: `${message}\n${tutorial}` }, { contextInfo: newsletterCtxStickerPlus, quoted: info });
+    await nazu.sendMessage(from, { text: `${message}\n${tutorial}` , contextInfo: newsletterCtxStickerPlus, quoted: info });
   } catch (e) {
     console.error(e);
     reply("ocorreu um erro 💔");
@@ -32500,7 +32500,7 @@ ${groupPrefix}antistickerplus remover → remove usuário e apaga mensagem
               newsletterName: "Lizzy"
             }
           };
-          await nazu.sendMessage(from, { text: message }, { contextInfo: newsletterCtx, quoted: info });
+          await nazu.sendMessage(from, { text: message , contextInfo: newsletterCtx, quoted: info });
         } catch (e) {
           console.error(e);
           reply("ocorreu um erro 💔");
@@ -32525,7 +32525,7 @@ ${groupPrefix}antistickerplus remover → remove usuário e apaga mensagem
               newsletterName: "Lizzy"
             }
           };
-          await nazu.sendMessage(from, { text: message }, { contextInfo: newsletterCtx, quoted: info });
+          await nazu.sendMessage(from, { text: message , contextInfo: newsletterCtx, quoted: info });
         } catch (e) {
           console.error(e);
           reply("ocorreu um erro 💔");
@@ -32551,7 +32551,7 @@ ${groupPrefix}antistickerplus remover → remove usuário e apaga mensagem
             }
           };
           const message = groupData.antiporn ? `✅ *Antiporn foi ativado com sucesso!*\n\nAgora, se alguém enviar conteúdo adulto (NSFW), será banido automaticamente. Mantenha o grupo seguro e adequado! ⚙️` : `✅ *Antiporn foi desativado.*\n\nConteúdo adulto não será mais bloqueado. Use com responsabilidade! ⚠️`;
-          await nazu.sendMessage(from, { text: message }, { contextInfo: newsletterAnti, quoted: info });
+          await nazu.sendMessage(from, { text: message , contextInfo: newsletterAnti, quoted: info });
         } catch (e) {
           console.error(e);
           reply("ocorreu um erro 💔");
@@ -32573,7 +32573,7 @@ ${groupPrefix}antistickerplus remover → remove usuário e apaga mensagem
               newsletterName: "Lizzy"
             }
           };
-          await nazu.sendMessage(from, { text: `✅ Auto figurinhas ${groupData.autoSticker ? 'ativadas' : 'desativadas'}! ${groupData.autoSticker ? 'Todas as imagens e vídeos serão convertidos em figurinhas.' : ''}` }, { contextInfo: newsletterCtxStk, quoted: info });
+          await nazu.sendMessage(from, { text: `✅ Auto figurinhas ${groupData.autoSticker ? 'ativadas' : 'desativadas'}! ${groupData.autoSticker ? 'Todas as imagens e vídeos serão convertidos em figurinhas.' : ''}` , contextInfo: newsletterCtxStk, quoted: info });
         } catch (e) {
           console.error(e);
           reply("Ocorreu um erro 💔");
@@ -32596,7 +32596,7 @@ ${groupPrefix}antistickerplus remover → remove usuário e apaga mensagem
               newsletterName: "Lizzy"
             }
           };
-          await nazu.sendMessage(from, { text: `✅ Auto resposta ${groupData.autorepo ? 'ativada' : 'desativada'}!` }, { contextInfo: newsletterCtxAuto, quoted: info });
+          await nazu.sendMessage(from, { text: `✅ Auto resposta ${groupData.autorepo ? 'ativada' : 'desativada'}!` , contextInfo: newsletterCtxAuto, quoted: info });
         } catch (e) {
           console.error(e);
           reply("Ocorreu um erro 💔");
@@ -32681,7 +32681,7 @@ case 'assistent':
             }
           };
           const message = groupData.antigore ? `✅ *Antigore foi ativado com sucesso!*\n\nAgora, se alguém enviar conteúdo gore, será banido automaticamente. Mantenha o grupo seguro e saudável! ⚙️` : `✅ *Antigore foi desativado.*\n\nConteúdo gore não será mais bloqueado. Use com cuidado! ⚠️`;
-          await nazu.sendMessage(from, { text: message }, { contextInfo: newsletterCtxGore, quoted: info });
+          await nazu.sendMessage(from, { text: message , contextInfo: newsletterCtxGore, quoted: info });
         } catch (e) {
           console.error(e);
           reply("ocorreu um erro 💔");
@@ -34036,40 +34036,40 @@ ${groupPrefix}antitoxic sensibilidade <0-100> - Define sensibilidade
         // Ativa o sistema
         if (subCmdAntipalavra === 'on' || subCmdAntipalavra === 'ativar') {
           const result = antipalavra.enableAntipalavra(from);
-          return await nazu.sendMessage(from, { text: result.message }, { contextInfo: newsletterCtx, quoted: info });
+          return await nazu.sendMessage(from, { text: result.message , contextInfo: newsletterCtx, quoted: info });
         }
         // Desativa o sistema
         if (subCmdAntipalavra === 'off' || subCmdAntipalavra === 'desativar') {
           const result = antipalavra.disableAntipalavra(from);
-          return await nazu.sendMessage(from, { text: result.message }, { contextInfo: newsletterCtx, quoted: info });
+          return await nazu.sendMessage(from, { text: result.message , contextInfo: newsletterCtx, quoted: info });
         }
         // Adiciona palavra à blacklist
         if (subCmdAntipalavra === 'add' || subCmdAntipalavra === 'adicionar') {
           const palavra = args.slice(1).join(' ').trim();
           if (!palavra) {
-            return await nazu.sendMessage(from, { text: `❌ Você precisa especificar a palavra!\n\nUso: ${groupPrefix}antipalavra add <palavra>` }, { contextInfo: newsletterCtx, quoted: info });
+            return await nazu.sendMessage(from, { text: `❌ Você precisa especificar a palavra!\n\nUso: ${groupPrefix}antipalavra add <palavra>` , contextInfo: newsletterCtx, quoted: info });
           }
           const result = antipalavra.addPalavraBlacklist(from, palavra);
-          return await nazu.sendMessage(from, { text: result.message }, { contextInfo: newsletterCtx, quoted: info });
+          return await nazu.sendMessage(from, { text: result.message , contextInfo: newsletterCtx, quoted: info });
         }
         // Remove palavra da blacklist
         if (subCmdAntipalavra === 'del' || subCmdAntipalavra === 'remover' || subCmdAntipalavra === 'remove') {
           const palavra = args.slice(1).join(' ').trim();
           if (!palavra) {
-            return await nazu.sendMessage(from, { text: `❌ Você precisa especificar a palavra!\n\nUso: ${groupPrefix}antipalavra del <palavra>` }, { contextInfo: newsletterCtx, quoted: info });
+            return await nazu.sendMessage(from, { text: `❌ Você precisa especificar a palavra!\n\nUso: ${groupPrefix}antipalavra del <palavra>` , contextInfo: newsletterCtx, quoted: info });
           }
           const result = antipalavra.removePalavraBlacklist(from, palavra);
-          return await nazu.sendMessage(from, { text: result.message }, { contextInfo: newsletterCtx, quoted: info });
+          return await nazu.sendMessage(from, { text: result.message , contextInfo: newsletterCtx, quoted: info });
         }
         // Lista todas as palavras
         if (subCmdAntipalavra === 'list' || subCmdAntipalavra === 'lista' || subCmdAntipalavra === 'listar') {
           const result = antipalavra.listPalavrasBlacklist(from);
-          return await nazu.sendMessage(from, { text: result.message }, { contextInfo: newsletterCtx, quoted: info });
+          return await nazu.sendMessage(from, { text: result.message , contextInfo: newsletterCtx, quoted: info });
         }
         // Limpa a blacklist
         if (subCmdAntipalavra === 'clear' || subCmdAntipalavra === 'limpar') {
           const result = antipalavra.clearBlacklist(from);
-          return await nazu.sendMessage(from, { text: result.message }, { contextInfo: newsletterCtx, quoted: info });
+          return await nazu.sendMessage(from, { text: result.message , contextInfo: newsletterCtx, quoted: info });
         }
         // Estatísticas
         if (subCmdAntipalavra === 'stats' || subCmdAntipalavra === 'estatisticas') {
@@ -34086,7 +34086,7 @@ ${groupPrefix}antitoxic sensibilidade <0-100> - Define sensibilidade
               msg += `${index + 1}. "${item.palavra}" - ${item.detections}x\n`;
             });
           }
-          return await nazu.sendMessage(from, { text: msg }, { contextInfo: newsletterCtx, quoted: info });
+          return await nazu.sendMessage(from, { text: msg , contextInfo: newsletterCtx, quoted: info });
         }
         // Menu de ajuda
         return await nazu.sendMessage(from, { text: `🚫 *ANTIPALAVRA - SISTEMA DE BLACKLIST*
@@ -34107,7 +34107,7 @@ ${groupPrefix}antipalavra stats
 └ Mostra estatísticas
 ⚠️ *IMPORTANTE:*
 Membros que falarem palavras da blacklist serão BANIDOS AUTOMATICAMENTE do grupo!
-💡 *Dica:* O sistema ignora acentos e maiúsculas/minúsculas na detecção.` }, { contextInfo: newsletterCtx, quoted: info });
+💡 *Dica:* O sistema ignora acentos e maiúsculas/minúsculas na detecção.` , contextInfo: newsletterCtx, quoted: info });
         break;
       case 'chance':
         try {
