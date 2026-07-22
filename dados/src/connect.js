@@ -4,6 +4,7 @@ import NodeCache from 'node-cache';
 import readline from 'readline';
 import pino from 'pino';
 import fs from 'fs/promises';
+import fsSync from 'fs';
 import path, { dirname, join } from 'path';
 import qrcode from 'qrcode-terminal';
 import { readFile } from 'fs/promises';
@@ -1625,8 +1626,8 @@ async function createBotSocket(authDir) {
                     const groupFile = path.join(DATABASE_DIR, 'grupos', `${groupId}.json`);
                     let groupData = {};
                     
-                    if (fs.existsSync(groupFile)) {
-                        groupData = JSON.parse(fs.readFileSync(groupFile, 'utf-8'));
+                    if (fsSync.existsSync(groupFile)) {
+                        groupData = JSON.parse(fsSync.readFileSync(groupFile, 'utf-8'));
                     }
                     
                     // Inicializar array de solicitações se não existir
@@ -1652,7 +1653,7 @@ async function createBotSocket(authDir) {
                         groupData.joinRequests = groupData.joinRequests.slice(-100);
                     }
                     
-                    fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
+                    fsSync.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
                 } catch (e) {
                     console.error('Erro ao salvar join request:', e.message);
                 }
