@@ -82,18 +82,34 @@ function markProcessed(key) {
     setTimeout(() => processedKeys.delete(key), LOCK_DURATION);
 }
 
-// Normaliza JID
+// Normaliza JID - extrai número de qualquer formato
 function normalizeJid(participant) {
     if (!participant) return null;
+    
+    // Se é string
     if (typeof participant === 'string') {
-        return participant.includes('@') ? participant : `${participant}@s.whatsapp.net`;
+        // Se já tem @, retorna como está
+        if (participant.includes('@')) return participant;
+        // Se não tem @, adiciona
+        return `${participant}@s.whatsapp.net`;
     }
+    
+    // Se é objeto (pode vir como { pn: 'numero', lid: '...', id: '...' })
     if (typeof participant === 'object') {
-        const jid = participant.pn || participant.lid || participant.id || participant;
-        if (typeof jid === 'string') {
-            return jid.includes('@') ? jid : `${jid}@s.whatsapp.net`;
+        // Tenta extrair o número de diferentes propriedades
+        const num = participant.pn || participant.lid || participant.id || participant.number;
+        
+        if (typeof num === 'string') {
+            // Remove qualquer @ que possa ter
+            const cleanNum = num.split('@')[0];
+            // Se parece ser um número LID (letras/números sem @s.whatsapp.net)
+            if (cleanNum.includes('lid') || !/^\d+$/.test(cleanNum)) {
+                return cleanNum.includes('@') ? cleanNum : `${cleanNum}@lid`;
+            }
+            return `${cleanNum}@s.whatsapp.net`;
         }
     }
+    
     return null;
 }
 
@@ -158,13 +174,26 @@ function buildRejectedCard(data) {
 export async function processNewJoinRequest(sock, eventData, groupSettings) {
     const { id: groupId, participant, participantPn, method, author, authorPn } = eventData;
     
+    console.log('[X9] Evento recebido:', JSON.stringify(eventData, null, 2));
+    
+    // Extrai o JID do participante - tenta diferentes formatos
     let participantJid = normalizeJid(participant);
+    
+    // Se participantPn existir, usa ele
     if (!participantJid && participantPn) {
         participantJid = normalizeJid(participantPn);
     }
     
+    // Fallback: tenta usar author/authorPn se for uma ação de aprovação
+    if (!participantJid) {
+        const authorJid = normalizeJid(author || authorPn);
+        if (authorJid) {
+            participantJid = authorJid;
+        }
+    }
+    
     if (!groupId || !participantJid) {
-        console.log('[X9] Dados insuficientes');
+        console.log('[X9] ❌ Dados insuficientes - participant:', participant, 'participantPn:', participantPn);
         return null;
     }
     
@@ -182,12 +211,19 @@ export async function processNewJoinRequest(sock, eventData, groupSettings) {
     const now = new Date();
     const participantNumber = participantJid.replace(/@.*$/, '');
     
-    // Tenta obter nome
+    console.log(`[X9] Participant: ${participantNumber} -> ${participantJid}`);
+    
+    // Tenta obter nome do perfil
     let participantName = participantNumber;
     try {
         const name = await sock.getName(participantJid);
-        if (name && name !== participantJid) participantName = name;
-    } catch (e) {}
+        if (name && name !== participantJid && name !== participantNumber) {
+            participantName = name;
+            console.log(`[X9] Nome encontrado: ${name}`);
+        }
+    } catch (e) {
+        console.log('[X9] Não conseguiu obter nome:', e.message);
+    }
     
     const data = {
         groupId,
@@ -207,6 +243,8 @@ export async function processNewJoinRequest(sock, eventData, groupSettings) {
     const cardText = buildCard(data);
     const mentions = [participantJid];
     
+    console.log('[X9] Enviando card:', cardText);
+    
     try {
         const sent = await sock.sendMessage(groupId, {
             text: cardText,
@@ -215,18 +253,19 @@ export async function processNewJoinRequest(sock, eventData, groupSettings) {
         
         if (sent?.key?.id) {
             x9Store.setMessageId(groupId, participantJid, sent.key.id);
-            console.log(`[X9] Card enviado: ${sent.key.id}`);
+            console.log(`[X9] ✅ Card enviado: ${sent.key.id}`);
         }
         
         return sent;
     } catch (error) {
-        console.error('[X9] Erro ao enviar card:', error.message);
+        console.error('[X9] ❌ Erro ao enviar card:', error.message);
         return null;
     }
 }
 
 /**
- * Atualiza card quando uma solicitação é aprovada via comando
+ * Remove card quando uma solicitação é aprovada via comando
+ * O comando !aprovar já envia sua própria mensagem de confirmação
  */
 export async function updateCardOnApprove(sock, groupId, participantJid, adminJid) {
     const req = x9Store.get(groupId, participantJid);
@@ -235,49 +274,25 @@ export async function updateCardOnApprove(sock, groupId, participantJid, adminJi
         return null;
     }
     
-    const now = new Date();
-    const adminNumber = adminJid.replace(/@.*$/, '');
-    
-    const cardData = {
-        participantName: req.participantName,
-        participantNumber: req.participantNumber,
-        adminNumber,
-        time: formatTime(now)
-    };
-    
-    const updatedText = buildApprovedCard(cardData);
-    const mentions = [adminJid, participantJid];
-    
     // Deleta mensagem original se existir
     if (req.messageId) {
         try {
             await sock.sendMessage(groupId, { 
                 delete: { id: req.messageId, remoteJid: groupId, fromMe: true } 
             });
+            console.log(`[X9] Card deletado`);
         } catch (e) {
             console.log('[X9] Não conseguiu deletar card antigo');
         }
     }
     
-    // Envia novo card
-    try {
-        const sent = await sock.sendMessage(groupId, {
-            text: updatedText,
-            mentions
-        });
-        
-        x9Store.update(groupId, participantJid, { status: 'approved' });
-        console.log(`[X9] Card atualizado para aprovado`);
-        
-        return sent;
-    } catch (error) {
-        console.error('[X9] Erro ao atualizar card:', error.message);
-        return null;
-    }
+    x9Store.update(groupId, participantJid, { status: 'approved' });
+    return { deleted: true };
 }
 
 /**
- * Atualiza card quando uma solicitação é negada via comando
+ * Remove card quando uma solicitação é negada via comando
+ * O comando !recusarsolic já envia sua própria mensagem de confirmação
  */
 export async function updateCardOnReject(sock, groupId, participantJid, adminJid) {
     const req = x9Store.get(groupId, participantJid);
@@ -286,42 +301,20 @@ export async function updateCardOnReject(sock, groupId, participantJid, adminJid
         return null;
     }
     
-    const now = new Date();
-    const adminNumber = adminJid.replace(/@.*$/, '');
-    
-    const cardData = {
-        participantName: req.participantName,
-        participantNumber: req.participantNumber,
-        adminNumber,
-        time: formatTime(now)
-    };
-    
-    const updatedText = buildRejectedCard(cardData);
-    const mentions = [adminJid];
-    
     // Deleta mensagem original
     if (req.messageId) {
         try {
             await sock.sendMessage(groupId, { 
                 delete: { id: req.messageId, remoteJid: groupId, fromMe: true } 
             });
-        } catch (e) {}
+            console.log(`[X9] Card deletado`);
+        } catch (e) {
+            console.log('[X9] Não conseguiu deletar card');
+        }
     }
     
-    try {
-        const sent = await sock.sendMessage(groupId, {
-            text: updatedText,
-            mentions
-        });
-        
-        x9Store.update(groupId, participantJid, { status: 'rejected' });
-        console.log(`[X9] Card atualizado para negado`);
-        
-        return sent;
-    } catch (error) {
-        console.error('[X9] Erro ao atualizar card:', error.message);
-        return null;
-    }
+    x9Store.update(groupId, participantJid, { status: 'rejected' });
+    return { deleted: true };
 }
 
 /**
