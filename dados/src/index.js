@@ -21742,7 +21742,7 @@ Precisa de ajuda? Entre em contato:
               if (message.text) {
                 message.text = `${message.text}\n\n> ID: ${suffix}`;
               }
-              await nazu.sendMessage(group.id, message, { contextInfo: newsletterContext });
+              await nazu.sendMessage(group.id, { ...message, contextInfo: newsletterContext });
               enviados++;
               if (enviados < totalGroups) {
                 const delay = Math.floor(Math.random() * 1000) + 1000;
