@@ -19675,7 +19675,7 @@ case 'pin':
                 const caption = title ? `${title}\n\n👁️ ${viewsText}` : `👁️ ${viewsText}`;
 
                 // Enviar vídeo primeiro
-                await nazu.sendMessage(from, {
+                const videoMsg = await nazu.sendMessage(from, {
                   video: { url: videoUrl },
                   caption: caption,
                   mimetype: 'video/mp4'
@@ -19684,7 +19684,7 @@ case 'pin':
                 // Delay antes do botão
                 await new Promise(r => setTimeout(r, 300));
 
-                // Enviar botão CTA
+                // Enviar botão CTA respondendo ao vídeo
                 const msg = await generateWAMessageFromContent(from, {
                   interactiveMessage: {
                     header: { hasMediaAttachment: false },
@@ -19713,7 +19713,8 @@ case 'pin':
                   }
                 }, { userJid: nazu.user.id });
 
-                await nazu.relayMessage(from, msg.message, { messageId: msg.key.id });
+                // Responder ao vídeo
+                await nazu.relayMessage(from, msg.message, { messageId: msg.key.id, quoted: videoMsg });
               };
 
               const results = datinha.results;
