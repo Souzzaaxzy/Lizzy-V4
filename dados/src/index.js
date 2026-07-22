@@ -19671,31 +19671,21 @@ case 'pin':
                 const title = videoData.title || '';
                 const views = videoData.views || 0;
                 const viewsText = views ? `${formatNumber(views)} visualizações` : '';
-                const videoUrl = videoData.urls?.[0] || '';
-                const caption = title ? `${title}\n\n👁️ ${viewsText}` : `👁️ ${viewsText}`;
 
-                // Enviar vídeo com interactiveButtons
+                // Enviar link para WhatsApp gerar preview automático com botão
+                const msg = `${title ? title + '\n\n' : ''}👁️ ${viewsText}\n\n${link}`;
+                
                 await nazu.sendMessage(from, {
-                  video: { url: videoUrl },
-                  caption: caption,
-                  mimetype: 'video/mp4',
-                  footer: '📱 TikTok',
+                  text: msg,
                   contextInfo: {
+                    forwardingScore: 999,
+                    isForwarded: true,
                     forwardedNewsletterMessageInfo: {
                       newsletterJid: '120363420762648535@newsletter',
                       newsletterName: 'Lizzy Bot',
                       serverMessageId: -1
                     }
-                  },
-                  interactiveButtons: [
-                    {
-                      name: "cta_url",
-                      buttonParamsJson: JSON.stringify({
-                        display_text: "🔗 Abrir no TikTok",
-                        url: link
-                      })
-                    }
-                  ]
+                  }
                 });
               };
 
