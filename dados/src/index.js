@@ -19290,20 +19290,17 @@ case 'pin':
     // Pegar até 5 imagens
     const itemsToSend = datinha.urls.slice(0, 5);
     
-    // Enviar imagens em álbum (agrupadas)
+    // Enviar imagens em álbum (usando propriedade album do Baileys)
     if (itemsToSend.length > 1) {
-      // Primeiro envia o texto inicial
-      await reply(isPinUrl ? '📌 Download do Pinterest' : `📌 Resultados da pesquisa por "${searchTerm}"`);
+      const albumImages = itemsToSend.map((url, index) => ({
+        image: { url },
+        caption: `🔍 busca ${index + 1}`
+      }));
       
-      // Enviar imagens em sequência rápida para criar álbum
-      for (let i = 0; i < itemsToSend.length; i++) {
-        await nazu.sendMessage(from, {
-          image: { url: itemsToSend[i] },
-          caption: `🔍 busca ${i + 1}`
-        });
-        // Pequeno delay para criar álbum
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
+      await nazu.sendMessage(from, {
+        text: isPinUrl ? '📌 Download do Pinterest' : `📌 Resultados da pesquisa por "${searchTerm}"`,
+        album: albumImages
+      }, { quoted: info });
     } else {
       // Se for apenas 1 imagem, enviar normalmente
       await nazu.sendMessage(from, {
