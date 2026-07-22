@@ -186,7 +186,7 @@ function getOrigin(method) {
 // ═══════════════════════════════════════════════════════════════
 
 /**
- * Envia card para nova solicitação de entrada
+ * Envia card para nova solicitação de entrada com foto do usuário
  */
 export async function processNewJoinRequest(sock, eventData, groupSettings) {
     const { id: groupId, participant, participantPn, method, author, authorPn } = eventData;
@@ -203,7 +203,7 @@ export async function processNewJoinRequest(sock, eventData, groupSettings) {
         if (authorJid) participantJid = authorJid;
     }
     
-    // Extrai o LID se existir (participant pode ter formato {pn, lid})
+    // Extrai o LID se existir
     if (typeof participant === 'object' && participant) {
         if (participant.lid) participantLid = participant.lid;
         else if (participantPn && typeof participantPn === 'object' && participantPn.lid) {
@@ -256,14 +256,35 @@ export async function processNewJoinRequest(sock, eventData, groupSettings) {
     console.log('[X9] Enviando card...');
     
     try {
-        const sent = await sock.sendMessage(groupId, {
-            text: cardText,
-            mentions: [participantJid]
-        });
+        // Tenta obter a foto de perfil
+        let photoUrl = null;
+        try {
+            photoUrl = await sock.profilePictureUrl(participantJid, 'image');
+        } catch (e) {
+            console.log('[X9] Sem foto de perfil');
+        }
+        
+        let sent;
+        
+        if (photoUrl) {
+            // Envia com foto
+            sent = await sock.sendMessage(groupId, {
+                image: { url: photoUrl },
+                caption: cardText,
+                mentions: [participantJid]
+            });
+            console.log(`[X9] ✅ Card com foto enviado`);
+        } else {
+            // Envia sem foto
+            sent = await sock.sendMessage(groupId, {
+                text: cardText,
+                mentions: [participantJid]
+            });
+            console.log(`[X9] ✅ Card sem foto enviado`);
+        }
         
         if (sent?.key?.id) {
             x9Store.setMessageId(groupId, participantJid, sent.key.id);
-            console.log(`[X9] ✅ Card enviado: ${sent.key.id}`);
         }
         
         return sent;
