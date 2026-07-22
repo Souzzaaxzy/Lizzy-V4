@@ -2316,11 +2316,27 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     
     // Processar cliques nos botões de solicitações de entrada
     if (isButtonMessage) {
-      const buttonId = info.message.buttonsResponseMessage?.selectedButtonId || 
-                       info.message.templateButtonReplyMessage?.selectedId ||
-                       info.message.interactiveResponseMessage?.nativeFlowResponseMessage?.params?.id;
+      let buttonId = '';
       
-      if (buttonId && (buttonId.startsWith('accept_') || buttonId.startsWith('deny_'))) {
+      // Tentar extrair buttonId de diferentes formatos
+      if (info.message.buttonsResponseMessage?.selectedButtonId) {
+        buttonId = info.message.buttonsResponseMessage.selectedButtonId;
+      } else if (info.message.templateButtonReplyMessage?.selectedId) {
+        buttonId = info.message.templateButtonReplyMessage.selectedId;
+      } else if (info.message.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson) {
+        try {
+          const params = JSON.parse(info.message.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson);
+          buttonId = params.id || '';
+        } catch (e) {
+          console.error('Erro ao parsear paramsJson:', e.message);
+        }
+      } else if (info.message.interactiveResponseMessage?.nativeFlowResponseMessage?.params?.id) {
+        buttonId = info.message.interactiveResponseMessage.nativeFlowResponseMessage.params.id;
+      }
+      
+      console.log('[X9] ButtonId extraído:', buttonId);
+      
+      if (buttonId && (buttonId.startsWith('x9_accept_') || buttonId.startsWith('x9_deny_'))) {
         // Importar e processar o clique do botão
         try {
           const { processJoinRequestButtonClick } = await import('../connect.js');

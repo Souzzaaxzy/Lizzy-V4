@@ -660,12 +660,13 @@ async function isGroupAdmin(sock, groupJid, userJid) {
     }
 }
 
-// Função para enviar mensagem com botões de solicitação
+// Função para enviar mensagem com botões de solicitação (usando nativeFlow para evitar resposta no chat)
 async function sendJoinRequestMessage(sock, groupJid, participantJid, requestData) {
     const { foto, nome, origem, horario } = requestData;
     
     const numeroFormatado = formatPhoneNumber(participantJid);
     const participantNum = participantJid.split('@')[0];
+    const groupNum = groupJid.split('@')[0];
     
     // Criar mensagem formatada
     const mensagem = `╭━━━〔 🔎 X9 • SOLICITAÇÃO DE ENTRADA 〕━━━⬣
@@ -677,40 +678,38 @@ async function sendJoinRequestMessage(sock, groupJid, participantJid, requestDat
 
 Deseja aprovar esta solicitação?`;
 
+    // Usar interactive message com nativeFlow para evitar resposta no chat
+    const buttons = [
+        {
+            name: "quick_reply",
+            buttonParamsJson: JSON.stringify({
+                display_text: "🟢 Aceitar",
+                id: `x9_accept_${participantNum}_${groupNum}`
+            })
+        },
+        {
+            name: "quick_reply",
+            buttonParamsJson: JSON.stringify({
+                display_text: "🔴 Negar",
+                id: `x9_deny_${participantNum}_${groupNum}`
+            })
+        }
+    ];
+
     // Enviar mensagem com foto (se disponível)
     if (foto) {
         await sock.sendMessage(groupJid, {
             image: { url: foto },
             caption: mensagem,
-            buttons: [
-                { 
-                    buttonId: `accept_${participantNum}_${groupJid.split('@')[0]}`, 
-                    buttonText: { displayText: '🟢 Aceitar' },
-                    type: 1
-                },
-                { 
-                    buttonId: `deny_${participantNum}_${groupJid.split('@')[0]}`, 
-                    buttonText: { displayText: '🔴 Negar' },
-                    type: 1
-                }
-            ],
+            footer: 'X9 • Sistema de Moderação',
+            buttons: buttons,
             headerType: 1
         });
     } else {
         await sock.sendMessage(groupJid, {
             text: mensagem,
-            buttons: [
-                { 
-                    buttonId: `accept_${participantNum}_${groupJid.split('@')[0]}`, 
-                    buttonText: { displayText: '🟢 Aceitar' },
-                    type: 1
-                },
-                { 
-                    buttonId: `deny_${participantNum}_${groupJid.split('@')[0]}`, 
-                    buttonText: { displayText: '🔴 Negar' },
-                    type: 1
-                }
-            ]
+            footer: 'X9 • Sistema de Moderação',
+            buttons: buttons
         });
     }
 }
@@ -718,30 +717,42 @@ Deseja aprovar esta solicitação?`;
 // Função para processar clique no botão
 async function processJoinRequestButton(sock, message, buttonId, senderJid, groupJid) {
     try {
+        console.log('[X9] Processando clique no botão:', buttonId);
+        
         // Verificar se é admin
         const isAdmin = await isGroupAdmin(sock, groupJid, senderJid);
+        console.log('[X9] Verificando admin:', { senderJid, groupJid, isAdmin });
+        
         if (!isAdmin) {
-            // Não fazer nada se não for admin
+            console.log('[X9] Não é admin, ignorando');
             return;
         }
         
         // Verificar se já foi processado
         if (isJoinRequestProcessed(groupJid, buttonId, 'button_click')) {
+            console.log('[X9] Já processado, ignorando');
             return;
         }
         
-        const [action, participantNum, groupNum] = buttonId.split('_');
+        // Parse do buttonId (formato: x9_accept_NUMERO_GRUPO ou x9_deny_NUMERO_GRUPO)
+        const parts = buttonId.split('_');
+        if (parts.length < 4) {
+            console.log('[X9] Formato inválido:', buttonId);
+            return;
+        }
+        
+        const action = parts[1]; // accept ou deny
+        const participantNum = parts[2]; // número do participante
         const participantJid = `${participantNum}@s.whatsapp.net`;
+        
+        console.log('[X9] Ação:', action, 'Participante:', participantJid);
         
         if (action === 'accept') {
             // Aprovar solicitação
+            console.log('[X9] Aprovando solicitação...');
             await sock.groupRequestParticipantsUpdate(groupJid, [participantJid], 'approve');
             
-            // Obter nome do participante
-            const participantName = await getUserName(sock, participantJid);
-            const adminName = await getUserName(sock, senderJid);
-            
-            // Editar mensagem para mostrar aprovação
+            // Enviar mensagem de confirmação
             const resposta = `✅ Solicitação aprovada por @${senderJid.split('@')[0]}.`;
             
             await sock.sendMessage(groupJid, {
@@ -753,12 +764,10 @@ async function processJoinRequestButton(sock, message, buttonId, senderJid, grou
             
         } else if (action === 'deny') {
             // Rejeitar solicitação
+            console.log('[X9] Rejeitando solicitação...');
             await sock.groupRequestParticipantsUpdate(groupJid, [participantJid], 'reject');
             
-            // Obter nome do participante
-            const adminName = await getUserName(sock, senderJid);
-            
-            // Editar mensagem para mostrar rejeição
+            // Enviar mensagem de confirmação
             const resposta = `❌ Solicitação negada por @${senderJid.split('@')[0]}.`;
             
             await sock.sendMessage(groupJid, {
@@ -902,7 +911,7 @@ async function handleGroupJoinRequest(AbyssSock, inf) {
 
 // Exportar função para processar botões de solicitações
 export async function processJoinRequestButtonClick(sock, message, buttonId, senderJid, groupJid) {
-    if (buttonId.startsWith('accept_') || buttonId.startsWith('deny_')) {
+    if (buttonId.startsWith('x9_accept_') || buttonId.startsWith('x9_deny_')) {
         await processJoinRequestButton(sock, message, buttonId, senderJid, groupJid);
     }
 }
