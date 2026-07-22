@@ -1,22 +1,13 @@
 /**
  * ═══════════════════════════════════════════════════════════════
- * X9 SYSTEM - Sistema Moderno de Solicitações de Entrada
+ * X9 SYSTEM - Sistema Moderno de Solicitações de Entrada v2
  * ═══════════════════════════════════════════════════════════════
  * 
  * Sistema refatorado para usar APIs modernas do Baileys:
- * - InteractiveMessage com botões
- * - Edição de mensagens
+ * - Botões interativos
  * - Detecção de eventos nativos do WhatsApp
  * - Anti-duplicação robusto
  */
-
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 // ═══════════════════════════════════════════════════════════════
 // MAPA DE PAÍSES POR DDI
@@ -46,31 +37,19 @@ const COUNTRY_CODES = {
     '234': 'Nigéria 🇳🇬',
     '233': 'Gana 🇬🇭',
     '254': 'Quênia 🇰🇪',
-    '255': 'Tanzânia 🇹🇿',
-    '256': 'Uganda 🇺🇬',
     '27': 'África do Sul 🇿🇦',
     '20': 'Egito 🇪🇬',
     '966': 'Arábia Saudita 🇸🇦',
     '971': 'Emirados Árabes 🇦🇪',
-    '973': 'Bahrein 🇧🇭',
-    '965': 'Kuwait 🇰🇼',
-    '974': 'Catar 🇶🇦',
-    '968': 'Omã 🇴🇲',
     '62': 'Indonésia 🇮🇩',
     '60': 'Malásia 🇲🇾',
     '65': 'Singapura 🇸🇬',
     '66': 'Tailândia 🇹🇭',
-    '84': 'Vietnã 🇻🇳',
     '63': 'Filipinas 🇵🇭',
     '81': 'Japão 🇯🇵',
     '82': 'Coréia do Sul 🇰🇷',
     '86': 'China 🇨🇳',
-    '852': 'Hong Kong 🇭🇰',
-    '886': 'Taiwan 🇹🇼',
     '91': 'Índia 🇮🇳',
-    '880': 'Bangladesh 🇧🇩',
-    '92': 'Paquistão 🇵🇰',
-    '94': 'Sri Lanka 🇱🇰',
     '61': 'Austrália 🇦🇺',
     '64': 'Nova Zelândia 🇳🇿',
     '32': 'Bélgica 🇧🇪',
@@ -85,90 +64,20 @@ const COUNTRY_CODES = {
     '90': 'Turquia 🇹🇷',
     '7': 'Rússia 🇷🇺',
     '380': 'Ucrânia 🇺🇦',
-    '359': 'Bulgária 🇧🇬',
-    '40': 'Romênia 🇷🇴',
-    '36': 'Hungria 🇭🇺',
-    '420': 'República Tcheca 🇨🇿',
-    '48': 'Polônia 🇵🇱',
-    '370': 'Lituânia 🇱🇹',
-    '371': 'Letônia 🇱🇻',
-    '373': 'Moldávia 🇲🇩',
-    '98': 'Irã 🇮🇷',
-    '964': 'Iraque 🇮🇶',
-    '961': 'Líbano 🇱🇧',
-    '962': 'Jordânia 🇯🇴',
-    '970': 'Palestina 🇵🇸',
-    '212': 'Marrocos 🇲🇦',
-    '213': 'Argélia 🇩🇿',
-    '216': 'Tunísia 🇹🇳',
-    '218': 'Líbia 🇱🇾',
-    '249': 'Sudão 🇸🇩',
-    '967': 'Iêmen 🇾🇪',
-    '237': 'Camarões 🇨🇲',
-    '241': 'Gabão 🇬🇦',
-    '226': 'Burkina Faso 🇧🇫',
-    '227': 'Níger 🇳🇪',
-    '228': 'Togo 🇹🇬',
-    '229': 'Benin 🇧🇯',
-    '235': 'Chade 🇹🇩',
-    '236': 'República Centro-Africana 🇨🇫',
-    '240': 'Guiné Equatorial 🇬🇶',
-    '243': 'RD Congo 🇨🇩',
-    '245': 'Guiné-Bissau 🇬🇼',
-    '258': 'Moçambique 🇲🇿',
-    '266': 'Lesoto 🇱🇸',
-    '268': 'Suazilândia 🇸🇿',
-    '269': 'Comores 🇰🇲',
-    '291': 'Eritreia 🇪🇷',
-    '291': 'Etiópia 🇪🇹',
-    '355': 'Albânia 🇦🇱',
-    '389': 'Macedônia 🇲🇰',
-    '381': 'Sérvia 🇷🇸',
-    '385': 'Croácia 🇭🇷',
-    '386': 'Eslovênia 🇸🇮',
-    '421': 'Eslováquia 🇸🇰',
-    '377': 'Mônaco 🇲🇨',
-    '379': 'Cidade do Vaticano 🇻🇦',
-    '356': 'Malta 🇲🇹',
-    '357': 'Chipre 🇨🇾',
-    '353': 'Irlanda 🇮🇪',
-    '354': 'Islândia 🇮🇸',
-    '372': 'Estônia 🇪🇪',
-    '374': 'Armênia 🇦🇲',
-    '375': 'Bielorrússia 🇧🇾',
-    '377': 'Andorra 🇦🇩',
-    '378': 'San Marino 🇸🇲',
-    '376': 'Liechtenstein 🇱🇮',
-    '447': 'Guernsey 🇬🇬',
-    '448': 'Jersey 🇯🇪',
-    '441': 'Ilha de Man 🇮🇲',
 };
 
-/**
- * Obtém o país baseado no DDI
- */
 function getCountryFromNumber(number) {
     if (!number) return 'Desconhecido 🌍';
     
     const cleanNumber = number.replace(/\D/g, '');
-    
-    // Tentar DDI de 3 dígitos primeiro
     const ddi3 = cleanNumber.substring(0, 3);
-    if (COUNTRY_CODES[ddi3]) {
-        return COUNTRY_CODES[ddi3];
-    }
+    if (COUNTRY_CODES[ddi3]) return COUNTRY_CODES[ddi3];
     
-    // Tentar DDI de 2 dígitos
     const ddi2 = cleanNumber.substring(0, 2);
-    if (COUNTRY_CODES[ddi2]) {
-        return COUNTRY_CODES[ddi2];
-    }
+    if (COUNTRY_CODES[ddi2]) return COUNTRY_CODES[ddi2];
     
-    // Tentar DDI de 1 dígito
     const ddi1 = cleanNumber.substring(0, 1);
-    if (COUNTRY_CODES[ddi1]) {
-        return COUNTRY_CODES[ddi1];
-    }
+    if (COUNTRY_CODES[ddi1]) return COUNTRY_CODES[ddi1];
     
     return 'Desconhecido 🌍';
 }
@@ -178,137 +87,66 @@ function getCountryFromNumber(number) {
 // ═══════════════════════════════════════════════════════════════
 class X9AntiDuplication {
     constructor() {
-        this.processedRequests = new Map(); // requestId -> timestamp
-        this.processedMessages = new Map(); // messageId -> timestamp
-        this.pendingActions = new Map(); // groupId:participantId -> timestamp
-        this.lockDuration = 30000; // 30 segundos de lock
-        this.cleanupInterval = null;
-        
-        this.startCleanup();
+        this.processedRequests = new Map();
+        this.processedMessages = new Map();
+        this.pendingActions = new Map();
+        this.lockDuration = 30000;
     }
     
-    startCleanup() {
-        // Limpa registros antigos a cada 5 minutos
-        this.cleanupInterval = setInterval(() => {
-            this.cleanup();
-        }, 5 * 60 * 1000);
+    generateRequestKey(groupId, participantId) {
+        return `${groupId}:${participantId}`;
     }
     
-    cleanup() {
-        const now = Date.now();
-        
-        // Limpa solicitações processadas
-        for (const [key, timestamp] of this.processedRequests) {
-            if (now - timestamp > this.lockDuration * 2) {
-                this.processedRequests.delete(key);
-            }
-        }
-        
-        // Limpa mensagens processadas
-        for (const [key, timestamp] of this.processedMessages) {
-            if (now - timestamp > this.lockDuration * 2) {
-                this.processedMessages.delete(key);
-            }
-        }
-        
-        // Limpa ações pendentes
-        for (const [key, timestamp] of this.pendingActions) {
-            if (now - timestamp > this.lockDuration) {
-                this.pendingActions.delete(key);
-            }
-        }
-    }
-    
-    /**
-     * Gera uma chave única para a solicitação
-     */
-    generateRequestKey(groupId, participantId, requestId = null) {
-        return `${groupId}:${participantId}${requestId ? `:${requestId}` : ''}`;
-    }
-    
-    /**
-     * Verifica se a solicitação já foi processada
-     */
-    isRequestProcessed(groupId, participantId, requestId = null) {
-        const key = this.generateRequestKey(groupId, participantId, requestId);
+    isRequestProcessed(groupId, participantId) {
+        const key = this.generateRequestKey(groupId, participantId);
         return this.processedRequests.has(key);
     }
     
-    /**
-     * Marca uma solicitação como processada
-     */
-    markRequestProcessed(groupId, participantId, requestId = null) {
-        const key = this.generateRequestKey(groupId, participantId, requestId);
+    markRequestProcessed(groupId, participantId) {
+        const key = this.generateRequestKey(groupId, participantId);
         this.processedRequests.set(key, Date.now());
     }
     
-    /**
-     * Verifica se a mensagem já foi processada
-     */
-    isMessageProcessed(messageId) {
-        return this.processedMessages.has(messageId);
-    }
-    
-    /**
-     * Marca uma mensagem como processada
-     */
     markMessageProcessed(messageId) {
         this.processedMessages.set(messageId, Date.now());
     }
     
-    /**
-     * Tenta adquirir um lock para ação
-     * Retorna true se conseguiu (lock disponível)
-     */
+    isMessageProcessed(messageId) {
+        return this.processedMessages.has(messageId);
+    }
+    
     tryAcquireLock(groupId, participantId) {
         const key = `${groupId}:${participantId}`;
         const now = Date.now();
-        
         const existing = this.pendingActions.get(key);
-        if (existing && now - existing < this.lockDuration) {
-            return false; // Já existe lock ativo
-        }
-        
+        if (existing && now - existing < this.lockDuration) return false;
         this.pendingActions.set(key, now);
         return true;
     }
     
-    /**
-     * Libera o lock após ação
-     */
     releaseLock(groupId, participantId) {
         const key = `${groupId}:${participantId}`;
         this.pendingActions.delete(key);
     }
     
-    /**
-     * Destrói o sistema (para shutdown)
-     */
     destroy() {
-        if (this.cleanupInterval) {
-            clearInterval(this.cleanupInterval);
-        }
         this.processedRequests.clear();
         this.processedMessages.clear();
         this.pendingActions.clear();
     }
 }
 
-// Instância global do anti-duplicação
 const x9AntiDuplication = new X9AntiDuplication();
 
 // ═══════════════════════════════════════════════════════════════
-// ARMAZENAMENTO DE CARDAPIO DE SOLICITAÇÕES
+// ARMAZENAMENTO DE SOLICITAÇÕES
 // ═══════════════════════════════════════════════════════════════
 class X9RequestStore {
     constructor() {
-        this.requests = new Map(); // groupId:participantId -> request data
-        this.messageMap = new Map(); // messageId -> request key
+        this.requests = new Map();
+        this.messageMap = new Map();
     }
     
-    /**
-     * Adiciona uma nova solicitação
-     */
     add(groupId, participantId, requestData) {
         const key = `${groupId}:${participantId}`;
         this.requests.set(key, {
@@ -319,130 +157,59 @@ class X9RequestStore {
         return key;
     }
     
-    /**
-     * Obtém uma solicitação
-     */
     get(groupId, participantId) {
         const key = `${groupId}:${participantId}`;
         return this.requests.get(key);
     }
     
-    /**
-     * Obtém uma solicitação pela chave
-     */
-    getByKey(key) {
-        return this.requests.get(key);
-    }
-    
-    /**
-     * Obtém uma solicitação pela mensagem ID
-     */
     getByMessageId(messageId) {
         const key = this.messageMap.get(messageId);
         return key ? this.requests.get(key) : null;
     }
     
-    /**
-     * Atualiza o status da solicitação
-     */
     updateStatus(groupId, participantId, status, adminJid = null) {
         const key = `${groupId}:${participantId}`;
         const request = this.requests.get(key);
         if (request) {
             request.status = status;
             request.updatedAt = Date.now();
-            if (adminJid) {
-                request.adminJid = adminJid;
-            }
+            if (adminJid) request.adminJid = adminJid;
         }
         return request;
     }
     
-    /**
-     * Associa uma mensagem ID à solicitação
-     */
     setMessageId(groupId, participantId, messageId) {
         const key = `${groupId}:${participantId}`;
         this.messageMap.set(messageId, key);
     }
-    
-    /**
-     * Remove uma solicitação
-     */
-    remove(groupId, participantId) {
-        const key = `${groupId}:${participantId}`;
-        const request = this.requests.get(key);
-        if (request && request.messageId) {
-            this.messageMap.delete(request.messageId);
-        }
-        this.requests.delete(key);
-    }
-    
-    /**
-     * Limpa todas as solicitações de um grupo
-     */
-    clearGroup(groupId) {
-        for (const [key, request] of this.requests) {
-            if (key.startsWith(`${groupId}:`)) {
-                if (request.messageId) {
-                    this.messageMap.delete(request.messageId);
-                }
-                this.requests.delete(key);
-            }
-        }
-    }
 }
 
-// Instância global do armazenamento
 const x9RequestStore = new X9RequestStore();
 
 // ═══════════════════════════════════════════════════════════════
 // FORMATADORES
 // ═══════════════════════════════════════════════════════════════
 
-/**
- * Formata data para o padrão brasileiro
- */
 function formatDate(date = new Date()) {
-    const dia = String(date.getDate()).padStart(2, '0');
-    const mes = String(date.getMonth() + 1).padStart(2, '0');
-    const ano = date.getFullYear();
-    return `${dia}/${mes}/${ano}`;
+    return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
 }
 
-/**
- * Formata hora para o padrão brasileiro
- */
 function formatTime(date = new Date()) {
-    const hora = String(date.getHours()).padStart(2, '0');
-    const minuto = String(date.getMinutes()).padStart(2, '0');
-    return `${hora}:${minuto}`;
+    return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
-/**
- * Gera ID único para a solicitação
- */
 function generateRequestId() {
     return `X9-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
-/**
- * Determina a origem da solicitação
- */
 function getRequestOrigin(method) {
     switch (method) {
-        case 'linked_group_join':
-            return '🔗 Link de convite direto';
-        case 'invite_link':
-            return '🔗 Link de convite';
-        case 'profile_qr_code':
-            return '📱 QR Code do perfil';
-        case 'contact_card':
-            return '📇 Cartão de contato';
-        case 'manual_add':
-            return '👤 Adicionado manualmente';
-        default:
-            return '🌐 Via WhatsApp';
+        case 'linked_group_join': return '🔗 Link de convite direto';
+        case 'invite_link': return '🔗 Link de convite';
+        case 'profile_qr_code': return '📱 QR Code do perfil';
+        case 'contact_card': return '📇 Cartão de contato';
+        case 'manual_add': return '👤 Adicionado manualmente';
+        default: return '🌐 Via WhatsApp';
     }
 }
 
@@ -450,21 +217,8 @@ function getRequestOrigin(method) {
 // CONSTRUTORES DE MENSAGEM
 // ═══════════════════════════════════════════════════════════════
 
-/**
- * Constrói o card de solicitação pendente
- */
 function buildPendingRequestCard(data) {
-    const {
-        participantName,
-        participantNumber,
-        participantJid,
-        country,
-        origin,
-        time,
-        date,
-        requestId
-    } = data;
-    
+    const { participantName, participantNumber, country, origin, time, date } = data;
     return `╭━━━〔 🔎 X9 • SOLICITAÇÃO DE ENTRADA 〕━━━⬣
 ┃ 👤 Nome: ${participantName || 'Não disponível'}
 ┃ 📞 Número: +${participantNumber}
@@ -478,18 +232,8 @@ function buildPendingRequestCard(data) {
 Deseja aprovar esta solicitação?`;
 }
 
-/**
- * Constrói o card de solicitação aprovada
- */
 function buildApprovedCard(data) {
-    const {
-        participantName,
-        participantNumber,
-        adminName,
-        adminNumber,
-        time
-    } = data;
-    
+    const { participantName, participantNumber, adminNumber, time } = data;
     return `╭━━━〔 ✅ SOLICITAÇÃO APROVADA 〕━━━⬣
 ┃ 👤 ${participantName || participantNumber}
 ┃ 👮 Aprovado por: @${adminNumber}
@@ -497,18 +241,8 @@ function buildApprovedCard(data) {
 ╰━━━━━━━━━━━━━━━━━━⬣`;
 }
 
-/**
- * Constrói o card de solicitação negada
- */
 function buildRejectedCard(data) {
-    const {
-        participantName,
-        participantNumber,
-        adminName,
-        adminNumber,
-        time
-    } = data;
-    
+    const { participantName, participantNumber, adminNumber, time } = data;
     return `╭━━━〔 ❌ SOLICITAÇÃO NEGADA 〕━━━⬣
 ┃ 👤 ${participantName || participantNumber}
 ┃ 👮 Negado por: @${adminNumber}
@@ -516,18 +250,8 @@ function buildRejectedCard(data) {
 ╰━━━━━━━━━━━━━━━━━━⬣`;
 }
 
-/**
- * Constrói notificação de aprovação via WhatsApp
- */
 function buildWhatsAppApprovalNotification(data) {
-    const {
-        participantName,
-        participantNumber,
-        adminName,
-        adminNumber,
-        time
-    } = data;
-    
+    const { participantName, participantNumber, adminNumber, time } = data;
     return `╭━━━〔 ✅ X9 • SOLICITAÇÃO APROVADA 〕━━━⬣
 ┃ 👤 Solicitante: ${participantName || participantNumber}
 ┃ 👮 Aprovado por: @${adminNumber}
@@ -535,18 +259,8 @@ function buildWhatsAppApprovalNotification(data) {
 ╰━━━━━━━━━━━━━━━━━━⬣`;
 }
 
-/**
- * Constrói notificação de rejeição via WhatsApp
- */
 function buildWhatsAppRejectionNotification(data) {
-    const {
-        participantName,
-        participantNumber,
-        adminName,
-        adminNumber,
-        time
-    } = data;
-    
+    const { participantName, participantNumber, adminNumber, time } = data;
     return `╭━━━〔 ❌ X9 • SOLICITAÇÃO NEGADA 〕━━━⬣
 ┃ 👤 Solicitante: ${participantName || participantNumber}
 ┃ 👮 Negado por: @${adminNumber}
@@ -555,98 +269,167 @@ function buildWhatsAppRejectionNotification(data) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// SISTEMA PRINCIPAL DE X9
+// FUNÇÕES AUXILIARES
+// ═══════════════════════════════════════════════════════════════
+
+async function getParticipantName(sock, jid) {
+    if (!jid) return 'Desconhecido';
+    try {
+        const name = sock.getName(jid);
+        if (name && name !== jid) return name;
+    } catch (e) {}
+    return jid.replace(/@.*$/, '');
+}
+
+async function getProfilePicture(sock, jid) {
+    if (!jid) return null;
+    try {
+        return await sock.profilePictureUrl(jid, 'image');
+    } catch (e) {
+        return null;
+    }
+}
+
+export async function isGroupAdmin(sock, groupId, userJid) {
+    try {
+        const metadata = await sock.groupMetadata(groupId);
+        const participant = metadata?.participants?.find(p => p.id === userJid);
+        return participant?.admin === 'admin' || participant?.admin === 'superadmin';
+    } catch (e) {
+        return false;
+    }
+}
+
+export function isX9ButtonCallback(callbackData) {
+    return callbackData?.selectedButtonId?.startsWith('x9_') || false;
+}
+
+export function cleanupX9System() {
+    x9AntiDuplication.destroy();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PROCESSAMENTO PRINCIPAL
 // ═══════════════════════════════════════════════════════════════
 
 /**
- * Processa uma nova solicitação de entrada
+ * Normaliza o JID do participante de diferentes formatos
  */
+function normalizeParticipantJid(participant) {
+    if (!participant) return null;
+    
+    // Se já é string
+    if (typeof participant === 'string') {
+        if (participant.includes('@s.whatsapp.net') || participant.includes('@lid')) {
+            return participant;
+        }
+        return `${participant}@s.whatsapp.net`;
+    }
+    
+    // Se é objeto
+    if (typeof participant === 'object') {
+        // Tenta diferentes propriedades
+        const jid = participant.pn || participant.lid || participant.id || participant;
+        if (typeof jid === 'string') {
+            if (jid.includes('@s.whatsapp.net') || jid.includes('@lid')) {
+                return jid;
+            }
+            return `${jid}@s.whatsapp.net`;
+        }
+    }
+    
+    return null;
+}
+
 export async function processNewJoinRequest(sock, eventData, groupSettings) {
     const { id: groupId, participant, participantPn, method, author, authorPn } = eventData;
     
+    console.log('[X9] ======================================');
+    console.log('[X9] 📩 Novo evento de solicitação');
+    console.log('[X9] Raw participant:', participant);
+    console.log('[X9] participantPn:', participantPn);
+    console.log('[X9] X9 ativo:', groupSettings?.x9);
+    
+    // Normaliza participant JID
+    let participantJid = normalizeParticipantJid(participant);
+    
+    // Fallback para participantPn se participant não funcionar
+    if (!participantJid && participantPn) {
+        participantJid = normalizeParticipantJid(participantPn);
+    }
+    
+    console.log('[X9] Normalized participantJid:', participantJid);
+    
     // Validações básicas
-    if (!groupId || !participant) {
-        console.log('[X9] Dados insuficientes para processar solicitação');
+    if (!groupId || !participantJid) {
+        console.log('[X9] ❌ Dados insuficientes');
         return null;
     }
     
-    // Verifica se X9 está ativo para este grupo
+    // Verifica se X9 está ativo
     if (!groupSettings?.x9) {
-        console.log('[X9] X9 desativado para este grupo');
+        console.log('[X9] ❌ X9 desativado para este grupo');
         return null;
     }
     
     // Verifica anti-duplicação
-    if (x9AntiDuplication.isRequestProcessed(groupId, participant)) {
-        console.log('[X9] Solicitação já processada, ignorando');
+    if (x9AntiDuplication.isRequestProcessed(groupId, participantJid)) {
+        console.log('[X9] ⚠️ Já processada, ignorando');
         return null;
     }
     
     const requestId = generateRequestId();
     const now = new Date();
     
-    // Coleta informações do participante
-    const participantNumber = participant.replace(/@.*$/, '');
-    const participantName = await getParticipantName(sock, participant);
-    const profilePic = await getProfilePicture(sock, participant);
+    // Coleta informações
+    const participantNumber = participantJid.replace(/@.*$/, '');
+    const participantName = await getParticipantName(sock, participantJid);
     const country = getCountryFromNumber(participantNumber);
+    
+    console.log(`[X9] 📋 Processando: ${participantName} (+${participantNumber})`);
     
     // Prepara dados da solicitação
     const requestData = {
         requestId,
         groupId,
-        participantJid: participant,
+        participantJid,
         participantNumber,
         participantName,
-        profilePic,
         country,
         origin: getRequestOrigin(method),
         time: formatTime(now),
         date: formatDate(now),
         method,
         author: author || authorPn || null,
-        authorName: author ? await getParticipantName(sock, author) : null,
         status: 'pending'
     };
     
-    // Armazena a solicitação
-    const storeKey = x9RequestStore.add(groupId, participant, requestData);
+    // Armazena
+    x9RequestStore.add(groupId, participantJid, requestData);
+    x9AntiDuplication.markRequestProcessed(groupId, participantJid);
     
-    // Marca como processada
-    x9AntiDuplication.markRequestProcessed(groupId, participant);
-    
-    // Constrói a mensagem do card
+    // Constrói card
     const cardText = buildPendingRequestCard(requestData);
-    
-    // Constrói mentions
-    const mentions = [participant];
+    const mentions = [participantJid];
     if (author) mentions.push(author);
     
-    // Contexto de newsletter (mantém o formato do bot)
-    const newsletterCtx = {
-        forwardingScore: 999,
-        isForwarded: true,
-        forwardedNewsletterMessageInfo: {
-            newsletterJid: "120363410980452460@newsletter",
-            newsletterName: "Lizzy"
-        }
-    };
+    console.log('[X9] 📤 Enviando card...');
+    console.log('[X9] Card:', cardText);
     
     try {
         // Envia mensagem com botões
         const sentMessage = await sock.sendMessage(groupId, {
             text: cardText,
             mentions,
-            contextInfo: newsletterCtx,
             footer: 'X9 System • Lizzy',
             buttons: [
                 {
-                    buttonId: `x9_approve_${groupId}_${participantNumber}`,
+                    buttonId: `x9_approve_${participantNumber}`,
                     buttonText: { displayText: '🟢 Aceitar' },
                     type: 1
                 },
                 {
-                    buttonId: `x9_reject_${groupId}_${participantNumber}`,
+                    buttonId: `x9_reject_${participantNumber}`,
                     buttonText: { displayText: '🔴 Negar' },
                     type: 1
                 }
@@ -654,79 +437,73 @@ export async function processNewJoinRequest(sock, eventData, groupSettings) {
             headerType: 1
         });
         
-        // Armazena ID da mensagem
+        console.log('[X9] ✅ Mensagem enviada:', sentMessage?.key?.id);
+        
         if (sentMessage?.key?.id) {
-            x9RequestStore.setMessageId(groupId, participant, sentMessage.key.id);
+            x9RequestStore.setMessageId(groupId, participantJid, sentMessage.key.id);
             x9AntiDuplication.markMessageProcessed(sentMessage.key.id);
             requestData.messageId = sentMessage.key.id;
-            x9RequestStore.add(groupId, participant, requestData);
+            x9RequestStore.add(groupId, participantJid, requestData);
         }
         
-        console.log(`[X9] Card de solicitação enviado para ${participantNumber} no grupo ${groupId}`);
         return sentMessage;
         
     } catch (error) {
-        console.error(`[X9] Erro ao enviar card de solicitação:`, error);
+        console.error('[X9] ❌ Erro ao enviar:', error.message);
         return null;
     }
 }
 
-/**
- * Processa callback de botão do X9
- */
 export async function processX9ButtonCallback(sock, message, callbackData, senderJid, isGroupAdmin) {
     const { selectedButtonId } = callbackData;
     
-    // Verifica se é um callback do X9
     if (!selectedButtonId || !selectedButtonId.startsWith('x9_')) {
         return { handled: false };
     }
     
-    // Verifica se é admin
     if (!isGroupAdmin) {
-        console.log(`[X9] Usuário ${senderJid} não é admin, ignorando callback`);
+        console.log(`[X9] Usuário ${senderJid} não é admin`);
         return { handled: true, action: 'ignored' };
     }
     
-    // Parse dos dados do botão
-    // Formato: x9_approve_groupId_participantNumber ou x9_reject_groupId_participantNumber
+    // Parse: x9_approve_NUMBER ou x9_reject_NUMBER
     const parts = selectedButtonId.split('_');
-    if (parts.length < 4) {
-        console.log('[X9] Formato de botão inválido');
+    if (parts.length < 3) {
+        console.log('[X9] Formato inválido');
         return { handled: true, action: 'invalid' };
     }
     
-    const action = parts[1]; // approve ou reject
-    const groupId = parts.slice(2, -1).join('_'); // Everything except last (number) and first 2 (x9_action)
-    const participantNumber = parts[parts.length - 1];
+    const action = parts[1];
+    const participantNumber = parts.slice(2).join('_');
     const participantJid = `${participantNumber}@s.whatsapp.net`;
     
-    console.log(`[X9] Callback recebido: ${action} para ${participantNumber} no grupo ${groupId}`);
+    // Busca em todos os grupos conhecidos
+    let foundRequest = null;
+    let groupId = null;
     
-    // Verifica se a solicitação existe
-    const request = x9RequestStore.get(groupId, participantJid);
-    if (!request) {
+    for (const [key, request] of x9RequestStore.requests) {
+        if (request.participantNumber === participantNumber && request.status === 'pending') {
+            foundRequest = request;
+            groupId = request.groupId;
+            break;
+        }
+    }
+    
+    if (!foundRequest) {
         console.log(`[X9] Solicitação não encontrada para ${participantNumber}`);
         return { handled: true, action: 'not_found' };
     }
     
-    // Verifica se já foi processada
-    if (request.status !== 'pending') {
-        console.log(`[X9] Solicitação já foi ${request.status}`);
-        return { handled: true, action: 'already_processed' };
-    }
-    
-    // Adquire lock
     if (!x9AntiDuplication.tryAcquireLock(groupId, participantJid)) {
-        console.log('[X9] Lock não adquirido, ação em progresso');
+        console.log('[X9] Lock ativo, ignorando');
         return { handled: true, action: 'locked' };
     }
     
     try {
         if (action === 'approve') {
-            return await handleX9Approval(sock, groupId, participantJid, request, senderJid);
+            return await handleApproval(sock, groupId, participantJid, foundRequest, senderJid);
         } else if (action === 'reject') {
-            return await handleX9Rejection(sock, groupId, participantJid, request, senderJid);
+            return await handleRejection(sock, groupId, participantJid, foundRequest, senderJid);
         }
     } finally {
         x9AntiDuplication.releaseLock(groupId, participantJid);
@@ -735,256 +512,120 @@ export async function processX9ButtonCallback(sock, message, callbackData, sende
     return { handled: true };
 }
 
-/**
- * Processa aprovação via botão
- */
-async function handleX9Approval(sock, groupId, participantJid, request, adminJid) {
+async function handleApproval(sock, groupId, participantJid, request, adminJid) {
     const now = new Date();
     const adminNumber = adminJid.replace(/@.*$/, '');
-    const adminName = await getParticipantName(sock, adminJid);
     
-    // Aprova o usuário no grupo
+    // Aprova
     try {
         await sock.groupRequestParticipantsUpdate(groupId, [participantJid], 'approve');
-        console.log(`[X9] Usuário ${participantJid} aprovado no grupo ${groupId}`);
     } catch (error) {
-        console.error(`[X9] Erro ao aprovar usuário:`, error);
-        // Continua mesmo se falhar (pode já ter sido aprovado)
+        console.error('[X9] Erro ao aprovar:', error.message);
     }
     
-    // Atualiza status
     x9RequestStore.updateStatus(groupId, participantJid, 'approved', adminJid);
     
-    // Prepara dados para card
     const cardData = {
         participantName: request.participantName,
         participantNumber: request.participantNumber,
-        adminName,
         adminNumber,
         time: formatTime(now)
     };
     
-    // Constrói card atualizado
     const updatedText = buildApprovedCard(cardData);
-    
-    // Contexto de newsletter
-    const newsletterCtx = {
-        forwardingScore: 999,
-        isForwarded: true,
-        forwardedNewsletterMessageInfo: {
-            newsletterJid: "120363410980452460@newsletter",
-            newsletterName: "Lizzy"
-        }
-    };
-    
-    // Mention do admin
     const mentions = [adminJid, participantJid];
     
-    // Se existir mensagem original, tenta editar ou deletar e enviar nova
-    if (request.messageId) {
-        try {
-            // Tenta editar a mensagem original usando chatModify
-            if (sock.chatModify && typeof sock.chatModify === 'function') {
-                // Usando chatModify para editar a mensagem
-                const editedMsg = await sock.chatModify({
-                    update: {
-                        message: updatedText,
-                        key: {
-                            remoteJid: groupId,
-                            id: request.messageId,
-                            fromMe: true
-                        }
-                    }
-                }, groupId).catch(() => null);
-                
-                if (editedMsg) {
-                    console.log(`[X9] Card editado com chatModify`);
-                    return { handled: true, action: 'approved', data: cardData };
-                }
-            }
-            
-            // Fallback: tenta deletar a mensagem original e enviar nova
+    try {
+        if (request.messageId) {
+            // Tenta deletar mensagem original
             try {
-                if (sock.ev) {
-                    // Emite um evento de exclusão para a mensagem original
-                    sock.ev.emit('messages.delete', {
-                        keys: [{
-                            remoteJid: groupId,
-                            id: request.messageId,
-                            fromMe: true
-                        }]
-                    });
-                }
-            } catch (deleteError) {
-                console.log(`[X9] Não foi possível deletar mensagem original`);
-            }
-        } catch (editError) {
-            console.log(`[X9] Erro ao editar/deletar, enviando nova mensagem`);
+                await sock.sendMessage(groupId, { delete: { id: request.messageId, remoteJid: groupId, fromMe: true } });
+            } catch (e) {}
         }
-    }
+    } catch (e) {}
     
-    // Envia nova mensagem com status atualizado
+    // Envia nova mensagem
     await sock.sendMessage(groupId, {
         text: updatedText,
-        mentions,
-        contextInfo: newsletterCtx
+        mentions
     });
-    console.log(`[X9] Nova mensagem de aprovação enviada`);
     
-    return { handled: true, action: 'approved', data: cardData };
+    console.log(`[X9] ✅ Aprovado: ${request.participantNumber}`);
+    return { handled: true, action: 'approved' };
 }
 
-/**
- * Processa rejeição via botão
- */
-async function handleX9Rejection(sock, groupId, participantJid, request, adminJid) {
+async function handleRejection(sock, groupId, participantJid, request, adminJid) {
     const now = new Date();
     const adminNumber = adminJid.replace(/@.*$/, '');
-    const adminName = await getParticipantName(sock, adminJid);
     
-    // Rejeita o usuário no grupo
+    // Rejeita
     try {
         await sock.groupRequestParticipantsUpdate(groupId, [participantJid], 'reject');
-        console.log(`[X9] Usuário ${participantJid} rejeitado no grupo ${groupId}`);
     } catch (error) {
-        console.error(`[X9] Erro ao rejeitar usuário:`, error);
-        // Continua mesmo se falhar (pode já ter sido rejeitado)
+        console.error('[X9] Erro ao rejeitar:', error.message);
     }
     
-    // Atualiza status
     x9RequestStore.updateStatus(groupId, participantJid, 'rejected', adminJid);
     
-    // Prepara dados para card
     const cardData = {
         participantName: request.participantName,
         participantNumber: request.participantNumber,
-        adminName,
         adminNumber,
         time: formatTime(now)
     };
     
-    // Constrói card atualizado
     const updatedText = buildRejectedCard(cardData);
-    
-    // Contexto de newsletter
-    const newsletterCtx = {
-        forwardingScore: 999,
-        isForwarded: true,
-        forwardedNewsletterMessageInfo: {
-            newsletterJid: "120363410980452460@newsletter",
-            newsletterName: "Lizzy"
-        }
-    };
-    
-    // Mention do admin
     const mentions = [adminJid];
     
-    // Se existir mensagem original, tenta editar ou deletar e enviar nova
-    if (request.messageId) {
-        try {
-            // Tenta editar a mensagem original usando chatModify
-            if (sock.chatModify && typeof sock.chatModify === 'function') {
-                // Usando chatModify para editar a mensagem
-                const editedMsg = await sock.chatModify({
-                    update: {
-                        message: updatedText,
-                        key: {
-                            remoteJid: groupId,
-                            id: request.messageId,
-                            fromMe: true
-                        }
-                    }
-                }, groupId).catch(() => null);
-                
-                if (editedMsg) {
-                    console.log(`[X9] Card editado com chatModify`);
-                    return { handled: true, action: 'rejected', data: cardData };
-                }
-            }
-            
-            // Fallback: tenta deletar a mensagem original e enviar nova
+    try {
+        if (request.messageId) {
             try {
-                if (sock.ev) {
-                    // Emite um evento de exclusão para a mensagem original
-                    sock.ev.emit('messages.delete', {
-                        keys: [{
-                            remoteJid: groupId,
-                            id: request.messageId,
-                            fromMe: true
-                        }]
-                    });
-                }
-            } catch (deleteError) {
-                console.log(`[X9] Não foi possível deletar mensagem original`);
-            }
-        } catch (editError) {
-            console.log(`[X9] Erro ao editar/deletar, enviando nova mensagem`);
+                await sock.sendMessage(groupId, { delete: { id: request.messageId, remoteJid: groupId, fromMe: true } });
+            } catch (e) {}
         }
-    }
+    } catch (e) {}
     
-    // Envia nova mensagem com status atualizado
     await sock.sendMessage(groupId, {
         text: updatedText,
-        mentions,
-        contextInfo: newsletterCtx
+        mentions
     });
-    console.log(`[X9] Nova mensagem de rejeição enviada`);
     
-    return { handled: true, action: 'rejected', data: cardData };
+    console.log(`[X9] ❌ Rejeitado: ${request.participantNumber}`);
+    return { handled: true, action: 'rejected' };
 }
 
-/**
- * Detecta e processa aprovações/rejeições feitas via WhatsApp
- * (sem usar os botões do bot)
- */
 export async function processWhatsAppNativeAction(sock, eventData, groupSettings) {
     const { id: groupId, action, author, authorPn, participant, participants } = eventData;
     
-    if (!groupSettings?.x9) {
-        return null;
-    }
+    if (!groupSettings?.x9) return null;
     
-    // Verifica se é uma ação de aprovação ou rejeição
     const isApproval = action === 'add' || action === 'approve';
     const isRejection = action === 'remove' || action === 'reject';
     
-    if (!isApproval && !isRejection) {
-        return null;
-    }
+    if (!isApproval && !isRejection) return null;
     
-    // Determina o participante e admin
     const targetParticipant = participant || (participants && participants[0]);
     const adminJid = author || authorPn;
     
-    if (!targetParticipant || !adminJid) {
-        return null;
-    }
+    if (!targetParticipant || !adminJid) return null;
     
-    // Verifica se não é ação do próprio bot
-    if (targetParticipant === sock.user?.id) {
-        return null;
-    }
+    const targetJid = normalizeParticipantJid(targetParticipant);
+    if (!targetJid) return null;
     
-    // Verifica se a solicitação existe no store
-    const existingRequest = x9RequestStore.get(groupId, targetParticipant);
-    
-    // Se já foi processada pelo bot, sincroniza
+    const existingRequest = x9RequestStore.get(groupId, targetJid);
     if (existingRequest && existingRequest.status !== 'pending') {
-        console.log(`[X9] Solicitação já processada pelo bot, sincronizando...`);
-        // Não faz nada se já foi sincronizada
+        console.log('[X9] Solicitação já processada, sincronizando...');
         return null;
     }
     
     const now = new Date();
     const adminNumber = adminJid.replace(/@.*$/, '');
-    const adminName = await getParticipantName(sock, adminJid);
-    const participantNumber = targetParticipant.replace(/@.*$/, '');
-    const participantName = existingRequest?.participantName || await getParticipantName(sock, targetParticipant);
+    const participantNumber = targetJid.replace(/@.*$/, '');
+    const participantName = existingRequest?.participantName || await getParticipantName(sock, targetJid);
     
     const cardData = {
         participantName,
         participantNumber,
-        adminName,
         adminNumber,
         time: formatTime(now)
     };
@@ -993,117 +634,28 @@ export async function processWhatsAppNativeAction(sock, eventData, groupSettings
         ? buildWhatsAppApprovalNotification(cardData)
         : buildWhatsAppRejectionNotification(cardData);
     
-    // Contexto de newsletter
-    const newsletterCtx = {
-        forwardingScore: 999,
-        isForwarded: true,
-        forwardedNewsletterMessageInfo: {
-            newsletterJid: "120363410980452460@newsletter",
-            newsletterName: "Lizzy"
-        }
-    };
+    const mentions = [adminJid, targetJid];
     
-    const mentions = [adminJid, targetParticipant];
-    
-    // Envia notificação
     try {
         await sock.sendMessage(groupId, {
             text: notificationText,
-            mentions,
-            contextInfo: newsletterCtx
+            mentions
         });
         
-        console.log(`[X9] Notificação de ${isApproval ? 'aprovação' : 'rejeição'} via WhatsApp enviada`);
+        console.log(`[X9] Notificação via WhatsApp: ${isApproval ? 'aprovado' : 'rejeitado'}`);
         
-        // Atualiza store se existir
         if (existingRequest) {
-            x9RequestStore.updateStatus(groupId, targetParticipant, isApproval ? 'approved' : 'rejected', adminJid);
+            x9RequestStore.updateStatus(groupId, targetJid, isApproval ? 'approved' : 'rejected', adminJid);
         }
         
-        return { action: isApproval ? 'approved' : 'rejected', data: cardData };
+        return { action: isApproval ? 'approved' : 'rejected' };
     } catch (error) {
-        console.error(`[X9] Erro ao enviar notificação:`, error);
+        console.error('[X9] Erro ao enviar notificação:', error.message);
         return null;
     }
 }
 
-/**
- * Obtém nome do participante
- */
-async function getParticipantName(sock, jid) {
-    if (!jid) return 'Desconhecido';
-    
-    try {
-        // Tenta obter do cache/contatos
-        const name = sock.getName(jid);
-        if (name && name !== jid) {
-            return name;
-        }
-    } catch (e) {
-        // Ignora erros
-    }
-    
-    // Tenta obter do WhatsApp
-    try {
-        const onWhatsApp = await sock.onWhatsApp(jid);
-        if (onWhatsApp && onWhatsApp.length > 0) {
-            const contact = onWhatsApp[0];
-            if (contact.notifyName) {
-                return contact.notifyName;
-            }
-        }
-    } catch (e) {
-        // Ignora erros
-    }
-    
-    // Retorna o número como fallback
-    return jid.replace(/@.*$/, '');
-}
-
-/**
- * Obtém foto de perfil do participante
- */
-async function getProfilePicture(sock, jid) {
-    if (!jid) return null;
-    
-    try {
-        const url = await sock.profilePictureUrl(jid, 'image');
-        return url;
-    } catch (e) {
-        return null;
-    }
-}
-
-/**
- * Verifica se um usuário é admin do grupo
- */
-export async function isGroupAdmin(sock, groupId, userJid) {
-    try {
-        const metadata = await sock.groupMetadata(groupId);
-        const participant = metadata?.participants?.find(p => p.id === userJid);
-        return participant?.admin === 'admin' || participant?.admin === 'superadmin';
-    } catch (e) {
-        console.error(`[X9] Erro ao verificar admin:`, e);
-        return false;
-    }
-}
-
-/**
- * Verifica se a mensagem é um callback de botão do X9
- */
-export function isX9ButtonCallback(callbackData) {
-    return callbackData?.selectedButtonId?.startsWith('x9_') || false;
-}
-
-/**
- * Limpa os dados do X9 System (para shutdown)
- */
-export function cleanupX9System() {
-    x9AntiDuplication.destroy();
-    console.log('[X9] Sistema limpo e finalizado');
-}
-
-// Exporta classes e funções para uso externo
+// Exports
 export {
     x9AntiDuplication,
     x9RequestStore,
