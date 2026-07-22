@@ -220,6 +220,37 @@ function shouldBanForBlacklist(userId, groupId) {
   }
   return null;
 }
+
+/**
+ * Verifica se um texto contém link de rede social
+ * @param {string} text - Texto para verificar
+ * @returns {object|null} - Informações do link encontrado ou null
+ */
+function isSocialMediaLink(text) {
+    if (!text || typeof text !== 'string') return null;
+    
+    const socialMediaPatterns = [
+        { pattern: /discord\.(gg|com|app\.com)/gi, name: 'Discord', icon: '💬' },
+        { pattern: /instagram\.(com|am)/gi, name: 'Instagram', icon: '📸' },
+        { pattern: /youtube\.(com|be|nocookie\.com|live)/gi, name: 'YouTube', icon: '▶️' },
+        { pattern: /youtu\.be/gi, name: 'YouTube', icon: '▶️' },
+        { pattern: /m\.youtube\.com/gi, name: 'YouTube', icon: '▶️' },
+        { pattern: /tiktok\.com/gi, name: 'TikTok', icon: '🎵' },
+        { pattern: /vm\.tiktok\.com/gi, name: 'TikTok', icon: '🎵' },
+        { pattern: /vt\.tiktok\.com/gi, name: 'TikTok', icon: '🎵' },
+        { pattern: /tiktokcdn\.com/gi, name: 'TikTok', icon: '🎵' },
+    ];
+    
+    const lowerText = text.toLowerCase();
+    
+    for (const social of socialMediaPatterns) {
+        if (social.pattern.test(lowerText)) {
+            return { found: true, name: social.name, icon: social.icon };
+        }
+    }
+    
+    return null;
+}
 /**
  * Função para lidar com eventos de participantes do grupo (Boas-vindas)
  * Adicionada para corrigir o problema do bot não enviar bem-vindo.
@@ -4684,10 +4715,16 @@ packname: `${nomebot}`,            type: isVideo ? 'video' : 'image',
     }
     // Verifica se o usuário é um parceiro registrado
     const isParceiro = !!(parceriasData?.active && parceriasData?.partners?.[sender]);
+    // AntiLinkGP - Ignora links de redes sociais (AntiSocial responsável)
     if (isGroup && isAntiLinkGp && !isGroupAdmin && !isParceiro) {
       if (!isUserWhitelisted(sender, 'antilinkgp')) {
         let foundGroupLink = false;
         let link_dgp = null;
+        // Verifica se é link de rede social
+        if (isSocialMediaLink(budy2)) {
+          // Ignora links de redes sociais - AntiSocial cuida disso
+          foundGroupLink = false;
+        } else {
         try {
           if (budy2.includes('chat.whatsapp.com')) {
             foundGroupLink = true;
@@ -4737,11 +4774,18 @@ packname: `${nomebot}`,            type: isVideo ? 'video' : 'image',
         } catch (error) {
           console.error("Erro no sistema antilink de grupos:", error);
         }
+        }
       }
     }
+    // AntiLinkCanal - Ignora links de redes sociais (AntiSocial responsável)
     if (isGroup && isAntiLinkCanal && !isGroupAdmin && !isParceiro) {
       if (!isUserWhitelisted(sender, 'antilinkcanal')) {
         let foundChannelLink = false;
+        // Verifica se é link de rede social
+        if (isSocialMediaLink(budy2)) {
+          // Ignora links de redes sociais - AntiSocial cuida disso
+          foundChannelLink = false;
+        } else {
         try {
           if (budy2.includes('whatsapp.com/channel/')) {
             foundChannelLink = true;
@@ -4787,10 +4831,12 @@ packname: `${nomebot}`,            type: isVideo ? 'video' : 'image',
         } catch (error) {
           console.error("Erro no sistema antilink de canais:", error);
         }
+        }
       }
     }
+    // AntiLinkSoft - Ignora links de redes sociais (AntiSocial responsável)
     if (isGroup && isAntiLinkSoft && !isGroupAdmin && !isParceiro && budy2.includes('http') && !isOwner) {
-      if (!isUserWhitelisted(sender, 'antilinksoft')) {
+      if (!isUserWhitelisted(sender, 'antilinksoft') && !isSocialMediaLink(budy2)) {
         try {
           await nazu.sendMessage(from, {
             delete: {
@@ -4806,11 +4852,13 @@ packname: `${nomebot}`,            type: isVideo ? 'video' : 'image',
         }
       }
     }
-    // AntiLink Hard - Remove qualquer link compartilhado
+    // AntiLink Hard - Ignora links de redes sociais (AntiSocial responsável)
     if (isGroup && groupData.antilinkhard && !isGroupAdmin && !isOwner && !isParceiro) {
       const linkRegex = /(https?:\/\/[^\s]+|www\.[^\s]+|\b[a-zA-Z0-9-]+\.(com|net|org|gov|edu|br|io|gg|dev|xyz|app|co|me)(\/[^\s]*)?)/gi;
       const hasLink = linkRegex.test(budy2);
-      if (hasLink && !isUserWhitelisted(sender, 'antilinkhard')) {
+      // Não processa links de redes sociais - AntiSocial cuida disso
+      const isSocial = isSocialMediaLink(budy2);
+      if (hasLink && !isUserWhitelisted(sender, 'antilinkhard') && !isSocial) {
         try {
           if (isBotAdmin) {
             const senderJidAntiLinkHard = sender;
@@ -4846,6 +4894,38 @@ packname: `${nomebot}`,            type: isVideo ? 'video' : 'image',
           return;
         } catch (error) {
           console.error("Erro no sistema antilink hard:", error);
+        }
+      }
+    }
+    // AntiSocial - Bloqueia links de redes sociais
+    if (isGroup && groupData.antisocial && !isGroupAdmin && !isOwner && !isParceiro) {
+      const socialLink = isSocialMediaLink(budy2);
+      if (socialLink && !isUserWhitelisted(sender, 'antisocial')) {
+        try {
+          // Deleta a mensagem
+          await nazu.sendMessage(from, {
+            delete: {
+              remoteJid: from,
+              fromMe: false,
+              id: info.key.id,
+              participant: sender
+            }
+          });
+          // Aplica punição
+          if (isBotAdmin) {
+            await nazu.groupParticipantsUpdate(from, [sender], 'remove').catch(e => 
+              console.error('Erro ao remover (antisocial):', e)
+            );
+            await reply(`🚫 @${getUserName(sender)}, links de ${socialLink.name} não são permitidos! Você foi removido.`, {
+              mentions: [sender]
+            });
+          } else {
+            await reply(`⚠️ @${getUserName(sender)}, links de ${socialLink.name} não são permitidos! Peço que não envie mais.`, {
+              mentions: [sender]
+            });
+          }
+        } catch (error) {
+          console.error("Erro no sistema AntiSocial:", error);
         }
       }
     }
@@ -30320,6 +30400,7 @@ break;
             { key: 'antifoton', name: 'Antifoton', isObject: false },
             { key: 'antiaudio', name: 'Antiaudio', isObject: false },
             { key: 'antigore', name: 'Antigore', isObject: false },
+            { key: 'antisocial', name: 'AntiSocial', isObject: false, desc: 'Bloqueia links de redes sociais (Discord, Instagram, YouTube e TikTok)' },
           ];
           // Verificar status de cada sistema
           let activeCount = 0;
@@ -34165,6 +34246,52 @@ ${groupPrefix}antipalavra stats
 • ban - Banimento imediato
 • adv - Advertência (3 = ban)
 💡 *Dica:* O sistema ignora acentos e maiúsculas/minúsculas.` , contextInfo: newsletterCtx, quoted: info });
+        break;
+      case 'antisocial':
+        if (!isGroup) return reply("❌ Este comando é só para grupos!");
+        if (!isGroupAdmin) return reply("❌ Apenas administradores podem usar este comando!");
+        const subCmd = args[0]?.toLowerCase();
+        const newsletterCtxAntiSocial = {
+          forwardingScore: 999,
+          isForwarded: true,
+          forwardedNewsletterMessageInfo: {
+            newsletterJid: "120363410980452460@newsletter",
+            newsletterName: "Lizzy"
+          }
+        };
+        // Ativa o sistema
+        if (subCmd === 'on' || subCmd === 'ativar') {
+          groupData.antisocial = true;
+          fs.writeFileSync(groupFilePath, JSON.stringify(groupData, null, 2));
+          return await nazu.sendMessage(from, { text: `✅ AntiSocial ativado! Agora links de redes sociais serão punidos automaticamente.
+
+📋 Redes bloqueadas:
+• 💬 Discord
+• 📸 Instagram
+• ▶️ YouTube
+• 🎵 TikTok` , contextInfo: newsletterCtxAntiSocial, quoted: info });
+        }
+        // Desativa o sistema
+        if (subCmd === 'off' || subCmd === 'desativar') {
+          groupData.antisocial = false;
+          fs.writeFileSync(groupFilePath, JSON.stringify(groupData, null, 2));
+          return await nazu.sendMessage(from, { text: `❌ AntiSocial desativado! Links de redes sociais voltarão a ser permitidos.` , contextInfo: newsletterCtxAntiSocial, quoted: info });
+        }
+        // Status
+        const status = groupData.antisocial ? '✅ Ativado' : '❌ Desativado';
+        return await nazu.sendMessage(from, { text: `🛡️ *ANTISOCIAL - STATUS*
+
+📊 Status: ${status}
+
+*Redes bloqueadas:*
+• 💬 Discord (discord.gg, discord.com)
+• 📸 Instagram (instagram.com, instagr.am)
+• ▶️ YouTube (youtube.com, youtu.be)
+• 🎵 TikTok (tiktok.com, vm.tiktok.com)
+
+*Comandos:*
+${groupPrefix}antisocial on - Ativar
+${groupPrefix}antisocial off - Desativar` , contextInfo: newsletterCtxAntiSocial, quoted: info });
         break;
       case 'chance':
         try {
