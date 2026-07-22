@@ -1,6 +1,6 @@
 // --- SISTEMA ANTIPALAVRA ---
-// Sistema de blacklist de palavras que resultam em banimento automático
-// Configurável por grupo - apenas administradores podem gerenciar
+// Sistema de blacklist de palavras com ações individuais (ban ou adv)
+// Cada palavra pode ter sua própria ação configurada
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -9,6 +9,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const GRUPOS_DIR = path.join(__dirname, '../../../database/grupos');
+
+// Ações válidas
+const ACOES_VALIDAS = ['ban', 'adv'];
 
 // --- HELPERS ---
 
@@ -69,6 +72,7 @@ const getAntipalavraConfig = (groupData) => {
             blacklist: [],
             stats: {
                 totalBans: 0,
+                totalAdvs: 0,
                 totalDetections: 0,
                 lastUpdate: new Date().toISOString()
             }
@@ -82,10 +86,19 @@ const getAntipalavraConfig = (groupData) => {
     if (!groupData.antipalavra.stats) {
         groupData.antipalavra.stats = {
             totalBans: 0,
+            totalAdvs: 0,
             totalDetections: 0,
             lastUpdate: new Date().toISOString()
         };
     }
+    
+    // Migra palavras antigas que não têm ação definida
+    groupData.antipalavra.blacklist = groupData.antipalavra.blacklist.map(item => {
+        if (!item.acao) {
+            item.acao = 'ban'; // Padrão para palavras antigas
+        }
+        return item;
+    });
     
     return groupData.antipalavra;
 };
@@ -153,9 +166,12 @@ const disableAntipalavra = (groupId) => {
 };
 
 /**
- * Adiciona uma palavra à blacklist
+ * Adiciona uma palavra à blacklist com ação específica
+ * @param {string} groupId - ID do grupo
+ * @param {string} palavra - Palavra a adicionar
+ * @param {string} acao - Ação a ser tomada: 'ban' ou 'adv'
  */
-const addPalavraBlacklist = (groupId, palavra) => {
+const addPalavraBlacklist = (groupId, palavra, acao) => {
     if (!palavra || typeof palavra !== 'string') {
         return {
             success: false,
@@ -163,9 +179,18 @@ const addPalavraBlacklist = (groupId, palavra) => {
         };
     }
     
+    // Valida a ação
+    if (!acao || !ACOES_VALIDAS.includes(acao.toLowerCase())) {
+        return {
+            success: false,
+            message: `❌ Ação inválida! Use:\n• ban - Banimento imediato\n• adv - Advertência\n\nExemplo: ${groupPrefix || '/'}antipalavra add spam ban`
+        };
+    }
+    
     const groupData = loadGroupData(groupId);
     const config = getAntipalavraConfig(groupData);
     const palavraNormalizada = normalizeText(palavra);
+    const acaoNormalizada = acao.toLowerCase();
     
     if (!palavraNormalizada) {
         return {
@@ -186,10 +211,11 @@ const addPalavraBlacklist = (groupId, palavra) => {
         };
     }
     
-    // Adiciona à blacklist
+    // Adiciona à blacklist com a ação especificada
     config.blacklist.push({
         palavra: palavra.trim(),
         palavraNormalizada: palavraNormalizada,
+        acao: acaoNormalizada,
         addedAt: new Date().toISOString(),
         detections: 0
     });
@@ -197,9 +223,10 @@ const addPalavraBlacklist = (groupId, palavra) => {
     config.stats.lastUpdate = new Date().toISOString();
     
     if (saveGroupData(groupId, groupData)) {
+        const acaoTexto = acaoNormalizada === 'ban' ? '🚫 Banimento imediato' : '⚠️ Advertência';
         return {
             success: true,
-            message: `✅ Palavra "${palavra}" adicionada à blacklist!\n📊 Total de palavras: ${config.blacklist.length}`
+            message: `✅ Palavra "${palavra}" adicionada!\n📊 Ação: ${acaoTexto}\n📊 Total de palavras: ${config.blacklist.length}`
         };
     }
     
@@ -274,13 +301,15 @@ const listPalavrasBlacklist = (groupId) => {
     message += `📊 Status: ${config.enabled ? '✅ Ativo' : '❌ Desativado'}\n`;
     message += `🔢 Total de palavras: ${config.blacklist.length}\n`;
     message += `🚫 Total de bans: ${config.stats.totalBans}\n`;
+    message += `⚠️ Total de advertências: ${config.stats.totalAdvs}\n`;
     message += `🔍 Total de detecções: ${config.stats.totalDetections}\n`;
     message += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
     
     sorted.forEach((item, index) => {
-        message += `${index + 1}. "${item.palavra}"\n`;
-        message += `   ├ 🔍 Detecções: ${item.detections}\n`;
-        message += `   └ 📅 Adicionada: ${new Date(item.addedAt).toLocaleDateString('pt-BR')}\n\n`;
+        const acaoIcone = item.acao === 'ban' ? '🚫' : '⚠️';
+        const acaoTexto = item.acao === 'ban' ? 'Ban' : 'Advertência';
+        message += `${index + 1}. "${item.palavra}" → ${acaoIcone} ${acaoTexto}\n`;
+        message += `   └ 🔍 Detecções: ${item.detections}\n\n`;
     });
     
     return {
@@ -325,7 +354,7 @@ const clearBlacklist = (groupId) => {
 
 /**
  * Verifica se uma mensagem contém palavras da blacklist
- * Retorna a primeira palavra detectada ou null
+ * Retorna a primeira palavra detectada com sua ação ou null
  */
 const checkMessage = (groupId, messageText) => {
     if (!messageText || typeof messageText !== 'string') {
@@ -355,7 +384,8 @@ const checkMessage = (groupId, messageText) => {
             return {
                 detected: true,
                 palavra: item.palavra,
-                palavraOriginal: item.palavra
+                palavraOriginal: item.palavra,
+                acao: item.acao // 'ban' ou 'adv'
             };
         }
     }
@@ -393,6 +423,69 @@ const registerBan = (groupId, userId, palavra) => {
 };
 
 /**
+ * Registra uma advertência
+ */
+const registerAdvertencia = (groupId) => {
+    const groupData = loadGroupData(groupId);
+    const config = getAntipalavraConfig(groupData);
+    
+    config.stats.totalAdvs++;
+    config.stats.lastUpdate = new Date().toISOString();
+    
+    saveGroupData(groupId, groupData);
+};
+
+/**
+ * Retorna o caminho do arquivo de dados do grupo
+ */
+const getGroupFilePath = (groupId) => {
+    return path.join(GRUPOS_DIR, `${groupId}.json`);
+};
+
+/**
+ * Aplica advertência a um usuário (usa o sistema existente de advertências)
+ * Retorna o número de advertências atual e se deve banir
+ */
+const applyAdvertencia = async (groupId, userId, palavra, senderJid, nazu) => {
+    const groupFilePath = getGroupFilePath(groupId);
+    let groupData = {};
+    
+    try {
+        if (fs.existsSync(groupFilePath)) {
+            groupData = JSON.parse(fs.readFileSync(groupFilePath, 'utf8'));
+        }
+    } catch (err) {
+        console.error('[ANTIPALAVRA] Erro ao carregar dados do grupo:', err.message);
+    }
+    
+    groupData.warnings = groupData.warnings || {};
+    groupData.warnings[userId] = groupData.warnings[userId] || [];
+    
+    // Adiciona advertência
+    groupData.warnings[userId].push({
+        reason: `Palavra proibida: ${palavra}`,
+        timestamp: Date.now(),
+        issuer: 'sistema-antipalavra'
+    });
+    
+    const warningCount = groupData.warnings[userId].length;
+    
+    try {
+        fs.writeFileSync(groupFilePath, JSON.stringify(groupData, null, 2));
+    } catch (err) {
+        console.error('[ANTIPALAVRA] Erro ao salvar advertência:', err.message);
+    }
+    
+    // Registra a advertência nas estatísticas do antipalavra
+    registerAdvertencia(groupId);
+    
+    return {
+        warningCount,
+        shouldBan: warningCount >= 3
+    };
+};
+
+/**
  * Obtém estatísticas do antipalavra
  */
 const getStats = (groupId) => {
@@ -402,14 +495,16 @@ const getStats = (groupId) => {
     return {
         enabled: config.enabled,
         totalWords: config.blacklist.length,
-        totalBans: config.stats.totalBans,
-        totalDetections: config.stats.totalDetections,
+        totalBans: config.stats.totalBans || 0,
+        totalAdvs: config.stats.totalAdvs || 0,
+        totalDetections: config.stats.totalDetections || 0,
         lastUpdate: config.stats.lastUpdate,
         topWords: config.blacklist
             .sort((a, b) => b.detections - a.detections)
             .slice(0, 5)
             .map(item => ({
                 palavra: item.palavra,
+                acao: item.acao,
                 detections: item.detections
             }))
     };
@@ -435,6 +530,9 @@ export {
     clearBlacklist,
     checkMessage,
     registerBan,
+    registerAdvertencia,
+    applyAdvertencia,
     getStats,
-    isActive
+    isActive,
+    getGroupFilePath
 };

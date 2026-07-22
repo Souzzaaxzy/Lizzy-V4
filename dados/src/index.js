@@ -5145,34 +5145,86 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
             } else if (!isGroupAdmin && !isUserWhitelisted(sender, 'antipalavra')) {
               const detectionResult = antipalavra.checkMessage(from, body);
               if (detectionResult && detectionResult.detected) {
-                console.log(`[ANTIPALAVRA] Palavra detectada: "${detectionResult.palavra}" de @${sender.split('@')[0]}`);
-                if (!isBotAdmin) {
-                  await nazu.sendMessage(from, {
-                    text: `⚠️ *ANTIPALAVRA - DETECÇÃO*\n\n` +
-                      `👤 @${sender.split('@')[0]} usou uma palavra proibida!\n` +
-                      `⚠️ Palavra: "${detectionResult.palavra}"\n\n` +
-                      `❌ Não posso banir pois não sou administrador!`,
-                    mentions: [sender]
-                  }).catch(err => console.error('[ANTIPALAVRA] Erro ao enviar notificação:', err.message));
-                  return;
-                }
+                console.log(`[ANTIPALAVRA] Palavra detectada: "${detectionResult.palavra}" (${detectionResult.acao}) de @${sender.split('@')[0]}`);
+                
+                // Deleta a mensagem
                 await nazu.sendMessage(from, { delete: info.key }).catch(err =>
                   console.error('[ANTIPALAVRA] Erro ao deletar mensagem:', err.message)
                 );
-                const senderJidAntiPalavra = sender;
-                await nazu.groupParticipantsUpdate(from, [senderJidAntiPalavra], 'remove').catch(err =>
-                  console.error('[ANTIPALAVRA] Erro ao remover usuário:', err.message)
-                );
-                antipalavra.registerBan(from, sender, detectionResult.palavra);
-                await nazu.sendMessage(from, {
-                  text: `🚫 *ANTIPALAVRA - BANIMENTO AUTOMÁTICO*\n\n` +
-                    `👤 Usuário: @${sender.split('@')[0]}\n` +
-                    `⚠️ Palavra detectada: "${detectionResult.palavra}"\n` +
-                    `🔨 Ação: Banimento automático\n\n` +
-                    `_O sistema antipalavra protege este grupo._`,
-                  mentions: [sender]
-                }).catch(err => console.error('[ANTIPALAVRA] Erro ao enviar notificação:', err.message));
-                return;
+                
+                const senderJidAnti = sender;
+                
+                // Verifica a ação configurada para esta palavra
+                if (detectionResult.acao === 'ban') {
+                  // Ação: Banimento imediato
+                  if (!isBotAdmin) {
+                    await nazu.sendMessage(from, {
+                      text: `⚠️ *ANTIPALAVRA - DETECÇÃO*\n\n` +
+                        `👤 @${sender.split('@')[0]} usou palavra proibida!\n` +
+                        `⚠️ Palavra: "${detectionResult.palavra}"\n` +
+                        `🔨 Ação: Banimento\n\n` +
+                        `❌ Não posso banir pois não sou administrador!`,
+                      mentions: [sender]
+                    }).catch(err => console.error('[ANTIPALAVRA] Erro:', err.message));
+                    return;
+                  }
+                  
+                  await nazu.groupParticipantsUpdate(from, [senderJidAnti], 'remove').catch(err =>
+                    console.error('[ANTIPALAVRA] Erro ao remover usuário:', err.message)
+                  );
+                  antipalavra.registerBan(from, sender, detectionResult.palavra);
+                  await nazu.sendMessage(from, {
+                    text: `🚫 *ANTIPALAVRA - BANIMENTO*\n\n` +
+                      `👤 @${sender.split('@')[0]}\n` +
+                      `⚠️ Palavra: "${detectionResult.palavra}"\n` +
+                      `🔨 Ação: Banimento imediato\n\n` +
+                      `_Sistema antipalavra ativo._`,
+                    mentions: [sender]
+                  }).catch(err => console.error('[ANTIPALAVRA] Erro:', err.message));
+                  return;
+                  
+                } else if (detectionResult.acao === 'adv') {
+                  // Ação: Advertência
+                  const advResult = await antipalavra.applyAdvertencia(from, sender, detectionResult.palavra, sender, nazu);
+                  
+                  if (advResult.shouldBan) {
+                    // 3 advertências = ban
+                    if (!isBotAdmin) {
+                      await nazu.sendMessage(from, {
+                        text: `⚠️ *ANTIPALAVRA - DETECÇÃO*\n\n` +
+                          `👤 @${sender.split('@')[0]} atingiu 3 advertências!\n` +
+                          `⚠️ Palavra: "${detectionResult.palavra}"\n` +
+                          `🔨 Ação: Banimento\n\n` +
+                          `❌ Não posso banir pois não sou administrador!`,
+                        mentions: [sender]
+                      }).catch(err => console.error('[ANTIPALAVRA] Erro:', err.message));
+                      return;
+                    }
+                    
+                    await nazu.groupParticipantsUpdate(from, [senderJidAnti], 'remove').catch(err =>
+                      console.error('[ANTIPALAVRA] Erro ao banir:', err.message)
+                    );
+                    antipalavra.registerBan(from, sender, detectionResult.palavra);
+                    await nazu.sendMessage(from, {
+                      text: `🚫 *ANTIPALAVRA - 3 ADVERTÊNCIAS*\n\n` +
+                        `👤 @${sender.split('@')[0]}\n` +
+                        `⚠️ Atingiu o limite de advertências!\n` +
+                        `🔨 Ação: Banimento\n\n` +
+                        `_Sistema antipalavra ativo._`,
+                      mentions: [sender]
+                    }).catch(err => console.error('[ANTIPALAVRA] Erro:', err.message));
+                  } else {
+                    await nazu.sendMessage(from, {
+                      text: `⚠️ *ANTIPALAVRA - ADVERTÊNCIA*\n\n` +
+                        `👤 @${sender.split('@')[0]}\n` +
+                        `⚠️ Palavra: "${detectionResult.palavra}"\n` +
+                        `📊 Advertências: ${advResult.warningCount}/3\n\n` +
+                        `_Sistema antipalavra ativo._`,
+                      mentions: [sender]
+                    }).catch(err => console.error('[ANTIPALAVRA] Erro:', err.message));
+                  }
+                  return;
+                }
               }
             }
           } catch (antipalavraErr) {
@@ -34038,11 +34090,19 @@ ${groupPrefix}antitoxic sensibilidade <0-100> - Define sensibilidade
         }
         // Adiciona palavra à blacklist
         if (subCmdAntipalavra === 'add' || subCmdAntipalavra === 'adicionar') {
-          const palavra = args.slice(1).join(' ').trim();
-          if (!palavra) {
-            return await nazu.sendMessage(from, { text: `❌ Você precisa especificar a palavra!\n\nUso: ${groupPrefix}antipalavra add <palavra>` , contextInfo: newsletterCtx, quoted: info });
+          const argsAdd = args.slice(1);
+          const acao = argsAdd[argsAdd.length - 1]?.toLowerCase();
+          const palavra = argsAdd.slice(0, -1).join(' ').trim();
+          
+          if (!palavra || !acao) {
+            return await nazu.sendMessage(from, { text: `❌ Uso incorreto!\n\nUso: ${groupPrefix}antipalavra add <palavra> <ação>\n\nAções disponíveis:\n• ban - Banimento imediato\n• adv - Advertência\n\nExemplos:\n${groupPrefix}antipalavra add spam ban\n${groupPrefix}antipalavra add palavrão adv` , contextInfo: newsletterCtx, quoted: info });
           }
-          const result = antipalavra.addPalavraBlacklist(from, palavra);
+          
+          if (!['ban', 'adv'].includes(acao)) {
+            return await nazu.sendMessage(from, { text: `❌ Ação inválida: "${acao}"\n\nAções disponíveis:\n• ban - Banimento imediato\n• adv - Advertência` , contextInfo: newsletterCtx, quoted: info });
+          }
+          
+          const result = antipalavra.addPalavraBlacklist(from, palavra, acao);
           return await nazu.sendMessage(from, { text: result.message , contextInfo: newsletterCtx, quoted: info });
         }
         // Remove palavra da blacklist
@@ -34072,11 +34132,13 @@ ${groupPrefix}antitoxic sensibilidade <0-100> - Define sensibilidade
           msg += `📊 Status: ${stats.enabled ? '✅ Ativo' : '❌ Desativado'}\n`;
           msg += `🔢 Palavras na blacklist: ${stats.totalWords}\n`;
           msg += `🚫 Total de bans: ${stats.totalBans}\n`;
+          msg += `⚠️ Total de advertências: ${stats.totalAdvs}\n`;
           msg += `🔍 Total de detecções: ${stats.totalDetections}\n`;
           if (stats.topWords && stats.topWords.length > 0) {
             msg += `\n🔝 *Top 5 palavras mais detectadas:*\n`;
             stats.topWords.forEach((item, index) => {
-              msg += `${index + 1}. "${item.palavra}" - ${item.detections}x\n`;
+              const acaoIcone = item.acao === 'ban' ? '🚫' : '⚠️';
+              msg += `${index + 1}. "${item.palavra}" ${acaoIcone} - ${item.detections}x\n`;
             });
           }
           return await nazu.sendMessage(from, { text: msg , contextInfo: newsletterCtx, quoted: info });
@@ -34088,8 +34150,8 @@ ${groupPrefix}antipalavra on
 └ Ativa o sistema
 ${groupPrefix}antipalavra off
 └ Desativa o sistema
-${groupPrefix}antipalavra add <palavra>
-└ Adiciona palavra à blacklist
+${groupPrefix}antipalavra add <palavra> <ação>
+└ Adiciona palavra com ação (ban/adv)
 ${groupPrefix}antipalavra del <palavra>
 └ Remove palavra da blacklist
 ${groupPrefix}antipalavra list
@@ -34098,9 +34160,10 @@ ${groupPrefix}antipalavra clear
 └ Limpa toda a blacklist
 ${groupPrefix}antipalavra stats
 └ Mostra estatísticas
-⚠️ *IMPORTANTE:*
-Membros que falarem palavras da blacklist serão BANIDOS AUTOMATICAMENTE do grupo!
-💡 *Dica:* O sistema ignora acentos e maiúsculas/minúsculas na detecção.` , contextInfo: newsletterCtx, quoted: info });
+*Ações disponíveis:*
+• ban - Banimento imediato
+• adv - Advertência (3 = ban)
+💡 *Dica:* O sistema ignora acentos e maiúsculas/minúsculas.` , contextInfo: newsletterCtx, quoted: info });
         break;
       case 'chance':
         try {
