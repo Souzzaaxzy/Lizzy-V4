@@ -303,31 +303,36 @@ function markProcessed(key) {
     setTimeout(() => processedKeys.delete(key), LOCK_DURATION);
 }
 
-// Normaliza JID - extrai número de qualquer formato
+// Normaliza JID - extrai APENAS o número real do telefone
+// NUNCA usa LID (Linked Identity) - é apenas um identificador interno
 function normalizeJid(participant) {
     if (!participant) return null;
     
     // Se é string
     if (typeof participant === 'string') {
         // Se já tem @, retorna como está
-        if (participant.includes('@')) return participant;
+        if (participant.includes('@')) {
+            // Se for LID, retorna null (não é número real)
+            if (participant.includes('@lid')) return null;
+            return participant;
+        }
         // Se não tem @, adiciona
         return `${participant}@s.whatsapp.net`;
     }
     
     // Se é objeto (pode vir como { pn: 'numero', lid: '...', id: '...' })
     if (typeof participant === 'object') {
-        // Tenta extrair o número de diferentes propriedades
-        const num = participant.pn || participant.lid || participant.id || participant.number;
+        // PRIORIDADE: pn > id > number (nunca usa lid!)
+        const num = participant.pn || participant.id || participant.number;
         
         if (typeof num === 'string') {
             // Remove qualquer @ que possa ter
             const cleanNum = num.split('@')[0];
-            // Se parece ser um número LID (letras/números sem @s.whatsapp.net)
-            if (cleanNum.includes('lid') || !/^\d+$/.test(cleanNum)) {
-                return cleanNum.includes('@') ? cleanNum : `${cleanNum}@lid`;
+            
+            // Verifica se é um número válido (apenas dígitos)
+            if (/^\d+$/.test(cleanNum)) {
+                return `${cleanNum}@s.whatsapp.net`;
             }
-            return `${cleanNum}@s.whatsapp.net`;
         }
     }
     
