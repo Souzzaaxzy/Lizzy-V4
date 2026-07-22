@@ -1486,12 +1486,30 @@ async function createBotSocket(authDir) {
 
 
         AbyssSock.ev.on('group-participants.update', async (inf) => {
+            console.log('[GROUP PARTICIPANTS UPDATE] Event:', JSON.stringify(inf, null, 2));
+            
             const updateData = {
                 id: inf.id || inf.jid,
                 participants: inf.participants,
                 action: inf.action,
                 author: inf.author || null
             };
+
+            // Verificar se é uma aprovação/rejeição de solicitação de entrada
+            // Quando um admin aprova uma solicitação, o WhatsApp pode enviar como "add"
+            if (inf.action === 'add' && inf.participants && inf.participants.length > 0) {
+                console.log('[GROUP PARTICIPANTS UPDATE] Possible approval detected:', inf.participants);
+                // Repassar para handleGroupJoinRequest também para verificar se é aprovação
+                if (typeof handleGroupJoinRequest === 'function') {
+                    await handleGroupJoinRequest(AbyssSock, {
+                        id: inf.id || inf.jid,
+                        action: 'approve',
+                        author: inf.author,
+                        participant: inf.participants[0],
+                        requestingUserJid: inf.participants[0]
+                    });
+                }
+            }
 
             if (typeof handleGroupParticipantsUpdate === 'function') {
                 await handleGroupParticipantsUpdate(AbyssSock, updateData, numerodono);
