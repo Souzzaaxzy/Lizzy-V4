@@ -19290,12 +19290,13 @@ case 'pin':
     // Pegar até 5 imagens
     const itemsToSend = datinha.urls.slice(0, 5);
     
-    // Enviar imagens usando carousel (cards) do Baileys
+    // Enviar imagens usando carousel (cards) do Baileys com nativeFlow
     if (itemsToSend.length > 1) {
       const cards = itemsToSend.map((url, index) => ({
         image: { url },
         caption: `🔍 busca ${index + 1}`,
-        footer: '📌 Pinterest'
+        footer: '📌 Pinterest',
+        nativeFlow: []
       }));
       
       await nazu.sendMessage(from, {
