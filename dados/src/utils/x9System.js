@@ -761,8 +761,21 @@ export async function notifyGroupChange(sock, groupId, changeType, adminJid, ext
     console.log('[X9] adminJid:', adminJid);
     
     const now = new Date();
-    // adminJid já contém @s.whatsapp.net, então usa direto
-    const adminText = adminJid || 'Admin';
+    
+    // Formatar o author - extrair só o número se for phone, ou o nome se for LID
+    let adminText = 'Admin';
+    if (adminJid) {
+        // Se for LID (contém @lid), extrair só o identificador
+        if (adminJid.includes('@lid')) {
+            adminText = adminJid.split('@')[0]; // Remove @lid
+        } 
+        // Se for número de telefone, extrair só o número
+        else if (adminJid.includes('@s.whatsapp.net')) {
+            adminText = adminJid.split('@')[0];
+        } else {
+            adminText = adminJid;
+        }
+    }
     
     let template;
     const vars = {
