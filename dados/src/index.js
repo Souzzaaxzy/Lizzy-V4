@@ -37352,6 +37352,14 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
             break;
           }
         }
+        // Processar auto-respostas do grupo (addautoadm) - funciona mesmo sem autorepo
+        if (!isCmd && isGroup) {
+          const groupAutoResponses = loadGroupAutoResponses(from);
+          if (groupAutoResponses.length > 0) {
+            await processAutoResponse(nazu, from, budy2, info);
+          }
+        }
+        // Processar auto-respostas globais (apenas se autorepo estiver ativo)
         if (!isCmd && isAutoRepo) {
           await processAutoResponse(nazu, from, budy2, info);
         };
