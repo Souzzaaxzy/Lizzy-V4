@@ -19665,39 +19665,36 @@ case 'pin':
               };
 
               const sendTikTokVideo = async (videoData, index) => {
-                const link = videoData.link || (isTikTokUrl ? q : '');
-                if (!link) return;
+                const url = videoData.urls?.[0];
+                if (!url) return;
 
                 const title = videoData.title || '';
-                const views = videoData.views || 0;
-                const viewsText = views ? `${formatNumber(views)} visualizações` : '';
-                const thumbnail = videoData.cover || videoData.thumbnail || '';
+                const link = videoData.link || (isTikTokUrl ? q : '');
 
-                const caption = title ? `${title}\n\n👁️ ${viewsText}` : `👁️ ${viewsText}`;
-
-                // Enviar card com thumbnail e botão CTA URL
-                await nazu.sendMessage(from, {
-                  image: { url: thumbnail },
-                  caption: caption,
-                  footer: '📱 TikTok',
-                  contextInfo: {
-                    forwardedNewsletterMessageInfo: {
-                      newsletterJid: '120363420762648535@newsletter',
-                      newsletterName: 'Lizzy Bot',
-                      serverMessageId: -1
-                    }
-                  },
-                  buttons: [
-                    {
-                      name: "cta_url",
-                      buttonParamsJson: JSON.stringify({
-                        display_text: "🔗 Abrir no TikTok",
-                        url: link
-                      })
-                    }
-                  ],
-                  headerType: 1
-                });
+                try {
+                  // Enviar vídeo com botão CTA URL (nativeFlow)
+                  await nazu.sendMessage(from, {
+                    video: { url },
+                    caption: title || '',
+                    buttons: [
+                      {
+                        name: "cta_url",
+                        buttonParamsJson: JSON.stringify({
+                          display_text: "🔗 Abrir no TikTok",
+                          url: link || url
+                        })
+                      }
+                    ],
+                    headerType: 4 // VIDEO
+                  }, { quoted: info });
+                } catch (videoErr) {
+                  console.error('Erro ao enviar vídeo com botão CTA:', videoErr.message);
+                  // Fallback: enviar só o vídeo
+                  await nazu.sendMessage(from, {
+                    video: { url },
+                    caption: title ? `📹 ${title}\n\n🔗 ${link}` : `🔗 ${link}`
+                  }, { quoted: info });
+                }
               };
 
               const results = datinha.results;
