@@ -28,6 +28,7 @@ import {
     processNewJoinRequest,
     notifyWhatsAppApproval,
     notifyWhatsAppRejection,
+    notifyGroupChange,
     isGroupAdmin,
     cleanupX9System
 } from './utils/x9System.js';
@@ -1304,8 +1305,7 @@ async function createBotSocket(authDir) {
 
                     // 📸 FOTO ALTERADA
                     if (ev.imgUrl || ev.picUrl) {
-                        mensagem = `📸 *X9 Report:* A foto do grupo foi alterada!${authorText ? ` por ${authorText}` : ''}`;
-                        console.log('[X9] Foto alterada');
+                        await notifyGroupChange(AbyssSock, groupId, 'photo_changed', author);
                     }
 
                     // 📝 NOME ALTERADO
@@ -1322,8 +1322,10 @@ async function createBotSocket(authDir) {
                         
                         // Só envia notificação se o nome realmente mudou
                         if (currentName && currentName !== ev.subject) {
-                            mensagem = `📝 *X9 Report:* Nome do grupo alterado!${authorText ? ` por ${authorText}` : ''}\n🔹 Anterior: *${currentName}*\n🔸 Novo: *${ev.subject}*`;
-                            console.log('[X9] Nome alterado:', ev.subject, '(anterior:', currentName + ')');
+                            await notifyGroupChange(AbyssSock, groupId, 'name_changed', author, {
+                                oldName: currentName,
+                                newName: ev.subject
+                            });
                         } else {
                             console.log('[X9] Nome do grupo já é o mesmo - ignorando evento');
                         }
@@ -1344,8 +1346,7 @@ async function createBotSocket(authDir) {
                         }
                         if (ev.desc === null) {
                             if (currentDesc) {
-                                mensagem = `📜 *X9 Report:* A descrição do grupo foi *removida*!${authorText ? ` por ${authorText}` : ''}`;
-                                console.log('[X9] Descrição removida');
+                                await notifyGroupChange(AbyssSock, groupId, 'desc_removed', author);
                             } else {
                                 console.log('[X9] Descrição já estava vazia - ignorando evento');
                             }
@@ -1353,8 +1354,9 @@ async function createBotSocket(authDir) {
                         // Se desc foi alterada, só notifica se realmente mudou
                         else if (currentDesc !== ev.desc) {
                             const descText = ev.desc.substring(0, 200) + (ev.desc.length > 200 ? '...' : '');
-                            mensagem = `📜 *X9 Report:* Descrição do grupo alterada!${authorText ? ` por ${authorText}` : ''}\n📝 Nova descrição: ${descText}`;
-                            console.log('[X9] Descrição alterada');
+                            await notifyGroupChange(AbyssSock, groupId, 'desc_changed', author, {
+                                newDesc: descText
+                            });
                         } else {
                             console.log('[X9] Descrição do grupo já é a mesma - ignorando evento');
                         }
@@ -1362,35 +1364,31 @@ async function createBotSocket(authDir) {
 
                     // 🔗 LINK DE CONVITE ALTERADO
                     else if (ev.inviteCode) {
-                        mensagem = `🔗 *X9 Report:* Link de convite do grupo foi redefinido!${authorText ? ` por ${authorText}` : ''}`;
-                        console.log('[X9] Link alterado:', ev.inviteCode);
-                        console.log('[X9] Autor do link:', author || 'não identificado');
+                        await notifyGroupChange(AbyssSock, groupId, 'link_changed', author);
                     }
 
                     // 🔒 GRUPO BLOQUEADO/DESBLOQUEADO
                     else if (ev.announce !== undefined) {
                         if (ev.announce === true) {
-                            mensagem = `🔒 *X9 Report:* Grupo foi *bloqueado*!${authorText ? ` por ${authorText}` : ''}\n📌 Apenas administradores podem enviar mensagens.`;
+                            await notifyGroupChange(AbyssSock, groupId, 'locked', author);
                         } else {
-                            mensagem = `🔓 *X9 Report:* Grupo foi *desbloqueado*!${authorText ? ` por ${authorText}` : ''}\n📌 Todos os membros podem enviar mensagens.`;
+                            await notifyGroupChange(AbyssSock, groupId, 'unlocked', author);
                         }
-                        console.log('[X9] Announce alterado:', ev.announce);
                     }
 
                     // ✏️ RESTRIÇÃO DE EDIÇÃO ALTERADA
                     else if (ev.restrict !== undefined) {
                         if (ev.restrict === true) {
-                            mensagem = `✏️ *X9 Report:* Edição do grupo foi *restrita*!${authorText ? ` por ${authorText}` : ''}\n📌 Apenas administradores podem editar informações.`;
+                            await notifyGroupChange(AbyssSock, groupId, 'edit_restricted', author);
                         } else {
-                            mensagem = `✏️ *X9 Report:* Edição do grupo foi *liberada*!${authorText ? ` por ${authorText}` : ''}\n📌 Todos os membros podem editar informações.`;
+                            await notifyGroupChange(AbyssSock, groupId, 'edit_free', author);
                         }
-                        console.log('[X9] Restrict alterado:', ev.restrict);
                     }
 
                     // ⏱️ MENSAGENS TEMPORÁRIAS/DESAPARECENDO
                     else if (ev.ephemeralDuration !== undefined) {
                         if (ev.ephemeralDuration === 0) {
-                            mensagem = `⏱️ *X9 Report:* Mensagens temporárias foram *desativadas*!${authorText ? ` por ${authorText}` : ''}`;
+                            await notifyGroupChange(AbyssSock, groupId, 'temporary_off', author);
                         } else {
                             const duration = ev.ephemeralDuration;
                             let timeText = '';
@@ -1399,27 +1397,16 @@ async function createBotSocket(authDir) {
                             else if (duration >= 3600) timeText = `${Math.floor(duration / 3600)} horas`;
                             else if (duration >= 60) timeText = `${Math.floor(duration / 60)} minutos`;
                             else timeText = `${duration} segundos`;
-                            mensagem = `⏱️ *X9 Report:* Mensagens temporárias foram *ativadas*!${authorText ? ` por ${authorText}` : ''}\n📌 Tempo: ${timeText}`;
+                            await notifyGroupChange(AbyssSock, groupId, 'temporary_on', author, {
+                                duration: timeText
+                            });
                         }
-                        console.log('[X9] Ephemeral alterado:', ev.ephemeralDuration);
                     }
 
                     // 👥 TAMANHO DO GRUPO MUDOU (membros foram adicionados/removidos)
                     else if (ev.size !== undefined) {
                         console.log('[X9] Tamanho do grupo:', ev.size);
                         // Não envia mensagem só por mudança de tamanho (já coberto por group-participants.update)
-                    }
-
-                    if (mensagem) {
-                        console.log('[X9] Enviando mensagem:', mensagem);
-                        console.log('[X9] Menções:', mention);
-                        const msgOptions = { text: mensagem, contextInfo: newsletterCtx };
-                        if (mention.length > 0) {
-                            msgOptions.mentions = [...new Set(mention)]; // Remove duplicatas
-                        }
-                        await AbyssSock.sendMessage(groupId, msgOptions).catch(err => {
-                            console.error(`❌ Erro ao enviar X9: ${err.message}`);
-                        });
                     }
 
                     if (DEBUG_MODE) {
