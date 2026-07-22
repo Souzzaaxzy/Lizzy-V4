@@ -19662,48 +19662,32 @@ case 'pin':
                 if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
                 return num.toString();
               };
-              // Função para enviar card de preview do TikTok (linkPreview rico como oficial)
+              // Função para enviar card do TikTok com nativeFlow (botão integrado como "ver canal")
               const sendTikTokCard = async (videoData, index) => {
                 const link = videoData.link || '';
                 const thumbnail = videoData.cover || videoData.thumbnail || '';
-                if (!link) return;
+                if (!link || !thumbnail) return;
                 
                 const title = videoData.title || '';
                 const views = videoData.views || 0;
                 const viewsText = views ? `${formatNumber(views)} visualizações` : '';
-                const duration = videoData.duration || 0;
                 
-                // Preparar thumbnail em alta qualidade
-                let highQualityThumbnail = null;
-                if (thumbnail) {
-                  try {
-                    const { imageMessage } = await prepareWAMessageMedia(
-                      { image: { url: thumbnail } },
-                      { upload: nazu.waUploadToServer, mediaTypeOverride: 'thumbnail-link' }
-                    );
-                    imageMessage.height = 720;
-                    imageMessage.width = 480;
-                    highQualityThumbnail = imageMessage;
-                  } catch (err) {
-                    console.error('Erro ao preparar thumbnail:', err.message);
-                  }
-                }
+                // Criar caption com título e visualizações
+                const caption = title ? `${title}\n\n👁️ ${viewsText}` : `👁️ ${viewsText}`;
                 
-                // Enviar texto com linkPreview rico para vídeo
+                // Enviar card com nativeFlow (botão integrado como "ver canal")
                 await nazu.sendMessage(from, {
                   text: link,
-                  linkPreview: {
-                    'matched-text': link,
-                    title: title || 'TikTok',
-                    description: viewsText || 'Vídeo do TikTok',
-                    previewType: 1, // 1 = vídeo
-                    jpegThumbnail: highQualityThumbnail?.thumbnail || null,
-                    highQualityThumbnail: highQualityThumbnail,
-                    linkPreviewMetadata: {
-                      linkMediaDuration: duration || 0,
-                      socialMediaPostType: 1 // 1 = REEL (TikTok/Instagram)
-                    }
-                  }
+                  cards: [{
+                    image: { url: thumbnail },
+                    caption: caption,
+                    footer: '📱 TikTok',
+                    nativeFlow: [{
+                      text: '🔗 Abrir no TikTok',
+                      url: link,
+                      useWebview: false
+                    }]
+                  }]
                 }, { quoted: info });
               };
 
