@@ -41,28 +41,19 @@ function getCountryCode(number) {
     return 'XX';
 }
 
-// Template do card - variáveis: {nome}, {numero}, {pais}, {paiscod}, {hora}, {data}, {origem}, {grupo}, {admin}
-const X9_CARD_TEMPLATE = `╭━━━〔 🔎 X9 • SOLICITAÇÃO 〕━━━⬣
-┃ 👤 {nome}
+// Template do card - simplificado
+const X9_CARD_TEMPLATE = `╭━━━〔 🔎 NOVA SOLICITAÇÃO 〕━━━⬣
 ┃ 📞 +{numero}
-┃ 🌍 {pais}
-┃ 🔗 {origem}
-┃ 🕒 {hora}
-┃ 📅 {data}
-┃ 📌 Aguardando aprovação
-╰━━━━━━━━━━━━━━━━━━⬣`;
-
-const X9_APPROVED_TEMPLATE = `╭━━━〔 ✅ APROVADO 〕━━━⬣
-┃ 👤 {nome}
-┃ 📞 +{numero}
-┃ 👮 @{admin}
 ┃ 🕒 {hora}
 ╰━━━━━━━━━━━━━━━━━━⬣`;
 
-const X9_REJECTED_TEMPLATE = `╭━━━〔 ❌ NEGADO 〕━━━⬣
-┃ 👤 {nome}
+const X9_APPROVED_TEMPLATE = `╭━━━〔 ✅ APROVADO POR @{admin} 〕━━━⬣
 ┃ 📞 +{numero}
-┃ 👮 @{admin}
+┃ 🕒 {hora}
+╰━━━━━━━━━━━━━━━━━━⬣`;
+
+const X9_REJECTED_TEMPLATE = `╭━━━〔 ❌ NEGADO POR @{admin} 〕━━━⬣
+┃ 📞 +{numero}
 ┃ 🕒 {hora}
 ╰━━━━━━━━━━━━━━━━━━⬣`;
 
@@ -193,26 +184,18 @@ function getOrigin(method) {
 export async function processNewJoinRequest(sock, eventData, groupSettings) {
     const { id: groupId, participant, participantPn, method, author, authorPn } = eventData;
     
-    console.log('[X9] Evento recebido:', JSON.stringify(eventData, null, 2));
-    
-    // Extrai o JID do participante - tenta diferentes formatos
+    // Extrai o JID do participante
     let participantJid = normalizeJid(participant);
-    
-    // Se participantPn existir, usa ele
     if (!participantJid && participantPn) {
         participantJid = normalizeJid(participantPn);
     }
-    
-    // Fallback: tenta usar author/authorPn se for uma ação de aprovação
     if (!participantJid) {
         const authorJid = normalizeJid(author || authorPn);
-        if (authorJid) {
-            participantJid = authorJid;
-        }
+        if (authorJid) participantJid = authorJid;
     }
     
     if (!groupId || !participantJid) {
-        console.log('[X9] ❌ Dados insuficientes - participant:', participant, 'participantPn:', participantPn);
+        console.log('[X9] ❌ Dados insuficientes');
         return null;
     }
     
@@ -230,60 +213,31 @@ export async function processNewJoinRequest(sock, eventData, groupSettings) {
     const now = new Date();
     const participantNumber = participantJid.replace(/@.*$/, '');
     
-    console.log(`[X9] Participant: ${participantNumber} -> ${participantJid}`);
-    
-    // Tenta obter nome do perfil - só usa se for diferente do número
-    let participantName = 'Usuário Desconhecido';
-    try {
-        const name = await sock.getName(participantJid);
-        // Só usa o nome se for um nome real (não for apenas números)
-        if (name && name !== participantJid && name !== participantNumber && !/^\d+$/.test(name)) {
-            participantName = name;
-            console.log(`[X9] Nome encontrado: ${name}`);
-        } else {
-            console.log(`[X9] Nome não disponível: ${name || 'vazio'}`);
-        }
-    } catch (e) {
-        console.log('[X9] Não conseguiu obter nome:', e.message);
-    }
-    
+    // Armazena dados
     const data = {
         groupId,
         participantJid,
         participantNumber,
-        participantName,
-        country: getCountryFromNumber(participantNumber),
-        paiscod: getCountryCode(participantNumber),
-        origin: getOrigin(method),
         time: formatTime(now),
-        date: formatDate(now),
         status: 'pending'
     };
     
     x9Store.add(groupId, participantJid, data);
     markProcessed(key);
     
-    // Usa o template system
+    // Template simplificado
     const vars = {
-        nome: participantName,
         numero: participantNumber,
-        pais: getCountryFromNumber(participantNumber),
-        paiscod: getCountryCode(participantNumber),
-        hora: formatTime(now),
-        data: formatDate(now),
-        origem: getOrigin(method),
-        grupo: groupId
+        hora: formatTime(now)
     };
     
     const cardText = parseTemplate(X9_CARD_TEMPLATE, vars);
-    const mentions = [participantJid];
     
-    console.log('[X9] Enviando card:', cardText);
+    console.log('[X9] Enviando card...');
     
     try {
         const sent = await sock.sendMessage(groupId, {
-            text: cardText,
-            mentions
+            text: cardText
         });
         
         if (sent?.key?.id) {
@@ -299,8 +253,7 @@ export async function processNewJoinRequest(sock, eventData, groupSettings) {
 }
 
 /**
- * Remove card quando uma solicitação é aprovada via comando
- * O comando !aprovar já envia sua própria mensagem de confirmação
+ * Envia card de aprovação mostrando quem aprovou
  */
 export async function updateCardOnApprove(sock, groupId, participantJid, adminJid) {
     const req = x9Store.get(groupId, participantJid);
@@ -309,25 +262,44 @@ export async function updateCardOnApprove(sock, groupId, participantJid, adminJi
         return null;
     }
     
+    const now = new Date();
+    const adminNumber = adminJid.replace(/@.*$/, '');
+    
     // Deleta mensagem original se existir
     if (req.messageId) {
         try {
             await sock.sendMessage(groupId, { 
                 delete: { id: req.messageId, remoteJid: groupId, fromMe: true } 
             });
-            console.log(`[X9] Card deletado`);
-        } catch (e) {
-            console.log('[X9] Não conseguiu deletar card antigo');
-        }
+        } catch (e) {}
     }
     
-    x9Store.update(groupId, participantJid, { status: 'approved' });
-    return { deleted: true };
+    // Envia mensagem de aprovação com quem aprovou
+    const vars = {
+        admin: adminNumber,
+        numero: req.participantNumber,
+        hora: formatTime(now)
+    };
+    
+    const approvedText = parseTemplate(X9_APPROVED_TEMPLATE, vars);
+    
+    try {
+        const sent = await sock.sendMessage(groupId, {
+            text: approvedText,
+            mentions: [adminJid]
+        });
+        
+        x9Store.update(groupId, participantJid, { status: 'approved' });
+        console.log(`[X9] ✅ Aprovado por ${adminNumber}`);
+        return sent;
+    } catch (error) {
+        console.error('[X9] Erro ao enviar aprovação:', error.message);
+        return null;
+    }
 }
 
 /**
- * Remove card quando uma solicitação é negada via comando
- * O comando !recusarsolic já envia sua própria mensagem de confirmação
+ * Envia card de rejeição mostrando quem rejeitou
  */
 export async function updateCardOnReject(sock, groupId, participantJid, adminJid) {
     const req = x9Store.get(groupId, participantJid);
@@ -336,20 +308,40 @@ export async function updateCardOnReject(sock, groupId, participantJid, adminJid
         return null;
     }
     
+    const now = new Date();
+    const adminNumber = adminJid.replace(/@.*$/, '');
+    
     // Deleta mensagem original
     if (req.messageId) {
         try {
             await sock.sendMessage(groupId, { 
                 delete: { id: req.messageId, remoteJid: groupId, fromMe: true } 
             });
-            console.log(`[X9] Card deletado`);
-        } catch (e) {
-            console.log('[X9] Não conseguiu deletar card');
-        }
+        } catch (e) {}
     }
     
-    x9Store.update(groupId, participantJid, { status: 'rejected' });
-    return { deleted: true };
+    // Envia mensagem de rejeição com quem rejeitou
+    const vars = {
+        admin: adminNumber,
+        numero: req.participantNumber,
+        hora: formatTime(now)
+    };
+    
+    const rejectedText = parseTemplate(X9_REJECTED_TEMPLATE, vars);
+    
+    try {
+        const sent = await sock.sendMessage(groupId, {
+            text: rejectedText,
+            mentions: [adminJid]
+        });
+        
+        x9Store.update(groupId, participantJid, { status: 'rejected' });
+        console.log(`[X9] ❌ Rejeitado por ${adminNumber}`);
+        return sent;
+    } catch (error) {
+        console.error('[X9] Erro ao enviar rejeição:', error.message);
+        return null;
+    }
 }
 
 /**

@@ -28994,7 +28994,7 @@ break;
                 await nazu.groupRequestParticipantsUpdate(from, [req.jid], 'approve');
                 approved.push(req.jid);
                 
-                // X9 System: Atualiza card se existir
+                // X9 System: Envia card de aprovação
                 if (groupData.x9) {
                   await updateCardOnApprove(nazu, from, req.jid, sender).catch(() => {});
                 }
@@ -29003,10 +29003,15 @@ break;
                 console.error(`Erro ao aprovar ${req.jid}:`, err);
               }
             }
-            let responseMsg = `✅ *Aprovação em Massa Concluída!*\n\n`;
-            responseMsg += `✅ Aprovados: ${approved.length}\n`;
-            if (failed.length > 0) responseMsg += `❌ Falhas: ${failed.length}\n`;
-            return reply(responseMsg);
+            // Se X9 ativo, não responde (X9 já enviou mensagem)
+            if (groupData.x9) {
+              // Não faz nada - X9 já enviou as mensagens
+            } else {
+              let responseMsg = `✅ *Aprovação em Massa Concluída!*\n\n`;
+              responseMsg += `✅ Aprovados: ${approved.length}\n`;
+              if (failed.length > 0) responseMsg += `❌ Falhas: ${failed.length}\n`;
+              return reply(responseMsg);
+            }
           }
           if (!menc_jid2 || menc_jid2.length === 0) {
             return reply(`❌ Marque alguém ou use "all" para aprovar todos.\n\n💡 Exemplos:\n• ${groupPrefix}aprovar @usuario\n• ${groupPrefix}aprovar all\n\nUse ${groupPrefix}solicitacoes para ver pendentes.`);
@@ -29019,7 +29024,7 @@ break;
               await nazu.groupRequestParticipantsUpdate(from, [user], 'approve');
               approved.push(user);
               
-              // X9 System: Atualiza card se existir
+              // X9 System: Envia card de aprovação
               if (groupData.x9) {
                 await updateCardOnApprove(nazu, from, user, sender).catch(err => {
                   console.log('[X9] Card não encontrado para:', user);
@@ -29030,16 +29035,21 @@ break;
               console.error(`Erro ao aprovar ${user}:`, err);
             }
           }
-          let responseMsg = '';
-          if (approved.length > 0) {
-            responseMsg += `✅ *Solicitações aprovadas:* (${approved.length})\n`;
-            approved.forEach(u => responseMsg += `• @${u.split('@')[0]}\n`);
+          // Se X9 ativo, não responde (X9 já enviou mensagem)
+          if (groupData.x9) {
+            // Não faz nada - X9 já enviou a mensagem
+          } else {
+            let responseMsg = '';
+            if (approved.length > 0) {
+              responseMsg += `✅ *Solicitações aprovadas:* (${approved.length})\n`;
+              approved.forEach(u => responseMsg += `• @${u.split('@')[0]}\n`);
+            }
+            if (failed.length > 0) {
+              responseMsg += `\n❌ *Falhas:* (${failed.length})\n`;
+              failed.forEach(u => responseMsg += `• @${u.split('@')[0]}\n`);
+            }
+            await reply(responseMsg, { mentions: [...approved, ...failed] });
           }
-          if (failed.length > 0) {
-            responseMsg += `\n❌ *Falhas:* (${failed.length})\n`;
-            failed.forEach(u => responseMsg += `• @${u.split('@')[0]}\n`);
-          }
-          await reply(responseMsg, { mentions: [...approved, ...failed] });
         } catch (e) {
           console.error(e);
           await reply("❌ Erro ao aprovar solicitações.");
@@ -29063,7 +29073,7 @@ break;
               await nazu.groupRequestParticipantsUpdate(from, [user], 'reject');
               rejected.push(user);
               
-              // X9 System: Atualiza card se existir
+              // X9 System: Envia card de rejeição
               if (groupData.x9) {
                 await updateCardOnReject(nazu, from, user, sender).catch(() => {});
               }
@@ -29072,16 +29082,21 @@ break;
               console.error(`Erro ao recusar ${user}:`, err);
             }
           }
-          let responseMsg = '';
-          if (rejected.length > 0) {
-            responseMsg += `❌ *Solicitações recusadas:* (${rejected.length})\n`;
-            rejected.forEach(u => responseMsg += `• @${u.split('@')[0]}\n`);
+          // Se X9 ativo, não responde (X9 já enviou mensagem)
+          if (groupData.x9) {
+            // Não faz nada - X9 já enviou as mensagens
+          } else {
+            let responseMsg = '';
+            if (rejected.length > 0) {
+              responseMsg += `❌ *Solicitações recusadas:* (${rejected.length})\n`;
+              rejected.forEach(u => responseMsg += `• @${u.split('@')[0]}\n`);
+            }
+            if (failed.length > 0) {
+              responseMsg += `\n⚠️ *Falhas:* (${failed.length})\n`;
+              failed.forEach(u => responseMsg += `• @${u.split('@')[0]}\n`);
+            }
+            await reply(responseMsg, { mentions: [...rejected, ...failed] });
           }
-          if (failed.length > 0) {
-            responseMsg += `\n⚠️ *Falhas:* (${failed.length})\n`;
-            failed.forEach(u => responseMsg += `• @${u.split('@')[0]}\n`);
-          }
-          await reply(responseMsg, { mentions: [...rejected, ...failed] });
         } catch (e) {
           console.error(e);
           await reply("❌ Erro ao recusar solicitações.");
