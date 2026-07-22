@@ -29,6 +29,57 @@ function getCountryFromNumber(number) {
     return 'Desconhecido 🌍';
 }
 
+function getCountryCode(number) {
+    if (!number) return 'XX';
+    const clean = number.replace(/\D/g, '');
+    const ddi3 = clean.substring(0, 3);
+    if (COUNTRY_CODES[ddi3]) return ddi3;
+    const ddi2 = clean.substring(0, 2);
+    if (COUNTRY_CODES[ddi2]) return ddi2;
+    const ddi1 = clean.substring(0, 1);
+    if (COUNTRY_CODES[ddi1]) return ddi1;
+    return 'XX';
+}
+
+// Template do card - variáveis: {nome}, {numero}, {pais}, {paiscod}, {hora}, {data}, {origem}, {grupo}, {admin}
+const X9_CARD_TEMPLATE = `╭━━━〔 🔎 X9 • SOLICITAÇÃO 〕━━━⬣
+┃ 👤 {nome}
+┃ 📞 +{numero}
+┃ 🌍 {pais}
+┃ 🔗 {origem}
+┃ 🕒 {hora}
+┃ 📅 {data}
+┃ 📌 Aguardando aprovação
+╰━━━━━━━━━━━━━━━━━━⬣`;
+
+const X9_APPROVED_TEMPLATE = `╭━━━〔 ✅ APROVADO 〕━━━⬣
+┃ 👤 {nome}
+┃ 📞 +{numero}
+┃ 👮 @{admin}
+┃ 🕒 {hora}
+╰━━━━━━━━━━━━━━━━━━⬣`;
+
+const X9_REJECTED_TEMPLATE = `╭━━━〔 ❌ NEGADO 〕━━━⬣
+┃ 👤 {nome}
+┃ 📞 +{numero}
+┃ 👮 @{admin}
+┃ 🕒 {hora}
+╰━━━━━━━━━━━━━━━━━━⬣`;
+
+// Substitui variáveis no template
+function parseTemplate(template, vars) {
+    return template
+        .replace(/{nome}/g, vars.nome || 'Usuário')
+        .replace(/{numero}/g, vars.numero || '')
+        .replace(/{pais}/g, vars.pais || 'Desconhecido')
+        .replace(/{paiscod}/g, vars.paiscod || '')
+        .replace(/{hora}/g, vars.hora || '')
+        .replace(/{data}/g, vars.data || '')
+        .replace(/{origem}/g, vars.origem || 'WhatsApp')
+        .replace(/{grupo}/g, vars.grupo || '')
+        .replace(/{admin}/g, vars.admin || '');
+}
+
 // Armazenamento de solicitações
 const x9Store = {
     requests: new Map(), // key: groupId:participantJid
@@ -132,40 +183,6 @@ function getOrigin(method) {
     return origins[method] || '🌐 Via WhatsApp';
 }
 
-// Cards
-function buildCard(data) {
-    const { participantName, participantNumber, country, origin, time, date } = data;
-    return `╭━━━〔 🔎 X9 • SOLICITAÇÃO 〕━━━⬣
-┃ 👤 Nome: ${participantName || 'Não disponível'}
-┃ 📞 Número: +${participantNumber}
-┃ 🌍 País: ${country}
-┃ 🔗 Origem: ${origin}
-┃ 🕒 Horário: ${time}
-┃ 📅 Data: ${date}
-┃ 📌 Status: Aguardando
-╰━━━━━━━━━━━━━━━━━━⬣`;
-}
-
-function buildApprovedCard(data) {
-    const { participantName, participantNumber, adminNumber, time } = data;
-    const name = participantName && participantName !== participantNumber ? participantName : participantNumber;
-    return `╭━━━〔 ✅ APROVADO 〕━━━⬣
-┃ 👤 ${name}
-┃ 👮 @${adminNumber}
-┃ 🕒 ${time}
-╰━━━━━━━━━━━━━━━━━━⬣`;
-}
-
-function buildRejectedCard(data) {
-    const { participantName, participantNumber, adminNumber, time } = data;
-    const name = participantName && participantName !== participantNumber ? participantName : participantNumber;
-    return `╭━━━〔 ❌ NEGADO 〕━━━⬣
-┃ 👤 ${name}
-┃ 👮 @${adminNumber}
-┃ 🕒 ${time}
-╰━━━━━━━━━━━━━━━━━━⬣`;
-}
-
 // ═══════════════════════════════════════════════════════════════
 // FUNÇÕES PRINCIPAIS
 // ═══════════════════════════════════════════════════════════════
@@ -236,6 +253,7 @@ export async function processNewJoinRequest(sock, eventData, groupSettings) {
         participantNumber,
         participantName,
         country: getCountryFromNumber(participantNumber),
+        paiscod: getCountryCode(participantNumber),
         origin: getOrigin(method),
         time: formatTime(now),
         date: formatDate(now),
@@ -245,7 +263,19 @@ export async function processNewJoinRequest(sock, eventData, groupSettings) {
     x9Store.add(groupId, participantJid, data);
     markProcessed(key);
     
-    const cardText = buildCard(data);
+    // Usa o template system
+    const vars = {
+        nome: participantName,
+        numero: participantNumber,
+        pais: getCountryFromNumber(participantNumber),
+        paiscod: getCountryCode(participantNumber),
+        hora: formatTime(now),
+        data: formatDate(now),
+        origem: getOrigin(method),
+        grupo: groupId
+    };
+    
+    const cardText = parseTemplate(X9_CARD_TEMPLATE, vars);
     const mentions = [participantJid];
     
     console.log('[X9] Enviando card:', cardText);
@@ -332,11 +362,19 @@ export async function notifyWhatsAppApproval(sock, groupId, participantJid, admi
     const now = new Date();
     const adminNumber = adminJid.replace(/@.*$/, '');
     
-    const notification = `╭━━━〔 ✅ X9 • APROVADO 〕━━━⬣
-┃ 👤 ${req.participantName || req.participantNumber}
-┃ 👮 @${adminNumber}
-┃ 🕒 ${formatTime(now)}
-╰━━━━━━━━━━━━━━━━━━⬣`;
+    const vars = {
+        nome: req.participantName || 'Usuário',
+        numero: req.participantNumber,
+        pais: req.country || 'Desconhecido',
+        paiscod: req.paiscod || '',
+        hora: formatTime(now),
+        data: '',
+        origem: '',
+        grupo: groupId,
+        admin: adminNumber
+    };
+    
+    const notification = parseTemplate(X9_APPROVED_TEMPLATE, vars);
     
     try {
         await sock.sendMessage(groupId, {
@@ -382,9 +420,14 @@ export function cleanupX9System() {
     processedKeys.clear();
 }
 
-// Exports adicionais
+// Exports
 export {
     x9Store,
     getCountryFromNumber,
-    normalizeJid
+    normalizeJid,
+    // Templates para customização
+    X9_CARD_TEMPLATE,
+    X9_APPROVED_TEMPLATE,
+    X9_REJECTED_TEMPLATE,
+    parseTemplate
 };
