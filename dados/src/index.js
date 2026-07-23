@@ -24248,7 +24248,6 @@ ${groupPrefix}setgroq sua_chave_aqui
           await reply("❌ Ocorreu um erro 💔");
         }
         break;
-      case 'fotomenugrupo':
       case 'setmenupic':
         try {
           if (!isGroup) return reply("◈ Este comando só funciona em grupos 💔");
@@ -27240,121 +27239,6 @@ ${groupPrefix}togglecmdvip premium_ia off`);
         } catch (error) {
           console.error('Erro no diagnóstico:', error);
           return reply(`❌ Erro ao executar diagnóstico:\n${error.message}`);
-        }
-        break;
-      }
-      case 'painel': {
-        if (!isOwner) return reply("🚫 Apenas o Dono ou Subdono pode acessar o painel!");
-        try {
-          const os = await import('os');
-          // ==================== BOT INFO ====================
-          const botPrefix = config.prefixo || '/';
-          // Uptime
-          const uptimeSec = process.uptime();
-          const days = Math.floor(uptimeSec / 86400);
-          const hours = Math.floor((uptimeSec % 86400) / 3600);
-          const mins = Math.floor((uptimeSec % 3600) / 60);
-          const secs = Math.floor(uptimeSec % 60);
-          const uptimeStr = days > 0 ? `${days}d ${hours}h ${mins}m` : `${hours}h ${mins}m ${secs}s`;
-          // Commands from commandStats
-          const cmdStats = loadJsonFile('./dados/database/commandStats.json', {});
-          const totalCmds = Object.values(cmdStats.commands || {}).reduce((s, c) => s + (c.count || 0), 0);
-          const cmdCount = Object.keys(cmdStats.commands || {}).length;
-          // ==================== USERS FROM COMMANDSTATS ====================
-          const allUsers = new Set();
-          const userCmdCount = {};
-          for (const [cmdName, cmdData] of Object.entries(cmdStats.commands || {})) {
-            for (const [userId, count] of Object.entries(cmdData.users || {})) {
-              allUsers.add(userId);
-              userCmdCount[userId] = (userCmdCount[userId] || 0) + count;
-            }
-          }
-          const totalUsers = allUsers.size;
-          // ==================== GROUPS ====================
-          let groups = 0;
-          try {
-            const groupFiles = fs.readdirSync('./dados/database/grupos/').filter(f => f.endsWith('.json'));
-            groups = groupFiles.length;
-          } catch (e) {}
-          // ==================== DATABASE ====================
-          let dbSize = 0;
-          let dbFiles = 0;
-          try {
-            const walkDir = (dir) => {
-              try {
-                const items = fs.readdirSync(dir);
-                for (const item of items) {
-                  if (item === '.git' || item === 'node_modules') continue;
-                  const fullPath = `${dir}/${item}`;
-                  try {
-                    const stat = fs.statSync(fullPath);
-                    if (stat.isDirectory()) {
-                      walkDir(fullPath);
-                    } else {
-                      dbSize += stat.size;
-                      dbFiles++;
-                    }
-                  } catch (e) {}
-                }
-              } catch (e) {}
-            };
-            walkDir('./dados');
-          } catch (e) {}
-          const dbSizeStr = dbSize > 1048576 ? `${(dbSize / 1048576).toFixed(1)} MB` : `${(dbSize / 1024).toFixed(1)} KB`;
-          // ==================== AI / SPECIAL ====================
-          let aiCount = 0;
-          let musicCount = 0;
-          let imgGenCount = 0;
-          for (const [cmdName, cmdData] of Object.entries(cmdStats.commands || {})) {
-            const count = cmdData.count || 0;
-            if (['ia', 'cognima', 'gpt', 'pergunte', 'ask'].includes(cmdName.toLowerCase())) aiCount += count;
-            if (['play', 'music', 'musica', 'ytmp3', 'ytmp4'].includes(cmdName.toLowerCase())) musicCount += count;
-            if (['image', 'img', 'gerarimg', 'dalle'].includes(cmdName.toLowerCase())) imgGenCount += count;
-          }
-          // ==================== BUILD MESSAGE ====================
-          const painelMsg = `
-╔══════════════════════════════════════╗
-║   👑 *PAINEL ADMINISTRATIVO* 👑
-║   ${nomebot}
-╚══════════════════════════════════════╝
-┌─ 🤖 *BOT* ─────────────────────────┐
-│ ✦ Prefixo: ${prefixo}
-│ ✦ Uptime: ${uptimeStr}
-│ ✦ Comandos: ${totalCmds} execuções
-│ ✦ Comandos carregados: ${cmdCount}
-└─────────────────────────────────────┘
-┌─ 👥 *USUÁRIOS* ─────────────────────┐
-│ ✦ Usuários únicos: ${totalUsers}
-│ ✦ Comandos totais: ${totalCmds}
-│ ✦ Comandos/usuários: ${totalUsers > 0 ? Math.round(totalCmds/totalUsers) : 0}
-└─────────────────────────────────────┘
-┌─ 🏘️ *GRUPOS* ──────────────────────┐
-│ ✦ Total de grupos: ${groups}
-│ ✦ Usuários/grupo: ${groups > 0 ? Math.round(totalUsers/groups) : 0}
-└─────────────────────────────────────┘
-┌─ 💾 *SISTEMA* ─────────────────────┐
-│ ✦ Uptime: ${uptimeStr}
-│ ✦ PID: ${process.pid}
-│ ✦ Node.js: ${process.version.replace('v', '')}
-│ ✦ Plataforma: ${os.platform()}
-└─────────────────────────────────────┘
-┌─ 🗄️ *BANCO DE DADOS* ───────────────┐
-│ ✦ Arquivos: ${dbFiles}
-│ ✦ Tamanho: ${dbSizeStr}
-│ ✦ Tipo: JSON Files
-│ ✦ Status: 🟢 Operacional
-└─────────────────────────────────────┘
-┌─ 🔥 *RECURSOS* ─────────────────────┐
-│ ✦ IA: ${aiCount} consultas
-│ ✦ Música: ${musicCount} downloads
-│ ✦ Imagens: ${imgGenCount} geradas
-└─────────────────────────────────────┘
-╚══════════════════════════════════════╝
-  ⚡ *Dados atualizados em tempo real* ⚡`;
-          await reply(painelMsg);
-        } catch (e) {
-          console.error('Erro painel:', e);
-          reply(`❌ Erro: ${e.message}`);
         }
         break;
       }
