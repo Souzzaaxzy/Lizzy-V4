@@ -377,5 +377,11 @@ ${isLiteMode ? '' : `╭─❖ 🔞 INTERAÇÕES "PICANTES"
 
 ╭─────────────────╮
 ╰─────────────────╯
+
+
+╭━━━〔 💬 NGL 〕━━━⬣
+┃ ${prefix}setngl
+┃ ${prefix}ngl
+╰━━━━━━━━━━━━━━⬣
 `;
 }

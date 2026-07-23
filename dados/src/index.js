@@ -34251,6 +34251,77 @@ ${groupPrefix}antipalavra stats
 • adv - Advertência (3 = ban)
 💡 *Dica:* O sistema ignora acentos e maiúsculas/minúsculas.` , contextInfo: newsletterCtx, quoted: info });
         break;
+      case 'setngl':
+        try {
+          if (!isGroup) return reply("❌ Este comando é só para grupos!");
+          if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
+          if (!q) return reply(`📝 *Como usar:*
+
+${groupPrefix}setngl <link>
+
+*Exemplo:*
+${groupPrefix}setngl https://ngl.link/seulink`);
+          
+          // Validar link
+          if (!q.includes('ngl.link')) {
+            return reply("❌ Link inválido! Use um link do NGL (ngl.link)");
+          }
+          
+          const nglGroupFilePath = buildGroupFilePath(from);
+          let nglGroupData = fs.existsSync(nglGroupFilePath) ? JSON.parse(fs.readFileSync(nglGroupFilePath, 'utf-8')) : {};
+          nglGroupData.ngl = nglGroupData.ngl || {};
+          nglGroupData.ngl.link = q;
+          fs.writeFileSync(nglGroupFilePath, JSON.stringify(nglGroupData, null, 2));
+          
+          reply(`✅ *Link do NGL configurado com sucesso!*
+
+📎 Link: ${q}
+
+💡 Use ${groupPrefix}ngl para enviar a mensagem de convite aos membros.`);
+        } catch (e) {
+          console.error(e);
+          reply("Ocorreu um erro 💔");
+        }
+        break;
+      case 'ngl':
+        try {
+          if (!isGroup) return reply("❌ Este comando é só para grupos!");
+          if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
+          
+          const nglGroupFilePath = buildGroupFilePath(from);
+          let nglGroupData = fs.existsSync(nglGroupFilePath) ? JSON.parse(fs.readFileSync(nglGroupFilePath, 'utf-8')) : {};
+          
+          if (!nglGroupData?.ngl?.link) {
+            return reply(`❌ Nenhum link de NGL foi configurado neste grupo.
+
+Um administrador deve utilizar:
+${groupPrefix}setngl https://ngl.link/...`);
+          }
+          
+          // Obter membros para mencionar
+          const nglGroupMetadata = await nazu.groupMetadata(from).catch(() => null);
+          const nglMentions = nglGroupMetadata?.participants?.map(p => p.id) || [];
+          
+          await sendInteractiveMessage(nazu, from, {
+            text: "💬 Mande sua pergunta anônima aqui.",
+            footer: '© Abyss Bot',
+            mentions: nglMentions,
+            interactiveButtons: [
+              {
+                name: "cta_url",
+                buttonParamsJson: JSON.stringify({
+                  display_text: "🔗 Abrir NGL",
+                  url: nglGroupData.ngl.link
+                })
+              }
+            ]
+          }, { quoted: info });
+          
+        } catch (e) {
+          console.error(e);
+          reply("Ocorreu um erro 💔");
+        }
+        break;
       case 'antisocial':
         if (!isGroup) return reply("❌ Este comando é só para grupos!");
         if (!isGroupAdmin) return reply("❌ Apenas administradores podem usar este comando!");
@@ -35654,6 +35725,77 @@ break;
       case 'offline':
       case 'online':
       case 'social':
+      case 'setngl':
+        try {
+          if (!isGroup) return reply("❌ Este comando é só para grupos!");
+          if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
+          if (!q) return reply(`📝 *Como usar:*
+
+${groupPrefix}setngl <link>
+
+*Exemplo:*
+${groupPrefix}setngl https://ngl.link/seulink`);
+          
+          // Validar link
+          if (!q.includes('ngl.link')) {
+            return reply("❌ Link inválido! Use um link do NGL (ngl.link)");
+          }
+          
+          const nglGroupFilePath = buildGroupFilePath(from);
+          let nglGroupData = fs.existsSync(nglGroupFilePath) ? JSON.parse(fs.readFileSync(nglGroupFilePath, 'utf-8')) : {};
+          nglGroupData.ngl = nglGroupData.ngl || {};
+          nglGroupData.ngl.link = q;
+          fs.writeFileSync(nglGroupFilePath, JSON.stringify(nglGroupData, null, 2));
+          
+          reply(`✅ *Link do NGL configurado com sucesso!*
+
+📎 Link: ${q}
+
+💡 Use ${groupPrefix}ngl para enviar a mensagem de convite aos membros.`);
+        } catch (e) {
+          console.error(e);
+          reply("Ocorreu um erro 💔");
+        }
+        break;
+      case 'ngl':
+        try {
+          if (!isGroup) return reply("❌ Este comando é só para grupos!");
+          if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
+          
+          const nglGroupFilePath = buildGroupFilePath(from);
+          let nglGroupData = fs.existsSync(nglGroupFilePath) ? JSON.parse(fs.readFileSync(nglGroupFilePath, 'utf-8')) : {};
+          
+          if (!nglGroupData?.ngl?.link) {
+            return reply(`❌ Nenhum link de NGL foi configurado neste grupo.
+
+Um administrador deve utilizar:
+${groupPrefix}setngl https://ngl.link/...`);
+          }
+          
+          // Obter membros para mencionar
+          const nglGroupMetadata = await nazu.groupMetadata(from).catch(() => null);
+          const nglMentions = nglGroupMetadata?.participants?.map(p => p.id) || [];
+          
+          await sendInteractiveMessage(nazu, from, {
+            text: "💬 Mande sua pergunta anônima aqui.",
+            footer: '© Abyss Bot',
+            mentions: nglMentions,
+            interactiveButtons: [
+              {
+                name: "cta_url",
+                buttonParamsJson: JSON.stringify({
+                  display_text: "🔗 Abrir NGL",
+                  url: nglGroupData.ngl.link
+                })
+              }
+            ]
+          }, { quoted: info });
+          
+        } catch (e) {
+          console.error(e);
+          reply("Ocorreu um erro 💔");
+        }
+        break;
       case 'antisocial':
       case 'popular':
       case 'solitario':
@@ -37470,7 +37612,7 @@ function getDiskSpaceInfo() {
 }
 // Função para enviar mensagens com botões interativos (CTA URL)
 async function sendInteractiveMessage(sock, jid, options, extra = {}) {
-  const { text, footer, interactiveButtons } = options;
+  const { text, footer, interactiveButtons, mentions } = options;
   
   const msg = await generateWAMessageFromContent(jid, {
     viewOnceMessage: {
@@ -37481,6 +37623,7 @@ async function sendInteractiveMessage(sock, jid, options, extra = {}) {
           },
           body: { text: text },
           footer: { text: footer || '' },
+          contextInfo: mentions ? { mentionedJid: mentions } : undefined,
           nativeFlowMessage: {
             buttons: interactiveButtons || []
           }
