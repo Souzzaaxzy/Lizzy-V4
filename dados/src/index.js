@@ -3102,59 +3102,20 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
           } catch (e) {}
        }
     }
-    // Anti-Mensagem Invisível - Modo Inteligente
-    // Se bot for MEMBRO: detecta rajada e quando virar admin remove todos
-    // Se bot for ADMIN: remove diretamente
-    if (info.message?.protocolMessage && !info.key.fromMe && !isGroupAdmin) {
+    // Anti-Mensagem Invisível - MODO COLETA DE DADOS
+    // Apenas detecta e loga para análise posterior
+    if (info.message?.protocolMessage && !info.key.fromMe) {
       const protocolType = info.message.protocolMessage.type;
       const msgKey = info.message.protocolMessage.key;
       
-      console.log(`[ANTI-INVISIVEL] ProtocolType: ${protocolType} | De: ${sender} | Group: ${from}`);
-      
-      // Inicializar storage de rajada se não existir
-      if (!global.burstDetections) global.burstDetections = {};
-      if (!global.burstDetections[from]) global.burstDetections[from] = { users: new Set(), lastDetection: 0 };
-      
-      // Adicionar usuário à lista de detectados
-      global.burstDetections[from].users.add(sender);
-      global.burstDetections[from].lastDetection = Date.now();
-      
-      // Limpar detecções antigas (mais de 5 min)
-      if (Date.now() - global.burstDetections[from].lastDetection > 300000) {
-        global.burstDetections[from].users.clear();
-      }
-      
-      console.log(`[ANTI-INVISIVEL] Detectados: ${global.burstDetections[from].users.size} usuários`);
-      
-      // Se detectou 3+ usuários em rajada, virar admin automaticamente
-      if (global.burstDetections[from].users.size >= 3 && !isBotAdmin) {
-        console.log(`[ANTI-INVISIVEL] 🚨 Rajada detectada! Virando admin para remover invasores...`);
-        try {
-          const botJid = nazu.user.jid;
-          await nazu.groupParticipantsUpdate(from, [botJid], "promote").catch(e => console.log('Erro ao virar admin:', e.message));
-          await new Promise(r => setTimeout(r, 2000)); // Aguarda 2s para promover
-        } catch (e) {
-          console.log('[ANTI-INVISIVEL] Erro ao promover:', e.message);
-        }
-      }
-      
-      // Se É admin após promoção, remove todos detectados
-      if (isBotAdmin) {
-        try {
-          const usersToRemove = Array.from(global.burstDetections[from].users);
-          if (usersToRemove.length > 0) {
-            console.log(`[ANTI-INVISIVEL] Removendo ${usersToRemove.length} invasores...`);
-            for (const user of usersToRemove) {
-              await nazu.groupParticipantsUpdate(from, [user], 'remove').catch(e => {});
-              await new Promise(r => setTimeout(r, 500)); // Delay entre remoções
-            }
-            global.burstDetections[from].users.clear();
-            console.log(`[ANTI-INVISIVEL] ✅ Invasores removidos!`);
-          }
-        } catch (e) {
-          console.error('[ANTI-INVISIVEL] Erro ao remover:', e.message);
-        }
-      }
+      console.log('═══════════════════════════════════════════════════');
+      console.log('[ANTI-INVISIVEL] 🔍 MENSAGEM INVISÍVEL DETECTADA!');
+      console.log(`[ANTI-INVISIVEL] 📋 ProtocolType: ${protocolType}`);
+      console.log(`[ANTI-INVISIVEL] 👤 De: ${sender}`);
+      console.log(`[ANTI-INVISIVEL] 👥 Group: ${from}`);
+      console.log(`[ANTI-INVISIVEL] 🔑 MessageKey:`, JSON.stringify(msgKey, null, 2));
+      console.log(`[ANTI-INVISIVEL] 📜 Full Message:`, JSON.stringify(info.message, null, 2));
+      console.log('═══════════════════════════════════════════════════');
     }
     // Lógica Anti-Pagamento (antipagamento/antirequest)
     if (isAntirequestPaymentMessage && isBotAdmin && (type === 'requestPaymentMessage' || type === 'sendPaymentMessage' || type === 'viewOnceMessageV2Extension' || type === 'viewOnceMessageV2' || type === 'viewOnceMessage') && !info.key.fromMe && !isGroupAdmin && !isUserWhitelisted(sender, 'antipagamento')) {
