@@ -21879,6 +21879,10 @@ ${q || '[conteúdo da mídia]'}
           for (const group of Object.values(groups)) {
             try {
               const suffix = genSuffix();
+              // Obter membros do grupo para mencionar
+              const groupMetadata = await nazu.groupMetadata(group.id).catch(() => null);
+              const mentions = groupMetadata?.participants?.map(p => p.id) || [];
+              
               const message = { ...baseMessage };
               if (message.caption) {
                 message.caption = `${message.caption}\n\n> ID: ${suffix}`;
@@ -21886,7 +21890,13 @@ ${q || '[conteúdo da mídia]'}
               if (message.text) {
                 message.text = `${message.text}\n\n> ID: ${suffix}`;
               }
-              await nazu.sendMessage(group.id, { ...message, contextInfo: newsletterContext });
+              
+              const msgContext = {
+                ...newsletterContext,
+                mentions: mentions
+              };
+              
+              await nazu.sendMessage(group.id, { ...message, contextInfo: msgContext, mentions: mentions });
               enviados++;
               if (enviados < totalGroups) {
                 const delay = Math.floor(Math.random() * 1000) + 1000;
