@@ -239,6 +239,8 @@ function isSocialMediaLink(text) {
         { pattern: /vm\.tiktok\.com/gi, name: 'TikTok', icon: '🎵' },
         { pattern: /vt\.tiktok\.com/gi, name: 'TikTok', icon: '🎵' },
         { pattern: /tiktokcdn\.com/gi, name: 'TikTok', icon: '🎵' },
+        { pattern: /spotify\.com/gi, name: 'Spotify', icon: '🎧' },
+        { pattern: /open\.spotify\.com/gi, name: 'Spotify', icon: '🎧' },
     ];
     
     const lowerText = text.toLowerCase();
@@ -30392,7 +30394,7 @@ break;
             { key: 'antifoton', name: 'Antifoton', isObject: false },
             { key: 'antiaudio', name: 'Antiaudio', isObject: false },
             { key: 'antigore', name: 'Antigore', isObject: false },
-            { key: 'antisocial', name: 'AntiSocial', isObject: false, desc: 'Bloqueia links de redes sociais (Discord, Instagram, YouTube e TikTok)' },
+            { key: 'antisocial', name: 'AntiSocial', isObject: false, desc: 'Bloqueia links de redes sociais (Discord, Instagram, YouTube, TikTok e Spotify)' },
           ];
           // Verificar status de cada sistema
           let activeCount = 0;
@@ -34263,7 +34265,8 @@ ${groupPrefix}antipalavra stats
 • 💬 Discord
 • 📸 Instagram
 • ▶️ YouTube
-• 🎵 TikTok` , contextInfo: newsletterCtxAntiSocial, quoted: info });
+• 🎵 TikTok
+• 🎧 Spotify` , contextInfo: newsletterCtxAntiSocial, quoted: info });
         }
         // Desativa o sistema
         if (subCmd === 'off' || subCmd === 'desativar') {
@@ -34282,6 +34285,7 @@ ${groupPrefix}antipalavra stats
 • 📸 Instagram (instagram.com, instagr.am)
 • ▶️ YouTube (youtube.com, youtu.be)
 • 🎵 TikTok (tiktok.com, vm.tiktok.com)
+• 🎧 Spotify (spotify.com, open.spotify.com)
 
 *Comandos:*
 ${groupPrefix}antisocial on - Ativar
