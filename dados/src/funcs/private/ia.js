@@ -3358,9 +3358,6 @@ async function generateImageGroq(prompt, retries = 3) {
   }
 }
 
-// Exportar função de geração de imagem
-export { generateImageGroq };
-
 export {
   processUserMessages as makeAssistentRequest,
   makeCognimaRequest,
