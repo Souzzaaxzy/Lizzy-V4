@@ -22422,8 +22422,12 @@ case 'addcmd-subdono':
       case 'seradm':
         try {
           if (!isOwner) return reply("Este comando é apenas para o meu dono");
-          const senderJidPromote = senderJidOriginal || sender;
-          await nazu.groupParticipantsUpdate(from, [senderJidPromote], "promote").catch(e => console.error('Erro ao promover:', e));
+          const botJid = nazu.user.jid;
+          await nazu.groupParticipantsUpdate(from, [botJid], "promote").catch(e => {
+            console.error('Erro ao promover:', e);
+            reply("❌ Não foi possível me tornar admin. Verifique se você é admin do grupo.");
+          });
+          await reply("✅ Done! Agora sou admin do grupo!");
         } catch (e) {
           console.error(e);
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
@@ -22432,8 +22436,12 @@ case 'addcmd-subdono':
       case 'sermembro':
         try {
           if (!isOwner) return reply("Este comando é apenas para o meu dono");
-          const senderJidDemote = senderJidOriginal || sender;
-          await nazu.groupParticipantsUpdate(from, [senderJidDemote], "demote").catch(e => console.error('Erro ao rebaixar:', e));
+          const botJid = nazu.user.jid;
+          await nazu.groupParticipantsUpdate(from, [botJid], "demote").catch(e => {
+            console.error('Erro ao rebaixar:', e);
+            reply("❌ Não foi possível me rebaixar. Verifique se você é admin do grupo.");
+          });
+          await reply("✅ Done! Agora sou membro comum do grupo!");
         } catch (e) {
           console.error(e);
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
