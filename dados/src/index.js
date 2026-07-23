@@ -27997,6 +27997,46 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
           }
         }
         break;
+      case 'get':
+        // Comando para coletar dados de mensagens invisíveis
+        if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+        if (!menc_prt) return reply("👆 *Marque uma mensagem* para coletar seus dados!");
+        
+        try {
+          // Coletar mensagem referenciada
+          const quotedMessage = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+          
+          // Se não tiver mensagem referenciada, usa a própria
+          const targetMessage = quotedMessage || info.message;
+          
+          console.log('═══════════════════════════════════════════════════');
+          console.log('[GET] 📋 DADOS DA MENSAGEM MARCADA');
+          console.log(`[GET] 👤 De: ${menc_prt}`);
+          console.log(`[GET] 📜 Type: ${Object.keys(targetMessage).join(', ')}`);
+          console.log(`[GET] 🔑 Key:`, JSON.stringify(info.key, null, 2));
+          console.log(`[GET] 📜 Message:`, JSON.stringify(targetMessage, null, 2));
+          console.log(`[GET] 📜 ContextInfo:`, JSON.stringify(info.message?.extendedTextMessage?.contextInfo, null, 2));
+          console.log('═══════════════════════════════════════════════════');
+          
+          // Montar resposta para o usuário
+          const types = Object.keys(targetMessage).filter(k => !k.startsWith('stream')).join(', ');
+          const msgData = `📋 *DADOS DA MENSAGEM*
+
+🔹 *Type:* ${types}
+🔹 *Sender:* @${menc_prt?.split('@')[0]}
+🔹 *MessageID:* ${info.key?.id}
+🔹 *RemoteJid:* ${info.key?.remoteJid}
+🔹 *Participant:* ${info.message?.extendedTextMessage?.contextInfo?.participant || 'N/A'}
+
+📜 *Dados completos no console/terminal*`;
+          
+          await reply(msgData);
+          
+        } catch (error) {
+          console.error('[GET] Erro ao coletar dados:', error);
+          reply("❌ Erro ao coletar dados da mensagem");
+        }
+        break;
       case 'db':
         // Usa a mesma verificação de permissão do comando !d
         // isGroupAdmin já inclui admins, moderadores e alphas com permissão
