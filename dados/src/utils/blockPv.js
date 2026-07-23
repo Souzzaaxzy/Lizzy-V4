@@ -291,7 +291,7 @@ export const menuCommandsMap = {
     },
     ferramentas: {
         menuName: 'Ferramentas',
-        commands: ['encurtar', 'google', 'calc', 'calcular', 'wikipedia', 'wiki', 'clima', 'traduzir', 'tradutor', 'noticias', 'news', 'horario', 'dolar', 'euro', 'bitcoin', 'cep', 'ip', 'dns', 'niver', 'idade', 'calcular', 'ping', 'calc', 'ocr', 'scan', 'dicionario', 'aurora', 'audio', 'voz', 'tts']
+        commands: ['encurtar', 'google', 'calc', 'calcular', 'wikipedia', 'wiki', 'clima', 'traduzir', 'tradutor', 'noticias', 'news', 'horario', 'dolar', 'euro', 'bitcoin', 'cep', 'ip', 'dns', 'niver', 'idade', 'calcular', 'ping', 'calc', 'scan', 'dicionario', 'aurora', 'audio', 'voz', 'tts']
     },
     menufig: {
         menuName: 'Figurinhas',

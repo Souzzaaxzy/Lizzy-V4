@@ -25,7 +25,6 @@ export default async function menuIa(prefix, botName = "MeuBot", userName = "Usu
 │ 🌐 ${prefix}resumirurl
 │ 💬 ${prefix}resumirchat
 │ 🎯 ${prefix}recomendar
-│ 📷 ${prefix}ocr
 ╰──────────────
 
 

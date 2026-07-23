@@ -15641,96 +15641,6 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
           });
         });
         break;
-      case 'ocr':
-        try {
-          // Verificar API key
-          if (!process.env.GROQ_API_KEY) {
-            return reply("❌ API da Groq não está configurada. Use !setgroq para configurar.");
-          }
-          // Verificar se há imagem quoted
-          if (!isQuotedImage && !isImage) {
-            return reply(`📷 *Como usar o OCR*
-Responda (marque) uma *imagem que contenha texto* com o comando:
-${groupPrefix}ocr
-O texto será extraído *exatamente* como está na imagem, sem resumir ou traduzir.
-⚠️ Marque uma imagem com texto visível.`);
-          }
-          await reply('🔍 *Processando imagem...*\n\nAguarde, extraindo texto da imagem.');
-          // Obter buffer da imagem
-          let imageBuffer;
-          if (isImage && info.message?.imageMessage) {
-            imageBuffer = await getFileBuffer(info.message.imageMessage, 'image');
-          } else if (isQuotedImage && quotedMessageContent?.imageMessage) {
-            imageBuffer = await getFileBuffer(quotedMessageContent.imageMessage, 'image');
-          }
-          if (!imageBuffer || (Buffer.isBuffer(imageBuffer) && imageBuffer.length === 0)) {
-            return reply("❌ Não foi possível baixar a imagem. Tente novamente.");
-          }
-          // Verificar tamanho (limite ~5MB para API)
-          const sizeMB = imageBuffer.length / (1024 * 1024);
-          if (sizeMB > 5) {
-            return reply(`❌ Imagem muito grande (${sizeMB.toFixed(1)}MB). Máximo: 5MB.\nTente enviar uma imagem menor ou comprimida.`);
-          }
-          // Converter para base64
-          const base64Image = Buffer.isBuffer(imageBuffer) 
-            ? imageBuffer.toString('base64')
-            : (await fs.readFile(imageBuffer)).toString('base64');
-          // Verificar se é PNG ou JPEG
-          const isPng = imageBuffer[0] === 0x89 && imageBuffer[1] === 0x50;
-          const mimeType = isPng ? 'image/png' : 'image/jpeg';
-          // Enviar para Groq Vision API
-          const response = await axios.post(
-            'https://api.groq.com/openai/v1/chat/completions',
-            {
-              model: 'llama-3.2-11b-vision-preview',
-              messages: [
-                {
-                  role: 'user',
-                  content: [
-                    {
-                      type: 'text',
-                      text: 'Extraia TODO o texto presente nesta imagem. Preserve a formatação original (quebras de linha, espaços, pontuação). NÃO resuma, NÃO traduza, NÃO interprete. Se não houver texto detectável, responda exatamente: "Nenhum texto detectado na imagem."'
-                    },
-                    {
-                      type: 'image_url',
-                      image_url: {
-                        url: `data:${mimeType};base64,${base64Image}`
-                      }
-                    }
-                  ]
-                }
-              ],
-              temperature: 0.1,
-              max_tokens: 4096
-            },
-            {
-              headers: {
-                'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
-                'Content-Type': 'application/json'
-              },
-              timeout: 60000
-            }
-          );
-          const extractedText = response.data.choices?.[0]?.message?.content?.trim();
-          if (!extractedText || extractedText === 'Nenhum texto detectado na imagem.') {
-            return reply('🔍 *Resultado do OCR*\n\nNenhum texto foi detectado na imagem enviada.');
-          }
-          await reply(`📝 *Texto Extraído:*\n\n${extractedText}`);
-        } catch (e) {
-          console.error('Erro no OCR:', e);
-          console.error('Response:', e.response?.data);
-          if (e.response?.status === 401) {
-            reply("❌ API Key inválida. Use !setgroq para configurar uma nova chave.");
-          } else if (e.response?.status === 429) {
-            reply("⏳ Limite de requisições atingido. Tente novamente em alguns minutos.");
-          } else if (e.response?.status === 400) {
-            const errorMsg = e.response?.data?.error?.message || 'Formato de imagem inválido ou muito grande';
-            reply(`❌ Erro na API: ${errorMsg}\n\nTente com uma imagem menor ou diferente.`);
-          } else {
-            reply(`❌ Erro ao processar OCR: ${e.message}`);
-          }
-        }
-        break;
       case 'historico':
       case 'history':
         try {
@@ -27177,13 +27087,11 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           const dbSizeStr = dbSize > 1048576 ? `${(dbSize / 1048576).toFixed(1)} MB` : `${(dbSize / 1024).toFixed(1)} KB`;
           // ==================== AI / SPECIAL ====================
           let aiCount = 0;
-          let ocrCount = 0;
           let musicCount = 0;
           let imgGenCount = 0;
           for (const [cmdName, cmdData] of Object.entries(cmdStats.commands || {})) {
             const count = cmdData.count || 0;
             if (['ia', 'cognima', 'gpt', 'pergunte', 'ask'].includes(cmdName.toLowerCase())) aiCount += count;
-            if (['ocr', 'ler'].includes(cmdName.toLowerCase())) ocrCount += count;
             if (['play', 'music', 'musica', 'ytmp3', 'ytmp4'].includes(cmdName.toLowerCase())) musicCount += count;
             if (['image', 'img', 'gerarimg', 'dalle'].includes(cmdName.toLowerCase())) imgGenCount += count;
           }
@@ -27222,7 +27130,6 @@ ${groupPrefix}togglecmdvip premium_ia off`);
 └─────────────────────────────────────┘
 ┌─ 🔥 *RECURSOS* ─────────────────────┐
 │ ✦ IA: ${aiCount} consultas
-│ ✦ OCR: ${ocrCount} leituras
 │ ✦ Música: ${musicCount} downloads
 │ ✦ Imagens: ${imgGenCount} geradas
 └─────────────────────────────────────┘
@@ -27260,7 +27167,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           }
           await nazu.sendMessage(from, {
             text: `╭═══════════════════════╮
-│      ⚡ 𝐊𝐀𝐈𝐒𝐄𝐑 𝐏𝐈𝐍𝐆 ⚡
+│      ⚡ ${nomebot} 𝐏𝐈𝐍𝐆 ⚡
 ╰═══════════════════════╯
 ╭─ 📡 𝐂𝐎𝐍𝐄𝐗𝐀̃𝐎
 │ ◈ Latência: ${speedConverted.toFixed(3)}s
@@ -27272,7 +27179,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
 │ ◈ Resposta: Rápida
 │ ◈ Servidor: Online
 ╰───────────────
-╭─ 🤖 𝐊𝐀𝐈𝐒𝐄𝐑𝐁𝐎𝐓
+╭─ 🤖 ${nomebot}𝐁𝐎𝐓
 │ ◈ Performance: Máxima
 │ ◈ Segurança: Ativa
 │ ◈ Operação: Perfeita
