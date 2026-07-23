@@ -851,6 +851,43 @@ const saveAdminErrorMessage = (message) => {
 
 // Inicializar
 ADMIN_ERROR_MESSAGE = loadAdminErrorMessage();
+
+// Função para enviar mensagem de erro admin com botão de canal
+async function replyAdminError(sock, jid, message, quotedMsg = null) {
+  try {
+    // Carregar URL do canal do global.json
+    let channelUrl = 'https://whatsapp.com/channel/0029Vb8VWbG3WHTWX9ZPnj0Y';
+    try {
+      const globalJson = JSON.parse(fs.readFileSync(DATABASE_DIR + '/global.json', 'utf-8'));
+      if (globalJson.channel?.welcomeUrl) {
+        channelUrl = globalJson.channel.welcomeUrl;
+      }
+    } catch (e) {
+      // Usar URL padrão
+    }
+    
+    await sendInteractiveMessage(sock, jid, {
+      text: message,
+      footer: '© Abyss Bot',
+      interactiveButtons: [
+        {
+          name: "cta_url",
+          buttonParamsJson: JSON.stringify({
+            display_text: "📢 Ver Canal",
+            url: channelUrl
+          })
+        }
+      ]
+    }, quotedMsg ? { quoted: quotedMsg } : {});
+    return true;
+  } catch (e) {
+    console.error('Erro ao enviar mensagem de erro admin:', e);
+    // Fallback: enviar mensagem simples
+    await sock.sendMessage(jid, { text: message }, quotedMsg ? { quoted: quotedMsg } : {});
+    return false;
+  }
+}
+
 // Armazenamento temporário para pedidos SMM pendentes de confirmação
 const pendingSmmOrders = new Map();
 const react = async (emoji, sock, messageKey, fromJid) => {
@@ -20960,9 +20997,9 @@ ${newAdmMsg}`);
             }
             break;
           case 'preview':
-            reply(`💔 *Mensagem atual:*
+            replyAdminError(nazu, from, `💔 *Mensagem atual:*
 
-${ADMIN_ERROR_MESSAGE}`);
+${ADMIN_ERROR_MESSAGE}`, info);
             break;
           case 'reset':
             if (saveAdminErrorMessage(ADMIN_ERROR_MESSAGE_DEFAULT)) {
@@ -24135,7 +24172,7 @@ ${groupPrefix}setgroq sua_chave_aqui
       case 'setmenupic':
         try {
           if (!isGroup) return reply("◈ Este comando só funciona em grupos 💔");
-          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
+          if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
           if (!isGroupCustomizationEnabled()) {
             return reply("⚠️ O sistema de personalização está desativado. Peça ao dono do bot para ativar com o comando: " + prefix + "personalizargrupo");
           }
@@ -24163,7 +24200,7 @@ ${groupPrefix}setgroq sua_chave_aqui
       case 'resetfotomenu':
         try {
           if (!isGroup) return reply("◈ Este comando só funciona em grupos 💔");
-          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
+          if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
           if (!isGroupCustomizationEnabled()) {
             return reply("⚠️ O sistema de personalização está desativado.");
           }
@@ -24183,7 +24220,7 @@ ${groupPrefix}setgroq sua_chave_aqui
       case 'setbotname':
         try {
           if (!isGroup) return reply("◈ Este comando só funciona em grupos 💔");
-          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
+          if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
           if (!isGroupCustomizationEnabled()) {
             return reply("⚠️ O sistema de personalização está desativado. Peça ao dono do bot para ativar com o comando: " + prefix + "personalizargrupo");
           }
@@ -24210,7 +24247,7 @@ ${groupPrefix}setgroq sua_chave_aqui
       case 'resetnome':
         try {
           if (!isGroup) return reply("◈ Este comando só funciona em grupos 💔");
-          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
+          if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
           if (!isGroupCustomizationEnabled()) {
             return reply("⚠️ O sistema de personalização está desativado.");
           }
@@ -30325,7 +30362,7 @@ break;
       case 'antis':
         try {
           if (!isGroup) return reply("Este comando só pode ser usado em grupos! 💔");
-          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
+          if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
           // Lista de todos os sistemas anti disponíveis
           const antiSystems = [
             { key: 'antilinkhard', name: 'Antilink Hard', isObject: false },
@@ -30872,7 +30909,7 @@ break;
             const newsletterContext = gerarContextNewsletter(adReply);
             await reply(menuText, { mentions, contextInfo: newsletterContext });
           } else if (args[1] === 'on') {
-            if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
+            if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
             if (!isBotAdmin) return reply("Preciso ser admin para isso 💔");
             if (!groupData.antiRoubo) groupData.antiRoubo = {};
             groupData.antiRoubo.enabled = true;
@@ -30888,7 +30925,7 @@ break;
             };
             await nazu.sendMessage(from, { text: "✅ *Anti Roubo de Administração ativado.*\n\nPromoções e rebaixamentos só poderão ser feitos pelo Dono do Grupo ou usuários autorizados." , contextInfo: newsletterAntiRoubo, quoted: info });
           } else if (args[1] === 'off') {
-            if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
+            if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
             if (groupData.antiRoubo) {
               groupData.antiRoubo.enabled = false;
             }
@@ -31715,7 +31752,7 @@ case 'set-bannerbv':
       case 'rmwelcomeimg':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
+          if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
           const groupFilePath = buildGroupFilePath(from);
           let groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : {
             welcome: {}
@@ -31738,7 +31775,7 @@ case 'set-bannerbv':
       case 'rmexitimg':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
+          if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
           const groupFilePath = buildGroupFilePath(from);
           let groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : {
             exit: {}
@@ -31946,7 +31983,7 @@ case 'set-bannerbv':
       case 'blacklist':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
+          if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
           
           // Coleta todos os usuários mencionados
           const targetUsers = new Set();
@@ -32036,7 +32073,7 @@ case 'set-bannerbv':
       case 'unblacklist':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
+          if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
           
           // Coleta todos os usuários mencionados
           let targetUsers = [];
@@ -32101,7 +32138,7 @@ case 'set-bannerbv':
       case 'listblacklist':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
+          if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
           const groupFilePath = buildGroupFilePath(from);
           let groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : {
             blacklist: {}
@@ -32123,7 +32160,7 @@ case 'set-bannerbv':
       case 'scanblacklist':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
+          if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
           await reply("🔍 *Escaneando membros do grupo...*");
           const globalBlacklist = loadGlobalBlacklist();
           const groupFilePath = buildGroupFilePath(from);
@@ -32166,7 +32203,7 @@ case 'set-bannerbv':
       case 'warning':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
+          if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
           if (!menc_os2) return reply("Marque um usuário 🙄");
           if (menc_os2 === botNumber) return reply("❌ Não posso advertir a mim mesma!");
           // Verificar se o alvo é moderador ou alpha
@@ -32221,7 +32258,7 @@ case 'set-bannerbv':
       case 'unwarning':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
+          if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
           if (!menc_os2) return reply("Marque um usuário 🙄");
           const groupFilePath = buildGroupFilePath(from);
           let groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : {
@@ -32244,7 +32281,7 @@ case 'set-bannerbv':
       case 'warninglist':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
+          if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
           const groupFilePath = buildGroupFilePath(from);
           let groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : {
             warnings: {}
@@ -32283,12 +32320,12 @@ case 'set-bannerbv':
           const enableActions = ['on', 'ativar', 'ligar', 'enable'];
           const disableActions = ['off', 'desativar', 'desligar', 'disable'];
           if (enableActions.includes(action)) {
-            if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
+            if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
             setSupportMode(from, true);
             return reply('✅ *Modo suporte ativado!* Agora membros podem solicitar tickets.');
           }
           if (disableActions.includes(action)) {
-            if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
+            if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
             setSupportMode(from, false);
             return reply('⚠️ *Modo suporte desativado!*');
           }
@@ -32401,7 +32438,7 @@ case 'set-bannerbv':
       case 'litemode':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
+          if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
           const groupFilePath = buildGroupFilePath(from);
           if (!groupData.modolite) {
             groupData.modolite = true;
@@ -32634,7 +32671,7 @@ ${groupPrefix}antistickerplus remover → remove usuário e apaga mensagem
       case 'autosticker':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
+          if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
           const groupFilePath = __dirname + `/../database/grupos/${from}.json`;
           let groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : {};
           groupData.autoSticker = !groupData.autoSticker;
@@ -32657,7 +32694,7 @@ ${groupPrefix}antistickerplus remover → remove usuário e apaga mensagem
       case 'autoresposta':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
+          if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
           const groupFilePath = __dirname + `/../database/grupos/${from}.json`;
           let groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : {};
           groupData.autorepo = !groupData.autorepo;
@@ -32680,7 +32717,7 @@ case 'assistente':
 case 'assistent':
   try {
     if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-    if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
+    if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
     const groupFilePath = __dirname + `/../database/grupos/${from}.json`;
     let groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : {};
     if (!q) {
@@ -32797,7 +32834,7 @@ case 'assistent':
       case 'mutar':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
-          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
+          if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
           if (!isBotAdmin) return sendAbyssWarning("Eu preciso ser administrador para apagar as mensagens.");
           if (!menc_os2) return reply("Marque alguém para mutar. 🙄");
           const targetId = await normalizeUserId(nazu, menc_os2);
@@ -32821,7 +32858,7 @@ case 'assistent':
       case 'unmute':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
-          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
+          if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
           if (!menc_os2) return reply("Marque alguém para desmutar. 🙄");
           const targetId = await normalizeUserId(nazu, menc_os2);
           const removed = removeUserFromMap(groupData.mutedUsers, targetId);
@@ -32962,7 +32999,7 @@ case 'assistent':
       case 'mutet':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
-          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
+          if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
           if (!isBotAdmin) return sendAbyssWarning("⚠️ Eu preciso ser administrador para apagar mensagens.");
           if (!menc_os2) return reply(`📝 *Como usar:* ${groupPrefix}mutet @usuário <tempo>\n\n⏱️ *Exemplos:*\n• ${groupPrefix}mutet @user 30s\n• ${groupPrefix}mutet @user 15m\n• ${groupPrefix}mutet @user 2h\n• ${groupPrefix}mutet @user 7d\n\n🕐 *Unidades:* s=segundos, m=minutos, h=horas, d=dias`);
           // Obter o ID do usuário normalizado
@@ -33029,7 +33066,7 @@ case 'assistent':
       case 'unmutet':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
-          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
+          if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
           if (!menc_os2) return reply("📝 *Como usar:* ${groupPrefix}unmutet @usuário");
           const tempUnmuteTargetId = await normalizeUserId(nazu, menc_os2);
           const result = removeTempMute(from, tempUnmuteTargetId, idsMatch);
