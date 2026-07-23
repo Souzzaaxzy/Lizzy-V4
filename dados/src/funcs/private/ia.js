@@ -3304,6 +3304,63 @@ function getAbyssResponseDelay(grupoUserId) {
 }
 
 
+
+
+// ========== FUNÇÃO DE GERAÇÃO DE IMAGEM (GROQ) ==========
+async function generateImageGroq(prompt, retries = 3) {
+  if (!prompt || typeof prompt !== 'string') {
+    throw new Error('Prompt é obrigatório para geração de imagem');
+  }
+
+  if (!GROQ_API_KEY) {
+    throw new Error('GROQ_API_KEY não configurada. Use !setgroq para configurar.');
+  }
+
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const response = await axios({
+        method: 'post',
+        url: 'https://api.groq.com/openai/v1/images/generations',
+        headers: {
+          'Authorization': `Bearer ${GROQ_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        data: {
+          model: 'flux-1-pro-preview',
+          prompt: prompt,
+          n: 1,
+          size: '1024x1024'
+        },
+        timeout: 120000
+      });
+
+      if (response.data?.data?.[0]?.url) {
+        return response.data.data[0].url;
+      }
+
+      if (response.data?.data?.[0]?.b64_json) {
+        return { b64_json: response.data.data[0].b64_json };
+      }
+
+      throw new Error('Resposta inválida da API de geração de imagem');
+    } catch (error) {
+      const status = error.response?.status;
+      const apiMessage = error.response?.data?.error?.message || error.message;
+
+      console.warn(`[Groq Image] Tentativa ${attempt + 1}/${retries} falhou:`, { status, message: apiMessage });
+
+      if (attempt === retries - 1) {
+        throw new Error(`[GROQ_IMAGE_ERROR] Falha na geração: ${apiMessage}`);
+      }
+
+      await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+    }
+  }
+}
+
+// Exportar função de geração de imagem
+export { generateImageGroq };
+
 export {
   processUserMessages as makeAssistentRequest,
   makeCognimaRequest,
@@ -3362,5 +3419,7 @@ export {
   getDynamicBotInfo,
   replaceDynamicVariables,
   checkBotNameMention,
-  hasBotMention
+  hasBotMention,
+  // Image generation
+  generateImageGroq
 };

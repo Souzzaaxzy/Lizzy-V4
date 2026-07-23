@@ -11,6 +11,11 @@ export default async function menuIa(prefix, botName = "MeuBot", userName = "Usu
 ╰──────────────
 
 
+╭─❖ 🎨 GERAÇÃO DE IMAGEM
+│ 🖼️ ${prefix}imagine
+╰──────────────
+
+
 ╭─❖ 📐 MATEMÁTICA
 │ 🧮 ${prefix}resolver
 │ ➗ ${prefix}calc
