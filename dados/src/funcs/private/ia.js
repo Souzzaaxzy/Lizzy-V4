@@ -3305,54 +3305,16 @@ function getAbyssResponseDelay(grupoUserId) {
 
 
 
-
 // ========== FUNÇÃO DE GERAÇÃO DE IMAGEM (GROQ + POLLINATIONS) ==========
 async function generateImageGroq(prompt, retries = 3) {
   if (!prompt || typeof prompt !== 'string') {
     throw new Error('Prompt é obrigatório para geração de imagem');
   }
 
-  // Melhorar prompt usando a IA da Groq
-  let enhancedPrompt = prompt;
-  if (GROQ_API_KEY) {
-    try {
-      const response = await axios({
-        method: 'post',
-        url: 'https://api.groq.com/openai/v1/chat/completions',
-        headers: {
-          'Authorization': `Bearer ${GROQ_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        data: {
-          model: 'meta-llama/llama-4-maverick-17b-8e-instruct',
-          messages: [
-            {
-              role: 'system',
-              content: 'Você é um especialista em criar prompts para geração de imagens. Transforme o texto do usuário em um prompt detalhado e descritivo em inglês, incluindo estilos artísticos, iluminação, detalhes visuais, etc. Responda APENAS com o prompt melhorado, sem explicações.'
-            },
-            {
-              role: 'user',
-              content: prompt
-            }
-          ],
-          temperature: 0.8,
-          max_tokens: 300
-        },
-        timeout: 30000
-      });
-      
-      if (response.data?.choices?.[0]?.message?.content) {
-        enhancedPrompt = response.data.choices[0].message.content.trim();
-      }
-    } catch (e) {
-      console.warn('[Groq Image] Erro ao melhorar prompt, usando original:', e.message);
-    }
-  }
+  // Gerar imagem usando Pollinations.ai com modelo de alta qualidade
+  const encodedPrompt = encodeURIComponent(prompt);
+  const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&model=flux&nologo=true`;
 
-  // Gerar imagem usando Pollinations.ai (gratuito)
-  const encodedPrompt = encodeURIComponent(enhancedPrompt);
-  const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&nologo=true`;
-  
   return imageUrl;
 }
 

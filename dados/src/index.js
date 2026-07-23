@@ -15745,30 +15745,20 @@ Seu limite será renovado automaticamente à meia-noite.`);
             fs.writeFileSync(imagineDbPath, JSON.stringify(imagineDb, null, 2));
           }
           
-          // Enviar mensagem de processamento
-          await reply('🎨 Gerando sua imagem... isso pode levar alguns segundos...');
+          // Gerar e enviar imagem diretamente
+          const imageUrl = await ia.generateImageGroq(q);
           
-          try {
-            await reply('🎨 Melhorando seu prompt e gerando a imagem... isso pode levar alguns segundos... 🖼️');
-            
-            const imageUrl = await ia.generateImageGroq(q);
-            
-            if (imageUrl) {
-              // Enviar imagem diretamente da URL
-              await nazu.sendMessage(from, {
-                image: { url: imageUrl },
-                caption: `🖼️ *Imagem gerada com sucesso!*
+          if (imageUrl) {
+            await nazu.sendMessage(from, {
+              image: { url: imageUrl },
+              caption: `🖼️ *Imagem gerada com sucesso!*
 
 📝 *Prompt:* ${q}`
-              }, { quoted: info });
-            }
-          } catch (imgError) {
-            console.error('Erro ao gerar imagem:', imgError);
-            await reply('😓 Ocorreu um erro ao gerar a imagem. Tente novamente mais tarde.');
+            }, { quoted: info });
           }
-        } catch (e) {
-          console.error(e);
-          reply("Ocorreu um erro 💔");
+        } catch (imgError) {
+          console.error('Erro ao gerar imagem:', imgError);
+          await reply('😓 Ocorreu um erro ao gerar a imagem. Tente novamente mais tarde.');
         }
         break;
       case 'cog':
