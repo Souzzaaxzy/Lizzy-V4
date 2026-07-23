@@ -21807,7 +21807,7 @@ ${q || '[conteúdo da mídia]'}
 
 ╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━⬣
 
-«✨ By ${nomebot}»
+«✨ By ${nomedono}»
 `;
           const newsletterContext = {
             forwardingScore: 999,
