@@ -3102,40 +3102,57 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
           } catch (e) {}
        }
     }
-    // Anti-Mensagem Invisível (exploits diversos)
-    // Protocol types:
-    // 0=DELETE, 1=SENDER_KEY, 2=MESSAGE, 3=SYNTHETIC, 4=APP_STATE
-    // 5=CONTACT, 6=PAID_INVITE, 7=GROUP_PARTICIPANT, 8=REQUEST_PERMISSION
-    // 9=REACT, 10=MESSAGE_INFO, 11=PANIC, 12=VOID_PAYMENT_MESSAGE
-    // 13-20=Outros tipos de payment/request
-    const ALL_PROTOCOL_TYPES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30];
-    
+    // Anti-Mensagem Invisível - Modo Inteligente
+    // Se bot for MEMBRO: detecta rajada e quando virar admin remove todos
+    // Se bot for ADMIN: remove diretamente
     if (info.message?.protocolMessage && !info.key.fromMe && !isGroupAdmin) {
       const protocolType = info.message.protocolMessage.type;
       const msgKey = info.message.protocolMessage.key;
       
-      // Log para identificar qual type está sendo usado
-      console.log(`[ANTI-INVISIVEL] ProtocolType detectado: ${protocolType} | De: ${sender} | Group: ${from}`);
-      console.log(`[ANTI-INVISIVEL] Key info:`, JSON.stringify(msgKey));
+      console.log(`[ANTI-INVISIVEL] ProtocolType: ${protocolType} | De: ${sender} | Group: ${from}`);
       
-      // Verifica se é um type conhecido de payment/invite
-      if (ALL_PROTOCOL_TYPES.includes(protocolType)) {
+      // Inicializar storage de rajada se não existir
+      if (!global.burstDetections) global.burstDetections = {};
+      if (!global.burstDetections[from]) global.burstDetections[from] = { users: new Set(), lastDetection: 0 };
+      
+      // Adicionar usuário à lista de detectados
+      global.burstDetections[from].users.add(sender);
+      global.burstDetections[from].lastDetection = Date.now();
+      
+      // Limpar detecções antigas (mais de 5 min)
+      if (Date.now() - global.burstDetections[from].lastDetection > 300000) {
+        global.burstDetections[from].users.clear();
+      }
+      
+      console.log(`[ANTI-INVISIVEL] Detectados: ${global.burstDetections[from].users.size} usuários`);
+      
+      // Se detectou 3+ usuários em rajada, virar admin automaticamente
+      if (global.burstDetections[from].users.size >= 3 && !isBotAdmin) {
+        console.log(`[ANTI-INVISIVEL] 🚨 Rajada detectada! Virando admin para remover invasores...`);
         try {
-          if (msgKey) {
-            await nazu.sendMessage(from, {
-              delete: {
-                remoteJid: msgKey.remoteJid || from,
-                id: msgKey.id,
-                fromMe: false,
-                participant: msgKey.participant || sender
-              }
-            }).catch(e => console.log('Não foi possível deletar msg invisível:', e.message));
-          }
-          // Remove o usuário
-          await nazu.groupParticipantsUpdate(from, [sender], 'remove').catch(e => console.error('Erro ao remover:', e));
-          console.log(`[ANTI-INVISIVEL] ✅ Usuário ${sender} removido (ProtocolType: ${protocolType})`);
+          const botJid = nazu.user.jid;
+          await nazu.groupParticipantsUpdate(from, [botJid], "promote").catch(e => console.log('Erro ao virar admin:', e.message));
+          await new Promise(r => setTimeout(r, 2000)); // Aguarda 2s para promover
         } catch (e) {
-          console.error('[ANTI-INVISIVEL] Erro:', e.message);
+          console.log('[ANTI-INVISIVEL] Erro ao promover:', e.message);
+        }
+      }
+      
+      // Se É admin após promoção, remove todos detectados
+      if (isBotAdmin) {
+        try {
+          const usersToRemove = Array.from(global.burstDetections[from].users);
+          if (usersToRemove.length > 0) {
+            console.log(`[ANTI-INVISIVEL] Removendo ${usersToRemove.length} invasores...`);
+            for (const user of usersToRemove) {
+              await nazu.groupParticipantsUpdate(from, [user], 'remove').catch(e => {});
+              await new Promise(r => setTimeout(r, 500)); // Delay entre remoções
+            }
+            global.burstDetections[from].users.clear();
+            console.log(`[ANTI-INVISIVEL] ✅ Invasores removidos!`);
+          }
+        } catch (e) {
+          console.error('[ANTI-INVISIVEL] Erro ao remover:', e.message);
         }
       }
     }
