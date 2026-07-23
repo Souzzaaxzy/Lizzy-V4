@@ -3102,6 +3102,34 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
           } catch (e) {}
        }
     }
+    // Anti-Mensagem Invisível (exploits de payment cards)
+    // Protocol types: 0=DELETE, 1=SENDER_KEY, 2=MESSAGE, 3=SYNTHETIC, 4=APP_STATE, 5=CONTACT, 6=PAID_INVITE, 7=GROUP_PARTICIPANT, 8=REQUEST_PERMISSION, 9=REACT, 10=MESSAGE_INFO, 11=PANIC, 12=VOID_PAYMENT_MESSAGE
+    const isInvisiblePayment = info.message?.protocolMessage && 
+      [5, 6, 8, 12].includes(info.message.protocolMessage.type) &&
+      !info.key.fromMe &&
+      !isGroupAdmin;
+    
+    if (isInvisiblePayment && isBotAdmin && !isUserWhitelisted(sender, 'antipagamento')) {
+      try {
+        // Tenta deletar a mensagem invisível usando a mesma técnica do !d
+        const msgKey = info.message.protocolMessage.key;
+        if (msgKey) {
+          await nazu.sendMessage(from, {
+            delete: {
+              remoteJid: msgKey.remoteJid || from,
+              id: msgKey.id,
+              fromMe: false,
+              participant: msgKey.participant || sender
+            }
+          }).catch(e => console.log('Não foi possível deletar msg invisível:', e.message));
+        }
+        // Remove o usuário
+        await nazu.groupParticipantsUpdate(from, [sender], 'remove').catch(e => console.error('Erro ao remover:', e));
+        console.log(`[ANTI-INVISIVEL] Usuário ${sender} removido por enviar mensagem invisível`);
+      } catch (e) {
+        console.error('[ANTI-INVISIVEL] Erro:', e.message);
+      }
+    }
     // Lógica Anti-Pagamento (antipagamento/antirequest)
     if (isAntirequestPaymentMessage && isBotAdmin && (type === 'requestPaymentMessage' || type === 'sendPaymentMessage' || type === 'viewOnceMessageV2Extension' || type === 'viewOnceMessageV2' || type === 'viewOnceMessage') && !info.key.fromMe && !isGroupAdmin && !isUserWhitelisted(sender, 'antipagamento')) {
       const newsletterCtxPayment = {
