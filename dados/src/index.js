@@ -818,6 +818,39 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = pathz.dirname(__filename);
 const OWNER_ONLY_MESSAGE = '🚫 Este comando é apenas para o dono do bot!';
+const ADMIN_ERROR_MESSAGE_DEFAULT = '💔 Você precisa ser admin do grupo para usar este comando!';
+// Mensagem customizada de erro admin (pode ser configurada pelo dono via !configerroradm)
+let ADMIN_ERROR_MESSAGE = ADMIN_ERROR_MESSAGE_DEFAULT;
+
+// Arquivo para salvar a mensagem customizada
+const ADMIN_ERROR_MSG_FILE = pathz.join(DONO_DIR, 'adminErrorMsg.json');
+
+// Carregar mensagem customizada
+const loadAdminErrorMessage = () => {
+  try {
+    if (fs.existsSync(ADMIN_ERROR_MSG_FILE)) {
+      const data = JSON.parse(fs.readFileSync(ADMIN_ERROR_MSG_FILE, 'utf-8'));
+      return data.message || ADMIN_ERROR_MESSAGE_DEFAULT;
+    }
+  } catch (e) {
+    console.error('Erro ao carregar mensagem de erro admin:', e);
+  }
+  return ADMIN_ERROR_MESSAGE_DEFAULT;
+};
+
+// Salvar mensagem customizada
+const saveAdminErrorMessage = (message) => {
+  try {
+    fs.writeFileSync(ADMIN_ERROR_MSG_FILE, JSON.stringify({ message }, null, 2), 'utf-8');
+    return true;
+  } catch (e) {
+    console.error('Erro ao salvar mensagem de erro admin:', e);
+    return false;
+  }
+};
+
+// Inicializar
+ADMIN_ERROR_MESSAGE = loadAdminErrorMessage();
 // Armazenamento temporário para pedidos SMM pendentes de confirmação
 const pendingSmmOrders = new Map();
 const react = async (emoji, sock, messageKey, fromJid) => {
@@ -20879,6 +20912,72 @@ case 'menuadm':
           await reply("❌ Ocorreu um erro ao carregar o menu de membros");
         }
         break;
+      case 'configerroradm':
+        if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
+        const subcmdAdm = args[0]?.toLowerCase();
+        if (!subcmdAdm) {
+          return reply(`💔 *Configurar Mensagem de Erro Admin*
+
+` +
+            `📌 *Uso:* ${groupPrefix}configerroradm <opção>
+
+` +
+            `*Opções:*
+` +
+            `• ${groupPrefix}configerroradm set <mensagem> - Definir mensagem personalizada
+` +
+            `• ${groupPrefix}configerroradm preview - Visualizar mensagem atual
+` +
+            `• ${groupPrefix}configerroradm reset - Restaurar padrão
+
+` +
+            `*Mensagem atual:*
+${ADMIN_ERROR_MESSAGE}
+
+` +
+            `*Variáveis disponíveis:*
+` +
+            `{user} - Nome do usuário
+` +
+            `{nomebot} - Nome do bot`);
+        }
+        switch (subcmdAdm) {
+          case 'set':
+            const newAdmMsg = args.slice(1).join(' ');
+            if (!newAdmMsg) {
+              return reply(`💔 Forneça a mensagem personalizada.
+
+Exemplo: ${groupPrefix}configerroradm set Você não é admin, {user}!`);
+            }
+            if (saveAdminErrorMessage(newAdmMsg)) {
+              ADMIN_ERROR_MESSAGE = newAdmMsg;
+              reply(`✅ Mensagem de erro admin configurada!
+
+Nova mensagem:
+${newAdmMsg}`);
+            } else {
+              reply(`❌ Erro ao salvar. Tente novamente.`);
+            }
+            break;
+          case 'preview':
+            reply(`💔 *Mensagem atual:*
+
+${ADMIN_ERROR_MESSAGE}`);
+            break;
+          case 'reset':
+            if (saveAdminErrorMessage(ADMIN_ERROR_MESSAGE_DEFAULT)) {
+              ADMIN_ERROR_MESSAGE = ADMIN_ERROR_MESSAGE_DEFAULT;
+              reply(`✅ Mensagem restaurada ao padrão!
+
+${ADMIN_ERROR_MESSAGE_DEFAULT}`);
+            } else {
+              reply(`❌ Erro ao restaurar. Tente novamente.`);
+            }
+            break;
+          default:
+            reply(`💔 Opção inválida. Use ${groupPrefix}configerroradm para ver as opções.`);
+        }
+        break;
       case 'configcmdnotfound':
       case 'setcmdmsg':
         if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
@@ -24036,7 +24135,7 @@ ${groupPrefix}setgroq sua_chave_aqui
       case 'setmenupic':
         try {
           if (!isGroup) return reply("◈ Este comando só funciona em grupos 💔");
-          if (!isGroupAdmin) return reply("Você precisa ser admin do grupo 💔");
+          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
           if (!isGroupCustomizationEnabled()) {
             return reply("⚠️ O sistema de personalização está desativado. Peça ao dono do bot para ativar com o comando: " + prefix + "personalizargrupo");
           }
@@ -24064,7 +24163,7 @@ ${groupPrefix}setgroq sua_chave_aqui
       case 'resetfotomenu':
         try {
           if (!isGroup) return reply("◈ Este comando só funciona em grupos 💔");
-          if (!isGroupAdmin) return reply("Você precisa ser admin do grupo 💔");
+          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
           if (!isGroupCustomizationEnabled()) {
             return reply("⚠️ O sistema de personalização está desativado.");
           }
@@ -24084,7 +24183,7 @@ ${groupPrefix}setgroq sua_chave_aqui
       case 'setbotname':
         try {
           if (!isGroup) return reply("◈ Este comando só funciona em grupos 💔");
-          if (!isGroupAdmin) return reply("Você precisa ser admin do grupo 💔");
+          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
           if (!isGroupCustomizationEnabled()) {
             return reply("⚠️ O sistema de personalização está desativado. Peça ao dono do bot para ativar com o comando: " + prefix + "personalizargrupo");
           }
@@ -24111,7 +24210,7 @@ ${groupPrefix}setgroq sua_chave_aqui
       case 'resetnome':
         try {
           if (!isGroup) return reply("◈ Este comando só funciona em grupos 💔");
-          if (!isGroupAdmin) return reply("Você precisa ser admin do grupo 💔");
+          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
           if (!isGroupCustomizationEnabled()) {
             return reply("⚠️ O sistema de personalização está desativado.");
           }
@@ -30226,7 +30325,7 @@ break;
       case 'antis':
         try {
           if (!isGroup) return reply("Este comando só pode ser usado em grupos! 💔");
-          if (!isGroupAdmin) return reply("Você precisa ser administrador para usar este comando! 💔");
+          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
           // Lista de todos os sistemas anti disponíveis
           const antiSystems = [
             { key: 'antilinkhard', name: 'Antilink Hard', isObject: false },
@@ -30773,7 +30872,7 @@ break;
             const newsletterContext = gerarContextNewsletter(adReply);
             await reply(menuText, { mentions, contextInfo: newsletterContext });
           } else if (args[1] === 'on') {
-            if (!isGroupAdmin) return reply("Você precisa ser admin 💔");
+            if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
             if (!isBotAdmin) return reply("Preciso ser admin para isso 💔");
             if (!groupData.antiRoubo) groupData.antiRoubo = {};
             groupData.antiRoubo.enabled = true;
@@ -30789,7 +30888,7 @@ break;
             };
             await nazu.sendMessage(from, { text: "✅ *Anti Roubo de Administração ativado.*\n\nPromoções e rebaixamentos só poderão ser feitos pelo Dono do Grupo ou usuários autorizados." , contextInfo: newsletterAntiRoubo, quoted: info });
           } else if (args[1] === 'off') {
-            if (!isGroupAdmin) return reply("Você precisa ser admin 💔");
+            if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
             if (groupData.antiRoubo) {
               groupData.antiRoubo.enabled = false;
             }
@@ -31616,7 +31715,7 @@ case 'set-bannerbv':
       case 'rmwelcomeimg':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!isGroupAdmin) return reply("Você precisa ser administrador 💔");
+          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
           const groupFilePath = buildGroupFilePath(from);
           let groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : {
             welcome: {}
@@ -31639,7 +31738,7 @@ case 'set-bannerbv':
       case 'rmexitimg':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!isGroupAdmin) return reply("Você precisa ser administrador 💔");
+          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
           const groupFilePath = buildGroupFilePath(from);
           let groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : {
             exit: {}
@@ -31847,7 +31946,7 @@ case 'set-bannerbv':
       case 'blacklist':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!isGroupAdmin) return reply("Você precisa ser administrador 💔");
+          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
           
           // Coleta todos os usuários mencionados
           const targetUsers = new Set();
@@ -31937,7 +32036,7 @@ case 'set-bannerbv':
       case 'unblacklist':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!isGroupAdmin) return reply("Você precisa ser administrador 💔");
+          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
           
           // Coleta todos os usuários mencionados
           let targetUsers = [];
@@ -32002,7 +32101,7 @@ case 'set-bannerbv':
       case 'listblacklist':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!isGroupAdmin) return reply("Você precisa ser administrador 💔");
+          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
           const groupFilePath = buildGroupFilePath(from);
           let groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : {
             blacklist: {}
@@ -32024,7 +32123,7 @@ case 'set-bannerbv':
       case 'scanblacklist':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!isGroupAdmin) return reply("Você precisa ser administrador 💔");
+          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
           await reply("🔍 *Escaneando membros do grupo...*");
           const globalBlacklist = loadGlobalBlacklist();
           const groupFilePath = buildGroupFilePath(from);
@@ -32067,7 +32166,7 @@ case 'set-bannerbv':
       case 'warning':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!isGroupAdmin) return reply("Você precisa ser administrador 💔");
+          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
           if (!menc_os2) return reply("Marque um usuário 🙄");
           if (menc_os2 === botNumber) return reply("❌ Não posso advertir a mim mesma!");
           // Verificar se o alvo é moderador ou alpha
@@ -32122,7 +32221,7 @@ case 'set-bannerbv':
       case 'unwarning':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!isGroupAdmin) return reply("Você precisa ser administrador 💔");
+          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
           if (!menc_os2) return reply("Marque um usuário 🙄");
           const groupFilePath = buildGroupFilePath(from);
           let groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : {
@@ -32145,7 +32244,7 @@ case 'set-bannerbv':
       case 'warninglist':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!isGroupAdmin) return reply("Você precisa ser administrador 💔");
+          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
           const groupFilePath = buildGroupFilePath(from);
           let groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : {
             warnings: {}
@@ -32184,12 +32283,12 @@ case 'set-bannerbv':
           const enableActions = ['on', 'ativar', 'ligar', 'enable'];
           const disableActions = ['off', 'desativar', 'desligar', 'disable'];
           if (enableActions.includes(action)) {
-            if (!isGroupAdmin) return reply('Você precisa ser administrador 💔');
+            if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
             setSupportMode(from, true);
             return reply('✅ *Modo suporte ativado!* Agora membros podem solicitar tickets.');
           }
           if (disableActions.includes(action)) {
-            if (!isGroupAdmin) return reply('Você precisa ser administrador 💔');
+            if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
             setSupportMode(from, false);
             return reply('⚠️ *Modo suporte desativado!*');
           }
@@ -32302,7 +32401,7 @@ case 'set-bannerbv':
       case 'litemode':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!isGroupAdmin) return reply("Você precisa ser administrador 💔");
+          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
           const groupFilePath = buildGroupFilePath(from);
           if (!groupData.modolite) {
             groupData.modolite = true;
@@ -32535,7 +32634,7 @@ ${groupPrefix}antistickerplus remover → remove usuário e apaga mensagem
       case 'autosticker':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!isGroupAdmin) return reply("Você precisa ser administrador 💔");
+          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
           const groupFilePath = __dirname + `/../database/grupos/${from}.json`;
           let groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : {};
           groupData.autoSticker = !groupData.autoSticker;
@@ -32558,7 +32657,7 @@ ${groupPrefix}antistickerplus remover → remove usuário e apaga mensagem
       case 'autoresposta':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!isGroupAdmin) return reply("Você precisa ser administrador 💔");
+          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
           const groupFilePath = __dirname + `/../database/grupos/${from}.json`;
           let groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : {};
           groupData.autorepo = !groupData.autorepo;
@@ -32581,7 +32680,7 @@ case 'assistente':
 case 'assistent':
   try {
     if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-    if (!isGroupAdmin) return reply("Você precisa ser administrador 💔");
+    if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
     const groupFilePath = __dirname + `/../database/grupos/${from}.json`;
     let groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : {};
     if (!q) {
@@ -32698,7 +32797,7 @@ case 'assistent':
       case 'mutar':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
-          if (!isGroupAdmin) return reply("Você precisa ser administrador para usar este comando. 💔");
+          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
           if (!isBotAdmin) return sendAbyssWarning("Eu preciso ser administrador para apagar as mensagens.");
           if (!menc_os2) return reply("Marque alguém para mutar. 🙄");
           const targetId = await normalizeUserId(nazu, menc_os2);
@@ -32722,7 +32821,7 @@ case 'assistent':
       case 'unmute':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
-          if (!isGroupAdmin) return reply("Você precisa ser administrador para usar este comando. 💔");
+          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
           if (!menc_os2) return reply("Marque alguém para desmutar. 🙄");
           const targetId = await normalizeUserId(nazu, menc_os2);
           const removed = removeUserFromMap(groupData.mutedUsers, targetId);
@@ -32863,7 +32962,7 @@ case 'assistent':
       case 'mutet':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
-          if (!isGroupAdmin) return reply("🚫 Você precisa ser administrador para usar este comando.");
+          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
           if (!isBotAdmin) return sendAbyssWarning("⚠️ Eu preciso ser administrador para apagar mensagens.");
           if (!menc_os2) return reply(`📝 *Como usar:* ${groupPrefix}mutet @usuário <tempo>\n\n⏱️ *Exemplos:*\n• ${groupPrefix}mutet @user 30s\n• ${groupPrefix}mutet @user 15m\n• ${groupPrefix}mutet @user 2h\n• ${groupPrefix}mutet @user 7d\n\n🕐 *Unidades:* s=segundos, m=minutos, h=horas, d=dias`);
           // Obter o ID do usuário normalizado
@@ -32930,7 +33029,7 @@ case 'assistent':
       case 'unmutet':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
-          if (!isGroupAdmin) return reply("🚫 Você precisa ser administrador para usar este comando.");
+          if (!isGroupAdmin) return reply(ADMIN_ERROR_MESSAGE);
           if (!menc_os2) return reply("📝 *Como usar:* ${groupPrefix}unmutet @usuário");
           const tempUnmuteTargetId = await normalizeUserId(nazu, menc_os2);
           const result = removeTempMute(from, tempUnmuteTargetId, idsMatch);
