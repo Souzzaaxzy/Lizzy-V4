@@ -852,33 +852,31 @@ const saveAdminErrorMessage = (message) => {
 // Inicializar
 ADMIN_ERROR_MESSAGE = loadAdminErrorMessage();
 
-// Função para enviar mensagem de erro admin com botão de canal
+
+// Função para enviar mensagem de erro admin com canal
 async function replyAdminError(sock, jid, message, quotedMsg = null) {
   try {
-    // Carregar URL do canal do global.json
-    let channelUrl = 'https://whatsapp.com/channel/0029Vb8VWbG3WHTWX9ZPnj0Y';
+    // Carregar config do canal
+    let channelJid = '120363410980452460@newsletter';
+    let channelName = 'Lizzy';
     try {
       const globalJson = JSON.parse(fs.readFileSync(DATABASE_DIR + '/global.json', 'utf-8'));
-      if (globalJson.channel?.welcomeUrl) {
-        channelUrl = globalJson.channel.welcomeUrl;
-      }
+      if (globalJson.channel?.channelJid) channelJid = globalJson.channel.channelJid;
+      if (globalJson.channel?.channelName) channelName = globalJson.channel.channelName;
     } catch (e) {
-      // Usar URL padrão
+      // Usar valores padrão
     }
     
-    await sendInteractiveMessage(sock, jid, {
-      text: message,
-      footer: '© Abyss Bot',
-      interactiveButtons: [
-        {
-          name: "cta_url",
-          buttonParamsJson: JSON.stringify({
-            display_text: "📢 Ver Canal",
-            url: channelUrl
-          })
-        }
-      ]
-    }, quotedMsg ? { quoted: quotedMsg } : {});
+    const newsletterCtx = {
+      forwardingScore: 999,
+      isForwarded: true,
+      forwardedNewsletterMessageInfo: {
+        newsletterJid: channelJid,
+        newsletterName: channelName
+      }
+    };
+    
+    await sock.sendMessage(jid, { text: message, contextInfo: newsletterCtx }, quotedMsg ? { quoted: quotedMsg } : {});
     return true;
   } catch (e) {
     console.error('Erro ao enviar mensagem de erro admin:', e);
@@ -887,6 +885,7 @@ async function replyAdminError(sock, jid, message, quotedMsg = null) {
     return false;
   }
 }
+
 
 // Armazenamento temporário para pedidos SMM pendentes de confirmação
 const pendingSmmOrders = new Map();

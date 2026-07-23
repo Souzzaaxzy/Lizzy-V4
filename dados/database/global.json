@@ -8,6 +8,8 @@
     "corLinhas": "white"
   },
   "channel": {
-    "welcomeUrl": "https://whatsapp.com/channel/0029Vb8VWbG3WHTWX9ZPnj0Y"
+    "welcomeUrl": "https://whatsapp.com/channel/0029Vb8VWbG3WHTWX9ZPnj0Y",
+    "channelJid": "120363410980452460@newsletter",
+    "channelName": "Lizzy"
   }
 }
