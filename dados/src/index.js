@@ -21799,7 +21799,16 @@ Precisa de ajuda? Entre em contato:
         try {
           if (!isOwner) return reply("Este comando é apenas para o meu dono 💔");
           if (!q && !isImage && !isVideo && !isQuotedImage && !isQuotedVideo) return reply('Digite ou marque uma imagem/vídeo! Exemplo: '+ groupPrefix + 'tm Olá a todos!');
-          const cabecalho = `╔══════════════════════\n║  📡 *TRANSMISSÃO DO ${nomebot}* 📡\n╚══════════════════════\n\n`;
+          const cabecalho = `╭━━━〔 🤖 ${nomebot} • TRANSMISSÃO 〕━━━⬣
+
+📝 Mensagem:
+${q || '[conteúdo da mídia]'}
+
+
+╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━⬣
+
+«✨ By ${nomebot}»
+`;
           const newsletterContext = {
             forwardingScore: 999,
             isForwarded: true,
