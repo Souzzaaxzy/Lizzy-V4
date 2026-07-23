@@ -15749,16 +15749,14 @@ Seu limite será renovado automaticamente à meia-noite.`);
           await reply('🎨 Gerando sua imagem... isso pode levar alguns segundos...');
           
           try {
+            await reply('🎨 Melhorando seu prompt e gerando a imagem... isso pode levar alguns segundos... 🖼️');
+            
             const imageUrl = await ia.generateImageGroq(q);
             
             if (imageUrl) {
-              // Baixar e enviar a imagem
-              const axios = (await import('axios')).default;
-              const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
-              const imageBuffer = Buffer.from(imageResponse.data);
-              
+              // Enviar imagem diretamente da URL
               await nazu.sendMessage(from, {
-                image: imageBuffer,
+                image: { url: imageUrl },
                 caption: `🖼️ *Imagem gerada com sucesso!*
 
 📝 *Prompt:* ${q}`

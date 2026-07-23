@@ -3306,56 +3306,54 @@ function getAbyssResponseDelay(grupoUserId) {
 
 
 
-// ========== FUNÇÃO DE GERAÇÃO DE IMAGEM (GROQ) ==========
+// ========== FUNÇÃO DE GERAÇÃO DE IMAGEM (GROQ + POLLINATIONS) ==========
 async function generateImageGroq(prompt, retries = 3) {
   if (!prompt || typeof prompt !== 'string') {
     throw new Error('Prompt é obrigatório para geração de imagem');
   }
 
-  if (!GROQ_API_KEY) {
-    throw new Error('GROQ_API_KEY não configurada. Use !setgroq para configurar.');
-  }
-
-  for (let attempt = 0; attempt < retries; attempt++) {
+  // Melhorar prompt usando a IA da Groq
+  let enhancedPrompt = prompt;
+  if (GROQ_API_KEY) {
     try {
       const response = await axios({
         method: 'post',
-        url: 'https://api.groq.com/openai/v1/images/generations',
+        url: 'https://api.groq.com/openai/v1/chat/completions',
         headers: {
           'Authorization': `Bearer ${GROQ_API_KEY}`,
           'Content-Type': 'application/json'
         },
         data: {
-          model: 'flux-1-pro-preview',
-          prompt: prompt,
-          n: 1,
-          size: '1024x1024'
+          model: 'meta-llama/llama-4-maverick-17b-8e-instruct',
+          messages: [
+            {
+              role: 'system',
+              content: 'Você é um especialista em criar prompts para geração de imagens. Transforme o texto do usuário em um prompt detalhado e descritivo em inglês, incluindo estilos artísticos, iluminação, detalhes visuais, etc. Responda APENAS com o prompt melhorado, sem explicações.'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          temperature: 0.8,
+          max_tokens: 300
         },
-        timeout: 120000
+        timeout: 30000
       });
-
-      if (response.data?.data?.[0]?.url) {
-        return response.data.data[0].url;
+      
+      if (response.data?.choices?.[0]?.message?.content) {
+        enhancedPrompt = response.data.choices[0].message.content.trim();
       }
-
-      if (response.data?.data?.[0]?.b64_json) {
-        return { b64_json: response.data.data[0].b64_json };
-      }
-
-      throw new Error('Resposta inválida da API de geração de imagem');
-    } catch (error) {
-      const status = error.response?.status;
-      const apiMessage = error.response?.data?.error?.message || error.message;
-
-      console.warn(`[Groq Image] Tentativa ${attempt + 1}/${retries} falhou:`, { status, message: apiMessage });
-
-      if (attempt === retries - 1) {
-        throw new Error(`[GROQ_IMAGE_ERROR] Falha na geração: ${apiMessage}`);
-      }
-
-      await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+    } catch (e) {
+      console.warn('[Groq Image] Erro ao melhorar prompt, usando original:', e.message);
     }
   }
+
+  // Gerar imagem usando Pollinations.ai (gratuito)
+  const encodedPrompt = encodeURIComponent(enhancedPrompt);
+  const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&nologo=true`;
+  
+  return imageUrl;
 }
 
 export {
