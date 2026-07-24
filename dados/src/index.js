@@ -36205,6 +36205,49 @@ ${groupPrefix}setngl https://ngl.link/...`);
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
         }
         break;
+      case 'compatibilidade':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          if (!isModoBn) return reply('❌ O modo brincadeira não está ativo nesse grupo.');
+
+          // Pegar os dois usuários mencionados
+          const users = [...new Set([...groupMentions, sender])].filter(u => u !== sender);
+          
+          if (users.length < 2) {
+            return reply(`💕 Use: ${groupPrefix}compatibilidade @user1 @user2
+Marque duas pessoas para ver a compatibilidade!`);
+          }
+
+          const user1 = users[0];
+          const user2 = users[1];
+          const nome1 = await getUserName(user1) || 'Usuário 1';
+          const nome2 = await getUserName(user2) || 'Usuário 2';
+          
+          // Número aleatório de 1 a 100
+          const compatibilidade = Math.floor(Math.random() * 100) + 1;
+
+          // Emoji baseado na compatibilidade
+          let emoji;
+          if (compatibilidade >= 80) emoji = '💖';
+          else if (compatibilidade >= 60) emoji = '💕';
+          else if (compatibilidade >= 40) emoji = '💜';
+          else if (compatibilidade >= 20) emoji = '😐';
+          else emoji = '💔';
+
+          await nazu.sendMessage(from, {
+            text: `${emoji} *COMPATIBILIDADE* ${emoji}
+
+👤 @${nome1}
+👤 @${nome2}
+
+💘 *${compatibilidade}%* de compatibilidade!`,
+            mentions: [user1, user2]
+          });
+        } catch (e) {
+          console.error(e);
+          reply("❌ Ocorreu um erro interno. Tente novamente.");
+        }
+        break;
       case 'afk':
         try {
           if (!isGroup) return reply("◈ Este comando só funciona em grupos.");

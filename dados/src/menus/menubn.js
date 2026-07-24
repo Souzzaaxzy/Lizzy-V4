@@ -78,6 +78,7 @@ export default async function menubn(prefix, botName = "MeuBot", userName = "Usu
 │ ⚔️ ${prefix}mata
 │ ⚔️ ${prefix}matar
 │ 💆 ${prefix}cafune
+│ 💕 ${prefix}compatibilidade
 ╰──────────────
 
 
