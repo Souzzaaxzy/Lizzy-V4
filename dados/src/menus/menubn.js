@@ -348,6 +348,8 @@ ${isLiteMode ? '' : `╭─❖ 🔞 INTERAÇÕES "PICANTES"
 │ 💪 ${prefix}rankpoderosa
 │ 🏆 ${prefix}rankvencedor
 │ 🏆 ${prefix}rankvencedora
+│ 🔀 ${prefix}rankpauzudos
+│ 🔀 ${prefix}rankputo
 ╰──────────────
 
 
@@ -373,6 +375,8 @@ ${isLiteMode ? '' : `╭─❖ 🔞 INTERAÇÕES "PICANTES"
 │ 🔭 ${prefix}rankvisionaria
 │ 💪 ${prefix}rankpoderosa
 │ 🏆 ${prefix}rankvencedora
+│ 🔀 ${prefix}rankbucetudas
+│ 🔀 ${prefix}rankputa
 ╰──────────────
 
 ╭─────────────────╮
