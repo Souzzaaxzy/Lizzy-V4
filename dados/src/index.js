@@ -18687,7 +18687,7 @@ case 'addaluguel':
           const cmdName = q.trim().toLowerCase();
           
           // Lista de comandos de brincadeira válidos
-          const validCommands = ['tapa', 'soco', 'socar', 'beijo', 'beijar', 'beijob', 'beijarb', 'abraco', 'abracar', 'mata', 'matar', 'tapar', 'goza', 'gozar', 'mamar', 'mamada', 'cafune', 'morder', 'mordida', 'lamber', 'lambida', 'explodir', 'sexo', 'siririca', 'punheta', 'chute', 'chutar', 'tomate'];
+          const validCommands = ['tapa', 'soco', 'socar', 'beijo', 'beijar', 'beijob', 'beijarb', 'abraco', 'abracar', 'mata', 'matar', 'tapar', 'goza', 'gozar', 'mamar', 'mamada', 'cafune', 'morder', 'mordida', 'lamber', 'lambida', 'explodir', 'sexo', 'siririca', 'punheta', 'chute', 'chutar', 'tomate', 'compatibilidade'];
           
           if (!validCommands.includes(cmdName)) {
             return reply(`❌ Esse comando não existe.\n\nComandos disponíveis:\n${validCommands.join(', ')}`);
@@ -36234,15 +36234,43 @@ Marque duas pessoas para ver a compatibilidade!`);
           else if (compatibilidade >= 20) emoji = '😐';
           else emoji = '💔';
 
-          await nazu.sendMessage(from, {
-            text: `${emoji} *COMPATIBILIDADE* ${emoji}
+          const messageText = `${emoji} *COMPATIBILIDADE* ${emoji}
 
 👤 @${nome1}
 👤 @${nome2}
 
-💘 *${compatibilidade}%* de compatibilidade!`,
-            mentions: [user1, user2]
-          });
+💘 *${compatibilidade}%* de compatibilidade!`;
+
+          // Verificar se existe GIF configurado
+          let gamesData = fs.existsSync(__dirname + '/funcs/json/games.json') ? JSON.parse(fs.readFileSync(__dirname + '/funcs/json/games.json')) : { games2: {} };
+          const media = gamesData.games2['compatibilidade'];
+
+          if (media?.video) {
+            const videoPath = media.video.url?.startsWith('./') 
+              ? path.join(__dirname, media.video.url.substring(1)) 
+              : media.video.url;
+            
+            if (videoPath.startsWith('http')) {
+              await nazu.sendMessage(from, {
+                video: { url: videoPath },
+                caption: messageText,
+                mentions: [user1, user2],
+                gifPlayback: true
+              });
+            } else if (fs.existsSync(videoPath)) {
+              const videoBuffer = fs.readFileSync(videoPath);
+              await nazu.sendMessage(from, {
+                video: videoBuffer,
+                caption: messageText,
+                mentions: [user1, user2],
+                gifPlayback: true
+              });
+            } else {
+              await nazu.sendMessage(from, { text: messageText, mentions: [user1, user2] });
+            }
+          } else {
+            await nazu.sendMessage(from, { text: messageText, mentions: [user1, user2] });
+          }
         } catch (e) {
           console.error(e);
           reply("❌ Ocorreu um erro interno. Tente novamente.");
