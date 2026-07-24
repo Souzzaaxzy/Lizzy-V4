@@ -19639,7 +19639,7 @@ case 'pin':
           reply("ocorreu um erro 💔");
         }
         break;
-      case 'tiktok':
+            case 'tiktok':
       case 'tiktokaudio':
       case 'tiktokvideo':
       case 'tiktoks':
@@ -19647,74 +19647,66 @@ case 'pin':
       case 'ttk':
       case 'tkk':
         try {
-          if (!q) return reply(`Digite um nome ou o link de um vídeo.\n> Ex: ${groupPrefix}${command} Gato`);
+          if (!q) return reply(`Digite um nome ou o link de um vídeo.
+> Ex: ${groupPrefix}${command} Gato`);
+          // Verificar se tem API key
           await nazu.sendMessage(from, { react: { text: '🔍', key: info.key } });
           let isTikTokUrl = q.includes('tiktok');
-          const newsletterCtxTikTok = {
-            forwardingScore: 999,
-            isForwarded: true,
-            forwardedNewsletterMessageInfo: {
-              newsletterJid: "120363410980452460@newsletter",
-              newsletterName: "Lizzy"
-            }
-          };
           const tiktokPromise = isTikTokUrl ? tiktok.dl(q) : tiktok.search(q);
           tiktokPromise
             .then(async (datinha) => {
               if (!datinha.ok) return reply(datinha.msg);
 
-              const formatNumber = (num) => {
-                if (!num) return '0';
-                if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-                if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
-                return num.toString();
-              };
-
-              const sendTikTokVideo = async (videoData, index) => {
+              // Função para enviar vídeo com botão CTA
+              const sendVideoWithButton = async (videoData, index) => {
                 const url = videoData.urls?.[0];
                 if (!url) return;
 
                 const title = videoData.title || '';
-                const link = videoData.link || (isTikTokUrl ? q : '');
-                const views = videoData.views || 0;
-                const viewsText = views ? `${formatNumber(views)} visualizações` : '';
-                const caption = title ? `${title}\n\n👁️ ${viewsText}` : `👁️ ${viewsText}`;
+                const link = videoData.link || '';
 
+                // Criar mensagem interativa com botão CTA
                 try {
                   await nazu.sendMessage(from, {
                     video: { url },
-                    caption: caption,
-                    contextInfo: newsletterCtxTikTok,
+                    caption: title ? `📹 ${title}` : undefined,
+                    footer: link ? `🔗 ${link}` : undefined,
                     buttons: [
                       {
-                        name: "cta_url",
-                        buttonParamsJson: JSON.stringify({
-                          display_text: "🔗 Abrir no TikTok",
-                          url: link || url
-                        })
+                        buttonId: `tiktok_${index}`,
+                        buttonText: { displayText: '📲 Ver no TikTok' },
+                        type: 1
                       }
                     ],
-                    headerType: 4 // VIDEO
+                    headerType: 4
                   }, { quoted: info });
                 } catch (videoErr) {
-                  console.error('Erro ao enviar vídeo com botão CTA:', videoErr.message);
+                  // Se falhar com botões, tenta enviar só o vídeo com caption
+                  console.error('Erro ao enviar vídeo com botão:', videoErr.message);
                   await nazu.sendMessage(from, {
                     video: { url },
-                    caption: title ? `📹 ${title}\n\n🔗 ${link}` : `🔗 ${link}`,
-                    contextInfo: newsletterCtxTikTok
+                    caption: title ? `📹 ${title}\n\n🔗 ${link}` : undefined
                   }, { quoted: info });
                 }
               };
 
+              // Verificar se tem múltiplos resultados (search)
               const results = datinha.results;
-              const videosToSend = (results && results.length > 0)
-                ? results.slice(0, 3)
-                : (datinha.urls?.[0] ? [datinha] : []);
-
-              for (let i = 0; i < videosToSend.length; i++) {
-                await sendTikTokVideo(videosToSend[i], i);
-                if (i < videosToSend.length - 1) {
-                  await new Promise(resolve => setTimeout(resolve, 500));
+              if (results && results.length > 0) {
+                // Enviar até 3 vídeos
+                const videosToSend = results.slice(0, 3);
+                for (let i = 0; i < videosToSend.length; i++) {
+                  await sendVideoWithButton(videosToSend[i], i);
+                  // Pequeno delay entre envios
+                  if (i < videosToSend.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                  }
+                }
+              } else {
+                // Compatibilidade com formato antigo (um vídeo)
+                const urlz = datinha.urls?.[0];
+                if (urlz) {
+                  await sendVideoWithButton(datinha, 0);
                 }
               }
 
@@ -19730,7 +19722,6 @@ case 'pin':
           reply("❌ Ocorreu um erro ao processar sua solicitação. Por favor, tente novamente mais tarde.");
         }
         break;
-
       case 'facebook':
       case 'fb':
       case 'fbdl':
