@@ -31495,11 +31495,14 @@ case 'bemvindo2':
           const fantasmasJid = fantasmas.map(f => isValidJid(f) ? f : formatToJid(f.split('@')[0]));
           let removidos = 0;
           try {
-            await nazu.groupParticipantsUpdate(from, fantasmasJid, 'remove').catch(e => console.error('Erro ao remover fantasmas:', e));
-            removidos = fantasmas.length;
-            // Atualiza o contador removendo os usuГЎrios banidos
-            dados.contador = updatedContador.filter(u => !fantasmas.includes(u.id));
-            fs.writeFileSync(arquivoGrupo, JSON.stringify(dados, null, 2));
+            const result = await nazu.groupParticipantsUpdate(from, fantasmasJid, 'remove');
+            if (result && result.length > 0) {
+              removidos = result.filter(r => r.status === "200" || r.status === 200).length;
+              if (removidos > 0) {
+                dados.contador = updatedContador.filter(u => !fantasmas.includes(u.id));
+                fs.writeFileSync(arquivoGrupo, JSON.stringify(dados, null, 2));
+              }
+            }
           } catch (e) {
             console.error("Erro ao remover:", e);
           }
