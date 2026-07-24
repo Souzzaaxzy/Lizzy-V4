@@ -429,6 +429,11 @@ async function initializeOptimizedCaches(AbyssSock) {
     try {
         await performanceOptimizer.initialize();
 
+        // Prefetch de dados frequentes
+        if (typeof prefetchFrequentlyUsed === 'function') {
+            await prefetchFrequentlyUsed();
+        }
+
         // Inicializa índice de captcha para busca rápida
         const requestCaptchaMsg = async (dataCaptcha) => {
             /*

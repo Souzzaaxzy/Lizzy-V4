@@ -245,6 +245,435 @@ const rateLimiter = new RateLimiter();
 setInterval(() => rateLimiter.cleanup(), 120000);
 
 // ============================================================
+// SISTEMA DE LIMPEZA AUTOMÁTICA DE DADOS VELHOS
+// ============================================================
+
+// Configurações de retenção de dados
+const DATA_RETENTION = {
+  inactiveUserDays: 30,      // Remover usuários inativos após 30 dias
+  oldMessageDays: 90,        // Remover mensagens antigas após 90 dias
+  tempFileHours: 24,         // Remover arquivos temp após 24h
+  maxUsersPerGroup: 500      // Máximo de usuários no contador por grupo
+};
+
+// Função para limpar dados de usuários inativos
+async function cleanupInactiveUsers() {
+  try {
+    const gruposDir = `${DATABASE_DIR}/grupos`;
+    if (!fs.existsSync(gruposDir)) return;
+    
+    const files = fs.readdirSync(gruposDir);
+    let totalCleaned = 0;
+    const cutoffDate = Date.now() - (DATA_RETENTION.inactiveUserDays * 24 * 60 * 60 * 1000);
+    
+    for (const file of files) {
+      if (!file.endsWith('.json')) continue;
+      
+      try {
+        const filePath = `${gruposDir}/${file}`;
+        const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+        
+        if (!data.contador || !Array.isArray(data.contador)) continue;
+        
+        // Filtrar usuários ativos nos últimos X dias
+        const activeUsers = data.contador.filter(user => {
+          if (!user.lastActivity) return true;
+          const lastActivity = new Date(user.lastActivity).getTime();
+          return lastActivity > cutoffDate;
+        });
+        
+        // Se removeu usuários, salvar arquivo
+        if (activeUsers.length < data.contador.length) {
+          const removed = data.contador.length - activeUsers.length;
+          totalCleaned += removed;
+          data.contador = activeUsers;
+          fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+        }
+        
+        // Limitar tamanho do contador se muito grande
+        if (data.contador.length > DATA_RETENTION.maxUsersPerGroup) {
+          // Manter apenas os mais ativos
+          data.contador.sort((a, b) => {
+            const aMsgs = (a.msg || 0) + (a.cmd || 0);
+            const bMsgs = (b.msg || 0) + (b.cmd || 0);
+            return bMsgs - aMsgs;
+          });
+          data.contador = data.contador.slice(0, DATA_RETENTION.maxUsersPerGroup);
+          fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+        }
+      } catch (e) {
+        // Pular arquivo com erro
+      }
+    }
+    
+    if (totalCleaned > 0) {
+      console.log(`[CLEANUP] Removidos ${totalCleaned} usuários inativos dos grupos`);
+    }
+  } catch (e) {
+    console.error('[CLEANUP] Erro ao limpar usuários inativos:', e.message);
+  }
+}
+
+// Função para limpar arquivos temporários
+async function cleanupTempFiles() {
+  try {
+    const tempDirs = [
+      './temp',
+      './downloads',
+      './midias/temp'
+    ];
+    
+    const cutoffTime = Date.now() - (DATA_RETENTION.tempFileHours * 60 * 60 * 1000);
+    let totalCleaned = 0;
+    
+    for (const dir of tempDirs) {
+      if (!fs.existsSync(dir)) continue;
+      
+      const files = fs.readdirSync(dir);
+      for (const file of files) {
+        try {
+          const filePath = `${dir}/${file}`;
+          const stats = fs.statSync(filePath);
+          
+          if (stats.mtimeMs < cutoffTime) {
+            fs.unlinkSync(filePath);
+            totalCleaned++;
+          }
+        } catch (e) {
+          // Pular arquivo com erro
+        }
+      }
+    }
+    
+    if (totalCleaned > 0) {
+      console.log(`[CLEANUP] Removidos ${totalCleaned} arquivos temporários`);
+    }
+  } catch (e) {
+    console.error('[CLEANUP] Erro ao limpar arquivos temp:', e.message);
+  }
+}
+
+// Função para limpar logs antigos
+async function cleanupOldLogs() {
+  try {
+    const logsDir = './logs';
+    if (!fs.existsSync(logsDir)) return;
+    
+    const cutoffTime = Date.now() - (7 * 24 * 60 * 60 * 1000); // 7 dias
+    let totalCleaned = 0;
+    
+    const files = fs.readdirSync(logsDir);
+    for (const file of files) {
+      if (!file.endsWith('.log')) continue;
+      
+      try {
+        const filePath = `${logsDir}/${file}`;
+        const stats = fs.statSync(filePath);
+        
+        if (stats.mtimeMs < cutoffTime) {
+          fs.unlinkSync(filePath);
+          totalCleaned++;
+        }
+      } catch (e) {
+        // Pular
+      }
+    }
+    
+    if (totalCleaned > 0) {
+      console.log(`[CLEANUP] Removidos ${totalCleaned} logs antigos`);
+    }
+  } catch (e) {
+    console.error('[CLEANUP] Erro ao limpar logs:', e.message);
+  }
+}
+
+// Agendar limpezas automáticas
+// - Limpeza de usuários inativos: a cada 6 horas
+// - Limpeza de arquivos temp: a cada 1 hora
+// - Limpeza de logs: a cada 24 horas
+setInterval(cleanupInactiveUsers, 6 * 60 * 60 * 1000);      // 6 horas
+setInterval(cleanupTempFiles, 60 * 60 * 1000);              // 1 hora
+setInterval(cleanupOldLogs, 24 * 60 * 60 * 1000);           // 24 horas
+
+// Fazer limpeza inicial após 5 minutos do bot iniciar
+setTimeout(cleanupInactiveUsers, 5 * 60 * 1000);
+setTimeout(cleanupTempFiles, 5 * 60 * 1000);
+
+// ============================================================
+// SISTEMA DE LOGGING ESTRUTURADO
+// ============================================================
+
+const LOG_LEVELS = {
+  ERROR: 0,
+  WARN: 1,
+  INFO: 2,
+  DEBUG: 3
+};
+
+const CURRENT_LOG_LEVEL = process.env.LOG_LEVEL 
+  ? LOG_LEVELS[process.env.LOG_LEVEL.toUpperCase()] 
+  : LOG_LEVELS.INFO;
+
+function formatLog(level, module, message, data = null) {
+  const timestamp = new Date().toISOString();
+  let log = `[${timestamp}] [${level}] [${module}] ${message}`;
+  
+  if (data) {
+    if (data instanceof Error) {
+      log += `\n  Error: ${data.message}\n  Stack: ${data.stack}`;
+    } else if (typeof data === 'object') {
+      log += `\n  Data: ${JSON.stringify(data)}`;
+    } else {
+      log += `\n  Data: ${data}`;
+    }
+  }
+  
+  return log;
+}
+
+const logger = {
+  error: (module, message, data = null) => {
+    if (CURRENT_LOG_LEVEL >= LOG_LEVELS.ERROR) {
+      console.error(formatLog('ERROR', module, message, data));
+    }
+  },
+  
+  warn: (module, message, data = null) => {
+    if (CURRENT_LOG_LEVEL >= LOG_LEVELS.WARN) {
+      console.warn(formatLog('WARN', module, message, data));
+    }
+  },
+  
+  info: (module, message, data = null) => {
+    if (CURRENT_LOG_LEVEL >= LOG_LEVELS.INFO) {
+      console.log(formatLog('INFO', module, message, data));
+    }
+  },
+  
+  debug: (module, message, data = null) => {
+    if (CURRENT_LOG_LEVEL >= LOG_LEVELS.DEBUG) {
+      console.log(formatLog('DEBUG', module, message, data));
+    }
+  },
+  
+  // Log de comando executado
+  command: (command, user, group, success = true) => {
+    if (CURRENT_LOG_LEVEL >= LOG_LEVELS.DEBUG) {
+      console.log(formatLog('CMD', 'COMMAND', `${success ? '✓' : '✗'} ${command}`, { user, group }));
+    }
+  },
+  
+  // Log de erro de API
+  apiError: (apiName, error) => {
+    logger.error('API', `Erro na API ${apiName}`, error);
+  },
+  
+  // Log de performance
+  perf: (operation, durationMs) => {
+    if (CURRENT_LOG_LEVEL >= LOG_LEVELS.DEBUG && durationMs > 100) {
+      logger.warn('PERF', `Operação lenta: ${operation} levou ${durationMs}ms`);
+    }
+  }
+};
+
+// ============================================================
+// SISTEMA DE BATCH WRITES (AGRUPAR GRAVAÇÕES)
+// ============================================================
+class BatchWriter {
+  constructor(flushIntervalMs = 2000) {
+    this.queue = new Map(); // filePath -> data
+    this.flushIntervalMs = flushIntervalMs;
+    this.flushTimer = null;
+    this.writeInProgress = new Set();
+  }
+
+  // Adiciona uma escrita à fila (com debounce)
+  queueWrite(filePath, data) {
+    this.queue.set(filePath, data);
+    this.scheduleFlush();
+  }
+
+  // Agenda o próximo flush
+  scheduleFlush() {
+    if (this.flushTimer) return; // Já agendado
+    
+    this.flushTimer = setTimeout(() => {
+      this.flush();
+    }, this.flushIntervalMs);
+  }
+
+  // Executa todas as escritas pendentes
+  async flush() {
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
+
+    if (this.queue.size === 0) return;
+
+    const writes = Array.from(this.queue.entries());
+    this.queue.clear();
+
+    // Executar todas as escritas em paralelo
+    await Promise.all(
+      writes.map(async ([filePath, data]) => {
+        if (this.writeInProgress.has(filePath)) {
+          // Se já está escrevendo, adiciona à fila novamente
+          this.queue.set(filePath, data);
+          return;
+        }
+
+        this.writeInProgress.add(filePath);
+        try {
+          await fsPromises.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
+        } catch (e) {
+          // Se falhar, coloca de volta na fila
+          console.error(`[BATCH] Erro ao escrever ${filePath}:`, e.message);
+          this.queue.set(filePath, data);
+        } finally {
+          this.writeInProgress.delete(filePath);
+        }
+      })
+    );
+  }
+
+  // Forçar escrita imediata
+  async forceFlush() {
+    await this.flush();
+    // Espera escritas em progresso terminarem
+    while (this.writeInProgress.size > 0) {
+      await new Promise(r => setTimeout(r, 100));
+    }
+  }
+}
+
+// Instância global do batch writer
+const batchWriter = new BatchWriter(2000); // Flush a cada 2 segundos
+
+// Flush ao desligar o bot
+process.on('SIGINT', async () => {
+  await batchWriter.forceFlush();
+  process.exit();
+});
+process.on('SIGTERM', async () => {
+  await batchWriter.forceFlush();
+  process.exit();
+});
+
+// ============================================================
+// SISTEMA DE DEBOUNCE PARA GRAVAÇÕES
+// ============================================================
+class Debouncer {
+  constructor(defaultDelay = 500) {
+    this.timers = new Map();
+    this.defaultDelay = defaultDelay;
+  }
+
+  // Agenda uma função para ser executada após o delay
+  debounce(key, fn, delay = this.defaultDelay) {
+    if (this.timers.has(key)) {
+      clearTimeout(this.timers.get(key));
+    }
+    
+    const timer = setTimeout(() => {
+      this.timers.delete(key);
+      fn();
+    }, delay);
+    
+    this.timers.set(key, timer);
+  }
+
+  // Cancela um debounce pendente
+  cancel(key) {
+    if (this.timers.has(key)) {
+      clearTimeout(this.timers.get(key));
+      this.timers.delete(key);
+    }
+  }
+
+  // Limpa todos os timers
+  clear() {
+    for (const timer of this.timers.values()) {
+      clearTimeout(timer);
+    }
+    this.timers.clear();
+  }
+}
+
+const fileDebouncer = new Debouncer(1000); // 1 segundo de delay
+
+// ============================================================
+// SISTEMA DE PREFETCH (CARREGAR DADOS FREQUENTES)
+// ============================================================
+const prefetchCache = new Map();
+
+// Carregar arquivos frequentes na memória
+async function prefetchFrequentlyUsed() {
+  console.log('[PREFETCH] Iniciando carregamento de dados frequentes...');
+  
+  const frequentFiles = [
+    { path: `${DATABASE_DIR}/global.json`, key: 'global' },
+    { path: `${DATABASE_DIR}/antispam.json`, key: 'antispam' },
+    { path: `${DATABASE_DIR}/antipv.json`, key: 'antipv' },
+    { path: `${DATABASE_DIR}/antiflood.json`, key: 'antiflood' },
+    { path: `${DATABASE_DIR}/blacklist.json`, key: 'blacklist' },
+    { path: `${DATABASE_DIR}/leveling.json`, key: 'leveling' },
+    { path: `${DATABASE_DIR}/economy.json`, key: 'economy' }
+  ];
+
+  for (const file of frequentFiles) {
+    try {
+      if (fs.existsSync(file.path)) {
+        const data = JSON.parse(fs.readFileSync(file.path, 'utf-8'));
+        prefetchCache.set(file.key, { data, loadedAt: Date.now() });
+      }
+    } catch (e) {
+      // Ignora erros, será lido normalmente quando necessário
+    }
+  }
+  
+  console.log(`[PREFETCH] Carregados ${prefetchCache.size} arquivos frequentes`);
+}
+
+// Obter dado do prefetch ou do arquivo
+function getPrefetchedData(key) {
+  const cached = prefetchCache.get(key);
+  if (cached) return cached.data;
+  return null;
+}
+
+// Atualizar cache de prefetch
+function updatePrefetch(key, data) {
+  prefetchCache.set(key, { data, loadedAt: Date.now() });
+}
+
+// Refresh periódico do prefetch (a cada 5 minutos)
+setInterval(() => {
+  for (const [key, cached] of prefetchCache.entries()) {
+    try {
+      let filePath;
+      switch(key) {
+        case 'global': filePath = `${DATABASE_DIR}/global.json`; break;
+        case 'antispam': filePath = `${DATABASE_DIR}/antispam.json`; break;
+        case 'antipv': filePath = `${DATABASE_DIR}/antipv.json`; break;
+        case 'antiflood': filePath = `${DATABASE_DIR}/antiflood.json`; break;
+        case 'blacklist': filePath = `${DATABASE_DIR}/blacklist.json`; break;
+        case 'leveling': filePath = `${DATABASE_DIR}/leveling.json`; break;
+        case 'economy': filePath = `${DATABASE_DIR}/economy.json`; break;
+        default: continue;
+      }
+      
+      if (fs.existsSync(filePath)) {
+        const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+        prefetchCache.set(key, { data, loadedAt: Date.now() });
+      }
+    } catch (e) {
+      // Ignora erros
+    }
+  }
+}, 5 * 60 * 1000);
+
+// ============================================================
 // FUNÇÕES ASYNC PARA I/O (PERFORMANCE)
 // ============================================================
 
