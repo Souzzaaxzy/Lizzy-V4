@@ -36211,7 +36211,8 @@ ${groupPrefix}setngl https://ngl.link/...`);
           if (!isModoBn) return reply('❌ O modo brincadeira não está ativo nesse grupo.');
 
           // Pegar os dois usuários mencionados
-          const users = [...new Set([...groupMentions, sender])].filter(u => u !== sender);
+          const menc_jid = info.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+          const users = menc_jid.filter(u => u !== sender && u !== botNumber);
           
           if (users.length < 2) {
             return reply(`💕 Use: ${groupPrefix}compatibilidade @user1 @user2
