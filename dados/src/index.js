@@ -27723,7 +27723,7 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
       case 'delete':
       case 'del':
       case 'd':
-        if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+        if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
         if (!menc_prt) return reply("Marque uma mensagem.");
         let stanzaId, participant;
         if (info.message.extendedTextMessage) {
@@ -27821,7 +27821,7 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
         break;
       case 'get':
         // Comando para coletar dados de mensagens invisíveis
-        if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+        if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
         if (!menc_prt) return reply("👆 *Marque uma mensagem* para coletar seus dados!");
         
         try {
@@ -27915,7 +27915,7 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
       case 'dbb':
         try {
           if (!isGroup) return reply("◈ Este comando só funciona em grupos!");
-          if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+          if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
           if (!isBotAdmin) return reply("Preciso ser administrador para realizar esta ação.");
           // Identificar o alvo: menção primeiro, depois reply
           const mentionedJids = info.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
@@ -28160,7 +28160,7 @@ break;
       case 'dia': {
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
-          if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+          if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
           
           const newsletterContext = {
             forwardingScore: 999,
@@ -28191,7 +28191,7 @@ break;
       case 'tarde': {
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
-          if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+          if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
           
           const newsletterContext = {
             forwardingScore: 999,
@@ -28222,7 +28222,7 @@ break;
       case 'noite': {
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
-          if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+          if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
           
           const newsletterContext = {
             forwardingScore: 999,
@@ -28490,7 +28490,7 @@ break;
       case 'kick':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
-          if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+          if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
           if (!isBotAdmin) return sendAbyssWarning("Eu preciso ser administrador para realizar esta ação.");
           if (!menc_os2) return reply("Marque alguém 🙄");
           if (menc_os2 === nmrdn) return reply("❌ Não posso banir o dono do bot.");
@@ -28540,7 +28540,7 @@ break;
       case 'banir2':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
-          if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+          if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
           if (!isBotAdmin) return sendAbyssWarning("Eu preciso ser administrador para realizar esta ação.");
           if (!menc_os2) return reply("Marque alguém 🙄");
           if (menc_os2 === nmrdn) return reply("❌ Não posso banir o dono do bot.");
@@ -28600,7 +28600,7 @@ break;
       case 'banirvarios':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
-          if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+          if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
           if (!isBotAdmin) return sendAbyssWarning("Eu preciso ser administrador para realizar esta ação.");
           // Extrair todos os usuários mencionados
           const mentionedUsers = info.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
@@ -28679,7 +28679,7 @@ break;
       case 'bbn':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando só funciona em grupos!");
-          if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+          if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
           if (!isBotAdmin) return reply("Preciso ser administrador para realizar esta ação.");
           // Extrair todos os usuários mencionados
           const mentionedUsers = info.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
@@ -28772,7 +28772,7 @@ break;
       case 'bam':
       case 'banfake':
         if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
-        if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+        if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
         if (!menc_os2) return reply("Marque alguém 🙄");
         if (menc_os2 === nmrdn) return reply("❌ Não posso banir o dono do bot.");
         if (menc_os2 === botNumber) return reply("❌ Ops! Eu faço parte da bagunça, não dá pra me remover 💔");
@@ -28853,7 +28853,7 @@ break;
       case 'linkgroup':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
-          if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+          if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
           if (!isBotAdmin) return sendAbyssWarning("Eu preciso ser administrador para realizar esta ação.");
           var linkgc;
           linkgc = await nazu.groupInviteCode(from);
@@ -29174,7 +29174,7 @@ break;
       case 'promote':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
-          if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+          if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
           if (!isBotAdmin) return sendAbyssWarning("Eu preciso ser administrador para realizar esta ação.");
           if (!menc_os2) return reply("Marque alguém 🙄");
           const promoteTargetJid = mencOs2JidOriginal || menc_os2;
@@ -29189,7 +29189,7 @@ break;
       case 'demote':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
-          if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+          if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
           if (!isBotAdmin) return sendAbyssWarning("Eu preciso ser administrador para realizar esta ação.");
           if (!menc_os2) return reply("Marque alguém 🙄");
           const demoteTargetJid = mencOs2JidOriginal || menc_os2;
@@ -29207,7 +29207,7 @@ break;
       case 'renomeargrupo':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
-          if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+          if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
           if (!isBotAdmin) return sendAbyssWarning("Eu preciso ser administrador para realizar esta ação.");
           const newName = q.trim();
           if (!newName) return reply('❌ Digite um novo nome para o grupo.\n\n📝 *Uso:* ' + groupPrefix + 'nomegp Nome do Grupo');
@@ -29242,7 +29242,7 @@ break;
       case 'descricao':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
-          if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+          if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
           if (!isBotAdmin) return sendAbyssWarning("Eu preciso ser administrador para realizar esta ação.");
           const newDesc = q.trim();
           if (!newDesc) return reply('❌ Digite uma nova descrição para o grupo.\n\n📝 *Uso:* ' + groupPrefix + 'descgrupo Descrição do grupo aqui');
@@ -29276,7 +29276,7 @@ break;
       case 'fotogp':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
-          if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+          if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
           if (!isBotAdmin) return sendAbyssWarning("Eu preciso ser administrador para realizar esta ação.");
           if (!isQuotedImage && !isImage) return reply('❌ Envie ou marque uma imagem para definir como foto do grupo.\n\n📝 *Uso:* Envie uma imagem com o comando ou responda uma imagem com ' + groupPrefix + 'fotogrupo');
           const messageToUse = isQuotedImage ? quotedMessageContent : info.message;
@@ -29300,7 +29300,7 @@ break;
       case 'marcar':
       case 'mark':
         if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
-        if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+        if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
         if (!isBotAdmin) return sendAbyssWarning("Eu preciso ser administrador para realizar esta ação.");
         try {
           // Proteção Anti-Ban: Verifica rate limit para grupos grandes
@@ -29359,7 +29359,7 @@ break;
               `╰─────────────────────⭓`;
             return nazu.sendMessage(from, { text: gpInfoMsg, mentions: [owner, ...groupAdmins] }, { quoted: info });
           }
-          if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+          if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
           if (!isBotAdmin) return sendAbyssWarning("Eu preciso ser administrador para realizar esta ação.");
           if (q.toLowerCase() === 'a' || q.toLowerCase() === 'o' || q.toLowerCase() === 'open' || q.toLowerCase() === 'abrir') {
             await nazu.groupSettingUpdate(from, 'not_announcement');
@@ -29917,7 +29917,7 @@ break;
       case 'hidetag':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
-          if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+          if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
           if (!isBotAdmin) return sendAbyssWarning("Eu preciso ser administrador para realizar esta ação.");
           // Proteção Anti-Ban: Verifica rate limit para grupos grandes
           const massMentionCheckHidetag = checkMassMentionLimit(from, AllgroupMembers.length);
@@ -30094,7 +30094,7 @@ break;
       case 'getpp':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
-          if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+          if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
           // Identificar o alvo: menção primeiro, reply, depois número de telefone
           const mentionedJids = info.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
           const quotedParticipant = info.message?.extendedTextMessage?.contextInfo?.participant;
