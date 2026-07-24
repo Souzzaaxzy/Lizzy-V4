@@ -1,5 +1,6 @@
 // Import jimp first to ensure image processing library is available for baileys
 import 'jimp';
+import fsPromises from 'fs/promises';
 import {
   downloadContentFromMessage,
   generateWAMessageFromContent,
@@ -94,7 +95,160 @@ function formatMessageText(template, replacements) {
   }
   return text;
 }
+
 // ============================================================
+// SISTEMA DE CACHE EM MEMÓRIA (PERFORMANCE)
+// ============================================================
+class MemoryCache {
+  constructor(defaultTTL = 60000) { // TTL padrão: 60 segundos
+    this.cache = new Map();
+    this.defaultTTL = defaultTTL;
+  }
+
+  set(key, value, ttl = this.defaultTTL) {
+    const expiresAt = ttl > 0 ? Date.now() + ttl : Infinity;
+    this.cache.set(key, { value, expiresAt });
+  }
+
+  get(key) {
+    const item = this.cache.get(key);
+    if (!item) return null;
+    if (Date.now() > item.expiresAt) {
+      this.cache.delete(key);
+      return null;
+    }
+    return item.value;
+  }
+
+  has(key) {
+    const item = this.cache.get(key);
+    if (!item) return false;
+    if (Date.now() > item.expiresAt) {
+      this.cache.delete(key);
+      return false;
+    }
+    return true;
+  }
+
+  delete(key) {
+    this.cache.delete(key);
+  }
+
+  clear() {
+    this.cache.clear();
+  }
+
+  // Limpa itens expirados
+  cleanup() {
+    const now = Date.now();
+    for (const [key, item] of this.cache.entries()) {
+      if (now > item.expiresAt) {
+        this.cache.delete(key);
+      }
+    }
+  }
+
+  // Retorna tamanho do cache
+  size() {
+    return this.cache.size;
+  }
+}
+
+// Cache instances para diferentes tipos de dados
+const cacheInstance = new MemoryCache(30000); // 30 segundos
+const groupSettingsCache = new MemoryCache(60000); // 60 segundos
+const counterCache = new MemoryCache(15000); // 15 segundos
+const gamesCache = new MemoryCache(60000); // 60 segundos
+
+// Cleanup automático do cache a cada 5 minutos
+setInterval(() => {
+  cacheInstance.cleanup();
+  groupSettingsCache.cleanup();
+  counterCache.cleanup();
+  gamesCache.cleanup();
+}, 300000);
+
+// ============================================================
+// SISTEMA DE RATE LIMITING (ANTI-SPAM)
+// ============================================================
+class RateLimiter {
+  constructor() {
+    this.limits = new Map();
+    this.defaultConfig = {
+      maxRequests: 5,      // máximo de pedidos
+      windowMs: 10000,    // janela de tempo (10 segundos)
+      cooldownMs: 5000     // tempo de espera após limite (5 segundos)
+    };
+  }
+
+  check(userId, command, config = this.defaultConfig) {
+    const key = `${userId}:${command}`;
+    const now = Date.now();
+    
+    if (!this.limits.has(key)) {
+      this.limits.set(key, { count: 1, firstRequest: now, cooldownUntil: 0 });
+      return { allowed: true, remaining: config.maxRequests - 1 };
+    }
+
+    const record = this.limits.get(key);
+
+    // Verificar se está em cooldown
+    if (now < record.cooldownUntil) {
+      const waitTime = Math.ceil((record.cooldownUntil - now) / 1000);
+      return { 
+        allowed: false, 
+        waitSeconds: waitTime,
+        message: `ğ�š Calma aí! Aguarde ${waitTime}s antes de usar novamente.`
+      };
+    }
+
+    // Resetar contador se passou da janela de tempo
+    if (now - record.firstRequest > config.windowMs) {
+      this.limits.set(key, { count: 1, firstRequest: now, cooldownUntil: 0 });
+      return { allowed: true, remaining: config.maxRequests - 1 };
+    }
+
+    // Incrementar contador
+    record.count++;
+
+    // Verificar se excedeu o limite
+    if (record.count > config.maxRequests) {
+      record.cooldownUntil = now + config.cooldownMs;
+      return { 
+        allowed: false, 
+        waitSeconds: Math.ceil(config.cooldownMs / 1000),
+        message: `ğ�š Calma aí! Aguarde ${Math.ceil(config.cooldownMs / 1000)}s antes de usar novamente.`
+      };
+    }
+
+    return { 
+      allowed: true, 
+      remaining: config.maxRequests - record.count 
+    };
+  }
+
+  // Limpa registros antigos
+  cleanup() {
+    const now = Date.now();
+    const maxAge = 300000; // 5 minutos
+    for (const [key, record] of this.limits.entries()) {
+      if (now - record.firstRequest > maxAge && now > record.cooldownUntil) {
+        this.limits.delete(key);
+      }
+    }
+  }
+}
+
+const rateLimiter = new RateLimiter();
+
+// Cleanup do rate limiter a cada 2 minutos
+setInterval(() => rateLimiter.cleanup(), 120000);
+
+// ============================================================
+// FUNÇÕES ASYNC PARA I/O (PERFORMANCE)
+// ============================================================
+
+// Função wrapper async para ler arquivo JSON com cache
 // SISTEMA DE PROTEГҮГғO ANTI-LOOP DO ANTI-ROUBO
 // Cache para evitar que o bot processe seus prГіprios eventos
 // ============================================================
@@ -527,7 +681,6 @@ import { parseHTML } from 'linkedom';
 import axios from 'axios';
 import pathz from 'path';
 import fs from 'fs';
-import { readFile, writeFile } from 'fs/promises';
 import os from 'os';
 import https from 'https';
 import crypto from 'crypto';
@@ -557,7 +710,6 @@ import msgCounter from './utils/msgCounter.js';
 // X9 System - IntegraГ§ГЈo com comandos de aprovaГ§ГЈo
 import { processNewJoinRequest, updateCardOnApprove, updateCardOnReject, notifyWhatsAppApproval, findRequestByNumber, x9Store } from './utils/x9System.js';
 import { saveWelcomeImage, loadWelcomeImage, deleteWelcomeImage, isLocalImagePath } from './utils/welcomeImages.js';
-import fsPromises from 'fs/promises';
 import {
   parseTimeToMs,
   formatTimeRemaining,
@@ -36022,6 +36174,11 @@ ${groupPrefix}setngl https://ngl.link/...`);
           });
           if (!isGroup) return sendAbyssWarning("в—Ҳ Este comando Г© sГі para grupos.");
           if (!isModoBn) return reply('вқҢ O modo brincadeira nГЈo estГЎ ativo nesse grupo.');
+          // Rate limiting para comandos de ranking
+          const rateLimitResult = rateLimiter.check(sender, 'rank', { maxRequests: 3, windowMs: 15000, cooldownMs: 10000 });
+          if (!rateLimitResult.allowed) {
+            return reply(rateLimitResult.message);
+          }
           let path = buildGroupFilePath(from);
           let gamesData = fs.existsSync(__dirname + '/funcs/json/games.json') ? JSON.parse(fs.readFileSync(__dirname + '/funcs/json/games.json')) : {
             ranks: {}
@@ -36103,6 +36260,11 @@ ${groupPrefix}setngl https://ngl.link/...`);
           });
           if (!isGroup) return sendAbyssWarning("в—Ҳ Este comando Г© sГі para grupos.");
           if (!isModoBn) return reply('вқҢ O modo brincadeira nГЈo estГЎ ativo nesse grupo.');
+          // Rate limiting para comandos de ranking
+          const rateLimitResultF = rateLimiter.check(sender, 'rank', { maxRequests: 3, windowMs: 15000, cooldownMs: 10000 });
+          if (!rateLimitResultF.allowed) {
+            return reply(rateLimitResultF.message);
+          }
           let path = buildGroupFilePath(from);
           let gamesData = fs.existsSync(__dirname + '/funcs/json/games.json') ? JSON.parse(fs.readFileSync(__dirname + '/funcs/json/games.json')) : {
             ranks: {}
@@ -36154,6 +36316,11 @@ ${groupPrefix}setngl https://ngl.link/...`);
         try {
           if (!isGroup) return sendAbyssWarning("в—Ҳ Este comando Г© sГі para grupos.");
           if (!isModoBn) return reply('вқҢ O modo brincadeira nГЈo estГЎ ativo nesse grupo.');
+          // Rate limiting para comandos de ranking
+          const rateLimitResultN = rateLimiter.check(sender, 'rank', { maxRequests: 3, windowMs: 15000, cooldownMs: 10000 });
+          if (!rateLimitResultN.allowed) {
+            return reply(rateLimitResultN.message);
+          }
           
           let path = buildGroupFilePath(from);
           let gamesData = fs.existsSync(__dirname + '/funcs/json/games.json') ? JSON.parse(fs.readFileSync(__dirname + '/funcs/json/games.json')) : {
@@ -36288,6 +36455,11 @@ ${groupPrefix}setngl https://ngl.link/...`);
           });
           if (!isGroup) return sendAbyssWarning("в—Ҳ Este comando Г© sГі para grupos.");
           if (!isModoBn) return reply('вқҢ O modo brincadeira nГЈo estГЎ ativo nesse grupo.');
+          // Rate limiting para comandos sociais
+          const rateLimitResultS = rateLimiter.check(sender, 'social', { maxRequests: 5, windowMs: 15000, cooldownMs: 8000 });
+          if (!rateLimitResultS.allowed) {
+            return reply(rateLimitResultS.message);
+          }
           // Para punheta, usa o prГіprio sender se ninguГ©m foi mencionado
           const targetUser = menc_os2 || sender;
           let gamesData = fs.existsSync(__dirname + '/funcs/json/games.json') ? JSON.parse(fs.readFileSync(__dirname + '/funcs/json/games.json')) : {
