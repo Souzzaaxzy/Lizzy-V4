@@ -33254,7 +33254,7 @@ case 'assistent':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
           if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
-          if (!menc_os2) return reply("📝 *Como usar:* ${groupPrefix}unmutet @usuário");
+          if (!menc_os2) return reply(`📝 *Como usar:* ${groupPrefix}unmutet @usuário`);
           const tempUnmuteTargetId = await normalizeUserId(nazu, menc_os2);
           const result = removeTempMute(from, tempUnmuteTargetId, idsMatch);
           if (result.success) {
