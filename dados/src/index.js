@@ -3443,7 +3443,7 @@ Você foi removido do grupo.`,
                 `┃ 💬 Total: ${counts.weeklyTotal.toLocaleString('pt-BR')} mensagens\n` +
                 `┃\n` +
                 `┃ Parabéns a todos que participaram! 🏆\n` +
-                `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
+                `╰------------------------------━╯`;
               await nazu.sendMessage(from, { text: goalMsg });
             }
           }
@@ -21878,7 +21878,7 @@ Precisa de ajuda? Entre em contato:
           if (subscribers.length === 0) {
             return reply('⚠️ Ainda não há inscritos para enviar a transmissão.\n\n💡 Os usuários devem usar o comando /inscrevertm no privado para se inscrever.');
           }
-          const cabecalho = `╔══════════════════════\n║  📡 *TRANSMISSÃO PRIVADA* 📡\n╚══════════════════════\n\n`;
+          const cabecalho = `╔══════════════════════\n║  📡 *TRANSMISSAO PRIVADA* 📡\n╚══════════════════════\n\n`;
           const genSuffix = () => Math.floor(100 + Math.random() * 900).toString();
           let baseMessage = {};
           // Verifica se a mensagem atual tem imagem
@@ -21969,7 +21969,7 @@ Precisa de ajuda? Entre em contato:
           if (!isOwner) return reply("🚫 Este comando é apenas para o meu dono 💔");
           const stats = transmissao.getStats();
           const subscribers = transmissao.getSubscribers();
-          let message = `📊 *STATUS DA TRANSMISSÃO TM2*\n\n`;
+          let message = `📊 *STATUS DA TRANSMISSAO TM2*\n\n`;
           message += `👥 *Inscritos:* ${stats.totalSubscribers}\n`;
           message += `📨 *Mensagens enviadas:* ${stats.totalMessages}\n`;
           message += `🕐 *Última transmissão:* ${stats.lastBroadcast || 'Nenhuma ainda'}\n\n`;
@@ -25695,7 +25695,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           message += `┃ 👥 Grupo: ${groupName || 'Grupo'}\n`;
           message += `┃ 📆 Data: ${dateStr}\n`;
           message += `┃\n`;
-          message += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+          message += `------------------------------━\n`;
           message += `┃\n`;
           message += `┃ 💬 Total de mensagens: ${(stats.daily.total || 0).toLocaleString('pt-BR')}\n`;
           message += `┃ 🎭 Figurinhas: ${stats.daily.stickers || 0}\n`;
@@ -25707,13 +25707,13 @@ ${groupPrefix}togglecmdvip premium_ia off`);
             const progress = Math.min(100, Math.round(((stats.daily.total || 0) / stats.settings.dailyGoal) * 100));
             const bar = '█'.repeat(Math.floor(progress / 10)) + '░'.repeat(10 - Math.floor(progress / 10));
             message += `┃\n`;
-            message += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+            message += `------------------------------━\n`;
             message += `┃\n`;
             message += `┃ 🎯 Meta: ${stats.settings.dailyGoal.toLocaleString('pt-BR')}\n`;
             message += `┃ 📊 [${bar}] ${progress}%\n`;
           }
           message += `┃\n`;
-          message += `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
+          message += `╰------------------------------━╯`;
           const newsletterMsgDiario = {
             forwardingScore: 999,
             isForwarded: true,
@@ -25739,7 +25739,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           message += `┃ 👥 Grupo: ${groupName || 'Grupo'}\n`;
           message += `┃ 📅 Período: Últimos 7 dias\n`;
           message += `┃\n`;
-          message += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+          message += `------------------------------━\n`;
           message += `┃\n`;
           message += `┃ 💬 Total de mensagens: ${(stats.weekly.total || 0).toLocaleString('pt-BR')}\n`;
           message += `┃ 🎭 Figurinhas: ${stats.weekly.stickers || 0}\n`;
@@ -25751,13 +25751,13 @@ ${groupPrefix}togglecmdvip premium_ia off`);
             const progress = Math.min(100, Math.round(((stats.weekly.total || 0) / stats.settings.weeklyGoal) * 100));
             const bar = '█'.repeat(Math.floor(progress / 10)) + '░'.repeat(10 - Math.floor(progress / 10));
             message += `┃\n`;
-            message += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+            message += `------------------------------━\n`;
             message += `┃\n`;
             message += `┃ 🎯 Meta: ${stats.settings.weeklyGoal.toLocaleString('pt-BR')}\n`;
             message += `┃ 📊 [${bar}] ${progress}%\n`;
           }
           message += `┃\n`;
-          message += `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
+          message += `╰------------------------------━╯`;
           const newsletterMsgSemanal = {
             forwardingScore: 999,
             isForwarded: true,
@@ -26225,7 +26225,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           message += `┃ 👤 @${userName.split(' ')[0]}\n`;
           message += `┃ 📅 Período: Últimos 7 dias\n`;
           message += `┃\n`;
-          message += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+          message += `------------------------------━━━━━━\n`;
           message += `┃\n`;
           message += `┃ 💬 Mensagens: ${userStats.weekly.count.toLocaleString('pt-BR')}\n`;
           message += `┃ 🎭 Figurinhas: ${userStats.weekly.stickers || 0}\n`;
@@ -26233,12 +26233,12 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           message += `┃ 🎵 Áudios: ${userStats.weekly.audios || 0}\n`;
           message += `┃\n`;
           if (userRank.rank > 0) {
-            message += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+            message += `------------------------------━━━━━━\n`;
             message += `┃\n`;
             message += `┃ 🏆 Ranking: #${userRank.rank}\n`;
             message += `┃\n`;
           }
-          message += `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
+          message += `╰------------------------------━━━━━━╯`;
           const newsletterMesemanal = {
             forwardingScore: 999,
             isForwarded: true,
@@ -34660,7 +34660,7 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
           'quadrisal': 'Quadrisal'
         };
         let text = `╭━━━⊱ 💕 *RELACIONAMENTOS DO GRUPO* ⊱━━━╮\n`;
-        text += `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n`;
+        text += `╰------------------------------━━━━━━━━╯\n\n`;
         const mentions = [];
         groupRelationships.forEach((rel) => {
           const emoji = RELATIONSHIP_EMOJIS[rel.type] || rel.emoji;
