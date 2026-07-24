@@ -2985,27 +2985,6 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
         
         fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
         console.log(`[ANTI-PAYMENT-RAJADA] ✅ ${realSender} adicionado à blacklist antipagamento`);
-        
-        // Se bot for admin, remover o invasor
-        if (isBotAdmin) {
-          try {
-            // Tentar deletar a mensagem
-            await nazu.sendMessage(from, {
-              delete: {
-                remoteJid: from,
-                id: info.key.id,
-                fromMe: false,
-                participant: realSender
-              }
-            }).catch(e => console.log('[ANTI-PAYMENT-RAJADA] Erro ao deletar:', e.message));
-            
-            // Remover invasor
-            await nazu.groupParticipantsUpdate(from, [realSender], 'remove').catch(e => console.log('[ANTI-PAYMENT-RAJADA] Erro ao remover:', e.message));
-            console.log(`[ANTI-PAYMENT-RAJADA] ✅ ${realSender} removido do grupo!`);
-          } catch (e) {
-            console.error('[ANTI-PAYMENT-RAJADA] Erro:', e.message);
-          }
-        }
       }
     }
     // Lógica Anti-Pagamento (antipagamento/antirequest)
