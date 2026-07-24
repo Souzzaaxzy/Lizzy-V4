@@ -3311,9 +3311,12 @@ async function generateImageGroq(prompt, retries = 3) {
     throw new Error('Prompt é obrigatório para geração de imagem');
   }
 
-  // Gerar imagem usando Pollinations.ai com modelo de alta qualidade
+  // Gerar imagem usando Pollinations.ai
+  // Usa modelo turbo + seed para maior fidelidade ao prompt
   const encodedPrompt = encodeURIComponent(prompt);
-  const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&model=flux&nologo=true`;
+  // Seed baseado no prompt para consistência (mesmo prompt = mesma imagem)
+  const seed = encodeURIComponent(prompt.split('').reduce((a, b) => a + b.charCodeAt(0), 0));
+  const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&model=turbo&seed=${seed}&nologo=true`;
 
   return imageUrl;
 }
