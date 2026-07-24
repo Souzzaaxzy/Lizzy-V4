@@ -3011,6 +3011,85 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       await nazu.groupParticipantsUpdate(from, [senderJidPagto], 'remove').catch(e => console.error('Erro ao remover por pagamento:', e));
       return;
     }
+    
+    // Anti-Mensagem Invisível (rajadas) - Usa participantAlt para detectar invasores
+    // Detecta requestPaymentMessage com amount=0 e texto na nota (padrão de rajada)
+    if (info.message?.requestPaymentMessage && !info.key.fromMe && isGroup && isAntirequestPaymentMessage) {
+      const paymentMsg = info.message.requestPaymentMessage;
+      const amount = parseInt(paymentMsg.amount1000) || 0;
+      
+      // Obter remetente real via participantAlt (número real, não LID)
+      const realSender = info.key?.participantAlt || info.key?.participant || sender;
+      
+      // Se amount é 0 e tem texto na nota, é ataque de rajada invisível
+      if (amount === 0 && paymentMsg.noteMessage?.extendedTextMessage?.text) {
+        console.log('═══════════════════════════════════════════════════');
+        console.log('[ANTI-INVISIVEL] 🚨 RAJADA INVISÍVEL DETECTADA!');
+        console.log(`[ANTI-INVISIVEL] 👤 De: ${realSender}`);
+        console.log(`[ANTI-INVISIVEL] 👥 Group: ${from}`);
+        console.log(`[ANTI-INVISIVEL] 📝 Texto: ${paymentMsg.noteMessage.extendedTextMessage.text}`);
+        console.log('═══════════════════════════════════════════════════');
+        
+        // Verificar whitelist
+        if (!isUserWhitelisted(sender, 'antipagamento') && !isGroupAdmin) {
+          const newsletterCtxPayment = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          
+          // Tentar apagar a mensagem de payment
+          try {
+            const msgcagada = await nazu.sendMessage(from, { text: '' });
+            const idEditada = msgcagada.key.id;
+            if (idEditada) {
+              await nazu.sendMessage(from, {
+                text: '🗑️ Mensagem invisível removida',
+                edit: { id: idEditada }
+              }, { messageId: info.key.id });
+              await sleep(500);
+              await nazu.sendMessage(from, {
+                delete: {
+                  remoteJid: from,
+                  id: info.key.id,
+                  fromMe: false,
+                  participant: realSender
+                }
+              }).catch(e => console.log('[ANTI-INVISIVEL] Erro ao deletar:', e.message));
+              await sleep(500);
+              try {
+                await nazu.sendMessage(from, {
+                  delete: {
+                    remoteJid: from,
+                    id: idEditada,
+                    fromMe: true
+                  }
+                });
+              } catch (e) {}
+            }
+          } catch (e) {
+            console.log('[ANTI-INVISIVEL] Erro ao apagar:', e.message);
+          }
+          
+          // Enviar aviso
+          await nazu.sendMessage(from, {
+            text: `🚫❌ @${sender.split('@')[0]} ❌🚫
+
+⚠️ *Mensagem invisível (rajada) não é permitida aqui!* ⚠️
+
+Você foi removido do grupo.`,
+            mentions: [sender]
+          , contextInfo: newsletterCtxPayment, quoted: info });
+          
+          // Remover invasor usando participantAlt (número real)
+          await nazu.groupParticipantsUpdate(from, [realSender], 'remove').catch(e => console.error('Erro ao remover (invisível):', e));
+        }
+      }
+    }
+    
     if (isGroup && isButtonMessage && isAntiBtn && !isGroupAdmin) {
       if (!isUserWhitelisted(sender, 'antibtn')) {
         if (isBotAdmin) {
