@@ -175,9 +175,9 @@ class RateLimiter {
   constructor() {
     this.limits = new Map();
     this.defaultConfig = {
-      maxRequests: 5,      // máximo de pedidos
-      windowMs: 10000,    // janela de tempo (10 segundos)
-      cooldownMs: 5000     // tempo de espera após limite (5 segundos)
+      maxRequests: 30,      // máximo de pedidos
+      windowMs: 30000,    // janela de tempo (10 segundos)
+      cooldownMs: 15000     // tempo de espera após limite (5 segundos)
     };
   }
 
@@ -36175,7 +36175,7 @@ ${groupPrefix}setngl https://ngl.link/...`);
           if (!isGroup) return sendAbyssWarning("в—Ҳ Este comando Г© sГі para grupos.");
           if (!isModoBn) return reply('вқҢ O modo brincadeira nГЈo estГЎ ativo nesse grupo.');
           // Rate limiting para comandos de ranking
-          const rateLimitResult = rateLimiter.check(sender, 'rank', { maxRequests: 3, windowMs: 15000, cooldownMs: 10000 });
+          const rateLimitResult = rateLimiter.check(sender, 'rank', { maxRequests: 10, windowMs: 30000, cooldownMs: 15000 });
           if (!rateLimitResult.allowed) {
             return reply(rateLimitResult.message);
           }
@@ -36261,7 +36261,7 @@ ${groupPrefix}setngl https://ngl.link/...`);
           if (!isGroup) return sendAbyssWarning("в—Ҳ Este comando Г© sГі para grupos.");
           if (!isModoBn) return reply('вқҢ O modo brincadeira nГЈo estГЎ ativo nesse grupo.');
           // Rate limiting para comandos de ranking
-          const rateLimitResultF = rateLimiter.check(sender, 'rank', { maxRequests: 3, windowMs: 15000, cooldownMs: 10000 });
+          const rateLimitResultF = rateLimiter.check(sender, 'rank', { maxRequests: 10, windowMs: 30000, cooldownMs: 15000 });
           if (!rateLimitResultF.allowed) {
             return reply(rateLimitResultF.message);
           }
@@ -36317,7 +36317,7 @@ ${groupPrefix}setngl https://ngl.link/...`);
           if (!isGroup) return sendAbyssWarning("в—Ҳ Este comando Г© sГі para grupos.");
           if (!isModoBn) return reply('вқҢ O modo brincadeira nГЈo estГЎ ativo nesse grupo.');
           // Rate limiting para comandos de ranking
-          const rateLimitResultN = rateLimiter.check(sender, 'rank', { maxRequests: 3, windowMs: 15000, cooldownMs: 10000 });
+          const rateLimitResultN = rateLimiter.check(sender, 'rank', { maxRequests: 10, windowMs: 30000, cooldownMs: 15000 });
           if (!rateLimitResultN.allowed) {
             return reply(rateLimitResultN.message);
           }
@@ -36456,7 +36456,7 @@ ${groupPrefix}setngl https://ngl.link/...`);
           if (!isGroup) return sendAbyssWarning("в—Ҳ Este comando Г© sГі para grupos.");
           if (!isModoBn) return reply('вқҢ O modo brincadeira nГЈo estГЎ ativo nesse grupo.');
           // Rate limiting para comandos sociais
-          const rateLimitResultS = rateLimiter.check(sender, 'social', { maxRequests: 5, windowMs: 15000, cooldownMs: 8000 });
+          const rateLimitResultS = rateLimiter.check(sender, 'social', { maxRequests: 20, windowMs: 30000, cooldownMs: 15000 });
           if (!rateLimitResultS.allowed) {
             return reply(rateLimitResultS.message);
           }
