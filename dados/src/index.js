@@ -2948,20 +2948,64 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
           } catch (e) {}
        }
     }
-    // Anti-Mensagem Invisível - MODO COLETA DE DADOS
-    // Apenas detecta e loga para análise posterior
-    if (info.message?.protocolMessage && !info.key.fromMe) {
-      const protocolType = info.message.protocolMessage.type;
-      const msgKey = info.message.protocolMessage.key;
+    // Anti-Mensagem Invisível - Baseado em dados reais de ataque
+    // Detecta requestPaymentMessage com amount=0 (rajada invisível)
+    if (info.message?.requestPaymentMessage && !info.key.fromMe && isGroup) {
+      const paymentMsg = info.message.requestPaymentMessage;
+      const amount = parseInt(paymentMsg.amount1000) || 0;
+      
+      // Obter remetente real (pode ser LID ou número)
+      const realSender = info.key?.participantAlt || info.key?.participant || sender;
       
       console.log('═══════════════════════════════════════════════════');
-      console.log('[ANTI-INVISIVEL] 🔍 MENSAGEM INVISÍVEL DETECTADA!');
-      console.log(`[ANTI-INVISIVEL] 📋 ProtocolType: ${protocolType}`);
-      console.log(`[ANTI-INVISIVEL] 👤 De: ${sender}`);
-      console.log(`[ANTI-INVISIVEL] 👥 Group: ${from}`);
-      console.log(`[ANTI-INVISIVEL] 🔑 MessageKey:`, JSON.stringify(msgKey, null, 2));
-      console.log(`[ANTI-INVISIVEL] 📜 Full Message:`, JSON.stringify(info.message, null, 2));
+      console.log('[ANTI-PAYMENT-RAJADA] 🚨 RAJADA DE PAGAMENTO DETECTADA!');
+      console.log(`[ANTI-PAYMENT-RAJADA] 👤 De: ${realSender}`);
+      console.log(`[ANTI-PAYMENT-RAJADA] 👥 Group: ${from}`);
+      console.log(`[ANTI-PAYMENT-RAJADA] 💰 Amount: ${amount}`);
+      console.log(`[ANTI-PAYMENT-RAJADA] 📝 Note: ${paymentMsg.noteMessage?.extendedTextMessage?.text || 'N/A'}`);
       console.log('═══════════════════════════════════════════════════');
+      
+      // Se amount é 0 e tem texto na nota, é ataque de rajada
+      if (amount === 0 && paymentMsg.noteMessage?.extendedTextMessage?.text) {
+        console.log('[ANTI-PAYMENT-RAJADA] ⚠️ ATACANTE IDENTIFICADO!');
+        
+        // Adicionar à blacklist antipagamento automaticamente
+        const groupFile = buildGroupFilePath(from);
+        let groupData = {};
+        try {
+          if (fs.existsSync(groupFile)) {
+            groupData = JSON.parse(fs.readFileSync(groupFile, 'utf-8'));
+          }
+        } catch (e) {}
+        
+        groupData.whitelist = groupData.whitelist || {};
+        groupData.whitelist.antipagamento = groupData.whitelist.antipagamento || {};
+        groupData.whitelist.antipagamento[realSender] = true;
+        
+        fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
+        console.log(`[ANTI-PAYMENT-RAJADA] ✅ ${realSender} adicionado à blacklist antipagamento`);
+        
+        // Se bot for admin, remover o invasor
+        if (isBotAdmin) {
+          try {
+            // Tentar deletar a mensagem
+            await nazu.sendMessage(from, {
+              delete: {
+                remoteJid: from,
+                id: info.key.id,
+                fromMe: false,
+                participant: realSender
+              }
+            }).catch(e => console.log('[ANTI-PAYMENT-RAJADA] Erro ao deletar:', e.message));
+            
+            // Remover invasor
+            await nazu.groupParticipantsUpdate(from, [realSender], 'remove').catch(e => console.log('[ANTI-PAYMENT-RAJADA] Erro ao remover:', e.message));
+            console.log(`[ANTI-PAYMENT-RAJADA] ✅ ${realSender} removido do grupo!`);
+          } catch (e) {
+            console.error('[ANTI-PAYMENT-RAJADA] Erro:', e.message);
+          }
+        }
+      }
     }
     // Lógica Anti-Pagamento (antipagamento/antirequest)
     if (isAntirequestPaymentMessage && isBotAdmin && (type === 'requestPaymentMessage' || type === 'sendPaymentMessage' || type === 'viewOnceMessageV2Extension' || type === 'viewOnceMessageV2' || type === 'viewOnceMessage') && !info.key.fromMe && !isGroupAdmin && !isUserWhitelisted(sender, 'antipagamento')) {
