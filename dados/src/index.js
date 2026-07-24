@@ -28271,6 +28271,46 @@ break;
         }
         break;
       }
+      case 'madrugada': {
+        try {
+          if (!isGroup) return sendAbyssWarning("в—Ҳ Este comando Г© sГі para grupos.");
+          if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissГЈo. рҹ’”");
+          
+          const newsletterContext = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          
+          const members = AllgroupMembers || [];
+          const message = `🌑 _BOA MADRUGADAAA!!_ 🌙🔥
+
+
+𝐂𝐇𝐀𝐌𝐀𝐍𝐃𝐎 🚨 ᴏs 𝐂𝐎𝐑𝐔𝐉𝐀̃𝐎𝐒 🦉, ᴏs 𝐈𝐍𝐒𝐎𝐍𝐄𝐒 😵‍💫, ᴏs 𝐕𝐈𝐑𝐀𝐃𝐎𝐒 🌚, ᴏs 𝐐𝐔𝐄𝐌 𝐓Ã𝐎 𝐌𝐀𝐓𝐀𝐍𝐃𝐎 𝐎 𝐒𝐎𝐍𝐎 🤣🔥
+
+
+𝐌𝐄𝐌𝐁𝐑𝐎 ᴄᴏᴍᴜᴍ 🫵🏻 𝐀𝐈𝐍𝐃𝐀 𝐄𝐒𝐓Á 𝐀𝐂𝐎𝐑𝐃𝐀𝐃𝐎? 👀💀
+
+
+𝐐𝐔𝐄𝐌 𝐃𝐎𝐑𝐌𝐈𝐔 😴💤, 𝐃𝐎𝐑𝐌𝐈𝐔... 𝐐𝐔𝐄𝐌 𝐅𝐈𝐂𝐎𝐔 🌙🔥, 𝐕𝐀𝐌𝐎𝐒 𝐅𝐀𝐙𝐄𝐑 𝐄𝐒𝐒𝐀 𝐌𝐀𝐃𝐑𝐔𝐆𝐀𝐃𝐀 𝐕𝐀𝐋𝐄𝐑 𝐀 𝐏𝐄𝐍𝐀! 😈⚡`;
+          
+          await nazu.sendMessage(from, {
+            text: message,
+            mentions: members,
+            contextInfo: newsletterContext
+          }).catch(err => {
+            console.error('Erro ao enviar mensagem madrugada:', err);
+            reply("вқҢ Erro ao tentar enviar a mensagem.");
+          });
+        } catch (e) {
+          console.error(e);
+          reply("вқҢ Ocorreu um erro ao executar o comando.");
+        }
+        break;
+      }
       case 'smm': {
         // VERSÃO ATUALIZADA - SEM LIMITES E COM NOMES COMPLETOS
         if (!isOwner) return reply('❌ Este comando é restrito ao dono do bot.');
