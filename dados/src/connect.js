@@ -270,6 +270,307 @@ class MessageQueue {
 
 const messageQueue = new MessageQueue(8, 10, 2); // 8 workers, 10 lotes, 2 mensagens por lote
 
+// ============================================================
+// SISTEMA ANTI-FLOOD (FASE 4)
+// ============================================================
+
+// Rate limiter por usuário para mensagens
+class UserFloodProtector {
+    constructor(maxMessages = 20, windowMs = 5000, action = 'ignore') {
+        this.tracking = new Map(); // userId -> { count, firstMessage, blocked }
+        this.maxMessages = maxMessages;
+        this.windowMs = windowMs;
+        this.action = action; // 'ignore' | 'warn' | 'block'
+        this.blockedUsers = new Map(); // userId -> unblockTime
+    }
+
+    check(userId) {
+        const now = Date.now();
+
+        // Verifica se está bloqueado
+        if (this.blockedUsers.has(userId)) {
+            const unblockTime = this.blockedUsers.get(userId);
+            if (now < unblockTime) {
+                return { blocked: true, waitSeconds: Math.ceil((unblockTime - now) / 1000) };
+            }
+            this.blockedUsers.delete(userId);
+        }
+
+        // Primeiro acesso
+        if (!this.tracking.has(userId)) {
+            this.tracking.set(userId, { count: 1, firstMessage: now });
+            return { blocked: false, allowed: true };
+        }
+
+        const data = this.tracking.get(userId);
+
+        // Reset se passou da janela de tempo
+        if (now - data.firstMessage > this.windowMs) {
+            this.tracking.set(userId, { count: 1, firstMessage: now });
+            return { blocked: false, allowed: true };
+        }
+
+        // Incrementa contador
+        data.count++;
+
+        // Verifica se excedeu o limite
+        if (data.count > this.maxMessages) {
+            // Bloquear por 30 segundos
+            this.blockedUsers.set(userId, now + 30000);
+            this.tracking.delete(userId);
+            return { blocked: true, waitSeconds: 30, wasFlood: true };
+        }
+
+        return { blocked: false, allowed: true, count: data.count, remaining: this.maxMessages - data.count };
+    }
+
+    // Cleanup periódico
+    cleanup() {
+        const now = Date.now();
+        // Remove trackers velhos
+        for (const [userId, data] of this.tracking.entries()) {
+            if (now - data.firstMessage > this.windowMs * 2) {
+                this.tracking.delete(userId);
+            }
+        }
+        // Remove bloqueios expirados
+        for (const [userId, unblockTime] of this.blockedUsers.entries()) {
+            if (now > unblockTime) {
+                this.blockedUsers.delete(userId);
+            }
+        }
+    }
+}
+
+// Instâncias de proteção anti-flood
+const globalFloodProtector = new UserFloodProtector(20, 5000, 'ignore'); // 20 msgs em 5s
+const groupFloodProtector = new UserFloodProtector(30, 10000, 'ignore'); // 30 msgs em 10s por grupo
+
+// Cleanup a cada 30 segundos
+setInterval(() => {
+    globalFloodProtector.cleanup();
+    groupFloodProtector.cleanup();
+}, 30000);
+
+// ============================================================
+// DEBOUNCE PARA CONTADOR DE MENSAGENS
+// ============================================================
+class CounterDebouncer {
+    constructor(flushIntervalMs = 3000) {
+        this.pendingWrites = new Map(); // groupId -> data
+        this.flushIntervalMs = flushIntervalMs;
+        this.flushTimer = null;
+    }
+
+    queueWrite(groupId, data) {
+        this.pendingWrites.set(groupId, data);
+        this.scheduleFlush();
+    }
+
+    scheduleFlush() {
+        if (this.flushTimer) return;
+        this.flushTimer = setTimeout(() => this.flush(), this.flushIntervalMs);
+    }
+
+    async flush() {
+        if (this.flushTimer) {
+            clearTimeout(this.flushTimer);
+            this.flushTimer = null;
+        }
+
+        if (this.pendingWrites.size === 0) return;
+
+        const writes = Array.from(this.pendingWrites.entries());
+        this.pendingWrites.clear();
+
+        // Agrupar escritas por arquivo (pode ter múltiplos grupos)
+        const fileGroups = new Map();
+        for (const [groupId, data] of writes) {
+            const filePath = `./database/grupos/${groupId}.json`;
+            if (!fileGroups.has(filePath)) {
+                fileGroups.set(filePath, []);
+            }
+            fileGroups.get(filePath).push([groupId, data]);
+        }
+
+        // Escrever cada arquivo uma vez
+        for (const [filePath, groupDatas] of fileGroups.entries()) {
+            try {
+                let existingData = {};
+                if (fs.existsSync(filePath)) {
+                    existingData = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+                }
+
+                // Mesclar dados
+                for (const [groupId, data] of groupDatas) {
+                    if (!existingData.contador) existingData.contador = [];
+                    
+                    for (const userData of data.contador || []) {
+                        const idx = existingData.contador.findIndex(u => u.id === userData.id);
+                        if (idx >= 0) {
+                            existingData.contador[idx].msg = (existingData.contador[idx].msg || 0) + (userData.msg || 0);
+                            existingData.contador[idx].cmd = (existingData.contador[idx].cmd || 0) + (userData.cmd || 0);
+                            existingData.contador[idx].lastActivity = userData.lastActivity;
+                        } else {
+                            existingData.contador.push(userData);
+                        }
+                    }
+                }
+
+                fs.writeFileSync(filePath, JSON.stringify(existingData, null, 2));
+            } catch (e) {
+                console.error(`[CounterDebouncer] Erro ao escrever ${filePath}:`, e.message);
+            }
+        }
+    }
+
+    forceFlush() {
+        if (this.flushTimer) {
+            clearTimeout(this.flushTimer);
+            this.flushTimer = null;
+        }
+        // Flush síncrono forçado
+        for (const [groupId, data] of this.pendingWrites.entries()) {
+            try {
+                const filePath = `./database/grupos/${groupId}.json`;
+                let existingData = {};
+                if (fs.existsSync(filePath)) {
+                    existingData = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+                }
+                
+                if (!existingData.contador) existingData.contador = [];
+                for (const userData of data.contador || []) {
+                    const idx = existingData.contador.findIndex(u => u.id === userData.id);
+                    if (idx >= 0) {
+                        existingData.contador[idx].msg = (existingData.contador[idx].msg || 0) + (userData.msg || 0);
+                        existingData.contador[idx].cmd = (existingData.contador[idx].cmd || 0) + (userData.cmd || 0);
+                    } else {
+                        existingData.contador.push(userData);
+                    }
+                }
+                
+                fs.writeFileSync(filePath, JSON.stringify(existingData, null, 2));
+            } catch (e) {
+                // Ignora erros no flush forçado
+            }
+        }
+        this.pendingWrites.clear();
+    }
+}
+
+const counterDebouncer = new CounterDebouncer(3000);
+
+// Flush forçado ao desligar
+process.on('SIGINT', () => {
+    counterDebouncer.forceFlush();
+    process.exit();
+});
+process.on('SIGTERM', () => {
+    counterDebouncer.forceFlush();
+    process.exit();
+});
+
+// ============================================================
+// COOLDOWN DE RESPOSTA POR USUÁRIO
+// ============================================================
+class ResponseCooldown {
+    constructor(defaultCooldownMs = 500) {
+        this.cooldowns = new Map(); // "userId:groupId" -> lastResponseTime
+        this.defaultCooldownMs = defaultCooldownMs;
+    }
+
+    canRespond(userId, groupId) {
+        const key = `${userId}:${groupId}`;
+        const now = Date.now();
+        
+        if (!this.cooldowns.has(key)) {
+            this.cooldowns.set(key, now);
+            return true;
+        }
+
+        const lastResponse = this.cooldowns.get(key);
+        if (now - lastResponse < this.defaultCooldownMs) {
+            return false;
+        }
+
+        this.cooldowns.set(key, now);
+        return true;
+    }
+
+    // Cleanup de cooldowns velhos
+    cleanup() {
+        const now = Date.now();
+        const maxAge = 60000; // 1 minuto
+        
+        for (const [key, lastTime] of this.cooldowns.entries()) {
+            if (now - lastTime > maxAge) {
+                this.cooldowns.delete(key);
+            }
+        }
+    }
+}
+
+const responseCooldown = new ResponseCooldown(500); // 500ms entre respostas do mesmo user no mesmo grupo
+
+setInterval(() => responseCooldown.cleanup(), 30000);
+
+// ============================================================
+// PROCESSAMENTO EM LOTES APRIMORADO
+// ============================================================
+class BatchProcessor {
+    constructor(maxBatchSize = 10, batchIntervalMs = 100) {
+        this.pendingItems = [];
+        this.maxBatchSize = maxBatchSize;
+        this.batchIntervalMs = batchIntervalMs;
+        this.timer = null;
+        this.processor = null;
+    }
+
+    setProcessor(fn) {
+        this.processor = fn;
+    }
+
+    add(item) {
+        this.pendingItems.push(item);
+        
+        if (this.pendingItems.length >= this.maxBatchSize) {
+            this.flush();
+        } else if (!this.timer) {
+            this.timer = setTimeout(() => this.flush(), this.batchIntervalMs);
+        }
+    }
+
+    flush() {
+        if (this.timer) {
+            clearTimeout(this.timer);
+            this.timer = null;
+        }
+
+        if (this.pendingItems.length === 0 || !this.processor) return;
+
+        const items = this.pendingItems.splice(0, this.maxBatchSize);
+        this.processor(items);
+
+        // Se ainda tem itens, agenda próximo flush
+        if (this.pendingItems.length > 0) {
+            this.timer = setTimeout(() => this.flush(), this.batchIntervalMs);
+        }
+    }
+}
+
+// Instância para processar comandos em lotes
+const commandBatchProcessor = new BatchProcessor(5, 200);
+commandBatchProcessor.setProcessor(async (commands) => {
+    // Processa comandos em lote, mas mantém ordem
+    for (const cmd of commands) {
+        try {
+            await cmd.process();
+        } catch (e) {
+            console.error(`[BatchProcessor] Erro ao processar comando:`, e.message);
+        }
+    }
+});
+
 const configPath = path.join(__dirname, "config.json");
 let config;
 let DEBUG_MODE = false; // Modo debug para logs detalhados
@@ -2147,6 +2448,6 @@ process.on('unhandledRejection', (reason, promise) => {
     // em eventos do Baileys. O importante é logar para diagnóstico.
 });
 
-export { rentalExpirationManager, messageQueue };
+export { rentalExpirationManager, messageQueue, globalFloodProtector, groupFloodProtector, counterDebouncer, responseCooldown };
 
 startNazu();
