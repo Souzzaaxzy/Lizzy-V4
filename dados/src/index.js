@@ -20733,6 +20733,7 @@ break;
         }
         break;
       case 'menubn':
+      case 'antisocial':
       case 'menubrincadeira':
       case 'menubrincadeiras':
       case 'gamemenu':
