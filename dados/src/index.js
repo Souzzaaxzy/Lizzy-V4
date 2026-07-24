@@ -2819,6 +2819,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     const isAntiLinkCanal = groupData.antilinkcanal;
     const isAntiLinkSoft = groupData.antilinksoft;
     const isAntiDel = groupData.antidel;
+    const isAntiInvi = groupData.antiinvi;
     const isAntiBtn = groupData.antibtn;
     const isAntiFoton = groupData.antifoton;
     const isAntiAudio = groupData.antiaudio;
@@ -2950,7 +2951,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     }
     // Anti-Mensagem Invisível - Baseado em dados reais de ataque
     // Detecta requestPaymentMessage com amount=0 (rajada invisível)
-    if (info.message?.requestPaymentMessage && !info.key.fromMe && isGroup) {
+    if (isAntiInvi && info.message?.requestPaymentMessage && !info.key.fromMe && isGroup) {
       const paymentMsg = info.message.requestPaymentMessage;
       const amount = parseInt(paymentMsg.amount1000) || 0;
       
@@ -26736,6 +26737,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
             ["AntiSticker", !!(groupData.antifig && groupData.antifig.enabled)],
             ["AntiSticker Plus", !!(groupData.antistickerplus)],
             ["AntiDelete", !!groupData.antidel],
+            ["AntiInvi", !!groupData.antiinvi],
                       ];
           const resFlags = [
             ["AutoDL", !!groupData.autodl],
@@ -30194,6 +30196,7 @@ break;
             { key: 'antiaudio', name: 'Antiaudio', isObject: false },
             { key: 'antigore', name: 'Antigore', isObject: false },
             { key: 'antidel', name: 'Antidelete', isObject: false },
+            { key: 'antiinvi', name: 'Anti-Invisível', isObject: false },
             { key: 'antisocial', name: 'AntiSocial', isObject: false, desc: 'Bloqueia links de redes sociais (Discord, Instagram, YouTube, TikTok e Spotify)' },
           ];
           // Verificar status de cada sistema
@@ -30849,6 +30852,29 @@ break;
           groupData.antiRoubo.authorizedUsers.splice(idx, 1);
           fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
           await reply(`✅ @${userNum} removido da lista de autorizados!`, { mentions: [userJid] });
+        } catch (e) {
+          console.error(e);
+          await reply("Ocorreu um erro 💔");
+        }
+        break;
+      case 'testeinvi':
+        try {
+          if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
+          if (!isGroupAdmin) return reply("Você precisa ser adm 💔");
+          if (!isBotAdmin) return reply("Eu preciso ser adm para isso 💔");
+          groupData.antiinvi = !groupData.antiinvi;
+          fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
+          const newsletterCtxInvi = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          await nazu.sendMessage(from, { text: `✅ Anti-Invisível ${groupData.antiinvi ? 'ativado' : 'desativado'}!
+
+Proteção contra rajadas de mensagens invisíveis (payment message com amount 0).` , contextInfo: newsletterCtxInvi, quoted: info });
         } catch (e) {
           console.error(e);
           await reply("Ocorreu um erro 💔");
