@@ -29191,6 +29191,31 @@ break;
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
           if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
           if (!isBotAdmin) return sendAbyssWarning("Eu preciso ser administrador para realizar esta ação.");
+          
+          // Carrega groupData para verificação anti-roubo
+          const groupFilePath = './dados/database/grupos/' + from.split('@')[0] + '@lid.json';
+          const groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath, 'utf-8')) : {};
+          
+          // ANTI-ROUBO: Verifica se executor é permitido
+          const hasAntiRoubo = groupData?.antiRoubo?.enabled;
+          if (hasAntiRoubo) {
+            const groupMetadata = await nazu.groupMetadata(from);
+            const groupCreator = groupMetadata?.owner?.split('@')[0] || '';
+            const senderNum = sender.split('@')[0];
+            const isCreator = senderNum === groupCreator;
+            
+            // Verifica se é admin permitido
+            const isAuth = groupData?.antiRoubo?.authorizedUsers?.some(u => {
+              const authNum = (u.split('@')[0] || '').replace(/\D/g, '');
+              const senderNormalized = (senderNum || '').replace(/\D/g, '');
+              return authNum === senderNormalized || authNum.includes(senderNormalized) || senderNormalized.includes(authNum);
+            });
+            
+            if (!isCreator && !isAuth) {
+              return reply("🚫 *Anti-Roubo ativo!* Você não tem permissão para promover usuários.\n\nSomente o Dono do Grupo ou admins autorizados podem usar este comando.");
+            }
+          }
+          
           if (!menc_os2) return reply("Marque alguém 🙄");
           const promoteTargetJid = mencOs2JidOriginal || menc_os2;
           await nazu.groupParticipantsUpdate(from, [promoteTargetJid], 'promote').catch(e => console.error('Erro ao promover usuário:', e));
@@ -29206,6 +29231,31 @@ break;
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
           if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
           if (!isBotAdmin) return sendAbyssWarning("Eu preciso ser administrador para realizar esta ação.");
+          
+          // Carrega groupData para verificação anti-roubo
+          const groupFilePathDemote = './dados/database/grupos/' + from.split('@')[0] + '@lid.json';
+          const groupDataDemote = fs.existsSync(groupFilePathDemote) ? JSON.parse(fs.readFileSync(groupFilePathDemote, 'utf-8')) : {};
+
+          // ANTI-ROUBO: Verifica se executor é permitido
+          const hasAntiRoubo = groupDataDemote?.antiRoubo?.enabled;
+          if (hasAntiRoubo) {
+            const groupMetadata = await nazu.groupMetadata(from);
+            const groupCreator = groupMetadata?.owner?.split('@')[0] || '';
+            const senderNum = sender.split('@')[0];
+            const isCreator = senderNum === groupCreator;
+            
+            // Verifica se é admin permitido
+            const isAuth = groupDataDemote?.antiRoubo?.authorizedUsers?.some(u => {
+              const authNum = (u.split('@')[0] || '').replace(/\D/g, '');
+              const senderNormalized = (senderNum || '').replace(/\D/g, '');
+              return authNum === senderNormalized || authNum.includes(senderNormalized) || senderNormalized.includes(authNum);
+            });
+            
+            if (!isCreator && !isAuth) {
+              return reply("🚫 *Anti-Roubo ativo!* Você não tem permissão para rebaixar usuários.\n\nSomente o Dono do Grupo ou admins autorizados podem usar este comando.");
+            }
+          }
+          
           if (!menc_os2) return reply("Marque alguém 🙄");
           const demoteTargetJid = mencOs2JidOriginal || menc_os2;
           await nazu.groupParticipantsUpdate(from, [demoteTargetJid], 'demote').catch(e => console.error('Erro ao rebaixar usuário:', e));
