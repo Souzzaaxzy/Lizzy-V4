@@ -21720,7 +21720,7 @@ Precisa de ajuda? Entre em contato:
           if (!q && !isImage && !isVideo && !isQuotedImage && !isQuotedVideo) return reply('Digite ou marque uma imagem/vídeo! Exemplo: '+ groupPrefix + 'tm Olá a todos!');
           const rodape = `
 
-в•°в"Ғв"Ғв"Ғв"Ғв"Ғв"Ғв"Ғв"Ғв"Ғв"Ғв"Ғв"Ғв"Ғв"Ғв"Ғв"Ғв"Ғв"Ғв"Ғв"Ғв"Ғв"Ғв"Ғв"Ғв"Ғв"Ғв"Ғв"Ғв"Ғв"Ғв"Ғв¬Ј
+━━━━━━━━━━━━━━━━━━━━━━
 > By ${nomedono}`;
           const newsletterContext = {
             forwardingScore: 999,
