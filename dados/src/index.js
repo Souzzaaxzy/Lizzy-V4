@@ -15716,66 +15716,6 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
         }
         break;
       }
-      case 'imagine':
-        try {
-          if (!q) return reply(`❌ Informe uma descrição para gerar a imagem.
-
-*Exemplo:*
-${groupPrefix}imagine um dragão azul voando sobre um castelo medieval`);
-          
-          // Verificar limite diário
-          const imagineDbPath = path.join(__dirname, 'funcs', 'json', 'imagine.json');
-          const imagineDb = fs.existsSync(imagineDbPath) ? JSON.parse(fs.readFileSync(imagineDbPath, 'utf-8')) : { users: {} };
-          
-          // Administradores e dono têm uso ilimitado
-          const isAdminOrOwner = isGroupAdmin || isOwner;
-          
-          if (!isAdminOrOwner) {
-            const hoje = new Date().toISOString().split('T')[0];
-            const userData = imagineDb.users?.[sender] || {};
-            
-            // Reset se mudou o dia
-            if (userData.ultimaDataReset !== hoje) {
-              imagineDb.users = imagineDb.users || {};
-              imagineDb.users[sender] = { usosHoje: 0, ultimaDataReset: hoje };
-              fs.writeFileSync(imagineDbPath, JSON.stringify(imagineDb, null, 2));
-            }
-            
-            const usos = imagineDb.users?.[sender]?.usosHoje || 0;
-            const limite = 5;
-            
-            if (usos >= limite) {
-              return reply(`❌ Você atingiu o limite diário de geração de imagens.
-
-*Limite diário:*
-🖼️ ${limite} imagens por dia
-
-Seu limite será renovado automaticamente à meia-noite.`);
-            }
-            
-            // Incrementar uso
-            imagineDb.users = imagineDb.users || {};
-            imagineDb.users[sender] = imagineDb.users[sender] || { ultimaDataReset: hoje };
-            imagineDb.users[sender].usosHoje = (imagineDb.users[sender].usosHoje || 0) + 1;
-            fs.writeFileSync(imagineDbPath, JSON.stringify(imagineDb, null, 2));
-          }
-          
-          // Gerar e enviar imagem diretamente
-          const imageUrl = await ia.generateImageGroq(q);
-          
-          if (imageUrl) {
-            await nazu.sendMessage(from, {
-              image: { url: imageUrl },
-              caption: `🖼️ *Imagem gerada com sucesso!*
-
-📝 *Prompt:* ${q}`
-            }, { quoted: info });
-          }
-        } catch (imgError) {
-          console.error('Erro ao gerar imagem:', imgError);
-          await reply('😓 Ocorreu um erro ao gerar a imagem. Tente novamente mais tarde.');
-        }
-        break;
       case 'cog':
         if (!q) return reply(`📢 Ei, falta a pergunta! Me diga o que quer saber após o comando ${groupPrefix}cog! 😴`);
         reply('⏳ Um momentinho, estou pensando na melhor resposta... 🌟').then(() => {
