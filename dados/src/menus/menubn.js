@@ -39,10 +39,10 @@ export default async function menubn(prefix, botName = "MeuBot", userName = "Usu
 
 
 
-╭━━━〔 💬 NGL 〕━━━⬣
-┃ ${prefix}setngl
-┃ ${prefix}ngl
-╰━━━━━━━━━━━━━━⬣
+╭─❖ 💬 NGL ANÔNIMO
+│ 🌐 ${prefix}setngl
+│ 💬 ${prefix}ngl
+╰──────────────
 
 ╭─❖ 💬 FRASES & TEXTOS
 │ 💡 ${prefix}conselho
