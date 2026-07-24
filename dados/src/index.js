@@ -21718,10 +21718,16 @@ Precisa de ajuda? Entre em contato:
         try {
           if (!isOwner) return reply("Este comando é apenas para o meu dono 💔");
           if (!q && !isImage && !isVideo && !isQuotedImage && !isQuotedVideo) return reply('Digite ou marque uma imagem/vídeo! Exemplo: '+ groupPrefix + 'tm Olá a todos!');
-          const rodape = `
+          const cabecalho = `╭━━━〔 🤖 ${nomebot} • TRANSMISSÃO 〕━━━⬣
 
-━━━━━━━━━━━━━━━━━━━━━━
-> By ${nomedono}`;
+📝 Mensagem:
+${q || '[conteúdo da mídia]'}
+
+
+╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━⬣
+
+«✨ By ${nomedono}»
+`;
           const newsletterContext = {
             forwardingScore: 999,
             isForwarded: true,
@@ -21741,7 +21747,7 @@ Precisa de ajuda? Entre em contato:
             const textoFinal = q || captionOriginal;
             baseMessage = {
               image,
-              caption: textoFinal ? `${textoFinal}${rodape}` : `Mensagem vazia${rodape}`
+              caption: textoFinal ? `${cabecalho}${textoFinal}` : cabecalho.trim()
             };
             hasMedia = true;
             mediaType = 'image';
@@ -21753,7 +21759,7 @@ Precisa de ajuda? Entre em contato:
             const textoFinal = q || captionOriginal;
             baseMessage = {
               video,
-              caption: textoFinal ? `${textoFinal}${rodape}` : `Mensagem vazia${rodape}`
+              caption: textoFinal ? `${cabecalho}${textoFinal}` : cabecalho.trim()
             };
             hasMedia = true;
             mediaType = 'video';
@@ -21763,7 +21769,7 @@ Precisa de ajuda? Entre em contato:
             const image = await getFileBuffer(info.message.extendedTextMessage.contextInfo.quotedMessage.imageMessage, 'image');
             baseMessage = {
               image,
-              caption: q ? `${q}${rodape}` : `Mensagem vazia${rodape}`
+              caption: q ? `${cabecalho}${q}` : cabecalho.trim()
             };
             hasMedia = true;
             mediaType = 'image';
@@ -21773,7 +21779,7 @@ Precisa de ajuda? Entre em contato:
             const video = await getFileBuffer(info.message.extendedTextMessage.contextInfo.quotedMessage.videoMessage, 'video');
             baseMessage = {
               video,
-              caption: q ? `${q}${rodape}` : `Mensagem vazia${rodape}`
+              caption: q ? `${cabecalho}${q}` : cabecalho.trim()
             };
             hasMedia = true;
             mediaType = 'video';
@@ -21781,7 +21787,7 @@ Precisa de ajuda? Entre em contato:
           // Apenas texto
           else {
             baseMessage = {
-              text: `${q}${rodape}`
+              text: `${cabecalho}${q}`
             };
           }
           const groups = await nazu.groupFetchAllParticipating();
@@ -21888,7 +21894,7 @@ Precisa de ajuda? Entre em contato:
             const textoFinal = q || captionOriginal;
             baseMessage = {
               image,
-              caption: textoFinal ? `${textoFinal}${rodape}` : `Mensagem vazia${rodape}`
+              caption: textoFinal ? `${cabecalho}${textoFinal}` : cabecalho.trim()
             };
           }
           // Verifica se a mensagem atual tem vídeo
@@ -21898,7 +21904,7 @@ Precisa de ajuda? Entre em contato:
             const textoFinal = q || captionOriginal;
             baseMessage = {
               video,
-              caption: textoFinal ? `${textoFinal}${rodape}` : `Mensagem vazia${rodape}`
+              caption: textoFinal ? `${cabecalho}${textoFinal}` : cabecalho.trim()
             };
           }
           // Verifica se cita uma imagem
@@ -21906,7 +21912,7 @@ Precisa de ajuda? Entre em contato:
             const image = await getFileBuffer(info.message.extendedTextMessage.contextInfo.quotedMessage.imageMessage, 'image');
             baseMessage = {
               image,
-              caption: q ? `${q}${rodape}` : `Mensagem vazia${rodape}`
+              caption: q ? `${cabecalho}${q}` : cabecalho.trim()
             };
           }
           // Verifica se cita um vídeo
@@ -21914,13 +21920,13 @@ Precisa de ajuda? Entre em contato:
             const video = await getFileBuffer(info.message.extendedTextMessage.contextInfo.quotedMessage.videoMessage, 'video');
             baseMessage = {
               video,
-              caption: q ? `${q}${rodape}` : `Mensagem vazia${rodape}`
+              caption: q ? `${cabecalho}${q}` : cabecalho.trim()
             };
           }
           // Apenas texto
           else {
             baseMessage = {
-              text: `${q}${rodape}`
+              text: `${cabecalho}${q}`
             };
           }
           const totalSubscribers = subscribers.length;
