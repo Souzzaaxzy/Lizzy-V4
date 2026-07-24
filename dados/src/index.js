@@ -20733,7 +20733,6 @@ break;
         }
         break;
       case 'menubn':
-      case 'antisocial':
       case 'menubrincadeira':
       case 'menubrincadeiras':
       case 'gamemenu':
@@ -35698,7 +35697,7 @@ ${groupPrefix}setngl https://ngl.link/...`);
           reply("Ocorreu um erro 💔");
         }
         break;
-      case 'antirede':
+      case 'antisocial':
       case 'popular':
       case 'solitario':
       case 'lider':
