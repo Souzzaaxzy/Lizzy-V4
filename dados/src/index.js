@@ -1531,160 +1531,6 @@ const ensureDatabaseIntegrity = ({ log = false, force = false } = {}) => {
 ensureDatabaseIntegrity();
 const buildGroupFilePath = (groupId) => pathz.join(GRUPOS_DIR, `${groupId}.json`);
 // ========================
-// SISTEMA DE LIXEIRA
-// ========================
-const EXPIRATION_TIME = 5 * 60 * 60 * 1000;
-function normalizeGroupId(groupId) {
-  if (!groupId) return null;
-  return groupId.replace(/@g\.us$/, '').replace(/[^0-9\-]/g, '_') + '@g.us';
-}
-function getTrashMessages(groupId) {
-  try {
-    const normId = normalizeGroupId(groupId);
-    if (!normId) return [];
-    const filePath = buildGroupFilePath(normId);
-    if (!fs.existsSync(filePath)) return [];
-    const gd = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    if (!gd || !Array.isArray(gd.trashMessages)) return [];
-    return gd.trashMessages;
-  } catch (e) {
-    console.error('Erro ao obter mensagens da lixeira:', e);
-    return [];
-  }
-}
-function addToTrash(groupId, messageData) {
-  try {
-    const normId = normalizeGroupId(groupId);
-    if (!normId) return false;
-    const filePath = buildGroupFilePath(normId);
-    // Garantir que o diretório existe
-    if (!fs.existsSync(GRUPOS_DIR)) {
-      fs.mkdirSync(GRUPOS_DIR, { recursive: true });
-    }
-    // Carregar dados existentes ou criar novo
-    let gd = {};
-    if (fs.existsSync(filePath)) {
-      try {
-        gd = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-      } catch (e) {
-        console.error('Erro ao ler arquivo do grupo, criando novo:', e);
-        gd = {};
-      }
-    }
-    // Inicializar array se necessário
-    if (!gd.trashMessages) gd.trashMessages = [];
-    // Verificar se mensagem já existe (evitar duplicatas)
-    const exists = gd.trashMessages.some(m => m.messageId === messageData.messageId);
-    if (exists) return true; // Já existe, não duplicar
-    const trashItem = {
-      messageId: messageData.messageId,
-      groupId: normId,
-      authorJid: messageData.authorJid,
-      authorName: messageData.authorName,
-      sentAt: messageData.sentAt || Date.now(),
-      deletedAt: Date.now(),
-      expiresAt: Date.now() + EXPIRATION_TIME,
-      messageType: messageData.messageType || 'desconhecido',
-      content: messageData.content || '',
-      mediaPath: messageData.mediaPath || null,
-      messageObj: messageData.messageObj || null
-    };
-    gd.trashMessages.push(trashItem);
-    writeJsonFile(filePath, gd);
-    console.log(`[LIXEIRA] Mensagem salva: ${messageData.messageId} em ${normId}`);
-    return true;
-  } catch (e) {
-    console.error('Erro ao adicionar mensagem na lixeira:', e);
-    return false;
-  }
-}
-function removeFromTrash(groupId, messageId) {
-  try {
-    const normId = normalizeGroupId(groupId);
-    if (!normId) return false;
-    const filePath = buildGroupFilePath(normId);
-    if (!fs.existsSync(filePath)) return false;
-    const gd = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    if (!gd || !gd.trashMessages) return false;
-    const beforeCount = gd.trashMessages.length;
-    gd.trashMessages = gd.trashMessages.filter(m => m.messageId !== messageId);
-    if (gd.trashMessages.length !== beforeCount) {
-      writeJsonFile(filePath, gd);
-      return true;
-    }
-    return false;
-  } catch (e) {
-    console.error('Erro ao remover mensagem da lixeira:', e);
-    return false;
-  }
-}
-function getTrashItem(groupId, index) {
-  try {
-    const normId = normalizeGroupId(groupId);
-    if (!normId) return null;
-    const filePath = buildGroupFilePath(normId);
-    if (!fs.existsSync(filePath)) return null;
-    const gd = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    if (!gd || !gd.trashMessages) return null;
-    const now = Date.now();
-    let validMessages = gd.trashMessages.filter(m => m.expiresAt > now);
-    // Atualizar arquivo se houver mensagens expiradas
-    if (validMessages.length !== gd.trashMessages.length) {
-      gd.trashMessages = validMessages;
-      writeJsonFile(filePath, gd);
-    }
-    if (index < 0 || index >= validMessages.length) return null;
-    return validMessages[index];
-  } catch (e) {
-    console.error('Erro ao obter item da lixeira:', e);
-    return null;
-  }
-}
-function getMessageType(msgObj) {
-  if (!msgObj || !msgObj.message) return 'desconhecido';
-  const msg = msgObj.message;
-  if (msg.conversation || msg.extendedTextMessage?.text) return 'texto';
-  if (msg.imageMessage) return 'imagem';
-  if (msg.videoMessage) return 'video';
-  if (msg.audioMessage) return 'audio';
-  if (msg.stickerMessage) return 'figurinha';
-  if (msg.documentMessage) return 'documento';
-  if (msg.locationMessage) return 'localizacao';
-  if (msg.contactsMessage || msg.contactMessage) return 'contato';
-  if (msg.pollCreationMessage) return 'enquete';
-  if (msg.reactionMessage) return 'reacao';
-  if (msg.listMessage) return 'lista';
-  return 'outro';
-}
-function extractMessageText(msgObj) {
-  if (!msgObj || !msgObj.message) return '';
-  const msg = msgObj.message;
-  if (msg.conversation) return msg.conversation;
-  if (msg.extendedTextMessage?.text) return msg.extendedTextMessage.text;
-  if (msg.imageMessage?.caption) return msg.imageMessage.caption;
-  if (msg.videoMessage?.caption) return msg.videoMessage.caption;
-  if (msg.documentMessage?.caption) return msg.documentMessage.caption;
-  return '';
-}
-function cleanupExpiredMessages(groupId) {
-  try {
-    const normId = normalizeGroupId(groupId);
-    if (!normId) return;
-    const filePath = buildGroupFilePath(normId);
-    if (!fs.existsSync(filePath)) return;
-    const gd = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    if (!gd || !gd.trashMessages) return;
-    const now = Date.now();
-    const beforeCount = gd.trashMessages.length;
-    gd.trashMessages = gd.trashMessages.filter(m => m.expiresAt > now);
-    if (gd.trashMessages.length !== beforeCount) {
-      writeJsonFile(filePath, gd);
-      console.log(`[LIXEIRA] Limpeza: ${beforeCount - gd.trashMessages.length} mensagens expiradas removidas`);
-    }
-  } catch (e) {
-    console.error('Erro ao limpar mensagens expiradas:', e);
-  }
-}
 let packageJson = {};
 try {
   packageJson = JSON.parse(fs.readFileSync(PACKAGE_JSON_PATH, 'utf-8'));
@@ -2972,7 +2818,6 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     const isAntiLinkGp = groupData.antilinkgp;
     const isAntiLinkCanal = groupData.antilinkcanal;
     const isAntiLinkSoft = groupData.antilinksoft;
-    const isAntiDel = groupData.antidel;
     const isAntiBtn = groupData.antibtn;
     const isAntiFoton = groupData.antifoton;
     const isAntiAudio = groupData.antiaudio;
@@ -3205,122 +3050,6 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     }
     if (isGroup && isCmd && isOnlyAdmin && !isGroupAdmin && !soadmBypassCommands.includes(command)) {
       return;
-    }
-    // LIXEIRA: Salvar mensagem apagada (sempre, independent do anti-del)
-    if (isGroup && info.message.protocolMessage && info.message.protocolMessage.type === 0) {
-      try {
-        const deletedMsgKey = info.message.protocolMessage.key;
-        const deletedMsgId = deletedMsgKey?.id;
-        const deletedMsgRemoteJid = deletedMsgKey?.remoteJid;
-        const cacheKey = `${deletedMsgRemoteJid || from}_${deletedMsgId}`;
-        console.log(`[LIXEIRA] Evento detectado - cacheKey: ${cacheKey}, isGroup: ${isGroup}`);
-        const cachedInfo = messagesCache.get(cacheKey);
-        if (cachedInfo && cachedInfo.message) {
-          const msgOriginal = cachedInfo.message;
-          const fromGroup = cachedInfo.key?.remoteJid || deletedMsgRemoteJid || from;
-          const participant = cachedInfo.key?.participant || deletedMsgKey?.participant || info.message.protocolMessage.key?.participant;
-          console.log(`[LIXEIRA] Mensagem encontrada no cache - fromGroup: ${fromGroup}, participant: ${participant}`);
-          if (participant) {
-            let userName = cachedInfo?.pushName || participant.split('@')[0];
-            try {
-              const fetchedName = await nazu.getName(fromGroup, participant);
-              if (fetchedName && fetchedName !== participant.split('@')[0]) {
-                userName = fetchedName;
-              }
-            } catch (e) {}
-            // Salvar na lixeira
-            const saveResult = addToTrash(fromGroup, {
-              messageId: deletedMsgId,
-              authorJid: participant,
-              authorName: userName,
-              sentAt: msgOriginal?.messageTimestamp ? msgOriginal.messageTimestamp * 1000 : Date.now(),
-              messageType: getMessageType(msgOriginal),
-              content: extractMessageText(msgOriginal),
-              mediaPath: null,
-              messageObj: msgOriginal
-            });
-            if (saveResult) {
-              console.log(`[LIXEIRA] Mensagem ${deletedMsgId} salva com sucesso para ${fromGroup}`);
-            } else {
-              console.log(`[LIXEIRA] Falha ao salvar mensagem ${deletedMsgId}`);
-            }
-          } else {
-            console.log(`[LIXEIRA] Participant não encontrado`);
-          }
-        } else {
-          console.log(`[LIXEIRA] Mensagem não encontrada no cache: ${cacheKey}, cacheSize: ${messagesCache?.size || 0}`);
-        }
-      } catch (e) {
-        console.error('[LIXEIRA] Erro ao salvar mensagem deletada:', e.message);
-      }
-    }
-    // ANTI-DEL: Continuar apenas se ativo
-    if (isGroup && info.message.protocolMessage && info.message.protocolMessage.type === 0 && isAntiDel) {
-      const deletedMsgKey = info.message.protocolMessage.key;
-      const cacheKey = `${deletedMsgKey.remoteJid || from}_${deletedMsgKey.id}`;
-      const cachedInfo = messagesCache.get(cacheKey);
-      if (!cachedInfo || !cachedInfo.message) return;
-      const msgOriginal = cachedInfo.message;
-      const clone = JSON.parse(
-        JSON.stringify(msgOriginal)
-          .replaceAll('conversation', 'text')
-          .replaceAll('Message', '')
-      );
-      for (const key in clone) {
-        const media = clone[key];
-        if (media && typeof media === 'object' && media.url) {
-          clone[key] = {
-            url: media.url
-          };
-          for (const subkey in media) {
-            if (subkey !== 'url') {
-              clone[subkey] = media[subkey];
-            }
-          }
-        }
-      }
-      const participant = cachedInfo.key.participant || info.message.protocolMessage.key.participant;
-      const fromGroup = cachedInfo.key.remoteJid;
-      if (!participant) return;
-      let userName = 'Usuário Desconhecido';
-      let profilePic = 'https://telegra.ph/file/b5427ea4b8701bc47e751.jpg';
-      const pushNameFromMsg = cachedInfo?.pushName || '';
-      if (pushNameFromMsg) {
-        userName = pushNameFromMsg;
-      } else {
-        try {
-          const fetchedName = await nazu.getName(fromGroup, participant);
-          const numeroLimpoFallback = participant.split('@')[0];
-          if (fetchedName && fetchedName !== numeroLimpoFallback) {
-            userName = fetchedName;
-          } else {
-            userName = numeroLimpoFallback;
-          }
-        } catch (e) {
-          userName = participant.split('@')[0];
-        }
-      }
-      try {
-        profilePic = await nazu.profilePictureUrl(participant, 'image');
-      } catch (e) {
-      }
-      clone.contextInfo = {
-        isForwarded: false,
-        mentionedJid: [participant],
-        externalAdReply: {
-          title: `MENSAGEM APAGADA POR: ${userName}`,
-          body: `Número: ${participant.split("@")[0]}`,
-          thumbnailUrl: profilePic,
-          sourceUrl: '',
-          mediaType: 1,
-          renderLargerThumbnail: false,
-        },
-      };
-      try {
-        await nazu.sendMessage(fromGroup, clone);
-      } catch (err) {
-        console.error('ERRO CRÍTICO AO REENVIAR MENSAGEM:', err);
-      }
     }
     if (isGroup && isCmd && !isGroupAdmin && groupData.blockedCommands && groupData.blockedCommands[command]) {
       await reply('⛔ Este comando foi bloqueado pelos administradores do grupo.');
@@ -26888,7 +26617,6 @@ ${groupPrefix}togglecmdvip premium_ia off`);
             ["AntiLoc", !!groupData.antiloc],
             ["AntiBtn", !!groupData.antibtn],
             ["AntiStatus", !!groupData.antistatus],
-            ["AntiDelete", !!groupData.antidel],
             ["AntiStatus V2", !!isAntiStts],
             ["AntiPagamento", !!isAntirequestPaymentMessage],
             ["AntiSticker", !!(groupData.antifig && groupData.antifig.enabled)],
@@ -30345,7 +30073,6 @@ break;
             { key: 'antiloc', name: 'Antiloc', isObject: false },
             { key: 'antistatus', name: 'Antistatus', isObject: false },
             { key: 'antiStts', name: 'Antistts', isObject: false },
-            { key: 'antidel', name: 'Antidelete', isObject: false },
             { key: 'antirequest', name: 'Antipagamento', isObject: false },
             { key: 'antistickerplus', name: 'Antistickerplus', isObject: true },
             { key: 'antifoton', name: 'Antifoton', isObject: false },
@@ -31006,27 +30733,6 @@ break;
           groupData.antiRoubo.authorizedUsers.splice(idx, 1);
           fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
           await reply(`✅ @${userNum} removido da lista de autorizados!`, { mentions: [userJid] });
-        } catch (e) {
-          console.error(e);
-          await reply("Ocorreu um erro 💔");
-        }
-        break;
-      case 'antidelete':
-        try {
-          if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!isGroupAdmin) return reply("Você precisa ser adm 💔");
-          if (!isBotAdmin) return reply("Eu preciso ser adm para isso 💔");
-          groupData.antidel = !groupData.antidel;
-          fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
-          const newsletterCtxDel = {
-            forwardingScore: 999,
-            isForwarded: true,
-            forwardedNewsletterMessageInfo: {
-              newsletterJid: "120363410980452460@newsletter",
-              newsletterName: "Lizzy"
-            }
-          };
-          await nazu.sendMessage(from, { text: `✅ Antidelete ${groupData.antidel ? 'ativado' : 'desativado'}!` , contextInfo: newsletterCtxDel, quoted: info });
         } catch (e) {
           console.error(e);
           await reply("Ocorreu um erro 💔");
@@ -33672,140 +33378,6 @@ ${groupPrefix}nota buscar <termo> - Busca nas notas`);
       // COMANDOS DE FIXAR/DESFIXAR FORAM REMOVIDOS
       // A API do WhatsApp não suporta fixar mensagens individuais em grupos
       // ========================
-      // COMANDOS DA LIXEIRA
-      // ========================
-      case 'lixeira':
-      case 'trash':
-      case 'lixo': {
-        if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
-        // Verificar permissoes (dono, admin, MOD, ALPHA)
-        const isBotOwner = isOwnerOrSub;
-        const isGroupAdmin = sender in groupAdmins;
-        const isModOrAlpha = (groupData.roles && groupData.roles[sender] && 
-          (groupData.roles[sender].includes('MOD') || groupData.roles[sender].includes('ALPHA')));
-        if (!isBotOwner && !isGroupAdmin && !isModOrAlpha) {
-          return reply("⛔ Você não tem permissão para usar este comando.");
-        }
-        // Limpar mensagens expiradas
-        cleanupExpiredMessages(from);
-        // Obter mensagens da lixeira
-        const trashMessages = getTrashMessages(from);
-        if (trashMessages.length === 0) {
-          return reply("🗑️ *Lixeira vazia*\n\nNenhuma mensagem apagada foi registrada neste grupo.");
-        }
-        // Mostrar ultimas 30 mensagens
-        const recentMessages = trashMessages.slice(-30).reverse();
-        let response = `🗑️ *LIXEIRA DO GRUPO*\n\nExibindo as últimas ${recentMessages.length} mensagem(ns) apagada(s):\n\n`;
-        recentMessages.forEach((msg, index) => {
-          const time = new Date(msg.sentAt);
-          const horario = `${time.getHours().toString().padStart(2, '0')}:${time.getMinutes().toString().padStart(2, '0')}`;
-          response += `${index + 1}. @${msg.authorName}\n`;
-          response += `Tipo: ${msg.messageType}\n`;
-          response += `Horário: ${horario}\n`;
-          if (msg.messageType === 'texto' && msg.content) {
-            response += `\n${msg.content}\n`;
-          } else if (msg.content) {
-            response += `\n${msg.content}\n`;
-          } else {
-            response += `\n[${msg.messageType.toUpperCase()}]\n`;
-          }
-          response += `\n`;
-        });
-        response += `\n📌 Use *${groupPrefix}restaurar <número>* para restaurar uma mensagem.`;
-        // Obter participants para mentions
-        const participants = [];
-        recentMessages.forEach(msg => {
-          if (msg.authorJid && !participants.includes(msg.authorJid)) {
-            participants.push(msg.authorJid);
-          }
-        });
-        return reply(response, { mentions: participants });
-        break;
-      }
-      case 'restaurar':
-      case 'restore': {
-        if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
-        // Verificar permissoes (dono, admin, MOD, ALPHA)
-        const isBotOwner = isOwnerOrSub;
-        const isGroupAdmin = sender in groupAdmins;
-        const isModOrAlpha = (groupData.roles && groupData.roles[sender] && 
-          (groupData.roles[sender].includes('MOD') || groupData.roles[sender].includes('ALPHA')));
-        if (!isBotOwner && !isGroupAdmin && !isModOrAlpha) {
-          return reply("⛔ Você não tem permissão para usar este comando.");
-        }
-        if (!args[0]) {
-          return reply(`📝 *Restaurar Mensagem*\n\nInforme o número da mensagem da lixeira.\n\nExemplo:\n${groupPrefix}restaurar 3`);
-        }
-        const index = parseInt(args[0]) - 1;
-        if (isNaN(index) || index < 0) {
-          return reply("❌ Número inválido! Use apenas números.");
-        }
-        // Limpar mensagens expiradas
-        cleanupExpiredMessages(from);
-        // Obter mensagem da lixeira
-        const trashItem = getTrashItem(from, index);
-        if (!trashItem) {
-          return reply("❌ Mensagem não encontrada na lixeira. Verifique o número informado.");
-        }
-        // Remover da lixeira apos restaura
-        removeFromTrash(from, trashItem.messageId);
-        try {
-          const msgObj = trashItem.messageObj;
-          if (!msgObj || !msgObj.message) {
-            if (trashItem.content) {
-              return reply(`📝 *Mensagem Restaurada*\n\n${trashItem.content}`);
-            }
-            return reply("❌ Não foi possível restaurar esta mensagem. O conteúdo não está disponível.");
-          }
-          // Reenviar mensagem conforme o tipo
-          if (msgObj.message.conversation || msgObj.message.extendedTextMessage) {
-            return await nazu.sendMessage(from, { text: trashItem.content || '' }, { quoted: info });
-          }
-          if (msgObj.message.imageMessage) {
-            const imgMsg = msgObj.message.imageMessage;
-            if (imgMsg.url) {
-              return await nazu.sendMessage(from, { image: { url: imgMsg.url }, caption: imgMsg.caption || '' });
-            }
-            return reply("🖼️ *Imagem*\n\nO arquivo da imagem não está mais disponível para restauração.");
-          }
-          if (msgObj.message.videoMessage) {
-            const vidMsg = msgObj.message.videoMessage;
-            if (vidMsg.url) {
-              return await nazu.sendMessage(from, { video: { url: vidMsg.url }, caption: vidMsg.caption || '' });
-            }
-            return reply("🎬 *Vídeo*\n\nO arquivo do vídeo não está mais disponível para restauração.");
-          }
-          if (msgObj.message.audioMessage) {
-            const audMsg = msgObj.message.audioMessage;
-            if (audMsg.url) {
-              return await nazu.sendMessage(from, { audio: { url: audMsg.url }, mimetype: audMsg.mimetype });
-            }
-            return reply("🎵 *Áudio*\n\nO arquivo de áudio não está mais disponível para restauração.");
-          }
-          if (msgObj.message.stickerMessage) {
-            const stickerMsg = msgObj.message.stickerMessage;
-            if (stickerMsg.url) {
-              return await nazu.sendMessage(from, { sticker: { url: stickerMsg.url } });
-            }
-            return reply("💎 *Figurinha*\n\nO arquivo da figurinha não está mais disponível para restauração.");
-          }
-          if (msgObj.message.documentMessage) {
-            const docMsg = msgObj.message.documentMessage;
-            if (docMsg.url) {
-              return await nazu.sendMessage(from, { document: { url: docMsg.url }, fileName: docMsg.fileName, mimetype: docMsg.mimetype, caption: docMsg.caption || '' });
-            }
-            return reply("📄 *Documento*\n\nO arquivo do documento não está mais disponível para restauração.");
-          }
-          if (trashItem.content) {
-            return reply(`📝 *Mensagem Restaurada*\n\n${trashItem.content}`);
-          }
-          return reply(`❌ Tipo de mensagem não suportado para restauração: ${trashItem.messageType}`);
-        } catch (err) {
-          console.error('Erro ao restaurar mensagem:', err);
-          return reply("❌ Erro ao restaurar a mensagem. Tente novamente.");
-        }
-        break;
-      }
       case 'notas':
       case 'notes':
         if (!notes) return reply("Sistema de notas temporariamente indisponível.");
