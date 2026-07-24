@@ -2819,7 +2819,6 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     const isAntiLinkCanal = groupData.antilinkcanal;
     const isAntiLinkSoft = groupData.antilinksoft;
     const isAntiDel = groupData.antidel;
-    const isAntiInvi = groupData.antiinvi;
     const isAntiBtn = groupData.antibtn;
     const isAntiFoton = groupData.antifoton;
     const isAntiAudio = groupData.antiaudio;
@@ -2949,42 +2948,81 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
           } catch (e) {}
        }
     }
-    // Anti-Mensagem Invisível - Baseado em dados reais de ataque
+    // Anti-Mensagem Invisível (rajadas de payment) - integrado ao antipagamento
     // Detecta requestPaymentMessage com amount=0 (rajada invisível)
-    if (isAntiInvi && info.message?.requestPaymentMessage && !info.key.fromMe && isGroup) {
+    if (info.message?.requestPaymentMessage && !info.key.fromMe && isGroup) {
       const paymentMsg = info.message.requestPaymentMessage;
       const amount = parseInt(paymentMsg.amount1000) || 0;
       
       // Obter remetente real (pode ser LID ou número)
       const realSender = info.key?.participantAlt || info.key?.participant || sender;
       
-      console.log('═══════════════════════════════════════════════════');
-      console.log('[ANTI-PAYMENT-RAJADA] 🚨 RAJADA DE PAGAMENTO DETECTADA!');
-      console.log(`[ANTI-PAYMENT-RAJADA] 👤 De: ${realSender}`);
-      console.log(`[ANTI-PAYMENT-RAJADA] 👥 Group: ${from}`);
-      console.log(`[ANTI-PAYMENT-RAJADA] 💰 Amount: ${amount}`);
-      console.log(`[ANTI-PAYMENT-RAJADA] 📝 Note: ${paymentMsg.noteMessage?.extendedTextMessage?.text || 'N/A'}`);
-      console.log('═══════════════════════════════════════════════════');
-      
-      // Se amount é 0 e tem texto na nota, é ataque de rajada
+      // Se amount é 0 e tem texto na nota, é ataque de rajada invisível
       if (amount === 0 && paymentMsg.noteMessage?.extendedTextMessage?.text) {
-        console.log('[ANTI-PAYMENT-RAJADA] ⚠️ ATACANTE IDENTIFICADO!');
+        console.log('═══════════════════════════════════════════════════');
+        console.log('[ANTI-INVISIVEL] 🚨 RAJADA INVISÍVEL DETECTADA!');
+        console.log(`[ANTI-INVISIVEL] 👤 De: ${realSender}`);
+        console.log(`[ANTI-INVISIVEL] 👥 Group: ${from}`);
+        console.log(`[ANTI-INVISIVEL] 📝 Texto: ${paymentMsg.noteMessage.extendedTextMessage.text}`);
+        console.log('═══════════════════════════════════════════════════');
         
-        // Adicionar à blacklist antipagamento automaticamente
-        const groupFile = buildGroupFilePath(from);
-        let groupData = {};
-        try {
-          if (fs.existsSync(groupFile)) {
-            groupData = JSON.parse(fs.readFileSync(groupFile, 'utf-8'));
+        // Se antipagamento está ativo, bloquear e remover
+        if (isAntirequestPaymentMessage && isBotAdmin && !isGroupAdmin && !isUserWhitelisted(sender, 'antipagamento')) {
+          const newsletterCtxPayment = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          
+          // Tentar apagar a mensagem de payment
+          try {
+            const msgcagada = await nazu.sendMessage(from, { text: '' });
+            const idEditada = msgcagada.key.id;
+            if (idEditada) {
+              await nazu.sendMessage(from, {
+                text: '🗑️ Mensagem invisível removida',
+                edit: { id: idEditada }
+              }, { messageId: info.key.id });
+              await sleep(500);
+              await nazu.sendMessage(from, {
+                delete: {
+                  remoteJid: from,
+                  id: info.key.id,
+                  fromMe: false,
+                  participant: realSender
+                }
+              }).catch(e => console.log('[ANTI-INVISIVEL] Erro ao deletar:', e.message));
+              await sleep(500);
+              try {
+                await nazu.sendMessage(from, {
+                  delete: {
+                    remoteJid: from,
+                    id: idEditada,
+                    fromMe: true
+                  }
+                });
+              } catch (e) {}
+            }
+          } catch (e) {
+            console.log('[ANTI-INVISIVEL] Erro ao apagar:', e.message);
           }
-        } catch (e) {}
-        
-        groupData.whitelist = groupData.whitelist || {};
-        groupData.whitelist.antipagamento = groupData.whitelist.antipagamento || {};
-        groupData.whitelist.antipagamento[realSender] = true;
-        
-        fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
-        console.log(`[ANTI-PAYMENT-RAJADA] ✅ ${realSender} adicionado à blacklist antipagamento`);
+          
+          // Enviar aviso
+          await nazu.sendMessage(from, {
+            text: `🚫❌ @${sender.split('@')[0]} ❌🚫
+
+⚠️ *Mensagem invisível (rajada) não é permitida aqui!* ⚠️
+
+Você foi removido do grupo.`,
+            mentions: [sender]
+          , contextInfo: newsletterCtxPayment, quoted: info });
+          
+          // Remover invasor
+          await nazu.groupParticipantsUpdate(from, [realSender], 'remove').catch(e => console.error('Erro ao remover (invisível):', e));
+        }
       }
     }
     // Lógica Anti-Pagamento (antipagamento/antirequest)
@@ -26716,7 +26754,6 @@ ${groupPrefix}togglecmdvip premium_ia off`);
             ["AntiSticker", !!(groupData.antifig && groupData.antifig.enabled)],
             ["AntiSticker Plus", !!(groupData.antistickerplus)],
             ["AntiDelete", !!groupData.antidel],
-            ["AntiInvi", !!groupData.antiinvi],
                       ];
           const resFlags = [
             ["AutoDL", !!groupData.autodl],
@@ -30175,7 +30212,6 @@ break;
             { key: 'antiaudio', name: 'Antiaudio', isObject: false },
             { key: 'antigore', name: 'Antigore', isObject: false },
             { key: 'antidel', name: 'Antidelete', isObject: false },
-            { key: 'antiinvi', name: 'Anti-Invisível', isObject: false },
             { key: 'antisocial', name: 'AntiSocial', isObject: false, desc: 'Bloqueia links de redes sociais (Discord, Instagram, YouTube, TikTok e Spotify)' },
           ];
           // Verificar status de cada sistema
@@ -30831,29 +30867,6 @@ break;
           groupData.antiRoubo.authorizedUsers.splice(idx, 1);
           fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
           await reply(`✅ @${userNum} removido da lista de autorizados!`, { mentions: [userJid] });
-        } catch (e) {
-          console.error(e);
-          await reply("Ocorreu um erro 💔");
-        }
-        break;
-      case 'testeinvi':
-        try {
-          if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!isGroupAdmin) return reply("Você precisa ser adm 💔");
-          if (!isBotAdmin) return reply("Eu preciso ser adm para isso 💔");
-          groupData.antiinvi = !groupData.antiinvi;
-          fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
-          const newsletterCtxInvi = {
-            forwardingScore: 999,
-            isForwarded: true,
-            forwardedNewsletterMessageInfo: {
-              newsletterJid: "120363410980452460@newsletter",
-              newsletterName: "Lizzy"
-            }
-          };
-          await nazu.sendMessage(from, { text: `✅ Anti-Invisível ${groupData.antiinvi ? 'ativado' : 'desativado'}!
-
-Proteção contra rajadas de mensagens invisíveis (payment message com amount 0).` , contextInfo: newsletterCtxInvi, quoted: info });
         } catch (e) {
           console.error(e);
           await reply("Ocorreu um erro 💔");
