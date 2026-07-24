@@ -34223,7 +34223,7 @@ ${groupPrefix}setngl https://ngl.link/...`);
           reply("Ocorreu um erro 💔");
         }
         break;
-      case 'antisocial':
+      case 'antirede':
         if (!isGroup) return reply("❌ Este comando é só para grupos!");
         if (!isGroupAdmin) return reply("❌ Apenas administradores podem usar este comando!");
         const subCmd = args[0]?.toLowerCase();
@@ -35697,7 +35697,7 @@ ${groupPrefix}setngl https://ngl.link/...`);
           reply("Ocorreu um erro 💔");
         }
         break;
-      case 'antisocial':
+      case 'antirede':
       case 'popular':
       case 'solitario':
       case 'lider':
