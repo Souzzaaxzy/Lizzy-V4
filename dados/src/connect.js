@@ -20,7 +20,6 @@ import { buildUserId } from './utils/helpers.js';
 import msgCounter from './utils/msgCounter.js';
 // ATENÇÃO: Se o seu arquivo se chamado 'index-2(2).js', RENOMEIE PARA 'index.js'
 // ou mude o caminho abaixo para './index-2(2).js'
-import { handleGroupParticipantsUpdate } from './index.js';
 import { initCaptchaIndex, loadCaptchaJson, saveCaptchaJson } from './utils/captchaIndex.js';
 import CaptchaIndex from './utils/captchaIndex.js';
 // X9 System - Sistema de solicitações de entrada
@@ -866,9 +865,6 @@ async function loadGroupSettings(groupId) {
 
 
 
-
-
-// A função handleGroupParticipantsUpdate foi removida daqui e agora é importada 
 // diretamente do index.js para garantir que as correções de boas-vindas 
 // e mensagens de saída funcionem corretamente e de forma centralizada.
 
@@ -1772,9 +1768,6 @@ async function createBotSocket(authDir) {
                 });
             }
 
-            if (typeof handleGroupParticipantsUpdate === 'function') {
-                await handleGroupParticipantsUpdate(AbyssSock, updateData, numerodono);
-            }
         });
 
         let messagesListenerAttached = false;
