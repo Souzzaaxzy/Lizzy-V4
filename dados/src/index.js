@@ -19639,7 +19639,7 @@ case 'pin':
           reply("ocorreu um erro 💔");
         }
         break;
-            case 'tiktok':
+                  case 'tiktok':
       case 'tiktokaudio':
       case 'tiktokvideo':
       case 'tiktoks':
@@ -19649,7 +19649,6 @@ case 'pin':
         try {
           if (!q) return reply(`Digite um nome ou o link de um vídeo.
 > Ex: ${groupPrefix}${command} Gato`);
-          // Verificar se tem API key
           await nazu.sendMessage(from, { react: { text: '🔍', key: info.key } });
           let isTikTokUrl = q.includes('tiktok');
           const tiktokPromise = isTikTokUrl ? tiktok.dl(q) : tiktok.search(q);
@@ -19657,56 +19656,51 @@ case 'pin':
             .then(async (datinha) => {
               if (!datinha.ok) return reply(datinha.msg);
 
-              // Função para enviar vídeo com botão CTA
-              const sendVideoWithButton = async (videoData, index) => {
+              const sendVideo = async (videoData, index) => {
                 const url = videoData.urls?.[0];
                 if (!url) return;
 
                 const title = videoData.title || '';
                 const link = videoData.link || '';
 
-                // Criar mensagem interativa com botão CTA
                 try {
                   await nazu.sendMessage(from, {
                     video: { url },
-                    caption: title ? `📹 ${title}` : undefined,
-                    footer: link ? `🔗 ${link}` : undefined,
-                    buttons: [
-                      {
-                        buttonId: `tiktok_${index}`,
-                        buttonText: { displayText: '📲 Ver no TikTok' },
-                        type: 1
+                    caption: title,
+                    headerType: 4,
+                    contextInfo: {
+                      externalAdReply: {
+                        title: "Ver canal",
+                        body: "",
+                        thumbnailUrl: videoData.cover || "",
+                        sourceUrl: link || url,
+                        mediaType: 2,
+                        renderLargerThumbnail: false
                       }
-                    ],
-                    headerType: 4
+                    }
                   }, { quoted: info });
                 } catch (videoErr) {
-                  // Se falhar com botões, tenta enviar só o vídeo com caption
-                  console.error('Erro ao enviar vídeo com botão:', videoErr.message);
+                  console.error('Erro ao enviar vídeo:', videoErr.message);
                   await nazu.sendMessage(from, {
                     video: { url },
-                    caption: title ? `📹 ${title}\n\n🔗 ${link}` : undefined
+                    caption: title
                   }, { quoted: info });
                 }
               };
 
-              // Verificar se tem múltiplos resultados (search)
               const results = datinha.results;
               if (results && results.length > 0) {
-                // Enviar até 3 vídeos
-                const videosToSend = results.slice(0, 3);
+                const videosToSend = results.slice(0, 2);
                 for (let i = 0; i < videosToSend.length; i++) {
-                  await sendVideoWithButton(videosToSend[i], i);
-                  // Pequeno delay entre envios
+                  await sendVideo(videosToSend[i], i);
                   if (i < videosToSend.length - 1) {
                     await new Promise(resolve => setTimeout(resolve, 500));
                   }
                 }
               } else {
-                // Compatibilidade com formato antigo (um vídeo)
                 const urlz = datinha.urls?.[0];
                 if (urlz) {
-                  await sendVideoWithButton(datinha, 0);
+                  await sendVideo(datinha, 0);
                 }
               }
 
