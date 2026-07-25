@@ -18687,7 +18687,7 @@ case 'addaluguel':
           const cmdName = q.trim().toLowerCase();
           
           // Lista de comandos de brincadeira válidos
-          const validCommands = ['tapa', 'soco', 'socar', 'beijo', 'beijar', 'beijob', 'beijarb', 'abraco', 'abracar', 'mata', 'matar', 'tapar', 'goza', 'gozar', 'mamar', 'mamada', 'cafune', 'morder', 'mordida', 'lamber', 'lambida', 'explodir', 'sexo', 'siririca', 'punheta', 'chute', 'chutar', 'tomate', 'compatibilidade'];
+          const validCommands = ['tapa', 'soco', 'socar', 'beijo', 'beijar', 'beijob', 'beijarb', 'abraco', 'abracar', 'mata', 'matar', 'tapar', 'goza', 'gozar', 'mamar', 'mamada', 'cafune', 'morder', 'mordida', 'lamber', 'lambida', 'explodir', 'sexo', 'siririca', 'punheta', 'chute', 'chutar', 'tomate', 'compatibilidade', 'rankputo', 'rankputa', 'rankpauzudo', 'rankbucetuda'];
           
           if (!validCommands.includes(cmdName)) {
             return reply(`❌ Esse comando não existe.\n\nComandos disponíveis:\n${validCommands.join(', ')}`);
@@ -36135,75 +36135,48 @@ ${groupPrefix}setngl https://ngl.link/...`);
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
         }
         break;
-      case 'rankputo':
+case 'rankputo':
       case 'rankputa':
       case 'rankpauzudo':
-      case 'rankbucetuda': {
-        if (!isGroup) {
-          await reply('⚠️ Este comando só funciona em grupos.');
-          break;
-        }
-        if (!isModoBn) {
-          await reply('❌ O modo brincadeira está desligado neste grupo.');
-          break;
-        }
-        const allMembers = AllgroupMembers || [];
-        if (allMembers.length < 3) {
-          await reply('❌ Precisa de pelo menos 3 membros no grupo!');
-          break;
-        }
+      case 'rankbucetuda':
+        try {
+          if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
+          if (!isModoBn) return reply('❌ O modo brincadeira não está ativo nesse grupo.');
+          
+          let path = buildGroupFilePath(from);
+          let gamesData = fs.existsSync(__dirname + '/funcs/json/games.json') ? JSON.parse(fs.readFileSync(__dirname + '/funcs/json/games.json')) : { ranks: {} };
+          let data = fs.existsSync(path) ? JSON.parse(fs.readFileSync(path)) : { mark: {} };
+          
+          let membros = AllgroupMembers.filter(m => !['0', 'marca'].includes(data.mark[m]));
+          if (membros.length < 5) return reply('❌ Membros insuficientes para formar um ranking.');
+          
+          let top5 = membros.sort(() => Math.random() - 0.5).slice(0, 5);
+          let cleanedCommand = command;
+          
+          let ranksData = fs.existsSync(__dirname + '/funcs/json/ranks.json') ? JSON.parse(fs.readFileSync(__dirname + '/funcs/json/ranks.json')) : { ranks: {} };
+          
+          // Texto do ranking
+          let responseText = ranksData[cleanedCommand] || `📊 *Ranking de ${cleanedCommand.replace('rank', '')}*:
 
-        
-        // Embaralhar e pegar até 5
-        const shuffled = [...allMembers].sort(() => Math.random() - 0.5);
-        const top5 = shuffled.slice(0, 5);
-        
-        // Pegar nomes
-        const nomes = await Promise.all(top5.map(async (id) => {
-          try {
-            const nome = await getUserName(id) || id.split('@')[0];
-            return nome;
-          } catch {
-            return id.split('@')[0];
+`;
+          top5.forEach((m, i) => {
+            responseText += `🏅 *#${i + 1}* - @${getUserName(m)}
+`;
+          });
+          
+          let media = gamesData.ranks[cleanedCommand];
+          if (media?.image) {
+            await nazu.sendMessage(from, { image: media.image, caption: responseText, mentions: top5 });
+          } else if (media?.video) {
+            await nazu.sendMessage(from, { video: media.video, caption: responseText, mentions: top5, gifPlayback: true });
+          } else {
+            await nazu.sendMessage(from, { text: responseText, mentions: top5 });
           }
-        }));
-        
-        // Determinar o título baseado no comando
-        let titulo, emoji;
-        switch(command) {
-          case 'rankputo':
-            titulo = '🏆 TOP 5 PUTOS DO GRUPO 🏆';
-            emoji = '😈';
-            break;
-          case 'rankputa':
-            titulo = '🏆 TOP 5 PUTAS DO GRUPO 🏆';
-            emoji = '🔥';
-            break;
-          case 'rankpauzudo':
-            titulo = '🍆 TOP 5 PAUZUDOS DO GRUPO 🍆';
-            emoji = '😎';
-            break;
-          case 'rankbucetuda':
-            titulo = '💋 TOP 5 BUCETUDAS DO GRUPO 💋';
-            emoji = '😘';
-            break;
+        } catch (e) {
+          console.error(e);
+          await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
         }
-        
-        const posicoes = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣'];
-        let ranking = `╭━━━〔 ${titulo} 〕━━━╮\n\n`;
-        
-        for (let i = 0; i < top5.length; i++) {
-          ranking += `${posicoes[i]} @${nomes[i]}\n\n`;
-        }
-        
-        ranking += `╰━━━━━━━━━━━━━━━━━━╯\n\n${emoji} *Ranking aleatório do grupo!*`;
-        
-        await nazu.sendMessage(from, {
-          text: ranking,
-          mentions: top5
-        });
         break;
-      }
 
       case 'chute':
       case 'chutar':
@@ -36371,7 +36344,7 @@ Marque duas pessoas para ver a compatibilidade!`);
 
           // Verificar se existe GIF configurado
           let gamesData = fs.existsSync(__dirname + '/funcs/json/games.json') ? JSON.parse(fs.readFileSync(__dirname + '/funcs/json/games.json')) : { games2: {} };
-          const media = gamesData.games2['compatibilidade'];
+          const media = gamesData.games2['compatibilidade', 'rankputo', 'rankputa', 'rankpauzudo', 'rankbucetuda'];
 
           if (media?.video) {
             const videoPath = media.video.url?.startsWith('./') 
