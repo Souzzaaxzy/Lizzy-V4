@@ -31386,28 +31386,32 @@ case 'bemvindo2':
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
         }
         break;
-      case 'banghost':  //corrigido por kauan revil
+      case 'banghost':
         try {
           if (!isGroup) return reply("❌ Só pode ser usado em grupos.");
-          if (!isGroupAdmin) return reply("❌ Apenas administradores.");
+          if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("❌ Apenas administradores.");
           if (!isBotAdmin) return reply("❌ Preciso ser administrador.");
+          
           const limite = parseInt(q);
           if (isNaN(limite) || limite < 0) return reply("⚠️ Use um número válido. Ex: " + prefix + "banghost 1");
+          
           const arquivoGrupo = `${GRUPOS_DIR}/${from}.json`;
           if (!fs.existsSync(arquivoGrupo)) return reply("📂 Sem dados de mensagens.");
-          let dados = JSON.parse(fs.readFileSync(arquivoGrupo))
-          let contador = dados.contador
-          if (!Array.isArray(contador)) return reply("⚠️ Contador não disponível.")
-          const currentMembers = AllgroupMembers
-          const contadorMap = new Map()
-          contador.forEach(user => contadorMap.set(user.id, user))
-          let updatedContador = []
-          let validUsers = []
-          const now = new Date().toISOString()
+          
+          let dados = JSON.parse(fs.readFileSync(arquivoGrupo));
+          let contador = dados.contador;
+          if (!Array.isArray(contador)) return reply("⚠️ Contador não disponível.");
+
+          const currentMembers = AllgroupMembers;
+          const contadorMap = new Map();
+          contador.forEach(user => contadorMap.set(user.id, user));
+
+          let updatedContador = [];
+          const now = new Date().toISOString();
+
           currentMembers.forEach(memberId => {
             if (contadorMap.has(memberId)) {
               const existingUser = contadorMap.get(memberId);
-              validUsers.push(existingUser);
               updatedContador.push(existingUser);
             } else {
               const newUser = {
@@ -31419,26 +31423,49 @@ case 'bemvindo2':
                 firstSeen: now,
                 lastActivity: now
               };
-              validUsers.push(newUser);
               updatedContador.push(newUser);
             }
           });
+
           const admins = groupAdmins || [];
-          const fantasmas = validUsers.filter(u => (u.msg || 0) <= limite && !admins.includes(u.id) && u.id !== botNumber && u.id !== sender && u.id !== nmrdn).map(u => u.id)
+          const fantasmas = updatedContador.filter(u => 
+            (u.msg || 0) <= limite && 
+            !admins.includes(u.id) && 
+            u.id !== botNumber && 
+            u.id !== sender && 
+            u.id !== nmrdn
+          ).map(u => u.id);
+
           if (!fantasmas.length) return reply(`🎉 Nenhum fantasma com até ${limite} msg.`);
-          // Converter fantasmas para JID (podem ser LID)
+
+          // Converter fantasmas para JID
           const fantasmasJid = fantasmas.map(f => isValidJid(f) ? f : formatToJid(f.split('@')[0]));
+          
+          // Remove um por um para evitar erros
           let removidos = 0;
-          try {
-            await nazu.groupParticipantsUpdate(from, fantasmasJid, 'remove').catch(e => console.error('Erro ao remover fantasmas:', e));
-            removidos = fantasmas.length;
-            // Atualiza o contador removendo os usuários banidos
-            dados.contador = updatedContador.filter(u => !fantasmas.includes(u.id));
-            fs.writeFileSync(arquivoGrupo, JSON.stringify(dados, null, 2));
-          } catch (e) {
-            console.error("Erro ao remover:", e);
+          let erros = 0;
+          
+          for (const fantasma of fantasmasJid) {
+            try {
+              await nazu.groupParticipantsUpdate(from, [fantasma], 'remove');
+              removidos++;
+              // Pequeno delay para evitar rate limit
+              await new Promise(r => setTimeout(r, 500));
+            } catch (e) {
+              console.error('Erro ao remover', fantasma, ':', e.message);
+              erros++;
+            }
           }
-          reply(removidos === 0 ? `⚠️ Nenhum fantasma pôde ser removido com até ${limite} msg.` : `✅ ${removidos} fantasma(s) removido(s).`);
+
+          // Atualiza o contador removendo os usuários banidos
+          dados.contador = updatedContador.filter(u => !fantasmas.includes(u.id));
+          fs.writeFileSync(arquivoGrupo, JSON.stringify(dados, null, 2));
+
+          if (removidos === 0) {
+            reply(`⚠️ Nenhum fantasma pôde ser removido.`);
+          } else {
+            reply(`✅ ${removidos} fantasma(s) removido(s).${erros > 0 ? ` (${erros} erro(s))` : ''}`);
+          }
         } catch (e) {
           console.error("Erro no banghost:", e);
           reply("💥 Erro ao tentar remover fantasmas.");
