@@ -36147,12 +36147,14 @@ ${groupPrefix}setngl https://ngl.link/...`);
           await reply('❌ O modo brincadeira está desligado neste grupo.');
           break;
         }
-
         const allMembers = AllgroupMembers || [];
         if (allMembers.length < 3) {
           await reply('❌ Precisa de pelo menos 3 membros no grupo!');
           break;
         }
+
+        
+        // Embaralhar e pegar até 5
         const shuffled = [...allMembers].sort(() => Math.random() - 0.5);
         const top5 = shuffled.slice(0, 5);
         
@@ -36186,19 +36188,1592 @@ ${groupPrefix}setngl https://ngl.link/...`);
             emoji = '😘';
             break;
         }
-
+        
         const posicoes = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣'];
-        let ranking = `╭━━━〔 \${titulo} 〕━━━╮\n\n`;
+        let ranking = `╭━━━〔 ${titulo} 〕━━━╮\n\n`;
         
         for (let i = 0; i < top5.length; i++) {
-          ranking += `\${posicoes[i]} @\${nomes[i]}\n\n`;
+          ranking += `${posicoes[i]} @${nomes[i]}\n\n`;
         }
         
-        ranking += `╰━━━━━━━━━━━━━━━━━━╯\n\n\${emoji} *Ranking aleatório do grupo!*`;
+        ranking += `╰━━━━━━━━━━━━━━━━━━╯\n\n${emoji} *Ranking aleatório do grupo!*`;
         
         await nazu.sendMessage(from, {
           text: ranking,
           mentions: top5
         });
         break;
+      }
 
+      case 'chute':
+      case 'chutar':
+      case 'tapa':
+      case 'soco':
+      case 'socar':
+      case 'beijo':
+      case 'beijar':
+      case 'beijob':
+      case 'beijarb':
+      case 'abraco':
+      case 'abracar':
+      case 'mata':
+      case 'matar':
+      case 'tapar':
+      case 'goza':
+      case 'gozar':
+      case 'mamar':
+      case 'mamada':
+      case 'cafune':
+      case 'morder':
+      case 'mordida':
+      case 'lamber':
+      case 'lambida':
+      case 'explodir':
+      case 'sexo':
+      case 'siririca':
+      case 'punheta':
+      case 'tomate':
+        try {
+          const comandosImpróprios = ['sexo', 'surubao', 'siririca', 'goza', 'gozar', 'mamar', 'mamada', 'beijob', 'beijarb', 'tapar'];
+          if (isModoLite && comandosImpróprios.includes(command)) return nazu.react('❌', {
+            key: info.key
+          });
+          if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
+          if (!isModoBn) return reply('❌ O modo brincadeira não está ativo nesse grupo.');
+          // Para punheta, usa o próprio sender se ninguém foi mencionado
+          const targetUser = menc_os2 || sender;
+          let gamesData = fs.existsSync(__dirname + '/funcs/json/games.json') ? JSON.parse(fs.readFileSync(__dirname + '/funcs/json/games.json')) : {
+            games2: {}
+          };
+          let GamezinData = fs.existsSync(__dirname + '/funcs/json/markgame.json') ? JSON.parse(fs.readFileSync(__dirname + '/funcs/json/markgame.json')) : {
+            ranks: {}
+          };
+          // Handle punheta - random message from array
+          let responseText;
+          if (command === 'punheta' && Array.isArray(GamezinData[command])) {
+            const randomMsg = GamezinData[command][Math.floor(Math.random() * GamezinData[command].length)];
+            responseText = randomMsg.replaceAll('@{nome}', `@${getUserName(targetUser)}`);
+          } else if (command === 'siririca') {
+            // Frases pré-definidas para siririca
+            const frasesSiririca = [
+              `🎉 @${getUserName(targetUser)} acaba de conquistar o prêmio de "menos discreto(a) do grupo".`,
+              `👀 Todo mundo olhando enquanto @${getUserName(targetUser)} tenta disfarçar.`,
+              `🫠 @${getUserName(targetUser)} foi aliviar o estresse.`,
+              `✋ @${getUserName(targetUser)} resolveu tirar um tempo para si... 😂`
+            ];
+            responseText = frasesSiririca[Math.floor(Math.random() * frasesSiririca.length)];
+          } else {
+            responseText = GamezinData[command]?.replaceAll('#nome#', `@${getUserName(targetUser)}`) || `Voce acabou de dar um(a) ${command} no(a) @${getUserName(targetUser)}`;
+          }
+          let media = gamesData.games2[command];
+          // Verifica se é um GIF customizado
+          const isCustomGif = media?.isGif === true;
+          // Resolver caminho absoluto para mídias locais
+          const resolveMediaPath = (url) => {
+            if (typeof url === 'string' && url.startsWith('./')) {
+              // './midias/...' -> '/data/.../dados/src/midias/...'
+              return path.join(__dirname, url.substring(1));
+            }
+            return url;
+          };
+          if (media?.image) {
+            const imagePath = resolveMediaPath(typeof media.image === 'object' ? media.image.url : media.image);
+            if (imagePath.startsWith('http')) {
+              // URL externa - enviar diretamente
+              await nazu.sendMessage(from, {
+                image: { url: imagePath },
+                caption: responseText,
+                mentions: [targetUser]
+              });
+            } else if (fs.existsSync(imagePath)) {
+              const imageBuffer = fs.readFileSync(imagePath);
+              await nazu.sendMessage(from, {
+                image: imageBuffer,
+                caption: responseText,
+                mentions: [targetUser]
+              });
+            } else {
+              await nazu.sendMessage(from, {
+                text: responseText,
+                mentions: [targetUser]
+              });
+            }
+          } else if (media?.video) {
+            const videoPath = resolveMediaPath(typeof media.video === 'object' ? media.video.url : media.video);
+            if (videoPath.startsWith('http')) {
+              await nazu.sendMessage(from, {
+                video: { url: videoPath },
+                caption: responseText,
+                mentions: [targetUser],
+                gifPlayback: true
+              });
+            } else if (fs.existsSync(videoPath)) {
+              const videoBuffer = fs.readFileSync(videoPath);
+              await nazu.sendMessage(from, {
+                video: videoBuffer,
+                caption: responseText,
+                mentions: [targetUser],
+                gifPlayback: true
+              });
+            } else {
+              await nazu.sendMessage(from, {
+                text: responseText,
+                mentions: [targetUser]
+              });
+            }
+          } else {
+            await nazu.sendMessage(from, {
+              text: responseText,
+              mentions: [targetUser]
+            });
+          }
+        } catch (e) {
+          console.error(e);
+          await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
+        }
+        break;
+      case 'compatibilidade':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          if (!isModoBn) return reply('❌ O modo brincadeira não está ativo nesse grupo.');
+
+          // Pegar os dois usuários mencionados
+          const menc_jid = info.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+          const users = menc_jid.filter(u => u !== sender && u !== botNumber);
+          
+          if (users.length < 2) {
+            return reply(`💕 Use: ${groupPrefix}compatibilidade @user1 @user2
+Marque duas pessoas para ver a compatibilidade!`);
+          }
+
+          const user1 = users[0];
+          const user2 = users[1];
+          const nome1 = await getUserName(user1) || 'Usuário 1';
+          const nome2 = await getUserName(user2) || 'Usuário 2';
+          
+          // Número aleatório de 1 a 100
+          const compatibilidade = Math.floor(Math.random() * 100) + 1;
+
+          // Emoji baseado na compatibilidade
+          let emoji;
+          if (compatibilidade >= 80) emoji = '💖';
+          else if (compatibilidade >= 60) emoji = '💕';
+          else if (compatibilidade >= 40) emoji = '💜';
+          else if (compatibilidade >= 20) emoji = '😐';
+          else emoji = '💔';
+
+          const messageText = `${emoji} *COMPATIBILIDADE* ${emoji}
+
+👤 @${nome1}
+👤 @${nome2}
+
+💘 *${compatibilidade}%* de compatibilidade!`;
+
+          // Verificar se existe GIF configurado
+          let gamesData = fs.existsSync(__dirname + '/funcs/json/games.json') ? JSON.parse(fs.readFileSync(__dirname + '/funcs/json/games.json')) : { games2: {} };
+          const media = gamesData.games2['compatibilidade'];
+
+          if (media?.video) {
+            const videoPath = media.video.url?.startsWith('./') 
+              ? path.join(__dirname, media.video.url.substring(1)) 
+              : media.video.url;
+            
+            if (videoPath.startsWith('http')) {
+              await nazu.sendMessage(from, {
+                video: { url: videoPath },
+                caption: messageText,
+                mentions: [user1, user2],
+                gifPlayback: true
+              });
+            } else if (fs.existsSync(videoPath)) {
+              const videoBuffer = fs.readFileSync(videoPath);
+              await nazu.sendMessage(from, {
+                video: videoBuffer,
+                caption: messageText,
+                mentions: [user1, user2],
+                gifPlayback: true
+              });
+            } else {
+              await nazu.sendMessage(from, { text: messageText, mentions: [user1, user2] });
+            }
+          } else {
+            await nazu.sendMessage(from, { text: messageText, mentions: [user1, user2] });
+          }
+        } catch (e) {
+          console.error(e);
+          reply("❌ Ocorreu um erro interno. Tente novamente.");
+        }
+        break;
+      case 'afk':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          const reason = q.trim();
+          groupData.afkUsers = groupData.afkUsers || {};
+          groupData.afkUsers[sender] = {
+            reason: reason || 'Não especificado',
+            since: Date.now()
+          };
+          fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
+          let afkSetMessage = `😴 Você está AFK.`;
+          if (reason) {
+            afkSetMessage += `
+Motivo: ${reason}`;
+          }
+          await reply(afkSetMessage);
+        } catch (e) {
+          console.error('Erro no comando afk:', e);
+          await reply("Ocorreu um erro ao definir AFK 💔");
+        }
+        break;
+      case 'voltei':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          if (groupData.afkUsers && groupData.afkUsers[sender]) {
+            delete groupData.afkUsers[sender];
+            fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
+            await reply(`👋 Bem-vindo(a) de volta! Seu status AFK foi removido.`);
+          } else {
+            await reply("Você não estava AFK.");
+          }
+        } catch (e) {
+          console.error('Erro no comando voltei:', e);
+          await reply("Ocorreu um erro ao remover AFK 💔");
+        }
+        break;
+      case 'regras':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          if (!groupData.rules || groupData.rules.length === 0) {
+            return reply("📜 Nenhuma regra definida para este grupo ainda.");
+          }
+          let rulesMessage = `📜 *Regras do Grupo ${groupName}* 📜
+`;
+          groupData.rules.forEach((rule, index) => {
+            rulesMessage += `${index + 1}. ${rule}
+`;
+          });
+          await reply(rulesMessage);
+        } catch (e) {
+          console.error('Erro no comando regras:', e);
+          await reply("Ocorreu um erro ao buscar as regras 💔");
+        }
+        break;
+      case 'addregra':
+      case 'addrule':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          if (!isGroupAdmin) return reply("Apenas administradores podem adicionar regras.");
+          if (!q) return reply(`📝 Por favor, forneça o texto da regra. Ex: ${groupPrefix}addregra Proibido spam.`);
+          groupData.rules = groupData.rules || [];
+          groupData.rules.push(q);
+          fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
+          await reply(`✅ Regra adicionada com sucesso!
+${groupData.rules.length}. ${q}`);
+        } catch (e) {
+          console.error('Erro no comando addregra:', e);
+          await reply("Ocorreu um erro ao adicionar a regra 💔");
+        }
+        break;
+      case 'delregra':
+      case 'delrule':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          if (!isGroupAdmin) return reply("Apenas administradores podem remover regras.");
+          if (!q || isNaN(parseInt(q))) return reply(`🔢 Por favor, forneça o número da regra a ser removida. Ex: ${groupPrefix}delregra 3`);
+          groupData.rules = groupData.rules || [];
+          const ruleNumber = parseInt(q);
+          if (ruleNumber < 1 || ruleNumber > groupData.rules.length) {
+            return reply(`❌ Número de regra inválido. Use ${groupPrefix}regras para ver a lista. Atualmente existem ${groupData.rules.length} regras.`);
+          }
+          const removedRule = groupData.rules.splice(ruleNumber - 1, 1);
+          fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
+          await reply(`🗑️ Regra "${removedRule}" removida com sucesso!`);
+        } catch (e) {
+          console.error('Erro no comando delregra:', e);
+          await reply("Ocorreu um erro ao remover a regra 💔");
+        }
+        break;
+      case 'addmod':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          if (!isGroupAdmin) return reply("Apenas administradores podem adicionar moderadores.");
+          if (!menc_os2) return reply(`Marque o usuário que deseja promover a moderador. Ex: ${groupPrefix}addmod @usuario`);
+          const modToAdd = menc_os2;
+          if (groupData.moderators.includes(modToAdd)) {
+            return reply(`@${getUserName(modToAdd)} já é um moderador.`, {
+              mentions: [modToAdd]
+            });
+          }
+          groupData.moderators.push(modToAdd);
+          fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
+          await reply(`✅ @${getUserName(modToAdd)} foi promovido a moderador do grupo!`, {
+            mentions: [modToAdd]
+          });
+        } catch (e) {
+          console.error('Erro no comando addmod:', e);
+          await reply("Ocorreu um erro ao adicionar moderador 💔");
+        }
+        break;
+      case 'delmod':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          if (!isGroupAdmin) return reply("Apenas administradores podem remover moderadores.");
+          if (!menc_os2) return reply(`Marque o usuário que deseja remover de moderador. Ex: ${groupPrefix}delmod @usuario`);
+          const modToRemove = menc_os2;
+          const modIndex = groupData.moderators.indexOf(modToRemove);
+          if (modIndex === -1) {
+            return reply(`@${getUserName(modToRemove)} não é um moderador.`, {
+              mentions: [modToRemove]
+            });
+          }
+          groupData.moderators.splice(modIndex, 1);
+          fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
+          await reply(`✅ @${getUserName(modToRemove)} não é mais um moderador do grupo.`, {
+            mentions: [modToRemove]
+          });
+        } catch (e) {
+          console.error('Erro no comando delmod:', e);
+          await reply("Ocorreu um erro ao remover moderador 💔");
+        }
+        break;
+      case 'listmods':
+      case 'modlist':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          if (groupData.moderators.length === 0) {
+            return reply("⚙️ Não há moderadores definidos para este grupo.");
+          }
+          let modsMessage = `⚙️ *Moderadores do Grupo ${groupName}* ⚙️\n\n`;
+          const mentionedUsers = [];
+          groupData.moderators.forEach(modJid => {
+            modsMessage += `➥ @${getUserName(modJid)}\n`;
+            mentionedUsers.push(modJid);
+          });
+          await reply(modsMessage, {
+            mentions: mentionedUsers
+          });
+        } catch (e) {
+          console.error('Erro no comando listmods:', e);
+          await reply("Ocorreu um erro ao listar moderadores 💔");
+        }
+        break;
+      case 'addalpha':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          if (!isGroupAdmin) return reply("Apenas administradores podem adicionar Alphas.");
+          if (!menc_os2) return reply(`Marque o usuário que deseja promover a Alpha. Ex: ${groupPrefix}addalpha @usuario`);
+          const alphaToAdd = menc_os2;
+          if (groupData.alphas.includes(alphaToAdd)) {
+            return reply(`@${getUserName(alphaToAdd)} já é um Alpha.`, {
+              mentions: [alphaToAdd]
+            });
+          }
+          groupData.alphas.push(alphaToAdd);
+          fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
+          await reply(`✅ @${getUserName(alphaToAdd)} foi promovido a Alpha do grupo! 🐺`, {
+            mentions: [alphaToAdd]
+          });
+          // ═══════════════════════════════════════════════════════════════
+          // 🤖 EVENTO NPC - USUÁRIO VIRAL ALPHA
+          // ═══════════════════════════════════════════════════════════════
+          await npcManager?.trigger(nazu, from, 'novo_alpha', alphaToAdd, getUserName(alphaToAdd));
+        } catch (e) {
+          console.error('Erro no comando addalpha:', e);
+          await reply("Ocorreu um erro ao adicionar Alpha 💔");
+        }
+        break;
+      case 'delalpha':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          if (!isGroupAdmin) return reply("Apenas administradores podem remover Alphas.");
+          if (!menc_os2) return reply(`Marque o usuário que deseja remover de Alpha. Ex: ${groupPrefix}delalpha @usuario`);
+          const alphaToRemove = menc_os2;
+          const alphaIndex = groupData.alphas.indexOf(alphaToRemove);
+          if (alphaIndex === -1) {
+            return reply(`@${getUserName(alphaToRemove)} não é um Alpha.`, {
+              mentions: [alphaToRemove]
+            });
+          }
+          groupData.alphas.splice(alphaIndex, 1);
+          fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
+          await reply(`✅ @${getUserName(alphaToRemove)} não é mais um Alpha do grupo.`, {
+            mentions: [alphaToRemove]
+          });
+        } catch (e) {
+          console.error('Erro no comando delalpha:', e);
+          await reply("Ocorreu um erro ao remover Alpha 💔");
+        }
+        break;
+      case 'listalphas':
+      case 'alphalist':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          if (groupData.alphas.length === 0) {
+            return reply("🐺 Não há Alphas definidos para este grupo.");
+          }
+          let alphasMessage = `🐺 *Alphas do Grupo ${groupName}* 🐺\n\n`;
+          const mentionedUsers = [];
+          groupData.alphas.forEach(alphaJid => {
+            alphasMessage += `➥ @${getUserName(alphaJid)}\n`;
+            mentionedUsers.push(alphaJid);
+          });
+          await reply(alphasMessage, {
+            mentions: mentionedUsers
+          });
+        } catch (e) {
+          console.error('Erro no comando listalphas:', e);
+          await reply("Ocorreu um erro ao listar Alphas 💔");
+        }
+        break;
+      case 'grantmodcmd':
+      case 'addmodcmd':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          if (!isGroupAdmin) return reply("Apenas administradores podem gerenciar permissões de moderador.");
+          if (!q) return reply(`Por favor, especifique o comando para permitir aos moderadores. Ex: ${groupPrefix}grantmodcmd ban`);
+          const cmdToAllow = q.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replaceAll(prefix, "");
+          if (groupData.allowedModCommands.includes(cmdToAllow)) {
+            return reply(`Comando "${cmdToAllow}" já está permitido para moderadores.`);
+          }
+          groupData.allowedModCommands.push(cmdToAllow);
+          fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
+          await reply(`✅ Moderadores agora podem usar o comando: ${groupPrefix}${cmdToAllow}`);
+        } catch (e) {
+          console.error('Erro no comando grantmodcmd:', e);
+          await reply("Ocorreu um erro ao permitir comando para moderadores 💔");
+        }
+        break;
+      case 'revokemodcmd':
+      case 'delmodcmd':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          if (!isGroupAdmin) return reply("Apenas administradores podem gerenciar permissões de moderador.");
+          if (!q) return reply(`Por favor, especifique o comando para proibir aos moderadores. Ex: ${groupPrefix}revokemodcmd ban`);
+          const cmdToDeny = q.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replaceAll(prefix, "");
+          const cmdIndex = groupData.allowedModCommands.indexOf(cmdToDeny);
+          if (cmdIndex === -1) {
+            return reply(`Comando "${cmdToDeny}" não estava permitido para moderadores.`);
+          }
+          groupData.allowedModCommands.splice(cmdIndex, 1);
+          fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
+          await reply(`✅ Moderadores não podem mais usar o comando: ${groupPrefix}${cmdToDeny}`);
+        } catch (e) {
+          console.error('Erro no comando revokemodcmd:', e);
+          await reply("Ocorreu um erro ao proibir comando para moderadores 💔");
+        }
+        break;
+      case 'listmodcmds':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          if (groupData.allowedModCommands.length === 0) {
+            return reply("🔧 Nenhum comando específico permitido para moderadores neste grupo.");
+          }
+          let cmdsMessage = `🔧 *Comandos Permitidos para Moderadores em ${groupName}* 🔧\n\n`;
+          groupData.allowedModCommands.forEach(cmd => {
+            cmdsMessage += `➥ ${groupPrefix}${cmd}\n`;
+          });
+          await reply(cmdsMessage);
+        } catch (e) {
+          console.error('Erro no comando listmodcmds:', e);
+          await reply("Ocorreu um erro ao listar comandos de moderadores 💔");
+        }
+        break;
+      case 'grantalphacmd':
+      case 'addalphacmd':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          if (!isGroupAdmin) return reply("Apenas administradores podem gerenciar permissões de Alpha.");
+          if (!q) return reply(`Por favor, especifique o comando para permitir aos Alphas. Ex: ${groupPrefix}grantalphacmd ban`);
+          const cmdToAllow = q.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replaceAll(prefix, "");
+          if (groupData.allowedAlphaCommands.includes(cmdToAllow)) {
+            return reply(`Comando "${cmdToAllow}" já está permitido para Alphas.`);
+          }
+          groupData.allowedAlphaCommands.push(cmdToAllow);
+          fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
+          await reply(`✅ Alphas agora podem usar o comando: ${groupPrefix}${cmdToAllow}`);
+        } catch (e) {
+          console.error('Erro no comando grantalphacmd:', e);
+          await reply("Ocorreu um erro ao permitir comando para Alphas 💔");
+        }
+        break;
+      case 'revokealphacmd':
+      case 'delalphacmd':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          if (!isGroupAdmin) return reply("Apenas administradores podem gerenciar permissões de Alpha.");
+          if (!q) return reply(`Por favor, especifique o comando para proibir aos Alphas. Ex: ${groupPrefix}revokealphacmd ban`);
+          const cmdToDeny = q.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replaceAll(prefix, "");
+          const cmdIndex = groupData.allowedAlphaCommands.indexOf(cmdToDeny);
+          if (cmdIndex === -1) {
+            return reply(`Comando "${cmdToDeny}" não estava permitido para Alphas.`);
+          }
+          groupData.allowedAlphaCommands.splice(cmdIndex, 1);
+          fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
+          await reply(`✅ Alphas não podem mais usar o comando: ${groupPrefix}${cmdToDeny}`);
+        } catch (e) {
+          console.error('Erro no comando revokealphacmd:', e);
+          await reply("Ocorreu um erro ao proibir comando para Alphas 💔");
+        }
+        break;
+      case 'listalphacmds':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          if (groupData.allowedAlphaCommands.length === 0) {
+            return reply("🔧 Nenhum comando específico permitido para Alphas neste grupo.");
+          }
+          let cmdsMessage = `🔧 *Comandos Permitidos para Alphas em ${groupName}* 🔧\n\n`;
+          groupData.allowedAlphaCommands.forEach(cmd => {
+            cmdsMessage += `➥ ${groupPrefix}${cmd}\n`;
+          });
+          await reply(cmdsMessage);
+        } catch (e) {
+          console.error('Erro no comando listalphacmds:', e);
+          await reply("Ocorreu um erro ao listar comandos de Alphas 💔");
+        }
+        break;
+      // ─── Permissões de Subdono ───
+      case 'grantsubcmd':
+        try {
+          if (!isOwner) return reply("Apenas o Dono pode gerenciar comandos de subdonos.");
+          if (!q) return reply(`📝 *Uso:* ${prefix}grantsubcmd <comando>
+Ex: ${prefix}grantsubcmd listagp`);
+          const cmdToAdd = q.replace(prefix, '').trim().toLowerCase().split(' ')[0];
+          if (!cmdToAdd) return reply("❌ Especifique o comando.");
+          const baseCmds = loadSubOwnerBaseCommands();
+          if (baseCmds.includes(cmdToAdd)) {
+            return reply(`⚠️ O comando ${prefix}${cmdToAdd} já está na lista base.`);
+          }
+          addSubOwnerBaseCmd(cmdToAdd);
+          await reply(`✅ Comando adicionado à lista base!
+📋 ${prefix}${cmdToAdd} agora pode ser usado por todos os subdonos.
+📦 Comandos na lista base: ${baseCmds.length + 1}`);
+        } catch (e) {
+          console.error('Erro no grantsubcmd:', e);
+          await reply("Ocorreu um erro 💔");
+        }
+        break;
+      case 'delsubcmd':
+        try {
+          if (!isOwner) return reply("Apenas o Dono pode gerenciar comandos de subdonos.");
+          if (!q) return reply(`📝 *Uso:* ${prefix}delsubcmd <comando>
+Ex: ${prefix}delsubcmd listagp`);
+          const cmdToRemove = q.replace(prefix, '').trim().toLowerCase().split(' ')[0];
+          if (!cmdToRemove) return reply("❌ Especifique o comando.");
+          const baseCmds = loadSubOwnerBaseCommands();
+          if (!baseCmds.includes(cmdToRemove)) {
+            return reply(`⚠️ O comando ${prefix}${cmdToRemove} não está na lista base.`);
+          }
+          removeSubOwnerBaseCmd(cmdToRemove);
+          await reply(`✅ Comando removido da lista base!
+📋 ${prefix}${cmdToRemove} não pode mais ser usado por subdonos.
+📦 Comandos na lista base: ${baseCmds.length - 1}`);
+        } catch (e) {
+          console.error('Erro no delsubcmd:', e);
+          await reply("Ocorreu um erro 💔");
+        }
+        break;
+      case 'listsubcmd':
+        try {
+          if (!isOwner && !isSubOwner) return reply("Apenas o Dono ou subdonos podem ver a lista.");
+          const cmds = loadSubOwnerBaseCommands();
+          if (cmds.length === 0) {
+            return reply(`📋 *Lista Base de Subcomandos*
+Nenhum comando na lista base.`);
+          }
+          let msg = `📋 *Lista Base de Subcomandos*
+`;
+          cmds.forEach(cmd => {
+            msg += `✓ ${prefix}${cmd}
+`;
+          });
+          msg += `
+📦 Total: ${cmds.length} comando(s)`;
+          await reply(msg);
+        } catch (e) {
+          console.error('Erro no listsubcmd:', e);
+          await reply("Ocorreu um erro 💔");
+        }
+        break;
+      case 'wl.add':
+      case 'wladd':
+      case 'addwhitelist':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          if (!isGroupAdmin) return reply("Apenas administradores podem adicionar usuários à whitelist.");
+          if (!menc_os2) {
+            const availableAntis = ['antilink', 'antilinkgp', 'antilinkhard', 'antilinksoft', 'antilinkcanal', 'antiporn', 'antistatus', 'antistts', 'antipagamento', 'antibtn', 'antidoc', 'antiloc', 'antifig', 'antistickerplus', 'antipalavra'];
+            return reply(`📋 *Uso do comando:*
+${groupPrefix}wl.add @usuario | anti1,anti2,anti3
+*Antis disponíveis:*
+${availableAntis.map(a => `• ${a}`).join('\n')}
+*Exemplo:*
+${groupPrefix}wl.add @usuario | antilink,antistatus,antiporn`);
+          }
+          const userId = menc_os2;
+          const wlArgs = q.split('|').map(a => a.trim());
+          const antisString = wlArgs.length > 1 ? wlArgs[1] : wlArgs[0];
+          if (!antisString || antisString.length === 0) {
+            return reply(`⚠️ Especifique os antis após o |
+*Exemplo:*
+${groupPrefix}wl.add @usuario | antilink,antistatus`);
+          }
+          const antis = antisString.split(',').map(a => a.trim().toLowerCase()).filter(a => a.length > 0 && !a.includes('@'));
+          if (antis.length === 0) {
+            return reply('⚠️ Nenhum anti válido foi especificado. Use o formato: antilink,antistatus,antiporn');
+          }
+          const validAntis = ['antilink', 'antilinkgp', 'antilinkhard', 'antilinksoft', 'antiporn', 'antistatus', 'antistts', 'antipagamento', 'antibtn', 'antidoc', 'antiloc', 'antifig', 'antilinkcanal', 'antistickerplus', 'antipalavra'];
+          const invalidAntis = antis.filter(a => !validAntis.includes(a));
+          if (invalidAntis.length > 0) {
+            return reply(`❌ Antis inválidos: ${invalidAntis.join(', ')}\n\n*Válidos:* ${validAntis.join(', ')}`);
+          }
+          groupData.adminWhitelist[userId] = {
+            antis: antis,
+            addedBy: sender,
+            addedAt: new Date().toISOString()
+          };
+          persistGroupData();
+          await reply(`✅ @${getUserName(userId)} adicionado à whitelist!\n\n*Antis ignorados:*\n${antis.map(a => `• ${a}`).join('\n')}`, {
+            mentions: [userId]
+          });
+        } catch (e) {
+          console.error('Erro no comando wl.add:', e);
+          await reply("❌ Ocorreu um erro ao adicionar à whitelist.");
+        }
+        break;
+      case 'wl.remove':
+      case 'wlremove':
+      case 'removewhitelist':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          if (!isGroupAdmin) return reply("Apenas administradores podem remover usuários da whitelist.");
+          if (!menc_os2) {
+            return reply(`⚠️ Marque o usuário que deseja remover da whitelist.\n\nEx: ${groupPrefix}wl.remove @usuario`);
+          }
+          const userId = menc_os2;
+          if (!groupData.adminWhitelist[userId]) {
+            return reply(`@${getUserName(userId)} não está na whitelist.`, {
+              mentions: [userId]
+            });
+          }
+          delete groupData.adminWhitelist[userId];
+          persistGroupData();
+          await reply(`✅ @${getUserName(userId)} removido da whitelist!`, {
+            mentions: [userId]
+          });
+        } catch (e) {
+          console.error('Erro no comando wl.remove:', e);
+          await reply("❌ Ocorreu um erro ao remover da whitelist.");
+        }
+        break;
+      case 'wl.lista':
+      case 'wllist':
+      case 'listawhitelist':
+      case 'whitelistlista':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          const whitelistEntries = Object.entries(groupData.adminWhitelist || {});
+          if (whitelistEntries.length === 0) {
+            return reply('📋 Não há usuários na whitelist deste grupo.');
+          }
+          let message = `📋 *Whitelist do Grupo*\n`;
+          message += `═══════════════════\n\n`;
+          const mentions = [];
+          whitelistEntries.forEach(([userId, data], index) => {
+            mentions.push(userId);
+            message += `${index + 1}. @${getUserName(userId)}\n`;
+            message += `   *Antis ignorados:*\n`;
+            data.antis.forEach(anti => {
+              message += `   • ${anti}\n`;
+            });
+            message += `   *Adicionado em:* ${new Date(data.addedAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}\n\n`;
+          });
+          message += `═══════════════════\n`;
+          message += `Total: ${whitelistEntries.length} usuário(s)`;
+          await reply(message, { mentions });
+        } catch (e) {
+          console.error('Erro no comando wl.lista:', e);
+          await reply("❌ Ocorreu um erro ao listar whitelist.");
+        }
+        break;
+      case 'minmessage':
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          if (!isGroupAdmin) return reply("Apenas administradores podem configurar isso.");
+          if (!args[0]) return reply(`Uso: ${groupPrefix}minmessage <mínimo de dígitos> <ban/adv> ou ${groupPrefix}minmessage off`);
+          if (args[0].toLowerCase() === 'off') {
+            delete groupData.minMessage;
+            fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
+            await reply(`✅ Sistema de legenda mínima desativado.`);
+          } else {
+            const minDigits = parseInt(args[0]);
+            const action = args[1]?.toLowerCase();
+            if (isNaN(minDigits) || minDigits < 1 || !['ban', 'adv'].includes(action)) {
+              return reply(`Formato inválido. Use: ${groupPrefix}minmessage <número positivo> <ban/adv>`);
+            }
+            groupData.minMessage = { minDigits, action };
+            fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
+            await reply(`✅ Configurado: Mínimo de ${minDigits} caracteres em legendas de fotos/vídeos. Ação em violação: ${action === 'ban' ? 'banir' : 'advertir'}.`);
+          }
+        } catch (e) {
+          console.error('Erro no comando minmessage:', e);
+          await reply("Ocorreu um erro ao configurar 💔");
+        }
+        break;
+      case 'nuke':
+        try {
+          if (!isOwner) return reply('Apenas o dono pode usar este comando.');
+          if (!isGroup) return reply('Apenas em grupos.');
+          if (!isBotAdmin) return reply('Preciso ser admin para isso.');
+          const membersToBan = AllgroupMembers.filter(m => m !== nazu.user.id && m !== sender);
+          if (membersToBan.length === 0) return reply('Nenhum membro para banir.');
+          // Converter membros para JID (podem ser LID)
+          const membersToBanJid = membersToBan.map(m => isValidJid(m) ? m : formatToJid(m.split('@')[0]));
+          await nazu.groupParticipantsUpdate(from, membersToBanJid, 'remove').catch(e => console.error('Erro no nuke:', e));
+        } catch (e) {
+          console.error('Erro no nuke:', e);
+          await reply('Ocorreu um erro ao banir 💔');
+        }
+        break;
+      case 'msgprefix':
+        try {
+          if (!isOwner) return reply('Apenas o dono pode configurar isso.');
+          if (!q) return reply('Uso: '+ groupPrefix + 'msgprefix off ou '+ groupPrefix + 'msgprefix texto aqui #prefixo#');
+          const newMsg = q.trim().toLowerCase() === 'off' ? false : q;
+          if (saveMsgPrefix(newMsg)) {
+            await reply(newMsg ? `✅ Mensagem prefix configurada: ${newMsg.replace('#prefixo#', prefix)}` : '✅ Mensagem prefix desativada.');
+          } else {
+            await reply('Erro ao salvar.');
+          }
+        } catch (e) {
+          console.error('Erro no msgprefix:', e);
+          await reply('Ocorreu um erro 💔');
+        }
+        break;
+      case 'msgboton':
+        try {
+          if (!isOwner) return reply('🚫 Apenas o dono pode alterar esta configuração!');
+          const currentConfig = loadMsgBotOn();
+          const newStatus = !currentConfig.enabled;
+          if (saveMsgBotOn(newStatus)) {
+            const statusText = newStatus ? '✅ ativada' : '❌ desativada';
+            await reply(`🔔 *Mensagem de inicialização ${statusText}!*\n\nAgora, quando o bot ligar, ${newStatus ? 'você receberá' : 'NÃO receberá'} uma mensagem de boas-vindas no seu privado.`);
+          } else {
+            await reply('❌ Erro ao salvar configuração.');
+          }
+        } catch (e) {
+          console.error('Erro no msgboton:', e);
+          await reply('❌ Ocorreu um erro ao processar sua solicitação.');
+        }
+        break;
+      case 'addreact':
+        try {
+          if (!isOwner) return reply('Apenas o dono pode adicionar reacts.');
+          if (args.length < 2) return reply('Uso: '+ groupPrefix + 'addreact trigger emoji');
+          const trigger = args[0];
+          const emoji = args[1];
+          const result = addCustomReact(trigger, emoji);
+          await reply(result.message);
+        } catch (e) {
+          console.error('Erro no addreact:', e);
+          await reply('Ocorreu um erro 💔');
+        }
+        break;
+      case 'delreact':
+        try {
+          if (!isOwner) return reply('Apenas o dono pode remover reacts.');
+          if (!q) return reply('Uso: '+ groupPrefix + 'delreact id');
+          const result = deleteCustomReact(q.trim());
+          await reply(result.message);
+        } catch (e) {
+          console.error('Erro no delreact:', e);
+          await reply('Ocorreu um erro 💔');
+        }
+        break;
+      case 'listreact':
+        try {
+          if (!isOwner) return reply('Apenas o dono pode listar reacts.');
+          const reacts = loadCustomReacts();
+          if (reacts.length === 0) return reply('Nenhum react configurado.');
+          let listMsg = '📋 Lista de Reacts:\n\n';
+          reacts.forEach(r => {
+            listMsg += `ID: ${r.id} | Trigger: ${r.trigger} | Emoji: ${r.emoji}\n`;
+          });
+          await reply(listMsg);
+        } catch (e) {
+          console.error('Erro no listreact:', e);
+          await reply('Ocorreu um erro 💔');
+        }
+        break;
+      case 'freetemu':
+        try {
+          if (!q) return reply('❌ Por favor, digite um link da Temu.');
+          if (!q.includes('temu')) return reply('❌ Link inválido.');
+          const KKMeMamaTemu = await temuScammer.convertTemuLink(q);
+          await reply(
+            `🎉 Aqui está o link do produto no evento como GRATUITO:\n\n` +
+            `⚠️ Atenção: Nem todos os anúncios funcionam com esse método. Se não funcionar com este link, tente outro.\n\n` +
+            `💡 Esse sistema foi criado por mim (Hiudy) e, até hoje, não vi ninguém oferecendo algo assim. Aproveite!\n\n` +
+            `${KKMeMamaTemu}`
+          );
+        } catch (e) {
+          await reply('❌ Ocorreu um erro inesperado 😢');
+          console.error(e);
+        }
+        break;
+      case 'cachedebug':
+      case 'debugcache':
+        try {
+          if (!isOwner) return reply('🚫 Apenas o dono e subdonos podem usar este comando.');
+          const { saveJidLidCache } = await import('./utils/helpers.js');
+          const cacheFilePath = JID_LID_CACHE_FILE;
+          // Força salvar o cache atual
+          saveJidLidCache();
+          // Lê o arquivo de cache
+          let cacheData = { mappings: {}, version: 'N/A', lastUpdate: 'N/A' };
+          try {
+            if (fs.existsSync(cacheFilePath)) {
+              cacheData = JSON.parse(fs.readFileSync(cacheFilePath, 'utf-8'));
+            }
+          } catch (e) {
+            console.error('Erro ao ler cache:', e);
+          }
+          const mappings = cacheData.mappings || {};
+          const entries = Object.entries(mappings);
+          const totalEntries = entries.length;
+          let msg = '📊 *Cache JID→LID Debug*\n\n';
+          msg += `📈 Total de entradas: ${totalEntries}\n`;
+          msg += `🕐 Última atualização: ${cacheData.lastUpdate || 'N/A'}\n`;
+          msg += `📦 Versão: ${cacheData.version || 'N/A'}\n\n`;
+          if (totalEntries > 0) {
+            msg += '📋 *Últimas 10 entradas:*\n\n';
+            const lastTen = entries.slice(-10);
+            lastTen.forEach(([jid, lid], idx) => {
+              const jidShort = jid.substring(0, 15) + '...';
+              const lidShort = lid.substring(0, 20) + '...';
+              msg += `${idx + 1}. JID: ${jidShort}\n   LID: ${lidShort}\n\n`;
+            });
+          } else {
+            msg += '⚠️ Cache vazio - nenhuma conversão JID→LID registrada ainda.\n';
+          }
+          msg += `\n💾 Arquivo: ${cacheFilePath.split('/').slice(-2).join('/')}`;
+          await reply(msg);
+        } catch (e) {
+          console.error('Erro no cachedebug:', e);
+          await reply('❌ Ocorreu um erro ao acessar o cache.');
+        }
+        break;
+      case 'horarios':
+      case 'horariopagante':
+      case 'sinais':
+        try {
+          const now = new Date();
+          const brasiliaTime = new Date(now.getTime() - (3 * 60 * 60 * 1000));
+          const currentHour = String(brasiliaTime.getHours()).padStart(2, '0');
+          const currentMinute = String(brasiliaTime.getMinutes()).padStart(2, '0');
+          const games = [
+            { name: 'Fortune Tiger 🐯', emoji: '🐯', baseMinutes: [5, 15, 25, 35, 45, 55] },
+            { name: 'Fortune Mouse 🐭', emoji: '🐭', baseMinutes: [8, 18, 28, 38, 48, 58] },
+            { name: 'Double Fortune 💰', emoji: '💰', baseMinutes: [3, 13, 23, 33, 43, 53] },
+            { name: 'Fortune Rabbit 🐰', emoji: '🐰', baseMinutes: [7, 17, 27, 37, 47, 57] },
+            { name: 'Fortune Ox 🐂', emoji: '🐂', baseMinutes: [2, 12, 22, 32, 42, 52] },
+            { name: 'Wild Cash x9000 💸', emoji: '💸', baseMinutes: [4, 14, 24, 34, 44, 54] },
+            { name: 'Mines ⛏️', emoji: '⛏️', baseMinutes: [6, 16, 26, 36, 46, 56] },
+            { name: 'Aviator ✈️', emoji: '✈️', baseMinutes: [9, 19, 29, 39, 49, 59] },
+            { name: 'Dragon Luck 🐲', emoji: '🐲', baseMinutes: [1, 11, 21, 31, 41, 51] },
+            { name: 'Ganesha Gold 🕉️', emoji: '🕉️', baseMinutes: [10, 20, 30, 40, 50, 0] },
+            { name: 'Bikini Paradise 👙', emoji: '👙', baseMinutes: [14, 24, 34, 44, 54, 4] },
+            { name: 'Muay Thai Champion 🥊', emoji: '🥊', baseMinutes: [11, 21, 31, 41, 51, 1] },
+            { name: 'Circus Delight 🎪', emoji: '🎪', baseMinutes: [13, 23, 33, 43, 53, 3] },
+            { name: 'Piggy Gold 🐷', emoji: '🐷', baseMinutes: [16, 26, 36, 46, 56, 6] },
+            { name: 'Midas Fortune 🌌', emoji: '🌌', baseMinutes: [12, 22, 32, 42, 52, 2] },
+            { name: 'Sun & Moon ☀️🌙', emoji: '🌙', baseMinutes: [15, 25, 35, 45, 55, 5] },
+            { name: 'Wild Bandito 🤠', emoji: '🤠', baseMinutes: [17, 27, 37, 47, 57, 7] },
+            { name: 'Fortune Dragon 🐉', emoji: '🐉', baseMinutes: [19, 29, 39, 49, 59, 9] },
+            { name: 'Cash Patrol 🚔', emoji: '🚔', baseMinutes: [18, 28, 38, 48, 58, 8] }
+          ];
+          let responseText = `🎰◈ *HORÁRIOS PAGANTES* ◈🎰\n\n`;
+          responseText += `┏━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
+          responseText += `┃  ⏰ *Horário (BR):* ${currentHour}:${currentMinute}  ┃\n`;
+          responseText += `┃  📅 *Data:* ${brasiliaTime.toLocaleDateString('pt-BR')}     ┃\n`;
+          responseText += `┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
+          games.forEach(game => {
+            const gameMinutes = game.baseMinutes.map(minute => {
+              const variation = Math.floor(Math.random() * 7) - 3;
+              let adjustedMinute = minute + variation;
+              if (adjustedMinute < 0) adjustedMinute += 60;
+              if (adjustedMinute >= 60) adjustedMinute -= 60;
+              return String(adjustedMinute).padStart(2, '0');
+            }).sort((a, b) => parseInt(a) - parseInt(b));
+            responseText += `╭─────────────────────────╮\n`;
+            responseText += `│ ${game.emoji} *${game.name}*\n`;
+            const nextTimes = [];
+            const currentMinuteInt = parseInt(currentMinute);
+            for (let minute of gameMinutes) {
+              const minuteInt = parseInt(minute);
+              let hour = parseInt(currentHour);
+              if (minuteInt <= currentMinuteInt) {
+                hour = (hour + 1) % 24;
+              }
+              nextTimes.push(`${String(hour).padStart(2, '0')}:${minute}`);
+              if (nextTimes.length >= 3) break;
+            }
+            while (nextTimes.length < 3) {
+              for (let minute of gameMinutes) {
+                let hour = (parseInt(currentHour) + Math.ceil(nextTimes.length / gameMinutes.length) + 1) % 24;
+                nextTimes.push(`${String(hour).padStart(2, '0')}:${minute}`);
+                if (nextTimes.length >= 3) break;
+              }
+            }
+            responseText += `│ 🕐 ${nextTimes.slice(0, 3).join(' • ')}\n`;
+            responseText += `╰─────────────────────────╯\n\n`;
+          });
+          responseText += `┏━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
+          responseText += `┃      ⚠️ *IMPORTANTE* ⚠️      ┃\n`;
+          responseText += `┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
+          responseText += `🔞 *Conteúdo para maiores de 18 anos*\n`;
+          responseText += `📊 Estes são horários estimados\n`;
+          responseText += `🎯 Jogue com responsabilidade\n`;
+          responseText += `💰 Nunca aposte mais do que pode perder\n`;
+          responseText += `🆘 Procure ajuda se tiver vício em jogos\n`;
+          responseText += `⚖️ Apostas podem causar dependência\n\n`;
+          responseText += `┏━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
+          responseText += `┃  🍀 *BOA SORTE E JOGUE*    ┃\n`;
+          responseText += `┃     *CONSCIENTEMENTE!* 🍀  ┃\n`;
+          responseText += `┗━━━━━━━━━━━━━━━━━━━━━━━━┛`;
+          await reply(responseText);
+        } catch (e) {
+          console.error('Erro no comando horarios:', e);
+          await reply('❌ Ocorreu um erro ao gerar os horários pagantes.');
+        }
+        break;
+      case 'autohorarios':
+        if (!isOwner && !isAdmins && !isGroupAdmins) return reply('⚠️ Este comando é apenas para administradores!');
+        try {
+          const action = args[0]?.toLowerCase();
+          if (!action || (action !== 'on' && action !== 'off' && action !== 'status' && action !== 'link')) {
+            const helpText = `┏━━━━━━━━━━━━━━━━━━━━━━━━┓\n` +
+              `┃   🤖 *AUTO HORÁRIOS*     ┃\n` +
+              `┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n` +
+              `📋 *Comandos disponíveis:*\n\n` +
+              `🟢 \`${groupPrefix}autohorarios on\`\n` +
+              `   ▸ Liga o envio automático\n\n` +
+              `🔴 \`${groupPrefix}autohorarios off\`\n` +
+              `   ▸ Desliga o envio automático\n\n` +
+              `📊 \`${groupPrefix}autohorarios status\`\n` +
+              `   ▸ Verifica status atual\n\n` +
+              `🔗 \`${groupPrefix}autohorarios link [URL]\`\n` +
+              `   ▸ Define link de apostas\n` +
+              `   ▸ Sem URL remove o link\n\n` +
+              `⏰ *Funcionamento:*\n` +
+              `• Envia horários a cada hora\n` +
+              `• Apenas em grupos\n` +
+              `• Inclui link se configurado\n\n` +
+              `⚙️ *Restrito a administradores*`;
+            await reply(helpText);
+            break;
+          }
+          let autoSchedules = {};
+          const autoSchedulesPath = './dados/database/autohorarios.json';
+          try {
+            if (fs.existsSync(autoSchedulesPath)) {
+              autoSchedules = JSON.parse(fs.readFileSync(autoSchedulesPath, 'utf8'));
+            }
+          } catch (e) {
+            autoSchedules = {};
+          }
+          if (!autoSchedules[from]) {
+            autoSchedules[from] = {
+              enabled: false,
+              link: null,
+              lastSent: 0
+            };
+          }
+          switch (action) {
+            case 'on':
+              autoSchedules[from].enabled = true;
+              fs.writeFileSync(autoSchedulesPath, JSON.stringify(autoSchedules, null, 2));
+              await reply('✅ *Auto horários ativado!*\n\n📤 Os horários pagantes serão enviados automaticamente a cada hora.\n\n⚡ O primeiro envio será na próxima hora cheia.');
+              break;
+            case 'off':
+              autoSchedules[from].enabled = false;
+              fs.writeFileSync(autoSchedulesPath, JSON.stringify(autoSchedules, null, 2));
+              await reply('🔴 *Auto horários desativado!*\n\n📴 Os envios automáticos foram interrompidos.');
+              break;
+            case 'status':
+              const config = autoSchedules[from];
+              const statusEmoji = config.enabled ? '🟢' : '🔴';
+              const statusText = config.enabled ? 'ATIVO' : 'INATIVO';
+              const linkStatus = config.link ? `🔗 ${config.link}` : '🚫 Nenhum link configurado';
+              const statusResponse = `┏━━━━━━━━━━━━━━━━━━━━━━━━┓\n` +
+                `┃   📊 *STATUS AUTO HORÁRIOS*  ┃\n` +
+                `┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n` +
+                `${statusEmoji} *Status:* ${statusText}\n\n` +
+                `🔗 *Link:*\n${linkStatus}\n\n` +
+                `⏰ *Próximo envio:*\n${config.enabled ? 'Na próxima hora cheia' : 'Desativado'}`;
+              await reply(statusResponse);
+              break;
+            case 'link':
+              const linkUrl = args.slice(1).join(' ').trim();
+              if (!linkUrl) {
+                autoSchedules[from].link = null;
+                fs.writeFileSync(autoSchedulesPath, JSON.stringify(autoSchedules, null, 2));
+                await reply('🗑️ *Link removido!*\n\n📝 Os horários automáticos não incluirão mais link de apostas.');
+              } else {
+                autoSchedules[from].link = linkUrl;
+                fs.writeFileSync(autoSchedulesPath, JSON.stringify(autoSchedules, null, 2));
+                await reply(`✅ *Link configurado!*\n\n🔗 *URL:* ${linkUrl}\n\n📝 Este link será incluído nos horários automáticos.`);
+              }
+              break;
+          }
+        } catch (e) {
+          console.error('Erro no comando autohorarios:', e);
+          await reply('❌ Ocorreu um erro ao configurar os horários automáticos.');
+        }
+        break;
+      // Rental expiration management commands
+      case 'rentalstats':
+        if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
+        if (!rentalExpirationManager) return reply('❌ Sistema de gerenciamento de expiração de aluguel não está ativo.');
+        const stats = rentalExpirationManager.getStats();
+        const message = `
+📊 **Estatísticas do Sistema de Expiração de Aluguel** 📊
+⏰ **Status do Sistema:**
+• Ativo: ${stats.isRunning ? '✅ Sim' : '❌ Não'}
+• Última verificação: ${stats.lastCheckTime ? new Date(stats.lastCheckTime).toLocaleString('pt-BR') : 'Nunca'}
+📈 **Estatísticas Gerais:**
+• Total de verificações: ${stats.totalChecks}
+• Avisos enviados: ${stats.warningsSent}
+• Avisos finais enviados: ${stats.finalWarningsSent}
+• Aluguéis expirados processados: ${stats.expiredProcessed}
+• Erros: ${stats.errors}
+⚙️ **Configurações:**
+• Intervalo de verificação: ${stats.config.checkInterval}
+• Dias para aviso: ${stats.config.warningDays}
+• Dias para aviso final: ${stats.config.finalWarningDays}
+• Limpeza automática: ${stats.config.enableAutoCleanup ? '✅ Ativada' : '❌ Desativada'}
+• Notificações: ${stats.config.enableNotifications ? '✅ Ativadas' : '❌ Desativadas'}
+📝 **Arquivo de Log:**
+• Local: ${stats.config.logFile}
+🔧 **Comandos Disponíveis:**
+• ${groupPrefix}rentalstats - Ver estatísticas
+• ${groupPrefix}rentaltest - Testar sistema manualmente
+• ${groupPrefix}rentalconfig - Configurar sistema
+• ${groupPrefix}rentalclean - Limpar logs antigos`;
+        await reply(message);
+        break;
+      case 'rentaltest':
+        if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
+        if (!rentalExpirationManager) return reply('❌ Sistema de gerenciamento de expiração de aluguel não está ativo.');
+        await reply('🔄 Iniciando teste manual do sistema de expiração de aluguel...');
+        try {
+          await rentalExpirationManager.checkExpiredRentals();
+          await reply('✅ Teste concluído com sucesso! Verifique as estatísticas para mais detalhes.');
+        } catch (error) {
+          console.error('❌ Error during rental test:', error);
+          await reply(`❌ Ocorreu um erro durante o teste: ${error.message}`);
+        }
+        break;
+      case 'rentalconfig':
+        if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
+        if (!q) return reply(`Uso: ${groupPrefix}rentalconfig <opção> <valor>\n\nOpções disponíveis:\n• interval <cron-expression>\n• warning <dias>\n• final <dias>\n• cleanup <horas>\n• notifications <on|off>\n• autocleanup <on|off>\n\nExemplo: ${groupPrefix}rentalconfig warning 7`);
+        const [option, value] = q.split(' ', 2);
+        if (!rentalExpirationManager) return reply('❌ Sistema de gerenciamento de expiração de aluguel não está ativo.');
+        try {
+          switch (option) {
+            case 'interval':
+              rentalExpirationManager.config.checkInterval = value;
+              await reply(`✅ Intervalo de verificação atualizado para: ${value}`);
+              break;
+            case 'warning':
+              rentalExpirationManager.config.warningDays = parseInt(value);
+              await reply(`✅ Dias para aviso inicial atualizados para: ${value}`);
+              break;
+            case 'final':
+              rentalExpirationManager.config.finalWarningDays = parseInt(value);
+              await reply(`✅ Dias para aviso final atualizados para: ${value}`);
+              break;
+            case 'cleanup':
+              rentalExpirationManager.config.cleanupDelayHours = parseInt(value);
+              await reply(`✅ Atraso para limpeza automática atualizado para: ${value} horas`);
+              break;
+            case 'notifications':
+              rentalExpirationManager.config.enableNotifications = value.toLowerCase() === 'on';
+              await reply(`✅ Notificações ${rentalExpirationManager.config.enableNotifications ? 'ativadas' : 'desativadas'}`);
+              break;
+            case 'autocleanup':
+              rentalExpirationManager.config.enableAutoCleanup = value.toLowerCase() === 'on';
+              await reply(`✅ Limpeza automática ${rentalExpirationManager.config.enableAutoCleanup ? 'ativada' : 'desativada'}`);
+              break;
+            default:
+              await reply(`❌ Opção inválida: ${option}\nUse ${groupPrefix}rentalconfig para ver as opções disponíveis.`);
+          }
+        } catch (error) {
+          console.error('❌ Error updating rental config:', error);
+          await reply(`❌ Ocorreu um erro ao atualizar a configuração: ${error.message}`);
+        }
+        break;
+      case 'rentalclean':
+        if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
+        if (!rentalExpirationManager) return reply('❌ Sistema de gerenciamento de expiração de aluguel não está ativo.');
+        try {
+          const statsBefore = rentalExpirationManager.getStats();
+          await rentalExpirationManager.resetStats();
+          await reply(`✅ Estatísticas resetadas com sucesso!\n\nAntes:\n• Verificações: ${statsBefore.totalChecks}\n• Avisos: ${statsBefore.warningsSent}\n• Erros: ${statsBefore.errors}\n\nDepois:\n• Verificações: 0\n• Avisos: 0\n• Erros: 0`);
+        } catch (error) {
+          console.error('❌ Error cleaning rental stats:', error);
+          await reply(`❌ Ocorreu um erro ao limpar as estatísticas: ${error.message}`);
+        }
+        break;
+      case 'salvarm':
+        try {
+          if (!isGroup) return reply('🚫 ◈ Este comando só funciona em grupos!');
+          if (!quotedMessageContent) return reply(`📸 Como usar:\n\n1️⃣ Responda uma mensagem (texto, áudio, foto, vídeo, etc)\n2️⃣ Mande ${groupPrefix}salvarm\n\nExemplo: ${groupPrefix}salvarm (respondendo uma foto)`);
+          // Obter informações de quem pediu o salvamento
+          const requesterJid = sender;
+          const requesterName = pushname || getUserName(sender);
+          const moment = {
+            type: type,
+            sender: sender,
+            senderName: pushname || getUserName(sender),
+            requester: requesterJid,
+            requesterName: requesterName,
+            content: null,
+            caption: null,
+            originalMessageKey: info.message.extendedTextMessage?.contextInfo?.stanzaId || null,
+            originalMessageId: info.message.extendedTextMessage?.contextInfo?.id || null,
+            originalSender: quotedMessageContent?.participant || info.message.extendedTextMessage?.contextInfo?.participant || null,
+            originalFromMe: quotedMessageContent?.fromMe || false
+          };
+          // Extrair conteúdo da mensagem respondida
+          if (isQuotedMsg || isQuotedMsg2) {
+            moment.type = 'text';
+            moment.content = quotedMessageContent.conversation || quotedMessageContent.extendedTextMessage?.text || '';
+          } else if (isQuotedImage) {
+            moment.type = 'image';
+            try {
+              const imageBuffer = await getFileBuffer(quotedMessageContent.imageMessage, 'image');
+              moment.content = imageBuffer.toString('base64');
+              moment.caption = quotedMessageContent.imageMessage.caption || '';
+            } catch (e) {
+              console.error('Erro ao extrair imagem:', e);
+              return reply('❌ Erro ao processar a imagem!');
+            }
+          } else if (isQuotedVideo) {
+            moment.type = 'video';
+            try {
+              const videoBuffer = await getFileBuffer(quotedMessageContent.videoMessage, 'video');
+              moment.content = videoBuffer.toString('base64');
+              moment.caption = quotedMessageContent.videoMessage.caption || '';
+            } catch (e) {
+              console.error('Erro ao extrair vídeo:', e);
+              return reply('❌ Erro ao processar o vídeo!');
+            }
+          } else if (isQuotedAudio) {
+            moment.type = 'audio';
+            try {
+              const audioBuffer = await getFileBuffer(quotedMessageContent.audioMessage, 'audio');
+              moment.content = audioBuffer.toString('base64');
+              moment.ptt = quotedMessageContent.audioMessage.ptt || false;
+            } catch (e) {
+              console.error('Erro ao extrair áudio:', e);
+              return reply('❌ Erro ao processar o áudio!');
+            }
+          } else if (isQuotedSticker) {
+            moment.type = 'sticker';
+            try {
+              const stickerBuffer = await getFileBuffer(quotedMessageContent.stickerMessage, 'sticker');
+              moment.content = stickerBuffer.toString('base64');
+            } catch (e) {
+              console.error('Erro ao extrair sticker:', e);
+              return reply('❌ Erro ao processar o sticker!');
+            }
+          } else {
+            return reply('❌ Tipo de mídia não suportado!');
+          }
+          const result = addMoment(from, moment);
+          if (result.success) {
+            await reply(`✅ ${result.message}`);
+          } else {
+            await reply(`❌ ${result.message}`);
+          }
+        } catch (e) {
+          console.error('Erro no comando salvarm:', e);
+          await reply('❌ Ocorreu um erro ao salvar o momento 💔');
+        }
+        break;
+      case 'moment':
+      case 'moments':
+        try {
+          if (!isGroup) return reply('🚫 ◈ Este comando só funciona em grupos!');
+          const moments = getMoments(from);
+          if (moments.length === 0) return reply('📸 Nenhum momento salvo para hoje!');
+          let responseText = `📸 *Momentos Salvos Hoje (${moments.length}/10)*\n\n`;
+          let mentions = [];
+          for (let i = 0; i < moments.length; i++) {
+            const m = moments[i];
+            const time = new Date(m.savedAt).toLocaleTimeString('pt-BR');
+            const senderMention = m.sender ? `@${m.sender.split('@')[0]}` : 'Desconhecido';
+            const requesterMention = m.requester ? `@${m.requester.split('@')[0]}` : 'Desconhecido';
+            // Adicionar à lista de mentions
+            if (m.requester && !mentions.includes(m.requester)) mentions.push(m.requester);
+            if (m.sender && !mentions.includes(m.sender)) mentions.push(m.sender);
+            responseText += `${i + 1}. 📄 Salvo por: ${requesterMention} (${m.requesterName || 'Desconhecido'})\n`;
+            responseText += `   🕒 ${time}\n`;
+            if (m.type === 'text') {
+              responseText += `   📝 ${m.content.substring(0, 50)}${m.content.length > 50 ? '...' : ''}\n`;
+              responseText += `   📄 Usar: ${groupPrefix}apm ${i + 1}\n\n`;
+            } else if (m.type === 'image') {
+              responseText += `   🖼️ Foto${m.caption ? ` - ${m.caption.substring(0, 30)}` : ''}\n`;
+              responseText += `   📄 Use ${groupPrefix}m ${i + 1} para ver a mídia\n`;
+              responseText += `   📄 Usar: ${groupPrefix}apm ${i + 1}\n\n`;
+            } else if (m.type === 'video') {
+              responseText += `   🎥 Vídeo${m.caption ? ` - ${m.caption.substring(0, 30)}` : ''}\n`;
+              responseText += `   📄 Use ${groupPrefix}m ${i + 1} para ver a mídia\n`;
+              responseText += `   📄 Usar: ${groupPrefix}apm ${i + 1}\n\n`;
+            } else if (m.type === 'audio') {
+              responseText += `   🎵 Áudio\n`;
+              responseText += `   📄 Use ${groupPrefix}m ${i + 1} para ver a mídia\n`;
+              responseText += `   📄 Usar: ${groupPrefix}apm ${i + 1}\n\n`;
+            } else if (m.type === 'sticker') {
+              responseText += `   🎭 Sticker\n`;
+              responseText += `   📄 Use ${groupPrefix}m ${i + 1} para ver a mídia\n`;
+              responseText += `   📄 Usar: ${groupPrefix}apm ${i + 1}\n\n`;
+            }
+          }
+          responseText += `\n📌 Limite: ${moments.length}/10 momentos por dia\n🚮 Para apagar um momento, use ${groupPrefix}apm [número]`;
+          await reply(responseText, { mentions: mentions });
+        } catch (e) {
+          console.error('Erro no comando moment:', e);
+          await reply('❌ Ocorreu um erro ao listar momentos 💔');
+        }
+        break;
+      case 'apm':
+        try {
+          if (!isGroup) return reply('🚫 ◈ Este comando só funciona em grupos!');
+          if (!q) return reply(`📄 Como usar:\n\n${groupPrefix}apm [número]\n\nExemplo: ${groupPrefix}apm 1`);
+          const momentIndex = parseInt(q) - 1;
+          const moments = getMoments(from);
+          if (momentIndex < 0 || momentIndex >= moments.length) {
+            return reply('❌ Número de momento inválido!');
+          }
+          const momentToDelete = moments[momentIndex];
+          // Verificar se quem está tentando apagar é quem salvou
+          if (momentToDelete.sender !== sender) {
+            return reply('🚫 Você só pode apagar momentos que você salvou!');
+          }
+          const result = deleteMoment(from, momentIndex);
+          if (result.success) {
+            await reply(`✅ ${result.message}`);
+          } else {
+            await reply(`❌ ${result.message}`);
+          }
+        } catch (e) {
+          console.error('Erro no comando apm:', e);
+          await reply('❌ Ocorreu um erro ao apagar o momento 💔');
+        }
+        break;
+      case 'm':
+        try {
+          if (!isGroup) return reply('🚫 ◈ Este comando só funciona em grupos!');
+          if (!q) return reply(`📄 Como usar:\n\n${groupPrefix}m [número]\n\nExemplo: ${groupPrefix}m 1`);
+          const momentIndex = parseInt(q.trim()) - 1;
+          const moments = getMoments(from);
+          if (momentIndex < 0 || momentIndex >= moments.length) {
+            return reply('❌ Número de momento inválido!');
+          }
+          const momentToShow = moments[momentIndex];
+          // Enviar a mídia com legenda
+          if (momentToShow.type === 'text') {
+            await reply(momentToShow.content);
+          } else if (momentToShow.type === 'image' && momentToShow.content) {
+            const imageBuffer = Buffer.from(momentToShow.content, 'base64');
+            await nazu.sendMessage(from, {
+              image: imageBuffer,
+              caption: momentToShow.caption || ''
+            });
+          } else if (momentToShow.type === 'video' && momentToShow.content) {
+            const videoBuffer = Buffer.from(momentToShow.content, 'base64');
+            await nazu.sendMessage(from, {
+              video: videoBuffer,
+              caption: momentToShow.caption || ''
+            });
+          } else if (momentToShow.type === 'audio' && momentToShow.content) {
+            const audioBuffer = Buffer.from(momentToShow.content, 'base64');
+            await nazu.sendMessage(from, {
+              audio: audioBuffer,
+              mimetype: 'audio/mpeg',
+              ptt: momentToShow.ptt || false
+            });
+          } else if (momentToShow.type === 'sticker' && momentToShow.content) {
+            const stickerBuffer = Buffer.from(momentToShow.content, 'base64');
+            await nazu.sendMessage(from, {
+              sticker: stickerBuffer
+            });
+          } else {
+            await reply('❌ Não foi possível recuperar a mídia!');
+          }
+        } catch (e) {
+          console.error('Erro no comando m:', e);
+          await reply('❌ Ocorreu um erro ao enviar a mídia 💔');
+        }
+        break;
+      case 'medirpau':
+        try {
+          if (!isGroup) return reply('🚫 ◈ Este comando só funciona em grupos!');
+          if (!groupData.modobrincadeira) return reply('🌌 O modo de brincadeiras não está ativado! Use !modobrincadeiras para ativar.');
+          const tamanho = Math.floor(Math.random() * 67) + 1;
+          let mensagem = '';
+          if (tamanho >= 1 && tamanho <= 5) {
+            mensagem = `${tamanho} cm ➥ Encontrado após buscas intensivas de 3 horas. 🔎`;
+          } else if (tamanho >= 6 && tamanho <= 10) {
+            mensagem = `${tamanho} cm ➥ Se piscar, perde. 👀`;
+          } else if (tamanho >= 11 && tamanho <= 15) {
+            mensagem = `${tamanho} cm ➥ Aparentemente existe. Teoricamente. 🤓`;
+          } else if (tamanho >= 16 && tamanho <= 20) {
+            mensagem = `${tamanho} cm ➥ Equilibrado, como tudo deve ser. 🟣`;
+          } else if (tamanho >= 21 && tamanho <= 25) {
+            mensagem = `${tamanho} cm ➥ O orgulho da família. 👨‍👩‍👦`;
+          } else if (tamanho >= 26 && tamanho <= 30) {
+            mensagem = `${tamanho} cm ➥ Já pode entrar em competições amadoras. 🏅`;
+          } else if (tamanho >= 31 && tamanho <= 35) {
+            mensagem = `${tamanho} cm ➥ O segurança pediu documento na entrada. 🪪`;
+          } else if (tamanho >= 36 && tamanho <= 40) {
+            mensagem = `${tamanho} cm ➥ A gravidade começou a colaborar. 🌍`;
+          } else if (tamanho >= 41 && tamanho <= 45) {
+            mensagem = `${tamanho} cm ➥ O Wi-Fi pega melhor perto dele. 📶`;
+          } else if (tamanho >= 46 && tamanho <= 50) {
+            mensagem = `${tamanho} cm ➥ Os engenheiros estão estudando o caso. 🏗️`;
+          } else if (tamanho >= 51 && tamanho <= 55) {
+            mensagem = `${tamanho} cm ➥ O governo classificou como patrimônio nacional. 🏛️`;
+          } else if (tamanho >= 56 && tamanho <= 60) {
+            mensagem = `${tamanho} cm ➥ Apareceu em imagens de satélite. 🛰️`;
+          } else if (tamanho >= 61 && tamanho <= 66) {
+            mensagem = `${tamanho} cm ➥ Detectado por radares militares. 🎯`;
+          } else if (tamanho === 67) {
+            mensagem = `🌌 CHEFE FINAL DOS CHEFES 🌌\n➥ Raridade: Impossível.\n➥ Status: Bug do sistema.\n➥ O bot travou tentando calcular.\n➥ Resultado validado por nenhum cientista.`;
+          }
+          await reply(mensagem);
+        } catch (e) {
+          console.error('Erro no comando medirpau:', e);
+          await reply('❌ Ocorreu um erro ao medir 💔');
+        }
+        break;
+      default:
+        if (isCmd) {
+          const cmdNotFoundConfig = loadCmdNotFoundConfig();
+          if (cmdNotFoundConfig.enabled) {
+            const userName = pushname || getUserName(sender);
+            const commandName = command || body.trim().slice(groupPrefix.length).split(/ +/).shift().trim();
+            const notFoundMessage = formatMessageWithFallback(
+              cmdNotFoundConfig.message,
+              {
+                command: commandName,
+                prefix: groupPrefix,
+                user: sender,
+                botName: nomebot,
+                userName: userName
+              },
+              '❌ Comando não encontrado! Tente ' + groupPrefix + 'menu para ver todos os comandos disponíveis.'
+            );
+            try {
+              await reply(notFoundMessage);
+              console.log(`🔍 Comando não encontrado: "${commandName}" por ${userName} (${sender}) no grupo ${isGroup ? groupMetadata.subject : 'privado'}`);
+            } catch (error) {
+              console.error('❌ Erro ao enviar mensagem de comando não encontrado:', error);
+              await nazu.react('❌', {
+                key: info.key
+              });
+            }
+          } else {
+            await nazu.react('❌', {
+              key: info.key
+            });
+          }
+        }
+        const msgPrefix = loadMsgPrefix();
+        if (['prefix', 'prefixo'].includes(budy2) && msgPrefix) {
+          await reply(msgPrefix.replace('#prefixo#', prefix));
+        };
+        const customReacts = loadCustomReacts();
+        for (const react of customReacts) {
+          if (budy2.includes(react.trigger)) {
+            await nazu.react(react.emoji, { key: info.key });
+            break;
+          }
+        }
+        // Processar auto-respostas do grupo (addautoadm) - funciona mesmo sem autorepo
+        if (!isCmd && isGroup) {
+          const groupAutoResponses = loadGroupAutoResponses(from);
+          if (groupAutoResponses.length > 0) {
+            await processAutoResponse(nazu, from, budy2, info);
+          }
+        }
+        // Processar auto-respostas globais (apenas se autorepo estiver ativo)
+        if (!isCmd && isAutoRepo) {
+          await processAutoResponse(nazu, from, budy2, info);
+        };
+        // ═══════════════════════════════════════════════════════════════
+        // 🤖 NPC AUTOMÁTICO - Responde a TODOS os eventos
+        // ═══════════════════════════════════════════════════════════════
+        if (isGroup && npcManager?.isEnabled(from) && !info.key.fromMe) {
+          // Detecta tipo de mensagem e faz NPC responder
+          const detectedEvent = npcManager.detectEvent(body, sender, pushname);
+          if (detectedEvent) {
+            await npcManager.trigger(nazu, from, detectedEvent, sender, pushname, {}, from);
+          }
+          // Responde a mensagens de mídia
+          if (type === 'imageMessage' && !isCmd) {
+            await npcManager.trigger(nazu, from, 'foto_enviada', sender, pushname, {}, from);
+          } else if (type === 'videoMessage' && !isCmd) {
+            await npcManager.trigger(nazu, from, 'video_enviado', sender, pushname, {}, from);
+          } else if (type === 'audioMessage' && !isCmd) {
+            await npcManager.trigger(nazu, from, 'audio_enviado', sender, pushname, {}, from);
+          } else if (type === 'stickerMessage' && !isCmd) {
+            await npcManager.trigger(nazu, from, 'sticker_enviado', sender, pushname, {}, from);
+          } else if (type === 'documentMessage' && !isCmd) {
+            await npcManager.trigger(nazu, from, 'documento_enviado', sender, pushname, {}, from);
+          }
+          // Responde a links compartilhados
+          if (budy2.includes('http') || budy2.includes('www.')) {
+            await npcManager.trigger(nazu, from, 'link_compartilhado', sender, pushname, {}, from);
+          }
+          // Responde a mensagens com perguntas (interação)
+          if (!isCmd && (body.endsWith('?') || body.includes('?')) && Math.random() < 0.3) {
+            await npcManager.trigger(nazu, from, 'mensagem_enviada', sender, pushname, {}, from);
+          }
+        }
+    };
+  } catch (error) {
+    console.error(`❌ [${msgId}] ERRO NO PROCESSAMENTO DA MENSAGEM`);
+    console.error('Tipo de erro:', error.name);
+    console.error('Mensagem:', error.message);
+    console.error('Stack trace:', error.stack);
+  };
+};
+function getDiskSpaceInfo() {
+  try {
+    const platform = os.platform();
+    let totalBytes = 0;
+    let freeBytes = 0;
+    const defaultResult = {
+      totalGb: 'N/A',
+      freeGb: 'N/A',
+      usedGb: 'N/A',
+      percentUsed: 'N/A'
+    };
+    if (platform === 'win32') {
+      try {
+        const scriptPath = __dirname;
+        const driveLetter = pathz.parse(scriptPath).root.charAt(0);
+        const command = `fsutil volume diskfree ${driveLetter}:`;
+        const output = execSync(command).toString();
+        const lines = output.split('\n');
+        const freeLine = lines.find(line => line.includes('Total # of free bytes'));
+        const totalLine = lines.find(line => line.includes('Total # of bytes'));
+        if (freeLine) {
+          freeBytes = parseFloat(freeLine.split(':')[1].trim().replace(/\./g, ''));
+        }
+        if (totalLine) {
+          totalBytes = parseFloat(totalLine.split(':')[1].trim().replace(/\./g, ''));
+        }
+      } catch (winError) {
+        console.error("Erro ao obter espaço em disco no Windows:", winError);
+        return defaultResult;
+      }
+    } else if (platform === 'linux' || platform === 'darwin') {
+      try {
+        const command = 'df -k .';
+        const output = execSync(command).toString();
+        const lines = output.split('\n');
+        if (lines.length > 1) {
+          const parts = lines[1].split(/\s+/);
+          totalBytes = parseInt(parts[1]) * 1024;
+          freeBytes = parseInt(parts[3]) * 1024;
+        }
+      } catch (unixError) {
+        console.error("Erro ao obter espaço em disco no Linux/macOS:", unixError);
+        return defaultResult;
+      }
+    } else {
+      console.warn(`Plataforma ${platform} não suportada para informações de disco`);
+      return defaultResult;
+    }
+    if (totalBytes > 0 && freeBytes >= 0) {
+      const usedBytes = totalBytes - freeBytes;
+      const totalGb = (totalBytes / 1024 / 1024 / 1024).toFixed(2);
+      const freeGb = (freeBytes / 1024 / 1024 / 1024).toFixed(2);
+      const usedGb = (usedBytes / 1024 / 1024 / 1024).toFixed(2);
+      const percentUsed = (usedBytes / totalBytes * 100).toFixed(1) + '%';
+      return {
+        totalGb,
+        freeGb,
+        usedGb,
+        percentUsed
+      };
+    } else {
+      console.warn("Valores inválidos de espaço em disco:", {
+        totalBytes,
+        freeBytes
+      });
+      return defaultResult;
+    }
+  } catch (error) {
+    console.error("Erro ao obter informações de disco:", error);
+    return {
+      totalGb: 'N/A',
+      freeGb: 'N/A',
+      usedGb: 'N/A',
+      percentUsed: 'N/A'
+    };
+
+
+  }
+}
+// Função para enviar mensagens com botões interativos (CTA URL)
+async function sendInteractiveMessage(sock, jid, options, extra = {}) {
+  const { text, footer, interactiveButtons, mentions } = options;
+  
+  const msg = await generateWAMessageFromContent(jid, {
+    viewOnceMessage: {
+      message: {
+        interactiveMessage: {
+          header: {
+            hasMediaAttachment: false,
+          },
+          body: { text: text },
+          footer: { text: footer || '' },
+          contextInfo: mentions ? { mentionedJid: mentions } : undefined,
+          nativeFlowMessage: {
+            buttons: interactiveButtons || []
+          }
+        }
+      }
+    }
+  }, extra);
+  
+  await sock.relayMessage(jid, msg.message, { messageId: msg.key.id });
+  return msg;
+}
+
+export default NazuninhaBotExec;
+/*
+ * ═══════════════════════════════════════════════════════════════
+ * ⚠️  INSTRUÇÃO OBRIGATÓRIA - REGISTRO DO EVENTO DE BOAS-VINDAS
+ * ═══════════════════════════════════════════════════════════════
+ *
+ * Para que as boas-vindas e mensagens de saída funcionem,
+ * você DEVE adicionar o seguinte código no seu arquivo de conexão
+ * (ex: app.js, bot.js, connection.js, start.js) DEPOIS de criar
+ * a conexão com o Baileys:
+ *
+ * import { handleGroupParticipantsUpdate } from './index.js';
+
+}
+ *
+ * // Dentro da função de conexão, após criar o socket (nazu/sock):
+ * nazu.ev.on('group-participants.update', async (update) => {
+ *   await handleGroupParticipantsUpdate(nazu, update);
+ * });
+ *
+ * ═══════════════════════════════════════════════════════════════
+ */
