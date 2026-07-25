@@ -316,6 +316,8 @@ ${isLiteMode ? '' : `╭─❖ 🔞 INTERAÇÕES "PICANTES"
 
 ╭─❖ 🏆 RANKINGS MASCULINOS
 │ 🏳️ ${prefix}rankgay
+│ 🐀 ${prefix}rankputo
+│ 🍆 ${prefix}rankpauzudo
 │ 🧠 ${prefix}rankburro
 │ 🧠 ${prefix}rankburra
 │ 🧠 ${prefix}rankinteligente
@@ -360,6 +362,8 @@ ${isLiteMode ? '' : `╭─❖ 🔞 INTERAÇÕES "PICANTES"
 
 ╭─❖ 🏆 RANKINGS FEMININOS
 │ 🏳️ ${prefix}ranklesbica
+│ 🐀 ${prefix}rankputa
+│ 💋 ${prefix}rankbucetuda
 │ 🧠 ${prefix}rankinteligente
 │ 🥷 ${prefix}rankotaku
 │ 💍 ${prefix}rankfiel
