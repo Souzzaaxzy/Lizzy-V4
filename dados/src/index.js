@@ -29174,6 +29174,10 @@ break;
       case 'promote':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
+          // Se X9 ativo, só owners/subowners podem usar
+          if (groupData.x9 && !isOwner && !isSubOwner) {
+            return reply("❌ Comando bloqueado pelo sistema anti-roubo. Apenas o dono pode usar este comando.");
+          }
           if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
           if (!isBotAdmin) return sendAbyssWarning("Eu preciso ser administrador para realizar esta ação.");
           if (!menc_os2) return reply("Marque alguém 🙄");
@@ -29189,6 +29193,10 @@ break;
       case 'demote':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
+          // Se X9 ativo, só owners/subowners podem usar
+          if (groupData.x9 && !isOwner && !isSubOwner) {
+            return reply("❌ Comando bloqueado pelo sistema anti-roubo. Apenas o dono pode usar este comando.");
+          }
           if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
           if (!isBotAdmin) return sendAbyssWarning("Eu preciso ser administrador para realizar esta ação.");
           if (!menc_os2) return reply("Marque alguém 🙄");
