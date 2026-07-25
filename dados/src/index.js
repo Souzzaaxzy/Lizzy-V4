@@ -5879,24 +5879,6 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
             args.push(...allParams.split(/ +/));
           }
           q = allParams;
-          // Adicionar botão CTA URL Canal Oficial após executar comando sem prefixo
-          try {
-            await sendInteractiveMessage(nazu, from, {
-              text: "📌 *Canal Oficial*\n\nAcesse nosso canal para novidades e atualizações!",
-              footer: "© Abyss Bot",
-              interactiveButtons: [
-                {
-                  name: "cta_url",
-                  buttonParamsJson: JSON.stringify({
-                    display_text: "📢 Canal Oficial",
-                    url: "https://whatsapp.com/channel/0029Vb8VWbG3WHTWX9ZPnj0Y"
-                  })
-                }
-              ]
-            }, { quoted: info });
-          } catch (e) {
-            console.log('[VER-CANAL-NOPREFIX] Erro:', e.message);
-          }
         }
       }
     }
