@@ -29174,9 +29174,20 @@ break;
       case 'promote':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
-          // Se X9 ativo, só owners/subowners podem usar
-          if (groupData.x9 && !isOwner && !isSubOwner) {
-            return reply("❌ Comando bloqueado pelo sistema anti-roubo. Apenas o dono pode usar este comando.");
+          // Verificação antiRoubo
+          if (groupData.antiRoubo?.enabled) {
+            const groupMetadata = await nazu.groupMetadata(from);
+            const groupCreator = groupMetadata?.owner?.split('@')[0] || '';
+            const senderNum = sender.split('@')[0];
+            const isCreator = senderNum === groupCreator;
+            const isAuth = groupData.antiRoubo?.authorizedUsers?.some(u => {
+              const authNum = (u.split('@')[0] || '').replace(/\D/g, '');
+              const senderNormalized = (senderNum || '').replace(/\D/g, '');
+              return authNum === senderNormalized || authNum.includes(senderNormalized) || senderNormalized.includes(authNum);
+            });
+            if (!isCreator && !isAuth && !isOwner && !isSubOwner) {
+              return reply("❌ Você não tem permissão para usar este comando. Apenas o dono do grupo ou usuários autorizados podem usar.");
+            }
           }
           if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
           if (!isBotAdmin) return sendAbyssWarning("Eu preciso ser administrador para realizar esta ação.");
@@ -29193,9 +29204,20 @@ break;
       case 'demote':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
-          // Se X9 ativo, só owners/subowners podem usar
-          if (groupData.x9 && !isOwner && !isSubOwner) {
-            return reply("❌ Comando bloqueado pelo sistema anti-roubo. Apenas o dono pode usar este comando.");
+          // Verificação antiRoubo
+          if (groupData.antiRoubo?.enabled) {
+            const groupMetadata = await nazu.groupMetadata(from);
+            const groupCreator = groupMetadata?.owner?.split('@')[0] || '';
+            const senderNum = sender.split('@')[0];
+            const isCreator = senderNum === groupCreator;
+            const isAuth = groupData.antiRoubo?.authorizedUsers?.some(u => {
+              const authNum = (u.split('@')[0] || '').replace(/\D/g, '');
+              const senderNormalized = (senderNum || '').replace(/\D/g, '');
+              return authNum === senderNormalized || authNum.includes(senderNormalized) || senderNormalized.includes(authNum);
+            });
+            if (!isCreator && !isAuth && !isOwner && !isSubOwner) {
+              return reply("❌ Você não tem permissão para usar este comando. Apenas o dono do grupo ou usuários autorizados podem usar.");
+            }
           }
           if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
           if (!isBotAdmin) return sendAbyssWarning("Eu preciso ser administrador para realizar esta ação.");
