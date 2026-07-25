@@ -78,7 +78,8 @@ import {
   setApiKey, 
   deleteApiKey, 
   getApiKey, 
-  getAllApiKeysStatus 
+  getAllApiKeysStatus,
+  loadGlobalBlacklist,
 } from './utils/database.js';
 // Suprimir warnings de execuções perdidas do node-cron
 const originalWarn = console.warn;
@@ -124,20 +125,6 @@ function hasAntiRouboLock(groupId) {
 // ============================================================
 // SISTEMA DE BLACKLIST - VERIFICAÇÃO AUTOMÁTICA DE USUÁRIOS
 // ============================================================
-
-// Função para carregar blacklist global
-function loadGlobalBlacklist() {
-  try {
-    const globalBlacklistPath = path.join(__dirname, 'database', 'blacklist_global.json');
-    if (!fs.existsSync(globalBlacklistPath)) return { users: {} };
-    const data = fs.readFileSync(globalBlacklistPath, 'utf-8');
-    return JSON.parse(data);
-  } catch (e) {
-    console.error('[BLACKLIST] Erro ao carregar blacklist global:', e.message);
-    return { users: {} };
-  }
-}
-
 /**
  * Verifica se um usuário está na blacklist global
  * @param {string} userId - ID do usuário (JID ou LID)
