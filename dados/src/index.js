@@ -711,7 +711,6 @@ import {
   saveNoPrefixCommands,
   loadCommandAliases,
   saveCommandAliases,
-  loadGlobalBlacklist,
   saveGlobalBlacklist,
   addGlobalBlacklist,
   removeGlobalBlacklist,
