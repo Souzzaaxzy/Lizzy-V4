@@ -5192,24 +5192,6 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
           } else {
             await reply(`📌 Prefixo atual deste grupo: ${currentPrefix}`);
           }
-          // Adicionar botão CTA URL Canal Oficial usando sendInteractiveMessage
-          try {
-            await sendInteractiveMessage(nazu, from, {
-              text: "📌 *Canal Oficial*\n\nAcesse nosso canal para novidades e atualizações!",
-              footer: "© Abyss Bot",
-              interactiveButtons: [
-                {
-                  name: "cta_url",
-                  buttonParamsJson: JSON.stringify({
-                    display_text: "📢 Canal Oficial",
-                    url: "https://whatsapp.com/channel/0029Vb8VWbG3WHTWX9ZPnj0Y"
-                  })
-                }
-              ]
-            }, { quoted: info });
-          } catch (e) {
-            console.log('[VER-CANAL] Erro:', e.message);
-          }
         }
         if (isGroup && antipalavra && body && !isCmd) {
           try {
