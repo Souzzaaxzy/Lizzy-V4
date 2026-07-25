@@ -124,6 +124,20 @@ function hasAntiRouboLock(groupId) {
 // ============================================================
 // SISTEMA DE BLACKLIST - VERIFICAÇÃO AUTOMÁTICA DE USUÁRIOS
 // ============================================================
+
+// Função para carregar blacklist global
+function loadGlobalBlacklist() {
+  try {
+    const globalBlacklistPath = path.join(__dirname, 'database', 'blacklist_global.json');
+    if (!fs.existsSync(globalBlacklistPath)) return { users: {} };
+    const data = fs.readFileSync(globalBlacklistPath, 'utf-8');
+    return JSON.parse(data);
+  } catch (e) {
+    console.error('[BLACKLIST] Erro ao carregar blacklist global:', e.message);
+    return { users: {} };
+  }
+}
+
 /**
  * Verifica se um usuário está na blacklist global
  * @param {string} userId - ID do usuário (JID ou LID)
@@ -325,6 +339,10 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
             // Banir usuários encontrados na blacklist
             if (usersToBan.length > 0) {
                 const idsToBan = usersToBan.map(u => u.id);
+                console.log(`\x1b[31m[BLACKLIST]\x1b[0m Banindo ${usersToBan.length} usuário(s) por estar na blacklist`);
+                for (const user of usersToBan) {
+                    console.log(`\x1b[31m[BLACKLIST]\x1b[0m - ${user.id} (${user.type}) - ${user.reason}`);
+                }
                 await nazu.groupParticipantsUpdate(id, idsToBan, 'remove');
             }
             // Continua com o fluxo normal de boas-vindas (se habilitado)
