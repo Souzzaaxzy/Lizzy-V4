@@ -36180,11 +36180,25 @@ ${groupPrefix}setngl https://ngl.link/...`);
           case 'rankpauzudo':
             titulo = '🍆 TOP 5 PAUZUDOS DO GRUPO 🍆';
             emoji = '😎';
-          break;
+            break;
+          case 'rankbucetuda':
+            titulo = '💋 TOP 5 BUCETUDAS DO GRUPO 💋';
+            emoji = '😘';
+            break;
         }
 
-        const allMembers = AllgroupMembers || [];
-        if (allMembers.length < 3) {
-          await reply('❌ Precisa de pelo menos 3 membros no grupo!');
-          break;
+        const posicoes = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣'];
+        let ranking = `╭━━━〔 \${titulo} 〕━━━╮\n\n`;
+        
+        for (let i = 0; i < top5.length; i++) {
+          ranking += `\${posicoes[i]} @\${nomes[i]}\n\n`;
         }
+        
+        ranking += `╰━━━━━━━━━━━━━━━━━━╯\n\n\${emoji} *Ranking aleatório do grupo!*`;
+        
+        await nazu.sendMessage(from, {
+          text: ranking,
+          mentions: top5
+        });
+        break;
+
