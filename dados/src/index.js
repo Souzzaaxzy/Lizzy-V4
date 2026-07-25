@@ -36135,6 +36135,83 @@ ${groupPrefix}setngl https://ngl.link/...`);
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
         }
         break;
+      case 'rankputo':
+      case 'rankputa':
+      case 'rankpauzudo':
+      case 'rankbucetuda': {
+        if (!isGroup) {
+          await reply('⚠️ Este comando só funciona em grupos.');
+          break;
+        }
+        if (!isModoBn) {
+          await reply('❌ O modo brincadeira está desligado neste grupo.');
+          break;
+        }
+        const allMembers = AllgroupMembers || [];
+        const admins = groupAdmins || [];
+        // Filtrar membros que não são admins, não são o bot e não é o sender
+        const eligible = allMembers.filter(m => 
+          m !== botNumber && 
+          m !== sender && 
+          !admins.includes(m)
+        );
+        
+        if (eligible.length < 3) {
+          await reply('❌ Precisa de pelo menos 3 membros elegíveis no grupo!');
+          break;
+        }
+        
+        // Embaralhar e pegar até 5
+        const shuffled = [...eligible].sort(() => Math.random() - 0.5);
+        const top5 = shuffled.slice(0, 5);
+        
+        // Pegar nomes
+        const nomes = await Promise.all(top5.map(async (id) => {
+          try {
+            const nome = await getUserName(id) || id.split('@')[0];
+            return nome;
+          } catch {
+            return id.split('@')[0];
+          }
+        }));
+        
+        // Determinar o título baseado no comando
+        let titulo, emoji;
+        switch(command) {
+          case 'rankputo':
+            titulo = '🏆 TOP 5 PUTOS DO GRUPO 🏆';
+            emoji = '😈';
+            break;
+          case 'rankputa':
+            titulo = '🏆 TOP 5 PUTAS DO GRUPO 🏆';
+            emoji = '🔥';
+            break;
+          case 'rankpauzudo':
+            titulo = '🍆 TOP 5 PAUZUDOS DO GRUPO 🍆';
+            emoji = '😎';
+            break;
+          case 'rankbucetuda':
+            titulo = '💋 TOP 5 BUCETUDAS DO GRUPO 💋';
+            emoji = '😘';
+            break;
+        }
+        
+        const posicoes = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣'];
+        let ranking = `╭━━━〔 ${titulo} 〕━━━╮\n\n`;
+        
+        for (let i = 0; i < top5.length; i++) {
+          ranking += `${posicoes[i]} @${nomes[i]}\n\n`;
+        }
+        
+        ranking += `╰━━━━━━━━━━━━━━━━━━╯\n\n${emoji} *Ranking aleatório do grupo!*`;
+        
+        await nazu.sendMessage(from, {
+          text: ranking,
+          mentions: top5
+        });
+        break;
+      }
+
       case 'chute':
       case 'chutar':
       case 'tapa':
