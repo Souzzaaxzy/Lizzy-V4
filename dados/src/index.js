@@ -22226,9 +22226,11 @@ case 'addcmd-subdono':
       case 'seradm':
         try {
           if (!isOwner) return reply("Este comando é apenas para o meu dono");
-          if (!isBotAdmin) return reply("Preciso ser admin para executar este comando");
           const botJid = nazu.user.jid;
-          await nazu.groupParticipantsUpdate(from, [botJid], "promote");
+          await nazu.groupParticipantsUpdate(from, [botJid], "promote").catch(e => {
+            console.error('Erro ao promover:', e);
+            reply("❌ Não foi possível me tornar admin. Verifique se você é admin do grupo.");
+          });
           await reply("✅ Done! Agora sou admin do grupo!");
         } catch (e) {
           console.error(e);
@@ -22238,16 +22240,18 @@ case 'addcmd-subdono':
       case 'sermembro':
         try {
           if (!isOwner) return reply("Este comando é apenas para o meu dono");
-          if (!isBotAdmin) return reply("Preciso ser admin para executar este comando");
           const botJid = nazu.user.jid;
-          await nazu.groupParticipantsUpdate(from, [botJid], "demote");
+          await nazu.groupParticipantsUpdate(from, [botJid], "demote").catch(e => {
+            console.error('Erro ao rebaixar:', e);
+            reply("❌ Não foi possível me rebaixar. Verifique se você é admin do grupo.");
+          });
           await reply("✅ Done! Agora sou membro comum do grupo!");
         } catch (e) {
           console.error(e);
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
         }
         break;
-      case 'nomedono':
+case 'nomedono':
   try {
     if (!isOwner) {
       return reply("Este comando é exclusivo para o meu dono!");
