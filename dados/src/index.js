@@ -22226,12 +22226,11 @@ case 'addcmd-subdono':
       case 'seradm':
         try {
           if (!isOwner) return reply("Este comando é apenas para o meu dono");
-          const botJid = nazu.user.jid;
-          await nazu.groupParticipantsUpdate(from, [botJid], "promote").catch(e => {
-            console.error('Erro ao promover:', e);
-            reply("❌ Não foi possível me tornar admin. Verifique se você é admin do grupo.");
+          if (!isBotAdmin) return reply("Preciso ser admin para executar este comando");
+          await nazu.groupParticipantsUpdate(from, [sender], "promote");
+          await reply("✅ Done! @${sender.split('@')[0]} agora é admin do grupo!", {
+            mentions: [sender]
           });
-          await reply("✅ Done! Agora sou admin do grupo!");
         } catch (e) {
           console.error(e);
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
@@ -22240,12 +22239,11 @@ case 'addcmd-subdono':
       case 'sermembro':
         try {
           if (!isOwner) return reply("Este comando é apenas para o meu dono");
-          const botJid = nazu.user.jid;
-          await nazu.groupParticipantsUpdate(from, [botJid], "demote").catch(e => {
-            console.error('Erro ao rebaixar:', e);
-            reply("❌ Não foi possível me rebaixar. Verifique se você é admin do grupo.");
+          if (!isBotAdmin) return reply("Preciso ser admin para executar este comando");
+          await nazu.groupParticipantsUpdate(from, [sender], "demote");
+          await reply("✅ Done! @${sender.split('@')[0]} agora é membro comum do grupo!", {
+            mentions: [sender]
           });
-          await reply("✅ Done! Agora sou membro comum do grupo!");
         } catch (e) {
           console.error(e);
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
