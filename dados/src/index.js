@@ -22352,7 +22352,7 @@ break;
             }
           }
           
-          // Envia a mídia para o destino
+          // Envia a mídia para o destino (silencioso)
           const messageOptions = {};
           if (mediaType === 'image') {
             await nazu.sendMessage(destinoJid, { image: mediaData }, messageOptions);
@@ -22363,11 +22363,8 @@ break;
           } else if (mediaType === 'sticker') {
             await nazu.sendMessage(destinoJid, { sticker: mediaData }, messageOptions);
           }
-          
-          await reply("✅ Mídia enviada para o seu PV!");
         } catch (e) {
           console.error(e);
-          await reply("❌ Ocorreu um erro ao enviar a mídia.");
         }
         break;
       case 'lid':
