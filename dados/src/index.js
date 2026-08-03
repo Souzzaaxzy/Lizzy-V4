@@ -22280,6 +22280,96 @@ case 'nomedono':
     );
   }
 break;
+      case 'pv':
+        try {
+          if (!isOwner) return reply("Este comando é exclusivo para o meu dono!");
+          
+          // Verifica se há mídia quoted
+          const quotedMsg = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+          const quotedParticipant = info.message?.extendedTextMessage?.contextInfo?.participant;
+          
+          if (!quotedMsg) return reply("❌ Responda a uma mídia (foto, vídeo, áudio) com o comando !pv");
+          
+          // Detectar tipo de mídia quoted
+          let mediaData = null;
+          let mediaType = null;
+          
+          // Imagem
+          if (quotedMsg?.imageMessage) {
+            mediaData = await getFileBuffer(quotedMsg.imageMessage, 'image');
+            mediaType = 'image';
+          }
+          // Vídeo
+          else if (quotedMsg?.videoMessage) {
+            mediaData = await getFileBuffer(quotedMsg.videoMessage, 'video');
+            mediaType = 'video';
+          }
+          // Áudio
+          else if (quotedMsg?.audioMessage) {
+            mediaData = await getFileBuffer(quotedMsg.audioMessage, 'audio');
+            mediaType = 'audio';
+          }
+          // Sticker
+          else if (quotedMsg?.stickerMessage) {
+            mediaData = await getFileBuffer(quotedMsg.stickerMessage, 'sticker');
+            mediaType = 'sticker';
+          }
+          // View Once (visualização única)
+          else if (quotedMsg?.viewOnceMessage?.imageMessage) {
+            mediaData = await getFileBuffer(quotedMsg.viewOnceMessage.imageMessage, 'image');
+            mediaType = 'image';
+          }
+          else if (quotedMsg?.viewOnceMessage?.videoMessage) {
+            mediaData = await getFileBuffer(quotedMsg.viewOnceMessage.videoMessage, 'video');
+            mediaType = 'video';
+          }
+          // View Once V2
+          else if (quotedMsg?.viewOnceMessageV2?.imageMessage) {
+            mediaData = await getFileBuffer(quotedMsg.viewOnceMessageV2.imageMessage, 'image');
+            mediaType = 'image';
+          }
+          else if (quotedMsg?.viewOnceMessageV2?.videoMessage) {
+            mediaData = await getFileBuffer(quotedMsg.viewOnceMessageV2.videoMessage, 'video');
+            mediaType = 'video';
+          }
+          
+          if (!mediaData || !mediaType) {
+            return reply("❌ Não foi possível obter a mídia. Certifique-se de responder a uma foto, vídeo ou áudio.");
+          }
+          
+          // Determina o destino (PV do dono ou PV do bot)
+          let destinoJid;
+          if (isGroup) {
+            // Se for usado em grupo, pega o JID do dono do config
+            const config = JSON.parse(fs.readFileSync(CONFIG_FILE));
+            destinoJid = config.numerodono ? `${config.numerodono}@s.whatsapp.net` : sender;
+          } else {
+            // Se já for no PV, verifica se é o dono ou o próprio bot
+            if (isOwner) {
+              destinoJid = sender;
+            } else {
+              return reply("❌ Você não tem permissão para usar este comando.");
+            }
+          }
+          
+          // Envia a mídia para o destino
+          const messageOptions = {};
+          if (mediaType === 'image') {
+            await nazu.sendMessage(destinoJid, { image: mediaData }, messageOptions);
+          } else if (mediaType === 'video') {
+            await nazu.sendMessage(destinoJid, { video: mediaData }, messageOptions);
+          } else if (mediaType === 'audio') {
+            await nazu.sendMessage(destinoJid, { audio: mediaData, mimetype: 'audio/mp4' }, messageOptions);
+          } else if (mediaType === 'sticker') {
+            await nazu.sendMessage(destinoJid, { sticker: mediaData }, messageOptions);
+          }
+          
+          await reply("✅ Mídia enviada para o seu PV!");
+        } catch (e) {
+          console.error(e);
+          await reply("❌ Ocorreu um erro ao enviar a mídia.");
+        }
+        break;
       case 'lid':
       case 'meulid':
         if (isGroup) {

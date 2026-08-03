@@ -29,6 +29,7 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 │ ⚡ ${prefix}prefixo
 │ 📞 ${prefix}numerodono
 │ 👤 ${prefix}nomedono
+│ 📤 ${prefix}pv
 │ 🤖 ${prefix}nomebot
 │ ⚙ ${prefix}configcmdnotfound
 │ 💬 ${prefix}setcmdmsg
