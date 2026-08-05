@@ -112,8 +112,7 @@ function addAntiRouboLock(groupId) {
   setTimeout(() => {
     if (antiRouboLock.get(groupId) && Date.now() - antiRouboLock.get(groupId) >= LOCK_TIMEOUT - 100) {
       antiRouboLock.delete(groupId);
-      console.log(`\x1b[33m[ANTI-ROUBO]\x1b[0m Lock expirado para grupo ${groupId}`);
-    }
+          }
   }, LOCK_TIMEOUT);
 }
 /**
@@ -260,8 +259,7 @@ function isSocialMediaLink(text) {
  */
 export const handleGroupParticipantsUpdate = async (nazu, { id, participants, action, author }, ownerNumber = null) => {
     // Log incondicional para diagnóstico no terminal do usuário
-    console.log(`\x1b[36m[PARTICIPANTS UPDATE]\x1b[0m Evento: \x1b[33m${action}\x1b[0m | Grupo: \x1b[32m${id}\x1b[0m | Membros: ${participants.length}${author ? ` | Autor: ${author}` : ''}`);
-    try {
+        try {
         // ============================================================
         // PROTEÇÃO CRÍTICA ANTI-LOOP
         // Verificações de segurança ANTES de qualquer lógica
@@ -277,25 +275,21 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
         }
         // 3. VERIFICAÇÃO CRÍTICA: Ignorar ações do próprio bot
         if (authorNum && authorNum === botNum) {
-            console.log(`\x1b[33m[ANTI-ROUBO]\x1b[0m Ignorando evento do próprio bot (${botNum})`);
-            return;
+                        return;
         }
         // 4. VERIFICAÇÃO CRÍTICA: Ignorar eventos durante reversão (anti-loop)
         if (hasAntiRouboLock(id)) {
-            console.log(`\x1b[33m[ANTI-ROUBO]\x1b[0m Ignorando evento durante reversão em grupo ${id}`);
-            return;
+                        return;
         }
         // 5. VERIFICAÇÃO CRÍTICA: Se não há author, não podemos identificar quem fez a ação
         // Ignorar para ações de promote/demote se não tivermos author (evita falsos positivos)
         if (!authorNum && (action === 'promote' || action === 'demote')) {
-            console.log(`\x1b[33m[ANTI-ROUBO]\x1b[0m Ignorando ${action} sem author definido (possível ação do bot)`);
-            return;
+                        return;
         }
         // 6. VERIFICAÇÃO CRÍTICA: Ignorar se author é o dono do bot
         const ownerNum = ownerNumber ? String(ownerNumber).replace(/\D/g, '') : '';
         if (authorNum && ownerNum && authorNum === ownerNum) {
-            console.log(`\x1b[33m[ANTI-ROUBO]\x1b[0m Ignorando evento do dono do bot (${ownerNum})`);
-            return;
+                        return;
         }
         // ============================================================
         // FIM DAS VERIFICAÇÕES DE PROTEÇÃO
@@ -326,10 +320,8 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
             // Banir usuários encontrados na blacklist
             if (usersToBan.length > 0) {
                 const idsToBan = usersToBan.map(u => u.id);
-                console.log(`\x1b[31m[BLACKLIST]\x1b[0m Banindo ${usersToBan.length} usuário(s) por estar na blacklist`);
                 for (const user of usersToBan) {
-                    console.log(`\x1b[31m[BLACKLIST]\x1b[0m - ${user.id} (${user.type}) - ${user.reason}`);
-                }
+                                    }
                 await nazu.groupParticipantsUpdate(id, idsToBan, 'remove');
             }
             // Continua com o fluxo normal de boas-vindas (se habilitado)
@@ -337,10 +329,8 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
             const isBv1 = !!(groupSettings.bemvindo || groupSettings.boasvindas || groupSettings.welcome?.enabled);
             const isBv2 = !!(groupSettings.bemvindo2 || groupSettings.boasvindas2);
             // Log de diagnóstico para facilitar depuração
-            console.log(`\x1b[34m[PARTICIPANTS UPDATE]\x1b[0m Chaves do grupo: bemvindo=${groupSettings.bemvindo}, bemvindo2=${groupSettings.bemvindo2}, welcome=${JSON.stringify(groupSettings.welcome)}`);
-            if (isBv1 || isBv2) {
-                console.log(`\x1b[34m[PARTICIPANTS UPDATE]\x1b[0m Preparando Boas-vindas (Modo: ${isBv2 ? 'BV2' : 'BV1'})`);
-                const settings = {
+                        if (isBv1 || isBv2) {
+                                const settings = {
                     text: isBv2 ? (groupSettings.textbv2 || groupSettings.boasvindas2) : (groupSettings.textbv || groupSettings.boasvindas),
                     photoType: isBv2 ? 'none' : (groupSettings.welcome?.photoType || 'api'),
                     photo: isBv2 ? false : (groupSettings.welcome?.photo !== false),
@@ -354,16 +344,13 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
                     true
                 );
                 await nazu.sendMessage(id, message);
-                console.log(`\x1b[32m[PARTICIPANTS UPDATE]\x1b[0m Mensagem de boas-vindas enviada.`);
-            } else {
-                console.log(`\x1b[33m[PARTICIPANTS UPDATE]\x1b[0m Boas-vindas estão DESATIVADAS para este grupo.`);
+                            } else {
             }
         } 
         // 4. Lógica de REMOVER (Saída)
         else if (action === 'remove') {
             if (groupSettings.exit?.enabled) {
-                console.log(`\x1b[34m[PARTICIPANTS UPDATE]\x1b[0m Preparando mensagem de Saída`);
-                const exitText = groupSettings.exit?.text ||
+                                const exitText = groupSettings.exit?.text ||
                     "╭━━━⊱ 👋 *ATÉ LOGO!* 👋 ⊱━━━╮\n│\n│ 👤 #numerodele#\n│\n│ 🚪 Saiu do grupo\n│ *#nomedogp#*\n│\n╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n💫 *Até a próxima!* 💫";
                 const participantIds = participants.map(p => typeof p === 'string' ? p : (p.id || p.jid || p.toString()));
                 const replacements = {
@@ -380,16 +367,14 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
                     delete exitMessage.text;
                 }
                 await nazu.sendMessage(id, exitMessage);
-                console.log(`\x1b[32m[PARTICIPANTS UPDATE]\x1b[0m Mensagem de saída enviada.`);
-            }
+                            }
         }
         // 5. X9 - Lógica de PROMOÇÃO (novos admins)
         else if (action === 'promote') {
             const hasX9 = groupSettings.x9;
             const hasAntiRoubo = groupSettings.antiRoubo?.enabled;
             if (hasX9 || hasAntiRoubo) {
-                console.log(`\x1b[34m[PARTICIPANTS UPDATE]\x1b[0m Preparando X9/AntiRoubo para promoção de admins`);
-                const promotedIds = participants.map(p => typeof p === 'string' ? p : (p.id || p.jid || p.toString()));
+                                const promotedIds = participants.map(p => typeof p === 'string' ? p : (p.id || p.jid || p.toString()));
                 let mentions = [...promotedIds];
                 let authorText = '';
                 let authorId = null;
@@ -413,7 +398,6 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
                       return authNum === authorNormalized || authNum.includes(authorNormalized) || authorNormalized.includes(authNum);
                     });
                     if (!isCreator && !isAuth) {
-                        console.log(`\x1b[31m[ANTI-ROUBO]\x1b[0m Detectada promoção não autorizada por @${authorNum}`);
                         // ADICIONAR LOCK ANTES de executar reversões (anti-loop)
                         addAntiRouboLock(id);
                         // REBAIXAR executor primeiro
@@ -433,7 +417,6 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
                             }
                         };
                         await nazu.sendMessage(id, { text: msg, mentions: [authorId], contextInfo: newsletterCtxAnti2 }).catch(e => console.error(`\x1b[31m[ANTI-ROUBO]\x1b[0m Erro ao enviar mensagem: ${e.message}`));
-                        console.log(`\x1b[32m[ANTI-ROUBO]\x1b[0m Reversão concluída para ${action} por @${authorNum}`);
                     }
                 }
                 if (hasX9) {
@@ -447,8 +430,7 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
                     };
                     const msgText = `⬆️🐺 *X9 Report:* ${promotedIds.map(p => `@${p.split('@')[0]}`).join(', ')} foi(ram) *promovido(s) a administrador*!${authorText}`;
                     await nazu.sendMessage(id, { text: msgText, mentions, contextInfo: newsletterCtxX9 }).catch(err => {});
-                    console.log(`\x1b[32m[PARTICIPANTS UPDATE]\x1b[0m X9 de promoção enviado.`);
-                }
+                                    }
             }
         }
         // 6. X9 - Lógica de REBAIXAMENTO (remover admin)
@@ -456,8 +438,7 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
             const hasX9 = groupSettings.x9;
             const hasAntiRoubo = groupSettings.antiRoubo?.enabled;
             if (hasX9 || hasAntiRoubo) {
-                console.log(`\x1b[34m[PARTICIPANTS UPDATE]\x1b[0m Preparando X9/AntiRoubo para rebaixamento de admins`);
-                const demotedIds = participants.map(p => typeof p === 'string' ? p : (p.id || p.jid || p.toString()));
+                                const demotedIds = participants.map(p => typeof p === 'string' ? p : (p.id || p.jid || p.toString()));
                 let mentions = [...demotedIds];
                 let authorText = '';
                 let authorId = null;
@@ -481,7 +462,6 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
                       return authNum === authorNormalized || authNum.includes(authorNormalized) || authorNormalized.includes(authNum);
                     });
                     if (!isCreator && !isAuth) {
-                        console.log(`\x1b[31m[ANTI-ROUBO]\x1b[0m Detectado rebaixamento não autorizado por @${authorNum}`);
                         // ADICIONAR LOCK ANTES de executar reversões (anti-loop)
                         addAntiRouboLock(id);
                         // REBAIXAR executor (já deve estar rebaixado, mas garantimos)
@@ -501,7 +481,6 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
                             }
                         };
                         await nazu.sendMessage(id, { text: msg, mentions: [authorId], contextInfo: newsletterCtxAnti }).catch(e => console.error(`\x1b[31m[ANTI-ROUBO]\x1b[0m Erro ao enviar mensagem: ${e.message}`));
-                        console.log(`\x1b[32m[ANTI-ROUBO]\x1b[0m Reversão concluída para ${action} por @${authorNum}`);
                     }
                 }
                 if (hasX9) {
@@ -515,8 +494,7 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
                     };
                     const msgText = `⬇️🐺 *X9 Report:* ${demotedIds.map(p => `@${p.split('@')[0]}`).join(', ')} foi(ram) *rebaixado(s) de administrador*!${authorText}`;
                     await nazu.sendMessage(id, { text: msgText, mentions, contextInfo: newsletterCtxX9Demote }).catch(err => {});
-                    console.log(`\x1b[32m[PARTICIPANTS UPDATE]\x1b[0m X9 de rebaixamento enviado.`);
-                }
+                                    }
             }
         }
     } catch (e) {
@@ -1263,7 +1241,6 @@ async function createGroupMessage(AbyssSock, groupMetadata, participants, settin
       message.caption = text;
       delete message.text;
     } else {
-      console.log(`\x1b[33m[CREATE MESSAGE]\x1b[0m Falha ao gerar card via API, enviando apenas texto.`);
     }
   } else if (settings.photoType === 'custom' && settings.image) {
     if (isLocalImagePath(settings.image)) {
@@ -1304,16 +1281,9 @@ const handleCaptchaResponse = async (nazu, info, from, sender, text) => {
     ?.replace(/@.*/, '');
   const isCapUser = CaptchaIndex.get(senderNormalized);
   const { total: totalPendentes } = CaptchaIndex.stats();
-  //console.log('infooooooooooo', info)
-  //console.log('\n--- [INÍCIO DA VALIDAÇÃO DE CAPTCHA] ---');
-  //console.log('[DEBUG] Sender:', sender);
-  //console.log('[DEBUG] Sender Normalizado:', senderNormalized);
-  //console.log('[DEBUG] Texto:', text);
-  //console.log('[DEBUG] Pendentes:', totalPendentes);
-  try {
+  //  //  //  //  try {
     if (isCapUser) {
       if (now >= isCapUser.expiresAt) {
-        console.log('[CAPTCHA] EXPIRADO');
         try {
           await nazu.sendMessage(isCapUser.groupId, {
             text: `⏰ @${senderNormalized} demorou demais e foi removido.`,
@@ -1332,8 +1302,7 @@ const handleCaptchaResponse = async (nazu, info, from, sender, text) => {
       }
       const respInt = parseInt(text?.trim());
       const answerInt = parseInt(isCapUser.answer);
-      console.log('[DEBUG] RESP:', respInt, '| CORRETO:', answerInt);
-      if (respInt === answerInt) {
+            if (respInt === answerInt) {
         CaptchaIndex.remove(senderNormalized);
         try {
           const groupMetadata = await nazu.groupMetadata(isCapUser.groupId);
@@ -1361,8 +1330,7 @@ const handleCaptchaResponse = async (nazu, info, from, sender, text) => {
         }
       }
     } else {
-      //   console.log(`[DEBUG] ${senderNormalized} NÃO tem captcha pendente`);
-    }
+      //       }
   } catch (error) {
     console.error('[ERRO CRÍTICO]:', error);
   }
@@ -1558,8 +1526,7 @@ if (npcManager?.config?.jornalEnabled) {
     try {
       const news = await npcManager.generateDailyNews();
       if (news) {
-        console.log('[NPC] Abyss News gerado com sucesso');
-      }
+              }
     } catch (e) {
       console.error('[NPC] Erro ao gerar jornal:', e.message);
     }
@@ -1570,8 +1537,7 @@ cron.schedule('0 20 * * *', async () => {
     try {
       const news = await npcManager.generateDailyNews();
       if (news) {
-        console.log('[NPC] Abyss News diário enviado');
-      }
+              }
     } catch (e) {
       console.error('[NPC] Erro no jornal diário:', e.message);
     }
@@ -1590,7 +1556,6 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
         text: `🔊 O mute temporário de @${userName} expirou. Ele agora pode enviar mensagens normalmente.`,
         mentions: [userId]
       });
-      console.log(`[TEMPMUTE] Mute expirado: ${userId} no grupo ${groupId}`);
     } catch (e) {
       console.error('[TEMPMUTE] Erro ao notificar expiração:', e);
     }
@@ -1608,14 +1573,12 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
         text: `⚠️ *PREFIXO AUTOMÁTICO CORRIGIDO*\n\n❌ O símbolo "$" é reservado e não pode ser usado como prefixo.\n\n✅ O prefixo foi alterado automaticamente para "/" ao iniciar o bot.\n\n💡 Use ${config.prefixo}prefix para alterar para outro símbolo válido.`
       });
     } catch (notifyError) {
-      console.log('Aviso: Não foi possível notificar o dono sobre a mudança de prefixo:', notifyError.message);
     }
   }
   // Log de debug aprimorado para rastreamento de IDs
   const debugLog = (msg, data = null) => {
     if (config?.debug) {
-      console.log(`[DEBUG] ${msg}`, data || '');
-    }
+          }
   };
   const normalizeMessageTimestamp = (timestamp) => {
     if (!timestamp) return null;
@@ -2483,7 +2446,6 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
             try {
               rawContent = rawContent.replace(/,\s*([\]}])/g, '$1');
               groupData = JSON.parse(rawContent);
-              console.log(`✅ Dados do grupo ${from} recuperados após sanitização`);
             } catch (retryError) {
               console.error(`❌ Falha na recuperação do grupo ${from}, usando dados padrão`);
               groupData = { mark: {}, createdAt: new Date().toISOString(), recovered: true };
@@ -2619,7 +2581,6 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       const captchaData = getCaptcha(sender);
       if (captchaData) {
         if (debug) {
-          console.log('[DEBUG CAPTCHA] Captcha pendente encontrado via índice:', {
             sender,
             body: body.trim(),
             expectedAnswer: captchaData.answer,
@@ -2628,7 +2589,6 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
         }
         const userAnswer = parseInt(body.trim());
         if (debug) {
-          console.log('[DEBUG CAPTCHA] Resposta do usuário:', userAnswer, 'É número?', !isNaN(userAnswer));
         }
         if (isNaN(userAnswer)) {
           await reply('❌ Resposta inválida! Por favor, envie apenas o número da resposta.');
@@ -2639,7 +2599,6 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
           // Resposta correta - aprovar no grupo
           try {
             if (debug) {
-              console.log('[DEBUG CAPTCHA] ✅ Resposta correta! Aprovando no grupo:', captchaData.groupId);
             }
             await nazu.groupRequestParticipantsUpdate(captchaData.groupId, [sender], 'approve');
             await reply('✅ *Correto!* Você foi aprovado no grupo. Bem-vindo! 🎉');
@@ -2667,7 +2626,6 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
           // Resposta incorreta - recusar
           try {
             if (debug) {
-              console.log('[DEBUG CAPTCHA] ❌ Resposta incorreta! Recusando no grupo:', captchaData.groupId);
             }
             await nazu.groupRequestParticipantsUpdate(captchaData.groupId, [sender], 'reject');
             await reply('❌ *Resposta incorreta!* Sua solicitação foi recusada. Você pode tentar solicitar novamente.');
@@ -2962,17 +2920,9 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       // Obter remetente real (pode ser LID ou número)
       const realSender = info.key?.participantAlt || info.key?.participant || sender;
       
-      console.log('═══════════════════════════════════════════════════');
-      console.log('[ANTI-PAYMENT-RAJADA] 🚨 RAJADA DE PAGAMENTO DETECTADA!');
-      console.log(`[ANTI-PAYMENT-RAJADA] 👤 De: ${realSender}`);
-      console.log(`[ANTI-PAYMENT-RAJADA] 👥 Group: ${from}`);
-      console.log(`[ANTI-PAYMENT-RAJADA] 💰 Amount: ${amount}`);
-      console.log(`[ANTI-PAYMENT-RAJADA] 📝 Note: ${paymentMsg.noteMessage?.extendedTextMessage?.text || 'N/A'}`);
-      console.log('═══════════════════════════════════════════════════');
-      
+            
       // Se amount é 0 e tem texto na nota, é ataque de rajada
       if (amount === 0 && paymentMsg.noteMessage?.extendedTextMessage?.text) {
-        console.log('[ANTI-PAYMENT-RAJADA] ⚠️ ATACANTE IDENTIFICADO!');
         
         // Adicionar à blacklist antipagamento automaticamente
         const groupFile = buildGroupFilePath(from);
@@ -2988,7 +2938,6 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
         groupData.whitelist.antipagamento[realSender] = true;
         
         fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
-        console.log(`[ANTI-PAYMENT-RAJADA] ✅ ${realSender} adicionado à blacklist antipagamento`);
       }
     }
     // Lógica Anti-Pagamento (antipagamento/antirequest)
@@ -3027,13 +2976,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       
       // Se amount é 0 e tem texto na nota, é ataque de rajada invisível
       if (amount === 0 && paymentMsg.noteMessage?.extendedTextMessage?.text) {
-        console.log('═══════════════════════════════════════════════════');
-        console.log('[ANTI-INVISIVEL] 🚨 RAJADA INVISÍVEL DETECTADA!');
-        console.log(`[ANTI-INVISIVEL] 👤 De: ${realSender}`);
-        console.log(`[ANTI-INVISIVEL] 👥 Group: ${from}`);
-        console.log(`[ANTI-INVISIVEL] 📝 Texto: ${paymentMsg.noteMessage.extendedTextMessage.text}`);
-        console.log('═══════════════════════════════════════════════════');
-        
+                
         // Verificar whitelist
         if (!isUserWhitelisted(sender, 'antipagamento') && !isGroupAdmin) {
           const newsletterCtxPayment = {
@@ -3062,7 +3005,6 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
                   fromMe: false,
                   participant: realSender
                 }
-              }).catch(e => console.log('[ANTI-INVISIVEL] Erro ao deletar:', e.message));
               await sleep(500);
               try {
                 await nazu.sendMessage(from, {
@@ -3075,7 +3017,6 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
               } catch (e) {}
             }
           } catch (e) {
-            console.log('[ANTI-INVISIVEL] Erro ao apagar:', e.message);
           }
           
           // Enviar aviso
@@ -3927,7 +3868,6 @@ Código: *${roleCode}*`,
               try {
                 await nazuInstance.groupSettingUpdate(groupId, 'not_announcement');
                 await nazuInstance.sendMessage(groupId, { text: '🔓 Grupo aberto automaticamente pelo agendamento diário.' });
-                console.log(`[Cron] ✅ Grupo ABERTO automaticamente: ${groupId.substring(0, 15)}... às ${normalized}`);
               } catch (e) {
                 console.error(`[Cron Error] open ${groupId}:`, e);
               }
@@ -3935,7 +3875,6 @@ Código: *${roleCode}*`,
               try {
                 await nazuInstance.groupSettingUpdate(groupId, 'announcement');
                 await nazuInstance.sendMessage(groupId, { text: '⚙️ Grupo fechado automaticamente pelo agendamento diário.' });
-                console.log(`[Cron] ✅ Grupo FECHADO automaticamente: ${groupId.substring(0, 15)}... às ${normalized}`);
               } catch (e) {
                 console.error(`[Cron Error] close ${groupId}:`, e);
               }
@@ -3967,17 +3906,14 @@ Código: *${roleCode}*`,
           const schedule = data.schedule && typeof data.schedule === 'object' ? data.schedule : {};
           if (schedule.openTime) {
             scheduleGroupJob(groupId, 'open', schedule.openTime, nazuInstance);
-            console.log(`[Cron] ✅ Agendamento ABRIR carregado: Grupo ${groupId.substring(0, 15)}... às ${schedule.openTime}`);
             loadedCount++;
           }
           if (schedule.closeTime) {
             scheduleGroupJob(groupId, 'close', schedule.closeTime, nazuInstance);
-            console.log(`[Cron] ✅ Agendamento FECHAR carregado: Grupo ${groupId.substring(0, 15)}... às ${schedule.closeTime}`);
             loadedCount++;
           }
         }
         if (loadedCount > 0) {
-          console.log(`[Cron] 📅 Total de ${loadedCount} agendamento(s) carregado(s) com sucesso`);
         }
       } catch (e) {
         console.error('[Cron] Failed to load group schedules:', e);
@@ -4142,7 +4078,6 @@ Código: *${roleCode}*`,
               return;
             }
             if (!currentMsg.enabled) {
-              console.log(`[AutoMsg] Mensagem ${msgConfig.id} está desativada, pulando envio`);
               return;
             }
             // Construir e enviar a mensagem
@@ -4166,7 +4101,6 @@ Código: *${roleCode}*`,
               messageContent.mimetype = 'audio/mp4';
             }
             await nazuInstance.sendMessage(groupId, messageContent);
-            console.log(`[AutoMsg] ✅ Mensagem enviada automaticamente: Grupo ${groupId.substring(0, 15)}... ID ${msgConfig.id} às ${normalized}`);
           } catch (e) {
             console.error(`[AutoMsg Error] ${groupId}:${msgConfig.id}:`, e);
           }
@@ -4177,7 +4111,6 @@ Código: *${roleCode}*`,
         // Iniciar a task imediatamente
         task.start();
         autoMsgCronJobs[key] = task;
-        console.log(`[AutoMsg] 🔔 Agendamento criado para ${key} em ${cronExpr} (timezone: America/Sao_Paulo)`);
       } catch (e) {
         console.error('[AutoMsg] Failed to schedule message', cronExpr, e);
       }
@@ -4197,13 +4130,11 @@ Código: *${roleCode}*`,
           for (const msgConfig of autoMessages) {
             if (msgConfig.enabled && msgConfig.time) {
               scheduleAutoMessage(groupId, msgConfig, nazuInstance);
-              console.log(`[AutoMsg] ✅ Mensagem agendada: Grupo ${groupId.substring(0, 15)}... ID ${msgConfig.id} às ${msgConfig.time}`);
               loadedCount++;
             }
           }
         }
         if (loadedCount > 0) {
-          console.log(`[AutoMsg] 📨 Total de ${loadedCount} mensagem(ns) automática(s) carregada(s) com sucesso`);
         }
       } catch (e) {
         console.error('[AutoMsg] Failed to load auto messages:', e);
@@ -4976,20 +4907,9 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
         const messageType = isCmd ? 'COMANDO' : 'MENSAGEM';
         const context = isGroup ? 'GRUPO' : 'PRIVADO';
         const messagePreview = isCmd ? `${groupPrefix}${command}${q ? ` ${q.substring(0, 25)}${q.length > 25 ? '...' : ''}` : ''}` : budy2.substring(0, 35) + (budy2.length > 35 ? '...' : '');
-        console.log('┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓');
-        console.log(`┃ ${messageType} [${context}]${' '.repeat(36 - messageType.length - context.length)}`);
-        console.log('┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫');
-        console.log(`┃ 📜 Conteúdo: ${messagePreview.padEnd(28)}`);
         if (isGroup) {
-          console.log(`┃ 👥 Grupo: ${(groupName || 'Desconhecido').padEnd(28)}`);
-          console.log(`┃ 👤 Usuário: ${(pushname || 'Sem Nome').padEnd(28)}`);
         } else {
-          console.log(`┃ 👤 Usuário: ${(pushname || 'Sem Nome').padEnd(28)}`);
-          console.log(`┃ 📱 Número: ${getUserName(sender).padEnd(28)}`);
         }
-        console.log('┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫');
-        console.log(`┃ 🕒 Data/Hora: ${timestamp.padEnd(27)}`);
-        console.log('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n');
       }
     } catch (error) {
       console.error('┃ 🚨 Erro ao gerar logs:', error, '');
@@ -5199,7 +5119,6 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
             } else if (!isGroupAdmin && !isUserWhitelisted(sender, 'antipalavra')) {
               const detectionResult = antipalavra.checkMessage(from, body);
               if (detectionResult && detectionResult.detected) {
-                console.log(`[ANTIPALAVRA] Palavra detectada: "${detectionResult.palavra}" (${detectionResult.acao}) de @${sender.split('@')[0]}`);
                 
                 // Deleta a mensagem
                 await nazu.sendMessage(from, { delete: info.key }).catch(err =>
@@ -5446,7 +5365,6 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
                 reply(`⚠️ Para executar *${groupPrefix}${respAssist.command}*, preciso que você informe: ${respAssist.falta}`);
                 return;
               }
-              console.log(`🤖 [PRO] Comando identificado: ${respAssist.command} ${respAssist.args || ''}`);
               // Simular execução do comando reutilizando o objeto info original
               const simulatedCommand = respAssist.command.toLowerCase();
               let simulatedArgs = respAssist.args || '';
@@ -5473,11 +5391,6 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
                 return qNumber === idNumber;
               }) : true;
               const mentionOrQuoted = targetMention || (quotedParticipant && !isQuotedBot ? quotedParticipant : null);
-              console.log(`🤖 [PRO] Menções originais: ${JSON.stringify(originalMentions)}`);
-              console.log(`🤖 [PRO] Menções sem bot: ${JSON.stringify(mentionsWithoutBot)}`);
-              console.log(`🤖 [PRO] Target menção: ${targetMention}`);
-              console.log(`🤖 [PRO] Quoted participant: ${quotedParticipant}`);
-              console.log(`🤖 [PRO] Menção ou quoted final: ${mentionOrQuoted}`);
               // Lista de comandos que precisam de menção (@user)
               const commandsNeedMention = ['ban', 'ban2', 'kick', 'promover', 'rebaixar', 'mute', 'desmute',
                 'mute2', 'desmute2', 'mutet', 'unmutet', 'adv', 'rmadv', 'userinfo', 'perfil', 'rep', 'presente', 'denunciar',
@@ -6267,10 +6180,8 @@ if (isCmd && command && !isOwner) {
       }
     }
     // Verificar bloqueio de menu no PV (comandos !menuxxx)
-    console.log('[MENU-PV] command="' + command + '", isGroup=' + isGroup + ', menuCommandMap[command]=' + JSON.stringify(blockPv.menuCommandMap[command]));
     if (!isGroup && blockPv.menuCommandMap && blockPv.menuCommandMap[command]) {
       const menuInfo = blockPv.menuCommandMap[command];
-      console.log('[MENU-PV] menuInfo=' + JSON.stringify(menuInfo) + ', isMenuBlocked=' + blockPv.isMenuBlocked(menuInfo.key));
       if (blockPv.isMenuBlocked(menuInfo.key)) {
         return reply("❌ O menu \"" + menuInfo.name + "\" está desativado para conversas privadas.\n\nUse este comando em um grupo.");
       }
@@ -10533,7 +10444,6 @@ switch (command) {
             }
           }
           if (!dg) {
-            console.log('❌ [DUNGEON DEBUG] Erro: Dados da dungeon não encontrados.', { type: party.type, partyId: party.id });
             return reply(`❌ Erro: Dados da dungeon "${party.type}" não encontrados.`);
           }
           if (party.members.includes(sender)) {
@@ -10571,7 +10481,6 @@ switch (command) {
             }
           }
           if (!dg) {
-            console.log('❌ [DUNGEON DEBUG] Erro: Dungeon não encontrada.', { type: myParty.type, partyId: myParty.id });
             return reply(`❌ Erro técnico: Dungeon "${myParty.type}" não encontrada. Peça ao líder para recriar a party.`);
           }
           if (myParty.members.length < 2) {
@@ -15775,7 +15684,6 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
               found = true;
             }
           } catch (err) {
-            console.log("Busca PT falhou, tentando EN...");
           }
           if (!found) {
             try {
@@ -15808,7 +15716,6 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
                 found = true;
               }
             } catch (err) {
-              console.log("Busca EN também falhou.");
             }
           }
           if (!found) {
@@ -15846,7 +15753,6 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
               throw new Error('Sem resultados');
             }
           }).catch(() => {
-            console.log("API primária do dicionário falhou, tentando IA...");
             const prompt = `Defina a palavra "${palavra}" em português de forma completa e fofa. Inclua a classe gramatical, os principais significados e um exemplo de uso em uma frase curta e bonitinha.`;
             ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', prompt, null).then((bahz) => {
               reply(formatAIResponse(bahz.data.choices[0].message.content));
@@ -15907,7 +15813,6 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
                   targetUserId = result.jid;
                 }
               } catch (err) {
-                console.log('Não foi possível obter LID via onWhatsApp:', err.message);
               }
             }
           } else if (q && q.trim()) {
@@ -15932,7 +15837,6 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
                     targetUserId = result.jid;
                   }
                 } catch (err) {
-                  console.log('Não foi possível obter LID via onWhatsApp:', err.message);
                 }
               }
             } else {
@@ -15976,7 +15880,6 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
                   targetUserId = result.jid;
                 }
               } catch (err) {
-                console.log('Não foi possível obter LID via onWhatsApp:', err.message);
               }
             }
           } else if (q && q.trim()) {
@@ -16001,7 +15904,6 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
                     targetUserId = result.jid;
                   }
                 } catch (err) {
-                  console.log('Não foi possível obter LID via onWhatsApp:', err.message);
                 }
               }
             } else {
@@ -16356,7 +16258,6 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
           // Captura stdout
           updateProcess.stdout.on('data', async (data) => {
             const output = data.toString();
-            console.log('UPDATE:', output);
             outputBuffer += output;
             // Verifica trigger especial de commits
             if (output.includes('CommitsFound:')) {
@@ -16402,7 +16303,6 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
                 await reply('🔄 Reiniciando agora...');
                 // Aguarda mais 1 segundo para garantir que a mensagem foi enviada
                 setTimeout(() => {
-                  console.log('[UPDATE] Reiniciando após atualização...');
                   process.exit(0); // Exit code 0 indica sucesso, o gerenciador de processos deve reiniciar
                 }, 1000);
               }, 3000);
@@ -16462,7 +16362,6 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
 ${data.id}`;
             reply(txt);
         } catch (e) {
-            console.log(e);
             reply('Não consegui obter o JID desse canal.');
         }
         break;
@@ -16481,7 +16380,6 @@ ${data.id}`;
           }
           // Aguarda 2 segundos para garantir que a mensagem foi enviada
           setTimeout(() => {
-            console.log('[RESTART] Reiniciando bot via comando...');
             process.exit(0); // Exit code 0 indica reinício intencional
           }, 2000);
         }).catch((e) => {
@@ -16554,7 +16452,6 @@ ${data.id}`;
           await reply(result.message);
           if (result.needsRestart) {
             setTimeout(() => {
-              console.log('[UPDATE] Reiniciando bot...');
               process.exit(0);
             }, 3000);
           }
@@ -16727,46 +16624,30 @@ ${data.id}`;
         }
         break;
 case 'addaluguel':
-    console.log('📌 Comando addaluguel iniciado');
-    console.log('👤 isOwner:', isOwner);
-    console.log('👥 isGroup:', isGroup);
-    console.log('📝 Texto recebido (q):', q);
-    console.log('🏷️ Grupo ID (from):', from);
     if (!isOwner) {
-        console.log('🚫 Bloqueado: usuário não é dono');
         return reply("🚫 Apenas o Dono principal pode adicionar aluguel!");
     }
     if (!isGroup) {
-        console.log('🚫 Bloqueado: comando não foi usado em grupo');
         return reply("◈ Este comando é só para grupos.");
     }
     try {
         const parts = q.toLowerCase().trim().split(' ');
-        console.log('🔍 Partes do argumento:', parts);
-        const durationArg = parts[0];
-        console.log('⏳ Duração recebida:', durationArg);
-        let durationDays = null;
+                const durationArg = parts[0];
+                let durationDays = null;
         if (durationArg === 'permanente') {
             durationDays = 'permanent';
-            console.log('♾️ Aluguel permanente detectado');
         } else if (!isNaN(parseInt(durationArg)) && parseInt(durationArg) > 0) {
             durationDays = parseInt(durationArg);
-            console.log('📅 Aluguel por dias:', durationDays);
-        } else {
-            console.log('❌ Duração inválida:', durationArg);
+                    } else {
             return reply(`🤔 Duração inválida. Use um número de dias (ex: 30) ou a palavra "permanente".\nExemplo: ${groupPrefix}addaluguel 30`);
         }
-        console.log('📤 Enviando para setGroupRental...');
-        const result = setGroupRental(from, durationDays);
-        console.log('✅ Resultado do setGroupRental:', result);
-        await reply(result.message);
-        console.log('📩 Resposta enviada ao usuário');
-    } catch (e) {
+                const result = setGroupRental(from, durationDays);
+                await reply(result.message);
+            } catch (e) {
         console.error("💥 Erro no comando addaluguel:", e);
         await reply("❌ Ocorreu um erro inesperado ao adicionar o aluguel.");
     }
-    console.log('🏁 Fim do comando addaluguel');
-    break;
+        break;
       case 'listaraluguel':
       case 'veralugueis':
       case 'listrentals':
@@ -16897,7 +16778,6 @@ case 'addaluguel':
               text: `⚠️ *AVISO IMPORTANTE*\n\nO aluguel deste grupo foi removido pelo proprietário do bot.\n\n❌ O bot não funcionará mais neste grupo.\n\nPara mais informações, entre em contato com o dono.`
             });
           } catch (e) {
-            console.log("Não foi possível notificar o grupo:", e.message);
           }
         } catch (e) {
           console.error("Erro no comando removeraluguel:", e);
@@ -16964,7 +16844,6 @@ case 'addaluguel':
               text: `🎉 *BOA NOTÍCIA!*\n\nSeu aluguel foi estendido!\n\n➕ Dias adicionados: *${daysToAdd}*\n📅 Nova data de expiração: *${newExpirationDate}*\n⏳ Dias restantes: *${daysLeft}*\n\n◈ Continue aproveitando o bot!`
             });
           } catch (e) {
-            console.log("Não foi possível notificar o grupo:", e.message);
           }
         } catch (e) {
           console.error("Erro no comando estenderaluguel:", e);
@@ -19097,8 +18976,7 @@ case 'addaluguel':
                       mentions: [sender]
                     }, { quoted: info }).catch(async (thumbErr) => {
                       // Se falhar a thumbnail, tenta com qualidade menor
-                      console.log('Tentando thumbnail com qualidade menor...');
-                      const fallbackUrls = [
+                                            const fallbackUrls = [
                         `https://img.youtube.com/vi/${videoId}/sddefault.jpg`,
                         `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
                         `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
@@ -20123,8 +20001,7 @@ Se não definir cores:
             mimetype: 'image/webp',
             contextInfo: newsletterContextBrat
           }, { quoted: info });
-          console.log(`[comando brat] ✅ Sticker enviado para: "${texto}"`);
-        } catch (e) {
+                  } catch (e) {
           console.error('Erro no comando brat:', e);
           reply("Ocorreu um erro ao processar o sticker Brat 💔");
         }
@@ -20182,7 +20059,6 @@ Se não definir cores, a API usa padrão automaticamente.`
             mimetype: 'image/webp',
             contextInfo: newsletterContextBratVid
           }, { quoted: info });
-          console.log(`[comando bratvid] ✅ Sticker enviado: "${texto}"`);
         } catch (e) {
           console.error('Erro no comando bratvid:', e);
           reply("Ocorreu um erro ao processar o sticker animado Brat 💔");
@@ -20205,8 +20081,7 @@ case 'download-bot':
     if (!githubUrl.includes('/archive/refs/heads/')) {
       githubUrl += '/archive/refs/heads/main.zip';
     }
-    console.log('[ZIPBOT] URL:', githubUrl);
-    const zipResponse = await axios.get(
+        const zipResponse = await axios.get(
       githubUrl,
       {
         responseType: 'arraybuffer',
@@ -20217,7 +20092,6 @@ case 'download-bot':
       }
     );
     const zipBuffer = Buffer.from(zipResponse.data);
-    console.log(
       '[ZIPBOT] Tamanho:',
       zipBuffer.length
     );
@@ -20916,7 +20790,6 @@ ${ADMIN_ERROR_MESSAGE_DEFAULT}`);
               messageQueueModule.messageQueue.pause();
             }
             setTimeout(() => {
-              console.log('[RESTART] Reiniciando bot após alteração de configuração...');
               process.exit(0);
             }, 2000);
           } catch (e) {
@@ -20951,8 +20824,7 @@ ${ADMIN_ERROR_MESSAGE_DEFAULT}`);
             cmdNotFoundConfig.message = newMessage;
             if (saveCmdNotFoundConfig(cmdNotFoundConfig)) {
               reply('✅ Mensagem personalizada salva com sucesso!');
-              console.log(`🔧 Comando não encontrado: Mensagem alterada por ${pushname} (${sender})`);
-            } else {
+                          } else {
               reply('❌ Ocorreu um erro ao salvar a mensagem. Tente novamente.');
             }
             break;
@@ -21905,7 +21777,6 @@ Precisa de ajuda? Entre em contato:
               // Se o erro for por conta bloqueada/número inválido, remove da lista
               if (error.message.includes('not-authorized') || error.message.includes('invalid')) {
                 transmissao.removeSubscriber(subscriber.id);
-                console.log(`Inscrito ${subscriber.id} removido automaticamente (conta inválida)`);
               }
             }
           }
@@ -22374,8 +22245,7 @@ break;
         } else {
           reply(info.key.remoteJid)
         }
-        console.log(info)
-        break
+                break
       case 'numerodono':
       case 'numero-dono':
         try {
@@ -24470,7 +24340,6 @@ ${groupPrefix}setgroq sua_chave_aqui
           }
           await reply(teks);
         } catch (e) {
-          console.log(e);
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
         }
         break;
@@ -24796,9 +24665,7 @@ ${groupPrefix}addcmdvip menudown all`);
               if (commands.size === 0) {
                 // Debug: mostra um trecho do menu para ajudar a identificar o problema
                 const menuPreview = menuText.substring(0, 500).replace(/\n/g, '\\n');
-                console.log(`[DEBUG] Menu "${menuName}" gerado (primeiros 500 chars):`, menuPreview);
-                console.log(`[DEBUG] Prefix usado: "${groupPrefix}"`);
-                return reply(`❌ Nenhum comando encontrado no menu "${menuName}"!\n\n*Debug:* Prefixo usado: "${groupPrefix}"\nVerifique o console para mais detalhes.`);
+                                                return reply(`❌ Nenhum comando encontrado no menu "${menuName}"!\n\n*Debug:* Prefixo usado: "${groupPrefix}"\nVerifique o console para mais detalhes.`);
               }
               const commandsArray = Array.from(commands).sort();
               let added = 0;
@@ -24816,8 +24683,7 @@ ${groupPrefix}addcmdvip menudown all`);
                 );
                 if (result.success) {
                   added++;
-                  console.log(`[VIP CMD] Comando "${cmdName}" adicionado por ${pushname} (${sender})`);
-                } else {
+                                  } else {
                   skipped++;
                 }
               }
@@ -24844,8 +24710,7 @@ ${groupPrefix}addcmdvip menudown all`);
           const result = vipCommandsManager.addVipCommand(cmdName, cmdDesc, cmdCategory, cmdUsage);
           await reply(result.message);
           if (result.success) {
-            console.log(`[VIP CMD] Comando "${cmdName}" adicionado por ${pushname} (${sender})`);
-          }
+                      }
         } catch (error) {
           console.error('Erro ao adicionar comando VIP:', error);
           await reply('❌ Erro ao adicionar comando VIP.');
@@ -24868,8 +24733,7 @@ ${groupPrefix}removecmdvip premium_ia`);
           const result = vipCommandsManager.removeVipCommand(cmdName);
           await reply(result.message);
           if (result.success) {
-            console.log(`[VIP CMD] Comando "${cmdName}" removido por ${pushname} (${sender})`);
-          }
+                      }
         } catch (error) {
           console.error('Erro ao remover comando VIP:', error);
           await reply('❌ Erro ao remover comando VIP.');
@@ -24912,8 +24776,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           const result = vipCommandsManager.toggleVipCommand(cmdName, enabled);
           await reply(result.message);
           if (result.success) {
-            console.log(`[VIP CMD] Comando "${cmdName}" ${enabled ? 'ativado' : 'desativado'} por ${pushname} (${sender})`);
-          }
+                      }
         } catch (error) {
           console.error('Erro ao alternar comando VIP:', error);
           await reply('❌ Erro ao alternar status do comando VIP.');
@@ -25296,13 +25159,11 @@ ${groupPrefix}togglecmdvip premium_ia off`);
                 removedCount++;
                 const userName = getUserName(user.id);
                 removedUsers.push(userName);
-                console.log(`[LIMPAR RANK] Removed departed user: ${user.id} (${userName})`);
-                return false;
+                                return false;
               }
               return true;
             } catch (e) {
-              console.log(`[LIMPAR RANK] Error processing user ${user?.id}:`, e.message);
-              invalidUsers.push(user?.id || 'Unknown');
+                            invalidUsers.push(user?.id || 'Unknown');
               return false;
             }
           });
@@ -25324,8 +25185,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
             mentions: removedUsers.map(name => buildUserId(name, config))
           });
           // Log the action
-          console.log(`[LIMPAR RANK] Action completed in group ${from}. Removed ${removedCount} users, ${invalidUsers.length} invalid entries.`);
-        } catch (e) {
+                  } catch (e) {
           console.error('[LIMPAR RANK] Error:', e);
           await reply("❌ Ocorreu um erro ao limpar o rank. Tente novamente mais tarde.");
         }
@@ -25351,22 +25211,19 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           let totalInvalid = 0;
           let summary = [];
           let failedGroups = [];
-          console.log(`[LIMPAR RANK GLOBAL] Starting cleanup for ${groupFiles.length} groups`);
-          for (const file of groupFiles) {
+                    for (const file of groupFiles) {
             try {
               const groupId = file.replace('.json', '');
               const groupPath = pathz.join(GRUPOS_DIR, file);
               // Skip if file doesn't exist or can't be read
               if (!fs.existsSync(groupPath)) {
-                console.log(`[LIMPAR RANK GLOBAL] Skipping non-existent file: ${groupPath}`);
-                continue;
+                                continue;
               }
               let gData;
               try {
                 gData = JSON.parse(fs.readFileSync(groupPath));
               } catch (parseError) {
-                console.log(`[LIMPAR RANK GLOBAL] Error reading group file ${groupId}:`, parseError.message);
-                failedGroups.push(`${groupId}: Erro ao ler arquivo`);
+                                failedGroups.push(`${groupId}: Erro ao ler arquivo`);
                 continue;
               }
               // Get group metadata with error handling
@@ -25374,13 +25231,11 @@ ${groupPrefix}togglecmdvip premium_ia off`);
               try {
                 metadata = await getCachedGroupMetadata(groupId).catch(() => null);
               } catch (metaError) {
-                console.log(`[LIMPAR RANK GLOBAL] Error getting metadata for group ${groupId}:`, metaError.message);
-                failedGroups.push(`${groupId}: Erro ao obter metadados`);
+                                failedGroups.push(`${groupId}: Erro ao obter metadados`);
                 continue;
               }
               if (!metadata) {
-                console.log(`[LIMPAR RANK GLOBAL] No metadata for group ${groupId}, skipping`);
-                continue;
+                                continue;
               }
               // Get current members with proper LID/JID handling
               const currentMembers = metadata.participants?.map(p => p.lid || p.id) || [];
@@ -25404,13 +25259,11 @@ ${groupPrefix}togglecmdvip premium_ia off`);
                       removedInGroup++;
                       totalRemoved++;
                       const userName = getUserName(user.id);
-                      console.log(`[LIMPAR RANK GLOBAL] Removed departed user from ${groupId}: ${user.id} (${userName})`);
-                      return false;
+                                            return false;
                     }
                     return true;
                   } catch (e) {
-                    console.log(`[LIMPAR RANK GLOBAL] Error processing user ${user?.id} in group ${groupId}:`, e.message);
-                    invalidInGroup++;
+                                        invalidInGroup++;
                     totalInvalid++;
                     return false;
                   }
@@ -25428,8 +25281,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
               try {
                 fs.writeFileSync(groupPath, JSON.stringify(gData, null, 2));
               } catch (writeError) {
-                console.log(`[LIMPAR RANK GLOBAL] Error writing to group file ${groupId}:`, writeError.message);
-                failedGroups.push(`${groupId}: Erro ao salvar arquivo`);
+                                failedGroups.push(`${groupId}: Erro ao salvar arquivo`);
                 continue;
               }
               // Add to summary if changes were made
@@ -25443,8 +25295,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
                 summary.push(groupSummary);
               }
             } catch (groupError) {
-              console.log(`[LIMPAR RANK GLOBAL] Error processing group file ${file}:`, groupError.message);
-              failedGroups.push(`${file}: Erro inesperado`);
+                            failedGroups.push(`${file}: Erro inesperado`);
             }
           }
           // Prepare response message
@@ -25462,8 +25313,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           }
           await reply(responseMessage);
           // Log the action
-          console.log(`[LIMPAR RANK GLOBAL] Cleanup completed. Total removed: ${totalRemoved}, Invalid: ${totalInvalid}, Failed: ${failedGroups.length}`);
-        } catch (e) {
+                  } catch (e) {
           console.error('[LIMPAR RANK GLOBAL] Error:', e);
           await reply("❌ Ocorreu um erro ao limpar ranks de todos os grupos. Tente novamente mais tarde.");
         }
@@ -25483,8 +25333,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
               const userId = user.id;
               const isValidMember = currentMembers.includes(userId);
               if (!isValidMember) {
-                console.log(`[RANKATIVO] Removed departed user: ${userId} (${getUserName(userId)})`);
-                return false;
+                                return false;
               }
               validUsers.push(user);
               return true;
@@ -25558,8 +25407,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
               const userId = user.id;
               const isValidMember = currentMembers.includes(userId);
               if (!isValidMember) {
-                console.log(`[RANKINATIVO] Removed departed user: ${userId} (${getUserName(userId)})`);
-                return false;
+                                return false;
               }
               validUsers.push(user);
               return true;
@@ -27827,8 +27675,7 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
                   }
                 });
               } catch (err) {
-                console.log('Falha ao apagar editada:', err.message);
-              }
+                              }
             }
             // Apaga a própria mensagem do comando
             try {
@@ -27841,8 +27688,7 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
                 }
               });
             } catch (e) {
-              console.log('Falha ao apagar mensagem do comando:', e.message);
-            }
+                          }
             reply("✅ Mensagem de pagamento deletada com sucesso!");
           } catch (error) {
             console.error('Erro ao deletar payment:', error);
@@ -27884,15 +27730,7 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
           // Se não tiver mensagem referenciada, usa a própria
           const targetMessage = quotedMessage || info.message;
           
-          console.log('═══════════════════════════════════════════════════');
-          console.log('[GET] 📋 DADOS DA MENSAGEM MARCADA');
-          console.log(`[GET] 👤 De: ${menc_prt}`);
-          console.log(`[GET] 📜 Type: ${Object.keys(targetMessage).join(', ')}`);
-          console.log(`[GET] 🔑 Key:`, JSON.stringify(info.key, null, 2));
-          console.log(`[GET] 📜 Message:`, JSON.stringify(targetMessage, null, 2));
-          console.log(`[GET] 📜 ContextInfo:`, JSON.stringify(info.message?.extendedTextMessage?.contextInfo, null, 2));
-          console.log('═══════════════════════════════════════════════════');
-          
+                    
           // Montar resposta para o usuário
           const types = Object.keys(targetMessage).filter(k => !k.startsWith('stream')).join(', ');
           const msgData = `📋 *DADOS DA MENSAGEM*
@@ -28822,8 +28660,7 @@ break;
             
             // Banir usando o JID direto (mesmo método do !ban)
             await nazu.groupParticipantsUpdate(from, [userJid], 'remove').catch(e => {
-              console.log(`Nota ao banir ${userJid}:`, e?.message || 'erro');
-            });
+                          });
             banidos.push(userJid);
             
             // Delay entre banimentos
@@ -37760,8 +37597,7 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
             );
             try {
               await reply(notFoundMessage);
-              console.log(`🔍 Comando não encontrado: "${commandName}" por ${userName} (${sender}) no grupo ${isGroup ? groupMetadata.subject : 'privado'}`);
-            } catch (error) {
+                          } catch (error) {
               console.error('❌ Erro ao enviar mensagem de comando não encontrado:', error);
               await nazu.react('❌', {
                 key: info.key
