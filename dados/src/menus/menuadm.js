@@ -234,6 +234,11 @@ export default async function menuadm(prefix, botName = "MeuBot", userName = "Us
 │ 🌅 ${prefix}dia
 │ 🌤️ ${prefix}tarde
 │ 🌙 ${prefix}noite
+│ 🌑 ${prefix}madrugada
+│ 🚨 ${prefix}cvc1
+│ 📢 ${prefix}cvc2
+│ 💀 ${prefix}cvc3
+│ ⚠️ ${prefix}cvc4
 ╰──────────────
 
 ╭─────────────────╮
