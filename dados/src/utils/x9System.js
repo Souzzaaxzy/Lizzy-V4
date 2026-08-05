@@ -423,7 +423,7 @@ function normalizeJid(participant) {
 
 // Formatadores
 function formatTime(date = new Date()) {
-    return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+    return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
 }
 
 function formatDate(date = new Date()) {
