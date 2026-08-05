@@ -28686,44 +28686,49 @@ break;
           if (usersToBan.length === 0) {
             return reply("❌ Nenhum usuário válido para banir.");
           }
-          // Converter usuários para JID (podem ser LID)
-          const usersToBanJid = usersToBan.map(u => isValidJid(u) ? u : formatToJid(u.split('@')[0]));
-          // Banir todos os usuários
-          const result = await nazu.groupParticipantsUpdate(from, usersToBanJid, 'remove').catch(e => {
-            console.error('Erro ao banir usuários (banirvarios):', e);
-            return [];
-          });
-          // Preparar relatório
-          let successCount = 0;
-          let failCount = 0;
+          // Banir cada usuário individualmente para ter melhor controle
+          const successUsers = [];
           const failedUsers = [];
-          for (let i = 0; i < result.length; i++) {
-            if (result[i].status === "200" || result[i].status === 200) {
-              successCount++;
-            } else {
-              failCount++;
-              failedUsers.push(usersToBan[i]);
+          for (const user of usersToBan) {
+            const userJid = isValidJid(user) ? user : formatToJid(user.split('@')[0]);
+            try {
+              const result = await nazu.groupParticipantsUpdate(from, [userJid], 'remove');
+              // Verificar se o banimento foi bem sucedido
+              const status = result?.[0]?.status;
+              if (status === 200 || status === "200") {
+                successUsers.push(user);
+              } else {
+                failedUsers.push(user);
+              }
+            } catch (e) {
+              console.error('Erro ao banir usuário:', user, e);
+              failedUsers.push(user);
             }
           }
+          const successCount = successUsers.length;
+          const failCount = failedUsers.length;
           // Montar mensagem de resposta
           let responseMsg = `🚪 *BANIMENTO EM MASSA*\n\n`;
           responseMsg += `✅ Banidos: ${successCount}\n`;
           if (failCount > 0) {
             responseMsg += `❌ Falhas: ${failCount}\n`;
+            responseMsg += `\n📋 Falharam: ${failedUsers.map(u => '@' + u.split('@')[0]).join(', ')}`;
           }
           if (q && q.length > 0) {
             responseMsg += `\n📝 Motivo: ${q}`;
           }
-          responseMsg += `\n\n📋 Removidos: ${usersToBan.map(u => '@' + u.split('@')[0]).join(', ')}`;
+          if (successCount > 0) {
+            responseMsg += `\n\n📋 Removidos: ${successUsers.map(u => '@' + u.split('@')[0]).join(', ')}`;
+          }
           // Notificação X9 se ativo
           if (groupData.x9 && successCount > 0) {
-            const x9Msg = `🚪 *X9 Report:* Os seguintes usuários foram removidos por @${sender.split('@')[0]}: ${usersToBan.map(u => '@' + u.split('@')[0]).join(', ')}${q && q.length > 0 ? '\n📝 Motivo: ' + q : ''}`;
+            const x9Msg = `🚪 *X9 Report:* Os seguintes usuários foram removidos por @${sender.split('@')[0]}: ${successUsers.map(u => '@' + u.split('@')[0]).join(', ')}${q && q.length > 0 ? '\n📝 Motivo: ' + q : ''}`;
             await nazu.sendMessage(from, {
               text: x9Msg,
-              mentions: [sender, ...usersToBan]
+              mentions: [sender, ...successUsers]
             }).catch(err => console.error('Erro ao enviar X9:', err.message));
           }
-          reply(responseMsg, { mentions: usersToBan });
+          reply(responseMsg, { mentions: successUsers });
         } catch (e) {
           console.error(e);
           reply("Ocorreu um erro 💔");
