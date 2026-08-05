@@ -220,7 +220,10 @@ const X9_CARD_TEMPLATE = `╭━━━〔 🔎 X9 • NOVA SOLICITAÇÃO 〕━�
 ┃ 🔗 Via: {origem}
 ┃ 🕒 Horário: {hora}
 ┃ 📌 Status: Aguardando aprovação
-╰━━━━━━━━━━━━━━━━━━━━━━━━━━⬣`;
+╰━━━━━━━━━━━━━━━━━━━━━━━━━━⬣
+━━━━━━━━━━━━━━━
+⚙️ Config do card:
+!card on | !card off`;
 
 const X9_APPROVED_TEMPLATE = `╭━━━〔 ✅ X9 • SOLICITAÇÃO APROVADA 〕━━━⬣
 ┃ 👤 Solicitante: @{numero}
@@ -465,6 +468,14 @@ export async function processNewJoinRequest(sock, eventData, groupSettings) {
     
     if (!groupSettings?.x9) {
         console.log('[X9] X9 desativado');
+        return null;
+    }
+    
+    // Verifica se o card de solicitação está ativado
+    // Por padrão (card não definido), o card é enviado (compatibilidade com grupos existentes)
+    const cardEnabled = groupSettings.card !== false;
+    if (!cardEnabled) {
+        console.log('[X9] Card de solicitacao desativado');
         return null;
     }
     

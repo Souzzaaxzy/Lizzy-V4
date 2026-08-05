@@ -30412,6 +30412,30 @@ break;
           await reply("Ocorreu um erro 💔");
         }
         break;
+      case 'card':
+        try {
+          if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
+          if (!isGroupAdmin) return reply("Você precisa ser adm 💔");
+          
+          const subCmd = q?.toLowerCase().trim();
+          
+          if (subCmd === 'on') {
+            groupData.card = true;
+            fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
+            await reply("✅ Card de solicitacoes ativado com sucesso!");
+          } else if (subCmd === 'off') {
+            groupData.card = false;
+            fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
+            await reply("❌ Card de solicitacoes desativado com sucesso!");
+          } else {
+            const status = groupData.card === false ? "❌ Desativado" : "✅ Ativado";
+            await reply(`Card de solicitacoes: ${status}\n\nUse: !card on | !card off`);
+          }
+        } catch (e) {
+          console.error(e);
+          await reply("Ocorreu um erro 💔");
+        }
+        break;
       case 'x9logs':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
