@@ -28699,14 +28699,17 @@ break;
           const failedUsers = [];
           const notInGroup = [];
           for (const user of usersToBan) {
+            // Converter LID para JID se necessário
+            let userJid = user;
+            if (!isValidJid(user)) {
+              // É LID, converter para JID
+              userJid = user.split('@')[0] + '@s.whatsapp.net';
+            }
             // Verificar se o usuário está no grupo
-            const userJid = isValidJid(user) ? user : formatToJid(user.split('@')[0]);
-            const isInGroup = groupMembers.some(m => 
-              m === userJid || 
-              m.split('@')[0] === userJid.split('@')[0] ||
-              m.replace('@s.whatsapp.net', '@lid') === userJid ||
-              m.replace('@lid', '@s.whatsapp.net') === userJid
-            );
+            const isInGroup = groupMembers.some(m => {
+              const memberJid = isValidJid(m) ? m : m.split('@')[0] + '@s.whatsapp.net';
+              return memberJid === userJid || memberJid.split('@')[0] === userJid.split('@')[0];
+            });
             if (!isInGroup) {
               notInGroup.push(user);
               continue;
