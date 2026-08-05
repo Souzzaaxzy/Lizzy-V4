@@ -4907,12 +4907,22 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
         const messageType = isCmd ? 'COMANDO' : 'MENSAGEM';
         const context = isGroup ? 'GRUPO' : 'PRIVADO';
         const messagePreview = isCmd ? `${groupPrefix}${command}${q ? ` ${q.substring(0, 25)}${q.length > 25 ? '...' : ''}` : ''}` : budy2.substring(0, 35) + (budy2.length > 35 ? '...' : '');
+        console.log('┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓');
+        console.log(`┃ ${messageType} [${context}]${' '.repeat(36 - messageType.length - context.length)}`);
+        console.log('┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫');
+        console.log(`┃ Conteudo: ${messagePreview.padEnd(28)}`);
         if (isGroup) {
+          console.log(`┃ Grupo: ${(groupName || 'Desconhecido').padEnd(28)}`);
+          console.log(`┃ Usuario: ${(pushname || 'Sem Nome').padEnd(28)}`);
         } else {
+          console.log(`┃ Usuario: ${(pushname || 'Sem Nome').padEnd(28)}`);
         }
+        console.log('┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫');
+        console.log(`┃ Data/Hora: ${timestamp.padEnd(27)}`);
+        console.log('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n');
       }
     } catch (error) {
-      console.error('┃ 🚨 Erro ao gerar logs:', error, '');
+      // Silent error
     }
     // Configurar callback de expiração para trisal/quadrisal
     if (relationshipManager && !relationshipManager.onExpirationEvents) {
