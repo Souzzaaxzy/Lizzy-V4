@@ -4894,24 +4894,31 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
     if (botState.viewMessages) nazu.readMessages([info.key]);
     try {
       if (budy2 && budy2.length > 1) {
-        const timestamp = new Date().toLocaleTimeString('pt-BR', {
-          hour12: false,
-          timeZone: 'America/Sao_Paulo'
-        });
-        const commandPreview = isCmd ? `${groupPrefix}${command}${q ? ` ${q.substring(0, 30)}${q.length > 30 ? '...' : ''}` : ''}` : budy2.substring(0, 40) + (budy2.length > 40 ? '...' : '');
-        const groupOrPv = isGroup ? (groupName || 'Desconhecido') : 'pv';
-        const header = 'NOVA EXECUCAO';
-        const headerLen = 26;
-        const padding = Math.floor((headerLen - header.length) / 2);
-        console.log('╭──────────────────────────╮');
-        console.log(`│${' '.repeat(padding)}${header}${' '.repeat(headerLen - padding - header.length)}│`);
-        console.log('├──────────────────────────┤');
-        console.log(`│ Comando  > ${commandPreview.padEnd(24)}│`);
-        console.log(`│ ${groupOrPv === 'pv' ? 'PV' : 'Grupo'}     > ${(groupOrPv === 'pv' ? '' : groupOrPv).padEnd(24)}│`);
-        console.log(`│ Usuario  > ${(pushname || 'Sem Nome').padEnd(24)}│`);
-        console.log('├──────────────────────────┤');
-        console.log(`│ ${timestamp.padEnd(24)}│`);
-        console.log('╰──────────────────────────╯');
+        const timestamp = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) + ' • ' + new Date().toLocaleTimeString('pt-BR', { hour12: false, timeZone: 'America/Sao_Paulo' });
+        const textPreview = isCmd ? `${groupPrefix}${command}${q ? ` ${q.substring(0, 23)}${q.length > 23 ? '...' : ''}` : ''}` : budy2.substring(0, 28) + (budy2.length > 28 ? '...' : '');
+        
+        if (isGroup) {
+          console.log('╭──────────────────────────╮');
+          console.log('│   NOVA MENSAGEM GP      │');
+          console.log('├──────────────────────────┤');
+          console.log(`│ Grupo  > ${(groupName || 'Desconhecido').substring(0, 23).padEnd(23)}│`);
+          console.log(`│ Usuario > ${(pushname || 'Sem Nome').substring(0, 23).padEnd(23)}│`);
+          console.log(`│ Texto   > ${textPreview.padEnd(23)}│`);
+          console.log('├──────────────────────────┤');
+          console.log(`│ ${timestamp.padEnd(24)}│`);
+          console.log('╰──────────────────────────╯');
+        } else {
+          const userId = sender.split('@')[0];
+          console.log('╭──────────────────────────╮');
+          console.log('│   NOVA MENSAGEM PV      │');
+          console.log('├──────────────────────────┤');
+          console.log(`│ Usuario > ${(pushname || 'Sem Nome').substring(0, 23).padEnd(23)}│`);
+          console.log(`│ ID      > ${userId.substring(0, 23).padEnd(23)}│`);
+          console.log(`│ Texto   > ${textPreview.padEnd(23)}│`);
+          console.log('├──────────────────────────┤');
+          console.log(`│ ${timestamp.padEnd(24)}│`);
+          console.log('╰──────────────────────────╯');
+        }
       }
     } catch (error) {
       // Silent error
