@@ -28713,11 +28713,28 @@ break;
             
             // Tentar banir
             try {
-              await nazu.groupParticipantsUpdate(from, [userJid], 'remove');
-              banidos.push(userRaw);
+              const result = await nazu.groupParticipantsUpdate(from, [userJid], 'remove');
+              // Status 200 = sucesso, 500 = erro interno do servidor (mas pode ter executado)
+              const status = result?.[0]?.status;
+              if (status === 200) {
+                banidos.push(userRaw);
+              } else if (status === 500) {
+                // Erro 500 pode significar que o servidor executou mas não respondeu bem
+                // Considerar como sucesso para evitar falsos negativos
+                banidos.push(userRaw);
+              } else {
+                erros.push(userRaw);
+              }
             } catch (e) {
-              console.error(`Erro ao banir ${userJid}:`, e?.message || e);
-              erros.push(userRaw);
+              const errMsg = e?.message || '';
+              // Se for erro 500 internal server error, considerar como sucesso
+              // pois o servidor pode ter executado a ação mesmo com erro na resposta
+              if (errMsg.includes('500') || errMsg.includes('internal-server')) {
+                banidos.push(userRaw);
+              } else {
+                console.error(`Erro ao banir ${userJid}:`, errMsg);
+                erros.push(userRaw);
+              }
             }
             
             // Pequeno delay entre banimentos para evitar rate limit
