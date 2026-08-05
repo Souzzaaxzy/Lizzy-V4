@@ -28675,8 +28675,6 @@ break;
           // Arrays para resultados
           const banidos = [];
           const jaSairam = [];
-          const naoEncontrados = [];
-          const erros = [];
           
           // Processar cada usuário
           for (let i = 0; i < mentionedUsers.length; i++) {
@@ -28711,25 +28709,16 @@ break;
               continue;
             }
             
-            // Tentar banir
-            try {
-              const result = await nazu.groupParticipantsUpdate(from, [userJid], 'remove');
-              // Apenas status 200 = sucesso confirmado
-              const status = result?.[0]?.status;
-              if (status === 200) {
-                banidos.push(userRaw);
-              } else {
-                erros.push(userRaw);
-              }
-            } catch (e) {
+            // Tentar banir - usar a mesma lógica do comando !ban singular
+            await nazu.groupParticipantsUpdate(from, [userJid], 'remove').catch(e => {
               const errMsg = e?.message || '';
-              console.error(`Erro ao banir ${userJid}:`, errMsg);
-              erros.push(userRaw);
-            }
+              console.log(`Nota ao banir ${userJid}:`, errMsg || 'erro desconhecido');
+            });
+            banidos.push(userRaw);
             
             // Pequeno delay entre banimentos para evitar rate limit
             if (i < mentionedUsers.length - 1) {
-              await new Promise(r => setTimeout(r, 200));
+              await new Promise(r => setTimeout(r, 300));
             }
           }
           
@@ -28746,13 +28735,8 @@ break;
             msg += `${jaSairam.map(u => '@' + u.split('@')[0]).join(', ')}\n\n`;
           }
           
-          if (erros.length > 0) {
-            msg += `❌ *${erros.length} erro(s)*\n`;
-            msg += `${erros.map(u => '@' + u.split('@')[0]).join(', ')}`;
-          }
-          
           if (q) {
-            msg += `\n\n📝 Motivo: ${q}`;
+            msg += `📝 Motivo: ${q}`;
           }
           
           // X9 se ativo
@@ -28761,8 +28745,7 @@ break;
             nazu.sendMessage(from, { text: x9Msg, mentions: [sender, ...banidos] }).catch(() => {});
           }
           
-          const todasMencoes = [...banidos, ...jaSairam, ...erros];
-          reply(msg, { mentions: todasMencoes });
+          reply(msg, { mentions: [...banidos, ...jaSairam] });
           
         } catch (e) {
           console.error(e);
