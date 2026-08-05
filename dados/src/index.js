@@ -28704,7 +28704,7 @@ break;
             
             // Delay entre banimentos
             if (i < mentionedUsers.length - 1) {
-              await new Promise(r => setTimeout(r, 300));
+              await new Promise(r => setTimeout(r, 100));
             }
           }
           
