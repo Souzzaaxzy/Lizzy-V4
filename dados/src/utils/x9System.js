@@ -214,15 +214,15 @@ function getCountryCode(number) {
 }
 
 // Template do card
-const X9_CARD_TEMPLATE = `╭━━━〔 🔎 X9 • NOVA SOLICITAÇÃO 〕━━━⬣
-┃ 👤 Nome: @{numero}
-┃ 🌍 País: {pais}
-┃ 🔗 Via: {origem}
-┃ 🕒 Horário: {hora}
-┃ 📌 Status: Aguardando aprovação
-╰━━━━━━━━━━━━━━━━━━━━━━━━━━⬣
+const X9_CARD_TEMPLATE = `╭━━━[ X9 - NOVA SOLICITACAO ]━━━
+| Nome: @{numero}
+| Pais: {pais}
+| Via: {origem}
+| Horario: {hora}
+| Status: Aguardando aprovacao
+╰━━━━━━━━━━━━━━━━━━━━━━━━
 ━━━━━━━━━━━━━━━
-⚙️ Config do card:
+Config do card:
 !card on | !card off`;
 
 const X9_APPROVED_TEMPLATE = `╭━━━〔 ✅ X9 • SOLICITAÇÃO APROVADA 〕━━━⬣
