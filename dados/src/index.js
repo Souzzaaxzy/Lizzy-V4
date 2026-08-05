@@ -28686,11 +28686,31 @@ break;
           if (usersToBan.length === 0) {
             return reply("❌ Nenhum usuário válido para banir.");
           }
+          // Obter membros atuais do grupo para verificar
+          let groupMembers = [];
+          try {
+            const groupInfo = await nazu.groupMetadata(from);
+            groupMembers = groupInfo.participants.map(p => p.id);
+          } catch (e) {
+            console.error('Erro ao obter membros do grupo:', e);
+          }
           // Banir cada usuário individualmente para ter melhor controle
           const successUsers = [];
           const failedUsers = [];
+          const notInGroup = [];
           for (const user of usersToBan) {
+            // Verificar se o usuário está no grupo
             const userJid = isValidJid(user) ? user : formatToJid(user.split('@')[0]);
+            const isInGroup = groupMembers.some(m => 
+              m === userJid || 
+              m.split('@')[0] === userJid.split('@')[0] ||
+              m.replace('@s.whatsapp.net', '@lid') === userJid ||
+              m.replace('@lid', '@s.whatsapp.net') === userJid
+            );
+            if (!isInGroup) {
+              notInGroup.push(user);
+              continue;
+            }
             try {
               const result = await nazu.groupParticipantsUpdate(from, [userJid], 'remove');
               // Verificar se o banimento foi bem sucedido
@@ -28701,17 +28721,27 @@ break;
                 failedUsers.push(user);
               }
             } catch (e) {
-              console.error('Erro ao banir usuário:', user, e);
+              // Ignorar erros internos do servidor (usuário provavelmente já saiu)
+              const errorMsg = e?.message || '';
+              if (errorMsg.includes('internal-server-err') || errorMsg.includes('500')) {
+                console.log(`Usuário ${user} provavelmente já não está no grupo`);
+              } else {
+                console.error('Erro ao banir usuário:', user, e);
+              }
               failedUsers.push(user);
             }
           }
           const successCount = successUsers.length;
-          const failCount = failedUsers.length;
+          const failCount = failedUsers.length + notInGroup.length;
           // Montar mensagem de resposta
           let responseMsg = `🚪 *BANIMENTO EM MASSA*\n\n`;
           responseMsg += `✅ Banidos: ${successCount}\n`;
-          if (failCount > 0) {
-            responseMsg += `❌ Falhas: ${failCount}\n`;
+          if (notInGroup.length > 0) {
+            responseMsg += `⚠️ Não estão no grupo: ${notInGroup.length}\n`;
+            responseMsg += `${notInGroup.map(u => '@' + u.split('@')[0]).join(', ')}\n`;
+          }
+          if (failedUsers.length > 0) {
+            responseMsg += `❌ Falhas: ${failedUsers.length}\n`;
             responseMsg += `\n📋 Falharam: ${failedUsers.map(u => '@' + u.split('@')[0]).join(', ')}`;
           }
           if (q && q.length > 0) {
@@ -28728,7 +28758,9 @@ break;
               mentions: [sender, ...successUsers]
             }).catch(err => console.error('Erro ao enviar X9:', err.message));
           }
-          reply(responseMsg, { mentions: successUsers });
+          // Incluir todos os usuários nas menções
+          const allMentionedUsers = [...successUsers, ...failedUsers, ...notInGroup];
+          reply(responseMsg, { mentions: allMentionedUsers });
         } catch (e) {
           console.error(e);
           reply("Ocorreu um erro 💔");
