@@ -28676,47 +28676,33 @@ break;
           const banidos = [];
           const jaSairam = [];
           
-          // Processar cada usuário
+          // Processar cada usuário - usar o mesmo método que !ban singular
           for (let i = 0; i < mentionedUsers.length; i++) {
-            let userRaw = mentionedUsers[i];
+            const userJid = mentionedUsers[i];
             
-            // Converter para JID padrão se necessário
-            let userJid = userRaw;
-            if (!isValidJid(userRaw)) {
-              userJid = userRaw.split('@')[0] + '@s.whatsapp.net';
-            }
+            // Verificações - comparar apenas números
+            const numeroUser = userJid.split('@')[0];
+            const numeroBot = botNumber.split('@')[0];
+            const numeroDono = nmrdn.includes('@') ? nmrdn.split('@')[0] : nmrdn;
             
-            // Verificações
-            if (userJid === botNumber) {
-              continue; // Pula o bot
-            }
-            if (userJid === nmrdn || userJid === nmrdn.split('@')[0] + '@s.whatsapp.net') {
-              continue; // Pula dono do bot
-            }
-            if (groupAdmins.includes(userJid) || groupAdmins.includes(userRaw)) {
-              continue; // Pula admins do grupo
-            }
+            if (numeroUser === numeroBot) continue;
+            if (numeroUser === numeroDono) continue;
+            if (groupAdmins.some(a => a.split('@')[0] === numeroUser)) continue;
             
             // Verificar se está no grupo
-            const numeroUser = userJid.split('@')[0];
-            const estaNoGrupo = groupMembers.some(m => {
-              const numeroMembro = m.split('@')[0];
-              return numeroMembro === numeroUser;
-            });
-            
+            const estaNoGrupo = groupMembers.some(m => m.split('@')[0] === numeroUser);
             if (!estaNoGrupo) {
-              jaSairam.push(userRaw);
+              jaSairam.push(userJid);
               continue;
             }
             
-            // Tentar banir - usar a mesma lógica do comando !ban singular
+            // Banir usando o JID direto (mesmo método do !ban)
             await nazu.groupParticipantsUpdate(from, [userJid], 'remove').catch(e => {
-              const errMsg = e?.message || '';
-              console.log(`Nota ao banir ${userJid}:`, errMsg || 'erro desconhecido');
+              console.log(`Nota ao banir ${userJid}:`, e?.message || 'erro');
             });
-            banidos.push(userRaw);
+            banidos.push(userJid);
             
-            // Pequeno delay entre banimentos para evitar rate limit
+            // Delay entre banimentos
             if (i < mentionedUsers.length - 1) {
               await new Promise(r => setTimeout(r, 300));
             }
