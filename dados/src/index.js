@@ -4906,8 +4906,11 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
         });
         const commandPreview = isCmd ? `${groupPrefix}${command}${q ? ` ${q.substring(0, 30)}${q.length > 30 ? '...' : ''}` : ''}` : budy2.substring(0, 40) + (budy2.length > 40 ? '...' : '');
         const groupOrPv = isGroup ? (groupName || 'Desconhecido') : 'pv';
+        const header = 'NOVA EXECUCAO';
+        const headerLen = 26;
+        const padding = Math.floor((headerLen - header.length) / 2);
         console.log('╭──────────────────────────╮');
-        console.log('│                 NOVA EXECUCAO     │');
+        console.log(`│${' '.repeat(padding)}${header}${' '.repeat(headerLen - padding - header.length)}│`);
         console.log('├──────────────────────────┤');
         console.log(`│ Comando  > ${commandPreview.padEnd(24)}│`);
         console.log(`│ ${groupOrPv === 'pv' ? 'PV' : 'Grupo'}     > ${(groupOrPv === 'pv' ? '' : groupOrPv).padEnd(24)}│`);
