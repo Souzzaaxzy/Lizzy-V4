@@ -28343,6 +28343,130 @@ break;
         }
         break;
       }
+      case 'cvc1': {
+        try {
+          if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
+          if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+          
+          const newsletterContext = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          
+          const members = AllgroupMembers || [];
+          const message = `🚨 _𝐂𝐎𝐍𝐕𝐎𝐂𝐀ÇÃ𝐎 𝐃𝐀 𝐓𝐑𝐎𝐏𝐀!!_ 🔥\n\n𝐀𝐓𝐄𝐍ÇÃ𝐎 🚨 ᴛᴏᴅᴀ ᴀ 𝐁𝐀𝐍𝐃𝐀 𝐃𝐎 𝐆𝐑𝐔𝐏𝐎 😎💥, ᴏs 𝐂𝐇𝐀𝐓𝐄𝐈𝐑𝐎𝐒🗣️, ᴏs 𝐌𝐄𝐌𝐄𝐈𝐑𝐎𝐒🤣, ᴏs 𝐅𝐀𝐍𝐓𝐀𝐒𝐌𝐀𝐒👻, ᴏs 𝐕𝐈𝐂𝐈𝐀𝐃𝐎𝐒 𝐍𝐎 𝐙𝐀𝐏📱🔥\n\n🫵🏻 𝐌𝐄𝐌𝐁𝐑𝐎 𝐀𝐓𝐈𝐕𝐎 𝐒𝐄 𝐌𝐀𝐍𝐈𝐅𝐄𝐒𝐓𝐀 😤⚡\n\nNão fica só olhando 👀, bora movimentar essa bagunça KKKKK 🔥`;
+          
+          await nazu.sendMessage(from, {
+            text: message,
+            mentions: members,
+            contextInfo: newsletterContext
+          }).catch(err => {
+            console.error('Erro ao enviar mensagem cvc1:', err);
+            reply("вқҢ Erro ao tentar enviar a mensagem.");
+          });
+        } catch (e) {
+          console.error(e);
+          reply("вқҢ Ocorreu um erro ao executar o comando.");
+        }
+        break;
+      }
+      case 'cvc2': {
+        try {
+          if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
+          if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+          
+          const newsletterContext = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          
+          const members = AllgroupMembers || [];
+          const message = `📢 _𝐀𝐋ÔÔÔ 𝐓𝐑𝐎𝐏𝐀!!_ 🔥\n\n𝐂𝐇𝐀𝐌𝐀𝐍𝐃𝐎 🚨 ᴏs 𝐂𝐑𝐈𝐀𝐒😎, ᴏs 𝐆𝐀𝐌𝐄𝐑𝐒🎮, ᴏs 𝐅𝐎𝐅𝐎𝐐𝐔𝐄𝐈𝐑𝐎𝐒☕, ᴏs 𝐃𝐀𝐒 𝐅𝐈𝐆𝐔𝐑𝐈𝐍𝐇𝐀𝐒😂, ᴏs 𝐐𝐔𝐄 𝐒Ó 𝐕𝐈𝐒𝐔𝐀𝐋𝐈𝐙𝐀𝐌👀\n\n𝐂𝐀𝐃Ê 𝐕𝐎𝐂Ê𝐒?? 😭🙏\n\n🫵🏻 𝐃Á 𝐀𝐒 𝐂𝐀𝐑𝐀𝐒 𝐀Í!! O grupo não vai conversar sozinho não KKKK 💬🔥`;
+          
+          await nazu.sendMessage(from, {
+            text: message,
+            mentions: members,
+            contextInfo: newsletterContext
+          }).catch(err => {
+            console.error('Erro ao enviar mensagem cvc2:', err);
+            reply("вқҢ Erro ao tentar enviar a mensagem.");
+          });
+        } catch (e) {
+          console.error(e);
+          reply("вқҢ Ocorreu um erro ao executar o comando.");
+        }
+        break;
+      }
+      case 'cvc3': {
+        try {
+          if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
+          if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+          
+          const newsletterContext = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          
+          const members = AllgroupMembers || [];
+          const message = `💀 _𝐀𝐋𝐄𝐑𝐓𝐀 𝐃𝐄 𝐆𝐑𝐔𝐏𝐎 𝐌𝐎𝐑𝐓𝐎!!_ 🚨\n\nᴏ 𝐂𝐇𝐀𝐓 ᴛÁ ᴍᴀɪs 𝐏𝐀𝐑𝐀𝐃𝐎 ǫᴜᴇ 𝐒𝐄𝐑𝐕𝐈𝐃𝐎𝐑 𝐒𝐄𝐌 𝐏𝐋𝐀𝐘𝐄𝐑 😭\n\nCadê os 𝐌𝐄𝐌𝐄𝐈𝐑𝐎𝐒🤣, ᴏs 𝐂𝐇𝐀𝐓𝐄𝐈𝐑𝐎𝐒🗣️, ᴏs 𝐂𝐀Ç𝐀𝐃𝐎𝐑𝐄𝐒 𝐃𝐄 𝐓𝐑𝐄𝐓𝐀🍿, ᴏs 𝐐𝐔𝐄 𝐒Ó 𝐀𝐏𝐀𝐑𝐄𝐂𝐄𝐌 𝐃𝐄 𝐌𝐀𝐃𝐑𝐔𝐆𝐀𝐃𝐀🌙\n\n🫵🏻 𝐀𝐏𝐀𝐑𝐄Ç𝐀𝐌 𝐀Í!! 😤🔥`;
+          
+          await nazu.sendMessage(from, {
+            text: message,
+            mentions: members,
+            contextInfo: newsletterContext
+          }).catch(err => {
+            console.error('Erro ao enviar mensagem cvc3:', err);
+            reply("вқҢ Erro ao tentar enviar a mensagem.");
+          });
+        } catch (e) {
+          console.error(e);
+          reply("вқҢ Ocorreu um erro ao executar o comando.");
+        }
+        break;
+      }
+      case 'cvc4': {
+        try {
+          if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
+          if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+          
+          const newsletterContext = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          
+          const members = AllgroupMembers || [];
+          const message = `⚠️ _𝐂𝐇𝐀𝐌𝐀𝐃𝐀 𝐔𝐑𝐆𝐄𝐍𝐓𝐄!!_ 🚨\n\n𝐏𝐑𝐎𝐂𝐔𝐑𝐀-𝐒𝐄 🔎 ᴏs 𝐌𝐄𝐌𝐁𝐑𝐎𝐒 𝐃𝐄𝐒𝐒𝐄 𝐆𝐑𝐔𝐏𝐎 😭\n\nᴏs 𝐐𝐔𝐄 𝐑𝐄𝐒𝐏𝐎𝐍𝐃𝐄𝐌 𝐒Ó 𝐂𝐎𝐌 𝐅𝐈𝐆𝐔𝐑𝐈𝐍𝐇𝐀😂, ᴏs 𝐎𝐍𝐋𝐈𝐍𝐄🟢, ᴏs 𝐄𝐒𝐏𝐈Õ𝐄𝐒👀, ᴏs 𝐐𝐔𝐄 𝐀𝐏𝐀𝐑𝐄𝐂𝐄𝐌 𝐍𝐀 𝐓𝐑𝐄𝐓𝐀🤡\n\n🫵🏻 𝐒𝐄 𝐕𝐎𝐂Ê 𝐄𝐒𝐓Á 𝐕𝐈𝐕𝐎... 𝐌𝐀𝐍𝐈𝐅𝐄𝐒𝐓𝐀!! 🔥`;
+          
+          await nazu.sendMessage(from, {
+            text: message,
+            mentions: members,
+            contextInfo: newsletterContext
+          }).catch(err => {
+            console.error('Erro ao enviar mensagem cvc4:', err);
+            reply("вқҢ Erro ao tentar enviar a mensagem.");
+          });
+        } catch (e) {
+          console.error(e);
+          reply("вқҢ Ocorreu um erro ao executar o comando.");
+        }
+        break;
+      }
       case 'smm': {
         // VERSÃO ATUALIZADA - SEM LIMITES E COM NOMES COMPLETOS
         if (!isOwner) return reply('❌ Este comando é restrito ao dono do bot.');
