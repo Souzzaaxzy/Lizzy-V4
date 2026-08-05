@@ -22228,7 +22228,7 @@ case 'addcmd-subdono':
           if (!isOwner) return reply("Este comando é apenas para o meu dono");
           if (!isBotAdmin) return reply("Preciso ser admin para executar este comando");
           await nazu.groupParticipantsUpdate(from, [sender], "promote");
-          await reply("✅ Done! @${sender.split('@')[0]} agora é admin do grupo!", {
+          await reply(`✅ Done! @${sender.split('@')[0]} agora é admin do grupo!`, {
             mentions: [sender]
           });
         } catch (e) {
@@ -22241,7 +22241,7 @@ case 'addcmd-subdono':
           if (!isOwner) return reply("Este comando é apenas para o meu dono");
           if (!isBotAdmin) return reply("Preciso ser admin para executar este comando");
           await nazu.groupParticipantsUpdate(from, [sender], "demote");
-          await reply("✅ Done! @${sender.split('@')[0]} agora é membro comum do grupo!", {
+          await reply(`✅ Done! @${sender.split('@')[0]} agora é membro comum do grupo!`, {
             mentions: [sender]
           });
         } catch (e) {
