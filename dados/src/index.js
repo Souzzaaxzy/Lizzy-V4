@@ -1281,7 +1281,7 @@ const handleCaptchaResponse = async (nazu, info, from, sender, text) => {
     ?.replace(/@.*/, '');
   const isCapUser = CaptchaIndex.get(senderNormalized);
   const { total: totalPendentes } = CaptchaIndex.stats();
-  //  //  //  //  try {
+  try {
     if (isCapUser) {
       if (now >= isCapUser.expiresAt) {
         try {
@@ -1302,7 +1302,7 @@ const handleCaptchaResponse = async (nazu, info, from, sender, text) => {
       }
       const respInt = parseInt(text?.trim());
       const answerInt = parseInt(isCapUser.answer);
-            if (respInt === answerInt) {
+      if (respInt === answerInt) {
         CaptchaIndex.remove(senderNormalized);
         try {
           const groupMetadata = await nazu.groupMetadata(isCapUser.groupId);
@@ -1328,9 +1328,13 @@ const handleCaptchaResponse = async (nazu, info, from, sender, text) => {
             mentions: [isCapUser.idOrigin]
           });
         }
+      } else {
+        await nazu.sendMessage(isCapUser.groupId, {
+          text: `❌ Resposta incorreta, @${senderNormalized}. Tente novamente!`,
+          mentions: [isCapUser.idOrigin]
+        });
       }
-    } else {
-      //       }
+    }
   } catch (error) {
     console.error('[ERRO CRÍTICO]:', error);
   }
@@ -2580,16 +2584,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     if (!isGroup && !info.key.fromMe) { // Ignora mensagens do próprio bot
       const captchaData = getCaptcha(sender);
       if (captchaData) {
-        if (debug) {
-            sender,
-            body: body.trim(),
-            expectedAnswer: captchaData.answer,
-            groupId: captchaData.groupId
-          });
-        }
         const userAnswer = parseInt(body.trim());
-        if (debug) {
-        }
         if (isNaN(userAnswer)) {
           await reply('❌ Resposta inválida! Por favor, envie apenas o número da resposta.');
           return;
@@ -2598,8 +2593,6 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
         if (userAnswer === captchaData.answer) {
           // Resposta correta - aprovar no grupo
           try {
-            if (debug) {
-            }
             await nazu.groupRequestParticipantsUpdate(captchaData.groupId, [sender], 'approve');
             await reply('✅ *Correto!* Você foi aprovado no grupo. Bem-vindo! 🎉');
             // Limpar captcha pendente do índice
@@ -3005,6 +2998,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
                   fromMe: false,
                   participant: realSender
                 }
+              });
               await sleep(500);
               try {
                 await nazu.sendMessage(from, {
@@ -20100,9 +20094,6 @@ case 'download-bot':
       }
     );
     const zipBuffer = Buffer.from(zipResponse.data);
-      '[ZIPBOT] Tamanho:',
-      zipBuffer.length
-    );
     if (!zipBuffer || zipBuffer.length < 1000) {
       throw new Error(
         'Arquivo ZIP inválido ou vazio.'
