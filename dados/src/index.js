@@ -21768,48 +21768,52 @@ Precisa de ajuda? Entre em contato:
           
           // Extrai o código do link
           const parts = q.split('https://chat.whatsapp.com/');
-          const code = parts[1]?.split('?')[0]; // Remove query params se houver
+          const code = parts[1]?.split('?')[0];
           
           if (!code || code.length < 5) {
             return reply('❌ Link de convite inválido. Verifique se o link está completo.');
           }
           
           console.log('[ENTRAR] Código extraído:', code);
-          console.log('[ENTRAR] Link original:', q);
-          
           await reply('⏳ Tentando entrar no grupo...');
           
           try {
-            console.log('[ENTRAR] Tentando nazu.groupAcceptInvite...');
+            // Primeiro tenta o método normal
+            console.log('[ENTRAR] Tentando método padrão...');
             const res = await nazu.groupAcceptInvite(code);
             console.log('[ENTRAR] Sucesso! Resposta:', JSON.stringify(res));
             await reply(`✅ Entrei no grupo com sucesso!`);
-          } catch (err) {
-            console.log('[ENTRAR] ====================================');
-            console.log('[ENTRAR] Erro completo:', JSON.stringify(err, null, 2));
-            console.log('[ENTRAR] ====================================');
+          } catch (err1) {
+            console.log('[ENTRAR] Método padrão falhou, tentando via query...');
             
-            const errorStr = String(err);
-            const errorLower = errorStr.toLowerCase();
-            const statusCode = err.output?.statusCode || err.data;
-            
-            // Verifica o código do erro
-            if (statusCode === 400 || statusCode === 500 || statusCode === '400' || statusCode === '500') {
-              if (errorLower.includes('not found') || errorLower.includes('não encontrado')) {
-                await reply('❌ Grupo não encontrado. O link pode estar incorreto ou o grupo foi excluído.');
-              } else if (errorLower.includes('bad request') || errorLower.includes('invalid')) {
-                await reply('❌ Link de convite inválido ou expirado. Solicite um novo link ao administrador do grupo.');
-              } else {
-                await reply('❌ Erro do WhatsApp ao entrar no grupo.\n\nPossíveis causas:\n• Link expirado ou revogado\n• O bot foi bloqueado temporariamente\n• Problema no servidor do WhatsApp\n\n💡 Tente pedir um novo link de convite.');
-              }
-            } else if (statusCode === 403 || statusCode === '403') {
-              await reply('❌ Permissão negada. O link pode estar incorreto ou você foi bloqueado.');
-            } else if (statusCode === 410 || statusCode === '410') {
-              await reply('❌ Este link de convite expirou ou foi revogado. Peça um novo link ao administrador do grupo.');
-            } else if (statusCode === 409 || statusCode === '409') {
-              await reply('ℹ️ O bot já está neste grupo!');
-            } else {
-              await reply(`❌ Erro ao entrar no grupo.\n\n*Código do erro:* ${statusCode || 'desconhecido'}\n*Detalhes:* ${err.message || 'verifique o console'}`);
+            try {
+              // Tenta via query direta como fallback
+              const queryResult = await nazu.query({
+                tag: 'iq',
+                attrs: {
+                  type: 'set',
+                  xmlns: 'w:g2',
+                  to: 'g.us'
+                },
+                content: [{
+                  tag: 'join',
+                  attrs: {},
+                  content: [{
+                    tag: 'code',
+                    attrs: {},
+                    content: code
+                  }]
+                }]
+              });
+              
+              console.log('[ENTRAR] Query via invite funcionou!', JSON.stringify(queryResult));
+              await reply(`✅ Entrei no grupo com sucesso!`);
+            } catch (err2) {
+              console.log('[ENTRAR] Query também falhou:', JSON.stringify(err2));
+              
+              // Se ambos falharam, informa o erro
+              const statusCode = err1.output?.statusCode || err1.data || '500';
+              await reply(`❌ Erro ao entrar no grupo (código: ${statusCode}).\n\nO bot não conseguiu entrar via API. Tente adicionar o bot manualmente ao grupo ou verificar se há restrições.`);
             }
           }
         } catch (e) {
