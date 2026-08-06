@@ -5840,12 +5840,23 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
           if (figBan) {
             // Figurinha cadastrada foi enviada
             if (isGroupAdmin) {
-              // Obter o alvo da mensagem quoted
+              // Obter o alvo da mensagem que a figurinha esta citando
+              const contextInfo = currentSticker.contextInfo || {};
+              const quotedMsg = contextInfo.quotedMessage;
               let targetUser = null;
-              if (quotedMessageContent?.sender) {
-                targetUser = quotedMessageContent.sender;
-              } else if (quotedMessageContent?.extendedTextMessage?.contextInfo?.participant) {
-                targetUser = quotedMessageContent.extendedTextMessage.contextInfo.participant;
+              // Extrair o remetente da mensagem quoted
+              if (quotedMsg?.sender) {
+                targetUser = quotedMsg.sender;
+              } else if (quotedMsg?.extendedTextMessage?.contextInfo?.participant) {
+                targetUser = quotedMsg.extendedTextMessage.contextInfo.participant;
+              } else if (quotedMsg?.imageMessage?.contextInfo?.participant) {
+                targetUser = quotedMsg.imageMessage.contextInfo.participant;
+              } else if (quotedMsg?.videoMessage?.contextInfo?.participant) {
+                targetUser = quotedMsg.videoMessage.contextInfo.participant;
+              } else if (quotedMsg?.audioMessage?.contextInfo?.participant) {
+                targetUser = quotedMsg.audioMessage.contextInfo.participant;
+              } else if (contextInfo.participant) {
+                targetUser = contextInfo.participant;
               }
               if (targetUser) {
                 // Normalizar
