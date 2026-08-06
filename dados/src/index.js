@@ -5832,74 +5832,86 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
     }
     // FIGBAN - Sistema de ban por figurinha
     if (isGroup && type === "stickerMessage" && !info.key.fromMe) {
-      const list = getFigBanList();
-      if (list.length > 0) {
-        const currentSticker = info.message?.stickerMessage;
-        if (currentSticker && currentSticker.fileSha256) {
-          const figBan = findFigBanByHash(currentSticker.fileSha256);
-          if (figBan) {
-            // Figurinha cadastrada foi enviada
-            if (isGroupAdmin) {
-              // Obter o alvo da mensagem que a figurinha esta citando
-              const contextInfo = currentSticker.contextInfo || {};
-              const quotedMsg = contextInfo.quotedMessage;
-              let targetUser = null;
-              // Extrair o remetente da mensagem quoted
-              if (quotedMsg?.sender) {
-                targetUser = quotedMsg.sender;
-              } else if (quotedMsg?.extendedTextMessage?.contextInfo?.participant) {
-                targetUser = quotedMsg.extendedTextMessage.contextInfo.participant;
-              } else if (quotedMsg?.imageMessage?.contextInfo?.participant) {
-                targetUser = quotedMsg.imageMessage.contextInfo.participant;
-              } else if (quotedMsg?.videoMessage?.contextInfo?.participant) {
-                targetUser = quotedMsg.videoMessage.contextInfo.participant;
-              } else if (quotedMsg?.audioMessage?.contextInfo?.participant) {
-                targetUser = quotedMsg.audioMessage.contextInfo.participant;
-              } else if (contextInfo.participant) {
-                targetUser = contextInfo.participant;
-              }
-              if (targetUser) {
-                // Normalizar
-                const targetNormalized = targetUser.split('@')[0].replace(/\s/g, '');
-                const senderNormalized = sender.split('@')[0].replace(/\s/g, '');
-                // Nao banir quem enviou a figurinha
-                if (targetNormalized !== senderNormalized) {
-                  try {
-                    const groupMetadata = await nazu.groupMetadata(from).catch(() => null);
-                    if (!groupMetadata) return;
-                    // Verificar se bot eh admin
-                    const botParticipant = groupMetadata.participants.find(p => p.id === botNumber);
-                    if (!botParticipant?.admin) return;
-                    // Verificar se alvo existe no grupo
-                    const targetParticipant = groupMetadata.participants.find(p => {
-                      const pId = p.id.split('@')[0].replace(/\s/g, '');
-                      return pId === targetNormalized || p.id === targetUser;
-                    });
-                    if (!targetParticipant) return;
-                    // Nao remover admins
-                    if (targetParticipant.admin) return;
-                    // Nao remover dono do grupo
-                    if (groupMetadata.owner) {
-                      const ownerNorm = groupMetadata.owner.split('@')[0].replace(/\s/g, '');
-                      if (ownerNorm === targetNormalized) return;
-                    }
-                    // Nao remover dono/subdono do bot
-                    const ownerNumbers = [numerodono, ...subdono].map(n => n.split('@')[0].replace(/\D/g, ''));
-                    const targetNum = targetNormalized.replace(/\D/g, '');
-                    if (ownerNumbers.some(on => on && (on === targetNum || targetNum.includes(on) || on.includes(targetNum)))) return;
-                    // Nao remover o proprio bot
-                    const botNum = botNumber.split('@')[0].replace(/\s/g, '');
-                    if (targetNum === botNum) return;
-                    // Remover
-                    await nazu.groupParticipantsUpdate(from, [targetUser], 'remove');
-                  } catch (error) {
-                    // Silencioso
-                  }
-                }
-              }
-            }
-          }
+      const figBanList = getFigBanList();
+      if (figBanList.length === 0) return;
+      
+      const currentSticker = info.message?.stickerMessage;
+      if (!currentSticker?.fileSha256) return;
+      
+      const currentHash = Buffer.from(currentSticker.fileSha256).toString('base64');
+      const figBan = figBanList.find(f => f.hash === currentHash);
+      if (!figBan) return;
+      
+      if (!isGroupAdmin) return;
+      
+      // Obter o alvo da mensagem quoted
+      const stickerContextInfo = currentSticker.contextInfo || {};
+      const quotedMsg = stickerContextInfo.quotedMessage;
+      if (!quotedMsg) return;
+      
+      // Extrair o participant do autor da mensagem quoted
+      // O participant está dentro do contextInfo da mensagem quoted, não no contexto da figurinha
+      let targetUser = null;
+      if (quotedMsg.sender) {
+        targetUser = quotedMsg.sender;
+      } else if (quotedMsg.extendedTextMessage?.contextInfo?.participant) {
+        targetUser = quotedMsg.extendedTextMessage.contextInfo.participant;
+      } else if (quotedMsg.imageMessage?.contextInfo?.participant) {
+        targetUser = quotedMsg.imageMessage.contextInfo.participant;
+      } else if (quotedMsg.videoMessage?.contextInfo?.participant) {
+        targetUser = quotedMsg.videoMessage.contextInfo.participant;
+      } else if (quotedMsg.audioMessage?.contextInfo?.participant) {
+        targetUser = quotedMsg.audioMessage.contextInfo.participant;
+      } else if (quotedMsg.stickerMessage?.contextInfo?.participant) {
+        targetUser = quotedMsg.stickerMessage.contextInfo.participant;
+      } else if (quotedMsg.documentMessage?.contextInfo?.participant) {
+        targetUser = quotedMsg.documentMessage.contextInfo.participant;
+      }
+      
+      if (!targetUser) return;
+      
+      // Normalizar para comparação
+      const targetNormalized = targetUser.split('@')[0].replace(/\s/g, '');
+      const senderNormalized = sender.split('@')[0].replace(/\s/g, '');
+      if (targetNormalized === senderNormalized) return;
+      
+      try {
+        const groupMetadata = await nazu.groupMetadata(from).catch(() => null);
+        if (!groupMetadata) return;
+        
+        // Verificar se bot é admin
+        const botParticipant = groupMetadata.participants.find(p => p.id === botNumber);
+        if (!botParticipant?.admin) return;
+        
+        // Verificar se alvo existe no grupo
+        const targetParticipant = groupMetadata.participants.find(p => {
+          const pId = p.id.split('@')[0].replace(/\s/g, '');
+          return pId === targetNormalized || p.id === targetUser;
+        });
+        if (!targetParticipant) return;
+        
+        // Não remover admins
+        if (targetParticipant.admin) return;
+        
+        // Não remover dono do grupo
+        if (groupMetadata.owner) {
+          const ownerNorm = groupMetadata.owner.split('@')[0].replace(/\s/g, '');
+          if (ownerNorm === targetNormalized) return;
         }
+        
+        // Não remover dono/subdono do bot
+        const ownerNumbers = [numerodono, ...subdono].map(n => n.split('@')[0].replace(/\D/g, ''));
+        const targetNum = targetNormalized.replace(/\D/g, '');
+        if (ownerNumbers.some(on => on && (on === targetNum || targetNum.includes(on) || on.includes(targetNum)))) return;
+        
+        // Não remover o próprio bot
+        const botNum = botNumber.split('@')[0].replace(/\s/g, '');
+        if (targetNum === botNum) return;
+        
+        // Remover o usuário
+        await nazu.groupParticipantsUpdate(from, [targetUser], 'remove');
+      } catch (error) {
+        // Silencioso
       }
     }
     if (!isCmd) {
