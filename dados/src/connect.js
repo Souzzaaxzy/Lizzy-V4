@@ -1387,6 +1387,12 @@ async function createBotSocket(authDir) {
             
             const { id: groupId, author, participant, action, method } = inf;
             
+            // Ignora eventos de rejeição - não processa novamente
+            if (action === 'revoke' || action === 'reject') {
+                console.log('[X9] Evento de rejeição ignorado');
+                return;
+            }
+            
             // Salva registro da solicitação para histórico
             if (groupId) {
                 try {
