@@ -731,32 +731,46 @@ export async function notifyWhatsAppRejection(sock, groupId, participantJid, adm
     console.log('[X9] groupId:', groupId);
     console.log('[X9] participantJid:', participantJid);
     console.log('[X9] adminJid:', adminJid);
+    console.log('[X9] All store keys:', [...x9Store.requests.keys()]);
     
-    const req = x9Store.get(groupId, participantJid);
+    // Normaliza o JID para busca
+    const normalizedJid = normalizeJid(participantJid);
+    const cleanJid = (normalizedJid || participantJid || '').replace(/@.+$/, '');
+    
+    console.log('[X9] Normalized JID:', normalizedJid);
+    console.log('[X9] Clean JID:', cleanJid);
+    
+    // Tenta buscar de várias formas
+    let req = x9Store.get(groupId, normalizedJid);
+    if (!req) req = x9Store.get(groupId, participantJid);
+    if (!req && cleanJid) req = x9Store.getByParticipantNumber(cleanJid);
+    
     console.log('[X9] Found request:', req ? 'SIM' : 'NÃO');
+    console.log('[X9] Request data:', req ? JSON.stringify(req) : 'null');
     
     if (!req || req.status !== 'pending') {
-        console.log('[X9] Request not found or not pending');
+        console.log('[X9] Request not found or not pending - ignorando');
         return null;
     }
-
-    const adminNumber = adminJid ? adminJid.replace(/@.*$/, '') : 'Admin';
 
     try {
         // Deleta mensagem original do card
         if (req.messageId) {
             try {
+                console.log('[X9] Tentando deletar mensagem ID:', req.messageId);
                 await sock.sendMessage(groupId, { 
                     delete: { id: req.messageId, remoteJid: groupId, fromMe: true } 
                 });
-                console.log('[X9] Card original deletado');
+                console.log('[X9] Card original deletado com sucesso');
             } catch (e) {
                 console.log('[X9] Erro ao deletar card:', e.message);
             }
+        } else {
+            console.log('[X9] Não há messageId para deletar');
         }
 
-        x9Store.update(groupId, participantJid, { status: 'rejected' });
-        console.log('[X9] ✅ Rejeição processada via WhatsApp - card removido');
+        x9Store.update(groupId, req.participantJid, { status: 'rejected' });
+        console.log('[X9] ✅ Rejeição processada - card removido');
     } catch (error) {
         console.error('[X9] Erro na rejeição:', error.message);
     }
