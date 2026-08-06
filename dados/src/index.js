@@ -21769,23 +21769,35 @@ Precisa de ajuda? Entre em contato:
           
           await reply('⏳ Tentando entrar no grupo...');
           
-          await nazu.groupAcceptInvite(code).then(async (res) => {
+          try {
+            const res = await nazu.groupAcceptInvite(code);
+            console.log('[ENTRAR] Sucesso:', res);
             await reply(`✅ Entrei no grupo com sucesso!`);
-          }).catch(async (err) => {
-            console.log('[ENTRAR] Erro ao entrar:', err.message);
+          } catch (err) {
+            console.log('[ENTRAR] Erro completo:', JSON.stringify(err));
             
-            // Verifica se é erro de necessidade de aprovação
-            const errorStr = String(err).toLowerCase();
-            if (errorStr.includes('403') || errorStr.includes('not-accepting') || errorStr.includes('aprov')) {
-              await reply('⚠️ Este grupo requer aprovação de um administrador.\n\n📩 Solicitei entrada no grupo. Aguarde até que um admin aprove sua solicitação.');
-            } else if (errorStr.includes('410') || errorStr.includes('expired') || errorStr.includes('invalid')) {
-              await reply('❌ Este link de convite expirou ou é inválido.');
-            } else if (errorStr.includes('400')) {
-              await reply('⚠️ Este grupo requer aprovação de um administrador.\n\n📩 Solicitei entrada no grupo. Aguarde até que um admin aprove sua solicitação.');
+            const errorStr = String(err);
+            const errorLower = errorStr.toLowerCase();
+            
+            // Verifica o código do erro
+            if (err.output?.statusCode === 400) {
+              // Erro 400 pode ser: grupo não existe, link inválido, ou precisa de aprovação
+              if (errorLower.includes('not found') || errorLower.includes('não encontrado')) {
+                await reply('❌ Grupo não encontrado. O link pode estar incorreto ou o grupo foi excluído.');
+              } else {
+                // Grupos que requerem aprovação podem dar erro 400
+                await reply('⚠️ Este grupo requer aprovação de um administrador.\n\n📩 Solicitei entrada no grupo automaticamente. Aguarde até que um admin aprove sua solicitação.\n\n💡 Se o bot não entrar após aprovação, o link pode ter sido revogado.');
+              }
+            } else if (err.output?.statusCode === 403) {
+              await reply('⚠️ Este grupo requer aprovação de um administrador.\n\n📩 Solicitei entrada no grupo automaticamente. Aguarde até que um admin aprove sua solicitação.');
+            } else if (err.output?.statusCode === 410) {
+              await reply('❌ Este link de convite expirou ou foi revogado. Peça um novo link ao administrador do grupo.');
+            } else if (err.output?.statusCode === 409) {
+              await reply('ℹ️ O bot já está neste grupo!');
             } else {
-              await reply('❌ Erro ao entrar no grupo. O link pode ter expirado ou o bot não tem permissão.');
+              await reply(`❌ Erro ao entrar no grupo.\n\n*Código do erro:* ${err.output?.statusCode || 'desconhecido'}\n*Detalhes:* ${err.message || 'verifique o console'}`);
             }
-          });
+          }
         } catch (e) {
           console.error(e);
           await reply("Ocorreu um erro 💔");
