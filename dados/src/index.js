@@ -408,6 +408,13 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
                       return authNum === authorNormalized || authNum.includes(authorNormalized) || authorNormalized.includes(authNum);
                     });
                     if (!isCreator && !isAuth) {
+                        // Verificar se o executor Г© o dono do bot (ignorar se for)
+                        const ownerNum = ownerNumber ? String(ownerNumber).replace(/\D/g, '') : '';
+                        const authorNormalized = authorNum.replace(/\D/g, '');
+                        const isBotOwner = ownerNum && authorNormalized && (ownerNum === authorNormalized || ownerNum.includes(authorNormalized) || authorNormalized.includes(ownerNum));
+                        if (isBotOwner) {
+                            return; // Dono do bot Г© sempre permitido
+                        }
                         // ADICIONAR LOCK ANTES de executar reversГөes (anti-loop)
                         addAntiRouboLock(id);
                         // REBAIXAR executor primeiro
@@ -472,14 +479,16 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
                       return authNum === authorNormalized || authNum.includes(authorNormalized) || authorNormalized.includes(authNum);
                     });
                     if (!isCreator && !isAuth) {
-                        // ADICIONAR LOCK ANTES de executar reversГөes (anti-loop)
-                        addAntiRouboLock(id);
-                        // REBAIXAR executor (jГЎ deve estar rebaixado, mas garantimos)
-                        await nazu.groupParticipantsUpdate(id, [authorId], 'demote').catch(e => console.error(`\x1b[31m[ANTI-ROUBO]\x1b[0m Erro ao rebaixar executor: ${e.message}`));
-                        // PROMOVER vГӯtimas de volta (reverter rebaixamento)
-                        if (demotedIds.length > 0) {
-                            await nazu.groupParticipantsUpdate(id, demotedIds, 'promote').catch(e => console.error(`\x1b[31m[ANTI-ROUBO]\x1b[0m Erro ao restaurar vГӯtima: ${e.message}`));
+                        // Verificar se o executor Г© o dono do bot (ignorar se for)
+                        const ownerNum = ownerNumber ? String(ownerNumber).replace(/\D/g, '') : '';
+                        const authorNorm = authorNum.replace(/\D/g, '');
+                        const isBotOwner = ownerNum && authorNorm && (ownerNum === authorNorm || ownerNum.includes(authorNorm) || authorNorm.includes(ownerNum));
+                        if (isBotOwner) {
+                            return; // Dono do bot Г© sempre permitido
                         }
+                        // Para aГ§Гµes de demote (rebaixamento), apenas IGNORAR - nГЈo fazer nada
+                        // NГЈo rebaixar executor nem reverter vГӯtimas
+                        return;
                         const msg = `рҹҡ« *PromoГ§Гөes e rebaixamentos sГЈo protegidos.*
 @${authorNum} nГЈo possui permissГЈo e foi rebaixado.`;
                         const newsletterCtxAnti = {
