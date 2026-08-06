@@ -28333,7 +28333,7 @@ break;
       case 'madrugada': {
         try {
           if (!isGroup) return sendAbyssWarning("> Este comando e so para grupos.");
-          if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissao. рҹ’”");
+          if (!isGroupAdmin) return reply("Comando restrito a Administradores ou Moderadores com permissao.");
           
           const newsletterContext = {
             forwardingScore: 999,
