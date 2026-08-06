@@ -11,6 +11,12 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 ╰──────────────
 
 
+╭─❖ ⚡ FIGBAN
+│ 🚫 ${prefix}setfigban
+│ 🗑️ ${prefix}delfigban
+╰──────────────
+
+
 ╭─❖ 🤖 INTELIGÊNCIA ARTIFICIAL
 │ 🔑 ${prefix}setgroq
 │ 📋 Status: ${prefix}setgroq
