@@ -21766,10 +21766,25 @@ Precisa de ajuda? Entre em contato:
           if (!isOwner) return reply("Este comando é apenas para o meu dono 💔");
           if (!q || !q.includes('chat.whatsapp.com')) return reply('Digite um link de convite válido! Exemplo: '+ groupPrefix + 'entrar https://chat.whatsapp.com/...');
           const code = q.split('https://chat.whatsapp.com/')[1];
-          await nazu.groupAcceptInvite(code).then(res => {
-            reply(`✅ Entrei no grupo com sucesso!`);
-          }).catch(err => {
-            reply('❌ Erro ao entrar no grupo. Link inválido ou permissão negada.');
+          
+          await reply('⏳ Tentando entrar no grupo...');
+          
+          await nazu.groupAcceptInvite(code).then(async (res) => {
+            await reply(`✅ Entrei no grupo com sucesso!`);
+          }).catch(async (err) => {
+            console.log('[ENTRAR] Erro ao entrar:', err.message);
+            
+            // Verifica se é erro de necessidade de aprovação
+            const errorStr = String(err).toLowerCase();
+            if (errorStr.includes('403') || errorStr.includes('not-accepting') || errorStr.includes('aprov')) {
+              await reply('⚠️ Este grupo requer aprovação de um administrador.\n\n📩 Solicitei entrada no grupo. Aguarde até que um admin aprove sua solicitação.');
+            } else if (errorStr.includes('410') || errorStr.includes('expired') || errorStr.includes('invalid')) {
+              await reply('❌ Este link de convite expirou ou é inválido.');
+            } else if (errorStr.includes('400')) {
+              await reply('⚠️ Este grupo requer aprovação de um administrador.\n\n📩 Solicitei entrada no grupo. Aguarde até que um admin aprove sua solicitação.');
+            } else {
+              await reply('❌ Erro ao entrar no grupo. O link pode ter expirado ou o bot não tem permissão.');
+            }
           });
         } catch (e) {
           console.error(e);
