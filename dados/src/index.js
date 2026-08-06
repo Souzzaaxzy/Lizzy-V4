@@ -5849,36 +5849,49 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
           const currentHashBase64 = Buffer.from(currentSticker.fileSha256).toString('base64');
           if (currentHashBase64 === figBanHash) {
             // A figurinha cadastrada foi enviada
+            console.log('[FIGBAN] Hash da figurinha reconhecido!');
             // Verificar se eh administrador que enviou
             if (isGroupAdmin) {
               // Obter a mensagem respondida (quoted message)
-              const quotedContextInfo = currentSticker.contextInfo || info.message?.extendedTextMessage?.contextInfo || {};
+              const contextInfo = currentSticker.contextInfo || {};
               let targetUser = null;
-              // Tentar obter o alvo da quoted message
-              if (quotedContextInfo.participant) {
-                targetUser = quotedContextInfo.participant;
-              } else if (quotedContextInfo.quotedMessage?.extendedTextMessage?.contextInfo?.participant) {
-                targetUser = quotedContextInfo.quotedMessage.extendedTextMessage.contextInfo.participant;
-              } else if (quotedContextInfo.quotedMessage?.sender) {
-                targetUser = quotedContextInfo.quotedMessage.sender;
+              // Extrair o remetente da mensagem quoted
+              // A estrutura pode variar, entao vamos tentar diferentes caminhos
+              if (contextInfo.quotedMessage) {
+                // Sender da mensagem quoted
+                if (contextInfo.quotedMessage.sender) {
+                  targetUser = contextInfo.quotedMessage.sender;
+                } else if (contextInfo.quotedMessage.extendedTextMessage?.contextInfo?.participant) {
+                  targetUser = contextInfo.quotedMessage.extendedTextMessage.contextInfo.participant;
+                } else if (contextInfo.quotedMessage.imageMessage?.contextInfo?.participant) {
+                  targetUser = contextInfo.quotedMessage.imageMessage.contextInfo.participant;
+                }
               }
+              // Tambem verificar participant direto (alguns clientes)
+              if (!targetUser && contextInfo.participant) {
+                targetUser = contextInfo.participant;
+              }
+              console.log('[FIGBAN] Alvo identificado:', targetUser);
               if (targetUser) {
                 // Normalizar o alvo
                 const targetNormalized = targetUser.split('@')[0].replace(/\s/g, '');
                 const senderNormalized = sender.split('@')[0].replace(/\s/g, '');
                 // Nao banir quem enviou a figurinha
                 if (targetNormalized !== senderNormalized) {
+                  console.log('[FIGBAN] Processando remocao de:', targetNormalized);
                   try {
                     // Obter metadata do grupo para verificacoes
                     const groupMetadata = await nazu.groupMetadata(from).catch(() => null);
                     if (!groupMetadata) {
-                      return; // Nao pode obter metadata, abortar
+                      console.log('[FIGBAN] Erro: nao foi possivel obter metadata');
+                      return;
                     }
                     // Verificar se o bot eh admin
                     const botParticipant = groupMetadata.participants.find(p => p.id === botNumber);
                     const isBotAdmin = botParticipant?.admin;
                     if (!isBotAdmin) {
-                      return; // Bot nao eh admin, nao pode remover
+                      console.log('[FIGBAN] Erro: bot nao eh admin');
+                      return;
                     }
                     // Verificar se o alvo existe no grupo
                     const targetParticipant = groupMetadata.participants.find(p => {
@@ -5886,35 +5899,52 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
                       return pId === targetNormalized || p.id === targetUser;
                     });
                     if (!targetParticipant) {
-                      return; // Alvo nao esta no grupo
+                      console.log('[FIGBAN] Erro: alvo nao esta no grupo');
+                      return;
                     }
                     // Verificar se o alvo nao eh admin
                     if (targetParticipant.admin) {
-                      return; // Alvo eh admin, nao remover
+                      console.log('[FIGBAN] Erro: alvo eh admin');
+                      return;
                     }
                     // Verificar se o alvo nao eh o dono do grupo
-                    if (groupMetadata.owner && (groupMetadata.owner.split('@')[0].replace(/\s/g, '') === targetNormalized || groupMetadata.owner === targetUser)) {
-                      return; // Alvo eh o dono do grupo
+                    if (groupMetadata.owner) {
+                      const ownerNormalized = groupMetadata.owner.split('@')[0].replace(/\s/g, '');
+                      if (ownerNormalized === targetNormalized || groupMetadata.owner === targetUser) {
+                        console.log('[FIGBAN] Erro: alvo eh o dono do grupo');
+                        return;
+                      }
                     }
                     // Verificar se o alvo nao eh dono do bot
                     const ownerNumbers = [numerodono, ...subdono].map(n => n.split('@')[0].replace(/\D/g, ''));
                     const targetNum = targetNormalized.replace(/\D/g, '');
                     if (ownerNumbers.some(on => on && (on === targetNum || targetNum.includes(on) || on.includes(targetNum)))) {
-                      return; // Alvo eh dono do bot
+                      console.log('[FIGBAN] Erro: alvo eh dono do bot');
+                      return;
                     }
                     // Verificar se o alvo nao eh o proprio bot
                     const botNum = botNumber.split('@')[0].replace(/\s/g, '');
                     if (targetNum === botNum) {
-                      return; // Alvo eh o proprio bot
+                      console.log('[FIGBAN] Erro: alvo eh o proprio bot');
+                      return;
                     }
                     // Todas as verificacoes passaram, remover o usuario
+                    console.log('[FIGBAN] Removendo usuario:', targetUser);
                     await nazu.groupParticipantsUpdate(from, [targetUser], 'remove').catch(e => console.error('[FIGBAN] Erro ao remover:', e.message));
                   } catch (error) {
                     console.error('[FIGBAN] Erro ao processar ban:', error);
                   }
+                } else {
+                  console.log('[FIGBAN] Erro: alvo eh igual ao remetente da figurinha');
                 }
+              } else {
+                console.log('[FIGBAN] Erro: nao foi possivel identificar o alvo (nao ha mensagem respondida)');
               }
+            } else {
+              console.log('[FIGBAN] Erro: quem enviou nao eh admin');
             }
+          } else {
+            console.log('[FIGBAN] Hash diferente: received=' + currentHashBase64.substring(0, 20) + '...');
           }
         }
       }
