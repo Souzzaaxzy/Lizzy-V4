@@ -21778,24 +21778,25 @@ Precisa de ajuda? Entre em contato:
             
             const errorStr = String(err);
             const errorLower = errorStr.toLowerCase();
+            const statusCode = err.output?.statusCode || err.data;
             
             // Verifica o código do erro
-            if (err.output?.statusCode === 400) {
-              // Erro 400 pode ser: grupo não existe, link inválido, ou precisa de aprovação
+            if (statusCode === 400 || statusCode === 500 || statusCode === '400' || statusCode === '500') {
+              // Erro 400 ou 500 pode ser: grupo não existe, link inválido, ou precisa de aprovação
               if (errorLower.includes('not found') || errorLower.includes('não encontrado')) {
                 await reply('❌ Grupo não encontrado. O link pode estar incorreto ou o grupo foi excluído.');
               } else {
-                // Grupos que requerem aprovação podem dar erro 400
+                // Grupos que requerem aprovação geralmente retornam erro 400 ou 500
                 await reply('⚠️ Este grupo requer aprovação de um administrador.\n\n📩 Solicitei entrada no grupo automaticamente. Aguarde até que um admin aprove sua solicitação.\n\n💡 Se o bot não entrar após aprovação, o link pode ter sido revogado.');
               }
-            } else if (err.output?.statusCode === 403) {
+            } else if (statusCode === 403 || statusCode === '403') {
               await reply('⚠️ Este grupo requer aprovação de um administrador.\n\n📩 Solicitei entrada no grupo automaticamente. Aguarde até que um admin aprove sua solicitação.');
-            } else if (err.output?.statusCode === 410) {
+            } else if (statusCode === 410 || statusCode === '410') {
               await reply('❌ Este link de convite expirou ou foi revogado. Peça um novo link ao administrador do grupo.');
-            } else if (err.output?.statusCode === 409) {
+            } else if (statusCode === 409 || statusCode === '409') {
               await reply('ℹ️ O bot já está neste grupo!');
             } else {
-              await reply(`❌ Erro ao entrar no grupo.\n\n*Código do erro:* ${err.output?.statusCode || 'desconhecido'}\n*Detalhes:* ${err.message || 'verifique o console'}`);
+              await reply(`❌ Erro ao entrar no grupo.\n\n*Código do erro:* ${statusCode || 'desconhecido'}\n*Detalhes:* ${err.message || 'verifique o console'}`);
             }
           }
         } catch (e) {
