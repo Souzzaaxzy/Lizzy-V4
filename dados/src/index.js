@@ -27734,10 +27734,10 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
           }
         }
         break;
-      case 'get':
-        // Comando para coletar TODOS os dados possГӯveis de uma mensagem
-        if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissГЈo. рҹ’”");
-        if (!menc_prt) return reply("рҹ‘Ҷ *Marque uma mensagem* para coletar seus dados!");
+            case 'get':
+        // Comando para coletar TODOS os dados possiveis de uma mensagem
+        if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores.");
+        if (!menc_prt) return reply("Marque uma mensagem para coletar seus dados!");
         
         try {
           // Coletar mensagem referenciada (quotada)
@@ -27748,7 +27748,7 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
             || info.message?.documentMessage?.contextInfo?.quotedMessage
             || info.message?.stickerMessage?.contextInfo?.quotedMessage;
           
-          // Se nГЈo tiver mensagem referenciada, usa a prГіpria
+          // Se nao tiver mensagem referenciada, usa a propria
           const targetMessage = quotedMessage || info.message;
           
           // Extrair contextInfo
@@ -27777,7 +27777,7 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
           const msgTimestamp = info.key?.messageTimestamp;
           const timestampBR = msgTimestamp ? new Date(msgTimestamp * 1000).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : 'N/A';
           
-          // Dados de mГӯdia
+          // Dados de midia
           const imageMsg = targetMessage?.imageMessage;
           const videoMsg = targetMessage?.videoMessage;
           const audioMsg = targetMessage?.audioMessage;
@@ -27796,11 +27796,11 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
             || targetMessage?.viewOnceMessageV2?.message?.imageMessage?.caption
             || targetMessage?.viewOnceMessageV2?.message?.videoMessage?.caption
             || (targetMessage?.editedMessage?.message?.protocolMessage?.editedMessage?.extendedTextMessage?.text)
-            || 'N/A (sem texto)';
+            || '[sem texto]';
           
           // Mencionados
           const mentionedJids = contextInfo?.mentionedJid || [];
-          const mentionedList = mentionedJids.length > 0 ? mentionedJids.map(j => `@${j.split('@')[0]}`).join(', ') : 'Nenhum';
+          const mentionedList = mentionedJids.length > 0 ? mentionedJids.map(j => '@' + j.split('@')[0]).join(', ') : 'Nenhum';
           
           // Forward info
           const forwardingScore = contextInfo?.forwardingScore || quotedContextInfo?.forwardingScore || 0;
@@ -27808,78 +27808,68 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
           
           // Sticker info
           const stickerData = stickerMsg ? `
-рҹ“Ә *Sticker Info:*
-рҹ”№ *Emoji:* ${stickerMsg?.firstScanLength || 'N/A'}
-рҹ”№ *Tipo:* ${stickerMsg?.isAnimated ? 'GIF/Animado' : 'PNG/EstГЎtico'}
-рҹ”№ *Pack:* ${stickerMsg?.mediaKey || 'N/A'}` : '';
+[STICKER]
+Tipo: ${stickerMsg?.isAnimated ? 'GIF/Animado' : 'PNG/Estatico'}
+Pack: ${stickerMsg?.mediaKey || 'N/A'}` : '';
           
           // Document info
           const documentData = documentMsg ? `
-рҹ“Ғ *Documento Info:*
-рҹ”№ *Nome:* ${documentMsg?.fileName || 'N/A'}
-рҹ”№ *MIME:* ${documentMsg?.mimetype || 'N/A'}
-рҹ”№ *Tamanho:* ${documentMsg?.fileLength ? formatFileSize(documentMsg.fileLength) : 'N/A'}` : '';
+[DOCUMENTO]
+Nome: ${documentMsg?.fileName || 'N/A'}
+MIME: ${documentMsg?.mimetype || 'N/A'}
+Tamanho: ${documentMsg?.fileLength ? formatFileSize(documentMsg.fileLength) : 'N/A'}` : '';
           
           // Audio info
           const audioData = audioMsg ? `
-рҹ”Ӯ *ГЃudio Info:*
-рҹ”№ *DuraГ§ГЈo:* ${audioMsg?.seconds ? audioMsg.seconds + 's' : 'N/A'}
-рҹ”№ *Tipo:* ${audioMsg?.ptt ? 'PTT (Notas de voz)' : 'ГЃudio normal'}
-рҹ”№ *MIME:* ${audioMsg?.mimetype || 'N/A'}` : '';
+[AUDIO]
+Duracao: ${audioMsg?.seconds ? audioMsg.seconds + 's' : 'N/A'}
+Tipo: ${audioMsg?.ptt ? 'PTT (Notas de voz)' : 'Audio normal'}
+MIME: ${audioMsg?.mimetype || 'N/A'}` : '';
           
           // Media info (image/video)
           const mediaData = (imageMsg || videoMsg) ? `
-рҹ“ӯ *MГӯdia Info:*
-рҹ”№ *Tipo:* ${imageMsg ? 'Imagem' : 'VГӯdeo'}
-рҹ”№ *Caption:* ${imageMsg?.caption || videoMsg?.caption || 'N/A'}
-рҹ”№ *MIME:* ${(imageMsg || videoMsg)?.mimetype || 'N/A'}
-рҹ”№ *Tamanho:* ${(imageMsg || videoMsg)?.fileLength ? formatFileSize((imageMsg || videoMsg).fileLength) : 'N/A'}
-рҹ”№ *ViewOnce:* ${targetMessage?.viewOnceMessage ? 'Sim' : 'NГЈo'}` : '';
+[MEDIA]
+Tipo: ${imageMsg ? 'Imagem' : 'Video'}
+Caption: ${imageMsg?.caption || videoMsg?.caption || 'N/A'}
+MIME: ${(imageMsg || videoMsg)?.mimetype || 'N/A'}
+Tamanho: ${(imageMsg || videoMsg)?.fileLength ? formatFileSize((imageMsg || videoMsg).fileLength) : 'N/A'}
+ViewOnce: ${targetMessage?.viewOnceMessage ? 'Sim' : 'Nao'}` : '';
           
           // Quoted message info
           const quotedData = quotedMessage ? `
-рҹ“ҫ *Mensagem Quotada:*
-рҹ”№ *Sender:* @${quotedSenderNumber}
-рҹ”№ *Tipo:* ${Object.keys(quotedMessage).filter(k => !k.startsWith('stream') && k !== 'contextInfo').join(', ') || 'N/A'}
-рҹ”№ *Texto:* ${quotedMessage?.extendedTextMessage?.text || quotedMessage?.conversation || quotedMessage?.imageMessage?.caption || quotedMessage?.videoMessage?.caption || '[MГӯdia sem caption]'}
-рҹ”№ *StanzaID:* ${quotedContextInfo?.stanzaId || 'N/A'}` : '';
+[QUOTED MESSAGE]
+Sender: @${quotedSenderNumber}
+Tipo: ${Object.keys(quotedMessage).filter(k => !k.startsWith('stream') && k !== 'contextInfo').join(', ') || 'N/A'}
+Texto: ${quotedMessage?.extendedTextMessage?.text || quotedMessage?.conversation || quotedMessage?.imageMessage?.caption || quotedMessage?.videoMessage?.caption || '[midia sem caption]'}
+StanzaID: ${quotedContextInfo?.stanzaId || 'N/A'}` : '';
           
           // Montar resposta completa
-          const msgData = `рҹ“Ӣ *DADOS COMPLETOS DA MENSAGEM*
+          const msgData = `== DADOS COMPLETOS DA MENSAGEM ==
 
-в”Ҹв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җ
-рҹ“‘ *INFO DA MENSAGEM*
-в”Ҹв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җ
-рҹ”№ *Type:* ${Object.keys(targetMessage).filter(k => !k.startsWith('stream') && k !== 'contextInfo').join(', ') || 'N/A'}
-рҹ”№ *MessageID:* ${info.key?.id || 'N/A'}
-рҹ”№ *RemoteJid:* ${info.key?.remoteJid || 'N/A'}
-рҹ”№ *Timestamp:* ${timestampBR}
-рҹ”№ *PushName:* ${pushname || 'N/A'}
-${isGroup ? `рҹ”№ *Group:* ${groupName || 'N/A'}` : ''}
+-- INFO DA MENSAGEM --
+Type: ${Object.keys(targetMessage).filter(k => !k.startsWith('stream') && k !== 'contextInfo').join(', ') || 'N/A'}
+MessageID: ${info.key?.id || 'N/A'}
+RemoteJid: ${info.key?.remoteJid || 'N/A'}
+Timestamp: ${timestampBR}
+PushName: ${pushname || 'N/A'}
+${isGroup ? `Group: ${groupName || 'N/A'}` : ''}
 
-в”Ҹв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җ
-рҹ‘Ө *INFO DO REMETENTE*
-в”Ҹв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җ
-рҹ”№ *Sender JID:* @${senderNumber}
-рҹ”№ *Participant:* ${contextInfo?.participant || senderJid || 'N/A'}
-рҹ”№ *Mencionados:* ${mentionedList}
-${isForwarded ? `рҹ”№ *Encaminhada:* Sim (score: ${forwardingScore})` : 'рҹ”№ *Encaminhada:* NГЈo'}
+-- INFO DO REMETENTE --
+Sender JID: @${senderNumber}
+Participant: ${contextInfo?.participant || senderJid || 'N/A'}
+Mencionados: ${mentionedList}
+Encaminhada: ${isForwarded ? `Sim (score: ${forwardingScore})` : 'Nao'}
 
-в”Ҹв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җ
-рҹ“„ *CONTEГҡDO*
-в”Ҹв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җ
+-- CONTEUDO --
 ${msgText.length > 500 ? msgText.substring(0, 500) + '...' : msgText}
 ${mediaData}
 ${audioData}
 ${stickerData}
 ${documentData}
 ${quotedData}
-в”Ҹв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җ
-рҹ”— *RAW DATA (Console)*
-в”Ҹв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җ
-\`\`\`
-${JSON.stringify(info.key, null, 2)}
-\`\`\``;
+
+-- RAW DATA (Console) --
+${JSON.stringify(info.key, null, 2)}`;
           
           await reply(msgData);
           
@@ -27892,7 +27882,7 @@ ${JSON.stringify(info.key, null, 2)}
           
         } catch (error) {
           console.error('[GET] Erro ao coletar dados:', error);
-          reply("вқҢ Erro ao coletar dados da mensagem");
+          reply("Erro ao coletar dados da mensagem");
         }
         break;
       case 'db':
