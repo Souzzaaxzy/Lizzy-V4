@@ -5943,7 +5943,7 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
         }
         
         // Não remover dono/subdono do bot
-        const ownerNumbers = [numerodono, ...subdono].map(n => n.split('@')[0].replace(/\D/g, ''));
+        const ownerNumbers = [numerodono, ...subDonoList].map(n => n.split('@')[0].replace(/\D/g, ''));
         const targetNum = targetNormalized.replace(/\D/g, '');
         if (ownerNumbers.some(on => on && (on === targetNum || targetNum.includes(on) || on.includes(targetNum)))) {
           console.log('[FIGBAN] Bloqueado: alvo é dono/subdono do bot');
