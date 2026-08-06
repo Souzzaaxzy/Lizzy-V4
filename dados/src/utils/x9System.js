@@ -630,7 +630,7 @@ export async function updateCardOnApprove(sock, groupId, participantJid, adminJi
 }
 
 /**
- * Envia card de rejeição mostrando quem rejeitou
+ * Remove card ao rejeitar (sem enviar card de rejeição)
  */
 export async function updateCardOnReject(sock, groupId, participantJid, adminJid) {
     try {
@@ -654,39 +654,27 @@ export async function updateCardOnReject(sock, groupId, participantJid, adminJid
             return null;
         }
         
-        const now = new Date();
         const adminNumber = adminJid.replace(/@.*$/, '');
         
-        // Deleta mensagem original
+        // Deleta mensagem original do card
         if (req.messageId) {
             try {
                 await sock.sendMessage(groupId, { 
                     delete: { id: req.messageId, remoteJid: groupId, fromMe: true } 
                 });
-            } catch (e) {}
+                console.log('[X9] Card original deletado');
+            } catch (e) {
+                console.log('[X9] Erro ao deletar card:', e.message);
+            }
         }
         
-        // Envia mensagem de rejeição
-        const vars = {
-            admin: adminNumber,
-            numero: req.participantNumber,
-            hora: formatTime(now)
-        };
-        
-        const rejectedText = parseTemplate(X9_REJECTED_TEMPLATE, vars);
-        
-        const sent = await sock.sendMessage(groupId, {
-            text: rejectedText,
-            contextInfo: X9_NEWSLETTER_CTX,
-            mentions: [req.participantJid, adminJid]
-        });
-        
+        // Atualiza status para rejeitado (NÃO envia card de rejeição)
         x9Store.update(groupId, req.participantJid, { status: 'rejected' });
-        console.log(`[X9] ❌ Rejeitado por ${adminNumber}`);
-        return sent;
+        console.log(`[X9] ❌ Rejeitado por ${adminNumber} - card removido`);
+        return null;
         
     } catch (error) {
-        console.error('[X9] Erro ao enviar rejeição:', error.message);
+        console.error('[X9] Erro ao rejeitar:', error.message);
         return null;
     }
 }
@@ -736,7 +724,7 @@ export async function notifyWhatsAppApproval(sock, groupId, participantJid, admi
 }
 
 /**
- * Envia notificação quando rejeitado via WhatsApp (sem comando)
+ * Remove card quando rejeitado via WhatsApp (sem enviar card de rejeição)
  */
 export async function notifyWhatsAppRejection(sock, groupId, participantJid, adminJid) {
     console.log('[X9] notifyWhatsAppRejection called');
@@ -752,29 +740,25 @@ export async function notifyWhatsAppRejection(sock, groupId, participantJid, adm
         return null;
     }
 
-    const now = new Date();
     const adminNumber = adminJid ? adminJid.replace(/@.*$/, '') : 'Admin';
 
-    const vars = {
-        numero: req.participantNumber,
-        hora: formatTime(now),
-        admin: adminNumber
-    };
-
-    const notification = parseTemplate(X9_REJECTED_TEMPLATE, vars);
-    console.log('[X9] Sending notification:', notification);
-
     try {
-        await sock.sendMessage(groupId, {
-            text: notification,
-            contextInfo: X9_NEWSLETTER_CTX,
-            mentions: [participantJid, adminJid].filter(Boolean)
-        });
+        // Deleta mensagem original do card
+        if (req.messageId) {
+            try {
+                await sock.sendMessage(groupId, { 
+                    delete: { id: req.messageId, remoteJid: groupId, fromMe: true } 
+                });
+                console.log('[X9] Card original deletado');
+            } catch (e) {
+                console.log('[X9] Erro ao deletar card:', e.message);
+            }
+        }
 
         x9Store.update(groupId, participantJid, { status: 'rejected' });
-        console.log('[X9] ✅ Rejeição enviada via WhatsApp');
+        console.log('[X9] ✅ Rejeição processada via WhatsApp - card removido');
     } catch (error) {
-        console.error('[X9] Erro na notificação:', error.message);
+        console.error('[X9] Erro na rejeição:', error.message);
     }
 }
 

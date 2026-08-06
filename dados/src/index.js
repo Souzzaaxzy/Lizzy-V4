@@ -5296,7 +5296,7 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
       return reply(`[ANTI-ROUBO] Parece que você está bloqueado de usar meus comandos globalmente.\nMotivo: ${globalBlocks.users[sender] ? globalBlocks.users[sender].reason : globalBlocks.users[getUserName(sender)].reason}`);
     }
     if (isCmd && globalBlocks.commands && globalBlocks.commands[command]) {
-      return reply(`[ANTI-ROUBO] O comando *${command}* está temporariamente desativado globalmente.\nMotivo: ${globalBlocks.commands[command].reason}`);
+      return reply(`O comando *${command}* está temporariamente desativado globalmente.\nMotivo: ${globalBlocks.commands[command].reason}`);
     }
     if (isCmd && commandStats && commandStats.trackCommandUsage && command && command.length > 0) {
       commandStats.trackCommandUsage(command, sender);
