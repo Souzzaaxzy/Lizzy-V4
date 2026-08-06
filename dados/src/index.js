@@ -486,10 +486,15 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
                         if (isBotOwner) {
                             return; // Dono do bot Г© sempre permitido
                         }
-                        // Para aГ§Гµes de demote (rebaixamento), apenas IGNORAR - nГЈo fazer nada
-                        // NГЈo rebaixar executor nem reverter vГӯtimas
-                        return;
-                        const msg = `рҹҡ« *PromoГ§Гөes e rebaixamentos sГЈo protegidos.*
+                        // ADICIONAR LOCK ANTES de executar reversГөes (anti-loop)
+                        addAntiRouboLock(id);
+                        // REBAIXAR executor (quem rebaixou perde admin)
+                        await nazu.groupParticipantsUpdate(id, [authorId], 'demote').catch(e => console.error(`\x1b[31m[ANTI-ROUBO]\x1b[0m Erro ao rebaixar executor: ${e.message}`));
+                        // PROMOVER vГӯtimas de volta (quem foi rebaixado volta a ser admin)
+                        if (demotedIds.length > 0) {
+                            await nazu.groupParticipantsUpdate(id, demotedIds, 'promote').catch(e => console.error(`\x1b[31m[ANTI-ROUBO]\x1b[0m Erro ao restaurar vГӯtima: ${e.message}`));
+                        }
+                        const msg = `рҹҡ« *Rebaixamentos sГЈo protegidos.*
 @${authorNum} nГЈo possui permissГЈo e foi rebaixado.`;
                         const newsletterCtxAnti = {
                             forwardingScore: 999,
