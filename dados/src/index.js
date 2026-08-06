@@ -5849,38 +5849,45 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
         return;
       }
       
-      // Obter o alvo da mensagem quoted
+      // Obter o participant do autor da mensagem quoted (que está no contextInfo da figurinha)
       const stickerContextInfo = currentSticker.contextInfo || {};
       const quotedMsg = stickerContextInfo.quotedMessage;
-      console.log('[FIGBAN] quotedMsg:', JSON.stringify(quotedMsg)?.substring(0, 200));
-      if (!quotedMsg) {
-        console.log('[FIGBAN] Bloqueado: não há mensagem quoted');
-        return;
-      }
+      console.log('[FIGBAN] quotedMsg type:', quotedMsg ? Object.keys(quotedMsg)[0] : 'null');
       
-      // Extrair o participant do autor da mensagem quoted
+      // O participant do autor da mensagem quoted está no contextInfo da mensagem quoted
+      // OU pode estar diretamente no participant da figurinha (quem foi citado)
       let targetUser = null;
-      if (quotedMsg.sender) {
+      
+      // Tentar obter do participant direto da figurinha (indica quem foi citado)
+      if (stickerContextInfo.participant && stickerContextInfo.participant !== sender) {
+        targetUser = stickerContextInfo.participant;
+        console.log('[FIGBAN] Target via stickerContextInfo.participant:', targetUser);
+      }
+      // Tentar do sender da mensagem quoted
+      else if (quotedMsg?.sender) {
         targetUser = quotedMsg.sender;
-        console.log('[FIGBAN] Target via sender:', targetUser);
-      } else if (quotedMsg.extendedTextMessage?.contextInfo?.participant) {
+        console.log('[FIGBAN] Target via quotedMsg.sender:', targetUser);
+      }
+      // Tentar do participant dentro do contextInfo da mensagem quoted
+      else if (quotedMsg?.extendedTextMessage?.contextInfo?.participant) {
         targetUser = quotedMsg.extendedTextMessage.contextInfo.participant;
-        console.log('[FIGBAN] Target via extendedTextMessage:', targetUser);
-      } else if (quotedMsg.imageMessage?.contextInfo?.participant) {
+        console.log('[FIGBAN] Target via extendedTextMessage.participant:', targetUser);
+      }
+      else if (quotedMsg?.imageMessage?.contextInfo?.participant) {
         targetUser = quotedMsg.imageMessage.contextInfo.participant;
-        console.log('[FIGBAN] Target via imageMessage:', targetUser);
-      } else if (quotedMsg.videoMessage?.contextInfo?.participant) {
+        console.log('[FIGBAN] Target via imageMessage.participant:', targetUser);
+      }
+      else if (quotedMsg?.videoMessage?.contextInfo?.participant) {
         targetUser = quotedMsg.videoMessage.contextInfo.participant;
-        console.log('[FIGBAN] Target via videoMessage:', targetUser);
-      } else if (quotedMsg.audioMessage?.contextInfo?.participant) {
+        console.log('[FIGBAN] Target via videoMessage.participant:', targetUser);
+      }
+      else if (quotedMsg?.audioMessage?.contextInfo?.participant) {
         targetUser = quotedMsg.audioMessage.contextInfo.participant;
-        console.log('[FIGBAN] Target via audioMessage:', targetUser);
-      } else if (quotedMsg.stickerMessage?.contextInfo?.participant) {
+        console.log('[FIGBAN] Target via audioMessage.participant:', targetUser);
+      }
+      else if (quotedMsg?.stickerMessage?.contextInfo?.participant) {
         targetUser = quotedMsg.stickerMessage.contextInfo.participant;
-        console.log('[FIGBAN] Target via stickerMessage:', targetUser);
-      } else if (quotedMsg.documentMessage?.contextInfo?.participant) {
-        targetUser = quotedMsg.documentMessage.contextInfo.participant;
-        console.log('[FIGBAN] Target via documentMessage:', targetUser);
+        console.log('[FIGBAN] Target via stickerMessage.participant:', targetUser);
       }
       
       if (!targetUser) {
