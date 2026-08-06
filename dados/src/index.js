@@ -225,52 +225,42 @@ function shouldBanForBlacklist(userId, groupId) {
 // SISTEMA FIGBAN - FIGURINHA PARA BANIR USUÁRIOS
 // ============================================================
 /**
- * Carrega o hash da figurinha de ban do global.json
- * @returns {string|null} - Hash Base64 da figurinha ou null
+ * Carrega a lista de figurinhas de ban do global.json
+ * @returns {Array} - Lista de figurinhas ou array vazio
  */
-function getFigBanHash() {
+function getFigBanList() {
   try {
     const globalJson = JSON.parse(fs.readFileSync(DATABASE_DIR + '/global.json', 'utf-8'));
-    return globalJson.figBan?.hash || null;
+    return globalJson.figBanList || [];
   } catch (e) {
-    return null;
+    return [];
   }
 }
 
 /**
- * Salva o hash da figurinha de ban no global.json
- * @param {string} hashBase64 - Hash em Base64 da figurinha
+ * Salva a lista de figurinhas de ban no global.json
+ * @param {Array} list - Lista de figurinhas
  */
-function setFigBanHash(hashBase64) {
+function setFigBanList(list) {
   try {
     const globalJson = JSON.parse(fs.readFileSync(DATABASE_DIR + '/global.json', 'utf-8'));
-    globalJson.figBan = {
-      hash: hashBase64,
-      updatedAt: new Date().toISOString()
-    };
+    globalJson.figBanList = list;
     fs.writeFileSync(DATABASE_DIR + '/global.json', JSON.stringify(globalJson, null, 2));
     return true;
   } catch (e) {
-    console.error('[FIGBAN] Erro ao salvar hash:', e.message);
     return false;
   }
 }
 
 /**
- * Remove o hash da figurinha de ban do global.json
+ * Verifica se o hash corresponde a alguma figurinha cadastrada
+ * @param {Buffer|Uint8Array} fileSha256 - Hash da figurinha
+ * @returns {Object|null} - Figurinha encontrada ou null
  */
-function deleteFigBanHash() {
-  try {
-    const globalJson = JSON.parse(fs.readFileSync(DATABASE_DIR + '/global.json', 'utf-8'));
-    if (globalJson.figBan) {
-      delete globalJson.figBan;
-      fs.writeFileSync(DATABASE_DIR + '/global.json', JSON.stringify(globalJson, null, 2));
-    }
-    return true;
-  } catch (e) {
-    console.error('[FIGBAN] Erro ao remover hash:', e.message);
-    return false;
-  }
+function findFigBanByHash(fileSha256) {
+  const list = getFigBanList();
+  const hashBase64 = Buffer.from(fileSha256).toString('base64');
+  return list.find(f => f.hash === hashBase64) || null;
 }
 
 /**
@@ -5842,109 +5832,61 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
     }
     // FIGBAN - Sistema de ban por figurinha
     if (isGroup && type === "stickerMessage" && !info.key.fromMe) {
-      const figBanHash = getFigBanHash();
-      if (figBanHash) {
+      const list = getFigBanList();
+      if (list.length > 0) {
         const currentSticker = info.message?.stickerMessage;
         if (currentSticker && currentSticker.fileSha256) {
-          const currentHashBase64 = Buffer.from(currentSticker.fileSha256).toString('base64');
-          if (currentHashBase64 === figBanHash) {
-            // A figurinha cadastrada foi enviada
-            console.log('[FIGBAN] Hash da figurinha reconhecido!');
-            // Verificar se eh administrador que enviou
+          const figBan = findFigBanByHash(currentSticker.fileSha256);
+          if (figBan) {
+            // Figurinha cadastrada foi enviada
             if (isGroupAdmin) {
-              // Obter a mensagem respondida (quoted message)
-              const contextInfo = currentSticker.contextInfo || {};
+              // Obter o alvo da mensagem quoted
               let targetUser = null;
-              // Extrair o remetente da mensagem quoted
-              // A estrutura pode variar, entao vamos tentar diferentes caminhos
-              if (contextInfo.quotedMessage) {
-                // Sender da mensagem quoted
-                if (contextInfo.quotedMessage.sender) {
-                  targetUser = contextInfo.quotedMessage.sender;
-                } else if (contextInfo.quotedMessage.extendedTextMessage?.contextInfo?.participant) {
-                  targetUser = contextInfo.quotedMessage.extendedTextMessage.contextInfo.participant;
-                } else if (contextInfo.quotedMessage.imageMessage?.contextInfo?.participant) {
-                  targetUser = contextInfo.quotedMessage.imageMessage.contextInfo.participant;
-                }
+              if (quotedMessageContent?.sender) {
+                targetUser = quotedMessageContent.sender;
+              } else if (quotedMessageContent?.extendedTextMessage?.contextInfo?.participant) {
+                targetUser = quotedMessageContent.extendedTextMessage.contextInfo.participant;
               }
-              // Tambem verificar participant direto (alguns clientes)
-              if (!targetUser && contextInfo.participant) {
-                targetUser = contextInfo.participant;
-              }
-              console.log('[FIGBAN] Alvo identificado:', targetUser);
               if (targetUser) {
-                // Normalizar o alvo
+                // Normalizar
                 const targetNormalized = targetUser.split('@')[0].replace(/\s/g, '');
                 const senderNormalized = sender.split('@')[0].replace(/\s/g, '');
                 // Nao banir quem enviou a figurinha
                 if (targetNormalized !== senderNormalized) {
-                  console.log('[FIGBAN] Processando remocao de:', targetNormalized);
                   try {
-                    // Obter metadata do grupo para verificacoes
                     const groupMetadata = await nazu.groupMetadata(from).catch(() => null);
-                    if (!groupMetadata) {
-                      console.log('[FIGBAN] Erro: nao foi possivel obter metadata');
-                      return;
-                    }
-                    // Verificar se o bot eh admin
+                    if (!groupMetadata) return;
+                    // Verificar se bot eh admin
                     const botParticipant = groupMetadata.participants.find(p => p.id === botNumber);
-                    const isBotAdmin = botParticipant?.admin;
-                    if (!isBotAdmin) {
-                      console.log('[FIGBAN] Erro: bot nao eh admin');
-                      return;
-                    }
-                    // Verificar se o alvo existe no grupo
+                    if (!botParticipant?.admin) return;
+                    // Verificar se alvo existe no grupo
                     const targetParticipant = groupMetadata.participants.find(p => {
                       const pId = p.id.split('@')[0].replace(/\s/g, '');
                       return pId === targetNormalized || p.id === targetUser;
                     });
-                    if (!targetParticipant) {
-                      console.log('[FIGBAN] Erro: alvo nao esta no grupo');
-                      return;
-                    }
-                    // Verificar se o alvo nao eh admin
-                    if (targetParticipant.admin) {
-                      console.log('[FIGBAN] Erro: alvo eh admin');
-                      return;
-                    }
-                    // Verificar se o alvo nao eh o dono do grupo
+                    if (!targetParticipant) return;
+                    // Nao remover admins
+                    if (targetParticipant.admin) return;
+                    // Nao remover dono do grupo
                     if (groupMetadata.owner) {
-                      const ownerNormalized = groupMetadata.owner.split('@')[0].replace(/\s/g, '');
-                      if (ownerNormalized === targetNormalized || groupMetadata.owner === targetUser) {
-                        console.log('[FIGBAN] Erro: alvo eh o dono do grupo');
-                        return;
-                      }
+                      const ownerNorm = groupMetadata.owner.split('@')[0].replace(/\s/g, '');
+                      if (ownerNorm === targetNormalized) return;
                     }
-                    // Verificar se o alvo nao eh dono do bot
+                    // Nao remover dono/subdono do bot
                     const ownerNumbers = [numerodono, ...subdono].map(n => n.split('@')[0].replace(/\D/g, ''));
                     const targetNum = targetNormalized.replace(/\D/g, '');
-                    if (ownerNumbers.some(on => on && (on === targetNum || targetNum.includes(on) || on.includes(targetNum)))) {
-                      console.log('[FIGBAN] Erro: alvo eh dono do bot');
-                      return;
-                    }
-                    // Verificar se o alvo nao eh o proprio bot
+                    if (ownerNumbers.some(on => on && (on === targetNum || targetNum.includes(on) || on.includes(targetNum)))) return;
+                    // Nao remover o proprio bot
                     const botNum = botNumber.split('@')[0].replace(/\s/g, '');
-                    if (targetNum === botNum) {
-                      console.log('[FIGBAN] Erro: alvo eh o proprio bot');
-                      return;
-                    }
-                    // Todas as verificacoes passaram, remover o usuario
-                    console.log('[FIGBAN] Removendo usuario:', targetUser);
-                    await nazu.groupParticipantsUpdate(from, [targetUser], 'remove').catch(e => console.error('[FIGBAN] Erro ao remover:', e.message));
+                    if (targetNum === botNum) return;
+                    // Remover
+                    await nazu.groupParticipantsUpdate(from, [targetUser], 'remove');
                   } catch (error) {
-                    console.error('[FIGBAN] Erro ao processar ban:', error);
+                    // Silencioso
                   }
-                } else {
-                  console.log('[FIGBAN] Erro: alvo eh igual ao remetente da figurinha');
                 }
-              } else {
-                console.log('[FIGBAN] Erro: nao foi possivel identificar o alvo (nao ha mensagem respondida)');
               }
-            } else {
-              console.log('[FIGBAN] Erro: quem enviou nao eh admin');
             }
-          } else {
-            console.log('[FIGBAN] Hash diferente: received=' + currentHashBase64.substring(0, 20) + '...');
           }
         }
       }
@@ -21636,31 +21578,74 @@ Precisa de ajuda? Entre em contato:
             return reply("❌ Nao foi possivel obter o hash da figurinha.");
           }
           const hashBase64 = Buffer.from(stickerMsg.fileSha256).toString('base64');
-          if (setFigBanHash(hashBase64)) {
-            await reply("✅ Figurinha de ban configurada com sucesso.");
+          const list = getFigBanList();
+          // Verificar se ja existe
+          const exists = list.find(f => f.hash === hashBase64);
+          if (exists) {
+            return reply("❌ Esta figurinha ja esta cadastrada.");
+          }
+          // Adicionar nova figurinha
+          list.push({
+            hash: hashBase64,
+            name: stickerMsg.name || `Figurinha ${list.length + 1}`,
+            addedAt: new Date().toISOString()
+          });
+          if (setFigBanList(list)) {
+            await reply(`✅ Figurinha adicionada. Total: ${list.length}`);
           } else {
             await reply("❌ Erro ao salvar a figurinha.");
           }
         } catch (e) {
-          console.error('[FIGBAN] Erro no setfigban:', e);
           await reply("Ocorreu um erro ao configurar a figurinha.");
         }
         break;
       case 'delfigban':
         try {
           if (!isOwner) return reply("Este comando e apenas para o meu dono.");
-          const currentHash = getFigBanHash();
-          if (!currentHash) {
+          const args = q.trim();
+          const list = getFigBanList();
+          if (list.length === 0) {
             return reply("❌ Nenhuma figurinha de ban configurada.");
           }
-          if (deleteFigBanHash()) {
-            await reply("✅ Figurinha de ban removida.");
+          if (args === 'all') {
+            // Remover todas
+            if (setFigBanList([])) {
+              return reply("✅ Todas as figurinhas de ban foram removidas.");
+            }
           } else {
-            await reply("❌ Erro ao remover a figurinha.");
+            // Remover pelo numero
+            const num = parseInt(args);
+            if (isNaN(num) || num < 1 || num > list.length) {
+              return reply(`❌ Use: ${groupPrefix}delfigban <numero> ou ${groupPrefix}delfigban all`);
+            }
+            list.splice(num - 1, 1);
+            if (setFigBanList(list)) {
+              return reply(`✅ Figurinha ${num} removida. Total: ${list.length}`);
+            }
           }
+          await reply("❌ Erro ao remover a figurinha.");
         } catch (e) {
-          console.error('[FIGBAN] Erro no delfigban:', e);
           await reply("Ocorreu um erro ao remover a figurinha.");
+        }
+        break;
+      case 'listfigban':
+        try {
+          if (!isOwner) return reply("Este comando e apenas para o meu dono.");
+          const list = getFigBanList();
+          if (list.length === 0) {
+            return reply("❌ Nenhuma figurinha de ban configurada.\n\nUse !setfigban respondendo a uma figurinha para adicionar.");
+          }
+          let text = `📋 *Lista de Figurinhas de Ban*\n\n`;
+          list.forEach((fig, i) => {
+            text += `◇ *Figurinha ${i + 1}*\n`;
+            text += `${fig.name || 'Sem nome'}\n`;
+            text += `Adicionada em: ${new Date(fig.addedAt).toLocaleString('pt-BR')}\n\n`;
+          });
+          text += `Use *${groupPrefix}setfigban* respondendo a uma figurinha para adicionar.\n`;
+          text += `Use *${groupPrefix}delfigban <numero>* para remover.`;
+          await reply(text);
+        } catch (e) {
+          await reply("Ocorreu um erro ao listar as figurinhas.");
         }
         break;
       case 'antipv4':

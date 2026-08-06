@@ -14,6 +14,7 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 ╭─❖ ⚡ FIGBAN
 │ 🚫 ${prefix}setfigban
 │ 🗑️ ${prefix}delfigban
+│ 📋 ${prefix}listfigban
 ╰──────────────
 
 
