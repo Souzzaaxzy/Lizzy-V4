@@ -21765,16 +21765,29 @@ Precisa de ajuda? Entre em contato:
         try {
           if (!isOwner) return reply("Este comando é apenas para o meu dono 💔");
           if (!q || !q.includes('chat.whatsapp.com')) return reply('Digite um link de convite válido! Exemplo: '+ groupPrefix + 'entrar https://chat.whatsapp.com/...');
-          const code = q.split('https://chat.whatsapp.com/')[1];
+          
+          // Extrai o código do link
+          const parts = q.split('https://chat.whatsapp.com/');
+          const code = parts[1]?.split('?')[0]; // Remove query params se houver
+          
+          if (!code || code.length < 5) {
+            return reply('❌ Link de convite inválido. Verifique se o link está completo.');
+          }
+          
+          console.log('[ENTRAR] Código extraído:', code);
+          console.log('[ENTRAR] Link original:', q);
           
           await reply('⏳ Tentando entrar no grupo...');
           
           try {
+            console.log('[ENTRAR] Tentando nazu.groupAcceptInvite...');
             const res = await nazu.groupAcceptInvite(code);
-            console.log('[ENTRAR] Sucesso:', res);
+            console.log('[ENTRAR] Sucesso! Resposta:', JSON.stringify(res));
             await reply(`✅ Entrei no grupo com sucesso!`);
           } catch (err) {
-            console.log('[ENTRAR] Erro completo:', JSON.stringify(err));
+            console.log('[ENTRAR] ====================================');
+            console.log('[ENTRAR] Erro completo:', JSON.stringify(err, null, 2));
+            console.log('[ENTRAR] ====================================');
             
             const errorStr = String(err);
             const errorLower = errorStr.toLowerCase();
@@ -21782,15 +21795,15 @@ Precisa de ajuda? Entre em contato:
             
             // Verifica o código do erro
             if (statusCode === 400 || statusCode === 500 || statusCode === '400' || statusCode === '500') {
-              // Erro 400 ou 500 pode ser: grupo não existe, link inválido, ou precisa de aprovação
               if (errorLower.includes('not found') || errorLower.includes('não encontrado')) {
                 await reply('❌ Grupo não encontrado. O link pode estar incorreto ou o grupo foi excluído.');
+              } else if (errorLower.includes('bad request') || errorLower.includes('invalid')) {
+                await reply('❌ Link de convite inválido ou expirado. Solicite um novo link ao administrador do grupo.');
               } else {
-                // Grupos que requerem aprovação geralmente retornam erro 400 ou 500
-                await reply('⚠️ Este grupo requer aprovação de um administrador.\n\n📩 Solicitei entrada no grupo automaticamente. Aguarde até que um admin aprove sua solicitação.\n\n💡 Se o bot não entrar após aprovação, o link pode ter sido revogado.');
+                await reply('❌ Erro do WhatsApp ao entrar no grupo.\n\nPossíveis causas:\n• Link expirado ou revogado\n• O bot foi bloqueado temporariamente\n• Problema no servidor do WhatsApp\n\n💡 Tente pedir um novo link de convite.');
               }
             } else if (statusCode === 403 || statusCode === '403') {
-              await reply('⚠️ Este grupo requer aprovação de um administrador.\n\n📩 Solicitei entrada no grupo automaticamente. Aguarde até que um admin aprove sua solicitação.');
+              await reply('❌ Permissão negada. O link pode estar incorreto ou você foi bloqueado.');
             } else if (statusCode === 410 || statusCode === '410') {
               await reply('❌ Este link de convite expirou ou foi revogado. Peça um novo link ao administrador do grupo.');
             } else if (statusCode === 409 || statusCode === '409') {
