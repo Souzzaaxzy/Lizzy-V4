@@ -36078,8 +36078,9 @@ break;
           let alvoJid = sender;
           let nomeAlvo = sender.split('@')[0];
           
-          if (mentionedJidList && mentionedJidList.length > 0) {
-            alvoJid = mentionedJidList[0];
+          const mentionedJid = info.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+          if (mentionedJid && mentionedJid.length > 0) {
+            alvoJid = mentionedJid[0];
             nomeAlvo = alvoJid.split('@')[0];
           }
           
