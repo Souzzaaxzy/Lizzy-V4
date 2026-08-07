@@ -36086,7 +36086,7 @@ break;
           }
           
           const porcentagem = Math.floor(Math.random() * 101);
-          const barraTamanho = 10;
+          const barraTamanho = 15;
           const barraPreenchida = Math.floor((porcentagem / 100) * barraTamanho);
           const barra = '█'.repeat(barraPreenchida) + '░'.repeat(barraTamanho - barraPreenchida);
           
@@ -36215,7 +36215,15 @@ break;
           
           const config = rateConfig[command] || { emoji: '🎯', nome: command };
           
-          await reply(`${config.emoji} @${nomeAlvo.split('@')[0]} é *${porcentagem}%* ${config.nome}!\n\n[${barra}]`, { mentions: [alvoJid] });
+          const resposta = `${config.emoji} *Teste de ${config.nome}*
+
+👤 @${nomeAlvo.split('@')[0]}
+
+[${barra}] ${porcentagem}%
+
+💭 *${porcentagem}%* de ${config.nome}!`;
+          
+          await reply(resposta, { mentions: [alvoJid] });
           
         } catch (e) {
           console.error(e);
