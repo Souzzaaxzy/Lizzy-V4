@@ -36076,13 +36076,11 @@ break;
           if (!isGroup) return reply("❌ Este comando é só para grupos!");
           
           let alvoJid = sender;
-          let nomeAlvo = pushname || 'Usuário';
+          let nomeAlvo = sender.split('@')[0];
           
           if (mentionedJidList && mentionedJidList.length > 0) {
             alvoJid = mentionedJidList[0];
-            const groupData = await nazu.groupMetadata(from).catch(() => null);
-            const membro = groupData?.participants?.find(p => p.id === alvoJid);
-            nomeAlvo = membro?.notify || membro?.pushname || alvoJid.split('@')[0];
+            nomeAlvo = alvoJid.split('@')[0];
           }
           
           const porcentagem = Math.floor(Math.random() * 101);
@@ -36215,18 +36213,12 @@ break;
           
           const config = rateConfig[command] || { emoji: '🎯', nome: command };
           
-          const resposta = `${config.emoji} *Teste de ${config.nome}*
-
-👤 @${nomeAlvo.split('@')[0]}
-
-[${barra}] ${porcentagem}%
-
-💭 *${porcentagem}%* de ${config.nome}!`;
+          const resposta = `${config.emoji} *Teste de ${config.nome}*\n\n👤 @${nomeAlvo}\n\n[${barra}] ${porcentagem}%\n\n💭 *${porcentagem}%* de ${config.nome}!`;
           
           await reply(resposta, { mentions: [alvoJid] });
           
         } catch (e) {
-          console.error(e);
+          console.error('[RATE] Erro:', e);
           reply("❌ Erro ao processar.");
         }
         break;
