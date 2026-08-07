@@ -35951,6 +35951,278 @@ break;
           reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
         });
         break;
+      
+      case 'gay':
+      case 'burro':
+      case 'inteligente':
+      case 'otaku':
+      case 'fiel':
+      case 'infiel':
+      case 'corno':
+      case 'gado':
+      case 'gostoso':
+      case 'feio':
+      case 'rico':
+      case 'pobre':
+      case 'pirocudo':
+      case 'pirokudo':
+      case 'nazista':
+      case 'ladrao':
+      case 'safado':
+      case 'vesgo':
+      case 'bebado':
+      case 'machista':
+      case 'homofobico':
+      case 'racista':
+      case 'chato':
+      case 'sortudo':
+      case 'azarado':
+      case 'forte':
+      case 'fraco':
+      case 'pegador':
+      case 'otario':
+      case 'macho':
+      case 'bobo':
+      case 'nerd':
+      case 'preguicoso':
+      case 'trabalhador':
+      case 'brabo':
+      case 'lindo':
+      case 'malandro':
+      case 'simpatico':
+      case 'engracado':
+      case 'charmoso':
+      case 'misterioso':
+      case 'carinhoso':
+      case 'desumilde':
+      case 'humilde':
+      case 'ciumento':
+      case 'corajoso':
+      case 'covarde':
+      case 'esperto':
+      case 'talarico':
+      case 'chorao':
+      case 'brincalhao':
+      case 'bolsonarista':
+      case 'petista':
+      case 'comunista':
+      case 'lulista':
+      case 'traidor':
+      case 'bandido':
+      case 'cachorro':
+      case 'vagabundo':
+      case 'pilantra':
+      case 'mito':
+      case 'padrao':
+      case 'comedia':
+      case 'psicopata':
+      case 'fortao':
+      case 'magrelo':
+      case 'bombado':
+      case 'chefe':
+      case 'presidente':
+      case 'rei':
+      case 'patrao':
+      case 'playboy':
+      case 'zueiro':
+      case 'gamer':
+      case 'programador':
+      case 'visionario':
+      case 'billionario':
+      case 'poderoso':
+      case 'vencedor':
+      case 'senhor':
+      case 'fofoqueiro':
+      case 'dorminhoco':
+      case 'comilao':
+      case 'sedentario':
+      case 'atleta':
+      case 'estudioso':
+      case 'romantico':
+      case 'extrovertido':
+      case 'introvertido':
+      case 'calmo':
+      case 'nervoso':
+      case 'organizado':
+      case 'bagunceiro':
+      case 'economico':
+      case 'gastador':
+      case 'saudavel':
+      case 'doente':
+      case 'supersticioso':
+      case 'cetico':
+      case 'religioso':
+      case 'ateu':
+      case 'tradicional':
+      case 'moderno':
+      case 'conservador':
+      case 'liberal':
+      case 'patriotico':
+      case 'cosmopolita':
+      case 'rural':
+      case 'urbano':
+      case 'aventureiro':
+      case 'caseiro':
+      case 'viajante':
+      case 'local':
+      case 'global':
+      case 'tecnologico':
+      case 'analogico':
+      case 'digital':
+      case 'offline':
+      case 'online':
+      case 'social':
+        try {
+          if (!isGroup) return reply("❌ Este comando é só para grupos!");
+          
+          let alvoJid = sender;
+          let nomeAlvo = pushname || 'Usuário';
+          
+          if (mentionedJidList && mentionedJidList.length > 0) {
+            alvoJid = mentionedJidList[0];
+            const groupData = await nazu.groupMetadata(from).catch(() => null);
+            const membro = groupData?.participants?.find(p => p.id === alvoJid);
+            nomeAlvo = membro?.notify || membro?.pushname || alvoJid.split('@')[0];
+          }
+          
+          const porcentagem = Math.floor(Math.random() * 101);
+          const barraTamanho = 10;
+          const barraPreenchida = Math.floor((porcentagem / 100) * barraTamanho);
+          const barra = '█'.repeat(barraPreenchida) + '░'.repeat(barraTamanho - barraPreenchida);
+          
+          const rateConfig = {
+            'gay': { emoji: '🏳️‍🌈', nome: 'gay' },
+            'burro': { emoji: '🤪', nome: 'burro' },
+            'inteligente': { emoji: '🧠', nome: 'inteligente' },
+            'otaku': { emoji: '🗾', nome: 'otaku' },
+            'fiel': { emoji: '💍', nome: 'fiel' },
+            'infiel': { emoji: '💔', nome: 'infiel' },
+            'corno': { emoji: '🦌', nome: 'corno' },
+            'gado': { emoji: '🐂', nome: 'gado' },
+            'gostoso': { emoji: '🔥', nome: 'gostoso(a)' },
+            'feio': { emoji: '😬', nome: 'feio(a)' },
+            'rico': { emoji: '💰', nome: 'rico(a)' },
+            'pobre': { emoji: '💸', nome: 'pobre' },
+            'pirocudo': { emoji: '😈', nome: 'pirocudo' },
+            'pirokudo': { emoji: '😈', nome: 'pirocudo' },
+            'nazista': { emoji: '⚠️', nome: 'nazista' },
+            'ladrao': { emoji: '🦹', nome: 'ladrão' },
+            'safado': { emoji: '😏', nome: 'safado(a)' },
+            'vesgo': { emoji: '👁️', nome: 'vesgo(a)' },
+            'bebado': { emoji: '🍺', nome: 'bêbado(a)' },
+            'machista': { emoji: '♂️', nome: 'machista' },
+            'homofobico': { emoji: '⚠️', nome: 'homofóbico(a)' },
+            'racista': { emoji: '⚠️', nome: 'racista' },
+            'chato': { emoji: '😴', nome: 'chato(a)' },
+            'sortudo': { emoji: '🍀', nome: 'sortudo(a)' },
+            'azarado': { emoji: '💀', nome: 'azarado(a)' },
+            'forte': { emoji: '💪', nome: 'forte' },
+            'fraco': { emoji: '😓', nome: 'fraco(a)' },
+            'pegador': { emoji: '😎', nome: 'pegador(a)' },
+            'otario': { emoji: '🤡', nome: 'otário(a)' },
+            'macho': { emoji: '♂️', nome: 'macho' },
+            'bobo': { emoji: '🤪', nome: 'bobo(a)' },
+            'nerd': { emoji: '🤓', nome: 'nerd' },
+            'preguicoso': { emoji: '😴', nome: 'preguiçoso(a)' },
+            'trabalhador': { emoji: '⚙️', nome: 'trabalhador(a)' },
+            'brabo': { emoji: '🦁', nome: 'brabo(a)' },
+            'lindo': { emoji: '✨', nome: 'lindo(a)' },
+            'malandro': { emoji: '😏', nome: 'malandro(a)' },
+            'simpatico': { emoji: '💕', nome: 'simpático(a)' },
+            'engracado': { emoji: '😂', nome: 'engraçado(a)' },
+            'charmoso': { emoji: '😘', nome: 'charmoso(a)' },
+            'misterioso': { emoji: '🕵️', nome: 'misterioso(a)' },
+            'carinhoso': { emoji: '🥰', nome: 'carinhoso(a)' },
+            'desumilde': { emoji: '😤', nome: 'desumilde' },
+            'humilde': { emoji: '🤝', nome: 'humilde' },
+            'ciumento': { emoji: '😤', nome: 'ciumento(a)' },
+            'corajoso': { emoji: '🦁', nome: 'corajoso(a)' },
+            'covarde': { emoji: '😨', nome: 'covarde' },
+            'esperto': { emoji: '🧠', nome: 'esperto(a)' },
+            'talarico': { emoji: '💘', nome: 'talárico(a)' },
+            'chorao': { emoji: '😭', nome: 'chorão(ona)' },
+            'brincalhao': { emoji: '🎉', nome: 'brincalhão(ona)' },
+            'bolsonarista': { emoji: '🇧🇷', nome: 'bolsonarista' },
+            'petista': { emoji: '🇧🇷', nome: 'petista' },
+            'comunista': { emoji: '🔴', nome: 'comunista' },
+            'lulista': { emoji: '🇧🇷', nome: 'lulista' },
+            'traidor': { emoji: '🗡️', nome: 'traidor(a)' },
+            'bandido': { emoji: '💀', nome: 'bandido(a)' },
+            'cachorro': { emoji: '🐕', nome: 'cachorro(a)' },
+            'vagabundo': { emoji: '😏', nome: 'vagabundo(a)' },
+            'pilantra': { emoji: '🕵️', nome: 'pilantra' },
+            'mito': { emoji: '⭐', nome: 'mito' },
+            'padrao': { emoji: '👑', nome: 'padrão' },
+            'comedia': { emoji: '😂', nome: 'comédia' },
+            'psicopata': { emoji: '🧠', nome: 'psicopata' },
+            'fortao': { emoji: '💪', nome: 'fortão(ona)' },
+            'magrelo': { emoji: '🦴', nome: 'magrelo(a)' },
+            'bombado': { emoji: '💪', nome: 'bombado(a)' },
+            'chefe': { emoji: '👔', nome: 'chefe' },
+            'presidente': { emoji: '🏛️', nome: 'presidente' },
+            'rei': { emoji: '👑', nome: 'rei(a)' },
+            'patrao': { emoji: '💼', nome: 'patrão(oa)' },
+            'playboy': { emoji: '😎', nome: 'playboy' },
+            'zueiro': { emoji: '😜', nome: 'zueiro(a)' },
+            'gamer': { emoji: '🎮', nome: 'gamer' },
+            'programador': { emoji: '💻', nome: 'programador(a)' },
+            'visionario': { emoji: '🔮', nome: 'visionário(a)' },
+            'billionario': { emoji: '💎', nome: 'bilionário(a)' },
+            'poderoso': { emoji: '⚡', nome: 'poderoso(a)' },
+            'vencedor': { emoji: '🏆', nome: 'vencedor(a)' },
+            'senhor': { emoji: '🤵', nome: 'senhor(a)' },
+            'fofoqueiro': { emoji: '🗣️', nome: 'fofoqueiro(a)' },
+            'dorminhoco': { emoji: '😴', nome: 'dorminhoco(a)' },
+            'comilao': { emoji: '🍔', nome: 'comilão(ona)' },
+            'sedentario': { emoji: '🛋️', nome: 'sedentário(a)' },
+            'atleta': { emoji: '🏃', nome: 'atleta' },
+            'estudioso': { emoji: '📚', nome: 'estudioso(a)' },
+            'romantico': { emoji: '💕', nome: 'romântico(a)' },
+            'extrovertido': { emoji: '🎉', nome: 'extrovertido(a)' },
+            'introvertido': { emoji: '🤫', nome: 'introvertido(a)' },
+            'calmo': { emoji: '😌', nome: 'calmo(a)' },
+            'nervoso': { emoji: '😤', nome: 'nervoso(a)' },
+            'organizado': { emoji: '📋', nome: 'organizado(a)' },
+            'bagunceiro': { emoji: '🗑️', nome: 'bagunceiro(a)' },
+            'economico': { emoji: '💰', nome: 'econômico(a)' },
+            'gastador': { emoji: '💸', nome: 'gastador(a)' },
+            'saudavel': { emoji: '🥗', nome: 'saudável' },
+            'doente': { emoji: '🤒', nome: 'doente' },
+            'supersticioso': { emoji: '🔮', nome: 'supersticioso(a)' },
+            'cetico': { emoji: '🤔', nome: 'cético(a)' },
+            'religioso': { emoji: '✝️', nome: 'religioso(a)' },
+            'ateu': { emoji: '🚫', nome: 'ateu(a)' },
+            'tradicional': { emoji: '📜', nome: 'tradicional' },
+            'moderno': { emoji: '🚀', nome: 'moderno(a)' },
+            'conservador': { emoji: '🛡️', nome: 'conservador(a)' },
+            'liberal': { emoji: '🗽', nome: 'liberal' },
+            'patriotico': { emoji: '🇧🇷', nome: 'patriótico(a)' },
+            'cosmopolita': { emoji: '🌍', nome: 'cosmopolita' },
+            'rural': { emoji: '🌾', nome: 'rural' },
+            'urbano': { emoji: '🌆', nome: 'urbano(a)' },
+            'aventureiro': { emoji: '🧭', nome: 'aventureiro(a)' },
+            'caseiro': { emoji: '🏠', nome: 'caseiro(a)' },
+            'viajante': { emoji: '✈️', nome: 'viajante' },
+            'local': { emoji: '📍', nome: 'local' },
+            'global': { emoji: '🌐', nome: 'global' },
+            'tecnologico': { emoji: '📱', nome: 'tecnológico(a)' },
+            'analogico': { emoji: '📻', nome: 'analógico(a)' },
+            'digital': { emoji: '💾', nome: 'digital' },
+            'offline': { emoji: '📴', nome: 'offline' },
+            'online': { emoji: '🌐', nome: 'online' },
+            'social': { emoji: '👥', nome: 'social' }
+          };
+          
+          const config = rateConfig[command] || { emoji: '🎯', nome: command };
+          
+          await reply(`${config.emoji} @${nomeAlvo.split('@')[0]} é *${porcentagem}%* ${config.nome}!\n\n[${barra}]`, { mentions: [alvoJid] });
+          
+        } catch (e) {
+          console.error(e);
+          reply("❌ Erro ao processar.");
+        }
+        break;
+      
       case 'setngl':
         try {
           if (!isGroup) return reply("❌ Este comando é só para grupos!");
