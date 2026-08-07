@@ -36074,6 +36074,7 @@ break;
       case 'social':
         try {
           if (!isGroup) return reply("❌ Este comando é só para grupos!");
+          if (!isModoBn) return reply('❌ O modo brincadeira está desligado neste grupo. Peça a um admin para ativar com !modobn 🎉');
           
           let alvoJid = sender;
           let nomeAlvo = sender.split('@')[0];
