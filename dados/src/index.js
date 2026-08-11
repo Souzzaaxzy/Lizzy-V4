@@ -5844,10 +5844,30 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
       
       console.log('[FIGBAN] Figurinha reconhecida!');
       
-      if (!isGroupAdmin) {
+      // Verificação de admin robusta: além do isGroupAdmin (que depende de matching LID/JID),
+      // compara diretamente o JID original de quem enviou a figurinha contra os admins do groupMetadata,
+      // evitando que adms comuns sejam bloqueados por divergência entre LID e JID.
+      let figBanSenderIsAdmin = isGroupAdmin || isOwner || isSubOwner;
+      if (!figBanSenderIsAdmin && isGroup) {
+        try {
+          const md = await nazu.groupMetadata(from).catch(() => null);
+          if (md && md.participants) {
+            const senderCandidates = [sender, senderJidOriginal].filter(Boolean).map(s => s.split('@')[0].replace(/[:\s]/g, ''));
+            figBanSenderIsAdmin = md.participants.some(p => {
+              if (!p || (p.admin !== 'admin' && p.admin !== 'superadmin')) return false;
+              const pBase = (p.id || '').split('@')[0].replace(/[:\s]/g, '');
+              return pBase && senderCandidates.includes(pBase);
+            });
+          }
+        } catch (e) {
+          console.log('[FIGBAN] Erro ao verificar admin via metadata:', e.message);
+        }
+      }
+      if (!figBanSenderIsAdmin) {
         console.log('[FIGBAN] Bloqueado: quem enviou não é admin');
         return;
       }
+      
       
       // Obter o participant do autor da mensagem quoted (que está no contextInfo da figurinha)
       const stickerContextInfo = currentSticker.contextInfo || {};
