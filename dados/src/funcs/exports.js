@@ -64,6 +64,13 @@ async function loadModules() {
         modules.edits = edits.default ?? edits;
         modules.canvas = canvas.default ?? canvas;
 
+        // --- API interna centralizada (fachada) ---
+        // FASE 1: apenas expõe os módulos atuais em um único objeto `API`.
+        // NÃO substitui nem duplica os exports acima — o ESM garante a mesma
+        // instância dos módulos importados por api-downloads.js.
+        const apiFacade = (await import('./api-downloads.js')).default;
+        modules.API = apiFacade;
+
         // --- utils ---
         const [
             styleTextMod, LogosMod, LogosMod2, verifyUpdateMod, emojiMixMod,
