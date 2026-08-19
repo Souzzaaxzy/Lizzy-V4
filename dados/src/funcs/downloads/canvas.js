@@ -1,4 +1,4 @@
-import { Jimp, loadFont, HorizontalAlign, VerticalAlign } from 'jimp';
+import { Jimp, loadFont, measureText, HorizontalAlign, VerticalAlign } from 'jimp';
 import { spawn } from 'child_process';
 import { promises as fsp } from 'fs';
 import os from 'os';
@@ -118,17 +118,22 @@ async function pngToWebp(pngBuffer, outFile) {
   return fsp.readFile(outFile);
 }
 
-function renderTextLayer(font, text, maxW, maxH, colorHex, blurPx = 0) {
+function renderTextLayer(font, text, maxW, maxH, colorHex, blurPx = 0, opts = {}) {
+  const {
+    alignX = HorizontalAlign.CENTER,
+    alignY = VerticalAlign.MIDDLE,
+    y = 0,
+  } = opts;
   const layer = new Jimp({ width: maxW, height: maxH, color: 0x00000000 });
   layer.print({
     font,
     x: 0,
-    y: 0,
+    y,
     text,
     maxWidth: maxW,
     maxHeight: maxH,
-    alignmentX: HorizontalAlign.CENTER,
-    alignmentY: VerticalAlign.MIDDLE,
+    alignmentX: alignX,
+    alignmentY: alignY,
   });
   const rgb = {
     r: (colorHex >> 16) & 0xff,
@@ -196,8 +201,9 @@ async function gerarbrat(query, bg, text_color, blur) {
 }
 
 /**
- * Gera sticker animado Brat (texto pulsando em loop, ritmo por BPM).
- * Retorna Buffer webp animado (512x512).
+ * Gera sticker animado Brat: o texto surge palavra por palavra (typewriter)
+ * até formar a frase inteira, pausa e recomeça em loop. Ritmo por BPM
+ * (1 palavra por batida). Retorna Buffer webp animado (512x512).
  */
 async function gerarbratvid(query, bg, text_color, bpm, blur) {
   try {
@@ -210,25 +216,92 @@ async function gerarbratvid(query, bg, text_color, bpm, blur) {
     const bgHex = parseColor(bg, 0xffffff);
     const textHex = parseColor(text_color, 0x000000);
     const bpmNum = Math.min(240, Math.max(30, parseFloat(bpm) || 120));
-    const baseBlur = Math.max(0, parseInt(blur, 10) || 2);
+    const blurPx = Math.max(0, parseInt(blur, 10) || 2);
 
     const font = await getFont();
-    const frames = 16;
-    const fps = Math.max(4, Math.round(bpmNum / 8));
-    // Cada ciclo de pulso dura (60/bpm)s; o número de frames por pulso
-    // define o quanto o desfoque oscila ao longo do loop.
-    const pulseFrames = Math.max(2, Math.round((60 / bpmNum) * fps));
+
+    const words = String(query).trim().split(/\s+/);
+    const wordsPerStep = Math.max(1, Math.ceil(words.length / 20)); // teto de ~20 passos
+    const steps = Math.ceil(words.length / wordsPerStep);
+    const fps = Math.max(1, Math.round(bpmNum / 60)); // 1 palavra por batida
+    const holdFrames = Math.max(2, fps); // pausa com a frase completa antes do loop
 
     const buffer = await withTempDir(async dir => {
-      for (let i = 0; i < frames; i++) {
-        const phase = (i % pulseFrames) / pulseFrames;
-        const osc = 0.5 - 0.5 * Math.cos(2 * Math.PI * phase); // 0→1→0
-        const frame = new Jimp({ width: 512, height: 512, color: bgHex * 256 + 0xff });
-        const textLayer = renderTextLayer(font, String(query), 460, 460, textHex, Math.round(baseBlur + osc * 6));
-        frame.composite(textLayer, 26, 26);
-        const png = await frame.getBuffer('image/png');
-        await fsp.writeFile(path.join(dir, `frame-${String(i).padStart(3, '0')}.png`), png);
+      // A fonte bitmap tem tamanho fixo: frases longas não caberiam em
+      // 460x460 (o print do jimp clipa o excedente). Mede-se o texto
+      // completo sem limite de altura e, se necessário, renderiza-se mais
+      // largo e reduz com escala — assim a frase inteira sempre cabe.
+      const renderLoose = (text, width) =>
+        renderTextLayer(font, text, width, 8192, textHex, 0, {
+          alignX: HorizontalAlign.LEFT,
+          alignY: VerticalAlign.TOP,
+        });
+      const inkBox = layer => {
+        let minX = layer.width, maxX = -1, minY = layer.height, maxY = -1;
+        layer.scan((x, y, idx) => {
+          if (layer.bitmap.data[idx + 3] > 0) {
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          }
+        });
+        return maxX >= 0
+          ? { w: maxX - minX + 1, h: maxY - minY + 1 }
+          : { w: 0, h: 0 };
+      };
+
+      const fullText = words.join(' ');
+      // Palavra mais larga que o canvas seria truncada pelo print (a quebra
+      // de linha do jimp usa largura de avanço, não a bbox de tinta — por
+      // isso mede-se com measureText): renderiza na largura dela e reduz.
+      let maxWordW = 0;
+      for (const w of words) {
+        const ww = measureText(font, w);
+        if (ww > maxWordW) maxWordW = ww;
       }
+      let textWidth = Math.max(460, maxWordW);
+      let box = inkBox(renderLoose(fullText, textWidth));
+      if (!box.w || !box.h) {
+        throw new Error('Não foi possível renderizar o texto');
+      }
+      if (box.h > 460 && maxWordW <= 460) {
+        // altura ≈ box.h * 460 / textWidth ao refluir: textWidth >= sqrt(h*460)
+        // faz o bloco refluído caber em 460x460 após a escala
+        textWidth = Math.max(460, Math.ceil(Math.sqrt(box.h * 460)));
+        box = inkBox(renderLoose(fullText, textWidth));
+      }
+      const scale = Math.min(1, 460 / box.h, 460 / box.w, 460 / textWidth);
+      const blockH = box.h * scale; // altura final (fixa) do bloco completo
+
+      // Origem fixa para todos os frames: com alinhamento à esquerda/topo,
+      // as palavras já exibidas não se movem enquanto as novas aparecem.
+      const originX = 26 + Math.round((460 - textWidth * scale) / 2);
+      const originY = 26 + Math.round((460 - blockH) / 2);
+
+      let frameIdx = 0;
+      const writeFrame = async text => {
+        const frame = new Jimp({ width: 512, height: 512, color: bgHex * 256 + 0xff });
+        const textLayer = renderTextLayer(font, text, textWidth, 8192, textHex, blurPx, {
+          alignX: HorizontalAlign.LEFT,
+          alignY: VerticalAlign.TOP,
+        });
+        if (scale < 1) textLayer.scale(scale);
+        frame.composite(textLayer, originX, originY);
+        const png = await frame.getBuffer('image/png');
+        await fsp.writeFile(
+          path.join(dir, `frame-${String(frameIdx++).padStart(3, '0')}.png`),
+          png
+        );
+      };
+
+      for (let i = 0; i < steps; i++) {
+        await writeFrame(words.slice(0, (i + 1) * wordsPerStep).join(' '));
+      }
+      for (let i = 0; i < holdFrames; i++) {
+        await writeFrame(fullText);
+      }
+
       const outFile = path.join(dir, 'out.webp');
       await runFfmpeg([
         '-framerate', String(fps),
