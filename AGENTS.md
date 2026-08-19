@@ -34,6 +34,17 @@
 - Comando `!tiktok`/`!ttk`/`!tkk` (e aliases) e `handleAutoDownload` (TikTok) **continuam funcionando sem alteração** (mesma interface `search`/`dl`, mesmo `urls[0]`, `title`, `author`, `cover`, `link`).
 - Validado: dl URL real (`vt.tiktok.com/ZSVMSaw8k/`) retorna todos os campos; search `gatos` retorna 3 resultados com play acessível; cache hit; erros graceful; 9 referências VexAPI confirmadas ausentes.
 
+## FASE 4 — Instagram migrado (sem VexAPI) ✅
+- Arquivo: `dados/src/funcs/downloads/igdl.js` reescrito (mantém `export { dl }`; nome do arquivo preservado).
+- **Removido**: `import verificarAPI`, `https`, `fs`, `CONFIG_FILE`, `apikey_vex`, `site_vex`, chamada a `/api/downloads/instagram`. **Nenhuma** referência VexAPI resta no Instagram (o arquivo não tem mais nenhum `import`).
+- **dl(url)**: extrai shortcode de `/p/`, `/reel/`, `/reels/`, `/tv/` (domínios `instagram.com`/`instagr.am`), converte para `media_id` (BigInt, alfabeto base64 do IG) e chama a **query GraphQL pública de posts deslogados** do Instagram (`PolarisLoggedOutDesktopWWWPostRootContentQuery`, doc_id `27130156389949648`), autenticada só com sessão anônima da homepage pública (token LSD + csrftoken; mesma abordagem do yt-dlp/parth-dl). Retorna só o que o IG libera anonimamente (`data.xig_polaris_media.if_not_gated_logged_out`).
+- Sessão anônima cacheada por 10min (`getSession`), reduzindo requisições. **429/403 = fail-fast** com erro controlado (não queima cota com retry — quem tenta de novo é o chamador). Cache de resultados preservado (Map, TTL 60min, 1000). Timeout via `AbortController` (25s).
+- **Carrossel completo**: `carousel_media[]` vira `data[]` na ordem original (cada item `{ type:image|video, url, mime }`). Vídeo = `video_versions[0].url`; imagem = `image_versions2.candidates[0].url`.
+- Formato de retorno **preservado**: `{ ok, criador:'Hiudy', data:[...], count }` + **aditivos** `user:{username}` e `caption` (o autodownload já lia `result.user?.username`). Erro: `{ ok:false, msg }` (`Postagem não encontrada`, `Conteúdo privado ou indisponível sem login`, `Limite de requisições...`).
+- Fachada e `exports.js` **não precisaram mudança**: `API.instagram.dl` e `modules.igdl.dl` expõem a nova implementação (mesma instância ESM).
+- Comando `!instagram`/`!igdl`/`!ig`/`!instavideo`/`!igstory` (`index.js` ~19852, itera `data[]` enviando `{ [item.type]: { url } }`) e `handleAutoDownload` (Instagram, `index.js` ~1806/1884, usa `data[0]` e `user?.username`) **continuam funcionando sem alteração** — validado por simulação dos dois fluxos com `nazu` fake.
+- Validado em Node: reel → 1 vídeo (`clips`), carrosseis de 13 e 7 imagens (CDN HTTP 200, video/mp4 / image/jpeg), post removido/URL inválida → `ok:false` graceful, cache hit, boot OK. Observação: sandbox datacenter sofre 429 no GraphQL anônimo do IG; em ~4min a cota volta.
+
 ## Formatos de exportação dos módulos (importante para a fachada)
 - Named exports (`export { ... }`): tiktok, youtube, igdl, pinterest, canvas, kwai, edits, logos → fachada usa `import * as ns` + `pickNamed()` (filtra `default`/`__esModule`).
 - Default objeto (`export default { ... }`): spotify, soundcloud, facebook, imagetools → fachada usa o default diretamente.
@@ -41,8 +52,8 @@
 
 ## Dependências da VexAPI (a substituir nas próximas fases)
 - `dados/src/funcs/API.js` → `verificarAPI()` valida `apikey_vex`/`site_vex` em `config.json`.
-- Módulos que usam VexAPI: `downloads/{youtube,igdl,lyrics,canvas}.js`, `edits/index.js`, `logos/index.js`, `utils/imagetools.js`.
-- Módulos JÁ próprios (não usam VexAPI): `downloads/{spotify,soundcloud,facebook,kwai,apkmod,mcplugins,pinterest,tiktok}.js`, `utils/search.js`.
+- Módulos que AINDA usam VexAPI: `downloads/{youtube,lyrics,canvas}.js`, `edits/index.js`, `logos/index.js`, `utils/imagetools.js`.
+- Módulos JÁ próprios (não usam VexAPI): `downloads/{spotify,soundcloud,facebook,kwai,apkmod,mcplugins,pinterest,tiktok,igdl}.js`, `utils/search.js`.
 - Endpoints VexAPI usados: `/api/pesquisa/{tiktok,youtube,pinterest,letra}`, `/api/pesquisas/pinterest` (typo), `/api/downloads/{tiktok,instagram,youtubemp3,youtubemp4}`, `/api/canvas/{brat,bratvideo,welcome2}`, `/api/edits/{type}`, `/api/logos/{type}`, `/api/ferramentas/{removebg,upscale}`, `/api/verificarkey`.
 
 ## Comandos e fluxos relevantes
@@ -57,4 +68,4 @@
 - Boot real: `node dados/src/connect.js` gera QR Code do WhatsApp (não executar em teste automatizado sem necessidade).
 
 ## Próxima fase sugerida
-- FASE 4: continuar substituindo a VexAPI módulo por módulo, dentro de `api-downloads.js`. Ordem recomendada restante: Instagram → Lyrics → YouTube → Logos/Edits → Canvas → imagetools (removeBg/upscale). Manter `API.js`/`config.json` legados até o fim da transição. Concluídas: Pinterest (FASE 2), TikTok (FASE 3).
+- FASE 5: continuar substituindo a VexAPI módulo por módulo, dentro de `api-downloads.js`. Ordem recomendada restante: Lyrics → YouTube → Logos/Edits → Canvas → imagetools (removeBg/upscale). Manter `API.js`/`config.json` legados até o fim da transição. Concluídas: Pinterest (FASE 2), TikTok (FASE 3), Instagram (FASE 4).
