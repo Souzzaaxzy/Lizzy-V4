@@ -66,10 +66,20 @@
 - Comandos `!play`, `!playvid`/`!ytmp4` (`index.js` ~19091/19598), autodownload (`index.js` ~1796/1841) validados por simulação (áudio `{audio:buffer,audio/mpeg}`, vídeo `{video:buffer,video/mp4}`, fallback documento).
 - Validado no sandbox (ffmpeg estático só para testes): search ok (241s/16 anos/vistas/autor), mp3 3.41MB com header ID3, mp4 360p 11.8MB container `ftyp`, LOGIN_REQUIRED → erro controlado, 38/38, boot OK. **IP de datacenter do sandbox é fortemente flag (`LOGIN_REQUIRED` em alguns vídeos) — em VPS/residencial funciona; falha degradada com msg clara.**
 
-## FASE 7 — Edits migrado (sem VexAPI) ✅ / Logos: bloqueado por design (rule 19) ⚠️
+## FASE 7 — Edits migrado (sem VexAPI) ✅ / Logos: resolvido na FASE 8 ✅
 - Arquivo: `dados/src/funcs/edits/index.js` reescrito (mantém `export { geraredit }`).
 - **Edits**: filtros de imagem **locais com `jimp` (dep existente)**: `blackwhite` greyscale, `desfoque` blur adaptativo, `jornal` greyscale+contraste+posterize, `cinema` letterbox. `wojakreaction` retorna **erro controlado** (exige arte/template que não existe no repo — honesto, não inventado). Cache/timeout/contrato `{ok, buffer}` preservados.
-- **Logos**: 21 geradores de texto-estilizado exigem fontes/texturas/templates (VexAPI usava serviços tipo ephoto/textpro, que têm CAPTCHA/Cloudflare — entra no "anti-bot", proibido). Sem assets/licença explícita não há implementação limpa → **não migrado por decisão honesta** (rule 19). `logos/index.js` continua na VexAPI até o usuário decidir (fornecer assets/templates/fontes/licença, remover os comandos do menu, ou produto pago). Comandos `!wojakreaction`/`!blackwhite`/`!jornal`/`!cinema`/`!desfoque` (index.js ~25347) validados com simulação (28/28 testes).
+- **Logos** (decisão da época): 34 geradores de texto-estilizado exigem fontes/templates (VexAPI usava ephoto/textpro — CAPTCHA/Cloudflare, proibido). Scraping descartado; IA (pollinations) falha em renderizar o texto exato. Resolvido na **FASE 8** com renderização 100% local (jimp + fontes bitmap próprias). Comandos `!wojakreaction`/`!blackwhite`/`!jornal`/`!cinema`/`!desfoque` (index.js ~25347) validados com simulação (28/28 testes).
+
+## FASE 8 — Logos migrado (sem VexAPI) ✅
+- Arquivo: `dados/src/funcs/logos/index.js` reescrito (mantém `export { gerarLogo }` + aditivo `STYLES`).
+- **Removido**: `import verificarAPI`, `https`, `fs`, `CONFIG_FILE`, `apikey_vex`, `site_vex`, chamada a `/api/logos/{type}`. **Nenhuma** referência VexAPI resta no Logos.
+- **Implementação 100% local com `jimp` (dep existente)**: os 34 tipos (`amongus, royal, mascotemetal, firework, summerbeach, cloudsky, techstyle, watercolor, ligatures, graffitistyle, frozen, colorful, balloon, multicolor, metal, doubleexposure, mascoteneon, eraser, america, snow, sunset, halloween, blood, hallobat, cemiterio, ffavatar, vintage3d, hollywood, glitch, galaxy, glossy, dragonfire, pubgavatar, comics`) são presets em `STYLES` (gradiente de fundo + gradiente de texto + sombra/glow/outline/estrelas/glitch RGB).
+- **Fontes bitmap próprias**: `logos/fonts/dejavu-bold-96.fnt` + `dejavu-bold-96_0.png` (~168KB), geradas uma vez offline (Pillow) a partir de **DejaVuSans-Bold** (licença permissiva — Bitstream Vera, redistribuível). Cobre ASCII 32-126 + Latin-1 160-255 (acentos PT-BR). Gerador **não** fica no repo.
+- Renderização: canvas 1200×640, texto com wrap (maxWidth 1080), bbox alfa, downscale se exceder, `renderLogo()` → `getBuffer('image/png')`. Contrato preservado `{ ok, buffer }` + aditivo `mime:'image/png'`. Erro controlado: `{ ok:false, msg }` (query/type vazio, tipo desconhecido, texto não renderizável).
+- Cache preservado (Map, TTL 60min, 1000). Type é normalizado (lowercase/trim) e validado contra `STYLES`.
+- Bloco de comandos em `index.js` ~25280 (`amongus...comics` → `logos.gerarLogo({query,type:command})`) **funciona sem alteração**. Nota: segundo bloco (`pornhub, avengers, graffiti, captainamerica, stone3d, neon2, thor, deadpool, blackpink`) usa `Logos2` de `utils/logotipos2.js` (apisnodz — fora do escopo; site fora do ar hoje, não é VexAPI).
+- Validado: 35/35 testes (import/facade, 34/34 tipos, PNG magic, query/type inválidos, cache hit, acentos/wrap, regressão de namespaces + edits real, zero refs VexAPI via grep, `node --check` OK).
 
 ## Formatos de exportação dos módulos (importante para a fachada)
 - Named exports (`export { ... }`): tiktok, youtube, igdl, pinterest, canvas, kwai, edits, logos → fachada usa `import * as ns` + `pickNamed()` (filtra `default`/`__esModule`).
@@ -78,9 +88,9 @@
 
 ## Dependências da VexAPI (a substituir nas próximas fases)
 - `dados/src/funcs/API.js` → `verificarAPI()` valida `apikey_vex`/`site_vex` em `config.json`.
-- Módulos que AINDA usam VexAPI: `downloads/canvas.js`, `logos/index.js`, `utils/imagetools.js`.
-- Módulos JÁ próprios (não usam VexAPI): `downloads/{spotify,soundcloud,facebook,kwai,apkmod,mcplugins,pinterest,tiktok,igdl,lyrics,youtube}.js`, `edits/index.js` (jimp local), `utils/search.js`.
-- Endpoints VexAPI usados: `/api/pesquisa/{tiktok,youtube,pinterest,letra}`, `/api/pesquisas/pinterest` (typo), `/api/downloads/{tiktok,instagram,youtubemp3,youtubemp4}`, `/api/canvas/{brat,bratvideo,welcome2}`, `/api/edits/{type}`, `/api/logos/{type}`, `/api/ferramentas/{removebg,upscale}`, `/api/verificarkey`.
+- Módulos que AINDA usam VexAPI: `downloads/canvas.js`, `utils/imagetools.js`.
+- Módulos JÁ próprios (não usam VexAPI): `downloads/{spotify,soundcloud,facebook,kwai,apkmod,mcplugins,pinterest,tiktok,igdl,lyrics,youtube}.js`, `edits/index.js` (jimp local), `logos/index.js` (jimp local + fontes bitmap próprias), `utils/search.js`.
+- Endpoints VexAPI ainda em uso: `/api/canvas/{brat,bratvideo,welcome2}`, `/api/ferramentas/{removebg,upscale}`, `/api/verificarkey`.
 
 ## Comandos e fluxos relevantes
 - Autodownload por URL: `handleAutoDownload(nazu, from, url, info)` em `index.js` (~linha 1789) detecta domínio e chama `youtube.mp3`, `tiktok.dl`, `igdl.dl`, `kwai.dl`, `facebook.downloadHD`, `pinterest.dl`, `spotify.download`, `soundcloud.download`.
@@ -94,4 +104,4 @@
 - Boot real: `node dados/src/connect.js` gera QR Code do WhatsApp (não executar em teste automatizado sem necessidade).
 
 ## Próxima fase sugerida
-- FASE 8+: continuar com a VexAPI: Canvas (`/api/canvas/{brat,bratvideo,welcome2}`) → imagetools (`/api/ferramentas/{removebg,upscale}`) → Logos depende de decisão do usuário (assets/licença). Manter `API.js`/`config.json` legados até o fim da transição. Concluídas: Pinterest (2), TikTok (3), Instagram (4), Lyrics (5), YouTube (6), Edits (7). Logos: aberto (rule 19).
+- FASE 9+: continuar com a VexAPI: Canvas (`/api/canvas/{brat,bratvideo,welcome2}`) → imagetools (`/api/ferramentas/{removebg,upscale}`). Manter `API.js`/`config.json` legados até o fim da transição. Concluídas: Pinterest (2), TikTok (3), Instagram (4), Lyrics (5), YouTube (6), Edits (7), Logos (8).
