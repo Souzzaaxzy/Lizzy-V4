@@ -92,16 +92,24 @@
 - Comandos cobertos: `!brat` (~20176), `!bratvid`/`!bratvideo` (~20228), welcome card automático do evento de grupo (`createGroupMessage`, `settings.photoType === 'api'`, ~1286). Nota: `'brat'` aparece também como `case 'brat'` no índice; aliases de bratvid preservados.
 - Validado: 35/35 (facade, RIFF/WEBP magic, chunk `ANIM`, PNG magic, acentos/emoji/hex, cache hit, concorrência, tmpdir limpo, fallbacks de avatar/fundo, regressão de namespaces + edits/logos, `ps` sem ffmpeg órfão, `node --check` OK). Bugs corrigidos durante teste: rgba negativo em `(hex<<8)|0xff` (cores ≥0x800000) e `%23` prefix.
 
+## FASE 10 — ImageTools migrado (sem VexAPI) ✅ / Auditoria global: VexAPI funcional ZERO
+- Arquivo: `dados/src/funcs/utils/imagetools.js` reescrito (mantém `export default {removeBg, upscale}` + named).
+- **Removido**: `verificarAPI`, `https`, `fs`(config), `CONFIG_FILE`, `apikey_vex`, `site_vex`, chamadas `/api/ferramentas/{removebg,upscale}` + console.logs de debug. Zero refs VexAPI.
+- **removeBg(url)**: implementação local real — flood-fill (BFS) a partir das bordas com color-key: referência = média dos 4 cantos (blocos 8×8), tolerância dist² ≤ 3·32². PNG RGBA, cantos transparentes, sujeito preservado. Guardas: fundo≥98,5% → erro "ocupa a imagem inteira"; ≤0,5% → "não detectado fundo uniforme"; >16MP → rejeita; download `fetch`+AbortController 25s, teto 15MB. **Limitação honesta: não é remoção por IA — funciona em fundos uniformes/similares às bordas; fundos complexos ficam parciais.**
+- **upscale(url, scale=2)**: jimp `resize({mode:'bicubicInterpolation'})` — interpolação, **não é AI-upscaling** (documentado no relatório da fase). Scale sanitizado: inteiro 2–4 (fora → erro controlado); dimensão final teto 4096px.
+- Contrato: `download` (URL) virou **`buffer`** (`{ ok, status:true, criador:'Tokyo', type:'image', mime:'image/png', scale?, buffer }`); erros `{ok:false,msg}` (upscale agora retorna em vez de throw — comando já trata). Cache preservado (Map, 30min, 1000).
+- `index.js` (3 call sites, fallback): removebg/sbg/sfundo usa `bgResult.buffer || fetch(bgResult.download)`; `{image: resultBuffer || {url}}`; upscale `{image: upscaleResult.buffer || {url}}` (corrigido bug pré-existente: comando lia `result.result?.download` inexistente). Import direto linha 589 **inalterado**.
+- Validado: 43/43 (facade, PNG magic, canto transparente+centro preservado, fundo 100%/gradiente erro, upscale ×2/×3/×4 dims, scale inválido, URL vazia/inválida/corrompida, concorrência, URL real, cache, regressão namespaces, `node --check` OK).
+- **Auditoria global VexAPI**: `grep` em todo `dados/` — **nenhum import de `funcs/API.js` resta** (verificarAPI órfã = CÓDIGO MORTO). Restam: `index.js` (linha 1727 msg + comando `!apikey` 22647 — CONFIGURAÇÃO), `.scripts/config.js` (default+prompt — CONFIGURAÇÃO), `config.json` (`site_vex`/`apikey_vex` — CONFIGURAÇÃO), comentários "sem VexAPI" nos módulos migrados (DOCUMENTAÇÃO). Nada funcional: **todos os módulos estão 100% sem VexAPI**. Remoção de `API.js`/chaves do config fica para tarefa de limpeza separada (não executada nesta fase).
+
 ## Formatos de exportação dos módulos (importante para a fachada)
 - Named exports (`export { ... }`): tiktok, youtube, igdl, pinterest, canvas, kwai, edits, logos → fachada usa `import * as ns` + `pickNamed()` (filtra `default`/`__esModule`).
 - Default objeto (`export default { ... }`): spotify, soundcloud, facebook, imagetools → fachada usa o default diretamente.
 - Default função (`export default fn`): lyrics (`getLyrics`), apkmod (`apkMod`), mcplugins (`buscarPlugin`) → fachada cria `callable()` que expõe a função como namespace **e** anexa `.getLyrics`/`.apkMod`/`.buscarPlugin` como propriedade (preserva chamada direta antiga `Lyrics(q)`).
 
-## Dependências da VexAPI (a substituir nas próximas fases)
-- `dados/src/funcs/API.js` → `verificarAPI()` valida `apikey_vex`/`site_vex` em `config.json`.
-- Módulos que AINDA usam VexAPI: `utils/imagetools.js`.
-- Módulos JÁ próprios (não usam VexAPI): `downloads/{spotify,soundcloud,facebook,kwai,apkmod,mcplugins,pinterest,tiktok,igdl,lyrics,youtube,canvas}.js`, `edits/index.js` (jimp local), `logos/index.js` (jimp local + fontes bitmap próprias), `utils/search.js`.
-- Endpoints VexAPI ainda em uso: `/api/ferramentas/{removebg,upscale}`, `/api/verificarkey`.
+## Dependências da VexAPI — ELIMINADAS
+- `funcs/API.js` foi **removido** na limpeza final; `config.json` não tem mais `site_vex`/`apikey_vex`.
+- Módulos próprios: `downloads/{spotify,soundcloud,facebook,kwai,apkmod,mcplugins,pinterest,tiktok,igdl,lyrics,youtube,canvas}.js`, `edits/index.js`, `logos/index.js` (jimp + fontes bitmap), `utils/imagetools.js` (jimp local), `utils/search.js`.
 
 ## Comandos e fluxos relevantes
 - Autodownload por URL: `handleAutoDownload(nazu, from, url, info)` em `index.js` (~linha 1789) detecta domínio e chama `youtube.mp3`, `tiktok.dl`, `igdl.dl`, `kwai.dl`, `facebook.downloadHD`, `pinterest.dl`, `spotify.download`, `soundcloud.download`.
@@ -114,5 +122,6 @@
 - Teste de estrutura da API: criar `.mjs` que importa `api-downloads.js` e `getModules()` de `exports.js`, verifica namespaces/funções e a desestruturação esperada pelo `index.js`.
 - Boot real: `node dados/src/connect.js` gera QR Code do WhatsApp (não executar em teste automatizado sem necessidade).
 
-## Próxima fase sugerida
-- FASE 10: última dependência VexAPI — imagetools (`/api/ferramentas/{removebg,upscale}`). Manter `API.js`/`config.json` legados até o fim da transição. Concluídas: Pinterest (2), TikTok (3), Instagram (4), Lyrics (5), YouTube (6), Edits (7), Logos (8), Canvas (9).
+## Migração VexAPI — CONCLUÍDA (fases 2-10) + limpeza final feita ✅
+- Todas as 9 migrações feitas: Pinterest, TikTok, Instagram, Lyrics, YouTube, Edits, Logos, Canvas, ImageTools.
+- **Limpeza final executada**: removidos `funcs/API.js` (verificarAPI, órfã), chaves `site_vex`/`apikey_vex` de `config.json`, defaults+prompt em `.scripts/config.js`, `const site_vex` e o comando `!apikey`/`!setkey` em `index.js`. Zero referências funcionais restantes (só comentários de documentação). `smm setkey` (menu dono) é outro comando, inalterado. Validado: `node --check` OK, boot de módulos OK, smoke logos/imagetools OK.

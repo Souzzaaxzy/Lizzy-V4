@@ -1724,7 +1724,6 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
   const nomedono = config.nomedono;
   const nomebot = config.nomebot;
   const prefixo = config.prefixo;
-  const site_vex = config.site_vex
   const debug = config.debug;
   const lidowner = config.lidowner;
   // Sistema de degradação automática de pets
@@ -22632,28 +22631,6 @@ break;
         }
       }
         break
-      case 'apikey':
-      case 'setkey':
-        try {
-          if (!isOwner) return reply("Este comando é exclusivo para o meu dono!");
-          if (!q) {
-            return reply(`Por favor, digite a nova apikey
-Exemplo:
-${groupPrefix}${command} 1a0b5879-bc22-4f4a
-⚠️ Você pega sua api-key no site ${site_vex}
-💸 Não esqueça de contratar um plano para ela funcionar!`);
-          }
-          let config = JSON.parse(fs.readFileSync(CONFIG_FILE));
-          config.apikey_vex = q;
-          writeJsonFile(CONFIG_FILE, config);
-          await reply(`✅ Apikey alterada com sucesso para "${q}"!
-🔄 Reiniciando o bot para aplicar as alterações...`);
-          await restartBot(reply);
-        } catch (e) {
-          console.error(e);
-          await reply("🐝 Ops! Ocorreu um erro inesperado. Tente novamente em alguns instantes, por favor! 🥺");
-        }
-        break;
       // ═══════════════════════════════════════════════════════════════
       // REAÇÕES POR NOME - Reagir automaticamente quando alguém menciona um nome (POR GRUPO)
       // ═══════════════════════════════════════════════════════════════
@@ -27430,16 +27407,13 @@ case 'sfundo':
       );
     }
     const resultUrl = bgResult.download;
-    if (!resultUrl) {
+    const resultBuffer = bgResult.buffer;
+    if (!resultUrl && !resultBuffer) {
       return reply('❌ A API não retornou nenhuma imagem.');
     }
     if (command === 'sbg' || command === 'sfundo') {
-      const response = await fetch(resultUrl);
-      if (!response.ok) {
-        throw new Error('Falha ao baixar imagem processada.');
-      }
-      const buffer = Buffer.from(
-        await response.arrayBuffer()
+      const buffer = resultBuffer || Buffer.from(
+        await (await fetch(resultUrl)).arrayBuffer()
       );
       return sendSticker(
         nazu,
@@ -27458,9 +27432,7 @@ case 'sfundo':
     return nazu.sendMessage(
       from,
       {
-        image: {
-          url: resultUrl
-        }
+        image: resultBuffer || { url: resultUrl }
       },
       {
         quoted: info
@@ -27492,8 +27464,8 @@ break;
           if (!upscaleResult.ok) {
             throw new Error(upscaleResult.msg || 'Não foi possível melhorar a imagem.');
           }
-          const resultUrl = upscaleResult.result?.download;
-          return nazu.sendMessage(from, { image: { url: resultUrl } }, { quoted: info });
+          const resultUrl = upscaleResult.download || upscaleResult.result?.download;
+          return nazu.sendMessage(from, { image: upscaleResult.buffer || { url: resultUrl } }, { quoted: info });
         } catch (e) {
           console.error(e);
           return reply('❌ Ocorreu um erro interno. Tente novamente em alguns minutos.');
