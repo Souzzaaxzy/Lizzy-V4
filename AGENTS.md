@@ -45,6 +45,15 @@
 - Comando `!instagram`/`!igdl`/`!ig`/`!instavideo`/`!igstory` (`index.js` ~19852, itera `data[]` enviando `{ [item.type]: { url } }`) e `handleAutoDownload` (Instagram, `index.js` ~1806/1884, usa `data[0]` e `user?.username`) **continuam funcionando sem alteração** — validado por simulação dos dois fluxos com `nazu` fake.
 - Validado em Node: reel → 1 vídeo (`clips`), carrosseis de 13 e 7 imagens (CDN HTTP 200, video/mp4 / image/jpeg), post removido/URL inválida → `ok:false` graceful, cache hit, boot OK. Observação: sandbox datacenter sofre 429 no GraphQL anônimo do IG; em ~4min a cota volta.
 
+## FASE 5 — Lyrics migrado (sem VexAPI) ✅
+- Arquivo: `dados/src/funcs/downloads/lyrics.js` reescrito (mantém `export default getLyrics`).
+- **Removido**: `import verificarAPI`, `https`, `fs`, `CONFIG_FILE`, `apikey_vex`, `site_vex`, chamada a `/api/pesquisa/letra`. **Nenhuma** referência VexAPI resta no Lyrics (arquivo sem imports).
+- **getLyrics(topic)**: busca na API pública e gratuita do **lrclib.net** (`GET /api/search?q=...`, sem chave/login; UA identificável exigido por eles). Se a query completa não achar nada (usuário manda artista junto), corta palavras do fim até achar (máx. 4 tentativas). Enriquecimento best-effort via API pública do **iTunes** (`itunes.apple.com/search`, sem chave) para thumbnail opcional (`artworkUrl100` → 600x600) e link público (`trackViewUrl`); falhas no iTunes **não** derrubam o fluxo (só perde imagem/link).
+- Formato de retorno **preservado**: `{ text, image? }` com o mesmo template (`🎵 *título*`/`👤 Artista`/`🔗 link`/`📜 *Letra:*`). Erro: **throw** (`Erro: ...`) — o comando `!letra`/`!lyrics` (`index.js` ~19684) já faz try/catch e também trata retorno string.
+- **Sem cache** (o módulo original também não tinha). Timeout via `AbortController` (25s). Sem novas dependências.
+- Fachada e `exports.js` **não precisaram mudança**: `API.lyrics(q)`, `API.lyrics.getLyrics(q)` e `modules.Lyrics(q)` expõem a nova implementação (mesma instância ESM via `callable()`).
+- Validado: 20/20 testes (importação, letra com imagem HTTP 200, fallback de query reduzida, não-encontrada/vazia com erro controlado, branches do comando com/sem imagem, regressão Pinterest/TikTok/Instagram) + boot do bot OK.
+
 ## Formatos de exportação dos módulos (importante para a fachada)
 - Named exports (`export { ... }`): tiktok, youtube, igdl, pinterest, canvas, kwai, edits, logos → fachada usa `import * as ns` + `pickNamed()` (filtra `default`/`__esModule`).
 - Default objeto (`export default { ... }`): spotify, soundcloud, facebook, imagetools → fachada usa o default diretamente.
@@ -52,8 +61,8 @@
 
 ## Dependências da VexAPI (a substituir nas próximas fases)
 - `dados/src/funcs/API.js` → `verificarAPI()` valida `apikey_vex`/`site_vex` em `config.json`.
-- Módulos que AINDA usam VexAPI: `downloads/{youtube,lyrics,canvas}.js`, `edits/index.js`, `logos/index.js`, `utils/imagetools.js`.
-- Módulos JÁ próprios (não usam VexAPI): `downloads/{spotify,soundcloud,facebook,kwai,apkmod,mcplugins,pinterest,tiktok,igdl}.js`, `utils/search.js`.
+- Módulos que AINDA usam VexAPI: `downloads/{youtube,canvas}.js`, `edits/index.js`, `logos/index.js`, `utils/imagetools.js`.
+- Módulos JÁ próprios (não usam VexAPI): `downloads/{spotify,soundcloud,facebook,kwai,apkmod,mcplugins,pinterest,tiktok,igdl,lyrics}.js`, `utils/search.js`.
 - Endpoints VexAPI usados: `/api/pesquisa/{tiktok,youtube,pinterest,letra}`, `/api/pesquisas/pinterest` (typo), `/api/downloads/{tiktok,instagram,youtubemp3,youtubemp4}`, `/api/canvas/{brat,bratvideo,welcome2}`, `/api/edits/{type}`, `/api/logos/{type}`, `/api/ferramentas/{removebg,upscale}`, `/api/verificarkey`.
 
 ## Comandos e fluxos relevantes
@@ -68,4 +77,4 @@
 - Boot real: `node dados/src/connect.js` gera QR Code do WhatsApp (não executar em teste automatizado sem necessidade).
 
 ## Próxima fase sugerida
-- FASE 5: continuar substituindo a VexAPI módulo por módulo, dentro de `api-downloads.js`. Ordem recomendada restante: Lyrics → YouTube → Logos/Edits → Canvas → imagetools (removeBg/upscale). Manter `API.js`/`config.json` legados até o fim da transição. Concluídas: Pinterest (FASE 2), TikTok (FASE 3), Instagram (FASE 4).
+- FASE 6: continuar substituindo a VexAPI módulo por módulo, dentro de `api-downloads.js`. Ordem recomendada restante: YouTube → Logos/Edits → Canvas → imagetools (removeBg/upscale). Manter `API.js`/`config.json` legados até o fim da transição. Concluídas: Pinterest (FASE 2), TikTok (FASE 3), Instagram (FASE 4), Lyrics (FASE 5).
