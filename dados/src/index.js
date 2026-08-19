@@ -1293,7 +1293,7 @@ async function createGroupMessage(AbyssSock, groupMetadata, participants, settin
       false
     );
     if (result?.ok) {
-      message.image = { url: result.url };
+      message.image = result.buffer || { url: result.url };
       message.caption = text;
       delete message.text;
     } else {
@@ -20216,7 +20216,7 @@ Se não definir cores:
             }
           };
           await nazu.sendMessage(from, {
-            sticker: { url: datinha.url },
+            sticker: datinha.buffer || { url: datinha.url },
             mimetype: 'image/webp',
             contextInfo: newsletterContextBrat
           }, { quoted: info });
@@ -20274,7 +20274,7 @@ Se não definir cores, a API usa padrão automaticamente.`
             }
           };
           await nazu.sendMessage(from, {
-            sticker: { url: datinha.url },
+            sticker: datinha.buffer || { url: datinha.url },
             mimetype: 'image/webp',
             contextInfo: newsletterContextBratVid
           }, { quoted: info });

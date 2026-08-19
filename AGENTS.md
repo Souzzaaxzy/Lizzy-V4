@@ -81,6 +81,17 @@
 - Bloco de comandos em `index.js` ~25280 (`amongus...comics` → `logos.gerarLogo({query,type:command})`) **funciona sem alteração**. Nota: segundo bloco (`pornhub, avengers, graffiti, captainamerica, stone3d, neon2, thor, deadpool, blackpink`) usa `Logos2` de `utils/logotipos2.js` (apisnodz — fora do escopo; site fora do ar hoje, não é VexAPI).
 - Validado: 35/35 testes (import/facade, 34/34 tipos, PNG magic, query/type inválidos, cache hit, acentos/wrap, regressão de namespaces + edits real, zero refs VexAPI via grep, `node --check` OK).
 
+## FASE 9 — Canvas migrado (sem VexAPI) ✅
+- Arquivo: `dados/src/funcs/downloads/canvas.js` reescrito (mantém `export { gerarbrat, gerarbratvid, gerarwelcomecard }`, mesmas assinaturas).
+- **Removido**: `verificarAPI`, `https`, `fs`(config), `CONFIG_FILE`, `apikey_vex`, `site_vex`, chamadas `/api/canvas/{brat,bratvideo,welcome2}`. **Zero** refs VexAPI (grep limpo).
+- **Implementação 100% local**: `jimp` (dep existente) + fonte bitmap da FASE 8 (`../logos/fonts/dejavu-bold-96.fnt`) + **FFmpeg do sistema** (`process.env.FFMPEG_PATH || 'ffmpeg'`, spawn com timeout 60s SIGKILL, mesmo padrão do youtube.js) para codificar WebP.
+- **gerarbrat(query,bg,text_color,blur)**: texto colorido (nomes de cor/hex/`%23` URL-encoded) com blur opcional sobre fundo sólido 512×512 → PNG → ffmpeg `libwebp` → **Buffer webp** (antes era URL). Cache preservado (Map, TTL 30min, 1000).
+- **gerarbratvid(query,bg,text_color,bpm,blur)**: 16 frames com blur pulsando (ritmo por BPM) escritos em `mkdtemp` único → ffmpeg `libwebp_anim` 512×512 loop → **Buffer webp animado**. `tmpdir` limpo em `finally` (testado: zero lixo, sem conflito em concorrência, sem processo órfão).
+- **gerarwelcomecard(avatar,nome,texto,fundo,corMoldura,corLinhas,glow)**: card 1200×600 — fundo por URL (cover+sombra) com fallback gradiente, avatar circular 300px (mask) + moldura (disc desenhado por scan), glow opcional (blur 20), linhas decorativas (`corLinhas`), nome+subtexto com crop por bbox alfa e escala para a zona. Downloads de avatar/fundo por `fetch`+`AbortController` 25s com fallback (avatar cinza / fundo padrão). Sem cache (original também não tinha).
+- Contrato: `{ ok, criador:'Tokyo', type:'image|video', mime:'image/webp|image/png', query|nome, buffer }` — **`url` virou `buffer`** (`{ ok:false, msg }` nos erros). Consumidores ajustados com fallback: `datinha.buffer || { url: datinha.url }` (brat ~20219, bratvid ~20277) e `result.buffer || { url: result.url }` (welcome ~1296). Baileys aceita Buffer direto em `sticker`/`image`.
+- Comandos cobertos: `!brat` (~20176), `!bratvid`/`!bratvideo` (~20228), welcome card automático do evento de grupo (`createGroupMessage`, `settings.photoType === 'api'`, ~1286). Nota: `'brat'` aparece também como `case 'brat'` no índice; aliases de bratvid preservados.
+- Validado: 35/35 (facade, RIFF/WEBP magic, chunk `ANIM`, PNG magic, acentos/emoji/hex, cache hit, concorrência, tmpdir limpo, fallbacks de avatar/fundo, regressão de namespaces + edits/logos, `ps` sem ffmpeg órfão, `node --check` OK). Bugs corrigidos durante teste: rgba negativo em `(hex<<8)|0xff` (cores ≥0x800000) e `%23` prefix.
+
 ## Formatos de exportação dos módulos (importante para a fachada)
 - Named exports (`export { ... }`): tiktok, youtube, igdl, pinterest, canvas, kwai, edits, logos → fachada usa `import * as ns` + `pickNamed()` (filtra `default`/`__esModule`).
 - Default objeto (`export default { ... }`): spotify, soundcloud, facebook, imagetools → fachada usa o default diretamente.
@@ -88,9 +99,9 @@
 
 ## Dependências da VexAPI (a substituir nas próximas fases)
 - `dados/src/funcs/API.js` → `verificarAPI()` valida `apikey_vex`/`site_vex` em `config.json`.
-- Módulos que AINDA usam VexAPI: `downloads/canvas.js`, `utils/imagetools.js`.
-- Módulos JÁ próprios (não usam VexAPI): `downloads/{spotify,soundcloud,facebook,kwai,apkmod,mcplugins,pinterest,tiktok,igdl,lyrics,youtube}.js`, `edits/index.js` (jimp local), `logos/index.js` (jimp local + fontes bitmap próprias), `utils/search.js`.
-- Endpoints VexAPI ainda em uso: `/api/canvas/{brat,bratvideo,welcome2}`, `/api/ferramentas/{removebg,upscale}`, `/api/verificarkey`.
+- Módulos que AINDA usam VexAPI: `utils/imagetools.js`.
+- Módulos JÁ próprios (não usam VexAPI): `downloads/{spotify,soundcloud,facebook,kwai,apkmod,mcplugins,pinterest,tiktok,igdl,lyrics,youtube,canvas}.js`, `edits/index.js` (jimp local), `logos/index.js` (jimp local + fontes bitmap próprias), `utils/search.js`.
+- Endpoints VexAPI ainda em uso: `/api/ferramentas/{removebg,upscale}`, `/api/verificarkey`.
 
 ## Comandos e fluxos relevantes
 - Autodownload por URL: `handleAutoDownload(nazu, from, url, info)` em `index.js` (~linha 1789) detecta domínio e chama `youtube.mp3`, `tiktok.dl`, `igdl.dl`, `kwai.dl`, `facebook.downloadHD`, `pinterest.dl`, `spotify.download`, `soundcloud.download`.
@@ -104,4 +115,4 @@
 - Boot real: `node dados/src/connect.js` gera QR Code do WhatsApp (não executar em teste automatizado sem necessidade).
 
 ## Próxima fase sugerida
-- FASE 9+: continuar com a VexAPI: Canvas (`/api/canvas/{brat,bratvideo,welcome2}`) → imagetools (`/api/ferramentas/{removebg,upscale}`). Manter `API.js`/`config.json` legados até o fim da transição. Concluídas: Pinterest (2), TikTok (3), Instagram (4), Lyrics (5), YouTube (6), Edits (7), Logos (8).
+- FASE 10: última dependência VexAPI — imagetools (`/api/ferramentas/{removebg,upscale}`). Manter `API.js`/`config.json` legados até o fim da transição. Concluídas: Pinterest (2), TikTok (3), Instagram (4), Lyrics (5), YouTube (6), Edits (7), Logos (8), Canvas (9).
