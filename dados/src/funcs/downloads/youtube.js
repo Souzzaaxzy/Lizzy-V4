@@ -8,10 +8,12 @@
  *
  * - mp3(url, bitrate=128) / mp4(url, quality=360): consulta o endpoint
  *   youtubei/v1/player com a chave Innertube pública que o próprio YouTube
- *   expõe nas suas páginas, usando o client ANDROID — o YouTube devolve URLs
- *   de stream diretas (sem cifra "n"). Se o YouTube responder LOGIN_REQUIRED
- *   (anti-bot do IP) ou UNPLAYABLE, retorna erro controlado (não faz login,
- *   não contorna proteção).
+ *   expõe nas suas páginas, com fallback entre vários clients (ANDROID, IOS,
+ *   ANDROID_VR — ver PLAYER_CLIENTS) porque o YouTube trata cada client de
+ *   forma diferente e intermitente. Esses clients devolvem URLs de stream
+ *   diretas (sem cifra "n"). Se todos responderem LOGIN_REQUIRED (anti-bot
+ *   do IP) ou UNPLAYABLE, retorna erro controlado (não faz login, não
+ *   contorna proteção).
  *
  * - MP4: prefere formato muxado (áudio+vídeo) com altura <= qualidade pedida;
  *   se não houver muxado, funde melhor vídeo + melhor áudio com FFmpeg
@@ -66,41 +68,129 @@ function extractVideoId(url) {
   return null;
 }
 
-// ---------- player response (Innertube público, client ANDROID) ----------
+// ---------- player response (Innertube público, fallback de clients) ----------
+//
+// O YouTube trata cada client de forma diferente (e de forma intermitente):
+// o mesmo vídeo pode dar OK num client e LOGIN_REQUIRED/UNPLAYABLE em outro.
+// Por isso o getPlayer tenta os clients em ordem até obter playabilityStatus
+// OK com formatos utilizáveis. Versões ANDROID < 20.x são rejeitadas (HTTP 400).
+// Versões testadas e funcionando em ago/2026: as listadas abaixo.
 
-async function getPlayer(videoId) {
+const PLAYER_CLIENTS = [
+  {
+    id: 'ANDROID@20.10.38',
+    ua: 'com.google.android.youtube/20.10.38 (Linux; U; Android 14) gzip',
+    client: { clientName: 'ANDROID', clientVersion: '20.10.38', androidSdkVersion: 35 }
+  },
+  {
+    id: 'ANDROID@20.19.35',
+    ua: 'com.google.android.youtube/20.19.35 (Linux; U; Android 14) gzip',
+    client: { clientName: 'ANDROID', clientVersion: '20.19.35', androidSdkVersion: 35 }
+  },
+  {
+    id: 'IOS@20.10.4',
+    ua: 'com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X)',
+    client: {
+      clientName: 'IOS',
+      clientVersion: '20.10.4',
+      deviceMake: 'Apple',
+      deviceModel: 'iPhone16,2'
+    }
+  },
+  {
+    id: 'ANDROID_VR@1.61.48',
+    ua: 'com.google.android.apps.youtube.vr.oculus/1.61.48 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip',
+    client: {
+      clientName: 'ANDROID_VR',
+      clientVersion: '1.61.48',
+      androidSdkVersion: 32,
+      osName: 'Android',
+      osVersion: '12L'
+    }
+  }
+];
+
+async function requestPlayer(videoId, def) {
   const res = await fetchWithTimeout(
     `https://www.youtube.com/youtubei/v1/player?key=${INNERTUBE_KEY}&prettyPrint=false`,
     {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'User-Agent': UA,
+        'User-Agent': def.ua,
         Origin: 'https://www.youtube.com'
       },
       body: JSON.stringify({
         videoId,
         context: {
-          client: {
-            clientName: 'ANDROID',
-            clientVersion: '20.19.35',
-            androidSdkVersion: 35,
-            hl: 'pt-BR',
-            gl: 'BR'
-          }
+          client: { ...def.client, hl: 'pt-BR', gl: 'BR' }
         },
         contentCheckOk: true,
         racyCheckOk: true
       })
     }
   );
-  let data;
   try {
-    data = await res.json();
+    return await res.json();
   } catch {
     throw new Error('Resposta inválida do YouTube');
   }
-  return data;
+}
+
+function hasUsableFormats(data) {
+  const streaming = data?.streamingData || {};
+  return [...(streaming.formats || []), ...(streaming.adaptiveFormats || [])].some(
+    f => f.url
+  );
+}
+
+// Tenta os clients em ordem; retorna o primeiro player OK com formatos.
+// Nunca retorna player UNPLAYABLE/LOGIN_REQUIRED/ERROR.
+async function getPlayer(videoId) {
+  let okWithoutFormats = null;
+  let sawLoginRequired = false;
+  let lastReason = '';
+  const diagnostics = [];
+
+  for (const def of PLAYER_CLIENTS) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      let data;
+      try {
+        data = await requestPlayer(videoId, def);
+      } catch (err) {
+        diagnostics.push(`${def.id}: ${err.message}`);
+        break; // falha de rede/JSON: retry no mesmo client não ajuda
+      }
+      const status = data?.playabilityStatus || {};
+      if (status.status === 'OK') {
+        if (hasUsableFormats(data)) return data;
+        okWithoutFormats ||= data;
+        break; // OK sem formatos: guarda como última opção, tenta outros clients
+      }
+      diagnostics.push(
+        `${def.id}: ${status.status || 'sem status'}${status.reason ? ` (${status.reason})` : ''}`
+      );
+      if (status.status === 'LOGIN_REQUIRED') {
+        sawLoginRequired = true;
+        continue; // anti-bot é intermitente: uma segunda tentativa neste client
+      }
+      lastReason = status.reason || lastReason;
+      break; // UNPLAYABLE/ERROR não muda com retry no mesmo client
+    }
+  }
+
+  if (okWithoutFormats) return okWithoutFormats;
+
+  // diagnóstico interno (log do bot), sem stack trace para o usuário
+  console.warn(`[youtube] getPlayer falhou (${videoId}): ${diagnostics.join(' | ')}`);
+  if (sawLoginRequired) {
+    throw new Error(
+      'YouTube exigiu verificação anti-bot para este IP. Tente novamente mais tarde.'
+    );
+  }
+  throw new Error(
+    lastReason || 'Não foi possível obter os dados de reprodução do YouTube.'
+  );
 }
 
 // Extrai metadados + status útil para erro controlado.
