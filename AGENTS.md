@@ -54,6 +54,18 @@
 - Fachada e `exports.js` **não precisaram mudança**: `API.lyrics(q)`, `API.lyrics.getLyrics(q)` e `modules.Lyrics(q)` expõem a nova implementação (mesma instância ESM via `callable()`).
 - Validado: 20/20 testes (importação, letra com imagem HTTP 200, fallback de query reduzida, não-encontrada/vazia com erro controlado, branches do comando com/sem imagem, regressão Pinterest/TikTok/Instagram) + boot do bot OK.
 
+## FASE 6 — YouTube migrado (sem VexAPI) ✅
+- Arquivo: `dados/src/funcs/downloads/youtube.js` reescrito (mantém `export { search, mp3, mp4 }` + aliases `ytmp3`/`ytmp4`). **Zero dependências novas.**
+- **Removido**: `import verificarAPI`, `https`, `fs` (config), `CONFIG_FILE`, chamadas a `/api/pesquisa/youtube`, `/api/downloads/youtubemp3`, `/api/downloads/youtubemp4`. **Nenhuma** referência VexAPI resta no YouTube.
+- **search(query)**: usa **`yt-search` (dependência já existente)** — scraping da página pública de resultados. Retorno preservado: `{ ok, data: { videoId, url, title, description, thumbnail, seconds, timestamp, views, ago, author } }` | `{ ok:false, msg }`.
+- **Stream URLs (mp3/mp4)**: POST público em `youtubei/v1/player` (chave Innertube que o próprio YouTube expõe nas suas páginas) com client **ANDROID** → o YouTube devolve URLs diretas **sem cifra "n"** (não quebra anti-bot). `playabilityStatus`: LOGIN_REQUIRED/UNPLAYABLE/erros → `{ ok:false, msg }` controlado (não faz login, não contorna proteção).
+- **mp4(url, quality=360)**: prefere **muxado** (áudio+vídeo) `<= qualidade` (maior altura dentro do teto), senão menor muxado; sem muxado → funde melhor vídeo `<= qualidade` + melhor áudio com **FFmpeg do sistema** (`-c copy`) — FFmpeg é requisito instalado sempre pelo bot (`config.js`). Aceito 144–2160 (fallback 360).
+- **mp3(url, bitrate=128)**: melhor stream de áudio (prefere audio/mp4) → transcode com **FFmpeg do sistema** para MP3 no bitrate (32–320, fallback 128). Temps em `os.tmpdir()` com `mkdtemp`, apagados sempre (testado: zero lixo).
+- **Buffer preservado**: URL → download (stream, teto 256MB, timeout 180s) → Buffer → WhatsApp. Contrato idêntico: `{ ok, buffer, title, thumbnail, filename:'<título>.mp3|.mp4' }`.
+- Timeout: `AbortController` 25s por chunk leitura/ocio + deadline total 180s; FFmpeg com timeout; erros controlados. Parâmetros de bitrate/qualidade sanitizados.
+- Comandos `!play`, `!playvid`/`!ytmp4` (`index.js` ~19091/19598), autodownload (`index.js` ~1796/1841) validados por simulação (áudio `{audio:buffer,audio/mpeg}`, vídeo `{video:buffer,video/mp4}`, fallback documento).
+- Validado no sandbox (ffmpeg estático só para testes): search ok (241s/16 anos/vistas/autor), mp3 3.41MB com header ID3, mp4 360p 11.8MB container `ftyp`, LOGIN_REQUIRED → erro controlado, 38/38, boot OK. **IP de datacenter do sandbox é fortemente flag (`LOGIN_REQUIRED` em alguns vídeos) — em VPS/residencial funciona; falha degradada com msg clara.**
+
 ## Formatos de exportação dos módulos (importante para a fachada)
 - Named exports (`export { ... }`): tiktok, youtube, igdl, pinterest, canvas, kwai, edits, logos → fachada usa `import * as ns` + `pickNamed()` (filtra `default`/`__esModule`).
 - Default objeto (`export default { ... }`): spotify, soundcloud, facebook, imagetools → fachada usa o default diretamente.
@@ -61,8 +73,8 @@
 
 ## Dependências da VexAPI (a substituir nas próximas fases)
 - `dados/src/funcs/API.js` → `verificarAPI()` valida `apikey_vex`/`site_vex` em `config.json`.
-- Módulos que AINDA usam VexAPI: `downloads/{youtube,canvas}.js`, `edits/index.js`, `logos/index.js`, `utils/imagetools.js`.
-- Módulos JÁ próprios (não usam VexAPI): `downloads/{spotify,soundcloud,facebook,kwai,apkmod,mcplugins,pinterest,tiktok,igdl,lyrics}.js`, `utils/search.js`.
+- Módulos que AINDA usam VexAPI: `downloads/canvas.js`, `edits/index.js`, `logos/index.js`, `utils/imagetools.js`.
+- Módulos JÁ próprios (não usam VexAPI): `downloads/{spotify,soundcloud,facebook,kwai,apkmod,mcplugins,pinterest,tiktok,igdl,lyrics,youtube}.js`, `utils/search.js`.
 - Endpoints VexAPI usados: `/api/pesquisa/{tiktok,youtube,pinterest,letra}`, `/api/pesquisas/pinterest` (typo), `/api/downloads/{tiktok,instagram,youtubemp3,youtubemp4}`, `/api/canvas/{brat,bratvideo,welcome2}`, `/api/edits/{type}`, `/api/logos/{type}`, `/api/ferramentas/{removebg,upscale}`, `/api/verificarkey`.
 
 ## Comandos e fluxos relevantes
@@ -77,4 +89,4 @@
 - Boot real: `node dados/src/connect.js` gera QR Code do WhatsApp (não executar em teste automatizado sem necessidade).
 
 ## Próxima fase sugerida
-- FASE 6: continuar substituindo a VexAPI módulo por módulo, dentro de `api-downloads.js`. Ordem recomendada restante: YouTube → Logos/Edits → Canvas → imagetools (removeBg/upscale). Manter `API.js`/`config.json` legados até o fim da transição. Concluídas: Pinterest (FASE 2), TikTok (FASE 3), Instagram (FASE 4), Lyrics (FASE 5).
+- FASE 7+: continuar substituindo a VexAPI módulo por módulo, dentro de `api-downloads.js`. Ordem recomendada restante: Logos/Edits → Canvas → imagetools (removeBg/upscale). Manter `API.js`/`config.json` legados até o fim da transição. Concluídas: Pinterest (FASE 2), TikTok (FASE 3), Instagram (FASE 4), Lyrics (FASE 5), YouTube (FASE 6).
