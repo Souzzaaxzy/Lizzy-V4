@@ -66,6 +66,11 @@
 - Comandos `!play`, `!playvid`/`!ytmp4` (`index.js` ~19091/19598), autodownload (`index.js` ~1796/1841) validados por simulação (áudio `{audio:buffer,audio/mpeg}`, vídeo `{video:buffer,video/mp4}`, fallback documento).
 - Validado no sandbox (ffmpeg estático só para testes): search ok (241s/16 anos/vistas/autor), mp3 3.41MB com header ID3, mp4 360p 11.8MB container `ftyp`, LOGIN_REQUIRED → erro controlado, 38/38, boot OK. **IP de datacenter do sandbox é fortemente flag (`LOGIN_REQUIRED` em alguns vídeos) — em VPS/residencial funciona; falha degradada com msg clara.**
 
+## FASE 7 — Edits migrado (sem VexAPI) ✅ / Logos: bloqueado por design (rule 19) ⚠️
+- Arquivo: `dados/src/funcs/edits/index.js` reescrito (mantém `export { geraredit }`).
+- **Edits**: filtros de imagem **locais com `jimp` (dep existente)**: `blackwhite` greyscale, `desfoque` blur adaptativo, `jornal` greyscale+contraste+posterize, `cinema` letterbox. `wojakreaction` retorna **erro controlado** (exige arte/template que não existe no repo — honesto, não inventado). Cache/timeout/contrato `{ok, buffer}` preservados.
+- **Logos**: 21 geradores de texto-estilizado exigem fontes/texturas/templates (VexAPI usava serviços tipo ephoto/textpro, que têm CAPTCHA/Cloudflare — entra no "anti-bot", proibido). Sem assets/licença explícita não há implementação limpa → **não migrado por decisão honesta** (rule 19). `logos/index.js` continua na VexAPI até o usuário decidir (fornecer assets/templates/fontes/licença, remover os comandos do menu, ou produto pago). Comandos `!wojakreaction`/`!blackwhite`/`!jornal`/`!cinema`/`!desfoque` (index.js ~25347) validados com simulação (28/28 testes).
+
 ## Formatos de exportação dos módulos (importante para a fachada)
 - Named exports (`export { ... }`): tiktok, youtube, igdl, pinterest, canvas, kwai, edits, logos → fachada usa `import * as ns` + `pickNamed()` (filtra `default`/`__esModule`).
 - Default objeto (`export default { ... }`): spotify, soundcloud, facebook, imagetools → fachada usa o default diretamente.
@@ -73,8 +78,8 @@
 
 ## Dependências da VexAPI (a substituir nas próximas fases)
 - `dados/src/funcs/API.js` → `verificarAPI()` valida `apikey_vex`/`site_vex` em `config.json`.
-- Módulos que AINDA usam VexAPI: `downloads/canvas.js`, `edits/index.js`, `logos/index.js`, `utils/imagetools.js`.
-- Módulos JÁ próprios (não usam VexAPI): `downloads/{spotify,soundcloud,facebook,kwai,apkmod,mcplugins,pinterest,tiktok,igdl,lyrics,youtube}.js`, `utils/search.js`.
+- Módulos que AINDA usam VexAPI: `downloads/canvas.js`, `logos/index.js`, `utils/imagetools.js`.
+- Módulos JÁ próprios (não usam VexAPI): `downloads/{spotify,soundcloud,facebook,kwai,apkmod,mcplugins,pinterest,tiktok,igdl,lyrics,youtube}.js`, `edits/index.js` (jimp local), `utils/search.js`.
 - Endpoints VexAPI usados: `/api/pesquisa/{tiktok,youtube,pinterest,letra}`, `/api/pesquisas/pinterest` (typo), `/api/downloads/{tiktok,instagram,youtubemp3,youtubemp4}`, `/api/canvas/{brat,bratvideo,welcome2}`, `/api/edits/{type}`, `/api/logos/{type}`, `/api/ferramentas/{removebg,upscale}`, `/api/verificarkey`.
 
 ## Comandos e fluxos relevantes
@@ -89,4 +94,4 @@
 - Boot real: `node dados/src/connect.js` gera QR Code do WhatsApp (não executar em teste automatizado sem necessidade).
 
 ## Próxima fase sugerida
-- FASE 7+: continuar substituindo a VexAPI módulo por módulo, dentro de `api-downloads.js`. Ordem recomendada restante: Logos/Edits → Canvas → imagetools (removeBg/upscale). Manter `API.js`/`config.json` legados até o fim da transição. Concluídas: Pinterest (FASE 2), TikTok (FASE 3), Instagram (FASE 4), Lyrics (FASE 5), YouTube (FASE 6).
+- FASE 8+: continuar com a VexAPI: Canvas (`/api/canvas/{brat,bratvideo,welcome2}`) → imagetools (`/api/ferramentas/{removebg,upscale}`) → Logos depende de decisão do usuário (assets/licença). Manter `API.js`/`config.json` legados até o fim da transição. Concluídas: Pinterest (2), TikTok (3), Instagram (4), Lyrics (5), YouTube (6), Edits (7). Logos: aberto (rule 19).
