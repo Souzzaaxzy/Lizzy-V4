@@ -238,7 +238,7 @@ export default async function menuRpg(prefix, botName = "MeuBot", userName = "Us
 │ 💥 ${prefix}rpgresetglobal confirmar
 │ 👶 ${prefix}resetadot @user
 │ 📊 ${prefix}rpgstats
-╰──────────────`;
+╰──────────────
 
 ╭─────────────────╮
 ╰─────────────────╯`;

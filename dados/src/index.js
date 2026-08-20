@@ -857,7 +857,7 @@ import {
 } from './utils/paths.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = pathz.dirname(__filename);
-const OWNER_ONLY_MESSAGE = '[ANTI-ROUBO] Este comando é apenas para o dono do bot!';
+const OWNER_ONLY_MESSAGE = 'Este comando é apenas para o dono do bot!';
 const ADMIN_ERROR_MESSAGE_DEFAULT = '💔 Você precisa ser admin do grupo para usar este comando!';
 // Mensagem customizada de erro admin (pode ser configurada pelo dono via !configerroradm)
 let ADMIN_ERROR_MESSAGE = ADMIN_ERROR_MESSAGE_DEFAULT;
@@ -2704,16 +2704,16 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
         return;
       };
       if (antipvData.mode === 'antipv2' && isCmd && !isOwner && !isPremium && !isTm2Command) {
-        await reply(antipvData.message || '[ANTI-ROUBO] ◈ Este comando só funciona em grupos!');
+        await reply(antipvData.message || '◈ Este comando só funciona em grupos!');
         return;
       };
       if (antipvData.mode === 'antipv3' && isCmd && !isOwner && !isPremium && !isTm2Command) {
         await nazu.updateBlockStatus(sender, 'block');
-        await reply('[ANTI-ROUBO] Você foi bloqueado por usar comandos no privado!');
+        await reply('Você foi bloqueado por usar comandos no privado!');
         return;
       };
       if (antipvData.mode === 'antipv4' && !isOwner && !isPremium && !isTm2Command) {
-        await reply(antipvData.message || '[ANTI-ROUBO] ◈ Este comando só funciona em grupos!');
+        await reply(antipvData.message || '◈ Este comando só funciona em grupos!');
         return;
       };
     };
@@ -2881,7 +2881,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
             if (isBotAdmin) {
               const senderJidMinMsg = sender;
               await nazu.groupParticipantsUpdate(from, [senderJidMinMsg], 'remove').catch(e => console.error('Erro ao remover (minMessage):', e));
-              await reply(`[ANTI-ROUBO] Usuário removido por enviar mídia sem legenda suficiente (mínimo: ${groupData.minMessage.minDigits} caracteres).`);
+              await reply(`Usuário removido por enviar mídia sem legenda suficiente (mínimo: ${groupData.minMessage.minDigits} caracteres).`);
             } else {
               await reply(`⚠️ Mídia sem legenda suficiente detectada, mas não sou admin para remover o usuário.`);
             }
@@ -3014,7 +3014,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
             await nazu.sendMessage(from, { text: '\n'.repeat(300) + '▫️ 𝙰𝙽𝚃𝙸-𝙵𝙻𝙾𝙾𝙳 𝙰𝚃𝙸𝚅𝙰𝙳𝙾 ▫️' }).catch(() => {});
           }
           await nazu.sendMessage(from, {
-            text: `[ANTI-ROUBO]❌ @${sender.split('@')[0]} ❌[ANTI-ROUBO]\n\n⚠️ *${isPaymentCase ? 'Mensagem de pagamento' : 'Visualização única'} não é permitida aqui!* ⚠️\n\nVocê foi removido do grupo.`,
+            text: `❌ @${sender.split('@')[0]} ❌\n\n⚠️ *${isPaymentCase ? 'Mensagem de pagamento' : 'Visualização única'} não é permitida aqui!* ⚠️\n\nVocê foi removido do grupo.`,
             mentions: [sender]
           , contextInfo: newsletterCtxPayment, quoted: info });
           if (groupData.legenda_documento && groupData.legenda_documento !== "0") {
@@ -3105,7 +3105,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
           
           // Enviar aviso
           await nazu.sendMessage(from, {
-            text: `[ANTI-ROUBO]❌ @${sender.split('@')[0]} ❌[ANTI-ROUBO]
+            text: `❌ @${sender.split('@')[0]} ❌
 
 ⚠️ *Mensagem invisível (rajada) não é permitida aqui!* ⚠️
 
@@ -3268,7 +3268,7 @@ Você foi removido do grupo.`,
           const msLeft = blockInfo.until - now;
           const secs = Math.ceil(msLeft / 1000);
           const m = Math.floor(secs / 60), s = secs % 60;
-          return reply(`[ANTI-ROUBO] Você está temporariamente bloqueado de usar comandos por anti-spam.
+          return reply(`Você está temporariamente bloqueado de usar comandos por anti-spam.
 ⏳ Aguarde ${m > 0 ? `${m}m ${s}s` : `${secs}s`}.`);
         } else if (blockInfo && blockInfo.until && now >= blockInfo.until) {
           delete cfg.blocks[sender];
@@ -3282,7 +3282,7 @@ Você foi removido do grupo.`,
           const blockMs = Math.max(1, parseInt(cfg.blockTime || 600)) * 1000;
           cfg.blocks[sender] = { until: now + blockMs, at: new Date().toISOString(), count: arr.length };
           writeJsonFile(DATABASE_DIR + '/antispam.json', cfg);
-          return reply(`[ANTI-ROUBO] Anti-spam: você excedeu o limite de ${limit} comandos em ${cfg.interval}s.
+          return reply(`Anti-spam: você excedeu o limite de ${limit} comandos em ${cfg.interval}s.
 ⚙️ Bloqueado por ${Math.floor(blockMs / 60000)} min.`);
         }
         writeJsonFile(DATABASE_DIR + '/antispam.json', cfg);
@@ -4923,7 +4923,7 @@ packname: `${nomebot}`,            type: isVideo ? 'video' : 'image',
             await nazu.groupParticipantsUpdate(from, [sender], 'remove').catch(e => 
               console.error('Erro ao remover (antisocial):', e)
             );
-            await reply(`[ANTI-ROUBO] @${getUserName(sender)}, links de ${socialLink.name} não são permitidos! Você foi removido.`, {
+            await reply(`@${getUserName(sender)}, links de ${socialLink.name} não são permitidos! Você foi removido.`, {
               mentions: [sender]
             });
           } else {
@@ -4968,7 +4968,7 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
             newsletterName: "Lizzy"
           }
         };
-        await nazu.sendMessage(from, { text: `[ANTI-ROUBO] @${getUserName(sender)}, este grupo não permite esse tipo de figurinha do whatsapp plus.`, mentions: [sender] , contextInfo: newsletterCtxSticker });
+        await nazu.sendMessage(from, { text: `@${getUserName(sender)}, este grupo não permite esse tipo de figurinha do whatsapp plus.`, mentions: [sender] , contextInfo: newsletterCtxSticker });
       }
       if (groupData.antistickerplus_remover && isBotAdmin) {
         const senderJidAntiSticker = sender;
@@ -5246,7 +5246,7 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
                   );
                   antipalavra.registerBan(from, sender, detectionResult.palavra);
                   await nazu.sendMessage(from, {
-                    text: `[ANTI-ROUBO] *ANTIPALAVRA - BANIMENTO*\n\n` +
+                    text: `🚫 *ANTIPALAVRA - BANIMENTO*\n\n` +
                       `👤 @${sender.split('@')[0]}\n` +
                       `⚠️ Palavra: "${detectionResult.palavra}"\n` +
                       `🔨 Ação: Banimento imediato\n\n` +
@@ -5278,7 +5278,7 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
                     );
                     antipalavra.registerBan(from, sender, detectionResult.palavra);
                     await nazu.sendMessage(from, {
-                      text: `[ANTI-ROUBO] *ANTIPALAVRA - 3 ADVERTÊNCIAS*\n\n` +
+                      text: `⚠️ *ANTIPALAVRA - 3 ADVERTÊNCIAS*\n\n` +
                         `👤 @${sender.split('@')[0]}\n` +
                         `⚠️ Atingiu o limite de advertências!\n` +
                         `🔨 Ação: Banimento\n\n` +
@@ -5307,7 +5307,7 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
       }
     }
     if (isGroup && groupData.blockedUsers && (groupData.blockedUsers[sender] || groupData.blockedUsers[getUserName(sender)]) && isCmd) {
-      return reply(`[ANTI-ROUBO] Você não tem permissão para usar comandos neste grupo.\nMotivo: ${groupData.blockedUsers[sender] ? groupData.blockedUsers[sender].reason : groupData.blockedUsers[getUserName(sender)].reason}`);
+      return reply(`Você não tem permissão para usar comandos neste grupo.\nMotivo: ${groupData.blockedUsers[sender] ? groupData.blockedUsers[sender].reason : groupData.blockedUsers[getUserName(sender)].reason}`);
     };
     const globalBlacklist = loadGlobalBlacklist();
     // Verificação melhorada usando idsMatch para comparar IDs corretamente
@@ -5315,7 +5315,7 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
       const foundKey = Object.keys(globalBlacklist.users).find(k => idsMatch(k, sender) || idsMatch(k, getUserName(sender)));
       if (foundKey) {
         const blacklistEntry = globalBlacklist.users[foundKey];
-        return reply(`[ANTI-ROUBO] Você está na blacklist global e não pode usar comandos.\nMotivo: ${blacklistEntry.reason}\nAdicionado por: ${blacklistEntry.addedBy}\nData: ${new Date(blacklistEntry.addedAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`);
+        return reply(`Você está na blacklist global e não pode usar comandos.\nMotivo: ${blacklistEntry.reason}\nAdicionado por: ${blacklistEntry.addedBy}\nData: ${new Date(blacklistEntry.addedAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`);
       }
     };
     // Verificação melhorada da blacklist local usando idsMatch
@@ -5323,11 +5323,11 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
       const foundKey = Object.keys(groupData.blacklist).find(k => idsMatch(k, sender) || idsMatch(k, getUserName(sender)));
       if (foundKey) {
         const blacklistEntry = groupData.blacklist[foundKey];
-        return reply(`[ANTI-ROUBO] Você está na blacklist deste grupo e não pode usar comandos.\nMotivo: ${blacklistEntry.reason}\nData: ${new Date(blacklistEntry.timestamp).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`);
+        return reply(`Você está na blacklist deste grupo e não pode usar comandos.\nMotivo: ${blacklistEntry.reason}\nData: ${new Date(blacklistEntry.timestamp).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`);
       }
     }
     if (sender && sender.includes('@') && globalBlocks.users && (globalBlocks.users[sender] || globalBlocks.users[getUserName(sender)]) && isCmd) {
-      return reply(`[ANTI-ROUBO] Parece que você está bloqueado de usar meus comandos globalmente.\nMotivo: ${globalBlocks.users[sender] ? globalBlocks.users[sender].reason : globalBlocks.users[getUserName(sender)].reason}`);
+      return reply(`Parece que você está bloqueado de usar meus comandos globalmente.\nMotivo: ${globalBlocks.users[sender] ? globalBlocks.users[sender].reason : globalBlocks.users[getUserName(sender)].reason}`);
     }
     if (isCmd && globalBlocks.commands && globalBlocks.commands[command]) {
       return reply(`O comando *${command}* está temporariamente desativado globalmente.\nMotivo: ${globalBlocks.commands[command].reason}`);
@@ -5840,7 +5840,7 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
           groupData.warnings[sender].lastWarned = new Date().toISOString();
           const warnCount = groupData.warnings[sender].count;
           const warnLimit = groupData.antifig.warnLimit || 3;
-          let warnMessage = `[ANTI-ROUBO] @${getUserName(sender)}, figurinhas não são permitidas neste grupo! Advertência ${warnCount}/${warnLimit}.`;
+          let warnMessage = `🚫 @${getUserName(sender)}, figurinhas não são permitidas neste grupo! Advertência ${warnCount}/${warnLimit}.`;
           if (warnCount >= warnLimit && isBotAdmin) {
             warnMessage += `\n⚠️ Você atingiu o limite de advertências e será removido.`;
             const senderJidAntiFig = sender;
@@ -6064,13 +6064,13 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
           const settings = customCmd.settings || {};
           // Verificações de permissão/contexto
           if (settings.ownerOnly && !isOwner) {
-            return reply('[ANTI-ROUBO] ◈ Este comando é só para o dono do bot.');
+            return reply('◈ Este comando é só para o dono do bot.');
           }
           if (settings.adminOnly && !isGroup) {
-            return reply('[ANTI-ROUBO] ◈ Este comando é só para admins do grupo (em grupos apenas).');
+            return reply('◈ Este comando é só para admins do grupo (em grupos apenas).');
           }
           if (settings.adminOnly && isGroup && !isGroupAdmin) {
-            return reply('[ANTI-ROUBO] ◈ Este comando é só para admins do grupo.');
+            return reply('◈ Este comando é só para admins do grupo.');
           }
           if (settings.context === 'group' && !isGroup) {
             return reply('⚠️ ◈ Este comando é só para grupos.');
@@ -6409,12 +6409,12 @@ if (isCmd && command && !isOwner) {
     // Se comando está na lista base, subdono pode usar
     if (baseSubOwnerCommands.includes(command)) {
       if (!isSubOwner) {
-        return reply('[ANTI-ROUBO] Apenas o Dono pode usar este comando!');
+        return reply('Apenas o Dono pode usar este comando!');
       }
     }
     // Se NÃO está na lista base e é subdono, bloquear
     else if (isSubOwner) {
-      return reply(`[ANTI-ROUBO] Este comando não está disponível para subdonos: ${prefix}${command}`);
+      return reply(`Este comando não está disponível para subdonos: ${prefix}${command}`);
     }
   } catch (e) {
     console.error('Erro ao verificar lista de comandos de subdonos:', e);
@@ -6641,7 +6641,7 @@ switch (command) {
             break;
           }
           if (!isGroupAdmin) {
-            await reply('[ANTI-ROUBO] Apenas administradores podem criar rolês.');
+            await reply('Apenas administradores podem criar rolês.');
             break;
           }
           const parts = parsePipeArgs(q);
@@ -6751,7 +6751,7 @@ switch (command) {
             break;
           }
           if (!isGroupAdmin) {
-            await reply('[ANTI-ROUBO] Apenas administradores podem alterar rolês.');
+            await reply('Apenas administradores podem alterar rolês.');
             break;
           }
           const parts = parsePipeArgs(q);
@@ -6860,7 +6860,7 @@ switch (command) {
             break;
           }
           if (!isGroupAdmin) {
-            await reply('[ANTI-ROUBO] Apenas administradores podem excluir rolês.');
+            await reply('Apenas administradores podem excluir rolês.');
             break;
           }
           const code = sanitizeRoleCode(q || args[0] || '');
@@ -7406,7 +7406,7 @@ switch (command) {
           }
           const mentioned = (menc_jid2 && menc_jid2[0]) || (q.includes('@') ? q.split(' ')[0].replace('@', '') : null);
           if (sub === 'resetrpg') {
-            if (!canUseOwnerCmd('resetrpg')) return reply('[ANTI-ROUBO] Você não tem permissão para usar este comando.');
+            if (!canUseOwnerCmd('resetrpg')) return reply('Você não tem permissão para usar este comando.');
             const target = (menc_jid2 && menc_jid2[0]) || null;
             const scope = (q || '').toLowerCase();
             if (scope.includes('all') || scope.includes('todos')) {
@@ -11774,7 +11774,7 @@ switch (command) {
         text += `╰━━━━━━━━━━━━━━━━━━━━╯\n\n`;
         text += `${pushname} está protegendo @${target.split('@')[0]}!\n\n`;
         text += `⏰ Duração: 1 hora\n`;
-        text += `[ANTI-ROUBO] Ataques e roubos bloqueados!\n`;
+        text += `🛡️ Ataques e roubos bloqueados!\n`;
         text += `💰 Custo: ${protectCost.toLocaleString()}`;
         return reply(text, { mentions: [target] });
         break;
@@ -11992,7 +11992,7 @@ switch (command) {
       // Reset global de todo o RPG
       case 'rpgresetglobal':
       case 'resetrpgglobal': {
-        if (!canUseOwnerCmd(command)) return reply('[ANTI-ROUBO] Você não tem permissão para usar este comando!');
+        if (!canUseOwnerCmd(command)) return reply('Você não tem permissão para usar este comando!');
         const confirmArg = (args[0] || '').toLowerCase();
         if (confirmArg !== 'confirmar') {
           return reply(`⚠️ *ATENÇÃO: RESET GLOBAL DO RPG*\n\n🗑️ Este comando irá APAGAR TODOS os dados do sistema RPG!\n\n❌ Esta ação é IRREVERSÍVEL!\n\n✅ Para confirmar, use:\n${groupPrefix}rpgresetglobal confirmar`);
@@ -13807,7 +13807,7 @@ switch (command) {
       case 'resumirurl':
         if (!q) return reply(`🌐 Quer resumir uma página? Envie a URL após o comando ${groupPrefix}resumirurl! Exemplo: ${groupPrefix}resumirurl https://exemplo.com/artigo 😊`);
         if (!q.startsWith('http://') && !q.startsWith('https://')) {
-          return reply(`[ANTI-ROUBO] Ops, parece que a URL é inválida! Certifique-se de incluir http:// ou https://. Exemplo: ${groupPrefix}resumirurl https://exemplo.com/artigo 😊`);
+          return reply(`Ops, parece que a URL é inválida! Certifique-se de incluir http:// ou https://. Exemplo: ${groupPrefix}resumirurl https://exemplo.com/artigo 😊`);
         }
         reply('⏳ Aguarde enquanto busco e resumo a página para você... ◈').then(() => {
           axios.get(q, {
@@ -16019,7 +16019,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
         break;
       case 'updates':
         try {
-          if (!canUseOwnerCmd(command)) return sendAbyssWarning("[ANTI-ROUBO] Você não tem permissão para usar este comando!");
+          if (!canUseOwnerCmd(command)) return sendAbyssWarning("Você não tem permissão para usar este comando!");
           if (!fs.existsSync(pathz.join(__dirname, '..', 'database', 'updateSave.json'))) return reply('❌ Sua versão não tem suporte a esse sistema ainda.');
           const AtualCom = await axios.get('https://api.github.com/repos/Souzzaaxzy/Abyss/commits?per_page=1', {
             headers: {
@@ -16040,9 +16040,9 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
         }
         break;
       case 'addsubdono':
-        if (!isOwner) return reply("[ANTI-ROUBO] Apenas o Dono pode adicionar subdonos!");
+        if (!isOwner) return reply("Apenas o Dono pode adicionar subdonos!");
         // Permissão estendida para subdonos
-        // if (isSubOwner && !isOwner) return reply("[ANTI-ROUBO] Subdonos não podem adicionar outros subdonos!");
+        // if (isSubOwner && !isOwner) return reply("Subdonos não podem adicionar outros subdonos!");
         try {
           let targetUserId;
           if (menc_jid2 && menc_jid2.length > 0) {
@@ -16108,9 +16108,9 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
       case 'remsubdono':
       case 'rmsubdono':
       case 'delsubdono':
-        if (!isOwner) return reply("[ANTI-ROUBO] Apenas o Dono pode remover subdonos!");
+        if (!isOwner) return reply("Apenas o Dono pode remover subdonos!");
         // Permissão estendida para subdonos
-        // if (isSubOwner && !isOwner) return reply("[ANTI-ROUBO] Subdonos não podem remover outros subdonos!");
+        // if (isSubOwner && !isOwner) return reply("Subdonos não podem remover outros subdonos!");
         try {
           let targetUserId;
           if (menc_jid2 && menc_jid2.length > 0) {
@@ -16180,7 +16180,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
         break;
       case 'listasubdonos':
       case 'listsubdonos':
-        if (!canUseOwnerCmd(command)) return reply("[ANTI-ROUBO] Você não tem permissão para usar este comando!");
+        if (!canUseOwnerCmd(command)) return reply("Você não tem permissão para usar este comando!");
         try {
           const subdonos = getSubdonos();
           if (subdonos.length === 0) {
@@ -16208,7 +16208,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
         }
         break;
       case 'addsubbot':
-        if (!canUseOwnerCmd(command)) return reply("[ANTI-ROUBO] Você não tem permissão para usar este comando!");
+        if (!canUseOwnerCmd(command)) return reply("Você não tem permissão para usar este comando!");
         try {
           const subBotManager = await import('./utils/subBotManager.js');
           if (!q || !q.trim()) {
@@ -16243,7 +16243,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
       case 'removesubbot':
       case 'delsubbot':
       case 'rmsubbot':
-        if (!isOwner) return reply("[ANTI-ROUBO] Apenas o Dono principal pode remover sub-bots!");
+        if (!isOwner) return reply("Apenas o Dono principal pode remover sub-bots!");
         try {
           const subBotManager = await import('./utils/subBotManager.js');
           if (!q || !q.trim()) {
@@ -16283,7 +16283,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
       case 'listarsubbots':
       case 'listsubbots':
       case 'subbots':
-        if (!isOwner) return reply("[ANTI-ROUBO] Apenas o Dono principal pode ver os sub-bots!");
+        if (!isOwner) return reply("Apenas o Dono principal pode ver os sub-bots!");
         try {
           const subBotManager = await import('./utils/subBotManager.js');
           const result = subBotManager.listSubBots();
@@ -16316,7 +16316,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
         break;
       case 'conectarsubbot':
       case 'reconnectsubbot':
-        if (!isOwner) return reply("[ANTI-ROUBO] Apenas o Dono principal pode reconectar sub-bots!");
+        if (!isOwner) return reply("Apenas o Dono principal pode reconectar sub-bots!");
         try {
           const subBotManager = await import('./utils/subBotManager.js');
           if (!q || !q.trim()) {
@@ -16407,7 +16407,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
         }
         break;
       case 'modoaluguel':
-        if (!isOwner) return reply("[ANTI-ROUBO] Apenas o Dono ou Subdono pode gerenciar o modo de aluguel!");
+        if (!isOwner) return reply("Apenas o Dono ou Subdono pode gerenciar o modo de aluguel!");
         try {
           const action = q.toLowerCase().trim();
           if (action === 'on' || action === 'ativar') {
@@ -16446,7 +16446,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
       case 'atualizar':
       case 'update':
       case 'atualizarbot':
-        if (!isOwner) return reply("[ANTI-ROUBO] Apenas o Dono ou Subdono pode atualizar o bot!");
+        if (!isOwner) return reply("Apenas o Dono ou Subdono pode atualizar o bot!");
         try {
           const updateScriptPath = pathz.join(__dirname, '.scripts', 'update.js');
           // Verifica se o script de atualização existe
@@ -16621,7 +16621,7 @@ ${data.id}`;
       case 'reiniciar':
       case 'restart':
       case 'reboot':
-        if (!isOwner) return reply("[ANTI-ROUBO] Apenas o Dono principal pode reiniciar o bot!");
+        if (!isOwner) return reply("Apenas o Dono principal pode reiniciar o bot!");
         reply(`🔄 *REINICIANDO O BOT...*
 ⏸️ Pausando processamento de mensagens...
 🔄 O bot voltará online em alguns segundos!`).then(() => {
@@ -16878,7 +16878,7 @@ ${data.id}`;
         break;
 case 'addaluguel':
     if (!isOwner) {
-        return reply("[ANTI-ROUBO] Apenas o Dono principal pode adicionar aluguel!");
+        return reply("Apenas o Dono principal pode adicionar aluguel!");
     }
     if (!isGroup) {
         return reply("◈ Este comando é só para grupos.");
@@ -16904,7 +16904,7 @@ case 'addaluguel':
       case 'listaraluguel':
       case 'veralugueis':
       case 'listrentals':
-        if (!isOwner) return reply("[ANTI-ROUBO] Apenas o Dono principal pode ver a lista de aluguéis!");
+        if (!isOwner) return reply("Apenas o Dono principal pode ver a lista de aluguéis!");
         try {
           const rentalData = loadRentalData();
           const groupIds = Object.keys(rentalData.groups || {});
@@ -16983,7 +16983,7 @@ case 'addaluguel':
       case 'removeraluguel':
       case 'deletaraluguel':
       case 'cancelaraluguel':
-        if (!isOwner) return reply("[ANTI-ROUBO] Apenas o Dono principal pode remover aluguéis!");
+        if (!isOwner) return reply("Apenas o Dono principal pode remover aluguéis!");
         try {
           let targetGroupId = q?.trim() || '';
           // Se não passou ID e está no grupo, usa o grupo atual
@@ -17040,7 +17040,7 @@ case 'addaluguel':
       case 'estenderaluguel':
       case 'adddiasaluguel':
       case 'extenderrental':
-        if (!isOwner) return reply("[ANTI-ROUBO] Apenas o Dono principal pode estender aluguéis!");
+        if (!isOwner) return reply("Apenas o Dono principal pode estender aluguéis!");
         try {
           const parts = q?.trim().split(' ') || [];
           let targetGroupId;
@@ -17106,7 +17106,7 @@ case 'addaluguel':
       case 'infoaluguel':
       case 'statusaluguel':
       case 'detalhesaluguel':
-        if (!isOwner) return reply("[ANTI-ROUBO] Apenas o Dono principal pode ver informações de aluguel!");
+        if (!isOwner) return reply("Apenas o Dono principal pode ver informações de aluguel!");
         try {
           let targetGroupId = q.trim();
           // Se não passou ID, usa o grupo atual
@@ -17183,7 +17183,7 @@ case 'addaluguel':
         break;
       case 'gerarcodigobr':
       case 'gerarcod':
-        if (!isOwner) return reply("[ANTI-ROUBO] Apenas o Dono principal pode gerar códigos!");
+        if (!isOwner) return reply("Apenas o Dono principal pode gerar códigos!");
         try {
           const parts = q.trim().split(' ');
           const durationArg = parts[0]?.toLowerCase();
@@ -17223,7 +17223,7 @@ case 'addaluguel':
         break;
       case 'limparaluguel':
         try {
-          if (!isOwner) return reply("Apenas o dono pode usar este comando. [ANTI-ROUBO]");
+          if (!isOwner) return reply("Apenas o dono pode usar este comando.");
           await reply("🔄 Iniciando limpeza completa de aluguéis...");
           let rentalData = loadRentalData();
           let groupsCleaned = 0;
@@ -17357,7 +17357,7 @@ case 'addaluguel':
           let summary = `🧹 *Resumo da Limpeza Completa de Aluguéis* 🧹\n\n`;
           summary += `✅ Grupos removidos dos registros: *${groupsCleaned}*\n`;
           summary += `⏰ Grupos vencidos processados: *${groupsExpired}*\n`;
-          summary += `[ANTI-ROUBO] Grupos sem aluguel processados: *${groupsWithoutRental}*\n`;
+          summary += `✅ Grupos sem aluguel processados: *${groupsWithoutRental}*\n`;
           summary += `📩 Administradores notificados: *${adminsNotified}*\n`;
           summary += `🗑️ Chats excluídos: *${chatsDeleted}*\n`;
           summary += `🧽 Conversas de grupos limpas: *${groupConversationsCleared}*\n`;
@@ -17451,8 +17451,8 @@ case 'addaluguel':
       case 'addautoadm':
       case 'addautoadmin':
         try {
-          if (!isGroup) return reply('[ANTI-ROUBO] ◈ Este comando só funciona em grupos!');
-          if (!isGroupAdmin) return reply('[ANTI-ROUBO] Este comando é apenas para administradores do grupo!');
+          if (!isGroup) return reply('◈ Este comando só funciona em grupos!');
+          if (!isGroupAdmin) return reply('Este comando é apenas para administradores do grupo!');
           if (!q || !q.includes('/')) return reply(`Por favor, forneça a mensagem recebida e a resposta separadas por /. Ex: ${groupPrefix}addautoadm oi/Olá! Como posso ajudar?`);
           const [received, response] = q.split('/').map(s => s.trim());
           if (!received || !response) return reply("Formato inválido. Use: mensagem recebida/mensagem do bot");
@@ -17473,8 +17473,8 @@ case 'addaluguel':
       case 'addautoadmidia':
       case 'addautoadmmidia':
         try {
-          if (!isGroup) return reply('[ANTI-ROUBO] ◈ Este comando só funciona em grupos!');
-          if (!isGroupAdmin) return reply('[ANTI-ROUBO] Este comando é apenas para administradores do grupo!');
+          if (!isGroup) return reply('◈ Este comando só funciona em grupos!');
+          if (!isGroupAdmin) return reply('Este comando é apenas para administradores do grupo!');
           if (!q) return reply(`📝 Como usar:\n\n1️⃣ ${groupPrefix}addautoadmidia [trigger]\n2️⃣ Responda uma mídia (imagem, vídeo, áudio ou sticker)\n3️⃣ Opcionalmente adicione uma legenda\n\nExemplo: ${groupPrefix}addautoadmidia bemvindo (respondendo uma imagem)`);
           const trigger = q.trim();
           let responseData = null;
@@ -17562,8 +17562,8 @@ case 'addaluguel':
       case 'listautoadm':
       case 'listautoadmin':
         try {
-          if (!isGroup) return reply('[ANTI-ROUBO] ◈ Este comando só funciona em grupos!');
-          if (!isGroupAdmin) return reply('[ANTI-ROUBO] Este comando é apenas para administradores do grupo!');
+          if (!isGroup) return reply('◈ Este comando só funciona em grupos!');
+          if (!isGroupAdmin) return reply('Este comando é apenas para administradores do grupo!');
           const autoResponses = loadGroupAutoResponses(from);
           if (autoResponses.length === 0) return reply("📜 Nenhuma auto-resposta do grupo definida.");
           let responseText = `📜 *Auto-Respostas do Grupo (${autoResponses.length})*\n\n`;
@@ -17616,8 +17616,8 @@ case 'addaluguel':
       case 'delautoadm':
       case 'delautoadmin':
         try {
-          if (!isGroup) return reply('[ANTI-ROUBO] ◈ Este comando só funciona em grupos!');
-          if (!isGroupAdmin) return reply('[ANTI-ROUBO] Este comando é apenas para administradores do grupo!');
+          if (!isGroup) return reply('◈ Este comando só funciona em grupos!');
+          if (!isGroupAdmin) return reply('Este comando é apenas para administradores do grupo!');
           if (!q || isNaN(parseInt(q))) return reply(`Por favor, forneça o número da auto-resposta a ser removida. Ex: ${groupPrefix}delautoadm 1`);
           const index = parseInt(q) - 1;
           const autoResponses = loadGroupAutoResponses(from);
@@ -17636,8 +17636,8 @@ case 'addaluguel':
       case 'autoresponses':
       case 'autorespostas':
         try {
-          if (!isGroup) return reply('[ANTI-ROUBO] ◈ Este comando só funciona em grupos!');
-          if (!isGroupAdmin) return reply('[ANTI-ROUBO] Este comando é apenas para administradores do grupo!');
+          if (!isGroup) return reply('◈ Este comando só funciona em grupos!');
+          if (!isGroupAdmin) return reply('Este comando é apenas para administradores do grupo!');
           const globalResponses = loadCustomAutoResponses();
           const groupResponses = loadGroupAutoResponses(from);
           let responseText = `📋 *Sistema de Auto-Respostas*\n\n`;
@@ -18563,7 +18563,7 @@ case 'addaluguel':
             }
             try {
               await nazu.groupParticipantsUpdate(from, idsToBan, 'remove');
-              await reply(`[ANTI-ROUBO] ${added.length} usuário(s) removido(s) do grupo.`);
+              await reply(`✅ ${added.length} usuário(s) removido(s) do grupo.`);
             } catch (banErr) {
               console.error('Erro ao banir usuários:', banErr.message);
             }
@@ -18900,7 +18900,7 @@ case 'addaluguel':
             }
             let warningMsg = '';
             if (category === 'phishing' || category === 'malware') {
-              warningMsg = '\n\n[ANTI-ROUBO] *NÃO ACESSE ESTE LINK!*\nEste domínio foi identificado como perigoso e pode roubar seus dados ou infectar seu dispositivo!';
+              warningMsg = '\n\n⚠️ *NÃO ACESSE ESTE LINK!*\nEste domínio foi identificado como perigoso e pode roubar seus dados ou infectar seu dispositivo!';
             }
             await reply(`${statusEmoji} *Resultado da Verificação*\n\n🔗 *Link:* ${urlToCheck}\n🌐 *Domínio:* ${domain}\n\n📊 *Status:* ${statusText}\n🏷️ *Categoria:* ${category}\n⚡ *Nível de Risco:* ${riskLevel}\n📅 *Registrado em:* ${createdAt}${warningMsg}\n\n⚙️ *Verificado por:* FishFish Security API`);
           } else {
@@ -20319,7 +20319,7 @@ Se não definir cores, a API usa padrão automaticamente.`
         break;
       case 'blockmenupv': {
         try {
-          if (!isOwner) return reply("[ANTI-ROUBO] Este comando é exclusivo para o dono do bot!");
+          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
           if (!q) {
             let menusList = "📋 Menus disponíveis:\n";
             for (const [key, data] of Object.entries(blockPv.menuCommandsMap)) {
@@ -20345,7 +20345,7 @@ Se não definir cores, a API usa padrão automaticamente.`
       }
       case 'unblockmenupv': {
         try {
-          if (!isOwner) return reply("[ANTI-ROUBO] Este comando é exclusivo para o dono do bot!");
+          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
           if (!q) {
             const blockList = blockPv.listBlockPV();
             if (blockList.menus.length === 0) {
@@ -20367,7 +20367,7 @@ Se não definir cores, a API usa padrão automaticamente.`
       }
       case 'blockcmdpv': {
         try {
-          if (!isOwner) return reply("[ANTI-ROUBO] Este comando é exclusivo para o dono do bot!");
+          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
           if (!q) {
             return reply("📋 Use: !blockcmdpv <comando>\nExemplo: !blockcmdpv play");
           }
@@ -20388,7 +20388,7 @@ Se não definir cores, a API usa padrão automaticamente.`
       }
       case 'unblockcmdpv': {
         try {
-          if (!isOwner) return reply("[ANTI-ROUBO] Este comando é exclusivo para o dono do bot!");
+          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
           if (!q) {
             const blockList = blockPv.listBlockPV();
             if (blockList.commands.length === 0) {
@@ -20411,7 +20411,7 @@ Se não definir cores, a API usa padrão automaticamente.`
       case 'listblockpv':
       case 'listblock': {
         try {
-          if (!isOwner) return reply("[ANTI-ROUBO] Este comando é exclusivo para o dono do bot!");
+          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
           const blockList = blockPv.listBlockPV();
           if (blockList.menus.length === 0 && blockList.commands.length === 0) {
             return reply("📋 Nenhum menu ou comando está bloqueado no PV.");
@@ -20713,7 +20713,7 @@ Se não definir cores, a API usa padrão automaticamente.`
             case 'blockmenugp': {
         try {
           if (!isGroup) return reply("⚠️ Este comando só funciona em grupos!");
-          if (!isGroupAdmin) return reply("[ANTI-ROUBO] Apenas administradores podem bloquear menus!");
+          if (!isGroupAdmin) return reply("Apenas administradores podem bloquear menus!");
           if (!q) {
             let menusList = "📋 *Menus disponíveis para bloquear:*\n\n";
             for (const [key, data] of Object.entries(blockGroupMenu.menuCommandsMap)) {
@@ -20740,7 +20740,7 @@ Se não definir cores, a API usa padrão automaticamente.`
       case 'unblockmenugp': {
         try {
           if (!isGroup) return reply("⚠️ Este comando só funciona em grupos!");
-          if (!isGroupAdmin) return reply("[ANTI-ROUBO] Apenas administradores podem desbloquear menus!");
+          if (!isGroupAdmin) return reply("Apenas administradores podem desbloquear menus!");
           if (!q) {
             const blockList = blockGroupMenu.listGroupBlockedMenus(from);
             if (blockList.length === 0) {
@@ -21113,7 +21113,7 @@ Exemplo: ${groupPrefix}addcmdmidia bemvindo | Seja bem-vindo!
   Exemplo: ${groupPrefix}addalias sticker | fig
 • Listar: ${groupPrefix}listalias
 • Remover: ${groupPrefix}delalias <alias>
-[ANTI-ROUBO] *Limitar Comandos*
+🔒 *Limitar Comandos*
 • Limitar: ${groupPrefix}cmdlimitar <comando> <max_usos> <tempo_em_segundos>
   Exemplo: ${groupPrefix}cmdlimitar gpt 3 60
   (3 usos a cada 60 segundos)
@@ -21180,7 +21180,7 @@ ${groupPrefix}addautomidia <palavra> | <legenda>
   Se não especificar quantidade, remove todas
   Exemplo: ${groupPrefix}delindicacao @usuario 5
   Remove 5 indicações
-[ANTI-ROUBO] *Blacklist Global*
+🚫 *Blacklist Global*
 • Banir: ${groupPrefix}addblackglobal @usuario | motivo
   ou: ${groupPrefix}addblackglobal 5511999999999 | motivo
 • Desbanir: ${groupPrefix}rmblackglobal @usuario
@@ -21647,7 +21647,7 @@ Precisa de ajuda? Entre em contato:
           const antipvFile = DATABASE_DIR + '/antipv.json';
           let antipvData = loadJsonFile(antipvFile, {
             mode: 'off',
-            message: '[ANTI-ROUBO] ◈ Este comando só funciona em grupos!'
+            message: '◈ Este comando só funciona em grupos!'
           });
           antipvData.message = q.trim();
           writeJsonFile(antipvFile, antipvData);
@@ -21925,7 +21925,7 @@ Precisa de ajuda? Entre em contato:
         break;
       case 'tm2':
         try {
-          if (!isOwner) return reply("[ANTI-ROUBO] Este comando é apenas para o meu dono 💔");
+          if (!isOwner) return reply("Este comando é apenas para o meu dono 💔");
           if (!q && !isImage && !isVideo && !isQuotedImage && !isQuotedVideo) return reply('Digite ou marque uma imagem/vídeo! Exemplo: '+ groupPrefix + 'tm2 Olá inscritos!');
           // Obtém lista de inscritos
           const subscribers = transmissao.getSubscribers();
@@ -22019,7 +22019,7 @@ Precisa de ajuda? Entre em contato:
       case 'statustm':
       case 'statustm2':
         try {
-          if (!isOwner) return reply("[ANTI-ROUBO] Este comando é apenas para o meu dono 💔");
+          if (!isOwner) return reply("Este comando é apenas para o meu dono 💔");
           const stats = transmissao.getStats();
           const subscribers = transmissao.getSubscribers();
           let message = `📊 *STATUS DA TRANSMISSAO TM2*\n\n`;
@@ -22046,7 +22046,7 @@ Precisa de ajuda? Entre em contato:
         }
         break;
       case 'reviverqr':
-        if (!isOwner) return reply('[ANTI-ROUBO] Este comando é exclusivo para o proprietário!');
+        if (!isOwner) return reply('Este comando é exclusivo para o proprietário!');
         const qrcodeDir = pathz.join(__dirname, '..', 'database', 'qr-code');
         const filePatterns = ['pre-key', 'sender', 'session'];
         let totalDeleted = 0;
@@ -22590,7 +22590,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
       case 'keyff':
       case 'keyfreefire':
         try {
-          if (!isOwner) return reply("[ANTI-ROUBO] Este comando é exclusivo para o dono do bot!");
+          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
           if (!q) return reply(`❌ Uso: ${prefix}keyff <api_key>\n\nExemplo: ${prefix}keyff SUA_API_KEY_AQUI`);
           const saved = setApiKey('freefire', q);
           if (saved) {
@@ -22606,7 +22606,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
       case 'delkeyff':
       case 'delkeyfreefire':
         try {
-          if (!isOwner) return reply("[ANTI-ROUBO] Este comando é exclusivo para o dono do bot!");
+          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
           const currentKey = getApiKey('freefire');
           if (!currentKey) {
             return reply("ℹ️ Não há API Key do Free Fire configurada.");
@@ -22626,7 +22626,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
       case 'keyvalorant':
       case 'keylol':
         try {
-          if (!isOwner) return reply("[ANTI-ROUBO] Este comando é exclusivo para o dono do bot!");
+          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
           if (!q) return reply(`❌ Uso: ${prefix}keyriot <api_key>\n\n📋 Usado para: Valorant e League of Legends\n🔗 Registrar em: https://developer.riotgames.com`);
           const saved = setApiKey('valorant', q);
           if (saved) {
@@ -22643,7 +22643,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
       case 'delkeyvalorant':
       case 'delkeylol':
         try {
-          if (!isOwner) return reply("[ANTI-ROUBO] Este comando é exclusivo para o dono do bot!");
+          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
           const currentKey = getApiKey('valorant');
           if (!currentKey) {
             return reply("ℹ️ Não há API Key da Riot configurada.");
@@ -22662,7 +22662,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
       case 'keysupercell':
       case 'keyclash':
         try {
-          if (!isOwner) return reply("[ANTI-ROUBO] Este comando é exclusivo para o dono do bot!");
+          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
           if (!q) return reply(`❌ Uso: ${prefix}keysupercell <api_key>\n\n📋 Usado para: Clash Royale, Brawl Stars e Clash of Clans\n🔗 Registrar em: https://developer.clashroyale.com`);
           const saved = setApiKey('clashroyale', q);
           if (saved) {
@@ -22678,7 +22678,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
       case 'delkeysupercell':
       case 'delkeyclash':
         try {
-          if (!isOwner) return reply("[ANTI-ROUBO] Este comando é exclusivo para o dono do bot!");
+          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
           const currentKey = getApiKey('clashroyale');
           if (!currentKey) {
             return reply("ℹ️ Não há API Key da Supercell configurada.");
@@ -22697,7 +22697,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
       case 'keycr':
       case 'keyclashroyale':
         try {
-          if (!isOwner) return reply("[ANTI-ROUBO] Este comando é exclusivo para o dono do bot!");
+          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
           if (!q) return reply(`❌ Uso: ${prefix}keycr <api_key>\n\n📋 Use ${prefix}keysupercell para ver todos os jogos\n🔗 Registrar em: https://developer.clashroyale.com`);
           const saved = setApiKey('clashroyale', q);
           if (saved) {
@@ -22713,7 +22713,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
       case 'delkeycr':
       case 'delkeyclashroyale':
         try {
-          if (!isOwner) return reply("[ANTI-ROUBO] Este comando é exclusivo para o dono do bot!");
+          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
           const currentKey = getApiKey('clashroyale');
           if (!currentKey) {
             return reply("ℹ️ Não há API Key da Supercell configurada.");
@@ -22869,7 +22869,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
       case 'keybs':
       case 'keybrawlstars':
         try {
-          if (!isOwner) return reply("[ANTI-ROUBO] Este comando é exclusivo para o dono do bot!");
+          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
           if (!q) return reply(`❌ Uso: ${prefix}keybs <api_key>\n\nExemplo: ${prefix}keybs SUA_API_KEY_AQUI`);
           const saved = setApiKey('brawlstars', q);
           if (saved) {
@@ -22885,7 +22885,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
       case 'delkeybs':
       case 'delkeybrawlstars':
         try {
-          if (!isOwner) return reply("[ANTI-ROUBO] Este comando é exclusivo para o dono do bot!");
+          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
           const currentKey = getApiKey('brawlstars');
           if (!currentKey) {
             return reply("ℹ️ Não há API Key do Brawl Stars configurada.");
@@ -23123,7 +23123,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
           else if (w.status === 'won') status = '✅ Vitória';
           else if (w.status === 'lost') status = '❌ Derrota';
           else if (w.status === 'tie') status = '🔄 Empate';
-          else if (w.status === 'notInWar') status = '[ANTI-ROUBO] Sem Guerra';
+          else if (w.status === 'notInWar') status = 'Sem Guerra';
           const warMsg = `⚔️ *CLASH OF CLANS - GUERRA*\n\n` +
             `📊 Status: ${status}\n` +
             `👥 Tamanho do Time: ${w.teamSize}vs${w.teamSize}\n\n` +
@@ -23180,7 +23180,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
         break;
       case 'keyroblox':
         try {
-          if (!isOwner) return reply("[ANTI-ROUBO] Este comando é exclusivo para o dono do bot!");
+          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
           if (!q) return reply(`❌ Uso: ${prefix}keyroblox <api_key>\n\nExemplo: ${prefix}keyroblox SUA_API_KEY_AQUI`);
           const saved = setApiKey('roblox', q);
           if (saved) {
@@ -23195,7 +23195,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
         break;
       case 'delkeyroblox':
         try {
-          if (!isOwner) return reply("[ANTI-ROUBO] Este comando é exclusivo para o dono do bot!");
+          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
           const currentKey = getApiKey('roblox');
           if (!currentKey) {
             return reply("ℹ️ Não há API Key do Roblox configurada.");
@@ -23234,7 +23234,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
             `🆔 ID: ${p.id}\n` +
             `📝 ${p.description}\n` +
             `📅 Criado em: ${createdDate}\n` +
-            `[ANTI-ROUBO] Banido: ${p.isBanned ? 'Sim ❌' : 'Não ✅'}`;
+            `Banido: ${p.isBanned ? 'Sim ❌' : 'Não ✅'}`;
           await reply(perfilMsg);
           await react('✅', nazu, info.key, from);
         } catch (e) {
@@ -23489,7 +23489,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
         break;
       case 'keypubg':
         try {
-          if (!isOwner) return reply("[ANTI-ROUBO] Este comando é exclusivo para o dono do bot!");
+          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
           if (!q) return reply(`❌ Uso: ${prefix}keypubg <api_key>\n\nExemplo: ${prefix}keypubg SUA_API_KEY_AQUI`);
           const saved = setApiKey('pubg', q);
           if (saved) {
@@ -23504,7 +23504,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
         break;
       case 'delkeypubg':
         try {
-          if (!isOwner) return reply("[ANTI-ROUBO] Este comando é exclusivo para o dono do bot!");
+          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
           const currentKey = getApiKey('pubg');
           if (!currentKey) {
             return reply("ℹ️ Não há API Key do PUBG configurada.");
@@ -23639,7 +23639,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
         break;
       case 'listkeys':
         try {
-          if (!isOwner) return reply("[ANTI-ROUBO] Este comando é exclusivo para o dono do bot!");
+          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
           let msg = "🔑 *STATUS DAS APIs DE GAMES*\n\n";
           // Free Fire
           const ffKey = getApiKey('freefire');
@@ -23671,7 +23671,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
       case 'setgrok':
       case 'groqkey':
         try {
-          if (!isOwner) return reply("[ANTI-ROUBO] Este comando é exclusivo para o dono do bot!");
+          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
           if (!q) {
             const currentKey = process.env.GROQ_API_KEY || '';
             const maskedKey = currentKey ? currentKey.substring(0, 8) + '...' + currentKey.substring(currentKey.length - 4) : 'Não configurada';
@@ -24558,7 +24558,7 @@ ${groupPrefix}setgroq sua_chave_aqui
             return reply('✅ Nenhum grupo banido no momento.');
           }
           const maxItems = 50;
-          let teks = `[ANTI-ROUBO] *Grupos Banidos* (${bannedGroups.length})\n\n`;
+          let teks = `🚫 *Grupos Banidos* (${bannedGroups.length})\n\n`;
           for (let i = 0; i < Math.min(bannedGroups.length, maxItems); i++) {
             const groupId = bannedGroups[i];
             let subject = 'Desconhecido';
@@ -24585,7 +24585,7 @@ ${groupPrefix}setgroq sua_chave_aqui
           if (!isOwner) return reply("Este comando é apenas para o meu dono");
           banGpIds[from] = !banGpIds[from];
           if (banGpIds[from]) {
-            await reply('[ANTI-ROUBO] Grupo banido, apenas usuarios premium ou meu dono podem utilizar o bot aqui agora.');
+            await reply('Grupo banido, apenas usuarios premium ou meu dono podem utilizar o bot aqui agora.');
           } else {
             await reply('✅ Grupo desbanido, todos podem utilizar o bot novamente.');
           }
@@ -24766,7 +24766,7 @@ ${groupPrefix}setgroq sua_chave_aqui
       case 'addvipcommand':
       case 'adicionarcmdvip':
         try {
-          if (!isOwner) return reply('[ANTI-ROUBO] Este comando é apenas para o dono do bot!');
+          if (!isOwner) return reply('Este comando é apenas para o dono do bot!');
           if (!q) {
             return reply(`📝 *Como adicionar comandos VIP:*
 *Formato:*
@@ -24928,7 +24928,7 @@ ${groupPrefix}addcmdvip menudown all`);
       case 'rmcmdvip':
       case 'delcmdvip':
         try {
-          if (!isOwner) return reply('[ANTI-ROUBO] Este comando é apenas para o dono do bot!');
+          if (!isOwner) return reply('Este comando é apenas para o dono do bot!');
           if (!q) {
             return reply(`📝 *Como remover comandos VIP:*
 *Formato:*
@@ -24951,7 +24951,7 @@ ${groupPrefix}removecmdvip premium_ia`);
       case 'comandosvip':
         try {
           if (!isOwnerOrSub && !isPremium) {
-            return reply('[ANTI-ROUBO] Este comando é apenas para o dono ou usuários VIP!');
+            return reply('Este comando é apenas para o dono ou usuários VIP!');
           }
           const customDesign = getMenuDesignWithDefaults(nomebot, pushname);
           const listText = await menuVIP(prefix, nomebot, pushname, customDesign);
@@ -24965,7 +24965,7 @@ ${groupPrefix}removecmdvip premium_ia`);
       case 'ativarcmdvip':
       case 'desativarcmdvip':
         try {
-          if (!isOwner) return reply('[ANTI-ROUBO] Este comando é apenas para o dono do bot!');
+          if (!isOwner) return reply('Este comando é apenas para o dono do bot!');
           if (!args[0] || !args[1]) {
             return reply(`📝 *Como ativar/desativar comandos VIP:*
 *Formato:*
@@ -24993,7 +24993,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
       case 'vipstats':
       case 'estatisticasvip':
         try {
-          if (!isOwner) return reply('[ANTI-ROUBO] Este comando é apenas para o dono do bot!');
+          if (!isOwner) return reply('Este comando é apenas para o dono do bot!');
           const stats = vipCommandsManager.getVipStats();
           let statsText = `📊 *ESTATÍSTICAS DO SISTEMA VIP*\n\n`;
           statsText += `╭─────────────────╮\n`;
@@ -25024,7 +25024,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
       case 'addindicar':
       case 'addindica':
         try {
-          if (!isOwner) return reply("[ANTI-ROUBO] Este comando é apenas para o dono do bot!");
+          if (!isOwner) return reply("Este comando é apenas para o dono do bot!");
           if (!menc_os2) return reply("❌ Você precisa marcar alguém para adicionar uma indicação!\n\n💡 Exemplo: " + prefix + "addindicacao @usuario");
           const indicacoesFile = pathz.join(DATABASE_DIR, 'indicacoes.json');
           let indicacoesData = loadJsonFile(indicacoesFile, { users: {} });
@@ -25091,7 +25091,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
       case 'rmindicacao':
       case 'removerindicacao':
         try {
-          if (!isOwner) return reply("[ANTI-ROUBO] Este comando é apenas para o dono do bot!");
+          if (!isOwner) return reply("Este comando é apenas para o dono do bot!");
           if (!menc_os2) return reply("❌ Você precisa marcar alguém para remover a indicação!\n\n💡 Exemplo: " + prefix + "delindicacao @usuario");
           const indicacoesFile = pathz.join(DATABASE_DIR, 'indicacoes.json');
           let indicacoesData = loadJsonFile(indicacoesFile, { users: {} });
@@ -26581,7 +26581,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
         break;
       case 'infoserver':
         if (!isOwner) {
-          await reply('[ANTI-ROUBO] *Ops! Você não tem permissão!* 😅\n\n🌌 *Este comando é só para o dono*\nInformações do servidor são confidenciais! ◈');
+          await reply('*Ops! Você não tem permissão!* 😅\n\n🌌 *Este comando é só para o dono*\nInformações do servidor são confidenciais! ◈');
           break;
         }
         const serverUptime = process.uptime();
@@ -26755,7 +26755,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           const currentTime = new Date().toLocaleString('pt-BR', {
             timeZone: 'America/Sao_Paulo'
           });
-          const lines = ["╭───🤖 STATUS DO BOT ───╮", `┊ 🏷️ Nome: ${nomebot}`, `┊ 👨‍💻 Dono: ${nomedono}`, `┊ 🆚 Versão: ${botVersion}`, `┊ 🟢 Status: ${botStatus}`, `┊ ⏰ Online há: ${botUptime}`, `┊ 🖥️ Plataforma: ${platform}`, `┊ 🟢 Node.js: ${nodeVersion}`, "┊", "┊ 📊 *Estatísticas:*", `┊ • 👥 Grupos: ${totalGroups}`, `┊ • 👤 Usuários: ${totalUsers}`, `┊ • ⚒️ Comandos: ${totalCommands}`, `┊ • 💎 Users Premium: ${premiumUsers}`, `┊ • 💎 Grupos Premium: ${premiumGroups}`, "┊", "┊ ⚙️ *Segurança:*", `┊ • [ANTI-ROUBO] Users Bloqueados: ${blockedUsers}`, `┊ • [ANTI-ROUBO] Cmds Bloqueados: ${blockedCommands}`, `┊ • 🏠 Modo Aluguel: ${rentalMode}`, "┊", "┊ 💾 *Sistema:*", `┊ • 🧠 RAM Usada: ${memUsed}MB`, `┊ • 📦 RAM Total: ${memTotal}MB`, `┊ • 🕐 Hora Atual: ${currentTime}`, "╰───────────────╯"].join("\n");
+          const lines = ["╭───🤖 STATUS DO BOT ───╮", `┊ 🏷️ Nome: ${nomebot}`, `┊ 👨‍💻 Dono: ${nomedono}`, `┊ 🆚 Versão: ${botVersion}`, `┊ 🟢 Status: ${botStatus}`, `┊ ⏰ Online há: ${botUptime}`, `┊ 🖥️ Plataforma: ${platform}`, `┊ 🟢 Node.js: ${nodeVersion}`, "┊", "┊ 📊 *Estatísticas:*", `┊ • 👥 Grupos: ${totalGroups}`, `┊ • 👤 Usuários: ${totalUsers}`, `┊ • ⚒️ Comandos: ${totalCommands}`, `┊ • 💎 Users Premium: ${premiumUsers}`, `┊ • 💎 Grupos Premium: ${premiumGroups}`, "┊", "┊ ⚙️ *Segurança:*", `┊ • 🔒 Users Bloqueados: ${blockedUsers}`, `┊ • 🔒 Cmds Bloqueados: ${blockedCommands}`, `┊ • 🏠 Modo Aluguel: ${rentalMode}`, "┊", "┊ 💾 *Sistema:*", `┊ • 🧠 RAM Usada: ${memUsed}MB`, `┊ • 📦 RAM Total: ${memTotal}MB`, `┊ • 🕐 Hora Atual: ${currentTime}`, "╰───────────────╯"].join("\n");
           await reply(lines);
         } catch (e) {
           console.error("Erro em statusbot:", e);
@@ -26764,7 +26764,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
         break;
       case 'iaclear':
       case 'limparhist':
-        if (!isOwner) return reply("[ANTI-ROUBO] Apenas donos e subdonos podem limpar o histórico!");
+        if (!isOwner) return reply("Apenas donos e subdonos podem limpar o histórico!");
         try {
           ia.clearOldHistorico(0);
           reply("✅ *Histórico do assistente limpo!*\n\n🗑️ Todas as conversas antigas foram removidas da memória.");
@@ -26938,7 +26938,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
             `┊ 📉 Limite Msg: ${groupData.messageLimit?.enabled ? `✅ ON (${groupData.messageLimit.limit}/${groupData.messageLimit.interval}s, ação: ${groupData.messageLimit.action})` : '❌ OFF'}`,
             `┊ 🤝 Parcerias: ${parceriasData?.active ? `✅ ON (${Object.keys(parceriasData.partners || {}).length} parceiros)` : '❌ OFF'}`,
             `┊ ⛔ Cmds bloqueados: ${groupData.blockedCommands ? Object.values(groupData.blockedCommands).filter(Boolean).length : 0}`,
-            `┊ [ANTI-ROUBO] Usuários bloqueados: ${groupData.blockedUsers ? Object.keys(groupData.blockedUsers).length : 0}`,
+            `┊ 🔒 Usuários bloqueados: ${groupData.blockedUsers ? Object.keys(groupData.blockedUsers).length : 0}`,
             `┊ 😴 AFKs ativos: ${groupData.afkUsers ? Object.keys(groupData.afkUsers).length : 0}`,
             `┊ 🧑‍⚖️ Moderadores: ${Array.isArray(groupData.moderators) ? groupData.moderators.length : 0}`,
             `┊ 🐺 Alphas: ${Array.isArray(groupData.alphas) ? groupData.alphas.length : 0}`,
@@ -27801,7 +27801,7 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
       case 'mention':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
-          if (!q) return reply(`📢 *Configuração de Marcações*\n\n🔧 Escolha como deseja ser mencionado:\n\n✅ *${groupPrefix}mention all* → Marcado em tudo (marcações e jogos).\n📢 *${groupPrefix}mention marca* → Apenas em marcações de administradores.\n🌌 *${groupPrefix}mention games* → Somente em jogos do bot.\n[ANTI-ROUBO] *${groupPrefix}mention 0* → Não será mencionado em nenhuma ocasião.`);
+          if (!q) return reply(`📢 *Configuração de Marcações*\n\n🔧 Escolha como deseja ser mencionado:\n\n✅ *${groupPrefix}mention all* → Marcado em tudo (marcações e jogos).\n📢 *${groupPrefix}mention marca* → Apenas em marcações de administradores.\n🌌 *${groupPrefix}mention games* → Somente em jogos do bot.\n❌ *${groupPrefix}mention 0* → Não será mencionado em nenhuma ocasião.`);
           let options = {
             all: '◈ Você agora será mencionado em todas as interações do bot, incluindo marcações de administradores e os jogos!',
             marca: '📢 A partir de agora, você será mencionado apenas quando um administrador marcar.',
@@ -28136,7 +28136,7 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
           }
           // Montar mensagem de sucesso
           const targetUserName = getUserName(targetUser) || targetUser.split('@')[0];
-          let successMsg = `[ANTI-ROUBO] *Ação concluída com sucesso!*\n\n`;
+          let successMsg = `✅ *Ação concluída com sucesso!*\n\n`;
           successMsg += `${msgDeleted ? '✅' : '❌'} Mensagem apagada.\n`;
           successMsg += `${userBanned ? '✅' : '❌'} Usuário removido do grupo.\n`;
           successMsg += `${userBlacklisted ? '✅' : '❌'} Usuário adicionado à blacklist.\n\n`;
@@ -29005,7 +29005,7 @@ break;
             fs.writeFileSync(groupFilePath, JSON.stringify(bbnGroupData, null, 2));
           }
           // Montar mensagem de sucesso
-          let successMsg = `[ANTI-ROUBO] *AÇÃO EM MASSA CONCLUÍDA*\n\n`;
+          let successMsg = `✅ *AÇÃO EM MASSA CONCLUÍDA*\n\n`;
           successMsg += `✅ Banidos: ${bannedCount}\n`;
           successMsg += `📋 Adicionados à blacklist: ${blacklistedCount}\n`;
           if (alreadyBlacklistedCount > 0) {
@@ -29635,7 +29635,7 @@ break;
               `│\n` +
               `├─────────────────────⭓\n` +
               `│ ⚙️ Anti-Link: ${groupData.antilink ? 'Ativo ✅' : 'Inativo ❌'}\n` +
-              `│ [ANTI-ROUBO] Anti-Flood: ${groupData.antiflood ? 'Ativo ✅' : 'Inativo ❌'}\n` +
+              `│ 🛡️ Anti-Flood: ${groupData.antiflood ? 'Ativo ✅' : 'Inativo ❌'}\n` +
               `│ ⚙️ Prefixo: ${groupPrefix}\n` +
               `│\n` +
               `╰─────────────────────⭓`;
@@ -31396,7 +31396,7 @@ Qualquer solicitação de pagamento será ${groupData.antirequest ? 'bloqueada e
       case 'limitmessage':
         try {
           if (!isGroup) return reply("◈ Este comando só funciona em grupos 💔");
-          if (!isGroupAdmin) return reply("Apenas administradores podem usar este comando [ANTI-ROUBO]");
+          if (!isGroupAdmin) return reply("Apenas administradores podem usar este comando");
           if (!q) {
             return reply(`📝 Configure o limite de mensagens! Exemplo: ${groupPrefix}limitmessage 5 1m ban\n` + `Formato: ${groupPrefix}limitmessage <quantidade> <tempo> <ação>\n` + `Tempo: s (segundos), m (minutos), h (horas)\n` + `Ação: ban (banimento direto) ou adv (advertências)`);
           }
@@ -31445,7 +31445,7 @@ Qualquer solicitação de pagamento será ${groupData.antirequest ? 'bloqueada e
       case 'dellimitmessage':
         try {
           if (!isGroup) return reply("◈ Este comando só funciona em grupos 💔");
-          if (!isGroupAdmin) return reply("Apenas administradores podem usar este comando [ANTI-ROUBO]");
+          if (!isGroupAdmin) return reply("Apenas administradores podem usar este comando");
           if (!groupData.messageLimit?.enabled) {
             return reply("📴 O limite de mensagens não está ativo neste grupo.");
           }
@@ -32468,7 +32468,7 @@ case 'set-bannerbv':
             }
             try {
               await nazu.groupParticipantsUpdate(from, idsToBan, 'remove');
-              await reply(`[ANTI-ROUBO] ${added.length} usuário(s) removido(s) do grupo.`);
+              await reply(`✅ ${added.length} usuário(s) removido(s) do grupo.`);
             } catch (banErr) {
               console.error('Erro ao banir usuários:', banErr.message);
             }
@@ -32597,7 +32597,7 @@ case 'set-bannerbv':
           }
           const idsToBan = toBan.map(u => u.id);
           await nazu.groupParticipantsUpdate(from, idsToBan, 'remove');
-          let msg = `[ANTI-ROUBO] *${toBan.length} USUÁRIO(S) BANIDO(S)*\n\n`;
+          let msg = `*${toBan.length} USUÁRIO(S) BANIDO(S)*\n\n`;
           for (const u of toBan) {
             msg += `👤 @${u.id.split('@')[0]}\n📋 Tipo: ${u.type === 'global' ? '🛑 GLOBAL' : '📋 LOCAL'}\n📝 Motivo: ${u.reason}\n\n`;
           }
@@ -32649,7 +32649,7 @@ case 'set-bannerbv':
             await nazu.groupParticipantsUpdate(from, [targetJid], 'remove').catch(e => console.error('Erro ao banir usuário (adv):', e));
             delete groupData.warnings[menc_os2];
             fs.writeFileSync(groupFilePath, JSON.stringify(groupData, null, 2));
-            reply(`[ANTI-ROUBO] @${getUserName(menc_os2)} recebeu 3 advertências e foi banido!\nÚltima advertência: ${reason}`, {
+            reply(`🚫 @${getUserName(menc_os2)} recebeu 3 advertências e foi banido!\nÚltima advertência: ${reason}`, {
               mentions: [menc_os2]
             });
           } else {
@@ -34472,20 +34472,20 @@ ${groupPrefix}antitoxic sensibilidade <0-100> - Define sensibilidade
           msg += `━━━━━━━━━━━━━━━━━━━━━\n`;
           msg += `📊 Status: ${stats.enabled ? '✅ Ativo' : '❌ Desativado'}\n`;
           msg += `🔢 Palavras na blacklist: ${stats.totalWords}\n`;
-          msg += `[ANTI-ROUBO] Total de bans: ${stats.totalBans}\n`;
+          msg += `📊 Total de bans: ${stats.totalBans}\n`;
           msg += `⚠️ Total de advertências: ${stats.totalAdvs}\n`;
           msg += `🔍 Total de detecções: ${stats.totalDetections}\n`;
           if (stats.topWords && stats.topWords.length > 0) {
             msg += `\n🔝 *Top 5 palavras mais detectadas:*\n`;
             stats.topWords.forEach((item, index) => {
-              const acaoIcone = item.acao === 'ban' ? '[ANTI-ROUBO]' : '⚠️';
+              const acaoIcone = item.acao === 'ban' ? '🚫' : '⚠️';
               msg += `${index + 1}. "${item.palavra}" ${acaoIcone} - ${item.detections}x\n`;
             });
           }
           return await nazu.sendMessage(from, { text: msg , contextInfo: newsletterCtx, quoted: info });
         }
         // Menu de ajuda
-        return await nazu.sendMessage(from, { text: `[ANTI-ROUBO] *ANTIPALAVRA - SISTEMA DE BLACKLIST*
+        return await nazu.sendMessage(from, { text: `🚫 *ANTIPALAVRA - SISTEMA DE BLACKLIST*
 *Comandos disponíveis:*
 ${groupPrefix}antipalavra on
 └ Ativa o sistema
@@ -35045,7 +35045,7 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
         const participants = [userOne, userTwo];
         const isParticipant = participants.includes(sender);
         if (!isParticipant && !isGroupAdmin && !isOwnerOrSub) {
-          await reply('[ANTI-ROUBO] Apenas os envolvidos ou um administrador podem encerrar o relacionamento de terceiros.');
+          await reply('Apenas os envolvidos ou um administrador podem encerrar o relacionamento de terceiros.');
           break;
         }
         const endResult = relationshipManager.endRelationship(userOne, userTwo, sender);
@@ -37355,7 +37355,7 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
         break;
       case 'msgboton':
         try {
-          if (!isOwner) return reply('[ANTI-ROUBO] Apenas o dono pode alterar esta configuração!');
+          if (!isOwner) return reply('Apenas o dono pode alterar esta configuração!');
           const currentConfig = loadMsgBotOn();
           const newStatus = !currentConfig.enabled;
           if (saveMsgBotOn(newStatus)) {
@@ -37427,7 +37427,7 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
       case 'cachedebug':
       case 'debugcache':
         try {
-          if (!isOwner) return reply('[ANTI-ROUBO] Apenas o dono e subdonos podem usar este comando.');
+          if (!isOwner) return reply('Apenas o dono e subdonos podem usar este comando.');
           const { saveJidLidCache } = await import('./utils/helpers.js');
           const cacheFilePath = JID_LID_CACHE_FILE;
           // Força salvar o cache atual
@@ -37607,7 +37607,7 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
               const config = autoSchedules[from];
               const statusEmoji = config.enabled ? '🟢' : '🔴';
               const statusText = config.enabled ? 'ATIVO' : 'INATIVO';
-              const linkStatus = config.link ? `🔗 ${config.link}` : '[ANTI-ROUBO] Nenhum link configurado';
+              const linkStatus = config.link ? `🔗 ${config.link}` : '❌ Nenhum link configurado';
               const statusResponse = `┏━━━━━━━━━━━━━━━━━━━━━━━━┓\n` +
                 `┃   📊 *STATUS AUTO HORÁRIOS*  ┃\n` +
                 `┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n` +
@@ -37730,7 +37730,7 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
         break;
       case 'salvarm':
         try {
-          if (!isGroup) return reply('[ANTI-ROUBO] ◈ Este comando só funciona em grupos!');
+          if (!isGroup) return reply('◈ Este comando só funciona em grupos!');
           if (!quotedMessageContent) return reply(`📸 Como usar:\n\n1️⃣ Responda uma mensagem (texto, áudio, foto, vídeo, etc)\n2️⃣ Mande ${groupPrefix}salvarm\n\nExemplo: ${groupPrefix}salvarm (respondendo uma foto)`);
           // Obter informações de quem pediu o salvamento
           const requesterJid = sender;
@@ -37808,7 +37808,7 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
       case 'moment':
       case 'moments':
         try {
-          if (!isGroup) return reply('[ANTI-ROUBO] ◈ Este comando só funciona em grupos!');
+          if (!isGroup) return reply('◈ Este comando só funciona em grupos!');
           const moments = getMoments(from);
           if (moments.length === 0) return reply('📸 Nenhum momento salvo para hoje!');
           let responseText = `📸 *Momentos Salvos Hoje (${moments.length}/10)*\n\n`;
@@ -37853,7 +37853,7 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
         break;
       case 'apm':
         try {
-          if (!isGroup) return reply('[ANTI-ROUBO] ◈ Este comando só funciona em grupos!');
+          if (!isGroup) return reply('◈ Este comando só funciona em grupos!');
           if (!q) return reply(`📄 Como usar:\n\n${groupPrefix}apm [número]\n\nExemplo: ${groupPrefix}apm 1`);
           const momentIndex = parseInt(q) - 1;
           const moments = getMoments(from);
@@ -37863,7 +37863,7 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
           const momentToDelete = moments[momentIndex];
           // Verificar se quem está tentando apagar é quem salvou
           if (momentToDelete.sender !== sender) {
-            return reply('[ANTI-ROUBO] Você só pode apagar momentos que você salvou!');
+            return reply('Você só pode apagar momentos que você salvou!');
           }
           const result = deleteMoment(from, momentIndex);
           if (result.success) {
@@ -37878,7 +37878,7 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
         break;
       case 'm':
         try {
-          if (!isGroup) return reply('[ANTI-ROUBO] ◈ Este comando só funciona em grupos!');
+          if (!isGroup) return reply('◈ Este comando só funciona em grupos!');
           if (!q) return reply(`📄 Como usar:\n\n${groupPrefix}m [número]\n\nExemplo: ${groupPrefix}m 1`);
           const momentIndex = parseInt(q.trim()) - 1;
           const moments = getMoments(from);
@@ -37923,7 +37923,7 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
         break;
       case 'medirpau':
         try {
-          if (!isGroup) return reply('[ANTI-ROUBO] ◈ Este comando só funciona em grupos!');
+          if (!isGroup) return reply('◈ Este comando só funciona em grupos!');
           if (!groupData.modobrincadeira) return reply('🌌 O modo de brincadeiras não está ativado! Use !modobrincadeiras para ativar.');
           const tamanho = Math.floor(Math.random() * 67) + 1;
           let mensagem = '';

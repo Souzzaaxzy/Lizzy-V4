@@ -1,45 +1,45 @@
-async function menuTopCmd(prefix, botName = "MeuBot", userName = "UsuГЎrio", topCommands = [], {
-    header = `в•ӯв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв•®вҠ° рҹҢё гҖҺ *${botName}* гҖҸ\nв”ӮOlГЎ, #user#!\nв•°в”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв•Ҝ`,
-    menuTopBorder = "в•ӯв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв•®",
-    bottomBorder = "в•°в”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв”Җв•Ҝ",
-    menuTitleIcon = "в—Ҳ",
-    menuItemIcon = "в–ё",
-    separatorIcon = "вқҒ",
-    middleBorder = "в”Ӯ",
+async function menuTopCmd(prefix, botName = "MeuBot", userName = "Usuário", topCommands = [], {
+    header = `╭──────────────────────────────────────────────╮⊰ 🌸 『 *${botName}* 』\n│Olá, #user#!\n╰──────────────────────────────────────────────╯`,
+    menuTopBorder = "╭──────────────────────────────────────────────╮",
+    bottomBorder = "╰──────────────────────────────────────────────╯",
+    menuTitleIcon = "◈",
+    menuItemIcon = "▸",
+    separatorIcon = "❁",
+    middleBorder = "│",
     topCommandsMenuTitle = "MAIS USADOS",
-    infoSectionTitle = "InformaГ§Гөes"
+    infoSectionTitle = "Informações"
 } = {}) {
     const formattedHeader = header.replace(/#user#/g, userName);
     if (!topCommands || topCommands.length === 0) {
         return `${formattedHeader}
 
 ${menuTopBorder}
-в”Ӯ ${topCommandsMenuTitle}
+│ ${topCommandsMenuTitle}
 ${middleBorder}
 ${middleBorder} Nenhum comando foi registrado ainda.
 ${middleBorder} Use ${prefix}menu para ver a lista
-${middleBorder} de comandos disponГӯveis!
+${middleBorder} de comandos disponíveis!
 ${middleBorder}
 ${bottomBorder}
 `;
     }
     const commandsList = topCommands.map((cmd, index) => {
         const position = index + 1;
-        const emoji = position <= 3 ? ['рҹҘҮ', 'рҹҘҲ', 'рҹҘү'][index] : 'рҹҸ…';
-        return `${middleBorder}${emoji} ${position}Вә: *${prefix}${cmd.name}*\n${middleBorder}   вҶі ${cmd.count} usos por ${cmd.uniqueUsers} usuГЎrios`;
+        const emoji = position <= 3 ? ['🥇', '🥈', '🥉'][index] : '🏅';
+        return `${middleBorder}${emoji} ${position}º: *${prefix}${cmd.name}*\n${middleBorder}   ↳ ${cmd.count} usos por ${cmd.uniqueUsers} usuários`;
     }).join('\n');
     return `
 ${formattedHeader}
 
 ${menuTopBorder}
-в”Ӯ Top ${topCommands.length} Comandos
+│ Top ${topCommands.length} Comandos
 ${commandsList}
 ${middleBorder}
-${middleBorder}в•ӯв”Җв–ё *${infoSectionTitle}:*
+${middleBorder}╭─▸ *${infoSectionTitle}:*
 ${middleBorder}
-${middleBorder}рҹ”Қ Use ${prefix}cmdinfo [comando]
-${middleBorder}   вҶі Para ver estatГӯsticas detalhadas
-${middleBorder}   вҶі Ex: ${prefix}cmdinfo menu
+${middleBorder}🔍 Use ${prefix}cmdinfo [comando]
+${middleBorder}   ↳ Para ver estatísticas detalhadas
+${middleBorder}   ↳ Ex: ${prefix}cmdinfo menu
 ${middleBorder}
 ${bottomBorder}
 
