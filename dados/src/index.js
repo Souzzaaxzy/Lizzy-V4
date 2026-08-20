@@ -27922,6 +27922,7 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
         // isGroupAdmin já inclui admins, moderadores e alphas com permissão
         try {
           if (!isGroup) return reply("◈ Este comando só funciona em grupos!");
+          if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
           if (!menc_prt) return reply("👆 *Marque uma mensagem* para banir o usuário!");
           let dbStanzaId, dbParticipant;
           if (info.message.extendedTextMessage) {
@@ -27933,7 +27934,7 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
           }
           if (!dbParticipant) return reply("Não consegui identificar o usuário.");
           // Verificar se não está tentando banir admin/dono
-          const targetRole = groupData?.usuarios?.[normalizeUserId(dbParticipant)]?.funcao;
+          const targetRole = groupData?.usuarios?.[await normalizeUserId(nazu, dbParticipant)]?.funcao;
           const targetIsAdmin = groupMetadata?.participants?.find(p => p.id === dbParticipant)?.admin;
           if (targetIsAdmin || targetRole === 'admin') {
             return reply("⚠️ Não posso banir um administrador!");
@@ -27944,27 +27945,53 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
           if (!isBotAdmin) {
             return reply("⚠️ Preciso ser administrador para banir membros!");
           }
-          // Apagar a mensagem marcada
-          await nazu.sendMessage(from, {
-            delete: {
-              remoteJid: from,
-              fromMe: false,
-              id: dbStanzaId,
-              participant: dbParticipant
-            }
-          });
-          // Banir o usuário
-          const dbTargetJid = isValidJid(dbParticipant) ? dbParticipant : formatToJid(dbParticipant.split('@')[0]);
-          await nazu.groupParticipantsUpdate(from, [dbTargetJid], 'remove').catch(e => console.error('Erro ao banir (db):', e));
-          // Apagar a própria mensagem do comando
-          await nazu.sendMessage(from, {
-            delete: {
-              remoteJid: from,
-              fromMe: false,
-              id: info.key.id,
-              participant: sender
-            }
-          });
+          let msgDeleted = false;
+          let userBanned = false;
+          // 1. Apagar a mensagem marcada (falha aqui não impede o ban)
+          try {
+            await nazu.sendMessage(from, {
+              delete: {
+                remoteJid: from,
+                fromMe: false,
+                id: dbStanzaId,
+                participant: dbParticipant
+              }
+            });
+            msgDeleted = true;
+          } catch (deleteError) {
+            console.error('Erro ao apagar mensagem (db):', deleteError);
+          }
+          // 2. Banir o usuário: usar o participant direto (funciona com LID e JID).
+          // Remove sufixo de dispositivo (:XX) que pode vir em LIDs.
+          const dbTargetJid = dbParticipant.includes(':')
+            ? dbParticipant.split(':')[0] + (dbParticipant.includes('@lid') ? '@lid' : '@s.whatsapp.net')
+            : dbParticipant;
+          try {
+            await nazu.groupParticipantsUpdate(from, [dbTargetJid], 'remove');
+            userBanned = true;
+          } catch (banError) {
+            console.error('Erro ao banir (db):', banError);
+          }
+          // 3. Apagar a própria mensagem do comando
+          try {
+            await nazu.sendMessage(from, {
+              delete: {
+                remoteJid: from,
+                fromMe: false,
+                id: info.key.id,
+                participant: sender
+              }
+            });
+          } catch (selfDeleteError) {
+            // Ignora erro ao apagar a própria mensagem
+          }
+          // Avisa se alguma das ações falhou
+          if (!msgDeleted || !userBanned) {
+            await reply(
+              (msgDeleted ? '✅' : '❌') + ' Mensagem apagada.\n' +
+              (userBanned ? '✅' : '❌') + ' Usuário removido do grupo.'
+            );
+          }
         } catch (error) {
           console.error('Erro no comando db:', error);
           reply("ocorreu um erro 💔");
