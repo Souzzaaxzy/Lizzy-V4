@@ -32134,7 +32134,7 @@ case 'set-bannerbv':
             await deleteWelcomeImage(groupData.welcome.image);
           }
           delete groupData.welcome.image;
-          fs.writeFileSync(groupFilePath, JSON.stringify(groupDataAntisocial, null, 2));
+          fs.writeFileSync(groupFilePath, JSON.stringify(groupData, null, 2));
           reply("✅ A imagem de boas-vindas foi removida com sucesso!");
         } catch (e) {
           console.error(e);
@@ -32154,7 +32154,7 @@ case 'set-bannerbv':
           };
           if (!groupData.exit?.image) return reply("❌ Não há imagem de saída configurada.");
           delete groupData.exit.image;
-          fs.writeFileSync(groupFilePath, JSON.stringify(groupDataAntisocial, null, 2));
+          fs.writeFileSync(groupFilePath, JSON.stringify(groupData, null, 2));
           reply("✅ A imagem de saída foi removida com sucesso!");
         } catch (e) {
           console.error(e);
@@ -32408,7 +32408,7 @@ case 'set-bannerbv':
             }
           }
           
-          fs.writeFileSync(groupFilePath, JSON.stringify(groupDataAntisocial, null, 2));
+          fs.writeFileSync(groupFilePath, JSON.stringify(groupData, null, 2));
           
           let msg = '';
           if (added.length > 0) msg += `✅ *${added.length} adicionado(s) à blacklist*\n`;
@@ -32496,7 +32496,7 @@ case 'set-bannerbv':
             }
           }
           
-          fs.writeFileSync(groupFilePath, JSON.stringify(groupDataAntisocial, null, 2));
+          fs.writeFileSync(groupFilePath, JSON.stringify(groupData, null, 2));
           
           let msg = '';
           if (removed.length > 0) msg += `👋 *${removed.length} removido(s) da blacklist*\n`;
@@ -32605,13 +32605,13 @@ case 'set-bannerbv':
             issuer: sender
           });
           const warningCount = groupData.warnings[menc_os2].length;
-          fs.writeFileSync(groupFilePath, JSON.stringify(groupDataAntisocial, null, 2));
+          fs.writeFileSync(groupFilePath, JSON.stringify(groupData, null, 2));
           // Obter o JID para banir - usar JID original ou o próprio menc_os2 (que pode ser LID válido)
           const targetJid = mencOs2JidOriginal || menc_os2;
           if (warningCount >= 3) {
             await nazu.groupParticipantsUpdate(from, [targetJid], 'remove').catch(e => console.error('Erro ao banir usuário (adv):', e));
             delete groupData.warnings[menc_os2];
-            fs.writeFileSync(groupFilePath, JSON.stringify(groupDataAntisocial, null, 2));
+            fs.writeFileSync(groupFilePath, JSON.stringify(groupData, null, 2));
             reply(`[ANTI-ROUBO] @${getUserName(menc_os2)} recebeu 3 advertências e foi banido!\nÚltima advertência: ${reason}`, {
               mentions: [menc_os2]
             });
@@ -32640,7 +32640,7 @@ case 'set-bannerbv':
           if (!groupData.warnings[menc_os2] || groupData.warnings[menc_os2].length === 0) return reply("❌ Este usuário não tem advertências.");
           groupData.warnings[menc_os2].pop();
           if (groupData.warnings[menc_os2].length === 0) delete groupData.warnings[menc_os2];
-          fs.writeFileSync(groupFilePath, JSON.stringify(groupDataAntisocial, null, 2));
+          fs.writeFileSync(groupFilePath, JSON.stringify(groupData, null, 2));
           reply(`✅ Uma advertência foi removida de @${getUserName(menc_os2)}. Advertências restantes: ${groupData.warnings[menc_os2]?.length || 0}/3`, {
             mentions: [menc_os2]
           });
@@ -32825,7 +32825,7 @@ case 'set-bannerbv':
               delete groupData.modoliteOff;
             }
           }
-          fs.writeFileSync(groupFilePath, JSON.stringify(groupDataAntisocial, null, 2));
+          fs.writeFileSync(groupFilePath, JSON.stringify(groupData, null, 2));
           if (groupData.modolite) {
             await reply('👶 *Modo Lite ativado!* O conteúdo inapropriado para crianças será filtrado neste grupo.');
           } else {
@@ -33047,7 +33047,7 @@ ${groupPrefix}antistickerplus remover → remove usuário e apaga mensagem
           const groupFilePath = __dirname + `/../database/grupos/${from}.json`;
           let groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : {};
           groupData.autoSticker = !groupData.autoSticker;
-          fs.writeFileSync(groupFilePath, JSON.stringify(groupDataAntisocial, null, 2));
+          fs.writeFileSync(groupFilePath, JSON.stringify(groupData, null, 2));
           const newsletterCtxStk = {
             forwardingScore: 999,
             isForwarded: true,
@@ -33070,7 +33070,7 @@ ${groupPrefix}antistickerplus remover → remove usuário e apaga mensagem
           const groupFilePath = __dirname + `/../database/grupos/${from}.json`;
           let groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : {};
           groupData.autorepo = !groupData.autorepo;
-          fs.writeFileSync(groupFilePath, JSON.stringify(groupDataAntisocial, null, 2));
+          fs.writeFileSync(groupFilePath, JSON.stringify(groupData, null, 2));
           const newsletterCtxAuto = {
             forwardingScore: 999,
             isForwarded: true,
@@ -33099,7 +33099,7 @@ case 'assistent':
       } else {
         groupData.assistentePersonality = groupData.assistentePersonality || 'abyss';
       }
-      fs.writeFileSync(groupFilePath, JSON.stringify(groupDataAntisocial, null, 2));
+      fs.writeFileSync(groupFilePath, JSON.stringify(groupData, null, 2));
       const statusMsg = groupData.assistente
         ? `✅ *Assistente ativada com sucesso!*\n\n` +
         `🤖 *Personalidade atual:* ${
@@ -33128,7 +33128,7 @@ case 'assistent':
     }
     groupData.assistente = true;
     groupData.assistentePersonality = personality;
-    fs.writeFileSync(groupFilePath, JSON.stringify(groupDataAntisocial, null, 2));
+    fs.writeFileSync(groupFilePath, JSON.stringify(groupData, null, 2));
     const personalityNames = {
       'abyss': '🌙 *Abyss* - Vampira tsundere',
       'humana': '👤 *Humana* - Age como pessoa real',
