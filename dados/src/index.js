@@ -2988,29 +2988,64 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
         fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
       }
     }
-    // Lógica Anti-Pagamento (antipagamento/antirequest)
-    if (isAntirequestPaymentMessage && isBotAdmin && (type === 'requestPaymentMessage' || type === 'sendPaymentMessage' || type === 'viewOnceMessageV2Extension' || type === 'viewOnceMessageV2' || type === 'viewOnceMessage') && !info.key.fromMe && !isGroupAdmin && !isUserWhitelisted(sender, 'antipagamento')) {
-      const newsletterCtxPayment = {
-        forwardingScore: 999,
-        isForwarded: true,
-        forwardedNewsletterMessageInfo: {
-          newsletterJid: "120363410980452460@newsletter",
-          newsletterName: "Lizzy"
+    // Lógica Anti-Pagamento (antipagamento/antirequest) — Lizzy + técnicas da RAVENA
+    if (isAntirequestPaymentMessage && isBotAdmin && !info.key.fromMe && !isGroupAdmin && !isOwner && !isUserWhitelisted(sender, 'antipagamento')) {
+      const isDirectPaymentMsg = type === 'requestPaymentMessage' || type === 'sendPaymentMessage';
+      const isViewOnceMsg = type === 'viewOnceMessageV2Extension' || type === 'viewOnceMessageV2' || type === 'viewOnceMessage';
+      // RAVENA: detecta resposta a um payment feita pelo próprio autor do payment (técnica de flood)
+      const quotedPaymentMsg = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+      const quotedPaymentAuthor = (quotedPaymentMsg?.requestPaymentMessage || quotedPaymentMsg?.sendPaymentMessage)
+        ? info.message?.extendedTextMessage?.contextInfo?.participant
+        : null;
+      const isReplyToPayment = !!(quotedPaymentAuthor && idsMatch(quotedPaymentAuthor, sender));
+      if (isDirectPaymentMsg || isViewOnceMsg || isReplyToPayment) {
+        const isPaymentCase = isDirectPaymentMsg || isReplyToPayment;
+        const newsletterCtxPayment = {
+          forwardingScore: 999,
+          isForwarded: true,
+          forwardedNewsletterMessageInfo: {
+            newsletterJid: "120363410980452460@newsletter",
+            newsletterName: "Lizzy"
+          }
+        };
+        try {
+          if (isPaymentCase) {
+            // RAVENA: mensagem limpante empurra o payment para cima da tela
+            await nazu.sendMessage(from, { text: '\n'.repeat(300) + '▫️ 𝙰𝙽𝚃𝙸-𝙵𝙻𝙾𝙾𝙳 𝙰𝚃𝙸𝚅𝙰𝙳𝙾 ▫️' }).catch(() => {});
+          }
+          await nazu.sendMessage(from, {
+            text: `[ANTI-ROUBO]❌ @${sender.split('@')[0]} ❌[ANTI-ROUBO]\n\n⚠️ *${isPaymentCase ? 'Mensagem de pagamento' : 'Visualização única'} não é permitida aqui!* ⚠️\n\nVocê foi removido do grupo.`,
+            mentions: [sender]
+          , contextInfo: newsletterCtxPayment, quoted: info });
+          if (groupData.legenda_documento && groupData.legenda_documento !== "0") {
+            await nazu.sendMessage(from, { text: groupData.legenda_documento }, { quoted: info });
+          }
+          if (isPaymentCase) {
+            // RAVENA: trava o grupo, remove o autor do payment e reabre
+            await nazu.groupSettingUpdate(from, 'announcement').catch(() => {});
+            await sleep(1500);
+            await nazu.groupParticipantsUpdate(from, [sender], 'remove').catch(e => console.error('Erro ao remover por pagamento:', e));
+            await sleep(1000);
+            await nazu.groupSettingUpdate(from, 'not_announcement').catch(() => {});
+            await nazu.sendMessage(from, { delete: { remoteJid: from, fromMe: false, id: info.key.id, participant: sender } }).catch(() => {});
+            // Apaga também o payment original que foi respondido
+            if (isReplyToPayment) {
+              const payStanzaId = info.message.extendedTextMessage.contextInfo.stanzaId;
+              if (payStanzaId) {
+                await nazu.sendMessage(from, { delete: { remoteJid: from, fromMe: false, id: payStanzaId, participant: quotedPaymentAuthor } }).catch(() => {});
+              }
+            }
+          } else {
+            setTimeout(async () => {
+              await nazu.sendMessage(from, { delete: { remoteJid: from, fromMe: false, id: info.key.id, participant: sender } }).catch(() => {});
+            }, 1500);
+            await nazu.groupParticipantsUpdate(from, [sender], 'remove').catch(e => console.error('Erro ao remover por pagamento:', e));
+          }
+        } catch (e) {
+          console.error('[ANTI-PAYMENT ERROR]', e);
         }
-      };
-      await nazu.sendMessage(from, {
-        text: `[ANTI-ROUBO]❌ @${sender.split('@')[0]} ❌[ANTI-ROUBO]\n\n⚠️ *Mensagem de pagamento ou visualização única não é permitida aqui!* ⚠️\n\nVocê foi removido do grupo.`,
-        mentions: [sender]
-      , contextInfo: newsletterCtxPayment, quoted: info });
-      if (groupData.legenda_documento && groupData.legenda_documento !== "0") {
-        await nazu.sendMessage(from, { text: groupData.legenda_documento }, { quoted: info });
+        return;
       }
-      setTimeout(async () => {
-        await nazu.sendMessage(from, { delete: { remoteJid: from, fromMe: false, id: info.key.id, participant: sender } }).catch(() => {});
-      }, 1500);
-      const senderJidPagto = sender;
-      await nazu.groupParticipantsUpdate(from, [senderJidPagto], 'remove').catch(e => console.error('Erro ao remover por pagamento:', e));
-      return;
     }
     
     // Anti-Mensagem Invisível (rajadas) - Usa participantAlt para detectar invasores
@@ -31332,6 +31367,8 @@ Proteção contra rajadas de mensagens invisíveis (payment message com amount 0
       }
       case 'antirequest':
       case 'antipagamento':
+      case 'antipayment':
+      case 'antipay':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
           if (!isGroupAdmin) return reply("Você precisa ser adm 💔");
