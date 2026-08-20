@@ -17,8 +17,6 @@ export default async function menuMembros(prefix, botName = "MeuBot", userName =
 │ 🤖 ${prefix}statusbot
 │ 👥 ${prefix}statusgp
 │ 📜 ${prefix}regras
-│ 📦 ${prefix}zipbot
-│ 🌐 ${prefix}gitbot
 │ 🎙 ${prefix}transcrever
 ╰──────────────
 
