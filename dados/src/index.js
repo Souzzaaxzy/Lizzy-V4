@@ -19127,8 +19127,13 @@ case 'addaluguel':
             videoUrl = q;
             youtube.mp3(videoUrl, 128)
               .then(async (dlRes) => {
-                if (!dlRes.ok) {
-                  return sendPlayError(`❌ Não foi possível baixar este vídeo.\n\n💡 Tente buscar por nome ao invés de usar o link.`);
+                if (!dlRes?.ok || !dlRes?.buffer) {
+                  console.error('[PLAY] youtube.mp3 falhou (link direto):', dlRes?.msg);
+                  return sendPlayError(`❌ Não foi possível baixar este vídeo.\n\n${dlRes?.msg || 'Erro desconhecido.'}\n\n💡 Tente buscar por nome ao invés de usar o link.`);
+                }
+                if (!Buffer.isBuffer(dlRes.buffer) || dlRes.buffer.length === 0) {
+                  console.error('[PLAY] buffer de áudio vazio ou inválido (link direto)');
+                  return sendPlayError('❌ Áudio baixado está vazio ou inválido.');
                 }
                 try {
                   // Apagar mensagem de pesquisa e mostrar "Música encontrada!"
@@ -19195,8 +19200,13 @@ case 'addaluguel':
               // =============================================
               youtube.mp3(videoUrl, 128)
                 .then(async (dlRes) => {
-                  if (!dlRes.ok) {
-                    return sendPlayError(`❌ Não foi possível baixar esta música.\n\nTente outra música.`);
+                  if (!dlRes?.ok || !dlRes?.buffer) {
+                    console.error('[PLAY] youtube.mp3 falhou:', dlRes?.msg);
+                    return sendPlayError(`❌ Não foi possível baixar esta música.\n\n${dlRes?.msg || 'Erro desconhecido.'}`);
+                  }
+                  if (!Buffer.isBuffer(dlRes.buffer) || dlRes.buffer.length === 0) {
+                    console.error('[PLAY] buffer de áudio vazio ou inválido (busca)');
+                    return sendPlayError('❌ Áudio baixado está vazio ou inválido.');
                   }
                   try {
                     // Apagar mensagem de busca e mostrar "Música encontrada!"
@@ -19204,7 +19214,7 @@ case 'addaluguel':
                     // =============================================
                     // ENVIAR INFORMAÇÕES DA MÚSICA
                     // =============================================
-                    const videoId = videoInfo.data.id || '';
+                    const videoId = videoInfo.data.videoId || '';
                     const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
                     const musicInfo = {
                       title: videoInfo.data.title || 'Música',
