@@ -87,37 +87,53 @@ async function checkYtDlp() {
   const candidates = [];
   if (process.env.YTDLP_PATH) candidates.push({ cmd: process.env.YTDLP_PATH, base: [] });
   candidates.push({ cmd: 'yt-dlp', base: [] });
+  // Caminhos absolutos comuns de instalação userspace (pip --user / pipx), comuns em
+  // ambientes Pterodactyl/hostiles onde o PATH do processo Node não inclui ~/.local/bin.
+  const home = os.homedir();
+  candidates.push({ cmd: `${home}/.local/bin/yt-dlp`, base: [] });
+  candidates.push({ cmd: '/home/container/.local/bin/yt-dlp', base: [] });
+  candidates.push({ cmd: '/root/.local/bin/yt-dlp', base: [] });
+  candidates.push({ cmd: '/usr/local/bin/yt-dlp', base: [] });
   candidates.push({ cmd: 'python3', base: ['-m', 'yt_dlp'] });
   candidates.push({ cmd: 'python', base: ['-m', 'yt_dlp'] });
+  candidates.push({ cmd: '/usr/bin/python3', base: ['-m', 'yt_dlp'] });
   for (const c of candidates) {
     try {
       await runProcess(c.cmd, [...c.base, '--version'], PROBE_TIMEOUT);
       ytdlpResolved = c;
       return c;
     } catch {
-      /* tenta o próximo candidato */
+      /* ignora; tenta o próximo candidato */
     }
   }
   ytdlpResolved = null;
   return null;
 }
 
-let ffmpegResolved; // undefined = não testado | boolean
+let ffmpegPath; // undefined = não testado | string indicando CAMINHO válido
 async function checkFfmpeg() {
-  if (ffmpegResolved) return true;
-  try {
-    await runProcess(FFMPEG, ['-version'], PROBE_TIMEOUT);
-    ffmpegResolved = true;
-    return true;
-  } catch {
-    ffmpegResolved = false;
-    return false;
+  if (ffmpegPath) return ffmpegPath;
+  const candidates = [FFMPEG];
+  if (!process.env.FFMPEG_PATH) {
+    const home = os.homedir();
+    candidates.push(`${home}/.local/bin/ffmpeg`, '/home/container/.local/bin/ffmpeg', '/root/.local/bin/ffmpeg', '/usr/bin/ffmpeg', '/usr/local/bin/ffmpeg');
   }
+  for (const cmd of candidates) {
+    try {
+      await runProcess(cmd, ['-version'], PROBE_TIMEOUT);
+      ffmpegPath = cmd;
+      return cmd;
+    } catch {
+      /* ignora */
+    }
+  }
+  return null; // não cacheia falha (instalação futura deve ser detectada)
 }
 
 // yt-dlp precisa saber onde está o FFmpeg quando ele não é o `ffmpeg` do PATH
-function ffmpegLocationArgs() {
-  return process.env.FFMPEG_PATH ? ['--ffmpeg-location', FFMPEG] : [];
+async function ffmpegLocationArgs() {
+  const f = await checkFfmpeg();
+  return f && f !== 'ffmpeg' ? ['--ffmpeg-location', f] : [];
 }
 
 // ---------- erros do yt-dlp → mensagens controladas ----------
@@ -229,7 +245,7 @@ async function ytdlpDownload(videoId, extraArgs, outTemplate) {
       '--max-filesize',
       String(MAX_BYTES),
       ...extraArgs,
-      ...ffmpegLocationArgs(),
+      ...(await ffmpegLocationArgs()),
       '-o',
       path.join(dir, outTemplate),
       '--print-json',
