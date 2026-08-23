@@ -63,7 +63,9 @@ const SystemInfo = {
 const DEPENDENCIES_CONFIG = [
     { name: 'Git', check: 'git --version', termux: 'pkg install git -y', win: 'winget install --id Git.Git -e', linux: 'apt install -y git || dnf install -y git || pacman -S --noconfirm git', mac: 'brew install git' },
     { name: 'Yarn', check: 'yarn --version', termux: 'npm i -g yarn', win: 'npm i -g yarn', linux: 'sudo npm i -g yarn', mac: 'npm i -g yarn' },
-    { name: 'FFmpeg', check: 'ffmpeg -version', termux: 'pkg install ffmpeg -y', win: 'winget install --id Gyan.FFmpeg -e || choco install ffmpeg', linux: 'apt install -y ffmpeg || dnf install -y ffmpeg || pacman -S --noconfirm ffmpeg', mac: 'brew install ffmpeg' }
+    { name: 'FFmpeg', check: 'ffmpeg -version', termux: 'pkg install ffmpeg -y', win: 'winget install --id Gyan.FFmpeg -e || choco install ffmpeg', linux: 'apt install -y ffmpeg || dnf install -y ffmpeg || pacman -S --noconfirm ffmpeg', mac: 'brew install ffmpeg' },
+    // yt-dlp: download local de YouTube. Instalação via pip (sem root; cai em userspace se preciso).
+    { name: 'yt-dlp', check: 'yt-dlp --version || python3 -m yt_dlp --version || python -m yt_dlp --version', termux: 'pip install -U yt-dlp', win: 'pip install -U yt-dlp', linux: 'python3 -m pip install -U yt-dlp || python -m pip install -U yt-dlp || python3 -m pip install --user -U yt-dlp', mac: 'python3 -m pip install -U yt-dlp' }
 ];
 
 async function runCommandWithSpinner(command, message) {

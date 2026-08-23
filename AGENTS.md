@@ -142,3 +142,12 @@
 ## Migração VexAPI — CONCLUÍDA (fases 2-10) + limpeza final feita ✅
 - Todas as 9 migrações feitas: Pinterest, TikTok, Instagram, Lyrics, YouTube, Edits, Logos, Canvas, ImageTools.
 - **Limpeza final executada**: removidos `funcs/API.js` (verificarAPI, órfã), chaves `site_vex`/`apikey_vex` de `config.json`, defaults+prompt em `.scripts/config.js`, `const site_vex` e o comando `!apikey`/`!setkey` em `index.js`. Zero referências funcionais restantes (só comentários de documentação). `smm setkey` (menu dono) é outro comando, inalterado. Validado: `node --check` OK, boot de módulos OK, smoke logos/imagetools OK.
+
+## !atualizar — instalação automática de dependências (ago/2026) ✅
+- `dados/src/.scripts/update.js` (chamado pelo `!atualizar`/`!update`/`!atualizarbot`, index.js ~16446): após `git pull`, agora **instala o que falta automaticamente** em vez de só baixar o código. Ordem: `git pull` → deps Node → FFmpeg → yt-dlp.
+- **Deps Node**: roda `npm ls --depth=0`; se houver pacote faltando ou `node_modules` ausente → `npm install --legacy-peer-deps` (fallback `npm install`). Se tudo íntegro → pula (idempotente, não reinstala desnecessariamente).
+- **yt-dlp** (requisito do YouTube local): checa `yt-dlp` no PATH → `python3 -m yt_dlp` → `python -m yt_dlp`; ausente → `python3|python -m pip install -U yt-dlp` com fallback `--user` (sem root/sudo). Falha na instalação **não aborta** a atualização — só loga aviso com o comando manual. Timeout 300s no pip, 600s no npm.
+- **FFmpeg**: só checagem (exige pacote de sistema ou `FFMPEG_PATH`). Ausente → aviso (não aborta). `update.js` usa `execFile` com args separados (sem concatenação).
+- **Mensagens do !atualizar** (index.js ~16485): mapa `updateMessages` ganhou triggers das novas etapas (`Dependências já atualizadas`, `Instalando yt-dlp`, `yt-dlp instalado/encontrado/ausente`, `FFmpeg encontrado/não encontrado`) — o usuário vê o progresso no WhatsApp.
+- `.scripts/config.js`: `DEPENDENCIES_CONFIG` ganhou entrada `yt-dlp` (check `yt-dlp --version || python3 -m yt_dlp --version`, install via pip por SO — termux/win/linux/mac), seguindo o padrão existente do Git/Yarn/FFmpeg.
+- Validado: repo git de teste (instala pacote faltando, instala yt-dlp via pip, 2ª run pula tudo), projeto real (deps completos → pula npm; PATH restrito → falha controlada), `node --check` OK.

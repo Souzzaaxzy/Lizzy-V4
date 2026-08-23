@@ -16483,7 +16483,15 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
             'Atualização aplicada': '✅ Atualização aplicada!\n\n📂 Restaurando dados preservados...',
             'Backup restaurado': '✅ Dados restaurados!\n\n📦 Instalando dependências...',
             'Instalando dependências': '📦 Instalando/verificando dependências...\n⏳ Isso pode levar alguns minutos...',
-            'Dependências instaladas': '✅ Dependências instaladas com sucesso!'
+            'Dependências instaladas': '✅ Dependências instaladas com sucesso!',
+            'Dependências já atualizadas': '✅ Dependências Node já estão atualizadas!',
+            'FFmpeg encontrado': '✅ FFmpeg disponível!',
+            'FFmpeg não encontrado': '⚠️ FFmpeg não encontrado no PATH (instale ou defina FFMPEG_PATH)',
+            'Instalando yt-dlp': '📥 Instalando yt-dlp (download de YouTube)...',
+            'yt-dlp instalado': '✅ yt-dlp instalado com sucesso!',
+            'yt-dlp encontrado': '✅ yt-dlp disponível!',
+            'yt-dlp ausente': '⚠️ yt-dlp não encontrado — instale manualmente: python3 -m pip install -U yt-dlp',
+            'falha ao instalar yt-dlp': '⚠️ Falha ao instalar yt-dlp automaticamente — instale: python3 -m pip install -U yt-dlp'
           };
           // Processa a fila de mensagens sequencialmente
           const processMessageQueue = async () => {
