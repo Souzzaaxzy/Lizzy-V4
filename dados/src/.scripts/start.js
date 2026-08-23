@@ -141,6 +141,36 @@ async function displayHeader() {
   console.log();
 }
 
+async function checkYtDlp() {
+  // Checa se yt-dlp está instalado; se não, instala automaticamente via pip (sem root).
+  // Necessário para o download local de YouTube (!play / !ytmp3 / !ytmp4).
+  info('📥 Verificando yt-dlp (download de YouTube)...');
+  const candidates = ['yt-dlp --version', 'python3 -m yt_dlp --version', 'python -m yt_dlp --version'];
+  for (const cmd of candidates) {
+    try {
+      execSync(cmd, { stdio: 'ignore', shell: true, timeout: 15000 });
+      mensagem('✅ yt-dlp já instalado.');
+      return;
+    } catch { /* tenta o próximo */ }
+  }
+  const python = (() => { try { execSync('python3 --version', { stdio: 'ignore', timeout: 10000 }); return 'python3'; } catch { try { execSync('python --version', { stdio: 'ignore', timeout: 10000 }); return 'python'; } catch { return null; } } })();
+  if (!python) {
+    aviso('⚠️ Python não encontrado — instale manualmente: python3 -m pip install -U yt-dlp');
+    return;
+  }
+  try {
+    info('⏳ Instalando yt-dlp...');
+    execSync(`${python} -m pip install -U yt-dlp`, { stdio: 'inherit', shell: true, timeout: 300000 });
+    mensagem('✅ yt-dlp instalado com sucesso!');
+  } catch {
+    try {
+      execSync(`${python} -m pip install --user -U yt-dlp`, { stdio: 'inherit', shell: true, timeout: 300000 });
+      mensagem('✅ yt-dlp instalado com sucesso (userspace)!');
+    } catch (e) {
+      aviso(`⚠️ Falha ao instalar yt-dlp: ${e.message}. Instale manualmente: ${python} -m pip install -U yt-dlp`);
+    }
+  }
+}
 async function checkPrerequisites() {
   // Apenas verifica se os arquivos básicos existem
   // Sem backup/restore automático na inicialização
@@ -202,6 +232,9 @@ async function checkPrerequisites() {
     aviso('❌ Não foi possível instalar as dependências.');
     process.exit(1);
   }
+  
+  // PASSO 3.5: yt-dlp (download local de YouTube)
+  await checkYtDlp();
   
   // PASSO 4: Verificar config.json
   if (!fsSync.existsSync(CONFIG_PATH)) {
