@@ -142,10 +142,14 @@ async function displayHeader() {
 }
 
 async function checkYtDlp() {
-  // Checa se yt-dlp está instalado; se não, instala automaticamente via pip (sem root).
+  // Checa se yt-dlp está instalado; se não, instala automaticamente (sem root).
   // Necessário para o download local de YouTube (!play / !ytmp3 / !ytmp4).
+  // Ordem: pip → ensurepip+pip → binário standalone oficial do GitHub (~/.local/bin).
   info('📥 Verificando yt-dlp (download de YouTube)...');
-  const candidates = ['yt-dlp --version', 'python3 -m yt_dlp --version', 'python -m yt_dlp --version'];
+  const homeBin = path.join(os.homedir(), '.local', 'bin');
+  const binName = isWindows ? 'yt-dlp.exe' : 'yt-dlp';
+  const localBin = path.join(homeBin, binName);
+  const candidates = ['yt-dlp --version', 'python3 -m yt_dlp --version', 'python -m yt_dlp --version', `"${localBin}" --version`];
   for (const cmd of candidates) {
     try {
       execSync(cmd, { stdio: 'ignore', shell: true, timeout: 15000 });
@@ -154,22 +158,46 @@ async function checkYtDlp() {
     } catch { /* tenta o próximo */ }
   }
   const python = (() => { try { execSync('python3 --version', { stdio: 'ignore', timeout: 10000 }); return 'python3'; } catch { try { execSync('python --version', { stdio: 'ignore', timeout: 10000 }); return 'python'; } catch { return null; } } })();
-  if (!python) {
-    aviso('⚠️ Python não encontrado — instale manualmente: python3 -m pip install -U yt-dlp');
-    return;
-  }
-  try {
-    info('⏳ Instalando yt-dlp...');
-    execSync(`${python} -m pip install -U yt-dlp`, { stdio: 'inherit', shell: true, timeout: 300000 });
-    mensagem('✅ yt-dlp instalado com sucesso!');
-  } catch {
-    try {
-      execSync(`${python} -m pip install --user -U yt-dlp`, { stdio: 'inherit', shell: true, timeout: 300000 });
-      mensagem('✅ yt-dlp instalado com sucesso (userspace)!');
-    } catch (e) {
-      aviso(`⚠️ Falha ao instalar yt-dlp: ${e.message}. Instale manualmente: ${python} -m pip install -U yt-dlp`);
+  const tryExec = (cmd) => { try { execSync(cmd, { stdio: 'inherit', shell: true, timeout: 300000 }); return true; } catch { return false; } };
+
+  // 1) pip (com ensurepip como preparo quando o módulo pip não existe)
+  if (python) {
+    info('⏳ Instalando yt-dlp via pip...');
+    const pipOk =
+      tryExec(`${python} -m pip install -U yt-dlp`) ||
+      tryExec(`${python} -m pip install --user -U yt-dlp`) ||
+      (tryExec(`${python} -m ensurepip --user`) && tryExec(`${python} -m pip install --user -U yt-dlp`));
+    if (pipOk) {
+      mensagem('✅ yt-dlp instalado com sucesso!');
+      return;
     }
+    info('ℹ️ pip indisponível — tentando binário standalone oficial...');
   }
+
+  // 2) Binário standalone oficial (não precisa de pip nem root)
+  try {
+    await fs.mkdir(homeBin, { recursive: true });
+    const dlUrl = isWindows
+      ? 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe'
+      : 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp';
+    const hasCurl = (() => { try { execSync('curl --version', { stdio: 'ignore', timeout: 10000 }); return true; } catch { return false; } })();
+    const hasWget = (() => { try { execSync('wget --version', { stdio: 'ignore', timeout: 10000 }); return true; } catch { return false; } })();
+    const dlCmd = hasCurl
+      ? `curl -sL -o "${localBin}" "${dlUrl}"`
+      : hasWget
+        ? `wget -q -O "${localBin}" "${dlUrl}"`
+        : null;
+    if (dlCmd && tryExec(dlCmd)) {
+      if (!isWindows) execSync(`chmod +x "${localBin}"`, { stdio: 'ignore' });
+      execSync(`"${localBin}" --version`, { stdio: 'ignore', shell: true, timeout: 30000 });
+      mensagem(`✅ yt-dlp instalado (binário) em ${localBin}`);
+      return;
+    }
+    aviso('⚠️ Falha ao baixar yt-dlp (sem curl/wget ou sem rede).');
+  } catch (e) {
+    aviso(`⚠️ Falha ao instalar yt-dlp: ${e.message}.`);
+  }
+  aviso('⚠️ yt-dlp não instalado. Comandos de YouTube (!play) ficarão indisponíveis.');
 }
 async function checkPrerequisites() {
   // Apenas verifica se os arquivos básicos existem

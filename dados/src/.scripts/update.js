@@ -2,6 +2,8 @@
 
 import { execFile } from 'child_process';
 import fs from 'fs';
+import os from 'os';
+import path from 'path';
 
 const execAsync = (cmd, args = [], opts = {}) => new Promise((resolve, reject) => {
   execFile(cmd, args, { shell: true, timeout: 600000, ...opts }, (error, stdout, stderr) => {
@@ -53,8 +55,11 @@ async function nodeDeps() {
   console.log('Dependências instaladas');
 }
 
-// yt-dlp local (download de YouTube). Instalação sem root/sudo, com fallback para userspace.
+// yt-dlp local (download de YouTube). Instalação sem root/sudo:
+// pip → ensurepip+pip → binário standalone oficial do GitHub em ~/.local/bin.
 async function ytDlp() {
+  const homeBin = path.join(os.homedir(), '.local', 'bin');
+  const localBin = path.join(homeBin, 'yt-dlp');
   if (await isAvailable('yt-dlp')) {
     console.log('yt-dlp encontrado');
     return;
@@ -63,24 +68,41 @@ async function ytDlp() {
     console.log('yt-dlp encontrado (python3 -m yt_dlp)');
     return;
   }
+  if (await isAvailable(localBin)) {
+    console.log('yt-dlp encontrado (~/.local/bin)');
+    return;
+  }
 
   const variant = (await isAvailable('python3')) ? 'python3' : (await isAvailable('python')) ? 'python' : null;
-  if (!variant) {
-    console.log('Aviso: yt-dlp ausente e Python não encontrado — instale manualmente (python3 -m pip install -U yt-dlp)');
-    return; // não aborta a atualização
-  }
-  console.log('Instalando yt-dlp');
-  try {
-    await execAsync(variant, ['-m', 'pip', 'install', '-U', 'yt-dlp'], { timeout: 300000 });
-  } catch {
-    try {
-      await execAsync(variant, ['-m', 'pip', 'install', '--user', '-U', 'yt-dlp'], { timeout: 300000 });
-    } catch (err) {
-      console.log('Aviso: falha ao instalar yt-dlp automaticamente:', err.stderr?.slice(-200) || err.message);
+  if (variant) {
+    console.log('Instalando yt-dlp');
+    const pip = async (args) => { try { await execAsync(variant, args, { timeout: 300000 }); return true; } catch { return false; } };
+    const pipOk =
+      (await pip(['-m', 'pip', 'install', '-U', 'yt-dlp'])) ||
+      (await pip(['-m', 'pip', 'install', '--user', '-U', 'yt-dlp'])) ||
+      ((await pip(['-m', 'ensurepip', '--user'])) && (await pip(['-m', 'pip', 'install', '--user', '-U', 'yt-dlp'])));
+    if (pipOk) {
+      console.log('yt-dlp instalado');
       return;
     }
+    console.log('Aviso: pip indisponível — baixando binário standalone oficial...');
   }
-  console.log('yt-dlp instalado');
+
+  // Binário standalone (não precisa de pip nem root; o youtube.js procura ~/.local/bin)
+  try {
+    fs.mkdirSync(homeBin, { recursive: true });
+    const url = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp';
+    const res = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(120000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    fs.writeFileSync(localBin, Buffer.from(await res.arrayBuffer()), { mode: 0o755 });
+    if (await isAvailable(localBin)) {
+      console.log(`yt-dlp instalado (binário) em ${localBin}`);
+      return;
+    }
+    throw new Error('binário baixado não executou');
+  } catch (err) {
+    console.log('Aviso: falha ao instalar yt-dlp automaticamente:', err.message);
+  }
 }
 
 // FFmpeg (conversão/stickers). Não tenta instalar sozinho: nos Linux de hospedagem
