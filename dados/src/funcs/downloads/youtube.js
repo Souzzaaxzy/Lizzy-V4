@@ -244,6 +244,13 @@ async function ytdlpDownload(videoId, extraArgs, outTemplate) {
       '30',
       '--max-filesize',
       String(MAX_BYTES),
+      // Estratégias anti-bloqueio do yt-dlp para IPs de datacenter
+      '--extractor-args',
+      'youtube:player_client=android,ios,web',
+      '--extractor-retries',
+      '3',
+      '--retry-sleep',
+      '5',
       ...extraArgs,
       ...(await ffmpegLocationArgs()),
       '-o',
