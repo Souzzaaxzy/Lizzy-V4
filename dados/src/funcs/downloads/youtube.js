@@ -245,12 +245,12 @@ async function ytdlpDownload(videoId, extraArgs, outTemplate) {
       '--max-filesize',
       String(MAX_BYTES),
       // Estratégias anti-bloqueio do yt-dlp para IPs de datacenter
-      '--extractor-args',
-      'youtube:player_client=android,ios,web',
       '--extractor-retries',
       '3',
       '--retry-sleep',
       '5',
+      '--user-agent',
+      'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36',
       ...extraArgs,
       ...(await ffmpegLocationArgs()),
       '-o',
@@ -258,11 +258,29 @@ async function ytdlpDownload(videoId, extraArgs, outTemplate) {
       '--print-json',
       `https://www.youtube.com/watch?v=${videoId}`
     ];
-    const { stdout } = await runProcess(ytdlp.cmd, args, YTDLP_TIMEOUT).catch(err => {
-      if (err.stderr) console.error('[youtube] yt-dlp stderr:', err.stderr.slice(-500));
-      else console.error('[youtube] yt-dlp falhou:', err.message);
-      throw err;
-    });
+    // Tenta múltiplos player_clients até um funcionar
+    const clients = ['android', 'ios', 'web', 'tv_embedded', 'mweb'];
+    let stdout = null;
+    let lastErr = null;
+    for (const client of clients) {
+      const argsWithClient = [...args, '--extractor-args', `youtube:player_client=${client}`];
+      try {
+        const result = await runProcess(ytdlp.cmd, argsWithClient, YTDLP_TIMEOUT);
+        stdout = result.stdout;
+        console.log(`[youtube] yt-dlp sucesso com client=${client}`);
+        break;
+      } catch (err) {
+        lastErr = err;
+        console.error(`[youtube] yt-dlp client=${client} falhou`);
+        if (clients.indexOf(client) < clients.length - 1) {
+          await new Promise(res => setTimeout(res, 2000));
+        }
+      }
+    }
+    if (!stdout) {
+      if (lastErr?.stderr) console.error('[youtube] yt-dlp stderr final:', lastErr.stderr.slice(-500));
+      throw lastErr || new Error('Todos os player_clients falharam');
+    }
     return { dir, meta: parsePrintJson(stdout) };
   } catch (err) {
     fs.rmSync(dir, { recursive: true, force: true });
