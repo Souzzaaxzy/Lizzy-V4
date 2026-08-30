@@ -19,6 +19,17 @@
  * Fallbacks automáticos: yt-dlp no PATH → `python3 -m yt_dlp` → `python -m yt_dlp`.
  * FFmpeg: FFMPEG_PATH (já usado pelo bot) ou `ffmpeg` no PATH.
  *
+ * Opções opcionais de ambiente (anti-bloqueio de datacenter):
+ *   YTDLP_SLEEP_REQUESTS   segundos de pausa entre requisições (ex.: 1)
+ *   YTDLP_FORCE_IPV4       força IPv4 por padrão; `YTDLP_DISABLE_IPV4=1` desativa.
+
+ *   YTDLP_PROXY             proxy de download (ex.: http://127.0.0.1:8080)
+ *   YTDLP_COOKIES_FILE      arquivo Netscape de cookies do próprio usuário
+ *   YTDLP_IMPERSONATE        impersonar client (ex.: chrome) — requer curl_cffi no yt-dlp
+
+ *   YTDLP_TIMEOUT_MS        timeout por tentativa (padrão 180s)
+ *   YTDLP_DEADLINE_MS       deadline total do download (padrão 240s)
+ *
  * Formato de retorno preservado (idêntico ao módulo original):
  *   search → { ok, data: { videoId, url, title, description, thumbnail,
  *              seconds, timestamp, views, ago, author } } | { ok:false, msg }
@@ -34,6 +45,12 @@ import path from 'path';
 const MAX_BYTES = 256 * 1024 * 1024;
 const FFMPEG = process.env.FFMPEG_PATH || 'ffmpeg';
 const YTDLP_TIMEOUT = parseInt(process.env.YTDLP_TIMEOUT_MS, 10) || 180000; // 180s padrão
+const YTDLP_DEADLINE = parseInt(process.env.YTDLP_DEADLINE_MS, 10) || 240000;  // teto real do fluxo de download inteiro (240s) — evita N clients x socket-timeount sem fim
+const YTDLP_SLEEP_REQUESTS = parseInt(process.env.YTDLP_SLEEP_REQUESTS, 10); // pausa entre requisições (ex.: 1)s
+const YTDLP_PROXY = process.env.YTDLP_PROXY || '';            // proxy opcional (ex.: http://127.0.0.1:8080)
+const YTDLP_COOKIES = process.env.YTDLP_COOKIES_FILE || '';   // arquivo Netscape opcional (ex.: /home/user/cookies.txt)
+const YTDLP_IMPERSONATE = process.env.YTDLP_IMPERSONATE || ''; // ex.: chrome (requer curl_cffi no yt-dlp)
+const YTDLP_FORCE_IPV4 = process.env.YTDLP_DISABLE_IPV4 !== '1';
 const PROBE_TIMEOUT = 15000;
 
 // ---------- processo filho com timeout real (spawn, args separados) ----------
@@ -160,6 +177,12 @@ function mapYtDlpError(stderr) {
 
 // ---------- extração de ID/URL ----------
 
+// Flag transitório de anti-bot/rate-limit (pode ceder com espera maior)
+function isBlockedError(err) {
+  const s = String(err?.message || '') + '\n' + String(err?.stderr || '');
+  return /not a bot|HTTP Error 429|Too Many Requests|HTTP Error 403|quota|rate-?limit/i.test(s);
+}
+
 // Aceita watch?v=, youtu.be/, /shorts/, /live/, /v/, /embed/, music.youtube.com.
 function extractVideoId(url) {
   const m = String(url || '').match(
@@ -251,6 +274,11 @@ async function ytdlpDownload(videoId, extraArgs, outTemplate) {
       '5',
       '--user-agent',
       'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36',
+      ...(YTDLP_SLEEP_REQUESTS ? ['--sleep-requests', String(YTDLP_SLEEP_REQUESTS)] : []),
+      ...(YTDLP_FORCE_IPV4 ? ['--force-ipv4'] : []),
+      ...(YTDLP_PROXY ? ['--proxy', YTDLP_PROXY] : []),
+      ...(YTDLP_COOKIES ? ['--cookies', YTDLP_COOKIES] : []),
+      ...(YTDLP_IMPERSONATE ? ['--impersonate', YTDLP_IMPERSONATE] : []),
       ...extraArgs,
       ...(await ffmpegLocationArgs()),
       '-o',
@@ -258,22 +286,31 @@ async function ytdlpDownload(videoId, extraArgs, outTemplate) {
       '--print-json',
       `https://www.youtube.com/watch?v=${videoId}`
     ];
-    // Tenta múltiplos player_clients até um funcionar
+    // Tenta múltiplos player_clients até um funcionar (backoff maior em bloqueio transitório)
     const clients = ['android', 'ios', 'web', 'tv_embedded', 'mweb'];
     let stdout = null;
     let lastErr = null;
+    const deadlineStart = Date.now();
     for (const client of clients) {
+      const remaining = YTDLP_DEADLINE - (Date.now() - deadlineStart);
+      if (remaining <= 1000) {
+        if (!lastErr) lastErr = new Error('Download expirou (deadline total atingida)');
+        break;
+      }
+      const attemptTimeout = Math.min(YTDLP_TIMEOUT, remaining);
       const argsWithClient = [...args, '--extractor-args', `youtube:player_client=${client}`];
       try {
-        const result = await runProcess(ytdlp.cmd, argsWithClient, YTDLP_TIMEOUT);
+        const result = await runProcess(ytdlp.cmd, argsWithClient, attemptTimeout);
         stdout = result.stdout;
         console.log(`[youtube] yt-dlp sucesso com client=${client}`);
         break;
       } catch (err) {
         lastErr = err;
-        console.error(`[youtube] yt-dlp client=${client} falhou`);
+        // Bloqueio/rate-limit costuma ser transitório: espera mais longa antes do próximo client
+        const blocked = isBlockedError(err);
+        console.error(`[youtube] yt-dlp client=${client} falhou${blocked ? ' (bloqueio/rate-limit' : ''}`);
         if (clients.indexOf(client) < clients.length - 1) {
-          await new Promise(res => setTimeout(res, 2000));
+          await new Promise(res => setTimeout(res, blocked ? 8000 : 2000));
         }
       }
     }
