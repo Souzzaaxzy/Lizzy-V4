@@ -26,6 +26,11 @@ dados/src/.auth_info_baileys/
 *.temp
 .DS_Store
 
+# Cookies do YouTube (nunca versionar credenciais)
+youtube-cookies.txt
+cookies.txt
+*.cookies.txt
+
 # Logs
 logs/
 *.log
