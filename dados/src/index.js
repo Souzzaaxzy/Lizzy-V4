@@ -19133,6 +19133,7 @@ case 'addaluguel':
           if (q.includes('youtube.com') || q.includes('youtu.be')) {
             // É um link direto
             videoUrl = q;
+            console.log(`[PLAY] URL recebida (link direto): ${videoUrl}`);
             youtube.mp3(videoUrl, 128)
               .then(async (dlRes) => {
                 if (!dlRes?.ok || !dlRes?.buffer) {
@@ -19157,6 +19158,7 @@ case 'addaluguel':
                     mentions: [sender]
                   }, { quoted: info }).catch(() => {});
                   // Enviar áudio
+                  console.log(`[PLAY] Enviando áudio (link direto): ${dlRes.filename || ''} — ${(dlRes.buffer?.length || 0) / 1024 / 1024} MB`);
                   await nazu.sendMessage(from, {
                     audio: dlRes.buffer,
                     mimetype: 'audio/mpeg'
@@ -19177,8 +19179,8 @@ case 'addaluguel':
                 }
               })
               .catch((downloadError) => {
-                console.error('Erro no download (link direto):', downloadError);
-                if (String(downloadError).includes("age")) {
+                console.error('[PLAY] yt-dlp error (link direto):', downloadError);
+                if (String(downloadError.message || downloadError).includes("age")) {
                   sendPlayError(`🔞 Este conteúdo possui restrição de idade e não pode ser baixado.`);
                 } else {
                   sendPlayError(`❌ Não foi possível baixar este vídeo.\n\n💡 Tente buscar por nome ao invés de usar o link.`);
@@ -19193,19 +19195,23 @@ case 'addaluguel':
           // =============================================
           // FLUXO DE BUSCA POR NOME
           // =============================================
+          console.log(`[PLAY] Pesquisa: ${q}`);
           youtube.search(q)
             .then(async (result) => {
               if (!result.ok) {
+                console.warn(`[PLAY] Pesquisa sem resultado: ${result?.msg || 'desconhecido'}`);
                 return sendPlayError(`❌ ${result.msg || 'Não foi possível encontrar esta música.'}\n\n💡 Verifique o nome e tente novamente.`);
               }
               videoInfo = result;
               videoUrl = result.data.url;
+              console.log(`[PLAY] URL encontrada: ${videoUrl} — ${result.data.title || ''}`);
               if (videoInfo.data.seconds > 1800) {
                 return sendPlayError(`⚠️ Este vídeo é muito longo (${videoInfo.data.timestamp}).\nPor favor, escolha um vídeo com menos de 30 minutos.`);
               }
               // =============================================
               // DOWNLOAD DO ÁUDIO
               // =============================================
+              console.log(`[PLAY] Iniciando download (yt-dlp): ${videoUrl}`);
               youtube.mp3(videoUrl, 128)
                 .then(async (dlRes) => {
                   if (!dlRes?.ok || !dlRes?.buffer) {
@@ -19271,6 +19277,7 @@ case 'addaluguel':
                     // =============================================
                     // ENVIAR ÁUDIO
                     // =============================================
+                    console.log(`[PLAY] Enviando áudio: ${dlRes.filename || ''} — ${(dlRes.buffer?.length || 0) / 1024 / 1024} MB`);
                     await nazu.sendMessage(from, {
                       audio: dlRes.buffer,
                       mimetype: 'audio/mpeg'

@@ -140,7 +140,7 @@ async function ffmpegLocationArgs() {
 
 function mapYtDlpError(stderr) {
   const s = String(stderr || '');
-  if (/Video unavailable|This video is not available/i.test(s)) return 'Vídeo indisponível.';
+  if (/Video unavailable|This video is (not available|unavailable)|is unavailable/i.test(s)) return 'Vídeo indisponível.';
   if (/Private video/i.test(s)) return 'Vídeo privado.';
   if (/Sign in to confirm your age|age-restricted|inappropriate for some users/i.test(s))
     return 'Vídeo com restrição de idade.';
@@ -278,7 +278,8 @@ async function ytdlpDownload(videoId, extraArgs, outTemplate) {
       }
     }
     if (!stdout) {
-      if (lastErr?.stderr) console.error('[youtube] yt-dlp stderr final:', lastErr.stderr.slice(-500));
+      if (lastErr?.stderr) console.error('[PLAY] yt-dlp stderr final:', lastErr.stderr.slice(-500));
+      console.error(`[PLAY] yt-dlp error: ${lastErr?.message || 'Todos os player_clients falharam'}`);
       throw lastErr || new Error('Todos os player_clients falharam');
     }
     return { dir, meta: parsePrintJson(stdout) };
@@ -326,6 +327,7 @@ async function mp3(url, bitrate = 128) {
     const videoId = extractVideoId(url);
     if (!videoId) return { ok: false, msg: 'URL do YouTube inválida' };
     const br = sanitizeBitrate(bitrate);
+    console.log(`[PLAY] Iniciando yt-dlp: ${url} (id=${videoId})`);
 
     const dl = await ytdlpDownload(
       videoId,
@@ -333,8 +335,10 @@ async function mp3(url, bitrate = 128) {
       'audio.%(ext)s'
     );
     dir = dl.dir;
+    console.log(`[PLAY] Download concluído: ${dl.meta?.title || ''} (${dir})`);
 
     const buffer = readOutputFile(dir, 'mp3');
+    console.log(`[PLAY] Conversão concluída: MP3 ${(buffer.length / 1024 / 1024).toFixed(2)} MB`);
     const title = dl.meta?.title || 'YouTube';
     const thumbnail =
       dl.meta?.thumbnail || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
@@ -349,7 +353,10 @@ async function mp3(url, bitrate = 128) {
   } catch (err) {
     return { ok: false, msg: 'Erro ao baixar música: ' + err.message };
   } finally {
-    if (dir) fs.rmSync(dir, { recursive: true, force: true });
+    if (dir) {
+      fs.rmSync(dir, { recursive: true, force: true });
+      console.log(`[PLAY] Arquivo removido: ${dir}`);
+    }
   }
 }
 
