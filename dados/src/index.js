@@ -23692,34 +23692,40 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
           reply("🐝 Ops! Ocorreu um erro inesperado!");
         }
         break;
-      case 'setgroq':
-      case 'setgrok':
-      case 'groqkey':
+      case 'key':
         try {
           if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
           if (!q) {
-            const currentKey = process.env.GROQ_API_KEY || '';
-            const maskedKey = currentKey ? currentKey.substring(0, 8) + '...' + currentKey.substring(currentKey.length - 4) : 'Não configurada';
-            return reply(`🔑 *Configurar GROQ API Key (GRÁTIS)*
+            const currentKey = typeof ia.getGeminiApiKey === 'function' ? ia.getGeminiApiKey(true) : (process.env.GEMINI_API_KEY || '');
+            const maskedKey = currentKey || 'Não configurada';
+            return reply(`🔑 *Configurar Google Gemini API Key*
 Key atual: \`${maskedKey}\`
-📝 *Como obter sua key (gratuito):*
-1. Acesse: https://console.groq.com/
+📝 *Como obter sua chave (grátis):*
+1. Acesse: https://aistudio.google.com/apikey
 2. Crie uma conta ou faça login
-3. Vá em API Keys > Create Key
+3. Vá em *Get API key* > *Create API key*
 4. Copie sua chave
 💡 *Uso:*
-${groupPrefix}setgroq sua_chave_aqui
-⚠️ Groq é gratuito com 30 req/min!`);
+${groupPrefix}key sua_chave_gemini
+⚠️ A chave Gemini dá acesso ao modelo de IA do bot.`);
+          }
+          const keyValue = q.trim();
+          if (!keyValue) {
+            return reply("❌ Chave inválida. Forneça uma chave válida.\nExemplo: ${groupPrefix}key AIza...");
+          }
+          if (/\s/.test(keyValue)) {
+            return reply("❌ Chave inválida. A chave não pode conter espaços.");
           }
           // Salvar no .env
           const envPath = pathz.join(__dirname, '../../.env');
           let envContent = '';
           if (fs.existsSync(envPath)) {
             envContent = fs.readFileSync(envPath, 'utf-8');
+            envContent = envContent.replace(/^GROQ_API_KEY=.*$/gm, "");
           }
-          // Substituir ou adicionar a linha GROQ_API_KEY
-          const keyLine = `GROQ_API_KEY=${q}`;
-          const keyRegex = /^GROQ_API_KEY=.*$/gm;
+          // Substituir ou adicionar a linha GEMINI_API_KEY
+          const keyLine = `GEMINI_API_KEY=${keyValue}`;
+          const keyRegex = /^GEMINI_API_KEY=.*$/gm;
           if (keyRegex.test(envContent)) {
             envContent = envContent.replace(keyRegex, keyLine);
           } else {
@@ -23727,11 +23733,15 @@ ${groupPrefix}setgroq sua_chave_aqui
           }
           fs.writeFileSync(envPath, envContent);
           // Atualizar variável em memória
-          process.env.GROQ_API_KEY = q;
-          await reply(`✅ *GROQ API Key configurada com sucesso!*
-🔑 Key: \`${q.substring(0, 8)}...${q.substring(q.length - 4)}\`
-✅ *GRÁTIS!* Limite: 30 req/min
-⚠️ *Importante:* Para aplicar completamente, reinicie o bot com ${groupPrefix}restart`);
+          process.env.GEMINI_API_KEY = keyValue;
+
+          // Aplicar imediatamente no módulo de IA (sem precisar reiniciar)
+          if (typeof ia.setGeminiApiKey === 'function') {
+            ia.setGeminiApiKey(keyValue);
+          }
+          await reply(`✅ *Chave da IA configurada com sucesso!*
+🔑 Key: \`${keyValue.substring(0, 4)}...${keyValue.substring(keyValue.length - 4)}\`
+🤖 O bot agora utiliza *Google Gemini* como provider de IA.`);
         } catch (e) {
           console.error(e);
           await reply("🐝 Ops! Ocorreu um erro inesperado. Tente novamente!");
@@ -35396,31 +35406,37 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
           if (audioSizeMB > 7) {
             return reply("❌ O áudio excede o limite de 7 minutos.");
           }
-          // Verificar se tem GROQ_API_KEY
-          if (!process.env.GROQ_API_KEY) {
-            return reply("❌ API da Groq não está configurada. Use !setgroq para configurar.");
+          // Verificar se tem chave Gemini configurada
+          const transcribeKey = typeof ia.getGeminiApiKey === 'function' ? ia.getGeminiApiKey() : (process.env.GEMINI_API_KEY || '');
+          if (!transcribeKey) {
+            return reply("❌ Chave da IA não está configurada. Use !key para configurar.");
           }
-          // Enviar para transcrição
-          const { default: FormData } = await import('form-data');
-          const form = new FormData();
-          form.append('file', Buffer.from(audioBuffer), { filename: 'audio.mp3', contentType: 'audio/mpeg' });
-          form.append('model', 'whisper-large-v3');
-          const response = await axios.post(
-            'https://api.groq.com/openai/v1/audio/transcriptions',
-            form,
+          // Enviar para transcrição via Google Gemini (áudio inline)
+          const b64Audio = audioBuffer.toString('base64');
+          const mimeType = quotedAudio.mimetype || 'audio/mpeg';
+          const transcribeModel = ia.GEMINI_DEFAULT_MODEL;
+          const transcribeRes = await axios.post(
+            `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(transcribeModel)}:generateContent`,
+            {
+              contents: [
+                {
+                  parts: [
+                    { text: 'Transcreva o áudio fornecido. Retorne apenas a transcrição completa, sem comentários.' },
+                    { inlineData: { mimeType: mimeType, data: b64Audio } }
+                  ]
+                }
+              ]
+            },
             {
               headers: {
-                ...form.getHeaders(),
-                'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
-              }
+                'Content-Type': 'application/json',
+                'x-goog-api-key': transcribeKey
+              },
+              timeout: 90000
             }
           );
-          const result = response.data;
-          if (result.error) {
-            console.error('Erro na API Groq:', result.error);
-            return reply("❌ Erro ao transcrever o áudio. Tente novamente.");
-          }
-          const transcription = result.text || '';
+          const candidate = transcribeRes.data?.candidates?.[0];
+          const transcription = candidate?.content?.parts?.map((p) => (p && typeof p.text === 'string') ? p.text : '').join('') || '';
           if (!transcription || transcription.trim() === '') {
             return reply("❌ Não foi possível transcrever o áudio. Ele pode estar inaudível ou vazio.");
           }

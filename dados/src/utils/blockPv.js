@@ -259,7 +259,7 @@ export const menuCommandsMap = {
     // Menu principal mostra esses menus:
     menuia: {
         menuName: 'IA',
-        commands: ['chatgpt', 'ia', 'gemini', 'gpt', 'groq', 'llama', 'deepseek']
+        commands: ['chatgpt', 'ia', 'gemini', 'gpt', 'llama', 'deepseek']
     },
     menudown: {
         menuName: 'Downloads',
@@ -283,7 +283,7 @@ export const menuCommandsMap = {
     },
     menudono: {
         menuName: 'Dono',
-        commands: ['cmd', 'exec', 'bc', 'broadcast', 'sair', 'entrar', 'blockmenupv', 'unblockmenupv', 'blockcmdpv', 'unblockcmdpv', 'listblockpv', 'nomebot', 'fotobot', 'bloquear', 'desbloquear', 'userblock', 'block', 'unblock', 'listblocks', 'modoligado', 'mododesligado', 'verificar', 'criarpv', 'deletepv', 'backup', 'setgroq', 'vergroq', 'settipoia', 'settipochat', 'regrasgp', 'rconfig', 'bconfig', 'config', 'addpalavra', 'delpalavra', 'listapc', 'antipalavras', 'addsticker', 'delsticker', 'listasticker', 'blackpalavra', 'bcgc', 'msgauto', 'addmsg', 'delmsg', 'listmsg', 'statusbot', 'att', 'update', 'restart', 'desligar', 'ligar', 'ping', 'configerroradm']
+        commands: ['cmd', 'exec', 'bc', 'broadcast', 'sair', 'entrar', 'blockmenupv', 'unblockmenupv', 'blockcmdpv', 'unblockcmdpv', 'listblockpv', 'nomebot', 'fotobot', 'bloquear', 'desbloquear', 'userblock', 'block', 'unblock', 'listblocks', 'modoligado', 'mododesligado', 'verificar', 'criarpv', 'deletepv', 'backup', 'key', 'settipoia', 'settipochat', 'regrasgp', 'rconfig', 'bconfig', 'config', 'addpalavra', 'delpalavra', 'listapc', 'antipalavras', 'addsticker', 'delsticker', 'listasticker', 'blackpalavra', 'bcgc', 'msgauto', 'addmsg', 'delmsg', 'listmsg', 'statusbot', 'att', 'update', 'restart', 'desligar', 'ligar', 'ping', 'configerroradm']
     },
     menumemb: {
         menuName: 'Membros',

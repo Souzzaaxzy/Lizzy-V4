@@ -19,8 +19,8 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 
 
 ╭─❖ 🤖 INTELIGÊNCIA ARTIFICIAL
-│ 🔑 ${prefix}setgroq
-│ 📋 Status: ${prefix}setgroq
+│ 🔑 ${prefix}key
+│ 📋 Status: ${prefix}key
 ╰──────────────
 
 

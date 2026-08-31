@@ -10,8 +10,23 @@ dotenv.config();
 
 import userContextDB from '../../utils/userContextDB.js';
 
-// Obter API key do Groq das variáveis de ambiente
-const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
+// Chave da API Google Gemini (carregada do .env ou definida em runtime via !key)
+let geminiApiKey = process.env.GEMINI_API_KEY || '';
+
+// Define a chave Gemini em runtime (usada pelo comando !key)
+function setGeminiApiKey(key) {
+  geminiApiKey = (key && typeof key === 'string') ? key.trim() : '';
+}
+
+// Retorna a chave Gemini atualmente em uso (mascarada para logs)
+function getGeminiApiKey(masked = false) {
+
+  const key = geminiApiKey || process.env.GEMINI_API_KEY || '';
+  if (!masked || !key) return key;
+  if (key.length <= 8) return '•'.repeat(key.length);
+  return `${key.substring(0, 4)}...${key.substring(key.length - 4)}`;
+}
+
 
 // Função para obter data/hora no fuso horário do Brasil (GMT-3)
 function getBrazilDateTime() {
@@ -1508,80 +1523,148 @@ Usuário: "muta esse maluco" (com tem_mencao=true)
 - Quando tem_mencao=true, comandos que precisam de @ NÃO precisam de falta
 `;
 
-// ========== FUNÇÃO GROQ (GRATUITA) ==========
-async function makeGroqRequest(modelo, texto, systemPrompt = null, historico = [], retries = 3) {
-  if (!modelo || !texto) {
+// ========== FUNÇÃO GOOGLE GEMINI ==========
+// Modelo Gemini padrão (estável e disponível na API — verificado em ago/2026)
+const GEMINI_DEFAULT_MODEL = 'gemini-3.7-flash';
+
+// Converte mensagens do formato OpenAI (system/user/assistant) para o formato Gemini (contents + systemInstruction)
+function buildGeminiPayload(modelo, texto, systemPrompt, historico) {
+  const contents = [];
+  let systemInstruction = systemPrompt || null;
+
+  if (historico && Array.isArray(historico)) {
+    for (const msg of historico) {
+      const role = msg.role;
+      const content = (msg.content && typeof msg.content === 'string') ? msg.content.trim() : '';
+      if (!content) continue;
+
+      if (role === 'system') {
+        // Mesclar instruções de sistema do histórico ao systemInstruction
+        systemInstruction = systemInstruction ? `${systemInstruction}\n\n${content}` : content;
+        continue;
+      }
+
+      const geminiRole = role === 'assistant' ? 'model' : 'user';
+      // Evitar dois conteúdos consecutivos do mesmo papel (Gemini exige alternância)
+      const prev = contents[contents.length - 1];
+      if (prev && prev.role === geminiRole) {
+        prev.parts[0].text += '\n\n' + content;
+        continue;
+      }
+
+      contents.push({ role: geminiRole, parts: [{ text: content }] });
+    }
+  }
+
+  // Mensagem atual do usuário sempre por último
+  const currentText = typeof texto === 'string' ? texto.trim() : String(texto || '');
+  if (!currentText) {
+    throw new Error('Parâmetros obrigatórios ausentes: texto vazio');
+  }
+
+  const last = contents[contents.length - 1];
+  if (last && last.role === 'user') {
+    last.parts[0].text += '\n\n' + currentText;
+  } else {
+    contents.push({ role: 'user', parts: [{ text: currentText }] });
+  }
+
+  const payload = {
+    contents,
+    generationConfig: {
+      temperature: 0.8,
+      maxOutputTokens: 4096
+    }
+  };
+  if (systemInstruction) {
+    payload.systemInstruction = { parts: [{ text: systemInstruction }] };
+  }
+  return payload;
+}
+
+
+// Extrai o texto da resposta do Gemini e normaliza para o formato OpenAI-compatível
+function normalizeGeminiResponse(data) {
+  const candidate = data?.candidates?.[0];
+  const parts = (candidate && Array.isArray(candidate.content?.parts)) ? candidate.content.parts : [];
+  const text = parts.map((part) => (part && typeof part.text === 'string') ? part.text : '').join('');
+
+  if (!text || !text.trim()) {
+    throw new Error('Resposta da API inválida');
+  }
+  return {
+    id: 'gemini-' + (candidate?.index ?? 0),
+    object: 'chat.completion',
+    choices: [
+      {
+        index: 0,
+        message: { role: 'assistant', content: text },
+        finish_reason: candidate?.finishReason || 'stop'
+      }
+    ]
+  };
+}
+
+async function makeGeminiRequest(modelo, texto, systemPrompt = null, historico = [], retries = 3) {
+  if (!texto) {
     throw new Error('Parâmetros obrigatórios ausentes: modelo e texto');
   }
 
-  if (!GROQ_API_KEY) {
-    throw new Error('GROQ_API_KEY não configurada. Adicione GROQ_API_KEY ao arquivo .env');
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) {
+    throw new Error('Chave da IA não configurada.Use !key para configurar.');
   }
 
-  const messages = [];
-  
-  if (systemPrompt) {
-    messages.push({ role: 'system', content: systemPrompt });
-  }
-  
-  // Limpar histórico - remover propriedades extras (timestamp, etc)
-  if (historico && historico.length > 0) {
-    const historicoLimpo = historico.map(msg => ({
-      role: msg.role,
-      content: msg.content
-    }));
-    messages.push(...historicoLimpo);
-  }
-  
-  messages.push({ role: 'user', content: texto });
-
-  // Mapear modelos para Groq
-  const modelMap = {
-    'meta/llama-3.1-nemotron-70b-instruct': 'llama-3.3-70b-versatile',
-    'meta/llama-3.1-405b-instruct': 'llama-3.3-70b-versatile',
-    'meta/llama-3.3-70b-instruct': 'llama-3.3-70b-versatile',
-    'moonshotai/kimi-k2.6': 'llama-3.3-70b-versatile'
-  };
-  const groqModel = modelMap[modelo] || 'llama-3.3-70b-versatile';
+  const model = typeof modelo === 'string' && modelo.trim() ? modelo.trim() : GEMINI_DEFAULT_MODEL;
+  const payload = buildGeminiPayload(modelo, texto, systemPrompt, historico);
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
 
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
       const response = await axios.post(
-        'https://api.groq.com/openai/v1/chat/completions',
-        {
-          messages,
-          model: groqModel,
-          temperature: 0.8,
-          max_tokens: 4096
-        },
+        url,
+        payload,
         {
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${GROQ_API_KEY}`
+            'x-goog-api-key': apiKey
           },
           timeout: 90000
         }
       );
 
-      if (!response.data || !response.data.choices || !response.data.choices[0]) {
-        throw new Error('Resposta da API inválida');
-      }
+      const data = normalizeGeminiResponse(response.data);
+      console.log('[Gemini API] ✅ Resposta recebida com sucesso');
 
-      console.log('[Groq API] ✅ Resposta recebida com sucesso');
-      
       return {
         success: true,
-        data: response.data
+        data
       };
 
     } catch (error) {
       const status = error.response?.status;
       const apiMessage = error.response?.data?.error?.message || error.message;
-      
-      console.warn(`[Groq API] Tentativa ${attempt + 1}/${retries} falhou:`, { status, message: apiMessage });
+
+      // Mapear erros para mensagens amigáveis/roteáveis pelos call sites existentes
+      let friendlyMessage;
+      if (status === 400 || status === 401 || status === 403) {
+        friendlyMessage = 'API key inválida ou sem permissão de acesso à Google Gemini API.';
+      } else if (status === 404) {
+        friendlyMessage = 'Modelo de IA indisponível na Google Gemini API (' + model + ').';
+      } else if (status === 429) {
+        friendlyMessage = 'Limite de requisições da Google Gemini API atingido. Tente novamente mais tarde.';
+      } else if (status === 408 || error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+        friendlyMessage = 'Tempo esgotado ao chamar a Google Gemini API.';
+      } else if (!status || error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED' || error.code === 'EAI_AGAIN') {
+        friendlyMessage = 'Falha de rede ao chamar a Google Gemini API.';
+      } else {
+        friendlyMessage = apiMessage || 'Erro desconhecido na Google Gemini API.';
+      }
+
+      console.warn(`[Gemini API] Tentativa ${attempt + 1}/${retries} falhou:`, { status, message: apiMessage });
 
       if (attempt === retries - 1) {
-        throw new Error(`[GROQ_ERROR] Falha na requisição: ${apiMessage}`);
+        throw new Error(`[AI_ERROR] Falha na requisição: ${friendlyMessage}`);
       }
 
       await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
@@ -1589,19 +1672,19 @@ async function makeGroqRequest(modelo, texto, systemPrompt = null, historico = [
   }
 }
 
-// ========== FUNÇÃO PRINCIPAL (GROQ) ==========
+// ========== FUNÇÃO PRINCIPAL (IA — provider Gemini) ==========
 async function makeCognimaRequest(modelo, texto, systemPrompt = null, historico = [], retries = 3) {
-  if (!modelo || !texto) {
+  if (!texto) {
     throw new Error('Parâmetros obrigatórios ausentes: modelo e texto');
   }
 
-  if (!GROQ_API_KEY) {
-    throw new Error('GROQ_API_KEY não configurada. Use !setgroq para configurar.');
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) {
+    throw new Error('Chave da IA não configurada.Use !key para configurar.');
   }
 
-  return await makeGroqRequest(modelo, texto, systemPrompt, historico, retries);
+  return await makeGeminiRequest(modelo, texto, systemPrompt, historico, retries);
 }
-
 function cleanWhatsAppFormatting(texto) {
   if (!texto || typeof texto !== 'string') return texto;
   return texto
@@ -1739,7 +1822,7 @@ function updateHistorico(grupoUserId, role, content, nome = null) {
     historico[grupoUserId] = [];
   }
   
-  // Apenas role e content - sem timestamp/name para compatibilidade com Groq
+  // Apenas role e content - sem timestamp/name para compatibilidade com o formato Gemini
   const entry = {
     role,
     content: cleanWhatsAppFormatting(content)
@@ -2051,7 +2134,7 @@ async function processUserMessages(data, nazu = null, ownerNumber = null, person
       try {
         // Chamada única para processamento com contexto
         const response = (await makeCognimaRequest(
-          'moonshotai/kimi-k2.6',
+          GEMINI_DEFAULT_MODEL,
           JSON.stringify(userInput),
           selectedPrompt,
           historico[userId] || []
@@ -3305,8 +3388,8 @@ function getAbyssResponseDelay(grupoUserId) {
 
 
 
-// ========== FUNÇÃO DE GERAÇÃO DE IMAGEM (GROQ + POLLINATIONS) ==========
-async function generateImageGroq(prompt, retries = 3) {
+// ========== FUNÇÃO DE GERAÇÃO DE IMAGEM (POLLINATIONS) ==========
+async function generateImage(prompt, retries = 3) {
   if (!prompt || typeof prompt !== 'string') {
     throw new Error('Prompt é obrigatório para geração de imagem');
   }
@@ -3381,5 +3464,8 @@ export {
   checkBotNameMention,
   hasBotMention,
   // Image generation
-  generateImageGroq
+  generateImage,
+  setGeminiApiKey,
+  getGeminiApiKey,
+  GEMINI_DEFAULT_MODEL,
 };
