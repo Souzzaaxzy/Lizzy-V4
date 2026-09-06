@@ -3319,7 +3319,7 @@ Você foi removido do grupo.`,
           optimizer.invalidateGroup(from);
         }
         await nazu.sendMessage(from, {
-          text: `👋 *Bem-vindo de volta, @${getUserName(sender)}!*\nVocê estava ausente por ${afkTime} e agora está de volta ao grupo. 😎\n\n✨ Que bom ter você por aqui novamente! ${nomebot}`,{
+          text: `👋 *Bem-vindo de volta, @${getUserName(sender)}!*\nVocê estava ausente por ${afkTime} e agora está de volta ao grupo. 😎\n\n✨ Que bom ter você por aqui novamente! ${nomebot}`,
           mentions: [
             sender
           ]
@@ -36883,7 +36883,7 @@ Marque duas pessoas para ver a compatibilidade!`);
           fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
           const motivoExib = reason || groupData.afkUsers[sender].reason || 'Não especificado';
           const msgAusencia = `💤 {nomebot} está ausente no momento.\n\nMotivo: ${motivoExib}\n\n⏰ Assim que voltar, avisaremos que você esteve ausente.`;
-          await reply(msgAusencia.replace(/{nomebot}/gi,nomebot);
+          await reply(msgAusencia.replace(/{nomebot}/gi,nomebot));
         } catch (e) {
           console.error('Erro no comando afk:', e);
           await reply('Ocorreu um erro ao definir AFK 💔');
@@ -36899,7 +36899,7 @@ Marque duas pessoas para ver a compatibilidade!`);
             delete groupData.afkUsers[sender];
             fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
             await nazu.sendMessage(from, {
-              text: `👋 Bem-vindo de volta, @${getUserName(sender)}!\nVocê estava ausente por ${afkTime} e agora está de volta ao grupo.😎\n\n✨ Que bom ter você por aqui novamente! ${nomebot}`,{
+              text: `👋 Bem-vindo de volta, @${getUserName(sender)}!\nVocê estava ausente por ${afkTime} e agora está de volta ao grupo.😎\n\n✨ Que bom ter você por aqui novamente! ${nomebot}`,
               mentions: [
                 sender
               ]
