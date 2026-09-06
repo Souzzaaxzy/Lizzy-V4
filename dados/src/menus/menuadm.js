@@ -207,6 +207,8 @@ export default async function menuadm(prefix, botName = "MeuBot", userName = "Us
 │ 🤝 ${prefix}modoparceria
 │ 🎮 ${prefix}modorpg
 │ ⚽ ${prefix}modofut
+│ 🖼 ${prefix}modofig
+│    > Ativa/desativa a conversão automática de fotos e vídeos de até 9 segundos em figurinhas.
 │ 🌙 ${prefix}modolite
 │ 👋 ${prefix}bemvindo
 │ 👋 ${prefix}bemvindo2

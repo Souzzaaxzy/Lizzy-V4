@@ -2538,6 +2538,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       // default flags
       groupData.modorpg = typeof groupData.modorpg === 'boolean' ? groupData.modorpg : false;
       groupData.modofut = typeof groupData.modofut === 'boolean' ? groupData.modofut : true; // Por padrão, fut fica ATIVADO
+      groupData.modofig = typeof groupData.modofig === 'boolean' ? groupData.modofig : false;
       groupData.minMessage = groupData.minMessage || null;
       groupData.moderators = groupData.moderators || [];
       groupData.allowedModCommands = groupData.allowedModCommands || [];
@@ -4644,26 +4645,27 @@ Código: *${roleCode}*`,
         }
       }
     }
-    if (isGroup && groupData.autoSticker && !info.key.fromMe) {
+    const autoConvertMediaToSticker = async () => {
+      const mediaImage = info.message?.imageMessage || info.message?.viewOnceMessageV2?.message?.imageMessage || info.message?.viewOnceMessage?.message?.imageMessage;
+      const mediaVideo = info.message?.videoMessage || info.message?.viewOnceMessageV2?.message?.videoMessage || info.message?.viewOnceMessage?.message?.videoMessage;
+      if (!mediaImage && !mediaVideo) return;
+      const isVideo = !!mediaVideo;
+      if (isVideo && mediaVideo.seconds > 9.9) return;
+      const buffer = await getFileBuffer(isVideo ? mediaVideo : mediaImage, isVideo ? 'video' : 'image');
+      const shouldForceSquare = global.autoStickerMode === 'square';
+      await sendSticker(nazu, from, {
+        sticker: buffer,
+        author: `『${pushname}』`,
+        packname: `${nomebot}`,
+        type: isVideo ? 'video' : 'image',
+        forceSquare: shouldForceSquare
+      }, {
+        quoted: info
+      });
+    };
+    if (isGroup && !info.key.fromMe && (groupData.autoSticker || groupData.modofig)) {
       try {
-        const mediaImage = info.message?.imageMessage || info.message?.viewOnceMessageV2?.message?.imageMessage || info.message?.viewOnceMessage?.message?.imageMessage;
-        const mediaVideo = info.message?.videoMessage || info.message?.viewOnceMessageV2?.message?.videoMessage || info.message?.viewOnceMessage?.message?.videoMessage;
-        if (mediaImage || mediaVideo) {
-          const isVideo = !!mediaVideo;
-          if (isVideo && mediaVideo.seconds > 9.9) {
-            return;
-          }
-          const buffer = await getFileBuffer(isVideo ? mediaVideo : mediaImage, isVideo ? 'video' : 'image');
-          const shouldForceSquare = global.autoStickerMode === 'square';
-          await sendSticker(nazu, from, {
-            sticker: buffer,
-author: `『${pushname}』`,
-packname: `${nomebot}`,            type: isVideo ? 'video' : 'image',
-            forceSquare: shouldForceSquare
-          }, {
-            quoted: info
-          });
-        }
+        await autoConvertMediaToSticker();
       } catch (e) {
         console.error("Erro ao converter mídia em figurinha automática:", e);
       }
@@ -32422,6 +32424,35 @@ case 'set-bannerbv':
           await reply("Ocorreu um erro ao alterar o modo de futebol 💔");
         }
         break;
+      case 'modofig':
+      case 'modofigurinha':
+      case 'figmode': {
+        try {
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          if (!isGroupAdmin) return reply("Apenas administradores podem usar este comando.");
+          groupData.modofig = !groupData.modofig;
+          writeJsonFile(groupFile, groupData);
+          if (isGroup) {
+            optimizer.invalidateGroup(from);
+          }
+          const newsletterCtxFig = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          const figMsg = groupData.modofig
+            ? `🖼️ *Modo Figurinhas*\n\nO modo automático de figurinhas foi *ativado* neste grupo.\n\n📸 Fotos: Automático\n🎥 Vídeos até 9s: Automático`
+            : `🖼️ *Modo Figurinhas*\n\nO modo automático de figurinhas foi *desativado* neste grupo.`;
+          await nazu.sendMessage(from, { text: figMsg, contextInfo: newsletterCtxFig, quoted: info });
+        } catch (e) {
+          console.error('Erro no comando modofig:', e);
+          await reply("Ocorreu um erro ao alterar o modo de figurinhas 💔");
+        }
+        break;
+      }
       case 'antifig':
         try {
           if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
