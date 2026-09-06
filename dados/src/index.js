@@ -96,6 +96,22 @@ function formatMessageText(template, replacements) {
   return text;
 }
 // ============================================================
+// Formata uma duraçáo em milissegundos para texto legível (pt-BR)
+function formatAwayTime(ms) {
+  if (!Number.isFinite(ms) || ms <=  0) return '0 segundos';
+  const totalSeconds = Math.floor(ms /  1000);
+  const days = Math.floor(totalSeconds /   (24 * 60 * 60));
+  const hours = Math.floor((totalSeconds %   (24 * 60 * 60)) / (60 * 60));
+  const minutes = Math.floor((totalSeconds %   (60 * 60)) / 60);
+  const seconds = totalSeconds %  60;
+  const parts = [];
+  if (days >  0) parts.push(`${days} ${days === 1 ? 'dia' : 'dias' }`);
+  if (hours >  0) parts.push(`${hours} ${hours === 1 ? 'hora' : 'horas' }`);
+  if (minutes >  0) parts.push(`${minutes} ${minutes === 1 ? 'minuto' : 'minutos' }`);
+  if (days ===  0 && hours ===  0 && seconds >  0) parts.push(`${seconds} ${seconds === 1 ? 'segundo' : 'segundos' }`);
+  return parts.join(' e ') || '0 segundos';
+}
+
 // SISTEMA DE PROTEÇÃO ANTI-LOOP DO ANTI-ROUBO
 // Cache para evitar que o bot processe seus próprios eventos
 // ============================================================
@@ -3292,19 +3308,24 @@ Você foi removido do grupo.`,
     }
     if (isGroup && groupData.afkUsers && groupData.afkUsers[sender]) {
       try {
-        const afkReason = groupData.afkUsers[sender].reason;
-        const afkSince = new Date(groupData.afkUsers[sender].since || Date.now()).toLocaleString('pt-BR', {
-          timeZone: 'America/Sao_Paulo'
-        });
+        const afkData = groupData.afkUsers[sender];
+        const afkSinceMs = typeof afkData.since === 'number' ? afkData.since : Date.now();
+        const afkTime = formatAwayTime(Date.now() - afkSinceMs);
+        const afkReason = afkData.reason || 'Não especificado';
         delete groupData.afkUsers[sender];
         writeJsonFile(groupFile, groupData);
-        // Otimização: Invalida cache quando groupData é salvo
+        // Otimização: Invalida cache quando groupData ê salvo
         if (isGroup) {
           optimizer.invalidateGroup(from);
         }
-        await reply(`👋 *Bem-vindo(a) de volta!*\nSeu status AFK foi removido.\nVocê estava ausente desde: ${afkSince}`);
+        await nazu.sendMessage(from, {
+          text: `👋 *Bem-vindo de volta, @${getUserName(sender)}!*\nVocê estava ausente por ${afkTime} e agora está de volta ao grupo. 😎\n\n✨ Que bom ter você por aqui novamente! ${nomebot}`,{
+          mentions: [
+            sender
+          ]
+        });
       } catch (error) {
-        console.error("Erro ao processar remoção de AFK:", error);
+        console.error('Erro ao processar remoção de AFK:', error);
       }
     }
     if (isGroup && isMuted && !isGroupAdmin && !isOwner) {
@@ -36851,38 +36872,46 @@ Marque duas pessoas para ver a compatibilidade!`);
         break;
       case 'afk':
         try {
-          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          if (!isGroup) return reply('◈ Este comando só funciona em grupos.');
           const reason = q.trim();
           groupData.afkUsers = groupData.afkUsers || {};
+          const afkJaSalvo = Boolean(groupData.afkUsers[sender]);
           groupData.afkUsers[sender] = {
-            reason: reason || 'Não especificado',
+            reason: reason || (afkJaSalvo ? groupData.afkUsers[sender].reason : null) || 'Não especificado',
             since: Date.now()
           };
           fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
-          let afkSetMessage = `😴 Você está AFK.`;
-          if (reason) {
-            afkSetMessage += `
-Motivo: ${reason}`;
-          }
-          await reply(afkSetMessage);
+          const motivoExib = reason || groupData.afkUsers[sender].reason || 'Não especificado';
+          const msgAusencia = `💤 {nomebot} está ausente no momento.\n\nMotivo: ${motivoExib}\n\n⏰ Assim que voltar, avisaremos que você esteve ausente.`;
+          await reply(msgAusencia.replace(/{nomebot}/gi,nomebot);
         } catch (e) {
           console.error('Erro no comando afk:', e);
-          await reply("Ocorreu um erro ao definir AFK 💔");
+          await reply('Ocorreu um erro ao definir AFK 💔');
         }
         break;
       case 'voltei':
         try {
-          if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
+          if (!isGroup) return reply('◈ Este comando só funciona em grupos.');
           if (groupData.afkUsers && groupData.afkUsers[sender]) {
+            const afkData = groupData.afkUsers[sender];
+            const afkSinceMs = typeof afkData.since === 'number' ? afkData.since : Date.now();
+            const afkTime = formatAwayTime(Date.now() - afkSinceMs);
             delete groupData.afkUsers[sender];
             fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
-            await reply(`👋 Bem-vindo(a) de volta! Seu status AFK foi removido.`);
+            await nazu.sendMessage(from, {
+              text: `👋 Bem-vindo de volta, @${getUserName(sender)}!\nVocê estava ausente por ${afkTime} e agora está de volta ao grupo.😎\n\n✨ Que bom ter você por aqui novamente! ${nomebot}`,{
+              mentions: [
+                sender
+              ]
+            },{
+              quoted: info
+            });
           } else {
-            await reply("Você não estava AFK.");
+            await reply('Você não estava AFK.');
           }
         } catch (e) {
           console.error('Erro no comando voltei:', e);
-          await reply("Ocorreu um erro ao remover AFK 💔");
+          await reply('Ocorreu um erro ao remover AFK 💔');
         }
         break;
       case 'regras':
