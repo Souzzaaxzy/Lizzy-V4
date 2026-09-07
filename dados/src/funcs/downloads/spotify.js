@@ -5,8 +5,30 @@
 
 import axios from 'axios';
 
-const SEARCH_BASE_URL = 'https://api.vreden.my.id';
+const SEARCH_BASE_URL = 'https://vreden.my.id';
 const DOWNLOAD_BASE_URL = 'https://spotisaver.net';
+const BRAVE_SEARCH_URL = 'https://search.brave.com/search';
+const BRAVE_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
+
+// Cache de busca Brave (parcial, por query)
+const braveCache = new Map();
+const BRAVE_CACHE_TTL = 60 * 60 * 1000;
+function getBraveCached(key) {
+  const item = braveCache.get(key);
+  if (!item) return null;
+  if (Date.now() - item.ts > BRAVE_CACHE_TTL) {
+    braveCache.delete(key);
+    return null;
+  }
+  return item.val;
+}
+function setBraveCache(key, val) {
+  if (braveCache.size >= 500) {
+    const oldestKey = braveCache.keys().next().value;
+    braveCache.delete(oldestKey);
+  }
+  braveCache.set(key, { val, ts: Date.now() });
+}
 
 // Cache simples
 const cache = new Map();
@@ -63,6 +85,53 @@ function isValidSpotifyUrl(url) {
  * @param {number} limit - Número de resultados
  * @returns {Promise<Object>} Resultados da busca
  */
+/**
+ * Busca tracks do Spotify via Brave Search (HTML publico, sem API)
+ */
+async function searchViaBrave(query) {
+  try {
+    const cached = getBraveCached('brave:' + query);
+    if (cached) return cached;
+    const response = await fetch(BRAVE_SEARCH_URL + '?q=' + encodeURIComponent(query + ' site:open.spotify.com/track'), {
+      headers: {
+        'User-Agent': BRAVE_USER_AGENT,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Referer': 'https://search.brave.com/',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'same-origin',
+        'Upgrade-Insecure-Requests': '1'
+      },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(45000)
+    });
+    if (!response.ok) {
+      return { ok: false, msg: 'Busca Brave indisponível (status ' + response.status + ')' };
+    }
+    const html = await response.text();
+    const urlRegex = new RegExp('https://open\\.spotify\\.com/track/[a-zA-Z0-9]+', 'g');
+    const uniqueUrls = [...new Set(html.match(urlRegex) || [])].slice(0, 5);
+    const found = [];
+    for (const url of uniqueUrls) {
+      const pos = html.indexOf(url);
+      const segment = html.slice(pos, pos + 3000);
+      const tm = segment.match(/title="([^"]+)"[^>]*>[^<]*/);
+      let title = tm ? tm[1].replace(/\| Spotify$/i, '').trim() : url;
+      const titleMatch = title.match(/^(.*?)\s*-\s*song and lyrics by (.*)$/i);
+      const name = titleMatch ? titleMatch[1].trim() : title.split('|')[0].trim();
+      const artist = titleMatch ? titleMatch[2].trim() : '';
+      found.push({ name, artist, song_link: url, link: url, source: 'brave' });
+    }
+    if (!found.length) return { ok: false, msg: 'Nenhuma música encontrada no Brave Search' };
+    setBraveCache('brave:' + query, found);
+    return { ok: true, results: found };
+  } catch (error) {
+    console.error('Erro na busca Brave do Spotify:', error.message);
+    return { ok: false, msg: 'Erro na busca Brave do Spotify: ' + error.message };
+  }
+}
+
 async function search(query) {
   try {
     if (!query || typeof query !== 'string') {
@@ -74,6 +143,26 @@ async function search(query) {
 
     const cached = getCached(`search:${query}`);
     if (cached) return cached;
+
+    try {
+      const brave = await searchViaBrave(query);
+      if (brave.ok && brave.results.length) {
+        const result = {
+          ok: true,
+          query,
+          total: brave.results.length,
+          results: brave.results,
+          source: 'brave'
+        };
+        setCache(`search:${query}`, result);
+        return result;
+      }
+      if (brave.msg) {
+        return { ok: false, query, msg: brave.msg };
+      }
+    } catch (braveError) {
+      console.error('Falha na busca Brave, tentando vreden:', braveError.message);
+    }
 
     const response = await axios.get(`${SEARCH_BASE_URL}/api/v2/search/spotify`, {
       params: {
