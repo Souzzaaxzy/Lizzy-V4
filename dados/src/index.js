@@ -19494,7 +19494,10 @@ case 'pin':
           await nazu.sendMessage(from, { react: { text: '🔍', key: info.key } });
           // 1. Buscar a música
           const searchResult = await spotifyModule.search(q);
-          if (!searchResult.ok || !searchResult.results?.length) {
+          if (!searchResult.ok) {
+            return reply(`❌ ${searchResult.msg || 'Erro ao buscar no Spotify. Tente novamente.'}`);
+          }
+          if (!searchResult.results?.length) {
             return reply('❌ Nenhuma música encontrada com esse nome.');
           }
           const track = searchResult.results[0];

@@ -82,18 +82,30 @@ async function search(query) {
       timeout: 120000
     });
 
-    if (!response.data || response.data.status_code !== 200) {
+    if (!response.data || (response.data.status_code !== undefined && response.data.status_code !== 200)) {
+      const apiMsg = response.data?.message || response.data?.msg || 'Erro ao buscar no Spotify';
       return {
         ok: false,
-        msg: 'Erro ao buscar no Spotify'
+        msg: apiMsg
       };
     }
+
+    const raw = response.data.result ?? response.data.data ?? response.data.results ?? [];
+    const list = Array.isArray(raw)
+      ? raw
+      : Array.isArray(raw.search_data)
+        ? raw.search_data
+        : Array.isArray(raw.tracks)
+          ? raw.tracks
+          : Array.isArray(raw.data)
+            ? raw.data
+            : [];
 
     const result = {
       ok: true,
       query,
-      total: response.data.result?.length || 0,
-      results: response.data.result.search_data || []
+      total: list.length,
+      results: list
     };
 
     setCache(`search:${query}`, result);
