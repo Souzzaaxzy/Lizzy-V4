@@ -19625,10 +19625,29 @@ case 'pin':
 │
 ╰━━━━━━━━━━━━━━━━━━━━━━━━━╯`);
           }
+          // Aviso visual de busca — será apagado quando o resultado estiver pronto
+          const searchingMsg = await nazu.sendMessage(from, {
+            text: '🔎 Procurando sua música...',
+            contextInfo: {
+              forwardingScore: 999,
+              isForwarded: true,
+              forwardedNewsletterMessageInfo: {
+                newsletterJid: "120363410980452460@newsletter",
+                newsletterName: "Lizzy"
+              }
+            }
+          });
+
           // Busca + download acontecem juntos; só prossegue com o resultado completo
           const result = await soundcloud.searchDownload(q);
 
+          const limparBusca = async () => {
+            if (!searchingMsg?.key) return;
+            await nazu.sendMessage(from, { delete: searchingMsg.key }).catch(() => {});
+          };
+
           if (!result?.ok) {
+            await limparBusca();
             if (String(result?.msg || '').includes('API key inválida')) {
               return reply('🤖 *Sistema de SoundCloud temporariamente indisponível*\n\n😅 Estou com problemas técnicos no momento. O administrador já foi notificado!');
             }
@@ -19642,13 +19661,15 @@ case 'pin':
           const durationLabel = formatPlaytime(result?.track?.duration);
 
           if (!musicUrl) {
+            await limparBusca();
             return reply('❌ Não foi possível obter o link da música no SoundCloud. Tente novamente.');
           }
 
           // O áudio já chega pronto do searchDownload — valida antes de QUALQUER envio
           const audioBuffer = result?.buffer;
           if (!audioBuffer || !Buffer.isBuffer(audioBuffer) || audioBuffer.length === 0) {
-            return reply('❌ O áudio da música veio vazio ou corrompido. Tente novamente.');
+            await limparBusca();
+            return reply("❌ O áudio da música veio vazio ou corrompido. Tente novamente.");
           }
           const fileName = result?.filename || `${title}.mp3`;
 
@@ -19662,6 +19683,8 @@ case 'pin':
             '🎧 Sua música está pronta!'
           ].join('\n');
 
+          // Tudo pronto — remove o aviso de busca antes de revelar o resultado
+          await limparBusca();
           let visualSent = null;
 
           try {
@@ -19695,13 +19718,22 @@ case 'pin':
             }
           }
 
-          // Áudio imediatamente abaixo da mensagem visual
+          // Áudio imediatamente abaixo da mensagem visual (sem quote, com Ver Canal)
+          const verCanalContext = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
           try {
             await nazu.sendMessage(from, {
               audio: audioBuffer,
               mimetype: 'audio/mpeg',
-              fileName
-            }, { quoted: info });
+              fileName,
+              contextInfo: verCanalContext
+            });
           } catch (audioError) {
             if (String(audioError).includes("ENOSPC") || String(audioError).includes("size")) {
               await reply('📦 Arquivo muito grande, enviando como documento...');
@@ -19709,7 +19741,7 @@ case 'pin':
                 document: audioBuffer,
                 fileName,
                 mimetype: 'audio/mpeg'
-              }, { quoted: info });
+              });
             } else {
               console.error('Erro ao enviar áudio do play3:', audioError);
               // Remove a mensagem visual para não deixar apresentação sem áudio
