@@ -188,6 +188,38 @@ function jsRuntimeArgs() {
   return ['--js-runtimes', runtimes.join(','), '--remote-components', YTDLP_REMOTE_COMPONENTS || 'ejs:github'];
 }
 
+// ---------- IP público do servidor (diagnóstico de bloqueio) ----------
+// O YouTube bloqueia IPs de datacenter/VPS com 403/not-a-bot. Mostrar
+// qual IP o servidor está usando ajuda o admin a entender se o bloqueio é ambiental.
+let resolvedPublicIp = null; // undefined = não testado | null = indisponível | string = ok
+let publicIpPromise = null;
+function getPublicIp() {
+  if (publicIpPromise) return publicIpPromise;
+  const run = async () => {
+    if (typeof resolvedPublicIp === 'string') return resolvedPublicIp;
+
+    try {
+      const res = await fetch('https://api.ipify.org', {
+        signal: AbortSignal.timeout(8000),
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Lizzy-Bot)' }
+      });
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      const ip = (await res.text()).trim();
+      if (/^[\d.:a-fA-F]+$/.test(ip)) {
+        resolvedPublicIp = ip; // so cacheia sucesso; falhas nao ficam presas
+        return resolvedPublicIp;
+      }
+    } catch {
+      /* falha nao e cacheada: a proxima chamada re-tenta */
+    }
+    return null;
+
+  };
+  publicIpPromise = run().finally(() => { publicIpPromise = null; });
+  return publicIpPromise
+
+}
+
 // ---------- erros do yt-dlp → mensagens controladas ----------
 
 function mapYtDlpError(stderr) {
@@ -325,12 +357,14 @@ async function ytdlpDownload(videoId, extraArgs, outTemplate) {
       `https://www.youtube.com/watch?v=${videoId}`
     ];
     // Log de diagnóstico do ambiente (sem expor cookies/tokens/segredos).
+    const publicIp = await getPublicIp().catch(() => null);
     console.log(
       `[PLAY] Configuração: yt-dlp ${ytdlp.version || '(detectado)'} | ` +
       `ffmpeg ${(await checkFfmpeg()) || 'ausente'} | ` +
       `js-runtime ${process.env.YTDLP_JS_RUNTIME || 'node (padrão)'} | ` +
       `cookies ${YTDLP_COOKIES ? 'configurado' : 'não'} | ` +
-      `po-token ${YTDLP_PO_TOKEN ? 'configurado' : 'não'}`
+      `po-token ${YTDLP_PO_TOKEN ? 'configurado' : 'não'} | ` +
+      `ip ${publicIp || 'indisponível'}`
     );
     // Tenta múltiplos player_clients até um funcionar (backoff maior em bloqueio transitório).
     // Ordem baseada no PO Token Guide oficial (yt-dlp 2026.08): sem PO token,
@@ -444,7 +478,20 @@ async function mp3(url, bitrate = 128) {
       filename: safeFilename(title, 'mp3')
     };
   } catch (err) {
-    return { ok: false, msg: 'Erro ao baixar música: ' + err.message };
+    const ip = isBlockedError(err) ? await getPublicIp().catch(() => null) : null;
+    const base = 'Erro ao baixar música: ' + err.message;
+    if (!ip) return { ok: false, msg: base };
+
+    return {
+      ok: false,
+      msg: base +
+        `\n\n🌐 IP do servidor: ${ip}\n\n` +
+        'Se este IP for de datacenter/VPS, o YouTube pode bloqueá-lo temporariamente ' +
+        '(comum em 403/not-a-bot). Opções para resolver:\n' +
+        `• cookies de navegador (YTDLP_COOKIES_FILE)\n` +
+        '• PO Token provider (YTDLP_PO_TOKEN)\n' +
+        '— veja o .env.example.'
+    };
   } finally {
     if (dir) {
       fs.rmSync(dir, { recursive: true, force: true });
@@ -489,7 +536,20 @@ async function mp4(url, quality = 360) {
       filename: safeFilename(title, 'mp4')
     };
   } catch (err) {
-    return { ok: false, msg: 'Erro ao baixar vídeo: ' + err.message };
+    const ip =isBlockedError(err) ? await getPublicIp().catch(() => null) : null;
+    const base = 'Erro ao baixar vídeo: ' + err.message;
+    if (!ip) return { ok: false, msg: base };
+
+    return {
+      ok: false,
+      msg: base +
+        `\n\n🌐 IP do servidor: ${ip}\n\n` +
+        'Se este IP for de datacenter/VPS, o YouTube pode bloqueá-lo temporariamente ' +
+        '(comum em 403/not-a-bot). Opções para resolver:\n' +
+        `• cookies de navegador (YTDLP_COOKIES_FILE)\n` +
+        '• PO Token provider (YTDLP_PO_TOKEN)\n' +
+        '— veja o .env.example.'
+    };
   } finally {
     if (dir) fs.rmSync(dir, { recursive: true, force: true });
   }
