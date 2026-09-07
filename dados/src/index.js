@@ -19717,23 +19717,15 @@ case 'pin':
               await reply(`${caption}\n\n🔗 ${musicUrl}`);
             }
           }
-
-          // Áudio imediatamente abaixo da mensagem visual (sem quote, com Ver Canal)
-          const verCanalContext = {
-            forwardingScore: 999,
-            isForwarded: true,
-            forwardedNewsletterMessageInfo: {
-              newsletterJid: "120363410980452460@newsletter",
-              newsletterName: "Lizzy"
-            }
-          };
+ 
+          // Áudio imediatamente abaixo da mensagem visual(sem responder nenhuma mensagem)
           try {
             await nazu.sendMessage(from, {
               audio: audioBuffer,
               mimetype: 'audio/mpeg',
-              fileName,
-              contextInfo: verCanalContext
+              fileName
             });
+
           } catch (audioError) {
             if (String(audioError).includes("ENOSPC") || String(audioError).includes("size")) {
               await reply('📦 Arquivo muito grande, enviando como documento...');
