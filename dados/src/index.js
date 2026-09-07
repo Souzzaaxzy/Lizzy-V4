@@ -1010,6 +1010,17 @@ const summarizeDescription = (description) => {
 // ═══════════════════════════════════════════════════════════════
 // 🎵 LAYOUT DO PLAYER DE MÚSICA (iPhone Style)
 // ═══════════════════════════════════════════════════════════════
+// Formata segundos para o padrão mm:ss (ou h:mm:ss quando necessário)
+const formatPlaytime = (seconds) => {
+  const total = Number(seconds);
+  if (!Number.isFinite(total) || total <= 0) return 'Não informado';
+  const horas = Math.floor(total / 3600);
+  const minutos = Math.floor((total % 3600) / 60);
+  const segs = Math.floor(total % 60);
+  const mm = String(minutos).padStart(2, '0');
+  const ss = String(segs).padStart(2, '0');
+  return horas > 0 ? `${horas}:${mm}:${ss}` : `${mm}:${ss}`;
+};
 const formatMusicPlayer = (title, artist, duration = null, progress = null, volume = null) => {
   const maxWidth = 42;
   const truncate = (text, maxLen) => {
@@ -19614,64 +19625,100 @@ case 'pin':
 │
 ╰━━━━━━━━━━━━━━━━━━━━━━━━━╯`);
           }
-          await reply('🔎 Buscando no SoundCloud... Aguarde!');
-          soundcloud.searchDownload(q)
-            .then(async (result) => {
-              if (!result.ok) {
-                if (result.msg.includes('API key inválida')) {
-                  return reply('🤖 *Sistema de SoundCloud temporariamente indisponível*\n\n😅 Estou com problemas técnicos no momento. O administrador já foi notificado!');
+          // Busca + download acontecem juntos; só prossegue com o resultado completo
+          const result = await soundcloud.searchDownload(q);
+
+          if (!result?.ok) {
+            if (String(result?.msg || '').includes('API key inválida')) {
+              return reply('🤖 *Sistema de SoundCloud temporariamente indisponível*\n\n😅 Estou com problemas técnicos no momento. O administrador já foi notificado!');
+            }
+            return reply(`❌ Erro: ${result?.msg || 'não foi possível buscar a música.'}`);
+          }
+
+          const title = result?.title || result?.track?.title || 'Música desconhecida';
+          const artist = result?.artist || result?.track?.artist || 'Artista desconhecido';
+          const musicUrl = result?.track?.permalink_url || '';
+          const thumbnailUrl = result?.thumbnail || result?.track?.artwork || '';
+          const durationLabel = formatPlaytime(result?.track?.duration);
+
+          if (!musicUrl) {
+            return reply('❌ Não foi possível obter o link da música no SoundCloud. Tente novamente.');
+          }
+
+          // O áudio já chega pronto do searchDownload — valida antes de QUALQUER envio
+          const audioBuffer = result?.buffer;
+          if (!audioBuffer || !Buffer.isBuffer(audioBuffer) || audioBuffer.length === 0) {
+            return reply('❌ O áudio da música veio vazio ou corrompido. Tente novamente.');
+          }
+          const fileName = result?.filename || `${title}.mp3`;
+
+          // Tudo pronto — monta a mensagem visual (thumbnail + informações + CTA URL)
+          const caption = [
+            `🎵 *${title}*`,
+            '',
+            `👤 Artista: *${artist}*`,
+            `⏱️ Duração: *${durationLabel}*`,
+            '',
+            '🎧 Sua música está pronta!'
+          ].join('\n');
+
+          let visualSent = null;
+
+          try {
+            const visualContent = thumbnailUrl
+              ? {
+                  image: { url: thumbnailUrl },
+                  caption,
+                  footer: '© Abyss Bot',
+                  nativeFlow: [{ text: '🎧 Ouvir música', url: musicUrl }]
                 }
-                return reply(`❌ Erro: ${result.msg}`);
+              : {
+                  text: `${caption}\n\n🔗 ${musicUrl}`,
+                  footer: '© Abyss Bot',
+                  nativeFlow: [{ text: '🎧 Ouvir música', url: musicUrl }]
+                };
+            visualSent = await nazu.sendMessage(from, visualContent, { quoted: info });
+          } catch (imgErr) {
+            console.error('Erro ao enviar mensagem visual do play3:', imgErr);
+            // Fallback sem botão nativo — o link vai na própria legenda
+            if (thumbnailUrl) {
+              visualSent = await nazu.sendMessage(from, {
+                image: { url: thumbnailUrl },
+                caption: `${caption}\n\n🔗 ${musicUrl}`
+              }, { quoted: info }).catch(async (fallbackErr) => {
+                console.error('Erro no fallback de imagem do play3:', fallbackErr);
+                await reply(`❌ Não foi possível exibir a música.\n\n🔗 ${musicUrl}`);
+                return null;
+              });
+            } else {
+              await reply(`${caption}\n\n🔗 ${musicUrl}`);
+            }
+          }
+
+          // Áudio imediatamente abaixo da mensagem visual
+          try {
+            await nazu.sendMessage(from, {
+              audio: audioBuffer,
+              mimetype: 'audio/mpeg',
+              fileName
+            }, { quoted: info });
+          } catch (audioError) {
+            if (String(audioError).includes("ENOSPC") || String(audioError).includes("size")) {
+              await reply('📦 Arquivo muito grande, enviando como documento...');
+              await nazu.sendMessage(from, {
+                document: audioBuffer,
+                fileName,
+                mimetype: 'audio/mpeg'
+              }, { quoted: info });
+            } else {
+              console.error('Erro ao enviar áudio do play3:', audioError);
+              // Remove a mensagem visual para não deixar apresentação sem áudio
+              if (visualSent) {
+                await nazu.sendMessage(from, { delete: visualSent.key }).catch(() => {});
               }
-              // Novo layout do player de música
-              const playerLayout = formatMusicPlayer(
-                result.track.title,
-                result.artist || 'Artista desconhecido',
-                result.track.duration,
-                0,
-                75
-              );
-              const caption = `${playerLayout}\n\n🎧 *Baixando e processando...*`;
-              try {
-                if (result.thumbnail) {
-                  await nazu.sendMessage(from, {
-                    image: { url: result.thumbnail },
-                    caption
-                  }, { quoted: info });
-                } else {
-                  await reply(caption);
-                }
-              } catch (imgErr) {
-                console.error('Erro ao enviar thumbnail do SoundCloud:', imgErr);
-              }
-              try {
-                await nazu.sendMessage(from, {
-                  audio: result.buffer,
-                  mimetype: 'audio/mpeg',
-                  fileName: result.filename
-                }, { quoted: info });
-              } catch (audioError) {
-                if (String(audioError).includes("ENOSPC") || String(audioError).includes("size")) {
-                  await reply('📦 Arquivo muito grande, enviando como documento...');
-                  await nazu.sendMessage(from, {
-                    document: result.buffer,
-                    fileName: result.filename,
-                    mimetype: 'audio/mpeg'
-                  }, { quoted: info });
-                } else {
-                  console.error('Erro ao enviar áudio do SoundCloud:', audioError);
-                  reply('❌ Ocorreu um erro ao enviar o áudio.');
-                }
-              }
-            })
-            .catch((error) => {
-              console.error('Erro na busca/download do SoundCloud:', error);
-              if (error.message?.includes('API key inválida')) {
-                reply('🤖 *Sistema de SoundCloud temporariamente indisponível*');
-              } else {
-                reply(`❌ Erro ao buscar no SoundCloud: ${error.message}`);
-              }
-            });
+              reply('❌ Ocorreu um erro ao enviar o áudio.');
+            }
+          }
         } catch (error) {
           console.error('Erro no comando play3:', error);
           reply("❌ Ocorreu um erro ao processar sua solicitação.");
