@@ -333,11 +333,13 @@ async function ytdlpDownload(videoId, extraArgs, outTemplate) {
       `po-token ${YTDLP_PO_TOKEN ? 'configurado' : 'não'}`
     );
     // Tenta múltiplos player_clients até um funcionar (backoff maior em bloqueio transitório).
-    // Ordem: android (mais permissivo a IPs de datacenter, sem desafio JS na maioria
-    // das vezes) → web/mweb (agora com runtime JS + solver EJS para assinaturas/
-    // n-challenge) → tv_embedded. CLIENTES 'ios'/'tv' foram removidos: exigem PO Token
-    // (GVS) para formatos hls / falham com "page needs to be reloaded".
-    const clients = ['android', 'web', 'mweb', 'tv_embedded'];
+    // Ordem baseada no PO Token Guide oficial (yt-dlp 2026.08): sem PO token,
+    // web_safari fornece HLS (m3u8) sem exigir GVS; mweb é o client recomendado
+    // pelo próprio yt-dlp quando os defaults falham; web usa EJS (n-challenge); android_vr
+    // não exige PO (mas não baixa "made for kids"); android exige GVS/player PO agora e
+    // fica como último fallback (com PO opcional). CLIENTES 'tv'/'tv_embedded'/'ios' foram
+    // removidos: exigem cookies de conta ou PO GVS e falham com "page needs to be reloaded".
+    const clients = ['web_safari', 'mweb', 'web', 'android_vr', 'android'];
     let stdout = null;
     let lastErr = null;
     const deadlineStart = Date.now();
