@@ -97,6 +97,7 @@ const PROBE_TIMEOUT = 15000;
 
 let resolvedCookiesPath = null;
 function resolveCookiesFile() {
+  const candidates = [];
   if (resolvedCookiesPath) return resolvedCookiesPath;
   if (YOUTUBE_COOKIES_FILE) candidates.push(YOUTUBE_COOKIES_FILE);
   if (YTDLP_COOKIES_FILE) candidates.push(YTDLP_COOKIES_FILE);
