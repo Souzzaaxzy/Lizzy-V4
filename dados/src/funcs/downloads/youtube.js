@@ -24,7 +24,8 @@
  *   YTDLP_FORCE_IPV4       força IPv4 por padrão; `YTDLP_DISABLE_IPV4=1` desativa.
 
  *   YTDLP_PROXY             proxy de download (ex.: http://127.0.0.1:8080)
- *   YTDLP_COOKIES_FILE      arquivo Netscape de cookies do próprio usuário
+ *   YOUTUBE_COOKIES_FILE   arquivo Netscape de cookies do próprio usuário (padrão: data/youtube/cookies.txt);
+ *   YTDLP_COOKIES_FILE      (legado — compatível)
  *   YTDLP_IMPERSONATE        impersonar client (ex.: chrome) — requer curl_cffi no yt-dlp
 
  *   YTDLP_JS_RUNTIME        runtime JS do extractor (padrão: o próprio Node do bot via
@@ -66,7 +67,12 @@ const YTDLP_TIMEOUT = parseInt(process.env.YTDLP_TIMEOUT_MS, 10) || 180000; // 1
 const YTDLP_DEADLINE = parseInt(process.env.YTDLP_DEADLINE_MS, 10) || 240000;  // teto real do fluxo de download inteiro (240s) — evita N clients x socket-timeount sem fim
 const YTDLP_SLEEP_REQUESTS = parseInt(process.env.YTDLP_SLEEP_REQUESTS, 10); // pausa entre requisições (ex.: 1)s
 const YTDLP_PROXY = process.env.YTDLP_PROXY || '';            // proxy opcional (ex.: http://127.0.0.1:8080)
-const YTDLP_COOKIES = process.env.YTDLP_COOKIES_FILE || '';   // arquivo Netscape opcional (ex.: /home/user/cookies.txt)
+// Arquivo de cookies do YouTube (formato Netscape). Opcional. Prioridade:
+// 1. YOUTUBE_COOKIES_FILE (novo, recomendado);
+// 2. YTDLP_COOKIES_FILE (legado — mantido para compatibilidade);
+// 3. Padrão implícito: ./data/youtube/cookies.txt (se existir)
+const YOUTUBE_COOKIES_FILE = process.env.YOUTUBE_COOKIES_FILE || '';
+const YTDLP_COOKIES_FILE = process.env.YTDLP_COOKIES_FILE || '';
 const YTDLP_IMPERSONATE = process.env.YTDLP_IMPERSONATE || ''; // ex.: chrome (requer curl_cffi no yt-dlp>
 const YTDLP_FORCE_IPV4 = process.env.YTDLP_DISABLE_IPV4 !== '1';
 // Runtime JS do extractor (obrigatório no YouTube moderno). Padrão: o próprio Node do bot.
@@ -78,6 +84,35 @@ const YTDLP_REMOTE_COMPONENTS = process.env.YTDLP_REMOTE_COMPONENTS || 'ejs:gith
 // PO Token opcional, apenas se o administrador usar um provider compatível (nunca fixo).
 const YTDLP_PO_TOKEN = process.env.YTDLP_PO_TOKEN || '';
 const PROBE_TIMEOUT = 15000;
+
+// ---------- cookies do YouTube (opcional, formato Netscape) ----------
+// Nunca ler/imprimir o conteúdo do arquivo: apenas a existência é usada.
+
+// Prioridade de resolução do arquivo de cookies:
+//   1. YOUTUBE_COOKIES_FILE      (novo, recomendado pelo projeto);
+//   2. YTDLP_COOKIES_FILE          (legado — mantido para compatibilidade);
+//   3. data/youtube/cookies.txt      (padrão implícito, se existir).
+//
+// O caminho é relativo ao CWD do processo (raiz do bot) ou absoluto.
+
+let resolvedCookiesPath = null;
+function resolveCookiesFile() {
+  if (resolvedCookiesPath) return resolvedCookiesPath;
+  if (YOUTUBE_COOKIES_FILE) candidates.push(YOUTUBE_COOKIES_FILE);
+  if (YTDLP_COOKIES_FILE) candidates.push(YTDLP_COOKIES_FILE);
+  candidates.push(path.join('data', 'youtube', 'cookies.txt'));
+  try {
+    for (const c of candidates) {
+      if (fs.existsSync(c) && fs.statSync(c).isFile()) {
+        resolvedCookiesPath = c;
+        return resolvedCookiesPath;
+      }
+    }
+  } catch {
+    /* se algo der errado, segue sem cookies */
+  }
+  return null; // não cacheia falha? se o arquivo surgir depois, será detectado
+}
 
 // ---------- processo filho com timeout real (spawn, args separados) ----------
 
@@ -249,6 +284,12 @@ function isBlockedError(err) {
   const s = String(err?.message || '') + '\n' + String(err?.stderr || '');
   return /not a bot|Sign in to confirm you.re not a bot|HTTP Error 429|Too Many Requests|HTTP Error 403|quota|rate-?limit/i.test(s);
 }
+// Falha de autenticação/cookies (ex.: cookies expirados, inválidos, corrompidos)
+function isAuthFailure(err) {
+  const s = String(err?.message || '') + '\\n' + String(err?.stderr || '');
+  return /Invalid cookies|Failed to parse cookies|cookies are not valid|cookie.*expired|cookie.*invalid|Netscape.*cookies|could not load cookies|Unable to parse|cookie-audit|invalid or expired cookies/i.test(s);
+}
+
 
 // Aceita watch?v=, youtu.be/, /shorts/, /live/, /v/, /embed/, music.youtube.com.
 function extractVideoId(url) {
@@ -325,6 +366,9 @@ async function ytdlpDownload(videoId, extraArgs, outTemplate) {
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'yt-'));
   try {
+    // Cookies do YouTube (opcional: formato Netscape; nunca logar o conteúdo).
+    const cookiesFile = resolveCookiesFile();
+    console.log(`[YT-DLP] Cookies disponíveis: ${cookiesFile ? 'sim' : 'não'}`);
     const args = [
       ...ytdlp.base,
       '--no-playlist',
@@ -347,7 +391,7 @@ async function ytdlpDownload(videoId, extraArgs, outTemplate) {
       ...(YTDLP_SLEEP_REQUESTS ? ['--sleep-requests', String(YTDLP_SLEEP_REQUESTS)] : []),
       ...(YTDLP_FORCE_IPV4 ? ['--force-ipv4'] : []),
       ...(YTDLP_PROXY ? ['--proxy', YTDLP_PROXY] : []),
-      ...(YTDLP_COOKIES ? ['--cookies', YTDLP_COOKIES] : []),
+      ...(cookiesFile ? ['--cookies', cookiesFile] : []),
       ...(YTDLP_IMPERSONATE ? ['--impersonate', YTDLP_IMPERSONATE] : []),
       ...extraArgs,
       ...(await ffmpegLocationArgs()),
@@ -362,50 +406,81 @@ async function ytdlpDownload(videoId, extraArgs, outTemplate) {
       `[PLAY] Configuração: yt-dlp ${ytdlp.version || '(detectado)'} | ` +
       `ffmpeg ${(await checkFfmpeg()) || 'ausente'} | ` +
       `js-runtime ${process.env.YTDLP_JS_RUNTIME || 'node (padrão)'} | ` +
-      `cookies ${YTDLP_COOKIES ? 'configurado' : 'não'} | ` +
+      `cookies ${cookiesFile ? 'sim' : 'não'} | ` +
       `po-token ${YTDLP_PO_TOKEN ? 'configurado' : 'não'} | ` +
       `ip ${publicIp || 'indisponível'}`
     );
     // Tenta múltiplos player_clients até um funcionar (backoff maior em bloqueio transitório).
     // Ordem baseada no PO Token Guide oficial (yt-dlp 2026.08): sem PO token,
     // web_safari fornece HLS (m3u8) sem exigir GVS; mweb é o client recomendado
-    // pelo próprio yt-dlp quando os defaults falham; web usa EJS (n-challenge); android_vr
+    // pelo próprio yt-dlp quando os defaults falham; web usa EJS (n-challenge; android_vr
     // não exige PO (mas não baixa "made for kids"); android exige GVS/player PO agora e
     // fica como último fallback (com PO opcional). CLIENTES 'tv'/'tv_embedded'/'ios' foram
     // removidos: exigem cookies de conta ou PO GVS e falham com "page needs to be reloaded".
     const clients = ['web_safari', 'mweb', 'web', 'android_vr', 'android'];
     let stdout = null;
     let lastErr = null;
+    let sawBlocked = false;
+    let sawAuthFail = false;
     const deadlineStart = Date.now();
-    for (const client of clients) {
-      const remaining = YTDLP_DEADLINE - (Date.now() - deadlineStart);
-      if (remaining <= 1000) {
-        if (!lastErr) lastErr = new Error('Download expirou (deadline total atingida)');
-        break;
+    // Fallback controlado de cookies: se a 1ª passada (com cookies) falhar por bloqueio
+    // ou autenticação, uma ÚNICA 2ª passada é feita sem cookies (nunca loop).
+    const maxPasses = cookiesFile ? 2 : 1;
+    for (let pass = 0; pass < maxPasses; pass++) {
+      // 2ª passada: remove o par `--cookies <arquivo>` dos argumentos (fallback).
+      const passArgs = pass === 1 ? args.filter((a, i) => a !== '--cookies' && !(args[i - 1] === '--cookies')) : args;
+      if (pass === 1) {
+        console.log('[YT-DLP] Cookies configurados, mas a autenticação não foi aceita — tentativa controlada sem cookies.');
       }
-      const attemptTimeout = Math.min(YTDLP_TIMEOUT, remaining);
-      // PO Token opcional (somente se o administrador configurou um provider compatível);
-      // quando ausente, nenhum po_token é enviado — o fluxo padrão não precisa dele.
+      const clientList = pass === 1 ? ['web_safari', 'mweb', 'web'] : clients;
+      for (const client of clientList) {
+        const remaining = YTDLP_DEADLINE - (Date.now() - deadlineStart);
+        if (remaining <= 1000) {
+          if (!lastErr) lastErr = new Error('Download expirou (deadline total atingida)');
+          break;
+        }
+        const attemptTimeout = Math.min(YTDLP_TIMEOUT, remaining);
+        // PO Token opcional (somente se o administrador configurou um provider compatível);
+        // quando ausente, nenhum po_token é enviado—o fluxo padrão não precisa dele.
 
-      const poSuffix = YTDLP_PO_TOKEN ? `,po_token=${YTDLP_PO_TOKEN}` : '';
-      const argsWithClient = [...args, '--extractor-args', `youtube:player_client=${client}${poSuffix}`];
-      try {
-        const result = await runProcess(ytdlp.cmd, argsWithClient, attemptTimeout);
-        stdout = result.stdout;
-        console.log(`[youtube] yt-dlp sucesso com client=${client}`);
-        break;
-      } catch (err) {
-        lastErr = err;
-        // Bloqueio/rate-limit costuma ser transitório: espera mais longa antes do próximo client
-        const blocked = isBlockedError(err);
-        console.error(`[youtube] yt-dlp client=${client} falhou${blocked ? ' (bloqueio/rate-limit' : ''}`);
-        if (clients.indexOf(client) < clients.length - 1) {
-          await new Promise(res => setTimeout(res, blocked ? 8000 : 2000));
+
+
+
+        const poSuffix = YTDLP_PO_TOKEN ? `,po_token=${YTDLP_PO_TOKEN}` : '';
+        const argsWithClient = [...passArgs, '--extractor-args', `youtube:player_client=${client}${poSuffix}`];
+        try {
+          const result = await runProcess(ytdlp.cmd, argsWithClient, attemptTimeout);
+          stdout = result.stdout;
+          console.log(`[youtube] yt-dlp sucesso com client=${client}`);
+          break;
+        } catch (err) {
+          lastErr = err;
+          // Bloqueio/rate-limit costuma ser transitório: espera mais longa antes do próximo client
+          const blocked = isBlockedError(err);
+          if (blocked) {
+            sawBlocked = true;
+            console.error(`[YT-DLP] YouTube retornou CAPTCHA/rate limit(client=${client}).`);
+          }
+          if (isAuthFailure(err)) {
+            sawAuthFail = true;
+            console.error(`[YT-DLP] Falha na autenticação via cookies(client=${client}).`);
+          }
+          if (!blocked && !isAuthFailure(err)) {
+            console.error(`[youtube] yt-dlp client=${client} falhou: ${err?.message || 'erro desconhecido'}`);
+          }
+          const delayMs = !cookiesFile ? (blocked ? 8000 : 2000) : (blocked ? 8000 : 1500);
+          if (clientList.indexOf(client) < clientList.length - 1) {
+            await new Promise(res => setTimeout(res, delayMs));
+          }
         }
       }
+      if (stdout) break;
+      // Só tenta a 2ª passada se houve sinal de bloqueio/autenticação (não em erros triviais).
+      if (cookiesFile && pass === 0 && !(sawBlocked || sawAuthFail)) break;
     }
     if (!stdout) {
       if (lastErr?.stderr) console.error('[PLAY] yt-dlp stderr final:', lastErr.stderr.slice(-500));
+      if (sawAuthFail) console.error('[YT-DLP] Falha na autenticação via cookies.');
       console.error(`[PLAY] yt-dlp error: ${lastErr?.message || 'Todos os player_clients falharam'}`);
       throw lastErr || new Error('Todos os player_clients falharam');
     }
@@ -488,7 +563,7 @@ async function mp3(url, bitrate = 128) {
         `\n\n🌐 IP do servidor: ${ip}\n\n` +
         'Se este IP for de datacenter/VPS, o YouTube pode bloqueá-lo temporariamente ' +
         '(comum em 403/not-a-bot). Opções para resolver:\n' +
-        `• cookies de navegador (YTDLP_COOKIES_FILE)\n` +
+        `• cookies de navegador (YOUTUBE_COOKIES_FILE)\n` +
         '• PO Token provider (YTDLP_PO_TOKEN)\n' +
         '— veja o .env.example.'
     };
@@ -546,7 +621,7 @@ async function mp4(url, quality = 360) {
         `\n\n🌐 IP do servidor: ${ip}\n\n` +
         'Se este IP for de datacenter/VPS, o YouTube pode bloqueá-lo temporariamente ' +
         '(comum em 403/not-a-bot). Opções para resolver:\n' +
-        `• cookies de navegador (YTDLP_COOKIES_FILE)\n` +
+        `• cookies de navegador (YOUTUBE_COOKIES_FILE)\n` +
         '• PO Token provider (YTDLP_PO_TOKEN)\n' +
         '— veja o .env.example.'
     };
