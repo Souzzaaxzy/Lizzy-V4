@@ -27160,10 +27160,11 @@ ${groupPrefix}togglecmdvip premium_ia off`);
         break;
       case 'criador':
         try {
+          const numeroCriadorFormatado = numerodono ? String(numerodono).replace(/\D/g, '') : 'Não configurado';
           const TextinCriadorInfo = `╭━━━⊱ 👨‍💻 *CRIADOR* 👨‍💻 ⊱━━━╮
 │
-│ 👤 *Nome:* Hiudy
-│ 📱 *Contato:* wa.me/553391967445
+│ 👤 *Nome:* ${nomedono}
+│ 📱 *Contato:* wa.me/${numeroCriadorFormatado}
 │
 ╰━━━━━━━━━━━━━━━━━━━━━━━━╯`;
           await reply(TextinCriadorInfo);
