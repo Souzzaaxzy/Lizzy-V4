@@ -19194,7 +19194,7 @@ case 'addaluguel':
                     visualSent = await nazu.sendMessage(from, {
                       image: { url: thumbnailUrl },
                       caption: musicCaption,
-                      footer: '© Abyss Bot',
+                      footer: `© ${nomebot}`,
                       nativeFlow: [{ text: '🎧 Ouvir música', url: musicUrl }]
                     }, { quoted: info });
                   } catch (imgErr) {
@@ -19302,7 +19302,7 @@ case 'addaluguel':
                           visualSent = await nazu.sendMessage(from, {
                             image: { url: thumbnailUrl },
                             caption: musicCaption,
-                            footer: '© Abyss Bot',
+                            footer: `© ${nomebot}`,
                             nativeFlow: [{ text: '🎧 Ouvir música', url: musicUrl }]
                           }, { quoted: info });
                         } catch (imgErr) {
@@ -19716,12 +19716,12 @@ case 'pin':
               ? {
                   image: { url: thumbnailUrl },
                   caption,
-                  footer: '© Abyss Bot',
+                  footer: `© ${nomebot}`,
                   nativeFlow: [{ text: '🎧 Ouvir música', url: musicUrl }]
                 }
               : {
                   text: `${caption}\n\n🔗 ${musicUrl}`,
-                  footer: '© Abyss Bot',
+                  footer: `© ${nomebot}`,
                   nativeFlow: [{ text: '🎧 Ouvir música', url: musicUrl }]
                 };
             visualSent = await nazu.sendMessage(from, visualContent, { quoted: info });
