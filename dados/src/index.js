@@ -19212,15 +19212,16 @@ case 'addaluguel':
                       });
                     }
                   })();
-                  const sendAudioDirect = (async () => {
+                  const sendAudioDirect = async () => {
                     console.log(`[PLAY] Enviando áudio (link direto): ${dlRes.filename || ''} — ${(dlRes.buffer?.length || 0) / 1024 / 1024} MB`);
                     await nazu.sendMessage(from, {
                       audio: dlRes.buffer,
                       mimetype: 'audio/mpeg',
                       fileName: `${dlRes.filename}`
                     });
-                  })();
-                  await Promise.allSettled([sendVisual, sendAudioDirect]);
+                  };
+                  await sendVisual();
+                  await sendAudioDirect();
                 } catch (audioError) {
                   if (String(audioError.includes("ENOSPC")) || String(audioError.includes("size"))) {
                     await deleteSearchMsg();
@@ -19341,7 +19342,7 @@ case 'addaluguel':
                           }
                         })();
                         let audioErr = null;
-                        const sendAudio = (async () => {
+                        const sendAudio = async () => {
                           try {
                             console.log(`[PLAY] Enviando áudio: ${dlRes.filename || ''} — ${(dlRes.buffer?.length || 0) / 1024 / 1024} MB`);
                             await nazu.sendMessage(from, {
@@ -19352,8 +19353,9 @@ case 'addaluguel':
                           } catch (e) {
                             audioErr = e;
                           }
-                        })();
-                        await Promise.allSettled([sendVisual, sendAudio]);
+                        };
+                        await sendVisual();
+                        await sendAudio();
                         if (audioErr) throw audioErr;
                       } catch (audioError) {
                         if (String(audioError.includes("ENOSPC")) || String(audioError.includes("size"))) {
