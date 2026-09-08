@@ -48,6 +48,10 @@
 
  *   YTDLP_TIMEOUT_MS        timeout por tentativa (padrão 180s)
  *   YTDLP_DEADLINE_MS       deadline total do download (padrão 240s)
+ *   YTDLP_CLIENTS           fila de clients do extractor (override opcional, CSV;
+ *                            padrão: 'web_safari,mweb,web' — fila enxuta de baixa
+ *                            latência. Se precisar de android_vr/android (ex.: vídeos
+ *                            "made for kids"), defina aqui (ex.: 'android_vr,android').
  *
  * Formato de retorno preservado (idêntico ao módulo original):
  *   search → { ok, data: { videoId, url, title, description, thumbnail,
@@ -468,7 +472,14 @@ async function ytdlpDownload(videoId, extraArgs, outTemplate) {
     // não exige PO (mas não baixa "made for kids"); android exige GVS/player PO agora e
     // fica como último fallback (com PO opcional). CLIENTES 'tv'/'tv_embedded'/'ios' foram
     // removidos: exigem cookies de conta ou PO GVS e falham com "page needs to be reloaded".
-    const clients = ['web_safari', 'mweb', 'web', 'android_vr', 'android'];
+    // Clientes: fila enxuta e preferida para baixa latência. web_safari
+    // (HLS, sem GVS) resolve quase tudo; mweb e web como fallback.
+    // android_vr/android exigem mais turnos (GVS/PO) e são lentos em IPs
+    // flagrados — ficam só se o admin pedir via YTDLP_CLIENTS (override).
+    const defaultClients = ['web_safari', 'mweb', 'web'];
+    const clients = process.env.YTDLP_CLIENTS
+      ? process.env.YTDLP_CLIENTS.split(',').map(s => s.trim()).filter(Boolean)
+      : defaultClients;
     let stdout = null;
     let lastErr = null;
     let sawBlocked = false;
@@ -519,7 +530,7 @@ async function ytdlpDownload(videoId, extraArgs, outTemplate) {
           if (!blocked && !isAuthFailure(err)) {
             console.error(`[youtube] yt-dlp client=${client} falhou: ${err?.message || 'erro desconhecido'}`);
           }
-          const delayMs = !cookiesFile ? (blocked ? 3000 : 800) : (blocked ? 3000 : 800);
+          const delayMs = !cookiesFile ? (blocked ? 1500 : 400) : (blocked ? 1500 : 400);
           if (clientList.indexOf(client) < clientList.length - 1) {
             await new Promise(res => setTimeout(res, delayMs));
           }
@@ -595,7 +606,19 @@ async function mp3(url, bitrate = 128) {
 
     const dl = await ytdlpDownload(
       videoId,
-      ['-f', 'bestaudio/best', '-x', '--audio-format', 'mp3', '--audio-quality', `${br}K`],
+      [
+        '-f',
+        // Fonte menor e mais rápida de converter: prefere m4a (AAC) ≤128k;
+        // fallback: m4a, depois opus/webm ≤128k, depois qualquer melhor.
+        // (antes: bestaudio — áudio de alta qualidade, download +5MB e
+        //  transcodificação mais lenta para MP3, custando ~3-5s extras)
+        'bestaudio[ext=m4a][abr<=128]/bestaudio[ext=m4a]/bestaudio[abr<=128]/bestaudio',
+        '-x',
+        '--audio-format',
+        'mp3',
+        '--audio-quality',
+        `${br}K`
+      ],
       'audio.%(ext)s'
     );
     dir = dl.dir;

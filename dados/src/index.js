@@ -19190,30 +19190,37 @@ case 'addaluguel':
                   const musicUrl = `https://youtube.com/watch?v=${videoId}`;
                   const musicCaption = `🎵 *${dlRes.filename || 'Música'}*\n\n✨ Aproveite a música @${pushname}!`;
                   let visualSent = null;
-                  try {
-                    visualSent = await nazu.sendMessage(from, {
-                      image: { url: thumbnailUrl },
-                      caption: musicCaption,
-                      footer: `© ${nomebot}`,
-                      nativeFlow: [{ text: 'Abrir no YouTube', url: musicUrl }]
-                    }, { quoted: info });
-                  } catch (imgErr) {
-                    console.error('Erro ao enviar mensagem visual do play:', imgErr);
-                    visualSent = await nazu.sendMessage(from, {
-                      image: { url: thumbnailUrl },
-                      caption: `${musicCaption}\n\n🔗 ${musicUrl}`
-                    }, { quoted: info }).catch(async (fallbackErr) => {
-                      console.error('Erro no fallback de imagem do play:', fallbackErr);
-                      await reply(`❌ Não foi possível exibir a música.\n\n🔗 ${musicUrl}`);
-                      return null;
+                  // Envia visual e áudio em paralelo — o áudio sobe imediatamente.
+
+                  const sendVisual = (async () => {
+                    try {
+                      visualSent = await nazu.sendMessage(from, {
+                        image: { url: thumbnailUrl },
+                        caption: musicCaption,
+                        footer: `© ${nomebot}`,
+                        nativeFlow: [{ text: 'Abrir no YouTube', url: musicUrl }]
+                      }, { quoted: info });
+                    } catch (imgErr) {
+                      console.error('Erro ao enviar mensagem visual do play:', imgErr);
+                      visualSent = await nazu.sendMessage(from, {
+                        image: { url: thumbnailUrl },
+                        caption: `${musicCaption}\n\n🔗 ${musicUrl}`
+                      }, { quoted: info }).catch(async (fallbackErr) => {
+                        console.error('Erro no fallback de imagem do play:', fallbackErr);
+                        await reply(`❌ Não foi possível exibir a música.\n\n🔗 ${musicUrl}`);
+                        return null;
+                      });
+                    }
+                  })();
+                  const sendAudioDirect = (async () => {
+                    console.log(`[PLAY] Enviando áudio (link direto): ${dlRes.filename || ''} — ${(dlRes.buffer?.length || 0) / 1024 / 1024} MB`);
+                    await nazu.sendMessage(from, {
+                      audio: dlRes.buffer,
+                      mimetype: 'audio/mpeg',
+                      fileName: `${dlRes.filename}`
                     });
-                  }
-                  console.log(`[PLAY] Enviando áudio (link direto): ${dlRes.filename || ''} — ${(dlRes.buffer?.length || 0) / 1024 / 1024} MB`);
-                  await nazu.sendMessage(from, {
-                    audio: dlRes.buffer,
-                    mimetype: 'audio/mpeg',
-                    fileName: `${dlRes.filename}`
-                  });
+                  })();
+                  await Promise.allSettled([sendVisual, sendAudioDirect]);
                 } catch (audioError) {
                   if (String(audioError.includes("ENOSPC")) || String(audioError.includes("size"))) {
                     await deleteSearchMsg();
@@ -19297,44 +19304,57 @@ case 'addaluguel':
                           `────────────────────────\n\n` +
                           `✨ Aproveite a música @${pushname}!`;
                         let visualSent = null;
-                        try {
-                          visualSent = await nazu.sendMessage(from, {
-                            image: { url: thumbnailUrl },
-                            caption: musicCaption,
-                            footer: `© ${nomebot}`,
-                            nativeFlow: [{ text: 'Abrir no YouTube', url: musicUrl }]
-                          }, { quoted: info });
-                        } catch (imgErr) {
-                          console.error('Erro ao enviar mensagem visual do play:', imgErr);
-                          const fallbackUrls = [
-                            `https://img.youtube.com/vi/${videoId}/sddefault.jpg`,
-                            `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
-                            `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
-                            videoInfo.data.thumbnail
-                          ];
-                          for (const url of fallbackUrls) {
-                            if (url) {
-                              try {
-                                visualSent = await nazu.sendMessage(from, {
-                                  image: { url },
-                                  caption: `${musicCaption}\n\n🔗 ${musicUrl}`
-                                }, { quoted: info });
-                                break;
-                              } catch (e) {
-                                continue;
+                        // Envia o visual e o áudio em paralelo - o áudio começa a subir
+                        // imediatamente(antes era sequencial: imagem -> áudio, somando os uploads).
+                        const sendVisual = (async () => {
+                          try {
+                            visualSent = await nazu.sendMessage(from, {
+                              image: { url: thumbnailUrl },
+                              caption: musicCaption,
+                              footer: `© ${nomebot}`,
+                              nativeFlow: [{ text: 'Abrir no YouTube', url: musicUrl }]
+                            }, { quoted: info });
+                          } catch (imgErr) {
+                            console.error('Erro ao enviar mensagem visual do play:', imgErr);
+                            const fallbackUrls = [
+                              `https://img.youtube.com/vi/${videoId}/sddefault.jpg`,
+                              `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+                              `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+                              videoInfo.data.thumbnail
+                            ];
+                            for (const url of fallbackUrls) {
+                              if (url) {
+                                try {
+                                  visualSent = await nazu.sendMessage(from, {
+                                    image: { url },
+                                    caption: `${musicCaption}\n\n🔗 ${musicUrl}`
+                                  }, { quoted: info });
+                                  break;
+                                } catch (e) {
+                                  continue;
+                                }
                               }
                             }
+                            if (!visualSent) {
+                              await reply(`❌ Não foi possível exibir a música.\n\n🔗 ${musicUrl}`);
+                            }
                           }
-                          if (!visualSent) {
-                            await reply(`❌ Não foi possível exibir a música.\n\n🔗 ${musicUrl}`);
+                        })();
+                        let audioErr = null;
+                        const sendAudio = (async () => {
+                          try {
+                            console.log(`[PLAY] Enviando áudio: ${dlRes.filename || ''} — ${(dlRes.buffer?.length || 0) / 1024 / 1024} MB`);
+                            await nazu.sendMessage(from, {
+                              audio: dlRes.buffer,
+                              mimetype: 'audio/mpeg',
+                              fileName: `${dlRes.filename}`
+                            });
+                          } catch (e) {
+                            audioErr = e;
                           }
-                        }
-                        console.log(`[PLAY] Enviando áudio: ${dlRes.filename || ''} — ${(dlRes.buffer?.length || 0) / 1024 / 1024} MB`);
-                        await nazu.sendMessage(from, {
-                          audio: dlRes.buffer,
-                          mimetype: 'audio/mpeg',
-                          fileName: `${dlRes.filename}`
-                        });
+                        })();
+                        await Promise.allSettled([sendVisual, sendAudio]);
+                        if (audioErr) throw audioErr;
                       } catch (audioError) {
                         if (String(audioError.includes("ENOSPC")) || String(audioError.includes("size"))) {
                           await deleteSearchMsg();
