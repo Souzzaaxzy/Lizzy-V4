@@ -19184,35 +19184,50 @@ case 'addaluguel':
                   return sendPlayError('❌ Áudio baixado está vazio ou inválido.');
                 }
                 try {
-                  // Apagar mensagem de pesquisa e mostrar "Música encontrada!"
                   await deleteSearchMsg();
-                  // Extrair video ID para thumbnail
                   const videoId = videoUrl.match(/(?:v=|youtu\.be\/)([^&]+)/)?.[1] || '';
                   const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+                  const musicUrl = `https://youtube.com/watch?v=${videoId}`;
                   const musicCaption = `🎵 *${dlRes.filename || 'Música'}*\n\n✨ Aproveite a música @${pushname}!`;
-                  // Enviar thumbnail com informações
-                  await nazu.sendMessage(from, {
-                    image: { url: thumbnailUrl },
-                    caption: musicCaption,
-                    mentions: [sender]
-                  }, { quoted: info }).catch(() => {});
-                  // Enviar áudio
+                  let visualSent = null;
+                  try {
+                    visualSent = await nazu.sendMessage(from, {
+                      image: { url: thumbnailUrl },
+                      caption: musicCaption,
+                      footer: '© Abyss Bot',
+                      nativeFlow: [{ text: '🎧 Ouvir música', url: musicUrl }]
+                    }, { quoted: info });
+                  } catch (imgErr) {
+                    console.error('Erro ao enviar mensagem visual do play:', imgErr);
+                    visualSent = await nazu.sendMessage(from, {
+                      image: { url: thumbnailUrl },
+                      caption: `${musicCaption}\n\n🔗 ${musicUrl}`
+                    }, { quoted: info }).catch(async (fallbackErr) => {
+                      console.error('Erro no fallback de imagem do play:', fallbackErr);
+                      await reply(`❌ Não foi possível exibir a música.\n\n🔗 ${musicUrl}`);
+                      return null;
+                    });
+                  }
                   console.log(`[PLAY] Enviando áudio (link direto): ${dlRes.filename || ''} — ${(dlRes.buffer?.length || 0) / 1024 / 1024} MB`);
                   await nazu.sendMessage(from, {
                     audio: dlRes.buffer,
-                    mimetype: 'audio/mpeg'
-                  }, { quoted: info });
+                    mimetype: 'audio/mpeg',
+                    fileName: `${dlRes.filename}`
+                  });
                 } catch (audioError) {
-                  if (String(audioError).includes("ENOSPC") || String(audioError).includes("size")) {
+                  if (String(audioError.includes("ENOSPC")) || String(audioError.includes("size"))) {
                     await deleteSearchMsg();
                     await nazu.sendMessage(from, { text: '📦 Arquivo muito grande para enviar como áudio, enviando como documento...' }, { quoted: info });
                     await nazu.sendMessage(from, {
                       document: dlRes.buffer,
                       fileName: `${dlRes.filename}`,
                       mimetype: 'audio/mpeg'
-                    }, { quoted: info });
+                    });
                   } else {
                     console.error('Erro ao enviar áudio (link direto):', audioError);
+                    if (visualSent) {
+                      await nazu.sendMessage(from, { delete: visualSent.key }).catch(() => {});
+                    }
                     await sendPlayError('❌ Ocorreu um erro ao enviar o áudio.');
                   }
                 }
@@ -19261,83 +19276,84 @@ case 'addaluguel':
                     console.error('[PLAY] buffer de áudio vazio ou inválido (busca)');
                     return sendPlayError('❌ Áudio baixado está vazio ou inválido.');
                   }
-                  try {
-                    // Apagar mensagem de busca e mostrar "Música encontrada!"
-                    await deleteSearchMsg();
-                    // =============================================
-                    // ENVIAR INFORMAÇÕES DA MÚSICA
-                    // =============================================
-                    const videoId = videoInfo.data.videoId || '';
-                    const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
-                    const musicInfo = {
-                      title: videoInfo.data.title || 'Música',
-                      artist: videoInfo.data.author?.name || videoInfo.data.author || 'Não informado',
-                      description: videoInfo.data.description || videoInfo.data.meta || 'Não informado',
-                      date: videoInfo.data.publishDate || videoInfo.data.uploadDate || videoInfo.data.date || null,
-                      duration: videoInfo.data.seconds || 0,
-                      url: videoUrl
-                    };
-                    const musicCaption = `🎵 *${musicInfo.title}*\n\n` +
-                      `👤 Artista: ${musicInfo.artist}\n\n` +
-                      `📝 Descrição:\n${summarizeDescription(musicInfo.description)}\n\n` +
-                      `📅 Lançamento: ${ffFormatDate(musicInfo.date)}\n\n` +
-                      `⏱️ Duração: ${formatDuration(musicInfo.duration)}\n\n` +
-                      `🔗 YouTube:\n${musicInfo.url}\n\n` +
-                      `────────────────────────\n\n` +
-                      `✨ Aproveite a música @${pushname}!`;
-                    // Envia a thumbnail com informações
-                    await nazu.sendMessage(from, {
-                      image: { url: thumbnailUrl },
-                      caption: musicCaption,
-                      mentions: [sender]
-                    }, { quoted: info }).catch(async (thumbErr) => {
-                      // Se falhar a thumbnail, tenta com qualidade menor
-                                            const fallbackUrls = [
-                        `https://img.youtube.com/vi/${videoId}/sddefault.jpg`,
-                        `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
-                        `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
-                        videoInfo.data.thumbnail
-                      ];
-                      for (const url of fallbackUrls) {
-                        if (url) {
-                          try {
-                            await nazu.sendMessage(from, {
-                              image: { url },
-                              caption: musicCaption,
-                              mentions: [sender]
-                            }, { quoted: info });
-                            break;
-                          } catch (e) {
-                            continue;
+                      try {
+                        await deleteSearchMsg();
+                        const videoId = videoInfo.data.videoId || '';
+                        const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+                        const musicUrl = videoInfo.data.url || videoUrl;
+                        const musicInfo = {
+                          title: videoInfo.data.title || 'Música',
+                          artist: videoInfo.data.author?.name || videoInfo.data.author || 'Não informado',
+                          description: videoInfo.data.description || videoInfo.data.meta || 'Não informado',
+                          date: videoInfo.data.publishDate || videoInfo.data.uploadDate || videoInfo.data.date || null,
+                          duration: videoInfo.data.seconds || 0,
+                          url: musicUrl
+                        };
+                        const musicCaption = `🎵 *${musicInfo.title}*\n\n` +
+                          `👤 Artista: ${musicInfo.artist}\n\n` +
+                          `📝 Descrição:\n${summarizeDescription(musicInfo.description)}\n\n` +
+                          `📅 Lançamento: ${ffFormatDate(musicInfo.date)}\n\n` +
+                          `⏱️ Duração: ${formatDuration(musicInfo.duration)}\n\n` +
+                          `🔗 YouTube:\n${musicInfo.url}\n\n` +
+                          `────────────────────────\n\n` +
+                          `✨ Aproveite a música @${pushname}!`;
+                        let visualSent = null;
+                        try {
+                          visualSent = await nazu.sendMessage(from, {
+                            image: { url: thumbnailUrl },
+                            caption: musicCaption,
+                            footer: '© Abyss Bot',
+                            nativeFlow: [{ text: '🎧 Ouvir música', url: musicUrl }]
+                          }, { quoted: info });
+                        } catch (imgErr) {
+                          console.error('Erro ao enviar mensagem visual do play:', imgErr);
+                          const fallbackUrls = [
+                            `https://img.youtube.com/vi/${videoId}/sddefault.jpg`,
+                            `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+                            `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+                            videoInfo.data.thumbnail
+                          ];
+                          for (const url of fallbackUrls) {
+                            if (url) {
+                              try {
+                                visualSent = await nazu.sendMessage(from, {
+                                  image: { url },
+                                  caption: `${musicCaption}\n\n🔗 ${musicUrl}`
+                                }, { quoted: info });
+                                break;
+                              } catch (e) {
+                                continue;
+                              }
+                            }
+                          }
+                          if (!visualSent) {
+                            await reply(`❌ Não foi possível exibir a música.\n\n🔗 ${musicUrl}`);
                           }
                         }
+                        console.log(`[PLAY] Enviando áudio: ${dlRes.filename || ''} — ${(dlRes.buffer?.length || 0) / 1024 / 1024} MB`);
+                        await nazu.sendMessage(from, {
+                          audio: dlRes.buffer,
+                          mimetype: 'audio/mpeg',
+                          fileName: `${dlRes.filename}`
+                        });
+                      } catch (audioError) {
+                        if (String(audioError.includes("ENOSPC")) || String(audioError.includes("size"))) {
+                          await deleteSearchMsg();
+                          await nazu.sendMessage(from, { text: '📦 Arquivo muito grande para enviar como áudio, enviando como documento...' }, { quoted: info });
+                          await nazu.sendMessage(from, {
+                            document: dlRes.buffer,
+                            fileName: `${dlRes.filename}`,
+                            mimetype: 'audio/mpeg'
+                          });
+                        } else {
+                          console.error('Erro ao enviar áudio (busca):', audioError);
+                          if (visualSent) {
+                            await nazu.sendMessage(from, { delete: visualSent.key }).catch(() => {});
+                          }
+                          await sendPlayError('❌ Ocorreu um erro ao enviar o áudio.');
+                        }
                       }
-                    });
-                    // =============================================
-                    // ENVIAR ÁUDIO
-                    // =============================================
-                    console.log(`[PLAY] Enviando áudio: ${dlRes.filename || ''} — ${(dlRes.buffer?.length || 0) / 1024 / 1024} MB`);
-                    await nazu.sendMessage(from, {
-                      audio: dlRes.buffer,
-                      mimetype: 'audio/mpeg'
-                    }, { quoted: info });
-                    // Reação de sucesso
-                    await nazu.sendMessage(from, { react: { text: '✅', key: info.key } });
-                  } catch (audioError) {
-                    if (String(audioError).includes("ENOSPC") || String(audioError).includes("size")) {
-                      await deleteSearchMsg();
-                      await nazu.sendMessage(from, { text: '📦 Arquivo muito grande para enviar como áudio, enviando como documento...' }, { quoted: info });
-                      await nazu.sendMessage(from, {
-                        document: dlRes.buffer,
-                        fileName: `${dlRes.filename}`,
-                        mimetype: 'audio/mpeg'
-                      }, { quoted: info });
-                    } else {
-                      console.error('Erro ao enviar áudio (busca):', audioError);
-                      await sendPlayError('❌ Ocorreu um erro ao enviar o áudio.');
-                    }
-                  }
-                })
+                    })
                 .catch((downloadError) => {
                   console.error('Erro no download (busca):', downloadError);
                   if (downloadError.message?.includes('API key inválida')) {
