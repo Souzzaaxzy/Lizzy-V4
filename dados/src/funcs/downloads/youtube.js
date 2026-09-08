@@ -476,7 +476,7 @@ async function ytdlpDownload(videoId, extraArgs, outTemplate) {
     // (HLS, sem GVS) resolve quase tudo; mweb e web como fallback.
     // android_vr/android exigem mais turnos (GVS/PO) e são lentos em IPs
     // flagrados — ficam só se o admin pedir via YTDLP_CLIENTS (override).
-    const defaultClients = ['web_safari', 'mweb', 'web'];
+    const defaultClients = ['default', 'web_safari', 'mweb', 'web', 'android_vr', 'android'];
     const clients = process.env.YTDLP_CLIENTS
       ? process.env.YTDLP_CLIENTS.split(',').map(s => s.trim()).filter(Boolean)
       : defaultClients;
@@ -484,6 +484,7 @@ async function ytdlpDownload(videoId, extraArgs, outTemplate) {
     let lastErr = null;
     let sawBlocked = false;
     let sawAuthFail = false;
+    let sawNoFormat = false;   // todos os clients falharam por 'Requested format is not available'
     const deadlineStart = Date.now();
     // Fallback controlado de cookies: se a 1ª passada (com cookies) falhar por bloqueio
     // ou autenticação, uma ÚNICA 2ª passada é feita sem cookies (nunca loop).
@@ -494,8 +495,22 @@ async function ytdlpDownload(videoId, extraArgs, outTemplate) {
       if (pass === 1) {
         console.log('[YT-DLP] Cookies configurados, mas a autenticação não foi aceita — tentativa controlada sem cookies.');
       }
-      const clientList = pass === 1 ? ['web_safari', 'mweb', 'web'] : clients;
-      for (const client of clientList) {
+      const clientList = pass === 1 ? ['default', 'web_safari', 'mweb', 'web'] : clients;
+      // 'default' usa extração nativa (sem --extractor-args); forçar client explícito
+      // provoca 'Requested format is not available' em vídeos que só expõem
+      // storyboards nos clients forçados. Se o 'default' bater rate-limit transitório,
+      // repete-lo uma vez (com backoff maior) antes de degradar para clients forçados.
+
+
+      let repeatDefaultDone = false;
+      // Quando o 'default' falha 2x por bloqueio/contexto, os clients forçados
+      // quase nunca expõem áudio (só storyboards) — pula-os para não queimar tempo.
+
+      let skipForcedClients = false;
+      for (let ci = 0; ci < clientList.length; ci++) {
+
+        if (skipForcedClients && clientList[ci] !== 'default') continue;
+        const client = clientList[ci];
         const remaining = YTDLP_DEADLINE - (Date.now() - deadlineStart);
         if (remaining <= 1000) {
           if (!lastErr) lastErr = new Error('Download expirou (deadline total atingida)');
@@ -508,8 +523,13 @@ async function ytdlpDownload(videoId, extraArgs, outTemplate) {
 
 
 
-        const poSuffix = YTDLP_PO_TOKEN ? `,po_token=${YTDLP_PO_TOKEN}` : '';
-        const argsWithClient = [...passArgs, '--extractor-args', `youtube:player_client=${client}${poSuffix}`];
+        // 'default' usa extração nativa do yt-dlp (sem --extractor-args): forçar client
+        // explícito provoca 'Requested format is not available' em vídeos que só
+        // expõem storyboards nos clients forçados.
+
+        const argsWithClient = client === 'default'
+          ? passArgs
+          : [...passArgs, '--extractor-args', `youtube:player_client=${client}${YTDLP_PO_TOKEN ? `,po_token=${YTDLP_PO_TOKEN}` : ''}`];
         try {
           const result = await runProcess(ytdlp.cmd, argsWithClient, attemptTimeout);
           stdout = result.stdout;
@@ -522,16 +542,35 @@ async function ytdlpDownload(videoId, extraArgs, outTemplate) {
           if (blocked) {
             sawBlocked = true;
             console.error(`[YT-DLP] YouTube retornou CAPTCHA/rate limit(client=${client}).`);
+            // Rate-limit no 'default' costuma ser intermitente: reexecuta o 'default'
+            // uma vez(com backoff maior) — clients forçados quase nunca expõem áudio
+            // quando o default é bloqueado nestes casos.
+
+            if (client === 'default' && !repeatDefaultDone) {
+              repeatDefaultDone = true;
+              console.log('[YT-DLP] Rate limit no default — nova tentativa com espera maior..');
+              await new Promise(res => setTimeout(res, 4000));
+              ci = ci - 1; // reexecuta o mesmo 'default' uma vez
+              continue;
+            }
+            if (client === 'default' && repeatDefaultDone) {
+              // 2ª falha consecutiva do 'default' por rate-limit: clients forçados
+              // só devolveriam storyboards — interrompe a fila e vai ao erro direto.
+              skipForcedClients = true;
+            }
           }
           if (isAuthFailure(err)) {
             sawAuthFail = true;
             console.error(`[YT-DLP] Falha na autenticação via cookies(client=${client}).`);
           }
+          if (/Requested format is not available/i.test(String(err?.stderr || ''))) {
+            sawNoFormat = true;
+          }
           if (!blocked && !isAuthFailure(err)) {
             console.error(`[youtube] yt-dlp client=${client} falhou: ${err?.message || 'erro desconhecido'}`);
           }
           const delayMs = !cookiesFile ? (blocked ? 1500 : 400) : (blocked ? 1500 : 400);
-          if (clientList.indexOf(client) < clientList.length - 1) {
+          if (ci < clientList.length - 1) {
             await new Promise(res => setTimeout(res, delayMs));
           }
         }
@@ -543,6 +582,12 @@ async function ytdlpDownload(videoId, extraArgs, outTemplate) {
     if (!stdout) {
       if (lastErr?.stderr) console.error('[PLAY] yt-dlp stderr final:', lastErr.stderr.slice(-500));
       if (sawAuthFail) console.error('[YT-DLP] Falha na autenticação via cookies.');
+      if (sawNoFormat && !sawBlocked && !sawAuthFail) {
+        console.error('[YT-DLP] Nenhum formato compatível encontrado — o YouTube não expôs formato de áudio/vídeo para estes clients (bloqueio de contexto/cookies/IP).');
+        const noFmt = new Error('Nenhum formato compatível encontrado— verifique cookies/contexto do YouTube.');
+        noFmt.stderr = lastErr?.stderr || '';
+        throw noFmt;
+      }
       console.error(`[PLAY] yt-dlp error: ${lastErr?.message || 'Todos os player_clients falharam'}`);
       throw lastErr || new Error('Todos os player_clients falharam');
     }
@@ -603,16 +648,17 @@ async function mp3(url, bitrate = 128) {
       return hit;
     }
     console.log(`[PLAY] Iniciando yt-dlp: ${url} (id=${videoId})`);
+    const tStart = Date.now();
 
     const dl = await ytdlpDownload(
       videoId,
       [
         '-f',
         // Fonte menor e mais rápida de converter: prefere m4a (AAC) ≤128k;
-        // fallback: m4a, depois opus/webm ≤128k, depois qualquer melhor.
-        // (antes: bestaudio — áudio de alta qualidade, download +5MB e
-        //  transcodificação mais lenta para MP3, custando ~3-5s extras)
-        'bestaudio[ext=m4a][abr<=128]/bestaudio[ext=m4a]/bestaudio[abr<=128]/bestaudio',
+        // fallback: m4a, depois ≤128k, depois mp4 (HLS/DASH, ext mp4], depois
+        // qualquer melhor. Nunca fixa ID de formato -- o yt-dlp escolhe dinamicamente
+        // entre os formatos que o vídeo realmente expõe (fallback universal bestaudio)..
+        'bestaudio[ext=m4a][abr<=128]/bestaudio[ext=m4a]/bestaudio[abr<=128]/bestaudio[ext=mp4]/bestaudio',
         '-x',
         '--audio-format',
         'mp3',
@@ -622,10 +668,10 @@ async function mp3(url, bitrate = 128) {
       'audio.%(ext)s'
     );
     dir = dl.dir;
-    console.log(`[PLAY] Download concluído: ${dl.meta?.title || ''} (${dir})`);
+    console.log(`[PLAY][PERF] yt-dlp download+conversão: ${((Date.now() - tStart) / 1000).toFixed(1)}s`);
 
     const buffer = readOutputFile(dir, 'mp3');
-    console.log(`[PLAY] Conversão concluída: MP3 ${(buffer.length / 1024 / 1024).toFixed(2)} MB`);
+    console.log(`[PLAY][PERF] leitura do arquivo: ${((Date.now() - tStart) / 1000).toFixed(1)}s`);
     const title = dl.meta?.title || 'YouTube';
     const thumbnail =
       dl.meta?.thumbnail || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
