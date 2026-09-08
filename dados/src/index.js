@@ -19195,7 +19195,7 @@ case 'addaluguel':
                       image: { url: thumbnailUrl },
                       caption: musicCaption,
                       footer: `© ${nomebot}`,
-                      nativeFlow: [{ text: '🎧 Ouvir música', url: musicUrl }]
+                      nativeFlow: [{ text: 'Abrir no YouTube', url: musicUrl }]
                     }, { quoted: info });
                   } catch (imgErr) {
                     console.error('Erro ao enviar mensagem visual do play:', imgErr);
@@ -19294,7 +19294,6 @@ case 'addaluguel':
                           `📝 Descrição:\n${summarizeDescription(musicInfo.description)}\n\n` +
                           `📅 Lançamento: ${ffFormatDate(musicInfo.date)}\n\n` +
                           `⏱️ Duração: ${formatDuration(musicInfo.duration)}\n\n` +
-                          `🔗 YouTube:\n${musicInfo.url}\n\n` +
                           `────────────────────────\n\n` +
                           `✨ Aproveite a música @${pushname}!`;
                         let visualSent = null;
@@ -19303,7 +19302,7 @@ case 'addaluguel':
                             image: { url: thumbnailUrl },
                             caption: musicCaption,
                             footer: `© ${nomebot}`,
-                            nativeFlow: [{ text: '🎧 Ouvir música', url: musicUrl }]
+                            nativeFlow: [{ text: 'Abrir no YouTube', url: musicUrl }]
                           }, { quoted: info });
                         } catch (imgErr) {
                           console.error('Erro ao enviar mensagem visual do play:', imgErr);
@@ -19717,12 +19716,12 @@ case 'pin':
                   image: { url: thumbnailUrl },
                   caption,
                   footer: `© ${nomebot}`,
-                  nativeFlow: [{ text: '🎧 Ouvir música', url: musicUrl }]
+                  nativeFlow: [{ text: 'Abrir no SoundCloud', url: musicUrl }]
                 }
               : {
                   text: `${caption}\n\n🔗 ${musicUrl}`,
                   footer: `© ${nomebot}`,
-                  nativeFlow: [{ text: '🎧 Ouvir música', url: musicUrl }]
+                  nativeFlow: [{ text: 'Abrir no SoundCloud', url: musicUrl }]
                 };
             visualSent = await nazu.sendMessage(from, visualContent, { quoted: info });
           } catch (imgErr) {

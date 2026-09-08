@@ -85,6 +85,48 @@ const YTDLP_REMOTE_COMPONENTS = process.env.YTDLP_REMOTE_COMPONENTS || 'ejs:gith
 const YTDLP_PO_TOKEN = process.env.YTDLP_PO_TOKEN || '';
 const PROBE_TIMEOUT = 15000;
 
+// ---------- cache de resultados mp3 (TTL curto pra músicas repetidas responderem rápido) ----------
+// Chave: videoId+bitrate. Mantém o Buffer em memória por até MP3_CACHE_TTL_MS (10min.
+
+const MP3_CACHE_TTL_MS = parseInt(process.env.YTDLP_CACHE_TTL_MS, 10) || 10 * 60 * 1000;
+const mp3Cache = new Map(); // videoId@br -> { buffer, title, thumbnail, filename, expiresAt }
+function mp3CacheGet(key) {
+  const hit = mp3Cache.get(key);
+  if (hit && hit.expiresAt > Date.now()) return hit;
+
+  return null;
+}
+function mp3CacheSet(key, val) {
+  mp3Cache.set(key, { ...val, expiresAt: Date.now() + MP3_CACHE_TTL_MS });
+  if (mp3Cache.size > 1000) {
+    const now = Date.now();
+    for (const [k, v] of mp3Cache) {
+      if (v.expiresAt < now) mp3Cache.delete(k);
+    }
+  }
+}
+
+
+// ---------- cache de busca (query→primeiro resultado, TTL curto p/ repetir pesquisas rápido) ----------
+// Chave: query normalizada. Armazena { data, expiresAt } por até SEARCH_CACHE_TTL_MS (10min.
+
+const SEARCH_CACHE_TTL_MS = parseInt(process.env.YTDLP_SEARCH_CACHE_TTL_MS, 10) || 10 * 60 * 1000;
+const searchCache = new Map(); // query_lower -> { data, expiresAt }
+function searchCacheGet(key) {
+  const hit = searchCache.get(key);
+  if (hit && hit.expiresAt > Date.now()) return hit.data;
+
+  return null;
+}
+function searchCacheSet(key, data) {
+  searchCache.set(key, { data, expiresAt: Date.now() + SEARCH_CACHE_TTL_MS });
+  if (searchCache.size > 1000) {
+    const now = Date.now();
+    for (const [k, v] of searchCache) {
+      if (v.expiresAt < now) searchCache.delete(k);
+    }
+  }
+}
 // ---------- cookies do YouTube (opcional, formato Netscape) ----------
 // Nunca ler/imprimir o conteúdo do arquivo: apenas a existência é usada.
 
@@ -377,13 +419,15 @@ async function ytdlpDownload(videoId, extraArgs, outTemplate) {
       '--no-progress',
       '--socket-timeout',
       '30',
+      '--retries',
+      '1',
       '--max-filesize',
       String(MAX_BYTES),
       // Estratégias anti-bloqueio do yt-dlp para IPs de datacenter
       '--extractor-retries',
-      '3',
+      '1',
       '--retry-sleep',
-      '5',
+      '2',
       // Sem --user-agent global: cada player_client precisa do UA correto
       // (ex.: web espera UA de navegador; android espera UA mobile). O yt-dlp
       // seleciona o UA certo por client quando não é forçado — forçar um único
@@ -401,16 +445,22 @@ async function ytdlpDownload(videoId, extraArgs, outTemplate) {
       '--print-json',
       `https://www.youtube.com/watch?v=${videoId}`
     ];
-    // Log de diagnóstico do ambiente (sem expor cookies/tokens/segredos).
-    const publicIp = await getPublicIp().catch(() => null);
-    console.log(
-      `[PLAY] Configuração: yt-dlp ${ytdlp.version || '(detectado)'} | ` +
-      `ffmpeg ${(await checkFfmpeg()) || 'ausente'} | ` +
-      `js-runtime ${process.env.YTDLP_JS_RUNTIME || 'node (padrão)'} | ` +
-      `cookies ${cookiesFile ? 'sim' : 'não'} | ` +
-      `po-token ${YTDLP_PO_TOKEN ? 'configurado' : 'não'} | ` +
-      `ip ${publicIp || 'indisponível'}`
-    );
+    // Log de diagnóstico do ambiente (sem expor cookies/tokens/segredos) — assíncrono.
+    // getPublicIp() pode levar até 8s na primeira chamada; logar não bloqueia o download.
+
+    const logPublicIpLater = async (ffmpegPathCached, cookiesFileCached, ytdlpVersion, poTokenCached, runtimeCached) => {
+      const publicIp = await getPublicIp().catch(() => null);
+      console.log(
+        `[PLAY] Configuração: yt-dlp ${ytdlpVersion || '(detectado)'} | ` +
+        `ffmpeg ${ffmpegPathCached || 'ausente'} | ` +
+        `js-runtime ${runtimeCached || 'node (padrão)'} | ` +
+        `cookies ${cookiesFileCached ? 'sim' : 'não'} | ` +
+        `po-token ${poTokenCached ? 'configurado' : 'não'} | ` +
+        `ip ${publicIp || 'indisponível'}`
+      );
+    };
+    // Fire-and-forget: o download não espera o log (economiza até 8s na 1ª chamada).
+    void logPublicIpLater(ffmpegPath, cookiesFile, ytdlp.version, YTDLP_PO_TOKEN, process.env.YTDLP_JS_RUNTIME);
     // Tenta múltiplos player_clients até um funcionar (backoff maior em bloqueio transitório).
     // Ordem baseada no PO Token Guide oficial (yt-dlp 2026.08): sem PO token,
     // web_safari fornece HLS (m3u8) sem exigir GVS; mweb é o client recomendado
@@ -469,7 +519,7 @@ async function ytdlpDownload(videoId, extraArgs, outTemplate) {
           if (!blocked && !isAuthFailure(err)) {
             console.error(`[youtube] yt-dlp client=${client} falhou: ${err?.message || 'erro desconhecido'}`);
           }
-          const delayMs = !cookiesFile ? (blocked ? 8000 : 2000) : (blocked ? 8000 : 1500);
+          const delayMs = !cookiesFile ? (blocked ? 3000 : 800) : (blocked ? 3000 : 800);
           if (clientList.indexOf(client) < clientList.length - 1) {
             await new Promise(res => setTimeout(res, delayMs));
           }
@@ -496,27 +546,31 @@ async function ytdlpDownload(videoId, extraArgs, outTemplate) {
 
 async function search(query) {
   try {
-    const r = await yts(String(query || ''));
+    const q = String(query || '').trim();
+    const ql = q.toLowerCase();
+    const cached = searchCacheGet(ql);
+    if (cached) return { ok: true, data: cached.data };
+
+    const r = await yts(q);
     const video = r?.videos?.[0];
     if (!video) {
       return { ok: false, msg: 'Nenhum vídeo encontrado' };
     }
 
-    return {
-      ok: true,
-      data: {
-        videoId: video.videoId,
-        url: video.url,
-        title: video.title,
-        description: video.description || '',
-        thumbnail: video.thumbnail || video.image || '',
-        seconds: video.seconds,
-        timestamp: video.timestamp,
-        views: video.views,
-        ago: video.ago,
-        author: video.author?.name
-      }
+    const data = {
+      videoId: video.videoId,
+      url: video.url,
+      title: video.title,
+      description: video.description || '',
+      thumbnail: video.thumbnail || video.image || '',
+      seconds: video.seconds,
+      timestamp: video.timestamp,
+      views: video.views,
+      ago: video.ago,
+      author: video.author?.name
     };
+    searchCacheSet(ql, data);
+    return { ok: true, data };
   } catch (err) {
     return { ok: false, msg: err.message };
   }
@@ -530,6 +584,13 @@ async function mp3(url, bitrate = 128) {
     const videoId = extractVideoId(url);
     if (!videoId) return { ok: false, msg: 'URL do YouTube inválida' };
     const br = sanitizeBitrate(bitrate);
+    const cacheKey = `${videoId}@${br}`;
+    const cached = mp3CacheGet(cacheKey);
+    if (cached) {
+      console.log(`[PLAY] Cache hit: ${cached.title} (id=${videoId}, ${br}k)`);
+      const hit = { ok: true, ...cached, buffer: cached.buffer };
+      return hit;
+    }
     console.log(`[PLAY] Iniciando yt-dlp: ${url} (id=${videoId})`);
 
     const dl = await ytdlpDownload(
@@ -546,13 +607,9 @@ async function mp3(url, bitrate = 128) {
     const thumbnail =
       dl.meta?.thumbnail || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
 
-    return {
-      ok: true,
-      buffer,
-      title,
-      thumbnail,
-      filename: safeFilename(title, 'mp3')
-    };
+    const result = { title, thumbnail, filename: safeFilename(title, 'mp3') };
+    mp3CacheSet(cacheKey, { ...result, buffer });
+    return { ok: true, ...result, buffer };
   } catch (err) {
     const ip = isBlockedError(err) ? await getPublicIp().catch(() => null) : null;
     const base = 'Erro ao baixar música: ' + err.message;
