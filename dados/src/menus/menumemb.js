@@ -9,6 +9,10 @@ export default async function menuMembros(prefix, botName = "MeuBot", userName =
 ╭─❖ 👤 PERFIL & ESTATÍSTICAS
 │ 👤 ${prefix}perfil
 │ 🙋 ${prefix}me
+│ 🎵 ${prefix}ptiktok @user
+│ 📸 ${prefix}pinsta @user
+│ 𝕏 ${prefix}px @user
+│ 🎧 ${prefix}pspotify @user
 ╰──────────────
 
 

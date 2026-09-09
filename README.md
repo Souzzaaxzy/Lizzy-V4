@@ -17,6 +17,7 @@
 
 - 🎮 **Sistema de RPG**
 - 📥 **Downloads (YouTube, TikTok, Spotify, etc.)**
+- 👤 **Perfis de Redes Sociais** — `!ptiktok @user`, `!pinsta @user`, `!px @user`, `!pspotify @user` (consulta por username; aceita com ou sem `@`; sem exigir link)
 - 🤖 **Inteligência Artificial**
 - 🛠 **Administração de Grupos**
 - 💰 **Economia e Jogos**

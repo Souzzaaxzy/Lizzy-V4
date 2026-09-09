@@ -74,6 +74,10 @@ import {
   getPlayer as pubgGetPlayer,
   getRecentMatches as pubgGetMatches
 } from './apis/pubg.js';
+// Social Profile (perfis de redes sociais por username)
+import {
+  getSocialProfile
+} from './funcs/utils/socialProfile.js';
 import { 
   setApiKey, 
   deleteApiKey, 
@@ -23456,6 +23460,47 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
           reply("❌ Ocorreu um erro ao buscar os jogos.");
         }
         break;
+      // ============ PERFIL DE REDES SOCIAIS ============
+      case 'ptiktok':
+      case 'pinsta':
+      case 'px':
+      case 'pspotify': {
+        const socialPlatform = command === 'ptiktok' ? 'tiktok' : command === 'pinsta' ? 'instagram' : command === 'px' ? 'x' : 'spotify';
+        try {
+          if (!q.trim()) {
+            const exemplo = prefix + (socialPlatform === 'x' ? 'px' : 'p' + socialPlatform) + ' @usuario';
+            return reply(`❌ Informe um usuário.\n\nExemplo:\n${exemplo}`);
+          }
+          await react('🔍', nazu, info.key, from);
+          const result = await getSocialProfile(socialPlatform, q);
+          if (!result.ok) {
+            await react('❌', nazu, info.key, from);
+            return reply(result.text);
+          }
+          console.log(`[socialProfile] ${socialPlatform} @${result.profile.username} ok em ${result.elapsedMs}ms`);
+          const newsletterCtx = gerarContextNewsletter();
+          if (result.buffer && result.buffer.length > 0) {
+            try {
+              await nazu.sendMessage(from, {
+                image: result.buffer,
+                caption: result.text
+              }, { quoted: info, contextInfo: newsletterCtx });
+            } catch (sendErr) {
+              // Foto falhou -> envia só texto (não é falha total)
+              console.error(`[socialProfile] falha ao enviar foto de ${socialPlatform}:`, sendErr.message);
+              await nazu.sendMessage(from, { text: result.text }, { quoted: info, contextInfo: newsletterCtx });
+            }
+          } else {
+            await nazu.sendMessage(from, { text: result.text }, { quoted: info, contextInfo: newsletterCtx });
+          }
+          await react('✅', nazu, info.key, from);
+        } catch (e) {
+          console.error(`[socialProfile] erro no comando ${command}:`, e);
+          await react('❌', nazu, info.key, from);
+          reply('❌ Não foi possível consultar este perfil agora.\n\nTente novamente em alguns instantes.');
+        }
+        break;
+      }
       // ============ VALORANT ============
       case 'vaperfil':
       case 'valoperfil':
