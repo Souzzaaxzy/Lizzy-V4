@@ -11,6 +11,9 @@
  */
 
 import axios from 'axios';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+const execFileP = promisify(execFile);
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -35,17 +38,46 @@ function setCached(key, data) {
   profileCache.set(key, { ts: Date.now(), data });
 }
 
-/** Remove @, espaços, barras e fragmentos de URL. Nunca aceita link como requisito. */
+/**
+ * Extrai o handle de um texto que pode ser:
+ *  - apenas o username (com ou sem @);
+ *  - uma URL completa de perfil (qualquer domínio suportado, qualquer caminho/query);
+ *  - texto com @handle em algum lugar.
+ * Nunca exige link; funciona como busca amigável.
+ */
 function normalizeUsername(input) {
   if (!input || typeof input !== 'string') return '';
-  let u = input.trim().replace(/^@+/, '').trim();
-  u = u.replace(/\s+/g, '');
-  // Se o usuário colou um link por engano, tenta extrair só o handle
-  const m = u.match(/(?:tiktok\.com|instagram\.com|instagr\.am|x\.com|twitter\.com|open\.spotify\.com|spotify\.com)\/@?([A-Za-z0-9_.]+)/);
-  if (m) u = m[1];
-  // Sanitização final: apenas caracteres seguros de usernames (inclui assentos e unicode)
-  u = (u.match(/[\p{L}\p{N}_.]+/u) || [u])[0];
-  return u.slice(0, 60);
+  let u = input.trim();
+  if (!u) return '';
+
+  const domains = '(?:tiktok\.com|instagram\.com|instagr\.am|x\.com|twitter\.com|open\.spotify\.com|spotify\.com)';
+  // Caso 1: link de perfil — o handle é o primeiro segmento do path após o domínio
+  // (ex. /@user, /user, /user/xyz; /reel/ID enganou => pula), com @ opcional.
+
+  const urlMatch = u.match(new RegExp(domains + '/?@?([\\p{L}\\p{N}_.-]+)(?:/|\\?|#|$)', 'u'));
+  if (urlMatch) {
+    let seg = urlMatch[1];
+    // Spotify usa /user/{id} — o id é o segundo segmento.
+
+    if (seg === 'user' && /spotify\.com/.test(u)) {
+      const m2 = u.match(/\/user\/@?([\p{L}\p{N}_.-]+)/u);
+      if (m2) return m2[1].slice(0, 60);
+    }
+    if (seg && /^[\p{L}\p{N}_.-]+$/u.test(seg)) return seg.slice(0, 60);
+  }
+
+  // Caso 2: URL solta que contenha um domínio suportado(mas sem path de perfil claro) —
+  // pega a última @handle presente no texto.
+  const atHandle = u.match(/@([\p{L}\p{N}_.-]+)/u);
+  if (atHandle) return atHandle[1].slice(0, 60);
+
+  // Caso 3: handle puro(primeira palavra, sem espaços).
+  const first = u.split(/\s+/)[0].replace(/^@+/, '');
+
+  // Sanitização final: apenas caracteres seguros de usernames (unicode, pontos, underscore, hífen.
+  const clean = (first.match(/[\p{L}\p{N}_.-]+/u) || [first])[0];
+  if (clean) return clean.slice(0, 60);
+  return '';
 }
 
 function toNumber(v) {
@@ -120,29 +152,86 @@ async function getTikTokProfile(username) {
 }
 
 // ── Instagram (API anônima pública) ────────────────────────────────
+const IG_APP_UA = 'Instagram 275.0.0.26.109 Android (30/11; 420dpi; 1080x2340; samsung; SM-G991B; exynos2100; en_US; 441578297)';
+const IG_ENDPOINTS = [
+  'https://www.instagram.com/api/v1/users/web_profile_info/?username=',
+  'https://i.instagram.com/api/v1/users/web_profile_info/?username='
+];
+
+/** Busca via curl do sistema (evita bloqueio de TLS fingerprint do axios/undici contra o IG). */
+async function fetchInstagramViaCurl(username) {
+  const args = [
+    '-sS', '-m', String(HTTP_TIMEOUT),
+    '-A', IG_APP_UA,
+    '-H', 'X-IG-App-ID: 936619743392459',
+    '-H', 'Accept: application/json',
+    '-H', 'Accept-Language: en-US,en;q=0.9',
+    'https://www.instagram.com/api/v1/users/web_profile_info/?username=' + encodeURIComponent(username),
+  ];
+  const { stdout } = await execFileP('curl', args, { timeout: HTTP_TIMEOUT + 5000, maxBuffer: 20 * 1024 * 1024 });
+  const data = JSON.parse(stdout);
+  return data?.data?.user || null;
+}
+
+async function fetchInstagramUser(username) {
+  // curl passa no fingerprint do IG; axios é o fallback para ambientes sem curl.
+
+
+
+
+  try {
+    return await fetchInstagramViaCurl(username);
+  } catch (curlErr) {
+    const status = curlErr?.stderr ? String(curlErr.stderr) : '';
+    if (curlErr?.code === 'ENOENT' && /401|403|429/.test(status)) {
+      const rateErr = new Error('instagram: rate limited via curl');
+      rateErr.response = { status: 429 };
+      throw rateErr;
+    }
+    if (status && !/404/.test(status)) console.error('socialProfile/instagram/curl:', status.slice(0, 200));
+    let lastErr = curlErr;
+    for (const base of IG_ENDPOINTS) {
+      for (let attempt =   0; attempt < 2; attempt++) {
+        try {
+          const res = await axios.get(base + encodeURIComponent(username), {
+            timeout: HTTP_TIMEOUT,
+            headers: {
+              'User-Agent': IG_APP_UA,
+              Accept: 'application/json',
+              'X-IG-App-ID': '936619743392459',
+              'Accept-Language': 'en-US,en;q=0.9'
+            }
+          });
+          return res.data?.data?.user || null;
+        } catch (e) {
+          lastErr = e;
+          if (e?.response?.status === 404) return null;
+          if (e?.response?.status === 401 || e?.response?.status === 403 || e?.response?.status === 429) {
+            if (attempt === 0) await new Promise(r => setTimeout(r, 600));
+            continue;
+          }
+          break;
+        }
+      }
+    }
+    throw lastErr;
+  }
+}
+
 async function getInstagramProfile(username) {
   try {
-    const url = `https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(username)}`;
-    const res = await axios.get(url, {
-      timeout: HTTP_TIMEOUT,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
-        Accept: 'application/json',
-        'X-IG-App-ID': '936619743392459',
-        'Accept-Language': 'en-US,en;q=0.9'
-      }
-    });
-    const u = res.data?.data?.user;
+    const u = await fetchInstagramUser(username);
     if (!u || !u.username) return { ok: false, msg: '❌ Perfil não encontrado.' };
+
     const profile = {
       platform: 'instagram',
       username: u.username,
       displayName: u.full_name || u.username,
-      avatar: u.profile_pic_url || u.profile_pic_url_hd || null,
+      avatar: u.profile_pic_url_hd || u.profile_pic_url || null,
       bio: u.biography || undefined,
-      followers: toNumber(u.follower_count),
-      following: toNumber(u.following_count),
-      posts: toNumber(u.media_count),
+      followers: toNumber(u.edge_followed_by?.count) ?? toNumber(u.follower_count),
+      following: toNumber(u.edge_follow?.count) ?? toNumber(u.following_count),
+      posts: toNumber(u.edge_owner_to_timeline_media?.count) ?? toNumber(u.media_count),
       private: !!u.is_private,
       verified: !!u.is_verified,
       profileUrl: `https://www.instagram.com/${u.username}`
@@ -150,7 +239,7 @@ async function getInstagramProfile(username) {
     return { ok: true, profile };
   } catch (e) {
     if (e?.response?.status === 404) return { ok: false, msg: '❌ Perfil não encontrado.' };
-    if (e?.response?.status === 403 || e?.response?.status === 429 || e?.response?.status === 400) {
+    if (e?.response?.status === 401 || e?.response?.status === 403 || e?.response?.status === 429) {
       return { ok: false, msg: '❌ Não foi possível consultar este perfil agora.', code: 'RATE_LIMITED' };
     }
     console.error('socialProfile/instagram:', e.message || e);
