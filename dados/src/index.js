@@ -85,8 +85,6 @@ import {
   getAllApiKeysStatus,
   loadGlobalBlacklist,
 } from './utils/database.js';
-// Cooldown por usuário+comando para os comandos de perfil social (antiflood também fora de grupos)
-const socialProfileCooldowns = new Map();
 // Suprimir warnings de execuções perdidas do node-cron
 const originalWarn = console.warn;
 console.warn = (...args) => {
@@ -23468,18 +23466,6 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
       case 'px':
       case 'pspotify': {
         const socialPlatform = command === 'ptiktok' ? 'tiktok' : command === 'pinsta' ? 'instagram' : command === 'px' ? 'x' : 'spotify';
-        const socialCdKey = `${sender}:${command}`;
-        const socialCdNow = Date.now();
-        const socialCdLast = socialProfileCooldowns.get(socialCdKey) || 0;
-        if (socialCdNow - socialCdLast < 10000) {
-          const socialCdLeft = Math.ceil((10000 - (socialCdNow - socialCdLast)) / 1000);
-          return reply(`⏳ Aguarde ${socialCdLeft} segundo(s) antes de consultar outro perfil.`);
-        }
-        socialProfileCooldowns.set(socialCdKey, socialCdNow);
-        if (socialProfileCooldowns.size > 5000) {
-          const oldestKey = socialProfileCooldowns.keys().next().value;
-          socialProfileCooldowns.delete(oldestKey);
-        }
         try {
           if (!q.trim()) {
             const exemplo = prefix + (socialPlatform === 'x' ? 'px' : 'p' + socialPlatform) + ' @usuario';
