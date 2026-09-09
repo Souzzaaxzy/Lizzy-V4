@@ -1,11 +1,17 @@
 /**
  * Spotify Download - Implementação direta sem API externa
- * Usa api. vrenden.my.id para busca e spotisaver.net para download
+ * Busca: API oficial do Spotify (Client Credentials, requer SPOTIFY_CLIENT_ID/SECRET no .env)
+ *         com fallback para Brave Search e vreden.my.id
+ * Download: spotisaver.net (terceiro, não oficial)
  */
 
 import axios from 'axios';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const SEARCH_BASE_URL = 'https://vreden.my.id';
+const SPOTIFY_API_BASE = 'https://api.spotify.com/v1';
 const DOWNLOAD_BASE_URL = 'https://spotisaver.net';
 const BRAVE_SEARCH_URL = 'https://search.brave.com/search';
 const BRAVE_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
@@ -132,6 +138,78 @@ async function searchViaBrave(query) {
   }
 }
 
+// ── Busca oficial (API do Spotify, Client Credentials) ────────────────
+let spotifyTokenCache = null;
+async function getSpotifyToken() {
+  const id = process.env.SPOTIFY_CLIENT_ID;
+  const secret = process.env.SPOTIFY_CLIENT_SECRET;
+
+  if (spotifyTokenCache && spotifyTokenCache.expiresAt > Date.now() + 60000) {
+
+    return spotifyTokenCache.token;
+  }
+  if (!id || !secret) throw new Error('SPOTIFY_CREDENTIALS_MISSING');
+  const basic = Buffer.from(`${id}:${secret}`).toString('base64');
+  const res = await axios.post('https://accounts.spotify.com/api/token',
+    new URLSearchParams({ grant_type: 'client_credentials' }),
+    {
+      timeout: 15000,
+      headers: {
+        Authorization: `Basic ${basic}`,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    }
+  );
+  const token = res.data?.access_token;
+  if (!token) throw new Error('SPOTIFY_TOKEN_FAIL');
+  spotifyTokenCache = { token, expiresAt: Date.now() + (res.data.expires_in || 3600) * 1000 };
+  return token;
+}
+
+/** Monta o mesmo formato devolvido pela busca (results[].name/artist/song_link/link). */
+function mapSpotifyTrack(track) {
+
+  const artists = Array.isArray(track.artists) ? track.artists.map(a => a.name) : [];
+  return {
+    name: track.name,
+    artist: artists.join(', '),
+    artists: artists,
+    song_link: track.external_urls?.spotify || `https://open.spotify.com/track/${track.id}`,
+    link: track.external_urls?.spotify || `https://open.spotify.com/track/${track.id}`,
+    id: track.id,
+    duration_ms: track.duration_ms,
+    album: track.album?.name,
+    image: track.album?.images?.[1]?.url || track.album?.images?.[0]?.url || null,
+    source: 'spotify-api'
+  };
+}
+
+async function searchViaSpotifyAPI(query) {
+  try {
+    const token = await getSpotifyToken();
+    const res = await axios.get(`${SPOTIFY_API_BASE}/search`, {
+      params: {
+        q: query,
+        type: 'track',
+        limit: 5
+      },
+      timeout: 15000,
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const tracks = res.data?.tracks?.items;
+    if (!Array.isArray(tracks) || !tracks.length) return { ok: false, msg: 'Nenhuma música encontrada no Spotify' };
+    const results = tracks.filter(t => t && t.id && t.external_urls?.spotify).map(mapSpotifyTrack);
+    if (!results.length) return { ok: false, msg: 'Nenhuma música encontrada no Spotify' };
+    return { ok: true, results };
+  } catch (error) {
+    if (error.message === 'SPOTIFY_CREDENTIALS_MISSING' || error.message === 'SPOTIFY_TOKEN_FAIL') {
+      return { ok: false, msg: error.message, code: 'NOT_CONFIGURED' };
+    }
+    console.error('Falha na busca oficial do Spotify:', error.message);
+    return { ok: false, msg: 'Falha na busca oficial do Spotify: ' + error.message };
+  }
+}
+
 async function search(query) {
   try {
     if (!query || typeof query !== 'string') {
@@ -143,6 +221,23 @@ async function search(query) {
 
     const cached = getCached(`search:${query}`);
     if (cached) return cached;
+
+    try {
+      const official = await searchViaSpotifyAPI(query);
+      if (official.ok && official.results.length) {
+        const result = {
+          ok: true,
+          query,
+          total: official.results.length,
+          results: official.results,
+          source: 'spotify-api'
+        };
+        setCache(`search:${query}`, result);
+        return result;
+      }
+    } catch (officialError) {
+      console.error('Falha na busca oficial do Spotify, tentando Brave:', officialError.message);
+    }
 
     try {
       const brave = await searchViaBrave(query);
