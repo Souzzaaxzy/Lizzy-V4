@@ -1085,14 +1085,19 @@ await test('24. reaproveita a mensagem original completa do messagesCache', asyn
   includes(replyText, 'READ', 'status 4 traduzido');
 });
 
-await test('25. uma única mensagem enviada, com "ler mais" e sem forward', async () => {
+await test('25. uma única mensagem visível, sem prefixo que colapse a prévia', async () => {
   const cmd = makeGetCommand({ quotedMessage: IMAGE });
   const { sent } = await runGet({ message: cmd.message, key: cmd.key });
   ok(sent.length === 1, `deveria enviar 1 mensagem, enviou ${sent.length}`);
   const content = sent[0].content?.text || '';
-  ok(content.startsWith('\u200e'), 'prefixo de "ler mais" presente');
+  // O !get NÃO usa o invisível do "ler mais": ele colapsaria a mensagem na
+  // prévia e esconderia os dados. O relatório começa visível.
+  ok(!content.startsWith('\u200e'), 'sem prefixo invisível de "ler mais"');
+  ok(content.startsWith('🔎'), 'começa direto no resumo visível');
   includes(content, 'GET MESSAGE');
   includes(content, 'RAW MESSAGE');
+  includes(content, 'IDENTIDADE');
+  includes(content, 'MEDIA');
   // O reply do bot sempre marca as respostas como encaminhadas (comportamento
   // preexistente); o importante aqui é não gerar mensagens duplicadas.
   ok(sent.length === 1, 'nenhuma mensagem extra foi enviada');

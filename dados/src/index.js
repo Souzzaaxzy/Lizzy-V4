@@ -28293,21 +28293,27 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
             },
           });
 
-          // O relatorio vai INTEIRO para o WhatsApp. Se passar do limite de
-          // bytes, e dividido em varias mensagens (corte sempre em quebra de
-          // linha) em vez de ser truncado ou despejado no terminal.
-          const lerMaisPrefix = getMenuLerMaisText();
+          // O relatorio vai INTEIRO para o WhatsApp: resumo primeiro e o
+          // detalhamento completo logo em seguida, SEM o prefixo invisivel de
+          // "ler mais" — ele colapsa a mensagem na previa e esconderia
+          // justamente os dados que o !get existe para mostrar.
+          // Se passar do limite de bytes, e dividido em varias mensagens
+          // (corte sempre em quebra de linha), nunca truncado nem mandado ao terminal.
           const body = `${summary}\n\n${full}`;
           const mentions = menc_prt && isValidJid(menc_prt) ? [menc_prt] : [];
+          const MAX_PART_BYTES = 52000;
+          const parts = splitTextForWhatsApp(body, MAX_PART_BYTES);
 
-          // Desconta o "ler mais" (que so acompanha a primeira parte) e a
-          // margem do envelope, deixando cada parte seguramente abaixo do limite.
-          const perPartBytes = 52000 - Buffer.byteLength(lerMaisPrefix, 'utf8');
-          const parts = splitTextForWhatsApp(body, perPartBytes);
+          // Log de diagnóstico: sempre uma linha confirmando a execução; o relatório
+          // completo só é impresso com config.debug ligado, para não poluir o log.
+          console.log(`[GET] executado | partes=${parts.length} | bytes=${Buffer.byteLength(body, 'utf8')} | alvo=${cachedTarget ? 'cache' : quoted?.quotedMessage ? 'contextInfo' : 'self'}`);
+          if (debug) {
+            for (const line of full.split('\n')) console.log(`[GET] ${line}`);
+          }
 
           for (let i = 0; i < parts.length; i++) {
             const total = parts.length > 1 ? `\n\n_(${i + 1}/${parts.length})_` : '';
-            const text = i === 0 ? `${lerMaisPrefix}${parts[i]}${total}` : `${parts[i]}${total}`;
+            const text = `${parts[i]}${total}`;
             // Só a primeira parte cita a mensagem marcada e menciona o autor.
             await reply(text, i === 0 ? { mentions, noForward: true } : { noForward: true });
           }

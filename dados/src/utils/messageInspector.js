@@ -1080,7 +1080,9 @@ export function buildMessageReport({ info, target = null, origin = 'self', quote
   const row = (label, value) => push(`• ${label}: ${value === undefined || value === null || value === '' ? 'não fornecido' : value}`);
 
   // ------------------------------------------------------------------ cabeçalho
-  push('🔎 *GET MESSAGE*');
+  // O summary já abre com "🔎 *GET MESSAGE*"; aqui vai só o "Detalhes completos:"
+  // para não repetir o título quando o relatório é enviado logo em seguida.
+  push('*Detalhes completos*');
   push('');
   push(`• Fonte do alvo: ${ORIGIN_LABEL[origin] || origin}`);
 
