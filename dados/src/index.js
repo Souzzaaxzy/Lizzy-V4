@@ -18,6 +18,7 @@ import {
   hasTextSignature,
   registerEnumLabels,
   safeJsonStringify,
+  splitTextForWhatsApp,
   toSafeObject
 } from './utils/messageInspector.js';
 
@@ -28292,34 +28293,33 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
             },
           });
 
-          // Uma unica mensagem: resumo visivel + detalhes na parte expandida
-          // ("ler mais"), respeitando o mesmo sistema ja usado pelos menus.
+          // O relatorio vai INTEIRO para o WhatsApp. Se passar do limite de
+          // bytes, e dividido em varias mensagens (corte sempre em quebra de
+          // linha) em vez de ser truncado ou despejado no terminal.
           const lerMaisPrefix = getMenuLerMaisText();
-          // O limite do WhatsApp e de ~65536 BYTES (nao caracteres) e este
-          // relatorio tem muitos multibyte (acentos/emojis), entao medimos
-          // bytes e ja descontamos o prefixo de "ler mais" que sera preposto.
-          const MAX_MESSAGE_BYTES = 55000;
-          const budget = MAX_MESSAGE_BYTES - Buffer.byteLength(lerMaisPrefix, 'utf8');
-          let body = `${summary}\n\n${full}`;
-          if (Buffer.byteLength(body, 'utf8') > budget) {
-            let cut = body.length;
-            let excess = Buffer.byteLength(body.slice(0, cut), 'utf8') - budget;
-            while (cut > 0 && excess > 0) {
-              cut -= Math.max(1, Math.ceil(excess / 3));
-              excess = Buffer.byteLength(body.slice(0, cut), 'utf8') - budget;
-            }
-            body = `${body.slice(0, Math.max(0, cut))}\n\n... [relatorio truncado no WhatsApp; objeto completo impresso no console]`;
-            console.log('[GET] Relatorio completo (truncado no WhatsApp):', full);
-          }
-
+          const body = `${summary}\n\n${full}`;
           const mentions = menc_prt && isValidJid(menc_prt) ? [menc_prt] : [];
-          await reply(`${lerMaisPrefix}${body}`, { mentions, noForward: true });
+
+          // Desconta o "ler mais" (que so acompanha a primeira parte) e a
+          // margem do envelope, deixando cada parte seguramente abaixo do limite.
+          const perPartBytes = 52000 - Buffer.byteLength(lerMaisPrefix, 'utf8');
+          const parts = splitTextForWhatsApp(body, perPartBytes);
+
+          for (let i = 0; i < parts.length; i++) {
+            const total = parts.length > 1 ? `\n\n_(${i + 1}/${parts.length})_` : '';
+            const text = i === 0 ? `${lerMaisPrefix}${parts[i]}${total}` : `${parts[i]}${total}`;
+            // Só a primeira parte cita a mensagem marcada e menciona o autor.
+            await reply(text, i === 0 ? { mentions, noForward: true } : { noForward: true });
+          }
         } catch (error) {
           console.error('[GET] Erro ao coletar dados:', error);
-          // Mesmo em falha inesperada, entrega o objeto cru em vez de so o erro.
+          // Mesmo em falha inesperada, entrega o objeto cru (inteiro, dividido
+          // em partes se preciso) em vez de mandar o usuario para o console.
           try {
-            const fallback = safeJsonStringify(toSafeObject(info), { indent: 2 });
-            await reply(`Erro ao montar o relatorio completo: ${error?.message || error}\n\n*RAW (fallback):*\n\`\`\`\n${fallback.slice(0, 8000)}\n\`\`\``);
+            const fallback = `*GET MESSAGE — fallback*\n\nErro ao montar o relatorio completo: ${error?.message || error}\n\n*RAW MESSAGE (safe)*\n\`\`\`\n${safeJsonStringify(toSafeObject(info), { indent: 2 })}\n\`\`\``;
+            for (const part of splitTextForWhatsApp(fallback, 52000)) {
+              await reply(part, { noForward: true });
+            }
           } catch {
             reply("Erro ao coletar dados da mensagem");
           }

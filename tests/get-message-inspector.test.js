@@ -1152,36 +1152,71 @@ await test('28. objetos de pagamento no WebMessageInfo (paymentInfo)', async () 
   includes(replyText, 'presente com valor "0"');
 });
 
-await test('29. relatório enorme é truncado com segurança (não estoura o limite)', async () => {
+await test('29. relatório enorme é DIVIDIDO em várias mensagens (nada vai pro terminal)', async () => {
   const filler = 'X'.repeat(500);
   const bigQuoted = {
     imageMessage: {
       ...IMAGE.imageMessage,
-      // 400 campos extras com strings longas para inflar o RAW
-      ...Object.fromEntries(Array.from({ length: 200 }, (_, i) => [`campoExtra${i}`, filler])),
+      // Muitos campos extras com strings longas para inflar o RAW
+      ...Object.fromEntries(Array.from({ length: 400 }, (_, i) => [`campoExtra${i}`, filler])),
     },
   };
   const cmd = makeGetCommand({ quotedMessage: bigQuoted });
   const { sent } = await runGet({ message: cmd.message, key: cmd.key });
-  const text = sent[0]?.content?.text || '';
-  // O limite do WhatsApp é em bytes: o relatório tem muitos acentos/multibyte.
-  const bytes = Buffer.byteLength(text, 'utf8');
-  ok(bytes <= 56000, `tamanho dentro do limite em bytes (${bytes})`);
-  ok(text.length > 1000, 'relatório foi produzido');
-  includes(text, 'relatorio truncado', 'aviso de truncamento presente');
-  notIncludes(text, 'GET MESSAGE\n\n\n', 'estrutura preservada');
+
+  ok(sent.length > 1, `deveria dividir em mais de uma mensagem, enviou ${sent.length}`);
+  const texts = sent.map((s) => s.content?.text || '');
+  // Cada parte precisa caber no limite do WhatsApp (medido em bytes).
+  for (const [i, text] of texts.entries()) {
+    ok(Buffer.byteLength(text, 'utf8') <= 56000, `parte ${i + 1} dentro do limite de bytes`);
+  }
+  // Nada é jogado fora: reconcatena as partes e confere que o relatório
+  // continua íntegro de ponta a ponta.
+  const joined = texts.join('\n');
+  includes(joined, 'GET MESSAGE');
+  includes(joined, 'CAMPOS DO PROTO');
+  includes(joined, 'RAW MESSAGE');
+  includes(joined, 'campoExtra0', 'primeiro campo extra presente');
+  includes(joined, 'campoExtra399', 'ÚLTIMO campo extra presente (nada truncado)');
+  notIncludes(joined, 'relatorio truncado', 'não há mais aviso de truncamento');
+  notIncludes(joined, 'impresso no console', 'não manda mais o usuário para o console');
+  includes(joined, `(1/${texts.length})`, 'numeração de partes');
 });
 
 await test('29b. acentos/emojis não corrompem o corte por bytes', async () => {
-  const acentuado = 'áàâãéêíóôõúüçÁÀÂÃÉÊÍÓÔÕÚÜÇção çãõ '.repeat(60);
+  const acentuado = 'áàâãéêíóôõúüçÁÀÂÃÉÊÍÓÔÕÚÜÇção çãõ '.repeat(200);
   const bigQuoted = { extendedTextMessage: { text: acentuado, contextInfo: { stanzaId: 'X' } } };
   const cmd = makeGetCommand({ quotedMessage: bigQuoted });
   const { sent } = await runGet({ message: cmd.message, key: cmd.key });
-  const text = sent[0]?.content?.text || '';
-  ok(Buffer.byteLength(text, 'utf8') <= 56000, 'dentro do limite em bytes');
-  // '�' indica caractere quebrado no meio (corte no lugar errado).
-  notIncludes(text, '\uFFFD', 'nenhum caractere corrompido no corte');
-  includes(text, 'ç', 'acentos preservados');
+  const joined = sent.map((s) => s.content?.text || '').join('\n');
+  for (const [i, part] of sent.entries()) {
+    ok(Buffer.byteLength(part.content?.text || '', 'utf8') <= 56000, `parte ${i + 1} dentro do limite`);
+  }
+  // '\uFFFD' indica caractere quebrado no meio (corte no lugar errado).
+  notIncludes(joined, '\uFFFD', 'nenhum caractere corrompido no corte');
+  includes(joined, 'ç', 'acentos preservados');
+});
+
+await test('29c. splitTextForWhatsApp não perde nem corrompe conteúdo', () => {
+  const { splitTextForWhatsApp } = inspector;
+
+  const linhas = Array.from({ length: 3000 }, (_, i) => `${String(i).padStart(5, '0')} ${'a'.repeat(94)}`);
+  const original = linhas.join('\n');
+  const partes = splitTextForWhatsApp(original, 10000);
+  ok(partes.length > 1, 'dividiu em várias partes');
+  ok(partes.every((p) => Buffer.byteLength(p, 'utf8') <= 10000), 'todas as partes dentro do limite');
+  ok(partes.join('\n') === original, 'conteúdo idêntico após dividir e reconcatenar');
+
+  const multibyte = Array.from({ length: 3000 }, (_, i) => `çãõ ${i} 😀🎉 ${'é'.repeat(40)}`).join('\n');
+  const partesMb = splitTextForWhatsApp(multibyte, 5000);
+  ok(partesMb.every((p) => Buffer.byteLength(p, 'utf8') <= 5000), 'partes multibyte dentro do limite');
+  ok(partesMb.join('\n') === multibyte, 'conteúdo multibyte idêntico');
+  ok(!partesMb.join('').includes('\uFFFD'), 'nenhum caractere quebrado');
+
+  const linhaGigante = 'á'.repeat(40000);
+  const partesLinha = splitTextForWhatsApp(linhaGigante, 1000);
+  ok(partesLinha.every((p) => Buffer.byteLength(p, 'utf8') <= 1000), 'linha gigante fatiada dentro do limite');
+  ok(partesLinha.join('') === linhaGigante, 'linha gigante idêntica');
 });
 
 await test('30. processamento concorrente do !get não interfere entre si', async () => {

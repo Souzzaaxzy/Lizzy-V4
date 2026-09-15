@@ -18,10 +18,10 @@ import crypto from 'crypto';
 // CONSTANTES
 // ============================================================================
 
-const MAX_DEPTH = 8;
-const MAX_ARRAY_ITEMS = 30;
-const MAX_OBJECT_KEYS = 60;
-const MAX_STRING_LEN = 900;
+const MAX_DEPTH = 14;
+const MAX_ARRAY_ITEMS = 200;
+const MAX_OBJECT_KEYS = 300;
+const MAX_STRING_LEN = 4000;
 const MAX_BINARY_PREVIEW = 24;
 
 /** Chaves cujo conteúdo nunca deve ir para o WhatsApp. */
@@ -501,7 +501,7 @@ export function formatFieldValue(value) {
   if (value === null) return 'null';
   if (value === undefined) return 'não fornecido';
   if (typeof value === 'boolean') return value ? 'true' : 'false';
-  if (typeof value === 'string') return value.length > 240 ? `${value.slice(0, 240)}…` : value;
+  if (typeof value === 'string') return value.length > 4000 ? `${value.slice(0, 4000)}… [campo longo, ${value.length} chars]` : value;
   if (typeof value === 'number') return String(value);
   if (typeof value === 'bigint') return value.toString();
   if (value && value.__binary) {
@@ -925,6 +925,64 @@ function tsToDate(timestamp) {
 }
 
 /**
+ * Divide um texto longo em partes que cabem no limite de mensagem do WhatsApp.
+ *
+ * O limite é em BYTES (não caracteres) e o relatório é cheio de multibyte
+ * (acentos/emojis), então medimos bytes. O corte acontece SEMPRE em quebra de
+ * linha, para nunca partir um caractere nem uma linha do relatório no meio.
+ *
+ * @param {string} text texto completo
+ * @param {number} maxBytes limite por parte (em bytes UTF-8)
+ * @returns {string[]} partes na ordem original
+ */
+export function splitTextForWhatsApp(text, maxBytes = 55000) {
+  const content = String(text ?? '');
+  if (!content) return [''];
+  if (Buffer.byteLength(content, 'utf8') <= maxBytes) return [content];
+
+  const parts = [];
+  let current = [];
+
+  const flush = () => {
+    if (current.length) {
+      parts.push(current.join('\n'));
+      current = [];
+    }
+  };
+
+  for (const rawLine of content.split('\n')) {
+    let line = rawLine;
+    // Uma única linha maior que o limite (ex.: RAW minificado) precisa ser
+    // fatiada por conta própria; fatiamos por code point para não corromper.
+    while (Buffer.byteLength(line, 'utf8') > maxBytes) {
+      flush();
+      const chars = Array.from(line);
+      let slice = '';
+      let size = 0;
+      let taken = 0;
+      for (const ch of chars) {
+        const chSize = Buffer.byteLength(ch, 'utf8');
+        if (size + chSize > maxBytes) break;
+        slice += ch;
+        size += chSize;
+        taken += 1;
+      }
+      parts.push(slice);
+      line = chars.slice(taken).join('');
+    }
+
+    const candidate = current.concat(line).join('\n');
+    if (Buffer.byteLength(candidate, 'utf8') > maxBytes) {
+      flush();
+    }
+    current.push(line);
+  }
+
+  flush();
+  return parts;
+}
+
+/**
  * Descreve um identificador individual (JID ou LID), deixando explícito quando
  * o campo não existe em vez de simplesmente ocultá-lo.
  */
@@ -1112,7 +1170,7 @@ export function buildMessageReport({ info, target = null, origin = 'self', quote
   for (const [path, value] of contentFields) {
     if (typeof value === 'string' && value.length > 400) {
       push(`• ${labelFor(path)} (${path}):`);
-      push(value.slice(0, 1500));
+      push(value);
       continue;
     }
     row(`${labelFor(path)} (${path})`, formatFieldValue(value));
@@ -1220,13 +1278,13 @@ export function buildMessageReport({ info, target = null, origin = 'self', quote
   // --------------------------------------------------------------- árvore do proto
   section('CAMPOS DO PROTO (safe)');
   push('```');
-  push(truncateJson(targetMessage, 14000));
+  push(safeJsonStringify(targetMessage, { indent: 2 }));
   push('```');
 
   // ------------------------------------------------------------------ raw message
   section('RAW MESSAGE');
   push('```');
-  push(truncateJson(source, 22000));
+  push(safeJsonStringify(source, { indent: 2 }));
   push('```');
 
   const full = lines.join('\n');
@@ -1269,11 +1327,6 @@ function summarizeTopLevel(value) {
     return keys.length ? `objeto {${keys.join(', ')}}` : 'objeto vazio';
   }
   return formatFieldValue(value);
-}
-
-function truncateJson(value, max) {
-  const json = safeJsonStringify(value, { indent: 2 });
-  return json.length > max ? `${json.slice(0, max)}\n… [truncado — ${json.length} chars no total]` : json;
 }
 
 function timestampOf(webMessage) {
