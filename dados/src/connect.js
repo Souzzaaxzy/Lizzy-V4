@@ -17,6 +17,7 @@ import RentalExpirationManager from './utils/rentalExpirationManager.js';
 import ElectionManager from './utils/electionManager.js';
 import { loadMsgBotOn } from './utils/database.js';
 import { buildUserId } from './utils/helpers.js';
+import { safeJsonStringify } from './utils/messageInspector.js';
 import msgCounter from './utils/msgCounter.js';
 // ATENÇÃO: Se o seu arquivo se chamado 'index-2(2).js', RENOMEIE PARA 'index.js'
 // ou mude o caminho abaixo para './index-2(2).js'
@@ -357,7 +358,17 @@ async function getGroupData(groupId) {
 function logPaymentMessage(msg, source = 'unknown') {
     if (!msg || typeof msg !== 'object') return;
     
-    const msgStr = JSON.stringify(msg);
+    // JSON.stringify direto quebra com BigInt/Long/Buffer: mensagens de
+    // pagamento carregam amount1000 e expiryTimestamp como Long. Usamos a
+    // serializacao segura do inspector (que tambem redige credenciais) para
+    // que este log nunca derrube o handler de messages.upsert.
+    let msgStr;
+    try {
+        msgStr = safeJsonStringify(msg);
+    } catch (error) {
+        console.error('[PAYMENT] Falha ao serializar mensagem de pagamento:', error?.message || error);
+        return;
+    }
     
     // Verificar se a mensagem contém alguma referência a "payment"
     if (!msgStr.toLowerCase().includes('payment')) return;
@@ -399,15 +410,8 @@ function logPaymentMessage(msg, source = 'unknown') {
     console.log('📦 JSON Completo da Mensagem:');
     console.log('───────────────────────────────────────────────────────────');
     
-    try {
-        console.log(JSON.stringify(msg, null, 2));
-    } catch (e) {
-        console.log('[JSON muito grande ou circular - exibindo resumido]');
-        console.log('Keys:', Object.keys(msg));
-        if (msg.message) {
-            console.log('Message Keys:', Object.keys(msg.message));
-        }
-    }
+    // safeJsonStringify trata Long/BigInt/Buffer/circulares e ja foi calculado acima.
+    console.log(msgStr);
     
     console.log('═══════════════════════════════════════════════════════════\n');
 }

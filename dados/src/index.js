@@ -10,8 +10,37 @@ import {
   DisconnectReason,
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
-  generateMessageID
+  generateMessageID,
+  proto
 } from '@itsliaaa/baileys';
+import {
+  buildMessageReport,
+  hasTextSignature,
+  registerEnumLabels,
+  safeJsonStringify,
+  toSafeObject
+} from './utils/messageInspector.js';
+
+// Mapas de enum do Baileys usados para traduzir status/stub/tipo de protocolo
+// no relatório do !get. Registrados uma única vez, sem custo por mensagem.
+registerEnumLabels({
+  status: proto?.WebMessageInfo?.Status,
+  stub: proto?.WebMessageInfo?.StubType,
+  protocol: proto?.Message?.ProtocolMessage?.Type
+});
+
+/**
+ * Clona uma mensagem preservando a estrutura, sem os riscos do
+ * JSON.parse(JSON.stringify(...)): BigInt, Long do protobuf, Buffer e
+ * referências circulares fazem o stringify direto lançar e derrubar o handler.
+ */
+function cloneMessageSafely(message) {
+  try {
+    return structuredClone(message);
+  } catch {
+    return toSafeObject(message, { obscureSensitive: false });
+  }
+}
 import { handleFut, handleFutCommand } from './games/futebol/index.js';
 import dotenv from 'dotenv';
 // Imports para sistema de Games
@@ -2321,7 +2350,9 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     const isGoingEmoji = (emoji) => typeof emoji === 'string' && emoji.includes(ROLE_GOING_BASE);
     const isNotGoingEmoji = (emoji) => typeof emoji === 'string' && emoji.includes(ROLE_NOT_GOING_BASE);
     const isButtonMessage = info.message.interactiveMessage || info.message.templateButtonReplyMessage || info.message.buttonsMessage || info.message.interactiveResponseMessage || info.message.listResponseMessage || info.message.buttonsResponseMessage ? true : false;
-    const isStatusMention = JSON.stringify(info.message).includes('groupStatusMentionMessage');
+    // hasTextSignature substitui JSON.stringify direto: este ultimo lanca em
+    // estruturas circulares ou com BigInt/Long e derrubaria o handler inteiro.
+    const isStatusMention = hasTextSignature(info.message, 'groupStatusMentionMessage');
     const getMessageText = message => {
       if (!message) return '';
       if (message.interactiveResponseMessage) {
@@ -5544,8 +5575,10 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
                 simulatedArgs = `@${mentionNumber} ${simulatedArgs}`.trim();
               }
               const simulatedBody = `${groupPrefix}${simulatedCommand} ${simulatedArgs}`.trim();
-              // Clonar o objeto info original mantendo estrutura completa
-              const fakeMessage = JSON.parse(JSON.stringify(info));
+              // Clonar o objeto info original mantendo estrutura completa.
+              // toSafeObject evita o crash de JSON.stringify em mensagens com
+              // BigInt/Long/Buffer/circulares (que abortava o handler).
+              const fakeMessage = cloneMessageSafely(info);
               // Atualizar timestamp para o momento atual
               fakeMessage.messageTimestamp = Math.floor(Date.now() / 1000);
               // Marcar como mensagem processada pelo PRO para evitar loop infinito
@@ -28116,38 +28149,183 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
           }
         }
         break;
-      case 'get':
-        // Comando para coletar dados de mensagens invisíveis
+      case 'get': {
+        // Ferramenta de inspecao/diagnostico de mensagens.
+        // Mantem a restricao original (admin/moderador) e passa a expor tudo
+        // que o Baileys entrega sobre a mensagem marcada.
         if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
-        if (!menc_prt) return reply("👆 *Marque uma mensagem* para coletar seus dados!");
-        
+
+        // Extrai o conteudo citado de QUALQUER tipo de mensagem, nao so texto:
+        // o contextInfo pode estar em imageMessage, audioMessage, etc.
+        const extractQuoted = (message) => {
+          if (!message || typeof message !== 'object') return null;
+          for (const key of Object.keys(message)) {
+            const node = message[key];
+            if (node && typeof node === 'object' && node.contextInfo?.quotedMessage) {
+              return { quotedMessage: node.contextInfo.quotedMessage, contextInfo: node.contextInfo, path: key };
+            }
+          }
+          return null;
+        };
+
+        const quoted = extractQuoted(info.message);
+        if (!menc_prt && !quoted) {
+          return reply("👆 *Marque uma mensagem* para coletar seus dados!");
+        }
+
         try {
-          // Coletar mensagem referenciada
-          const quotedMessage = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-          
-          // Se não tiver mensagem referenciada, usa a própria
-          const targetMessage = quotedMessage || info.message;
-          
-                    
-          // Montar resposta para o usuário
-          const types = Object.keys(targetMessage).filter(k => !k.startsWith('stream')).join(', ');
-          const msgData = `📋 *DADOS DA MENSAGEM*
+          const quotedContext = quoted?.contextInfo || null;
+          const stanzaId = quotedContext?.stanzaId || null;
 
-🔹 *Type:* ${types}
-🔹 *Sender:* @${menc_prt?.split('@')[0]}
-🔹 *MessageID:* ${info.key?.id}
-🔹 *RemoteJid:* ${info.key?.remoteJid}
-🔹 *Participant:* ${info.message?.extendedTextMessage?.contextInfo?.participant || 'N/A'}
+          // Busca a mensagem original completa no cache interno do bot.
+          // O contextInfo entrega apenas um resumo do citado (as vezes sem
+          // mediaKey/timestamps), entao reutilizamos o messagesCache - o mesmo
+          // store ja usado pelo anti-delete - em vez de criar outro sistema.
+          const lookupCache = (id, chatHint) => {
+            if (!messagesCache || !id || typeof messagesCache.get !== 'function') return null;
+            const candidates = [];
+            if (chatHint) candidates.push(`${chatHint}_${id}`);
+            candidates.push(`${from}_${id}`);
+            for (const key of candidates) {
+              const found = messagesCache.get(key);
+              if (found?.message) return found;
+            }
+            // Fallback: varredura reversa limitada (o cache tem poda automatica).
+            try {
+              const keys = Array.from(messagesCache.keys());
+              for (let i = keys.length - 1; i >= Math.max(0, keys.length - 800); i--) {
+                if (keys[i].endsWith(`_${id}`)) {
+                  const found = messagesCache.get(keys[i]);
+                  if (found?.message) return found;
+                }
+              }
+            } catch { /* cache indisponivel */ }
+            return null;
+          };
 
-📜 *Dados completos no console/terminal*`;
-          
-          await reply(msgData);
-          
+          const cachedTarget = lookupCache(stanzaId, quotedContext?.remoteJid);
+
+          // -------------------- identidades (JID x LID) --------------------
+          // JID carrega o numero; LID e o identificador interno. Nunca assumimos
+          // que sao iguais: mostramos os dois lados e marcamos o que faltar.
+          const toLidSafe = async (jid) => {
+            if (!jid || !isValidJid(jid)) return null;
+            try {
+              const lid = await getLidFromJidCached(nazu, jid);
+              return lid && lid !== jid ? lid : null;
+            } catch { return null; }
+          };
+          const toPnSafe = async (lid) => {
+            if (!lid || !lid.endsWith('@lid')) return null;
+            try {
+              const pn = await nazu.signalRepository?.lidMapping?.getPNForLID?.(lid);
+              return pn || null;
+            } catch { return null; }
+          };
+
+          const identity = {};
+          identity.senderJid = senderJidOriginal
+            ? (senderJidOriginal.endsWith('@lid') ? await toPnSafe(senderJidOriginal) : senderJidOriginal)
+            : (sender?.endsWith('@lid') ? await toPnSafe(sender) : sender || null);
+          identity.senderLid = sender?.endsWith('@lid') ? sender : await toLidSafe(identity.senderJid);
+          identity.chatJid = from?.endsWith('@lid') ? await toPnSafe(from) : from || null;
+          // LID de chat só se aplica a conversas individuais; um grupo não tem LID.
+          identity.chatLid = from?.endsWith('@g.us') || from?.endsWith('@newsletter') || from?.endsWith('@broadcast')
+            ? null
+            : (from?.endsWith('@lid') ? from : await toLidSafe(from));
+          identity.participantJid = info.key?.participant?.endsWith('@lid')
+            ? (await toPnSafe(info.key.participant)) || info.key?.participantAlt || null
+            : info.key?.participant || null;
+          identity.participantLid = info.key?.participant?.endsWith('@lid')
+            ? info.key.participant
+            : (info.key?.participantAlt?.endsWith('@lid') ? info.key.participantAlt : await toLidSafe(info.key?.participant));
+          // Autor da mensagem citada: também separamos JID e LID dele.
+          const quotedAuthor = quotedContext?.participant || null;
+          identity.quotedAuthorJid = quotedAuthor
+            ? (quotedAuthor.endsWith('@lid') ? await toPnSafe(quotedAuthor) : quotedAuthor)
+            : null;
+          identity.quotedAuthorLid = quotedAuthor
+            ? (quotedAuthor.endsWith('@lid') ? quotedAuthor : await toLidSafe(quotedAuthor))
+            : null;
+          identity.mapped = Boolean(identity.senderJid && identity.senderLid);
+
+          // -------------------- metadados do grupo --------------------
+          // Cargo do autor da mensagem ALVO (não de quem digitou o comando).
+          // Faz match pelo LID, PN, alt e número base — o metadata pode estar
+          // endereçado de qualquer uma dessas formas.
+          let senderIsAdmin = null;
+          if (isGroup && groupMetadata?.participants) {
+            const candidates = [
+              quotedContext?.participant,
+              info.key?.participant,
+              info.key?.participantAlt,
+              sender,
+            ].filter(Boolean).map((v) => String(v).split('@')[0].split(':')[0]);
+            if (candidates.length) {
+              const found = groupMetadata.participants.find((p) => {
+                if (typeof p === 'string') return candidates.includes(p.split('@')[0].split(':')[0]);
+                const ids = [p?.id, p?.lid, p?.phoneNumber]
+                  .filter(Boolean)
+                  .map((v) => String(v).split('@')[0].split(':')[0]);
+                return ids.some((id) => candidates.includes(id));
+              });
+              if (found && typeof found !== 'string') {
+                senderIsAdmin = found.admin === 'admin' || found.admin === 'superadmin';
+              }
+            }
+          }
+
+          const { summary, full } = buildMessageReport({
+            info,
+            target: cachedTarget || quoted?.quotedMessage || info.message,
+            origin: cachedTarget ? 'cache' : quoted?.quotedMessage ? 'contextInfo' : 'self',
+            quotedContext,
+            extra: {
+              sender,
+              senderJidOriginal,
+              isBotSender,
+              identity,
+              quotedPath: quoted?.path,
+              groupName: isGroup ? (groupMetadata?.subject || groupName) : null,
+              groupMemberCount: isGroup ? (groupMetadata?.participants?.length ?? null) : null,
+              senderIsAdmin,
+            },
+          });
+
+          // Uma unica mensagem: resumo visivel + detalhes na parte expandida
+          // ("ler mais"), respeitando o mesmo sistema ja usado pelos menus.
+          const lerMaisPrefix = getMenuLerMaisText();
+          // O limite do WhatsApp e de ~65536 BYTES (nao caracteres) e este
+          // relatorio tem muitos multibyte (acentos/emojis), entao medimos
+          // bytes e ja descontamos o prefixo de "ler mais" que sera preposto.
+          const MAX_MESSAGE_BYTES = 55000;
+          const budget = MAX_MESSAGE_BYTES - Buffer.byteLength(lerMaisPrefix, 'utf8');
+          let body = `${summary}\n\n${full}`;
+          if (Buffer.byteLength(body, 'utf8') > budget) {
+            let cut = body.length;
+            let excess = Buffer.byteLength(body.slice(0, cut), 'utf8') - budget;
+            while (cut > 0 && excess > 0) {
+              cut -= Math.max(1, Math.ceil(excess / 3));
+              excess = Buffer.byteLength(body.slice(0, cut), 'utf8') - budget;
+            }
+            body = `${body.slice(0, Math.max(0, cut))}\n\n... [relatorio truncado no WhatsApp; objeto completo impresso no console]`;
+            console.log('[GET] Relatorio completo (truncado no WhatsApp):', full);
+          }
+
+          const mentions = menc_prt && isValidJid(menc_prt) ? [menc_prt] : [];
+          await reply(`${lerMaisPrefix}${body}`, { mentions, noForward: true });
         } catch (error) {
           console.error('[GET] Erro ao coletar dados:', error);
-          reply("❌ Erro ao coletar dados da mensagem");
+          // Mesmo em falha inesperada, entrega o objeto cru em vez de so o erro.
+          try {
+            const fallback = safeJsonStringify(toSafeObject(info), { indent: 2 });
+            await reply(`Erro ao montar o relatorio completo: ${error?.message || error}\n\n*RAW (fallback):*\n\`\`\`\n${fallback.slice(0, 8000)}\n\`\`\``);
+          } catch {
+            reply("Erro ao coletar dados da mensagem");
+          }
         }
         break;
+      }
       case 'db':
         // Usa a mesma verificação de permissão do comando !d
         // isGroupAdmin já inclui admins, moderadores e alphas com permissão
