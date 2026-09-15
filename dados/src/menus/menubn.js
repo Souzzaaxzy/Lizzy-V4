@@ -94,6 +94,9 @@ ${isLiteMode ? '' : `╭─❖ 🔞 INTERAÇÕES "PICANTES"
 │ 🚀 ${prefix}gozar
 │ 🍼 ${prefix}mamar
 │ 🍼 ${prefix}mamada
+│ 🔒 ${prefix}pgpau
+│ 🔒 ${prefix}pgpeito
+│ 🍑 ${prefix}pgbunda
 ╰──────────────
 
 

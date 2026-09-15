@@ -146,6 +146,25 @@ function formatAwayTime(ms) {
   return parts.join(' e ') || '0 segundos';
 }
 
+// ============================================================
+// FRASES DOS COMANDOS DE PEGAR (!pgpau / !pgpeito / !pgbunda)
+// exatamente 2 frases por comando; "@usuario" e "@alvo" sao substituidos
+// pelos nomes reais e enviados como mencoes de verdade (JID via mentions).
+const FRASES_PEGAR = {
+  pgpau: [
+    '@usuario foi lá e pegou no pau de @alvo 😏',
+    '@usuario agarrou o pau de @alvo e apertou 👀'
+  ],
+  pgpeito: [
+    '@usuario chegou em @alvo e apertou seus peitos 😏',
+    '@usuario foi sem vergonha e pegou nos peitos de @alvo 👀'
+  ],
+  pgbunda: [
+    '@usuario chegou por trás e pegou a bunda de @alvo 😏',
+    '@usuario agarrou a bunda de @alvo e deu aquela apertada 👀'
+  ]
+};
+
 // SISTEMA DE PROTEÇÃO ANTI-LOOP DO ANTI-ROUBO
 // Cache para evitar que o bot processe seus próprios eventos
 // ============================================================
@@ -18872,7 +18891,7 @@ case 'addaluguel':
           const cmdName = q.trim().toLowerCase();
           
           // Lista de comandos de brincadeira válidos
-          const validCommands = ['tapa', 'soco', 'socar', 'beijo', 'beijar', 'beijob', 'beijarb', 'abraco', 'abracar', 'mata', 'matar', 'tapar', 'goza', 'gozar', 'mamar', 'mamada', 'cafune', 'morder', 'mordida', 'lamber', 'lambida', 'explodir', 'sexo', 'siririca', 'punheta', 'chute', 'chutar', 'tomate', 'compatibilidade', 'rankputo', 'rankputa', 'rankpauzudo', 'rankbucetuda'];
+          const validCommands = ['tapa', 'soco', 'socar', 'beijo', 'beijar', 'beijob', 'beijarb', 'abraco', 'abracar', 'mata', 'matar', 'tapar', 'goza', 'gozar', 'mamar', 'mamada', 'cafune', 'morder', 'mordida', 'lamber', 'lambida', 'explodir', 'sexo', 'siririca', 'punheta', 'chute', 'chutar', 'tomate', 'compatibilidade', 'rankputo', 'rankputa', 'rankpauzudo', 'rankbucetuda', 'pgpau', 'pgpeito', 'pgbunda'];
           
           if (!validCommands.includes(cmdName)) {
             return reply(`❌ Esse comando não existe.\n\nComandos disponíveis:\n${validCommands.join(', ')}`);
@@ -37048,6 +37067,10 @@ case 'rankputo':
       case 'cafune':
       case 'morder':
       case 'mordida':
+      // Pegar: interacao direta entre dois usuarios (executor + alvo marcado).
+      case 'pgpau':
+      case 'pgpeito':
+      case 'pgbunda':
       case 'lamber':
       case 'lambida':
       case 'explodir':
@@ -37056,12 +37079,17 @@ case 'rankputo':
       case 'punheta':
       case 'tomate':
         try {
-          const comandosImpróprios = ['sexo', 'surubao', 'siririca', 'goza', 'gozar', 'mamar', 'mamada', 'beijob', 'beijarb', 'tapar'];
+          const comandosImpróprios = ['sexo', 'surubao', 'siririca', 'goza', 'gozar', 'mamar', 'mamada', 'beijob', 'beijarb', 'tapar', 'pgpau', 'pgpeito', 'pgbunda'];
           if (isModoLite && comandosImpróprios.includes(command)) return nazu.react('❌', {
             key: info.key
           });
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
           if (!isModoBn) return reply('❌ O modo brincadeira não está ativo nesse grupo.');
+          // Os comandos de pegar exigem um alvo marcado: sem isso nao ha
+          // interacao entre duas pessoas (nada de "undefined"/"null" na frase).
+          if (FRASES_PEGAR[command] && !menc_os2) {
+            return reply(`❌ Marque alguém para pegar!\n\n💡 Exemplo: ${groupPrefix}${command} @user`);
+          }
           // Para punheta, usa o próprio sender se ninguém foi mencionado
           const targetUser = menc_os2 || sender;
           let gamesData = fs.existsSync(__dirname + '/funcs/json/games.json') ? JSON.parse(fs.readFileSync(__dirname + '/funcs/json/games.json')) : {
@@ -37084,9 +37112,20 @@ case 'rankputo':
               `✋ @${getUserName(targetUser)} resolveu tirar um tempo para si... 😂`
             ];
             responseText = frasesSiririca[Math.floor(Math.random() * frasesSiririca.length)];
+          } else if (FRASES_PEGAR[command]) {
+            // Frases fixas de cada comando de pegar (exatamente duas, sorteadas).
+            const frases = FRASES_PEGAR[command];
+            const frase = frases[Math.floor(Math.random() * frases.length)];
+            responseText = frase.replaceAll('@usuario', `@${getUserName(sender)}`).replaceAll('@alvo', `@${getUserName(targetUser)}`);
           } else {
             responseText = GamezinData[command]?.replaceAll('#nome#', `@${getUserName(targetUser)}`) || `Voce acabou de dar um(a) ${command} no(a) @${getUserName(targetUser)}`;
           }
+          // Nos comandos de pegar a frase cita as duas pessoas, entao as duas
+          // precisam de mencao real; nos outros comandos segue apenas o alvo.
+          const mentionsToSend = FRASES_PEGAR[command]
+            ? [sender, targetUser].filter((jid, i, arr) => jid && arr.indexOf(jid) === i)
+            : [targetUser];
+
           let media = gamesData.games2[command];
           // Verifica se é um GIF customizado
           const isCustomGif = media?.isGif === true;
@@ -37105,19 +37144,19 @@ case 'rankputo':
               await nazu.sendMessage(from, {
                 image: { url: imagePath },
                 caption: responseText,
-                mentions: [targetUser]
+                mentions: mentionsToSend
               });
             } else if (fs.existsSync(imagePath)) {
               const imageBuffer = fs.readFileSync(imagePath);
               await nazu.sendMessage(from, {
                 image: imageBuffer,
                 caption: responseText,
-                mentions: [targetUser]
+                mentions: mentionsToSend
               });
             } else {
               await nazu.sendMessage(from, {
                 text: responseText,
-                mentions: [targetUser]
+                mentions: mentionsToSend
               });
             }
           } else if (media?.video) {
@@ -37126,7 +37165,7 @@ case 'rankputo':
               await nazu.sendMessage(from, {
                 video: { url: videoPath },
                 caption: responseText,
-                mentions: [targetUser],
+                mentions: mentionsToSend,
                 gifPlayback: true
               });
             } else if (fs.existsSync(videoPath)) {
@@ -37134,19 +37173,19 @@ case 'rankputo':
               await nazu.sendMessage(from, {
                 video: videoBuffer,
                 caption: responseText,
-                mentions: [targetUser],
+                mentions: mentionsToSend,
                 gifPlayback: true
               });
             } else {
               await nazu.sendMessage(from, {
                 text: responseText,
-                mentions: [targetUser]
+                mentions: mentionsToSend
               });
             }
           } else {
             await nazu.sendMessage(from, {
               text: responseText,
-              mentions: [targetUser]
+              mentions: mentionsToSend
             });
           }
         } catch (e) {

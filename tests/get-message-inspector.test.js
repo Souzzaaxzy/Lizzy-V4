@@ -9,6 +9,9 @@
  * Uso: node tests/get-message-inspector.test.js
  */
 
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { getContentType, proto } from '@itsliaaa/baileys';
 import protobufjs from 'protobufjs/minimal.js';
 
@@ -66,6 +69,12 @@ function notIncludes(haystack, needle, label) {
 // ============================================================================
 // CARGA DO HANDLER REAL
 // ============================================================================
+
+// Redireciona o banco para um diretório temporário ANTES de importar o handler:
+// assim os grupos usados nos testes não são gravados no dados/database real.
+const TMP_DB = fs.mkdtempSync(path.join(os.tmpdir(), 'lizzy-get-db-'));
+process.env.DATABASE_PATH = TMP_DB;
+fs.mkdirSync(path.join(TMP_DB, 'grupos'), { recursive: true });
 
 const INDEX_PATH = new URL('../dados/src/index.js', import.meta.url).href;
 const indexModule = await import(INDEX_PATH);
@@ -1373,6 +1382,9 @@ await test('37. conteúdo do próprio proto é listado na seção CONTEÚDO', as
 // ============================================================================
 // RELATÓRIO FINAL
 // ============================================================================
+
+// Remove o banco temporário criado por este teste.
+fs.rmSync(TMP_DB, { recursive: true, force: true });
 
 const totalPassed = RESULTS.reduce((acc, r) => acc + r.passed, 0);
 const totalFailed = RESULTS.reduce((acc, r) => acc + r.failed, 0);
