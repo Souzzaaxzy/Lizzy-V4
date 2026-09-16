@@ -1331,7 +1331,23 @@ const invalidateGroupCache = (groupId) => {
 // ═══════════════════════════════════════════════════════════════
 // 🔄 FUNÇÕES DE UTILIDADE
 // ═══════════════════════════════════════════════════════════════
+
+/**
+ * Caminho de arquivo temporário EXCLUSIVO para uma escrita atômica.
+ *
+ * Antes, sync e async usavam `${filePath}.tmp`, o mesmo nome para todos os
+ * escritores. Duas escritas concorrentes no mesmo JSON (comum: o handler de
+ * mensagem e o persistGroupData do !testcall) pisavam uma na outra -- a
+ * primeira renomeava o .tmp e a segunda falhava no rename com ENOENT, perdendo
+ * a escrita. O sufixo único por chamada elimina a colisão; o rename continua
+ * atômico porque o temp fica no mesmo diretório.
+ */
+let tempFileSeq = 0;
+const uniqueTempPath = (filePath) =>
+  `${filePath}.${process.pid}.${++tempFileSeq}.tmp`;
+
 const writeJsonFile = (filePath, data) => {
+  let tempPath = null;
   try {
     // Validação de entrada
     if (data === undefined || data === null) {
@@ -1355,7 +1371,7 @@ const writeJsonFile = (filePath, data) => {
     }
     ensureDirectoryExists(pathz.dirname(filePath));
     // Escreve em arquivo temporário primeiro (operação atômica)
-    const tempPath = filePath + '.tmp';
+    tempPath = uniqueTempPath(filePath);
     fs.writeFileSync(tempPath, jsonString, 'utf-8');
     // Verifica integridade do arquivo temporário
     try {
@@ -1373,8 +1389,7 @@ const writeJsonFile = (filePath, data) => {
     console.error(`❌ Erro ao escrever JSON em ${filePath}:`, error.message);
     // Tenta limpar arquivo temporário
     try {
-      const tempPath = filePath + '.tmp';
-      if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+      if (tempPath && fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
     } catch (e) { }
     return false;
   }
@@ -1386,6 +1401,7 @@ const writeJsonFile = (filePath, data) => {
  * @returns {Promise<boolean>}
  */
 const writeJsonFileAsync = async (filePath, data) => {
+  let tempPath = null;
   try {
     if (data === undefined || data === null) {
       console.error(`❌ writeJsonFileAsync: Tentativa de salvar dados nulos em ${filePath}`);
@@ -1407,7 +1423,7 @@ const writeJsonFileAsync = async (filePath, data) => {
     }
     await fsPromises.mkdir(pathz.dirname(filePath), { recursive: true });
     // Escreve em arquivo temporário primeiro (operação atômica)
-    const tempPath = filePath + '.tmp';
+    tempPath = uniqueTempPath(filePath);
     await fsPromises.writeFile(tempPath, jsonString, 'utf-8');
     // Verifica integridade
     try {
@@ -1424,8 +1440,7 @@ const writeJsonFileAsync = async (filePath, data) => {
   } catch (error) {
     console.error(`❌ Erro ao escrever JSON async em ${filePath}:`, error.message);
     try {
-      const tempPath = filePath + '.tmp';
-      await fsPromises.unlink(tempPath).catch(() => { });
+      if (tempPath) await fsPromises.unlink(tempPath).catch(() => { });
     } catch (e) { }
     return false;
   }

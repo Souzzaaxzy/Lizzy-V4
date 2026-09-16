@@ -18,7 +18,8 @@ import ElectionManager from './utils/electionManager.js';
 import { loadMsgBotOn } from './utils/database.js';
 import { buildUserId } from './utils/helpers.js';
 import { safeJsonStringify } from './utils/messageInspector.js';
-import { buildCallNotification, shouldNotifyCall } from './utils/callNotifier.js';
+import * as callNotifier from './utils/callNotifier.js';
+import * as paths from './utils/paths.js';
 import msgCounter from './utils/msgCounter.js';
 // ATENÇÃO: Se o seu arquivo se chamado 'index-2(2).js', RENOMEIE PARA 'index.js'
 // ou mude o caminho abaixo para './index-2(2).js'
@@ -400,10 +401,18 @@ const logger = pino({
     level: 'silent'
 });
 
-const AUTH_DIR = path.join(__dirname, '..', 'database', 'qr-code');
-const DATABASE_DIR = path.join(__dirname, '..', 'database');
-const GRUPOS_DIR = path.join(DATABASE_DIR, 'grupos');
-const GLOBAL_BLACKLIST_PATH = path.join(__dirname, '..', 'database', 'dono', 'globalBlacklist.json');
+// DIRETORIOS VIA utils/paths.js: sao os unicos que respeitam DATABASE_PATH.
+// Antes eram montados aqui com path.join(__dirname, '..') fixo, o que ignorava a
+// variavel e fazia sub-bots e testes lerem/gravarem sempre o banco do bot
+// principal (o index.js, esse sim, sempre usou paths.js).
+const {
+    DATABASE_DIR,
+    GRUPOS_DIR,
+    GLOBAL_BLACKLIST_FILE: GLOBAL_BLACKLIST_PATH
+} = paths;
+
+// O diretorio de auth fica dentro do banco (sub-bot tem o seu proprio).
+const AUTH_DIR = path.join(DATABASE_DIR, 'qr-code');
 
 /**
  * Carrega dados do grupo do arquivo JSON
@@ -1671,10 +1680,12 @@ async function createBotSocket(authDir) {
                             const normId = groupId.replace(/@g.us$/, '').replace(/[^0-9-]/g, '_') + '@g.us';
                             if (!normId) continue;
                             
-                            const filePath = `./database/grupos/${normId}.json`;
-                            if (!fs.existsSync('./database/grupos')) {
-                                fs.mkdirSync('./database/grupos', { recursive: true });
+                            // GRUPOS_DIR (via paths.js) e nao "./database/grupos":
+                            // caminho relativo ao CWD ignorava DATABASE_PATH.
+                            if (!fs.existsSync(GRUPOS_DIR)) {
+                                fs.mkdirSync(GRUPOS_DIR, { recursive: true });
                             }
+                            const filePath = path.join(GRUPOS_DIR, `${normId}.json`);
                             if (!fs.existsSync(filePath)) {
                                 fs.writeFileSync(filePath, JSON.stringify({}, null, 2));
                             }
@@ -1782,21 +1793,18 @@ async function createBotSocket(authDir) {
                         if (!groupId || !groupId.endsWith('@g.us')) continue;
                         if (senderId === AbyssSock.user?.id) continue;
                         
-                        const { 
-                            normalizeGroupId, 
-                            buildGroupFilePath, 
-                            writeJsonFile 
-                        } = await import('./utils/paths.js');
                         const fs = await import('fs');
-                        
+
                         // Normalize group ID (same as in index.js)
-                            const normId = groupId.replace(/@g.us$/, '').replace(/[^0-9-]/g, '_') + '@g.us';
+                        const normId = groupId.replace(/@g.us$/, '').replace(/[^0-9-]/g, '_') + '@g.us';
                         if (!normId) continue;
-                        
-                        const filePath = `./database/grupos/${normId}.json`;
-                            if (!fs.existsSync('./database/grupos')) {
-                                fs.mkdirSync('./database/grupos', { recursive: true });
-                            }
+
+                        // GRUPOS_DIR (via paths.js) e nao "./database/grupos":
+                        // caminho relativo ao CWD ignorava DATABASE_PATH.
+                        if (!fs.existsSync(GRUPOS_DIR)) {
+                            fs.mkdirSync(GRUPOS_DIR, { recursive: true });
+                        }
+                        const filePath = path.join(GRUPOS_DIR, `${normId}.json`);
                         
                         // Criar arquivo se não existir
                         if (!fs.existsSync(filePath)) {
@@ -1849,47 +1857,42 @@ async function createBotSocket(authDir) {
          * O Baileys é SINALIZAÇÃO de chamada apenas — não há áudio/vídeo. Aqui
          * só observamos o evento e avisamos no grupo, quando o toggle estiver
          * ligado. Nada de mídia, nada de atender: a lib não tem essa stack.
+         *
+         * A regra (só grupo + toggle) e o texto moram em callNotifier.js; aqui
+         * ficam só as dependências reais (socket, disco, envio).
          */
+        const CALL_GROUP_NAME_TTL = 10 * 60; // segundos, igual ao cache 'groupMeta'
+
+        /**
+         * Nome do grupo para a notificação.
+         *
+         * A ordem (groupName persistido -> cache -> metadata) mora em
+         * callNotifier.resolveCallGroupName; aqui só entram os acessos reais.
+         * O metadata vai por cache 'groupMeta' porque uma chamada gera várias
+         * stanzas, e sem isso cada uma bateria na rede.
+         */
+        const getCallGroupName = (chatId, groupData) =>
+            callNotifier.resolveCallGroupName(groupData, {
+                getCached: () => performanceOptimizer.cacheGet('groupMeta', `name:${chatId}`),
+                setCached: (name) => performanceOptimizer.cacheSet('groupMeta', `name:${chatId}`, name, CALL_GROUP_NAME_TTL),
+                fetchMetadata: async () => {
+                    const meta = await AbyssSock.groupMetadata(chatId).catch(() => null);
+                    return meta ? meta.subject : null;
+                }
+            });
+
         let callListenerAttached = false;
         const attachCallListener = () => {
             if (callListenerAttached) return;
             callListenerAttached = true;
 
-            AbyssSock.ev.on('call', async ([call]) => {
-                try {
-                    if (!call) return;
-
-                    const chatId = call.chatId;
-                    if (!chatId) return;
-
-                    // Só grupos: o !testcall é um comando de grupo, e o toggle
-                    // fica no groupData daquele grupo.
-                    if (!chatId.endsWith('@g.us')) return;
-
-                    const groupData = await getGroupData(chatId).catch(() => null);
-                    if (!shouldNotifyCall(groupData)) return;
-
-                    // Nome do autor e do grupo são best-effort: se falharem, a
-                    // notificação sai com o número em vez de não sair.
-                    // Não há distinção de quem ligou: qualquer usuário do grupo
-                    // é notificado igual, inclusive o próprio bot.
-                    let callerName = null;
-                    try {
-                        callerName = await AbyssSock.getName(call.from);
-                    } catch (e) { /* segue com o número */ }
-
-                    const notif = buildCallNotification(call, {
-                        callerName,
-                        groupName: groupData.subject || groupData.name || null
-                    });
-                    if (!notif) return;
-
-                    await AbyssSock.sendMessage(chatId, { text: notif.text });
-                    console.log(`[TESTCALL] ${notif.kind} notificado em ${chatId}`);
-                } catch (e) {
-                    // Uma falha aqui não pode derrubar o listener.
-                    console.error('[TESTCALL] Erro ao notificar chamada:', e?.message || e);
-                }
+            callNotifier.attachCallNotifier({
+                ev: AbyssSock.ev,
+                getGroupData,
+                getCallerName: (jid) => AbyssSock.getName(jid),
+                getGroupName: getCallGroupName,
+                send: (chatId, text) => AbyssSock.sendMessage(chatId, { text }),
+                log: (delivery) => console.log(`[TESTCALL] ${delivery.kind} notificado em ${delivery.chatId}`)
             });
         };
 
