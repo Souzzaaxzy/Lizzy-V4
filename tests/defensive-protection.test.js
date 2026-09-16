@@ -649,27 +649,48 @@ await test('!testeinvi: a rajada com amount=0 é tratada mesmo sem antirequest',
   ok((calls.groupParticipantsUpdate || 0) >= 1, `rajada tratada com antiinvi ligado (${calls.groupParticipantsUpdate || 0})`);
 });
 
-await test('!raja: inclui messageSecret (assinatura do raja invisível)', async () => {
+await test('!raja: padrão NÃO inclui messageSecret (igual ao raja real)', async () => {
   const { relayed } = await runOwner('!raja 1 texto');
   const built = relayed[0].message;
-  ok(Boolean(built.messageContextInfo), 'messageContextInfo presente');
+  // O raja REAL não tem messageContextInfo — conferido pelo !get no próprio real.
   const sec = built.messageContextInfo?.messageSecret;
-  ok(Boolean(sec), 'messageSecret presente');
-  ok(Buffer.from(sec).length === 32, `messageSecret com 32 bytes (${Buffer.from(sec || []).length})`);
+  ok(!sec, `sem messageSecret por padrão (obtido: ${sec ? 'presente' : 'ausente'})`);
+  const c = inspector.classifyMessage(built);
+  ok(c.hasMessageSecret === false, 'classificação também sem secret');
+  ok(c.isInvisiblePayment === false, 'não marcado como payment invisível');
 });
 
-await test('!raja: opção nosecret remove o messageSecret (variante)', async () => {
-  const { relayed } = await runOwner('!raja 1 texto | nosecret');
+await test('!raja: infla menções com mencoes=N (o raja real tinha 348)', async () => {
+  // O grupo do teste tem 4 membros; o raja real vinha de um grupo de 353 e
+  // trazia 348 menções. É a única diferença que resta em relação ao real.
+  const padrao = await runOwner('!raja 1 texto');
+  const nPadrao = padrao.relayed[0].message.requestPaymentMessage
+    .noteMessage.extendedTextMessage.contextInfo.mentionedJid.length;
+  ok(nPadrao <= 5, `padrão usa só os membros do grupo (${nPadrao})`);
+
+  const inflado = await runOwner('!raja 1 texto | mencoes=348');
+  const c = inflado.relayed[0].message.requestPaymentMessage
+    .noteMessage.extendedTextMessage.contextInfo;
+  ok(c.mentionedJid.length === 348, `348 menções (${c.mentionedJid.length})`);
+  ok(c.mentionedJid.every((j) => String(j).endsWith('@lid')), 'todas no formato @lid');
+  ok(new Set(c.mentionedJid).size === 348, 'todas distintas');
+  const bytes = Buffer.byteLength(JSON.stringify(inflado.relayed[0].message), 'utf8');
+  ok(bytes > 6000, `payload inflado com ${bytes} bytes (o real tem ~9KB)`);
+});
+
+await test('!raja: opção secret adiciona o messageSecret (variante)', async () => {
+  const { relayed } = await runOwner('!raja 1 texto | secret');
   const built = relayed[0].message;
-  ok(!built.messageContextInfo, 'messageContextInfo ausente');
+  const sec = built.messageContextInfo?.messageSecret;
+  ok(Boolean(sec), 'messageSecret presente com a opção');
+  ok(Buffer.from(sec).length === 32, `32 bytes (${Buffer.from(sec || []).length})`);
   const c = inspector.classifyMessage(built);
-  ok(c.hasMessageSecret === false, 'hasMessageSecret false');
-  ok(c.isInvisiblePayment === false, 'não classificado como payment invisível');
-  ok(c.paymentAmount.isZero === true, 'amount zero continua detectado');
+  ok(c.hasMessageSecret === true, 'hasMessageSecret true');
+  ok(c.isInvisiblePayment === true, 'marcado como payment invisível');
 });
 
 await test('messageSecret + payment é a assinatura do raja invisível', async () => {
-  const { relayed } = await runOwner('!raja 1 texto');
+  const { relayed } = await runOwner('!raja 1 texto | secret');
   const c = inspector.classifyMessage(relayed[0].message);
   ok(c.isPayment === true, 'isPayment');
   ok(c.hasMessageSecret === true, 'hasMessageSecret');
@@ -677,14 +698,14 @@ await test('messageSecret + payment é a assinatura do raja invisível', async (
   ok(c.messageContextInfo !== null, 'messageContextInfo exposto');
 
   // Com ViewOnce junto, a assinatura continua valendo.
-  const vo = await runOwner('!raja 1 texto | vov2');
+  const vo = await runOwner('!raja 1 texto | vov2 secret');
   const c2 = inspector.classifyMessage(vo.relayed[0].message);
   ok(c2.isViewOnce === true, 'viewOnce');
   ok(c2.isInvisiblePayment === true, 'invisível mesmo com wrapper');
 });
 
 await test('!get: nova seção MESSAGE CONTEXT INFO mostra o messageSecret', async () => {
-  const { relayed } = await runOwner('!raja 1 texto');
+  const { relayed } = await runOwner('!raja 1 texto | secret');
   const built = relayed[0].message;
   const rep = inspector.buildMessageReport({
     info: { key: { remoteJid: 'g@g.us', id: 'X', participant: OWNER_LID_RAJA }, message: built, pushName: 'X' },

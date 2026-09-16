@@ -131,20 +131,27 @@ Ferramenta do dono para validar a proteção anti-raja em grupo de teste.
   então basta aninhar), `clean` (mensagem "limpante" de 300 quebras antes de
   cada raja), `fwd` (adiciona `forwardingScore: 999` + `isForwarded: true` na
   nota) e `delay=N` (intervalo entre envios, padrão 700ms, teto 10000).
-- **`messageContextInfo.messageSecret` — a assinatura do raja invisível**: o
-  raja invisível é um **estado malformado** do WhatsApp: um
-  `requestPaymentMessage` carregando `messageContextInfo.messageSecret`. O
-  cliente real **sempre** envia `messageSecret` (a Baileys adiciona em
-  `generateWAMessageContent` via `shouldIncludeReportingToken()`, que só exclui
-  reaction/poll update), mas essa combinação com payment é o que faz o card
-  não renderizar para os admins. Como o `!raja` monta o proto direto via
-  `generateWAMessageFromContent`, precisava incluir o campo na mão —
-  **era isso que faltava** para reproduzir o efeito.
-  - `buildRajaContent()` agora retorna `{ ...inner, messageContextInfo: { messageSecret: randomBytes(32) } }`.
-  - Opção `nosecret` remove o campo, para comparar as duas formas.
-  - `classifyMessage()` expõe `hasMessageSecret`, `messageContextInfo` e
-    `isInvisiblePayment` (payment + secret); o anti-raja passa a usar
-    `isInvisiblePayment` como marcador principal, com o `amount === 0` como reforço.
+- **O QUE NÃO É O DIFERENCIAL (descartado com prova)**: `messageSecret` foi
+  testado e **descartado**. O `!get` rodado no raja REAL mostra
+  `messageContextInfo: ausente` e `messageSecret: ausente` — o real não carrega
+  esse campo. A hipótese veio do código da Baileys (`generateWAMessageContent`
+  adiciona `messageSecret` via `shouldIncludeReportingToken()`), mas não se
+  aplica aqui. `!raja` **não** inclui por padrão; a opção `secret` adiciona, só
+  para comparação. `classifyMessage()` ainda expõe `hasMessageSecret` e
+  `isInvisiblePayment` porque o campo continua útil como sinal de anomalia.
+- **RECURSOS DO RAJA REAL vs GERADO (comparados nos RAWs)**: `currencyCodeIso4217`,
+  `amount1000 "0"`, `expiryTimestamp "0"`, `amount {value "0", offset 1000,
+  currencyCode BRL}`, texto na NOTA, `mentionedJid`, `groupMentions []`,
+  `statusAttributions []`, ID de 22 chars — **todos idênticos**.
+  Os campos `endCardTiles: []`/`groupMentions: []`/`statusAttributions: []`
+  aparecem no real porque a captura passou por encode/decode do protobuf; o
+  objeto local só os ganha ao ser enviado (confirmado com `Message.create` +
+  `encode`/`decode`).
+- **A ÚNICA DIFERENÇA MEDIDA É O TAMANHO**: o raja real trazia **348 menções**
+  (~9 KB de payload) e um texto de ~700 chars; o gerado, num grupo de 4 membros,
+  trazia **4 menções** (~332 bytes). É por isso que o efeito não aparecia no
+  grupo de teste. Opção `mencoes=N` infla a lista com LIDs sintéticos no formato
+  real (padrão: usa os membros do grupo). Para reproduzir: `!raja 3 texto | mencoes=348`.
 - **`!get` ganhou a seção `MESSAGE CONTEXT INFO (envelope)`**: o campo vive no
   TOPO do `Message` (irmão do tipo), por isso não aparecia em nenhuma seção —
   passava batido no RAW. A seção mostra `messageSecret` (bytes/hex/sha256),

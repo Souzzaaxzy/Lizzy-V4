@@ -320,15 +320,35 @@ function buildRajaContent(text, mentions = [], options = {}) {
   // messageSecret e justamente o estado malformado que faz o card nao renderizar
   // (a mensagem fica "invisivel"). Como o !raja monta o proto direto, precisamos
   // incluir na mao.
+  // O raja real NAO carrega messageContextInfo (confirmado no !get: "messageSecret
+  // ausente"), entao o padrao e nao incluir. `secret` adiciona a variante.
   const envelope = {};
-  if (options.messageSecret !== null) {
+  if (options.messageSecret) {
     envelope.messageContextInfo = {
-      messageSecret: options.messageSecret || crypto.randomBytes(32),
+      messageSecret: options.messageSecret === true ? crypto.randomBytes(32) : options.messageSecret,
     };
   }
   // Encapsulamento opcional em ViewOnce (os tres wrappers sao FutureProofMessage).
   const inner = options.wrapper ? { [options.wrapper]: { message: payment } } : payment;
   return { ...inner, ...envelope };
+}
+
+/**
+ * Gera LIDs sinteticos no formato real (15 digitos + @lid), para inflar a lista
+ * de mencoes sem depender do tamanho do grupo.
+ *
+ * O raja real trazia 348 mencoes de um grupo de 353 membros. Em grupo pequeno o
+ * !raja so consegue 4 -- e essa diferenca de TAMANHO e a unica que resta entre
+ * o raja real e o gerado (os payloads ja batem campo a campo).
+ */
+function generatePadMentions(count) {
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    // 15 digitos, no mesmo formato dos LIDs reais.
+    const n = String(100000000000000n + BigInt(i) * 7919n);
+    out.push(`${n.slice(0, 15)}@lid`);
+  }
+  return out;
 }
 
 /**
@@ -31850,7 +31870,8 @@ break;
               `💡 Uso: ${groupPrefix}raja <quantidade> <texto>\n` +
               `📌 Exemplo: ${groupPrefix}raja 5 olá, esse é o meu texto\n\n` +
               `⚙️ *Opções* (após "|"), todas opcionais:\n` +
-              `• nosecret → remove o messageSecret (comparação)\n` +
+              `• mencoes=N → infla a lista de menções (o raja real tinha 348)\n` +
+              `• secret → adiciona messageContextInfo (o raja real NÃO tem)\n` +
               `• vo → encapsula em viewOnceMessage\n` +
               `• vov2 → encapsula em viewOnceMessageV2\n` +
               `• vov2ext → encapsula em viewOnceMessageV2Extension\n` +
@@ -31880,9 +31901,13 @@ break;
             : /(^|\s)vov2(\s|$)/.test(opcoes) ? 'viewOnceMessageV2'
             : /(^|\s)vo(\s|$)/.test(opcoes) ? 'viewOnceMessage'
             : null;
-          // O raja invisivel depende do messageSecret no envelope (o cliente
-          // real sempre envia). `nosecret` remove, para comparar as duas formas.
-          const semSecret = /(^|\s)nosecret(\s|$)/.test(opcoes);
+          // `secret` adiciona messageContextInfo (o raja real NAO tem).
+          const comSecret = /(^|\s)secret(\s|$)/.test(opcoes);
+          // `mencoes=N` infla a lista de mencoes com LIDs sinteticos. O raja real
+          // trazia 348 (grupo de 353); em grupo pequeno isso e impossivel, e o
+          // tamanho e a unica diferenca que resta em relacao ao raja real.
+          const mencMatch = /mencoes?\s*=\s*(\d+)/.exec(opcoes);
+          const mencoesAlvo = mencMatch ? Math.min(Math.max(parseInt(mencMatch[1], 10), 1), 1000) : null;
           const delayMatch = /delay\s*=\s*(\d+)/.exec(opcoes);
           const delay = delayMatch ? Math.min(Math.max(parseInt(delayMatch[1], 10), 100), 10000) : 700;
 
@@ -31894,11 +31919,11 @@ break;
           await reply(
             `🧪 *RAJA DE TESTE*\n\n` +
             `📨 Mensagens: ${total}${count > MAX_RAJA ? ` (limitado de ${count}; teto ${MAX_RAJA})` : ''}\n` +
-            `👥 Menções por mensagem: ${mentions.length}\n` +
             `💰 amount1000: "0" (igual ao raja real)\n` +
             `🔁 Nota encaminhada: ${comForward ? 'sim (forwardingScore 999)' : 'não (igual ao raja real)'}\n` +
             `👁️ Encapsulamento: ${wrapper || 'nenhum (raja real)'}\n` +
-            `🔐 messageSecret: ${semSecret ? 'NÃO (variante)' : 'SIM (raja real)'}\n` +
+            `🔐 messageSecret: ${comSecret ? 'SIM (variante)' : 'NÃO (raja real)'}\n` +
+            `👥 Menções: ${mencoesAlvo ? `${mencoesAlvo} (inflado)` : `${mentions.length} (membros do grupo)`}\n` +
             `🧹 Mensagem "limpante": ${comClean ? 'sim' : 'não'}\n` +
             `⏱️ Intervalo: ${delay}ms\n` +
             `📝 Texto: ${texto.slice(0, 80)}${texto.length > 80 ? '...' : ''}\n\n` +
@@ -31906,10 +31931,18 @@ break;
             `🚀 Enviando...`
           );
 
-          const content = buildRajaContent(texto, mentions, {
+          // Menções efetivas: as do grupo, ou infladas ate o alvo pedido.
+          let mencoesFinal = mentions;
+          if (mencoesAlvo && mencoesAlvo > mentions.length) {
+            const reais = mentions.slice(0, mencoesAlvo);
+            const faltam = mencoesAlvo - reais.length;
+            mencoesFinal = [...reais, ...generatePadMentions(faltam)];
+          }
+
+          const content = buildRajaContent(texto, mencoesFinal, {
             forwarded: comForward,
             wrapper,
-            messageSecret: semSecret ? null : undefined,
+            messageSecret: comSecret,
           });
 
           // Gera UMA vez e reaproveita: só o ID muda por envio, como no
