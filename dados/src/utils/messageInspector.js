@@ -23,6 +23,8 @@ const MAX_ARRAY_ITEMS = 200;
 const MAX_OBJECT_KEYS = 300;
 const MAX_STRING_LEN = 4000;
 const MAX_BINARY_PREVIEW = 24;
+// Quantas mencoes sao LISTADAS no relatorio. A CONTAGEM nunca e limitada.
+const MAX_MENTIONS_DISPLAYED = 25;
 
 /** Chaves cujo conteúdo nunca deve ir para o WhatsApp. */
 const SENSITIVE_KEY_PATTERN = /(apikey|api_key|secret|password|passwd|senha|token|privatekey|private_key|sessionkey|session_key|credential|authorization|bearer|authcred|noisekey|signedprekey|signed_prekey|identitykey|identity_key|prekey|advsecret|adv_secret|registrationid|masterkey|mastersecret|nKey)/i;
@@ -516,6 +518,90 @@ export function formatFieldValue(value) {
 // ============================================================================
 
 /**
+ * Classificação barata e defensiva de uma mensagem recebida.
+ *
+ * Roda ANTES de qualquer trabalho pesado (resolução de LID, banco, mídia) e
+ * devolve o mínimo necessário para decidir como tratar a mensagem.
+ *
+ * Não faz I/O, não serializa a mensagem inteira e não percorre `mentionedJid`
+ * — apenas lê os campos que interessam, em tempo constante.
+ *
+ * @param {object} message conteúdo da mensagem (info.message)
+ * @returns {{
+ *   type: string|null,          // tipo externo (getContentType-like)
+ *   isPayment: boolean,         // requestPaymentMessage / sendPaymentMessage / paymentInvite
+ *   isRequestPayment: boolean,
+ *   paymentAmount: { raw: *, isZero: boolean, present: boolean },
+ *   noteText: string|null,      // texto da nota do payment (raja)
+ *   noteContextInfo: object|null,
+ *   mentionCount: number,       // quantas menções no contextInfo da NOTA
+ *   hasMentions: boolean,
+ *   mentionPath: string|null,
+ *   isCatalog: boolean,
+ *   isViewOnce: boolean,
+ *   isEphemeral: boolean,
+ *   isForwardedBurst: boolean,  // noteMessage + forwardingScore alto (padrão raja)
+ *   heavy: boolean,             // merece tratamento defensivo antes dos handlers
+ * }}
+ */
+export function classifyMessage(message) {
+  const empty = {
+    type: null, isPayment: false, isRequestPayment: false,
+    paymentAmount: { raw: null, isZero: false, present: false },
+    noteText: null, noteContextInfo: null,
+    mentionCount: 0, hasMentions: false, mentionPath: null,
+    isCatalog: false, isViewOnce: false, isEphemeral: false,
+    isForwardedBurst: false, heavy: false,
+  };
+
+  if (!message || typeof message !== 'object') return empty;
+
+  const type = innerNameOf(message);
+
+  const requestPayment = message.requestPaymentMessage || null;
+  const sendPayment = message.sendPaymentMessage || null;
+  const paymentInvite = message.paymentInviteMessage || null;
+  const isPayment = Boolean(requestPayment || sendPayment || paymentInvite);
+
+  // O texto do "raja" vive dentro da NOTA do pagamento, não em conversation.
+  const noteMessage = requestPayment?.noteMessage || sendPayment?.noteMessage || null;
+  const noteExt = noteMessage?.extendedTextMessage || null;
+  const noteText = noteExt?.text ?? noteMessage?.conversation ?? null;
+  const noteContextInfo = noteExt?.contextInfo || noteMessage?.contextInfo || null;
+
+  const noteMentions = noteContextInfo?.mentionedJid;
+  const mentionCount = Array.isArray(noteMentions) ? noteMentions.length : 0;
+
+  // amount1000 pode vir como string "0", número 0 ou Long — sem converter nada.
+  const rawAmount = requestPayment ? requestPayment.amount1000 : null;
+  const amountPresent = requestPayment ? Object.prototype.hasOwnProperty.call(requestPayment, 'amount1000') : false;
+  const amountStr = rawAmount === null || rawAmount === undefined ? '' : String(rawAmount).trim();
+  const isZero = amountStr !== '' && /^-?0+(\.0+)?$/.test(amountStr);
+
+  const forwardedScore = noteContextInfo?.forwardingScore;
+  const isForwardedBurst = Boolean(noteExt && (noteContextInfo?.isForwarded === true || (typeof forwardedScore === 'number' && forwardedScore >= 100)));
+
+  const isCatalog = Boolean(message.productMessage || message.catalogMessage || message.orderMessage || message.interactiveMessage?.nativeFlowMessage?.name === 'mpm');
+  const isViewOnce = Boolean(message.viewOnceMessage || message.viewOnceMessageV2 || message.viewOnceMessageV2Extension);
+  const isEphemeral = Boolean(message.ephemeralMessage || message.viewOnceMessageV2Extension);
+
+  // "heavy" = merece proteção antes dos handlers caros (não significa bloquear).
+  const heavy = isPayment || mentionCount > 50 || isCatalog;
+
+  return {
+    type, isPayment,
+    isRequestPayment: Boolean(requestPayment),
+    paymentAmount: { raw: rawAmount ?? null, isZero, present: amountPresent },
+    noteText: typeof noteText === 'string' ? noteText : null,
+    noteContextInfo,
+    mentionCount,
+    hasMentions: mentionCount > 0,
+    mentionPath: mentionCount > 0 ? 'requestPaymentMessage.noteMessage.extendedTextMessage.contextInfo.mentionedJid' : null,
+    isCatalog, isViewOnce, isEphemeral, isForwardedBurst, heavy,
+  };
+}
+
+/**
  * Verifica se algum campo do objeto contém uma assinatura textual, sem
  * serializar. É seguro contra referências circulares e tipos especiais — ao
  * contrário de JSON.stringify, que lança em ambos os casos.
@@ -776,35 +862,57 @@ export function buildMentionsReport(rawMessage) {
   const keys = findKeysDeep(normalizeInput(rawMessage), (key) => /mentionedJid|groupMentions|nonJidMentions|statusMentions/i.test(key), { maxHits: 20 });
 
   if (!keys.length) {
-    return { mentions: [], lines: ['• Nenhuma menção detectada na mensagem (mentionedJid ausente).'] };
+    return { mentions: [], total: 0, truncated: false, lines: ['• Nenhuma menção detectada na mensagem (mentionedJid ausente).'] };
   }
 
   const lines = [];
   const allMentions = new Set();
+  let total = 0;
+  let truncated = false;
 
   for (const hit of keys) {
     const value = hit.value;
     if (Array.isArray(value)) {
       lines.push(`• ${hit.path}: ${value.length} item(ns)`);
-      for (const item of value.slice(0, 25)) {
+      // Conta e coleta TODAS as menções; só a EXIBIÇÃO é limitada. Antes o
+      // resumo informava 25 enquanto o proto tinha 348, porque o contador saía
+      // da lista já truncada para leitura.
+      total += value.length;
+      for (const item of value) {
+        if (typeof item === 'string') allMentions.add(item);
+      }
+      for (const item of value.slice(0, MAX_MENTIONS_DISPLAYED)) {
         if (typeof item === 'string') {
-          allMentions.add(item);
           const kind = item.endsWith('@lid') ? 'LID' : item.endsWith('@s.whatsapp.net') ? 'JID (PN)' : item.endsWith('@g.us') ? 'Grupo' : 'outro';
           lines.push(`   - ${item}  [${kind}]`);
         } else if (item && typeof item === 'object') {
           lines.push(`   - ${Object.entries(item).map(([k, v]) => `${k}=${formatFieldValue(v)}`).join(' | ')}`);
         }
       }
-      if (value.length > 25) lines.push(`   … +${value.length - 25} itens`);
+      if (value.length > MAX_MENTIONS_DISPLAYED) {
+        truncated = true;
+        lines.push(`   … +${value.length - MAX_MENTIONS_DISPLAYED} itens (exibição limitada; a contagem acima é o total real)`);
+      }
     } else {
       lines.push(`• ${hit.path}: ${formatFieldValue(value)}`);
+    }
+  }
+
+  // Resumo LID x JID do conjunto completo (útil no diagnóstico de rajada).
+  const lidCount = [...allMentions].filter((m) => m.endsWith('@lid')).length;
+  const pnCount = [...allMentions].filter((m) => m.endsWith('@s.whatsapp.net')).length;
+  if (total > 0) {
+    lines.push(`• Total real de menções: ${total} (únicas: ${allMentions.size})`);
+    lines.push(`• Composição: ${lidCount} LID / ${pnCount} JID (PN)`);
+    if (total > 50) {
+      lines.push('• ⚠️ Volume de menções muito acima do normal — padrão típico de rajada.');
     }
   }
 
   const mentionAll = Array.from(allMentions).some((m) => /^(all|todos)@/i.test(m));
   lines.push(`• Menção a todos: ${mentionAll ? 'Sim' : 'Não detectada'}`);
 
-  return { mentions: [...allMentions], lines };
+  return { mentions: [...allMentions], total, truncated, lines };
 }
 
 /** Seção de contexto / citação. */
@@ -1304,7 +1412,7 @@ export function buildMessageReport({ info, target = null, origin = 'self', quote
     `• Participant: ${key.participant ?? 'não fornecido'}`,
     `• ViewOnce: ${viewOnce.isViewOnce ? 'Sim' : 'Não'}`,
     `• Payment: ${payment.isPayment ? 'Sim (ver seção PAYMENT)' : 'Não'}`,
-    `• Menções: ${mentions.mentions.length ? `${mentions.mentions.length} no alvo` : 'nenhuma no alvo'}`,
+    `• Menções: ${mentions.total ? `${mentions.total} no alvo${mentions.truncated ? ' (exibição limitada)' : ''}` : 'nenhuma no alvo'}`,
     `• Encaminhada: ${hasTextSignature({ t: targetMessage, c: commandEnvelope?.message }, 'isForwarded') ? 'Sim (campo isForwarded presente)' : 'Não detectada'}`,
     `• Citação interna: ${context.quote ? `${context.quote.type || 'desconhecido'} (${context.quote.contextInfo?.stanzaId || 'sem id'})` : 'não'}`,
     '',

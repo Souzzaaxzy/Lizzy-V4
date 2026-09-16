@@ -102,6 +102,81 @@
 - Validado: 43/43 (facade, PNG magic, canto transparente+centro preservado, fundo 100%/gradiente erro, upscale ×2/×3/×4 dims, scale inválido, URL vazia/inválida/corrompida, concorrência, URL real, cache, regressão namespaces, `node --check` OK).
 - **Auditoria global VexAPI**: `grep` em todo `dados/` — **nenhum import de `funcs/API.js` resta** (verificarAPI órfã = CÓDIGO MORTO). Restam: `index.js` (linha 1727 msg + comando `!apikey` 22647 — CONFIGURAÇÃO), `.scripts/config.js` (default+prompt — CONFIGURAÇÃO), `config.json` (`site_vex`/`apikey_vex` — CONFIGURAÇÃO), comentários "sem VexAPI" nos módulos migrados (DOCUMENTAÇÃO). Nada funcional: **todos os módulos estão 100% sem VexAPI**. Remoção de `API.js`/chaves do config fica para tarefa de limpeza separada (não executada nesta fase).
 
+## RAJA / requestPaymentMessage — causa do atraso MEDIDA e proteção ✅
+Analisado contra o bot de referência (**Kimori / RAVENA-BOT**, `@whiskeysockets/baileys@7.0.0-rc13`).
+
+### Estrutura do "raja" (amostra real, via `!get`)
+```
+requestPaymentMessage
+  currencyCodeIso4217: "BRL"      amount1000: "0"      expiryTimestamp: "0"
+  amount: { value: "0", offset: 1000, currencyCode: "BRL" }
+  noteMessage
+    extendedTextMessage
+      text: "..."                 <- o texto NÃO está em conversation
+      contextInfo
+        mentionedJid: [ ~348 ]    <- centenas de menções, metade LID metade PN
+        forwardingScore: 999, isForwarded: true
+```
+`!get` já lia esse caminho corretamente (o `noteMessage` estava certo), mas o
+**resumo contava 25 em vez de 348**.
+
+### Causa do atraso (COMPROVADA por medição, não hipótese)
+1. **`await sleep(1500)` + `await sleep(1000)` no handler de pagamento** (`index.js`, bloco anti-pagamento) e **`await sleep(500)` ×2** no bloco anti-invisível. Medido com CPU profile: **~1000ms de idle** exatos, 52% das amostras.
+2. **O `MessageQueue` (connect.js) só avança depois que o LOTE INTEIRO termina** (`await Promise.allSettled(batches)`), com 4 workers / 2 mensagens por lote. Cada raja prendia um slot por ~2,5s.
+3. **A fila era um array sem teto** (`this.queue.push`), então o trabalho especial acumulava sem limite.
+
+Medições (handler real + fila real, reproduzindo o formato da amostra):
+| rajadas na fila | `!ping` ANTES | `!ping` DEPOIS |
+|---|---|---|
+| 0 | 118 ms | 115 ms |
+| 4 | 1013 ms | 18 ms |
+| 16 | 1022 ms | 68 ms |
+| 64 | 4169 ms | 138 ms |
+| 256 | **13485 ms** | **582 ms** |
+
+Handler de UMA rajada: **1117 ms → ~109 ms**. CPU do parsing com 348 menções é
+irrelevante (**0,7 ms** somando `hasTextSignature` + `classifyMessage` +
+`safeJsonStringify`), então o problema nunca foi CPU nem serialização — era
+**espera bloqueante acumulada na fila**. Zero chamadas `onWhatsApp` por menção
+(a Lizzy não resolvia os 348 LIDs), ou seja, a hipótese das "348 resoluções de
+LID" **não se confirmou**.
+
+### Correções
+- **`index.js`**: `schedulePaymentEnforcement()` e `scheduleInvisibleCleanup()` —
+  o mesmo trabalho (fechar grupo → remover → reabrir) roda em segundo plano, com
+  fila própria limitada a 4 concorrentes e **1 enforcement por grupo** (evita
+  centenas de operações de grupo simultâneas). `drainEnforcementQueue()` +
+  `paymentEnforcementLocks`.
+- **`index.js`**: early return na rajada já tratada (não segue pelos ~40 blocos
+  de filtros com centenas de menções).
+- **`index.js`**: detecção por **dois caminhos independentes** — `amount1000`
+  zero OU > 50 menções na nota (`classifyMessage`), em vez de depender da string
+  `'0'` exata.
+- **`connect.js`**: fila com **teto (500)**, contadores `totalDropped`/
+  `maxQueueLength`, e **prioridade**: comando (`!ping`, `!menu`...) entra na
+  frente das mensagens especiais. `isPriorityMessage()` é O(1) e **explicitamente
+  NÃO considera a nota do payment** como comando.
+- **`messageInspector.js`**: `classifyMessage()` (classificação barata, sem I/O,
+  ~0,002 ms) e `buildMentionsReport()` agora conta TODAS as menções e limita
+  apenas a EXIBIÇÃO (`MAX_MENTIONS_DISPLAYED`), com resumo LID×JID e alerta de
+  volume. Resumo passou a informar 348 (era 25).
+
+### Referência vs Lizzy
+- **Kimori** também gera/consome payment cards (`PaymentCardDiv`), tem
+  `extrairTexto` com o caminho `requestPaymentMessage.noteMessage...` (mas na
+  **segunda** posição, depois de `sendPaymentMessage`), e reage com "ANTI-FLOOD
+  ATIVADO" + remoção imediata — **sem `sleep` bloqueante** no caminho.
+- A Lizzy havia adotado a técnica da RAVENA (fechar/remover/reabrir) **somando**
+  os sleeps ao caminho crítico, que é onde divergiu.
+
+### Testes: `tests/defensive-protection.test.js` (27 testes / 60 asserções)
+Classificação (amount ausente/null/"0"/≠0, nota vs conversation, catálogo,
+ViewOnce, custo), raja (handler rápido, enforcement em background, avisos, sem
+undefined/null, sem 348 resoluções de LID), mensagens normais (`!ping`, `!menu`,
+`!get`, `!testeinvi`, ViewOnce, catálogo, LID) e a fila (prioridade, teto,
+`!ping` < 3 s atrás de 256 rajadas). Usa `DATABASE_PATH` temporário — não toca o
+banco real.
+
 ## COMANDOS "!pgpau" / "!pgpeito" / "!pgbunda" (pegar) ✅
 - **Sem sistema paralelo**: os três entraram no bloco `case` que JÁ existe para os comandos de interação (`tapa`, `soco`, `beijo`, `siririca`...) em `index.js` (~37067). Herdam de graça: exigência de grupo, `modobrincadeira`, `isModoLite`, leitura do `games.json > games2`, resolução de mídia local/URL, `gifPlayback` e envio via `nazu.sendMessage`.
 - **Frases**: constante `FRASES_PEGAR` no topo do `index.js` (module-level, ~linha 149) com **exatamente 2 frases por comando** (as fornecidas, sem alteração). O ramo `else if (FRASES_PEGAR[command])` sorteia uma e troca `@usuario` → `@<executor>` e `@alvo` → `@<alvo>`. Não mistura frases entre comandos.

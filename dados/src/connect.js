@@ -41,12 +41,41 @@ const {
 } = modules.default;
 
 
+/**
+ * Uma mensagem é "prioritária" quando é um comando do bot digitado por alguém
+ * (ex.: !ping, !menu, !help). Essas entram na frente na fila para que um flood
+ * de mensagens especiais não deixe o bot mudo.
+ *
+ * Detecção barata: olha só os campos de texto mais comuns do proto e o
+ * primeiro caractere. Não percorre menções nem faz I/O.
+ */
+const COMMAND_PREFIXES = ['!', '/', '#', '.', '$', '%'];
+
+function isPriorityMessage(message) {
+    if (!message || typeof message !== 'object') return false;
+    const content = message.message;
+    if (!content || typeof content !== 'object') return false;
+
+    let text = '';
+    if (typeof content.conversation === 'string') text = content.conversation;
+    else if (typeof content.extendedTextMessage?.text === 'string') text = content.extendedTextMessage.text;
+    // O texto do "raja" vive na nota do pagamento: NÃO é comando.
+    else if (content.requestPaymentMessage?.noteMessage?.extendedTextMessage?.text) return false;
+    else if (typeof content.imageMessage?.caption === 'string') text = content.imageMessage.caption;
+    else if (typeof content.videoMessage?.caption === 'string') text = content.videoMessage.caption;
+
+    const trimmed = text.trimStart();
+    if (!trimmed) return false;
+    return COMMAND_PREFIXES.includes(trimmed[0]);
+}
+
 class MessageQueue {
-    constructor(maxWorkers = 4, batchSize = 10, messagesPerBatch = 2) {
+    constructor(maxWorkers = 4, batchSize = 10, messagesPerBatch = 2, maxQueueSize = 500) {
         this.queue = [];
         this.maxWorkers = maxWorkers;
         this.batchSize = batchSize;
         this.messagesPerBatch = messagesPerBatch;
+        this.maxQueueSize = maxQueueSize;
         this.activeWorkers = 0;
         this.isProcessing = false;
         this.processingInterval = null;
@@ -54,7 +83,9 @@ class MessageQueue {
         this.stats = {
             totalProcessed: 0,
             totalErrors: 0,
+            totalDropped: 0,
             currentQueueLength: 0,
+            maxQueueLength: 0,
             startTime: Date.now(),
             batchesProcessed: 0,
             avgBatchTime: 0
@@ -67,21 +98,45 @@ class MessageQueue {
     }
 
     async add(message, processor) {
+        // Fila limitada: sem teto, uma rajada de mensagens especiais empurrava
+        // comandos normais para o fim de uma fila que só crescia (medido: um
+        // !ping atrás de 256 rajadas esperava ~13,5s). Com o teto, o excedente
+        // é descartado com aviso em vez de acumular memória e latência.
+        if (this.queue.length >= this.maxQueueSize) {
+            this.stats.totalDropped++;
+            const dropped = this.queue.pop(); // descarta a mais antiga da cauda
+            if (dropped) dropped.resolve(null);
+            console.warn(`[MessageQueue] Fila cheia (${this.maxQueueSize}); descartando mensagem ${dropped?.id || '?'}`);
+        }
+
+        const item = {
+            message,
+            processor,
+            priority: isPriorityMessage(message) ? 1 : 0,
+            timestamp: Date.now(),
+            id: `msg_${++this.idCounter}_${Date.now()}`
+        };
+
+        // Comandos do bot (ex.: !ping, !menu) entram na frente: um flood de
+        // mensagens especiais não pode impedir que eles sejam respondidos.
+        if (item.priority === 1) {
+            const insertAt = this.queue.findIndex((queued) => queued.priority === 0);
+            if (insertAt === -1) this.queue.push(item);
+            else this.queue.splice(insertAt, 0, item);
+        } else {
+            this.queue.push(item);
+        }
+
+        this.stats.currentQueueLength = this.queue.length;
+        this.stats.maxQueueLength = Math.max(this.stats.maxQueueLength, this.queue.length);
+
+        if (!this.isProcessing) {
+            this.startProcessing();
+        }
+
         return new Promise((resolve, reject) => {
-            this.queue.push({
-                message,
-                processor,
-                resolve,
-                reject,
-                timestamp: Date.now(),
-                id: `msg_${++this.idCounter}_${Date.now()}`
-            });
-
-            this.stats.currentQueueLength = this.queue.length;
-
-            if (!this.isProcessing) {
-                this.startProcessing();
-            }
+            item.resolve = resolve;
+            item.reject = reject;
         });
     }
 
@@ -210,6 +265,9 @@ class MessageQueue {
             isProcessing: this.isProcessing,
             totalProcessed: this.stats.totalProcessed,
             totalErrors: this.stats.totalErrors,
+            totalDropped: this.stats.totalDropped,
+            maxQueueLength: this.stats.maxQueueLength,
+            maxQueueSize: this.maxQueueSize,
             currentQueueLength: this.stats.currentQueueLength,
             batchesProcessed: this.stats.batchesProcessed,
             avgBatchTime: Math.round(this.stats.avgBatchTime),
@@ -269,7 +327,10 @@ class MessageQueue {
     }
 }
 
-const messageQueue = new MessageQueue(8, 10, 2); // 8 workers, 10 lotes, 2 mensagens por lote
+// 8 workers, 10 lotes, 2 mensagens por lote, teto de 500 na fila.
+// O teto evita que uma rajada de mensagens especiais empurre comandos normais
+// para uma fila sem fim (medido: !ping levava ~13,5s atrás de 256 rajadas).
+const messageQueue = new MessageQueue(8, 10, 2, 500);
 
 const configPath = path.join(__dirname, "config.json");
 let config;

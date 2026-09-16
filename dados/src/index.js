@@ -15,6 +15,7 @@ import {
 } from '@itsliaaa/baileys';
 import {
   buildMessageReport,
+  classifyMessage,
   hasTextSignature,
   registerEnumLabels,
   safeJsonStringify,
@@ -144,6 +145,108 @@ function formatAwayTime(ms) {
   if (minutes >  0) parts.push(`${minutes} ${minutes === 1 ? 'minuto' : 'minutos' }`);
   if (days ===  0 && hours ===  0 && seconds >  0) parts.push(`${seconds} ${seconds === 1 ? 'segundo' : 'segundos' }`);
   return parts.join(' e ') || '0 segundos';
+}
+
+// ============================================================
+// ENFORCEMENT DE PAGAMENTO EM SEGUNDO PLANO
+// ============================================================
+/**
+ * Executa a remoção do autor de um pagamento FORA do caminho crítico.
+ *
+ * Antes essa sequência rodava com `await sleep(1500)` + `await sleep(1000)`
+ * dentro do handler de mensagens. O MessageQueue do connect.js só avança depois
+ * que o lote inteiro termina, então cada rajada prendia um slot de worker por
+ * ~2,5s; com a fila sem limite, um `!ping` atrás de 256 rajadas esperava ~13,5s.
+ *
+ * O efeito no grupo é o mesmo (fecha → remove → reabre), mas o handler retorna
+ * imediatamente e a fila segue processando as próximas mensagens.
+ *
+ * Limitação de concorrência: no máximo 1 enforcement por grupo por vez, para
+ * que uma rajada não abra centenas de operações de grupo simultâneas.
+ */
+const paymentEnforcementLocks = new Map();
+const MAX_CONCURRENT_ENFORCEMENTS = 4;
+let activeEnforcements = 0;
+const enforcementQueue = [];
+
+function schedulePaymentEnforcement(nazu, ctx) {
+  const { from } = ctx;
+  // Um grupo já tem enforcement em andamento: a remoção seguinte seria
+  // redundante (o autor já está sendo removido).
+  if (paymentEnforcementLocks.has(from)) return false;
+
+  enforcementQueue.push({ nazu, ctx });
+  paymentEnforcementLocks.set(from, Date.now());
+  drainEnforcementQueue();
+  return true;
+}
+
+function drainEnforcementQueue() {
+  while (activeEnforcements < MAX_CONCURRENT_ENFORCEMENTS && enforcementQueue.length > 0) {
+    const job = enforcementQueue.shift();
+    activeEnforcements += 1;
+    runPaymentEnforcement(job.nazu, job.ctx)
+      .catch((e) => console.error('[ANTI-PAYMENT] enforcement falhou:', e?.message || e))
+      .finally(() => {
+        activeEnforcements -= 1;
+        paymentEnforcementLocks.delete(job.ctx.from);
+        drainEnforcementQueue();
+      });
+  }
+}
+
+async function runPaymentEnforcement(nazu, ctx) {
+  const { from, sender, isReplyToPayment, info, quotedPaymentAuthor } = ctx;
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  await nazu.groupSettingUpdate(from, 'announcement').catch(() => {});
+  await sleep(1500);
+  await nazu.groupParticipantsUpdate(from, [sender], 'remove').catch((e) => console.error('Erro ao remover por pagamento:', e));
+  await sleep(1000);
+  await nazu.groupSettingUpdate(from, 'not_announcement').catch(() => {});
+  await nazu.sendMessage(from, { delete: { remoteJid: from, fromMe: false, id: info.key.id, participant: sender } }).catch(() => {});
+
+  // Apaga também o payment original que foi respondido.
+  if (isReplyToPayment) {
+    const payStanzaId = info?.message?.extendedTextMessage?.contextInfo?.stanzaId;
+    if (payStanzaId) {
+      await nazu.sendMessage(from, { delete: { remoteJid: from, fromMe: false, id: payStanzaId, participant: quotedPaymentAuthor } }).catch(() => {});
+    }
+  }
+}
+
+/**
+ * Limpeza da "mensagem invisível" (rajada) em segundo plano.
+ * Mesma razão do bloco de pagamento: os `await sleep(500)` no meio do handler
+ * prendiam um slot do MessageQueue a cada rajada.
+ */
+function scheduleInvisibleCleanup(nazu, ctx) {
+  const { from, realSender, stanzaId } = ctx;
+  setImmediate(async () => {
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    try {
+      const created = await nazu.sendMessage(from, { text: '' });
+      const tempId = created?.key?.id;
+      if (!tempId) return;
+
+      await nazu.sendMessage(from, {
+        text: '🗑️ Mensagem invisível removida',
+        edit: { id: tempId },
+      }, { messageId: stanzaId }).catch(() => {});
+
+      await sleep(500);
+      await nazu.sendMessage(from, {
+        delete: { remoteJid: from, id: stanzaId, fromMe: false, participant: realSender },
+      }).catch(() => {});
+
+      await sleep(500);
+      await nazu.sendMessage(from, {
+        delete: { remoteJid: from, id: tempId, fromMe: true },
+      }).catch(() => {});
+    } catch (e) {
+      // Falha na limpeza não deve afetar o processamento das outras mensagens.
+    }
+  });
 }
 
 // ============================================================
@@ -2308,6 +2411,10 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       canUseOwnerCmd: 'função disponível'
     });
     const type = getContentType(info.message);
+    // Classificação defensiva barata (sem I/O, sem serializar a mensagem).
+    // Usada mais abaixo para tratar rajadas de pagamento sem varrer centenas
+    // de menções e sem deixar o texto da NOTA virar comando.
+    const classification = classifyMessage(info.message);
     // Verificação robusta de tipo de mensagem para mídias
     const message = info.message || {};
     const hasAudio = message.audioMessage || 
@@ -3104,25 +3211,21 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
             await nazu.sendMessage(from, { text: groupData.legenda_documento }, { quoted: info });
           }
           if (isPaymentCase) {
-            // RAVENA: trava o grupo, remove o autor do payment e reabre
-            await nazu.groupSettingUpdate(from, 'announcement').catch(() => {});
-            await sleep(1500);
-            await nazu.groupParticipantsUpdate(from, [sender], 'remove').catch(e => console.error('Erro ao remover por pagamento:', e));
-            await sleep(1000);
-            await nazu.groupSettingUpdate(from, 'not_announcement').catch(() => {});
+            // A remoção por pagamento é aplicada em segundo plano.
+            //
+            // Antes, os `await sleep(1500)` + `await sleep(1000)` rodavam DENTRO
+            // do handler: como o MessageQueue só avança depois que o lote inteiro
+            // termina, cada rajada prendia um slot de worker por ~2,5s e a fila
+            // crescia sem limite — um comando normal atrás de 256 rajadas levava
+            // ~13,5s. O trabalho é o mesmo, só deixou de bloquear a fila.
+            schedulePaymentEnforcement(nazu, {
+              from, sender, isReplyToPayment, info, quotedPaymentAuthor,
+            });
             await nazu.sendMessage(from, { delete: { remoteJid: from, fromMe: false, id: info.key.id, participant: sender } }).catch(() => {});
-            // Apaga também o payment original que foi respondido
-            if (isReplyToPayment) {
-              const payStanzaId = info.message.extendedTextMessage.contextInfo.stanzaId;
-              if (payStanzaId) {
-                await nazu.sendMessage(from, { delete: { remoteJid: from, fromMe: false, id: payStanzaId, participant: quotedPaymentAuthor } }).catch(() => {});
-              }
-            }
           } else {
-            setTimeout(async () => {
-              await nazu.sendMessage(from, { delete: { remoteJid: from, fromMe: false, id: info.key.id, participant: sender } }).catch(() => {});
-            }, 1500);
-            await nazu.groupParticipantsUpdate(from, [sender], 'remove').catch(e => console.error('Erro ao remover por pagamento:', e));
+            schedulePaymentEnforcement(nazu, {
+              from, sender, isReplyToPayment, info, quotedPaymentAuthor,
+            });
           }
         } catch (e) {
           console.error('[ANTI-PAYMENT ERROR]', e);
@@ -3140,8 +3243,15 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       // Obter remetente real via participantAlt (número real, não LID)
       const realSender = info.key?.participantAlt || info.key?.participant || sender;
       
-      // Se amount é 0 e tem texto na nota, é ataque de rajada invisível
-      if (amount === 0 && paymentMsg.noteMessage?.extendedTextMessage?.text) {
+      // Se amount é 0 e tem texto na nota, é ataque de rajada invisível.
+      //
+      // A classificação defensiva cobre a mesma amostra real por dois caminhos
+      // independentes: (a) amount1000 explicitamente zero; (b) nota com
+      // centenas de menções (o raja medido trazia 348). Isso evita depender de
+      // uma string exata — "0", 0, "00" e Long zero todos contam como zero.
+      const isBurstByAmount = amount === 0 && Boolean(paymentMsg.noteMessage?.extendedTextMessage?.text);
+      const isBurstByMentions = classification.mentionCount > 50 && Boolean(classification.noteText);
+      if (isBurstByAmount || isBurstByMentions) {
                 
         // Verificar whitelist
         if (!isUserWhitelisted(sender, 'antipagamento') && !isGroupAdmin) {
@@ -3154,37 +3264,11 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
             }
           };
           
-          // Tentar apagar a mensagem de payment
-          try {
-            const msgcagada = await nazu.sendMessage(from, { text: '' });
-            const idEditada = msgcagada.key.id;
-            if (idEditada) {
-              await nazu.sendMessage(from, {
-                text: '🗑️ Mensagem invisível removida',
-                edit: { id: idEditada }
-              }, { messageId: info.key.id });
-              await sleep(500);
-              await nazu.sendMessage(from, {
-                delete: {
-                  remoteJid: from,
-                  id: info.key.id,
-                  fromMe: false,
-                  participant: realSender
-                }
-              });
-              await sleep(500);
-              try {
-                await nazu.sendMessage(from, {
-                  delete: {
-                    remoteJid: from,
-                    id: idEditada,
-                    fromMe: true
-                  }
-                });
-              } catch (e) {}
-            }
-          } catch (e) {
-          }
+          // Tentar apagar a mensagem de payment.
+          // Roda em segundo plano: os `await sleep(500)` no meio do handler
+          // prendiam um slot do MessageQueue a cada rajada (mesmo problema do
+          // bloco de pagamento acima).
+          scheduleInvisibleCleanup(nazu, { from, realSender, stanzaId: info.key.id });
           
           // Enviar aviso
           await nazu.sendMessage(from, {
@@ -3199,6 +3283,13 @@ Você foi removido do grupo.`,
           // Remover invasor usando participantAlt (número real)
           await nazu.groupParticipantsUpdate(from, [realSender], 'remove').catch(e => console.error('Erro ao remover (invisível):', e));
         }
+
+        // A rajada já foi tratada (limpeza agendada + aviso + remoção).
+        // Não há motivo para seguir pelo pipeline de comandos/filtros: o texto
+        // está dentro da NOTA do pagamento, não é uma mensagem do usuário, e
+        // continuar só gastaria trabalho com centenas de menções. Sem este
+        // early return o handler ainda percorria ~40 blocos de filtros.
+        return;
       }
     }
     
