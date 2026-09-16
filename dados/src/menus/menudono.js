@@ -249,6 +249,11 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 │ 🔑 ${prefix}smm setkey
 ╰──────────────
 
+
+╭─❖ 🧪 TESTES DE PROTEÇÃO (DONO)
+│ 💳 ${prefix}raja
+╰──────────────
+
 ╭─────────────────╮
 ╰─────────────────╯
 `;

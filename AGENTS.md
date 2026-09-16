@@ -102,6 +102,31 @@
 - Validado: 43/43 (facade, PNG magic, canto transparente+centro preservado, fundo 100%/gradiente erro, upscale ×2/×3/×4 dims, scale inválido, URL vazia/inválida/corrompida, concorrência, URL real, cache, regressão namespaces, `node --check` OK).
 - **Auditoria global VexAPI**: `grep` em todo `dados/` — **nenhum import de `funcs/API.js` resta** (verificarAPI órfã = CÓDIGO MORTO). Restam: `index.js` (linha 1727 msg + comando `!apikey` 22647 — CONFIGURAÇÃO), `.scripts/config.js` (default+prompt — CONFIGURAÇÃO), `config.json` (`site_vex`/`apikey_vex` — CONFIGURAÇÃO), comentários "sem VexAPI" nos módulos migrados (DOCUMENTAÇÃO). Nada funcional: **todos os módulos estão 100% sem VexAPI**. Remoção de `API.js`/chaves do config fica para tarefa de limpeza separada (não executada nesta fase).
 
+## COMANDO "!raja" — gerador de teste (EXCLUSIVO DO DONO) ✅
+Ferramenta do dono para validar a proteção anti-raja em grupo de teste.
+
+- **Uso**: `!raja <quantidade> <texto>` — ex. `!raja 5 olá, esse é o meu texto`.
+- **Restrições**: só o dono (`isOwner`) e só em grupo. Teto rígido de **50**
+  mensagens por execução (é ferramenta de teste, não gerador de flood).
+  Intervalo de 700 ms entre envios.
+- **Formato gerado** (`buildRajaContent()`, `index.js` ~252): idêntico à amostra
+  real — `requestPaymentMessage` + `amount1000: "0"` + `expiryTimestamp: "0"` +
+  `amount: { value: "0", offset: 1000, currencyCode: "BRL" }` + texto dentro de
+  `noteMessage.extendedTextMessage.text` (não em `conversation`) +
+  `contextInfo.mentionedJid` com os membros do grupo.
+- **Menções**: reaproveita o `AllgroupMembers` já resolvido pelo handler (mesmos
+  JIDs/LIDs do raja real; numa amostra real eram 348 de um grupo de 354). Nenhuma
+  consulta extra ao WhatsApp.
+- **Envio**: `generateWAMessageFromContent` uma vez + `relayMessage` por mensagem
+  com `messageId` novo (`generateMessageID()`), porque o WhatsApp descarta ID
+  repetido — mesma técnica do `!divulgar`.
+- **Menu**: categoria própria **🧪 TESTES DE PROTEÇÃO (DONO)** no `menudono`
+  (sem duplicar categoria existente).
+- **Testes em `tests/defensive-protection.test.js`**: permissão (não-dono
+  bloqueado), só em grupo, validação de quantidade/texto, N mensagens no formato
+  exato, IDs distintos, teto de 50, o que ele gera é detectado pela própria
+  `classifyMessage` e presença no menudono.
+
 ## RAJA / requestPaymentMessage — causa do atraso MEDIDA e proteção ✅
 Analisado contra o bot de referência (**Kimori / RAVENA-BOT**, `@whiskeysockets/baileys@7.0.0-rc13`).
 

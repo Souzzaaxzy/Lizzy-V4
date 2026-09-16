@@ -68,7 +68,7 @@ const inspector = await import(new URL('../dados/src/utils/messageInspector.js',
 
 const ADMIN_JID = '5511000000001@s.whatsapp.net';
 const ADMIN_LID = '111000000000001@lid';
-const RAJA_LID = '217205740421125@lid';
+const RAJA_LID = '217000000000125@lid'; // ficticio (o teste nao depende do valor)
 // Identidade do bot: getBotNumber usa nazu.user.lid, então ele precisa estar
 // na lista de admins do grupo para os blocos anti-pagamento rodarem.
 const BOT_LID = '111111111111111@lid';
@@ -477,9 +477,151 @@ await test('fila: !ping responde rápido atrás de 256 rajadas', async () => {
 });
 
 // ============================================================================
+// 5) !raja — GERADOR DE TESTE (EXCLUSIVO DO DONO)
+// ============================================================================
+
+// Identificadores ficticios: `fromMe: true` ja faz o handler tratar como dono,
+// entao nao precisamos do numero/LID real do dono do bot nos testes.
+const OWNER_LID_RAJA = '111000000000099@lid';
+const OWNER_JID_RAJA = '551100000000099@s.whatsapp.net';
+
+/**
+ * Executa um comando como DONO, capturando relayMessage.
+ *
+ * Usa `fromMe: true` porque é assim que as mensagens do próprio dono chegam ao
+ * bot (enviadas do aparelho dele). Isso também mantém o teste determinístico:
+ * o handler aplica throttle de 3 comandos/5s por sender e o dono é sempre o
+ * mesmo LID (vem do config.json), então sem `fromMe` os testes seguintes
+ * mediriam o rate limit em vez do comando.
+ */
+async function runOwner(text, { groupJid = makeGroup(), participant = OWNER_LID_RAJA, fromMe = true } = {}) {
+  const sent = [];
+  const relayed = [];
+  const nazu = makeNazu({ groupJid, sent, calls: {} });
+  nazu.relayMessage = async (jid, message, opts) => { relayed.push({ jid, message, opts }); };
+  await handleMessage(nazu, {
+    key: { remoteJid: groupJid, fromMe, id: 'RAJA', participant },
+    message: { extendedTextMessage: { text } },
+    messageTimestamp: 1757900000, pushName: 'Dono',
+  }, null, new Map(), null);
+  return { sent, relayed, text: textOf(sent) };
+}
+
+await test('!raja: só o dono pode usar', async () => {
+  const { relayed, text } = await runOwner('!raja 2 oi', {
+    participant: '5511000000007@s.whatsapp.net',
+    fromMe: false,
+  });
+  includes(text, 'Apenas o dono', 'bloqueou não-dono');
+  ok(relayed.length === 0, `nada foi enviado (${relayed.length})`);
+});
+
+await test('!raja: só funciona em grupo', async () => {
+  const sent = [];
+  const relayed = [];
+  const nazu = makeNazu({ groupJid: 'x@g.us', sent, calls: {} });
+  nazu.relayMessage = async (...a) => relayed.push(a);
+  await handleMessage(nazu, {
+    key: { remoteJid: OWNER_JID_RAJA, fromMe: true, id: 'PV', participant: OWNER_LID_RAJA },
+    message: { extendedTextMessage: { text: '!raja 2 oi' } },
+    messageTimestamp: 1757900000, pushName: 'Dono',
+  }, null, new Map(), null);
+  includes(textOf(sent), 'só funciona em grupos', 'bloqueou no PV');
+  ok(relayed.length === 0, 'nada enviado no PV');
+});
+
+await test('!raja: valida quantidade e texto', async () => {
+  const semQtd = await runOwner('!raja');
+  includes(semQtd.text, 'Informe a quantidade', 'sem quantidade');
+  ok(semQtd.relayed.length === 0, 'nada enviado sem quantidade');
+
+  const semTexto = await runOwner('!raja 3');
+  includes(semTexto.text, 'Informe o texto', 'sem texto');
+  ok(semTexto.relayed.length === 0, 'nada enviado sem texto');
+});
+
+await test('!raja N texto: envia N mensagens no formato exato do raja real', async () => {
+  const { relayed, text } = await runOwner('!raja 3 meu texto de teste');
+  ok(relayed.length === 3, `enviou 3 mensagens (${relayed.length})`);
+  includes(text, 'CONCLUÍDO', 'resumo enviado');
+
+  const rpm = relayed[0].message.requestPaymentMessage;
+  ok(Boolean(rpm), 'é requestPaymentMessage');
+  ok(rpm.currencyCodeIso4217 === 'BRL', 'moeda BRL');
+  ok(rpm.amount1000 === '0', `amount1000 = "0" (${JSON.stringify(rpm.amount1000)})`);
+  ok(rpm.expiryTimestamp === '0', 'expiryTimestamp = "0"');
+  ok(rpm.amount?.value === '0', 'amount.value = "0"');
+  ok(rpm.amount?.offset === 1000, 'amount.offset = 1000');
+  ok(rpm.amount?.currencyCode === 'BRL', 'amount.currencyCode = BRL');
+  ok(rpm.noteMessage?.extendedTextMessage?.text === 'meu texto de teste', 'texto dentro da NOTA');
+  ok(Array.isArray(rpm.noteMessage.extendedTextMessage.contextInfo?.mentionedJid), 'mentionedJid na nota');
+});
+
+await test('!raja: cada envio tem ID próprio (o WhatsApp descarta ID repetido)', async () => {
+  const { relayed } = await runOwner('!raja 3 texto');
+  const ids = relayed.map((r) => r.opts?.messageId);
+  ok(ids.every(Boolean), 'todos têm messageId');
+  ok(new Set(ids).size === 3, `3 IDs distintos (${new Set(ids).size})`);
+  ok(JSON.stringify(relayed[0].message) === JSON.stringify(relayed[1].message), 'conteúdo reaproveitado');
+});
+
+await test('!raja: teto rígido de 50 (ferramenta de teste, não gerador de flood)', async () => {
+  const { relayed, text } = await runOwner('!raja 999 texto');
+  ok(relayed.length === 50, `respeitou o teto (${relayed.length})`);
+  includes(text, 'limitado', 'avisou sobre o limite');
+});
+
+await test('!raja: o que ele gera é detectado pela própria proteção anti-raja', async () => {
+  const { relayed } = await runOwner('!raja 1 texto de verificacao');
+  const c = inspector.classifyMessage(relayed[0].message);
+  ok(c.isPayment === true, 'classificado como payment');
+  ok(c.isRequestPayment === true, 'classificado como request payment');
+  ok(c.paymentAmount.isZero === true, 'amount zero reconhecido');
+  ok(c.noteText === 'texto de verificacao', 'texto da nota extraído');
+  ok(c.heavy === true, 'tratado como mensagem pesada');
+});
+
+await test('!testeinvi: a rajada com amount=0 é tratada mesmo sem antirequest', async () => {
+  // Grupo APENAS com antiinvi (sem antirequest): o toggle !testeinvi deve
+  // cobrir a rajada de payment amount=0 sozinho.
+  const groupJid = makeGroup();
+  fs.writeFileSync(path.join(GROUPS_DIR, `${groupJid}.json`),
+    JSON.stringify({ antiinvi: true, antirequest: false }, null, 2));
+
+  const sent = [];
+  const calls = {};
+  const nazu = makeNazu({ groupJid, sent, calls });
+  nazu.groupMetadata = async () => ({ id: groupJid, subject: 'G', participants: [
+    { id: ADMIN_LID, admin: 'superadmin', phoneNumber: ADMIN_JID },
+    { id: BOT_LID, admin: 'admin', phoneNumber: BOT_JID },
+    { id: RAJA_LID, admin: null },
+  ] });
+  await handleMessage(nazu, {
+    key: { remoteJid: groupJid, fromMe: false, id: 'INVI', participant: RAJA_LID },
+    message: makeRaja(), messageTimestamp: 1757900000, pushName: 'Raja',
+  }, null, new Map(), null);
+
+  await new Promise((r) => setTimeout(r, 3300));
+  ok((calls.groupParticipantsUpdate || 0) >= 1, `rajada tratada com antiinvi ligado (${calls.groupParticipantsUpdate || 0})`);
+});
+
+await test('!raja aparece na categoria exclusiva do menudono', async () => {
+  const menus = await import(new URL('../dados/src/menus/menudono.js', import.meta.url).href);
+  const txt = String(await menus.default('!', 'Lizzy', 'Dono'));
+  const i = txt.indexOf('TESTES DE PROTEÇÃO');
+  ok(i !== -1, 'categoria presente');
+  const bloco = txt.slice(i, txt.indexOf('╰', i));
+  includes(bloco, '!raja', '!raja listado na categoria');
+  ok(txt.split('TESTES DE PROTEÇÃO').length - 1 === 1, 'categoria não duplicada');
+});
+
+// ============================================================================
 // RESULTADO
 // ============================================================================
 
+// Da um instante para os trabalhos de segundo plano (enforcement de pagamento,
+// escrita assincrona de JSON) terminarem antes de remover o banco temporario.
+await new Promise((r) => setTimeout(r, 6000));
 fs.rmSync(TMP_DB, { recursive: true, force: true });
 
 const totalPassed = RESULTS.reduce((a, r) => a + r.passed, 0);

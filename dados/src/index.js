@@ -250,6 +250,51 @@ function scheduleInvisibleCleanup(nazu, ctx) {
 }
 
 // ============================================================
+// !raja — GERADOR DE MENSAGEM DE TESTE (EXCLUSIVO DO DONO)
+// ============================================================
+/**
+ * Monta um `requestPaymentMessage` no MESMO formato da amostra real capturada
+ * pelo !get, para o dono validar a proteção anti-raja num grupo de teste.
+ *
+ * Formato reproduzido (idêntico ao observado em produção):
+ *   requestPaymentMessage
+ *     currencyCodeIso4217: "BRL"
+ *     amount1000: "0"          <- zero explícito (não ausente)
+ *     expiryTimestamp: "0"
+ *     amount: { value: "0", offset: 1000, currencyCode: "BRL" }
+ *     noteMessage -> extendedTextMessage -> text (o texto do usuário)
+ *                                       -> contextInfo.mentionedJid [N]
+ *
+ * O texto vai na NOTA, não em `conversation` — é isso que faz a mensagem
+ * aparecer vazia/invisível para quem só lê `conversation`.
+ *
+ * @param {string} text   texto que aparece dentro da nota
+ * @param {string[]} mentions JIDs/LIDs mencionados (as "348 menções")
+ * @returns {object} conteúdo pronto para generateWAMessageFromContent
+ */
+function buildRajaContent(text, mentions = []) {
+  const contextInfo = { mentionedJid: [...mentions] };
+  return {
+    requestPaymentMessage: {
+      currencyCodeIso4217: 'BRL',
+      amount1000: '0',
+      expiryTimestamp: '0',
+      noteMessage: {
+        extendedTextMessage: {
+          text,
+          contextInfo,
+        },
+      },
+      amount: {
+        value: '0',
+        offset: 1000,
+        currencyCode: 'BRL',
+      },
+    },
+  };
+}
+
+// ============================================================
 // FRASES DOS COMANDOS DE PEGAR (!pgpau / !pgpeito / !pgbunda)
 // exatamente 2 frases por comando; "@usuario" e "@alvo" sao substituidos
 // pelos nomes reais e enviados como mencoes de verdade (JID via mentions).
@@ -3149,37 +3194,20 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
           } catch (e) {}
        }
     }
-    // Anti-Mensagem Invisível - Baseado em dados reais de ataque
-    // Detecta requestPaymentMessage com amount=0 (rajada invisível)
-    if (isAntiInvi && info.message?.requestPaymentMessage && !info.key.fromMe && isGroup) {
-      const paymentMsg = info.message.requestPaymentMessage;
-      const amount = parseInt(paymentMsg.amount1000) || 0;
-      
-      // Obter remetente real (pode ser LID ou número)
-      const realSender = info.key?.participantAlt || info.key?.participant || sender;
-      
-            
-      // Se amount é 0 e tem texto na nota, é ataque de rajada
-      if (amount === 0 && paymentMsg.noteMessage?.extendedTextMessage?.text) {
-        
-        // Adicionar à blacklist antipagamento automaticamente
-        const groupFile = buildGroupFilePath(from);
-        let groupData = {};
-        try {
-          if (fs.existsSync(groupFile)) {
-            groupData = JSON.parse(fs.readFileSync(groupFile, 'utf-8'));
-          }
-        } catch (e) {}
-        
-        groupData.whitelist = groupData.whitelist || {};
-        groupData.whitelist.antipagamento = groupData.whitelist.antipagamento || {};
-        groupData.whitelist.antipagamento[realSender] = true;
-        
-        fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
-      }
-    }
+    // NOTA: aqui existia um bloco "Anti-Mensagem Invisível" que detectava
+    // requestPaymentMessage com amount=0 e fazia um read+write SÍNCRONO do
+    // arquivo do grupo a cada mensagem, gravando em
+    // `groupData.whitelist.antipagamento`. Essa estrutura não é lida em lugar
+    // nenhum (isUserWhitelisted() consulta adminWhitelist), então era código
+    // morto que ainda bloqueava o event loop e competia com o
+    // `persistGroupData()` pelo mesmo arquivo. O tratamento da rajada é feito
+    // pelo bloco anti-pagamento abaixo, que roda em segundo plano.
     // Lógica Anti-Pagamento (antipagamento/antirequest) — Lizzy + técnicas da RAVENA
-    if (isAntirequestPaymentMessage && isBotAdmin && !info.key.fromMe && !isGroupAdmin && !isOwner && !isUserWhitelisted(sender, 'antipagamento')) {
+    // O anti-invisível (`!testeinvi`) cobre a rajada de payment com amount=0,
+    // que era o único caso que o bloco removido tratava — assim o toggle volta a
+    // cumprir o que promete, em vez de ficar sem efeito.
+    const isRajaBurst = Boolean(classification.isRequestPayment && classification.paymentAmount.isZero);
+    if ((isAntirequestPaymentMessage || (isAntiInvi && isRajaBurst)) && isBotAdmin && !info.key.fromMe && !isGroupAdmin && !isOwner && !isUserWhitelisted(sender, 'antipagamento')) {
       const isDirectPaymentMsg = type === 'requestPaymentMessage' || type === 'sendPaymentMessage';
       const isViewOnceMsg = type === 'viewOnceMessageV2Extension' || type === 'viewOnceMessageV2' || type === 'viewOnceMessage';
       // RAVENA: detecta resposta a um payment feita pelo próprio autor do payment (técnica de flood)
@@ -31730,6 +31758,96 @@ break;
           await reply("Ocorreu um erro 💔");
         }
         break;
+      // !raja — gerador de mensagem de TESTE no formato do raja real.
+      // Exclusivo do dono, só em grupo, e serve para validar o anti-raja.
+      case 'raja': {
+        try {
+          if (!isOwner) return reply("❌ Apenas o dono do bot pode usar este comando.");
+          if (!isGroup) return reply("◈ Este comando só funciona em grupos (use um grupo de teste).");
+
+          // Uso: !raja <quantidade> <texto>
+          const parts = q.trim().split(/\s+/);
+          const countRaw = parts[0];
+          const texto = parts.slice(1).join(' ').trim();
+          const count = parseInt(countRaw, 10);
+
+          if (!countRaw || !Number.isFinite(count) || count < 1) {
+            return reply(
+              `🧪 *TESTE DE RAJA*\n\n` +
+              `❌ Informe a quantidade de mensagens.\n\n` +
+              `💡 Uso: ${groupPrefix}raja <quantidade> <texto>\n` +
+              `📌 Exemplo: ${groupPrefix}raja 5 olá, esse é o meu texto`
+            );
+          }
+          if (!texto) {
+            return reply(
+              `🧪 *TESTE DE RAJA*\n\n` +
+              `❌ Informe o texto que vai dentro da nota.\n\n` +
+              `💡 Uso: ${groupPrefix}raja <quantidade> <texto>\n` +
+              `📌 Exemplo: ${groupPrefix}raja 5 olá, esse é o meu texto`
+            );
+          }
+
+          // Teto rígido: é ferramenta de teste, não gerador de flood.
+          const MAX_RAJA = 50;
+          const total = Math.min(count, MAX_RAJA);
+
+          // As menções do raja real eram os membros do grupo (348 numa amostra
+          // de um grupo de 354). Reaproveita o AllgroupMembers já resolvido
+          // pelo handler — nenhuma consulta extra.
+          const mentions = Array.isArray(AllgroupMembers) ? AllgroupMembers : [];
+
+          await reply(
+            `🧪 *RAJA DE TESTE*\n\n` +
+            `📨 Mensagens: ${total}${count > MAX_RAJA ? ` (limitado de ${count}; teto ${MAX_RAJA})` : ''}\n` +
+            `👥 Menções por mensagem: ${mentions.length}\n` +
+            `📝 Texto: ${texto.slice(0, 80)}${texto.length > 80 ? '...' : ''}\n\n` +
+            `⚙️ Formato: requestPaymentMessage + amount1000 "0" + noteMessage\n` +
+            `⏱️ Enviando...`
+          );
+
+          const content = buildRajaContent(texto, mentions);
+
+          // Gera UMA vez e reaproveita: só o ID muda por envio, como no
+          // !divulgar. Evita montar 50 protos idênticos.
+          const baseMsg = await generateWAMessageFromContent(from, content, { userJid: nazu?.user?.id });
+
+          const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+          let enviados = 0;
+          const falhas = [];
+
+          for (let i = 0; i < total; i++) {
+            try {
+              // messageId novo por envio: o WhatsApp descarta IDs repetidos.
+              const msgId = generateMessageID();
+              await nazu.relayMessage(from, baseMsg.message, { messageId: msgId });
+              enviados += 1;
+            } catch (e) {
+              falhas.push(e?.message || String(e));
+            }
+            // Intervalo entre envios: evita rajada instantânea no servidor.
+            if (i < total - 1) await sleep(700);
+          }
+
+          const resumo = [
+            `✅ *RAJA DE TESTE CONCLUÍDO*`,
+            ``,
+            `📨 Enviadas: ${enviados}/${total}`,
+            `👥 Menções por mensagem: ${mentions.length}`,
+            `🆔 Formato: requestPaymentMessage (amount1000 "0")`,
+          ];
+          if (falhas.length) {
+            resumo.push(``, `⚠️ Falhas: ${falhas.length}`);
+            resumo.push(`• ${falhas.slice(0, 3).join('\n• ')}`);
+          }
+          resumo.push(``, `💡 Use ${groupPrefix}get marcando uma delas para conferir o que chegou.`);
+          await reply(resumo.join('\n'));
+        } catch (e) {
+          console.error('[RAJA] Erro:', e);
+          await reply(`❌ Erro ao gerar o raja de teste: ${e?.message || e}`);
+        }
+        break;
+      }
       case 'testeinvi':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
