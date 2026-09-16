@@ -109,11 +109,17 @@ Ferramenta do dono para validar a proteção anti-raja em grupo de teste.
 - **Restrições**: só o dono (`isOwner`) e só em grupo. Teto rígido de **50**
   mensagens por execução (é ferramenta de teste, não gerador de flood).
   Intervalo de 700 ms entre envios.
-- **Formato gerado** (`buildRajaContent()`, `index.js` ~252): idêntico à amostra
-  real — `requestPaymentMessage` + `amount1000: "0"` + `expiryTimestamp: "0"` +
-  `amount: { value: "0", offset: 1000, currencyCode: "BRL" }` + texto dentro de
-  `noteMessage.extendedTextMessage.text` (não em `conversation`) +
-  `contextInfo.mentionedJid` com os membros do grupo.
+- **Formato gerado** (`buildRajaContent()`, `index.js` ~252): espelha o
+  `!divmsg`/`!div` do bot de referência (Kimori), que é o que produz o efeito:
+  `amount1000: "1000"`, `amount.value: "1000"`, `offset: 1000`,
+  `expiryTimestamp: "0"`, texto em `noteMessage.extendedTextMessage.text`
+  (NÃO em `conversation`) e **`contextInfo` da nota com `forwardingScore: 999` +
+  `isForwarded: true`** — é esse par que faz o WhatsApp tratar como card
+  encaminhado em vez de balão normal. `mentionedJid` com os membros do grupo.
+- **Opções** (após `|`): `zero` (usa `amount1000`/`value` = "0", o formato da
+  amostra do `!get`), `nofwd` (sem forwardingScore/isForwarded), `clean` (envia
+  a mensagem "limpante" de 300 quebras antes de cada raja, técnica que acompanha
+  o raja no referência) e `delay=N` (intervalo, padrão 700ms, teto 10000).
 - **Menções**: reaproveita o `AllgroupMembers` já resolvido pelo handler (mesmos
   JIDs/LIDs do raja real; numa amostra real eram 348 de um grupo de 354). Nenhuma
   consulta extra ao WhatsApp.

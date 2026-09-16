@@ -272,12 +272,28 @@ function scheduleInvisibleCleanup(nazu, ctx) {
  * @param {string[]} mentions JIDs/LIDs mencionados (as "348 menções")
  * @returns {object} conteúdo pronto para generateWAMessageFromContent
  */
-function buildRajaContent(text, mentions = []) {
-  const contextInfo = { mentionedJid: [...mentions] };
+function buildRajaContent(text, mentions = [], options = {}) {
+  const {
+    amount1000 = '1000',
+    amountValue = '1000',
+    offset = 1000,
+    currency = 'BRL',
+    forwarded = true,
+    forwardingScore = 999,
+  } = options;
+
+  // `forwardingScore` + `isForwarded` na nota são o que faz o WhatsApp tratar a
+  // mensagem como card encaminhado em vez de balão normal. O bot de referência
+  // usa exatamente esses dois campos na nota do requestPaymentMessage.
+  const contextInfo = {
+    mentionedJid: [...mentions],
+    ...(forwarded ? { forwardingScore, isForwarded: true } : {}),
+  };
+
   return {
     requestPaymentMessage: {
-      currencyCodeIso4217: 'BRL',
-      amount1000: '0',
+      currencyCodeIso4217: currency,
+      amount1000: String(amount1000),
       expiryTimestamp: '0',
       noteMessage: {
         extendedTextMessage: {
@@ -286,9 +302,9 @@ function buildRajaContent(text, mentions = []) {
         },
       },
       amount: {
-        value: '0',
-        offset: 1000,
-        currencyCode: 'BRL',
+        value: String(amountValue),
+        offset,
+        currencyCode: currency,
       },
     },
   };
@@ -31760,13 +31776,23 @@ break;
         break;
       // !raja — gerador de mensagem de TESTE no formato do raja real.
       // Exclusivo do dono, só em grupo, e serve para validar o anti-raja.
+      // !raja — gerador de mensagem de TESTE no formato do raja real.
+      // Exclusivo do dono, só em grupo, e serve para validar o anti-raja.
       case 'raja': {
         try {
           if (!isOwner) return reply("❌ Apenas o dono do bot pode usar este comando.");
           if (!isGroup) return reply("◈ Este comando só funciona em grupos (use um grupo de teste).");
 
-          // Uso: !raja <quantidade> <texto>
-          const parts = q.trim().split(/\s+/);
+          // Uso: !raja <quantidade> <texto> [| opções]
+          // Opções (separadas por "|", opcionais):
+          //   zero      -> amount 1000 -> 0 (o padrão é "1000", como no real)
+          //   nofwd     -> não marca a nota como encaminhada
+          //   clean     -> envia a mensagem "limpante" antes de cada raja
+          //   delay=N   -> intervalo entre envios em ms (padrão 700)
+          const [textoParte, ...opcoesParte] = q.split('|');
+          const opcoes = opcoesParte.join('|').toLowerCase();
+
+          const parts = textoParte.trim().split(/\s+/);
           const countRaw = parts[0];
           const texto = parts.slice(1).join(' ').trim();
           const count = parseInt(countRaw, 10);
@@ -31776,7 +31802,12 @@ break;
               `🧪 *TESTE DE RAJA*\n\n` +
               `❌ Informe a quantidade de mensagens.\n\n` +
               `💡 Uso: ${groupPrefix}raja <quantidade> <texto>\n` +
-              `📌 Exemplo: ${groupPrefix}raja 5 olá, esse é o meu texto`
+              `📌 Exemplo: ${groupPrefix}raja 5 olá, esse é o meu texto\n\n` +
+              `⚙️ *Opções* (após "|"):\n` +
+              `• zero → amount "0" (padrão é "1000", como no raja real)\n` +
+              `• nofwd → não marca a nota como encaminhada\n` +
+              `• clean → envia a mensagem "limpante" antes de cada uma\n` +
+              `• delay=N → intervalo entre envios em ms (padrão 700)`
             );
           }
           if (!texto) {
@@ -31792,6 +31823,12 @@ break;
           const MAX_RAJA = 50;
           const total = Math.min(count, MAX_RAJA);
 
+          const usarZero = /(^|\s)zero(\s|$)/.test(opcoes);
+          const semForward = /(^|\s)nofwd(\s|$)/.test(opcoes);
+          const comClean = /(^|\s)clean(\s|$)/.test(opcoes);
+          const delayMatch = /delay\s*=\s*(\d+)/.exec(opcoes);
+          const delay = delayMatch ? Math.min(Math.max(parseInt(delayMatch[1], 10), 100), 10000) : 700;
+
           // As menções do raja real eram os membros do grupo (348 numa amostra
           // de um grupo de 354). Reaproveita o AllgroupMembers já resolvido
           // pelo handler — nenhuma consulta extra.
@@ -31801,12 +31838,20 @@ break;
             `🧪 *RAJA DE TESTE*\n\n` +
             `📨 Mensagens: ${total}${count > MAX_RAJA ? ` (limitado de ${count}; teto ${MAX_RAJA})` : ''}\n` +
             `👥 Menções por mensagem: ${mentions.length}\n` +
+            `💰 amount1000: ${usarZero ? '"0"' : '"1000"'}\n` +
+            `🔁 Nota encaminhada: ${semForward ? 'não' : 'sim (forwardingScore 999)'}\n` +
+            `🧹 Mensagem "limpante": ${comClean ? 'sim' : 'não'}\n` +
+            `⏱️ Intervalo: ${delay}ms\n` +
             `📝 Texto: ${texto.slice(0, 80)}${texto.length > 80 ? '...' : ''}\n\n` +
-            `⚙️ Formato: requestPaymentMessage + amount1000 "0" + noteMessage\n` +
-            `⏱️ Enviando...`
+            `⚙️ Formato: requestPaymentMessage + noteMessage → extendedTextMessage\n` +
+            `🚀 Enviando...`
           );
 
-          const content = buildRajaContent(texto, mentions);
+          const content = buildRajaContent(texto, mentions, {
+            amount1000: usarZero ? '0' : '1000',
+            amountValue: usarZero ? '0' : '1000',
+            forwarded: !semForward,
+          });
 
           // Gera UMA vez e reaproveita: só o ID muda por envio, como no
           // !divulgar. Evita montar 50 protos idênticos.
@@ -31818,6 +31863,13 @@ break;
 
           for (let i = 0; i < total; i++) {
             try {
+              // Mensagem "limpante": empurra o conteúdo anterior para fora da
+              // tela, técnica que acompanha o raja no bot de referência.
+              if (comClean) {
+                await nazu.sendMessage(from, {
+                  text: '\n'.repeat(300) + '▫️ 𝙰𝙽𝚃𝙸-𝙵𝙻𝙾𝙾𝙳 𝙰𝚃𝙸𝚅𝙰𝙳𝙾 ▫️',
+                }).catch(() => {});
+              }
               // messageId novo por envio: o WhatsApp descarta IDs repetidos.
               const msgId = generateMessageID();
               await nazu.relayMessage(from, baseMsg.message, { messageId: msgId });
@@ -31826,7 +31878,7 @@ break;
               falhas.push(e?.message || String(e));
             }
             // Intervalo entre envios: evita rajada instantânea no servidor.
-            if (i < total - 1) await sleep(700);
+            if (i < total - 1) await sleep(delay);
           }
 
           const resumo = [
@@ -31834,7 +31886,7 @@ break;
             ``,
             `📨 Enviadas: ${enviados}/${total}`,
             `👥 Menções por mensagem: ${mentions.length}`,
-            `🆔 Formato: requestPaymentMessage (amount1000 "0")`,
+            `💰 amount1000: ${usarZero ? '"0"' : '"1000"'}`,
           ];
           if (falhas.length) {
             resumo.push(``, `⚠️ Falhas: ${falhas.length}`);
@@ -31848,6 +31900,7 @@ break;
         }
         break;
       }
+
       case 'testeinvi':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");

@@ -540,7 +540,7 @@ await test('!raja: valida quantidade e texto', async () => {
   ok(semTexto.relayed.length === 0, 'nada enviado sem texto');
 });
 
-await test('!raja N texto: envia N mensagens no formato exato do raja real', async () => {
+await test('!raja N texto: envia N mensagens no formato do raja real', async () => {
   const { relayed, text } = await runOwner('!raja 3 meu texto de teste');
   ok(relayed.length === 3, `enviou 3 mensagens (${relayed.length})`);
   includes(text, 'CONCLUÍDO', 'resumo enviado');
@@ -548,14 +548,47 @@ await test('!raja N texto: envia N mensagens no formato exato do raja real', asy
   const rpm = relayed[0].message.requestPaymentMessage;
   ok(Boolean(rpm), 'é requestPaymentMessage');
   ok(rpm.currencyCodeIso4217 === 'BRL', 'moeda BRL');
-  ok(rpm.amount1000 === '0', `amount1000 = "0" (${JSON.stringify(rpm.amount1000)})`);
   ok(rpm.expiryTimestamp === '0', 'expiryTimestamp = "0"');
-  ok(rpm.amount?.value === '0', 'amount.value = "0"');
   ok(rpm.amount?.offset === 1000, 'amount.offset = 1000');
   ok(rpm.amount?.currencyCode === 'BRL', 'amount.currencyCode = BRL');
   ok(rpm.noteMessage?.extendedTextMessage?.text === 'meu texto de teste', 'texto dentro da NOTA');
   ok(Array.isArray(rpm.noteMessage.extendedTextMessage.contextInfo?.mentionedJid), 'mentionedJid na nota');
+
+  // Padrão espelha o !divmsg do bot de referência (o que produz o efeito).
+  ok(rpm.amount1000 === '1000', `amount1000 padrão = "1000" (${JSON.stringify(rpm.amount1000)})`);
+  ok(rpm.amount?.value === '1000', 'amount.value padrão = "1000"');
+  const ci = rpm.noteMessage.extendedTextMessage.contextInfo;
+  ok(ci.forwardingScore === 999, `forwardingScore = 999 (${ci.forwardingScore})`);
+  ok(ci.isForwarded === true, 'isForwarded = true (card encaminhado)');
 });
+
+await test('!raja: opção "zero" usa amount "0" (formato da amostra do !get)', async () => {
+  const { relayed } = await runOwner('!raja 1 texto | zero');
+  const rpm = relayed[0].message.requestPaymentMessage;
+  ok(rpm.amount1000 === '0', `amount1000 = "0" (${JSON.stringify(rpm.amount1000)})`);
+  ok(rpm.amount?.value === '0', 'amount.value = "0"');
+});
+
+await test('!raja: opção "nofwd" remove o marcador de encaminhada', async () => {
+  const { relayed } = await runOwner('!raja 1 texto | nofwd');
+  const ci = relayed[0].message.requestPaymentMessage.noteMessage.extendedTextMessage.contextInfo;
+  ok(ci.forwardingScore === undefined, 'sem forwardingScore');
+  ok(ci.isForwarded === undefined, 'sem isForwarded');
+  ok(Array.isArray(ci.mentionedJid), 'menções continuam presentes');
+});
+
+await test('!raja: opção "clean" envia a mensagem limpante antes de cada raja', async () => {
+  const { sent, relayed } = await runOwner('!raja 2 texto | clean');
+  ok(relayed.length === 2, `2 rajas enviadas (${relayed.length})`);
+  const limpantes = sent.map((s) => s.content).filter((c) => typeof c?.text === 'string' && c.text.startsWith('\n'.repeat(300)));
+  ok(limpantes.length === 2, `2 mensagens limpantes (${limpantes.length})`);
+  // O rótulo usa letras estilizadas (nao ASCII) + o simbolo ▫️, entao
+  // conferimos pelos marcadores que existem de fato no texto.
+  includes(limpantes[0]?.text, '\u25AB', 'símbolo do rótulo');
+  ok(limpantes[0].text.trim().length > 0, 'limpante tem conteúdo após as quebras');
+  ok(limpantes[0].text.length > 300, 'limpante tem as 300 quebras de linha');
+});
+
 
 await test('!raja: cada envio tem ID próprio (o WhatsApp descarta ID repetido)', async () => {
   const { relayed } = await runOwner('!raja 3 texto');
@@ -572,13 +605,20 @@ await test('!raja: teto rígido de 50 (ferramenta de teste, não gerador de floo
 });
 
 await test('!raja: o que ele gera é detectado pela própria proteção anti-raja', async () => {
-  const { relayed } = await runOwner('!raja 1 texto de verificacao');
-  const c = inspector.classifyMessage(relayed[0].message);
+  // Formato da amostra real (amount "0") é o que o anti-raja classifica como
+  // rajada; com o padrão "1000" ele ainda é payment, mas não é "burst".
+  const comZero = await runOwner('!raja 1 texto de verificacao | zero');
+  const c = inspector.classifyMessage(comZero.relayed[0].message);
   ok(c.isPayment === true, 'classificado como payment');
   ok(c.isRequestPayment === true, 'classificado como request payment');
   ok(c.paymentAmount.isZero === true, 'amount zero reconhecido');
   ok(c.noteText === 'texto de verificacao', 'texto da nota extraído');
   ok(c.heavy === true, 'tratado como mensagem pesada');
+
+  const padrao = await runOwner('!raja 1 outro texto');
+  const c2 = inspector.classifyMessage(padrao.relayed[0].message);
+  ok(c2.isPayment === true, 'padrão também é payment');
+  ok(c2.paymentAmount.isZero === false, 'padrão não é amount zero');
 });
 
 await test('!testeinvi: a rajada com amount=0 é tratada mesmo sem antirequest', async () => {
