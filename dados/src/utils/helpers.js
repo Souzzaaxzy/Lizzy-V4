@@ -138,6 +138,43 @@ function idsMatch(id1, id2) {
   return base1 === base2;
 }
 
+// Extrai so os digitos do telefone, venha como JID, com sufixo :XX ou cru.
+function phoneDigits(value) {
+  if (!value) return '';
+  return String(value).split('@')[0].split(':')[0].replace(/\D/g, '');
+}
+
+/**
+ * Acha o participante do grupo que corresponde a um numero de telefone.
+ *
+ * Em grupo o `participant.id` e o LID (ex.: 111000000000001@lid), nao o
+ * telefone: o numero real vive em `phoneNumber` (e as vezes em `pn`).
+ * Comparar `p.id === "<numero>@s.whatsapp.net"` nunca casa, e era o motivo
+ * de `addblacklist 5511999999999` nao achar ninguem e cair na mensagem de uso.
+ *
+ * Aceita participants como objeto ou string e compara so os digitos, entao
+ * funciona com JID, LID, `:XX`, numero cru e numero com formatacao.
+ *
+ * @param {Array} participants lista de `groupMetadata.participants`
+ * @param {string|number} number numero (com ou sem formatacao/JID)
+ * @returns {object|string|null} o participante encontrado, ou null
+ */
+function findParticipantByNumber(participants, number) {
+  const target = phoneDigits(number);
+  if (!target || !Array.isArray(participants)) return null;
+
+  for (const p of participants) {
+    if (!p) continue;
+    if (typeof p === 'string') {
+      if (phoneDigits(p) === target) return p;
+      continue;
+    }
+    const candidates = [p.id, p.lid, p.phoneNumber, p.pn].filter(Boolean);
+    if (candidates.some((v) => phoneDigits(v) === target)) return p;
+  }
+  return null;
+}
+
 // Verifica se um ID está presente em um array (comparação por base, ignora :XX)
 function idInArray(id, array) {
   if (!id || !Array.isArray(array)) return false;
@@ -936,6 +973,7 @@ export {
   convertIdsToLid,
   idsMatch,
   idInArray,
+  findParticipantByNumber,
   // Funções de segurança JSON
   createBackup,
   recoverFromBackup,

@@ -528,6 +528,40 @@ chamadas. Só em grupo, exige admin.
 - `funcs/API.js` foi **removido** na limpeza final; `config.json` não tem mais `site_vex`/`apikey_vex`.
 - Módulos próprios: `downloads/{spotify,soundcloud,facebook,kwai,apkmod,mcplugins,pinterest,tiktok,igdl,lyrics,youtube,canvas}.js`, `edits/index.js`, `logos/index.js` (jimp + fontes bitmap), `utils/imagetools.js` (jimp local), `utils/search.js`.
 
+## BLACKLIST por número (!addblacklist / !delblacklist / !listblacklist) ✅
+- **BUG CORRIGIDO**: `!addblacklist 5511999999999` não salvava nada — respondia
+  a mensagem de uso. Em grupo, **`participant.id` é o LID**
+  (ex.: `111000000000001@lid`) e o **número real fica em `phoneNumber`** (às
+  vezes `pn`). A busca era `p.id === "<numero>@s.whatsapp.net"`, que **nunca
+  casa**, então `targetUsers` ficava vazio e o comando caía no early-return.
+  A menção sempre funcionou (o `menc_os2` já vem como LID).
+- **Helper**: `findParticipantByNumber(participants, number)` em
+  `utils/helpers.js` — compara **só os dígitos** de `id`, `lid`, `phoneNumber` e
+  `pn`, aceitando JID, LID, `:device`, número cru e formatado
+  (`+55 11 99999-9999`). Usar esse helper sempre que precisar casar
+  número ↔ participante de grupo (o padrão certo já existia solto no
+  `index.js` ~28458, que considera `id`/`lid`/`phoneNumber`).
+- **`addblacklist`**: se o número está no grupo, salva pelo **LID** (chave usada
+  no resto do sistema); se não está, salva o JID do número (vale se a pessoa
+  entrar depois).
+- **`delblacklist`**: resolve o número para **todos** os candidatos (LID + JID)
+  e os trata como **uma pessoa só** — se a entrada existia como LID, remover por
+  número não deve também reportar "não estava" pelo JID. As menções foram
+  normalizadas para `[[id]]` para casar com esse formato agrupado.
+- **Armadilha do nome**: `!blacklist` é **alias de `!addblacklist`**; a listagem
+  é `!listblacklist` (`menus/menuadm.js`: `addblacklist`, `delblacklist`,
+  `listblacklist`).
+- **Armadilha dos testes**: `getCachedGroupMetadata()` cacheia o metadata por
+  grupo com **TTL de 10s**. Reusar o mesmo grupo entre comandos devolve o admin
+  anterior e o comando responde *"Você precisa ser admin"* — por isso cada
+  comando precisa de um **grupo novo** (mesma armadilha já documentada no
+  `!testcall`).
+- **Testes**: `tests/blacklist-number.test.js` — 12 testes / 38 asserções,
+  handler real com socket falso (participants com `id`=LID + `phoneNumber`):
+  helper, add por número (dentro/fora do grupo), com motivo, del por número
+  (entrada como LID, como JID, e as duas juntas), listagem e regressão de
+  menção. Verificado revertendo o fix: **11 asserções falham**.
+
 ## RELACIONAMENTOS múltiplos (!trisal / !quadrisal / !relacionamento) ✅
 - Módulo: `dados/src/funcs/utils/relationships.js` (`RelationshipManager`).
   Comandos em `index.js` (~35523 trisal, ~35568 quadrisal, ~35613

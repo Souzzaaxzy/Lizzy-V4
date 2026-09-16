@@ -881,7 +881,8 @@ import {
   normalizeUserId,
   convertIdsToLid,
   idsMatch,
-  idInArray
+  idInArray,
+  findParticipantByNumber
 } from './utils/helpers.js';
 import {
   loadMsgPrefix,
@@ -33137,26 +33138,26 @@ case 'set-bannerbv':
             for (const part of parts) {
               const cleanNumber = part.replace(/[@\s\-()]/g, '').replace(/\D/g, '');
               if (cleanNumber.length >= 10) {
-                // Simplified: add directly as JID
-                const candidateJid = buildUserId(cleanNumber, config);
-                if (groupMetadata?.participants) {
-                  const participant = groupMetadata.participants.find(p => 
-                    p.id === candidateJid || p.lid === candidateJid || (p.lid && p.lid.includes(cleanNumber))
-                  );
-                  if (participant?.lid) targetUsers.add(participant.lid);
-                  else if (participant?.id) targetUsers.add(participant.id);
-                } else {
-                  try {
-                    const lid = await getLidFromJidCached(nazu, candidateJid);
-                    targetUsers.add(lid && lid.includes('@lid') ? lid : candidateJid);
-                  } catch (err) {
-                    targetUsers.add(candidateJid);
-                  }
+                // Em grupo o participant.id é o LID e o número real fica em
+                // phoneNumber, então a busca precisa olhar os dois. Antes era
+                // `p.id === "<numero>@s.whatsapp.net"`, que nunca casa -- por
+                // isso `addblacklist 5511999999999` não achava ninguém e caía
+                // na mensagem de uso.
+                const participant = findParticipantByNumber(groupMetadata?.participants, cleanNumber);
+                if (participant) {
+                  const id = typeof participant === 'string' ? participant : (participant.lid || participant.id);
+                  // Guarda o LID, que é a chave usada no resto do sistema.
+                  if (id) targetUsers.add(id);
+                  continue;
                 }
+
+                // Não está no grupo: salva o número mesmo assim (continua
+                // valendo se a pessoa entrar depois).
+                targetUsers.add(buildUserId(cleanNumber, config));
               }
             }
           }
-          
+
           if (targetUsers.size === 0) return reply(`❌ Uso: ${groupPrefix}addblacklist <número>\\n\\nExemplo: ${groupPrefix}addblacklist 5511987654321\\n\\nOu marque: ${groupPrefix}addblacklist @usuario`);
           
           const reason = q ? (q.includes('@') || !menc_os2) ? (args.length > 1 ? args.slice(1).join(' ') : 'Motivo não informado') : q.trim() : 'Motivo não informado';
@@ -33215,10 +33216,12 @@ case 'set-bannerbv':
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
           if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
           
-          // Coleta todos os usuários mencionados
+          // Cada item é a lista de formas possíveis da MESMA pessoa (a menção
+          // traz uma só; o número pode ter LID + JID).
           let targetUsers = [];
           if (menc_os2) {
-            targetUsers = Array.isArray(menc_os2) ? menc_os2 : [menc_os2];
+            const mentioned = Array.isArray(menc_os2) ? menc_os2 : [menc_os2];
+            targetUsers = mentioned.filter(Boolean).map((u) => [u]);
           }
           
           // Se informou número(s) no texto
@@ -33227,44 +33230,47 @@ case 'set-bannerbv':
             for (const part of parts) {
               const cleanNumber = part.replace(/\D/g, '');
               if (cleanNumber.length >= 10) {
-                const candidateJid = buildUserId(cleanNumber, config);
-                if (groupMetadata?.participants) {
-                  const participant = groupMetadata.participants.find(p => 
-                    p.id === candidateJid || p.lid === candidateJid || (p.lid && p.lid.includes(cleanNumber))
-                  );
-                  if (participant?.lid) targetUsers.push(participant.lid);
-                  else if (participant?.id) targetUsers.push(participant.id);
-                } else {
-                  try {
-                    const lid = await getLidFromJidCached(nazu, candidateJid);
-                    targetUsers.push(lid && lid.includes('@lid') ? lid : candidateJid);
-                  } catch (err) {
-                    targetUsers.push(candidateJid);
-                  }
+                // Mesma resolução do addblacklist: em grupo o participant.id é
+                // o LID e o número real fica em phoneNumber.
+                const participant = findParticipantByNumber(groupMetadata?.participants, cleanNumber);
+                const candidatos = [];
+                if (participant) {
+                  const id = typeof participant === 'string' ? participant : (participant.lid || participant.id);
+                  if (id) candidatos.push(id);
                 }
+                // O JID do número também: a entrada pode ter sido salva assim
+                // quando a pessoa ainda não estava no grupo.
+                candidatos.push(buildUserId(cleanNumber, config));
+                // Guarda os candidatos de UMA pessoa juntos, para não contar a
+                // mesma pessoa como "removida" e "não estava" ao mesmo tempo.
+                targetUsers.push(candidatos);
               }
             }
           }
-          
           if (targetUsers.length === 0) return reply(`Marque o(s) usuário(s) (ex: ${groupPrefix}delblacklist @usuario @usuario2).`);
-          
+
           const groupFilePath = buildGroupFilePath(from);
           let groupData = fs.existsSync(groupFilePath) ? JSON.parse(fs.readFileSync(groupFilePath)) : { blacklist: {} };
           groupData.blacklist = groupData.blacklist || {};
-          
+
           const removed = [];
           const notFound = [];
-          
-          for (const targetUser of targetUsers) {
-            if (groupData.blacklist[targetUser]) {
-              delete groupData.blacklist[targetUser];
-              removed.push(targetUser);
+
+          for (const candidatos of targetUsers) {
+            // Remove TODAS as formas que existirem para a mesma pessoa (LID e
+            // JID do número), contando a pessoa uma única vez.
+            const encontrados = candidatos.filter((c) => groupData.blacklist[c]);
+            if (encontrados.length > 0) {
+              for (const chave of encontrados) {
+                delete groupData.blacklist[chave];
+                removed.push(chave);
+              }
             } else {
-              notFound.push(targetUser);
+              notFound.push(candidatos[0]);
             }
           }
-          
           fs.writeFileSync(groupFilePath, JSON.stringify(groupData, null, 2));
+
           
           let msg = '';
           if (removed.length > 0) msg += `👋 *${removed.length} removido(s) da blacklist*\n`;
