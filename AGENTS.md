@@ -528,6 +528,45 @@ chamadas. Só em grupo, exige admin.
 - `funcs/API.js` foi **removido** na limpeza final; `config.json` não tem mais `site_vex`/`apikey_vex`.
 - Módulos próprios: `downloads/{spotify,soundcloud,facebook,kwai,apkmod,mcplugins,pinterest,tiktok,igdl,lyrics,youtube,canvas}.js`, `edits/index.js`, `logos/index.js` (jimp + fontes bitmap), `utils/imagetools.js` (jimp local), `utils/search.js`.
 
+## RELACIONAMENTOS múltiplos (!trisal / !quadrisal / !relacionamento) ✅
+- Módulo: `dados/src/funcs/utils/relationships.js` (`RelationshipManager`).
+  Comandos em `index.js` (~35523 trisal, ~35568 quadrisal, ~35613
+  terminartrisal/terminarquadrisal, ~35653 relacionamento).
+- **Aceitação (já funcionava)**: `createGroupRequest` guarda o pedido em
+  `pendingGroupRequests` (por grupo) e cada alvo responde "sim". O
+  relacionamento só é criado quando **todos** aceitam; um "não" cancela tudo.
+- **BUG CORRIGIDO — `!relacionamento` não mostrava os parceiros.** A cadeia era:
+  1. em multi, `getActivePairForUser().partnerId` era
+     `otherUsers.join(',')` → **`"b@lid,c@lid"`, que não é um JID**;
+  2. o handler passava isso como `userTwo` para `getRelationshipSummary`, que
+     resolve o par pela **chave de duas pessoas** (`_getPairKey`);
+  3. o trisal é gravado sob `"groupId::a::b::c"`, então a chave nunca casava e a
+     resposta era *"Nenhum relacionamento ativo registrado entre essas pessoas"*.
+  Correções: `partnerId` voltou a ser **um JID único** (o primeiro dos demais) e
+  a lista completa ficou em `allPartners`; novo `_findRelationshipBetween()`
+  acha o par 1-1 **ou** o múltiplo que contém as duas pessoas; novo
+  `getRelationshipSummaryForUser()` (usado por `!relacionamento` sem menção) e
+  `_buildSummaryMessage()` lista **todos** os participantes do trisal/quadrisal.
+- **Isolamento por grupo**: `_createGroupRelationship` **não gravava
+  `pair.groupId`** (só dentro de `stages`), então `getActivePairForUser(user,
+  groupId)` casava direto e um trisal de **outro grupo** vazava. Agora
+  `pair.groupId` é gravado e o escopo é respeitado em
+  `getActivePairForUser`, `_findRelationshipBetween` e `getRelationshipSummary`.
+- **Terminar/traição em multi**: `endRelationship` e `getBetrayalHistory` também
+  usavam `_getPairKey` (quebravam em multi) — passaram a usar
+  `_findRelationshipBetween`. `createBetrayalRequest` agora compara o alvo com
+  **todos** os parceiros (`allPartners`): "trair" com membro do próprio
+  trisal/quadrisal não é traição.
+- `getActivePairForUser` tinha **duas definições** (a segunda sombreava a
+  primeira); a duplicata foi removida.
+- **Testes**: `tests/relationships-multi.test.js` — 16 testes / 59 asserções,
+  rodando o **handler real** com socket falso: pedido, validações, aceite
+  parcial/total, recusa, exibição dos 3/4 parceiros, isolamento entre grupos,
+  término, traição e regressão do 1-1. **Armadilha**: em grupo, as menções
+  chegam como **LID** (é o que o handler compara com o `sender`, também LID) —
+  o fake que manda JID em `mentionedJid` faz tudo não casar.
+  Verificado revertendo os fixes: **19 asserções falham** com o código antigo.
+
 ## Comandos e fluxos relevantes
 - Autodownload por URL: `handleAutoDownload(nazu, from, url, info)` em `index.js` (~linha 1789) detecta domínio e chama `youtube.mp3`, `tiktok.dl`, `igdl.dl`, `kwai.dl`, `facebook.downloadHD`, `pinterest.dl`, `spotify.download`, `soundcloud.download`.
 - Imports diretos em `index.js` (não via exports.js): `spotifyModule` (linha 590), `removeBg/upscale` (589), `search/searchNews` (588).
