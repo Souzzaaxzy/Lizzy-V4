@@ -229,7 +229,7 @@ async function installNodeDependencies() {
         print.info(`📂 Diretório atual: ${process.cwd()}`);
         print.info('⏳ Executando npm install (isso pode levar alguns minutos)...');
         
-        const { stdout, stderr } = await execAsync('npm install --legacy-peer-deps 2>&1', { shell: true, timeout: 300000 });
+        const { stdout, stderr } = await execAsync('npm install --legacy-peer-deps --allow-git=all 2>&1', { shell: true, timeout: 300000 });
         if (stdout) print.detail(stdout);
         if (stderr) print.detail(stderr);
         
@@ -253,7 +253,7 @@ async function installNodeDependencies() {
         }
         print.warning('⚠️ Tentando npm install sem flags...');
         try {
-            await execAsync('npm install 2>&1', { shell: true, timeout: 300000 });
+            await execAsync('npm install --allow-git=all 2>&1', { shell: true, timeout: 300000 });
             if (fsSync.existsSync(nodeModulesPath)) {
                 print.message('✅ Dependências instaladas com sucesso (fallback).');
                 return { name: 'Node Dependencies', status: `${colors.green}✅ Instalado${colors.reset}` };

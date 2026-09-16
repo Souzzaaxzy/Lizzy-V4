@@ -573,6 +573,39 @@ chamadas. Só em grupo, exige admin.
 - Comando `!apikey`/`!setkey` em `index.js` (~linha 22635) grava `config.apikey_vex`.
 - `dados/src/.scripts/config.js` tem prompt que pede `apikey_vex`.
 
+## INSTALAÇÃO — EALLOWGIT no `npm install` (npm ≥ 11.10) ✅
+- **Sintoma**: a primeira instalação morre com
+  `npm error code EALLOWGIT` / *"Fetching packages of type 'git' have been
+  disabled"* / `Refusing to fetch "@itsliaaa/baileys@git+ssh://..."`.
+- **Causa**: o bot depende da fork via git (`"@itsliaaa/baileys":
+  "github:Souzzaaxzy/baileys"`). No **npm 11.10** entrou a opção `allow-git` e
+  no **npm 12 o padrão virou `none`** — git por dependência passou a ser
+  bloqueado por segurança (o `.npmrc` do pacote git pode trocar o binário do
+  git). Não é bug do bot nem da fork.
+- **Correção**: `allow-git=all` no `.npmrc` do projeto (rastreado; o `.npmrc`
+  do projeto tem precedência sobre user/global). Também passou a ir na linha de
+  comando nos três scripts de install (`config.js`, `start.js`, `update.js`),
+  para o caso de o install rodar sem o `.npmrc` da raiz.
+- **TEM que ser `all`, não `root`**: o npm **11.12.x tem bug conhecido**
+  (`npm/cli#9189`) em que `allow-git=root` não libera **nem a dependência git de
+  raiz** e o install falha igual. Medido:
+
+  | npm | `allow-git=root` | `allow-git=all` |
+  |---|---|---|
+  | 9.9.4 | OK | OK |
+  | 10.9.8 | OK | OK |
+  | **11.12.1** | **FALHA (EALLOWGIT)** | OK |
+  | 12.0.2 | OK | OK |
+
+  Versões anteriores ao npm 11.10 simplesmente ignoram a chave/flag.
+- **Não precisa de git instalado nem de chave SSH**: o npm baixa o commit via
+  `codeload.github.com` (HTTPS). Verificado com o `git` fora do `PATH`.
+  O `git+ssh://` que aparece no `package-lock.json` é só o formato de registro
+  da URL resolvida; a coleta é HTTPS.
+- Validado: primeira instalação do zero (clone sem `node_modules`, cache npm
+  limpo) com npm **12.0.2** e `npm ci`, e o baileys instalado tem
+  `CallStatus`/`preacceptCall` (fork certa). As suítes rodam nessa instalação.
+
 ## Setup do ambiente
 - `npm install --legacy-peer-deps` instala deps em `/workspace/project/Lizzy-V4/node_modules`.
 - Teste de estrutura da API: criar `.mjs` que importa `api-downloads.js` e `getModules()` de `exports.js`, verifica namespaces/funções e a desestruturação esperada pelo `index.js`.

@@ -47,9 +47,9 @@ async function nodeDeps() {
 
   console.log('Instalando dependências');
   try {
-    await execAsync('npm', ['install', '--legacy-peer-deps'], { timeout: 600000 });
+    await execAsync('npm', ['install', '--legacy-peer-deps', '--allow-git=all'], { timeout: 600000 });
   } catch {
-    await execAsync('npm', ['install'], { timeout: 600000 });
+    await execAsync('npm', ['install', '--allow-git=all'], { timeout: 600000 });
   }
   if (!fs.existsSync('node_modules')) throw new Error('npm install terminou mas node_modules não foi criado');
   console.log('Dependências instaladas');

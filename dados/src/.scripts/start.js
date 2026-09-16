@@ -228,9 +228,9 @@ async function checkPrerequisites() {
   }
   
   const installCommands = [
-    'npm install --legacy-peer-deps',
-    'npm install --force',
-    'npm install'
+    'npm install --legacy-peer-deps --allow-git=all',
+    'npm install --force --allow-git=all',
+    'npm install --allow-git=all'
   ];
   
   let installed = false;
