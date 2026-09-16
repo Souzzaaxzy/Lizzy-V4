@@ -222,7 +222,6 @@ async function checkYtDlp() {
     try {
       const probe = await runProcess(c.cmd, [...c.base, '--version'], PROBE_TIMEOUT);
       ytdlpResolved = { ...c, version: String(probe.stdout || '').trim().split('\n')[0] };
-      console.log(`[youtube] yt-dlp detectado: ${ytdlpResolved.version || c.cmd}`);
       return ytdlpResolved;
     } catch {
       /* ignora; tenta o próximo candidato */
@@ -502,7 +501,6 @@ async function ytdlpDownload(videoId, extraArgs, outTemplate) {
         try {
           const result = await runProcess(ytdlp.cmd, argsWithClient, attemptTimeout);
           stdout = result.stdout;
-          console.log(`[youtube] yt-dlp sucesso com client=${client}`);
           break;
         } catch (err) {
           lastErr = err;
@@ -587,11 +585,9 @@ async function mp3(url, bitrate = 128) {
     const cacheKey = `${videoId}@${br}`;
     const cached = mp3CacheGet(cacheKey);
     if (cached) {
-      console.log(`[PLAY] Cache hit: ${cached.title} (id=${videoId}, ${br}k)`);
       const hit = { ok: true, ...cached, buffer: cached.buffer };
       return hit;
     }
-    console.log(`[PLAY] Iniciando yt-dlp: ${url} (id=${videoId})`);
 
     const dl = await ytdlpDownload(
       videoId,
@@ -599,10 +595,8 @@ async function mp3(url, bitrate = 128) {
       'audio.%(ext)s'
     );
     dir = dl.dir;
-    console.log(`[PLAY] Download concluído: ${dl.meta?.title || ''} (${dir})`);
 
     const buffer = readOutputFile(dir, 'mp3');
-    console.log(`[PLAY] Conversão concluída: MP3 ${(buffer.length / 1024 / 1024).toFixed(2)} MB`);
     const title = dl.meta?.title || 'YouTube';
     const thumbnail =
       dl.meta?.thumbnail || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
@@ -628,7 +622,6 @@ async function mp3(url, bitrate = 128) {
   } finally {
     if (dir) {
       fs.rmSync(dir, { recursive: true, force: true });
-      console.log(`[PLAY] Arquivo removido: ${dir}`);
     }
   }
 }

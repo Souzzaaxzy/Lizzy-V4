@@ -918,6 +918,114 @@ await test('!raja aparece na categoria exclusiva do menudono', async () => {
 });
 
 // ============================================================================
+// 6) MessageQueue.add() — ORDEM DO resolve (bug real de producao)
+// ============================================================================
+
+/**
+ * Reproduz o add() com a ORDEM ATUAL e com a ordem antiga (bugada).
+ *
+ * O connect.js nao pode ser importado aqui (abre socket), entao alem de simular
+ * as duas ordens lemos o fonte e checamos a ordem real das operacoes.
+ */
+function makeQueue({ buggy }) {
+  const q = { queue: [], isProcessing: false, stats: { totalProcessed: 0, totalErrors: 0 } };
+
+  q.add = async function (message, processor) {
+    const item = { message, processor };
+    this.queue.push(item);
+
+    if (buggy) {
+      // ORDEM QUE ESTAVA NO AR: processa antes de `item.resolve` existir.
+      if (!this.isProcessing) this.startProcessing();
+      return new Promise((resolve, reject) => { item.resolve = resolve; item.reject = reject; });
+    }
+
+    // ORDEM CORRIGIDA: cria a Promise primeiro.
+    const promise = new Promise((resolve, reject) => { item.resolve = resolve; item.reject = reject; });
+    if (!this.isProcessing) this.startProcessing();
+    return promise;
+  };
+
+  q.startProcessing = async function () {
+    if (this.isProcessing) return;
+    this.isProcessing = true;
+    while (this.queue.length > 0) {
+      const item = this.queue.shift();
+      const { processor, resolve } = item;
+      try {
+        const result = await processor(item.message);
+        resolve(result);           // <- linha que estourava em producao
+        this.stats.totalProcessed++;
+      } catch (e) {
+        this.stats.totalErrors++;
+        throw e;
+      }
+    }
+    this.isProcessing = false;
+  };
+
+  return q;
+}
+
+await test('fila: ordem antiga do add() NAO resolve (bug do "resolve is not a function")', async () => {
+  // A ordem bugada faz o TypeError escapar como unhandled rejection e DERRUBA o
+  // processo (exatamente o que acontecia em producao). Capturamos para poder
+  // assertar em vez de morrer — a captura e parte do teste.
+  const capturados = [];
+  const onUnhandled = (e) => { capturados.push(e?.message || String(e)); };
+  process.on('unhandledRejection', onUnhandled);
+
+  try {
+    const q = makeQueue({ buggy: true });
+    let resultado = 'NUNCA SETTLEOU (promise pendurada)';
+    await Promise.race([
+      q.add({ t: 1 }, async () => 'ok')
+        .then((v) => { resultado = `resolveu: ${v}`; })
+        .catch((e) => { resultado = `rejeitou: ${e.message}`; }),
+      new Promise((r) => setTimeout(() => r('timeout'), 400)),
+    ]);
+
+    // Com a ordem bugada a Promise nunca settleia: nem resolve, nem rejeita.
+    ok(resultado === 'NUNCA SETTLEOU (promise pendurada)',
+      `ordem antiga nao resolve nem rejeita (obtido: ${resultado})`);
+    // E o erro aparece como unhandled — foi o "TypeError: resolve is not a
+    // function" no log de producao do dono.
+    ok(capturados.some((m) => m.includes('resolve is not a function')),
+      `TypeError capturado como unhandled (obtido: ${JSON.stringify(capturados)})`);
+  } finally {
+    process.off('unhandledRejection', onUnhandled);
+  }
+});
+
+await test('fila: ordem corrigida resolve normalmente', async () => {
+  const q = makeQueue({ buggy: false });
+  const r = await Promise.race([
+    q.add({ t: 1 }, async () => 'ok'),
+    new Promise((res) => setTimeout(() => res('TIMEOUT'), 400)),
+  ]);
+  ok(r === 'ok', `a mensagem resolve com o valor do processor (obtido: ${r})`);
+  ok(q.stats.totalProcessed === 1 && q.stats.totalErrors === 0, 'contadores corretos');
+});
+
+await test('fila: connect.js cria a Promise ANTES de startProcessing()', () => {
+  // Regressao direta no fonte: era essa inversao que causava o erro em ~95% das
+  // mensagens (totalErrors 70 de totalProcessed 74 no log de producao).
+  const src = fs.readFileSync(new URL('../dados/src/connect.js', import.meta.url), 'utf-8');
+  const ini = src.indexOf('    async add(message, processor) {');
+  const fim = src.indexOf('\n    startProcessing() {', ini);
+  const add = src.slice(ini, fim);
+
+  const posPromise = add.indexOf('const promise = new Promise(');
+  const posStart = add.indexOf('this.startProcessing();');
+  ok(posPromise !== -1 && posStart !== -1 && posPromise < posStart,
+    `Promise (pos ${posPromise}) criada antes de startProcessing (pos ${posStart})`);
+
+  // O descarte por fila cheia tambem precisa checar typeof antes de resolver.
+  ok(src.includes("typeof dropped?.resolve === 'function'"),
+    'descarte da fila cheia checa typeof resolve');
+});
+
+// ============================================================================
 // RESULTADO
 // ============================================================================
 

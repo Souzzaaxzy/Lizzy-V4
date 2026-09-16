@@ -80,10 +80,14 @@ function getDynamicBotInfo() {
   
   try {
     // Tentar carregar do config.json
+    // O projeto é ESM ("type": "module"), então `__dirname` NÃO existe: usá-lo
+    // lançava "ReferenceError: __dirname is not defined" e o catch abaixo
+    // engolia com um warn, fazendo o bot cair sempre nos valores padrão
+    // ("Abyss"/"!") em vez de ler o config.json.
     const possiblePaths = [
       path.join(process.cwd(), 'dados', 'src', 'config.json'),
       path.join(process.cwd(), 'src', 'config.json'),
-      path.join(__dirname, '..', '..', 'config.json')
+      path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'config.json')
     ];
     
     for (const configPath of possiblePaths) {

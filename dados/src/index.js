@@ -19391,7 +19391,6 @@ case 'addaluguel':
           if (q.includes('youtube.com') || q.includes('youtu.be')) {
             // É um link direto
             videoUrl = q;
-            console.log(`[PLAY] URL recebida (link direto): ${videoUrl}`);
             youtube.mp3(videoUrl, 128)
               .then(async (dlRes) => {
                 if (!dlRes?.ok || !dlRes?.buffer) {
@@ -19427,7 +19426,6 @@ case 'addaluguel':
                       return null;
                     });
                   }
-                  console.log(`[PLAY] Enviando áudio (link direto): ${dlRes.filename || ''} — ${(dlRes.buffer?.length || 0) / 1024 / 1024} MB`);
                   await nazu.sendMessage(from, {
                     audio: dlRes.buffer,
                     mimetype: 'audio/mpeg',
@@ -19468,7 +19466,6 @@ case 'addaluguel':
           // =============================================
           // FLUXO DE BUSCA POR NOME
           // =============================================
-          console.log(`[PLAY] Pesquisa: ${q}`);
           youtube.search(q)
             .then(async (result) => {
               if (!result.ok) {
@@ -19477,14 +19474,12 @@ case 'addaluguel':
               }
               videoInfo = result;
               videoUrl = result.data.url;
-              console.log(`[PLAY] URL encontrada: ${videoUrl} — ${result.data.title || ''}`);
               if (videoInfo.data.seconds > 1800) {
                 return sendPlayError(`⚠️ Este vídeo é muito longo (${videoInfo.data.timestamp}).\nPor favor, escolha um vídeo com menos de 30 minutos.`);
               }
               // =============================================
               // DOWNLOAD DO ÁUDIO
               // =============================================
-              console.log(`[PLAY] Iniciando download (yt-dlp): ${videoUrl}`);
               youtube.mp3(videoUrl, 128)
                 .then(async (dlRes) => {
                   if (!dlRes?.ok || !dlRes?.buffer) {
@@ -19548,7 +19543,6 @@ case 'addaluguel':
                             await reply(`❌ Não foi possível exibir a música.\n\n🔗 ${musicUrl}`);
                           }
                         }
-                        console.log(`[PLAY] Enviando áudio: ${dlRes.filename || ''} — ${(dlRes.buffer?.length || 0) / 1024 / 1024} MB`);
                         await nazu.sendMessage(from, {
                           audio: dlRes.buffer,
                           mimetype: 'audio/mpeg',
@@ -28484,13 +28478,6 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
           const mentions = menc_prt && isValidJid(menc_prt) ? [menc_prt] : [];
           const MAX_PART_BYTES = 52000;
           const parts = splitTextForWhatsApp(body, MAX_PART_BYTES);
-
-          // Log de diagnóstico: sempre uma linha confirmando a execução; o relatório
-          // completo só é impresso com config.debug ligado, para não poluir o log.
-          console.log(`[GET] executado | partes=${parts.length} | bytes=${Buffer.byteLength(body, 'utf8')} | alvo=${cachedTarget ? 'cache' : quoted?.quotedMessage ? 'contextInfo' : 'self'}`);
-          if (debug) {
-            for (const line of full.split('\n')) console.log(`[GET] ${line}`);
-          }
 
           for (let i = 0; i < parts.length; i++) {
             const total = parts.length > 1 ? `\n\n_(${i + 1}/${parts.length})_` : '';

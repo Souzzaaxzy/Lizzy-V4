@@ -106,7 +106,11 @@ class MessageQueue {
         if (this.queue.length >= this.maxQueueSize) {
             this.stats.totalDropped++;
             const dropped = this.queue.pop(); // descarta a mais antiga da cauda
-            if (dropped) dropped.resolve(null);
+            // Nem toda mensagem na fila tem `resolve`: `add()` já retornou e o
+            // item pode ter sido enfileirado antes da atribuição. Chamar sem
+            // checar estoura "resolve is not a function", igual ao bug corrigido
+            // logo abaixo.
+            if (typeof dropped?.resolve === 'function') dropped.resolve(null);
             console.warn(`[MessageQueue] Fila cheia (${this.maxQueueSize}); descartando mensagem ${dropped?.id || '?'}`);
         }
 
@@ -131,14 +135,21 @@ class MessageQueue {
         this.stats.currentQueueLength = this.queue.length;
         this.stats.maxQueueLength = Math.max(this.stats.maxQueueLength, this.queue.length);
 
+        // A Promise (e portanto `item.resolve`/`item.reject`) precisa existir
+        // ANTES de startProcessing(). Antes o startProcessing() vinha primeiro,
+        // então o worker pegava o item com `resolve` ainda undefined e estourava
+        // `TypeError: resolve is not a function` na primeira mensagem de uma fila
+        // vazia — e a Promise ficava pendurada para sempre (nunca settleia).
+        const promise = new Promise((resolve, reject) => {
+            item.resolve = resolve;
+            item.reject = reject;
+        });
+
         if (!this.isProcessing) {
             this.startProcessing();
         }
 
-        return new Promise((resolve, reject) => {
-            item.resolve = resolve;
-            item.reject = reject;
-        });
+        return promise;
     }
 
     startProcessing() {
@@ -155,7 +166,6 @@ class MessageQueue {
 
     resume() {
         if (!this.isProcessing) {
-            console.log('[MessageQueue] Retomando processamento');
             this.startProcessing();
         }
     }
@@ -1557,14 +1567,11 @@ async function createBotSocket(authDir) {
                 }
             }
 
-            console.error({
-                messageId: item.id,
-                errorType: error.constructor.name,
-                errorMessage: error.message,
-                stack: error.stack,
-                messageTimestamp: item.timestamp,
-                queueStatus: messageQueue.getStatus()
-            });
+            // O dump completo do objeto era redundante: a linha acima já imprime
+            // o erro com stack. Mantém só o que ela não traz (o tipo do erro),
+            // em uma linha, para um erro real continuar rastreável sem despejar
+            // 30 linhas de status da fila no terminal.
+            console.error(`   ↳ tipo=${error.constructor.name} | fila: ${messageQueue.getStatus().currentQueueLength}/${messageQueue.getStatus().maxQueueSize}`);
         };
 
         messageQueue.setErrorHandler(queueErrorHandler);
@@ -1688,9 +1695,6 @@ async function createBotSocket(authDir) {
                             }
                             
                             fs.writeFileSync(filePath, JSON.stringify(groupData, null, 2));
-                            console.log(`[DELETED] Msg apagada por ${senderId}`);
-                            console.log(`[DELETED] userIndex: ${userIndex}, apagadas: ${userIndex !== -1 ? groupData.contador[userIndex].apagadas : 'novo user'}`);
-                            console.log(`[DELETED] arquivo: ${filePath}`);
                         } catch (e) {
                             console.error('[DELETED] Erro:', e);
                         }
@@ -1832,7 +1836,6 @@ async function createBotSocket(authDir) {
                         }
                         
                         fs.writeFileSync(filePath, JSON.stringify(groupData, null, 2));
-                        console.log(`[DELETED] Mensagem apagada por ${senderId} em ${groupId}`);
                     }
                 } catch (e) {
                     console.error('[DELETED] Erro ao processar mensagem deletada:', e);
