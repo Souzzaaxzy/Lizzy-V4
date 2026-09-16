@@ -131,6 +131,25 @@ Ferramenta do dono para validar a proteção anti-raja em grupo de teste.
   então basta aninhar), `clean` (mensagem "limpante" de 300 quebras antes de
   cada raja), `fwd` (adiciona `forwardingScore: 999` + `isForwarded: true` na
   nota) e `delay=N` (intervalo entre envios, padrão 700ms, teto 10000).
+- **`messageContextInfo.messageSecret` — a assinatura do raja invisível**: o
+  raja invisível é um **estado malformado** do WhatsApp: um
+  `requestPaymentMessage` carregando `messageContextInfo.messageSecret`. O
+  cliente real **sempre** envia `messageSecret` (a Baileys adiciona em
+  `generateWAMessageContent` via `shouldIncludeReportingToken()`, que só exclui
+  reaction/poll update), mas essa combinação com payment é o que faz o card
+  não renderizar para os admins. Como o `!raja` monta o proto direto via
+  `generateWAMessageFromContent`, precisava incluir o campo na mão —
+  **era isso que faltava** para reproduzir o efeito.
+  - `buildRajaContent()` agora retorna `{ ...inner, messageContextInfo: { messageSecret: randomBytes(32) } }`.
+  - Opção `nosecret` remove o campo, para comparar as duas formas.
+  - `classifyMessage()` expõe `hasMessageSecret`, `messageContextInfo` e
+    `isInvisiblePayment` (payment + secret); o anti-raja passa a usar
+    `isInvisiblePayment` como marcador principal, com o `amount === 0` como reforço.
+- **`!get` ganhou a seção `MESSAGE CONTEXT INFO (envelope)`**: o campo vive no
+  TOPO do `Message` (irmão do tipo), por isso não aparecia em nenhuma seção —
+  passava batido no RAW. A seção mostra `messageSecret` (bytes/hex/sha256),
+  `botMessageSecret`, `deviceListMetadata` e quaisquer outros campos do
+  envelope, além de avisar quando é a assinatura do raja.
 - **BUG CORRIGIDO no anti-pagamento**: a condição usava
   `type === 'viewOnceMessage*'` **sozinho**, então QUALQUER foto/vídeo de "ver
   uma vez" (normal e legítimo) era tratado como pagamento e **removia o autor

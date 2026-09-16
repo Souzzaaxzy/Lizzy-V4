@@ -649,6 +649,53 @@ await test('!testeinvi: a rajada com amount=0 é tratada mesmo sem antirequest',
   ok((calls.groupParticipantsUpdate || 0) >= 1, `rajada tratada com antiinvi ligado (${calls.groupParticipantsUpdate || 0})`);
 });
 
+await test('!raja: inclui messageSecret (assinatura do raja invisível)', async () => {
+  const { relayed } = await runOwner('!raja 1 texto');
+  const built = relayed[0].message;
+  ok(Boolean(built.messageContextInfo), 'messageContextInfo presente');
+  const sec = built.messageContextInfo?.messageSecret;
+  ok(Boolean(sec), 'messageSecret presente');
+  ok(Buffer.from(sec).length === 32, `messageSecret com 32 bytes (${Buffer.from(sec || []).length})`);
+});
+
+await test('!raja: opção nosecret remove o messageSecret (variante)', async () => {
+  const { relayed } = await runOwner('!raja 1 texto | nosecret');
+  const built = relayed[0].message;
+  ok(!built.messageContextInfo, 'messageContextInfo ausente');
+  const c = inspector.classifyMessage(built);
+  ok(c.hasMessageSecret === false, 'hasMessageSecret false');
+  ok(c.isInvisiblePayment === false, 'não classificado como payment invisível');
+  ok(c.paymentAmount.isZero === true, 'amount zero continua detectado');
+});
+
+await test('messageSecret + payment é a assinatura do raja invisível', async () => {
+  const { relayed } = await runOwner('!raja 1 texto');
+  const c = inspector.classifyMessage(relayed[0].message);
+  ok(c.isPayment === true, 'isPayment');
+  ok(c.hasMessageSecret === true, 'hasMessageSecret');
+  ok(c.isInvisiblePayment === true, 'isInvisiblePayment');
+  ok(c.messageContextInfo !== null, 'messageContextInfo exposto');
+
+  // Com ViewOnce junto, a assinatura continua valendo.
+  const vo = await runOwner('!raja 1 texto | vov2');
+  const c2 = inspector.classifyMessage(vo.relayed[0].message);
+  ok(c2.isViewOnce === true, 'viewOnce');
+  ok(c2.isInvisiblePayment === true, 'invisível mesmo com wrapper');
+});
+
+await test('!get: nova seção MESSAGE CONTEXT INFO mostra o messageSecret', async () => {
+  const { relayed } = await runOwner('!raja 1 texto');
+  const built = relayed[0].message;
+  const rep = inspector.buildMessageReport({
+    info: { key: { remoteJid: 'g@g.us', id: 'X', participant: OWNER_LID_RAJA }, message: built, pushName: 'X' },
+    target: built, origin: 'contextInfo', extra: {},
+  });
+  includes(rep.full, 'MESSAGE CONTEXT INFO', 'seção existe');
+  includes(rep.full, 'messageSecret: PRESENTE', 'secret detectado');
+  includes(rep.full, 'assinatura do raja invisível', 'explica o significado');
+  includes(rep.summary, 'messageSecret', 'resumo mostra o secret');
+});
+
 await test('!raja: opções vo/vov2/vov2ext encapsulam em ViewOnce', async () => {
   const casos = [
     ['!raja 1 texto', 'requestPaymentMessage'],

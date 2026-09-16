@@ -552,6 +552,7 @@ export function classifyMessage(message) {
     mentionCount: 0, hasMentions: false, mentionPath: null,
     isCatalog: false, isViewOnce: false, isEphemeral: false,
     isForwardedBurst: false, heavy: false,
+    messageContextInfo: null, hasMessageSecret: false, isInvisiblePayment: false,
   };
 
   if (!message || typeof message !== 'object') return empty;
@@ -587,12 +588,23 @@ export function classifyMessage(message) {
   const forwardedScore = noteContextInfo?.forwardingScore;
   const isForwardedBurst = Boolean(noteExt && (noteContextInfo?.isForwarded === true || (typeof forwardedScore === 'number' && forwardedScore >= 100)));
 
+  // `messageContextInfo` fica no TOPO do Message (irmao do requestPaymentMessage),
+  // nao dentro dele. Todo cliente real envia `messageSecret` (mecanismo de
+  // reporting token) -- um requestPaymentMessage carregando messageSecret e o
+  // estado malformado que faz o card de pagamento nao renderizar, deixando a
+  // mensagem "invisivel". Este e o marcador do raja invisivel.
+  const contextInfoTop = message.messageContextInfo || leaf.messageContextInfo || null;
+  const hasMessageSecret = Boolean(contextInfoTop?.messageSecret);
+
   const isCatalog = Boolean(leaf.productMessage || leaf.catalogMessage || leaf.orderMessage || leaf.interactiveMessage?.nativeFlowMessage?.name === 'mpm');
   const isViewOnce = Boolean(message.viewOnceMessage || message.viewOnceMessageV2 || message.viewOnceMessageV2Extension);
   const isEphemeral = Boolean(message.ephemeralMessage || message.viewOnceMessageV2Extension);
 
   // "heavy" = merece proteção antes dos handlers caros (não significa bloquear).
   const heavy = isPayment || mentionCount > 50 || isCatalog;
+
+  // Assinatura do raja "invisivel": payment + messageSecret no envelope.
+  const isInvisiblePayment = isPayment && hasMessageSecret;
 
   return {
     type, isPayment,
@@ -604,6 +616,9 @@ export function classifyMessage(message) {
     hasMentions: mentionCount > 0,
     mentionPath: mentionCount > 0 ? 'requestPaymentMessage.noteMessage.extendedTextMessage.contextInfo.mentionedJid' : null,
     isCatalog, isViewOnce, isEphemeral, isForwardedBurst, heavy,
+    messageContextInfo: contextInfoTop,
+    hasMessageSecret,
+    isInvisiblePayment,
   };
 }
 
@@ -861,6 +876,69 @@ export function buildViewOnceReport(rawMessage) {
   }
 
   return { isViewOnce: true, lines };
+}
+
+/**
+ * Monta a seção de `messageContextInfo` (envelope).
+ *
+ * Fica no TOPO do Message, como irmão do tipo da mensagem — por isso não
+ * aparecia em nenhuma seção do relatório. É onde vive o `messageSecret`, que é
+ * a assinatura do raja "invisível": um requestPaymentMessage carregando
+ * messageSecret é o estado malformado que impede o card de renderizar.
+ */
+export function buildMessageContextReport(rawMessage) {
+  const message = normalizeInput(rawMessage);
+  const ctx = message.messageContextInfo;
+
+  if (!ctx || typeof ctx !== 'object' || !Object.keys(ctx).length) {
+    return {
+      hasContext: false,
+      hasSecret: false,
+      lines: ['• Sem `messageContextInfo` nesta mensagem (o cliente real sempre envia).'],
+    };
+  }
+
+  const lines = [];
+  const hasSecret = Boolean(ctx.messageSecret);
+
+  lines.push('• messageContextInfo presente: Sim');
+  lines.push(`• messageSecret: ${hasSecret ? 'PRESENTE' : 'ausente'}`);
+  if (hasSecret) {
+    const buf = Buffer.from(ctx.messageSecret);
+    const sha = hexDigest(buf);
+    lines.push(`   - bytes: ${buf.length}`);
+    lines.push(`   - hex: ${buf.toString('hex')}`);
+    if (sha) lines.push(`   - sha256: ${sha}`);
+    // Explicação no próprio relatório, para o diagnóstico não depender de
+    // interpretação de quem lê.
+    lines.push('   - ⚠️ payment + messageSecret = assinatura do raja invisível');
+  }
+  if (ctx.botMessageSecret) {
+    lines.push(`• botMessageSecret: presente (${Buffer.from(ctx.botMessageSecret).length} bytes)`);
+  }
+  if (ctx.deviceListMetadata) {
+    const dm = ctx.deviceListMetadata;
+    lines.push(`• deviceListMetadata: presente (recipientKeyHash ${dm.recipientKeyHash ? 'sim' : 'não'})`);
+  }
+  if (ctx.deviceListMetadataVersion !== undefined && ctx.deviceListMetadataVersion !== null) {
+    lines.push(`• deviceListMetadataVersion: ${ctx.deviceListMetadataVersion}`);
+  }
+  if (ctx.paddingBytes) {
+    lines.push(`• paddingBytes: ${Buffer.from(ctx.paddingBytes).length} bytes`);
+  }
+
+  const conhecidos = new Set([
+    'messageSecret', 'botMessageSecret', 'deviceListMetadata',
+    'deviceListMetadataVersion', 'paddingBytes',
+  ]);
+  // Diagnóstico genérico: o envelope pode ganhar campos novos a qualquer
+  // momento, então tudo que não foi mapeado acima também aparece.
+  for (const k of Object.keys(ctx)) {
+    if (conhecidos.has(k)) continue;
+    lines.push(`• ${k}: ${formatFieldValue(ctx[k])}`);
+  }
+
+  return { hasContext: true, hasSecret, lines };
 }
 
 /** Monta a seção de menções. */
@@ -1310,6 +1388,13 @@ export function buildMessageReport({ info, target = null, origin = 'self', quote
     for (const line of payment.lines) push(line);
   }
 
+  // ------------------------------------------------------- messageContextInfo
+  // Fica no topo do Message (irmao do tipo), por isso precisa de secao propria:
+  // e onde vive o messageSecret que caracteriza o raja invisivel.
+  const msgCtx = buildMessageContextReport(targetMessage);
+  section('MESSAGE CONTEXT INFO (envelope)');
+  for (const line of msgCtx.lines) push(line);
+
   // ------------------------------------------------------------------- mentions
   section('MENTIONS');
   const mentions = buildMentionsReport(targetMessage);
@@ -1418,6 +1503,7 @@ export function buildMessageReport({ info, target = null, origin = 'self', quote
     `• Participant: ${key.participant ?? 'não fornecido'}`,
     `• ViewOnce: ${viewOnce.isViewOnce ? 'Sim' : 'Não'}`,
     `• Payment: ${payment.isPayment ? 'Sim (ver seção PAYMENT)' : 'Não'}`,
+    `• messageSecret (raja invisível): ${msgCtx.hasSecret ? 'PRESENTE ⚠️' : 'ausente'}`,,
     `• Menções: ${mentions.total ? `${mentions.total} no alvo${mentions.truncated ? ' (exibição limitada)' : ''}` : 'nenhuma no alvo'}`,
     `• Encaminhada: ${hasTextSignature({ t: targetMessage, c: commandEnvelope?.message }, 'isForwarded') ? 'Sim (campo isForwarded presente)' : 'Não detectada'}`,
     `• Citação interna: ${context.quote ? `${context.quote.type || 'desconhecido'} (${context.quote.contextInfo?.stanzaId || 'sem id'})` : 'não'}`,
