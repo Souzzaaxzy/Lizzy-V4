@@ -18,6 +18,7 @@ import ElectionManager from './utils/electionManager.js';
 import { loadMsgBotOn } from './utils/database.js';
 import { buildUserId } from './utils/helpers.js';
 import { safeJsonStringify } from './utils/messageInspector.js';
+import { buildCallNotification, shouldNotifyCall } from './utils/callNotifier.js';
 import msgCounter from './utils/msgCounter.js';
 // ATENÇÃO: Se o seu arquivo se chamado 'index-2(2).js', RENOMEIE PARA 'index.js'
 // ou mude o caminho abaixo para './index-2(2).js'
@@ -1839,6 +1840,56 @@ async function createBotSocket(authDir) {
             });
         };
 
+        /**
+         * Notificações de chamada (!testcall).
+         *
+         * O Baileys é SINALIZAÇÃO de chamada apenas — não há áudio/vídeo. Aqui
+         * só observamos o evento e avisamos no grupo, quando o toggle estiver
+         * ligado. Nada de mídia, nada de atender: a lib não tem essa stack.
+         */
+        let callListenerAttached = false;
+        const attachCallListener = () => {
+            if (callListenerAttached) return;
+            callListenerAttached = true;
+
+            AbyssSock.ev.on('call', async ([call]) => {
+                try {
+                    if (!call) return;
+
+                    const chatId = call.chatId;
+                    if (!chatId) return;
+
+                    // Só grupos: o !testcall é um comando de grupo, e o toggle
+                    // fica no groupData daquele grupo.
+                    if (!chatId.endsWith('@g.us')) return;
+
+                    const groupData = await getGroupData(chatId).catch(() => null);
+                    if (!shouldNotifyCall(groupData)) return;
+
+                    // Nome do autor e do grupo são best-effort: se falharem, a
+                    // notificação sai com o número em vez de não sair.
+                    const botJid = AbyssSock.user?.id || null;
+                    let callerName = null;
+                    try {
+                        callerName = await AbyssSock.getName(call.from);
+                    } catch (e) { /* segue com o número */ }
+
+                    const notif = buildCallNotification(call, {
+                        botJid,
+                        callerName,
+                        groupName: groupData.subject || groupData.name || null
+                    });
+                    if (!notif) return;
+
+                    await AbyssSock.sendMessage(chatId, { text: notif.text });
+                    console.log(`[TESTCALL] ${notif.kind} notificado em ${chatId}`);
+                } catch (e) {
+                    // Uma falha aqui não pode derrubar o listener.
+                    console.error('[TESTCALL] Erro ao notificar chamada:', e?.message || e);
+                }
+            });
+        };
+
         AbyssSock.ev.on('connection.update', async (update) => {
             const {
                 connection,
@@ -1898,6 +1949,7 @@ async function createBotSocket(authDir) {
                     console.log('✅ Sistema de contador de mensagens inicializado');
 
                     attachMessagesListener();
+                    attachCallListener(); // Notificações de chamada (!testcall)
                     startCacheCleanup(); // Inicia o sistema de limpeza de cache
 
                     // Envia mensagem de boas-vindas para o dono

@@ -31900,6 +31900,36 @@ break;
         break;
       }
 
+      case 'testcall':
+        try {
+          if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
+          if (!isGroupAdmin) return reply("Você precisa ser adm 💔");
+
+          const ligado = !groupData.testcall;
+          groupData.testcall = ligado;
+          const newsletterCtxCall = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          await nazu.sendMessage(from, {
+            text: `📞 *TESTCALL ${ligado ? 'ATIVADO' : 'DESATIVADO'}*
+
+${ligado
+  ? 'Toda chamada neste grupo será notificada aqui: entrada de chamada, chamada saindo do bot, tentativa de ligação e chamada perdida.'
+  : 'As notificações de chamada foram desligadas neste grupo.'}`,
+            contextInfo: newsletterCtxCall,
+            quoted: info
+          });
+          persistGroupData();
+        } catch (e) {
+          console.error('[TESTCALL] Erro:', e);
+          await reply("Ocorreu um erro 💔");
+        }
+        break;
       case 'testeinvi':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");

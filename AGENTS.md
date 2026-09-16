@@ -382,6 +382,39 @@ banco real.
 - **`!menubn`**: adicionados na categoria existente **INTERAÇÕES "PICANTES"** (`menus/menubn.js`, que só aparece fora do modo lite) e na lista `menuCommandsMap.menubn.commands` (`utils/blockPv.js`) — mesma categoria, sem duplicar.
 - **Testes**: `tests/pg-commands.test.js` — 22 testes / 141 asserções com o handler real: alvo obrigatório, menção de executor e alvo (JID/LID reais), as 2 frases exatas de cada comando, aleatoriedade (80 execuções), GIF via `!setgif`, `!menubn`/categoria, `blockPv`, regressão dos comandos antigos, fora de grupo, e varredura de caracteres estranhos (chinês/cirílico/invisível/homoglifo). O teste usa `DATABASE_PATH` temporário: **não toca** o `dados/database` real. Rodar com `node tests/pg-commands.test.js`.
 
+
+## COMANDO "!testcall" — notificações de chamada (ago/2026) ✅
+Comando de teste, **fora de qualquer menu**, que liga/desliga por grupo o aviso de
+chamadas. Só em grupo, exige admin.
+
+- **Uso**: `!testcall` alterna o toggle `groupData.testcall` (persistido no JSON
+  do grupo). Com ele ligado, todo evento de chamada daquele grupo é notificado.
+- **O que notifica** (`dados/src/utils/callNotifier.js`): entrada de chamada
+  (`offer`), chamada **saindo do bot** (quando `call.from` é o próprio bot),
+  chamada de grupo, atendida, recusada, encerrada, latência e **chamada perdida**
+  (`timeout`). Os 9 status são classificados; qualquer status novo cai num
+  rótulo genérico em vez de sumir.
+- **Regra de notificação**: `shouldNotifyCall(groupData)` (só com `testcall`
+  ligado) + filtro de chat `@g.us`. Grupo desligado não recebe nada; PV é
+  ignorado mesmo ligado, porque o toggle é por grupo.
+- **Listener**: `attachCallListener()` em `connect.js` (~1842), registrado ao
+  lado do `attachMessagesListener()`. Lê o `groupData` pelo `getGroupData()` do
+  próprio connect.js (respeita `DATABASE_PATH`) e nunca deixa uma falha derrubar
+  o listener.
+- **LIMITE TÉCNICO — isto é SINALIZAÇÃO, não chamada.** O Baileys não tem stack
+  de mídia (nada de WebRTC/SRTP/codec), então **não existe "entrar na chamada",
+  atender, nem tocar áudio**. Só dá para observar o evento e recusar
+  (`rejectCall`). Qualquer plano de "bot entra na call e toca música" esbarra
+  nisso — ver a seção sobre o wacrg mais abaixo.
+- **Testes**: `tests/testcall.test.js` — 14 testes / 46 asserções. Cobre a
+  classificação dos 9 status, chamada saindo vs entrando, texto sem
+  `undefined`/`null`, entradas inválidas, e o comando (só grupo, só admin,
+  alterna e persiste, não-admin não liga).
+  **Atenção**: **não importe `connect.js` em testes** — importá-lo ABRE SOCKET
+  de verdade (gera QR e conecta), o que trava a suíte. Por isso o handler é
+  coberto pela regra (`shouldNotifyCall` + filtro `@g.us`), não por import.
+
+
 ## COMANDO "!get" — reescrito como ferramenta de diagnóstico ✅
 - **Novo módulo**: `dados/src/utils/messageInspector.js` (não substitui nenhum sistema de leitura de mensagens; apenas transforma o objeto que o Baileys já entregou em relatório).
 - **`index.js` → `case 'get'`** (bloco reescrito): antes só mostrava `Object.keys(quotedMessage)` e mandava o resto pro console. Agora gera o relatório completo e **envia tudo pelo WhatsApp** com prefixo de "ler mais" (`getMenuLerMaisText()`, mesmo sistema dos menus).
