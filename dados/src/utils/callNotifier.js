@@ -10,7 +10,33 @@
  * quem envia a mensagem e o connect.js. Assim da para testar sem WhatsApp.
  */
 
-import { CallStatus, isMissedCall } from '@itsliaaa/baileys';
+import * as Baileys from '@itsliaaa/baileys';
+
+/**
+ * Constantes de status com fallback local.
+ *
+ * `CallStatus` vem do pacote (adicionado no fork). Importar com nome direto
+ * (`import { CallStatus }`) derrubava o bot INTEIRO no boot caso o pacote
+ * instalado fosse anterior ao fork -- um `import` nomeado inexistente e erro
+ * fatal de resolucao ESM, nao algo que da para capturar com try/catch.
+ *
+ * Com o namespace + fallback, o modulo funciona com as duas versoes: se o
+ * pacote tiver as constantes, usa as dele; se nao, usa estas, que sao
+ * exatamente as mesmas strings que `getCallStatusFromNode` emite.
+ */
+const CallStatus = Baileys.CallStatus || Object.freeze({
+    Offer: 'offer',
+    Ringing: 'ringing',
+    PreAccept: 'preaccept',
+    Transport: 'transport',
+    RelayLatency: 'relaylatency',
+    Accept: 'accept',
+    Reject: 'reject',
+    Terminate: 'terminate',
+    Timeout: 'timeout'
+});
+
+const isMissedCall = Baileys.isMissedCall || ((status) => status === CallStatus.Timeout);
 
 /**
  * Extrai o numero de um JID/LID para exibir de forma legivel.
