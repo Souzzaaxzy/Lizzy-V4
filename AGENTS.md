@@ -409,14 +409,23 @@ chamadas. Só em grupo, exige admin.
   atender, nem tocar áudio**. Só dá para observar o evento e recusar
   (`rejectCall`). Qualquer plano de "bot entra na call e toca música" esbarra
   nisso — ver a seção sobre o wacrg mais abaixo.
-- **Testes**: `tests/testcall.test.js` — 15 testes / 52 asserções. Cobre a
+- **Testes**: `tests/testcall.test.js` — 17 testes / 57 asserções. Cobre a
   classificação dos 9 status, o tratamento **igual para qualquer autor**
   (terceiro, bot e LID produzem o mesmo rótulo; o texto nunca diz "saindo" nem
   "bot"), texto sem `undefined`/`null`, entradas inválidas, e o comando (só
-  grupo, só admin, alterna e persiste, não-admin não liga).
-  **Atenção**: **não importe `connect.js` em testes** — importá-lo ABRE SOCKET
-  de verdade (gera QR e conecta), o que trava a suíte. Por isso o handler é
-  coberto pela regra (`shouldNotifyCall` + filtro `@g.us`), não por import.
+  grupo, só admin, alterna e persiste, não-admin não liga, e a **mensagem do
+  comando** descreve o comportamento real sem prometer "saindo do bot").
+  **Armadilhas do handler** (descobertas escrevendo estes testes):
+  - **não importe `connect.js`** — importá-lo ABRE SOCKET de verdade (gera QR e
+    conecta), o que trava a suíte. O handler é coberto pela regra
+    (`shouldNotifyCall` + filtro `@g.us`), não por import.
+  - **throttle de 3 comandos/5s por sender** — usar o mesmo sender em toda a
+    suíte faz o 4º responder "Calma aí!". O helper `run()` troca de sender a
+    cada 3 usos.
+  - **`getCachedGroupMetadata()` cacheia o metadata do grupo** — um participante
+    admin inventado por chamada não sobrevive à 2ª chamada (o cache devolve o
+    metadata anterior e a resposta é "Você precisa ser adm"). Por isso o grupo
+    também é novo a cada teste.
 
 
 ## COMANDO "!get" — reescrito como ferramenta de diagnóstico ✅

@@ -31919,7 +31919,16 @@ break;
             text: `📞 *TESTCALL ${ligado ? 'ATIVADO' : 'DESATIVADO'}*
 
 ${ligado
-  ? 'Toda chamada neste grupo será notificada aqui: entrada de chamada, chamada saindo do bot, tentativa de ligação e chamada perdida.'
+  ? `Qualquer chamada neste grupo será notificada aqui, de qualquer membro.
+
+*O que você vai receber:*
+• Ligação entrando
+• Chamando / chamada recebida pelo destino
+• Conectando / latência
+• Chamada atendida, recusada ou encerrada
+• Chamada perdida (ninguém atendeu)
+
+_Não há distinção de quem ligou: todas são reportadas igual._`
   : 'As notificações de chamada foram desligadas neste grupo.'}`,
             contextInfo: newsletterCtxCall,
             quoted: info

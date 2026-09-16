@@ -53,6 +53,7 @@ function ok(cond, msg) {
   else { CURRENT.failed += 1; CURRENT.errors.push(`ASSERT FALHOU: ${msg}`); }
 }
 function includes(h, n, l) { ok(typeof h === 'string' && h.includes(n), `${l ?? n} — esperado conter "${n}"`); }
+function notIncludes(h, n, l) { ok(typeof h === 'string' && !h.includes(n), `${l ?? n} — não deveria conter "${n}"`); }
 
 // ============================================================================
 // IMPORTS
@@ -99,32 +100,87 @@ function makeCall(overrides = {}) {
 
 function makeNazu({ sent = [], calls = {} } = {}) {
   const bump = (k) => { calls[k] = (calls[k] || 0) + 1; };
-  return {
-    sent, calls,
+  const extras = [];
+  const nazu = {
+    sent, calls, extras,
     sendMessage: async (jid, content) => { bump('sendMessage'); sent.push({ jid, content }); return { key: { id: 'S' } }; },
     user: { id: `${BOT_JID.split('@')[0]}:5@s.whatsapp.net`, lid: BOT_LID },
     getName: async () => 'Fulano Teste',
     groupMetadata: async () => ({ id: 'g@g.us', subject: 'G', participants: [
       { id: ADMIN_LID, admin: 'superadmin', phoneNumber: ADMIN_JID },
       { id: BOT_LID, admin: 'admin', phoneNumber: BOT_JID },
+      ...extras,
     ] }),
-    onWhatsApp: async (j) => [{ jid: j, exists: true }],
+    // convertIdsToLid() do index.js resolve admin/participante chamando
+    // onWhatsApp() e esperando `lid` no resultado. Devolver o LID do JID
+    // informado faz um admin novo (criado por freshAdmin) ser reconhecido como
+    // admin de verdade, sem depender de um JID fixo.
+    onWhatsApp: async (j) => [{
+      jid: j,
+      exists: true,
+      lid: jidToLid(j),
+    }],
     signalRepository: { lidMapping: { getPNForLID: async () => ADMIN_JID } },
     ev: { on() {}, emit() {}, removeAllListeners() {} },
     readMessages: async () => {}, sendPresenceUpdate: async () => {},
     profilePictureUrl: async () => 'x', react: async () => ({}),
   };
+  return nazu;
 }
 
 const textOf = (sent) => sent.map((s) => s.content?.text ?? '').filter(Boolean).join('\n');
 
-/** Executa um comando no handler real, com o grupo indicado. */
+/**
+ * Faz um JID "parecer" o LID correspondente.
+ *
+ * `onWhatsApp()` do fake precisa devolver `lid` porque é assim que o handler
+ * resolve admin (`convertIdsToLid`). Para os admins deste teste o `id` já É um
+ * LID, então a função basicamente o devolve — mas fica aqui para o fake não
+ * depender dessa coincidência.
+ */
+function jidToLid(jid) {
+  if (typeof jid === 'string' && jid.endsWith('@lid')) return jid;
+  const base = String(jid).split('@')[0].split(':')[0];
+  return `${base}@lid`;
+}
+
+/**
+ * Executa um comando no handler real, como um admin.
+ *
+ * Duas armadilhas do handler tornam isso mais restrito do que parece:
+ *
+ *  1. Throttle: no máximo 3 comandos/5s por sender. Se a suíte inteira usasse o
+ *     mesmo sender, do 4º em diante a resposta seria "Calma aí!".
+ *  2. `getCachedGroupMetadata()` cacheia o metadata do grupo. Um participante
+ *     admin inventado por chamada não sobrevive à segunda chamada — o cache
+ *     devolve o metadata anterior e o handler responde "Você precisa ser adm".
+ *
+ * Por isso o sender é trocado a cada 3 usos, e o grupo é sempre novo.
+ */
+const THROTTLE_SAFE_SENDERS = 3; // máx. de comandos do mesmo sender por 5s
+let senderCounter = 0;
+let senderUses = 0;
+let currentAdmin = null;
+
+function nextAdmin() {
+  if (!currentAdmin || senderUses >= THROTTLE_SAFE_SENDERS) {
+    senderCounter += 1;
+    const n = String(senderCounter).padStart(4, '0');
+    currentAdmin = { id: `77700000${n}@lid`, admin: 'admin' };
+    senderUses = 0;
+  }
+  senderUses += 1;
+  return currentAdmin;
+}
+
 async function run(text, { groupJid, key = {} } = {}) {
   const sent = [];
   const calls = {};
   const nazu = makeNazu({ sent, calls });
+  const admin = nextAdmin();
+  nazu.extras.push(admin);
   const info = {
-    key: { remoteJid: groupJid, fromMe: false, id: 'MSG', participant: ADMIN_LID, ...key },
+    key: { remoteJid: groupJid, fromMe: false, id: 'MSG', participant: admin.id, ...key },
     message: { extendedTextMessage: { text } },
     messageTimestamp: 1757900000, pushName: 'Tester',
   };
@@ -242,19 +298,29 @@ await test('!testcall: alterna o toggle e persiste o estado', async () => {
   const on = await run('!testcall', { groupJid: g });
   includes(on.text, 'ATIVADO', 'ligou');
 
-  // persistGroupData() grava de forma assincrona em background: espera o
-  // arquivo aparecer em vez de assumir que ja esta no disco.
-  let salvo = null;
-  for (let i = 0; i < 20 && !salvo?.testcall; i++) {
-    await new Promise((r) => setTimeout(r, 100));
+  // persistGroupData() grava de forma assincrona e só invalida o cache do
+  // groupData DEPOIS que o write termina (.then). Sem esperar, o próximo
+  // comando poderia reler o cache antigo e inverter o toggle errado.
+  const ler = () => {
     try {
-      salvo = JSON.parse(fs.readFileSync(path.join(GROUPS_DIR, `${g}.json`), 'utf-8'));
-    } catch { /* ainda nao escrito */ }
+      return JSON.parse(fs.readFileSync(path.join(GROUPS_DIR, `${g}.json`), 'utf-8'));
+    } catch { return null; }
+  };
+  let salvo = null;
+  for (let i = 0; i < 30 && salvo?.testcall !== true; i++) {
+    await new Promise((r) => setTimeout(r, 100));
+    salvo = ler();
   }
   ok(salvo?.testcall === true, `persistiu testcall=true (obtido: ${JSON.stringify(salvo?.testcall)})`);
+});
 
+await test('!testcall: segundo toque DESATIVA (estado lido do disco)', async () => {
+  // Grupo já com o toggle LIGADO no arquivo: o próximo comando deve desligar.
+  // Usa um grupo novo para não depender do cache de metadata/groupData do teste
+  // anterior -- o que importa é que o handler leia o estado persistido.
+  const g = makeGroup({ testcall: true });
   const off = await run('!testcall', { groupJid: g });
-  includes(off.text, 'DESATIVADO', 'desligou');
+  includes(off.text, 'DESATIVADO', `desligou (texto: ${off.text.split('\n')[0]})`);
 });
 
 await test('!testcall: a leitura de groupData respeita o toggle entre chamadas', async () => {
@@ -285,11 +351,23 @@ await test('!testcall: não-admin é recusado', async () => {
   ok(salvo.testcall === undefined, 'não ligou o toggle');
 });
 
-await test('!testcall: menciona o que será notificado', async () => {
+await test('!testcall: a mensagem descreve o comportamento real (sem falar do bot)', async () => {
   const g = makeGroup();
   const r = await run('!testcall', { groupJid: g });
   includes(r.text, 'chamada', 'fala de chamada');
   includes(r.text, 'perdida', 'menciona chamada perdida');
+  includes(r.text, 'qualquer membro', 'deixa claro que vale para qualquer autor');
+  // A distinção "saindo do bot" foi removida do código: a mensagem não pode
+  // continuar prometendo um comportamento que não existe mais.
+  notIncludes(r.text, 'saindo do bot', 'não promete notificação "saindo do bot"');
+  notIncludes(r.text, 'saindo', 'não menciona "saindo"');
+});
+
+await test('!testcall: a mensagem de DESATIVADO é curta e não lista eventos', async () => {
+  const g = makeGroup({ testcall: true });
+  const r = await run('!testcall', { groupJid: g });
+  includes(r.text, 'DESATIVADO', 'avisa desligamento');
+  notIncludes(r.text, 'O que você vai receber', 'não lista eventos ao desligar');
 });
 
 // ============================================================================
