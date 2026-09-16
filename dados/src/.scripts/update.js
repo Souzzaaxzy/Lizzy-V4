@@ -7,7 +7,9 @@ import path from 'path';
 
 const execAsync = (cmd, args = [], opts = {}) => new Promise((resolve, reject) => {
   execFile(cmd, args, { shell: true, timeout: 600000, ...opts }, (error, stdout, stderr) => {
-    if (error) reject(Object.assign(error, { stderr }));
+    // stdout vai anexado mesmo no erro: `npm ls --all` sai com exit 1 quando há
+    // problemas, mas ainda imprime o JSON que precisamos ler.
+    if (error) reject(Object.assign(error, { stdout, stderr }));
     else resolve({ stdout, stderr });
   });
 });
@@ -36,13 +38,26 @@ async function gitPull() {
 
 // Instala dependências Node somente se houver algo faltando.
 async function nodeDeps() {
+  // `npm ls --depth=0` não detecta dependência TRANSITIVA faltando (devolve
+  // exit 0), então usamos a lista `problems` do `npm ls --all`, ignorando o
+  // peer opcional `sharp@*` (não é instalado de propósito).
+  let treeOk = false;
   try {
-    await execAsync('npm', ['ls', '--depth=0'], { timeout: 120000 });
-    if (!fs.existsSync('node_modules')) throw new Error('node_modules ausente');
+    let report;
+    try {
+      ({ stdout: report } = await execAsync('npm', ['ls', '--all', '--json'], { timeout: 120000 }));
+    } catch (error) {
+      report = error?.stdout;
+    }
+    const problems = report ? (JSON.parse(report).problems ?? []) : ['npm ls não retornou dados'];
+    treeOk = problems.filter((p) => !String(p).includes('sharp')).length === 0;
+  } catch {
+    treeOk = false;
+  }
+
+  if (treeOk && fs.existsSync('node_modules')) {
     console.log('Dependências já atualizadas');
     return;
-  } catch {
-    /* há pacotes faltando: instala abaixo */
   }
 
   console.log('Instalando dependências');

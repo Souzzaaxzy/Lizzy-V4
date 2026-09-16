@@ -213,16 +213,56 @@ async function installNodeDependencies() {
 
     const nodeModulesPath = path.join(process.cwd(), 'node_modules');
     
+    /**
+     * Verifica se a árvore de dependências está realmente completa.
+     *
+     * `npm ls --depth=0` NÃO serve: devolve exit 0 mesmo quando uma dependência
+     * transitiva obrigatória está faltando (testado removendo
+     * node_modules/pngjs, que é dep de @jimp/js-png). Com isso o instalador
+     * concluía "dependências já instaladas", pulava o install e deixava o bot
+     * quebrar no boot com ERR_MODULE_NOT_FOUND.
+     *
+     * Usa `npm ls --all --json` e olha a lista `problems`, ignorando o peer
+     * OPCIONAL `sharp@*`: ele não é instalado de propósito e faria uma árvore
+     * saudável parecer quebrada.
+     */
+    const checkDependencyTree = async () => {
+        let report;
+        try {
+            const { stdout } = await execAsync('npm ls --all --json', { shell: true, timeout: 120000 });
+            report = stdout;
+        } catch (error) {
+            // npm ls sai com exit != 0 quando há problemas, mas ainda manda o
+            // JSON em stdout. Só é falha real se não vier JSON nenhum.
+            report = error?.stdout;
+            if (!report) return { ok: false, problems: ['npm ls não retornou dados'] };
+        }
+
+        let parsed;
+        try {
+            parsed = JSON.parse(report);
+        } catch {
+            return { ok: false, problems: ['saída do npm ls inválida'] };
+        }
+
+        const problems = Array.isArray(parsed.problems) ? parsed.problems : [];
+        const obrigatorios = problems.filter((p) => !String(p).includes('sharp'));
+        return obrigatorios.length ? { ok: false, problems: obrigatorios } : { ok: true };
+    };
+
     // Verificar se já existe node_modules
     if (fsSync.existsSync(nodeModulesPath)) {
         print.message('📦 node_modules já existe, verificando dependências...');
-        try {
-            await execAsync('npm ls --depth=0', { shell: true });
+        const tree = await checkDependencyTree();
+        if (tree.ok) {
             print.message('✅ Dependências já estão instaladas.');
             return { name: 'Node Dependencies', status: `${colors.green}✅ Já instalado${colors.reset}` };
-        } catch {
-            print.message('⚠️ node_modules existe mas pode estar incompleto, reinstalando...');
         }
+        if (tree.problems?.length) {
+            print.warning('⚠️ Dependências faltando:');
+            for (const p of tree.problems.slice(0, 5)) print.warning(`   • ${p}`);
+        }
+        print.message('⚠️ node_modules existe mas está incompleto, reinstalando...');
     }
     
     try {

@@ -606,6 +606,33 @@ chamadas. Só em grupo, exige admin.
   limpo) com npm **12.0.2** e `npm ci`, e o baileys instalado tem
   `CallStatus`/`preacceptCall` (fork certa). As suítes rodam nessa instalação.
 
+## INSTALAÇÃO — árvore de dependências parcial ✅
+- **Sintoma**: o bot quebra no boot com
+  `ERR_MODULE_NOT_FOUND: Cannot find package '.../node_modules/pngjs/lib/png.js'
+  imported from '.../node_modules/@jimp/js-png/dist/esm/index.js'`.
+  Pode ser qualquer dependência **transitiva** faltando, não só o pngjs.
+- **Causa**: o instalador (`config.js`) decidia pular o install com
+  **`npm ls --depth=0`**. Esse comando devolve **exit 0 mesmo com uma
+  dependência transitiva obrigatória ausente** — verificado removendo
+  `node_modules/pngjs` (dep de `@jimp/js-png`): `npm ls --depth=0` → exit 0.
+  Ou seja: `node_modules` ficava pela metade (install interrompido antes do
+  `EALLOWGIT` ser corrigido, disco cheio, `^C` no meio) e o instalador
+  respondia *"Dependências já estão instaladas"*, seguindo em frente.
+- **Correção**: validar a árvore com **`npm ls --all --json`** e olhar a lista
+  `problems`, **ignorando o peer opcional `sharp@*`** (não é instalado de
+  propósito e faria uma árvore saudável parecer quebrada — `npm ls --all` sai
+  com exit 1 até numa árvore íntegra por causa dele). Aplicado em
+  `config.js` e `update.js`; quando há faltando, imprime quais e reinstala.
+- **Detalhe do `update.js`**: o `execAsync` de lá usa `execFile` e só anexava
+  `stderr` ao erro — precisou passar a anexar `stdout` também, porque
+  `npm ls --all` sai com exit 1 quando há problemas mas ainda imprime o JSON.
+- Não é bug do código do bot nem dos pacotes: os tarballs de `pngjs` 3/6/7 no
+  registry estão íntegros, e o `package-lock.json`/`yarn.lock` já declaram
+  `pngjs` como dep de `@jimp/js-png`.
+- Validado nos dois sentidos: árvore quebrada → detecta, mostra os faltantes e
+  reinstala (jimp volta a carregar); árvore saudável → *"já estão instaladas"*
+  e não reinstala (idempotente).
+
 ## Setup do ambiente
 - `npm install --legacy-peer-deps` instala deps em `/workspace/project/Lizzy-V4/node_modules`.
 - Teste de estrutura da API: criar `.mjs` que importa `api-downloads.js` e `getModules()` de `exports.js`, verifica namespaces/funções e a desestruturação esperada pelo `index.js`.
