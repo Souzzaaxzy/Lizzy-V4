@@ -109,17 +109,32 @@ Ferramenta do dono para validar a proteção anti-raja em grupo de teste.
 - **Restrições**: só o dono (`isOwner`) e só em grupo. Teto rígido de **50**
   mensagens por execução (é ferramenta de teste, não gerador de flood).
   Intervalo de 700 ms entre envios.
-- **Formato gerado** (`buildRajaContent()`, `index.js` ~252): espelha o
-  `!divmsg`/`!div` do bot de referência (Kimori), que é o que produz o efeito:
-  `amount1000: "1000"`, `amount.value: "1000"`, `offset: 1000`,
-  `expiryTimestamp: "0"`, texto em `noteMessage.extendedTextMessage.text`
-  (NÃO em `conversation`) e **`contextInfo` da nota com `forwardingScore: 999` +
-  `isForwarded: true`** — é esse par que faz o WhatsApp tratar como card
-  encaminhado em vez de balão normal. `mentionedJid` com os membros do grupo.
-- **Opções** (após `|`): `zero` (usa `amount1000`/`value` = "0", o formato da
-  amostra do `!get`), `nofwd` (sem forwardingScore/isForwarded), `clean` (envia
-  a mensagem "limpante" de 300 quebras antes de cada raja, técnica que acompanha
-  o raja no referência) e `delay=N` (intervalo, padrão 700ms, teto 10000).
+- **Formato gerado** (`buildRajaContent()`, `index.js` ~275): espelha a **amostra
+  real** capturada pelo `!get`. Bate **11/11 campos**:
+  `currencyCodeIso4217: "BRL"`, `amount1000: "0"`, `expiryTimestamp: "0"`,
+  `amount: { value: "0", offset: 1000, currencyCode: "BRL" }`, texto em
+  `noteMessage.extendedTextMessage.text` (NÃO em `conversation`) e
+  `contextInfo` da nota com **apenas `mentionedJid`** — o proto preenche
+  `groupMentions: []` e `statusAttributions: []` sozinho.
+  **Armadilha conhecida**: NÃO adicionar `forwardingScore`/`isForwarded` na nota.
+  A amostra real não tem esses campos (o `!get` mostra "Encaminhada: Não
+  detectada"); adicioná-los faz o WhatsApp renderizar como card encaminhado em
+  vez de mensagem vazia.
+- **ID da mensagem**: `generateRajaMessageId()` → `'3EB0' + 9 bytes hex` = **22
+  chars**, que é o formato da amostra real (`3EB0A9C9AFB76E7451EA1D`) e dos
+  clientes nativos. Os helpers da Baileys **não servem**: `generateMessageID()`
+  dá 40 chars (`3EB0` + 18 bytes hex) e `generateMessageIDV2()` insere um
+  marcador `'STARFALL'` no meio.
+- **Opções** (após `|`, todas opcionais): `clean` (mensagem "limpante" de 300
+  quebras antes de cada raja), `fwd` (adiciona `forwardingScore: 999` +
+  `isForwarded: true` na nota, para testar essa variante) e `delay=N`
+  (intervalo entre envios, padrão 700ms, teto 10000).
+- **Baileys mod** (`@itsliaaa/baileys@0.3.18-final`): `generateWAMessageContent`
+  tem suporte nativo a payment (`utils/messages.js` ~1200, via
+  `requestPaymentFrom`), mas ele coloca `contextInfo`/`mentions` no
+  `requestPaymentMessage` e não na NOTA — o raja real tem as menções dentro de
+  `noteMessage.extendedTextMessage.contextInfo`. Por isso o `!raja` usa
+  `generateWAMessageFromContent` + `relayMessage`, que dá controle exato do proto.
 - **Menções**: reaproveita o `AllgroupMembers` já resolvido pelo handler (mesmos
   JIDs/LIDs do raja real; numa amostra real eram 348 de um grupo de 354). Nenhuma
   consulta extra ao WhatsApp.

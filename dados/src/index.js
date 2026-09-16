@@ -10,7 +10,6 @@ import {
   DisconnectReason,
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
-  generateMessageID,
   proto
 } from '@itsliaaa/baileys';
 import {
@@ -274,27 +273,32 @@ function scheduleInvisibleCleanup(nazu, ctx) {
  */
 function buildRajaContent(text, mentions = [], options = {}) {
   const {
-    amount1000 = '1000',
-    amountValue = '1000',
+    amount1000 = '0',
+    amountValue = '0',
     offset = 1000,
     currency = 'BRL',
-    forwarded = true,
+    forwarded = false,
     forwardingScore = 999,
   } = options;
 
-  // `forwardingScore` + `isForwarded` na nota são o que faz o WhatsApp tratar a
-  // mensagem como card encaminhado em vez de balão normal. O bot de referência
-  // usa exatamente esses dois campos na nota do requestPaymentMessage.
-  const contextInfo = {
-    mentionedJid: [...mentions],
-    ...(forwarded ? { forwardingScore, isForwarded: true } : {}),
-  };
+  // O contextInfo do raja real contem APENAS as mencoes (o proto preenche
+  // `groupMentions: []` e `statusAttributions: []` sozinho). Nada de
+  // `forwardingScore`/`isForwarded`: a amostra real nao tem esses campos --
+  // o !get mostra "Encaminhada: Nao detectada" -- e adiciona-los faz o
+  // WhatsApp renderizar como card encaminhado em vez de mensagem vazia.
+  const contextInfo = { mentionedJid: [...mentions] };
+  if (forwarded) {
+    contextInfo.forwardingScore = forwardingScore;
+    contextInfo.isForwarded = true;
+  }
 
   return {
     requestPaymentMessage: {
       currencyCodeIso4217: currency,
       amount1000: String(amount1000),
       expiryTimestamp: '0',
+      // O texto vive na NOTA (noteMessage), nunca em `conversation` -- e isso
+      // que faz a mensagem aparecer vazia para quem so le o texto do balao.
       noteMessage: {
         extendedTextMessage: {
           text,
@@ -308,6 +312,19 @@ function buildRajaContent(text, mentions = [], options = {}) {
       },
     },
   };
+}
+
+/**
+ * ID no mesmo formato do raja real: '3EB0' + 9 bytes hex = 22 caracteres.
+ *
+ * Os helpers da Baileys nao servem aqui:
+ *   generateMessageID()   -> '3EB0' + 18 bytes hex = 40 chars
+ *   generateMessageIDV2() -> insere um marcador 'STARFALL' no meio
+ * A amostra real (3EB0A9C9AFB76E7451EA1D) tem 22 chars, que e o padrao do
+ * cliente nativo -- entao geramos nesse formato.
+ */
+function generateRajaMessageId() {
+  return '3EB0' + crypto.randomBytes(9).toString('hex').toUpperCase();
 }
 
 // ============================================================
@@ -31803,11 +31820,11 @@ break;
               `❌ Informe a quantidade de mensagens.\n\n` +
               `💡 Uso: ${groupPrefix}raja <quantidade> <texto>\n` +
               `📌 Exemplo: ${groupPrefix}raja 5 olá, esse é o meu texto\n\n` +
-              `⚙️ *Opções* (após "|"):\n` +
-              `• zero → amount "0" (padrão é "1000", como no raja real)\n` +
-              `• nofwd → não marca a nota como encaminhada\n` +
+              `⚙️ *Opções* (após "|"), todas opcionais:\n` +
               `• clean → envia a mensagem "limpante" antes de cada uma\n` +
-              `• delay=N → intervalo entre envios em ms (padrão 700)`
+              `• fwd → adiciona forwardingScore/isForwarded na nota\n` +
+              `• delay=N → intervalo entre envios em ms (padrão 700)\n\n` +
+              `ℹ️ Padrão = raja real: amount "0" e SEM marcador de encaminhada.`
             );
           }
           if (!texto) {
@@ -31823,8 +31840,7 @@ break;
           const MAX_RAJA = 50;
           const total = Math.min(count, MAX_RAJA);
 
-          const usarZero = /(^|\s)zero(\s|$)/.test(opcoes);
-          const semForward = /(^|\s)nofwd(\s|$)/.test(opcoes);
+          const comForward = /(^|\s)fwd(\s|$)/.test(opcoes);
           const comClean = /(^|\s)clean(\s|$)/.test(opcoes);
           const delayMatch = /delay\s*=\s*(\d+)/.exec(opcoes);
           const delay = delayMatch ? Math.min(Math.max(parseInt(delayMatch[1], 10), 100), 10000) : 700;
@@ -31838,8 +31854,8 @@ break;
             `🧪 *RAJA DE TESTE*\n\n` +
             `📨 Mensagens: ${total}${count > MAX_RAJA ? ` (limitado de ${count}; teto ${MAX_RAJA})` : ''}\n` +
             `👥 Menções por mensagem: ${mentions.length}\n` +
-            `💰 amount1000: ${usarZero ? '"0"' : '"1000"'}\n` +
-            `🔁 Nota encaminhada: ${semForward ? 'não' : 'sim (forwardingScore 999)'}\n` +
+            `💰 amount1000: "0" (igual ao raja real)\n` +
+            `🔁 Nota encaminhada: ${comForward ? 'sim (forwardingScore 999)' : 'não (igual ao raja real)'}\n` +
             `🧹 Mensagem "limpante": ${comClean ? 'sim' : 'não'}\n` +
             `⏱️ Intervalo: ${delay}ms\n` +
             `📝 Texto: ${texto.slice(0, 80)}${texto.length > 80 ? '...' : ''}\n\n` +
@@ -31848,9 +31864,7 @@ break;
           );
 
           const content = buildRajaContent(texto, mentions, {
-            amount1000: usarZero ? '0' : '1000',
-            amountValue: usarZero ? '0' : '1000',
-            forwarded: !semForward,
+            forwarded: comForward,
           });
 
           // Gera UMA vez e reaproveita: só o ID muda por envio, como no
@@ -31870,8 +31884,9 @@ break;
                   text: '\n'.repeat(300) + '▫️ 𝙰𝙽𝚃𝙸-𝙵𝙻𝙾𝙾𝙳 𝙰𝚃𝙸𝚅𝙰𝙳𝙾 ▫️',
                 }).catch(() => {});
               }
-              // messageId novo por envio: o WhatsApp descarta IDs repetidos.
-              const msgId = generateMessageID();
+              // messageId novo por envio (o WhatsApp descarta IDs repetidos),
+              // no formato do raja real (22 chars), nao no da Baileys (40).
+              const msgId = generateRajaMessageId();
               await nazu.relayMessage(from, baseMsg.message, { messageId: msgId });
               enviados += 1;
             } catch (e) {
@@ -31886,7 +31901,8 @@ break;
             ``,
             `📨 Enviadas: ${enviados}/${total}`,
             `👥 Menções por mensagem: ${mentions.length}`,
-            `💰 amount1000: ${usarZero ? '"0"' : '"1000"'}`,
+            `💰 amount1000: "0"`,
+            `🔁 Nota encaminhada: ${comForward ? 'sim' : 'não'}`,
           ];
           if (falhas.length) {
             resumo.push(``, `⚠️ Falhas: ${falhas.length}`);
