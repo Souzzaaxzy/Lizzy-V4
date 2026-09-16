@@ -137,8 +137,10 @@ Ferramenta do dono para validar a proteção anti-raja em grupo de teste.
   esse campo. A hipótese veio do código da Baileys (`generateWAMessageContent`
   adiciona `messageSecret` via `shouldIncludeReportingToken()`), mas não se
   aplica aqui. `!raja` **não** inclui por padrão; a opção `secret` adiciona, só
-  para comparação. `classifyMessage()` ainda expõe `hasMessageSecret` e
-  `isInvisiblePayment` porque o campo continua útil como sinal de anomalia.
+  para comparação. `classifyMessage()` expõe `hasMessageSecret` como sinal de
+  anomalia do envelope apenas; **não** use esse campo como assinatura de nada
+  (ver "ANÁLISE DA MECÂNICA DO RAJA INVISÍVEL" abaixo — a versão antiga do texto
+  dizia que ele era o marcador do raja, o que a amostra real desmentiu).
 - **RECURSOS DO RAJA REAL vs GERADO (comparados nos RAWs)**: `currencyCodeIso4217`,
   `amount1000 "0"`, `expiryTimestamp "0"`, `amount {value "0", offset 1000,
   currencyCode BRL}`, texto na NOTA, `mentionedJid`, `groupMentions []`,
@@ -156,7 +158,12 @@ Ferramenta do dono para validar a proteção anti-raja em grupo de teste.
   TOPO do `Message` (irmão do tipo), por isso não aparecia em nenhuma seção —
   passava batido no RAW. A seção mostra `messageSecret` (bytes/hex/sha256),
   `botMessageSecret`, `deviceListMetadata` e quaisquer outros campos do
-  envelope, além de avisar quando é a assinatura do raja.
+  envelope, além de avisar quando o campo aparece junto com um payment sem valor.
+  **Correção posterior (set/2026)**: a seção afirmava que `messageSecret` era "a
+  assinatura do raja invisível" e que "o cliente real sempre envia". As duas
+  coisas são falsas — o raja real medido **não** carrega o campo, e o reporting
+  token acompanha quase todo tipo de mensagem. Ver a seção "ANÁLISE DA MECÂNICA
+  DO RAJA INVISÍVEL" abaixo.
 - **BUG CORRIGIDO no anti-pagamento**: a condição usava
   `type === 'viewOnceMessage*'` **sozinho**, então QUALQUER foto/vídeo de "ver
   uma vez" (normal e legítimo) era tratado como pagamento e **removia o autor
@@ -185,6 +192,78 @@ Ferramenta do dono para validar a proteção anti-raja em grupo de teste.
   bloqueado), só em grupo, validação de quantidade/texto, N mensagens no formato
   exato, IDs distintos, teto de 50, o que ele gera é detectado pela própria
   `classifyMessage` e presença no menudono.
+
+## ANÁLISE DA MECÂNICA DO "RAJA" INVISÍVEL (set/2026) — correções de detecção ✅
+Investigação pedida pelo dono: *como o "raja" fica invisível, olhando forks da
+Baileys e clientes modificados.* Resultado honesto: **a mecânica não vem de
+nenhum fork nem de um WhatsApp mod** — é um proto de `requestPaymentMessage`
+bem-formado no campo errado. Nenhum fork da Baileys implementa "modo invisível";
+os que mexem em payment (`@itsliaaa/baileys`, `Putrazaubdillah/Baileys`,
+`rexxzyid/elaina-baileys`, `c4bal/baileys`) só montam o card com valor
+**legítimo** (`amount1000: 1000`, `currencyCodeIso4217: 'IDR'`,
+`expiryTimestamp: Date.now()`), via `hasNonNullishProperty(message,
+'requestPaymentFrom')`. Não existe flag, opção nem wrapper que ligue o estado
+invisível.
+
+### Por que a mensagem some (o que É reproduzível)
+O texto do "raja" vive em `noteMessage.extendedTextMessage.text`, **nunca** em
+`conversation`. Os cards de pagamento daquele proto vêm com `amount1000` e
+`amount.value` zerados. O WhatsApp renderiza card de pagamento a partir do
+`amount`; com o valor zerado ele não tem o que desenhar e a mensagem fica **sem
+conteúdo visível** para quem a recebe. Isso é um **estado do proto**, não um
+recurso do cliente — daí ser igualmente reproduzível por Baileys.
+
+Consequência prática: a invisibilidade **não é um interruptor que se liga**. O
+que o `!raja` faz é montar o mesmo proto; se ele aparece, a diferença está no
+**volume/tamanho**, não numa flag. A amostra real trazia **348 menções** (~9 KB)
+de um grupo de 353 membros; o gerado, num grupo de 4, trazia 4 (~332 bytes).
+
+### Correções aplicadas nesta rodada
+Dois furos reais de detecção, achados comparando o código com a amostra real:
+
+1. **`amount1000` ausente + `amount.value` zerado passava batido.** A detecção
+   só olhava `amount1000`. Quando o campo não vem no proto e só o valor interno
+   está zerado, o card também não renderiza — mas `isZero` era `false`.
+   Agora `classifyMessage` cobre **os dois caminhos** e expõe qual deles provou o
+   zero em `paymentAmount.zeroPath` (`'amount1000'` | `'amount.value'`).
+   O fallback é **condicional** de propósito: se `amount1000` veio com valor, ele
+   manda — um pagamento legítimo (`amount1000: '1500'`) **não** vira rajada.
+2. **Payment encapsulado em ViewOnce escapava do segundo bloco.** Aquele bloco
+   testava `info.message.requestPaymentMessage` (caminho cru); com wrapper, o
+   payment não está no nível de cima. Trocado por `classification.isRequestPayment`
+   + `classification.paymentAmount.isZero` (o `classifyMessage` já desembrulha).
+
+### `messageSecret` NÃO era a assinatura (hipótese corrigida)
+A rodada anterior tratou `messageSecret` como "o marcador principal" do raja
+invisível. **A amostra real desmente**: o `!get` no raja real mostra
+`messageContextInfo: ausente`. Além disso, `shouldIncludeReportingToken()` do
+Baileys inclui o campo em quase **todo** tipo de mensagem (só exclui reaction,
+encReaction, encEventResponse e pollUpdate), então presença **não identifica
+nada** — marcá-la como assinatura classificaria texto e imagem normais como
+ameaça. Agora `isInvisiblePayment = isPayment && isZero` (o estado malformado
+real) e o `!get` diz explicitamente que o campo, sozinho, não é assinatura.
+
+### O que foi pesquisado e não existe (para não repetir a busca)
+- `messageSecret` como assinatura: **descartado** (ver acima).
+- Forks da Baileys com "invisible mode": **não existem**; os forks de payment
+  montam valor legítimo.
+- WhatsApp GB / mods: nenhum ponto de extensão de proto documentado para isso.
+- `grep` no RAW real por `requestFrom`: **ausente** no raja capturado.
+
+### Escopo deliberado
+O entregável foi **detecção** (o bot não deixar passar) e **fidelidade do `!get`**
+(que o relatório não minta). Não foi feito trabalho para deixar o payload mais
+invisível ou mais eficaz: o `!raja` continua o gerador de teste **exclusivo do
+dono**, limitado a grupo, com teto rígido de 50 e opções só para *comparação*.
+
+### Estado
+`classifyMessage()` agora expõe `paymentAmount.zeroPath` e
+`paymentAmount.innerValue`; `isInvisiblePayment` passou a significar "payment
+sem valor". Testes: 3 novos de regressão (amount1000 ausente + `amount.value`
+zerado; ViewOnce com amount ausente; **pagamento legítimo NÃO removido** — roda
+com `antirequest: false` para isolar o caminho da rajada). Suítes: **50/50**,
+**54/54**, **22/22**.
+
 
 ## RAJA / requestPaymentMessage — causa do atraso MEDIDA e proteção ✅
 Analisado contra o bot de referência (**Kimori / RAVENA-BOT**, `@whiskeysockets/baileys@7.0.0-rc13`).

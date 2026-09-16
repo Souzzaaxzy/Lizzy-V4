@@ -3276,12 +3276,16 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     // O anti-invisível (`!testeinvi`) cobre a rajada de payment com amount=0,
     // que era o único caso que o bloco removido tratava — assim o toggle volta a
     // cumprir o que promete, em vez de ficar sem efeito.
-    // Assinatura real do raja invisivel: um payment carregando
-    // `messageContextInfo.messageSecret` (estado malformado que impede o card
-    // de renderizar). Antes eu so olhava o amount zero; agora o marcador
-    // principal e o messageSecret, com o amount zero como reforco.
-    const isRajaBurst = Boolean(classification.isInvisiblePayment)
-      || Boolean(classification.isRequestPayment && classification.paymentAmount.isZero);
+    // Assinatura medida do raja invisível: um card de pagamento SEM valor.
+    // O `messageSecret` chegou a ser tratado como o marcador principal numa
+    // rodada anterior, mas a amostra real colhida com o !get NÃO o carrega — e
+    // ele acompanha quase todo tipo de mensagem, então não serve de assinatura.
+    // O marcador é o valor zerado, com o tipo e as menções como reforço.
+    //
+    // `classification.paymentAmount.isZero` cobre os dois caminhos do zero
+    // (`amount1000` e `amount.value`) e desembrulha ViewOnce, então um único
+    // predicado basta — não é preciso olhar o tipo interno.
+    const isRajaBurst = Boolean(classification.isPayment && classification.paymentAmount.isZero);
     if ((isAntirequestPaymentMessage || (isAntiInvi && isRajaBurst)) && isBotAdmin && !info.key.fromMe && !isGroupAdmin && !isOwner && !isUserWhitelisted(sender, 'antipagamento')) {
       const isDirectPaymentMsg = type === 'requestPaymentMessage' || type === 'sendPaymentMessage';
       // BUG CORRIGIDO: aqui bastava o tipo ser viewOnce para tratar como
@@ -3345,21 +3349,23 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     }
     
     // Anti-Mensagem Invisível (rajadas) - Usa participantAlt para detectar invasores
-    // Detecta requestPaymentMessage com amount=0 e texto na nota (padrão de rajada)
-    if (info.message?.requestPaymentMessage && !info.key.fromMe && isGroup && isAntirequestPaymentMessage) {
-      const paymentMsg = info.message.requestPaymentMessage;
-      const amount = parseInt(paymentMsg.amount1000) || 0;
+    // Detecta payment com amount zerado e texto na nota (padrão de rajada).
+    // Usa a classificação (que desembrulha ViewOnce) em vez do caminho cru
+    // `info.message.requestPaymentMessage`: o raja encapsulado não tem o
+    // payment no nível de cima e passava batido por este bloco.
+    if (classification.isRequestPayment && !info.key.fromMe && isGroup && isAntirequestPaymentMessage) {
       
       // Obter remetente real via participantAlt (número real, não LID)
       const realSender = info.key?.participantAlt || info.key?.participant || sender;
       
-      // Se amount é 0 e tem texto na nota, é ataque de rajada invisível.
+      // Se o amount está zerado e há texto na nota, é rajada invisível.
       //
-      // A classificação defensiva cobre a mesma amostra real por dois caminhos
-      // independentes: (a) amount1000 explicitamente zero; (b) nota com
-      // centenas de menções (o raja medido trazia 348). Isso evita depender de
-      // uma string exata — "0", 0, "00" e Long zero todos contam como zero.
-      const isBurstByAmount = amount === 0 && Boolean(paymentMsg.noteMessage?.extendedTextMessage?.text);
+      // A classificação cobre a mesma amostra real por dois caminhos
+      // independentes: (a) amount zerado — em `amount1000` OU em `amount.value`,
+      // porque o card também some quando só o campo interno está zerado;
+      // (b) nota com centenas de menções (o raja medido trazia 348). Isso evita
+      // depender de uma string exata — "0", 0, "00" e Long zero contam como zero.
+      const isBurstByAmount = classification.paymentAmount.isZero && Boolean(classification.noteText);
       const isBurstByMentions = classification.mentionCount > 50 && Boolean(classification.noteText);
       if (isBurstByAmount || isBurstByMentions) {
                 

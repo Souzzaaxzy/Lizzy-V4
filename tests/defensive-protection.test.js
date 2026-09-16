@@ -78,11 +78,12 @@ let groupCounter = 0;
 const GROUPS_DIR = path.join(TMP_DB, 'grupos');
 
 /** Grupo de teste com os anti-* ligados, como num cenário real de proteção. */
-function makeGroup(extraAdmins = []) {
+function makeGroup(extraAdmins = [], flags = {}) {
   groupCounter += 1;
   const jid = `1203639100000000${String(groupCounter).padStart(3, '0')}@g.us`;
   fs.writeFileSync(path.join(GROUPS_DIR, `${jid}.json`), JSON.stringify({
     antiinvi: true, antirequest: true, modobrincadeira: true,
+    ...flags,
     // O bot precisa ser admin para os anti-pagamento agirem (guarda isBotAdmin).
     __extraAdmins: [{ id: BOT_LID, admin: 'admin', phoneNumber: BOT_JID }, ...extraAdmins],
   }, null, 2));
@@ -657,7 +658,83 @@ await test('!raja: padrão NÃO inclui messageSecret (igual ao raja real)', asyn
   ok(!sec, `sem messageSecret por padrão (obtido: ${sec ? 'presente' : 'ausente'})`);
   const c = inspector.classifyMessage(built);
   ok(c.hasMessageSecret === false, 'classificação também sem secret');
-  ok(c.isInvisiblePayment === false, 'não marcado como payment invisível');
+  // O marcador é o card SEM VALOR, não o envelope: o real não carrega
+  // messageSecret, então esse campo nunca poderia ser a assinatura.
+  ok(c.isInvisiblePayment === true, 'marcado como payment invisível pelo amount zerado');
+});
+
+await test('raja: detectado com amount1000 AUSENTE (só amount.value zerado)', async () => {
+  // Regressão: a detecção só olhava `amount1000`. Quando o campo simplesmente
+  // não vem no proto e só `amount.value` está zerado, o card também não
+  // renderiza e a proteção deixava passar.
+  const raja = {
+    requestPaymentMessage: {
+      currencyCodeIso4217: 'BRL',
+      // sem amount1000
+      noteMessage: { extendedTextMessage: { text: 'rajada', contextInfo: { mentionedJid: [] } } },
+      amount: { value: '0', offset: 1000, currencyCode: 'BRL' },
+    },
+  };
+  const c = inspector.classifyMessage(raja);
+  ok(c.paymentAmount.isZero === true, 'assinalado como zero');
+  ok(c.paymentAmount.zeroPath === 'amount.value', `caminho do zero = amount.value (${c.paymentAmount.zeroPath})`);
+  ok(c.paymentAmount.present === false, 'amount1000 realmente ausente');
+  ok(c.isInvisiblePayment === true, 'classificado como payment invisível');
+
+  const { calls } = await run(raja);
+  await new Promise((r) => setTimeout(r, 3300));
+  ok((calls.groupParticipantsUpdate || 0) >= 1, 'autor removido mesmo sem amount1000');
+});
+
+await test('raja encapsulado em ViewOnce COM amount ausente é detectado', async () => {
+  // Regressão: com wrapper, `requestPaymentMessage` não está no nível de cima,
+  // então o caminho cru `info.message.requestPaymentMessage` não encontrava o
+  // pagamento e a rajada passava batido.
+  const raja = {
+    viewOnceMessageV2: {
+      message: {
+        requestPaymentMessage: {
+          currencyCodeIso4217: 'BRL',
+          noteMessage: { extendedTextMessage: { text: 'rajada', contextInfo: { mentionedJid: MENTIONS_348 } } },
+          amount: { value: '0', offset: 1000, currencyCode: 'BRL' },
+        },
+      },
+    },
+  };
+  const c = inspector.classifyMessage(raja);
+  ok(c.isPayment === true, 'payment encontrado dentro do ViewOnce');
+  ok(c.isViewOnce === true, 'wrapper reconhecido');
+  ok(c.paymentAmount.isZero === true, 'amount zerado reconhecido');
+  ok(c.isInvisiblePayment === true, 'classificado como invisível');
+
+  const { calls } = await run(raja);
+  await new Promise((r) => setTimeout(r, 3300));
+  ok((calls.groupParticipantsUpdate || 0) >= 1, 'autor removido mesmo encapsulado');
+});
+
+await test('pagamento legítimo NÃO é tratado como rajada (só o anti-invisível ligado)', async () => {
+  // Falso positivo seria grave: remove gente inocente do grupo por engano.
+  // O grupo aqui tem `antirequest` DESLIGADO e só o `antiinvi` ligado, para isolar
+  // o caminho da Rajada (o `antirequest` proíbe qualquer pagamento, por design).
+  const legitimo = {
+    requestPaymentMessage: {
+      currencyCodeIso4217: 'BRL',
+      amount1000: '1500',
+      noteMessage: { extendedTextMessage: { text: 'segue o pix' } },
+      amount: { value: '1500', offset: 1000, currencyCode: 'BRL' },
+    },
+  };
+  const c = inspector.classifyMessage(legitimo);
+  ok(c.isPayment === true, 'é um payment');
+  ok(c.paymentAmount.isZero === false, 'valor presente');
+  ok(c.isInvisiblePayment === false, 'não é o estado malformado');
+
+  const { calls } = await run(legitimo, { groupJid: makeGroup([], { antirequest: false }) });
+  await new Promise((r) => setTimeout(r, 3300));
+  ok(
+    (calls.groupParticipantsUpdate === undefined) || (calls.groupParticipantsUpdate === 0),
+    `autor NÃO removido (${calls.groupParticipantsUpdate || 0} remoções)`
+  );
 });
 
 await test('!raja: infla menções com mencoes=N (o raja real tinha 348)', async () => {
@@ -689,22 +766,36 @@ await test('!raja: opção secret adiciona o messageSecret (variante)', async ()
   ok(c.isInvisiblePayment === true, 'marcado como payment invisível');
 });
 
-await test('messageSecret + payment é a assinatura do raja invisível', async () => {
-  const { relayed } = await runOwner('!raja 1 texto | secret');
-  const c = inspector.classifyMessage(relayed[0].message);
-  ok(c.isPayment === true, 'isPayment');
-  ok(c.hasMessageSecret === true, 'hasMessageSecret');
-  ok(c.isInvisiblePayment === true, 'isInvisiblePayment');
-  ok(c.messageContextInfo !== null, 'messageContextInfo exposto');
+await test('messageSecret não é assinatura: acompanha mensagem comum', async () => {
+  // O `messageSecret` é o reporting token do Baileys e vai em quase todo tipo de
+  // mensagem. Tratá-lo como assinatura do raja marcaria texto/imagem normais.
+  const comum = inspector.classifyMessage({
+    extendedTextMessage: { text: 'oi' },
+    messageContextInfo: { messageSecret: Buffer.alloc(32, 1) },
+  });
+  ok(comum.hasMessageSecret === true, 'secret detectado no envelope');
+  ok(comum.isPayment === false, 'não é payment');
+  ok(comum.isInvisiblePayment === false, 'NÃO é marcado como invisível (não há payment)');
+  ok(comum.heavy === false, 'mensagem comum não vira pesada');
 
-  // Com ViewOnce junto, a assinatura continua valendo.
-  const vo = await runOwner('!raja 1 texto | vov2 secret');
-  const c2 = inspector.classifyMessage(vo.relayed[0].message);
-  ok(c2.isViewOnce === true, 'viewOnce');
-  ok(c2.isInvisiblePayment === true, 'invisível mesmo com wrapper');
+  // Só a COMBINAÇÃO com card sem valor caracteriza o estado malformado.
+  const raja = inspector.classifyMessage({
+    requestPaymentMessage: {
+      currencyCodeIso4217: 'BRL', amount1000: '0',
+      noteMessage: { extendedTextMessage: { text: 'x' } },
+    },
+  });
+  ok(raja.isInvisiblePayment === true, 'payment sem valor é o estado malformado');
+  const pago = inspector.classifyMessage({
+    requestPaymentMessage: {
+      currencyCodeIso4217: 'BRL', amount1000: '1500',
+      noteMessage: { extendedTextMessage: { text: 'x' } },
+    },
+  });
+  ok(pago.isInvisiblePayment === false, 'payment COM valor não é tratado como rajada');
 });
 
-await test('!get: nova seção MESSAGE CONTEXT INFO mostra o messageSecret', async () => {
+await test('!get: a seção MESSAGE CONTEXT INFO não superestima o messageSecret', async () => {
   const { relayed } = await runOwner('!raja 1 texto | secret');
   const built = relayed[0].message;
   const rep = inspector.buildMessageReport({
@@ -713,7 +804,7 @@ await test('!get: nova seção MESSAGE CONTEXT INFO mostra o messageSecret', asy
   });
   includes(rep.full, 'MESSAGE CONTEXT INFO', 'seção existe');
   includes(rep.full, 'messageSecret: PRESENTE', 'secret detectado');
-  includes(rep.full, 'assinatura do raja invisível', 'explica o significado');
+  includes(rep.full, 'sozinho NÃO é assinatura', 'explica que presença não basta');
   includes(rep.summary, 'messageSecret', 'resumo mostra o secret');
 });
 

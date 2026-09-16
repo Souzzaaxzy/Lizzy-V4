@@ -582,17 +582,34 @@ export function classifyMessage(message) {
   // amount1000 pode vir como string "0", número 0 ou Long — sem converter nada.
   const rawAmount = requestPayment ? requestPayment.amount1000 : null;
   const amountPresent = requestPayment ? Object.prototype.hasOwnProperty.call(requestPayment, 'amount1000') : false;
-  const amountStr = rawAmount === null || rawAmount === undefined ? '' : String(rawAmount).trim();
-  const isZero = amountStr !== '' && /^-?0+(\.0+)?$/.test(amountStr);
+  const amountIsNull = rawAmount === null || rawAmount === undefined;
+  const amountStr = amountIsNull ? '' : String(rawAmount).trim();
+  const amountZeroish = amountStr !== '' && ZERO_LIKE.test(amountStr);
+
+  // O card também desaparece quando `amount1000` simplesmente não vem e só
+  // `amount.value` está zerado. O fallback é condicional de propósito: quando o
+  // campo principal existe e tem valor, ele manda — assim um pagamento legítimo
+  // (amount1000 = 1500) não vira "invisível" por causa do campo interno.
+  const primarySpeaks = amountPresent && !amountIsNull && !amountZeroish;
+  const innerAmountStr = requestPayment?.amount?.value === null || requestPayment?.amount?.value === undefined
+    ? ''
+    : String(requestPayment.amount.value).trim();
+  const innerAmountZeroish = innerAmountStr !== '' && ZERO_LIKE.test(innerAmountStr);
+
+  // Qual caminho provou o zero. O relatório do !get precisa saber disso para não
+  // afirmar "amount1000 = 0" quando o campo nem veio no proto.
+  const amountZeroPath = amountZeroish ? 'amount1000'
+    : (!primarySpeaks && innerAmountZeroish) ? 'amount.value'
+    : null;
+  const isZero = amountZeroPath !== null;
 
   const forwardedScore = noteContextInfo?.forwardingScore;
   const isForwardedBurst = Boolean(noteExt && (noteContextInfo?.isForwarded === true || (typeof forwardedScore === 'number' && forwardedScore >= 100)));
 
   // `messageContextInfo` fica no TOPO do Message (irmao do requestPaymentMessage),
-  // nao dentro dele. Todo cliente real envia `messageSecret` (mecanismo de
-  // reporting token) -- um requestPaymentMessage carregando messageSecret e o
-  // estado malformado que faz o card de pagamento nao renderizar, deixando a
-  // mensagem "invisivel". Este e o marcador do raja invisivel.
+  // nao dentro dele. O Baileys inclui `messageSecret` (reporting token) ao ENVIAR
+  // quase qualquer tipo de mensagem, entao a presenca do campo, sozinha, NAO
+  // identifica nada: e apenas um sinal de anomalia para o relatorio do !get.
   const contextInfoTop = message.messageContextInfo || leaf.messageContextInfo || null;
   const hasMessageSecret = Boolean(contextInfoTop?.messageSecret);
 
@@ -603,13 +620,17 @@ export function classifyMessage(message) {
   // "heavy" = merece proteção antes dos handlers caros (não significa bloquear).
   const heavy = isPayment || mentionCount > 50 || isCatalog;
 
-  // Assinatura do raja "invisivel": payment + messageSecret no envelope.
-  const isInvisiblePayment = isPayment && hasMessageSecret;
+  // Estado malformado medido: card de pagamento SEM valor. É o que faz o
+  // WhatsApp não renderizar a mensagem (o "raja invisível"). O `messageSecret`
+  // chegou a ser tratado como assinatura, mas a amostra real do dono não o
+  // carrega, então o marcador é o valor zerado — em `amount1000` ou em
+  // `amount.value`.
+  const isInvisiblePayment = isPayment && isZero;
 
   return {
     type, isPayment,
     isRequestPayment: Boolean(requestPayment),
-    paymentAmount: { raw: rawAmount ?? null, isZero, present: amountPresent },
+    paymentAmount: { raw: rawAmount ?? null, isZero, present: amountPresent, zeroPath: amountZeroPath, innerValue: innerAmountStr || null },
     noteText: typeof noteText === 'string' ? noteText : null,
     noteContextInfo,
     mentionCount,
@@ -789,6 +810,18 @@ export function buildPaymentReport(rawMessage, webMessage) {
       lines.push(`• ${field.path}: ${formatFieldValue(field.value)}`);
     }
     lines.push('_Um campo ausente e um campo com valor "0" são situações diferentes: o primeiro não foi enviado no proto, o segundo foi explicitamente zerado._');
+    // Diagnóstico direto do estado que torna o card invisível, com o caminho que
+    // provou o zero — sem afirmar "amount1000 = 0" quando o campo nem veio.
+    const zeroCheck = classifyMessage(message);
+    if (zeroCheck.isPayment) {
+      const pa = zeroCheck.paymentAmount;
+      if (pa.isZero) {
+        lines.push(`🎯 *Estado malformado:* card de pagamento SEM valor (zero em \`${pa.zeroPath}\`).`);
+        lines.push('   - É essa combinação que faz o WhatsApp não renderizar a mensagem.');
+      } else {
+        lines.push('✅ Card de pagamento com valor presente — não é o estado malformado.');
+      }
+    }
   }
 
   if (Object.keys(webPaymentInfo).length) {
@@ -894,7 +927,12 @@ export function buildMessageContextReport(rawMessage) {
     return {
       hasContext: false,
       hasSecret: false,
-      lines: ['• Sem `messageContextInfo` nesta mensagem (o cliente real sempre envia).'],
+      lines: [
+        '• Sem `messageContextInfo` nesta mensagem.',
+        '   - O Baileys só adiciona esse envelope ao ENVIAR (generateWAMessageContent),',
+        '     então a AUSÊNCIA aqui não prova nada sobre a mensagem original —',
+        '     o fragmento citado pode não carregar o envelope.',
+      ],
     };
   }
 
@@ -910,8 +948,12 @@ export function buildMessageContextReport(rawMessage) {
     lines.push(`   - hex: ${buf.toString('hex')}`);
     if (sha) lines.push(`   - sha256: ${sha}`);
     // Explicação no próprio relatório, para o diagnóstico não depender de
-    // interpretação de quem lê.
-    lines.push('   - ⚠️ payment + messageSecret = assinatura do raja invisível');
+    // interpretação de quem lê. O `messageSecret` acompanha quase todo tipo de
+    // mensagem (é o reporting token do Baileys), então PRESENÇA não é assinatura
+    // de nada; é a COMBINAÇÃO com um card de pagamento sem valor que caracteriza
+    // o estado malformado.
+    lines.push('   - ⚠️ presente JUNTO com payment sem valor = estado malformado (card não renderiza)');
+    lines.push('   - ℹ️ sozinho NÃO é assinatura: o reporting token acompanha quase todo tipo de mensagem');
   }
   if (ctx.botMessageSecret) {
     lines.push(`• botMessageSecret: presente (${Buffer.from(ctx.botMessageSecret).length} bytes)`);
@@ -1503,7 +1545,7 @@ export function buildMessageReport({ info, target = null, origin = 'self', quote
     `• Participant: ${key.participant ?? 'não fornecido'}`,
     `• ViewOnce: ${viewOnce.isViewOnce ? 'Sim' : 'Não'}`,
     `• Payment: ${payment.isPayment ? 'Sim (ver seção PAYMENT)' : 'Não'}`,
-    `• messageSecret (raja invisível): ${msgCtx.hasSecret ? 'PRESENTE ⚠️' : 'ausente'}`,,
+    `• messageSecret (envelope): ${msgCtx.hasSecret ? 'presente (não é assinatura sozinho)' : 'ausente'}`,
     `• Menções: ${mentions.total ? `${mentions.total} no alvo${mentions.truncated ? ' (exibição limitada)' : ''}` : 'nenhuma no alvo'}`,
     `• Encaminhada: ${hasTextSignature({ t: targetMessage, c: commandEnvelope?.message }, 'isForwarded') ? 'Sim (campo isForwarded presente)' : 'Não detectada'}`,
     `• Citação interna: ${context.quote ? `${context.quote.type || 'desconhecido'} (${context.quote.contextInfo?.stanzaId || 'sem id'})` : 'não'}`,
