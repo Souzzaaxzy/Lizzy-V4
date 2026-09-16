@@ -252,8 +252,6 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 
 ╭─❖ 🧪 TESTES DE PROTEÇÃO (DONO)
 │ 💳 ${prefix}raja <qtd> <texto>
-│ 🧹 ${prefix}raja ... | clean
-│ 🔢 ${prefix}raja ... | zero
 ╰──────────────
 
 ╭─────────────────╮

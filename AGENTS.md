@@ -125,19 +125,28 @@ Ferramenta do dono para validar a proteção anti-raja em grupo de teste.
   clientes nativos. Os helpers da Baileys **não servem**: `generateMessageID()`
   dá 40 chars (`3EB0` + 18 bytes hex) e `generateMessageIDV2()` insere um
   marcador `'STARFALL'` no meio.
-- **Opções** (após `|`, todas opcionais): `vo` / `vov2` / `vov2ext`
-  (encapsula o payment em `viewOnceMessage` / `viewOnceMessageV2` /
-  `viewOnceMessageV2Extension` — os três são `FutureProofMessage { message }`,
-  então basta aninhar), `clean` (mensagem "limpante" de 300 quebras antes de
-  cada raja), `fwd` (adiciona `forwardingScore: 999` + `isForwarded: true` na
-  nota) e `delay=N` (intervalo entre envios, padrão 700ms, teto 10000).
+- **Opções: NÃO EXISTEM MAIS (set/2026).** A forma é **única**:
+  `!raja <quantidade> <texto>`. Foram removidas `vo`/`vov2`/`vov2ext`
+  (encapsulamento ViewOnce), `secret` (messageContextInfo), `fwd`
+  (forwardingScore/isForwarded), `clean` (mensagem "limpante"), `zero`,
+  `mencoes=N` e `delay=N`. Um "| algo" digitado agora faz parte do **texto da
+  nota** e não altera o proto. Motivo: eram variações de *gerador de flood* e
+  não serviam à validação da proteção — a proteção já é testada contra fixtures
+  manuais de ViewOnce, sem precisar que o comando saiba gerá-las.
+  As opções antigas ficaram mal documentadas no `menudono` (`| clean`, `| zero`);
+  as três linhas viraram uma só.
+- **Log de diagnóstico** (`logRajaEnvio()`, `index.js` ~299): imprime uma linha
+  por envio — `[RAJA] enviado | id=… | bytes=… | mencoes=… | amount1000=… | …`.
+  Existe porque "o raja não funcionou" é ambíguo: pode ser falha de relay,
+  payload que não é o que o WhatsApp precisa para não renderizar, ou efeito
+  dependente do tamanho/população do grupo. Sem registrar o que foi realmente
+  enviado não dá para separar os três casos.
 - **O QUE NÃO É O DIFERENCIAL (descartado com prova)**: `messageSecret` foi
   testado e **descartado**. O `!get` rodado no raja REAL mostra
   `messageContextInfo: ausente` e `messageSecret: ausente` — o real não carrega
   esse campo. A hipótese veio do código da Baileys (`generateWAMessageContent`
   adiciona `messageSecret` via `shouldIncludeReportingToken()`), mas não se
-  aplica aqui. `!raja` **não** inclui por padrão; a opção `secret` adiciona, só
-  para comparação. `classifyMessage()` expõe `hasMessageSecret` como sinal de
+  aplica aqui. `classifyMessage()` expõe `hasMessageSecret` como sinal de
   anomalia do envelope apenas; **não** use esse campo como assinatura de nada
   (ver "ANÁLISE DA MECÂNICA DO RAJA INVISÍVEL" abaixo — a versão antiga do texto
   dizia que ele era o marcador do raja, o que a amostra real desmentiu).
@@ -152,8 +161,10 @@ Ferramenta do dono para validar a proteção anti-raja em grupo de teste.
 - **A ÚNICA DIFERENÇA MEDIDA É O TAMANHO**: o raja real trazia **348 menções**
   (~9 KB de payload) e um texto de ~700 chars; o gerado, num grupo de 4 membros,
   trazia **4 menções** (~332 bytes). É por isso que o efeito não aparecia no
-  grupo de teste. Opção `mencoes=N` infla a lista com LIDs sintéticos no formato
-  real (padrão: usa os membros do grupo). Para reproduzir: `!raja 3 texto | mencoes=348`.
+  grupo de teste. **A opção `mencoes=N` que existia para inflar a lista foi
+  removida** (set/2026): era ferramenta de flood, não de validação. Num grupo
+  pequeno o `!raja` gera um payload pequeno — se o efeito depende do tamanho,
+  reproduzir isso exigiria um grupo grande, não uma opção no comando.
 - **`!get` ganhou a seção `MESSAGE CONTEXT INFO (envelope)`**: o campo vive no
   TOPO do `Message` (irmão do tipo), por isso não aparecia em nenhuma seção —
   passava batido no RAW. A seção mostra `messageSecret` (bytes/hex/sha256),
@@ -250,11 +261,33 @@ real) e o `!get` diz explicitamente que o campo, sozinho, não é assinatura.
 - WhatsApp GB / mods: nenhum ponto de extensão de proto documentado para isso.
 - `grep` no RAW real por `requestFrom`: **ausente** no raja capturado.
 
+### Pesquisa adicional (set/2026, 2ª rodada — "ainda não funciona")
+Buscas por `requestPaymentMessage` + mensagem invisível/flood, e o guia oficial
+de troubleshooting da Baileys, **não trouxeram nenhuma técnica nova**:
+
+- **Não há relato público da receita.** O que existe são bots de flood genéricos
+  (`usithadev/whatsapp-flood-bot`, scripts `_flood`/`!flood` por Selenium) que
+  mandam **texto normal** N vezes — nada a ver com payment.
+- **A Baileys não tem conceito de "invisível".** O guia de troubleshooting trata
+  de mensagens que não aparecem por *outras* causas (`issue #1831` "This message
+  can't be displayed here" = mensagem que o cliente Web não sabe renderizar;
+  `issue #2468` = mensagem de evento de grupo mudou no v7; `issue #832` =
+  mensagens aparecendo vazias). Ou seja: "não renderizar" é um **modo de falha
+  conhecido e genérico** da renderização, não um recurso.
+- Isso **reforça** o diagnóstico: o efeito vem de o proto não ter o que o
+  WhatsApp precisa para desenhar o card. Não existe interruptor a ligar.
+
+Consequência prática para quem for testar: como não há receita pública, o teste
+tem de ser **empírico no seu ambiente**, e é para isso que serve o log
+`[RAJA] enviado` — ele mostra bytes/menções/amount do que saiu, para separar
+"falhou o relay" de "saiu mas o cliente renderizou" de "depende do grupo".
+
 ### Escopo deliberado
 O entregável foi **detecção** (o bot não deixar passar) e **fidelidade do `!get`**
 (que o relatório não minta). Não foi feito trabalho para deixar o payload mais
 invisível ou mais eficaz: o `!raja` continua o gerador de teste **exclusivo do
-dono**, limitado a grupo, com teto rígido de 50 e opções só para *comparação*.
+dono**, limitado a grupo, com teto rígido de 50 e **forma única** (sem opções —
+as variantes de flood foram removidas em set/2026).
 
 ### Estado
 `classifyMessage()` agora expõe `paymentAmount.zeroPath` e

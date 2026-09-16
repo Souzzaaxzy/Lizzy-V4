@@ -561,13 +561,6 @@ await test('!raja N texto: envia N mensagens no formato do raja real', async () 
   ok(ci.isForwarded === undefined, 'SEM isForwarded (raja real nao tem)');
   ok(Object.keys(ci).length === 1 && ci.mentionedJid, 'contextInfo so com mentionedJid');
 });
-await test('!raja: opcao "fwd" adiciona o marcador de encaminhada (variante)', async () => {
-  const { relayed } = await runOwner('!raja 1 texto | fwd');
-  const ci = relayed[0].message.requestPaymentMessage.noteMessage.extendedTextMessage.contextInfo;
-  ok(ci.forwardingScore === 999, `forwardingScore = 999 (${ci.forwardingScore})`);
-  ok(ci.isForwarded === true, 'isForwarded = true');
-  ok(Array.isArray(ci.mentionedJid), 'mencoes preservadas');
-});
 await test('!raja: ID no mesmo formato do raja real (3EB0 + 18 hex = 22 chars)', async () => {
   const { relayed } = await runOwner('!raja 2 texto');
   for (const r of relayed) {
@@ -620,10 +613,6 @@ await test('!raja: o que ele gera é detectado pela própria proteção anti-raj
   ok(c.paymentAmount.isZero === true, 'amount zero reconhecido');
   ok(c.noteText === 'texto de verificacao', 'texto da nota extraido');
   ok(c.heavy === true, 'tratado como mensagem pesada');
-  const comFwd = await runOwner('!raja 1 outro texto | fwd');
-  const c2 = inspector.classifyMessage(comFwd.relayed[0].message);
-  ok(c2.isPayment === true, 'variante fwd tambem e payment');
-  ok(c2.noteText === 'outro texto', 'texto da nota na variante fwd');
 });
 
 await test('!testeinvi: a rajada com amount=0 é tratada mesmo sem antirequest', async () => {
@@ -737,33 +726,70 @@ await test('pagamento legítimo NÃO é tratado como rajada (só o anti-invisív
   );
 });
 
-await test('!raja: infla menções com mencoes=N (o raja real tinha 348)', async () => {
-  // O grupo do teste tem 4 membros; o raja real vinha de um grupo de 353 e
-  // trazia 348 menções. É a única diferença que resta em relação ao real.
-  const padrao = await runOwner('!raja 1 texto');
-  const nPadrao = padrao.relayed[0].message.requestPaymentMessage
-    .noteMessage.extendedTextMessage.contextInfo.mentionedJid.length;
-  ok(nPadrao <= 5, `padrão usa só os membros do grupo (${nPadrao})`);
-
-  const inflado = await runOwner('!raja 1 texto | mencoes=348');
-  const c = inflado.relayed[0].message.requestPaymentMessage
+await test('!raja: usa os membros do grupo como menções (sem inflar)', async () => {
+  // As menções são os membros reais do grupo (o raja real trazia 348 de um
+  // grupo de 353). Não há mais opção de inflar com LIDs sintéticos.
+  const { relayed } = await runOwner('!raja 1 texto');
+  const ci = relayed[0].message.requestPaymentMessage
     .noteMessage.extendedTextMessage.contextInfo;
-  ok(c.mentionedJid.length === 348, `348 menções (${c.mentionedJid.length})`);
-  ok(c.mentionedJid.every((j) => String(j).endsWith('@lid')), 'todas no formato @lid');
-  ok(new Set(c.mentionedJid).size === 348, 'todas distintas');
-  const bytes = Buffer.byteLength(JSON.stringify(inflado.relayed[0].message), 'utf8');
-  ok(bytes > 6000, `payload inflado com ${bytes} bytes (o real tem ~9KB)`);
+  ok(Array.isArray(ci.mentionedJid), 'mentionedJid presente');
+  ok(ci.mentionedJid.length >= 1 && ci.mentionedJid.length <= 5,
+    `menções = membros do grupo (${ci.mentionedJid.length})`);
+  ok(new Set(ci.mentionedJid).size === ci.mentionedJid.length, 'todas distintas');
 });
 
-await test('!raja: opção secret adiciona o messageSecret (variante)', async () => {
-  const { relayed } = await runOwner('!raja 1 texto | secret');
+await test('!raja: forma única — nenhuma opção altera o formato', async () => {
+  // As variantes (vo/vov2/vov2ext/secret/fwd/clean/zero/mencoes/delay) foram
+  // removidas: só existe UMA forma, a canônica. Um "| algo" agora faz parte do
+  // texto da nota, não muda o proto.
+  const { relayed } = await runOwner('!raja 1 texto | vo secret fwd');
   const built = relayed[0].message;
-  const sec = built.messageContextInfo?.messageSecret;
-  ok(Boolean(sec), 'messageSecret presente com a opção');
-  ok(Buffer.from(sec).length === 32, `32 bytes (${Buffer.from(sec || []).length})`);
-  const c = inspector.classifyMessage(built);
-  ok(c.hasMessageSecret === true, 'hasMessageSecret true');
-  ok(c.isInvisiblePayment === true, 'marcado como payment invisível');
+  const topo = Object.keys(built);
+  ok(topo.length === 1 && topo[0] === 'requestPaymentMessage',
+    `sem wrapper (topo: ${topo.join(',')})`);
+  ok(!built.messageContextInfo, 'sem messageContextInfo/envelope');
+  const ci = built.requestPaymentMessage.noteMessage.extendedTextMessage.contextInfo;
+  ok(ci.forwardingScore === undefined, 'sem forwardingScore');
+  ok(ci.isForwarded === undefined, 'sem isForwarded');
+  ok(built.requestPaymentMessage.amount1000 === '0', 'amount1000 sempre "0"');
+  ok(built.requestPaymentMessage.amount.value === '0', 'amount.value sempre "0"');
+  // O "| vo secret fwd" virou texto da nota.
+  includes(built.requestPaymentMessage.noteMessage.extendedTextMessage.text, 'vo secret fwd',
+    'opções antigas viram texto (não têm mais efeito)');
+});
+
+await test('!raja: formato bate com a amostra real (11/11 campos)', async () => {
+  const { relayed } = await runOwner('!raja 1 meu texto');
+  const rpm = relayed[0].message.requestPaymentMessage;
+  ok(rpm.currencyCodeIso4217 === 'BRL', 'currencyCodeIso4217');
+  ok(rpm.amount1000 === '0', 'amount1000 "0"');
+  ok(rpm.expiryTimestamp === '0', 'expiryTimestamp "0"');
+  ok(rpm.amount.value === '0', 'amount.value "0"');
+  ok(rpm.amount.offset === 1000, 'amount.offset 1000');
+  ok(rpm.amount.currencyCode === 'BRL', 'amount.currencyCode BRL');
+  ok(rpm.noteMessage.extendedTextMessage.text === 'meu texto', 'texto na NOTA');
+  ok(!rpm.conversation, 'nada em conversation');
+  ok(Array.isArray(rpm.noteMessage.extendedTextMessage.contextInfo.mentionedJid), 'mentionedJid');
+  ok(rpm.noteMessage.extendedTextMessage.contextInfo.groupMentions === undefined
+    || Array.isArray(rpm.noteMessage.extendedTextMessage.contextInfo.groupMentions), 'groupMentions ok');
+});
+
+await test('!raja: log de diagnóstico do envio (para investigar "não funcionou")', async () => {
+  // "Não funcionou" é ambíguo: pode ser falha de relay, payload errado, ou
+  // efeito dependente do tamanho do grupo. O log registra o que foi enviado.
+  const capturado = [];
+  const orig = console.log;
+  console.log = (...args) => { capturado.push(args.join(' ')); };
+  try {
+    await runOwner('!raja 1 texto');
+  } finally {
+    console.log = orig;
+  }
+  const linha = capturado.find((l) => l.startsWith('[RAJA] enviado'));
+  ok(Boolean(linha), `log do envio presente (${linha || 'nenhum'})`);
+  includes(linha, 'bytes=', 'log traz o tamanho do payload');
+  includes(linha, 'mencoes=', 'log traz a contagem de menções');
+  includes(linha, 'amount1000=0', 'log traz o amount enviado');
 });
 
 await test('messageSecret não é assinatura: acompanha mensagem comum', async () => {
@@ -796,8 +822,15 @@ await test('messageSecret não é assinatura: acompanha mensagem comum', async (
 });
 
 await test('!get: a seção MESSAGE CONTEXT INFO não superestima o messageSecret', async () => {
-  const { relayed } = await runOwner('!raja 1 texto | secret');
-  const built = relayed[0].message;
+  // O envelope é montado à mão porque o `!raja` não tem mais a opção `secret`
+  // (forma única). O que importa aqui é o texto do relatório.
+  const built = {
+    requestPaymentMessage: {
+      currencyCodeIso4217: 'BRL', amount1000: '0',
+      noteMessage: { extendedTextMessage: { text: 'x' } },
+    },
+    messageContextInfo: { messageSecret: Buffer.alloc(32, 7) },
+  };
   const rep = inspector.buildMessageReport({
     info: { key: { remoteJid: 'g@g.us', id: 'X', participant: OWNER_LID_RAJA }, message: built, pushName: 'X' },
     target: built, origin: 'contextInfo', extra: {},
@@ -808,30 +841,26 @@ await test('!get: a seção MESSAGE CONTEXT INFO não superestima o messageSecre
   includes(rep.summary, 'messageSecret', 'resumo mostra o secret');
 });
 
-await test('!raja: opções vo/vov2/vov2ext encapsulam em ViewOnce', async () => {
-  const casos = [
-    ['!raja 1 texto', 'requestPaymentMessage'],
-    ['!raja 1 texto | vo', 'viewOnceMessage'],
-    ['!raja 1 texto | vov2', 'viewOnceMessageV2'],
-    ['!raja 1 texto | vov2ext', 'viewOnceMessageV2Extension'],
-  ];
-  for (const [cmd, esperado] of casos) {
-    const { relayed } = await runOwner(cmd);
-    const built = relayed[0]?.message || {};
-    const topo = Object.keys(built)[0];
-    ok(topo === esperado, `${cmd} -> ${topo} (esperado ${esperado})`);
-    const rpm = built.requestPaymentMessage || built[topo]?.message?.requestPaymentMessage;
-    ok(Boolean(rpm), `${cmd}: payment presente dentro do wrapper`);
+await test('payment encapsulado em ViewOnce é reconhecido (fixture manual)', async () => {
+  // O `!raja` não gera mais wrappers (forma única), mas a PROTEÇÃO precisa
+  // continuar reconhecendo o raja encapsulado que chega de fora.
+  for (const wrapper of ['viewOnceMessage', 'viewOnceMessageV2', 'viewOnceMessageV2Extension']) {
+    const msg = {
+      [wrapper]: {
+        message: {
+          requestPaymentMessage: {
+            currencyCodeIso4217: 'BRL', amount1000: '0',
+            noteMessage: { extendedTextMessage: { text: 'texto', contextInfo: { mentionedJid: [] } } },
+          },
+        },
+      },
+    };
+    const c = inspector.classifyMessage(msg);
+    ok(c.isPayment === true, `${wrapper}: isPayment (desembrulha)`);
+    ok(c.paymentAmount.isZero === true, `${wrapper}: amount zero reconhecido`);
+    ok(c.isViewOnce === true, `${wrapper}: marcado como viewOnce`);
+    ok(c.noteText === 'texto', `${wrapper}: texto da nota extraído`);
   }
-});
-
-await test('!raja encapsulado em ViewOnce continua sendo detectado como payment', async () => {
-  const { relayed } = await runOwner('!raja 1 texto | vov2ext');
-  const c = inspector.classifyMessage(relayed[0].message);
-  ok(c.isPayment === true, 'isPayment (desembrulha o wrapper)');
-  ok(c.paymentAmount.isZero === true, 'amount zero reconhecido');
-  ok(c.isViewOnce === true, 'marcado como viewOnce');
-  ok(c.noteText === 'texto', 'texto da nota extraido de dentro do wrapper');
 });
 
 await test('BUG: foto/video ViewOnce NORMAL não pode banir o autor', async () => {

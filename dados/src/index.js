@@ -252,103 +252,58 @@ function scheduleInvisibleCleanup(nazu, ctx) {
 // !raja — GERADOR DE MENSAGEM DE TESTE (EXCLUSIVO DO DONO)
 // ============================================================
 /**
- * Monta um `requestPaymentMessage` no MESMO formato da amostra real capturada
- * pelo !get, para o dono validar a proteção anti-raja num grupo de teste.
+ * Monta o `requestPaymentMessage` no MESMO formato da amostra real capturada
+ * pelo !get (forma CANÔNICA e única — não há variantes).
  *
- * Formato reproduzido (idêntico ao observado em produção):
  *   requestPaymentMessage
  *     currencyCodeIso4217: "BRL"
- *     amount1000: "0"          <- zero explícito (não ausente)
+ *     amount1000: "0"          <- zero explícito (o card não tem valor a renderizar)
  *     expiryTimestamp: "0"
  *     amount: { value: "0", offset: 1000, currencyCode: "BRL" }
  *     noteMessage -> extendedTextMessage -> text (o texto do usuário)
  *                                       -> contextInfo.mentionedJid [N]
  *
- * O texto vai na NOTA, não em `conversation` — é isso que faz a mensagem
- * aparecer vazia/invisível para quem só lê `conversation`.
+ * O texto vai na NOTA, não em `conversation`. O contextInfo carrega APENAS
+ * `mentionedJid`: a amostra real não tem `forwardingScore`/`isForwarded`, e
+ * adicioná-los muda a renderização (card encaminhado em vez de vazio).
  *
  * @param {string} text   texto que aparece dentro da nota
- * @param {string[]} mentions JIDs/LIDs mencionados (as "348 menções")
+ * @param {string[]} mentions JIDs/LIDs mencionados
  * @returns {object} conteúdo pronto para generateWAMessageFromContent
  */
-function buildRajaContent(text, mentions = [], options = {}) {
-  const {
-    amount1000 = '0',
-    amountValue = '0',
-    offset = 1000,
-    currency = 'BRL',
-    forwarded = false,
-    forwardingScore = 999,
-  } = options;
-
-  // O contextInfo do raja real contem APENAS as mencoes (o proto preenche
-  // `groupMentions: []` e `statusAttributions: []` sozinho). Nada de
-  // `forwardingScore`/`isForwarded`: a amostra real nao tem esses campos --
-  // o !get mostra "Encaminhada: Nao detectada" -- e adiciona-los faz o
-  // WhatsApp renderizar como card encaminhado em vez de mensagem vazia.
-  const contextInfo = { mentionedJid: [...mentions] };
-  if (forwarded) {
-    contextInfo.forwardingScore = forwardingScore;
-    contextInfo.isForwarded = true;
-  }
-
-  const payment = {
+function buildRajaContent(text, mentions = []) {
+  return {
     requestPaymentMessage: {
-      currencyCodeIso4217: currency,
-      amount1000: String(amount1000),
+      currencyCodeIso4217: 'BRL',
+      amount1000: '0',
       expiryTimestamp: '0',
-      // O texto vive na NOTA (noteMessage), nunca em `conversation` -- e isso
-      // que faz a mensagem aparecer vazia para quem so le o texto do balao.
       noteMessage: {
         extendedTextMessage: {
           text,
-          contextInfo,
+          contextInfo: { mentionedJid: [...mentions] },
         },
       },
-      amount: {
-        value: String(amountValue),
-        offset,
-        currencyCode: currency,
-      },
+      amount: { value: '0', offset: 1000, currencyCode: 'BRL' },
     },
   };
-
-  // `messageContextInfo.messageSecret` e o que faz o WhatsApp tratar a mensagem
-  // como "secreta" (mecanismo de reporting token). Todo cliente real inclui
-  // isso: a Baileys adiciona em generateWAMessageContent para QUALQUER mensagem
-  // que nao seja reaction/poll update. Um requestPaymentMessage carregando
-  // messageSecret e justamente o estado malformado que faz o card nao renderizar
-  // (a mensagem fica "invisivel"). Como o !raja monta o proto direto, precisamos
-  // incluir na mao.
-  // O raja real NAO carrega messageContextInfo (confirmado no !get: "messageSecret
-  // ausente"), entao o padrao e nao incluir. `secret` adiciona a variante.
-  const envelope = {};
-  if (options.messageSecret) {
-    envelope.messageContextInfo = {
-      messageSecret: options.messageSecret === true ? crypto.randomBytes(32) : options.messageSecret,
-    };
-  }
-  // Encapsulamento opcional em ViewOnce (os tres wrappers sao FutureProofMessage).
-  const inner = options.wrapper ? { [options.wrapper]: { message: payment } } : payment;
-  return { ...inner, ...envelope };
 }
 
 /**
- * Gera LIDs sinteticos no formato real (15 digitos + @lid), para inflar a lista
- * de mencoes sem depender do tamanho do grupo.
+ * Log de diagnóstico do envio.
  *
- * O raja real trazia 348 mencoes de um grupo de 353 membros. Em grupo pequeno o
- * !raja so consegue 4 -- e essa diferenca de TAMANHO e a unica que resta entre
- * o raja real e o gerado (os payloads ja batem campo a campo).
+ * Existe porque "o raja não funcionou" é ambíguo: pode ser (a) o relay falhou,
+ * (b) o payload não é o que o WhatsApp precisa para não renderizar, ou (c) o
+ * efeito depende do tamanho/população do grupo e não aparece num grupo pequeno.
+ * Sem o que foi REALMENTE enviado não dá para separar os três casos.
  */
-function generatePadMentions(count) {
-  const out = [];
-  for (let i = 0; i < count; i++) {
-    // 15 digitos, no mesmo formato dos LIDs reais.
-    const n = String(100000000000000n + BigInt(i) * 7919n);
-    out.push(`${n.slice(0, 15)}@lid`);
-  }
-  return out;
+function logRajaEnvio(content, mentions, msgId) {
+  const bytes = Buffer.byteLength(JSON.stringify(content), 'utf8');
+  console.log(
+    `[RAJA] enviado | id=${msgId} | bytes=${bytes} | mencoes=${mentions.length} | ` +
+    `amount1000=${content.requestPaymentMessage.amount1000} | ` +
+    `amount.value=${content.requestPaymentMessage.amount.value} | ` +
+    `tipos=${Object.keys(content).join(',')}`
+  );
 }
 
 /**
@@ -31850,21 +31805,15 @@ break;
       // Exclusivo do dono, só em grupo, e serve para validar o anti-raja.
       // !raja — gerador de mensagem de TESTE no formato do raja real.
       // Exclusivo do dono, só em grupo, e serve para validar o anti-raja.
+      // !raja — gerador de mensagem de TESTE no formato do raja real.
+      // Exclusivo do dono, só em grupo, e serve para validar o anti-raja.
+      // Forma única: `!raja <quantidade> <texto>` (sem opções/variantes).
       case 'raja': {
         try {
           if (!isOwner) return reply("❌ Apenas o dono do bot pode usar este comando.");
           if (!isGroup) return reply("◈ Este comando só funciona em grupos (use um grupo de teste).");
 
-          // Uso: !raja <quantidade> <texto> [| opções]
-          // Opções (separadas por "|", opcionais):
-          //   zero      -> amount 1000 -> 0 (o padrão é "1000", como no real)
-          //   nofwd     -> não marca a nota como encaminhada
-          //   clean     -> envia a mensagem "limpante" antes de cada raja
-          //   delay=N   -> intervalo entre envios em ms (padrão 700)
-          const [textoParte, ...opcoesParte] = q.split('|');
-          const opcoes = opcoesParte.join('|').toLowerCase();
-
-          const parts = textoParte.trim().split(/\s+/);
+          const parts = q.trim().split(/\s+/);
           const countRaw = parts[0];
           const texto = parts.slice(1).join(' ').trim();
           const count = parseInt(countRaw, 10);
@@ -31874,17 +31823,7 @@ break;
               `🧪 *TESTE DE RAJA*\n\n` +
               `❌ Informe a quantidade de mensagens.\n\n` +
               `💡 Uso: ${groupPrefix}raja <quantidade> <texto>\n` +
-              `📌 Exemplo: ${groupPrefix}raja 5 olá, esse é o meu texto\n\n` +
-              `⚙️ *Opções* (após "|"), todas opcionais:\n` +
-              `• mencoes=N → infla a lista de menções (o raja real tinha 348)\n` +
-              `• secret → adiciona messageContextInfo (o raja real NÃO tem)\n` +
-              `• vo → encapsula em viewOnceMessage\n` +
-              `• vov2 → encapsula em viewOnceMessageV2\n` +
-              `• vov2ext → encapsula em viewOnceMessageV2Extension\n` +
-              `• clean → envia a mensagem "limpante" antes de cada uma\n` +
-              `• fwd → adiciona forwardingScore/isForwarded na nota\n` +
-              `• delay=N → intervalo entre envios em ms (padrão 700)\n\n` +
-              `ℹ️ Padrão = raja real: amount "0", sem encaminhada e sem wrapper.`
+              `📌 Exemplo: ${groupPrefix}raja 5 olá, esse é o meu texto`
             );
           }
           if (!texto) {
@@ -31900,84 +31839,45 @@ break;
           const MAX_RAJA = 50;
           const total = Math.min(count, MAX_RAJA);
 
-          const comForward = /(^|\s)fwd(\s|$)/.test(opcoes);
-          const comClean = /(^|\s)clean(\s|$)/.test(opcoes);
-          // Encapsulamento em ViewOnce (o raja invisivel costuma chegar assim).
-          const wrapper = /(^|\s)vov2ext(\s|$)/.test(opcoes) ? 'viewOnceMessageV2Extension'
-            : /(^|\s)vov2(\s|$)/.test(opcoes) ? 'viewOnceMessageV2'
-            : /(^|\s)vo(\s|$)/.test(opcoes) ? 'viewOnceMessage'
-            : null;
-          // `secret` adiciona messageContextInfo (o raja real NAO tem).
-          const comSecret = /(^|\s)secret(\s|$)/.test(opcoes);
-          // `mencoes=N` infla a lista de mencoes com LIDs sinteticos. O raja real
-          // trazia 348 (grupo de 353); em grupo pequeno isso e impossivel, e o
-          // tamanho e a unica diferenca que resta em relacao ao raja real.
-          const mencMatch = /mencoes?\s*=\s*(\d+)/.exec(opcoes);
-          const mencoesAlvo = mencMatch ? Math.min(Math.max(parseInt(mencMatch[1], 10), 1), 1000) : null;
-          const delayMatch = /delay\s*=\s*(\d+)/.exec(opcoes);
-          const delay = delayMatch ? Math.min(Math.max(parseInt(delayMatch[1], 10), 100), 10000) : 700;
-
-          // As menções do raja real eram os membros do grupo (348 numa amostra
-          // de um grupo de 354). Reaproveita o AllgroupMembers já resolvido
-          // pelo handler — nenhuma consulta extra.
+          // As menções do raja real eram os membros do grupo (348 numa amostra de
+          // um grupo de 353). Reaproveita o AllgroupMembers já resolvido pelo
+          // handler — nenhuma consulta extra ao WhatsApp.
           const mentions = Array.isArray(AllgroupMembers) ? AllgroupMembers : [];
 
           await reply(
             `🧪 *RAJA DE TESTE*\n\n` +
             `📨 Mensagens: ${total}${count > MAX_RAJA ? ` (limitado de ${count}; teto ${MAX_RAJA})` : ''}\n` +
             `💰 amount1000: "0" (igual ao raja real)\n` +
-            `🔁 Nota encaminhada: ${comForward ? 'sim (forwardingScore 999)' : 'não (igual ao raja real)'}\n` +
-            `👁️ Encapsulamento: ${wrapper || 'nenhum (raja real)'}\n` +
-            `🔐 messageSecret: ${comSecret ? 'SIM (variante)' : 'NÃO (raja real)'}\n` +
-            `👥 Menções: ${mencoesAlvo ? `${mencoesAlvo} (inflado)` : `${mentions.length} (membros do grupo)`}\n` +
-            `🧹 Mensagem "limpante": ${comClean ? 'sim' : 'não'}\n` +
-            `⏱️ Intervalo: ${delay}ms\n` +
+            `👥 Menções: ${mentions.length} (membros do grupo)\n` +
             `📝 Texto: ${texto.slice(0, 80)}${texto.length > 80 ? '...' : ''}\n\n` +
             `⚙️ Formato: requestPaymentMessage + noteMessage → extendedTextMessage\n` +
             `🚀 Enviando...`
           );
 
-          // Menções efetivas: as do grupo, ou infladas ate o alvo pedido.
-          let mencoesFinal = mentions;
-          if (mencoesAlvo && mencoesAlvo > mentions.length) {
-            const reais = mentions.slice(0, mencoesAlvo);
-            const faltam = mencoesAlvo - reais.length;
-            mencoesFinal = [...reais, ...generatePadMentions(faltam)];
-          }
-
-          const content = buildRajaContent(texto, mencoesFinal, {
-            forwarded: comForward,
-            wrapper,
-            messageSecret: comSecret,
-          });
+          const content = buildRajaContent(texto, mentions);
 
           // Gera UMA vez e reaproveita: só o ID muda por envio, como no
           // !divulgar. Evita montar 50 protos idênticos.
           const baseMsg = await generateWAMessageFromContent(from, content, { userJid: nazu?.user?.id });
 
           const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+          const DELAY_MS = 700;
           let enviados = 0;
           const falhas = [];
 
           for (let i = 0; i < total; i++) {
             try {
-              // Mensagem "limpante": empurra o conteúdo anterior para fora da
-              // tela, técnica que acompanha o raja no bot de referência.
-              if (comClean) {
-                await nazu.sendMessage(from, {
-                  text: '\n'.repeat(300) + '▫️ 𝙰𝙽𝚃𝙸-𝙵𝙻𝙾𝙾𝙳 𝙰𝚃𝙸𝚅𝙰𝙳𝙾 ▫️',
-                }).catch(() => {});
-              }
               // messageId novo por envio (o WhatsApp descarta IDs repetidos),
               // no formato do raja real (22 chars), nao no da Baileys (40).
               const msgId = generateRajaMessageId();
               await nazu.relayMessage(from, baseMsg.message, { messageId: msgId });
+              logRajaEnvio(content, mentions, msgId);
               enviados += 1;
             } catch (e) {
               falhas.push(e?.message || String(e));
             }
             // Intervalo entre envios: evita rajada instantânea no servidor.
-            if (i < total - 1) await sleep(delay);
+            if (i < total - 1) await sleep(DELAY_MS);
           }
 
           const resumo = [
@@ -31986,7 +31886,6 @@ break;
             `📨 Enviadas: ${enviados}/${total}`,
             `👥 Menções por mensagem: ${mentions.length}`,
             `💰 amount1000: "0"`,
-            `🔁 Nota encaminhada: ${comForward ? 'sim' : 'não'}`,
           ];
           if (falhas.length) {
             resumo.push(``, `⚠️ Falhas: ${falhas.length}`);
