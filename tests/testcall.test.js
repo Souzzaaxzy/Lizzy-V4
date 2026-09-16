@@ -371,14 +371,330 @@ await test('!testcall: a mensagem de DESATIVADO é curta e não lista eventos', 
 });
 
 // ============================================================================
-// 3) HANDLER DE CALL (connect.js) — via socket fake
+// 3) LISTENER DE CALL (callNotifier.attachCallNotifier) — deps injetadas
 // ============================================================================
+//
+// O listener vive em callNotifier.js e recebe socket/disco/envio por injeção,
+// entao o fluxo real (filtro de grupo -> toggle -> nomes -> texto -> envio) e
+// exercitado aqui sem importar o connect.js (que abre socket de verdade).
+
+/** Event emitter minimo, com a mesma forma do ev do Baileys. */
+function makeEv() {
+  const handlers = {};
+  return {
+    handlers,
+    on(event, fn) { (handlers[event] = handlers[event] || []).push(fn); },
+    emit(event, args) { return (handlers[event] || []).map((fn) => fn(args)); },
+  };
+}
+
+/**
+ * Monta o listener com dependencias controladas e devolve o que foi enviado.
+ *
+ * As dependencias precisam entrar ANTES do attach: `attachCallNotifier`
+ * desestrutura as deps ao registrar, entao reatribuir o objeto depois nao
+ * surtiria efeito. `call()` roda o handler capturando console.error localmente.
+ */
+function makeListener(overrides = {}) {
+  const ev = makeEv();
+  const sent = [];
+  const errors = [];
+  const logs = [];
+  const deps = {
+    ev,
+    getGroupData: async () => null,
+    getCallerName: async () => 'Fulano',
+    getGroupName: async () => 'Meu Grupo',
+    send: async (chatId, text) => { sent.push({ chatId, text }); },
+    log: (delivery) => { logs.push(delivery); },
+    ...overrides,
+  };
+  const handler = notifier.attachCallNotifier(deps);
+
+  // Captura o console.error DURANTE a execucao (o listener loga ali) sem
+  // poluir a saida da suite.
+  const call = async (args) => {
+    const origError = console.error;
+    console.error = (...a) => { errors.push(a.map(String).join(' ')); };
+    try {
+      await handler(args);
+    } finally {
+      console.error = origError;
+    }
+  };
+
+  return { ev, sent, errors, logs, handler, deps, call };
+}
+
+await test('listener: registra no evento call e entrega entrega valida', async () => {
+  const l = makeListener({ getGroupData: async () => ({ testcall: true }) });
+  ok(l.ev.handlers.call && l.ev.handlers.call.length === 1, 'registrou 1 handler em call');
+
+  await l.call([makeCall()]);
+  ok(l.sent.length === 1, 'enviou 1 notificacao');
+  ok(l.sent[0].chatId === '120363920000000001@g.us', 'enviou no chat do grupo');
+  includes(l.sent[0].text, 'Ligação entrando', 'texto da oferta');
+  includes(l.sent[0].text, 'Fulano', 'nome do autor resolvido');
+  includes(l.sent[0].text, 'Meu Grupo', 'nome do grupo resolvido');
+  ok(l.logs.length === 1 && l.logs[0].kind === 'offer', 'logou o tipo offer');
+});
+
+await test('listener: grupo SEM o toggle nao recebe nada', async () => {
+  const semToggle = makeListener({ getGroupData: async () => ({ testcall: false }) });
+  await semToggle.call([makeCall()]);
+  ok(semToggle.sent.length === 0, 'toggle desligado nao envia');
+
+  const semArquivo = makeListener({ getGroupData: async () => null });
+  await semArquivo.call([makeCall()]);
+  ok(semArquivo.sent.length === 0, 'grupo sem dados nao envia');
+
+  const semCampo = makeListener({ getGroupData: async () => ({}) });
+  await semCampo.call([makeCall()]);
+  ok(semCampo.sent.length === 0, 'groupData sem testcall nao envia');
+});
+
+await test('listener: ignora chat que nao e grupo (inclusive o toggle ligado)', async () => {
+  // Mesmo com groupData ligado, PV/status/newsletter nao sao notificados: o
+  // filtro de chat vem ANTES da leitura do toggle.
+  let leuGroupData = false;
+  const pv = makeListener({
+    getGroupData: async () => { leuGroupData = true; return { testcall: true }; },
+  });
+  await pv.call([makeCall({ chatId: '5511999999999@s.whatsapp.net' })]);
+  ok(pv.sent.length === 0, 'PV nao notifica');
+  ok(leuGroupData === false, 'nao le groupData para chat nao-grupo');
+
+  await pv.call([makeCall({ chatId: undefined })]);
+  await pv.call([makeCall({ chatId: null })]);
+  ok(pv.sent.length === 0, 'chatId ausente/null nao notifica');
+});
+
+await test('listener: falha ao resolver nomes nao impede a notificacao', async () => {
+  const l = makeListener({
+    getGroupData: async () => ({ testcall: true }),
+    getCallerName: async () => { throw new Error('getName falhou'); },
+    getGroupName: async () => { throw new Error('groupMetadata falhou'); },
+  });
+  await l.call([makeCall()]);
+  ok(l.sent.length === 1, 'notificacao saiu mesmo sem nomes');
+  includes(l.sent[0].text, '5511999999999', 'caiu para o numero do autor');
+  notIncludes(l.sent[0].text, 'undefined', 'sem undefined no texto');
+  notIncludes(l.sent[0].text, 'null', 'sem null no texto');
+});
+
+await test('listener: falha ao ler groupData nao derruba nem notifica', async () => {
+  const l = makeListener({ getGroupData: async () => { throw new Error('EACCES'); } });
+  await l.call([makeCall()]);
+  ok(l.sent.length === 0, 'sem groupData legivel, nao notifica');
+  ok(l.errors.length === 0, 'nao loga erro: leitura falha e comportamento esperado');
+});
+
+await test('listener: entrada invalida/vazia nao quebra', async () => {
+  const l = makeListener({ getGroupData: async () => ({ testcall: true }) });
+  await l.call([null]);
+  await l.call([undefined]);
+  await l.call([]);
+  ok(l.sent.length === 0, 'nada enviado para eventos vazios');
+  ok(l.errors.length === 0, 'sem excecao escapando');
+});
+
+await test('listener: notifica todos os 9 status quando ligado', async () => {
+  const l = makeListener({ getGroupData: async () => ({ testcall: true }) });
+  const statuses = ['offer', 'ringing', 'preaccept', 'transport', 'relaylatency',
+                    'accept', 'reject', 'terminate', 'timeout'];
+  for (const status of statuses) await l.call([makeCall({ status })]);
+  ok(l.sent.length === statuses.length, 'notificou os 9 status');
+  // Cada mensagem carrega o id da chamada e nao deixa placeholder.
+  for (const s of l.sent) {
+    includes(s.text, '3EB0CALLTEST', 'id da chamada');
+    notIncludes(s.text, 'undefined', 'sem undefined');
+  }
+});
+
+await test('listener: falha no envio e capturada (nao derruba o listener)', async () => {
+  const l = makeListener({
+    getGroupData: async () => ({ testcall: true }),
+    send: async () => { throw new Error('send falhou'); },
+  });
+  await l.call([makeCall()]);
+  ok(l.errors.some((e) => e.includes('TESTCALL')), 'erro de envio foi logado');
+});
+
+await test('listener: notifica QUALQUER autor, inclusive o bot', async () => {
+  const l = makeListener({ getGroupData: async () => ({ testcall: true }) });
+  await l.call([makeCall({ from: '5511988887777@s.whatsapp.net' })]);
+  await l.call([makeCall({ from: BOT_JID })]);
+  await l.call([makeCall({ from: '217205740421125@lid' })]);
+  ok(l.sent.length === 3, 'notificou os 3 autores');
+  for (const s of l.sent) {
+    notIncludes(s.text, 'saindo', 'nao distingue autor');
+    notIncludes(s.text, 'bot', 'nao menciona bot');
+  }
+});
+
+// ============================================================================
+// 4) NOME DO GRUPO NA NOTIFICACAO (resolveCallGroupName)
+// ============================================================================
+
+/** Deps de metadata controladas, registrando consultas e escritas de cache. */
+function makeNameDeps({ cached = null, subject = null, metadataThrows = false } = {}) {
+  const state = { fetched: 0, cached: [], useCache: cached };
+  return {
+    state,
+    getCached: () => state.useCache,
+    setCached: (name) => { state.cached.push(name); state.useCache = name; },
+    fetchMetadata: async () => {
+      state.fetched += 1;
+      if (metadataThrows) throw new Error('groupMetadata falhou');
+      return subject;
+    },
+  };
+}
+
+await test('nome do grupo: usa o groupName persistido sem tocar metadata', async () => {
+  const deps = makeNameDeps({ subject: 'Do metadata' });
+  const nome = await notifier.resolveCallGroupName({ groupName: 'Grupo Salvo' }, deps);
+  ok(nome === 'Grupo Salvo', `usou o persistido (obtido: ${nome})`);
+  ok(deps.state.fetched === 0, 'nao consultou metadata');
+});
+
+await test('nome do grupo: cai para o metadata quando nao ha groupName', async () => {
+  // Este e o caso que nunca funcionava: groupData de grupo guarda state de
+  // features e nao tem subject/name, entao a linha "• Grupo:" nunca aparecia.
+  const deps = makeNameDeps({ subject: 'Meu Grupo Real' });
+  const nome = await notifier.resolveCallGroupName({ testcall: true }, deps);
+  ok(nome === 'Meu Grupo Real', `resolveu pelo metadata (obtido: ${nome})`);
+  ok(deps.state.fetched === 1, 'consultou metadata uma vez');
+  ok(deps.state.cached.includes('Meu Grupo Real'), 'guardou no cache');
+});
+
+await test('nome do grupo: usa cache antes do metadata', async () => {
+  const deps = makeNameDeps({ cached: 'Do Cache', subject: 'Do metadata' });
+  const nome = await notifier.resolveCallGroupName({}, deps);
+  ok(nome === 'Do Cache', 'preferiu o cache');
+  ok(deps.state.fetched === 0, 'nao consultou metadata com cache quente');
+});
+
+await test('nome do grupo: groupName vazio/espaco nao conta', async () => {
+  const deps = makeNameDeps({ subject: 'Do metadata' });
+  ok(await notifier.resolveCallGroupName({ groupName: '   ' }, deps) === 'Do metadata',
+    'groupName so com espacos caiu para o metadata');
+  const deps2 = makeNameDeps({ subject: 'Do metadata' });
+  ok(await notifier.resolveCallGroupName({ groupName: '' }, deps2) === 'Do metadata',
+    'groupName vazio caiu para o metadata');
+});
+
+await test('nome do grupo: apara espacos e ignora metadata invalido', async () => {
+  const espacos = await notifier.resolveCallGroupName({}, makeNameDeps({ subject: '  Grupo X  ' }));
+  ok(espacos === 'Grupo X', `apara espacos (obtido: ${JSON.stringify(espacos)})`);
+
+  const vazio = await notifier.resolveCallGroupName({}, makeNameDeps({ subject: '   ' }));
+  ok(vazio === null, 'subject so com espacos -> null');
+
+  const nulo = await notifier.resolveCallGroupName({}, makeNameDeps({ subject: null }));
+  ok(nulo === null, 'subject null -> null');
+});
+
+await test('nome do grupo: falha no metadata devolve null (nao quebra a notificacao)', async () => {
+  const deps = makeNameDeps({ metadataThrows: true });
+  const nome = await notifier.resolveCallGroupName({ testcall: true }, deps);
+  ok(nome === null, 'devolveu null em vez de lancar');
+  ok(deps.state.cached.length === 0, 'nao cacheou nome inexistente');
+});
+
+await test('listener: notificacao inclui o nome do grupo quando resolvido', async () => {
+  const l = makeListener({
+    getGroupData: async () => ({ testcall: true }),
+    getGroupName: async () => 'Grupo Resolvido',
+  });
+  await l.call([makeCall()]);
+  includes(l.sent[0].text, '• Grupo: Grupo Resolvido', 'linha do grupo presente');
+});
+
+await test('listener: sem nome resolvido, sai sem a linha do grupo (sem placeholder)', async () => {
+  const l = makeListener({
+    getGroupData: async () => ({ testcall: true }),
+    getGroupName: async () => null,
+  });
+  await l.call([makeCall()]);
+  ok(l.sent.length === 1, 'notificacao saiu');
+  notIncludes(l.sent[0].text, '• Grupo:', 'sem linha de grupo');
+  notIncludes(l.sent[0].text, 'null', 'sem null no texto');
+});
+
+// ============================================================================
+// 5) ESCRITAS CONCORRENTES NO MESMO GRUPO (regressao do .tmp compartilhado)
+// ============================================================================
+
+await test('escritas concorrentes no mesmo grupo nao se perdem (sem ENOENT)', async () => {
+  // Regressao: writeJsonFile e writeJsonFileAsync usavam o MESMO `${file}.tmp`.
+  // Com varios comandos no mesmo grupo ao mesmo tempo, a primeira escrita
+  // renomeava o .tmp e as outras falhavam no rename (ENOENT), perdendo dados.
+  // Agora cada escrita usa um temp unico.
+  //
+  // Nao se afirma QUAL valor ficou no arquivo: com N toggles concorrentes o
+  // "ultimo write vence" e nao-deterministico por construcao. O que a correcao
+  // garante -- e o que este teste trava -- e que nenhuma escrita se perca e que
+  // o arquivo nunca fique corrompido ou com .tmp orfao.
+  const g = makeGroup();
+  const errosDeEscrita = [];
+  const origError = console.error;
+  console.error = (...a) => {
+    const linha = a.map(String).join(' ');
+    if (linha.includes('Erro ao escrever JSON')) errosDeEscrita.push(linha);
+  };
+
+  try {
+    // Varios comandos no mesmo grupo disparados juntos.
+    const execucoes = [];
+    for (let i = 0; i < 12; i++) execucoes.push(run('!testcall', { groupJid: g }));
+    await Promise.all(execucoes);
+  } finally {
+    console.error = origError;
+  }
+
+  ok(errosDeEscrita.length === 0,
+    `nenhuma escrita falhou (obtido: ${errosDeEscrita.length} erros)`);
+  if (errosDeEscrita.length > 0) console.log('     ' + errosDeEscrita[0]);
+
+  // O arquivo final precisa continuar sendo JSON valido (nao escrito pela metade).
+  await waitForPendingWrites();
+  let salvo = null;
+  try {
+    salvo = JSON.parse(fs.readFileSync(path.join(GROUPS_DIR, `${g}.json`), 'utf-8'));
+  } catch (e) {
+    salvo = null;
+  }
+  ok(salvo !== null, 'arquivo final e JSON valido');
+  ok(salvo && salvo.__extraAdmins !== undefined, 'estado original preservado no arquivo');
+
+  // E nenhum .tmp orfao ficou para tras.
+  const orfaos = fs.readdirSync(GROUPS_DIR).filter((f) => f.endsWith('.tmp'));
+  ok(orfaos.length === 0, `sem .tmp orfao (obtido: ${orfaos.length})`);
+});
 
 // ============================================================================
 
 // Espera as escritas assincronas de groupData (persistGroupData roda em
-// background) antes de medir e remover o banco temporario.
-await new Promise((r) => setTimeout(r, 1500));
+// background) terminarem antes de medir e remover o banco temporario: sem isso
+// o rmSync pode remover o diretorio no meio de uma escrita.
+async function waitForPendingWrites(timeoutMs = 5000) {
+  const pending = () => {
+    try {
+      return fs.readdirSync(GROUPS_DIR).some((f) => f.endsWith('.tmp'));
+    } catch {
+      return false;
+    }
+  };
+  const deadline = Date.now() + timeoutMs;
+  let quietChecks = 0;
+  while (quietChecks < 2 && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 100));
+    quietChecks = pending() ? 0 : quietChecks + 1;
+  }
+}
+
+await waitForPendingWrites();
 
 const totalOk = RESULTS.reduce((a, r) => a + r.passed, 0);
 const totalFail = RESULTS.reduce((a, r) => a + r.failed, 0);

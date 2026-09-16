@@ -400,25 +400,54 @@ chamadas. Só em grupo, exige admin.
 - **Regra de notificação**: `shouldNotifyCall(groupData)` (só com `testcall`
   ligado) + filtro de chat `@g.us`. Grupo desligado não recebe nada; PV é
   ignorado mesmo ligado, porque o toggle é por grupo.
-- **Listener**: `attachCallListener()` em `connect.js` (~1842), registrado ao
-  lado do `attachMessagesListener()`. Lê o `groupData` pelo `getGroupData()` do
-  próprio connect.js (respeita `DATABASE_PATH`) e nunca deixa uma falha derrubar
-  o listener.
+- **Listener**: `attachCallListener()` em `connect.js` (~1884) — só injeta as
+  dependências reais (socket, leitura do `groupData`, envio) em
+  `callNotifier.attachCallNotifier()`, registrado ao lado do
+  `attachMessagesListener()`. **A regra (só grupo + toggle) e o texto vivem no
+  `callNotifier.js`**, que segue puro: é isso que permite testar o fluxo inteiro
+  sem abrir socket (importar o `connect.js` abre conexão de verdade).
+- **Nome do grupo**: `resolveCallGroupName()` (`callNotifier.js`) resolve na
+  ordem `groupData.groupName` (persistido pelo `index.js`) → cache `groupMeta` →
+  metadata do Baileys. Antes o listener lia `groupData.subject || groupData.name`
+  — campos que **não existem** nos JSONs de grupo (que guardam state de
+  features), então a linha `• Grupo:` nunca aparecia.
+- **`DATABASE_PATH`**: `connect.js` passou a tirar `DATABASE_DIR`/`GRUPOS_DIR`/
+  `GLOBAL_BLACKLIST_PATH` de `utils/paths.js` (e `AUTH_DIR` de dentro do
+  `DATABASE_DIR`). Antes eram montados com `path.join(__dirname, '..')` fixo, o
+  que **ignorava a variável** — sub-bots e testes liam/gravavam sempre o banco do
+  bot principal. No mesmo caminho foram corrigidos dois caminhos relativos ao
+  CWD (`./database/grupos/...`) e um **import dinâmico quebrado** no
+  `messages.delete` (`normalizeGroupId`/`buildGroupFilePath`/`writeJsonFile` não
+  existem em `paths.js`).
+- **Bug de escrita concorrente (perda de dados)**: `writeJsonFile` e
+  `writeJsonFileAsync` usavam **o mesmo** `${filePath}.tmp`. Duas escritas no
+  mesmo JSON ao mesmo tempo (ex.: handler de mensagem + `persistGroupData`)
+  pisavam uma na outra — a primeira renomeava o `.tmp` e a segunda falhava no
+  rename com **ENOENT, perdendo a escrita**. Agora cada escrita usa
+  `uniqueTempPath()` com pid+sequência (rename segue atômico: o temp fica no
+  mesmo diretório). Teste de regressão valida revertendo o fix.
 - **LIMITE TÉCNICO — isto é SINALIZAÇÃO, não chamada.** O Baileys não tem stack
   de mídia (nada de WebRTC/SRTP/codec), então **não existe "entrar na chamada",
   atender, nem tocar áudio**. Só dá para observar o evento e recusar
-  (`rejectCall`). Qualquer plano de "bot entra na call e toca música" esbarra
-  nisso — ver a seção sobre o wacrg mais abaixo.
-- **Testes**: `tests/testcall.test.js` — 17 testes / 57 asserções. Cobre a
+  (`rejectCall`). A fork adiciona `preacceptCall` (equivale a SIP 180 Ringing,
+  **não** é aceite), mas o bot **não usa** — o `!testcall` só observa e informa.
+  Qualquer plano de "bot entra na call e toca música" esbarra nisso.
+- **Testes**: `tests/testcall.test.js` — 35 testes / 127 asserções. Cobre a
   classificação dos 9 status, o tratamento **igual para qualquer autor**
   (terceiro, bot e LID produzem o mesmo rótulo; o texto nunca diz "saindo" nem
   "bot"), texto sem `undefined`/`null`, entradas inválidas, e o comando (só
   grupo, só admin, alterna e persiste, não-admin não liga, e a **mensagem do
   comando** descreve o comportamento real sem prometer "saindo do bot").
+  **Cobertura do listener (seção 3)**: o fluxo real via deps injetadas — filtro
+  de chat **antes** de ler o toggle, toggle desligado/ausente, falha de
+  `getGroupData`/nomes não derrubando, falha de envio capturada, e os 9 status
+  entregues. **Seção 4**: `resolveCallGroupName` (persistido → cache → metadata,
+  espaços, inválidos, falha de metadata). **Seção 5**: escritas concorrentes sem
+  perda (regressão do `.tmp`).
   **Armadilhas do handler** (descobertas escrevendo estes testes):
   - **não importe `connect.js`** — importá-lo ABRE SOCKET de verdade (gera QR e
-    conecta), o que trava a suíte. O handler é coberto pela regra
-    (`shouldNotifyCall` + filtro `@g.us`), não por import.
+    conecta), o que trava a suíte. Por isso o handler recebe as dependências
+    por injeção (`attachCallNotifier`) e é exercitado sem import do connect.
   - **throttle de 3 comandos/5s por sender** — usar o mesmo sender em toda a
     suíte faz o 4º responder "Calma aí!". O helper `run()` troca de sender a
     cada 3 usos.
@@ -478,6 +507,22 @@ chamadas. Só em grupo, exige admin.
 - Named exports (`export { ... }`): tiktok, youtube, igdl, pinterest, canvas, kwai, edits, logos → fachada usa `import * as ns` + `pickNamed()` (filtra `default`/`__esModule`).
 - Default objeto (`export default { ... }`): spotify, soundcloud, facebook, imagetools → fachada usa o default diretamente.
 - Default função (`export default fn`): lyrics (`getLyrics`), apkmod (`apkMod`), mcplugins (`buscarPlugin`) → fachada cria `callable()` que expõe a função como namespace **e** anexa `.getLyrics`/`.apkMod`/`.buscarPlugin` como propriedade (preserva chamada direta antiga `Lyrics(q)`).
+
+## Baileys: a fork é a dependência do bot
+- `package.json`: `"@itsliaaa/baileys": "github:Souzzaaxzy/baileys"` — a fork
+  **é** a lib do bot, fixada no commit `453ccf7` pelo `package-lock.json`.
+- A fork traz a API de sinalização de call: `CallStatus` (9 estados),
+  `isMissedCall`, `isCallEnded`, `CALL_OFFER_EVICTED_STATUSES` e
+  `preacceptCall` (SIP 180 Ringing; **não** é aceite, a lib não carrega mídia).
+  Também corrige um `TypeError` do `getCallStatusFromNode` em node sem `attrs`.
+- **`callNotifier.js` mantém fallback local de `CallStatus`/`isMissedCall`**
+  (`Baileys.CallStatus || {...}`) de propósito: importar com nome direto
+  (`import { CallStatus }`) é erro fatal de resolução ESM e derrubaria o boot
+  inteiro numa versão anterior à fork. Com a fork instalada o fallback não é usado.
+- **`yarn.lock` estava apontando para o pacote npm** (`@itsliaaa/baileys@0.3.18-final`
+  do registry), então um `yarn install` traria a versão **antiga**, sem
+  `CallStatus`/`preacceptCall` — incoerente com o `package.json`. A entrada agora
+  aponta para a fork (mesmo commit do `package-lock.json`).
 
 ## Dependências da VexAPI — ELIMINADAS
 - `funcs/API.js` foi **removido** na limpeza final; `config.json` não tem mais `site_vex`/`apikey_vex`.

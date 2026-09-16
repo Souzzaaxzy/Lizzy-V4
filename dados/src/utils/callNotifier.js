@@ -6,8 +6,9 @@
  * casos, `callerPn`. Isso e SINALIZACAO apenas: a lib nao carrega audio/video,
  * entao nao existe "entrar na chamada" -- so da para observar e recusar.
  *
- * Este modulo e puro (nao abre socket, nao toca disco): quem le o `groupData` e
- * quem envia a mensagem e o connect.js. Assim da para testar sem WhatsApp.
+ * Este modulo e puro (nao abre socket, nao toca disco): quem fornece socket,
+ * `groupData`, resolucao de nomes e envio e o connect.js, via
+ * `attachCallNotifier()`. Assim da para exercitar o fluxo real sem WhatsApp.
  */
 
 import * as Baileys from '@itsliaaa/baileys';
@@ -38,6 +39,9 @@ const CallStatus = Baileys.CallStatus || Object.freeze({
 
 const isMissedCall = Baileys.isMissedCall || ((status) => status === CallStatus.Timeout);
 
+/** Sufixo de JID de grupo. Toda notificacao do !testcall e por grupo. */
+const GROUP_CHAT_SUFFIX = '@g.us';
+
 /**
  * Extrai o numero de um JID/LID para exibir de forma legivel.
  * Mantem o JID completo quando nao parece um numero (ex.: newsletter).
@@ -61,7 +65,13 @@ export function displayUser(jid) {
 export function classifyCallEvent(call) {
     if (!call || typeof call !== 'object') return null;
 
-    // Toda notificacao comeca com o status; o rotulo diz o que aconteceu.
+    // "Chamada perdida" e um conceito proprio da lib (ninguem atendeu) e tem
+    // rotulo especifico -- por isso sai antes do switch, que fica 1:1 com o
+    // restante do ciclo de vida.
+    if (isMissedCall(call.status)) {
+        return { kind: 'timeout', emoji: '📵', label: 'Chamada perdida (ninguém atendeu)' };
+    }
+
     switch (call.status) {
         case CallStatus.Offer:
             return { kind: 'offer', emoji: '📞', label: 'Ligação entrando' };
@@ -79,9 +89,6 @@ export function classifyCallEvent(call) {
             return { kind: 'reject', emoji: '❌', label: 'Chamada recusada' };
         case CallStatus.Terminate:
             return { kind: 'terminate', emoji: '📴', label: 'Chamada encerrada' };
-        case CallStatus.Timeout:
-            // Este e o caso "tentativa de ligacao que ninguem atendeu".
-            return { kind: 'timeout', emoji: '📵', label: 'Chamada perdida (ninguém atendeu)' };
         default:
             return { kind: 'unknown', emoji: '📞', label: `Evento de chamada (${call.status || 'sem status'})` };
     }
@@ -137,6 +144,132 @@ export function buildCallNotification(call, options = {}) {
  */
 export function shouldNotifyCall(groupData) {
     return Boolean(groupData && groupData.testcall);
+}
+
+/**
+ * Decide o destino de um evento de call, com os dados ja resolvidos.
+ *
+ * Concentra as duas condicoes que fazem uma notificacao existir -- ser grupo e
+ * ter o toggle ligado -- para que a regra seja testavel sem socket e o listener
+ * nunca precise reimplementa-la.
+ *
+ * @param {object} call evento de `ev.on('call')`
+ * @param {object} [context]
+ * @param {object|null} [context.groupData] dados do grupo (toggle)
+ * @param {string|null} [context.callerName] nome do autor, quando conhecido
+ * @param {string|null} [context.groupName] nome do grupo, quando conhecido
+ * @returns {{chatId: string, text: string, kind: string}|null}
+ */
+export function buildCallDelivery(call, context = {}) {
+    if (!call || typeof call !== 'object') return null;
+
+    const chatId = call.chatId;
+    if (typeof chatId !== 'string' || !chatId.endsWith(GROUP_CHAT_SUFFIX)) return null;
+    if (!shouldNotifyCall(context.groupData)) return null;
+
+    const notif = buildCallNotification(call, {
+        callerName: context.callerName,
+        groupName: context.groupName
+    });
+    if (!notif) return null;
+
+    return { chatId, text: notif.text, kind: notif.kind };
+}
+
+/**
+ * Resolve o nome do grupo para a notificacao.
+ *
+ * Ordem: o `groupName` que o index.js persiste no groupData -> cache -> metadata
+ * do Baileys. Os `groupData` de grupo guardam state de features e NAO tinham
+ * `subject`/`name`, entao a linha "• Grupo:" nunca aparecia: sem este fallback o
+ * unico caminho que funcionava era o groupName persistido.
+ *
+ * As tres operacoes entram injetadas porque a leitura de metadata e I/O; sem
+ * isso a ordem nao seria testavel.
+ *
+ * @param {object|null} groupData dados do grupo
+ * @param {object} deps
+ * @param {(key: string) => string|null|undefined} deps.getCached
+ * @param {(name: string) => void} deps.setCached
+ * @param {() => Promise<string|null>} deps.fetchMetadata
+ * @returns {Promise<string|null>} nome utilizavel, ou null
+ */
+export async function resolveCallGroupName(groupData, deps) {
+    const persisted = groupData && groupData.groupName;
+    if (typeof persisted === 'string' && persisted.trim()) return persisted.trim();
+
+    const cached = deps.getCached();
+    if (typeof cached === 'string' && cached) return cached;
+
+    let subject = null;
+    try {
+        subject = await deps.fetchMetadata();
+    } catch (e) {
+        return null;
+    }
+    if (typeof subject !== 'string') return null;
+
+    const name = subject.trim();
+    if (!name) return null;
+    deps.setCached(name);
+    return name;
+}
+
+/**
+ * Registra o listener de `call` no socket.
+ *
+ * O modulo continua puro: socket, leitura do groupData, resolucao de nomes e
+ * envio entram como dependencias injetadas. E o que permite exercitar o fluxo
+ * real (filtro de grupo, toggle, texto, envio) sem abrir conexao.
+ *
+ * @param {object} deps
+ * @param {object} deps.ev event emitter do Baileys (`sock.ev`)
+ * @param {(chatId: string) => Promise<object|null>} deps.getGroupData
+ * @param {(jid: string) => Promise<string|null>} deps.getCallerName
+ * @param {(chatId: string, groupData: object|null) => Promise<string|null>} deps.getGroupName
+ * @param {(chatId: string, text: string) => Promise<any>} deps.send
+ * @param {(delivery: object, call: object) => void} [deps.log]
+ * @returns {(args: [object]) => Promise<void>} handler registrado
+ */
+export function attachCallNotifier(deps) {
+    const { ev, getGroupData, getCallerName, getGroupName, send, log } = deps;
+
+    const handler = async ([call]) => {
+        try {
+            if (!call || typeof call !== 'object') return;
+
+            const chatId = call.chatId;
+            // Só grupos: o toggle vive no groupData daquele grupo. Checa antes
+            // de qualquer I/O para não ler disco/network a toa.
+            if (typeof chatId !== 'string' || !chatId.endsWith(GROUP_CHAT_SUFFIX)) return;
+
+            let groupData = null;
+            try { groupData = await getGroupData(chatId); } catch (e) { groupData = null; }
+            if (!shouldNotifyCall(groupData)) return;
+
+            // Nome do autor e do grupo são best-effort: se falharem, a
+            // notificação sai com o número (e sem a linha do grupo) em vez de
+            // não sair. Não há distinção de quem ligou: qualquer usuário do
+            // grupo é notificado igual, inclusive o próprio bot.
+            let callerName = null;
+            try { callerName = await getCallerName(call.from); } catch (e) { /* segue com o número */ }
+
+            let groupName = null;
+            try { groupName = await getGroupName(chatId, groupData); } catch (e) { /* segue sem a linha */ }
+
+            const delivery = buildCallDelivery(call, { groupData, callerName, groupName });
+            if (!delivery) return;
+
+            await send(delivery.chatId, delivery.text);
+            if (typeof log === 'function') log(delivery, call);
+        } catch (e) {
+            // Uma falha aqui não pode derrubar o listener.
+            console.error('[TESTCALL] Erro ao notificar chamada:', e?.message || e);
+        }
+    };
+
+    ev.on('call', handler);
+    return handler;
 }
 
 export { CallStatus, isMissedCall };
