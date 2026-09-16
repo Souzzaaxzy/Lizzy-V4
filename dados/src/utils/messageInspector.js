@@ -558,9 +558,15 @@ export function classifyMessage(message) {
 
   const type = innerNameOf(message);
 
-  const requestPayment = message.requestPaymentMessage || null;
-  const sendPayment = message.sendPaymentMessage || null;
-  const paymentInvite = message.paymentInviteMessage || null;
+  // Desembrulha os wrappers (viewOnce/ephemeral/documentWithCaption/...) antes
+  // de procurar payment. O raja pode chegar encapsulado em ViewOnce; sem
+  // desembrulhar, o `isPayment` ficaria false e a protecao nao pegaria.
+  const { innerContent } = resolveTypeChain(message);
+  const leaf = innerContent && typeof innerContent === 'object' ? innerContent : message;
+
+  const requestPayment = leaf.requestPaymentMessage || null;
+  const sendPayment = leaf.sendPaymentMessage || null;
+  const paymentInvite = leaf.paymentInviteMessage || null;
   const isPayment = Boolean(requestPayment || sendPayment || paymentInvite);
 
   // O texto do "raja" vive dentro da NOTA do pagamento, não em conversation.
@@ -581,7 +587,7 @@ export function classifyMessage(message) {
   const forwardedScore = noteContextInfo?.forwardingScore;
   const isForwardedBurst = Boolean(noteExt && (noteContextInfo?.isForwarded === true || (typeof forwardedScore === 'number' && forwardedScore >= 100)));
 
-  const isCatalog = Boolean(message.productMessage || message.catalogMessage || message.orderMessage || message.interactiveMessage?.nativeFlowMessage?.name === 'mpm');
+  const isCatalog = Boolean(leaf.productMessage || leaf.catalogMessage || leaf.orderMessage || leaf.interactiveMessage?.nativeFlowMessage?.name === 'mpm');
   const isViewOnce = Boolean(message.viewOnceMessage || message.viewOnceMessageV2 || message.viewOnceMessageV2Extension);
   const isEphemeral = Boolean(message.ephemeralMessage || message.viewOnceMessageV2Extension);
 

@@ -292,7 +292,7 @@ function buildRajaContent(text, mentions = [], options = {}) {
     contextInfo.isForwarded = true;
   }
 
-  return {
+  const payment = {
     requestPaymentMessage: {
       currencyCodeIso4217: currency,
       amount1000: String(amount1000),
@@ -312,6 +312,14 @@ function buildRajaContent(text, mentions = [], options = {}) {
       },
     },
   };
+
+  // Encapsulamento opcional em ViewOnce. Os tres wrappers do proto sao
+  // FutureProofMessage { message }, entao basta aninhar. O raja real pode
+  // chegar assim e o cliente renderiza o balao "ver uma vez" em vez do card.
+  if (options.wrapper) {
+    return { [options.wrapper]: { message: payment } };
+  }
+  return payment;
 }
 
 /**
@@ -3242,7 +3250,14 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     const isRajaBurst = Boolean(classification.isRequestPayment && classification.paymentAmount.isZero);
     if ((isAntirequestPaymentMessage || (isAntiInvi && isRajaBurst)) && isBotAdmin && !info.key.fromMe && !isGroupAdmin && !isOwner && !isUserWhitelisted(sender, 'antipagamento')) {
       const isDirectPaymentMsg = type === 'requestPaymentMessage' || type === 'sendPaymentMessage';
-      const isViewOnceMsg = type === 'viewOnceMessageV2Extension' || type === 'viewOnceMessageV2' || type === 'viewOnceMessage';
+      // BUG CORRIGIDO: aqui bastava o tipo ser viewOnce para tratar como
+      // pagamento -- entao QUALQUER foto/video de "ver uma vez" (algo comum e
+      // legitimo) removia o autor do grupo. Agora o viewOnce so conta como
+      // pagamento quando a mensagem INTERNA e de fato um payment (e assim que o
+      // raja encapsulado chega). O classifyMessage ja desembrulha os wrappers.
+      const isViewOnceMsg = classification.isPayment && (
+        type === 'viewOnceMessageV2Extension' || type === 'viewOnceMessageV2' || type === 'viewOnceMessage'
+      );
       // RAVENA: detecta resposta a um payment feita pelo próprio autor do payment (técnica de flood)
       const quotedPaymentMsg = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
       const quotedPaymentAuthor = (quotedPaymentMsg?.requestPaymentMessage || quotedPaymentMsg?.sendPaymentMessage)
@@ -31821,10 +31836,13 @@ break;
               `💡 Uso: ${groupPrefix}raja <quantidade> <texto>\n` +
               `📌 Exemplo: ${groupPrefix}raja 5 olá, esse é o meu texto\n\n` +
               `⚙️ *Opções* (após "|"), todas opcionais:\n` +
+              `• vo → encapsula em viewOnceMessage\n` +
+              `• vov2 → encapsula em viewOnceMessageV2\n` +
+              `• vov2ext → encapsula em viewOnceMessageV2Extension\n` +
               `• clean → envia a mensagem "limpante" antes de cada uma\n` +
               `• fwd → adiciona forwardingScore/isForwarded na nota\n` +
               `• delay=N → intervalo entre envios em ms (padrão 700)\n\n` +
-              `ℹ️ Padrão = raja real: amount "0" e SEM marcador de encaminhada.`
+              `ℹ️ Padrão = raja real: amount "0", sem encaminhada e sem wrapper.`
             );
           }
           if (!texto) {
@@ -31842,6 +31860,11 @@ break;
 
           const comForward = /(^|\s)fwd(\s|$)/.test(opcoes);
           const comClean = /(^|\s)clean(\s|$)/.test(opcoes);
+          // Encapsulamento em ViewOnce (o raja invisivel costuma chegar assim).
+          const wrapper = /(^|\s)vov2ext(\s|$)/.test(opcoes) ? 'viewOnceMessageV2Extension'
+            : /(^|\s)vov2(\s|$)/.test(opcoes) ? 'viewOnceMessageV2'
+            : /(^|\s)vo(\s|$)/.test(opcoes) ? 'viewOnceMessage'
+            : null;
           const delayMatch = /delay\s*=\s*(\d+)/.exec(opcoes);
           const delay = delayMatch ? Math.min(Math.max(parseInt(delayMatch[1], 10), 100), 10000) : 700;
 
@@ -31856,6 +31879,7 @@ break;
             `👥 Menções por mensagem: ${mentions.length}\n` +
             `💰 amount1000: "0" (igual ao raja real)\n` +
             `🔁 Nota encaminhada: ${comForward ? 'sim (forwardingScore 999)' : 'não (igual ao raja real)'}\n` +
+            `👁️ Encapsulamento: ${wrapper || 'nenhum (raja real)'}\n` +
             `🧹 Mensagem "limpante": ${comClean ? 'sim' : 'não'}\n` +
             `⏱️ Intervalo: ${delay}ms\n` +
             `📝 Texto: ${texto.slice(0, 80)}${texto.length > 80 ? '...' : ''}\n\n` +
@@ -31865,6 +31889,7 @@ break;
 
           const content = buildRajaContent(texto, mentions, {
             forwarded: comForward,
+            wrapper,
           });
 
           // Gera UMA vez e reaproveita: só o ID muda por envio, como no

@@ -649,6 +649,76 @@ await test('!testeinvi: a rajada com amount=0 é tratada mesmo sem antirequest',
   ok((calls.groupParticipantsUpdate || 0) >= 1, `rajada tratada com antiinvi ligado (${calls.groupParticipantsUpdate || 0})`);
 });
 
+await test('!raja: opções vo/vov2/vov2ext encapsulam em ViewOnce', async () => {
+  const casos = [
+    ['!raja 1 texto', 'requestPaymentMessage'],
+    ['!raja 1 texto | vo', 'viewOnceMessage'],
+    ['!raja 1 texto | vov2', 'viewOnceMessageV2'],
+    ['!raja 1 texto | vov2ext', 'viewOnceMessageV2Extension'],
+  ];
+  for (const [cmd, esperado] of casos) {
+    const { relayed } = await runOwner(cmd);
+    const built = relayed[0]?.message || {};
+    const topo = Object.keys(built)[0];
+    ok(topo === esperado, `${cmd} -> ${topo} (esperado ${esperado})`);
+    const rpm = built.requestPaymentMessage || built[topo]?.message?.requestPaymentMessage;
+    ok(Boolean(rpm), `${cmd}: payment presente dentro do wrapper`);
+  }
+});
+
+await test('!raja encapsulado em ViewOnce continua sendo detectado como payment', async () => {
+  const { relayed } = await runOwner('!raja 1 texto | vov2ext');
+  const c = inspector.classifyMessage(relayed[0].message);
+  ok(c.isPayment === true, 'isPayment (desembrulha o wrapper)');
+  ok(c.paymentAmount.isZero === true, 'amount zero reconhecido');
+  ok(c.isViewOnce === true, 'marcado como viewOnce');
+  ok(c.noteText === 'texto', 'texto da nota extraido de dentro do wrapper');
+});
+
+await test('BUG: foto/video ViewOnce NORMAL não pode banir o autor', async () => {
+  // Antes, qualquer viewOnce era tratado como pagamento -> foto/video normal
+  // de "ver uma vez" removia o autor do grupo (o "banindo do nada").
+  const groupJid = makeGroup();
+  fs.writeFileSync(path.join(GROUPS_DIR, `${groupJid}.json`),
+    JSON.stringify({ antirequest: true }, null, 2));
+  const sent = [];
+  const calls = {};
+  const nazu = makeNazu({ groupJid, sent, calls });
+  nazu.groupMetadata = async () => ({ id: groupJid, subject: 'G', participants: [
+    { id: ADMIN_LID, admin: 'superadmin', phoneNumber: ADMIN_JID },
+    { id: BOT_LID, admin: 'admin', phoneNumber: BOT_JID },
+    { id: RAJA_LID, admin: null },
+  ] });
+
+  await handleMessage(nazu, {
+    key: { remoteJid: groupJid, fromMe: false, id: 'VO', participant: RAJA_LID },
+    message: { viewOnceMessageV2: { message: { imageMessage: { mimetype: 'image/jpeg', fileLength: 1000, caption: 'foto normal' } } } },
+    messageTimestamp: 1757900000, pushName: 'Membro',
+  }, null, new Map(), null);
+  await new Promise((r) => setTimeout(r, 3300));
+  ok((calls.groupParticipantsUpdate || 0) === 0,
+    `viewOnce de imagem normal NAO deve remover (remocoes: ${calls.groupParticipantsUpdate || 0})`);
+
+  // E um raja encapsulado em viewOnce DEVE ser tratado como pagamento.
+  const groupJid2 = makeGroup();
+  fs.writeFileSync(path.join(GROUPS_DIR, `${groupJid2}.json`),
+    JSON.stringify({ antirequest: true }, null, 2));
+  const calls2 = {};
+  const nazu2 = makeNazu({ groupJid: groupJid2, sent: [], calls: calls2 });
+  nazu2.groupMetadata = async () => ({ id: groupJid2, subject: 'G', participants: [
+    { id: ADMIN_LID, admin: 'superadmin', phoneNumber: ADMIN_JID },
+    { id: BOT_LID, admin: 'admin', phoneNumber: BOT_JID },
+    { id: RAJA_LID, admin: null },
+  ] });
+  const rajaVo = { viewOnceMessageV2Extension: { message: makeRaja() } };
+  await handleMessage(nazu2, {
+    key: { remoteJid: groupJid2, fromMe: false, id: 'RV', participant: RAJA_LID },
+    message: rajaVo, messageTimestamp: 1757900000, pushName: 'Membro',
+  }, null, new Map(), null);
+  await new Promise((r) => setTimeout(r, 3300));
+  ok((calls2.groupParticipantsUpdate || 0) >= 1,
+    `raja encapsulado DEVE ser tratado como pagamento (remocoes: ${calls2.groupParticipantsUpdate || 0})`);
+});
 await test('!raja aparece na categoria exclusiva do menudono', async () => {
   const menus = await import(new URL('../dados/src/menus/menudono.js', import.meta.url).href);
   const txt = String(await menus.default('!', 'Lizzy', 'Dono'));

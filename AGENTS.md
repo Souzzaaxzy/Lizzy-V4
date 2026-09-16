@@ -125,10 +125,22 @@ Ferramenta do dono para validar a proteção anti-raja em grupo de teste.
   clientes nativos. Os helpers da Baileys **não servem**: `generateMessageID()`
   dá 40 chars (`3EB0` + 18 bytes hex) e `generateMessageIDV2()` insere um
   marcador `'STARFALL'` no meio.
-- **Opções** (após `|`, todas opcionais): `clean` (mensagem "limpante" de 300
-  quebras antes de cada raja), `fwd` (adiciona `forwardingScore: 999` +
-  `isForwarded: true` na nota, para testar essa variante) e `delay=N`
-  (intervalo entre envios, padrão 700ms, teto 10000).
+- **Opções** (após `|`, todas opcionais): `vo` / `vov2` / `vov2ext`
+  (encapsula o payment em `viewOnceMessage` / `viewOnceMessageV2` /
+  `viewOnceMessageV2Extension` — os três são `FutureProofMessage { message }`,
+  então basta aninhar), `clean` (mensagem "limpante" de 300 quebras antes de
+  cada raja), `fwd` (adiciona `forwardingScore: 999` + `isForwarded: true` na
+  nota) e `delay=N` (intervalo entre envios, padrão 700ms, teto 10000).
+- **BUG CORRIGIDO no anti-pagamento**: a condição usava
+  `type === 'viewOnceMessage*'` **sozinho**, então QUALQUER foto/vídeo de "ver
+  uma vez" (normal e legítimo) era tratado como pagamento e **removia o autor
+  do grupo** — era o "banindo do nada" relatado. Agora o viewOnce só conta como
+  pagamento quando há payment **dentro** dele
+  (`classification.isPayment && type === 'viewOnceMessage*'`).
+- **`classifyMessage()` desembrulha wrappers**: usa `resolveTypeChain()` antes de
+  procurar payment, então o `isPayment`/`amount`/`noteText` funcionam mesmo com
+  o raja encapsulado em ViewOnce (antes ficava `isPayment: false` e a proteção
+  não pegava).
 - **Baileys mod** (`@itsliaaa/baileys@0.3.18-final`): `generateWAMessageContent`
   tem suporte nativo a payment (`utils/messages.js` ~1200, via
   `requestPaymentFrom`), mas ele coloca `contextInfo`/`mentions` no
