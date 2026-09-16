@@ -522,36 +522,80 @@ class RelationshipManager {
     return lines.join('\n');
   }
 
-  getRelationshipSummary(userA, userB) {
-    const key = this._getPairKey(userA, userB);
-    if (!key) {
-      return {
-        success: false,
-        message: 'Não foi possível identificar essa dupla.'
-      };
-    }
-
-    const data = this._loadData();
-    const pair = data.pairs[key];
-    if (!pair || !pair.status) {
+  /**
+   * Resumo do relacionamento entre duas pessoas.
+   *
+   * `groupId` restringe a busca ao grupo: as mesmas pessoas podem ter um
+   * trisal em um grupo e outro em outro, e sem o escopo a consulta podia
+   * devolver o relacionamento do grupo errado.
+   */
+  getRelationshipSummary(userA, userB, groupId = null) {
+    const found = this._findRelationshipBetween(userA, userB, groupId);
+    if (!found) {
       return {
         success: false,
         message: 'Nenhum relacionamento ativo registrado entre essas pessoas.'
       };
     }
 
-    const partnerA = getUserName(userA);
-    const partnerB = getUserName(userB);
+    return this._buildSummaryMessage(found.pair, [userA, userB]);
+  }
+
+  /**
+   * Resumo do relacionamento de UM usuario, sem precisar de par informado.
+   *
+   * E o caminho de `!relacionamento` sem mencao. Antes o handler pegava
+   * `activePair.partnerId` e passava como "a outra pessoa", mas em
+   * trisal/quadrisal o `partnerId` era a lista inteira separada por virgula
+   * ("b@lid,c@lid") -- que nao e um JID e nunca casa com nenhum par, entao o
+   * comando respondia "Nenhum relacionamento ativo registrado".
+   */
+  getRelationshipSummaryForUser(userId, groupId = null) {
+    const activePair = this.getActivePairForUser(userId, groupId);
+    if (!activePair) {
+      return {
+        success: false,
+        message: '❌ Você não marcou ninguém e não possui relacionamento ativo no momento.'
+      };
+    }
+
+    const pair = activePair.pair;
+    const users = Array.isArray(pair.users) ? pair.users : [];
+
+    // Ordena com o autor primeiro, para a mensagem abrir com quem consultou.
+    const normalizedSelf = this._normalizeId(userId);
+    const ordered = users.slice().sort((x, y) => {
+      const xSelf = this._normalizeId(x) === normalizedSelf ? 0 : 1;
+      const ySelf = this._normalizeId(y) === normalizedSelf ? 0 : 1;
+      return xSelf - ySelf;
+    });
+
+    return this._buildSummaryMessage(pair, ordered);
+  }
+
+  _buildSummaryMessage(pair, people) {
+    const config = TYPE_CONFIG[pair.status];
+    const isMultiple = Boolean(config?.multipleParticipants);
+    const users = Array.isArray(pair.users) && pair.users.length ? pair.users : people;
+
+    // Em trisal/quadrisal TODOS os participantes são parceiros entre si, então
+    // a lista mostra o grupo inteiro (quem consultou incluído). Nos 1-1, mostra
+    // o par consultado.
+    const listed = isMultiple ? users : people;
+
+    const nameList = listed
+      .map(u => `@${getUserName(u)}`)
+      .join(isMultiple ? ', ' : ' & ');
+
     const lines = [
       '💞 *RELACIONAMENTO*',
       '',
-      `👥 Parceiros: @${partnerA} & @${partnerB}`
+      `${isMultiple ? '👥 Participantes' : '👥 Parceiros'}: ${nameList}`
     ];
 
-    if (pair.status && TYPE_CONFIG[pair.status]) {
-      const statusConfig = TYPE_CONFIG[pair.status];
-      lines.push(`${statusConfig.emoji} Status atual: ${statusConfig.label}`);
-      
+    if (config) {
+      lines.push(`${config.emoji} Status atual: ${config.label}`);
+
       const statusSince = pair.stages?.[pair.status]?.since;
       if (statusSince) {
         const formatted = this._formatDate(statusSince);
@@ -563,23 +607,24 @@ class RelationshipManager {
       lines.push('⚠️ Status atual: sem registro válido.');
     }
 
-    // Mostra histórico de estágios
+    // Historico de estagios: so os 1-1 evoluem por ficante/namoro/casamento.
+    // O estagio atual ja aparece acima, entao ele sai daqui para nao repetir.
     const historicalStages = ['ficante', 'namoro', 'casamento']
-      .filter(stage => pair.stages?.[stage]?.since)
+      .filter(stage => stage !== pair.status && pair.stages?.[stage]?.since)
       .map(stage => {
-        const config = TYPE_CONFIG[stage];
+        const stageConfig = TYPE_CONFIG[stage];
         const since = pair.stages[stage].since;
         const formatted = this._formatDate(since);
         const sinceTimestamp = Date.parse(since);
         const duration = Number.isNaN(sinceTimestamp) ? null : this._formatDuration(Date.now() - sinceTimestamp);
-        return `${config.emoji} ${config.label}: ${formatted || 'data desconhecida'}${duration ? ` (há ${duration})` : ''}`;
+        return `${stageConfig.emoji} ${stageConfig.label}: ${formatted || 'data desconhecida'}${duration ? ` (há ${duration})` : ''}`;
       });
 
     if (historicalStages.length > 0) {
       lines.push('', '📚 Histórico de Estágios:', ...historicalStages);
     }
 
-    // Se está namorando mas não casado, mostra tempo restante para casar
+    // Se esta namorando mas nao casado, mostra tempo restante para casar.
     if (pair.status === 'namoro' && pair.stages?.namoro?.since) {
       const namoroSince = Date.parse(pair.stages.namoro.since);
       if (!Number.isNaN(namoroSince)) {
@@ -596,53 +641,62 @@ class RelationshipManager {
     return {
       success: true,
       message: lines.join('\n'),
-      mentions: [userA, userB]
+      mentions: (users.length ? users : people).slice()
     };
   }
-
-  getActivePairForUser(userId) {
-    const normalized = this._normalizeId(userId);
-    if (!normalized) return null;
+  _findRelationshipBetween(userA, userB, groupId = null) {
+    const a = this._normalizeId(userA);
+    const b = this._normalizeId(userB);
+    if (!a || !b || a === b) return null;
 
     const data = this._loadData();
-    for (const [key, pair] of Object.entries(data.pairs)) {
-      if (!pair || !Array.isArray(pair.users) || !pair.status || !TYPE_CONFIG[pair.status]) continue;
-      const users = pair.users.map(u => this._normalizeId(u));
-      const index = users.indexOf(normalized);
-      if (index === -1) continue;
 
-      const partnerIndex = index === 0 ? 1 : 0;
-      const partnerId = pair.users[partnerIndex];
-      if (!partnerId) continue;
-
-      return {
-        key,
-        pair,
-        partnerId,
-        userId: pair.users[index]
-      };
+    // 1) Par 1-1: a chave canonica "a::b" identifica o relacionamento.
+    const directKey = this._getPairKey(a, b);
+    const direct = data.pairs[directKey];
+    if (direct && direct.status && TYPE_CONFIG[direct.status]) {
+      return { key: directKey, pair: direct };
     }
 
-    return null;
+    // 2) Relacionamento de grupo (trisal/quadrisal): a chave e
+    // "groupId::a::b::c", entao _getPairKey nunca casa. Aqui procura o par
+    // MULTIPLO que contenha as duas pessoas.
+    const found = [];
+    for (const [key, pair] of Object.entries(data.pairs)) {
+      if (!pair || !pair.status || !TYPE_CONFIG[pair.status]) continue;
+      if (!TYPE_CONFIG[pair.status].multipleParticipants) continue;
+      if (!Array.isArray(pair.users)) continue;
+
+      const users = pair.users.map(u => this._normalizeId(u));
+      if (users.includes(a) && users.includes(b)) {
+        found.push({ key, pair });
+      }
+    }
+    if (found.length === 0) return null;
+
+    // Duas pessoas podem dividir varios grupos e ter um trisal em cada um. Com
+    // groupId, o relacionamento DAQUELE grupo vence; sem ele, mantem o primeiro
+    // (comportamento antigo, para chamadas que nao tem contexto de grupo).
+    if (groupId) {
+      const scoped = found.find(f => f.pair.groupId === groupId);
+      if (scoped) return scoped;
+    }
+
+    return found[0];
   }
 
   endRelationship(userA, userB, triggeredBy) {
-    const key = this._getPairKey(userA, userB);
-    if (!key) {
-      return {
-        success: false,
-        message: '❌ Não foi possível identificar essa dupla.'
-      };
-    }
-
-    const data = this._loadData();
-    const pair = data.pairs[key];
-    if (!pair || !pair.status || !TYPE_CONFIG[pair.status]) {
+    const found = this._findRelationshipBetween(userA, userB);
+    if (!found) {
       return {
         success: false,
         message: '❌ Não existe um relacionamento ativo entre essas pessoas.'
       };
     }
+
+    const { key } = found;
+    const data = this._loadData();
+    const pair = data.pairs[key];
 
     const status = pair.status;
     const config = TYPE_CONFIG[status];
@@ -901,6 +955,10 @@ class RelationshipManager {
       users: allUsers, // Mantém a ordem original com JIDs
       status: pending.type,
       type: pending.type, // trisal ou quadrisal
+      // groupId no proprio par: e o que getActivePairForUser(user, groupId) usa
+      // para nao devolver um trisal de OUTRO grupo (antes so existia dentro de
+      // stages, entao a checagem passava direto e vazava entre grupos).
+      groupId: pending.groupId,
       stages: {
         [pending.type]: {
           since: new Date(now).toISOString(),
@@ -936,62 +994,65 @@ class RelationshipManager {
     };
   }
 
-  // Encontra o relacionamento ativo de um usuário (função melhorada para múltiplos)
-  // Se groupId for fornecido, busca apenas nesse grupo
+  /**
+   * Encontra o relacionamento ativo de um usuario.
+   *
+   * `partnerId` continua sendo um JID unico em todos os casos: em
+   * trisal/quadrisal ele e o primeiro dos demais parceiros e a lista completa
+   * fica em `allPartners`. Antes, o multi devolvia todos os parceiros juntos
+   * numa string separada por virgula ("b@lid,c@lid"), que NÃO e um JID --
+   * qualquer consumidor que fizesse `.split('@')[0]` ou buscasse esse id no
+   * banco recebia lixo (era a causa de `!relacionamento` responder
+   * "Nenhum relacionamento ativo registrado" depois do trisal formado).
+   *
+   * Se `groupId` for informado, so considera relacionamentos daquele grupo.
+   */
   getActivePairForUser(userId, groupId = null) {
     const normalized = this._normalizeId(userId);
     if (!normalized) return null;
 
     const data = this._loadData();
-    
+
     for (const [key, pair] of Object.entries(data.pairs)) {
       if (!pair || !Array.isArray(pair.users) || !pair.status || !TYPE_CONFIG[pair.status]) continue;
-      
-      // Se groupId foi fornecido, verifica se o relacionamento é desse grupo
-      // Usa pair.groupId (salvo no stageEntry) em vez de verificar a chave
-      if (groupId && pair.groupId && pair.groupId !== groupId) {
-        continue;
-      }
-      
-      // Verifica se é um tipo de relacionamento múltiplo
+
+      // Escopo por grupo: usa pair.groupId (gravado no stageEntry e no proprio
+      // pair). Sem isso, um trisal de outro grupo "vazava" para este.
+      if (groupId && pair.groupId && pair.groupId !== groupId) continue;
+
+      const usersNormalized = pair.users.map(u => this._normalizeId(u));
+      const index = usersNormalized.indexOf(normalized);
+      if (index === -1) continue;
+
+      const otherUsers = pair.users.filter((u, i) => i !== index);
+
+      // Relacionamento multiplo: todos sao parceiros entre si.
       if (TYPE_CONFIG[pair.status]?.multipleParticipants) {
-        // Para trisal/quadrisal, verifica se o usuário está em users
-        const usersNormalized = pair.users.map(u => this._normalizeId(u));
-        const index = usersNormalized.indexOf(normalized);
-        if (index !== -1) {
-          // Retorna todos os outros participantes
-          const otherUsers = pair.users.filter((u, i) => i !== index);
-          return {
-            key,
-            pair,
-            partnerId: otherUsers.join(','), // Retorna todos os parceiros separados por vírgula
-            allPartners: otherUsers,
-            userId: pair.users[index],
-            groupId: groupId
-          };
-        }
-      } else {
-        // Para relacionamentos 1-1 (ficante, namoro, casamento)
-        const usersNormalized = pair.users.map(u => this._normalizeId(u));
-        const index = usersNormalized.indexOf(normalized);
-        if (index !== -1) {
-          const partnerIndex = index === 0 ? 1 : 0;
-          const partnerId = pair.users[partnerIndex];
-          if (!partnerId) continue;
-          return {
-            key,
-            pair,
-            partnerId,
-            userId: pair.users[index],
-            groupId: groupId
-          };
-        }
+        if (otherUsers.length === 0) continue;
+        return {
+          key,
+          pair,
+          partnerId: otherUsers[0], // primeiro parceiro, sempre um JID valido
+          allPartners: otherUsers,  // lista completa (compatibilidade)
+          userId: pair.users[index],
+          groupId: pair.groupId ?? groupId
+        };
       }
+
+      // Relacionamento 1-1 (ficante, namoro, casamento).
+      const partnerId = otherUsers[0];
+      if (!partnerId) continue;
+      return {
+        key,
+        pair,
+        partnerId,
+        userId: pair.users[index],
+        groupId: pair.groupId ?? groupId
+      };
     }
 
     return null;
   }
-
   // Termina relacionamento de grupo (trisal ou quadrisal)
   disbandGroupRelationship(userId, triggeredBy, groupId = null) {
     const userActivePair = this.getActivePairForUser(userId, groupId);
@@ -1168,8 +1229,8 @@ class RelationshipManager {
 
   // Cria pedido de traição
   createBetrayalRequest(userId, targetId, groupId, prefix = '/') {
-    const userActivePair = this.getActivePairForUser(userId);
-    
+    const userActivePair = this.getActivePairForUser(userId, groupId);
+
     if (!userActivePair) {
       return {
         success: false,
@@ -1180,12 +1241,20 @@ class RelationshipManager {
 
     const partnerId = userActivePair.partnerId;
 
+    // Em trisal/quadrisal TODOS os membros sao parceiros, entao "trair" com
+    // qualquer um deles nao e traicao. Compara com a lista inteira.
+    const allPartners = Array.isArray(userActivePair.allPartners) && userActivePair.allPartners.length
+      ? userActivePair.allPartners
+      : [partnerId];
+    const targetNormalized = this._normalizeId(targetId);
+    const betrayedPartner = allPartners.find(p => this._normalizeId(p) === targetNormalized);
+
     // Verifica se está tentando trair com o próprio parceiro
-    if (this._normalizeId(targetId) === this._normalizeId(partnerId)) {
+    if (betrayedPartner) {
       return {
         success: false,
         message: '❌ Você não pode trair seu parceiro com ele mesmo!',
-        mentions: [partnerId]
+        mentions: [betrayedPartner]
       };
     }
 
@@ -1331,23 +1400,15 @@ class RelationshipManager {
   }
 
   getBetrayalHistory(userA, userB) {
-    const key = this._getPairKey(userA, userB);
-    if (!key) {
-      return {
-        success: false,
-        message: 'Não foi possível identificar essa dupla.'
-      };
-    }
-
-    const data = this._loadData();
-    const pair = data.pairs[key];
-    
-    if (!pair || !pair.status) {
+    const found = this._findRelationshipBetween(userA, userB);
+    if (!found) {
       return {
         success: false,
         message: 'Nenhum relacionamento ativo encontrado entre essas pessoas.'
       };
     }
+
+    const pair = found.pair;
 
     const betrayals = (pair.history || []).filter(h => h.type === 'traicao');
     

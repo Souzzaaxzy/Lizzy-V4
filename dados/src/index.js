@@ -35652,28 +35652,37 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
       }
       case 'relacionamento': {
         const mentionedList = Array.isArray(menc_jid2) ? menc_jid2 : [];
+
+        // Sem marcacao: mostra o relacionamento de quem pediu. Precisa passar
+        // pelo resumo por usuario porque em trisal/quadrisal sao varios
+        // parceiros (e o "partnerId" antigo era uma string com virgulas que
+        // nunca casava com nenhum par, respondendo "nenhum relacionamento").
+        if (mentionedList.length < 2 && !menc_os2) {
+          const summary = relationshipManager.getRelationshipSummaryForUser(sender, from);
+          if (!summary.success) {
+            await reply(summary.message);
+            break;
+          }
+          await nazu.sendMessage(from, {
+            text: summary.message,
+            mentions: summary.mentions || [sender]
+          }, { quoted: info });
+          break;
+        }
+
         let userOne = null;
         let userTwo = null;
         if (mentionedList.length >= 2) {
           [userOne, userTwo] = mentionedList;
-        } else if (menc_os2) {
+        } else {
           userOne = sender;
           userTwo = menc_os2;
-        }
-        if (!userOne || !userTwo) {
-          const activePair = relationshipManager.getActivePairForUser(sender, from);
-          if (!activePair) {
-            await reply('❌ Você não marcou ninguém e não possui relacionamento ativo no momento.');
-            break;
-          }
-          userOne = sender;
-          userTwo = activePair.partnerId;
         }
         if (userOne === userTwo) {
           await reply('❌ Selecione pessoas diferentes para consultar.');
           break;
         }
-        const summary = relationshipManager.getRelationshipSummary(userOne, userTwo);
+        const summary = relationshipManager.getRelationshipSummary(userOne, userTwo, from);
         if (!summary.success) {
           await reply(summary.message);
           break;
