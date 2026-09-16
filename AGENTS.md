@@ -390,10 +390,13 @@ chamadas. Só em grupo, exige admin.
 - **Uso**: `!testcall` alterna o toggle `groupData.testcall` (persistido no JSON
   do grupo). Com ele ligado, todo evento de chamada daquele grupo é notificado.
 - **O que notifica** (`dados/src/utils/callNotifier.js`): entrada de chamada
-  (`offer`), chamada **saindo do bot** (quando `call.from` é o próprio bot),
-  chamada de grupo, atendida, recusada, encerrada, latência e **chamada perdida**
-  (`timeout`). Os 9 status são classificados; qualquer status novo cai num
-  rótulo genérico em vez de sumir.
+  (`offer`), chamando, chamada recebida pelo destino, conectando, latência,
+  atendida, recusada, encerrada e **chamada perdida** (`timeout`). Os 9 status
+  são classificados; qualquer status novo cai num rótulo genérico em vez de sumir.
+- **Sem distinção de autor**: qualquer chamada no grupo é notificada igual, de
+  quem for — inclusive do próprio bot. Não existe rótulo "saindo do bot" nem
+  parâmetro `botJid`; `classifyCallEvent(call)` só olha o status. O nome exibido
+  vem de `getName()`, com o número como fallback.
 - **Regra de notificação**: `shouldNotifyCall(groupData)` (só com `testcall`
   ligado) + filtro de chat `@g.us`. Grupo desligado não recebe nada; PV é
   ignorado mesmo ligado, porque o toggle é por grupo.
@@ -406,10 +409,11 @@ chamadas. Só em grupo, exige admin.
   atender, nem tocar áudio**. Só dá para observar o evento e recusar
   (`rejectCall`). Qualquer plano de "bot entra na call e toca música" esbarra
   nisso — ver a seção sobre o wacrg mais abaixo.
-- **Testes**: `tests/testcall.test.js` — 14 testes / 46 asserções. Cobre a
-  classificação dos 9 status, chamada saindo vs entrando, texto sem
-  `undefined`/`null`, entradas inválidas, e o comando (só grupo, só admin,
-  alterna e persiste, não-admin não liga).
+- **Testes**: `tests/testcall.test.js` — 15 testes / 52 asserções. Cobre a
+  classificação dos 9 status, o tratamento **igual para qualquer autor**
+  (terceiro, bot e LID produzem o mesmo rótulo; o texto nunca diz "saindo" nem
+  "bot"), texto sem `undefined`/`null`, entradas inválidas, e o comando (só
+  grupo, só admin, alterna e persiste, não-admin não liga).
   **Atenção**: **não importe `connect.js` em testes** — importá-lo ABRE SOCKET
   de verdade (gera QR e conecta), o que trava a suíte. Por isso o handler é
   coberto pela regra (`shouldNotifyCall` + filtro `@g.us`), não por import.

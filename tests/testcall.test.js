@@ -156,22 +156,44 @@ await test('notifier: identifica tentativa de ligação (offer) e chamada perdid
   ok(notifier.isMissedCall('timeout') === true, 'isMissedCall(timeout)');
 });
 
-await test('notifier: distingue chamada SAINDO do bot', () => {
-  const botJid = '5599999999999@s.whatsapp.net';
-  const propria = notifier.classifyCallEvent(makeCall({ from: botJid }), botJid);
-  includes(propria.label, 'saindo', 'chamada originada pelo bot');
-  const terceiro = notifier.classifyCallEvent(makeCall(), botJid);
-  includes(terceiro.label, 'entrando', 'chamada de terceiro');
+await test('notifier: informa quando a chamada é de grupo', () => {
+  // O rótulo não distingue autor, mas o TEXTO ainda informa se a chamada é de
+  // grupo (dado do protocolo, não sobre quem ligou).
+  const c = notifier.buildCallNotification(makeCall({ isGroup: true, groupJid: 'g@g.us' }));
+  includes(c.text, 'Chamada de grupo', 'texto indica grupo');
 });
 
-await test('notifier: marca chamada de grupo', () => {
-  const c = notifier.classifyCallEvent(makeCall({ isGroup: true, groupJid: 'g@g.us' }));
-  includes(c.label, 'grupo', 'rótulo indica grupo');
+await test('notifier: trata QUALQUER autor igual (sem distinguir o bot)', () => {
+  // O pedido é explícito: qualquer chamada, de qualquer usuário do grupo,
+  // recebe a mesma notificação — inclusive quando quem liga é o próprio bot.
+  const deTerceiro = notifier.classifyCallEvent(makeCall({ from: '5511988887777@s.whatsapp.net' }));
+  const doBot = notifier.classifyCallEvent(makeCall({ from: '5599999999999@s.whatsapp.net' }));
+  const deLid = notifier.classifyCallEvent(makeCall({ from: '217205740421125@lid' }));
+
+  ok(deTerceiro.label === doBot.label, `terceiro e bot têm o mesmo rótulo (${deTerceiro.label})`);
+  ok(deTerceiro.label === deLid.label, `LID e JID têm o mesmo rótulo (${deLid.label})`);
+  includes(deTerceiro.label, 'Ligação entrando', 'rótulo neutro quanto ao autor');
+
+  // E o texto também não muda com o autor, só com o nome exibido.
+  const t1 = notifier.buildCallNotification(makeCall({ from: '5511988887777@s.whatsapp.net' }));
+  const t2 = notifier.buildCallNotification(makeCall({ from: '5599999999999@s.whatsapp.net' }));
+  ok(!t1.text.includes('saindo') && !t2.text.includes('saindo'), 'nunca diz "saindo"');
+  ok(!t1.text.includes('bot') && !t2.text.includes('bot'), 'nunca menciona "bot" no texto');
+});
+
+await test('notifier: notifica os callbacks de qualquer usuário', () => {
+  // buildCallNotification não recebe mais botJid: a assinatura não permite
+  // distinguir autor, o que é o comportamento desejado.
+  const r = notifier.buildCallNotification(makeCall({ from: '5511900000000@s.whatsapp.net' }));
+  ok(r !== null, 'gera notificação');
+  includes(r.text, 'Ligação entrando', 'rótulo padrão');
+  ok(notifier.buildCallNotification(makeCall(), { botJid: 'x' }) !== null,
+    'opção botJid extra é ignorada, não quebra');
 });
 
 await test('notifier: texto da notificação traz autor, tipo e id', () => {
   const { text, kind } = notifier.buildCallNotification(makeCall(), {
-    callerName: 'Fulano', groupName: 'Meu Grupo', botJid: null,
+    callerName: 'Fulano', groupName: 'Meu Grupo',
   });
   ok(kind === 'offer', 'kind da oferta');
   includes(text, 'Ligação entrando', 'cabeçalho');

@@ -52,32 +52,23 @@ export function displayUser(jid) {
 /**
  * Classifica o evento em uma das situacoes que o bot notifica.
  *
+ * Nao ha distincao de autor: qualquer chamada no grupo e tratada igual, seja de
+ * quem for. O bot apenas observa e reporta.
+ *
  * @param {object} call evento de `ev.on('call')`
- * @param {string} [botJid] JID do proprio bot, para distinguir chamada saindo
  * @returns {{kind: string, label: string, emoji: string}|null}
  */
-export function classifyCallEvent(call, botJid = null) {
+export function classifyCallEvent(call) {
     if (!call || typeof call !== 'object') return null;
 
-    const status = call.status;
-    // Uma chamada feita PELO bot aparece com from = proprio bot.
-    const fromBot = Boolean(botJid) && call.from === botJid;
-    const quem = fromBot ? 'saindo' : 'entrando';
-
     // Toda notificacao comeca com o status; o rotulo diz o que aconteceu.
-    switch (status) {
+    switch (call.status) {
         case CallStatus.Offer:
-            return {
-                kind: 'offer',
-                emoji: '📞',
-                label: fromBot
-                    ? 'Ligação saindo do bot'
-                    : `Ligação entrando${call.isGroup ? ' (em grupo)' : ''}`
-            };
+            return { kind: 'offer', emoji: '📞', label: 'Ligação entrando' };
         case CallStatus.Ringing:
-            return { kind: 'ringing', emoji: '', label: 'Chamando' };
+            return { kind: 'ringing', emoji: '🔔', label: 'Chamando' };
         case CallStatus.PreAccept:
-            return { kind: 'preaccept', emoji: '', label: 'Chamada recebida pelo destino' };
+            return { kind: 'preaccept', emoji: '📲', label: 'Chamada recebida pelo destino' };
         case CallStatus.Transport:
             return { kind: 'transport', emoji: '🔗', label: 'Conectando a chamada' };
         case CallStatus.RelayLatency:
@@ -85,14 +76,14 @@ export function classifyCallEvent(call, botJid = null) {
         case CallStatus.Accept:
             return { kind: 'accept', emoji: '✅', label: 'Chamada atendida' };
         case CallStatus.Reject:
-            return { kind: 'reject', emoji: '❌', label: fromBot ? 'Chamada recusada pelo bot' : 'Chamada recusada' };
+            return { kind: 'reject', emoji: '❌', label: 'Chamada recusada' };
         case CallStatus.Terminate:
-            return { kind: 'terminate', emoji: '', label: 'Chamada encerrada' };
+            return { kind: 'terminate', emoji: '📴', label: 'Chamada encerrada' };
         case CallStatus.Timeout:
             // Este e o caso "tentativa de ligacao que ninguem atendeu".
-            return { kind: 'timeout', emoji: '', label: 'Chamada perdida (ninguém atendeu)' };
+            return { kind: 'timeout', emoji: '📵', label: 'Chamada perdida (ninguém atendeu)' };
         default:
-            return { kind: 'unknown', emoji: '', label: `Evento de chamada (${status || 'sem status'})` };
+            return { kind: 'unknown', emoji: '📞', label: `Evento de chamada (${call.status || 'sem status'})` };
     }
 }
 
@@ -101,13 +92,12 @@ export function classifyCallEvent(call, botJid = null) {
  *
  * @param {object} call       evento de `ev.on('call')`
  * @param {object} [options]
- * @param {string} [options.botJid]     JID do bot (para marcar chamada saindo)
  * @param {string} [options.callerName] nome do autor, quando conhecido
  * @param {string} [options.groupName]  nome do grupo
  * @returns {{text: string, kind: string}|null}
  */
 export function buildCallNotification(call, options = {}) {
-    const info = classifyCallEvent(call, options.botJid);
+    const info = classifyCallEvent(call);
     if (!info) return null;
 
     const { callerName, groupName } = options;

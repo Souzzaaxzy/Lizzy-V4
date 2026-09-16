@@ -1868,14 +1868,14 @@ async function createBotSocket(authDir) {
 
                     // Nome do autor e do grupo são best-effort: se falharem, a
                     // notificação sai com o número em vez de não sair.
-                    const botJid = AbyssSock.user?.id || null;
+                    // Não há distinção de quem ligou: qualquer usuário do grupo
+                    // é notificado igual, inclusive o próprio bot.
                     let callerName = null;
                     try {
                         callerName = await AbyssSock.getName(call.from);
                     } catch (e) { /* segue com o número */ }
 
                     const notif = buildCallNotification(call, {
-                        botJid,
                         callerName,
                         groupName: groupData.subject || groupData.name || null
                     });
