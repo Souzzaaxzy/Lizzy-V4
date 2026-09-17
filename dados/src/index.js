@@ -28012,6 +28012,89 @@ packname: `${nomebot}`,
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
         }
         break;
+      case 'statusgrupo':
+      case 'grupostatus':
+        try {
+          if (!isGroup) return reply('❌ Este comando só funciona em grupos.');
+
+          // Legenda: tudo que vem depois do comando. Não é interpretado como
+          // outro comando (o texto bruto de `q` já vem pronto para isso).
+          const legendaStatus = (q || '').trim();
+
+          // Mídia pode vir respondendo (citando) uma mensagem — inclusive
+          // visualização única ou efêmera, que o resolvedor descasca.
+          const quotedStatus = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+          const midiaStatus = resolveMedia([quotedStatus, info.message]);
+
+          const statusContent = { groupStatus: true };
+
+          if (midiaStatus && (midiaStatus.type === 'image' || midiaStatus.type === 'video' || midiaStatus.type === 'audio')) {
+            // Baixa UMA vez, com o mesmo caminho dos outros comandos
+            // (downloadContentFromMessage + mediaKey). Sem sistema paralelo.
+            let buffer;
+            try {
+              buffer = await getFileBuffer(midiaStatus.media, midiaStatus.type);
+            } catch (dlErr) {
+              const motivo = describeMediaError(dlErr);
+              return reply(
+                motivo
+                  ? `❌ Não consegui baixar essa mídia: ${motivo}.`
+                  : '❌ Não foi possível baixar a mídia marcada.'
+              );
+            }
+
+            if (!buffer || !Buffer.isBuffer(buffer) || buffer.length === 0) {
+              return reply('❌ A mídia marcada veio vazia. Tente novamente.');
+            }
+
+            statusContent[midiaStatus.type] = buffer;
+            if (midiaStatus.media.mimetype) statusContent.mimetype = midiaStatus.media.mimetype;
+            if (midiaStatus.type === 'audio') statusContent.ptt = false;
+            if (legendaStatus) statusContent.caption = legendaStatus;
+          } else if (legendaStatus) {
+            statusContent.text = legendaStatus;
+          } else {
+            return reply(
+              '❌ Informe o conteúdo do status.\n\n' +
+              '• Texto: `!statusgrupo Bom dia, grupo!`\n' +
+              '• Mídia: responda uma foto/vídeo/áudio e use `!statusgrupo`\n' +
+              '• Com legenda: `!statusgrupo Minha legenda` (respondendo a mídia)'
+            );
+          }
+
+          // Aviso temporário de processamento.
+          let avisoId = null;
+          try {
+            const aviso = await nazu.sendMessage(from, { text: '⏳ Publicando status no grupo...' });
+            avisoId = aviso?.key?.id || null;
+          } catch { /* se nem o aviso sair, segue para o envio */ }
+
+          try {
+            // `groupStatus: true` é o que a fork usa para:
+            //   1. marcar contextInfo.isGroupStatus = true;
+            //   2. encapsular em groupStatusMessageV2;
+            //   3. enviar is_group_status='true' na stanza.
+            // O destino é o PRÓPRIO JID do grupo — nunca status@broadcast.
+            await nazu.sendMessage(from, statusContent, { quoted: info });
+
+            if (avisoId) {
+              await nazu.sendMessage(from, { delete: { remoteJid: from, fromMe: true, id: avisoId } }).catch(() => {});
+            }
+            await nazu.sendMessage(from, { text: '✅ Status publicado no grupo!' });
+          } catch (sendErr) {
+            console.error('[STATUSGRUPO] Falha ao publicar:', sendErr?.message || sendErr);
+            const motivo = describeMediaError(sendErr);
+            await reply(
+              motivo
+                ? `❌ Não foi possível publicar o status: ${motivo}.`
+                : '❌ Não foi possível publicar o status no grupo. Tente novamente.'
+            );
+          }
+        } catch (e) {
+          console.error('[STATUSGRUPO] Erro:', e?.message || e);
+          await reply('❌ Ocorreu um erro ao publicar o status.');
+        }
+        break;
       case 'st2':
       case 'stk2':
       case 'sticker2':

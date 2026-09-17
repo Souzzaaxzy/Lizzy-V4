@@ -236,10 +236,10 @@ export function describeMediaError(error) {
   if (/429|rate|too many/i.test(msg)) {
     return 'o WhatsApp está limitando os downloads agora (tente de novo em instantes)';
   }
-  if (/timeout|ETIMEDOUT|ECONNRESET|socket/i.test(msg)) {
-    return 'a conexão caiu no meio do download';
+  if (/timeout|ETIMEDOUT|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|socket|fetch failed/i.test(msg)) {
+    return 'a conexão com o servidor de mídia falhou';
   }
-  if (/No valid media URL|mediaKey/i.test(msg)) {
+  if (/No valid media URL|mediaKey|empty media key/i.test(msg)) {
     return 'os dados da mídia vieram incompletos na mensagem';
   }
   return null;

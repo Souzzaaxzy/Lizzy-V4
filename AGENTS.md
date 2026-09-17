@@ -528,6 +528,54 @@ chamadas. Só em grupo, exige admin.
 - `funcs/API.js` foi **removido** na limpeza final; `config.json` não tem mais `site_vex`/`apikey_vex`.
 - Módulos próprios: `downloads/{spotify,soundcloud,facebook,kwai,apkmod,mcplugins,pinterest,tiktok,igdl,lyrics,youtube,canvas}.js`, `edits/index.js`, `logos/index.js` (jimp + fontes bitmap), `utils/imagetools.js` (jimp local), `utils/search.js`.
 
+## COMANDO `!statusgrupo` — Group Status NATIVO no próprio grupo ✅
+- **O que faz**: publica um **Group Status nativo** (recurso "status do grupo" do
+  WhatsApp) dentro do grupo atual. **NÃO** vai para `status@broadcast`, **NÃO**
+  vira status pessoal da conta, **NÃO** é mensagem comum.
+- **A FORK JÁ SUPORTAVA — nada de implementação paralela.** Antes de escrever
+  qualquer coisa foi auditada: a fork tem suporte nativo e **documentado**
+  (`README.md`, seção "Group Status"): basta passar **`groupStatus: true`** no
+  `sendMessage`. Internamente (`lib/Utils/messages.js` ~1311):
+  1. marca `contextInfo.isGroupStatus = true`;
+  2. encapsula a mensagem em **`groupStatusMessageV2`**;
+  e em `lib/Socket/messages-send.js` (~511) adiciona o atributo
+  **`is_group_status='true'`** na stanza — que é o que o WhatsApp usa para
+  reconhecer como status de grupo. O `messageSecret` é gerado automaticamente
+  (`randomBytes(32)` via `shouldIncludeReportingToken`).
+  **Nem a fork nem o `WAProto` precisaram ser alterados.** Nenhum commit na fork.
+- **Comando**: `!statusgrupo` (alias `!grupostatus`). **NÃO** usei `!statusgp`
+  como alias: esse nome **já existia** e é OUTRO comando (relatório de status do
+  grupo, em `menumemb`). Como o `switch` pega o primeiro match, o alias seria
+  enganoso — o `!statusgp` continua sendo o relatório.
+- **Conteúdo aceito**: texto (`!statusgrupo Bom dia!`), mídia respondida
+  (imagem/vídeo/áudio) com ou sem legenda (`!statusgrupo Minha legenda`). A
+  legenda é o texto cru depois do comando — não é interpretada como outro
+  comando, e acentos/emojis passam intactos.
+- **Reaproveitamento**: `resolveMedia()` (`utils/viewOnce.js`) para achar a mídia
+  respondida — inclusive view once/efêmera — e `getFileBuffer()` para baixar
+  **uma vez** (mesmo `downloadContentFromMessage`/`mediaKey` dos outros
+  comandos). Sem sistema paralelo de mídia, parser, permissão ou conexão.
+- **Áudio**: o protocolo aceita (validado: vira `audioMessage` dentro do
+  `groupStatusMessageV2`) — implementado.
+- **Erros**: fora de grupo, sem conteúdo, mídia não baixável, mídia sem
+  `mediaKey`, falha no relay, tipo não suportado (documento). Nunca expõe stack
+  trace; o detalhe vai para o console.
+- **`describeMediaError`** ganhou os casos `ECONNREFUSED`/`fetch failed` (falha de
+  conexão) e `empty media key` (dados incompletos da mídia) — sem isso o usuário
+  recebia um genérico "não foi possível baixar" sem causa.
+- **Testes**: `tests/statusgrupo.test.js` — 19 testes / 56 asserções. O teste
+  **não se contenta** em ver "enviou algo": pega o conteúdo que o comando montou
+  e passa pelo caminho REAL da fork (`generateWAMessageContent`), conferindo que
+  vira `groupStatusMessageV2`, com `isGroupStatus: true`, `messageSecret`
+  presente e destino `@g.us` (e nunca `status@broadcast`). Mídia de teste é
+  **cifrada de verdade** (hkdf + AES-256-CBC) e servida por HTTP local. Cobre
+  texto/imagem/vídeo/áudio/legenda/view once, erros e regressão (mensagem normal
+  não ganha `groupStatus`). Verificado removendo o `groupStatus: true`:
+  **21 asserções falham** — o teste distingue status nativo de mensagem comum.
+- **Validação real com o WhatsApp (NÃO feita)**: exige conta pareada e grupo de
+  teste; o ambiente aqui não tem sessão. Fica pendente para o dono confirmar no
+  cliente oficial. O que está provado por teste é o payload/stanza corretos.
+
 ## COMANDO `!antimidia` (era `!antifoton`) — apaga foto E vídeo ✅
 - **O que faz**: apaga fotos e vídeos **normais** enviados por quem não é
   admin/dono. **Visualização única é isenta de propósito** — o objetivo é
