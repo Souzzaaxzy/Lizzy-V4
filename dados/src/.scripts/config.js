@@ -7,6 +7,7 @@ import { exec, spawn } from 'child_process';
 import readline from 'readline';
 import os from 'os';
 import { promisify } from 'util';
+import { gitDependencyDrift } from './git-drift.js';
 
 const execAsync = promisify(exec);
 
@@ -250,11 +251,32 @@ async function installNodeDependencies() {
         return obrigatorios.length ? { ok: false, problems: obrigatorios } : { ok: true };
     };
 
+    /**
+     * Detecta dependência de GIT instalada em commit DIFERENTE do lockfile.
+     *
+     * Por que isso é necessário: `npm ls` compara VERSÃO, não commit. A fork do
+     * Baileys mantém a versão `0.3.18-final` entre commits, então trocar o
+     * commit no package-lock (para pegar uma correção da fork) NÃO gera nenhum
+     * `problem` — a árvore parecia saudável e o install era pulado, deixando o
+     * código ANTIGO da fork instalado. Sintoma real: um recurso novo da fork
+     * (ex.: `canBeReshared` no status de grupo) era silenciosamente ignorado,
+     * mesmo com o bot já atualizado no GitHub.
+     *
+     * A lógica fica em `git-drift.js` (mesma usada pelo `.scripts/update.js`).
+     */
+    const checkGitDependencyDrift = () => gitDependencyDrift(process.cwd());
+
     // Verificar se já existe node_modules
     if (fsSync.existsSync(nodeModulesPath)) {
         print.message('📦 node_modules já existe, verificando dependências...');
         const tree = await checkDependencyTree();
-        if (tree.ok) {
+        const drift = checkGitDependencyDrift();
+        if (drift) {
+            print.warning('⚠️ Dependência de git em commit desatualizado:');
+            print.warning(`   • instalado: ${drift.instalado}`);
+            print.warning(`   • esperado : ${drift.esperado}`);
+            print.message('⚠️ Reinstalando para aplicar a versão correta da dependência...');
+        } else if (tree.ok) {
             print.message('✅ Dependências já estão instaladas.');
             return { name: 'Node Dependencies', status: `${colors.green}✅ Já instalado${colors.reset}` };
         }

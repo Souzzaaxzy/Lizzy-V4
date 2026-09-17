@@ -4,6 +4,7 @@ import { execFile } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { gitDependencyDrift } from './git-drift.js';
 
 const execAsync = (cmd, args = [], opts = {}) => new Promise((resolve, reject) => {
   execFile(cmd, args, { shell: true, timeout: 600000, ...opts }, (error, stdout, stderr) => {
@@ -146,6 +147,17 @@ async function tentarPullPreservandoEstado() {
   await restaurarEstadoLocal(estado);
 }
 
+// Detecta dependência de GIT instalada em commit DIFERENTE do lockfile.
+//
+// Por que: `npm ls` compara VERSÃO, não commit. A fork do Baileys mantém
+// `0.3.18-final` entre commits, então trocar o commit no package-lock (para
+// pegar uma correção da fork) NÃO gera nenhum `problem` -- a árvore parecia
+// saudável, o install era pulado e a fork continuava no código ANTIGO. Sintoma
+// real: um recurso novo da fork (ex.: `canBeReshared` no status de grupo) era
+// silenciosamente ignorado mesmo com o bot atualizado.
+//
+// A lógica fica em `git-drift.js` (mesma usada pelo `.scripts/config.js`).
+
 // Instala dependências Node somente se houver algo faltando.
 async function nodeDeps() {
   // `npm ls --depth=0` não detecta dependência TRANSITIVA faltando (devolve
@@ -165,9 +177,17 @@ async function nodeDeps() {
     treeOk = false;
   }
 
-  if (treeOk && fs.existsSync('node_modules')) {
+  const drift = fs.existsSync('node_modules') ? gitDependencyDrift(process.cwd()) : null;
+
+  if (treeOk && fs.existsSync('node_modules') && !drift) {
     console.log('Dependências já atualizadas');
     return;
+  }
+
+  if (drift) {
+    console.log('Dependência de git em commit desatualizado:');
+    console.log(`  instalado: ${drift.instalado}`);
+    console.log(`  esperado : ${drift.esperado}`);
   }
 
   console.log('Instalando dependências');

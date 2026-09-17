@@ -624,21 +624,94 @@ chamadas. Só em grupo, exige admin.
   mesmo caminho de mídia, mesma permissão de admin, mesmo menu. O botão é do
   WhatsApp; o bot só **declara a permissão**.
 - **Dependência fixada**: `package-lock.json` + `yarn.lock` apontam para o commit
-  `09d78f495d2bc90d59258a53c29d7ee12faa1ee3` da fork (antes `453ccf7`). Sem isso o
-  bot instalaria a versão sem o flag e o repostar não funcionaria.
-- **Testes da Lizzy**: `tests/statusgrupo.test.js` — 32 testes / 90 asserções. O
-  helper `payloadDoContent` passou a capturar
-  `ci.featureEligibilities.canBeReshared`; a seção 9 cobre texto/imagem/vídeo/
-  legenda, que a flag não vira campo solto no proto, que **sobrevive ao
-  encode/decode real do proto** (`proto.Message.encode`/`decode` — prova de que
-  vai no fio, não só em memória) e a regressão de mensagem comum. Verificado
-  revertendo para `{ groupStatus: true }`: **6 asserções falham**.
+  `09d78f495d2bc90d59258a53c29d7ee12faa1ee3` da fork (antes `453ccf7`). **Só trocar
+  o lock NÃO bastava** — o install era pulado por comparar versão e não commit;
+  ver "BUG DO INSTALADOR" abaixo.
+- **Testes da Lizzy**: `tests/statusgrupo.test.js` — **32 testes / 95 asserções**.
+  O helper `payloadDoContent` passou a capturar o contextInfo de status; a seção
+  9 cobre a permissão e o contexto completo (ver "REPOSTAGEM do Group Status —
+  `contextInfo` completo" abaixo). Verificado revertendo o payload: **13
+  asserções falham**.
 - **Limitação conhecida (lado WhatsApp, não da lib/fork)**: status de **áudio**
   (`ptt`) não oferece repostar independentemente da flag. Documentado no README
   da fork.
 - **Validação real com o WhatsApp (NÃO feita)**: o ambiente não tem sessão
   pareada. Só o payload/stanza estão provados por teste; o dono precisa confirmar
   o botão no cliente oficial.
+
+## BUG DO INSTALADOR — fork de git ficava no commit ANTIGO (raiz do "repostar não apareceu") ✅
+- **Sintoma**: o dono reportou que, depois de tudo, o status do grupo **ainda não
+  mostrava a opção de repostar**.
+- **Causa raiz (MEDIDA, não hipótese)**: `config.js` e `.scripts/update.js`
+  decidiam se rodavam `npm install` olhando só a lista `problems` do
+  `npm ls --all`. **`npm ls` compara VERSÃO, não commit** — e a fork do Baileys
+  mantém `0.3.18-final` entre commits. Então trocar o commit no
+  `package-lock.json` (para pegar o `canBeReshared`) **não gerava nenhum
+  `problem`**: a árvore parecia saudável, o install era pulado e a fork
+  continuava no commit **ANTIGO** (`453ccf7`, sem o flag). O bot já estava
+  atualizado no GitHub, mas o código da fork em execução era o velho.
+- **Prova**: com a fork antiga instalada, `generateWAMessageContent(..., {
+  groupStatus: true, canBeReshared: true })` produz `featureEligibilities: null`
+  — o flag é **silenciosamente ignorado** (a lib não reclama). Com a nova,
+  `canBeReshared: true`. Também medido: lock no commit novo + node_modules no
+  antigo → `problems` só com o peer opcional `sharp`, `treeOk = true` → install
+  pulado.
+- **Correção**: novo módulo **`dados/src/.scripts/git-drift.js`** —
+  `gitDependencyDrift(raiz)` compara o commit pedido pelo `package-lock.json`
+  com o do `node_modules/.package-lock.json` (que é a fonte da verdade do npm).
+  Se divergirem, retorna `{ esperado, instalado }` e o install é forçado.
+  Sem dados confiáveis dos dois lados devolve `null` (não força reinstalação à
+  toa). Usado pelos **dois** scripts, para não divergir.
+- **Mensagens**: `config.js` avisa "Dependência de git em commit desatualizado"
+  + os dois commits; `update.js` loga o mesmo e o `!atualizar` mostra
+  *"Atualizando a fork do Baileys para o commit correto..."* no WhatsApp.
+- **Testes**: `tests/installer-git-drift.test.js` — 6 testes / 12 asserções:
+  detecta a divergência (o bug real), **não** trata commit igual como deriva
+  (install segue idempotente), lockfile ilegível/sem `node_modules` não vira
+  falsa reinstalação, e os dois scripts realmente usam o módulo. Verificado
+  desligando a detecção: **3 falham**.
+- **Armadilha**: enquanto o commit instalado for o antigo, **nenhum** teste de
+  payload passa a valer — por isso este teste é a primeira linha de defesa.
+  Quem já está travado precisa de **um** `npm install` manual (ou `!atualizar`
+  depois deste fix) para sair do commit velho.
+
+## REPOSTAGEM do Group Status — `contextInfo` completo ✅
+- **O comando não manda mais só um booleano.** `!statusgrupo` passou a montar:
+  ```js
+  const statusContent = {
+    groupStatus: true,
+    contextInfo: {
+      featureEligibilities: { canBeReshared: true, canReceiveMultiReact: true },
+      statusSourceType: 4,                 // TEXT
+      statusAttributions: [{ type: 10 }],  // STATUS_CLOSE_SHARING
+      statusAudienceMetadata: { audienceType: 1 } // CLOSE_FRIENDS
+    }
+  };
+  ```
+- **Por quê**: o único conjunto de campos que as implementações de Group Status
+  em uso de fato enviam é esse (`featureEligibilities` +
+  `statusSourceType`/`statusAttributions`/`statusAudienceMetadata`), não o flag
+  isolado. Comparado em 3 bots independentes que publicam status de grupo
+  ("gstatus"/"tagsw"/"group-upswgc") — o bloco é idêntico entre eles.
+- A fork **mescla** `contextInfo` antes de encapsular em `groupStatusMessageV2`,
+  então o bloco chega ao payload interno (confirmado por encode/decode real).
+- **Enums**: `proto.ContextInfo.StatusSourceType.TEXT` (4),
+  `proto.StatusAttribution.Type.STATUS_CLOSE_SHARING` (10),
+  `proto.ContextInfo.StatusAudienceMetadata.AudienceType.CLOSE_FRIENDS` (1).
+- **Armadilha de teste descoberta aqui**: o objeto do protobuf guarda o **número**
+  do enum; é o `toJSON()` que resolve o nome. Comparar com a string
+  (`'STATUS_CLOSE_SHARING'`) falha — compare com
+  `proto.StatusAttribution.Type.STATUS_CLOSE_SHARING`.
+- **Testes**: `tests/statusgrupo.test.js` — 32 testes / 95 asserções. A seção 9
+  cobre texto/imagem/vídeo/legenda, o contexto completo (e não só o booleano),
+  a sobrevivência ao `encode`/`decode` real do proto e a regressão de mensagem
+  comum. Verificado revertendo para `{ groupStatus: true }`: **13 asserções
+  falham**.
+- **O que ainda NÃO está provado**: o botão aparecer no aparelho. Reshare é
+  também condicionado a *AB props* do cliente
+  (`wa_web_status_resharer_flow_enabled` & cia.) e à preferência de privacidade
+  de quem posta — coisa que biblioteca nenhuma controla. Se o botão não aparecer
+  nem com o payload correto, o limite é da plataforma, não do bot.
 
 ## COMANDO `!antimidia` (era `!antifoton`) — apaga foto E vídeo ✅
 - **O que faz**: apaga fotos e vídeos **normais** enviados por quem não é

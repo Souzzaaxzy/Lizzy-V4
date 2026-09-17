@@ -16764,6 +16764,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
             'Instalando dependências': '📦 Instalando/verificando dependências...\n⏳ Isso pode levar alguns minutos...',
             'Dependências instaladas': '✅ Dependências instaladas com sucesso!',
             'Dependências já atualizadas': '✅ Dependências Node já estão atualizadas!',
+            'Dependência de git em commit desatualizado': ' Atualizando a fork do Baileys para o commit correto...',
             'FFmpeg encontrado': '✅ FFmpeg disponível!',
             'FFmpeg não encontrado': '⚠️ FFmpeg não encontrado no PATH (instale ou defina FFMPEG_PATH)',
             'Instalando yt-dlp': '📥 Instalando yt-dlp (download de YouTube)...',
@@ -28031,11 +28032,29 @@ packname: `${nomebot}`,
           const midiaStatus = resolveMedia([quotedStatus, info.message]);
 
           // `groupStatus: true` faz a fork encapsular em groupStatusMessageV2 e
-          // marcar isGroupStatus; `canBeReshared: true` declara a permissão de
-          // repostagem no próprio payload (contextInfo.featureEligibilities),
-          // que é o que faz o cliente oferecer o "compartilhar/repostar" nativo.
-          // O botão é do WhatsApp — aqui só declaramos a permissão.
-          const statusContent = { groupStatus: true, canBeReshared: true };
+          // marcar isGroupStatus.
+          //
+          // O `contextInfo` abaixo vai DENTRO da mensagem interna (a fork mescla
+          // o contextInfo antes de encapsular) e é o que declara a permissão de
+          // repostagem. O cliente do destinatário lê a permissão do PRÓPRIO
+          // payload (`contextInfo.featureEligibilities.canBeReshared`), não das
+          // configurações de privacidade da conta — sem isso o botão nativo de
+          // "compartilhar/repostar" não aparece.
+          //
+          // `statusSourceType`/`statusAttributions`/`statusAudienceMetadata` são
+          // o mesmo conjunto que o cliente oficial envia num status de texto e
+          // que as implementações de Group Status em uso colocam junto do flag;
+          // `canReceiveMultiReact` acompanha o `canBeReshared` no mesmo bloco.
+          // O botão em si é do WhatsApp — o bot só declara a permissão.
+          const statusContent = {
+            groupStatus: true,
+            contextInfo: {
+              featureEligibilities: { canBeReshared: true, canReceiveMultiReact: true },
+              statusSourceType: 4, // TEXT
+              statusAttributions: [{ type: 10 }], // STATUS_CLOSE_SHARING
+              statusAudienceMetadata: { audienceType: 1 } // CLOSE_FRIENDS
+            }
+          };
 
           if (midiaStatus && (midiaStatus.type === 'image' || midiaStatus.type === 'video' || midiaStatus.type === 'audio')) {
             // Baixa UMA vez, com o mesmo caminho dos outros comandos

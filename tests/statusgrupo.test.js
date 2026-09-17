@@ -196,8 +196,12 @@ async function payloadDoContent(content) {
     temSecret: Boolean(gerado.messageContextInfo?.messageSecret),
     caption: inner?.[tipo]?.caption,
     textoInterno: inner?.extendedTextMessage?.text,
-    // Permissão de repostagem declarada no próprio payload.
+    // Permissão de repostagem e contexto de status declarados no payload.
     canBeReshared: ci?.featureEligibilities?.canBeReshared,
+    multiReact: ci?.featureEligibilities?.canReceiveMultiReact,
+    statusSourceType: ci?.statusSourceType,
+    statusAttributions: ci?.statusAttributions,
+    statusAudienceMetadata: ci?.statusAudienceMetadata,
   };
 }
 
@@ -567,11 +571,16 @@ await test('!grupostatus (alias) também exige admin', async () => {
 // ============================================================================
 // 9) REPOSTAGEM: A PERMISSÃO VAI NO PRÓPRIO PAYLOAD
 // ============================================================================
-// O botão de "compartilhar/repostar" é do WhatsApp: a biblioteca decide se ele
-// aparece lendo `contextInfo.featureEligibilities.canBeReshared` do PRÓPRIO
-// payload, não das configurações de privacidade da conta. Estes testes pegam o
-// conteúdo real montado pelo comando e passam pelo caminho da fork, conferindo
-// que a permissão chega ao destinatário em todos os tipos publicados.
+// O botão de "compartilhar/repostar" é do WhatsApp: o cliente do destinatário
+// decide se ele aparece lendo `contextInfo.featureEligibilities.canBeReshared`
+// do PRÓPRIO payload, não das configurações de privacidade da conta. Estes
+// testes pegam o conteúdo real montado pelo comando e passam pelo caminho da
+// fork, conferindo que a permissão chega ao destinatário em todos os tipos
+// publicados.
+//
+// O comando manda um `contextInfo` completo (e não só um booleano) porque é
+// esse o conjunto que o cliente oficial usa num status de texto e que as
+// implementações de Group Status em uso colocam junto do flag.
 
 await test('texto: o payload declara a permissão de repostagem', async () => {
   const groupJid = makeGroup();
@@ -581,6 +590,26 @@ await test('texto: o payload declara a permissão de repostagem', async () => {
   ok(p.canBeReshared === true, 'contextInfo.featureEligibilities.canBeReshared = true');
   ok(p.temV2, 'continua sendo Group Status (não virou mensagem comum)');
   ok(p.isGroupStatus === true, 'isGroupStatus preservado junto da permissão');
+  ok(p.multiReact === true, 'canReceiveMultiReact acompanha o canBeReshared');
+});
+
+await test('texto: o contexto de status completo vai junto (não só o booleano)', async () => {
+  const groupJid = makeGroup();
+  const { publicacao } = await rodar({ groupJid, text: '!statusgrupo contexto completo' });
+  const p = await payloadDoContent(publicacao.content);
+
+  // Comparação pelo valor numérico do enum (é o que vai no fio): o proto guarda o
+  // número e só resolve o nome no toJSON().
+  ok(p.statusSourceType === proto.ContextInfo.StatusSourceType.TEXT, 'statusSourceType = TEXT');
+  ok(
+    p.statusAttributions?.[0]?.type === proto.StatusAttribution.Type.STATUS_CLOSE_SHARING,
+    `statusAttributions = STATUS_CLOSE_SHARING (obtido ${p.statusAttributions?.[0]?.type})`
+  );
+  ok(
+    p.statusAudienceMetadata?.audienceType ===
+      proto.ContextInfo.StatusAudienceMetadata.AudienceType.CLOSE_FRIENDS,
+    `statusAudienceMetadata = CLOSE_FRIENDS (obtido ${p.statusAudienceMetadata?.audienceType})`
+  );
 });
 
 await test('imagem: o payload declara a permissão de repostagem', async () => {
@@ -611,23 +640,13 @@ await test('imagem + legenda: permissão sobrevive à legenda', async () => {
   ok(p.canBeReshared === true, 'a permissão não se perdeu com a legenda');
 });
 
-await test('a flag é consumida pela fork e não vira campo desconhecido no proto', async () => {
-  // Objeto fresco: `generateWAMessageContent` MUTA a entrada (apaga a flag), então
-  // usar o objeto de outro teste faria esta asserção passar por acaso.
-  const entrada = { text: 'teste', groupStatus: true, canBeReshared: true };
-  const p = await payloadDoContent(entrada);
-
-  notIncludes(p.chaves.join(','), 'canBeReshared', 'não aparece como chave no topo do payload');
-  ok(!('canBeReshared' in entrada), 'a fork consome a flag (não é enviada crua ao proto)');
-});
-
 await test('a permissão sobrevive ao encode/decode do proto (vai mesmo no fio)', async () => {
   const groupJid = makeGroup();
   const { publicacao } = await rodar({ groupJid, text: '!statusgrupo Viaja no proto' });
 
   // Reencoda exatamente o que iria para o servidor e decodifica de volta: é a
-  // prova de que o campo é encodável e chega ao destinatário — um payload que
-  // só existe em memória não serviria.
+  // prova de que os campos são encodáveis e chegam ao destinatário — um payload
+  // que só existe em memória não serviria.
   const gerado = await generateWAMessageContent(publicacao.content, {
     userJid: `${BOT_JID.split('@')[0]}@s.whatsapp.net`,
     upload: fakeUpload,
@@ -636,11 +655,15 @@ await test('a permissão sobrevive ao encode/decode do proto (vai mesmo no fio)'
   const decodificado = proto.Message.decode(bytes);
 
   const inner = decodificado.groupStatusMessageV2?.message?.extendedTextMessage;
+  const ci = inner?.contextInfo;
   ok(Boolean(inner), 'continua groupStatusMessageV2 depois do round-trip');
-  ok(inner?.contextInfo?.isGroupStatus === true, 'isGroupStatus sobrevive');
+  ok(ci?.isGroupStatus === true, 'isGroupStatus sobrevive');
+  ok(ci?.featureEligibilities?.canBeReshared === true, 'canBeReshared sobrevive ao encode/decode');
+  ok(ci?.featureEligibilities?.canReceiveMultiReact === true, 'canReceiveMultiReact sobrevive');
+  ok(ci?.statusSourceType === proto.ContextInfo.StatusSourceType.TEXT, 'statusSourceType sobrevive');
   ok(
-    inner?.contextInfo?.featureEligibilities?.canBeReshared === true,
-    'featureEligibilities.canBeReshared sobrevive ao encode/decode'
+    ci?.statusAttributions?.[0]?.type === proto.StatusAttribution.Type.STATUS_CLOSE_SHARING,
+    'statusAttributions sobrevive ao encode/decode'
   );
   includes(inner?.text || '', 'Viaja no proto', 'o texto continua íntegro');
 });
