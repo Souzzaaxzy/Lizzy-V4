@@ -56,76 +56,83 @@ async function convertToWebp(mediaBuffer, isVideo = false, forceSquare = false) 
   const st = await fs.stat(tmpIn);
   if (st.size === 0) throw new Error("Arquivo temporário de entrada vazio");
 
-  const vfBase = forceSquare
-    ? "scale=320:320"
-    : "scale=320:320:force_original_aspect_ratio=decrease,pad=320:320:(ow-iw)/2:(oh-ih)/2:color=0x00000000,format=rgba";
+  // A conversão inteira roda dentro do try para o arquivo de entrada ser
+  // removido em QUALQUER saída. Antes o unlink ficava só no caminho feliz: se o
+  // ffmpeg falhasse (ou não estivesse instalado), o tmpIn ficava para sempre em
+  // database/tmp — cada tentativa deixava um arquivo órfão.
+  try {
+    const vfBase = forceSquare
+      ? "scale=320:320"
+      : "scale=320:320:force_original_aspect_ratio=decrease,pad=320:320:(ow-iw)/2:(oh-ih)/2:color=0x00000000,format=rgba";
 
-  const filters = isVideo ? `${vfBase},fps=15` : vfBase;
+    const filters = isVideo ? `${vfBase},fps=15` : vfBase;
 
-  // Limites de tamanho e qualidade
-  const MAX_SIZE = 990000; // Menos de 1MB com margem de segurança (~966KB)
-  const MIN_QUALITY = isVideo ? 15 : 25;
-  let quality = isVideo ? 45 : 75;
-  let outBuffer = null;
-  let attempts = 0;
-  const MAX_ATTEMPTS = 8;
+    // Limites de tamanho e qualidade
+    const MAX_SIZE = 990000; // Menos de 1MB com margem de segurança (~966KB)
+    const MIN_QUALITY = isVideo ? 15 : 25;
+    let quality = isVideo ? 45 : 75;
+    let outBuffer = null;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 8;
 
-  while (attempts < MAX_ATTEMPTS) {
-    attempts++;
-    const tmpOut = generateTempFileName("webp");
+    while (attempts < MAX_ATTEMPTS) {
+      attempts++;
+      const tmpOut = generateTempFileName("webp");
 
-    const cmdOptions = [
-      "-vf", filters,
-      "-c:v", "libwebp",
-      "-lossless", "0",
-      "-compression_level", "6",
-      "-preset", "default",
-      ...(isVideo
-        ? ["-q:v", String(quality), "-loop", "0", "-an", "-vsync", "0", "-t", "8"]
-        : ["-q:v", String(quality)])
-    ];
+      const cmdOptions = [
+        "-vf", filters,
+        "-c:v", "libwebp",
+        "-lossless", "0",
+        "-compression_level", "6",
+        "-preset", "default",
+        ...(isVideo
+          ? ["-q:v", String(quality), "-loop", "0", "-an", "-vsync", "0", "-t", "8"]
+          : ["-q:v", String(quality)])
+      ];
 
-    await new Promise((resolve, reject) => {
-      ffmpeg(tmpIn)
-        .outputOptions(cmdOptions)
-        .format("webp")
-        .on("error", err => reject(err))
-        .on("end", () => resolve())
-        .save(tmpOut);
-    });
+      await new Promise((resolve, reject) => {
+        ffmpeg(tmpIn)
+          .outputOptions(cmdOptions)
+          .format("webp")
+          .on("error", err => reject(err))
+          .on("end", () => resolve())
+          .save(tmpOut);
+      });
 
-    const outStat = await fs.stat(tmpOut).catch(() => null);
-    if (!outStat || outStat.size === 0) {
+      const outStat = await fs.stat(tmpOut).catch(() => null);
+      if (!outStat || outStat.size === 0) {
+        await fs.unlink(tmpOut).catch(()=>{});
+        throw new Error("Conversão falhou: saída vazia");
+      }
+
+      outBuffer = await fs.readFile(tmpOut);
       await fs.unlink(tmpOut).catch(()=>{});
-      throw new Error("Conversão falhou: saída vazia");
+
+      // Verifica se está dentro do limite
+      if (outBuffer.length <= MAX_SIZE) {
+        break;
+      }
+
+      // Se ainda está grande, reduz qualidade
+      if (quality <= MIN_QUALITY) {
+        break;
+      }
+
+      // Reduz qualidade progressivamente
+      const reductionFactor = outBuffer.length / MAX_SIZE;
+      if (reductionFactor > 1.5) {
+        quality = Math.max(MIN_QUALITY, Math.floor(quality * 0.6));
+      } else if (reductionFactor > 1.2) {
+        quality = Math.max(MIN_QUALITY, Math.floor(quality * 0.75));
+      } else {
+        quality = Math.max(MIN_QUALITY, quality - 10);
+      }
     }
 
-    outBuffer = await fs.readFile(tmpOut);
-    await fs.unlink(tmpOut).catch(()=>{});
-
-    // Verifica se está dentro do limite
-    if (outBuffer.length <= MAX_SIZE) {
-      break;
-    }
-
-    // Se ainda está grande, reduz qualidade
-    if (quality <= MIN_QUALITY) {
-      break;
-    }
-
-    // Reduz qualidade progressivamente
-    const reductionFactor = outBuffer.length / MAX_SIZE;
-    if (reductionFactor > 1.5) {
-      quality = Math.max(MIN_QUALITY, Math.floor(quality * 0.6));
-    } else if (reductionFactor > 1.2) {
-      quality = Math.max(MIN_QUALITY, Math.floor(quality * 0.75));
-    } else {
-      quality = Math.max(MIN_QUALITY, quality - 10);
-    }
+  } finally {
+    // Sempre limpa o arquivo de entrada, inclusive em erro/timeout do ffmpeg.
+    await fs.unlink(tmpIn).catch(() => {});
   }
-
-  // Limpeza
-  await fs.unlink(tmpIn).catch(()=>{});
 
   return outBuffer;
 }

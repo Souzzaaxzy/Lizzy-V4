@@ -22,6 +22,7 @@ import {
   toSafeObject
 } from './utils/messageInspector.js';
 import { buildCmdNotFoundExtras } from './utils/commandSuggest.js';
+import { extractMedia, resolveMedia, describeMediaError } from './utils/viewOnce.js';
 
 // Mapas de enum do Baileys usados para traduzir status/stub/tipo de protocolo
 // no relatório do !get. Registrados uma única vez, sem custo por mensagem.
@@ -4670,33 +4671,16 @@ Código: *${roleCode}*`,
         throw error;
       }
     };
+    /**
+     * Mídia de uma mensagem, em qualquer encapsulamento.
+     *
+     * Antes isto listava os caminhos na mão (imageMessage, viewOnceMessage,
+     * viewOnceMessageV2) e por isso não enxergava `viewOnceMessageV2Extension`
+     * nem mensagem efêmera. Agora delega ao resolvedor compartilhado.
+     */
     const getMediaInfo = message => {
-      if (!message) return null;
-      if (message.imageMessage) return {
-        media: message.imageMessage,
-        type: 'image'
-      };
-      if (message.videoMessage) return {
-        media: message.videoMessage,
-        type: 'video'
-      };
-      if (message.viewOnceMessage?.message?.imageMessage) return {
-        media: message.viewOnceMessage.message.imageMessage,
-        type: 'image'
-      };
-      if (message.viewOnceMessage?.message?.videoMessage) return {
-        media: message.viewOnceMessage.message.videoMessage,
-        type: 'video'
-      };
-      if (message.viewOnceMessageV2?.message?.imageMessage) return {
-        media: message.viewOnceMessageV2.message.imageMessage,
-        type: 'image'
-      };
-      if (message.viewOnceMessageV2?.message?.videoMessage) return {
-        media: message.viewOnceMessageV2.message.videoMessage,
-        type: 'video'
-      };
-      return null;
+      const found = extractMedia(message);
+      return found ? { media: found.media, type: found.type, viewOnce: found.viewOnce, chain: found.chain } : null;
     };
     /**
      * Processa uma imagem usando ffmpeg para formato adequado para foto de perfil
@@ -22772,52 +22756,21 @@ break;
           
           if (!quotedMsg) return reply("❌ Responda a uma mídia (foto, vídeo, áudio) com o comando !pv");
           
-          // Detectar tipo de mídia quoted
-          let mediaData = null;
-          let mediaType = null;
-          
-          // Imagem
-          if (quotedMsg?.imageMessage) {
-            mediaData = await getFileBuffer(quotedMsg.imageMessage, 'image');
-            mediaType = 'image';
-          }
-          // Vídeo
-          else if (quotedMsg?.videoMessage) {
-            mediaData = await getFileBuffer(quotedMsg.videoMessage, 'video');
-            mediaType = 'video';
-          }
-          // Áudio
-          else if (quotedMsg?.audioMessage) {
-            mediaData = await getFileBuffer(quotedMsg.audioMessage, 'audio');
-            mediaType = 'audio';
-          }
-          // Sticker
-          else if (quotedMsg?.stickerMessage) {
-            mediaData = await getFileBuffer(quotedMsg.stickerMessage, 'sticker');
-            mediaType = 'sticker';
-          }
-          // View Once (visualização única)
-          else if (quotedMsg?.viewOnceMessage?.imageMessage) {
-            mediaData = await getFileBuffer(quotedMsg.viewOnceMessage.imageMessage, 'image');
-            mediaType = 'image';
-          }
-          else if (quotedMsg?.viewOnceMessage?.videoMessage) {
-            mediaData = await getFileBuffer(quotedMsg.viewOnceMessage.videoMessage, 'video');
-            mediaType = 'video';
-          }
-          // View Once V2
-          else if (quotedMsg?.viewOnceMessageV2?.imageMessage) {
-            mediaData = await getFileBuffer(quotedMsg.viewOnceMessageV2.imageMessage, 'image');
-            mediaType = 'image';
-          }
-          else if (quotedMsg?.viewOnceMessageV2?.videoMessage) {
-            mediaData = await getFileBuffer(quotedMsg.viewOnceMessageV2.videoMessage, 'video');
-            mediaType = 'video';
-          }
-          
-          if (!mediaData || !mediaType) {
+          // Resolve a mídia seja qual for o encapsulamento (viewOnce V1/V2/
+          // V2Extension, efêmera, citação de documento...).
+          //
+          // Antes isto checava os caminhos "na mão" e, no ViewOnce, lia
+          // `viewOnceMessageV2.imageMessage` — faltando o nível `.message`, que
+          // é onde a mídia realmente fica (`viewOnceMessageV2.message.imageMessage`).
+          // Por isso o comando sempre caía no "Não foi possível obter a mídia".
+          const encontrada = resolveMedia([quotedMsg]);
+
+          if (!encontrada) {
             return reply("❌ Não foi possível obter a mídia. Certifique-se de responder a uma foto, vídeo ou áudio.");
           }
+
+          const { media, type: mediaType } = encontrada;
+          const mediaData = await getFileBuffer(media, mediaType);
           
           // Determina o destino (PV do dono ou PV do bot)
           let destinoJid;
@@ -22841,9 +22794,16 @@ break;
           } else if (mediaType === 'video') {
             await nazu.sendMessage(destinoJid, { video: mediaData }, messageOptions);
           } else if (mediaType === 'audio') {
-            await nazu.sendMessage(destinoJid, { audio: mediaData, mimetype: 'audio/mp4' }, messageOptions);
+            const mimetype = media.mimetype || 'audio/mp4';
+            await nazu.sendMessage(destinoJid, { audio: mediaData, mimetype, ptt: false }, messageOptions);
           } else if (mediaType === 'sticker') {
             await nazu.sendMessage(destinoJid, { sticker: mediaData }, messageOptions);
+          } else if (mediaType === 'document') {
+            await nazu.sendMessage(destinoJid, {
+              document: mediaData,
+              mimetype: media.mimetype || 'application/octet-stream',
+              fileName: media.fileName || 'arquivo'
+            }, messageOptions);
           }
         } catch (e) {
           console.error(e);
@@ -24178,10 +24138,16 @@ ${groupPrefix}key sua_chave_gemini
           if (fs.existsSync(__dirname + '/../midias/menu.jpg')) fs.unlinkSync(__dirname + '/../midias/menu.jpg');
           if (fs.existsSync(__dirname + '/../midias/menu.mp4')) fs.unlinkSync(__dirname + '/../midias/menu.mp4');
           var RSM = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-          var boij2 = RSM?.imageMessage || info.message?.imageMessage || RSM?.viewOnceMessageV2?.message?.imageMessage || info.message?.viewOnceMessageV2?.message?.imageMessage || info.message?.viewOnceMessage?.message?.imageMessage || RSM?.viewOnceMessage?.message?.imageMessage;
-          var boij = RSM?.videoMessage || info.message?.videoMessage || RSM?.viewOnceMessageV2?.message?.videoMessage || info.message?.viewOnceMessageV2?.message?.videoMessage || info.message?.viewOnceMessage?.message?.videoMessage || RSM?.viewOnceMessage?.message?.videoMessage;
+          // Um único resolvedor descasca qualquer encapsulamento (viewOnce V1/
+          // V2/V2Extension, efêmera, citação). Os nomes boij2/boij continuam
+          // iguais para não mexer no resto do comando; só imagem e vídeo são
+          // aceitos aqui (áudio/figurinha/documento caem na mensagem de uso).
+          const midiaComando = resolveMedia([RSM, info.message]);
+          var isVideoMidia = midiaComando?.type === 'video';
+          var boij = isVideoMidia ? midiaComando.media : null;
+          var boij2 = midiaComando?.type === 'image' ? midiaComando.media : null;
           if (!boij && !boij2) return reply(`Marque uma imagem ou um vídeo, com o comando: ${prefix + command} (mencionando a mídia)`);
-          var isVideo2 = !!boij;
+          var isVideo2 = isVideoMidia;
           var buffer = await getFileBuffer(isVideo2 ? boij : boij2, isVideo2 ? 'video' : 'image');
           fs.writeFileSync(__dirname + '/../midias/menu.' + (isVideo2 ? 'mp4' : 'jpg'), buffer);
           await reply('✅ Mídia do menu atualizada com sucesso.');
@@ -25686,43 +25652,44 @@ ${groupPrefix}togglecmdvip premium_ia off`);
       case 'open':
       case 'revelar':
         try {
-          var RSMM = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-          var boij22 = RSMM?.imageMessage || info.message?.imageMessage || RSMM?.viewOnceMessageV2?.message?.imageMessage || info.message?.viewOnceMessageV2?.message?.imageMessage || info.message?.viewOnceMessage?.message?.imageMessage || RSMM?.viewOnceMessage?.message?.imageMessage;
-          var boijj = RSMM?.videoMessage || info.message?.videoMessage || RSMM?.viewOnceMessageV2?.message?.videoMessage || info.message?.viewOnceMessageV2?.message?.videoMessage || info.message?.viewOnceMessage?.message?.videoMessage || RSMM?.viewOnceMessage?.message?.videoMessage;
-          var boij33 = RSMM?.audioMessage || info.message?.audioMessage || RSMM?.viewOnceMessageV2?.message?.audioMessage || info.message?.viewOnceMessageV2?.message?.audioMessage || info.message?.viewOnceMessage?.message?.audioMessage || RSMM?.viewOnceMessage?.message?.audioMessage;
-          if (boijj) {
-            var px = boijj;
-            px.viewOnce = false;
-            px.video = {
-              url: px.url
-            };
-            await nazu.sendMessage(from, px, {
-              quoted: info
-            });
-          } else if (boij22) {
-            var px = boij22;
-            px.viewOnce = false;
-            px.image = {
-              url: px.url
-            };
-            await nazu.sendMessage(from, px, {
-              quoted: info
-            });
-          } else if (boij33) {
-            var px = boij33;
-            px.viewOnce = false;
-            px.audio = {
-              url: px.url
-            };
-            await nazu.sendMessage(from, px, {
-              quoted: info
-            });
-          } else {
-            return reply('Por favor, *mencione uma imagem, video ou áudio em visualização única* para executar o comando.');
+          // A mídia pode estar encapsulada de várias formas (viewOnce V1/V2/
+          // V2Extension, efêmera, com legenda em documento...). O resolvedor
+          // descasca a cadeia inteira e devolve a mídia de verdade.
+          const quotedRevelar = info.message?.extendedTextMessage?.contextInfo?.quotedMessage
+            || info.message?.imageMessage?.contextInfo?.quotedMessage
+            || info.message?.videoMessage?.contextInfo?.quotedMessage;
+          const encontrada = resolveMedia([quotedRevelar, info.message]);
+
+          if (!encontrada) {
+            return reply('Por favor, *marque uma imagem, vídeo ou áudio em visualização única* para executar o comando.');
           }
+
+          const { media, type } = encontrada;
+
+          // BAIXA a mídia (descriptografa) e envia o buffer.
+          //
+          // Antes isto mandava a URL do CDN direto no campo `image`/`video`.
+          // O Baileys, ao receber uma URL, faz um fetch cru (getStream -> remote)
+          // e reenvia os bytes como se fossem a mídia — mas o que está no CDN é
+          // o conteúdo CIFRADO. Resultado: o destinatário recebia um arquivo
+          // ilegível e o WhatsApp mostrava "não foi possível baixar a mídia".
+          // Baixando aqui, o download passa por downloadContentFromMessage, que
+          // usa a mediaKey e entrega o conteúdo já descriptografado.
+          const buffer = await getFileBuffer(media, type);
+
+          const conteudo = { [type]: buffer };
+          if (media.mimetype) conteudo.mimetype = media.mimetype;
+          if (media.fileName) conteudo.fileName = media.fileName;
+
+          await nazu.sendMessage(from, conteudo, { quoted: info });
         } catch (e) {
-          console.error(e);
-          await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
+          console.error('[REVELAR] Falha ao revelar mídia:', e?.message || e);
+          const motivo = describeMediaError(e);
+          await reply(
+            motivo
+              ? `❌ Não consegui baixar essa mídia: ${motivo}.`
+              : '❌ Ocorreu um erro interno. Tente novamente em alguns minutos.'
+          );
         }
         break;
       case 'limpardb':
@@ -27996,10 +27963,16 @@ packname: `${nomebot}`,
       case 's':
         try {
           var RSM = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-          var boij2 = RSM?.imageMessage || info.message?.imageMessage || RSM?.viewOnceMessageV2?.message?.imageMessage || info.message?.viewOnceMessageV2?.message?.imageMessage || info.message?.viewOnceMessage?.message?.imageMessage || RSM?.viewOnceMessage?.message?.imageMessage;
-          var boij = RSM?.videoMessage || info.message?.videoMessage || RSM?.viewOnceMessageV2?.message?.videoMessage || info.message?.viewOnceMessageV2?.message?.videoMessage || info.message?.viewOnceMessage?.message?.videoMessage || RSM?.viewOnceMessage?.message?.videoMessage;
+          // Um único resolvedor descasca qualquer encapsulamento (viewOnce V1/
+          // V2/V2Extension, efêmera, citação). Os nomes boij2/boij continuam
+          // iguais para não mexer no resto do comando; só imagem e vídeo são
+          // aceitos aqui (áudio/figurinha/documento caem na mensagem de uso).
+          const midiaComando = resolveMedia([RSM, info.message]);
+          var isVideoMidia = midiaComando?.type === 'video';
+          var boij = isVideoMidia ? midiaComando.media : null;
+          var boij2 = midiaComando?.type === 'image' ? midiaComando.media : null;
           if (!boij && !boij2) return reply(`Marque uma imagem ou um vídeo de até 9.9 segundos para fazer figurinha, com o comando: ${prefix + command} (mencionando a mídia)`);
-          var isVideo2 = !!boij;
+          var isVideo2 = isVideoMidia;
           if (isVideo2 && boij.seconds > 9.9) return reply(`O vídeo precisa ter no máximo 9.9 segundos para ser convertido em figurinha.`);
           var buffer = await getFileBuffer(isVideo2 ? boij : boij2, isVideo2 ? 'video' : 'image');
           const newsletterCtxSticker = {
@@ -28031,10 +28004,16 @@ packname: `${nomebot}`,
       case 's2':
         try {
           var RSM = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-          var boij2 = RSM?.imageMessage || info.message?.imageMessage || RSM?.viewOnceMessageV2?.message?.imageMessage || info.message?.viewOnceMessageV2?.message?.imageMessage || info.message?.viewOnceMessage?.message?.imageMessage || RSM?.viewOnceMessage?.message?.imageMessage;
-          var boij = RSM?.videoMessage || info.message?.videoMessage || RSM?.viewOnceMessageV2?.message?.videoMessage || info.message?.viewOnceMessageV2?.message?.videoMessage || info.message?.viewOnceMessage?.message?.videoMessage || RSM?.viewOnceMessage?.message?.videoMessage;
+          // Um único resolvedor descasca qualquer encapsulamento (viewOnce V1/
+          // V2/V2Extension, efêmera, citação). Os nomes boij2/boij continuam
+          // iguais para não mexer no resto do comando; só imagem e vídeo são
+          // aceitos aqui (áudio/figurinha/documento caem na mensagem de uso).
+          const midiaComando = resolveMedia([RSM, info.message]);
+          var isVideoMidia = midiaComando?.type === 'video';
+          var boij = isVideoMidia ? midiaComando.media : null;
+          var boij2 = midiaComando?.type === 'image' ? midiaComando.media : null;
           if (!boij && !boij2) return reply(`Marque uma imagem ou um vídeo de até 9.9 segundos para fazer figurinha, com o comando: ${prefix + command} (mencionando a mídia)`);
-          var isVideo2 = !!boij;
+          var isVideo2 = isVideoMidia;
           if (isVideo2 && boij.seconds > 9.9) return reply(`O vídeo precisa ter no máximo 9.9 segundos para ser convertido em figurinha.`);
           var buffer = await getFileBuffer(isVideo2 ? boij : boij2, isVideo2 ? 'video' : 'image');
           const newsletterCtxSticker2 = {

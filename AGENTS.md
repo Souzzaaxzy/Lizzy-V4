@@ -528,6 +528,60 @@ chamadas. Só em grupo, exige admin.
 - `funcs/API.js` foi **removido** na limpeza final; `config.json` não tem mais `site_vex`/`apikey_vex`.
 - Módulos próprios: `downloads/{spotify,soundcloud,facebook,kwai,apkmod,mcplugins,pinterest,tiktok,igdl,lyrics,youtube,canvas}.js`, `edits/index.js`, `logos/index.js` (jimp + fontes bitmap), `utils/imagetools.js` (jimp local), `utils/search.js`.
 
+## VISUALIZAÇÃO de mídia encapsulada (View Once / efêmera) ✅
+- **Sintoma**: comandos como `!s`, `!pv` e `!revelar` enviavam a mídia, mas ao
+  carregar o WhatsApp mostrava **"não foi possível baixar a mídia"** (ou o
+  comando dizia que não havia mídia).
+- **Eram DOIS bugs distintos:**
+  1. **Caminho errado do ViewOnceV2.** A mídia vive em
+     `viewOnceMessageV2.message.imageMessage`. Vários comandos liam
+     `viewOnceMessageV2.imageMessage` — **faltando `.message`** — e nunca
+     achavam nada (`viewOnceMessageV2.imageMessage` é `undefined`). O `!pv`
+     tinha esse bug em imagem e vídeo, e sempre caía no "Não foi possível obter
+     a mídia".
+  2. **Enviar a URL do CDN em vez do buffer.** O que está na URL do WhatsApp é
+     conteúdo **cifrado**. Ao receber `{ image: { url } }`, o Baileys faz um
+     fetch cru (`getStream` → `remote`) e reenvia aqueles bytes como se fossem a
+     mídia: o destinatário recebia um arquivo ilegível. Era o `!revelar`, que
+     fazia `px.image = { url: px.url }` e mandava isso. O certo é baixar aqui
+     com `getFileBuffer` (que usa `downloadContentFromMessage` com a `mediaKey`)
+     e enviar o **buffer já descriptografado**.
+- **Módulo**: `dados/src/utils/viewOnce.js` — resolvedor puro (sem Baileys, dá
+  para testar sem socket):
+  - `extractMedia(content)` / `resolveMedia([...])`: descascam **qualquer**
+    cadeia de encapsulamento, em qualquer profundidade;
+  - `isViewOnce()`, `mediaTypeLabel()`, `describeMediaError()`.
+- **Armadilha da detecção de wrapper**: `viewOnceMessageV2` e
+  `viewOnceMessageV2Extension` **não terminam em "Message"** (terminam em "V2" /
+  "V2Extension"). Uma detecção por sufixo `*Message` os ignoraria — foi uma
+  versão inicial do próprio resolvedor que caiu nisso. Hoje a escolha da chave é
+  por **lista explícita em ordem de prioridade** (mídia → wrappers → conversa →
+  fallback genérico). A ordem importa: `messageContextInfo` acompanha quase toda
+  mensagem e também contém "Message" no nome.
+- **Formas cobertas**: mídia direta, `viewOnceMessage` (V1),
+  `viewOnceMessageV2`, `viewOnceMessageV2Extension`, `ephemeralMessage` (grupo
+  com mensagens temporárias) — inclusive **aninhado**
+  (`ephemeral > viewOnceV2 > mídia`) —, `documentWithCaptionMessage`,
+  `ptvMessage` (nota de vídeo) e `stickerMessage`/`audioMessage`/`documentMessage`.
+- **Comandos corrigidos**: `!revelar` (passou a baixar e enviar buffer),
+  `!pv` (passou a resolver certo e ganhou documento/`ptv`),
+  `!s`/`!st`/`!sticker` e `!st2`/`!sticker2`/`!s2` (usavam a cadeia na mão), e o
+  `getMediaInfo` compartilhado (que não enxergava V2Extension nem efêmera).
+- **Vazamento de temporários corrigido (achado pelos testes do `!s`)**:
+  `dados/src/funcs/utils/sticker.js` removia o arquivo de entrada
+  (`database/tmp/...`) só no caminho feliz. Se o ffmpeg falhasse — ou **não
+  estivesse instalado** — o órfão ficava para sempre, um por tentativa. Agora o
+  corpo da conversão fica dentro de `try { ... } finally { unlink }`.
+- **Testes**: `tests/viewonce-v2.test.js` — 16 testes / 59 asserções. O teste
+  **não se contenta em ver "enviou algo"**: ele **cifra uma mídia de verdade**
+  (hkdf + AES-256-CBC, o mesmo formato do WhatsApp), serve por HTTP local e
+  confere que o comando entrega o **buffer original descriptografado**. Cobre o
+  resolvedor (12 formas de encapsulamento), `!revelar` (V1/V2/V2Extension/
+  efêmera), `!s`, `!pv` e o vazamento de temporários.
+  Verificado revertendo os fixes: **11 asserções falham** com o comportamento
+  antigo (URL cifrada e caminho sem `.message`), e o teste de temporários
+  detecta o vazamento (1 → 2 arquivos).
+
 ## VARIÁVEL `{cmdSm}` — comando mais parecido (!configcmdnotfound) ✅
 - **O que é**: nova variável da mensagem de comando não encontrado. Mostra o
   **comando mais parecido** com o que o usuário digitou — ex.: `!pingg` sugere
