@@ -152,7 +152,7 @@ export default async function menuadm(prefix, botName = "MeuBot", userName = "Us
 │ 📍 ${prefix}antiloc
 │ 🖼 ${prefix}antifig
 │ 🔘 ${prefix}antibtn
-│ 🖼 ${prefix}antifoton
+│ 🖼 ${prefix}antimidia
 │ 🎤 ${prefix}antiaudio
 │ ✨ ${prefix}antistickerplus
 │ 🔗 ${prefix}antilinkgp

@@ -528,6 +528,35 @@ chamadas. Só em grupo, exige admin.
 - `funcs/API.js` foi **removido** na limpeza final; `config.json` não tem mais `site_vex`/`apikey_vex`.
 - Módulos próprios: `downloads/{spotify,soundcloud,facebook,kwai,apkmod,mcplugins,pinterest,tiktok,igdl,lyrics,youtube,canvas}.js`, `edits/index.js`, `logos/index.js` (jimp + fontes bitmap), `utils/imagetools.js` (jimp local), `utils/search.js`.
 
+## COMANDO `!antimidia` (era `!antifoton`) — apaga foto E vídeo ✅
+- **O que faz**: apaga fotos e vídeos **normais** enviados por quem não é
+  admin/dono. **Visualização única é isenta de propósito** — o objetivo é
+  justamente forçar o envio como view once.
+- **Renomeado**: `!antifoton` → `!antimidia` (com `!antimidias` como alias).
+  O nome antigo **continua funcionando** para não quebrar o hábito nem scripts.
+- **BUG CORRIGIDO na detecção**: a condição checava `type === 'imageMessage'`
+  (só foto). Agora cobre `isImage || isVideo`. Detalhe que exigiu cuidado: a
+  checagem de view once usa o **envelope cru** (`info.message`) via
+  `isViewOnce()`, porque `type` de um view once também é
+  `'imageMessage'`/`'videoMessage'` — se filtrasse por `type`, o comando
+  apagaria justamente o que ele existe para permitir.
+- **Retrocompatibilidade da flag salva**: grupos que já tinham ligado o recurso
+  guardaram `antifoton: true` no JSON. O código lê
+  `groupData.antimidia ?? groupData.antifoton`, e o comando grava na chave nova
+  e **apaga a antiga** (para não sobrar valor velho que o fallback leria).
+  O painel de antis (`!configs`) também consulta a chave legada — sem isso um
+  grupo configurado antes apareceria como desativado.
+- **Onde mexe**: `index.js` (flag `isAntiMidia`, bloco de apagar, `case` do
+  comando, lista do painel) e `menus/menuadm.js`.
+- **Testes**: `tests/antimidia.test.js` — 14 testes / 29 asserções: toggle e
+  persistência, só grupo/só admin, alias antigo, flag antiga ainda ativa, foto e
+  **vídeo** apagados, view once (foto e vídeo) preservado, admin/dono
+  preservados, texto intacto, desligado/sem config não apaga, menu e painel.
+  Verificado revertendo a detecção para só-imagem: o teste de vídeo falha.
+- **Armadilha dos testes**: o `sender` precisa **existir no metadata do grupo**
+  (senão o handler nega por não ser admin) e o metadata é **cacheado por grupo**
+  (TTL 10s) — usar o mesmo ADMIN_LID com grupo novo a cada execução.
+
 ## VISUALIZAÇÃO de mídia encapsulada (View Once / efêmera) ✅
 - **Sintoma**: comandos como `!s`, `!pv` e `!revelar` enviavam a mídia, mas ao
   carregar o WhatsApp mostrava **"não foi possível baixar a mídia"** (ou o

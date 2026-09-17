@@ -22,7 +22,7 @@ import {
   toSafeObject
 } from './utils/messageInspector.js';
 import { buildCmdNotFoundExtras } from './utils/commandSuggest.js';
-import { extractMedia, resolveMedia, describeMediaError } from './utils/viewOnce.js';
+import { extractMedia, resolveMedia, isViewOnce, describeMediaError } from './utils/viewOnce.js';
 
 // Mapas de enum do Baileys usados para traduzir status/stub/tipo de protocolo
 // no relatório do !get. Registrados uma única vez, sem custo por mensagem.
@@ -3115,7 +3115,11 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     const isAntiDel = groupData.antidel;
     const isAntiInvi = groupData.antiinvi;
     const isAntiBtn = groupData.antibtn;
-    const isAntiFoton = groupData.antifoton;
+    // O comando era `!antifoton`; virou `!antimidia` ao passar a cobrir vídeo
+    // também. Grupos que já tinham ligado o recurso continuam valendo: a flag
+    // antiga (`antifoton`) é lida como fallback, e o toggle novo (`antimidia`)
+    // tem prioridade quando existir.
+    const isAntiMidia = groupData.antimidia ?? groupData.antifoton;
     const isAntiAudio = groupData.antiaudio;
     const isAntiStatus = groupData.antistatus;
     const isAntiStts = isGroup && groupData && groupData.antiStts !== false;
@@ -3406,8 +3410,15 @@ Você foi removido do grupo.`,
         }
       }
     }
-    // AntiFotoN - Apagar fotos normais
-    if (isGroup && isAntiFoton && isImage && !info.message?.viewOnceMessage && !info.message?.viewOnceMessageV2 && !info.message?.viewOnceMessageV2Extension && !isGroupAdmin && !isOwner) {
+    // AntiMídia - Apagar fotos e vídeos NORMAIS (view once é permitido)
+    //
+    // O propósito é justamente forçar o envio como visualização única, então
+    // mídia view once fica isenta. A checagem usa o envelope CRU
+    // (`info.message`) porque `type` de um view once também é
+    // 'imageMessage'/'videoMessage' — sem isso o comando apagaria justamente o
+    // que ele existe para permitir.
+    const isMidiaNormal = (isImage || isVideo) && !isViewOnce(info.message);
+    if (isGroup && isAntiMidia && isMidiaNormal && !isGroupAdmin && !isOwner) {
       if (isBotAdmin) {
         try {
           await nazu.sendMessage(from, {
@@ -3418,9 +3429,12 @@ Você foi removido do grupo.`,
               participant: sender
             }
           });
-          await nazu.sendMessage(from, { text: "🖼️ Fotos normais não estão permitidas neste grupo.\nEnvie sua imagem como Visualização Única." });
+          const tipoMidia = isVideo ? 'Vídeos' : 'Fotos';
+          await nazu.sendMessage(from, {
+            text: `🖼️ ${tipoMidia} não estão permitidas neste grupo.\nEnvie sua mídia como Visualização Única.`
+          });
         } catch (e) {
-          console.error("Erro ao apagar mensagem (antifoton):", e);
+          console.error("Erro ao apagar mensagem (antimidia):", e);
         }
       }
     }
@@ -31129,7 +31143,7 @@ break;
             { key: 'antiStts', name: 'Antistts', isObject: false },
             { key: 'antirequest', name: 'Antipagamento', isObject: false },
             { key: 'antistickerplus', name: 'Antistickerplus', isObject: true },
-            { key: 'antifoton', name: 'Antifoton', isObject: false },
+            { key: 'antimidia', name: 'Antimídia', isObject: false, legacyKey: 'antifoton' },
             { key: 'antiaudio', name: 'Antiaudio', isObject: false },
             { key: 'antigore', name: 'Antigore', isObject: false },
             { key: 'antidel', name: 'Antidelete', isObject: false },
@@ -31149,7 +31163,10 @@ break;
               const obj = groupData[system.key];
               isActive = obj && (system.subKey ? obj[system.subKey] : Object.keys(obj).some(k => obj[k]));
             } else {
-              isActive = !!groupData[system.key];
+              // `legacyKey` cobre renomeações (ex.: antifoton -> antimidia):
+              // grupos que ligaram antes da troca continuam aparecendo ativos.
+              const valor = groupData[system.key] ?? (system.legacyKey ? groupData[system.legacyKey] : undefined);
+              isActive = !!valor;
             }
             if (isActive) {
               activeCount++;
@@ -31539,12 +31556,17 @@ break;
           await reply("Ocorreu um erro 💔");
         }
         break;
-      case 'antifoton':
+      case 'antimidia':
+      case 'antimidias':
+      case 'antifoton': // nome antigo: continua funcionando
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
           if (!isGroupAdmin) return reply("Você precisa ser adm 💔");
           if (!isBotAdmin) return reply("Eu preciso ser adm para isso 💔");
-          groupData.antifoton = !groupData.antifoton;
+          // Alterna o toggle novo. A flag antiga é limpa para não sobrar valor
+          // velho (o fallback `??` a leria caso `antimidia` deixasse de existir).
+          groupData.antimidia = !(groupData.antimidia ?? groupData.antifoton);
+          delete groupData.antifoton;
           fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
           const newsletterCtx = {
             forwardingScore: 999,
@@ -31554,7 +31576,13 @@ break;
               newsletterName: "Lizzy"
             }
           };
-          await nazu.sendMessage(from, { text: groupData.antifoton ? "🟢 Fotos normais agora serão apagadas." : "🔴 Fotos normais não serão mais apagadas." , contextInfo: newsletterCtx, quoted: info });
+          await nazu.sendMessage(from, {
+            text: groupData.antimidia
+              ? "🟢 Fotos e vídeos normais agora serão apagados.\n\n💡 Visualização única continua permitida."
+              : "🔴 Fotos e vídeos normais não serão mais apagados.",
+            contextInfo: newsletterCtx,
+            quoted: info
+          });
         } catch (e) {
           console.error(e);
           await reply("Ocorreu um erro 💔");
