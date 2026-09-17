@@ -28016,6 +28016,10 @@ packname: `${nomebot}`,
       case 'grupostatus':
         try {
           if (!isGroup) return reply('❌ Este comando só funciona em grupos.');
+          // Só administração: usa o `isGroupAdmin` existente, que já agrega
+          // admin do grupo, dono, subdono e moderadores autorizados — sem criar
+          // um sistema de permissão paralelo.
+          if (!isGroupAdmin) return reply('❌ Apenas administradores podem publicar status no grupo.');
 
           // Legenda: tudo que vem depois do comando. Não é interpretado como
           // outro comando (o texto bruto de `q` já vem pronto para isso).

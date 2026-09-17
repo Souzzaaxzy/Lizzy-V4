@@ -101,10 +101,11 @@ function makeGroup(flags = {}) {
 }
 
 /**
- * Socket falso. Registra tudo que foi enviado, inclusive a mídia recebida.
- * `midiaEntregue` guarda os bytes que o bot mandou para o "servidor".
+ * Socket falso. `senderNoMetadata` é o autor da mensagem; ele entra no metadata
+ * como admin quando `comoAdmin` for true (o handler decide a permissão a partir
+ * do metadata do grupo).
  */
-function makeNazu({ sent, groupJid }) {
+function makeNazu({ sent, groupJid, senderNoMetadata = USER_LID, comoAdmin = false }) {
   return {
     sendMessage: async (jid, content, options) => {
       sent.push({ jid, content, options });
@@ -118,7 +119,12 @@ function makeNazu({ sent, groupJid }) {
       subject: 'Grupo SG',
       participants: [
         { id: BOT_LID, lid: BOT_LID, phoneNumber: BOT_JID, admin: 'admin' },
-        { id: USER_LID, lid: USER_LID, phoneNumber: '5511999999997@s.whatsapp.net', admin: null },
+        {
+          id: senderNoMetadata,
+          lid: senderNoMetadata,
+          phoneNumber: '5511999999997@s.whatsapp.net',
+          admin: comoAdmin ? 'admin' : null,
+        },
       ],
     }),
     groupParticipantsUpdate: async () => ({}),
@@ -133,20 +139,25 @@ function makeNazu({ sent, groupJid }) {
 }
 
 /**
- * Executa o comando.
+ * Executa o comando como ADMIN.
  *
- * Cada execução usa um sender DIFERENTE: o handler limita 3 comandos/5s por
- * sender, então reutilizar o mesmo faria o 4º responder "Calma aí!" e o teste
- * mediria a coisa errada.
+ * O sender precisa estar no metadata do grupo (senão o handler nega por não ser
+ * admin), e o metadata é cacheado por grupo — então o admin é incluído no
+ * metadata do grupo E varia por execução (o handler limita 3 comandos/5s por
+ * sender; reutilizar o mesmo faria o 4º responder "Calma aí!").
  */
 let senderCounter = 0;
-async function rodar({ groupJid, text, quoted = null, sender = null }) {
+async function rodar({ groupJid, text, quoted = null, sender = null, admin = true }) {
   if (!sender) {
     senderCounter += 1;
-    sender = `33300000${String(senderCounter).padStart(5, '0')}@lid`;
+    sender = admin
+      ? `22200000${String(senderCounter).padStart(5, '0')}@lid`
+      : `33300000${String(senderCounter).padStart(5, '0')}@lid`;
   }
+  const ehAdmin = admin;
+
   const sent = [];
-  const nazu = makeNazu({ sent, groupJid });
+  const nazu = makeNazu({ sent, groupJid, senderNoMetadata: sender, comoAdmin: ehAdmin });
   const contextInfo = { remoteJid: groupJid };
   if (quoted) {
     contextInfo.quotedMessage = quoted;
@@ -424,7 +435,8 @@ await test('mídia sem mediaKey: avisa que os dados vieram incompletos', async (
 await test('falha no envio: avisa sem quebrar', async () => {
   const groupJid = makeGroup();
   const sent = [];
-  const nazu = makeNazu({ sent, groupJid });
+  const adminFalha = '222000000000099@lid';
+  const nazu = makeNazu({ sent, groupJid, senderNoMetadata: adminFalha, comoAdmin: true });
   // O envio do status falha; o aviso e a confirmação não devem estourar.
   nazu.sendMessage = async (jid, content) => {
     if (content?.groupStatus) throw new Error('relay failed');
@@ -433,7 +445,7 @@ await test('falha no envio: avisa sem quebrar', async () => {
   };
 
   await handleMessage(nazu, {
-    key: { remoteJid: groupJid, fromMe: false, id: 'M-ERR', participant: USER_LID },
+    key: { remoteJid: groupJid, fromMe: false, id: 'M-ERR', participant: adminFalha },
     message: { extendedTextMessage: { text: '!statusgrupo teste', contextInfo: { remoteJid: groupJid } } },
     messageTimestamp: 1757900000,
     pushName: 'Tester',
@@ -460,9 +472,13 @@ await test('tipo não suportado (documento): cai na mensagem de uso', async () =
 // ============================================================================
 
 await test('múltiplos status seguidos: cada um publica', async () => {
+  // Mesmo sender e mesmo grupo nas duas: o metadata é cacheado por grupo, então
+  // o admin continua válido; e como são 2 comandos, fica dentro do limite de
+  // 3 comandos/5s por sender.
   const groupJid = makeGroup();
-  const r1 = await rodar({ groupJid, text: '!statusgrupo primeiro' });
-  const r2 = await rodar({ groupJid, text: '!statusgrupo segundo' });
+  const mesmoAdmin = '222000000000077@lid';
+  const r1 = await rodar({ groupJid, text: '!statusgrupo primeiro', sender: mesmoAdmin });
+  const r2 = await rodar({ groupJid, text: '!statusgrupo segundo', sender: mesmoAdmin });
 
   ok(r1.publicacao && r2.publicacao, 'as duas publicações aconteceram');
   const p1 = await payloadDoContent(r1.publicacao.content);
@@ -497,6 +513,77 @@ await test('alias grupostatus funciona; statusgp continua sendo o OUTRO comando'
   const g2 = makeGroup();
   const b = await rodar({ groupJid: g2, text: '!statusgp' });
   ok(!b.publicacao, 'statusgp NÃO publica group status (é o relatório do grupo)');
+});
+
+// ============================================================================
+// 7) PERMISSÃO: SÓ ADMINISTRAÇÃO
+// ============================================================================
+
+await test('!statusgrupo: membro comum NÃO publica (só admins)', async () => {
+  const groupJid = makeGroup();
+  const { texto, publicacao } = await rodar({
+    groupJid,
+    text: '!statusgrupo tentando',
+    admin: false,
+  });
+
+  ok(!publicacao, 'não publicou nada');
+  includes(texto, 'Apenas administradores', 'explica a restrição');
+  notIncludes(texto, 'Status publicado', 'não confirma sucesso');
+  notIncludes(texto, 'at ', 'sem stack trace');
+});
+
+await test('!statusgrupo: membro comum nem chega a baixar mídia', async () => {
+  // A checagem de permissão vem ANTES de qualquer I/O: um não-admin
+  // respondendo mídia não deve disparar download.
+  const groupJid = makeGroup();
+  const { texto, publicacao } = await rodar({
+    groupJid,
+    text: '!statusgrupo',
+    quoted: IMAGEM,
+    admin: false,
+  });
+
+  ok(!publicacao, 'não publicou');
+  includes(texto, 'Apenas administradores', 'barrou antes de processar a mídia');
+});
+
+await test('!statusgrupo: admin do grupo publica normalmente', async () => {
+  const groupJid = makeGroup();
+  const { publicacao } = await rodar({ groupJid, text: '!statusgrupo sou admin', admin: true });
+  ok(publicacao?.content?.groupStatus === true, 'admin consegue publicar');
+});
+
+await test('!grupostatus (alias) também exige admin', async () => {
+  const groupJid = makeGroup();
+  const { texto, publicacao } = await rodar({ groupJid, text: '!grupostatus tentando', admin: false });
+  ok(!publicacao, 'alias não publica para não-admin');
+  includes(texto, 'Apenas administradores', 'alias também restrito');
+});
+
+// ============================================================================
+// 8) MENU: APARECE NO MENUADM E NÃO NO MENUMEMB
+// ============================================================================
+
+await test('menuadm: statusgrupo listado (comando de administração)', async () => {
+  const src = fs.readFileSync(path.join(PROJECT, 'dados/src/menus/menuadm.js'), 'utf-8');
+  includes(src, '${prefix}statusgrupo', 'menuadm lista statusgrupo');
+
+  // E o menu renderiza de fato.
+  const mod = await import(new URL('../dados/src/menus/menuadm.js', import.meta.url).href);
+  const texto = String(await (mod.default ?? mod)('!', 'Lizzy', 'Teste'));
+  includes(texto, '!statusgrupo', 'a saída do menuadm traz o comando');
+  includes(texto, 'GESTÃO DO GRUPO', 'está na seção de gestão do grupo');
+});
+
+await test('menumemb: statusgrupo NÃO aparece mais (é de admin)', async () => {
+  const src = fs.readFileSync(path.join(PROJECT, 'dados/src/menus/menumemb.js'), 'utf-8');
+  notIncludes(src, 'statusgrupo', 'menumemb não lista mais statusgrupo');
+
+  const mod = await import(new URL('../dados/src/menus/menumemb.js', import.meta.url).href);
+  const texto = String(await (mod.default ?? mod)('!', 'Lizzy', 'Teste', false));
+  notIncludes(texto, 'statusgrupo', 'a saída do menumemb não traz o comando');
+  includes(texto, 'statusgp', 'o statusgp (relatório) continua lá');
 });
 
 // ============================================================================

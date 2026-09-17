@@ -20,7 +20,6 @@ export default async function menuMembros(prefix, botName = "MeuBot", userName =
 │ 📶 ${prefix}ping
 │ 🤖 ${prefix}statusbot
 │ 👥 ${prefix}statusgp
-│ 🧑‍🧑‍🧒 ${prefix}statusgrupo
 │ 📜 ${prefix}regras
 │ 🎙 ${prefix}transcrever
 ╰──────────────

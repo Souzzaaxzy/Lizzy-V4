@@ -547,6 +547,13 @@ chamadas. Só em grupo, exige admin.
   como alias: esse nome **já existia** e é OUTRO comando (relatório de status do
   grupo, em `menumemb`). Como o `switch` pega o primeiro match, o alias seria
   enganoso — o `!statusgp` continua sendo o relatório.
+- **PERMISSÃO: só administração.** Usa o `isGroupAdmin` que já existe (agrega
+  admin do grupo, dono, subdono e moderadores autorizados) — nenhum sistema de
+  permissão paralelo. A checagem vem **antes de qualquer I/O**, então um membro
+  comum não dispara download de mídia. Mensagem: *"Apenas administradores podem
+  publicar status no grupo."*
+- **MENU**: aparece no **`menuadm`** (seção "GESTÃO DO GRUPO"), e **não** no
+  `menumemb` — coerente com a restrição.
 - **Conteúdo aceito**: texto (`!statusgrupo Bom dia!`), mídia respondida
   (imagem/vídeo/áudio) com ou sem legenda (`!statusgrupo Minha legenda`). A
   legenda é o texto cru depois do comando — não é interpretada como outro
@@ -563,15 +570,21 @@ chamadas. Só em grupo, exige admin.
 - **`describeMediaError`** ganhou os casos `ECONNREFUSED`/`fetch failed` (falha de
   conexão) e `empty media key` (dados incompletos da mídia) — sem isso o usuário
   recebia um genérico "não foi possível baixar" sem causa.
-- **Testes**: `tests/statusgrupo.test.js` — 19 testes / 56 asserções. O teste
+- **Testes**: `tests/statusgrupo.test.js` — 25 testes / 71 asserções. O teste
   **não se contenta** em ver "enviou algo": pega o conteúdo que o comando montou
   e passa pelo caminho REAL da fork (`generateWAMessageContent`), conferindo que
   vira `groupStatusMessageV2`, com `isGroupStatus: true`, `messageSecret`
   presente e destino `@g.us` (e nunca `status@broadcast`). Mídia de teste é
   **cifrada de verdade** (hkdf + AES-256-CBC) e servida por HTTP local. Cobre
-  texto/imagem/vídeo/áudio/legenda/view once, erros e regressão (mensagem normal
-  não ganha `groupStatus`). Verificado removendo o `groupStatus: true`:
-  **21 asserções falham** — o teste distingue status nativo de mensagem comum.
+  texto/imagem/vídeo/áudio/legenda/view once, erros, regressão (mensagem normal
+  não ganha `groupStatus`), **permissão** (membro comum barrado antes de baixar
+  mídia; admin e alias) e **menu** (presente no `menuadm`, ausente no
+  `menumemb`). Verificado removendo o `groupStatus: true`: **21 asserções
+  falham**; removendo a checagem de admin: **7 falham**.
+- **Armadilha dos testes**: o metadata do grupo é **cacheado por grupo** (TTL
+  10s), então o admin precisa estar no metadata E o sender precisa ser coerente
+  entre chamadas do mesmo grupo. Para o teste de status consecutivos usa-se o
+  mesmo admin; para os demais, um grupo novo a cada execução.
 - **Validação real com o WhatsApp (NÃO feita)**: exige conta pareada e grupo de
   teste; o ambiente aqui não tem sessão. Fica pendente para o dono confirmar no
   cliente oficial. O que está provado por teste é o payload/stanza corretos.

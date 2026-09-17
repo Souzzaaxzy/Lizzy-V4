@@ -82,6 +82,7 @@ export default async function menuadm(prefix, botName = "MeuBot", userName = "Us
 │ 📝 ${prefix}nomegp
 │ 📄 ${prefix}descgrupo
 │ 🖼 ${prefix}fotogrupo
+│ 🧑‍🧑‍🧒 ${prefix}statusgrupo
 │ ➕ ${prefix}addregra
 │ ➖ ${prefix}delregra
 │ 🗂 ${prefix}lixeira
