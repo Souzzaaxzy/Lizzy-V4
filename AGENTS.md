@@ -640,6 +640,52 @@ chamadas. Só em grupo, exige admin.
   limpo) com npm **12.0.2** e `npm ci`, e o baileys instalado tem
   `CallStatus`/`preacceptCall` (fork certa). As suítes rodam nessa instalação.
 
+## !atualizar — git pull abortado por mudança local no banco ✅
+- **Sintoma**: `!atualizar` falha sempre com
+  `error: Your local changes to the following files would be overwritten by
+  merge: dados/database/global.json` / `Please commit your changes or stash
+  them before you merge. Aborting`.
+- **Causa**: o bot grava o estado dele dentro de `dados/database` (economia,
+  contadores, grupos) enquanto roda. Vários desses arquivos estão **rastreados
+  no git**, então o arquivo está sempre "modificado" na árvore de trabalho.
+  Quando o commit que vem do GitHub mexe no **mesmo** arquivo, o merge aborta.
+  Reproduzido: commit do upstream que altera `global.json`.
+- **Pior**: isso é uma **contradição do repositório** — o `.gitignore` manda
+  ignorar `dados/database/**/*.json`, mas **49 desses arquivos foram
+  commitados** antes (e `.gitignore` não afeta arquivo já rastreado). Por isso
+  o estado de runtime fica "sujo" indefinidamente.
+- **Correção no `update.js`**: antes do pull, o script copia para um diretório
+  temporário todos os arquivos alterados de `dados/database`; se o pull falhar,
+  tenta de novo liberando (`git checkout -- dados/database`) **só** esses
+  arquivos; e por fim devolve o estado copiado. Código e configs locais nunca
+  são tocados. Validado em 4 cenários: upstream mexendo no mesmo arquivo, só no
+  código, na mesma linha, e até no caso em que o upstream **destrackeia** o
+  arquivo (o mais difícil — deixava conflito `modify/delete`).
+- **Armadilha do parser**: `git status --porcelain` devolve `"XY caminho"`. O
+  corte dos 3 primeiros chars tem de vir **antes** do `trim()` — o trim come o
+  espaço inicial e desloca o caminho (`ados/database/...`). Foi um bug real na
+  primeira versão desta correção, pego pelos testes.
+- **Desbloqueio para quem já está travado** (o `update.js` antigo não se
+  corrige sozinho, porque é justamente ele que falha): com o bot parado, na
+  raiz do projeto —
+
+  ```bash
+  cp -r dados/database /tmp/backup-database   # 1. guarda o estado
+  git checkout -- dados/database              # 2. libera os arquivos de dados
+  git pull                                    # 3. baixa a correção
+  cp -r /tmp/backup-database/. dados/database/ # 4. devolve o estado
+  ```
+
+  **Não use `git stash pop`** aqui: ele deixa marcadores de conflito
+  (`<<<<<<<`) dentro do JSON quando o mesmo arquivo mudou dos dois lados,
+  corrompendo o arquivo. O fluxo acima foi validado e mantém o JSON válido.
+- **Pendência conhecida (não feita)**: destrackear os 49 arquivos
+  (`git rm --cached`) resolveria a causa raiz, mas na transição gera conflito
+  `modify/delete` para quem já roda o bot. Precisa de uma migração cuidadosa.
+- **ALERTA de segurança**: `dados/database/dono/ff_credentials_br.json` tem
+  **109 pares uid+password** e está commitado — e o repositório é **público**.
+  Essas credenciais estão expostas no GitHub e devem ser rotacionadas.
+
 ## INSTALAÇÃO — árvore de dependências parcial ✅
 - **Sintoma**: o bot quebra no boot com
   `ERR_MODULE_NOT_FOUND: Cannot find package '.../node_modules/pngjs/lib/png.js'

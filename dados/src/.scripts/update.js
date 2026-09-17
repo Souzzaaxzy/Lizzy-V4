@@ -14,6 +14,10 @@ const execAsync = (cmd, args = [], opts = {}) => new Promise((resolve, reject) =
   });
 });
 
+// Estado do bot (economia, grupos, contadores...). Relativo à raiz do projeto,
+// que é o cwd com que o index.js sobe este script.
+const DB_DIR = 'dados/database';
+
 async function isAvailable(cmd, args = ['--version']) {
   try {
     await execAsync(cmd, args, { timeout: 15000 });
@@ -31,9 +35,115 @@ async function gitPull() {
     console.log('Aviso: não foi possível configurar git pull.rebase');
   }
 
+  // O bot grava o estado dele dentro de dados/database enquanto roda (economia,
+  // contadores, grupos...). Se o commit que vem do GitHub mexer no MESMO arquivo
+  // desses, o merge aborta com:
+  //
+  //   error: Your local changes to the following files would be overwritten by
+  //   merge: dados/database/global.json
+  //
+  // Por isso o estado local é copiado para um diretório temporário antes do
+  // pull e devolvido depois. Nada é descartado.
+  const estado = await guardarEstadoLocal();
+
   console.log('Baixando a versão mais recente...');
-  await execAsync('git', ['pull']);
+  try {
+    await execAsync('git', ['pull']);
+  } catch (err) {
+    // Segunda tentativa: se ainda houver conflito (ex.: arquivo de estado que
+    // mudou dos dois lados), aceita a versão do repositório SÓ nos arquivos de
+    // dados -- que são recriados/sobrescritos pelo bot de qualquer forma -- e
+    // mantém o código atualizado.
+    console.log('Aviso: pull encontrou conflito, tentando preservar o estado local...');
+    await tentarPullPreservandoEstado();
+  }
   console.log('Download concluído');
+
+  await restaurarEstadoLocal(estado);
+}
+
+/** Guarda as alterações locais só de dados/database (sem tocar no resto). */
+async function guardarEstadoLocal() {
+  try {
+    const { stdout } = await execAsync('git', ['status', '--porcelain', '--', DB_DIR]);
+    // Formato de cada linha: "XY caminho" (XY = 2 chars de status + 1 espaço).
+    // O corte dos 3 primeiros chars tem que vir ANTES do trim: o trim come o
+    // espaço inicial e desloca o caminho (virava "ados/database/...").
+    const linhas = stdout.split('\n').map((l) => l.replace(/\r$/, '')).filter((l) => l.trim());
+    if (linhas.length === 0) return null;
+
+    // Copia os arquivos alterados para um diretório temporário. É mais simples e
+    // seguro que stash: funciona mesmo com arquivo novo, deletado ou conflitado.
+    const backup = fs.mkdtempSync(path.join(os.tmpdir(), 'estado-bot-'));
+    const arquivos = [];
+    for (const linha of linhas) {
+      const caminho = linha.slice(3).trim().replace(/^"|"$/g, '');
+      const origem = path.join(process.cwd(), caminho);
+      if (!fs.existsSync(origem) || !fs.statSync(origem).isFile()) continue;
+      const destino = path.join(backup, caminho.replace(/\//g, '__'));
+      fs.copyFileSync(origem, destino);
+      arquivos.push({ caminho, destino });
+    }
+    if (arquivos.length === 0) {
+      fs.rmSync(backup, { recursive: true, force: true });
+      return null;
+    }
+    console.log(`Estado local preservado (${arquivos.length} arquivo(s) em ${DB_DIR})`);
+    return { backup, arquivos };
+  } catch (err) {
+    console.log('Aviso: não foi possível preservar o estado local:', err.message);
+    return null;
+  }
+}
+
+/** Devolve os arquivos guardados por cima do que veio do repositório. */
+async function restaurarEstadoLocal(estado) {
+  if (!estado) return;
+  try {
+    let restaurados = 0;
+    for (const { caminho, destino } of estado.arquivos) {
+      try {
+        fs.mkdirSync(path.dirname(path.join(process.cwd(), caminho)), { recursive: true });
+        fs.copyFileSync(destino, path.join(process.cwd(), caminho));
+        restaurados += 1;
+      } catch {
+        /* um arquivo que falhar não impede os outros */
+      }
+    }
+    if (restaurados > 0) console.log(`Estado local restaurado (${restaurados} arquivo(s))`);
+  } catch (err) {
+    console.log('Aviso: falha ao restaurar o estado local:', err.message);
+  } finally {
+    try {
+      fs.rmSync(estado.backup, { recursive: true, force: true });
+    } catch { /* temporário */ }
+  }
+}
+
+/**
+ * Última tentativa de pull: guarda o estado, descarta as mudanças locais nos
+ * arquivos de DADOS (`checkout -- <DB_DIR>`) e puxa de novo.
+ *
+ * Só toca em dados/database -- código e configs locais ficam intactos.
+ */
+async function tentarPullPreservandoEstado() {
+  const estado = await guardarEstadoLocal();
+  try {
+    // Desfaz mudanças locais apenas nos arquivos de estado já rastreados, para
+    // o merge não abortar. O conteúdo real foi guardado acima.
+    await execAsync('git', ['checkout', '--', DB_DIR]);
+  } catch { /* nada rastreado modificado: segue */ }
+
+  try {
+    await execAsync('git', ['pull']);
+  } catch (err) {
+    console.log('Aviso: git pull ainda falhou:', err.stderr || err.message);
+    // Mesmo falhando, devolve o estado local para não perder dados do bot.
+    await restaurarEstadoLocal(estado);
+    throw err;
+  }
+
+  await restaurarEstadoLocal(estado);
 }
 
 // Instala dependências Node somente se houver algo faltando.
