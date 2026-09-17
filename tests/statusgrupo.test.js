@@ -187,14 +187,17 @@ async function payloadDoContent(content) {
   const vo = gerado.groupStatusMessageV2;
   const inner = vo?.message;
   const tipo = inner ? Object.keys(inner)[0] : null;
+  const ci = inner?.[tipo]?.contextInfo;
   return {
     chaves: Object.keys(gerado),
     temV2: Boolean(vo),
     tipoInterno: tipo,
-    isGroupStatus: inner?.[tipo]?.contextInfo?.isGroupStatus,
+    isGroupStatus: ci?.isGroupStatus,
     temSecret: Boolean(gerado.messageContextInfo?.messageSecret),
     caption: inner?.[tipo]?.caption,
     textoInterno: inner?.extendedTextMessage?.text,
+    // Permissão de repostagem declarada no próprio payload.
+    canBeReshared: ci?.featureEligibilities?.canBeReshared,
   };
 }
 
@@ -562,7 +565,100 @@ await test('!grupostatus (alias) também exige admin', async () => {
 });
 
 // ============================================================================
-// 8) MENU: APARECE NO MENUADM E NÃO NO MENUMEMB
+// 9) REPOSTAGEM: A PERMISSÃO VAI NO PRÓPRIO PAYLOAD
+// ============================================================================
+// O botão de "compartilhar/repostar" é do WhatsApp: a biblioteca decide se ele
+// aparece lendo `contextInfo.featureEligibilities.canBeReshared` do PRÓPRIO
+// payload, não das configurações de privacidade da conta. Estes testes pegam o
+// conteúdo real montado pelo comando e passam pelo caminho da fork, conferindo
+// que a permissão chega ao destinatário em todos os tipos publicados.
+
+await test('texto: o payload declara a permissão de repostagem', async () => {
+  const groupJid = makeGroup();
+  const { publicacao } = await rodar({ groupJid, text: '!statusgrupo Reposte isso' });
+  const p = await payloadDoContent(publicacao.content);
+
+  ok(p.canBeReshared === true, 'contextInfo.featureEligibilities.canBeReshared = true');
+  ok(p.temV2, 'continua sendo Group Status (não virou mensagem comum)');
+  ok(p.isGroupStatus === true, 'isGroupStatus preservado junto da permissão');
+});
+
+await test('imagem: o payload declara a permissão de repostagem', async () => {
+  const groupJid = makeGroup();
+  const { publicacao } = await rodar({ groupJid, text: '!statusgrupo', quoted: IMAGEM });
+  const p = await payloadDoContent(publicacao.content);
+
+  ok(p.tipoInterno === 'imageMessage', `é imagem (${p.tipoInterno})`);
+  ok(p.canBeReshared === true, 'imagem com permissão de repostagem');
+  ok(p.isGroupStatus === true, 'isGroupStatus preservado');
+});
+
+await test('vídeo: o payload declara a permissão de repostagem', async () => {
+  const groupJid = makeGroup();
+  const { publicacao } = await rodar({ groupJid, text: '!statusgrupo', quoted: VIDEO });
+  const p = await payloadDoContent(publicacao.content);
+
+  ok(p.tipoInterno === 'videoMessage', `é vídeo (${p.tipoInterno})`);
+  ok(p.canBeReshared === true, 'vídeo com permissão de repostagem');
+});
+
+await test('imagem + legenda: permissão sobrevive à legenda', async () => {
+  const groupJid = makeGroup();
+  const { publicacao } = await rodar({ groupJid, text: '!statusgrupo Olha 🔥', quoted: IMAGEM });
+  const p = await payloadDoContent(publicacao.content);
+
+  ok(p.caption === 'Olha 🔥', 'a legenda continua indo');
+  ok(p.canBeReshared === true, 'a permissão não se perdeu com a legenda');
+});
+
+await test('a flag é consumida pela fork e não vira campo desconhecido no proto', async () => {
+  // Objeto fresco: `generateWAMessageContent` MUTA a entrada (apaga a flag), então
+  // usar o objeto de outro teste faria esta asserção passar por acaso.
+  const entrada = { text: 'teste', groupStatus: true, canBeReshared: true };
+  const p = await payloadDoContent(entrada);
+
+  notIncludes(p.chaves.join(','), 'canBeReshared', 'não aparece como chave no topo do payload');
+  ok(!('canBeReshared' in entrada), 'a fork consome a flag (não é enviada crua ao proto)');
+});
+
+await test('a permissão sobrevive ao encode/decode do proto (vai mesmo no fio)', async () => {
+  const groupJid = makeGroup();
+  const { publicacao } = await rodar({ groupJid, text: '!statusgrupo Viaja no proto' });
+
+  // Reencoda exatamente o que iria para o servidor e decodifica de volta: é a
+  // prova de que o campo é encodável e chega ao destinatário — um payload que
+  // só existe em memória não serviria.
+  const gerado = await generateWAMessageContent(publicacao.content, {
+    userJid: `${BOT_JID.split('@')[0]}@s.whatsapp.net`,
+    upload: fakeUpload,
+  });
+  const bytes = proto.Message.encode(proto.Message.create(gerado)).finish();
+  const decodificado = proto.Message.decode(bytes);
+
+  const inner = decodificado.groupStatusMessageV2?.message?.extendedTextMessage;
+  ok(Boolean(inner), 'continua groupStatusMessageV2 depois do round-trip');
+  ok(inner?.contextInfo?.isGroupStatus === true, 'isGroupStatus sobrevive');
+  ok(
+    inner?.contextInfo?.featureEligibilities?.canBeReshared === true,
+    'featureEligibilities.canBeReshared sobrevive ao encode/decode'
+  );
+  includes(inner?.text || '', 'Viaja no proto', 'o texto continua íntegro');
+});
+
+await test('regressão: mensagem comum do bot NÃO ganha permissão de repostagem', async () => {
+  const groupJid = makeGroup();
+  const { publicacao } = await rodar({ groupJid, text: '!statusgrupo Bom dia' });
+  const p = await payloadDoContent(publicacao.content);
+  ok(p.canBeReshared === true, 'o status publica com a permissão');
+
+  // Um conteúdo normal (sem a flag) não deve declarar nada.
+  const comum = await payloadDoContent({ text: 'mensagem comum' });
+  ok(comum.canBeReshared === undefined, 'texto comum segue sem featureEligibilities');
+  ok(comum.isGroupStatus === undefined, 'texto comum não vira Group Status');
+});
+
+// ============================================================================
+// 10) MENU: APARECE NO MENUADM E NÃO NO MENUMEMB
 // ============================================================================
 
 await test('menuadm: statusgrupo listado (comando de administração)', async () => {

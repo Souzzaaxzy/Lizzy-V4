@@ -28030,7 +28030,12 @@ packname: `${nomebot}`,
           const quotedStatus = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
           const midiaStatus = resolveMedia([quotedStatus, info.message]);
 
-          const statusContent = { groupStatus: true };
+          // `groupStatus: true` faz a fork encapsular em groupStatusMessageV2 e
+          // marcar isGroupStatus; `canBeReshared: true` declara a permissão de
+          // repostagem no próprio payload (contextInfo.featureEligibilities),
+          // que é o que faz o cliente oferecer o "compartilhar/repostar" nativo.
+          // O botão é do WhatsApp — aqui só declaramos a permissão.
+          const statusContent = { groupStatus: true, canBeReshared: true };
 
           if (midiaStatus && (midiaStatus.type === 'image' || midiaStatus.type === 'video' || midiaStatus.type === 'audio')) {
             // Baixa UMA vez, com o mesmo caminho dos outros comandos

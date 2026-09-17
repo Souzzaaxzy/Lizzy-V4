@@ -570,17 +570,19 @@ chamadas. Só em grupo, exige admin.
 - **`describeMediaError`** ganhou os casos `ECONNREFUSED`/`fetch failed` (falha de
   conexão) e `empty media key` (dados incompletos da mídia) — sem isso o usuário
   recebia um genérico "não foi possível baixar" sem causa.
-- **Testes**: `tests/statusgrupo.test.js` — 25 testes / 71 asserções. O teste
-  **não se contenta** em ver "enviou algo": pega o conteúdo que o comando montou
-  e passa pelo caminho REAL da fork (`generateWAMessageContent`), conferindo que
-  vira `groupStatusMessageV2`, com `isGroupStatus: true`, `messageSecret`
-  presente e destino `@g.us` (e nunca `status@broadcast`). Mídia de teste é
-  **cifrada de verdade** (hkdf + AES-256-CBC) e servida por HTTP local. Cobre
-  texto/imagem/vídeo/áudio/legenda/view once, erros, regressão (mensagem normal
-  não ganha `groupStatus`), **permissão** (membro comum barrado antes de baixar
-  mídia; admin e alias) e **menu** (presente no `menuadm`, ausente no
-  `menumemb`). Verificado removendo o `groupStatus: true`: **21 asserções
-  falham**; removendo a checagem de admin: **7 falham**.
+- **Testes**: `tests/statusgrupo.test.js` — **32 testes / 90 asserções** (o total
+  subiu com a seção 9 de repostagem; ver "REPOSTAGEM do Group Status" abaixo). O
+  teste **não se contenta** em ver "enviou algo": pega o conteúdo que o comando
+  montou e passa pelo caminho REAL da fork (`generateWAMessageContent`),
+  conferindo que vira `groupStatusMessageV2`, com `isGroupStatus: true`,
+  `messageSecret` presente e destino `@g.us` (e nunca `status@broadcast`). Mídia
+  de teste é **cifrada de verdade** (hkdf + AES-256-CBC) e servida por HTTP
+  local. Cobre texto/imagem/vídeo/áudio/legenda/view once, erros, regressão
+  (mensagem normal não ganha `groupStatus`), **permissão** (membro comum barrado
+  antes de baixar mídia; admin e alias), **menu** (presente no `menuadm`, ausente
+  no `menumemb`) e **repostagem** (a permissão chega no payload). Verificado
+  removendo o `groupStatus: true`: **21 asserções falham**; removendo a checagem
+  de admin: **7 falham**; revertendo o `canBeReshared`: **6 falham**.
 - **Armadilha dos testes**: o metadata do grupo é **cacheado por grupo** (TTL
   10s), então o admin precisa estar no metadata E o sender precisa ser coerente
   entre chamadas do mesmo grupo. Para o teste de status consecutivos usa-se o
@@ -588,6 +590,55 @@ chamadas. Só em grupo, exige admin.
 - **Validação real com o WhatsApp (NÃO feita)**: exige conta pareada e grupo de
   teste; o ambiente aqui não tem sessão. Fica pendente para o dono confirmar no
   cliente oficial. O que está provado por teste é o payload/stanza corretos.
+
+## REPOSTAGEM do Group Status (`canBeReshared`) — fork + Lizzy ✅
+- **Pergunta do dono**: "nativo direto do status do grupo a opção de repostar,
+  sem postar em nenhum outro contato, tem como?" → **sim**, via flag de payload.
+- **Descoberta que mudou o diagnóstico**: o botão de repostar/compartilhar
+  **não** depende das configurações de privacidade da conta ("Allow Sharing"). O
+  cliente lê a permissão do **próprio payload**
+  (`contextInfo.featureEligibilities.canBeReshared`). Status postado por
+  biblioteca não mostrava o botão porque esse campo simplesmente não ia na
+  mensagem. Referência: `WhiskeySockets/Baileys#2633` (issue [DOCS] Broadcast &
+  Stories — exemplos de audio/video/caption/reshare).
+- **Fork (lado da biblioteca) — commit `09d78f4`** (`lib/Utils/messages.js`, ~21
+  linhas): novo flag booleano opcional `canBeReshared`, no **mesmo padrão do
+  `groupStatus`** já existente. Quando ligado, mescla
+  `contextInfo.featureEligibilities.canBeReshared = true` (preservando
+  `contextInfo`/`featureEligibilities` já existentes) e apaga a flag da entrada
+  (`delete message.canBeReshared`), para não vazar campo desconhecido no proto.
+  README da fork ganhou a seção "Reshare (`canBeReshared`)" + entrada no índice.
+- **Fork — armadilha que já derrubou um diagnóstico errado**:
+  `generateWAMessageContent` **MUTA o objeto de entrada** (`delete
+  message.groupStatus` / `delete message.canBeReshared`). Reusar o mesmo objeto
+  entre chamadas faz o teste mentir (parecia que o `groupStatusMessageV2` havia
+  sumido). Cada caso de teste usa **objeto fresco**.
+- **Fork — testes**: `tests/reshare.test.js` (16 testes / 4 suítes): marca a
+  permissão, não mexe sem a flag, consome a flag da entrada, respeita `false`,
+  preserva `contextInfo`/`featureEligibilities` existentes, convive com
+  `groupStatus`/`spoiler`/`viewOnce`/`quoted`, vale para texto/imagem/vídeo/áudio
+  e a regressão de mensagem normal. Rodar com `node --test
+  tests/reshare.test.js`. Verificado desligando o suporte: **12 falham**.
+- **Lizzy (lado do bot)**: `dados/src/index.js` (~28033) — o `!statusgrupo`
+  passou a montar `{ groupStatus: true, canBeReshared: true }`. Nada mais mudou:
+  mesmo caminho de mídia, mesma permissão de admin, mesmo menu. O botão é do
+  WhatsApp; o bot só **declara a permissão**.
+- **Dependência fixada**: `package-lock.json` + `yarn.lock` apontam para o commit
+  `09d78f495d2bc90d59258a53c29d7ee12faa1ee3` da fork (antes `453ccf7`). Sem isso o
+  bot instalaria a versão sem o flag e o repostar não funcionaria.
+- **Testes da Lizzy**: `tests/statusgrupo.test.js` — 32 testes / 90 asserções. O
+  helper `payloadDoContent` passou a capturar
+  `ci.featureEligibilities.canBeReshared`; a seção 9 cobre texto/imagem/vídeo/
+  legenda, que a flag não vira campo solto no proto, que **sobrevive ao
+  encode/decode real do proto** (`proto.Message.encode`/`decode` — prova de que
+  vai no fio, não só em memória) e a regressão de mensagem comum. Verificado
+  revertendo para `{ groupStatus: true }`: **6 asserções falham**.
+- **Limitação conhecida (lado WhatsApp, não da lib/fork)**: status de **áudio**
+  (`ptt`) não oferece repostar independentemente da flag. Documentado no README
+  da fork.
+- **Validação real com o WhatsApp (NÃO feita)**: o ambiente não tem sessão
+  pareada. Só o payload/stanza estão provados por teste; o dono precisa confirmar
+  o botão no cliente oficial.
 
 ## COMANDO `!antimidia` (era `!antifoton`) — apaga foto E vídeo ✅
 - **O que faz**: apaga fotos e vídeos **normais** enviados por quem não é
