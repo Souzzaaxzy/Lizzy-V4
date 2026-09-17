@@ -528,6 +528,48 @@ chamadas. Só em grupo, exige admin.
 - `funcs/API.js` foi **removido** na limpeza final; `config.json` não tem mais `site_vex`/`apikey_vex`.
 - Módulos próprios: `downloads/{spotify,soundcloud,facebook,kwai,apkmod,mcplugins,pinterest,tiktok,igdl,lyrics,youtube,canvas}.js`, `edits/index.js`, `logos/index.js` (jimp + fontes bitmap), `utils/imagetools.js` (jimp local), `utils/search.js`.
 
+## VARIÁVEL `{cmdSm}` — comando mais parecido (!configcmdnotfound) ✅
+- **O que é**: nova variável da mensagem de comando não encontrado. Mostra o
+  **comando mais parecido** com o que o usuário digitou — ex.: `!pingg` sugere
+  `!ping`. Mesmo padrão das outras (`{command}`, `{prefix}`, `{user}`,
+  `{botName}`, `{userName}`).
+- **Uso**: `!configcmdnotfound set O comando {command} não existe! Você quis
+  dizer {cmdSm}?` → o que o usuário vê é *"O comando pingg não existe! Você quis
+  dizer !ping?"*.
+- **Sem sugestão razoável, cai no menu** (`{prefix}menu`) — a variável nunca fica
+  vazia nem deixa o texto com buraco (ex.: "Você quis dizer ?").
+- **Módulo**: `dados/src/utils/commandSuggest.js` — `getAllBotCommands()`,
+  `levenshtein()`, `findClosestCommand()`, `buildCmdNotFoundExtras()`.
+- **De onde vem a lista de comandos**: do **próprio `index.js`**, pelos
+  `case '...':` do switch principal, que ficam com **6 espaços de indentação**.
+  Isso exclui os subcomandos (ex.: `set`/`style`/`preview` do
+  `configcmdnotfound`), que têm indentação maior — sem esse filtro, digitar
+  `!set` sugeriria `set` como comando válido, e não é. ~1841 comandos, lidos uma
+  vez e cacheados (o arquivo tem ~1.9 MB).
+- **Critério da sugestão**: prefere o comando que **contém** o texto digitado
+  (ou é contido por ele); depois decide por distância de Levenshtein, com teto
+  proporcional ao tamanho da palavra. Empate desempata pelo nome mais curto.
+  Entrada sem nada parecido devolve `null` (→ menu).
+- **Ponto de integração**: no `default:` do switch (comando não encontrado), as
+  variáveis extras entram via `...buildCmdNotFoundExtras(commandName,
+  groupPrefix)`. O `preview` usa o mesmo helper (com `exemplo`), então a
+  pré-visualização mostra a variável resolvida de verdade.
+- **Whitelist**: `validateMessageTemplate` (em `utils/database.js`) precisa
+  aceitar `{cmdSm}`, senão o `!configcmdnotfound set` **rejeita** o template e a
+  mensagem cai no fallback. Também foi adicionada aos defaults de
+  `loadCmdNotFoundConfig` e ao `reset`.
+- **Armadilha dos testes**: o handler limita **3 comandos/5s por sender**.
+  Enviar vários comandos errados com o mesmo sender faz o 4º responder
+  *"Calma aí!"* e o teste mede a coisa errada — o helper `enviar()` troca de
+  sender a cada chamada (mesma armadilha do `!testcall`).
+- **Testes**: `tests/cmd-suggest.test.js` — 21 testes / 68 asserções: helper
+  (erro de digitação, lixo sem sugestão, entrada vazia, normalização,
+  subcomando excluído, cache, Levenshtein), template (aceita `{cmdSm}`, rejeita
+  variável inventada, substituição) e o **fluxo real** pelo handler (sugestão
+  aparece, cai no menu sem sugestão, convive com as outras variáveis, mensagem
+  antiga sem `{cmdSm}` continua igual). Verificado removendo `{cmdSm}` da
+  whitelist: **6 asserções falham**.
+
 ## MÍDIAS dos comandos de brincadeira — pasta `dados/src/gifsbn/` ✅
 - **Pasta**: `dados/src/gifsbn/` (criada; tem `.gitkeep`). É onde ficam TODAS as
   mídias (GIF/vídeo/imagem) dos comandos de brincadeira.

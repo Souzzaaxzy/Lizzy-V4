@@ -511,7 +511,8 @@ const loadCmdNotFoundConfig = () => {
       prefix: '{prefix}',
       user: '{user}',
       botName: '{botName}',
-      userName: '{userName}'
+      userName: '{userName}',
+      cmdSm: '{cmdSm}'
     }
   });
 };
@@ -725,7 +726,9 @@ const validateMessageTemplate = (template) => {
     issues.push('Número desigual de chaves abertas e fechadas');
   }
 
-  const validVariables = ['{command}', '{prefix}', '{user}', '{botName}', '{userName}'];
+  // Variáveis aceitas no template. `{cmdSm}` é resolvida no momento do envio
+  // (comando mais parecido com o que o usuário digitou).
+  const validVariables = ['{command}', '{prefix}', '{user}', '{botName}', '{userName}', '{cmdSm}'];
   const foundVariables = template.match(/\{[^}]+\}/g) || [];
 
   foundVariables.forEach(variable => {

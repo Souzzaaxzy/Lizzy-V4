@@ -21,6 +21,7 @@ import {
   splitTextForWhatsApp,
   toSafeObject
 } from './utils/messageInspector.js';
+import { buildCmdNotFoundExtras } from './utils/commandSuggest.js';
 
 // Mapas de enum do Baileys usados para traduzir status/stub/tipo de protocolo
 // no relatório do !get. Registrados uma única vez, sem custo por mensagem.
@@ -21254,6 +21255,7 @@ ${ADMIN_ERROR_MESSAGE_DEFAULT}`);
             `• ${groupPrefix}configcmdnotfound reset - Restaurar configurações padrão\n\n` +
             `📌 *Variáveis disponíveis:*\n` +
             `{command} - Comando digitado\n` +
+            `{cmdSm} - Comando mais parecido com o que foi digitado\n` +
             `{prefix} - Prefixo do bot\n` +
             `{user} - Usuário que digitou\n` +
             `{botName} - Nome do bot\n` +
@@ -21293,7 +21295,7 @@ ${ADMIN_ERROR_MESSAGE_DEFAULT}`);
             const newMessage = args.slice(1).join(' ');
             if (!newMessage) {
               return reply('❌ Por favor, forneça uma mensagem personalizada.\n\nExemplo: ' +
-                prefix + 'configcmdnotfound set O comando {command} não existe! Tente {prefix}menu');
+                prefix + 'configcmdnotfound set O comando {command} não existe! Você quis dizer {cmdSm}?');
             }
             // Validate the message template
             const validation = validateMessageTemplate(newMessage);
@@ -21323,11 +21325,14 @@ ${ADMIN_ERROR_MESSAGE_DEFAULT}`);
             const previewMessage = formatMessageWithFallback(
               cmdNotFoundConfig.message,
               {
+                // Comando fictício para o preview: mostra como {cmdSm} aparece
+                // de verdade (aqui, uma sugestão plausível para "exemplo").
                 command: 'exemplo',
                 prefix: prefixo,
                 user: sender,
                 botName: nomebot,
-                userName: userName
+                userName: userName,
+                ...buildCmdNotFoundExtras('exemplo', prefixo)
               },
               '❌ Comando não encontrado! Tente ' + prefixo + 'menu para ver todos os comandos disponíveis.'
             );
@@ -21342,7 +21347,8 @@ ${ADMIN_ERROR_MESSAGE_DEFAULT}`);
               prefix: '{prefix}',
               user: '{user}',
               botName: '{botName}',
-              userName: '{userName}'
+              userName: '{userName}',
+              cmdSm: '{cmdSm}'
             };
             if (saveCmdNotFoundConfig(cmdNotFoundConfig, 'resetado para padrão')) {
               reply('✅ Configurações de comando não encontradas restauradas para o padrão!');
@@ -38759,7 +38765,10 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
                 prefix: groupPrefix,
                 user: sender,
                 botName: nomebot,
-                userName: userName
+                userName: userName,
+                // {cmdSm} = comando mais parecido com o que foi digitado
+                // (ex.: "!pingg" -> "!ping"); sem sugestão, cai no menu.
+                ...buildCmdNotFoundExtras(commandName, groupPrefix)
               },
               '❌ Comando não encontrado! Tente ' + groupPrefix + 'menu para ver todos os comandos disponíveis.'
             );
