@@ -528,6 +528,48 @@ chamadas. Só em grupo, exige admin.
 - `funcs/API.js` foi **removido** na limpeza final; `config.json` não tem mais `site_vex`/`apikey_vex`.
 - Módulos próprios: `downloads/{spotify,soundcloud,facebook,kwai,apkmod,mcplugins,pinterest,tiktok,igdl,lyrics,youtube,canvas}.js`, `edits/index.js`, `logos/index.js` (jimp + fontes bitmap), `utils/imagetools.js` (jimp local), `utils/search.js`.
 
+## MÍDIAS dos comandos de brincadeira — pasta `dados/src/gifsbn/` ✅
+- **Pasta**: `dados/src/gifsbn/` (criada; tem `.gitkeep`). É onde ficam TODAS as
+  mídias (GIF/vídeo/imagem) dos comandos de brincadeira.
+- **Duas formas de definir a mídia de um comando:**
+  1. `!setgif <comando>` (respondendo uma mídia) — grava
+     `gifsbn/<comando>.<ext>` e registra `./gifsbn/<comando>.<ext>` no
+     `games.json` (`games2`).
+  2. **Arquivo solto na pasta** com o nome do comando — ex.: `gifsbn/tapar.gif`
+     faz o `!tapar` usar aquele arquivo, **sem rodar nenhum comando**. É o
+     requisito que motivou a mudança.
+- **Prioridade**: o arquivo solto **vence** o `games.json`. Trocar o arquivo na
+  pasta é suficiente para trocar a mídia do comando.
+- **Extensões aceitas** (ordem de busca em `MEDIA_EXTS`): `gif, mp4, webm, mov,
+  jpg, jpeg, png, webp`. GIF primeiro por ser o uso mais comum. Vídeo recebe
+  `gifPlayback: true`; imagem vai como imagem.
+- **Módulo**: `dados/src/funcs/utils/gifsbn.js` — `findGifsbnMedia`,
+  `buildMediaFromFile`, `saveGifsbnMedia`, `resolveBrincadeiraMedia`,
+  `resolveMediaUrl`. O `index.js` só chama; a regra fica no módulo (testável).
+- **`saveGifsbnMedia` apaga outras extensões do mesmo comando** antes de gravar.
+  Sem isso, um `tapar.gif` antigo continuaria na pasta e, como o arquivo solto
+  tem prioridade, venceria o `tapar.mp4` recém-definido pelo `!setgif`.
+- **Caminho no `games.json`**: é relativo à pasta `dados/src`
+  (`./gifsbn/<cmd>.<ext>`). Quem resolve é `resolveMediaUrl(url, __dirname)`, que
+  trata qualquer caminho `./` como relativo a `dados/src` — por isso os caminhos
+  antigos (`./midias/...`, `./database/gifs/...`) **continuam funcionando**
+  (retrocompatível com quem já tem mídia registrada).
+- **Consumidores ajustados**: comandos de brincadeira (`games2[command]`),
+  surubão (`games2['surubao']`) e compatibilidade (`games2['compatibilidade']`).
+  Os demais leitores de `games.json` (`games`, `ranks`) não usam a pasta.
+- **Bug pré-existente visto de passagem (NÃO corrigido)**: em
+  `index.js`, `gamesData.games2['compatibilidade', 'rankputo', 'rankputa',
+  'rankpauzudo', 'rankbucetuda']` — o operador vírgula faz isso ser avaliado
+  como só `games2['rankbucetuda']`, então o fallback do games.json para
+  `compatibilidade` nunca acha a mídia de `compatibilidade`. O caminho novo
+  (arquivo `gifsbn/compatibilidade.gif`) funciona; o antigo segue sem efeito.
+- **Testes**: `tests/gifsbn-media.test.js` — 16 testes / 61 asserções: helper
+  (extensões, prioridade, troca de extensão, caminho relativo, nome perigoso
+  `../` e extensão inválida), **handler real** enviando `gifsbn/tapar.gif` e
+  `gifsbn/beijo.jpg` sem passar pelo `!setgif`, fallback para texto quando não há
+  mídia, e verificação da ligação do `!setgif`. Verificado revertendo: sem o
+  fallback, **5 asserções falham** nos testes do requisito.
+
 ## BLACKLIST por número (!addblacklist / !delblacklist / !listblacklist) ✅
 - **BUG CORRIGIDO**: `!addblacklist 5511999999999` não salvava nada — respondia
   a mensagem de uso. Em grupo, **`participant.id` é o LID**

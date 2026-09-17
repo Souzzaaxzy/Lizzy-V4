@@ -826,6 +826,12 @@ import * as ia from './funcs/private/ia.js';
 import * as vipCommandsManager from './utils/vipCommandsManager.js';
 import { getInfo as gdriveGetInfo } from './funcs/utils/gdrive.js';
 import { getInfo as mediafireGetInfo } from './funcs/utils/mediafire.js';
+import {
+  saveGifsbnMedia,
+  buildMediaFromFile,
+  resolveBrincadeiraMedia,
+  resolveMediaUrl as resolveGifsbnMediaUrl
+} from './funcs/utils/gifsbn.js';
 import { getInfo as twitterGetInfo } from './funcs/utils/twitter.js';
 import { search, searchNews } from './funcs/utils/search.js';
 import { removeBg, upscale } from './funcs/utils/imagetools.js';
@@ -19099,27 +19105,26 @@ case 'addaluguel':
             gamesData.games2 = {};
           }
           
-          // Salvar localmente na pasta database/gifs
+          // Salvar o arquivo na pasta gifsbn (mídias dos comandos de brincadeira)
           const ext = isImage && !isGif ? 'jpg' : (isGif ? 'gif' : 'mp4');
-          const mediaPath = `./database/gifs/${cmdName}.${ext}`;
-          const gifsDir = path.join(__dirname, './database/gifs');
-          const fullPath = path.join(gifsDir, `${cmdName}.${ext}`);
-          fs.mkdirSync(gifsDir, { recursive: true });
-          fs.writeFileSync(fullPath, mediaBuffer);
-          
-          // Salvar no games.json com o caminho local (formato esperado pelo bot)
+          const saved = saveGifsbnMedia(cmdName, ext, mediaBuffer);
+          if (!saved) {
+            return reply(`❌ Não foi possível salvar a mídia de "${cmdName}".`);
+          }
+
+          // Salvar no games.json com o caminho relativo à pasta dados/src
           if (isImage && !isGif) {
             gamesData.games2[cmdName] = {
-              image: { url: mediaPath },
+              image: { url: saved.relativePath },
               isGif: false
             };
           } else {
             gamesData.games2[cmdName] = {
-              video: { url: mediaPath },
+              video: { url: saved.relativePath },
               isGif: isGif
             };
           }
-          
+
           fs.writeFileSync(gamesFilePath, JSON.stringify(gamesData, null, 2));
           
           const tipoMedia = isImage && !isGif ? 'imagem' : (isGif ? 'GIF' : 'vídeo');
@@ -36562,13 +36567,9 @@ break;
           }
           // Carregar gamesData para usar a mídia do comando surubao
           let gamesDataSurubao = fs.existsSync(__dirname + '/funcs/json/games.json') ? JSON.parse(fs.readFileSync(__dirname + '/funcs/json/games.json')) : { games2: {} };
-          const surubaoMedia = gamesDataSurubao.games2['surubao'];
-          const resolveMediaPath = (url) => {
-            if (typeof url === 'string' && url.startsWith('./')) {
-              return path.join(__dirname, url.substring(1));
-            }
-            return url;
-          };
+          // Arquivo solto em gifsbn/ vence o games.json (ex.: gifsbn/surubao.gif)
+          const surubaoMedia = buildMediaFromFile('surubao') || gamesDataSurubao.games2['surubao'];
+          const resolveMediaPath = (url) => resolveGifsbnMediaUrl(url, __dirname);
           if (surubaoMedia?.video) {
             const videoPath = resolveMediaPath(surubaoMedia.video.url);
             if (videoPath.startsWith('http')) {
@@ -37443,17 +37444,12 @@ case 'rankputo':
             ? [sender, targetUser].filter((jid, i, arr) => jid && arr.indexOf(jid) === i)
             : [targetUser];
 
-          let media = gamesData.games2[command];
-          // Verifica se é um GIF customizado
-          const isCustomGif = media?.isGif === true;
+          // Mídia do comando: um arquivo solto em gifsbn/ (ex.: gifsbn/tapar.gif)
+          // tem prioridade sobre o que estiver registrado no games.json, então
+          // basta colocar/trocar o arquivo na pasta para o comando usá-lo.
+          const { media, isCustomGif } = resolveBrincadeiraMedia(gamesData.games2[command], command);
           // Resolver caminho absoluto para mídias locais
-          const resolveMediaPath = (url) => {
-            if (typeof url === 'string' && url.startsWith('./')) {
-              // './midias/...' -> '/data/.../dados/src/midias/...'
-              return path.join(__dirname, url.substring(1));
-            }
-            return url;
-          };
+          const resolveMediaPath = (url) => resolveGifsbnMediaUrl(url, __dirname);
           if (media?.image) {
             const imagePath = resolveMediaPath(typeof media.image === 'object' ? media.image.url : media.image);
             if (imagePath.startsWith('http')) {
@@ -37549,12 +37545,11 @@ Marque duas pessoas para ver a compatibilidade!`);
 
           // Verificar se existe GIF configurado
           let gamesData = fs.existsSync(__dirname + '/funcs/json/games.json') ? JSON.parse(fs.readFileSync(__dirname + '/funcs/json/games.json')) : { games2: {} };
-          const media = gamesData.games2['compatibilidade', 'rankputo', 'rankputa', 'rankpauzudo', 'rankbucetuda'];
+          const media = buildMediaFromFile('compatibilidade')
+            || gamesData.games2['compatibilidade', 'rankputo', 'rankputa', 'rankpauzudo', 'rankbucetuda'];
 
           if (media?.video) {
-            const videoPath = media.video.url?.startsWith('./') 
-              ? path.join(__dirname, media.video.url.substring(1)) 
-              : media.video.url;
+            const videoPath = resolveGifsbnMediaUrl(media.video.url, __dirname);
             
             if (videoPath.startsWith('http')) {
               await nazu.sendMessage(from, {
