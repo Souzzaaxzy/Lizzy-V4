@@ -60,6 +60,12 @@ async function convertToWebp(mediaBuffer, isVideo = false, forceSquare = false) 
   // removido em QUALQUER saída. Antes o unlink ficava só no caminho feliz: se o
   // ffmpeg falhasse (ou não estivesse instalado), o tmpIn ficava para sempre em
   // database/tmp — cada tentativa deixava um arquivo órfão.
+  //
+  // `outBuffer` é declarado AQUI FORA de propósito: ele é o valor de retorno da
+  // função e precisa continuar visível depois do bloco (declará-lo dentro do
+  // `try` o deixaria fora de escopo no `return`).
+  let outBuffer = null;
+
   try {
     const vfBase = forceSquare
       ? "scale=320:320"
@@ -71,7 +77,6 @@ async function convertToWebp(mediaBuffer, isVideo = false, forceSquare = false) 
     const MAX_SIZE = 990000; // Menos de 1MB com margem de segurança (~966KB)
     const MIN_QUALITY = isVideo ? 15 : 25;
     let quality = isVideo ? 45 : 75;
-    let outBuffer = null;
     let attempts = 0;
     const MAX_ATTEMPTS = 8;
 

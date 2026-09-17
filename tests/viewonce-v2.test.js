@@ -354,16 +354,38 @@ await test('!revelar sem mídia: mantém a mensagem de uso', async () => {
   includes(texto, 'marque uma imagem', 'explica o uso');
 });
 
-await test('!s (figurinha) acha a mídia do ViewOnceV2', async () => {
-  // O comando converte em figurinha (webp); o que importa aqui é que ele
-  // ACHOU e baixou a mídia — antes nem isso acontecia.
-  const imagem = publicarMidia('ImageMessage', JPEG_FAKE, 'image');
-  const { sent, texto } = await citar('s', { viewOnceMessageV2: { message: { imageMessage: imagem } } });
+await test('!s (figurinha): não estoura erro de CÓDIGO ao processar a mídia', async () => {
+  // O comando converte em figurinha, e a conversão depende do ffmpeg do
+  // sistema. Neste ambiente ele não existe, então o esperado é uma falha
+  // CONTROLADA — nunca um erro de código (ReferenceError/TypeError), que ficaria
+  // escondido atrás do "Ocorreu um erro interno" genérico.
+  //
+  // Foi exatamente por aqui que passou um `ReferenceError: outBuffer is not
+  // defined` introduzido numa correção anterior: o catch genérico engoliu o
+  // erro e a asserção antiga era permissiva demais (`usouMidia || !reclamou`),
+  // então o teste seguia verde. Agora olhamos o erro REAL que foi logado.
+  const erros = [];
+  const origError = console.error;
+  console.error = (...a) => { erros.push(a.map(String).join(' ')); };
+  let sent;
+  let texto;
+  try {
+    const imagem = publicarMidia('ImageMessage', JPEG_FAKE, 'image');
+    const r = await citar('s', { viewOnceMessageV2: { message: { imageMessage: imagem } } });
+    sent = r.sent;
+    texto = r.texto;
+  } finally {
+    console.error = origError;
+  }
 
+  const erroDeCodigo = erros.find((e) => /ReferenceError|TypeError|is not defined|is not a function/.test(e));
+  ok(!erroDeCodigo, `nenhum erro de código (achado: ${erroDeCodigo?.slice(0, 80) || 'nenhum'})`);
+  notIncludes(texto, 'Marque uma imagem ou um vídeo', 'reconheceu a mídia do ViewOnceV2 (não pediu de novo)');
+
+  // Se o ffmpeg existir, a figurinha sai; se não, a falha é controlada.
   const usouMidia = sent.some((s) => s.content?.sticker);
-  const reclamouDeMidia = texto.includes('Marque uma imagem');
-  ok(usouMidia || !reclamouDeMidia, `não caiu no "Marque uma imagem" (texto: ${texto.slice(0, 60)})`);
-  notIncludes(texto, 'Marque uma imagem ou um vídeo', 'reconheceu a mídia do ViewOnceV2');
+  const falhouControlado = texto.includes('Ocorreu um erro interno');
+  ok(usouMidia || falhouControlado, `enviou a figurinha ou falhou de forma controlada (texto: ${texto.slice(0, 50)})`);
 });
 
 await test('!s sem mídia: ainda pede a mídia (não regride)', async () => {
