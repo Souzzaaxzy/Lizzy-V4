@@ -517,6 +517,63 @@ NÃO altera o `!rajar` nem o `!rajar2`.
   `!rajar2` seguem intactos. **Verificado: removendo o `recipientMode`, 4 dos 8
   falham.**
 
+## COMANDO "!rajar4" — EXPERIMENTO: rotação seletiva de Sender Key (set/2026)
+Objetivo: cifrar uma mensagem NOVA de grupo com uma **Sender Key NOVA (B)** e
+distribuir B **somente** aos autorizados, de forma que quem só tem a chave
+antiga (A) não consiga decifrar. NÃO altera `!rajar`, `!rajar2` nem `!rajar3`.
+
+- **Onde vive a API**: na fork (`@itsliaaa/baileys`), commit `b0479f2`
+  (`experimental: sender key rotation selective distribution`). Módulo novo
+  `lib/Utils/sender-key-rotation.js` e a API
+  `relayGroupMessageWithSenderKeyRotation(groupJid, message, { allowedParticipants, messageId })`.
+- **Como funciona**: reaproveita o `relayMessage`. A flag faz o send path
+  **acrescentar um novo Sender Key state** antes de cifrar e estreitar o fan-out
+  para `allowedParticipants`. Como `GroupCipher.encrypt()` usa o estado mais
+  recente, o `skmsg` passa a ser da chave nova, e o SKDM distribuído é o
+  correspondente. Continua mensagem normal de grupo: `to='<grupo>'`, sem
+  `participant`, sem `count`, sem `sendMessagesAgain`, sem pairwise retry.
+- **Por que acrescentar e não substituir** (`SenderKeyRecord`): `setSenderKeyState()`
+  faz `senderKeyStates.length = 0` e quebraria quem ainda tem a chave antiga;
+  `addSenderKeyState()` só preenche a chave de assinatura **pública** (formato de
+  estado aprendido via SKDM recebido). Por isso o experimento faz
+  `senderKeyStates.push(new SenderKeyState(id, 0, chainKey, keyPair))` — o estado
+  velho continua disponível para decifrar. `getSenderKeyState()` sem id devolve o
+  **último** estado, que é o que o `encrypt()` usa.
+- **Comando** (`index.js`, `case 'rajar4'`): `!rajar4 @alvo [texto]` (aceita
+  citação). **Exclusivo do dono** e só em grupo; **alvo obrigatório** — sem alvo
+  recusa em vez de adivinhar. Autoriza **somente o alvo** (`allowedParticipants:
+  [alvo]`); nenhum admin entra.
+- **Rollback**: se o envio falhar depois da rotação, a fork remove o estado
+  acrescentado (`signalRepository.rollbackSenderKeyRotation`), para o grupo não
+  ficar com uma chave que ninguém recebeu.
+- **Menu**: `│ 🔑 ${prefix}rajar4 @alvo [texto]` na categoria **🧪 TESTES DE
+  PROTEÇÃO (DONO)**; `'rajar4'` no `blockPv`.
+- **Log** (`[SENDER-KEY-ROTATION]`): grupo, autorizados, alvo, messageId, bytes.
+  Sem chaves, sem chain key, sem signing key, sem plaintext.
+- **RESULTADO MEDIDO (fork, `b0479f2`)**:
+  - `tests/sender-key-rotation.test.js` (5 testes, isolado): um record mantém A e
+    B simultaneamente, com **ids, chain keys e signing keys diferentes**;
+    `encrypt()` escolhe o mais recente; um device que só tem A **não decifra** o
+    cifrado de B; duas mensagens com B usam o **mesmo id** e a cadeia avança.
+  - `tests/sender-key-rotation-send.test.js` (5 testes, caminho real de envio):
+    só os autorizados são endereçados (inclusive **todos os devices** do membro
+    multi-device); os membros decifram e os admins — que só têm A — falham com
+    `No session found to decrypt message`. Evidência: admins com
+    `senderKeyIds: [500148101]` (só A); membros com `[A, B]`.
+  - **Mutações caçadas**: pular a rotação → 2 dos 5 falham; ignorar o
+    subconjunto (distribuir B para o grupo) → 2 dos 5 falham.
+- **LIMITE HONESTO**: isso está **comprovado apenas localmente**. **NÃO** foi
+  validado em dispositivo real: se o WhatsApp **aceita** uma mensagem cuja Sender
+  Key só alguns receberam, como cada cliente renderiza, se o admin gera retry e se
+  esse retry entrega B, e se o comportamento persiste após reiniciar — tudo isso
+  continua **não testado**. Sem essa evidência, não é possível afirmar sucesso.
+- **Testes da Lizzy**: `tests/rajar4.test.js` (13 testes / 21 asserções) — chama
+  só a API de rotação com o alvo autorizado, não usa pairwise nem
+  `recipientMode`, autoriza apenas o alvo (nunca admin), citação, regras de
+  grupo/dono/alvo, aviso de fork incompatível, e confirma que `!rajar`,
+  `!rajar2` e `!rajar3` seguem intactos. **Verificado: trocando a rotação por um
+  `sendMessage` comum, 7 dos 13 falham.**
+
 
 
 ## COMANDOS "!pgpau" / "!pgpeito" / "!pgbunda" (pegar) ✅

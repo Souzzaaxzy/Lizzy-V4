@@ -32319,6 +32319,70 @@ break;
         break;
       }
 
+      // !rajar4 — EXPERIMENTO: rotação seletiva de Sender Key.
+      // Cifra a mensagem com uma NOVA Sender Key B e distribui B somente aos
+      // alvos. NÃO altera o !rajar, !rajar2 nem !rajar3 — cada um continua
+      // disponível para comparação.
+      //
+      // Serve para observar, em grupo real, se o WhatsApp aceita esse envio e
+      // como cada dispositivo se comporta. A parte criptográfica está provada
+      // nos testes da fork (membros leem, quem só tem a chave antiga não); o
+      // comportamento do servidor NÃO está provado.
+      case 'rajar4': {
+        try {
+          if (!isGroup) return reply('❌ Este comando só funciona em grupos.');
+
+          // Comando de laboratório (categoria DONO no menu).
+          if (!isOwner) return reply('❌ Apenas o dono do bot pode usar este comando.');
+
+          // Alvo obrigatório: a rotação distribui a chave nova só para quem for
+          // autorizado, então um alvo explícito é indispensável.
+          if (!menc_os2) {
+            return reply('❌ Marque (@) ou responda a mensagem de quem deve receber a mensagem rotacionada.');
+          }
+          const alvo = menc_os2;
+
+          const textoRajar4 = (q || '').replace(/@\d+/g, '').trim() || '[TESTE SENDER KEY B] mensagem experimental';
+
+          if (typeof nazu.relayGroupMessageWithSenderKeyRotation !== 'function') {
+            return reply('❌ A fork instalada não expõe a API de rotação experimental (atualize @itsliaaa/baileys).');
+          }
+
+          const msg = await generateWAMessageFromContent(
+            from,
+            { conversation: textoRajar4 },
+            { userJid: nazu?.user?.id }
+          );
+
+          // Somente o alvo fica autorizado a receber a Sender Key B. Nenhum
+          // admin é incluído.
+          const resultado = await nazu.relayGroupMessageWithSenderKeyRotation(
+            from,
+            msg.message,
+            { allowedParticipants: [alvo], messageId: msg.key?.id }
+          );
+
+          const autorizados = resultado?.allowedParticipants?.length ?? 0;
+          console.log(
+            `[SENDER-KEY-ROTATION] comando=rajar4 | grupo=${from} | ` +
+            `autorizados=${autorizados} | alvo=${alvo} | ` +
+            `messageId=${resultado?.messageId} | bytes=${Buffer.byteLength(textoRajar4, 'utf8')}`
+          );
+          await reply(
+            `🔑 Rotação seletiva enviada.\n` +
+            `• Sender Key NOVA distribuída apenas para @${String(alvo).split('@')[0].split(':')[0]}\n` +
+            `• admins e demais participantes não receberam a chave nova\n` +
+            `• modo: mensagem normal de grupo (sem retry pairwise)\n\n` +
+            `⚠️ A parte criptográfica está provada localmente. A aceitação pelo servidor do WhatsApp NÃO foi validada — observe os dispositivos.`,
+            { mentions: [alvo] }
+          );
+        } catch (e) {
+          console.error('[RAJAR4] Erro:', e?.message || e);
+          await reply('❌ Não foi possível executar a rotação experimental.');
+        }
+        break;
+      }
+
       case 'testcall':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
