@@ -431,6 +431,58 @@ o material da Sender Key não é distribuído aos admins, então eles não decif
   passaria como membro comum e o teste de admin mediria a coisa errada.
   **Verificado: removendo o `recipientMode`, 4 dos 16 falham.**
 
+## COMANDO "!rajar2" — EXPERIMENTAL: retransmissão pairwise (set/2026) ✅
+Objetivo: **observar** se o WhatsApp aceita uma retransmissão pairwise de uma
+mensagem de grupo e como o cliente destinatário processa esse payload. NÃO
+substitui o `!rajar` — os dois coexistem.
+
+- **Onde vive a API**: na fork (`@itsliaaa/baileys`), commit `3ce1a1e`
+  (`feat(experimental): add pairwise group retry research flow`). Arquivo novo
+  `lib/Utils/pairwise-experimental.js` e a API
+  `relayGroupMessagePairwiseExperimental(groupJid, message, options)` no socket.
+  É um wrapper fino sobre o caminho de retry que JÁ existe: `relayMessage` com
+  `participant` monta `<message to="<grupo>" participant="<device>">` com
+  `<enc type="msg" count="N">` cifrado por `signalRepository.encryptMessage`,
+  mais o Sender Key distribution message. **Sem segundo sistema de retry, sem
+  segunda arquitetura de Sender Key, sem protobuf novo.**
+- **Origem técnica (PoC *Send and Pretend*)**: no PoC
+  (`sbaresearch/transcript-consistency`, `code/whatsapp/poc-client`), o modo
+  `ByteFlip` corrompe o ciphertext do grupo para os destinatários emitirem
+  retry receipts; a resposta de retry é então cifrada pairwise, e o
+  `PlaintextModifierCallback` permite trocar o conteúdo para UM destinatário.
+  A substituição era a única capacidade que a Baileys não expunha — é o que esta
+  API adiciona (`experimentalPayload`). A metade "corromper o ciphertext" NÃO foi
+  implementada: na Baileys o retry é dirigido pelos receipts de entrada
+  (`handleReceipt → sendMessagesAgain`), então provocá-los é passo operacional,
+  não mudança no send path.
+- **Desligado por padrão**: o ramo experimental exige a flag
+  `experimentalPairwiseRetry: true` **E** um `participant` de dispositivo único.
+  Sem a flag nada muda — nem grupos, nem 1:1, nem status, nem o retry normal, nem
+  o `recipientMode`. Para remover o recurso basta não passar a flag.
+- **Comando** (`index.js`, `case 'rajar2'`): `!rajar2 @alvo [texto]` (também
+  aceita responder/citar a mensagem do alvo). **Exclusivo do dono** e só em
+  grupo. Sem alvo, o comando **recusa** em vez de adivinhar. Ele monta a
+  mensagem com `generateWAMessageFromContent` (pipeline normal) e chama SOMENTE
+  `nazu.relayGroupMessagePairwiseExperimental`. Se a fork instalada não expuser a
+  função, avisa e não faz mais nada.
+- **Menu**: linha `│ 🧪 ${prefix}rajar2 @alvo [texto]` na categoria **🧪 TESTES DE
+  PROTEÇÃO (DONO)** do `menudono`, e `'rajar2'` na lista do `blockPv`.
+- **LOG** (`[PAIRWISE-EXPERIMENT]`): imprime grupo, participant, device,
+  messageId e bytes. Nenhum segredo, chave ou plaintext é registrado.
+- **Testes da Lizzy**: `tests/rajar2.test.js` (8 testes / 16 asserções) — chama a
+  API experimental com o alvo certo (menção e citação), NÃO passa pelo
+  `sendMessage` normal, recusa fora de grupo / sem alvo / não-dono, avisa quando
+  a fork não expõe a API, e confirma que o `!rajar` **continua** com
+  `recipientMode: 'members-only'`. **Armadilha**: o `key` precisa de `participant`
+  — sem ele o handler nem chega ao `switch` (retorna antes por "sender não
+  identificado"). **Verificado: trocando a chamada experimental por um
+  `sendMessage` comum, 5 dos 8 falham.**
+- **Estado honesto**: os testes provam o **stanza pairwise** e a **decifragem pelo
+  dispositivo alvo** com chaves reais (na fork). O comportamento do cliente real
+  e a aceitação pelo servidor do WhatsApp **não** foram validados (sem conta
+  pareada neste ambiente).
+
+
 ## COMANDOS "!pgpau" / "!pgpeito" / "!pgbunda" (pegar) ✅
 - **Sem sistema paralelo**: os três entraram no bloco `case` que JÁ existe para os comandos de interação (`tapa`, `soco`, `beijo`, `siririca`...) em `index.js` (~37067). Herdam de graça: exigência de grupo, `modobrincadeira`, `isModoLite`, leitura do `games.json > games2`, resolução de mídia local/URL, `gifPlayback` e envio via `nazu.sendMessage`.
 - **Frases**: constante `FRASES_PEGAR` no topo do `index.js` (module-level, ~linha 149) com **exatamente 2 frases por comando** (as fornecidas, sem alteração). O ramo `else if (FRASES_PEGAR[command])` sorteia uma e troca `@usuario` → `@<executor>` e `@alvo` → `@<alvo>`. Não mistura frases entre comandos.

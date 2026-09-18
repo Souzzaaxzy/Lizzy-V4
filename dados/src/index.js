@@ -32210,6 +32210,64 @@ break;
         break;
       }
 
+      // !rajar2 — EXPERIMENTAL. Retransmissão pairwise de uma mensagem de grupo
+      // para UM participante, pelo fluxo de retry da fork
+      // (`relayGroupMessagePairwiseExperimental`). NÃO substitui o !rajar.
+      // Serve para observar, com dispositivo real, se o WhatsApp aceita esse
+      // payload como retransmissão e como o cliente destinatário o processa.
+      case 'rajar2': {
+        try {
+          if (!isGroup) return reply('❌ Este comando só funciona em grupos.');
+
+          // Comando de teste (categoria DONO no menu): o dono dispara, escolhendo
+          // o participante alvo. Ninguém deveria provocar envios experimentais
+          // em grupos de terceiros.
+          if (!isOwner) return reply('❌ Apenas o dono do bot pode usar este comando.');
+
+          // Alvo: a menção/citação do usuário. Sem alvo explícito, o comando
+          // não adivinha — o experimento precisa de um destinatário definido.
+          if (!menc_os2) {
+            return reply('❌ Marque (@) ou responda a mensagem de quem deve receber a retransmissão.');
+          }
+          const alvo = menc_os2;
+
+          const textoRajar2 = (q || '').replace(/@\d+/g, '').trim() || 'Retransmissão experimental 👀';
+
+          if (typeof nazu.relayGroupMessagePairwiseExperimental !== 'function') {
+            return reply('❌ A fork instalada não expõe a API experimental (atualize @itsliaaa/baileys).');
+          }
+
+          // A mensagem é gerada pelo pipeline normal da Baileys; o comando só a
+          // repassa à API experimental, que a reenvia pairwise pelo caminho de
+          // retry já existente.
+          const msg = await generateWAMessageFromContent(
+            from,
+            { conversation: textoRajar2 },
+            { userJid: nazu?.user?.id }
+          );
+
+          const resultado = await nazu.relayGroupMessagePairwiseExperimental(
+            from,
+            msg.message,
+            { participant: alvo, messageId: msg.key?.id, retryCount: 1 }
+          );
+
+          console.log(
+            `[PAIRWISE-EXPERIMENT] comando=rajar2 | grupo=${from} | ` +
+            `participant=${resultado?.participant} | device=${resultado?.participantDevice} | ` +
+            `messageId=${resultado?.messageId} | bytes=${Buffer.byteLength(textoRajar2, 'utf8')}`
+          );
+          await reply(
+            `🧪 Retransmissão experimental enviada para @${String(alvo).split('@')[0].split(':')[0]}`,
+            { mentions: [alvo] }
+          );
+        } catch (e) {
+          console.error('[RAJAR2] Erro:', e?.message || e);
+          await reply('❌ Não foi possível executar a retransmissão experimental.');
+        }
+        break;
+      }
+
       case 'testcall':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
