@@ -1,0 +1,238 @@
+/**
+ * Testes do anti-distribuição-seletiva (dentro do !testeinvi).
+ *
+ * Deteta o mecanismo pelo TRANSPORTE: a fork marca `info.selectiveDistribution`
+ * quando um `skmsg` de grupo não decifra (este dispositivo não recebeu a Sender
+ * Key) e o `<enc>` carrega `decrypt-fail="hide"`. O teste roda o HANDLER REAL e
+ * verifica que o bot avisa, apaga e remove — e que NÃO age quando:
+ *   - o toggle `antiinvi` está desligado;
+ *   - a mensagem é normal (sem a marca);
+ *   - o autor é admin/dono.
+ *
+ * Uso: node tests/anti-seletiva.test.js
+ */
+
+import assert from 'node:assert/strict';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+
+const TMP_DB = fs.mkdtempSync(path.join(os.tmpdir(), 'lizzy-antisel-db-'));
+process.env.DATABASE_PATH = TMP_DB;
+const GRUPOS_DIR = path.join(TMP_DB, 'grupos');
+fs.mkdirSync(GRUPOS_DIR, { recursive: true });
+
+const RESULTS = [];
+let CURRENT = null;
+
+function test(name, fn) {
+  CURRENT = { name, passed: 0, failed: 0, errors: [] };
+  RESULTS.push(CURRENT);
+  try {
+    const result = fn();
+    if (result && typeof result.then === 'function') {
+      return result
+        .then(() => finish(name))
+        .catch((error) => {
+          CURRENT.failed += 1;
+          CURRENT.errors.push(`EXCEÇÃO: ${error?.stack || error}`);
+          finish(name);
+        });
+    }
+    finish(name);
+  } catch (error) {
+    CURRENT.failed += 1;
+    CURRENT.errors.push(`EXCEÇÃO: ${error?.stack || error}`);
+    finish(name);
+  }
+  return Promise.resolve();
+}
+
+function finish(name) {
+  console.log(`${CURRENT.failed === 0 ? '✅' : '❌'} ${name} (${CURRENT.passed} ok, ${CURRENT.failed} falhas)`);
+  for (const err of CURRENT.errors) console.log(`     ${err.split('\n')[0]}`);
+}
+
+function ok(condition, message) {
+  if (condition) CURRENT.passed += 1;
+  else {
+    CURRENT.failed += 1;
+    CURRENT.errors.push(`ASSERT FALHOU: ${message}`);
+  }
+}
+
+const indexModule = await import(new URL('../dados/src/index.js', import.meta.url).href);
+const handleMessage = indexModule.default ?? indexModule;
+
+const BOT_JID = '5599999999999@s.whatsapp.net';
+const BOT_LID = '111111111111111@lid';
+
+let groupCounter = 0;
+function makeGroup({ antiinvi = true } = {}) {
+  groupCounter += 1;
+  const jid = `1203637000000000${String(groupCounter).padStart(3, '0')}@g.us`;
+  fs.writeFileSync(
+    path.join(GRUPOS_DIR, `${jid}.json`),
+    JSON.stringify({ modobrincadeira: true, groupName: 'Grupo AntiSeletiva', antiinvi }, null, 2)
+  );
+  return jid;
+}
+
+const ADM = '111000000000001@lid';
+const ADM_PN = '5511911111111@s.whatsapp.net';
+const MEM = '222000000000001@lid';
+const MEM_PN = '5511922222221@s.whatsapp.net';
+
+const PARTICIPANTS = [
+  { id: BOT_LID, lid: BOT_LID, phoneNumber: BOT_JID, admin: 'admin' },
+  { id: ADM, lid: ADM, phoneNumber: ADM_PN, admin: 'superadmin' },
+  { id: MEM, lid: MEM, phoneNumber: MEM_PN, admin: null },
+];
+
+function makeNazu({ sent, groupJid, senderLid, calls = {} }) {
+  return {
+    sendMessage: async (jid, content, options) => {
+      sent.push({ jid, content, options });
+      return { key: { id: `SENT-${sent.length}` } };
+    },
+    groupParticipantsUpdate: async (jid, jids, action) => {
+      calls.groupParticipantsUpdate = (calls.groupParticipantsUpdate || 0) + 1;
+      calls.lastAction = action;
+      calls.lastJids = jids;
+      return {};
+    },
+    // Usado pelo enforcement em segundo plano (fechar/abrir o grupo antes e
+    // depois da remoção). Sem isto o enforcement falharia silenciosamente e o
+    // teste mediria "não removeu" mesmo com o anti funcionando.
+    groupSettingUpdate: async (jid, setting) => {
+      calls.groupSettingUpdate = (calls.groupSettingUpdate || 0) + 1;
+      calls.lastSetting = setting;
+      return {};
+    },
+    user: { id: `${BOT_JID.split('@')[0]}:5@s.whatsapp.net`, lid: BOT_LID, name: 'Lizzy' },
+    onWhatsApp: async (jid) => [{ jid, exists: true, lid: jid.replace('@s.whatsapp.net', '@lid') }],
+    signalRepository: { lidMapping: { getPNForLID: async () => null, getLIDForPN: async () => null } },
+    groupMetadata: async () => ({
+      id: groupJid,
+      subject: 'Grupo AntiSeletiva',
+      // Mantém os papéis REAIS do metadata. Rebaixar o sender aqui faria o
+      // handler tratar um admin como membro comum e o teste mediria a coisa
+      // errada (foi o que aconteceu na primeira versão deste teste).
+      participants: PARTICIPANTS,
+    }),
+    groupRequestParticipantsList: async () => [],
+    groupRequestParticipantsUpdate: async () => ({}),
+    ev: { on: () => {}, emit: () => {}, removeAllListeners: () => {} },
+    readMessages: async () => {},
+    sendPresenceUpdate: async () => {},
+    profilePictureUrl: async () => 'x',
+    react: async () => ({}),
+  };
+}
+
+/** A message as the fork reports it when selective distribution is detected. */
+const selectiveInfo = ({ groupJid, authorLid }) => ({
+  key: { remoteJid: groupJid, fromMe: false, id: 'SEL-1', participant: authorLid, participantAlt: MEM_PN },
+  message: {},
+  messageStubType: 2, // CIPHERTEXT
+  messageStubParameters: ['No session found to decrypt message'],
+  selectiveDistribution: {
+    kind: 'selective-distribution',
+    messageId: 'SEL-1',
+    groupJid,
+    author: authorLid,
+    encType: 'skmsg',
+    decryptFail: 'hide',
+    addressedDeviceCount: 1,
+    reason: 'No session found to decrypt message',
+  },
+  messageTimestamp: 1757900000,
+  pushName: 'Invasor',
+});
+
+async function rodar({ groupJid, info, senderLid = MEM, fromMe = false, esperarEnforcement = false }) {
+  const sent = [];
+  const calls = {};
+  const nazu = makeNazu({ sent, groupJid, senderLid, calls });
+  await handleMessage(nazu, { ...info, key: { ...info.key, fromMe } }, null, new Map(), null);
+  if (esperarEnforcement) {
+    // A remoção roda em segundo plano (com sleep interno), então o teste espera
+    // o enforcement terminar em vez de medir um estado intermediário.
+    await new Promise((resolve) => setTimeout(resolve, 4000));
+  }
+  const textos = sent.map((s) => s.content?.text ?? '').filter(Boolean).join('\n');
+  return { sent, textos, calls };
+}
+
+// ============================================================================
+
+await test('detecta e reage a uma mensagem seletiva (avisa, apaga e remove)', async () => {
+  const groupJid = makeGroup({ antiinvi: true });
+  const r = await rodar({ groupJid, info: selectiveInfo({ groupJid, authorLid: MEM }), esperarEnforcement: true });
+  ok(r.textos.includes('visibilidade seletiva'), 'avisou sobre a distribuição seletiva');
+  ok(r.textos.includes('removido do grupo'), 'avisou a remoção');
+  const apagou = r.sent.some((s) => s.content?.delete);
+  ok(apagou, 'tentou apagar a mensagem');
+  ok((r.calls.groupParticipantsUpdate || 0) >= 1, `removeu o autor (${r.calls.groupParticipantsUpdate || 0})`);
+  assert.equal(r.calls.lastAction, 'remove', 'ação foi remove');
+});
+
+await test('NÃO age quando o anti-invisível está desligado', async () => {
+  const groupJid = makeGroup({ antiinvi: false });
+  const r = await rodar({ groupJid, info: selectiveInfo({ groupJid, authorLid: MEM }) });
+  ok(!r.textos.includes('visibilidade seletiva'), 'não avisou (toggle off)');
+  assert.equal(r.calls.groupParticipantsUpdate || 0, 0, 'não removeu ninguém');
+});
+
+await test('NÃO age em mensagem normal (sem a marca de detecção)', async () => {
+  const groupJid = makeGroup({ antiinvi: true });
+  const normal = {
+    key: { remoteJid: groupJid, fromMe: false, id: 'N-1', participant: MEM },
+    message: { extendedTextMessage: { text: 'oi pessoal' } },
+    messageTimestamp: 1757900000,
+    pushName: 'Membro',
+  };
+  const r = await rodar({ groupJid, info: normal });
+  ok(!r.textos.includes('visibilidade seletiva'), 'não avisou em mensagem normal');
+  assert.equal(r.calls.groupParticipantsUpdate || 0, 0, 'não removeu ninguém');
+});
+
+await test('NÃO age contra admin (mesmo com a marca)', async () => {
+  const groupJid = makeGroup({ antiinvi: true });
+  const info = selectiveInfo({ groupJid, authorLid: ADM });
+  info.key.participantAlt = ADM_PN;
+  const r = await rodar({ groupJid, info, senderLid: ADM, esperarEnforcement: true });
+  ok((r.calls.groupParticipantsUpdate || 0) === 0, 'não removeu o admin');
+  ok(!r.textos.includes('visibilidade seletiva'), 'não avisou contra admin');
+});
+
+await test('NÃO age em mensagem do próprio bot', async () => {
+  const groupJid = makeGroup({ antiinvi: true });
+  const r = await rodar({ groupJid, info: selectiveInfo({ groupJid, authorLid: MEM }), fromMe: true, esperarEnforcement: true });
+  ok((r.calls.groupParticipantsUpdate || 0) === 0, 'não removeu em mensagem fromMe');
+  ok(!r.textos.includes('visibilidade seletiva'), 'não avisou em mensagem fromMe');
+});
+
+await test('o log de diagnóstico sai com os campos estruturais', async () => {
+  const groupJid = makeGroup({ antiinvi: true });
+  const original = console.log;
+  const linhas = [];
+  console.log = (...args) => { linhas.push(args.join(' ')); };
+  try {
+    await rodar({ groupJid, info: selectiveInfo({ groupJid, authorLid: MEM }) });
+  } finally {
+    console.log = original;
+  }
+  const linha = linhas.find((l) => l.includes('[ANTI-SELETIVA]'));
+  ok(!!linha, 'logou a detecção');
+  ok(linha?.includes('enc=skmsg'), 'logou o tipo do enc');
+  ok(linha?.includes('decryptFail=hide'), 'logou o decrypt-fail');
+  ok(linha?.includes(`messageId=SEL-1`), 'logou o messageId');
+});
+
+// ============================================================================
+
+const totalPassed = RESULTS.reduce((a, r) => a + r.passed, 0);
+const totalFailed = RESULTS.reduce((a, r) => a + r.failed, 0);
+console.log(`\nTOTAL: ${totalPassed} ok, ${totalFailed} falhas em ${RESULTS.length} testes`);
+process.exit(totalFailed === 0 ? 0 : 1);

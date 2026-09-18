@@ -3392,6 +3392,65 @@ Você foi removido do grupo.`,
         return;
       }
     }
+    // Anti-Distribuição Seletiva — detecta o mecanismo de "mensagem só para
+    // alguns" pelo TRANSPORTE, não pelo conteúdo.
+    //
+    // A assinatura vem da própria fork: quando um `skmsg` de grupo não decifra
+    // porque este dispositivo NÃO recebeu a Sender Key, e o `<enc>` carrega
+    // `decrypt-fail="hide"` (o remetente mandou esconder a entrada), a fork
+    // marca `info.selectiveDistribution`. Como é assinatura de transporte, pega
+    // qualquer implementação da mesma ideia — não só a nossa.
+    //
+    // Os três sinais juntos são exigidos de propósito: sem o `decrypt-fail`
+    // não há intenção (entrar tarde no grupo ou perder a chave dá o mesmo erro
+    // de decifragem), então isso reduz falso positivo.
+    if (isGroup && isAntiInvi && info?.selectiveDistribution && !info.key.fromMe) {
+      const det = info.selectiveDistribution;
+      const autorDet = info.key?.participantAlt || info.key?.participant || sender;
+
+      console.log(
+        `[ANTI-SELETIVA] detectado | grupo=${det.groupJid} | messageId=${det.messageId} | ` +
+        `autor=${det.author} | enc=${det.encType} | decryptFail=${det.decryptFail} | ` +
+        `devices=${det.addressedDeviceCount}`
+      );
+
+      // Só age se o bot puder agir, e nunca contra admin/dono/whitelist.
+      const podeAgir = isBotAdmin && !isGroupAdmin && !isOwner && !isUserWhitelisted(sender, 'antipagamento');
+
+      if (podeAgir) {
+        const newsletterCtxSeletiva = {
+          forwardingScore: 999,
+          isForwarded: true,
+          forwardedNewsletterMessageInfo: {
+            newsletterJid: "120363410980452460@newsletter",
+            newsletterName: "Lizzy"
+          }
+        };
+
+        // A remoção roda em segundo plano (mesmo motivo do bloco de pagamento:
+        // não prender um slot do MessageQueue no caminho crítico).
+        schedulePaymentEnforcement(nazu, {
+          from, sender: autorDet, isReplyToPayment: false, info, quotedPaymentAuthor: autorDet,
+        });
+
+        await nazu.sendMessage(from, {
+          text: `❌ @${String(sender).split('@')[0]} ❌\n\n` +
+            `⚠️ *Mensagem com visibilidade seletiva não é permitida aqui!* ⚠️\n\n` +
+            `Detectei uma mensagem de grupo enviada para todos, mas cifrada de forma que\n` +
+            `alguns participantes (inclusive admins) não conseguem ler.\n\n` +
+            `Você foi removido do grupo.`,
+          mentions: [sender],
+          contextInfo: newsletterCtxSeletiva,
+          quoted: info
+        }).catch(() => {});
+
+        await nazu.sendMessage(from, {
+          delete: { remoteJid: from, fromMe: false, id: info.key.id, participant: sender }
+        }).catch(() => {});
+      }
+    }
+
+
     
     if (isGroup && isButtonMessage && isAntiBtn && !isGroupAdmin) {
       if (!isUserWhitelisted(sender, 'antibtn')) {
@@ -32482,7 +32541,9 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
           };
           await nazu.sendMessage(from, { text: `✅ Anti-Invisível ${groupData.antiinvi ? 'ativado' : 'desativado'}!
 
-Proteção contra rajadas de mensagens invisíveis (payment message com amount 0).` , contextInfo: newsletterCtxInvi, quoted: info });
+Proteção contra rajadas de mensagens invisíveis (payment message com amount 0)
+E contra mensagens com distribuição seletiva (enviadas para todos, mas
+cifradas para que alguns — inclusive admins — não consigam ler).` , contextInfo: newsletterCtxInvi, quoted: info });
         } catch (e) {
           console.error(e);
           await reply("Ocorreu um erro 💔");
