@@ -648,13 +648,24 @@ chamadas. Só em grupo, exige admin.
   não é reordenado).
 - **Proto real (descoberto, não suposto)**: o campo é
   `Message.pollCreationOptionImageMessage` — **campo 90, tag 722**, tipo
-  `FutureProofMessage` (que só carrega `message`). Mas o que se envia de fato é:
+  `FutureProofMessage` (que só carrega `message`). O formato no fio é:
   - **pai**: `pollCreationMessageV3` com `pollContentType: IMAGE` (enum
     `Message.PollContentType.IMAGE = 2`) e, por opção, `optionName` +
     `optionHash`;
-  - **filhos**: um `imageMessage` por opção, cada um com
-    `messageContextInfo.messageAssociation = { parentMessageKey, associationType:
-    MEDIA_POLL (7) }`.
+  - **filhos**: cada imagem vai **dentro do envelope
+    `pollCreationOptionImageMessage`** (`{ pollCreationOptionImageMessage: {
+    message: <imageMessage> } }`) e associada ao pai via
+    `messageContextInfo.messageAssociation = { parentMessageKey,
+    associationType: MEDIA_POLL (7) }`.
+- **BUG CORRIGIDO (sintoma real: "enviou as 3 fotos em sequência, não criou a
+  enquete")**: a primeira versão mandava os filhos como `imageMessage` **cru**,
+  só com a associação. **Não basta.** O cliente só trata um filho como IMAGEM DE
+  OPÇÃO quando ele vem dentro do envelope `pollCreationOptionImageMessage` — que
+  é justamente o campo que dá nome ao recurso. Sem o envelope, a associação é
+  ignorada e as imagens chegam como fotos soltas. Segundo erro no mesmo caminho:
+  o nó `<meta polltype="creation">` era adicionado só para `poll`; o `imagePoll`
+  não entrava no ramo, então a stanza não ia marcada como criação de enquete.
+  Ambos corrigidos em `0f4099a`.
 - **`optionHash`** = `hex(sha256( hex(sha256(optionName)) + base64(fileSha256) ))`
   — o `fileSha256` é o da imagem **daquela** opção. Fórmula tirada do cliente
   (`WAWebPollOptionHashUtils.generatePollOptionHash`) e reimplementada em
@@ -678,15 +689,18 @@ chamadas. Só em grupo, exige admin.
   `lib/Socket/messages-send.js`, espelhando o bloco do álbum. As imagens
   preparadas são passadas ao `sendMessage` por um holder compartilhado.
 - **Dependência**: `package-lock.json`/`yarn.lock` fixados em
-  `a88e51b6b6209060f3e78d63a91a195dae23bf10` da fork (commit "add image poll
-  proto support"). **Não esquecer**: só trocar o lock não basta — ver "BUG DO
-  INSTALADOR" (o `!atualizar` já corrigido resolve).
+  `0f4099aafc17c77478745b88f8a2ff77a887a515` da fork (inclui "add image poll
+  proto support" + "wrap image poll options in
+  pollCreationOptionImageMessage"). **Não esquecer**: só trocar o lock não basta
+  — ver "BUG DO INSTALADOR" (o `!atualizar` já corrigido resolve).
 - **Testes**: `tests/enqueteimg.test.js` (43 testes / 88 asserções — parser,
   coleta, resolução, comando real com socket falso) e
-  `tests/enqueteimg-integration.test.js` (5 testes / 26 asserções — o payload do
-  comando pelo caminho real da fork, com encode/decode). Fork:
-  `tests/image-poll.test.js` + `tests/image-poll-send.test.js`. Verificado
-  trocando o `imagePoll` por uma enquete de texto: **10 asserções falham**.
+  `tests/enqueteimg-integration.test.js` (5 testes / 29 asserções — o payload do
+  comando pelo caminho real da fork, com encode/decode, incluindo o envelope).
+  Fork: `tests/image-poll.test.js` + `tests/image-poll-send.test.js`.
+  Verificado trocando o `imagePoll` por uma enquete de texto: **10 asserções
+  falham**; removendo o envelope `pollCreationOptionImageMessage`: **2 testes
+  falham**.
 - **Não quebra o existente**: `!enquete`/`!poll` (texto) intactos, quiz intacto,
   envio normal de imagens intacto, votação intacta. Verificado por teste.
 - **Status**: **NÃO DOCUMENTADO no README da fork de propósito** — falta

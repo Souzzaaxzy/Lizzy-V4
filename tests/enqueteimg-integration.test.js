@@ -126,8 +126,10 @@ await test('integração: sobrevive ao encode/decode (vai mesmo no fio)', async 
   // filhos
   const parentKey = { remoteJid: GROUP, fromMe: true, id: 'POLL-1' };
   for (let i = 0; i < holder.images.length; i++) {
+    // Formato exato que o sendMessage da fork relaya: a imagem vai dentro do
+    // envelope `pollCreationOptionImageMessage` e associada ao poll.
     const filho = {
-      ...holder.images[i],
+      pollCreationOptionImageMessage: { message: holder.images[i] },
       messageContextInfo: {
         ...(holder.images[i].messageContextInfo || {}),
         messageAssociation: {
@@ -138,7 +140,11 @@ await test('integração: sobrevive ao encode/decode (vai mesmo no fio)', async 
     };
     const b = proto.Message.encode(proto.Message.create(filho)).finish();
     const d = proto.Message.decode(b);
-    ok(Boolean(normalizeMessageContent(d).imageMessage), `filho ${i + 1} é imagem`);
+    ok(Boolean(d.pollCreationOptionImageMessage), `filho ${i + 1} vem embrulhado em pollCreationOptionImageMessage`);
+    ok(
+      Boolean(normalizeMessageContent(d.pollCreationOptionImageMessage.message).imageMessage),
+      `filho ${i + 1} contém a imagem`
+    );
     ok(
       d.messageContextInfo.messageAssociation.associationType ===
         proto.MessageAssociation.AssociationType.MEDIA_POLL,
