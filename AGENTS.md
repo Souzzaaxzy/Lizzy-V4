@@ -562,31 +562,39 @@ antiga (A) não consiga decifrar. NÃO altera `!rajar`, `!rajar2` nem `!rajar3`.
     `senderKeyIds: [500148101]` (só A); membros com `[A, B]`.
   - **Mutações caçadas**: pular a rotação → 2 dos 5 falham; ignorar o
     subconjunto (distribuir B para o grupo) → 2 dos 5 falham.
-- **RESULTADO NO WHATSAPP REAL (set/2026): ❌ NÃO FUNCIONA.** O teste real foi
-  executado e a mensagem ficou **visível para TODOS**. O log
-  `[SENDER-KEY-ROTATION] autorizados=1` engana: esse número vem do **argumento
-  passado pelo comando**, não do wire. Na stanza, o endereçamento é
-  **idêntico** ao de uma mensagem normal — `to="<grupo>"`, sem `participant`,
-  sem `recipient`. O servidor recebe "entregue esta mensagem de grupo" e faz
-  fan-out para todos. A única diferença é quantos nós `<to>` levam a Sender Key.
-  Captura em `tests/rotation-wire-comparison.test.js` (fork):
-  `targets of every message stanza sent: [ '<grupo>', '<grupo>' ]`.
-- **Segundo motivo do vazamento total**: o **retry reentrega o conteúdo**.
-  `sendMessagesAgain → relayMessage({ participant })` reenvia a mensagem
-  cifrada pairwise para o dispositivo que pediu. Medido em
-  `tests/sender-key-rotation-retry-content.test.js`: um admin excluído que pede
-  retry lê o texto inteiro. O stanza rotacionado leva `decrypt-fail="hide"`,
-  que deveria fazer o cliente esconder a entrada em vez de pedir retry — mas
-  isso é comportamento do cliente e, no aparelho real, o conteúdo vazou.
-- **Conclusão das camadas** (não confundir): `recipientMode` /
-  `recipientParticipants`, `sender-key-memory`, o SKDM e a criptografia de
-  Sender Key são **todos do lado do cliente** e **nenhum** limita o que o
-  servidor entrega. O `participant` só faz sentido em retry. A **única** coisa
-  que o servidor obedece é o `to` — o JID do grupo.
-- **Mantenha o `!rajar4` como está**: ele agora serve como experimento que
-  **documenta o limite**, não como promessa de privacidade. NÃO criar `!rajar5`
-  nem outra variante especulativa.
-- **Testes da Lizzy**: `tests/rajar4.test.js` (13 testes / 21 asserções) — chama
+- **RESULTADO NO WHATSAPP REAL (set/2026): ❌ FALHOU NA 1ª TENTATIVA — duas causas
+  encontradas e corrigidas.** O teste real mostrou a mensagem visível para TODOS.
+  Causa 1: a chave rotacionada ficava **ativa** no grupo (corrigido: rotação por
+  mensagem, com reversão após cifrar). Causa 2 (a decisiva): o **retry
+  reentrega o conteúdo** — `sendMessagesAgain → relayMessage({ participant })`
+  reenvia a mensagem **cifrada pairwise para o dispositivo que pediu**, então o
+  excluído lia o texto. É o "pairwise E2EE fallback" do PoC *Send and Pretend*.
+  Corrigido com o equivalente do `PreRetryCallback`: mensagens rotacionadas
+  entram num `suppressedRetryRegistry` (TTL 10 min, por socket) e o gate de
+  retry **não responde** para elas (fork `d13e7cc`).
+- **O log `autorizados=1` enganava**: era a contagem **do argumento passado pelo
+  comando**, não do wire. Na stanza, o endereçamento é `to="<grupo>"`, sem
+  `participant`/`recipient` — o servidor continua entregando a **todos**. A
+  diferença é só quantos nós `<to>` levam a Sender Key.
+- **O que isso produz (a semântica pedida)**: o excluído **recebe o stanza**
+  (então sabe que a mensagem existe e consegue citá-la/marcá-la), mas **não
+  consegue decifrar** e **não consegue mais pedir pelo retry**. O
+  `decrypt-fail="hide"` no `<enc type="skmsg">` é o que instrui o cliente a
+  esconder a entrada em vez de mostrar erro.
+- **AINDA NÃO VALIDADO EM APARELHO REAL**: se o cliente, ao receber uma mensagem
+  que não decifra com `decrypt-fail="hide"`, fica **silencioso** (o desejado) ou
+  mostra **placeholder/erro**. Isso é comportamento do cliente e decide o
+  resultado. Testar de novo com `!rajar4 @alvo texto` e observar admins.
+- **Lição de teste (importante para não repetir)**: o harness **precisa** passar
+  `maxMsgRetryCount`, senão `willSendMessageAgain` vira `retryCount < undefined`
+  → sempre false, e o teste de retry **passa sem provar nada**. O teste novo
+  agora também verifica que o retry de uma mensagem **normal** é respondido
+  (1 stanza), garantindo que a supressão é escopada e não um mute geral.
+- **Camadas, sem confundir**: `recipientMode`/`recipientParticipants`,
+  `sender-key-memory`, SKDM e criptografia de Sender Key são **do lado do
+  cliente**; o `participant` só vale em retry; a **única** coisa que o servidor
+  obedece é o `to` (JID do grupo). Limitar uma camada não limita as outras.
+- **Testes da Lizzy**: `tests/rajar4.test.js` (13 testes / 27 asserções) — chama
   só a API de rotação com o alvo autorizado, não usa pairwise nem
   `recipientMode`, autoriza apenas o alvo (nunca admin), citação, regras de
   grupo/dono/alvo, aviso de fork incompatível, e confirma que `!rajar`,

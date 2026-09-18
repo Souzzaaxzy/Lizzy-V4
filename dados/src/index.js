@@ -32373,10 +32373,10 @@ break;
             `• Sender Key NOVA distribuída apenas para @${String(alvo).split('@')[0].split(':')[0]}\n` +
             `• admins e demais participantes não receberam a chave nova\n` +
             `• modo: mensagem normal de grupo (sem retry pairwise)\n\n` +
-            `❌ RESULTADO REAL JÁ MEDIDO: a mensagem FICA VISÍVEL PARA TODOS. A stanza é\n` +
-            `endereçada ao JID do grupo (o servidor não recebe nenhum subconjunto) e o\n` +
-            `retry reenvia o conteúdo cifrado pairwise a quem pedir. Não use esperando\n` +
-            `privacidade — este comando existe para documentar o limite.`,
+            `🧪 Estado atual: a chave é rotacionada por mensagem e o retry do conteúdo\n` +
+            `está suprimido para esta mensagem — quem não tem a chave não consegue\n` +
+            `decifrar nem pedir de novo. Ainda NÃO validado em aparelho real: se o\n` +
+            `cliente mostra um placeholder ou fica silencioso (decrypt-fail=hide).`,
             { mentions: [alvo] }
           );
         } catch (e) {
