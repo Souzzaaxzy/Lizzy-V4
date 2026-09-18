@@ -32369,11 +32369,14 @@ break;
             `messageId=${resultado?.messageId} | bytes=${Buffer.byteLength(textoRajar4, 'utf8')}`
           );
           await reply(
-            `🔑 Rotação seletiva enviada.\n` +
+            `🔑 Rotação seletiva enviada (experimento).\n` +
             `• Sender Key NOVA distribuída apenas para @${String(alvo).split('@')[0].split(':')[0]}\n` +
             `• admins e demais participantes não receberam a chave nova\n` +
             `• modo: mensagem normal de grupo (sem retry pairwise)\n\n` +
-            `⚠️ A parte criptográfica está provada localmente. A aceitação pelo servidor do WhatsApp NÃO foi validada — observe os dispositivos.`,
+            `❌ RESULTADO REAL JÁ MEDIDO: a mensagem FICA VISÍVEL PARA TODOS. A stanza é\n` +
+            `endereçada ao JID do grupo (o servidor não recebe nenhum subconjunto) e o\n` +
+            `retry reenvia o conteúdo cifrado pairwise a quem pedir. Não use esperando\n` +
+            `privacidade — este comando existe para documentar o limite.`,
             { mentions: [alvo] }
           );
         } catch (e) {

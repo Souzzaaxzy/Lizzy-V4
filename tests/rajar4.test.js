@@ -244,12 +244,15 @@ await test('!rajar4 avisa se a fork não expõe a API de rotação', async () =>
   ok(r.textos.includes('não expõe a API de rotação'), 'informou a incompatibilidade');
 });
 
-await test('!rajar4 informa o que foi distribuído e que o servidor não foi validado', async () => {
+await test('!rajar4 informa o que foi distribuído e que NÃO há privacidade (resultado real)', async () => {
   const groupJid = makeGroup();
   const r = await rodar({ groupJid, text: `!rajar4 @${MEM_1} relatorio`, participant: MEM_1 });
   ok(r.textos.includes('Sender Key NOVA'), 'informou a chave nova');
   ok(r.textos.includes('sem retry pairwise'), 'informou que não é retry');
-  ok(r.textos.includes('NÃO foi validada'), 'deixou claro que o servidor não foi validado');
+  // O resultado real medido: a mensagem aparece para todos. O comando deve dizer
+  // isso em vez de sugerir que a privacidade funcionou.
+  ok(r.textos.includes('VISÍVEL PARA TODOS'), 'avisou o resultado real (visível para todos)');
+  ok(r.textos.includes('Não use esperando'), 'avisou para não usar esperando privacidade');
 });
 
 // Regressão: os comandos anteriores continuam intactos.

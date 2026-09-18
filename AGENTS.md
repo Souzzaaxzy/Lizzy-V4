@@ -562,11 +562,30 @@ antiga (A) não consiga decifrar. NÃO altera `!rajar`, `!rajar2` nem `!rajar3`.
     `senderKeyIds: [500148101]` (só A); membros com `[A, B]`.
   - **Mutações caçadas**: pular a rotação → 2 dos 5 falham; ignorar o
     subconjunto (distribuir B para o grupo) → 2 dos 5 falham.
-- **LIMITE HONESTO**: isso está **comprovado apenas localmente**. **NÃO** foi
-  validado em dispositivo real: se o WhatsApp **aceita** uma mensagem cuja Sender
-  Key só alguns receberam, como cada cliente renderiza, se o admin gera retry e se
-  esse retry entrega B, e se o comportamento persiste após reiniciar — tudo isso
-  continua **não testado**. Sem essa evidência, não é possível afirmar sucesso.
+- **RESULTADO NO WHATSAPP REAL (set/2026): ❌ NÃO FUNCIONA.** O teste real foi
+  executado e a mensagem ficou **visível para TODOS**. O log
+  `[SENDER-KEY-ROTATION] autorizados=1` engana: esse número vem do **argumento
+  passado pelo comando**, não do wire. Na stanza, o endereçamento é
+  **idêntico** ao de uma mensagem normal — `to="<grupo>"`, sem `participant`,
+  sem `recipient`. O servidor recebe "entregue esta mensagem de grupo" e faz
+  fan-out para todos. A única diferença é quantos nós `<to>` levam a Sender Key.
+  Captura em `tests/rotation-wire-comparison.test.js` (fork):
+  `targets of every message stanza sent: [ '<grupo>', '<grupo>' ]`.
+- **Segundo motivo do vazamento total**: o **retry reentrega o conteúdo**.
+  `sendMessagesAgain → relayMessage({ participant })` reenvia a mensagem
+  cifrada pairwise para o dispositivo que pediu. Medido em
+  `tests/sender-key-rotation-retry-content.test.js`: um admin excluído que pede
+  retry lê o texto inteiro. O stanza rotacionado leva `decrypt-fail="hide"`,
+  que deveria fazer o cliente esconder a entrada em vez de pedir retry — mas
+  isso é comportamento do cliente e, no aparelho real, o conteúdo vazou.
+- **Conclusão das camadas** (não confundir): `recipientMode` /
+  `recipientParticipants`, `sender-key-memory`, o SKDM e a criptografia de
+  Sender Key são **todos do lado do cliente** e **nenhum** limita o que o
+  servidor entrega. O `participant` só faz sentido em retry. A **única** coisa
+  que o servidor obedece é o `to` — o JID do grupo.
+- **Mantenha o `!rajar4` como está**: ele agora serve como experimento que
+  **documenta o limite**, não como promessa de privacidade. NÃO criar `!rajar5`
+  nem outra variante especulativa.
 - **Testes da Lizzy**: `tests/rajar4.test.js` (13 testes / 21 asserções) — chama
   só a API de rotação com o alvo autorizado, não usa pairwise nem
   `recipientMode`, autoriza apenas o alvo (nunca admin), citação, regras de
