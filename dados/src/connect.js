@@ -1598,7 +1598,18 @@ async function createBotSocket(authDir) {
                 };
             }
 
-            if (!info || !info.message || !info.key?.remoteJid) {
+            // Uma mensagem de grupo que não pôde ser decifrada NÃO tem
+            // `info.message` — só `messageStubType`/`messageStubParameters`. O
+            // anti-fantasma precisa vê-las (é assim que a distribuição seletiva
+            // chega), então o guard abre uma exceção para esse caso em vez de
+            // descartar. Sem `remoteJid` continua sendo descartado.
+            const isUndecryptableGroupMsg =
+                info?.selectiveDistribution && info.key?.remoteJid;
+
+            if (!info || !info.key?.remoteJid) {
+                return;
+            }
+            if (!info.message && !isUndecryptableGroupMsg) {
                 return;
             }
 

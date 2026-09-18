@@ -130,10 +130,15 @@ function makeNazu({ sent, groupJid, senderLid, calls = {} }) {
   };
 }
 
-/** A message as the fork reports it when selective distribution is detected. */
+/** A message as the fork reports it when selective distribution is detected.
+ *
+ * IMPORTANTE: sem `message` — uma mensagem que não decifra tem só
+ * `messageStubType`/`messageStubParameters`. O teste antigo inventava
+ * `message: {}` e por isso passava enquanto na produção nada acontecia: o guard
+ * `!info.message` do connect.js descartava antes do anti rodar.
+ */
 const selectiveInfo = ({ groupJid, authorLid }) => ({
   key: { remoteJid: groupJid, fromMe: false, id: 'SEL-1', participant: authorLid, participantAlt: MEM_PN },
-  message: {},
   messageStubType: 2, // CIPHERTEXT
   messageStubParameters: ['No session found to decrypt message'],
   selectiveDistribution: {
@@ -229,6 +234,26 @@ await test('o log de diagnóstico sai com os campos estruturais', async () => {
   ok(linha?.includes('decryptFail=hide'), 'logou o decrypt-fail');
   ok(linha?.includes(`messageId=SEL-1`), 'logou o messageId');
 });
+await test('o guard do connect.js deixa passar a mensagem sem `message` (causa raiz do "não bane")', async () => {
+  // Reproduz a condição EXATA do processMessage em connect.js. Antes, o guard
+  // `!info.message` descartava a mensagem aqui e o anti nunca rodava — era o
+  // motivo real de "ativo o !antifantasma mas não bane".
+  const guard = (info) => {
+    const isUndecryptableGroupMsg = info?.selectiveDistribution && info.key?.remoteJid;
+    if (!info || !info.key?.remoteJid) return 'drop';
+    if (!info.message && !isUndecryptableGroupMsg) return 'drop';
+    return 'pass';
+  };
+
+  const fantasma = selectiveInfo({ groupJid: 'g@g.us', authorLid: MEM });
+  ok(guard(fantasma) === 'pass', 'a mensagem fantasma passa pelo guard');
+
+  // Um stub qualquer SEM detecção continua sendo descartado (nada regrediu).
+  ok(guard({ key: { remoteJid: 'g@g.us', id: 'X' }, messageStubType: 2 }) === 'drop', 'stub sem detecção continua descartado');
+  ok(guard({ selectiveDistribution: {} }) === 'drop', 'sem remoteJid é descartado');
+  ok(guard({ message: { conversation: 'oi' }, key: { remoteJid: 'g@g.us' } }) === 'pass', 'mensagem normal segue passando');
+});
+
 
 // ============================================================================
 

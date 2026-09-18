@@ -2571,7 +2571,13 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     const ROLE_NOT_GOING_BASE = '🤷';
     const isGoingEmoji = (emoji) => typeof emoji === 'string' && emoji.includes(ROLE_GOING_BASE);
     const isNotGoingEmoji = (emoji) => typeof emoji === 'string' && emoji.includes(ROLE_NOT_GOING_BASE);
-    const isButtonMessage = info.message.interactiveMessage || info.message.templateButtonReplyMessage || info.message.buttonsMessage || info.message.interactiveResponseMessage || info.message.listResponseMessage || info.message.buttonsResponseMessage ? true : false;
+    // `info.message` pode NÃO existir: uma mensagem de grupo que não pôde ser
+    // decifrada (CIPHERTEXT) chega só com `messageStubType`/`messageStubParameters`
+    // — e é justamente por onde o ataque fantasma chega. Acessar direto aqui
+    // lançava TypeError e derrubava o handler ANTES do anti rodar, que era o
+    // motivo real de "ativo o !antifantasma mas não bane".
+    const msgContent = info.message || {};
+    const isButtonMessage = msgContent.interactiveMessage || msgContent.templateButtonReplyMessage || msgContent.buttonsMessage || msgContent.interactiveResponseMessage || msgContent.listResponseMessage || msgContent.buttonsResponseMessage ? true : false;
     // hasTextSignature substitui JSON.stringify direto: este ultimo lanca em
     // estruturas circulares ou com BigInt/Long e derrubaria o handler inteiro.
     const isStatusMention = hasTextSignature(info.message, 'groupStatusMentionMessage');
@@ -3440,6 +3446,17 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
           delete: { remoteJid: from, fromMe: false, id: info.key.id, participant: sender }
         }).catch(() => {});
       }
+
+      // A mensagem nao tem conteudo decifravel: e um stub (CIPHERTEXT). Seguir
+      // pelo pipeline abaixo nao faz sentido e varios blocos leem
+      // `info.message.x` direto, o que lancaria TypeError. O tratamento ja foi
+      // feito acima.
+      return;
+    }
+    // Mensagem sem conteudo (stub que nao e da deteccao fantasma): nada a
+    // processar aqui. Varios blocos abaixo assumem `info.message` existente.
+    if (!info.message) {
+      return;
     }
 
 
