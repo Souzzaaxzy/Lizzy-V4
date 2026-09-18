@@ -373,6 +373,64 @@ undefined/null, sem 348 resoluções de LID), mensagens normais (`!ping`, `!menu
 `!ping` < 3 s atrás de 256 rajadas). Usa `DATABASE_PATH` temporário — não toca o
 banco real.
 
+## COMANDO "!rajar" — mensagem só para membros comuns ✅
+Entrega a mensagem apenas aos membros comuns do grupo. NÃO é "manda e apaga", não
+é view-once, não é edição, não é exclusão: a restrição está no **TRANSPORTE** —
+o material da Sender Key não é distribuído aos admins, então eles não decifram.
+
+- **Onde vive a regra**: na fork (`@itsliaaa/baileys`), commit `3b41788`
+  (`feat: add members-only group message transport`). Novo módulo
+  `lib/Utils/recipient-selector.js` (`selectGroupRecipients`,
+  `resolveGroupRecipients`, `isGroupAdminParticipant`, `GROUP_RECIPIENT_MODES`)
+  e novo parâmetro no `relayMessage`/`sendMessage`:
+  `recipientMode: 'all' | 'admins-only' | 'members-only'` ou
+  `recipientParticipants: [...]`. README da fork documenta em
+  "Members-only group message".
+- **Como funciona (por que restringir a lista basta)**: o `relayMessage` deriva
+  os dispositivos dos **participantes do grupo** e, a partir daí, monta
+  SenderKeyDistributionMessage, os nós `<to>`, o `<enc type="skmsg">` e o
+  `phash`. `resolveGroupRecipients` substitui a lista ANTES da descoberta de
+  dispositivos, então tudo a jusante (SKDM, ciphertext, `phash`) segue o
+  subconjunto — não é um filtro aplicado depois que o material já saiu.
+  Quando há restrição, os `<enc>` ganham `decrypt-fail="hide"` para o cliente do
+  excluído esconder a entrada em vez de mostrar "aguardando mensagem".
+- **Admin é pelo metadata, não por heurística**: `admin === 'admin'` (promovido)
+  ou `'superadmin'` (criador). Nada de nome/número/posição.
+- **Falha segura**: se a restrição não casar ninguém, a fork **lança** e nada é
+  enviado — em vez de cair no grupo inteiro (que é exatamente o que não se quer).
+- **Comando** (`index.js` ~32166, `case 'rajar'`): `!rajar <texto>` (sem texto,
+  frase padrão). Só em grupo. Exige que quem executa seja **membro comum**
+  (`isGroupAdmin && !isOwner` → recusa), porque um admin não deveria disparar a
+  mensagem que ele mesmo não leria; o dono é a exceção, para validar. Log de uma
+  linha (`[RAJAR] enviado | grupo | membros | admins | bytes`) sem nada sensível.
+- **Menu**: linha `│ 👥 ${prefix}rajar [texto]` na categoria existente **🧪
+  TESTES DE PROTEÇÃO (DONO)** do `menudono`, ao lado do `!raja`. `blockPv.js`
+  ganhou `'raja'` e `'rajar'` na lista do `menudono`.
+- **LIMITAÇÕES (importante, não vender como o que não é)**: a stanza continua
+  endereçada AO GRUPO, então o admin **percebe que houve uma mensagem** (recebe
+  a referência); o que ele não consegue é **ler o conteúdo**. O subconjunto é
+  resolvido a cada envio a partir do metadata atual (promover alguém a admin
+  depois não afeta mensagens já enviadas; membro novo não recebe as antigas).
+  Não é barreira de confidencialidade contra o WhatsApp/servidor. Documentado
+  também no README da fork.
+- **Testes da fork**: `tests/members-only-send.test.js` (8 testes) — roda o
+  caminho REAL do `relayMessage` (só o transporte é gravado), monta sessões
+  Signal de verdade (chaves geradas, `injectE2ESession`), e **decifra** o que
+  cada dispositivo recebeu com as próprias chaves privadas: membro incluído
+  recebe a Sender Key e lê a mensagem; o excluído não tem nó `<to>` nenhum.
+  Cobre também `admins-only`, lista explícita, mensagem normal (todos) e a
+  recusa quando a restrição não casa ninguém. **Verificado: desligando a
+  restrição, 6 dos 8 falham.**
+- **Testes da Lizzy**: `tests/rajar.test.js` (16 testes / 19 asserções) — função
+  pura (membros-only exclui `admin`/`superadmin`, sem heurística de nome,
+  admins-only, `null` fora, não-casa-ninguém lança, modo inválido lança), o
+  **handler real** (envia com `recipientMode: 'members-only'`, propaga a
+  restrição, frase padrão, admin recusado, só em grupo) e menu/`blockPv`.
+  **Armadilha**: o `sender` precisa EXISTIR no metadata do grupo (o handler
+  decide a permissão comparando com os admins do metadata) — um LID inventado
+  passaria como membro comum e o teste de admin mediria a coisa errada.
+  **Verificado: removendo o `recipientMode`, 4 dos 16 falham.**
+
 ## COMANDOS "!pgpau" / "!pgpeito" / "!pgbunda" (pegar) ✅
 - **Sem sistema paralelo**: os três entraram no bloco `case` que JÁ existe para os comandos de interação (`tapa`, `soco`, `beijo`, `siririca`...) em `index.js` (~37067). Herdam de graça: exigência de grupo, `modobrincadeira`, `isModoLite`, leitura do `games.json > games2`, resolução de mídia local/URL, `gifPlayback` e envio via `nazu.sendMessage`.
 - **Frases**: constante `FRASES_PEGAR` no topo do `index.js` (module-level, ~linha 149) com **exatamente 2 frases por comando** (as fornecidas, sem alteração). O ramo `else if (FRASES_PEGAR[command])` sorteia uma e troca `@usuario` → `@<executor>` e `@alvo` → `@<alvo>`. Não mistura frases entre comandos.

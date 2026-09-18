@@ -32163,6 +32163,53 @@ break;
         break;
       }
 
+      // !rajar — interação "só os membros comuns" (admins não conseguem ler).
+      // O comando não tem nada de especial no TEXTO: a característica está no
+      // TRANSPORTE. A fork da Baileys ganhou a restrição de destinatários
+      // (`recipientMode`) no sendMessage, que limita o fan-out da Sender Key
+      // aos membros comuns — admins não recebem material criptográfico e não
+      // conseguem decifrar a mensagem.
+      // Forma única: `!rajar <texto>` (sem argumentos, usa uma frase padrão).
+      case 'rajar': {
+        try {
+          if (!isGroup) return reply('❌ Este comando só funciona em grupos.');
+
+          const textoRajar = (q || '').trim() || 'Oi, membros! 👀';
+
+          // Quem executa também precisa ser membro comum: um admin não deve
+          // conseguir disparar a mensagem que ele mesmo não leria. O dono do
+          // bot é a exceção, para conseguir validar o comando.
+          if (isGroupAdmin && !isOwner) {
+            return reply('❌ Apenas membros comuns podem enviar esta mensagem.');
+          }
+
+          const membrosComuns = AllgroupMembers.filter(id => !idInArray(id, groupAdmins));
+          if (!membrosComuns.length) {
+            return reply('❌ Não há membros comuns neste grupo além de você.');
+          }
+
+          const conteudoRajar = { text: textoRajar };
+
+          // `recipientMode: 'members-only'` é resolvido pela fork a partir da
+          // metadata real do grupo (campo `admin` do participante) — sem
+          // heurística de nome/número. Se nenhum destinatário casar, a fork
+          // lança e nada é enviado, em vez de vazar para o grupo inteiro.
+          await nazu.sendMessage(from, conteudoRajar, {
+            recipientMode: 'members-only',
+            quoted: info
+          });
+
+          console.log(
+            `[RAJAR] enviado | grupo=${from} | membros=${membrosComuns.length} | ` +
+            `admins=${groupAdmins.length} | bytes=${Buffer.byteLength(textoRajar, 'utf8')}`
+          );
+        } catch (e) {
+          console.error('[RAJAR] Erro:', e?.message || e);
+          await reply('❌ Não foi possível enviar a mensagem para os membros.');
+        }
+        break;
+      }
+
       case 'testcall':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
