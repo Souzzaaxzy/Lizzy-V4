@@ -32268,6 +32268,57 @@ break;
         break;
       }
 
+      // !rajar3 — EXPERIMENTO: mensagem NOVA de grupo com
+      // `recipientMode: 'members-only'`, pelo fluxo normal do
+      // `relayMessage` (sem pairwise retry, sem `participant` de retry).
+      // Serve para observação real do comportamento do WhatsApp. NÃO altera o
+      // !rajar nem o !rajar2.
+      //
+      // OBSERVAÇÃO TÉCNICA (medida nos testes da fork): este modo só isola de
+      // verdade quem NUNCA recebeu a Sender Key. Como a Sender Key é reusada
+      // entre envios e a cadeia só avança, um admin que já participou de uma
+      // mensagem normal antes consegue decifrar a mensagem `members-only`
+      // depois. O comando não esconde isso: informa o modo e registra os
+      // metadados estruturais para o teste real.
+      case 'rajar3': {
+        try {
+          if (!isGroup) return reply('❌ Este comando só funciona em grupos.');
+
+          // Comando de laboratório (categoria DONO no menu).
+          if (!isOwner) return reply('❌ Apenas o dono do bot pode usar este comando.');
+
+          const textoRajar3 = (q || '').trim() || '[TESTE MEMBERS_ONLY] mensagem experimental';
+
+          // Metadados estruturais do que vai sair — sem chaves, sem plaintext
+          // de terceiros, sem credenciais. Os número vêm do metadata do grupo.
+          const membrosComuns = AllgroupMembers.filter(id => !idInArray(id, groupAdmins));
+          const alvoInfo = menc_os2 ? ` | alvo=${menc_os2}` : '';
+          console.log(
+            `[MEMBERS-ONLY] enviando | grupo=${from} | modo=members-only | ` +
+            `membros=${membrosComuns.length} | admins=${groupAdmins.length} | ` +
+            `participantes=${AllgroupMembers.length}${alvoInfo} | ` +
+            `bytes=${Buffer.byteLength(textoRajar3, 'utf8')}`
+          );
+
+          await nazu.sendMessage(from, { text: textoRajar3 }, {
+            recipientMode: 'members-only',
+            quoted: info
+          });
+
+          const aviso =
+            `🧪 [TESTE MEMBERS_ONLY] mensagem enviada com recipientMode 'members-only'.\n` +
+            `• membros comuns: ${membrosComuns.length}\n` +
+            `• admins: ${groupAdmins.length}\n` +
+            `• modo: mensagem nova de grupo (sem retry pairwise)\n\n` +
+            `⚠️ Limitação medida: admins que JÁ receberam a Sender Key numa mensagem normal anterior conseguem decifrar esta.`;
+          await reply(aviso);
+        } catch (e) {
+          console.error('[RAJAR3] Erro:', e?.message || e);
+          await reply('❌ Não foi possível executar o experimento members-only.');
+        }
+        break;
+      }
+
       case 'testcall':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");

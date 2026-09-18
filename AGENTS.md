@@ -482,6 +482,42 @@ substitui o `!rajar` — os dois coexistem.
   e a aceitação pelo servidor do WhatsApp **não** foram validados (sem conta
   pareada neste ambiente).
 
+## COMANDO "!rajar3" — EXPERIMENTO: members-only de verdade (set/2026) ⚠️ NAO ISOLA
+Objetivo: enviar uma **mensagem NOVA de grupo** com `recipientMode: 'members-only'`
+pelo fluxo normal (sem pairwise retry) e **medir** o que isso realmente esconde.
+NÃO altera o `!rajar` nem o `!rajar2`.
+
+- **Comando** (`index.js`, `case 'rajar3'`): `!rajar3 [texto]` (padrão
+  `[TESTE MEMBERS_ONLY] mensagem experimental`). **Exclusivo do dono** e só em
+  grupo. Chama `nazu.sendMessage(from, { text }, { recipientMode: 'members-only' })`
+  — o fluxo normal. Não usa `relayGroupMessagePairwiseExperimental`.
+- **Log** (`[MEMBERS-ONLY]`): grupo, modo, nº de membros comuns, nº de admins,
+  total de participantes e bytes. Sem chaves, sem plaintext de terceiros.
+- **Menu**: `│ 👥 ${prefix}rajar3 [texto]` na categoria **🧪 TESTES DE PROTEÇÃO
+  (DONO)** do `menudono`, e `'rajar3'` no `blockPv`.
+- **RESULTADO MEDIDO (importante)**: na fork, `tests/members-only-leak.test.js`
+  (commit `d42af75`) prova que **um admin excluído CONSEGUE decifrar** a mensagem
+  `members-only` quando já recebeu a Sender Key numa mensagem normal anterior.
+  Motivo: a Sender Key é **reusada** entre envios (`GroupSessionBuilder.create()`
+  só gera chave se o registro estiver vazio; `GroupCipher.encrypt()` continua a
+  MESMA cadeia). A restrição corta a **nova distribuição**, não a decifragem.
+  Mesmo id de Sender Key nos dois envios; o admin decifra o ciphertext restrito.
+  Isolamento real só ocorre para quem **nunca** recebeu a chave (entrou depois, ou
+  o primeiro envio do grupo já foi restrito). A fork também mostra que **rotacionar
+  a Sender Key** (limpar `sender-key` **e** `sender-key-memory`) antes do envio
+  restrito BLOQUEIA o admin (id diferente).
+- **Implicação para o `!rajar`**: a afirmação de que "os admins não decifram" só
+  é verdadeira para admins que nunca viram uma mensagem normal da Sender Key
+  naquele grupo. Em uso real, quem já participou do grupo normalmente tem a
+  chave — então o `!rajar` **não** produz mensagem invisível para admins.
+- **Testes da Lizzy**: `tests/rajar3.test.js` (8 testes / 14 asserções) — envia
+  com `recipientMode: 'members-only'` e o texto pedido, NÃO chama a API
+  experimental nem usa `participant` de retry, frase padrão, recusa fora de
+  grupo / não-dono, informa contagens e a limitação, e confirma que `!rajar` e
+  `!rajar2` seguem intactos. **Verificado: removendo o `recipientMode`, 4 dos 8
+  falham.**
+
+
 
 ## COMANDOS "!pgpau" / "!pgpeito" / "!pgbunda" (pegar) ✅
 - **Sem sistema paralelo**: os três entraram no bloco `case` que JÁ existe para os comandos de interação (`tapa`, `soco`, `beijo`, `siririca`...) em `index.js` (~37067). Herdam de graça: exigência de grupo, `modobrincadeira`, `isModoLite`, leitura do `games.json > games2`, resolução de mídia local/URL, `gifPlayback` e envio via `nazu.sendMessage`.

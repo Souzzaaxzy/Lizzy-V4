@@ -254,6 +254,7 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 │ 💳 ${prefix}raja <qtd> <texto>
 │ 👥 ${prefix}rajar [texto]
 │ 🧪 ${prefix}rajar2 @alvo [texto]
+│ 👥 ${prefix}rajar3 [texto]
 ╰──────────────
 
 ╭─────────────────╮
