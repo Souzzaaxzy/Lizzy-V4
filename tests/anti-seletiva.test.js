@@ -1,5 +1,5 @@
 /**
- * Testes do anti-distribuição-seletiva (dentro do !testeinvi).
+ * Testes do anti-distribuição-seletiva (dentro do !antifantasma).
  *
  * Deteta o mecanismo pelo TRANSPORTE: a fork marca `info.selectiveDistribution`
  * quando um `skmsg` de grupo não decifra (este dispositivo não recebeu a Sender
@@ -169,8 +169,8 @@ async function rodar({ groupJid, info, senderLid = MEM, fromMe = false, esperarE
 await test('detecta e reage a uma mensagem seletiva (avisa, apaga e remove)', async () => {
   const groupJid = makeGroup({ antiinvi: true });
   const r = await rodar({ groupJid, info: selectiveInfo({ groupJid, authorLid: MEM }), esperarEnforcement: true });
-  ok(r.textos.includes('visibilidade seletiva'), 'avisou sobre a distribuição seletiva');
-  ok(r.textos.includes('removido do grupo'), 'avisou a remoção');
+  ok(r.textos.includes('tentou atacar com mensagem fantasma'), 'avisou o ataque fantasma');
+  ok(r.textos.includes('foi banido'), 'avisou o banimento');
   const apagou = r.sent.some((s) => s.content?.delete);
   ok(apagou, 'tentou apagar a mensagem');
   ok((r.calls.groupParticipantsUpdate || 0) >= 1, `removeu o autor (${r.calls.groupParticipantsUpdate || 0})`);
@@ -180,7 +180,7 @@ await test('detecta e reage a uma mensagem seletiva (avisa, apaga e remove)', as
 await test('NÃO age quando o anti-invisível está desligado', async () => {
   const groupJid = makeGroup({ antiinvi: false });
   const r = await rodar({ groupJid, info: selectiveInfo({ groupJid, authorLid: MEM }) });
-  ok(!r.textos.includes('visibilidade seletiva'), 'não avisou (toggle off)');
+  ok(!r.textos.includes('mensagem fantasma'), 'não avisou (toggle off)');
   assert.equal(r.calls.groupParticipantsUpdate || 0, 0, 'não removeu ninguém');
 });
 
@@ -193,7 +193,7 @@ await test('NÃO age em mensagem normal (sem a marca de detecção)', async () =
     pushName: 'Membro',
   };
   const r = await rodar({ groupJid, info: normal });
-  ok(!r.textos.includes('visibilidade seletiva'), 'não avisou em mensagem normal');
+  ok(!r.textos.includes('mensagem fantasma'), 'não avisou em mensagem normal');
   assert.equal(r.calls.groupParticipantsUpdate || 0, 0, 'não removeu ninguém');
 });
 
@@ -203,14 +203,14 @@ await test('NÃO age contra admin (mesmo com a marca)', async () => {
   info.key.participantAlt = ADM_PN;
   const r = await rodar({ groupJid, info, senderLid: ADM, esperarEnforcement: true });
   ok((r.calls.groupParticipantsUpdate || 0) === 0, 'não removeu o admin');
-  ok(!r.textos.includes('visibilidade seletiva'), 'não avisou contra admin');
+  ok(!r.textos.includes('mensagem fantasma'), 'não avisou contra admin');
 });
 
 await test('NÃO age em mensagem do próprio bot', async () => {
   const groupJid = makeGroup({ antiinvi: true });
   const r = await rodar({ groupJid, info: selectiveInfo({ groupJid, authorLid: MEM }), fromMe: true, esperarEnforcement: true });
   ok((r.calls.groupParticipantsUpdate || 0) === 0, 'não removeu em mensagem fromMe');
-  ok(!r.textos.includes('visibilidade seletiva'), 'não avisou em mensagem fromMe');
+  ok(!r.textos.includes('mensagem fantasma'), 'não avisou em mensagem fromMe');
 });
 
 await test('o log de diagnóstico sai com os campos estruturais', async () => {

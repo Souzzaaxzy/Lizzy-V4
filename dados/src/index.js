@@ -3257,7 +3257,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     // `persistGroupData()` pelo mesmo arquivo. O tratamento da rajada é feito
     // pelo bloco anti-pagamento abaixo, que roda em segundo plano.
     // Lógica Anti-Pagamento (antipagamento/antirequest) — Lizzy + técnicas da RAVENA
-    // O anti-invisível (`!testeinvi`) cobre a rajada de payment com amount=0,
+    // O anti-fantasma (`!antifantasma`) cobre a rajada de payment com amount=0,
     // que era o único caso que o bloco removido tratava — assim o toggle volta a
     // cumprir o que promete, em vez de ficar sem efeito.
     // Assinatura medida do raja invisível: um card de pagamento SEM valor.
@@ -3372,11 +3372,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
           
           // Enviar aviso
           await nazu.sendMessage(from, {
-            text: `❌ @${sender.split('@')[0]} ❌
-
-⚠️ *Mensagem invisível (rajada) não é permitida aqui!* ⚠️
-
-Você foi removido do grupo.`,
+            text: `❌ @${sender.split('@')[0]} tentou atacar com mensagem fantasma e foi banido`,
             mentions: [sender]
           , contextInfo: newsletterCtxPayment, quoted: info });
           
@@ -3434,11 +3430,7 @@ Você foi removido do grupo.`,
         });
 
         await nazu.sendMessage(from, {
-          text: `❌ @${String(sender).split('@')[0]} ❌\n\n` +
-            `⚠️ *Mensagem com visibilidade seletiva não é permitida aqui!* ⚠️\n\n` +
-            `Detectei uma mensagem de grupo enviada para todos, mas cifrada de forma que\n` +
-            `alguns participantes (inclusive admins) não conseguem ler.\n\n` +
-            `Você foi removido do grupo.`,
+          text: `❌ @${String(sender).split('@')[0]} tentou atacar com mensagem fantasma e foi banido`,
           mentions: [sender],
           contextInfo: newsletterCtxSeletiva,
           quoted: info
@@ -27372,7 +27364,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
             ["AntiSticker", !!(groupData.antifig && groupData.antifig.enabled)],
             ["AntiSticker Plus", !!(groupData.antistickerplus)],
             ["AntiDelete", !!groupData.antidel],
-            ["AntiInvi", !!groupData.antiinvi],
+            ["AntiFantasma", !!groupData.antiinvi],
                       ];
           const resFlags = [
             ["AutoDL", !!groupData.autodl],
@@ -31448,7 +31440,7 @@ break;
             { key: 'antiaudio', name: 'Antiaudio', isObject: false },
             { key: 'antigore', name: 'Antigore', isObject: false },
             { key: 'antidel', name: 'Antidelete', isObject: false },
-            { key: 'antiinvi', name: 'Anti-Invisível', isObject: false },
+            { key: 'antiinvi', name: 'AntiFantasma', isObject: false },
             { key: 'antisocial', name: 'AntiSocial', isObject: false, desc: 'Bloqueia links de redes sociais (Discord, Instagram, YouTube, TikTok e Spotify)' },
           ];
           // Verificar status de cada sistema
@@ -32524,7 +32516,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
           await reply("Ocorreu um erro 💔");
         }
         break;
-      case 'testeinvi':
+      case 'antifantasma':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
           if (!isGroupAdmin) return reply("Você precisa ser adm 💔");
@@ -32539,11 +32531,12 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               newsletterName: "Lizzy"
             }
           };
-          await nazu.sendMessage(from, { text: `✅ Anti-Invisível ${groupData.antiinvi ? 'ativado' : 'desativado'}!
+          const textoFantasma = groupData.antiinvi
+            ? `✅ Anti fantasma ativado
 
-Proteção contra rajadas de mensagens invisíveis (payment message com amount 0)
-E contra mensagens com distribuição seletiva (enviadas para todos, mas
-cifradas para que alguns — inclusive admins — não consigam ler).` , contextInfo: newsletterCtxInvi, quoted: info });
+agora todo ataque fantasma sera detectado e banido automaticamente`
+            : `❌ Anti fantasma desativado.`;
+          await nazu.sendMessage(from, { text: textoFantasma, contextInfo: newsletterCtxInvi, quoted: info });
         } catch (e) {
           console.error(e);
           await reply("Ocorreu um erro 💔");

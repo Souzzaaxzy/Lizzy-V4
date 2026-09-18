@@ -344,12 +344,21 @@ await test('!get continua funcionando (e mostra a nota do raja)', async () => {
   includes(text, '348', 'as 348 menções contadas');
 });
 
-await test('!testeinvi continua funcionando', async () => {
+await test('!antifantasma alterna e responde o estado', async () => {
   const a = freshAdmin();
-  const { sent } = await run({ extendedTextMessage: { text: '!testeinvi' } },
-    { groupJid: makeGroup([{ id: a.lid, admin: 'admin', phoneNumber: a.jid }]), key: { participant: a.lid } });
-  const text = textOf(sent);
-  includes(text, 'Anti-Invis', 'respondeu o testeinvi');
+  // makeGroup cria o grupo com antiinvi: true, então o primeiro uso desliga.
+  const gOff = makeGroup([{ id: a.lid, admin: 'admin', phoneNumber: a.jid }]);
+  const off = await run({ extendedTextMessage: { text: '!antifantasma' } },
+    { groupJid: gOff, key: { participant: a.lid } });
+  includes(textOf(off.sent), 'Anti fantasma desativado', 'respondeu o desligamento');
+
+  // Um grupo que começa desligado: o comando liga e mostra a mensagem completa.
+  const gOn = makeGroup([{ id: a.lid, admin: 'admin', phoneNumber: a.jid }], { antiinvi: false });
+  const on = await run({ extendedTextMessage: { text: '!antifantasma' } },
+    { groupJid: gOn, key: { participant: a.lid } });
+  const textOn = textOf(on.sent);
+  includes(textOn, 'Anti fantasma ativado', 'respondeu o acionamento');
+  includes(textOn, 'todo ataque fantasma sera detectado e banido automaticamente', 'trouxe a frase de aviso');
 });
 
 await test('ViewOnce normal continua funcionando', async () => {
@@ -595,7 +604,7 @@ await test('!raja: autoriza todos os membros comuns e nenhum admin', async () =>
   ok(!autorizados.includes(ADMIN_LID), 'nenhum admin autorizado');
   ok(rotated.every((r) => Array.isArray(r.opts.allowedParticipants)), 'cada envio passa a lista');
 });
-await test('!testeinvi: a rajada com amount=0 e tratada mesmo sem antirequest', async () => {
+await test('!antifantasma: a rajada com amount=0 e tratada mesmo sem antirequest', async () => {
   const groupJid = makeGroup();
   fs.writeFileSync(path.join(GROUPS_DIR, `${groupJid}.json`),
     JSON.stringify({ antiinvi: true, antirequest: false }, null, 2));
@@ -641,8 +650,8 @@ await test('!raja: o que ele gera é detectado pela própria proteção anti-raj
   ok(c.heavy === true, 'tratado como mensagem pesada');
 });
 
-await test('!testeinvi: a rajada com amount=0 é tratada mesmo sem antirequest', async () => {
-  // Grupo APENAS com antiinvi (sem antirequest): o toggle !testeinvi deve
+await test('!antifantasma: a rajada com amount=0 é tratada mesmo sem antirequest', async () => {
+  // Grupo APENAS com antiinvi (sem antirequest): o toggle !antifantasma deve
   // cobrir a rajada de payment amount=0 sozinho.
   const groupJid = makeGroup();
   fs.writeFileSync(path.join(GROUPS_DIR, `${groupJid}.json`),
