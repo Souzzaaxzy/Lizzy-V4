@@ -20,6 +20,7 @@ export default async function menuadm(prefix, botName = "MeuBot", userName = "Us
 │ 🎲 ${prefix}roletaban
 │ ⚡ ${prefix}ban2
 │ 📊 ${prefix}enquete
+│ 🖼️ ${prefix}enqueteimg <pergunta>|1|2|3
 │ 📢 ${prefix}chamar @user <qtd>
 │ 🎭 ${prefix}bam
 │ 💬 ${prefix}setbammsg

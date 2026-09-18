@@ -23,6 +23,7 @@ import {
 } from './utils/messageInspector.js';
 import { buildCmdNotFoundExtras } from './utils/commandSuggest.js';
 import { extractMedia, resolveMedia, isViewOnce, describeMediaError } from './utils/viewOnce.js';
+import { parseImagePollArgs, collectAttachments, resolveAttachments, buildOptionName } from './utils/pollImages.js';
 
 // Mapas de enum do Baileys usados para traduzir status/stub/tipo de protocolo
 // no relatório do !get. Registrados uma única vez, sem custo por mensagem.
@@ -28923,6 +28924,109 @@ case 'poll':
       '❌ Ocorreu um erro ao criar a enquete.'
     );
   }
+break;
+      case 'enqueteimg':
+      case 'pollimg':
+        try {
+          if (!isGroup) {
+            return reply("❌ ◈ Este comando é só para grupos.");
+          }
+          if (!isGroupAdmin) {
+            return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+          }
+
+          // Formato: PERGUNTA|1|2|3 — cada número é a posição da imagem na
+          // sequência de anexos. A ordem digitada é a ordem das opções.
+          const parsed = parseImagePollArgs(q);
+          if (!parsed.ok) {
+            return reply(
+              `❌ ${parsed.error}\n\n` +
+              `💡 Use assim:\n` +
+              `1️⃣ Envie as imagens (2 ou mais)\n` +
+              `2️⃣ Envie o comando:\n` +
+              `${prefix + command} Qual vocês preferem?|1|2|3\n\n` +
+              `📌 Os números são a ordem das imagens enviadas.\n` +
+              `📌 Um índice pode se repetir? Não — cada opção usa uma imagem.\n` +
+              `📌 A ordem digitada é respeitada (ex.: \`|3|1|2\`).`
+            );
+          }
+
+          // De onde vêm as imagens: a imagem marcada (citada) tem prioridade;
+          // senão, as imagens recentes do próprio autor nesta conversa.
+          const quotedAnexo = resolveMedia([
+            info.message?.extendedTextMessage?.contextInfo?.quotedMessage,
+            info.message?.imageMessage ? info.message : null
+          ]);
+
+          let anexos = [];
+          if (quotedAnexo && quotedAnexo.type === 'image') {
+            anexos = [{ key: null, image: quotedAnexo.media }];
+          } else {
+            const senderIds = [
+              sender,
+              senderJidOriginal,
+              info.key?.participant,
+              info.participant
+            ].filter(Boolean);
+            anexos = collectAttachments(messagesCache, {
+              chatJid: from,
+              senders: senderIds
+            });
+          }
+
+          const resolvido = resolveAttachments(anexos, parsed.indexes);
+          if (!resolvido.ok) {
+            return reply(`❌ ${resolvido.error}`);
+          }
+
+          // Baixa as imagens pelo caminho normal do bot (downloadContentFromMessage
+          // + mediaKey) e monta uma opção por imagem, na ordem pedida.
+          const opcoes = [];
+          for (let i = 0; i < resolvido.items.length; i++) {
+            const item = resolvido.items[i];
+            let buffer;
+            try {
+              buffer = await getFileBuffer(item.image, 'image');
+            } catch (dlErr) {
+              const motivo = describeMediaError(dlErr);
+              return reply(
+                motivo
+                  ? `❌ Não consegui baixar a imagem ${parsed.indexes[i]}: ${motivo}.`
+                  : `❌ Não consegui baixar a imagem ${parsed.indexes[i]}.`
+              );
+            }
+
+            if (!buffer || !Buffer.isBuffer(buffer) || buffer.length === 0) {
+              return reply(`❌ A imagem ${parsed.indexes[i]} veio vazia.`);
+            }
+
+            opcoes.push({
+              name: buildOptionName(i + 1),
+              image: buffer,
+              mimetype: item.image?.mimetype || 'image/jpeg'
+            });
+          }
+
+          await nazu.sendMessage(
+            from,
+            {
+              imagePoll: {
+                name: parsed.question,
+                options: opcoes,
+                selectableCount: 1
+              }
+            },
+            {
+              quoted: info
+            }
+          );
+        } catch (e) {
+          console.error('[ENQUETEIMG] Erro:', e?.message || e);
+          return reply(
+            '❌ Não foi possível criar a enquete com imagens.\n' +
+            'Verifique se as imagens ainda estão disponíveis e tente novamente.'
+          );
+        }
 break;
       case 'listblocksgp':
       case 'blocklist':

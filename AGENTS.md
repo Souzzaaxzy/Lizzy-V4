@@ -639,6 +639,59 @@ chamadas. Só em grupo, exige admin.
   pareada. Só o payload/stanza estão provados por teste; o dono precisa confirmar
   o botão no cliente oficial.
 
+## COMANDO `!enqueteimg` — enquete com IMAGENS nas opções (experimental) ⚠️
+- **O que faz**: publica uma enquete nativa do WhatsApp cujas **opções são
+  imagens**. Comando `!enqueteimg` (alias `!pollimg`), só em grupo, só admin —
+  mesma permissão do `!enquete`.
+- **Formato**: `!enqueteimg PERGUNTA|1|2|3`. Os números são a posição da imagem
+  na **sequência de anexos**; a ordem digitada é a ordem das opções (`|3|1|2`
+  não é reordenado).
+- **Proto real (descoberto, não suposto)**: o campo é
+  `Message.pollCreationOptionImageMessage` — **campo 90, tag 722**, tipo
+  `FutureProofMessage` (que só carrega `message`). Mas o que se envia de fato é:
+  - **pai**: `pollCreationMessageV3` com `pollContentType: IMAGE` (enum
+    `Message.PollContentType.IMAGE = 2`) e, por opção, `optionName` +
+    `optionHash`;
+  - **filhos**: um `imageMessage` por opção, cada um com
+    `messageContextInfo.messageAssociation = { parentMessageKey, associationType:
+    MEDIA_POLL (7) }`.
+- **`optionHash`** = `hex(sha256( hex(sha256(optionName)) + base64(fileSha256) ))`
+  — o `fileSha256` é o da imagem **daquela** opção. Fórmula tirada do cliente
+  (`WAWebPollOptionHashUtils.generatePollOptionHash`) e reimplementada em
+  `generatePollOptionHash`.
+- **Onde vêm as imagens**: o WhatsApp **não** entrega várias imagens numa
+  mensagem só. A coleta usa o `messagesCache` que o bot já mantém — nenhum
+  sistema paralelo de mídia. Critério restritivo: **mesmo chat**, **mesmo autor**
+  (compara número, aceitando LID ou JID), **janela de 2 min**, ordem de envio
+  (mais antiga primeiro = imagem 1). Se o usuário **responder** uma imagem, ela
+  tem prioridade. Módulo: `dados/src/utils/pollImages.js` (puro, testável).
+- **Nome das opções**: o protocolo exige `optionName` (o hash depende dele) e a
+  enquete com imagens não tem onde digitar texto por imagem — então geramos
+  `Opção 1`, `Opção 2`... via `buildOptionName`.
+- **Validações**: pergunta vazia, menos de 2 índices, índice não numérico,
+  índice `0`/negativo, **índice duplicado** (cada opção precisa de imagem
+  diferente), acima do máximo (12), índice inexistente, nenhuma imagem recente,
+  download falhou, buffer vazio. Todas com mensagem amigável, sem stack trace.
+- **Fork**: `imagePoll` em `lib/Utils/messages.js` (reusa
+  `prepareWAMessageMedia` — mesmo pipeline de criptografia/thumbnail/upload/cache;
+  nada é enviado duas vezes) e o relay dos filhos em
+  `lib/Socket/messages-send.js`, espelhando o bloco do álbum. As imagens
+  preparadas são passadas ao `sendMessage` por um holder compartilhado.
+- **Dependência**: `package-lock.json`/`yarn.lock` fixados em
+  `a88e51b6b6209060f3e78d63a91a195dae23bf10` da fork (commit "add image poll
+  proto support"). **Não esquecer**: só trocar o lock não basta — ver "BUG DO
+  INSTALADOR" (o `!atualizar` já corrigido resolve).
+- **Testes**: `tests/enqueteimg.test.js` (43 testes / 88 asserções — parser,
+  coleta, resolução, comando real com socket falso) e
+  `tests/enqueteimg-integration.test.js` (5 testes / 26 asserções — o payload do
+  comando pelo caminho real da fork, com encode/decode). Fork:
+  `tests/image-poll.test.js` + `tests/image-poll-send.test.js`. Verificado
+  trocando o `imagePoll` por uma enquete de texto: **10 asserções falham**.
+- **Não quebra o existente**: `!enquete`/`!poll` (texto) intactos, quiz intacto,
+  envio normal de imagens intacto, votação intacta. Verificado por teste.
+- **Status**: **NÃO DOCUMENTADO no README da fork de propósito** — falta
+  validar em aparelho real antes de apresentar como suporte oficial.
+
 ## BUG DO INSTALADOR — fork de git ficava no commit ANTIGO (raiz do "repostar não apareceu") ✅
 - **Sintoma**: o dono reportou que, depois de tudo, o status do grupo **ainda não
   mostrava a opção de repostar**.
