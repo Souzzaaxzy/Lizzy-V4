@@ -672,10 +672,34 @@ chamadas. Só em grupo, exige admin.
   `generatePollOptionHash`.
 - **Onde vêm as imagens**: o WhatsApp **não** entrega várias imagens numa
   mensagem só. A coleta usa o `messagesCache` que o bot já mantém — nenhum
-  sistema paralelo de mídia. Critério restritivo: **mesmo chat**, **mesmo autor**
-  (compara número, aceitando LID ou JID), **janela de 2 min**, ordem de envio
-  (mais antiga primeiro = imagem 1). Se o usuário **responder** uma imagem, ela
-  tem prioridade. Módulo: `dados/src/utils/pollImages.js` (puro, testável).
+  sistema paralelo de mídia. Módulo: `dados/src/utils/pollImages.js` (puro,
+  testável). Dois caminhos:
+  1. **ÁLBUM** (o fluxo normal do usuário: selecionar as imagens e digitar o
+     comando na legenda). O WhatsApp manda um pai (`albumMessage`, **sem campo
+     de legenda**) + **um filho por imagem**, em mensagens separadas com ~1,5s
+     entre elas. A legenda vai em UM dos filhos. **Quando o handler roda nesse
+     filho, os irmãos ainda não chegaram** — por isso `waitForAlbumChildren()`
+     espera: o total vem do próprio pai (`albumMessage.expectedImageCount`),
+     então para de esperar no momento certo (e tem timeout de 6s).
+  2. **Imagens em sequência** (enviadas antes do comando): mesma janela de 2 min,
+     mesmo autor, **ordem de chegada** (o Map preserva a inserção).
+  Imagem **respondida** tem prioridade (1 imagem só).
+- **ARMADILHA que custou uma rodada de debug**: a própria mensagem do comando
+  **não** pode entrar como atalho de "imagem". Quando o comando vai na legenda
+  de um álbum, a mensagem é só o PRIMEIRO filho — usar "a imagem da própria
+  mensagem" devolvia 1 imagem e ignorava o resto do álbum. O atalho foi removido.
+- **ARMADILHA 2**: o filtro de tempo usava `ts > now`, ou seja, descartava
+  imagem com timestamp **à frente** do relógio local — jogava fora o álbum
+  inteiro quando os filhos vinham com timestamp adiantado. Agora usa diferença
+  absoluta (`Math.abs(now - ts) > windowMs`).
+- **ARMADILHA 3 (crash silencioso, achada no aparelho)**: `getFileBuffer` não
+  tinha timeout, e `getHttpStream` **descartava** `options.signal` — então um
+  `AbortController` do chamador não fazia efeito nenhum. Se o servidor de mídia
+  aceita a conexão e nunca responde, o fetch fica pendurado **para sempre**: o
+  handler daquela mensagem nunca termina e o comando parece "morto", enquanto
+  os outros comandos seguem funcionando (o processo está vivo). Corrigido nos
+  dois lados: `getHttpStream` repassa `signal` (fork `f1db0c5`) e o
+  `getFileBuffer` usa `AbortController` de 30s (`options.timeoutMs` ajusta).
 - **Nome das opções**: o protocolo exige `optionName` (o hash depende dele) e a
   enquete com imagens não tem onde digitar texto por imagem — então geramos
   `Opção 1`, `Opção 2`... via `buildOptionName`.
@@ -689,18 +713,19 @@ chamadas. Só em grupo, exige admin.
   `lib/Socket/messages-send.js`, espelhando o bloco do álbum. As imagens
   preparadas são passadas ao `sendMessage` por um holder compartilhado.
 - **Dependência**: `package-lock.json`/`yarn.lock` fixados em
-  `0f4099aafc17c77478745b88f8a2ff77a887a515` da fork (inclui "add image poll
-  proto support" + "wrap image poll options in
-  pollCreationOptionImageMessage"). **Não esquecer**: só trocar o lock não basta
-  — ver "BUG DO INSTALADOR" (o `!atualizar` já corrigido resolve).
-- **Testes**: `tests/enqueteimg.test.js` (43 testes / 88 asserções — parser,
-  coleta, resolução, comando real com socket falso) e
-  `tests/enqueteimg-integration.test.js` (5 testes / 29 asserções — o payload do
-  comando pelo caminho real da fork, com encode/decode, incluindo o envelope).
-  Fork: `tests/image-poll.test.js` + `tests/image-poll-send.test.js`.
+  `f1db0c5ef4397ae2d83a26c02a820dcf49a6128d` da fork (image poll proto support +
+  envelope dos filhos + `signal` no fetch de mídia). **Não esquecer**: só trocar
+  o lock não basta — ver "BUG DO INSTALADOR" (o `!atualizar` já corrigido
+  resolve).
+- **Testes**: `tests/enqueteimg.test.js` (54 testes / 113 asserções — parser,
+  coleta, **álbum com filhos chegando em partes**, resolução, comando real com
+  socket falso) e `tests/enqueteimg-integration.test.js` (5 testes / 29
+  asserções — o payload do comando pelo caminho real da fork, com encode/decode,
+  incluindo o envelope). Fork: `tests/image-poll.test.js`,
+  `tests/image-poll-send.test.js` e `tests/media-fetch-signal.test.js`.
   Verificado trocando o `imagePoll` por uma enquete de texto: **10 asserções
   falham**; removendo o envelope `pollCreationOptionImageMessage`: **2 testes
-  falham**.
+  falham**; removendo o `signal` do fetch: o teste **não termina** (trava).
 - **Não quebra o existente**: `!enquete`/`!poll` (texto) intactos, quiz intacto,
   envio normal de imagens intacto, votação intacta. Verificado por teste.
 - **Status**: **NÃO DOCUMENTADO no README da fork de propósito** — falta

@@ -23,7 +23,7 @@ import {
 } from './utils/messageInspector.js';
 import { buildCmdNotFoundExtras } from './utils/commandSuggest.js';
 import { extractMedia, resolveMedia, isViewOnce, describeMediaError } from './utils/viewOnce.js';
-import { parseImagePollArgs, collectAttachments, resolveAttachments, buildOptionName } from './utils/pollImages.js';
+import { parseImagePollArgs, collectPollImages, resolveAttachments, buildOptionName } from './utils/pollImages.js';
 
 // Mapas de enum do Baileys usados para traduzir status/stub/tipo de protocolo
 // no relatório do !get. Registrados uma única vez, sem custo por mensagem.
@@ -4650,7 +4650,22 @@ Código: *${roleCode}*`,
         if (!mediakey) {
           throw new Error('Chave de mídia inválida');
         }
-        const stream = await downloadContentFromMessage(mediakey, mediaType);
+        // Timeout obrigatório: `downloadContentFromMessage` faz um fetch sem
+        // signal. Se o servidor de mídia aceita a conexão e nunca responde, a
+        // promise fica pendurada PARA SEMPRE e o handler nunca termina — o bot
+        // parece "morto" naquela mensagem (outros comandos seguem funcionando).
+        // `options.timeoutMs` permite ajustar; o padrão é 30s.
+        const timeoutMs = Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : 30000;
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        let stream;
+        try {
+          stream = await downloadContentFromMessage(mediakey, mediaType, {
+            options: { signal: controller.signal }
+          });
+        } finally {
+          clearTimeout(timer);
+        }
         let buffer = Buffer.from([]);
         const MAX_BUFFER_SIZE = 50 * 1024 * 1024;
         let totalSize = 0;
@@ -28951,11 +28966,19 @@ break;
             );
           }
 
-          // De onde vêm as imagens: a imagem marcada (citada) tem prioridade;
-          // senão, as imagens recentes do próprio autor nesta conversa.
+          // De onde vêm as imagens:
+          //  - a imagem MARCADA (respondida) tem prioridade — 1 imagem só, para
+          //    o caso de responder uma foto específica;
+          //  - caso contrário, coleta da conversa. Isso cobre tanto o ÁLBUM
+          //    (várias selecionadas + comando na legenda) quanto as imagens
+          //    enviadas em sequência antes do comando.
+          //
+          // A própria mensagem NÃO entra como atalho: quando o comando vai na
+          // legenda de um álbum, a mensagem do comando é só o PRIMEIRO filho —
+          // usar "a imagem da própria mensagem" devolveria 1 imagem e ignoraria
+          // o resto do álbum.
           const quotedAnexo = resolveMedia([
-            info.message?.extendedTextMessage?.contextInfo?.quotedMessage,
-            info.message?.imageMessage ? info.message : null
+            info.message?.extendedTextMessage?.contextInfo?.quotedMessage
           ]);
 
           let anexos = [];
@@ -28968,9 +28991,13 @@ break;
               info.key?.participant,
               info.participant
             ].filter(Boolean);
-            anexos = collectAttachments(messagesCache, {
+            // Se o comando veio na legenda de um ÁLBUM (imagens selecionadas
+            // juntas), espera os irmãos chegarem antes de montar a enquete —
+            // nesse instante os outros filhos ainda não estão no cache.
+            anexos = await collectPollImages(messagesCache, {
               chatJid: from,
-              senders: senderIds
+              senders: senderIds,
+              message: info.message
             });
           }
 

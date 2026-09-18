@@ -152,16 +152,136 @@ export function collectAttachments(messagesCache, opts = {}) {
     const image = findImageMessage(info.message);
     if (!image) continue;
 
-    // `messageTimestamp` vem em segundos (number, Long ou string).
+    // `messageTimestamp` vem em segundos (number, Long ou string). Usa valor
+    // ABSOLUTO de propósito: um relógio levemente à frente do nosso não pode
+    // descartar uma imagem legítima (era o caso do `ts > now`, que jogava fora
+    // o álbum inteiro quando os filhos vinham com timestamp adiantado).
     const ts = Number(info.messageTimestamp) * 1000;
-    if (!Number.isFinite(ts) || now - ts > windowMs || ts > now) continue;
+    if (!Number.isFinite(ts) || Math.abs(now - ts) > windowMs) continue;
 
     encontrados.push({ key: info.key, image, timestamp: ts });
   }
 
-  // Ordem de envio: mais antiga primeiro.
-  encontrados.sort((a, b) => a.timestamp - b.timestamp);
+  // Ordem de CHEGADA: o Map preserva a ordem de inserção, que é a ordem em que
+  // as mensagens chegaram (mais antiga primeiro). Não reordenar por timestamp:
+  // dois filhos de álbum podem cair no mesmo segundo e embaralhar a sequência.
   return encontrados.slice(-max);
+}
+
+/** AssociationType do proto (MessageAssociation.AssociationType). */
+export const ASSOCIATION_MEDIA_ALBUM = 1;
+export const ASSOCIATION_MEDIA_POLL = 7;
+
+/**
+ * Quando a mensagem é filha de um ÁLBUM, devolve o id do pai e quantas imagens
+ * o álbum espera.
+ *
+ * Por que isso existe: quando o usuário SELECIONA várias imagens e digita o
+ * comando na legenda, o WhatsApp não manda uma mensagem só — manda um pai
+ * (`albumMessage`, sem legenda) mais um filho por imagem, em mensagens
+ * separadas com ~1,5s entre elas. A legenda vai em UM dos filhos. No instante
+ * em que esse filho chega, os outros ainda não estão no cache — sem esperar o
+ * álbum completar, o comando só enxerga a primeira imagem.
+ *
+ * @returns {{ parentId: string, expected: number|null }|null}
+ */
+export function albumContextOf(message, messagesCache, chatJid) {
+  const assoc = message?.messageContextInfo?.messageAssociation;
+  if (!assoc || assoc.associationType !== ASSOCIATION_MEDIA_ALBUM) return null;
+  const parentId = assoc.parentMessageKey?.id;
+  if (!parentId) return null;
+
+  const parent = messagesCache?.get?.(`${chatJid}_${parentId}`);
+  const expected = parent?.message?.albumMessage?.expectedImageCount ?? null;
+  return { parentId, expected: typeof expected === 'number' ? expected : null };
+}
+
+/**
+ * Filhos de um álbum já presentes no cache, na ordem de chegada.
+ * O escopo é o id do pai (único por álbum), então não precisa filtrar autor —
+ * e evita a ambiguidade LID/JID.
+ */
+export function collectAlbumChildren(messagesCache, chatJid, parentId, { max = MAX_ATTACHMENTS } = {}) {
+  if (!messagesCache || typeof messagesCache.values !== 'function' || !chatJid || !parentId) return [];
+
+  const filhos = [];
+  for (const info of messagesCache.values()) {
+    if (!info?.key?.remoteJid || info.key.remoteJid !== chatJid) continue;
+    const assoc = info?.message?.messageContextInfo?.messageAssociation;
+    if (!assoc || assoc.associationType !== ASSOCIATION_MEDIA_ALBUM) continue;
+    if (assoc.parentMessageKey?.id !== parentId) continue;
+
+    const image = findImageMessage(info.message);
+    if (!image) continue;
+
+    filhos.push({ key: info.key, image, timestamp: Number(info.messageTimestamp) * 1000 });
+    if (filhos.length >= max) break;
+  }
+  return filhos;
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Espera o álbum completar.
+ *
+ * O total esperado vem do próprio pai (`albumMessage.expectedImageCount`), então
+ * dá para parar de esperar no momento certo em vez de chutar um tempo fixo. Se o
+ * pai não estiver disponível, para quando a contagem estabiliza.
+ */
+export async function waitForAlbumChildren(
+  messagesCache,
+  { chatJid, parentId, expected = null, max = MAX_ATTACHMENTS, timeoutMs = 6000, pollMs = 400 }
+) {
+  const limite = Date.now() + timeoutMs;
+  let filhos = collectAlbumChildren(messagesCache, chatJid, parentId, { max });
+  if (expected && filhos.length >= expected) return filhos;
+
+  let anterior = filhos.length;
+  while (Date.now() < limite) {
+    await sleep(pollMs);
+    filhos = collectAlbumChildren(messagesCache, chatJid, parentId, { max });
+    if (expected && filhos.length >= expected) return filhos;
+    // Sem total conhecido: para quando a contagem para de crescer.
+    if (!expected && filhos.length > 0 && filhos.length === anterior) return filhos;
+    anterior = filhos.length;
+  }
+  return filhos;
+}
+
+/**
+ * Entrada principal da coleta: decide de onde vêm as imagens do comando.
+ *
+ * 1. Se a mensagem faz parte de um ÁLBUM, espera os irmãos e usa o álbum — é o
+ *    fluxo "selecionar as imagens e digitar o comando na legenda".
+ * 2. Caso contrário, usa as imagens recentes do autor na conversa.
+ */
+export async function collectPollImages(
+  messagesCache,
+  {
+    chatJid,
+    senders = [],
+    message = null,
+    now = Date.now(),
+    windowMs = DEFAULT_WINDOW_MS,
+    max = MAX_ATTACHMENTS,
+    albumWaitMs = 6000,
+    albumPollMs = 400
+  } = {}
+) {
+  const album = albumContextOf(message, messagesCache, chatJid);
+  if (album) {
+    const filhos = await waitForAlbumChildren(messagesCache, {
+      chatJid,
+      parentId: album.parentId,
+      expected: album.expected,
+      max,
+      timeoutMs: albumWaitMs,
+      pollMs: albumPollMs
+    });
+    if (filhos.length) return filhos;
+  }
+  return collectAttachments(messagesCache, { chatJid, senders, now, windowMs, max });
 }
 
 /**

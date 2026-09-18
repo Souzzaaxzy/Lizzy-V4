@@ -187,15 +187,28 @@ const AUTOR = '111000000000001@lid';
 const OUTRO = '999000000000999@lid';
 const AGORA = 1_800_000_000_000;
 
-await test('coleta: pega as imagens do autor na ordem de envio', () => {
+await test('coleta: pega as imagens do autor na ORDEM DE CHEGADA', () => {
+  // O Map preserva a ordem de inserção = ordem em que as mensagens chegaram.
+  // É essa a ordem que numera as imagens (1 = primeira que chegou), e não o
+  // timestamp: dois filhos de álbum podem cair no mesmo segundo.
   const cache = cacheCom([
-    infoImagem({ chat: CHAT, autor: AUTOR, id: 'c', ts: AGORA / 1000 - 3 }),
     infoImagem({ chat: CHAT, autor: AUTOR, id: 'a', ts: AGORA / 1000 - 10 }),
-    infoImagem({ chat: CHAT, autor: AUTOR, id: 'b', ts: AGORA / 1000 - 6 })
+    infoImagem({ chat: CHAT, autor: AUTOR, id: 'b', ts: AGORA / 1000 - 6 }),
+    infoImagem({ chat: CHAT, autor: AUTOR, id: 'c', ts: AGORA / 1000 - 3 })
   ]);
   const r = collectAttachments(cache, { chatJid: CHAT, senders: [AUTOR], now: AGORA });
   ok(r.length === 3, `achou 3 (obtido ${r.length})`);
-  ok(r[0].key.id === 'a' && r[1].key.id === 'b' && r[2].key.id === 'c', 'ordenado do mais antigo para o mais novo');
+  ok(r[0].key.id === 'a' && r[1].key.id === 'b' && r[2].key.id === 'c', 'mantém a ordem de chegada');
+});
+
+await test('coleta: timestamp levemente no futuro NÃO descarta a imagem', () => {
+  // Um relógio adiantado não pode jogar fora uma imagem legítima (era o caso
+  // do filtro `ts > now`, que descartava o álbum inteiro).
+  const cache = cacheCom([
+    infoImagem({ chat: CHAT, autor: AUTOR, id: 'futuro', ts: AGORA / 1000 + 5 })
+  ]);
+  const r = collectAttachments(cache, { chatJid: CHAT, senders: [AUTOR], now: AGORA });
+  ok(r.length === 1, 'imagem com timestamp adiantado é aceita');
 });
 
 await test('coleta: ignora imagem de OUTRO autor', () => {
@@ -303,6 +316,151 @@ await test('resolve: sem anexos é recusado com instrução', () => {
 await test('resolve: nome da opção é "Opção N"', () => {
   ok(buildOptionName(1) === 'Opção 1', 'opção 1');
   ok(buildOptionName(3) === 'Opção 3', 'opção 3');
+});
+
+// ============================================================================
+// 3.5) ÁLBUM — o fluxo "selecionar as imagens e digitar o comando na legenda"
+// ============================================================================
+// O WhatsApp manda um pai (`albumMessage`, sem legenda) + um filho por imagem,
+// em mensagens SEPARADAS (~1,5s entre elas). A legenda vai em UM dos filhos.
+// Quando o handler roda nesse filho, os irmãos ainda não chegaram.
+
+const {
+  albumContextOf,
+  collectAlbumChildren,
+  waitForAlbumChildren,
+  collectPollImages
+} = await import('../dados/src/utils/pollImages.js');
+
+const ASSOC_ALBUM = 1;
+
+/** Info de um filho de álbum, no formato do messagesCache. */
+function filhoAlbum({ chat, autor, id, parentId, ts }) {
+  const parentKey = { remoteJid: chat, fromMe: false, id: parentId, participant: autor };
+  return {
+    key: { remoteJid: chat, fromMe: false, id, participant: autor },
+    message: {
+      imageMessage: { url: `https://x/${id}`, mimetype: 'image/jpeg' },
+      messageContextInfo: {
+        messageAssociation: { parentMessageKey: parentKey, associationType: ASSOC_ALBUM }
+      }
+    },
+    messageTimestamp: ts
+  };
+}
+
+function paiAlbum({ chat, autor, id, expected, ts }) {
+  return {
+    key: { remoteJid: chat, fromMe: false, id, participant: autor },
+    message: { albumMessage: { expectedImageCount: expected, expectedVideoCount: 0 } },
+    messageTimestamp: ts
+  };
+}
+
+await test('álbum: reconhece que a mensagem é filha de um álbum', () => {
+  const cache = cacheCom([paiAlbum({ chat: CHAT, autor: AUTOR, id: 'P', expected: 3, ts: AGORA / 1000 })]);
+  const ctx = albumContextOf(filhoAlbum({ chat: CHAT, autor: AUTOR, id: 'F0', parentId: 'P', ts: AGORA / 1000 }).message, cache, CHAT);
+  ok(ctx !== null, 'detectou o álbum');
+  ok(ctx.parentId === 'P', `id do pai (obtido ${ctx?.parentId})`);
+  ok(ctx.expected === 3, `total esperado (obtido ${ctx?.expected})`);
+});
+
+await test('álbum: mensagem comum NÃO é tratada como álbum', () => {
+  const cache = cacheCom([]);
+  ok(albumContextOf({ imageMessage: {} }, cache, CHAT) === null, 'imagem solta não é álbum');
+  ok(albumContextOf({ conversation: 'oi' }, cache, CHAT) === null, 'texto não é álbum');
+  ok(albumContextOf(null, cache, CHAT) === null, 'null não quebra');
+});
+
+await test('álbum: coleta só os filhos DAQUELE pai', () => {
+  const cache = cacheCom([
+    paiAlbum({ chat: CHAT, autor: AUTOR, id: 'P1', expected: 2, ts: AGORA / 1000 }),
+    paiAlbum({ chat: CHAT, autor: AUTOR, id: 'P2', expected: 2, ts: AGORA / 1000 }),
+    filhoAlbum({ chat: CHAT, autor: AUTOR, id: 'A', parentId: 'P1', ts: AGORA / 1000 }),
+    filhoAlbum({ chat: CHAT, autor: AUTOR, id: 'B', parentId: 'P1', ts: AGORA / 1000 }),
+    filhoAlbum({ chat: CHAT, autor: AUTOR, id: 'C', parentId: 'P2', ts: AGORA / 1000 })
+  ]);
+  const r = collectAlbumChildren(cache, CHAT, 'P1');
+  ok(r.length === 2, `2 filhos do P1 (obtido ${r.length})`);
+  ok(r[0].key.id === 'A' && r[1].key.id === 'B', 'só os do P1, na ordem');
+});
+
+await test('álbum: ESPERA os filhos que ainda não chegaram', async () => {
+  const cache = cacheCom([
+    paiAlbum({ chat: CHAT, autor: AUTOR, id: 'P', expected: 3, ts: AGORA / 1000 }),
+    filhoAlbum({ chat: CHAT, autor: AUTOR, id: 'F0', parentId: 'P', ts: AGORA / 1000 })
+  ]);
+
+  // Os outros dois chegam depois, como no WhatsApp real.
+  setTimeout(() => cache.set(`${CHAT}_F1`, filhoAlbum({ chat: CHAT, autor: AUTOR, id: 'F1', parentId: 'P', ts: AGORA / 1000 })), 300);
+  setTimeout(() => cache.set(`${CHAT}_F2`, filhoAlbum({ chat: CHAT, autor: AUTOR, id: 'F2', parentId: 'P', ts: AGORA / 1000 })), 600);
+
+  const r = await waitForAlbumChildren(cache, { chatJid: CHAT, parentId: 'P', expected: 3, timeoutMs: 4000, pollMs: 150 });
+  ok(r.length === 3, `esperou e juntou os 3 (obtido ${r.length})`);
+  ok(r.map((f) => f.key.id).join(',') === 'F0,F1,F2', 'na ordem de chegada');
+});
+
+await test('álbum: para de esperar assim que o total esperado chega', async () => {
+  const cache = cacheCom([
+    paiAlbum({ chat: CHAT, autor: AUTOR, id: 'P', expected: 2, ts: AGORA / 1000 }),
+    filhoAlbum({ chat: CHAT, autor: AUTOR, id: 'F0', parentId: 'P', ts: AGORA / 1000 }),
+    filhoAlbum({ chat: CHAT, autor: AUTOR, id: 'F1', parentId: 'P', ts: AGORA / 1000 })
+  ]);
+  const t0 = Date.now();
+  const r = await waitForAlbumChildren(cache, { chatJid: CHAT, parentId: 'P', expected: 2, timeoutMs: 5000, pollMs: 100 });
+  const ms = Date.now() - t0;
+  ok(r.length === 2, 'pegou os 2');
+  ok(ms < 500, `não esperou à toa (levou ${ms}ms)`);
+});
+
+await test('álbum: timeout não trava para sempre', async () => {
+  const cache = cacheCom([
+    paiAlbum({ chat: CHAT, autor: AUTOR, id: 'P', expected: 5, ts: AGORA / 1000 }),
+    filhoAlbum({ chat: CHAT, autor: AUTOR, id: 'F0', parentId: 'P', ts: AGORA / 1000 })
+  ]);
+  const t0 = Date.now();
+  const r = await waitForAlbumChildren(cache, { chatJid: CHAT, parentId: 'P', expected: 5, timeoutMs: 800, pollMs: 150 });
+  const ms = Date.now() - t0;
+  ok(r.length === 1, 'devolveu o que tinha');
+  ok(ms < 3000, `respeitou o timeout (levou ${ms}ms)`);
+});
+
+await test('collectPollImages: usa o álbum quando a mensagem é filha', async () => {
+  const cache = cacheCom([
+    paiAlbum({ chat: CHAT, autor: AUTOR, id: 'P', expected: 2, ts: AGORA / 1000 }),
+    filhoAlbum({ chat: CHAT, autor: AUTOR, id: 'F0', parentId: 'P', ts: AGORA / 1000 }),
+    filhoAlbum({ chat: CHAT, autor: AUTOR, id: 'F1', parentId: 'P', ts: AGORA / 1000 }),
+    // uma imagem SOLTA de outro momento não pode entrar
+    infoImagem({ chat: CHAT, autor: AUTOR, id: 'solta', ts: AGORA / 1000 })
+  ]);
+  const mensagem = filhoAlbum({ chat: CHAT, autor: AUTOR, id: 'F0', parentId: 'P', ts: AGORA / 1000 }).message;
+
+  const r = await collectPollImages(cache, {
+    chatJid: CHAT,
+    senders: [AUTOR],
+    message: mensagem,
+    now: AGORA,
+    albumWaitMs: 1000,
+    albumPollMs: 100
+  });
+  ok(r.length === 2, `usou só o álbum (obtido ${r.length})`);
+  ok(r.map((f) => f.key.id).join(',') === 'F0,F1', 'os dois filhos do álbum, sem a solta');
+});
+
+await test('collectPollImages: sem álbum, cai para as imagens recentes', async () => {
+  const cache = cacheCom([
+    infoImagem({ chat: CHAT, autor: AUTOR, id: 'a', ts: AGORA / 1000 - 5 }),
+    infoImagem({ chat: CHAT, autor: AUTOR, id: 'b', ts: AGORA / 1000 - 4 })
+  ]);
+  const r = await collectPollImages(cache, {
+    chatJid: CHAT,
+    senders: [AUTOR],
+    message: { extendedTextMessage: { text: '!enqueteimg x|1|2' } },
+    now: AGORA,
+    albumWaitMs: 300,
+    albumPollMs: 100
+  });
+  ok(r.length === 2, `usou as recentes (obtido ${r.length})`);
 });
 
 // ============================================================================
@@ -565,6 +723,91 @@ await test('comando: fora de grupo recusa', async () => {
 await test('comando: !pollimg (alias) funciona igual', async () => {
   const { publicacao } = await rodar({ text: '!pollimg Alias|1|2' , imagens: 2 });
   ok(publicacao?.content?.imagePoll?.options?.length === 2, 'alias envia o poll');
+});
+
+// ---------------------------------------------------------------------------
+// ÁLBUM end-to-end: o comando na LEGENDA, com os filhos chegando em partes.
+// É o fluxo que o usuário faz na prática ("selecionar as imagens e digitar").
+// ---------------------------------------------------------------------------
+await test('comando + ÁLBUM: espera os filhos e monta a enquete com todos', async () => {
+  senderCounter += 1;
+  const groupJid = `1203630000000002${String(senderCounter).padStart(2, '0')}@g.us`;
+  const sender = `2220000002${String(senderCounter).padStart(5, '0')}@lid`;
+  const base = Math.floor(Date.now() / 1000);
+
+  const parentKey = { remoteJid: groupJid, fromMe: false, id: 'ALBUM-PAI', participant: sender };
+  const cache = new Map();
+  cache.set(`${groupJid}_ALBUM-PAI`, {
+    key: parentKey,
+    message: { albumMessage: { expectedImageCount: 3, expectedVideoCount: 0 } },
+    messageTimestamp: base
+  });
+
+  const filho = (i, comLegenda) => ({
+    key: { remoteJid: groupJid, fromMe: false, id: `F${i}`, participant: sender },
+    message: {
+      imageMessage: {
+        ...publicarImagem(),
+        ...(comLegenda ? { caption: '!enqueteimg Qual vocês preferem?|1|2|3' } : {})
+      },
+      messageContextInfo: {
+        messageAssociation: { parentMessageKey: parentKey, associationType: 1 }
+      }
+    },
+    messageTimestamp: base + i
+  });
+
+  const info0 = filho(0, true);
+  cache.set(`${groupJid}_F0`, info0);
+  // Os irmãos chegam depois, como no WhatsApp real.
+  setTimeout(() => cache.set(`${groupJid}_F1`, filho(1, false)), 800);
+  setTimeout(() => cache.set(`${groupJid}_F2`, filho(2, false)), 1600);
+
+  const sent = [];
+  const nazu = makeNazu({ sent, groupJid, sender });
+  await handleMessage(nazu, info0, null, cache, null);
+
+  const publicacao = sent.find((s) => s.content?.imagePoll) || null;
+  ok(publicacao, 'montou a enquete a partir do álbum');
+  const opcoes = publicacao?.content?.imagePoll?.options ?? [];
+  ok(opcoes.length === 3, `3 opções, uma por imagem do álbum (obtido ${opcoes.length})`);
+  for (const o of opcoes) {
+    ok(Buffer.isBuffer(o.image) && o.image.length > 0, `"${o.name}" com buffer de imagem`);
+  }
+});
+
+await test('comando + ÁLBUM: nunca pendura (respeita o timeout)', async () => {
+  senderCounter += 1;
+  const groupJid = `1203630000000003${String(senderCounter).padStart(2, '0')}@g.us`;
+  const sender = `2220000003${String(senderCounter).padStart(5, '0')}@lid`;
+  const base = Math.floor(Date.now() / 1000);
+
+  // O álbum DIZ que espera 5 imagens, mas só 1 chega.
+  const parentKey = { remoteJid: groupJid, fromMe: false, id: 'P', participant: sender };
+  const cache = new Map();
+  cache.set(`${groupJid}_P`, {
+    key: parentKey,
+    message: { albumMessage: { expectedImageCount: 5, expectedVideoCount: 0 } },
+    messageTimestamp: base
+  });
+  cache.set(`${groupJid}_F0`, {
+    key: { remoteJid: groupJid, fromMe: false, id: 'F0', participant: sender },
+    message: {
+      imageMessage: { ...publicarImagem(), caption: '!enqueteimg Teste|1|2' },
+      messageContextInfo: { messageAssociation: { parentMessageKey: parentKey, associationType: 1 } }
+    },
+    messageTimestamp: base
+  });
+
+  const sent = [];
+  const nazu = makeNazu({ sent, groupJid, sender });
+  const t0 = Date.now();
+  await handleMessage(nazu, cache.get(`${groupJid}_F0`), null, cache, null);
+  const ms = Date.now() - t0;
+
+  ok(ms < 20000, `não pendurou (levou ${ms}ms)`);
+  const texto = sent.map((s) => s.content?.text ?? '').filter(Boolean).join('\n');
+  includes(texto, 'não existe', 'explica que faltou imagem em vez de travar');
 });
 
 // ============================================================================
