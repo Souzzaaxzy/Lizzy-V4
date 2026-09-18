@@ -487,7 +487,12 @@ const OWNER_LID_RAJA = '111000000000099@lid';
 const OWNER_JID_RAJA = '551100000000099@s.whatsapp.net';
 
 /**
- * Executa um comando como DONO, capturando relayMessage.
+ * Executa um comando como DONO, capturando o caminho de envio.
+ *
+ * O !raja envia por ROTAÇÃO SELETIVA (membros comuns leem, admins não), não
+ * mais por relayMessage. Capturamos os dois: `rotated` é o envio real e
+ * `relayed` serve para provar que o relayMessage NÃO é usado (ele mostraria a
+ * mensagem ao grupo inteiro, incluindo admins).
  *
  * Usa `fromMe: true` porque é assim que as mensagens do próprio dono chegam ao
  * bot (enviadas do aparelho dele). Isso também mantém o teste determinístico:
@@ -498,54 +503,64 @@ const OWNER_JID_RAJA = '551100000000099@s.whatsapp.net';
 async function runOwner(text, { groupJid = makeGroup(), participant = OWNER_LID_RAJA, fromMe = true } = {}) {
   const sent = [];
   const relayed = [];
+  const rotated = [];
   const nazu = makeNazu({ groupJid, sent, calls: {} });
   nazu.relayMessage = async (jid, message, opts) => { relayed.push({ jid, message, opts }); };
+  nazu.relayGroupMessageWithSenderKeyRotation = async (jid, message, opts) => {
+    rotated.push({ jid, message, opts });
+    return { groupJid: jid, messageId: opts?.messageId, allowedParticipants: opts?.allowedParticipants };
+  };
   await handleMessage(nazu, {
     key: { remoteJid: groupJid, fromMe, id: 'RAJA', participant },
     message: { extendedTextMessage: { text } },
     messageTimestamp: 1757900000, pushName: 'Dono',
   }, null, new Map(), null);
-  return { sent, relayed, text: textOf(sent) };
+  return { sent, relayed, rotated, text: textOf(sent) };
 }
 
 await test('!raja: só o dono pode usar', async () => {
-  const { relayed, text } = await runOwner('!raja 2 oi', {
+  const { relayed, rotated, text } = await runOwner('!raja 2 oi', {
     participant: '5511000000007@s.whatsapp.net',
     fromMe: false,
   });
   includes(text, 'Apenas o dono', 'bloqueou não-dono');
-  ok(relayed.length === 0, `nada foi enviado (${relayed.length})`);
+  ok(relayed.length === 0, `nada foi enviado por relayMessage (${relayed.length})`);
+  ok(rotated.length === 0, `nada foi enviado por rotação (${rotated.length})`);
 });
 
 await test('!raja: só funciona em grupo', async () => {
   const sent = [];
   const relayed = [];
+  const rotated = [];
   const nazu = makeNazu({ groupJid: 'x@g.us', sent, calls: {} });
   nazu.relayMessage = async (...a) => relayed.push(a);
+  nazu.relayGroupMessageWithSenderKeyRotation = async (...a) => rotated.push(a);
   await handleMessage(nazu, {
     key: { remoteJid: OWNER_JID_RAJA, fromMe: true, id: 'PV', participant: OWNER_LID_RAJA },
     message: { extendedTextMessage: { text: '!raja 2 oi' } },
     messageTimestamp: 1757900000, pushName: 'Dono',
   }, null, new Map(), null);
   includes(textOf(sent), 'só funciona em grupos', 'bloqueou no PV');
-  ok(relayed.length === 0, 'nada enviado no PV');
+  ok(relayed.length === 0, 'nada enviado por relayMessage no PV');
+  ok(rotated.length === 0, 'nada enviado por rotação no PV');
 });
 
 await test('!raja: valida quantidade e texto', async () => {
   const semQtd = await runOwner('!raja');
   includes(semQtd.text, 'Informe a quantidade', 'sem quantidade');
-  ok(semQtd.relayed.length === 0, 'nada enviado sem quantidade');
+  ok(semQtd.rotated.length === 0, 'nada enviado sem quantidade');
 
   const semTexto = await runOwner('!raja 3');
   includes(semTexto.text, 'Informe o texto', 'sem texto');
-  ok(semTexto.relayed.length === 0, 'nada enviado sem texto');
+  ok(semTexto.rotated.length === 0, 'nada enviado sem texto');
 });
 
 await test('!raja N texto: envia N mensagens no formato do raja real', async () => {
-  const { relayed, text } = await runOwner('!raja 3 meu texto de teste');
-  ok(relayed.length === 3, `enviou 3 mensagens (${relayed.length})`);
+  const { rotated, relayed, text } = await runOwner('!raja 3 meu texto de teste');
+  ok(rotated.length === 3, `enviou 3 mensagens por rotação (${rotated.length})`);
+  ok(relayed.length === 0, 'NAO usou relayMessage (mostraria a todos, inclusive admins)');
   includes(text, 'CONCLUÍDO', 'resumo enviado');
-  const rpm = relayed[0].message.requestPaymentMessage;
+  const rpm = rotated[0].message.requestPaymentMessage;
   ok(Boolean(rpm), 'é requestPaymentMessage');
   ok(rpm.currencyCodeIso4217 === 'BRL', 'moeda BRL');
   ok(rpm.expiryTimestamp === '0', 'expiryTimestamp = "0"');
@@ -562,12 +577,23 @@ await test('!raja N texto: envia N mensagens no formato do raja real', async () 
   ok(Object.keys(ci).length === 1 && ci.mentionedJid, 'contextInfo so com mentionedJid');
 });
 await test('!raja: ID no mesmo formato do raja real (3EB0 + 18 hex = 22 chars)', async () => {
-  const { relayed } = await runOwner('!raja 2 texto');
-  for (const r of relayed) {
+  const { rotated } = await runOwner('!raja 2 texto');
+  for (const r of rotated) {
     const id = r.opts?.messageId || '';
     ok(/^3EB0[0-9A-F]{18}$/.test(id), `ID no formato nativo: ${id} (${id.length} chars)`);
   }
-  ok(relayed.every((r) => !String(r.opts?.messageId).includes('STARFALL')), 'sem o marcador STARFALL');
+  ok(rotated.every((r) => !String(r.opts?.messageId).includes('STARFALL')), 'sem o marcador STARFALL');
+});
+
+await test('!raja: autoriza todos os membros comuns e nenhum admin', async () => {
+  const { rotated } = await runOwner('!raja 1 so membros');
+  ok(rotated.length === 1, `um envio (${rotated.length})`);
+  const autorizados = rotated[0]?.opts?.allowedParticipants ?? [];
+  ok(autorizados.length > 0, 'tem autorizados');
+  // O dono (OWNER_LID_RAJA) não está no metadata, então os autorizados são os
+  // membros comuns do grupo de teste; o que importa é que nenhum admin entra.
+  ok(!autorizados.includes(ADMIN_LID), 'nenhum admin autorizado');
+  ok(rotated.every((r) => Array.isArray(r.opts.allowedParticipants)), 'cada envio passa a lista');
 });
 await test('!testeinvi: a rajada com amount=0 e tratada mesmo sem antirequest', async () => {
   const groupJid = makeGroup();
@@ -590,16 +616,16 @@ await test('!testeinvi: a rajada com amount=0 e tratada mesmo sem antirequest', 
 });
 
 await test('!raja: cada envio tem ID próprio (o WhatsApp descarta ID repetido)', async () => {
-  const { relayed } = await runOwner('!raja 3 texto');
-  const ids = relayed.map((r) => r.opts?.messageId);
+  const { rotated } = await runOwner('!raja 3 texto');
+  const ids = rotated.map((r) => r.opts?.messageId);
   ok(ids.every(Boolean), 'todos têm messageId');
   ok(new Set(ids).size === 3, `3 IDs distintos (${new Set(ids).size})`);
-  ok(JSON.stringify(relayed[0].message) === JSON.stringify(relayed[1].message), 'conteúdo reaproveitado');
+  ok(JSON.stringify(rotated[0].message) === JSON.stringify(rotated[1].message), 'conteúdo reaproveitado');
 });
 
 await test('!raja: teto rígido de 50 (ferramenta de teste, não gerador de flood)', async () => {
-  const { relayed, text } = await runOwner('!raja 999 texto');
-  ok(relayed.length === 50, `respeitou o teto (${relayed.length})`);
+  const { rotated, text } = await runOwner("!raja 999 texto");
+  ok(rotated.length === 50, `respeitou o teto (${rotated.length})`);
   includes(text, 'limitado', 'avisou sobre o limite');
 });
 
@@ -607,7 +633,7 @@ await test('!raja: o que ele gera é detectado pela própria proteção anti-raj
   // O padrao ja e o formato do raja real (amount "0"), entao ele e
   // classificado como rajada pelo anti-raja direto.
   const padrao = await runOwner('!raja 1 texto de verificacao');
-  const c = inspector.classifyMessage(padrao.relayed[0].message);
+  const c = inspector.classifyMessage(padrao.rotated[0].message);
   ok(c.isPayment === true, 'classificado como payment');
   ok(c.isRequestPayment === true, 'classificado como request payment');
   ok(c.paymentAmount.isZero === true, 'amount zero reconhecido');
@@ -640,8 +666,8 @@ await test('!testeinvi: a rajada com amount=0 é tratada mesmo sem antirequest',
 });
 
 await test('!raja: padrão NÃO inclui messageSecret (igual ao raja real)', async () => {
-  const { relayed } = await runOwner('!raja 1 texto');
-  const built = relayed[0].message;
+  const { rotated } = await runOwner('!raja 1 texto');
+  const built = rotated[0].message;
   // O raja REAL não tem messageContextInfo — conferido pelo !get no próprio real.
   const sec = built.messageContextInfo?.messageSecret;
   ok(!sec, `sem messageSecret por padrão (obtido: ${sec ? 'presente' : 'ausente'})`);
@@ -729,8 +755,8 @@ await test('pagamento legítimo NÃO é tratado como rajada (só o anti-invisív
 await test('!raja: usa os membros do grupo como menções (sem inflar)', async () => {
   // As menções são os membros reais do grupo (o raja real trazia 348 de um
   // grupo de 353). Não há mais opção de inflar com LIDs sintéticos.
-  const { relayed } = await runOwner('!raja 1 texto');
-  const ci = relayed[0].message.requestPaymentMessage
+  const { rotated } = await runOwner('!raja 1 texto');
+  const ci = rotated[0].message.requestPaymentMessage
     .noteMessage.extendedTextMessage.contextInfo;
   ok(Array.isArray(ci.mentionedJid), 'mentionedJid presente');
   ok(ci.mentionedJid.length >= 1 && ci.mentionedJid.length <= 5,
@@ -742,8 +768,8 @@ await test('!raja: forma única — nenhuma opção altera o formato', async () 
   // As variantes (vo/vov2/vov2ext/secret/fwd/clean/zero/mencoes/delay) foram
   // removidas: só existe UMA forma, a canônica. Um "| algo" agora faz parte do
   // texto da nota, não muda o proto.
-  const { relayed } = await runOwner('!raja 1 texto | vo secret fwd');
-  const built = relayed[0].message;
+  const { rotated } = await runOwner('!raja 1 texto | vo secret fwd');
+  const built = rotated[0].message;
   const topo = Object.keys(built);
   ok(topo.length === 1 && topo[0] === 'requestPaymentMessage',
     `sem wrapper (topo: ${topo.join(',')})`);
@@ -759,8 +785,8 @@ await test('!raja: forma única — nenhuma opção altera o formato', async () 
 });
 
 await test('!raja: formato bate com a amostra real (11/11 campos)', async () => {
-  const { relayed } = await runOwner('!raja 1 meu texto');
-  const rpm = relayed[0].message.requestPaymentMessage;
+  const { rotated } = await runOwner('!raja 1 meu texto');
+  const rpm = rotated[0].message.requestPaymentMessage;
   ok(rpm.currencyCodeIso4217 === 'BRL', 'currencyCodeIso4217');
   ok(rpm.amount1000 === '0', 'amount1000 "0"');
   ok(rpm.expiryTimestamp === '0', 'expiryTimestamp "0"');

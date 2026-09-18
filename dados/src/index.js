@@ -32123,17 +32123,56 @@ break;
           // !divulgar. Evita montar 50 protos idênticos.
           const baseMsg = await generateWAMessageFromContent(from, content, { userJid: nazu?.user?.id });
 
+          // ============================================================
+          // FORMA DE ENVIO — membros comuns leem, admins não.
+          //
+          // O conteúdo do raja é o mesmo de sempre (buildRajaContent, acima);
+          // o que muda é SÓ o caminho de envio: em vez de relayMessage para o
+          // grupo inteiro, usa a rotação seletiva de Sender Key, autorizando
+          // todos os membros comuns e nenhum admin.
+          //
+          // Como funciona (medido em aparelho real):
+          //  - uma Sender Key NOVA é criada para esta mensagem;
+          //  - ela é distribuída SÓ aos autorizados (membros comuns);
+          //  - o ciphertext continua indo ao grupo, então os admins RECEBEM o
+          //    stanza (sabem que existe, conseguem citar), mas não decifram;
+          //  - `decrypt-fail=hide` manda o cliente esconder a entrada;
+          //  - a chave volta ao estado anterior depois do envio (rotação por
+          //    mensagem) para não quebrar o grupo;
+          //  - o retry dessas mensagens é suprimido, senão o conteúdo vazaria
+          //    de volta cifrado pairwise para o admin.
+          // ============================================================
+          const membrosComuns = AllgroupMembers.filter((id) => !idInArray(id, groupAdmins));
+          const usaRotacao = typeof nazu.relayGroupMessageWithSenderKeyRotation === 'function' && membrosComuns.length > 0;
+
+          if (!usaRotacao) {
+            return reply(
+              `❌ Não foi possível enviar o raja com visibilidade só para membros.\n\n` +
+              `• membros comuns encontrados: ${membrosComuns.length}\n` +
+              `• fork com a API de rotação: ${typeof nazu.relayGroupMessageWithSenderKeyRotation === 'function' ? 'sim' : 'NÃO'}\n\n` +
+              `Nada foi enviado — em vez de cair para o grupo inteiro (o que mostraria a mensagem aos admins).`
+            );
+          }
+
           const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
           const DELAY_MS = 700;
           let enviados = 0;
           const falhas = [];
+
+          console.log(
+            `[RAJA] envio seletivo | grupo=${from} | membros=${membrosComuns.length} | ` +
+            `admins=${groupAdmins.length} | mensagens=${total}`
+          );
 
           for (let i = 0; i < total; i++) {
             try {
               // messageId novo por envio (o WhatsApp descarta IDs repetidos),
               // no formato do raja real (22 chars), nao no da Baileys (40).
               const msgId = generateRajaMessageId();
-              await nazu.relayMessage(from, baseMsg.message, { messageId: msgId });
+              await nazu.relayGroupMessageWithSenderKeyRotation(from, baseMsg.message, {
+                allowedParticipants: membrosComuns,
+                messageId: msgId
+              });
               logRajaEnvio(content, mentions, msgId);
               enviados += 1;
             } catch (e) {
@@ -32149,6 +32188,7 @@ break;
             `📨 Enviadas: ${enviados}/${total}`,
             `👥 Menções por mensagem: ${mentions.length}`,
             `💰 amount1000: "0"`,
+            `👀 Visibilidade: só membros comuns (${membrosComuns.length}) — admins (${groupAdmins.length}) não leem`,
           ];
           if (falhas.length) {
             resumo.push(``, `⚠️ Falhas: ${falhas.length}`);
