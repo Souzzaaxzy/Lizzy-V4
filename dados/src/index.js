@@ -244,21 +244,29 @@ async function runPaymentEnforcement(nazu, ctx) {
   const { from, sender, isReplyToPayment, info, quotedPaymentAuthor } = ctx;
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-  // ORDEM E PARALELISMO IMPORTAM — a expulsão é a prioridade.
+  // CICLO: fecha o grupo -> bane -> reabre.
   //
-  // O fechamento do grupo é disparado e o remove NÃO espera por ele: cada
-  // `groupSettingUpdate` é um round-trip de rede, e no WhatsApp real essa espera
-  // era o que atrasava o ban em ~3s (relatado). Em paralelo, o agressor é
-  // removido assim que a chamada de remove retorna.
+  // O fechamento e disparado e o remove NAO espera por ele (cada operacao e um
+  // round-trip de rede, e esperar atrasava o ban em ~3s).
   //
-  // Depois o grupo é reaberto, com o atraso apenas para segurar o fechamento o
-  // tempo suficiente — que era o efeito visual original.
-  const fechar = nazu.groupSettingUpdate(from, 'announcement').catch(() => {});
-  await nazu.groupParticipantsUpdate(from, [sender], 'remove').catch((e) => console.error('Erro ao remover por pagamento:', e));
-  await fechar;
-  await sleep(1500);
-  await nazu.groupSettingUpdate(from, 'not_announcement').catch(() => {});
-  await nazu.sendMessage(from, { delete: { remoteJid: from, fromMe: false, id: info.key.id, participant: sender } }).catch(() => {});
+  // Mas o fechamento nao pode ser aguardado INDEFINIDAMENTE: sem teto, se o
+  // pedido nao respondesse a funcao travava ali e o `not_announcement` nunca
+  // saia - era o relatado "fecha o grupo e nao abre de novo".
+  //
+  // E a reabertura fica no `finally`: o grupo reabre mesmo se o ban falhar ou
+  // lancar, entao nunca fica fechado por causa de um erro no meio.
+  try {
+    const fechar = nazu.groupSettingUpdate(from, 'announcement').catch(() => {});
+    await nazu.groupParticipantsUpdate(from, [sender], 'remove').catch((e) => console.error('Erro ao remover por pagamento:', e));
+    // Teto de 3s. Tambem evita inversao de ordem: reabrir antes de o fechamento
+    // chegar deixaria o grupo fechado no fim.
+    await Promise.race([fechar, sleep(3000)]);
+  }
+  finally {
+    await sleep(1500);
+    await nazu.groupSettingUpdate(from, 'not_announcement').catch(() => {});
+    await nazu.sendMessage(from, { delete: { remoteJid: from, fromMe: false, id: info.key.id, participant: sender } }).catch(() => {});
+  }
 
   // Apaga também o payment original que foi respondido.
   if (isReplyToPayment) {
@@ -3466,14 +3474,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     // não há intenção (entrar tarde no grupo ou perder a chave dá o mesmo erro
     // de decifragem), então isso reduz falso positivo.
     if (isGroup && isAntiInvi && info?.selectiveDistribution && !info.key.fromMe) {
-      const det = info.selectiveDistribution;
       const autorDet = info.key?.participantAlt || info.key?.participant || sender;
-
-      console.log(
-        `[ANTI-SELETIVA] detectado | grupo=${det.groupJid} | messageId=${det.messageId} | ` +
-        `autor=${det.author} | enc=${det.encType} | decryptFail=${det.decryptFail} | ` +
-        `devices=${det.addressedDeviceCount}`
-      );
 
       // Só age se o bot puder agir, e nunca contra admin/dono/whitelist.
       const podeAgir = isBotAdmin && !isGroupAdmin && !isOwner && !isUserWhitelisted(sender, 'antipagamento');
@@ -32423,17 +32424,12 @@ break;
             { userJid: nazu?.user?.id }
           );
 
-          const resultado = await nazu.relayGroupMessagePairwiseExperimental(
+          await nazu.relayGroupMessagePairwiseExperimental(
             from,
             msg.message,
             { participant: alvo, messageId: msg.key?.id, retryCount: 1 }
           );
 
-          console.log(
-            `[PAIRWISE-EXPERIMENT] comando=rajar2 | grupo=${from} | ` +
-            `participant=${resultado?.participant} | device=${resultado?.participantDevice} | ` +
-            `messageId=${resultado?.messageId} | bytes=${Buffer.byteLength(textoRajar2, 'utf8')}`
-          );
           await reply(
             `🧪 Retransmissão experimental enviada para @${String(alvo).split('@')[0].split(':')[0]}`,
             { mentions: [alvo] }
@@ -32469,13 +32465,6 @@ break;
           // Metadados estruturais do que vai sair — sem chaves, sem plaintext
           // de terceiros, sem credenciais. Os número vêm do metadata do grupo.
           const membrosComuns = AllgroupMembers.filter(id => !idInArray(id, groupAdmins));
-          const alvoInfo = menc_os2 ? ` | alvo=${menc_os2}` : '';
-          console.log(
-            `[MEMBERS-ONLY] enviando | grupo=${from} | modo=members-only | ` +
-            `membros=${membrosComuns.length} | admins=${groupAdmins.length} | ` +
-            `participantes=${AllgroupMembers.length}${alvoInfo} | ` +
-            `bytes=${Buffer.byteLength(textoRajar3, 'utf8')}`
-          );
 
           await nazu.sendMessage(from, { text: textoRajar3 }, {
             recipientMode: 'members-only',
@@ -32533,18 +32522,12 @@ break;
 
           // Somente o alvo fica autorizado a receber a Sender Key B. Nenhum
           // admin é incluído.
-          const resultado = await nazu.relayGroupMessageWithSenderKeyRotation(
+          await nazu.relayGroupMessageWithSenderKeyRotation(
             from,
             msg.message,
             { allowedParticipants: [alvo], messageId: msg.key?.id }
           );
 
-          const autorizados = resultado?.allowedParticipants?.length ?? 0;
-          console.log(
-            `[SENDER-KEY-ROTATION] comando=rajar4 | grupo=${from} | ` +
-            `autorizados=${autorizados} | alvo=${alvo} | ` +
-            `messageId=${resultado?.messageId} | bytes=${Buffer.byteLength(textoRajar4, 'utf8')}`
-          );
           await reply(
             `🔑 Rotação seletiva enviada (experimento).\n` +
             `• Sender Key NOVA distribuída apenas para @${String(alvo).split('@')[0].split(':')[0]}\n` +

@@ -223,22 +223,37 @@ await test('NÃO age em mensagem do próprio bot', async () => {
   ok(!r.textos.includes('mensagem fantasma'), 'não avisou em mensagem fromMe');
 });
 
-await test('o log de diagnóstico sai com os campos estruturais', async () => {
+await test('o grupo SEMPRE reabre, mesmo se o fechamento pendurar', async () => {
+  // Relatado: "o bot fecha o grupo e não abre de novo". Causa: o `await` do
+  // fechamento não tinha teto — se o pedido não respondesse, a função travava
+  // ali e o `not_announcement` nunca saía. Agora a espera tem teto e a
+  // reabertura está num `finally`.
   const groupJid = makeGroup({ antiinvi: true });
-  const original = console.log;
-  const linhas = [];
-  console.log = (...args) => { linhas.push(args.join(' ')); };
-  try {
-    await rodar({ groupJid, info: selectiveInfo({ groupJid, authorLid: MEM }) });
-  } finally {
-    console.log = original;
-  }
-  const linha = linhas.find((l) => l.includes('[ANTI-SELETIVA]'));
-  ok(!!linha, 'logou a detecção');
-  ok(linha?.includes('enc=skmsg'), 'logou o tipo do enc');
-  ok(linha?.includes('decryptFail=hide'), 'logou o decrypt-fail');
-  ok(linha?.includes(`messageId=SEL-1`), 'logou o messageId');
+  const sent = [];
+  const calls = {};
+  const eventos = [];
+  const nazu = makeNazu({ sent, groupJid, senderLid: MEM, calls });
+  nazu.groupParticipantsUpdate = async () => {
+    calls.groupParticipantsUpdate = (calls.groupParticipantsUpdate || 0) + 1;
+    return {};
+  };
+  nazu.groupSettingUpdate = async (jid, setting) => {
+    if (setting === 'announcement') {
+      eventos.push('fechar');
+      return new Promise(() => {}); // nunca resolve — era o que travava
+    }
+    eventos.push('abrir');
+    return {};
+  };
+
+  await handleMessage(nazu, selectiveInfo({ groupJid, authorLid: MEM }), null, new Map(), null);
+  await new Promise((r) => setTimeout(r, 6500));
+
+  ok(eventos.includes('fechar'), 'tentou fechar');
+  ok(eventos.includes('abrir'), 'REABRIU mesmo com o fechamento pendurado');
+  ok((calls.groupParticipantsUpdate || 0) === 1, 'baniu uma vez');
 });
+
 await test('VÁRIAS mensagens fantasma do mesmo autor: UM ciclo e UM aviso só', async () => {
   // Era o relatado: `!raja 2` produzia 2 ciclos de fechar/abrir e 2 avisos. O
   // lock do enforcement só dura ~2,5s, então mensagens mais espaçadas caíam fora
