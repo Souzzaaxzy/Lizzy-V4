@@ -917,6 +917,50 @@ ir para o status**.
 - **Não validado em aparelho real** (sem sessão pareada): o áudio **tocar** e o
   botão de repostar aparecer. O que está provado por teste é o payload/stanza.
 
+## CORREÇÃO do áudio do `!statusgrupo` — transcodificar para OGG/Opus (set/2026) ✅
+- **Sintoma relatado**: o áudio publicado no status aparecia como "áudio não
+  disponível" no cliente.
+- **Causa**: o comando enviava os **bytes originais** com o mimetype de origem
+  (`mp3`, `m4a`, `webm`...). O status do WhatsApp exige **OGG com codec Opus,
+  mono, 48 kHz**; qualquer outro formato não renderiza. Reenviar o original
+  "funcionava" (o envio não dava erro) mas o destinatário não conseguia ouvir.
+- **Correção**: novo módulo **`dados/src/utils/oggOpus.js`** —
+  `toOggOpus(buffer)` transcodifica sempre com o **FFmpeg do sistema**
+  (`FFMPEG_PATH` ou `ffmpeg`), parâmetros fixos:
+  `-vn -c:a libopus -b:a 64k -ar 48000 -ac 1 -avoid_negative_ts make_zero -f ogg`.
+  `-vn` descarta faixa de vídeo (um mp4 baixado pode ter imagem). `spawn` com
+  args separados (sem shell), timeout 60s com `SIGKILL` no **grupo de processos**
+  (`detached` + `kill(-pid)`) e `mkdtemp` sempre removido em `finally`.
+- **`ptt`**: passou de `false` para **`true`**. Estava errado — status de áudio
+  É nota de voz; `ptt: true` é o que a fork usa para tratar como áudio de status
+  (waveform/background) e o que o cliente renderiza.
+- **`backgroundArgb: 0xFF000000`** adicionado (fundo do cartão de voz, mesma cor
+  que o status de voz usa). Verificado por medição: a fork só aplica
+  `backgroundColor` quando `ptt === true`.
+- **`mimetype`**: agora fixo em `audio/ogg; codecs=opus` para áudio (não mais o
+  mimetype da origem). Imagem/vídeo seguem preservando o original.
+- **Erro controlado**: sem FFmpeg no servidor → mensagem específica
+  (*"o FFmpeg não está instalado no servidor"*); áudio inválido → *"Não consegui
+  converter esse áudio"*. Nunca publica lixo nem vaza stack trace.
+- **Testes**: `tests/statusgrupo.test.js` — **49 testes / 143 asserções**. A
+  seção de áudio agora usa **áudio de verdade gerado pelo FFmpeg** (`sine` via
+  lavfi): publica OGG, **converte MP3 → OGG/Opus** (o caso que não renderizava),
+  valida o header `OggS` no buffer enviado (prova que NÃO são os bytes
+  originais), `ptt: true`, `backgroundArgb`, `encode/decode` real do proto e
+  áudio inválido → erro controlado. Teste direto do helper (`toOggOpus`) inclui
+  verificação de `OpusHead`/`OpusTags` na saída.
+- **PRÉ-REQUISITO**: FFmpeg instalado no servidor (o bot já exige em
+  `config.js`/`update.js`). Sem ele, texto/imagem/vídeo seguem funcionando e só
+  o áudio dá erro claro.
+- **ARMADILHA DOS TESTES**: a suíte agora depende de FFmpeg real no PATH; sem
+  ele, os testes de áudio falham por falta do binário (não por bug do comando).
+  Rodar com o ffmpeg disponível (ex.: `FFMPEG_PATH` apontando para um estático).
+- **Falha PRÉ-EXISTENTE observada (não é desta mudança)**: em
+  `tests/viewonce-v2.test.js`, o teste *"!s não deixa arquivo temporário para
+  trás"* falha **quando o FFmpeg está presente no PATH** — confirmado rodando o
+  baseline sem as mudanças do áudio (mesmo 76/77). Com o PATH sem ffmpeg, passa
+  77/77. Não foi corrigido aqui por estar fora do escopo do pedido.
+
 ## COMANDO `!d` reescrito + MINI SISTEMA de apagar GROUP STATUS (set/2026) ✅
 - **Case trocada** por um bloco novo (pedido do dono): a permissão virou
   `if (!isGroupAdmin && !isPremium)`, o alvo é resolvido por

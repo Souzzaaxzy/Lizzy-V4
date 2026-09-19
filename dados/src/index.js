@@ -24,6 +24,7 @@ import {
 import { buildCmdNotFoundExtras } from './utils/commandSuggest.js';
 import { extractMedia, resolveMedia, isViewOnce, describeMediaError, extractQuoted, extractText } from './utils/viewOnce.js';
 import { parseImagePollArgs, collectPollImages, resolveAttachments, buildOptionName } from './utils/pollImages.js';
+import { toOggOpus } from './utils/oggOpus.js';
 import {
   isGroupStatusContent,
   buildGroupStatusRevokePayloads,
@@ -28243,13 +28244,33 @@ packname: `${nomebot}`,
             statusContent[midiaStatus.type] = buffer;
             if (midiaStatus.media.mimetype) statusContent.mimetype = midiaStatus.media.mimetype;
             if (midiaStatus.type === 'audio') {
-              // Áudio de status não é nota de voz: `ptt: true` não é aceito como
-              // status.
-              statusContent.ptt = false;
-              // Repassa a duração que veio no áudio original. Sem isso a fork
-              // tenta calcular com FFmpeg e, se ele não estiver no servidor, o
-              // `seconds` fica indefinido e o áudio pode não renderizar. O valor
-              // já existe no proto recebido — não custa nada.
+              // Áudio de status exige OGG/Opus. Reenviar os bytes originais com
+              // o mimetype de origem (mp3, m4a, webm...) faz o cliente mostrar
+              // "áudio não disponível" — o status não renderiza. Transcodifica
+              // sempre, para valer qualquer formato de entrada.
+              let audioOpus;
+              try {
+                audioOpus = await toOggOpus(buffer);
+              } catch (convErr) {
+                console.error('[STATUSGRUPO] Falha ao converter áudio:', convErr?.message || convErr);
+                const semFfmpeg = /FFmpeg não encontrado/i.test(String(convErr?.message));
+                return reply(
+                  semFfmpeg
+                    ? '❌ Não consegui publicar o áudio: o FFmpeg não está instalado no servidor.'
+                    : '❌ Não consegui converter esse áudio para publicar no status.'
+                );
+              }
+
+              statusContent.audio = audioOpus;
+              statusContent.mimetype = 'audio/ogg; codecs=opus';
+              // Status de voz: `ptt: true` é o que a fork usa para tratar como
+              // áudio de status (waveform/background) e o cliente renderiza.
+              statusContent.ptt = true;
+              // Fundo do status de áudio (o cliente desenha o cartão da nota em
+              // cima dele). Preto opaco — mesma cor que o status de voz usa.
+              statusContent.backgroundArgb = 0xFF000000;
+              // O `seconds` do original pode não corresponder ao transcodificado;
+              // só repassamos quando existe.
               if (Number(midiaStatus.media.seconds) > 0) {
                 statusContent.seconds = Number(midiaStatus.media.seconds);
               }

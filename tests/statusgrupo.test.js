@@ -16,6 +16,7 @@
  */
 
 import crypto from 'crypto';
+import { execFileSync } from 'child_process';
 import fs from 'fs';
 import http from 'http';
 import os from 'os';
@@ -199,6 +200,7 @@ async function payloadDoContent(content) {
     ptt: inner?.[tipo]?.ptt,
     mimetype: inner?.[tipo]?.mimetype,
     seconds: inner?.[tipo]?.seconds,
+    backgroundArgb: inner?.[tipo]?.backgroundArgb,
     // Permissão de repostagem e contexto de status declarados no payload.
     canBeReshared: ci?.featureEligibilities?.canBeReshared,
     multiReact: ci?.featureEligibilities?.canReceiveMultiReact,
@@ -249,7 +251,7 @@ async function subirServidor() {
 }
 
 /** Publica uma mídia cifrada e devolve o proto que aponta para ela. */
-function publicarMidia(tipoProto, plaintext, type) {
+function publicarMidia(tipoProto, plaintext, type, mimeOverride = null) {
   const mediaKey = crypto.randomBytes(32);
   const cifrado = cifrar(plaintext, mediaKey, type);
   const rota = `/m-${Math.random().toString(36).slice(2)}.enc`;
@@ -259,22 +261,46 @@ function publicarMidia(tipoProto, plaintext, type) {
   return proto.Message[tipoProto].create({
     url: `http://127.0.0.1:${porta}${rota}`,
     mediaKey,
-    mimetype,
+    mimetype: mimeOverride || mimetype,
     fileLength: plaintext.length,
   });
 }
 
-// Preenchidas no início da suíte (depois do servidor subir).
+// Áudio de VERDADE: o status exige OGG/Opus, então a conversão do comando só
+// pode ser provada com um áudio real (um buffer com header OggS falso não passa
+// pelo ffmpeg). Geramos um mp3 curto e um wav — o comando precisa transcodificar
+// os dois para ogg/opus.
+const FFMPEG_BIN = process.env.FFMPEG_PATH || 'ffmpeg';
+
+function gerarAudioFfmpeg(formatoSaida, extraArgs = []) {
+  const out = path.join(TMP_DB, `audio-teste-${Math.random().toString(36).slice(2)}.${formatoSaida}`);
+  execFileSync(FFMPEG_BIN, [
+    '-hide_banner', '-loglevel', 'error', '-y',
+    '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1',
+    ...extraArgs,
+    out,
+  ]);
+  const buffer = fs.readFileSync(out);
+  fs.unlinkSync(out);
+  return buffer;
+}
+
 let IMAGEM;
 let VIDEO;
 let AUDIO;
+let AUDIO_MP3;
 let IMAGEM_VO2;
 let IMAGEM_CAP;
 
 await subirServidor();
 IMAGEM = { imageMessage: publicarMidia('ImageMessage', JPEG_REAL, 'image') };
 VIDEO = { videoMessage: publicarMidia('VideoMessage', MP4_REAL, 'video') };
-AUDIO = { audioMessage: publicarMidia('AudioMessage', OGG_REAL, 'audio') };
+
+// O áudio chega como OGG cru (bytes de verdade, gerados pelo ffmpeg)
+AUDIO = { audioMessage: publicarMidia('AudioMessage', gerarAudioFfmpeg('ogg', ['-c:a', 'libopus', '-ac', '1']), 'audio') };
+// E também como MP3 — o caso que quebrava: formato errado precisa ser convertido
+AUDIO_MP3 = { audioMessage: publicarMidia('AudioMessage', gerarAudioFfmpeg('mp3', ['-c:a', 'libmp3lame']), 'audio', 'audio/mpeg') };
+
 IMAGEM_VO2 = { viewOnceMessageV2: { message: { imageMessage: publicarMidia('ImageMessage', JPEG_REAL, 'image') } } };
 IMAGEM_CAP = { imageMessage: { ...publicarMidia('ImageMessage', JPEG_REAL, 'image'), caption: 'legenda do anexo' } };
 
@@ -405,8 +431,53 @@ await test('!statusgrupo respondendo áudio: publica o áudio', async () => {
 
   ok(publicacao, 'publicou');
   ok(Buffer.isBuffer(publicacao?.content?.audio), 'mandou BUFFER de áudio (baixado, não a URL)');
-  ok(publicacao?.content?.ptt === false, 'ptt: false (status de áudio não é nota de voz)');
+  ok(publicacao?.content?.ptt === true, 'ptt: true (status de voz)');
+  ok(publicacao?.content?.mimetype === 'audio/ogg; codecs=opus', 'mimetype de status');
   includes(texto, 'Status publicado', 'confirma o sucesso');
+});
+
+await test('áudio: o buffer enviado é OGG/Opus DE VERDADE (não os bytes originais)', async () => {
+  const groupJid = makeGroup();
+  const { publicacao } = await rodar({ groupJid, text: '!statusgrupo', quoted: AUDIO });
+
+  const enviado = publicacao?.content?.audio;
+  ok(Buffer.isBuffer(enviado), 'mandou buffer');
+  ok(enviado.subarray(0, 4).toString() === 'OggS', `header OggS (obtido "${enviado.subarray(0, 4).toString()}")`);
+  ok(enviado.length > 0, 'buffer não vazio');
+});
+
+await test('áudio em MP3: é CONVERTIDO para OGG/Opus (o caso que não renderizava)', async () => {
+  const groupJid = makeGroup();
+  const { publicacao, texto } = await rodar({ groupJid, text: '!statusgrupo', quoted: AUDIO_MP3 });
+
+  includes(texto, 'Status publicado', 'publicou sem erro');
+  const enviado = publicacao?.content?.audio;
+  ok(Buffer.isBuffer(enviado), 'mandou buffer');
+  // O original mp3 começa com 'ID3'; o enviado tem de ser Ogg.
+  ok(enviado.subarray(0, 4).toString() === 'OggS', `convertido para OggS (obtido "${enviado.subarray(0, 4).toString()}")`);
+  ok(publicacao?.content?.mimetype === 'audio/ogg; codecs=opus', 'mimetype declarado como ogg/opus');
+  ok(publicacao?.content?.ptt === true, 'ptt: true');
+});
+
+await test('áudio: a conversão roda de verdade pelo ffmpeg do sistema', async () => {
+  // Sem depender do comando: o helper tem de produzir um OGG/Opus válido.
+  const { toOggOpus } = await import(new URL('../dados/src/utils/oggOpus.js', import.meta.url).href);
+  const mp3 = gerarAudioFfmpeg('mp3', ['-c:a', 'libmp3lame']);
+
+  const ogg = await toOggOpus(mp3);
+  ok(ogg.subarray(0, 4).toString() === 'OggS', 'converteu mp3 -> ogg');
+  ok(ogg.length > 0, 'saída não vazia');
+  ok(ogg.toString('latin1').includes('OpusHead') || ogg.toString('latin1').includes('OpusTags'), 'contém o codec Opus');
+});
+
+await test('áudio inválido: erro controlado, sem publicar lixo', async () => {
+  const groupJid = makeGroup();
+  const invalido = { audioMessage: publicarMidia('AudioMessage', Buffer.from('isto-nao-e-audio'), 'audio', 'audio/mpeg') };
+  const { publicacao, texto } = await rodar({ groupJid, text: '!statusgrupo', quoted: invalido });
+
+  ok(!publicacao, 'não publicou');
+  includes(texto, 'converter esse áudio', 'explica que não deu para converter');
+  notIncludes(texto, 'at ', 'sem stack trace');
 });
 
 await test('áudio: payload vira groupStatusMessageV2 com audioMessage', async () => {
@@ -417,7 +488,8 @@ await test('áudio: payload vira groupStatusMessageV2 com audioMessage', async (
   ok(p.temV2, 'encapsulado em groupStatusMessageV2');
   ok(p.tipoInterno === 'audioMessage', `tipo interno (${p.tipoInterno})`);
   ok(p.isGroupStatus === true, 'isGroupStatus = true');
-  ok(p.ptt === false, 'ptt: false no payload');
+  ok(p.ptt === true, 'ptt: true no payload');
+  ok(p.backgroundArgb === 0xFF000000, `fundo do cartão de voz definido (${p.backgroundArgb})`);
   ok(p.temSecret, 'messageSecret gerado');
 });
 
@@ -442,14 +514,8 @@ await test('áudio: sobrevive ao encode/decode do proto (vai mesmo no fio)', asy
   const inner = decodificado.groupStatusMessageV2?.message?.audioMessage;
   ok(Boolean(inner), 'continua groupStatusMessageV2/audioMessage depois do round-trip');
   ok(inner?.mimetype === 'audio/ogg; codecs=opus', `mimetype sobrevive (${inner?.mimetype})`);
-  ok(inner?.ptt === false, 'ptt permanece false');
+  ok(inner?.ptt === true, 'ptt permanece true');
   ok(inner?.contextInfo?.isGroupStatus === true, 'isGroupStatus sobrevive');
-});
-
-await test('áudio: mimetype do áudio original é preservado', async () => {
-  const groupJid = makeGroup();
-  const { publicacao } = await rodar({ groupJid, text: '!statusgrupo', quoted: AUDIO });
-  ok(publicacao?.content?.mimetype === 'audio/ogg; codecs=opus', 'usa o mimetype da mídia respondida');
 });
 
 // ============================================================================
