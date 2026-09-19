@@ -66,6 +66,10 @@ function includes(haystack, needle, label) {
   ok(typeof haystack === 'string' && haystack.includes(needle), `${label ?? needle} — esperado conter "${needle}"`);
 }
 
+function notIncludes(haystack, needle, label) {
+  ok(typeof haystack === 'string' && !haystack.includes(needle), `${label ?? needle} — não deveria conter "${needle}"`);
+}
+
 // ============================================================================
 // IMPORTS
 // ============================================================================
@@ -496,6 +500,78 @@ await test('regressão: comando comum não vira status', async () => {
   const { sent, publicacao } = await rodar({ groupJid, text: '!s', quoted: null });
   ok(!publicacao, 'não publicou status');
   ok(sent.length > 0, 'respondeu normalmente');
+});
+
+await test('!testecard: autor identificado por LID (o caso que falhava)', async () => {
+  // Regressão do bug real: `isValidJid` exige PN puro e REJEITA LID, então um
+  // `participant` em LID fazia o comando responder "não identifiquei o autor".
+  // Em grupo moderno o participant costuma ser LID — era o caso do relato.
+  const gs = await import(new URL('../dados/src/utils/groupStatus.js', import.meta.url).href);
+  gs.clearPublishedGroupStatuses();
+  const groupJid = fazerGrupo();
+  const autorLid = '999888777666555@lid';
+
+  const { publicacao, texto } = await rodar({
+    groupJid,
+    text: '!testecard',
+    quoted: { extendedTextMessage: { text: 'boa tarde galera' } },
+    autor: autorLid,
+  });
+
+  ok(Boolean(publicacao), 'publicou com autor em LID');
+  notIncludes(texto, 'Não consegui identificar', 'NÃO diz que não identificou');
+  const autores = (publicacao?.content?.contextInfo?.statusAttributions || [])
+    .map((a) => a.groupStatus?.authorJid)
+    .filter(Boolean);
+  ok(autores.some((a) => String(a).includes('999888777666555')), `authorJid é o LID do autor (${autores})`);
+});
+
+await test('!testecard: funciona quando o comando vem em mídia (contextInfo fora do texto)', async () => {
+  // O `menc_prt` só olha `extendedTextMessage`. Se o comando chega como legenda
+  // de uma imagem, o contextInfo fica em `imageMessage` — o comando precisa
+  // achar o autor mesmo assim.
+  const groupJid = fazerGrupo();
+  const autor = '5511888888888@s.whatsapp.net';
+  const sender = '222000000000099@lid';
+  const sent = [];
+  const nazu = makeNazu({ sent, groupJid, sender, comoAdmin: true });
+
+  await handleMessage(nazu, {
+    key: { remoteJid: groupJid, fromMe: false, id: 'CMD-MIDIA', participant: sender },
+    message: {
+      imageMessage: {
+        url: 'https://x/y',
+        mimetype: 'image/jpeg',
+        // comando na legenda de uma imagem, respondendo a outra mensagem
+        caption: '!testecard',
+        contextInfo: {
+          remoteJid: groupJid,
+          participant: autor,
+          stanzaId: 'MSG-ORIG',
+          quotedMessage: { extendedTextMessage: { text: 'boa tarde galera' } },
+        },
+      },
+    },
+    messageTimestamp: 1757900000,
+    pushName: 'Tester',
+  }, null, new Map(), null);
+
+  const publicacao = sent.find((s) => s.content?.groupStatus === true) || null;
+  ok(Boolean(publicacao), 'publicou mesmo com o comando vindo em mídia');
+  const autores = (publicacao?.content?.contextInfo?.statusAttributions || [])
+    .map((a) => a.groupStatus?.authorJid)
+    .filter(Boolean);
+  ok(autores.some((a) => String(a).split('@')[0] === autor.split('@')[0]), `autor correto (${autores})`);
+});
+
+await test('!testecard: testa as 4 variantes sem quebrar', async () => {
+  for (const v of card.CARD_VARIANTS) {
+    const groupJid = fazerGrupo();
+    const { publicacao } = await rodar({
+      groupJid, text: `!testecard ${v}`, quoted: { extendedTextMessage: { text: 'oi' } },
+    });
+    ok(Boolean(publicacao), `variante ${v} publica`);
+  }
 });
 
 await test('menuadm: !testecard listado', async () => {

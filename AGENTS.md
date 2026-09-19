@@ -986,6 +986,31 @@ vira status, menu).
   importa é que aponte para o autor e **não** para a Lizzy — comparar pelo
   `split('@')[0]` e verificar ausência do número do bot.
 
+### BUG CORRIGIDO — "não identificou o autor da mensagem" (set/2026)
+Relatado pelo dono no uso real. Duas causas, ambas medidas:
+
+1. **`isValidJid` rejeita LID.** O guarda do comando usava `isValidJid(autorCard)`,
+   mas essa função é `/^\d+@s\.whatsapp\.net$/` — **só PN**. Em grupo moderno o
+   `participant` da citação é **LID** (`...@lid`), então a validação dava `false`
+   e caía direto no "não consegui identificar o autor". Troca por **`isUserId`**,
+   que aceita as duas formas. **Armadilha geral**: usar `isValidJid` para validar
+   `participant`/`sender` em grupo é errado pelo mesmo motivo; `isValidJid` só
+   serve para saber "é um PN que dá para converter".
+2. **`menc_prt` só olha `extendedTextMessage`.** Se o comando chega como legenda
+   de uma imagem/áudio (o `contextInfo` fica no nó do tipo), o autor não era
+   encontrado. Agora o comando varre o `contextInfo` de qualquer tipo
+   (texto, imagem, vídeo, áudio, documento, figurinha, view once) — `contextCard`.
+
+Também endurecido: a conversão LID↔PN usava `...?.getPNForLID?.(x).catch(...)`,
+que lança `TypeError` quando o socket não tem `lidMapping` (o `.catch` num valor
+indefinido). Cada conversão ganhou `try/catch` próprio, e
+`getLidFromJidCached` que devolve o próprio JID quando não converte passou a ser
+tratado como "não converteu" (antes isso fazia o LID virar `authorJid` errado).
+
+Testes de regressão adicionados ao `tests/testecard.test.js` (agora **25 testes /
+102 asserções**): autor em **LID** publica e não responde "não identifiquei"; o
+comando funciona vindo em **legenda de imagem**; as 4 variantes publicam.
+
 ### O que está PROVADO e o que NÃO está
 - **Provado por teste**: o payload monta, sobrevive ao `encode`/`decode`,
   continua sendo Group Status do grupo certo, carrega autor + contexto +

@@ -28386,19 +28386,48 @@ packname: `${nomebot}`,
           }
 
           // Autor original: `participant` do contextInfo é quem escreveu a
-          // mensagem marcada. Guardamos as duas formas de identidade (JID/LID)
-          // porque o cliente usa uma delas para resolver nome/foto.
-          const autorCard = menc_prt || null;
-          if (!autorCard || !isValidJid(autorCard)) {
-            return reply('❌ Não consegui identificar o autor da mensagem respondida.');
+          // mensagem marcada.
+          //
+          // ATENÇÃO: não usar `isValidJid` aqui. Ele exige PN puro
+          // (`/^\d+@s\.whatsapp\.net$/`) e REJEITA LID -- e em grupo moderno o
+          // `participant` da citação é justamente um LID. Era isso que fazia o
+          // comando responder "não consegui identificar o autor". `isUserId`
+          // aceita as duas formas.
+          //
+          // Além do `menc_prt` (que só olha `extendedTextMessage`), varremos o
+          // `contextInfo` de QUALQUER tipo de mensagem: o comando pode chegar como
+          // resposta a uma imagem/áudio, e o `contextInfo` fica no nó do tipo.
+          const contextCard =
+            info.message?.extendedTextMessage?.contextInfo ||
+            info.message?.imageMessage?.contextInfo ||
+            info.message?.videoMessage?.contextInfo ||
+            info.message?.audioMessage?.contextInfo ||
+            info.message?.documentMessage?.contextInfo ||
+            info.message?.stickerMessage?.contextInfo ||
+            info.message?.viewOnceMessage?.contextInfo ||
+            info.message?.viewOnceMessageV2?.message?.imageMessage?.contextInfo ||
+            null;
+          const autorCard = contextCard?.participant || menc_prt || null;
+          if (!autorCard || !isUserId(autorCard)) {
+            return reply('\u274c Não consegui identificar o autor da mensagem respondida.');
           }
 
-          const autorLid = autorCard.endsWith('@lid')
-            ? autorCard
-            : await getLidFromJidCached(nazu, autorCard).catch(() => null);
-          const autorPn = autorCard.endsWith('@lid')
-            ? (await nazu.signalRepository?.lidMapping?.getPNForLID?.(autorCard).catch(() => null) || null)
-            : autorCard;
+          // Converte para as duas formas de identidade. Cada conversão tem o
+          // seu próprio try/catch: `getPNForLID` pode nem existir no socket, e
+          // chamar `.catch` num valor indefinido lançaria TypeError -- que
+          // derrubaria o comando no catch externo e trocaria a falha real por
+          // "ocorreu um erro".
+          let autorLid = autorCard.endsWith('@lid') ? autorCard : null;
+          if (!autorLid) {
+            try { autorLid = await getLidFromJidCached(nazu, autorCard); } catch { autorLid = null; }
+            if (autorLid === autorCard) autorLid = null; // não converteu
+          }
+          let autorPn = autorCard.endsWith('@lid') ? null : autorCard;
+          if (!autorPn && autorCard.endsWith('@lid')) {
+            try {
+              autorPn = (await nazu.signalRepository?.lidMapping?.getPNForLID?.(autorCard)) || null;
+            } catch { autorPn = null; }
+          }
 
           // `authorJid` aceita PN (`@s.whatsapp.net`) ou LID (`@lid`). Preferimos o
           // PN: é o identificador canônico da conta e o que o cliente resolve
@@ -28407,9 +28436,7 @@ packname: `${nomebot}`,
           const authorJid = autorPn || autorLid || autorCard;
           const authorJidAlt = authorJid === autorPn ? autorLid : autorPn;
 
-          const stanzeIdCard = info.message?.extendedTextMessage?.contextInfo?.stanzaId
-            || info.message?.viewOnceMessage?.contextInfo?.stanzaId
-            || null;
+          const stanzeIdCard = contextCard?.stanzaId || null;
 
           // Conteúdo: a mensagem do autor, como texto.
           const conteudoCard = buildCardVariant(variante, {
