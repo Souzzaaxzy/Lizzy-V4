@@ -917,6 +917,90 @@ ir para o status**.
 - **Não validado em aparelho real** (sem sessão pareada): o áudio **tocar** e o
   botão de repostar aparecer. O que está provado por teste é o payload/stanza.
 
+## `!testecard` — EXPERIMENTO: Group Status com identidade do autor (set/2026) 🔬
+Investigação pedida pelo dono: dá para publicar, num único Group Status, a
+mensagem de um usuário **junto da identidade dele**, deixando o próprio WhatsApp
+resolver nome/foto — em vez de o bot montar um card PNG?
+
+### Resposta: SIM, o campo existe — `StatusAttribution.GroupStatus.authorJid`
+- Field numbers medidos no wire desta fork: `ContextInfo.statusAttributions` =
+  **65**, `StatusAttribution.type` = **1**, `StatusAttribution.groupStatus` =
+  **6**, `GroupStatus.authorJid` = **1**.
+- A finalidade é documentada no proto e por bibliotecas que implementam o mesmo
+  protocolo: o Cobalt (`StatusAttribution.java`) diz que o campo "identifies the
+  original author of the group status so that clients can render the correct
+  **contact name and avatar**". O `whatsmeow`, o `elaina-baileys` e ~20 forks
+  expõem o mesmo campo (`makeGroupStatusAttribution({ authorJid })`).
+- **A fork NÃO precisou de mudança**: `StatusAttribution.GroupStatus` já existe
+  no `WAProto` instalado e a fork já mescla `contextInfo` antes de encapsular em
+  `groupStatusMessageV2`. O trabalho ficou todo na Lizzy.
+- **Prova de que é campo real** (e não invenção): em round-trip real de
+  protobuf, `authorJid` sobrevive (PN e LID), enquanto um campo inventado no
+  `contextInfo` é **descartado em silêncio**. Isso separa "o proto suporta" de
+  "achismo".
+
+### Módulo (puro, testável) — `dados/src/utils/groupStatusCard.js`
+- `readQuotedContent(quoted)` — texto/mídia da mensagem citada, descascando
+  encapsulamentos (viewOnce/efêmera).
+- `buildAuthorAttribution(proto, authorJid)` — monta **só** o atributo
+  `GROUP_STATUS` com `authorJid`; devolve `null` se o proto não suportar.
+- `buildAuthorContextStatus({...})` — junta numa stanza: conteúdo + identidade
+  (`authorJid`/`participantAlt`) + contexto (`participant`) + referência
+  (`quotedMessage`/`stanzaId`/`remoteJid`).
+- `buildCardVariant(variant, opts)` e `CARD_VARIANTS` — variantes que isolam uma
+  hipótese cada, para comparar no aparelho: `full` (tudo), `attribution` (só o
+  autor), `quote` (só a referência, controle), `plain` (status comum, controle).
+- `describePayload(content)` — resumo de uma linha para o console separar
+  "o servidor rejeitou" de "saiu e o cliente ignorou".
+- O módulo recebe o `proto` **por parâmetro** (não importa o Baileys), então é
+  testável sem socket e não cria dependência circular.
+
+### Comando — `!testecard [variante]`
+- `index.js` (case logo após o `!statusgrupo`). Só em grupo, só admin. **Exige
+  responder uma mensagem**; sem isso ou sem texto, explica o uso.
+- Reutiliza o que já existe: `extractQuoted` (citação em qualquer tipo),
+  `menc_prt` (autor), `getLidFromJidCached` + `lidMapping.getPNForLID`
+  (JID↔LID), `rememberPublishedGroupStatus` (para o `!d` apagar depois).
+- **`authorJid` prefere o PN** (`@s.whatsapp.net`) — identificador canônico, que
+  o cliente resolve com mais facilidade; o outro formato (LID) vai em
+  `participantAlt`. As duas formas sobrevivem ao wire.
+- Mantém `STATUS_CLOSE_SHARING` + `statusAudienceMetadata` do `!statusgrupo`,
+  para não quebrar o que já funcionava.
+- **NÃO atribui a mensagem à Lizzy**: o conteúdo é o do autor e a atribuição
+  aponta para ele. Não usa `status@broadcast`: publica no JID do grupo.
+- Erros tratados com mensagem clara; log técnico só no console (`[TESTECARD]`).
+- Menu: linha na categoria de administração do `menuadm`.
+
+### Testes — `tests/testecard.test.js` (22 testes / 93 asserções)
+Helpers puros, ausência de campo inventado, variantes, **round-trip real de
+protobuf** (prova de que autor/contexto/referência viajam no fio), handler real
+(sem reply, fora de grupo, não-admin, variante inválida, mensagem sem texto,
+registro para o `!d`) e regressão (`!statusgrupo` intacto, comando comum não
+vira status, menu).
+- **Armadilha (custou 1 rodada)**: o metadata do grupo é **cacheado por grupo**
+  (TTL 10s). Gerar JID de grupo com `Math.random` faz colisões e o teste seguinte
+  herda o admin anterior → "Apenas administradores". Usar JID **determinístico e
+  único por teste** (`grupoSeq`).
+- **Armadilha 2**: o handler normaliza a identidade do autor para **LID** quando
+  consegue converter, então comparar o `authorJid` com o PN literal falha. O que
+  importa é que aponte para o autor e **não** para a Lizzy — comparar pelo
+  `split('@')[0]` e verificar ausência do número do bot.
+
+### O que está PROVADO e o que NÃO está
+- **Provado por teste**: o payload monta, sobrevive ao `encode`/`decode`,
+  continua sendo Group Status do grupo certo, carrega autor + contexto +
+  referência, e nenhum campo fora do proto é usado.
+- **NÃO provado (precisa de aparelho)**: que o WhatsApp **renderiza** o nome/foto
+  do autor a partir de um `authorJid` que não é o remetente real da stanza. A
+  evidência de que funciona é documental (campo existe com essa finalidade e é
+  usado por outras bibliotecas). Se o cliente ignorar, o fallback honesto é
+  publicar a mensagem como status normal (texto/mídia) — **nunca** um card PNG
+  com nome+foto+texto, que era o que o dono pediu explicitamente para evitar.
+- Ressalva de honestidade: `authorJid` é, no proto, a **assinatura do autor** do
+  status. Apontá-lo para outra pessoa é uso não documentado (pode ser tratado
+  como spoofing de atribuição). Por isso o comando é experimental e traz a
+  variante `plain` como controle.
+
 ## CORREÇÃO do áudio do `!statusgrupo` — transcodificar para OGG/Opus (set/2026) ✅
 - **Sintoma relatado**: o áudio publicado no status aparecia como "áudio não
   disponível" no cliente.
