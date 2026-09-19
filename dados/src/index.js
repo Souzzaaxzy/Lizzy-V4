@@ -32240,6 +32240,15 @@ break;
           // handler — nenhuma consulta extra ao WhatsApp.
           const mentions = Array.isArray(AllgroupMembers) ? AllgroupMembers : [];
 
+          // MENÇÕES VISÍVEIS: o `mentionedJid` sozinho não faz o WhatsApp
+          // renderizar a menção — o TEXTO precisa conter `@<número>`. Aqui os
+          // `@` dos membros são acrescentados ao final do texto, sem alterar
+          // nada do que já existia (proto, formato, teto, delay).
+          const mencoesTexto = mentions
+            .map((jid) => `@${String(jid).split('@')[0].split(':')[0]}`)
+            .join(' ');
+          const textoComMencoes = mencoesTexto ? `${texto} ${mencoesTexto}` : texto;
+
           await reply(
             `🧪 *RAJA DE TESTE*\n\n` +
             `📨 Mensagens: ${total}${count > MAX_RAJA ? ` (limitado de ${count}; teto ${MAX_RAJA})` : ''}\n` +
@@ -32250,7 +32259,7 @@ break;
             `🚀 Enviando...`
           );
 
-          const content = buildRajaContent(texto, mentions);
+          const content = buildRajaContent(textoComMencoes, mentions);
 
           // Gera UMA vez e reaproveita: só o ID muda por envio, como no
           // !divulgar. Evita montar 50 protos idênticos.
