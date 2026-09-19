@@ -575,7 +575,7 @@ await test('!raja N texto: envia N mensagens no formato do raja real', async () 
   ok(rpm.expiryTimestamp === '0', 'expiryTimestamp = "0"');
   ok(rpm.amount?.offset === 1000, 'amount.offset = 1000');
   ok(rpm.amount?.currencyCode === 'BRL', 'amount.currencyCode = BRL');
-  ok(rpm.noteMessage?.extendedTextMessage?.text?.startsWith('meu texto de teste'), 'texto dentro da NOTA (mencoes no fim)');
+  ok(rpm.noteMessage?.extendedTextMessage?.text === 'meu texto de teste', 'texto dentro da NOTA');
   ok(Array.isArray(rpm.noteMessage.extendedTextMessage.contextInfo?.mentionedJid), 'mentionedJid na nota');
   // O padrao TEM de bater com a amostra real capturada pelo !get.
   ok(rpm.amount1000 === '0', `amount1000 = "0" (${JSON.stringify(rpm.amount1000)})`);
@@ -646,7 +646,7 @@ await test('!raja: o que ele gera é detectado pela própria proteção anti-raj
   ok(c.isPayment === true, 'classificado como payment');
   ok(c.isRequestPayment === true, 'classificado como request payment');
   ok(c.paymentAmount.isZero === true, 'amount zero reconhecido');
-  ok(c.noteText?.startsWith('texto de verificacao'), 'texto da nota extraido');
+  ok(c.noteText === 'texto de verificacao', 'texto da nota extraido');
   ok(c.heavy === true, 'tratado como mensagem pesada');
 });
 
@@ -802,7 +802,7 @@ await test('!raja: formato bate com a amostra real (11/11 campos)', async () => 
   ok(rpm.amount.value === '0', 'amount.value "0"');
   ok(rpm.amount.offset === 1000, 'amount.offset 1000');
   ok(rpm.amount.currencyCode === 'BRL', 'amount.currencyCode BRL');
-  ok(rpm.noteMessage.extendedTextMessage.text?.startsWith('meu texto'), 'texto na NOTA (mencoes no fim)');
+  ok(rpm.noteMessage.extendedTextMessage.text === 'meu texto', 'texto na NOTA');
   ok(!rpm.conversation, 'nada em conversation');
   ok(Array.isArray(rpm.noteMessage.extendedTextMessage.contextInfo.mentionedJid), 'mentionedJid');
   ok(rpm.noteMessage.extendedTextMessage.contextInfo.groupMentions === undefined

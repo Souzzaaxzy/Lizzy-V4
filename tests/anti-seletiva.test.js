@@ -384,6 +384,41 @@ await test('10 mensagens fantasma em rajada (100ms): UMA punição, e rápida', 
   ok(eventos[0] && eventos[0].t < 900, `a punição saiu em ${eventos[0]?.t}ms, não na 7ª mensagem`);
 });
 
+await test('um ataque NOVO depois da janela volta a ser punido (era o "não detecta mais")', async () => {
+  // Relatado: depois da primeira punição, os `!raja` seguintes não eram
+  // detectados. Causa: a janela de supressão por autor era de 5 MINUTOS, então
+  // o mesmo autor ficava ignorado e todo ataque seguinte era descartado em
+  // silêncio. A janela agora é curta (cobre só uma rajada).
+  const groupJid = makeGroup({ antiinvi: true });
+  const sent = [];
+  const calls = {};
+  const nazu = makeNazu({ sent, groupJid, senderLid: MEM, calls });
+
+  const ghost = (id) => ({
+    key: { remoteJid: groupJid, fromMe: false, id, participant: MEM, participantAlt: MEM_PN },
+    messageStubType: 2,
+    selectiveDistribution: {
+      kind: 'selective-distribution', messageId: id, groupJid, author: MEM,
+      encType: 'skmsg', decryptFail: 'hide', addressedDeviceCount: 1,
+      reason: 'No session found to decrypt message',
+    },
+    messageTimestamp: 1757900000, pushName: 'Invasor',
+  });
+
+  // 1ª punição
+  await handleMessage(nazu, ghost('N-1'), null, new Map(), null);
+  await new Promise((r) => setTimeout(r, 2500));
+  ok((calls.groupParticipantsUpdate || 0) === 1, 'primeira punição aplicada');
+
+  // Espera a janela de supressão expirar e ataca de novo.
+  await new Promise((r) => setTimeout(r, 9000));
+  await handleMessage(nazu, ghost('N-2'), null, new Map(), null);
+  await new Promise((r) => setTimeout(r, 2500));
+
+  ok((calls.groupParticipantsUpdate || 0) === 2, `o ataque seguinte FOI punido (${calls.groupParticipantsUpdate || 0}) — não ficou em silêncio`);
+  ok(sent.filter((s) => s.content?.text?.includes('mensagem fantasma')).length === 2, 'dois avisos, um por ataque');
+});
+
 
 await test('o guard do connect.js deixa passar a mensagem sem `message` (causa raiz do "não bane")', async () => {
   // Reproduz a condição EXATA do processMessage em connect.js. Antes, o guard

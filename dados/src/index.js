@@ -175,16 +175,18 @@ const enforcementQueue = [];
  * Grupos→autores já punidos recentemente, para o anti não repetir o ciclo
  * fechar/remover/reabrir quando o agressor manda VÁRIAS mensagens fantasma.
  *
- * O lock do enforcement só dura o tempo do trabalho (~2,5s). Com mensagens mais
- * espaçadas que isso (ex.: `!raja` com delay ou uso manual), o segundo fantasma
- * caía fora do lock e disparava um novo ciclo — foi o relatado: "mandei 2
- * mensagens e ele fechou/abriu o grupo duas vezes".
+ * Janela de supressão, curta de propósito.
  *
- * Aqui a memória é por AUTOR e dura minutos, não segundos: a primeira punição
- * basta, e repetir a cada mensagem só multiplicaria operações de grupo e avisos.
+ * Precisa cobrir UMA rajada (o `!raja` manda a 100ms, então alguns segundos
+ * bastam) e ser curta o suficiente para não engolir o próximo ataque. A primeira
+ * versão usava 5 MINUTOS e foi o que quebrou o uso real: depois de punir uma vez,
+ * o mesmo autor ficava ignorado, então todo `!raja` seguinte era descartado em
+ * silêncio — o relatado "não detecta mais".
+ *
+ * 8s cobre uma rajada de até ~80 mensagens a 100ms e libera rápido.
  */
 const punishedGhosts = new Map();
-const GHOST_PUNISH_WINDOW_MS = 5 * 60 * 1000;
+const GHOST_PUNISH_WINDOW_MS = 8 * 1000;
 const GHOST_PUNISH_KEY_SEP = '\u0000';
 
 /** Whether this author was already punished for a ghost attack in this group. */
@@ -242,19 +244,18 @@ async function runPaymentEnforcement(nazu, ctx) {
   const { from, sender, isReplyToPayment, info, quotedPaymentAuthor } = ctx;
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-  // ORDEM IMPORTA: fechar e REMOVER primeiro, e só então reabrir.
+  // ORDEM E PARALELISMO IMPORTAM — a expulsão é a prioridade.
   //
-  // Antes havia um `sleep(1500)` ANTES do remove, para o "efeito RAVENA" de
-  // fechar o grupo antes de expulsar. O preço era o atraso do ban: em um teste
-  // real com 10 mensagens fantasma espaçadas, o bot só removeu na SÉTIMA — cada
-  // mensagem chegava enquanto o enforcement ainda dormia.
+  // O fechamento do grupo é disparado e o remove NÃO espera por ele: cada
+  // `groupSettingUpdate` é um round-trip de rede, e no WhatsApp real essa espera
+  // era o que atrasava o ban em ~3s (relatado). Em paralelo, o agressor é
+  // removido assim que a chamada de remove retorna.
   //
-  // Agora a expulsão sai primeiro (o fechamento já foi disparado antes dela, sem
-  // esperar), então o agressor é removido na PRIMEIRA mensagem. Os sleeps
-  // permanecem apenas para segurar o grupo fechado o suficiente antes de
-  // reabrir, que era o objetivo original do efeito visual.
-  await nazu.groupSettingUpdate(from, 'announcement').catch(() => {});
+  // Depois o grupo é reaberto, com o atraso apenas para segurar o fechamento o
+  // tempo suficiente — que era o efeito visual original.
+  const fechar = nazu.groupSettingUpdate(from, 'announcement').catch(() => {});
   await nazu.groupParticipantsUpdate(from, [sender], 'remove').catch((e) => console.error('Erro ao remover por pagamento:', e));
+  await fechar;
   await sleep(1500);
   await nazu.groupSettingUpdate(from, 'not_announcement').catch(() => {});
   await nazu.sendMessage(from, { delete: { remoteJid: from, fromMe: false, id: info.key.id, participant: sender } }).catch(() => {});
@@ -32240,15 +32241,6 @@ break;
           // handler — nenhuma consulta extra ao WhatsApp.
           const mentions = Array.isArray(AllgroupMembers) ? AllgroupMembers : [];
 
-          // MENÇÕES VISÍVEIS: o `mentionedJid` sozinho não faz o WhatsApp
-          // renderizar a menção — o TEXTO precisa conter `@<número>`. Aqui os
-          // `@` dos membros são acrescentados ao final do texto, sem alterar
-          // nada do que já existia (proto, formato, teto, delay).
-          const mencoesTexto = mentions
-            .map((jid) => `@${String(jid).split('@')[0].split(':')[0]}`)
-            .join(' ');
-          const textoComMencoes = mencoesTexto ? `${texto} ${mencoesTexto}` : texto;
-
           await reply(
             `🧪 *RAJA DE TESTE*\n\n` +
             `📨 Mensagens: ${total}${count > MAX_RAJA ? ` (limitado de ${count}; teto ${MAX_RAJA})` : ''}\n` +
@@ -32259,7 +32251,7 @@ break;
             `🚀 Enviando...`
           );
 
-          const content = buildRajaContent(textoComMencoes, mentions);
+          const content = buildRajaContent(texto, mentions);
 
           // Gera UMA vez e reaproveita: só o ID muda por envio, como no
           // !divulgar. Evita montar 50 protos idênticos.

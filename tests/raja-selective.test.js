@@ -180,11 +180,13 @@ await test('!raja mantém o conteúdo do raja intacto (requestPaymentMessage)', 
   const msg = r.rotationCalls[0]?.m;
   ok(!!msg, 'passou a mensagem do raja');
   ok(!!msg?.requestPaymentMessage, 'o conteúdo continua sendo requestPaymentMessage');
-  // O texto começa com o que foi pedido e ganha os @ das menções no fim (para o
-  // WhatsApp renderizar a menção); o resto do proto continua igual.
-  const nota = msg?.requestPaymentMessage?.noteMessage?.extendedTextMessage?.text;
-  ok(typeof nota === 'string' && nota.startsWith('nota'), `o texto começa com o pedido (${JSON.stringify(nota?.slice(0, 40))})`);
-  ok(nota.includes('@'), 'as menções foram acrescentadas ao texto');
+  // O texto é exatamente o pedido — as menções vivem no `mentionedJid`, não no
+  // texto (foi assim que o raja real medido se comportava).
+  assert.equal(
+    msg?.requestPaymentMessage?.noteMessage?.extendedTextMessage?.text,
+    'nota',
+    'o texto continua na NOTA, sem @ no corpo'
+  );
   ok(
     Array.isArray(msg?.requestPaymentMessage?.noteMessage?.extendedTextMessage?.contextInfo?.mentionedJid),
     'mentionedJid continua na nota'
