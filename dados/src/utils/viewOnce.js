@@ -212,6 +212,82 @@ export function isViewOnce(content) {
   return unwrapContent(content).viewOnce;
 }
 
+/**
+ * Mensagem marcada/citada (`contextInfo.quotedMessage`) de um conteúdo.
+ *
+ * Não assume o tipo do topo: o comando pode chegar como texto
+ * (`extendedTextMessage`) ou como legenda de mídia (`imageMessage`, etc.), e em
+ * ambos o `contextInfo` fica no nó do tipo. Desce wrappers (efêmera) também.
+ *
+ * @param {object} content `info.message`
+ * @returns {object|null}
+ */
+export function extractQuoted(content) {
+  let current = content;
+  let guard = 0;
+
+  while (current && typeof current === 'object' && guard < 12) {
+    guard += 1;
+
+    for (const key of Object.keys(current)) {
+      const node = current[key];
+      if (node && typeof node === 'object' && node.contextInfo?.quotedMessage) {
+        return node.contextInfo.quotedMessage;
+      }
+    }
+
+    const wrapperKey = WRAPPER_KEYS.find((k) => current[k] && typeof current[k] === 'object');
+    if (!wrapperKey) break;
+    const wrapper = current[wrapperKey];
+    const child = WRAPPER_CHILDREN.map((f) => wrapper?.[f]).find((v) => v && typeof v === 'object');
+    if (!child) break;
+    current = child;
+  }
+
+  return null;
+}
+
+/**
+ * Texto "legível" de um conteúdo: conversa, texto estendido ou a legenda de uma
+ * mídia — descascando qualquer encapsulamento. Devolve string vazia quando não
+ * há texto.
+ *
+ * Existe para responder uma mensagem de texto (ou uma mídia com legenda) e
+ * levar esse texto ao status sem depender do tipo da mensagem.
+ *
+ * @param {object} content
+ * @returns {string}
+ */
+export function extractText(content) {
+  const MEDIA_CAPTION_KEYS = ['imageMessage', 'videoMessage', 'ptvMessage', 'documentMessage', 'audioMessage'];
+  let current = content;
+  let guard = 0;
+
+  while (current && typeof current === 'object' && guard < 12) {
+    guard += 1;
+
+    if (typeof current.conversation === 'string' && current.conversation.trim()) {
+      return current.conversation.trim();
+    }
+    const extended = current.extendedTextMessage?.text;
+    if (typeof extended === 'string' && extended.trim()) return extended.trim();
+
+    for (const key of MEDIA_CAPTION_KEYS) {
+      const caption = current[key]?.caption;
+      if (typeof caption === 'string' && caption.trim()) return caption.trim();
+    }
+
+    const wrapperKey = WRAPPER_KEYS.find((k) => current[k] && typeof current[k] === 'object');
+    if (!wrapperKey) break;
+    const wrapper = current[wrapperKey];
+    const child = WRAPPER_CHILDREN.map((f) => wrapper?.[f]).find((v) => v && typeof v === 'object');
+    if (!child) break;
+    current = child;
+  }
+
+  return '';
+}
+
 /** Nome amigável do tipo de mídia (para mensagens ao usuário). */
 export function mediaTypeLabel(type) {
   switch (type) {

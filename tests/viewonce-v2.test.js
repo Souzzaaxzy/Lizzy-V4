@@ -239,6 +239,44 @@ await test('resolvedor: mediaTypeLabel em português', () => {
   ok(vo.mediaTypeLabel('document') === 'documento', 'document');
 });
 
+await test('extractQuoted: acha a citação em QUALQUER tipo de mensagem', () => {
+  const citada = { conversation: 'alvo' };
+
+  ok(vo.extractQuoted({ extendedTextMessage: { contextInfo: { quotedMessage: citada } } }) === citada, 'texto');
+  ok(vo.extractQuoted({ conversation: 'oi' }) === null, 'sem citação -> null');
+
+  const emImagem = { imageMessage: { contextInfo: { quotedMessage: citada } } };
+  ok(vo.extractQuoted(emImagem) === citada, 'comando na legenda de uma imagem');
+
+  const emAudio = { audioMessage: { contextInfo: { quotedMessage: citada } } };
+  ok(vo.extractQuoted(emAudio) === citada, 'comando em áudio');
+
+  const efemera = { ephemeralMessage: { message: { extendedTextMessage: { contextInfo: { quotedMessage: citada } } } } };
+  ok(vo.extractQuoted(efemera) === citada, 'dentro de mensagem efêmera');
+
+  ok(vo.extractQuoted(null) === null, 'null -> null');
+  ok(vo.extractQuoted(undefined) === null, 'undefined -> null');
+});
+
+await test('extractText: texto de conversa, texto estendido e legenda', () => {
+  ok(vo.extractText({ conversation: '  oi  ' }) === 'oi', 'conversation com trim');
+  ok(vo.extractText({ extendedTextMessage: { text: 'texto' } }) === 'texto', 'extendedTextMessage');
+  ok(vo.extractText({ imageMessage: { caption: 'legenda' } }) === 'legenda', 'legenda de imagem');
+  ok(vo.extractText({ videoMessage: { caption: 'legenda v' } }) === 'legenda v', 'legenda de vídeo');
+  ok(vo.extractText({ audioMessage: {} }) === '', 'áudio sem legenda -> vazio');
+  ok(
+    vo.extractText({ viewOnceMessageV2: { message: { imageMessage: { caption: 'vo' } } } }) === 'vo',
+    'legenda dentro de view once V2'
+  );
+  ok(
+    vo.extractText({ ephemeralMessage: { message: { extendedTextMessage: { text: 'ef' } } } }) === 'ef',
+    'texto dentro de efêmera'
+  );
+  ok(vo.extractText({ stickerMessage: {} }) === '', 'figurinha -> vazio');
+  ok(vo.extractText(null) === '', 'null -> vazio');
+  ok(vo.extractText({ extendedTextMessage: { text: '   ' } }) === '', 'só espaços -> vazio');
+});
+
 // ============================================================================
 // 2) COMANDOS REAIS — o download tem de ENTREGAR O CONTEÚDO DESCRIPTOGRAFADO
 // ============================================================================

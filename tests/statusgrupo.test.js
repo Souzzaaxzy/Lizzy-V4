@@ -196,6 +196,9 @@ async function payloadDoContent(content) {
     temSecret: Boolean(gerado.messageContextInfo?.messageSecret),
     caption: inner?.[tipo]?.caption,
     textoInterno: inner?.extendedTextMessage?.text,
+    ptt: inner?.[tipo]?.ptt,
+    mimetype: inner?.[tipo]?.mimetype,
+    seconds: inner?.[tipo]?.seconds,
     // Permissão de repostagem e contexto de status declarados no payload.
     canBeReshared: ci?.featureEligibilities?.canBeReshared,
     multiReact: ci?.featureEligibilities?.canReceiveMultiReact,
@@ -224,6 +227,7 @@ const JPEG_REAL = Buffer.concat([
   Buffer.from([0xff, 0xd9]),
 ]);
 const MP4_REAL = Buffer.concat([Buffer.from('ftypisom'), Buffer.from('video-real-'.repeat(30))]);
+const OGG_REAL = Buffer.concat([Buffer.from('OggS'), Buffer.from('audio-real-'.repeat(30))]);
 
 let servidor = null;
 let porta = 0;
@@ -251,7 +255,7 @@ function publicarMidia(tipoProto, plaintext, type) {
   const rota = `/m-${Math.random().toString(36).slice(2)}.enc`;
   servidos.set(rota, cifrado);
 
-  const mimetype = tipoProto === 'ImageMessage' ? 'image/jpeg' : tipoProto === 'VideoMessage' ? 'video/mp4' : 'audio/ogg';
+  const mimetype = tipoProto === 'ImageMessage' ? 'image/jpeg' : tipoProto === 'VideoMessage' ? 'video/mp4' : 'audio/ogg; codecs=opus';
   return proto.Message[tipoProto].create({
     url: `http://127.0.0.1:${porta}${rota}`,
     mediaKey,
@@ -263,12 +267,16 @@ function publicarMidia(tipoProto, plaintext, type) {
 // Preenchidas no início da suíte (depois do servidor subir).
 let IMAGEM;
 let VIDEO;
+let AUDIO;
 let IMAGEM_VO2;
+let IMAGEM_CAP;
 
 await subirServidor();
 IMAGEM = { imageMessage: publicarMidia('ImageMessage', JPEG_REAL, 'image') };
 VIDEO = { videoMessage: publicarMidia('VideoMessage', MP4_REAL, 'video') };
+AUDIO = { audioMessage: publicarMidia('AudioMessage', OGG_REAL, 'audio') };
 IMAGEM_VO2 = { viewOnceMessageV2: { message: { imageMessage: publicarMidia('ImageMessage', JPEG_REAL, 'image') } } };
+IMAGEM_CAP = { imageMessage: { ...publicarMidia('ImageMessage', JPEG_REAL, 'image'), caption: 'legenda do anexo' } };
 
 // ============================================================================
 // 1) GUARDAS
@@ -283,7 +291,7 @@ await test('!statusgrupo: fora de grupo recusa', async () => {
 await test('!statusgrupo: sem conteúdo e sem mídia recusa com o uso', async () => {
   const groupJid = makeGroup();
   const { texto, publicacao } = await rodar({ groupJid, text: '!statusgrupo' });
-  includes(texto, 'Informe o conteúdo', 'explica o uso');
+  includes(texto, 'Responda a uma mensagem', 'explica o uso');
   includes(texto, 'statusgrupo', 'mostra exemplos');
   ok(!publicacao, 'não publica vazio');
 });
@@ -291,7 +299,7 @@ await test('!statusgrupo: sem conteúdo e sem mídia recusa com o uso', async ()
 await test('!statusgrupo: texto em branco não publica', async () => {
   const groupJid = makeGroup();
   const { texto, publicacao } = await rodar({ groupJid, text: '!statusgrupo    ' });
-  includes(texto, 'Informe o conteúdo', 'exige conteúdo real');
+  includes(texto, 'Responda a uma mensagem', 'exige conteúdo real');
   ok(!publicacao, 'não publica só espaços');
 });
 
@@ -388,6 +396,134 @@ await test('vídeo + legenda: legenda preservada', async () => {
 });
 
 // ============================================================================
+// 4.1) ÁUDIO
+// ============================================================================
+
+await test('!statusgrupo respondendo áudio: publica o áudio', async () => {
+  const groupJid = makeGroup();
+  const { publicacao, texto } = await rodar({ groupJid, text: '!statusgrupo', quoted: AUDIO });
+
+  ok(publicacao, 'publicou');
+  ok(Buffer.isBuffer(publicacao?.content?.audio), 'mandou BUFFER de áudio (baixado, não a URL)');
+  ok(publicacao?.content?.ptt === false, 'ptt: false (status de áudio não é nota de voz)');
+  includes(texto, 'Status publicado', 'confirma o sucesso');
+});
+
+await test('áudio: payload vira groupStatusMessageV2 com audioMessage', async () => {
+  const groupJid = makeGroup();
+  const { publicacao } = await rodar({ groupJid, text: '!statusgrupo', quoted: AUDIO });
+  const p = await payloadDoContent(publicacao.content);
+
+  ok(p.temV2, 'encapsulado em groupStatusMessageV2');
+  ok(p.tipoInterno === 'audioMessage', `tipo interno (${p.tipoInterno})`);
+  ok(p.isGroupStatus === true, 'isGroupStatus = true');
+  ok(p.ptt === false, 'ptt: false no payload');
+  ok(p.temSecret, 'messageSecret gerado');
+});
+
+await test('áudio: o payload declara a permissão de repostagem', async () => {
+  const groupJid = makeGroup();
+  const { publicacao } = await rodar({ groupJid, text: '!statusgrupo', quoted: AUDIO });
+  const p = await payloadDoContent(publicacao.content);
+  ok(p.canBeReshared === true, 'áudio com permissão de repostagem');
+});
+
+await test('áudio: sobrevive ao encode/decode do proto (vai mesmo no fio)', async () => {
+  const groupJid = makeGroup();
+  const { publicacao } = await rodar({ groupJid, text: '!statusgrupo', quoted: AUDIO });
+
+  const gerado = await generateWAMessageContent(publicacao.content, {
+    userJid: `${BOT_JID.split('@')[0]}@s.whatsapp.net`,
+    upload: fakeUpload,
+  });
+  const bytes = proto.Message.encode(proto.Message.create(gerado)).finish();
+  const decodificado = proto.Message.decode(bytes);
+
+  const inner = decodificado.groupStatusMessageV2?.message?.audioMessage;
+  ok(Boolean(inner), 'continua groupStatusMessageV2/audioMessage depois do round-trip');
+  ok(inner?.mimetype === 'audio/ogg; codecs=opus', `mimetype sobrevive (${inner?.mimetype})`);
+  ok(inner?.ptt === false, 'ptt permanece false');
+  ok(inner?.contextInfo?.isGroupStatus === true, 'isGroupStatus sobrevive');
+});
+
+await test('áudio: mimetype do áudio original é preservado', async () => {
+  const groupJid = makeGroup();
+  const { publicacao } = await rodar({ groupJid, text: '!statusgrupo', quoted: AUDIO });
+  ok(publicacao?.content?.mimetype === 'audio/ogg; codecs=opus', 'usa o mimetype da mídia respondida');
+});
+
+// ============================================================================
+// 4.2) SÓ RESPONDE: O COMANDO NUNCA VAI PARA O STATUS
+// ============================================================================
+// O status é publicado a partir da mensagem RESPONDIDA. Nada da mensagem do
+// comando (o texto `!statusgrupo ...`) pode aparecer no payload — nem como
+// conteúdo, nem como citação.
+
+await test('respondendo sem digitar nada: o comando não vira legenda', async () => {
+  const groupJid = makeGroup();
+  const { publicacao } = await rodar({ groupJid, text: '!statusgrupo', quoted: IMAGEM });
+  const p = await payloadDoContent(publicacao.content);
+
+  ok(p.tipoInterno === 'imageMessage', 'publicou a imagem respondida');
+  ok(!p.caption, 'sem texto digitado, nenhuma legenda inventada');
+  notIncludes(String(p.caption || ''), 'statusgrupo', 'o comando não vira legenda');
+});
+
+await test('o status NÃO cita o comando (quotedMessage ausente)', async () => {
+  const groupJid = makeGroup();
+  const { publicacao } = await rodar({ groupJid, text: '!statusgrupo', quoted: IMAGEM });
+
+  ok(!publicacao.options?.quoted, 'não envia `quoted` no envio do status');
+  const p = await payloadDoContent(publicacao.content);
+  ok(p.quotedMessage === undefined, 'contextInfo do status não carrega quotedMessage do comando');
+});
+
+await test('respondendo uma mensagem de TEXTO: publica o texto dela', async () => {
+  const groupJid = makeGroup();
+  const { publicacao } = await rodar({
+    groupJid,
+    text: '!statusgrupo',
+    quoted: { conversation: 'mensagem original do usuário' },
+  });
+  const p = await payloadDoContent(publicacao.content);
+
+  ok(p.tipoInterno === 'extendedTextMessage', `publicou como texto (${p.tipoInterno})`);
+  ok(p.textoInterno === 'mensagem original do usuário', 'o texto da mensagem respondida foi publicado');
+  notIncludes(p.textoInterno || '', 'statusgrupo', 'o comando não vaza para o status');
+});
+
+await test('respondendo mídia com legenda (sem texto no comando): a legenda do anexo vai', async () => {
+  const groupJid = makeGroup();
+  const { publicacao } = await rodar({ groupJid, text: '!statusgrupo', quoted: IMAGEM_CAP });
+  const p = await payloadDoContent(publicacao.content);
+
+  ok(p.tipoInterno === 'imageMessage', 'publicou a imagem');
+  ok(p.caption === 'legenda do anexo', `legenda do anexo usada (obtida "${p.caption}")`);
+});
+
+await test('texto digitado no comando tem prioridade sobre a legenda do anexo', async () => {
+  const groupJid = makeGroup();
+  const { publicacao } = await rodar({ groupJid, text: '!statusgrupo legenda nova', quoted: IMAGEM_CAP });
+  const p = await payloadDoContent(publicacao.content);
+  ok(p.caption === 'legenda nova', `legenda do comando venceu (obtida "${p.caption}")`);
+});
+
+await test('respondendo uma mensagem de visualização única: publica o conteúdo', async () => {
+  const groupJid = makeGroup();
+  const { publicacao } = await rodar({ groupJid, text: '!statusgrupo', quoted: IMAGEM_VO2 });
+  const p = await payloadDoContent(publicacao.content);
+  ok(p.temV2, 'encapsulado em groupStatusMessageV2');
+  ok(p.tipoInterno === 'imageMessage', 'a mídia de dentro do view once foi publicada');
+});
+
+await test('regressão: legenda vinda de texto do comando continua funcionando', async () => {
+  const groupJid = makeGroup();
+  const { publicacao } = await rodar({ groupJid, text: '!statusgrupo Olha isso 🔥', quoted: IMAGEM });
+  const p = await payloadDoContent(publicacao.content);
+  ok(p.caption === 'Olha isso 🔥', 'texto digitado no comando vira legenda da mídia');
+});
+
+// ============================================================================
 // 5) VISUALIZAÇÃO ÚNICA (reaproveita o resolvedor de mídia)
 // ============================================================================
 
@@ -471,7 +607,31 @@ await test('tipo não suportado (documento): cai na mensagem de uso', async () =
     quoted: { documentMessage: { url: 'https://x/y', mimetype: 'application/pdf', fileName: 'x.pdf' } },
   });
   ok(!publicacao, 'não publica documento');
-  includes(texto, 'Informe o conteúdo', 'explica o uso');
+  includes(texto, 'Responda a uma mensagem', 'explica o uso');
+});
+
+await test('documento COM legenda não vira status de texto (não engana)', async () => {
+  const groupJid = makeGroup();
+  const { texto, publicacao } = await rodar({
+    groupJid,
+    text: '!statusgrupo',
+    quoted: {
+      documentMessage: { url: 'https://x/y', mimetype: 'application/pdf', fileName: 'x.pdf', caption: 'legenda do doc' },
+    },
+  });
+  ok(!publicacao, 'não publica nada');
+  includes(texto, 'Responda a uma mensagem', 'explica o uso em vez de usar a legenda do doc');
+});
+
+await test('figurinha respondida não vira status', async () => {
+  const groupJid = makeGroup();
+  const { texto, publicacao } = await rodar({
+    groupJid,
+    text: '!statusgrupo',
+    quoted: { stickerMessage: { url: 'https://x/y', mimetype: 'image/webp' } },
+  });
+  ok(!publicacao, 'não publica figurinha');
+  includes(texto, 'Responda a uma mensagem', 'explica o uso');
 });
 
 // ============================================================================

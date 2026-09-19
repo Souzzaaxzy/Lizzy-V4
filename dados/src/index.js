@@ -22,8 +22,16 @@ import {
   toSafeObject
 } from './utils/messageInspector.js';
 import { buildCmdNotFoundExtras } from './utils/commandSuggest.js';
-import { extractMedia, resolveMedia, isViewOnce, describeMediaError } from './utils/viewOnce.js';
+import { extractMedia, resolveMedia, isViewOnce, describeMediaError, extractQuoted, extractText } from './utils/viewOnce.js';
 import { parseImagePollArgs, collectPollImages, resolveAttachments, buildOptionName } from './utils/pollImages.js';
+import {
+  isGroupStatusContent,
+  buildGroupStatusRevokePayloads,
+  rememberPublishedGroupStatus,
+  isPublishedGroupStatus,
+  getLastPublishedGroupStatus,
+  forgetPublishedGroupStatus,
+} from './utils/groupStatus.js';
 
 // Mapas de enum do Baileys usados para traduzir status/stub/tipo de protocolo
 // no relatório do !get. Registrados uma única vez, sem custo por mensagem.
@@ -28167,20 +28175,24 @@ packname: `${nomebot}`,
       case 'statusgrupo':
       case 'grupostatus':
         try {
+          // ── Créditos ─────────────────────────────────────────────────────────────────
+          // Comando desenvolvido por 𝐊𝐚𝐧𝐧𝐨𝐧.
+          // ─────────────────────────────────────────────────────────────────────────────────
           if (!isGroup) return reply('❌ Este comando só funciona em grupos.');
           // Só administração: usa o `isGroupAdmin` existente, que já agrega
           // admin do grupo, dono, subdono e moderadores autorizados — sem criar
           // um sistema de permissão paralelo.
           if (!isGroupAdmin) return reply('❌ Apenas administradores podem publicar status no grupo.');
 
-          // Legenda: tudo que vem depois do comando. Não é interpretado como
-          // outro comando (o texto bruto de `q` já vem pronto para isso).
+          // Legenda/texto: tudo que vem depois do comando. Não é interpretado
+          // como outro comando (o texto bruto de `q` já vem pronto para isso).
           const legendaStatus = (q || '').trim();
 
-          // Mídia pode vir respondendo (citando) uma mensagem — inclusive
-          // visualização única ou efêmera, que o resolvedor descasca.
-          const quotedStatus = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-          const midiaStatus = resolveMedia([quotedStatus, info.message]);
+          // Alvo = mensagem RESPONDIDA (citada). O `!statusgrupo` publica o que
+          // foi marcado; não olhamos a mensagem do próprio comando para não
+          // publicar o comando nem usar a mídia dele.
+          const quotedStatus = extractQuoted(info.message);
+          const midiaStatus = resolveMedia([quotedStatus]);
 
           // `groupStatus: true` faz a fork encapsular em groupStatusMessageV2 e
           // marcar isGroupStatus.
@@ -28197,6 +28209,8 @@ packname: `${nomebot}`,
           // que as implementações de Group Status em uso colocam junto do flag;
           // `canReceiveMultiReact` acompanha o `canBeReshared` no mesmo bloco.
           // O botão em si é do WhatsApp — o bot só declara a permissão.
+          // MÍDIA nos tipos aceitos: imagem, vídeo e áudio.
+          const TIPOS_STATUS = ['image', 'video', 'audio'];
           const statusContent = {
             groupStatus: true,
             contextInfo: {
@@ -28207,7 +28221,7 @@ packname: `${nomebot}`,
             }
           };
 
-          if (midiaStatus && (midiaStatus.type === 'image' || midiaStatus.type === 'video' || midiaStatus.type === 'audio')) {
+          if (midiaStatus && TIPOS_STATUS.includes(midiaStatus.type)) {
             // Baixa UMA vez, com o mesmo caminho dos outros comandos
             // (downloadContentFromMessage + mediaKey). Sem sistema paralelo.
             let buffer;
@@ -28228,17 +28242,43 @@ packname: `${nomebot}`,
 
             statusContent[midiaStatus.type] = buffer;
             if (midiaStatus.media.mimetype) statusContent.mimetype = midiaStatus.media.mimetype;
-            if (midiaStatus.type === 'audio') statusContent.ptt = false;
-            if (legendaStatus) statusContent.caption = legendaStatus;
-          } else if (legendaStatus) {
-            statusContent.text = legendaStatus;
+            if (midiaStatus.type === 'audio') {
+              // Áudio de status não é nota de voz: `ptt: true` não é aceito como
+              // status.
+              statusContent.ptt = false;
+              // Repassa a duração que veio no áudio original. Sem isso a fork
+              // tenta calcular com FFmpeg e, se ele não estiver no servidor, o
+              // `seconds` fica indefinido e o áudio pode não renderizar. O valor
+              // já existe no proto recebido — não custa nada.
+              if (Number(midiaStatus.media.seconds) > 0) {
+                statusContent.seconds = Number(midiaStatus.media.seconds);
+              }
+            } else {
+              // Legenda: o texto digitado no comando vence; se não houver, usa a
+              // legenda que já acompanhava a mídia respondida.
+              const legendaDaMidia = extractText(quotedStatus);
+              const caption = legendaStatus || legendaDaMidia;
+              if (caption) statusContent.caption = caption;
+            }
           } else {
-            return reply(
-              '❌ Informe o conteúdo do status.\n\n' +
-              '• Texto: `!statusgrupo Bom dia, grupo!`\n' +
-              '• Mídia: responda uma foto/vídeo/áudio e use `!statusgrupo`\n' +
-              '• Com legenda: `!statusgrupo Minha legenda` (respondendo a mídia)'
-            );
+            // Sem mídia dos tipos aceitos. Se o alvo for uma mídia NÃO suportada
+            // (documento/figurinha), avisa em vez de publicar a legenda dela como
+            // texto — silenciosamente transformar um documento em status de texto
+            // seria enganoso.
+            const midiaNaoSuportada = midiaStatus && !TIPOS_STATUS.includes(midiaStatus.type);
+
+            // Texto digitado no comando ou o texto da mensagem respondida
+            // (mensagem de texto pura também vira status).
+            const textoStatus = legendaStatus || (!midiaNaoSuportada && extractText(quotedStatus));
+            if (!textoStatus) {
+              return reply(
+                '❌ Responda a uma mensagem (foto, vídeo, áudio ou texto) ou digite o conteúdo.\n\n' +
+                '• Mídia: responda a foto/vídeo/áudio e use `!statusgrupo`\n' +
+                '• Mídia com legenda: `!statusgrupo Minha legenda` (respondendo a mídia)\n' +
+                '• Texto: `!statusgrupo Bom dia, grupo!`'
+              );
+            }
+            statusContent.text = textoStatus;
           }
 
           // Aviso temporário de processamento.
@@ -28254,7 +28294,17 @@ packname: `${nomebot}`,
             //   2. encapsular em groupStatusMessageV2;
             //   3. enviar is_group_status='true' na stanza.
             // O destino é o PRÓPRIO JID do grupo — nunca status@broadcast.
-            await nazu.sendMessage(from, statusContent, { quoted: info });
+            //
+            // NÃO citamos o comando (`quoted: info`): o `quotedMessage` viajaria
+            // DENTRO do status e o texto do próprio comando apareceria junto da
+            // publicação — exatamente o que não se quer.
+            const statusEnviado = await nazu.sendMessage(from, statusContent);
+
+            // Guarda o ID do status publicado. O `!d` normal NÃO apaga status
+            // (monta a key como mensagem de terceiro), então este registro é o
+            // que permite ao `!d` reconhecer o alvo como status e revogá-lo.
+            const statusId = statusEnviado?.key?.id;
+            if (statusId) rememberPublishedGroupStatus(from, statusId);
 
             if (avisoId) {
               await nazu.sendMessage(from, { delete: { remoteJid: from, fromMe: true, id: avisoId } }).catch(() => {});
@@ -28513,29 +28563,99 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
       case 'delete':
       case 'del':
       case 'd':
-        if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
-        if (!menc_prt) return reply("Marque uma mensagem.");
-        let stanzaId, participant;
-        if (info.message.extendedTextMessage) {
-          stanzaId = info.message.extendedTextMessage.contextInfo.stanzaId;
-          participant = info.message.extendedTextMessage.contextInfo.participant || menc_prt;
-        } else if (info.message.viewOnceMessage) {
-          stanzaId = info.key.id;
-          participant = info.key.participant || menc_prt;
-        }
-        // Verificar se é uma mensagem de pagamento
-        const quotedMessage = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-        if (quotedMessage?.requestPaymentMessage) {
-          // Lógica especial para mensagens de pagamento
+        if (!isGroupAdmin && !isPremium) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+
+        const stanzaId = info.message?.extendedTextMessage?.contextInfo?.stanzaId || info.message?.viewOnceMessage?.contextInfo?.stanzaId || info.key.id;
+        if (!stanzaId) return reply("❌ Não foi possível identificar a mensagem marcada!");
+
+        // Verifica se a mensagem marcada é um payment
+        const quotedMessage = info.message?.extendedTextMessage?.contextInfo?.quotedMessage || info.message?.viewOnceMessage?.contextInfo?.quotedMessage;
+
+        // ================= MINI SISTEMA: APAGAR STATUS DE GRUPO =================
+        // O status publicado pelo `!statusgrupo` NÃO é apagado pelo caminho
+        // normal: ele vai encapsulado em `groupStatusMessageV2` e a stanza leva
+        // `is_group_status='true'`. Além disso o `!d` comum monta a key como
+        // mensagem de TERCEIRO (`fromMe: false` + participant), enquanto um
+        // status publicado pelo bot é `fromMe: true` — a key não casa e o
+        // servidor ignora. Então o status tem um caminho próprio aqui.
+        //
+        // Como reconhecer o alvo:
+        //   1. o `quotedMessage` traz o wrapper do status (citação direta);
+        //   2. o ID citado é um status que ESTE bot publicou (registro em
+        //      memória alimentado pelo `!statusgrupo`);
+        //   3. o `!d` veio sem alvo nenhum — cai no último status publicado
+        //      neste chat (é o caso em que o bot responde "Marque uma mensagem"
+        //      hoje, e nada era apagado; agora tem o que fazer).
+        const citouStatus = isGroupStatusContent(quotedMessage);
+        const idEhStatusPublicado = isPublishedGroupStatus(from, stanzaId);
+        const semAlvoCitado = !quotedMessage && stanzaId === info.key.id;
+        const statusPointer = (citouStatus || idEhStatusPublicado)
+          ? stanzaId
+          : (semAlvoCitado ? getLastPublishedGroupStatus(from) : null);
+
+        if (statusPointer) {
+          if (!isGroup) return reply("❌ Só dá para apagar status de grupo dentro do grupo.");
           try {
+            // O status é uma stanza especial: a revogação precisa sair no MESMO
+            // formato. `buildGroupStatusRevokePayloads` devolve a variante
+            // encapsulada como status (casada com `is_group_status`) e a
+            // simples como rede de segurança.
+            const payloads = buildGroupStatusRevokePayloads({
+              remoteJid: from,
+              id: statusPointer,
+              fromMe: true
+            });
+
+            let apagou = false;
+            for (const payload of payloads) {
+              try {
+                await nazu.sendMessage(from, payload);
+                apagou = true;
+              } catch (statusErr) {
+                console.error('[DELETE-STATUS] tentativa falhou:', statusErr?.message || statusErr);
+              }
+            }
+
+            forgetPublishedGroupStatus(from, statusPointer);
+
+            // Apaga também a mensagem do comando.
+            await nazu.sendMessage(from, {
+              delete: {
+                remoteJid: from,
+                fromMe: false,
+                id: info.key.id,
+                participant: sender
+              }
+            }).catch(() => {});
+
+            return reply(apagou ? "✅ Status do grupo apagado!" : "❌ Não consegui apagar o status do grupo. 💔");
+          } catch (statusErr) {
+            console.error('[DELETE-STATUS] erro:', statusErr?.message || statusErr);
+            return reply("Ocorreu um erro ao apagar o status 💔");
+          }
+        }
+        // ============================ FIM DO MINI SISTEMA ============================
+
+        if (!menc_prt) return reply("Marque a mensagem do usuário que deseja apagar, do bot ou de alguém..");
+
+        // Se for mensagem de pagamento, usa o método especial
+        if (quotedMessage?.requestPaymentMessage) {
+          try {
+            // PASSO 1: CRIA MENSAGEM VAZIA PARA GERAR ID
             const msgcagada = await nazu.sendMessage(from, { text: '' });
             const idEditada = msgcagada.key.id;
+
             if (!idEditada) throw new Error('falha ao gerar ID');
+
+            // PASSO 2: EDITA A MENSAGEM DE PAGAMENTO
             await nazu.sendMessage(from, {
               text: '🗑️ Mensagem de pagamento removida',
               edit: { id: idEditada }
             }, { messageId: stanzaId });
+
             await sleep(500);
+
+            // PASSO 3: APAGA A MENSAGEM ORIGINAL (PAYMENT)
             await nazu.sendMessage(from, {
               delete: {
                 remoteJid: from,
@@ -28544,7 +28664,10 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
                 participant: menc_prt
               }
             });
+
             await sleep(500);
+
+            // PASSO 4: APAGA A MENSAGEM EDITADA DO BOT
             try {
               await nazu.sendMessage(from, {
                 delete: {
@@ -28564,10 +28687,30 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
                   }
                 });
               } catch (err) {
-                              }
+              }
             }
-            // Apaga a própria mensagem do comando
-            try {
+
+            reply("✅ Mensagem de pagamento deletada com sucesso!");
+
+          } catch (error) {
+            console.error('Erro ao deletar payment:', error);
+            reply("❌ Erro ao tentar deletar mensagem de pagamento");
+          }
+
+        } else {
+          // Se NÃO for payment, usa o método normal
+          try {
+            await nazu.sendMessage(from, {
+              delete: {
+                remoteJid: from,
+                fromMe: false,
+                id: stanzaId,
+                participant: menc_prt
+              }
+            });
+
+            // Também apaga a mensagem do comando
+            setTimeout(async() => {
               await nazu.sendMessage(from, {
                 delete: {
                   remoteJid: from,
@@ -28576,34 +28719,9 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
                   participant: sender
                 }
               });
-            } catch (e) {
-                          }
-            reply("✅ Mensagem de pagamento deletada com sucesso!");
-          } catch (error) {
-            console.error('Erro ao deletar payment:', error);
-            reply("❌ Erro ao tentar deletar mensagem de pagamento");
-          }
-        } else {
-          // Método normal para mensagens comuns
-          try {
-            await nazu.sendMessage(from, {
-              delete: {
-                remoteJid: from,
-                fromMe: false,
-                id: stanzaId,
-                participant: participant
-              }
-            });
-            await nazu.sendMessage(from, {
-              delete: {
-                remoteJid: from,
-                fromMe: false,
-                id: info.key.id,
-                participant: sender
-              }
-            });
-          } catch (error) {
-            reply("Ocorreu um erro ao apagar as mensagens 💔");
+            }, 500);
+          } catch (e) {
+            reply("ocorreu um erro 💔");
           }
         }
         break;

@@ -869,6 +869,101 @@ chamadas. Só em grupo, exige admin.
   de quem posta — coisa que biblioteca nenhuma controla. Se o botão não aparecer
   nem com o payload correto, o limite é da plataforma, não do bot.
 
+## `!statusgrupo` — ÁUDIO + publicação só-respondendo (set/2026) ✅
+Três mudanças pedidas pelo dono: (1) aceitar **áudio**; (2) o status vir **só da
+mensagem respondida** (mídia com/sem legenda, ou texto); (3) o **comando nunca
+ir para o status**.
+
+- **BUG 1 — o comando ia junto no payload.** O bloco enviava
+  `nazu.sendMessage(from, statusContent, { quoted: info })`. O `quoted` injeta
+  `contextInfo.quotedMessage` **dentro** da mensagem interna do status
+  (`lib/Utils/messages.js` ~1514). Confirmado no payload: o
+  `groupStatusMessageV2.audioMessage.contextInfo.quotedMessage` carregava
+  `{"extendedTextMessage":{"text":"!statusgrupo minha legenda"}}`. Correção:
+  **removido o `quoted: info`** do envio. Nada da mensagem do comando aparece no
+  status.
+- **BUG 2 — o comando podia virar conteúdo.** O `resolveMedia([quoted, info.message])`
+  tinha `info.message` como fallback; e o `else if (legendaStatus)` publicava o
+  texto digitado como status de texto mesmo **sem responder nada**. Agora o alvo
+  é **só** o citado: `extractQuoted(info.message)` → `resolveMedia([quotedStatus])`.
+  Com mídia suportada, a legenda é `legendaStatus || legenda do anexo`; sem
+  mídia, o texto é `legendaStatus || texto da mensagem respondida`. Sem nada
+  disso → mensagem de uso.
+- **ÁUDIO**: entrou em `TIPOS_STATUS = ['image','video','audio']` com
+  `ptt: false` (áudio de status não é nota de voz) e **`seconds` repassado** do
+  proto original quando existe — sem isso a fork tenta calcular com FFmpeg e,
+  sem FFmpeg no servidor, o `seconds` fica indefinido. O **mimetype original é
+  preservado** (`audio/ogg; codecs=opus` veio intacto no encode/decode real).
+- **`viewOnce.js` ganhou dois helpers reutilizáveis** (sem Baileys, testáveis):
+  `extractQuoted(content)` — acha o `contextInfo.quotedMessage` **em qualquer
+  tipo** (texto, imagem, áudio) e desce wrappers (efêmera), onde antes o código
+  lia só `extendedTextMessage`; `extractText(content)` — texto de `conversation`,
+  `extendedTextMessage.text` ou legenda de mídia, descascando viewOnce/efêmera.
+- **Mídia NÃO suportada (documento/figurinha)**: **não** publica a legenda dela
+  como texto (seria enganoso — um documento viraria status de texto). Cai na
+  mensagem de uso, mesmo com legenda.
+- **Limite do WhatsApp (lado plataforma, não do bot)**: status de áudio com
+  `ptt: true` não oferece repostar; por isso `ptt: false`. Documentado no README
+  da fork.
+- **Testes**: `tests/statusgrupo.test.js` — **46 testes / 128 asserções**. Seções
+  novas: áudio (buffer, `ptt: false`, `mimetype`, `encode/decode` real, reshare),
+  "só responde" (o comando não vira conteúdo nem citação, `quotedMessage`
+  ausente, texto respondido vira status, legenda do anexo, prioridade do texto do
+  comando, view once) e os não-suportados. `tests/viewonce-v2.test.js` ganhou
+  testes diretos de `extractQuoted`/`extractText` (18 testes / 77 asserções).
+  Validado: 46/46, 18/18 e regressão verde (get-message-inspector, pg-commands,
+  testcall, antimidia, defensive-protection, enqueteimg, relationships-multi,
+  blacklist-number, gifsbn-media, cmd-suggest). `node --check` e boot OK.
+- **Não validado em aparelho real** (sem sessão pareada): o áudio **tocar** e o
+  botão de repostar aparecer. O que está provado por teste é o payload/stanza.
+
+## COMANDO `!d` reescrito + MINI SISTEMA de apagar GROUP STATUS (set/2026) ✅
+- **Case trocada** por um bloco novo (pedido do dono): a permissão virou
+  `if (!isGroupAdmin && !isPremium)`, o alvo é resolvido por
+  `extendedTextMessage.contextInfo.stanzaId || viewOnceMessage.contextInfo.stanzaId || info.key.id`,
+  e o fluxo de **pagamento** (editar mensagem vazia + apagar original + apagar
+  editada) ficou idêntico ao enviado. **Nomes novos no escopo do switch**
+  (`stanzaId`, `quotedMessage`, `citouStatus`, `idEhStatusPublicado`,
+  `statusPointer`): conferido que não há uso anterior no mesmo switch — sem TDZ.
+- **Problema que o mini sistema resolve**: o `!d` normal **não apagava** o
+  status do grupo. Dois motivos, medidos no payload: (1) o `!d` comum monta a
+  key como mensagem de TERCEIRO (`fromMe: false` + `participant`), enquanto um
+  status publicado pelo bot é `fromMe: true`; (2) o status é uma stanza especial
+  (`is_group_status='true'`), então a revogação precisa sair no **mesmo formato**.
+- **Módulo novo** `dados/src/utils/groupStatus.js` (puro, sem Baileys):
+  - `isGroupStatusContent(content)` — reconhece `groupStatusMessageV2`/
+    `groupStatusMessage`/`contextInfo.isGroupStatus`, descascando wrappers;
+  - `buildGroupStatusRevokePayloads(key)` — devolve **duas** tentativas: a
+    revogação encapsulada como status (`{ groupStatus: true, delete }`, que leva
+    `is_group_status='true'`) e a simples como rede de segurança;
+  - registro em memória por chat (`rememberPublishedGroupStatus`,
+    `isPublishedGroupStatus`, `getLastPublishedGroupStatus`,
+    `forgetPublishedGroupStatus`, `clearPublishedGroupStatuses`), TTL 12h, teto
+    de 50 por chat.
+- **`!statusgrupo` alimenta o registro**: ao publicar, guarda
+  `statusEnviado.key.id`. É o que permite apagar depois sem depender de citar a
+  mensagem (o cliente não entrega o status como citável de forma confiável).
+- **Como o `!d` decide**: se o citado é status (`isGroupStatusContent`) OU o ID
+  citado está no registro → revoga ESSE id. Se o `!d` veio **sem alvo** e há
+  status publicado no grupo → cai no **último** do registro (antes respondia só
+  "Marque uma mensagem" e nada era apagado). Então apaga também a mensagem do
+  comando.
+- **Testes**: `tests/delete-status.test.js` — **11 testes / 55 asserções**:
+  helpers puros (reconhecimento, ordem dos payloads, registro), `!d` sem alvo →
+  último status, `!d` citando status, formato da revogação, apagar comando,
+  barrado para não-admin, e a **regressão** dos fluxos antigos (mensagem de
+  terceiro com `fromMe:false`+participant, pagamento com edição, sem alvo e sem
+  status). Validado: 11/11 + regressão verde (statusgrupo 46/46, viewonce-v2,
+  get-message-inspector, antimidia, pg-commands, testcall, blacklist-number,
+  defensive-protection). `node --check` e boot OK.
+- **Créditos no `!statusgrupo`**: comentário `Comando desenvolvido por 𝐊𝐚𝐧𝐧𝐨𝐧.`
+  no início da case.
+- **ARMADILHA (custou uma rodada)**: editar o `index.js` com Python usando
+  `open(..., encoding='utf-8')` + `readlines/writelines` **corrompeu o arquivo
+  inteiro** (todo acento virou mojibake — lido como cp1251). A solução foi
+  sempre `open(path, 'rb')` → `.decode('utf-8')` → operar em `str` → gravar com
+  `.encode('utf-8')`, e conferir com `b.count(b'\xd0\x93\xc2\xa9') == 0`.
+
 ## COMANDO `!antimidia` (era `!antifoton`) — apaga foto E vídeo ✅
 - **O que faz**: apaga fotos e vídeos **normais** enviados por quem não é
   admin/dono. **Visualização única é isenta de propósito** — o objetivo é
