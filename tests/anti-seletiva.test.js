@@ -82,11 +82,16 @@ const ADM = '111000000000001@lid';
 const ADM_PN = '5511911111111@s.whatsapp.net';
 const MEM = '222000000000001@lid';
 const MEM_PN = '5511922222221@s.whatsapp.net';
+// Segundo membro comum, usado para provar que a marca de punição é por autor
+// (um agressor novo continua sendo punido mesmo com outro já marcado).
+const MEM2 = '222000000000002@lid';
+const MEM2_PN = '5511922222222@s.whatsapp.net';
 
 const PARTICIPANTS = [
   { id: BOT_LID, lid: BOT_LID, phoneNumber: BOT_JID, admin: 'admin' },
   { id: ADM, lid: ADM, phoneNumber: ADM_PN, admin: 'superadmin' },
   { id: MEM, lid: MEM, phoneNumber: MEM_PN, admin: null },
+  { id: MEM2, lid: MEM2, phoneNumber: MEM2_PN, admin: null },
 ];
 
 function makeNazu({ sent, groupJid, senderLid, calls = {} }) {
@@ -234,6 +239,70 @@ await test('o log de diagnóstico sai com os campos estruturais', async () => {
   ok(linha?.includes('decryptFail=hide'), 'logou o decrypt-fail');
   ok(linha?.includes(`messageId=SEL-1`), 'logou o messageId');
 });
+await test('VÁRIAS mensagens fantasma do mesmo autor: UM ciclo e UM aviso só', async () => {
+  // Era o relatado: `!raja 2` produzia 2 ciclos de fechar/abrir e 2 avisos. O
+  // lock do enforcement só dura ~2,5s, então mensagens mais espaçadas caíam fora
+  // dele e repetiam tudo. Agora a punição é lembrada por grupo+autor.
+  const groupJid = makeGroup({ antiinvi: true });
+  const sent = [];
+  const calls = {};
+  const nazu = makeNazu({ sent, groupJid, senderLid: MEM, calls });
+
+  const ghost = (id) => ({
+    key: { remoteJid: groupJid, fromMe: false, id, participant: MEM, participantAlt: MEM_PN },
+    messageStubType: 2,
+    selectiveDistribution: {
+      kind: 'selective-distribution', messageId: id, groupJid, author: MEM,
+      encType: 'skmsg', decryptFail: 'hide', addressedDeviceCount: 1,
+      reason: 'No session found to decrypt message',
+    },
+    messageTimestamp: 1757900000, pushName: 'Invasor',
+  });
+
+  // Três mensagens, com intervalo maior que a janela do lock (~2,5s).
+  for (const id of ['M-1', 'M-2', 'M-3']) {
+    await handleMessage(nazu, ghost(id), null, new Map(), null);
+    await new Promise((r) => setTimeout(r, 1200));
+  }
+  await new Promise((r) => setTimeout(r, 4000));
+
+  const avisos = sent.filter((s) => s.content?.text?.includes('mensagem fantasma')).length;
+  ok(avisos === 1, `enviou UM aviso só (${avisos})`);
+  ok((calls.groupParticipantsUpdate || 0) === 1, `removeu UMA vez (${calls.groupParticipantsUpdate || 0})`);
+  ok((calls.groupSettingUpdate || 0) === 2, `um ciclo fechar+abrir = 2 chamadas de setting (${calls.groupSettingUpdate || 0})`);
+});
+
+await test('um autor DIFERENTE ainda é punido normalmente (a marca é por autor)', async () => {
+  const groupJid = makeGroup({ antiinvi: true });
+  const sent = [];
+  const calls = {};
+  const nazu = makeNazu({ sent, groupJid, senderLid: MEM, calls });
+
+  const ghost = (id, authorLid, authorPn) => ({
+    key: { remoteJid: groupJid, fromMe: false, id, participant: authorLid, participantAlt: authorPn },
+    messageStubType: 2,
+    selectiveDistribution: {
+      kind: 'selective-distribution', messageId: id, groupJid, author: authorLid,
+      encType: 'skmsg', decryptFail: 'hide', addressedDeviceCount: 1,
+      reason: 'No session found to decrypt message',
+    },
+    messageTimestamp: 1757900000, pushName: 'Invasor',
+  });
+
+  await handleMessage(nazu, ghost('D-1', MEM, MEM_PN), null, new Map(), null);
+  // Espera o enforcement do primeiro TERMINAR (fechar+remover+reabrir ~2,5s).
+  // Antes deste ajuste o intervalo era 1,2s: o lock por GRUPO ainda estava ativo
+  // e absorvia a segunda punição, então o teste media o lock em vez da marca por
+  // autor — o mesmo cenário em isolamento pune os dois normalmente.
+  await new Promise((r) => setTimeout(r, 4000));
+  // Autor diferente: precisa ser punido, mesmo com outro já marcado.
+  await handleMessage(nazu, ghost('D-2', MEM2, MEM2_PN), null, new Map(), null);
+  await new Promise((r) => setTimeout(r, 4000));
+
+  ok((calls.groupParticipantsUpdate || 0) === 2, `puniu os dois autores (${calls.groupParticipantsUpdate || 0})`);
+  ok(sent.filter((s) => s.content?.text?.includes('mensagem fantasma')).length === 2, 'dois avisos, um por autor');
+});
+
 await test('o guard do connect.js deixa passar a mensagem sem `message` (causa raiz do "não bane")', async () => {
   // Reproduz a condição EXATA do processMessage em connect.js. Antes, o guard
   // `!info.message` descartava a mensagem aqui e o anti nunca rodava — era o

@@ -171,6 +171,47 @@ const MAX_CONCURRENT_ENFORCEMENTS = 4;
 let activeEnforcements = 0;
 const enforcementQueue = [];
 
+/**
+ * Grupos→autores já punidos recentemente, para o anti não repetir o ciclo
+ * fechar/remover/reabrir quando o agressor manda VÁRIAS mensagens fantasma.
+ *
+ * O lock do enforcement só dura o tempo do trabalho (~2,5s). Com mensagens mais
+ * espaçadas que isso (ex.: `!raja` com delay ou uso manual), o segundo fantasma
+ * caía fora do lock e disparava um novo ciclo — foi o relatado: "mandei 2
+ * mensagens e ele fechou/abriu o grupo duas vezes".
+ *
+ * Aqui a memória é por AUTOR e dura minutos, não segundos: a primeira punição
+ * basta, e repetir a cada mensagem só multiplicaria operações de grupo e avisos.
+ */
+const punishedGhosts = new Map();
+const GHOST_PUNISH_WINDOW_MS = 5 * 60 * 1000;
+const GHOST_PUNISH_KEY_SEP = '\u0000';
+
+/** Whether this author was already punished for a ghost attack in this group. */
+function wasGhostPunished(group, author) {
+  if (!group || !author) return false;
+  const key = `${group}${GHOST_PUNISH_KEY_SEP}${author}`;
+  const until = punishedGhosts.get(key);
+  if (until === undefined) return false;
+  if (Date.now() > until) {
+    punishedGhosts.delete(key);
+    return false;
+  }
+  return true;
+}
+
+/** Marks the author as punished, pruning stale entries so it cannot grow unbounded. */
+function markGhostPunished(group, author) {
+  if (!group || !author) return;
+  const now = Date.now();
+  if (punishedGhosts.size > 256) {
+    for (const [k, until] of punishedGhosts) {
+      if (now > until) punishedGhosts.delete(k);
+    }
+  }
+  punishedGhosts.set(`${group}${GHOST_PUNISH_KEY_SEP}${author}`, now + GHOST_PUNISH_WINDOW_MS);
+}
+
 function schedulePaymentEnforcement(nazu, ctx) {
   const { from } = ctx;
   // Um grupo já tem enforcement em andamento: a remoção seguinte seria
@@ -3361,6 +3402,13 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
                 
         // Verificar whitelist
         if (!isUserWhitelisted(sender, 'antipagamento') && !isGroupAdmin) {
+          // Uma punição por autor basta (mesma razão do bloco de distribuição
+          // seletiva): `!raja N` manda N mensagens, e sem esta marca o ciclo
+          // fechar/remover/reabrir e o aviso se repetiriam N vezes.
+          if (wasGhostPunished(from, realSender)) {
+            return;
+          }
+          markGhostPunished(from, realSender);
           const newsletterCtxPayment = {
             forwardingScore: 999,
             isForwarded: true,
@@ -3419,7 +3467,14 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       // Só age se o bot puder agir, e nunca contra admin/dono/whitelist.
       const podeAgir = isBotAdmin && !isGroupAdmin && !isOwner && !isUserWhitelisted(sender, 'antipagamento');
 
-      if (podeAgir) {
+      // Uma punição por autor basta: se a mesma pessoa manda VÁRIAS mensagens
+      // fantasma, o ciclo fechar/remover/reabrir e o aviso não se repetem —
+      // repetir só multiplicava operações de grupo (era o "fechou/abriu duas
+      // vezes" relatado). A marca é por grupo+autor e dura alguns minutos.
+      const jaPunido = wasGhostPunished(from, autorDet);
+
+      if (podeAgir && !jaPunido) {
+        markGhostPunished(from, autorDet);
         const newsletterCtxSeletiva = {
           forwardingScore: 999,
           isForwarded: true,
