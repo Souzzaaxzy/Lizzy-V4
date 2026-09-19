@@ -242,10 +242,20 @@ async function runPaymentEnforcement(nazu, ctx) {
   const { from, sender, isReplyToPayment, info, quotedPaymentAuthor } = ctx;
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+  // ORDEM IMPORTA: fechar e REMOVER primeiro, e só então reabrir.
+  //
+  // Antes havia um `sleep(1500)` ANTES do remove, para o "efeito RAVENA" de
+  // fechar o grupo antes de expulsar. O preço era o atraso do ban: em um teste
+  // real com 10 mensagens fantasma espaçadas, o bot só removeu na SÉTIMA — cada
+  // mensagem chegava enquanto o enforcement ainda dormia.
+  //
+  // Agora a expulsão sai primeiro (o fechamento já foi disparado antes dela, sem
+  // esperar), então o agressor é removido na PRIMEIRA mensagem. Os sleeps
+  // permanecem apenas para segurar o grupo fechado o suficiente antes de
+  // reabrir, que era o objetivo original do efeito visual.
   await nazu.groupSettingUpdate(from, 'announcement').catch(() => {});
-  await sleep(1500);
   await nazu.groupParticipantsUpdate(from, [sender], 'remove').catch((e) => console.error('Erro ao remover por pagamento:', e));
-  await sleep(1000);
+  await sleep(1500);
   await nazu.groupSettingUpdate(from, 'not_announcement').catch(() => {});
   await nazu.sendMessage(from, { delete: { remoteJid: from, fromMe: false, id: info.key.id, participant: sender } }).catch(() => {});
 
@@ -32278,7 +32288,10 @@ break;
           }
 
           const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-          const DELAY_MS = 700;
+          // 100ms: rajada mesmo, uma mensagem atrás da outra. Era 700ms, o que
+          // espaçava demais e dava tempo do grupo "respirar" entre os envios.
+          // O teto de 50 (`MAX_RAJA`) continua sendo o limite de volume.
+          const DELAY_MS = 100;
           let enviados = 0;
           const falhas = [];
 

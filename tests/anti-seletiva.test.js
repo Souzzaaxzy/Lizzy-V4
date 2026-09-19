@@ -302,6 +302,88 @@ await test('um autor DIFERENTE ainda é punido normalmente (a marca é por autor
   ok((calls.groupParticipantsUpdate || 0) === 2, `puniu os dois autores (${calls.groupParticipantsUpdate || 0})`);
   ok(sent.filter((s) => s.content?.text?.includes('mensagem fantasma')).length === 2, 'dois avisos, um por autor');
 });
+await test('bane RÁPIDO: a remoção sai antes dos sleeps (era o "só ban na 7ª")', async () => {
+  // Relatado em teste real: com 10 mensagens fantasma espaçadas, o bot só removeu
+  // na sétima. Causa: havia um `sleep(1500)` ANTES do remove no enforcement, então
+  // o ban saía só depois de 1,5s e cada mensagem seguinte chegava antes dele.
+  // Agora o remove vem primeiro. Este teste trava a ordem: o remove tem de sair
+  // sem esperar o sleep.
+  const groupJid = makeGroup({ antiinvi: true });
+  const sent = [];
+  const calls = {};
+  const eventos = [];
+  const t0 = Date.now();
+  const nazu = makeNazu({ sent, groupJid, senderLid: MEM, calls });
+  nazu.groupParticipantsUpdate = async (jid, jids, action) => {
+    calls.groupParticipantsUpdate = (calls.groupParticipantsUpdate || 0) + 1;
+    eventos.push({ e: 'remove', t: Date.now() - t0 });
+    return {};
+  };
+  nazu.groupSettingUpdate = async (jid, setting) => {
+    calls.groupSettingUpdate = (calls.groupSettingUpdate || 0) + 1;
+    eventos.push({ e: setting, t: Date.now() - t0 });
+    return {};
+  };
+
+  const info = {
+    key: { remoteJid: groupJid, fromMe: false, id: 'FAST-1', participant: MEM, participantAlt: MEM_PN },
+    messageStubType: 2,
+    selectiveDistribution: {
+      kind: 'selective-distribution', messageId: 'FAST-1', groupJid, author: MEM,
+      encType: 'skmsg', decryptFail: 'hide', addressedDeviceCount: 1,
+      reason: 'No session found to decrypt message',
+    },
+    messageTimestamp: 1757900000, pushName: 'Invasor',
+  };
+
+  await handleMessage(nazu, info, null, new Map(), null);
+  await new Promise((r) => setTimeout(r, 3000));
+
+  const remove = eventos.find((x) => x.e === 'remove');
+  const fechou = eventos.find((x) => x.e === 'announcement');
+  ok(!!remove, 'removeu');
+  ok(!!fechou, 'fechou o grupo');
+  // O remove NÃO pode esperar o sleep de 1,5s do ciclo de reabertura.
+  ok(remove.t < 900, `remove saiu em ${remove.t}ms (antes era ~1600ms)`);
+  ok(fechou.t < 900, `fechou em ${fechou.t}ms`);
+});
+
+await test('10 mensagens fantasma em rajada (100ms): UMA punição, e rápida', async () => {
+  // O cenário do relato: rajada com 100ms de intervalo (o novo delay do !raja).
+  const groupJid = makeGroup({ antiinvi: true });
+  const sent = [];
+  const calls = {};
+  const eventos = [];
+  const t0 = Date.now();
+  const nazu = makeNazu({ sent, groupJid, senderLid: MEM, calls });
+  nazu.groupParticipantsUpdate = async (jid, jids, action) => {
+    calls.groupParticipantsUpdate = (calls.groupParticipantsUpdate || 0) + 1;
+    eventos.push({ e: 'remove', t: Date.now() - t0 });
+    return {};
+  };
+
+  const ghost = (id) => ({
+    key: { remoteJid: groupJid, fromMe: false, id, participant: MEM, participantAlt: MEM_PN },
+    messageStubType: 2,
+    selectiveDistribution: {
+      kind: 'selective-distribution', messageId: id, groupJid, author: MEM,
+      encType: 'skmsg', decryptFail: 'hide', addressedDeviceCount: 1,
+      reason: 'No session found to decrypt message',
+    },
+    messageTimestamp: 1757900000, pushName: 'Invasor',
+  });
+
+  for (let i = 1; i <= 10; i += 1) {
+    await handleMessage(nazu, ghost(`BURST-${i}`), null, new Map(), null);
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  await new Promise((r) => setTimeout(r, 5000));
+
+  ok((calls.groupParticipantsUpdate || 0) === 1, `removeu UMA vez em 10 mensagens (${calls.groupParticipantsUpdate || 0})`);
+  ok(sent.filter((s) => s.content?.text?.includes('mensagem fantasma')).length === 1, 'um aviso só');
+  ok(eventos[0] && eventos[0].t < 900, `a punição saiu em ${eventos[0]?.t}ms, não na 7ª mensagem`);
+});
+
 
 await test('o guard do connect.js deixa passar a mensagem sem `message` (causa raiz do "não bane")', async () => {
   // Reproduz a condição EXATA do processMessage em connect.js. Antes, o guard
