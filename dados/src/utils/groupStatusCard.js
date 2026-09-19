@@ -165,7 +165,7 @@ export function buildAuthorContextStatus(opts = {}) {
 // ---------------------------------------------------------------------------
 
 /** Variantes disponíveis no `!testecard`. */
-export const CARD_VARIANTS = ['full', 'attribution', 'quote', 'plain'];
+export const CARD_VARIANTS = ['full', 'attribution', 'poster', 'quote', 'plain'];
 
 /**
  * Monta o payload de UMA variante do experimento.
@@ -194,6 +194,20 @@ export function buildCardVariant(variant, opts = {}) {
         contextInfo: {
           ...STATUS_CONTEXT_INFO,
           statusAttributions: ci.statusAttributions,
+        },
+      };
+
+    // Só o `posterStatusId` — o campo de `ContextInfo` cujo nome é literalmente
+    // "quem postou o status". Se ALGUM campo fizer o cliente resolver o autor,
+    // a aposta mais provável é esta (o `authorJid` já foi testado no aparelho e
+    // o cliente ignorou).
+    case 'poster':
+      return {
+        groupStatus: true,
+        text: base.text,
+        contextInfo: {
+          ...STATUS_CONTEXT_INFO,
+          posterStatusId: opts.authorJid,
         },
       };
 

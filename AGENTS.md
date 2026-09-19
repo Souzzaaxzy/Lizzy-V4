@@ -948,8 +948,8 @@ resolver nome/foto — em vez de o bot montar um card PNG?
   (`authorJid`/`participantAlt`) + contexto (`participant`) + referência
   (`quotedMessage`/`stanzaId`/`remoteJid`).
 - `buildCardVariant(variant, opts)` e `CARD_VARIANTS` — variantes que isolam uma
-  hipótese cada, para comparar no aparelho: `full` (tudo), `attribution` (só o
-  autor), `quote` (só a referência, controle), `plain` (status comum, controle).
+  hipótese cada: `full` (tudo), `attribution` (só o autor), `poster` (só
+  `posterStatusId`), `quote` (só a referência, controle), `plain` (controle puro).
 - `describePayload(content)` — resumo de uma linha para o console separar
   "o servidor rejeitou" de "saiu e o cliente ignorou".
 - O módulo recebe o `proto` **por parâmetro** (não importa o Baileys), então é
@@ -971,7 +971,7 @@ resolver nome/foto — em vez de o bot montar um card PNG?
 - Erros tratados com mensagem clara; log técnico só no console (`[TESTECARD]`).
 - Menu: linha na categoria de administração do `menuadm`.
 
-### Testes — `tests/testecard.test.js` (22 testes / 93 asserções)
+### Testes — `tests/testecard.test.js` (25 testes / 106 asserções)
 Helpers puros, ausência de campo inventado, variantes, **round-trip real de
 protobuf** (prova de que autor/contexto/referência viajam no fio), handler real
 (sem reply, fora de grupo, não-admin, variante inválida, mensagem sem texto,
@@ -1010,6 +1010,40 @@ tratado como "não converteu" (antes isso fazia o LID virar `authorJid` errado).
 Testes de regressão adicionados ao `tests/testecard.test.js` (agora **25 testes /
 102 asserções**): autor em **LID** publica e não responde "não identifiquei"; o
 comando funciona vindo em **legenda de imagem**; as 4 variantes publicam.
+
+### RESULTADO NO APARELHO (set/2026) — o cliente IGNOROU a atribuição ❌
+O dono testou no WhatsApp real: **o status foi publicado, mas o perfil do autor
+NÃO apareceu**. Ou seja: o servidor **aceitou** o payload (a stanza não foi
+rejeitada), e o **cliente descartou** o `authorJid` na renderização.
+
+**Onde exatamente o WhatsApp descarta**: não no envio. O campo é serializado,
+chega ao destinatário (provado por round-trip) e simplesmente **não é lido** para
+desenhar o status. Não há erro, não há rejeição — o comportamento é de campo
+ignorado, não de campo inválido.
+
+**Por que isso era esperado, em retrospecto**: o `authorJid` é a **assinatura do
+autor** do status, preenchida pelo **próprio cliente oficial** quando a pessoa
+posta o status no grupo. O fluxo nativo é: o autor posta → o cliente dele anexa
+o próprio JID. Um bot que publica em nome do grupo **não é** o autor, então o
+cliente não tem por que confiar/renderizar um `authorJid` que não corresponde ao
+remetente real da stanza. É, na prática, spoofing de atribuição — e o cliente
+protege contra isso ignorando o campo.
+
+**Conclusão honesta**: o protocolo **aceita** a estrutura (campo existe, é
+serializável, é usado pelo cliente oficial no fluxo dele), mas **não permite**
+que um terceiro a use para dizer "esta mensagem é do João". Não é possível fazer
+o WhatsApp renderizar nome/foto do autor nativamente a partir de um bot.
+
+### Alternativa testada: `posterStatusId`
+Adicionada a variante **`poster`** (`!testecard poster`), que usa
+`ContextInfo.posterStatusId` (field 79) — o campo em `ContextInfo` cujo nome é
+literalmente "quem postou o status". É o candidato mais forte depois do
+`authorJid`, e sobrevive ao wire (verificado). Falta testar no aparelho; se
+também for ignorado, fecha-se o conjunto de campos plausíveis do `ContextInfo`.
+
+Campo descartado na investigação: `originalSelfAuthor` vive em `MsgOpaqueData`,
+que **não tem** caminho a partir de `ContextInfo` — não dá para usá-lo num
+Group Status.
 
 ### O que está PROVADO e o que NÃO está
 - **Provado por teste**: o payload monta, sobrevive ao `encode`/`decode`,

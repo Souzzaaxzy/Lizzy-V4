@@ -196,7 +196,13 @@ await test('variantes: cada uma isola uma hipótese', () => {
   ok(!plain.contextInfo.statusAttributions.some((a) => a.groupStatus?.authorJid), 'plain sem autor');
 
   ok(card.buildCardVariant('inexistente', opts) === null, 'variante inválida -> null');
-  ok(card.CARD_VARIANTS.length === 4, 'quatro variantes');
+  ok(card.CARD_VARIANTS.length === 5, 'cinco variantes');
+
+  // poster: o campo literal 'quem postou o status' (ContextInfo.posterStatusId)
+  const poster = card.buildCardVariant('poster', opts);
+  ok(poster.contextInfo.posterStatusId === opts.authorJid, 'poster usa posterStatusId');
+  ok(!poster.contextInfo.participant, 'poster sem participant');
+  ok(!poster.contextInfo.statusAttributions.some((a) => a.groupStatus?.authorJid), 'poster sem atribuicao');
 });
 
 await test('describePayload: resumo de uma linha para diagnóstico', () => {
