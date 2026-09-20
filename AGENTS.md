@@ -1008,6 +1008,82 @@ ir para o status**.
   sempre `open(path, 'rb')` → `.decode('utf-8')` → operar em `str` → gravar com
   `.encode('utf-8')`, e conferir com `b.count(b'\xd0\x93\xc2\xa9') == 0`.
 
+## PLUGIN REMOTO "!antifantasma" — núcleo privado no servidor, adaptador no cliente ✅
+Pedido do dono: um plugin remoto em que o **código real** do AntiFantasma fica no
+servidor da Lizzy e o usuário recebe **só um adaptador**. O usuário personaliza
+livremente a case e os comandos de ligar/desligar no `Index.js` dele.
+
+### Estrutura
+- **Servidor (privado, na Lizzy)** — `dados/src/antifantasma/`:
+  - `core.js` — o **núcleo real**: guardas, classificação do ataque e a decisão
+    das ações. Puro (sem I/O), testável direto. **Nunca é servido nem entregue.**
+  - `api.js` — servidor HTTP (`node:http` nativo, **zero dependência nova**):
+    valida a KEY, chama o núcleo e devolve **só a ação abstrata**. Persiste as
+    KEYs em `dados/database/antifantasma/keys.json` (escrita atômica com tmp
+    único). Tem `criarKey()`, `revogarKey()`, `validarKey()` e
+    `processarRequisicao()` (testável sem abrir porta).
+- **Cliente (entregável)** — `dados/src/antifantasma-cliente/antifantasma.js`:
+  o **único** arquivo entregue ao usuário. CommonJS (`require('./antifantasma')`,
+  como o pedido especifica), com estado local e as funções públicas.
+
+### Vocabulário de ações (o cliente só EXECUTA, não decide)
+`close_group` → `groupSettingUpdate(g, 'announcement')`
+`ban_user`     → `groupParticipantsUpdate(g, [a], 'remove')`
+`open_group`  → `groupSettingUpdate(g, 'not_announcement')`
+A ordem (fechar → banir → reabrir) e o **quando** de cada uma ficam no `core.js`.
+
+### Interface pública que o usuário vê
+`executar({ sock, grupo, autor, contexto, reply })`, `ativar()`, `desativar()`,
+`estaAtivo()` e `iniciar(sock)`. Os **nomes das cases são escolha do usuário** —
+o plugin não impõe nenhum (`afon`/`afoff`/`seguranca`/qualquer coisa). O texto
+das respostas também é livre.
+
+### Separação de responsabilidades (o ponto central)
+- **KEY** → autoriza o acesso à API. `validarKey` roda **no servidor**; nunca há
+  `if (authorized)` no cliente, porque o usuário tem o próprio adaptador e
+  poderia burlá-lo. KEY ausente/inexistente/de outro plugin/revogada → **403** e
+  o **núcleo não executa**.
+- **ativar/desativar** → controle **local**, do usuário. Desativado, o adaptador
+  **nem faz a chamada** (testado).
+- A KEY **não** liga/desliga o plugin — são eixos independentes, como pedido.
+
+### Regra de ouro: a API nunca devolve código
+A resposta carrega apenas `{ success, action, actions, notice }` — nada de
+`code`, função, algoritmo, caminho de arquivo ou stack. Nenhum endpoint serve o
+núcleo: `/core.js`, `/api/antifantasma/source`, `/api/antifantasma/code` e
+afins respondem **404** (testado por HTTP real). Só existe
+`POST /api/antifantasma/exec`.
+
+### Integração no bot
+`connect.js` sobe a API **só quando `ANTIFANTASMA_PORT` está definida**, dentro de
+try/catch — sem a env, nada muda e nenhuma porta abre. Env documentada no
+`.env.example`.
+
+### Testes — `tests/antifantasma-plugin.test.js` (20 testes / 143 asserções)
+Núcleo (as 3 ações; guardas: não-grupo, mensagem própria, bot sem poder, autor
+desconhecido/privilegiado/whitelisted/já punido; os dois sinais exigidos juntos
+para não dar falso positivo; entrada inválida não quebra), API (KEY válida/
+inválida/ausente/revogada/de outro plugin; não executa o núcleo sem KEY válida;
+sem ataque devolve sucesso sem ação) e **o teste de vazamento**: varre as
+respostas e o HTTP real proibindo `function`, `=>`, `require(`, `core.js`,
+`dados/`, `selectiveDistribution`, `decidir(`, `stack` etc. — e confirma que o
+arquivo entregue **não contém** nenhum critério de decisão.
+- **Bug corrigido durante os testes**: `iniciarApi(0)` retornava `null` porque a
+  checagem era por falsy (`!port`) — e `0` é porta efêmera **válida**. Agora a
+  checagem distingue "sem argumento" (exige env válida) de "argumento 0" (porta
+  efêmera, usada nos testes).
+- **Armadilha do entregável**: o repo é ESM (`"type": "module"`), então
+  `module.exports` num `.js` lança. O adaptador é CommonJS porque é o que o
+  `require()` do bot do usuário espera; no teste ele é materializado como `.cjs`.
+  Se o bot do usuário for ESM, o arquivo só precisa ser renomeado para `.cjs`.
+- **Armadilha de versão**: `dist/` está no `.gitignore`, então o entregável
+  ficaria fora do git. Ele mora em `dados/src/antifantasma-cliente/`.
+
+### Escopo deliberadamente pequeno
+Nada de marketplace, catálogo, registry, heartbeat, sistema genérico de
+permissões, loja ou dashboard. Só o AntiFantasma: `core.js` + `api.js` no
+servidor, `antifantasma.js` no cliente.
+
 ## COMANDO `!antimidia` (era `!antifoton`) — apaga foto E vídeo ✅
 - **O que faz**: apaga fotos e vídeos **normais** enviados por quem não é
   admin/dono. **Visualização única é isenta de propósito** — o objetivo é

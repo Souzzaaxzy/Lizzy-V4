@@ -13,6 +13,10 @@ yarn-error.log*
 dados/database/*.json
 dados/database/grupos/*.json
 dados/database/dono/*.json
+# Subdiretórios criados em runtime (ex.: antifantasma/keys.json, que guarda as
+# KEYs das instalações). Sem isto, um JSON novo em subpasta entraria no commit —
+# e as KEYs vazariam junto.
+dados/database/**/*.json
 !dados/database/.gitkeep
 !dados/database/grupos/.gitkeep
 !dados/database/dono/.gitkeep
