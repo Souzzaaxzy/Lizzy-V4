@@ -1,0 +1,268 @@
+/**
+ * TESTE DO LADO DO USUÁRIO — fluxo real, sem mock da Lizzy.
+ *
+ * Simula o que a bot do usuário realmente faz:
+ *
+ *   1. Recebe o arquivo `antifantasma.js` (exatamente o que a Lizzy envia).
+ *   2. Recebe a KEY gerada pelo servidor.
+ *   3. Importa o arquivo como o tutorial ensina.
+ *   4. Roda as cases personalizadas.
+ *   5. Uma mensagem com sinal de ataque chega → o servidor decide → as ações
+ *      rodam no socket do usuário.
+ *
+ * O único dublê é o SOCKET (o WhatsApp do usuário) e o servidor HTTP local —
+ * nada do lado da Lizzy é substituído: usa a API real, o núcleo real e as keys
+ * reais.
+ *
+ * Uso: node tests/antifantasma-usuario.test.js
+ */
+
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import http from 'node:http';
+import { createRequire } from 'module';
+import { fileURLToPath } from 'url';
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const PROJECT = path.resolve(HERE, '..');
+const require = createRequire(import.meta.url);
+
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'lizzy-user-e2e-'));
+process.env.DATABASE_PATH = TMP;
+fs.mkdirSync(path.join(TMP, 'antifantasma'), { recursive: true });
+
+// Servidor da Lizzy: a API real, sem dublê.
+const api = await import(new URL('../dados/src/antifantasma/api.js', import.meta.url).href);
+const keys = await import(new URL('../dados/src/antifantasma/keys.js', import.meta.url).href);
+
+let ok = 0;
+let fail = 0;
+const erros = [];
+
+function check(cond, msg) {
+  if (cond) { ok += 1; console.log(`✅ ${msg}`); }
+  else { fail += 1; erros.push(msg); console.log(`❌ ${msg}`); }
+}
+
+// ============================================================================
+// 1) A LIZZY CRIA A KEY (o que o !addghostcmd faz)
+// ============================================================================
+
+const NUMERO_USUARIO = '5511999999999';
+const registro = keys.criarKey({ owner: NUMERO_USUARIO });
+check(Boolean(registro.key), `Lizzy gerou a key #${registro.id}`);
+
+// ============================================================================
+// 2) A LIZZY ENTREGA O ARQUIVO (montado como o !addghostcmd monta)
+// ============================================================================
+
+const server = api.iniciarApi(0);
+await new Promise((r) => setTimeout(r, 250));
+const portaApi = server.address().port;
+const endpoint = `http://127.0.0.1:${portaApi}/api/antifantasma/exec`;
+
+const fonteEntregavel = fs.readFileSync(
+  path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antifantasma.js'),
+  'utf-8'
+);
+const arquivoEntregue = fonteEntregavel
+  .replace(/const API_URL = '[^']*';/, `const API_URL = '${endpoint}';`)
+  .replace(/const KEY = '[^']*';/, `const KEY = '${registro.key}';`)
+  .replace(/const BOT_ID = '[^']*';/, `const BOT_ID = '${NUMERO_USUARIO}';`);
+
+// Sanidade do entregável: é o adaptador e não contém o núcleo.
+check(arquivoEntregue.includes('executar'), 'o arquivo entregue é o adaptador');
+check(!arquivoEntregue.includes('selectiveDistribution'), 'o arquivo NÃO contém a regra interna');
+check(!arquivoEntregue.includes('core.js'), 'o arquivo NÃO referencia o núcleo');
+
+// ============================================================================
+// 3) A BOT DO USUÁRIO INSTALA (como o tutorial manda)
+// ============================================================================
+
+// A bot do usuário é CommonJS: `const antiFantasma = require('./antifantasma')`.
+const destino = path.join(TMP, 'antifantasma.cjs');
+fs.writeFileSync(destino, arquivoEntregue);
+const antiFantasma = require(destino);
+
+check(typeof antiFantasma.executar === 'function', 'usuario consegue importar e chamar executar');
+check(typeof antiFantasma.ativar === 'function', 'tem ativar');
+check(typeof antiFantasma.desativar === 'function', 'tem desativar');
+check(typeof antiFantasma.estaAtivo === 'function', 'tem estaAtivo');
+
+// ============================================================================
+// 4) SOCKET FALSO (é o WhatsApp do usuário, não a Lizzy)
+// ============================================================================
+
+const acoesNoSocket = [];
+const sock = {
+  groupSettingUpdate: async (grupo, tipo) => { acoesNoSocket.push(`setting:${tipo}`); },
+  groupParticipantsUpdate: async (grupo, alvos, acao) => {
+    acoesNoSocket.push(`participants:${acao}:${alvos[0]}`);
+  },
+  sendMessage: async (grupo, conteudo) => { acoesNoSocket.push('aviso'); },
+};
+
+const GRUPO = '120363000000000000@g.us';
+const ATACANTE = '5511888888888@s.whatsapp.net';
+
+// ============================================================================
+// 5) CASES PERSONALIZADAS DO USUÁRIO (nomes livres, como o tutorial permite)
+// ============================================================================
+
+const respostas = [];
+const reply = async (t) => { respostas.push(t); };
+
+/** Case 'afon' — o usuário escolheu esse nome. */
+async function caseAfon() {
+  antiFantasma.ativar();
+  await reply('🟢 AntiFantasma ativado.');
+}
+
+/** Case 'afoff'. */
+async function caseAfoff() {
+  antiFantasma.desativar();
+  await reply('🔴 AntiFantasma desativado.');
+}
+
+/** Case 'afstatus'. */
+async function caseAfstatus() {
+  await reply(antiFantasma.estaAtivo() ? '🟢 Ligado' : '🔴 Desligado');
+}
+
+/** Case 'antifantasma' — avaliar uma mensagem (o exemplo do tutorial). */
+async function caseAntifantasma(msg) {
+  return antiFantasma.executar({
+    sock,
+    grupo: msg.grupo,
+    autor: msg.autor,
+    reply,
+    contexto: msg.contexto,
+  });
+}
+
+// ============================================================================
+// 6) FLUXO REAL
+// ============================================================================
+
+console.log('\n── desativado por padrão ──');
+check(antiFantasma.estaAtivo() === false, 'começa desativado');
+const antesOff = acoesNoSocket.length;
+await caseAntifantasma({ grupo: GRUPO, autor: ATACANTE, contexto: { isGroup: true, botIsAdmin: true, sender: ATACANTE, selectiveDistribution: true, undecryptableGroupMessage: true } });
+check(acoesNoSocket.length === antesOff, 'desativado: nenhuma ação no socket (nem chama a API)');
+
+console.log('\n── usuário ativa com a case dele ──');
+await caseAfon();
+check(antiFantasma.estaAtivo() === true, "case 'afon' ativou");
+check(respostas.at(-1).includes('ativado'), 'respondeu o texto que ELE escolheu');
+
+await caseAfstatus();
+check(respostas.at(-1).includes('Ligado'), "case 'afstatus' responde o estado");
+
+console.log('\n── mensagem NORMAL: nada acontece ──');
+const antesNormal = acoesNoSocket.length;
+const rNormal = await caseAntifantasma({
+  grupo: GRUPO, autor: ATACANTE,
+  contexto: { isGroup: true, botIsAdmin: true, sender: ATACANTE },
+});
+check(rNormal.ok === true && rNormal.acoes.length === 0, 'mensagem normal não gera ação');
+check(acoesNoSocket.length === antesNormal, 'nada aconteceu no grupo');
+
+console.log('\n── ATAQUE: servidor decide e as ações rodam ──');
+const rAtaque = await caseAntifantasma({
+  grupo: GRUPO, autor: ATACANTE,
+  contexto: {
+    isGroup: true, botIsAdmin: true, sender: ATACANTE,
+    selectiveDistribution: true, undecryptableGroupMessage: true,
+  },
+});
+
+check(rAtaque.ok === true, 'executou sem erro');
+check(rAtaque.acoes.length === 3, `três ações (${rAtaque.acoes})`);
+check(acoesNoSocket.includes('setting:announcement'), 'grupo FECHADO');
+check(acoesNoSocket.includes(`participants:remove:${ATACANTE}`), 'atacante BANIDO');
+check(acoesNoSocket.includes('setting:not_announcement'), 'grupo REABERTO');
+check(acoesNoSocket.includes('aviso'), 'aviso publicado');
+
+console.log('\n── ataque do ADMIN: não deve ser punido ──');
+const antesAdmin = acoesNoSocket.length;
+await caseAntifantasma({
+  grupo: GRUPO, autor: ATACANTE,
+  contexto: {
+    isGroup: true, botIsAdmin: true, sender: ATACANTE,
+    senderIsPrivileged: true,
+    selectiveDistribution: true, undecryptableGroupMessage: true,
+  },
+});
+check(acoesNoSocket.length === antesAdmin, 'admin não é punido');
+
+console.log('\n── usuário desativa ──');
+await caseAfoff();
+check(antiFantasma.estaAtivo() === false, "case 'afoff' desativou");
+
+console.log('\n── KEY revogada: recusada mesmo com o arquivo em mãos ──');
+antiFantasma.ativar();
+keys.revogarPorId(registro.id);
+const respostasAntes = respostas.length;
+const rRevogada = await caseAntifantasma({
+  grupo: GRUPO, autor: ATACANTE,
+  contexto: { isGroup: true, botIsAdmin: true, sender: ATACANTE, selectiveDistribution: true, undecryptableGroupMessage: true },
+});
+check(rRevogada.ok === false, 'key revogada não executa');
+check(respostas.slice(respostasAntes).some((t) => t.includes('KEY do AntiFantasma inválida')), 'avisa a key inválida');
+
+console.log('\n── KEY de OUTRO usuário: recusada (1 key = 1 usuário) ──');
+const outro = keys.criarKey({ owner: '5511777777777' });
+fs.writeFileSync(
+  path.join(TMP, 'outro.cjs'),
+  fonteEntregavel
+    .replace(/const API_URL = '[^']*';/, `const API_URL = '${endpoint}';`)
+    .replace(/const KEY = '[^']*';/, `const KEY = '${outro.key}';`)
+    // Simula o usuário B usando a key do usuário A: mantém o BOT_ID do A.
+    .replace(/const BOT_ID = '[^']*';/, `const BOT_ID = '${NUMERO_USUARIO}';`)
+);
+const afOutro = require(path.join(TMP, 'outro.cjs'));
+afOutro.ativar();
+const rOutro = await afOutro.executar({
+  sock, grupo: GRUPO, autor: ATACANTE, reply,
+  contexto: { isGroup: true, botIsAdmin: true, sender: ATACANTE, selectiveDistribution: true, undecryptableGroupMessage: true },
+});
+check(rOutro.ok === false, 'key de outro dono é recusada');
+
+// ============================================================================
+// 7) ERROS DE AMBIENTE
+// ============================================================================
+
+console.log('\n── API fora do ar ──');
+const afCaiu = require((() => {
+  const p = path.join(TMP, 'caiu.cjs');
+  fs.writeFileSync(p, fonteEntregavel
+    .replace(/const API_URL = '[^']*';/, "const API_URL = 'http://127.0.0.1:1/x';")
+    .replace(/const KEY = '[^']*';/, `const KEY = '${registro.key}';`)
+    .replace(/const BOT_ID = '[^']*';/, `const BOT_ID = '${NUMERO_USUARIO}';`));
+  return p;
+})());
+afCaiu.ativar();
+const rCaiu = await afCaiu.executar({ sock, grupo: GRUPO, autor: ATACANTE, reply, contexto: {} });
+check(rCaiu.ok === false, 'falha controlada');
+check(respostas.some((t) => t.includes('Serviço AntiFantasma indisponível')), 'avisa indisponível');
+
+console.log('\n── chamada sem sock/grupo ──');
+const rSemSock = await antiFantasma.executar({ contexto: {} });
+check(rSemSock.ok === false, 'sem sock não quebra');
+
+await new Promise((r) => server.close(r));
+
+console.log('\n════════════════════════════════════════');
+console.log(`RESULTADO: ${ok} ok | ${fail} falhas`);
+console.log('════════════════════════════════════════');
+
+fs.rmSync(TMP, { recursive: true, force: true });
+
+if (fail) {
+  console.log('\nFALHAS:');
+  for (const e of erros) console.log(`- ${e}`);
+  process.exit(1);
+}
+console.log('✅ FLUXO DO USUÁRIO VALIDADO SEM ERROS');
+process.exit(0);

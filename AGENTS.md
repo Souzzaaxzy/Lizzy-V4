@@ -1068,6 +1068,26 @@ nenhuma existente).
   não contém `selectiveDistribution`/`undecryptableGroupMessage`/`normalizeContext`
   nem referencia `core.js`.
 
+### Teste do LADO DO USUÁRIO (set/2026) ✅
+Dois testes validam a ponta do usuário, com o servidor REAL (nada da Lizzy é
+substituído — só o socket do WhatsApp e o host/porta viram locais):
+
+- **`tests/antifantasma-usuario.test.js` (29 asserções)** — simula a bot do
+  usuário: importa o arquivo do jeito que o tutorial ensina, cria as **cases
+  personalizadas** (`afon`/`afoff`/`afstatus`/`antifantasma` — nomes livres) e
+  percorre o fluxo: desativado não chama a API; ativa; mensagem normal não gera
+  ação; **ataque fecha/bani/reabre**; admin não é punido; desativa; **key
+  revogada recusada**; **key de outro dono recusada**; API fora do ar tratada;
+  chamada sem `sock` não quebra.
+- **`tests/antifantasma-entrega.test.js` (17 asserções)** — a diferença
+  importante: o arquivo sai do **`!addghostcmd` rodando de verdade no handler**
+  (não é montado à mão). Confere que a entrega vem **configurada** (URL real, KEY
+  e BOT_ID preenchidos, sem placeholder), que o **tutorial** tem import/case/
+  ativar/desativar e deixa claro que o nome é livre, e então **instala esse
+  arquivo e roda** — fechando a cadeia `comando → arquivo → bot do usuário → API`.
+- Verificado também o health pela **URL pública real**:
+  `{"ok":true,"tipo":"online","versao":"1"}`.
+
 ### Testes — `tests/ghost-manager.test.js` (35 testes / 139 asserções)
 Registro (ids sequenciais, revogar não libera número, duplo revogar, inexistente,
 estatísticas, dono obrigatório, máscara), **persistência** (relê do disco com
