@@ -1059,6 +1059,37 @@ afins respondem **404** (testado por HTTP real). Só existe
 try/catch — sem a env, nada muda e nenhuma porta abre. Env documentada no
 `.env.example`.
 
+### Detecção automática da URL HTTPS (set/2026) ✅
+O administrador **não precisa** descobrir/digitar a URL pública: o bot detecta o
+domínio da plataforma sozinho.
+
+- Módulo novo **`dados/src/utils/publicUrl.js`** (puro: recebe o `env` por
+  parâmetro, então cada plataforma é testável sem tocar no processo):
+  `detectarUrlPublica()`, `portaConfigurada()`, `endpointAntiFantasma()` e
+  `resumoParaLog()`.
+- **Fontes consultadas** (a primeira que existir vence):
+  `ANTIFANTASMA_PUBLIC_URL` / `PUBLIC_URL` (override do admin) → `RUNTIME_URL`
+  (**este ambiente**, já vem com esquema) → Render → Railway → Vercel → Koyeb →
+  Fly → Heroku → Azure → Codespaces → `PUBLIC_HOSTNAME`/`DOMAIN`.
+- **Normalização**: sem esquema assume `https://`; **`http://` em host público
+  vira `https://`** (a KEY não pode trafegar em claro); `http://` é mantido só em
+  `localhost`/`127.0.0.1` para desenvolvimento; barra final removida para não
+  gerar `//` no endpoint.
+- **Log no início do bot** (`dados/src/.scripts/start.js`, logo após o IP do
+  servidor, então aparece também a cada reset):
+  ```
+  🔐 AntiFantasma (plugin remoto)
+     URL pública: https://<host detectado>
+     Porta da API: 8080
+     Endpoint:    https://<host>/api/antifantasma/exec
+  ```
+  O log só aparece quando há algo a mostrar (URL detectada **ou** porta
+  configurada) — num bot que não usa a API, o boot não ganha ruído. Quando não
+  detecta, orienta a definir `ANTIFANTASMA_PUBLIC_URL`.
+- `iniciarApi()` também loga a URL/endpoint ao subir. `endpointPublico()` expõe o
+  valor para quem quiser consumir.
+- Nada disso é específico do AntiFantasma: serve para qualquer endpoint público.
+
 ### Testes — `tests/antifantasma-plugin.test.js` (20 testes / 143 asserções)
 Núcleo (as 3 ações; guardas: não-grupo, mensagem própria, bot sem poder, autor
 desconhecido/privilegiado/whitelisted/já punido; os dois sinais exigidos juntos

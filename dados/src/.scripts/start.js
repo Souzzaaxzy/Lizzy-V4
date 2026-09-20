@@ -302,6 +302,19 @@ async function startBot(codeMode = false) {
   // Mostrar IP do servidor
   const serverIP = await getServerIP();
   info(`🌐 IP do Servidor: ${colors.yellow}${serverIP}${colors.reset}`);
+
+  // URL pública HTTPS detectada automaticamente (a mesma que vai no adaptador
+  // do AntiFantasma). Só aparece se houver o que mostrar.
+  try {
+    const { resumoParaLog } = await import('../utils/publicUrl.js');
+    const resumo = resumoParaLog();
+    if (resumo) {
+      for (const linha of resumo.texto.split('\n')) info(linha);
+    }
+  } catch {
+    // Detecção é informativa: nunca impede o boot.
+  }
+
   info(`📷 Iniciando com ${codeMode ? 'código de pareamento' : 'QR Code'}`);
 
   botProcess = spawn('node', args, {

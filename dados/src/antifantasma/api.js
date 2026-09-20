@@ -18,6 +18,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 
 import { DATABASE_DIR } from '../utils/paths.js';
+import { resumoParaLog, endpointAntiFantasma } from '../utils/publicUrl.js';
 import { decidir, mensagemDoMotivo, ACTIONS } from './core.js';
 
 const KEYS_FILE = path.join(DATABASE_DIR, 'antifantasma', 'keys.json');
@@ -226,10 +227,20 @@ export function iniciarApi(port) {
   });
 
   server.listen(port, () => {
+    // Loga a URL pública detectada automaticamente — é ela que vai no adaptador
+    // do usuário. Se a detecção falhar, aponta a variável para definir à mão.
+    const resumo = resumoParaLog();
     console.log(`[ANTIFANTASMA] API ouvindo na porta ${port}`);
+    if (resumo) console.log(resumo.texto);
+    else console.log('   (defina ANTIFANTASMA_PUBLIC_URL para registrar a URL pública)');
   });
 
   return server;
+}
+
+/** Endpoint público sugerido para colocar no adaptador do usuário. */
+export function endpointPublico(env = process.env) {
+  return endpointAntiFantasma(env);
 }
 
 export { ACTIONS, PLUGIN_ID, KEYS_FILE };

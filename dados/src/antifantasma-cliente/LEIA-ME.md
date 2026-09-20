@@ -14,7 +14,14 @@ const API_URL = 'https://SEU-SERVIDOR/api/antifantasma/exec';
 const KEY = 'SUA-KEY-AQUI';
 ```
 
-Em produção use **HTTPS**.
+A `API_URL` é o **endpoint da Lizzy** (o servidor do plugin) — não a sua. Quem
+instala o plugin gera a KEY e informa as duas linhas.
+
+> O servidor detecta sozinho a própria URL pública: no início da Lizzy aparece
+> no log algo como
+> `Endpoint: https://host/api/antifantasma/exec`. É esse valor que vai aqui.
+
+Em produção use **HTTPS** (a KEY nunca deve trafegar em claro).
 
 ## 2. Importe no Index.js
 
