@@ -1102,6 +1102,48 @@ nenhuma existente).
   de grupo próprio. E os helpers precisam **achatar** `richResponse`
   (`sub.text` + `sub.code[].codeContent`), senão o teste não enxerga o tutorial.
 
+### LEVAR PARA OUTRO BOT — só o arquivo, nada do projeto (set/2026) ✅
+Pedido do dono: *"passar o comando de antifantasma para outro bot sem ele
+precisar dos arquivos diversos que realmente executa"*. Ou seja: o outro bot
+recebe **um arquivo** e mais nada; a lógica continua no servidor.
+
+**Já era assim — e agora está provado.** O entregável depende **apenas de
+módulos nativos do Node** (`node:http`/`node:https`); não referencia
+`core.js`/`api.js`/`keys.js`/`health.js`/`utils/` em lugar nenhum.
+- **`tests/antifantasma-autossuficiente.test.js` (14)** — análise estática
+  (todo `require` do CÓDIGO é nativo; a análise ignora comentários, senão a
+  própria documentação do arquivo dava falso positivo) **+ runtime**: copia
+  **só** `antiinvisivel.cjs` para uma pasta limpa, confirma que há **1 arquivo
+  na pasta**, que `core.js` **não existe** ali, e roda ativar → ataque
+  (fecha/bani/reabre) até o fim.
+- O que fica no **cliente**: observar as mensagens, relatar os sinais crus e
+  executar os nomes de ação autorizados. O que fica no **servidor**: a
+  classificação do ataque, as guardas e a decisão. Nenhum "arquivo diverso"
+  viaja junto.
+
+**Nomes de variável não são obstáculo**: a CASE usa `isGroup`,
+`isGroupAdmin`, `isBotAdmin`, `reply`, `nazu`, `from`, `info` — **exatamente os
+mesmos** da case que o dono já tinha no outro bot (comparado com a que ele
+mandou). Por isso funcionou no bot dele sem renomear nada.
+
+**A KEY é o único ponto preso ao servidor**: ela fica registrada no servidor
+que a gerou (`keys.json`). Arquivo gerado por **outro** servidor → `inexistente`
+→ "KEY inválida" (agora com o motivo logado). Leads a duas regras práticas,
+documentadas no `LEIA-ME`:
+1. gerar o arquivo pelo `!addghostcmd` **do servidor que vai atender**,
+   respondendo a uma mensagem **do número do outro bot** (é o `BOT_ID`);
+2. se o bot de destino já tinha arquivo antigo, ele precisa ser **substituído**
+   — o antigo carrega o `require` que quebra em ESM.
+
+**Limite honesto**: o formato do payload (contexto) é o mesmo que a API da
+Lizzy espera. Se o outro bot for baseado numa lib/versão com nomes muito
+diferentes de `nazu`/`groupMetadata`/`sendMessage`, a CASE precisa de ajuste —
+mas o arquivo continua igual.
+
+**Suítes**: plugin 21/154, usuario 40/40, entrega 19/19, e2e 22/22,
+instalacao-limpa 20/20, **autossuficiente 14/14**, esm-replica 10/10,
+cjs-replica 5/5, ghost-manager 37/154.
+
 ### VERIFICAÇÃO COMPLETA — 3 causas reais do "ainda não funciona" (set/2026) ✅
 O dono reportou que **no bot de destino não funcionava**, com este log:
 `erro: '❌ KEY do AntiFantasma inválida ou revogada.'` — e a pergunta "descubra
