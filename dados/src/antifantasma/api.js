@@ -15,7 +15,7 @@
 
 import http from 'node:http';
 
-import { resumoParaLog, endpointAntiFantasma } from '../utils/publicUrl.js';
+import { resumoParaLog, endpointAntiFantasma, escolherPorta } from '../utils/publicUrl.js';
 import { decidir, mensagemDoMotivo, ACTIONS } from './core.js';
 import { validarKey, PLUGIN_ID, KEYS_FILE } from './keys.js';
 
@@ -23,6 +23,27 @@ import { validarKey, PLUGIN_ID, KEYS_FILE } from './keys.js';
 // uma requisição enorme consuma memória.
 const MAX_BODY_BYTES = 8 * 1024;
 const VERSAO_API = '1';
+
+/**
+ * Porta em que ESTA API está ouvindo, quando está no ar.
+ *
+ * Guardada em módulo porque a URL pública depende dela: neste runtime cada porta
+ * publicada tem o seu subdomínio (`work-1`, `work-2`), então quem for montar o
+ * endereço precisa usar a porta REAL — não a que está na variável de ambiente.
+ */
+let portaAtual = 0;
+
+/** Porta em uso pela API. `0` quando ela não subiu. */
+export function portaEmUso() {
+  return portaAtual;
+}
+
+/** Define a porta em uso. Usado internamente pelo `iniciarApi`. */
+export function definirPortaEmUso(porta) {
+  const n = Number(porta);
+  portaAtual = Number.isFinite(n) && n > 0 ? n : 0;
+  return portaAtual;
+}
 
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -121,12 +142,12 @@ export function processarRequisicao(entrada) {
  * @returns {import('node:http').Server|null}
  */
 export function iniciarApi(port) {
-  // Sem argumento: só sobe quando `ANTIFANTASMA_PORT` está definida e válida.
-  // Assim o boot padrão do bot não abre porta nenhuma.
+  // Sem argumento: a porta é ESCOLHIDA automaticamente — `ANTIFANTASMA_PORT` se
+  // definida, senão a primeira porta publicada do runtime (WORKER_1/WORKER_2,
+  // que têm subdomínio HTTPS próprio). Sem nenhuma, a API não sobe.
   if (port === undefined) {
-    const doEnv = Number(process.env.ANTIFANTASMA_PORT);
-    if (!process.env.ANTIFANTASMA_PORT || Number.isNaN(doEnv) || doEnv <= 0) return null;
-    port = doEnv;
+    port = escolherPorta();
+    if (!port) return null;
   }
 
   // Com argumento, `0` é válido de propósito (porta efêmera, usada nos testes).
@@ -173,20 +194,29 @@ export function iniciarApi(port) {
   });
 
   server.listen(port, () => {
-    // Loga a URL pública detectada automaticamente — é ela que vai no adaptador
-    // do usuário. Se a detecção falhar, aponta a variável para definir à mão.
-    const resumo = resumoParaLog();
-    console.log(`[ANTIFANTASMA] API ouvindo na porta ${port}`);
+    // A porta REAL em uso (quando passamos 0, o SO escolhe) é a que determina o
+    // subdomínio. Registramos ela no módulo para que o `!ghostcmd` e o
+    // `!addghostcmd` montem a URL certa — senão anunciariam a porta errada e o
+    // adaptador do usuário falaria com outro serviço.
+    const portaReal = server.address()?.port ?? port;
+    definirPortaEmUso(portaReal);
+
+    const resumo = resumoParaLog(process.env, { porta: portaReal });
+    console.log(`[ANTIFANTASMA] API ouvindo na porta ${portaReal}`);
     if (resumo) console.log(resumo.texto);
     else console.log('   (defina ANTIFANTASMA_PUBLIC_URL para registrar a URL pública)');
+  });
+
+  server.on('close', () => {
+    definirPortaEmUso(0);
   });
 
   return server;
 }
 
 /** Endpoint público sugerido para colocar no adaptador do usuário. */
-export function endpointPublico(env = process.env) {
-  return endpointAntiFantasma(env);
+export function endpointPublico(env = process.env, opts = {}) {
+  return endpointAntiFantasma(env, opts);
 }
 
 export { ACTIONS, PLUGIN_ID, KEYS_FILE };

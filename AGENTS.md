@@ -1137,6 +1137,53 @@ try/catch — sem a env, nada muda e nenhuma porta abre. Env documentada no
 O administrador **não precisa** descobrir/digitar a URL pública: o bot detecta o
 domínio da plataforma sozinho.
 
+#### Mapeamento PORTA → subdomínio (medido e comprovado)
+Neste runtime as variáveis `WORKER_1=12000` e `WORKER_2=12001` são **portas
+publicadas**, e cada uma responde num subdomínio próprio:
+
+```
+12000 -> https://work-1-<host>
+12001 -> https://work-2-<host>
+```
+
+**Comprovado empiricamente**: subi um servidor na 12000 e `https://work-1-<host>/`
+devolveu **200** com o corpo do servidor; derrubando o servidor, voltou **502**
+(ou seja: o proxy→porta existe e é específico daquela porta). Portas fora dessa
+lista **não têm subdomínio** — nelas a única URL válida é a base do runtime.
+
+**Por isso a detecção sabe a PORTA.** Sem essa ligação, uma API ouvindo na 12001
+seria anunciada com a URL da 12000, e o adaptador do usuário falaria com o
+serviço errado.
+
+- `portasPublicadas(env)` → `[12000, 12001]` (lê `WORKER_1`/`WORKER_2`)
+- `escolherPorta(env)` → `ANTIFANTASMA_PORT` se definida; senão a **primeira porta
+  publicada**. É a escolha que faz o "detectar sozinho" funcionar de verdade:
+  nelas existe subdomínio HTTPS alcançável de fora.
+- `detectarUrlPublica(env, { porta })` → resolve o subdomínio daquela porta.
+- `portaEmUso()` (na `api.js`) → a porta REAL em que o servidor subiu. O
+  `!ghostcmd` e o `!addghostcmd` usam ela (não a env), para não montar a URL da
+  porta errada. É zerada quando o servidor fecha.
+
+#### Resultado: tudo automático, ponta a ponta
+- `connect.js` chama `iniciarApi()` **sem argumento** → a API escolhe a porta
+  publicada sozinha e detecta a URL correspondente.
+- `!addghostcmd` entrega o `antifantasma.js` **já preenchido** com a URL real
+  (`work-1`), a key e o botId — verificado: `API_URL` saiu com `work-1-<host>`,
+  sem o placeholder `api.exemplo.com`.
+- Health respondido pela URL pública real: `{"ok":true,"tipo":"online"}`.
+- Boot real mostra:
+  ```
+  [ANTIFANTASMA] API ouvindo na porta 12000
+  🔐 AntiFantasma (plugin remoto)
+     URL pública: https://work-1-<host>
+     Porta da API: 12000
+     Endpoint:    https://work-1-<host>/api/antifantasma/exec
+  ```
+- `ANTIFANTASMA_PORT` continua sendo o override — se definida, ganha (e a URL
+  passa a ser a base, já que a porta deixa de ser uma das publicadas).
+
+#### Demais fontes (inalterado)
+
 - Módulo novo **`dados/src/utils/publicUrl.js`** (puro: recebe o `env` por
   parâmetro, então cada plataforma é testável sem tocar no processo):
   `detectarUrlPublica()`, `portaConfigurada()`, `endpointAntiFantasma()` e

@@ -304,10 +304,12 @@ async function startBot(codeMode = false) {
   info(`🌐 IP do Servidor: ${colors.yellow}${serverIP}${colors.reset}`);
 
   // URL pública HTTPS detectada automaticamente (a mesma que vai no adaptador
-  // do AntiFantasma). Só aparece se houver o que mostrar.
+  // do AntiFantasma). A porta também é escolhida sozinha (a publicada do
+  // runtime, quando não houver ANTIFANTASMA_PORT). Só aparece se houver o que
+  // mostrar.
   try {
-    const { resumoParaLog } = await import('../utils/publicUrl.js');
-    const resumo = resumoParaLog();
+    const { resumoParaLog, escolherPorta } = await import('../utils/publicUrl.js');
+    const resumo = resumoParaLog(process.env, { porta: escolherPorta() });
     if (resumo) {
       for (const linha of resumo.texto.split('\n')) info(linha);
     }

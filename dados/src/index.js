@@ -28,6 +28,7 @@ import { toOggOpus } from './utils/oggOpus.js';
 import * as ghostKeys from './antifantasma/keys.js';
 import { verificarSaude as ghostVerificarSaude } from './antifantasma/health.js';
 import { endpointAntiFantasma as ghostEndpointUrl } from './utils/publicUrl.js';
+import { portaEmUso as ghostPortaEmUso } from './antifantasma/api.js';
 import {
   isGroupStatusContent,
   buildGroupStatusRevokePayloads,
@@ -2572,13 +2573,27 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     // ── 👻 PLUGIN FANTASMA ───────────────────────────────────────────────
     // Encapsula as duas coisas que os comandos precisam: a URL pública da API
     // (detectada automaticamente, com fallback pela porta local) e o health.
-    const ghostEndpoint = () => ghostEndpointUrl();
+    //
+    // A porta vem do SERVIDOR quando ele está no ar (`ghostPortaAtiva()`), senão
+    // da variável de ambiente. É essa porta que define o subdomínio público
+    // (work-1/work-2), então usar a porta errada mandaria o adaptador do usuário
+    // para outro endereço.
+    const ghostPortaAtiva = () => {
+      const ativa = Number(ghostPortaEmUso?.()) || 0;
+      return ativa > 0 ? ativa : (Number(process.env.ANTIFANTASMA_PORT) || 0);
+    };
+    const ghostPortaOpts = () => {
+      const p = ghostPortaAtiva();
+      return p > 0 ? { porta: p } : {};
+    };
+    const ghostPortaOuZero = () => ghostPortaAtiva();
+    const ghostEndpoint = () => ghostEndpointUrl(process.env, ghostPortaOpts());
     const ghostHealth = async () => {
       const base = ghostEndpoint();
       if (base) return ghostVerificarSaude(base, { timeoutMs: 5000 });
       // Sem URL pública, tenta a API local (o servidor pode estar no ar mesmo
       // sem domínio detectado) — assim o painel ainda diz algo util.
-      const porta = Number(process.env.ANTIFANTASMA_PORT) || 0;
+      const porta = ghostPortaOuZero();
       if (!porta) return { ok: false, tipo: 'offline', detalhe: 'nao_configurado' };
       return ghostVerificarSaude(`http://127.0.0.1:${porta}`, { timeoutMs: 3000 });
     };

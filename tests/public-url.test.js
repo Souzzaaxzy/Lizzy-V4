@@ -46,6 +46,56 @@ test('OpenHands runtime (RUNTIME_URL) — o host deste ambiente', () => {
      'https://abc.prod-runtime.all-hands.dev');
 });
 
+test('portasPublicadas lê WORKER_1/WORKER_2', () => {
+  eq(JSON.stringify(m.portasPublicadas({ WORKER_1: '12000', WORKER_2: '12001' })), '[12000,12001]');
+  eq(JSON.stringify(m.portasPublicadas({ WORKER_1: '12000' })), '[12000]');
+  eq(JSON.stringify(m.portasPublicadas({ WORKER_2: '12001' })), '[12001]');
+  eq(JSON.stringify(m.portasPublicadas({})), '[]');
+  eq(JSON.stringify(m.portasPublicadas({ WORKER_1: 'abc', WORKER_2: '-1' })), '[]', 'valores inválidos');
+  eq(JSON.stringify(m.portasPublicadas(null)), '[]');
+});
+
+test('URL por PORTA: work-1 / work-2 (medido neste runtime)', () => {
+  const env = {
+    RUNTIME_URL: 'https://abc.prod-runtime.all-hands.dev',
+    WORKER_1: '12000',
+    WORKER_2: '12001',
+  };
+  eq(m.detectarUrlPublica(env, { porta: 12000 }), 'https://work-1-abc.prod-runtime.all-hands.dev');
+  eq(m.detectarUrlPublica(env, { porta: 12001 }), 'https://work-2-abc.prod-runtime.all-hands.dev');
+});
+
+test('porta sem subdomínio cai na URL base do runtime', () => {
+  const env = { RUNTIME_URL: 'https://abc.host.dev', WORKER_1: '12000', WORKER_2: '12001' };
+  eq(m.detectarUrlPublica(env, { porta: 8080 }), 'https://abc.host.dev', 'porta 8080 não é publicada');
+  eq(m.detectarUrlPublica(env, { porta: 0 }), 'https://abc.host.dev', 'sem porta -> base');
+  eq(m.detectarUrlPublica(env, {}), 'https://abc.host.dev', 'sem opts -> base');
+});
+
+test('escolherPorta: env explícita ganha; senão a primeira publicada', () => {
+  eq(m.escolherPorta({ ANTIFANTASMA_PORT: '9000', WORKER_1: '12000' }), 9000, 'env explícita');
+  eq(m.escolherPorta({ WORKER_1: '12000', WORKER_2: '12001' }), 12000, 'primeira publicada');
+  eq(m.escolherPorta({ WORKER_2: '12001' }), 12001, 'só a segunda');
+  eq(m.escolherPorta({}), 0, 'nenhuma');
+});
+
+test('endpoint respeita a porta', () => {
+  const env = { RUNTIME_URL: 'https://abc.host.dev', WORKER_1: '12000' };
+  eq(m.endpointAntiFantasma(env, { porta: 12000 }),
+     'https://work-1-abc.host.dev/api/antifantasma/exec');
+  eq(m.endpointAntiFantasma(env, { porta: 9999 }),
+     'https://abc.host.dev/api/antifantasma/exec');
+});
+
+test('override do admin ignora o mapeamento de porta', () => {
+  const env = {
+    ANTIFANTASMA_PUBLIC_URL: 'https://meu.dominio.com',
+    RUNTIME_URL: 'https://abc.host.dev',
+    WORKER_1: '12000',
+  };
+  eq(m.detectarUrlPublica(env, { porta: 12000 }), 'https://meu.dominio.com');
+});
+
 test('Render, Railway, Vercel, Koyeb, Fly, Heroku, Azure', () => {
   eq(m.detectarUrlPublica({ RENDER_EXTERNAL_URL: 'https://x.onrender.com' }), 'https://x.onrender.com');
   eq(m.detectarUrlPublica({ RAILWAY_PUBLIC_DOMAIN: 'x.up.railway.app' }), 'https://x.up.railway.app');
