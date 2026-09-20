@@ -266,6 +266,8 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 │    Gerar acesso ao Plugin Fantasma
 │ 🗑️ ${prefix}delghostcmd <número>
 │    Revogar uma Key
+│ 🧹 ${prefix}delghostcmd alt
+│    Apagar TODAS as Keys
 ╰──────────────
 ╭─────────────────╮
 ╰─────────────────╯

@@ -1050,6 +1050,11 @@ Todos usam `canUseOwnerCmd` — **nenhum sistema de permissão novo**.
   Se o envio do arquivo falhar, avisa que a entrega **não** foi concluída.
 - **`!delghostcmd <número>`** — revoga (muda status, **não apaga**). Responde
   `revogada com sucesso` / `já está revogada` / `não encontrada`.
+- **`!delghostcmd alt`** — apaga **TODAS** as keys (ativas e revogadas), via
+  `apagarTodas()`. **O contador `nextId` NÃO volta**: se a #5 existiu, a próxima
+  key criada será #6 mesmo após a limpeza total — a regra "não reutilizar
+  número" sobrevive ao cenário mais destrutivo. Responde quantas removeu e qual
+  será a próxima. Sem nada para apagar, informa `Removidas: 0`.
 
 ### Menu
 Categoria **👻 PLUGIN FANTASMA** no `menudono` (adicionada, sem substituir
@@ -1063,7 +1068,7 @@ nenhuma existente).
   não contém `selectiveDistribution`/`undecryptableGroupMessage`/`normalizeContext`
   nem referencia `core.js`.
 
-### Testes — `tests/ghost-manager.test.js` (30 testes / 119 asserções)
+### Testes — `tests/ghost-manager.test.js` (35 testes / 139 asserções)
 Registro (ids sequenciais, revogar não libera número, duplo revogar, inexistente,
 estatísticas, dono obrigatório, máscara), **persistência** (relê do disco com
 `version`/`nextId`/status), **1 key = 1 usuário** (dono passa, outro é recusado

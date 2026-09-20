@@ -39766,10 +39766,31 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
         try {
           if (!canUseOwnerCmd('delghostcmd')) return reply('Este comando é apenas para o dono do bot!');
 
-          const numGhost = String(q || '').trim().split(/\s+/)[0];
-          if (!/^\d+$/.test(numGhost)) {
-            return reply(`❌ Use: ${groupPrefix}delghostcmd <número>\nExemplo: ${groupPrefix}delghostcmd 2`);
+          const argGhost = String(q || '').trim().split(/\s+/)[0] || '';
+
+          // `alt` apaga TUDO (ativas e revogadas). O contador de ids NÃO volta,
+          // então números antigos continuam sem poder ser reutilizados.
+          if (argGhost.toLowerCase() === 'alt') {
+            const apagado = ghostKeys.apagarTodas();
+            return nazu.sendMessage(from, {
+              text: [
+                '👻 *PLUGIN FANTASMA*',
+                '',
+                '🗑️ Todas as keys foram apagadas.',
+                `📊 Removidas: ${apagado.removidas}`,
+                `🔢 Próxima key será a #${apagado.proximoId} (números não se repetem)`,
+              ].join('\n'),
+            }, { quoted: info });
           }
+
+          if (!/^\d+$/.test(argGhost)) {
+            return reply(
+              `❌ Use: ${groupPrefix}delghostcmd <número>\n` +
+              `Ou: ${groupPrefix}delghostcmd alt (apaga TODAS as keys)\n` +
+              `Exemplo: ${groupPrefix}delghostcmd 2`
+            );
+          }
+          const numGhost = argGhost;
 
           const resGhost = ghostKeys.revogarPorId(Number(numGhost));
 

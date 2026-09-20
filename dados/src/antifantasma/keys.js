@@ -180,6 +180,27 @@ export function revogarPorId(id) {
   return { ok: true, registro };
 }
 
+/**
+ * Remove TODAS as keys (ativas e revogadas).
+ *
+ * Atenção deliberada ao `nextId`: ele NÃO é zerado. O contador continua de onde
+ * parou, então os números nunca são reutilizados — se a #5 existiu um dia, a
+ * próxima key criada será #6, mesmo após uma limpeza total. Isso preserva a
+ * regra "não reutilizar número" mesmo no cenário mais destrutivo.
+ *
+ * @returns {{removidas: number, proximoId: number}}
+ */
+export function apagarTodas() {
+  const estado = lerBruto();
+  const removidas = estado.keys.length;
+  const proximoId = estado.nextId;
+
+  estado.keys = [];
+  gravar(estado);
+
+  return { removidas, proximoId };
+}
+
 // ───────────────────────────────────────────────────────────────────────────
 // AUTORIZAÇÃO
 // ───────────────────────────────────────────────────────────────────────────

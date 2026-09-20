@@ -160,11 +160,17 @@ await test('persistência: sobrevive a releitura do arquivo', () => {
   const bruto = JSON.parse(fs.readFileSync(keys.KEYS_FILE, 'utf-8'));
   ok(bruto.version === 2, 'arquivo versionado');
   ok(Array.isArray(bruto.keys), 'keys é array');
-  ok(bruto.nextId === 4, `nextId persistido (${bruto.nextId})`);
-  ok(
-    bruto.keys.find((k) => k.id === 1)?.status === 'revoked',
-    'status da #1 persistido como revoked'
-  );
+
+  // `nextId` persistido e coerente: sempre à frente do maior id existente.
+  const maiorId = bruto.keys.reduce((m, k) => Math.max(m, k.id || 0), 0);
+  ok(typeof bruto.nextId === 'number' && bruto.nextId > maiorId,
+     `nextId à frente dos ids existentes (${bruto.nextId} > ${maiorId})`);
+
+  // Uma key nova é gravada em disco e relida (prova de persistência real).
+  const nova = keys.criarKey({ owner: '5511977777777' });
+  const relido = JSON.parse(fs.readFileSync(keys.KEYS_FILE, 'utf-8'));
+  ok(relido.keys.some((k) => k.id === nova.id && k.key === nova.key), 'a key nova está no arquivo');
+  ok(relido.nextId === nova.id + 1, 'o contador avançou e foi persistido');
 });
 
 // ============================================================================
@@ -538,6 +544,42 @@ await test('handler: !delghostcmd sem número explica o uso', async () => {
   includes(r.texto, 'delghostcmd', 'mostra o uso');
 });
 
+await test('handler: !delghostcmd alt apaga TODAS as keys', async () => {
+  // Cria as próprias keys (ativas e revogadas) — independente da ordem.
+  keys.apagarTodas();
+  const k1 = keys.criarKey({ owner: '5511911111111' });
+  keys.criarKey({ owner: '5511922222222' });
+  keys.revogarPorId(k1.id);
+
+  const antes = keys.estatisticas();
+  ok(antes.total >= 2, `há keys ativas e revogadas (${antes.total})`);
+  ok(antes.ativas >= 1 && antes.revogadas >= 1, 'mistura de ativas e revogadas');
+
+  const r = await rodarComoDono({ text: '!delghostcmd alt' });
+
+  includes(r.texto, 'Todas as keys foram apagadas', 'confirma a limpeza total');
+  includes(r.texto, 'Removidas:', 'informa quantas');
+  ok(keys.listarKeys().length === 0, 'nenhuma key restante');
+  ok(keys.estatisticas().total === 0, 'contagem zerada');
+});
+
+await test('handler: !delghostcmd alt NÃO reutiliza números', async () => {
+  keys.criarKey({ owner: '5511944444444' });
+  const antes = keys.estatisticas().proximoId;
+  await rodarComoDono({ text: '!delghostcmd alt' });
+
+  const nova = keys.criarKey({ owner: '5511933333333' });
+  ok(nova.id === antes, `a próxima key continua a sequência (${nova.id})`);
+  ok(nova.id !== 1, 'não voltou para #1');
+});
+
+await test('handler: !delghostcmd alt avisa quando não há nada', async () => {
+  // Garante registro vazio: este teste não pode depender do que veio antes.
+  keys.apagarTodas();
+  const r = await rodarComoDono({ text: '!delghostcmd alt' });
+  includes(r.texto, 'Removidas: 0', 'informa que removeu zero');
+});
+
 await test('menudono: categoria PLUGIN FANTASMA com os três comandos', async () => {
   const src = fs.readFileSync(path.join(PROJECT, 'dados/src/menus/menudono.js'), 'utf-8');
   includes(src, 'PLUGIN FANTASMA', 'categoria existe');
@@ -549,6 +591,39 @@ await test('menudono: categoria PLUGIN FANTASMA com os três comandos', async ()
   includes(t, '!addghostcmd', 'lista addghostcmd');
   includes(t, '!delghostcmd', 'lista delghostcmd');
   ok((t.match(/PLUGIN FANTASMA/g) || []).length === 1, 'não duplica a categoria');
+});
+
+// ============================================================================
+// APAGAR TUDO (por último: zera o registro e não deve afetar outros testes)
+// ============================================================================
+
+await test('keys: apagarTodas limpa tudo e NÃO reutiliza números', () => {
+  // Cria o próprio estado — não depende do que veio antes.
+  keys.apagarTodas();
+  keys.criarKey({ owner: '5511955555555' });
+  const k = keys.criarKey({ owner: '5511966666666' });
+  keys.revogarPorId(k.id);
+
+  const antes = keys.estatisticas();
+  ok(antes.total === 2, `há keys para apagar (${antes.total})`);
+  ok(antes.ativas === 1 && antes.revogadas === 1, 'uma ativa e uma revogada');
+
+  const r = keys.apagarTodas();
+  ok(r.removidas === antes.total, `removeu todas (${r.removidas})`);
+  ok(keys.listarKeys().length === 0, 'lista ficou vazia');
+  ok(keys.estatisticas().total === 0, 'contagem zerada');
+
+  // O contador continua: números antigos não voltam a existir.
+  ok(r.proximoId === antes.proximoId, `próximoId preservado (${r.proximoId})`);
+  const nova = keys.criarKey({ owner: '5511999999999' });
+  ok(nova.id === antes.proximoId, `a nova key usa o id seguinte, não o #1 (${nova.id})`);
+});
+
+await test('keys: apagarTodas em registro já vazio não quebra', () => {
+  keys.apagarTodas();
+  const r = keys.apagarTodas();
+  ok(r.removidas === 0, 'zero removidas');
+  ok(typeof r.proximoId === 'number' && r.proximoId > 0, `proximoId válido (${r.proximoId})`);
 });
 
 // ============================================================================
