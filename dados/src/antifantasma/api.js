@@ -102,7 +102,20 @@ export function processarRequisicao(entrada) {
   const validacao = validarKey(key, { botId });
   if (!validacao.ok) {
     // Nunca executar o núcleo com KEY inválida.
-    return { status: 403, body: { success: false, error: 'key_invalida' } };
+    //
+    // A resposta leva o MOTIVO da recusa (ausente/inexistente/revogada/
+    // dono_diferente). Sem ele, "KEY inválida" cobre quatro causas diferentes e
+    // o problema fica indiagnosticável no bot do usuário — foi exatamente o que
+    // aconteceu no campo. O motivo é um rótulo curto, não a key, nem o dono,
+    // nem nada do núcleo.
+    return {
+      status: 403,
+      body: {
+        success: false,
+        error: 'key_invalida',
+        reason: validacao.motivo || 'desconhecido',
+      },
+    };
   }
 
   let decisao;

@@ -75,7 +75,7 @@ const require = createRequire(import.meta.url);
 // O adaptador e CommonJS (o `require('./antifantasma')` do bot do usuario).
 // O repo da Lizzy e ESM, entao copiamos para .cjs e carregamos de la.
 const ADAPTADOR_CJS = path.join(TMP_DB, 'antiinvisivel.cjs');
-fs.copyFileSync(path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antiinvisivel.js'), ADAPTADOR_CJS);
+fs.copyFileSync(path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antiinvisivel.cjs'), ADAPTADOR_CJS);
 const adaptador = require(ADAPTADOR_CJS);
 
 const CONTEXTO_ATAQUE = {
@@ -166,6 +166,34 @@ await test('API: KEY inválida/ausente/revogada -> 403 e NÃO executa o núcleo'
   ok(revogada.body.actions === undefined, 'revogada não devolve ações');
 });
 
+await test('API: a recusa da KEY vem com o MOTIVO (diagnóstico do "KEY inválida")', () => {
+  // Sem o motivo, "KEY inválida" cobre 4 causas bem diferentes e não dá para
+  // saber o que arrumar — foi o que aconteceu no campo.
+  const inexistente = api.processarRequisicao({ key: 'MTX-NAOEXISTE', context: CONTEXTO_ATAQUE });
+  ok(inexistente.body.reason === 'inexistente', `motivo da inexistente (${inexistente.body.reason})`);
+
+  const ausente = api.processarRequisicao({ context: CONTEXTO_ATAQUE });
+  ok(ausente.body.reason === 'ausente', `motivo da ausente (${ausente.body.reason})`);
+
+  const revogavel = keys.criarKey({ owner: '5511999999999' });
+  keys.revogarPorId(revogavel.id);
+  const revogada = api.processarRequisicao({ key: revogavel.key, context: CONTEXTO_ATAQUE });
+  ok(revogada.body.reason === 'revogada', `motivo da revogada (${revogada.body.reason})`);
+
+  // Key válida, mas usada por OUTRO bot: o motivo diz exatamente isso.
+  const deOutro = keys.criarKey({ owner: '5511888888888' });
+  const outroBot = api.processarRequisicao({
+    key: deOutro.key, botId: '5511777777777', context: CONTEXTO_ATAQUE,
+  });
+  ok(outroBot.status === 403, 'key de outro dono é recusada');
+  ok(outroBot.body.reason === 'dono_diferente', `motivo dono_diferente (${outroBot.body.reason})`);
+
+  // O motivo é um rótulo curto: não pode carregar a key, o dono nem o núcleo.
+  const texto = JSON.stringify(inexistente.body);
+  ok(!texto.includes('MTX-NAOEXISTE'), 'a resposta não ecoa a key');
+  ok(!texto.includes('5511'), 'a resposta não expõe número de dono');
+});
+
 await test('API: KEY de outro plugin é recusada', () => {
   // Uma key que existe no arquivo mas nunca foi registrada pelo plugin não
   // autoriza nada (o registro agora é por id/dono, não por um mapa solto).
@@ -206,9 +234,10 @@ await test('API NUNCA vaza código, regra ou caminho interno', () => {
     const texto = JSON.stringify(body);
     const chaves = Object.keys(body);
 
-    // Só pode conter chaves de resultado.
+    // Só pode conter chaves de resultado. `reason` é o motivo da recusa da KEY
+    // (rótulo curto), que a Lizzy devolve para o problema ser diagnosticável.
     for (const k of chaves) {
-      ok(['success', 'error', 'action', 'actions', 'notice'].includes(k), `chave permitida (${k})`);
+      ok(['success', 'error', 'action', 'actions', 'notice', 'reason'].includes(k), `chave permitida (${k})`);
     }
 
     for (const p of proibidos) {
@@ -305,7 +334,7 @@ await test('adaptador: DESATIVADO não faz chamada nenhuma', async () => {
 });
 
 await test('adaptador: a lógica NÃO está no arquivo entregue', () => {
-  const fonte = fs.readFileSync(path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antiinvisivel.js'), 'utf-8');
+  const fonte = fs.readFileSync(path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antiinvisivel.cjs'), 'utf-8');
 
   // O adaptador RELATA sinais (é o trabalho dele) e conhece os NOMES das ações
   // (precisa executá-las). O que ele não pode conter é a DECISÃO: critérios,
@@ -348,7 +377,7 @@ await test('adaptador: executa as ações autorizadas via sock', async () => {
 
   // Adapta a URL do módulo para o servidor local (o arquivo é do usuário; aqui
   // só apontamos a API para o teste).
-  const fonte = fs.readFileSync(path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antiinvisivel.js'), 'utf-8');
+  const fonte = fs.readFileSync(path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antiinvisivel.cjs'), 'utf-8');
   const adaptado = fonte.replace(
     /const API_URL = '[^']*';/,
     `const API_URL = 'http://127.0.0.1:${porta}/api/antifantasma/exec';`
@@ -385,7 +414,7 @@ await test('adaptador: KEY inválida responde a mensagem certa', async () => {
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const porta = server.address().port;
 
-  const fonte = fs.readFileSync(path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antiinvisivel.js'), 'utf-8');
+  const fonte = fs.readFileSync(path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antiinvisivel.cjs'), 'utf-8');
   const adaptado = fonte.replace(/const API_URL = '[^']*';/, `const API_URL = 'http://127.0.0.1:${porta}/x';`);
   const tmp = path.join(TMP_DB, 'adaptador-403.cjs');
   fs.writeFileSync(tmp, adaptado);
@@ -402,7 +431,7 @@ await test('adaptador: KEY inválida responde a mensagem certa', async () => {
 });
 
 await test('adaptador: serviço indisponível responde a mensagem certa', async () => {
-  const fonte = fs.readFileSync(path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antiinvisivel.js'), 'utf-8');
+  const fonte = fs.readFileSync(path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antiinvisivel.cjs'), 'utf-8');
   // Porta fechada -> conexão recusada.
   const adaptado = fonte.replace(/const API_URL = '[^']*';/, "const API_URL = 'http://127.0.0.1:1/x';");
   const tmp = path.join(TMP_DB, 'adaptador-off.cjs');
@@ -426,7 +455,7 @@ await test('adaptador: erro interno responde a mensagem certa', async () => {
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const porta = server.address().port;
 
-  const fonte = fs.readFileSync(path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antiinvisivel.js'), 'utf-8');
+  const fonte = fs.readFileSync(path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antiinvisivel.cjs'), 'utf-8');
   const adaptado = fonte.replace(/const API_URL = '[^']*';/, `const API_URL = 'http://127.0.0.1:${porta}/x';`);
   const tmp = path.join(TMP_DB, 'adaptador-500.cjs');
   fs.writeFileSync(tmp, adaptado);

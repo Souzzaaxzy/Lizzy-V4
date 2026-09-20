@@ -39665,7 +39665,7 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
           let codigoAdaptador;
           try {
             codigoAdaptador = await fsPromises.readFile(
-              pathz.join(__dirname, 'antifantasma-cliente', 'antiinvisivel.js'),
+              pathz.join(__dirname, 'antifantasma-cliente', 'antiinvisivel.cjs'),
               'utf-8'
             );
           } catch (e) {
@@ -39689,14 +39689,16 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
             '',
             '━━━━━━━━━━━━━━',
             '📁 *1. Onde colocar*',
-            'Coloque o arquivo `antiinvisivel.js` na MESMA pasta do seu `Index.js`:',
+            'Coloque o arquivo `antiinvisivel.cjs` na MESMA pasta do seu `Index.js`:',
             '',
             'dados/',
             '└── src/',
             '    ├── index.js',
-            '    └── antiinvisivel.js',
+            '    └── antiinvisivel.cjs',
             '',
             '✅ O arquivo JÁ VEM configurado (KEY e URL da API). Não edite nada nele.',
+            '✅ Ele termina em `.cjs` de propósito: assim funciona no seu bot,',
+            '   seja ele CommonJS ou ESM. Não renomeie.',
           ].join('\n');
 
           // CASE COMPLETA, pronta para o usuário colar. É autossuficiente: o
@@ -39704,7 +39706,11 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
           // mesmo, então o usuário não precisa editar o handler dele.
           const CASE_COMPLETA = `case 'antifantasma':
   try {
-    const antiInvisivel = require('./antiinvisivel');
+    // Carrega o plugin de um jeito que funciona em bot CommonJS E em bot ESM.
+    // (bot ESM não tem \`require\`; usar só \`require\` faria o comando cair no erro)
+    const antiInvisivel = typeof require === 'function'
+      ? require('./antiinvisivel.cjs')
+      : (await import('./antiinvisivel.cjs')).default;
 
     if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
     if (!isGroupAdmin) return reply("Você precisa ser adm 💔");
@@ -39713,7 +39719,7 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
     // Liga a observação contínua. É isto que faz a proteção funcionar sozinha,
     // sem precisar editar o handler: o plugin passa a olhar as mensagens do
     // grupo e a API decide. Pode chamar sempre -- não duplica o listener.
-    antiInvisivel.iniciar(nazu);
+    if (typeof nazu !== 'undefined') antiInvisivel.iniciar(nazu);
 
     // O estado é POR GRUPO: alternar aqui mexe só neste grupo.
     if (antiInvisivel.estaAtivo(from)) {
@@ -39783,9 +39789,9 @@ agora todo ataque fantasma sera detectado e banido automaticamente\`);
           try {
             await nazu.sendMessage(from, {
               document: Buffer.from(arquivoPronto, 'utf-8'),
-              fileName: 'antiinvisivel.js',
+              fileName: 'antiinvisivel.cjs',
               mimetype: 'application/javascript',
-              caption: `📦 antiinvisivel.js — acesso #${registro.id}`,
+              caption: `📦 antiinvisivel.cjs — acesso #${registro.id}`,
             }, { quoted: info });
           } catch (e) {
             console.error('[ADDGHOSTCMD] Falha ao enviar o arquivo:', e?.message || e);

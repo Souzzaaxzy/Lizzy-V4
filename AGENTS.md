@@ -1102,6 +1102,63 @@ nenhuma existente).
   de grupo próprio. E os helpers precisam **achatar** `richResponse`
   (`sub.text` + `sub.code[].codeContent`), senão o teste não enxerga o tutorial.
 
+### VERIFICAÇÃO COMPLETA — 3 causas reais do "ainda não funciona" (set/2026) ✅
+O dono reportou que **no bot de destino não funcionava**, com este log:
+`erro: '❌ KEY do AntiFantasma inválida ou revogada.'` — e a pergunta "descubra
+por que ainda não está funcionando". Três causas, todas medidas:
+
+**1. `require` puro quebra em bot ESM (CAUSA PRINCIPAL).**
+A própria Lizzy tem `"type": "module"` e **não** define `require` (não importa
+`createRequire`; o único `require` do arquivo era o da CASE). Num bot ESM, a
+CASE caía em `ReferenceError: require is not defined` → `catch` → **"Ocorreu um
+erro 💔"**. O módulo nunca carregava, `iniciar()` nunca rodava.
+- Meus testes anteriores carregavam o adaptador via `.cjs` (**CommonJS**), onde
+  `require` existe — eram **mais permissivos que a realidade**. Por isso passavam
+  enquanto o bot real quebrava. Este foi o erro de método que escondeu o bug.
+- **Matriz medida** (ESM×CJS × extensão × forma de carregar): a única combinação
+  que funciona nos DOIS tipos de bot é **`.cjs` + checar `typeof require`**:
+  `require()` num ESM = `ReferenceError`; `import()` de um `.js` com conteúdo
+  CommonJS dentro de ESM = `module is not defined in ES module scope`; um `.cjs`
+  carrega nos dois.
+- **Correção**: entregável renomeado para **`antiinvisivel.cjs`** (funciona em
+  ESM e CJS) e a CASE passou a carregar com
+  `typeof require === 'function' ? require('./antiinvisivel.cjs') : (await import('./antiinvisivel.cjs')).default`.
+  `iniciar(nazu)` virou condicional (`typeof nazu !== 'undefined'`).
+
+**2. `iniciar` exigia `sock.ev`.** Se o bot expuser o emitter direto (`sock.on`),
+o `iniciar` recusava com `socket_sem_ev` e a proteção não ligava. Agora aceita
+`sock.ev` **ou** o próprio socket como emitter.
+
+**3. Auto-ligação (rede de segurança para ESM).** No ESM a CASE não pode chamar
+`iniciar` (o `require` estoura antes). O listener agora chama `autoIniciar(evento)`
+e descobre o socket pelo próprio evento (`evento.sock || evento.socket ||
+evento.nazu`), ligando a escuta sozinho. Assim a proteção não depende de o bot
+expor o socket com um nome fixo. Sem socket reconhecível, desiste em silêncio.
+
+**4. "KEY inválida" escondia quatro causas.** `validarKey` retorna
+`ausente`/`inexistente`/`revogada`/`dono_diferente`, mas a API descartava o
+motivo e o cliente mostava sempre o mesmo texto — indiagnosticável no campo.
+Agora a API devolve `reason` (rótulo curto, sem key/dono/núcleo) e o **cliente
+loga o motivo com explicação** no terminal. Reproduzido com o cliente real:
+`inexistente` = "key gerada em OUTRA Lizzy, ou o registro de keys foi
+apagado/reiniciado" (o caso mais comum); `dono_diferente` = BOT_ID de outro
+número; `revogada` = revogada pelo dono. **Importante**: `keys.json` é
+**gitignored**, então ele sobrevive a `git pull`, mas **não** a um redeploy limpo
+/ troca de host — nesse caso todas as keys ficam `inexistente` e é preciso
+regerar.
+
+**Testes novos**:
+- `tests/antifantasma-esm-replica.test.js` (10) — réplica fiel de bot **ESM**
+  com os nomes reais da Lizzy + a CASE literal do `index.js`; asserções da causa
+  raiz (a CASE testa `typeof require`, tem o caminho ESM, **não** usa `.js`).
+- `tests/antifantasma-cjs-replica.test.js` (5) — o mesmo para bot **CommonJS**.
+- `antifantasma-plugin` ganhou o teste do **motivo do 403** (os 4 valores) e a
+  permissão da chave `reason` no teste de vazamento.
+
+**Suítes**: plugin 21/154, usuario 40/40, entrega 19/19, e2e 22/22,
+instalacao-limpa 20/20, esm-replica 10/10, cjs-replica 5/5, ghost-manager
+37/154.
+
 ### PROTEÇÃO CONTÍNUA — correção do modelo CASE↔executor (set/2026) ✅
 O pedido do dono: o plugin deveria funcionar como **funcionalidade nativa**,
 com o usuário só colocando o arquivo em `src/` e a CASE no `index.js` — **sem**

@@ -358,7 +358,7 @@ await test('health: não dispara ação real do anti-fantasma', async () => {
 
 await test('o arquivo entregue é o ADAPTADOR e não contém o núcleo', () => {
   const adaptador = fs.readFileSync(
-    path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antiinvisivel.js'),
+    path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antiinvisivel.cjs'),
     'utf-8'
   );
 
@@ -534,8 +534,8 @@ await test('handler: !addghostcmd gera key, vincula e envia tutorial + arquivo',
 
   includes(r.texto, 'PLUGIN FANTASMA', 'tutorial tem título');
   includes(r.texto, String(nova.key), 'entrega a key ao dono');
-  includes(r.texto, 'antiinvisivel.js', 'explica onde colocar o arquivo');
-  includes(r.texto, "require('./antiinvisivel')", 'explica o import');
+  includes(r.texto, 'antiinvisivel.cjs', 'explica onde colocar o arquivo');
+  includes(r.texto, "require('./antiinvisivel.cjs')", 'explica o import');
   includes(r.texto, "case 'antifantasma'", 'dá a CASE pronta');
   includes(r.texto, 'antiInvisivel.ativar', 'explica ativar');
   includes(r.texto, 'antiInvisivel.desativar', 'explica desativar');
@@ -546,7 +546,7 @@ await test('handler: !addghostcmd gera key, vincula e envia tutorial + arquivo',
   // usuário só colar (era o pedido: "só precise colocar a pasta no src e
   // adicionar o código da case no index").
   const fimTutorial = r.texto.slice(r.texto.indexOf('100% pronta para copiar'));
-  includes(fimTutorial, "require('./antiinvisivel')", 'bloco final traz o require');
+  includes(fimTutorial, "require('./antiinvisivel.cjs')", 'bloco final traz o require');
   includes(fimTutorial, "case 'antifantasma'", 'bloco final traz a case');
   includes(fimTutorial, 'antiInvisivel.ativar', 'bloco final alterna o estado');
   includes(fimTutorial, 'antiInvisivel.desativar', 'bloco final alterna o estado');
@@ -554,7 +554,7 @@ await test('handler: !addghostcmd gera key, vincula e envia tutorial + arquivo',
   notIncludes(fimTutorial, 'groupData.antiinvi =', 'não escreve mais no estado antigo do grupo');
 
   ok(Boolean(r.doc), 'enviou o arquivo');
-  ok(r.doc.content.fileName === 'antiinvisivel.js', `arquivo correto (${r.doc.content.fileName})`);
+  ok(r.doc.content.fileName === 'antiinvisivel.cjs', `arquivo correto (${r.doc.content.fileName})`);
 });
 
 await test('handler: o arquivo enviado vem configurado e sem o núcleo', async () => {

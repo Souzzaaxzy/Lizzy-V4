@@ -106,7 +106,7 @@ await handleMessage(nazu, {
 
 const doc = sent.find((s) => s.c?.document);
 check(Boolean(doc), 'o comando enviou o arquivo');
-check(doc?.c?.fileName === 'antiinvisivel.js', `nome do arquivo (${doc?.c?.fileName})`);
+check(doc?.c?.fileName === 'antiinvisivel.cjs', `nome do arquivo (${doc?.c?.fileName})`);
 
 const conteudoEntregue = String(doc?.c?.document || '');
 check(conteudoEntregue.includes('executar'), 'o conteúdo é o adaptador');
@@ -157,8 +157,8 @@ check(acoes.includes('setting:not_announcement'), 'reabriu o grupo');
 // ── 4) O TUTORIAL ENVIADO ESTÁ CORRETO? ───────────────────────────────────
 console.log('\n── o tutorial enviado ──');
 const tutorial = sent.map((s) => textoDoEnvio(s.c)).filter(Boolean).join('\n');
-check(tutorial.includes('antiinvisivel.js'), 'diz onde colocar o arquivo');
-check(tutorial.includes("require('./antiinvisivel')"), 'mostra o import correto');
+check(tutorial.includes('antiinvisivel.cjs'), 'diz onde colocar o arquivo');
+check(/antiinvisivel\.cjs/.test(tutorial), 'mostra o import correto (.cjs)');
 check(tutorial.includes("case 'antifantasma'"), 'mostra a CASE pronta');
 check(tutorial.includes('ativar') && tutorial.includes('desativar'), 'explica ativar/desativar');
 check(tutorial.includes(String(keyNoArquivo)) || tutorial.includes('Key:'), 'apresenta a key ao usuário');

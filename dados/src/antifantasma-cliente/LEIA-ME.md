@@ -1,13 +1,13 @@
 # AntiFantasma — integração
 
-Você recebeu **um único arquivo**: `antiinvisivel.js`. Coloque-o na mesma pasta
+Você recebeu **um único arquivo**: `antiinvisivel.cjs`. Coloque-o na mesma pasta
 do seu `Index.js` (ex.: `src/`).
 
 O funcionamento real roda no servidor — este arquivo é só o adaptador.
 
 ## 1. Configure no topo do arquivo
 
-Abra `antiinvisivel.js` e ajuste:
+Abra `antiinvisivel.cjs` e ajuste:
 
 ```js
 const API_URL = 'https://SEU-SERVIDOR/api/antifantasma/exec';
@@ -28,9 +28,9 @@ Em produção use **HTTPS** (a KEY nunca deve trafegar em claro).
 A CASE entregue no tutorial já traz o `require` **dentro** dela — você não
 precisa importar nada no topo do arquivo.
 
-> Se o seu `package.json` tiver `"type": "module"`, renomeie o arquivo para
-> `antiinvisivel.cjs` e ajuste o `require` da CASE para `./antiinvisivel.cjs`.
-> Nada mais muda.
+> O arquivo termina em `.cjs` **de propósito**: assim funciona tanto num bot
+> CommonJS quanto num bot ESM (a Lizzy é ESM). A CASE já carrega do jeito certo
+> para cada caso — não renomeie nem mude a extensão.
 
 ## 3. Cole a CASE
 

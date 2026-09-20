@@ -3,7 +3,7 @@
  *
  * Simula o que a bot do usuário realmente faz:
  *
- *   1. Recebe o arquivo `antiinvisivel.js` (exatamente o que a Lizzy envia).
+ *   1. Recebe o arquivo `antiinvisivel.cjs` (exatamente o que a Lizzy envia).
  *   2. Recebe a KEY gerada pelo servidor.
  *   3. Importa o arquivo como o tutorial ensina.
  *   4. Roda as cases personalizadas.
@@ -63,7 +63,7 @@ const portaApi = server.address().port;
 const endpoint = `http://127.0.0.1:${portaApi}/api/antifantasma/exec`;
 
 const fonteEntregavel = fs.readFileSync(
-  path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antiinvisivel.js'),
+  path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antiinvisivel.cjs'),
   'utf-8'
 );
 const arquivoEntregue = fonteEntregavel

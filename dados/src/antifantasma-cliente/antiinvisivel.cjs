@@ -140,6 +140,22 @@ const MENSAGENS = {
   interno: '❌ Não foi possível processar o AntiFantasma.',
 };
 
+/**
+ * Explicações por motivo de recusa da KEY.
+ *
+ * A API devolve o motivo junto do 403. Sem ele, "KEY inválida" cobriria quatro
+ * causas bem diferentes (arquivo de keys resetado, key colada errada, bot
+ * diferente, key revogada) e não haveria como saber o que arrumar. O texto
+ * abaixo é o que aparece no log do bot do usuário; ao usuário final mantemos a
+ * mensagem genérica, porque o grupo não precisa saber disso.
+ */
+const MOTIVOS_KEY = {
+  ausente: 'a KEY não chegou à API (arquivo entregue sem a KEY preenchida?)',
+  inexistente: 'esta KEY não existe no servidor (foi gerada em OUTRA Lizzy, ou o registro de keys foi apagado/reiniciado)',
+  revogada: 'esta KEY foi revogada pelo dono',
+  dono_diferente: 'esta KEY pertence a OUTRO usuário (o BOT_ID não confere)',
+};
+
 // ───────────────────────────────────────────────────────────────────────────
 // EXECUÇÃO DAS AÇÕES (o adaptador só sabe EXECUTAR; o critério fica no servidor)
 // ───────────────────────────────────────────────────────────────────────────
@@ -387,10 +403,15 @@ async function executarInterno(params = {}) {
     return { ok: false, acoes: [], erro: MENSAGENS.indisponivel, motivo: 'indisponivel' };
   }
 
-  // KEY recusada pela API (ausente, inexistente, revogada ou de outro plugin).
+  // KEY recusada pela API (ausente, inexistente, revogada ou de outro dono).
+  // Aqui é onde o dono do bot descobre o que está errado: logamos o MOTIVO que
+  // a API mandou, porque só "KEY inválida" não diz o que arrumar.
   if (resposta.status === 401 || resposta.status === 403) {
+    const motivo = resposta.body?.reason || 'desconhecido';
+    const explicacao = MOTIVOS_KEY[motivo] || 'motivo não reconhecido';
+    console.error(`[AntiFantasma] KEY recusada (motivo: ${motivo}) — ${explicacao}`);
     if (reply) await reply(MENSAGENS.key).catch(() => {});
-    return { ok: false, acoes: [], erro: MENSAGENS.key };
+    return { ok: false, acoes: [], erro: MENSAGENS.key, motivoKey: motivo };
   }
 
   if (resposta.status !== 200 || !resposta.body || resposta.body.success !== true) {
@@ -437,6 +458,24 @@ let listenerAtual = null;
 /** Ids de mensagens já avaliadas — evita processar a mesma duas vezes. */
 const vistos = new Set();
 
+/**
+ * Auto-liga a observação quando o módulo traz um socket reconhecível.
+ *
+ * Serve para o caso do ESM: o `require()` da CASE não existe lá, então ela
+ * falharia antes de chamar `iniciar(sock)`. Aqui, na PRIMEIRA mensagem que
+ * chega, o módulo detecta o socket pelo evento e liga a escuta sozinho — assim
+ * a proteção contínua não depende de o bot expor o socket com um nome fixo.
+ *
+ * Não decide nada: só garante que `iniciar` roda. Sem socket reconhecível,
+ * desiste e espera a chamada explícita.
+ */
+function autoIniciar(evento) {
+  if (estaEscutando()) return;
+  // Em variantes da lib o socket aparece como `sock`, `socket` ou `nazu`.
+  const dono = evento?.sock || evento?.socket || evento?.nazu || null;
+  if (dono) iniciar(dono);
+}
+
 function podarVistos() {
   if (vistos.size <= 1000) return;
   const chaves = Array.from(vistos).slice(0, 500);
@@ -452,6 +491,9 @@ function podarVistos() {
  */
 async function aoReceberMensagens(evento) {
   try {
+    // Garante a escuta mesmo quando a CASE não pôde chamar `iniciar` (ESM).
+    autoIniciar(evento);
+
     const lista = Array.isArray(evento?.messages)
       ? evento.messages
       : (evento?.key ? [evento] : []);
@@ -496,7 +538,13 @@ function iniciar(sock) {
   if (!sock || typeof sock !== 'object') {
     return { ok: false, escutando: false, motivo: 'sem_sock' };
   }
-  if (!sock.ev || typeof sock.ev.on !== 'function') {
+  // O emitter das mensagens: no Baileys é `sock.ev`. Alguns bots expõem o
+  // próprio socket como emitter (`sock.on`), então aceitamos os dois.
+  const emitter = (sock.ev && typeof sock.ev.on === 'function')
+    ? sock.ev
+    : (typeof sock.on === 'function' ? sock : null);
+
+  if (!emitter) {
     return { ok: false, escutando: false, motivo: 'socket_sem_ev' };
   }
 
@@ -505,11 +553,14 @@ function iniciar(sock) {
   }
 
   // Socket novo (ou primeira vez): se já escutávamos outro, saímos dele antes.
-  if (socketEscutado && listenerAtual && typeof socketEscutado.ev?.off === 'function') {
-    try { socketEscutado.ev.off('messages.upsert', listenerAtual); } catch { /* ignora */ }
+  if (socketEscutado && listenerAtual) {
+    const anterior = (socketEscutado.ev && typeof socketEscutado.ev.off === 'function')
+      ? socketEscutado.ev
+      : (typeof socketEscutado.off === 'function' ? socketEscutado : null);
+    if (anterior) { try { anterior.off('messages.upsert', listenerAtual); } catch { /* ignora */ } }
   }
 
-  sock.ev.on('messages.upsert', aoReceberMensagens);
+  emitter.on('messages.upsert', aoReceberMensagens);
   socketEscutado = sock;
   listenerAtual = aoReceberMensagens;
 
@@ -518,8 +569,11 @@ function iniciar(sock) {
 
 /** Para de observar as mensagens (a proteção deixa de rodar até novo `iniciar`). */
 function parar() {
-  if (socketEscutado && listenerAtual && typeof socketEscutado.ev?.off === 'function') {
-    try { socketEscutado.ev.off('messages.upsert', listenerAtual); } catch { /* ignora */ }
+  if (socketEscutado && listenerAtual) {
+    const emitter = (socketEscutado.ev && typeof socketEscutado.ev.off === 'function')
+      ? socketEscutado.ev
+      : (typeof socketEscutado.off === 'function' ? socketEscutado : null);
+    if (emitter) { try { emitter.off('messages.upsert', listenerAtual); } catch { /* ignora */ } }
   }
   socketEscutado = null;
   listenerAtual = null;
@@ -534,16 +588,11 @@ function estaEscutando() {
 /**
  * Exportação.
  *
- * Este arquivo é CommonJS (é o que o `require('./antiinvisivel')` espera). Isso
- * cobre as duas formas de uso sem o usuário mexer em nada:
- *
- *   - bot CommonJS:  const antiInvisivel = require('./antiinvisivel');
- *   - bot ESM:       import antiInvisivel from './antiinvisivel.js';  (o Node
- *                    entrega este `module.exports` como export default)
- *
- * Exceção: se o `package.json` do bot tiver `"type": "module"`, o Node trata
- * arquivos `.js` como ESM e este arquivo precisa ser renomeado para
- * `antiinvisivel.cjs`. Nada mais muda — o `require`/`import` continuam iguais.
+ * O arquivo termina em `.cjs` de propósito: assim um bot ESM consegue carregá-lo
+ * (com `import('./antiinvisivel.cjs')` ou via `require` num CJS) e um bot
+ * CommonJS também. O caso que NÃO funciona é um `.js` com conteúdo CommonJS
+ * dentro de um bot ESM — o Node recusa com "module is not defined in ES module
+ * scope". Por isso a extensão importa e a CASE já carrega do jeito certo.
  */
 module.exports = {
   // Estado local (livre para o usuário usar em qualquer case)

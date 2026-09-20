@@ -4,7 +4,7 @@
  * Simula um bot destinatário que NÃO tem integração Anti-Fantasma. Ele recebe
  * APENAS duas coisas:
  *
- *   1. o arquivo `antiinvisivel.js` na pasta `src/`;
+ *   1. o arquivo `antiinvisivel.cjs` na pasta `src/`;
  *   2. a CASE COMPLETA, extraída LITERALMENTE do `index.js` da Lizzy (a mesma
  *      que o `!addghostcmd` entrega no tutorial).
  *
@@ -64,8 +64,8 @@ const server = api.iniciarApi(0);
 await sleep(250);
 const endpoint = `http://127.0.0.1:${server.address().port}/api/antifantasma/exec`;
 
-const CAMINHO_CLIENTE = path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antiinvisivel.js');
-check(fs.existsSync(CAMINHO_CLIENTE), 'o entregável se chama antiinvisivel.js');
+const CAMINHO_CLIENTE = path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antiinvisivel.cjs');
+check(fs.existsSync(CAMINHO_CLIENTE), 'o entregável se chama antiinvisivel.cjs');
 const fonte = fs.readFileSync(CAMINHO_CLIENTE, 'utf-8');
 const entregue = fonte
   .replace(/const API_URL = '[^']*';/, `const API_URL = '${endpoint}';`)
@@ -100,8 +100,8 @@ const CASE = extrairCaseCompleta(INDEX_SRC);
 
 console.log('\n── 0.1 A CASE entregue é a correta ──');
 check(CASE.includes("case 'antifantasma'"), 'a CASE traz o case antifantasma');
-check(/require\(['"]\.\/antiinvisivel['"]\)/.test(CASE), "a CASE usa require('./antiinvisivel')");
-check(CASE.indexOf("require('./antiinvisivel')") > CASE.indexOf("case 'antifantasma'"),
+check(/require\(['"]\.\/antiinvisivel\.cjs['"]\)/.test(CASE), "a CASE usa require('./antiinvisivel.cjs')");
+check(CASE.indexOf("require('./antiinvisivel.cjs')") > CASE.indexOf("case 'antifantasma'"),
   'o require está DENTRO da case (regra absoluta da seção 4)');
 check(/\.iniciar\s*\(/.test(CASE), 'a CASE liga a proteção contínua via iniciar()');
 check(!/antiInvisivel\.executar/.test(CASE), 'a CASE não exige chamada manual no handler');
@@ -129,7 +129,7 @@ function montarCase(caseCode, ctx) {
     `return (async () => { switch ('antifantasma') { ${caseCode}\n } })();`,
   );
   const requireShim = (p) => {
-    if (p === './antiinvisivel' || p === './antifantasma') return require(DESTINO);
+    if (p === './antiinvisivel.cjs' || p === './antiinvisivel' || p === './antifantasma') return require(DESTINO);
     return require(p);
   };
   return fn(
