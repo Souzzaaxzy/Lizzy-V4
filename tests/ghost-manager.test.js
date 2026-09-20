@@ -60,6 +60,23 @@ function includes(haystack, needle, label) {
   ok(typeof haystack === 'string' && haystack.includes(needle), `${label ?? needle} — esperado conter "${needle}"`);
 }
 
+/** Achata um envio em texto puro, juntando `text`, legenda, code block e
+ *  os trechos do richResponse (que tem texto E codigo dentro). */
+function textoDoEnvio(c) {
+  if (!c || typeof c !== 'object') return '';
+  const partes = [];
+  for (const k of ['text', 'caption', 'code', 'footerText', 'headerText', 'disclaimerText']) {
+    if (typeof c[k] === 'string') partes.push(c[k]);
+  }
+  if (Array.isArray(c.richResponse)) {
+    for (const sub of c.richResponse) {
+      if (typeof sub?.text === 'string') partes.push(sub.text);
+      if (Array.isArray(sub?.code)) partes.push(sub.code.map((x) => x.codeContent).join('\n'));
+    }
+  }
+  return partes.join('\n');
+}
+
 function notIncludes(haystack, needle, label) {
   ok(typeof haystack === 'string' && !haystack.includes(needle), `${label ?? needle} — não deveria conter "${needle}"`);
 }
@@ -381,12 +398,7 @@ async function rodar({ text, sender = null, adm = false, quoted = null, autorQuo
     pushName: 'Tester',
   }, null, new Map(), null);
 
-  // O tutorial vem em texto (cabeçalho) + code block (conteúdo técnico no
-  // campo `code`). Sem juntar os dois, o teste não enxerga o tutorial.
-  const texto = sent
-    .map((s) => [s.content?.text, s.content?.caption, s.content?.code, s.content?.footerText, s.content?.headerText]
-      .filter((v) => typeof v === 'string').join('\n'))
-    .filter(Boolean).join('\n');
+  const texto = sent.map((s) => textoDoEnvio(s.content)).filter(Boolean).join('\n');
   const doc = sent.find((s) => s.content?.document) || null;
   return { sent, texto, doc, nazu };
 }
@@ -409,12 +421,7 @@ async function rodarComoDono(params) {
     pushName: 'Dono',
   }, null, new Map(), null);
 
-  // O tutorial vem em texto (cabeçalho) + code block (conteúdo técnico no
-  // campo `code`). Sem juntar os dois, o teste não enxerga o tutorial.
-  const texto = sent
-    .map((s) => [s.content?.text, s.content?.caption, s.content?.code, s.content?.footerText, s.content?.headerText]
-      .filter((v) => typeof v === 'string').join('\n'))
-    .filter(Boolean).join('\n');
+  const texto = sent.map((s) => textoDoEnvio(s.content)).filter(Boolean).join('\n');
   const doc = sent.find((s) => s.content?.document) || null;
   return { sent, texto, doc };
 }

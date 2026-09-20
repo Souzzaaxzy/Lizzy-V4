@@ -39678,18 +39678,16 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
             .replace(/const KEY = '[^']*';/, `const KEY = '${registro.key}';`)
             .replace(/const BOT_ID = '[^']*';/, `const BOT_ID = '${donoBase}';`);
 
-                    const tutorialGhost = [
+          // Tutorial em texto normal, com APENAS os trechos de código na
+          // "code box" nativa da fork (richResponseMessage). O texto fica como
+          // mensagem comum; só o código vira bloco formatado.
+          const tutorialGhost = [
             `👻 *PLUGIN FANTASMA — ACESSO #${registro.id}*`,
             '',
             `👤 Usuário: @${donoBase}`,
             `🔑 Key: \`${registro.key}\``,
+            '',
             '━━━━━━━━━━━━━━',
-          ].join('\n');
-
-          // A parte com código vai como "code block" nativo da fork
-          // (richResponseMessage): aparece formatado e com botão de copiar, em
-          // vez de um ``` comum.
-          const tutorialCode = [
             '📁 *1. Onde colocar*',
             'Coloque o arquivo `antifantasma.js` na MESMA pasta do seu `Index.js`:',
             '',
@@ -39697,73 +39695,51 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
             '└── src/',
             '    ├── Index.js',
             '    └── antifantasma.js',
-            '',
-            '📥 *2. Como importar* (no seu `Index.js`):',
-            "// cole no topo do Index.js, junto dos outros requires",
-            "const antiFantasma = require('./antifantasma');",
+          ].join('\n');
+
+          const tutorialRodape = [
             '',
             '🔑 *3. Configurar a KEY*',
             'O arquivo JÁ VEM configurado com a sua KEY e a URL da API.',
             'Se precisar conferir, abra o topo do `antifantasma.js`.',
             '',
-            '⚙️ *4. Adicionar a case* (exemplo):',
-            "case 'antifantasma': {",
-            '    await antiFantasma.executar({',
-            '        sock,',
-            '        msg,',
-            '        args,',
-            '        reply',
-            '    });',
-            '    break;',
-            '}',
-            '',
             '⚠️ *IMPORTANTE:* o plugin precisa ver AS MENSAGENS do grupo.',
-            'A case acima só roda quando alguém digita o comando. Para proteger',
+            'A case abaixo só roda quando alguém digita o comando. Para proteger',
             'de verdade, chame `executar` a cada mensagem recebida:',
-            "// no seu handler de mensagens, para cada msg do grupo",
-            'await antiFantasma.executar({ sock, msg, reply });',
-            '',
-            '🟢 *5. Ativar / desativar*:',
-            "case 'afon':",
-            '    antiFantasma.ativar();',
-            "    await reply('👻 AntiFantasma ativado.');",
-            '    break;',
-            '',
-            "case 'afoff':",
-            '    antiFantasma.desativar();',
-            "    await reply('👻 AntiFantasma desativado.');",
-            '    break;',
-          ].join('\n');
-
-          const tutorialRodape = [
             '',
             '🎨 *6. Personalizar*',
-            'Os nomes acima são só EXEMPLO. Troque por `af`, `ghost`, `protecao`,',
-            '`fantasma` — o que você quiser. A Lizzy não exige nome nenhum.',
+            'Os nomes das cases são só EXEMPLO. Troque por `af`, `ghost`,',
+            '`protecao`, `fantasma` — o que você quiser.',
           ].join('\n');
 
-          // 1) Cabeçalho + KEY (texto simples, para o @menção resolver)
+          // 1) Texto normal do tutorial.
           await nazu.sendMessage(from, {
             text: tutorialGhost,
             mentions: [alvoGhost],
           }, { quoted: info }).catch((e) => console.error('[ADDGHOSTCMD] tutorial:', e?.message || e));
 
-          // 2) O tutorial com CÓDIGO como code block nativo. Se a versão da lib
-          //    não suportar richResponse, cai para texto simples — o usuário
-          //    precisa receber o tutorial de qualquer forma.
+          // 2) Só os CÓDIGOS na code box (texto do meio vai junto, para o
+          //    tutorial ficar na ordem certa). Se a lib não suportar
+          //    richResponse, cai para texto simples.
+          const trechosTutorial = [
+            { text: '📥 *2. Como importar* (no topo do seu `Index.js`):' },
+            { code: [{ codeContent: "const antiFantasma = require('./antifantasma');", highlightType: 1 }], language: 'javascript' },
+            { text: '⚙️ *4. Adicionar a case* (exemplo):' },
+            { code: [{ codeContent: "case 'antifantasma': {\n    await antiFantasma.executar({\n        sock,\n        msg,\n        args,\n        reply\n    });\n    break;\n}", highlightType: 1 }], language: 'javascript' },
+            { text: '⚠️ E no seu handler de mensagens (é o que protege de verdade):' },
+            { code: [{ codeContent: 'await antiFantasma.executar({ sock, msg, reply });', highlightType: 1 }], language: 'javascript' },
+            { text: '🟢 *5. Ativar / desativar* (exemplo):' },
+            { code: [{ codeContent: "case 'afon':\n    antiFantasma.ativar();\n    await reply('👻 AntiFantasma ativado.');\n    break;", highlightType: 1 }], language: 'javascript' },
+            { code: [{ codeContent: "case 'afoff':\n    antiFantasma.desativar();\n    await reply('👻 AntiFantasma desativado.');\n    break;", highlightType: 1 }], language: 'javascript' },
+            { text: tutorialRodape },
+          ];
+
           try {
-            await nazu.sendMessage(from, {
-              disclaimerText: '👻 PLUGIN FANTASMA — TUTORIAL',
-              headerText: '## Como instalar',
-              contentText: '---',
-              code: tutorialCode,
-              language: 'javascript',
-              footerText: tutorialRodape,
-            }, { quoted: info });
+            await nazu.sendMessage(from, { richResponse: trechosTutorial }, { quoted: info });
           } catch (richErr) {
-            console.error('[ADDGHOSTCMD] code block falhou, enviando texto:', richErr?.message || richErr);
+            console.error('[ADDGHOSTCMD] code box falhou, enviando texto:', richErr?.message || richErr);
             await nazu.sendMessage(from, {
-              text: `${tutorialCode}\n${tutorialRodape}`,
+              text: trechosTutorial.map((t) => t.text || (t.code || []).map((c) => c.codeContent).join('\n')).join('\n\n'),
             }, { quoted: info }).catch(() => {});
           }
 

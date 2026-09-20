@@ -1069,32 +1069,38 @@ nenhuma existente).
   nem referencia `core.js`.
 
 ### Code block nativo ("black box") no tutorial + blindagem do cliente (set/2026) ✅
-- **O tutorial do `!addghostcmd` agora envia o código como CODE BLOCK NATIVO** da
-  fork (`richResponseMessage`, o "Message with Code Block" documentado no README
-  dela: `disclaimerText` + `headerText` + `code` + `language` + `footerText`).
-  Aparece formatado e com tokenização (`tokenizeCode`), em vez de um ``` cru.
-  **Verificado no wire**: o payload vira `botForwardedMessage` →
-  `richResponseMessage`, com os blocos tokenizados (`messageType 5`, `language`,
-  15 blocos no teste). Se versão antiga da lib não suportar, cai para texto
-  simples — o usuário recebe o tutorial de qualquer forma.
-- O tutorial vai em **dois envios**: texto (cabeçalho + KEY, para o `@menção`
-  resolver) e o code block (conteúdo técnico).
+- **O tutorial do `!addghostcmd` mantém o TEXTO normal** e usa a code box nativa
+  da fork (`richResponseMessage`) **apenas nos trechos de código**. A forma
+  correta é `richResponse: [{ text }, { code: [{ codeContent, highlightType }],
+  language }, ...]` — texto e código intercalados na ordem do tutorial:
+  ```
+  [TEXTO]  📥 2. Como importar
+  [CODE ]  const antiFantasma = require('./antifantasma');
+  [TEXTO]  ⚙️ 4. Adicionar a case
+  [CODE ]  case 'antifantasma': { ... }
+  [TEXTO]  ⚠️ E no handler de mensagens
+  [CODE ]  await antiFantasma.executar({ sock, msg, reply });
+  [TEXTO]  🟢 5. Ativar / desativar
+  [CODE ]  case 'afon': ...
+  [CODE ]  case 'afoff': ...
+  ```
+  O tutorial sai em **dois envios**: (1) texto com cabeçalho + KEY (o `@menção`
+  precisa de mensagem de texto) e (2) o `richResponse` com texto+código. Se a lib
+  não suportar, cai para texto simples.
+- **Os exemplos usam `antifantasma` / `afon` / `afoff`** (como no código da
+  própria Lizzy), refletindo a chamada real do adaptador.
 - **Blindagem do adaptador** (ele roda no handler do bot do usuário, onde uma
-  exceção pode quebrar o processamento dele): `executar` agora envolve TODO o
-  corpo num try/catch e devolve `{ok:false, motivo:'excecao', detalhe}` — nunca
-  lança. Testado com **17 entradas hostis** (null, número, string, `sock` sem
-  métodos, `groupMetadata` que lança, `participants` não-array, `reply` não-função
-  etc.): nenhuma derruba.
+  exceção pode quebrar o processamento dele): `executar` envolve TODO o corpo num
+  try/catch e devolve `{ok:false, motivo:'excecao', detalhe}` — nunca lança.
+  Testado com **17 entradas hostis**: nenhuma derruba.
 - **Cache da consulta de administração** (15s, por grupo+autor): sem ele, CADA
-  mensagem faria uma consulta de metadata ao WhatsApp — em grupo movimentado isso
-  pesa no bot do usuário. Testado: 5 mensagens = 1 consulta. Também trata
-  `sock.groupMetadata` ausente ou que lança, sem quebrar.
-- **Armadilha nos testes**: o cache é por (grupo, autor), então dois testes que
-  usam o MESMO grupo recebem o resultado do primeiro — o teste de "autor admin"
-  precisou de um grupo próprio para medir o que queria.
-- **Armadilha 2**: os testes liam o tutorial só de `content.text`; com o code
-  block, o conteúdo técnico está em `content.code`. Os helpers passaram a juntar
-  `text`+`code`+`footerText`.
+  mensagem faria consulta de metadata ao WhatsApp — pesa em grupo movimentado.
+  Testado: 5 mensagens = 1 consulta. Também trata `sock.groupMetadata` ausente
+  ou que lança.
+- **Armadilha nos testes**: o cache é por (grupo, autor), então dois testes com o
+  MESMO grupo recebem o resultado do primeiro — o teste de "autor admin" precisou
+  de grupo próprio. E os helpers precisam **achatar** `richResponse`
+  (`sub.text` + `sub.code[].codeContent`), senão o teste não enxerga o tutorial.
 
 ### BUG: "testei com outro bot real e não fez nada" (set/2026) ✅ CORRIGIDO
 Relato do dono: o plugin foi instalado numa bot real, chegou um ataque e **nada

@@ -32,6 +32,23 @@ let ok = 0;
 let fail = 0;
 const erros = [];
 
+/** Achata um envio em texto puro, juntando `text`, legenda, code block e
+ *  os trechos do richResponse (que tem texto E codigo dentro). */
+function textoDoEnvio(c) {
+  if (!c || typeof c !== 'object') return '';
+  const partes = [];
+  for (const k of ['text', 'caption', 'code', 'footerText', 'headerText', 'disclaimerText']) {
+    if (typeof c[k] === 'string') partes.push(c[k]);
+  }
+  if (Array.isArray(c.richResponse)) {
+    for (const sub of c.richResponse) {
+      if (typeof sub?.text === 'string') partes.push(sub.text);
+      if (Array.isArray(sub?.code)) partes.push(sub.code.map((x) => x.codeContent).join('\n'));
+    }
+  }
+  return partes.join('\n');
+}
+
 function check(cond, msg) {
   if (cond) { ok += 1; console.log(`✅ ${msg}`); }
   else { fail += 1; erros.push(msg); console.log(`❌ ${msg}`); }
@@ -139,9 +156,7 @@ check(acoes.includes('setting:not_announcement'), 'reabriu o grupo');
 
 // ── 4) O TUTORIAL ENVIADO ESTÁ CORRETO? ───────────────────────────────────
 console.log('\n── o tutorial enviado ──');
-// O tutorial vem em texto + code block (campo `code`).
-const tutorial = sent.map((s) => [s.c?.text, s.c?.code, s.c?.footerText, s.c?.headerText]
-  .filter((v) => typeof v === 'string').join('\n')).join('\n');
+const tutorial = sent.map((s) => textoDoEnvio(s.c)).filter(Boolean).join('\n');
 check(tutorial.includes('antifantasma.js'), 'diz onde colocar o arquivo');
 check(tutorial.includes("require('./antifantasma')"), 'mostra o import correto');
 check(tutorial.includes('case'), 'mostra exemplo de case');
