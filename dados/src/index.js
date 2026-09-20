@@ -39665,7 +39665,7 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
           let codigoAdaptador;
           try {
             codigoAdaptador = await fsPromises.readFile(
-              pathz.join(__dirname, 'antifantasma-cliente', 'antifantasma.js'),
+              pathz.join(__dirname, 'antifantasma-cliente', 'antiinvisivel.js'),
               'utf-8'
             );
           } catch (e) {
@@ -39689,41 +39689,45 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
             '',
             '━━━━━━━━━━━━━━',
             '📁 *1. Onde colocar*',
-            'Coloque o arquivo `antifantasma.js` na MESMA pasta do seu `Index.js`:',
+            'Coloque o arquivo `antiinvisivel.js` na MESMA pasta do seu `Index.js`:',
             '',
-            'Bot/',
+            'dados/',
             '└── src/',
-            '    ├── Index.js',
-            '    └── antifantasma.js',
+            '    ├── index.js',
+            '    └── antiinvisivel.js',
+            '',
+            '✅ O arquivo JÁ VEM configurado (KEY e URL da API). Não edite nada nele.',
           ].join('\n');
 
-          // Bloco COMPLETO, pronto para o usuário colar. Inclui o `require` do
-          // plugin (que já vem configurado) e a case, para ele só precisar
-          // colocar o arquivo em `src/` e colar isto no Index.js dele.
-          const CASE_COMPLETA = `// ═══════════════ 👻 ANTI FANTASMA ═══════════════
-// 1) Coloque o arquivo \`antifantasma.js\` (entregue junto) na MESMA pasta
-//    deste Index.js. Ele já vem com a sua KEY e a URL da API configuradas.
-const antiFantasma = require('./antifantasma');
-
-// 2) Cole este case dentro do switch dos seus comandos:
-case 'antifantasma':
+          // CASE COMPLETA, pronta para o usuário colar. É autossuficiente: o
+          // `require` fica DENTRO da case e a proteção contínua é ligada ali
+          // mesmo, então o usuário não precisa editar o handler dele.
+          const CASE_COMPLETA = `case 'antifantasma':
   try {
+    const antiInvisivel = require('./antiinvisivel');
+
     if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
     if (!isGroupAdmin) return reply("Você precisa ser adm 💔");
     if (!isBotAdmin) return reply("Eu preciso ser adm para isso 💔");
 
-    // O estado agora vive no plugin (o \`groupData.antiinvi\` não é mais usado).
-    if (antiFantasma.estaAtivo()) {
-      antiFantasma.desativar();
+    // Liga a observação contínua. É isto que faz a proteção funcionar sozinha,
+    // sem precisar editar o handler: o plugin passa a olhar as mensagens do
+    // grupo e a API decide. Pode chamar sempre -- não duplica o listener.
+    antiInvisivel.iniciar(nazu);
+
+    // O estado é POR GRUPO: alternar aqui mexe só neste grupo.
+    if (antiInvisivel.estaAtivo(from)) {
+      antiInvisivel.desativar(from);
+
+      await reply("❌ Anti fantasma desativado.");
     } else {
-      antiFantasma.ativar();
+      antiInvisivel.ativar(from);
+
+      await reply(\`✅ Anti fantasma ativado
+
+agora todo ataque fantasma sera detectado e banido automaticamente\`);
     }
 
-    const textoFantasma = antiFantasma.estaAtivo()
-      ? "✅ Anti fantasma ativado\\n\\nagora todo ataque fantasma sera detectado e banido automaticamente"
-      : "❌ Anti fantasma desativado.";
-
-    await nazu.sendMessage(from, { text: textoFantasma, quoted: info });
   } catch (e) {
     console.error(e);
     await reply("Ocorreu um erro 💔");
@@ -39733,17 +39737,20 @@ case 'antifantasma':
 
           const tutorialRodape = [
             '',
-            '🔑 *3. Configurar a KEY*',
-            'O arquivo JÁ VEM configurado com a sua KEY e a URL da API.',
-            'Se precisar conferir, abra o topo do `antifantasma.js`.',
+            '⚙️ *2. Copiar a CASE COMPLETA* (logo abaixo) — ela é 100% pronta.',
+            'O `require` já vai DENTRO dela. Não precisa mexer no handler.',
             '',
-            '⚠️ *IMPORTANTE:* o plugin precisa ver AS MENSAGENS do grupo.',
-            'A case abaixo só roda quando alguém digita o comando. Para proteger',
-            'de verdade, chame `executar` a cada mensagem recebida:',
+            '3. *Colar* a CASE dentro do switch dos seus comandos, no `index.js`.',
             '',
-            '🎨 *6. Personalizar*',
-            'Os nomes das cases são só EXEMPLO. Troque por `af`, `ghost`,',
-            '`protecao`, `fantasma` — o que você quiser.',
+            '4. *Reiniciar* o bot.',
+            '',
+            '5. *Ligar*: envie no grupo',
+            `    ${groupPrefix}antifantasma`,
+            '6. *Desligar*: envie o mesmo comando de novo.',
+            '',
+            '✅ Pronto. Depois de ligar, a proteção roda sozinha:',
+            'o plugin observa as mensagens, a API decide e as ações',
+            'são executadas. Nenhuma outra edição é necessária.',
           ].join('\n');
 
           // 1) Texto normal do tutorial.
@@ -39756,20 +39763,10 @@ case 'antifantasma':
           //    tutorial ficar na ordem certa). Se a lib não suportar
           //    richResponse, cai para texto simples.
           const trechosTutorial = [
-            { text: '📥 *2. Como importar* (no topo do seu `Index.js`):' },
-            { code: [{ codeContent: "const antiFantasma = require('./antifantasma');", highlightType: 1 }], language: 'javascript' },
-            { text: '⚙️ *4. Adicionar a case* (exemplo):' },
-            { code: [{ codeContent: "case 'antifantasma': {\n    await antiFantasma.executar({\n        sock,\n        msg,\n        args,\n        reply\n    });\n    break;\n}", highlightType: 1 }], language: 'javascript' },
-            { text: '⚠️ E no seu handler de mensagens (é o que protege de verdade):' },
-            { code: [{ codeContent: 'await antiFantasma.executar({ sock, msg, reply });', highlightType: 1 }], language: 'javascript' },
-            { text: '🟢 *5. Ativar / desativar* (exemplo):' },
-            { code: [{ codeContent: "case 'afon':\n    antiFantasma.ativar();\n    await reply('👻 AntiFantasma ativado.');\n    break;", highlightType: 1 }], language: 'javascript' },
-            { code: [{ codeContent: "case 'afoff':\n    antiFantasma.desativar();\n    await reply('👻 AntiFantasma desativado.');\n    break;", highlightType: 1 }], language: 'javascript' },
-            { text: tutorialRodape },
-            { text: '✅ *Aqui está uma case 100% feita e funcional de exemplo:*\n'
-              + 'É o código COMPLETO: já vem com o `require` do plugin e a URL da API.\n'
-              + 'Você só precisa colocar o arquivo em `src/` e colar isto no seu `Index.js`.' },
+            { text: '📋 *2. A CASE COMPLETA (copie e cole no seu switch de comandos):*' },
+            { text: '✅ *Aqui está a CASE COMPLETA, 100% pronta para copiar e colar:*' },
             { code: [{ codeContent: CASE_COMPLETA, highlightType: 1 }], language: 'javascript' },
+            { text: tutorialRodape },
           ];
 
           try {
@@ -39786,9 +39783,9 @@ case 'antifantasma':
           try {
             await nazu.sendMessage(from, {
               document: Buffer.from(arquivoPronto, 'utf-8'),
-              fileName: 'antifantasma.js',
+              fileName: 'antiinvisivel.js',
               mimetype: 'application/javascript',
-              caption: `📦 antifantasma.js — acesso #${registro.id}`,
+              caption: `📦 antiinvisivel.js — acesso #${registro.id}`,
             }, { quoted: info });
           } catch (e) {
             console.error('[ADDGHOSTCMD] Falha ao enviar o arquivo:', e?.message || e);

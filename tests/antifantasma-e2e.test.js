@@ -52,9 +52,9 @@ check(/^MTX-GHOST-[0-9A-F]{8}$/.test(key), `KEY criada no formato MTX-GHOST-XXXX
 
 // ── 3) Prepara o adaptador EXATAMENTE como o usuário recebe ────────────────
 const fonteOriginal = fs.readFileSync(
-  path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antifantasma.js'), 'utf-8'
+  path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antiinvisivel.js'), 'utf-8'
 );
-const adaptadorPath = path.join(TMP_DB, 'antifantasma.cjs');
+const adaptadorPath = path.join(TMP_DB, 'antiinvisivel.cjs');
 fs.writeFileSync(
   adaptadorPath,
   fonteOriginal

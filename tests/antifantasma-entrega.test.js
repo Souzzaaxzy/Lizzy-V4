@@ -106,7 +106,7 @@ await handleMessage(nazu, {
 
 const doc = sent.find((s) => s.c?.document);
 check(Boolean(doc), 'o comando enviou o arquivo');
-check(doc?.c?.fileName === 'antifantasma.js', `nome do arquivo (${doc?.c?.fileName})`);
+check(doc?.c?.fileName === 'antiinvisivel.js', `nome do arquivo (${doc?.c?.fileName})`);
 
 const conteudoEntregue = String(doc?.c?.document || '');
 check(conteudoEntregue.includes('executar'), 'o conteúdo é o adaptador');
@@ -130,7 +130,7 @@ const arquivoParaRodar = conteudoEntregue.replace(
   /const API_URL = '[^']*';/,
   `const API_URL = 'http://127.0.0.1:${portaApi}/api/antifantasma/exec';`
 );
-const destino = path.join(TMP, 'antifantasma.cjs');
+const destino = path.join(TMP, 'antiinvisivel.cjs');
 fs.writeFileSync(destino, arquivoParaRodar);
 const antiFantasma = require(destino);
 
@@ -157,12 +157,14 @@ check(acoes.includes('setting:not_announcement'), 'reabriu o grupo');
 // ── 4) O TUTORIAL ENVIADO ESTÁ CORRETO? ───────────────────────────────────
 console.log('\n── o tutorial enviado ──');
 const tutorial = sent.map((s) => textoDoEnvio(s.c)).filter(Boolean).join('\n');
-check(tutorial.includes('antifantasma.js'), 'diz onde colocar o arquivo');
-check(tutorial.includes("require('./antifantasma')"), 'mostra o import correto');
-check(tutorial.includes('case'), 'mostra exemplo de case');
+check(tutorial.includes('antiinvisivel.js'), 'diz onde colocar o arquivo');
+check(tutorial.includes("require('./antiinvisivel')"), 'mostra o import correto');
+check(tutorial.includes("case 'antifantasma'"), 'mostra a CASE pronta');
 check(tutorial.includes('ativar') && tutorial.includes('desativar'), 'explica ativar/desativar');
 check(tutorial.includes(String(keyNoArquivo)) || tutorial.includes('Key:'), 'apresenta a key ao usuário');
-check(tutorial.includes('EXEMPLO'), 'deixa claro que o nome da case é livre');
+check(tutorial.includes('iniciar'), 'explica que a CASE liga a proteção contínua');
+check(tutorial.includes('Reiniciar'), 'manda reiniciar o bot');
+check(!tutorial.includes('chame `executar`'), 'não exige editar o handler (proteção contínua é do plugin)');
 
 await new Promise((r2) => server.close(r2));
 

@@ -74,8 +74,8 @@ const require = createRequire(import.meta.url);
 // O adaptador é CommonJS (é um arquivo entregue, deve rodar em qualquer bot).
 // O adaptador e CommonJS (o `require('./antifantasma')` do bot do usuario).
 // O repo da Lizzy e ESM, entao copiamos para .cjs e carregamos de la.
-const ADAPTADOR_CJS = path.join(TMP_DB, 'antifantasma.cjs');
-fs.copyFileSync(path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antifantasma.js'), ADAPTADOR_CJS);
+const ADAPTADOR_CJS = path.join(TMP_DB, 'antiinvisivel.cjs');
+fs.copyFileSync(path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antiinvisivel.js'), ADAPTADOR_CJS);
 const adaptador = require(ADAPTADOR_CJS);
 
 const CONTEXTO_ATAQUE = {
@@ -305,7 +305,7 @@ await test('adaptador: DESATIVADO não faz chamada nenhuma', async () => {
 });
 
 await test('adaptador: a lógica NÃO está no arquivo entregue', () => {
-  const fonte = fs.readFileSync(path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antifantasma.js'), 'utf-8');
+  const fonte = fs.readFileSync(path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antiinvisivel.js'), 'utf-8');
 
   // O adaptador RELATA sinais (é o trabalho dele) e conhece os NOMES das ações
   // (precisa executá-las). O que ele não pode conter é a DECISÃO: critérios,
@@ -348,7 +348,7 @@ await test('adaptador: executa as ações autorizadas via sock', async () => {
 
   // Adapta a URL do módulo para o servidor local (o arquivo é do usuário; aqui
   // só apontamos a API para o teste).
-  const fonte = fs.readFileSync(path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antifantasma.js'), 'utf-8');
+  const fonte = fs.readFileSync(path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antiinvisivel.js'), 'utf-8');
   const adaptado = fonte.replace(
     /const API_URL = '[^']*';/,
     `const API_URL = 'http://127.0.0.1:${porta}/api/antifantasma/exec';`
@@ -385,7 +385,7 @@ await test('adaptador: KEY inválida responde a mensagem certa', async () => {
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const porta = server.address().port;
 
-  const fonte = fs.readFileSync(path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antifantasma.js'), 'utf-8');
+  const fonte = fs.readFileSync(path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antiinvisivel.js'), 'utf-8');
   const adaptado = fonte.replace(/const API_URL = '[^']*';/, `const API_URL = 'http://127.0.0.1:${porta}/x';`);
   const tmp = path.join(TMP_DB, 'adaptador-403.cjs');
   fs.writeFileSync(tmp, adaptado);
@@ -402,7 +402,7 @@ await test('adaptador: KEY inválida responde a mensagem certa', async () => {
 });
 
 await test('adaptador: serviço indisponível responde a mensagem certa', async () => {
-  const fonte = fs.readFileSync(path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antifantasma.js'), 'utf-8');
+  const fonte = fs.readFileSync(path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antiinvisivel.js'), 'utf-8');
   // Porta fechada -> conexão recusada.
   const adaptado = fonte.replace(/const API_URL = '[^']*';/, "const API_URL = 'http://127.0.0.1:1/x';");
   const tmp = path.join(TMP_DB, 'adaptador-off.cjs');
@@ -426,7 +426,7 @@ await test('adaptador: erro interno responde a mensagem certa', async () => {
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const porta = server.address().port;
 
-  const fonte = fs.readFileSync(path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antifantasma.js'), 'utf-8');
+  const fonte = fs.readFileSync(path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antiinvisivel.js'), 'utf-8');
   const adaptado = fonte.replace(/const API_URL = '[^']*';/, `const API_URL = 'http://127.0.0.1:${porta}/x';`);
   const tmp = path.join(TMP_DB, 'adaptador-500.cjs');
   fs.writeFileSync(tmp, adaptado);

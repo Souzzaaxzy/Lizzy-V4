@@ -1,26 +1,27 @@
 /**
- * AntiFantasma — ADAPTADOR (arquivo entregue ao usuário).
+ * AntiInvisível / AntiFantasma — ADAPTADOR (arquivo entregue ao usuário).
  *
  * Este é o ÚNICO arquivo do plugin que o usuário recebe. Ele funciona como um
- * cliente mínimo: guarda o estado local de ativação, manda o contexto para a API
- * e executa as ações que a API autorizar, através do `sock`.
+ * cliente mínimo: guarda o estado local de ativação, observa as mensagens do
+ * grupo, manda o contexto para a API e executa as ações que a API autorizar,
+ * através do `sock`.
  *
  * Ele NÃO contém o algoritmo, as regras, os critérios de detecção nem a lógica
  * de decisão — tudo isso permanece no servidor.
  *
- * ─── Como usar (o usuário escolhe os nomes) ────────────────────────────────
+ * ─── Como usar ────────────────────────────────────────────────────────────
  *
- *   const antiFantasma = require('./antifantasma');
+ * O usuário NÃO precisa editar nada aqui, nem registrar listener à mão. Basta
+ * colar a CASE entregue no tutorial: ela chama `iniciar(sock)` uma vez e o
+ * plugin passa a observar as mensagens sozinho.
  *
- *   // Ligue uma vez, no início (é o que mantém a proteção ativa por mensagem):
- *   antiFantasma.iniciar(sock);
+ *   case 'antifantasma':
+ *     const antiInvisivel = require('./antiinvisivel');
+ *     antiInvisivel.iniciar(sock);   // liga a observação contínua
+ *     antiInvisivel.ativar(from);    // liga a proteção NESTE grupo
+ *     ...
  *
- *   // Cases livres — os nomes são escolha sua:
- *   case 'afon':    antiFantasma.ativar();    await reply('🟢 Ativado'); break;
- *   case 'afoff':   antiFantasma.desativar(); await reply('🔴 Desativado'); break;
- *   case 'afstatus':await reply(antiFantasma.estaAtivo() ? 'Ligado' : 'Desligado'); break;
- *
- * A KEY e a URL da API ficam na configuração abaixo.
+ * A KEY e a URL da API ficam na configuração abaixo (já preenchidas).
  */
 
 'use strict';
@@ -47,23 +48,33 @@ const BOT_ID = '5500000000000';
 // ESTADO LOCAL (ativar/desativar) — controlado só pelo usuário
 // ───────────────────────────────────────────────────────────────────────────
 
-let ativo = false;
+/**
+ * Estado liga/desliga.
+ *
+ * O estado é POR GRUPO: ativar no Grupo A não liga no Grupo B. Sem informar o
+ * grupo, o valor é o global (usado como padrão de quem não separa por grupo).
+ */
+let ativoGlobal = false;
+const ativoPorGrupo = new Map();
 
-/** Ativa o AntiFantasma nesta bot. */
-function ativar() {
-  ativo = true;
-  return ativo;
+/** Ativa a proteção (naquele grupo, ou globalmente quando sem grupo). */
+function ativar(grupo) {
+  if (grupo) ativoPorGrupo.set(String(grupo), true);
+  else ativoGlobal = true;
+  return estaAtivo(grupo);
 }
 
-/** Desativa o AntiFantasma nesta bot. */
-function desativar() {
-  ativo = false;
-  return ativo;
+/** Desativa a proteção (naquele grupo, ou globalmente quando sem grupo). */
+function desativar(grupo) {
+  if (grupo) ativoPorGrupo.set(String(grupo), false);
+  else ativoGlobal = false;
+  return estaAtivo(grupo);
 }
 
-/** O AntiFantasma está ativo nesta bot? */
-function estaAtivo() {
-  return ativo === true;
+/** A proteção está ativa? Sem grupo, responde o global; com grupo, o do grupo. */
+function estaAtivo(grupo) {
+  if (grupo && ativoPorGrupo.has(String(grupo))) return ativoPorGrupo.get(String(grupo)) === true;
+  return ativoGlobal === true;
 }
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -291,7 +302,7 @@ async function consultarAdministracao(sock, grupo, autor) {
  *
  * Basta passar a mensagem do Baileys — o adaptador extrai o resto sozinho:
  *
- *   await antiFantasma.executar({ sock, msg, reply });
+ *   await antiInvisivel.executar({ sock, msg, reply });
  *
  * Também aceita os campos explícitos (`grupo`, `autor`, `contexto`) para quem
  * preferir montar à mão.
@@ -325,18 +336,20 @@ async function executar(params = {}) {
 }
 
 async function executarInterno(params = {}) {
-  if (!estaAtivo()) {
-    // Desativado: NADA sai daqui (nem chamada à API). Devolve o motivo para o
-    // usuário entender por que não houve ação, em vez de falhar em silêncio.
-    return { ok: true, acoes: [], motivo: 'desativado' };
-  }
-
   const sock = params.sock;
   const msg = params.msg && typeof params.msg === 'object' ? params.msg : null;
   const key = msg?.key && typeof msg.key === 'object' ? msg.key : {};
 
   // Aceita as duas formas: explícita (`grupo`/`from`) ou direto da mensagem.
   const grupo = params.grupo || params.from || key.remoteJid || null;
+
+  // O estado é POR GRUPO: só age no grupo onde a proteção foi ligada.
+  if (!estaAtivo(grupo)) {
+    // Desativado: NADA sai daqui (nem chamada à API). Devolve o motivo para o
+    // usuário entender por que não houve ação, em vez de falhar em silêncio.
+    return { ok: true, acoes: [], motivo: 'desativado' };
+  }
+
   const autor = params.autor || params.sender || key.participantAlt || key.participant
     || (key.fromMe ? BOT_ID : null) || null;
   const reply = typeof params.reply === 'function' ? params.reply : null;
@@ -356,8 +369,7 @@ async function executarInterno(params = {}) {
     : extrairContexto(msg, grupo, autor);
 
   // Completa o que o usuário não informou: se o BOT pode agir e se o AUTOR é
-  // privilegiado. Sem isso o servidor não tem como decidir — e era o que fazia
-  // o plugin "não fazer nada" mesmo com o ataque chegando.
+  // privilegiado. Sem isso o servidor não tem como decidir.
   if (contexto.isGroup !== false && (contexto.botIsAdmin === undefined || contexto.senderIsPrivileged === undefined)) {
     const adm = await consultarAdministracao(sock, grupo, autor);
     if (adm) {
@@ -414,19 +426,124 @@ async function executarInterno(params = {}) {
   return { ok: true, acoes: executadas };
 }
 
+// ───────────────────────────────────────────────────────────────────────────
+// PROTEÇÃO CONTÍNUA — observa as mensagens sozinho (sem editar o handler)
+// ───────────────────────────────────────────────────────────────────────────
+
+/** Socket em que já estamos escutando (evita listener duplicado). */
+let socketEscutado = null;
+/** Guarda a função anexada, para o caso de ser preciso removê-la depois. */
+let listenerAtual = null;
+/** Ids de mensagens já avaliadas — evita processar a mesma duas vezes. */
+const vistos = new Set();
+
+function podarVistos() {
+  if (vistos.size <= 1000) return;
+  const chaves = Array.from(vistos).slice(0, 500);
+  for (const k of chaves) vistos.delete(k);
+}
+
+/**
+ * Processa um evento `messages.upsert` do Baileys.
+ *
+ * Filtro estrutural (não é decisão de ataque, é o mesmo que o núcleo aplica
+ * antes de classificar): só mensagens de grupo e que não são do próprio bot.
+ * Qualquer julgamento sobre ser ou não ataque continua no servidor.
+ */
+async function aoReceberMensagens(evento) {
+  try {
+    const lista = Array.isArray(evento?.messages)
+      ? evento.messages
+      : (evento?.key ? [evento] : []);
+
+    for (const msg of lista) {
+      const grupo = msg?.key?.remoteJid;
+      if (!grupo || !String(grupo).endsWith('@g.us')) continue;
+      if (msg?.key?.fromMe) continue;
+      if (!estaAtivo(grupo)) continue;
+
+      const id = msg?.key?.id;
+      if (id) {
+        if (vistos.has(id)) continue;
+        vistos.add(id);
+        podarVistos();
+      }
+
+      // Sem `reply`: o plugin não responde nada por conta própria. Se a API
+      // estiver fora do ar, o grupo não recebe erro a cada mensagem.
+      await executar({ sock: socketEscutado, msg, grupo });
+    }
+  } catch {
+    // A observação nunca pode derrubar o handler do usuário.
+  }
+}
+
+/**
+ * Liga a observação contínua no socket informado.
+ *
+ * Chamado UMA vez pela CASE entregue. Anexa um listener próprio de
+ * `messages.upsert` ao lado do que o bot do usuário já tem — sem substituir nem
+ * interferir no handler dele. Como o listener é registrado no próprio socket do
+ * Baileys, não é preciso editar nada no `index.js` além da CASE.
+ *
+ * É idempotente: chamar de novo (o usuário alternando liga/desliga) não duplica
+ * o listener. Se o socket for outro (reconexão), troca a escuta para ele.
+ *
+ * @param {object} sock socket do Baileys
+ * @returns {{ok: boolean, escutando: boolean, motivo?: string}}
+ */
+function iniciar(sock) {
+  if (!sock || typeof sock !== 'object') {
+    return { ok: false, escutando: false, motivo: 'sem_sock' };
+  }
+  if (!sock.ev || typeof sock.ev.on !== 'function') {
+    return { ok: false, escutando: false, motivo: 'socket_sem_ev' };
+  }
+
+  if (socketEscutado === sock && listenerAtual) {
+    return { ok: true, escutando: true };
+  }
+
+  // Socket novo (ou primeira vez): se já escutávamos outro, saímos dele antes.
+  if (socketEscutado && listenerAtual && typeof socketEscutado.ev?.off === 'function') {
+    try { socketEscutado.ev.off('messages.upsert', listenerAtual); } catch { /* ignora */ }
+  }
+
+  sock.ev.on('messages.upsert', aoReceberMensagens);
+  socketEscutado = sock;
+  listenerAtual = aoReceberMensagens;
+
+  return { ok: true, escutando: true };
+}
+
+/** Para de observar as mensagens (a proteção deixa de rodar até novo `iniciar`). */
+function parar() {
+  if (socketEscutado && listenerAtual && typeof socketEscutado.ev?.off === 'function') {
+    try { socketEscutado.ev.off('messages.upsert', listenerAtual); } catch { /* ignora */ }
+  }
+  socketEscutado = null;
+  listenerAtual = null;
+  return { ok: true, escutando: false };
+}
+
+/** Está observando as mensagens? */
+function estaEscutando() {
+  return Boolean(socketEscutado && listenerAtual);
+}
+
 /**
  * Exportação.
  *
- * Este arquivo é CommonJS (é o que o `require('./antifantasma')` espera). Isso
+ * Este arquivo é CommonJS (é o que o `require('./antiinvisivel')` espera). Isso
  * cobre as duas formas de uso sem o usuário mexer em nada:
  *
- *   - bot CommonJS:  const antiFantasma = require('./antifantasma');
- *   - bot ESM:       import antiFantasma from './antifantasma.js';  (o Node
+ *   - bot CommonJS:  const antiInvisivel = require('./antiinvisivel');
+ *   - bot ESM:       import antiInvisivel from './antiinvisivel.js';  (o Node
  *                    entrega este `module.exports` como export default)
  *
  * Exceção: se o `package.json` do bot tiver `"type": "module"`, o Node trata
  * arquivos `.js` como ESM e este arquivo precisa ser renomeado para
- * `antifantasma.cjs`. Nada mais muda — o `require`/`import` continuam iguais.
+ * `antiinvisivel.cjs`. Nada mais muda — o `require`/`import` continuam iguais.
  */
 module.exports = {
   // Estado local (livre para o usuário usar em qualquer case)
@@ -435,9 +552,8 @@ module.exports = {
   estaAtivo,
   // Processamento
   executar,
-  // Conveniência: liga a proteção e devolve o mesmo objeto
-  iniciar(sock) {
-    ativar();
-    return { ok: true, sock: Boolean(sock) };
-  },
+  // Proteção contínua (a CASE chama isto uma vez e pronto)
+  iniciar,
+  parar,
+  estaEscutando,
 };

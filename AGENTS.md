@@ -1102,6 +1102,62 @@ nenhuma existente).
   de grupo próprio. E os helpers precisam **achatar** `richResponse`
   (`sub.text` + `sub.code[].codeContent`), senão o teste não enxerga o tutorial.
 
+### PROTEÇÃO CONTÍNUA — correção do modelo CASE↔executor (set/2026) ✅
+O pedido do dono: o plugin deveria funcionar como **funcionalidade nativa**,
+com o usuário só colocando o arquivo em `src/` e a CASE no `index.js` — **sem**
+editar handler nem registrar listener. Correção do sistema existente (nada de
+recriar API/core/keys).
+
+**Quatro defeitos medidos antes de mexer** (cada um com prova, não hipótese):
+1. `iniciar(sock)` **ignorava o socket**: recebia o parâmetro e não anexava
+   listener nenhum (`ev.on` chamado **0** vezes). Ou seja, a proteção contínua
+   não existia.
+2. A CASE tinha o `require` **fora** dela (no topo do bloco) — contra a regra
+   de manter o carregamento dentro da case.
+3. A CASE **não chamava `iniciar()`**; o tutorial mandava o usuário "chamar
+   `executar` a cada mensagem recebida" — exatamente a edição manual proibida.
+4. O entregável se chamava `antifantasma.js`, não `antiinvisivel.js`.
+
+**Correções** (arquitetura e contrato preservados):
+- **Novo entregável `dados/src/antifantasma-cliente/antiinvisivel.js`**: mesma
+  observação/execução de antes, **mais** a proteção contínua que faltava.
+  `iniciar(sock)` agora anexa `messages.upsert` **no próprio `sock.ev`** (é onde
+  o bot já registra os listeners dele — `nazu.ev.on`, confirmado no `index.js`).
+  É idempotente (troca de socket/reconexão não duplica) e tem `parar()`.
+  O listener é **aditivo**: não substitui nem interfere no handler do usuário.
+- **Estado POR GRUPO**: `ativar(grupo)`/`desativar(grupo)`/`estaAtivo(grupo)`.
+  Ligar no Grupo A não liga no B. Sem grupo, mantém o comportamento global
+  (compatível com quem chama sem argumento). **Não** foi criado outro banco: o
+  estado vive no módulo, como antes.
+- **CASE**: `require('./antiinvisivel')` **dentro** da case + `iniciar(nazu)`;
+  alterna por grupo (`estaAtivo(from)`). O `catch` continua respondendo erro.
+- **Tutorial** (`!addghostcmd`): passos 1-6 (colocar arquivo → copiar CASE →
+  colar → reiniciar → `!antifantasma` liga → de novo desliga), **sem** a etapa
+  de editar handler. Arquivo entregue e legenda renomeados para
+  `antiinvisivel.js`. `LEIA-ME.md` reescrito para o mesmo fluxo.
+- **API/core/keys/health intocados.** Nenhuma decisão foi para o cliente: o
+  adaptador segue só relatando sinais e executando `actions[]`.
+
+**Novo teste `tests/antifantasma-instalacao-limpa.test.js` (20 asserções)** — é
+o critério definitivo: extrai a CASE **literalmente** do `index.js`, monta um
+bot que só tem o arquivo + a CASE (socket sem `sendMessage`, **nenhuma** chamada
+manual, **nenhum** listener à mão) e percorre ativar → ataque (fecha/bani/reabre)
+→ normal (nada) → desativar (para) → permissões → estado por grupo. **Verificado
+neutralizando o `sock.ev.on` do `iniciar`: 5 asserções falham** — o teste mede o
+comportamento real, não a aparência.
+
+**Armadilha do dublê**: o socket de teste precisa de `.ev` (o Baileys expõe o
+EventEmitter ali). Sem isso o `iniciar` recusa corretamente com `socket_sem_ev`
+e o teste mediria errado. E `new Function` com a case precisa de uma quebra de
+linha antes do `}` do switch, senão o comentário final da CASE engole o
+fechamento e dá `SyntaxError`.
+
+**Suítes**: antifantasma-plugin 20/146, usuario 40/40, entrega 19/19,
+instalacao-limpa 20/20, e2e 22/22, ghost-manager 37/154, + 21 suítes de
+regressão verdes. `statusgrupo` falha por **falta de ffmpeg no sandbox** —
+**pré-existente, comprovado** rodando-a com `git stash` (mesma falha sem as
+mudanças).
+
 ### BLOCO FINAL do tutorial: código COMPLETO e autossuficiente (set/2026) ✅
 - **Pedido do dono**: o último trecho do tutorial devia ser *"o código exato que
   ele possa usar, já contendo todas as const, ligado no arquivo, tudo"* — o
@@ -1242,8 +1298,8 @@ livremente a case e os comandos de ligar/desligar no `Index.js` dele.
     KEYs em `dados/database/antifantasma/keys.json` (escrita atômica com tmp
     único). Tem `criarKey()`, `revogarKey()`, `validarKey()` e
     `processarRequisicao()` (testável sem abrir porta).
-- **Cliente (entregável)** — `dados/src/antifantasma-cliente/antifantasma.js`:
-  o **único** arquivo entregue ao usuário. CommonJS (`require('./antifantasma')`,
+- **Cliente (entregável)** — `dados/src/antifantasma-cliente/antiinvisivel.js` (era `antifantasma.js`, renomeado na correção de proteção contínua):
+  o **único** arquivo entregue ao usuário. CommonJS (`require('./antiinvisivel')`,
   como o pedido especifica), com estado local e as funções públicas.
 
 ### Vocabulário de ações (o cliente só EXECUTA, não decide)

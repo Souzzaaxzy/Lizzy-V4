@@ -1,13 +1,13 @@
 # AntiFantasma — integração
 
-Você recebeu **um único arquivo**: `antifantasma.js`. Coloque-o na mesma pasta
+Você recebeu **um único arquivo**: `antiinvisivel.js`. Coloque-o na mesma pasta
 do seu `Index.js` (ex.: `src/`).
 
 O funcionamento real roda no servidor — este arquivo é só o adaptador.
 
 ## 1. Configure no topo do arquivo
 
-Abra `antifantasma.js` e ajuste:
+Abra `antiinvisivel.js` e ajuste:
 
 ```js
 const API_URL = 'https://SEU-SERVIDOR/api/antifantasma/exec';
@@ -25,53 +25,49 @@ Em produção use **HTTPS** (a KEY nunca deve trafegar em claro).
 
 ## 2. Importe no Index.js
 
-```js
-const antiFantasma = require('./antifantasma');
-```
+A CASE entregue no tutorial já traz o `require` **dentro** dela — você não
+precisa importar nada no topo do arquivo.
 
 > Se o seu `package.json` tiver `"type": "module"`, renomeie o arquivo para
-> `antifantasma.cjs` e use `await import('./antifantasma.cjs')`. Nada mais muda.
+> `antiinvisivel.cjs` e ajuste o `require` da CASE para `./antiinvisivel.cjs`.
+> Nada mais muda.
 
-## 3. Crie as cases que você quiser
+## 3. Cole a CASE
 
-Os nomes são **escolha sua** — o plugin não impõe nenhum:
+A **CASE completa** vem no tutorial. Cole dentro do switch dos seus comandos.
+Ela é autossuficiente.
 
-```js
-case 'afon':
-  antiFantasma.ativar();
-  await reply('🟢 AntiFantasma ativado.');
-  break;
+## 4. Reinicie o bot e use
 
-case 'afoff':
-  antiFantasma.desativar();
-  await reply('🔴 AntiFantasma desativado.');
-  break;
+No grupo:
 
-case 'afstatus':
-  await reply(antiFantasma.estaAtivo() ? '🟢 Ligado' : '🔴 Desligado');
-  break;
+```
+!antifantasma       → liga a proteção NESTE grupo
+!antifantasma       → desliga
 ```
 
-## 4. Passe cada mensagem do grupo para o AntiFantasma avaliar
+**Não existe etapa extra.** Você não precisa editar o seu handler de mensagens:
+a CASE chama `iniciar(nazu)` e o plugin passa a observar as mensagens do grupo
+sozinho, consultando a API e executando as ações. O estado é por grupo — ligar
+no Grupo A não liga no Grupo B.
 
-Onde você já processa mensagens de grupo, chame `executar`:
-
-```js
-await antiFantasma.executar({
-  sock,   // o socket do seu bot
-  msg,    // a mensagem do Baileys (o adaptador extrai o resto sozinho)
-  reply,  // função de resposta do seu bot
-});
-```
-
-Regras importantes:
-
-- **Desativado não chama a API** — se `estaAtivo()` for `false`, `executar`
-  retorna imediatamente e nada sai da sua bot.
+- **Desativado não chama a API** — se a proteção estiver desligada naquele
+  grupo, `executar` retorna imediatamente e nada sai da sua bot.
 - Você **não precisa saber** quais sinais caracterizam ataque: mande o contexto
   que tiver e a decisão vem do servidor.
 - O `sock` precisa ter `groupSettingUpdate` e `groupParticipantsUpdate` (padrão
   no Baileys).
+
+## Funções do módulo
+
+| Função | Para que serve |
+|---|---|
+| `iniciar(sock)` | Liga a observação contínua (a CASE chama isto) |
+| `parar()` | Para de observar |
+| `ativar(grupo)` | Liga a proteção naquele grupo |
+| `desativar(grupo)` | Desliga a proteção naquele grupo |
+| `estaAtivo(grupo)` | A proteção está ligada naquele grupo? |
+| `executar({ sock, msg })` | Avalia uma mensagem específica à mão (opcional) |
 
 ## Respostas possíveis
 
