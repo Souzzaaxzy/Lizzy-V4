@@ -1182,6 +1182,43 @@ serviço errado.
 - `ANTIFANTASMA_PORT` continua sendo o override — se definida, ganha (e a URL
   passa a ser a base, já que a porta deixa de ser uma das publicadas).
 
+#### Suporte a Pterodactyl / Bronxys (set/2026) ✅
+O host do dono é **Bronxys, que usa Pterodactyl**. O diagnóstico do próprio
+comando mostrou o ambiente:
+
+```
+RUNTIME_URL: ausente      RUNTIME_ID: ausente
+HOSTNAME: 7e9f4503-...    (UUID do container — não tem domínio)
+Portas publicadas: nenhuma
+```
+
+**Por que nenhuma detecção anterior funcionava**: o Pterodactyl é
+arquiteturalmente diferente das outras plataformas — ele **não publica domínio**.
+Entrega apenas a alocação (`SERVER_IP` + `SERVER_PORT`), sem TLS. Não há
+`RUNTIME_URL`, `WORKER_*`, nem hostname com domínio. Não era caso de "definir a
+env": era plataforma não suportada.
+
+**Implementado** (`urlDoPterodactyl`):
+- Monta `http://<SERVER_IP>:<SERVER_PORT>` — o endereço real da alocação.
+- **Exige os dois dados.** Só o IP não basta: sem a porta a URL não leva a lugar
+  nenhum, e inventar porta daria endereço errado → devolve `null`.
+- Porta **80** dispensa sufixo; porta **443** pressupõe TLS, então o esquema é
+  `https` (usar `http` falaria com um listener TLS e morreria).
+- **Não passa por `normalizar()`** de propósito: aquela função força `https` em
+  host público, o que quebraria o acesso (não há TLS nessa porta).
+- `escolherPorta` reconhece `SERVER_PORT` — é exatamente onde a API deve ouvir,
+  já que a porta é publicada pelo painel.
+- **Precedência**: Pterodactyl vem **antes** do runtime. Se o runtime ganhasse
+  primeiro, a porta do painel acabaria colada numa URL `https://<runtime>` —
+  endereço inexistente (bug pego em teste).
+- `ANTIFANTASMA_PUBLIC_URL` continua vencendo tudo, para quem tem domínio próprio
+  com TLS.
+
+**Diagnóstico** agora lista também `SERVER_IP` e `SERVER_PORT`.
+
+Testes: `public-url` **27/27** (novos: IP+porta, porta 80/443, exige os dois
+dados, valores inválidos, `escolherPorta`, override, e a precedência sem mistura).
+
 #### Correção: "não consegui detectar a URL pública" (set/2026) ✅
 Sintoma relatado pelo dono no uso real. Duas causas, ambas corrigidas:
 

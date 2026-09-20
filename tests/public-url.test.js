@@ -72,6 +72,63 @@ test('porta sem subdomínio cai na URL base do runtime', () => {
   eq(m.detectarUrlPublica(env, {}), 'https://abc.host.dev', 'sem opts -> base');
 });
 
+test('Pterodactyl / Bronxys: IP + SERVER_PORT (sem domínio, sem HTTPS)', () => {
+  // Aqui NÃO existe domínio publicado nem TLS: o endereço é o próprio
+  // http://<ip>:<porta> da alocação.
+  eq(m.detectarUrlPublica({ SERVER_IP: '203.0.113.10', SERVER_PORT: '25565' }),
+     'http://203.0.113.10:25565');
+  eq(m.endpointAntiFantasma({ SERVER_IP: '203.0.113.10', SERVER_PORT: '25565' }),
+     'http://203.0.113.10:25565/api/antifantasma/exec');
+
+  // Portas padrão não levam sufixo.
+  eq(m.detectarUrlPublica({ SERVER_IP: '1.2.3.4', SERVER_PORT: '80' }), 'http://1.2.3.4');
+  // 443 pressupõe TLS — usar http falaria com um listener TLS e morreria.
+  eq(m.detectarUrlPublica({ SERVER_IP: '1.2.3.4', SERVER_PORT: '443' }), 'https://1.2.3.4');
+});
+
+test('Pterodactyl: exige IP E porta (não inventa endereço)', () => {
+  // Só o IP: sem a porta a URL não leva a lugar nenhum.
+  eq(m.detectarUrlPublica({ SERVER_IP: '1.2.3.4' }), null);
+  // Só a porta: sem o IP não há host.
+  eq(m.detectarUrlPublica({ SERVER_PORT: '25565' }), null);
+  // Valores inválidos.
+  eq(m.detectarUrlPublica({ SERVER_IP: '   ', SERVER_PORT: '25565' }), null);
+  eq(m.detectarUrlPublica({ SERVER_IP: '1.2.3.4', SERVER_PORT: 'abc' }), null);
+  eq(m.detectarUrlPublica({ SERVER_IP: '1.2.3.4', SERVER_PORT: '0' }), null);
+  eq(m.detectarUrlPublica({ SERVER_IP: '1.2.3.4', SERVER_PORT: '-1' }), null);
+});
+
+test('escolherPorta reconhece a alocação do Pterodactyl', () => {
+  eq(m.escolherPorta({ SERVER_IP: '1.2.3.4', SERVER_PORT: '25565' }), 25565);
+  eq(m.escolherPorta({ ANTIFANTASMA_PORT: '9000', SERVER_PORT: '25565' }), 9000, 'override ganha');
+});
+
+test('override do admin vence o Pterodactyl (para quem tem domínio próprio)', () => {
+  const env = {
+    ANTIFANTASMA_PUBLIC_URL: 'https://meudominio.com',
+    SERVER_IP: '1.2.3.4',
+    SERVER_PORT: '25565',
+  };
+  eq(m.detectarUrlPublica(env), 'https://meudominio.com');
+});
+
+test('Pterodactyl ganha do runtime quando os dois existem (não mistura)', () => {
+  // Se o runtime ganhasse primeiro, a porta do painel acabaria colada numa URL
+  // `https://<runtime>` — endereço que não existe.
+  const env = {
+    RUNTIME_URL: 'https://abc.prod-runtime.all-hands.dev',
+    WORKER_1: '12000',
+    SERVER_IP: '203.0.113.10',
+    SERVER_PORT: '25565',
+  };
+  eq(m.detectarUrlPublica(env), 'http://203.0.113.10:25565');
+  eq(m.escolherPorta(env), 25565, 'a porta é a da alocação');
+
+  // Sem os dados do Pterodactyl, o runtime volta a valer (sandbox de dev).
+  const soRuntime = { RUNTIME_URL: 'https://abc.host.dev', WORKER_1: '12000' };
+  eq(m.detectarUrlPublica(soRuntime, { porta: 12000 }), 'https://work-1-abc.host.dev');
+});
+
 test('fallback de HOST: RUNTIME_ID e HOSTNAME quando falta RUNTIME_URL', () => {
   // Sem RUNTIME_URL, o host é reconstruído — foi o cenário em que o comando
   // dizia "não consegui detectar a URL pública".

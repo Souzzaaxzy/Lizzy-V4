@@ -91,6 +91,41 @@ const FONTES = [
   { nome: 'DOMAIN', montar: (v) => (v.startsWith('http') ? v : `https://${v}`) },
 ];
 
+/**
+ * Pterodactyl (e painéis derivados, ex.: "Bronxys").
+ *
+ * Diferente das plataformas acima, o Pterodactyl NÃO publica um domínio: ele
+ * entrega o IP e a porta da alocação (`SERVER_IP` + `SERVER_PORT`). Não existe
+ * HTTPS pronto — o acesso é direto, em `http://<ip>:<porta>`.
+ *
+ * Por isso a detecção aqui é diferente: em vez de montar `https://<host>`,
+ * montamos `http://<ip>:<porta>` e deixamos o administrador apontar um domínio
+ * próprio (via `ANTIFANTASMA_PUBLIC_URL`) quando quiser HTTPS de verdade.
+ *
+ * Exigimos PORTANTO os dois dados. Só o IP não basta: sem a porta a URL não
+ * leva a lugar nenhum, e inventar a porta daria um endereço errado.
+ *
+ * @returns {string|null} ex.: `http://203.0.113.10:25565`
+ */
+function urlDoPterodactyl(env) {
+  const ip = env?.SERVER_IP;
+  const porta = env?.SERVER_PORT;
+  if (typeof ip !== 'string' || !ip.trim()) return null;
+  const ipLimpo = ip.trim().replace(/\/+$/, '');
+  if (!ipLimpo) return null;
+
+  const nPorta = Number(porta);
+  // Sem porta válida não dá para montar o endereço — melhor devolver null (e o
+  // dono define a env) do que entregar uma URL que não responde.
+  if (!Number.isFinite(nPorta) || nPorta <= 0) return null;
+
+  // Porta 443 pressupõe TLS: nesse caso o esquema tem de ser https, senão a
+  // conexão fala HTTP com um listener TLS e morre. Na 80, http puro.
+  if (nPorta === 443) return `https://${ipLimpo}`;
+  const sufixo = nPorta === 80 ? '' : `:${nPorta}`;
+  return `http://${ipLimpo}${sufixo}`;
+}
+
 /** Normaliza para `https://host` sem barra no fim. `null` quando inválido. */
 function normalizar(valor) {
   if (typeof valor !== 'string' || !valor.trim()) return null;
@@ -186,9 +221,17 @@ export function detectarUrlPublica(env = process.env, opts = {}) {
     if (normalizada) return normalizada;
   }
 
+  // Pterodactyl / Bronxys vem ANTES do runtime: quando `SERVER_IP`+`SERVER_PORT`
+  // existem, é ali que a API está de fato ouvindo (a porta é a da alocação do
+  // painel). Se o runtime ganhasse primeiro, a porta do painel acabaria colada
+  // numa URL `https://<runtime>`, endereço que não existe.
+  // NÃO passa por `normalizar()` de propósito: forçar https aqui quebraria o
+  // acesso (não há TLS nessa porta).
+  const doPterodactyl = urlDoPterodactyl(env);
+  if (doPterodactyl) return doPterodactyl;
+
   // Neste runtime a URL depende da PORTA: `work-1`/`work-2` são subdomínios
-  // distintos. Resolver isso antes das outras fontes evita anunciar a porta
-  // errada. O host vem de `RUNTIME_URL`, `RUNTIME_ID` ou `HOSTNAME` (fallbacks).
+  // distintos. O host vem de `RUNTIME_URL`, `RUNTIME_ID` ou `HOSTNAME`.
   const porta = opts.porta ?? portaConfigurada(env);
   const doRuntime = urlDoRuntimeParaPorta(env, porta);
   if (doRuntime) return doRuntime;
@@ -243,6 +286,12 @@ export function endpointAntiFantasma(env = process.env, opts = {}) {
 export function escolherPorta(env = process.env) {
   const explicita = portaConfigurada(env);
   if (explicita) return explicita;
+
+  // Pterodactyl: a porta é a da alocação (`SERVER_PORT`), que já é publicada
+  // pelo painel — é exatamente onde a API deve ouvir.
+  const pterodactyl = Number(env?.SERVER_PORT);
+  if (Number.isFinite(pterodactyl) && pterodactyl > 0) return pterodactyl;
+
   const publicadas = portasPublicadas(env);
   return publicadas.length ? publicadas[0] : 0;
 }

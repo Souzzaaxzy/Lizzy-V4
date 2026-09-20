@@ -2595,6 +2595,9 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       linhas.push(`• RUNTIME_URL: ${process.env.RUNTIME_URL ? 'presente' : 'ausente'}`);
       linhas.push(`• RUNTIME_ID: ${process.env.RUNTIME_ID || 'ausente'}`);
       linhas.push(`• HOSTNAME: ${process.env.HOSTNAME || 'ausente'}`);
+      // Pterodactyl (e painéis derivados): aqui não há domínio, só IP + porta.
+      linhas.push(`• SERVER_IP: ${process.env.SERVER_IP || 'ausente'}`);
+      linhas.push(`• SERVER_PORT: ${process.env.SERVER_PORT || 'ausente'}`);
       const pub = ghostPortasPublicadas(process.env);
       linhas.push(`• Portas publicadas: ${pub.length ? pub.join(', ') : 'nenhuma'}`);
       linhas.push(`• Porta em uso: ${ghostPortaAtiva() || 'nenhuma'}`);
