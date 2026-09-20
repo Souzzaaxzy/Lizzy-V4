@@ -114,10 +114,32 @@ function normalizar(valor) {
 
 /** Host base do runtime, sem esquema (ex.: `abc.prod-runtime.all-hands.dev`). */
 function hostDoRuntime(env) {
+  // 1) O caminho direto: `RUNTIME_URL` já traz o host completo.
   const bruto = env?.RUNTIME_URL;
-  if (typeof bruto !== 'string' || !bruto.trim()) return null;
-  const semEsquema = bruto.trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '');
-  return semEsquema || null;
+  if (typeof bruto === 'string' && bruto.trim()) {
+    const semEsquema = bruto.trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+    if (semEsquema) return semEsquema;
+  }
+
+  // 2) Fallback por `RUNTIME_ID`: em alguns lançamentos do runtime a
+  //    `RUNTIME_URL` não vem, mas o `RUNTIME_ID` sim. O domínio segue um padrão
+  //    fixo da plataforma, então dá para reconstruí-lo.
+  const id = env?.RUNTIME_ID;
+  if (typeof id === 'string' && /^[a-z0-9-]+$/i.test(id.trim())) {
+    return `${id.trim()}.prod-runtime.all-hands.dev`;
+  }
+
+  // 3) Último recurso: o próprio `HOSTNAME` do container costuma ser
+  //    `runtime-<id>-<hash>-<sufixo>`. Extraindo o `<id>`, chegamos ao mesmo
+  //    domínio. Verificado neste ambiente: `HOSTNAME` e `RUNTIME_URL` apontam
+  //    para o mesmo id.
+  const hostname = env?.HOSTNAME;
+  if (typeof hostname === 'string') {
+    const m = /^runtime-([a-z0-9]+)-/i.exec(hostname.trim());
+    if (m) return `${m[1]}.prod-runtime.all-hands.dev`;
+  }
+
+  return null;
 }
 
 /**
@@ -130,18 +152,18 @@ function hostDoRuntime(env) {
  * @returns {string|null}
  */
 function urlDoRuntimeParaPorta(env, porta) {
-  const base = normalizar(env?.RUNTIME_URL);
-  if (!base) return null;
+  // Usa o host derivado (RUNTIME_URL, RUNTIME_ID ou HOSTNAME) — não só a
+  // `RUNTIME_URL`, senão o fallback não teria efeito.
+  const host = hostDoRuntime(env);
+  if (!host) return null;
 
   const n = Number(porta);
-  if (!Number.isFinite(n) || n <= 0) return base;
+  if (!Number.isFinite(n) || n <= 0) return `https://${host}`;
 
   const publicadas = portasPublicadas(env);
   const idx = publicadas.indexOf(n);
-  if (idx < 0) return base;
+  if (idx < 0) return `https://${host}`;
 
-  const host = hostDoRuntime(env);
-  if (!host) return base;
   return `https://work-${idx + 1}-${host}`;
 }
 
@@ -166,12 +188,10 @@ export function detectarUrlPublica(env = process.env, opts = {}) {
 
   // Neste runtime a URL depende da PORTA: `work-1`/`work-2` são subdomínios
   // distintos. Resolver isso antes das outras fontes evita anunciar a porta
-  // errada.
+  // errada. O host vem de `RUNTIME_URL`, `RUNTIME_ID` ou `HOSTNAME` (fallbacks).
   const porta = opts.porta ?? portaConfigurada(env);
-  if (env.RUNTIME_URL) {
-    const especifica = urlDoRuntimeParaPorta(env, porta);
-    if (especifica) return especifica;
-  }
+  const doRuntime = urlDoRuntimeParaPorta(env, porta);
+  if (doRuntime) return doRuntime;
 
   for (const fonte of FONTES) {
     const valor = env[fonte.nome];

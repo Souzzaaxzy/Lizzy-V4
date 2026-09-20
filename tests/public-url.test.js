@@ -72,6 +72,32 @@ test('porta sem subdomínio cai na URL base do runtime', () => {
   eq(m.detectarUrlPublica(env, {}), 'https://abc.host.dev', 'sem opts -> base');
 });
 
+test('fallback de HOST: RUNTIME_ID e HOSTNAME quando falta RUNTIME_URL', () => {
+  // Sem RUNTIME_URL, o host é reconstruído — foi o cenário em que o comando
+  // dizia "não consegui detectar a URL pública".
+  const soId = { RUNTIME_ID: 'abc', WORKER_1: '12000' };
+  eq(m.detectarUrlPublica(soId, { porta: 12000 }), 'https://work-1-abc.prod-runtime.all-hands.dev');
+  eq(m.endpointAntiFantasma(soId, { porta: 12000 }),
+     'https://work-1-abc.prod-runtime.all-hands.dev/api/antifantasma/exec');
+
+  const soHostname = { HOSTNAME: 'runtime-abc-d865c869f-5m9lv', WORKER_1: '12000' };
+  eq(m.detectarUrlPublica(soHostname, { porta: 12000 }), 'https://work-1-abc.prod-runtime.all-hands.dev');
+
+  // RUNTIME_URL ausente E sem os fallbacks -> null (aí é caso de definir a env).
+  eq(m.detectarUrlPublica({ WORKER_1: '12000' }, { porta: 12000 }), null);
+  eq(m.detectarUrlPublica({ HOSTNAME: 'container-qualquer' }, {}), null, 'HOSTNAME fora do padrão não inventa host');
+});
+
+test('API caída não perde o subdomínio (a porta é escolhida, não a em uso)', () => {
+  // Cenário do erro relatado: a API não subiu, então `portaEmUso()` é 0. A URL
+  // precisa continuar sendo a da porta publicada — antes caía na base, sem
+  // subdomínio, e o adaptador do usuário não alcançava o serviço.
+  const env = { RUNTIME_URL: 'https://abc.host.dev', WORKER_1: '12000', WORKER_2: '12001' };
+  const porta = m.escolherPorta(env);
+  eq(porta, 12000, 'porta escolhida mesmo com API caída');
+  eq(m.endpointAntiFantasma(env, { porta }), 'https://work-1-abc.host.dev/api/antifantasma/exec');
+});
+
 test('escolherPorta: env explícita ganha; senão a primeira publicada', () => {
   eq(m.escolherPorta({ ANTIFANTASMA_PORT: '9000', WORKER_1: '12000' }), 9000, 'env explícita');
   eq(m.escolherPorta({ WORKER_1: '12000', WORKER_2: '12001' }), 12000, 'primeira publicada');

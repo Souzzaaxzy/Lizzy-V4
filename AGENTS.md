@@ -1182,6 +1182,34 @@ serviço errado.
 - `ANTIFANTASMA_PORT` continua sendo o override — se definida, ganha (e a URL
   passa a ser a base, já que a porta deixa de ser uma das publicadas).
 
+#### Correção: "não consegui detectar a URL pública" (set/2026) ✅
+Sintoma relatado pelo dono no uso real. Duas causas, ambas corrigidas:
+
+1. **A detecção dependia só de `RUNTIME_URL`.** Se essa variável não estiver no
+   ambiente do bot, a URL saía `null` e o comando recusava. Agora o host é
+   reconstruído por **três caminhos**, em ordem:
+   - `RUNTIME_URL` (caminho direto);
+   - `RUNTIME_ID` → `<id>.prod-runtime.all-hands.dev`;
+   - `HOSTNAME` → `runtime-<id>-<hash>-<sufixo>` → `<id>.prod-runtime.all-hands.dev`
+     (verificado: neste ambiente `HOSTNAME` e `RUNTIME_URL` dão o mesmo id).
+   `HOSTNAME` fora do padrão **não** inventa host (devolve `null`), para não
+   gerar URL falsa.
+
+2. **Com a API caída, a URL perdia o subdomínio.** `ghostPortaAtiva()` usava
+   `portaEmUso() || ANTIFANTASMA_PORT` e, sem a env, virava `0` → a detecção
+   caía na **base** (sem `work-1`), que não é alcançável de fora. Agora, quando
+   não há porta em uso, o fallback é `escolherPorta()` — a **porta publicada** do
+   runtime. Assim o endereço entregue ao usuário continua sendo o `work-1`.
+
+**Mensagem de erro agora diagnostica**: quando ainda assim não der para detectar,
+o comando lista o que o bot **enxerga** (`RUNTIME_URL`/`RUNTIME_ID`/`HOSTNAME`
+presentes ou ausentes, portas publicadas, porta em uso) — sem expor nada
+sensível. Isso separa "falta definir a env" de "ambiente sem domínio".
+
+Testes: `public-url` **22/22** (novos: fallback por `RUNTIME_ID`/`HOSTNAME`,
+`HOSTNAME` fora do padrão → `null`, e a URL mantendo o subdomínio com a API
+caída).
+
 #### Demais fontes (inalterado)
 
 - Módulo novo **`dados/src/utils/publicUrl.js`** (puro: recebe o `env` por

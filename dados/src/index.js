@@ -27,7 +27,7 @@ import { parseImagePollArgs, collectPollImages, resolveAttachments, buildOptionN
 import { toOggOpus } from './utils/oggOpus.js';
 import * as ghostKeys from './antifantasma/keys.js';
 import { verificarSaude as ghostVerificarSaude } from './antifantasma/health.js';
-import { endpointAntiFantasma as ghostEndpointUrl } from './utils/publicUrl.js';
+import { endpointAntiFantasma as ghostEndpointUrl, escolherPorta as ghostEscolherPorta, portasPublicadas as ghostPortasPublicadas } from './utils/publicUrl.js';
 import { portaEmUso as ghostPortaEmUso } from './antifantasma/api.js';
 import {
   isGroupStatusContent,
@@ -2574,26 +2574,38 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     // Encapsula as duas coisas que os comandos precisam: a URL pública da API
     // (detectada automaticamente, com fallback pela porta local) e o health.
     //
-    // A porta vem do SERVIDOR quando ele está no ar (`ghostPortaAtiva()`), senão
-    // da variável de ambiente. É essa porta que define o subdomínio público
-    // (work-1/work-2), então usar a porta errada mandaria o adaptador do usuário
-    // para outro endereço.
+    // A porta vem do SERVIDOR quando ele está no ar (`ghostPortaEmUso()`), senão
+    // da escolha automática (env ou porta publicada). É essa porta que define o
+    // subdomínio público (work-1/work-2), então usar a porta errada mandaria o
+    // adaptador do usuário para outro endereço.
     const ghostPortaAtiva = () => {
       const ativa = Number(ghostPortaEmUso?.()) || 0;
-      return ativa > 0 ? ativa : (Number(process.env.ANTIFANTASMA_PORT) || 0);
+      if (ativa > 0) return ativa;
+      return ghostEscolherPorta();
     };
     const ghostPortaOpts = () => {
       const p = ghostPortaAtiva();
       return p > 0 ? { porta: p } : {};
     };
-    const ghostPortaOuZero = () => ghostPortaAtiva();
     const ghostEndpoint = () => ghostEndpointUrl(process.env, ghostPortaOpts());
+    // Diagnóstico para quando a URL não é detectada: mostra o que o bot ENXERGA
+    // no ambiente, para o dono saber o que falta (sem expor nada sensível).
+    const ghostDiagUrl = () => {
+      const linhas = ['*O que eu procurei:*'];
+      linhas.push(`• RUNTIME_URL: ${process.env.RUNTIME_URL ? 'presente' : 'ausente'}`);
+      linhas.push(`• RUNTIME_ID: ${process.env.RUNTIME_ID || 'ausente'}`);
+      linhas.push(`• HOSTNAME: ${process.env.HOSTNAME || 'ausente'}`);
+      const pub = ghostPortasPublicadas(process.env);
+      linhas.push(`• Portas publicadas: ${pub.length ? pub.join(', ') : 'nenhuma'}`);
+      linhas.push(`• Porta em uso: ${ghostPortaAtiva() || 'nenhuma'}`);
+      return linhas.join('\n');
+    };
     const ghostHealth = async () => {
       const base = ghostEndpoint();
       if (base) return ghostVerificarSaude(base, { timeoutMs: 5000 });
       // Sem URL pública, tenta a API local (o servidor pode estar no ar mesmo
       // sem domínio detectado) — assim o painel ainda diz algo util.
-      const porta = ghostPortaOuZero();
+      const porta = ghostPortaAtiva();
       if (!porta) return { ok: false, tipo: 'offline', detalhe: 'nao_configurado' };
       return ghostVerificarSaude(`http://127.0.0.1:${porta}`, { timeoutMs: 3000 });
     };
@@ -39636,10 +39648,13 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
           const endpointGhost = ghostEndpoint();
           if (!endpointGhost) {
             // A key existe, mas sem URL o tutorial sairia inútil. Avisa em vez
-            // de entregar algo quebrado.
+            // de entregar algo quebrado — e DIZ o que foi procurado, para o dono
+            // saber se é caso de definir a variável ou de ambiente sem domínio.
+            const diag = ghostDiagUrl();
             return reply(
-              '⚠️ Key gerada, mas não consegui detectar a URL pública da API.\n' +
-              'Defina `ANTIFANTASMA_PUBLIC_URL` e rode o comando de novo.'
+              '⚠️ Key gerada, mas não consegui detectar a URL pública da API.\n\n' +
+              diag +
+              '\n\nUse `ANTIFANTASMA_PUBLIC_URL` para informar o endereço público.'
             );
           }
 
