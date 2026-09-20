@@ -208,6 +208,21 @@ function mesmoUsuario(a, b) {
 }
 
 /**
+ * Cache curto do resultado de `consultarAdministracao`.
+ *
+ * Sem isto, CADA mensagem do grupo faria uma consulta de metadata ao WhatsApp.
+ * Em grupo movimentado isso pesa (e o bot do usuário pode não ter cache próprio),
+ * então guardamos por alguns segundos. É a mesma ideia do cache de metadata que
+ * a própria Lizzy usa.
+ */
+const CACHE_ADM_MS = 15000;
+const cacheAdm = new Map();
+
+function chaveCacheAdm(grupo, autor) {
+  return `${grupo}|${autor || ''}`;
+}
+
+/**
  * Descobre, no próprio grupo, se o BOT é admin e se o AUTOR é admin.
  *
  * Isto é consulta ao WhatsApp, não regra do produto: o servidor precisa saber
@@ -218,8 +233,18 @@ function mesmoUsuario(a, b) {
  * decide com o que tem.
  */
 async function consultarAdministracao(sock, grupo, autor) {
+  const chave = chaveCacheAdm(grupo, autor);
+  const guardado = cacheAdm.get(chave);
+  if (guardado && Date.now() - guardado.quando < CACHE_ADM_MS) return guardado.valor;
+
+  let resultado = null;
   try {
-    const meta = await sock.groupMetadata(grupo);
+    // `groupMetadata` é o caminho padrão do Baileys. Se não existir na versão,
+    // cai para o outro método conhecido.
+    const meta = typeof sock.groupMetadata === 'function'
+      ? await sock.groupMetadata(grupo)
+      : null;
+
     const participantes = Array.isArray(meta?.participants) ? meta.participants : [];
     const ehAdmin = (p) => p && (p.admin === 'admin' || p.admin === 'superadmin');
 
@@ -227,23 +252,38 @@ async function consultarAdministracao(sock, grupo, autor) {
     const eu = sock?.user?.id || sock?.user?.lid || null;
     const meuNumero = typeof eu === 'string' ? eu.split(':')[0].split('@')[0] : null;
 
+    const candidatosDe = (p) => [p?.id, p?.lid, p?.phoneNumber, p?.pn].filter(Boolean);
+
     const acharMeu = participantes.find((p) => {
-      const candidatos = [p?.id, p?.lid, p?.phoneNumber, p?.pn].filter(Boolean);
-      return candidatos.some((c) => mesmoUsuario(c, eu) || (meuNumero && mesmoUsuario(c, meuNumero)));
+      const cands = candidatosDe(p);
+      return cands.some((c) => mesmoUsuario(c, eu) || (meuNumero && mesmoUsuario(c, meuNumero)));
     });
 
     const acharAutor = autor
-      ? participantes.find((p) => [p?.id, p?.lid, p?.phoneNumber, p?.pn].filter(Boolean).some((c) => mesmoUsuario(c, autor)))
+      ? participantes.find((p) => candidatosDe(p).some((c) => mesmoUsuario(c, autor)))
       : null;
 
-    return {
-      botIsAdmin: ehAdmin(acharMeu),
-      senderIsPrivileged: ehAdmin(acharAutor),
-    };
+    // Só considera resposta válida se veio lista de participantes.
+    if (participantes.length > 0) {
+      resultado = {
+        botIsAdmin: ehAdmin(acharMeu),
+        senderIsPrivileged: ehAdmin(acharAutor),
+      };
+    }
   } catch {
     // Sem metadata não dá para afirmar nada — o servidor decide com o resto.
-    return null;
+    resultado = null;
   }
+
+  // Guarda até o resultado nulo, para não repetir a consulta falha em rajada.
+  cacheAdm.set(chave, { quando: Date.now(), valor: resultado });
+  if (cacheAdm.size > 500) {
+    // Poda simples: descarta os mais antigos.
+    const chaves = Array.from(cacheAdm.keys()).slice(0, 200);
+    for (const k of chaves) cacheAdm.delete(k);
+  }
+
+  return resultado;
 }
 
 /**
@@ -266,6 +306,25 @@ async function consultarAdministracao(sock, grupo, autor) {
  * @returns {Promise<{ok: boolean, acoes: string[], erro?: string, motivo?: string}>}
  */
 async function executar(params = {}) {
+  // BLINDAGEM: este arquivo roda no handler do bot do usuário. Qualquer exceção
+  // que escape daqui pode derrubar o processamento da mensagem dele — e o
+  // problema nem seria do plugin. Por isso o corpo inteiro fica dentro de um
+  // try/catch: o pior caso é devolver erro controlado.
+  try {
+    return await executarInterno(params);
+  } catch (e) {
+    return {
+      ok: false,
+      acoes: [],
+      erro: MENSAGENS.interno,
+      motivo: 'excecao',
+      // Sem stack para o usuário; o detalhe é útil no log dele.
+      detalhe: String(e?.message || e).slice(0, 200),
+    };
+  }
+}
+
+async function executarInterno(params = {}) {
   if (!estaAtivo()) {
     // Desativado: NADA sai daqui (nem chamada à API). Devolve o motivo para o
     // usuário entender por que não houve ação, em vez de falhar em silêncio.

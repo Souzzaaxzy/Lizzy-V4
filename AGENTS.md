@@ -1068,6 +1068,34 @@ nenhuma existente).
   não contém `selectiveDistribution`/`undecryptableGroupMessage`/`normalizeContext`
   nem referencia `core.js`.
 
+### Code block nativo ("black box") no tutorial + blindagem do cliente (set/2026) ✅
+- **O tutorial do `!addghostcmd` agora envia o código como CODE BLOCK NATIVO** da
+  fork (`richResponseMessage`, o "Message with Code Block" documentado no README
+  dela: `disclaimerText` + `headerText` + `code` + `language` + `footerText`).
+  Aparece formatado e com tokenização (`tokenizeCode`), em vez de um ``` cru.
+  **Verificado no wire**: o payload vira `botForwardedMessage` →
+  `richResponseMessage`, com os blocos tokenizados (`messageType 5`, `language`,
+  15 blocos no teste). Se versão antiga da lib não suportar, cai para texto
+  simples — o usuário recebe o tutorial de qualquer forma.
+- O tutorial vai em **dois envios**: texto (cabeçalho + KEY, para o `@menção`
+  resolver) e o code block (conteúdo técnico).
+- **Blindagem do adaptador** (ele roda no handler do bot do usuário, onde uma
+  exceção pode quebrar o processamento dele): `executar` agora envolve TODO o
+  corpo num try/catch e devolve `{ok:false, motivo:'excecao', detalhe}` — nunca
+  lança. Testado com **17 entradas hostis** (null, número, string, `sock` sem
+  métodos, `groupMetadata` que lança, `participants` não-array, `reply` não-função
+  etc.): nenhuma derruba.
+- **Cache da consulta de administração** (15s, por grupo+autor): sem ele, CADA
+  mensagem faria uma consulta de metadata ao WhatsApp — em grupo movimentado isso
+  pesa no bot do usuário. Testado: 5 mensagens = 1 consulta. Também trata
+  `sock.groupMetadata` ausente ou que lança, sem quebrar.
+- **Armadilha nos testes**: o cache é por (grupo, autor), então dois testes que
+  usam o MESMO grupo recebem o resultado do primeiro — o teste de "autor admin"
+  precisou de um grupo próprio para medir o que queria.
+- **Armadilha 2**: os testes liam o tutorial só de `content.text`; com o code
+  block, o conteúdo técnico está em `content.code`. Os helpers passaram a juntar
+  `text`+`code`+`footerText`.
+
 ### BUG: "testei com outro bot real e não fez nada" (set/2026) ✅ CORRIGIDO
 Relato do dono: o plugin foi instalado numa bot real, chegou um ataque e **nada
 aconteceu**. Reproduzi a chamada EXATA do tutorial e confirmei: retornava
@@ -1111,7 +1139,7 @@ observa, o servidor decide.
 Dois testes validam a ponta do usuário, com o servidor REAL (nada da Lizzy é
 substituído — só o socket do WhatsApp e o host/porta viram locais):
 
-- **`tests/antifantasma-usuario.test.js` (38 asserções)** — simula a bot do
+- **`tests/antifantasma-usuario.test.js` (40 asserções)** — simula a bot do
   usuário: importa o arquivo do jeito que o tutorial ensina, cria as **cases
   personalizadas** (`afon`/`afoff`/`afstatus`/`antifantasma` — nomes livres) e
   percorre o fluxo: desativado não chama a API; ativa; mensagem normal não gera

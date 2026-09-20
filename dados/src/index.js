@@ -39678,33 +39678,35 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
             .replace(/const KEY = '[^']*';/, `const KEY = '${registro.key}';`)
             .replace(/const BOT_ID = '[^']*';/, `const BOT_ID = '${donoBase}';`);
 
-          const tutorialGhost = [
+                    const tutorialGhost = [
             `👻 *PLUGIN FANTASMA — ACESSO #${registro.id}*`,
             '',
             `👤 Usuário: @${donoBase}`,
             `🔑 Key: \`${registro.key}\``,
-            '',
             '━━━━━━━━━━━━━━',
+          ].join('\n');
+
+          // A parte com código vai como "code block" nativo da fork
+          // (richResponseMessage): aparece formatado e com botão de copiar, em
+          // vez de um ``` comum.
+          const tutorialCode = [
             '📁 *1. Onde colocar*',
             'Coloque o arquivo `antifantasma.js` na MESMA pasta do seu `Index.js`:',
-            '```',
+            '',
             'Bot/',
             '└── src/',
             '    ├── Index.js',
             '    └── antifantasma.js',
-            '```',
             '',
-            '📥 *2. Como importar* (no seu `Index.js`)',
-            '```js',
+            '📥 *2. Como importar* (no seu `Index.js`):',
+            "// cole no topo do Index.js, junto dos outros requires",
             "const antiFantasma = require('./antifantasma');",
-            '```',
             '',
             '🔑 *3. Configurar a KEY*',
-            'O arquivo já vem configurado com a sua KEY e a URL da API.',
+            'O arquivo JÁ VEM configurado com a sua KEY e a URL da API.',
             'Se precisar conferir, abra o topo do `antifantasma.js`.',
             '',
-            '⚙️ *4. Adicionar a case* (exemplo)',
-            '```js',
+            '⚙️ *4. Adicionar a case* (exemplo):',
             "case 'antifantasma': {",
             '    await antiFantasma.executar({',
             '        sock,',
@@ -39714,18 +39716,14 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
             '    });',
             '    break;',
             '}',
-            '```',
             '',
             '⚠️ *IMPORTANTE:* o plugin precisa ver AS MENSAGENS do grupo.',
-            'A case acima só funciona quando alguém digita o comando.',
-            'Para proteger de verdade, chame `executar` a cada mensagem recebida,',
-            'no seu handler de mensagens',
-            '```js',
+            'A case acima só roda quando alguém digita o comando. Para proteger',
+            'de verdade, chame `executar` a cada mensagem recebida:',
+            "// no seu handler de mensagens, para cada msg do grupo",
             'await antiFantasma.executar({ sock, msg, reply });',
-            '```',
             '',
-            '🟢 *5. Ativar / desativar*',
-            '```js',
+            '🟢 *5. Ativar / desativar*:',
             "case 'afon':",
             '    antiFantasma.ativar();',
             "    await reply('👻 AntiFantasma ativado.');",
@@ -39735,18 +39733,39 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
             '    antiFantasma.desativar();',
             "    await reply('👻 AntiFantasma desativado.');",
             '    break;',
-            '```',
+          ].join('\n');
+
+          const tutorialRodape = [
             '',
             '🎨 *6. Personalizar*',
             'Os nomes acima são só EXEMPLO. Troque por `af`, `ghost`, `protecao`,',
             '`fantasma` — o que você quiser. A Lizzy não exige nome nenhum.',
           ].join('\n');
 
-          // 1) Tutorial
+          // 1) Cabeçalho + KEY (texto simples, para o @menção resolver)
           await nazu.sendMessage(from, {
             text: tutorialGhost,
             mentions: [alvoGhost],
           }, { quoted: info }).catch((e) => console.error('[ADDGHOSTCMD] tutorial:', e?.message || e));
+
+          // 2) O tutorial com CÓDIGO como code block nativo. Se a versão da lib
+          //    não suportar richResponse, cai para texto simples — o usuário
+          //    precisa receber o tutorial de qualquer forma.
+          try {
+            await nazu.sendMessage(from, {
+              disclaimerText: '👻 PLUGIN FANTASMA — TUTORIAL',
+              headerText: '## Como instalar',
+              contentText: '---',
+              code: tutorialCode,
+              language: 'javascript',
+              footerText: tutorialRodape,
+            }, { quoted: info });
+          } catch (richErr) {
+            console.error('[ADDGHOSTCMD] code block falhou, enviando texto:', richErr?.message || richErr);
+            await nazu.sendMessage(from, {
+              text: `${tutorialCode}\n${tutorialRodape}`,
+            }, { quoted: info }).catch(() => {});
+          }
 
           // 2) O arquivo. Se falhar, o dono PRECISA saber: a entrega não pode
           //    ser considerada concluída sem ele.

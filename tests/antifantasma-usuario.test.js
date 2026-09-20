@@ -294,13 +294,78 @@ const sockSemAdm = {
   groupParticipantsUpdate: async (g, a, c) => { acoesAdm.push(`participants:${c}`); },
   sendMessage: async () => { acoesAdm.push('aviso'); },
 };
-const rAdm = await afTutorial.executar({ sock: sockSemAdm, msg: msgAtaque, args: [], reply: async () => {} });
+const rAdm = await afTutorial.executar({
+  sock: sockSemAdm,
+  // Grupo DIFERENTE de propósito: a consulta de administração é cacheada por
+  // (grupo, autor), então reusar o mesmo grupo devolveria o resultado anterior
+  // e o teste mediria a coisa errada.
+  msg: { ...msgAtaque, key: { ...msgAtaque.key, remoteJid: '120363222222222222@g.us' } },
+  args: [],
+  reply: async () => {},
+});
 check(rAdm.ok === true, 'executou');
 check(acoesAdm.length === 0, 'autor que é ADMIN não é punido (descoberto sozinho)');
 
 console.log('\n── aviso quando falta sock/grupo ──');
 const rSemMsg = await afTutorial.executar({ sock: { sendMessage: async () => {} }, reply: async () => {} });
 check(rSemMsg.ok === false && rSemMsg.motivo === 'sem_grupo', `sem grupo informa o motivo (${rSemMsg.motivo})`);
+
+console.log('\n── BLINDAGEM: nada pode derrubar o bot do usuário ──');
+// O adaptador roda no handler dele. Uma exceção aqui pode quebrar o bot inteiro
+// — então `executar` NUNCA pode lançar, por pior que seja a entrada.
+
+const entradasHostis = [
+  undefined,
+  null,
+  0,
+  '',
+  [],
+  'texto',
+  { sock: null },
+  { sock: {} },
+  { sock: {}, grupo: null },
+  { sock: { groupMetadata: 'não é função' }, msg: { key: {} } },
+  { sock: { groupMetadata: async () => { throw new Error('boom'); } }, msg: { key: { remoteJid: 'g@g.us' } } },
+  { sock: { groupMetadata: async () => null }, msg: { key: { remoteJid: 'g@g.us' } } },
+  { sock: { groupMetadata: async () => ({ participants: 'não é array' }) }, msg: { key: { remoteJid: 'g@g.us' } } },
+  { sock: {}, msg: { key: null } },
+  { sock: {}, msg: 'não é objeto' },
+  { sock: {}, msg: { key: { remoteJid: 'g@g.us' } }, reply: 'não é função' },
+  { sock: { groupSettingUpdate: () => { throw new Error('falha'); } }, msg: { key: { remoteJid: 'g@g.us' } } },
+];
+
+let lancou = 0;
+for (const entrada of entradasHostis) {
+  try {
+    const r = await afTutorial.executar(entrada);
+    if (!r || typeof r !== 'object' || typeof r.ok !== 'boolean') {
+      lancou += 1;
+      console.log(`   retorno inválido para ${JSON.stringify(entrada)}`);
+    }
+  } catch (e) {
+    lancou += 1;
+    console.log(`   LANÇOU para ${JSON.stringify(entrada)}: ${e.message}`);
+  }
+}
+check(lancou === 0, `nenhuma entrada hostil derruba o bot (${entradasHostis.length} testadas)`);
+
+console.log('\n── cache de metadata (não martela o WhatsApp) ──');
+let consultas = 0;
+const sockCache = {
+  user: { id: `${NUMERO_USUARIO}:5@s.whatsapp.net` },
+  groupMetadata: async () => {
+    consultas += 1;
+    return { participants: [{ id: `${NUMERO_USUARIO}@s.whatsapp.net`, admin: 'admin' }, { id: ATACANTE, admin: null }] };
+  },
+  groupSettingUpdate: async () => {},
+  groupParticipantsUpdate: async () => {},
+  sendMessage: async () => {},
+};
+const grupoCache = '120363111111111111@g.us';
+for (let i = 0; i < 5; i++) {
+  await afTutorial.executar({ sock: sockCache, msg: { key: { remoteJid: grupoCache, participant: ATACANTE } }, reply: async () => {} });
+}
+check(consultas === 1, `5 mensagens = 1 consulta de metadata (obtido ${consultas})`);
 
 // ============================================================================
 // 7) ERROS DE AMBIENTE

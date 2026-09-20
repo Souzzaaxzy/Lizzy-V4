@@ -139,7 +139,9 @@ check(acoes.includes('setting:not_announcement'), 'reabriu o grupo');
 
 // ── 4) O TUTORIAL ENVIADO ESTÁ CORRETO? ───────────────────────────────────
 console.log('\n── o tutorial enviado ──');
-const tutorial = sent.map((s) => String(s.c?.text || '')).join('\n');
+// O tutorial vem em texto + code block (campo `code`).
+const tutorial = sent.map((s) => [s.c?.text, s.c?.code, s.c?.footerText, s.c?.headerText]
+  .filter((v) => typeof v === 'string').join('\n')).join('\n');
 check(tutorial.includes('antifantasma.js'), 'diz onde colocar o arquivo');
 check(tutorial.includes("require('./antifantasma')"), 'mostra o import correto');
 check(tutorial.includes('case'), 'mostra exemplo de case');

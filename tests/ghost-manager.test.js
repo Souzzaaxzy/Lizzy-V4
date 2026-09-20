@@ -381,7 +381,12 @@ async function rodar({ text, sender = null, adm = false, quoted = null, autorQuo
     pushName: 'Tester',
   }, null, new Map(), null);
 
-  const texto = sent.map((s) => s.content?.text ?? s.content?.caption ?? '').filter(Boolean).join('\n');
+  // O tutorial vem em texto (cabeçalho) + code block (conteúdo técnico no
+  // campo `code`). Sem juntar os dois, o teste não enxerga o tutorial.
+  const texto = sent
+    .map((s) => [s.content?.text, s.content?.caption, s.content?.code, s.content?.footerText, s.content?.headerText]
+      .filter((v) => typeof v === 'string').join('\n'))
+    .filter(Boolean).join('\n');
   const doc = sent.find((s) => s.content?.document) || null;
   return { sent, texto, doc, nazu };
 }
@@ -404,7 +409,12 @@ async function rodarComoDono(params) {
     pushName: 'Dono',
   }, null, new Map(), null);
 
-  const texto = sent.map((s) => s.content?.text ?? s.content?.caption ?? '').filter(Boolean).join('\n');
+  // O tutorial vem em texto (cabeçalho) + code block (conteúdo técnico no
+  // campo `code`). Sem juntar os dois, o teste não enxerga o tutorial.
+  const texto = sent
+    .map((s) => [s.content?.text, s.content?.caption, s.content?.code, s.content?.footerText, s.content?.headerText]
+      .filter((v) => typeof v === 'string').join('\n'))
+    .filter(Boolean).join('\n');
   const doc = sent.find((s) => s.content?.document) || null;
   return { sent, texto, doc };
 }
