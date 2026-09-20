@@ -39697,16 +39697,22 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
             '    └── antifantasma.js',
           ].join('\n');
 
-          // Case COMPLETA, pronta para o usuário copiar e colar no Index.js dele.
-          // É a case do próprio anti-fantasma, adaptada para usar o PLUGIN: o
-          // estado sai do `groupData.antiinvi` e passa a ser do `antiFantasma`.
-          const CASE_COMPLETA = `case 'antifantasma':
+          // Bloco COMPLETO, pronto para o usuário colar. Inclui o `require` do
+          // plugin (que já vem configurado) e a case, para ele só precisar
+          // colocar o arquivo em `src/` e colar isto no Index.js dele.
+          const CASE_COMPLETA = `// ═══════════════ 👻 ANTI FANTASMA ═══════════════
+// 1) Coloque o arquivo \`antifantasma.js\` (entregue junto) na MESMA pasta
+//    deste Index.js. Ele já vem com a sua KEY e a URL da API configuradas.
+const antiFantasma = require('./antifantasma');
+
+// 2) Cole este case dentro do switch dos seus comandos:
+case 'antifantasma':
   try {
     if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
     if (!isGroupAdmin) return reply("Você precisa ser adm 💔");
     if (!isBotAdmin) return reply("Eu preciso ser adm para isso 💔");
 
-    // Liga/desliga o plugin. O estado fica no próprio antifantasma.js.
+    // O estado agora vive no plugin (o \`groupData.antiinvi\` não é mais usado).
     if (antiFantasma.estaAtivo()) {
       antiFantasma.desativar();
     } else {
@@ -39722,7 +39728,8 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
     console.error(e);
     await reply("Ocorreu um erro 💔");
   }
-  break;`;
+  break;
+// ═══════════════════════════════════════════════════════════════════`;
 
           const tutorialRodape = [
             '',
@@ -39759,7 +39766,9 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
             { code: [{ codeContent: "case 'afon':\n    antiFantasma.ativar();\n    await reply('👻 AntiFantasma ativado.');\n    break;", highlightType: 1 }], language: 'javascript' },
             { code: [{ codeContent: "case 'afoff':\n    antiFantasma.desativar();\n    await reply('👻 AntiFantasma desativado.');\n    break;", highlightType: 1 }], language: 'javascript' },
             { text: tutorialRodape },
-            { text: '✅ *Aqui está uma case 100% feita e funcional de exemplo:*\nCopie e cole direto no seu `Index.js`.' },
+            { text: '✅ *Aqui está uma case 100% feita e funcional de exemplo:*\n'
+              + 'É o código COMPLETO: já vem com o `require` do plugin e a URL da API.\n'
+              + 'Você só precisa colocar o arquivo em `src/` e colar isto no seu `Index.js`.' },
             { code: [{ codeContent: CASE_COMPLETA, highlightType: 1 }], language: 'javascript' },
           ];
 

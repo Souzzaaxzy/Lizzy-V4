@@ -541,6 +541,16 @@ await test('handler: !addghostcmd gera key, vincula e envia tutorial + arquivo',
   includes(r.texto, 'antiFantasma.desativar()', 'explica desativar');
   includes(r.texto, 'EXEMPLO', 'deixa claro que o nome da case é livre');
 
+  // O bloco final tem de ser AUTOSSUFICIENTE: require + case juntos, para o
+  // usuário só colar (era o pedido: "só precise colocar a pasta no src e
+  // adicionar o código da case no index").
+  const fimTutorial = r.texto.slice(r.texto.indexOf('100% feita e funcional'));
+  includes(fimTutorial, "require('./antifantasma')", 'bloco final traz o require');
+  includes(fimTutorial, "case 'antifantasma'", 'bloco final traz a case');
+  includes(fimTutorial, 'antiFantasma.ativar()', 'bloco final alterna o estado');
+  includes(fimTutorial, 'antiFantasma.desativar()', 'bloco final alterna o estado');
+  notIncludes(fimTutorial, 'groupData.antiinvi =', 'não escreve mais no estado antigo do grupo');
+
   ok(Boolean(r.doc), 'enviou o arquivo');
   ok(r.doc.content.fileName === 'antifantasma.js', `arquivo correto (${r.doc.content.fileName})`);
 });
