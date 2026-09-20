@@ -1102,6 +1102,32 @@ nenhuma existente).
   de grupo próprio. E os helpers precisam **achatar** `richResponse`
   (`sub.text` + `sub.code[].codeContent`), senão o teste não enxerga o tutorial.
 
+### BLOCO FINAL do tutorial: código COMPLETO e autossuficiente (set/2026) ✅
+- **Pedido do dono**: o último trecho do tutorial devia ser *"o código exato que
+  ele possa usar, já contendo todas as const, ligado no arquivo, tudo"* — o
+  usuário só teria de colocar a pasta em `src/` e colar a case no `Index.js`.
+- **`CASE_COMPLETA`** (`index.js` ~39703) deixou de ser só a `case`: agora é o
+  **bloco inteiro**, com cabeçalho, o `const antiFantasma =
+  require('./antifantasma');` **e** a `case 'antifantasma'` logo abaixo.
+- **Fidelidade à case do usuário**: a lógica é a dele (checagens
+  `isGroup`/`isGroupAdmin`/`isBotAdmin`, alternar liga/desliga, o mesmo
+  `textoFantasma` e o mesmo envio via `nazu.sendMessage(from, { text, quoted })`),
+  com **uma** troca obrigatória: o estado sai do `groupData.antiinvi` e passa a
+  ser `antiFantasma.estaAtivo()/ativar()/desativar()` (é o plugin). O
+  `newsletterCtxInvi` do original **não** foi para o exemplo (contexto de
+  encaminhamento de newsletter é enfeite do bot dele, não do comando).
+- **Texto que antecede** agora diz que é o **código completo** (com require e
+  URL) e não só "uma case".
+- **Armadilha do template literal**: o bloco vive dentro de uma template string
+  do `index.js`; por isso backticks literais vão **escapados** (`` \` ``) e as
+  quebras de linha *internas* do JS gerado saem como `\\n` — conferido avaliando
+  o literal de verdade (`node /tmp/case_block.js`), não só olhando a fonte.
+- **Teste**: `tests/ghost-manager.test.js` — a asserção nova fatia o texto a
+  partir de *"100% feita e funcional"* e exige `require('./antifantasma')` +
+  `case 'antifantasma'` + `ativar()`/`desativar()` nesse trecho final, e que ele
+  **não escreva** mais em `groupData.antiinvi =`. 37 testes / 152 asserções;
+  regressão `antifantasma-entrega` (17/17) e `antifantasma-plugin` (20/20) ok.
+
 ### BUG: "testei com outro bot real e não fez nada" (set/2026) ✅ CORRIGIDO
 Relato do dono: o plugin foi instalado numa bot real, chegou um ataque e **nada
 aconteceu**. Reproduzi a chamada EXATA do tutorial e confirmei: retornava
