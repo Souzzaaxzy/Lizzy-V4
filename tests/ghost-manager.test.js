@@ -310,7 +310,9 @@ await test('o arquivo entregue é o ADAPTADOR e não contém o núcleo', () => {
   ok(adaptador.includes('estaAtivo'), 'tem estaAtivo');
 
   // Não é o núcleo.
-  const proibido = ['selectiveDistribution', 'undecryptableGroupMessage', 'zeroValuePayment', 'normalizeContext'];
+  // Ele relata sinais (trabalho dele) e conhece os NOMES das ações; o que não
+  // pode conter é a DECISÃO: combinações, limiares ou o texto das decisões.
+  const proibido = ['normalizeContext', 'decidir(', 'ataqueSeletivo', 'ja_punido', 'sem_ataque'];
   for (const p of proibido) ok(!adaptador.includes(p), `não contém "${p}"`);
 
   // O core existe separado e NÃO é enviado.
@@ -494,7 +496,9 @@ await test('handler: o arquivo enviado vem configurado e sem o núcleo', async (
 
   const conteudo = String(r.doc.content.document);
   ok(conteudo.includes('executar'), 'é o adaptador');
-  ok(!conteudo.includes('selectiveDistribution'), 'não tem regra interna');
+  ok(!conteudo.includes('normalizeContext') && !conteudo.includes('decidir('),
+     'não tem a decisão interna');
+  ok(!/selectiveDistribution\s*&&/.test(conteudo), 'não combina sinais (a regra é do servidor)');
   ok(!conteudo.includes('core.js'), 'não referencia o núcleo');
 
   // Veio configurado: a key do registro tem de estar no arquivo.

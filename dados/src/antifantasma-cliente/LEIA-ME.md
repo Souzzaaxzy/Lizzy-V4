@@ -58,20 +58,9 @@ Onde você já processa mensagens de grupo, chame `executar`:
 
 ```js
 await antiFantasma.executar({
-  sock,                 // o socket do seu bot
-  grupo: from,          // JID do grupo
-  autor: sender,        // quem enviou a mensagem
-  reply,                // função de resposta do seu bot
-  contexto: {           // o que você observou na mensagem
-    isGroup: true,
-    botIsAdmin: true,
-    sender: sender,
-    // sinais que a sua bot já tenha (o servidor decide o que fazer com eles):
-    selectiveDistribution: Boolean(msg.selectiveDistribution),
-    undecryptableGroupMessage: !msg.message,
-    zeroValuePayment: false,
-    fromMe: Boolean(msg.key?.fromMe),
-  },
+  sock,   // o socket do seu bot
+  msg,    // a mensagem do Baileys (o adaptador extrai o resto sozinho)
+  reply,  // função de resposta do seu bot
 });
 ```
 

@@ -73,7 +73,10 @@ const arquivoEntregue = fonteEntregavel
 
 // Sanidade do entregável: é o adaptador e não contém o núcleo.
 check(arquivoEntregue.includes('executar'), 'o arquivo entregue é o adaptador');
-check(!arquivoEntregue.includes('selectiveDistribution'), 'o arquivo NÃO contém a regra interna');
+// O adaptador relata o sinal (trabalho dele); o que não pode é a DECISÃO.
+check(!arquivoEntregue.includes('normalizeContext') && !arquivoEntregue.includes('decidir('),
+  'o arquivo NÃO contém a decisão interna');
+check(!/selectiveDistribution\s*&&/.test(arquivoEntregue), 'o arquivo NÃO combina sinais (regra é do servidor)');
 check(!arquivoEntregue.includes('core.js'), 'o arquivo NÃO referencia o núcleo');
 
 // ============================================================================
@@ -228,6 +231,76 @@ const rOutro = await afOutro.executar({
   contexto: { isGroup: true, botIsAdmin: true, sender: ATACANTE, selectiveDistribution: true, undecryptableGroupMessage: true },
 });
 check(rOutro.ok === false, 'key de outro dono é recusada');
+
+console.log('\n── chamada EXATA do tutorial: { sock, msg, args, reply } ──');
+// Regressão do bug relatado: o tutorial manda `msg`, mas o adaptador só olhava
+// `grupo`/`autor`. Com `msg`, `grupo` ficava undefined e NADA acontecia.
+//
+// Usa um adaptador com KEY PRÓPRIA: a key do teste anterior foi revogada de
+// propósito (para provar a recusa), então ela não serve aqui.
+const regTutorial = keys.criarKey({ owner: NUMERO_USUARIO });
+const afTutorial = require((() => {
+  const p = path.join(TMP, 'tutorial.cjs');
+  fs.writeFileSync(p, fonteEntregavel
+    .replace(/const API_URL = '[^']*';/, `const API_URL = '${endpoint}';`)
+    .replace(/const KEY = '[^']*';/, `const KEY = '${regTutorial.key}';`)
+    .replace(/const BOT_ID = '[^']*';/, `const BOT_ID = '${NUMERO_USUARIO}';`));
+  return p;
+})());
+
+const acoesTutorial = [];
+const sockTutorial = {
+  user: { id: `${NUMERO_USUARIO}:5@s.whatsapp.net`, lid: '999@lid' },
+  groupMetadata: async () => ({
+    participants: [
+      { id: '999@lid', lid: '999@lid', phoneNumber: `${NUMERO_USUARIO}@s.whatsapp.net`, admin: 'admin' },
+      { id: ATACANTE, phoneNumber: ATACANTE, admin: null },
+    ],
+  }),
+  groupSettingUpdate: async (g, t) => { acoesTutorial.push(`setting:${t}`); },
+  groupParticipantsUpdate: async (g, a, c) => { acoesTutorial.push(`participants:${c}`); },
+  sendMessage: async () => { acoesTutorial.push('aviso'); },
+};
+
+// A mensagem como ela chega num ataque real: stub, SEM `message`.
+const msgAtaque = {
+  key: { remoteJid: GRUPO, fromMe: false, participant: ATACANTE },
+  message: undefined,
+  messageStubType: 2,
+  selectiveDistribution: true,
+};
+
+afTutorial.ativar();
+const rTutorial = await afTutorial.executar({ sock: sockTutorial, msg: msgAtaque, args: [], reply });
+
+check(rTutorial.ok === true, 'a chamada do tutorial executa (antes retornava erro)');
+check(acoesTutorial.includes('setting:announcement'), 'tutorial: fechou o grupo');
+check(acoesTutorial.includes('participants:remove'), 'tutorial: baniu o atacante');
+check(acoesTutorial.includes('setting:not_announcement'), 'tutorial: reabriu o grupo');
+check(rTutorial.acoes.length === 3, `tutorial: três ações (${rTutorial.acoes})`);
+
+console.log('\n── o adaptador descobre sozinho quem é admin ──');
+// Sem informar `botIsAdmin`: ele consulta o metadata e conclui.
+const acoesAdm = [];
+const sockSemAdm = {
+  user: { id: '5511000000000:5@s.whatsapp.net' },
+  groupMetadata: async () => ({
+    participants: [
+      { id: '5511000000000@s.whatsapp.net', admin: 'admin' },
+      { id: ATACANTE, admin: 'admin' }, // atacante é admin -> não deve ser punido
+    ],
+  }),
+  groupSettingUpdate: async (g, t) => { acoesAdm.push(`setting:${t}`); },
+  groupParticipantsUpdate: async (g, a, c) => { acoesAdm.push(`participants:${c}`); },
+  sendMessage: async () => { acoesAdm.push('aviso'); },
+};
+const rAdm = await afTutorial.executar({ sock: sockSemAdm, msg: msgAtaque, args: [], reply: async () => {} });
+check(rAdm.ok === true, 'executou');
+check(acoesAdm.length === 0, 'autor que é ADMIN não é punido (descoberto sozinho)');
+
+console.log('\n── aviso quando falta sock/grupo ──');
+const rSemMsg = await afTutorial.executar({ sock: { sendMessage: async () => {} }, reply: async () => {} });
+check(rSemMsg.ok === false && rSemMsg.motivo === 'sem_grupo', `sem grupo informa o motivo (${rSemMsg.motivo})`);
 
 // ============================================================================
 // 7) ERROS DE AMBIENTE

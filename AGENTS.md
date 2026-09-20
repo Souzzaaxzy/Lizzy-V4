@@ -1068,11 +1068,50 @@ nenhuma existente).
   não contém `selectiveDistribution`/`undecryptableGroupMessage`/`normalizeContext`
   nem referencia `core.js`.
 
+### BUG: "testei com outro bot real e não fez nada" (set/2026) ✅ CORRIGIDO
+Relato do dono: o plugin foi instalado numa bot real, chegou um ataque e **nada
+aconteceu**. Reproduzi a chamada EXATA do tutorial e confirmei: retornava
+`{ok:false}` sem tocar no socket. Eram **quatro** problemas em série:
+
+1. **A INTERFACE NÃO BATIA (a causa principal).** O tutorial manda o usuário
+   escrever `executar({ sock, msg, args, reply })`, mas o adaptador só lia
+   `params.grupo` / `params.autor` / `params.contexto`. Com `msg`, `grupo` ficava
+   `undefined` → retornava cedo. **O usuário seguia o tutorial ao pé da letra e
+   não acontecia nada.** Agora o adaptador **extrai tudo do `msg`** (JID do
+   grupo, autor, sinais) e aceita as duas formas.
+
+2. **`botIsAdmin` nunca era enviado.** O núcleo exige esse sinal como guarda;
+   sem ele, jamais agiria — mesmo com o contexto correto. Agora o adaptador
+   **consulta o metadata do grupo** (`sock.groupMetadata`) e descobre sozinho se
+   o bot é admin e se o autor é privilegiado. É consulta ao WhatsApp, não regra
+   do produto: o critério continua no servidor.
+
+3. **O núcleo e o adaptador falavam nomes diferentes.** O adaptador observava
+   `temMensagem`/`temStub`/`pagamento`, mas o núcleo só entendia
+   `undecryptableGroupMessage`/`zeroValuePayment`. Agora `normalizeContext`
+   aceita as duas formas e faz a leitura do pagamento **no servidor** (o
+   adaptador relata o valor cru; quem julga é o núcleo).
+
+4. **O tutorial enganava sobre o uso.** Dizia só "adicione a case", mas uma case
+   só roda quando alguém digita o comando — o plugin precisa ver **as
+   mensagens**. Adicionado aviso explícito + exemplo de chamada por mensagem.
+
+**Prova**: a chamada idêntica à do tutorial agora devolve
+`{ok:true, acoes:['close_group','ban_user','open_group']}` e executa
+`announcement`, `remove` e `not_announcement` no socket.
+
+**Testes ajustados**: as checagens de vazamento proibiam os *nomes dos campos*
+(`selectiveDistribution` etc.). Mas o adaptador **precisa** relatar os sinais —
+é o trabalho dele. A checagem correta é pela **decisão**: `normalizeContext`,
+`decidir(`, `ataqueSeletivo`, `ja_punido` e combinações de sinais
+(`selectiveDistribution &&`). Assim o teste mede o que importa: o cliente
+observa, o servidor decide.
+
 ### Teste do LADO DO USUÁRIO (set/2026) ✅
 Dois testes validam a ponta do usuário, com o servidor REAL (nada da Lizzy é
 substituído — só o socket do WhatsApp e o host/porta viram locais):
 
-- **`tests/antifantasma-usuario.test.js` (29 asserções)** — simula a bot do
+- **`tests/antifantasma-usuario.test.js` (38 asserções)** — simula a bot do
   usuário: importa o arquivo do jeito que o tutorial ensina, cria as **cases
   personalizadas** (`afon`/`afoff`/`afstatus`/`antifantasma` — nomes livres) e
   percorre o fluxo: desativado não chama a API; ativa; mensagem normal não gera

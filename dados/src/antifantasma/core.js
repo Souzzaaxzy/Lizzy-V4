@@ -30,9 +30,21 @@ export const ACTIONS = Object.freeze({
  * poderia mandar qualquer coisa), então cada sinal é validado por tipo e
  * normalizado antes de influenciar a decisão. A autoridade final (KEY válida)
  * fica na API, antes de chegar aqui.
+ *
+ * Os nomes aceitam as duas formas: a que o adaptador observa (`temMensagem`,
+ * `pagamento`) e a forma canônica usada aqui.
  */
 function normalizeContext(raw) {
   const c = raw && typeof raw === 'object' ? raw : {};
+
+  // Pagamento: o adaptador relata presença e valor crus. A leitura de qual
+  // combinação é ataque acontece AQUI, não no cliente.
+  const pag = c.pagamento && typeof c.pagamento === 'object' ? c.pagamento : null;
+  const valorPagamento = pag?.amount1000 ?? pag?.amountValue ?? null;
+  const pagamentoZerado = pag
+    ? (valorPagamento === null || String(valorPagamento) === '0')
+    : false;
+
   return {
     // É grupo? Sem isso o AntiFantasma não age.
     isGroup: c.isGroup === true,
@@ -50,8 +62,11 @@ function normalizeContext(raw) {
     // Sinais de ataque. O adaptador só reporta o que observou; a leitura de
     // qual conjunto de sinais caracteriza ataque é decisão daqui.
     selectiveDistribution: c.selectiveDistribution === true,
-    undecryptableGroupMessage: c.undecryptableGroupMessage === true,
-    zeroValuePayment: c.zeroValuePayment === true,
+    // Mensagem NÃO decifrável: o adaptador relata `temMensagem: false` (ou a
+    // forma canônica `undecryptableGroupMessage`).
+    undecryptableGroupMessage: c.undecryptableGroupMessage === true
+      || (c.temMensagem === false && c.temStub === true),
+    zeroValuePayment: c.zeroValuePayment === true || pagamentoZerado,
     // Mensagem do próprio bot não é ataque.
     fromMe: c.fromMe === true,
   };

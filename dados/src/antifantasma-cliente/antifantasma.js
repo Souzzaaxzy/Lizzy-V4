@@ -76,7 +76,7 @@ function estaAtivo() {
  * Usa `node:https`/`node:http` nativos de propósito: este arquivo roda na bot do
  * usuário, que não deve precisar instalar nada.
  */
-function pedir(contexto) {
+function pedir(contexto, grupo) {
   return new Promise((resolve, reject) => {
     let url;
     try {
@@ -87,9 +87,10 @@ function pedir(contexto) {
     }
 
     const lib = url.protocol === 'https:' ? require('node:https') : require('node:http');
-    // `botId` identifica esta instalação. A API confere se ele é o dono
-    // registrado da KEY — é o que impede alguém usar a KEY de outra pessoa.
-    const corpo = JSON.stringify({ key: KEY, botId: BOT_ID, context: contexto });
+    // `botId` identifica esta instalação (a API confere se é o dono da KEY) e
+    // `grupo` diz em qual grupo o status deve ser publicado — a API precisa dele
+    // para saber onde reabrir.
+    const corpo = JSON.stringify({ key: KEY, botId: BOT_ID, grupo, context: contexto });
 
     const req = lib.request(
       {
@@ -157,39 +158,162 @@ async function executarAcao(acao, ctx) {
 }
 
 /**
+ * Extrai os dados que a API precisa a partir da mensagem do Baileys.
+ *
+ * Isto é OBSERVAÇÃO, não decisão: o adaptador apenas relata o que viu. Qual
+ * combinação disso caracteriza ataque é regra do servidor, que o cliente não
+ * conhece.
+ *
+ * Existe para o usuário não precisar montar nada: basta passar `msg`.
+ */
+function extrairContexto(msg, grupo, autor) {
+  const m = msg && typeof msg === 'object' ? msg : {};
+  const key = m.key && typeof m.key === 'object' ? m.key : {};
+  const conteudo = m.message && typeof m.message === 'object' ? m.message : null;
+
+  // Pagamento: relata a presença e o valor cru, sem julgar. O servidor decide o
+  // que fazer com isso (é lá que vive a regra do "pagamento zerado").
+  let pagamento = null;
+  const nota = conteudo?.requestPaymentMessage;
+  if (nota) {
+    pagamento = {
+      presente: true,
+      amount1000: nota.amount1000 != null ? String(nota.amount1000) : null,
+      amountValue: nota.amount?.value != null ? String(nota.amount.value) : null,
+    };
+  }
+
+  return {
+    isGroup: typeof grupo === 'string' && grupo.endsWith('@g.us'),
+    fromMe: key.fromMe === true,
+    sender: autor || null,
+    // O que o WhatsApp entrega: a mensagem veio decifrada?
+    temMensagem: Boolean(conteudo),
+    // Marca de transporte da fork (distribuição seletiva).
+    selectiveDistribution: m.selectiveDistribution === true,
+    // Stub de grupo (mensagem que não pôde ser decifrada).
+    temStub: m.messageStubType != null,
+    ...(pagamento ? { pagamento } : {}),
+  };
+}
+
+/**
+ * Compara dois identificadores tolerando JID/LID/número.
+ * `5511999999999@s.whatsapp.net` casa com `5511999999999`.
+ */
+function mesmoUsuario(a, b) {
+  if (!a || !b) return false;
+  const so = (v) => String(v).split(':')[0].split('@')[0];
+  return so(a) === so(b);
+}
+
+/**
+ * Descobre, no próprio grupo, se o BOT é admin e se o AUTOR é admin.
+ *
+ * Isto é consulta ao WhatsApp, não regra do produto: o servidor precisa saber
+ * se há poder para agir e se deve poupar o autor. Fazer aqui evita que o usuário
+ * tenha de montar essa parte à mão.
+ *
+ * Um erro aqui não quebra nada: devolve `null` (desconhecido) e o servidor
+ * decide com o que tem.
+ */
+async function consultarAdministracao(sock, grupo, autor) {
+  try {
+    const meta = await sock.groupMetadata(grupo);
+    const participantes = Array.isArray(meta?.participants) ? meta.participants : [];
+    const ehAdmin = (p) => p && (p.admin === 'admin' || p.admin === 'superadmin');
+
+    // O próprio bot: o JID vem do socket. Em Baileys é `sock.user.id`.
+    const eu = sock?.user?.id || sock?.user?.lid || null;
+    const meuNumero = typeof eu === 'string' ? eu.split(':')[0].split('@')[0] : null;
+
+    const acharMeu = participantes.find((p) => {
+      const candidatos = [p?.id, p?.lid, p?.phoneNumber, p?.pn].filter(Boolean);
+      return candidatos.some((c) => mesmoUsuario(c, eu) || (meuNumero && mesmoUsuario(c, meuNumero)));
+    });
+
+    const acharAutor = autor
+      ? participantes.find((p) => [p?.id, p?.lid, p?.phoneNumber, p?.pn].filter(Boolean).some((c) => mesmoUsuario(c, autor)))
+      : null;
+
+    return {
+      botIsAdmin: ehAdmin(acharMeu),
+      senderIsPrivileged: ehAdmin(acharAutor),
+    };
+  } catch {
+    // Sem metadata não dá para afirmar nada — o servidor decide com o resto.
+    return null;
+  }
+}
+
+/**
  * Roda uma mensagem observada pelo AntiFantasma.
  *
- * Chame isto para cada mensagem que você quer que o AntiFantasma avalie. Se
- * estiver desativado, NADA é enviado à API.
+ * Basta passar a mensagem do Baileys — o adaptador extrai o resto sozinho:
+ *
+ *   await antiFantasma.executar({ sock, msg, reply });
+ *
+ * Também aceita os campos explícitos (`grupo`, `autor`, `contexto`) para quem
+ * preferir montar à mão.
  *
  * @param {object} params
  * @param {object} params.sock socket do Baileys
- * @param {string} params.grupo JID do grupo
- * @param {string} [params.autor] quem enviou a mensagem observada
- * @param {object} [params.contexto] sinais observados (o servidor decide o que fazer)
+ * @param {object} [params.msg] a mensagem do Baileys (`info`)
+ * @param {string} [params.grupo] JID do grupo (senão vem de `msg.key.remoteJid`)
+ * @param {string} [params.autor] quem enviou (senão vem do `msg.key`)
+ * @param {object} [params.contexto] sinais já montados (opcional)
  * @param {Function} [params.reply] função de resposta do seu bot
- * @returns {Promise<{ok: boolean, acoes: string[], erro?: string}>}
+ * @returns {Promise<{ok: boolean, acoes: string[], erro?: string, motivo?: string}>}
  */
 async function executar(params = {}) {
   if (!estaAtivo()) {
-    return { ok: true, acoes: [] };
+    // Desativado: NADA sai daqui (nem chamada à API). Devolve o motivo para o
+    // usuário entender por que não houve ação, em vez de falhar em silêncio.
+    return { ok: true, acoes: [], motivo: 'desativado' };
   }
 
   const sock = params.sock;
-  const grupo = params.grupo || params.from;
-  const autor = params.autor || params.sender;
+  const msg = params.msg && typeof params.msg === 'object' ? params.msg : null;
+  const key = msg?.key && typeof msg.key === 'object' ? msg.key : {};
+
+  // Aceita as duas formas: explícita (`grupo`/`from`) ou direto da mensagem.
+  const grupo = params.grupo || params.from || key.remoteJid || null;
+  const autor = params.autor || params.sender || key.participantAlt || key.participant
+    || (key.fromMe ? BOT_ID : null) || null;
   const reply = typeof params.reply === 'function' ? params.reply : null;
 
   if (!sock || !grupo) {
-    return { ok: false, acoes: [], erro: MENSAGENS.interno };
+    return {
+      ok: false,
+      acoes: [],
+      erro: MENSAGENS.interno,
+      motivo: !sock ? 'sem_sock' : 'sem_grupo',
+    };
   }
+
+  // Contexto: usa o que o usuário passou ou extrai da mensagem.
+  const contexto = params.contexto && typeof params.contexto === 'object'
+    ? { ...params.contexto }
+    : extrairContexto(msg, grupo, autor);
+
+  // Completa o que o usuário não informou: se o BOT pode agir e se o AUTOR é
+  // privilegiado. Sem isso o servidor não tem como decidir — e era o que fazia
+  // o plugin "não fazer nada" mesmo com o ataque chegando.
+  if (contexto.isGroup !== false && (contexto.botIsAdmin === undefined || contexto.senderIsPrivileged === undefined)) {
+    const adm = await consultarAdministracao(sock, grupo, autor);
+    if (adm) {
+      if (contexto.botIsAdmin === undefined) contexto.botIsAdmin = adm.botIsAdmin;
+      if (contexto.senderIsPrivileged === undefined) contexto.senderIsPrivileged = adm.senderIsPrivileged;
+    }
+  }
+  if (contexto.sender === undefined || contexto.sender === null) contexto.sender = autor || null;
 
   let resposta;
   try {
-    resposta = await pedir(params.contexto || {});
+    resposta = await pedir(contexto, grupo);
   } catch {
     if (reply) await reply(MENSAGENS.indisponivel).catch(() => {});
-    return { ok: false, acoes: [], erro: MENSAGENS.indisponivel };
+    return { ok: false, acoes: [], erro: MENSAGENS.indisponivel, motivo: 'indisponivel' };
   }
 
   // KEY recusada pela API (ausente, inexistente, revogada ou de outro plugin).

@@ -307,16 +307,24 @@ await test('adaptador: DESATIVADO não faz chamada nenhuma', async () => {
 await test('adaptador: a lógica NÃO está no arquivo entregue', () => {
   const fonte = fs.readFileSync(path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antifantasma.js'), 'utf-8');
 
-  // O adaptador pode conhecer os NOMES das ações (precisa executá-las), mas não
-  // pode conter os critérios que decidem quando cada uma acontece.
-  const proibido = [
-    'selectiveDistribution', 'undecryptableGroupMessage', 'zeroValuePayment',
-    'alreadyPunished', 'senderIsPrivileged', 'senderIsWhitelisted',
-    'normalizeContext', 'decidir',
+  // O adaptador RELATA sinais (é o trabalho dele) e conhece os NOMES das ações
+  // (precisa executá-las). O que ele não pode conter é a DECISÃO: critérios,
+  // combinações de sinais, limiares ou o texto das decisões.
+  const decidirProibido = [
+    'normalizeContext', 'decidir(', 'ataqueSeletivo', 'ataquePagamentoZero',
+    'ja_punido', 'sem_ataque', 'autor_privilegiado',
   ];
-  for (const p of proibido) {
-    ok(!fonte.includes(p), `adaptador não contém "${p}"`);
+  for (const p of decidirProibido) {
+    ok(!fonte.includes(p), `adaptador não contém a decisão "${p}"`);
   }
+
+  // Nenhuma combinação de sinais (isso é regra do servidor).
+  ok(!/selectiveDistribution\s*&&/.test(fonte), 'não combina sinais para decidir');
+  ok(!/undecryptable\w*\s*&&/.test(fonte), 'não combina sinais para decidir (2)');
+
+  // Não importa o núcleo nem referencia os arquivos privados.
+  ok(!fonte.includes('core.js'), 'não referencia o núcleo');
+  ok(!fonte.includes('requiring'), 'sem require do núcleo');
 
   // Não importa o núcleo de forma alguma.
   ok(!fonte.includes('core.js'), 'adaptador não referencia core.js');
