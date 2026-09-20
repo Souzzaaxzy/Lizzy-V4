@@ -167,6 +167,48 @@ await test('keys: mascaramento esconde o segredo', () => {
   ok(keys.mascararKey('').includes('••••'), 'entrada vazia não quebra');
 });
 
+await test('keys: numeração sem buraco (o bug relatado)', () => {
+  // Relato: "apaguei a key 1 e gero uma nova ela fica como 2". A numeração é a
+  // POSIÇÃO na lista, então nunca sobra buraco.
+  keys.apagarTodas();
+  const a = keys.criarKey({ owner: 'A' });
+  const b = keys.criarKey({ owner: 'B' });
+  const c = keys.criarKey({ owner: 'C' });
+  ok(a.id === 1 && b.id === 2 && c.id === 3, `sequência 1,2,3 (${a.id},${b.id},${c.id})`);
+
+  // "Apagar" pelo comando = revogar (o registro fica). A numeração segue 1..N.
+  keys.revogarPorId(1);
+  const lista = keys.listarKeys();
+  ok(lista.map((r) => r.id).join(',') === '1,2,3', `ids continuam 1,2,3 (${lista.map((r) => r.id)})`);
+  ok(lista[0].status === 'revoked', 'a #1 fica REVOGADA no lugar, sem buraco');
+
+  // Removendo de verdade (alt) e criando de novo: volta para #1.
+  keys.apagarTodas();
+  const nova = keys.criarKey({ owner: 'D' });
+  ok(nova.id === 1, `depois do alt, a nova é #1 (${nova.id})`);
+});
+
+await test('keys: arquivo antigo com ids altos é renumerado sozinho', () => {
+  // Um arquivo que ficou com ids 5,6 (do contador antigo) passa a ser 1,2 na
+  // próxima leitura — conserta instalações que já existiam.
+  keys.apagarTodas();
+  const antigo = {
+    version: 2,
+    nextId: 99,
+    keys: [
+      { id: 5, key: 'MTX-GHOST-AAAABBBB', owner: 'X', status: 'active', createdAt: '2026-01-01' },
+      { id: 9, key: 'MTX-GHOST-CCCCDDDD', owner: 'Y', status: 'revoked', createdAt: '2026-01-02' },
+    ],
+  };
+  fs.writeFileSync(keys.KEYS_FILE, JSON.stringify(antigo));
+
+  const lista = keys.listarKeys();
+  ok(lista.map((r) => r.id).join(',') === '1,2', `renumerado para 1,2 (${lista.map((r) => r.id)})`);
+  ok(lista[0].key === 'MTX-GHOST-AAAABBBB', 'preserva a key do primeiro');
+  ok(lista[1].status === 'revoked', 'preserva o status');
+  ok(keys.estatisticas().proximoId === 3, `próximo id = 3 (${keys.estatisticas().proximoId})`);
+});
+
 // ============================================================================
 // 2) PERSISTÊNCIA
 // ============================================================================
@@ -544,6 +586,12 @@ await test('handler: duas keys, dois usuários — sem compartilhamento', async 
 });
 
 await test('handler: !delghostcmd revoga e avisa', async () => {
+  // Cria o próprio estado: os testes de renumeração zeram a lista, então a #2
+  // pode não existir mais quando este roda.
+  keys.apagarTodas();
+  keys.criarKey({ owner: '5511911111111' });
+  keys.criarKey({ owner: '5511922222222' });
+
   const r = await rodarComoDono({ text: '!delghostcmd 2' });
   includes(r.texto, 'revogada com sucesso', 'confirma a revogação');
   includes(r.texto, 'REVOGADA', 'mostra o status');
@@ -551,6 +599,8 @@ await test('handler: !delghostcmd revoga e avisa', async () => {
 });
 
 await test('handler: !delghostcmd em key já revogada avisa', async () => {
+  // A #2 já foi revogada no teste anterior; garante o estado de qualquer forma.
+  if (keys.buscarPorId(2)?.status !== 'revoked') keys.revogarPorId(2);
   const r = await rodarComoDono({ text: '!delghostcmd 2' });
   includes(r.texto, 'já está revogada', 'avisa que já estava revogada');
 });
@@ -584,14 +634,13 @@ await test('handler: !delghostcmd alt apaga TODAS as keys', async () => {
   ok(keys.estatisticas().total === 0, 'contagem zerada');
 });
 
-await test('handler: !delghostcmd alt NÃO reutiliza números', async () => {
+await test('handler: !delghostcmd alt reinicia a numeração em #1', async () => {
   keys.criarKey({ owner: '5511944444444' });
-  const antes = keys.estatisticas().proximoId;
+  keys.criarKey({ owner: '5511955555555' });
   await rodarComoDono({ text: '!delghostcmd alt' });
 
   const nova = keys.criarKey({ owner: '5511933333333' });
-  ok(nova.id === antes, `a próxima key continua a sequência (${nova.id})`);
-  ok(nova.id !== 1, 'não voltou para #1');
+  ok(nova.id === 1, `a nova key volta a ser #1 (${nova.id})`);
 });
 
 await test('handler: !delghostcmd alt avisa quando não há nada', async () => {
@@ -618,7 +667,7 @@ await test('menudono: categoria PLUGIN FANTASMA com os três comandos', async ()
 // APAGAR TUDO (por último: zera o registro e não deve afetar outros testes)
 // ============================================================================
 
-await test('keys: apagarTodas limpa tudo e NÃO reutiliza números', () => {
+await test('keys: apagarTodas limpa tudo e a numeração VOLTA para #1', () => {
   // Cria o próprio estado — não depende do que veio antes.
   keys.apagarTodas();
   keys.criarKey({ owner: '5511955555555' });
@@ -633,18 +682,18 @@ await test('keys: apagarTodas limpa tudo e NÃO reutiliza números', () => {
   ok(r.removidas === antes.total, `removeu todas (${r.removidas})`);
   ok(keys.listarKeys().length === 0, 'lista ficou vazia');
   ok(keys.estatisticas().total === 0, 'contagem zerada');
+  ok(r.proximoId === 1, `próximoId volta a 1 (${r.proximoId})`);
 
-  // O contador continua: números antigos não voltam a existir.
-  ok(r.proximoId === antes.proximoId, `próximoId preservado (${r.proximoId})`);
+  // Depois do alt, a próxima key é #1 de novo.
   const nova = keys.criarKey({ owner: '5511999999999' });
-  ok(nova.id === antes.proximoId, `a nova key usa o id seguinte, não o #1 (${nova.id})`);
+  ok(nova.id === 1, `a nova key volta a ser #1 (${nova.id})`);
 });
 
 await test('keys: apagarTodas em registro já vazio não quebra', () => {
   keys.apagarTodas();
   const r = keys.apagarTodas();
   ok(r.removidas === 0, 'zero removidas');
-  ok(typeof r.proximoId === 'number' && r.proximoId > 0, `proximoId válido (${r.proximoId})`);
+  ok(r.proximoId === 1, `proximoId 1 (${r.proximoId})`);
 });
 
 // ============================================================================

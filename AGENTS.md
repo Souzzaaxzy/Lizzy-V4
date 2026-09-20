@@ -1161,10 +1161,32 @@ substituído — só o socket do WhatsApp e o host/porta viram locais):
 - Verificado também o health pela **URL pública real**:
   `{"ok":true,"tipo":"online","versao":"1"}`.
 
-### Testes — `tests/ghost-manager.test.js` (35 testes / 139 asserções)
-Registro (ids sequenciais, revogar não libera número, duplo revogar, inexistente,
+### Numeração das keys: sem buracos (set/2026) ✅
+Relato do dono: *"apaguei a key 1 e gero uma nova ela fica como 2"* — e o mesmo
+acontecia no `alt`. Reproduzido: apagar/revogar a #1 e criar outra dava #2.
+
+**Causa**: o `id` era um **contador persistido** (`nextId`) que só subia. Uma vez
+usado, o número nunca voltava — então a numeração ficava com buracos depois de
+qualquer remoção.
+
+**Correção**: o `id` passou a ser a **posição na lista** (1..N), recalculada em
+`renumerar()` a cada leitura. Consequências:
+- apagar a #1 e criar outra → a nova é **#1** de novo;
+- `alt` (`apagarTodas`) → a próxima criada é **#1**;
+- `!delghostcmd <n>` **revoga** (não remove): o registro fica no lugar com status
+  `revoked` e **a numeração não abre buraco** — a lista continua 1,2,3 e a
+  próxima criada é a seguinte;
+- **arquivos antigos se consertam sozinhos**: um JSON que ficou com ids 5 e 9
+  (do contador) é renumerado para 1 e 2 na primeira leitura, preservando keys,
+  donos e status.
+
+O teste que exigia "não reutilizar números" foi **substituído** pelo novo
+contrato (o comportamento antigo é justamente o bug relatado).
+
+### Testes — `tests/ghost-manager.test.js` (37 testes / 147 asserções)
+Registro (numeração sem buraco, renumeração de arquivo antigo, duplo revogar, inexistente,
 estatísticas, dono obrigatório, máscara), **persistência** (relê do disco com
-`version`/`nextId`/status), **1 key = 1 usuário** (dono passa, outro é recusado
+`version`/status), **1 key = 1 usuário** (dono passa, outro é recusado
 com 403 pelo `processarRequisicao`, JID e número equivalentes), **health** (online,
 offline, erro, serviço diferente, e que `/health` não aceita POST com contexto —
 ou seja, não dispara ação real), **arquivo** (é o adaptador e não o núcleo),

@@ -37,9 +37,30 @@ const VERSAO = 2;
  *   keys: [ { id, key, owner, status, createdAt, ... } ]
  * }
  *
- * `nextId` é persistido de propósito: mesmo que um registro seja removido à
- * mão, o próximo número continua de onde parou — nunca volta para #1.
+ * O `id` é a POSIÇÃO na lista (1, 2, 3...) e é reatribuído a cada leitura.
+ * Assim a numeração nunca tem buraco: apagar a #1 faz a que era #2 virar #1, e a
+ * próxima criada começa logo depois da última existente. É o que o dono espera
+ * ao ver o painel e ao usar `!delghostcmd <número>`.
+ *
+ * `nextId` continua no arquivo só por compatibilidade de formato; quem manda é
+ * a posição calculada na leitura.
  */
+
+/**
+ * Renumera as keys de 1..N na ordem atual da lista.
+ *
+ * Chamado em toda leitura: conserta sozinho um arquivo antigo (que tinha ids
+ * altos por causa do contador) e garante que nunca exista buraco na sequência.
+ */
+function renumerar(estado) {
+  estado.keys.forEach((r, i) => {
+    r.id = i + 1;
+  });
+  // O próximo id é sempre o seguinte ao último existente.
+  estado.nextId = estado.keys.length + 1;
+  return estado;
+}
+
 function vazio() {
   return { version: VERSAO, nextId: 1, keys: [] };
 }
@@ -60,13 +81,13 @@ function lerBruto() {
 
   // Formato atual.
   if (Array.isArray(dados.keys)) {
-    const maiorId = dados.keys.reduce((m, r) => Math.max(m, Number(r?.id) || 0), 0);
-    return {
+    // Renumera na leitura: conserta arquivos antigos (com ids altos do contador)
+    // e garante sequência sem buracos.
+    return renumerar({
       version: VERSAO,
-      // Nunca deixa o contador ficar atrás dos ids existentes.
-      nextId: Math.max(Number(dados.nextId) || 1, maiorId + 1),
+      nextId: Number(dados.nextId) || 1,
       keys: dados.keys,
-    };
+    });
   }
 
   // Formato antigo (mapa). Migra atribuindo ids na ordem de leitura.
@@ -82,7 +103,7 @@ function lerBruto() {
       ...(reg?.descricao ? { descricao: reg.descricao } : {}),
     });
   }
-  return migrado;
+  return renumerar(migrado);
 }
 
 function gravar(estado) {
@@ -138,7 +159,8 @@ export function criarKey({ owner, descricao = '' } = {}) {
   }
 
   const estado = lerBruto();
-  const id = estado.nextId;
+  // O id é a posição: logo depois da última key existente (sem buracos).
+  const id = estado.keys.length + 1;
 
   // Aleatoriedade criptográfica; formato legível para o dono copiar.
   const key = `MTX-GHOST-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
@@ -153,7 +175,7 @@ export function criarKey({ owner, descricao = '' } = {}) {
   };
 
   estado.keys.push(registro);
-  estado.nextId = id + 1; // nunca reutiliza o número
+  estado.nextId = id + 1; // acompanha a posição (o número real é recalculado na leitura)
   gravar(estado);
 
   return registro;
@@ -183,22 +205,19 @@ export function revogarPorId(id) {
 /**
  * Remove TODAS as keys (ativas e revogadas).
  *
- * Atenção deliberada ao `nextId`: ele NÃO é zerado. O contador continua de onde
- * parou, então os números nunca são reutilizados — se a #5 existiu um dia, a
- * próxima key criada será #6, mesmo após uma limpeza total. Isso preserva a
- * regra "não reutilizar número" mesmo no cenário mais destrutivo.
+ * Com a numeração por posição, a próxima key criada volta a ser #1 — que é o
+ * comportamento esperado pelo dono ao limpar tudo.
  *
  * @returns {{removidas: number, proximoId: number}}
  */
 export function apagarTodas() {
   const estado = lerBruto();
   const removidas = estado.keys.length;
-  const proximoId = estado.nextId;
 
   estado.keys = [];
-  gravar(estado);
+  gravar(renumerar(estado)); // nextId volta a 1
 
-  return { removidas, proximoId };
+  return { removidas, proximoId: 1 };
 }
 
 // ───────────────────────────────────────────────────────────────────────────
