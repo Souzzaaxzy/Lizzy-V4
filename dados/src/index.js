@@ -25,6 +25,9 @@ import { buildCmdNotFoundExtras } from './utils/commandSuggest.js';
 import { extractMedia, resolveMedia, isViewOnce, describeMediaError, extractQuoted, extractText } from './utils/viewOnce.js';
 import { parseImagePollArgs, collectPollImages, resolveAttachments, buildOptionName } from './utils/pollImages.js';
 import { toOggOpus } from './utils/oggOpus.js';
+import * as ghostKeys from './antifantasma/keys.js';
+import { verificarSaude as ghostVerificarSaude } from './antifantasma/health.js';
+import { endpointAntiFantasma as ghostEndpointUrl } from './utils/publicUrl.js';
 import {
   isGroupStatusContent,
   buildGroupStatusRevokePayloads,
@@ -2564,6 +2567,20 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       if (isOwner) return true;
       if (isSubOwner && hasSubOwnerCmdPerm(sender, cmd)) return true;
       return false;
+    };
+
+    // ── 👻 PLUGIN FANTASMA ───────────────────────────────────────────────
+    // Encapsula as duas coisas que os comandos precisam: a URL pública da API
+    // (detectada automaticamente, com fallback pela porta local) e o health.
+    const ghostEndpoint = () => ghostEndpointUrl();
+    const ghostHealth = async () => {
+      const base = ghostEndpoint();
+      if (base) return ghostVerificarSaude(base, { timeoutMs: 5000 });
+      // Sem URL pública, tenta a API local (o servidor pode estar no ar mesmo
+      // sem domínio detectado) — assim o painel ainda diz algo util.
+      const porta = Number(process.env.ANTIFANTASMA_PORT) || 0;
+      if (!porta) return { ok: false, tipo: 'offline', detalhe: 'nao_configurado' };
+      return ghostVerificarSaude(`http://127.0.0.1:${porta}`, { timeoutMs: 3000 });
     };
     // Debug: log das verificações de permissão
     debugLog('Verificações de permissão:', {
@@ -39524,6 +39541,227 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
         } catch (e) {
           console.error('Erro no comando medirpau:', e);
           await reply('❌ Ocorreu um erro ao medir 💔');
+        }
+        break;
+// ── 👻 PLUGIN FANTASMA (exclusivo do dono) ────────────────────────────
+      // Gerenciamento da distribuição do plugin remoto AntiFantasma. Não
+      // duplica a lógica do anti: só administra keys e mostra o estado.
+      // A autorização usa o mesmo padrão de dono do resto do bot.
+      case 'ghostcmd':
+        try {
+          if (!canUseOwnerCmd('ghostcmd')) return reply('Este comando é apenas para o dono do bot!');
+
+          const stats = ghostKeys.estatisticas();
+          const lista = ghostKeys.listarKeys();
+
+          // Health check: diz se a API está de pé SEM disparar ação real do
+          // anti-fantasma (não fecha grupo, não bane ninguém).
+          const saude = await ghostHealth();
+          const linhaServidor = saude.ok
+            ? `🌐 Servidor: ONLINE\n🔌 API: FUNCIONAL${saude.versao ? ` (v${saude.versao})` : ''}`
+            : `🌐 Servidor: ${saude.tipo === 'offline' ? 'OFFLINE' : 'ERRO'}\n🔌 API: ${saude.tipo === 'offline' ? 'INDISPONÍVEL' : 'ERRO'}`;
+
+          const partes = [`👻 *PLUGIN FANTASMA*`, '', linhaServidor, ''];
+
+          if (lista.length) {
+            partes.push('🔑 *CHAVES*', '');
+            for (const r of lista) {
+              const dono = String(r.owner || 'desconhecido').split('@')[0];
+              const ativa = r.status === 'active';
+              partes.push(`#${r.id} — ${ativa ? '🟢 ATIVA' : '🔴 REVOGADA'}`);
+              partes.push(`👤 @${dono}`);
+              partes.push('');
+            }
+          } else {
+            partes.push('🔑 Nenhuma chave gerada ainda.', '');
+          }
+
+          partes.push('━━━━━━━━━━━━━━');
+          partes.push(`📊 Total geradas: ${stats.total}`);
+          partes.push(`🟢 Ativas: ${stats.ativas}`);
+          partes.push(`🔴 Revogadas: ${stats.revogadas}`);
+
+          // Menções só dos donos realmente listados, para o @nome resolver.
+          const mencionsGhost = [...new Set(lista.map((r) => r.owner).filter(Boolean))];
+          await nazu.sendMessage(from, {
+            text: partes.join('\n'),
+            ...(mencionsGhost.length ? { mentions: mencionsGhost } : {}),
+          }, { quoted: info });
+        } catch (e) {
+          console.error('[GHOSTCMD] Erro:', e?.message || e);
+          await reply('❌ Não foi possível consultar o Plugin Fantasma.');
+        }
+        break;
+
+      case 'addghostcmd':
+        try {
+          if (!canUseOwnerCmd('addghostcmd')) return reply('Este comando é apenas para o dono do bot!');
+
+          // O dono precisa indicar quem recebe — reutiliza o contexto já
+          // resolvido pelo handler (resposta/menção), sem sistema paralelo.
+          const alvoGhost = menc_os2 || null;
+          if (!alvoGhost) {
+            return reply(
+              '❌ Responda a mensagem da pessoa que vai receber o Plugin Fantasma\n' +
+              'e execute o comando novamente.'
+            );
+          }
+
+          const donoBase = String(alvoGhost).split('@')[0];
+
+          let registro;
+          try {
+            registro = ghostKeys.criarKey({ owner: alvoGhost, descricao: `concedido por ${senderBase}` });
+          } catch (e) {
+            console.error('[ADDGHOSTCMD] Falha ao registrar a key:', e?.message || e);
+            return reply('❌ Não foi possível gerar o acesso do Plugin Fantasma.');
+          }
+
+          // URL pública detectada automaticamente (a mesma que o bot loga).
+          const endpointGhost = ghostEndpoint();
+          if (!endpointGhost) {
+            // A key existe, mas sem URL o tutorial sairia inútil. Avisa em vez
+            // de entregar algo quebrado.
+            return reply(
+              '⚠️ Key gerada, mas não consegui detectar a URL pública da API.\n' +
+              'Defina `ANTIFANTASMA_PUBLIC_URL` e rode o comando de novo.'
+            );
+          }
+
+          // O arquivo entregue é o ADAPTADOR — nunca o núcleo.
+          let codigoAdaptador;
+          try {
+            codigoAdaptador = await fsPromises.readFile(
+              pathz.join(__dirname, 'antifantasma-cliente', 'antifantasma.js'),
+              'utf-8'
+            );
+          } catch (e) {
+            console.error('[ADDGHOSTCMD] Adaptador não encontrado:', e?.message || e);
+            return reply('❌ Não foi possível carregar o arquivo do plugin.');
+          }
+
+          const arquivoPronto = codigoAdaptador
+            .replace(/const API_URL = '[^']*';/, `const API_URL = '${endpointGhost}';`)
+            .replace(/const KEY = '[^']*';/, `const KEY = '${registro.key}';`)
+            .replace(/const BOT_ID = '[^']*';/, `const BOT_ID = '${donoBase}';`);
+
+          const tutorialGhost = [
+            `👻 *PLUGIN FANTASMA — ACESSO #${registro.id}*`,
+            '',
+            `👤 Usuário: @${donoBase}`,
+            `🔑 Key: \`${registro.key}\``,
+            '',
+            '━━━━━━━━━━━━━━',
+            '📁 *1. Onde colocar*',
+            'Coloque o arquivo `antifantasma.js` na MESMA pasta do seu `Index.js`:',
+            '```',
+            'Bot/',
+            '└── src/',
+            '    ├── Index.js',
+            '    └── antifantasma.js',
+            '```',
+            '',
+            '📥 *2. Como importar* (no seu `Index.js`)',
+            '```js',
+            "const antiFantasma = require('./antifantasma');",
+            '```',
+            '',
+            '🔑 *3. Configurar a KEY*',
+            'O arquivo já vem configurado com a sua KEY e a URL da API.',
+            'Se precisar conferir, abra o topo do `antifantasma.js`.',
+            '',
+            '⚙️ *4. Adicionar a case* (exemplo)',
+            '```js',
+            "case 'antifantasma': {",
+            '    await antiFantasma.executar({',
+            '        sock,',
+            '        msg,',
+            '        args,',
+            '        reply',
+            '    });',
+            '    break;',
+            '}',
+            '```',
+            '',
+            '🟢 *5. Ativar / desativar*',
+            '```js',
+            "case 'afon':",
+            '    antiFantasma.ativar();',
+            "    await reply('👻 AntiFantasma ativado.');",
+            '    break;',
+            '',
+            "case 'afoff':",
+            '    antiFantasma.desativar();',
+            "    await reply('👻 AntiFantasma desativado.');",
+            '    break;',
+            '```',
+            '',
+            '🎨 *6. Personalizar*',
+            'Os nomes acima são só EXEMPLO. Troque por `af`, `ghost`, `protecao`,',
+            '`fantasma` — o que você quiser. A Lizzy não exige nome nenhum.',
+          ].join('\n');
+
+          // 1) Tutorial
+          await nazu.sendMessage(from, {
+            text: tutorialGhost,
+            mentions: [alvoGhost],
+          }, { quoted: info }).catch((e) => console.error('[ADDGHOSTCMD] tutorial:', e?.message || e));
+
+          // 2) O arquivo. Se falhar, o dono PRECISA saber: a entrega não pode
+          //    ser considerada concluída sem ele.
+          try {
+            await nazu.sendMessage(from, {
+              document: Buffer.from(arquivoPronto, 'utf-8'),
+              fileName: 'antifantasma.js',
+              mimetype: 'application/javascript',
+              caption: `📦 antifantasma.js — acesso #${registro.id}`,
+            }, { quoted: info });
+          } catch (e) {
+            console.error('[ADDGHOSTCMD] Falha ao enviar o arquivo:', e?.message || e);
+            await reply(
+              '⚠️ A key foi criada e o tutorial enviado, mas o ARQUIVO não saiu.\n' +
+              'A entrega não está completa — tente enviar o arquivo novamente.'
+            );
+          }
+        } catch (e) {
+          console.error('[ADDGHOSTCMD] Erro:', e?.message || e);
+          await reply('❌ Não foi possível gerar o acesso do Plugin Fantasma.');
+        }
+        break;
+
+      case 'delghostcmd':
+        try {
+          if (!canUseOwnerCmd('delghostcmd')) return reply('Este comando é apenas para o dono do bot!');
+
+          const numGhost = String(q || '').trim().split(/\s+/)[0];
+          if (!/^\d+$/.test(numGhost)) {
+            return reply(`❌ Use: ${groupPrefix}delghostcmd <número>\nExemplo: ${groupPrefix}delghostcmd 2`);
+          }
+
+          const resGhost = ghostKeys.revogarPorId(Number(numGhost));
+
+          if (!resGhost.ok) {
+            if (resGhost.motivo === 'ja_revogada') {
+              return reply(`⚠️ A Key #${numGhost} já está revogada.`);
+            }
+            return reply(`❌ Key #${numGhost} não encontrada.`);
+          }
+
+          const donoRev = String(resGhost.registro.owner || 'desconhecido').split('@')[0];
+          await nazu.sendMessage(from, {
+            text: [
+              '👻 *PLUGIN FANTASMA*',
+              '',
+              `🔑 Key #${resGhost.registro.id} revogada com sucesso.`,
+              '',
+              `👤 Usuário: @${donoRev}`,
+              '🔴 Status: REVOGADA',
+            ].join('\n'),
+            mentions: resGhost.registro.owner ? [resGhost.registro.owner] : [],
+          }, { quoted: info });
+        } catch (e) {
+          console.error('[DELGHOSTCMD] Erro:', e?.message || e);
+          await reply('❌ Não foi possível revogar a key.');
         }
         break;
       default:

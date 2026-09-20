@@ -6,94 +6,24 @@
  * executar. Nunca devolve código, algoritmo, regra ou o conteúdo do núcleo.
  *
  * Não existe endpoint que sirva o `core.js` — nem `/core.js`, nem `/source`,
- * nem `/code`. A única rota é o processamento, e ela responde apenas JSON com
- * o resultado.
+ * nem `/code`. Além do processamento, existe um `/health` proposital: é o que o
+ * `!ghostcmd` usa para saber se a API está de pé **sem** disparar nenhuma ação
+ * real do anti-fantasma.
  *
  * Dependência: apenas `node:http` nativo (sem framework, sem pacote novo).
  */
 
 import http from 'node:http';
-import fs from 'node:fs';
-import path from 'node:path';
-import crypto from 'node:crypto';
 
-import { DATABASE_DIR } from '../utils/paths.js';
 import { resumoParaLog, endpointAntiFantasma } from '../utils/publicUrl.js';
 import { decidir, mensagemDoMotivo, ACTIONS } from './core.js';
-
-const KEYS_FILE = path.join(DATABASE_DIR, 'antifantasma', 'keys.json');
-const PLUGIN_ID = 'antifantasma';
+import { validarKey, PLUGIN_ID, KEYS_FILE } from './keys.js';
 
 // Tamanho máximo do corpo aceito. O contexto é pequeno; um limite evita que
 // uma requisição enorme consuma memória.
 const MAX_BODY_BYTES = 8 * 1024;
+const VERSAO_API = '1';
 
-// ───────────────────────────────────────────────────────────────────────────
-// KEYS — persistência mínima (JSON), sem sistema de permissões genérico.
-// ───────────────────────────────────────────────────────────────────────────
-
-function lerKeys() {
-  try {
-    const bruto = fs.readFileSync(KEYS_FILE, 'utf-8');
-    const dados = JSON.parse(bruto);
-    return dados && typeof dados === 'object' ? dados : {};
-  } catch {
-    return {};
-  }
-}
-
-function gravarKeys(keys) {
-  fs.mkdirSync(path.dirname(KEYS_FILE), { recursive: true });
-  // Escrita atômica: um tmp único por chamada evita que duas gravações
-  // concorrentes pisem uma na outra (mesmo cuidado do writeJsonFile do bot).
-  const tmp = `${KEYS_FILE}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(keys, null, 2));
-  fs.renameSync(tmp, KEYS_FILE);
-}
-
-/**
- * Valida uma KEY e devolve o motivo quando negada.
- *
- * A verificação é feita AQUI, no servidor — nunca no cliente. Um
- * `if (authorized)` local seria burlável, já que o usuário tem o próprio
- * adaptador.
- *
- * @param {string} key
- * @returns {{ok: boolean, motivo?: string, registro?: object}}
- */
-export function validarKey(key) {
-  if (typeof key !== 'string' || !key.trim()) return { ok: false, motivo: 'ausente' };
-  const keys = lerKeys();
-  const registro = keys[key.trim()];
-  if (!registro) return { ok: false, motivo: 'inexistente' };
-  if (registro.plugin !== PLUGIN_ID) return { ok: false, motivo: 'plugin_errado' };
-  if (registro.active !== true) return { ok: false, motivo: 'revogada' };
-  return { ok: true, registro };
-}
-
-/** Cria uma KEY individual para uma instalação. */
-export function criarKey(descricao = '') {
-  const key = `MTX-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
-  const keys = lerKeys();
-  keys[key] = {
-    plugin: PLUGIN_ID,
-    active: true,
-    criadaEm: new Date().toISOString(),
-    descricao: String(descricao).slice(0, 120),
-  };
-  gravarKeys(keys);
-  return key;
-}
-
-/** Revoga uma KEY. A API passa a recusar as execuções dela. */
-export function revogarKey(key) {
-  const keys = lerKeys();
-  if (!keys[key]) return false;
-  keys[key].active = false;
-  keys[key].revogadaEm = new Date().toISOString();
-  gravarKeys(keys);
-  return true;
-}
 
 // ───────────────────────────────────────────────────────────────────────────
 // HTTP
@@ -140,13 +70,15 @@ function lerCorpo(req) {
  *
  * Separado do servidor HTTP para poder ser testado sem abrir porta.
  *
- * @param {{key?: string, context?: object}} entrada
+ * @param {{key?: string, botId?: string, context?: object}} entrada
  * @returns {{status: number, body: object}}
  */
 export function processarRequisicao(entrada) {
-  const { key, context } = entrada && typeof entrada === 'object' ? entrada : {};
+  const { key, botId, context } = entrada && typeof entrada === 'object' ? entrada : {};
 
-  const validacao = validarKey(key);
+  // `botId` viaja junto para a regra "1 key = 1 usuário": quem tem a key mas não
+  // é o dono registrado é recusado aqui, no servidor.
+  const validacao = validarKey(key, { botId });
   if (!validacao.ok) {
     // Nunca executar o núcleo com KEY inválida.
     return { status: 403, body: { success: false, error: 'key_invalida' } };
@@ -203,9 +135,23 @@ export function iniciarApi(port) {
   port = n;
 
   const server = http.createServer(async (req, res) => {
-    // Qualquer caminho que não seja o de processamento responde 404 — inclusive
-    // tentativas de buscar o código-fonte do núcleo.
     const rota = (req.url || '').split('?')[0];
+
+    // Health check do `!ghostcmd`. Não recebe key, não toca no núcleo e não
+    // executa ação nenhuma — serve só para dizer que a API está de pé.
+    // Não expõe contagem de keys, donos nem qualquer dado administrativo.
+    if (req.method === 'GET' && (rota === '/api/antifantasma/health' || rota === '/health')) {
+      responder(res, 200, {
+        success: true,
+        plugin: PLUGIN_ID,
+        version: VERSAO_API,
+        uptime: Math.floor(process.uptime()),
+      });
+      return;
+    }
+
+    // Qualquer outro caminho responde 404 — inclusive tentativas de buscar o
+    // código-fonte do núcleo.
     if (req.method === 'POST' && rota === '/api/antifantasma/exec') {
       let entrada;
       try {

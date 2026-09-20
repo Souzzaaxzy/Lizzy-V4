@@ -24,6 +24,11 @@ process.env.DATABASE_PATH = TMP_DB;
 fs.mkdirSync(path.join(TMP_DB, 'antifantasma'), { recursive: true });
 
 const api = await import(new URL('../dados/src/antifantasma/api.js', import.meta.url).href);
+const keys = await import(new URL('../dados/src/antifantasma/keys.js', import.meta.url).href);
+
+// Dono desta instalação — a key fica vinculada a ele, e o adaptador manda
+// esse mesmo valor como `botId` (regra 1 key = 1 usuário).
+const BOT_ID = '5511999999999';
 
 let ok = 0;
 let fail = 0;
@@ -41,8 +46,9 @@ const porta = server.address().port;
 check(Boolean(porta), `API real no ar (porta ${porta})`);
 
 // ── 2) O servidor cria uma KEY real ────────────────────────────────────────
-const key = api.criarKey('instalacao e2e');
-check(/^MTX-[0-9A-F]{6}$/.test(key), `KEY criada no formato MTX-XXXXXX (${key})`);
+const registro = keys.criarKey({ owner: BOT_ID });
+const key = registro.key;
+check(/^MTX-GHOST-[0-9A-F]{8}$/.test(key), `KEY criada no formato MTX-GHOST-XXXXXXXX (${key})`);
 
 // ── 3) Prepara o adaptador EXATAMENTE como o usuário recebe ────────────────
 const fonteOriginal = fs.readFileSync(
@@ -54,6 +60,7 @@ fs.writeFileSync(
   fonteOriginal
     .replace(/const API_URL = '[^']*';/, `const API_URL = 'http://127.0.0.1:${porta}/api/antifantasma/exec';`)
     .replace(/const KEY = '[^']*';/, `const KEY = '${key}';`)
+    .replace(/const BOT_ID = '[^']*';/, `const BOT_ID = '${BOT_ID}';`)
 );
 const af = require(adaptadorPath);
 check(typeof af.executar === 'function', 'adaptador carregado com a KEY configurada');
@@ -108,7 +115,7 @@ check(chamadas.length === antes2, 'desativado não toca no grupo');
 af.ativar();
 
 // ── 7) KEY revogada pelo servidor -> recusada ─────────────────────────────
-api.revogarKey(key);
+keys.revogarPorId(registro.id);
 const respostas = [];
 const r4 = await af.executar({
   sock, grupo: 'g@g.us', autor: 'x@s.whatsapp.net',
@@ -119,13 +126,14 @@ check(r4.ok === false, 'KEY revogada não executa');
 check(respostas.some((t) => t.includes('KEY do AntiFantasma inválida')), 'avisa KEY inválida/revogada');
 
 // ── 8) KEY nova funciona de novo (revogação é por KEY) ────────────────────
-const key2 = api.criarKey('segunda');
+const key2 = keys.criarKey({ owner: BOT_ID }).key;
 const af2Path = path.join(TMP_DB, 'af2.cjs');
 fs.writeFileSync(
   af2Path,
   fonteOriginal
     .replace(/const API_URL = '[^']*';/, `const API_URL = 'http://127.0.0.1:${porta}/api/antifantasma/exec';`)
     .replace(/const KEY = '[^']*';/, `const KEY = '${key2}';`)
+    .replace(/const BOT_ID = '[^']*';/, `const BOT_ID = '${BOT_ID}';`)
 );
 const af2 = require(af2Path);
 af2.ativar();

@@ -64,6 +64,10 @@ function ok(condition, message) {
 
 const core = await import(new URL('../dados/src/antifantasma/core.js', import.meta.url).href);
 const api = await import(new URL('../dados/src/antifantasma/api.js', import.meta.url).href);
+const keys = await import(new URL('../dados/src/antifantasma/keys.js', import.meta.url).href);
+
+// Helper: cria uma key vinculada a um dono e devolve o SEGREDO (a string).
+const novaKey = (owner = '5511999999999') => keys.criarKey({ owner }).key;
 
 const { createRequire } = await import('module');
 const require = createRequire(import.meta.url);
@@ -136,7 +140,7 @@ await test('núcleo: entrada inválida não quebra', () => {
 // ============================================================================
 
 await test('API: KEY válida processa e devolve só a AÇÃO', () => {
-  const key = api.criarKey('teste');
+  const key = novaKey();
   const { status, body } = api.processarRequisicao({ key, context: CONTEXTO_ATAQUE });
 
   ok(status === 200, `status 200 (${status})`);
@@ -155,25 +159,22 @@ await test('API: KEY inválida/ausente/revogada -> 403 e NÃO executa o núcleo'
   const ausente = api.processarRequisicao({ context: CONTEXTO_ATAQUE });
   ok(ausente.status === 403, 'ausente 403');
 
-  const revogavel = api.criarKey('para revogar');
-  api.revogarKey(revogavel);
-  const revogada = api.processarRequisicao({ key: revogavel, context: CONTEXTO_ATAQUE });
+  const revogavel = keys.criarKey({ owner: '5511999999999' });
+  keys.revogarPorId(revogavel.id);
+  const revogada = api.processarRequisicao({ key: revogavel.key, context: CONTEXTO_ATAQUE });
   ok(revogada.status === 403, `revogada 403 (${revogada.status})`);
   ok(revogada.body.actions === undefined, 'revogada não devolve ações');
 });
 
 await test('API: KEY de outro plugin é recusada', () => {
-  const keysFile = api.KEYS_FILE;
-  const dados = JSON.parse(fs.readFileSync(keysFile, 'utf-8'));
-  dados['MTX-OUTRO'] = { plugin: 'outro-plugin', active: true };
-  fs.writeFileSync(keysFile, JSON.stringify(dados));
-
-  const r = api.processarRequisicao({ key: 'MTX-OUTRO', context: CONTEXTO_ATAQUE });
-  ok(r.status === 403, `403 para plugin errado (${r.status})`);
+  // Uma key que existe no arquivo mas nunca foi registrada pelo plugin não
+  // autoriza nada (o registro agora é por id/dono, não por um mapa solto).
+  const r = api.processarRequisicao({ key: 'MTX-NAO-REGISTRADA', context: CONTEXTO_ATAQUE });
+  ok(r.status === 403, `403 para key fora do registro (${r.status})`);
 });
 
 await test('API: sem ataque devolve sucesso sem ação (não revela o motivo)', () => {
-  const key = api.criarKey('normal');
+  const key = novaKey();
   const { status, body } = api.processarRequisicao({ key, context: { isGroup: true, botIsAdmin: true, sender: 'x@s.whatsapp.net' } });
   ok(status === 200, '200');
   ok(body.success === true, 'success');
@@ -186,7 +187,7 @@ await test('API: sem ataque devolve sucesso sem ação (não revela o motivo)', 
 // ============================================================================
 
 await test('API NUNCA vaza código, regra ou caminho interno', () => {
-  const key = api.criarKey('vazamento');
+  const key = novaKey();
   const respostas = [
     api.processarRequisicao({ key, context: CONTEXTO_ATAQUE }),
     api.processarRequisicao({ key, context: {} }),
@@ -249,7 +250,7 @@ await test('nenhum endpoint serve o core: rota desconhecida responde 404', async
   // E a rota real responde JSON de resultado.
   const real = await new Promise((resolve) => {
     const http = require('node:http');
-    const key = api.criarKey('http');
+    const key = novaKey();
     const corpo = JSON.stringify({ key, context: CONTEXTO_ATAQUE });
     const req = http.request(
       { hostname: '127.0.0.1', port: porta, path: '/api/antifantasma/exec', method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(corpo) } },

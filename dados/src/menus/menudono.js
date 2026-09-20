@@ -258,6 +258,15 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 │ 🔑 ${prefix}rajar4 @alvo [texto]
 ╰──────────────
 
+
+╭─❖ 👻 PLUGIN FANTASMA
+│ 📊 ${prefix}ghostcmd
+│    Status do servidor e Keys
+│ ➕ ${prefix}addghostcmd
+│    Gerar acesso ao Plugin Fantasma
+│ 🗑️ ${prefix}delghostcmd <número>
+│    Revogar uma Key
+╰──────────────
 ╭─────────────────╮
 ╰─────────────────╯
 `;

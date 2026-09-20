@@ -35,6 +35,14 @@ const API_URL = 'https://api.exemplo.com/api/antifantasma/exec';
 /** KEY individual desta instalação. */
 const KEY = 'MTX-000000';
 
+/**
+ * Identificador desta instalação (o número da sua bot).
+ *
+ * A API vincula cada KEY a UM dono e recusa quem não for ele — mesmo que a KEY
+ * vaze. Este valor é o que a Lizzy usou quando gerou a sua KEY.
+ */
+const BOT_ID = '5500000000000';
+
 // ───────────────────────────────────────────────────────────────────────────
 // ESTADO LOCAL (ativar/desativar) — controlado só pelo usuário
 // ───────────────────────────────────────────────────────────────────────────
@@ -79,7 +87,9 @@ function pedir(contexto) {
     }
 
     const lib = url.protocol === 'https:' ? require('node:https') : require('node:http');
-    const corpo = JSON.stringify({ key: KEY, context: contexto });
+    // `botId` identifica esta instalação. A API confere se ele é o dono
+    // registrado da KEY — é o que impede alguém usar a KEY de outra pessoa.
+    const corpo = JSON.stringify({ key: KEY, botId: BOT_ID, context: contexto });
 
     const req = lib.request(
       {

@@ -1008,6 +1008,80 @@ ir para o status**.
   sempre `open(path, 'rb')` → `.decode('utf-8')` → operar em `str` → gravar com
   `.encode('utf-8')`, e conferir com `b.count(b'\xd0\x93\xc2\xa9') == 0`.
 
+## GERENCIAMENTO do Plugin Fantasma — `!ghostcmd` / `!addghostcmd` / `!delghostcmd` ✅
+Sistema pequeno, **exclusivo do dono**, para administrar a distribuição do plugin
+remoto. Só isso: nada de marketplace, registry, dashboard ou permissões novas.
+
+### Módulos
+- **`dados/src/antifantasma/keys.js`** — registro das keys. Formato em disco:
+  `{ version, nextId, keys: [{ id, key, owner, status, createdAt }] }`.
+  - `id` numérico sequencial **persistido** (`nextId`): revogar **não** libera o
+    número, então nunca existe reuso de id.
+  - `criarKey({ owner })`, `revogarPorId(id)`, `listarKeys()`, `buscarPorId(id)`,
+    `estatisticas()`, `mascararKey(key)` e `validarKey(key, { botId })`.
+  - **Migra o formato antigo** (mapa key→registro, sem id) ao ler — quem já tinha
+    keys não perde nada.
+  - Escrita atômica (tmp único + rename), como no resto do projeto.
+- **`dados/src/antifantasma/health.js`** — `verificarSaude(baseUrl)` bate no
+  `/api/antifantasma/health` (GET, sem key, sem contexto). Diferencia
+  **online** / **offline** (sem resposta/timeout) / **erro** (respondeu errado) e
+  confere que é o nosso plugin (`plugin === 'antifantasma'`), para não confundir
+  outro serviço na mesma porta.
+- **`api.js`** ganhou o endpoint `/api/antifantasma/health` (não expõe keys,
+  donos nem contagem) e passou a **repassar `botId`** para a validação.
+
+### 1 key = 1 usuário (validado no servidor)
+`validarKey` recebe `{ botId }` e confere que ele é o **dono registrado** da key.
+Se não for → `dono_diferente` → **403**, e o núcleo **não executa**. Mesmo que o
+usuário B descubra a key do A, não passa. A comparação tolera as formas
+JID/LID/número (`mesmoUsuario`). O adaptador manda esse valor no campo `BOT_ID`.
+
+### Comandos (`index.js`, logo antes do `default:`)
+Todos usam `canUseOwnerCmd` — **nenhum sistema de permissão novo**.
+- **`!ghostcmd`** — painel: `Servidor ONLINE/OFFLINE/ERRO`, `API
+  FUNCIONAL/INDISPONÍVEL`, lista de keys (`#N`, `@dono`, `🟢 ATIVA`/`🔴
+  REVOGADA`) e a contagem (total/ativas/revogadas). **Nunca mostra a key
+  inteira** (só o painel por número/dono/status).
+- **`!addghostcmd`** — exige responder a mensagem do destinatário (reusa o
+  `menc_os2` do handler). Cria a key vinculada, gera o id, e envia **tutorial +
+  o arquivo** `antifantasma.js` como documento. O arquivo sai **já configurado**
+  (URL detectada + key + botId). O tutorial explica pasta, import, case,
+  ativar/desativar e deixa explícito que **o nome da case é livre**.
+  Se o envio do arquivo falhar, avisa que a entrega **não** foi concluída.
+- **`!delghostcmd <número>`** — revoga (muda status, **não apaga**). Responde
+  `revogada com sucesso` / `já está revogada` / `não encontrada`.
+
+### Menu
+Categoria **👻 PLUGIN FANTASMA** no `menudono` (adicionada, sem substituir
+nenhuma existente).
+
+### Segurança
+- O painel **não** expõe a key inteira; `mascararKey` existe para log/exibição
+  (`MTX-GH••••C3D4`).
+- Nenhum log imprime a key crua.
+- O arquivo entregue é o **adaptador** — nunca o `core.js`. Testado: o adaptador
+  não contém `selectiveDistribution`/`undecryptableGroupMessage`/`normalizeContext`
+  nem referencia `core.js`.
+
+### Testes — `tests/ghost-manager.test.js` (30 testes / 119 asserções)
+Registro (ids sequenciais, revogar não libera número, duplo revogar, inexistente,
+estatísticas, dono obrigatório, máscara), **persistência** (relê do disco com
+`version`/`nextId`/status), **1 key = 1 usuário** (dono passa, outro é recusado
+com 403 pelo `processarRequisicao`, JID e número equivalentes), **health** (online,
+offline, erro, serviço diferente, e que `/health` não aceita POST com contexto —
+ou seja, não dispara ação real), **arquivo** (é o adaptador e não o núcleo),
+**handler real** (comum bloqueado nos três; painel com status/keys/contagem;
+key não aparece inteira; add sem alvo pede resposta; add cria 1 key com id
+sequencial vinculada ao usuário, envia tutorial e arquivo configurado; duas keys
+para dois usuários sem compartilhamento; del revoga/avisa/inexistente/sem
+número) e **menudono**.
+- **Armadilha**: o handler normaliza a identidade do alvo para **LID**
+  (`...@lid`), então o teste não pode procurar a key pelo JID literal — compara
+  pelo número (`split('@')[0]`).
+- **Armadilha 2**: procurar a key pelo dono pegava a key **antiga** de outro
+  teste (mesmo número). O correto é rastrear o **id novo** (`proximoId` antes da
+  chamada).
+
 ## PLUGIN REMOTO "!antifantasma" — núcleo privado no servidor, adaptador no cliente ✅
 Pedido do dono: um plugin remoto em que o **código real** do AntiFantasma fica no
 servidor da Lizzy e o usuário recebe **só um adaptador**. O usuário personaliza
