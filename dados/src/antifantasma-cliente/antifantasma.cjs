@@ -16,9 +16,9 @@
  * plugin passa a observar as mensagens sozinho.
  *
  *   case 'antifantasma':
- *     const antiInvisivel = require('./antiinvisivel');
- *     antiInvisivel.iniciar(sock);   // liga a observação contínua
- *     antiInvisivel.ativar(from);    // liga a proteção NESTE grupo
+ *     const antiFantasma = require('./antifantasma');
+ *     antiFantasma.iniciar(sock);   // liga a observação contínua
+ *     antiFantasma.ativar(from);    // liga a proteção NESTE grupo
  *     ...
  *
  * A KEY e a URL da API ficam na configuração abaixo (já preenchidas).
@@ -318,7 +318,7 @@ async function consultarAdministracao(sock, grupo, autor) {
  *
  * Basta passar a mensagem do Baileys — o adaptador extrai o resto sozinho:
  *
- *   await antiInvisivel.executar({ sock, msg, reply });
+ *   await antiFantasma.executar({ sock, msg, reply });
  *
  * Também aceita os campos explícitos (`grupo`, `autor`, `contexto`) para quem
  * preferir montar à mão.
@@ -589,7 +589,7 @@ function estaEscutando() {
  * Exportação.
  *
  * O arquivo termina em `.cjs` de propósito: assim um bot ESM consegue carregá-lo
- * (com `import('./antiinvisivel.cjs')` ou via `require` num CJS) e um bot
+ * (com `import('./antifantasma.cjs')` ou via `require` num CJS) e um bot
  * CommonJS também. O caso que NÃO funciona é um `.js` com conteúdo CommonJS
  * dentro de um bot ESM — o Node recusa com "module is not defined in ES module
  * scope". Por isso a extensão importa e a CASE já carrega do jeito certo.

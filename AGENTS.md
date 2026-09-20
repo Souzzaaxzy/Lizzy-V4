@@ -1113,7 +1113,7 @@ módulos nativos do Node** (`node:http`/`node:https`); não referencia
 - **`tests/antifantasma-autossuficiente.test.js` (14)** — análise estática
   (todo `require` do CÓDIGO é nativo; a análise ignora comentários, senão a
   própria documentação do arquivo dava falso positivo) **+ runtime**: copia
-  **só** `antiinvisivel.cjs` para uma pasta limpa, confirma que há **1 arquivo
+  **só** `antifantasma.cjs` para uma pasta limpa, confirma que há **1 arquivo
   na pasta**, que `core.js` **não existe** ali, e roda ativar → ataque
   (fecha/bani/reabre) até o fim.
 - O que fica no **cliente**: observar as mensagens, relatar os sinais crus e
@@ -1144,6 +1144,12 @@ mas o arquivo continua igual.
 instalacao-limpa 20/20, **autossuficiente 14/14**, esm-replica 10/10,
 cjs-replica 5/5, ghost-manager 37/154.
 
+**NOMENCLATURA CORRIGIDA (set/2026)**: o entregável volta a se chamar
+**`antifantasma.cjs`** — o plugin é **AntiFantasma**, não "antiinvisível". O
+`.cjs` fica (é o que permite carregar em bot ESM *e* CommonJS). A variável na
+CASE é `antiFantasma` e o arquivo do adaptador é
+`dados/src/antifantasma-cliente/antifantasma.cjs`.
+
 ### VERIFICAÇÃO COMPLETA — 3 causas reais do "ainda não funciona" (set/2026) ✅
 O dono reportou que **no bot de destino não funcionava**, com este log:
 `erro: '❌ KEY do AntiFantasma inválida ou revogada.'` — e a pergunta "descubra
@@ -1162,9 +1168,9 @@ erro 💔"**. O módulo nunca carregava, `iniciar()` nunca rodava.
   `require()` num ESM = `ReferenceError`; `import()` de um `.js` com conteúdo
   CommonJS dentro de ESM = `module is not defined in ES module scope`; um `.cjs`
   carrega nos dois.
-- **Correção**: entregável renomeado para **`antiinvisivel.cjs`** (funciona em
+- **Correção**: entregável renomeado para **`antifantasma.cjs`** (funciona em
   ESM e CJS) e a CASE passou a carregar com
-  `typeof require === 'function' ? require('./antiinvisivel.cjs') : (await import('./antiinvisivel.cjs')).default`.
+  `typeof require === 'function' ? require('./antifantasma.cjs') : (await import('./antifantasma.cjs')).default`.
   `iniciar(nazu)` virou condicional (`typeof nazu !== 'undefined'`).
 
 **2. `iniciar` exigia `sock.ev`.** Se o bot expuser o emitter direto (`sock.on`),
@@ -1215,10 +1221,10 @@ recriar API/core/keys).
    de manter o carregamento dentro da case.
 3. A CASE **não chamava `iniciar()`**; o tutorial mandava o usuário "chamar
    `executar` a cada mensagem recebida" — exatamente a edição manual proibida.
-4. O entregável se chamava `antifantasma.js`, não `antiinvisivel.js`.
+4. O entregável se chamava `antifantasma.js`, não `antifantasma.cjs`.
 
 **Correções** (arquitetura e contrato preservados):
-- **Novo entregável `dados/src/antifantasma-cliente/antiinvisivel.js`**: mesma
+- **Novo entregável `dados/src/antifantasma-cliente/antifantasma.cjs`**: mesma
   observação/execução de antes, **mais** a proteção contínua que faltava.
   `iniciar(sock)` agora anexa `messages.upsert` **no próprio `sock.ev`** (é onde
   o bot já registra os listeners dele — `nazu.ev.on`, confirmado no `index.js`).
@@ -1228,12 +1234,12 @@ recriar API/core/keys).
   Ligar no Grupo A não liga no B. Sem grupo, mantém o comportamento global
   (compatível com quem chama sem argumento). **Não** foi criado outro banco: o
   estado vive no módulo, como antes.
-- **CASE**: `require('./antiinvisivel')` **dentro** da case + `iniciar(nazu)`;
+- **CASE**: `require('./antifantasma')` **dentro** da case + `iniciar(nazu)`;
   alterna por grupo (`estaAtivo(from)`). O `catch` continua respondendo erro.
 - **Tutorial** (`!addghostcmd`): passos 1-6 (colocar arquivo → copiar CASE →
   colar → reiniciar → `!antifantasma` liga → de novo desliga), **sem** a etapa
   de editar handler. Arquivo entregue e legenda renomeados para
-  `antiinvisivel.js`. `LEIA-ME.md` reescrito para o mesmo fluxo.
+  `antifantasma.cjs`. `LEIA-ME.md` reescrito para o mesmo fluxo.
 - **API/core/keys/health intocados.** Nenhuma decisão foi para o cliente: o
   adaptador segue só relatando sinais e executando `actions[]`.
 
@@ -1397,8 +1403,8 @@ livremente a case e os comandos de ligar/desligar no `Index.js` dele.
     KEYs em `dados/database/antifantasma/keys.json` (escrita atômica com tmp
     único). Tem `criarKey()`, `revogarKey()`, `validarKey()` e
     `processarRequisicao()` (testável sem abrir porta).
-- **Cliente (entregável)** — `dados/src/antifantasma-cliente/antiinvisivel.js` (era `antifantasma.js`, renomeado na correção de proteção contínua):
-  o **único** arquivo entregue ao usuário. CommonJS (`require('./antiinvisivel')`,
+- **Cliente (entregável)** — `dados/src/antifantasma-cliente/antifantasma.cjs` (era `antifantasma.js`, renomeado na correção de proteção contínua):
+  o **único** arquivo entregue ao usuário. CommonJS (`require('./antifantasma')`,
   como o pedido especifica), com estado local e as funções públicas.
 
 ### Vocabulário de ações (o cliente só EXECUTA, não decide)

@@ -4,11 +4,11 @@
  * Simula um bot destinatário que NÃO tem integração Anti-Fantasma. Ele recebe
  * APENAS duas coisas:
  *
- *   1. o arquivo `antiinvisivel.cjs` na pasta `src/`;
+ *   1. o arquivo `antifantasma.cjs` na pasta `src/`;
  *   2. a CASE COMPLETA, extraída LITERALMENTE do `index.js` da Lizzy (a mesma
  *      que o `!addghostcmd` entrega no tutorial).
  *
- * O teste NÃO adiciona `antiInvisivel.executar(...)` em nenhum lugar, NÃO cria
+ * O teste NÃO adiciona `antiFantasma.executar(...)` em nenhum lugar, NÃO cria
  * outra case e NÃO registra nenhum listener manual. Se a proteção contínua
  * funcionar assim, o sistema está corrigido.
  *
@@ -64,8 +64,8 @@ const server = api.iniciarApi(0);
 await sleep(250);
 const endpoint = `http://127.0.0.1:${server.address().port}/api/antifantasma/exec`;
 
-const CAMINHO_CLIENTE = path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antiinvisivel.cjs');
-check(fs.existsSync(CAMINHO_CLIENTE), 'o entregável se chama antiinvisivel.cjs');
+const CAMINHO_CLIENTE = path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antifantasma.cjs');
+check(fs.existsSync(CAMINHO_CLIENTE), 'o entregável se chama antifantasma.cjs');
 const fonte = fs.readFileSync(CAMINHO_CLIENTE, 'utf-8');
 const entregue = fonte
   .replace(/const API_URL = '[^']*';/, `const API_URL = '${endpoint}';`)
@@ -74,7 +74,7 @@ const entregue = fonte
 
 // O usuário coloca o arquivo em src/. O repo é ESM, então materializamos como
 // .cjs (o adaptador é CommonJS, como o `require()` dele espera).
-const DESTINO = path.join(TMP, 'antiinvisivel.cjs');
+const DESTINO = path.join(TMP, 'antifantasma.cjs');
 fs.writeFileSync(DESTINO, entregue);
 
 // ── A CASE COMPLETA, extraída LITERALMENTE do index.js ─────────────────────
@@ -100,11 +100,11 @@ const CASE = extrairCaseCompleta(INDEX_SRC);
 
 console.log('\n── 0.1 A CASE entregue é a correta ──');
 check(CASE.includes("case 'antifantasma'"), 'a CASE traz o case antifantasma');
-check(/require\(['"]\.\/antiinvisivel\.cjs['"]\)/.test(CASE), "a CASE usa require('./antiinvisivel.cjs')");
-check(CASE.indexOf("require('./antiinvisivel.cjs')") > CASE.indexOf("case 'antifantasma'"),
+check(/require\(['"]\.\/antifantasma\.cjs['"]\)/.test(CASE), "a CASE usa require('./antifantasma.cjs')");
+check(CASE.indexOf("require('./antifantasma.cjs')") > CASE.indexOf("case 'antifantasma'"),
   'o require está DENTRO da case (regra absoluta da seção 4)');
 check(/\.iniciar\s*\(/.test(CASE), 'a CASE liga a proteção contínua via iniciar()');
-check(!/antiInvisivel\.executar/.test(CASE), 'a CASE não exige chamada manual no handler');
+check(!/antiFantasma\.executar/.test(CASE), 'a CASE não exige chamada manual no handler');
 
 // ── A "bot do usuário" (só a CASE + o arquivo) ─────────────────────────────
 function criarSocket() {
@@ -129,7 +129,7 @@ function montarCase(caseCode, ctx) {
     `return (async () => { switch ('antifantasma') { ${caseCode}\n } })();`,
   );
   const requireShim = (p) => {
-    if (p === './antiinvisivel.cjs' || p === './antiinvisivel' || p === './antifantasma') return require(DESTINO);
+    if (p === './antifantasma.cjs' || p === './antifantasma' || p === './antifantasma') return require(DESTINO);
     return require(p);
   };
   return fn(

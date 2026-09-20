@@ -1,6 +1,6 @@
 # AntiFantasma — integração
 
-Você recebeu **um único arquivo**: `antiinvisivel.cjs`. Coloque-o na mesma pasta
+Você recebeu **um único arquivo**: `antifantasma.cjs`. Coloque-o na mesma pasta
 do seu `Index.js` (ex.: `src/`).
 
 O funcionamento real roda no servidor — este arquivo é só o adaptador.
@@ -8,12 +8,12 @@ O funcionamento real roda no servidor — este arquivo é só o adaptador.
 ## Usar em OUTRO bot (levar só o comando)
 
 Você **não** precisa copiar `core.js`, `api.js`, `keys.js`, `health.js` nem nada
-do projeto. Leve **só o `antiinvisivel.cjs`** e cole a CASE no `index.js` do
+do projeto. Leve **só o `antifantasma.cjs`** e cole a CASE no `index.js` do
 outro bot. A lógica continua no servidor da Lizzy que gerou a KEY.
 
 1. Na **Lizzy** (o servidor), rode `!addghostcmd` respondendo a uma mensagem
    **do número do outro bot**. Isso gera a KEY e o arquivo já configurado.
-2. No outro bot, coloque `antiinvisivel.cjs` na pasta do `index.js`.
+2. No outro bot, coloque `antifantasma.cjs` na pasta do `index.js`.
 3. Cole a CASE (a que veio no tutorial) no switch de comandos.
 4. Reinicie o bot e envie `!antifantasma` no grupo.
 
@@ -25,12 +25,12 @@ outro bot. A lógica continua no servidor da Lizzy que gerou a KEY.
 dados/
 └── src/
     ├── index.js
-    └── antiinvisivel.cjs        <- o ÚNICO arquivo que o outro bot precisa
+    └── antifantasma.cjs        <- o ÚNICO arquivo que o outro bot precisa
 ```
 
 ## 1. Configure no topo do arquivo
 
-Abra `antiinvisivel.cjs` e ajuste:
+Abra `antifantasma.cjs` e ajuste:
 
 ```js
 const API_URL = 'https://SEU-SERVIDOR/api/antifantasma/exec';

@@ -3,7 +3,7 @@
  *
  * Monta um bot que é ESM (`"type": "module"`), tem os MESMOS nomes reais que a
  * Lizzy usa (nazu, from, info, isGroup, isGroupAdmin, isBotAdmin, reply) e
- * recebe APENAS: o arquivo antiinvisivel.cjs + a CASE do tutorial.
+ * recebe APENAS: o arquivo antifantasma.cjs + a CASE do tutorial.
  *
  * Uso: node tests/antifantasma-esm-replica.test.js
  */
@@ -35,7 +35,7 @@ fs.writeFileSync(path.join(TMP, 'package.json'), JSON.stringify({ type: 'module'
 
 // ── O arquivo entregue, como o !addghostcmd monta (já configurado) ─────────
 const cliente = fs.readFileSync(
-  path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antiinvisivel.cjs'), 'utf-8')
+  path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antifantasma.cjs'), 'utf-8')
   .replace(/const API_URL = '[^']*';/, `const API_URL = '${endpoint}';`)
   .replace(/const KEY = '[^']*';/, `const KEY = '${registro.key}';`)
   .replace(/const BOT_ID = '[^']*';/, `const BOT_ID = '${NUMERO}';`);
@@ -75,18 +75,18 @@ async function esperar(cond, ms = 1500) {
 console.log('── 0. A CASE carrega o arquivo de forma compatível? ──');
 check(/typeof\s+require\s*===\s*['"]function['"]/.test(CASE),
   'a CASE testa se `require` existe antes de usar');
-check(/import\(['"]\.\/antiinvisivel\.cjs['"]\)/.test(CASE),
+check(/import\(['"]\.\/antifantasma\.cjs['"]\)/.test(CASE),
   'a CASE tem o caminho ESM (import dinâmico do .cjs)');
-check(/require\(['"]\.\/antiinvisivel\.cjs['"]\)/.test(CASE),
+check(/require\(['"]\.\/antifantasma\.cjs['"]\)/.test(CASE),
   'a CASE mantém o caminho CommonJS');
-check(!/require\(['"]\.\/antiinvisivel\.js['"]\)/.test(CASE),
+check(!/require\(['"]\.\/antifantasma\.js['"]\)/.test(CASE),
   'a CASE NÃO usa o .js (quebraria em bot ESM)');
 check(/typeof\s+nazu\s*!==\s*['"]undefined['"]/.test(CASE),
   'a CASE só chama iniciar(nazu) se nazu existir');
 console.log('');
 
 // O usuário coloca o arquivo em src/, com o nome que o tutorial manda.
-const NOME = process.argv[2] || 'antiinvisivel.cjs';
+const NOME = process.argv[2] || 'antifantasma.cjs';
 fs.writeFileSync(path.join(TMP, 'src', NOME), cliente);
 
 // ── O index.js do bot: ESM, com os nomes reais, com a CASE colada ─────────

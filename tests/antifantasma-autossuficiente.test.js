@@ -1,7 +1,7 @@
 /**
  * PROVA DE AUTOSSUFICIÊNCIA — o usuário recebe UM arquivo só.
  *
- * Copia APENAS `antiinvisivel.cjs` (configurado) para uma pasta limpa, SEM
+ * Copia APENAS `antifantasma.cjs` (configurado) para uma pasta limpa, SEM
  * nenhum arquivo do projeto (nada de core.js/api.js/keys.js/utils/), monta um
  * bot mínimo com a CASE e roda o fluxo inteiro. Se isso passar, está provado
  * que o destinatário não precisa dos "arquivos diversos" que executam o
@@ -37,10 +37,10 @@ async function esperar(cond, ms = 1500) {
 // ── 1) ANÁLISE ESTÁTICA: o arquivo depende só de módulos nativos ───────────
 console.log('── 1. O arquivo entregue depende de algo do projeto? ──');
 const fonte = fs.readFileSync(
-  path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antiinvisivel.cjs'), 'utf-8');
+  path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antifantasma.cjs'), 'utf-8');
 
 // A análise é sobre o CÓDIGO, não sobre os comentários: o cabeçalho cita
-// `require('./antiinvisivel')` e o nome do plugin como documentação.
+// `require('./antifantasma')` e o nome do plugin como documentação.
 const codigo = fonte
   .replace(/\/\*[\s\S]*?\*\//g, '')   // blocos /* ... */
   .replace(/^[ \t]*\/\/.*$/gm, '');   // linhas //
@@ -81,10 +81,10 @@ const arquivoRecebido = fonte
   .replace(/const API_URL = '[^']*';/, `const API_URL = '${endpoint}';`)
   .replace(/const KEY = '[^']*';/, `const KEY = '${registro.key}';`)
   .replace(/const BOT_ID = '[^']*';/, `const BOT_ID = '${NUMERO}';`);
-fs.writeFileSync(path.join(SRC, 'antiinvisivel.cjs'), arquivoRecebido);
+fs.writeFileSync(path.join(SRC, 'antifantasma.cjs'), arquivoRecebido);
 
 const arquivosNaPasta = fs.readdirSync(SRC);
-check(arquivosNaPasta.length === 1 && arquivosNaPasta[0] === 'antiinvisivel.cjs',
+check(arquivosNaPasta.length === 1 && arquivosNaPasta[0] === 'antifantasma.cjs',
   `a pasta do usuário tem SÓ o arquivo entregue (${arquivosNaPasta.join(', ')})`);
 
 // Prova de que não há nada do projeto por perto: buscar uma dependência
@@ -131,7 +131,7 @@ const montarCase = new Function(
   `return (async () => { switch ('antifantasma') { ${CASE}\n } })();`);
 
 const requireDoBot = (p) => {
-  if (/antiinvisivel/.test(p)) return require(path.join(SRC, 'antiinvisivel.cjs'));
+  if (/antifantasma/.test(p)) return require(path.join(SRC, 'antifantasma.cjs'));
   return require(p);
 };
 

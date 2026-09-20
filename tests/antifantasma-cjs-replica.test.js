@@ -35,11 +35,11 @@ const endpoint = `http://127.0.0.1:${server.address().port}/api/antifantasma/exe
 fs.writeFileSync(path.join(TMP, 'package.json'), JSON.stringify({ type: 'commonjs' }, null, 2));
 
 const cliente = fs.readFileSync(
-  path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antiinvisivel.cjs'), 'utf-8')
+  path.join(PROJECT, 'dados', 'src', 'antifantasma-cliente', 'antifantasma.cjs'), 'utf-8')
   .replace(/const API_URL = '[^']*';/, `const API_URL = '${endpoint}';`)
   .replace(/const KEY = '[^']*';/, `const KEY = '${registro.key}';`)
   .replace(/const BOT_ID = '[^']*';/, `const BOT_ID = '${NUMERO}';`);
-fs.writeFileSync(path.join(TMP, 'src', 'antiinvisivel.cjs'), cliente);
+fs.writeFileSync(path.join(TMP, 'src', 'antifantasma.cjs'), cliente);
 
 function extrairCase(src) {
   const marca = 'const CASE_COMPLETA = `';
