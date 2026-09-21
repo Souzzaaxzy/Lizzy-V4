@@ -18,6 +18,7 @@ import http from 'node:http';
 import { resumoParaLog, endpointAntiFantasma, escolherPorta } from '../utils/publicUrl.js';
 import { decidir, mensagemDoMotivo, ACTIONS } from './core.js';
 import { validarKey, PLUGIN_ID, KEYS_FILE } from './keys.js';
+import { lerUrlManual } from './urlManual.js';
 
 // Tamanho máximo do corpo aceito. O contexto é pequeno; um limite evita que
 // uma requisição enorme consuma memória.
@@ -214,10 +215,12 @@ export function iniciarApi(port) {
     const portaReal = server.address()?.port ?? port;
     definirPortaEmUso(portaReal);
 
-    const resumo = resumoParaLog(process.env, { porta: portaReal });
+    // A URL gravada à mão (`!seturlghost`) vence a detecção automática — por
+    // isso é passada explicitamente, e não deixada para o ambiente.
+    const resumo = resumoParaLog(process.env, { porta: portaReal, urlManual: lerUrlManual() });
     console.log(`[ANTIFANTASMA] API ouvindo na porta ${portaReal}`);
     if (resumo) console.log(resumo.texto);
-    else console.log('   (defina ANTIFANTASMA_PUBLIC_URL para registrar a URL pública)');
+    else console.log('   (defina ANTIFANTASMA_PUBLIC_URL ou use !seturlghost para registrar a URL pública)');
   });
 
   server.on('close', () => {

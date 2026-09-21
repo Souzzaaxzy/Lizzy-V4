@@ -1102,6 +1102,81 @@ nenhuma existente).
   de grupo próprio. E os helpers precisam **achatar** `richResponse`
   (`sub.text` + `sub.code[].codeContent`), senão o teste não enxerga o tutorial.
 
+### COMANDO `!seturlghost` + URL no log de boot (set/2026) ✅
+Pedido do dono: *"vou adicionar a url manualmente, quero mais um comando
+!seturlghost, e também quero que nas logs do bot quando ele inicia tenha um
+campo mostrando a url do servidor"*.
+
+**Novo módulo `dados/src/antifantasma/urlManual.js`** — persistência da URL
+gravada à mão, em `dados/database/antifantasma/publicUrl.json` (separado das
+keys: é configuração do servidor, não credencial). Escrita atômica com tmp
+único, como o resto do projeto. `normalizarUrl`, `gravarUrlManual`,
+`lerUrlManual`, `limparUrlManual`, `temUrlManual`.
+
+**Precedência da URL** (do maior para o menor):
+1. **URL gravada com `!seturlghost`** ← NOVO
+2. `ANTIFANTASMA_PUBLIC_URL` / `PUBLIC_URL`
+3. detecção automática (runtime/Render/Railway/Pterodactyl/...)
+
+O comando **ganha** da variável de ambiente de propósito: quem acabou de digitar
+a URL espera que ela valha, sem mexer no painel. Implementado via
+`opts.urlManual` em `detectarUrlPublica`/`endpointAntiFantasma`/`resumoParaLog`
+— o módulo `publicUrl.js` continua **puro** (recebe o valor, não lê disco), o
+que preserva os 27 testes existentes sem alterá-los.
+
+**Normalização** (cobre o que o WhatsApp manda): sem esquema → `https`;
+`http://` em host **público** vira `https` (a KEY não pode trafegar em claro) e
+só `localhost`/`127.0.0.1` mantêm http; tira barra final, espaços e os `<>` de
+link; preserva porta. Recusa: host sem ponto (`abc`), host só de pontuação
+(`.`/`https://.`), esquema perigoso (`javascript:`/`ftp://`), injeção de comando
+com `\n`, e qualquer coisa > 500 chars. Testado com 26 entradas reais — 12
+aceitas, 14 recusadas.
+
+**Comando `!seturlghost`** (`index.js`, logo antes do `default:`), exclusivo do
+dono (`canUseOwnerCmd`, sem sistema de permissão novo):
+- `!seturlghost <url>` — grava e confirma com o endpoint resultante;
+- `!seturlghost` (ou `ver`/`status`) — mostra endpoint em uso + **origem**;
+- `!seturlghost limpar` (ou `reset`/`apagar`/`remover`) — volta à detecção.
+- Menu: linha na categoria **👻 PLUGIN FANTASMA** do `menudono`, e
+  `'seturlghost'` na lista do `menudono` em `blockPv.js` (junto com
+  `ghostcmd`/`addghostcmd`/`delghostcmd`, que faltavam nessa lista).
+
+**LOG DE BOOT — agora SEMPRE mostra a URL.** `resumoParaLog` ganhou
+`opts.sempre` e o campo **`Origem`**:
+```
+🔐 AntiFantasma (plugin remoto)
+   URL pública: https://meuservidor.com
+   Origem:      gravada com !seturlghost
+   Porta da API: 12000
+   Endpoint:    https://meuservidor.com/api/antifantasma/exec
+```
+Antes, um bot **sem** URL detectada não imprimia nada (o bloco era omitido) —
+ou seja, quem mais precisava da informação era quem não a via. Agora
+`start.js` passa `sempre: true` e, quando não há URL, o log diz *"não
+detectada"* e aponta o `!seturlghost`.
+
+**Integrações**: `start.js` (boot), `api.js` (log ao subir a API),
+`!ghostcmd` (seção *URL DO SERVIDOR* com endpoint + origem),
+`!addghostcmd` (o arquivo entregue passa a apontar para a URL manual) e o
+diagnóstico do `ghostDiagUrl` (primeira linha é a URL gravada).
+
+**Testes**: `tests/seturlghost.test.js` — **13 testes / 87 asserções**, rodando
+o **handler real** com socket falso: normalização/validação, robustez com 26
+entradas, persistência em disco, precedência, `resumoParaLog` (origem + sempre),
+os três modos do comando, NÃO-dono barrado, `!addghostcmd` entregando o arquivo
+com a URL manual, `!ghostcmd` e menu/blockPv.
+**Armadilha**: importar o `index.js` deixa timers/handles abertos — sem
+`process.exit(0)` no fim, a suíte fica pendurada (todos os testes passam, mas o
+processo nunca encerra).
+**Ajuste de teste antigo**: `tests/public-url.test.js` esperava a mensagem
+`ANTIFANTASMA_PUBLIC_URL` no log sem URL; a expectativa virou `seturlghost`,
+que é o caminho que o log passou a indicar (a variável continua valendo).
+
+**Suítes**: seturlghost 13/87, public-url 27/27, ghost-manager 37/154,
+antifantasma-plugin 21/154, usuario 40/40, entrega 19/19, e2e 22/22,
+instalacao-limpa 20/20, autossuficiente 14/14, esm 10/10, cjs 5/5, + 23 de
+regressão.
+
 ### LEVAR PARA OUTRO BOT — só o arquivo, nada do projeto (set/2026) ✅
 Pedido do dono: *"passar o comando de antifantasma para outro bot sem ele
 precisar dos arquivos diversos que realmente executa"*. Ou seja: o outro bot

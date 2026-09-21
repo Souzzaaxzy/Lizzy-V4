@@ -29,6 +29,7 @@ import * as ghostKeys from './antifantasma/keys.js';
 import { verificarSaude as ghostVerificarSaude } from './antifantasma/health.js';
 import { endpointAntiFantasma as ghostEndpointUrl, escolherPorta as ghostEscolherPorta, portasPublicadas as ghostPortasPublicadas } from './utils/publicUrl.js';
 import { portaEmUso as ghostPortaEmUso } from './antifantasma/api.js';
+import * as ghostUrlManualModule from './antifantasma/urlManual.js';
 import {
   isGroupStatusContent,
   buildGroupStatusRevokePayloads,
@@ -2583,15 +2584,24 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       if (ativa > 0) return ativa;
       return ghostEscolherPorta();
     };
+    // Lê a URL gravada com `!seturlghost`. É ela que vence a detecção: quem
+    // digitou a URL espera que valha, sem mexer em variável de ambiente.
+    const ghostUrlManual = () => {
+      try { return ghostUrlManualModule.lerUrlManual(); } catch { return null; }
+    };
     const ghostPortaOpts = () => {
       const p = ghostPortaAtiva();
-      return p > 0 ? { porta: p } : {};
+      const manual = ghostUrlManual();
+      return manual ? { porta: p, urlManual: manual } : (p > 0 ? { porta: p } : {});
     };
     const ghostEndpoint = () => ghostEndpointUrl(process.env, ghostPortaOpts());
     // Diagnóstico para quando a URL não é detectada: mostra o que o bot ENXERGA
     // no ambiente, para o dono saber o que falta (sem expor nada sensível).
     const ghostDiagUrl = () => {
       const linhas = ['*O que eu procurei:*'];
+      // A URL gravada com `!seturlghost` é a primeira coisa a checar: se ela
+      // existe, é ela que vale e o resto do diagnóstico é irrelevante.
+      linhas.push(`• URL gravada (!seturlghost): ${ghostUrlManual() || 'nenhuma'}`);
       linhas.push(`• RUNTIME_URL: ${process.env.RUNTIME_URL ? 'presente' : 'ausente'}`);
       linhas.push(`• RUNTIME_ID: ${process.env.RUNTIME_ID || 'ausente'}`);
       linhas.push(`• HOSTNAME: ${process.env.HOSTNAME || 'ausente'}`);
@@ -39591,7 +39601,19 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
             ? `🌐 Servidor: ONLINE\n🔌 API: FUNCIONAL${saude.versao ? ` (v${saude.versao})` : ''}`
             : `🌐 Servidor: ${saude.tipo === 'offline' ? 'OFFLINE' : 'ERRO'}\n🔌 API: ${saude.tipo === 'offline' ? 'INDISPONÍVEL' : 'ERRO'}`;
 
+          const endpointAtual = ghostEndpoint();
+          const urlManual = ghostUrlManual();
+          const origemUrl = urlManual
+            ? 'gravada com !seturlghost'
+            : 'automática';
+
           const partes = [`👻 *PLUGIN FANTASMA*`, '', linhaServidor, ''];
+          partes.push('🌐 *URL DO SERVIDOR*');
+          partes.push(endpointAtual ? `🔗 ${endpointAtual}` : '🔗 não detectada');
+          partes.push(`📍 Origem: ${origemUrl}`);
+          if (urlManual) partes.push(`✍️ Manual: ${urlManual}`);
+          partes.push(`${groupPrefix}seturlghost <url> para alterar`);
+          partes.push('');
 
           if (lista.length) {
             partes.push('🔑 *CHAVES*', '');
@@ -39860,6 +39882,84 @@ agora todo ataque fantasma sera detectado e banido automaticamente\`);
         } catch (e) {
           console.error('[DELGHOSTCMD] Erro:', e?.message || e);
           await reply('❌ Não foi possível revogar a key.');
+        }
+        break;
+
+      // ── 🌐 URL DO SERVIDOR DO PLUGIN FANTASMA (exclusivo do dono) ──────
+      // O dono digita o endereço público da API. O que ele grava aqui VENCE a
+      // detecção automática (runtime/Render/Pterodactyl...) — útil quando o bot
+      // está atrás de proxy, túnel ou domínio próprio, casos em que a detecção
+      // não acerta. Sem argumento, mostra a URL atual e a origem.
+      case 'seturlghost':
+        try {
+          if (!canUseOwnerCmd('seturlghost')) return reply('Este comando é apenas para o dono do bot!');
+
+          const argUrl = String(q || '').trim();
+
+          // Ver / limpar
+          if (!argUrl || ['ver', 'status'].includes(argUrl.toLowerCase())) {
+            const manualAtual = ghostUrlManual();
+            const endpointAtual2 = ghostEndpoint();
+            return nazu.sendMessage(from, {
+              text: [
+                '👻 *URL DO SERVIDOR — PLUGIN FANTASMA*',
+                '',
+                `🔗 Endpoint em uso: ${endpointAtual2 || 'não detectado'}`,
+                `📍 Origem: ${manualAtual ? 'gravada com !seturlghost' : 'detecção automática'}`,
+                manualAtual ? `✍️ URL manual: ${manualAtual}` : '',
+                '',
+                `Use: ${groupPrefix}seturlghost <url>`,
+                `Ex.:  ${groupPrefix}seturlghost https://meuservidor.com`,
+                `Para voltar à detecção automática: ${groupPrefix}seturlghost limpar`,
+              ].filter(Boolean).join('\n'),
+            }, { quoted: info });
+          }
+
+          // Limpar: volta a valer a detecção automática.
+          if (['limpar', 'reset', 'apagar', 'remover'].includes(argUrl.toLowerCase())) {
+            const r = ghostUrlManualModule.limparUrlManual();
+            if (!r.ok) return reply('❌ Não foi possível remover a URL gravada.');
+            const agora = ghostEndpoint();
+            return nazu.sendMessage(from, {
+              text: [
+                '👻 *PLUGIN FANTASMA*',
+                '',
+                '🗑️ URL manual removida.',
+                `🔗 Endpoint agora: ${agora || 'não detectado (volte a definir a URL)'}`,
+                '📍 Origem: detecção automática',
+              ].join('\n'),
+            }, { quoted: info });
+          }
+
+          // Gravar
+          const res = ghostUrlManualModule.gravarUrlManual(argUrl);
+          if (!res.ok) {
+            return reply(
+              '❌ URL inválida.\n\n' +
+              'Envie um endereço como `https://meuservidor.com` (com ou sem o esquema).\n' +
+              'Obs.: `http://` só é aceito em endereço local — a KEY do usuário não pode\n' +
+              'trafegar sem TLS.'
+            );
+          }
+
+          const endpointNovo = ghostEndpoint();
+          console.log(`[SETURLGHOST] URL do servidor definida: ${res.url}`);
+          return nazu.sendMessage(from, {
+            text: [
+              '👻 *PLUGIN FANTASMA*',
+              '',
+              '✅ URL do servidor definida.',
+              '',
+              `🔗 ${res.url}`,
+              `📡 Endpoint: ${endpointNovo}`,
+              '',
+              '📍 Esta URL agora vence a detecção automática.',
+              `O ${groupPrefix}addghostcmd vai entregar o arquivo apontando para ela.`,
+            ].join('\n'),
+          }, { quoted: info });
+        } catch (e) {
+          console.error('[SETURLGHOST] Erro:', e?.message || e);
+          await reply('❌ Não foi possível definir a URL do servidor.');
         }
         break;
       default:

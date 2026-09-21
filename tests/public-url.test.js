@@ -278,7 +278,9 @@ test('resumoParaLog traz URL, porta e endpoint', () => {
 test('sem URL, o log orienta o administrador', () => {
   const r = m.resumoParaLog({ ANTIFANTASMA_PORT: '9000' });
   truthy(r, 'ainda há o que logar (porta definida)');
-  truthy(r.texto.includes('ANTIFANTASMA_PUBLIC_URL'), 'aponta a variável manual');
+  // O caminho mais direto hoje é o comando; a variável de ambiente continua
+  // valendo, mas quem lê o log precisa saber que dá para resolver ali mesmo.
+  truthy(r.texto.includes('seturlghost'), 'aponta o comando !seturlghost');
 });
 
 test('sem nada configurado, não loga (não polui o boot)', () => {

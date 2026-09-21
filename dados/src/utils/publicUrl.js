@@ -215,6 +215,12 @@ function urlDoRuntimeParaPorta(env, porta) {
 export function detectarUrlPublica(env = process.env, opts = {}) {
   if (!env || typeof env !== 'object') return null;
 
+  // URL gravada À MÃO pelo dono (`!seturlghost`) vence tudo. Vem por `opts` em
+  // vez de ser lida aqui: este módulo é puro em relação ao ambiente (não toca
+  // disco), o que o mantém testável e sem dependência do banco de dados.
+  const manual = normalizar(opts.urlManual);
+  if (manual) return manual;
+
   // Override do administrador tem precedência absoluta (e ignora a porta).
   for (const nome of ['ANTIFANTASMA_PUBLIC_URL', 'PUBLIC_URL']) {
     const normalizada = normalizar(env[nome]);
@@ -308,16 +314,32 @@ export function escolherPorta(env = process.env) {
  */
 export function resumoParaLog(env = process.env, opts = {}) {
   const porta = Number(opts.porta) > 0 ? Number(opts.porta) : portaConfigurada(env);
-  const url = detectarUrlPublica(env, { porta });
+  const url = detectarUrlPublica(env, { porta, urlManual: opts.urlManual });
   const endpoint = url ? `${url}/api/antifantasma/exec` : null;
 
-  if (!url && !porta) return null;
+  // `opts.sempre`: o boot sempre imprime o bloco (mesmo sem URL/porta), para o
+  // dono ver de relance qual endereço o servidor está anunciando — inclusive
+  // quando não há nenhum. Sem isso, um bot sem URL não dizia nada no log.
+  if (!url && !porta && !opts.sempre) return null;
+
+  // De onde veio a URL: gravada à mão, variável de ambiente ou detecção
+  // automática. Sem isso, "URL pública: X" não diz se é o que o dono digitou.
+  const origem = normalizar(opts.urlManual)
+    ? 'gravada com !seturlghost'
+    : (normalizar(env?.ANTIFANTASMA_PUBLIC_URL) || normalizar(env?.PUBLIC_URL))
+      ? 'variável de ambiente'
+      : 'detectada automaticamente';
 
   const linhas = ['🔐 AntiFantasma (plugin remoto)'];
-  if (url) linhas.push(`   URL pública: ${url}`);
-  else linhas.push('   URL pública: não detectada (defina ANTIFANTASMA_PUBLIC_URL)');
+  if (url) {
+    linhas.push(`   URL pública: ${url}`);
+    linhas.push(`   Origem:      ${origem}`);
+  } else {
+    linhas.push('   URL pública: não detectada');
+    linhas.push('   Use o comando !seturlghost <url> para definir manualmente');
+  }
   linhas.push(`   Porta da API: ${porta || 'não configurada (defina ANTIFANTASMA_PORT)'}`);
   if (endpoint) linhas.push(`   Endpoint:    ${endpoint}`);
 
-  return { url, porta, endpoint, texto: linhas.join('\n') };
+  return { url, porta, endpoint, origem, texto: linhas.join('\n') };
 }

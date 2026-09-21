@@ -303,13 +303,18 @@ async function startBot(codeMode = false) {
   const serverIP = await getServerIP();
   info(`🌐 IP do Servidor: ${colors.yellow}${serverIP}${colors.reset}`);
 
-  // URL pública HTTPS detectada automaticamente (a mesma que vai no adaptador
-  // do AntiFantasma). A porta também é escolhida sozinha (a publicada do
-  // runtime, quando não houver ANTIFANTASMA_PORT). Só aparece se houver o que
-  // mostrar.
+  // URL pública HTTPS do servidor — a mesma que vai no adaptador do AntiFantasma
+  // e a que os clientes usam para falar com a API. SEMPRE aparece no boot: é a
+  // informação que o dono precisa para saber se o endereço anunciado está certo
+  // (e a URL gravada com !seturlghost vence a detecção automática).
   try {
     const { resumoParaLog, escolherPorta } = await import('../utils/publicUrl.js');
-    const resumo = resumoParaLog(process.env, { porta: escolherPorta() });
+    const { lerUrlManual } = await import('../antifantasma/urlManual.js');
+    const resumo = resumoParaLog(process.env, {
+      porta: escolherPorta(),
+      urlManual: lerUrlManual(),
+      sempre: true,
+    });
     if (resumo) {
       for (const linha of resumo.texto.split('\n')) info(linha);
     }

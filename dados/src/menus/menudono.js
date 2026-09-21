@@ -268,6 +268,9 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 │    Revogar uma Key
 │ 🧹 ${prefix}delghostcmd alt
 │    Apagar TODAS as Keys
+│ 🌐 ${prefix}seturlghost <url>
+│    Definir a URL do servidor
+│    (sem url: ver | 'limpar' p/ automático)
 ╰──────────────
 ╭─────────────────╮
 ╰─────────────────╯
