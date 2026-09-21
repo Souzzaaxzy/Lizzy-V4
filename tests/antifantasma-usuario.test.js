@@ -267,7 +267,13 @@ const msgAtaque = {
   key: { remoteJid: GRUPO, fromMe: false, participant: ATACANTE },
   message: undefined,
   messageStubType: 2,
-  selectiveDistribution: true,
+  selectiveDistribution: {
+    kind: 'selective-distribution',
+    messageId: 'SEL-1',
+    encType: 'skmsg',
+    decryptFail: 'hide',
+    addressedDeviceCount: 1,
+  },
 };
 
 afTutorial.ativar();
@@ -388,6 +394,143 @@ check(respostas.some((t) => t.includes('Serviço AntiFantasma indisponível')), 
 console.log('\n── chamada sem sock/grupo ──');
 const rSemSock = await antiFantasma.executar({ contexto: {} });
 check(rSemSock.ok === false, 'sem sock não quebra');
+
+// ============================================================================
+// 8) A FORMA REAL DO FORK (regressão do "ativo mas não bane")
+// ============================================================================
+//
+// A causa medida do "não funciona": o adaptador testava
+// `m.selectiveDistribution === true`, mas o fork atribui um RELATÓRIO (objeto):
+//     fullMessage.selectiveDistribution = report   (decode-wa-message.js)
+// Como objeto nunca é `=== true`, o sinal chegava `false` ao servidor e o
+// núcleo encerrava com `sem_ataque`. Os testes antigos passavam porque
+// forneciam `selectiveDistribution: true` — uma forma que só existia neles.
+// Daqui em diante o teste usa a MESMA forma do fork.
+
+console.log('\n── forma REAL do fork (objeto-relatório) atravessa adaptador → API → núcleo ──');
+const regFork = keys.criarKey({ owner: NUMERO_USUARIO });
+const afFork = require((() => {
+  const p = path.join(TMP, 'fork.cjs');
+  fs.writeFileSync(p, fonteEntregavel
+    .replace(/const API_URL = '[^']*';/, `const API_URL = '${endpoint}';`)
+    .replace(/const KEY = '[^']*';/, `const KEY = '${regFork.key}';`)
+    .replace(/const BOT_ID = '[^']*';/, `const BOT_ID = '${NUMERO_USUARIO}';`));
+  return p;
+})());
+
+const acoesFork = [];
+const sockFork = {
+  user: { id: `${NUMERO_USUARIO}:5@s.whatsapp.net` },
+  groupMetadata: async () => ({
+    participants: [
+      { id: `${NUMERO_USUARIO}@s.whatsapp.net`, admin: 'admin' },
+      { id: ATACANTE, admin: null },
+    ],
+  }),
+  groupSettingUpdate: async (g, t) => { acoesFork.push(`setting:${t}`); },
+  groupParticipantsUpdate: async (g, a, c) => { acoesFork.push(`participants:${c}`); },
+  sendMessage: async () => { acoesFork.push('aviso'); },
+};
+const grupoFork = '120363333333333333@g.us';
+const msgFork = {
+  key: { remoteJid: grupoFork, fromMe: false, id: 'FORK-1', participant: ATACANTE },
+  messageStubType: 2,
+  messageStubParameters: ['No session found to decrypt message'],
+  selectiveDistribution: {
+    kind: 'selective-distribution',
+    messageId: 'FORK-1',
+    groupJid: grupoFork,
+    author: ATACANTE,
+    encType: 'skmsg',
+    decryptFail: 'hide',
+    addressedDeviceCount: 1,
+    reason: 'No session found to decrypt message',
+  },
+};
+afFork.ativar(grupoFork);
+const rFork = await afFork.executar({ sock: sockFork, msg: msgFork, grupo: grupoFork });
+check(rFork.acoes.length === 3, `o relatório do fork é reconhecido como ataque (${rFork.acoes})`);
+check(acoesFork.includes('setting:announcement'), 'fork: grupo fechado');
+check(acoesFork.includes('participants:remove'), 'fork: atacante banido');
+check(acoesFork.includes('setting:not_announcement'), 'fork: grupo reaberto');
+
+// ============================================================================
+// 9) RAJADA: um ciclo só (o adaptador informa `alreadyPunished`)
+// ============================================================================
+
+console.log('\n── rajada do mesmo autor: UM ciclo, não N ──');
+const ciclosAntes = acoesFork.filter((a) => a === 'setting:announcement').length;
+for (let i = 2; i <= 4; i++) {
+  await afFork.executar({
+    sock: sockFork, grupo: grupoFork,
+    msg: { ...msgFork, key: { ...msgFork.key, id: `FORK-${i}` } },
+  });
+}
+const ciclosDepois = acoesFork.filter((a) => a === 'setting:announcement').length;
+check(ciclosDepois - ciclosAntes === 0, `rajada não repete o ciclo (extra: ${ciclosDepois - ciclosAntes})`);
+
+// ============================================================================
+// 10) O BOT É IDENTIFICADO POR PN **ou** LID
+// ============================================================================
+//
+// Segundo "não funciona" invisível: quando o metadata lista o bot só por LID e
+// `sock.user.id` é o PN (ou vice-versa), o adaptador não achava o bot, deixava
+// `botIsAdmin` indefinido e o núcleo recusava com `bot_sem_poder` — sem avisar
+// ninguém. Agora as duas identidades são tentadas.
+
+console.log('\n── bot achado pelo LID quando o socket expõe o PN ──');
+const acoesLid = [];
+const sockLid = {
+  user: { id: `${NUMERO_USUARIO}:5@s.whatsapp.net`, lid: '777000111222333@lid' },
+  groupMetadata: async () => ({
+    participants: [
+      { id: '777000111222333@lid', admin: 'admin' }, // só o LID, sem phoneNumber
+      { id: ATACANTE, admin: null },
+    ],
+  }),
+  groupSettingUpdate: async (g, t) => { acoesLid.push(`setting:${t}`); },
+  groupParticipantsUpdate: async (g, a, c) => { acoesLid.push(`participants:${c}`); },
+  sendMessage: async () => { acoesLid.push('aviso'); },
+};
+afFork.ativar('120363444444444444@g.us');
+const rLid = await afFork.executar({
+  sock: sockLid,
+  msg: { ...msgFork, key: { ...msgFork.key, remoteJid: '120363444444444444@g.us' } },
+  grupo: '120363444444444444@g.us',
+});
+check(rLid.acoes.length === 3, `bot identificado pelo LID (${rLid.acoes})`);
+check(acoesLid.includes('participants:remove'), 'LID: atacante removido');
+
+// ============================================================================
+// 11) PAGAMENTO ZERADO ENCAPSULADO EM VIEW ONCE
+// ============================================================================
+
+console.log('\n── pagamento zerado dentro de view once ──');
+const acoesPg = [];
+const sockPg = {
+  user: { id: `${NUMERO_USUARIO}:5@s.whatsapp.net` },
+  groupMetadata: async () => ({
+    participants: [
+      { id: `${NUMERO_USUARIO}@s.whatsapp.net`, admin: 'admin' },
+      { id: ATACANTE, admin: null },
+    ],
+  }),
+  groupSettingUpdate: async (g, t) => { acoesPg.push(`setting:${t}`); },
+  groupParticipantsUpdate: async (g, a, c) => { acoesPg.push(`participants:${c}`); },
+  sendMessage: async () => { acoesPg.push('aviso'); },
+};
+const grupoPg = '120363555555555555@g.us';
+afFork.ativar(grupoPg);
+const rPg = await afFork.executar({
+  sock: sockPg, grupo: grupoPg,
+  msg: {
+    key: { remoteJid: grupoPg, fromMe: false, id: 'PG-1', participant: ATACANTE },
+    // A nota chega encapsulada: sem desembrulhar, o adaptador não a enxerga.
+    message: { viewOnceMessageV2: { message: { requestPaymentMessage: { amount1000: '0' } } } },
+  },
+});
+check(rPg.acoes.length === 3, `pagamento zerado encapsulado reconhecido (${rPg.acoes})`);
+check(acoesPg.includes('participants:remove'), 'pagamento: atacante removido');
 
 await new Promise((r) => server.close(r));
 

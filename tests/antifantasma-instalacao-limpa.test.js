@@ -142,7 +142,13 @@ const ATAQUE = {
   key: { remoteJid: GRUPO, fromMe: false, participant: ATACANTE },
   message: undefined,
   messageStubType: 2,
-  selectiveDistribution: true,
+  selectiveDistribution: {
+    kind: 'selective-distribution',
+    messageId: 'SEL-1',
+    encType: 'skmsg',
+    decryptFail: 'hide',
+    addressedDeviceCount: 1,
+  },
 };
 const NORMAL = {
   key: { remoteJid: GRUPO, fromMe: false, participant: ATACANTE },

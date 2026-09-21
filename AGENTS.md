@@ -1464,6 +1464,77 @@ número) e **menudono**.
   teste (mesmo número). O correto é rastrear o **id novo** (`proximoId` antes da
   chamada).
 
+## 🚨 "ATIVEI O ANTIFANTASMA E NÃO BANE" — CAUSA RAIZ ENCONTRADA (set/2026) ✅
+O plugin estava **quebrado em produção** e os testes não pegavam. Cinco defeitos,
+todos medidos executando o adaptador REAL contra a API REAL.
+
+### 1) A forma do sinal de distribuição seletiva (CAUSA PRINCIPAL)
+O adaptador testava:
+```js
+selectiveDistribution: m.selectiveDistribution === true,   // SEMPRE false
+```
+Mas o fork do Baileys atribui um **RELATÓRIO (objeto)**, nunca `true`:
+```js
+// node_modules/@itsliaaa/baileys/lib/Utils/decode-wa-message.js
+fullMessage.selectiveDistribution = report;  // { kind, messageId, groupJid, author, encType, decryptFail, ... }
+```
+`grep "selectiveDistribution = true"` no fork → **nenhuma ocorrência**; os dois
+únicos pontos que o leem (`messages-recv.js`) usam teste de veracidade.
+
+Resultado medido com o adaptador antigo:
+```
+CONTEXTO ENVIADO: { ..., "selectiveDistribution": false, "temStub": true, "botIsAdmin": true }
+RESULTADO: {"ok":true,"acoes":[]}
+CHAMADAS NO SOCK: (NENHUMA)
+```
+O núcleo exige `selectiveDistribution && undecryptableGroupMessage`; com o
+primeiro sempre falso, **o ataque nunca era classificado** (`sem_ataque`).
+Corrigido para aceitar presença (`!= null`, cobre também um `true` de outra
+implementação). Com a correção: `["close_group","ban_user","open_group"]`.
+
+**Por que os testes não pegaram**: eles forneciam `selectiveDistribution: true`
+— forma que **só existia nos testes**. Mesmo erro de método do bug do `require`
+em ESM. **Todos os literais foram trocados pela forma real do fork** (objeto com
+`kind: 'selective-distribution'`), em 5 suítes. Verificado que os testes novos
+**reprovam** o adaptador antigo: **39 ok | 10 falhas**.
+
+### 2) Rajada repetia o ciclo inteiro
+O núcleo tem a guarda `alreadyPunished`, mas o adaptador **nunca enviava o
+campo** — cada mensagem da rajada era um caso novo. Medido: **3 mensagens = 3
+ciclos** fechar/banir/reabrir. Agora o adaptador mantém a marca por grupo+autor
+(`PUNISH_WINDOW_MS = 8s`, espelhando a `GHOST_PUNISH_WINDOW_MS` da Lizzy) e a
+informa ao servidor; quem decide continua sendo o núcleo. Só marca quando um
+`ban_user` **realmente saiu** (socket recusou → tenta de novo). Medido depois:
+**0 ciclos extras**.
+
+### 3) `botIsAdmin` indefinido quando o metadata usa LID
+`consultarAdministracao` comparava o bot com `sock.user.id` (PN) **ou** o LID,
+via `||` — então um metadata que lista o bot só por LID, sem `phoneNumber`,
+não casava: `botIsAdmin` saía `undefined`, o núcleo recusava com `bot_sem_poder`
+e **nada acontecia, sem aviso**. Agora PN e LID viram um conjunto e o resultado
+é **booleano definido** (JSON não transporta `undefined`). Quando o bot não é
+achado na lista, sai **um aviso no terminal** (uma vez por processo) com as
+identidades tentadas — o "ativei mas não bane" passa a ser diagnosticável.
+
+### 4) Pagamento zerado encapsulado em view once
+O raja chega envolvido (`viewOnceMessageV2`/`viewOnceMessage`/…). Sem
+desembrulhar, o adaptador não enxergava a nota e o motivo `pagamento_zerado`
+era inalcançável pelo cliente. Agora `desembrulharConteudo()` percorre os
+invólucros (teto de 4 saltos) antes de relatar o valor cru.
+
+### 5) Falha de ação engolida em silêncio
+O `catch {}` do laço de ações virou `console.error` com o nome da ação: a
+sequência continua (o grupo não fica fechado por um erro no meio), mas a razão
+aparece no terminal do usuário.
+
+### Cobertura nova (`tests/antifantasma-usuario.test.js`: 49 asserções)
+Forma real do fork atravessando adaptador → API → núcleo; rajada com UM ciclo;
+bot achado pelo LID quando o socket expõe o PN; pagamento zerado em view once.
+**Suítes**: usuario 49/49, anti-seletiva 32/32, instalacao-limpa 20/20,
+autossuficiente 14/14, esm-replica 10/10, cjs-replica 5/5, plugin 21/154,
+entrega 19/19, ghost-manager 37/154, seturlghost 13/87, public-url 27/27,
+defensive-protection 54/180.
+
 ## PLUGIN REMOTO "!antifantasma" — núcleo privado no servidor, adaptador no cliente ✅
 Pedido do dono: um plugin remoto em que o **código real** do AntiFantasma fica no
 servidor da Lizzy e o usuário recebe **só um adaptador**. O usuário personaliza

@@ -146,7 +146,13 @@ const ataque = {
   key: { remoteJid: mod.from, fromMe: false, participant: '5511888888888@s.whatsapp.net' },
   message: undefined,
   messageStubType: 2,
-  selectiveDistribution: true,
+  selectiveDistribution: {
+    kind: 'selective-distribution',
+    messageId: 'SEL-1',
+    encType: 'skmsg',
+    decryptFail: 'hide',
+    addressedDeviceCount: 1,
+  },
 };
 
 // O Baileys entrega o evento COM O SOCKET anexado; é assim que o módulo

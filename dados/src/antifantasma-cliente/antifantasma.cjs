@@ -185,6 +185,42 @@ async function executarAcao(acao, ctx) {
 }
 
 /**
+ * Desembrulha os invólucros de "ver uma vez"/edição até chegar no conteúdo
+ * real. O raja pode vir encapsulado num view once; sem desembrulhar, o
+ * adaptador não enxergaria a nota de pagamento.
+ */
+function desembrulharConteudo(conteudo) {
+  let atual = conteudo && typeof conteudo === 'object' ? conteudo : null;
+  // Teto de 4 saltos: mais que isso é estrutura inesperada, não vale insistir.
+  for (let i = 0; i < 4 && atual; i += 1) {
+    const proximo =
+      atual.viewOnceMessage?.message ||
+      atual.viewOnceMessageV2?.message ||
+      atual.viewOnceMessageV2Extension?.message ||
+      atual.documentWithCaptionMessage?.message ||
+      atual.editedMessage?.message?.protocolMessage?.editedMessage ||
+      null;
+    if (!proximo || proximo === atual) break;
+    atual = proximo;
+  }
+  return atual;
+}
+
+/**
+ * Relata a presença e o valor CRU do pagamento, sem julgar. O servidor decide o
+ * que fazer com isso (é lá que vive a regra do "pagamento zerado").
+ */
+function extrairPagamento(conteudo) {
+  const nota = desembrulharConteudo(conteudo)?.requestPaymentMessage;
+  if (!nota || typeof nota !== 'object') return null;
+  return {
+    presente: true,
+    amount1000: nota.amount1000 != null ? String(nota.amount1000) : null,
+    amountValue: nota.amount?.value != null ? String(nota.amount.value) : null,
+  };
+}
+
+/**
  * Extrai os dados que a API precisa a partir da mensagem do Baileys.
  *
  * Isto é OBSERVAÇÃO, não decisão: o adaptador apenas relata o que viu. Qual
@@ -193,33 +229,39 @@ async function executarAcao(acao, ctx) {
  *
  * Existe para o usuário não precisar montar nada: basta passar `msg`.
  */
-function extrairContexto(msg, grupo, autor) {
+function extrairContexto(msg, grupo, autor, jaPunido = false) {
   const m = msg && typeof msg === 'object' ? msg : {};
   const key = m.key && typeof m.key === 'object' ? m.key : {};
   const conteudo = m.message && typeof m.message === 'object' ? m.message : null;
 
-  // Pagamento: relata a presença e o valor cru, sem julgar. O servidor decide o
-  // que fazer com isso (é lá que vive a regra do "pagamento zerado").
-  let pagamento = null;
-  const nota = conteudo?.requestPaymentMessage;
-  if (nota) {
-    pagamento = {
-      presente: true,
-      amount1000: nota.amount1000 != null ? String(nota.amount1000) : null,
-      amountValue: nota.amount?.value != null ? String(nota.amount.value) : null,
-    };
-  }
+  const pagamento = extrairPagamento(conteudo);
+
+  // A fork reporta a distribuição seletiva como um RELATÓRIO (objeto), não como
+  // o booleano `true`: `fullMessage.selectiveDistribution = report` (ver
+  // decode-wa-message.js). Testar `=== true` daria sempre `false` e o ataque
+  // nunca seria classificado — era a causa de "ativo o !antifantasma mas não
+  // bane". Aqui basta a PRESENÇA da marca (aceita também `true`, de
+  // implementações que só sinalizam).
+  const marcaSeletiva = m.selectiveDistribution;
+  const temMarcaSeletiva = marcaSeletiva != null && marcaSeletiva !== false;
+
+  // O autor nunca deve ser o próprio bot: se a lib não trouxer o participante,
+  // relata nulo (o núcleo trata como "autor_desconhecido") em vez de inventar.
+  const autorSeguro = autor || key.participantAlt || key.participant || null;
 
   return {
     isGroup: typeof grupo === 'string' && grupo.endsWith('@g.us'),
     fromMe: key.fromMe === true,
-    sender: autor || null,
+    sender: autorSeguro,
     // O que o WhatsApp entrega: a mensagem veio decifrada?
     temMensagem: Boolean(conteudo),
     // Marca de transporte da fork (distribuição seletiva).
-    selectiveDistribution: m.selectiveDistribution === true,
+    selectiveDistribution: temMarcaSeletiva,
     // Stub de grupo (mensagem que não pôde ser decifrada).
     temStub: m.messageStubType != null,
+    // O adaptador apenas INFORMA que já puniu este autor nesta rajada; quem
+    // decide se isso encerra o caso continua sendo o núcleo.
+    alreadyPunished: jaPunido === true,
     ...(pagamento ? { pagamento } : {}),
   };
 }
@@ -244,6 +286,56 @@ function mesmoUsuario(a, b) {
  */
 const CACHE_ADM_MS = 15000;
 const cacheAdm = new Map();
+
+/**
+ * Janela de supressão por grupo+autor, espelhando a da Lizzy (`wasGhostPunished`).
+ *
+ * Sem ela, cada mensagem fantasma da mesma rajada é enviada à API como um caso
+ * novo e o cliente executa o ciclo fechar/banir/reabrir N vezes — medido: uma
+ * rajada de 3 mensagens produzia 3 ciclos. O servidor também tem a guarda
+ * (`alreadyPunished`), mas só consegue aplicá-la se o adaptador informar o
+ * estado; aqui ele apenas informa.
+ *
+ * 8s cobre uma rajada de ~80 mensagens a 100ms (a cadência do `!raja`) e libera
+ * rápido para o próximo ataque ser punido de novo.
+ */
+const PUNISH_WINDOW_MS = 8 * 1000;
+const punished = new Map();
+const PUNISH_KEY_SEP = '\u0000';
+
+/**
+ * Aviso de "não achei o bot no grupo" já emitido?
+ *
+ * É um erro de configuração do grupo (o bot não é admin, ou o metadata não usa a
+ * identidade que o socket expõe), não um evento por mensagem: repetir a cada
+ * mensagem poluiria o terminal do usuário. Uma vez por processo basta.
+ */
+let avisoBotNaoEncontrado = false;
+
+/** Este autor já foi punido neste grupo há pouco? */
+function wasPunished(grupo, autor) {
+  if (!grupo || !autor) return false;
+  const chave = `${grupo}${PUNISH_KEY_SEP}${autor}`;
+  const ate = punished.get(chave);
+  if (ate === undefined) return false;
+  if (Date.now() > ate) {
+    punished.delete(chave);
+    return false;
+  }
+  return true;
+}
+
+/** Marca o autor como punido, podando entradas vencidas para não crescer sem limite. */
+function markPunished(grupo, autor) {
+  if (!grupo || !autor) return;
+  const agora = Date.now();
+  if (punished.size > 256) {
+    for (const [k, ate] of punished) {
+      if (agora > ate) punished.delete(k);
+    }
+  }
+  punished.set(`${grupo}${PUNISH_KEY_SEP}${autor}`, agora + PUNISH_WINDOW_MS);
+}
 
 function chaveCacheAdm(grupo, autor) {
   return `${grupo}|${autor || ''}`;
@@ -273,18 +365,22 @@ async function consultarAdministracao(sock, grupo, autor) {
       : null;
 
     const participantes = Array.isArray(meta?.participants) ? meta.participants : [];
-    const ehAdmin = (p) => p && (p.admin === 'admin' || p.admin === 'superadmin');
+    const ehAdmin = (p) => Boolean(p) && (p.admin === 'admin' || p.admin === 'superadmin');
 
-    // O próprio bot: o JID vem do socket. Em Baileys é `sock.user.id`.
-    const eu = sock?.user?.id || sock?.user?.lid || null;
-    const meuNumero = typeof eu === 'string' ? eu.split(':')[0].split('@')[0] : null;
+    // O próprio bot: as duas formas de identidade que o socket oferece (PN e
+    // LID) viram um conjunto. Sem isso, um metadata que lista o bot só por LID
+    // enquanto `sock.user.id` é o PN não casava — `botIsAdmin` saía `undefined`,
+    // o núcleo recusava com `bot_sem_poder` e a proteção não fazia NADA, em
+    // silêncio. Era um "não funciona" invisível.
+    const bases = new Set();
+    for (const v of [sock?.user?.id, sock?.user?.lid]) {
+      if (typeof v === 'string' && v) bases.add(String(v).split(':')[0].split('@')[0]);
+    }
 
     const candidatosDe = (p) => [p?.id, p?.lid, p?.phoneNumber, p?.pn].filter(Boolean);
 
-    const acharMeu = participantes.find((p) => {
-      const cands = candidatosDe(p);
-      return cands.some((c) => mesmoUsuario(c, eu) || (meuNumero && mesmoUsuario(c, meuNumero)));
-    });
+    const acharMeu = participantes.find((p) =>
+      candidatosDe(p).some((c) => bases.has(String(c).split(':')[0].split('@')[0])));
 
     const acharAutor = autor
       ? participantes.find((p) => candidatosDe(p).some((c) => mesmoUsuario(c, autor)))
@@ -292,10 +388,23 @@ async function consultarAdministracao(sock, grupo, autor) {
 
     // Só considera resposta válida se veio lista de participantes.
     if (participantes.length > 0) {
+      // Booleano DEFINIDO, nunca `undefined`: `undefined` não atravessa o JSON
+      // e o servidor receberia um contexto sem o campo, sem saber por quê.
       resultado = {
         botIsAdmin: ehAdmin(acharMeu),
         senderIsPrivileged: ehAdmin(acharAutor),
       };
+      if (!acharMeu && !avisoBotNaoEncontrado) {
+        // Diagnóstico honesto: sem achar o bot na lista, `botIsAdmin` é falso e
+        // o anti não age. Isto explica "ativei mas não bane" no terminal do
+        // usuário, em vez de deixar o silêncio.
+        avisoBotNaoEncontrado = true;
+        console.error(
+          '[AntiFantasma] não encontrei o bot na lista de participantes deste grupo; '
+          + 'sem admin o anti não age. Identidades tentadas:',
+          [...bases].join(', ')
+        );
+      }
     }
   } catch {
     // Sem metadata não dá para afirmar nada — o servidor decide com o resto.
@@ -366,8 +475,9 @@ async function executarInterno(params = {}) {
     return { ok: true, acoes: [], motivo: 'desativado' };
   }
 
-  const autor = params.autor || params.sender || key.participantAlt || key.participant
-    || (key.fromMe ? BOT_ID : null) || null;
+  // Nunca usa o próprio BOT_ID como autor: se o participante não vier, relata
+  // nulo (o núcleo responde `autor_desconhecido`) em vez de apontar o bot.
+  const autor = params.autor || params.sender || key.participantAlt || key.participant || null;
   const reply = typeof params.reply === 'function' ? params.reply : null;
 
   if (!sock || !grupo) {
@@ -380,9 +490,10 @@ async function executarInterno(params = {}) {
   }
 
   // Contexto: usa o que o usuário passou ou extrai da mensagem.
+  const jaPunido = wasPunished(grupo, autor);
   const contexto = params.contexto && typeof params.contexto === 'object'
     ? { ...params.contexto }
-    : extrairContexto(msg, grupo, autor);
+    : extrairContexto(msg, grupo, autor, jaPunido);
 
   // Completa o que o usuário não informou: se o BOT pode agir e se o AUTOR é
   // privilegiado. Sem isso o servidor não tem como decidir.
@@ -431,8 +542,17 @@ async function executarInterno(params = {}) {
     try {
       const fez = await executarAcao(acao, { sock, grupo, autor });
       if (fez) executadas.push(acao);
-    } catch { /* segue para a próxima */ }
+    } catch (e) {
+      // A sequência continua (não deixar o grupo fechado por um erro no meio),
+      // mas a falha vai para o log: engolir em silêncio escondia o motivo de
+      // "não baniu", o mesmo tipo de cegueira que atrasou o diagnóstico antes.
+      console.error(`[AntiFantasma] ação "${acao}" falhou:`, e?.message || e);
+    }
   }
+
+  // Só marca quando uma punição REALMENTE saiu: se a API mandou banir e o socket
+  // recusou, o próximo evento ainda deve tentar de novo.
+  if (executadas.includes('ban_user')) markPunished(grupo, autor);
 
   // Aviso público, quando a API pediu. O texto vem do servidor.
   if (typeof resposta.body.notice === 'string' && resposta.body.notice && executadas.includes('ban_user')) {
