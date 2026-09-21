@@ -1991,26 +1991,38 @@ LID.
   (`DONO DO BOT`), preservando o comportamento antigo como fallback.
 - Falha de um dos envios vai para o log com `[DONO] ...` (não engole em silêncio).
 
-### Ajustes depois do primeiro uso real (set/2026) ✅
-Três coisas que só apareceram no aparelho:
+### Formato FINAL das duas mensagens (set/2026) ✅
+Depois de mais uma rodada no aparelho, o formato ficou assim:
 
-1. **Sem `quoted`.** As duas mensagens saem **soltas** no grupo (o terceiro
-   argumento do `sendMessage` foi removido) — antes respondiam à mensagem do
-   comando.
-2. **O catálogo não aparecia**: o WhatsApp respondia *"atualize o WhatsApp"*. O
-   card ia **só** com `catalog` (CatalogSnapshot); o app exige também o campo
-   **`product`** (ProductSnapshot) para desenhar. Agora o payload leva os dois, e
-   a imagem do produto é a própria foto do dono (`productId = DONO-<numero>`).
-   **Armadilha**: só `catalog` não basta — é essa a causa do "atualize o
-   WhatsApp".
-3. **Card de perfil completo** ("Conversar" / "Ver empresa" + nome e bio). Os
+1. **Catálogo = card "compartilhado do perfil"**: a foto do dono com **um único
+   botão "Ver"**. Vai como `interactiveMessage` com cabeçalho de imagem e botão
+   **`cta_catalog`**.
+   - **Armadilha medida**: `productMessage` com `catalog` (+ `product`) **não
+     renderiza** para número comum — o app responde *"atualize o WhatsApp"*. O
+     cartão de catálogo do WhatsApp exige **conta Business com catálogo no
+     Commerce Manager**; sem isso nenhum payload de catálogo aparece. O caminho
+     `interactiveMessage` + `cta_catalog` funciona sem essa exigência.
+2. **Card de perfil comercial** com nome, bio e "Conversar"/"Ver empresa". Os
    botões e o bloco de perfil saem dos campos do **vCard**:
    - `ORG` → "Ver empresa"
    - `TITLE` → cargo
-   - `NOTE` → a **bio** (`bioDono` = `👑 Dono do <bot> · fale comigo: <link>`)
+   - `NOTE` → a **bio**
    - `waid` → faz o app reconhecer o número como conta WhatsApp e oferecer
-     **"Conversar"**; sem ele o botão vira *"Convidar para o WhatsApp"*.
-   - `N`/`FN`/`URL` também vão no vCard.
+     "Conversar"; sem ele vira *"Convidar para o WhatsApp"*.
+   - `N`/`FN`/`URL` também vão.
+
+   **A bio agora é o RECADO real do dono**, lido com `fetchStatus`, com queda
+   para um texto montado quando ele não tem recado.
+   - **Bug corrigido**: `fetchStatus` devolve uma **LISTA**
+     (`[{ id, status, setAt }]`), não um objeto — ler `res?.status` no array dava
+     sempre `undefined` e a bio real nunca apareceria.
+
+   **Limite honesto**: "Ver empresa" só aparece se o número do dono for **conta
+   Business**. Em conta pessoal, o botão não é oferecido por mais que o vCard
+   tenha `ORG` — quem decide é o cliente do WhatsApp, não o payload.
+
+**Sem `quoted`**: as duas mensagens saem soltas no grupo (o terceiro argumento do
+`sendMessage` é omitido).
 
 **Armadilha de edição**: o bloco vive dentro de um `switch` de 36k linhas. Numa
 substituição por intervalo de linhas eu removi sem perceber (a) o `catch` do
@@ -2018,8 +2030,8 @@ card e (b) o bloco de fallback, e ainda troquei `nomedono` por `nomedo`
 (`ReferenceError` só visível em runtime). Desde então: `node --check` **e** rodar
 o teste do comando depois de qualquer splice.
 
-### Testes — `tests/dono-perfil.test.js` (32 asserções)
-Roda o **handler real** com socket falso: ordem catálogo→card, `catalogImage` =
+### Testes — `tests/dono-perfil.test.js` (34 asserções)
+Roda o **handler real** com socket falso: ordem catálogo→card, imagem + botão "Ver",
 foto atual do dono, troca de foto reflete no catálogo (sem cache),
 `businessOwnerJid`, vCard bem formado com `waid`/telefone, título/displayName =
 nome do dono, ausência de foto ainda manda o card (e não o texto) e fallback de
