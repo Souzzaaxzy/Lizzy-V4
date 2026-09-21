@@ -1997,13 +1997,20 @@ LID.
 Depois de mais uma rodada no aparelho, o formato ficou assim:
 
 1. **Catálogo = card "compartilhado do perfil"**: a foto do dono com **um único
-   botão "Ver"**. Vai como `interactiveMessage` com cabeçalho de imagem e botão
-   **`cta_catalog`**.
+   botão "Ver"**, e **sem nenhum texto** (sem caption/footer/title). Vai como
+   `interactiveMessage` com cabeçalho de imagem e botão **`cta_catalog`**.
    - **Armadilha medida**: `productMessage` com `catalog` (+ `product`) **não
      renderiza** para número comum — o app responde *"atualize o WhatsApp"*. O
      cartão de catálogo do WhatsApp exige **conta Business com catálogo no
      Commerce Manager**; sem isso nenhum payload de catálogo aparece. O caminho
      `interactiveMessage` + `cta_catalog` funciona sem essa exigência.
+   - **Armadilha do texto vazio**: remover o `caption` **quebra** o card! É o
+     `caption` que faz a fork criar o `header`; sem ele cai em
+     `Object.assign(undefined, m)` → `Cannot convert undefined or null to
+     object` e o catálogo nem é montado (o `try/catch` engolia). Medido:
+     `{image, nativeFlow}` → ERRO; `{image, title, footer, nativeFlow}` → ERRO;
+     `{image, caption: '', nativeFlow}` → OK. Por isso vai `caption: ''` (vazio
+     de propósito: cria o header e não mostra texto).
 2. **Card de perfil comercial** com nome, bio e "Conversar"/"Ver empresa". Os
    botões e o bloco de perfil saem dos campos do **vCard**:
    - `ORG` → "Ver empresa"
