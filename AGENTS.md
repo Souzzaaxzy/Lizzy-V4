@@ -1961,7 +1961,7 @@ dono** seguido do **card de perfil comercial** do número setado em `numerodono`
 Ordem explícita: **catálogo primeiro, card abaixo**.
 
 ### Como ficou (`index.js`, `case 'dono'`)
-1. **Catálogo primeiro.** Usa a nova estrutura `catalog` da fork
+1. **Catálogo primeiro.** Usa a estrutura `catalog` da fork (e o `product` junto — ver ajustes abaixo),
    (`ProductMessage.catalog` → `CatalogSnapshot`), que antes só montava `product`
    e por isso não produzia card de catálogo:
    ```js
@@ -1991,7 +1991,34 @@ LID.
   (`DONO DO BOT`), preservando o comportamento antigo como fallback.
 - Falha de um dos envios vai para o log com `[DONO] ...` (não engole em silêncio).
 
-### Testes — `tests/dono-perfil.test.js` (23 asserções)
+### Ajustes depois do primeiro uso real (set/2026) ✅
+Três coisas que só apareceram no aparelho:
+
+1. **Sem `quoted`.** As duas mensagens saem **soltas** no grupo (o terceiro
+   argumento do `sendMessage` foi removido) — antes respondiam à mensagem do
+   comando.
+2. **O catálogo não aparecia**: o WhatsApp respondia *"atualize o WhatsApp"*. O
+   card ia **só** com `catalog` (CatalogSnapshot); o app exige também o campo
+   **`product`** (ProductSnapshot) para desenhar. Agora o payload leva os dois, e
+   a imagem do produto é a própria foto do dono (`productId = DONO-<numero>`).
+   **Armadilha**: só `catalog` não basta — é essa a causa do "atualize o
+   WhatsApp".
+3. **Card de perfil completo** ("Conversar" / "Ver empresa" + nome e bio). Os
+   botões e o bloco de perfil saem dos campos do **vCard**:
+   - `ORG` → "Ver empresa"
+   - `TITLE` → cargo
+   - `NOTE` → a **bio** (`bioDono` = `👑 Dono do <bot> · fale comigo: <link>`)
+   - `waid` → faz o app reconhecer o número como conta WhatsApp e oferecer
+     **"Conversar"**; sem ele o botão vira *"Convidar para o WhatsApp"*.
+   - `N`/`FN`/`URL` também vão no vCard.
+
+**Armadilha de edição**: o bloco vive dentro de um `switch` de 36k linhas. Numa
+substituição por intervalo de linhas eu removi sem perceber (a) o `catch` do
+card e (b) o bloco de fallback, e ainda troquei `nomedono` por `nomedo`
+(`ReferenceError` só visível em runtime). Desde então: `node --check` **e** rodar
+o teste do comando depois de qualquer splice.
+
+### Testes — `tests/dono-perfil.test.js` (32 asserções)
 Roda o **handler real** com socket falso: ordem catálogo→card, `catalogImage` =
 foto atual do dono, troca de foto reflete no catálogo (sem cache),
 `businessOwnerJid`, vCard bem formado com `waid`/telefone, título/displayName =
