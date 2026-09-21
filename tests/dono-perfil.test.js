@@ -132,7 +132,8 @@ async function rodar(texto = '!dono') {
 
 console.log('\n── 1. o catálogo sai PRIMEIRO e o card logo abaixo ──');
 const env1 = await rodar();
-const comCatalogo = env1.filter(e => e.content?.catalog);
+// O catálogo agora é o card "compartilhado do perfil": imagem + botão "Ver".
+const comCatalogo = env1.filter(e => e.content?.nativeFlow);
 const comContato = env1.filter(e => e.content?.contacts);
 check(comCatalogo.length === 1, 'enviou 1 catálogo');
 check(comContato.length === 1, 'enviou 1 card de perfil comercial');
@@ -141,23 +142,21 @@ check(
   'ordem correta: catálogo antes do card'
 );
 
-console.log('\n── 2. o catálogo usa a FOTO REAL do dono ──');
-check(comCatalogo[0]?.content?.catalog?.catalogImage?.url === fotoAtual,
-  `catalogImage = foto atual do dono (${fotoAtual})`);
-check(comCatalogo[0]?.content?.businessOwnerJid === DONO_JID,
-  `businessOwnerJid = ${DONO_JID}`);
-check(comCatalogo[0]?.content?.catalog?.title === 'Souzzaaxzy', 'título = nome do dono');
+console.log('\n── 2. o catálogo usa a FOTO REAL do dono e tem o botão "Ver" ──');
+check(comCatalogo[0]?.content?.image?.url === fotoAtual,
+  `imagem = foto atual do dono (${fotoAtual})`);
+check(comCatalogo[0]?.content?.caption === 'Souzzaaxzy', 'título/caption = nome do dono');
+const botoesCat = comCatalogo[0]?.content?.nativeFlow || [];
+check(botoesCat.length === 1, 'um botão só, como no card de catálogo compartilhado');
+check(botoesCat[0]?.name === 'cta_catalog', 'o botão é do tipo cta_catalog');
+let paramsCat = {};
+try { paramsCat = JSON.parse(botoesCat[0]?.buttonParamsJson || '{}'); } catch { /* ilegível */ }
+check(paramsCat.display_text === 'Ver', 'o botão mostra "Ver"');
+check(String(paramsCat.merchant_url || '').includes(NUMERO_DONO), 'o botão aponta para o dono');
 
 console.log('\n── 2b. NENHUMA das mensagens responde a do comando (sem quoted) ──');
 check(comCatalogo[0]?.options?.quoted == null, 'catálogo sem quoted');
 check(comContato[0]?.options?.quoted == null, 'card sem quoted');
-
-console.log('\n── 2c. o catálogo leva `product` junto (senão o app diz "atualize") ──');
-check(Boolean(comCatalogo[0]?.content?.product), 'product presente ao lado de catalog');
-check(comCatalogo[0]?.content?.product?.productImage?.url === fotoAtual,
-  'a imagem do produto é a própria foto do dono');
-check(comCatalogo[0]?.content?.product?.productId === `DONO-${NUMERO_DONO}`,
-  'productId derivado do número do dono');
 
 console.log('\n── 2d. o card traz empresa, cargo e bio (ORG/TITLE/NOTE) ──');
 const vcardCat = comContato[0]?.content?.contacts?.contacts?.[0]?.vcard || '';
@@ -169,8 +168,8 @@ check(vcardCat.includes(`waid=${NUMERO_DONO}`), 'waid presente — habilita "Con
 console.log('\n── 3. trocar a foto do dono troca a foto do catálogo ──');
 fotoAtual = 'https://pps.whatsapp.net/foto-2-NOVA.jpg';
 const env2 = await rodar();
-const cat2 = env2.find(e => e.content?.catalog);
-check(cat2?.content?.catalog?.catalogImage?.url === fotoAtual,
+const cat2 = env2.find(e => e.content?.nativeFlow);
+check(cat2?.content?.image?.url === fotoAtual,
   'a URL nova apareceu (sem cache)');
 
 console.log('\n── 4. card de perfil comercial: vCard do número do dono ──');
@@ -180,10 +179,34 @@ check(vcard.includes(`waid=${NUMERO_DONO}`), 'vCard traz o waid do dono');
 check(vcard.includes(`+${NUMERO_DONO}`), 'vCard traz o telefone do dono');
 check(comContato[0]?.content?.contacts?.displayName === 'Souzzaaxzy', 'displayName = nome do dono');
 
+console.log('\n── 4b. a bio do card vem do RECADO real do dono ──');
+// `fetchStatus` devolve uma LISTA ({ id, status, setAt }), como a fork faz.
+// Com recado no perfil, o NOTE do vCard deve refletir esse texto.
+const envRecado = await (async () => {
+  const enviadosRec = [];
+  const nazuRec = makeNazu({ enviados: enviadosRec });
+  nazuRec.fetchStatus = async (jid) => [{ id: jid, status: 'Fale comigo, é o dono 😎' }];
+  await handleMessage(nazuRec, msgDono(), null, new Map(), null);
+  return enviadosRec;
+})();
+const vcardRec = envRecado.filter(e => e.content?.contacts)[0]?.content?.contacts?.contacts?.[0]?.vcard || '';
+check(vcardRec.includes('NOTE:Fale comigo, é o dono 😎'), 'o recado real virou a bio (NOTE)');
+
+console.log('\n── 4c. sem recado: a bio cai no texto montado ──');
+const envSemRecado = await (async () => {
+  const enviadosSR = [];
+  const nazuSR = makeNazu({ enviados: enviadosSR });
+  nazuSR.fetchStatus = async () => [{ id: 'x', status: '' }];
+  await handleMessage(nazuSR, msgDono(), null, new Map(), null);
+  return enviadosSR;
+})();
+const vcardSR = envSemRecado.filter(e => e.content?.contacts)[0]?.content?.contacts?.contacts?.[0]?.vcard || '';
+check(vcardSR.includes('NOTE:') && vcardSR.includes('Dono do'), 'bio padrão quando não há recado');
+
 console.log('\n── 5. sem foto do dono: ainda manda o card (e não o texto) ──');
 falhaFoto = true;
 const env3 = await rodar();
-const cat3 = env3.filter(e => e.content?.catalog);
+const cat3 = env3.filter(e => e.content?.nativeFlow);
 const cont3 = env3.filter(e => e.content?.contacts);
 const texto3 = env3.filter(e => typeof e.content?.text === 'string');
 check(cat3.length === 0, 'não mandou catálogo sem foto');
@@ -200,7 +223,7 @@ const nazuQuebrado = {
   profilePictureUrl: async () => { throw new Error('sem foto'); },
   sendMessage: async (jid, content) => {
     enviadosFallback.push(content);
-    if (content?.catalog || content?.contacts) throw new Error('sem suporte');
+    if (content?.nativeFlow || content?.contacts) throw new Error('sem suporte');
     return { key: { id: 'x' } };
   },
 };
@@ -222,23 +245,19 @@ const recriar = async (conteudo) => generateWAMessageContent(conteudo, {
   userJid: DONO_JID, upload: uploadFalso, jid: GRUPO,
 });
 
-// `catalogImage` precisa ser uma fonte de mídia REAL: a fork lê a imagem para
-// preparar o upload (o caminho novo passa por prepareWAMessageMedia). Troca a
-// URL fictícia por um JPEG local só para esta verificação.
+// A imagem do catálogo é lida pela fork para preparar o upload: troca a URL
+// fictícia por um JPEG local só para esta verificação.
 const JPEG = Buffer.from([
   0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01,
   0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xff, 0xd9
 ]);
 const payloadCatalogo = {
   ...comCatalogo[0].content,
-  catalog: { ...comCatalogo[0].content.catalog, catalogImage: JPEG },
-  // O `product` também carrega imagem: troca pela mesma fonte local.
-  product: { ...comCatalogo[0].content.product, productImage: JPEG },
+  image: JPEG,
 };
 
-// Se a fork instalada não tiver o suporte a `catalog`, isto lança ("Invalid
-// media type") — é exatamente o que queremos detectar, então vira falha de
-// asserção em vez de derrubar a suíte.
+// Se a fork instalada não montar o card, isto lança — vira falha de asserção
+// em vez de derrubar a suíte.
 let catReal = null;
 try {
   catReal = await recriar(payloadCatalogo);
@@ -246,10 +265,11 @@ try {
   check(false, `a fork instalada monta o catálogo (falhou: ${e?.message}) — falta atualizar a dependência?`);
 }
 if (catReal) {
-  check(Boolean(catReal.productMessage), 'catálogo do !dono vira productMessage na fork');
-  check(catReal.productMessage?.catalog?.title === 'Souzzaaxzy', 'o título do catálogo chega ao proto');
-  check(Boolean(catReal.productMessage?.catalog?.catalogImage), 'a imagem do catálogo é preparada');
-  check(catReal.productMessage?.businessOwnerJid === DONO_JID, 'businessOwnerJid no proto');
+  check(Boolean(catReal.interactiveMessage), 'o catálogo do !dono vira interactiveMessage na fork');
+  check(Boolean(catReal.interactiveMessage?.header?.imageMessage), 'o header leva a imagem do dono');
+  const botoesReais = catReal.interactiveMessage?.nativeFlowMessage?.buttons || [];
+  check(botoesReais.length === 1, 'um botão no proto');
+  check(botoesReais[0]?.name === 'cta_catalog', 'o botão chega como cta_catalog no proto');
 }
 
 const cardReal = await recriar(comContato[0].content);
@@ -257,11 +277,12 @@ check(Boolean(cardReal.contactMessage), 'card de perfil vira contactMessage na f
 check(String(cardReal.contactMessage?.vcard || '').includes('BEGIN:VCARD'), 'o vCard chega ao proto');
 
 // Round-trip: o que sai do generateWAMessageContent sobrevive ao encode/decode.
-if (catReal?.productMessage) {
-  const decodificado = proto.Message.ProductMessage.decode(
-    proto.Message.ProductMessage.encode(catReal.productMessage).finish()
+if (catReal?.interactiveMessage) {
+  const decodificado = proto.Message.InteractiveMessage.decode(
+    proto.Message.InteractiveMessage.encode(catReal.interactiveMessage).finish()
   );
-  check(decodificado.catalog?.title === 'Souzzaaxzy', 'o catálogo sobrevive ao encode/decode');
+  check(decodificado.nativeFlowMessage?.buttons?.[0]?.name === 'cta_catalog',
+    'o botão do catálogo sobrevive ao encode/decode');
 }
 
 console.log('\n════════════════════════════════════════');

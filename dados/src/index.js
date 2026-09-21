@@ -27641,21 +27641,44 @@ ${groupPrefix}togglecmdvip premium_ia off`);
 │    • wa.me/${displayNum}${subName}`;
             }
           }
-          // ── 👑 !dono — catálogo (foto real do dono) + card de perfil comercial ──
+          // Duas mensagens, nesta ordem, SEM `quoted` (saem soltas no grupo):
           //
-          // Ordem pedida: o CATÁLOGO sai primeiro, o CARD DE PERFIL COMERCIAL
-          // logo abaixo. O catálogo usa a FOTO REAL do dono, lida na hora com
-          // `profilePictureUrl` — se ele trocar a foto, o próximo `!dono` já vem
-          // com a nova (nada é gravado em disco nem cacheado aqui).
+          //  1. Catálogo: a foto do dono com o botão "Ver" — o mesmo cartão que
+          //     aparece quando alguém compartilha o catálogo do próprio perfil.
+          //  2. Card de perfil comercial logo abaixo: nome, bio e os botões
+          //     "Conversar" e "Ver empresa".
+          //
+          // A foto é lida na hora (`profilePictureUrl`), então trocar a foto do
+          // dono muda o próximo `!dono` — nada é gravado em disco nem cacheado.
           const donoNumero = numerodono ? String(numerodono).replace(/\D/g, '') : null;
           const donoJidPn = donoNumero ? `${donoNumero}@s.whatsapp.net` : null;
           // O dono pode estar identificado por LID na config; tenta as duas formas.
           const donoJids = [donoJidPn, lidowner].filter(Boolean);
 
-const nomeDono = nomedono || 'Dono';
+          const nomeDono = nomedono || 'Dono';
           const linkDono = `https://wa.me/${numeroDonoFormatado}`;
-          // A `bio` é o texto que aparece no bloco de perfil do contato (vem do NOTE do vCard).
-          const bioDono = `👑 Dono do ${nomebot || 'bot'} · fale comigo: ${linkDono}`;
+
+          // Bio do card: o RECADO real do perfil do dono ("recado" do WhatsApp).
+          //
+          // `fetchStatus` devolve uma LISTA (um item por jid, no formato
+          // `{ id, status, setAt }`), não um objeto único — ler `res?.status` no
+          // array daria sempre undefined. Se o dono não tiver recado, cai no
+          // texto montado.
+          let bioDono = '';
+          for (const jid of donoJids) {
+            try {
+              const lista = await nazu.fetchStatus?.(jid);
+              const item = Array.isArray(lista) ? lista[0] : lista;
+              const texto = item?.status;
+              if (typeof texto === 'string' && texto.trim()) {
+                bioDono = texto.trim();
+                break;
+              }
+            } catch {
+              // Sem recado / método indisponível: usa o texto padrão abaixo.
+            }
+          }
+          if (!bioDono) bioDono = `👑 Dono do ${nomebot || 'bot'} · fale comigo no WhatsApp`;
 
           const textoDono = `╭━━━⊱ 🌌 *DONO DO BOT* 🌌 ⊱━━━╮
 │
@@ -27677,51 +27700,51 @@ const nomeDono = nomedono || 'Dono';
             }
           }
 
-          // 1) CATÁLOGO com a foto real do dono.
+          // 1) CATÁLOGO — o card "compartilhado do perfil": foto + botão "Ver".
           //
-          // Vai como `productMessage` com `catalog` (CatalogSnapshot) E também o
-          // campo `product`: o WhatsApp só renderiza o card quando existe um
-          // snapshot de produto junto. Só com `catalog` o app responde "atualize
-          // o WhatsApp" e a mensagem não aparece. A imagem do produto é a própria
-          // foto do dono.
-          //
-          // Nenhuma das duas mensagens leva `quoted`: elas aparecem soltas no
-          // grupo, sem responder a mensagem do comando.
+          // Vai como `interactiveMessage` com cabeçalho de imagem e um botão
+          // `cta_catalog` (o mesmo tipo que o WhatsApp usa no catálogo
+          // compartilhado). Só `productMessage`/`catalog` NÃO serve para número
+          // comum: o cartão de catálogo exige conta Business com catálogo
+          // cadastrado no Commerce Manager, e o app responde "atualize o
+          // WhatsApp" quando o número não tem um.
           if (donoJidPn && fotoDono) {
             try {
               await nazu.sendMessage(from, {
-                catalog: {
-                  catalogImage: { url: fotoDono },
-                  title: nomeDono,
-                  description: bioDono
-                },
-                product: {
-                  productImage: { url: fotoDono },
-                  productId: `DONO-${donoNumero}`,
-                  title: nomeDono,
-                  description: bioDono,
-                  currencyCode: 'BRL',
-                  priceAmount1000: 0,
-                  productImageCount: 1,
-                  url: linkDono
-                },
-                businessOwnerJid: donoJidPn,
-                body: '🛍️ Toque para ver o catálogo',
-                footer: linkDono
+                image: { url: fotoDono },
+                caption: nomeDono,
+                footer: linkDono,
+                title: nomeDono,
+                nativeFlow: [
+                  {
+                    name: 'cta_catalog',
+                    buttonParamsJson: JSON.stringify({
+                      display_text: 'Ver',
+                      merchant_url: linkDono
+                    })
+                  }
+                ]
               });
               enviou.catalogo = true;
             } catch (e) {
-              console.error('[DONO] catálogo falhou:', e?.message || e);
+              console.error('[DONO] catalogo falhou:', e?.message || e);
             }
           }
 
-          // 2) CARD DE PERFIL COMERCIAL do número do dono, logo abaixo.
+          // 2) CARD DE PERFIL COMERCIAL — nome, bio e "Conversar"/"Ver empresa".
           //
-          // Os botões "Conversar" / "Ver empresa" e o bloco de perfil (nome +
-          // bio) vêm dos campos do vCard: ORG (empresa), TITLE (cargo) e NOTE (a
-          // bio). O `waid` é o que faz o app reconhecer o número como conta
-          // WhatsApp e oferecer "Conversar" — sem ele o botão vira "Convidar
-          // para o WhatsApp".
+          // Os botões e o bloco de perfil saem dos campos do vCard:
+          //   ORG   -> habilita "Ver empresa"
+          //   TITLE -> cargo exibido no perfil
+          //   NOTE  -> a bio
+          //   waid  -> faz o app reconhecer o número como conta WhatsApp e
+          //            oferecer "Conversar" (sem ele vira "Convidar para o
+          //            WhatsApp").
+          //
+          // Ressalva honesta: "Ver empresa" só é oferecido quando o número do
+          // dono é CONTA BUSINESS (perfil comercial preenchido). Em conta
+          // pessoal o botão não aparece, por mais que o vCard tenha ORG — é
+          // decisão do cliente do WhatsApp, não do payload.
           if (donoJidPn) {
             try {
               const vcard = [
