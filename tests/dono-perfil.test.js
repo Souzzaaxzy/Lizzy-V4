@@ -145,7 +145,9 @@ check(
 console.log('\n── 2. o catálogo usa a FOTO REAL do dono e tem o botão "Ver" ──');
 check(comCatalogo[0]?.content?.image?.url === fotoAtual,
   `imagem = foto atual do dono (${fotoAtual})`);
-check(comCatalogo[0]?.content?.caption === 'Souzzaaxzy', 'título/caption = nome do dono');
+check(!comCatalogo[0]?.content?.caption, 'catálogo SEM caption visível (vazio)');
+check(comCatalogo[0]?.content?.footer == null, 'catálogo SEM footer');
+check(comCatalogo[0]?.content?.title == null, 'catálogo SEM title');
 const botoesCat = comCatalogo[0]?.content?.nativeFlow || [];
 check(botoesCat.length === 1, 'um botão só, como no card de catálogo compartilhado');
 check(botoesCat[0]?.name === 'cta_catalog', 'o botão é do tipo cta_catalog');

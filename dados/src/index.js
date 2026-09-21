@@ -27663,7 +27663,6 @@ ${groupPrefix}togglecmdvip premium_ia off`);
             lid: lidowner,
             bioFallback: `👑 Dono do ${nomebot || 'bot'} · fale comigo no WhatsApp`,
             cargo: 'Dono do bot',
-            tag: 'DONO',
           });
 
           // Fallback: se nem o catálogo nem o card saíram (ex.: ambiente sem
@@ -27694,7 +27693,6 @@ ${groupPrefix}togglecmdvip premium_ia off`);
             lid: lidowner,
             bioFallback: `👨‍💻 Criador do ${nomebot || 'bot'} · fale comigo no WhatsApp`,
             cargo: 'Criador do bot',
-            tag: 'CRIADOR',
           });
 
           // Fallback: mantém o comportamento antigo se nada sair.
@@ -40222,8 +40220,7 @@ async function sendInteractiveMessage(sock, jid, options, extra = {}) {
  * @param {string} p.nome    nome exibido
  * @param {string} [p.lid]   LID alternativo, quando a config tiver
  * @param {string} p.bioFallback bio usada quando o perfil não tem recado
- * @param {string} [p.cargo] TITLE do vCard
- * @param {string} [p.tag]   prefixo dos logs (ex.: 'DONO')
+* @param {string} [p.cargo] TITLE do vCard
  * @returns {Promise<{catalogo: boolean, card: boolean}>}
  */
 async function enviarCardsDoPerfil(sock, chatId, p = {}) {
@@ -40233,7 +40230,6 @@ async function enviarCardsDoPerfil(sock, chatId, p = {}) {
     lid = null,
     bioFallback = '',
     cargo = '',
-    tag = 'PERFIL',
   } = p;
 
   const numeroLimpo = numero ? String(numero).replace(/\D/g, '') : null;
@@ -40275,14 +40271,19 @@ async function enviarCardsDoPerfil(sock, chatId, p = {}) {
     }
   }
 
-  // 1) Catálogo (foto + botão "Ver").
+  // 1) Catálogo (só a foto + botão "Ver").
+  //
+  // Sem NENHUM texto: sem caption visível, sem footer e sem title.
+  //
+  // Detalhe da fork: o `caption` é o que faz ela criar o HEADER com a imagem.
+  // Sem ele o código cai em `Object.assign(undefined, m)` e lança
+  // ("Cannot convert undefined or null to object") — o card nem é montado. Por
+  // isso passamos `caption: ''` (vazio): cria o header e não mostra texto.
   if (foto) {
     try {
       await sock.sendMessage(chatId, {
         image: { url: foto },
-        caption: nomeExibir,
-        footer: link,
-        title: nomeExibir,
+        caption: '',
         nativeFlow: [
           {
             name: 'cta_catalog',
@@ -40294,8 +40295,8 @@ async function enviarCardsDoPerfil(sock, chatId, p = {}) {
         ],
       });
       enviou.catalogo = true;
-    } catch (e) {
-      console.error(`[${tag}] catalogo falhou:`, e?.message || e);
+    } catch {
+      // Sem suporte a este card: segue para o card de perfil.
     }
   }
 
@@ -40321,8 +40322,8 @@ async function enviarCardsDoPerfil(sock, chatId, p = {}) {
       },
     });
     enviou.card = true;
-  } catch (e) {
-    console.error(`[${tag}] card de perfil falhou:`, e?.message || e);
+  } catch {
+    // Sem suporte a este card: o comando cai no texto de fallback.
   }
 
   return enviou;
