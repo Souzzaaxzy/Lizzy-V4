@@ -250,7 +250,7 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 ╰──────────────
 
 
-╭─❖ 🫥 MENSAGENS INVISÍVEIS
+╭─❖ 👻 MENSAGENS INVISÍVEIS
 │ 📦 ${prefix}raja
 │    Mostra a mensagem e a quantidade salvas
 │ 💾 ${prefix}setmsgraja <qtd> <texto>
