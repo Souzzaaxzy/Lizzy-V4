@@ -1955,6 +1955,69 @@ servidor, `antifantasma.js` no cliente.
   (entrada como LID, como JID, e as duas juntas), listagem e regressão de
   menção. Verificado revertendo o fix: **11 asserções falham**.
 
+## COMANDO `!dono` — catálogo (foto real) + card de perfil comercial ✅
+Pedido do dono: substituir o `!dono` por **um catálogo único com a foto real do
+dono** seguido do **card de perfil comercial** do número setado em `numerodono`.
+Ordem explícita: **catálogo primeiro, card abaixo**.
+
+### Como ficou (`index.js`, `case 'dono'`)
+1. **Catálogo primeiro.** Usa a nova estrutura `catalog` da fork
+   (`ProductMessage.catalog` → `CatalogSnapshot`), que antes só montava `product`
+   e por isso não produzia card de catálogo:
+   ```js
+   await nazu.sendMessage(from, {
+     catalog: { catalogImage: { url: fotoDono }, title: nomedono, description: ... },
+     businessOwnerJid: donoJidPn,
+     body, footer,
+   }, { quoted: info });
+   ```
+2. **Card de perfil comercial abaixo.** `contacts` → `contactMessage` com um
+   vCard do número do dono (`waid` + telefone), que é o "card de perfil" que o
+   usuário adiciona à agenda.
+
+### A foto é do DONO REAL, sempre atual
+`nazu.profilePictureUrl(jid, 'image')` é chamado **na hora de cada `!dono`** —
+nada é gravado em disco nem cacheado. Se o dono troca a foto, o próximo `!dono`
+já traz a nova. Testado: trocar a URL entre chamadas muda o `catalogImage`.
+
+O JID é resolvido por `numerodono` (`<numero>@s.whatsapp.net`) e, se a config
+tiver `lidowner`, as duas formas são tentadas — o dono pode estar endereçado por
+LID.
+
+### Robustez
+- **Sem foto** (privacidade/"não tem foto") → o catálogo é omitido e o card sai
+  normalmente: o comando **não fica mudo**.
+- **Socket sem suporte** a catálogo/card → cai no **texto de sempre**
+  (`DONO DO BOT`), preservando o comportamento antigo como fallback.
+- Falha de um dos envios vai para o log com `[DONO] ...` (não engole em silêncio).
+
+### Testes — `tests/dono-perfil.test.js` (16 asserções)
+Roda o **handler real** com socket falso: ordem catálogo→card, `catalogImage` =
+foto atual do dono, troca de foto reflete no catálogo (sem cache),
+`businessOwnerJid`, vCard bem formado com `waid`/telefone, título/displayName =
+nome do dono, ausência de foto ainda manda o card (e não o texto) e fallback de
+texto quando nada sai.
+- **Armadilha**: o handler tem **throttle de comandos por remetente** (3 por 5s).
+  Reusar o mesmo autor entre cenários fazia o teste cair no anti-flood e medir a
+  mensagem "calma aí" em vez do `!dono` — cada cenário usa um remetente próprio.
+- **Armadilha 2**: a config vem de `CONFIG_FILE` (respeita `CONFIG_PATH` em
+  `utils/paths.js`), não de `DATABASE_PATH`; sem setar `CONFIG_PATH` o handler lê
+  a config real e o teste mede outra coisa.
+
+### Suporte na fork (`Souzzaaxzy/baileys`, commit `aee4b24`)
+O card de catálogo e o MPM exigiam suporte que **não existia**: `prepareProductMessage`
+ignorava `catalog` e não havia ramo para o multi-produto. A fork ganhou
+(`feat(business): Business Profile + Catálogo Business`):
+- `ProductMessage.catalog` (`CatalogSnapshot`) montado no send path;
+- MPM via `productList` → `listMessage` com `listType = PRODUCT_LIST` +
+  `productListInfo` (no fio **não existe** `ProductListMessage`);
+- `Utils/business.js` exportado na raiz + `getBusinessProfileV2`;
+- suíte da fork: 123 testes / 0 falhas.
+
+**Dependência**: o `package-lock.json` foi apontado para o commit novo
+(`git+ssh://...#aee4b24`). Um `npm install` sem isso instala o commit antigo e o
+`catalog` não funciona — foi o primeiro obstáculo.
+
 ## RELACIONAMENTOS múltiplos (!trisal / !quadrisal / !relacionamento) ✅
 - Módulo: `dados/src/funcs/utils/relationships.js` (`RelationshipManager`).
   Comandos em `index.js` (~35523 trisal, ~35568 quadrisal, ~35613

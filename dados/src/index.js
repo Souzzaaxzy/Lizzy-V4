@@ -27641,13 +27641,88 @@ ${groupPrefix}togglecmdvip premium_ia off`);
 │    • wa.me/${displayNum}${subName}`;
             }
           }
-          const TextinDonoInfo = `╭━━━⊱ 🌌 *DONO DO BOT* 🌌 ⊱━━━╮
+          // ── 👑 !dono — catálogo (foto real do dono) + card de perfil comercial ──
+          //
+          // Ordem pedida: o CATÁLOGO sai primeiro, o CARD DE PERFIL COMERCIAL
+          // logo abaixo. O catálogo usa a FOTO REAL do dono, lida na hora com
+          // `profilePictureUrl` — se ele trocar a foto, o próximo `!dono` já vem
+          // com a nova (nada é gravado em disco nem cacheado aqui).
+          const donoNumero = numerodono ? String(numerodono).replace(/\D/g, '') : null;
+          const donoJidPn = donoNumero ? `${donoNumero}@s.whatsapp.net` : null;
+          // O dono pode estar identificado por LID na config; tenta as duas formas.
+          const donoJids = [donoJidPn, lidowner].filter(Boolean);
+
+          const textoDono = `╭━━━⊱ 🌌 *DONO DO BOT* 🌌 ⊱━━━╮
 │
 │ 👤 *Nome:* ${nomedono}
 │ 📱 *Contato:* wa.me/${numeroDonoFormatado}${subdonosText}
 │
 ╰━━━━━━━━━━━━━━━━━━━━━━━━╯`;
-          await reply(TextinDonoInfo);
+
+          const enviou = { catalogo: false, card: false };
+
+          // 1) CATÁLOGO com a foto real do dono.
+          if (donoJidPn) {
+            let fotoDono = null;
+            for (const jid of donoJids) {
+              try {
+                fotoDono = await nazu.profilePictureUrl(jid, 'image');
+                if (fotoDono) break;
+              } catch {
+                // Sem foto (privacidade/"não tem foto") ou JID inválido: tenta o próximo.
+              }
+            }
+
+            if (fotoDono) {
+              try {
+                await nazu.sendMessage(from, {
+                  catalog: {
+                    catalogImage: { url: fotoDono },
+                    title: nomedono || 'Dono',
+                    description: `Fale com o dono: wa.me/${numeroDonoFormatado}`
+                  },
+                  businessOwnerJid: donoJidPn,
+                  body: '👑 Toque para ver o perfil do dono',
+                  footer: `wa.me/${numeroDonoFormatado}`
+                }, { quoted: info });
+                enviou.catalogo = true;
+              } catch (e) {
+                console.error('[DONO] catálogo falhou:', e?.message || e);
+              }
+            }
+          }
+
+          // 2) CARD DE PERFIL COMERCIAL do número do dono, logo abaixo.
+          if (donoJidPn) {
+            try {
+              await nazu.sendMessage(from, {
+                contacts: {
+                  displayName: nomedono || 'Dono',
+                  contacts: [
+                    {
+                      displayName: nomedono || 'Dono',
+                      vcard: [
+                        'BEGIN:VCARD',
+                        'VERSION:3.0',
+                        `FN:${nomedono || 'Dono'}`,
+                        'TEL;type=CELL;type=VOICE;waid=' + donoNumero + ':+' + donoNumero,
+                        'END:VCARD'
+                      ].join('\n')
+                    }
+                  ]
+                }
+              }, { quoted: info });
+              enviou.card = true;
+            } catch (e) {
+              console.error('[DONO] card de perfil falhou:', e?.message || e);
+            }
+          }
+
+          // 3) Fallback: se nem o catálogo nem o card saíram (ex.: ambiente sem
+          //    suporte), manda o texto de sempre para o comando nunca ficar mudo.
+          if (!enviou.catalogo && !enviou.card) {
+            await reply(textoDono);
+          }
         } catch (e) {
           console.error(e);
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
