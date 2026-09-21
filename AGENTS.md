@@ -298,6 +298,48 @@ com `antirequest: false` para isolar o caminho da rajada). Suítes: **50/50**,
 **54/54**, **22/22**.
 
 
+## RAJA — sistema salvo por grupo (!setmsgraja / !raja / !rajar) + !msghost ✅
+Reorganização pedida pelo dono (set/2026). Categoria do menu dono:
+**"🧪 TESTES DE PROTEÇÃO (DONO)" → "🫥 MENSAGENS INVISÍVEIS"**.
+
+### Os quatro comandos
+| Comando | O que faz |
+|---|---|
+| `!setmsgraja <qtd> <texto>` | salva quantidade + texto **no grupo** (`groupData.msgraja`) |
+| `!raja` | **mostra** o que está salvo (não envia nada) |
+| `!rajar` | **dispara** a rajada com o que está salvo |
+| `!msghost @alvo [texto]` | apaga a mensagem do comando e envia o texto **só ao alvo**, no privado |
+
+- **Estado POR GRUPO** (`groupData.msgraja`), como o resto dos anti/comandos.
+  Salvar no grupo A não vale no B.
+- `!raja` e `!rajar` são do **dono** e só funcionam em grupo.
+- Teto de **50** mensagens (herdado do raja antigo), avisando quando limita.
+- `!rajar` mantém o conteúdo (`buildRajaContent` → `requestPaymentMessage` com
+  `amount1000: "0"` e o texto na NOTA) e o transporte **seletivo** (rotação de
+  Sender Key só para membros comuns). **Falha fechado** se a fork não expuser a
+  rotação: nada é enviado, em vez de vazar para o grupo inteiro.
+- `!msghost` substitui o antigo `!rajar4`. Sem texto explícito, usa o salvo.
+- **Removidos**: `rajar2`, `rajar3`, `rajar4` (e as APIs experimentais que
+  exercitavam), `raja <qtd> <texto>` na forma antiga.
+- Menu (`menudono.js`) e `blockPv.js` atualizados para os quatro comandos.
+
+### Testes — `tests/raja-selective.test.js` (23 asserções, 13 testes)
+Salvamento por grupo, `!raja` que só mostra, `!rajar` usando o que foi salvo,
+teto de 50, isolamento entre grupos, autorização só dos membros comuns (nenhum
+admin), conteúdo intacto, messageId único por envio e falha fechada sem a API.
+
+- **Armadilha 1**: o throttle de comandos é por **REMETENTE** (3 por 5s) mas é
+  **pulado quando `info.key.fromMe`**. Os testes mandam vários comandos
+  seguidos, então precisam rodar como o próprio bot (`fromMe: true`) — com
+  remetente comum, do 4º comando em diante a resposta era "calma aí".
+- **Armadilha 2**: `persistGroupData()` é **fire-and-forget**
+  (`writeJsonFileAsync`). Ler o arquivo do grupo logo depois de `handleMessage`
+  mede uma **corrida**: o `!setmsgraja` respondia "salvo" mas o `!raja` seguinte
+  ainda lia "nada salvo". O teste espera a escrita.
+- **Armadilha 3**: o harness rebaixava quem envia a "membro comum". Como o
+  comando agora roda como o **bot**, isso colocava o próprio bot na lista de
+  autorizados e media o conjunto errado.
+
 ## RAJA / requestPaymentMessage — causa do atraso MEDIDA e proteção ✅
 Analisado contra o bot de referência (**Kimori / RAVENA-BOT**, `@whiskeysockets/baileys@7.0.0-rc13`).
 
