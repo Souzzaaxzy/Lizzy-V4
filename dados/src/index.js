@@ -27648,38 +27648,8 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           //  2. Card de perfil comercial logo abaixo: nome, bio e os botões
           //     "Conversar" e "Ver empresa".
           //
-          // A foto é lida na hora (`profilePictureUrl`), então trocar a foto do
-          // dono muda o próximo `!dono` — nada é gravado em disco nem cacheado.
-          const donoNumero = numerodono ? String(numerodono).replace(/\D/g, '') : null;
-          const donoJidPn = donoNumero ? `${donoNumero}@s.whatsapp.net` : null;
-          // O dono pode estar identificado por LID na config; tenta as duas formas.
-          const donoJids = [donoJidPn, lidowner].filter(Boolean);
-
-          const nomeDono = nomedono || 'Dono';
-          const linkDono = `https://wa.me/${numeroDonoFormatado}`;
-
-          // Bio do card: o RECADO real do perfil do dono ("recado" do WhatsApp).
-          //
-          // `fetchStatus` devolve uma LISTA (um item por jid, no formato
-          // `{ id, status, setAt }`), não um objeto único — ler `res?.status` no
-          // array daria sempre undefined. Se o dono não tiver recado, cai no
-          // texto montado.
-          let bioDono = '';
-          for (const jid of donoJids) {
-            try {
-              const lista = await nazu.fetchStatus?.(jid);
-              const item = Array.isArray(lista) ? lista[0] : lista;
-              const texto = item?.status;
-              if (typeof texto === 'string' && texto.trim()) {
-                bioDono = texto.trim();
-                break;
-              }
-            } catch {
-              // Sem recado / método indisponível: usa o texto padrão abaixo.
-            }
-          }
-          if (!bioDono) bioDono = `👑 Dono do ${nomebot || 'bot'} · fale comigo no WhatsApp`;
-
+          // A montagem dos dois fica em `enviarCardsDoPerfil` (compartilhada com
+          // o `!criador`): um lugar só para o formato, sem duplicar o bloco.
           const textoDono = `╭━━━⊱ 🌌 *DONO DO BOT* 🌌 ⊱━━━╮
 │
 │ 👤 *Nome:* ${nomedono}
@@ -27687,93 +27657,17 @@ ${groupPrefix}togglecmdvip premium_ia off`);
 │
 ╰━━━━━━━━━━━━━━━━━━━━━━━━╯`;
 
-          const enviou = { catalogo: false, card: false };
+          const enviou = await enviarCardsDoPerfil(nazu, from, {
+            numero: numerodono,
+            nome: nomedono,
+            lid: lidowner,
+            bioFallback: `👑 Dono do ${nomebot || 'bot'} · fale comigo no WhatsApp`,
+            cargo: 'Dono do bot',
+            tag: 'DONO',
+          });
 
-          // Foto atual do dono (a mesma imagem serve ao catálogo).
-          let fotoDono = null;
-          for (const jid of donoJids) {
-            try {
-              fotoDono = await nazu.profilePictureUrl(jid, 'image');
-              if (fotoDono) break;
-            } catch {
-              // Sem foto (privacidade / "não tem foto") ou JID inválido: tenta o próximo.
-            }
-          }
-
-          // 1) CATÁLOGO — o card "compartilhado do perfil": foto + botão "Ver".
-          //
-          // Vai como `interactiveMessage` com cabeçalho de imagem e um botão
-          // `cta_catalog` (o mesmo tipo que o WhatsApp usa no catálogo
-          // compartilhado). Só `productMessage`/`catalog` NÃO serve para número
-          // comum: o cartão de catálogo exige conta Business com catálogo
-          // cadastrado no Commerce Manager, e o app responde "atualize o
-          // WhatsApp" quando o número não tem um.
-          if (donoJidPn && fotoDono) {
-            try {
-              await nazu.sendMessage(from, {
-                image: { url: fotoDono },
-                caption: nomeDono,
-                footer: linkDono,
-                title: nomeDono,
-                nativeFlow: [
-                  {
-                    name: 'cta_catalog',
-                    buttonParamsJson: JSON.stringify({
-                      display_text: 'Ver',
-                      merchant_url: linkDono
-                    })
-                  }
-                ]
-              });
-              enviou.catalogo = true;
-            } catch (e) {
-              console.error('[DONO] catalogo falhou:', e?.message || e);
-            }
-          }
-
-          // 2) CARD DE PERFIL COMERCIAL — nome, bio e "Conversar"/"Ver empresa".
-          //
-          // Os botões e o bloco de perfil saem dos campos do vCard:
-          //   ORG   -> habilita "Ver empresa"
-          //   TITLE -> cargo exibido no perfil
-          //   NOTE  -> a bio
-          //   waid  -> faz o app reconhecer o número como conta WhatsApp e
-          //            oferecer "Conversar" (sem ele vira "Convidar para o
-          //            WhatsApp").
-          //
-          // Ressalva honesta: "Ver empresa" só é oferecido quando o número do
-          // dono é CONTA BUSINESS (perfil comercial preenchido). Em conta
-          // pessoal o botão não aparece, por mais que o vCard tenha ORG — é
-          // decisão do cliente do WhatsApp, não do payload.
-          if (donoJidPn) {
-            try {
-              const vcard = [
-                'BEGIN:VCARD',
-                'VERSION:3.0',
-                `N:${nomeDono};;;;`,
-                `FN:${nomeDono}`,
-                `ORG:${nomeDono}`,
-                'TITLE:Dono do bot',
-                `NOTE:${bioDono}`,
-                `URL:${linkDono}`,
-                `TEL;type=CELL;type=VOICE;waid=${donoNumero}:+${donoNumero}`,
-                'END:VCARD'
-              ].join('\n');
-
-              await nazu.sendMessage(from, {
-                contacts: {
-                  displayName: nomeDono,
-                  contacts: [{ displayName: nomeDono, vcard }]
-                }
-              });
-              enviou.card = true;
-            } catch (e) {
-              console.error('[DONO] card de perfil falhou:', e?.message || e);
-            }
-          }
-
-          // 3) Fallback: se nem o catálogo nem o card saíram (ex.: ambiente sem
-          //    suporte), manda o texto de sempre para o comando nunca ficar mudo.
+          // Fallback: se nem o catálogo nem o card saíram (ex.: ambiente sem
+          // suporte), manda o texto de sempre para o comando nunca ficar mudo.
           if (!enviou.catalogo && !enviou.card) {
             await reply(textoDono);
           }
@@ -27785,13 +27679,28 @@ ${groupPrefix}togglecmdvip premium_ia off`);
       case 'criador':
         try {
           const numeroCriadorFormatado = numerodono ? String(numerodono).replace(/\D/g, '') : 'Não configurado';
-          const TextinCriadorInfo = `╭━━━⊱ 👨‍💻 *CRIADOR* 👨‍💻 ⊱━━━╮
+          // Mesmo layout do `!dono` (catálogo + card de perfil comercial), via o helper
+          // compartilhado. Aqui o "cargo" identifica o criador.
+          const textoCriador = `╭━━━⊱ 👨‍💻 *CRIADOR* 👨‍💻 ⊱━━━╮
 │
 │ 👤 *Nome:* ${nomedono}
 │ 📱 *Contato:* wa.me/${numeroCriadorFormatado}
 │
 ╰━━━━━━━━━━━━━━━━━━━━━━━━╯`;
-          await reply(TextinCriadorInfo);
+
+          const enviouCriador = await enviarCardsDoPerfil(nazu, from, {
+            numero: numerodono,
+            nome: nomedono,
+            lid: lidowner,
+            bioFallback: `👨‍💻 Criador do ${nomebot || 'bot'} · fale comigo no WhatsApp`,
+            cargo: 'Criador do bot',
+            tag: 'CRIADOR',
+          });
+
+          // Fallback: mantém o comportamento antigo se nada sair.
+          if (!enviouCriador.catalogo && !enviouCriador.card) {
+            await reply(textoCriador);
+          }
         } catch (e) {
           console.error(e);
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
@@ -40288,6 +40197,135 @@ async function sendInteractiveMessage(sock, jid, options, extra = {}) {
   
   await sock.relayMessage(jid, msg.message, { messageId: msg.key.id });
   return msg;
+}
+
+/**
+ * Envia os DOIS cards de um perfil (usado por `!dono` e `!criador`).
+ *
+ * Ordem: catálogo primeiro, card de perfil comercial logo abaixo. Nenhuma das
+ * duas mensagens leva `quoted` — saem soltas no chat.
+ *
+ *   1. Catálogo = card "compartilhado do perfil": a foto real + botão "Ver"
+ *      (`interactiveMessage` + `cta_catalog`). Só `productMessage`/`catalog` não
+ *      serve para número comum: o cartão de catálogo exige conta Business com
+ *      catálogo no Commerce Manager e o app responde "atualize o WhatsApp".
+ *   2. Card de perfil comercial: nome, bio e "Conversar"/"Ver empresa". Os
+ *      botões saem do vCard (ORG/TITLE/NOTE) e o `waid` habilita "Conversar".
+ *
+ * A foto e a bio são lidas na hora, sem cache: trocar a foto ou o recado do
+ * perfil muda o próximo envio.
+ *
+ * @param {object} sock socket do Baileys
+ * @param {string} chatId destino
+ * @param {object} p
+ * @param {string} p.numero  número (só dígitos) do perfil
+ * @param {string} p.nome    nome exibido
+ * @param {string} [p.lid]   LID alternativo, quando a config tiver
+ * @param {string} p.bioFallback bio usada quando o perfil não tem recado
+ * @param {string} [p.cargo] TITLE do vCard
+ * @param {string} [p.tag]   prefixo dos logs (ex.: 'DONO')
+ * @returns {Promise<{catalogo: boolean, card: boolean}>}
+ */
+async function enviarCardsDoPerfil(sock, chatId, p = {}) {
+  const {
+    numero,
+    nome,
+    lid = null,
+    bioFallback = '',
+    cargo = '',
+    tag = 'PERFIL',
+  } = p;
+
+  const numeroLimpo = numero ? String(numero).replace(/\D/g, '') : null;
+  if (!numeroLimpo || !chatId) return { catalogo: false, card: false };
+
+  const jidPn = `${numeroLimpo}@s.whatsapp.net`;
+  const jids = [jidPn, lid].filter(Boolean);
+  const nomeExibir = nome || 'Dono';
+  const link = `https://wa.me/${numeroLimpo}`;
+  const enviou = { catalogo: false, card: false };
+
+  // Bio: preferimos o RECADO real do perfil. `fetchStatus` devolve uma LISTA
+  // (`[{ id, status, setAt }]`), não um objeto — ler `.status` no array daria
+  // sempre undefined.
+  let bio = '';
+  for (const jid of jids) {
+    try {
+      const lista = await sock.fetchStatus?.(jid);
+      const item = Array.isArray(lista) ? lista[0] : lista;
+      const texto = item?.status;
+      if (typeof texto === 'string' && texto.trim()) {
+        bio = texto.trim();
+        break;
+      }
+    } catch {
+      // Sem recado / método indisponível: usa o fallback.
+    }
+  }
+  if (!bio) bio = bioFallback || nomeExibir;
+
+  // Foto atual do perfil (serve ao catálogo).
+  let foto = null;
+  for (const jid of jids) {
+    try {
+      foto = await sock.profilePictureUrl(jid, 'image');
+      if (foto) break;
+    } catch {
+      // Sem foto (privacidade / "não tem foto") ou JID inválido: tenta o próximo.
+    }
+  }
+
+  // 1) Catálogo (foto + botão "Ver").
+  if (foto) {
+    try {
+      await sock.sendMessage(chatId, {
+        image: { url: foto },
+        caption: nomeExibir,
+        footer: link,
+        title: nomeExibir,
+        nativeFlow: [
+          {
+            name: 'cta_catalog',
+            buttonParamsJson: JSON.stringify({
+              display_text: 'Ver',
+              merchant_url: link,
+            }),
+          },
+        ],
+      });
+      enviou.catalogo = true;
+    } catch (e) {
+      console.error(`[${tag}] catalogo falhou:`, e?.message || e);
+    }
+  }
+
+  // 2) Card de perfil comercial (nome, bio, "Conversar"/"Ver empresa").
+  try {
+    const vcard = [
+      'BEGIN:VCARD',
+      'VERSION:3.0',
+      `N:${nomeExibir};;;;`,
+      `FN:${nomeExibir}`,
+      `ORG:${nomeExibir}`,
+      ...(cargo ? [`TITLE:${cargo}`] : []),
+      `NOTE:${bio}`,
+      `URL:${link}`,
+      `TEL;type=CELL;type=VOICE;waid=${numeroLimpo}:+${numeroLimpo}`,
+      'END:VCARD',
+    ].join('\n');
+
+    await sock.sendMessage(chatId, {
+      contacts: {
+        displayName: nomeExibir,
+        contacts: [{ displayName: nomeExibir, vcard }],
+      },
+    });
+    enviou.card = true;
+  } catch (e) {
+    console.error(`[${tag}] card de perfil falhou:`, e?.message || e);
+  }
+
+  return enviou;
 }
 
 export default NazuninhaBotExec;

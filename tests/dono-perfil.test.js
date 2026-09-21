@@ -285,6 +285,35 @@ if (catReal?.interactiveMessage) {
     'o botão do catálogo sobrevive ao encode/decode');
 }
 
+console.log('\n── 8. !criador usa o MESMO layout (catálogo + card de perfil) ──');
+const envCriador = await (async () => {
+  const enviadosC = [];
+  const nazuC = makeNazu({ enviados: enviadosC });
+  await handleMessage(nazuC, msgDono('!criador'), null, new Map(), null);
+  return enviadosC;
+})();
+const catCriador = envCriador.filter(e => e.content?.nativeFlow);
+const cardCriador = envCriador.filter(e => e.content?.contacts);
+check(catCriador.length === 1, '!criador mandou o catálogo');
+check(cardCriador.length === 1, '!criador mandou o card de perfil comercial');
+check(
+  envCriador.indexOf(catCriador[0]) < envCriador.indexOf(cardCriador[0]),
+  '!criador: catálogo antes do card'
+);
+check(catCriador[0]?.content?.image?.url === fotoAtual,
+  '!criador: catálogo usa a foto real do perfil');
+const botoesCriador = catCriador[0]?.content?.nativeFlow || [];
+let paramsCriador = {};
+try { paramsCriador = JSON.parse(botoesCriador[0]?.buttonParamsJson || '{}'); } catch { /* ilegível */ }
+check(paramsCriador.display_text === 'Ver', '!criador: botão "Ver" no catálogo');
+check(catCriador[0]?.options?.quoted == null, '!criador: catálogo sem quoted');
+check(cardCriador[0]?.options?.quoted == null, '!criador: card sem quoted');
+const vcardCriador = cardCriador[0]?.content?.contacts?.contacts?.[0]?.vcard || '';
+check(vcardCriador.includes('ORG:'), '!criador: ORG no vCard');
+check(vcardCriador.includes('TITLE:Criador do bot'), '!criador: TITLE identifica o criador');
+check(vcardCriador.includes(`waid=${NUMERO_DONO}`), '!criador: waid presente');
+check(vcardCriador.includes('NOTE:'), '!criador: NOTE (bio) presente');
+
 console.log('\n════════════════════════════════════════');
 console.log(`RESULTADO: ${ok} ok | ${fail} falhas`);
 console.log('════════════════════════════════════════');
@@ -294,5 +323,5 @@ if (fail) {
   for (const e of erros) console.log(`- ${e}`);
   process.exit(1);
 }
-console.log('✅ !dono VALIDADO');
+console.log('✅ !dono e !criador VALIDADOS');
 process.exit(0);
