@@ -123,17 +123,31 @@ async function restaurarEstadoLocal(estado) {
 
 /**
  * Última tentativa de pull: guarda o estado, descarta as mudanças locais nos
- * arquivos de DADOS (`checkout -- <DB_DIR>`) e puxa de novo.
+ * arquivos GERADOS (`dados/database` e `package-lock.json`) e puxa de novo.
  *
- * Só toca em dados/database -- código e configs locais ficam intactos.
+ * Por que o lockfile entra aqui: o npm reescreve o `package-lock.json` a cada
+ * `npm install` (ex.: ao expandir um hash de commit curto para o SHA completo).
+ * Isso deixa o arquivo "modificado" na árvore de trabalho; se o commit que vem
+ * do GitHub mexer no MESMO arquivo, o `git pull` aborta com
+ *
+ *   error: Your local changes to the following files would be overwritten by
+ *   merge: package-lock.json
+ *
+ * e o bot NUNCA pega a atualização — era o sintoma "deu push e não chegou".
+ * O lockfile é artefato de instalação (o conteúdo real é recriado a partir do
+ * `package.json`), então descartá-lo é seguro; código e configs locais não são
+ * tocados.
  */
 async function tentarPullPreservandoEstado() {
   const estado = await guardarEstadoLocal();
   try {
-    // Desfaz mudanças locais apenas nos arquivos de estado já rastreados, para
-    // o merge não abortar. O conteúdo real foi guardado acima.
+    // Desfaz mudanças locais nos arquivos gerados, para o merge não abortar.
+    // O estado do bot foi guardado acima; o lockfile é recriado no install.
     await execAsync('git', ['checkout', '--', DB_DIR]);
   } catch { /* nada rastreado modificado: segue */ }
+  try {
+    await execAsync('git', ['checkout', '--', 'package-lock.json']);
+  } catch { /* não rastreado (ex.: destrackeado) ou sem mudança: segue */ }
 
   try {
     await execAsync('git', ['pull']);
