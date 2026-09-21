@@ -1991,12 +1991,19 @@ LID.
   (`DONO DO BOT`), preservando o comportamento antigo como fallback.
 - Falha de um dos envios vai para o log com `[DONO] ...` (não engole em silêncio).
 
-### Testes — `tests/dono-perfil.test.js` (16 asserções)
+### Testes — `tests/dono-perfil.test.js` (23 asserções)
 Roda o **handler real** com socket falso: ordem catálogo→card, `catalogImage` =
 foto atual do dono, troca de foto reflete no catálogo (sem cache),
 `businessOwnerJid`, vCard bem formado com `waid`/telefone, título/displayName =
 nome do dono, ausência de foto ainda manda o card (e não o texto) e fallback de
 texto quando nada sai.
+- **Cego de propósito corrigido (seção 7)**: os primeiros testes usam socket
+  **falso**, então provavam apenas a FORMA que o comando monta. Eles passavam
+  **até com uma fork sem `catalog`** — mediam menos que o problema real. A seção
+  7 leva o payload pelo `generateWAMessageContent` da fork instalada (com um JPEG
+  local, porque o caminho novo lê a imagem) e exige `productMessage` com
+  `catalog` + `contactMessage`. **Verificado**: com a fork antiga a suíte falha
+  (`Invalid media type`); com a nova, 23/23.
 - **Armadilha**: o handler tem **throttle de comandos por remetente** (3 por 5s).
   Reusar o mesmo autor entre cenários fazia o teste cair no anti-flood e medir a
   mensagem "calma aí" em vez do `!dono` — cada cenário usa um remetente próprio.

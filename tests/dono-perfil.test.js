@@ -191,6 +191,59 @@ const textoFallback = enviadosFallback.filter(c => typeof c?.text === 'string');
 check(textoFallback.length >= 1, 'mandou o texto de fallback (comando não fica mudo)');
 check(textoFallback.some(t => t.text.includes('DONO DO BOT')), 'o texto é o de sempre');
 
+console.log('\n── 7. o payload gerado vira mesmo productMessage/contactMessage na FORK ──');
+// Este teste é o que faltava: os anteriores usam socket FALSO, então provam
+// apenas a forma que o comando MONTA. Eles passavam até com uma fork sem
+// suporte a `catalog` — medindo menos do que o problema real. Aqui o payload
+// atravessa o `generateWAMessageContent` da fork instalada, que é quem decide
+// se vira `productMessage` (catálogo) e `contactMessage` (card).
+const { generateWAMessageContent, proto } = await import('@itsliaaa/baileys');
+
+const uploadFalso = async () => ({ url: 'https://mmg.whatsapp.net/fake', directPath: '/v/fake' });
+const recriar = async (conteudo) => generateWAMessageContent(conteudo, {
+  userJid: DONO_JID, upload: uploadFalso, jid: GRUPO,
+});
+
+// `catalogImage` precisa ser uma fonte de mídia REAL: a fork lê a imagem para
+// preparar o upload (o caminho novo passa por prepareWAMessageMedia). Troca a
+// URL fictícia por um JPEG local só para esta verificação.
+const JPEG = Buffer.from([
+  0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01,
+  0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xff, 0xd9
+]);
+const payloadCatalogo = {
+  ...comCatalogo[0].content,
+  catalog: { ...comCatalogo[0].content.catalog, catalogImage: JPEG },
+};
+
+// Se a fork instalada não tiver o suporte a `catalog`, isto lança ("Invalid
+// media type") — é exatamente o que queremos detectar, então vira falha de
+// asserção em vez de derrubar a suíte.
+let catReal = null;
+try {
+  catReal = await recriar(payloadCatalogo);
+} catch (e) {
+  check(false, `a fork instalada monta o catálogo (falhou: ${e?.message}) — falta atualizar a dependência?`);
+}
+if (catReal) {
+  check(Boolean(catReal.productMessage), 'catálogo do !dono vira productMessage na fork');
+  check(catReal.productMessage?.catalog?.title === 'Souzzaaxzy', 'o título do catálogo chega ao proto');
+  check(Boolean(catReal.productMessage?.catalog?.catalogImage), 'a imagem do catálogo é preparada');
+  check(catReal.productMessage?.businessOwnerJid === DONO_JID, 'businessOwnerJid no proto');
+}
+
+const cardReal = await recriar(comContato[0].content);
+check(Boolean(cardReal.contactMessage), 'card de perfil vira contactMessage na fork');
+check(String(cardReal.contactMessage?.vcard || '').includes('BEGIN:VCARD'), 'o vCard chega ao proto');
+
+// Round-trip: o que sai do generateWAMessageContent sobrevive ao encode/decode.
+if (catReal?.productMessage) {
+  const decodificado = proto.Message.ProductMessage.decode(
+    proto.Message.ProductMessage.encode(catReal.productMessage).finish()
+  );
+  check(decodificado.catalog?.title === 'Souzzaaxzy', 'o catálogo sobrevive ao encode/decode');
+}
+
 console.log('\n════════════════════════════════════════');
 console.log(`RESULTADO: ${ok} ok | ${fail} falhas`);
 console.log('════════════════════════════════════════');
