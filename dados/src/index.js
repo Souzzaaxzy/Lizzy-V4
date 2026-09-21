@@ -27652,6 +27652,11 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           // O dono pode estar identificado por LID na config; tenta as duas formas.
           const donoJids = [donoJidPn, lidowner].filter(Boolean);
 
+const nomeDono = nomedono || 'Dono';
+          const linkDono = `https://wa.me/${numeroDonoFormatado}`;
+          // A `bio` é o texto que aparece no bloco de perfil do contato (vem do NOTE do vCard).
+          const bioDono = `👑 Dono do ${nomebot || 'bot'} · fale comigo: ${linkDono}`;
+
           const textoDono = `╭━━━⊱ 🌌 *DONO DO BOT* 🌌 ⊱━━━╮
 │
 │ 👤 *Nome:* ${nomedono}
@@ -27661,57 +27666,83 @@ ${groupPrefix}togglecmdvip premium_ia off`);
 
           const enviou = { catalogo: false, card: false };
 
-          // 1) CATÁLOGO com a foto real do dono.
-          if (donoJidPn) {
-            let fotoDono = null;
-            for (const jid of donoJids) {
-              try {
-                fotoDono = await nazu.profilePictureUrl(jid, 'image');
-                if (fotoDono) break;
-              } catch {
-                // Sem foto (privacidade/"não tem foto") ou JID inválido: tenta o próximo.
-              }
+          // Foto atual do dono (a mesma imagem serve ao catálogo).
+          let fotoDono = null;
+          for (const jid of donoJids) {
+            try {
+              fotoDono = await nazu.profilePictureUrl(jid, 'image');
+              if (fotoDono) break;
+            } catch {
+              // Sem foto (privacidade / "não tem foto") ou JID inválido: tenta o próximo.
             }
+          }
 
-            if (fotoDono) {
-              try {
-                await nazu.sendMessage(from, {
-                  catalog: {
-                    catalogImage: { url: fotoDono },
-                    title: nomedono || 'Dono',
-                    description: `Fale com o dono: wa.me/${numeroDonoFormatado}`
-                  },
-                  businessOwnerJid: donoJidPn,
-                  body: '👑 Toque para ver o perfil do dono',
-                  footer: `wa.me/${numeroDonoFormatado}`
-                }, { quoted: info });
-                enviou.catalogo = true;
-              } catch (e) {
-                console.error('[DONO] catálogo falhou:', e?.message || e);
-              }
+          // 1) CATÁLOGO com a foto real do dono.
+          //
+          // Vai como `productMessage` com `catalog` (CatalogSnapshot) E também o
+          // campo `product`: o WhatsApp só renderiza o card quando existe um
+          // snapshot de produto junto. Só com `catalog` o app responde "atualize
+          // o WhatsApp" e a mensagem não aparece. A imagem do produto é a própria
+          // foto do dono.
+          //
+          // Nenhuma das duas mensagens leva `quoted`: elas aparecem soltas no
+          // grupo, sem responder a mensagem do comando.
+          if (donoJidPn && fotoDono) {
+            try {
+              await nazu.sendMessage(from, {
+                catalog: {
+                  catalogImage: { url: fotoDono },
+                  title: nomeDono,
+                  description: bioDono
+                },
+                product: {
+                  productImage: { url: fotoDono },
+                  productId: `DONO-${donoNumero}`,
+                  title: nomeDono,
+                  description: bioDono,
+                  currencyCode: 'BRL',
+                  priceAmount1000: 0,
+                  productImageCount: 1,
+                  url: linkDono
+                },
+                businessOwnerJid: donoJidPn,
+                body: '🛍️ Toque para ver o catálogo',
+                footer: linkDono
+              });
+              enviou.catalogo = true;
+            } catch (e) {
+              console.error('[DONO] catálogo falhou:', e?.message || e);
             }
           }
 
           // 2) CARD DE PERFIL COMERCIAL do número do dono, logo abaixo.
+          //
+          // Os botões "Conversar" / "Ver empresa" e o bloco de perfil (nome +
+          // bio) vêm dos campos do vCard: ORG (empresa), TITLE (cargo) e NOTE (a
+          // bio). O `waid` é o que faz o app reconhecer o número como conta
+          // WhatsApp e oferecer "Conversar" — sem ele o botão vira "Convidar
+          // para o WhatsApp".
           if (donoJidPn) {
             try {
+              const vcard = [
+                'BEGIN:VCARD',
+                'VERSION:3.0',
+                `N:${nomeDono};;;;`,
+                `FN:${nomeDono}`,
+                `ORG:${nomeDono}`,
+                'TITLE:Dono do bot',
+                `NOTE:${bioDono}`,
+                `URL:${linkDono}`,
+                `TEL;type=CELL;type=VOICE;waid=${donoNumero}:+${donoNumero}`,
+                'END:VCARD'
+              ].join('\n');
+
               await nazu.sendMessage(from, {
                 contacts: {
-                  displayName: nomedono || 'Dono',
-                  contacts: [
-                    {
-                      displayName: nomedono || 'Dono',
-                      vcard: [
-                        'BEGIN:VCARD',
-                        'VERSION:3.0',
-                        `FN:${nomedono || 'Dono'}`,
-                        'TEL;type=CELL;type=VOICE;waid=' + donoNumero + ':+' + donoNumero,
-                        'END:VCARD'
-                      ].join('\n')
-                    }
-                  ]
+                  displayName: nomeDono,
+                  contacts: [{ displayName: nomeDono, vcard }]
                 }
-              }, { quoted: info });
+              });
               enviou.card = true;
             } catch (e) {
               console.error('[DONO] card de perfil falhou:', e?.message || e);

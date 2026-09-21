@@ -148,6 +148,24 @@ check(comCatalogo[0]?.content?.businessOwnerJid === DONO_JID,
   `businessOwnerJid = ${DONO_JID}`);
 check(comCatalogo[0]?.content?.catalog?.title === 'Souzzaaxzy', 'título = nome do dono');
 
+console.log('\n── 2b. NENHUMA das mensagens responde a do comando (sem quoted) ──');
+check(comCatalogo[0]?.options?.quoted == null, 'catálogo sem quoted');
+check(comContato[0]?.options?.quoted == null, 'card sem quoted');
+
+console.log('\n── 2c. o catálogo leva `product` junto (senão o app diz "atualize") ──');
+check(Boolean(comCatalogo[0]?.content?.product), 'product presente ao lado de catalog');
+check(comCatalogo[0]?.content?.product?.productImage?.url === fotoAtual,
+  'a imagem do produto é a própria foto do dono');
+check(comCatalogo[0]?.content?.product?.productId === `DONO-${NUMERO_DONO}`,
+  'productId derivado do número do dono');
+
+console.log('\n── 2d. o card traz empresa, cargo e bio (ORG/TITLE/NOTE) ──');
+const vcardCat = comContato[0]?.content?.contacts?.contacts?.[0]?.vcard || '';
+check(vcardCat.includes('ORG:'), 'ORG (empresa) no vCard — habilita "Ver empresa"');
+check(vcardCat.includes('TITLE:'), 'TITLE (cargo) no vCard');
+check(vcardCat.includes('NOTE:'), 'NOTE (bio) no vCard');
+check(vcardCat.includes(`waid=${NUMERO_DONO}`), 'waid presente — habilita "Conversar"');
+
 console.log('\n── 3. trocar a foto do dono troca a foto do catálogo ──');
 fotoAtual = 'https://pps.whatsapp.net/foto-2-NOVA.jpg';
 const env2 = await rodar();
@@ -214,6 +232,8 @@ const JPEG = Buffer.from([
 const payloadCatalogo = {
   ...comCatalogo[0].content,
   catalog: { ...comCatalogo[0].content.catalog, catalogImage: JPEG },
+  // O `product` também carrega imagem: troca pela mesma fonte local.
+  product: { ...comCatalogo[0].content.product, productImage: JPEG },
 };
 
 // Se a fork instalada não tiver o suporte a `catalog`, isto lança ("Invalid
