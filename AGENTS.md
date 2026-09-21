@@ -2176,6 +2176,52 @@ ignorava `catalog` e não havia ramo para o multi-produto. A fork ganhou
   **109 pares uid+password** e está commitado — e o repositório é **público**.
   Essas credenciais estão expostas no GitHub e devem ser rotacionadas.
 
+### `package-lock.json` também travava o pull (set/2026) ✅ CORRIGIDO
+Sintoma relatado: *"de novo aquele erro de não aparecer no bot depois do push"*.
+Desta vez a causa era diferente (não era `dados/database`) e **foi eu que
+introduzi**:
+
+1. Apontei a fork no `package-lock.json` para o commit novo, mas usei o hash
+   **curto** (`aee4b24`). O npm **expande** para o SHA completo ao escrever o
+   lock, então o arquivo ficava "modificado" na árvore do bot.
+2. Como meus commits mexiam no **mesmo** arquivo, o `git pull` abortava:
+   ```
+   error: Your local changes to the following files would be overwritten by
+   merge: package-lock.json
+   Aborting
+   ```
+3. O fallback `tentarPullPreservandoEstado()` só liberava `dados/database` —
+   **nunca** o lockfile. Então o retry falhava igual e o bot ficava **travado**,
+   sem pegar nenhum commit novo.
+
+Reproduzido localmente com um remote de teste (bot 1 commit atrás + lock sujo):
+`git pull` aborta; o fallback antigo repete o erro; com
+`git checkout -- package-lock.json` o pull completa (fast-forward).
+
+**Correções**:
+- `package-lock.json` passou a usar o **hash completo**
+  (`aee4b2451ef1e2394085e890b00d82c6df372209`). **Regra**: sempre hash completo
+  de 40 chars em dependência git — hash curto gera **falso drift** no
+  `gitDependencyDrift` (compara strings: `aee4b24` != `aee4b24<40>`), fazendo o
+  `!atualizar` reinstalar a cada execução.
+- `update.js`: o fallback agora também solta o lockfile
+  (`git checkout -- package-lock.json`) antes do retry. O lockfile é artefato de
+  instalação — o conteúdo real vem do `package.json` e é recriado no
+  `npm install` da sequência.
+- Verificado que, com o hash completo, `npm install` deixa o lock
+  **byte-idêntico** ao commitado (md5 igual antes/depois) — não fica mais sujo.
+
+**Desbloqueio imediato** (o `update.js` do bot ainda é o antigo, que não se
+corrige sozinho): com o bot parado, na raiz do projeto —
+
+```bash
+git checkout -- package-lock.json   # libera o lockfile
+git pull                            # baixa este fix
+npm install --allow-git=all         # sincroniza a fork
+```
+
+Depois disso o `!atualizar` volta a funcionar sozinho.
+
 ## INSTALAÇÃO — árvore de dependências parcial ✅
 - **Sintoma**: o bot quebra no boot com
   `ERR_MODULE_NOT_FOUND: Cannot find package '.../node_modules/pngjs/lib/png.js'
