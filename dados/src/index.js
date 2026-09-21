@@ -32440,81 +32440,106 @@ break;
       // Forma única: `!raja <quantidade> <texto>` (sem opções/variantes).
       case 'raja': {
         try {
-          if (!isOwner) return reply("❌ Apenas o dono do bot pode usar este comando.");
-          if (!isGroup) return reply("◈ Este comando só funciona em grupos (use um grupo de teste).");
+          if (!isGroup) return reply('❌ Este comando só funciona em grupos.');
 
-          const parts = q.trim().split(/\s+/);
-          const countRaw = parts[0];
-          const texto = parts.slice(1).join(' ').trim();
-          const count = parseInt(countRaw, 10);
-
-          if (!countRaw || !Number.isFinite(count) || count < 1) {
+          // Mostra o que está SALVO para este grupo (`!setmsgraja`). Não envia
+          // nada: quem dispara é o `!rajar`. Assim o dono confere a quantidade e
+          // o texto antes de rodar uma rajada.
+          const cfg = groupData.msgraja;
+          if (!cfg || !cfg.texto) {
             return reply(
-              `🧪 *TESTE DE RAJA*\n\n` +
-              `❌ Informe a quantidade de mensagens.\n\n` +
-              `💡 Uso: ${groupPrefix}raja <quantidade> <texto>\n` +
-              `📌 Exemplo: ${groupPrefix}raja 5 olá, esse é o meu texto`
+              `📦 *MENSAGEM DO RAJA*\n\n` +
+              `❌ Nenhuma mensagem salva neste grupo.\n\n` +
+              `💡 Use: ${groupPrefix}setmsgraja <quantidade> <texto>\n` +
+              `📌 Exemplo: ${groupPrefix}setmsgraja 5 olá, esse é o meu texto`
             );
           }
-          if (!texto) {
-            return reply(
-              `🧪 *TESTE DE RAJA*\n\n` +
-              `❌ Informe o texto que vai dentro da nota.\n\n` +
-              `💡 Uso: ${groupPrefix}raja <quantidade> <texto>\n` +
-              `📌 Exemplo: ${groupPrefix}raja 5 olá, esse é o meu texto`
-            );
-          }
-
-          // Teto rígido: é ferramenta de teste, não gerador de flood.
-          const MAX_RAJA = 50;
-          const total = Math.min(count, MAX_RAJA);
-
-          // As menções do raja real eram os membros do grupo (348 numa amostra de
-          // um grupo de 353). Reaproveita o AllgroupMembers já resolvido pelo
-          // handler — nenhuma consulta extra ao WhatsApp.
-          const mentions = Array.isArray(AllgroupMembers) ? AllgroupMembers : [];
 
           await reply(
-            `🧪 *RAJA DE TESTE*\n\n` +
-            `📨 Mensagens: ${total}${count > MAX_RAJA ? ` (limitado de ${count}; teto ${MAX_RAJA})` : ''}\n` +
-            `💰 amount1000: "0" (igual ao raja real)\n` +
-            `👥 Menções: ${mentions.length} (membros do grupo)\n` +
-            `📝 Texto: ${texto.slice(0, 80)}${texto.length > 80 ? '...' : ''}\n\n` +
-            `⚙️ Formato: requestPaymentMessage + noteMessage → extendedTextMessage\n` +
-            `🚀 Enviando...`
+            `📦 *MENSAGEM DO RAJA* (este grupo)\n\n` +
+            `📨 Quantidade: ${cfg.quantidade}\n` +
+            `📝 Texto: ${cfg.texto}\n\n` +
+            `💡 Para disparar: ${groupPrefix}rajar`
           );
+        } catch (e) {
+          console.error('[RAJA] Erro:', e?.message || e);
+          await reply('❌ Não foi possível consultar a mensagem do raja.');
+        }
+        break;
+      }
+
+      // !setmsgraja — salva a quantidade e o texto do raja NESTE grupo.
+      // O que for salvo aqui é lido pelo `!raja` (mostra) e pelo `!rajar`
+      // (dispara). O estado é por grupo, como o resto dos anti/comandos.
+      case 'setmsgraja': {
+        try {
+          if (!isOwner) return reply('❌ Apenas o dono do bot pode usar este comando.');
+          if (!isGroup) return reply('❌ Este comando só funciona em grupos.');
+
+          const parts = q.trim().split(/\s+/);
+          const qtdRaw = parts[0];
+          const texto = parts.slice(1).join(' ').trim();
+          const qtd = parseInt(qtdRaw, 10);
+
+          if (!qtdRaw || !Number.isFinite(qtd) || qtd < 1 || !texto) {
+            return reply(
+              `📦 *SALVAR MENSAGEM DO RAJA*\n\n` +
+              `💡 Uso: ${groupPrefix}setmsgraja <quantidade> <texto>\n` +
+              `📌 Exemplo: ${groupPrefix}setmsgraja 5 olá, esse é o meu texto`
+            );
+          }
+
+          // Teto rígido: continua sendo ferramenta de teste, não gerador de flood.
+          const MAX_RAJA = 50;
+          const quantidade = Math.min(qtd, MAX_RAJA);
+
+          groupData.msgraja = { quantidade, texto };
+          persistGroupData();
+
+          await reply(
+            `✅ *MENSAGEM DO RAJA SALVA* (este grupo)\n\n` +
+            `📨 Quantidade: ${quantidade}${qtd > MAX_RAJA ? ` (limitado de ${qtd}; teto ${MAX_RAJA})` : ''}\n` +
+            `📝 Texto: ${texto}\n\n` +
+            `💡 ${groupPrefix}raja para conferir · ${groupPrefix}rajar para disparar`
+          );
+        } catch (e) {
+          console.error('[SETMSGRAJA] Erro:', e?.message || e);
+          await reply('❌ Não foi possível salvar a mensagem do raja.');
+        }
+        break;
+      }
+
+      // !rajar — dispara a rajada com o texto e a quantidade SALVOS neste grupo.
+      // O conteúdo é o mesmo do raja (`buildRajaContent`); o que muda é o
+      // TRANSPORTE: em vez de relayMessage para o grupo inteiro, usa a rotação
+      // seletiva de Sender Key autorizando só os membros comuns, então os admins
+      // recebem o stanza mas não conseguem decifrar.
+      case 'rajar': {
+        try {
+          if (!isGroup) return reply('❌ Este comando só funciona em grupos.');
+          if (!isOwner) return reply('❌ Apenas o dono do bot pode usar este comando.');
+
+          const cfg = groupData.msgraja;
+          if (!cfg || !cfg.texto) {
+            return reply(
+              `❌ Nada salvo neste grupo.\n\n` +
+              `💡 Use: ${groupPrefix}setmsgraja <quantidade> <texto>`
+            );
+          }
+
+          const texto = cfg.texto;
+          const total = cfg.quantidade;
+          const mentions = Array.isArray(AllgroupMembers) ? AllgroupMembers : [];
 
           const content = buildRajaContent(texto, mentions);
-
-          // Gera UMA vez e reaproveita: só o ID muda por envio, como no
-          // !divulgar. Evita montar 50 protos idênticos.
           const baseMsg = await generateWAMessageFromContent(from, content, { userJid: nazu?.user?.id });
 
-          // ============================================================
-          // FORMA DE ENVIO — membros comuns leem, admins não.
-          //
-          // O conteúdo do raja é o mesmo de sempre (buildRajaContent, acima);
-          // o que muda é SÓ o caminho de envio: em vez de relayMessage para o
-          // grupo inteiro, usa a rotação seletiva de Sender Key, autorizando
-          // todos os membros comuns e nenhum admin.
-          //
-          // Como funciona (medido em aparelho real):
-          //  - uma Sender Key NOVA é criada para esta mensagem;
-          //  - ela é distribuída SÓ aos autorizados (membros comuns);
-          //  - o ciphertext continua indo ao grupo, então os admins RECEBEM o
-          //    stanza (sabem que existe, conseguem citar), mas não decifram;
-          //  - `decrypt-fail=hide` manda o cliente esconder a entrada;
-          //  - a chave volta ao estado anterior depois do envio (rotação por
-          //    mensagem) para não quebrar o grupo;
-          //  - o retry dessas mensagens é suprimido, senão o conteúdo vazaria
-          //    de volta cifrado pairwise para o admin.
-          // ============================================================
           const membrosComuns = AllgroupMembers.filter((id) => !idInArray(id, groupAdmins));
           const usaRotacao = typeof nazu.relayGroupMessageWithSenderKeyRotation === 'function' && membrosComuns.length > 0;
 
           if (!usaRotacao) {
             return reply(
-              `❌ Não foi possível enviar o raja com visibilidade só para membros.\n\n` +
+              `❌ Não foi possível enviar com visibilidade só para membros.\n\n` +
               `• membros comuns encontrados: ${membrosComuns.length}\n` +
               `• fork com a API de rotação: ${typeof nazu.relayGroupMessageWithSenderKeyRotation === 'function' ? 'sim' : 'NÃO'}\n\n` +
               `Nada foi enviado — em vez de cair para o grupo inteiro (o que mostraria a mensagem aos admins).`
@@ -32522,22 +32547,15 @@ break;
           }
 
           const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-          // 100ms: rajada mesmo, uma mensagem atrás da outra. Era 700ms, o que
-          // espaçava demais e dava tempo do grupo "respirar" entre os envios.
-          // O teto de 50 (`MAX_RAJA`) continua sendo o limite de volume.
+          // 100ms: rajada de verdade, uma mensagem atrás da outra.
           const DELAY_MS = 100;
           let enviados = 0;
           const falhas = [];
 
-          console.log(
-            `[RAJA] envio seletivo | grupo=${from} | membros=${membrosComuns.length} | ` +
-            `admins=${groupAdmins.length} | mensagens=${total}`
-          );
-
           for (let i = 0; i < total; i++) {
             try {
               // messageId novo por envio (o WhatsApp descarta IDs repetidos),
-              // no formato do raja real (22 chars), nao no da Baileys (40).
+              // no formato do raja real (22 chars).
               const msgId = generateRajaMessageId();
               await nazu.relayGroupMessageWithSenderKeyRotation(from, baseMsg.message, {
                 allowedParticipants: membrosComuns,
@@ -32548,232 +32566,46 @@ break;
             } catch (e) {
               falhas.push(e?.message || String(e));
             }
-            // Intervalo entre envios: evita rajada instantânea no servidor.
             if (i < total - 1) await sleep(DELAY_MS);
           }
 
           const resumo = [
-            `✅ *RAJA DE TESTE CONCLUÍDO*`,
+            `✅ *RAJA CONCLUÍDO*`,
             ``,
             `📨 Enviadas: ${enviados}/${total}`,
             `👥 Menções por mensagem: ${mentions.length}`,
-            `💰 amount1000: "0"`,
             `👀 Visibilidade: só membros comuns (${membrosComuns.length}) — admins (${groupAdmins.length}) não leem`,
           ];
           if (falhas.length) {
             resumo.push(``, `⚠️ Falhas: ${falhas.length}`);
             resumo.push(`• ${falhas.slice(0, 3).join('\n• ')}`);
           }
-          resumo.push(``, `💡 Use ${groupPrefix}get marcando uma delas para conferir o que chegou.`);
           await reply(resumo.join('\n'));
         } catch (e) {
-          console.error('[RAJA] Erro:', e);
-          await reply(`❌ Erro ao gerar o raja de teste: ${e?.message || e}`);
-        }
-        break;
-      }
-
-      // !rajar — interação "só os membros comuns" (admins não conseguem ler).
-      // O comando não tem nada de especial no TEXTO: a característica está no
-      // TRANSPORTE. A fork da Baileys ganhou a restrição de destinatários
-      // (`recipientMode`) no sendMessage, que limita o fan-out da Sender Key
-      // aos membros comuns — admins não recebem material criptográfico e não
-      // conseguem decifrar a mensagem.
-      // Forma única: `!rajar <texto>` (sem argumentos, usa uma frase padrão).
-      case 'rajar': {
-        try {
-          if (!isGroup) return reply('❌ Este comando só funciona em grupos.');
-
-          const textoRajar = (q || '').trim() || 'Oi, membros! 👀';
-
-          // Quem executa também precisa ser membro comum: um admin não deve
-          // conseguir disparar a mensagem que ele mesmo não leria. O dono do
-          // bot é a exceção, para conseguir validar o comando.
-          if (isGroupAdmin && !isOwner) {
-            return reply('❌ Apenas membros comuns podem enviar esta mensagem.');
-          }
-
-          const membrosComuns = AllgroupMembers.filter(id => !idInArray(id, groupAdmins));
-          if (!membrosComuns.length) {
-            return reply('❌ Não há membros comuns neste grupo além de você.');
-          }
-
-          const conteudoRajar = { text: textoRajar };
-
-          // `recipientMode: 'members-only'` é resolvido pela fork a partir da
-          // metadata real do grupo (campo `admin` do participante) — sem
-          // heurística de nome/número. Se nenhum destinatário casar, a fork
-          // lança e nada é enviado, em vez de vazar para o grupo inteiro.
-          await nazu.sendMessage(from, conteudoRajar, {
-            recipientMode: 'members-only',
-            quoted: info
-          });
-
-          console.log(
-            `[RAJAR] enviado | grupo=${from} | membros=${membrosComuns.length} | ` +
-            `admins=${groupAdmins.length} | bytes=${Buffer.byteLength(textoRajar, 'utf8')}`
-          );
-        } catch (e) {
           console.error('[RAJAR] Erro:', e?.message || e);
-          await reply('❌ Não foi possível enviar a mensagem para os membros.');
+          await reply('❌ Não foi possível disparar o raja.');
         }
         break;
       }
 
-      // !rajar2 — EXPERIMENTAL. Retransmissão pairwise de uma mensagem de grupo
-      // para UM participante, pelo fluxo de retry da fork
-      // (`relayGroupMessagePairwiseExperimental`). NÃO substitui o !rajar.
-      // Serve para observar, com dispositivo real, se o WhatsApp aceita esse
-      // payload como retransmissão e como o cliente destinatário o processa.
-      case 'rajar2': {
+      // !msghost — apaga a mensagem do comando e envia o texto SÓ para o usuário
+      // (no privado dele). Nada mais: sem aviso no grupo, sem confirmação.
+      case 'msghost': {
         try {
           if (!isGroup) return reply('❌ Este comando só funciona em grupos.');
-
-          // Comando de teste (categoria DONO no menu): o dono dispara, escolhendo
-          // o participante alvo. Ninguém deveria provocar envios experimentais
-          // em grupos de terceiros.
           if (!isOwner) return reply('❌ Apenas o dono do bot pode usar este comando.');
 
-          // Alvo: a menção/citação do usuário. Sem alvo explícito, o comando
-          // não adivinha — o experimento precisa de um destinatário definido.
-          if (!menc_os2) {
-            return reply('❌ Marque (@) ou responda a mensagem de quem deve receber a retransmissão.');
-          }
-          const alvo = menc_os2;
+          // 1) Apaga a mensagem do comando no grupo.
+          await nazu.sendMessage(from, { delete: info.key }).catch(() => {});
 
-          const textoRajar2 = (q || '').replace(/@\d+/g, '').trim() || 'Retransmissão experimental 👀';
+          // 2) Envia o texto só para o alvo, no privado.
+          if (!menc_os2) return;
+          const texto = (q || '').replace(/@\d+/g, '').trim() || groupData.msgraja?.texto || '';
+          if (!texto) return;
 
-          if (typeof nazu.relayGroupMessagePairwiseExperimental !== 'function') {
-            return reply('❌ A fork instalada não expõe a API experimental (atualize @itsliaaa/baileys).');
-          }
-
-          // A mensagem é gerada pelo pipeline normal da Baileys; o comando só a
-          // repassa à API experimental, que a reenvia pairwise pelo caminho de
-          // retry já existente.
-          const msg = await generateWAMessageFromContent(
-            from,
-            { conversation: textoRajar2 },
-            { userJid: nazu?.user?.id }
-          );
-
-          await nazu.relayGroupMessagePairwiseExperimental(
-            from,
-            msg.message,
-            { participant: alvo, messageId: msg.key?.id, retryCount: 1 }
-          );
-
-          await reply(
-            `🧪 Retransmissão experimental enviada para @${String(alvo).split('@')[0].split(':')[0]}`,
-            { mentions: [alvo] }
-          );
+          await nazu.sendMessage(menc_os2, { text: texto }).catch(() => {});
         } catch (e) {
-          console.error('[RAJAR2] Erro:', e?.message || e);
-          await reply('❌ Não foi possível executar a retransmissão experimental.');
-        }
-        break;
-      }
-
-      // !rajar3 — EXPERIMENTO: mensagem NOVA de grupo com
-      // `recipientMode: 'members-only'`, pelo fluxo normal do
-      // `relayMessage` (sem pairwise retry, sem `participant` de retry).
-      // Serve para observação real do comportamento do WhatsApp. NÃO altera o
-      // !rajar nem o !rajar2.
-      //
-      // OBSERVAÇÃO TÉCNICA (medida nos testes da fork): este modo só isola de
-      // verdade quem NUNCA recebeu a Sender Key. Como a Sender Key é reusada
-      // entre envios e a cadeia só avança, um admin que já participou de uma
-      // mensagem normal antes consegue decifrar a mensagem `members-only`
-      // depois. O comando não esconde isso: informa o modo e registra os
-      // metadados estruturais para o teste real.
-      case 'rajar3': {
-        try {
-          if (!isGroup) return reply('❌ Este comando só funciona em grupos.');
-
-          // Comando de laboratório (categoria DONO no menu).
-          if (!isOwner) return reply('❌ Apenas o dono do bot pode usar este comando.');
-
-          const textoRajar3 = (q || '').trim() || '[TESTE MEMBERS_ONLY] mensagem experimental';
-
-          // Metadados estruturais do que vai sair — sem chaves, sem plaintext
-          // de terceiros, sem credenciais. Os número vêm do metadata do grupo.
-          const membrosComuns = AllgroupMembers.filter(id => !idInArray(id, groupAdmins));
-
-          await nazu.sendMessage(from, { text: textoRajar3 }, {
-            recipientMode: 'members-only',
-            quoted: info
-          });
-
-          const aviso =
-            `🧪 [TESTE MEMBERS_ONLY] mensagem enviada com recipientMode 'members-only'.\n` +
-            `• membros comuns: ${membrosComuns.length}\n` +
-            `• admins: ${groupAdmins.length}\n` +
-            `• modo: mensagem nova de grupo (sem retry pairwise)\n\n` +
-            `⚠️ Limitação medida: admins que JÁ receberam a Sender Key numa mensagem normal anterior conseguem decifrar esta.`;
-          await reply(aviso);
-        } catch (e) {
-          console.error('[RAJAR3] Erro:', e?.message || e);
-          await reply('❌ Não foi possível executar o experimento members-only.');
-        }
-        break;
-      }
-
-      // !rajar4 — EXPERIMENTO: rotação seletiva de Sender Key.
-      // Cifra a mensagem com uma NOVA Sender Key B e distribui B somente aos
-      // alvos. NÃO altera o !rajar, !rajar2 nem !rajar3 — cada um continua
-      // disponível para comparação.
-      //
-      // Serve para observar, em grupo real, se o WhatsApp aceita esse envio e
-      // como cada dispositivo se comporta. A parte criptográfica está provada
-      // nos testes da fork (membros leem, quem só tem a chave antiga não); o
-      // comportamento do servidor NÃO está provado.
-      case 'rajar4': {
-        try {
-          if (!isGroup) return reply('❌ Este comando só funciona em grupos.');
-
-          // Comando de laboratório (categoria DONO no menu).
-          if (!isOwner) return reply('❌ Apenas o dono do bot pode usar este comando.');
-
-          // Alvo obrigatório: a rotação distribui a chave nova só para quem for
-          // autorizado, então um alvo explícito é indispensável.
-          if (!menc_os2) {
-            return reply('❌ Marque (@) ou responda a mensagem de quem deve receber a mensagem rotacionada.');
-          }
-          const alvo = menc_os2;
-
-          const textoRajar4 = (q || '').replace(/@\d+/g, '').trim() || '[TESTE SENDER KEY B] mensagem experimental';
-
-          if (typeof nazu.relayGroupMessageWithSenderKeyRotation !== 'function') {
-            return reply('❌ A fork instalada não expõe a API de rotação experimental (atualize @itsliaaa/baileys).');
-          }
-
-          const msg = await generateWAMessageFromContent(
-            from,
-            { conversation: textoRajar4 },
-            { userJid: nazu?.user?.id }
-          );
-
-          // Somente o alvo fica autorizado a receber a Sender Key B. Nenhum
-          // admin é incluído.
-          await nazu.relayGroupMessageWithSenderKeyRotation(
-            from,
-            msg.message,
-            { allowedParticipants: [alvo], messageId: msg.key?.id }
-          );
-
-          await reply(
-            `🔑 Rotação seletiva enviada (experimento).\n` +
-            `• Sender Key NOVA distribuída apenas para @${String(alvo).split('@')[0].split(':')[0]}\n` +
-            `• admins e demais participantes não receberam a chave nova\n` +
-            `• modo: mensagem normal de grupo (sem retry pairwise)\n\n` +
-            `🧪 Estado atual: a chave é rotacionada por mensagem e o retry do conteúdo\n` +
-            `está suprimido para esta mensagem — quem não tem a chave não consegue\n` +
-            `decifrar nem pedir de novo. Ainda NÃO validado em aparelho real: se o\n` +
-            `cliente mostra um placeholder ou fica silencioso (decrypt-fail=hide).`,
-            { mentions: [alvo] }
-          );
-        } catch (e) {
-          console.error('[RAJAR4] Erro:', e?.message || e);
-          await reply('❌ Não foi possível executar a rotação experimental.');
+          console.error('[MSGHOST] Erro:', e?.message || e);
         }
         break;
       }

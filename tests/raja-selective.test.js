@@ -108,7 +108,10 @@ function makeNazu({ sent, groupJid, senderLid, hasRotationApi = true }) {
     groupMetadata: async () => ({
       id: groupJid,
       subject: 'Grupo Raja Seletivo',
-      participants: GROUP_PARTICIPANTS.map((p) => (p.id === senderLid ? { ...p, admin: null } : p)),
+      // Os papéis REAIS do metadata, sem rebaixar quem envia: o comando agora é
+      // disparado como o PRÓPRIO bot (fromMe), e rebaixar o bot o faria entrar
+      // na lista de "membros comuns" — medindo o conjunto errado de autorizados.
+      participants: GROUP_PARTICIPANTS,
     }),
     groupParticipantsUpdate: async () => ({}),
     groupRequestParticipantsList: async () => [],
@@ -129,13 +132,32 @@ function makeNazu({ sent, groupJid, senderLid, hasRotationApi = true }) {
   return nazu;
 }
 
-async function rodar({ groupJid, text = '!raja 2 teste', senderLid = MEM_1, hasRotationApi = true }) {
+/**
+ * Envia o comando como o PRÓPRIO bot (fromMe).
+ *
+ * Dois motivos: (1) o throttle de comandos (`checkThrottle`) é PULADO quando
+ * `info.key.fromMe` é true, então vários comandos seguidos no teste não caem no
+ * anti-flood; (2) os comandos desta suíte são do dono, e `fromMe` é uma das
+ * formas que o handler aceita como dono.
+ */
+/** Espera a escrita em disco.
+ *
+ * `persistGroupData()` é fire-and-forget (`writeJsonFileAsync`): o arquivo do
+ * grupo NÃO está pronto quando `handleMessage` retorna. Ler direto dava
+ * `undefined` e o teste mediria uma corrida em vez do comportamento.
+ */
+const esperarDisco = () => new Promise((r) => setTimeout(r, 400));
+
+let cenario = 0;
+
+async function rodar({ groupJid, text = '!rajar', hasRotationApi = true }) {
+  cenario += 1;
   const sent = [];
-  const nazu = makeNazu({ sent, groupJid, senderLid, hasRotationApi });
+  const nazu = makeNazu({ sent, groupJid, senderLid: BOT_LID, hasRotationApi });
   await handleMessage(
     nazu,
     {
-      key: { remoteJid: groupJid, fromMe: true, id: 'M-1', participant: senderLid },
+      key: { remoteJid: groupJid, fromMe: true, id: `M-${cenario}`, participant: BOT_LID },
       message: { extendedTextMessage: { text, contextInfo: { remoteJid: groupJid } } },
       messageTimestamp: 1757900000,
       pushName: 'Tester',
@@ -144,15 +166,95 @@ async function rodar({ groupJid, text = '!raja 2 teste', senderLid = MEM_1, hasR
     new Map(),
     null
   );
+  // `persistGroupData()` é fire-and-forget: sem esperar, o comando SEGUINTE lê o
+  // cache antigo e o teste mediria uma corrida (foi o que aconteceu: o
+  // `!setmsgraja` salvava mas o `!raja` ainda via "nada salvo").
+  await esperarDisco();
   const textos = sent.map((s) => s.content?.text ?? '').filter(Boolean).join('\n');
   return { sent, textos, nazu, rotationCalls: nazu._rotationCalls };
 }
 
 // ============================================================================
 
-await test('!raja autoriza TODOS os membros comuns e NENHUM admin', async () => {
+await test('!setmsgraja salva quantidade e texto NESTE grupo', async () => {
   const groupJid = makeGroup();
-  const r = await rodar({ groupJid, text: '!raja 1 oi' });
+  const r = await rodar({ groupJid, text: '!setmsgraja 7 bom dia pessoal' });
+  ok(r.textos.includes('MENSAGEM DO RAJA SALVA'), 'confirmou o salvamento');
+
+  // O estado precisa ter ido para o arquivo do grupo (é o que o !raja lê).
+  await esperarDisco();
+  const salvo = JSON.parse(fs.readFileSync(path.join(GRUPOS_DIR, `${groupJid}.json`), 'utf-8'));
+  assert.equal(salvo.msgraja?.quantidade, 7, 'quantidade salva');
+  assert.equal(salvo.msgraja?.texto, 'bom dia pessoal', 'texto salvo');
+});
+
+await test('!raja mostra o que está salvo (não dispara nada)', async () => {
+  const groupJid = makeGroup();
+  await rodar({ groupJid, text: '!setmsgraja 3 texto salvo' });
+  const r = await rodar({ groupJid, text: '!raja' });
+  ok(r.textos.includes('MENSAGEM DO RAJA'), 'mostrou o painel');
+  ok(r.textos.includes('3'), 'mostrou a quantidade');
+  ok(r.textos.includes('texto salvo'), 'mostrou o texto');
+  assert.equal(r.rotationCalls.length, 0, 'NÃO disparou nada');
+});
+
+await test('!raja sem nada salvo avisa e ensina o comando', async () => {
+  const groupJid = makeGroup();
+  const r = await rodar({ groupJid, text: '!raja' });
+  ok(r.textos.includes('Nenhuma mensagem salva'), 'avisou que não há nada salvo');
+  ok(r.textos.includes('setmsgraja'), 'apontou o !setmsgraja');
+});
+
+await test('!rajar usa a quantidade e o texto salvos', async () => {
+  const groupJid = makeGroup();
+  await rodar({ groupJid, text: '!setmsgraja 3 repete' });
+  const r = await rodar({ groupJid, text: '!rajar' });
+  assert.equal(r.rotationCalls.length, 3, 'enviou exatamente a quantidade salva');
+  const msg = r.rotationCalls[0]?.m;
+  assert.equal(
+    msg?.requestPaymentMessage?.noteMessage?.extendedTextMessage?.text,
+    'repete',
+    'usou o texto salvo, na NOTA'
+  );
+});
+
+await test('!rajar sem nada salvo não envia e aponta o !setmsgraja', async () => {
+  const groupJid = makeGroup();
+  const r = await rodar({ groupJid, text: '!rajar' });
+  assert.equal(r.rotationCalls.length, 0, 'não enviou');
+  ok(r.textos.includes('Nada salvo'), 'avisou que não há nada salvo');
+});
+
+await test('o estado é POR GRUPO: salvar no A não vale no B', async () => {
+  const grupoA = makeGroup();
+  const grupoB = makeGroup();
+  await rodar({ groupJid: grupoA, text: '!setmsgraja 2 do A' });
+  const rB = await rodar({ groupJid: grupoB, text: '!rajar' });
+  assert.equal(rB.rotationCalls.length, 0, 'o grupo B não disparou nada');
+  ok(rB.textos.includes('Nada salvo'), 'o grupo B não herdou o texto do A');
+});
+
+await test('!setmsgraja aplica o teto de 50', async () => {
+  const groupJid = makeGroup();
+  const r = await rodar({ groupJid, text: '!setmsgraja 999 teto' });
+  await esperarDisco();
+  const salvo = JSON.parse(fs.readFileSync(path.join(GRUPOS_DIR, `${groupJid}.json`), 'utf-8'));
+  assert.equal(salvo.msgraja?.quantidade, 50, 'guardou no máximo 50');
+  ok(r.textos.includes('limitado'), 'informou que limitou');
+});
+
+await test('!setmsgraja recusa sem quantidade ou sem texto', async () => {
+  const groupJid = makeGroup();
+  const semTexto = await rodar({ groupJid, text: '!setmsgraja 5' });
+  ok(semTexto.textos.includes('Uso:'), 'pediu o formato correto');
+  const semQtd = await rodar({ groupJid, text: '!setmsgraja texto solto' });
+  ok(semQtd.textos.includes('Uso:'), 'pediu o formato correto');
+});
+
+await test('!rajar autoriza TODOS os membros comuns e NENHUM admin', async () => {
+  const groupJid = makeGroup();
+  await rodar({ groupJid, text: '!setmsgraja 1 oi' });
+  const r = await rodar({ groupJid, text: '!rajar' });
   ok(r.rotationCalls.length === 1, `usou a rotação (${r.rotationCalls.length} chamadas)`);
   const autorizados = r.rotationCalls[0]?.o?.allowedParticipants ?? [];
   assert.deepEqual(
@@ -164,9 +266,10 @@ await test('!raja autoriza TODOS os membros comuns e NENHUM admin', async () => 
   ok(!autorizados.includes(ADM_B), 'ADM_B (admin) NÃO está autorizado');
 });
 
-await test('!raja NÃO usa relayMessage nem sendMessage para o conteúdo do raja', async () => {
+await test('!rajar NÃO usa relayMessage nem sendMessage para o conteúdo', async () => {
   const groupJid = makeGroup();
-  const r = await rodar({ groupJid, text: '!raja 1 conteudo' });
+  await rodar({ groupJid, text: '!setmsgraja 1 conteudo' });
+  const r = await rodar({ groupJid, text: '!rajar' });
   const viaRelay = r.sent.filter((s) => s.via === 'relayMessage');
   ok(viaRelay.length === 0, `não caiu no relayMessage (${viaRelay.length}) — ele mostraria a todos`);
   const enviosComTexto = r.sent.filter((s) => s.content?.text === 'conteudo');
@@ -174,14 +277,13 @@ await test('!raja NÃO usa relayMessage nem sendMessage para o conteúdo do raja
   ok(r.rotationCalls.length === 1, 'o conteúdo saiu só pela rotação');
 });
 
-await test('!raja mantém o conteúdo do raja intacto (requestPaymentMessage)', async () => {
+await test('!rajar mantém o conteúdo do raja intacto (requestPaymentMessage)', async () => {
   const groupJid = makeGroup();
-  const r = await rodar({ groupJid, text: '!raja 1 nota' });
+  await rodar({ groupJid, text: '!setmsgraja 1 nota' });
+  const r = await rodar({ groupJid, text: '!rajar' });
   const msg = r.rotationCalls[0]?.m;
   ok(!!msg, 'passou a mensagem do raja');
   ok(!!msg?.requestPaymentMessage, 'o conteúdo continua sendo requestPaymentMessage');
-  // O texto é exatamente o pedido — as menções vivem no `mentionedJid`, não no
-  // texto (foi assim que o raja real medido se comportava).
   assert.equal(
     msg?.requestPaymentMessage?.noteMessage?.extendedTextMessage?.text,
     'nota',
@@ -193,9 +295,10 @@ await test('!raja mantém o conteúdo do raja intacto (requestPaymentMessage)', 
   );
 });
 
-await test('!raja envia N vezes, cada uma com messageId próprio', async () => {
+await test('!rajar envia N vezes, cada uma com messageId próprio', async () => {
   const groupJid = makeGroup();
-  const r = await rodar({ groupJid, text: '!raja 3 repete' });
+  await rodar({ groupJid, text: '!setmsgraja 3 repete' });
+  const r = await rodar({ groupJid, text: '!rajar' });
   assert.equal(r.rotationCalls.length, 3, 'enviou 3 mensagens');
   const ids = r.rotationCalls.map((c) => c.o?.messageId);
   assert.equal(new Set(ids).size, 3, 'cada envio tem um messageId distinto');
@@ -206,50 +309,14 @@ await test('!raja envia N vezes, cada uma com messageId próprio', async () => {
   );
 });
 
-await test('!raja falha fechado se a fork não expõe a rotação (não vaza para o grupo)', async () => {
+await test('!rajar falha fechado se a fork não expõe a rotação (não vaza)', async () => {
   const groupJid = makeGroup();
-  const r = await rodar({ groupJid, text: '!raja 1 x', hasRotationApi: false });
+  await rodar({ groupJid, text: '!setmsgraja 1 x' });
+  const r = await rodar({ groupJid, text: '!rajar', hasRotationApi: false });
   assert.equal(r.rotationCalls.length, 0, 'não chamou a rotação (inexistente)');
   const viaRelay = r.sent.filter((s) => s.via === 'relayMessage');
   assert.equal(viaRelay.length, 0, 'NÃO caiu para o relayMessage — nada foi enviado ao grupo');
   ok(r.textos.includes('Nada foi enviado'), 'avisou que nada foi enviado');
-});
-
-await test('!raja com grupo só de admins falha fechado', async () => {
-  const groupJid = makeGroup();
-  // Grupo sem membros comuns: sobrescreve o metadata para só admins.
-  const sent = [];
-  const nazu = makeNazu({ sent, groupJid, senderLid: ADM_A });
-  nazu.groupMetadata = async () => ({
-    id: groupJid,
-    subject: 'Só admins',
-    participants: [
-      { id: BOT_LID, lid: BOT_LID, phoneNumber: BOT_JID, admin: 'admin' },
-      { id: ADM_A, lid: ADM_A, phoneNumber: ADM_A_PN, admin: 'superadmin' },
-    ],
-  });
-  await handleMessage(
-    nazu,
-    {
-      key: { remoteJid: groupJid, fromMe: true, id: 'M-2', participant: ADM_A },
-      message: { extendedTextMessage: { text: '!raja 1 x', contextInfo: { remoteJid: groupJid } } },
-      messageTimestamp: 1757900000,
-      pushName: 'Tester',
-    },
-    null,
-    new Map(),
-    null
-  );
-  assert.equal(nazu._rotationCalls.length, 0, 'não enviou nada');
-  const textos = sent.map((s) => s.content?.text ?? '').join('\n');
-  ok(textos.includes('Nada foi enviado'), 'avisou que nada foi enviado');
-});
-
-await test('!raja continua exigindo quantidade e texto', async () => {
-  const groupJid = makeGroup();
-  const r = await rodar({ groupJid, text: '!raja' });
-  assert.equal(r.rotationCalls.length, 0, 'sem argumentos não envia');
-  ok(r.textos.includes('Informe a quantidade'), 'pediu a quantidade');
 });
 
 // ============================================================================

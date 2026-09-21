@@ -250,12 +250,15 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 ╰──────────────
 
 
-╭─❖ 🧪 TESTES DE PROTEÇÃO (DONO)
-│ 💳 ${prefix}raja <qtd> <texto>
-│ 👥 ${prefix}rajar [texto]
-│ 🧪 ${prefix}rajar2 @alvo [texto]
-│ 👥 ${prefix}rajar3 [texto]
-│ 🔑 ${prefix}rajar4 @alvo [texto]
+╭─❖ 🫥 MENSAGENS INVISÍVEIS
+│ 📦 ${prefix}raja
+│    Mostra a mensagem e a quantidade salvas
+│ 💾 ${prefix}setmsgraja <qtd> <texto>
+│    Salva a mensagem do raja (por grupo)
+│ 🚀 ${prefix}rajar
+│    Dispara a mensagem salva
+│ 🫥 ${prefix}msghost @alvo [texto]
+│    Apaga o comando e envia só ao alvo
 ╰──────────────
 
 
