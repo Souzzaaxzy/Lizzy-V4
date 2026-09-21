@@ -1955,30 +1955,32 @@ servidor, `antifantasma.js` no cliente.
   (entrada como LID, como JID, e as duas juntas), listagem e regressão de
   menção. Verificado revertendo o fix: **11 asserções falham**.
 
-## COMANDO `!dono` — catálogo (foto real) + card de perfil comercial ✅
+## COMANDOS `!dono` e `!criador` — catálogo (foto real) + card de perfil comercial ✅
 Pedido do dono: substituir o `!dono` por **um catálogo único com a foto real do
 dono** seguido do **card de perfil comercial** do número setado em `numerodono`.
-Ordem explícita: **catálogo primeiro, card abaixo**.
+Ordem explícita: **catálogo primeiro, card abaixo**. Depois o mesmo layout foi
+pedido para o `!criador`.
 
-### Como ficou (`index.js`, `case 'dono'`)
-1. **Catálogo primeiro.** Usa a estrutura `catalog` da fork (e o `product` junto — ver ajustes abaixo),
-   (`ProductMessage.catalog` → `CatalogSnapshot`), que antes só montava `product`
-   e por isso não produzia card de catálogo:
-   ```js
-   await nazu.sendMessage(from, {
-     catalog: { catalogImage: { url: fotoDono }, title: nomedono, description: ... },
-     businessOwnerJid: donoJidPn,
-     body, footer,
-   }, { quoted: info });
-   ```
-2. **Card de perfil comercial abaixo.** `contacts` → `contactMessage` com um
-   vCard do número do dono (`waid` + telefone), que é o "card de perfil" que o
-   usuário adiciona à agenda.
+### Helper compartilhado (os dois comandos)
+`enviarCardsDoPerfil(sock, chatId, { numero, nome, lid, bioFallback, cargo, tag })`
+(idle no fim do `index.js`, ao lado de `sendInteractiveMessage`) monta e envia os
+dois cards. **Os dois comandos chamam o mesmo helper** — o formato vive num lugar
+só, então a próxima mudança de layout vale para ambos sem risco de divergirem
+(antes seriam ~90 linhas duplicadas).
+
+O que muda por comando são os parâmetros:
+- `!dono`: `cargo: 'Dono do bot'`, bio padrão `👑 Dono do <bot>…`, `tag: 'DONO'`.
+- `!criador`: `cargo: 'Criador do bot'`, bio padrão `👨‍💻 Criador do <bot>…`,
+  `tag: 'CRIADOR'`.
+
+Cada um mantém o **texto de fallback** próprio (`DONO DO BOT` / `CRIADOR`): se
+nem o catálogo nem o card saírem, o texto de sempre é enviado — o comando nunca
+fica mudo.
 
 ### A foto é do DONO REAL, sempre atual
-`nazu.profilePictureUrl(jid, 'image')` é chamado **na hora de cada `!dono`** —
-nada é gravado em disco nem cacheado. Se o dono troca a foto, o próximo `!dono`
-já traz a nova. Testado: trocar a URL entre chamadas muda o `catalogImage`.
+`nazu.profilePictureUrl(jid, 'image')` é chamado **na hora de cada comando** —
+nada é gravado em disco nem cacheado. Se o perfil troca a foto, o próximo `!dono`
+já traz a nova. Testado: trocar a URL entre chamadas muda a imagem do catálogo.
 
 O JID é resolvido por `numerodono` (`<numero>@s.whatsapp.net`) e, se a config
 tiver `lidowner`, as duas formas são tentadas — o dono pode estar endereçado por
@@ -1988,8 +1990,8 @@ LID.
 - **Sem foto** (privacidade/"não tem foto") → o catálogo é omitido e o card sai
   normalmente: o comando **não fica mudo**.
 - **Socket sem suporte** a catálogo/card → cai no **texto de sempre**
-  (`DONO DO BOT`), preservando o comportamento antigo como fallback.
-- Falha de um dos envios vai para o log com `[DONO] ...` (não engole em silêncio).
+  (`DONO DO BOT` / `CRIADOR`), preservando o comportamento antigo como fallback.
+- Falha de um dos envios vai para o log com `[DONO]`/`[CRIADOR] ...` (não engole em silêncio).
 
 ### Formato FINAL das duas mensagens (set/2026) ✅
 Depois de mais uma rodada no aparelho, o formato ficou assim:
