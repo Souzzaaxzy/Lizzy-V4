@@ -127,10 +127,24 @@ function setupGracefulShutdown() {
 }
 
 async function displayHeader() {
+  // Biblioteca do WhatsApp REALMENTE instalada (fork do Baileys). Lida do
+  // pacote em node_modules, então trocar o commit no lockfile e reinstalar já
+  // muda o que aparece aqui — sem editar código.
+  let waLib = null;
+  try {
+    const { getWhatsAppLibrary } = await import('../utils/baileysInfo.js');
+    waLib = getWhatsAppLibrary();
+  } catch {
+    // Informativo: nunca impede o boot.
+  }
+
   const header = [
     `${colors.bold}🚀 Nazuna - Conexão WhatsApp${colors.reset}`,
     `${colors.bold}📦 Versão: ${version}${colors.reset}`,
   ];
+  if (waLib?.label) {
+    header.push(`${colors.bold}🧩 Baileys: ${waLib.label}${colors.reset}`);
+  }
 
   separador();
   for (const line of header) {

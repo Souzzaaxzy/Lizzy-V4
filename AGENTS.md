@@ -2304,6 +2304,42 @@ um **carrossel com até 5 vídeos** encontrados — só isso.
 - Comando `!apikey`/`!setkey` em `index.js` (~linha 22635) grava `config.apikey_vex`.
 - `dados/src/.scripts/config.js` tem prompt que pede `apikey_vex`.
 
+## BOOT mostra a fork do Baileys REALMENTE instalada ✅
+- **Problema**: o boot anunciava uma biblioteca que **não era mais a que estava
+  rodando**. Não havia nenhuma linha fixa "errada" no código — o header do
+  `npm start` nunca mostrava a lib (só nome do bot e versão). Faltava a informação.
+- **Correção**: novo módulo **`dados/src/utils/baileysInfo.js`** —
+  `getWhatsAppLibrary(root?)` lê a fork **instalada** e monta o rótulo:
+  - `package.json` do pacote → **nome** e **versão**
+    (`@souzzaaxzy/baileys` / `0.3.18-final`);
+  - `node_modules/.package-lock.json` → **commit** (única fonte da verdade do
+    npm; a versão é a mesma em vários commits, então só o commit identifica a
+    revisão);
+  - `parseResolved()` extrai `owner/repo` e o commit de
+    `git+ssh://git@github.com/Souzzaaxzy/baileys.git#<sha>`.
+- **Header do boot** (`start.js` → `displayHeader`): ganhou a linha
+  ```
+  🧩 Baileys: @souzzaaxzy/baileys 0.3.18-final (Souzzaaxzy/baileys@d3692c7)
+  ```
+  O `commit` é exibido **curto (7 chars)** só para leitura; o valor completo
+  continua disponível em `info.commit` (o `gitDependencyDrift` compara 40 chars —
+  hash curto geraria falso drift; por isso não se guarda o curto).
+- **Por que ler em vez de fixar a string**: como o rótulo vem do que está
+  instalado, trocar o commit no lockfile + reinstalar **já muda o boot**, sem
+  editar código. Era exatamente o defeito relatado ("mostra a última que eu
+  usava") — uma string fixa voltaria a envelhecer na próxima troca.
+- **Robustez**: o módulo é puro (só lê arquivos) e **nunca lança** — sem
+  `node_modules`, `package.json` corrompido, sem lockfile ou pacote sem
+  `name`/`version`, devolve um rótulo válido (`versão desconhecida`,
+  `commit: null`) em vez de buraco ou `undefined`. A chamada no `start.js` está
+  em `try/catch`: informação de boot nunca impede o boot.
+- **Testes**: `tests/baileys-boot-info.test.js` — **26 asserções**: leitura
+  completa, commit completo vs curto, commits diferentes → labels diferentes,
+  mesma versão em commits diferentes não confunde, e os casos degenerados
+  (sem pacote/corrompido/sem lock/sem campos) sem `undefined|null|NaN`; mais a
+  checagem de que o `start.js` usa a função e **não** tem biblioteca antiga fixa.
+  Verificado: o boot real imprime a linha com o commit `d3692c7`.
+
 ## INSTALAÇÃO — EALLOWGIT no `npm install` (npm ≥ 11.10) ✅
 - **Sintoma**: a primeira instalação morre com
   `npm error code EALLOWGIT` / *"Fetching packages of type 'git' have been
