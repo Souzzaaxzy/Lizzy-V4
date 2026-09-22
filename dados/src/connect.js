@@ -1967,17 +1967,6 @@ async function createBotSocket(authDir) {
 
                     attachMessagesListener();
                     attachCallListener(); // Notificações de chamada (!testcall)
-                    // API do AntiFantasma (plugin remoto). Sobe sozinha: escolhe
-                    // a porta publicada do runtime (WORKER_1/WORKER_2) quando
-                    // ANTIFANTASMA_PORT não estiver definida, e detecta a URL
-                    // pública HTTPS correspondente. Sem porta utilizável, não
-                    // muda nada. Falha aqui nunca derruba o bot.
-                    try {
-                        const { iniciarApi } = await import('./antifantasma/api.js');
-                        iniciarApi();
-                    } catch (err) {
-                        console.error('[ANTIFANTASMA] API não iniciada:', err?.message || err);
-                    }
                     startCacheCleanup(); // Inicia o sistema de limpeza de cache
 
                     // Envia mensagem de boas-vindas para o dono

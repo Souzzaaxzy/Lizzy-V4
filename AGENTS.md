@@ -2831,3 +2831,38 @@ e, no fim, `✅ ATUALIZADO` com `Status: 100% sincronizado` + database preservad
 `git-drift.js`, `npm install` (`--legacy-peer-deps`/`--allow-git=all`), FFmpeg,
 yt-dlp, pausa do `messageQueue`, `!atualizar` como dono-only e reinício após
 sucesso. Nenhum segundo sistema de update; `update.js` é o mesmo arquivo.
+
+## SISTEMA DE PLUGIN do AntiFantasma — REMOVIDO (set/2026) ❌
+O **sistema de plugin** (o AntiFantasma remoto) foi removido por completo a
+pedido do dono. O **anti do próprio bot** (`!antifantasma` / `antiinvi`) **não
+foi tocado** — continua exatamente como estava.
+
+### O que foi removido (plugin)
+- **Módulos**: `dados/src/antifantasma/` inteiro (`core.js`, `api.js`,
+  `keys.js`, `health.js`, `urlManual.js`) e `dados/src/antifantasma-cliente/`
+  (`antifantasma.cjs`, `LEIA-ME.md`).
+- **`dados/src/utils/publicUrl.js`** — existia só para montar o endpoint do
+  plugin (`endpointAntiFantasma`), mais nada.
+- **Comandos** (`index.js`): `!ghostcmd` (painel/status/keys), `!addghostcmd`
+  (gerar key + entregar o adaptador), `!delghostcmd` (revogar / `alt`),
+  `!seturlghost` (URL manual), o bloco de helpers do plugin e os 5 imports.
+- **Boot**: a subida da API em `connect.js` (`iniciarApi()`) e o log da URL
+  pública no `start.js`.
+- **Menu/blockPv**: a categoria **👻 PLUGIN FANTASMA** do `menudono` e as
+  entradas `ghostcmd`/`addghostcmd`/`delghostcmd`/`seturlghost` do `blockPv`.
+- **Env**: `ANTIFANTASMA_PORT` e `ANTIFANTASMA_PUBLIC_URL` do `.env.example`.
+- **Testes**: 11 suítes do plugin (`antifantasma-plugin`, `-entrega`, `-e2e`,
+  `-usuario`, `-autossuficiente`, `-esm-replica`, `-cjs-replica`,
+  `-instalacao-limpa`, `ghost-manager`, `seturlghost`, `public-url`).
+
+### O que NÃO foi tocado (o anti do bot)
+`groupData.antiinvi` (toggle do `!antifantasma` in-bot), `isProtectedSelective`,
+`classifyMessage` (`utils/messageInspector.js`), os blocos anti-rajada e
+anti-distribuição-seletiva do handler, e `tests/antifantasma-classificacao.test.js`.
+Verificado por `grep`: **zero** referências a `ghostcmd`/`seturlghost`/
+`antifantasma/` restam. O bot carrega (`INDEX CARREGA OK`).
+
+### Nota
+A separação confirma que o anti verdadeiro sempre viveu no bot — o plugin era
+só a **distribuição** dele para outras bots (core no servidor + adaptador no
+cliente). Remover o plugin não enfraquece a proteção local.

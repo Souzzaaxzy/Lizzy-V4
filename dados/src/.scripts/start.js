@@ -317,25 +317,6 @@ async function startBot(codeMode = false) {
   const serverIP = await getServerIP();
   info(`🌐 IP do Servidor: ${colors.yellow}${serverIP}${colors.reset}`);
 
-  // URL pública HTTPS do servidor — a mesma que vai no adaptador do AntiFantasma
-  // e a que os clientes usam para falar com a API. SEMPRE aparece no boot: é a
-  // informação que o dono precisa para saber se o endereço anunciado está certo
-  // (e a URL gravada com !seturlghost vence a detecção automática).
-  try {
-    const { resumoParaLog, escolherPorta } = await import('../utils/publicUrl.js');
-    const { lerUrlManual } = await import('../antifantasma/urlManual.js');
-    const resumo = resumoParaLog(process.env, {
-      porta: escolherPorta(),
-      urlManual: lerUrlManual(),
-      sempre: true,
-    });
-    if (resumo) {
-      for (const linha of resumo.texto.split('\n')) info(linha);
-    }
-  } catch {
-    // Detecção é informativa: nunca impede o boot.
-  }
-
   info(`📷 Iniciando com ${codeMode ? 'código de pareamento' : 'QR Code'}`);
 
   botProcess = spawn('node', args, {

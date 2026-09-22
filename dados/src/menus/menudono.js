@@ -262,19 +262,6 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 ╰──────────────
 
 
-╭─❖ 👻 PLUGIN FANTASMA
-│ 📊 ${prefix}ghostcmd
-│    Status do servidor e Keys
-│ ➕ ${prefix}addghostcmd
-│    Gerar acesso ao Plugin Fantasma
-│ 🗑️ ${prefix}delghostcmd <número>
-│    Revogar uma Key
-│ 🧹 ${prefix}delghostcmd alt
-│    Apagar TODAS as Keys
-│ 🌐 ${prefix}seturlghost <url>
-│    Definir a URL do servidor
-│    (sem url: ver | 'limpar' p/ automático)
-╰──────────────
 ╭─────────────────╮
 ╰─────────────────╯
 `;
