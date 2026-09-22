@@ -3252,3 +3252,53 @@ e `dados/src/utils/messageInspector.js` (formatação da seção) + os testes do
 `!get`. O `dados/src/index.js` foi **revertido** ao estado anterior — o `!rajar`
 (`buildRajaContent`/`logRajaEnvio`) está exatamente como estava.
 
+
+## `!get` — 2 bugs de RELATÓRIO medidos em amostras reais (set/2026) ✅
+Amostras do dono mostraram dois números/valores que **pareciam prova** e não eram.
+Nenhum toca no `!rajar`/anti — só o relatório do `!get`.
+
+### BUG 1 — espaço comum contava como "invisível" (`103 invisível(is)`)
+Num `requestPaymentMessage` com um **aviso normal de 635 chars**, o relatório
+dizia `nota com 639 chars, 103 invisível(is)`. Não havia **nenhum** carácter
+invisível: os 103 eram **espaços comuns**. Causa: o contador usava a classe `\s`.
+
+Consequência prática: o número parecia evidência de manipulação de texto e não
+significava nada. Corrigido com `INVISIVEL_RE`, que lista **apenas** o que
+realmente não é desenhado — zero-width (`U+200B..U+200F`), marcas de formatação
+(`U+202A..U+202E`, `U+2060..U+2064`, `U+2066..U+2069`), hífen suave (`U+00AD`),
+BOM (`U+FEFF`), seletores de variação (`U+FE00..U+FE0F`) e fillers
+(`U+034F`, `U+115F`, `U+1160`, `U+17B4`, `U+17B5`, `U+180E`, `U+3164`, `U+FFA0`).
+**Espaço comum NÃO entra.**
+
+`textoSemConteudoVisivel` (o que promove a assinatura `INV-023`) continua usando
+a classe ampla (`\s` + invisíveis), porque ali o critério é correto: "não há nada
+desenhado". O que mudou foi só a **contagem** exibida.
+
+### BUG 2 — Long do protobuf aparecia como `0n`
+`amount1000: 0n` / `amount.value: 0n`. O Long do protobufjs vira **BigInt** e o
+`safeValue` fazia `` `${v}n` `` — o `n` é **sintaxe de literal BigInt**, não parte
+do valor. Agora `v.toString()`. Regressão coberta (inclusive que `0n` continua
+sendo zero para a detecção).
+
+### O que NÃO foi feito (fora de escopo — reportado ao dono)
+O dono relatou que o **anti** não pega o raja `sendPaymentMessage`. Diagnóstico
+medido, **não corrigido** (mexe em `index.js`, que a tarefa restringe ao `!get`):
+
+```
+classifyMessage(sendPaymentMessage):
+  isPayment      : true
+  paymentAmount  : { isZero: false, present: false, zeroPath: null }
+  --> isRajaBurst        : false   <-- gate do anti
+  --> isBurstByAmount    : false
+```
+O gate do anti é `classification.isPayment && classification.paymentAmount.isZero`
+(`index.js` ~3385/3464). Como o `sendPaymentMessage` **não carrega `amount`**, o
+zero nunca é provado e o gate **é falso por construção** — nenhum
+`sendPaymentMessage` passa, por mais invisível que seja a nota. O `!get` detecta
+porque usa a assinatura `INV-023` (tipo + nota invisível), que **não** depende de
+`amount`.
+
+**Testes**: 57 testes / 450 asserções (2 regressões novas: espaço não conta,
+`0n` não aparece). Regressões todas verdes: `get-message-inspector` 54/269,
+`raja-selective` 23/0, `antifantasma-classificacao` 18/18,
+`ghost-detection` 24/81, `anti-seletiva` 32/32.

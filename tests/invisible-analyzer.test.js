@@ -850,6 +850,35 @@ await teste('55. forma do raja (sendPaymentMessage) e reconhecida; texto visíve
   ok(r2.classification !== 'FORTEMENTE_COMPATIVEL', 'não vira forte');
 });
 
+await teste('56. espaco comum NAO conta como invisivel (bug do "103 invisivel(is)")', () => {
+  // Regressão: a primeira versão usava `\s` no contador e reportava os ~103
+  // ESPAÇOS de um aviso normal como "103 invisível(is)" — número que parecia
+  // prova de manipulação. Espaço não é carácter invisível.
+  const aviso = 'AVISO IMPORTANTE — LEIA COM ATENÇÃO! Este grupo será desativado em breve e não será mais utilizado para os próximos avisos.';
+  const msg = { key: { remoteJid: 'g@g.us', fromMe: false, id: '3EB0AABBCCDDEEFF112255', participant: '111@lid' }, message: { requestPaymentMessage: { amount1000: '0', amount: { value: '0', offset: 1000 }, noteMessage: { extendedTextMessage: { text: aviso } } } } };
+  const r = analyzeInvisibleMessage({ info: msg });
+  eq(r.payment.nota.invisiveis, 0, 'espaços normais não são invisíveis');
+  eq(r.payment.nota.semConteudoVisivel, false, 'texto com conteúdo não é "sem conteúdo visível"');
+  const txt = formatInvisibleSection(r);
+  naoContem(txt, '103 invisível', 'não inventa contagem de invisíveis');
+  naoContem(txt, 'invisível(is)', 'nem exibe o campo quando é zero');
+  // Mas zero-width de verdade continua contando.
+  const real = { key: { remoteJid: 'g@g.us', fromMe: false, id: '3EB0AABBCCDDEEFF112256', participant: '111@lid' }, message: { sendPaymentMessage: { noteMessage: { extendedTextMessage: { text: `.${'\u200b'.repeat(9)}` } } } } };
+  eq(analyzeInvisibleMessage({ info: real }).payment.nota.invisiveis, 9, 'zero-width real conta');
+});
+
+await teste('57. Long do protobuf aparece como numero puro, nao "0n"', () => {
+  // Regressão: o Long do protobufjs vira BigInt e o relatório mostrava `0n`,
+  // que parece um valor estranho. Agora mostra o número.
+  const msg = { key: { remoteJid: 'g@g.us', fromMe: false, id: '3EB0AABBCCDDEEFF112257', participant: '111@lid' }, message: { requestPaymentMessage: { amount1000: 0n, amount: { value: 0n, offset: 1000 }, noteMessage: { extendedTextMessage: { text: 'pague' } } } } };
+  const r = analyzeInvisibleMessage({ info: msg });
+  eq(r.payment.amount1000.valor, '0', 'amount1000 sem o sufixo n');
+  eq(r.payment.amountValue.valor, '0', 'amount.value sem o sufixo n');
+  const txt = formatInvisibleSection(r);
+  naoContem(txt, '0n', 'o relatório não mostra "0n"');
+  eq(r.payment.anomaliaZero, true, 'zero em BigInt continua sendo zero');
+});
+
 await teste('54. par raja × normal do MESMO grupo: o ID distingue', () => {
   // Amostras reais do dono no mesmo grupo. A normal (`conversation: ok`) tem ID
   // hex puro de 32 chars; o raja tem 33 + `_L0`. O sufixo aparece SÓ no raja.

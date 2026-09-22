@@ -199,7 +199,9 @@ const isZeroLike = (v) => {
 const safeValue = (v) => {
   if (v === undefined) return 'não fornecido';
   if (v === null) return 'null';
-  if (typeof v === 'bigint') return `${v}n`;
+  // O Long do protobufjs vira BigInt no caminho: mostrar `0n` é ruído — o `n` é
+  // sintaxe de literal BigInt, não parte do valor. Mostramos o número puro.
+  if (typeof v === 'bigint') return v.toString();
   if (typeof v === 'boolean' || typeof v === 'number') return String(v);
   if (typeof v === 'string') return v.length > 120 ? `${v.slice(0, 120)}…` : v;
   if (v instanceof Uint8Array || Buffer.isBuffer(v)) return `bytes(${v.length})`;
@@ -505,13 +507,28 @@ export function analisarSenderKey(content = {}, info = {}) {
 const NOTE_SEM_CONTEUDO = /^(?:[\s\u00a0\u200b-\u200f\u2028-\u202f\u2060-\u206f\ufeff]*)$/;
 
 /**
- * O texto tem ZERO caracteres visiveis? `.` + zero-width nao conta como texto:
- * o cliente desenha quase nada, mas o campo esta presente. Serve para separar
- * "nota com conteudo" de "nota so com espaco/invisivel".
+ * Caracteres INVISÍVEIS de verdade — zero-width, marcas de formatação, BOM,
+ * hífen suave, seletores de variação e os "fillers" que não desenham nada.
+ *
+ * ESPAÇO COMUM NÃO ENTRA. A primeira versão usava `\s` e contava os 103
+ * espaços de um aviso normal como "103 invisível(is)" — um número que parecia
+ * prova de manipulação e era só texto com espaços. Aqui só entram caracteres
+ * que realmente não aparecem.
  */
+const INVISIVEL_RE = /[\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\u3164\ufeff\ufe00-\ufe0f\uffa0]/;
+
+/** O texto é composto SÓ de espaço/branco + invisíveis (nada é desenhado)? */
 const textoSemConteudoVisivel = (texto) => typeof texto === 'string'
   && texto.length > 0
   && NOTE_SEM_CONTEUDO.test(texto);
+
+/** Quantos caracteres do texto são INVISÍVEIS (zero-width/formatação). */
+const contarInvisiveis = (texto) => {
+  if (typeof texto !== 'string') return 0;
+  let n = 0;
+  for (const c of texto) if (INVISIVEL_RE.test(c)) n += 1;
+  return n;
+};
 
 /**
  * O texto é essencialmente PADDING invisível? Cobre o caso da amostra real
@@ -522,14 +539,6 @@ const paddingInvisivel = (texto) => {
   if (typeof texto !== 'string' || !texto.length) return false;
   const n = contarInvisiveis(texto);
   return n >= 3 && n / [...texto].length >= 0.5;
-};
-
-/** Quantos caracteres do texto são invisíveis (zero-width/BOM/variation selectors). */
-const contarInvisiveis = (texto) => {
-  if (typeof texto !== 'string') return 0;
-  let n = 0;
-  for (const c of texto) if (NOTE_SEM_CONTEUDO.test(c)) n += 1;
-  return n;
 };
 
 /**
