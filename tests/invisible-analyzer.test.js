@@ -273,7 +273,7 @@ await teste('7. MATRIZ A: payment legítimo tem valor e não é anomalia', () =>
   eq(r.payment.amount1000.valor, '1500', 'amount1000 lido');
   ok(!r.indicators.some((i) => i.id === 'INV-007'), 'INV-007 ausente');
   const txt = formatInvisibleSection(r);
-  contem(txt, 'Card de pagamento com valor presente', 'justificativa honesta');
+  contem(txt, 'Request de pagamento com valor presente', 'justificativa honesta');
 });
 
 await teste('8. MATRIZ A: stub de quem entrou tarde é INCONCLUSIVA, nunca ataque', () => {
@@ -788,6 +788,56 @@ await teste('49. PLACAR: ataques conhecidos são detectados (recall)', () => {
     ok(r.classification === 'FORTEMENTE_COMPATIVEL', `${nome} é FORTEMENTE_COMPATIVEL`);
   }
   eq(fn, 0, 'zero falso negativo');
+});
+
+await teste('50. sendPaymentMessage (amostra real) e ATIPICA, nunca forte', () => {
+  // Reproduz o `sendPaymentMessage` da amostra do dono: id `_L0`, nota com
+  // "." + zero-width, 6 menções, transactionData Java.
+  const nota = { extendedTextMessage: { text: `.${'\u200b'.repeat(9)}`, contextInfo: { mentionedJid: Array.from({ length: 6 }, (_, i) => `5511900000${i}@s.whatsapp.net`), groupMentions: [], statusAttributions: [], nonJidMentions: 1 } } };
+  const msg = { key: { remoteJid: null, id: 'ADBA604E2AA05061E5E6343D4BBB3D4C6_L0', participant: '132161176899607@lid' }, message: { sendPaymentMessage: { noteMessage: nota, transactionData: 'AAAA' } } };
+  const r = analyzeInvisibleMessage({ info: msg });
+  eq(r.classification, 'ATIPICA', 'atípica, não forte');
+  eq(r.detected, false, 'não é detectado como ataque');
+  eq(r.payment.disponivel, true, 'payment reconhecido');
+  eq(r.payment.requestPayment, false, 'não é request');
+  eq(r.payment.anomaliaZero, false, 'sendPaymentMessage não tem amount — zero não é avaliado');
+  contem(r.payment.justificativa, 'nao carrega valor', 'explica por que o zero não se aplica');
+  eq(r.payment.nota.invisiveis, 9, 'conta os zero-width factuais');
+  eq(r.payment.nota.semConteudoVisivel, true, 'nota sem conteúdo visível');
+  eq(r.key.sufixoHistorico, '_L0', 'sufixo de histórico detectado');
+  ok(r.indicators.some((i) => i.id === 'INV-021'), 'INV-021 presente');
+  ok(r.indicators.some((i) => i.id === 'INV-020'), 'INV-020 presente (com outro indicador)');
+  ok(!r.indicators.some((i) => i.id === 'INV-019'), 'não é card zerado');
+  ok(!r.indicators.some((i) => i.id === 'INV-007'), 'não é a rajada');
+  eq(r.context.disponivel, true, 'contextInfo encontrado dentro da nota');
+  contem(r.context.caminho, 'noteMessage', 'caminho correto');
+  eq(r.context.mencoes, 6, 'menções lidas');
+});
+
+await teste('51. nota só com zero-width e SEM outro indicador não pontua', () => {
+  const msg = { key: { remoteJid: '123@g.us', fromMe: false, id: '3EB0AABBCCDDEEFF112299', participant: '111@s.whatsapp.net', addressingMode: 'pn' }, message: { extendedTextMessage: { text: '\u200b\u200b\u200b\u200b' } } };
+  const r = analyzeInvisibleMessage({ info: msg });
+  ok(!r.indicators.some((i) => i.id === 'INV-020'), 'INV-020 exige outro indicador na mesma mensagem');
+  eq(r.classification, 'NORMAL', 'sem outro sinal, é normal');
+});
+
+await teste('52. ID com sufixo _L0 não é confundido com ID livre', () => {
+  const k = analisarKey({ id: 'ADBA604E_L0', remoteJid: 'g@g.us', fromMe: false }, {});
+  eq(k.sufixoHistorico, '_L0', 'reconhece _L0');
+  ok(k.anomalias.some((a) => /historico/.test(a)), 'anomalia específica');
+  const livre = analisarKey({ id: 'ADBA604E2AA0', remoteJid: 'g@g.us', fromMe: false }, {});
+  eq(livre.sufixoHistorico, null, 'sem sufixo');
+  contem(livre.idFormato, 'fora do padrao', 'formato genérico');
+});
+
+await teste('53. transactionData é decodificado (Java serializado), sem vazar "--"', async () => {
+  const inspector = await import(new URL('../dados/src/utils/messageInspector.js', import.meta.url).href);
+  const buf = Buffer.concat([Buffer.from([0, 0, 0]), Buffer.from([0xac, 0xed, 0x00, 0x05]), Buffer.from('java.math.BigDecimal', 'ascii')]);
+  const alvo = { sendPaymentMessage: { transactionData: buf.toString('base64') } };
+  const rep = inspector.buildMessageReport({ info: { key: { remoteJid: 'g@g.us', id: 'X' }, message: alvo }, target: alvo, origin: 'contextInfo', extra: {} });
+  contem(rep.full, 'transactionData (decodificado)', 'seção presente');
+  contem(rep.full, 'objeto Java serializado', 'formato identificado');
+  contem(rep.full, 'não é chave privada', 'deixa claro que não é segredo');
 });
 
 // ============================================================================

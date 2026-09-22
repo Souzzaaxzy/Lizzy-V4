@@ -964,6 +964,16 @@ export function buildPaymentReport(rawMessage, webMessage) {
     appendPaymentInfo(lines, webMessage.quotedPaymentInfo, 'quotedPaymentInfo');
   }
 
+  // transactionData é um blob opaco; em vez de despejar centenas de bytes no
+  // relatório, extraímos o que ele REALMENTE carrega (é um objeto Java
+  // serializado). Nada é inventado: o que não decodificar é declarado assim.
+  const txHit = findKeysDeep(message, (key) => key === 'transactionData', { maxHits: 2 })[0];
+  if (txHit && txHit.value) {
+    lines.push('');
+    lines.push('🧪 *transactionData (decodificado)*');
+    for (const line of describeTransactionData(txHit.value)) lines.push(`• ${line}`);
+  }
+
   // Contexto/participantes envolvidos no fluxo de pagamento
   const participantKeys = findKeysDeep(leaf, (key) => /^(requestFrom|receiverJid|participant|sender|recipient)$/i.test(key), { maxHits: 10 });
   if (participantKeys.length) {
@@ -975,6 +985,66 @@ export function buildPaymentReport(rawMessage, webMessage) {
   }
 
   return { isPayment: true, lines };
+}
+
+/**
+ * Decodifica `transactionData` do pagamento.
+ *
+ * O campo é um blob em base64 que, decodificado, é um objeto **Java
+ * serializado** (`AC ED 00 05`) com `BigDecimal` e, no meio, strings UTF-16LE:
+ * o id da própria mensagem, o jid do grupo, o status (`UNSET`) e um rótulo
+ * (`X.0x9`). Nada disso é chave criptográfica — é o registro interno que o
+ * cliente Android grava. Aqui só extraímos o que é legível; o resto é declarado
+ * como não interpretado, sem inventar semântica.
+ */
+function describeTransactionData(value) {
+  const out = [];
+  let buf = null;
+  if (typeof value === 'string') {
+    try { buf = Buffer.from(value.replace(/\s+/g, ''), 'base64'); } catch { buf = null; }
+  } else if (Buffer.isBuffer(value) || value instanceof Uint8Array) {
+    buf = Buffer.from(value);
+  }
+  if (!buf || !buf.length) return ['não foi possível decodificar (não é base64/bytes).'];
+
+  out.push(`tamanho decodificado: ${buf.length} byte(s)`);
+  // O header da serialização Java não fica necessariamente no offset 0 — neste
+  // formato ele vem depois de um preâmbulo do cliente. Por isso a busca é por
+  // toda a extensão do buffer.
+  const offsets = [];
+  for (let i = 0; i + 3 < buf.length; i++) {
+    if (buf[i] === 0xac && buf[i + 1] === 0xed && buf[i + 2] === 0x00 && buf[i + 3] === 0x05) offsets.push(i);
+  }
+  out.push(offsets.length
+    ? `formato: objeto Java serializado (AC ED 00 05) em ${offsets.length} bloco(s) — registro interno do cliente, não é chave.`
+    : 'formato: não reconhecido como serialização Java.');
+
+  // Strings UTF-16LE legíveis (é como o Android grava os campos).
+  const utf16 = [];
+  let cur = '';
+  for (let i = 0; i + 1 < buf.length; i += 2) {
+    const code = buf[i] | (buf[i + 1] << 8);
+    if (code >= 0x20 && code < 0x7f) cur += String.fromCharCode(code);
+    else { if (cur.length >= 4) utf16.push(cur); cur = ''; }
+  }
+  if (cur.length >= 4) utf16.push(cur);
+  const unicos = [...new Set(utf16)];
+  if (unicos.length) {
+    out.push(`strings legíveis: ${unicos.map((s) => `\`${s}\``).join(', ')}`);
+  }
+  const classes = [...new Set((() => {
+    const s = [];
+    let c = '';
+    for (const b of buf) {
+      if (b >= 0x20 && b < 0x7f) c += String.fromCharCode(b);
+      else { if (c.length >= 4) s.push(c); c = ''; }
+    }
+    if (c.length >= 4) s.push(c);
+    return s;
+  })())].filter((s) => /^[A-Za-z0-9_$/.]+$/.test(s) && /\./.test(s));
+  if (classes.length) out.push(`classes referenciadas: ${classes.slice(0, 12).map((s) => `\`${s}\``).join(', ')}`);
+  out.push('observação: conteúdo binário restante não é interpretado (não é chave privada nem credencial).');
+  return out;
 }
 
 function appendPaymentInfo(lines, info, label) {

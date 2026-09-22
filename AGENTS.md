@@ -3054,3 +3054,50 @@ Validadas também as regressões: `get-message-inspector` **54/269**,
 `anti-seletiva` **32/32**, `viewonce-v2` **18/77**, `cmd-suggest` **21/68**,
 `testcall` **35/127**, `blacklist-number` **12/38**, `antimidia` **14/29**,
 `gifsbn-media` **16/61**, `delete-status` **11/55**.
+
+### Amostra real `sendPaymentMessage` (set/2026) + 3 correções ✅
+GET real do dono: `sendPaymentMessage` citado, ID `..._L0`, nota com `"."` +
+zero-width, 6 menções, `transactionData` opaco. **Classificação: ATÍPICA** (o
+comportamento correto — não é o raja). A investigação achou **3 defeitos** no
+analisador e 2 campos que faltavam no `!get`.
+
+1. **A `justificativa` do pagamento mentia para `sendPaymentMessage`.**
+   O tipo `sendPaymentMessage` **não carrega `amount`** (quem carrega é o
+   `requestPaymentMessage`), então dizer "card com valor presente — não é o
+   estado malformado" era falso: não havia valor nenhum para avaliar. Agora a
+   justificativa é condicional ao tipo e diz que o zero **não se aplica** ali.
+2. **O `contextInfo` da NOTA não era encontrado.** A busca seguia só a cadeia de
+   wrappers (`viewOnce → …`), mas num `sendPaymentMessage` o `contextInfo` mora em
+   `noteMessage.extendedTextMessage`. O `!get` mostrava as menções e ao mesmo
+   tempo dizia `ContextInfo: Não`. Novo helper `encontrarContextInfo(raiz, depth)`
+   faz busca limitada na árvore e devolve o **caminho**; `analisarContexto`,
+   `analisarCitacao` e `contextoBruto` passaram a usá-lo.
+3. **O `transactionData` ia para o WhatsApp como centenas de bytes.** Ele não é
+   lixo: decodificado é um **objeto Java serializado** (`AC ED 00 05`), com
+   `BigDecimal` e strings UTF-16LE — o **id da própria mensagem**, o **jid do
+   grupo**, `UNSET` e `X.0x9`. Nada de chave/credencial. `describeTransactionData`
+   substitui o despejo por: tamanho, formato, strings legíveis, classes
+   referenciadas e a ressalva de que o binário restante não é interpretado.
+
+**Dois indicadores novos** (o analisador estava cego para os dois):
+- **`INV-020` — nota com texto sem conteúdo visível** (peso 2, severidade média).
+  Cobre `.` + 9 zero-widths. **Ambíguo por desenho**: várias ferramentas usam
+  caracteres invisíveis para "campo vazio", então o peso **só conta quando já
+  existe outro indicador na mesma mensagem** (`indicadores.length > 0`). A
+  medição é factual: `invisiveis` (contagem) e `semConteudoVisivel`
+  (tudo invisível **ou** padding ≥ 3 invisíveis e ≥ 50% do texto).
+- **`INV-021` — ID com sufixo de fonte/histórico** (`<id>_L0`, peso 1, baixa).
+  Não é o formato de envio direto dos clientes (`3EB0…`); pode indicar
+  histórico/relay. Ambíguo, não é prova.
+
+**Placar da amostra:** 4/100, ATÍPICA, `detected: false`, indicadores com peso =
+`INV-021`. Com `INV-020` somando (2) + `INV-021` (1) = 3 → ainda ATÍPICA, **não**
+SUSPEITA. Nenhum falso positivo.
+
+**Testes**: `tests/invisible-analyzer.test.js` foi de 49 → **53 testes / 419
+asserções** (novos: a amostra real ponta a ponta, zero-width sozinho não pontua,
+`_L0` não é confundido com ID livre, `transactionData` decodificado).
+Regressões re-verificadas: `get-message-inspector` 54/269, `antifantasma-classificacao`
+18/18, `ghost-detection` 24/81. `defensive-protection` continua **24 falhas
+PRÉ-EXISTENTES** (reproduzidas com `git worktree` no commit anterior — todas em
+`!raja`, sem relação).

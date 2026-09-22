@@ -82,6 +82,8 @@ export const INDICADORES = Object.freeze({
   INV_017: { id: 'INV-017', nome: 'Contexto de encaminhamento na nota', categoria: 'contexto', severidade: 'media', peso: 2, descricao: 'contextInfo da NOTA com isForwarded/forwardingScore alto. Fez parte do formato do raja real; sozinho e enfeite.' },
   INV_018: { id: 'INV-018', nome: 'SKDM observado no conteudo', categoria: 'criptografia', severidade: 'baixa', peso: 0, descricao: 'senderKeyDistributionMessage decifrado. Informativo: e a distribuicao de chave, normal em grupo. O bloco <enc type="skmsg"> cru NAO e observavel nesta camada.' },
   INV_019: { id: 'INV-019', nome: 'Card de pagamento zerado sem nota', categoria: 'payment', severidade: 'media', peso: 2, descricao: 'requestPaymentMessage sem valor, mas SEM texto na nota. O card tambem nao renderiza, porem nao carrega mensagem escondida — e um card malformado, nao a rajada. Peso reduzido de proposito.' },
+  INV_020: { id: 'INV-020', nome: 'Nota com texto sem conteudo visivel', categoria: 'payment', severidade: 'media', peso: 2, descricao: 'O texto da NOTA existe mas so tem espaco/zero-width: o cliente desenha ~nada. Sozinho e ambiguo (varios envios usam caracteres invisiveis para "vazio"); pesa apenas quando ja ha outro indicador de pagamento na mesma mensagem.' },
+  INV_021: { id: 'INV-021', nome: 'ID com sufixo de fonte/historico', categoria: 'estrutura', severidade: 'baixa', peso: 1, descricao: 'ID no formato `<id>_L0` (sufixo de origem/historico). Nao e o formato dos clientes (`3EB0...`) e pode indicar historico/relay, nao um envio direto. Ambiguo: nao e prova de nada.' },
 });
 
 const AMBIGUOS = new Set(['INV-010', 'INV-011']); // stub/LID sozinhos -> nunca elevam
@@ -311,6 +313,10 @@ export function analisarKey(key = {}, opts = {}) {
   const idFormato = id
     ? (ID_PADRAO.test(id) ? 'padrao (prefixo 3EB0/3A/BAE5 + hex)' : `fora do padrao (${id.length} chars)`)
     : 'ausente';
+  // `_L<numero>` = sufixo de fonte/historico do WhatsApp (o cliente costuma
+  // receber historico com esse sufixo). Nao e o formato de envio direto
+  // (`3EB0...`), mas NAO e prova de nada — so contexto estrutural.
+  const sufixoHistorico = /_L\d+$/.test(id) ? id.slice(id.lastIndexOf('_L')) : null;
   const vistos = opts.seenIds instanceof Set ? opts.seenIds : null;
   const reuso = vistos && id ? vistos.has(id) : null;
 
@@ -322,6 +328,7 @@ export function analisarKey(key = {}, opts = {}) {
 
   const anomalias = [];
   if (!id) anomalias.push('MessageKey sem `id` — identificacao impossivel.');
+  else if (sufixoHistorico) anomalias.push(`ID com sufixo de fonte/historico (\`${sufixoHistorico}\`) — nao e o formato de envio direto dos clientes.`);
   else if (!ID_PADRAO.test(id)) anomalias.push(`ID de mensagem fora do padrao dos clientes (${id.length} chars).`);
   if (reuso === true) anomalias.push('ID ja visto antes neste processo — possivel reutilizacao.');
   if (k.fromMe === true && (jidKind(k.remoteJid) === 'grupo') && !k.participant) anomalias.push('fromMe=true em grupo sem participant.');
@@ -331,6 +338,7 @@ export function analisarKey(key = {}, opts = {}) {
     disponivel: Boolean(id || keysOf(k).length),
     id: id || null,
     idFormato,
+    sufixoHistorico,
     fromMe: has(k, 'fromMe') ? k.fromMe === true : null,
     remoteJid: k.remoteJid ?? null,
     remoteJidTipo: jidKind(k.remoteJid),
@@ -492,6 +500,66 @@ export function analisarSenderKey(content = {}, info = {}) {
   };
 }
 
+const NOTE_SEM_CONTEUDO = /^(?:[\s\u00a0\u200b-\u200f\u2028-\u202f\u2060-\u206f\ufeff]*)$/;
+
+/**
+ * O texto tem ZERO caracteres visiveis? `.` + zero-width nao conta como texto:
+ * o cliente desenha quase nada, mas o campo esta presente. Serve para separar
+ * "nota com conteudo" de "nota so com espaco/invisivel".
+ */
+const textoSemConteudoVisivel = (texto) => typeof texto === 'string'
+  && texto.length > 0
+  && NOTE_SEM_CONTEUDO.test(texto);
+
+/**
+ * O texto é essencialmente PADDING invisível? Cobre o caso da amostra real
+ * (`.` + 9 zero-widths): há 1 caractere visível, mas 90% do texto é invisível.
+ * Exige pelo menos 3 invisíveis e metade do texto — abaixo disso é texto normal.
+ */
+const paddingInvisivel = (texto) => {
+  if (typeof texto !== 'string' || !texto.length) return false;
+  const n = contarInvisiveis(texto);
+  return n >= 3 && n / [...texto].length >= 0.5;
+};
+
+/** Quantos caracteres do texto são invisíveis (zero-width/BOM/variation selectors). */
+const contarInvisiveis = (texto) => {
+  if (typeof texto !== 'string') return 0;
+  let n = 0;
+  for (const c of texto) if (NOTE_SEM_CONTEUDO.test(c)) n += 1;
+  return n;
+};
+
+/**
+ * Procura o primeiro `contextInfo` na árvore, com profundidade limitada e
+ * caminho de volta. Generaliza a busca além da cadeia de wrappers: o
+ * `contextInfo` de um `sendPaymentMessage` vive em `noteMessage`, não no wrapper.
+ */
+function encontrarContextInfo(raiz, maxDepth = 5) {
+  if (!isObj(raiz)) return null;
+  const visitados = new WeakSet();
+  const walk = (node, caminho, depth) => {
+    if (depth > maxDepth || !isObj(node) || visitados.has(node)) return null;
+    visitados.add(node);
+    if (isObj(node.contextInfo) && keysOf(node.contextInfo).length) return { ctx: node.contextInfo, caminho: `${caminho}.contextInfo` };
+    // Wrappers: segue o conteúdo interno antes de varrer as chaves.
+    const nome = nomeInterno(node);
+    if (nome && nome !== 'conversation' && isObj(node[nome])) {
+      const nested = node[nome].message;
+      const r = walk(isObj(nested) ? nested : node[nome], `${caminho}.${nome}`, depth + 1);
+      if (r) return r;
+    }
+    for (const k of Object.keys(node)) {
+      const v = node[k];
+      if (!isObj(v)) continue;
+      const r = walk(v, `${caminho}.${k}`, depth + 1);
+      if (r) return r;
+    }
+    return null;
+  };
+  return walk(raiz, 'message', 0);
+}
+
 /** PaymentAnalyzer: estrutura, valores e nota — sem inflar "pagamento" a "invisivel". */
 export function analisarPagamento(content = {}) {
   const leaf = resolverFolha(content);
@@ -548,33 +616,29 @@ export function analisarPagamento(content = {}) {
         presente: true,
         texto: noteTexto || null,
         tamanho: noteTexto.length,
+        invisiveis: contarInvisiveis(noteTexto),
+        semConteudoVisivel: textoSemConteudoVisivel(noteTexto) || paddingInvisivel(noteTexto),
         mencoes,
         forwardingScore: forward,
         isForwarded: noteCtx?.isForwarded === true,
       }
-      : { presente: false, texto: null, tamanho: 0, mencoes: 0, forwardingScore: null, isForwarded: false },
+      : { presente: false, texto: null, tamanho: 0, invisiveis: 0, semConteudoVisivel: false, mencoes: 0, forwardingScore: null, isForwarded: false },
     justificativa: zeroPath
       ? `Card de pagamento sem valor (zero em \`${zeroPath}\`): o WhatsApp nao tem o que desenhar e a mensagem fica sem conteudo visivel.`
-      : 'Card de pagamento com valor presente — nao e o estado malformado.',
+      : request
+        ? 'Request de pagamento com valor presente — nao e o estado malformado.'
+        : 'Sem `amount` neste tipo de pagamento (o `sendPaymentMessage` nao carrega valor — quem carrega e o `requestPaymentMessage`); por isso o estado "zerado" NAO e avaliado aqui.',
   };
 }
 
 /** ContextInfoAnalyzer: campos presentes, citacao, mencoes, efemera, encaminhamento. */
 export function analisarContexto(content = {}) {
-  let ctx = null;
-  let caminho = null;
-  let node = content;
-  let guard = 0;
-  while (isObj(node) && guard < 12) {
-    guard += 1;
-    const name = nomeInterno(node);
-    if (!name || name === 'conversation') break;
-    const value = node[name];
-    if (isObj(value?.contextInfo)) { ctx = value.contextInfo; caminho = `${name}.contextInfo`; break; }
-    const nested = isObj(value) ? (value.message ?? value.editedMessage ?? value.groupStatusMessage) : null;
-    if (!isObj(nested)) break;
-    node = nested;
-  }
+  // A cadeia de wrappers NÃO é o único lugar onde mora o contextInfo: num
+  // `sendPaymentMessage` ele fica em `noteMessage.extendedTextMessage`. Por isso
+  // a busca é por profundidade limitada (não só pela cadeia), cobrindo os dois.
+  const achado = encontrarContextInfo(content, 5);
+  const ctx = achado?.ctx || null;
+  const caminho = achado?.caminho || null;
   if (!ctx) {
     return { disponivel: false, caminho: null, campos: [], mencoes: 0, groupMentions: 0, naoJidMentions: null, citacao: null, efemera: null, encaminhamento: null, desconhecidos: [], anomalias: [] };
   }
@@ -621,22 +685,9 @@ export function analisarCitacao(content = {}, limite = 5) {
   }
   const tipos = [];
   const anomalias = [];
-  // Desembrulha a citacao recursivamente (limitado) para medir profundidade.
-  let atual = contexto.citacao.tipo && content ? null : null;
-  // Procura o quotedMessage real a partir do contextInfo.
-  let node = content;
-  let ctx = null;
-  let guard = 0;
-  while (isObj(node) && guard < 12) {
-    guard += 1;
-    const name = nomeInterno(node);
-    if (!name || name === 'conversation') break;
-    const value = node[name];
-    if (isObj(value?.contextInfo?.quotedMessage)) { ctx = value.contextInfo; break; }
-    const nested = isObj(value) ? (value.message ?? value.editedMessage ?? value.groupStatusMessage) : null;
-    if (!isObj(nested)) break;
-    node = nested;
-  }
+  // O contextInfo pode estar em `noteMessage` (sendPaymentMessage), não só na
+  // cadeia de wrappers — por isso reutilizamos o mesmo localizador.
+  const ctx = encontrarContextInfo(content)?.ctx || null;
   let quoted = ctx?.quotedMessage || null;
   let profundidade = 0;
   while (isObj(quoted) && profundidade < limite) {
@@ -824,6 +875,17 @@ export function correlacionar(analises = {}) {
 
   // ── Descriptografia / transporte ─────────────────────────────────────────
   if (stub?.vaziaTecnicamente) push('INV_010', `stub ${stub.tipoLabel}${stub.parametros[0] ? `: ${stub.parametros[0]}` : ''}`);
+
+  // Nota com texto so de espaco/zero-width: AMBIGUO. Diferente do stub, varias
+  // ferramentas usam caracteres invisiveis para "campo vazio" (esta amostra e um
+  // envio de pagamento legitimo). Por isso o peso conta apenas quando JA existe
+  // outra evidencia na MESMA mensagem (nunca sozinha).
+  if (payment?.nota?.semConteudoVisivel && indicadores.length > 0) {
+    push('INV_020', `nota com ${payment.nota.tamanho} chars, nenhum visível`);
+  }
+
+  // ── ID com sufixo de fonte/historico (`..._L0`) ──────────────────────────
+  if (key?.sufixoHistorico) push('INV_021', `ID termina em \`${key.sufixoHistorico}\``);
 
   // ── Enderecamento ────────────────────────────────────────────────────────
   if (lid?.lidDetectado) push('INV_011', 'mensagem endereçada por LID');
@@ -1044,19 +1106,7 @@ export function analyzeInvisibleMessage(entrada = {}) {
 
 /** Extrai o contextInfo cru (para o detector de campos desconhecidos). */
 function contextoBruto(content) {
-  let node = content;
-  let guard = 0;
-  while (isObj(node) && guard < 12) {
-    guard += 1;
-    const name = nomeInterno(node);
-    if (!name || name === 'conversation') break;
-    const value = node[name];
-    if (isObj(value?.contextInfo)) return value.contextInfo;
-    const nested = isObj(value) ? (value.message ?? value.editedMessage ?? value.groupStatusMessage) : null;
-    if (!isObj(nested)) break;
-    node = nested;
-  }
-  return null;
+  return encontrarContextInfo(content)?.ctx || null;
 }
 
 /** Limites honestos desta camada, expostos para o relatorio e para os testes. */
@@ -1169,7 +1219,7 @@ export function formatInvisibleSection(resultado, opts = {}) {
     push(`├─ amount.offset: ${val(R.payment.amountOffset)}`);
     push(`├─ Moeda: ${val(R.payment.currencyCodeIso4217)}`);
     push(`├─ Zero provado por: ${val(R.payment.zeroPath)}`);
-    push(`└─ NoteMessage: ${R.payment.nota.presente ? `presente (${R.payment.nota.tamanho} chars, ${R.payment.nota.mencoes} menções)` : 'ausente'}`);
+    push(`└─ NoteMessage: ${R.payment.nota.presente ? `presente (${R.payment.nota.tamanho} chars, ${R.payment.nota.mencoes} menções${R.payment.nota.invisiveis ? `, ${R.payment.nota.invisiveis} invisível(is)` : ''})` : 'ausente'}`);
     push(`   _${R.payment.justificativa}_`);
   }
 
