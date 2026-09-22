@@ -27161,40 +27161,227 @@ ${groupPrefix}togglecmdvip premium_ia off`);
         }
         break;
       case 'me':
+      case 'getperfil': {
         try {
+          // ⏱️ Toda consulta de perfil (foto/bio/conta) tem teto de tempo: sem
+          // isso, um servidor que aceita a conexão e não responde pendura o
+          // handler (mesma armadilha do !enqueteimg).
+          const safeQuery = async (fn, timeout = 5000, fallback = null) => {
+            let timer;
+            try {
+              return await Promise.race([
+                Promise.resolve().then(fn),
+                new Promise(resolve => {
+                  timer = setTimeout(() => resolve(fallback), timeout);
+                })
+              ]);
+            } catch {
+              return fallback;
+            } finally {
+              if (timer) clearTimeout(timer);
+            }
+          };
+          // 📇 Contexto da mensagem (citação/resposta)
+          const contextInfo = info?.message?.extendedTextMessage?.contextInfo || null;
+          // 📁 Metadata do grupo (o handler já resolveu; recarrega se vier incompleto)
+          let meta = isGroup ? groupMetadata : null;
+          if (isGroup && (!meta || !Array.isArray(meta.participants))) {
+            try {
+              meta = await safeQuery(() => nazu.groupMetadata(from), 6000, null);
+            } catch {}
+          }
+          // 🔎 Acha o participante por LID/JID/número — em grupo o `participant.id`
+          // é o LID e o número real vive em `phoneNumber`/`pn`.
+          const findParticipant = (jid) => {
+            if (!jid || !Array.isArray(meta?.participants)) return null;
+            const jidNumber = String(jid).split('@')[0].split(':')[0];
+            return meta.participants.find(participant => {
+              const ids = [participant?.id, participant?.lid, participant?.phoneNumber].filter(Boolean);
+              if (ids.includes(jid)) return true;
+              return ids.some(value => {
+                const valueNumber = String(value).split('@')[0].split(':')[0];
+                return jidNumber && valueNumber === jidNumber;
+              });
+            }) || null;
+          };
+          // 🎯 Alvo: menção > número digitado > mensagem respondida > próprio usuário
+          let user = null;
+          let numeroDigitado = '';
+          if (menc_jid2 && menc_jid2[0]) {
+            user = menc_jid2[0];
+          } else if (args[0]) {
+            numeroDigitado = String(args[0]).replace(/\D/g, '');
+            if (numeroDigitado.length < 10 || numeroDigitado.length > 15) {
+              return reply(`❌ Número inválido.\n\nUse:\n*${groupPrefix}me 5562999999999*`);
+            }
+            const check = await safeQuery(() => nazu.onWhatsApp(numeroDigitado), 6000, null);
+            const result = Array.isArray(check) ? check.find(item => item?.exists) : null;
+            if (!result?.jid) {
+              return reply('❌ Esse número não existe no WhatsApp.');
+            }
+            user = result.jid;
+          } else if (contextInfo?.participant) {
+            user = contextInfo.participant;
+          } else {
+            user = sender || info.key.participant || info.key.remoteJid;
+          }
+          const participantData = findParticipant(user);
+          // 🆔 Identidades — JID e LID são eixos diferentes, nunca assumidos iguais
+          let lidJid = null;
+          let phoneJid = null;
+          if (user?.endsWith('@lid')) lidJid = user;
+          if (user?.endsWith('@s.whatsapp.net')) phoneJid = user;
+          if (participantData?.lid) lidJid = participantData.lid;
+          if (participantData?.phoneNumber) phoneJid = participantData.phoneNumber;
+          // 📱 Número real
+          let number = '';
+          if (numeroDigitado) number = numeroDigitado;
+          else if (phoneJid) number = String(phoneJid).split('@')[0].split(':')[0];
+          else if (user?.endsWith('@s.whatsapp.net')) number = String(user).split('@')[0].split(':')[0];
+          // Alvo endereçado só por LID e o metadata não trouxe o PN: tenta mapear
+          if (!number && user?.endsWith('@lid')) {
+            const pn = await safeQuery(() => nazu.signalRepository?.lidMapping?.getPNForLID(user), 4000, null);
+            if (pn) {
+              phoneJid = pn;
+              number = String(pn).split('@')[0].split(':')[0];
+            }
+          }
+          const targetJid = phoneJid || user;
+          // Conjunto de identidades do alvo (nome, cargo e contadores usam isto)
+          const targetIds = [user, targetJid, lidJid, phoneJid, participantData?.id, participantData?.lid, participantData?.phoneNumber, number ? `${number}@s.whatsapp.net` : null].filter(Boolean);
+          const targetBases = new Set(targetIds.map(v => String(v).split('@')[0].split(':')[0]));
+          const isSelf = targetIds.some(id => sender && idsMatch(id, sender));
+          const matchesTarget = (id) => {
+            if (!id) return false;
+            if (targetIds.includes(id)) return true;
+            return targetIds.some(a => idsMatch(a, id));
+          };
+          // 👤 Nome — nunca devolve JID, LID nem número cru
+          const isUsefulName = (value) => {
+            const text = String(value || '').trim();
+            if (!text) return false;
+            if (targetIds.includes(text) || text === number || text === `+${number}`) return false;
+            if (/^\+?\d+$/.test(text)) return false;
+            if (/^\d+@(s\.whatsapp\.net|lid)$/.test(text)) return false;
+            return true;
+          };
+          let contactName = '';
+          try {
+            const contacts = nazu.store?.contacts || {};
+            for (const key of Object.keys(contacts)) {
+              const base = String(key).split('@')[0].split(':')[0];
+              if (!targetBases.has(base)) continue;
+              const c = contacts[key] || {};
+              const cand = c.notify || c.verifiedName || c.name || c.subject;
+              if (isUsefulName(cand)) {
+                contactName = String(cand).trim();
+                break;
+              }
+            }
+          } catch {}
+          const participantName = isUsefulName(participantData?.name)
+            ? String(participantData.name).trim()
+            : (isUsefulName(participantData?.notify) ? String(participantData.notify).trim() : '');
+          let username = '';
+          if (participantData?.username) {
+            username = String(participantData.username);
+            if (!username.startsWith('@')) username = `@${username}`;
+          }
+          const selfPush = isSelf && isUsefulName(pushname) ? String(pushname).trim() : '';
+          const fallbackName = number ? `+${number}` : 'Nome não disponível';
+          const userName = contactName || participantName || selfPush || (isUsefulName(username) ? username : '') || fallbackName;
+          const numerodele = number ? `+${number}` : (user ? getUserName(user) : fallbackName);
+          // 📝 Bio — o RECADO real do perfil; `fetchStatus` devolve LISTA
+          let bio = 'Sem bio disponível';
+          for (const jid of [phoneJid, targetJid, user].filter(Boolean)) {
+            const lista = await safeQuery(() => nazu.fetchStatus(jid), 5000, null);
+            const arr = Array.isArray(lista) ? lista : (lista ? [lista] : []);
+            const texto = arr.map(i => i?.status).find(s => typeof s === 'string' && s.trim());
+            if (texto) {
+              bio = texto.trim();
+              break;
+            }
+          }
+          // 🏢 Tipo de conta — IQ público `w:biz` (Business x Pessoal)
+          let tipoConta = 'Pessoal';
+          try {
+            const bizFn = typeof nazu.getBusinessProfileV2 === 'function'
+              ? nazu.getBusinessProfileV2
+              : (typeof nazu.getBusinessProfile === 'function' ? nazu.getBusinessProfile : null);
+            if (bizFn && targetJid) {
+              const prof = await safeQuery(() => bizFn.call(nazu, targetJid), 6000, null);
+              if (prof && (prof.description || prof.category || prof.wid || prof.address || prof.email || (Array.isArray(prof.website) && prof.website.length))) {
+                tipoConta = 'Business';
+              }
+            }
+          } catch {}
+          // ⭐ Cargo do alvo (nunca por nome/número digitado — só pelos cargos reais)
+          let status = 'Membro';
+          const ownerJids = [`${numerodono}@s.whatsapp.net`];
+          if (lidowner) ownerJids.push(lidowner);
+          if (targetIds.some(a => ownerJids.some(o => idsMatch(a, o)))) status = 'Dono';
+          else if (targetIds.some(a => { try { return isSubdono(a); } catch { return false; } })) status = 'Subdono';
+          else if (participantData?.admin === 'superadmin' || participantData?.admin === 'admin') status = 'Admin';
+          else if (targetIds.some(a => (groupAdmins || []).some(g => idsMatch(g, a)))) status = 'Admin';
+          else if (targetIds.some(a => premiumListaZinha?.[a] || premiumListaZinha?.[String(a).split('@')[0]])) status = 'Premium';
+          // 📊 Atividade (aceita qualquer identidade do alvo no contador)
+          const sumContador = (contador) => {
+            const entry = (Array.isArray(contador) ? contador : []).find(u => matchesTarget(u?.id));
+            return entry ? { msg: entry.msg || 0, cmd: entry.cmd || 0, figu: entry.figu || 0 } : null;
+          };
           let groupMessages = 0;
           let groupCommands = 0;
           let groupStickers = 0;
-          if (isGroup && groupData.contador && Array.isArray(groupData.contador)) {
-            const userData = groupData.contador.find(u => u.id === sender);
-            if (userData) {
-              groupMessages = userData.msg || 0;
-              groupCommands = userData.cmd || 0;
-              groupStickers = userData.figu || 0;
+          if (isGroup) {
+            const g = sumContador(groupData?.contador);
+            if (g) {
+              groupMessages = g.msg;
+              groupCommands = g.cmd;
+              groupStickers = g.figu;
             }
           }
           let totalMessages = 0;
           let totalCommands = 0;
           let totalStickers = 0;
-          const groupFiles = fs.readdirSync(GRUPOS_DIR).filter(file => file.endsWith('.json'));
-          for (const file of groupFiles) {
-            try {
-              const groupData = JSON.parse(fs.readFileSync(pathz.join(GRUPOS_DIR, file)));
-              if (groupData.contador && Array.isArray(groupData.contador)) {
-                const userData = groupData.contador.find(u => u.id === sender);
-                if (userData) {
-                  totalMessages += userData.msg || 0;
-                  totalCommands += userData.cmd || 0;
-                  totalStickers += userData.figu || 0;
+          try {
+            const groupFiles = fs.readdirSync(GRUPOS_DIR).filter(file => file.endsWith('.json'));
+            for (const file of groupFiles) {
+              try {
+                const data = JSON.parse(fs.readFileSync(pathz.join(GRUPOS_DIR, file)));
+                const t = sumContador(data?.contador);
+                if (t) {
+                  totalMessages += t.msg;
+                  totalCommands += t.cmd;
+                  totalStickers += t.figu;
                 }
-              }
-            } catch (e) {
-              console.error(`Erro ao ler ${file}:`, e);
+              } catch {}
             }
+          } catch (e) {
+            console.error('[ME] Erro ao somar contadores:', e?.message);
           }
-          const userName = pushname || getUserName(sender);
-          const userStatus = isOwnerOrSub ? 'Dono' : isPremium ? 'Premium' : isGroupAdmin ? 'Admin' : 'Membro';
-          const statusMessage = `📊 *Meu Status - ${userName}* 📊\n\n👤 *Nome*: ${userName}\n📱 *Número*: @${getUserName(sender)}\n⭐ *Status*: ${userStatus}\n\n${isGroup ? `\n📌 *No Grupo: ${groupName}*\n💬 Mensagens: ${groupMessages}\n⚒️ Comandos: ${groupCommands}\n🎨 Figurinhas: ${groupStickers}\n` : ''}\n\n🌐 *Geral (Todos os Grupos)*\n💬 Mensagens: ${totalMessages}\n⚒️ Comandos: ${totalCommands}\n🎨 Figurinhas: ${totalStickers}\n\n◈ *Bot*: ${nomebot} by ${nomedono} ◈`;
+          const statusMessage = `╭━━━〔 👤 PERFIL 〕━━━⬣
+
+📛 Nome: ${userName}
+📱 Número: ${numerodele}
+📝 Bio: ${bio}
+⭐ Status: ${status}
+🏢 Conta: ${tipoConta}
+
+╭━━〔 📊 ATIVIDADE 〕
+
+📌 Neste Grupo
+💬 Mensagens: ${groupMessages}
+⚒️ Comandos: ${groupCommands}
+🎨 Figurinhas: ${groupStickers}
+
+🌐 Todos os Grupos
+💬 Mensagens: ${totalMessages}
+⚒️ Comandos: ${totalCommands}
+🎨 Figurinhas: ${totalStickers}
+
+╰━━━━━━━━━━━━━━━━⬣
+
+${nomebot}  By  👑 ${nomedono}`;
           await nazu.sendMessage(from, {
             text: statusMessage,
             contextInfo: {
@@ -27207,10 +27394,11 @@ ${groupPrefix}togglecmdvip premium_ia off`);
             }
           });
         } catch (e) {
-          console.error(e);
+          console.error('[ME] Erro:', e);
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
         }
         break;
+      }
       case 'infoserver':
         if (!isOwner) {
           await reply('*Ops! Você não tem permissão!* 😅\n\n🌌 *Este comando é só para o dono*\nInformações do servidor são confidenciais! ◈');

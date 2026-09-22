@@ -2154,6 +2154,55 @@ ignorava `catalog` e não havia ramo para o multi-produto. A fork ganhou
   o fake que manda JID em `mentionedJid` faz tudo não casar.
   Verificado revertendo os fixes: **19 asserções falham** com o código antigo.
 
+## COMANDO `!me` — perfil completo no novo layout (set/2026) ✅
+- **Pedido do dono**: o `!me` deixou de ser "meu status" e passou a mostrar o
+  **perfil** (nome, número, bio, tipo de conta, cargo) + **atividade** (no grupo
+  e global). Aliases: `!me` e `!getperfil` (mesma case; `!perfil` continua sendo
+  o OUTRO comando de RPG, não foi tocado).
+- **Layout exato** (o que o dono pediu): cabeçalho `╭━━━〔 👤 PERFIL 〕━━━⬣`,
+  os cinco campos (`📛 Nome`/`📱 Número`/`📝 Bio`/`⭐ Status`/`🏢 Conta`),
+  `╭━━〔 📊 ATIVIDADE 〕` com os blocos `📌 Neste Grupo` e `🌐 Todos os Grupos`
+  (mensagens/comandos/figurinhas), fechamento `╰━━━━━━━━━━━━━━━━⬣` e rodapé
+  `${nomebot}  By  👑 ${nomedono}`.
+- **Alvo** (o mesmo critério do trecho que o dono mandou): menção →
+  número digitado → mensagem respondida → o próprio usuário. Ou seja, dá para
+  consultar o perfil de um terceiro. Número fora de 10–15 dígitos e número
+  inexistente (`onWhatsApp`) recusam com mensagem clara.
+- **De onde vem cada campo**:
+  - **Nome** — contatos da sessão (`nazu.store.contacts.notify/verifiedName`) →
+    `participant.name/notify` do metadata → `pushName` (só do próprio usuário) →
+    `+número`. **Nunca** devolve JID, LID nem número cru como nome (`isUsefulName`).
+  - **Número** — PN do metadata (`phoneNumber`), senão o número digitado; alvo
+    só-LID sem PN no metadata tenta `signalRepository.lidMapping.getPNForLID`.
+  - **Bio** — o RECADO real via `fetchStatus` (**lista** `[{ id, status, setAt }]`,
+    não objeto) → `Sem bio disponível`.
+  - **Conta** — IQ público `w:biz` por `getBusinessProfileV2` (ou
+    `getBusinessProfile` como fallback): perfil presente → `Business`, senão
+    `Pessoal`.
+  - **Status/cargo** — Dono (números/LID do config) → Subdono (`isSubdono`) →
+    Admin (metadata ou `groupAdmins`) → Premium (`premiumListaZinha`; ela é
+    chaveada por `from` **e** por usuário) → Membro.
+- **Atividade casa por qualquer identidade do alvo** (LID, JID ou número):
+  `matchesTarget` usa `idsMatch`, porque o contador pode estar gravado por JID e
+  o alvo chegar por LID. O global varre todos os JSONs de `GRUPOS_DIR`.
+- **`safeQuery` no topo da case**: foto/meta/número/bio/conta passam por um
+  teto de tempo (Promise.race). Um servidor que aceita a conexão e não responde
+  não pendura mais o handler — mesma armadilha documentada no `!enqueteimg`.
+  Socket sem `fetchStatus`/`getBusinessProfileV2` (fork anterior) não quebra:
+  cai no padrão.
+- **Contrato preservado**: mesmo envio (`nazu.sendMessage(from, { text,
+  contextInfo: newsletter })`), mesmo bloco de erro. Nada de sistema paralelo.
+- **Testes**: `tests/me-profile.test.js` — **44 asserções**, rodando o **handler
+  real** com socket falso: layout campo a campo, alvo por menção/resposta/número
+  (e o número de quem digitou NÃO vaza), nome nunca sendo JID/LID/número,
+  bio (recado/padrão/exceção), Business vs Pessoal (+exceção), cargos, atividade
+  no grupo e global (isolando os arquivos com `limparGrupos()`), contador por
+  JID casando com alvo em LID, zeros em vez de `undefined`/`NaN`, o alias
+  `!getperfil` e socket sem os métodos de perfil.
+  **Armadilha**: o throttle é por REMETENTE (3 comandos por 5s) — a suíte usa um
+  remetente novo por chamada (`nextSender()`), senão do 4º comando em diante a
+  resposta é "Calma aí!" e o teste mede a coisa errada.
+
 ## Comandos e fluxos relevantes
 - Autodownload por URL: `handleAutoDownload(nazu, from, url, info)` em `index.js` (~linha 1789) detecta domínio e chama `youtube.mp3`, `tiktok.dl`, `igdl.dl`, `kwai.dl`, `facebook.downloadHD`, `pinterest.dl`, `spotify.download`, `soundcloud.download`.
 - Imports diretos em `index.js` (não via exports.js): `spotifyModule` (linha 590), `removeBg/upscale` (589), `search/searchNews` (588).
