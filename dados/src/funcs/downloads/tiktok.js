@@ -7,9 +7,10 @@
  *   e consulta tikwm.com (agregador público gratuito, sem apikey) para obter a
  *   URL do vídeo sem marca d'água, capa, áudio, autor e estatísticas.
  * - search(query): Bing Videos Search (HTML público) encontra páginas de vídeo
- *   do TikTok sobre o termo e, em seguida, aplica dl() em cada uma (até 3) para
- *   montar a lista de resultados. Mesma abordagem legítima já usada pelo
- *   módulo Pinterest do projeto (Bing como fonte de descoberta).
+ *   do TikTok sobre o termo e, em seguida, resolve cada uma no tikwm (até
+ *   SEARCH_MAX_RESULTS) para montar a lista de resultados. Mesma abordagem
+ *   legítima já usada pelo módulo Pinterest do projeto (Bing como fonte de
+ *   descoberta).
  *
  * Formato de retorno mantido compatível com o módulo original:
  *   dl:     { ok, criador, title, type, mime, urls[], author, username,
