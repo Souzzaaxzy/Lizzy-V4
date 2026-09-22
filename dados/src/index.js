@@ -21281,9 +21281,8 @@ Se não definir cores, a API usa padrão automaticamente.`
               await nazu.sendMessage(from, {
                 audio: audioBuffer,
                 mimetype: 'audio/mpeg',
-                ptt: false
-              }, {
-                quoted: info
+                ptt: false,
+                contextInfo: newsletterContext
               }).then(async () => {
                 // Depois envia o menu
                 if (mediaBuffer) {
@@ -21291,17 +21290,13 @@ Se não definir cores, a API usa padrão automaticamente.`
                     [useVideo ? 'video' : 'image']: mediaBuffer,
                     caption: lerMaisPrefix + menuText,
                     gifPlayback: useVideo,
-                    mimetype: useVideo ? 'video/mp4' : 'image/jpeg'
-                  }, {
-                    quoted: info,
+                    mimetype: useVideo ? 'video/mp4' : 'image/jpeg',
                     contextInfo: newsletterContext
                   });
                 } else {
                   await nazu.sendMessage(from, {
                     text: lerMaisPrefix + menuText,
                     contextInfo: newsletterContext
-                  }, {
-                    quoted: info
                   });
                 }
               });
@@ -21312,17 +21307,13 @@ Se não definir cores, a API usa padrão automaticamente.`
                   [useVideo ? 'video' : 'image']: mediaBuffer,
                   caption: lerMaisPrefix + menuText,
                   gifPlayback: useVideo,
-                  mimetype: useVideo ? 'video/mp4' : 'image/jpeg'
-                }, {
-                  quoted: info,
+                  mimetype: useVideo ? 'video/mp4' : 'image/jpeg',
                   contextInfo: newsletterContext
                 });
               } else {
                 await nazu.sendMessage(from, {
                   text: lerMaisPrefix + menuText,
                   contextInfo: newsletterContext
-                }, {
-                  quoted: info
                 });
               }
             }
@@ -21333,17 +21324,13 @@ Se não definir cores, a API usa padrão automaticamente.`
                 [useVideo ? 'video' : 'image']: mediaBuffer,
                 caption: lerMaisPrefix + menuText,
                 gifPlayback: useVideo,
-                mimetype: useVideo ? 'video/mp4' : 'image/jpeg'
-              }, {
-                quoted: info,
+                mimetype: useVideo ? 'video/mp4' : 'image/jpeg',
                 contextInfo: newsletterContext
               });
             } else {
               await nazu.sendMessage(from, {
                 text: lerMaisPrefix + menuText,
                 contextInfo: newsletterContext
-              }, {
-                quoted: info
               });
             }
           }
@@ -21384,8 +21371,6 @@ Se não definir cores, a API usa padrão automaticamente.`
           await nazu.sendMessage(from, {
             text: `${menuText}\n\n⚠️ *Nota*: Ocorreu um erro ao carregar a mídia do menu.`,
             contextInfo: newsletterContext
-          }, {
-            quoted: info
           });
         }
         break;
@@ -22284,17 +22269,13 @@ Precisa de ajuda? Entre em contato:
             await nazu.sendMessage(from, {
               [useVideo ? 'video' : 'image']: mediaBuffer,
               caption: lerMaisPrefix + menuText,
-              gifPlayback: isGif
-            }, {
-              quoted: info,
+              gifPlayback: isGif,
               contextInfo: newsletterContext
             });
           } else {
             await nazu.sendMessage(from, {
               text: lerMaisPrefix + menuText,
               contextInfo: newsletterContext
-            }, {
-              quoted: info
             });
           }
         }

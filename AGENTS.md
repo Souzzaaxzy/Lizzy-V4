@@ -3633,3 +3633,63 @@ A comparação é por **caminho resolvido**, não string — assim `./midias/x` 
 Regressões verdes: `get-message-inspector` 54/269, `raja-selective` 23/0,
 `antifantasma-classificacao` 18/18, `ghost-detection` 24/81, `anti-seletiva` 32/32,
 `viewonce-v2` 18/77, `cmd-suggest` 21/68, `testcall` 35/127.
+
+### MENU — sem `quoted` e com newsletter no lugar CERTO (set/2026) ✅
+Pedido do dono: *"faça quase o mesmo layout para o menu, sem quoted e com
+newsletter também"*. Feito — e o caminho revelou **onde** o `contextInfo` tem de
+ir.
+
+#### 1. `quoted` removido (10 envios)
+O menu citava a mensagem do usuário em **todos** os envios. Removido de:
+`case 'menu'` (8 pontos: áudio, mídia, textos e o fallback) e
+`sendMenuWithMedia` (2: mídia e texto).
+
+**Armadilha de método (custou uma rodada):** a primeira tentativa foi um
+`replace` de string genérico (`}, {\n  quoted: info\n});`) e ele acertou
+**21 lugares fora do menu** (economia, pin, stickers, etc.) — o diff mostrou
+ranges em `case 'addaluguel'`, `case 'pin'`, `type: 'image'`, `packname`...
+**Revertido** e refeito **cirurgicamente por número de linha**, dentro dos blocos
+de menu apenas. O diff final são **exatamente 10 linhas removidas**, todas nos
+ranges do menu. Lição: em arquivo de 36k linhas, substituição textual ampla é
+perigosa; conferir o `git diff` **antes** de seguir é obrigatório.
+
+#### 2. O newsletter ia para o lugar ERRADO (o achado real)
+O menu passava `contextInfo` no **3º argumento** do `sendMessage` (as *options*):
+
+```js
+nazu.sendMessage(from, { image, caption }, { contextInfo: newsletterContext })  // IGNORADO
+```
+
+**A fork lê `message.contextInfo`** — o **2º** argumento (o content) — em
+`generateWAMessageContent` (`messages.js` ~1488). `options.contextInfo` **não é
+lido por ninguém**. Medido com o caminho real (`generateWAMessage`):
+
+| forma | newsletter chega? |
+|---|---|
+| `{ text }` + `options.contextInfo` | **false** ← era o que o menu fazia |
+| `{ text, contextInfo }` | **true** |
+
+Correção: o `contextInfo` foi movido para **dentro do content**, nos 10 envios.
+
+**Observação que explica o histórico**: a resposta do prefixo já funcionava
+porque o `responderPrefixo` envia por `nazu.sendMessage` com o `contextInfo`
+dentro do objeto da mensagem — a forma certa. O menu usava a forma errada desde
+antes.
+
+#### 3. O áudio do menu ganhou newsletter
+Era o único envio do menu sem cabeçalho (e tinha um objeto de opções **vazio**
+sobrando, `}, {\n}`). Agora tem `contextInfo` no content.
+
+#### Testes — `tests/menu-layout.test.js` (**7 testes / 27 asserções**)
+Roda o **handler real** com socket falso:
+- `!menu` sem `quoted` e com newsletter (texto **e** mídia);
+- **6 menus temáticos** (`!menudono`, `!menuadm`, `!menumemb`, `!menurpg`,
+  `!menudown`, `!menulogos`) — todos via `sendMenuWithMedia`;
+- o conteúdo continua saindo (nome do bot, saudação);
+- o newsletter traz `newsletterJid` de verdade (não objeto vazio);
+- **guarda estrutural**: varre o código e falha se alguém reintroduzir
+  `quoted: info` num envio de menu, ou deixar um envio sem `contextInfo`.
+
+Regressões verdes: `get-message-inspector` 54/269, `midiaprefix` 26/83,
+`raja-selective` 23/0, `antifantasma-classificacao` 18/18, `ghost-detection` 24/81,
+`anti-seletiva` 32/32, `cmd-suggest` 21/68.
