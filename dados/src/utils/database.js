@@ -3443,8 +3443,15 @@ const getPrefixMediaIsGif = () => {
 const setPrefixMedia = (mediaPath, mediaType, isGif = false) => {
   const data = loadPrefixMedia();
 
-  // Remove mídia anterior se existir
-  if (data.mediaPath && fs.existsSync(data.mediaPath)) {
+  // Remove a mídia anterior — MAS NUNCA quando é o MESMO arquivo.
+  //
+  // O comando grava sempre em `prefix_media.<ext>` (caminho fixo), então o
+  // caminho novo é igual ao antigo em todo salvamento. Sem esta guarda, o
+  // `unlinkSync` apagava o arquivo que tinha ACABADO de ser escrito, e a mídia
+  // "sumia" — `isPrefixMediaEnabled()` passava a false e o prefixo deixava de
+  // enviar a mídia. Medido: salvar 2x deixava `existsSync` = false.
+  const mesmoArquivo = data.mediaPath && pathz.resolve(data.mediaPath) === pathz.resolve(mediaPath);
+  if (!mesmoArquivo && data.mediaPath && fs.existsSync(data.mediaPath)) {
     try {
       fs.unlinkSync(data.mediaPath);
     } catch (error) {

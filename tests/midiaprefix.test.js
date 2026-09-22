@@ -414,6 +414,49 @@ await test('21. TODA resposta do prefixo carrega o cabeçalho de canal (newslett
 // SEÇÃO 6 — PERMISSÃO
 // ============================================================================
 
+await test('25. trocar a mídia (2x) NÃO apaga o próprio arquivo', async () => {
+  // Regressão do bug real: o comando grava SEMPRE em `prefix_media.<ext>`, e o
+  // `setPrefixMedia` apagava "a mídia anterior" sem checar se era o MESMO
+  // arquivo — então o 2º salvamento apagava o que tinha acabado de escrever.
+  // Efeito: `isPrefixMediaEnabled()` virava false e o prefixo parava de enviar
+  // a mídia (mesmo tendo sido "salva com sucesso").
+  await rodar({ comando: '!midiaprefix off' });
+  await rodar({ comando: '!midiaprefix', midia: midiaEnviada('image', JPEG_REAL) });
+  ok(Boolean(db.isPrefixMediaEnabled()), 'após o 1º salvamento: ativa');
+  const p1 = db.getPrefixMediaPath();
+  await rodar({ comando: '!midiaprefix', midia: midiaEnviada('image', JPEG_REAL) });
+  ok(Boolean(db.isPrefixMediaEnabled()), 'após o 2º salvamento: CONTINUA ativa');
+  eq(db.getPrefixMediaPath(), p1, 'mesmo caminho (é o esperado)');
+  ok(fs.existsSync(p1), 'o arquivo existe no disco');
+  // E o "prefixo" realmente envia a mídia.
+  const { sent } = await rodar({ comando: 'prefixo' });
+  ok(sent.some((x) => Buffer.isBuffer(x.content?.image)), 'enviou a imagem depois de trocar');
+});
+
+await test('26. mídia + texto juntos: o texto vai como LEGENDA da mídia', async () => {
+  // O relato: "as mídias setadas no prefixo não estão sendo enviadas junto ao
+  // texto". Este teste amarra os dois: a mídia sai COM o texto como legenda,
+  // nas DUAS ordens de configuração.
+  const conferir = async (ordem) => {
+    await rodar({ comando: '!midiaprefix off' });
+    if (ordem === 'midia-primeiro') {
+      await rodar({ comando: '!midiaprefix', midia: midiaEnviada('image', JPEG_REAL) });
+      await rodar({ comando: '!midiaprefix Legenda #prefixo# para #numerodele#' });
+    } else {
+      await rodar({ comando: '!midiaprefix Legenda #prefixo# para #numerodele#' });
+      await rodar({ comando: '!midiaprefix', midia: midiaEnviada('image', JPEG_REAL) });
+    }
+    ok(Boolean(db.isPrefixMediaEnabled()), `${ordem}: mídia ativa`);
+    eq(db.loadMsgPrefix(), 'Legenda #prefixo# para #numerodele#', `${ordem}: texto salvo`);
+    const { sent } = await rodar({ comando: 'prefixo' });
+    const comImagem = sent.find((x) => x.content?.image);
+    ok(comImagem, `${ordem}: enviou a mídia`);
+    contem(comImagem.content.caption, 'Legenda ! para @5511000000000', `${ordem}: texto como legenda, variáveis resolvidas`);
+  };
+  await conferir('midia-primeiro');
+  await conferir('texto-primeiro');
+});
+
 await test('22. a resposta do prefixo NÃO cita a mensagem do usuário (sem quoted)', async () => {
   await rodar({ comando: '!midiaprefix Use #prefixo# antes!' });
   const comTexto = await rodar({ comando: 'prefixo' });

@@ -3573,3 +3573,63 @@ permanece o mesmo (delega a decisão), então o silêncio vale para `prefixo` e
 Regressões verdes: `get-message-inspector` 54/269, `raja-selective` 23/0,
 `antifantasma-classificacao` 18/18, `ghost-detection` 24/81, `anti-seletiva` 32/32,
 `viewonce-v2` 18/77, `cmd-suggest` 21/68, `testcall` 35/127.
+
+### 🚨 BUG RAIZ — a mídia do prefixo se AUTO-APAGAVA ao salvar (set/2026) ✅
+Relato do dono: *"as mídias setadas no prefixo não estão sendo enviadas junto ao
+texto quando alguém fala 'prefixo'"*. A causa não era o envio — era o
+**salvamento**.
+
+#### O bug (medido, não hipótese)
+O comando grava sempre no **mesmo caminho fixo**: `midias/prefix_media.jpg` (ou
+`.mp4`). O `setPrefixMedia` fazia:
+
+```js
+if (data.mediaPath && fs.existsSync(data.mediaPath)) fs.unlinkSync(data.mediaPath);
+data.mediaPath = mediaPath;   // <-- o MESMO caminho que acabou de ser gravado
+```
+
+Como o caminho novo é **igual** ao antigo, o `unlinkSync` **apagava o arquivo que
+tinha acabado de ser escrito**. Prova isolada:
+
+```
+apos 1a: true  {"mediaPath":".../prefix_media.jpg"}
+apos 2a: false {"mediaPath":".../prefix_media.jpg"}   <-- arquivo apagado por si mesmo
+```
+
+Consequência: `isPrefixMediaEnabled()` (`mediaPath && existsSync`) virava
+**false**, e o `responderPrefixo` caía no ramo de "só texto" — a mídia **nunca**
+era enviada, mesmo o comando respondendo *"mídia atualizada com sucesso"*.
+
+**Por que parecia intermitente**: o cenário `imagem → texto → prefixo` funcionava
+(uma gravação só). O bug aparecia ao gravar mídia **duas vezes** — trocar o GIF,
+corrigir a foto, ou configurar mídia **depois** de já haver mídia. Reproduzido
+com o handler real:
+
+| cenário | antes | depois |
+|---|---|---|
+| imagem → texto → "prefixo" | mídia enviada | mídia enviada |
+| **imagem → OUTRA imagem** | **`ativa=false`** | `ativa=true` |
+| texto → imagem → "prefixo" | mídia enviada | mídia enviada |
+
+#### Correção
+`setPrefixMedia` só apaga a mídia anterior quando o caminho é **diferente**:
+
+```js
+const mesmoArquivo = data.mediaPath && pathz.resolve(data.mediaPath) === pathz.resolve(mediaPath);
+if (!mesmoArquivo && data.mediaPath && fs.existsSync(data.mediaPath)) { ...unlink... }
+```
+
+A comparação é por **caminho resolvido**, não string — assim `./midias/x` e
+`/abs/midias/x` contam como o mesmo arquivo.
+
+#### Testes — 24 → **26 testes / 83 asserções**
+- **25** (novo): salvar mídia **2×** mantém `isPrefixMediaEnabled()` true e o
+  arquivo no disco; e o "prefixo" envia a imagem depois da troca. É a regressão
+  exata do bug.
+- **26** (novo): mídia + texto, nas **duas ordens** (`mídia→texto` e
+  `texto→mídia`), exige que a mídia saia **com o texto como legenda** e as
+  variáveis resolvidas. Amarra o relato do dono ponta a ponta.
+
+Regressões verdes: `get-message-inspector` 54/269, `raja-selective` 23/0,
+`antifantasma-classificacao` 18/18, `ghost-detection` 24/81, `anti-seletiva` 32/32,
+`viewonce-v2` 18/77, `cmd-suggest` 21/68, `testcall` 35/127.
