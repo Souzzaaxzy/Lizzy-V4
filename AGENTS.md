@@ -2840,3 +2840,101 @@ oneof, a serialização) está correta e provada. O que a medição real acresce
 foi o **veredito de efeito**: aceito e ignorado — porque o recurso é pessoal e
 de entrada. O laboratório continua útil como ferramenta de diagnóstico (mostra
 o que sai, com ID e bytes), mas **não é e não será** um "muda o tema do grupo".
+
+## CORREÇÃO DEFINITIVA DO SISTEMA DE ATUALIZAÇÃO (set/2026) ✅
+Substituído o `git pull` (merge) por **sincronização determinística**. O
+sintoma relatado era o bot ficar **um commit atrasado para sempre**:
+
+```
+fork:  A → B → C → D
+bot :  A → B → C        (!atualizar não chegava em D)
+```
+
+### Por que o pull antigo falhava (medido, não hipótese)
+O bot tem estado local estruturalmente sujo: ele grava sozinho em
+`dados/database` (economia, grupos, contadores) e o `npm install` reescreve o
+`package-lock.json`. `git pull` faz **merge** — e o merge podia concluir "sem
+erro" deixando a árvore num estado que **não** é o `origin/main`; a rodada
+seguinte partia desse estado intermediário, e o atraso se perpetuava. O
+fallback antigo (`git checkout --` em arquivos e novo pull) também era merge,
+então reproduzia o problema.
+
+### Contrato novo
+**`HEAD === origin/main`**, comparado por **SHA completo**. E a sincronização é
+`git reset --hard origin/main` (sem merge). O estado do bot é preservado pelo
+**backup do database**, não pelo merge.
+
+### Módulos novos (nenhum sistema paralelo: `update.js` foi reescrito em cima deles)
+- **`dados/src/.scripts/git-sync.js`** — `validarGit`, `identificarOrigem`
+  (valida o owner/repo do remote), `fetchRemoto`, `lerEstado`, `nomeDoCommit`,
+  `sincronizarComRemoto`, `sincronizarCodigo`. O `spawn` do git é **injetável**,
+  então os cenários de falha são testáveis sem repositório real.
+- **`dados/src/.scripts/database-backup.js`** — `criarBackupDatabase`,
+  `validarBackupDatabase`, `restaurarBackupDatabase`,
+  `validarRestauracaoDatabase`, `descartarBackupDatabase`.
+- `git-drift.js` **preservado** (é a única checagem que pega a fork no commit
+  errado, já que a versão `0.3.18-final` é a mesma entre commits).
+
+### Backup RECURSIVO (não pela lista do `git status`)
+O backup copia **`dados/database` inteiro**, recursivamente — rastreados, não
+rastreados, novos, modificados e **ignorados** (o `.gitignore` esconde muito
+arquivo ali, e um backup por `git status` os perderia). É criado e validado
+**antes de qualquer operação destrutiva**; se falhar, **aborta sem reset**
+(etapa `BACKUP`). O restore é por sobrescrita, sem apagar o diretório, para não
+remover arquivo criado durante a atualização. O backup só é descartado depois de
+restore + validação de SHA.
+
+### Etapas de erro (substituem o inútil "código: 1")
+`GIT` · `REMOTE` · `BACKUP` · `FETCH` · `SINCRONIZAÇÃO` · `RESTORE` ·
+`DEPENDÊNCIAS` · `BAILEYS` · `VALIDAÇÃO` — a UI mostra **qual** etapa falhou.
+
+### SHA x interface
+O SHA é usado **só internamente** (comparação + linhas `[UPDATE]` de
+diagnóstico). A interface recebe **nome** de commit (`git log -1 --pretty=%s`),
+via linhas estruturadas `UI:<tipo>:<json>`. O comando mostra:
+```
+╭━━〔 🔄 ATUALIZAÇÃO 〕━━⬣
+┃ 📦 Repositório: Souzzaaxzy/baileys
+┃ 🌿 Branch: main
+┃ 🔹 Atual:  <título do commit local>
+┃ 🔹 Remoto: <título do commit remoto>
+┃ ⏳ Sincronizando...
+╰━━━━━━━━━━━━━━━━━━━━━━⬣
+```
+e, no fim, `✅ ATUALIZADO` com `Status: 100% sincronizado` + database preservado.
+`LIZZY_UPDATE_REMOTE`/`LIZZY_UPDATE_BRANCH` permitem fork/host próprio.
+
+### Bugs pré-existentes corrigidos no caminho
+1. **`extrairRepo`** — o regex antigo devolvia `github.com/Souzzaaxzy/baileys`
+   (com o host), então a validação de origem **recusaria um remote correto**.
+   Agora pega os dois últimos segmentos de caminho (`owner/repo`).
+2. **Validação de remote apontava para o repo errado** — o `update.js`
+   passava `REPO_FORK` (a dependência), mas quem está clonado é o **bot**
+   (`REPO_BOT`). Corrigido (foi o que o e2e pegou).
+3. **`node_modules` obrigatório sempre** — o npm **não cria** o diretório quando
+   não há dependências, então um projeto sem deps dava falso "npm install
+   falhou". Agora só cobra o diretório se o `package.json` declarar dependência.
+
+### Testes
+- **`tests/update-sync.test.js` — 19 testes / 65 asserções** (git fake com
+  estado): TESTE 1 (já atualizado, zero reset), 2 (um commit atrasado), 3 (vários
+  atrasados A→D), 6 (falha no backup → zero reset), 9 (falha no fetch → etapa
+  FETCH), 10 (reset sem efeito → falha VALIDAÇÃO, nunca "100% sincronizado"),
+  11 (título do commit, nunca SHA), 21 (**o bug relatado**: pushes sucessivos
+  B/C/D cada um alcançado), mais git ausente, remote inesperado/aceito, backup
+  completo recursivo, restore byte a byte, arquivo não rastreado preservado.
+- **E2E com repositório git REAL** (script em `/tmp`, não versionado): repo
+  atrasado 3 commits + database sujo (`global.json` modificado, `nao-rastreado.json`
+  novo) + `package-lock.json` sujo → `EXIT=0`, `HEAD === origin/main`,
+  `DB IDENTICO` (md5 igual) e interface com nomes de commit.
+- **Prova no clone do repo REAL** (`Souzzaaxzy/Lizzy-V4`, 3 commits atrás,
+  `node_modules` removido): 62 arquivos de database preservados byte a byte,
+  HEAD foi de `8303b21` para `418e203` = `origin/main`. Rodado de novo já
+  sincronizado → `jaAtualizado: true`, sem reset.
+- Regressão verde: testcall, cmd-suggest, me-profile, seturlghost,
+  blacklist-number, chat-theme-lab, installer-git-drift, baileys-boot-info.
+
+### O que NÃO mudou (de propósito)
+`git-drift.js`, `npm install` (`--legacy-peer-deps`/`--allow-git=all`), FFmpeg,
+yt-dlp, pausa do `messageQueue`, `!atualizar` como dono-only e reinício após
+sucesso. Nenhum segundo sistema de update; `update.js` é o mesmo arquivo.

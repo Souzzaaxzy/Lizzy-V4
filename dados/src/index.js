@@ -17003,28 +17003,34 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
           const messagesSent = new Set(); // Rastreia mensagens já enviadas para evitar duplicatas
           const messageQueue = []; // Fila de mensagens pendentes
           let isProcessingQueue = false;
-          // Mapeamento de triggers para mensagens
+          // ── Estado da sincronização, preenchido pelas linhas `UI:` do script.
+          // O script passa o NOME do commit (nunca o SHA) para a interface; o
+          // SHA fica só no log interno para diagnóstico.
+          let uiEstado = null;   // { repo, branch, localNome, remoteNome, sincronizado }
+          let uiErro = null;     // { etapa, localNome, remoteNome, detalhe }
+          let uiOk = null;       // { repoFork, branch, localNome, remoteNome, jaAtualizado, databaseArquivos }
+          let uiBackup = null;   // { count }
+          const updatesProcessados = new Set();
+
+          // Linhas de progresso do script (mantidas: são texto fixo, sem SHA).
           const updateMessages = {
-            'Verificando requisitos': '🔍 Verificando requisitos do sistema...',
-            'Criando backup': '📁 Criando backup dos arquivos importantes...',
-            'Backup salvo': '✅ Backup criado com sucesso!',
-            'Baixando a versão': '📥 Baixando atualização do GitHub...',
-            'CommitsFound:': null, // Handler especial abaixo
-            'Download concluído': '✅ Download concluído!\n\n🧹 Limpando arquivos antigos...',
-            'Limpeza concluída': '✅ Limpeza concluída!\n\n🚀 Aplicando atualização...',
-            'Atualização aplicada': '✅ Atualização aplicada!\n\n📂 Restaurando dados preservados...',
-            'Backup restaurado': '✅ Dados restaurados!\n\n📦 Instalando dependências...',
-            'Instalando dependências': '📦 Instalando/verificando dependências...\n⏳ Isso pode levar alguns minutos...',
-            'Dependências instaladas': '✅ Dependências instaladas com sucesso!',
+            '[UPDATE] Backup database iniciado': '📁 Preservando os dados do bot...',
+            '[UPDATE] Backup database validado': '✅ Backup do database validado!',
+            '[UPDATE] Restore database iniciado': '📂 Restaurando os dados preservados...',
+            '[UPDATE] Database restaurado': '✅ Dados do bot restaurados!',
+            '[UPDATE] Database validado': '✅ Dados do bot validados!',
             'Dependências já atualizadas': '✅ Dependências Node já estão atualizadas!',
             'Dependência de git em commit desatualizado': ' Atualizando a fork do Baileys para o commit correto...',
+            'Instalando dependências': '📦 Instalando/verificando dependências...\n⏳ Isso pode levar alguns minutos...',
+            'Dependências instaladas': '✅ Dependências instaladas com sucesso!',
+            '[UPDATE] Baileys validado': '✅ Baileys (fork) no commit correto!',
             'FFmpeg encontrado': '✅ FFmpeg disponível!',
+            'FFmpeg configurado via FFMPEG_PATH': '✅ FFmpeg configurado via FFMPEG_PATH!',
             'FFmpeg não encontrado': '⚠️ FFmpeg não encontrado no PATH (instale ou defina FFMPEG_PATH)',
             'Instalando yt-dlp': '📥 Instalando yt-dlp (download de YouTube)...',
             'yt-dlp instalado': '✅ yt-dlp instalado com sucesso!',
             'yt-dlp encontrado': '✅ yt-dlp disponível!',
-            'yt-dlp ausente': '⚠️ yt-dlp não encontrado — instale manualmente: python3 -m pip install -U yt-dlp',
-            'falha ao instalar yt-dlp': '⚠️ Falha ao instalar yt-dlp automaticamente — instale: python3 -m pip install -U yt-dlp'
+            'Tudo já sincronizado': '✅ O código já está 100% sincronizado com a main.'
           };
           // Processa a fila de mensagens sequencialmente
           const processMessageQueue = async () => {
@@ -17034,7 +17040,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
               const message = messageQueue.shift();
               try {
                 await reply(message);
-                await new Promise(resolve => setTimeout(resolve, 1500)); // Delay entre mensagens
+                await new Promise(resolve => setTimeout(resolve, 1200)); // Delay entre mensagens
               } catch (e) {
                 console.error('Erro ao enviar update:', e);
               }
@@ -17049,34 +17055,60 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
               processMessageQueue();
             }
           };
+          // Monta o card de status da sincronização (nomes de commit, sem SHA).
+          const cardEstado = (estado, titulo, rodape) => {
+            const linhas = [
+              `╭━━〔 ${titulo} 〕━━⬣`,
+              '┃',
+              `┃ 📦 Repositório: ${estado.repo || 'Souzzaaxzy/baileys'}`,
+              `┃ 🌿 Branch: ${estado.branch || 'main'}`,
+              '┃'
+            ];
+            if (estado.localNome) linhas.push('┃ 🔹 Atual:', `┃ ${estado.localNome}`, '┃');
+            if (estado.remoteNome) linhas.push('┃ 🔹 Remoto:', `┃ ${estado.remoteNome}`, '┃');
+            if (rodape) linhas.push(`┃ ${rodape}`);
+            linhas.push('╰━━━━━━━━━━━━━━━━━━━━━━╯');
+            return linhas.join('\n');
+          };
           // Captura stdout
           updateProcess.stdout.on('data', async (data) => {
             const output = data.toString();
             outputBuffer += output;
-            // Verifica trigger especial de commits
-            if (output.includes('CommitsFound:')) {
-              // Extrai commits do buffer
-              const commitsMatch = outputBuffer.match(/CommitsFound: (\d+) commits disponíveis/);
-              const commitDetails = [];
-              // Extrai linhas de commits do buffer
-              const lines = outputBuffer.split('\n');
-              for (const line of lines) {
-                const match = line.match(/\d+\. \[`([^`]+)`\] (.+?) \((\d{2}\/\d{2}\/\d{4})\)/);
-                if (match) {
-                  commitDetails.push({ hash: match[1], message: match[2], date: match[3] });
+
+            // ── Linhas estruturadas `UI:<tipo>:<json>` (fonte da verdade da UI)
+            for (const linha of output.split('\n')) {
+              if (!linha.startsWith('UI:')) continue;
+              const partes = linha.split(':');
+              const tipo = partes[1];
+              let dados = {};
+              try { dados = JSON.parse(partes.slice(2).join(':')); } catch { dados = {}; }
+              if (tipo === 'ESTADO') {
+                uiEstado = dados;
+                if (dados.sincronizado) {
+                  queueUpdate('ja-sincronizado', cardEstado(
+                    dados, '🔄 ATUALIZAÇÃO',
+                    '✅ Já está na versão mais recente.\n┃ ⏳ Verificando dependências...'
+                  ));
+                } else {
+                  queueUpdate('sincronizando', cardEstado(
+                    dados, '🔄 ATUALIZAÇÃO',
+                    '⏳ Sincronizando...'
+                  ));
                 }
-              }
-              if (commitDetails.length > 0) {
-                let commitsMsg = `📋 *Commits que serão atualizados (${commitsMatch ? commitsMatch[1] : commitDetails.length}):*\n`;
-                commitDetails.slice(0, 5).forEach(c => {
-                  commitsMsg += `▸ [\`${c.hash}\`] ${c.message}\n`;
-                });
-                queueUpdate('CommitsFound:', commitsMsg);
+              } else if (tipo === 'BACKUP') {
+                uiBackup = dados;
+              } else if (tipo === 'DATABASE') {
+                // validado no card final
+              } else if (tipo === 'ERRO') {
+                uiErro = dados;
+              } else if (tipo === 'OK') {
+                uiOk = dados;
               }
             }
-            // Verifica cada trigger e enfileira a mensagem correspondente
+
+            // ── Progresso textual (sem SHA)
             for (const [trigger, message] of Object.entries(updateMessages)) {
-              if (trigger !== 'CommitsFound:' && output.includes(trigger) && message) {
+              if (output.includes(trigger) && message) {
                 queueUpdate(trigger, message);
               }
             }
@@ -17089,9 +17121,31 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
           // Quando o processo terminar
           updateProcess.on('close', async (code) => {
             if (code === 0) {
-              await reply(`✅ *ATUALIZAÇÃO CONCLUÍDA COM SUCESSO!*
-🎉 O bot foi atualizado para a versão mais recente!
-🔄 Reiniciando automaticamente em 3 segundos...`);
+              // Card final com os NOMES dos commits (o SHA nunca vai para a UI).
+              const ok = uiOk || {};
+              const localNome = ok.localNome || uiEstado?.localNome || 'Commit não identificado';
+              const remoteNome = ok.remoteNome || uiEstado?.remoteNome || 'Commit não identificado';
+              const card = [
+                '╭━━〔 ✅ ATUALIZADO 〕━━⬣',
+                '┃',
+                `┃ 📦 repositório bot: ${ok.repoBot || 'Souzzaaxzy/Lizzy-V4'}`,
+                `┃ 📦 Repositório fork: ${ok.repoFork || 'Souzzaaxzy/baileys'}`,
+                `┃ 🌿 Branch: ${ok.branch || 'main'}`,
+                '┃',
+                '┃ Commit bot:',
+                `┃ ${remoteNome}`,
+                '┃',
+                '┃ Commit fork:',
+                `┃ ${ok.forkNome || remoteNome}`,
+                '┃',
+                '┃ Status: 100% sincronizado',
+                '┃',
+                `┃ 💾 Database preservado (${ok.databaseArquivos ?? uiBackup?.count ?? 0} arquivo(s))`,
+                ok.jaAtualizado ? '┃ ℹ️ O código já estava na versão mais recente.' : null,
+                '╰━━━━━━━━━━━━━━━━━━━━━━╯'
+              ].filter(Boolean).join('\n');
+              await reply(card);
+              await reply('🎉 O bot foi atualizado!\n🔄 Reiniciando automaticamente em 3 segundos...');
               // Aguarda 3 segundos antes de reiniciar
               setTimeout(async () => {
                 await reply('🔄 Reiniciando agora...');
@@ -17101,19 +17155,29 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
                 }, 1000);
               }, 3000);
             } else {
-              await reply(`❌ *ERRO NA ATUALIZAÇÃO!*
-⚠️ O processo de atualização falhou com código: ${code}
-🔧 *O que fazer:*
-┃
-┃ 1️⃣ Verifique sua conexão com a internet
-┃ 2️⃣ Certifique-se de ter Git instalado
-┃ 3️⃣ Tente novamente em alguns minutos
-┃ 4️⃣ Se persistir, atualize manualmente:
-┃    cd dados/src/.scripts
-┃    node update.js
-┃
-┗━━━━━━━━━━━━━━━━━━━━━
-📂 Backup foi preservado para segurança.`);
+              // A ETAPA que falhou substitui o antigo "código: N", que não dizia nada.
+              const erro = uiErro || {};
+              const localNome = erro.localNome || uiEstado?.localNome || 'Commit não identificado';
+              const remoteNome = erro.remoteNome || uiEstado?.remoteNome || 'Commit não identificado';
+              const cardErro = [
+                '╭━━〔 ❌ ATUALIZAÇÃO FALHOU 〕━━⬣',
+                '┃',
+                `┃ 📦 Repositório: ${erro.repoFork || 'Souzzaaxzy/baileys'}`,
+                `┃ 🌿 Branch: ${erro.branch || 'main'}`,
+                '┃',
+                `┃ 📍 Etapa: ${erro.etapa || 'VALIDAÇÃO'}`,
+                '┃',
+                '┃ 🔹 Atual:',
+                `┃ ${localNome}`,
+                '┃',
+                '┃ 🔹 Remoto:',
+                `┃ ${remoteNome}`,
+                erro.detalhe ? `┃\n┃ ⚠️ ${erro.detalhe}` : null,
+                '┃',
+                '┃ 💾 Backup do database preservado.',
+                '╰━━━━━━━━━━━━━━━━━━━━━━╯'
+              ].filter(Boolean).join('\n');
+              await reply(cardErro);
               // Retoma o processamento de mensagens
               if (messageQueueModule.messageQueue && typeof messageQueueModule.messageQueue.resume === 'function') {
                 messageQueueModule.messageQueue.resume();
