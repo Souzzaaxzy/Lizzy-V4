@@ -2115,6 +2115,47 @@ ignorava `catalog` e não havia ramo para o multi-produto. A fork ganhou
 (`git+ssh://...#aee4b24`). Um `npm install` sem isso instala o commit antigo e o
 `catalog` não funciona — foi o primeiro obstáculo.
 
+### Suporte na fork — CARROSSEL COM VÍDEO (`commit d3692c7`) ✅
+O carrossel (`cards`) da fork só aceitava **imagem/produto** de forma confiável:
+o vídeo ou estourava, ou era descartado em silêncio. Quatro correções, em
+`lib/Utils/messages.js` (commit `d3692c7`,
+`feat(carousel): support video cards (and fix 3 broken card paths)`):
+
+1. **Vídeo com `ptv: true`** era recusado com *"Invalid media type for carousel
+   card"*. O pipeline de mídia devolve `ptvMessage`, que
+   `hasValidCarouselHeader` não conhecia. Novo helper **`resolveCarouselHeader`**
+   (exportado) mapeia `ptvMessage` → `videoMessage`.
+2. **Card de mídia SEM `caption`** estourava *"Cannot convert undefined or null
+   to object"* no `Object.assign(carouselCard.header, ...)`: o header só era
+   criado dentro do `if (caption)`. Agora o header é criado **sempre** que a
+   mídia é válida (com ou sem legenda).
+3. **Card sem `nativeFlow`** estourava *"Cannot read properties of undefined
+   (reading 'buttons')"* em `prepareNativeFlowButtons`. Campo ausente agora é
+   simplesmente "sem botões".
+4. **Card com mídia e `text`** (em vez de `caption`) **perdia a mídia**: o ramo
+   do `text` nem olhava o header. Agora anexa a mídia válida também.
+
+- Carrossel **misto** (imagem + vídeo + imagem) preserva a mídia de cada card na
+  ordem original. `gifPlayback`, `seconds`, `thumbnail`, `title` e `subtitle`
+  são preservados nos cards de vídeo. `carouselCardType`/`messageVersion`
+  continuam como antes (`UNKNOWN`/`1`).
+- **Testes na fork**: `tests/carousel-video.test.js` — **19 testes**, rodando o
+  caminho REAL (`generateWAMessageContent` + upload instrumentado) e conferindo
+  o proto montado (inclusive `encode`/`decode`). **Baseline (código antigo):
+  14 dos 19 falham**; com as correções, 19/19. Suíte completa da fork:
+  **142/142**.
+- **README da fork**: nova seção `#### 🎬 Carousel with Media (Image & Video)`
+  (exemplo de card de vídeo, carrossel misto, opções por card `gifPlayback`/
+  `ptv`/`seconds`/`thumbnail`/`title`/`subtitle` e a nota de que `caption` e
+  `text` são equivalentes, e que card sem `nativeFlow` é válido). Entrou no
+  Table of Contents e na seção "Messages Handling & Compatibility".
+- **Nada disso exige mudança no `index.js`** da Lizzy: o comando `!pinterest`
+  que monta `cards` continua igual; para usar vídeo, basta um card com
+  `video: { url }` (a interface é a mesma do resto da lib).
+- **Dependência**: o `package-lock.json`/`yarn.lock` passaram a apontar para
+  `d3692c7ec2fa4a1fd28fdbc0cee0525b488476da`. Sem o commit novo, card de vídeo
+  sem `caption`, com `ptv` ou sem `nativeFlow` quebra/desaparece.
+
 ## RELACIONAMENTOS múltiplos (!trisal / !quadrisal / !relacionamento) ✅
 - Módulo: `dados/src/funcs/utils/relationships.js` (`RelationshipManager`).
   Comandos em `index.js` (~35523 trisal, ~35568 quadrisal, ~35613
