@@ -2115,6 +2115,60 @@ ignorava `catalog` e não havia ramo para o multi-produto. A fork ganhou
 (`git+ssh://...#aee4b24`). Um `npm install` sem isso instala o commit antigo e o
 `catalog` não funciona — foi o primeiro obstáculo.
 
+### Suporte na fork — ROTAÇÃO: ROLLBACK EM FALHA + CONCORRÊNCIA (`commit 8d69c3b`) ✅
+Auditoria do `!rajar` pedida pelo dono. Dois achados **medidos**, não hipótese:
+
+1. **O rollback só rodava no caminho de SUCESSO.** Se a criptografia ou a
+   distribuição falhasse (o que acontece **depois** de a rotação já ter anexado
+   um estado), o estado rotacionado ficava **ATIVO**: o grupo continuaria
+   cifrando com uma chave que só o subconjunto autorizado recebeu, e o
+   `sender-key-memory` diria que os outros já a têm — então ninguém mais
+   receberia o SKDM novo. **O grupo inteiro ficaria ilegível, exceto o alvo.**
+   - **Medição**: com `encryptGroupMessage` forçado a lançar, o código ANTIGO
+     fazia **ZERO rollbacks** e o estado rotacionado permanecia no store; com o
+     fix, faz **exatamente UM** rollback e o estado base é restaurado.
+   - **Correção**: a janela `rotate → encrypt → distribute → rollback` foi
+     envolvida em **`try/finally`**, então o rollback roda no sucesso, no erro,
+     na exceção, no timeout e na falha de transporte.
+   - O `catch` do wrapper continua cobrindo o caso em que o bloco interno nem
+     começou; os testes **contam chamadas** e provam que só um dos dois dispara
+     (sem `pop()` duplo — que removeria o estado base).
+2. **Concorrência**: as rotações do mesmo grupo agora são serializadas por um
+   `makeKeyedMutex` (chave = grupo), para as janelas não se sobreporem. Uma
+   sobreposição faria os dois `pop()` removerem o estado errado. Grupos
+   diferentes seguem em paralelo, e um envio normal compartilha o mesmo mutex
+   (não cifra com chave temporária).
+   - **Escopo honesto**: NÃO consegui reproduzir um overlap no harness mesmo
+     sem o mutex — os `await` da janela são, na sua maioria, nível microtask com
+     sessões stubadas (em produção o `assertSessions` faz I/O real). O mutex é
+     **defensivo**; o teste que o guarda (`does NOT let two rotation WINDOWS
+     overlap`) é um **guarda de regressão**, não uma prova de falha.
+
+**Testes novos na fork** (commit `8d69c3b`):
+- `tests/sender-key-rotation-state-integrity.test.js` (**12**): rollback em falha
+  de criptografia e de distribuição, **exatamente um** rollback, baseline
+  preservado, envio normal depois de uma rotação falha, SKDM/sender-key id
+  **distintos por mensagem**, e as invariantes de janela/no-overlap.
+- `tests/sender-key-rotation-burst.test.js` (**6**): rajadas de **1/5/10/25/50**
+  com **sessões Signal reais e decifragem real**. Mede: cada membro decifra cada
+  mensagem protegida **pelo SKDM daquela mensagem**, o admin decifra **zero**,
+  cada mensagem usa **seu próprio** sender-key id, e mensagens normais continuam
+  decifrando na alternância `protegida → normal → protegida → normal`.
+- Suíte completa da fork: **160/160**.
+
+**Medições** (loopback local; limitam o custo da ROTAÇÃO, não a rede):
+
+| rajada | stanzas | ids únicos | admin decifra | tempo | média/msg |
+|---|---|---|---|---|---|
+| 1 | 1 | 1 | 0 | 16,8 ms | 16,8 ms |
+| 5 | 5 | 5 | 0 | 44,1 ms | 8,8 ms |
+| 10 | 10 | 10 | 0 | 96,3 ms | 9,6 ms |
+| 25 | 25 | 25 | 0 | 280,4 ms | 11,2 ms |
+| 50 | 50 | 50 | 0 | 514,1 ms | 10,3 ms |
+
+**Dependência**: `package-lock.json`/`yarn.lock` passaram a apontar para
+`8d69c3bf56a78f9a8c668978e02f1113e28d2124`.
+
 ### Suporte na fork — CARROSSEL COM VÍDEO (`commit d3692c7`) ✅
 O carrossel (`cards`) da fork só aceitava **imagem/produto** de forma confiável:
 o vídeo ou estourava, ou era descartado em silêncio. Quatro correções, em
@@ -2194,6 +2248,50 @@ o vídeo ou estourava, ou era descartado em silêncio. Quatro correções, em
   chegam como **LID** (é o que o handler compara com o `sender`, também LID) —
   o fake que manda JID em `mentionedJid` faz tudo não casar.
   Verificado revertendo os fixes: **19 asserções falham** com o código antigo.
+
+## CLASSIFICAÇÃO CENTRAL do AntiFantasma (`classifyMessage.category`) ✅
+O AntiFantasma decidia "é fantasma?" com um `if` solto lendo `info.message`.
+Isso escondia dois problemas:
+
+1. **O sinal está no `info`, não em `info.message`.** A fork anexa
+   `selectiveDistribution` ao `fullMessage`, que **é** o `info` (o
+   WebMessageInfo) — e numa mensagem fantasma `info.message` é `undefined` (o
+   payload não decifrou). Ler só `info.message` **nunca** acharia nada.
+2. O critério ficava espalhado, sem um ponto único para ajustar.
+
+**Agora `classifyMessage` aceita DOIS níveis** — o conteúdo (`info.message`,
+uso original) e o `info` inteiro — resolve qual é o conteúdo real e expõe uma
+**categoria única**:
+
+| Categoria | Quando |
+|---|---|
+| `PAYMENT_ZERO` | pagamento com valor zerado (`amount1000` ou `amount.value`) |
+| `PROTECTED_DECRYPT_FAILURE` | sinal de distribuição seletiva **sem** payload decifrável |
+| `PROTECTED_SELECTIVE` | sinal presente **e** havia conteúdo decifrado |
+| `NORMAL` | todo o resto |
+
+- **Compatibilidade**: `protectedSelective` é o MESMO booleano que o handler já
+  lia de `info.selectiveDistribution` (aceita o **relatório**/objeto da fork e o
+  booleano `true`), então nada que dependa dele quebra.
+- O sinal é procurado **no `info` E no conteúdo**, então nenhum chamador precisa
+  saber onde ele está.
+- `hasDecryptedContent` olha o **conteúdo declarado**, não o objeto caído como
+  fallback: sem isso "tem conteúdo" seria sempre verdadeiro e a
+  `PROTECTED_DECRYPT_FAILURE` nunca seria classificada (bug encontrado pelo
+  próprio teste).
+- **Nunca deixa buraco**: entrada inválida (`null`/`undefined`/string/array)
+  devolve `NORMAL` com todos os sinais em `false` — `undefined` faria o handler
+  tratar lixo como ameaça.
+- **`isProtectedSelective(info)`** (`index.js`, ao lado de
+  `wasGhostPunished`) consome a classificação central, com fallback para a
+  leitura antiga. Entrada inesperada → `false` (**não pune** na dúvida).
+
+**Testes**: `tests/antifantasma-classificacao.test.js` — **18 asserções**:
+categorias, localização do sinal (inclusive o teste que documenta que ler só
+`info.message` não acharia), forma antiga (`true`), precedência de
+`PAYMENT_ZERO`, pagamento legítimo (1500) que **não** vira ataque, e robustez
+com lixo. Regressões: `anti-seletiva` **32/32**, `get-message-inspector`
+**54/269**.
 
 ## COMANDO `!me` — perfil completo no novo layout (set/2026) ✅
 - **Pedido do dono**: o `!me` deixou de ser "meu status" e passou a mostrar o
