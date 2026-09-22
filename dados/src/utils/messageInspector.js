@@ -561,6 +561,12 @@ export function classifyMessage(message) {
     protectedDecryptFailure: false,
     decryptFail: null,
     hasDecryptedContent: false,
+    // Sinais de estrutura do transporte: `null` quando não há report, para não
+    // inventar evidência numa entrada que nunca os teve.
+    reportHasPhash: null,
+    reportDensity: null,
+    reportSkdmRecentMs: null,
+    pairwiseGroupPayload: false,
   };
 
   if (!message || typeof message !== 'object') return empty;
@@ -685,6 +691,28 @@ export function classifyMessage(message) {
   const decryptFail = typeof selectiveReport === 'object' && selectiveReport !== null
     ? (selectiveReport.decryptFail ?? null)
     : null;
+
+  // ── Sinais de ESTRUTURA do transporte (aditivos) ─────────────────────────
+  //
+  // O `decrypt-fail` é ligado pelo remetente; estes não dependem da boa vontade
+  // dele, então são o que corrobora um ataque de verdade:
+  //   • `hasPhash` — ausente na stanza rotacionada (o fan-out normal carrega);
+  //   • `density` — endereçados ÷ dispositivos do grupo;
+  //   • `skdmRecentMs` — SenderKeyDistributionMessage fresco do mesmo autor.
+  // Só fazem sentido quando HÁ report; sem ele ficam `null` (nunca inventados).
+  const temReport = typeof selectiveReport === 'object' && selectiveReport !== null;
+  const reportHasPhash = temReport && Object.prototype.hasOwnProperty.call(selectiveReport, 'hasPhash')
+    ? selectiveReport.hasPhash
+    : null;
+  const reportDensity = temReport && typeof selectiveReport.density === 'number'
+    ? selectiveReport.density
+    : null;
+  const reportSkdmRecentMs = temReport && typeof selectiveReport.skdmRecentMs === 'number'
+    ? selectiveReport.skdmRecentMs
+    : null;
+  // Stanza de grupo com enc pareado (transport do retry) — vem do fullMessage.
+  const pairwiseGroupPayload = message.pairwiseGroupPayload === true
+    || contentRoot.pairwiseGroupPayload === true;
   // Mensagem sem payload decifrável: veio CONTEÚDO de verdade? (o stub de
   // grupo). A classificação distingue "não veio nada" de "veio e é pagamento
   // zerado".
@@ -734,6 +762,11 @@ export function classifyMessage(message) {
     protectedDecryptFailure,
     decryptFail,
     hasDecryptedContent,
+    // Sinais de estrutura do transporte (null quando não há report).
+    reportHasPhash,
+    reportDensity,
+    reportSkdmRecentMs,
+    pairwiseGroupPayload,
   };
 }
 

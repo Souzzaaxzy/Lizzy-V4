@@ -2866,3 +2866,73 @@ Verificado por `grep`: **zero** referências a `ghostcmd`/`seturlghost`/
 A separação confirma que o anti verdadeiro sempre viveu no bot — o plugin era
 só a **distribuição** dele para outras bots (core no servidor + adaptador no
 cliente). Remover o plugin não enfraquece a proteção local.
+
+## MELHORIA DO ANTI — corroboração de rotação + pontuação por evidências (set/2026) ✅
+Endurecimento do anti pedido pelo dono, **medindo o falso positivo antes de
+ligar**. Entrega em dois lados: fork (sinais novos no transporte) + bot
+(pontuação, fixtures e corpus de sósias). **A decisão de produção NÃO mudou** —
+ver "O que ainda não está ligado".
+
+### O problema que isto resolve
+Uma mensagem de grupo que não decifra tem DUAS causas que produzem o **mesmo
+erro**, e o ciphertext sozinho não as separa:
+
+1. **este dispositivo entrou tarde / perdeu a Sender Key** — o remetente não fez
+   nada de errado;
+2. **o remetente ROTACIONOU a chave e distribuiu só a um subconjunto** — este
+   dispositivo foi deixado de fora de propósito.
+
+O `decrypt-fail="hide"` ajuda, mas é **ligado pelo remetente** e também aparece
+em fluxo benigno (o `rereg_recovery_request` do próprio WhatsApp carrega o
+atributo e ainda **decifra com sucesso**). Ele prova intenção no máximo; não
+corrobora nada.
+
+### FORK — commit `71748ac` (204/204 na suíte)
+1. **`lib/Utils/skdm-rotation-index.js`** — índice de SenderKeyDistributionMessage
+   visto na recepção. Um SKDM fresco do **mesmo autor** no **mesmo grupo** é
+   exatamente o que separa (2) de (1): quem entrou tarde **não** recebe SKDM de
+   um grupo onde já está; uma rotação **recebe**. Limitado (1 entrada por
+   grupo+autor, teto de 512, poda preguiçosa) e com relógio injetável.
+2. **Report enriquecido** (`selective-distribution-detector.js`): `hasPhash`
+   (a stanza rotacionada **não** carrega phash — já provado num teste da fork),
+   `density` + `groupDeviceCount` (subconjunto = densidade baixa) e
+   `skdmRecentMs` (a corroboração do item 1).
+3. **`pairwiseGroupPayload`** — stanza de **grupo** com enc **pareado**
+   (`type=msg`/`pkmsg`): é o transporte do retry, por onde o conteúdo chega a
+   quem foi excluído. É flag, não prova (retry também acontece por motivo
+   benigno).
+- `isSelectiveDistributionFailure` **inalterado** — continua exigindo os três
+  sinais, então o gate **não** ficou mais frouxo. Os campos novos são aditivos e
+  vêm `null` quando não há report.
+
+### BOT — pontuação, fixtures e sósias
+- **`dados/src/utils/ghostDetection.js`** — soma de evidências em vez de gate
+  booleano único. Pesos: `phashAusente` 3, `densidadeBaixa` 3, `skdmFresco` 4,
+  `payloadPareado` 2, `decryptFailHide` 2, `rajadaPaymentZerado` 6,
+  `mencaoEmMassa` 3, `stubCiphertext` 1, `mensagemVazia` 1. Limiar de punição 6,
+  de observação 3.
+- **DOIS CAMINHOS, de propósito**: o ataque de **conteúdo** (payment zerado +
+  texto na nota) pune pela própria assinatura — é o que a produção já fazia. O
+  ataque de **transporte** exige um sinal **estrutural** (phash/densidade/SKDM),
+  e é isso que impede punir o `rereg` e o "entrei tarde".
+- **`classifyMessage`** passou a expor `reportHasPhash`, `reportDensity`,
+  `reportSkdmRecentMs` e `pairwiseGroupPayload` (aditivo; `null` sem report —
+  nunca inventa evidência).
+- **`tests/helpers/ghost-fixtures.js`** — gerador **offline**: monta os corpos em
+  memória, **nada é enviado**, nenhum socket abre. Além dos ataques, gera os
+  **SÓSIAS** (payment legítimo, view-once real, stub de quem entrou tarde, SKDM
+  de `rereg_recovery`, fan-out normal com phash, texto, catálogo).
+- **`tests/ghost-detection.test.js`** — **24 testes / 81 asserções**.
+  Placar do corpus: **precisão 100%, recall 100%, ZERO falso positivo**.
+
+### O que ainda NÃO está ligado (de propósito)
+A pontuação roda no handler apenas como **observação** — ela loga
+`[GHOST-SCORE] acao=… score=… motivo=…` e **não** substitui o gate atual. Motivo:
+a punição **remove o membro e fecha o grupo**, e não tem desfazer; ligar uma
+pontuação nova sem medição de campo é exatamente como nasceu o bug "banindo do
+nada". Com o log rodando em grupo real, o dono mede o falso positivo e a virada
+passa a ser uma linha (`ghostDetection.decidir(...)` no lugar do gate).
+
+### Aviso
+`tests/defensive-protection.test.js` falha (48 asserts) — **pré-existente**,
+comprovado com `git worktree` no commit anterior. Não tem relação com isto.

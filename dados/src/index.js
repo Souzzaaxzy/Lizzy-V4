@@ -25,6 +25,7 @@ import { buildCmdNotFoundExtras } from './utils/commandSuggest.js';
 import { extractMedia, resolveMedia, isViewOnce, describeMediaError, extractQuoted, extractText } from './utils/viewOnce.js';
 import { parseImagePollArgs, collectPollImages, resolveAttachments, buildOptionName } from './utils/pollImages.js';
 import { toOggOpus } from './utils/oggOpus.js';
+import * as ghostDetection from './utils/ghostDetection.js';
 import {
   isGroupStatusContent,
   buildGroupStatusRevokePayloads,
@@ -3520,6 +3521,33 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     // de decifragem), então isso reduz falso positivo.
     if (isGroup && isAntiInvi && !info.key.fromMe && isProtectedSelective(info)) {
       const autorDet = info.key?.participantAlt || info.key?.participant || sender;
+
+      // ── Pontuação (OBSERVAÇÃO) ─────────────────────────────────────────
+      // Roda SEMPRE, mas ainda NÃO decide: registra no log a soma das
+      // evidências (phash ausente, densidade, SKDM fresco, atributo, stub) para
+      // o dono medir o falso positivo com dados reais antes de a pontuação
+      // substituir o gate. `decidir` já está implementado e testado; a virada é
+      // de uma linha — deliberadamente adiada até haver medição de campo.
+      try {
+        const classificacao = classifyMessage(info);
+        const avalia = ghostDetection.decidir({
+          ...info,
+          selectiveDistribution: info.selectiveDistribution,
+          zeroValuePayment: classificacao.paymentAmount.isZero,
+          noteText: classificacao.noteText,
+          mentionCount: classificacao.mentionCount,
+          temMensagem: Boolean(info.message),
+          pairwiseGroupPayload: classificacao.pairwiseGroupPayload,
+        });
+        console.log(
+          `[GHOST-SCORE] acao=${avalia.acao} score=${avalia.score} motivo=${avalia.motivo} ` +
+          `phashAusente=${avalia.sinais.phashAusente} densidade=${avalia.sinais.densidade} ` +
+          `skdmMs=${avalia.sinais.skdmMs} pareado=${avalia.sinais.payloadPareado}`
+        );
+      } catch (e) {
+        // A pontuação é diagnóstico: nunca impede a proteção que já existe.
+        console.error('[GHOST-SCORE] falha ao pontuar:', e?.message || e);
+      }
 
       // Só age se o bot puder agir, e nunca contra admin/dono/whitelist.
       const podeAgir = isBotAdmin && !isGroupAdmin && !isOwner && !isUserWhitelisted(sender, 'antipagamento');
