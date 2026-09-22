@@ -25,6 +25,7 @@ import { buildCmdNotFoundExtras } from './utils/commandSuggest.js';
 import { extractMedia, resolveMedia, isViewOnce, describeMediaError, extractQuoted, extractText } from './utils/viewOnce.js';
 import { parseImagePollArgs, collectPollImages, resolveAttachments, buildOptionName } from './utils/pollImages.js';
 import { toOggOpus } from './utils/oggOpus.js';
+import { converterGifParaMp4 } from './utils/gifMedia.js';
 import * as ghostDetection from './utils/ghostDetection.js';
 import {
   isGroupStatusContent,
@@ -394,6 +395,54 @@ function buildRajaContent(text, mentions = []) {
       amount: { value: '0', offset: 1000, currencyCode: 'BRL' },
     },
   };
+}
+
+/**
+ * Resposta ao usuário que digita só "prefixo" no grupo.
+ *
+ * Unifica as duas configurações do `!midiaprefix` num ponto só, para os dois
+ * gatilhos (o "prefixo" solto e o handler de comandos) não divergirem:
+ *   - com MÍDIA -> envia a mídia com o texto como legenda (ou legenda padrão);
+ *   - só TEXTO  -> envia o texto;
+ *   - nada      -> envia o prefixo simples.
+ * `#prefixo#` e `#numerodele#` são resolvidos em todos os caminhos.
+ */
+async function responderPrefixo(nazu, from, info, sender, currentPrefix, reply) {
+  const textoConfigurado = loadMsgPrefix();
+  const montar = (padrao) => String(textoConfigurado || padrao)
+    .replace(/#prefixo#/g, currentPrefix)
+    .replace(/#numerodele#/g, `@${String(sender).split('@')[0]}`);
+  const mencoes = [sender];
+
+  if (isPrefixMediaEnabled()) {
+    const mediaPath = getPrefixMediaPath();
+    const mediaType = getPrefixMediaType();
+    const mediaBuffer = fs.readFileSync(mediaPath);
+    const legenda = montar(`Olá @${String(sender).split('@')[0]}!\n\nMeu prefixo atual neste grupo é:\n\n*${currentPrefix}*\n\nUtilize esse prefixo para executar meus comandos.`);
+    // GIF e vídeo são gravados os dois como 'video'; o gifPlayback é ligado
+    // quando o arquivo salvo veio de GIF (o WhatsApp só anima MP4 com a flag).
+    const ehGif = getPrefixMediaIsGif();
+    if (mediaType === 'video') {
+      await nazu.sendMessage(from, {
+        video: mediaBuffer,
+        caption: legenda,
+        mentions: mencoes,
+        ...(ehGif ? { gifPlayback: true } : {}),
+      }, { quoted: info });
+    } else {
+      await nazu.sendMessage(from, {
+        image: mediaBuffer,
+        caption: legenda,
+        mentions: mencoes,
+      }, { quoted: info });
+    }
+    return;
+  }
+  if (textoConfigurado) {
+    await reply(montar(`📌 Prefixo atual deste grupo: ${currentPrefix}`), { mentions: mencoes });
+    return;
+  }
+  await reply(`📌 Prefixo atual deste grupo: ${currentPrefix}`);
 }
 
 /**
@@ -1158,6 +1207,7 @@ import {
   isPrefixMediaEnabled,
   getPrefixMediaPath,
   getPrefixMediaType,
+  getPrefixMediaIsGif,
   setPrefixMedia,
   removePrefixMedia,
   // Sistema de Mídia de Menu por Grupo
@@ -5687,31 +5737,12 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
             console.warn('[ANTITOXIC] Error:', toxicErr.message);
           });
         }
-        // Responder quando alguém manda só "prefixo" no chat
+        // Responder quando alguém manda só "prefixo" no chat.
+        // Delegado ao `responderPrefixo` para os dois gatilhos não divergirem:
+        // mídia+texto, só texto, ou o prefixo simples.
         if (isGroup && !isCmd && budy2 && budy2.trim().toLowerCase() === 'prefixo') {
           const currentPrefix = groupData.customPrefix || config.prefixo || '!';
-          // Verificar se existe mídia configurada para a resposta prefixo
-          if (isPrefixMediaEnabled()) {
-            const mediaPath = getPrefixMediaPath();
-            const mediaType = getPrefixMediaType();
-            const mediaBuffer = fs.readFileSync(mediaPath);
-            const captionText = `Olá @${sender.split('@')[0]}!\n\nMeu prefixo atual neste grupo é:\n\n*${currentPrefix}*\n\nUtilize esse prefixo para executar meus comandos.`;
-            if (mediaType === 'video') {
-              await nazu.sendMessage(from, {
-                video: mediaBuffer,
-                caption: captionText,
-                mentions: [sender]
-              }, { quoted: info });
-            } else {
-              await nazu.sendMessage(from, {
-                image: mediaBuffer,
-                caption: captionText,
-                mentions: [sender]
-              }, { quoted: info });
-            }
-          } else {
-            await reply(`📌 Prefixo atual deste grupo: ${currentPrefix}`);
-          }
+          await responderPrefixo(nazu, from, info, sender, currentPrefix, reply);
         }
         if (isGroup && antipalavra && body && !isCmd) {
           try {
@@ -21718,12 +21749,13 @@ Use: ${groupPrefix}prefixo <novo_prefixo>
 Exemplo: ${groupPrefix}prefixo .
 • Define qual símbolo inicia os comandos
 • Pode ser: ! . / # $ ou qualquer caractere
-🔹 *Mensagem de Prefixo*
-Use: ${groupPrefix}msgprefix <mensagem>
-Exemplo: ${groupPrefix}msgprefix Use #prefixo# antes do comando!
-• Mensagem mostrada quando esquecem o prefixo
-• Use #prefixo# onde o prefixo deve aparecer
-• Para desativar: ${groupPrefix}msgprefix off
+🔹 *Mídia / Mensagem de Prefixo*
+Use: ${groupPrefix}midiaprefix <mensagem>
+Exemplo: ${groupPrefix}midiaprefix Use #prefixo# antes do comando, #numerodele#!
+• Junta mídia (foto, vídeo ou GIF) e mensagem da resposta "prefixo"
+• Mande/marque uma foto, vídeo ou GIF para definir a mídia
+• Use #prefixo# e #numerodele# onde devem aparecer
+• Para desativar tudo: ${groupPrefix}midiaprefix off
 🔹 *Nome do Bot*
 Use: ${groupPrefix}nomebot <nome>
 Exemplo: ${groupPrefix}nomebot Abyss
@@ -24586,80 +24618,142 @@ ${groupPrefix}key sua_chave_gemini
         }
         break;
       // ========== SISTEMA DE MÍDIA DA RESPOSTA PREFIXO ==========
+      // ========== MIDIA DA RESPOSTA PREFIXO (unificado) ==========
+      // Junta os antigos !fotoprefix / !videoprefix / !msgprefix num comando so.
+      // Aceita IMAGEM, VIDEO, GIF e TEXTO, e a resposta ao "prefixo" combina os
+      // dois: com midia, ela vai com o texto como legenda; so com texto, vai o
+      // texto; sem nada, o prefixo simples.
+      //
+      // GIF: o WhatsApp NAO reproduz GIF como GIF. O que anima e um MP4 com
+      // gifPlayback, entao o GIF recebido e convertido para MP4 ao salvar
+      // (utils/gifMedia.js) e gravado como video.
+      case 'midiaprefix':
       case 'fotoprefix':
-        try {
-          if (!isOwner) return reply("Este comando é apenas para o meu dono");
-          // Verificar se é para remover
-          if (q && (q.toLowerCase() === 'off' || q.toLowerCase() === 'del' || q.toLowerCase() === 'delete' || q.toLowerCase() === 'remover')) {
-            if (!isPrefixMediaEnabled()) {
-              return reply("ℹ️ Não há mídia configurada para a resposta prefixo.");
-            }
-            removePrefixMedia();
-            return reply("✅ Mídia da resposta prefixo removida com sucesso!\n\n" +
-              "A resposta voltará a ser enviada apenas como texto.");
-          }
-          var RSMImage = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-          var imageData = RSMImage?.imageMessage || info.message?.imageMessage || RSMImage?.viewOnceMessageV2?.message?.imageMessage || info.message?.viewOnceMessageV2?.message?.imageMessage || info.message?.viewOnceMessage?.message?.imageMessage || RSMImage?.viewOnceMessage?.message?.imageMessage;
-          if (!imageData) {
-            const statusMsg = isPrefixMediaEnabled()
-              ? `ℹ️ *Mídia da resposta prefixo está ATIVA*\n\n` +
-              `📷 Uma mídia está configurada para ser enviada quando alguém digita "prefixo".\n\n` +
-              `📝 *Comandos disponíveis:*\n` +
-              `• ${groupPrefix}fotoprefix - Enviar/marcar imagem para configurar\n` +
-              `• ${groupPrefix}fotoprefix off - Remover a mídia\n` +
-              `• ${groupPrefix}videoprefix - Configurar vídeo`
-              : `❌ *Envie ou marque uma imagem* com o comando: ${groupPrefix}fotoprefix\n\n` +
-              `📷 Esta imagem será enviada quando alguém digitar "prefixo" no chat.\n\n` +
-              `💡 Para remover depois, use: ${groupPrefix}fotoprefix off\n` +
-              `💡 Para vídeo, use: ${groupPrefix}videoprefix`;
-            return reply(statusMsg);
-          }
-          var imageBuffer = await getFileBuffer(imageData, 'image');
-          var imagePath = __dirname + '/../midias/prefix_media.jpg';
-          fs.writeFileSync(imagePath, imageBuffer);
-          setPrefixMedia(imagePath, 'image');
-          await reply('✅ Mídia da resposta "prefixo" atualizada com sucesso!');
-        } catch (e) {
-          console.error(e);
-          reply("ocorreu um erro 💔");
-        }
-        break;
       case 'videoprefix':
+      case 'gifprefix':
+      case 'msgprefix':
         try {
           if (!isOwner) return reply("Este comando é apenas para o meu dono");
-          // Verificar se é para remover
-          if (q && (q.toLowerCase() === 'off' || q.toLowerCase() === 'del' || q.toLowerCase() === 'delete' || q.toLowerCase() === 'remover')) {
-            if (!isPrefixMediaEnabled()) {
-              return reply("ℹ️ Não há mídia configurada para a resposta prefixo.");
+          const alvo = (q || '').trim();
+
+          // ---- remover (midia + texto) ----
+          if (['off', 'del', 'delete', 'remover'].includes(alvo.toLowerCase())) {
+            const tinhaMidia = isPrefixMediaEnabled();
+            const tinhaTexto = Boolean(loadMsgPrefix());
+            if (!tinhaMidia && !tinhaTexto) {
+              return reply("ℹ️ Não há nada configurado para a resposta prefixo.");
             }
-            removePrefixMedia();
-            return reply("✅ Mídia da resposta prefixo removida com sucesso!\n\n" +
-              "A resposta voltará a ser enviada apenas como texto.");
+            if (tinhaMidia) removePrefixMedia();
+            if (tinhaTexto) saveMsgPrefix(false);
+            return reply("✅ Resposta do prefixo removida (mídia e texto).\n\n" +
+              "Ao digitar *prefixo*, o bot volta a responder apenas o prefixo atual.");
           }
-          var RSVideo = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-          var videoData = RSVideo?.videoMessage || info.message?.videoMessage || RSVideo?.viewOnceMessageV2?.message?.videoMessage || info.message?.viewOnceMessageV2?.message?.videoMessage || info.message?.viewOnceMessage?.message?.videoMessage || RSVideo?.viewOnceMessage?.message?.videoMessage;
-          if (!videoData) {
-            const statusMsg = isPrefixMediaEnabled()
-              ? `ℹ️ *Mídia da resposta prefixo está ATIVA*\n\n` +
-              `🎬 Um vídeo está configurado para ser enviado quando alguém digita "prefixo".\n\n` +
-              `📝 *Comandos disponíveis:*\n` +
-              `• ${groupPrefix}videoprefix - Enviar/marcar vídeo para configurar\n` +
-              `• ${groupPrefix}videoprefix off - Remover a mídia\n` +
-              `• ${groupPrefix}fotoprefix - Configurar imagem`
-              : `❌ *Envie ou marque um vídeo* com o comando: ${groupPrefix}videoprefix\n\n` +
-              `🎬 Este vídeo será enviado quando alguém digitar "prefixo" no chat.\n\n` +
-              `💡 Para remover depois, use: ${groupPrefix}videoprefix off\n` +
-              `💡 Para imagem, use: ${groupPrefix}fotoprefix`;
-            return reply(statusMsg);
+
+          // ---- detecta a midia (marcada ou enviada junto do comando) ----
+          // Um helper so resolve: pega a primeira midia disponivel e diz o tipo.
+          // Nao ha segundo sistema de media — usa o mesmo getFileBuffer.
+          const ctxM = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+          const acharMidia = () => {
+            const cands = [
+              [info.message?.imageMessage, 'image'],
+              [info.message?.videoMessage, 'video'],
+              [info.message?.stickerMessage, 'gif'],
+              [info.message?.documentMessage, 'document'],
+              [ctxM?.imageMessage, 'image'],
+              [ctxM?.videoMessage, 'video'],
+              [ctxM?.stickerMessage, 'gif'],
+              [ctxM?.documentMessage, 'document'],
+              [info.message?.viewOnceMessageV2?.message?.imageMessage, 'image'],
+              [info.message?.viewOnceMessageV2?.message?.videoMessage, 'video'],
+              [info.message?.viewOnceMessage?.message?.imageMessage, 'image'],
+              [info.message?.viewOnceMessage?.message?.videoMessage, 'video'],
+              [ctxM?.viewOnceMessageV2?.message?.imageMessage, 'image'],
+              [ctxM?.viewOnceMessageV2?.message?.videoMessage, 'video'],
+              [ctxM?.viewOnceMessage?.message?.imageMessage, 'image'],
+              [ctxM?.viewOnceMessage?.message?.videoMessage, 'video'],
+            ];
+            for (const [m, tipo] of cands) {
+              if (!m || typeof m !== 'object') continue;
+              const mimetype = String(m.mimetype || '').toLowerCase();
+              // GIF/WebP sao imagem para o proto, mas sao ANIMADOS: tratamos como
+              // 'gif' para converter em MP4 e manter a animacao no destino.
+              if (mimetype.includes('gif') || mimetype.includes('webp') || m.isAnimated) {
+                return { midia: m, tipo: 'gif' };
+              }
+              // Documento que na verdade e imagem/video (o mimetype decide).
+              if (tipo === 'document') {
+                if (mimetype.includes('image/')) return { midia: m, tipo: 'image' };
+                if (mimetype.includes('video/')) return { midia: m, tipo: 'video' };
+                continue;
+              }
+              return { midia: m, tipo };
+            }
+            return null;
+          };
+
+          const achado = acharMidia();
+
+          // ---- sem midia: entao e TEXTO ----
+          if (!achado) {
+            if (!alvo) {
+              const temMidia = isPrefixMediaEnabled();
+              const temTexto = Boolean(loadMsgPrefix());
+              return reply(
+                `📌 *MIDIA DA RESPOSTA PREFIXO*\n\n` +
+                ((temMidia || temTexto)
+                  ? `ℹ️ *Configurado agora:*\n` +
+                    `• Mídia: ${temMidia ? `Sim (${getPrefixMediaType()})` : 'Não'}\n` +
+                    `• Texto: ${temTexto ? 'Sim' : 'Não'}\n\n`
+                  : '❌ *Nada configurado ainda.*\n\n') +
+                `*Como usar:*\n` +
+                `• ${groupPrefix}midiaprefix <texto> — salva o texto\n` +
+                `• ${groupPrefix}midiaprefix + imagem/vídeo/GIF — salva a mídia\n` +
+                `• ${groupPrefix}midiaprefix off — remove tudo\n\n` +
+                `*Variáveis do texto:*\n` +
+                `• #prefixo# — o prefixo deste grupo\n` +
+                `• #numerodele# — menciona quem digitou\n\n` +
+                `📌 Exemplo: ${groupPrefix}midiaprefix Use #prefixo# antes do comando, #numerodele#!`
+              );
+            }
+            if (!saveMsgPrefix(alvo)) return reply('❌ Erro ao salvar o texto.');
+            const previa = alvo.replace(/#prefixo#/g, prefix).replace(/#numerodele#/g, `@${sender.split('@')[0]}`);
+            return reply(`✅ *Texto da resposta prefixo salvo!*\n\nPrévia: ${previa}`, { mentions: [sender] });
           }
-          var videoBuffer = await getFileBuffer(videoData, 'video');
-          var videoPath = __dirname + '/../midias/prefix_media.mp4';
-          fs.writeFileSync(videoPath, videoBuffer);
-          setPrefixMedia(videoPath, 'video');
-          await reply('✅ Mídia da resposta "prefixo" atualizada com sucesso!');
+
+          // ---- com midia: baixa, (converte GIF) e salva ----
+          const { midia, tipo } = achado;
+          let buffer = await getFileBuffer(midia, tipo === 'image' ? 'image' : 'video');
+
+          if (tipo === 'gif') {
+            try {
+              buffer = await converterGifParaMp4(buffer);
+            } catch (convErr) {
+              console.error('[MIDIAPREFIX] Falha ao converter GIF:', convErr?.message || convErr);
+              return reply('❌ Não consegui converter esse GIF.\n\nVerifique se o FFmpeg está instalado no servidor.');
+            }
+          }
+
+          const ext = tipo === 'image' ? 'jpg' : 'mp4';
+          const mediaPath = __dirname + `/../midias/prefix_media.${ext}`;
+          ensureDirectoryExists(pathz.dirname(mediaPath));
+          fs.writeFileSync(mediaPath, buffer);
+          // GIF e video saem os DOIS como 'video' — o que muda no envio e o
+          // gifPlayback, ligado quando o arquivo veio de GIF.
+          setPrefixMedia(mediaPath, tipo === 'image' ? 'image' : 'video', tipo === 'gif');
+
+          const nome = tipo === 'image' ? 'Imagem' : (tipo === 'gif' ? 'GIF' : 'Vídeo');
+          await reply(
+            `✅ *${nome} da resposta prefixo atualizado!*\n\n` +
+            `📦 Tamanho: ${(buffer.length / 1024).toFixed(0)} KB\n` +
+            (loadMsgPrefix()
+              ? `💬 O texto configurado será enviado como legenda.\n`
+              : `💡 Dica: use ${groupPrefix}midiaprefix <texto> para definir uma legenda.\n`) +
+            (tipo === 'gif' ? `🎞 Convertido para MP4 (o WhatsApp só anima MP4 com gifPlayback).\n` : '') +
+            `\nAo digitar *prefixo*, a mídia será enviada neste grupo.`
+          );
         } catch (e) {
-          console.error(e);
-          reply("ocorreu um erro 💔");
+          console.error('[MIDIAPREFIX] Erro:', e?.message || e);
+          reply("Ocorreu um erro 💔");
         }
         break;
       case 'audiomenu':
@@ -39118,21 +39212,9 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
           await reply('Ocorreu um erro ao banir 💔');
         }
         break;
-      case 'msgprefix':
-        try {
-          if (!isOwner) return reply('Apenas o dono pode configurar isso.');
-          if (!q) return reply('Uso: '+ groupPrefix + 'msgprefix off ou '+ groupPrefix + 'msgprefix texto aqui #prefixo#');
-          const newMsg = q.trim().toLowerCase() === 'off' ? false : q;
-          if (saveMsgPrefix(newMsg)) {
-            await reply(newMsg ? `✅ Mensagem prefix configurada: ${newMsg.replace('#prefixo#', prefix)}` : '✅ Mensagem prefix desativada.');
-          } else {
-            await reply('Erro ao salvar.');
-          }
-        } catch (e) {
-          console.error('Erro no msgprefix:', e);
-          await reply('Ocorreu um erro 💔');
-        }
-        break;
+      // NOTA: o `msgprefix` foi unificado no `!midiaprefix` (junto com
+      // fotoprefix/videoprefix). A case antiga ficava aqui; ela foi removida e o
+      // comando agora vive num bloco so, no bloco de midia da resposta prefixo.
       case 'msgboton':
         try {
           if (!isOwner) return reply('Apenas o dono pode alterar esta configuração!');
@@ -39777,10 +39859,11 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
             });
           }
         }
-        const msgPrefix = loadMsgPrefix();
-        if (['prefix', 'prefixo'].includes(budy2) && msgPrefix) {
-          await reply(msgPrefix.replace('#prefixo#', prefix));
-        };
+        // Gatilho do handler de comandos (o "prefixo" solto já é tratado acima).
+        if (['prefix', 'prefixo'].includes(budy2)) {
+          const currentPrefix = groupData.customPrefix || config.prefixo || '!';
+          await responderPrefixo(nazu, from, info, sender, currentPrefix, reply);
+        }
         const customReacts = loadCustomReacts();
         for (const react of customReacts) {
           if (budy2.includes(react.trigger)) {

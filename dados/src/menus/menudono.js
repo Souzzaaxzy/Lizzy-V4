@@ -46,8 +46,7 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 │ 🎵 ${prefix}audiomenu
 │ 📖 ${prefix}lermais
 │ 🎨 ${prefix}personalizargrupo
-│ 📸 ${prefix}fotoprefix
-│ 🎥 ${prefix}videoprefix
+│ 📸 ${prefix}midiaprefix
 ╰──────────────
 
 
@@ -205,7 +204,6 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 │ 📊 ${prefix}limparrankg
 │ ♻ ${prefix}reviverqr
 │ 💣 ${prefix}nuke
-│ 💬 ${prefix}msgprefix
 ╰──────────────
 
 

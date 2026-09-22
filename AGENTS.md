@@ -3366,3 +3366,104 @@ BigDecimal 0 extraídos do `transactionData`). Regressões verdes:
 `antifantasma-classificacao` 18/18, `ghost-detection` 24/81,
 `anti-seletiva` 32/32. Escopo: só o `!get` (`messageInspector` +
 `invisibleAnalyzer` + testes) — `index.js` intocado.
+
+## COMANDO `!midiaprefix` — unificou `fotoprefix` + `videoprefix` + `msgprefix` ✅
+Pedido do dono: juntar os três num comando só, aceitando **foto, vídeo, GIF e
+texto**, e adicionar a variável **`#numerodele#`**. O nome novo é
+**`!midiaprefix`**.
+
+### Um comando, quatro entradas
+O bloco antigo (duas cases quase idênticas + uma terceira para texto) virou
+**uma** case com aliases:
+
+```js
+case 'midiaprefix':
+case 'fotoprefix':   // aliases preservados
+case 'videoprefix':
+case 'gifprefix':
+case 'msgprefix':
+```
+Ou seja: **os nomes antigos continuam funcionando** (ninguém que já usa precisa
+mudar), mas há **uma** implementação.
+
+### Detecção de mídia (um helper)
+`acharMidia()` varre as 16 posições possíveis (mensagem enviada ou marcada ×
+`image`/`video`/`sticker`/`document` × view-once V1/V2) e devolve
+`{ midia, tipo }`. O tipo sai do **mimetype**, não do nome do campo:
+- `image/gif`, `image/webp` ou `isAnimated` → **`gif`**;
+- `image/*` → `image`; `video/*` → `video`;
+- `document*` decide por mimetype (documento que é imagem/vídeo conta).
+
+### GIF → MP4 (módulo novo `utils/gifMedia.js`)
+**O WhatsApp não reproduz GIF como GIF.** O que ele anima é um **MP4** enviado
+com **`gifPlayback: true`**. Então o GIF marcado é:
+1. baixado (mesmo `getFileBuffer` de sempre — sem sistema paralelo de mídia);
+2. **convertido para MP4** por `converterGifParaMp4` (FFmpeg do sistema,
+   `libx264` + `yuv420p` + `faststart`, `scale=trunc(iw/2)*2` para dimensão par,
+   `-an` porque GIF não tem áudio);
+3. salvo como `prefix_media.mp4` e marcado **`isGif: true`**.
+
+O `gifPlayback` é ligado no **envio** quando `isGif` é true — assim o destino vê
+um GIF animado, não um vídeo comum. O módulo é isolado e só fala com o FFmpeg
+(args fixos, sem entrada do usuário → sem injeção), com teto de 60s, SIGKILL no
+grupo de processos e `tmp` sempre limpo.
+
+### `#numerodele#` e `#prefixo#`
+Ambas resolvidas nos **dois** caminhos (texto salvo e legenda da mídia):
+`#prefixo#` → prefixo do grupo; `#numerodele#` → `@<número>` + menção real.
+
+### Resposta ao "prefixo" — os dois gatilhos unificados
+Havia **dois** consumidores (o "prefixo" solto e o handler de comandos) que
+faziam coisas diferentes. Agora ambos chamam **`responderPrefixo()`**:
+- **mídia + texto** → envia a mídia com o texto como **legenda**;
+- **só texto** → envia o texto;
+- **só mídia** → mídia com legenda padrão;
+- **nada** → o prefixo simples.
+
+### `off` remove TUDO
+`!midiaprefix off` remove a mídia **e** o texto (antes eram dois comandos para
+isso). Se não há nada, avisa em vez de fingir sucesso.
+
+### Persistência
+`prefixMedia.json` ganhou **`isGif`** (`setPrefixMedia(path, type, isGif)` e
+`getPrefixMediaIsGif()`), inicializado no default, zerado no `removePrefixMedia`.
+`msgprefix.json` continua sendo o texto — **um arquivo por responsabilidade**,
+nenhum banco novo.
+
+### Menu e help
+`menudono`: `📸 midiaprefix` (e o `💬 msgprefix` foi removido, junto do
+`🎥 videoprefix`). O help do prefixo virou **"Mídia / Mensagem de Prefixo"**
+descrevendo o comando unificado.
+
+### Testes — `tests/midiaprefix.test.js` (19 testes / 57 asserções)
+Roda o **handler real** com socket falso, `DATABASE_PATH`/`CONFIG_PATH`
+temporários, e **mídia cifrada de verdade** (hkdf + AES-256-CBC) servida por HTTP
+local — o `getFileBuffer` percorre o download real. Cobre: texto com
+`#prefixo#`/`#numerodele#`, imagem (e que o arquivo salvo é o **JPEG
+descriptografado**), vídeo, GIF (convertido — o teste confere o magic `ftyp` do
+MP4, ou seja, que **não** são os bytes do GIF), WebP animado, `off`, aliases
+antigos, os três modos da resposta ao "prefixo", `gifPlayback`, permissão, menu e
+help.
+**O teste guarda e restaura os `prefix_media.*` versionados** — o comando APAGA a
+mídia anterior ao salvar, e sem isso ele sujaria a árvore de trabalho (foi um bug
+real encontrado ao rodar: o teste chegou a remover o `prefix_media.jpg` do repo).
+
+**Armadilhas encontradas escrevendo os testes:**
+1. **`directPath` no proto faz a fork montar `https://`** e ignorar a `url`
+   (`messages-media.js` ~475). Com um servidor HTTP local, o fetch morria com
+   `SSL ... wrong version number`. O fixture **não** leva `directPath`.
+2. **Mídia enviada como a própria mensagem**: o comando tem de estar na
+   `caption` **dentro** do objeto de mídia (`imageMessage.caption`), não no topo
+   — é de lá que o `getMessageText` lê.
+3. **`isPrefixMediaEnabled()` devolve `null`** (é `data.mediaPath && ...`), não
+   `false` — asserção por truthiness.
+4. **`isOwner` inclui `info.key.fromMe`**: nos testes de permissão o comando
+   precisa ir com `fromMe: false`, senão o remetente já conta como dono.
+
+Regressões verdes: `get-message-inspector` 54/269, `raja-selective` 23/0,
+`antifantasma-classificacao` 18/18, `ghost-detection` 24/81, `anti-seletiva` 32/32,
+`viewonce-v2` 18/77, `cmd-suggest` 21/68, `testcall` 35/127,
+`blacklist-number` 12/38, `antimidia` 14/29, `gifsbn-media` 16/61,
+`delete-status` 11/55, `me-profile` 44/44.
+**Pré-requisito**: FFmpeg no servidor para o caminho de GIF (os testes de GIF são
+pulados sem ele, com aviso — o sandbox não tem).

@@ -3400,7 +3400,7 @@ const removeGroupCustomPhoto = (groupId) => {
 // ============== SISTEMA DE MÍDIA DA RESPOSTA PREFIXO ==============
 
 const loadPrefixMedia = () => {
-  ensureJsonFileExists(PREFIX_MEDIA_FILE, { mediaPath: null, mediaType: null });
+  ensureJsonFileExists(PREFIX_MEDIA_FILE, { mediaPath: null, mediaType: null, isGif: false });
   return loadJsonFile(PREFIX_MEDIA_FILE);
 };
 
@@ -3426,7 +3426,21 @@ const getPrefixMediaType = () => {
   return data.mediaType || null;
 };
 
-const setPrefixMedia = (mediaPath, mediaType) => {
+/**
+ * A midia salva veio de um GIF? GIF e gravado como MP4 ('video'), mas no envio
+ * precisa de `gifPlayback: true` para continuar animando como GIF no destino.
+ */
+const getPrefixMediaIsGif = () => {
+  const data = loadPrefixMedia();
+  return data.isGif === true;
+};
+
+/**
+ * @param {string} mediaPath
+ * @param {'image'|'video'} mediaType
+ * @param {boolean} [isGif] veio de GIF (MP4 com gifPlayback no envio)
+ */
+const setPrefixMedia = (mediaPath, mediaType, isGif = false) => {
   const data = loadPrefixMedia();
 
   // Remove mídia anterior se existir
@@ -3440,6 +3454,7 @@ const setPrefixMedia = (mediaPath, mediaType) => {
 
   data.mediaPath = mediaPath;
   data.mediaType = mediaType;
+  data.isGif = isGif === true;
   savePrefixMedia(data);
   return true;
 };
@@ -3458,6 +3473,7 @@ const removePrefixMedia = () => {
 
   data.mediaPath = null;
   data.mediaType = null;
+  data.isGif = false;
   savePrefixMedia(data);
   return true;
 };
@@ -3719,6 +3735,7 @@ export {
   isPrefixMediaEnabled,
   getPrefixMediaPath,
   getPrefixMediaType,
+  getPrefixMediaIsGif,
   setPrefixMedia,
   removePrefixMedia,
   // Funções de combate
