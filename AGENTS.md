@@ -2298,113 +2298,38 @@ de verificação da **conversa**". E existe o campo `identityVerification` em
 2. **Por isso o comando não pode "dar" verificação.** Um bot não verifica a
    chave de um contato *para o contato* — quem faz isso é o AKD do servidor.
 
-**Estado do `!testverify`:** continua sendo o **instrumento de observação**
-(correto e útil para capturar uma action dessas se ela chegar), com a
-classificação **⚪ INCONCLUSIVO** e a relação com selo oficial **NÃO CONFIRMADA**.
-O que a pesquisa acrescenta é o **mecanismo**: é verificação de identidade
-E2E/key-transparency, e é **inbound**. Não vou afirmar efeito sem medição em
-cliente real.
+**Estado:** o comando `!testverify` foi **REMOVIDO** (ver a nota de remoção
+abaixo). O que a pesquisa acrescenta é o **mecanismo**: é verificação de
+identidade E2E/key-transparency, e é **inbound** — por isso enviar do bot não tem
+efeito esperado, e não faz sentido manter um comando que só confirma que a
+stanza saiu. Não vou afirmar efeito sem medição em cliente real.
 
-## COMANDO `!testverify` — EXPERIMENTO de MarkAsVerifiedAction ✅
-Investigação + implementação experimental pedidas pelo dono. O comando existe
-para **descobrir** o comportamento da action, não para "dar selo".
+## COMANDO `!testverify` — REMOVIDO (set/2026) ❌
+O comando existiu como **instrumento de observação** da `MarkAsVerifiedAction` e
+foi **removido** quando a investigação concluiu o que a action é (ver
+"O QUE A ACTION REALMENTE É", acima).
 
-### O que a investigação determinou (FATO, com fonte)
+**Por que foi removido:** a action é **inbound** (servidor → cliente) e não tem
+consumidor no cliente oficial para o caso de envio (as 3 ocorrências no bundle
+do WhatsApp Web são só o schema; **0 usos**). Ou seja: enviá-la de um bot não
+tem efeito esperado — a verificação de identidade é feita pelo **provedor**
+(AKD/key transparency da Meta). Manter um comando que só confirma "a stanza
+saiu" não agrega.
 
-| Item | Resultado |
-|---|---|
-| Proto existe? | **SIM** — `proto.Message.MarkAsVerifiedAction` |
-| Onde está? | `Message.ProtocolMessage`, **campo 32** |
-| Enum do pai | `MARK_AS_VERIFIED_ACTION = 36` |
-| Transporte | **ProtocolMessage** (NÃO App State, NÃO mutation) |
-| App State | **NÃO utilizado** — não há `markAsVerified*` em `SyncActionValue` |
+**O que ficou:**
+- a **recepção** na fork (`lib/Utils/process-message.js`, case do tipo 36)
+  continua: se uma action dessas **chegar**, ela é capturada e reportada via
+  `chats.update` — isso é útil e não depende do comando.
+- o **helper de envio** da fork (`lib/Utils/mark-as-verified.js`) continua
+  disponível como API experimental, para quem quiser reproduzir o experimento
+  por conta própria.
+- `tests/testverify-what-it-does.test.js` (**18 asserções**) continua e **não
+  depende do comando** — ele mede os FATOS do schema (os dois sistemas de
+  verified, os campos, o caminho de entrega).
 
-**Campos** (fonte: spec INTERNO do WhatsApp Web, `Message$MarkAsVerifiedAction`
-em `WAWebProtobufsE2E_pb.js`; confere campo a campo com whatsmeow e Cobalt):
-
-| # | Campo | Tipo |
-|---|---|---|
-| 1 | `userJidString` | STRING |
-| 2 | `verified` | BOOL |
-| 3 | `verifiedIdentityKey` | BYTES |
-| 4 | `actionSeq` | UINT64 |
-
-**A "hipótese do App State" foi DESCARTADA por evidência**, não por opinião: o
-envelope é `ProtocolMessage` e a action não aparece na lista de `SyncActionValue`.
-Criar `SyncdMutation`/`SyncdPatch`/LTHash seria inventar um transporte que o
-schema não descreve.
-
-### O que NÃO foi possível estabelecer (DESCONHECIDO)
-
-- **Direção / quem origina a action.** NÃO foi encontrado código de cliente que
-  a **origine**. O bundle do WhatsApp Web só define o schema (3 ocorrências, todas
-  de spec). A implementação de referência que existe apenas **recebe** (transforma
-  a action recebida em um `chats.update`, isto é, um estado de **conversa** — não
-  um selo de usuário). **Enviar é, portanto, um experimento**: o servidor pode
-  ignorar ou rejeitar.
-- **Semântica de `verified`.** O schema diz que é BOOL, mas nada define se `true`
-  marca ou se `false` desmarca.
-- **Origem de `verifiedIdentityKey`.** Não há evidência de como o cliente oficial
-  a obtém. Por isso o bot **não a fabrica** (nada de bytes aleatórios nem chave de
-  outra conta): sem valor legítimo, o campo simplesmente NÃO vai.
-- **Relação com "selo oficial".** **NÃO CONFIRMADA.** `verified` no schema não é
-  prova de selo azul/Meta Verified. O comando nunca promete isso.
-
-### Implementação na FORK (`commit 00aeec9`)
-
-- **`WAProto`**: a estrutura foi adicionada de forma **determinística** por
-  `scripts/add-mark-as-verified-action.js` (idempotente, `--check`, e cada âncora
-  é exigida **exatamente uma vez**). O `WAProto` é **artefato gerado** e a fork
-  não guarda o `.proto` nem o `pbjs` — então o delta é aplicado como o gerador
-  produziria, em vez de edição solta à mão.
-- **`lib/Utils/mark-as-verified.js`**: build + validação (fail-closed) + envio
-  pelo **`relayMessage` existente** (nenhum socket/transport/ap-state paralelo).
-  Normaliza o JID sem **converter PN↔LID** (a evidência não sustenta a conversão).
-- **`lib/Utils/process-message.js`**: case para o tipo 36 que **observa** e
-  reporta via `chats.update`, com a identidade reduzida a **LENGTH** no log.
-- **`sock.sendMarkAsVerifiedAction`** na fachada.
-
-### Decisões de segurança
-
-- `verified`/`actionSeq` são **omitidos** (não chutados). **Ausente ≠ `false`**,
-  e os helpers preservam essa diferença.
-- A `verifiedIdentityKey` **nunca** é fabricada nem logada (só o tamanho).
-- **Fail-closed**: JID/payload inválido lança e **nada é enviado**.
-
-### O comando
-
-- `!testverify` — envia a action (alvo: menção > o próprio remetente);
-- `!testverify debug` — diagnóstico **sem enviar**;
-- Permissão: `canUseOwnerCmd` (o sistema existente; nenhum bypass);
-- A resposta **separa ENVIO de EFEITO** e diz que o ACK não implica verificação
-  visual;
-- Menu: categoria **🧪 TESTES EXPERIMENTAIS** no `menudono`, descrita como
-  *"Teste experimental de MarkAsVerifiedAction (envia a action; não garante selo)"*.
-
-### Testes
-
-- Fork: `mark-as-verified-action-proto.test.js` (**12**) e
-  `mark-as-verified-action-helper.test.js` (**18**). Suíte da fork: **172/172**.
-- Lizzy: `tests/testverify.test.js` (**31**). Verificado desativando a case: o
-  teste **falha** — ele mede comportamento real.
-- Regressões verdes: anti-seletiva 32/32, raja-selective 23/23,
-  get-message-inspector 54/269, ghost-manager, seturlghost, antifantasma-*,
-  me-profile, pin-tiktok, cmd-suggest, gifsbn, blacklist.
-
-### Armadilha do teste (documentada)
-
-O throttle é **por remetente** (3 comandos/5s) e trocar o remetente **quebraria a
-permissão de dono** (que vem de `senderBase === ownerBase`). O teste usa
-`fromMe: true` (caminho que o próprio handler prevê: pula o throttle **e** conta
-como dono), e os casos de **permissão** usam `fromMe: false` + remetente que não
-é o dono, para medir a recusa de verdade.
-
-### Classificação final do experimento
-
-**⚪ INCONCLUSIVO** — proto encontrado, schema validado, payload construído,
-serializado e enviado; **efeito funcional NÃO observado** (o ambiente não tem
-sessão pareada, então CLIENTE REAL e ACK não foram medidos). A relação com selo
-oficial está **NÃO CONFIRMADA**.
+**Removido neste repositório:** a `case 'testverify'` (`index.js`), a categoria
+**🧪 TESTES EXPERIMENTAIS** do `menudono` e `tests/testverify.test.js`.
+Verificado: `grep testverify` em `dados/` → **0 ocorrências**.
 
 ## CLASSIFICAÇÃO CENTRAL do AntiFantasma (`classifyMessage.category`) ✅
 O AntiFantasma decidia "é fantasma?" com um `if` solto lendo `info.message`.

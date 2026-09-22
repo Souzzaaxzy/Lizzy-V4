@@ -26,7 +26,7 @@
  * Nada aqui afirma efeito no cliente. O que nao foi medido fica marcado como
  * nao medido.
  *
- * Uso: node tests/testverify-does-not-verify-profile.test.js
+ * Uso: node tests/testverify-what-it-does.test.js
  */
 
 import { proto } from '@itsliaaa/baileys';
