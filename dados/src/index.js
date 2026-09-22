@@ -25,7 +25,6 @@ import { buildCmdNotFoundExtras } from './utils/commandSuggest.js';
 import { extractMedia, resolveMedia, isViewOnce, describeMediaError, extractQuoted, extractText } from './utils/viewOnce.js';
 import { parseImagePollArgs, collectPollImages, resolveAttachments, buildOptionName } from './utils/pollImages.js';
 import { toOggOpus } from './utils/oggOpus.js';
-import { runTemaTest, TEMA_USAGE } from './utils/chatThemeLab.js';
 import * as ghostKeys from './antifantasma/keys.js';
 import { verificarSaude as ghostVerificarSaude } from './antifantasma/health.js';
 import { endpointAntiFantasma as ghostEndpointUrl, escolherPorta as ghostEscolherPorta, portasPublicadas as ghostPortasPublicadas } from './utils/publicUrl.js';
@@ -40138,27 +40137,6 @@ agora todo ataque fantasma sera detectado e banido automaticamente\`);
           await reply('❌ Não foi possível definir a URL do servidor.');
         }
         break;
-
-      // ── 🎨 LABORATÓRIO EXPERIMENTAL: chat theme / wallpaper ────────────────
-      // Não é recurso oficial e NÃO entra em menu (FASE 35): o payload é o do
-      // protocolo real descoberto na fork, mas nenhum efeito visual é afirmado.
-      // Comando exclusivo do dono, e só em conversa controlada (grupo/PV).
-      case 'tema': {
-        try {
-          if (!canUseOwnerCmd(command)) return reply('Você não tem permissão para usar este comando.');
-          const temaRes = await runTemaTest({
-            sendChatTheme: nazu.sendChatTheme,
-            jid: from,
-            args
-          });
-          console.log(`[TEMA] ok=${temaRes.ok} variant=${temaRes.variant || 'none'} motivo=${temaRes.reason || '-'}`);
-          await nazu.sendMessage(from, { text: temaRes.text, quoted: info });
-        } catch (e) {
-          console.error('[TEMA] Erro:', e?.message || e);
-          try { await reply(`❌ Erro no laboratório de tema 💔\n\n${TEMA_USAGE}`); } catch { /* ignore */ }
-        }
-        break;
-      }
 
       default:
         if (isCmd) {

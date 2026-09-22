@@ -2690,157 +2690,50 @@ Depois disso o `!atualizar` volta a funcionar sozinho.
 - `.scripts/config.js`: `DEPENDENCIES_CONFIG` ganhou entrada `yt-dlp` (check `yt-dlp --version || python3 -m yt_dlp --version`, install via pip por SO — termux/win/linux/mac), seguindo o padrão existente do Git/Yarn/FFmpeg.
 - Validado: repo git de teste (instala pacote faltando, instala yt-dlp via pip, 2ª run pula tudo), projeto real (deps completos → pula npm; PATH restrito → falha controlada), `node --check` OK.
 
-## LABORATÓRIO EXPERIMENTAL `!tema` — chat theme / wallpaper (set/2026) ⚠️
-Investigação pedida pelo dono: descobrir o **protocolo wire real** de tema de
-conversa no WhatsApp e integrar um laboratório à Lizzy. Entrega em dois lados:
-fork (Baileys) + bot (Lizzy). **Comando do DONO, fora de qualquer menu.**
+## COMANDO `!tema` — REMOVIDO (set/2026) ❌
+O laboratório de chat theme / wallpaper foi **removido** a pedido do dono, depois
+de cumprir o objetivo. Ficou como **conhecimento**, não como comando.
 
-### O que o protocolo É (medido no WAProto, não suposto)
-O tema **não** é propriedade de mensagem comum (`{ chatTheme }` no topo não é o
-wire) e **não** é App State (não existe `chatTheme*` em `SyncActionValue`). É um
-**`ProtocolMessage`**:
-```
-ProtocolMessage.type = CHAT_THEME_SETTING (34)
-ProtocolMessage.chatThemeSetting            (campo 30)
-```
-`ChatThemeSetting`: `1 settingTimestampMs` INT64, `2 clearTheme` BOOL,
-`3 colorSchemeId` STRING, e o oneof `wallpaper`:
-```
-10 defaultWallpaper  { isDoodleEnabled }
-11 solidColor        { colorLight, colorDark, isDoodleEnabled }
-12 stockImage        { stockImageId string, dimLevel float }
-13 customImage       { directPath, mediaKey, fileEncSha256, fileSha256, dimLevel float }
-14 animatedWallpaper { animatedWallpaperId string, dimLevel float }
-```
+### O que foi removido
+- **Bot**: `case 'tema'` no `index.js`, o import de `chatThemeLab.js`, o módulo
+  `dados/src/utils/chatThemeLab.js`, `tests/chat-theme-lab.test.js` e `'tema'` da
+  lista do `menudono` em `blockPv.js`. `grep` confirma **zero** referências.
+- **Fork** (commit `ef49852`): `lib/Utils/chat-theme.js`, a fachada
+  `sendChatTheme` e seu import, o re-export em `lib/Utils/index.js`, o `case`
+  observacional de `CHAT_THEME_SETTING` no `process-message.js`, o script
+  `scripts/add-chat-animated-wallpaper.js`, os dois testes (15+18) e a seção do
+  README + entrada do TOC.
 
-### BUG DA FORK CORRIGIDO — variante 14 ausente
-`proto.Message.ChatAnimatedWallpaper` era **`undefined`** e encodar
-`{ animatedWallpaper: ... }` produzia **0 bytes** (campo descartado em silêncio).
-As outras 4 variantes existiam. A fonte da verdade do delta é o spec interno do
-WhatsApp Web (`Message$ChatAnimatedWallpaper`). Como o WAProto é artefato
-**gerado** e a fork não guarda o `.proto` nem o pbjs, o delta é aplicado por
-`scripts/add-chat-animated-wallpaper.js` — determinístico e idempotente.
+### O WAProto foi REVERTIDO ao estado GERADO
+O delta experimental (`ChatAnimatedWallpaper`, variante 14) foi descartado.
+O que **permanece** é o schema original: `ChatThemeSetting` campos 1/2/3 e as
+variantes 10..13, e `ProtocolMessage.chatThemeSetting` (campo 30) — nada disso
+foi criado por nós.
 
-### ARMADILHA DO GERADOR (por que o helper existe)
-O `encode` gerado usa `hasOwnProperty`, **não** o getter do oneof. Setar dois
-membros do wallpaper escreve **os DOIS** no wire, e o receptor resolve pelo
-**último** — semântica de oneof inválida. Por isso `buildChatThemeSetting`
-impõe a exclusividade por conta própria e recusa mais de uma variante. Há um
-teste que **primeiro demonstra a falha** do gerador.
+### Por que foi removido (o que a investigação concluiu)
+1. **É PESSOAL.** O tema de conversa do WhatsApp só aparece para quem escolheu;
+   a documentação pública (WABetaInfo) é explícita: *"not shared with other
+   participants... limited to the device of the person who sets it"*.
+2. **O direcionamento é INBOUND.** Enviar `ChatThemeSetting` não aplica nada —
+   nem em quem recebe, nem em quem manda. Quem aplica é o próprio app, local.
+3. **O WhatsApp está construindo um "theme sync"** (beta fechado) justamente
+   para compartilhar tema — prova de que esse caminho não faz isso hoje.
+4. **Os IDs são opacos.** `colorSchemeId`, `stockImageId` e `animatedWallpaperId`
+   são `string` sem enum no proto; não existe lista pública. Só `solidColor`
+   aceita valor controlado (cores literais ARGB de 8 dígitos).
+Classificação final medida no aparelho: **ACEITO E IGNORADO**.
 
-### Lado FORK (Baileys) — commit `92cf68d`
-- `lib/Utils/chat-theme.js`: validação **fail-closed** (jid, variante
-  desconhecida, oneof misto, timestamp não-inteiro → recusa) + envelope +
-  envio pelo `relayMessage` existente. `mediaKey`/`file*Sha256` só aparecem como
-  **comprimento** no log, nunca o conteúdo.
-- `lib/Utils/process-message.js`: `case type 34` **observacional** — reporta o
-  tema que CHEGOU via `chats.update`, para comparar enviado × recebido. Não
-  aplica nada nem afirma efeito.
-- `lib/Socket/messages-send.js`: fachada `sendChatTheme` (wrapper fino sobre o
-  relay).
-- README: seção `🎨 ChatThemeSetting (experimental)` + TOC.
-- Testes: `chat-theme-setting-proto.test.js` (15: field numbers, oneof, quirk do
-  gerador, precisão de float, variante nova) + `chat-theme-helper.test.js` (18:
-  validação, negativos, nada de segredo no log). Suíte completa: **223/223**.
+### Conhecimento que fica (para não repetir a busca)
+- O tema viaja como `ProtocolMessage` type 34 / `chatThemeSetting` campo 30 —
+  **não** é propriedade de mensagem comum, **não** é App State.
+- Existe também `SyncActionValue.SettingsSyncAction.chatThemeId` +
+  `colorSchemeId` (App State, coleção `settings`): é aí que o tema do próprio
+  usuário é gravado. O `processSyncAction` do Baileys **não** trata
+  `settingsSyncAction`, então o bot ignora o tema por completo.
+- O `encode` gerado usa `hasOwnProperty`, não o getter do oneof: setar dois
+  membros do wallpaper escreve **os dois** no wire.
 
-### Lado LIZZY — `dados/src/utils/chatThemeLab.js` + `case 'tema'`
-- Módulo **puro** (sender injetado, sem socket/disco/rede) →
-  `parseTemaArgs` + `runTemaTest`.
-- `!tema teste` (defaultWallpaper) · `stock <ID> [dim]` · `animated <ID> [dim]` ·
-  `color <#clara> <#escura>` · `scheme <ID>` · `reset` (clearTheme). **Uma
-  variação por execução.**
-- Exclusivo do dono (`canUseOwnerCmd`), sem sistema de permissão novo. `from`
-  como alvo (vale PV e grupo). `settingTimestampMs` injetado (`now()`).
-- **NÃO entra em menu** (FASE 35: não existia categoria experimental e não se
-  cria menu só para isso). Resposta **não promete efeito** — diz explicitamente
-  "Isto NAO confirma alteracao visual" e cita o caso "aceito e ignorado".
-- Fork antiga (sem `sendChatTheme`) → erro claro "Atualize a fork", sem crash.
-- Testes: `tests/chat-theme-lab.test.js` — **15 testes / 55 asserções**. Mede o
-  **handler real** com socket falso (payload, args inválidos não chamam o
-  sender, não-dono barrado, fork sem suporte) + asserção de que a mensagem
-  **não** afirma "tema alterado".
-- Validado também com a fork real instalada: os 6 modos viram
-  `ProtocolMessage` type 34 com o campo 30 e a variante certa.
-
-### Dependência fixada
-`package-lock.json`/`yarn.lock` apontam para `92cf68dc6f08151104f077d5d86bd006abce1716`
-(**hash completo** — hash curto gera falso drift no `gitDependencyDrift`). O boot
-confirma: `Baileys: @souzzaaxzy/baileys 0.3.18-final (Souzzaaxzy/baileys@92cf68d)`.
-
-### CLASSIFICAÇÃO FINAL — honesta: **DESCONHECIDO** (não FUNCIONAL)
-Nenhuma evidência de efeito visual foi produzida: o ambiente **não tem sessão
-pareada** de WhatsApp, então os testes reais no cliente (FASES 15/21-27) **não
-foram executados**. O que está provado: o proto, a serialização/round-trip, o
-envio pela via normal e a recepção observacional. O que **não** está provado: o
-Android/Web interpretar, o wallpaper mudar, persistir, ou o botão aparecer. A
-direção do protocolo também não foi estabelecida (relatos públicos descrevem
-tema de conversa como pessoal). **Não converter "payload enviado" em "tema
-alterado"** — a mensagem do comando foi escrita exatamente para não fazer isso.
-
-### PENDENTE PARA O DONO
-Testar `!tema` num aparelho real (PV e grupo), observar se algum cliente muda a
-aparência, e registrar o resultado. Sem essa medição, a classificação continua
-**DESCONHECIDO**. Nota: o trabalho foi retomado de uma sessão anterior que
-morreu por estouro de contexto (918k tokens); a fork não tinha recebido o commit.
-
-### TESTE REAL no grupo (set/2026) — resultado: NADA aconteceu, e agora sabemos POR QUÊ ✅
-O dono rodou `!tema` no grupo e recebeu o relatório correto (payload enviado,
-`Wallpaper: defaultWallpaper`, vestamp, nenhum erro) — e **nada mudou na tela**.
-Isso não é bug do comando; é o comportamento **esperado** do recurso, e a
-investigação externa fechou o caso.
-
-#### As DUAS razões (independentes) de nada aparecer
-1. **`defaultWallpaper` é a aparência PADRÃO.** O `!tema teste` monta o
-   `defaultWallpaper` — que por definição é "volte ao padrão". Mesmo que o
-   protocolo funcionasse perfeitamente, **não haveria o que mudar**. Foi uma
-   escolha ruim de default para um teste visual (o default certo seria um
-   wallpaper concreto). `stock`/`animated`/`color` seriam os testes com efeito
-   possível.
-2. **O tema de conversa do WhatsApp é PESSOAL — e o direcionamento é INBOUND.**
-   A WABetaInfo (fonte que acompanha os betas) é explícita: *"When a chat theme
-   is selected, it is NOT shared with other participants in the conversation.
-   Only the user who chooses the theme can see it applied"* e *"Unlike
-   Instagram, WhatsApp themes do not affect how the conversation appears to
-   other participants... limited to the device of the person who sets it."*
-   Ou seja: **enviar um `ChatThemeSetting` para uma conversa não aplica nada** —
-   nem em quem recebe, nem em quem manda. Quem aplica é o **próprio app**, local.
-   É a mesma categoria da `MarkAsVerifiedAction`: protocolo de **entrada**
-   (servidor → cliente), não uma ação que o cliente origina.
-3. Contexto que confirma: o WhatsApp **está desenvolvendo** (beta fechado, iOS
-   26.37.10.16) um *theme sync* justamente para compartilhar tema com os outros
-   participantes — prova de que **hoje isso não existe**. Quando existir, será
-   por esse novo caminho, não por um envio cru do `ChatThemeSetting`.
-
-#### Consequência para a classificação (FASE 27)
-Sai de **DESCONHECIDO** para **ACEITO E IGNORADO** — a única das seis que
-descreve exatamente isto: o protocolo é transportado/aceito (o envio não deu
-erro e o payload é válido), mas **não produz efeito visual**. Não é FUNCIONAL,
-não é REJEITADO (não houve erro), não é INCOMPATÍVEL.
-**Não houve medição de ACK/entrega** (o socket do bot não expõe o ack deste
-caminho) — a classificação se apoia no comportamento documentado do cliente +
-o envio bem-sucedido.
-
-#### Correções aplicadas nesta rodada
-- **Fork `ec41976`**: o helper agora **gera o `messageId`** (antes o
-  `relayMessage` gerava internamente e o chamador nunca sabia — era a causa do
-  `🆔 ID: n/d` no relatório). O log passa a identificar a stanza exata.
-- **Lizzy**: `TEMA_USAGE` agora diz que `teste` é *"a aparência PADRÃO: por
-  definição não muda nada na tela"*, e a resposta do comando ganhou a nota
-  `TEMA_NOT_INBOUND_NOTE` — *"O tema de conversa do WhatsApp é PESSOAL (só
-  aparece para quem escolheu). Enviar o payload não aplica nada no aparelho de
-  quem recebe."* Antes a mensagem só dizia "pode ser aceito e ignorado" sem
-  explicar **por quê**; agora explica.
-- Testes: `tests/chat-theme-lab.test.js` → **18 testes / 62 asserções** (novos:
-  a nota de PESSOAL, o ID deixando de ser `n/d`, e a USAGE avisando do default).
-- Pin da fork atualizado para `ec41976091b681823135edd5ad8ddc77a656a067`.
-
-#### O que continua valendo
-Toda a parte de protocolo (descoberta do proto, o bug da variante 14, o quirk do
-oneof, a serialização) está correta e provada. O que a medição real acrescentou
-foi o **veredito de efeito**: aceito e ignorado — porque o recurso é pessoal e
-de entrada. O laboratório continua útil como ferramenta de diagnóstico (mostra
-o que sai, com ID e bytes), mas **não é e não será** um "muda o tema do grupo".
-
+Suíte da fork após a remoção: **190/190** (223 menos os 33 testes de tema).
 ## CORREÇÃO DEFINITIVA DO SISTEMA DE ATUALIZAÇÃO (set/2026) ✅
 Substituído o `git pull` (merge) por **sincronização determinística**. O
 sintoma relatado era o bot ficar **um commit atrasado para sempre**:
