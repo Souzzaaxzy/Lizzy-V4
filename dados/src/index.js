@@ -30568,24 +30568,6 @@ break;
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
         }
         break;
-      case 'testecopy':
-        try {
-          await nazu.sendMessage(from, {
-            text: "TESTE COPY - Este texto deve aparecer com o botao Ver canal",
-            contextInfo: {
-              forwardingScore: 999,
-              isForwarded: true,
-              forwardedNewsletterMessageInfo: {
-                newsletterJid: "120363410980452460@newsletter",
-                newsletterName: "Lizzy"
-              }
-            }
-          });
-        } catch (e) {
-          console.error(e);
-          await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
-        }
-        break;
       case 'solicitacoes':
       case 'pendentes':
       case 'requests':
