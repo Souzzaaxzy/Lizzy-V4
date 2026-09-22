@@ -228,6 +228,41 @@ function markGhostPunished(group, author) {
   punishedGhosts.set(`${group}${GHOST_PUNISH_KEY_SEP}${author}`, now + GHOST_PUNISH_WINDOW_MS);
 }
 
+/**
+ * Esta mensagem é uma distribuição seletiva (mensagem fantasma)?
+ *
+ * A decisão vem da classificação CENTRAL (`classifyMessage`), não de um `if`
+ * solto espalhado pelo handler.
+ *
+ * IMPORTANTE — onde o sinal vive: a fork anexa `selectiveDistribution` ao
+ * `fullMessage`, que é o próprio `info` (o WebMessageInfo) — NÃO dentro de
+ * `info.message`. E numa mensagem fantasma `info.message` é `undefined` (o
+ * payload não decifrou), então ler só `info.message` nunca acharia nada. É por
+ * isso que este helper recebe o `info` inteiro.
+ *
+ * Aceita também as duas formas do sinal: o RELATÓRIO (objeto) que a fork
+ * atribui, e um `true` de implementações que só sinalizam a presença.
+ *
+ * Devolve `false` para qualquer entrada inesperada: classificar errado aqui
+ * puniria alguém, então na dúvida não é ataque.
+ */
+function isProtectedSelective(info) {
+  if (!info || typeof info !== 'object') return false;
+  try {
+    // `classifyMessage` recebe o conteúdo da mensagem e lê o sinal de
+    // `message.selectiveDistribution`; aqui passamos o `info` inteiro, que é
+    // onde o campo realmente está.
+    const c = classifyMessage(info);
+    if (c.protectedSelective === true) return true;
+    // Fallback direto: cobre `info.message.selectiveDistribution` caso alguma
+    // versão da lib o coloque dentro do conteúdo.
+    const nested = info.message?.selectiveDistribution;
+    return nested != null && nested !== false;
+  } catch {
+    return false;
+  }
+}
+
 function schedulePaymentEnforcement(nazu, ctx) {
   const { from } = ctx;
   // Um grupo já tem enforcement em andamento: a remoção seguinte seria
@@ -3539,7 +3574,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     // Os três sinais juntos são exigidos de propósito: sem o `decrypt-fail`
     // não há intenção (entrar tarde no grupo ou perder a chave dá o mesmo erro
     // de decifragem), então isso reduz falso positivo.
-    if (isGroup && isAntiInvi && info?.selectiveDistribution && !info.key.fromMe) {
+    if (isGroup && isAntiInvi && !info.key.fromMe && isProtectedSelective(info)) {
       const autorDet = info.key?.participantAlt || info.key?.participant || sender;
 
       // Só age se o bot puder agir, e nunca contra admin/dono/whitelist.

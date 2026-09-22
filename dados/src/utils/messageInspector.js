@@ -547,23 +547,55 @@ export function formatFieldValue(value) {
 export function classifyMessage(message) {
   const empty = {
     type: null, isPayment: false, isRequestPayment: false,
-    paymentAmount: { raw: null, isZero: false, present: false },
+    paymentAmount: { raw: null, isZero: false, present: false, zeroPath: null, innerValue: null },
     noteText: null, noteContextInfo: null,
     mentionCount: 0, hasMentions: false, mentionPath: null,
     isCatalog: false, isViewOnce: false, isEphemeral: false,
     isForwardedBurst: false, heavy: false,
     messageContextInfo: null, hasMessageSecret: false, isInvisiblePayment: false,
+    // A classificação NUNCA deixa buraco: sem entrada válida é NORMAL, com os
+    // sinais todos em false. Um `undefined` aqui faria o handler tratar uma
+    // entrada inesperada como ameaça.
+    category: 'NORMAL',
+    protectedSelective: false,
+    protectedDecryptFailure: false,
+    decryptFail: null,
+    hasDecryptedContent: false,
   };
 
   if (!message || typeof message !== 'object') return empty;
+  // Arrays e strings não são mensagens: devolve o padrão em vez de tentar
+  // desembrulhar um formato impossível.
+  if (Array.isArray(message) || typeof message === 'string') return empty;
 
   const type = innerNameOf(message);
+
+  // ── Onde está o CONTEÚDO e onde está o SINAL ──────────────────────────────
+  //
+  // `classifyMessage` é chamada com dois níveis, de propósito:
+  //   - com o CONTEÚDO (`info.message`) — uso original do handler;
+  //   - com o `info` inteiro — necessário para o AntiFantasma, porque a fork
+  //     anexa `selectiveDistribution` ao `fullMessage` (o info), e numa
+  //     mensagem fantasma `info.message` é `undefined`.
+  //
+  // Por isso: se o objeto tem `key`/`messageStubType` (cara de info), o
+  // conteúdo real é `message.message`; senão o próprio objeto já é o conteúdo.
+  // Isso mantém os DOIS usos corretos com uma única fonte de verdade.
+  const looksLikeInfo = message.key != null || message.messageStubType != null;
+  // Numa mensagem fantasma o info NÃO tem `message` (o payload não decifrou):
+  // nesse caso o conteúdo é declaradamente AUSENTE, e não o próprio info —
+  // cair para o info faria "existe conteúdo" ser sempre verdadeiro e a
+  // PROTECTED_DECRYPT_FAILURE nunca seria classificada.
+  const contentAbsent = looksLikeInfo && !(message.message && typeof message.message === 'object');
+  const contentRoot = contentAbsent
+    ? {}
+    : (looksLikeInfo ? message.message : message);
 
   // Desembrulha os wrappers (viewOnce/ephemeral/documentWithCaption/...) antes
   // de procurar payment. O raja pode chegar encapsulado em ViewOnce; sem
   // desembrulhar, o `isPayment` ficaria false e a protecao nao pegaria.
-  const { innerContent } = resolveTypeChain(message);
-  const leaf = innerContent && typeof innerContent === 'object' ? innerContent : message;
+  const { innerContent } = resolveTypeChain(contentRoot);
+  const leaf = innerContent && typeof innerContent === 'object' ? innerContent : contentRoot;
 
   const requestPayment = leaf.requestPaymentMessage || null;
   const sendPayment = leaf.sendPaymentMessage || null;
@@ -627,6 +659,61 @@ export function classifyMessage(message) {
   // `amount.value`.
   const isInvisiblePayment = isPayment && isZero;
 
+  // ── Classificação central do AntiFantasma ────────────────────────────────
+  //
+  // Ponto ÚNICO onde o "que é esta mensagem" é decidido, para os comandos não
+  // repetirem o mesmo conjunto de `if`s. É apenas RÓTULO: não decide punição
+  // (isso continua no handler, com as guardas de admin/whitelist/dedup).
+  //
+  // A ordem reflete a especificidade: primeiro o pagamento (que é verificável
+  // no próprio payload), depois os estados de transporte que só existem quando
+  // a fork marca `selectiveDistribution`.
+  //
+  // `PROTECTED_*` são os estados do mecanismo de distribuição seletiva — o
+  // `decrypt-fail="hide"` combinado com a falha de decifragem que a fork
+  // reporta. Compatibilidade: `protectedSelective` é o MESMO booleano que o
+  // handler já usava lendo `info.selectiveDistribution`, então nada que dependa
+  // daquilo quebra.
+  // O sinal pode estar em DOIS lugares, dependendo de com o que a função foi
+  // chamada: no `info` (a fork anexa ao fullMessage) ou no próprio conteúdo
+  // (se algum dia for colocado ali). Os dois são aceitos para não depender de
+  // qual nível o chamador passou.
+  const selectiveReport = message.selectiveDistribution ?? contentRoot.selectiveDistribution ?? null;
+  // A fork atribui um RELATÓRIO (objeto). Aceita também `true`, de
+  // implementações que só sinalizam a presença.
+  const protectedSelective = selectiveReport != null && selectiveReport !== false;
+  const decryptFail = typeof selectiveReport === 'object' && selectiveReport !== null
+    ? (selectiveReport.decryptFail ?? null)
+    : null;
+  // Mensagem sem payload decifrável: veio CONTEÚDO de verdade? (o stub de
+  // grupo). A classificação distingue "não veio nada" de "veio e é pagamento
+  // zerado".
+  //
+  // O teste tem de ser sobre o CONTEÚDO, não sobre `leaf`: quando não há
+  // conteúdo, `leaf` cai no próprio objeto passado (o info), que TEM chaves —
+  // usar `Object.keys(leaf)` diria "tem conteúdo" sempre. Aqui olhamos o
+  // conteúdo resolvido a partir do wrapper.
+  const resolvedContent = innerContent && typeof innerContent === 'object' ? innerContent : null;
+  const declaredContent = contentRoot && typeof contentRoot === 'object' && contentRoot !== message
+    ? contentRoot
+    : null;
+  const hasDecryptedContent = Boolean(
+    (resolvedContent && Object.keys(resolvedContent).length > 0)
+    || (declaredContent && Object.keys(declaredContent).length > 0)
+  );
+  const protectedDecryptFailure = protectedSelective && !hasDecryptedContent;
+
+  let category;
+  if (isZero) {
+    category = 'PAYMENT_ZERO';
+  } else if (protectedDecryptFailure) {
+    category = 'PROTECTED_DECRYPT_FAILURE';
+  } else if (protectedSelective) {
+    category = 'PROTECTED_SELECTIVE';
+  } else {
+    category = 'NORMAL';
+  }
+
   return {
     type, isPayment,
     isRequestPayment: Boolean(requestPayment),
@@ -640,6 +727,13 @@ export function classifyMessage(message) {
     messageContextInfo: contextInfoTop,
     hasMessageSecret,
     isInvisiblePayment,
+    // Categoria central + os sinais que a compõem (o handler consome isto em um
+    // lugar só, em vez de espalhar verificações).
+    category,
+    protectedSelective,
+    protectedDecryptFailure,
+    decryptFail,
+    hasDecryptedContent,
   };
 }
 
