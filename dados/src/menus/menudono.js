@@ -257,7 +257,7 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 │    Salva a mensagem do raja (por grupo)
 │ 🚀 ${prefix}rajar
 │    Dispara a mensagem salva
-│ 🫥 ${prefix}msghost @alvo [texto]
+│ 👻 ${prefix}msghost @alvo [texto]
 │    Apaga o comando e envia só ao alvo
 ╰──────────────
 
