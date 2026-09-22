@@ -1,7 +1,7 @@
-#              👑 Abyss
+#              👑Lizzy
 
 <p align="center">
-  <img src="dados/midias/menu.gif" alt="Abyss GIF" width="600">
+  <img src="dados/midias/menu.gif" alt="Lizzy Gif" width="600">
 </p>
 
 <p align="center">
