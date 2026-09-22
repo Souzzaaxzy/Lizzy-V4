@@ -372,20 +372,20 @@ await test('13. GIF salvo é enviado com gifPlayback=true', async () => {
   eq(comVideo.content.gifPlayback, true, 'gifPlayback ligado');
 });
 
-await test('14. nenhuma configuração: "prefixo" responde o prefixo simples', async () => {
+await test('14. sem NADA configurado: "prefixo" não responde nada (silêncio)', async () => {
+  // Pedido do dono: sem prefixo configurado, o bot NÃO deve responder — não há
+  // o que dizer. Antes ele respondia o prefixo "cru".
   await rodar({ comando: '!midiaprefix off' });
   const { sent } = await rodar({ comando: 'prefixo' });
-  const texto = sent.map((s) => s.content?.text).filter(Boolean).join('\n');
-  contem(texto, 'Prefixo atual deste grupo: !', 'responde o prefixo');
-  ok(!sent.some((s) => s.content?.video || s.content?.image), 'sem mídia');
+  eq(sent.length, 0, 'nenhuma mensagem enviada');
 });
 
 await test('20. a resposta sai UMA vez só (não duplica)', async () => {
   // Regressão: havia DOIS gatilhos para o "prefixo" (o bloco do "prefixo"
   // solto + o do handler de comandos), e a mensagem saía DUAS VEZES.
   await rodar({ comando: '!midiaprefix off' });
-  const simples = await rodar({ comando: 'prefixo' });
-  eq(simples.sent.length, 1, 'sem config: exatamente 1 mensagem');
+  const semConfig = await rodar({ comando: 'prefixo' });
+  eq(semConfig.sent.length, 0, 'sem config: silêncio (não responde nada)');
   await rodar({ comando: '!midiaprefix Use #prefixo# antes!' });
   const comTexto = await rodar({ comando: 'prefixo' });
   eq(comTexto.sent.length, 1, 'com texto: exatamente 1 mensagem');
@@ -396,10 +396,10 @@ await test('20. a resposta sai UMA vez só (não duplica)', async () => {
 
 await test('21. TODA resposta do prefixo carrega o cabeçalho de canal (newsletter)', async () => {
   const temNewsletter = (c) => Boolean(c?.contextInfo?.forwardedNewsletterMessageInfo?.newsletterJid);
-  // sem config
+  // sem config: silencio (nada para checar)
   await rodar({ comando: '!midiaprefix off' });
   const a = await rodar({ comando: 'prefixo' });
-  ok(a.sent.length > 0 && a.sent.every((x) => temNewsletter(x.content)), 'texto simples com newsletter');
+  eq(a.sent.length, 0, 'sem config nao responde (e portanto nao ha newsletter a checar)');
   // com texto
   await rodar({ comando: '!midiaprefix Use #prefixo# antes!' });
   const b = await rodar({ comando: 'prefixo' });
@@ -413,6 +413,54 @@ await test('21. TODA resposta do prefixo carrega o cabeçalho de canal (newslett
 // ============================================================================
 // SEÇÃO 6 — PERMISSÃO
 // ============================================================================
+
+await test('22. a resposta do prefixo NÃO cita a mensagem do usuário (sem quoted)', async () => {
+  await rodar({ comando: '!midiaprefix Use #prefixo# antes!' });
+  const comTexto = await rodar({ comando: 'prefixo' });
+  ok(comTexto.sent.every((x) => !x.options?.quoted), 'texto: sem quoted');
+  await rodar({ comando: '!midiaprefix', midia: midiaEnviada('image', JPEG_REAL) });
+  const comMidia = await rodar({ comando: 'prefixo' });
+  ok(comMidia.sent.every((x) => !x.options?.quoted), 'mídia: sem quoted');
+});
+
+await test('23. GIF do WhatsApp chega como videoMessage+gifPlayback e é tratado como GIF', async () => {
+  // O cliente envia GIF como VIDEO com gifPlayback=true — NÃO como image/gif.
+  // Era esse o furo: o GIF caía como 'video' e ia pro lugar errado.
+  // Mídia CIFRADA de verdade (senão o download falha antes de chegar na
+  // conversão e o teste mediria o erro errado).
+  const base = midiaEnviada('video', MP4_REAL);
+  const gifDoWhats = { videoMessage: { ...base.videoMessage, gifPlayback: true, seconds: 2 } };
+  const { sent } = await rodar({ comando: '!midiaprefix', marcada: gifDoWhats });
+  const resposta = sent.map((s) => s.content?.text).filter(Boolean).join('\n');
+  if (!ffmpegOk) {
+    // Sem FFmpeg a conversão falha — e o teste exige erro CONTROLADO, não
+    // salvar o vídeo como se fosse GIF.
+    contem(resposta, 'Não consegui converter esse GIF', 'erro controlado sem FFmpeg');
+    ok(!db.getPrefixMediaIsGif(), 'não marcou como gif sem converter');
+    return;
+  }
+  contem(resposta, 'GIF da resposta prefixo atualizado', 'reconheceu como GIF');
+  eq(db.getPrefixMediaIsGif(), true, 'isGif marcado');
+  eq(db.getPrefixMediaType(), 'video', 'salvo como video (MP4)');
+});
+
+await test('24. detecção de tipo: foto, vídeo e GIF têm cada um o seu tipo', async () => {
+  const casos = [
+    ['image', { imageMessage: { mimetype: 'image/jpeg' } }, 'Imagem'],
+    ['video', { videoMessage: { mimetype: 'video/mp4' } }, 'Vídeo'],
+    ['gif-img', { imageMessage: { mimetype: 'image/gif' } }, 'GIF'],
+  ];
+  for (const [nome, proto, rotulo] of casos) {
+    if (rotulo === 'GIF' && !ffmpegOk) { console.log(`     ⏭  ${nome}: pulado (sem FFmpeg)`); continue; }
+    const m = { ...proto };
+    const tipo = Object.keys(m)[0];
+    const pub = midiaEnviada(tipo === 'imageMessage' ? 'image' : 'video', JPEG_REAL);
+    const midia = { [tipo]: { ...pub[tipo === 'imageMessage' ? 'imageMessage' : 'videoMessage'], ...m[tipo] } };
+    const { sent } = await rodar({ comando: '!midiaprefix', marcada: midia });
+    const resp = sent.map((s) => s.content?.text).filter(Boolean).join('\n');
+    contem(resp, `${rotulo} da resposta prefixo atualizado`, `${nome} -> ${rotulo}`);
+  }
+});
 
 await test('15. não-dono é recusado (texto e mídia)', async () => {
   const r1 = await rodar({ comando: '!midiaprefix texto do intruso', sender: OTHER_JID, fromMe: false });

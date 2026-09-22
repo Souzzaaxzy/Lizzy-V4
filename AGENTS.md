@@ -3526,3 +3526,50 @@ direto.
 Regressões verdes: `get-message-inspector` 54/269, `raja-selective` 23/0,
 `antifantasma-classificacao` 18/18, `ghost-detection` 24/81, `anti-seletiva` 32/32,
 `viewonce-v2` 18/77, `cmd-suggest` 21/68, `testcall` 35/127.
+
+### CORREÇÕES — sem quoted, GIF real, e silêncio sem configuração (set/2026) ✅
+Três pedidos do dono, todos medidos.
+
+#### 1. A resposta do prefixo NÃO cita mais o usuário (sem `quoted`)
+Os envios do `responderPrefixo` passavam `{ quoted: info }` — a resposta ficava
+presa à mensagem de quem digitou. **Removido**: as três saídas (texto, imagem,
+vídeo/GIF) saem **soltas** no grupo. O teste 22 garante que nenhuma tem
+`options.quoted`.
+
+#### 2. GIF não era identificado — a causa era o FORMATO que o cliente envia
+O analisador procurava `image/gif`/`image/webp`. **O WhatsApp não manda GIF
+assim**: ele manda um **`videoMessage` com `gifPlayback: true`** e mimetype
+`video/mp4`. Resultado: o GIF caía como `video` comum e ia para o lugar errado.
+
+Detecção corrigida, nesta ordem (proto **e** mimetype):
+1. **`gifPlayback === true`** em videoMessage → **GIF** ← era o furo;
+2. mimetype `gif`/`webp` ou `isAnimated` → GIF (figurinha animada);
+3. mimetype `video/` → vídeo;
+4. mimetype `image/` → foto;
+5. documento → decide pelo mimetype.
+
+**Bug irmão corrigido no mesmo caminho**: o `getFileBuffer` era chamado com
+`'video'` para tudo que não fosse imagem. Figurinha (WebP) tem **HKDF próprio**
+(`sticker` → info `Image`), então decifrar como `video` dava **bytes corrompidos**.
+Agora o tipo de download vem do **campo do proto**: `sticker` → `'sticker'`,
+documento → `'document'`, resto → `image`/`video`. O `acharMidia` devolve
+`{ midia, tipo, campo }` para isso.
+
+#### 3. Sem nada configurado, o bot NÃO responde
+Antes, sem mídia e sem texto, ele respondia `📌 Prefixo atual deste grupo: !`.
+O dono não quer isso — não há o que dizer. `responderPrefixo` agora retorna
+**`false`** sem enviar nada quando não há mídia **nem** texto. O gatilho
+permanece o mesmo (delega a decisão), então o silêncio vale para `prefixo` e
+`prefix`.
+
+#### Testes — `tests/midiaprefix.test.js` 21 → **24 testes / 70 asserções**
+- **14** reescrito: sem configuração → **0 mensagens** (silêncio).
+- **20/21** ajustados: o caso "sem config" agora espera silêncio.
+- **22** (novo): nenhuma resposta do prefixo tem `quoted`.
+- **23** (novo): GIF que chega como `videoMessage` + `gifPlayback` é tratado como
+  GIF (e sem FFmpeg exige **erro controlado**, não salvar como vídeo).
+- **24** (novo): foto, vídeo e GIF (`image/gif`) cada um recebe o rótulo certo.
+
+Regressões verdes: `get-message-inspector` 54/269, `raja-selective` 23/0,
+`antifantasma-classificacao` 18/18, `ghost-detection` 24/81, `anti-seletiva` 32/32,
+`viewonce-v2` 18/77, `cmd-suggest` 21/68, `testcall` 35/127.

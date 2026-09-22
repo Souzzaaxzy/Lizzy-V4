@@ -429,14 +429,25 @@ function gerarContextNewsletter(externalAdReply = null) {
  * faziam a mensagem sair duas vezes):
  *   - com MÍDIA -> envia a mídia com o texto como legenda (ou legenda padrão);
  *   - só TEXTO  -> envia o texto;
- *   - nada      -> envia o prefixo simples.
- * `#prefixo#` e `#numerodele#` são resolvidos em todos os caminhos.
+ *   - NADA      -> NÃO responde nada. Se não há prefixo configurado, não há o
+ *     que dizer; responder o prefixo "cru" era justamente o ruído que o dono
+ *     não queria.
+ * `#prefixo#` e `#numerodele#` são resolvidos nos caminhos que respondem.
+ *
+ * As mensagens saem SEM citação (`quoted`) — o dono pediu que a resposta do
+ * prefixo não fique presa à mensagem do usuário.
  *
  * TODA mensagem daqui carrega o CABEÇALHO DE CANAL (newsletter): é o que faz o
  * cliente mostrar "Ver canal" no topo da mensagem.
+ *
+ * @returns {Promise<boolean>} true se respondeu algo, false se não havia nada.
  */
 async function responderPrefixo(nazu, from, info, sender, currentPrefix) {
   const textoConfigurado = loadMsgPrefix();
+  const temMidia = isPrefixMediaEnabled();
+  // Nada configurado -> silêncio. Não responde o prefixo "cru".
+  if (!temMidia && !textoConfigurado) return false;
+
   const montar = (padrao) => String(textoConfigurado || padrao)
     .replace(/#prefixo#/g, currentPrefix)
     .replace(/#numerodele#/g, `@${String(sender).split('@')[0]}`);
@@ -445,13 +456,14 @@ async function responderPrefixo(nazu, from, info, sender, currentPrefix) {
   // direto (e não pelo helper `reply`) porque o `reply` não aceita `contextInfo`
   // — ele ignora a opção. Assim o cabeçalho é explícito em todos os caminhos.
   const newsletter = gerarContextNewsletter();
+  // SEM `quoted`: a resposta sai solta no grupo.
   const enviarTexto = (texto) => nazu.sendMessage(from, {
     text: texto,
     mentions: mencoes,
     contextInfo: newsletter,
-  }, { quoted: info });
+  });
 
-  if (isPrefixMediaEnabled()) {
+  if (temMidia) {
     const mediaPath = getPrefixMediaPath();
     const mediaType = getPrefixMediaType();
     const mediaBuffer = fs.readFileSync(mediaPath);
@@ -466,22 +478,19 @@ async function responderPrefixo(nazu, from, info, sender, currentPrefix) {
         mentions: mencoes,
         contextInfo: newsletter,
         ...(ehGif ? { gifPlayback: true } : {}),
-      }, { quoted: info });
+      });
     } else {
       await nazu.sendMessage(from, {
         image: mediaBuffer,
         caption: legenda,
         mentions: mencoes,
         contextInfo: newsletter,
-      }, { quoted: info });
+      });
     }
-    return;
+    return true;
   }
-  if (textoConfigurado) {
-    await enviarTexto(montar(`📌 Prefixo atual deste grupo: ${currentPrefix}`));
-    return;
-  }
-  await enviarTexto(`📌 Prefixo atual deste grupo: ${currentPrefix}`);
+  await enviarTexto(montar(`📌 Prefixo atual deste grupo: ${currentPrefix}`));
+  return true;
 }
 
 /**
@@ -24677,41 +24686,65 @@ ${groupPrefix}key sua_chave_gemini
           // ---- detecta a midia (marcada ou enviada junto do comando) ----
           // Um helper so resolve: pega a primeira midia disponivel e diz o tipo.
           // Nao ha segundo sistema de media — usa o mesmo getFileBuffer.
+          //
+          // O TIPO SAI DO PROTO + MIMETYPE, nesta ordem:
+          //  1. `gifPlayback: true` em videoMessage -> GIF do WhatsApp (o cliente
+          //     envia GIF como VIDEO com essa flag, NAO como image/gif — era o
+          //     furo que fazia o GIF ser salvo como video comum);
+          //  2. mimetype `gif`/`webp` ou `isAnimated` -> GIF (sticker animado);
+          //  3. mimetype `video/` -> video;
+          //  4. mimetype `image/` -> image (foto);
+          //  5. documento -> decide pelo mimetype (doc que e foto/video conta).
           const ctxM = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
           const acharMidia = () => {
             const cands = [
-              [info.message?.imageMessage, 'image'],
-              [info.message?.videoMessage, 'video'],
-              [info.message?.stickerMessage, 'gif'],
-              [info.message?.documentMessage, 'document'],
-              [ctxM?.imageMessage, 'image'],
-              [ctxM?.videoMessage, 'video'],
-              [ctxM?.stickerMessage, 'gif'],
-              [ctxM?.documentMessage, 'document'],
-              [info.message?.viewOnceMessageV2?.message?.imageMessage, 'image'],
-              [info.message?.viewOnceMessageV2?.message?.videoMessage, 'video'],
-              [info.message?.viewOnceMessage?.message?.imageMessage, 'image'],
-              [info.message?.viewOnceMessage?.message?.videoMessage, 'video'],
-              [ctxM?.viewOnceMessageV2?.message?.imageMessage, 'image'],
-              [ctxM?.viewOnceMessageV2?.message?.videoMessage, 'video'],
-              [ctxM?.viewOnceMessage?.message?.imageMessage, 'image'],
-              [ctxM?.viewOnceMessage?.message?.videoMessage, 'video'],
+              info.message?.imageMessage, info.message?.videoMessage,
+              info.message?.stickerMessage, info.message?.documentMessage,
+              ctxM?.imageMessage, ctxM?.videoMessage,
+              ctxM?.stickerMessage, ctxM?.documentMessage,
+              info.message?.viewOnceMessageV2?.message?.imageMessage,
+              info.message?.viewOnceMessageV2?.message?.videoMessage,
+              info.message?.viewOnceMessage?.message?.imageMessage,
+              info.message?.viewOnceMessage?.message?.videoMessage,
+              ctxM?.viewOnceMessageV2?.message?.imageMessage,
+              ctxM?.viewOnceMessageV2?.message?.videoMessage,
+              ctxM?.viewOnceMessage?.message?.imageMessage,
+              ctxM?.viewOnceMessage?.message?.videoMessage,
             ];
-            for (const [m, tipo] of cands) {
+            // Descobre o CAMPO do proto (define o tipo de download no Baileys:
+            // sticker -> 'sticker', documento -> 'document', etc.).
+            const campoDe = (m) => {
+              const pares = [
+                [info.message?.imageMessage, 'image'], [info.message?.videoMessage, 'video'],
+                [info.message?.stickerMessage, 'sticker'], [info.message?.documentMessage, 'document'],
+                [ctxM?.imageMessage, 'image'], [ctxM?.videoMessage, 'video'],
+                [ctxM?.stickerMessage, 'sticker'], [ctxM?.documentMessage, 'document'],
+                [info.message?.viewOnceMessageV2?.message?.imageMessage, 'image'],
+                [info.message?.viewOnceMessageV2?.message?.videoMessage, 'video'],
+                [info.message?.viewOnceMessage?.message?.imageMessage, 'image'],
+                [info.message?.viewOnceMessage?.message?.videoMessage, 'video'],
+                [ctxM?.viewOnceMessageV2?.message?.imageMessage, 'image'],
+                [ctxM?.viewOnceMessageV2?.message?.videoMessage, 'video'],
+                [ctxM?.viewOnceMessage?.message?.imageMessage, 'image'],
+                [ctxM?.viewOnceMessage?.message?.videoMessage, 'video'],
+              ];
+              for (const [ref, campo] of pares) if (ref && ref === m) return campo;
+              return null;
+            };
+            for (const m of cands) {
               if (!m || typeof m !== 'object') continue;
               const mimetype = String(m.mimetype || '').toLowerCase();
-              // GIF/WebP sao imagem para o proto, mas sao ANIMADOS: tratamos como
-              // 'gif' para converter em MP4 e manter a animacao no destino.
-              if (mimetype.includes('gif') || mimetype.includes('webp') || m.isAnimated) {
-                return { midia: m, tipo: 'gif' };
-              }
-              // Documento que na verdade e imagem/video (o mimetype decide).
-              if (tipo === 'document') {
-                if (mimetype.includes('image/')) return { midia: m, tipo: 'image' };
-                if (mimetype.includes('video/')) return { midia: m, tipo: 'video' };
-                continue;
-              }
-              return { midia: m, tipo };
+              const campo = campoDe(m);
+              const isGif = m.gifPlayback === true
+                || mimetype.includes('gif')
+                || mimetype.includes('webp')
+                || m.isAnimated === true;
+              if (isGif) return { midia: m, tipo: 'gif', campo };
+              if (mimetype.includes('video/')) return { midia: m, tipo: 'video', campo };
+              if (mimetype.includes('image/')) return { midia: m, tipo: 'image', campo };
+              // Sem mimetype confiavel: decide pelo campo que carrega a midia.
+              if (campo === 'video') return { midia: m, tipo: 'video', campo };
+              if (campo === 'image') return { midia: m, tipo: 'image', campo };
             }
             return null;
           };
@@ -24746,8 +24779,14 @@ ${groupPrefix}key sua_chave_gemini
           }
 
           // ---- com midia: baixa, (converte GIF) e salva ----
-          const { midia, tipo } = achado;
-          let buffer = await getFileBuffer(midia, tipo === 'image' ? 'image' : 'video');
+          const { midia, tipo, campo } = achado;
+          // O tipo de download e o CAMPO do proto: `sticker` tem HKDF proprio
+          // (mapeia para 'Image'), documento e `document`, e video e `video`.
+          // Usar 'video' para tudo (como antes) decifrava ERRADO a figurinha.
+          const tipoDownload = campo === 'sticker' ? 'sticker'
+            : campo === 'document' ? 'document'
+            : tipo === 'image' ? 'image' : 'video';
+          let buffer = await getFileBuffer(midia, tipoDownload);
 
           if (tipo === 'gif') {
             try {
