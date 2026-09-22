@@ -19902,10 +19902,24 @@ case 'pin':
     const PIN_URL_REGEX = /^(?:https?:\/\/)?(?:[a-zA-Z0-9-]+\.)?pinterest\.\w{2,6}(?:\.\w{2})?\/pin\/([0-9a-zA-Z]+)|^https?:\/\/pin\.it\/[a-zA-Z0-9]+/i;
     const searchTerm = q.trim();
     const isPinUrl = PIN_URL_REGEX.test(searchTerm);
-    const datinha = await (isPinUrl
-      ? pinterest.dl(searchTerm)
-      : pinterest.search(searchTerm)
-    );
+    // Aviso de busca: é apagado assim que o resultado chega (sucesso ou erro).
+    const searchMsg = await nazu.sendMessage(from, { text: '🔎 Pesquisando Pin...' }, { quoted: info });
+    const deleteSearchMsg = async () => {
+      if (searchMsg?.key) {
+        await nazu.sendMessage(from, { delete: searchMsg.key }).catch(() => {});
+      }
+    };
+    let datinha;
+    try {
+      datinha = await (isPinUrl
+        ? pinterest.dl(searchTerm)
+        : pinterest.search(searchTerm)
+      );
+    } catch (err) {
+      await deleteSearchMsg();
+      throw err;
+    }
+    await deleteSearchMsg();
     if (typeof datinha === 'string') {
       return reply(datinha);
     }
@@ -19920,7 +19934,7 @@ case 'pin':
     }
     // Pegar até 5 imagens
     const itemsToSend = datinha.urls.slice(0, 5);
-    
+
     // Enviar imagens usando carousel (cards) do Baileys com nativeFlow
     if (itemsToSend.length > 1) {
       const cards = itemsToSend.map((url, index) => ({
@@ -19929,7 +19943,7 @@ case 'pin':
         footer: '📌 Pinterest',
         nativeFlow: []
       }));
-      
+
       await nazu.sendMessage(from, {
         text: isPinUrl ? '📌 Download do Pinterest' : `📌 Resultados da pesquisa por "${searchTerm}"`,
         cards: cards
@@ -20342,67 +20356,91 @@ case 'pin':
           if (!q) return reply(`Digite um nome ou o link de um vídeo.
 > Ex: ${groupPrefix}${command} Gato`);
           await nazu.sendMessage(from, { react: { text: '🔍', key: info.key } });
-          let isTikTokUrl = q.includes('tiktok');
-          const tiktokPromise = isTikTokUrl ? tiktok.dl(q) : tiktok.search(q);
-          tiktokPromise
-            .then(async (datinha) => {
-              if (!datinha.ok) return reply(datinha.msg);
-
-              const sendVideo = async (videoData, index) => {
-                const url = videoData.urls?.[0];
-                if (!url) return;
-
-                const title = videoData.title || '';
-                const link = videoData.link || '';
-
-                try {
-                  await nazu.sendMessage(from, {
-                    video: { url },
-                    caption: title,
-                    headerType: 4,
-                    contextInfo: {
-                      externalAdReply: {
-                        title: "Ver canal",
-                        body: "",
-                        thumbnailUrl: videoData.cover || "",
-                        sourceUrl: link || url,
-                        mediaType: 2,
-                        renderLargerThumbnail: false
-                      }
-                    }
-                  }, { quoted: info });
-                } catch (videoErr) {
-                  console.error('Erro ao enviar vídeo:', videoErr.message);
-                  await nazu.sendMessage(from, {
-                    video: { url },
-                    caption: title
-                  }, { quoted: info });
-                }
-              };
-
-              const results = datinha.results;
-              if (results && results.length > 0) {
-                const videosToSend = results.slice(0, 2);
-                for (let i = 0; i < videosToSend.length; i++) {
-                  await sendVideo(videosToSend[i], i);
-                  if (i < videosToSend.length - 1) {
-                    await new Promise(resolve => setTimeout(resolve, 500));
+          const isTikTokUrl = q.includes('tiktok');
+          // Aviso de busca: é apagado assim que o resultado chega (sucesso ou erro).
+          const searchMsg = await nazu.sendMessage(from, {
+            text: isTikTokUrl ? '🔎 Procurando vídeo...' : '🔎 Procurando vídeos...'
+          }, { quoted: info });
+          const deleteSearchMsg = async () => {
+            if (searchMsg?.key) {
+              await nazu.sendMessage(from, { delete: searchMsg.key }).catch(() => {});
+            }
+          };
+          let datinha;
+          try {
+            datinha = await (isTikTokUrl ? tiktok.dl(q) : tiktok.search(q));
+          } catch (err) {
+            await deleteSearchMsg();
+            throw err;
+          }
+          await deleteSearchMsg();
+          if (!datinha.ok) {
+            await reply(datinha.msg);
+            return;
+          }
+          // =============================================
+          // LINK: baixa o vídeo pedido (fluxo de sempre).
+          // =============================================
+          if (isTikTokUrl) {
+            const url = datinha.urls?.[0];
+            if (!url) {
+              await reply('❌ Não foi possível obter este vídeo. 😕');
+              return;
+            }
+            const title = datinha.title || '';
+            const link = datinha.link || q;
+            try {
+              await nazu.sendMessage(from, {
+                video: { url },
+                caption: title,
+                headerType: 4,
+                contextInfo: {
+                  externalAdReply: {
+                    title: "Ver canal",
+                    body: "",
+                    thumbnailUrl: datinha.cover || "",
+                    sourceUrl: link || url,
+                    mediaType: 2,
+                    renderLargerThumbnail: false
                   }
                 }
-              } else {
-                const urlz = datinha.urls?.[0];
-                if (urlz) {
-                  await sendVideo(datinha, 0);
-                }
-              }
-
-              await nazu.sendMessage(from, { react: { text: '✅', key: info.key } });
-            })
-            .catch(async (e) => {
-              console.error('Erro no comando TikTok (promise):', e);
-              reply("❌ Ocorreu um erro ao processar sua solicitação. Por favor, tente novamente mais tarde.");
-            });
-          return;
+              }, { quoted: info });
+            } catch (videoErr) {
+              console.error('Erro ao enviar vídeo:', videoErr.message);
+              await nazu.sendMessage(from, { video: { url }, caption: title }, { quoted: info });
+            }
+            await nazu.sendMessage(from, { react: { text: '✅', key: info.key } });
+            return;
+          }
+          // =============================================
+          // BUSCA: carrossel com os vídeos encontrados.
+          //
+          // Um card de carrossel só aceita imagem/vídeo/produto, então só
+          // entram resultados de VÍDEO com URL acessível (o módulo já
+          // descarta slideshow de imagem e link morto).
+          // =============================================
+          const results = (datinha.results || []).filter(
+            (v) => v?.urls?.[0] && v.type !== 'image'
+          ).slice(0, 5);
+          if (!results.length) {
+            await reply('❌ Nenhum vídeo encontrado. 😕');
+            return;
+          }
+          const cards = results.map((v, index) => ({
+            video: { url: v.urls[0] },
+            // Um dos campos de texto é obrigatório para o card.
+            caption: v.title ? `${index + 1}. ${v.title}`.slice(0, 300) : `🎬 Vídeo ${index + 1}`,
+            title: `🎬 Vídeo ${index + 1}`,
+            subtitle: v.author || v.username || 'TikTok',
+            footer: '🎵 TikTok',
+            nativeFlow: []
+          }));
+          await nazu.sendMessage(from, {
+            text: `🎬 *Vídeos encontrados para "${q.trim()}"*`,
+            footer: '🎵 TikTok',
+            cards
+          }, { quoted: info });
+          await nazu.sendMessage(from, { react: { text: '✅', key: info.key } });
         } catch (e) {
           console.error('Erro no comando TikTok:', e);
           reply("❌ Ocorreu um erro ao processar sua solicitação. Por favor, tente novamente mais tarde.");

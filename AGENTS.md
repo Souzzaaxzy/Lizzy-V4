@@ -2244,6 +2244,60 @@ o vídeo ou estourava, ou era descartado em silêncio. Quatro correções, em
   remetente novo por chamada (`nextSender()`), senão do 4º comando em diante a
   resposta é "Calma aí!" e o teste mede a coisa errada.
 
+## COMANDO `!pin` — aviso de busca que é apagado (set/2026) ✅
+- Ao executar, manda **`🔎 Pesquisando Pin...`** (respondendo o comando) e
+  **apaga essa mensagem** assim que o resultado chega — **inclusive no erro**
+  (o `deleteSearchMsg()` roda no `catch` antes de repropagar). Só então envia o
+  carrossel normal (ou a recusa).
+- O aviso fica em `searchMsg` e é apagado por `nazu.sendMessage(from, { delete:
+  searchMsg.key })` — a mesma técnica do `!play` (~19607) e do `/raja`.
+- Guarda: se `sendMessage` do aviso falhar, o comando ainda tenta o carrossel.
+
+## COMANDO `!tiktok` — carrossel de 5 vídeos na busca (set/2026) ✅
+Pedido do dono: na **busca**, mandar `🔎 Procurando vídeos...`, apagar e enviar
+um **carrossel com até 5 vídeos** encontrados — só isso.
+
+- **Fluxo** (`index.js` ~20348, cases `tiktok`, `ttk`, `tkk`, `tiktoks`,
+  `tiktoksearch`, `tiktokaudio`, `tiktokvideo`):
+  1. reage 🔍 no comando;
+  2. envia o aviso (`Procurando vídeo...` no link / `Procurando vídeos...` na
+     busca — singular e plural para não mentir);
+  3. resolve `tiktok.dl(q)` ou `tiktok.search(q)`;
+  4. **apaga o aviso** (também no caminho de exceção);
+  5. **busca** → monta o carrossel; **link** → mantém o download de sempre.
+- **`tiktok.search` agora devolve até 5 vídeos** (`SEARCH_MAX_RESULTS`), não 3.
+  Um card de carrossel **só aceita imagem/vídeo/produto**, então a busca
+  **descarta slideshows de imagem** (`media.type === 'video'` obrigatório) e
+  URLs mortas — por isso o card nunca fica inválido.
+  - **Orçamento de tempo** (`SEARCH_BUDGET_MS = 25s`): as resoluções no tikwm são
+    em série (respeitando o ~1 req/s do agregador), então a busca sempre termina,
+    mesmo com muitos candidatos ruins.
+  - **Cache de busca com TTL maior** (`SEARCH_CACHE_TTL = 6h`, contra 1h do
+    `dl`): cada busca custa várias chamadas ao tikwm. `getCached` passou a
+    aceitar `ttl` por chave.
+- **Cards**: `{ video: { url }, caption: "N. título", title: "🎬 Vídeo N",
+  subtitle: <autor>, footer: '🎵 TikTok', nativeFlow: [] }`. A busca usa a URL
+  `play` (sem marca d'água) que o tikwm devolve — a mesma dos vídeos do fluxo
+  antigo. `caption`/`title` existem porque o card precisa de um campo de texto.
+- **Erros**: sem termo mantém a mensagem de uso (não manda aviso); nenhum vídeo
+  → `❌ Nenhum vídeo encontrado. 😕` (sem carrossel vazio). Tudo com `try/await`
+  em vez do `.then()` de antes — o handler não retorna mais antes da hora.
+- **Dependência de fork**: o carrossel de vídeo exige o commit `d3692c7` da fork
+  (ver "Suporte na fork — CARROSSEL COM VÍDEO"). Com o commit antigo, card de
+  vídeo sem `caption`/com `ptv`/sem `nativeFlow` quebrava.
+- **Testes**: `tests/pin-tiktok-carousel.test.js` — **40 asserções** rodando o
+  **handler real** com `fetch` controlado (Bing e tikwm respondem roteiro
+  local; nada de rede real). Cobre aviso enviado/apagado (sucesso e erro), ordem
+  aviso→carrossel, 5 cards de vídeo, slideshow descartado, links `.mp4`, busca
+  vazia, fluxo de link preservado (1 vídeo, sem carrossel) e a mensagem de uso.
+  **Baseline (código antigo): 29 das 40 falham.**
+- **Validação do payload**: a mesma forma de card passada pelo
+  `generateWAMessageContent` da fork instalada vira **5 cards de vídeo** no
+  proto (`header.videoMessage` + `hasMediaAttachment`), sobrevivendo ao
+  `encode`/`decode`.
+- **PENDENTE (não validado em aparelho real)**: o carrossel de vídeos
+  *renderizar* no cliente. O que está provado é o payload/stanza.
+
 ## Comandos e fluxos relevantes
 - Autodownload por URL: `handleAutoDownload(nazu, from, url, info)` em `index.js` (~linha 1789) detecta domínio e chama `youtube.mp3`, `tiktok.dl`, `igdl.dl`, `kwai.dl`, `facebook.downloadHD`, `pinterest.dl`, `spotify.download`, `soundcloud.download`.
 - Imports diretos em `index.js` (não via exports.js): `spotifyModule` (linha 590), `removeBg/upscale` (589), `search/searchNews` (588).

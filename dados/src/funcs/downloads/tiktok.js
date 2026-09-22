@@ -19,7 +19,11 @@
  *             link, views }
  *   erro:   { ok: false, msg }
  *
- * Cache em memória preservado (Map, TTL 60min, limite 1000).
+ * `search` devolve até SEARCH_MAX_RESULTS vídeos (o carrossel do !tiktok usa 5).
+ *
+ * Cache em memória preservado (Map, TTL 60min, limite 1000). O cache de busca
+ * usa TTL maior (SEARCH_CACHE_TTL) porque cada busca resolve vários vídeos no
+ * tikwm, que tem limite de requisições.
  */
 
 const UA =
@@ -27,13 +31,21 @@ const UA =
 
 const TIKWM_API = 'https://www.tikwm.com/api/';
 
+// Quantos vídeos a busca tenta montar (o !tiktok envia até 5 no carrossel).
+const SEARCH_MAX_RESULTS = 5;
+// Orçamento de tempo da busca: garante que ela sempre termine, mesmo quando
+// muitos candidatos precisam ser resolvidos em série no tikwm.
+const SEARCH_BUDGET_MS = 25000;
+
 const cache = new Map();
 const CACHE_TTL = 60 * 60 * 1000;
+// Busca cacheada por mais tempo: cada uma custa várias chamadas ao tikwm.
+const SEARCH_CACHE_TTL = 6 * 60 * 60 * 1000;
 
-function getCached(key) {
+function getCached(key, ttl = CACHE_TTL) {
   const item = cache.get(key);
   if (!item) return null;
-  if (Date.now() - item.ts > CACHE_TTL) {
+  if (Date.now() - item.ts > ttl) {
     cache.delete(key);
     return null;
   }
@@ -185,7 +197,7 @@ async function search(query) {
       return { ok: false, msg: 'Termo de pesquisa inválido' };
     }
 
-    const cached = getCached(`search:${query}`);
+    const cached = getCached(`search:${query}`, SEARCH_CACHE_TTL);
     if (cached) return { ok: true, ...cached, cached: true };
 
     // 1) Bing Videos Search descobre páginas de vídeo do TikTok sobre o termo.
@@ -203,19 +215,24 @@ async function search(query) {
           )
         ].map((m) => m[0])
       )
-    ].slice(0, 5);
+    ].slice(0, SEARCH_MAX_RESULTS);
 
     if (!tiktokUrls.length) {
       return { ok: false, msg: 'Nenhum vídeo encontrado' };
     }
 
-    // 2) dl() em cada URL (até 3) para montar os resultados. Respeita o limite
-    //    de ~1 req/s do tikwm (agregador gratuito) com um pequeno delay.
+    // 2) Resolve cada URL no tikwm para montar os resultados. Um card de
+    //    carrossel precisa de VÍDEO com URL acessível, então descartamos
+    //    slideshows de imagem e URLs mortas. As resoluções vão em série
+    //    (respeitando o ~1 req/s do tikwm) com orçamento de tempo: a busca
+    //    sempre termina, mesmo com muitos candidatos ruins.
     const results = [];
+    const deadline = Date.now() + SEARCH_BUDGET_MS;
     for (const videoUrl of tiktokUrls) {
-      if (results.length >= 3) break;
+      if (results.length >= SEARCH_MAX_RESULTS) break;
+      if (Date.now() > deadline) break;
       const media = await fetchFromTikwm(videoUrl);
-      if (media) {
+      if (media && media.type === 'video' && media.urls?.[0]) {
         results.push({
           criador: 'null',
           title: media.title,
