@@ -146,6 +146,26 @@ await test('run: NAO promete efeito visual', async () => {
   includes(r.text, 'aceito e ignorado', 'cita o caso aceito-e-ignorado');
 });
 
+await test('run: avisa que o tema e PESSOAL (nao muda a tela de quem recebe)', async () => {
+  const sendChatTheme = async () => ({ ok: true, messageId: 'X', variant: null });
+  const r = await lab.runTemaTest({ sendChatTheme, jid: '123@g.us', args: ['stock', 'w'], now: () => 1 });
+  includes(r.text, 'PESSOAL', 'diz que e pessoal');
+  includes(r.text, 'nao aplica nada no aparelho de quem recebe', 'explica o limite do direcionamento');
+  includes(r.text, 'Isto NAO confirma', 'ja era, continua');
+});
+
+await test('run: mostra o ID quando o sender o devolve (nao fica "n/d")', async () => {
+  const sendChatTheme = async () => ({ ok: true, messageId: '3EB0ABC', variant: 'stockImage' });
+  const r = await lab.runTemaTest({ sendChatTheme, jid: '123@g.us', args: ['stock', 'w'], now: () => 1 });
+  includes(r.text, '3EB0ABC', 'ID no relatorio');
+  notIncludes(r.text, 'n/d', 'nao cai no placeholder quando ha ID');
+});
+
+await test('runTemaTest: a USAGE avisa que "teste" e a aparencia padrao', () => {
+  includes(lab.TEMA_USAGE, 'defaultWallpaper', 'lista o teste');
+  includes(lab.TEMA_USAGE, 'aparencia PADRAO', 'explica que o default nao muda nada');
+});
+
 await test('run: fork sem sendChatTheme nao quebra (erro claro)', async () => {
   const r = await lab.runTemaTest({ sendChatTheme: undefined, jid: '123@g.us', args: ['teste'], now: () => 1 });
   ok(r.ok === false && r.reason === 'sem_suporte', 'detecta falta de suporte');

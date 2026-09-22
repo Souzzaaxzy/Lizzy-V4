@@ -26,12 +26,26 @@ export const TEMA_USAGE =
     '🧪 *CHAT THEME LAB*\n\n' +
     'Uso (UMA variacao por execucao):\n' +
     '• !tema teste — defaultWallpaper\n' +
+    '  (a aparencia PADRAO: por definicao nao muda nada na tela)\n' +
     '• !tema stock <ID> [dim] — stockImage\n' +
     '• !tema animated <ID> [dim] — animatedWallpaper\n' +
     '• !tema color <#light> <#dark> — solidColor\n' +
     '• !tema scheme <ID> — colorSchemeId\n' +
     '• !tema reset — clearTheme\n\n' +
     '_Protocolo experimental. Nao garante alteracao de aparencia._';
+
+/**
+ * Nota de honestidade sobre o direcionamento do protocolo.
+ *
+ * Medido: o tema de conversa do WhatsApp e **pessoal** — quem escolhe ve so na
+ * propria tela. O proprio WhatsApp esta desenvolvendo um "theme sync" (ainda
+ * em beta fechado) para compartilhar o tema com os outros participantes.
+ * Logo, mandar o `ChatThemeSetting` para uma conversa NAO muda a tela de quem
+ * recebe, e nem a de quem manda: a aplicacao e local, pelo proprio app.
+ */
+export const TEMA_NOT_INBOUND_NOTE =
+    '⚠️ O tema de conversa do WhatsApp e PESSOAL (so aparece para quem escolheu).\n' +
+    'Enviar o payload nao aplica nada no aparelho de quem recebe.';
 
 /**
  * Interpreta os argumentos do comando e devolve os campos do `ChatThemeSetting`.
@@ -154,6 +168,8 @@ export const runTemaTest = async ({ sendChatTheme, jid, args, now = Date.now }) 
         `🆔 ID: ${result.messageId || 'n/d'}`,
         '',
         '📤 Enviado pela via normal (relayMessage).',
+        '',
+        TEMA_NOT_INBOUND_NOTE,
         '',
         '_Isto NAO confirma alteracao visual._',
         '_O efeito e do cliente do WhatsApp — pode ser aceito e ignorado._'

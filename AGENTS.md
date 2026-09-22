@@ -2782,3 +2782,61 @@ Testar `!tema` num aparelho real (PV e grupo), observar se algum cliente muda a
 aparência, e registrar o resultado. Sem essa medição, a classificação continua
 **DESCONHECIDO**. Nota: o trabalho foi retomado de uma sessão anterior que
 morreu por estouro de contexto (918k tokens); a fork não tinha recebido o commit.
+
+### TESTE REAL no grupo (set/2026) — resultado: NADA aconteceu, e agora sabemos POR QUÊ ✅
+O dono rodou `!tema` no grupo e recebeu o relatório correto (payload enviado,
+`Wallpaper: defaultWallpaper`, vestamp, nenhum erro) — e **nada mudou na tela**.
+Isso não é bug do comando; é o comportamento **esperado** do recurso, e a
+investigação externa fechou o caso.
+
+#### As DUAS razões (independentes) de nada aparecer
+1. **`defaultWallpaper` é a aparência PADRÃO.** O `!tema teste` monta o
+   `defaultWallpaper` — que por definição é "volte ao padrão". Mesmo que o
+   protocolo funcionasse perfeitamente, **não haveria o que mudar**. Foi uma
+   escolha ruim de default para um teste visual (o default certo seria um
+   wallpaper concreto). `stock`/`animated`/`color` seriam os testes com efeito
+   possível.
+2. **O tema de conversa do WhatsApp é PESSOAL — e o direcionamento é INBOUND.**
+   A WABetaInfo (fonte que acompanha os betas) é explícita: *"When a chat theme
+   is selected, it is NOT shared with other participants in the conversation.
+   Only the user who chooses the theme can see it applied"* e *"Unlike
+   Instagram, WhatsApp themes do not affect how the conversation appears to
+   other participants... limited to the device of the person who sets it."*
+   Ou seja: **enviar um `ChatThemeSetting` para uma conversa não aplica nada** —
+   nem em quem recebe, nem em quem manda. Quem aplica é o **próprio app**, local.
+   É a mesma categoria da `MarkAsVerifiedAction`: protocolo de **entrada**
+   (servidor → cliente), não uma ação que o cliente origina.
+3. Contexto que confirma: o WhatsApp **está desenvolvendo** (beta fechado, iOS
+   26.37.10.16) um *theme sync* justamente para compartilhar tema com os outros
+   participantes — prova de que **hoje isso não existe**. Quando existir, será
+   por esse novo caminho, não por um envio cru do `ChatThemeSetting`.
+
+#### Consequência para a classificação (FASE 27)
+Sai de **DESCONHECIDO** para **ACEITO E IGNORADO** — a única das seis que
+descreve exatamente isto: o protocolo é transportado/aceito (o envio não deu
+erro e o payload é válido), mas **não produz efeito visual**. Não é FUNCIONAL,
+não é REJEITADO (não houve erro), não é INCOMPATÍVEL.
+**Não houve medição de ACK/entrega** (o socket do bot não expõe o ack deste
+caminho) — a classificação se apoia no comportamento documentado do cliente +
+o envio bem-sucedido.
+
+#### Correções aplicadas nesta rodada
+- **Fork `ec41976`**: o helper agora **gera o `messageId`** (antes o
+  `relayMessage` gerava internamente e o chamador nunca sabia — era a causa do
+  `🆔 ID: n/d` no relatório). O log passa a identificar a stanza exata.
+- **Lizzy**: `TEMA_USAGE` agora diz que `teste` é *"a aparência PADRÃO: por
+  definição não muda nada na tela"*, e a resposta do comando ganhou a nota
+  `TEMA_NOT_INBOUND_NOTE` — *"O tema de conversa do WhatsApp é PESSOAL (só
+  aparece para quem escolheu). Enviar o payload não aplica nada no aparelho de
+  quem recebe."* Antes a mensagem só dizia "pode ser aceito e ignorado" sem
+  explicar **por quê**; agora explica.
+- Testes: `tests/chat-theme-lab.test.js` → **18 testes / 62 asserções** (novos:
+  a nota de PESSOAL, o ID deixando de ser `n/d`, e a USAGE avisando do default).
+- Pin da fork atualizado para `ec41976091b681823135edd5ad8ddc77a656a067`.
+
+#### O que continua valendo
+Toda a parte de protocolo (descoberta do proto, o bug da variante 14, o quirk do
+oneof, a serialização) está correta e provada. O que a medição real acrescentou
+foi o **veredito de efeito**: aceito e ignorado — porque o recurso é pessoal e
+de entrada. O laboratório continua útil como ferramenta de diagnóstico (mostra
+o que sai, com ID e bytes), mas **não é e não será** um "muda o tema do grupo".
