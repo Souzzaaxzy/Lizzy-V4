@@ -2689,3 +2689,96 @@ Depois disso o `!atualizar` volta a funcionar sozinho.
 - **Mensagens do !atualizar** (index.js ~16485): mapa `updateMessages` ganhou triggers das novas etapas (`Dependências já atualizadas`, `Instalando yt-dlp`, `yt-dlp instalado/encontrado/ausente`, `FFmpeg encontrado/não encontrado`) — o usuário vê o progresso no WhatsApp.
 - `.scripts/config.js`: `DEPENDENCIES_CONFIG` ganhou entrada `yt-dlp` (check `yt-dlp --version || python3 -m yt_dlp --version`, install via pip por SO — termux/win/linux/mac), seguindo o padrão existente do Git/Yarn/FFmpeg.
 - Validado: repo git de teste (instala pacote faltando, instala yt-dlp via pip, 2ª run pula tudo), projeto real (deps completos → pula npm; PATH restrito → falha controlada), `node --check` OK.
+
+## LABORATÓRIO EXPERIMENTAL `!tema` — chat theme / wallpaper (set/2026) ⚠️
+Investigação pedida pelo dono: descobrir o **protocolo wire real** de tema de
+conversa no WhatsApp e integrar um laboratório à Lizzy. Entrega em dois lados:
+fork (Baileys) + bot (Lizzy). **Comando do DONO, fora de qualquer menu.**
+
+### O que o protocolo É (medido no WAProto, não suposto)
+O tema **não** é propriedade de mensagem comum (`{ chatTheme }` no topo não é o
+wire) e **não** é App State (não existe `chatTheme*` em `SyncActionValue`). É um
+**`ProtocolMessage`**:
+```
+ProtocolMessage.type = CHAT_THEME_SETTING (34)
+ProtocolMessage.chatThemeSetting            (campo 30)
+```
+`ChatThemeSetting`: `1 settingTimestampMs` INT64, `2 clearTheme` BOOL,
+`3 colorSchemeId` STRING, e o oneof `wallpaper`:
+```
+10 defaultWallpaper  { isDoodleEnabled }
+11 solidColor        { colorLight, colorDark, isDoodleEnabled }
+12 stockImage        { stockImageId string, dimLevel float }
+13 customImage       { directPath, mediaKey, fileEncSha256, fileSha256, dimLevel float }
+14 animatedWallpaper { animatedWallpaperId string, dimLevel float }
+```
+
+### BUG DA FORK CORRIGIDO — variante 14 ausente
+`proto.Message.ChatAnimatedWallpaper` era **`undefined`** e encodar
+`{ animatedWallpaper: ... }` produzia **0 bytes** (campo descartado em silêncio).
+As outras 4 variantes existiam. A fonte da verdade do delta é o spec interno do
+WhatsApp Web (`Message$ChatAnimatedWallpaper`). Como o WAProto é artefato
+**gerado** e a fork não guarda o `.proto` nem o pbjs, o delta é aplicado por
+`scripts/add-chat-animated-wallpaper.js` — determinístico e idempotente.
+
+### ARMADILHA DO GERADOR (por que o helper existe)
+O `encode` gerado usa `hasOwnProperty`, **não** o getter do oneof. Setar dois
+membros do wallpaper escreve **os DOIS** no wire, e o receptor resolve pelo
+**último** — semântica de oneof inválida. Por isso `buildChatThemeSetting`
+impõe a exclusividade por conta própria e recusa mais de uma variante. Há um
+teste que **primeiro demonstra a falha** do gerador.
+
+### Lado FORK (Baileys) — commit `92cf68d`
+- `lib/Utils/chat-theme.js`: validação **fail-closed** (jid, variante
+  desconhecida, oneof misto, timestamp não-inteiro → recusa) + envelope +
+  envio pelo `relayMessage` existente. `mediaKey`/`file*Sha256` só aparecem como
+  **comprimento** no log, nunca o conteúdo.
+- `lib/Utils/process-message.js`: `case type 34` **observacional** — reporta o
+  tema que CHEGOU via `chats.update`, para comparar enviado × recebido. Não
+  aplica nada nem afirma efeito.
+- `lib/Socket/messages-send.js`: fachada `sendChatTheme` (wrapper fino sobre o
+  relay).
+- README: seção `🎨 ChatThemeSetting (experimental)` + TOC.
+- Testes: `chat-theme-setting-proto.test.js` (15: field numbers, oneof, quirk do
+  gerador, precisão de float, variante nova) + `chat-theme-helper.test.js` (18:
+  validação, negativos, nada de segredo no log). Suíte completa: **223/223**.
+
+### Lado LIZZY — `dados/src/utils/chatThemeLab.js` + `case 'tema'`
+- Módulo **puro** (sender injetado, sem socket/disco/rede) →
+  `parseTemaArgs` + `runTemaTest`.
+- `!tema teste` (defaultWallpaper) · `stock <ID> [dim]` · `animated <ID> [dim]` ·
+  `color <#clara> <#escura>` · `scheme <ID>` · `reset` (clearTheme). **Uma
+  variação por execução.**
+- Exclusivo do dono (`canUseOwnerCmd`), sem sistema de permissão novo. `from`
+  como alvo (vale PV e grupo). `settingTimestampMs` injetado (`now()`).
+- **NÃO entra em menu** (FASE 35: não existia categoria experimental e não se
+  cria menu só para isso). Resposta **não promete efeito** — diz explicitamente
+  "Isto NAO confirma alteracao visual" e cita o caso "aceito e ignorado".
+- Fork antiga (sem `sendChatTheme`) → erro claro "Atualize a fork", sem crash.
+- Testes: `tests/chat-theme-lab.test.js` — **15 testes / 55 asserções**. Mede o
+  **handler real** com socket falso (payload, args inválidos não chamam o
+  sender, não-dono barrado, fork sem suporte) + asserção de que a mensagem
+  **não** afirma "tema alterado".
+- Validado também com a fork real instalada: os 6 modos viram
+  `ProtocolMessage` type 34 com o campo 30 e a variante certa.
+
+### Dependência fixada
+`package-lock.json`/`yarn.lock` apontam para `92cf68dc6f08151104f077d5d86bd006abce1716`
+(**hash completo** — hash curto gera falso drift no `gitDependencyDrift`). O boot
+confirma: `Baileys: @souzzaaxzy/baileys 0.3.18-final (Souzzaaxzy/baileys@92cf68d)`.
+
+### CLASSIFICAÇÃO FINAL — honesta: **DESCONHECIDO** (não FUNCIONAL)
+Nenhuma evidência de efeito visual foi produzida: o ambiente **não tem sessão
+pareada** de WhatsApp, então os testes reais no cliente (FASES 15/21-27) **não
+foram executados**. O que está provado: o proto, a serialização/round-trip, o
+envio pela via normal e a recepção observacional. O que **não** está provado: o
+Android/Web interpretar, o wallpaper mudar, persistir, ou o botão aparecer. A
+direção do protocolo também não foi estabelecida (relatos públicos descrevem
+tema de conversa como pessoal). **Não converter "payload enviado" em "tema
+alterado"** — a mensagem do comando foi escrita exatamente para não fazer isso.
+
+### PENDENTE PARA O DONO
+Testar `!tema` num aparelho real (PV e grupo), observar se algum cliente muda a
+aparência, e registrar o resultado. Sem essa medição, a classificação continua
+**DESCONHECIDO**. Nota: o trabalho foi retomado de uma sessão anterior que
+morreu por estouro de contexto (918k tokens); a fork não tinha recebido o commit.

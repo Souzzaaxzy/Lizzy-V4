@@ -101,7 +101,7 @@
 
 "@itsliaaa/baileys@github:Souzzaaxzy/baileys":
   version "0.3.18-final"
-  resolved "https://codeload.github.com/Souzzaaxzy/baileys/tar.gz/00aeec923e503b5558d3adc1ba8530957e0832d6"
+  resolved "https://codeload.github.com/Souzzaaxzy/baileys/tar.gz/92cf68dc6f08151104f077d5d86bd006abce1716"
   dependencies:
     "@adiwajshing/keyed-db" "^0.2.4"
     "@cacheable/node-cache" "^1.4.0"
