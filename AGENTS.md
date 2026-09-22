@@ -3467,3 +3467,62 @@ Regressões verdes: `get-message-inspector` 54/269, `raja-selective` 23/0,
 `delete-status` 11/55, `me-profile` 44/44.
 **Pré-requisito**: FFmpeg no servidor para o caminho de GIF (os testes de GIF são
 pulados sem ele, com aviso — o sandbox não tem).
+
+### CORREÇÃO — prefixo saía DUAS vezes + cabeçalho de canal (set/2026) ✅
+Relato do dono: *"antes eu tinha colocado uma mensagem de prefix direto nos
+arquivos da index, e agora está conflitando, mandando a msg de prefixo duas
+vezes"*. Medido, e eram **duas** causas encadeadas.
+
+#### Causa 1 — dois gatilhos para a mesma mensagem (a duplicação)
+Havia **dois** blocos que respondiam ao "prefixo":
+1. `if (isGroup && !isCmd && budy2 === 'prefixo')` (bloco do "prefixo" solto);
+2. `if (['prefix', 'prefixo'].includes(budy2))` (no handler de comandos).
+
+Como "prefixo" é uma mensagem **sem comando**, ela passava pelos **dois** —
+daí a resposta sair em dobro. **Medido**: 2 mensagens enviadas, idênticas.
+
+Correção: o gatilho 2 foi **removido**. O gatilho 1 virou o **ponto único** e
+passou a aceitar também `prefix` (antes só o gatilho removido cobria essa
+variante). Agora: **1 mensagem**.
+
+#### Causa 2 — `gerarContextNewsletter is not defined` (a resposta não saía)
+O `responderPrefixo` é uma função de **módulo**, mas `gerarContextNewsletter`
+estava declarada **dentro do handler** (profundidade de chaves = 1, medido). Ao
+tentar montar o cabeçalho, lançava `ReferenceError` e **a resposta do prefixo
+não era enviada** — o `try/catch` do bloco engolia.
+
+Correção: a função foi movida para o **escopo do módulo**, logo antes do
+`responderPrefixo` (que é quem a usa). A definição interna foi substituída por um
+comentário explicando o porquê.
+
+**Armadilha de diagnóstico registrada:** o sintoma "0 mensagens enviadas" parecia
+filtro bloqueando o bloco, mas o bloco **era alcançado** (log confirmou) — o erro
+estava *dentro* do `responderPrefixo`. Isolar com `try/catch` + log no ponto de
+chamada foi o que revelou a mensagem real.
+
+#### Cabeçalho de canal (newsletter) em TODA resposta do prefixo
+Pedido do dono: *"quero que toda mensagem de prefixo setada por esse novo sistema
+tenha o newsletter"*. As **três** saídas do `responderPrefixo` agora carregam
+`gerarContextNewsletter()`:
+- **texto** (simples ou configurado);
+- **imagem** com legenda;
+- **vídeo/GIF** com legenda.
+
+Detalhe que exigiu cuidado: o helper `reply()` do handler **ignora** a opção
+`contextInfo` (só lê `mentions`/`noForward`/`noQuote`) — embora já adicione o
+newsletter por padrão. Para o cabeçalho ser **explícito** e não depender do
+comportamento do `reply`, o `responderPrefixo` envia por `nazu.sendMessage`
+direto.
+
+#### Testes — `tests/midiaprefix.test.js` 19 → **21 testes / 65 asserções**
+- **teste 20**: a resposta sai **exatamente 1 vez** (sem config, com texto e com
+  `prefix`). É a regressão da duplicação.
+- **teste 21**: **toda** resposta do prefixo tem
+  `contextInfo.forwardedNewsletterMessageInfo.newsletterJid` — nos três modos.
+- **teste 19** (ajustado): exige **1 definição + 1 chamada** de `responderPrefixo`
+  e que `gerarContextNewsletter` esteja na **coluna 0** (escopo do módulo), antes
+  do `responderPrefixo`.
+
+Regressões verdes: `get-message-inspector` 54/269, `raja-selective` 23/0,
+`antifantasma-classificacao` 18/18, `ghost-detection` 24/81, `anti-seletiva` 32/32,
+`viewonce-v2` 18/77, `cmd-suggest` 21/68, `testcall` 35/127.

@@ -380,6 +380,36 @@ await test('14. nenhuma configuração: "prefixo" responde o prefixo simples', a
   ok(!sent.some((s) => s.content?.video || s.content?.image), 'sem mídia');
 });
 
+await test('20. a resposta sai UMA vez só (não duplica)', async () => {
+  // Regressão: havia DOIS gatilhos para o "prefixo" (o bloco do "prefixo"
+  // solto + o do handler de comandos), e a mensagem saía DUAS VEZES.
+  await rodar({ comando: '!midiaprefix off' });
+  const simples = await rodar({ comando: 'prefixo' });
+  eq(simples.sent.length, 1, 'sem config: exatamente 1 mensagem');
+  await rodar({ comando: '!midiaprefix Use #prefixo# antes!' });
+  const comTexto = await rodar({ comando: 'prefixo' });
+  eq(comTexto.sent.length, 1, 'com texto: exatamente 1 mensagem');
+  // "prefix" (sem o o) também responde, e também uma vez só.
+  const variante = await rodar({ comando: 'prefix' });
+  eq(variante.sent.length, 1, '"prefix" também responde uma vez');
+});
+
+await test('21. TODA resposta do prefixo carrega o cabeçalho de canal (newsletter)', async () => {
+  const temNewsletter = (c) => Boolean(c?.contextInfo?.forwardedNewsletterMessageInfo?.newsletterJid);
+  // sem config
+  await rodar({ comando: '!midiaprefix off' });
+  const a = await rodar({ comando: 'prefixo' });
+  ok(a.sent.length > 0 && a.sent.every((x) => temNewsletter(x.content)), 'texto simples com newsletter');
+  // com texto
+  await rodar({ comando: '!midiaprefix Use #prefixo# antes!' });
+  const b = await rodar({ comando: 'prefixo' });
+  ok(b.sent.length > 0 && b.sent.every((x) => temNewsletter(x.content)), 'texto configurado com newsletter');
+  // com mídia
+  await rodar({ comando: '!midiaprefix', midia: midiaEnviada('image', JPEG_REAL) });
+  const c = await rodar({ comando: 'prefixo' });
+  ok(c.sent.length > 0 && c.sent.every((x) => temNewsletter(x.content)), 'mídia com newsletter');
+});
+
 // ============================================================================
 // SEÇÃO 6 — PERMISSÃO
 // ============================================================================
@@ -418,10 +448,17 @@ await test('18. msgprefix/fotoprefix/videoprefix só existem como alias', () => 
   eq((src.match(/case 'midiaprefix'/g) || []).length, 1, 'uma case midiaprefix');
 });
 
-await test('19. os dois gatilhos de "prefixo" usam o mesmo helper', () => {
+await test('19. a resposta do prefixo tem ponto UNICO e helper no escopo do modulo', () => {
   const src = fs.readFileSync(new URL('../dados/src/index.js', import.meta.url), 'utf8');
   const usos = (src.match(/responderPrefixo\(/g) || []).length;
-  eq(usos, 3, '1 definição + 2 chamadas (não duplicado)');
+  eq(usos, 2, '1 definição + 1 chamada (ponto ÚNICO — não duplica a resposta)');
+  // E `gerarContextNewsletter` tem de estar no ESCOPO DO MÓDULO, senão o
+  // responderPrefixo não a alcança ("is not defined").
+  const linhas = src.split('\n');
+  const linhaDef = linhas.findIndex((l) => /^function gerarContextNewsletter/.test(l));
+  ok(linhaDef > 0, 'gerarContextNewsletter definida no escopo do módulo (coluna 0)');
+  const linhaResponder = linhas.findIndex((l) => /^async function responderPrefixo/.test(l));
+  ok(linhaDef < linhaResponder, 'definida antes de responderPrefixo');
 });
 
 // ============================================================================

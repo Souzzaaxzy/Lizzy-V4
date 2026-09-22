@@ -398,21 +398,58 @@ function buildRajaContent(text, mentions = []) {
 }
 
 /**
+ * Cabeçalho de CANAL (newsletter) das mensagens do bot.
+ *
+ * Fica no ESCOPO DO MÓDULO de propósito: `responderPrefixo` é uma função de
+ * módulo e precisa dela. Enquanto ela vivia dentro do handler, o prefixo não
+ * conseguia montar o cabeçalho ("gerarContextNewsletter is not defined").
+ */
+function gerarContextNewsletter(externalAdReply = null) {
+  if ("120363410980452460@newsletter" === "0@newsletter") {
+    return {};
+  }
+  const base = {
+    forwardedNewsletterMessageInfo: {
+      newsletterJid: "120363410980452460@newsletter",
+      newsletterName: "Lizzy",
+    },
+    forwardingScore: 999,
+    isForwarded: true,
+  };
+  if (externalAdReply) {
+    base.externalAdReply = externalAdReply;
+  }
+  return base;
+}
+
+/**
  * Resposta ao usuário que digita só "prefixo" no grupo.
  *
- * Unifica as duas configurações do `!midiaprefix` num ponto só, para os dois
- * gatilhos (o "prefixo" solto e o handler de comandos) não divergirem:
+ * Ponto ÚNICO da resposta (os dois gatilhos antigos foram reduzidos a um — eles
+ * faziam a mensagem sair duas vezes):
  *   - com MÍDIA -> envia a mídia com o texto como legenda (ou legenda padrão);
  *   - só TEXTO  -> envia o texto;
  *   - nada      -> envia o prefixo simples.
  * `#prefixo#` e `#numerodele#` são resolvidos em todos os caminhos.
+ *
+ * TODA mensagem daqui carrega o CABEÇALHO DE CANAL (newsletter): é o que faz o
+ * cliente mostrar "Ver canal" no topo da mensagem.
  */
-async function responderPrefixo(nazu, from, info, sender, currentPrefix, reply) {
+async function responderPrefixo(nazu, from, info, sender, currentPrefix) {
   const textoConfigurado = loadMsgPrefix();
   const montar = (padrao) => String(textoConfigurado || padrao)
     .replace(/#prefixo#/g, currentPrefix)
     .replace(/#numerodele#/g, `@${String(sender).split('@')[0]}`);
   const mencoes = [sender];
+  // Cabeçalho de canal em TODA resposta do prefixo. Enviado por `nazu.sendMessage`
+  // direto (e não pelo helper `reply`) porque o `reply` não aceita `contextInfo`
+  // — ele ignora a opção. Assim o cabeçalho é explícito em todos os caminhos.
+  const newsletter = gerarContextNewsletter();
+  const enviarTexto = (texto) => nazu.sendMessage(from, {
+    text: texto,
+    mentions: mencoes,
+    contextInfo: newsletter,
+  }, { quoted: info });
 
   if (isPrefixMediaEnabled()) {
     const mediaPath = getPrefixMediaPath();
@@ -427,6 +464,7 @@ async function responderPrefixo(nazu, from, info, sender, currentPrefix, reply) 
         video: mediaBuffer,
         caption: legenda,
         mentions: mencoes,
+        contextInfo: newsletter,
         ...(ehGif ? { gifPlayback: true } : {}),
       }, { quoted: info });
     } else {
@@ -434,15 +472,16 @@ async function responderPrefixo(nazu, from, info, sender, currentPrefix, reply) 
         image: mediaBuffer,
         caption: legenda,
         mentions: mencoes,
+        contextInfo: newsletter,
       }, { quoted: info });
     }
     return;
   }
   if (textoConfigurado) {
-    await reply(montar(`📌 Prefixo atual deste grupo: ${currentPrefix}`), { mentions: mencoes });
+    await enviarTexto(montar(`📌 Prefixo atual deste grupo: ${currentPrefix}`));
     return;
   }
-  await reply(`📌 Prefixo atual deste grupo: ${currentPrefix}`);
+  await enviarTexto(`📌 Prefixo atual deste grupo: ${currentPrefix}`);
 }
 
 /**
@@ -5737,12 +5776,12 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
             console.warn('[ANTITOXIC] Error:', toxicErr.message);
           });
         }
-        // Responder quando alguém manda só "prefixo" no chat.
-        // Delegado ao `responderPrefixo` para os dois gatilhos não divergirem:
-        // mídia+texto, só texto, ou o prefixo simples.
-        if (isGroup && !isCmd && budy2 && budy2.trim().toLowerCase() === 'prefixo') {
+        // Responder quando alguém manda só "prefixo" (ou "prefix") no chat.
+        // PONTO ÚNICO da resposta — o gatilho que existia no handler de comandos
+        // foi removido porque fazia a mensagem sair DUAS VEZES.
+        if (isGroup && !isCmd && budy2 && ['prefixo', 'prefix'].includes(budy2.trim().toLowerCase())) {
           const currentPrefix = groupData.customPrefix || config.prefixo || '!';
-          await responderPrefixo(nazu, from, info, sender, currentPrefix, reply);
+          await responderPrefixo(nazu, from, info, sender, currentPrefix);
         }
         if (isGroup && antipalavra && body && !isCmd) {
           try {
@@ -6974,25 +7013,11 @@ if (isCmd && command && !isOwner) {
       }
     }
     // ======================================================
-// Função para adicionar contexto de Newsletter nas mensagens
-function gerarContextNewsletter(externalAdReply = null) {
-    if ("120363410980452460@newsletter" === "0@newsletter") {
-        return {};
-    }
-    const base = {
-        forwardedNewsletterMessageInfo: {
-            newsletterJid: "120363410980452460@newsletter",
-            newsletterName: "Lizzy"
-        },
-        forwardingScore: 999,
-        isForwarded: true
-    };
-    if (externalAdReply) {
-        base.externalAdReply = externalAdReply;
-    }
-    return base;
-}
-// ======================================================
+    // `gerarContextNewsletter` foi movida para o ESCOPO DO MÓDULO (topo do
+    // arquivo). Aqui dentro ela só era visível para o handler; o
+    // `responderPrefixo` (função de módulo) não a alcançava — dava
+    // "gerarContextNewsletter is not defined" e a resposta do prefixo não saía.
+    // ======================================================
 switch (command) {
       // ═══════════════════════════════════════════════════════════════
       // 💌 SISTEMA DE CONFISSÕES
@@ -39859,11 +39884,10 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
             });
           }
         }
-        // Gatilho do handler de comandos (o "prefixo" solto já é tratado acima).
-        if (['prefix', 'prefixo'].includes(budy2)) {
-          const currentPrefix = groupData.customPrefix || config.prefixo || '!';
-          await responderPrefixo(nazu, from, info, sender, currentPrefix, reply);
-        }
+        // NOTA: o gatilho do "prefixo" NÃO fica aqui. Ele é tratado uma única
+        // vez no bloco `if (isGroup && !isCmd && budy2 === 'prefixo')`, mais
+        // acima. Ter os dois fazia a resposta sair DUAS VEZES — o "prefixo" é
+        // uma mensagem sem comando, então ela passava pelos dois pontos.
         const customReacts = loadCustomReacts();
         for (const react of customReacts) {
           if (budy2.includes(react.trigger)) {
