@@ -2936,3 +2936,121 @@ passa a ser uma linha (`ghostDetection.decidir(...)` no lugar do gate).
 ### Aviso
 `tests/defensive-protection.test.js` falha (48 asserts) — **pré-existente**,
 comprovado com `git worktree` no commit anterior. Não tem relação com isto.
+
+## `!get` — ANÁLISE FORENSE DE MENSAGEM INVISÍVEL (set/2026) ✅
+Nova categoria do `!get`: **"🕵️ ANÁLISE DE MENSAGEM INVISÍVEL"**. Ela **não**
+procura um campo chamado "invisible" — ela monta, a partir do que é realmente
+observável no objeto que o Baileys entregou, um conjunto de **características** e
+decide pela **correlação** entre elas.
+
+### Arquivos
+- **`dados/src/utils/invisibleAnalyzer.js`** (novo, ~1250 linhas) — o **motor**.
+  Puro: sem rede, disco, socket ou credenciais. Recebe o `WebMessageInfo` e
+  devolve um resultado estruturado.
+- **`dados/src/utils/messageInspector.js`** — ganhou o import do motor e uma
+  **seção adicional** no fim de `buildMessageReport` (o relatório antigo continua
+  inteiro). `buildMessageReport` agora devolve também `forense`.
+- **`dados/src/index.js`** (`case 'get'` ~29265) — passa `forenseDebug` para o
+  `extra` (ativado por `!get debug`/`full`/`verbose`) e loga **uma linha**:
+  `[INVISIBLE-ANALYZER] get | classificacao=… | compat=… | indicadores=…`.
+- **`tests/invisible-analyzer.test.js`** (novo) — **49 testes / 390 asserções**.
+
+### Separação de camadas (o pedido central)
+```
+mensagem → analyzeInvisibleMessage() → resultado estruturado → formatador
+```
+O motor nunca formata; o formatador (`formatInvisibleSection` /
+`formatInvisibleResumo`) consome o resultado. É isso que permite reusar o mesmo
+resultado no anti, em logs, em comandos de debug e em testes.
+
+### Detectores (cada responsabilidade isolada)
+`analisarKey`, `analisarLid`, `analisarDistribuicao`, `analisarDescriptografia`,
+`analisarSenderKey`, `analisarPagamento`, `analisarContexto`, `analisarCitacao`,
+`analisarWrappers`, `analisarStub`, `analisarProtocolo`,
+`analisarCamposDesconhecidos` e `correlacionar` (CorrelationEngine).
+
+### Catálogo de indicadores (19) e pesos
+| ID | Nome | Cat. | Sev. | Peso |
+|---|---|---|---|---|
+| INV-001 | Distribuição seletiva registrada | distribuição | alta | 5 |
+| INV-002 | `decrypt-fail="hide"` presente | criptografia | média | 2 |
+| INV-003 | Stanza rotacionada sem phash | distribuição | alta | 3 |
+| INV-004 | Densidade de destinatários baixa | distribuição | alta | 3 |
+| INV-005 | SenderKeyDistributionMessage fresco | criptografia | alta | 4 |
+| INV-006 | Payload pareado em stanza de grupo | distribuição | média | 2 |
+| INV-007 | Pagamento sem valor (com nota) | payment | alta | 6 |
+| INV-008 | Nota de pagamento com texto | payment | baixa | 0 (informativo) |
+| INV-009 | Menções em massa na nota | dispersão | média | 3 |
+| INV-010 | Stub CIPHERTEXT (sem payload) | criptografia | baixa | 1 |
+| INV-011 | Endereçamento por LID | addressing | baixa | 0 (informativo) |
+| INV-012 | LID inconsistente no endereçamento | addressing | média | 2 |
+| INV-013 | Encapsulamento aninhado | estrutura | baixa | 1 |
+| INV-014 | Citação sem stanzaId | contexto | média | 2 |
+| INV-015 | Campos desconhecidos no proto | estrutura | baixa | 1 |
+| INV-016 | Mensagem de sistema/protocolo | sistema | baixa | 0 (informativo) |
+| INV-017 | Contexto de encaminhamento na nota | contexto | média | 2 |
+| INV-018 | SKDM observado no conteúdo | criptografia | baixa | 0 (informativo) |
+| INV-019 | Card de pagamento zerado **sem** nota | payment | média | 2 |
+
+Os pesos refletem **evidência técnica**, não arbitrariedade: sinais estruturais
+(fora do controle do remetente) valem mais que os ambíguos.
+
+### Classificação
+`NORMAL` · `ATÍPICA` · `SUSPEITA` · `FORTEMENTE COMPATÍVEL` · `INCONCLUSIVA`.
+Duas **assinaturas** sustentam "fortemente compatível" por si:
+- **conteúdo**: pagamento zerado **com** texto na nota (a rajada);
+- **transporte**: report de distribuição seletiva **+** falha de decifragem **+**
+  corroboração **estrutural** (phash ausente / densidade baixa / SKDM fresco).
+
+Qualquer evidência estrutural sozinha já eleva a forte. O **stub CIPHERTEXT
+isolado** (sem report) vira **INCONCLUSIVA** — é o mesmo estado de quem entrou
+tarde ou perdeu a Sender Key.
+
+### Índice de compatibilidade
+Escala **relativa** 0-99 (assinatura → 90+; sinais ambíguos → teto de 79; normal
+→ 0). O relatório diz explicitamente que **não é probabilidade estatística**.
+Nunca existe "100% invisível" nem "% de certeza".
+
+### Regras contra falso positivo (o risco real)
+- `@lid`, pagamento, `noteMessage`, `decrypt-fail` e inclusive
+  `selectiveDistribution` **não** classificam sozinhos. O fan-out normal (phash
+  presente + densidade cheia) produz report mas **seletiva = false**; e a
+  assinatura de transporte exige o sinal estrutural.
+- `mencaoEmMassa` só conta junto de nota de pagamento zerado.
+- Campos de tipos sem mapa conhecido **não** entram na varredura de "campos
+  desconhecidos" (senão o proto variaria e tudo viraria desconhecido).
+- Material criptográfico nunca é exposto (só presença/digest/contagem).
+- Toda ausência é reportada como **"NÃO DISPONÍVEL"**, nunca inventada.
+
+### Limitações honestas (documentadas na própria seção)
+- O `<enc type="skmsg">` cru **não existe** nesta camada: a fork o resolve no
+  `decode-wa-message.js`. O que se vê é a consequência
+  (`info.selectiveDistribution`). Por isso **nenhum sistema paralelo de captura
+  foi criado**.
+- Reuso de ID só é detectável com um `Set` de IDs já vistos; sem ele, `null`.
+- Campos de versões mais novas do proto aparecem como "campos desconhecidos".
+- `device`, `agent`, `to`, `from`, `status` **não existem** nesta versão da fork
+  (a `MessageKey` real tem `remoteJid`/`fromMe`/`id`/`participant` + os campos de
+  addressing que a fork anexa); a seção MESSAGE KEY diz isso.
+
+### Modos
+- `!get` → relatório completo com a seção forense.
+- `!get debug` (ou `full`/`verbose`) → acrescenta a camada de depuração.
+- `formatInvisibleResumo` existe para um bloco curto (não ligado ao comando por
+  padrão, mas exportado para reuso).
+
+### Testes — `tests/invisible-analyzer.test.js` (49 testes / 390 asserções)
+Cobre a matriz A-J: A (texto/mídia/áudio/figurinha/citação/menções/view-once/
+efêmera/encaminhada/edição/SKDM/payment legítimo/payment zero sem nota/nota com
+valor/só LID/catálogo/sistema/revogação/erro 1a1/fan-out normal), B (raja e raja
+em view-once), C (parcialmente semelhantes), D (LID), E/F (payment/note),
+G (distribuição seletiva), H (falha de descriptografia), I (Sender Key/skmsg),
+J (combinação). Mais: robustez a entrada inválida, não vazamento de segredos,
+formatação, e **integração com o handler real** (seção forense presente, resumo,
+relatório grande dividido, `!get debug`, recusa original preservada).
+**Placar: zero falso positivo, zero falso negativo.**
+Validadas também as regressões: `get-message-inspector` **54/269**,
+`antifantasma-classificacao` **18/18**, `ghost-detection` **24/81**,
+`anti-seletiva` **32/32**, `viewonce-v2` **18/77**, `cmd-suggest` **21/68**,
+`testcall` **35/127**, `blacklist-number` **12/38**, `antimidia` **14/29**,
+`gifsbn-media` **16/61**, `delete-status` **11/55**.

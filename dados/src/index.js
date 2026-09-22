@@ -29262,7 +29262,7 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
             }
           }
 
-          const { summary, full } = buildMessageReport({
+          const { summary, full, forense } = buildMessageReport({
             info,
             target: cachedTarget || quoted?.quotedMessage || info.message,
             origin: cachedTarget ? 'cache' : quoted?.quotedMessage ? 'contextInfo' : 'self',
@@ -29276,8 +29276,20 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
               groupName: isGroup ? (groupMetadata?.subject || groupName) : null,
               groupMemberCount: isGroup ? (groupMetadata?.participants?.length ?? null) : null,
               senderIsAdmin,
+              // `!get debug` mostra a camada extra (caminhos/tipos de cada campo).
+              forenseDebug: /^(debug|full|verbose)$/i.test((args[0] || '').trim()),
             },
           });
+
+          // Linha unica de diagnostico do analisador (sem conteudo sensivel).
+          // Nao polui producao: so um resumo por execucao, e o relatorio completo
+          // no terminal apenas quando debug esta ligado.
+          try {
+            if (forense) {
+              const ids = forense.indicators.filter((i) => Number(i.peso) > 0).map((i) => i.id).join(',') || 'nenhum';
+              console.log(`[INVISIBLE-ANALYZER] get | classificacao=${forense.classification} | compat=${forense.confidence} | indicadores=${ids}`);
+            }
+          } catch { /* diagnostico nunca derruba o comando */ }
 
           // O relatorio vai INTEIRO para o WhatsApp: resumo primeiro e o
           // detalhamento completo logo em seguida, SEM o prefixo invisivel de

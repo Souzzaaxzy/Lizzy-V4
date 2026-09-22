@@ -14,6 +14,8 @@
 
 import crypto from 'crypto';
 
+import { analyzeInvisibleMessage, formatInvisibleSection } from './invisibleAnalyzer.js';
+
 // ============================================================================
 // CONSTANTES
 // ============================================================================
@@ -1657,6 +1659,38 @@ export function buildMessageReport({ info, target = null, origin = 'self', quote
   push(safeJsonStringify(source, { indent: 2 }));
   push('```');
 
+  // ------------------------------------------------- análise forense de invisível
+  // Camada ADICIONAL: o motor vive em utils/invisibleAnalyzer.js (puro) e aqui
+  // só formatamos. O envelope traz os campos de transporte (selectiveDistribution,
+  // pairwiseGroupPayload, stub) que a fork anexa ao WebMessageInfo — é por isso
+  // que ele é somado ao alvo, e não substituído por ele.
+  let forense = null;
+  try {
+    const envelopeForense = {
+      ...(origin === 'self' ? (info || {}) : (commandEnvelope || {})),
+      selectiveDistribution: info?.selectiveDistribution ?? commandEnvelope?.selectiveDistribution ?? source?.selectiveDistribution ?? null,
+      pairwiseGroupPayload: info?.pairwiseGroupPayload === true || commandEnvelope?.pairwiseGroupPayload === true,
+      messageStubType: source?.messageStubType ?? info?.messageStubType ?? commandEnvelope?.messageStubType,
+      messageStubParameters: source?.messageStubParameters ?? info?.messageStubParameters ?? commandEnvelope?.messageStubParameters,
+      retryCount: info?.retryCount ?? commandEnvelope?.retryCount,
+      key: key || source?.key || info?.key,
+    };
+    forense = analyzeInvisibleMessage({
+      info: envelopeForense,
+      content: targetMessage,
+      key,
+      identity: extra.identity || null,
+      quotedContext,
+    });
+    section('🕵️ ANÁLISE DE MENSAGEM INVISÍVEL');
+    push(formatInvisibleSection(forense, { debug: extra.forenseDebug === true }));
+  } catch (error) {
+    // A análise é diagnóstico: uma falha aqui nunca pode derrubar o !get.
+    push('');
+    push('*🕵️ ANÁLISE DE MENSAGEM INVISÍVEL*');
+    push(`• Falha ao executar o analisador: ${error?.message || error}`);
+  }
+
   const full = lines.join('\n');
 
   const summaryLines = [
@@ -1676,11 +1710,12 @@ export function buildMessageReport({ info, target = null, origin = 'self', quote
     `• Menções: ${mentions.total ? `${mentions.total} no alvo${mentions.truncated ? ' (exibição limitada)' : ''}` : 'nenhuma no alvo'}`,
     `• Encaminhada: ${hasTextSignature({ t: targetMessage, c: commandEnvelope?.message }, 'isForwarded') ? 'Sim (campo isForwarded presente)' : 'Não detectada'}`,
     `• Citação interna: ${context.quote ? `${context.quote.type || 'desconhecido'} (${context.quote.contextInfo?.stanzaId || 'sem id'})` : 'não'}`,
+    forense ? `• Invisível: ${forense.classification} (compatibilidade ${forense.confidence}/100)` : null,
     '',
     '_Detalhes técnicos completos abaixo._',
-  ];
+  ].filter((l) => l !== null);
 
-  return { summary: summaryLines.join('\n'), full };
+  return { summary: summaryLines.join('\n'), full, forense };
 }
 
 const ORIGIN_LABEL = {
