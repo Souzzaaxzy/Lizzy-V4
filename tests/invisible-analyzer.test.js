@@ -790,28 +790,50 @@ await teste('49. PLACAR: ataques conhecidos são detectados (recall)', () => {
   eq(fn, 0, 'zero falso negativo');
 });
 
-await teste('50. sendPaymentMessage (amostra real) e ATIPICA, nunca forte', () => {
+await teste('50. sendPaymentMessage (amostra real) e SUSPEITA, nunca FORTE', () => {
   // Reproduz o `sendPaymentMessage` da amostra do dono: id `_L0`, nota com
-  // "." + zero-width, 6 menções, transactionData Java.
-  const nota = { extendedTextMessage: { text: `.${'\u200b'.repeat(9)}`, contextInfo: { mentionedJid: Array.from({ length: 6 }, (_, i) => `5511900000${i}@s.whatsapp.net`), groupMentions: [], statusAttributions: [], nonJidMentions: 1 } } };
-  const msg = { key: { remoteJid: null, id: 'ADBA604E2AA05061E5E6343D4BBB3D4C6_L0', participant: '132161176899607@lid' }, message: { sendPaymentMessage: { noteMessage: nota, transactionData: 'AAAA' } } };
+  // "." + zero-width, 6 menções, transactionData Java. NÃO é o raja (que é
+  // requestPaymentMessage + amount zero), mas é um card de pagamento
+  // estruturalmente incompleto — SUSPEITA, nunca FORTE.
+  const nota = { extendedTextMessage: { text: `.${'\u200b'.repeat(7)}`, contextInfo: { mentionedJid: Array.from({ length: 6 }, (_, i) => `5511900000${i}@s.whatsapp.net`), groupMentions: [], statusAttributions: [], nonJidMentions: 1 } } };
+  const msg = { key: { remoteJid: null, id: 'A7E2D294EC0FD01967CCAE5DDF28C0048_L0', participant: '132161176899607@lid' }, message: { sendPaymentMessage: { noteMessage: nota, transactionData: 'AAAA' } } };
   const r = analyzeInvisibleMessage({ info: msg });
-  eq(r.classification, 'ATIPICA', 'atípica, não forte');
-  eq(r.detected, false, 'não é detectado como ataque');
+  eq(r.classification, 'SUSPEITA', 'suspeita (não forte)');
+  eq(r.detected, true, 'marcado como suspeito');
   eq(r.payment.disponivel, true, 'payment reconhecido');
   eq(r.payment.requestPayment, false, 'não é request');
   eq(r.payment.anomaliaZero, false, 'sendPaymentMessage não tem amount — zero não é avaliado');
+  eq(r.payment.referenciaAusente, true, 'requestMessageKey ausente');
+  eq(r.payment.cardZeradoSemReferencia, true, 'card sem valor e sem referência');
   contem(r.payment.justificativa, 'nao carrega valor', 'explica por que o zero não se aplica');
-  eq(r.payment.nota.invisiveis, 9, 'conta os zero-width factuais');
+  eq(r.payment.nota.invisiveis, 7, 'conta os zero-width factuais');
   eq(r.payment.nota.semConteudoVisivel, true, 'nota sem conteúdo visível');
   eq(r.key.sufixoHistorico, '_L0', 'sufixo de histórico detectado');
   ok(r.indicators.some((i) => i.id === 'INV-021'), 'INV-021 presente');
   ok(r.indicators.some((i) => i.id === 'INV-020'), 'INV-020 presente (com outro indicador)');
-  ok(!r.indicators.some((i) => i.id === 'INV-019'), 'não é card zerado');
+  ok(r.indicators.some((i) => i.id === 'INV-022'), 'INV-022 presente');
+  ok(!r.indicators.some((i) => i.id === 'INV-019'), 'não é card zerado de request');
   ok(!r.indicators.some((i) => i.id === 'INV-007'), 'não é a rajada');
   eq(r.context.disponivel, true, 'contextInfo encontrado dentro da nota');
   contem(r.context.caminho, 'noteMessage', 'caminho correto');
   eq(r.context.mencoes, 6, 'menções lidas');
+  const txt = formatInvisibleSection(r);
+  contem(txt, 'requestMessageKey: AUSENTE', 'a seção mostra a ausência');
+});
+
+await teste('54. par raja × normal do MESMO grupo: o ID distingue', () => {
+  // Amostras reais do dono no mesmo grupo. A normal (`conversation: ok`) tem ID
+  // hex puro de 32 chars; o raja tem 33 + `_L0`. O sufixo aparece SÓ no raja.
+  const normal = { key: { remoteJid: null, id: 'A5584E336949912391505C34BCD82100', participant: '23734744260711@lid' }, message: { conversation: 'ok' } };
+  const raja = { key: { remoteJid: null, id: 'A7E2D294EC0FD01967CCAE5DDF28C0048_L0', participant: '132161176899607@lid' }, message: { sendPaymentMessage: { noteMessage: { extendedTextMessage: { text: '.​​​​​​​', contextInfo: { mentionedJid: ['1@s.whatsapp.net'] } } } } } };
+  const rn = analyzeInvisibleMessage({ info: normal });
+  const rr = analyzeInvisibleMessage({ info: raja });
+  eq(rn.classification, 'NORMAL', 'a normal é NORMAL');
+  eq(rn.key.sufixoHistorico, null, 'normal sem sufixo');
+  eq(rn.confidence, 0, 'índice 0');
+  eq(rr.key.sufixoHistorico, '_L0', 'raja com sufixo');
+  ok(rr.confidence > rn.confidence, `o raja pontua mais (${rr.confidence} > ${rn.confidence})`);
+  ok(rn.indicators.every((i) => Number(i.peso) === 0), 'nenhum indicador com peso na normal');
 });
 
 await teste('51. nota só com zero-width e SEM outro indicador não pontua', () => {

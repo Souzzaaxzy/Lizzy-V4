@@ -3101,3 +3101,59 @@ Regressões re-verificadas: `get-message-inspector` 54/269, `antifantasma-classi
 18/18, `ghost-detection` 24/81. `defensive-protection` continua **24 falhas
 PRÉ-EXISTENTES** (reproduzidas com `git worktree` no commit anterior — todas em
 `!raja`, sem relação).
+
+### Par raja × normal do MESMO grupo + `requestMessageKey` ausente (set/2026) ✅
+O dono mandou o **par que faltava**: o raja e uma mensagem normal, ambas no
+**mesmo grupo** (`120363432070074647@g.us`). A comparação revelou o que separa os
+dois — e um campo que o analisador não olhava.
+
+#### O que separa (medido, lado a lado)
+| | normal | raja |
+|---|---|---|
+| tipo | `conversation` | `sendPaymentMessage` |
+| ID | `A5584E336949912391505C34BCD82100` | `A7E2D294EC0FD01967CCAE5DDF28C0048_L0` |
+| ID — base / total | 32 hex / 32 | 33 hex / 36 |
+| sufixo | **nenhum** | **`_L0`** |
+| nota | — | `.` + 7 zero-width |
+| author LID | `23734744260711@lid` (remetente) | `132161176899607@lid` (terceiro) |
+| classificação | NORMAL, 0/100 | SUSPEITA, 26/100 |
+
+O **sufixo `_L0` aparece só no raja** — a mensagem normal do mesmo grupo tem ID
+hex puro. É a evidência mais limpa que temos: **não é artefato do grupo**.
+
+#### A descoberta: `requestMessageKey` AUSENTE
+O proto `SendPaymentMessage` tem **4 campos** (`noteMessage`, `requestMessageKey`,
+`background`, `transactionData`). Verificado no `.d.ts` da fork instalada:
+`requestMessageKey` é o **ponteiro para o pedido que este envio responde**.
+
+Os dois rajas carregam **só** `noteMessage` + `transactionData`:
+- **sem `requestMessageKey`** → o card não responde a pedido nenhum;
+- e o tipo **não carrega `amount`** → não há valor em lugar nenhum.
+
+Ou seja: é um **card de pagamento estruturalmente incompleto** — um envelope de
+pagamento com nota invisível e sem lastro. **Não é** a assinatura clássica do
+raja (`requestPaymentMessage` + `amount` zero), mas é uma variante dela.
+
+#### `INV-022` — sendPaymentMessage sem referência ao pedido
+Peso **3**, severidade **média** — *média de propósito*, com a justificativa
+registrada no próprio indicador: o campo existe no proto, mas **não temos amostra
+benignа confirmada** que prove que todo `sendPaymentMessage` legítimo o carrega.
+Então isto **corrobora, não prova**. A seção PAYMENT agora mostra
+`requestMessageKey: AUSENTE`.
+
+#### Placar e honestidade
+O raja passou de **ATÍPICA 13/100** para **SUSPEITA 26/100** (3 indicadores com
+peso: `INV-022` 3 + `INV-020` 2 + `INV-021` 1). **Não** vira FORTEMENTE
+COMPATÍVEL — e isso é correto: falta a assinatura (zero + `amount`), que este
+tipo não tem.
+
+**Pendência honesta que fica registrada:** o `transactionData` (1024 bytes, Java
+serializado) **não é decodificado até o fim**. Ele contém um `BigDecimal` cujo
+valor não conseguimos extrair (o XOR de 0x00 quebra nas regiões de
+comprimento). Se aquele `BigDecimal` for `0`, fechamos a assinatura de valor zero
+também nesse tipo. Fica como próximo passo, não como afirmação.
+
+**Testes**: 53 → **54 testes / 431 asserções** (novos: a amostra `sendPaymentMessage`
+agora SUSPEITA com `requestMessageKey` ausente, e o **par raja×normal do mesmo
+grupo** provando que o ID distingue). Regressões: `get-message-inspector` 54/269,
+`antifantasma-classificacao` 18/18, `ghost-detection` 24/81, `anti-seletiva` 32/32.

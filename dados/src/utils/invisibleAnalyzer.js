@@ -84,6 +84,7 @@ export const INDICADORES = Object.freeze({
   INV_019: { id: 'INV-019', nome: 'Card de pagamento zerado sem nota', categoria: 'payment', severidade: 'media', peso: 2, descricao: 'requestPaymentMessage sem valor, mas SEM texto na nota. O card tambem nao renderiza, porem nao carrega mensagem escondida — e um card malformado, nao a rajada. Peso reduzido de proposito.' },
   INV_020: { id: 'INV-020', nome: 'Nota com texto sem conteudo visivel', categoria: 'payment', severidade: 'media', peso: 2, descricao: 'O texto da NOTA existe mas so tem espaco/zero-width: o cliente desenha ~nada. Sozinho e ambiguo (varios envios usam caracteres invisiveis para "vazio"); pesa apenas quando ja ha outro indicador de pagamento na mesma mensagem.' },
   INV_021: { id: 'INV-021', nome: 'ID com sufixo de fonte/historico', categoria: 'estrutura', severidade: 'baixa', peso: 1, descricao: 'ID no formato `<id>_L0` (sufixo de origem/historico). Nao e o formato dos clientes (`3EB0...`) e pode indicar historico/relay, nao um envio direto. Ambiguo: nao e prova de nada.' },
+  INV_022: { id: 'INV-022', nome: 'sendPaymentMessage sem referencia ao pedido', categoria: 'payment', severidade: 'media', peso: 3, descricao: 'O proto `SendPaymentMessage` tem `requestMessageKey` — o ponteiro para o pedido que este envio responde. Aqui ele esta AUSENTE e nao ha `amount` nenhum: o card nao responde a pedido algum e nao carrega valor. Severidade MEDIA de proposito: o campo existe no proto, mas nao ha amostra benigna confirmada que prove que ele sempre acompanha um envio legitimo — entao isto corrobora, nao prova.' },
 });
 
 const AMBIGUOS = new Set(['INV-010', 'INV-011']); // stub/LID sozinhos -> nunca elevam
@@ -590,6 +591,13 @@ export function analisarPagamento(content = {}) {
   const mencoes = Array.isArray(noteCtx?.mentionedJid) ? noteCtx.mentionedJid.length : 0;
   const forward = noteCtx && typeof noteCtx.forwardingScore === 'number' ? noteCtx.forwardingScore : null;
 
+  // `SendPaymentMessage.requestMessageKey` aponta para o pedido que este envio
+  // responde. Sem ele o card nao referencia pedido nenhum — e, como o tipo
+  // tambem nao carrega `amount`, nao ha valor em lugar nenhum.
+  const requestMessageKey = isObj(send?.requestMessageKey) ? send.requestMessageKey : null;
+  const referenciaAusente = Boolean(send && !requestMessageKey);
+  const cardZeradoSemReferencia = referenciaAusente && !request;
+
   return {
     disponivel: true,
     tipos,
@@ -611,6 +619,11 @@ export function analisarPagamento(content = {}) {
     amountOffset: offset,
     anomaliaZero: zeroPath !== null,
     zeroPath,
+    requestMessageKey: requestMessageKey
+      ? { id: requestMessageKey.id ?? null, remoteJid: requestMessageKey.remoteJid ?? null, fromMe: requestMessageKey.fromMe ?? null }
+      : null,
+    referenciaAusente,
+    cardZeradoSemReferencia,
     nota: noteMsg
       ? {
         presente: true,
@@ -870,6 +883,11 @@ export function correlacionar(analises = {}) {
     if (payment.nota?.mencoes > MENCao_EM_MASSA && payment.anomaliaZero) push('INV_009', `${payment.nota.mencoes} menções na nota`);
     if ((payment.nota?.isForwarded || (payment.nota?.forwardingScore ?? 0) >= 100) && payment.anomaliaZero) {
       push('INV_017', `contextInfo da nota com isForwarded/forwardingScore=${payment.nota.forwardingScore}`);
+    }
+    // Card de pagamento SEM valor e SEM referência ao pedido: estruturalmente
+    // incompleto. É um indicador próprio (não é a rajada, que é request+zero).
+    if (payment.cardZeradoSemReferencia) {
+      push('INV_022', 'sendPaymentMessage sem `requestMessageKey` e sem `amount`');
     }
   }
 
@@ -1219,6 +1237,7 @@ export function formatInvisibleSection(resultado, opts = {}) {
     push(`├─ amount.offset: ${val(R.payment.amountOffset)}`);
     push(`├─ Moeda: ${val(R.payment.currencyCodeIso4217)}`);
     push(`├─ Zero provado por: ${val(R.payment.zeroPath)}`);
+    push(`├─ requestMessageKey: ${R.payment.requestMessageKey ? `presente (${R.payment.requestMessageKey.id || 'sem id'})` : (R.payment.requestPayment ? 'não aplicável (é um request)' : 'AUSENTE')}`);
     push(`└─ NoteMessage: ${R.payment.nota.presente ? `presente (${R.payment.nota.tamanho} chars, ${R.payment.nota.mencoes} menções${R.payment.nota.invisiveis ? `, ${R.payment.nota.invisiveis} invisível(is)` : ''})` : 'ausente'}`);
     push(`   _${R.payment.justificativa}_`);
   }
