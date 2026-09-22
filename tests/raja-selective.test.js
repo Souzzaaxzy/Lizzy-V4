@@ -212,7 +212,7 @@ await test('!rajar usa a quantidade e o texto salvos', async () => {
   assert.equal(r.rotationCalls.length, 3, 'enviou exatamente a quantidade salva');
   const msg = r.rotationCalls[0]?.m;
   assert.equal(
-    msg?.sendPaymentMessage?.noteMessage?.extendedTextMessage?.text,
+    msg?.requestPaymentMessage?.noteMessage?.extendedTextMessage?.text,
     'repete',
     'usou o texto salvo, na NOTA'
   );
@@ -277,20 +277,20 @@ await test('!rajar NÃO usa relayMessage nem sendMessage para o conteúdo', asyn
   ok(r.rotationCalls.length === 1, 'o conteúdo saiu só pela rotação');
 });
 
-await test('!rajar mantém o conteúdo do raja intacto (sendPaymentMessage)', async () => {
+await test('!rajar mantém o conteúdo do raja intacto (requestPaymentMessage)', async () => {
   const groupJid = makeGroup();
   await rodar({ groupJid, text: '!setmsgraja 1 nota' });
   const r = await rodar({ groupJid, text: '!rajar' });
   const msg = r.rotationCalls[0]?.m;
   ok(!!msg, 'passou a mensagem do raja');
-  ok(!!msg?.sendPaymentMessage, 'o conteúdo é sendPaymentMessage (o tipo do raja REAL medido)');
+  ok(!!msg?.requestPaymentMessage, 'o conteúdo continua sendo requestPaymentMessage');
   assert.equal(
-    msg?.sendPaymentMessage?.noteMessage?.extendedTextMessage?.text,
+    msg?.requestPaymentMessage?.noteMessage?.extendedTextMessage?.text,
     'nota',
     'o texto continua na NOTA, sem @ no corpo'
   );
   ok(
-    Array.isArray(msg?.sendPaymentMessage?.noteMessage?.extendedTextMessage?.contextInfo?.mentionedJid),
+    Array.isArray(msg?.requestPaymentMessage?.noteMessage?.extendedTextMessage?.contextInfo?.mentionedJid),
     'mentionedJid continua na nota'
   );
 });

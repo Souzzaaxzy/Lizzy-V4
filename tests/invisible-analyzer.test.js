@@ -822,27 +822,32 @@ await teste('50. raja real (sendPaymentMessage + nota invisível) e FORTE', () =
   contem(txt, 'Envelope vazio: Sim', 'a conclusão mostra a assinatura');
 });
 
-await teste('55. o payload do !rajar é reconhecido como o raja real', () => {
-  // `buildRajaContent` (index.js ~382) monta exatamente este formato. O teste
-  // trava a fidelidade: o que o `!rajar` envia tem de disparar a assinatura.
-  const rajar = {
+await teste('55. forma do raja (sendPaymentMessage) e reconhecida; texto visível não', () => {
+  // O raja REAL é `sendPaymentMessage` com a nota invisível. Este teste trava a
+  // assinatura no motor do !get — o que o `!rajar` monta é assunto do comando e
+  // NÃO é pré-requisito aqui (o comando não foi alterado nesta tarefa).
+  const invisivel = {
     sendPaymentMessage: {
-      noteMessage: { extendedTextMessage: { text: 'meu texto do raja', contextInfo: { mentionedJid: ['1@s.whatsapp.net', '2@s.whatsapp.net'] } } },
+      noteMessage: { extendedTextMessage: { text: `.${'\u200b'.repeat(7)}`, contextInfo: { mentionedJid: ['1@s.whatsapp.net', '2@s.whatsapp.net'] } } },
     },
   };
-  const r = analyzeInvisibleMessage({ info: { key: { remoteJid: 'g@g.us', fromMe: true, id: '3EB0AABBCCDDEEFF112233', participant: '111@lid' }, message: rajar } });
-  eq(r.payment.tipoPrincipal, 'sendPaymentMessage', 'tipo do payload do !rajar');
+  const r = analyzeInvisibleMessage({ info: { key: { remoteJid: 'g@g.us', fromMe: true, id: '3EB0AABBCCDDEEFF112233', participant: '111@lid' }, message: invisivel } });
+  eq(r.payment.tipoPrincipal, 'sendPaymentMessage', 'tipo reconhecido');
   eq(r.payment.requestPayment, false, 'não é requestPaymentMessage');
-  // Texto VISÍVEL no payload: o `!rajar` manda o texto do usuário. Então a
-  // assinatura de envelope vazio NÃO dispara — o que o `!rajar` gera é o
-  // transporte; a invisibilidade vem do texto que o dono salva.
-  eq(r.correlation.assinaturaEnvelopeVazio, false, 'texto visível não é envelope vazio');
-  ok(r.classification !== 'FORTEMENTE_COMPATIVEL', 'texto visível não vira forte');
-  // E com o texto invisível (o que o raja real carrega), dispara.
-  const invisivel = { sendPaymentMessage: { noteMessage: { extendedTextMessage: { text: `.${'\u200b'.repeat(7)}` } } } };
-  const r2 = analyzeInvisibleMessage({ info: { key: { remoteJid: 'g@g.us', fromMe: true, id: '3EB0AABBCCDDEEFF112244', participant: '111@lid' }, message: invisivel } });
-  eq(r2.correlation.assinaturaEnvelopeVazio, true, 'texto invisível dispara a assinatura');
-  eq(r2.classification, 'FORTEMENTE_COMPATIVEL', 'é o raja');
+  eq(r.correlation.assinaturaEnvelopeVazio, true, 'texto invisível dispara a assinatura');
+  eq(r.classification, 'FORTEMENTE_COMPATIVEL', 'é o raja');
+
+  // Com texto VISÍVEL a assinatura não dispara: no raja real o que esconde é o
+  // texto (zero-width), não o tipo. Sem isso, qualquer envio de pagamento
+  // legítimo com nota viraria "raja".
+  const visivel = {
+    sendPaymentMessage: {
+      noteMessage: { extendedTextMessage: { text: 'obrigado pelo pagamento', contextInfo: { mentionedJid: ['1@s.whatsapp.net'] } } },
+    },
+  };
+  const r2 = analyzeInvisibleMessage({ info: { key: { remoteJid: 'g@g.us', fromMe: true, id: '3EB0AABBCCDDEEFF112244', participant: '111@lid' }, message: visivel } });
+  eq(r2.correlation.assinaturaEnvelopeVazio, false, 'texto visível não é envelope vazio');
+  ok(r2.classification !== 'FORTEMENTE_COMPATIVEL', 'não vira forte');
 });
 
 await teste('54. par raja × normal do MESMO grupo: o ID distingue', () => {

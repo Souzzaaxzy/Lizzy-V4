@@ -3195,16 +3195,26 @@ E **não** carrega `requestMessageKey` (o ponteiro para o pedido) nem `amount`.
 Ou seja: é um **envelope de pagamento VAZIO** — o tipo é de um envio de pagamento,
 não tem valor para desenhar, e a única coisa com conteúdo é a nota — escondida.
 
-### O `!rajar` foi corrigido
-`buildRajaContent` passou a montar `sendPaymentMessage` com a nota. Confirmado com
-`generateWAMessageFromContent` + encode: o tipo no wire é `sendPaymentMessage`
-(exatamente o do raja real), **sem precisar de mudança na fork**. O
-`logRajaEnvio` deixou de ler `requestPaymentMessage.amount1000` (que não existe
-mais no payload) e passou a logar `tipo`/`chars_nota`/`zero_width`.
+### O `!rajar` NÃO foi alterado (era só análise)
+**Decisão do dono, respeitada:** o `!rajar` devia ser **apenas analisado**, não
+modificado — a tarefa era mexer só no `!get`. Numa rodada intermediária eu cheguei
+a trocar `buildRajaContent` para `sendPaymentMessage`; isso foi **revertido**
+(`git checkout` do commit anterior) e o comando permanece exatamente como estava
+(`requestPaymentMessage` + `amount1000: "0"`).
+
+O que **fica registrado como conhecimento** (medido, não aplicado):
+- o `!rajar` monta `requestPaymentMessage`, mas o raja REAL é
+  `sendPaymentMessage` — **são tipos diferentes**;
+- confirmado por `generateWAMessageFromContent` + encode: um payload
+  `sendPaymentMessage` sai no wire como `sendPaymentMessage`, **sem precisar de
+  mudança na fork** (se algum dia se quiser alinhar o comando);
+- o `logRajaEnvio` do comando continua lendo `requestPaymentMessage.amount1000`
+  (coerente com o payload que ele realmente envia).
 
 ### Análise: nova assinatura `INV-023`
 - **`INV-023` — Envelope de pagamento com texto invisível** (peso 6, **alta**):
-  `sendPaymentMessage` cuja nota só tem texto invisível. É a assinatura medida.
+  `sendPaymentMessage` cuja nota só tem texto invisível. É a assinatura medida do
+  raja real — o `!get` a reconhece independentemente do que o `!rajar` monta.
 - `INV-020` (nota sem conteúdo visível) agora **só vale fora do
   `sendPaymentMessage`** — senão duplicaria a assinatura.
 - Nova assinatura entra em `correlation.assinaturaEnvelopeVazio`, exibida na
@@ -3228,10 +3238,17 @@ real". **A premissa nunca esteve certa.** O que a corrigiu foi o dono mandar o
 **par raja × normal** *e* apontar o `!rajar`: sem a comparação do tipo, o
 `amount1000: "0"` parecia evidência convincente.
 
-**Testes**: 55 testes / 441 asserções (`invisible-analyzer`), incluindo o payload
-do `!rajar` e o par raja×normal. `tests/raja-selective.test.js` **23/0** (as duas
-asserções que checavam `requestPaymentMessage` foram atualizadas para
-`sendPaymentMessage`). Regressões: `get-message-inspector` 54/269,
-`antifantasma-classificacao` 18/18, `ghost-detection` 24/81, `anti-seletiva` 32/32.
-`rajar.test.js` (6 falhas) e `defensive-protection.test.js` (24) continuam
-**pré-existentes** — verificados na baseline.
+**Testes**: 55 testes / 441 asserções (`invisible-analyzer`), incluindo o formato
+`sendPaymentMessage` e o par raja×normal — **nenhum teste do `!rajar` foi
+alterado**. `tests/raja-selective.test.js` continua **23/0** no estado original.
+Regressões: `get-message-inspector` 54/269, `antifantasma-classificacao` 18/18,
+`ghost-detection` 24/81, `anti-seletiva` 32/32. `rajar.test.js` (6 falhas) e
+`defensive-protection.test.js` (24) continuam **pré-existentes** — verificados na
+baseline.
+
+### Escopo final desta rodada (o que mudou de fato)
+Só o **`!get`** foi tocado: `dados/src/utils/invisibleAnalyzer.js` (motor forense)
+e `dados/src/utils/messageInspector.js` (formatação da seção) + os testes do
+`!get`. O `dados/src/index.js` foi **revertido** ao estado anterior — o `!rajar`
+(`buildRajaContent`/`logRajaEnvio`) está exatamente como estava.
+
