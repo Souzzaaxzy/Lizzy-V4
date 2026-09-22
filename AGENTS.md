@@ -3693,3 +3693,63 @@ Roda o **handler real** com socket falso:
 Regressões verdes: `get-message-inspector` 54/269, `midiaprefix` 26/83,
 `raja-selective` 23/0, `antifantasma-classificacao` 18/18, `ghost-detection` 24/81,
 `anti-seletiva` 32/32, `cmd-suggest` 21/68.
+
+### MENU PRINCIPAL — layout novo + divisão no "ler mais" (set/2026) ✅
+Pedido do dono: trocar o `!menu` pelo layout das caixas `꧁༺ ✦ ༻꧂`, **com a
+primeira categoria ANTES do "ler mais"** (junto com o gif) e o resto colapsado.
+
+#### `menus/menu.js` reescrito — devolve 3 partes, não uma string
+```js
+{ visible, rest, full, header }
+```
+- **`visible`** — cabeçalho + **primeira categoria (UTILIDADES)**;
+- **`rest`** — as demais categorias + o fecho;
+- **`full`** — a junção.
+
+O `index.js` compõe: `` `${visible}${lerMaisPrefix}${rest}` ``. Com o "ler mais"
+**desligado** o prefixo é string vazia, então sai o menu inteiro — o mesmo
+código serve para os dois modos, sem `if`.
+
+#### Dois estilos de bold (medidos, não supostos)
+O layout pedido usa **dois** blocos Unicode diferentes:
+| onde | estilo | base |
+|---|---|---|
+| cabeçalho (`𝐂𝐚𝐫𝐠𝐨`, `𝟕𝟗𝟎`) | MATHEMATICAL BOLD | `U+1D400` |
+| títulos das categorias (`𝑼𝑻𝑰𝑳𝑰𝑫𝑨𝑫𝑬𝑺`) | MATHEMATICAL BOLD ITALIC | `U+1D468` |
+
+Conferido por code point nas amostras do dono. `bold()` e `boldItalic()`
+convertem **por código** (a fonte fica legível/editável) — a primeira versão
+usava sans-serif bold (`U+1D5D4`) e estava **errada**.
+
+#### Filler `ㅤ` (U+3164) no alinhamento
+As linhas seguem `marcador emoji ㅤcmd` quando há emoji e `marcador ㅤcmd` quando
+não há. Sem o filler no segundo caso, `◇ !menulogos` ficava desalinhado em
+relação a `⟢ ⚽ ㅤ!menufut`.
+
+#### O `header` antigo foi REMOVIDO do index
+O `case 'menu'` montava um `header` (com `🌌`) e passava como option — ele
+**sobrescrevia** o cabeçalho novo do módulo. E `userCargo`/`userVip`/`ping` nem
+eram passados (o módulo caía nos defaults). Agora o index passa os **dados
+reais** e deixa o módulo montar o layout.
+
+#### Menus temáticos: intocados
+`sendMenuWithMedia` (dona dos outros 14 menus) continua **texto puro** e aplica o
+`lerMaisPrefix` por conta própria. Uma tentativa de remover o prefixo de lá
+(os menus temáticos não têm a divisão visible/rest) foi **revertida** — sem o
+prefixo, o conteúdo deles deixaria de colapsar.
+
+#### Testes — `tests/menu-layout.test.js` (reescrito, **14 testes / 73 asserções**)
+- layout campo a campo (topo, saudação, cargo/vip/ping em bold, rodapés);
+- **dois estilos** de bold distintos (e que o título NÃO usa bold reto);
+- `visible` tem a 1ª categoria e **não** as demais; `rest` tem as demais + fecho;
+- `full` é a junção; o prefixo do grupo é respeitado (não fixa `!`);
+- marcadores/emoji por categoria;
+- **integração**: com o "ler mais" **ligado**, a 1ª categoria fica **antes** do
+  prefixo invisível e JOGOS/COMUNIDADE **depois**; **desligado**, sai inteiro;
+- cabeçalho com nome/cargo/ping reais; sem `quoted` e com newsletter;
+- menus temáticos continuam funcionando (e **não perderam** o "ler mais");
+- guardas estruturais (o index compõe na ordem `visible < lerMais < rest`).
+
+Regressões verdes: `get-message-inspector` 54/269, `midiaprefix` 26/83,
+`raja-selective` 23/0, `antifantasma-classificacao` 18/18, `ghost-detection` 24/81,
+`anti-seletiva` 32/32, `cmd-suggest` 21/68, `testcall` 35/127.

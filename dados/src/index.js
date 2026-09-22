@@ -7618,7 +7618,7 @@ switch (command) {
           const lerMaisPrefix = getMenuLerMaisText();
           await nazu.sendMessage(from, {
             video: mediaBuffer,
-            caption: lerMaisPrefix + menuText,
+            caption: menuText,
             gifPlayback: true,
             mimetype: 'video/mp4'
           }, {
@@ -21254,17 +21254,22 @@ Se não definir cores, a API usa padrão automaticamente.`
           const userVip = premiumListaZinha[sender] || premiumListaZinha[from] || false;
           const timestamp = Date.now();
           const pingMs = Math.round((timestamp - info.messageTimestamp * 1000));
-          const header = `╭━━━〔 🌌 ${customBotName} 〕━━━╮
-┃ 👋 Olá, @${pushname}
-┃ 👤 Cargo: ${userCargo}
-┃ 💎 VIP: ${userVip ? 'Sim' : 'Não'}
-┃ ⚡ Ping: ${pingMs}ms
-╰━━━━━━━━━━━━━━━━━━━╯`;
-          const menuText = await menu(groupPrefix, customBotName, pushname, {
+          // O `menu.js` monta o PRÓPRIO cabeçalho (layout novo). Passamos os
+          // dados reais — antes o `header` era montado aqui e sobrescrevia o do
+          // módulo, e cargo/vip/ping nem chegavam.
+          const menuParts = await menu(groupPrefix, customBotName, pushname, {
             ...customDesign,
-            header
+            userCargo,
+            userVip,
+            ping: pingMs,
           });
           const lerMaisPrefix = getMenuLerMaisText();
+          // `visible` (cabeçalho + PRIMEIRA categoria) fica ANTES do prefixo do
+          // "ler mais" — assim a prévia mostra a mídia E o primeiro bloco de
+          // comandos. `rest` (demais categorias + rodapé) vai depois e fica
+          // colapsado. Com o "ler mais" desligado, o prefixo é vazio e o menu
+          // sai inteiro.
+          const menuText = `${menuParts.visible}${lerMaisPrefix}${menuParts.rest}`;
           const newsletterContext = {
             forwardingScore: 999,
             isForwarded: true,
@@ -21288,14 +21293,14 @@ Se não definir cores, a API usa padrão automaticamente.`
                 if (mediaBuffer) {
                   await nazu.sendMessage(from, {
                     [useVideo ? 'video' : 'image']: mediaBuffer,
-                    caption: lerMaisPrefix + menuText,
+                    caption: menuText,
                     gifPlayback: useVideo,
                     mimetype: useVideo ? 'video/mp4' : 'image/jpeg',
                     contextInfo: newsletterContext
                   });
                 } else {
                   await nazu.sendMessage(from, {
-                    text: lerMaisPrefix + menuText,
+                    text: menuText,
                     contextInfo: newsletterContext
                   });
                 }
@@ -21305,14 +21310,14 @@ Se não definir cores, a API usa padrão automaticamente.`
               if (mediaBuffer) {
                 await nazu.sendMessage(from, {
                   [useVideo ? 'video' : 'image']: mediaBuffer,
-                  caption: lerMaisPrefix + menuText,
+                  caption: menuText,
                   gifPlayback: useVideo,
                   mimetype: useVideo ? 'video/mp4' : 'image/jpeg',
                   contextInfo: newsletterContext
                 });
               } else {
                 await nazu.sendMessage(from, {
-                  text: lerMaisPrefix + menuText,
+                  text: menuText,
                   contextInfo: newsletterContext
                 });
               }
@@ -21322,14 +21327,14 @@ Se não definir cores, a API usa padrão automaticamente.`
             if (mediaBuffer) {
               await nazu.sendMessage(from, {
                 [useVideo ? 'video' : 'image']: mediaBuffer,
-                caption: lerMaisPrefix + menuText,
+                caption: menuText,
                 gifPlayback: useVideo,
                 mimetype: useVideo ? 'video/mp4' : 'image/jpeg',
                 contextInfo: newsletterContext
               });
             } else {
               await nazu.sendMessage(from, {
-                text: lerMaisPrefix + menuText,
+                text: menuText,
                 contextInfo: newsletterContext
               });
             }
@@ -21350,16 +21355,13 @@ Se não definir cores, a API usa padrão automaticamente.`
           const userVip = premiumListaZinha[sender] || premiumListaZinha[from] || false;
           const timestamp = Date.now();
           const pingMs = Math.round((timestamp - info.messageTimestamp * 1000));
-          const header = `╭━━━〔 🌌 ${nomebot} 〕━━━╮
-┃ 👋 Olá, @${pushname}
-┃ 👤 Cargo: ${userCargo}
-┃ 💎 VIP: ${userVip ? 'Sim' : 'Não'}
-┃ ⚡ Ping: ${pingMs}ms
-╰━━━━━━━━━━━━━━━━━━━╯`;
-          const menuText = await menu(prefix, nomebot, pushname, {
+          const menuPartsFb = await menu(prefix, nomebot, pushname, {
             ...customDesign,
-            header
+            userCargo,
+            userVip,
+            ping: pingMs,
           });
+          const menuText = `${menuPartsFb.visible}${getMenuLerMaisText()}${menuPartsFb.rest}`;
           const newsletterContext = {
             forwardingScore: 999,
             isForwarded: true,
@@ -22264,7 +22266,9 @@ Precisa de ajuda? Entre em contato:
               newsletterName: "Lizzy"
             }
           };
-          // Envia o menu com ou sem mídia
+          // Envia o menu com ou sem mídia.
+          // Os menus TEMÁTICOS são texto puro (não passam pelo `menu.js`, que é
+          // quem divide visible/rest), então o "ler mais" é aplicado aqui.
           if (mediaBuffer) {
             await nazu.sendMessage(from, {
               [useVideo ? 'video' : 'image']: mediaBuffer,

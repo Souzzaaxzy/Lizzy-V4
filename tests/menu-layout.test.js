@@ -1,12 +1,11 @@
 /**
- * Testes do LAYOUT de envio do MENU (dados/src/index.js).
+ * Testes do LAYOUT do menu principal (`dados/src/menus/menu.js`) e da sua
+ * integração no `!menu` (dados/src/index.js).
  *
- * Pedido do dono: o menu deve sair SEM citação (`quoted`) e COM o cabeçalho de
- * canal (newsletter) — o mesmo tratamento dado à resposta do prefixo.
- *
- * Roda o handler REAL com socket falso e `DATABASE_PATH`/`CONFIG_PATH`
- * temporários. Cobre o `!menu` (case 'menu') e o `sendMenuWithMedia` (usado por
- * todos os menus temáticos: alteradores, ia, logotipos, downloads, admin...).
+ * O ponto central: o menu é dividido em DUAS partes por causa do "ler mais".
+ *   - `visible` (cabeçalho + PRIMEIRA categoria) fica ANTES do prefixo invisível
+ *     — é o que aparece na prévia junto com a mídia;
+ *   - `rest` (demais categorias + rodapé) fica DEPOIS, colapsado.
  *
  * Uso: node tests/menu-layout.test.js
  */
@@ -41,9 +40,10 @@ function finish(name) {
 function ok(c, m) { if (c) CURRENT.passed += 1; else { CURRENT.failed += 1; CURRENT.errors.push(`ASSERT FALHOU: ${m}`); } }
 function eq(a, b, m) { ok(a === b, `${m} — esperado ${JSON.stringify(b)}, veio ${JSON.stringify(a)}`); }
 function contem(h, n, l) { ok(typeof h === 'string' && h.includes(n), `${l || n} — esperado conter "${n}"`); }
+function naoContem(h, n, l) { ok(typeof h === 'string' && !h.includes(n), `${l || n} — não deveria conter "${n}"`); }
 
 // ============================================================================
-// CARGA DO HANDLER REAL
+// CARGA
 // ============================================================================
 
 const TMP_DB = fs.mkdtempSync(path.join(os.tmpdir(), 'lizzy-menu-db-'));
@@ -52,6 +52,11 @@ process.env.CONFIG_PATH = path.join(TMP_DB, 'config.json');
 fs.mkdirSync(path.join(TMP_DB, 'grupos'), { recursive: true });
 fs.mkdirSync(path.join(TMP_DB, 'dono'), { recursive: true });
 fs.writeFileSync(process.env.CONFIG_PATH, JSON.stringify({ prefixo: '!', nomebot: 'Abyss', nomedono: 'Dono', numerodono: '5511000000000', debug: false }, null, 2));
+
+const menuMod = await import(new URL('../dados/src/menus/menu.js', import.meta.url).href);
+const menu = menuMod.default;
+const { bold, boldItalic } = menuMod;
+const db = await import(new URL('../dados/src/utils/database.js', import.meta.url).href);
 
 const indexModule = await import(new URL('../dados/src/index.js', import.meta.url).href);
 const handleMessage = indexModule.default ?? indexModule;
@@ -64,7 +69,6 @@ if (typeof handleMessage !== 'function') throw new Error('index.js não exporta 
 const BOT_JID = '5599999999999@s.whatsapp.net';
 const BOT_LID = '111111111111111@lid';
 const DONO = '5511000000000@s.whatsapp.net';
-
 let groupCounter = 0;
 const newGroupJid = () => { groupCounter += 1; return `1203638200000000${String(groupCounter).padStart(3, '0')}@g.us`; };
 
@@ -85,19 +89,12 @@ function makeNazu({ sent, groupJid }) {
     groupRequestParticipantsList: async () => [],
     groupRequestParticipantsUpdate: async () => ({}),
     ev: { on: () => {}, emit: () => {}, removeAllListeners: () => {} },
-    readMessages: async () => {},
-    sendPresenceUpdate: async () => {},
-    profilePictureUrl: async () => null,
-    react: async () => ({}),
+    readMessages: async () => {}, sendPresenceUpdate: async () => {},
+    profilePictureUrl: async () => null, react: async () => ({}),
   };
 }
 
 let n = 0;
-/**
- * Executa um comando no handler real.
- * `fromMe: true` pula o throttle por remetente (o dono é o próprio bot aqui) —
- * sem isso o 4º comando responde "calma aí" e o teste mede a coisa errada.
- */
 async function rodar(comando) {
   const sent = [];
   const groupJid = newGroupJid();
@@ -106,95 +103,158 @@ async function rodar(comando) {
   await handleMessage(nazu, {
     key: { remoteJid: groupJid, fromMe: true, id: `M${n}`, participant: '5511000000000@lid' },
     message: { extendedTextMessage: { text: comando } },
-    messageTimestamp: 1757900000,
-    pushName: 'Tester',
+    messageTimestamp: 1757900000, pushName: 'Tester',
   }, null, new Map(), null);
   return { sent };
 }
-
-const temNewsletter = (content) => Boolean(content?.contextInfo?.forwardedNewsletterMessageInfo?.newsletterJid);
+const temNewsletter = (c) => Boolean(c?.contextInfo?.forwardedNewsletterMessageInfo?.newsletterJid);
+const textoDe = (s) => s.map((x) => x.content?.text || x.content?.caption || '').join('\n');
 
 // ============================================================================
-// TESTES
+// SEÇÃO 1 — O LAYOUT (menu.js)
 // ============================================================================
 
-await test('1. !menu sai SEM citação (quoted) e COM newsletter', async () => {
-  const { sent } = await rodar('!menu');
-  ok(sent.length > 0, `enviou algo (${sent.length})`);
-  ok(sent.every((x) => !x.options?.quoted), 'nenhuma mensagem cita o usuário');
-  ok(sent.every((x) => temNewsletter(x.content)), 'todas têm cabeçalho de canal');
+await test('1. o cabeçalho segue o layout pedido (com o cargo em bold)', async () => {
+  const r = await menu('!', 'Abyss', 'Kannon', { userCargo: 'Dono', userVip: false, ping: 790 });
+  contem(r.visible, '╭━━━꧁༺ ✦ Abyss ✦ ༻꧂━━━╮', 'topo');
+  contem(r.visible, '┃ 𖤐 𝐎𝐥á, Kannon', 'saudação');
+  contem(r.visible, `┃ 〆 𝐂𝐚𝐫𝐠𝐨: ${bold('Dono')}`, 'cargo em bold');
+  contem(r.visible, `┃ ◈ 𝐕𝐈𝐏: ${bold('Não')}`, 'vip em bold');
+  contem(r.visible, `┃ ⌁ 𝐏𝐢𝐧𝐠: ${bold('790')}𝐦𝐬`, 'ping em bold');
+  contem(r.visible, '╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━━━╯', 'rodapé do header');
 });
 
-await test('2. !menu com mídia: a mídia também vai sem quoted e com newsletter', async () => {
-  // `dados/midias/menu.jpg` é versionado, então o caminho de mídia é exercitado.
-  const menuImg = new URL('../dados/midias/menu.jpg', import.meta.url);
-  if (!fs.existsSync(menuImg)) { console.log('     ⏭  pulado (sem dados/midias/menu.jpg)'); eq(1, 1, 'pulado'); return; }
-  const { sent } = await rodar('!menu');
-  const comMidia = sent.find((x) => x.content?.image || x.content?.video);
-  ok(comMidia, 'enviou o menu com mídia');
-  ok(!comMidia.options?.quoted, 'a mídia não cita o usuário');
-  ok(temNewsletter(comMidia.content), 'a mídia tem cabeçalho de canal');
+await test('2. as categorias usam BOLD ITALIC (estilo diferente do header)', async () => {
+  const r = await menu('!', 'Abyss', 'Kannon', {});
+  contem(r.visible, `⚙️ ${boldItalic('UTILIDADES')} ⚙️`, 'título em bold italic');
+  contem(r.rest, `🎨 ${boldItalic('CRIAÇÃO')} 🎨`, 'CRIAÇÃO em bold italic');
+  contem(r.rest, `🛡️ ${boldItalic('COMUNIDADE')} 🛡️`, 'COMUNIDADE em bold italic');
+  contem(r.rest, `🎮 ${boldItalic('JOGOS')} 🎮`, 'JOGOS em bold italic');
+  naoContem(r.visible, bold('UTILIDADES'), 'não usa bold reto no título');
 });
 
-await test('3. menus temáticos (sendMenuWithMedia) também: sem quoted + newsletter', async () => {
-  for (const cmd of ['!menudono', '!menuadm', '!menumemb', '!menurpg', '!menudown', '!menulogos']) {
-    const { sent } = await rodar(cmd);
-    if (!sent.length) { console.log(`     ⏭  ${cmd}: não enviou (talvez sem permissão)`); continue; }
-    ok(sent.every((x) => !x.options?.quoted), `${cmd}: sem quoted`);
-    ok(sent.every((x) => temNewsletter(x.content)), `${cmd}: com newsletter`);
+await test('3. a PRIMEIRA categoria (UTILIDADES) fica na parte VISÍVEL', async () => {
+  const r = await menu('!', 'Abyss', 'Kannon', {});
+  contem(r.visible, boldItalic('UTILIDADES'), 'na parte visível');
+  contem(r.visible, '!menuia', 'com os comandos');
+  contem(r.visible, '!menudown', 'com os comandos');
+  contem(r.visible, '!ferramentas', 'com os comandos');
+  contem(r.visible, '!menufig', 'com os comandos');
+  naoContem(r.rest, boldItalic('UTILIDADES'), 'não duplica no rest');
+});
+
+await test('4. as DEMAIS categorias ficam no `rest` (ler mais) + o fecho', async () => {
+  const r = await menu('!', 'Abyss', 'Kannon', {});
+  for (const t of ['CRIAÇÃO', 'COMUNIDADE', 'JOGOS']) contem(r.rest, boldItalic(t), `rest tem ${boldItalic(t)}`);
+  for (const c of ['!menulogos', '!menuedits', '!alteradores', '!menumemb', '!menuadm', '!menudono', '!menubn', '!menufut', '!menurpg', '!menuvip', '!menugames']) {
+    contem(r.rest, c, `rest tem ${c}`);
   }
+  contem(r.rest, '╰━━━꧁༺ 𓆩 ✦ Abyss ✦ 𓆪 ༻꧂━━━╯', 'fecho com o nome do bot');
+  naoContem(r.visible, boldItalic('JOGOS'), 'JOGOS não está no visível');
+  naoContem(r.visible, boldItalic('COMUNIDADE'), 'COMUNIDADE não está no visível');
 });
 
-await test('4. o CONTEÚDO do menu continua saindo (não quebrou no caminho)', async () => {
+await test('5. `full` é a junção e o menu respeita o prefixo do grupo', async () => {
+  const r = await menu('/', 'Abyss', 'K', {});
+  contem(r.full, r.visible, 'full contém visible');
+  contem(r.full, r.rest, 'full contém rest');
+  contem(r.visible, '/menuia', 'usa o prefixo passado');
+  naoContem(r.visible, '!menuia', 'não fixa o "!"');
+});
+
+await test('6. o marcador e o emoji de cada categoria são os do layout', async () => {
+  const r = await menu('!', 'Abyss', 'K', {});
+  contem(r.visible, '𓆩 🤖 ㅤ!menuia', 'marcador 𓆩 com emoji');
+  contem(r.rest, '◇ ㅤ!menulogos', 'marcador ◇ com filler');
+  contem(r.rest, '❖ ㅤ!menumemb', 'marcador ❖ com filler');
+  contem(r.rest, '⟢ ⚽ ㅤ!menufut', 'marcador ⟢ com emoji');
+});
+
+// ============================================================================
+// SEÇÃO 2 — INTEGRAÇÃO NO !menu
+// ============================================================================
+
+await test('7. !menu envia a PRIMEIRA categoria ANTES do "ler mais"', async () => {
+  db.setMenuLerMais(true);
+  const prefixoInvisivel = db.getMenuLerMaisText();
+  ok(prefixoInvisivel.length > 0, 'pré-condição: o "ler mais" está ligado');
   const { sent } = await rodar('!menu');
-  const texto = sent.map((x) => x.content?.text || x.content?.caption || '').join('\n');
+  const texto = textoDe(sent);
+  const posInvisivel = texto.indexOf(prefixoInvisivel);
+  ok(posInvisivel > 0, 'achou o prefixo invisível no texto enviado');
+  const antes = texto.slice(0, posInvisivel);
+  const depois = texto.slice(posInvisivel + prefixoInvisivel.length);
+  contem(antes, boldItalic('UTILIDADES'), 'UTILIDADES fica ANTES do ler mais');
+  contem(antes, '!menuia', 'os comandos da 1ª categoria ficam antes');
+  naoContem(antes, boldItalic('JOGOS'), 'JOGOS NÃO fica antes');
+  contem(depois, boldItalic('JOGOS'), 'JOGOS fica DEPOIS (colapsado)');
+  contem(depois, boldItalic('COMUNIDADE'), 'COMUNIDADE fica depois');
+  db.setMenuLerMais(false);
+});
+
+await test('8. com o "ler mais" DESLIGADO o menu sai inteiro, sem separador', async () => {
+  db.setMenuLerMais(false);
+  eq(db.getMenuLerMaisText(), '', 'pré-condição: prefixo vazio');
+  const { sent } = await rodar('!menu');
+  const texto = textoDe(sent);
+  contem(texto, boldItalic('UTILIDADES'), 'tem a 1ª categoria');
+  contem(texto, boldItalic('JOGOS'), 'tem as demais');
+  contem(texto, 'Abyss', 'tem o nome do bot');
+});
+
+await test('9. o cabeçalho do !menu usa o nome/cargo/ping reais', async () => {
+  const { sent } = await rodar('!menu');
+  const texto = textoDe(sent);
+  contem(texto, 'Abyss', 'nome do bot');
+  contem(texto, `𝐂𝐚𝐫𝐠𝐨: ${bold('Dono')}`, 'cargo do dono em bold');
+  contem(texto, '𝐏𝐢𝐧𝐠:', 'linha de ping presente');
+});
+
+await test('10. o menu continua sem quoted e com newsletter', async () => {
+  const { sent } = await rodar('!menu');
+  ok(sent.length > 0, 'enviou');
+  ok(sent.every((x) => !x.options?.quoted), 'sem quoted');
+  ok(sent.every((x) => temNewsletter(x.content)), 'com newsletter');
+});
+
+await test('11. os menus TEMÁTICOS continuam funcionando (não usam o menu.js)', async () => {
+  db.setMenuLerMais(true);
+  const { sent } = await rodar('!menudono');
+  if (!sent.length) { console.log('     ⏭  !menudono não enviou (sem permissão?)'); db.setMenuLerMais(false); return; }
+  const texto = textoDe(sent);
   ok(texto.length > 0, 'tem conteúdo');
-  contem(texto, 'Abyss', 'traz o nome do bot');
-  // O menu tem o cabeçalho com saudação/cargo.
-  contem(texto, 'Olá', 'traz a saudação');
+  ok(sent.every((x) => !x.options?.quoted), 'sem quoted');
+  ok(sent.every((x) => temNewsletter(x.content)), 'com newsletter');
+  db.setMenuLerMais(false);
 });
 
-await test('5. o newsletter traz o canal esperado (não é só um objeto vazio)', async () => {
-  const { sent } = await rodar('!menu');
-  const comCtx = sent.find((x) => temNewsletter(x.content));
-  ok(comCtx, 'achou mensagem com newsletter');
-  const info = comCtx.content.contextInfo.forwardedNewsletterMessageInfo;
-  eq(typeof info.newsletterJid, 'string', 'newsletterJid é string');
-  ok(info.newsletterJid.includes('@newsletter'), 'jid é de newsletter');
-  eq(comCtx.content.contextInfo.isForwarded, true, 'isForwarded ligado');
+// ============================================================================
+// SEÇÃO 3 — GUARDAS ESTRUTURAIS
+// ============================================================================
+
+await test('12. o menu.js exporta a divisão visible/rest (contrato)', async () => {
+  const r = await menu('!', 'B', 'U', {});
+  for (const k of ['visible', 'rest', 'full', 'header']) ok(k in r, `exporta ${k}`);
+  ok(typeof r.visible === 'string' && r.visible.length > 0, 'visible é string não-vazia');
+  ok(typeof r.rest === 'string' && r.rest.length > 0, 'rest é string não-vazia');
 });
 
-await test('6. NENHUM envio de menu no código usa `quoted: info`', () => {
-  // Guarda estrutural: se alguém reintroduzir `quoted` num envio de menu, este
-  // teste falha. Varre os dois blocos que enviam menu.
+await test('13. o index compõe visible + lerMais + rest (não só concatena tudo)', () => {
   const src = fs.readFileSync(new URL('../dados/src/index.js', import.meta.url), 'utf8');
-  const linhas = src.split('\n');
-  const inicios = [linhas.findIndex((l) => /^\s*case 'menu':/.test(l)), linhas.findIndex((l) => /async function sendMenuWithMedia/.test(l))];
-  const problemas = [];
-  for (const ini of inicios) {
-    if (ini < 0) continue;
-    // janela generosa: o case 'menu' termina antes de `case 'alteradores'`
-    for (let i = ini; i < ini + 200 && i < linhas.length; i++) {
-      if (/^\s*case '/.test(linhas[i]) && i > ini) break;
-      if (/quoted: info/.test(linhas[i])) problemas.push(i + 1);
-    }
-  }
-  eq(problemas.length, 0, `nenhum \`quoted: info\` nos blocos de menu (achados nas linhas ${problemas.join(', ')})`);
+  contem(src, '${menuParts.visible}${lerMaisPrefix}${menuParts.rest}', 'composição no case menu');
+  contem(src, 'menuPartsFb.visible', 'composição no fallback');
+  const idxV = src.indexOf('${menuParts.visible}');
+  const idxL = src.indexOf('${lerMaisPrefix}');
+  const idxR = src.indexOf('${menuParts.rest}');
+  ok(idxV < idxL && idxL < idxR, 'ordem visible < lerMais < rest');
 });
 
-await test('7. TODOS os envios de menu carregam contextInfo (nenhum ficou sem)', () => {
+await test('14. os menus temáticos NÃO perderam o "ler mais"', () => {
   const src = fs.readFileSync(new URL('../dados/src/index.js', import.meta.url), 'utf8');
-  const linhas = src.split('\n');
-  const ini = linhas.findIndex((l) => /^\s*case 'menu':/.test(l));
-  const semCtx = [];
-  for (let i = ini; i < ini + 200 && i < linhas.length; i++) {
-    if (/^\s*case '/.test(linhas[i]) && i > ini) break;
-    if (/await nazu\.sendMessage/.test(linhas[i])) {
-      const bloco = linhas.slice(i, i + 14).join('\n');
-      if (!bloco.includes('newsletterContext')) semCtx.push(i + 1);
-    }
-  }
-  eq(semCtx.length, 0, `todo envio do menu tem newsletter (faltou nas linhas ${semCtx.join(', ')})`);
+  const i = src.indexOf('async function sendMenuWithMedia');
+  ok(i > 0, 'achou o helper');
+  const bloco = src.slice(i, i + 5000);
+  contem(bloco, 'lerMaisPrefix + menuText', 'o helper aplica o ler mais');
 });
 
 // ============================================================================
