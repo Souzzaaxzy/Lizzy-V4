@@ -790,16 +790,16 @@ await teste('49. PLACAR: ataques conhecidos são detectados (recall)', () => {
   eq(fn, 0, 'zero falso negativo');
 });
 
-await teste('50. sendPaymentMessage (amostra real) e SUSPEITA, nunca FORTE', () => {
-  // Reproduz o `sendPaymentMessage` da amostra do dono: id `_L0`, nota com
-  // "." + zero-width, 6 menções, transactionData Java. NÃO é o raja (que é
-  // requestPaymentMessage + amount zero), mas é um card de pagamento
-  // estruturalmente incompleto — SUSPEITA, nunca FORTE.
+await teste('50. raja real (sendPaymentMessage + nota invisível) e FORTE', () => {
+  // Reproduz o `sendPaymentMessage` do dono: id `_L0`, nota com "." + zero-width,
+  // 6 menções, transactionData Java. Depois da comparação com o !rajar, este é o
+  // formato do raja REAL — assinatura de ENVELOPE VAZIO, FORTEMENTE COMPATÍVEL.
   const nota = { extendedTextMessage: { text: `.${'\u200b'.repeat(7)}`, contextInfo: { mentionedJid: Array.from({ length: 6 }, (_, i) => `5511900000${i}@s.whatsapp.net`), groupMentions: [], statusAttributions: [], nonJidMentions: 1 } } };
   const msg = { key: { remoteJid: null, id: 'A7E2D294EC0FD01967CCAE5DDF28C0048_L0', participant: '132161176899607@lid' }, message: { sendPaymentMessage: { noteMessage: nota, transactionData: 'AAAA' } } };
   const r = analyzeInvisibleMessage({ info: msg });
-  eq(r.classification, 'SUSPEITA', 'suspeita (não forte)');
-  eq(r.detected, true, 'marcado como suspeito');
+  eq(r.classification, 'FORTEMENTE_COMPATIVEL', 'fortemente compatível');
+  eq(r.detected, true, 'detectado');
+  eq(r.correlation.assinaturaEnvelopeVazio, true, 'assinatura de envelope vazio');
   eq(r.payment.disponivel, true, 'payment reconhecido');
   eq(r.payment.requestPayment, false, 'não é request');
   eq(r.payment.anomaliaZero, false, 'sendPaymentMessage não tem amount — zero não é avaliado');
@@ -809,16 +809,40 @@ await teste('50. sendPaymentMessage (amostra real) e SUSPEITA, nunca FORTE', () 
   eq(r.payment.nota.invisiveis, 7, 'conta os zero-width factuais');
   eq(r.payment.nota.semConteudoVisivel, true, 'nota sem conteúdo visível');
   eq(r.key.sufixoHistorico, '_L0', 'sufixo de histórico detectado');
-  ok(r.indicators.some((i) => i.id === 'INV-021'), 'INV-021 presente');
-  ok(r.indicators.some((i) => i.id === 'INV-020'), 'INV-020 presente (com outro indicador)');
+  ok(r.indicators.some((i) => i.id === 'INV-023'), 'INV-023 é a assinatura');
   ok(r.indicators.some((i) => i.id === 'INV-022'), 'INV-022 presente');
-  ok(!r.indicators.some((i) => i.id === 'INV-019'), 'não é card zerado de request');
-  ok(!r.indicators.some((i) => i.id === 'INV-007'), 'não é a rajada');
+  ok(r.indicators.some((i) => i.id === 'INV-021'), 'INV-021 presente');
+  ok(!r.indicators.some((i) => i.id === 'INV-020'), 'INV-020 não duplica a assinatura do sendPaymentMessage');
+  ok(!r.indicators.some((i) => i.id === 'INV-007'), 'não é a rajada de request');
   eq(r.context.disponivel, true, 'contextInfo encontrado dentro da nota');
   contem(r.context.caminho, 'noteMessage', 'caminho correto');
   eq(r.context.mencoes, 6, 'menções lidas');
   const txt = formatInvisibleSection(r);
   contem(txt, 'requestMessageKey: AUSENTE', 'a seção mostra a ausência');
+  contem(txt, 'Envelope vazio: Sim', 'a conclusão mostra a assinatura');
+});
+
+await teste('55. o payload do !rajar é reconhecido como o raja real', () => {
+  // `buildRajaContent` (index.js ~382) monta exatamente este formato. O teste
+  // trava a fidelidade: o que o `!rajar` envia tem de disparar a assinatura.
+  const rajar = {
+    sendPaymentMessage: {
+      noteMessage: { extendedTextMessage: { text: 'meu texto do raja', contextInfo: { mentionedJid: ['1@s.whatsapp.net', '2@s.whatsapp.net'] } } },
+    },
+  };
+  const r = analyzeInvisibleMessage({ info: { key: { remoteJid: 'g@g.us', fromMe: true, id: '3EB0AABBCCDDEEFF112233', participant: '111@lid' }, message: rajar } });
+  eq(r.payment.tipoPrincipal, 'sendPaymentMessage', 'tipo do payload do !rajar');
+  eq(r.payment.requestPayment, false, 'não é requestPaymentMessage');
+  // Texto VISÍVEL no payload: o `!rajar` manda o texto do usuário. Então a
+  // assinatura de envelope vazio NÃO dispara — o que o `!rajar` gera é o
+  // transporte; a invisibilidade vem do texto que o dono salva.
+  eq(r.correlation.assinaturaEnvelopeVazio, false, 'texto visível não é envelope vazio');
+  ok(r.classification !== 'FORTEMENTE_COMPATIVEL', 'texto visível não vira forte');
+  // E com o texto invisível (o que o raja real carrega), dispara.
+  const invisivel = { sendPaymentMessage: { noteMessage: { extendedTextMessage: { text: `.${'\u200b'.repeat(7)}` } } } };
+  const r2 = analyzeInvisibleMessage({ info: { key: { remoteJid: 'g@g.us', fromMe: true, id: '3EB0AABBCCDDEEFF112244', participant: '111@lid' }, message: invisivel } });
+  eq(r2.correlation.assinaturaEnvelopeVazio, true, 'texto invisível dispara a assinatura');
+  eq(r2.classification, 'FORTEMENTE_COMPATIVEL', 'é o raja');
 });
 
 await teste('54. par raja × normal do MESMO grupo: o ID distingue', () => {

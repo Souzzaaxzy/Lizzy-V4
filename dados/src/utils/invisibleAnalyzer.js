@@ -85,6 +85,7 @@ export const INDICADORES = Object.freeze({
   INV_020: { id: 'INV-020', nome: 'Nota com texto sem conteudo visivel', categoria: 'payment', severidade: 'media', peso: 2, descricao: 'O texto da NOTA existe mas so tem espaco/zero-width: o cliente desenha ~nada. Sozinho e ambiguo (varios envios usam caracteres invisiveis para "vazio"); pesa apenas quando ja ha outro indicador de pagamento na mesma mensagem.' },
   INV_021: { id: 'INV-021', nome: 'ID com sufixo de fonte/historico', categoria: 'estrutura', severidade: 'baixa', peso: 1, descricao: 'ID no formato `<id>_L0` (sufixo de origem/historico). Nao e o formato dos clientes (`3EB0...`) e pode indicar historico/relay, nao um envio direto. Ambiguo: nao e prova de nada.' },
   INV_022: { id: 'INV-022', nome: 'sendPaymentMessage sem referencia ao pedido', categoria: 'payment', severidade: 'media', peso: 3, descricao: 'O proto `SendPaymentMessage` tem `requestMessageKey` — o ponteiro para o pedido que este envio responde. Aqui ele esta AUSENTE e nao ha `amount` nenhum: o card nao responde a pedido algum e nao carrega valor. Severidade MEDIA de proposito: o campo existe no proto, mas nao ha amostra benigna confirmada que prove que ele sempre acompanha um envio legitimo — entao isto corrobora, nao prova.' },
+  INV_023: { id: 'INV-023', nome: 'Envelope de pagamento com texto invisivel', categoria: 'payment', severidade: 'alta', peso: 6, descricao: 'ASSINATURA MEDIDA do raja: `sendPaymentMessage` cuja nota carrega texto INVISIVEL (`.` + zero-width). O `sendPaymentMessage` e o tipo de um envio de pagamento e, sozinho, nao carrega `amount` — com a nota invisivel, o card nao mostra nada e o texto viaja escondido. Confirmado contra o raja REAL e contra o espelho que o `!rajar` monta.' },
 });
 
 const AMBIGUOS = new Set(['INV-010', 'INV-011']); // stub/LID sozinhos -> nunca elevam
@@ -894,12 +895,19 @@ export function correlacionar(analises = {}) {
   // ── Descriptografia / transporte ─────────────────────────────────────────
   if (stub?.vaziaTecnicamente) push('INV_010', `stub ${stub.tipoLabel}${stub.parametros[0] ? `: ${stub.parametros[0]}` : ''}`);
 
-  // Nota com texto so de espaco/zero-width: AMBIGUO. Diferente do stub, varias
-  // ferramentas usam caracteres invisiveis para "campo vazio" (esta amostra e um
-  // envio de pagamento legitimo). Por isso o peso conta apenas quando JA existe
-  // outra evidencia na MESMA mensagem (nunca sozinha).
-  if (payment?.nota?.semConteudoVisivel && indicadores.length > 0) {
+  // Nota com texto so de espaco/zero-width. Ambiguo QUANDO SOZINHO (varias
+  // ferramentas usam caracteres invisiveis para "campo vazio"), mas quando o
+  // tipo e `sendPaymentMessage` isto VIRA a assinatura do raja (INV-023) — por
+  // isso o INV-020 so entra nos demais tipos.
+  if (payment?.nota?.semConteudoVisivel && payment?.tipoPrincipal !== 'sendPaymentMessage' && indicadores.length > 0) {
     push('INV_020', `nota com ${payment.nota.tamanho} chars, nenhum visível`);
+  }
+
+  // ASSINATURA do raja REAL medido: envelope de pagamento (sendPaymentMessage)
+  // com a nota carregando apenas texto invisivel. O tipo nao tem `amount`, entao
+  // o card nao tem o que mostrar e so a nota (escondida) existe.
+  if (payment?.tipoPrincipal === 'sendPaymentMessage' && payment?.nota?.semConteudoVisivel) {
+    push('INV_023', `sendPaymentMessage com nota de ${payment.nota.tamanho} chars, ${payment.nota.invisiveis} invisível(is)`);
   }
 
   // ── ID com sufixo de fonte/historico (`..._L0`) ──────────────────────────
@@ -927,20 +935,26 @@ export function correlacionar(analises = {}) {
   );
 
   // Duas assinaturas se sustentam por si (combinacao de campos):
-  //  - conteudo: pagamento zerado COM texto na nota (a rajada) — o card nao
-  //    renderiza E carrega uma mensagem escondida;
+  //  - conteudo: pagamento zerado COM texto na nota (o raja "de CONTEUDO", no
+  //    requestPaymentMessage) — o card nao renderiza E carrega uma mensagem;
+  //  - ENVELOPE VAZIO: `sendPaymentMessage` com a nota de texto INVISIVEL. Este
+  //    e o tipo do raja REAL medido (o `!rajar` tambem passou a usar): o
+  //    `sendPaymentMessage` e o tipo de um envio de pagamento e, sozinho, nao
+  //    carrega `amount` — com a nota invisivel, o card nao mostra nada e o texto
+  //    viaja escondido.
   //  - transporte: report de distribuicao seletiva da fork + falha de decifragem
   //    + corroboracao ESTRUTURAL (phash ausente / densidade baixa / SKDM fresco).
-  //    O report sozinho e controlado pelo remetente; exigir o sinal estrutural
-  //    evita falso positivo em fluxo benigno que tambem carrega decrypt-fail.
   const assinaturaConteudo = Boolean(payment?.anomaliaZero && payment?.nota?.texto);
+  const assinaturaEnvelopeVazio = Boolean(
+    payment?.tipoPrincipal === 'sendPaymentMessage' && payment?.nota?.semConteudoVisivel,
+  );
   const assinaturaTransporte = Boolean(distribution?.disponivel && distribution.seletiva && decryption?.falha && estrutural);
 
   let classificacao;
   if (!key?.disponivel && !contentDisponivel) {
     // Nada observavel: nunca inventar conclusao.
     classificacao = 'INCONCLUSIVA';
-  } else if (assinaturaConteudo || assinaturaTransporte) {
+  } else if (assinaturaConteudo || assinaturaEnvelopeVazio || assinaturaTransporte) {
     classificacao = 'FORTEMENTE_COMPATIVEL';
   } else if (estrutural) {
     // Qualquer evidencia estrutural (phash ausente/densidade baixa/SKDM fresco)
@@ -989,6 +1003,7 @@ export function correlacionar(analises = {}) {
     ambiguos: indicadores.filter((i) => AMBIGUOS.has(i.id)),
     temEvidenciaEstrutural: estrutural,
     assinaturaConteudo,
+    assinaturaEnvelopeVazio,
     assinaturaTransporte,
     classificacao,
   };
@@ -998,7 +1013,7 @@ export function correlacionar(analises = {}) {
  * Concatena a conclusao tecnica em frases curtas, explicando POR QUE a
  * mensagem foi classificada assim (a pergunta "de onde veio isso?").
  */
-export function construirExplicacao({ classificacao, indicadores, distribution, payment, decryption, lid }) {
+export function construirExplicacao({ classificacao, indicadores, distribution, payment, decryption, lid, assinaturaEnvelopeVazio }) {
   const linhas = [];
   if (classificacao === 'NORMAL') {
     linhas.push('Nenhuma caracteristica relevante encontrada. Mensagem compativel com o fluxo normal.');
@@ -1007,6 +1022,9 @@ export function construirExplicacao({ classificacao, indicadores, distribution, 
   const nomes = indicadores.map((i) => i.nome);
   if (classificacao === 'FORTEMENTE_COMPATIVEL') {
     linhas.push('Padrao correspondente ao detector conhecido: houve combinacao de indicadores, nenhum deles isolado.');
+    if (assinaturaEnvelopeVazio) {
+      linhas.push('Assinatura de ENVELOPE VAZIO: `sendPaymentMessage` (tipo de um envio de pagamento, que NAO carrega `amount`) com a nota carregando apenas texto invisivel — o card nao mostra nada e o texto viaja escondido. E o formato do raja real, o mesmo que o `!rajar` monta.');
+    }
     if (payment?.anomaliaZero && payment?.nota?.texto) {
       linhas.push('Assinatura de CONTEUDO: card de pagamento sem valor (zero em `' + payment.zeroPath + '`) COM texto na nota — e o formato que faz o WhatsApp nao renderizar a mensagem.');
     }
@@ -1075,6 +1093,7 @@ export function analyzeInvisibleMessage(entrada = {}) {
     classificacao: correlacao.classificacao,
     indicadores: correlacao.indicadores,
     distribution: distA, payment: payA, decryption: decA, lid: lidA,
+    assinaturaEnvelopeVazio: correlacao.assinaturaEnvelopeVazio,
   });
 
   return {
@@ -1115,6 +1134,7 @@ export function analyzeInvisibleMessage(entrada = {}) {
       indice: correlacao.indice,
       estrutural: correlacao.temEvidenciaEstrutural,
       assinaturaConteudo: correlacao.assinaturaConteudo,
+      assinaturaEnvelopeVazio: correlacao.assinaturaEnvelopeVazio,
       assinaturaTransporte: correlacao.assinaturaTransporte,
     },
     explanation: explicacao,
@@ -1301,7 +1321,7 @@ export function formatInvisibleSection(resultado, opts = {}) {
   push('🧠 CONCLUSÃO TÉCNICA');
   for (const linha of R.explanation || []) push(`• ${linha}`);
   if (R.correlation) {
-    push(`• Evidência estrutural: ${bool(R.correlation.estrutural)} | Assinatura de conteúdo: ${bool(R.correlation.assinaturaConteudo)} | Assinatura de transporte: ${bool(R.correlation.assinaturaTransporte)}`);
+    push(`• Evidência estrutural: ${bool(R.correlation.estrutural)} | Assinatura de conteúdo: ${bool(R.correlation.assinaturaConteudo)} | Envelope vazio: ${bool(R.correlation.assinaturaEnvelopeVazio)} | Assinatura de transporte: ${bool(R.correlation.assinaturaTransporte)}`);
   }
   if (R.limitations?.length) {
     push('');

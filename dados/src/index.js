@@ -381,17 +381,13 @@ function scheduleInvisibleCleanup(nazu, ctx) {
  */
 function buildRajaContent(text, mentions = []) {
   return {
-    requestPaymentMessage: {
-      currencyCodeIso4217: 'BRL',
-      amount1000: '0',
-      expiryTimestamp: '0',
+    sendPaymentMessage: {
       noteMessage: {
         extendedTextMessage: {
           text,
           contextInfo: { mentionedJid: [...mentions] },
         },
       },
-      amount: { value: '0', offset: 1000, currencyCode: 'BRL' },
     },
   };
 }
@@ -406,11 +402,13 @@ function buildRajaContent(text, mentions = []) {
  */
 function logRajaEnvio(content, mentions, msgId) {
   const bytes = Buffer.byteLength(JSON.stringify(content), 'utf8');
+  // O payload agora é `sendPaymentMessage` (é o tipo do raja REAL medido) —
+  // não há `requestPaymentMessage.amount1000` para ler. Logamos o que existe.
+  const tipo = Object.keys(content).join(',');
+  const nota = content.sendPaymentMessage?.noteMessage?.extendedTextMessage?.text ?? '';
   console.log(
     `[RAJA] enviado | id=${msgId} | bytes=${bytes} | mencoes=${mentions.length} | ` +
-    `amount1000=${content.requestPaymentMessage.amount1000} | ` +
-    `amount.value=${content.requestPaymentMessage.amount.value} | ` +
-    `tipos=${Object.keys(content).join(',')}`
+    `tipo=${tipo} | chars_nota=${nota.length} | zero_width=${(nota.match(/[\u200b-\u200f\u2060\ufeff]/g) || []).length}`
   );
 }
 

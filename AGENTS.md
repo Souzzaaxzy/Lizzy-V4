@@ -3157,3 +3157,81 @@ também nesse tipo. Fica como próximo passo, não como afirmação.
 agora SUSPEITA com `requestMessageKey` ausente, e o **par raja×normal do mesmo
 grupo** provando que o ID distingue). Regressões: `get-message-inspector` 54/269,
 `antifantasma-classificacao` 18/18, `ghost-detection` 24/81, `anti-seletiva` 32/32.
+
+## 🚨 O TIPO WAS: `!rajar` mandava `requestPaymentMessage`, o raja REAL é `sendPaymentMessage` ✅
+O dono corrigiu o rumo: *"payment não é a mensagem invisível — olhe o `!rajar` e
+compare"*. A comparação derrubou a premissa em que o analisador (e o próprio
+`!rajar`) se apoiavam desde o começo.
+
+### O que o `!rajar` mandava (`buildRajaContent`, `index.js` ~382)
+```js
+requestPaymentMessage: {
+  currencyCodeIso4217: 'BRL', amount1000: '0', expiryTimestamp: '0',
+  noteMessage: { extendedTextMessage: { text, contextInfo: { mentionedJid } } },
+  amount: { value: '0', offset: 1000, currencyCode: 'BRL' },
+}
+```
+### O que o raja REAL é (medido nos 3 GOTs do dono)
+```js
+sendPaymentMessage: {
+  noteMessage: { extendedTextMessage: { text: ".<7x U+200B>", contextInfo: { mentionedJid: [6] } } },
+  transactionData: "<1024B, Java serializado>",
+}
+```
+
+**É outro TIPO.** O `amount1000: '0'`/`amount.value: '0'` que fundamentava todo o
+detector **não existe no raja real** — é uma assinatura que nunca esteve lá.
+Isso explica por que o `!rajar` nunca reproduzia o efeito e por que a detecção
+não pegava.
+
+### A assinatura real (confirmada por encode)
+`SendPaymentMessage` (`WAProto`) tem **4 campos**: `noteMessage`,
+`requestMessageKey`, `background`, `transactionData`. O raja carrega **2**:
+- **`noteMessage`** — com o texto **invisível** (`.` + zero-width);
+- **`transactionData`** — 1024 B; contém `BigDecimal` + o **id da própria
+  mensagem** + o **jid do grupo** (não é chave/credencial).
+
+E **não** carrega `requestMessageKey` (o ponteiro para o pedido) nem `amount`.
+Ou seja: é um **envelope de pagamento VAZIO** — o tipo é de um envio de pagamento,
+não tem valor para desenhar, e a única coisa com conteúdo é a nota — escondida.
+
+### O `!rajar` foi corrigido
+`buildRajaContent` passou a montar `sendPaymentMessage` com a nota. Confirmado com
+`generateWAMessageFromContent` + encode: o tipo no wire é `sendPaymentMessage`
+(exatamente o do raja real), **sem precisar de mudança na fork**. O
+`logRajaEnvio` deixou de ler `requestPaymentMessage.amount1000` (que não existe
+mais no payload) e passou a logar `tipo`/`chars_nota`/`zero_width`.
+
+### Análise: nova assinatura `INV-023`
+- **`INV-023` — Envelope de pagamento com texto invisível** (peso 6, **alta**):
+  `sendPaymentMessage` cuja nota só tem texto invisível. É a assinatura medida.
+- `INV-020` (nota sem conteúdo visível) agora **só vale fora do
+  `sendPaymentMessage`** — senão duplicaria a assinatura.
+- Nova assinatura entra em `correlation.assinaturaEnvelopeVazio`, exibida na
+  conclusão como **"Envelope vazio: Sim"**.
+
+### Placar
+| | antes | agora |
+|---|---|---|
+| raja real | ATÍPICA 13/100 | **FORTEMENTE COMPATÍVEL 44/100** |
+| normal (`conversation: ok`) | NORMAL 0/100 | NORMAL 0/100 |
+
+Indicadores do raja: `INV-023` (6) + `INV-022` (3) + `INV-021` (1) = **10**, e a
+assinatura dispara → FORTE. O que o `!rajar` envia com **texto visível** →
+`assinaturaEnvelopeVazio: false` → não vira forte (correto: a invisibilidade vem
+do texto, não do transporte).
+
+### Lição (registrada para não repetir)
+Duas rodadas de análise foram construídas sobre a premissa
+"requestPaymentMessage + amount 0", documentada no AGENTS.md como a "amostra
+real". **A premissa nunca esteve certa.** O que a corrigiu foi o dono mandar o
+**par raja × normal** *e* apontar o `!rajar`: sem a comparação do tipo, o
+`amount1000: "0"` parecia evidência convincente.
+
+**Testes**: 55 testes / 441 asserções (`invisible-analyzer`), incluindo o payload
+do `!rajar` e o par raja×normal. `tests/raja-selective.test.js` **23/0** (as duas
+asserções que checavam `requestPaymentMessage` foram atualizadas para
+`sendPaymentMessage`). Regressões: `get-message-inspector` 54/269,
+`antifantasma-classificacao` 18/18, `ghost-detection` 24/81, `anti-seletiva` 32/32.
+`rajar.test.js` (6 falhas) e `defensive-protection.test.js` (24) continuam
+**pré-existentes** — verificados na baseline.
