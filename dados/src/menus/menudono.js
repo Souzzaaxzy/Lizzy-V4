@@ -275,6 +275,13 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 │    Definir a URL do servidor
 │    (sem url: ver | 'limpar' p/ automático)
 ╰──────────────
+
+
+╭─❖ 🧪 TESTES EXPERIMENTAIS
+│ 🧪 ${prefix}testverify
+│    🧪 Teste experimental de MarkAsVerifiedAction
+│    (envia a action; não garante selo)
+╰──────────────
 ╭─────────────────╮
 ╰─────────────────╯
 `;

@@ -40091,6 +40091,115 @@ agora todo ataque fantasma sera detectado e banido automaticamente\`);
           await reply('❌ Não foi possível definir a URL do servidor.');
         }
         break;
+
+      // ── 🧪 TESTVERIFY — EXPERIMENTO (exclusivo do dono) ──────────────────
+      //
+      // Envia uma `MarkAsVerifiedAction` pelo caminho REAL que a investigação
+      // apontou: um `ProtocolMessage` (type 36, campo 32). NÃO é App State, NÃO
+      // é mutation, NÃO cria user verificado.
+      //
+      // O comando é um INSTRUMENTO de teste. Ele não afirma que existe efeito:
+      // o schema e o comportamento observado mandam, não o nome da action. Por
+      // isso a resposta usa as classificações de RESULTADO (ENVIADO / ACK) e
+      // separa explicitamente "envio" de "efeito".
+      case 'testverify':
+        try {
+          if (!canUseOwnerCmd('testverify')) {
+            return reply('Este comando é apenas para o dono do bot!');
+          }
+
+          // Fonte única de verdade do schema, direto do WAProto instalado.
+          const mvaType = proto.Message.ProtocolMessage.Type.MARK_AS_VERIFIED_ACTION;
+          const temCampo = Boolean(proto.Message.MarkAsVerifiedAction);
+          const temHelper = typeof nazu.sendMarkAsVerifiedAction === 'function';
+
+          const debug = /^debug$/i.test(String(q || '').trim());
+
+          // O alvo: menção > resposta > o próprio remetente. Nunca inventa.
+          const alvo = menc_os2 || sender;
+          if (!alvo) return reply('❌ Não consegui identificar o alvo.');
+
+          // Tipo do JID: informativo. A action aceita PN ou LID; NÃO convertemos
+          // entre eles (isso seria um palpite que a evidência não sustenta).
+          const tipoJid = String(alvo).endsWith('@lid') ? 'LID' : 'PN';
+
+          // NÃO fabricamos `verifiedIdentityKey`. A action tem esse campo, mas
+          // não há evidência de origem legítima para ele, e chutar bytes é
+          // proibido. Sem o dado, o campo simplesmente não vai.
+          const identityKey = null;
+
+          if (debug) {
+            return nazu.sendMessage(from, {
+              text: [
+                '🧪 *TESTVERIFY — DEBUG*',
+                '',
+                `PROTO: ${temCampo ? 'encontrado' : 'AUSENTE'}`,
+                'ACTION: MarkAsVerifiedAction',
+                `TYPE: MARK_AS_VERIFIED_ACTION (${mvaType ?? '?'})`,
+                'CAMPO PAI: ProtocolMessage.markAsVerifiedAction = 32',
+                `TARGET: @${String(alvo).split('@')[0]} (${tipoJid})`,
+                `HELPER: ${temHelper ? 'disponível' : 'AUSENTE na fork instalada'}`,
+                `identityKey: ${identityKey ? '[fornecida]' : '[AUSENTE — não fabricada]'}`,
+                '',
+                'TRANSPORTE: relayMessage (ProtocolMessage)',
+                'APP STATE: NÃO utilizado (a action não é um SyncActionValue)',
+              ].join('\n'),
+              mentions: [alvo],
+            }, { quoted: info });
+          }
+
+          if (!temCampo || mvaType !== 36) {
+            return reply(
+              '❌ O WAProto instalado não expõe `MarkAsVerifiedAction` (type 36).\n\n' +
+              'Instale a fork no commit que traz o schema e tente de novo.'
+            );
+          }
+
+          if (!temHelper) {
+            return reply(
+              '❌ A fork instalada não expõe `sendMarkAsVerifiedAction`.\n\n' +
+              'O schema existe, mas o helper de envio não — atualize a dependência.'
+            );
+          }
+
+          // Se o envio for tentado, informa ANTES que é experimental. O dono não
+          // deve achar que isso pinta selo.
+          await reply(
+            '🧪 *TESTE EXPERIMENTAL*\n\n' +
+            `🎯 Alvo: @${String(alvo).split('@')[0]} (${tipoJid})\n` +
+            '📦 Envelope: ProtocolMessage type 36\n\n' +
+            'Enviando... (isto NÃO é um comando de verificação e não garante selo)',
+            { mentions: [alvo] }
+          );
+
+          const res = await nazu.sendMarkAsVerifiedAction({
+            userJidString: alvo,
+            // `verified` e `actionSeq` omitidos de propósito: não há evidência
+            // de qual valor o servidor espera, e mandar um chute é pior que
+            // mandar ausente (ausente != false).
+            messageId: generateRajaMessageId ? generateRajaMessageId() : undefined,
+          });
+
+          const linhas = [
+            '🧪 *RESULTADO DO EXPERIMENTO*',
+            '',
+            'ACTION: MarkAsVerifiedAction',
+            `ENVIO: ${res.ok ? 'OK' : 'FALHA'}`,
+            'ACK: não observável por este caminho',
+            '',
+            'Resultado funcional: NÃO CONFIRMADO.',
+            'O ACK (quando houver) é de transporte — não significa que o',
+            'WhatsApp aplicou qualquer verificação visual.',
+          ];
+          if (res.error) {
+            linhas.push('', `⚠️ Detalhe: ${String(res.error).slice(0, 200)}`);
+          }
+          await nazu.sendMessage(from, { text: linhas.join('\n') });
+        } catch (e) {
+          console.error('[TESTVERIFY] Erro:', e?.message || e);
+          await reply('❌ Não foi possível executar o experimento.');
+        }
+        break;
       default:
         if (isCmd) {
           const cmdNotFoundConfig = loadCmdNotFoundConfig();
