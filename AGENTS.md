@@ -2249,6 +2249,62 @@ o vídeo ou estourava, ou era descartado em silêncio. Quatro correções, em
   o fake que manda JID em `mentionedJid` faz tudo não casar.
   Verificado revertendo os fixes: **19 asserções falham** com o código antigo.
 
+### O QUE A ACTION REALMENTE É (pesquisa + testes locais, set/2026) ✅
+Pesquisa na internet + testes locais (`tests/testverify-what-it-does.test.js`,
+**18 asserções**). A conclusão muda o entendimento do recurso.
+
+**Há DOIS sistemas de "verified" no WhatsApp, e a action NÃO é o selo:**
+
+| | **Selo** (OBA / Meta Verified) | **Esta action** |
+|---|---|---|
+| Domínio | business | E2E / identidade |
+| Campos | `verifiedName`, `vnameCert`, `vlevel` | `verifiedIdentityKey`, `actionSeq` |
+| Como se obtém | **verificação de negócio pela Meta** (documentação pública: exige notabilidade, 3–5 matérias de imprensa) | troca de chaves / key transparency |
+| Escopo | a **conta** | a **conversa** |
+| Identifica uma chave? | **não** | **sim** (`verifiedIdentityKey`) |
+| Tem sequência de mudança? | **não** | **sim** (`actionSeq`) |
+
+**Evidência local que sustenta isso** (não é opinião):
+- `proto.BizIdentityInfo` (o selo) tem `vlevel`/`vnameCert` e **não** tem
+  `verifiedIdentityKey` nem `actionSeq` — logo o selo não é uma mudança de chave;
+- `MarkAsVerifiedAction` tem `userJidString` + `verifiedIdentityKey` + `actionSeq`
+  — identifica **pessoa + chave + mudança**, que é a assinatura de verificação de
+  identidade E2E;
+- os campos da action **não** incluem `verifiedName`/`vnameCert` (o que o selo
+  exigiria), e nenhum campo é de negócio.
+
+**Pistas de nome (as mais fortes):** o bundle do WhatsApp Web tem
+`PrefilledButtonType.VERIFIED_STATE_NON_ADMIN` e `VERIFIED_STATE_ADMIN` — "estado
+de verificação da **conversa**". E existe o campo `identityVerification` em
+`Conversation` (domínio de App State / metadata). Nada disso é selo de perfil.
+
+**Corroboração externa (documentação pública):**
+- **Key Transparency / AKD** (Meta, 2023): o cliente **verifica
+  automaticamente** que a **identity key** do contato bate com o diretório
+  auditável. A "tela de verificação" passa a mostrar o resultado **sozinha**.
+  Isso explica exatamente um `verified` sobre **identidade**, com
+  `verifiedIdentityKey` e uma **sequência** (`actionSeq`) de mudanças.
+- O **selo** (OBA / Meta Verified) é outra coisa: verificação de negócio,
+  concedida pela Meta — e **nenhum** campo da action expressa isso.
+
+**DUAS conclusões práticas, e ambas importam:**
+
+1. **É uma ação de ENTRADA (servidor → cliente).** No bundle do WhatsApp Web as
+   **3 ocorrências** de `markAsVerifiedAction` são **só o schema**; não há
+   **nenhum consumidor** (`markAsVerifiedAction(` = 0, `chat.markAsVerifiedAction`
+   = 0). Quem processa é o **recebimento**. Não é uma ação que o cliente
+   *origina* — então enviá-la de um bot não tem efeito esperado, porque a
+   verificação é do **provedor** (a Meta consulta o AKD e notifica o cliente).
+2. **Por isso o comando não pode "dar" verificação.** Um bot não verifica a
+   chave de um contato *para o contato* — quem faz isso é o AKD do servidor.
+
+**Estado do `!testverify`:** continua sendo o **instrumento de observação**
+(correto e útil para capturar uma action dessas se ela chegar), com a
+classificação **⚪ INCONCLUSIVO** e a relação com selo oficial **NÃO CONFIRMADA**.
+O que a pesquisa acrescenta é o **mecanismo**: é verificação de identidade
+E2E/key-transparency, e é **inbound**. Não vou afirmar efeito sem medição em
+cliente real.
+
 ## COMANDO `!testverify` — EXPERIMENTO de MarkAsVerifiedAction ✅
 Investigação + implementação experimental pedidas pelo dono. O comando existe
 para **descobrir** o comportamento da action, não para "dar selo".
