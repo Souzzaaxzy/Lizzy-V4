@@ -3302,3 +3302,67 @@ porque usa a assinatura `INV-023` (tipo + nota invisível), que **não** depende
 `0n` não aparece). Regressões todas verdes: `get-message-inspector` 54/269,
 `raja-selective` 23/0, `antifantasma-classificacao` 18/18,
 `ghost-detection` 24/81, `anti-seletiva` 32/32.
+
+## `!get` — `transactionData` decodificado: timestamp em ms + BigDecimal 0 (set/2026) ✅
+3ª amostra do dono (`AE043D49…_L0`), mesmo formato `sendPaymentMessage`. A
+decodificação do `transactionData` avançou: agora extrai **dois campos com
+leitura verificada**, em vez de só listar strings.
+
+### O que o `transactionData` é (formato medido)
+Registro BinFmt com blocos aninhados. Estrutura confirmada nas 3 amostras:
+
+```
+offset   0  preâmbulo (04 00 00 00 … + máscara ff…)
+offset  16  uint32 len + "XXX" (UTF-16LE)
+offset  48  uint32 len + "<id>_L0"        <- id da PRÓPRIA mensagem
+offset 144  uint32 len + "<grupo>@g.us"   <- jid do grupo
+offset 200  uint64 LE                      <- TIMESTAMP EM MS
+offset 212  uint32 len + "UNSET"
+offset 256  uint32 len + "X.0x9"
+offset 380  AC ED 00 05  (BigDecimal, 1º bloco Java)
+offset 728  AC ED 00 05  (BigDecimal, 2º bloco Java)
+```
+
+**Campo novo: timestamp em milissegundos.** Nas 3 amostras o valor termina em
+`000` — ou seja, é **segundos × 1000**:
+
+| amostra | ts do tx | ts da mensagem (envelope) | Δ |
+|---|---|---|---|
+| `ADBA604E` | 1790101849000 | 1790108013 | 6164 s |
+| `A7E2D294` | 1790101848000 | 1790105873 | 4025 s |
+| `AE043D49` | 1790109070000 | 1790109509 | 439 s |
+
+### `BigDecimal` = zero (medição, não suposição)
+Os dois blocos Java são `java.math.BigDecimal` com `intVal` do tipo
+`java.math.BigInteger`. O `BigInteger` serializa a **magnitude** como `byte[]`
+(`75 72 00 02 5b 42` + `78 70` + length). Nas 3 amostras o **length é 0** →
+magnitude vazia → **BigInteger zero**. O `BigDecimal` que o `sendPaymentMessage`
+carrega é **0**.
+
+### O que o `!get` passou a mostrar
+```
+🧪 *transactionData (decodificado)*
+• tamanho decodificado: N byte(s)
+• formato: objeto Java serializado (AC ED 00 05) em N bloco(s)
+• strings legíveis: `AE043D49..._L0`, `120363432070074647@g.us`, `UNSET`, `X.0x9`, `java.math.BigDecimal`
+• timestamps em ms encontrados: offset 200 → 1790109070000 (2026-09-22T20:31:10.000Z)
+• BigDecimal.class: 2 ocorrência(s) — intVal com magnitude vazia (BigInteger 0)
+• classes referenciadas: ...
+```
+Nada além disso é interpretado — o que não tem leitura verificada continua
+declarado como não interpretado (sem adivinhar semântica).
+
+### Leitura dos 3 rajas (todos coerentes)
+- **`requestPaymentMessage`** (amostra 1 de outra rodada): card zerado + nota com
+  texto real → **FORTEMENTE COMPATÍVEL 92/100** (assinatura de CONTEÚDO).
+- **`sendPaymentMessage`** (3 amostras): envelope de pagamento sem `amount` e com
+  `requestMessageKey` ausente, nota invisível, `transactionData` com timestamp e
+  BigDecimal 0 → **FORTEMENTE COMPATÍVEL 44/100** (assinatura de ENVELOPE VAZIO,
+  `INV-023`).
+
+**Testes**: 58 testes / 455 asserções (nova regressão: timestamp em ms e
+BigDecimal 0 extraídos do `transactionData`). Regressões verdes:
+`get-message-inspector` 54/269, `raja-selective` 23/0,
+`antifantasma-classificacao` 18/18, `ghost-detection` 24/81,
+`anti-seletiva` 32/32. Escopo: só o `!get` (`messageInspector` +
+`invisibleAnalyzer` + testes) — `index.js` intocado.

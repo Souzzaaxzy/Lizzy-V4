@@ -1032,6 +1032,32 @@ function describeTransactionData(value) {
   if (unicos.length) {
     out.push(`strings legíveis: ${unicos.map((s) => `\`${s}\``).join(', ')}`);
   }
+
+  // Campos numéricos com sinal claro. O `transactionData` é um registro BinFmt
+  // com blocos aninhados; dois campos têm interpretação verificada:
+  //  - um uint64 LE logo após o jid do grupo = timestamp em MILISSEGUNDOS
+  //    (nas 3 amostras o valor termina em 000, ou seja, segundos × 1000);
+  //  - os `BigInteger` são os intVal dos BigDecimal (a magnitude é vazia → zero).
+  // O que não tiver interpretação verificada NÃO é reportado — nada de adivinhar.
+  const tsCands = [];
+  for (let i = 0; i + 8 <= buf.length; i++) {
+    const v = buf.readBigUInt64LE(i);
+    if (v > 1000000000000n && v < 4000000000000n && v % 1000n === 0n) tsCands.push({ i, v: Number(v) });
+  }
+  if (tsCands.length) {
+    // O primeiro candidato de 8 bytes é ruído (faz parte da máscara 0xFFFFFFFF);
+    // os válidos são os que ficam numa faixa de data plausível e alinhados.
+    const uteis = tsCands.filter((c) => new Date(c.v).getUTCFullYear() >= 2010 && new Date(c.v).getUTCFullYear() <= 2100);
+    if (uteis.length) {
+      out.push(`timestamps em ms encontrados: ${uteis.map((c) => `offset ${c.i} → ${c.v} (${new Date(c.v).toISOString()})`).join(' | ')}`);
+    }
+  }
+  // BigDecimal/intVal: `00 00 00 00` (magnitude vazia) = zero.
+  const biMarker = Buffer.from('java.math.BigInteger', 'utf16le');
+  let biCount = 0;
+  let p = -1;
+  while ((p = buf.indexOf(biMarker, p + 1)) !== -1) biCount += 1;
+  if (biCount) out.push(`BigDecimal.class: ${biCount} ocorrência(s) — intVal com magnitude vazia (BigInteger 0)`);
   const classes = [...new Set((() => {
     const s = [];
     let c = '';

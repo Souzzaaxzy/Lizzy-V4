@@ -920,6 +920,30 @@ await teste('53. transactionData é decodificado (Java serializado), sem vazar "
   contem(rep.full, 'não é chave privada', 'deixa claro que não é segredo');
 });
 
+await teste('58. transactionData: timestamp em ms e BigDecimal 0 sao extraidos', async () => {
+  // Regressão: o transactionData é um registro BinFmt. Dois campos têm leitura
+  // verificada e agora aparecem no relatório: o timestamp em ms (uint64 LE logo
+  // após o jid do grupo, sempre segundos × 1000) e os BigDecimal (intVal com
+  // magnitude vazia = zero). Nada além disso é interpretado.
+  const inspector = await import(new URL('../dados/src/utils/messageInspector.js', import.meta.url).href);
+  // Monta um transactionData minimo com o mesmo layout: preâmbulo + jid UTF-16LE
+  // + uint64 LE do timestamp + um classdesc de BigDecimal.
+  const jid = Buffer.from('120363432070074647@g.us', 'utf16le');
+  const lenPrefix = Buffer.alloc(4);
+  lenPrefix.writeUInt32LE(jid.length / 2, 0);
+  const ts = Buffer.alloc(8);
+  ts.writeBigUInt64LE(1790109070000n, 0);
+  const bi = Buffer.from('java.math.BigInteger', 'utf16le');
+  const buf = Buffer.concat([Buffer.alloc(16), lenPrefix, jid, Buffer.from([0, 0, 0, 0, 0, 0, 0, 0]), ts, bi]);
+  const alvo = { sendPaymentMessage: { transactionData: buf.toString('base64') } };
+  const rep = inspector.buildMessageReport({ info: { key: { remoteJid: 'g@g.us', id: 'X' }, message: alvo }, target: alvo, origin: 'contextInfo', extra: {} });
+  contem(rep.full, '120363432070074647@g.us', 'jid legível extraído');
+  contem(rep.full, '1790109070000', 'timestamp em ms extraído');
+  contem(rep.full, '2026-09-22', 'timestamp convertido em data');
+  contem(rep.full, 'BigDecimal.class', 'BigDecimal reportado');
+  contem(rep.full, 'magnitude vazia', 'intVal zerado explicado');
+});
+
 // ============================================================================
 // FINAL
 // ============================================================================
