@@ -4244,13 +4244,19 @@ categoria "INTERAÇÕES PICANTES" do `menubn`). A primeira versão usava `🩻`
    `dados/src/plaq/` e as instruções de configuração — informação de dono, não
    de usuário. O menu agora termina na categoria PLAQUINHA.
 3. **O cabeçalho ganhou um aviso picante** deixando claro que é conteúdo +18:
-   *"🔞 Preparei umas plaquinhas bem safadas pra você..." / "😈 Aqui é só coisa
-   +18, hein? Segura a vergonha."* — o tom segue o que o bot já usa
-   (`menubn`: `gostosa`, `safado`, `safada`).
+   *"🔞 Área +18: aqui só tem coisa picante..." / "😈 Segura a vergonha e vem
+   ver."* — o tom segue o que o bot já usa (`menubn`: `gostosa`, `safado`,
+   `safada`).
+   **O aviso é DE PROPÓSITO genérico**: a primeira versão dizia *"preparei umas
+   plaquinhas bem safadas"* e o dono recusou com o motivo certo — *"o menu vai
+   ter mais coisas, então essa frase não faz sentido"*. Uma frase presa a uma
+   categoria envelhece na primeira adição; por isso o cabeçalho fala só da
+   **natureza do menu** (+18), e quem nomeia categoria é a categoria.
 
-Testes cobrindo os três (menu18-plaquinha 15 → **18 testes / 60 asserções**):
-o cabeçalho diz "+18" em tom picante, o bloco COMO USAR **não** existe mais, e a
-linha da categoria no menu principal **não** tem emoji. (A asserção mira a
+Testes cobrindo os três (menu18-plaquinha 15 → **19 testes / 62 asserções**):
+o cabeçalho diz "+18" em tom picante, o aviso é **genérico** (não cita
+"plaquinha"), o bloco COMO USAR **não** existe mais, e a linha da categoria no
+menu principal **não** tem emoji. (A asserção mira a
 **linha da chamada `categoria(...)`**, não o comentário do topo do arquivo —
 que também cita COMUNIDADE e faria o teste medir o lugar errado.)
 

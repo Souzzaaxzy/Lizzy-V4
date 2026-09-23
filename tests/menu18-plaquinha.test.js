@@ -230,7 +230,19 @@ await test('o cabeçalho avisa em tom safado que é +18', async () => {
   const out = await run({ groupJid, sender: people[0], text: '!menu18', participants });
   includesTxt(out.text, '+18', 'diz que é conteúdo +18');
   // O pedido foi uma mensagem "picante" no começo, não um aviso seco.
-  ok(/safad|vergonha|picante/i.test(out.text), 'o aviso está em tom picante');
+  ok(/vergonha|picante|safad/i.test(out.text), 'o aviso está em tom picante');
+});
+
+await test('o aviso é GENÉRICO (o menu vai ganhar mais categorias)', async () => {
+  const { groupJid, people, participants } = setup(2);
+  const out = await run({ groupJid, sender: people[0], text: '!menu18', participants });
+  // O aviso não pode citar uma categoria específica: o menu recebe outras
+  // depois, e uma frase presa a "plaquinha" envelheceria na primeira adição.
+  const cabecalho = out.text.split('╰')[0];
+  ok(!/plaquinha/i.test(cabecalho),
+    'o cabeçalho não cita a categoria (só o título da categoria pode citar)');
+  // Sanidade: a categoria continua lá, com o nome dela.
+  includesTxt(out.text, 'PLAQUINHA', 'a categoria mantém o nome');
 });
 
 await test('o menu NÃO traz mais o bloco COMO USAR', async () => {
