@@ -186,8 +186,6 @@ export default async function menuadm(prefix, botName = "MeuBot", userName = "Us
 │ 📤 ${prefix}fotosaiu
 │ 🗑 ${prefix}rmfotosaiu
 │ ⚡ ${prefix}setprefix
-│ 🖼 ${prefix}fotomenug
-│ 🎥 ${prefix}videomenug
 │ 🗑 ${prefix}removermediamenugrupo
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 

@@ -1259,6 +1259,12 @@ import {
   setPrefixMedia,
   removePrefixMedia,
   // Sistema de Mídia de Menu por Grupo
+  isMenuMediaEnabled,
+  getMenuMediaPath,
+  getMenuMediaType,
+  getMenuMediaIsGif,
+  setMenuMedia,
+  removeMenuMedia,
   getGroupMenuMedia,
   setGroupMenuMedia,
   removeGroupMenuMedia,
@@ -21210,31 +21216,29 @@ Se não definir cores, a API usa padrão automaticamente.`
               customBotName = groupCustom.customName;
             }
           }
-          // Define a mídia a ser usada (prioridade: grupo > global > padrão)
-          let mediaPath, useVideo, mediaBuffer;
+          // Define a mídia a ser usada (prioridade: grupo > global > padrão).
+          // `isGif` liga o `gifPlayback` no envio (GIF vira MP4 ao salvar).
+          let mediaPath, useVideo, mediaBuffer, isGifMenu = false;
           let groupMenuMedia = null;
-          // 1º Prioridade: Mídia personalizada do grupo (sistema !fotomenug/!videomenug)
+          // 1º Prioridade: mídia personalizada do GRUPO.
           if (isGroup) {
             groupMenuMedia = getGroupMenuMedia(from);
           }
           if (groupMenuMedia) {
-            // Usa a mídia personalizada do grupo
             mediaPath = groupMenuMedia.file;
             useVideo = groupMenuMedia.type === 'video';
+            isGifMenu = groupMenuMedia.type === 'video' && mediaPath.endsWith('.gif');
             mediaBuffer = fs.readFileSync(mediaPath);
           } else {
-            // 2º Prioridade: Mídia global padrão
-            const menuVideoPath = __dirname + '/../midias/menu.mp4';
-            const menuImagePath = __dirname + '/../midias/menu.jpg';
-            // Verifica se existe mídia global
-            const hasGlobalVideo = fs.existsSync(menuVideoPath);
-            const hasGlobalImage = fs.existsSync(menuImagePath);
-            if (hasGlobalVideo || hasGlobalImage) {
-              useVideo = hasGlobalVideo;
-              mediaPath = useVideo ? menuVideoPath : menuImagePath;
+            // 2º Prioridade: mídia GLOBAL (definida pelo `!midiamenu`).
+            const globalPath = getMenuMediaPath();
+            if (globalPath) {
+              mediaPath = globalPath;
+              useVideo = getMenuMediaType() === 'video';
+              isGifMenu = getMenuMediaIsGif();
               mediaBuffer = fs.readFileSync(mediaPath);
             } else {
-              // 3º Prioridade: Comportamento padrão (sem mídia)
+              // 3º Prioridade: sem mídia.
               mediaPath = null;
               useVideo = false;
               mediaBuffer = null;
@@ -21294,7 +21298,7 @@ Se não definir cores, a API usa padrão automaticamente.`
                   await nazu.sendMessage(from, {
                     [useVideo ? 'video' : 'image']: mediaBuffer,
                     caption: menuText,
-                    gifPlayback: useVideo,
+                    gifPlayback: isGifMenu,
                     mimetype: useVideo ? 'video/mp4' : 'image/jpeg',
                     contextInfo: newsletterContext
                   });
@@ -21311,7 +21315,7 @@ Se não definir cores, a API usa padrão automaticamente.`
                 await nazu.sendMessage(from, {
                   [useVideo ? 'video' : 'image']: mediaBuffer,
                   caption: menuText,
-                  gifPlayback: useVideo,
+                  gifPlayback: isGifMenu,
                   mimetype: useVideo ? 'video/mp4' : 'image/jpeg',
                   contextInfo: newsletterContext
                 });
@@ -21328,7 +21332,7 @@ Se não definir cores, a API usa padrão automaticamente.`
               await nazu.sendMessage(from, {
                 [useVideo ? 'video' : 'image']: mediaBuffer,
                 caption: menuText,
-                gifPlayback: useVideo,
+                gifPlayback: isGifMenu,
                 mimetype: useVideo ? 'video/mp4' : 'image/jpeg',
                 contextInfo: newsletterContext
               });
@@ -22221,31 +22225,22 @@ Precisa de ajuda? Entre em contato:
           // Define a mídia a ser usada (prioridade: grupo > global > padrão)
           let mediaPath, useVideo, mediaBuffer, isGif = false;
           let groupMenuMedia = null;
-          // 1º Prioridade: Mídia personalizada do grupo (sistema !fotomenug/!videomenug)
+          // 1º Prioridade: mídia personalizada do GRUPO.
           if (isGroup) {
             groupMenuMedia = getGroupMenuMedia(from);
           }
           if (groupMenuMedia) {
-            // Usa a mídia personalizada do grupo
             mediaPath = groupMenuMedia.file;
             useVideo = groupMenuMedia.type === 'video';
             isGif = groupMenuMedia.type === 'video' && mediaPath.endsWith('.gif');
             mediaBuffer = fs.readFileSync(mediaPath);
           } else {
-            // 2º Prioridade: Mídia global padrão
-            const menuVideoPath = __dirname + '/../midias/menu.mp4';
-            const menuImagePath = __dirname + '/../midias/menu.jpg';
-            // Verifica se existe mídia global
-            const hasGlobalVideo = fs.existsSync(menuVideoPath);
-            const hasGlobalImage = fs.existsSync(menuImagePath);
-            if (hasGlobalVideo) {
-              mediaPath = menuVideoPath;
-              useVideo = true;
-              isGif = mediaPath.endsWith('.gif');
-              mediaBuffer = fs.readFileSync(mediaPath);
-            } else if (hasGlobalImage) {
-              mediaPath = menuImagePath;
-              useVideo = false;
+            // 2º Prioridade: mídia GLOBAL (definida pelo `!midiamenu`).
+            const globalPath = getMenuMediaPath();
+            if (globalPath) {
+              mediaPath = globalPath;
+              useVideo = getMenuMediaType() === 'video';
+              isGif = getMenuMediaIsGif();
               mediaBuffer = fs.readFileSync(mediaPath);
             }
           }
@@ -24521,119 +24516,133 @@ ${groupPrefix}key sua_chave_gemini
           await reply("🐝 Ops! Ocorreu um erro inesperado. Tente novamente em alguns instantes, por favor! 🥺");
         }
         break;
+      // ========== MÍDIA DO MENU (GLOBAL) ==========
+      // Unifica os antigos !fotomenu / !videomenu num comando so, com o MESMO
+      // desenho do `!midiaprefix`: aceita FOTO, VIDEO e GIF; `off` remove.
+      //
+      // GIF: o WhatsApp nao reproduz GIF como GIF — o que anima e um MP4 com
+      // `gifPlayback: true`. Entao o GIF recebido e convertido para MP4 ao
+      // salvar (utils/gifMedia.js) e gravado como video com `isGif`.
+      case 'midiamenu':
       case 'fotomenu':
       case 'videomenu':
+      case 'gifmenu':
       case 'mediamenu':
-      case 'midiamenu':
         try {
           if (!isOwner) return reply("Este comando é apenas para o meu dono");
-          if (fs.existsSync(__dirname + '/../midias/menu.jpg')) fs.unlinkSync(__dirname + '/../midias/menu.jpg');
-          if (fs.existsSync(__dirname + '/../midias/menu.mp4')) fs.unlinkSync(__dirname + '/../midias/menu.mp4');
-          var RSM = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-          // Um único resolvedor descasca qualquer encapsulamento (viewOnce V1/
-          // V2/V2Extension, efêmera, citação). Os nomes boij2/boij continuam
-          // iguais para não mexer no resto do comando; só imagem e vídeo são
-          // aceitos aqui (áudio/figurinha/documento caem na mensagem de uso).
-          const midiaComando = resolveMedia([RSM, info.message]);
-          var isVideoMidia = midiaComando?.type === 'video';
-          var boij = isVideoMidia ? midiaComando.media : null;
-          var boij2 = midiaComando?.type === 'image' ? midiaComando.media : null;
-          if (!boij && !boij2) return reply(`Marque uma imagem ou um vídeo, com o comando: ${prefix + command} (mencionando a mídia)`);
-          var isVideo2 = isVideoMidia;
-          var buffer = await getFileBuffer(isVideo2 ? boij : boij2, isVideo2 ? 'video' : 'image');
-          fs.writeFileSync(__dirname + '/../midias/menu.' + (isVideo2 ? 'mp4' : 'jpg'), buffer);
-          await reply('✅ Mídia do menu atualizada com sucesso.');
-        } catch (e) {
-          console.error(e);
-          reply("ocorreu um erro 💔");
-        }
-        break;
-      // ========== SISTEMA DE MÍDIA DE MENU POR GRUPO ==========
-      case 'fotomenug':
-        try {
-          if (!isGroup) return reply("◈ Este comando só funciona em grupos!");
-          if (!isGroupAdmin && !isOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
-          // Verificar se respondeu uma imagem
-          var RSMImageGroup = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-          var imageDataGroup = RSMImageGroup?.imageMessage || info.message?.imageMessage || RSMImageGroup?.viewOnceMessageV2?.message?.imageMessage || info.message?.viewOnceMessageV2?.message?.imageMessage || info.message?.viewOnceMessage?.message?.imageMessage || RSMImageGroup?.viewOnceMessage?.message?.imageMessage;
-          if (!imageDataGroup) {
-            return reply(`❌ Responda uma imagem para definir a foto do menu.`);
-          }
-          try {
-            // Baixa a imagem
-            const imageBuffer = await getFileBuffer(imageDataGroup, 'image');
-            // Salva no diretório do grupo
-            ensureDirectoryExists(MENU_GROUPS_MEDIA_DIR);
-            const imagePath = pathz.join(MENU_GROUPS_MEDIA_DIR, `${from}.jpg`);
-            fs.writeFileSync(imagePath, imageBuffer);
-            // Salva no banco de dados
-            const saved = setGroupMenuMedia(from, 'image', imagePath);
-            if (saved) {
-              await reply(`✅ Foto do menu deste grupo definida com sucesso!\n\nAgora todos os menus enviados neste grupo utilizarão esta imagem.`);
-            } else {
-              await reply("❌ Não foi possível salvar a mídia.");
+
+          // ---- remover ----
+          if (['off', 'del', 'delete', 'remover'].includes((q || '').trim().toLowerCase())) {
+            if (!isMenuMediaEnabled()) {
+              return reply("ℹ️ Não há mídia configurada para o menu.");
             }
-          } catch (e) {
-            console.error('Erro ao salvar foto do menu do grupo:', e);
-            await reply("❌ Não foi possível salvar a mídia.");
+            removeMenuMedia();
+            return reply("✅ Mídia do menu removida com sucesso.\n\nO menu voltará a usar o padrão.");
           }
-        } catch (e) {
-          console.error(e);
-          reply("ocorreu um erro 💔");
-        }
-        break;
-      case 'videomenug':
-        try {
-          if (!isGroup) return reply("◈ Este comando só funciona em grupos!");
-          if (!isGroupAdmin && !isOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
-          // Verificar se respondeu um vídeo/GIF
-          var RSVideoGroup = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-          var videoDataGroup = RSVideoGroup?.videoMessage || info.message?.videoMessage || RSVideoGroup?.viewOnceMessageV2?.message?.videoMessage || info.message?.viewOnceMessageV2?.message?.videoMessage || info.message?.viewOnceMessage?.message?.videoMessage || RSVideoGroup?.viewOnceMessage?.message?.videoMessage;
-          if (!videoDataGroup) {
-            return reply(`❌ Responda um vídeo ou GIF para definir o vídeo do menu.`);
-          }
-          try {
-            // Baixa o vídeo
-            const videoBuffer = await getFileBuffer(videoDataGroup, 'video');
-            // Salva no diretório do grupo
-            ensureDirectoryExists(MENU_GROUPS_MEDIA_DIR);
-            const videoPath = pathz.join(MENU_GROUPS_MEDIA_DIR, `${from}.mp4`);
-            fs.writeFileSync(videoPath, videoBuffer);
-            // Salva no banco de dados
-            const saved = setGroupMenuMedia(from, 'video', videoPath);
-            if (saved) {
-              await reply(`✅ Vídeo/GIF do menu deste grupo definido com sucesso!\n\nTodos os menus enviados neste grupo utilizarão este vídeo.`);
-            } else {
-              await reply("❌ Não foi possível salvar a mídia.");
+
+          // ---- detecta a midia (marcada ou enviada junto do comando) ----
+          // Mesma logica do `!midiaprefix`: o TIPO sai do proto + mimetype,
+          // com o `gifPlayback` primeiro (e assim que o WhatsApp manda GIF).
+          const ctxM = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+          const acharMidia = () => {
+            const cands = [
+              info.message?.imageMessage, info.message?.videoMessage,
+              info.message?.stickerMessage, info.message?.documentMessage,
+              ctxM?.imageMessage, ctxM?.videoMessage,
+              ctxM?.stickerMessage, ctxM?.documentMessage,
+              info.message?.viewOnceMessageV2?.message?.imageMessage,
+              info.message?.viewOnceMessageV2?.message?.videoMessage,
+              info.message?.viewOnceMessage?.message?.imageMessage,
+              info.message?.viewOnceMessage?.message?.videoMessage,
+              ctxM?.viewOnceMessageV2?.message?.imageMessage,
+              ctxM?.viewOnceMessageV2?.message?.videoMessage,
+              ctxM?.viewOnceMessage?.message?.imageMessage,
+              ctxM?.viewOnceMessage?.message?.videoMessage,
+            ];
+            const campoDe = (m) => {
+              const pares = [
+                [info.message?.imageMessage, 'image'], [info.message?.videoMessage, 'video'],
+                [info.message?.stickerMessage, 'sticker'], [info.message?.documentMessage, 'document'],
+                [ctxM?.imageMessage, 'image'], [ctxM?.videoMessage, 'video'],
+                [ctxM?.stickerMessage, 'sticker'], [ctxM?.documentMessage, 'document'],
+                [info.message?.viewOnceMessageV2?.message?.imageMessage, 'image'],
+                [info.message?.viewOnceMessageV2?.message?.videoMessage, 'video'],
+                [info.message?.viewOnceMessage?.message?.imageMessage, 'image'],
+                [info.message?.viewOnceMessage?.message?.videoMessage, 'video'],
+                [ctxM?.viewOnceMessageV2?.message?.imageMessage, 'image'],
+                [ctxM?.viewOnceMessageV2?.message?.videoMessage, 'video'],
+                [ctxM?.viewOnceMessage?.message?.imageMessage, 'image'],
+                [ctxM?.viewOnceMessage?.message?.videoMessage, 'video'],
+              ];
+              for (const [ref, campo] of pares) if (ref && ref === m) return campo;
+              return null;
+            };
+            for (const m of cands) {
+              if (!m || typeof m !== 'object') continue;
+              const mimetype = String(m.mimetype || '').toLowerCase();
+              const campo = campoDe(m);
+              const isGif = m.gifPlayback === true
+                || mimetype.includes('gif')
+                || mimetype.includes('webp')
+                || m.isAnimated === true;
+              if (isGif) return { midia: m, tipo: 'gif', campo };
+              if (mimetype.includes('video/')) return { midia: m, tipo: 'video', campo };
+              if (mimetype.includes('image/')) return { midia: m, tipo: 'image', campo };
+              if (campo === 'video') return { midia: m, tipo: 'video', campo };
+              if (campo === 'image') return { midia: m, tipo: 'image', campo };
             }
-          } catch (e) {
-            console.error('Erro ao salvar vídeo do menu do grupo:', e);
-            await reply("❌ Não foi possível salvar a mídia.");
+            return null;
+          };
+
+          const achado = acharMidia();
+          if (!achado) {
+            const ativo = isMenuMediaEnabled();
+            return reply(
+              `📌 *MÍDIA DO MENU*\n\n` +
+              (ativo
+                ? `ℹ️ Configurado agora: *${getMenuMediaType()}*${getMenuMediaIsGif() ? ' (GIF)' : ''}\n\n`
+                : '❌ *Nada configurado ainda.*\n\n') +
+              `*Como usar:*\n` +
+              `• ${groupPrefix}midiamenu + foto, vídeo ou GIF — define a mídia do menu\n` +
+              `• ${groupPrefix}midiamenu off — remove a mídia\n\n` +
+              `💡 A mídia aparece junto do menu em TODOS os grupos.`
+            );
           }
+
+          // ---- baixa, (converte GIF) e salva ----
+          const { midia, tipo, campo } = achado;
+          const tipoDownload = campo === 'sticker' ? 'sticker'
+            : campo === 'document' ? 'document'
+            : tipo === 'image' ? 'image' : 'video';
+          let buffer = await getFileBuffer(midia, tipoDownload);
+
+          if (tipo === 'gif') {
+            try {
+              buffer = await converterGifParaMp4(buffer);
+            } catch (convErr) {
+              console.error('[MIDIAMENU] Falha ao converter GIF:', convErr?.message || convErr);
+              return reply('❌ Não consegui converter esse GIF.\n\nVerifique se o FFmpeg está instalado no servidor.');
+            }
+          }
+
+          const ext = tipo === 'image' ? 'jpg' : 'mp4';
+          const mediaPath = __dirname + `/../midias/menu.${ext}`;
+          ensureDirectoryExists(pathz.dirname(mediaPath));
+          fs.writeFileSync(mediaPath, buffer);
+          // GIF e video saem os DOIS como 'video' — o gifPlayback e ligado no
+          // envio quando o arquivo veio de GIF.
+          setMenuMedia(mediaPath, tipo === 'image' ? 'image' : 'video', tipo === 'gif');
+
+          const nome = tipo === 'image' ? 'Imagem' : (tipo === 'gif' ? 'GIF' : 'Vídeo');
+          await reply(
+            `✅ *${nome} do menu atualizada!*\n\n` +
+            `📦 Tamanho: ${(buffer.length / 1024).toFixed(0)} KB\n` +
+            (tipo === 'gif' ? `🎞 Convertido para MP4 (o WhatsApp só anima MP4 com gifPlayback).\n` : '') +
+            `\nA mídia será enviada junto do menu em todos os grupos.`
+          );
         } catch (e) {
-          console.error(e);
-          reply("ocorreu um erro 💔");
-        }
-        break;
-      case 'removermediamenugrupo':
-      case 'removerfotomenug':
-      case 'removervideomenug':
-        try {
-          if (!isGroup) return reply("◈ Este comando só funciona em grupos!");
-          if (!isGroupAdmin && !isOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
-          const groupMedia = getGroupMenuMedia(from);
-          if (!groupMedia) {
-            return reply("ℹ️ Este grupo não possui mídia personalizada para o menu.");
-          }
-          const removed = removeGroupMenuMedia(from);
-          if (removed) {
-            await reply("✅ Mídia do menu deste grupo removida com sucesso!\n\nOs menus voltarão a usar a mídia global.");
-          } else {
-            await reply("❌ Não foi possível remover a mídia.");
-          }
-        } catch (e) {
-          console.error(e);
-          reply("ocorreu um erro 💔");
+          console.error('[MIDIAMENU] Erro:', e?.message || e);
+          reply("Ocorreu um erro 💔");
         }
         break;
       // ========== SISTEMA DE MÍDIA DA RESPOSTA PREFIXO ==========
@@ -25094,7 +25103,7 @@ ${groupPrefix}key sua_chave_gemini
           const statusMsg = newState
             ? `✅ *Sistema de Personalização Ativado!*\n\n` +
             `Agora os donos dos grupos podem:\n` +
-            `📸 Mudar a foto do menu (${groupPrefix}fotomenugrupo)\n` +
+            `📸 Mudar a mídia do menu do grupo (${groupPrefix}fotomenugrupo)\n` +
             `✏️ Mudar o nome do bot (${groupPrefix}nomegrupo)\n\n` +
             `💡 As personalizações só afetam o grupo onde foram configuradas.`
             : `❌ *Sistema de Personalização Desativado!*\n\n` +
@@ -25112,21 +25121,58 @@ ${groupPrefix}key sua_chave_gemini
           if (!isGroupCustomizationEnabled()) {
             return reply("⚠️ O sistema de personalização está desativado. Peça ao dono do bot para ativar com o comando: " + prefix + "personalizargrupo");
           }
-          if (!isQuotedImage && !isImage) {
-            return reply(`❌ Envie ou marque uma imagem para definir como foto do menu deste grupo.\n\n` +
-              `📝 *Uso:* Envie uma imagem com o comando ou responda uma imagem com ${groupPrefix}fotomenugrupo\n\n` +
-              `💡 Para remover a personalização, use: ${groupPrefix}removerfotomenu`);
+          // Aceita FOTO, VIDEO e GIF (antes so imagem). O GIF e convertido para
+          // MP4 (o WhatsApp so anima MP4 com gifPlayback).
+          const ctxG = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+          const acharG = () => {
+            const cands = [
+              info.message?.imageMessage, info.message?.videoMessage,
+              info.message?.stickerMessage,
+              ctxG?.imageMessage, ctxG?.videoMessage, ctxG?.stickerMessage,
+              info.message?.viewOnceMessageV2?.message?.imageMessage,
+              info.message?.viewOnceMessageV2?.message?.videoMessage,
+              ctxG?.viewOnceMessageV2?.message?.imageMessage,
+              ctxG?.viewOnceMessageV2?.message?.videoMessage,
+            ];
+            for (const m of cands) {
+              if (!m || typeof m !== 'object') continue;
+              const mt = String(m.mimetype || '').toLowerCase();
+              const ehGif = m.gifPlayback === true || mt.includes('gif') || mt.includes('webp') || m.isAnimated === true;
+              if (ehGif) return { midia: m, tipo: 'gif' };
+              if (mt.includes('video/')) return { midia: m, tipo: 'video' };
+              if (mt.includes('image/')) return { midia: m, tipo: 'image' };
+              if (m === info.message?.videoMessage || m === ctxG?.videoMessage) return { midia: m, tipo: 'video' };
+              return { midia: m, tipo: 'image' };
+            }
+            return null;
+          };
+          const achadoG = acharG();
+          if (!achadoG) {
+            return reply(`❌ Envie ou marque uma foto, vídeo ou GIF para definir a mídia do menu deste grupo.\n\n` +
+              `📝 *Uso:* ${groupPrefix}setmenupic (com a mídia marcada ou enviada junto)\n\n` +
+              `💡 Para remover, use: ${groupPrefix}removermediamenugrupo`);
           }
-          const messageToUse = isQuotedImage ? quotedMessageContent : info.message;
-          const mediaInfo = getMediaInfo(messageToUse);
-          if (!mediaInfo || mediaInfo.type !== 'image') return reply('❌ Mídia inválida. Envie uma imagem.');
-          const imageBuffer = await getFileBuffer(mediaInfo.media, 'image');
-          // Salva a imagem no diretório de grupos
-          const customPhotoPath = __dirname + `/../database/grupos/${from}_menu.jpg`;
-          fs.writeFileSync(customPhotoPath, imageBuffer);
-          setGroupCustomPhoto(from, customPhotoPath);
-          await reply(`✅ *Foto do menu personalizada com sucesso!*\n\n` +
-            `🎨 Esta foto será exibida apenas neste grupo quando alguém usar o comando ${groupPrefix}menu`);
+          const { midia: midiaG, tipo: tipoG } = achadoG;
+          let bufferG = await getFileBuffer(midiaG, tipoG === 'image' ? 'image' : (tipoG === 'gif' ? 'sticker' : 'video'));
+          if (tipoG === 'gif') {
+            try {
+              bufferG = await converterGifParaMp4(bufferG);
+            } catch (convErr) {
+              console.error('[SETMENUPIC] Falha ao converter GIF:', convErr?.message || convErr);
+              return reply('❌ Não consegui converter esse GIF. Verifique se o FFmpeg está instalado.');
+            }
+          }
+          ensureDirectoryExists(MENU_GROUPS_MEDIA_DIR);
+          const extG = tipoG === 'image' ? 'jpg' : 'mp4';
+          const groupMediaPath = pathz.join(MENU_GROUPS_MEDIA_DIR, `${from}.${extG}`);
+          fs.writeFileSync(groupMediaPath, bufferG);
+          // Grava no sistema que o MENU realmente le (`getGroupMenuMedia`).
+          setGroupMenuMedia(from, tipoG === 'image' ? 'image' : 'video', groupMediaPath);
+          // Mantem o registro de personalizacao (usado pelo `!infoperso`).
+          setGroupCustomPhoto(from, groupMediaPath);
+          const nomeG = tipoG === 'image' ? 'Foto' : (tipoG === 'gif' ? 'GIF' : 'Vídeo');
+          await reply(`✅ *${nomeG} do menu personalizada com sucesso!*\n\n` +
+            `🎨 Será exibida apenas neste grupo quando alguém usar ${groupPrefix}menu`);
         } catch (e) {
           console.error('Erro no comando fotomenugrupo:', e);
           await reply("❌ Ocorreu um erro ao personalizar a foto do menu 💔");
@@ -25210,7 +25256,7 @@ ${groupPrefix}key sua_chave_gemini
             return reply(`ℹ️ *Este grupo não possui personalizações.*\n\n` +
               `📌 Comandos disponíveis para admins:\n` +
               `• ${groupPrefix}nomegrupo <nome> - Personalizar nome do bot\n` +
-              `• ${groupPrefix}fotomenugrupo - Personalizar foto do menu\n` +
+              `• ${groupPrefix}fotomenugrupo - Personalizar a mídia do menu (foto, vídeo ou GIF)\n` +
               `• ${groupPrefix}removernome - Remover nome personalizado\n` +
               `• ${groupPrefix}removerfotomenu - Remover foto personalizada`);
           }
@@ -27854,16 +27900,18 @@ ${nomebot}  By  👑 ${nomedono}`;
             return reply("Sistema de estatísticas temporariamente indisponível.");
           }
           const topCommands = await commandStats.getMostUsedCommands(10);
+          // Usa a mídia GLOBAL (a mesma do `!midiamenu`) quando existir.
+          const globalTopPath = getMenuMediaPath();
           const menuVideoPath = __dirname + '/../midias/menu.mp4';
           const menuImagePath = __dirname + '/../midias/menu.jpg';
-          const useVideo = fs.existsSync(menuVideoPath);
-          const mediaPath = useVideo ? menuVideoPath : menuImagePath;
+          const useVideo = globalTopPath ? getMenuMediaType() === 'video' : fs.existsSync(menuVideoPath);
+          const mediaPath = globalTopPath || (useVideo ? menuVideoPath : menuImagePath);
           const mediaBuffer = fs.readFileSync(mediaPath);
           const menuText = await menuTopCmd(groupPrefix, nomebot, pushname, topCommands);
           await nazu.sendMessage(from, {
             [useVideo ? 'video' : 'image']: mediaBuffer,
             caption: menuText,
-            gifPlayback: useVideo,
+            gifPlayback: globalTopPath ? getMenuMediaIsGif() : false,
             mimetype: useVideo ? 'video/mp4' : 'image/jpeg'
           }, {
             quoted: info,

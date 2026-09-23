@@ -3873,3 +3873,67 @@ de comando do `menubn`: **idênticas**).
 Regressões verdes: `get-message-inspector` 54/269, `midiaprefix` 26/83,
 `raja-selective` 23/0, `antifantasma-classificacao` 18/18, `ghost-detection` 24/81,
 `anti-seletiva` 32/32, `cmd-suggest` 21/68, `testcall` 35/127.
+
+### `!midiamenu` unificado + remoção do sistema duplicado (set/2026) ✅
+Pedido do dono: *"deixa apenas o midiamenu e adiciona suporte a foto e gif"*.
+
+#### Havia TRÊS sistemas para a mídia do menu
+| comando | escopo | armazenava em | era lido pelo menu? |
+|---|---|---|---|
+| `!fotomenu` / `!videomenu` (+ alias `midiamenu`) | global | `midias/menu.jpg\|mp4` (fs direto) | sim (por fs) |
+| `!fotomenug` / `!videomenug` | por grupo | `menuMediaGroups.json` | **sim** |
+| `!fotomenugrupo` / `!setmenupic` | por grupo | `groupCustomization.customPhoto` | **NÃO — código morto** |
+
+`getGroupCustomPhoto` **nunca era chamado** (conferido por grep): o
+`!fotomenugrupo` gravava a foto e o menu nunca a usava.
+
+#### O que foi feito
+1. **`!fotomenug` e `!videomenug` REMOVIDOS** — duplicavam o `!fotomenugrupo`.
+   Agora respondem "comando não encontrado".
+2. **`!midiamenu`** passou a ser o nome principal do sistema **global**
+   (`fotomenu`/`videomenu`/`gifmenu`/`mediamenu` continuam como aliases), com o
+   **mesmo desenho do `!midiaprefix`**: aceita **foto, vídeo e GIF**, `off`
+   remove, mensagem de ajuda quando não há nada.
+3. **GIF**: detectado por **`gifPlayback === true`** (o WhatsApp manda GIF como
+   `videoMessage`), depois `gif/webp/isAnimated`, e convertido para MP4 ao
+   salvar (`utils/gifMedia.js`). Marcado com `isGif` para o envio ligar o
+   `gifPlayback`.
+4. **`!fotomenugrupo`/`!setmenupic`** deixou de gravar código morto: passou a
+   gravar no **sistema que o menu realmente lê** (`setGroupMenuMedia`), também com
+   foto/vídeo/GIF. Mantém o `setGroupCustomPhoto` apenas como registro para o
+   `!infoperso`.
+5. **O menu (`case 'menu'` e `sendMenuWithMedia`) passou a ler a mídia global
+   pelo helper novo** (`getMenuMediaPath`/`getMenuMediaType`/`getMenuMediaIsGif`)
+   em vez de checar arquivo por fs, e o `gifPlayback` do envio agora vem do
+   **`isGifMenu`** (antes era `gifPlayback: useVideo` — ou seja, **todo vídeo era
+   enviado como GIF**, o que era um bug).
+6. **`!topcmd`** também passou a usar a mídia global (antes lia o arquivo por fs
+   e mandava `gifPlayback` de uma variável inexistente no escopo — bug latente).
+
+#### Persistência
+Novo `dados/database/dono/menuMedia.json` (`mediaPath`/`mediaType`/`isGif`),
+espelhando o `prefixMedia`. `setMenuMedia` **não apaga quando o caminho é o
+mesmo** (`pathz.resolve`) — o comando grava sempre em `menu.jpg`/`menu.mp4`, e
+sem essa guarda o arquivo recém-escrito seria apagado (o mesmo bug do prefixo).
+
+#### Testes — `menu-layout` 20 → **23 testes / 236 asserções**
+- **20** — `!midiamenu` existe, os antigos **`fotomenug`/`videomenug` foram
+  removidos** (0 cases), os aliases do global continuam, e o bloco antigo (sem
+  `off`/GIF) sumiu;
+- **21** — o bloco usa `isMenuMediaEnabled`/`setMenuMedia`/`removeMenuMedia`,
+  converte GIF, detecta pelo `gifPlayback`; e o `case 'menu'` usa
+  `getMenuMediaPath`/`getMenuMediaIsGif` e envia com `gifPlayback: isGifMenu`;
+- **22** — `menudono` lista `midiamenu` e não tem mais `fotomenu`; `menuadm`
+  não tem mais `fotomenug`/`videomenug`.
+- baseline de contagem ajustado: `menuadm` **172 → 170** (−2 removidos),
+  `menudono` **166 → 165** (2 viraram 1).
+
+**Medido com o handler real** (mídia cifrada de verdade, servida por HTTP local):
+foto → `tipo=image`; vídeo → `tipo=video`; `off` → limpa; `!fotomenu` (alias) →
+funciona; **`!fotomenug`/`!videomenug` → "comando não encontrado"**. O GIF foi
+reconhecido e caiu no erro **controlado** de FFmpeg ausente (o sandbox não tem) —
+que é o comportamento projetado, não um sucesso silencioso.
+
+Regressões verdes: `get-message-inspector` 54/269, `midiaprefix` 26/83,
+`raja-selective` 23/0, `antifantasma-classificacao` 18/18, `ghost-detection` 24/81,
+`anti-seletiva` 32/32, `cmd-suggest` 21/68, `testcall` 35/127, `viewonce-v2` 18/77.

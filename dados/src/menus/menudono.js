@@ -42,8 +42,7 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 │ ⚙ ${prefix}configcmdnotfound
 │ 💬 ${prefix}setcmdmsg
 │ 🖼 ${prefix}fotobot
-│ 🖼 ${prefix}fotomenu
-│ 🎥 ${prefix}videomenu
+│ 🖼 ${prefix}midiamenu
 │ 🎵 ${prefix}audiomenu
 │ 📖 ${prefix}lermais
 │ 🎨 ${prefix}personalizargrupo

@@ -50,6 +50,7 @@ import {
   ELECTION_CONFIG_FILE,
   MSG_COUNTER_FILE,
   PREFIX_MEDIA_FILE,
+  MENU_MEDIA_FILE,
   MENU_MEDIA_GROUPS_FILE,
   MENU_GROUPS_MEDIA_DIR,
   CONFIG_FILE,
@@ -3763,6 +3764,13 @@ export {
   // Sistema de Mídia de Menu por Grupo
   loadMenuMediaGroups,
   saveMenuMediaGroups,
+  loadMenuMedia,
+  isMenuMediaEnabled,
+  getMenuMediaPath,
+  getMenuMediaType,
+  getMenuMediaIsGif,
+  setMenuMedia,
+  removeMenuMedia,
   getGroupMenuMedia,
   setGroupMenuMedia,
   removeGroupMenuMedia,
@@ -3773,6 +3781,66 @@ export {
   setApiKey,
   deleteApiKey,
   getAllApiKeysStatus,
+};
+
+// ===== Mídia do MENU (global) =====
+// Espelha o sistema do prefixo: um unico slot, gravado sempre no mesmo arquivo
+// (`midias/menu.jpg` ou `midias/menu.mp4`). O `isGif` marca quando o MP4 veio de
+// um GIF — no envio precisa de `gifPlayback: true` para animar.
+const loadMenuMedia = () => {
+  ensureJsonFileExists(MENU_MEDIA_FILE, { mediaPath: null, mediaType: null, isGif: false });
+  return loadJsonFile(MENU_MEDIA_FILE);
+};
+
+const saveMenuMedia = (data) => {
+  fs.writeFileSync(MENU_MEDIA_FILE, JSON.stringify(data, null, 2));
+};
+
+const isMenuMediaEnabled = () => {
+  const data = loadMenuMedia();
+  return Boolean(data.mediaPath && fs.existsSync(data.mediaPath));
+};
+
+const getMenuMediaPath = () => {
+  const data = loadMenuMedia();
+  if (data.mediaPath && fs.existsSync(data.mediaPath)) return data.mediaPath;
+  return null;
+};
+
+const getMenuMediaType = () => loadMenuMedia().mediaType || null;
+const getMenuMediaIsGif = () => loadMenuMedia().isGif === true;
+
+/**
+ * @param {string} mediaPath
+ * @param {'image'|'video'} mediaType
+ * @param {boolean} [isGif] veio de GIF (MP4 com gifPlayback no envio)
+ */
+const setMenuMedia = (mediaPath, mediaType, isGif = false) => {
+  const data = loadMenuMedia();
+  // NUNCA apaga quando e o MESMO arquivo: o comando grava sempre em
+  // `menu.jpg`/`menu.mp4`, entao o caminho novo e igual ao antigo e o unlink
+  // apagaria o que acabou de ser escrito (bug ja visto no prefixo).
+  const mesmoArquivo = data.mediaPath && pathz.resolve(data.mediaPath) === pathz.resolve(mediaPath);
+  if (!mesmoArquivo && data.mediaPath && fs.existsSync(data.mediaPath)) {
+    try { fs.unlinkSync(data.mediaPath); } catch (e) { console.error('Erro ao remover midia anterior do menu:', e); }
+  }
+  data.mediaPath = mediaPath;
+  data.mediaType = mediaType;
+  data.isGif = isGif === true;
+  saveMenuMedia(data);
+  return true;
+};
+
+const removeMenuMedia = () => {
+  const data = loadMenuMedia();
+  if (data.mediaPath && fs.existsSync(data.mediaPath)) {
+    try { fs.unlinkSync(data.mediaPath); } catch (e) { console.error('Erro ao remover midia do menu:', e); }
+  }
+  data.mediaPath = null;
+  data.mediaType = null;
+  data.isGif = false;
+  saveMenuMedia(data);
+  return true;
 };
 
 // ===== Sistema de Mídia de Menu por Grupo =====

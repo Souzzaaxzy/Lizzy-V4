@@ -273,7 +273,10 @@ await test('13. o index compõe visible + lerMais + rest (não só concatena tud
 // TRAVA: se algum comando sumir numa mexida futura, o teste falha.
 const COMANDOS_POR_MENU = {
   menuia: 17, menudown: 20, ferramentas: 26, menufig: 16, menulogo: 44,
-  menuedits: 5, alteradores: 58, menumemb: 54, menuadm: 172, menudono: 166,
+  menuedits: 5, alteradores: 58, menumemb: 54,
+  // menuadm: 172 -> 170 (removidos `fotomenug` e `videomenug`).
+  // menudono: 166 -> 165 (`fotomenu` + `videomenu` -> `midiamenu`).
+  menuadm: 170, menudono: 165,
   menubn: 348, menufut: 42, menurpg: 149,
   // menuvip nao tem comando cadastrado; o `!` contado e o `!addcmdvip` da
   // instrucao ("Use: !addcmdvip"), que no original tambem estava fixo.
@@ -349,6 +352,48 @@ await test('14. os menus temáticos NÃO perderam o "ler mais"', () => {
   ok(i > 0, 'achou o helper');
   const bloco = src.slice(i, i + 5000);
   contem(bloco, 'lerMaisPrefix + menuText', 'o helper aplica o ler mais');
+});
+
+await test('20. !midiamenu existe e os antigos !fotomenug/!videomenug foram removidos', () => {
+  const src = fs.readFileSync(new URL('../dados/src/index.js', import.meta.url), 'utf8');
+  eq((src.match(/case 'midiamenu'/g) || []).length, 1, 'uma case midiamenu');
+  eq((src.match(/case 'fotomenug'/g) || []).length, 0, 'fotomenug removido');
+  eq((src.match(/case 'videomenug'/g) || []).length, 0, 'videomenug removido');
+  // Aliases do global continuam (compatibilidade).
+  for (const c of ['fotomenu', 'videomenu', 'gifmenu', 'mediamenu']) {
+    eq((src.match(new RegExp(`case '${c}'`, 'g')) || []).length, 1, `${c} é alias`);
+  }
+  // E nao sobrou a case antiga do global (sem `off`, sem GIF).
+  ok(!src.includes('Marque uma imagem ou um vídeo, com o comando'), 'bloco antigo removido');
+});
+
+await test('21. !midiamenu usa o mesmo desenho do prefixo (foto/vídeo/GIF + off)', () => {
+  const src = fs.readFileSync(new URL('../dados/src/index.js', import.meta.url), 'utf8');
+  const i = src.indexOf("case 'midiamenu'");
+  const bloco = src.slice(i, i + 8000);
+  contem(bloco, 'isMenuMediaEnabled', 'usa o sistema de mídia do menu');
+  contem(bloco, 'setMenuMedia', 'grava pelo helper');
+  contem(bloco, 'removeMenuMedia', 'off remove');
+  contem(bloco, 'converterGifParaMp4', 'GIF é convertido');
+  contem(bloco, "m.gifPlayback === true", 'detecta GIF pelo gifPlayback');
+  contem(bloco, 'gifPlayback', 'trata o GIF');
+  // O menu (case 'menu') passa a usar o sistema novo com isGifMenu.
+  const j = src.indexOf("case 'menu':");
+  const blocoMenu = src.slice(j, j + 6000);
+  contem(blocoMenu, 'getMenuMediaPath', 'menu lê a mídia global nova');
+  contem(blocoMenu, 'getMenuMediaIsGif', 'menu lê o isGif');
+  contem(blocoMenu, 'gifPlayback: isGifMenu', 'menu envia com gifPlayback');
+});
+
+await test('22. o menuadm e o menudono refletem os comandos', () => {
+  const adm = fs.readFileSync(new URL('../dados/src/menus/menuadm.js', import.meta.url), 'utf8');
+  const dono = fs.readFileSync(new URL('../dados/src/menus/menudono.js', import.meta.url), 'utf8');
+  contem(dono, 'midiamenu', 'menudono lista midiamenu');
+  ok(!dono.includes('fotomenu'), 'menudono sem fotomenu');
+  // `fotomenugrupo` contem "fotomenug" como substring — a checagem e pela
+  // LINHA do comando antigo (`${prefix}fotomenug`), nao por substring.
+  ok(!/\$\{prefix\}fotomenug\b/.test(adm.replace(/fotomenugrupo/g, '')), 'menuadm sem fotomenug');
+  ok(!/\$\{prefix\}videomenug/.test(adm), 'menuadm sem videomenug');
 });
 
 // ============================================================================
