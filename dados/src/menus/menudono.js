@@ -1,38 +1,39 @@
+import { boldItalic } from './layout.js';
+
 export default async function menuDono(prefix, botName = "MeuBot", userName = "Usuário") {
-    return `╭━━━〔 👑 ${botName} • 𝐃𝐎𝐍𝐎 〕━━━╮
-┃ 👋 Olá, @${userName}
-┃ 👑 Painel do Proprietário
-┃ ⚙️ Controle total da Lizzy
-╰━━━━━━━━━━━━━━━━━━━━━━╯
+    return `╭━━━꧁༺ ✦ ${botName} ✦ ༻꧂━━━╮
+┃ 𖤐 𝐎𝐥á, @${userName}
+┃ 👑 Área do dono
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━━━╯
 
 
-╭─❖ 📚 INÍCIO
+╭━━━꧁༺ ㅤ📚 ${boldItalic('INÍCIO')} 📚ㅤ ༻꧂━━━╮
 │ 📖 ${prefix}tutorial
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ ⚡ FIGBAN
+╭━━━꧁༺ ㅤ⚡ ${boldItalic('FIGBAN')} ⚡ㅤ ༻꧂━━━╮
 │ 🚫 ${prefix}setfigban
 │ 🗑️ ${prefix}delfigban
 │ 📋 ${prefix}listfigban
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🤖 INTELIGÊNCIA ARTIFICIAL
+╭━━━꧁༺ ㅤ🤖 ${boldItalic('INTELIGÊNCIA ARTIFICIAL')} 🤖ㅤ ༻꧂━━━╮
 │ 🔑 ${prefix}key
 │ 📋 Status: ${prefix}key
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🌌 REAÇÕES POR NOME
+╭━━━꧁༺ ㅤ🌌 ${boldItalic('REAÇÕES POR NOME')} 🌌ㅤ ༻꧂━━━╮
 │ 😀 ${prefix}reacao
 │ ➕ ${prefix}reacao add
 │ ❌ ${prefix}reacao excluir
 │ 🔄 ${prefix}reacao toggle
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🤖 CONFIGURAÇÕES DO BOT
+╭━━━꧁༺ ㅤ🤖 ${boldItalic('CONFIGURAÇÕES DO BOT')} 🤖ㅤ ༻꧂━━━╮
 │ ⚡ ${prefix}prefixo
 │ 📞 ${prefix}numerodono
 │ 👤 ${prefix}nomedono
@@ -47,10 +48,10 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 │ 📖 ${prefix}lermais
 │ 🎨 ${prefix}personalizargrupo
 │ 📸 ${prefix}midiaprefix
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🎨 DESIGN & APARÊNCIA
+╭━━━꧁༺ ㅤ🎨 ${boldItalic('DESIGN & APARÊNCIA')} 🎨ㅤ ༻꧂━━━╮
 │ 🖌 ${prefix}designmenu
 │ 📐 ${prefix}setborda
 │ 📐 ${prefix}setbordafim
@@ -60,10 +61,10 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 │ 📝 ${prefix}settitulo
 │ 🏷 ${prefix}setheader
 │ ♻ ${prefix}resetdesign
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ ⚙️ AUTOMAÇÃO
+╭━━━꧁༺ ㅤ⚙️ ${boldItalic('AUTOMAÇÃO')} ⚙️ㅤ ༻꧂━━━╮
 │ ➕ ${prefix}addauto
 │ 🖼 ${prefix}addautomidia
 │ 📋 ${prefix}listauto
@@ -74,10 +75,10 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 │ ➕ ${prefix}addnopref
 │ 📋 ${prefix}listnopref
 │ ❌ ${prefix}delnopref
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🛠️ COMANDOS PERSONALIZADOS
+╭━━━꧁༺ ㅤ🛠️ ${boldItalic('COMANDOS PERSONALIZADOS')} 🛠️ㅤ ༻꧂━━━╮
 │ ➕ ${prefix}addcmd
 │ 🖼 ${prefix}addcmdmidia
 │ 📋 ${prefix}listcmd
@@ -92,26 +93,26 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 │ ➕ ${prefix}addcase
 │ ❌ ${prefix}delcase
 │ 🎬 ${prefix}setgif
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🚫 LIMITAÇÃO
+╭━━━꧁༺ ㅤ🚫 ${boldItalic('LIMITAÇÃO')} 🚫ㅤ ༻꧂━━━╮
 │ 🚷 ${prefix}cmdlimitar
 │ ✅ ${prefix}cmddeslimitar
 │ 📋 ${prefix}cmdlimites
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🔒 BLOQUEIO NO PV
+╭━━━꧁༺ ㅤ🔒 ${boldItalic('BLOQUEIO NO PV')} 🔒ㅤ ༻꧂━━━╮
 │ 🚫 ${prefix}blockmenupv
 │ ✅ ${prefix}unblockmenupv
 │ 🚫 ${prefix}blockcmdpv
 │ ✅ ${prefix}unblockcmdpv
 │ 📋 ${prefix}listblockpv
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 👥 USUÁRIOS
+╭━━━꧁༺ ㅤ👥 ${boldItalic('USUÁRIOS')} 👥ㅤ ༻꧂━━━╮
 │ 👑 ${prefix}addsubdono
 │ ❌ ${prefix}delsubdono
 │ 📋 ${prefix}listasubdonos
@@ -125,17 +126,17 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 │ 🚫 ${prefix}bangp
 │ ✅ ${prefix}unbangp
 │ 📋 ${prefix}listbangp
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🔐 PERMISSÕES SUBDONO
+╭━━━꧁༺ ㅤ🔐 ${boldItalic('PERMISSÕES SUBDONO')} 🔐ㅤ ༻꧂━━━╮
 │ ➕ ${prefix}grantsubcmd
 │ ❌ ${prefix}delsubcmd
 │ 📋 ${prefix}listsubcmd
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 💰 ALUGUEL
+╭━━━꧁༺ ㅤ💰 ${boldItalic('ALUGUEL')} 💰ㅤ ༻꧂━━━╮
 │ ⚙ ${prefix}modoaluguel
 │ ➕ ${prefix}addaluguel
 │ 🔑 ${prefix}gerarcod
@@ -148,19 +149,19 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 │ 🎁 ${prefix}dayfree
 │ 💵 ${prefix}setdiv
 │ 📢 ${prefix}divulgar
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🤖 SUB-BOTS
+╭━━━꧁༺ ㅤ🤖 ${boldItalic('SUB-BOTS')} 🤖ㅤ ༻꧂━━━╮
 │ ➕ ${prefix}addsubbot
 │ ❌ ${prefix}removesubbot
 │ 📋 ${prefix}listarsubbots
 │ 🔗 ${prefix}conectarsubbot
 │ 🔑 ${prefix}gerarcodigo
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 💎 VIP
+╭━━━꧁༺ ㅤ💎 ${boldItalic('VIP')} 💎ㅤ ༻꧂━━━╮
 │ ➕ ${prefix}addcmdvip
 │ ❌ ${prefix}removecmdvip
 │ 📋 ${prefix}listcmdvip
@@ -168,10 +169,10 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 │ 📊 ${prefix}statsvip
 │ 💎 ${prefix}menuvip
 │ ℹ ${prefix}infovip
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ ⚡ MANUTENÇÃO
+╭━━━꧁༺ ㅤ⚡ ${boldItalic('MANUTENÇÃO')} ⚡ㅤ ༻꧂━━━╮
 │ 🔄 ${prefix}atualizar
 │ ♻ ${prefix}reiniciar
 │ ➕ ${prefix}entrar
@@ -184,10 +185,10 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 │ ✅ ${prefix}unblockuserg
 │ 📋 ${prefix}listblocks
 │ 🛡 ${prefix}antibanmarcar
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 📊 MONITORAMENTO
+╭━━━꧁༺ ㅤ📊 ${boldItalic('MONITORAMENTO')} 📊ㅤ ༻꧂━━━╮
 │ 📋 ${prefix}listagp
 │ 🚫 ${prefix}antipv
 │ 🚫 ${prefix}antipv2
@@ -204,10 +205,10 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 │ 📊 ${prefix}limparrankg
 │ ♻ ${prefix}reviverqr
 │ 💣 ${prefix}nuke
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 📡 TRANSMISSÕES
+╭━━━꧁༺ ㅤ📡 ${boldItalic('TRANSMISSÕES')} 📡ㅤ ༻꧂━━━╮
 │ 📢 ${prefix}tm
 │ 💬 ${prefix}tm2
 │ 📊 ${prefix}statustm
@@ -219,10 +220,10 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 │ 📤 ${prefix}divdono send
 │ ⏰ ${prefix}divdono time
 │ 📊 ${prefix}divdono status
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🎮 APIs GAMES
+╭━━━꧁༺ ㅤ🎮 ${boldItalic('APIs GAMES')} 🎮ㅤ ༻꧂━━━╮
 │ 🔑 ${prefix}keyff
 │ 🔑 ${prefix}keyvalorant
 │ 🔑 ${prefix}keycr
@@ -236,19 +237,19 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 │ ❌ ${prefix}delkeyroblox
 │ ❌ ${prefix}delkeypubg
 │ 📋 ${prefix}listkeys
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 📈 SERVIÇOS SMM
+╭━━━꧁༺ ㅤ📈 ${boldItalic('SERVIÇOS SMM')} 📈ㅤ ༻꧂━━━╮
 │ 💰 ${prefix}smm saldo
 │ 📋 ${prefix}smm servicos
 │ 📦 ${prefix}smm pedido
 │ 📊 ${prefix}smm status
 │ 🔑 ${prefix}smm setkey
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 👻 MENSAGENS INVISÍVEIS
+╭━━━꧁༺ ㅤ👻 ${boldItalic('MENSAGENS INVISÍVEIS')} 👻ㅤ ༻꧂━━━╮
 │ 📦 ${prefix}raja
 │    Mostra a mensagem e a quantidade salvas
 │ 💾 ${prefix}setmsgraja <qtd> <texto>
@@ -257,7 +258,7 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 │    Dispara a mensagem salva
 │ 👻 ${prefix}msghost @alvo [texto]
 │    Apaga o comando e envia só ao alvo
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
 ╭─────────────────╮

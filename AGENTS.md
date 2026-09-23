@@ -3797,3 +3797,79 @@ mudança** — a composição `visible + lerMaisPrefix + rest` já estava certa.
 Regressões verdes: `get-message-inspector` 54/269, `midiaprefix` 26/83,
 `raja-selective` 23/0, `antifantasma-classificacao` 18/18, `ghost-detection` 24/81,
 `anti-seletiva` 32/32, `cmd-suggest` 21/68, `testcall` 35/127.
+
+### LAYOUT NOVO em TODOS os menus do menu principal (set/2026) ✅
+Pedido do dono: aplicar o layout (`꧁༺ ✦ ༻꧂`) nos **menus que aparecem no próprio
+menu** — cabeçalho em cima, categorias embaixo — **sem perder nenhum comando**
+(atenção especial ao `!menubn`, que tem 348).
+
+#### Módulo novo: `menus/layout.js` (fonte única do desenho)
+`bold`, `boldItalic`, `TOPO`, `RODAPE_BLOCO`, `FECHO`, `cabecalho()`,
+`abrirCategoria()`, `categoria()`, `item()`. O `menu.js` passou a **importar** daqui
+em vez de manter a própria cópia — os dois estilos de bold (BOLD no cabeçalho,
+BOLD ITALIC nos títulos) vivem num lugar só. O `menu.js` **reexporta**
+`bold`/`boldItalic` para não quebrar quem importava dele.
+
+#### 15 menus convertidos
+`menuia · menudown · ferramentas · menufig · menulogo · menuedits · alteradores ·
+menumemb · menuadm · menudono · menubn · menufut · menurpg · menuvip · menugames`
+
+A conversão foi **mecânica e verificada**: só as **linhas de borda** mudam
+(cabeçalho + abertura/fechamento de categoria); as linhas com `${prefix}` são
+copiadas byte a byte. O script comparava a **contagem de comandos e de linhas de
+comando** antes/depois e **abortava sem escrever** se divergisse.
+
+**Resultado medido (baseline do git → depois):**
+
+| menu | comandos |
+|---|---|
+| menubn | **348 → 348** |
+| menuadm | 172 → 172 |
+| menudono | 166 → 166 |
+| menurpg | 149 → 149 |
+| alteradores | 58 → 58 |
+| menumemb | 54 → 54 |
+| menulogo | 44 → 44 |
+| menufut | 42 → 42 |
+| menugames | 28 → 28 |
+| ferramentas | 26 → 26 |
+| menudown | 20 → 20 |
+| menuia | 17 → 17 |
+| menufig | 16 → 16 |
+| menuedits | 5 → 5 |
+| menuvip | 0 → 0 |
+
+**1087 comandos preservados, 0 perdidos** (conferido também por `diff` das linhas
+de comando do `menubn`: **idênticas**).
+
+#### Casos especiais que o conversor teve de tratar
+1. **Cabeçalho dentro de template literal** (`    return \`╭━━━〔`) — o regex
+   inicial não pegava e o cabeçalho ficava antigo.
+2. **Categorias dentro de template aninhada** no `menubn`:
+   `${isLiteMode ? '' : \`╭─❖ 🔞 INTERAÇÕES...` e `` `}╭─❖ 😆 BRINCADEIRAS... ``
+   — a abertura vem colada no fecho da template. Sem tratar, essas duas
+   categorias ficavam com a borda velha.
+3. **`menugames` fecha com `⬣`** (não `╯`) e tem um bloco extra sem título.
+4. **`menufut` tinha um segundo cabeçalho** (`╭━━━〔 💡 INÍCIO RÁPIDO 〕━━━╮`).
+5. **`alteradores`** não usa `╭─❖`: tem variáveis (`menuTopBorder`,
+   `middleBorder`, `menuItemIcon`) e é chamado **sem** design customizado. Foi
+   reescrito no layout novo, agrupado pelos **9 títulos originais**, mantendo os
+   58 comandos na ordem.
+6. **`menuvip`** não tem comando cadastrado — o único `!` é o `!addcmdvip` da
+   instrução, que continua lá.
+
+#### Testes — `menu-layout` 15 → **20 testes / 215 asserções**
+- **15** — os 15 menus usam o cabeçalho e as caixas novas, e **não** têm mais as
+  linhas de borda antigas (checagem **por linha**, não substring: o fecho novo
+  também tem traços);
+- **16** — **contagem de comandos por menu** contra o baseline (trava contra
+  perda futura);
+- **17** — **`menubn`: os 348** + amostras de cada categoria (inclusive as
+  condicionais) + o **modo lite** continua escondendo as "picantes" e mantendo
+  centenas de comandos;
+- **18** — títulos em **bold italic** em 4 menus diferentes;
+- **19** — `menuvip` (sem comandos) não quebra.
+
+Regressões verdes: `get-message-inspector` 54/269, `midiaprefix` 26/83,
+`raja-selective` 23/0, `antifantasma-classificacao` 18/18, `ghost-detection` 24/81,
+`anti-seletiva` 32/32, `cmd-suggest` 21/68, `testcall` 35/127.

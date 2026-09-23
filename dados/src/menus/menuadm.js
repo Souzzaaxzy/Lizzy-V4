@@ -1,19 +1,20 @@
+import { boldItalic } from './layout.js';
+
 export default async function menuadm(prefix, botName = "MeuBot", userName = "Usuário") {
-    return `╭━━━〔 🛡️ ${botName} • 𝐀𝐃𝐌 〕━━━╮
-┃ 👋 Olá, @${userName}
-┃ 👑 Painel Administrativo
-┃ ⚙️ Gerencie todo o grupo
-╰━━━━━━━━━━━━━━━━━━━╯
+    return `╭━━━꧁༺ ✦ ${botName} ✦ ༻꧂━━━╮
+┃ 𖤐 𝐎𝐥á, @${userName}
+┃ 🛡️ Gestão do grupo
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━━━╯
 
 
-╭─❖ 🏛️ SISTEMA DE ELEIÇÃO
+╭━━━꧁༺ ㅤ🏛️ ${boldItalic('SISTEMA DE ELEIÇÃO')} 🏛️ㅤ ༻꧂━━━╮
 │ 🗳 ${prefix}eleicao
 │ 👤 ${prefix}cand
 │ ⏱ ${prefix}tempeleicao
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🛡️ GESTÃO DE USUÁRIOS
+╭━━━꧁༺ ㅤ🛡️ ${boldItalic('GESTÃO DE USUÁRIOS')} 🛡️ㅤ ༻꧂━━━╮
 │ 🚫 ${prefix}ban
 │ 🚫 ${prefix}bann @user1 @user2
 │ ☠ ${prefix}bbn @user1 @user2 @user3
@@ -42,17 +43,17 @@ export default async function menuadm(prefix, botName = "MeuBot", userName = "Us
 │ 📊 ${prefix}atividade
 │ 👤 ${prefix}checkativo
 │ 🖼 ${prefix}getpp
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🎯 METAS DE MENSAGENS
+╭━━━꧁༺ ㅤ🎯 ${boldItalic('METAS DE MENSAGENS')} 🎯ㅤ ༻꧂━━━╮
 │ 🎯 ${prefix}setdiario
 │ 📅 ${prefix}setsemanal
 │ 📊 ${prefix}vermetas
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🔒 CONTROLE DE ACESSO
+╭━━━꧁༺ ㅤ🔒 ${boldItalic('CONTROLE DE ACESSO')} 🔒ㅤ ༻꧂━━━╮
 │ 🚫 ${prefix}blockuser
 │ ✅ ${prefix}unblockuser
 │ 📋 ${prefix}listblockuser
@@ -61,20 +62,20 @@ export default async function menuadm(prefix, botName = "MeuBot", userName = "Us
 │ 📂 ${prefix}blockmenugp
 │ 📂 ${prefix}unblockmenugp
 │ 📑 ${prefix}listblockmenugp
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🛡️ CONTROLE LEGADO
+╭━━━꧁༺ ㅤ🛡️ ${boldItalic('CONTROLE LEGADO')} 🛡️ㅤ ༻꧂━━━╮
 │ 📋 ${prefix}listblocksgp
 │ ➕ ${prefix}addblacklist
 │ ➖ ${prefix}delblacklist
 │ 📖 ${prefix}listblacklist
 │ 🚫 ${prefix}blockcmd
 │ ✅ ${prefix}unblockcmd
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 💬 GESTÃO DO GRUPO
+╭━━━꧁༺ ㅤ💬 ${boldItalic('GESTÃO DO GRUPO')} 💬ㅤ ༻꧂━━━╮
 │ 🗑 ${prefix}del
 │ 🧹 ${prefix}limpar
 │ 📢 ${prefix}marcar
@@ -91,10 +92,10 @@ export default async function menuadm(prefix, botName = "MeuBot", userName = "Us
 │ 🎭 ${prefix}role.criar
 │ ✏ ${prefix}role.alterar
 │ ❌ ${prefix}role.excluir
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ ⚙️ GRUPO & PERMISSÕES
+╭━━━꧁༺ ㅤ⚙️ ${boldItalic('GRUPO & PERMISSÕES')} ⚙️ㅤ ༻꧂━━━╮
 │ 🔗 ${prefix}linkgp
 │ 🔓 ${prefix}grupo A/F
 │ 🕒 ${prefix}opengp
@@ -107,44 +108,44 @@ export default async function menuadm(prefix, botName = "MeuBot", userName = "Us
 │ ✅ ${prefix}aprovar
 │ ☑ ${prefix}aprovar all
 │ ❌ ${prefix}recusarsolic
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 👥 MODERADORES
+╭━━━꧁༺ ㅤ👥 ${boldItalic('MODERADORES')} 👥ㅤ ༻꧂━━━╮
 │ ➕ ${prefix}addmod
 │ ➖ ${prefix}delmod
 │ 📋 ${prefix}listmods
 │ 🔑 ${prefix}grantmodcmd
 │ ❌ ${prefix}revokemodcmd
 │ 📖 ${prefix}listmodcmds
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🐺 CARGO ALPHA
+╭━━━꧁༺ ㅤ🐺 ${boldItalic('CARGO ALPHA')} 🐺ㅤ ༻꧂━━━╮
 │ ➕ ${prefix}addalpha
 │ ➖ ${prefix}delalpha
 │ 📋 ${prefix}listalphas
 │ 🔑 ${prefix}grantalphacmd
 │ ❌ ${prefix}revokealphacmd
 │ 📖 ${prefix}listalphacmds
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🛡️ WHITELIST
+╭━━━꧁༺ ㅤ🛡️ ${boldItalic('WHITELIST')} 🛡️ㅤ ༻꧂━━━╮
 │ ➕ ${prefix}wladd
 │ ➖ ${prefix}wl.remove
 │ 📋 ${prefix}wl.lista
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🤝 PARCERIAS
+╭━━━꧁༺ ㅤ🤝 ${boldItalic('PARCERIAS')} 🤝ㅤ ༻꧂━━━╮
 │ 📋 ${prefix}parcerias
 │ ➕ ${prefix}addparceria
 │ ➖ ${prefix}delparceria
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🔒 SEGURANÇA
+╭━━━꧁༺ ㅤ🔒 ${boldItalic('SEGURANÇA')} 🔒ㅤ ༻꧂━━━╮
 │ 🌊 ${prefix}antiflood
 │ 🕵 ${prefix}x9
 │ 🃏 ${prefix}card on/off
@@ -170,10 +171,10 @@ export default async function menuadm(prefix, botName = "MeuBot", userName = "Us
 │ 🌐 ${prefix}antisocial
 │ 👤 ${prefix}perm @user
 │ 👤 ${prefix}delp @user
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🎨 CONFIGURAÇÕES
+╭━━━꧁༺ ㅤ🎨 ${boldItalic('CONFIGURAÇÕES')} 🎨ㅤ ༻꧂━━━╮
 │ 💬 ${prefix}legendasaiu
 │ 👋 ${prefix}legendabv
 │ 📥 ${prefix}legendaentrada
@@ -188,20 +189,20 @@ export default async function menuadm(prefix, botName = "MeuBot", userName = "Us
 │ 🖼 ${prefix}fotomenug
 │ 🎥 ${prefix}videomenug
 │ 🗑 ${prefix}removermediamenugrupo
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 💬 AUTO-RESPOSTAS
+╭━━━꧁༺ ㅤ💬 ${boldItalic('AUTO-RESPOSTAS')} 💬ㅤ ༻꧂━━━╮
 │ ➕ ${prefix}addautoadm
 │ 🖼 ${prefix}addautoadmidia
 │ 📋 ${prefix}listautoadm
 │ ➖ ${prefix}delautoadm
 │ 🤖 ${prefix}autorespostas
 │ 🔄 ${prefix}autorepo
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ ⚡ MODOS & ATIVAÇÕES
+╭━━━꧁༺ ㅤ⚡ ${boldItalic('MODOS & ATIVAÇÕES')} ⚡ㅤ ༻꧂━━━╮
 │ 📥 ${prefix}autodl
 │ 📏 ${prefix}minmessage
 │ 🤖 ${prefix}assistente
@@ -221,10 +222,10 @@ export default async function menuadm(prefix, botName = "MeuBot", userName = "Us
 │ 🖼 ${prefix}fotomenugrupo
 │ 📝 ${prefix}nomegp
 │ 👤 ${prefix}infoperso
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🤖 SISTEMA DE NPCs
+╭━━━꧁༺ ㅤ🤖 ${boldItalic('SISTEMA DE NPCs')} 🤖ㅤ ༻꧂━━━╮
 │ ▶ ${prefix}npc on
 │ ⏹ ${prefix}npc off
 │ 📊 ${prefix}npc status
@@ -232,10 +233,10 @@ export default async function menuadm(prefix, botName = "MeuBot", userName = "Us
 │ 📰 ${prefix}npc jornal on
 │ 📰 ${prefix}npc jornal off
 │ ⚙ ${prefix}npc config
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ ☀️ SAUDAÇÕES EM GRUPO
+╭━━━꧁༺ ㅤ☀️ ${boldItalic('SAUDAÇÕES EM GRUPO')} ☀️ㅤ ༻꧂━━━╮
 │ 🌅 ${prefix}dia
 │ 🌤️ ${prefix}tarde
 │ 🌙 ${prefix}noite
@@ -244,7 +245,7 @@ export default async function menuadm(prefix, botName = "MeuBot", userName = "Us
 │ 📢 ${prefix}cvc2
 │ 💀 ${prefix}cvc3
 │ ⚠️ ${prefix}cvc4
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 ╭─────────────────╮
 ╰─────────────────╯

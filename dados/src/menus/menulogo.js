@@ -1,12 +1,13 @@
+import { boldItalic } from './layout.js';
+
 export default async function menuLogo(prefix, botName = "MeuBot", userName = "Usuário") {
-    return `╭━━━〔 🎨 ${botName} • 𝐋𝐎𝐆𝐎𝐓𝐈𝐏𝐎𝐒 〕━━━╮
-┃ 👋 Olá, @${userName}
-┃ 🖌️ Crie logos e artes personalizadas
-┃ ✨ Diversos estilos disponíveis
-╰━━━━━━━━━━━━━━━━━━━━━━━━━╯
+    return `╭━━━꧁༺ ✦ ${botName} ✦ ༻꧂━━━╮
+┃ 𖤐 𝐎𝐥á, @${userName}
+┃ 🎨 Geradores de logotipo
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━━━╯
 
 
-╭─❖ 🎨 LOGOTIPOS • 1 TEXTO
+╭━━━꧁༺ ㅤ🎨 ${boldItalic('LOGOTIPOS 1 TEXTO')} 🎨ㅤ ༻꧂━━━╮
 │ 👾 ${prefix}amongus
 │ 👑 ${prefix}royal
 │ 🤖 ${prefix}mascotemetal
@@ -41,10 +42,10 @@ export default async function menuLogo(prefix, botName = "MeuBot", userName = "U
 │ 🐉 ${prefix}dragonfire
 │ 🎯 ${prefix}pubgavatar
 │ 💥 ${prefix}comics
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🖼️ LOGOTIPOS • 2 TEXTOS
+╭━━━꧁༺ ㅤ🖼️ ${boldItalic('LOGOTIPOS 2 TEXTOS')} 🖼️ㅤ ༻꧂━━━╮
 │ 🟧 ${prefix}pornhub
 │ 🦸 ${prefix}avengers
 │ 🧱 ${prefix}graffiti
@@ -55,7 +56,7 @@ export default async function menuLogo(prefix, botName = "MeuBot", userName = "U
 │ 👾 ${prefix}amongus
 │ ❤️ ${prefix}deadpool
 │ 🩷 ${prefix}blackpink
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 ╭─────────────────╮
 ╰─────────────────╯

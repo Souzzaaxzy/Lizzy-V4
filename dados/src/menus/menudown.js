@@ -1,35 +1,36 @@
+import { boldItalic } from './layout.js';
+
 export default async function menuDown(prefix, botName = "MeuBot", userName = "Usuário") {
-    return `╭━━━〔 🌐 ${botName} • 𝐏𝐄𝐒𝐐𝐔𝐈𝐒𝐀𝐒 & 𝐃𝐎𝐖𝐍𝐋𝐎𝐀𝐃𝐒 〕━━━╮
-┃ 👋 Olá, @${userName}
-┃ 🌍 Pesquisa, músicas e downloads
-┃ ⚡ Tudo em um só lugar
-╰━━━━━━━━━━━━━━━━━━━━━━━━━╯
+    return `╭━━━꧁༺ ✦ ${botName} ✦ ༻꧂━━━╮
+┃ 𖤐 𝐎𝐥á, @${userName}
+┃ 📥 Pesquisas & downloads
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━━━╯
 
 
-╭─❖ 🔍 PESQUISAS & CONSULTAS
+╭━━━꧁༺ ㅤ🔍 ${boldItalic('PESQUISAS & CONSULTAS')} 🔍ㅤ ༻꧂━━━╮
 │ 🌐 ${prefix}google
 │ 📰 ${prefix}noticias
 │ 📱 ${prefix}apps
 │ 📖 ${prefix}dicionario
 │ 📚 ${prefix}wikipedia
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🎵 MÚSICA & ÁUDIO
+╭━━━꧁༺ ㅤ🎵 ${boldItalic('MÚSICA & ÁUDIO')} 🎵ㅤ ༻꧂━━━╮
 │ 🎼 ${prefix}letra
 │ ▶️ ${prefix}play
 │ 🎧 ${prefix}play2
 │ 🟢 ${prefix}spotify
 │ ☁️ ${prefix}soundcloud
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🎬 VÍDEOS & STREAMING
+╭━━━꧁༺ ㅤ🎬 ${boldItalic('VÍDEOS & STREAMING')} 🎬ㅤ ༻꧂━━━╮
 │ 🎥 ${prefix}playvid
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 📥 DOWNLOADS
+╭━━━꧁༺ ㅤ📥 ${boldItalic('DOWNLOADS')} 📥ㅤ ༻꧂━━━╮
 │ 🎵 ${prefix}tiktok
 │ 📸 ${prefix}instagram
 │ 🎬 ${prefix}kwai
@@ -38,12 +39,12 @@ export default async function menuDown(prefix, botName = "MeuBot", userName = "U
 │ ☁️ ${prefix}gdrive
 │ 📦 ${prefix}mediafire
 │ 🐦 ${prefix}twitter
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 📱 MÍDIAS SOCIAIS
+╭━━━꧁༺ ㅤ📱 ${boldItalic('MÍDIAS SOCIAIS')} 📱ㅤ ༻꧂━━━╮
 │ 📌 ${prefix}pinterest
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 ╭─────────────────╮
 ╰─────────────────╯

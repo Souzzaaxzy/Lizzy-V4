@@ -2,14 +2,16 @@
  * Menu Games - Menu de comandos de jogos
  */
 
+import { boldItalic } from './layout.js';
+
 export default async function menugames(prefix, botName = "MeuBot", userName = "Usuário") {
-    return `╭━━━〔 🎮 ${botName} • 𝐆𝐀𝐌𝐄𝐒 〕━━━⬣
-┃ 🕹️ Consulte perfis, rankings e estatísticas
-┃ de diversos jogos em um só lugar.
-╰━━━━━━━━━━━━━━━━━━━━━━━━━━⬣
+    return `╭━━━꧁༺ ✦ ${botName} ✦ ༻꧂━━━╮
+┃ 𖤐 𝐎𝐥á, @${userName}
+┃ 🕹️ Perfis e rankings de jogos
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━━━╯
 
 
-╭─❖ 🔥 FREE FIRE
+╭━━━꧁༺ ㅤ🔥 ${boldItalic('FREE FIRE')} 🔥ㅤ ༻꧂━━━╮
 │ ➜ ${prefix}ffperfil <UID>
 │    ╰ Ver perfil completo
 │
@@ -18,10 +20,10 @@ export default async function menugames(prefix, botName = "MeuBot", userName = "
 │
 │ ➜ ${prefix}ffguilda <ID>
 │    ╰ Informações da guilda
-╰──────────────────────────⬣
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 👑 CLASH ROYALE
+╭━━━꧁༺ ㅤ👑 ${boldItalic('CLASH ROYALE')} 👑ㅤ ༻꧂━━━╮
 │ ➜ ${prefix}crperfil <#TAG>
 │    ╰ Perfil do jogador
 │
@@ -33,10 +35,10 @@ export default async function menugames(prefix, botName = "MeuBot", userName = "
 │
 │ ➜ ${prefix}crranking
 │    ╰ Ranking global
-╰──────────────────────────⬣
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ ⭐ BRAWL STARS
+╭━━━꧁༺ ㅤ⭐ ${boldItalic('BRAWL STARS')} ⭐ㅤ ༻꧂━━━╮
 │ ➜ ${prefix}bsperfil <#TAG>
 │    ╰ Perfil do jogador
 │
@@ -48,10 +50,10 @@ export default async function menugames(prefix, botName = "MeuBot", userName = "
 │
 │ ➜ ${prefix}bsranking
 │    ╰ Ranking global
-╰──────────────────────────⬣
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🏰 CLASH OF CLANS
+╭━━━꧁༺ ㅤ🏰 ${boldItalic('CLASH OF CLANS')} 🏰ㅤ ༻꧂━━━╮
 │ ➜ ${prefix}cocperfil <#TAG>
 │    ╰ Perfil do jogador
 │
@@ -63,10 +65,10 @@ export default async function menugames(prefix, botName = "MeuBot", userName = "
 │
 │ ➜ ${prefix}cocranking
 │    ╰ Ranking global
-╰──────────────────────────⬣
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🎮 ROBLOX
+╭━━━꧁༺ ㅤ🎮 ${boldItalic('ROBLOX')} 🎮ㅤ ༻꧂━━━╮
 │ ➜ ${prefix}rbxperfil <username>
 │    ╰ Perfil do usuário
 │
@@ -75,10 +77,10 @@ export default async function menugames(prefix, botName = "MeuBot", userName = "
 │
 │ ➜ ${prefix}rbxjogos <username>
 │    ╰ Jogos favoritos
-╰──────────────────────────⬣
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🎯 VALORANT
+╭━━━꧁༺ ㅤ🎯 ${boldItalic('VALORANT')} 🎯ㅤ ༻꧂━━━╮
 │ ➜ ${prefix}vaperfil <Nome#TAG>
 │    ╰ Perfil competitivo
 │
@@ -87,10 +89,10 @@ export default async function menugames(prefix, botName = "MeuBot", userName = "
 │
 │ ➜ ${prefix}varanking
 │    ╰ Top jogadores
-╰──────────────────────────⬣
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 👑 LEAGUE OF LEGENDS
+╭━━━꧁༺ ㅤ👑 ${boldItalic('LEAGUE OF LEGENDS')} 👑ㅤ ༻꧂━━━╮
 │ ➜ ${prefix}lolperfil <Nome>
 │    ╰ Perfil do invocador
 │
@@ -99,10 +101,10 @@ export default async function menugames(prefix, botName = "MeuBot", userName = "
 │
 │ ➜ ${prefix}lolmaster
 │    ╰ Top Master
-╰──────────────────────────⬣
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🎪 PUBG
+╭━━━꧁༺ ㅤ🎪 ${boldItalic('PUBG')} 🎪ㅤ ༻꧂━━━╮
 │ ➜ ${prefix}pubgperfil <Nome>
 │    ╰ Perfil do jogador
 │
@@ -111,10 +113,10 @@ export default async function menugames(prefix, botName = "MeuBot", userName = "
 │
 │ ➜ ${prefix}pubgmatch <Nome>
 │    ╰ Últimas partidas
-╰──────────────────────────⬣
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭━━━━━━━━━━━━━━━━━━━━━━━━━━⬣
+╭━━━꧁༺ ✦ ༻꧂━━━╮
 ┃ 💡 Dica:
 ┃ Use *${prefix}ajuda <comando>* para
 ┃ visualizar exemplos e detalhes.

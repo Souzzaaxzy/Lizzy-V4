@@ -1,12 +1,13 @@
+import { boldItalic } from './layout.js';
+
 export default async function menuRpg(prefix, botName = "MeuBot", userName = "Usuário") {
-    return `╭━━━〔 ⚔️ ${botName} • 𝐑𝐏𝐆 〕━━━╮
-┃ 👋 Olá, @${userName}
-┃ ⚔️ Sistema RPG completo
-┃ 🌟 Evolua, batalhe e conquiste
-╰━━━━━━━━━━━━━━━━━━━━━━╯
+    return `╭━━━꧁༺ ✦ ${botName} ✦ ༻꧂━━━╮
+┃ 𖤐 𝐎𝐥á, @${userName}
+┃ ⚔️ Aventura e progressão
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━━━╯
 
 
-╭─❖ 👤 PERFIL & STATUS
+╭━━━꧁༺ ㅤ👤 ${boldItalic('PERFIL & STATUS')} 👤ㅤ ༻꧂━━━╮
 │ 📜 ${prefix}perfilrpg
 │ 💰 ${prefix}carteira
 │ 🏆 ${prefix}toprpg
@@ -15,19 +16,19 @@ export default async function menuRpg(prefix, botName = "MeuBot", userName = "Us
 │ 🎒 ${prefix}inv
 │ ⚔️ ${prefix}equipamentos
 │ 🏅 ${prefix}conquistas
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🌟 EVOLUÇÃO & PRESTIGE
+╭━━━꧁༺ ㅤ🌟 ${boldItalic('EVOLUÇÃO & PRESTIGE')} 🌟ㅤ ༻꧂━━━╮
 │ ⬆️ ${prefix}evoluir
 │ 🔥 ${prefix}prestige
 │ 🔥 ${prefix}streak
 │ 🎁 ${prefix}reivindicar
 │ ⚡ ${prefix}speedup
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 💰 ECONOMIA & FINANÇAS
+╭━━━꧁༺ ㅤ💰 ${boldItalic('ECONOMIA & FINANÇAS')} 💰ㅤ ༻꧂━━━╮
 │ 🏦 ${prefix}dep <valor|all>
 │ 💸 ${prefix}sacar <valor|all>
 │ 💳 ${prefix}pix @user <valor>
@@ -40,17 +41,17 @@ export default async function menuRpg(prefix, botName = "MeuBot", userName = "Us
 │ 🧬 ${prefix}habilidades
 │ 📅 ${prefix}desafiosemanal
 │ 🗓️ ${prefix}desafiomensal
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 📈 INVESTIMENTOS
+╭━━━꧁༺ ㅤ📈 ${boldItalic('INVESTIMENTOS')} 📈ㅤ ༻꧂━━━╮
 │ 📊 ${prefix}investir
 │ 📈 ${prefix}investir <ação> <qtd>
 │ 💹 ${prefix}sell <ação> <qtd>
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🎰 CASSINO & APOSTAS
+╭━━━꧁༺ ㅤ🎰 ${boldItalic('CASSINO & APOSTAS')} 🎰ㅤ ༻꧂━━━╮
 │ 🎲 ${prefix}dados <valor>
 │ 🪙 ${prefix}coinflip <cara|coroa> <valor>
 │ 🚀 ${prefix}crash <valor>
@@ -63,10 +64,10 @@ export default async function menuRpg(prefix, botName = "MeuBot", userName = "Us
 │ 🐎 ${prefix}corrida <valor> <cavalo>
 │ 🔨 ${prefix}leilao
 │ 💎 ${prefix}topriqueza
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🎯 ATIVIDADES DIÁRIAS
+╭━━━꧁༺ ㅤ🎯 ${boldItalic('ATIVIDADES DIÁRIAS')} 🎯ㅤ ༻꧂━━━╮
 │ 🎁 ${prefix}diario
 │ 💼 ${prefix}work
 │ ⛏️ ${prefix}mine
@@ -83,41 +84,41 @@ export default async function menuRpg(prefix, botName = "MeuBot", userName = "Us
 │ 🍖 ${prefix}eat <comida>
 │ 💵 ${prefix}vendercomida <item>
 │ 🌱 ${prefix}sementes
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🗺️ AVENTURA & EXPLORAÇÃO
+╭━━━꧁༺ ㅤ🗺️ ${boldItalic('AVENTURA & EXPLORAÇÃO')} 🗺️ㅤ ༻꧂━━━╮
 │ 🌎 ${prefix}explore
 │ 🏰 ${prefix}masmorra
 │ 👹 ${prefix}bossrpg
 │ 🎉 ${prefix}eventos
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🏰 DUNGEONS & RAIDS
+╭━━━꧁༺ ㅤ🏰 ${boldItalic('DUNGEONS & RAIDS')} 🏰ㅤ ༻꧂━━━╮
 │ 📜 ${prefix}dungeon
 │ 🏗️ ${prefix}dungeon criar <tipo>
 │ 🚪 ${prefix}dungeon entrar <id>
 │ ⚔️ ${prefix}dungeon iniciar
 │ 🚶 ${prefix}dungeon sair
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ ⚔️ CLASSES & PROFISSÕES
+╭━━━꧁༺ ㅤ⚔️ ${boldItalic('CLASSES & PROFISSÕES')} ⚔️ㅤ ༻꧂━━━╮
 │ 📚 ${prefix}class
 │ 🛡️ ${prefix}class <nome>
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🏠 HOUSING
+╭━━━꧁༺ ㅤ🏠 ${boldItalic('HOUSING')} 🏠ㅤ ༻꧂━━━╮
 │ 🏡 ${prefix}casa
 │ 🏠 ${prefix}casa comprar <tipo>
 │ 📦 ${prefix}casa coletar
 │ 🎨 ${prefix}casa decorar <item>
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🛒 MERCADO
+╭━━━꧁༺ ㅤ🛒 ${boldItalic('MERCADO')} 🛒ㅤ ༻꧂━━━╮
 │ 🔨 ${prefix}auction
 │ 💰 ${prefix}auction vender <item> <preço>
 │ 🛍️ ${prefix}auction comprar <nº>
@@ -130,10 +131,10 @@ export default async function menuRpg(prefix, botName = "MeuBot", userName = "Us
 │ 🛒 ${prefix}cmerc <nº>
 │ 📜 ${prefix}meusan
 │ ❌ ${prefix}cancelar <nº>
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ ⚔️ COMBATE & BATALHAS
+╭━━━꧁༺ ㅤ⚔️ ${boldItalic('COMBATE & BATALHAS')} ⚔️ㅤ ༻꧂━━━╮
 │ ⚔️ ${prefix}duelrpg @user
 │ 🏟️ ${prefix}arena
 │ 🏆 ${prefix}torneio
@@ -141,20 +142,20 @@ export default async function menuRpg(prefix, botName = "MeuBot", userName = "Us
 │ 💀 ${prefix}crime
 │ ⚔️ ${prefix}guerra
 │ 🎯 ${prefix}desafio
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🔨 CRAFTING & EQUIPAMENTOS
+╭━━━꧁༺ ㅤ🔨 ${boldItalic('CRAFTING & EQUIPAMENTOS')} 🔨ㅤ ༻꧂━━━╮
 │ 🔥 ${prefix}forge <item>
 │ ✨ ${prefix}enchant
 │ 🗑️ ${prefix}dismantle <item>
 │ 🔧 ${prefix}reparar <item>
 │ ⛏️ ${prefix}materiais
 │ 💰 ${prefix}precos
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 💝 SOCIAL & RELACIONAMENTOS
+╭━━━꧁༺ ㅤ💝 ${boldItalic('SOCIAL & RELACIONAMENTOS')} 💝ㅤ ༻꧂━━━╮
 │ 💍 ${prefix}casar @user
 │ 💔 ${prefix}divorciar
 │ ❤️ ${prefix}namorar @user
@@ -165,18 +166,18 @@ export default async function menuRpg(prefix, botName = "MeuBot", userName = "Us
 │ 💋 ${prefix}beijarrpg @user
 │ 👊 ${prefix}baterrpg @user
 │ 🛡️ ${prefix}proteger @user
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 👨‍👩‍👧 FAMÍLIA & ADOÇÃO
+╭━━━꧁༺ ㅤ👨‍👩‍👧 ${boldItalic('FAMÍLIA & ADOÇÃO')} 👨‍👩‍👧ㅤ ༻꧂━━━╮
 │ 👪 ${prefix}familia
 │ 👶 ${prefix}adotaruser @user
 │ ❌ ${prefix}deserdar @user
 │ 🌳 ${prefix}arvore
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🏰 CLÃ & COMUNIDADE
+╭━━━꧁༺ ㅤ🏰 ${boldItalic('CLÃ & COMUNIDADE')} 🏰ㅤ ༻꧂━━━╮
 │ 🏰 ${prefix}criarcla <nome>
 │ 📜 ${prefix}cla
 │ ➕ ${prefix}convidar @user
@@ -185,16 +186,16 @@ export default async function menuRpg(prefix, botName = "MeuBot", userName = "Us
 │ ❌ ${prefix}recusarconvite
 │ 🗑️ ${prefix}expulsar @user
 │ 🚫 ${prefix}rmconvite @user
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 📜 MISSÕES & CONQUISTAS
+╭━━━꧁༺ ㅤ📜 ${boldItalic('MISSÕES & CONQUISTAS')} 📜ㅤ ༻꧂━━━╮
 │ 📋 ${prefix}missoes
 │ 🏅 ${prefix}conquistas
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🐾 PETS & COMPANHEIROS
+╭━━━꧁༺ ㅤ🐾 ${boldItalic('PETS & COMPANHEIROS')} 🐾ㅤ ༻꧂━━━╮
 │ 🐕 ${prefix}pets
 │ 🐾 ${prefix}adotar <pet>
 │ 🍖 ${prefix}feed <nº>
@@ -205,16 +206,16 @@ export default async function menuRpg(prefix, botName = "MeuBot", userName = "Us
 │ 🎲 ${prefix}petbet <valor> <nº> @user
 │ 🎒 ${prefix}equippet
 │ 🚫 ${prefix}unequippet
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ ⭐ REPUTAÇÃO & FAMA
+╭━━━꧁༺ ㅤ⭐ ${boldItalic('REPUTAÇÃO & FAMA')} ⭐ㅤ ༻꧂━━━╮
 │ ⭐ ${prefix}rep
 │ 🗳️ ${prefix}vote @user
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 💎 LOJA PREMIUM
+╭━━━꧁༺ ㅤ💎 ${boldItalic('LOJA PREMIUM')} 💎ㅤ ༻꧂━━━╮
 │ 💎 ${prefix}lojapremium
 │ 🛒 ${prefix}comprarpremium <item>
 │ 🚀 ${prefix}boost
@@ -225,10 +226,10 @@ export default async function menuRpg(prefix, botName = "MeuBot", userName = "Us
 │ 📊 ${prefix}meustats
 │ 🎁 ${prefix}doar <valor>
 │ 🎁 ${prefix}presente @user <item>
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🔧 ADMIN RPG
+╭━━━꧁༺ ㅤ🔧 ${boldItalic('ADMIN RPG')} 🔧ㅤ ༻꧂━━━╮
 │ 👑 ${prefix}rpgadd @user <valor>
 │ 👑 ${prefix}rpgremove @user <valor>
 │ ⭐ ${prefix}rpgsetlevel @user <nivel>
@@ -238,7 +239,7 @@ export default async function menuRpg(prefix, botName = "MeuBot", userName = "Us
 │ 💥 ${prefix}rpgresetglobal confirmar
 │ 👶 ${prefix}resetadot @user
 │ 📊 ${prefix}rpgstats
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 ╭─────────────────╮
 ╰─────────────────╯`;

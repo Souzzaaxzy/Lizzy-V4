@@ -1,107 +1,104 @@
-export default async function menuAlterador(prefix, botName = "MeuBot", userName = "Usuário", {
-    header = `╔══════════════════════════════════════════════╗\n║              🤖 ${botName}              ║\n║              Olá, ${userName}!              ║\n╚══════════════════════════════════════════════╝`,
-    menuTopBorder = "╭──────────────────────────────────────────────╮",
-    bottomBorder = "╰──────────────────────────────────────────────╯",
-    menuTitleIcon = "◈",
-    menuItemIcon = "▸",
-    separatorIcon = "❁",
-    middleBorder = "│",
-    videoMenuTitle = "🎬 EFEITOS DE VÍDEO",
-    audioMenuTitle = "🎵 EFEITOS DE ÁUDIO",
-    imageMenuTitle = "🖼️ ALTERAR IMAGEM"
-} = {}) {
-    return `${header}
+import { boldItalic, cabecalho, FECHO } from './layout.js';
 
-${menuTopBorder}
-│ ${videoMenuTitle}
-${middleBorder}
-${middleBorder} ${menuTitleIcon} EDIÇÃO BÁSICA ${menuTitleIcon}
-${middleBorder} ${menuItemIcon}${prefix}cortarvideo <inicio> <fim>
-${middleBorder} ${menuItemIcon}${prefix}tomp3 - Converter para áudio
-${middleBorder}
-${middleBorder} ${menuTitleIcon} VELOCIDADE ${menuTitleIcon}
-${middleBorder} ${menuItemIcon}${prefix}videorapido
-${middleBorder} ${menuItemIcon}${prefix}fastvid
-${middleBorder} ${menuItemIcon}${prefix}videoslow
-${middleBorder} ${menuItemIcon}${prefix}videolento
-${middleBorder}
-${middleBorder} ${menuTitleIcon} EFEITOS ${menuTitleIcon}
-${middleBorder} ${menuItemIcon}${prefix}videoreverso
-${middleBorder} ${menuItemIcon}${prefix}videoloop
-${middleBorder} ${menuItemIcon}${prefix}videomudo
-${middleBorder} ${menuItemIcon}${prefix}videobw
-${middleBorder} ${menuItemIcon}${prefix}pretoebranco
-${middleBorder} ${menuItemIcon}${prefix}sepia
-${middleBorder} ${menuItemIcon}${prefix}espelhar
-${middleBorder} ${menuItemIcon}${prefix}rotacionar
-${bottomBorder}
+export default async function menuAlterador(prefix, botName = "MeuBot", userName = "Usuário") {
+    return `${cabecalho(botName, userName, 'ALTERADORES', '🎬', ['🎬 Efeitos de vídeo, áudio e imagem'])}
 
-${menuTopBorder}
-│ ${imageMenuTitle}
-${middleBorder}
-${middleBorder} ${menuItemIcon}${prefix}rmbg
-${middleBorder} ${menuItemIcon}${prefix}upscale
-${bottomBorder}
 
-${menuTopBorder}
-│ ${audioMenuTitle}
-${middleBorder}
-${middleBorder} ${menuTitleIcon} EDIÇÃO BÁSICA ${menuTitleIcon}
-${middleBorder} ${menuItemIcon}${prefix}cortaraudio <inicio> <fim>
-${middleBorder} ${menuItemIcon}${prefix}velocidade <0.5-3.0>
-${middleBorder} ${menuItemIcon}${prefix}speed <0.5-3.0>
-${middleBorder} ${menuItemIcon}${prefix}normalizar
-${middleBorder}
-${middleBorder} ${menuTitleIcon} MUDANÇA DE VOZ ${menuTitleIcon}
-${middleBorder} ${menuItemIcon}${prefix}boyvoice
-${middleBorder} ${menuItemIcon}${prefix}vozmenino
-${middleBorder} ${menuItemIcon}${prefix}womenvoice
-${middleBorder} ${menuItemIcon}${prefix}vozmulher
-${middleBorder} ${menuItemIcon}${prefix}manvoice
-${middleBorder} ${menuItemIcon}${prefix}vozhomem
-${middleBorder} ${menuItemIcon}${prefix}childvoice
-${middleBorder} ${menuItemIcon}${prefix}vozcrianca
-${middleBorder}
-${middleBorder} ${menuTitleIcon} EFEITOS DE VELOCIDADE ${menuTitleIcon}
-${middleBorder} ${menuItemIcon}${prefix}speedup
-${middleBorder} ${menuItemIcon}${prefix}vozrapida
-${middleBorder} ${menuItemIcon}${prefix}audiorapido
-${middleBorder} ${menuItemIcon}${prefix}vozlenta
-${middleBorder} ${menuItemIcon}${prefix}audiolento
-${middleBorder}
-${middleBorder} ${menuTitleIcon} EFEITOS DE BASS & GRAVE ${menuTitleIcon}
-${middleBorder} ${menuItemIcon}${prefix}bass
-${middleBorder} ${menuItemIcon}${prefix}bass2
-${middleBorder} ${menuItemIcon}${prefix}bass3
-${middleBorder} ${menuItemIcon}${prefix}bassbn <1-20>
-${middleBorder} ${menuItemIcon}${prefix}grave
-${middleBorder} ${menuItemIcon}${prefix}vozgrave
-${middleBorder}
-${middleBorder} ${menuTitleIcon} EFEITOS ESPECIAIS ${menuTitleIcon}
-${middleBorder} ${menuItemIcon}${prefix}vozeco
-${middleBorder} ${menuItemIcon}${prefix}eco
-${middleBorder} ${menuItemIcon}${prefix}vozcaverna
-${middleBorder} ${menuItemIcon}${prefix}reverb
-${middleBorder} ${menuItemIcon}${prefix}reversobn
-${middleBorder} ${menuItemIcon}${prefix}reverse
-${middleBorder} ${menuItemIcon}${prefix}audioreverso
-${middleBorder} ${menuItemIcon}${prefix}chorus
-${middleBorder} ${menuItemIcon}${prefix}phaser
-${middleBorder} ${menuItemIcon}${prefix}flanger
-${middleBorder} ${menuItemIcon}${prefix}tremolo
-${middleBorder} ${menuItemIcon}${prefix}vibrato
-${middleBorder}
-${middleBorder} ${menuTitleIcon} VOLUME & EQUALIZAÇÃO ${menuTitleIcon}
-${middleBorder} ${menuItemIcon}${prefix}volumeboost
-${middleBorder} ${menuItemIcon}${prefix}aumentarvolume
-${middleBorder} ${menuItemIcon}${prefix}equalizer
-${middleBorder} ${menuItemIcon}${prefix}equalizar
-${middleBorder} ${menuItemIcon}${prefix}overdrive
-${middleBorder} ${menuItemIcon}${prefix}pitch
-${middleBorder} ${menuItemIcon}${prefix}lowpass
-${bottomBorder}
+╭━━━꧁༺ ㅤ✂️ ${boldItalic('EDIÇÃO BÁSICA')} ✂️ㅤ ༻꧂━━━╮
+│ ➜ ${prefix}cortarvideo <inicio> <fim>
+│ ➜ ${prefix}tomp3
+│    ╰ Converter para áudio
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
-╭─────────────────╮
-╰─────────────────╯
+
+╭━━━꧁༺ ㅤ⏱️ ${boldItalic('VELOCIDADE')} ⏱️ㅤ ༻꧂━━━╮
+│ ➜ ${prefix}videorapido
+│ ➜ ${prefix}fastvid
+│ ➜ ${prefix}videoslow
+│ ➜ ${prefix}videolento
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
+
+
+╭━━━꧁༺ ㅤ✨ ${boldItalic('EFEITOS')} ✨ㅤ ༻꧂━━━╮
+│ ➜ ${prefix}videoreverso
+│ ➜ ${prefix}videoloop
+│ ➜ ${prefix}videomudo
+│ ➜ ${prefix}videobw
+│ ➜ ${prefix}pretoebranco
+│ ➜ ${prefix}sepia
+│ ➜ ${prefix}espelhar
+│ ➜ ${prefix}rotacionar
+│ ➜ ${prefix}rmbg
+│ ➜ ${prefix}upscale
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
+
+
+╭━━━꧁༺ ㅤ✂️ ${boldItalic('EDIÇÃO BÁSICA')} ✂️ㅤ ༻꧂━━━╮
+│ ➜ ${prefix}cortaraudio <inicio> <fim>
+│ ➜ ${prefix}velocidade <0.5-3.0>
+│ ➜ ${prefix}speed <0.5-3.0>
+│ ➜ ${prefix}normalizar
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
+
+
+╭━━━꧁༺ ㅤ🎙️ ${boldItalic('MUDANÇA DE VOZ')} 🎙️ㅤ ༻꧂━━━╮
+│ ➜ ${prefix}boyvoice
+│ ➜ ${prefix}vozmenino
+│ ➜ ${prefix}womenvoice
+│ ➜ ${prefix}vozmulher
+│ ➜ ${prefix}manvoice
+│ ➜ ${prefix}vozhomem
+│ ➜ ${prefix}childvoice
+│ ➜ ${prefix}vozcrianca
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
+
+
+╭━━━꧁༺ ㅤ⏩ ${boldItalic('EFEITOS DE VELOCIDADE')} ⏩ㅤ ༻꧂━━━╮
+│ ➜ ${prefix}speedup
+│ ➜ ${prefix}vozrapida
+│ ➜ ${prefix}audiorapido
+│ ➜ ${prefix}vozlenta
+│ ➜ ${prefix}audiolento
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
+
+
+╭━━━꧁༺ ㅤ🔊 ${boldItalic('EFEITOS DE BASS & GRAVE')} 🔊ㅤ ༻꧂━━━╮
+│ ➜ ${prefix}bass
+│ ➜ ${prefix}bass2
+│ ➜ ${prefix}bass3
+│ ➜ ${prefix}bassbn <1-20>
+│ ➜ ${prefix}grave
+│ ➜ ${prefix}vozgrave
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
+
+
+╭━━━꧁༺ ㅤ🌈 ${boldItalic('EFEITOS ESPECIAIS')} 🌈ㅤ ༻꧂━━━╮
+│ ➜ ${prefix}vozeco
+│ ➜ ${prefix}eco
+│ ➜ ${prefix}vozcaverna
+│ ➜ ${prefix}reverb
+│ ➜ ${prefix}reversobn
+│ ➜ ${prefix}reverse
+│ ➜ ${prefix}audioreverso
+│ ➜ ${prefix}chorus
+│ ➜ ${prefix}phaser
+│ ➜ ${prefix}flanger
+│ ➜ ${prefix}tremolo
+│ ➜ ${prefix}vibrato
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
+
+
+╭━━━꧁༺ ㅤ🎚️ ${boldItalic('VOLUME & EQUALIZAÇÃO')} 🎚️ㅤ ༻꧂━━━╮
+│ ➜ ${prefix}volumeboost
+│ ➜ ${prefix}aumentarvolume
+│ ➜ ${prefix}equalizer
+│ ➜ ${prefix}equalizar
+│ ➜ ${prefix}overdrive
+│ ➜ ${prefix}pitch
+│ ➜ ${prefix}lowpass
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
+
+
+${FECHO(botName)}
 `;
 }

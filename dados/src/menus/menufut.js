@@ -1,103 +1,104 @@
+import { boldItalic } from './layout.js';
+
 export default async function menuFut(prefix, botName = "MeuBot", userName = "Usuário") {
-    return `╭━━━〔 ⚽ ${botName} • 𝐅𝐔𝐓𝐄𝐁𝐎𝐋 𝐆𝐋𝐎𝐁𝐀𝐋 〕━━━╮
-┃ 👋 Olá, @${userName}
-┃ ⚽ Modo Futebol Ativo
-┃ 🏆 Gerencie sua carreira e seu clube
-╰━━━━━━━━━━━━━━━━━━━━━━━━━╯
+    return `╭━━━꧁༺ ✦ ${botName} ✦ ༻꧂━━━╮
+┃ 𖤐 𝐎𝐥á, @${userName}
+┃ ⚽ Futebol global
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━━━╯
 
 
-╭─❖ 👤 PERFIL & STATUS
+╭━━━꧁༺ ㅤ👤 ${boldItalic('PERFIL & STATUS')} 👤ㅤ ༻꧂━━━╮
 │ 👤 ${prefix}fut perfil
 │ 📊 ${prefix}fut stats
 │ 💰 ${prefix}fut saldo
 │ ⚡ ${prefix}fut energia
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🏋️ TREINAMENTO
+╭━━━꧁༺ ㅤ🏋️ ${boldItalic('TREINAMENTO')} 🏋️ㅤ ༻꧂━━━╮
 │ 🏋️ ${prefix}fut tre pac/sho/pas/dri/def/phy
 │ 😴 ${prefix}fut descansar
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ ⚔️ PARTIDAS & DESAFIOS
+╭━━━꧁༺ ㅤ⚔️ ${boldItalic('PARTIDAS & DESAFIOS')} ⚔️ㅤ ༻꧂━━━╮
 │ 🎮 ${prefix}fut x1 @usuario
 │ ✅ ${prefix}fut ax1
 │ ❌ ${prefix}fut rx1
 │ 🎯 ${prefix}fut solo [normal/dificil/extremo]
 │ 🔥 ${prefix}fut rivalidade @user
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🏆 TORNEIOS
+╭━━━꧁༺ ㅤ🏆 ${boldItalic('TORNEIOS')} 🏆ㅤ ༻꧂━━━╮
 │ 📋 ${prefix}fut torneio
 │ 🎫 ${prefix}fut torneio entrar [ID]
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 📊 RANKINGS
+╭━━━꧁༺ ㅤ📊 ${boldItalic('RANKINGS')} 📊ㅤ ༻꧂━━━╮
 │ 🥇 ${prefix}fut divisoes
 │ 📈 ${prefix}fut ranking
 │ 🌍 ${prefix}fut topglobal
 │ ⚽ ${prefix}fut rankingclubes
 │ ⭐ ${prefix}fut soloscore
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ ⭐ EVOLUÇÃO DO JOGADOR
+╭━━━꧁༺ ㅤ⭐ ${boldItalic('EVOLUÇÃO DO JOGADOR')} ⭐ㅤ ༻꧂━━━╮
 │ 📊 ${prefix}fut xp
 │ 💎 ${prefix}fut evoluir [attr] [pts]
 │ 🎯 ${prefix}fut atributos
 │ 🛒 ${prefix}fut hab
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ ⚙️ CLUBE
+╭━━━꧁༺ ㅤ⚙️ ${boldItalic('CLUBE')} ⚙️ㅤ ༻꧂━━━╮
 │ 🏗️ ${prefix}fut criar [nome]
 │ 📋 ${prefix}fut clube
 │ 👥 ${prefix}fut membros
 │ 🚪 ${prefix}fut sair
 │ ✏️ ${prefix}fut renomearclube [nome]
 │ 💼 ${prefix}fut prop @user [salário]
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 💼 NEGOCIAÇÕES
+╭━━━꧁༺ ㅤ💼 ${boldItalic('NEGOCIAÇÕES')} 💼ㅤ ༻꧂━━━╮
 │ 📨 ${prefix}fut negs
 │ ✅ ${prefix}fut ace [id]
 │ ❌ ${prefix}fut repro [id]
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🎁 RECOMPENSAS
+╭━━━꧁༺ ㅤ🎁 ${boldItalic('RECOMPENSAS')} 🎁ㅤ ༻꧂━━━╮
 │ 📦 ${prefix}fut diaria
 │ 📅 ${prefix}fut semanal
 │ 🎫 ${prefix}fut codigo [CODIGO]
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🏅 EXTRAS
+╭━━━꧁༺ ㅤ🏅 ${boldItalic('EXTRAS')} 🏅ㅤ ༻꧂━━━╮
 │ 🔥 ${prefix}fut forma
 │ 🏆 ${prefix}fut conquistas
 │ 👑 ${prefix}fut titulos
 │ 🏅 ${prefix}fut temporada
 │ ⭐ ${prefix}fut reputacao
 │ ⚔️ ${prefix}fut rivalidades
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ ⚠️ ADMINISTRAÇÃO
+╭━━━꧁༺ ㅤ⚠️ ${boldItalic('ADMINISTRAÇÃO')} ⚠️ㅤ ༻꧂━━━╮
 │ ⚙️ ${prefix}futadmin
 │ 🔒 Painel administrativo
 │ 👑 Exclusivo para administradores
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭━━━〔 💡 INÍCIO RÁPIDO 〕━━━╮
+╭━━━꧁༺ ㅤ💡 ${boldItalic('INÍCIO RÁPIDO')} 💡ㅤ ༻꧂━━━╮
 ┃ ⚽ Use ${prefix}fut entrar
 ┃ 🏆 Comece sua carreira
 ┃ 🌍 Domine o Futebol Global
-╰━━━━━━━━━━━━━━━━━━━━━━╯
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 ╭─────────────────╮
 ╰─────────────────╯

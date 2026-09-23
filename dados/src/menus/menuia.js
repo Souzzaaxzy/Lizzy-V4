@@ -1,28 +1,29 @@
+import { boldItalic } from './layout.js';
+
 export default async function menuIa(prefix, botName = "MeuBot", userName = "Usuário") {
-    return `╭━━━〔 🤖 ${botName} • 𝐈𝐀 〕━━━╮
-┃ 👋 Olá, @${userName}
-┃ 🧠 Inteligência Artificial
-┃ ✨ Ferramentas inteligentes
-╰━━━━━━━━━━━━━━━━━━━━━━━━━╯
+    return `╭━━━꧁༺ ✦ ${botName} ✦ ༻꧂━━━╮
+┃ 𖤐 𝐎𝐥á, @${userName}
+┃ ✨ Inteligência artificial
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━━━╯
 
 
-╭─❖ ✍️ GERAÇÃO DE TEXTO
+╭━━━꧁༺ ㅤ✍️ ${boldItalic('GERAÇÃO DE TEXTO')} ✍️ㅤ ༻꧂━━━╮
 │ 📝 ${prefix}cog
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🎨 GERAÇÃO DE IMAGEM
+╭━━━꧁༺ ㅤ🎨 ${boldItalic('GERAÇÃO DE IMAGEM')} 🎨ㅤ ༻꧂━━━╮
 │ 🖼️ ${prefix}imagine
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 📐 MATEMÁTICA
+╭━━━꧁༺ ㅤ📐 ${boldItalic('MATEMÁTICA')} 📐ㅤ ༻꧂━━━╮
 │ 🧮 ${prefix}resolver
 │ ➗ ${prefix}calc
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🛠️ FERRAMENTAS DE IA
+╭━━━꧁༺ ㅤ🛠️ ${boldItalic('FERRAMENTAS DE IA')} 🛠️ㅤ ༻꧂━━━╮
 │ 💡 ${prefix}ideias
 │ 📖 ${prefix}explicar
 │ 📄 ${prefix}resumir
@@ -30,21 +31,21 @@ export default async function menuIa(prefix, botName = "MeuBot", userName = "Usu
 │ 🌐 ${prefix}resumirurl
 │ 💬 ${prefix}resumirchat
 │ 🎯 ${prefix}recomendar
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 💬 DEBATES & ARGUMENTAÇÃO
+╭━━━꧁༺ ㅤ💬 ${boldItalic('DEBATES & ARGUMENTAÇÃO')} 💬ㅤ ༻꧂━━━╮
 │ 🗣️ ${prefix}debater
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 📖 HISTÓRIAS INTERATIVAS
+╭━━━꧁༺ ㅤ📖 ${boldItalic('HISTÓRIAS INTERATIVAS')} 📖ㅤ ༻꧂━━━╮
 │ 📚 ${prefix}aventura
 │ 🎲 ${prefix}aventura escolha
 │ 📊 ${prefix}aventura status
 │ 🚪 ${prefix}aventura sair
 │ 🔖 Alias: ${prefix}historia
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 ╭─────────────────╮
 ╰─────────────────╯

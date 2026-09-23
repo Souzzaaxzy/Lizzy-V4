@@ -1,46 +1,47 @@
+import { boldItalic } from './layout.js';
+
 export default async function menuMembros(prefix, botName = "MeuBot", userName = "Usuário") {
-    return `╭━━━〔 👥 ${botName} • 𝐌𝐄𝐌𝐁𝐑𝐎𝐒 〕━━━╮
-┃ 👋 Olá, @${userName}
-┃ 👤 Painel do Membro
-┃ ✨ Recursos da comunidade
-╰━━━━━━━━━━━━━━━━━━━━━━╯
+    return `╭━━━꧁༺ ✦ ${botName} ✦ ༻꧂━━━╮
+┃ 𖤐 𝐎𝐥á, @${userName}
+┃ 👤 Perfil, status e ranking
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━━━╯
 
 
-╭─❖ 👤 PERFIL & ESTATÍSTICAS
+╭━━━꧁༺ ㅤ👤 ${boldItalic('PERFIL & ESTATÍSTICAS')} 👤ㅤ ༻꧂━━━╮
 │ 👤 ${prefix}perfil
 │ 🙋 ${prefix}me
 │ 🎵 ${prefix}ptiktok @user
 │ 📸 ${prefix}pinsta @user
 │ 𝕏 ${prefix}px @user
 │ 🎧 ${prefix}pspotify @user
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🤖 STATUS DO BOT
+╭━━━꧁༺ ㅤ🤖 ${boldItalic('STATUS DO BOT')} 🤖ㅤ ༻꧂━━━╮
 │ 📶 ${prefix}ping
 │ 🤖 ${prefix}statusbot
 │ 👥 ${prefix}statusgp
 │ 📜 ${prefix}regras
 │ 🎙 ${prefix}transcrever
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ ⚙️ CONFIGURAÇÕES PESSOAIS
+╭━━━꧁༺ ㅤ⚙️ ${boldItalic('CONFIGURAÇÕES PESSOAIS')} ⚙️ㅤ ༻꧂━━━╮
 │ 📢 ${prefix}mention
 │ 🌙 ${prefix}afk
 │ ☀️ ${prefix}voltei
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 👥 INTERAÇÃO SOCIAL
+╭━━━꧁༺ ㅤ👥 ${boldItalic('INTERAÇÃO SOCIAL')} 👥ㅤ ༻꧂━━━╮
 │ 🎭 ${prefix}roles
 │ ✅ ${prefix}role.vou
 │ ❌ ${prefix}role.nvou
 │ 📋 ${prefix}role.confirmados
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🏆 RANKINGS & GAMIFICAÇÃO
+╭━━━꧁༺ ㅤ🏆 ${boldItalic('RANKINGS & GAMIFICAÇÃO')} 🏆ㅤ ༻꧂━━━╮
 │ 🥇 ${prefix}rankativo
 │ 💤 ${prefix}rankinativo
 │ 📊 ${prefix}rankativos
@@ -49,10 +50,10 @@ export default async function menuMembros(prefix, botName = "MeuBot", userName =
 │ 📋 ${prefix}meativo
 │ ⚡ ${prefix}totalcmd
 │ 🔥 ${prefix}topcmd
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 📊 ESTATÍSTICAS
+╭━━━꧁༺ ㅤ📊 ${boldItalic('ESTATÍSTICAS')} 📊ㅤ ༻꧂━━━╮
 │ 📅 ${prefix}msgdiario
 │ 📆 ${prefix}msgsemanal
 │ 📈 ${prefix}estdia
@@ -65,35 +66,35 @@ export default async function menuMembros(prefix, botName = "MeuBot", userName =
 │ 💎 ${prefix}recorde
 │ ⭐ ${prefix}merecorde
 │ 🎯 ${prefix}vermetas
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🎁 CONQUISTAS & INVENTÁRIO
+╭━━━꧁༺ ㅤ🎁 ${boldItalic('CONQUISTAS & INVENTÁRIO')} 🎁ㅤ ༻꧂━━━╮
 │ 🏅 ${prefix}conquistas
 │ 📦 ${prefix}caixa diaria
 │ 🎁 ${prefix}caixa rara
 │ 👑 ${prefix}caixa lendaria
 │ 🎀 ${prefix}presente
 │ 🎒 ${prefix}inv
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ ⭐ REPUTAÇÃO
+╭━━━꧁༺ ㅤ⭐ ${boldItalic('REPUTAÇÃO')} ⭐ㅤ ༻꧂━━━╮
 │ 👍 ${prefix}rep +
 │ 👎 ${prefix}rep -
 │ 👤 ${prefix}rep
 │ 🏆 ${prefix}toprep
 │ 🚨 ${prefix}denunciar
 │ 📋 ${prefix}denuncias
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 📸 MOMENTOS
+╭━━━꧁༺ ㅤ📸 ${boldItalic('MOMENTOS')} 📸ㅤ ༻꧂━━━╮
 │ 💾 ${prefix}salvarm
 │ 🖼 ${prefix}moment
 │ 🔎 ${prefix}m
 │ 🗑 ${prefix}apm
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 ╭─────────────────╮
 ╰─────────────────╯

@@ -16,43 +16,11 @@
  * editável, e a conversão é determinística.
  */
 
-/**
- * Converte ASCII para um estilo "bold" do Unicode.
- *
- * São DOIS estilos no layout (medidos nos caracteres do pedido):
- *   - `bold`        → MATHEMATICAL BOLD (A = U+1D400) — usado no cabeçalho;
- *   - `boldItalic`  → MATHEMATICAL BOLD ITALIC (A = U+1D468) — usado nos títulos
- *     das categorias.
- *
- * Converter por código (em vez de literais no arquivo) mantém a fonte legível e
- * editável, e a conversão é determinística. Os acentos e emojis passam intactos
- * (não têm equivalente nesses blocos).
- */
-function converter(texto, baseMaiuscula, baseMinuscula, baseDigito) {
-  let saida = '';
-  for (const ch of String(texto)) {
-    const c = ch.codePointAt(0);
-    if (c >= 65 && c <= 90) saida += String.fromCodePoint(baseMaiuscula + (c - 65));
-    else if (c >= 97 && c <= 122) saida += String.fromCodePoint(baseMinuscula + (c - 97));
-    else if (baseDigito && c >= 48 && c <= 57) saida += String.fromCodePoint(baseDigito + (c - 48));
-    else saida += ch;
-  }
-  return saida;
-}
+import { bold, boldItalic, TOPO, RODAPE_BLOCO, FECHO } from './layout.js';
 
-/** MATHEMATICAL BOLD (A = U+1D400, a = U+1D41A, 0 = U+1D7CE). */
-export function bold(texto) {
-  return converter(texto, 0x1D400, 0x1D41A, 0x1D7CE);
-}
-
-/** MATHEMATICAL BOLD ITALIC (A = U+1D468, a = U+1D482). Sem dígitos no bloco. */
-export function boldItalic(texto) {
-  return converter(texto, 0x1D468, 0x1D482, null);
-}
-
-const TOPO = (botName) => `╭━━━꧁༺ ✦ ${botName} ✦ ༻꧂━━━╮`;
-const RODAPE_BLOCO = '╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯';
-const FECHO = (botName) => `╰━━━꧁༺ 𓆩 ✦ ${botName} ✦ 𓆪 ༻꧂━━━╯`;
+// Reexporta para quem importava `bold`/`boldItalic` do menu.js continuar
+// funcionando (o módulo passou a ser o `layout.js`, fonte única).
+export { bold, boldItalic };
 
 /**
  * Monta uma categoria. `comandos` aceita `'nome'` (sem emoji) ou

@@ -1,75 +1,76 @@
+import { boldItalic } from './layout.js';
+
 export default async function menuFerramentas(prefix, botName = "MeuBot", userName = "Usuário") {
-    return `╭━━━〔 🛠️ ${botName} • 𝐅𝐄𝐑𝐑𝐀𝐌𝐄𝐍𝐓𝐀𝐒 〕━━━╮
-┃ 👋 Olá, @${userName}
-┃ ⚙️ Utilidades para o dia a dia
-┃ ✨ Ferramentas rápidas e práticas
-╰━━━━━━━━━━━━━━━━━━━━━━━━━╯
+    return `╭━━━꧁༺ ✦ ${botName} ✦ ༻꧂━━━╮
+┃ 𖤐 𝐎𝐥á, @${userName}
+┃ 🛠️ Utilidades diversas
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━━━╯
 
 
-╭─❖ 📱 IDENTIDADE & NOMES
+╭━━━꧁༺ ㅤ📱 ${boldItalic('IDENTIDADE & NOMES')} 📱ㅤ ༻꧂━━━╮
 │ 🎭 ${prefix}gerarnick
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🖼️ CAPTURAS & QR CODE
+╭━━━꧁༺ ㅤ🖼️ ${boldItalic('CAPTURAS & QR CODE')} 🖼️ㅤ ༻꧂━━━╮
 │ 🌐 ${prefix}ssweb
 │ 📱 ${prefix}qrcode <texto>
 │ 🔍 ${prefix}lerqr
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🧮 CÁLCULOS & CONVERSÕES
+╭━━━꧁༺ ㅤ🧮 ${boldItalic('CÁLCULOS & CONVERSÕES')} 🧮ㅤ ༻꧂━━━╮
 │ ➗ ${prefix}calc <expressão>
 │ 📐 ${prefix}calc converter <valor> <de> <para>
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🔮 HORÓSCOPO & MISTICISMO
+╭━━━꧁༺ ㅤ🔮 ${boldItalic('HORÓSCOPO & MISTICISMO')} 🔮ㅤ ༻꧂━━━╮
 │ ♈ ${prefix}horoscopo <signo>
 │ 🌟 ${prefix}signos
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 📝 NOTAS PESSOAIS
+╭━━━꧁༺ ㅤ📝 ${boldItalic('NOTAS PESSOAIS')} 📝ㅤ ༻꧂━━━╮
 │ ➕ ${prefix}nota add <texto>
 │ 📋 ${prefix}notas
 │ 👁️ ${prefix}nota ver <id>
 │ 🗑️ ${prefix}nota del <id>
 │ 📌 ${prefix}nota fixar <id>
 │ 🔎 ${prefix}nota buscar <termo>
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🌐 LINKS & UPLOADS
+╭━━━꧁༺ ㅤ🌐 ${boldItalic('LINKS & UPLOADS')} 🌐ㅤ ༻꧂━━━╮
 │ ✂️ ${prefix}encurtalink
 │ ☁️ ${prefix}upload
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🔒 SEGURANÇA
+╭━━━꧁༺ ㅤ🔒 ${boldItalic('SEGURANÇA')} 🔒ㅤ ༻꧂━━━╮
 │ 🛡️ ${prefix}verificar <link>
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🕒 TEMPO & CLIMA
+╭━━━꧁༺ ㅤ🕒 ${boldItalic('TEMPO & CLIMA')} 🕒ㅤ ༻꧂━━━╮
 │ 🕐 ${prefix}hora <cidade/país>
 │ 🌦️ ${prefix}clima <cidade>
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 📚 DICIONÁRIO & TRADUÇÃO
+╭━━━꧁༺ ㅤ📚 ${boldItalic('DICIONÁRIO & TRADUÇÃO')} 📚ㅤ ༻꧂━━━╮
 │ 📖 ${prefix}dicionario
 │ 🌍 ${prefix}tradutor
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ ⏰ LEMBRETES & ORGANIZAÇÃO
+╭━━━꧁༺ ㅤ⏰ ${boldItalic('LEMBRETES & ORGANIZAÇÃO')} ⏰ㅤ ༻꧂━━━╮
 │ 🔔 ${prefix}lembrete
 │ 📋 ${prefix}meuslembretes
 │ ❌ ${prefix}apagalembrete
 │ 🎂 ${prefix}aniversario
 │ 📊 ${prefix}estatisticas
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 ╭─────────────────╮
 ╰─────────────────╯

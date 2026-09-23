@@ -1,12 +1,13 @@
+import { boldItalic } from './layout.js';
+
 export default async function menubn(prefix, botName = "MeuBot", userName = "Usuário", isLiteMode = false) {
-    return `╭━━━〔 🎮 ${botName} • 𝐁𝐑𝐈𝐍𝐂𝐀𝐃𝐄𝐈𝐑𝐀𝐒 〕━━━╮
-┃ 👋 Olá, @${userName}
-┃ 🎮 Modo Brincadeira Ativo
-┃ ✨ Comandos de diversão
-╰━━━━━━━━━━━━━━━━━━━━━━━━━╯
+    return `╭━━━꧁༺ ✦ ${botName} ✦ ༻꧂━━━╮
+┃ 𖤐 𝐎𝐥á, @${userName}
+┃ 🎮 Comandos de diversão
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━━━╯
 
 
-╭─❖ 🎮 JOGOS & DIVERSÃO
+╭━━━꧁༺ ㅤ🎮 ${boldItalic('JOGOS & DIVERSÃO')} 🎮ㅤ ༻꧂━━━╮
 │ 🎯 ${prefix}tictactoe
 │ 🎮 ${prefix}connect4
 │ 🃏 ${prefix}uno criar
@@ -35,16 +36,16 @@ export default async function menubn(prefix, botName = "MeuBot", userName = "Usu
 │ ✋ ${prefix}ppt
 │ 🛑 ${prefix}stop
 │ 💀 ${prefix}suicidio
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
 
-╭─❖ 💬 NGL ANÔNIMO
+╭━━━꧁༺ ㅤ💬 ${boldItalic('NGL ANÔNIMO')} 💬ㅤ ༻꧂━━━╮
 │ 🌐 ${prefix}setngl
 │ 💬 ${prefix}ngl
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
-╭─❖ 💬 FRASES & TEXTOS
+╭━━━꧁༺ ㅤ💬 ${boldItalic('FRASES & TEXTOS')} 💬ㅤ ༻꧂━━━╮
 │ 💡 ${prefix}conselho
 │ 📖 ${prefix}conselhobiblico
 │ 💘 ${prefix}cantada
@@ -54,10 +55,10 @@ export default async function menubn(prefix, botName = "MeuBot", userName = "Usu
 │ 🌟 ${prefix}elogio
 │ 🪞 ${prefix}reflexao
 │ 📰 ${prefix}fato
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 👋 INTERAÇÕES SOCIAIS
+╭━━━꧁༺ ㅤ👋 ${boldItalic('INTERAÇÕES SOCIAIS')} 👋ㅤ ༻꧂━━━╮
 │ 💭 ${prefix}confessar
 │ 💭 ${prefix}confessarn
 │ 👊 ${prefix}chute
@@ -79,10 +80,10 @@ export default async function menubn(prefix, botName = "MeuBot", userName = "Usu
 │ ⚔️ ${prefix}matar
 │ 💆 ${prefix}cafune
 │ 💕 ${prefix}compatibilidade
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-${isLiteMode ? '' : `╭─❖ 🔞 INTERAÇÕES "PICANTES"
+${isLiteMode ? '' : `╭━━━꧁༺ ㅤ🔞 ${boldItalic('INTERAÇÕES "PICANTES"')} 🔞ㅤ ༻꧂━━━╮
 │ 🔥 ${prefix}surubao
 │ 🍑 ${prefix}siririca
 │ 🔥 ${prefix}sexo
@@ -97,10 +98,10 @@ ${isLiteMode ? '' : `╭─❖ 🔞 INTERAÇÕES "PICANTES"
 │ 🔒 ${prefix}pgpau
 │ 🔒 ${prefix}pgpeito
 │ 🍑 ${prefix}pgbunda
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-`}╭─❖ 😆 BRINCADEIRAS MASCULINAS
+`}╭━━━꧁༺ ㅤ😆 ${boldItalic('BRINCADEIRAS MASCULINAS')} 😆ㅤ ༻꧂━━━╮
 │ 📏 ${prefix}medirpau
 │ 🏳️ ${prefix}gay
 │ 🧠 ${prefix}burro
@@ -298,10 +299,10 @@ ${isLiteMode ? '' : `╭─❖ 🔞 INTERAÇÕES "PICANTES"
 │ 😩 ${prefix}vagabundo
 │ 😩 ${prefix}vagabunda
 │ 🕵 ${prefix}pilantra
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 💑 RELACIONAMENTOS
+╭━━━꧁༺ ㅤ💑 ${boldItalic('RELACIONAMENTOS')} 💑ㅤ ༻꧂━━━╮
 │ 💌 ${prefix}ficante
 │ 💍 ${prefix}namoro
 │ 💒 ${prefix}casamento
@@ -314,10 +315,10 @@ ${isLiteMode ? '' : `╭─❖ 🔞 INTERAÇÕES "PICANTES"
 │ 🤥 ${prefix}trair
 │ 📜 ${prefix}historicotraicao
 │ 🏳️ ${prefix}lesbica
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🏆 RANKINGS MASCULINOS
+╭━━━꧁༺ ㅤ🏆 ${boldItalic('RANKINGS MASCULINOS')} 🏆ㅤ ༻꧂━━━╮
 │ 🏳️ ${prefix}rankgay
 │ 🐀 ${prefix}rankputo
 │ 🍆 ${prefix}rankpauzudo
@@ -360,10 +361,10 @@ ${isLiteMode ? '' : `╭─❖ 🔞 INTERAÇÕES "PICANTES"
 │ 💪 ${prefix}rankpoderosa
 │ 🏆 ${prefix}rankvencedor
 │ 🏆 ${prefix}rankvencedora
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ 🏆 RANKINGS FEMININOS
+╭━━━꧁༺ ㅤ🏆 ${boldItalic('RANKINGS FEMININOS')} 🏆ㅤ ༻꧂━━━╮
 │ 🏳️ ${prefix}ranklesbica
 │ 🐀 ${prefix}rankputa
 │ 💋 ${prefix}rankbucetuda
@@ -387,7 +388,7 @@ ${isLiteMode ? '' : `╭─❖ 🔞 INTERAÇÕES "PICANTES"
 │ 🔭 ${prefix}rankvisionaria
 │ 💪 ${prefix}rankpoderosa
 │ 🏆 ${prefix}rankvencedora
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 ╭─────────────────╮
 ╰─────────────────╯

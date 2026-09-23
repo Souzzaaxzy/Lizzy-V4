@@ -1,18 +1,19 @@
+import { boldItalic } from './layout.js';
+
 export default async function menuVip(prefix, botName = "MeuBot", userName = "Usuário") {
-    return `╭━━━〔 🌌 ${botName} • 𝐕𝐈𝐏 〕━━━╮
-┃ 👋 Olá, @${userName}
+    return `╭━━━꧁༺ ✦ ${botName} ✦ ༻꧂━━━╮
+┃ 𖤐 𝐎𝐥á, @${userName}
 ┃ 💎 Comandos exclusivos VIP
-┃ ✨ Recursos especiais da Lizzy
-╰━━━━━━━━━━━━━━━━━━━━━━╯
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━━━╯
 
 
-╭─❖ 🌌 COMANDOS VIP
+╭━━━꧁༺ ㅤ🌌 ${boldItalic('COMANDOS VIP')} 🌌ㅤ ༻꧂━━━╮
 │ 📭 Nenhum comando cadastrado
 │
 │ 💡 Dono pode adicionar novos
 │ ⚙️ Use:
 │ 📍 !addcmdvip
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 ╭─────────────────╮
 ╰─────────────────╯

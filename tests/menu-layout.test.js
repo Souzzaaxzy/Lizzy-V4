@@ -265,6 +265,84 @@ await test('13. o index compõe visible + lerMais + rest (não só concatena tud
   ok(idxV < idxL && idxL < idxR, 'ordem visible < lerMais < rest');
 });
 
+// ============================================================================
+// SEÇÃO 4 — MENUS TEMÁTICOS no layout novo
+// ============================================================================
+
+// Comandos esperados por menu (contagem medida no baseline do git). Serve de
+// TRAVA: se algum comando sumir numa mexida futura, o teste falha.
+const COMANDOS_POR_MENU = {
+  menuia: 17, menudown: 20, ferramentas: 26, menufig: 16, menulogo: 44,
+  menuedits: 5, alteradores: 58, menumemb: 54, menuadm: 172, menudono: 166,
+  menubn: 348, menufut: 42, menurpg: 149,
+  // menuvip nao tem comando cadastrado; o `!` contado e o `!addcmdvip` da
+  // instrucao ("Use: !addcmdvip"), que no original tambem estava fixo.
+  menuvip: 1, menugames: 28,
+};
+
+await test('15. TODOS os menus temáticos usam o layout novo (caixas ꧁༺ ✦ ༻꧂)', async () => {
+  for (const nome of Object.keys(COMANDOS_POR_MENU)) {
+    const mod = await import(new URL(`../dados/src/menus/${nome}.js`, import.meta.url).href);
+    const texto = await mod.default('!', 'Abyss', 'Kannon');
+    ok(typeof texto === 'string' && texto.length > 0, `${nome}: renderiza`);
+    contem(texto, '╭━━━꧁༺ ✦ Abyss ✦ ༻꧂━━━╮', `${nome}: cabeçalho novo`);
+    contem(texto, '╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━━━╯', `${nome}: fecha o cabeçalho`);
+    ok(!texto.includes('╭─❖'), `${nome}: não tem mais a borda antiga ╭─❖`);
+    // A borda antiga e uma linha INTEIRA de tracos; o fecho novo tambem tem
+    // tracos, entao a checagem e por LINHA, nao por substring.
+    const temLinhaAntiga = texto.split('\n').some((l) => /^╰─+$/.test(l.trim()));
+    ok(!temLinhaAntiga, `${nome}: não tem mais a linha de borda antiga`);
+  }
+});
+
+await test('16. NENHUM comando se perdeu (contagem por menu vs baseline)', async () => {
+  for (const [nome, esperado] of Object.entries(COMANDOS_POR_MENU)) {
+    const mod = await import(new URL(`../dados/src/menus/${nome}.js`, import.meta.url).href);
+    const texto = await mod.default('!', 'Abyss', 'Kannon');
+    const n = (texto.match(/!/g) || []).length;   // `${prefix}` = '!' no teste
+    eq(n, esperado, `${nome}: ${esperado} comandos`);
+  }
+});
+
+await test('17. menubn: os 348 comandos estão TODOS lá (o mais crítico)', async () => {
+  const mod = await import(new URL('../dados/src/menus/menubn.js', import.meta.url).href);
+  const texto = await mod.default('!', 'Abyss', 'Kannon');
+  eq((texto.match(/!/g) || []).length, 348, '348 comandos no modo completo');
+  // Amostras de cada categoria (inclusive as condicionais).
+  for (const c of ['!tictactoe', '!uno criar', '!conselho', '!tapa', '!surubao', '!pgpau', '!medirpau', '!rankputo', '!casal']) {
+    contem(texto, c, `tem ${c}`);
+  }
+  // Modo LITE: continua escondendo as "picantes" e mantendo o resto.
+  const lite = await mod.default('!', 'Abyss', 'Kannon', true);
+  ok(!lite.includes('!surubao'), 'lite esconde as picantes');
+  ok(lite.includes('!tictactoe'), 'lite mantém jogos');
+  ok(lite.includes('!medirpau'), 'lite mantém as masculinas');
+  ok((lite.match(/!/g) || []).length > 300, 'lite ainda tem centenas de comandos');
+});
+
+await test('18. as categorias dos menus temáticos usam BOLD ITALIC no título', async () => {
+  const casos = [
+    ['menuia', 'GERAÇÃO DE TEXTO'],
+    ['menudono', 'INÍCIO'],
+    ['menubn', 'JOGOS & DIVERSÃO'],
+    ['alteradores', 'EDIÇÃO BÁSICA'],
+  ];
+  for (const [nome, titulo] of casos) {
+    const mod = await import(new URL(`../dados/src/menus/${nome}.js`, import.meta.url).href);
+    const texto = await mod.default('!', 'Abyss', 'Kannon');
+    contem(texto, boldItalic(titulo), `${nome}: título "${titulo}" em bold italic`);
+    contem(texto, '╭━━━꧁༺', `${nome}: usa a caixa de categoria nova`);
+  }
+});
+
+await test('19. menuvip (sem comandos) não quebra e usa o layout', async () => {
+  const mod = await import(new URL('../dados/src/menus/menuvip.js', import.meta.url).href);
+  const texto = await mod.default('!', 'Abyss', 'Kannon');
+  contem(texto, '╭━━━꧁༺ ✦ Abyss ✦ ༻꧂━━━╮', 'cabeçalho novo');
+  contem(texto, 'Nenhum comando cadastrado', 'mantém o aviso de vazio');
+  contem(texto, '!addcmdvip', 'mantém a instrução para o dono');
+});
+
 await test('14. os menus temáticos NÃO perderam o "ler mais"', () => {
   const src = fs.readFileSync(new URL('../dados/src/index.js', import.meta.url), 'utf8');
   const i = src.indexOf('async function sendMenuWithMedia');

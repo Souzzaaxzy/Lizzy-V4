@@ -1,12 +1,13 @@
+import { boldItalic } from './layout.js';
+
 export default async function menuFig(prefix, botName = "MeuBot", userName = "Usuário") {
-    return `╭━━━〔 🖼️ ${botName} • 𝐅𝐈𝐆𝐔𝐑𝐈𝐍𝐇𝐀𝐒 〕━━━╮
-┃ 👋 Olá, @${userName}
-┃ 🎨 Crie, edite e personalize stickers
-┃ ✨ Todas as ferramentas em um só menu
-╰━━━━━━━━━━━━━━━━━━━━━━━━━╯
+    return `╭━━━꧁༺ ✦ ${botName} ✦ ༻꧂━━━╮
+┃ 𖤐 𝐎𝐥á, @${userName}
+┃ 🖼️ Crie e gerencie figurinhas
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━━━╯
 
 
-╭─❖ 🎨 CRIAÇÃO DE FIGURINHAS
+╭━━━꧁༺ ㅤ🎨 ${boldItalic('CRIAÇÃO DE FIGURINHAS')} 🎨ㅤ ༻꧂━━━╮
 │ 😀 ${prefix}emojimix
 │ 📝 ${prefix}ttp
 │ ✨ ${prefix}attp
@@ -15,10 +16,10 @@ export default async function menuFig(prefix, botName = "MeuBot", userName = "Us
 │ 🌄 ${prefix}sbg
 │ 🪄 ${prefix}sfundo
 │ 💬 ${prefix}qc
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭─❖ ⚙️ GERENCIAMENTO DE FIGURINHAS
+╭━━━꧁༺ ㅤ⚙️ ${boldItalic('GERENCIAMENTO DE FIGURINHAS')} ⚙️ㅤ ༻꧂━━━╮
 │ 🎲 ${prefix}figualeatoria
 │ 📚 ${prefix}figurinhas
 │ ✏️ ${prefix}rename
@@ -27,7 +28,7 @@ export default async function menuFig(prefix, botName = "MeuBot", userName = "Us
 │ 🖼️ ${prefix}toimg
 │ 😎 ${prefix}brat
 │ 🎥 ${prefix}bratvid
-╰──────────────
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 ╭─────────────────╮
 ╰─────────────────╯
