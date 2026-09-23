@@ -271,14 +271,14 @@ await test('o menu principal NÃO põe emoji na entrada do menu18', async () => 
   ok(!linha.includes('🩻'), 'sem o raio-X na linha do menu principal');
 });
 
-await test('menu +18 usa o emoji picante e não um símbolo inventado', async () => {
+await test('menu +18 usa o emoji de +18 (e não um símbolo inventado)', async () => {
   const { groupJid, people, participants } = setup(2);
   const out = await run({ groupJid, sender: people[0], text: '!menu18', participants });
-  // O emoji do menu18 é o 🌶️ (picante). Antes era o 🔞 e antes disso um 🩻
-  // (raio-X) sem sentido — o dono trocou os dois.
-  includes(out.text, '🌶️', 'usa o emoji picante');
+  // O menu18 é +18 e usa o MESMO emoji que o resto do bot (categoria
+  // "INTERAÇÕES PICANTES" do menubn). A primeira versão usava um 🩻 (raio-X)
+  // sem sentido, trocado por este.
+  includes(out.text, '🔞', 'usa o emoji +18 do bot');
   ok(!out.text.includes('🩻'), 'não usa o símbolo de raio-X');
-  ok(!out.text.includes('🔞'), 'não usa mais o emoji de proibido');
 });
 
 await test('aliases do menu funcionam', async () => {

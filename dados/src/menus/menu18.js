@@ -5,7 +5,7 @@
  * NÃO cita "plaquinha": o menu recebe mais categorias depois, e uma frase presa
  * a uma categoria específica envelheceria na primeira adição.
  *
- * O emoji é o mesmo que o resto do bot usa para esse tipo de conteúdo (`🌶️`,
+ * O emoji é o mesmo que o resto do bot usa para esse tipo de conteúdo (`🔞`,
  * como na categoria "INTERAÇÕES PICANTES" do `menubn`) — nada de símbolo
  * inventado que não comunica nada.
  *
@@ -26,12 +26,12 @@ export default async function menu18(prefix, botName = 'MeuBot', userName = 'Usu
 
   return `╭━━━꧁༺ ✦ ${botName} ✦ ༻꧂━━━╮
 ┃ 𖤐 𝐎𝐥á, @${userName}
-┃ 🌶️ Área +18: aqui só tem coisa picante...
+┃ 🔞 Área +18: aqui só tem coisa picante...
 ┃ 😈 Segura a vergonha e vem ver.
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━━━╯
 
 
-╭━━━꧁༺ ㅤ🌶️ ${boldItalic('PLAQUINHA')} 🌶️ㅤ ༻꧂━━━╮
+╭━━━꧁༺ ㅤ🔞 ${boldItalic('PLAQUINHA')} 🔞ㅤ ༻꧂━━━╮
 ${linhas.join('\n')}
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 `;

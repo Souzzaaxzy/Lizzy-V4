@@ -4428,11 +4428,18 @@ exigir que o dono reescrevesse o texto que ele mesmo mandou.
   MESMO item**, `selectableCount: 1`, o emoji preservado, coerência em 10
   execuções, e a exigência de grupo + modo brincadeira.
 
-### Emoji do menu18 trocado
-O dono pediu para trocar o `🔞` do menu18. Agora é o **🌶️ (picante)** — o
-menu continua dizendo que é +18 no cabeçalho (`Área +18: aqui só tem coisa
-picante...`), só o símbolo mudou. O teste passou a exigir o 🌶️ **e** a recusar
-tanto o 🔞 quanto o antigo 🦻 (raio-X), para não voltar.
+### Emoji trocado — no `!eununca` (não no menu18)
+O pedido era *"trocar o 🔞 do comando `!eununca`"*, e eu tinha entendido que era o
+**menu18** — troquei o lugar errado e depois reverti.
+
+- **`!eununca`**: o título da enquete passou de `🔞 EU NUNCA` para **`🌶️ EU NUNCA`**.
+  As duas opções (`Eu nunca` / `Eu já`) e o resto do comando não mudaram.
+- **`menu18`**: voltou ao `🔞` (como estava). O teste dele continua exigindo esse
+  emoji e recusando o antigo 🦻 (raio-X), que era o símbolo inventado sem sentido.
+
+Lembrete de leitura: `🔞` é "proibido para menores" e aparece em vários lugares do
+bot (conteúdo restrito, modo lite, `!play` com vídeo +18...). Quando o pedido diz
+"o 🔞 **do comando X**", é o do X — não o do menu.
 
 ## SISTEMA ANTIBOT — REMOVIDO (set/2026) ❌
 O AntiBot foi **removido por completo** a pedido do dono, depois de nao entregar

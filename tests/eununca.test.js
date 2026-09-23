@@ -167,12 +167,13 @@ await test('!eununca publica uma enquete com as duas opções', async () => {
 await test('a pergunta da enquete vem da lista iNever', async () => {
   const { enquete } = await rodar();
   const frases = TOOLS.iNever;
-  ok(frases.includes(enquete.name.replace(/^🔞 EU NUNCA\n\n/, '')), 'a pergunta é uma das frases da lista');
+  ok(frases.includes(enquete.name.replace(/^🌶️ EU NUNCA\n\n/, '')), 'a pergunta é uma das frases da lista');
 });
 
-await test('o cabeçalho da enquete é preservado', async () => {
+await test('o cabeçalho da enquete usa o emoji picante', async () => {
   const { enquete } = await rodar();
-  ok(enquete.name.startsWith('🔞 EU NUNCA'), 'mantém o título');
+  ok(enquete.name.startsWith('🌶️ EU NUNCA'), 'título com o emoji picante');
+  ok(!enquete.name.includes('🔞'), 'não usa mais o emoji de proibido');
 });
 
 await test('só roda em grupo e com modo brincadeira', async () => {
@@ -186,7 +187,7 @@ await test('10 execuções trazem frases da lista nova', async () => {
   const frases = new Set(TOOLS.iNever);
   for (let i = 0; i < 10; i++) {
     const { enquete } = await rodar();
-    const texto = enquete.name.replace(/^🔞 EU NUNCA\n\n/, '');
+    const texto = enquete.name.replace(/^🌶️ EU NUNCA\n\n/, '');
     ok(frases.has(texto), `pergunta ${i + 1} veio da lista`);
   }
 });
