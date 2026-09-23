@@ -37692,11 +37692,16 @@ case 'vab':
           Math.random() * vabJson().length
         )
       ];
+    // A pergunta agora vai NO TÍTULO da enquete (`item.pergunta`). Antes o
+    // título era fixo e cada item só tinha as duas opções soltas, sem contexto.
+    const tituloVab = vabs.pergunta
+      ? `🤔 ${vabs.pergunta}`
+      : '🤔 O QUE VOCÊ PREFERE?';
     await nazu.sendMessage(
       from,
       {
         poll: {
-          name: '🤔 O QUE VOCÊ PREFERE?',
+          name: tituloVab,
           values: [
             vabs.option1,
             vabs.option2

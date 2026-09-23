@@ -4393,6 +4393,47 @@ Roda o handler real com socket falso e confere a lista **e** a enquete:
 **Armadilha:** o throttle é por remetente (3 comandos/5s) — o teste cria um
 remetente novo por execução (mesmo padrão de `testcall`/`me-profile`).
 
+
+## COMANDO `!vab` — 200 perguntas novas + pergunta no título (set/2026) ✅
+Pedido do dono: aplicar no `!vab` a mesma troca feita no `!eununca` — substituir
+tudo por uma lista nova (**150** de "Isso ou Aquilo: Amigáveis" + **50** de
+"Relacionamento").
+
+### Onde os itens moram
+`dados/src/funcs/json/vab.json` — lista de itens. **Formato mudou**: antes cada
+item tinha só `{ option1, option2 }` (as opções soltas, sem contexto); agora
+tem **`{ pergunta, option1, option2 }`**. Nenhum outro consumidor do arquivo
+existe no repo (conferido por grep), então a mudança fica contida.
+
+### O comando
+`case 'vab'` (`index.js`) agora usa a pergunta **no TÍTULO** da enquete:
+`🤔 ${item.pergunta}`. Antes o título era fixo (`🤔 O QUE VOCÊ PREFERE?`) e
+a pergunta do item se perdia — o usuário via só duas opções soltas, sem saber o
+que estava escolhendo. Fallback preservado: item sem `pergunta` cai no título
+antigo. As duas opções e o `selectableCount: 1` continuam iguais.
+
+### Uma descoberta do teste (não é bug)
+**200 itens, mas apenas 127 perguntas distintas.** Várias perguntas são
+genéricas de propósito, do próprio texto do dono — *"O que você prefere?"*
+aparece **34 vezes**, *"Qual dessas situações você escolheria?"* 11, e assim por
+diante. A identidade de um item é o conjunto **pergunta + as duas opções** (esse
+trio é único nas 200). O teste mede isso — exigir "pergunta única" seria
+exigir que o dono reescrevesse o texto que ele mesmo mandou.
+
+### Testes — `tests/vab.test.js` (**9 testes / 28 asserções**)
+- arquivo: 200 itens, primeira e última conferidas, todos com pergunta + 2
+  opções com texto, nenhum item repetido (trio), as 50 de relacionamento no
+  fim, e o estilo antigo ("usar meias furadas") ausente;
+- handler real: a enquete sai com a pergunta no título e as **duas opções do
+  MESMO item**, `selectableCount: 1`, o emoji preservado, coerência em 10
+  execuções, e a exigência de grupo + modo brincadeira.
+
+### Emoji do menu18 trocado
+O dono pediu para trocar o `🔞` do menu18. Agora é o **🌶️ (picante)** — o
+menu continua dizendo que é +18 no cabeçalho (`Área +18: aqui só tem coisa
+picante...`), só o símbolo mudou. O teste passou a exigir o 🌶️ **e** a recusar
+tanto o 🔞 quanto o antigo 🦻 (raio-X), para não voltar.
+
 ## SISTEMA ANTIBOT — REMOVIDO (set/2026) ❌
 O AntiBot foi **removido por completo** a pedido do dono, depois de nao entregar
 o resultado esperado em uso real. Nao sobrou nada nos dois repositorios.

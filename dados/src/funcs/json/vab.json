@@ -1,554 +1,1002 @@
 [
     {
-        "option1": "usar meias furadas",
-        "option2": "usar sapatos sujos"
+        "pergunta": "O que você prefere fazer em um dia completamente livre?",
+        "option1": "Sair com seus amigos e aproveitar o dia fazendo alguma coisa divertida.",
+        "option2": "Ficar em casa, colocar uma música e aproveitar o dia descansando."
     },
     {
-        "option1": "estar sempre 10 minutos atrasado",
-        "option2": "estar sempre 20 minutos adiantado"
+        "pergunta": "Se pudesse viajar amanhã, qual experiência escolheria?",
+        "option1": "Conhecer uma cidade completamente nova e explorar cada cantinho.",
+        "option2": "Voltar para um lugar que já visitou e que deixou boas lembranças."
     },
     {
-        "option1": "saber ler lábios",
-        "option2": "saber a linguagem de sinais"
+        "pergunta": "Quando você está tendo um dia ruim, o que costuma preferir?",
+        "option1": "Conversar com alguém de confiança até conseguir colocar tudo para fora.",
+        "option2": "Ficar um pouco sozinho até conseguir organizar seus pensamentos."
     },
     {
-        "option1": "ser fluente em todos os idiomas",
-        "option2": "saber tocar todos os instrumentos musicais"
+        "pergunta": "Qual desses momentos parece mais agradável?",
+        "option1": "Passar uma tarde conversando e rindo com seus melhores amigos.",
+        "option2": "Passar uma tarde tranquila assistindo alguma coisa que você gosta."
     },
     {
-        "option1": "sempre ficar preso no trânsito",
-        "option2": "ter internet ruim"
+        "pergunta": "Se pudesse escolher um lugar para passar o fim de semana, qual seria?",
+        "option1": "Uma casa confortável cercada pela natureza e longe do barulho.",
+        "option2": "Uma cidade movimentada cheia de lugares diferentes para conhecer."
     },
     {
-        "option1": "ser abduzido por alienígenas",
-        "option2": "possuído por um demônio"
+        "pergunta": "O que você prefere receber de alguém querido?",
+        "option1": "Uma mensagem enorme explicando o quanto você é importante.",
+        "option2": "Um abraço apertado que demonstre carinho sem precisar de palavras."
     },
     {
-        "option1": "poder voar",
-        "option2": "poder ficar invisível"
+        "pergunta": "Qual situação seria mais divertida para você?",
+        "option1": "Sair sem nenhum plano e descobrir o que fazer durante o caminho.",
+        "option2": "Planejar tudo com seus amigos e seguir exatamente o roteiro preparado."
     },
     {
-        "option1": "viver 100 anos no passado",
-        "option2": "viver 100 anos no futuro"
+        "pergunta": "Se tivesse uma noite completamente livre, o que faria?",
+        "option1": "Ficaria conversando até de madrugada com alguém especial.",
+        "option2": "Jogaria alguma coisa com seus amigos até perder a noção do horário."
     },
     {
-        "option1": "participar de um reality show",
-        "option2": "ficar desempregado por 2 anos"
+        "pergunta": "O que você prefere em uma amizade?",
+        "option1": "Ter alguém que sempre consegue fazer você rir mesmo nos dias ruins.",
+        "option2": "Ter alguém que sabe ouvir você quando precisa desabafar."
     },
     {
-        "option1": "viver 25 anos a mais",
-        "option2": "viver uma vida sem a necessidade de dormir"
+        "pergunta": "Qual dessas lembranças você gostaria de guardar para sempre?",
+        "option1": "Um dia em que todos os seus amigos estavam juntos e felizes.",
+        "option2": "Um momento simples que fez você sorrir de verdade."
     },
     {
-        "option1": "salvar um membro da sua família",
-        "option2": "salvar 1.000 estranhos"
+        "pergunta": "Se pudesse aprender uma habilidade instantaneamente, qual escolheria?",
+        "option1": "Aprender a tocar perfeitamente qualquer instrumento musical.",
+        "option2": "Aprender a falar fluentemente qualquer idioma do mundo."
     },
     {
-        "option1": "ter 10 cachorrinhos",
-        "option2": "ter 10 gatinhos"
+        "pergunta": "Se pudesse ter um superpoder, qual escolheria?",
+        "option1": "Poder se teletransportar para qualquer lugar quando quisesse.",
+        "option2": "Poder voltar alguns minutos no tempo para corrigir pequenos erros."
     },
     {
-        "option1": "estar sempre com calor",
-        "option2": "estar sempre com frio"
+        "pergunta": "Qual dessas situações você escolheria?",
+        "option1": "Poder ler os pensamentos das pessoas quando quisesse.",
+        "option2": "Poder descobrir exatamente o que acontecerá no futuro."
     },
     {
-        "option1": "estar sempre com uma pedra no sapato",
-        "option2": "estar sempre com um cisco no olho"
+        "pergunta": "Se tivesse que escolher uma companhia para uma viagem longa, quem seria?",
+        "option1": "Um amigo que transforma qualquer situação em uma história engraçada.",
+        "option2": "Um amigo tranquilo com quem você consegue conversar sobre qualquer coisa."
     },
     {
-        "option1": "poder rever seus sonhos em vídeo",
-        "option2": "pegar no sono estalando os dedos"
+        "pergunta": "O que você prefere fazer quando começa a chover?",
+        "option1": "Ficar perto da janela ouvindo a chuva enquanto descansa.",
+        "option2": "Sair mesmo com chuva e transformar o momento em uma aventura."
     },
     {
-        "option1": "ficar preso num teleférico quebrado",
-        "option2": "num elevador quebrado"
+        "pergunta": "Qual cenário parece mais confortável?",
+        "option1": "Um quarto escuro, cobertor, música baixa e uma série para assistir.",
+        "option2": "Uma sala cheia de amigos, comida na mesa e muita conversa."
     },
     {
-        "option1": "comer pizza todo dia",
-        "option2": "comer massa todo dia"
+        "pergunta": "Se pudesse escolher uma comida para comer durante uma semana inteira, qual seria?",
+        "option1": "Uma comida caseira preparada exatamente do jeito que você gosta.",
+        "option2": "Seu lanche favorito com todos os acompanhamentos que você escolheria."
     },
     {
-        "option1": "ser pago para ler livros",
-        "option2": "assistir TV"
+        "pergunta": "Qual programa você escolheria para uma sexta-feira?",
+        "option1": "Sair para comer alguma coisa e conversar com os amigos.",
+        "option2": "Fazer uma noite de filmes e jogos em casa."
     },
     {
-        "option1": "se livrar de todos os maus motoristas",
-        "option2": "nunca mais ter que ficar numa fila"
+        "pergunta": "O que você prefere em uma viagem?",
+        "option1": "Ter um roteiro organizado para conhecer vários lugares.",
+        "option2": "Não ter quase nenhum plano e decidir tudo durante a viagem."
     },
     {
-        "option1": "ter um salário alto num trabalho que você odeia",
-        "option2": "ter um salário baixo num trabalho que você ama"
+        "pergunta": "Se pudesse escolher uma paisagem para observar todos os dias, qual seria?",
+        "option1": "O mar durante o pôr do sol.",
+        "option2": "Uma montanha cercada por natureza durante o amanhecer."
     },
     {
-        "option1": "estar sozinho na floresta sendo perseguido por um urso",
-        "option2": "ter três dos seus dentes quebrados com um martelo"
+        "pergunta": "Qual desses presentes teria mais significado para você?",
+        "option1": "Uma carta escrita à mão por alguém que gosta muito de você.",
+        "option2": "Um presente simples escolhido especialmente pensando nos seus gostos."
     },
     {
-        "option1": "ser obrigado a obedecer a alguém que você odeia",
-        "option2": "dar ordens terríveis a alguém que você ama"
+        "pergunta": "Quando você conhece alguém novo, o que prefere?",
+        "option1": "Passar horas conversando e descobrindo tudo sobre a pessoa.",
+        "option2": "Fazer alguma atividade juntos e deixar a amizade surgir naturalmente."
     },
     {
-        "option1": "ficar doente pelo resto da vida",
-        "option2": "matar um gatinho"
+        "pergunta": "Qual situação seria mais engraçada?",
+        "option1": "Seus amigos lembrarem uma história vergonhosa sua durante uma reunião.",
+        "option2": "Você descobrir que todo mundo tem uma história vergonhosa parecida."
     },
     {
-        "option1": "não poder ter filhos",
-        "option2": "só poder conceber quíntuplos"
+        "pergunta": "Se pudesse reviver um tipo de momento, qual escolheria?",
+        "option1": "Uma noite em que você riu tanto que ficou sem conseguir falar.",
+        "option2": "Um dia tranquilo em que tudo parecia estar exatamente no lugar."
     },
     {
-        "option1": "não ter família",
-        "option2": "não ter amigos"
+        "pergunta": "Qual companhia você escolheria para passar um domingo?",
+        "option1": "Seus amigos reunidos para comer, conversar e brincar.",
+        "option2": "Uma pessoa querida para assistir filmes e aproveitar o dia juntos."
     },
     {
-        "option1": "lamber o chão de uma estação de metrô de Nova York",
-        "option2": "lamber a privada de um banheiro público"
+        "pergunta": "O que você prefere quando está cansado?",
+        "option1": "Dormir algumas horas e acordar completamente renovado.",
+        "option2": "Ficar acordado fazendo alguma coisa que realmente gosta."
     },
     {
-        "option1": "perder todas as lembranças que você fez até agora",
-        "option2": "esquecer a cada 24 horas o que aconteceu no dia anterior"
+        "pergunta": "Se pudesse morar em qualquer lugar, qual escolheria?",
+        "option1": "Uma cidade grande cheia de oportunidades e lugares para conhecer.",
+        "option2": "Uma cidade pequena e tranquila onde todo mundo parece se conhecer."
     },
     {
-        "option1": "jogar roleta-russa com três balas por $5.000.000",
-        "option2": "jogar roleta-russa com uma bala por $100.000"
+        "pergunta": "Qual dessas experiências parece mais interessante?",
+        "option1": "Fazer uma trilha até chegar a uma cachoeira escondida.",
+        "option2": "Passar o dia conhecendo restaurantes e lugares diferentes de uma cidade."
     },
     {
-        "option1": "matar uma pessoa inocente",
-        "option2": "matar cinco pessoas que cometeram crimes leves"
+        "pergunta": "O que você prefere em uma conversa?",
+        "option1": "Conversar sobre assuntos sérios e conhecer profundamente a pessoa.",
+        "option2": "Ficar falando besteiras e rindo de coisas que ninguém mais entenderia."
     },
     {
-        "option1": "bater o dedinho do pé na quina de um móvel todos os dias",
-        "option2": "tomar banho duas vezes por semana"
+        "pergunta": "Qual dessas situações você escolheria?",
+        "option1": "Receber uma ligação inesperada de alguém que você gosta muito.",
+        "option2": "Receber uma mensagem enorme dizendo que alguém estava com saudade."
     },
     {
-        "option1": "não ter cotovelos",
-        "option2": "não ter joelhos"
+        "pergunta": "Se pudesse escolher uma atividade para fazer com amigos, qual seria?",
+        "option1": "Fazer uma viagem curta e conhecer um lugar novo juntos.",
+        "option2": "Organizar uma noite em casa cheia de comida, jogos e brincadeiras."
     },
     {
-        "option1": "ter cheiro de cachorro molhado",
-        "option2": "ter cheiro de bode"
+        "pergunta": "Qual desses ambientes combina mais com você?",
+        "option1": "Um lugar tranquilo onde você consegue pensar e descansar.",
+        "option2": "Um lugar cheio de pessoas, música e coisas acontecendo."
     },
     {
-        "option1": "estar sempre com fome",
-        "option2": "estar sempre com sede"
+        "pergunta": "O que você prefere fazer quando conhece um lugar novo?",
+        "option1": "Tirar várias fotos para guardar lembranças daquele momento.",
+        "option2": "Guardar o celular e simplesmente aproveitar a experiência."
     },
     {
-        "option1": "sempre dizer seus pensamentos em voz alta",
-        "option2": "nunca mais falar, nem mesmo em linguagem de sinais"
+        "pergunta": "Qual seria uma forma divertida de passar uma madrugada?",
+        "option1": "Ficar conversando sobre assuntos aleatórios até o sono chegar.",
+        "option2": "Jogar alguma coisa com os amigos até alguém finalmente desistir."
     },
     {
-        "option1": "ficar enterrado até o pescoço com o sol na cara por 8 horas",
-        "option2": "ficar enterrado até o pescoço cercado de formigas-de-fogo por 20 minutos"
+        "pergunta": "Se pudesse escolher uma surpresa, qual gostaria de receber?",
+        "option1": "Uma pessoa aparecer de repente para passar o dia com você.",
+        "option2": "Encontrar um presente inesperado esperando por você em casa."
     },
     {
-        "option1": "ser completamente louco e saber que é louco",
-        "option2": "ser completamente louco e acreditar que é são"
+        "pergunta": "O que você escolheria para um encontro entre amigos?",
+        "option1": "Um churrasco com música, comida e muita conversa.",
+        "option2": "Uma noite de jogos com desafios e brincadeiras."
     },
     {
-        "option1": "ficar trancado num quarto constantemente escuro por uma semana",
-        "option2": "ficar trancado num quarto constantemente claro por uma semana"
+        "pergunta": "Qual dessas situações seria mais especial?",
+        "option1": "Alguém lembrar de uma coisa pequena que você contou meses atrás.",
+        "option2": "Alguém aparecer justamente quando você mais precisava de companhia."
     },
     {
-        "option1": "morrer congelado",
-        "option2": "morrer queimado"
+        "pergunta": "Se pudesse apagar uma coisa da rotina, o que escolheria?",
+        "option1": "Ter que acordar cedo todos os dias.",
+        "option2": "Ter que lidar com trânsito e lugares lotados."
     },
     {
-        "option1": "fazer uma tatuagem enorme no peito com o nome do seu parceiro",
-        "option2": "fazer uma tatuagem pequena do rosto dele no seu braço"
+        "pergunta": "Qual dessas coisas você gostaria de fazer mais?",
+        "option1": "Viajar e conhecer lugares que nunca visitou.",
+        "option2": "Passar mais tempo com as pessoas que realmente importam."
     },
     {
-        "option1": "que os animais que você toque morram",
-        "option2": "que os computadores em que você toque travem"
+        "pergunta": "O que você prefere em um fim de semana?",
+        "option1": "Ter vários compromissos e aproveitar cada hora do dia.",
+        "option2": "Não ter nenhum compromisso e decidir tudo na hora."
     },
     {
-        "option1": "ter superforça",
-        "option2": "ter supervelocidade"
+        "pergunta": "Se pudesse escolher uma lembrança para reviver, qual seria?",
+        "option1": "Uma viagem que marcou muito sua vida.",
+        "option2": "Um encontro simples que acabou se tornando inesquecível."
     },
     {
-        "option1": "ser rico e infeliz",
-        "option2": "ser pobre e feliz"
+        "pergunta": "Qual dessas atividades parece mais divertida?",
+        "option1": "Fazer uma noite de karaokê com seus amigos.",
+        "option2": "Fazer uma competição de jogos entre todo mundo."
     },
     {
-        "option1": "viver sem música",
-        "option2": "viver sem filmes"
+        "pergunta": "Se pudesse passar um dia sem nenhuma obrigação, o que faria?",
+        "option1": "Sair pela cidade sem destino e descobrir lugares novos.",
+        "option2": "Ficar em casa fazendo absolutamente nada sem culpa."
     },
     {
-        "option1": "ter a habilidade de ler mentes",
-        "option2": "ter a habilidade de se teletransportar"
+        "pergunta": "O que você prefere ganhar?",
+        "option1": "Um presente que você queria há muito tempo.",
+        "option2": "Uma experiência inesquecível para viver com alguém querido."
     },
     {
-        "option1": "nunca mais poder comer doce",
-        "option2": "nunca mais poder comer salgado"
+        "pergunta": "Qual dessas situações você escolheria?",
+        "option1": "Conhecer alguém novo durante uma viagem inesperada.",
+        "option2": "Reencontrar uma pessoa que você não via há muitos anos."
     },
     {
-        "option1": "ter um carro voador",
-        "option2": "ter uma casa subaquática"
+        "pergunta": "Qual seria sua escolha para uma noite fria?",
+        "option1": "Ficar enrolado no cobertor assistindo alguma coisa.",
+        "option2": "Sair para comer alguma coisa quente com os amigos."
     },
     {
-        "option1": "ser famoso por 1 ano",
-        "option2": "ser anônimo para sempre"
+        "pergunta": "O que você prefere ouvir?",
+        "option1": "Uma música que lembra uma fase muito boa da sua vida.",
+        "option2": "Uma música completamente nova que você nunca tinha escutado."
     },
     {
-        "option1": "ter o poder de controlar o tempo",
-        "option2": "ter o poder de controlar o clima"
+        "pergunta": "Qual dessas situações parece mais confortável?",
+        "option1": "Conversar com alguém enquanto olha a chuva pela janela.",
+        "option2": "Caminhar à noite ouvindo música e pensando na vida."
     },
     {
-        "option1": "sempre perder suas chaves",
-        "option2": "sempre perder seu celular"
+        "pergunta": "Se pudesse escolher uma festa, qual seria?",
+        "option1": "Uma festa grande cheia de pessoas e música.",
+        "option2": "Uma reunião pequena apenas com pessoas próximas."
     },
     {
-        "option1": "ter um cachorro que fala",
-        "option2": "ter um gato que cozinha"
+        "pergunta": "O que você prefere fazer depois de um dia cansativo?",
+        "option1": "Tomar um banho, comer alguma coisa e dormir cedo.",
+        "option2": "Conversar com alguém e contar tudo que aconteceu durante o dia."
     },
     {
-        "option1": "nunca mais poder usar redes sociais",
-        "option2": "nunca mais poder assistir TV"
+        "pergunta": "Qual dessas situações você escolheria?",
+        "option1": "Passar horas jogando com seus amigos em uma call.",
+        "option2": "Passar horas conversando sobre assuntos completamente aleatórios."
     },
     {
-        "option1": "ter a habilidade de falar com animais",
-        "option2": "ter a habilidade de falar todas as línguas humanas"
+        "pergunta": "Se pudesse ter uma casa dos sonhos, o que escolheria?",
+        "option1": "Uma casa enorme com piscina e vários espaços de lazer.",
+        "option2": "Uma casa menor, confortável e cercada por natureza."
     },
     {
-        "option1": "sempre acordar cedo",
-        "option2": "sempre dormir tarde"
+        "pergunta": "Qual desses lugares você gostaria de conhecer?",
+        "option1": "Uma cidade famosa cheia de pontos turísticos.",
+        "option2": "Um lugar pouco conhecido que quase ninguém visita."
     },
     {
-        "option1": "ter um emprego chato que paga muito",
-        "option2": "ter um emprego divertido que paga pouco"
+        "pergunta": "O que você prefere em uma viagem?",
+        "option1": "Conhecer muitos lugares diferentes em pouco tempo.",
+        "option2": "Conhecer profundamente um único lugar sem pressa."
     },
     {
-        "option1": "viver sem internet",
-        "option2": "viver sem ar-condicionado"
+        "pergunta": "Qual dessas experiências você escolheria?",
+        "option1": "Fazer uma viagem de carro ouvindo suas músicas favoritas.",
+        "option2": "Viajar de avião para um destino completamente inesperado."
     },
     {
-        "option1": "ter a habilidade de parar o tempo",
-        "option2": "ter a habilidade de voltar no tempo"
+        "pergunta": "O que você prefere fazer em um dia ensolarado?",
+        "option1": "Ir para algum lugar ao ar livre e aproveitar o sol.",
+        "option2": "Ficar em casa com o ar-condicionado e assistir alguma coisa."
     },
     {
-        "option1": "sempre saber a verdade",
-        "option2": "sempre acreditar em mentiras"
+        "pergunta": "Qual dessas situações você escolheria?",
+        "option1": "Ganhar uma viagem surpresa sem saber o destino.",
+        "option2": "Escolher exatamente para onde você quer viajar."
     },
     {
-        "option1": "ter um superpoder, mas nunca poder contar para ninguém",
-        "option2": "não ter superpoder, mas todo mundo achar que você tem"
+        "pergunta": "O que você prefere?",
+        "option1": "Ter uma rotina tranquila e previsível.",
+        "option2": "Viver sempre com alguma novidade acontecendo."
     },
     {
-        "option1": "ter a habilidade de voar, mas só 1 metro do chão",
-        "option2": "ter a habilidade de ficar invisível, mas só por 10 segundos"
+        "pergunta": "Qual dessas coisas você faria primeiro?",
+        "option1": "Realizaria um sonho antigo que sempre ficou para depois.",
+        "option2": "Ajudaria alguém próximo a realizar um sonho importante."
     },
     {
-        "option1": "sempre ter que usar roupas de frio no calor",
-        "option2": "sempre ter que usar roupas de calor no frio"
+        "pergunta": "Se pudesse ter uma habilidade extraordinária, qual escolheria?",
+        "option1": "Conseguir aprender qualquer coisa depois de estudar uma única vez.",
+        "option2": "Conseguir criar qualquer coisa que imaginar com as próprias mãos."
     },
     {
-        "option1": "ter um milhão de reais agora",
-        "option2": "ter mil reais por mês para sempre"
+        "pergunta": "Qual dessas situações seria mais interessante?",
+        "option1": "Poder conhecer o passado e observar momentos históricos.",
+        "option2": "Poder conhecer o futuro e descobrir como o mundo estará."
     },
     {
-        "option1": "ser um gênio em matemática",
-        "option2": "ser um gênio em artes"
+        "pergunta": "Se pudesse escolher uma profissão completamente diferente, qual seria?",
+        "option1": "Trabalhar viajando pelo mundo e conhecendo lugares diferentes.",
+        "option2": "Trabalhar em algo criativo e passar o dia criando coisas novas."
     },
     {
-        "option1": "ter a habilidade de curar qualquer doença",
-        "option2": "ter a habilidade de acabar com a fome no mundo"
+        "pergunta": "O que você prefere fazer quando está entediado?",
+        "option1": "Procurar alguma coisa nova para aprender ou experimentar.",
+        "option2": "Chamar alguém para conversar e inventar alguma coisa para fazer."
     },
     {
-        "option1": "sempre ganhar em jogos de azar",
-        "option2": "sempre ganhar em jogos de habilidade"
+        "pergunta": "Qual desses dias você escolheria?",
+        "option1": "Um dia cheio de aventuras e acontecimentos inesperados.",
+        "option2": "Um dia completamente tranquilo sem nenhum problema."
     },
     {
-        "option1": "ter a memória de um elefante",
-        "option2": "ter a agilidade de um guepardo"
+        "pergunta": "O que você prefere guardar?",
+        "option1": "Fotos de momentos especiais que aconteceram ao longo dos anos.",
+        "option2": "Objetos pequenos que lembram pessoas e momentos importantes."
     },
     {
-        "option1": "viver em um mundo sem cores",
-        "option2": "viver em um mundo sem sons"
+        "pergunta": "Qual dessas coisas você gostaria de receber?",
+        "option1": "Uma mensagem inesperada de alguém que você não fala há muito tempo.",
+        "option2": "Uma ligação de alguém que você sente muita saudade."
     },
     {
-        "option1": "ter a habilidade de ler um livro em 1 minuto",
-        "option2": "ter a habilidade de assistir um filme em 5 minutos"
+        "pergunta": "Se pudesse escolher uma companhia para assistir um filme, qual seria?",
+        "option1": "Alguém que comenta cada cena e deixa tudo mais engraçado.",
+        "option2": "Alguém que fica quietinho e realmente entra na história."
     },
     {
-        "option1": "sempre ter que cantar em vez de falar",
-        "option2": "sempre ter que dançar em vez de andar"
+        "pergunta": "Qual dessas atividades você escolheria para um dia de chuva?",
+        "option1": "Fazer comida e assistir vários filmes durante o dia.",
+        "option2": "Jogar algum jogo enquanto escuta a chuva lá fora."
     },
     {
-        "option1": "ter um jardim mágico que cresce instantaneamente",
-        "option2": "ter uma cozinha que prepara qualquer comida sozinha"
+        "pergunta": "O que você prefere em um amigo?",
+        "option1": "Alguém que sempre fala a verdade, mesmo quando é difícil.",
+        "option2": "Alguém que sempre tenta proteger seus sentimentos."
     },
     {
-        "option1": "ser imune a picadas de insetos",
-        "option2": "ser imune a queimaduras de sol"
+        "pergunta": "Qual dessas situações você escolheria?",
+        "option1": "Ter uma conversa que dura horas e passa por vários assuntos.",
+        "option2": "Ficar em silêncio ao lado de alguém sem que o silêncio seja estranho."
     },
     {
-        "option1": "ter a habilidade de encontrar qualquer coisa perdida",
-        "option2": "ter a habilidade de consertar qualquer coisa quebrada"
+        "pergunta": "Se pudesse voltar para uma idade, qual escolheria?",
+        "option1": "Voltar para uma época da infância cheia de lembranças boas.",
+        "option2": "Voltar para uma fase da adolescência que marcou sua vida."
     },
     {
-        "option1": "sempre ter que usar sapatos apertados",
-        "option2": "sempre ter que usar roupas largas"
+        "pergunta": "Qual dessas experiências você escolheria?",
+        "option1": "Acampar durante uma noite inteira observando as estrelas.",
+        "option2": "Passar uma noite em um hotel confortável com uma vista incrível."
     },
     {
-        "option1": "ter um animal de estimação que é um dragão miniatura",
-        "option2": "ter um animal de estimação que é um unicórnio miniatura"
+        "pergunta": "O que você prefere fazer nas férias?",
+        "option1": "Viajar e passar os dias conhecendo lugares diferentes.",
+        "option2": "Ficar em casa e aproveitar o tempo para descansar de verdade."
     },
     {
-        "option1": "sempre acordar com o cabelo perfeito",
-        "option2": "sempre acordar com a pele perfeita"
+        "pergunta": "Qual dessas situações seria mais divertida?",
+        "option1": "Organizar uma competição entre todos os seus amigos.",
+        "option2": "Organizar uma brincadeira em que ninguém sabe o que vai acontecer."
     },
     {
-        "option1": "ter a habilidade de falar com plantas",
-        "option2": "ter a habilidade de falar com pedras"
+        "pergunta": "Se pudesse escolher uma experiência gratuita para sempre, qual seria?",
+        "option1": "Poder viajar para qualquer lugar do mundo quando quisesse.",
+        "option2": "Poder comer em qualquer restaurante sem precisar pagar."
     },
     {
-        "option1": "sempre saber a resposta, mas nunca poder compartilhar",
-        "option2": "nunca saber a resposta, mas sempre poder adivinhar"
+        "pergunta": "O que você prefere?",
+        "option1": "Receber uma surpresa sem fazer ideia do que é.",
+        "option2": "Saber da surpresa e ficar esperando ansiosamente pelo momento."
     },
     {
-        "option1": "ter um carro que nunca quebra",
-        "option2": "ter uma casa que nunca precisa de reparos"
+        "pergunta": "Qual dessas situações você escolheria?",
+        "option1": "Passar o dia inteiro em um parque de diversões.",
+        "option2": "Passar o dia inteiro em uma praia tranquila."
     },
     {
-        "option1": "ser capaz de respirar debaixo d'água",
-        "option2": "ser capaz de sobreviver no espaço sem traje"
+        "pergunta": "O que você prefere fazer com seus amigos?",
+        "option1": "Criar uma lembrança completamente aleatória que ninguém esquecerá.",
+        "option2": "Relembrar histórias antigas e rir de tudo que já aconteceu."
     },
     {
-        "option1": "ter a habilidade de desenhar perfeitamente",
-        "option2": "ter a habilidade de tocar qualquer instrumento perfeitamente"
+        "pergunta": "Se pudesse escolher uma noite perfeita, qual seria?",
+        "option1": "Uma noite tranquila conversando com pessoas importantes.",
+        "option2": "Uma noite agitada cheia de música, brincadeiras e diversão."
     },
     {
-        "option1": "sempre ter que andar de ponta-cabeça",
-        "option2": "sempre ter que andar de costas"
+        "pergunta": "Qual dessas coisas você gostaria de fazer mais?",
+        "option1": "Tirar fotos para registrar os momentos importantes.",
+        "option2": "Guardar o celular e viver mais os momentos sem registrar tudo."
     },
     {
-        "option1": "ter um guarda-roupa infinito",
-        "option2": "ter uma geladeira que nunca fica vazia"
+        "pergunta": "O que você prefere receber?",
+        "option1": "Um áudio enorme contando uma história engraçada.",
+        "option2": "Uma sequência de mensagens contando tudo que aconteceu no dia."
     },
     {
-        "option1": "ser capaz de viajar para qualquer lugar do mundo de graça",
-        "option2": "ser capaz de comer em qualquer restaurante de graça"
+        "pergunta": "Qual dessas situações você escolheria?",
+        "option1": "Ser lembrado por sempre conseguir fazer as pessoas sorrirem.",
+        "option2": "Ser lembrado por sempre estar presente quando alguém precisava."
     },
     {
-        "option1": "ter a habilidade de aprender qualquer coisa em 1 dia",
-        "option2": "ter a habilidade de esquecer qualquer coisa em 1 dia"
+        "pergunta": "Se pudesse escolher uma característica para ter, qual seria?",
+        "option1": "Ter muita coragem para experimentar coisas novas.",
+        "option2": "Ter muita paciência para lidar com qualquer situação."
     },
     {
-        "option1": "sempre ter que rir quando está triste",
-        "option2": "sempre ter que chorar quando está feliz"
+        "pergunta": "O que você prefere?",
+        "option1": "Conhecer muitas pessoas durante a vida.",
+        "option2": "Conhecer poucas pessoas e construir amizades muito profundas."
     },
     {
-        "option1": "ter um robô que faz todas as tarefas domésticas",
-        "option2": "ter um robô que faz todo o seu trabalho"
+        "pergunta": "Qual dessas situações você escolheria?",
+        "option1": "Passar um dia inteiro conversando com seu melhor amigo.",
+        "option2": "Passar um dia inteiro fazendo alguma aventura com ele."
     },
     {
-        "option1": "ser capaz de ver 10 minutos no futuro",
-        "option2": "ser capaz de voltar 10 minutos no passado"
+        "pergunta": "O que você prefere quando alguém está triste?",
+        "option1": "Sentar ao lado da pessoa e ouvir tudo que ela quiser falar.",
+        "option2": "Tentar fazer a pessoa rir e esquecer um pouco o problema."
     },
     {
-        "option1": "ter a habilidade de mudar de cor como um camaleão",
-        "option2": "ter a habilidade de brilhar no escuro"
+        "pergunta": "Qual dessas coisas você faria em uma viagem?",
+        "option1": "Experimentaria comidas que nunca provou antes.",
+        "option2": "Procuraria os lugares mais famosos e conhecidos da região."
     },
     {
-        "option1": "sempre ter que falar em rimas",
-        "option2": "sempre ter que falar em versos"
+        "pergunta": "Se pudesse escolher uma vista para acordar todos os dias, qual seria?",
+        "option1": "Uma praia enorme com o mar aparecendo pela janela.",
+        "option2": "Uma paisagem de montanhas cobertas de verde."
     },
     {
-        "option1": "ter um superpoder que só funciona à noite",
-        "option2": "ter um superpoder que só funciona de dia"
+        "pergunta": "O que você prefere?",
+        "option1": "Ter uma vida cheia de histórias inesperadas para contar.",
+        "option2": "Ter uma vida tranquila cheia de momentos simples e felizes."
     },
     {
-        "option1": "ser capaz de parar de envelhecer",
-        "option2": "ser capaz de voltar a qualquer idade que quiser"
+        "pergunta": "Qual dessas coisas você escolheria para uma noite com amigos?",
+        "option1": "Pedir várias comidas e ficar conversando durante horas.",
+        "option2": "Jogar vários jogos diferentes e fazer pequenas competições."
     },
     {
-        "option1": "ter a habilidade de conversar com seus ancestrais",
-        "option2": "ter a habilidade de conversar com seus descendentes"
+        "pergunta": "Se pudesse escolher uma memória perfeita, qual seria?",
+        "option1": "Um dia inteiro cercado pelas pessoas que você mais gosta.",
+        "option2": "Uma viagem em que tudo aconteceu exatamente como você queria."
     },
     {
-        "option1": "sempre ter que usar óculos escuros, mesmo à noite",
-        "option2": "sempre ter que usar chapéu, mesmo dentro de casa"
+        "pergunta": "O que você prefere?",
+        "option1": "Receber uma mensagem de alguém dizendo que sente sua falta.",
+        "option2": "Receber uma mensagem dizendo que está orgulhoso de você."
     },
     {
-        "option1": "ter um mapa que mostra a localização de qualquer coisa perdida",
-        "option2": "ter um relógio que mostra o tempo restante de sua vida"
+        "pergunta": "Qual dessas experiências escolheria?",
+        "option1": "Fazer algo que sempre teve medo de tentar.",
+        "option2": "Aprender algo completamente novo que nunca imaginou fazer."
     },
     {
-        "option1": "ser capaz de se transformar em qualquer animal",
-        "option2": "ser capaz de se transformar em qualquer pessoa"
+        "pergunta": "O que você prefere em uma conversa?",
+        "option1": "Falar sobre sonhos, planos e coisas que você quer realizar.",
+        "option2": "Falar sobre histórias engraçadas e situações que já aconteceram."
     },
     {
-        "option1": "ter um jardim que cresce comida instantaneamente",
-        "option2": "ter uma árvore que dá dinheiro"
+        "pergunta": "Qual dessas opções parece mais divertida?",
+        "option1": "Fazer uma viagem sem saber exatamente onde vai terminar.",
+        "option2": "Escolher um destino e planejar uma aventura inteira."
     },
     {
-        "option1": "sempre ter que andar de skate",
-        "option2": "sempre ter que andar de patins"
+        "pergunta": "Se pudesse escolher uma companhia para uma caminhada, qual seria?",
+        "option1": "Alguém com quem você pode conversar durante horas.",
+        "option2": "Alguém com quem você consegue ficar em silêncio confortavelmente."
     },
     {
-        "option1": "ter a habilidade de ver no escuro",
-        "option2": "ter a habilidade de ver através das paredes"
+        "pergunta": "O que você prefere?",
+        "option1": "Ter uma noite inteira para jogar seu jogo favorito.",
+        "option2": "Ter uma noite inteira para assistir suas séries favoritas."
     },
     {
-        "option1": "ser capaz de parar o tempo por 1 hora por dia",
-        "option2": "ser capaz de voltar no tempo por 1 hora por dia"
+        "pergunta": "Qual dessas situações você escolheria?",
+        "option1": "Encontrar uma mensagem antiga que faz você lembrar de alguém.",
+        "option2": "Encontrar uma foto antiga que traz uma lembrança muito boa."
     },
     {
-        "option1": "ter um assistente pessoal robô",
-        "option2": "ter um carro autônomo que dirige sozinho"
+        "pergunta": "O que você prefere?",
+        "option1": "Ser surpreendido por alguém em um momento comum.",
+        "option2": "Planejar uma surpresa perfeita para alguém importante."
     },
     {
-        "option1": "sempre ter que falar em voz alta",
-        "option2": "sempre ter que sussurrar"
+        "pergunta": "Qual dessas coisas seria mais especial?",
+        "option1": "Alguém lembrar de uma pequena coisa que você gosta.",
+        "option2": "Alguém lembrar de uma data importante para você."
     },
     {
-        "option1": "ter a habilidade de se clonar",
-        "option2": "ter a habilidade de se teletransportar"
+        "pergunta": "Se pudesse escolher um lugar para passar o aniversário, qual seria?",
+        "option1": "Uma festa grande cercada por todos os seus amigos.",
+        "option2": "Uma comemoração pequena com poucas pessoas especiais."
     },
     {
-        "option1": "ser capaz de prever o clima com 100% de precisão",
-        "option2": "ser capaz de prever o trânsito com 100% de precisão"
+        "pergunta": "O que você prefere?",
+        "option1": "Ganhar algo que você queria há muito tempo.",
+        "option2": "Ganhar algo simples que tenha um significado especial."
     },
     {
-        "option1": "ter um livro que escreve suas histórias sozinho",
-        "option2": "ter um diário que revela segredos do futuro"
+        "pergunta": "Qual dessas coisas você faria em uma tarde livre?",
+        "option1": "Sair para conhecer algum lugar novo da sua cidade.",
+        "option2": "Chamar alguém para passar a tarde conversando em casa."
     },
     {
-        "option1": "sempre ter que usar roupas de super-herói",
-        "option2": "sempre ter que usar roupas de palhaço"
+        "pergunta": "Qual dessas situações escolheria?",
+        "option1": "Descobrir uma música incrível por acaso.",
+        "option2": "Receber uma música indicada por alguém que conhece muito bem seus gostos."
     },
     {
-        "option1": "ter a habilidade de se comunicar com extraterrestres",
-        "option2": "ter a habilidade de se comunicar com fantasmas"
+        "pergunta": "O que você prefere?",
+        "option1": "Ter uma playlist perfeita para cada momento da sua vida.",
+        "option2": "Ter uma música especial que sempre consegue melhorar seu humor."
     },
     {
-        "option1": "ser capaz de comer o quanto quiser sem engordar",
-        "option2": "ser capaz de dormir o quanto quiser sem se sentir cansado"
+        "pergunta": "Qual dessas experiências escolheria?",
+        "option1": "Ver o nascer do sol depois de passar a madrugada acordado.",
+        "option2": "Ver o pôr do sol enquanto conversa com alguém importante."
     },
     {
-        "option1": "ter um telefone que nunca descarrega",
-        "option2": "ter um computador que nunca trava"
+        "pergunta": "O que você prefere fazer no sábado?",
+        "option1": "Sair cedo e aproveitar o máximo possível do dia.",
+        "option2": "Dormir até tarde e deixar o dia acontecer sem pressa."
     },
     {
-        "option1": "sempre ter que andar de bicicleta",
-        "option2": "sempre ter que andar de patinete"
+        "pergunta": "Qual dessas situações seria mais engraçada?",
+        "option1": "Seus amigos encontrarem uma foto sua extremamente vergonhosa.",
+        "option2": "Descobrir que seus amigos também têm fotos ainda mais vergonhosas."
     },
     {
-        "option1": "ter a habilidade de se tornar invisível por 1 hora por dia",
-        "option2": "ter a habilidade de voar por 1 hora por dia"
+        "pergunta": "O que você prefere?",
+        "option1": "Fazer alguém rir quando ela está tendo um dia ruim.",
+        "option2": "Ser a pessoa que alguém procura quando precisa conversar."
     },
     {
-        "option1": "ser capaz de ler um livro em 5 minutos",
-        "option2": "ser capaz de assistir um filme em 10 minutos"
+        "pergunta": "Qual dessas coisas você escolheria?",
+        "option1": "Ter uma amizade que começou completamente por acaso.",
+        "option2": "Ter uma amizade que começou depois de anos se conhecendo."
     },
     {
-        "option1": "ter um relógio que adiciona 1 hora ao seu dia",
-        "option2": "ter um relógio que congela o tempo por 1 hora"
+        "pergunta": "Se pudesse escolher uma atividade para fazer agora, qual seria?",
+        "option1": "Sair para comer alguma coisa em um lugar novo.",
+        "option2": "Ficar em casa e pedir sua comida favorita."
     },
     {
-        "option1": "sempre ter que usar roupas de banho",
-        "option2": "sempre ter que usar roupas de frio"
+        "pergunta": "O que você prefere?",
+        "option1": "Receber uma mensagem inesperada durante o dia.",
+        "option2": "Receber uma ligação inesperada durante a noite."
     },
     {
-        "option1": "ter a habilidade de se transformar em água",
-        "option2": "ter a habilidade de se transformar em fogo"
+        "pergunta": "Qual dessas situações escolheria?",
+        "option1": "Descobrir um lugar secreto incrível durante uma viagem.",
+        "option2": "Descobrir uma comida incrível em um restaurante desconhecido."
     },
     {
-        "option1": "ser capaz de falar com plantas e elas crescerem instantaneamente",
-        "option2": "ser capaz de falar com animais e eles obedecerem você"
+        "pergunta": "O que você prefere?",
+        "option1": "Passar uma tarde inteira na praia sem fazer nada.",
+        "option2": "Passar uma tarde inteira explorando uma cidade nova."
     },
     {
-        "option1": "ter um guarda-chuva que te faz flutuar",
-        "option2": "ter um chapéu que te faz ficar invisível"
+        "pergunta": "Qual dessas coisas você escolheria?",
+        "option1": "Ter uma câmera capaz de registrar perfeitamente todas as suas memórias.",
+        "option2": "Ter um diário capaz de guardar exatamente tudo que você sentiu."
     },
     {
-        "option1": "sempre ter que comer comidas picantes",
-        "option2": "sempre ter que comer comidas doces"
+        "pergunta": "O que você prefere?",
+        "option1": "Ter coragem para falar tudo que pensa.",
+        "option2": "Ter sabedoria para saber exatamente quando falar."
     },
     {
-        "option1": "ter a habilidade de se transformar em uma nuvem",
-        "option2": "ter a habilidade de se transformar em uma árvore"
+        "pergunta": "Qual dessas situações escolheria?",
+        "option1": "Fazer uma amizade durante uma viagem inesperada.",
+        "option2": "Reencontrar alguém importante em uma viagem."
     },
     {
-        "option1": "ser capaz de ver 24 horas no futuro",
-        "option2": "ser capaz de voltar 24 horas no passado"
+        "pergunta": "O que você prefere?",
+        "option1": "Ter alguém que sempre te faça rir.",
+        "option2": "Ter alguém que sempre saiba quando você precisa de ajuda."
     },
     {
-        "option1": "ter um espelho que mostra seu futuro",
-        "option2": "ter um espelho que mostra seu passado"
+        "pergunta": "Qual dessas experiências escolheria?",
+        "option1": "Fazer algo completamente fora da sua zona de conforto.",
+        "option2": "Aperfeiçoar algo que você já sabe fazer muito bem."
     },
     {
-        "option1": "sempre ter que usar roupas brilhantes",
-        "option2": "sempre ter que usar roupas escuras"
+        "pergunta": "O que você prefere?",
+        "option1": "Ter uma memória perfeita de todos os momentos felizes.",
+        "option2": "Poder reviver qualquer momento feliz quando quisesse."
     },
     {
-        "option1": "ter a habilidade de se transformar em vento",
-        "option2": "ter a habilidade de se transformar em pedra"
+        "pergunta": "Qual dessas coisas você escolheria?",
+        "option1": "Conhecer pessoalmente alguém que admira muito.",
+        "option2": "Ter uma conversa longa com essa pessoa pela internet."
     },
     {
-        "option1": "ser capaz de se comunicar com pessoas através de pensamentos",
-        "option2": "ser capaz de se comunicar com animais através de pensamentos"
+        "pergunta": "O que você prefere?",
+        "option1": "Ter uma noite inteira de conversa profunda.",
+        "option2": "Ter uma noite inteira de risadas e brincadeiras."
     },
     {
-        "option1": "ter um tapete mágico que voa",
-        "option2": "ter uma mochila que te teleporta para qualquer lugar"
+        "pergunta": "Qual dessas situações seria melhor para você?",
+        "option1": "Ter um dia inteiro sem receber nenhuma mensagem.",
+        "option2": "Ter um dia inteiro conversando com alguém que você gosta."
     },
     {
-        "option1": "sempre ter que andar de costas",
-        "option2": "sempre ter que andar de lado"
+        "pergunta": "O que você prefere?",
+        "option1": "Ter uma rotina que nunca muda e saber exatamente o que esperar.",
+        "option2": "Ter uma rotina imprevisível com novidades todos os dias."
     },
     {
-        "option1": "ter a habilidade de se transformar em gelo",
-        "option2": "ter a habilidade de se transformar em areia"
+        "pergunta": "Qual dessas coisas você escolheria?",
+        "option1": "Aprender a tocar sua música favorita em um instrumento.",
+        "option2": "Aprender a cantar sua música favorita perfeitamente."
     },
     {
-        "option1": "ser capaz de ver a vida de outras pessoas em sonhos",
-        "option2": "ser capaz de ver seu próprio futuro em sonhos"
+        "pergunta": "O que você prefere?",
+        "option1": "Conseguir lembrar perfeitamente de todos os sonhos que teve.",
+        "option2": "Conseguir escolher o que vai sonhar antes de dormir."
     },
     {
-        "option1": "ter um lápis que desenha coisas que se tornam reais",
-        "option2": "ter uma caneta que escreve coisas que se tornam realidade"
+        "pergunta": "Qual dessas situações escolheria?",
+        "option1": "Ter uma noite de jogos com seus amigos.",
+        "option2": "Ter uma noite de filmes com seus amigos."
     },
     {
-        "option1": "sempre ter que usar roupas de couro",
-        "option2": "sempre ter que usar roupas de algodão"
+        "pergunta": "O que você prefere?",
+        "option1": "Passar uma semana inteira viajando sem internet.",
+        "option2": "Ficar em casa com internet, mas sem poder sair."
     },
     {
-        "option1": "ter a habilidade de se transformar em luz",
-        "option2": "ter a habilidade de se transformar em sombra"
+        "pergunta": "Qual dessas coisas você escolheria?",
+        "option1": "Ter um amigo que sempre fala exatamente o que você precisa ouvir.",
+        "option2": "Ter um amigo que sempre sabe como melhorar seu humor."
     },
     {
-        "option1": "ser capaz de se comunicar com o vento",
-        "option2": "ser capaz de se comunicar com a água"
+        "pergunta": "O que você prefere?",
+        "option1": "Fazer uma viagem longa com uma pessoa muito próxima.",
+        "option2": "Fazer várias viagens curtas com diferentes amigos."
     },
     {
-        "option1": "ter um relógio que te faz voltar no tempo 1 minuto",
-        "option2": "ter um relógio que te faz avançar no tempo 1 minuto"
+        "pergunta": "Qual dessas situações você escolheria?",
+        "option1": "Ganhar ingressos para o show do seu artista favorito.",
+        "option2": "Ganhar uma viagem para conhecer uma cidade que sempre quis visitar."
     },
     {
-        "option1": "sempre ter que usar roupas de festa",
-        "option2": "sempre ter que usar roupas de academia"
+        "pergunta": "O que você prefere?",
+        "option1": "Ter um dia perfeito que você nunca esqueceria.",
+        "option2": "Ter vários dias simples que sempre deixam você feliz."
     },
     {
-        "option1": "ter a habilidade de se transformar em neblina",
-        "option2": "ter a habilidade de se transformar em fumaça"
+        "pergunta": "Qual dessas coisas você faria?",
+        "option1": "Tentaria conversar com alguém que não vê há muito tempo.",
+        "option2": "Preferiria deixar a lembrança dessa pessoa no passado."
     },
     {
-        "option1": "ser capaz de se comunicar com as estrelas",
-        "option2": "ser capaz de se comunicar com a lua"
+        "pergunta": "O que você prefere?",
+        "option1": "Receber uma foto inesperada de alguém que gosta de você.",
+        "option2": "Receber uma mensagem inesperada dizendo que estavam pensando em você."
     },
     {
-        "option1": "ter um anel que te faz flutuar",
-        "option2": "ter um colar que te faz ficar invisível"
+        "pergunta": "Qual dessas situações escolheria?",
+        "option1": "Ter um amigo que mora perto e poder vê-lo sempre.",
+        "option2": "Ter um amigo que mora longe, mas mantém uma amizade muito forte."
     },
     {
-        "option1": "sempre ter que usar roupas de couro",
-        "option2": "sempre ter que usar roupas de seda"
+        "pergunta": "O que você prefere?",
+        "option1": "Passar horas contando histórias da sua infância.",
+        "option2": "Passar horas falando sobre seus planos para o futuro."
     },
     {
-        "option1": "ter a habilidade de se transformar em arco-íris",
-        "option2": "ter a habilidade de se transformar em tempestade"
+        "pergunta": "Qual dessas experiências escolheria?",
+        "option1": "Conhecer uma cultura completamente diferente da sua.",
+        "option2": "Conhecer profundamente a história do seu próprio país."
     },
     {
-        "option1": "ser capaz de se comunicar com o sol",
-        "option2": "ser capaz de se comunicar com as nuvens"
+        "pergunta": "O que você prefere?",
+        "option1": "Ser muito bom em conversar com qualquer pessoa.",
+        "option2": "Ser muito bom em entender o que as pessoas sentem."
+    },
+    {
+        "pergunta": "Qual dessas situações escolheria?",
+        "option1": "Receber um elogio inesperado de alguém que admira.",
+        "option2": "Fazer um elogio e perceber que realmente mudou o dia da pessoa."
+    },
+    {
+        "pergunta": "O que você prefere?",
+        "option1": "Ter uma vida cheia de aventuras para contar.",
+        "option2": "Ter uma vida tranquila cheia de pessoas especiais."
+    },
+    {
+        "pergunta": "Qual dessas coisas você escolheria?",
+        "option1": "Poder passar uma semana em qualquer lugar do mundo.",
+        "option2": "Poder trazer qualquer pessoa do mundo para passar uma semana com você."
+    },
+    {
+        "pergunta": "O que você prefere?",
+        "option1": "Ser lembrado pelas coisas engraçadas que fez.",
+        "option2": "Ser lembrado pela forma como tratava as pessoas."
+    },
+    {
+        "pergunta": "Qual dessas situações escolheria?",
+        "option1": "Ter alguém que sempre comemora suas pequenas conquistas.",
+        "option2": "Ter alguém que sempre te ajuda quando algo dá errado."
+    },
+    {
+        "pergunta": "O que você prefere?",
+        "option1": "Ter coragem para realizar todos os seus sonhos.",
+        "option2": "Ter tempo suficiente para aproveitar cada conquista."
+    },
+    {
+        "pergunta": "Qual dessas experiências escolheria?",
+        "option1": "Assistir ao nascer do sol em um lugar completamente desconhecido.",
+        "option2": "Assistir ao pôr do sol no seu lugar favorito com alguém importante."
+    },
+    {
+        "pergunta": "O que você prefere?",
+        "option1": "Fazer algo incrível e não tirar nenhuma foto.",
+        "option2": "Registrar tudo para poder lembrar daquele dia depois."
+    },
+    {
+        "pergunta": "Qual dessas situações escolheria?",
+        "option1": "Ter uma conversa que muda completamente sua forma de pensar.",
+        "option2": "Ter uma experiência que muda completamente sua forma de enxergar a vida."
+    },
+    {
+        "pergunta": "O que você prefere?",
+        "option1": "Ter poucos momentos incríveis que nunca esquecerá.",
+        "option2": "Ter muitos momentos simples que sempre trazem felicidade."
+    },
+    {
+        "pergunta": "Qual dessas coisas seria mais importante para você?",
+        "option1": "Ter pessoas que realmente conhecem quem você é.",
+        "option2": "Ter pessoas que aceitam você exatamente como você é."
+    },
+    {
+        "pergunta": "Se pudesse escolher uma coisa para levar para o resto da vida, qual seria?",
+        "option1": "As melhores lembranças de todas as pessoas que passaram pela sua vida.",
+        "option2": "A capacidade de continuar criando novas lembranças especiais."
+    },
+    {
+        "pergunta": "Em um relacionamento, o que seria mais importante para você?",
+        "option1": "Ter alguém que sempre esteja disposto a conversar quando surgir um problema.",
+        "option2": "Ter alguém que demonstre carinho principalmente através de atitudes."
+    },
+    {
+        "pergunta": "O que você preferiria receber de alguém especial?",
+        "option1": "Uma mensagem enorme explicando tudo que sente por você.",
+        "option2": "Um abraço demorado que demonstre tudo sem precisar falar."
+    },
+    {
+        "pergunta": "Qual situação seria mais especial?",
+        "option1": "A pessoa lembrar de uma coisa pequena que você comentou meses atrás.",
+        "option2": "A pessoa preparar uma surpresa baseada em algo que sabe que você gosta."
+    },
+    {
+        "pergunta": "Em um relacionamento, o que você prefere?",
+        "option1": "Passar horas conversando sobre qualquer assunto.",
+        "option2": "Conseguir ficar em silêncio juntos sem que seja desconfortável."
+    },
+    {
+        "pergunta": "Qual encontro você escolheria?",
+        "option1": "Um jantar preparado especialmente para vocês dois.",
+        "option2": "Um passeio simples em algum lugar onde possam conversar bastante."
+    },
+    {
+        "pergunta": "O que você prefere receber durante o dia?",
+        "option1": "Uma mensagem inesperada dizendo que a pessoa está pensando em você.",
+        "option2": "Uma ligação inesperada apenas para ouvir sua voz."
+    },
+    {
+        "pergunta": "Qual demonstração de carinho seria mais importante?",
+        "option1": "A pessoa lembrar de perguntar como foi seu dia.",
+        "option2": "A pessoa perceber quando você não está bem mesmo sem você falar."
+    },
+    {
+        "pergunta": "Se estivesse triste, o que gostaria que a pessoa fizesse?",
+        "option1": "Ficasse ao seu lado e escutasse tudo que você quisesse falar.",
+        "option2": "Tentasse te fazer sorrir para tirar um pouco do peso daquele momento."
+    },
+    {
+        "pergunta": "O que você prefere em uma relação?",
+        "option1": "Ter alguém muito romântico que gosta de fazer surpresas.",
+        "option2": "Ter alguém mais simples que demonstra amor através de pequenas atitudes."
+    },
+    {
+        "pergunta": "Qual situação seria mais bonita?",
+        "option1": "A pessoa escrever uma carta contando tudo que sente.",
+        "option2": "A pessoa guardar pequenos detalhes da história de vocês."
+    },
+    {
+        "pergunta": "O que você escolheria depois de uma discussão?",
+        "option1": "Resolver tudo conversando até os dois conseguirem se entender.",
+        "option2": "Dar um pouco de espaço para os dois se acalmarem antes de conversar."
+    },
+    {
+        "pergunta": "Se alguém te decepcionasse, o que seria mais importante?",
+        "option1": "Receber um pedido de desculpas sincero acompanhado de uma mudança.",
+        "option2": "Ter tempo para decidir se consegue confiar novamente na pessoa."
+    },
+    {
+        "pergunta": "O que você prefere em uma relação?",
+        "option1": "Ter muita comunicação para conversar sobre absolutamente tudo.",
+        "option2": "Ter muita confiança e não precisar explicar cada detalhe da sua vida."
+    },
+    {
+        "pergunta": "Qual situação seria mais difícil para você?",
+        "option1": "Gostar muito de alguém que não sente o mesmo.",
+        "option2": "Descobrir que alguém que você ama deixou de sentir o mesmo."
+    },
+    {
+        "pergunta": "O que você escolheria?",
+        "option1": "Ter uma última conversa sincera com alguém do passado.",
+        "option2": "Seguir em frente sem procurar nenhuma explicação."
+    },
+    {
+        "pergunta": "Se alguém que você amava voltasse para sua vida, o que preferiria?",
+        "option1": "Conversar para descobrir se as coisas poderiam funcionar novamente.",
+        "option2": "Manter distância para não reviver sentimentos antigos."
+    },
+    {
+        "pergunta": "O que você prefere receber?",
+        "option1": "Um “eu te amo” dito espontaneamente em um momento inesperado.",
+        "option2": "Uma atitude que mostre que a pessoa realmente te ama."
+    },
+    {
+        "pergunta": "Qual situação parece mais romântica?",
+        "option1": "Caminhar juntos durante a noite conversando sobre a vida.",
+        "option2": "Ficar em casa abraçados enquanto assistem alguma coisa."
+    },
+    {
+        "pergunta": "Em uma relação, você escolheria?",
+        "option1": "Ter alguém que demonstra muito carinho em público.",
+        "option2": "Ter alguém que demonstra muito carinho principalmente quando estão sozinhos."
+    },
+    {
+        "pergunta": "O que seria mais importante depois de uma briga?",
+        "option1": "A pessoa reconhecer onde errou sem você precisar insistir.",
+        "option2": "A pessoa mostrar através de atitudes que quer melhorar."
+    },
+    {
+        "pergunta": "Qual situação você escolheria?",
+        "option1": "Perdoar alguém porque percebeu que realmente se arrependeu.",
+        "option2": "Não voltar a confiar porque a decepção foi grande demais."
+    },
+    {
+        "pergunta": "O que você prefere em um relacionamento?",
+        "option1": "Fazer muitos planos juntos para o futuro.",
+        "option2": "Viver o presente e deixar o futuro acontecer naturalmente."
+    },
+    {
+        "pergunta": "Qual dessas atitudes significaria mais para você?",
+        "option1": "A pessoa lembrar de algo que você gosta e trazer para você sem motivo.",
+        "option2": "A pessoa aparecer quando percebe que você precisa de companhia."
+    },
+    {
+        "pergunta": "Se estivesse com saudade, o que faria?",
+        "option1": "Mandaria uma mensagem dizendo exatamente o que está sentindo.",
+        "option2": "Esperaria a outra pessoa procurar você primeiro."
+    },
+    {
+        "pergunta": "Qual situação você escolheria?",
+        "option1": "Amar alguém profundamente mesmo sabendo que pode se machucar.",
+        "option2": "Se proteger e evitar se envolver para não sofrer."
+    },
+    {
+        "pergunta": "O que você prefere?",
+        "option1": "Um relacionamento que começa como uma grande amizade.",
+        "option2": "Uma paixão inesperada que cresce rapidamente."
+    },
+    {
+        "pergunta": "Qual seria mais importante?",
+        "option1": "Ter muita química e sentir uma conexão muito forte.",
+        "option2": "Ter muita compatibilidade e conseguir construir uma vida tranquila juntos."
+    },
+    {
+        "pergunta": "Se pudesse escolher uma lembrança de um relacionamento, qual seria?",
+        "option1": "O primeiro momento em que percebeu que estava apaixonado.",
+        "option2": "O momento em que percebeu que aquela pessoa realmente se importava com você."
+    },
+    {
+        "pergunta": "O que você prefere?",
+        "option1": "Receber uma declaração inesperada em uma conversa comum.",
+        "option2": "Descobrir uma carta que a pessoa escreveu sobre você há muito tempo."
+    },
+    {
+        "pergunta": "Qual situação seria mais dolorosa?",
+        "option1": "Descobrir que alguém mentiu para você durante muito tempo.",
+        "option2": "Descobrir que alguém escondeu sentimentos importantes de você."
+    },
+    {
+        "pergunta": "O que você faria?",
+        "option1": "Tentaria consertar uma relação mesmo depois de uma grande decepção.",
+        "option2": "Aceitaria o fim e seguiria em frente para proteger sua paz."
+    },
+    {
+        "pergunta": "Qual situação você escolheria?",
+        "option1": "Ter alguém que demonstra ciúmes porque tem medo de perder você.",
+        "option2": "Ter alguém que demonstra confiança mesmo quando outras pessoas se aproximam."
+    },
+    {
+        "pergunta": "O que você prefere?",
+        "option1": "Ter uma pessoa que sabe exatamente como te acalmar.",
+        "option2": "Ter uma pessoa que sempre consegue te fazer rir."
+    },
+    {
+        "pergunta": "Qual dessas situações seria mais especial?",
+        "option1": "A pessoa lembrar de uma data que você nem imaginava que ela lembraria.",
+        "option2": "A pessoa criar uma nova tradição que se torna especial para vocês."
+    },
+    {
+        "pergunta": "Se pudesse escolher uma noite com alguém especial, qual seria?",
+        "option1": "Sair para um lugar bonito e passar horas conversando.",
+        "option2": "Ficar em casa, pedir comida e passar a noite juntos."
+    },
+    {
+        "pergunta": "O que você prefere depois de um dia difícil?",
+        "option1": "Receber uma mensagem dizendo que está tudo bem e que você não está sozinho.",
+        "option2": "Receber um abraço e simplesmente ficar em silêncio por alguns minutos."
+    },
+    {
+        "pergunta": "Qual situação escolheria?",
+        "option1": "Descobrir que alguém gosta de você depois de muito tempo.",
+        "option2": "Perceber aos poucos que está começando a gostar de alguém."
+    },
+    {
+        "pergunta": "O que você prefere?",
+        "option1": "Ser a primeira pessoa que alguém procura quando está feliz.",
+        "option2": "Ser a primeira pessoa que alguém procura quando está passando por algo difícil."
+    },
+    {
+        "pergunta": "Qual seria mais importante?",
+        "option1": "Estar com alguém que entende seus defeitos e continua ao seu lado.",
+        "option2": "Estar com alguém que te incentiva constantemente a melhorar."
+    },
+    {
+        "pergunta": "Se pudesse escolher uma experiência com alguém especial, qual seria?",
+        "option1": "Fazer uma viagem juntos e descobrir novos lugares.",
+        "option2": "Construir pequenas lembranças juntos dentro da rotina."
+    },
+    {
+        "pergunta": "O que você prefere?",
+        "option1": "Ter alguém que diga exatamente o que sente.",
+        "option2": "Ter alguém que demonstre tudo através das atitudes."
+    },
+    {
+        "pergunta": "Qual dessas situações escolheria?",
+        "option1": "Receber uma mensagem de “sinto sua falta” depois de muito tempo.",
+        "option2": "Receber uma mensagem de “ainda lembro de você” depois de anos."
+    },
+    {
+        "pergunta": "Se um relacionamento terminasse, o que você preferiria?",
+        "option1": "Ter uma conversa final para entender tudo que aconteceu.",
+        "option2": "Não ter uma última conversa e simplesmente seguir sua vida."
+    },
+    {
+        "pergunta": "O que você escolheria?",
+        "option1": "Voltar para alguém que você ainda ama e tentar novamente.",
+        "option2": "Começar uma nova história com alguém que acabou de conhecer."
+    },
+    {
+        "pergunta": "Qual situação seria mais difícil?",
+        "option1": "Saber que alguém que você ama está feliz com outra pessoa.",
+        "option2": "Saber que alguém que você ama ainda sofre por você."
+    },
+    {
+        "pergunta": "O que você prefere em um relacionamento?",
+        "option1": "Ter alguém que compartilha praticamente todos os seus interesses.",
+        "option2": "Ter alguém completamente diferente que apresenta novas experiências para você."
+    },
+    {
+        "pergunta": "Qual dessas atitudes faria você se sentir mais amado?",
+        "option1": "A pessoa separar um tempo especialmente para ficar com você.",
+        "option2": "A pessoa lembrar dos pequenos detalhes que fazem você se sentir especial."
+    },
+    {
+        "pergunta": "O que você escolheria?",
+        "option1": "Ter uma relação tranquila que cresce devagar e com muita confiança.",
+        "option2": "Viver uma conexão intensa que acontece rapidamente e muda tudo."
+    },
+    {
+        "pergunta": "Se pudesse guardar apenas uma coisa de uma relação importante, qual seria?",
+        "option1": "Todas as lembranças boas que vocês construíram juntos.",
+        "option2": "Tudo que você aprendeu sobre amar e ser amado durante aquela história."
+    },
+    {
+        "pergunta": "O que você escolheria para uma relação ideal?",
+        "option1": "Ter alguém que seja seu parceiro, seu melhor amigo e seu porto seguro.",
+        "option2": "Ter alguém com quem você possa crescer, viver novas experiências e construir uma história juntos."
     }
 ]
