@@ -214,7 +214,7 @@ function getCountryCode(number) {
 }
 
 // Template do card
-const X9_CARD_TEMPLATE = `╭━━━[ X9 - NOVA SOLICITACAO ]━━━
+const X9_CARD_TEMPLATE = `╭━━━꧁༺ 𝐗𝟗 - 𝐍𝐎𝐕𝐀 𝐒𝐎𝐋𝐈𝐂𝐈𝐓𝐀𝐂𝐀𝐎 ༻꧂━━━╮
 | Nome: @{numero}
 | Pais: {pais}
 | Via: {origem}
@@ -225,84 +225,84 @@ const X9_CARD_TEMPLATE = `╭━━━[ X9 - NOVA SOLICITACAO ]━━━
 Config do card:
 !card on | !card off`;
 
-const X9_APPROVED_TEMPLATE = `╭━━━〔 ✅ X9 • SOLICITAÇÃO APROVADA 〕━━━⬣
+const X9_APPROVED_TEMPLATE = `╭━━━꧁༺ ✅ 𝐗𝟗 • 𝐒𝐎𝐋𝐈𝐂𝐈𝐓𝐀ÇÃ𝐎 𝐀𝐏𝐑𝐎𝐕𝐀𝐃𝐀 ༻꧂━━━╮
 ┃ 👤 Solicitante: @{numero}
 ┃ 👮 Aprovado por: @{admin}
 ┃ 🕒 Horário: {hora}
 ┃ 📌 Status: Concluído
-╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━⬣`;
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
 
-const X9_REJECTED_TEMPLATE = `╭━━━〔 ❌ X9 • SOLICITAÇÃO NEGADA 〕━━━⬣
+const X9_REJECTED_TEMPLATE = `╭━━━꧁༺ ❌ 𝐗𝟗 • 𝐒𝐎𝐋𝐈𝐂𝐈𝐓𝐀ÇÃ𝐎 𝐍𝐄𝐆𝐀𝐃𝐀 ༻꧂━━━╮
 ┃ 👤 Solicitante: @{numero}
 ┃ 👮 Negado por: @{admin}
 ┃ 🕒 Horário: {hora}
 ┃ 📌 Status: Negado
-╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━⬣`;
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
 
 // Templates para notificações de mudanças no grupo
-const X9_GROUP_NAME_CHANGED = `╭━━━〔 📝 X9 • NOME ALTERADO 〕━━━⬣
+const X9_GROUP_NAME_CHANGED = `╭━━━꧁༺ 📝 𝐗𝟗 • 𝐍𝐎𝐌𝐄 𝐀𝐋𝐓𝐄𝐑𝐀𝐃𝐎 ༻꧂━━━╮
 ┃ 👤 Por: @{admin}
 ┃ 📌 Anterior: {oldName}
 ┃ 🆕 Novo: {newName}
 ┃ 🕒 Horário: {hora}
-╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━⬣`;
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
 
-const X9_GROUP_DESC_CHANGED = `╭━━━〔 📜 X9 • DESCRIÇÃO ALTERADA 〕━━━⬣
+const X9_GROUP_DESC_CHANGED = `╭━━━꧁༺ 📜 𝐗𝟗 • 𝐃𝐄𝐒𝐂𝐑𝐈ÇÃ𝐎 𝐀𝐋𝐓𝐄𝐑𝐀𝐃𝐀 ༻꧂━━━╮
 ┃ 👤 Por: @{admin}
 ┃ 📝 Nova descrição: {newDesc}
 ┃ 🕒 Horário: {hora}
-╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━⬣`;
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
 
-const X9_GROUP_DESC_REMOVED = `╭━━━〔 📜 X9 • DESCRIÇÃO REMOVIDA 〕━━━⬣
+const X9_GROUP_DESC_REMOVED = `╭━━━꧁༺ 📜 𝐗𝟗 • 𝐃𝐄𝐒𝐂𝐑𝐈ÇÃ𝐎 𝐑𝐄𝐌𝐎𝐕𝐈𝐃𝐀 ༻꧂━━━╮
 ┃ 👤 Por: @{admin}
 ┃ 🕒 Horário: {hora}
-╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━⬣`;
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
 
-const X9_GROUP_PHOTO_CHANGED = `╭━━━〔 📸 X9 • FOTO ALTERADA 〕━━━⬣
+const X9_GROUP_PHOTO_CHANGED = `╭━━━꧁༺ 📸 𝐗𝟗 • 𝐅𝐎𝐓𝐎 𝐀𝐋𝐓𝐄𝐑𝐀𝐃𝐀 ༻꧂━━━╮
 ┃ 👤 Por: @{admin}
 ┃ 🕒 Horário: {hora}
-╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━⬣`;
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
 
-const X9_GROUP_LINK_CHANGED = `╭━━━〔 🔗 X9 • LINK REDEFINIDO 〕━━━⬣
+const X9_GROUP_LINK_CHANGED = `╭━━━꧁༺ 🔗 𝐗𝟗 • 𝐋𝐈𝐍𝐊 𝐑𝐄𝐃𝐄𝐅𝐈𝐍𝐈𝐃𝐎 ༻꧂━━━╮
 ┃ 👤 Por: @{admin}
 ┃ 🕒 Horário: {hora}
-╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━⬣`;
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
 
-const X9_GROUP_LOCKED = `╭━━━〔 🔒 X9 • GRUPO BLOQUEADO 〕━━━⬣
+const X9_GROUP_LOCKED = `╭━━━꧁༺ 🔒 𝐗𝟗 • 𝐆𝐑𝐔𝐏𝐎 𝐁𝐋𝐎𝐐𝐔𝐄𝐀𝐃𝐎 ༻꧂━━━╮
 ┃ 👤 Por: @{admin}
 ┃ 📌 Apenas admins podem enviar mensagens
 ┃ 🕒 Horário: {hora}
-╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━⬣`;
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
 
-const X9_GROUP_UNLOCKED = `╭━━━〔 🔓 X9 • GRUPO DESBLOQUEADO 〕━━━⬣
+const X9_GROUP_UNLOCKED = `╭━━━꧁༺ 🔓 𝐗𝟗 • 𝐆𝐑𝐔𝐏𝐎 𝐃𝐄𝐒𝐁𝐋𝐎𝐐𝐔𝐄𝐀𝐃𝐎 ༻꧂━━━╮
 ┃ 👤 Por: @{admin}
 ┃ 📌 Todos podem enviar mensagens
 ┃ 🕒 Horário: {hora}
-╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━⬣`;
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
 
-const X9_GROUP_EDIT_RESTRICTED = `╭━━━〔 ✏️ X9 • EDIÇÃO RESTRITA 〕━━━⬣
+const X9_GROUP_EDIT_RESTRICTED = `╭━━━꧁༺ ✏️ 𝐗𝟗 • 𝐄𝐃𝐈ÇÃ𝐎 𝐑𝐄𝐒𝐓𝐑𝐈𝐓𝐀 ༻꧂━━━╮
 ┃ 👤 Por: @{admin}
 ┃ 📌 Apenas admins podem editar
 ┃ 🕒 Horário: {hora}
-╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━⬣`;
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
 
-const X9_GROUP_EDIT_FREE = `╭━━━〔 ✏️ X9 • EDIÇÃO LIBERADA 〕━━━⬣
+const X9_GROUP_EDIT_FREE = `╭━━━꧁༺ ✏️ 𝐗𝟗 • 𝐄𝐃𝐈ÇÃ𝐎 𝐋𝐈𝐁𝐄𝐑𝐀𝐃𝐀 ༻꧂━━━╮
 ┃ 👤 Por: @{admin}
 ┃ 📌 Todos podem editar
 ┃ 🕒 Horário: {hora}
-╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━⬣`;
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
 
-const X9_GROUP_TEMPORARY_ON = `╭━━━〔 ⏱️ X9 • MENSAGENS TEMPORÁRIAS 〕━━━⬣
+const X9_GROUP_TEMPORARY_ON = `╭━━━꧁༺ ⏱️ 𝐗𝟗 • 𝐌𝐄𝐍𝐒𝐀𝐆𝐄𝐍𝐒 𝐓𝐄𝐌𝐏𝐎𝐑Á𝐑𝐈𝐀𝐒 ༻꧂━━━╮
 ┃ 👤 Por: @{admin}
 ┃ ⏱️ Tempo: {duration}
 ┃ 🕒 Horário: {hora}
-╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━⬣`;
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
 
-const X9_GROUP_TEMPORARY_OFF = `╭━━━〔 ⏱️ X9 • MENSAGENS TEMPORÁRIAS 〕━━━⬣
+const X9_GROUP_TEMPORARY_OFF = `╭━━━꧁༺ ⏱️ 𝐗𝟗 • 𝐌𝐄𝐍𝐒𝐀𝐆𝐄𝐍𝐒 𝐓𝐄𝐌𝐏𝐎𝐑Á𝐑𝐈𝐀𝐒 ༻꧂━━━╮
 ┃ 👤 Por: @{admin}
 ┃ ⏱️ Desativadas
 ┃ 🕒 Horário: {hora}
-╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━⬣`;
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
 
 // Newsletter context para fazer mensagens aparecerem como encaminhadas
 const X9_NEWSLETTER_CTX = {

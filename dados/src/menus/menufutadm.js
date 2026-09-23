@@ -1,9 +1,9 @@
 export default async function menuFutAdm(prefix, botName = "MeuBot", userName = "Usuário") {
-    return `╭━━━〔 ⚙️ ${botName} • 𝐏𝐀𝐈𝐍𝐄𝐋 𝐅𝐔𝐓 𝐀𝐃𝐌 〕━━━╮
+    return `╭━━━꧁༺ ⚙️ ${botName} • 𝐏𝐀𝐈𝐍𝐄𝐋 𝐅𝐔𝐓 𝐀𝐃𝐌 ༻꧂━━━╮
 ┃ 👋 Olá, @${userName}
 ┃ ⚙️ Painel administrativo do Futebol Global
 ┃ 🔒 Área exclusiva para administradores
-╰━━━━━━━━━━━━━━━━━━━━━━━━━╯
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
 ╭─❖ 🔒 ÁREA RESTRITA
@@ -117,11 +117,11 @@ export default async function menuFutAdm(prefix, botName = "MeuBot", userName = 
 ╰──────────────
 
 
-╭━━━〔 💡 AJUDA 〕━━━╮
+╭━━━꧁༺ 💡 𝐀𝐉𝐔𝐃𝐀 ༻꧂━━━╮
 ┃ ⚙️ Use ${prefix}futadmin [comando]
 ┃ 📖 Para detalhes do comando
 ┃ 🔒 Acesso administrativo
-╰━━━━━━━━━━━━━━━━━━╯
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 ╭─────────────────╮
 ╰─────────────────╯

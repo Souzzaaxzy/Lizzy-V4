@@ -177,9 +177,9 @@ console.log('\n── 1. layout pedido pelo dono ──');
 {
   const groupJid = makeGroup();
   const out = await executar({ groupJid, sender: nextSender().lid });
-  check(out.includes('╭━━━〔 👤 PERFIL 〕━━━⬣'), 'cabeçalho PERFIL');
-  check(out.includes('╭━━〔 📊 ATIVIDADE 〕'), 'cabeçalho ATIVIDADE');
-  check(out.includes('╰━━━━━━━━━━━━━━━━⬣'), 'fechamento com ⬣');
+  check(out.includes('╭━━━꧁༺ 👤 𝐏𝐄𝐑𝐅𝐈𝐋 ༻꧂━━━╮'), 'cabeçalho PERFIL (layout novo)');
+  check(out.includes('╭━━━꧁༺ 📊 𝐀𝐓𝐈𝐕𝐈𝐃𝐀𝐃𝐄 ༻꧂━━━╮'), 'cabeçalho ATIVIDADE (layout novo)');
+  check(out.includes('╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯'), 'fechamento no layout novo');
   check(out.includes('📛 Nome:'), 'campo Nome');
   check(out.includes('📱 Número:'), 'campo Número');
   check(out.includes('📝 Bio:'), 'campo Bio');
@@ -336,7 +336,7 @@ console.log('\n── 5. atividade: grupo e global ──');
 console.log('\n── 6. alias !getperfil e robustez ──');
 {
   const out = await executar({ groupJid: makeGroup(), sender: nextSender().lid, text: '!getperfil' });
-  check(out.includes('👤 PERFIL'), '!getperfil responde o mesmo layout');
+  check(out.includes('👤 𝐏𝐄𝐑𝐅𝐈𝐋'), '!getperfil responde o mesmo layout');
 
   // Socket sem os métodos de perfil (fork anterior): não pode quebrar.
   const groupJid = makeGroup();
@@ -351,7 +351,7 @@ console.log('\n── 6. alias !getperfil e robustez ──');
     pushName: 'Testador',
   }, null, new Map(), null);
   const textos = sent.map(s => s.content?.text || '').filter(Boolean);
-  check(textos.some(t => t.includes('👤 PERFIL')), 'socket sem métodos de perfil ainda responde');
+  check(textos.some(t => t.includes('👤 𝐏𝐄𝐑𝐅𝐈𝐋')), 'socket sem métodos de perfil ainda responde');
 }
 
 console.log('\n════════════════════════════════════════');

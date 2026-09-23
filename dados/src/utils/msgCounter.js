@@ -768,7 +768,7 @@ const formatTopRanking = (topUsers, period, groupName) => {
   const periodName = period === 'daily' ? 'DIÁRIO' : 'SEMANAL';
   const emoji = period === 'daily' ? '📅' : '📆';
   
-  let message = `╭━━━〔 🏆 TOP 5 ${periodName} ]━━━╮\n`;
+  let message = `╭━━━꧁༺ 🏆 𝐓𝐎𝐏 𝟓 ${periodName} ༻꧂━━━╮\n`;
   message += `┃ ${emoji} Grupo: ${groupName}\n`;
   message += `┣━━━━━━━━━━━━━━━━━━━━\n`;
   
@@ -782,7 +782,7 @@ const formatTopRanking = (topUsers, period, groupName) => {
     });
   }
   
-  message += `╰━━━━━━━━━━━━━━━━━━━━╯`;
+  message += `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
   
   return message;
 };
@@ -793,7 +793,7 @@ const formatDailyStats = (groupId) => {
   const topUsers = getTopUsers(groupId, 'daily', 5);
   const userRank = getUserRank(groupId, sender, 'daily'); // sender will be set externally
   
-  let message = `╭━━━〔 📊 ESTATÍSTICAS DIÁRIAS 〕━━━╮\n`;
+  let message = `╭━━━꧁༺ 📊 𝐄𝐒𝐓𝐀𝐓Í𝐒𝐓𝐈𝐂𝐀𝐒 𝐃𝐈Á𝐑𝐈𝐀𝐒 ༻꧂━━━╮\n`;
   message += `┃ 💬 Mensagens hoje: ${stats.daily.total.toLocaleString('pt-BR')}\n`;
   message += `┃ 👥 Usuários ativos: ${userCount}\n`;
   if (stats.settings.dailyGoal) {
@@ -801,7 +801,7 @@ const formatDailyStats = (groupId) => {
     message += `┃ 🎯 Meta: ${stats.settings.dailyGoal.toLocaleString('pt-BR')}\n`;
     message += `┃ 📈 Progresso: ${progress}%\n`;
   }
-  message += `╰━━━━━━━━━━━━━━━━━━━━━━━━╯`;
+  message += `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
   
   return message;
 };
@@ -810,7 +810,7 @@ const formatWeeklyStats = (groupId) => {
   const stats = getGroupStats(groupId);
   const userCount = Object.keys(stats.weekly.users).length;
   
-  let message = `╭━━━〔 📊 ESTATÍSTICAS SEMANAIS 〕━━━╮\n`;
+  let message = `╭━━━꧁༺ 📊 𝐄𝐒𝐓𝐀𝐓Í𝐒𝐓𝐈𝐂𝐀𝐒 𝐒𝐄𝐌𝐀𝐍𝐀𝐈𝐒 ༻꧂━━━╮\n`;
   message += `┃ 💬 Mensagens na semana: ${stats.weekly.total.toLocaleString('pt-BR')}\n`;
   message += `┃ 👥 Usuários ativos: ${userCount}\n`;
   if (stats.settings.weeklyGoal) {
@@ -818,7 +818,7 @@ const formatWeeklyStats = (groupId) => {
     message += `┃ 🎯 Meta: ${stats.settings.weeklyGoal.toLocaleString('pt-BR')}\n`;
     message += `┃ 📈 Progresso: ${progress}%\n`;
   }
-  message += `╰━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
+  message += `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
   
   return message;
 };

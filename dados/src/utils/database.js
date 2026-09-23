@@ -2575,7 +2575,7 @@ function checkLevelUp(userId, userData, levelingData, nazu, from) {
       const oldLevel = userData.level - 1;
       const nextXp = calculateNextLevelXp(userData.level);
       
-      let levelUpText = `╭━〔 ⭐ LEVEL UP 〕━⬣\n`;
+      let levelUpText = `╭━━━꧁༺ ⭐ 𝐋𝐄𝐕𝐄𝐋 𝐔𝐏 ༻꧂━━━╮\n`;
       levelUpText += `┃\n`;
       levelUpText += `┃ 👤 @${getUserName(userId)}\n`;
       levelUpText += `┃\n`;
@@ -2583,7 +2583,7 @@ function checkLevelUp(userId, userData, levelingData, nazu, from) {
       levelUpText += `┃ ✨ XP: ${userData.xp}/${nextXp}\n`;
       levelUpText += `┃ 🏅 Patente: ${userData.patent || 'Iniciante'}\n`;
       levelUpText += `┃\n`;
-      levelUpText += `╰━━━━━━━━━━━━━━⬣\n\n`;
+      levelUpText += `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n\n`;
       levelUpText += `🎉 Evolução concluída!\n\n`;
       levelUpText += `💡 Continue ativo para alcançar\n`;
       levelUpText += `a próxima patente.`;

@@ -840,7 +840,7 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
         else if (action === 'remove') {
             if (groupSettings.exit?.enabled) {
                                 const exitText = groupSettings.exit?.text ||
-                    "╭━━━⊱ 👋 *ATÉ LOGO!* 👋 ⊱━━━╮\n│\n│ 👤 #numerodele#\n│\n│ 🚪 Saiu do grupo\n│ *#nomedogp#*\n│\n╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n💫 *Até a próxima!* 💫";
+                    "╭━━━꧁༺ 👋 𝐀𝐓É 𝐋𝐎𝐆𝐎! 👋 ༻꧂━━━╮\n│\n│ 👤 #numerodele#\n│\n│ 🚪 Saiu do grupo\n│ *#nomedogp#*\n│\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n\n💫 *Até a próxima!* 💫";
                 const participantIds = participants.map(p => typeof p === 'string' ? p : (p.id || p.jid || p.toString()));
                 const replacements = {
                     '#numerodele#': participantIds.map(p => `@${p.split('@')[0]}`).join(', '),
@@ -1754,8 +1754,8 @@ async function createGroupMessage(AbyssSock, groupMetadata, participants, settin
     '#membros#': groupMetadata.participants.length,
   };
   const defaultText = isWelcome
-    ? (globalJson.textbv || "╭━━━⊱ 🌟 **BEM-VINDO AO VOID*!* 🌟 ⊱━━━╮\n│\n│ 👤 #numerodele#\n│\n│ 🏠 Grupo: *#nomedogp#*\n│ 👥 Membros: *#membros#*\n│\n╰━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n◈ *Seja bem-vindo ao abismo!* ◈")
-    : (globalJson.exit?.text || "╭━━━⊱ 👋 *ATÉ LOGO!* 👋 ⊱━━━╮\n│\n│ 👤 #numerodele#\n│\n│ 🚪 Saiu do grupo\n│ *#nomedogp#*\n│\n╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n💫 *Até a próxima!* 💫");
+    ? (globalJson.textbv || "╭━━━꧁༺ 🌟 𝐁𝐄𝐌-𝐕𝐈𝐍𝐃𝐎 𝐀𝐎 𝐕𝐎𝐈𝐃! 🌟 ༻꧂━━━╮\n│\n│ 👤 #numerodele#\n│\n│ 🏠 Grupo: *#nomedogp#*\n│ 👥 Membros: *#membros#*\n│\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n\n◈ *Seja bem-vindo ao abismo!* ◈")
+    : (globalJson.exit?.text || "╭━━━꧁༺ 👋 𝐀𝐓É 𝐋𝐎𝐆𝐎! 👋 ༻꧂━━━╮\n│\n│ 👤 #numerodele#\n│\n│ 🚪 Saiu do grupo\n│ *#nomedogp#*\n│\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n\n💫 *Até a próxima!* 💫");
   const text = formatMessageText(settings.text || defaultText, replacements);
   const message = {
     text,
@@ -2349,12 +2349,12 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
         }
         if (result.urls?.length > 0) {
           const videoUrl = result.urls[0];
-          const caption = `╭━━━〔 📱 ${nomebot} • 𝗧𝗜𝗞𝗧𝗢𝗞 📱 〕━━━╮\n` +
+          const caption = `╭━━━꧁༺ 📱 ${nomebot} • 𝗧𝗜𝗞𝗧𝗢𝗞 📱 ༻꧂━━━╮\n` +
             `┃\n` +
             `┃ 📱 ${result.title || 'Vídeo do TikTok'}\n` +
             `┃ 👤 ${result.author || 'Desconhecido'}\n` +
             `┃\n` +
-            `╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n` +
+            `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n\n` +
             `🎬 Seu vídeo está pronto!`;
           await nazu.sendMessage(from, {
             video: { url: videoUrl },
@@ -2376,12 +2376,12 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
           return false;
         }
         const media = result.data[0];
-        const caption = `╭━━━〔 📸 ${nomebot} • 𝗜𝗡𝗦𝗧𝗔𝗚𝗥𝗔𝗠 📸 〕━━━╮\n` +
+        const caption = `╭━━━꧁༺ 📸 ${nomebot} • 𝗜𝗡𝗦𝗧𝗔𝗚𝗥𝗔𝗠 📸 ༻꧂━━━╮\n` +
           `┃\n` +
           `┃ 📸 Conteúdo do Instagram\n` +
           `┃ 👤 ${result.user?.username || 'Usuário'}\n` +
           `┃\n` +
-          `╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n` +
+          `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n\n` +
           `◈ Conteúdo baixado com sucesso!`;
         if (media.type === 'video') {
           await nazu.sendMessage(from, {
@@ -4052,7 +4052,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
             const goalsResult = msgCounter.checkGoals(from);
             if (goalsResult.daily.reached) {
               const stats = msgCounter.getGroupStats(from);
-              const goalMsg = `╭━━━〔 🎉 META DIÁRIA ATINGIDA! 〕━━━╮\n` +
+              const goalMsg = `╭━━━꧁༺ 🎉 𝐌𝐄𝐓𝐀 𝐃𝐈Á𝐑𝐈𝐀 𝐀𝐓𝐈𝐍𝐆𝐈𝐃𝐀! ༻꧂━━━╮\n` +
                 `┃\n` +
                 `┃ 🎯 O grupo alcançou a meta de\n` +
                 `┃ ${stats.settings.dailyGoal.toLocaleString('pt-BR')} mensagens hoje!\n` +
@@ -4060,7 +4060,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
                 `┃ 💬 Total: ${counts.dailyTotal.toLocaleString('pt-BR')} mensagens\n` +
                 `┃\n` +
                 `┃ Obrigado pela participação de todos! 🚀\n` +
-                `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
+                `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
               await nazu.sendMessage(from, { text: goalMsg });
             }
             if (goalsResult.weekly.reached) {
@@ -8329,7 +8329,7 @@ switch (command) {
           }
           if (sub === 'comprar' || sub === 'buy') {
             const rawKey = (args[0] || '');
-            if (!rawKey) return reply(`╭━━━⊱ 🛒 *COMPRAR* 🛒 ⊱━━━╮\n│\n│ ❌ Informe o ID do item\n│\n│ 📝 *Exemplo:*\n│ ${groupPrefix}comprar espada_de_ferro\n│\n│ 🛍️ Ver loja: ${groupPrefix}loja\n│\n╰━━━━━━━━━━━━━━━━━━━━╯`);
+            if (!rawKey) return reply(`╭━━━꧁༺ 🛒 𝐂𝐎𝐌𝐏𝐑𝐀𝐑 🛒 ༻꧂━━━╮\n│\n│ ❌ Informe o ID do item\n│\n│ 📝 *Exemplo:*\n│ ${groupPrefix}comprar espada_de_ferro\n│\n│ 🛍️ Ver loja: ${groupPrefix}loja\n│\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`);
             const normalizeStr = (str) => str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
             const inputName = normalizeStr(rawKey);
             const shop = econ.shop || {};
@@ -8361,19 +8361,19 @@ switch (command) {
               // Chama a função original de recálculo para garantir que todos os campos (power, attackBonus, etc) sejam atualizados
               recalcEquipmentBonuses(me, econ.shop);
               saveEconomy(econ);
-              return reply(`╭━━━⊱ ✅ *COMPRA & EQUIPE* ✅ ⊱━━━╮\n│\n│ ◈ Item: *${it.name}*\n│ 💰 Valor: *${fmt(it.price)}*\n│ ⚙️ Slot: *${slot.toUpperCase()}*\n│\n│ ✅ Comprado e equipado com sucesso!\n│ 📊 Seu poder agora é: *${me.power || 0}*\n│\n╰━━━━━━━━━━━━━━━━━━━━━━╯`);
+              return reply(`╭━━━꧁༺ ✅ 𝐂𝐎𝐌𝐏𝐑𝐀 & 𝐄𝐐𝐔𝐈𝐏𝐄 ✅ ༻꧂━━━╮\n│\n│ ◈ Item: *${it.name}*\n│ 💰 Valor: *${fmt(it.price)}*\n│ ⚙️ Slot: *${slot.toUpperCase()}*\n│\n│ ✅ Comprado e equipado com sucesso!\n│ 📊 Seu poder agora é: *${me.power || 0}*\n│\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`);
             }
             // Ferramentas (Picaretas)
             if (it.type === 'tool' && it.toolType === 'pickaxe') {
               me.tools = me.tools || {};
               me.tools.pickaxe = { tier: it.tier, dur: it.durability, max: it.durability, key };
               saveEconomy(econ);
-              return reply(`╭━━━⊱ ✅ *COMPRA* ✅ ⊱━━━╮\n│\n│ 🛠️ Você comprou e equipou:\n│ ${it.name}\n│\n│ ⚙️ Durabilidade: ${it.durability}\n│\n╰━━━━━━━━━━━━━━━━━━━━╯`);
+              return reply(`╭━━━꧁༺ ✅ 𝐂𝐎𝐌𝐏𝐑𝐀 ✅ ༻꧂━━━╮\n│\n│ 🛠️ Você comprou e equipou:\n│ ${it.name}\n│\n│ ⚙️ Durabilidade: ${it.durability}\n│\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`);
             }
             // Caso contrário (Consumíveis, Pets, etc), vai para o inventário
             me.inventory[key] = (me.inventory[key] || 0) + 1;
             saveEconomy(econ);
-            return reply(`╭━━━⊱ ✅ *COMPRA* ✅ ⊱━━━╮\n│\n│ 🎒 Você comprou:\n│ ${it.name}\n│\n│ 💰 Preço: ${fmt(it.price)}\n│\n╰━━━━━━━━━━━━━━━━━━━━╯`);
+            return reply(`╭━━━꧁༺ ✅ 𝐂𝐎𝐌𝐏𝐑𝐀 ✅ ༻꧂━━━╮\n│\n│ 🎒 Você comprou:\n│ ${it.name}\n│\n│ 💰 Preço: ${fmt(it.price)}\n│\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`);
           }
           if (sub === 'inventario' || sub === 'inv') {
             recalcEquipmentBonuses(me, econ.shop);
@@ -8410,7 +8410,7 @@ switch (command) {
           if (sub === 'materiais') {
             const mats = me.materials || {};
             const keys = Object.keys(mats).filter(k => mats[k] > 0);
-            if (keys.length === 0) return reply('╭━━━⊱ ⛏️ *MATERIAIS* ⛏️ ⊱━━━╮\n│\n│ 📭 Você não possui materiais\n│\n│ ⛏️ Mine para coletar!\n│ Use: '+ groupPrefix + 'minerar\n│\n╰━━━━━━━━━━━━━━━━━━━━━━╯');
+            if (keys.length === 0) return reply('╭━━━꧁༺ ⛏️ 𝐌𝐀𝐓𝐄𝐑𝐈𝐀𝐈𝐒 ⛏️ ༻꧂━━━╮\n│\n│ 📭 Você não possui materiais\n│\n│ ⛏️ Mine para coletar!\n│ Use: '+ groupPrefix + 'minerar\n│\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯');
             let text = '╭━━━⊱ ⛏️ *MATERIAIS* ⛏️ ⊱━━━╮\n│\n';
             for (const k of keys) text += `│ 💎 ${k}: ${mats[k]}\n`;
             text += '│\n╰━━━━━━━━━━━━━━━━━━━━━━╯';
@@ -10094,7 +10094,7 @@ switch (command) {
         let oppHp = oppPet.hp;
         let turn = 0;
         const maxTurns = 15;
-        let battleLog = `╭━━━⊱ ◈ *BATALHA DE PETS!* ◈ ⊱━━━╮\n\n`;
+        let battleLog = `╭━━━꧁༺ ◈ 𝐁𝐀𝐓𝐀𝐋𝐇𝐀 𝐃𝐄 𝐏𝐄𝐓𝐒! ◈ ༻꧂━━━╮\n\n`;
         battleLog += `${myPet.emoji} *${myPet.name}* (Lv.${myPet.level})\n`;
         battleLog += `❤️ ${myHp}/${myPet.maxHp} | ◈ ${myStats.totalAtk} | ⚙️ ${myStats.totalDef} | ⚡ ${myStats.totalSpd}\n`;
         if (hasAdvantage) battleLog += `◈ *VANTAGEM DE TIPO!*\n`;
@@ -10102,7 +10102,7 @@ switch (command) {
         battleLog += `${oppPet.emoji} *${oppPet.name}* (Lv.${oppPet.level})\n`;
         battleLog += `❤️ ${oppHp}/${oppPet.maxHp} | ◈ ${oppStats.totalAtk} | ⚙️ ${oppStats.totalDef} | ⚡ ${oppStats.totalSpd}\n`;
         if (oppHasAdvantage) battleLog += `◈ *VANTAGEM DE TIPO!*\n`;
-        battleLog += `\n╰━━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n`;
+        battleLog += `\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n\n`;
         battleLog += `⚡ *INÍCIO DA BATALHA!*\n\n`;
         while (myHp > 0 && oppHp > 0 && turn < maxTurns) {
           turn++;
@@ -10250,7 +10250,7 @@ switch (command) {
           myHp -= oppDmg;
         }
         const won = myHp > oppHp;
-        let resultMsg = `╭━━━⊱ 🎰 *APOSTA DE PETS* ⊱━━━╮\n\n`;
+        let resultMsg = `╭━━━꧁༺ 🎰 𝐀𝐏𝐎𝐒𝐓𝐀 𝐃𝐄 𝐏𝐄𝐓𝐒 ༻꧂━━━╮\n\n`;
         resultMsg += `${myPet.emoji} *${myPet.name}* (Lv.${myPet.level}) VS ${oppPet.emoji} *${oppPet.name}* (Lv.${oppPet.level})\n\n`;
         resultMsg += `💰 Aposta: ${betAmount.toLocaleString()}\n\n`;
         if (won) {
@@ -10262,7 +10262,7 @@ switch (command) {
           opponent.wallet += betAmount;
           resultMsg += `🌌 *VOCÊ PERDEU!*\n💸 Perdeu: -${betAmount.toLocaleString()}`;
         }
-        resultMsg += `\n╰━━━━━━━━━━━━━━━━━━━━━━╯`;
+        resultMsg += `\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
         saveEconomy(econ);
         return reply(resultMsg, { mentions: [target] });
       }
@@ -10585,12 +10585,12 @@ switch (command) {
         let playerHp = playerStats.hp;
         let turns = 0;
         const maxTurns = 15;
-        let battleLog = `╭━━━⊱ 👹 *BOSS FIGHT!* ⊱━━━╮\n\n`;
+        let battleLog = `╭━━━꧁༺ 👹 𝐁𝐎𝐒𝐒 𝐅𝐈𝐆𝐇𝐓! ༻꧂━━━╮\n\n`;
         battleLog += `${boss.emoji} *${boss.name}*\n`;
         battleLog += `❤️ HP: ${boss.hp} | ◈ ATK: ${boss.attack} | ⚙️ DEF: ${boss.defense}\n\n`;
         battleLog += `VS\n\n`;
         battleLog += `◈ *${pushname}* (Poder: ${playerPower})\n\n`;
-        battleLog += `╰━━━━━━━━━━━━━━━━━━━━╯\n\n`;
+        battleLog += `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n\n`;
         while (bossHp > 0 && playerHp > 0 && turns < maxTurns) {
           // Player ataca
           const playerDmg = Math.max(10, Math.floor(playerPower * 0.3 + Math.random() * 30 - boss.defense * 0.2));
@@ -11042,7 +11042,7 @@ switch (command) {
         me.classeBonuses = classes[classeEscolhida].bonus;
         const classData = classes[classeEscolhida];
         saveEconomy(econ);
-        return reply(`╭━━━⊱ ◈ *CLASSE ESCOLHIDA* ⊱━━━╮\n\n${classData.emoji} Você agora é um *${classData.name}*!\n\n📊 *Bônus:*\n◈ ATK +${classData.bonus.attack || 0}\n⚙️ DEF +${classData.bonus.defense || 0}\n\n◈ *Habilidade:* ${classData.skill}\n${classData.skillDesc}\n\n╰━━━━━━━━━━━━━━━━━━━━╯`);
+        return reply(`╭━━━꧁༺ ◈ 𝐂𝐋𝐀𝐒𝐒𝐄 𝐄𝐒𝐂𝐎𝐋𝐇𝐈𝐃𝐀 ༻꧂━━━╮\n\n${classData.emoji} Você agora é um *${classData.name}*!\n\n📊 *Bônus:*\n◈ ATK +${classData.bonus.attack || 0}\n⚙️ DEF +${classData.bonus.defense || 0}\n\n◈ *Habilidade:* ${classData.skill}\n${classData.skillDesc}\n\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`);
       }
       // ═══════════════════════════════════════════════════════════════
       // 🏠 SISTEMA DE HOUSING (CASAS)
@@ -11117,7 +11117,7 @@ switch (command) {
           me.house.type = tipo;
           me.house.lastCollect = Date.now();
           saveEconomy(econ);
-          return reply(`╭━━━⊱ 🎉 *CASA COMPRADA* ⊱━━━╮\n\n${casa.emoji} Você comprou uma *${casa.name}*!\n\n📦 Armazenamento: +${casa.bonus.storage}\n💰 Renda: ${casa.renda}/dia\n\n╰━━━━━━━━━━━━━━━━━━━━╯`);
+          return reply(`╭━━━꧁༺ 🎉 𝐂𝐀𝐒𝐀 𝐂𝐎𝐌𝐏𝐑𝐀𝐃𝐀 ༻꧂━━━╮\n\n${casa.emoji} Você comprou uma *${casa.name}*!\n\n📦 Armazenamento: +${casa.bonus.storage}\n💰 Renda: ${casa.renda}/dia\n\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`);
         }
         // Coletar renda
         if (sub === 'coletar') {
@@ -11246,7 +11246,7 @@ switch (command) {
             status: 'waiting'
           };
           saveEconomy(econ);
-          return reply(`╭━━━⊱ 🎉 *PARTY CRIADA* ⊱━━━╮\n\n${dg.emoji} *${dg.name}*\n\n🆔 ID: \`${partyId.slice(-8)}\`\n👥 Membros: 1/${dg.players}\n👹 Boss: ${dg.boss}\n\n💡 Outros jogadores podem usar:\n${groupPrefix}dungeon entrar ${partyId.slice(-8)}\n\n╰━━━━━━━━━━━━━━━━━━━━╯`);
+          return reply(`╭━━━꧁༺ 🎉 𝐏𝐀𝐑𝐓𝐘 𝐂𝐑𝐈𝐀𝐃𝐀 ༻꧂━━━╮\n\n${dg.emoji} *${dg.name}*\n\n🆔 ID: \`${partyId.slice(-8)}\`\n👥 Membros: 1/${dg.players}\n👹 Boss: ${dg.boss}\n\n💡 Outros jogadores podem usar:\n${groupPrefix}dungeon entrar ${partyId.slice(-8)}\n\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`);
         }
         // Entrar em party
         if (sub === 'entrar') {
@@ -12023,8 +12023,8 @@ switch (command) {
             targetUser.family.parents = targetUser.family.parents.filter(parent => parent !== activePair.partnerId);
           }
         }
-        let text = `╭━━━⊱ 💔 *DESERDADO* ⊱━━━╮\n`;
-        text += `╰━━━━━━━━━━━━━━━━━━━━╯\n\n`;
+        let text = `╭━━━꧁༺ 💔 𝐃𝐄𝐒𝐄𝐑𝐃𝐀𝐃𝐎 ༻꧂━━━╮\n`;
+        text += `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n\n`;
         text += `😢 ${pushname} deserdou @${target.split('@')[0]}!\n\n`;
         text += `👨‍👩‍👧‍👦 Agora você tem ${me.family.children.length} filho(s)!\n\n`;
         text += `💡 Use ${groupPrefix}familia para ver sua família atualizada.`;
@@ -12084,8 +12084,8 @@ switch (command) {
         // 6. Remover qualquer solicitação pendente de adoção para este usuário
         adoptionManager.resetAdoption(from, target);
         saveEconomy(econ);
-        let text = `╭━━━⊱ ✅ *RESET DE ADOÇÃO* ⊱━━━╮\n`;
-        text += `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n`;
+        let text = `╭━━━꧁༺ ✅ 𝐑𝐄𝐒𝐄𝐓 𝐃𝐄 𝐀𝐃𝐎ÇÃ𝐎 ༻꧂━━━╮\n`;
+        text += `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n\n`;
         text += `✅ A árvore genealógica de adoção de @${target.split('@')[0]} foi resetada com sucesso.\n\n`;
         text += `📋 *Ações realizadas:*\n`;
         text += `• Removidos ${childrenResetCount} filho(s) adotivo(s)\n`;
@@ -12103,8 +12103,8 @@ switch (command) {
         const econ = loadEconomy();
         const me = getEcoUser(econ, sender);
         if (!me.family) me.family = { spouse: null, children: [], parents: [], siblings: [] };
-        let text = `╭━━━⊱ 🌳 *ÁRVORE GENEALÓGICA* ⊱━━━╮\n`;
-        text += `╰━━━━━━━━━━━━━━━━━━━━╯\n\n`;
+        let text = `╭━━━꧁༺ 🌳 Á𝐑𝐕𝐎𝐑𝐄 𝐆𝐄𝐍𝐄𝐀𝐋Ó𝐆𝐈𝐂𝐀 ༻꧂━━━╮\n`;
+        text += `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n\n`;
         // Avós
         const grandparents = [];
         if (me.family.parents) {
@@ -12206,7 +12206,7 @@ switch (command) {
             tournament.startTime = Date.now();
             tournament.prize = 50000;
             saveEconomy(econ);
-            return reply(`╭━━━⊱ 🏆 *TORNEIO ABERTO!* ⊱━━━╮\n╰━━━━━━━━━━━━━━━━━━━━╯\n\n◈ Um torneio foi iniciado!\n\n💰 Prêmio: ${tournament.prize.toLocaleString()}\n⏰ Inscrições abertas!\n\n💡 Use ${groupPrefix}torneio entrar`);
+            return reply(`╭━━━꧁༺ 🏆 𝐓𝐎𝐑𝐍𝐄𝐈𝐎 𝐀𝐁𝐄𝐑𝐓𝐎! ༻꧂━━━╮\n╰━━━━━━━━━━━━━━━━━━━━╯\n\n◈ Um torneio foi iniciado!\n\n💰 Prêmio: ${tournament.prize.toLocaleString()}\n⏰ Inscrições abertas!\n\n💡 Use ${groupPrefix}torneio entrar`);
           }
           return reply(`❌ Não há torneio ativo!\n\n💡 Admins: Use ${groupPrefix}torneio criar`);
         }
@@ -12233,7 +12233,7 @@ switch (command) {
           // Simular batalhas
           let fighters = [...tournament.participants];
           let round = 1;
-          let results = `╭━━━⊱ 🏆 *TORNEIO* ⊱━━━╮\n╰━━━━━━━━━━━━━━━━━━━━╯\n\n`;
+          let results = `╭━━━⊱ 🏆 *TORNEIO* ⊱━━━╮\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n\n`;
           while (fighters.length > 1) {
             results += `◈ *RODADA ${round}*\n\n`;
             const nextRound = [];
@@ -12263,8 +12263,8 @@ switch (command) {
           return reply(results, { mentions: tournament.participants });
         }
         // Ver info do torneio
-        let text = `╭━━━⊱ 🏆 *TORNEIO ATIVO* ⊱━━━╮\n`;
-        text += `╰━━━━━━━━━━━━━━━━━━━━╯\n\n`;
+        let text = `╭━━━꧁༺ 🏆 𝐓𝐎𝐑𝐍𝐄𝐈𝐎 𝐀𝐓𝐈𝐕𝐎 ༻꧂━━━╮\n`;
+        text += `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n\n`;
         text += `👥 Participantes: ${tournament.participants.length}\n`;
         text += `💰 Prêmio: ${tournament.prize.toLocaleString()}\n\n`;
         text += `📋 *INSCRITOS:*\n`;
@@ -12347,8 +12347,8 @@ switch (command) {
         targetData.protection.protectedBy = sender;
         targetData.protection.until = Date.now() + 3600000; // 1 hora
         saveEconomy(econ);
-        let text = `╭━━━⊱ ⚙️ *PROTEÇÃO ATIVA* ⊱━━━╮\n`;
-        text += `╰━━━━━━━━━━━━━━━━━━━━╯\n\n`;
+        let text = `╭━━━꧁༺ ⚙️ 𝐏𝐑𝐎𝐓𝐄ÇÃ𝐎 𝐀𝐓𝐈𝐕𝐀 ༻꧂━━━╮\n`;
+        text += `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n\n`;
         text += `${pushname} está protegendo @${target.split('@')[0]}!\n\n`;
         text += `⏰ Duração: 1 hora\n`;
         text += `🛡️ Ataques e roubos bloqueados!\n`;
@@ -12422,8 +12422,8 @@ switch (command) {
         me.lastVote[target] = now;
         // 🤖 EVENTO NPC - VOTO POSITIVO
         await npcManager?.trigger(nazu, from, 'voto_positivo', target, target.split('@')[0]);
-        let text = `╭━━━⊱ 👍 *VOTO POSITIVO* ⊱━━━╮\n`;
-        text += `╰━━━━━━━━━━━━━━━━━━━━╯\n\n`;
+        let text = `╭━━━꧁༺ 👍 𝐕𝐎𝐓𝐎 𝐏𝐎𝐒𝐈𝐓𝐈𝐕𝐎 ༻꧂━━━╮\n`;
+        text += `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n\n`;
         text += `${pushname} deu reputação para @${target.split('@')[0]}!\n\n`;
         text += `⭐ +10 pontos de reputação\n`;
         text += `☯️ +5 karma\n`;
@@ -12485,7 +12485,7 @@ switch (command) {
         const targetData = getEcoUser(econ, target);
         targetData.wallet = (targetData.wallet || 0) + amount;
         saveEconomy(econ);
-        return reply(`╭━━━⊱ ✅ *DINHEIRO ADICIONADO* ⊱━━━╮\n│\n│ 👤 @${target.split('@')[0]}\n│ 💰 +${amount.toLocaleString()} moedas\n│ 💼 Carteira atual: ${targetData.wallet.toLocaleString()}\n│\n╰━━━━━━━━━━━━━━━━━━━━━━━━━╯`, { mentions: [target] });
+        return reply(`╭━━━꧁༺ ✅ 𝐃𝐈𝐍𝐇𝐄𝐈𝐑𝐎 𝐀𝐃𝐈𝐂𝐈𝐎𝐍𝐀𝐃𝐎 ༻꧂━━━╮\n│\n│ 👤 @${target.split('@')[0]}\n│ 💰 +${amount.toLocaleString()} moedas\n│ 💼 Carteira atual: ${targetData.wallet.toLocaleString()}\n│\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`, { mentions: [target] });
       }
       // Remover dinheiro de jogador
       case 'rpgremove':
@@ -12500,7 +12500,7 @@ switch (command) {
         targetData.wallet = Math.max(0, (targetData.wallet || 0) - amount);
         targetData.bank = Math.max(0, (targetData.bank || 0));
         saveEconomy(econ);
-        return reply(`╭━━━⊱ ✅ *DINHEIRO REMOVIDO* ⊱━━━╮\n│\n│ 👤 @${target.split('@')[0]}\n│ 💸 -${amount.toLocaleString()} moedas\n│ 💼 Carteira atual: ${targetData.wallet.toLocaleString()}\n│\n╰━━━━━━━━━━━━━━━━━━━━━━━━━╯`, { mentions: [target] });
+        return reply(`╭━━━꧁༺ ✅ 𝐃𝐈𝐍𝐇𝐄𝐈𝐑𝐎 𝐑𝐄𝐌𝐎𝐕𝐈𝐃𝐎 ༻꧂━━━╮\n│\n│ 👤 @${target.split('@')[0]}\n│ 💸 -${amount.toLocaleString()} moedas\n│ 💼 Carteira atual: ${targetData.wallet.toLocaleString()}\n│\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`, { mentions: [target] });
       }
       // Definir level de jogador
       case 'rpgsetlevel':
@@ -12518,7 +12518,7 @@ switch (command) {
         const stats = calculateCombatStats(targetData, econ);
         targetData.power = stats.power;
         saveEconomy(econ);
-        return reply(`╭━━━⊱ ✅ *NÍVEL DEFINIDO* ⊱━━━╮\n│\n│ 👤 @${target.split('@')[0]}\n│ 📊 Nível: ${newLevel}\n│ ◈ Poder: ${targetData.power}\n│\n╰━━━━━━━━━━━━━━━━━━━━━━━━━╯`, { mentions: [target] });
+        return reply(`╭━━━꧁༺ ✅ 𝐍Í𝐕𝐄𝐋 𝐃𝐄𝐅𝐈𝐍𝐈𝐃𝐎 ༻꧂━━━╮\n│\n│ 👤 @${target.split('@')[0]}\n│ 📊 Nível: ${newLevel}\n│ ◈ Poder: ${targetData.power}\n│\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`, { mentions: [target] });
       }
       // Adicionar item ao jogador
       case 'rpgadditem':
@@ -12535,7 +12535,7 @@ switch (command) {
         // Se for um equipamento, força o recálculo
         recalcEquipmentBonuses(targetData, econ.shop);
         saveEconomy(econ);
-        return reply(`╭━━━⊱ ✅ *ITEM ADICIONADO* ⊱━━━╮\n│\n│ 👤 @${target.split('@')[0]}\n│ 📦 Item: ${itemArgs}\n│ 🔢 Quantidade: +${qty}\n│\n╰━━━━━━━━━━━━━━━━━━━━━━━━━╯`, { mentions: [target] });
+        return reply(`╭━━━꧁༺ ✅ 𝐈𝐓𝐄𝐌 𝐀𝐃𝐈𝐂𝐈𝐎𝐍𝐀𝐃𝐎 ༻꧂━━━╮\n│\n│ 👤 @${target.split('@')[0]}\n│ 📦 Item: ${itemArgs}\n│ 🔢 Quantidade: +${qty}\n│\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`, { mentions: [target] });
       }
       // Remover item do jogador
       case 'rpgremoveitem':
@@ -12550,7 +12550,7 @@ switch (command) {
         targetData.inventory = targetData.inventory || {};
         targetData.inventory[itemArgs] = Math.max(0, (targetData.inventory[itemArgs] || 0) - qty);
         saveEconomy(econ);
-        return reply(`╭━━━⊱ ✅ *ITEM REMOVIDO* ⊱━━━╮\n│\n│ 👤 @${target.split('@')[0]}\n│ 📦 Item: ${itemArgs}\n│ 🔢 Quantidade: -${qty}\n│\n╰━━━━━━━━━━━━━━━━━━━━━━━━━╯`, { mentions: [target] });
+        return reply(`╭━━━꧁༺ ✅ 𝐈𝐓𝐄𝐌 𝐑𝐄𝐌𝐎𝐕𝐈𝐃𝐎 ༻꧂━━━╮\n│\n│ 👤 @${target.split('@')[0]}\n│ 📦 Item: ${itemArgs}\n│ 🔢 Quantidade: -${qty}\n│\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`, { mentions: [target] });
       }
       // Reset total do jogador
       case 'rpgresetplayer':
@@ -12561,7 +12561,7 @@ switch (command) {
         if (econ.users[target]) {
           delete econ.users[target];
           saveEconomy(econ);
-          return reply(`╭━━━⊱ ✅ *JOGADOR RESETADO* ⊱━━━╮\n│\n│ 👤 @${target.split('@')[0]}\n│ 🗑️ Todos os dados RPG removidos\n│\n╰━━━━━━━━━━━━━━━━━━━━━━━━━╯`, { mentions: [target] });
+          return reply(`╭━━━꧁༺ ✅ 𝐉𝐎𝐆𝐀𝐃𝐎𝐑 𝐑𝐄𝐒𝐄𝐓𝐀𝐃𝐎 ༻꧂━━━╮\n│\n│ 👤 @${target.split('@')[0]}\n│ 🗑️ Todos os dados RPG removidos\n│\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`, { mentions: [target] });
         } else {
           return reply('❌ Jogador não encontrado no sistema RPG!');
         }
@@ -12577,7 +12577,7 @@ switch (command) {
         const econ = loadEconomy();
         econ.users = {};
         saveEconomy(econ);
-        return reply(`╭━━━⊱ ⚠️ *RESET GLOBAL* ⊱━━━╮\n│\n│ 🗑️ Sistema RPG resetado!\n│ 👥 Todos os jogadores zerados\n│\n╰━━━━━━━━━━━━━━━━━━━━━━━━━╯`);
+        return reply(`╭━━━꧁༺ ⚠️ 𝐑𝐄𝐒𝐄𝐓 𝐆𝐋𝐎𝐁𝐀𝐋 ༻꧂━━━╮\n│\n│ 🗑️ Sistema RPG resetado!\n│ 👥 Todos os jogadores zerados\n│\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`);
       }
       // Estatísticas do sistema RPG
       case 'rpgstats':
@@ -12686,7 +12686,7 @@ switch (command) {
         if (itemId === 'multiplicador_xp') me.xpMultiplier = 2;
         if (item.income) me.dailyIncome = (me.dailyIncome || 0) + item.income;
         saveEconomy(econ);
-        return reply(`╭━━━⊱ ✅ *COMPRA PREMIUM* ⊱━━━╮\n│\n│ 🛒 ${item.name}\n│ 💰 -${item.price.toLocaleString()}\n│\n│ ◈ Item adicionado com sucesso!\n│\n╰━━━━━━━━━━━━━━━━━━━━━━━━━╯`);
+        return reply(`╭━━━꧁༺ ✅ 𝐂𝐎𝐌𝐏𝐑𝐀 𝐏𝐑𝐄𝐌𝐈𝐔𝐌 ༻꧂━━━╮\n│\n│ 🛒 ${item.name}\n│ 💰 -${item.price.toLocaleString()}\n│\n│ ◈ Item adicionado com sucesso!\n│\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`);
       }
       // Cassino Roleta - NERFADO
       case 'roleta':
@@ -12731,7 +12731,7 @@ switch (command) {
         const normalizedChoice = choice;
         me.cooldowns = me.cooldowns || {};
         me.cooldowns.roleta = Date.now() + 10 * 60 * 1000; // 10 minutos
-        let text = `╭━━━⊱ 🎰 *ROLETA* ⊱━━━╮\n\n`;
+        let text = `╭━━━꧁༺ 🎰 𝐑𝐎𝐋𝐄𝐓𝐀 ༻꧂━━━╮\n\n`;
         text += `🎯 Sua aposta: ${colorEmoji[choice]} ${bet.toLocaleString()}\n`;
         text += `🎲 Resultado: ${colorEmoji[winColor]} ${winColor.toUpperCase()}\n\n`;
         if (normalizedChoice === winColor) {
@@ -12747,7 +12747,7 @@ switch (command) {
           // 🤖 EVENTO NPC - ROLETA PERDA
           await npcManager?.trigger(nazu, from, 'cassino_roleta_perda', sender, pushname, { bet: normalizedChoice.toUpperCase() });
         }
-        text += `\n\n╰━━━━━━━━━━━━━━━━━━━━╯`;
+        text += `\n\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
         saveEconomy(econ);
         return reply(text);
       }
@@ -12810,7 +12810,7 @@ switch (command) {
         const dealerValue = getValue(dealerCards);
         me.cooldowns = me.cooldowns || {};
         me.cooldowns.blackjack = Date.now() + 10 * 60 * 1000; // 10 minutos
-        let text = `╭━━━⊱ 🃏 *BLACKJACK* ⊱━━━╮\n\n`;
+        let text = `╭━━━꧁༺ 🃏 𝐁𝐋𝐀𝐂𝐊𝐉𝐀𝐂𝐊 ༻꧂━━━╮\n\n`;
         text += `👤 Você: ${playerCards.join(' ')} = ${playerValue}\n`;
         text += `🎰 Dealer: ${dealerCards.join(' ')} = ${dealerValue}\n\n`;
         if (playerValue > 21) {
@@ -12838,7 +12838,7 @@ switch (command) {
           // 🤖 EVENTO NPC - BLACKJACK PERDA
           await npcManager?.trigger(nazu, from, 'cassino_slots_perda', sender, pushname);
         }
-        text += `\n\n╰━━━━━━━━━━━━━━━━━━━━╯`;
+        text += `\n\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
         saveEconomy(econ);
         return reply(text);
       }
@@ -12937,7 +12937,7 @@ switch (command) {
           const totalTickets = Object.values(econ.lottery.tickets).reduce((a, b) => a + b, 0);
           const nextDrawTime = econ.lottery.lastDraw + 86400000; // +24 horas
           const nextDraw = new Date(nextDrawTime).toLocaleString('pt-BR');
-          let text = `╭━━━⊱ 🎫 *LOTERIA* ⊱━━━╮\n\n`;
+          let text = `╭━━━꧁༺ 🎫 𝐋𝐎𝐓𝐄𝐑𝐈𝐀 ༻꧂━━━╮\n\n`;
           text += `💰 Jackpot: *${econ.lottery.jackpot.toLocaleString()}*\n`;
           text += `🎟️ Total de bilhetes: ${totalTickets}\n`;
           text += `📅 Próximo sorteio: ${nextDraw}\n\n`;
@@ -12956,7 +12956,7 @@ switch (command) {
           econ.lottery.tickets[sender] = (econ.lottery.tickets[sender] || 0) + qty;
           econ.lottery.jackpot += totalCost;
           saveEconomy(econ);
-          return reply(`╭━━━⊱ 🎫 *BILHETES COMPRADOS* ⊱━━━╮\n\n🎟️ Quantidade: ${qty}\n💰 Total: -${totalCost.toLocaleString()}\n\n🎫 Seus bilhetes: ${econ.lottery.tickets[sender]}\n💰 Jackpot atual: ${econ.lottery.jackpot.toLocaleString()}\n\n╰━━━━━━━━━━━━━━━━━━━━╯`);
+          return reply(`╭━━━⊱ 🎫 *BILHETES COMPRADOS* ⊱━━━╮\n\n🎟️ Quantidade: ${qty}\n💰 Total: -${totalCost.toLocaleString()}\n\n🎫 Seus bilhetes: ${econ.lottery.tickets[sender]}\n💰 Jackpot atual: ${econ.lottery.jackpot.toLocaleString()}\n\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`);
         }
         return reply(`❌ Subcomando inválido!\n\n💡 Use:\n${groupPrefix}loteria - Ver informações\n${groupPrefix}loteria comprar <qtd> - Comprar bilhetes`);
       }
@@ -12971,7 +12971,7 @@ switch (command) {
         const bet = parseInt(args[0]) || 0;
         const horse = parseInt(args[1]) || 0;
         if (bet <= 0 || horse < 1 || horse > 5) {
-          let text = `╭━━━⊱ 🏇 *CORRIDA DE CAVALOS* ⊱━━━╮\n\n`;
+          let text = `╭━━━꧁༺ 🏇 𝐂𝐎𝐑𝐑𝐈𝐃𝐀 𝐃𝐄 𝐂𝐀𝐕𝐀𝐋𝐎𝐒 ༻꧂━━━╮\n\n`;
           text += `💡 Uso: ${groupPrefix}corrida <valor> <cavalo 1-5>\n\n`;
           text += `🐴 Cavalos:\n`;
           text += `1. 🟤 Trovão (1.5x) - Favorito\n`;
@@ -12979,7 +12979,7 @@ switch (command) {
           text += `3. ⚫ Sombra (3x)\n`;
           text += `4. 🟡 Ouro (5x)\n`;
           text += `5. 🔴 Fênix (10x) - Zebra\n`;
-          text += `\n╰━━━━━━━━━━━━━━━━━━━━╯`;
+          text += `\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
           return reply(text);
         }
         if (bet > me.wallet) return reply('❌ Saldo insuficiente!');
@@ -12998,7 +12998,7 @@ switch (command) {
           random -= horses[i].chance;
           if (random <= 0) { winner = i + 1; break; }
         }
-        let text = `╭━━━⊱ 🏇 *CORRIDA* ⊱━━━╮\n\n`;
+        let text = `╭━━━꧁༺ 🏇 𝐂𝐎𝐑𝐑𝐈𝐃𝐀 ༻꧂━━━╮\n\n`;
         text += `🎯 Você apostou: ${selectedHorse.name}\n`;
         text += `💰 Valor: ${bet.toLocaleString()}\n\n`;
         text += `🏁 E o vencedor é...\n\n`;
@@ -13011,7 +13011,7 @@ switch (command) {
           me.wallet -= bet;
           text += `🌌 *VOCÊ PERDEU!*\n💸 -${bet.toLocaleString()}`;
         }
-        text += `\n\n╰━━━━━━━━━━━━━━━━━━━━╯`;
+        text += `\n\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
         saveEconomy(econ);
         return reply(text);
       }
@@ -13029,7 +13029,7 @@ switch (command) {
           if (econ.auctions.length === 0) {
             return reply(`🏛️ Nenhum leilão ativo!\n\n💡 Use ${groupPrefix}leilao criar <item> <preço> para criar um leilão`);
           }
-          let text = `╭━━━⊱ 🏛️ *LEILÕES ATIVOS* ⊱━━━╮\n\n`;
+          let text = `╭━━━꧁༺ 🏛️ 𝐋𝐄𝐈𝐋Õ𝐄𝐒 𝐀𝐓𝐈𝐕𝐎𝐒 ༻꧂━━━╮\n\n`;
           econ.auctions.forEach((auction, i) => {
             const endsIn = Math.max(0, Math.floor((auction.endTime - Date.now()) / 60000));
             text += `${i + 1}. ${auction.item}\n`;
@@ -13038,7 +13038,7 @@ switch (command) {
             text += `   ⏰ Termina em: ${endsIn} min\n\n`;
           });
           text += `💡 ${groupPrefix}leilao dar <nº> <valor>\n`;
-          text += `╰━━━━━━━━━━━━━━━━━━━━╯`;
+          text += `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
           saveEconomy(econ);
           return reply(text);
         }
@@ -13061,7 +13061,7 @@ switch (command) {
             endTime: Date.now() + 3600000 // 1 hora
           });
           saveEconomy(econ);
-          return reply(`╭━━━⊱ 🏛️ *LEILÃO CRIADO* ⊱━━━╮\n\n📦 Item: ${item}\n💰 Preço inicial: ${price.toLocaleString()}\n⏰ Duração: 1 hora\n\n╰━━━━━━━━━━━━━━━━━━━━╯`);
+          return reply(`╭━━━꧁༺ 🏛️ 𝐋𝐄𝐈𝐋Ã𝐎 𝐂𝐑𝐈𝐀𝐃𝐎 ༻꧂━━━╮\n\n📦 Item: ${item}\n💰 Preço inicial: ${price.toLocaleString()}\n⏰ Duração: 1 hora\n\n╰━━━━━━━━━━━━━━━━━━━━╯`);
         }
         if (sub === 'dar' || sub === 'bid') {
           const auctionIndex = parseInt(args[1]) - 1;
@@ -13088,7 +13088,7 @@ switch (command) {
           auction.currentBid = bidAmount;
           auction.highestBidder = sender;
           saveEconomy(econ);
-          return reply(`╭━━━⊱ 🏛️ *LANCE DADO* ⊱━━━╮\n\n📦 Item: ${auction.item}\n💰 Seu lance: ${bidAmount.toLocaleString()}\n🏆 Você é o maior lance!\n\n╰━━━━━━━━━━━━━━━━━━━━╯`);
+          return reply(`╭━━━⊱ 🏛️ *LANCE DADO* ⊱━━━╮\n\n📦 Item: ${auction.item}\n💰 Seu lance: ${bidAmount.toLocaleString()}\n🏆 Você é o maior lance!\n\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`);
         }
         return reply(`❌ Subcomando inválido!\n\n💡 Use:\n${groupPrefix}leilao - Ver leilões\n${groupPrefix}leilao criar <item> <preço>\n${groupPrefix}leilao dar <nº> <valor>`);
       }
@@ -13134,7 +13134,7 @@ switch (command) {
         // Normaliza o parâmetro do boost
         const sub = rawSub ? (resolveParamAlias(rawSub) || findKeyIgnoringAccents(boosts, rawSub) || normalizeParam(rawSub)) : '';
         if (!sub || sub === 'ver') {
-          let text = `╭━━━⊱ ⚡ *BOOSTS* ⊱━━━╮\n\n`;
+          let text = `╭━━━꧁༺ ⚡ 𝐁𝐎𝐎𝐒𝐓𝐒 ༻꧂━━━╮\n\n`;
           // Verificar boosts ativos
           if (me.activeBoosts && Object.keys(me.activeBoosts).length > 0) {
             text += `🔥 *BOOSTS ATIVOS:*\n`;
@@ -13167,7 +13167,7 @@ switch (command) {
           effect: boost.effect
         };
         saveEconomy(econ);
-        return reply(`╭━━━⊱ ⚡ *BOOST ATIVADO* ⊱━━━╮\n\n${boost.name}\n⏰ Duração: ${boost.duration / 60000} minutos\n💰 Custo: -${boost.price.toLocaleString()}\n\n🔥 Aproveite os bônus!\n\n╰━━━━━━━━━━━━━━━━━━━━╯`);
+        return reply(`╭━━━⊱ ⚡ *BOOST ATIVADO* ⊱━━━╮\n\n${boost.name}\n⏰ Duração: ${boost.duration / 60000} minutos\n💰 Custo: -${boost.price.toLocaleString()}\n\n🔥 Aproveite os bônus!\n\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`);
       }
       // Sistema de Tributos/Impostos
       case 'tributos':
@@ -13212,7 +13212,7 @@ switch (command) {
         if (!sub || sub === 'ver') {
           const daysSincePayment = Math.floor((Date.now() - (me.taxes.lastPaid || 0)) / 86400000);
           const dueAmount = daysSincePayment > 0 ? dailyTax * daysSincePayment : 0;
-          let text = `╭━━━⊱ 🏦 *TRIBUTOS* ⊱━━━╮\n\n`;
+          let text = `╭━━━꧁༺ 🏦 𝐓𝐑𝐈𝐁𝐔𝐓𝐎𝐒 ༻꧂━━━╮\n\n`;
           text += `💎 Riqueza Total: ${totalWealth.toLocaleString()}\n`;
           text += `📊 Faixa: ${taxBracket}\n`;
           text += `💰 Taxa diária: ${dailyTax.toLocaleString()}\n\n`;
@@ -13226,7 +13226,7 @@ switch (command) {
           } else {
             text += `✅ Tributos em dia!`;
           }
-          text += `\n\n╰━━━━━━━━━━━━━━━━━━━━╯`;
+          text += `\n\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
           saveEconomy(econ);
           return reply(text);
         }
@@ -13243,7 +13243,7 @@ switch (command) {
           me.taxes.lastPaid = Date.now();
           me.taxes.totalPaid = (me.taxes.totalPaid || 0) + dueAmount;
           saveEconomy(econ);
-          return reply(`╭━━━⊱ ✅ *TRIBUTOS PAGOS* ⊱━━━╮\n\n💸 Valor: -${dueAmount.toLocaleString()}\n📅 Próximo: Em 1 dia\n\n✅ Você está em dia!\n\n╰━━━━━━━━━━━━━━━━━━━━╯`);
+          return reply(`╭━━━꧁༺ ✅ 𝐓𝐑𝐈𝐁𝐔𝐓𝐎𝐒 𝐏𝐀𝐆𝐎𝐒 ༻꧂━━━╮\n\n💸 Valor: -${dueAmount.toLocaleString()}\n📅 Próximo: Em 1 dia\n\n✅ Você está em dia!\n\n╰━━━━━━━━━━━━━━━━━━━━╯`);
         }
         return reply(`❌ Subcomando inválido!\n\n💡 Use:\n${groupPrefix}tributos - Ver situação\n${groupPrefix}tributos pagar - Pagar tributos`);
       }
@@ -13272,7 +13272,7 @@ switch (command) {
         if (!econ.treasury) econ.treasury = 0;
         econ.treasury += amount;
         saveEconomy(econ);
-        return reply(`╭━━━⊱ 💝 *DOAÇÃO* ⊱━━━╮\n\n💰 Valor: ${amount.toLocaleString()}\n☯️ Karma: +${karmaGain}\n⭐ Reputação: +${Math.floor(karmaGain / 2)}\n\n📊 Total doado: ${me.donations.total.toLocaleString()}\n🏦 Tesouro: ${econ.treasury.toLocaleString()}\n\n◈ Obrigado pela generosidade!\n\n╰━━━━━━━━━━━━━━━━━━━━╯`);
+        return reply(`╭━━━꧁༺ 💝 𝐃𝐎𝐀ÇÃ𝐎 ༻꧂━━━╮\n\n💰 Valor: ${amount.toLocaleString()}\n☯️ Karma: +${karmaGain}\n⭐ Reputação: +${Math.floor(karmaGain / 2)}\n\n📊 Total doado: ${me.donations.total.toLocaleString()}\n🏦 Tesouro: ${econ.treasury.toLocaleString()}\n\n◈ Obrigado pela generosidade!\n\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`);
       }
       // Sistema de Presente
       case 'presente':
@@ -13296,7 +13296,7 @@ switch (command) {
         me.inventory[item] -= qty;
         targetData.inventory[item] = (targetData.inventory[item] || 0) + qty;
         saveEconomy(econ);
-        return reply(`╭━━━⊱ 🎁 *PRESENTE ENVIADO* ⊱━━━╮\n\n📦 Item: ${item}\n🔢 Quantidade: ${qty}\n👤 Para: @${target.split('@')[0]}\n\n◈ Presente entregue!\n\n╰━━━━━━━━━━━━━━━━━━━━╯`, { mentions: [target] });
+        return reply(`╭━━━⊱ 🎁 *PRESENTE ENVIADO* ⊱━━━╮\n\n📦 Item: ${item}\n🔢 Quantidade: ${qty}\n👤 Para: @${target.split('@')[0]}\n\n◈ Presente entregue!\n\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`, { mentions: [target] });
       }
       // Estatísticas pessoais detalhadas
       case 'meustats':
@@ -13453,8 +13453,8 @@ switch (command) {
           date: Date.now(),
           bonus: me.prestige.bonusMultiplier
         };
-        let text = `╭━━━⊱ 🌟◈ *PRESTIGIADO!* ◈🌟 ⊱━━━╮\n`;
-        text += `╰━━━━━━━━━━━━━━━━━━━━╯\n\n`;
+        let text = `╭━━━꧁༺ 🌟◈ 𝐏𝐑𝐄𝐒𝐓𝐈𝐆𝐈𝐀𝐃𝐎! ◈🌟 ༻꧂━━━╮\n`;
+        text += `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n\n`;
         text += `🎉 *PARABÉNS!*\n`;
         text += `Você alcançou o Prestige ${me.prestige.level}!\n\n`;
         text += `◈ Novo multiplicador: ${me.prestige.bonusMultiplier.toFixed(2)}x\n`;
@@ -13541,8 +13541,8 @@ switch (command) {
         me.wallet -= totalCost;
         me.investments.stocks[stockType] = (me.investments.stocks[stockType] || 0) + amount;
         me.investments.totalInvested += totalCost;
-        let text = `╭━━━⊱ 💼 *INVESTIMENTO* ⊱━━━╮\n`;
-        text += `╰━━━━━━━━━━━━━━━━━━━━╯\n\n`;
+        let text = `╭━━━꧁༺ 💼 𝐈𝐍𝐕𝐄𝐒𝐓𝐈𝐌𝐄𝐍𝐓𝐎 ༻꧂━━━╮\n`;
+        text += `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n\n`;
         text += `✅ Investimento realizado!\n\n`;
         text += `📊 Ação: ${stockType.toUpperCase()}\n`;
         text += `📈 Quantidade: ${amount}\n`;
@@ -13572,8 +13572,8 @@ switch (command) {
         me.investments.stocks[stockType] -= amount;
         me.wallet += totalValue;
         me.investments.totalProfit += totalValue;
-        let text = `╭━━━⊱ 💵 *VENDA* ⊱━━━╮\n`;
-        text += `╰━━━━━━━━━━━━━━━━━━━━╯\n\n`;
+        let text = `╭━━━꧁༺ 💵 𝐕𝐄𝐍𝐃𝐀 ༻꧂━━━╮\n`;
+        text += `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n\n`;
         text += `✅ Ações vendidas!\n\n`;
         text += `📊 Ação: ${stockType.toUpperCase()}\n`;
         text += `📈 Quantidade: ${amount}\n`;
@@ -13605,8 +13605,8 @@ switch (command) {
         else if (botLuck < 0.8) botRoll = 5;
         else if (botLuck < 0.9) botRoll = 4;
         else botRoll = Math.floor(Math.random() * 3) + 1; // 1-3 apenas 10% das vezes
-        let text = `╭━━━⊱ 🎲 *JOGO DE DADOS* 🎲 ⊱━━━╮\n`;
-        text += `╰━━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n`;
+        let text = `╭━━━꧁༺ 🎲 𝐉𝐎𝐆𝐎 𝐃𝐄 𝐃𝐀𝐃𝐎𝐒 🎲 ༻꧂━━━╮\n`;
+        text += `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n\n`;
         text += `🎲 *Você:* ${playerRoll}\n`;
         text += `🎲 *Bot:* ${botRoll}\n\n`;
         text += `╭━━━━━━━━━━━━━━━━━━━━━╮\n`;
@@ -13667,8 +13667,8 @@ switch (command) {
         // A moeda é "viciada" - quase sempre cai no lado oposto
         const playerWins = Math.random() < 0.05;
         const result = playerWins ? choice : (choice === 'cara' ? 'coroa' : 'cara');
-        let text = `╭━━━⊱ 🪙 *COIN FLIP* ⊱━━━╮\n`;
-        text += `╰━━━━━━━━━━━━━━━━━━━━╯\n\n`;
+        let text = `╭━━━꧁༺ 🪙 𝐂𝐎𝐈𝐍 𝐅𝐋𝐈𝐏 ༻꧂━━━╮\n`;
+        text += `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n\n`;
         text += `🪙 Você escolheu: *${choice}*\n`;
         text += `🪙 Resultado: *${result}*\n\n`;
         me.cooldowns = me.cooldowns || {};
@@ -13711,8 +13711,8 @@ switch (command) {
         }
         // User exit também viciado para sair tarde demais
         const userExit = (1.05 + Math.random() * 1.5).toFixed(2); // 1.05x a 2.55x
-        let text = `╭━━━⊱ 🚀 *CRASH* ⊱━━━╮\n`;
-        text += `╰━━━━━━━━━━━━━━━━━━━━╯\n\n`;
+        let text = `╭━━━꧁༺ 🚀 𝐂𝐑𝐀𝐒𝐇 ༻꧂━━━╮\n`;
+        text += `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n\n`;
         text += `🚀 Você saiu em: ${userExit}x\n`;
         text += `💥 Crash em: ${crashPoint}x\n\n`;
         me.cooldowns = me.cooldowns || {};
@@ -13830,8 +13830,8 @@ switch (command) {
         }
         let claimed = false;
         let totalClaimed = 0;
-        let text = `╭━━━⊱ 🎁 *RECOMPENSAS* ⊱━━━╮\n`;
-        text += `╰━━━━━━━━━━━━━━━━━━━━╯\n\n`;
+        let text = `╭━━━꧁༺ 🎁 𝐑𝐄𝐂𝐎𝐌𝐏𝐄𝐍𝐒𝐀𝐒 ༻꧂━━━╮\n`;
+        text += `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n\n`;
         // Verifica recompensas de streak
         const streakRewards = [
           { days: 7, amount: 10000 },
@@ -13874,7 +13874,7 @@ switch (command) {
         } else {
           // Verifica se há recompensas disponíveis mas não reivindicadas
           let hasAvailableRewards = false;
-          let availableText = `╭━━━⊱ 🎁 *RECOMPENSAS DISPONÍVEIS* ⊱━━━╮\n╰━━━━━━━━━━━━━━━━━━━━╯\n\n`;
+          let availableText = `╭━━━꧁༺ 🎁 𝐑𝐄𝐂𝐎𝐌𝐏𝐄𝐍𝐒𝐀𝐒 𝐃𝐈𝐒𝐏𝐎𝐍Í𝐕𝐄𝐈𝐒 ༻꧂━━━╮\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n\n`;
           // Verifica streak
           const hasStreakReward = streakRewards.some(r =>
             me.streak.current >= r.days && !me.streak.rewards.includes(r.days)
@@ -17103,7 +17103,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
           // Monta o card de status da sincronização (nomes de commit, sem SHA).
           const cardEstado = (estado, titulo, rodape) => {
             const linhas = [
-              `╭━━〔 ${titulo} 〕━━⬣`,
+              `╭━━━꧁༺ ${titulo} ༻꧂━━━╮`,
               '┃',
               `┃ 📦 Repositório: ${estado.repo || 'Souzzaaxzy/baileys'}`,
               `┃ 🌿 Branch: ${estado.branch || 'main'}`,
@@ -17112,7 +17112,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
             if (estado.localNome) linhas.push('┃ 🔹 Atual:', `┃ ${estado.localNome}`, '┃');
             if (estado.remoteNome) linhas.push('┃ 🔹 Remoto:', `┃ ${estado.remoteNome}`, '┃');
             if (rodape) linhas.push(`┃ ${rodape}`);
-            linhas.push('╰━━━━━━━━━━━━━━━━━━━━━━╯');
+            linhas.push('╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯');
             return linhas.join('\n');
           };
           // Captura stdout
@@ -17171,7 +17171,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
               const localNome = ok.localNome || uiEstado?.localNome || 'Commit não identificado';
               const remoteNome = ok.remoteNome || uiEstado?.remoteNome || 'Commit não identificado';
               const card = [
-                '╭━━〔 ✅ ATUALIZADO 〕━━⬣',
+                '╭━━━꧁༺ ✅ 𝐀𝐓𝐔𝐀𝐋𝐈𝐙𝐀𝐃𝐎 ༻꧂━━━╮',
                 '┃',
                 `┃ 📦 repositório bot: ${ok.repoBot || 'Souzzaaxzy/Lizzy-V4'}`,
                 `┃ 📦 Repositório fork: ${ok.repoFork || 'Souzzaaxzy/baileys'}`,
@@ -17187,7 +17187,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
                 '┃',
                 `┃ 💾 Database preservado (${ok.databaseArquivos ?? uiBackup?.count ?? 0} arquivo(s))`,
                 ok.jaAtualizado ? '┃ ℹ️ O código já estava na versão mais recente.' : null,
-                '╰━━━━━━━━━━━━━━━━━━━━━━╯'
+                '╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯'
               ].filter(Boolean).join('\n');
               await reply(card);
               await reply('🎉 O bot foi atualizado!\n🔄 Reiniciando automaticamente em 3 segundos...');
@@ -17205,7 +17205,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
               const localNome = erro.localNome || uiEstado?.localNome || 'Commit não identificado';
               const remoteNome = erro.remoteNome || uiEstado?.remoteNome || 'Commit não identificado';
               const cardErro = [
-                '╭━━〔 ❌ ATUALIZAÇÃO FALHOU 〕━━⬣',
+                '╭━━━꧁༺ ❌ 𝐀𝐓𝐔𝐀𝐋𝐈𝐙𝐀ÇÃ𝐎 𝐅𝐀𝐋𝐇𝐎𝐔 ༻꧂━━━╮',
                 '┃',
                 `┃ 📦 Repositório: ${erro.repoFork || 'Souzzaaxzy/baileys'}`,
                 `┃ 🌿 Branch: ${erro.branch || 'main'}`,
@@ -17220,7 +17220,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
                 erro.detalhe ? `┃\n┃ ⚠️ ${erro.detalhe}` : null,
                 '┃',
                 '┃ 💾 Backup do database preservado.',
-                '╰━━━━━━━━━━━━━━━━━━━━━━╯'
+                '╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯'
               ].filter(Boolean).join('\n');
               await reply(cardErro);
               // Retoma o processamento de mensagens
@@ -26781,7 +26781,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           const userRank = msgCounter.getUserRank(from, sender, 'daily');
           const today = new Date();
           const dateStr = today.toLocaleDateString('pt-BR');
-          let message = `╭━━━〔 📅 TOP DIÁRIO 〕━━━╮\n`;
+          let message = `╭━━━꧁༺ 📅 𝐓𝐎𝐏 𝐃𝐈Á𝐑𝐈𝐎 ༻꧂━━━╮\n`;
           message += `┃ 👥 Grupo: ${groupName || 'Grupo'}\n`;
           message += `┃ 📆 Data: ${dateStr}\n`;
           message += `┃\n`;
@@ -26813,7 +26813,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
             message += `┃ 📍 Sua posição: #${userRank.rank}\n`;
           }
           message += `┃\n`;
-          message += `╰━━━━━━━━━━━━━━━━━━━━╯`;
+          message += `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
           await reply(message);
         } catch (e) {
           console.error('[TOPDIARIO] Erro:', e);
@@ -26826,7 +26826,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           const topUsers = msgCounter.getTopUsers(from, 'weekly', 5);
           const stats = msgCounter.getGroupStats(from);
           const userRank = msgCounter.getUserRank(from, sender, 'weekly');
-          let message = `╭━━━〔 🔥 TOP SEMANAL 〕━━━╮\n`;
+          let message = `╭━━━꧁༺ 🔥 𝐓𝐎𝐏 𝐒𝐄𝐌𝐀𝐍𝐀𝐋 ༻꧂━━━╮\n`;
           message += `┃ 👥 Grupo: ${groupName || 'Grupo'}\n`;
           message += `┃ 📅 Período: Últimos 7 dias\n`;
           message += `┃\n`;
@@ -26858,7 +26858,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
             message += `┃ 📍 Sua posição: #${userRank.rank}\n`;
           }
           message += `┃\n`;
-          message += `╰━━━━━━━━━━━━━━━━━━━━━━━╯`;
+          message += `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
           await reply(message);
         } catch (e) {
           console.error('[TOPSEMANAL] Erro:', e);
@@ -26884,9 +26884,9 @@ ${groupPrefix}togglecmdvip premium_ia off`);
             const [ye, me, de] = end.split('-');
             return `${ds}/${ms} - ${de}/${me}`;
           };
-          let message = `╭━━━〔 🏆 RECORDES DO GRUPO 〕━━━╮\n`;
+          let message = `╭━━━꧁༺ 🏆 𝐑𝐄𝐂𝐎𝐑𝐃𝐄𝐒 𝐃𝐎 𝐆𝐑𝐔𝐏𝐎 ༻꧂━━━╮\n`;
           message += `┃ 👥 Grupo: ${groupName || 'Grupo'}\n`;
-          message += `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯\n`;
+          message += `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n`;
           message += `┃\n`;
           message += `📅 RECORDE DIÁRIO\n`;
           message += `━━━━━━━━━━━━━━\n`;
@@ -26942,12 +26942,12 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           const hasDailyRecord = userRecords.daily && userRecords.daily.total > 0;
           const hasWeeklyRecord = userRecords.weekly && userRecords.weekly.total > 0;
           if (!hasDailyRecord && !hasWeeklyRecord) {
-            return reply(`╭━━━〔 👤 MEUS RECORDES 〕━━━╮\n┃\n┃ 👤 Usuário: @${userName.split(' ')[0]}\n┃ 👥 Grupo: ${groupName || 'Grupo'}\n╰━━━━━━━━━━━━━━━━━━━━╯\n┃\n┃ ⚠️ Você ainda não possui\n┃ recordes registrados.\n┃\n┃ 💡 Continue ativo para\n┃ bater seus recordes!\n┃\n╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`);
+            return reply(`╭━━━꧁༺ 👤 𝐌𝐄𝐔𝐒 𝐑𝐄𝐂𝐎𝐑𝐃𝐄𝐒 ༻꧂━━━╮\n┃\n┃ 👤 Usuário: @${userName.split(' ')[0]}\n┃ 👥 Grupo: ${groupName || 'Grupo'}\n╰━━━━━━━━━━━━━━━━━━━━╯\n┃\n┃ ⚠️ Você ainda não possui\n┃ recordes registrados.\n┃\n┃ 💡 Continue ativo para\n┃ bater seus recordes!\n┃\n╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`);
           }
-          let message = `╭━━━〔 👤 MEUS RECORDES 〕━━━╮\n`;
+          let message = `╭━━━꧁༺ 👤 𝐌𝐄𝐔𝐒 𝐑𝐄𝐂𝐎𝐑𝐃𝐄𝐒 ༻꧂━━━╮\n`;
           message += `┃ 👤 Usuário: @${userName.split(' ')[0]}\n`;
           message += `┃ 👥 Grupo: ${groupName || 'Grupo'}\n`;
-          message += `╰━━━━━━━━━━━━━━━━━━━━╯\n`;
+          message += `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n`;
           message += `┃\n`;
           if (hasDailyRecord) {
             const dailyMedia = (userRecords.daily.images || 0) + (userRecords.daily.videos || 0);
@@ -27011,17 +27011,17 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           const topUsers = msgCounter.getTopUsersByDate(from, dateStr, 3);
           if (!stats) {
             const formattedDate = `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
-            return reply(`╭━━━〔 📅 ESTATÍSTICAS DO DIA 〕━━━╮\n┃\n┃ 📆 Data: ${formattedDate}\n┃\n┃ ⚠️ Não há registros disponíveis\n┃ para esta data.\n┃\n┃ 💡 Os dados são mantidos por\n┃ até 90 dias.\n╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`);
+            return reply(`╭━━━꧁༺ 📅 𝐄𝐒𝐓𝐀𝐓Í𝐒𝐓𝐈𝐂𝐀𝐒 𝐃𝐎 𝐃𝐈𝐀 ༻꧂━━━╮\n┃\n┃ 📆 Data: ${formattedDate}\n┃\n┃ ⚠️ Não há registros disponíveis\n┃ para esta data.\n┃\n┃ 💡 Os dados são mantidos por\n┃ até 90 dias.\n╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`);
           }
           // Formatar data para exibição
           const formattedDate = `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
           const totalMedia = (stats.images || 0) + (stats.videos || 0);
           const userCount = stats.users ? Object.keys(stats.users).length : 0;
           const currentTime = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-          let message = `╭━━━〔 📅 ESTATÍSTICAS DO DIA 〕━━━╮\n`;
+          let message = `╭━━━꧁༺ 📅 𝐄𝐒𝐓𝐀𝐓Í𝐒𝐓𝐈𝐂𝐀𝐒 𝐃𝐎 𝐃𝐈𝐀 ༻꧂━━━╮\n`;
           message += `┃ 👥 Grupo: ${groupName || 'Grupo'}\n`;
           message += `┃ 📆 Data: ${formattedDate}\n`;
-          message += `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯\n`;
+          message += `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n`;
           message += `┃\n`;
           message += `🏅 Ranking de usuários\n`;
           message += `━━━━━━━━━━━━━━\n`;
@@ -27058,10 +27058,10 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
           const userName = pushname || sender.split('@')[0];
           const detailedRank = msgCounter.getUserDetailedRank(from, sender, 'daily');
-          let message = `╭━━━〔 📅 POSIÇÃO DIÁRIA 〕━━━╮\n`;
+          let message = `╭━━━꧁༺ 📅 𝐏𝐎𝐒𝐈ÇÃ𝐎 𝐃𝐈Á𝐑𝐈𝐀 ༻꧂━━━╮\n`;
           message += `┃ 👤 Usuário: @${userName.split(' ')[0]}\n`;
           message += `┃ 👥 Grupo: ${groupName || 'Grupo'}\n`;
-          message += `╰━━━━━━━━━━━━━━━━━━━━╯\n`;
+          message += `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n`;
           message += `┃\n`;
           if (!detailedRank.hasActivity) {
             message += `┃ 📭 Você ainda não possui\n`;
@@ -27116,10 +27116,10 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
           const userName = pushname || sender.split('@')[0];
           const detailedRank = msgCounter.getUserDetailedRank(from, sender, 'weekly');
-          let message = `╭━━━〔 🔥 POSIÇÃO SEMANAL 〕━━━╮\n`;
+          let message = `╭━━━꧁༺ 🔥 𝐏𝐎𝐒𝐈ÇÃ𝐎 𝐒𝐄𝐌𝐀𝐍𝐀𝐋 ༻꧂━━━╮\n`;
           message += `┃ 👤 Usuário: @${userName.split(' ')[0]}\n`;
           message += `┃ 👥 Grupo: ${groupName || 'Grupo'}\n`;
-          message += `╰━━━━━━━━━━━━━━━━━━━━╯\n`;
+          message += `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n`;
           message += `┃\n`;
           if (!detailedRank.hasActivity) {
             message += `┃ 📭 Você ainda não possui\n`;
@@ -27180,7 +27180,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           const dateStr = today.toLocaleDateString('pt-BR');
           // Mídias = apenas imagens e vídeos (sem stickers)
           const totalMedia = (userStats.daily.images || 0) + (userStats.daily.videos || 0);
-          let message = `╭━━━〔 📊 SUAS ESTATÍSTICAS 〕━━━╮\n`;
+          let message = `╭━━━꧁༺ 📊 𝐒𝐔𝐀𝐒 𝐄𝐒𝐓𝐀𝐓Í𝐒𝐓𝐈𝐂𝐀𝐒 ༻꧂━━━╮\n`;
           message += `┃\n`;
           message += `┃ 👤 @${userName.split(' ')[0]}\n`;
           message += `┃ 📅 Data: ${dateStr}\n`;
@@ -27198,7 +27198,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
             message += `┃ 🏆 Ranking: #${userRank.rank}\n`;
             message += `┃\n`;
           }
-          message += `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
+          message += `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
           const newsletterMediario = {
             forwardingScore: 999,
             isForwarded: true,
@@ -27269,7 +27269,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
             return reply(`◈ Uso incorreto!\n\n📝 Exemplo: *${groupPrefix}setdiario 10000*\n\n💡 Defina uma meta diária de mensagens para o grupo.`);
           }
           msgCounter.setDailyGoal(from, goalValue);
-          const message = `╭━━━〔 🎯 META DIÁRIA DEFINIDA 〕━━━╮\n┃\n┃ ✅ Nova meta diária configurada!\n┃\n┃ 🎯 Meta: ${goalValue.toLocaleString('pt-BR')} mensagens\n┃\n╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
+          const message = `╭━━━꧁༺ 🎯 𝐌𝐄𝐓𝐀 𝐃𝐈Á𝐑𝐈𝐀 𝐃𝐄𝐅𝐈𝐍𝐈𝐃𝐀 ༻꧂━━━╮\n┃\n┃ ✅ Nova meta diária configurada!\n┃\n┃ 🎯 Meta: ${goalValue.toLocaleString('pt-BR')} mensagens\n┃\n╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
           await reply(message);
         } catch (e) {
           console.error('[SETDIARIO] Erro:', e);
@@ -27288,7 +27288,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           const args = body.trim().split(' ');
           const confirm = args[1]?.toLowerCase();
           if (confirm !== 'confirmar' && confirm !== 'confirm') {
-            const message = `╭━━━〔 ⚠️ CONFIRMAR RESET 〕━━━╮\n`;
+            const message = `╭━━━꧁༺ ⚠️ 𝐂𝐎𝐍𝐅𝐈𝐑𝐌𝐀𝐑 𝐑𝐄𝐒𝐄𝐓 ༻꧂━━━╮\n`;
             message += `┃\n`;
             message += `┃ Tem certeza que deseja resetar\n`;
             message += `┃ as estatísticas diárias?\n`;
@@ -27299,19 +27299,19 @@ ${groupPrefix}togglecmdvip premium_ia off`);
             message += `┃ Para confirmar, use:\n`;
             message += `┃ *${groupPrefix}resetmsgdiario confirmar*\n`;
             message += `┃\n`;
-            message += `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
+            message += `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
             return reply(message);
           }
           msgCounter.resetDailyManual(from);
           const userName = pushname || sender.split('@')[0];
-          const message = `╭━━━〔 🗑️ RESET DIÁRIO 〕━━━╮\n`;
+          const message = `╭━━━꧁༺ 🗑️ 𝐑𝐄𝐒𝐄𝐓 𝐃𝐈Á𝐑𝐈𝐎 ༻꧂━━━╮\n`;
           message += `┃\n`;
           message += `┃ ✅ Estatísticas diárias resetadas!\n`;
           message += `┃\n`;
           message += `┃ 👥 Grupo: ${groupName || 'Grupo'}\n`;
           message += `┃ 👤 Resetado por: @${userName.split(' ')[0]}\n`;
           message += `┃\n`;
-          message += `╰━━━━━━━━━━━━━━━━━━━━╯`;
+          message += `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
           await reply(message);
         } catch (e) {
           console.error('[RESETMSGDIARIO] Erro:', e);
@@ -27330,7 +27330,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           const args = body.trim().split(' ');
           const confirm = args[1]?.toLowerCase();
           if (confirm !== 'confirmar' && confirm !== 'confirm') {
-            const message = `╭━━━〔 ⚠️ CONFIRMAR RESET 〕━━━╮\n`;
+            const message = `╭━━━꧁༺ ⚠️ 𝐂𝐎𝐍𝐅𝐈𝐑𝐌𝐀𝐑 𝐑𝐄𝐒𝐄𝐓 ༻꧂━━━╮\n`;
             message += `┃\n`;
             message += `┃ Tem certeza que deseja resetar\n`;
             message += `┃ as estatísticas semanais?\n`;
@@ -27341,19 +27341,19 @@ ${groupPrefix}togglecmdvip premium_ia off`);
             message += `┃ Para confirmar, use:\n`;
             message += `┃ *${groupPrefix}resetmsgsemanal confirmar*\n`;
             message += `┃\n`;
-            message += `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
+            message += `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
             return reply(message);
           }
           msgCounter.resetWeeklyManual(from);
           const userName = pushname || sender.split('@')[0];
-          const message = `╭━━━〔 🗑️ RESET SEMANAL 〕━━━╮\n`;
+          const message = `╭━━━꧁༺ 🗑️ 𝐑𝐄𝐒𝐄𝐓 𝐒𝐄𝐌𝐀𝐍𝐀𝐋 ༻꧂━━━╮\n`;
           message += `┃\n`;
           message += `┃ ✅ Estatísticas semanais resetadas!\n`;
           message += `┃\n`;
           message += `┃ 👥 Grupo: ${groupName || 'Grupo'}\n`;
           message += `┃ 👤 Resetado por: @${userName.split(' ')[0]}\n`;
           message += `┃\n`;
-          message += `╰━━━━━━━━━━━━━━━━━━━━╯`;
+          message += `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
           await reply(message);
         } catch (e) {
           console.error('[RESETMSGSEMANAL] Erro:', e);
@@ -27375,7 +27375,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
             return reply(`◈ Uso incorreto!\n\n📝 Exemplo: *${groupPrefix}setsemanal 50000*\n\n💡 Defina uma meta semanal de mensagens para o grupo.`);
           }
           msgCounter.setWeeklyGoal(from, goalValue);
-          const message = `╭━━━〔 🎯 META SEMANAL DEFINIDA 〕━━━╮\n┃\n┃ ✅ Nova meta semanal configurada!\n┃\n┃ 🎯 Meta: ${goalValue.toLocaleString('pt-BR')} mensagens\n┃\n╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
+          const message = `╭━━━꧁༺ 🎯 𝐌𝐄𝐓𝐀 𝐒𝐄𝐌𝐀𝐍𝐀𝐋 𝐃𝐄𝐅𝐈𝐍𝐈𝐃𝐀 ༻꧂━━━╮\n┃\n┃ ✅ Nova meta semanal configurada!\n┃\n┃ 🎯 Meta: ${goalValue.toLocaleString('pt-BR')} mensagens\n┃\n╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯`;
           await reply(message);
         } catch (e) {
           console.error('[SETSEMANAL] Erro:', e);
@@ -27386,7 +27386,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
         try {
           if (!isGroup) return reply("◈ Este comando só funciona em grupos.");
           const stats = msgCounter.getGroupStats(from);
-          let message = `╭━━━〔 🎯 METAS DO GRUPO 〕━━━╮\n`;
+          let message = `╭━━━꧁༺ 🎯 𝐌𝐄𝐓𝐀𝐒 𝐃𝐎 𝐆𝐑𝐔𝐏𝐎 ༻꧂━━━╮\n`;
           message += `┃\n`;
           // Meta diária
           if (stats.settings.dailyGoal) {
@@ -27412,7 +27412,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
             message += `┃ 📆 Meta Semanal: Não definida\n`;
           }
           message += `┃\n`;
-          message += `╰━━━━━━━━━━━━━━━━━━━━━━━━╯`;
+          message += `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
           await reply(message);
         } catch (e) {
           console.error('[VERMETAS] Erro:', e);
@@ -27635,7 +27635,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           } catch (e) {
             console.error('[ME] Erro ao somar contadores:', e?.message);
           }
-          const statusMessage = `╭━━━〔 👤 PERFIL 〕━━━⬣
+          const statusMessage = `╭━━━꧁༺ 👤 𝐏𝐄𝐑𝐅𝐈𝐋 ༻꧂━━━╮
 
 📛 Nome: ${userName}
 📱 Número: ${numerodele}
@@ -27643,7 +27643,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
 ⭐ Status: ${status}
 🏢 Conta: ${tipoConta}
 
-╭━━〔 📊 ATIVIDADE 〕
+╭━━━꧁༺ 📊 𝐀𝐓𝐈𝐕𝐈𝐃𝐀𝐃𝐄 ༻꧂━━━╮
 
 📌 Neste Grupo
 💬 Mensagens: ${groupMessages}
@@ -27655,7 +27655,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
 ⚒️ Comandos: ${totalCommands}
 🎨 Figurinhas: ${totalStickers}
 
-╰━━━━━━━━━━━━━━━━⬣
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 ${nomebot}  By  👑 ${nomedono}`;
           await nazu.sendMessage(from, {
@@ -32147,19 +32147,19 @@ break;
           const registros = groupData.joinRequests || [];
           
           if (registros.length === 0) {
-            return reply(`╭━━━〔 📥 SOLICITAÇÕES 〕━━━╮
+            return reply(`╭━━━꧁༺ 📥 𝐒𝐎𝐋𝐈𝐂𝐈𝐓𝐀ÇÕ𝐄𝐒 ༻꧂━━━╮
 ┃
 ┃ 📭 Nenhum registro encontrado.
 ┃
-╰━━━━━━━━━━━━━━━━━━━━╯`);
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`);
           }
           
           const ultimos = registros.slice(-5).reverse();
-          let mensagem = `╭━━━〔 📥 SOLICITAÇÕES 〕━━━╮
+          let mensagem = `╭━━━꧁༺ 📥 𝐒𝐎𝐋𝐈𝐂𝐈𝐓𝐀ÇÕ𝐄𝐒 ༻꧂━━━╮
 ┃
 ┃ 📊 Últimas ${ultimos.length} solicitações
 ┃
-╰━━━━━━━━━━━━━━━━━━━━╯\n\n`;
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n\n`;
           
           const mentions = [];
           
@@ -35371,7 +35371,7 @@ case 'assistent':
           });
           const formattedDuration = formatTimeRemaining(durationMs);
           await nazu.sendMessage(from, {
-            text: `╭━━━〔 🔇 MUTE TEMPORÁRIO 〕━━━╮\n┃\n┃ 👤 Usuário: @${getUserName(menc_os2)}\n┃ 👮 Aplicado por: @${adminName}\n┃ ⏳ Duração: ${formattedDuration}\n┃ 🕒 Expira em: ${expiresAtStr}\n┃\n╰━━━━━━━━━━━━━━━━━━━━╯`,
+            text: `╭━━━꧁༺ 🔇 𝐌𝐔𝐓𝐄 𝐓𝐄𝐌𝐏𝐎𝐑Á𝐑𝐈𝐎 ༻꧂━━━╮\n┃\n┃ 👤 Usuário: @${getUserName(menc_os2)}\n┃ 👮 Aplicado por: @${adminName}\n┃ ⏳ Duração: ${formattedDuration}\n┃ 🕒 Expira em: ${expiresAtStr}\n┃\n╰━━━━━━━━━━━━━━━━━━━━╯`,
             mentions: [menc_os2, sender]
           }, { quoted: info });
         } catch (e) {
@@ -35389,7 +35389,7 @@ case 'assistent':
           if (result.success) {
             const adminName = getUserName(sender);
             await nazu.sendMessage(from, {
-              text: `╭━━━〔 🔊 MUTE REMOVIDO 〕━━━╮\n┃\n┃ 👤 Usuário: @${getUserName(menc_os2)}\n┃ 👮 Removido por: @${adminName}\n┃\n╰━━━━━━━━━━━━━━━━━━━━╯`,
+              text: `╭━━━〔 🔊 MUTE REMOVIDO 〕━━━╮\n┃\n┃ 👤 Usuário: @${getUserName(menc_os2)}\n┃ 👮 Removido por: @${adminName}\n┃\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`,
               mentions: [menc_os2, sender]
             }, { quoted: info });
           } else {
@@ -37062,7 +37062,7 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
       }
       case 'casal':
         try {
-          if (!isGroup) return reply("╭━━━⊱ 💔 *ERRO* 💔 ⊱━━━╮\n│\n│ ❌ Este comando só funciona\n│    em grupos!\n│\n╰━━━━━━━━━━━━━━━━━━━━╯");
+          if (!isGroup) return reply("╭━━━꧁༺ 💔 𝐄𝐑𝐑𝐎 💔 ༻꧂━━━╮\n│\n│ ❌ Este comando só funciona\n│    em grupos!\n│\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯");
           if (!isModoBn) return reply('❌ O modo brincadeira não está ativo nesse grupo.');
           if (AllgroupMembers.length < 2) return reply('❌ Preciso de pelo menos 2 membros no grupo!');
           let path = buildGroupFilePath(from);
@@ -37110,7 +37110,7 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
         break;
       case 'shipo':
         try {
-          if (!isGroup) return reply("╭━━━⊱ 💔 *ERRO* 💔 ⊱━━━╮\n│\n│ ❌ Este comando só funciona\n│    em grupos!\n│\n╰━━━━━━━━━━━━━━━━━━━━╯");
+          if (!isGroup) return reply("╭━━━꧁༺ 💔 𝐄𝐑𝐑𝐎 💔 ༻꧂━━━╮\n│\n│ ❌ Este comando só funciona\n│    em grupos!\n│\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯");
           if (!isModoBn) return reply('❌ O modo brincadeira não está ativo nesse grupo.');
           if (!menc_os2) return reply(`╭━━━⊱ 💘 *SHIPO* 💘 ⊱━━━╮
 │

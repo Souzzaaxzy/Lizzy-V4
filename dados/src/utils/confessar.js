@@ -138,9 +138,9 @@ async function checkNumberExists(nazu, jid) {
 
 // Envia confissão identificada
 async function sendIdentifiedConfession(nazu, senderName, recipientJid, message) {
-  const confessionMessage = `╭━━━〔 💌 NOVA MENSAGEM 〕━━━╮
+  const confessionMessage = `╭━━━꧁༺ 💌 𝐍𝐎𝐕𝐀 𝐌𝐄𝐍𝐒𝐀𝐆𝐄𝐌 ༻꧂━━━╮
 ┃ 👤 Você recebeu uma mensagem!
-╰━━━━━━━━━━━━━━━━━━━━╯
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 👤 Remetente:
 ${senderName}
@@ -158,9 +158,9 @@ ${message}
 
 // Envia confissão anônima
 async function sendAnonymousConfession(nazu, recipientJid, message) {
-  const anonymousMessage = `╭━━━〔 💌 CONFISSÃO ANÔNIMA 〕━━━╮
+  const anonymousMessage = `╭━━━꧁༺ 💌 𝐂𝐎𝐍𝐅𝐈𝐒𝐒Ã𝐎 𝐀𝐍Ô𝐍𝐈𝐌𝐀 ༻꧂━━━╮
 ┃ 🤫 Você recebeu uma confissão anônima!
-╰━━━━━━━━━━━━━━━━━━━━╯
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 💬 Mensagem:
 

@@ -85,8 +85,8 @@ class AdoptionManager {
     const requesterName = request.requesterRaw.split('@')[0];
     const targetName = request.targetRaw.split('@')[0];
     
-    return `╭━━━⊱ 📩 *SOLICITAÇÃO DE ADOÇÃO* ⊱━━━╮
-╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯
+    return `╭━━━꧁༺ 📩 𝐒𝐎𝐋𝐈𝐂𝐈𝐓𝐀ÇÃ𝐎 𝐃𝐄 𝐀𝐃𝐎ÇÃ𝐎 ༻꧂━━━╮
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 📨 Você solicitou a adoção de @${targetName}.
 
@@ -101,8 +101,8 @@ class AdoptionManager {
     const requesterName = request.requesterRaw.split('@')[0];
     const targetName = request.targetRaw.split('@')[0];
     
-    return `╭━━━⊱ ⏰ *ADOÇÃO EXPIRADA* ⊱━━━╮
-╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯
+    return `╭━━━꧁༺ ⏰ 𝐀𝐃𝐎ÇÃ𝐎 𝐄𝐗𝐏𝐈𝐑𝐀𝐃𝐀 ༻꧂━━━╮
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 ⏰ O pedido de adoção expirou.
 
@@ -149,8 +149,8 @@ class AdoptionManager {
       return {
         success: true,
         reason: 'rejected',
-        message: `╭━━━⊱ ❌ *ADOÇÃO RECUSADA* ⊱━━━╮
-╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯
+        message: `╭━━━꧁༺ ❌ 𝐀𝐃𝐎ÇÃ𝐎 𝐑𝐄𝐂𝐔𝐒𝐀𝐃𝐀 ༻꧂━━━╮
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 ❌ Pedido de adoção recusado.
 
@@ -215,8 +215,8 @@ class AdoptionManager {
     return {
       success: true,
       reason: 'accepted',
-      message: `╭━━━⊱ 🎉 *ADOÇÃO REALIZADA* ⊱━━━╮
-╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯
+      message: `╭━━━꧁༺ 🎉 𝐀𝐃𝐎ÇÃ𝐎 𝐑𝐄𝐀𝐋𝐈𝐙𝐀𝐃𝐀 ༻꧂━━━╮
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 🎉 A adoção foi aceita com sucesso!
 

@@ -4083,3 +4083,78 @@ Editar `relationships.js` com `file_editor` sobre linhas com template string
 funciona, mas o preview de `grep`/`sed` no terminal pode exibir **mojibake** mesmo
 com o arquivo íntegro — a checagem válida é `node --check` +
 `b.decode('utf-8')`.
+
+## LAYOUT NO REPO INTEIRO — conversor verificado (set/2026) ✅
+Pedido do dono: *"coloca esse layout em TUDO menos respostas simples e templates
+configuráveis"*. Feito com **ferramenta de conversão** (não find & replace),
+com dry-run e invariantes verificados por teste.
+
+### Ferramenta: `tools/convert-layout.py`
+Dois modos: `--dry` (só relata) e `--apply` (grava). **Escopo deliberado** —
+converte somente o que é seguro:
+
+| Converte | Não toca |
+|---|---|
+| TOPO `╭━━━〔 … 〕━━━╮` (variantes `⊱…⊱`, `╭━〔〕━⬣`, `╭━━[…]━━`) | caixas já no layout novo (`꧁`) |
+| RODAPE `╰` + **só** barras `━/═` + canto | **largura fixa** (corpo com `│`) |
+| — | **bordas configuráveis** (`menuTopBorder`/`bottomBorder`/`header`) |
+| — | **templates configuráveis** (`globalJson`, `defaultText`, `#numerodele#`…) |
+| — | **rodapé solto** (converte só par topo+rodapé) |
+
+Resultado: **81 pares topo+rodapé** convertidos em 7 arquivos. Pulados: **104
+caixas de largura fixa** e **126 topo/rodapé sem par** (melhor deixar no estilo
+antigo do que desalinhar).
+
+### Título: décor removida + bold Unicode
+O título perde `*`/`**` de markdown e vira MATHEMATICAL BOLD. O resto do corpo
+fica **intacto** (inclusive os `*bold*` internos — o WhatsApp renderiza normal).
+
+### Verificação (o que impede estrago)
+Antes de gravar, cada arquivo é conferido:
+1. **mesma contagem de linhas** (senão aborta);
+2. **mesmos placeholders** (`${...}`, `{...}`, `#nome#`) — comparação por
+   `sorted()` (senão aborta).
+
+Dois bugs reais foram pegos **no dry-run**, não no aparelho:
+- **`${a[b].emoji}`**: o `]` de dentro do placeholder era lido como fechamento do
+  título e a caixa saía corrompida → resolvido **mascarando** os placeholders
+  (PUA) antes do regex;
+- **caixa de UMA LINHA** (topo e rodapé na mesma linha, com `\n` internos): o
+  pareamento avançava e casava o topo com o rodapé da **próxima** caixa →
+  detectado pelo teste de idempotência e corrigido com `BOT_RE.search(mascarado,
+  mtop.end())`.
+- **topos aninhados** (ex.: `!me` com `PERFIL` e um bloco `ATIVIDADE` no meio e
+  UM rodapé no fim): encontrar outro topo **não** encerra a busca.
+
+### Teste: `tests/layout-conversion.test.js` (9 asserções)
+Roda o conversor **real** em `--dry` e verifica: (1) **idempotência** (segunda
+passada não acha mais nada — foi o que pegou o bug da caixa de uma linha);
+(2) topo e rodapé em **par**; (3) nenhum arquivo com topo novo + rodapé velho;
+(4) placeholders preservados; (5) nenhum título vazio/quebrado.
+
+### Ajustes em testes existentes
+- **`me-profile`**: as asserções do `!me` checavam os literais antigos
+  (`╭━━━〔 👤 PERFIL 〕━━━⬣`). Atualizadas para o layout novo — o **44/44** se
+  mantém. É a mudança correta: o `!me` é mensagem de comando, não resposta
+  simples.
+- **`pg-commands`** (4 falhas) e **`defensive-protection`** (24) e
+  **`rajar2/3/4`**: falhas **PRÉ-EXISTENTES**, confirmadas no baseline com o
+  código original (mesmos números). Sem relação com esta mudança.
+
+### Suíte completa após a conversão
+Verdes: anti-seletiva 32/0, antifantasma-classificacao 18/18, antimidia 14/29,
+baileys-boot-info 26/0, blacklist-number 12/38, cmd-suggest 21/68,
+delete-status 11/55, dono-perfil 47/0, enqueteimg 54/113, enqueteimg-integration
+5/29, get-message-inspector 54/269, gifsbn-media 16/61, installer-git-drift 6/12,
+invisible-analyzer 58/455, **layout-conversion 9/0**, **me-profile 44/0**,
+menu-layout 25/250, midiaprefix 26/83, pin-tiktok-carousel 40/0, raja-selective
+23/0, relationships-multi 18/79, sticker-convert 4/11, testcall 35/127,
+testverify 18/0, viewonce-v2 18/77; ghost-detection e update-sync exit 0.
+`statusgrupo` falha por **ffmpeg ausente no sandbox** (pré-existente).
+`node --check` em todos os 7 arquivos + boot do `index.js` OK.
+
+### O que ficou de fora (por desenho)
+As **~957 respostas simples** (`await reply('❌ Marque…')`) e os **templates
+configuráveis** (bem-vindo/saída/`global.json`) **não** ganharam caixa — decisão
+do dono. As caixas de **largura fixa** também ficaram no estilo antigo: o layout
+novo não tem borda direita, então converter só topo/rodapé desalinharia.
