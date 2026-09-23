@@ -107,6 +107,13 @@ const {
   resolvePlaqMedia
 } = await import(new URL('../dados/src/funcs/utils/plaq.js', import.meta.url).href);
 
+/**
+ * Foto da pasta REAL do repositório, tirada ANTES de qualquer teste.
+ * O teste escreve em `PLAQ_PATH` (tmp), então ao final a pasta real tem de
+ * estar idêntica — é o repositório do dono, com as mídias reais dele.
+ */
+const PASTA_REAL_ANTES = fs.readdirSync(path.join(ROOT, 'dados', 'src', 'plaq')).sort();
+
 const BOT_JID = '5599999999999@s.whatsapp.net';
 const BOT_LID = '111111111111111@lid';
 
@@ -384,12 +391,15 @@ await test('regressão: !menufig / !menusticker continuam funcionando', async ()
   }
 });
 
-await test('a pasta plaq do repositório existe e só tem o .gitkeep', () => {
+await test('o teste não suja a pasta real do repositório', () => {
   const realDir = path.join(ROOT, 'dados', 'src', 'plaq');
   ok(fs.existsSync(path.join(realDir, '.gitkeep')), 'a pasta tem .gitkeep (existe no repositório)');
-  // O teste NÃO pode deixar mídia na pasta real: é o repositório do dono.
-  const sujeira = fs.readdirSync(realDir).filter((f) => f !== '.gitkeep');
-  ok(sujeira.length === 0, `a pasta real ficou limpa (encontrado: ${sujeira.join(', ') || 'nada'})`);
+  // O teste roda com PLAQ_PATH apontando para um tmp, então NÃO pode ter
+  // acrescentado arquivo aqui. A pasta pode (e deve) conter as mídias reais do
+  // dono — o que se mede é que o teste não escreveu no repositório.
+  const depois = fs.readdirSync(realDir).sort();
+  ok(JSON.stringify(depois) === JSON.stringify(PASTA_REAL_ANTES),
+    `a pasta real ficou igual ao início (antes: ${PASTA_REAL_ANTES.join(',')} | depois: ${depois.join(',')})`);
 });
 
 // ============================================================================
