@@ -80,6 +80,10 @@ if (typeof handleMessage !== 'function') throw new Error('index.js não exporta 
 const { getGroupAntiBotConfig } = await import(
   new URL('../dados/src/utils/antibot/config.js', import.meta.url).href
 );
+const {
+  getEngine: getEngineForTest,
+  buildStatusText
+} = await import(new URL('../dados/src/utils/antibot/manager.js', import.meta.url).href);
 
 const BOT_JID = '5599999999999@s.whatsapp.net';
 const BOT_LID = '111111111111111@lid';
@@ -387,6 +391,56 @@ await test('blockPv inclui antibot no menuadm', async () => {
 await test('o núcleo do AntiBot está disponível na fork instalada', async () => {
   const mod = await import(new URL('../dados/src/utils/antibot/config.js', import.meta.url).href);
   ok(mod.isCoreAvailable(), `núcleo disponível (erro: ${mod.getCoreError() || 'nenhum'})`);
+});
+
+// ============================================================================
+// 4) O RELATO: "usei o outro bot e só disse 1 usuário analisado"
+// ============================================================================
+
+await test('outro bot no grupo É contado e analisado (regressão do relato)', async () => {
+  const { groupJid, people, participants } = setup(3, { antibot: { enabled: true, mode: 'observe' } });
+  const [, outroBot] = people;
+  const sent = [];
+
+  // O outro bot manda comandos no grupo. O engine deve contar E analisar.
+  for (let i = 0; i < 30; i++) {
+    await run({
+      groupJid,
+      sender: outroBot,
+      text: `!comando${i}`,
+      participants,
+      sent,
+    });
+  }
+  const engine = getEngineForTest(groupJid, readGroup(groupJid));
+  ok(engine, 'engine do grupo existe (AntiBot ligado)');
+  const stats = engine.stats(groupJid);
+  ok(stats.analyzed >= 1, `o outro bot foi contado como analisado (analyzed=${stats.analyzed})`);
+
+  // E a análise TEM de ter encontrado algo, senão o painel mente.
+  const suspeitos = (stats.OBSERVING || 0) + (stats.SUSPICIOUS || 0)
+    + (stats.HIGH_RISK || 0) + (stats.CONFIRMED || 0);
+  ok(suspeitos >= 1,
+    `o outro bot aparece na análise, não zerado (stats=${JSON.stringify(stats)})`);
+
+  // E a lista mostra ele.
+  const lista = engine.listChat(groupJid);
+  ok(lista.length >= 1, `a lista mostra o outro bot (${lista.length})`);
+});
+
+await test('o painel NÃO mente em observe: mostra a banda da análise', async () => {
+  const { groupJid, people, participants } = setup(3, { antibot: { enabled: true, mode: 'observe' } });
+  const [, outroBot] = people;
+  for (let i = 0; i < 30; i++) {
+    await run({ groupJid, sender: outroBot, text: `!x${i}`, participants });
+  }
+  const engine = getEngineForTest(groupJid, readGroup(groupJid));
+  const texto = buildStatusText(groupJid, readGroup(groupJid), engine.stats(groupJid));
+  // Em observe NADA é escalado; ainda assim o painel precisa revelar a análise.
+  includes(texto, 'Participantes analisados', 'painel mostra o total analisado');
+  ok(!/Em observação: 0\n┃ ⚠️ Suspeitos: 0\n┃ 🚨 Alto risco: 0\n┃ ✅ Confirmados: 0/.test(texto)
+    || /Em observação: [1-9]|Suspeitos: [1-9]|Alto risco: [1-9]|Confirmados: [1-9]/.test(texto),
+    'as contagens não ficam todas zeradas em observe');
 });
 
 // ============================================================================

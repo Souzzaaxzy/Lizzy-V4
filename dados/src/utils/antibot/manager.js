@@ -113,7 +113,7 @@ export const buildStatusText = (groupJid, groupData, stats) => {
     `┃ ⚙️ ${disponivel ? (cfg.enabled ? 'Ativo' : 'Desligado') : 'Indisponível'}`,
     `┃ 🛡️ Modo: ${modo}`,
     '┃',
-    `┃ 📊 Participantes analisados: ${stats?.total ?? 0}`,
+    `┃ 📊 Participantes analisados: ${stats?.analyzed ?? stats?.total ?? 0}`,
     `┃ 👀 Em observação: ${stats?.OBSERVING ?? 0}`,
     `┃ ⚠️ Suspeitos: ${stats?.SUSPICIOUS ?? 0}`,
     `┃ 🚨 Alto risco: ${stats?.HIGH_RISK ?? 0}`,
@@ -127,6 +127,15 @@ export const buildStatusText = (groupJid, groupData, stats) => {
   ];
   if (!disponivel) {
     linhas.splice(linhas.length - 1, 0, '┃', '┃ ⚠️ A fork instalada não expõe o núcleo do AntiBot.');
+  } else if (!cfg.enabled) {
+    linhas.splice(linhas.length - 1, 0, '┃', '┃ ℹ️ Use o comando de ativação para começar a analisar.');
+  } else if ((stats?.analyzed ?? stats?.total ?? 0) <= 1) {
+    // Sem este aviso, "1 analisado" parece defeito quando é o comportamento
+    // correto: só conta quem falou DESDE que o AntiBot ligou.
+    linhas.splice(linhas.length - 1, 0,
+      '┃',
+      '┃ ℹ️ Conta quem falou desde que o AntiBot ligou.',
+      '┃    Mande mensagem de outra conta no grupo para ela aparecer.');
   }
   return linhas.join('\n');
 };

@@ -4291,6 +4291,49 @@ núcleo. O padrão é **desligado**, e ao ligar o modo é `observe`.
   24, `pg-commands` 4, `rajar2/3/4`, `statusgrupo` (ffmpeg ausente).
 - `node --check` em tudo + **boot do bot OK**.
 
+### CALIBRAÇÃO — 3 correções após o relato "não detectou nada" ✅
+O dono relatou: *"ativei o antibot, usei outro bot no grupo e não detectou nada,
+só disse que tinha 1 usuário analisado"*. Reproduzi e eram **três** causas
+distintas, todas medidas:
+
+**1. Escala quebrada (a principal).** O teto por categoria era **12** e a banda
+de confirmação **65** — o comportamento sozinho NUNCA chegava lá. Pior: o
+`ConfidenceEngine` exigia **3** categorias distintas, e observação passiva não
+reúne três classes independentes. Por construção, o sistema **nunca confirmava nada**. Recalibrado a partir da curva desejada (comportamento pode ser
+SUSPICIOUS, nunca actionable sozinho; ritmo sustentado confirma):
+cap **34** (acima de `suspicious` 30, abaixo de `highRisk` 50), bandas
+**15/30/50/65**, `minCategoriesForConfirm` **2**, tiers de persistência
+**14 / 22 / 40**.
+
+**2. Rajada instantânea pontuava MENOS que ritmo espaçado (furo real).** 30
+mensagens no **mesmo milissegundo** davam **NORMAL 14**; as mesmas 30 a 1s de
+intervalo davam **32 SUSPICIOUS**. Causa: com média 0 e variância 0, o guard de
+"variância baixa" (que existe para pegar pacing de máquina) não sabia distinguir
+*pacing* de **ausência de pacing**. Nova evidência **`burst_density`** (behavior,
+STRONG, 18): maior densidade numa janela deslizante de 2s, teto 8 (4 msg/s
+sustentados é impossível de digitar). E `regular_intervals` passou a exigir média
+≥ 20ms — ou seja, exige que **exista** pacing. Resultado: rajada instantânea
+14 → **32 SUSPICIOUS**, com `burst_density` no relatório.
+
+**3. Painel zerado.** `stats()` contava a banda **efetiva** — e em `log`/`observe`
+todo mundo é rebaixado a NORMAL, então as contagens apareciam **zeradas**
+justamente no modo em que se quer ver evidência ("não detectou nada" era, em
+parte, o painel escondendo a análise). Agora o painel usa a banda **RAW** da
+análise, e o comando avisa que conta quem falou **desde que o AntiBot ligou**.
+
+### A curva medida (o que esperar)
+| cenário | resultado |
+|---|---|
+| 40 msgs, 1 janela, gap 1s | SUSPICIOUS 32 — **não age** |
+| 120 msgs, 3 janelas | HIGH_RISK 54 |
+| 150 msgs, 5 janelas | **CONFIRMED 72 — age** |
+| 30 msgs no mesmo ms | SUSPICIOUS 32 (`burst_density`) |
+| 20 msgs a cada 30s | NORMAL 0 |
+| humano *bursty* (300ms–15s) | NORMAL 0 |
+
+Sustentação **+** pacing é o que confirma; uma janela nunca age, por mais
+intensa que seja.
+
 ### Limitações honestas
 - É heurística: precisa de janelas; participante novo não é julgado
   (`minSamplesForAnalysis`).
@@ -4298,6 +4341,6 @@ núcleo. O padrão é **desligado**, e ao ligar o modo é `observe`.
   aceitável pelo requisito de precisão.
 - A correlação stanza↔mensagem é **um nível** (chave chat+autor, não id de
   mensagem): cobre o caso real sem crescer memória.
-- Os limiares foram calibrados no **corpus de teste**, não em campo; são
+- Os limiares foram calibrados em **curva medida**, não em campo; são
   configuráveis por grupo (`groupData.antibot.thresholds`).
 - O botão de ação só existe no modo `active`; o padrão nunca age.
