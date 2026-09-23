@@ -4215,7 +4215,7 @@ do dono. As caixas de **largura fixa** também ficaram no estilo antigo: o layou
 novo não tem borda direita, então converter só topo/rodapé desalinharia.
 
 
-## MENU 18 (`!menu18`) + PLAQUINHAS (`!plaq1`..`!plaq10`) ✅
+## MENU 18 (`!menu18`, +18) + PLAQUINHAS (`!plaq1`..`!plaq10`) ✅
 Pedido do dono: um menu novo chamado `!menu18`, na categoria **COMUNIDADE** do
 menu principal, com a mesma interface dos outros (layout, gif, estilo), tendo a
 primeira categoria chamada **PLAQUINHA**, e 10 comandos `!plaq1`..`!plaq10` cuja
@@ -4228,9 +4228,14 @@ mídia é um arquivo solto numa pasta nova em `src` (`plaq/`).
 | `dados/src/funcs/utils/plaq.js` | resolvedor da mídia (novo) |
 | `dados/src/plaq/` | a pasta das mídias (com `.gitkeep`) |
 | `dados/src/menus/index.js` | registro `menu18: './menu18.js'` |
-| `dados/src/menus/menu.js` | `menu18` na categoria COMUNIDADE |
+| `dados/src/menus/menu.js` | `[🔞 menu18]` na categoria COMUNIDADE |
 | `dados/src/utils/blockPv.js` | entrada do menu + `menuCommandsMap.menu18` |
 | `tests/menu18-plaquinha.test.js` | 14 testes / 50 asserções |
+
+### É um menu +18
+Usa o **mesmo emoji que o resto do bot usa para conteúdo +18** (`🔞`, como na
+categoria "INTERAÇÕES PICANTES" do `menubn`). A primeira versão usava `🩻`
+(raio-X) — símbolo inventado, que não comunicava nada; foi trocado.
 
 ### A mídia é o arquivo na pasta (sem comando, sem JSON)
 Igual ao `gifsbn`: **basta colocar `dados/src/plaq/plaq1.png`** e o `!plaq1` usa

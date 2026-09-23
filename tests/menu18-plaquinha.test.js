@@ -225,6 +225,15 @@ await test('!menu18 responde e usa o layout dos outros menus', async () => {
   includes(out.text, '!plaq10', 'lista o plaq10');
 });
 
+await test('menu +18 usa o emoji de +18 (e não um símbolo inventado)', async () => {
+  const { groupJid, people, participants } = setup(2);
+  const out = await run({ groupJid, sender: people[0], text: '!menu18', participants });
+  // O bot já usa 🔞 para conteúdo +18 (categoria "INTERAÇÕES PICANTES" do
+  // menubn). O menu18 é +18, então segue a MESMA convenção.
+  includes(out.text, '🔞', 'usa o emoji +18 do bot');
+  ok(!out.text.includes('🩻'), 'não usa mais o símbolo de raio-X');
+});
+
 await test('aliases do menu funcionam', async () => {
   const { groupJid, people, participants } = setup(2);
   for (const cmd of ['!menuplaquinha', '!menuplaquinhas']) {

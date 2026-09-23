@@ -1,6 +1,10 @@
 /**
  * Menu 18 — PLAQUINHAS (`!plaq1`..`!plaq10`).
  *
+ * Menu de conteúdo **+18**, então usa o mesmo emoji que o resto do bot usa para
+ * esse tipo de conteúdo (`🔞`, como na categoria "INTERAÇÕES PICANTES" do
+ * `menubn`) — nada de símbolo inventado que não comunica nada.
+ *
  * Mesmo layout dos outros menus (cabeçalho `꧁༺ ✦ ༻꧂`, categoria com
  * `boldItalic`), e a mesma convenção de mídia: quem envia é o
  * `sendMenuWithMedia`, então o gif/foto/vídeo do menu é o do grupo/global
@@ -22,11 +26,11 @@ export default async function menu18(prefix, botName = 'MeuBot', userName = 'Usu
 
   return `╭━━━꧁༺ ✦ ${botName} ✦ ༻꧂━━━╮
 ┃ 𖤐 𝐎𝐥á, @${userName}
-┃ 🩻 Plaquinhas prontas pra zoar
+┃ 🔞 Plaquinhas +18
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━━━╯
 
 
-╭━━━꧁༺ ㅤ🩻 ${boldItalic('PLAQUINHA')} 🩻ㅤ ༻꧂━━━╮
+╭━━━꧁༺ ㅤ🔞 ${boldItalic('PLAQUINHA')} 🔞ㅤ ༻꧂━━━╮
 ${linhas.join('\n')}
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 

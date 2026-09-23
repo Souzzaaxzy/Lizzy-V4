@@ -22197,7 +22197,7 @@ Precisa de ajuda? Entre em contato:
         }
         break;
       // ═══════════════════════════════════════════════════════════════
-      // 🩻 !plaq1 .. !plaq10 — plaquinhas (mídia solta em dados/src/plaq/)
+      // 🔞 !plaq1 .. !plaq10 — plaquinhas +18 (mídia solta em dados/src/plaq/)
       // ═══════════════════════════════════════════════════════════════
       // Cada comando envia o arquivo que estiver em `plaq/<comando>.<ext>`
       // (ex.: `plaq/plaq1.png`). Sem arquivo, avisa em vez de mandar nada.
