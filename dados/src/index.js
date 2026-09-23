@@ -37659,7 +37659,7 @@ case 'eununca':
       from,
       {
         poll: {
-          name: `🌶️ EU NUNCA\n\n${pergunta}`,
+          name: `🙈 EU NUNCA\n\n${pergunta}`,
           values: [
             'Eu nunca',
             'Eu já'

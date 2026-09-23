@@ -4432,8 +4432,16 @@ exigir que o dono reescrevesse o texto que ele mesmo mandou.
 O pedido era *"trocar o 🔞 do comando `!eununca`"*, e eu tinha entendido que era o
 **menu18** — troquei o lugar errado e depois reverti.
 
-- **`!eununca`**: o título da enquete passou de `🔞 EU NUNCA` para **`🌶️ EU NUNCA`**.
-  As duas opções (`Eu nunca` / `Eu já`) e o resto do comando não mudaram.
+- **`!eununca`**: o título da enquete passou de `🔞 EU NUNCA` para **`🙈 EU NUNCA`**
+  (macaco que tapa os olhos — o gesto de "não quero ver / não acredito", que é o
+  tom do jogo). Houve uma parada intermediária no 🌶️, trocada porque **não
+  combinava**: depois de o dono substituir as frases, o conteúdo deixou de ser
+  picante e virou confissão sobre sentimentos, memória e amizade — o 🌶️ passou a
+  mentir sobre o conteúdo. As duas opções (`Eu nunca` / `Eu já`) e o resto do
+  comando não mudaram.
+  **Por que o 🙈**: combina com CONFESSAR (o jogo é admitir o que fez), é
+  amigável, e não estava em uso em nenhum menu (conferido por grep; o 🤔 já
+  é do `!vab`).
 - **`menu18`**: voltou ao `🔞` (como estava). O teste dele continua exigindo esse
   emoji e recusando o antigo 🦻 (raio-X), que era o símbolo inventado sem sentido.
 
