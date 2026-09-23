@@ -5644,7 +5644,8 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
                 if (relResponse.success && relResponse.message) {
                   await nazu.sendMessage(from, {
                     text: relResponse.message,
-                    mentions: relResponse.mentions || []
+                    mentions: relResponse.mentions || [],
+                    contextInfo: gerarContextNewsletter()
                   });
                 }
               }
@@ -5656,7 +5657,8 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
                 if (groupResponse?.success && groupResponse?.message) {
                   await nazu.sendMessage(from, {
                     text: groupResponse.message,
-                    mentions: groupResponse.mentions || []
+                    mentions: groupResponse.mentions || [],
+                    contextInfo: gerarContextNewsletter()
                   });
                 }
               }
@@ -5668,7 +5670,8 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
                   if (betrayalResponse.success && betrayalResponse.message) {
                     await nazu.sendMessage(from, {
                       text: betrayalResponse.message,
-                      mentions: betrayalResponse.mentions || []
+                      mentions: betrayalResponse.mentions || [],
+                      contextInfo: gerarContextNewsletter()
                     });
                   }
                 }
@@ -36608,7 +36611,8 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
           if (requestResult.mentions && requestResult.mentions.length > 0) {
             await nazu.sendMessage(from, {
               text: requestResult.message,
-              mentions: requestResult.mentions
+              mentions: requestResult.mentions,
+              contextInfo: gerarContextNewsletter()
             }, { quoted: info });
           } else {
             await reply(requestResult.message);
@@ -36617,7 +36621,8 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
         }
         await nazu.sendMessage(from, {
           text: requestResult.message,
-          mentions: requestResult.mentions || [sender, menc_os2]
+          mentions: requestResult.mentions || [sender, menc_os2],
+          contextInfo: gerarContextNewsletter()
         });
         break;
       }
@@ -36644,7 +36649,8 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
           if (requestResult.mentions && requestResult.mentions.length > 0) {
             await nazu.sendMessage(from, {
               text: requestResult.message,
-              mentions: requestResult.mentions
+              mentions: requestResult.mentions,
+              contextInfo: gerarContextNewsletter(),
             }, { quoted: info });
           } else {
             await reply(requestResult.message);
@@ -36653,7 +36659,8 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
         }
         await nazu.sendMessage(from, {
           text: requestResult.message,
-          mentions: requestResult.mentions || [sender, menc_os2]
+          mentions: requestResult.mentions || [sender, menc_os2],
+          contextInfo: gerarContextNewsletter(),
         });
         break;
       }
@@ -36680,7 +36687,8 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
           if (requestResult.mentions && requestResult.mentions.length > 0) {
             await nazu.sendMessage(from, {
               text: requestResult.message,
-              mentions: requestResult.mentions
+              mentions: requestResult.mentions,
+              contextInfo: gerarContextNewsletter(),
             }, { quoted: info });
           } else {
             await reply(requestResult.message);
@@ -36689,7 +36697,8 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
         }
         await nazu.sendMessage(from, {
           text: requestResult.message,
-          mentions: requestResult.mentions || [sender, menc_os2]
+          mentions: requestResult.mentions || [sender, menc_os2],
+          contextInfo: gerarContextNewsletter(),
         });
         break;
       }
@@ -36725,7 +36734,8 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
           if (requestResult.mentions && requestResult.mentions.length > 0) {
             await nazu.sendMessage(from, {
               text: requestResult.message,
-              mentions: requestResult.mentions
+              mentions: requestResult.mentions,
+              contextInfo: gerarContextNewsletter(),
             }, { quoted: info });
           } else {
             await reply(requestResult.message);
@@ -36734,7 +36744,8 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
         }
         await nazu.sendMessage(from, {
           text: requestResult.message,
-          mentions: requestResult.mentions
+          mentions: requestResult.mentions,
+          contextInfo: gerarContextNewsletter(),
         });
         break;
       }
@@ -36770,7 +36781,8 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
           if (requestResult.mentions && requestResult.mentions.length > 0) {
             await nazu.sendMessage(from, {
               text: requestResult.message,
-              mentions: requestResult.mentions
+              mentions: requestResult.mentions,
+              contextInfo: gerarContextNewsletter(),
             }, { quoted: info });
           } else {
             await reply(requestResult.message);
@@ -36779,7 +36791,8 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
         }
         await nazu.sendMessage(from, {
           text: requestResult.message,
-          mentions: requestResult.mentions
+          mentions: requestResult.mentions,
+          contextInfo: gerarContextNewsletter(),
         });
         break;
       }
@@ -36838,7 +36851,8 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
           }
           await nazu.sendMessage(from, {
             text: summary.message,
-            mentions: summary.mentions || [sender]
+            mentions: summary.mentions || [sender],
+            contextInfo: gerarContextNewsletter(),
           }, { quoted: info });
           break;
         }
@@ -36862,7 +36876,8 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
         }
         await nazu.sendMessage(from, {
           text: summary.message,
-          mentions: summary.mentions || [userOne, userTwo]
+          mentions: summary.mentions || [userOne, userTwo],
+          contextInfo: gerarContextNewsletter(),
         }, { quoted: info });
         break;
       }

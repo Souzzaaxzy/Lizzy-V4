@@ -4003,3 +4003,83 @@ desenha **cards diferentes** — não existe payload que funda as duas numa. O q
 dá para fazer (e foi feito) é **aproximar ao máximo**: mesmo cabeçalho de canal,
 mesma ausência de citação e **adjacência imediata**. Se ainda aparecer um vão
 visual entre os dois no aparelho, o limite é do cliente, não do payload.
+
+## RELACIONAMENTOS — layout novo (`꧁༺ ✦ ༻꧂`) + newsletter (set/2026) ✅
+Pedido do dono: aplicar o layout dos menus nas **três** mensagens do fluxo de
+relacionamento — pedido, aceitação ("sim") e status — e dar **cabeçalho de canal
+(newsletter)** nos três.
+
+### Onde vive o desenho
+`dados/src/funcs/utils/relationships.js` ganhou `TOPO_REL(emoji, titulo)` e
+`FECHO_REL(botName)` no topo do módulo, usando o **`bold()` do `menus/layout.js`**
+— a mesma fonte única de bold dos menus (nada de duplicar a tabela de code
+points). O nome do bot vem de `nomeDoBot()` (lê `config.json` pelo `CONFIG_FILE`
+de `utils/paths.js`, com fallback `'Bot'`).
+
+### Formatos (fiéis ao sample do dono)
+```
+pedido        ╭━━━꧁༺ 💞 𝐏𝐄𝐃𝐈𝐃𝐎 𝐃𝐄 𝐍𝐀𝐌𝐎𝐑𝐎 ༻꧂━━━╮
+              ┃ 💞 @quem 𝐜𝐨𝐧𝐯𝐢𝐝𝐨𝐮 @alvo
+              ┃    𝐩𝐚𝐫𝐚 𝐮𝐦 𝐧𝐚𝐦𝐨𝐫𝐨!
+              ┃
+              ┃ ✅ 𝐀𝐜𝐞𝐢𝐭𝐚𝐫: "sim"
+              ┃ ❌ 𝐑𝐞𝐜𝐮𝐬𝐚𝐫: "não"
+              ┃ ⏳ 𝐄𝐱𝐩𝐢𝐫𝐚 𝐞𝐦 𝟓𝐦.
+              ╰━━━꧁༺ ✦ 𝐋𝐢𝐳𝐳𝐲 𝐝𝐨 𝐩𝐫𝐢𝐯𝐲 ✦ ༻꧂━━━╯
+
+aceitação     ╭━━━꧁༺ 💞 𝐏𝐄𝐃𝐈𝐃𝐎 𝐀𝐂𝐄𝐈𝐓𝐎 ༻꧂━━━╮
+              ┃ 💞 @a 𝐞 @b
+              ┃    𝐚𝐠𝐨𝐫𝐚 𝐞𝐬𝐭ã𝐨 𝐧𝐚𝐦𝐨𝐫𝐚𝐧𝐝𝐨!
+              ┃ 🗓️ 𝐈𝐧í𝐜𝐢𝐨: <data>
+              ╰━━━꧁༺ ✦ <bot> ✦ ༻꧂━━━╯
+
+status        ╭━━━꧁༺ 💞 𝐑𝐄𝐋𝐀𝐂𝐈𝐎𝐍𝐀𝐌𝐄𝐍𝐓𝐎 ༻꧂━━━╮
+              ┃ 👥 𝐏𝐚𝐫𝐜𝐞𝐢𝐫𝐨𝐬: @a & @b
+              ┃ 💞 𝐒𝐭𝐚𝐭𝐮𝐬: 𝐍𝐚𝐦𝐨𝐫𝐨
+              ┃ 🗓️ 𝐃𝐞𝐬𝐝𝐞: <data> (<tempo>)
+              ┃
+              ┃ 📚 𝐇𝐢𝐬𝐭ó𝐫𝐢𝐜𝐨:
+              ┃ 🎈 𝐅𝐢𝐜𝐚𝐧𝐭𝐞: <data> (<tempo>)
+              ┃
+              ┃ ⏳ 𝐂𝐚𝐬𝐚𝐦𝐞𝐧𝐭𝐨: <tempo_restante>
+              ╰━━━꧁༺ ✦ <bot> ✦ ༻꧂━━━╯
+```
+
+### Regras que o layout segue
+- **Título e rótulos em MATHEMATICAL BOLD** (`bold()`); **menções `@numero` ficam
+  plain** (bold em número atrapalharia a leitura e não é o desenho pedido).
+- O **rodapé** é `╰━━━꧁༺ ✦ <nomebot> ✦ ༻꧂━━━╯` nas **três** mensagens.
+- Só o **cabeçalho** carrega o emoji do tipo antes do título.
+
+### Mesma família migrada (consistência)
+Como o mesmo comando produz várias mensagens, todas foram para o layout — senão o
+fluxo ficaria meio migrado: **pedido de grupo** (trisal/quadrisal), **aceite
+parcial** ("Ainda aguardando" + progresso), **recusa 1-1**, **cancelamento de
+grupo**, **formado**, **encerrado** e **expirado**.
+
+### Newsletter
+Nos **envios** (`index.js`), `contextInfo: gerarContextNewsletter()` foi
+adicionado dentro do **content** (não nas options — a fork lê
+`message.contextInfo`) em: pedido 1-1 (`ficante`/`namoro`/`casamento`), pedido de
+grupo (`trisal`/`quadrisal`), **respostas de aceite/recusa** (o caminho que
+produz a mensagem de aceitação) e **status** (`!relacionamento`).
+
+### Testes — `relationships-multi` 16 → **18 testes / 79 asserções**
+Os helpers `includes`/`notIncludes` ganharam `desbold()`, que converte o bold
+Unicode para ASCII **antes** de comparar — sem ele a asserção falharia mesmo com
+a mensagem certa (mede o conteúdo, não o code point). Novas seções:
+- **layout**: as três mensagens abrem com `╭━━━꧁༺` e fecham com `✦ ༻꧂━━━╯`,
+  o cabeçalho tem bold Unicode de verdade e não tem asterisco de markdown;
+- **newsletter**: as três mensagens levam
+  `forwardedNewsletterMessageInfo.newsletterJid` + `isForwarded`, e o texto não
+  vaza o contexto.
+Regressões verdes: `menu-layout` 25/250, `midiaprefix` 26/83, `me-profile` 44/0,
+`get-message-inspector` 54/269, `cmd-suggest` 21/68, `testcall` 35/127,
+`viewonce-v2` 18/77, `delete-status` 11/55, `anti-seletiva` 32/0,
+`antifantasma-classificacao` 18/18. `node --check` OK.
+
+### Armadilha
+Editar `relationships.js` com `file_editor` sobre linhas com template string
+funciona, mas o preview de `grep`/`sed` no terminal pode exibir **mojibake** mesmo
+com o arquivo íntegro — a checagem válida é `node --check` +
+`b.decode('utf-8')`.

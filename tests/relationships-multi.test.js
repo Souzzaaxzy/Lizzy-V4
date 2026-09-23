@@ -66,12 +66,34 @@ function ok(condition, message) {
   }
 }
 
+/**
+ * Normaliza o MATHEMATICAL BOLD/ITALIC do layout para ASCII.
+ *
+ * Os títulos e rótulos passaram a sair em bold Unicode (`𝐏𝐄𝐃𝐈𝐃𝐎`), então
+ * comparar com texto ASCII direto falharia mesmo com a mensagem correta. Aqui
+ * a comparação mede o CONTEÚDO (o texto que o usuário lê), não o code point.
+ */
+function desbold(text) {
+  if (typeof text !== 'string') return text;
+  let out = '';
+  for (const ch of text) {
+    const cp = ch.codePointAt(0);
+    if (cp >= 0x1d400 && cp <= 0x1d419) out += String.fromCharCode(65 + (cp - 0x1d400));
+    else if (cp >= 0x1d41a && cp <= 0x1d433) out += String.fromCharCode(97 + (cp - 0x1d41a));
+    else if (cp >= 0x1d468 && cp <= 0x1d481) out += String.fromCharCode(65 + (cp - 0x1d468));
+    else if (cp >= 0x1d482 && cp <= 0x1d49b) out += String.fromCharCode(97 + (cp - 0x1d482));
+    else if (cp >= 0x1d7ce && cp <= 0x1d7e7) out += String.fromCharCode(48 + (cp - 0x1d7ce));
+    else out += ch;
+  }
+  return out;
+}
+
 function includes(haystack, needle, label) {
-  ok(typeof haystack === 'string' && haystack.includes(needle), `${label ?? needle} — esperado conter "${needle}"`);
+  ok(typeof haystack === 'string' && desbold(haystack).includes(needle), `${label ?? needle} — esperado conter "${needle}"`);
 }
 
 function notIncludes(haystack, needle, label) {
-  ok(typeof haystack === 'string' && !haystack.includes(needle), `${label ?? needle} — não deveria conter "${needle}"`);
+  ok(typeof haystack === 'string' && !desbold(haystack).includes(needle), `${label ?? needle} — não deveria conter "${needle}"`);
 }
 
 // ============================================================================
@@ -490,6 +512,59 @@ await test('1-1 (!casar/!namorar): fluxo e exibição preservados', async () => 
   const ap = relationshipManager.getActivePairForUser(a.lid, groupJid);
   ok(ap?.partnerId === b.lid, `partnerId é o parceiro (obtido ${ap?.partnerId})`);
   ok(ap?.allPartners === undefined, '1-1 não expõe allPartners');
+});
+
+// ============================================================================
+// 7) LAYOUT NOVO + NEWSLETTER (set/2026)
+// ============================================================================
+
+await test('layout: pedido/aceitação/status usam a caixa ꧁༺ ✦ ༻꧂', async () => {
+  const { groupJid, people, participants } = setup(2);
+  const [a, b] = people;
+
+  const invite = await run({ groupJid, sender: a, text: '!namorar', mentions: [b], participants });
+  includes(invite, '╭━━━꧁༺', 'pedido abre a caixa');
+  includes(invite, '╰━━━꧁༺ ✦', 'pedido fecha a caixa com o nome do bot');
+  includes(invite, '✦ ༻꧂━━━╯', 'pedido tem o fecho completo');
+
+  const accepted = await run({ groupJid, sender: b, text: 'sim', participants });
+  includes(accepted, '╭━━━꧁༺', 'aceitação abre a caixa');
+  includes(accepted, '✦ ༻꧂━━━╯', 'aceitação fecha a caixa');
+
+  const status = await run({ groupJid, sender: a, text: '!relacionamento', participants });
+  includes(status, '╭━━━꧁༺', 'status abre a caixa');
+  includes(status, '✦ ༻꧂━━━╯', 'status fecha a caixa');
+  // Títulos em bold Unicode de verdade (MATHEMATICAL BOLD), não texto cru.
+  ok(/[\u{1D400}-\u{1D433}]/u.test(invite), 'título do pedido em bold Unicode');
+  ok(/[\u{1D400}-\u{1D433}]/u.test(status), 'título do status em bold Unicode');
+  // Nunca sobra marcador de markdown antigo no cabeçalho.
+  notIncludes(invite.split('\n')[0], '*', 'cabeçalho sem asteriscos');
+});
+
+await test('newsletter: pedido, aceitação e status levam o cabeçalho de canal', async () => {
+  const { groupJid, people, participants } = setup(2);
+  const [a, b] = people;
+
+  const sent = [];
+  await run({ groupJid, sender: a, text: '!namorar', mentions: [b], participants, sent });
+  await run({ groupJid, sender: b, text: 'sim', participants, sent });
+  await run({ groupJid, sender: a, text: '!relacionamento', participants, sent });
+
+  // Só as mensagens com texto do relacionamento (as demais não têm contextInfo).
+  const comCtx = sent.filter((s) => s.content?.text && s.content?.contextInfo);
+  ok(comCtx.length >= 3, `3 mensagens com contextInfo (obtido ${comCtx.length})`);
+
+  for (const s of comCtx) {
+    const info = s.content.contextInfo;
+    ok(info?.forwardedNewsletterMessageInfo?.newsletterJid === '120363410980452460@newsletter',
+      `newsletter presente (${s.content.text.slice(0, 20)}...)`);
+    ok(info.isForwarded === true, 'marcado como encaminhado do canal');
+  }
+
+  // E o corpo do newsletter não aparece no texto.
+  for (const s of comCtx) {
+    notIncludes(s.content.text, 'newsletterJid', 'texto sem vazar o contexto');
+  }
 });
 
 // ============================================================================

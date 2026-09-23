@@ -1,8 +1,29 @@
 import { loadRelationships, saveRelationships } from '../../utils/database.js';
-import { getUserName, normalizar } from '../../utils/helpers.js';
+import { getUserName, normalizar, loadJsonFile } from '../../utils/helpers.js';
+import { CONFIG_FILE } from '../../utils/paths.js';
+import { bold } from '../../menus/layout.js';
 
 const REQUEST_TIMEOUT_MS = 5 * 60 * 1000;
 const MARRIAGE_REQUIRED_MS = 48 * 60 * 60 * 1000;
+
+/**
+ * Caixas do layout `꧁༺ ✦ ༻꧂` usadas pelas mensagens de relacionamento.
+ *
+ * O desenho é o mesmo dos menus: título e rótulos em MATHEMATICAL BOLD
+ * (`bold()`), cabeçalho com o emoji do tipo e rodapé com o nome do bot.
+ */
+const TOPO_REL = (emoji, titulo) => `╭━━━꧁༺ ${emoji} ${bold(titulo)} ༻꧂━━━╮`;
+const FECHO_REL = (botName) => `╰━━━꧁༺ ✦ ${botName} ✦ ༻꧂━━━╯`;
+
+/** Nome do bot lido do config (o rodapé é sempre o mesmo nos três layouts). */
+function nomeDoBot() {
+  try {
+    const config = loadJsonFile(CONFIG_FILE, {});
+    return config?.nomebot || 'Bot';
+  } catch {
+    return 'Bot';
+  }
+}
 
 const STATUS_ORDER = {
   ficante: 1,
@@ -319,14 +340,17 @@ class RelationshipManager {
     const config = TYPE_CONFIG[request.type];
     const requesterName = getUserName(request.requesterRaw);
     const targetName = getUserName(request.targetRaw);
-    return `${config.emoji} *PEDIDO DE ${config.label.toUpperCase()}*
-
-@${requesterName} convidou @${targetName} para ${config.inviteLabel}!
-
-✅ Aceitar: "sim"
-❌ Recusar: "não"
-
-⏳ Expira em ${this._formatDuration(REQUEST_TIMEOUT_MS)}.`;
+    const botName = nomeDoBot();
+    return [
+      TOPO_REL(config.emoji, `PEDIDO DE ${config.label.toUpperCase()}`),
+      `┃ ${config.emoji} @${requesterName} ${bold('convidou')} @${targetName}`,
+      `┃    ${bold(`para ${config.inviteLabel}!`)}`,
+      '┃',
+      `┃ ✅ ${bold('Aceitar')}: "sim"`,
+      `┃ ❌ ${bold('Recusar')}: "não"`,
+      `┃ ⏳ ${bold(`Expira em ${this._formatDuration(REQUEST_TIMEOUT_MS)}.`)}`,
+      FECHO_REL(botName),
+    ].join('\n');
   }
 
   async processResponse(groupId, responderId, rawResponse) {
@@ -355,9 +379,12 @@ class RelationshipManager {
       const targetName = getUserName(pending.targetRaw);
       return {
         success: true,
-        message: `${config.emoji} Pedido de ${config.label.toLowerCase()} recusado.
-
-@${targetName} não aceitou o pedido de @${requesterName}.`,
+        message: [
+          TOPO_REL(config.emoji, 'PEDIDO RECUSADO'),
+          `┃ ${config.emoji} @${targetName} ${bold('recusou')}`,
+          `┃    ${bold('o pedido de')} @${requesterName}`,
+          FECHO_REL(nomeDoBot()),
+        ].join('\n'),
         mentions: [pending.requesterRaw, pending.targetRaw]
       };
     }
@@ -488,16 +515,13 @@ class RelationshipManager {
     const targetName = getUserName(request.targetRaw);
     const stageInfo = pair.stages?.[request.type];
     const sinceText = stageInfo?.since ? this._formatDate(stageInfo.since) : null;
+    const botName = nomeDoBot();
 
     const lines = [
-      config.successHeadline,
-      '',
-      `${config.emoji} @${requesterName} e @${targetName} ${config.successText}`
+      TOPO_REL(config.emoji, 'PEDIDO ACEITO'),
+      `┃ ${config.emoji} @${requesterName} ${bold('e')} @${targetName}`,
+      `┃    ${bold(config.successText)}`,
     ];
-
-    if (sinceText) {
-      lines.push(`🗓️ Início: ${sinceText}`);
-    }
 
     // Para casamento, mostra quanto tempo namoraram
     if (request.type === 'casamento' && pair.stages?.namoro?.since) {
@@ -505,7 +529,7 @@ class RelationshipManager {
       const casamentoSince = Date.parse(stageInfo.since);
       if (!Number.isNaN(namoroSince) && !Number.isNaN(casamentoSince)) {
         const namoroDuration = casamentoSince - namoroSince;
-        lines.push(`� Tempo de namoro antes do casamento: ${this._formatDuration(namoroDuration)}`);
+        lines.push(`┃ 🗓️ ${bold('Namoro')}: ${this._formatDuration(namoroDuration)}`);
       }
     }
 
@@ -515,10 +539,15 @@ class RelationshipManager {
       const namoroSince = Date.parse(stageInfo.since);
       if (!Number.isNaN(ficanteSince) && !Number.isNaN(namoroSince) && ficanteSince !== namoroSince) {
         const ficanteDuration = namoroSince - ficanteSince;
-        lines.push(`🎈 Tempo de ficante antes do namoro: ${this._formatDuration(ficanteDuration)}`);
+        lines.push(`┃ 🎈 ${bold('Ficante')}: ${this._formatDuration(ficanteDuration)}`);
       }
     }
 
+    if (sinceText) {
+      lines.push(`┃ 🗓️ ${bold('Início')}: ${sinceText}`);
+    }
+
+    lines.push(FECHO_REL(botName));
     return lines.join('\n');
   }
 
@@ -587,24 +616,25 @@ class RelationshipManager {
       .map(u => `@${getUserName(u)}`)
       .join(isMultiple ? ', ' : ' & ');
 
+    const botName = nomeDoBot();
+    const emoji = config?.emoji || '💞';
     const lines = [
-      '💞 *RELACIONAMENTO*',
-      '',
-      `${isMultiple ? '👥 Participantes' : '👥 Parceiros'}: ${nameList}`
+      TOPO_REL(emoji, 'RELACIONAMENTO'),
+      `┃ 👥 ${bold(isMultiple ? 'Participantes' : 'Parceiros')}: ${nameList}`
     ];
 
     if (config) {
-      lines.push(`${config.emoji} Status atual: ${config.label}`);
+      lines.push(`┃ ${config.emoji} ${bold('Status')}: ${bold(config.label)}`);
 
       const statusSince = pair.stages?.[pair.status]?.since;
       if (statusSince) {
         const formatted = this._formatDate(statusSince);
         const sinceTimestamp = Date.parse(statusSince);
         const duration = Number.isNaN(sinceTimestamp) ? null : this._formatDuration(Date.now() - sinceTimestamp);
-        lines.push(`🗓️ Desde: ${formatted || 'data desconhecida'}${duration ? ` (há ${duration})` : ''}`);
+        lines.push(`┃ 🗓️ ${bold('Desde')}: ${formatted || 'data desconhecida'}${duration ? ` (${duration})` : ''}`);
       }
     } else {
-      lines.push('⚠️ Status atual: sem registro válido.');
+      lines.push(`┃ ⚠️ ${bold('Status')}: sem registro válido.`);
     }
 
     // Historico de estagios: so os 1-1 evoluem por ficante/namoro/casamento.
@@ -617,11 +647,11 @@ class RelationshipManager {
         const formatted = this._formatDate(since);
         const sinceTimestamp = Date.parse(since);
         const duration = Number.isNaN(sinceTimestamp) ? null : this._formatDuration(Date.now() - sinceTimestamp);
-        return `${stageConfig.emoji} ${stageConfig.label}: ${formatted || 'data desconhecida'}${duration ? ` (há ${duration})` : ''}`;
+        return `┃ ${stageConfig.emoji} ${bold(stageConfig.label)}: ${formatted || 'data desconhecida'}${duration ? ` (${duration})` : ''}`;
       });
 
     if (historicalStages.length > 0) {
-      lines.push('', '📚 Histórico de Estágios:', ...historicalStages);
+      lines.push('┃', `┃ 📚 ${bold('Histórico')}:`, ...historicalStages);
     }
 
     // Se esta namorando mas nao casado, mostra tempo restante para casar.
@@ -631,12 +661,14 @@ class RelationshipManager {
         const elapsed = Date.now() - namoroSince;
         if (elapsed < MARRIAGE_REQUIRED_MS) {
           const remaining = MARRIAGE_REQUIRED_MS - elapsed;
-          lines.push('', `⏳ Tempo restante para liberar casamento: ${this._formatDuration(remaining)}`);
+          lines.push('┃', `┃ ⏳ ${bold('Casamento')}: ${this._formatDuration(remaining)}`);
         } else {
-          lines.push('', `✅ Já podem se casar! Tempo de namoro: ${this._formatDuration(elapsed)}`);
+          lines.push('┃', `┃ ✅ ${bold('Casamento')}: liberado (${this._formatDuration(elapsed)})`);
         }
       }
     }
+
+    lines.push(FECHO_REL(botName));
 
     return {
       success: true,
@@ -854,10 +886,20 @@ class RelationshipManager {
     const config = TYPE_CONFIG[normalizedType];
     const requesterName = getUserName(requesterId);
     const targetNames = targetIds.map(t => `@${getUserName(t)}`).join(', ');
+    const botName = nomeDoBot();
 
     return {
       success: true,
-      message: `${config.emoji} *PEDIDO DE ${config.label.toUpperCase()}*\n\n${targetNames}, vocês receberam um pedido de ${config.label.toLowerCase()} de @${requesterName}.\n\n📌 Usem os comandos:\n• *sim* - Aceitar\n• *não* - Recusar\n\n⏳ Expira em ${this._formatDuration(REQUEST_TIMEOUT_MS)}.`,
+      message: [
+        TOPO_REL(config.emoji, `PEDIDO DE ${config.label.toUpperCase()}`),
+        `┃ ${config.emoji} ${targetNames}`,
+        `┃    ${bold('convidados por')} @${requesterName}`,
+        '┃',
+        `┃ ✅ ${bold('Aceitar')}: "sim"`,
+        `┃ ❌ ${bold('Recusar')}: "não"`,
+        `┃ ⏳ ${bold(`Expira em ${this._formatDuration(REQUEST_TIMEOUT_MS)}.`)}`,
+        FECHO_REL(botName),
+      ].join('\n'),
       mentions: allParticipants,
       request
     };
@@ -906,7 +948,14 @@ class RelationshipManager {
       return {
         success: true,
         cancelled: true,
-        message: `${config.emoji} *${config.label.toUpperCase()} CANCELADO*\n\n@${rejecterName} recusou o pedido de ${config.label.toLowerCase()} de @${requesterName}.\n\n💔 O ${config.label.toLowerCase()} não foi formado.`,
+        message: [
+          TOPO_REL(config.emoji, `${config.label.toUpperCase()} CANCELADO`),
+          `┃ ${config.emoji} @${rejecterName} ${bold('recusou')}`,
+          `┃    ${bold('o pedido de')} @${requesterName}`,
+          '┃',
+          `┃ 💔 ${bold(`O ${config.label.toLowerCase()} não foi formado.`)}`,
+          FECHO_REL(nomeDoBot()),
+        ].join('\n'),
         mentions: [pending.requesterRaw, responderId]
       };
     }
@@ -929,11 +978,19 @@ class RelationshipManager {
     const remaining = allTargets.filter(t => !pending.acceptedTargets.includes(t));
     const accepted = pending.acceptedTargets.length;
     const total = allTargets.length;
-    const remainingNames = remaining.map(t => `• @${getUserName(t)}`).join('\n');
 
     return {
       success: true,
-      message: `✅ @${getUserName(responderId)} aceitou o pedido de ${config.label.toLowerCase()}.\n\n⏳ Ainda aguardando:\n${remainingNames}\n\n📊 Progresso: ${accepted}/${total} aceitações concluídas.`,
+      message: [
+        TOPO_REL(config.emoji, 'PEDIDO ACEITO'),
+        `┃ ✅ @${getUserName(responderId)} ${bold('aceitou')}`,
+        '┃',
+        `┃ ⏳ ${bold('Ainda aguardando')}:`,
+        ...remaining.map(t => `┃    @${getUserName(t)}`),
+        '┃',
+        `┃ 📊 ${bold(`Progresso: ${accepted}/${total}`)}`,
+        FECHO_REL(nomeDoBot()),
+      ].join('\n'),
       mentions: [responderId, pending.requesterRaw, ...remaining]
     };
   }
@@ -988,7 +1045,13 @@ class RelationshipManager {
     return {
       success: true,
       created: true,
-      message: `${config.emoji} *${config.label.toUpperCase()} FORMADO!*\n\n💞 ${participantNames}\n\n${config.successText} 🎉`,
+      message: [
+        TOPO_REL(config.emoji, `${config.label.toUpperCase()} FORMADO!`),
+        `┃ ${config.emoji} ${participantNames}`,
+        '┃',
+        `┃ 🎉 ${bold(config.successText)}`,
+        FECHO_REL(nomeDoBot()),
+      ].join('\n'),
       mentions: allUsers,
       pair
     };
@@ -1120,7 +1183,14 @@ class RelationshipManager {
 
     return {
       success: true,
-      message: `💔 *${config.label.toUpperCase()} ENCERRADO*\n\n${participantNames}\n\nO ${config.label.toLowerCase()} foi encerrado por @${getUserName(triggeredBy)}.${duration ? `\n\n⏱️ Duração: ${duration}` : ''}`,
+      message: [
+        TOPO_REL(config.emoji, `${config.label.toUpperCase()} ENCERRADO`),
+        `┃ 💔 ${participantNames}`,
+        '┃',
+        `┃ ${bold('encerrado por')} @${getUserName(triggeredBy)}`,
+        ...(duration ? ['┃', `┃ ⏱️ ${bold('Duração')}: ${duration}`] : []),
+        FECHO_REL(nomeDoBot()),
+      ].join('\n'),
       mentions: allUsers
     };
   }
@@ -1143,11 +1213,17 @@ class RelationshipManager {
         const notResponded = allTargets.filter(t => !accepted.includes(t));
         
         if (notResponded.length > 0) {
-          const notRespondedNames = notResponded.map(t => `• @${getUserName(t)}`).join('\n');
           expiredEvents.push({
             groupId,
             type: 'group_expired',
-            message: `⌛ O tempo para aceitar o pedido de ${config.label.toLowerCase()} expirou.\n\n❌ Os seguintes membros não aceitaram a solicitação:\n${notRespondedNames}\n\nSolicitação cancelada.`,
+            message: [
+              TOPO_REL(config.emoji, 'PEDIDO EXPIRADO'),
+              `┃ ⌛ ${bold(`O pedido de ${config.label.toLowerCase()} expirou.`)}`,
+              '┃',
+              `┃ ❌ ${bold('Não aceitaram')}:`,
+              ...notResponded.map(t => `┃    @${getUserName(t)}`),
+              FECHO_REL(nomeDoBot()),
+            ].join('\n'),
             mentions: [request.requesterRaw, ...notResponded]
           });
         }
