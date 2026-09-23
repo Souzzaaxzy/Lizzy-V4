@@ -219,6 +219,10 @@ export const menuCommandMap = {
     'menudono': { key: 'menudono', name: 'Dono' },
     'donomenu': { key: 'menudono', name: 'Dono' },
     'donomenu': { key: 'menudono', name: 'Dono' },
+    // Plaquinhas
+    'menu18': { key: 'menu18', name: 'Plaquinhas' },
+    'menuplaquinha': { key: 'menu18', name: 'Plaquinhas' },
+    'menuplaquinhas': { key: 'menu18', name: 'Plaquinhas' },
     // Figurinhas
     'menufig': { key: 'menufig', name: 'Figurinhas' },
     'menusticker': { key: 'menufig', name: 'Figurinhas' },
@@ -296,6 +300,10 @@ export const menuCommandsMap = {
     menufig: {
         menuName: 'Figurinhas',
         commands: ['sticker', 's', 'f', 'fig', 'sg', 'sf', 'toimg', 'rmbg', 'semfundo', 'attp', 'attp2', 'dado', 'fsticker']
+    },
+    menu18: {
+        menuName: 'Plaquinhas',
+        commands: ['plaq1', 'plaq2', 'plaq3', 'plaq4', 'plaq5', 'plaq6', 'plaq7', 'plaq8', 'plaq9', 'plaq10']
     },
     alteradores: {
         menuName: 'Alteradores',

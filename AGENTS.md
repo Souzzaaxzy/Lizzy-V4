@@ -4214,6 +4214,65 @@ configuráveis** (bem-vindo/saída/`global.json`) **não** ganharam caixa — de
 do dono. As caixas de **largura fixa** também ficaram no estilo antigo: o layout
 novo não tem borda direita, então converter só topo/rodapé desalinharia.
 
+
+## MENU 18 (`!menu18`) + PLAQUINHAS (`!plaq1`..`!plaq10`) ✅
+Pedido do dono: um menu novo chamado `!menu18`, na categoria **COMUNIDADE** do
+menu principal, com a mesma interface dos outros (layout, gif, estilo), tendo a
+primeira categoria chamada **PLAQUINHA**, e 10 comandos `!plaq1`..`!plaq10` cuja
+mídia é um arquivo solto numa pasta nova em `src` (`plaq/`).
+
+### Arquivos
+| Caminho | O que é |
+|---|---|
+| `dados/src/menus/menu18.js` | o menu (novo) |
+| `dados/src/funcs/utils/plaq.js` | resolvedor da mídia (novo) |
+| `dados/src/plaq/` | a pasta das mídias (com `.gitkeep`) |
+| `dados/src/menus/index.js` | registro `menu18: './menu18.js'` |
+| `dados/src/menus/menu.js` | `menu18` na categoria COMUNIDADE |
+| `dados/src/utils/blockPv.js` | entrada do menu + `menuCommandsMap.menu18` |
+| `tests/menu18-plaquinha.test.js` | 14 testes / 50 asserções |
+
+### A mídia é o arquivo na pasta (sem comando, sem JSON)
+Igual ao `gifsbn`: **basta colocar `dados/src/plaq/plaq1.png`** e o `!plaq1` usa
+aquele arquivo. Nenhum comando de configuração, nenhum registro em banco.
+Extensões aceitas (mesma ordem do `gifsbn`, reusando o `MEDIA_EXTS` dele):
+`gif, mp4, webm, mov, jpg, jpeg, png, webp`. GIF/vídeo sai com `gifPlayback`.
+
+**Escopo fechado**: `PLAQ_COMMANDS` lista os 10 nomes e qualquer outro é
+recusado — a pasta **não** vira resolvedor genérico de mídia para qualquer
+comando (diferente do `gifsbn`, que serve toda a família de brincadeiras). Esse
+é o "limitado a esses 10 comandos" que o dono pediu.
+
+### O menu diz o estado real
+Cada linha da categoria mostra **✅** quando já existe arquivo em `plaq/` para o
+comando e **▫️** quando ainda não existe. Assim o menu não promete o que não
+existe. Ele usa o `boldItalic` do `menus/layout.js` (mesma fonte dos outros
+menus) e é enviado pelo `sendMenuWithMedia` — então o gif/foto/vídeo do grupo ou
+global vale para ele **exatamente como** para os demais (nada de sistema
+paralelo de mídia de menu).
+
+### Armadilhas encontradas e corrigidas
+1. **Caminho da pasta com um `..` a menos** — `plaq.js` mora em
+   `dados/src/funcs/utils`, então precisa de **dois** `..` para voltar a
+   `dados/src` (o teste pegou: o módulo procurava em `funcs/plaq`).
+2. **Caminho relativo quebrava quando a pasta é trocada.** O comando resolvia
+   `./plaq/x.png` contra a pasta real. Trocado por `resolvePlaqMedia()`, que
+   devolve o **caminho absoluto** — é o que permite o teste apontar `PLAQ_PATH`
+   para um tmp e **não escrever no repositório**.
+3. **Título em bold Unicode** — as asserções do menu comparavam com ASCII
+   (`PLAQUINHA`) e falhavam mesmo com o menu correto. O teste ganhou `desbold()`
+   + `includesTxt()` (mesma solução do `relationships-multi` e do `menu-layout`).
+4. **`case 'menu18'` entrou no meio do grupo `stickermenu/menusticker/menufig`**
+   na primeira tentativa, o que quebraria aqueles aliases. Movido para antes do
+   grupo, com case próprio. (A regressão de `!menufig`/`!menusticker` no teste
+   cobre exatamente isso.)
+
+### Variável de ambiente
+`PLAQ_PATH` — aponta a pasta de mídia para outro lugar (mesmo padrão do
+`DATABASE_PATH`). Sem ela, usa `dados/src/plaq`. Existe para o teste rodar
+isolado; em produção não precisa definir nada.
+
+
 ## SISTEMA ANTIBOT — REMOVIDO (set/2026) ❌
 O AntiBot foi **removido por completo** a pedido do dono, depois de nao entregar
 o resultado esperado em uso real. Nao sobrou nada nos dois repositorios.

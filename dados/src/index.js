@@ -1037,6 +1037,10 @@ import {
   resolveBrincadeiraMedia,
   resolveMediaUrl as resolveGifsbnMediaUrl
 } from './funcs/utils/gifsbn.js';
+import {
+  resolvePlaqMedia,
+  normalizePlaqCommand
+} from './funcs/utils/plaq.js';
 import { getInfo as twitterGetInfo } from './funcs/utils/twitter.js';
 import { search, searchNews } from './funcs/utils/search.js';
 import { removeBg, upscale } from './funcs/utils/imagetools.js';
@@ -2572,7 +2576,8 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     menuVIP,
     menuBuscas,
     menuBrawlStars,
-    menuGames
+    menuGames,
+    menu18
   } = menus;
   const prefix = prefixo;
   const numerodonoStr = String(numerodono);
@@ -22180,6 +22185,66 @@ Precisa de ajuda? Entre em contato:
           await reply("❌ Ocorreu um erro ao carregar o menu do dono");
         }
         break;
+      case 'menu18':
+      case 'menuplaquinha':
+      case 'menuplaquinhas':
+      case 'menupraq':
+        try {
+          await sendMenuWithMedia('menu18', menu18);
+        } catch (error) {
+          console.error('Erro ao enviar menu 18:', error);
+          await reply("❌ Ocorreu um erro ao carregar o menu de plaquinhas");
+        }
+        break;
+      // ═══════════════════════════════════════════════════════════════
+      // 🩻 !plaq1 .. !plaq10 — plaquinhas (mídia solta em dados/src/plaq/)
+      // ═══════════════════════════════════════════════════════════════
+      // Cada comando envia o arquivo que estiver em `plaq/<comando>.<ext>`
+      // (ex.: `plaq/plaq1.png`). Sem arquivo, avisa em vez de mandar nada.
+      // A lista dos 10 é fechada (`PLAQ_COMMANDS`), então a pasta não serve
+      // para outros comandos.
+      case 'plaq1':
+      case 'plaq2':
+      case 'plaq3':
+      case 'plaq4':
+      case 'plaq5':
+      case 'plaq6':
+      case 'plaq7':
+      case 'plaq8':
+      case 'plaq9':
+      case 'plaq10': {
+        try {
+          const plaqName = normalizePlaqCommand(command);
+          if (!plaqName) {
+            // Não deveria acontecer: o case já limita a lista.
+            await reply("❌ Comando inválido.");
+            break;
+          }
+          const plaqMedia = resolvePlaqMedia(plaqName);
+          if (!plaqMedia) {
+            await reply(`❌ A plaquinha *${plaqName}* ainda não tem mídia.\n\n📁 Coloque o arquivo em: \`dados/src/plaq/${plaqName}.png\` (aceita gif, mp4, jpg, webp)`);
+            break;
+          }
+          // Caminho absoluto vindo do resolvedor: não depende de qual pasta
+          // `plaq/` está em uso.
+          const plaqBuffer = fs.readFileSync(plaqMedia.file);
+          if (plaqMedia.isVideo) {
+            await nazu.sendMessage(from, {
+              video: plaqBuffer,
+              gifPlayback: plaqMedia.isGif,
+              mimetype: 'video/mp4'
+            });
+          } else {
+            await nazu.sendMessage(from, {
+              image: plaqBuffer
+            });
+          }
+        } catch (e) {
+          console.error('[PLAQ] Erro:', e);
+          await reply("❌ Ocorreu um erro ao enviar a plaquinha");
+        }
+        break;
+      }
       case 'stickermenu':
       case 'menusticker':
       case 'menufig':
