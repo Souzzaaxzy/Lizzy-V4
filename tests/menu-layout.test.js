@@ -396,6 +396,48 @@ await test('22. o menuadm e o menudono refletem os comandos', () => {
   ok(!/\$\{prefix\}videomenug/.test(adm), 'menuadm sem videomenug');
 });
 
+await test('23. !audiomenu: menu em cima, audio embaixo, os dois com newsletter', async () => {
+  // Pedido do dono: o audio vai DEPOIS do menu e os dois levam o mesmo cabecalho
+  // de canal, para parecerem um bloco so.
+  const src = fs.readFileSync(new URL('../dados/src/index.js', import.meta.url), 'utf8');
+  const i = src.indexOf("case 'audiomenu'");
+  ok(i > 0, 'a case audiomenu existe');
+  const bloco = src.slice(i, i + 3000);
+  contem(bloco, 'setMenuAudio', 'salva o audio');
+  contem(bloco, 'removeMenuAudio', 'off remove');
+
+  // No envio do menu, a ORDEM tem de ser menu -> audio.
+  const j = src.indexOf('// ---- 1) O MENU (acima) ----');
+  const k = src.indexOf('// ---- 2) O ÁUDIO (abaixo) ----');
+  ok(j > 0 && k > j, 'o menu vem antes do audio no codigo');
+  const envio = src.slice(j, k + 2000);
+  // O audio sai DEPOIS do bloco do menu e sem `quoted`.
+  const posMenuEnvio = envio.indexOf('text: menuText');
+  const posAudioEnvio = envio.indexOf('audio: audioBuffer');
+  ok(posMenuEnvio > 0 && posAudioEnvio > posMenuEnvio, 'o envio do audio fica depois do envio do menu');
+  contem(envio, 'contextInfo: newsletterContext', 'os dois usam o mesmo contexto de canal');
+  ok(!envio.includes('quoted: info'), 'nem o menu nem o audio citam o usuario');
+  ok(!envio.includes('Envia o áudio primeiro'), 'o comentario antigo (audio primeiro) sumiu');
+});
+
+await test('24. !audiomenu off deixa de existir (remove registro e arquivo)', async () => {
+  const dbMod = await import(new URL('../dados/src/utils/database.js', import.meta.url).href);
+  const caminho = dbMod.getMenuAudioPath();
+  // Estado inicial: sem audio (o teste 23 nao configurou).
+  ok(!dbMod.isMenuAudioEnabled(), 'comeca sem audio');
+  // Configura um audio de mentira (arquivo real no tmp do banco).
+  const falso = path.join(TMP_DB, 'audio-teste.mp3');
+  fs.writeFileSync(falso, Buffer.from('audio'));
+  dbMod.setMenuAudio(falso);
+  ok(Boolean(dbMod.isMenuAudioEnabled()), 'audio ativo apos configurar');
+  ok(fs.existsSync(falso), 'arquivo existe');
+  // off -> deixa de existir.
+  dbMod.removeMenuAudio();
+  ok(!dbMod.isMenuAudioEnabled(), 'desativado');
+  eq(dbMod.getMenuAudioPath(), null, 'sem caminho');
+  ok(!fs.existsSync(falso), 'arquivo removido do disco');
+});
+
 // ============================================================================
 // FINAL
 // ============================================================================

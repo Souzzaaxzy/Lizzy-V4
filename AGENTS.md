@@ -3937,3 +3937,69 @@ que é o comportamento projetado, não um sucesso silencioso.
 Regressões verdes: `get-message-inspector` 54/269, `midiaprefix` 26/83,
 `raja-selective` 23/0, `antifantasma-classificacao` 18/18, `ghost-detection` 24/81,
 `anti-seletiva` 32/32, `cmd-suggest` 21/68, `testcall` 35/127, `viewonce-v2` 18/77.
+
+### `!audiomenu` — menu em cima, áudio embaixo, como um bloco só (set/2026) ✅
+Pedido do dono: o áudio do menu deve sair **depois** do menu, com **cabeçalho de
+canal**, e os dois devem **parecer uma coisa só**.
+
+**O comando já existia** (`!audiomenu`/`!menuaudio`/`!setmenuaudio`, no
+`menudono`): já salvava o áudio e já removia com `off`. O que estava errado era o
+**resto**.
+
+#### O que mudou
+1. **A ORDEM estava invertida.** O código dizia literalmente
+   `// Envia o áudio primeiro se configurado` — era **áudio acima, menu abaixo**.
+   Agora é **menu primeiro, áudio depois**, como pedido.
+2. **O bloco de envio foi simplificado.** Antes havia 3 ramos aninhados (com
+   áudio, sem áudio válido, sem áudio) repetindo o mesmo envio do menu 3 vezes —
+   e o menu só saía **dentro** do `.then()` do áudio, o que acoplava a ordem.
+   Agora é linear: **(1) menu** e **(2) áudio**, cada um com a sua guarda.
+3. **Os dois levam o MESMO `contextInfo`** (`newsletterContext`), então o cliente
+   desenha o cabeçalho de encaminhamento de canal **nos dois** — é isso que faz
+   parecerem um bloco. Confirmado no proto real:
+
+```
+tipo: audioMessage
+newsletter? true
+contextInfo: {"mentionedJid":[],...,"forwardingScore":999,"isForwarded":true,
+              "forwardedNewsletterMessageInfo":{"newsletterJid":"120363410980452460@newsletter",...}}
+```
+
+4. **Sem `quoted`** em nenhum dos dois (nem o áudio cita o usuário) e **sem
+   intervalo** entre os envios: qualquer `await sleep` abriria espaço entre os
+   cards.
+5. **Textos do comando** atualizados: dizem que o áudio vai **depois** do menu e
+   que os dois usam o mesmo cabeçalho de canal.
+
+#### `off` deixa de existir
+`!audiomenu off` → `removeMenuAudio()`: **desativa**, zera o `audioPath` **e apaga
+o arquivo** do disco. Conferido por teste (arquivo some, `getMenuAudioPath()`
+vira `null`, `isMenuAudioEnabled()` false). Sem áudio configurado, o `!menu` sai
+só com o menu.
+
+#### Medido com o handler real (áudio cifrado de verdade, servido por HTTP local)
+```
+1. !audiomenu (com o áudio marcado)  -> ✅ configurado, menu_audio.mp3
+2. !menu                             -> ordem: TEXTO -> AUDIO
+                                        newsletter nos dois: true | true
+                                        quoted: false | false
+3. !audiomenu off                    -> ✅ removido, arquivo apagado
+4. !menu                             -> ordem: TEXTO   (sem áudio)
+```
+
+#### Testes — `menu-layout` 23 → **25 testes / 250 asserções**
+- **23** — a case existe, usa `setMenuAudio`/`removeMenuAudio`, o **menu vem antes
+  do áudio no código e no envio**, os dois usam `newsletterContext`, nenhum tem
+  `quoted`, e o comentário antigo ("áudio primeiro") sumiu;
+- **24** — `off` remove o **registro e o arquivo** (deixa de existir de fato).
+
+Regressões verdes: `get-message-inspector` 54/269, `midiaprefix` 26/83,
+`raja-selective` 23/0, `antifantasma-classificacao` 18/18, `ghost-detection` 24/81,
+`anti-seletiva` 32/32, `cmd-suggest` 21/68, `testcall` 35/127, `viewonce-v2` 18/77.
+
+#### Limite honesto do "parecer uma coisa só"
+O WhatsApp trata texto/mídia e áudio como **mensagens separadas** e o cliente
+desenha **cards diferentes** — não existe payload que funda as duas numa. O que
+dá para fazer (e foi feito) é **aproximar ao máximo**: mesmo cabeçalho de canal,
+mesma ausência de citação e **adjacência imediata**. Se ainda aparecer um vão
+visual entre os dois no aparelho, o limite é do cliente, não do payload.

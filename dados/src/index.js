@@ -21282,7 +21282,28 @@ Se não definir cores, a API usa padrão automaticamente.`
               newsletterName: "Lizzy"
             }
           };
-          // Envia o áudio primeiro se configurado
+          // ---- 1) O MENU (acima) ----
+          if (mediaBuffer) {
+            await nazu.sendMessage(from, {
+              [useVideo ? 'video' : 'image']: mediaBuffer,
+              caption: menuText,
+              gifPlayback: isGifMenu,
+              mimetype: useVideo ? 'video/mp4' : 'image/jpeg',
+              contextInfo: newsletterContext
+            });
+          } else {
+            await nazu.sendMessage(from, {
+              text: menuText,
+              contextInfo: newsletterContext
+            });
+          }
+
+          // ---- 2) O ÁUDIO (abaixo) ----
+          // ORDEM: menu em cima, áudio embaixo. Os dois carregam o MESMO
+          // `contextInfo` de canal (`forwardedNewsletterMessageInfo`), então o
+          // cliente desenha o cabeçalho de encaminhamento nos DOIS e eles leem
+          // como um bloco só. Sem `quoted` (igual ao menu) e sem intervalo:
+          // qualquer atraso aqui abriria um espaço entre os dois.
           if (isMenuAudioEnabled()) {
             const audioPath = getMenuAudioPath();
             if (audioPath && fs.existsSync(audioPath)) {
@@ -21291,54 +21312,6 @@ Se não definir cores, a API usa padrão automaticamente.`
                 audio: audioBuffer,
                 mimetype: 'audio/mpeg',
                 ptt: false,
-                contextInfo: newsletterContext
-              }).then(async () => {
-                // Depois envia o menu
-                if (mediaBuffer) {
-                  await nazu.sendMessage(from, {
-                    [useVideo ? 'video' : 'image']: mediaBuffer,
-                    caption: menuText,
-                    gifPlayback: isGifMenu,
-                    mimetype: useVideo ? 'video/mp4' : 'image/jpeg',
-                    contextInfo: newsletterContext
-                  });
-                } else {
-                  await nazu.sendMessage(from, {
-                    text: menuText,
-                    contextInfo: newsletterContext
-                  });
-                }
-              });
-            } else {
-              // Se não tem áudio válido, envia só o menu
-              if (mediaBuffer) {
-                await nazu.sendMessage(from, {
-                  [useVideo ? 'video' : 'image']: mediaBuffer,
-                  caption: menuText,
-                  gifPlayback: isGifMenu,
-                  mimetype: useVideo ? 'video/mp4' : 'image/jpeg',
-                  contextInfo: newsletterContext
-                });
-              } else {
-                await nazu.sendMessage(from, {
-                  text: menuText,
-                  contextInfo: newsletterContext
-                });
-              }
-            }
-          } else {
-            // Se áudio não está ativo, envia só o menu
-            if (mediaBuffer) {
-              await nazu.sendMessage(from, {
-                [useVideo ? 'video' : 'image']: mediaBuffer,
-                caption: menuText,
-                gifPlayback: isGifMenu,
-                mimetype: useVideo ? 'video/mp4' : 'image/jpeg',
-                contextInfo: newsletterContext
-              });
-            } else {
-              await nazu.sendMessage(from, {
-                text: menuText,
                 contextInfo: newsletterContext
               });
             }
@@ -24833,13 +24806,14 @@ ${groupPrefix}key sua_chave_gemini
           if (!audioMsg) {
             const statusMsg = isMenuAudioEnabled()
               ? `ℹ️ *Áudio do menu está ATIVO*\n\n` +
-              `🎵 Um áudio está configurado para ser enviado com o menu.\n\n` +
+              `🎵 Um áudio está configurado para ser enviado DEPOIS do menu.\n\n` +
               `📝 *Comandos disponíveis:*\n` +
               `• ${groupPrefix}${command} - Enviar/marcar áudio para configurar\n` +
               `• ${groupPrefix}${command} off - Remover o áudio\n` +
               `• ${groupPrefix}${command} del - Remover o áudio`
               : `❌ *Envie ou marque um áudio* com o comando: ${groupPrefix}${command}\n\n` +
-              `🎵 Este áudio será enviado junto com o menu principal.\n\n` +
+              `🎵 Este áudio será enviado DEPOIS do menu (menu em cima, áudio embaixo),\n` +
+              `com o mesmo cabeçalho de canal — os dois leem como um bloco só.\n\n` +
               `💡 Para remover depois, use: ${groupPrefix}${command} off`;
             return reply(statusMsg);
           }
@@ -24851,7 +24825,8 @@ ${groupPrefix}key sua_chave_gemini
           // Atualiza a configuração
           setMenuAudio(audioPath);
           await reply('✅ *Áudio do menu configurado com sucesso!*\n\n' +
-            '🎵 O áudio será enviado junto com o menu principal.\n\n' +
+            '🎵 O áudio será enviado DEPOIS do menu (menu em cima, áudio embaixo).\n' +
+            '📡 Os dois levam o mesmo cabeçalho de canal, então parecem um bloco só.\n\n' +
             `💡 Para remover, use: ${groupPrefix}${command} off`);
         } catch (e) {
           console.error('Erro no comando audiomenu:', e);
