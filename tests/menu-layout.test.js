@@ -126,21 +126,33 @@ await test('1. o cabeçalho segue o layout pedido (com o cargo em bold)', async 
 
 await test('2. as categorias usam BOLD ITALIC (estilo diferente do header)', async () => {
   const r = await menu('!', 'Abyss', 'Kannon', {});
-  contem(r.visible, `⚙️ ${boldItalic('UTILIDADES')} ⚙️`, 'título em bold italic');
+  contem(r.rest, `⚙️ ${boldItalic('UTILIDADES')} ⚙️`, 'título em bold italic');
   contem(r.rest, `🎨 ${boldItalic('CRIAÇÃO')} 🎨`, 'CRIAÇÃO em bold italic');
   contem(r.rest, `🛡️ ${boldItalic('COMUNIDADE')} 🛡️`, 'COMUNIDADE em bold italic');
   contem(r.rest, `🎮 ${boldItalic('JOGOS')} 🎮`, 'JOGOS em bold italic');
-  naoContem(r.visible, bold('UTILIDADES'), 'não usa bold reto no título');
+  naoContem(r.rest, bold('UTILIDADES'), 'não usa bold reto no título');
 });
 
-await test('3. a PRIMEIRA categoria (UTILIDADES) fica na parte VISÍVEL', async () => {
+await test('3. o `visible` é SÓ o cabeçalho (nenhuma categoria acima)', async () => {
   const r = await menu('!', 'Abyss', 'Kannon', {});
-  contem(r.visible, boldItalic('UTILIDADES'), 'na parte visível');
-  contem(r.visible, '!menuia', 'com os comandos');
-  contem(r.visible, '!menudown', 'com os comandos');
-  contem(r.visible, '!ferramentas', 'com os comandos');
-  contem(r.visible, '!menufig', 'com os comandos');
-  naoContem(r.rest, boldItalic('UTILIDADES'), 'não duplica no rest');
+  contem(r.visible, '╭━━━꧁༺ ✦ Abyss ✦ ༻꧂━━━╮', 'tem o cabeçalho');
+  // NENHUMA categoria pode estar acima do "ler mais".
+  for (const t of ['UTILIDADES', 'CRIAÇÃO', 'COMUNIDADE', 'JOGOS']) {
+    naoContem(r.visible, boldItalic(t), `${t} NÃO fica no visible`);
+  }
+  naoContem(r.visible, '!menuia', 'nenhum comando no visible');
+});
+
+await test('3b. TODAS as categorias ficam no `rest` (abaixo do ler mais)', async () => {
+  const r = await menu('!', 'Abyss', 'Kannon', {});
+  for (const t of ['UTILIDADES', 'CRIAÇÃO', 'COMUNIDADE', 'JOGOS']) {
+    contem(r.rest, boldItalic(t), `${t} está no rest`);
+  }
+  for (const c of ['!menuia', '!menudown', '!ferramentas', '!menufig', '!menulogos', '!menuedits', '!alteradores', '!menumemb', '!menuadm', '!menudono', '!menubn', '!menufut', '!menurpg', '!menuvip', '!menugames']) {
+    contem(r.rest, c, `rest tem ${c}`);
+  }
+  // E UTILIDADES vem PRIMEIRO (ordem do layout).
+  ok(r.rest.indexOf(boldItalic('UTILIDADES')) < r.rest.indexOf(boldItalic('CRIAÇÃO')), 'UTILIDADES antes de CRIAÇÃO');
 });
 
 await test('4. as DEMAIS categorias ficam no `rest` (ler mais) + o fecho', async () => {
@@ -152,19 +164,20 @@ await test('4. as DEMAIS categorias ficam no `rest` (ler mais) + o fecho', async
   contem(r.rest, '╰━━━꧁༺ 𓆩 ✦ Abyss ✦ 𓆪 ༻꧂━━━╯', 'fecho com o nome do bot');
   naoContem(r.visible, boldItalic('JOGOS'), 'JOGOS não está no visível');
   naoContem(r.visible, boldItalic('COMUNIDADE'), 'COMUNIDADE não está no visível');
+  naoContem(r.visible, boldItalic('UTILIDADES'), 'UTILIDADES também não');
 });
 
 await test('5. `full` é a junção e o menu respeita o prefixo do grupo', async () => {
   const r = await menu('/', 'Abyss', 'K', {});
   contem(r.full, r.visible, 'full contém visible');
   contem(r.full, r.rest, 'full contém rest');
-  contem(r.visible, '/menuia', 'usa o prefixo passado');
-  naoContem(r.visible, '!menuia', 'não fixa o "!"');
+  contem(r.rest, '/menuia', 'usa o prefixo passado');
+  naoContem(r.rest, '!menuia', 'não fixa o "!"');
 });
 
 await test('6. o marcador e o emoji de cada categoria são os do layout', async () => {
   const r = await menu('!', 'Abyss', 'K', {});
-  contem(r.visible, '𓆩 🤖 ㅤ!menuia', 'marcador 𓆩 com emoji');
+  contem(r.rest, '𓆩 🤖 ㅤ!menuia', 'marcador 𓆩 com emoji');
   contem(r.rest, '◇ ㅤ!menulogos', 'marcador ◇ com filler');
   contem(r.rest, '❖ ㅤ!menumemb', 'marcador ❖ com filler');
   contem(r.rest, '⟢ ⚽ ㅤ!menufut', 'marcador ⟢ com emoji');
@@ -174,7 +187,7 @@ await test('6. o marcador e o emoji de cada categoria são os do layout', async 
 // SEÇÃO 2 — INTEGRAÇÃO NO !menu
 // ============================================================================
 
-await test('7. !menu envia a PRIMEIRA categoria ANTES do "ler mais"', async () => {
+await test('7. !menu deixa SÓ o cabeçalho antes do "ler mais" (categorias depois)', async () => {
   db.setMenuLerMais(true);
   const prefixoInvisivel = db.getMenuLerMaisText();
   ok(prefixoInvisivel.length > 0, 'pré-condição: o "ler mais" está ligado');
@@ -184,11 +197,13 @@ await test('7. !menu envia a PRIMEIRA categoria ANTES do "ler mais"', async () =
   ok(posInvisivel > 0, 'achou o prefixo invisível no texto enviado');
   const antes = texto.slice(0, posInvisivel);
   const depois = texto.slice(posInvisivel + prefixoInvisivel.length);
-  contem(antes, boldItalic('UTILIDADES'), 'UTILIDADES fica ANTES do ler mais');
-  contem(antes, '!menuia', 'os comandos da 1ª categoria ficam antes');
-  naoContem(antes, boldItalic('JOGOS'), 'JOGOS NÃO fica antes');
-  contem(depois, boldItalic('JOGOS'), 'JOGOS fica DEPOIS (colapsado)');
-  contem(depois, boldItalic('COMUNIDADE'), 'COMUNIDADE fica depois');
+  // Acima do "ler mais" fica SÓ o cabeçalho; TODAS as categorias vão abaixo.
+  contem(antes, 'Abyss', 'o cabeçalho fica antes');
+  for (const t of ['UTILIDADES', 'CRIAÇÃO', 'COMUNIDADE', 'JOGOS']) {
+    naoContem(antes, boldItalic(t), `${t} NÃO fica antes do ler mais`);
+    contem(depois, boldItalic(t), `${t} fica depois (colapsado)`);
+  }
+  contem(depois, '!menuia', 'os comandos ficam depois');
   db.setMenuLerMais(false);
 });
 
@@ -236,6 +251,7 @@ await test('12. o menu.js exporta a divisão visible/rest (contrato)', async () 
   const r = await menu('!', 'B', 'U', {});
   for (const k of ['visible', 'rest', 'full', 'header']) ok(k in r, `exporta ${k}`);
   ok(typeof r.visible === 'string' && r.visible.length > 0, 'visible é string não-vazia');
+  eq(r.visible, r.header, 'visible é exatamente o cabeçalho');
   ok(typeof r.rest === 'string' && r.rest.length > 0, 'rest é string não-vazia');
 });
 

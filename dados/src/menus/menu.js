@@ -3,19 +3,17 @@
  *
  * O texto é dividido em DUAS partes, por causa do "ler mais" do WhatsApp:
  *
- *   - `visible` — o CABEÇALHO + a PRIMEIRA CATEGORIA. É o que aparece na prévia,
- *     junto com a mídia (gif/foto/vídeo). Se a primeira categoria fosse para o
- *     "ler mais", a prévia ficaria só com o cabeçalho e o usuário não veria
- *     nenhum comando sem tocar em "ler mais".
- *   - `rest` — as demais categorias + o rodapé. Vai DEPOIS do prefixo invisível
- *     do "ler mais", então fica colapsado.
+ *   - `visible` — APENAS o CABEÇALHO. É o que aparece na prévia, junto com a
+ *     mídia (gif/foto/vídeo).
+ *   - `rest` — TODAS as categorias (UTILIDADES, CRIAÇÃO, COMUNIDADE, JOGOS) + o
+ *     fecho. Vai DEPOIS do prefixo invisível do "ler mais", então fica colapsado.
  *
  * A composição final é: `visible + lerMaisPrefix + rest`. Com o "ler mais"
  * desligado o prefixo é vazio, então o resultado é o menu inteiro.
  *
- * O bold é aplicado por `bold()` (ASCII → mathematical bold do Unicode) em vez de
- * caracteres literais no arquivo: a fonte fica legível/editável e a conversão é
- * determinística.
+ * O bold é aplicado por `bold()`/`boldItalic()` (ASCII → mathematical bold do
+ * Unicode) em vez de caracteres literais no arquivo: a fonte fica legível e
+ * editável, e a conversão é determinística.
  */
 
 /**
@@ -87,13 +85,12 @@ export default async function menu(prefix, botName = 'MeuBot', userName = 'Usuá
 ┃ ⌁ 𝐏𝐢𝐧𝐠: ${bold(ping)}𝐦𝐬
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━━━╯`;
 
-  // PRIMEIRA categoria: vai na parte VISÍVEL (junto com a mídia).
-  const primeira = categoria(prefix, 'UTILIDADES', '⚙️', '𓆩', [
-    ['🤖', 'menuia'], ['📥', 'menudown'], ['🛠️', 'ferramentas'], ['🖼️', 'menufig'],
-  ]);
-
-  // Demais categorias: ficam no "ler mais".
+  // TODAS as categorias ficam no `rest` (abaixo do "ler mais"). A primeira é
+  // UTILIDADES, como no layout pedido.
   const restante = [
+    categoria(prefix, 'UTILIDADES', '⚙️', '𓆩', [
+      ['🤖', 'menuia'], ['📥', 'menudown'], ['🛠️', 'ferramentas'], ['🖼️', 'menufig'],
+    ]),
     categoria(prefix, 'CRIAÇÃO', '🎨', '◇', ['menulogos', 'menuedits', 'alteradores']),
     categoria(prefix, 'COMUNIDADE', '🛡️', '❖', ['menumemb', 'menuadm', 'menudono', 'menubn']),
     categoria(prefix, 'JOGOS', '🎮', '⟢', [
@@ -101,7 +98,8 @@ export default async function menu(prefix, botName = 'MeuBot', userName = 'Usuá
     ]),
   ].join('\n\n\n');
 
-  const visible = `${header}\n\n\n${primeira}`;
+  // `visible` = SÓ o cabeçalho (a prévia, junto com a mídia).
+  const visible = header;
   const rest = `${restante}\n\n\n${FECHO(botName)}`;
 
   return { visible, rest, full: `${visible}\n\n\n${rest}`, header };

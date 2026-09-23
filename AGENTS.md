@@ -3753,3 +3753,47 @@ prefixo, o conteúdo deles deixaria de colapsar.
 Regressões verdes: `get-message-inspector` 54/269, `midiaprefix` 26/83,
 `raja-selective` 23/0, `antifantasma-classificacao` 18/18, `ghost-detection` 24/81,
 `anti-seletiva` 32/32, `cmd-suggest` 21/68, `testcall` 35/127.
+
+### MENU — correção do corte: só o CABEÇALHO acima do "ler mais" (set/2026) ✅
+Correção do dono: *"pode deixar as categorias abaixo do ler mais"*.
+
+**Antes:** `visible` = cabeçalho + UTILIDADES (a 1ª categoria ficava na prévia).
+**Agora:** `visible` = **só o cabeçalho**; **TODAS** as categorias (UTILIDADES,
+CRIAÇÃO, COMUNIDADE, JOGOS) + o fecho vão para o `rest`, abaixo do "ler mais".
+
+A ordem das categorias **não mudou** — UTILIDADES continua sendo a primeira, só
+que agora ela (e as demais) ficam colapsadas:
+
+```
+╭━━━꧁༺ ✦ Abyss ✦ ༻꧂━━━╮          <- visível (junto com a mídia)
+┃ 𖤐 𝐎𝐥á, Kannon
+┃ 〆 𝐂𝐚𝐫𝐠𝐨: 𝐃𝐨𝐧𝐨
+┃ ◈ 𝐕𝐈𝐏: 𝐍ã𝐨
+┃ ⌁ 𝐏𝐢𝐧𝐠: 𝟕𝟗𝟎𝐦𝐬
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━━━╯
+        ⋮ ler mais ⋮
+⚙️ UTILIDADES · 🎨 CRIAÇÃO · 🛡️ COMUNIDADE · 🎮 JOGOS · fecho   <- colapsado
+```
+
+**Nota de processo**: o pedido chegou com uma contradição ("a primeira categoria
+acima" e "utilidades abaixo", sendo UTILIDADES a primeira). Em vez de adivinhar
+— já tinha errado uma vez nessa mesma divisão — apresentei as leituras possíveis
+com o **resultado renderizado** de cada uma e pedi a escolha. O dono confirmou:
+categorias abaixo. Vale como regra: quando o pedido se contradiz, mostrar o
+resultado concreto das opções resolve mais rápido que escolher por conta própria.
+
+O contrato do módulo não mudou (`visible`/`rest`/`full`/`header`); só o conteúdo
+de `visible` passou a ser exatamente o `header`. O `index.js` **não precisou de
+mudança** — a composição `visible + lerMaisPrefix + rest` já estava certa.
+
+**Testes**: 14 → **15 testes / 100 asserções** (`menu-layout`). Reescritos:
+- **3** — `visible` é SÓ o cabeçalho; **nenhuma** categoria aparece acima;
+- **3b** (novo) — TODAS as categorias no `rest`, com UTILIDADES **antes** de
+  CRIAÇÃO (ordem preservada);
+- **7** — com o "ler mais" ligado, acima só há o cabeçalho; todas as categorias
+  ficam **depois** do prefixo invisível;
+- **12** — `visible === header` (o contrato virou asserção).
+
+Regressões verdes: `get-message-inspector` 54/269, `midiaprefix` 26/83,
+`raja-selective` 23/0, `antifantasma-classificacao` 18/18, `ghost-detection` 24/81,
+`anti-seletiva` 32/32, `cmd-suggest` 21/68, `testcall` 35/127.
