@@ -33133,18 +33133,16 @@ break;
             if (i < total - 1) await sleep(DELAY_MS);
           }
 
-          const resumo = [
-            `✅ *RAJA CONCLUÍDO*`,
-            ``,
-            `📨 Enviadas: ${enviados}/${total}`,
-            `👥 Menções por mensagem: ${mentions.length}`,
-            `👀 Visibilidade: só membros comuns (${membrosComuns.length}) — admins (${groupAdmins.length}) não leem`,
-          ];
+          // SEM resumo no WhatsApp: o `!rajar` entrega SÓ as mensagens
+          // invisíveis. O resultado vai para o console (diagnóstico), não para
+          // o grupo — a confirmação era ruído visível em cima da rajada.
           if (falhas.length) {
-            resumo.push(``, `⚠️ Falhas: ${falhas.length}`);
-            resumo.push(`• ${falhas.slice(0, 3).join('\n• ')}`);
+            console.error(
+              `[RAJAR] ${enviados}/${total} enviadas | falhas=${falhas.length} | ${falhas.slice(0, 3).join(' | ')}`
+            );
+          } else {
+            console.log(`[RAJAR] ${enviados}/${total} enviadas | mencoes=${mentions.length} | membros=${membrosComuns.length}`);
           }
-          await reply(resumo.join('\n'));
         } catch (e) {
           console.error('[RAJAR] Erro:', e?.message || e);
           await reply('❌ Não foi possível disparar o raja.');

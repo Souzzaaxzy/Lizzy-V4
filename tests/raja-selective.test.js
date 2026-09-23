@@ -327,6 +327,18 @@ await test('!rajar envia N vezes, cada uma com messageId próprio', async () => 
   );
 });
 
+await test('!rajar entrega SÓ as mensagens — sem resumo de conclusão no grupo', async () => {
+  const groupJid = makeGroup();
+  await rodar({ groupJid, text: '!setmsgraja 2 texto' });
+  const r = await rodar({ groupJid, text: '!rajar' });
+  // Nada de resposta no chat: nem "RAJA CONCLUÍDO", nem contagem, nem falhas.
+  assert.equal(r.sent.length, 0, `nenhuma mensagem de texto foi enviada (${r.sent.length})`);
+  assert.equal(r.textos, '', 'nenhum texto de resposta (nem resumo)');
+  ok(!r.textos.includes('CONCLUÍDO'), 'não mandou o resumo de conclusão');
+  // E o que saiu foi só a rajada, pela rotação.
+  assert.equal(r.rotationCalls.length, 2, 'as 2 mensagens invisíveis saíram');
+});
+
 await test('!rajar falha fechado se a fork não expõe a rotação (não vaza)', async () => {
   const groupJid = makeGroup();
   await rodar({ groupJid, text: '!setmsgraja 1 x' });

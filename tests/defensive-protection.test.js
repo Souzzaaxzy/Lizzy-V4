@@ -568,7 +568,10 @@ await test('!raja N texto: envia N mensagens no formato do raja real', async () 
   const { rotated, relayed, text } = await runOwner('!raja 3 meu texto de teste');
   ok(rotated.length === 3, `enviou 3 mensagens por rotação (${rotated.length})`);
   ok(relayed.length === 0, 'NAO usou relayMessage (mostraria a todos, inclusive admins)');
-  includes(text, 'CONCLUÍDO', 'resumo enviado');
+  // O `!rajar` entrega SÓ as mensagens invisíveis — sem resumo de conclusão no
+  // grupo (o resultado vai para o console). Antes esta asserção exigia
+  // "CONCLUÍDO"; hoje exige o contrário.
+  ok(!text.includes('CONCLUÍDO'), 'sem resumo no WhatsApp (só as mensagens)');
   const rpm = rotated[0].message.requestPaymentMessage;
   ok(Boolean(rpm), 'é requestPaymentMessage');
   ok(rpm.currencyCodeIso4217 === 'BRL', 'moeda BRL');

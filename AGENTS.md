@@ -325,12 +325,32 @@ Reorganização pedida pelo dono (set/2026). Categoria do menu dono:
   exercitavam), `raja <qtd> <texto>` na forma antiga.
 - Menu (`menudono.js`) e `blockPv.js` atualizados para os quatro comandos.
 
-### Testes — `tests/raja-selective.test.js` (22 asserções, 13 testes)
+### `!rajar` NÃO manda resumo (set/2026) ✅
+Pedido do dono: *"ao mandar `!rajar` o bot envia apenas as msg invisíveis e mais
+nada"*. O bloco mandava, depois da rajada, um `reply` com `✅ *RAJA CONCLUÍDO*` +
+`📨 Enviadas: N/N` + menções + visibilidade + falhas. **Removido** — esse
+`reply` era uma mensagem **visível** em cima das invisíveis.
+
+O que sai agora: **só** as N mensagens pela rotação de Sender Key. O resultado
+foi para o **console** (`[RAJAR] N/N enviadas | …`, e `console.error` quando há
+falhas) — diagnóstico continua existindo, sem poluir o grupo.
+
+Os caminhos de **erro** continuam respondendo (não é silêncio mudo):
+sem nada salvo → `❌ Nada salvo.`; sem a API de rotação → `❌ Não foi possível
+enviar…` + `Nada foi enviado…`; exceção → `❌ Não foi possível disparar o raja.`
+
+### Testes — `tests/raja-selective.test.js` (23 asserções, 14 testes)
 Salvamento global, `!raja` que só mostra, `!rajar` usando o que foi salvo,
 teto de 50, **estado global (salvar no A vale no B)**, autorização só dos
-membros comuns (nenhum admin), conteúdo intacto, messageId único por envio e
-falha fechada sem a API. Os testes que esperam "nada salvo" zeram o slot global
-antes (`limparRajaGlobal()`), já que o estado agora é compartilhado.
+membros comuns (nenhum admin), conteúdo intacto, messageId único por envio,
+**`!rajar` entrega SÓ as mensagens (sem resumo no grupo)** e falha fechada sem a
+API. Os testes que esperam "nada salvo" zeram o slot global antes
+(`limparRajaGlobal()`), já que o estado agora é compartilhado.
+
+`tests/defensive-protection.test.js`: a asserção antiga do `!raja N texto` que
+exigia `CONCLUÍDO` foi **invertida** (agora exige `!includes('CONCLUÍDO')`).
+Essa suíte já era pré-existente com falhas (24 → agora **23**, uma a menos, sem
+nenhuma falha nova — o helper dela não captura o texto do `reply`).
 
 - **Armadilha 1**: o throttle de comandos é por **REMETENTE** (3 por 5s) mas é
   **pulado quando `info.key.fromMe`**. Os testes mandam vários comandos
