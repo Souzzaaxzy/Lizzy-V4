@@ -4356,6 +4356,43 @@ fechadas. Os testes antigos do `menu18-plaquinha` que mediam o envio comum foram
 teste cria um remetente novo por execução; e o dublê do socket precisa de
 `waUploadToServer` (senão o `generateWAMessage` falha e o teste mede o erro).
 
+
+## COMANDO `!eununca` — frases trocadas (set/2026) ✅
+Pedido do dono: substituir **todas** as frases do `!eununca` por uma lista nova de
+**200** (50 de relacionamento/afeto + 150 de dia a dia, amizade, música, etc.).
+
+### Onde as frases moram
+`dados/src/funcs/json/tools.json` → chave **`iNever`** (a única fonte). O comando
+(`index.js`, `case 'eununca'`) só faz `toolsJson().iNever[Math.floor(random *
+length)]` e publica a **enquete** com as duas opções fixas `Eu nunca` / `Eu já`
+(`selectableCount: 1`) e o título `🔞 EU NUNCA`.
+
+### O que mudou
+- **160 → 200 frases**: as antigas (tom picante/erótico: "pum no elevador",
+  "transei no carro", "brinquedos sexuais"...) saíram **todas**.
+- A numeração da mensagem do dono **não** foi para o arquivo — só as frases.
+- Substituição feita **só no bloco `iNever`**, preservando CRLF e a indentação de
+  4 espaços do arquivo. As outras 9 listas (`Cantadas`, `curiousFacts`,
+  `Conselhos`, `ConselhosBiblicos`, `Piadas`, `Charadas`, `FrasesMotivacionais`,
+  `Elogios`, `Reflexoes`) ficaram intactas — conferido no `diff` (só linhas de
+  frase mudaram) e por teste.
+- Nenhuma frase passa de **120 chars** (a mais longa é a de "algumas pessoas
+  entram na nossa vida para ficar..."), dentro do limite da enquete.
+
+### Testes — `tests/eununca.test.js` (**9 testes / 34 asserções**)
+Roda o handler real com socket falso e confere a lista **e** a enquete:
+- a lista tem 200, sem repetidas, com a primeira e a última esperadas;
+- toda frase começa com `Eu nunca `/`Eu já ` (o formato que a enquete espera);
+- **as frases antigas picantes não existem mais** (checagem por trecho, para pegar
+  reintrodução);
+- as 9 outras listas do `tools.json` seguem com conteúdo;
+- o comando publica a enquete com as duas opções, `selectableCount: 1`, o título
+  preservado, e a pergunta vem de `iNever`;
+- 10 execuções, todas com pergunta da lista nova;
+- só roda em grupo e com modo brincadeira.
+**Armadilha:** o throttle é por remetente (3 comandos/5s) — o teste cria um
+remetente novo por execução (mesmo padrão de `testcall`/`me-profile`).
+
 ## SISTEMA ANTIBOT — REMOVIDO (set/2026) ❌
 O AntiBot foi **removido por completo** a pedido do dono, depois de nao entregar
 o resultado esperado em uso real. Nao sobrou nada nos dois repositorios.
