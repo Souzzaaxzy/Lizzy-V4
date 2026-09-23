@@ -60,7 +60,7 @@ export default async function menu(prefix, botName = 'MeuBot', userName = 'Usuá
       ['🤖', 'menuia'], ['📥', 'menudown'], ['🛠️', 'ferramentas'], ['🖼️', 'menufig'],
     ]),
     categoria(prefix, 'CRIAÇÃO', '🎨', '◇', ['menulogos', 'menuedits', 'alteradores']),
-    categoria(prefix, 'COMUNIDADE', '🛡️', '❖', ['menumemb', 'menuadm', 'menudono', 'menubn', ['🔞', 'menu18']]),
+    categoria(prefix, 'COMUNIDADE', '🛡️', '❖', ['menumemb', 'menuadm', 'menudono', 'menubn', 'menu18']),
     categoria(prefix, 'JOGOS', '🎮', '⟢', [
       ['⚽', 'menufut'], ['🎮', 'menurpg'], ['💎', 'menuvip'], ['🎯', 'menugames'],
     ]),

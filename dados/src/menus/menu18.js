@@ -1,9 +1,10 @@
 /**
  * Menu 18 — PLAQUINHAS (`!plaq1`..`!plaq10`).
  *
- * Menu de conteúdo **+18**, então usa o mesmo emoji que o resto do bot usa para
- * esse tipo de conteúdo (`🔞`, como na categoria "INTERAÇÕES PICANTES" do
- * `menubn`) — nada de símbolo inventado que não comunica nada.
+ * Menu de conteúdo **+18**: o cabeçalho traz uma mensagem safada dizendo isso, e
+ * o emoji é o mesmo que o resto do bot usa para esse tipo de conteúdo (`🔞`,
+ * como na categoria "INTERAÇÕES PICANTES" do `menubn`) — nada de símbolo
+ * inventado que não comunica nada.
  *
  * Mesmo layout dos outros menus (cabeçalho `꧁༺ ✦ ༻꧂`, categoria com
  * `boldItalic`), e a mesma convenção de mídia: quem envia é o
@@ -26,19 +27,13 @@ export default async function menu18(prefix, botName = 'MeuBot', userName = 'Usu
 
   return `╭━━━꧁༺ ✦ ${botName} ✦ ༻꧂━━━╮
 ┃ 𖤐 𝐎𝐥á, @${userName}
-┃ 🔞 Plaquinhas +18
+┃ 🔞 Preparei umas plaquinhas bem safadas pra você...
+┃ 😈 Aqui é só coisa +18, hein? Segura a vergonha.
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━━━╯
 
 
 ╭━━━꧁༺ ㅤ🔞 ${boldItalic('PLAQUINHA')} 🔞ㅤ ༻꧂━━━╮
 ${linhas.join('\n')}
-╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
-
-
-╭━━━꧁༺ ㅤ💡 ${boldItalic('COMO USAR')} 💡ㅤ ༻꧂━━━╮
-｜ 📁 Coloque a mídia em: dados/src/plaq/
-｜ 🏷️ Com o nome do comando (ex.: plaq1.png)
-｜ 🖼️ Aceita: imagem, gif, vídeo ou figurinha animada
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 `;
 }

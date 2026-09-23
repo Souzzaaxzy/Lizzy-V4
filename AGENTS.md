@@ -4228,7 +4228,7 @@ mídia é um arquivo solto numa pasta nova em `src` (`plaq/`).
 | `dados/src/funcs/utils/plaq.js` | resolvedor da mídia (novo) |
 | `dados/src/plaq/` | a pasta das mídias (com `.gitkeep`) |
 | `dados/src/menus/index.js` | registro `menu18: './menu18.js'` |
-| `dados/src/menus/menu.js` | `[🔞 menu18]` na categoria COMUNIDADE |
+| `dados/src/menus/menu.js` | `menu18` na categoria COMUNIDADE (sem emoji) |
 | `dados/src/utils/blockPv.js` | entrada do menu + `menuCommandsMap.menu18` |
 | `tests/menu18-plaquinha.test.js` | 14 testes / 50 asserções |
 
@@ -4236,6 +4236,23 @@ mídia é um arquivo solto numa pasta nova em `src` (`plaq/`).
 Usa o **mesmo emoji que o resto do bot usa para conteúdo +18** (`🔞`, como na
 categoria "INTERAÇÕES PICANTES" do `menubn`). A primeira versão usava `🩻`
 (raio-X) — símbolo inventado, que não comunicava nada; foi trocado.
+
+**Ajustes pedidos depois (set/2026):**
+1. **Fora do MENU PRINCIPAL o emoji saiu.** Na categoria COMUNIDADE a entrada é
+   só `!menu18`, sem emoji (o `🔞` fica só dentro do próprio menu18).
+2. **O bloco "COMO USAR" saiu do menu18.** Ele expunha o caminho
+   `dados/src/plaq/` e as instruções de configuração — informação de dono, não
+   de usuário. O menu agora termina na categoria PLAQUINHA.
+3. **O cabeçalho ganhou um aviso picante** deixando claro que é conteúdo +18:
+   *"🔞 Preparei umas plaquinhas bem safadas pra você..." / "😈 Aqui é só coisa
+   +18, hein? Segura a vergonha."* — o tom segue o que o bot já usa
+   (`menubn`: `gostosa`, `safado`, `safada`).
+
+Testes cobrindo os três (menu18-plaquinha 15 → **18 testes / 60 asserções**):
+o cabeçalho diz "+18" em tom picante, o bloco COMO USAR **não** existe mais, e a
+linha da categoria no menu principal **não** tem emoji. (A asserção mira a
+**linha da chamada `categoria(...)`**, não o comentário do topo do arquivo —
+que também cita COMUNIDADE e faria o teste medir o lugar errado.)
 
 ### A mídia é o arquivo na pasta (sem comando, sem JSON)
 Igual ao `gifsbn`: **basta colocar `dados/src/plaq/plaq1.png`** e o `!plaq1` usa

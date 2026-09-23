@@ -225,6 +225,32 @@ await test('!menu18 responde e usa o layout dos outros menus', async () => {
   includes(out.text, '!plaq10', 'lista o plaq10');
 });
 
+await test('o cabeçalho avisa em tom safado que é +18', async () => {
+  const { groupJid, people, participants } = setup(2);
+  const out = await run({ groupJid, sender: people[0], text: '!menu18', participants });
+  includesTxt(out.text, '+18', 'diz que é conteúdo +18');
+  // O pedido foi uma mensagem "picante" no começo, não um aviso seco.
+  ok(/safad|vergonha|picante/i.test(out.text), 'o aviso está em tom picante');
+});
+
+await test('o menu NÃO traz mais o bloco COMO USAR', async () => {
+  const { groupJid, people, participants } = setup(2);
+  const out = await run({ groupJid, sender: people[0], text: '!menu18', participants });
+  ok(!desbold(out.text).includes('COMO USAR'), 'o bloco de instruções saiu');
+  ok(!out.text.includes('dados/src/plaq/'), 'não expõe mais o caminho da pasta no menu');
+});
+
+await test('o menu principal NÃO põe emoji na entrada do menu18', async () => {
+  const menuSrc = fs.readFileSync(new URL('../dados/src/menus/menu.js', import.meta.url), 'utf-8');
+  // A LINHA DA CHAMADA `categoria(...)`, não o comentário do topo do arquivo
+  // (que também cita COMUNIDADE e faria o teste medir outra coisa).
+  const linha = menuSrc.split('\n').find((l) => l.includes("categoria(prefix, 'COMUNIDADE'"));
+  ok(Boolean(linha), 'achou a linha da categoria COMUNIDADE');
+  includes(linha, "'menu18'", 'menu18 está na categoria');
+  ok(!linha.includes('🔞'), 'sem o emoji +18 na linha do menu principal');
+  ok(!linha.includes('🩻'), 'sem o raio-X na linha do menu principal');
+});
+
 await test('menu +18 usa o emoji de +18 (e não um símbolo inventado)', async () => {
   const { groupJid, people, participants } = setup(2);
   const out = await run({ groupJid, sender: people[0], text: '!menu18', participants });
