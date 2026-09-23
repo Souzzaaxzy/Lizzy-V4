@@ -4159,188 +4159,43 @@ configuráveis** (bem-vindo/saída/`global.json`) **não** ganharam caixa — de
 do dono. As caixas de **largura fixa** também ficaram no estilo antigo: o layout
 novo não tem borda direita, então converter só topo/rodapé desalinharia.
 
-## ANTIBOT — detecção multicamada (núcleo na fork + comando na Lizzy) ✅
-Sistema de detecção de **comportamento automatizado não autorizado** por
-correlação de evidências independentes e persistentes. Entregue em **dois
-repositórios**, com a regra explícita: *preferir falso negativo a falso positivo*.
+## SISTEMA ANTIBOT — REMOVIDO (set/2026) ❌
+O AntiBot foi **removido por completo** a pedido do dono, depois de nao entregar
+o resultado esperado em uso real. Nao sobrou nada nos dois repositorios.
 
-### Onde cada coisa vive
-| Camada | Repositório | Arquivos |
-|---|---|---|
-| **Núcleo** (stanza, proto, comportamento, evidência, confidence, decay) | `Souzzaaxzy/baileys` | `lib/AntiBot/` (12 módulos + `README-ANTIBOT.md`) |
-| **Camada do bot** (config por grupo, ciclo de vida dos engines, textos) | `Lizzy-V4` | `dados/src/utils/antibot/{config,manager}.js` |
-| **Comando e integração** | `Lizzy-V4` | `case 'antibot'` no `index.js`, `menuadm`, lista de antis, `blockPv` |
+### O que foi removido
+- **Fork** (`Souzzaaxzy/baileys`): `lib/AntiBot/` inteiro (12 modulos +
+  `README-ANTIBOT.md`), o export em `lib/Utils/index.js`, e os testes
+  `tests/antibot.test.js` / `tests/antibot-monitoring.test.js`.
+- **Lizzy**: `dados/src/utils/antibot/` (`config.js`, `manager.js`), o bloco de
+  analise no handler, a `case 'antibot'`, os imports, a linha no `menuadm`, a
+  entrada na lista de antis (com o ramo `nestedKey`), o `antibot` do `blockPv`,
+  a flag no painel de seguranca e `tests/antibot-lizzy.test.js`.
+- **Lock**: o pin da fork voltou para o commit anterior ao AntiBot
+  (`71748ac...`), entao a dependencia instalada **nao** traz o codigo removido.
+- O baseline do `menu-layout` voltou para `menuadm: 170`.
 
-A Lizzy **não reimplementa detecção**: consome o núcleo da fork via
-`@itsliaaa/baileys` (o pin do `package-lock.json` foi para o commit do AntiBot,
-**hash completo de 40 chars** — ver "BUG DO INSTALADOR" para o porquê).
+### O que a tentativa ensinou (para nao repetir)
+Apesar de a remocao ser o pedido, o diagnostico vale registrar, porque o
+problema nao foi "faltou detector" e sim **calibracao**:
 
-### A fork é JS puro (não TS) — e isso mudou a implementação
-A fork **não tem fonte TypeScript nem build**: `lib/` é JavaScript ESM com
-`.d.ts` ao lado, gerados de um projeto fora do repositório. Implementar `.ts`
-ali criaria arquivos que nunca seriam executados (não há `tsc`), então o núcleo
-foi escrito em **JS ESM**, no mesmo padrão dos módulos existentes
-(`selective-distribution-detector.js`, `skdm-rotation-index.js`), e exportado por
-`lib/Utils/index.js` — o que faz `import { createAntiBotEngine } from
-'@itsliaaa/baileys'` funcionar como qualquer outra API da lib.
+1. **Escala impossivel.** O teto por categoria (12) era metade da banda de
+   confirmacao (65), e a confirmacao exigia 3 categorias independentes — que
+   observacao passiva nao reune. Por construcao o sistema **nunca confirmava**.
+2. **Rajada instantanea pontuava menos que ritmo espacado.** 30 mensagens no
+   mesmo milissegundo davam NORMAL 14; as mesmas 30 a 1s davam SUSPICIOUS 32. O
+   guard de "variancia baixa" nao distinguia *pacing* de **ausencia** de pacing.
+3. **O painel escondia a analise** em `log`/`observe`, porque contava a banda
+   efetiva (rebaixada a NORMAL) em vez da banda bruta.
 
-### Os sinais: o que é confiável e o que **não** é
-Isto é o resultado da pesquisa, e é o que impede o sistema de virar um detector
-de "muita atividade".
+Mesmo depois de corrigidos os tres, o veredito do dono foi que **nao funcionou
+na pratica** — e a decisao foi remover. Um detector comportamental heuristico
+tem um limite real: sem sinal de protocolo confiavel (e o WhatsApp nao expoe um),
+"ritmo + repeticao" separa automacao de humano de forma imperfeita, e o custo de
+errar e alto nos dois sentidos.
 
-**CONFIRMADO (usável):** regularidade de intervalos (CV baixo), similaridade de
-payload (digest), uniformidade de tamanho, sequência de tipos repetida (exige
-≥2 tipos distintos), contradição stanza↔mensagem (só com repetição).
-
-**NÃO CONFIÁVEL (peso 0, nunca pontua):** LID, PN, `addressingMode`,
-`participantAlt`, `messageStubType`, `category` da stanza, mensagem editada,
-mídia/sticker/áudio, ausência de presence, ausência de receipt, tipo de
-cliente/plataforma, reconexão. O `!get` e o `invisibleAnalyzer` já expõem vários
-destes como "informativos"; o AntiBot segue a mesma classificação.
-
-**DESCONHECIDO:** campo novo do proto (versão futura do WhatsApp) → vira
-`structural_anomaly` **com peso 0**, apenas para o relatório.
-
-### Pesos (`EVIDENCE_CATALOG`, fonte única)
-`regular_intervals` 6 (behavior) · `payload_similarity` 4 · `repeating_sequence` 4 ·
-`uniform_length` 2 · `persistent_behavior` 5 / `persistent_risk` 9–12 (tier) ·
-`protocol_inconsistency` 4 · `structural_anomaly` 0.
-
-O `EvidenceEngine` garante: peso **vem do catálogo** (o chamador não escolhe),
-**dedup por tipo** (repetir candidato não multiplica) e **cap de 12 por
-categoria** (empilhar sinal fraco não alcança confirmação).
-
-### Os três guardas contra falso positivo (cada um nasceu de um teste)
-1. **Cap por categoria ⇒ comportamento sozinho NUNCA confirma.** Comportamento
-   tem teto 12 e `suspicious` é 20, então uma janela puramente comportamental
-   não passa de OBSERVING. O `ConfidenceEngine` ainda exige **≥3 categorias
-   distintas** e **≥1 não-comportamental**. Teste: *behaviour ALONE can never
-   confirm, no matter how sustained*.
-2. **Janela é TEMPO, não contagem.** Gravar uma janela por mensagem fazia um
-   burst de 40 mensagens parecer 40 janelas de persistência — inflando a
-   evidência que deveria **provar** sustentação. Hoje: uma janela por `windowMs`,
-   fechada no fim, com o score que ela terminou (bug pego pelo teste de
-   idempotência de janela).
-3. **Tempo de CHEGADA, não `messageTimestamp`.** O campo tem resolução de
-   **1 segundo**: um bot a 10 msg/s produz timestamps idênticos e o pacing fica
-   invisível. A medição honesta é quando **este dispositivo recebeu**.
-
-Complementos: `repeating_sequence` exige ≥2 tipos distintos (senão todo humano
-que só manda texto "repete com período 1"); o digest **não** colapsa dígitos
-(senão "msg 1", "msg 2" viram o mesmo payload).
-
-### Confirmação (`ConfidenceEngine`)
-`CONFIRMED` exige **todas**: score ≥ `confirmed` (65); ≥3 categorias distintas;
-≥1 não-comportamental; ≥2 janelas anteriores em risco. Falhando qualquer uma,
-**rebaixa** para HIGH_RISK com motivo (`confirm_denied_*`). Ambiguidade ⇒ banda
-menor. Bandas: `observing 10 · suspicious 20 · highRisk 38 · confirmed 65`.
-
-### Mecanismos
-- **`StanzaObserver`** — passivo e **aditivo**: anexa listeners `CB:message`,
-  `CB:receipt`, `CB:notification`, `CB:presence`, `CB:chatstate` no **mesmo
-  `sock.ws`** que a fork já usa. Não altera, não bloqueia, não re-emite; cada
-  corpo está em try/catch (uma exceção no observer **não** pode abortar o
-  dispatch do socket); `unobserve()` remove só o que ele adicionou.
-- **`EventCorrelationEngine`** — junta fato de stanza com mensagem decodificada.
-  Uma inconsistência isolada vira report; só com **repetição** vira evidência.
-- **`RiskDecay`** — evidência é **recomputada** por janela (não acumulada) e o
-  score carregado sofre decaimento de meia-vida (10 min). Quem volta ao normal
-  volta a NORMAL.
-- **Memória limitada** — `maxSamples` 60/participante, `maxParticipants` 512/chat
-  com despejo LRU, TTLs na correlação, `prune()` por inatividade.
-
-### `!antibot` (comando, por grupo)
-Permissão igual aos outros antis (grupo + admin). Subcomandos: `on`/`off`,
-`modo <log|observe|quarantine|active>` (aceita PT-BR: `quarentena`/`ativo`),
-`lista`, `reset`, e sem argumento mostra o painel
-(`🤖 ANTIBOT`, modo, contagens por banda, subsistemas). Persistência em
-`groupData.antibot` pelo **`persistGroupData()` existente** — nenhum banco novo.
-
-**Modos:** `log` não escala nada; `observe` analisa; `quarantine` marca sem agir;
-`active` é o **único** que permite ação, e só com `actionAllowed === true` do
-núcleo. O padrão é **desligado**, e ao ligar o modo é `observe`.
-
-### Integração administrativa
-- **`menuadm`** — `🤖 !antibot` na categoria **SEGURANÇA**.
-- **Lista de antis** — entrada `AntiBot` com `nestedKey: 'enabled'` (o painel de
-  segurança lê `groupData.antibot.enabled`). O `nestedKey` reusa o mecanismo do
-  `subKey`, só que para objeto aninhado.
-- **`blockPv`** — `antibot` adicionado ao `menuadm`.
-- **Ação automática** — usa o **mesmo** `nazu.groupParticipantsUpdate(from,
-  [sender], 'remove')` dos outros antis, e antes revalida: alvo ainda no grupo,
-  não é dono/subdono/admin, e o bot é admin. Roda **depois** da checagem de
-  permissão do handler, só para membro comum (`!isOwner && !isGroupAdmin`).
-
-### Testes
-- **Fork** — `tests/antibot.test.js` (17 testes): humano normal/ativo/repetitivo,
-  mídia, LID nunca confirmam; bot escala; comportamento-sozinho não confirma;
-  persistência exige janela; sinais não-usáveis valem 0; memória limitada;
-  entrada inválida não lança. **Suíte da fork: 221/221.**
-- **Lizzy** — `tests/antibot-lizzy.test.js` (15 testes / 34 asserções). Roda o
-  **handler real** com socket falso. Falso positivo é a prioridade: humano muito
-  ativo, mídia, e `log`/`observe`/`quarantine` **nunca removem**; admin/dono
-  nunca são removidos; desligado não analisa; on/off e modo persistem por grupo e
-  não vazam entre grupos; menuadm/lista/blockPv; núcleo disponível.
-  **Armadilhas (as mesmas de sempre):** o throttle é por **remetente** (3/5s) e é
-  **pulado com `fromMe`** → os comandos rodam como o bot;  `q` traz os argumentos
-  **sem** o comando (o `budy2` inclui); `persistGroupData()` é fire-and-forget
-  (esperar a escrita); o título do painel é **bold Unicode** (comparar com ASCII
-  falharia).
-- **Regressão**: só o `menu-layout` mudou de contagem — `menuadm` 170 → **171**
-  (o `!antibot` entrou). Falhas pré-existentes inalteradas: `defensive-protection`
-  24, `pg-commands` 4, `rajar2/3/4`, `statusgrupo` (ffmpeg ausente).
-- `node --check` em tudo + **boot do bot OK**.
-
-### CALIBRAÇÃO — 3 correções após o relato "não detectou nada" ✅
-O dono relatou: *"ativei o antibot, usei outro bot no grupo e não detectou nada,
-só disse que tinha 1 usuário analisado"*. Reproduzi e eram **três** causas
-distintas, todas medidas:
-
-**1. Escala quebrada (a principal).** O teto por categoria era **12** e a banda
-de confirmação **65** — o comportamento sozinho NUNCA chegava lá. Pior: o
-`ConfidenceEngine` exigia **3** categorias distintas, e observação passiva não
-reúne três classes independentes. Por construção, o sistema **nunca confirmava nada**. Recalibrado a partir da curva desejada (comportamento pode ser
-SUSPICIOUS, nunca actionable sozinho; ritmo sustentado confirma):
-cap **34** (acima de `suspicious` 30, abaixo de `highRisk` 50), bandas
-**15/30/50/65**, `minCategoriesForConfirm` **2**, tiers de persistência
-**14 / 22 / 40**.
-
-**2. Rajada instantânea pontuava MENOS que ritmo espaçado (furo real).** 30
-mensagens no **mesmo milissegundo** davam **NORMAL 14**; as mesmas 30 a 1s de
-intervalo davam **32 SUSPICIOUS**. Causa: com média 0 e variância 0, o guard de
-"variância baixa" (que existe para pegar pacing de máquina) não sabia distinguir
-*pacing* de **ausência de pacing**. Nova evidência **`burst_density`** (behavior,
-STRONG, 18): maior densidade numa janela deslizante de 2s, teto 8 (4 msg/s
-sustentados é impossível de digitar). E `regular_intervals` passou a exigir média
-≥ 20ms — ou seja, exige que **exista** pacing. Resultado: rajada instantânea
-14 → **32 SUSPICIOUS**, com `burst_density` no relatório.
-
-**3. Painel zerado.** `stats()` contava a banda **efetiva** — e em `log`/`observe`
-todo mundo é rebaixado a NORMAL, então as contagens apareciam **zeradas**
-justamente no modo em que se quer ver evidência ("não detectou nada" era, em
-parte, o painel escondendo a análise). Agora o painel usa a banda **RAW** da
-análise, e o comando avisa que conta quem falou **desde que o AntiBot ligou**.
-
-### A curva medida (o que esperar)
-| cenário | resultado |
-|---|---|
-| 40 msgs, 1 janela, gap 1s | SUSPICIOUS 32 — **não age** |
-| 120 msgs, 3 janelas | HIGH_RISK 54 |
-| 150 msgs, 5 janelas | **CONFIRMED 72 — age** |
-| 30 msgs no mesmo ms | SUSPICIOUS 32 (`burst_density`) |
-| 20 msgs a cada 30s | NORMAL 0 |
-| humano *bursty* (300ms–15s) | NORMAL 0 |
-
-Sustentação **+** pacing é o que confirma; uma janela nunca age, por mais
-intensa que seja.
-
-### Limitações honestas
-- É heurística: precisa de janelas; participante novo não é julgado
-  (`minSamplesForAnalysis`).
-- Um atacante que varie texto **e** intervalos aleatoriamente não é detectado —
-  aceitável pelo requisito de precisão.
-- A correlação stanza↔mensagem é **um nível** (chave chat+autor, não id de
-  mensagem): cobre o caso real sem crescer memória.
-- Os limiares foram calibrados em **curva medida**, não em campo; são
-  configuráveis por grupo (`groupData.antibot.thresholds`).
-- O botão de ação só existe no modo `active`; o padrão nunca age.
+### Nota
+O que continua existindo e **nao** foi tocado: os antis do proprio bot
+(`!antifantasma`, `!antimidia`, `!antidelete`, `!antiflood`, `antilink*`,
+`!antibotao`/`antibtn`), o `!get` com o `invisibleAnalyzer`, o
+`ghostDetection`/pontuacao de fantasmas e o `!raja`/`!rajar`.

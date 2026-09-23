@@ -1316,20 +1316,6 @@ import {
   MASS_MENTION_CONFIG_FILE,
   MENU_GROUPS_MEDIA_DIR
 } from './utils/paths.js';
-import antibotConfig, {
-  getGroupAntiBotConfig,
-  setGroupAntiBotConfig,
-  isCoreAvailable as isAntiBotCoreAvailable,
-  MODE_LABELS as ANTIBOT_MODE_LABELS
-} from './utils/antibot/config.js';
-import {
-  getEngine as getAntiBotEngine,
-  dropEngine as dropAntiBotEngine,
-  toAntiBotResult,
-  logEvaluation as logAntiBotEvaluation,
-  buildStatusText as buildAntiBotStatusText,
-  buildWatchListText as buildAntiBotWatchListText
-} from './utils/antibot/manager.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = pathz.dirname(__filename);
 const OWNER_ONLY_MESSAGE = 'Este comando é apenas para o dono do bot!';
@@ -3336,45 +3322,6 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       return; // Ignora silenciosamente o alias para não-admins
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // 🤖 ANTIBOT — análise passiva (núcleo na fork)
-    // ═══════════════════════════════════════════════════════════════
-    // Roda ANTES dos filtros de comando, porque o AntiBot observa mensagem
-    // comum — não só comando. É puramente observacional: não apaga, não
-    // responde e nunca age por conta própria. A ação só existe no modo
-    // `active` E quando o núcleo devolve `actionAllowed` (confirmação com
-    // múltiplas categorias + persistência).
-    //
-    // Falha em silêncio por desenho: um erro aqui não pode derrubar o
-    // processamento normal da mensagem.
-    if (isGroup && !isOwner && !isGroupAdmin) {
-      try {
-        const antibotEngine = getAntiBotEngine(from, groupData);
-        if (antibotEngine) {
-          const evaluation = antibotEngine.ingest(info);
-          if (evaluation) {
-            const antiBotResult = toAntiBotResult(evaluation);
-            logAntiBotEvaluation(from, antiBotResult);
-            // Ação automática: SOMENTE modo `active` + confirmação do núcleo,
-            // e sempre revalidando as guardas antes de remover alguém.
-            if (antiBotResult?.actionAllowed) {
-              const aindaNoGrupo = groupAdmins.length >= 0 && Array.isArray(groupMetadata?.participants)
-                ? groupMetadata.participants.some((p) => idsMatch(p?.id, sender) || idsMatch(p?.lid, sender) || idsMatch(p?.phoneNumber, sender))
-                : true;
-              const alvoEhPrivilegiado = isOwner || isSubOwner || isGroupAdmin || idInArray(sender, groupAdmins);
-              if (aindaNoGrupo && !alvoEhPrivilegiado && isBotAdmin) {
-                await nazu.groupParticipantsUpdate(from, [sender], 'remove')
-                  .catch((e) => console.error('[ANTIBOT] Erro ao remover:', e?.message || e));
-                console.log(`[ANTIBOT] acao=remove group=${from} jid=${sender} score=${antiBotResult.automationScore}`);
-              }
-            }
-          }
-        }
-      } catch (antiBotError) {
-        // Nunca propaga: o AntiBot é acessório ao fluxo da mensagem.
-        console.error('[ANTIBOT] erro na análise:', antiBotError?.message || antiBotError);
-      }
-    }
     const isAntiPorn = groupData.antiporn;
     const isMuted = isUserInMap(groupData.mutedUsers, sender);
     const isMuted2 = isUserInMap(groupData.mutedUsers2, sender);
@@ -28035,7 +27982,6 @@ ${nomebot}  By  👑 ${nomedono}`;
             ["AntiSticker Plus", !!(groupData.antistickerplus)],
             ["AntiDelete", !!groupData.antidel],
             ["AntiFantasma", !!groupData.antiinvi],
-            ["AntiBot", !!groupData.antibot?.enabled],
                       ];
           const resFlags = [
             ["AutoDL", !!groupData.autodl],
@@ -32273,10 +32219,6 @@ break;
             { key: 'antidel', name: 'Antidelete', isObject: false },
             { key: 'antiinvi', name: 'AntiFantasma', isObject: false },
             { key: 'antisocial', name: 'AntiSocial', isObject: false, desc: 'Bloqueia links de redes sociais (Discord, Instagram, YouTube, TikTok e Spotify)' },
-            // `nestedKey` para configs que moram dentro de um objeto (ex.:
-            // `groupData.antibot.enabled`) — reusa o mesmo mecanismo do `subKey`,
-            // só que com o objeto aninhado em vez de um campo plano.
-            { key: 'antibot', name: 'AntiBot', nestedKey: 'enabled', desc: 'Detecta comportamento automatizado por correlação de evidências' },
           ];
           // Verificar status de cada sistema
           let activeCount = 0;
@@ -32290,9 +32232,6 @@ break;
             } else if (system.isObject) {
               const obj = groupData[system.key];
               isActive = obj && (system.subKey ? obj[system.subKey] : Object.keys(obj).some(k => obj[k]));
-            } else if (system.nestedKey) {
-              // Config aninhada (ex.: `groupData.antibot.enabled`).
-              isActive = !!groupData[system.key]?.[system.nestedKey];
             } else {
               // `legacyKey` cobre renomeações (ex.: antifoton -> antimidia):
               // grupos que ligaram antes da troca continuam aparecendo ativos.
@@ -33171,126 +33110,6 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
           await reply("Ocorreu um erro 💔");
         }
         break;
-      // ═══════════════════════════════════════════════════════════════
-      // 🤖 !antibot — controle do AntiBot (sistema de antis, por grupo)
-      // ═══════════════════════════════════════════════════════════════
-      // Segue o mesmo padrão dos outros antis: grupo + admin + bot admin,
-      // toggle em `groupData`, persistência pelo `persistGroupData()`.
-      // A detecção NÃO mora aqui: o núcleo está na fork e a camada em
-      // `utils/antibot/`.
-      case 'antibot': {
-        try {
-          if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!isGroupAdmin) return reply("Você precisa ser adm 💔");
-
-          // `q` traz os argumentos SEM o nome do comando (o `budy2` inclui).
-          const antiBotArgs = (q || '').trim().split(/\s+/).filter(Boolean);
-          const sub = (antiBotArgs[0] || '').toLowerCase();
-          const cfg = getGroupAntiBotConfig(groupData);
-          const enviar = (texto) => nazu.sendMessage(from, {
-            text: texto,
-            contextInfo: gerarContextNewsletter()
-          });
-
-          // Sem argumento (ou "status"): mostra o painel.
-          if (!sub || sub === 'status') {
-            const engine = getAntiBotEngine(from, groupData);
-            const stats = engine ? engine.stats(from) : { total: 0 };
-            await enviar(buildAntiBotStatusText(from, groupData, stats));
-            break;
-          }
-
-          // ligar/desligar
-          if (['on', 'ligar', 'ativar'].includes(sub)) {
-            setGroupAntiBotConfig(groupData, { enabled: true });
-            persistGroupData();
-            // Sobe o engine já com a config nova (cria o observador passivo).
-            const engine = getAntiBotEngine(from, groupData);
-            if (engine && typeof engine.attach === 'function') {
-              try { engine.attach(nazu); } catch (e) { console.error('[ANTIBOT] attach:', e?.message); }
-            }
-            await enviar(
-              `✅ *ANTIBOT ATIVADO*\n\n` +
-              `🛡️ Modo atual: *${ANTIBOT_MODE_LABELS[cfg.mode] || cfg.mode}*\n` +
-              `_Use ${groupPrefix}antibot modo <log|observe|quarantine|active> para mudar._`
-            );
-            break;
-          }
-
-          if (['off', 'desligar', 'desativar'].includes(sub)) {
-            setGroupAntiBotConfig(groupData, { enabled: false });
-            persistGroupData();
-            dropAntiBotEngine(from);
-            await enviar('❌ *ANTIBOT DESLIGADO*');
-            break;
-          }
-
-          // modo <log|observe|quarantine|active>
-          if (sub === 'modo' || sub === 'mode') {
-            const alvo = (antiBotArgs[1] || '').toLowerCase();
-            if (!alvo) {
-              await enviar(
-                `🛡️ *Modo atual:* ${ANTIBOT_MODE_LABELS[cfg.mode] || cfg.mode}\n\n` +
-                `• *log* — só registra\n` +
-                `• *observe* — analisa e mostra evidências\n` +
-                `• *quarantine* — marca, não bane\n` +
-                `• *active* — permite ação SÓ com confirmação`
-              );
-              break;
-            }
-            const antes = cfg.mode;
-            setGroupAntiBotConfig(groupData, { mode: alvo });
-            const depois = getGroupAntiBotConfig(groupData).mode;
-            if (depois === antes && antes !== alvo) {
-              await enviar('❌ Modo inválido. Use: log, observe, quarantine ou active.');
-              break;
-            }
-            persistGroupData();
-            dropAntiBotEngine(from); // recria com os thresholds do novo modo
-            if (getGroupAntiBotConfig(groupData).enabled) {
-              const engine = getAntiBotEngine(from, groupData);
-              if (engine && typeof engine.attach === 'function') {
-                try { engine.attach(nazu); } catch (e) { console.error('[ANTIBOT] attach:', e?.message); }
-              }
-            }
-            await enviar(`🛡️ *Modo do AntiBot:* ${ANTIBOT_MODE_LABELS[depois] || depois}`);
-            break;
-          }
-
-          // lista de quem está acima do normal
-          if (['lista', 'list', 'suspeitos', 'watch'].includes(sub)) {
-            const engine = getAntiBotEngine(from, groupData);
-            const lista = engine ? engine.listChat(from) : [];
-            const mentions = lista.slice(0, 10).map((p) => p.participant);
-            await nazu.sendMessage(from, {
-              text: buildAntiBotWatchListText(from, lista),
-              mentions,
-              contextInfo: gerarContextNewsletter()
-            });
-            break;
-          }
-
-          // limpar o estado do grupo
-          if (['reset', 'limpar'].includes(sub)) {
-            dropAntiBotEngine(from);
-            await enviar('🧹 Estado do AntiBot deste grupo foi reiniciado.');
-            break;
-          }
-
-          await enviar(
-            `🤖 *ANTIBOT* — uso:\n\n` +
-            `• ${groupPrefix}antibot — status\n` +
-            `• ${groupPrefix}antibot on / off\n` +
-            `• ${groupPrefix}antibot modo <log|observe|quarantine|active>\n` +
-            `• ${groupPrefix}antibot lista\n` +
-            `• ${groupPrefix}antibot reset`
-          );
-        } catch (e) {
-          console.error('[ANTIBOT] Erro no comando:', e);
-          await reply("Ocorreu um erro 💔");
-        }
-        break;
-      }
       case 'antifantasma':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
