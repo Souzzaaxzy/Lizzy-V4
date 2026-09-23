@@ -4226,11 +4226,13 @@ mídia é um arquivo solto numa pasta nova em `src` (`plaq/`).
 |---|---|
 | `dados/src/menus/menu18.js` | o menu (novo) |
 | `dados/src/funcs/utils/plaq.js` | resolvedor da mídia (novo) |
+| `dados/src/utils/restrictedMedia.js` | envio restrito a 1 membro (novo) |
 | `dados/src/plaq/` | a pasta das mídias (com `.gitkeep`) |
 | `dados/src/menus/index.js` | registro `menu18: './menu18.js'` |
 | `dados/src/menus/menu.js` | `menu18` na categoria COMUNIDADE (sem emoji) |
 | `dados/src/utils/blockPv.js` | entrada do menu + `menuCommandsMap.menu18` |
-| `tests/menu18-plaquinha.test.js` | 14 testes / 50 asserções |
+| `tests/menu18-plaquinha.test.js` | 19 testes / 62 asserções |
+| `tests/plaq-midia-restrita.test.js` | 11 testes / 42 asserções |
 
 ### É um menu +18
 Usa o **mesmo emoji que o resto do bot usa para conteúdo +18** (`🔞`, como na
@@ -4300,6 +4302,58 @@ paralelo de mídia de menu).
 `DATABASE_PATH`). Sem ela, usa `dados/src/plaq`. Existe para o teste rodar
 isolado; em produção não precisa definir nada.
 
+
+
+### MÍDIA SÓ PARA QUEM PEDIU (o emoji e a visibilidade restrita) (set/2026) ✅
+Dois pedidos do dono na mesma rodada:
+
+**1. Emoji 🖼️ antes de cada comando no menu18.** Cada linha ficou
+`｜ 🖼️ ✅ !plaq1` (o ✅/▫️ continua indicando se já existe mídia).
+
+**2. A mídia só é visível para quem pediu o comando.** Antes dela vai um aviso em
+TEXTO (esse sim todos veem):
+> 🤫 @fulano, essa mídia é só sua.
+> _Só você consegue abrir ela — o resto do grupo não vê nada._
+
+Módulo novo: **`dados/src/utils/restrictedMedia.js`**, que **reusa a mesma
+rotação de Sender Key do `!rajar`** (`relayGroupMessageWithSenderKeyRotation` +
+`allowedParticipants`). Nada de pipeline paralelo: a mídia é preparada pelo
+`generateWAMessage` (o caminho normal da lib, que faz o upload) usando o
+`waUploadToServer` **do próprio socket**, e o `message` montado vai para a
+rotação.
+
+**Três erros meus, todos pegos por medição:**
+1. **`generateWAMessageFromContent` NÃO prepara mídia.** Usá-lo deixava a mensagem
+   só com a chave do buffer (`{ image: { url: 'x.png' } }`), sem `mediaKey` — ou
+   seja, a mídia nunca subia. Quem faz o prepare/upload é o
+   **`generateWAMessage`** (que chama `generateWAMessageContent` +
+   `prepareWAMessageMedia` por dentro).
+2. **`options.upload is not a function`.** O `generateWAMessage` exige o
+   uploader explícito; passei o `waUploadToServer` do socket.
+3. **Mandar LID **e** PN da mesma pessoa contava como DOIS destinatários.** A lista
+   de `allowedParticipants` é usada **como está** — a lib não converte LID↔PN ali
+   — e o grupo endereça todos num modo só. Novo `resolveSenderJid()` escolhe a
+   forma pelo **metadata do grupo** (o `id` do participante já é a forma certa).
+
+**Falha fechada, em quatro pontos:** sem a API de rotação na fork, sem
+`waUploadToServer`, sem alvo válido, ou buffer vazio → **nada é enviado** e o
+bot avisa. Cair para o grupo inteiro mostraria exatamente o que se quer esconder.
+
+**LIMITE HONESTO (o mesmo do `!rajar`):** a stanza continua endereçada AO GRUPO.
+Quem foi excluído **percebe que houve uma mensagem** (recebe a referência), mas não
+consegue **ler o conteúdo** — não recebeu o material da Sender Key. Não é barreira
+contra o servidor do WhatsApp.
+
+**Testes:** `plaq-midia-restrita` (**11 testes / 42 asserções**) roda o handler
+real e leva o que o comando passou pelo caminho REAL da fork
+(`resolveGroupRecipients`), exigindo **um** destinatário — quem pediu — e não o
+grupo. Cobre também: ordem aviso→mídia, a mídia **nunca** pelo `sendMessage`
+comum, o `imageMessage` montado de verdade, os 10 comandos, e as duas falhas
+fechadas. Os testes antigos do `menu18-plaquinha` que mediam o envio comum foram
+**atualizados** (o contrato mudou: não há mais envio comum).
+**Armadilhas:** `sendMessage` é limitado a 3 comandos/5s **por remetente** — o
+teste cria um remetente novo por execução; e o dublê do socket precisa de
+`waUploadToServer` (senão o `generateWAMessage` falha e o teste mede o erro).
 
 ## SISTEMA ANTIBOT — REMOVIDO (set/2026) ❌
 O AntiBot foi **removido por completo** a pedido do dono, depois de nao entregar

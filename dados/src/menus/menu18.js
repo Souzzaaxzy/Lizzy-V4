@@ -25,7 +25,7 @@ import { PLAQ_COMMANDS, findPlaqMedia } from '../funcs/utils/plaq.js';
 export default async function menu18(prefix, botName = 'MeuBot', userName = 'Usuário') {
   const linhas = PLAQ_COMMANDS.map((cmd) => {
     const tem = findPlaqMedia(cmd) ? '✅' : '▫️';
-    return `｜ ${tem} ${prefix}${cmd}`;
+    return `｜ 🖼️ ${tem} ${prefix}${cmd}`;
   });
 
   return `╭━━━꧁༺ ✦ ${botName} ✦ ༻꧂━━━╮

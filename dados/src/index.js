@@ -1041,6 +1041,11 @@ import {
   resolvePlaqMedia,
   normalizePlaqCommand
 } from './funcs/utils/plaq.js';
+import {
+  sendRestrictedMedia,
+  normalizeRestrictedTargets,
+  resolveSenderJid
+} from './utils/restrictedMedia.js';
 import { getInfo as twitterGetInfo } from './funcs/utils/twitter.js';
 import { search, searchNews } from './funcs/utils/search.js';
 import { removeBg, upscale } from './funcs/utils/imagetools.js';
@@ -22203,6 +22208,10 @@ Precisa de ajuda? Entre em contato:
       // (ex.: `plaq/plaq1.png`). Sem arquivo, avisa em vez de mandar nada.
       // A lista dos 10 é fechada (`PLAQ_COMMANDS`), então a pasta não serve
       // para outros comandos.
+      //
+      // VISIBILIDADE RESTRITA: a foto só é decifrável por quem pediu. Antes dela
+      // vai um aviso em texto (esse sim visível a todos), na mesma técnica de
+      // rotação de Sender Key do `!rajar`. Ver `utils/restrictedMedia.js`.
       case 'plaq1':
       case 'plaq2':
       case 'plaq3':
@@ -22225,20 +22234,51 @@ Precisa de ajuda? Entre em contato:
             await reply(`❌ A plaquinha *${plaqName}* ainda não tem mídia.\n\n📁 Coloque o arquivo em: \`dados/src/plaq/${plaqName}.png\` (aceita gif, mp4, jpg, webp)`);
             break;
           }
+
+          // O alvo é SEMPRE quem pediu o comando (não quem foi marcado).
+          // Resolvo para a forma que o GRUPO usa (LID ou PN): a lista de
+          // destinatários é usada como está, então mandar as duas formas da
+          // MESMA pessoa a contaria como dois destinatários.
+          const alvoUnico = resolveSenderJid({
+            participants: groupMetadata?.participants,
+            sender,
+            senderAlt: senderJidOriginal
+          });
+          const alvoJids = normalizeRestrictedTargets(alvoUnico);
+
+          // O aviso vai para TODOS e cita quem pediu. É ele que explica por que
+          // a foto "não aparece" para os outros.
+          const aviso =
+            `🤫 @${getUserName(sender)}, essa mídia é só sua.\n\n` +
+            `_Só você consegue abrir ela — o resto do grupo não vê nada._`;
+
+          await nazu.sendMessage(from, {
+            text: aviso,
+            mentions: [sender]
+          });
+
           // Caminho absoluto vindo do resolvedor: não depende de qual pasta
           // `plaq/` está em uso.
           const plaqBuffer = fs.readFileSync(plaqMedia.file);
-          if (plaqMedia.isVideo) {
-            await nazu.sendMessage(from, {
-              video: plaqBuffer,
-              gifPlayback: plaqMedia.isGif,
-              mimetype: 'video/mp4'
-            });
-          } else {
-            await nazu.sendMessage(from, {
-              image: plaqBuffer
-            });
+
+          const envioRestrito = await sendRestrictedMedia({
+            sock: nazu,
+            groupJid: from,
+            targets: alvoJids,
+            mediaBuffer: plaqBuffer,
+            isVideo: plaqMedia.isVideo,
+            generateWAMessage
+          });
+
+          if (!envioRestrito.ok) {
+            console.error(`[PLAQ] envio restrito falhou: ${envioRestrito.reason} ${envioRestrito.detail || ''}`);
+            await reply(
+              `⚠️ Não consegui enviar a mídia só para você por aqui (${envioRestrito.reason}).\n\n` +
+              `_Nada foi enviado — melhor assim do que mandar para o grupo inteiro._`
+            );
+            break;
           }
+          console.log(`[PLAQ] enviado restrito | cmd=${plaqName} | alvo=${alvoJids.join(',')} | bytes=${plaqBuffer.length}`);
         } catch (e) {
           console.error('[PLAQ] Erro:', e);
           await reply("❌ Ocorreu um erro ao enviar a plaquinha");

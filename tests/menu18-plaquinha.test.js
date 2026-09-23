@@ -103,7 +103,8 @@ const handleMessage = indexModule.default ?? indexModule;
 if (typeof handleMessage !== 'function') throw new Error('index.js não exporta o handler');
 
 const {
-  PLAQ_DIR, PLAQ_COMMANDS, findPlaqMedia, normalizePlaqCommand, isPlaqCommand
+  PLAQ_DIR, PLAQ_COMMANDS, findPlaqMedia, normalizePlaqCommand, isPlaqCommand,
+  resolvePlaqMedia
 } = await import(new URL('../dados/src/funcs/utils/plaq.js', import.meta.url).href);
 
 const BOT_JID = '5599999999999@s.whatsapp.net';
@@ -298,15 +299,17 @@ await test('o menu marca ✅ só os comandos que TÊM mídia', async () => {
 // 3) COMANDOS
 // ============================================================================
 
-await test('!plaq1 envia a imagem colocada na pasta (sem JSON, sem comando)', async () => {
+await test('!plaq1 usa a imagem colocada na pasta (sem JSON, sem comando)', async () => {
   limparPlaq();
   criarPlaq('plaq1', 'png');
   const { groupJid, people, participants } = setup(2);
   const out = await run({ groupJid, sender: people[0], text: '!plaq1', participants });
-  const msg = out.sent.find((s) => s.content && s.content.image);
-  ok(Boolean(msg), 'enviou como imagem');
-  ok(Buffer.isBuffer(msg?.content?.image) && msg.content.image.length > 0, 'o conteúdo é o Buffer do arquivo');
-  ok(!out.text.includes('não tem mídia'), 'não reclamou de mídia ausente');
+  // A mídia NÃO sai mais pelo `sendMessage` comum: ela vai RESTRITA (coberta em
+  // `plaq-midia-restrita.test.js`). Aqui se mede que o comando achou o arquivo
+  // da pasta e não reclamou de mídia ausente.
+  ok(!out.text.includes('não tem mídia'), 'achou a mídia na pasta');
+  const mandouComum = out.sent.some((s) => s.content?.image || s.content?.video);
+  ok(!mandouComum, 'não manda a mídia para o grupo inteiro');
   limparPlaq();
 });
 
@@ -328,25 +331,25 @@ await test('cada comando usa O SEU arquivo (não compartilha mídia)', async () 
   // plaq4 com bytes diferentes, para distinguir
   const outro = Buffer.concat([PNG_1x1, Buffer.from([0, 0, 0])]);
   criarPlaq('plaq4', 'png', outro);
-  const { groupJid, people, participants } = setup(2);
+  setup(2);
 
-  const out3 = await run({ groupJid, sender: makePerson(), text: '!plaq3', participants });
-  const out4 = await run({ groupJid, sender: makePerson(), text: '!plaq4', participants });
-  const img3 = out3.sent.find((s) => s.content?.image)?.content.image;
-  const img4 = out4.sent.find((s) => s.content?.image)?.content.image;
-  ok(img3 && img4, 'os dois enviaram imagem');
-  ok(!img3.equals(img4), 'cada comando manda o SEU arquivo');
+  // Lê os arquivos como o resolvedor do comando lê (o envio em si é restrito).
+  const m3 = resolvePlaqMedia('plaq3');
+  const m4 = resolvePlaqMedia('plaq4');
+  ok(m3 && m4, 'os dois comandos têm arquivo');
+  const img3 = fs.readFileSync(m3.file);
+  const img4 = fs.readFileSync(m4.file);
+  ok(!img3.equals(img4), 'cada comando aponta para o SEU arquivo');
+  ok(m3.file.endsWith('plaq3.png') && m4.file.endsWith('plaq4.png'), 'caminhos distintos');
   limparPlaq();
 });
 
-await test('GIF/vídeo vai com gifPlayback', async () => {
+await test('GIF é reconhecido como vídeo/GIF pelo resolvedor', async () => {
   limparPlaq();
   criarPlaq('plaq2', 'gif');
-  const { groupJid, people, participants } = setup(2);
-  const out = await run({ groupJid, sender: people[0], text: '!plaq2', participants });
-  const msg = out.sent.find((s) => s.content?.video);
-  ok(Boolean(msg), 'enviou como vídeo');
-  ok(msg?.content?.gifPlayback === true, 'com gifPlayback ligado');
+  const m = resolvePlaqMedia('plaq2');
+  ok(m && m.isVideo === true, 'GIF entra como vídeo');
+  ok(m.isGif === true, 'e marcado como GIF (liga o gifPlayback no envio)');
   limparPlaq();
 });
 
