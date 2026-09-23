@@ -298,20 +298,22 @@ com `antirequest: false` para isolar o caminho da rajada). Suítes: **50/50**,
 **54/54**, **22/22**.
 
 
-## RAJA — sistema salvo por grupo (!setmsgraja / !raja / !rajar) + !msghost ✅
+## RAJA — sistema salvo GLOBALMENTE (!setmsgraja / !raja / !rajar) + !msghost ✅
 Reorganização pedida pelo dono (set/2026). Categoria do menu dono:
 **"🧪 TESTES DE PROTEÇÃO (DONO)" → "🫥 MENSAGENS INVISÍVEIS"**.
 
 ### Os quatro comandos
 | Comando | O que faz |
 |---|---|
-| `!setmsgraja <qtd> <texto>` | salva quantidade + texto **no grupo** (`groupData.msgraja`) |
+| `!setmsgraja <qtd> <texto>` | salva quantidade + texto **no bot** (slot global `dono/rajaMsg.json`) |
 | `!raja` | **mostra** o que está salvo (não envia nada) |
 | `!rajar` | **dispara** a rajada com o que está salvo |
 | `!msghost @alvo [texto]` | apaga a mensagem do comando e envia o texto **só ao alvo**, no privado |
 
-- **Estado POR GRUPO** (`groupData.msgraja`), como o resto dos anti/comandos.
-  Salvar no grupo A não vale no B.
+- **Estado GLOBAL** (`dono/rajaMsg.json`, via `loadRajaMsg`/`saveRajaMsg` em
+  `utils/database.js`). Salvar no grupo A **vale no B** — o que for salvo vale
+  em qualquer grupo. (Antes era `groupData.msgraja`, por grupo; mudado a pedido
+  do dono — só o escopo do armazenamento, nada do transporte/conteúdo.)
 - `!raja` e `!rajar` são do **dono** e só funcionam em grupo.
 - Teto de **50** mensagens (herdado do raja antigo), avisando quando limita.
 - `!rajar` mantém o conteúdo (`buildRajaContent` → `requestPaymentMessage` com
@@ -323,10 +325,12 @@ Reorganização pedida pelo dono (set/2026). Categoria do menu dono:
   exercitavam), `raja <qtd> <texto>` na forma antiga.
 - Menu (`menudono.js`) e `blockPv.js` atualizados para os quatro comandos.
 
-### Testes — `tests/raja-selective.test.js` (23 asserções, 13 testes)
-Salvamento por grupo, `!raja` que só mostra, `!rajar` usando o que foi salvo,
-teto de 50, isolamento entre grupos, autorização só dos membros comuns (nenhum
-admin), conteúdo intacto, messageId único por envio e falha fechada sem a API.
+### Testes — `tests/raja-selective.test.js` (22 asserções, 13 testes)
+Salvamento global, `!raja` que só mostra, `!rajar` usando o que foi salvo,
+teto de 50, **estado global (salvar no A vale no B)**, autorização só dos
+membros comuns (nenhum admin), conteúdo intacto, messageId único por envio e
+falha fechada sem a API. Os testes que esperam "nada salvo" zeram o slot global
+antes (`limparRajaGlobal()`), já que o estado agora é compartilhado.
 
 - **Armadilha 1**: o throttle de comandos é por **REMETENTE** (3 por 5s) mas é
   **pulado quando `info.key.fromMe`**. Os testes mandam vários comandos

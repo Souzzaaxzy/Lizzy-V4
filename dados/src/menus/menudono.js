@@ -252,7 +252,7 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 │ 📦 ${prefix}raja
 │    Mostra a mensagem e a quantidade salvas
 │ 💾 ${prefix}setmsgraja <qtd> <texto>
-│    Salva a mensagem do raja (por grupo)
+│    Salva a mensagem do raja (global)
 │ 🚀 ${prefix}rajar
 │    Dispara a mensagem salva
 │ 👻 ${prefix}msghost @alvo [texto]

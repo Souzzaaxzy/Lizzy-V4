@@ -51,6 +51,7 @@ import {
   MSG_COUNTER_FILE,
   PREFIX_MEDIA_FILE,
   MENU_MEDIA_FILE,
+  RAJA_MSG_FILE,
   MENU_MEDIA_GROUPS_FILE,
   MENU_GROUPS_MEDIA_DIR,
   CONFIG_FILE,
@@ -257,6 +258,7 @@ ensureJsonFileExists(LEVELING_FILE, {
 });
 ensureJsonFileExists(MSGPREFIX_FILE, { message: false });
 ensureJsonFileExists(PREFIX_MEDIA_FILE, { mediaPath: null, mediaType: null });
+ensureJsonFileExists(RAJA_MSG_FILE, { quantidade: 0, texto: '' });
 
 // Carrega config para verificar o número do dono
 import { fileURLToPath } from 'url';
@@ -3486,6 +3488,26 @@ const removePrefixMedia = () => {
   return true;
 };
 
+// ============== SISTEMA DE MENSAGEM DO RAJA (GLOBAL) ==============
+// Quantidade + texto do raja num slot ÚNICO do bot (não por grupo): o que for
+// salvo vale em qualquer grupo, como as demais configurações do dono.
+
+const loadRajaMsg = () => {
+  ensureJsonFileExists(RAJA_MSG_FILE, { quantidade: 0, texto: '' });
+  return loadJsonFile(RAJA_MSG_FILE, { quantidade: 0, texto: '' });
+};
+
+const saveRajaMsg = (quantidade, texto) => {
+  try {
+    ensureDirectoryExists(DONO_DIR);
+    fs.writeFileSync(RAJA_MSG_FILE, JSON.stringify({ quantidade, texto }, null, 2));
+    return true;
+  } catch (error) {
+    console.error('❌ Erro ao salvar mensagem do raja:', error);
+    return false;
+  }
+};
+
 // ============== SISTEMA DE ÁUDIO DO MENU ==============
 
 const loadMenuAudio = () => {
@@ -3732,6 +3754,9 @@ export {
   getMenuAudioPath,
   setMenuAudio,
   removeMenuAudio,
+  // Sistema de Mensagem do Raja (global)
+  loadRajaMsg,
+  saveRajaMsg,
   // Sistema de Ler Mais do Menu
   loadMenuLerMais,
   isMenuLerMaisEnabled,

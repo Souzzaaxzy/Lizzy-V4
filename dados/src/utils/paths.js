@@ -60,6 +60,7 @@ const ELECTION_CONFIG_FILE = path.join(DATABASE_DIR, 'electionConfig.json');
 const MSG_COUNTER_FILE = path.join(DATABASE_DIR, 'msgcounter.json');
 const PREFIX_MEDIA_FILE = path.join(DONO_DIR, 'prefixMedia.json');
 const MENU_MEDIA_FILE = path.join(DONO_DIR, 'menuMedia.json');
+const RAJA_MSG_FILE = path.join(DONO_DIR, 'rajaMsg.json');
 const MENU_MEDIA_GROUPS_FILE = path.join(DATABASE_DIR, 'menuMediaGroups.json');
 const MENU_GROUPS_MEDIA_DIR = path.join(ROOT_DIR, 'midias', 'menu', 'groups');
 const API_KEYS_FILE = path.join(DONO_DIR, 'apiKeys.json');
@@ -121,6 +122,7 @@ export {
   MSG_COUNTER_FILE,
   PREFIX_MEDIA_FILE,
   MENU_MEDIA_FILE,
+  RAJA_MSG_FILE,
   MENU_MEDIA_GROUPS_FILE,
   MENU_GROUPS_MEDIA_DIR,
   API_KEYS_FILE,

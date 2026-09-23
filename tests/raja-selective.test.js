@@ -148,6 +148,16 @@ function makeNazu({ sent, groupJid, senderLid, hasRotationApi = true }) {
  */
 const esperarDisco = () => new Promise((r) => setTimeout(r, 400));
 
+// O estado do raja agora é GLOBAL, então um teste que espera "nada salvo"
+// precisa zerar o slot antes — senão herda o que o teste anterior gravou.
+const limparRajaGlobal = () => {
+  fs.mkdirSync(path.join(TMP_DB, 'dono'), { recursive: true });
+  fs.writeFileSync(
+    path.join(TMP_DB, 'dono', 'rajaMsg.json'),
+    JSON.stringify({ quantidade: 0, texto: '' }, null, 2)
+  );
+};
+
 let cenario = 0;
 
 async function rodar({ groupJid, text = '!rajar', hasRotationApi = true }) {
@@ -176,16 +186,17 @@ async function rodar({ groupJid, text = '!rajar', hasRotationApi = true }) {
 
 // ============================================================================
 
-await test('!setmsgraja salva quantidade e texto NESTE grupo', async () => {
+await test('!setmsgraja salva quantidade e texto GLOBALMENTE', async () => {
   const groupJid = makeGroup();
   const r = await rodar({ groupJid, text: '!setmsgraja 7 bom dia pessoal' });
   ok(r.textos.includes('MENSAGEM DO RAJA SALVA'), 'confirmou o salvamento');
 
-  // O estado precisa ter ido para o arquivo do grupo (é o que o !raja lê).
+  // O estado vai para o slot GLOBAL do bot (é o que o !raja lê), não para o
+  // arquivo do grupo.
   await esperarDisco();
-  const salvo = JSON.parse(fs.readFileSync(path.join(GRUPOS_DIR, `${groupJid}.json`), 'utf-8'));
-  assert.equal(salvo.msgraja?.quantidade, 7, 'quantidade salva');
-  assert.equal(salvo.msgraja?.texto, 'bom dia pessoal', 'texto salvo');
+  const salvo = JSON.parse(fs.readFileSync(path.join(TMP_DB, 'dono', 'rajaMsg.json'), 'utf-8'));
+  assert.equal(salvo.quantidade, 7, 'quantidade salva');
+  assert.equal(salvo.texto, 'bom dia pessoal', 'texto salvo');
 });
 
 await test('!raja mostra o que está salvo (não dispara nada)', async () => {
@@ -199,6 +210,7 @@ await test('!raja mostra o que está salvo (não dispara nada)', async () => {
 });
 
 await test('!raja sem nada salvo avisa e ensina o comando', async () => {
+  limparRajaGlobal();
   const groupJid = makeGroup();
   const r = await rodar({ groupJid, text: '!raja' });
   ok(r.textos.includes('Nenhuma mensagem salva'), 'avisou que não há nada salvo');
@@ -219,27 +231,33 @@ await test('!rajar usa a quantidade e o texto salvos', async () => {
 });
 
 await test('!rajar sem nada salvo não envia e aponta o !setmsgraja', async () => {
+  limparRajaGlobal();
   const groupJid = makeGroup();
   const r = await rodar({ groupJid, text: '!rajar' });
   assert.equal(r.rotationCalls.length, 0, 'não enviou');
   ok(r.textos.includes('Nada salvo'), 'avisou que não há nada salvo');
 });
 
-await test('o estado é POR GRUPO: salvar no A não vale no B', async () => {
+await test('o estado é GLOBAL: salvar no A vale no B', async () => {
   const grupoA = makeGroup();
   const grupoB = makeGroup();
   await rodar({ groupJid: grupoA, text: '!setmsgraja 2 do A' });
   const rB = await rodar({ groupJid: grupoB, text: '!rajar' });
-  assert.equal(rB.rotationCalls.length, 0, 'o grupo B não disparou nada');
-  ok(rB.textos.includes('Nada salvo'), 'o grupo B não herdou o texto do A');
+  assert.equal(rB.rotationCalls.length, 2, 'o grupo B herdou o que foi salvo no A');
+  const msg = rB.rotationCalls[0]?.m;
+  assert.equal(
+    msg?.requestPaymentMessage?.noteMessage?.extendedTextMessage?.text,
+    'do A',
+    'o grupo B usou o texto salvo no A'
+  );
 });
 
 await test('!setmsgraja aplica o teto de 50', async () => {
   const groupJid = makeGroup();
   const r = await rodar({ groupJid, text: '!setmsgraja 999 teto' });
   await esperarDisco();
-  const salvo = JSON.parse(fs.readFileSync(path.join(GRUPOS_DIR, `${groupJid}.json`), 'utf-8'));
-  assert.equal(salvo.msgraja?.quantidade, 50, 'guardou no máximo 50');
+  const salvo = JSON.parse(fs.readFileSync(path.join(TMP_DB, 'dono', 'rajaMsg.json'), 'utf-8'));
+  assert.equal(salvo.quantidade, 50, 'guardou no máximo 50');
   ok(r.textos.includes('limitado'), 'informou que limitou');
 });
 

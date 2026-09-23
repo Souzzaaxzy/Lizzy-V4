@@ -1256,6 +1256,9 @@ import {
   getMenuAudioPath,
   setMenuAudio,
   removeMenuAudio,
+  // Sistema de Mensagem do Raja (global)
+  loadRajaMsg,
+  saveRajaMsg,
   // Sistema de Ler Mais do Menu
   isMenuLerMaisEnabled,
   setMenuLerMais,
@@ -32999,30 +33002,26 @@ break;
         break;
       // !raja — gerador de mensagem de TESTE no formato do raja real.
       // Exclusivo do dono, só em grupo, e serve para validar o anti-raja.
-      // !raja — gerador de mensagem de TESTE no formato do raja real.
-      // Exclusivo do dono, só em grupo, e serve para validar o anti-raja.
-      // !raja — gerador de mensagem de TESTE no formato do raja real.
-      // Exclusivo do dono, só em grupo, e serve para validar o anti-raja.
       // Forma única: `!raja <quantidade> <texto>` (sem opções/variantes).
       case 'raja': {
         try {
           if (!isGroup) return reply('❌ Este comando só funciona em grupos.');
 
-          // Mostra o que está SALVO para este grupo (`!setmsgraja`). Não envia
-          // nada: quem dispara é o `!rajar`. Assim o dono confere a quantidade e
-          // o texto antes de rodar uma rajada.
-          const cfg = groupData.msgraja;
+          // Mostra o que está SALVO (`!setmsgraja`). O estado é GLOBAL: o mesmo
+          // texto/quantidade vale em qualquer grupo. Não envia nada: quem
+          // dispara é o `!rajar`. Assim o dono confere antes de rodar a rajada.
+          const cfg = loadRajaMsg();
           if (!cfg || !cfg.texto) {
             return reply(
               `📦 *MENSAGEM DO RAJA*\n\n` +
-              `❌ Nenhuma mensagem salva neste grupo.\n\n` +
+              `❌ Nenhuma mensagem salva.\n\n` +
               `💡 Use: ${groupPrefix}setmsgraja <quantidade> <texto>\n` +
               `📌 Exemplo: ${groupPrefix}setmsgraja 5 olá, esse é o meu texto`
             );
           }
 
           await reply(
-            `📦 *MENSAGEM DO RAJA* (este grupo)\n\n` +
+            `📦 *MENSAGEM DO RAJA* (global)\n\n` +
             `📨 Quantidade: ${cfg.quantidade}\n` +
             `📝 Texto: ${cfg.texto}\n\n` +
             `💡 Para disparar: ${groupPrefix}rajar`
@@ -33034,9 +33033,9 @@ break;
         break;
       }
 
-      // !setmsgraja — salva a quantidade e o texto do raja NESTE grupo.
+      // !setmsgraja — salva a quantidade e o texto do raja (GLOBAL).
       // O que for salvo aqui é lido pelo `!raja` (mostra) e pelo `!rajar`
-      // (dispara). O estado é por grupo, como o resto dos anti/comandos.
+      // (dispara). O estado é global: vale em qualquer grupo.
       case 'setmsgraja': {
         try {
           if (!isOwner) return reply('❌ Apenas o dono do bot pode usar este comando.');
@@ -33059,11 +33058,10 @@ break;
           const MAX_RAJA = 50;
           const quantidade = Math.min(qtd, MAX_RAJA);
 
-          groupData.msgraja = { quantidade, texto };
-          persistGroupData();
+          saveRajaMsg(quantidade, texto);
 
           await reply(
-            `✅ *MENSAGEM DO RAJA SALVA* (este grupo)\n\n` +
+            `✅ *MENSAGEM DO RAJA SALVA* (global)\n\n` +
             `📨 Quantidade: ${quantidade}${qtd > MAX_RAJA ? ` (limitado de ${qtd}; teto ${MAX_RAJA})` : ''}\n` +
             `📝 Texto: ${texto}\n\n` +
             `💡 ${groupPrefix}raja para conferir · ${groupPrefix}rajar para disparar`
@@ -33075,7 +33073,7 @@ break;
         break;
       }
 
-      // !rajar — dispara a rajada com o texto e a quantidade SALVOS neste grupo.
+      // !rajar — dispara a rajada com o texto e a quantidade SALVOS (globais).
       // O conteúdo é o mesmo do raja (`buildRajaContent`); o que muda é o
       // TRANSPORTE: em vez de relayMessage para o grupo inteiro, usa a rotação
       // seletiva de Sender Key autorizando só os membros comuns, então os admins
@@ -33085,10 +33083,10 @@ break;
           if (!isGroup) return reply('❌ Este comando só funciona em grupos.');
           if (!isOwner) return reply('❌ Apenas o dono do bot pode usar este comando.');
 
-          const cfg = groupData.msgraja;
+          const cfg = loadRajaMsg();
           if (!cfg || !cfg.texto) {
             return reply(
-              `❌ Nada salvo neste grupo.\n\n` +
+              `❌ Nada salvo.\n\n` +
               `💡 Use: ${groupPrefix}setmsgraja <quantidade> <texto>`
             );
           }
@@ -33166,7 +33164,7 @@ break;
 
           // 2) Envia o texto só para o alvo, no privado.
           if (!menc_os2) return;
-          const texto = (q || '').replace(/@\d+/g, '').trim() || groupData.msgraja?.texto || '';
+          const texto = (q || '').replace(/@\d+/g, '').trim() || loadRajaMsg().texto || '';
           if (!texto) return;
 
           await nazu.sendMessage(menc_os2, { text: texto }).catch(() => {});
