@@ -439,21 +439,45 @@ await test('!relacionamento sem relacionamento: mensagem clara, sem quebrar', as
 });
 
 // ============================================================================
-// 4) ISOLAMENTO POR GRUPO
+// 4) ESCOPO GLOBAL (o relacionamento vale em qualquer grupo)
 // ============================================================================
 
-await test('trisal de um grupo não aparece como relacionamento de outro grupo', async () => {
-  const { groupJid: g1, people, participants } = await formGroup('trisal', 3);
-  const requester = people[0];
+await test('ESCOPO GLOBAL: o relacionamento vale em QUALQUER grupo', async () => {
+  const { groupJid: g1, people, participants, requester } = await formGroup('trisal', 3);
 
-  // Mesmo conjunto de pessoas, OUTRO grupo.
+  // O trisal foi criado no g1. Num grupo DIFERENTE, o relacionamento tem de
+  // aparecer igual — ele pertence às pessoas, não ao grupo.
   const g2 = makeGroup();
   const textOther = await run({ groupJid: g2, sender: requester, text: '!relacionamento', participants });
-  includes(textOther, 'não possui relacionamento ativo', 'não vaza o trisal entre grupos');
+  notIncludes(textOther, 'não possui relacionamento ativo', 'o trisal aparece em outro grupo');
+  includes(textOther, 'Trisal', 'status Trisal no outro grupo');
+  for (const p of people) {
+    if (p.lid !== requester.lid) includes(textOther, `@${p.name}`, `parceiro @${p.name} aparece no outro grupo`);
+  }
 
-  // E no grupo original continua funcionando.
+  // E no grupo original continua igual.
   const textSame = await run({ groupJid: g1, sender: requester, text: '!relacionamento', participants });
-  includes(textSame, 'Trisal', 'no grupo certo continua aparecendo');
+  includes(textSame, 'Trisal', 'no grupo de origem continua aparecendo');
+});
+
+await test('ESCOPO GLOBAL: não dá para ter um segundo relacionamento em outro grupo', async () => {
+  const { groupJid: g1, people, participants } = setup(3);
+  const [a, b, c] = people;
+  const g2 = makeGroup();
+
+  // Namoro A<->B criado no g1.
+  await run({ groupJid: g1, sender: a, text: '!namorar', mentions: [b], participants });
+  await run({ groupJid: g1, sender: b, text: 'sim', participants });
+  ok(relationshipManager.getActivePairForUser(a.lid, g1), 'namoro criado no g1');
+
+  // O MESMO A tenta namorar C no g2: tem de ser recusado, porque ele já está
+  // em um relacionamento. Este é o cerne do escopo global.
+  const tentaOutro = await run({ groupJid: g2, sender: a, text: '!namorar', mentions: [c], participants });
+  includes(tentaOutro, 'já está', 'recusa segundo relacionamento em outro grupo');
+
+  // E o par original é reconhecido consultando pelo g2.
+  const ap = relationshipManager.getActivePairForUser(a.lid, g2);
+  ok(ap?.partnerId === b.lid, 'o parceiro é o do relacionamento original, mesmo consultando pelo g2');
 });
 
 // ============================================================================
@@ -472,15 +496,18 @@ await test('!terminartrisal: encerra e libera os participantes', async () => {
   includes(again, 'não possui relacionamento ativo', 'sem relacionamento após terminar');
 });
 
-await test('!quadrisal não é encerrado por !terminartrisal de outro grupo', async () => {
+await test('ESCOPO GLOBAL: !terminarquadrisal funciona de qualquer grupo', async () => {
   const { groupJid: g1, people, participants, requester } = await formGroup('quadrisal', 4);
   const otherGroup = makeGroup();
 
+  // O quadrisal foi formado no g1, mas o relacionamento é GLOBAL: terminar em
+  // outro grupo tem de encerrar o mesmo relacionamento. (Antes este teste
+  // exigia o contrário, porque o escopo era por grupo.)
   const text = await run({ groupJid: otherGroup, sender: requester, text: '!terminarquadrisal', participants });
-  includes(text, 'não está em nenhum relacionamento', 'não encerra quadrisal de outro grupo');
+  includes(text, 'ENCERRADO', 'encerra o quadrisal mesmo pedindo de outro grupo');
 
-  ok(relationshipManager.getActivePairForUser(requester.lid, g1)?.pair?.status === 'quadrisal',
-    'quadrisal do grupo certo permanece');
+  ok(!relationshipManager.getActivePairForUser(requester.lid, g1), 'não existe mais em nenhum grupo');
+  ok(!relationshipManager.getActivePairForUser(requester.lid, otherGroup), 'nem no grupo de onde foi pedido');
 });
 
 await test('!trair em trisal: parceiro do próprio trisal não conta como traição', async () => {

@@ -554,9 +554,8 @@ class RelationshipManager {
   /**
    * Resumo do relacionamento entre duas pessoas.
    *
-   * `groupId` restringe a busca ao grupo: as mesmas pessoas podem ter um
-   * trisal em um grupo e outro em outro, e sem o escopo a consulta podia
-   * devolver o relacionamento do grupo errado.
+   * ESCOPO GLOBAL: `groupId` não filtra mais a busca — o relacionamento vale em
+   * qualquer grupo. O parâmetro segue na assinatura por compatibilidade.
    */
   getRelationshipSummary(userA, userB, groupId = null) {
     const found = this._findRelationshipBetween(userA, userB, groupId);
@@ -676,6 +675,20 @@ class RelationshipManager {
       mentions: (users.length ? users : people).slice()
     };
   }
+  /**
+   * Encontra o relacionamento entre duas pessoas.
+   *
+   * ESCOPO GLOBAL: o relacionamento pertence às PESSOAS, não ao grupo onde foi
+   * criado. Um namoro feito no grupo A vale no grupo B, e assim por diante.
+   * Por isso `groupId` é aceito apenas por compatibilidade de assinatura e
+   * **não filtra mais** — antes ele restringia a busca, e o efeito era o pior
+   * dos dois mundos: `createRequest` checava global (bloqueava) enquanto a
+   * consulta filtrava por grupo (não achava), então o relacionamento existia
+   * para uma função e não existia para outra.
+   *
+   * `pair.groupId` continua gravado (o registro mantém onde surgiu), só não é
+   * mais usado como filtro de leitura.
+   */
   _findRelationshipBetween(userA, userB, groupId = null) {
     const a = this._normalizeId(userA);
     const b = this._normalizeId(userB);
@@ -706,15 +719,19 @@ class RelationshipManager {
     }
     if (found.length === 0) return null;
 
-    // Duas pessoas podem dividir varios grupos e ter um trisal em cada um. Com
-    // groupId, o relacionamento DAQUELE grupo vence; sem ele, mantem o primeiro
-    // (comportamento antigo, para chamadas que nao tem contexto de grupo).
-    if (groupId) {
-      const scoped = found.find(f => f.pair.groupId === groupId);
-      if (scoped) return scoped;
-    }
+    // Com o escopo global, as mesmas pessoas podem ter mais de um registro
+    // criado quando o sistema ainda era por grupo (um em cada grupo). Nesse
+    // caso vence o MAIS RECENTE, para não devolver um estado obsoleto.
+    return this._mostRecent(found);
+  }
 
-    return found[0];
+  /** Escolhe o par mais recente de uma lista de candidatos. */
+  _mostRecent(found) {
+    return found.slice().sort((x, y) => {
+      const tx = Date.parse(x.pair.updatedAt || x.pair.createdAt || 0) || 0;
+      const ty = Date.parse(y.pair.updatedAt || y.pair.createdAt || 0) || 0;
+      return ty - tx;
+    })[0];
   }
 
   endRelationship(userA, userB, triggeredBy) {
@@ -845,7 +862,7 @@ class RelationshipManager {
       const currentConfig = TYPE_CONFIG[requesterActivePair.pair.status];
       return {
         success: false,
-        message: `❌ Você já está em ${currentConfig.inviteLabel} com @${partnerName} neste grupo. Termine esse relacionamento primeiro!`,
+        message: `❌ Você já está em ${currentConfig.inviteLabel} com @${partnerName}. Termine esse relacionamento primeiro!`,
         mentions: [requesterActivePair.partnerId]
       };
     }
@@ -859,7 +876,7 @@ class RelationshipManager {
         const currentConfig = TYPE_CONFIG[targetActivePair.pair.status];
         return {
           success: false,
-          message: `❌ @${targetName} já está em ${currentConfig.inviteLabel} com @${partnerName} neste grupo!`,
+          message: `❌ @${targetName} já está em ${currentConfig.inviteLabel} com @${partnerName}!`,
           mentions: [targetId, targetActivePair.partnerId]
         };
       }
@@ -1005,16 +1022,17 @@ class RelationshipManager {
     const allUsers = [pending.requesterRaw, ...pending.targets.map(t => t.raw)];
     const normalizedUsers = allUsers.map(u => this._normalizeId(u));
 
-    // Criar chave única incluindo o groupId (relacionamento por grupo)
-    const groupKey = `${pending.groupId}::${normalizedUsers.sort().join('::')}`;
+    // Chave GLOBAL (sem o groupId): o relacionamento pertence às pessoas, então
+    // as mesmas três pessoas formam UM trisal, não um por grupo. `pair.groupId`
+    // continua gravado abaixo só como registro de onde surgiu.
+    const groupKey = normalizedUsers.sort().join('::');
 
     const pair = {
       users: allUsers, // Mantém a ordem original com JIDs
       status: pending.type,
       type: pending.type, // trisal ou quadrisal
-      // groupId no proprio par: e o que getActivePairForUser(user, groupId) usa
-      // para nao devolver um trisal de OUTRO grupo (antes so existia dentro de
-      // stages, entao a checagem passava direto e vazava entre grupos).
+      // Registro de onde o relacionamento foi criado. NÃO é mais filtro de
+      // leitura (escopo global), serve para exibição e diagnóstico.
       groupId: pending.groupId,
       stages: {
         [pending.type]: {
@@ -1068,7 +1086,10 @@ class RelationshipManager {
    * banco recebia lixo (era a causa de `!relacionamento` responder
    * "Nenhum relacionamento ativo registrado" depois do trisal formado).
    *
-   * Se `groupId` for informado, so considera relacionamentos daquele grupo.
+   * ESCOPO GLOBAL: o relacionamento vale em QUALQUER grupo. `groupId` fica na
+   * assinatura só por compatibilidade e não filtra — se filtrasse, alguém
+   * casado no grupo A apareceria como solteiro no grupo B, e poderia iniciar um
+   * segundo relacionamento lá.
    */
   getActivePairForUser(userId, groupId = null) {
     const normalized = this._normalizeId(userId);
@@ -1078,10 +1099,6 @@ class RelationshipManager {
 
     for (const [key, pair] of Object.entries(data.pairs)) {
       if (!pair || !Array.isArray(pair.users) || !pair.status || !TYPE_CONFIG[pair.status]) continue;
-
-      // Escopo por grupo: usa pair.groupId (gravado no stageEntry e no proprio
-      // pair). Sem isso, um trisal de outro grupo "vazava" para este.
-      if (groupId && pair.groupId && pair.groupId !== groupId) continue;
 
       const usersNormalized = pair.users.map(u => this._normalizeId(u));
       const index = usersNormalized.indexOf(normalized);
@@ -1120,7 +1137,7 @@ class RelationshipManager {
   disbandGroupRelationship(userId, triggeredBy, groupId = null) {
     const userActivePair = this.getActivePairForUser(userId, groupId);
     if (!userActivePair) {
-      return { success: false, message: '❌ Você não está em nenhum relacionamento múltiplo (trisal ou quadrisal) neste grupo.' };
+      return { success: false, message: '❌ Você não está em nenhum relacionamento múltiplo (trisal ou quadrisal).' };
     }
 
     const pair = userActivePair.pair;

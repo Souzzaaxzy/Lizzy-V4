@@ -2231,9 +2231,10 @@ o vídeo ou estourava, ou era descartado em silêncio. Quatro correções, em
   `_buildSummaryMessage()` lista **todos** os participantes do trisal/quadrisal.
 - **Isolamento por grupo**: `_createGroupRelationship` **não gravava
   `pair.groupId`** (só dentro de `stages`), então `getActivePairForUser(user,
-  groupId)` casava direto e um trisal de **outro grupo** vazava. Agora
-  `pair.groupId` é gravado e o escopo é respeitado em
-  `getActivePairForUser`, `_findRelationshipBetween` e `getRelationshipSummary`.
+  groupId)` casava direto e um trisal de **outro grupo** vazava. Na época isso
+  foi tratado gravando `pair.groupId` e filtrando — mas **isso mudou**: hoje o
+  escopo é **global** (ver a seção "ESCOPO GLOBAL" abaixo). `pair.groupId`
+  continua gravado só como registro de onde o relacionamento nasceu.
 - **Terminar/traição em multi**: `endRelationship` e `getBetrayalHistory` também
   usavam `_getPairKey` (quebravam em multi) — passaram a usar
   `_findRelationshipBetween`. `createBetrayalRequest` agora compara o alvo com
@@ -4083,6 +4084,60 @@ Editar `relationships.js` com `file_editor` sobre linhas com template string
 funciona, mas o preview de `grep`/`sed` no terminal pode exibir **mojibake** mesmo
 com o arquivo íntegro — a checagem válida é `node --check` +
 `b.decode('utf-8')`.
+
+
+### ESCOPO GLOBAL — o relacionamento pertence às PESSOAS, não ao grupo (set/2026) ✅
+Pedido do dono: *"quero que ele seja global, namoro em um grupo, namoro em outro
+também, e isso por diante"*. Feito.
+
+**O que estava inconsistente (medido, não suposto):** o sistema era meio global e
+meio por grupo, e as duas metades discordavam:
+
+| operação | comportamento ANTES |
+|---|---|
+| `createRequest` (criar) | já checava **global** → bloqueava segundo relacionamento |
+| `getActivePairForUser(A, outroGrupo)` | filtrava por grupo → **não achava** |
+| `getRelationshipSummary(A, B, outroGrupo)` | achava (fallback sem escopo) |
+| criar trisal em outro grupo | bloqueado pela checagem global |
+
+Ou seja: o relacionamento **existia** para uma função e **não existia** para
+outra. Agora tudo é global e coerente.
+
+**O que mudou em `dados/src/funcs/utils/relationships.js`:**
+1. `_findRelationshipBetween` — `groupId` **não filtra mais** (segue na
+   assinatura por compatibilidade). Quando as mesmas pessoas têm mais de um
+   registro (criados na época em que o escopo era por grupo), vence o **mais
+   recente** (`_mostRecent`), para não devolver estado obsoleto.
+2. `getActivePairForUser` — removido o filtro `pair.groupId !== groupId`. É o que
+   faz alguém casado no grupo A aparecer casado no grupo B.
+3. `_createGroupRelationship` — a chave do trisal/quadrisal deixou de incluir o
+   `groupId` (era `${groupId}::a::b::c`, agora `a::b::c`). Sem isso, as **mesmas
+   três pessoas** poderiam formar **dois** trisais, um por grupo.
+4. Mensagens que afirmavam escopo por grupo ficaram honestas: saiu o
+   *"neste grupo"* de "Você já está em X com @fulano **neste grupo**", de "@fulano
+   já está em X … **neste grupo**" e de "não está em nenhum relacionamento
+   múltiplo … **neste grupo**".
+
+**Nada precisou mudar no `index.js`:** os ~12 call sites continuam passando
+`from` como segundo argumento e ele é simplesmente ignorado — a assinatura foi
+mantida de propósito.
+
+**Efeito pelos comandos:** casar/namorar no grupo A vale no grupo B;
+`!relacionamento` mostra o mesmo em qualquer grupo; não dá para ter um segundo
+relacionamento em outro grupo; `!terminar`/`!terminarquadrisal` encerram de
+qualquer grupo. O `!casais` (que já filtra pelos MEMBROS do grupo) segue listando
+só quem está no grupo atual — isso não mudou.
+
+**Testes** (`relationships-multi` 16 → **19 testes / 86 asserções**):
+- *ESCOPO GLOBAL: o relacionamento vale em QUALQUER grupo* — trisal criado no g1
+  aparece igual no g2, com os 3 parceiros.
+- *ESCOPO GLOBAL: não dá para ter um segundo relacionamento em outro grupo* — A
+  namora B no g1 e é recusado ao tentar namorar C no g2; consultando pelo g2, o
+  parceiro continua sendo B.
+- *ESCOPO GLOBAL: !terminarquadrisal funciona de qualquer grupo* — substitui o
+  teste antigo, que exigia o **oposto** (era a premissa de escopo por grupo).
+  Agora terminar de outro grupo encerra e some de todos.
+Regressão verde nas outras suítes.
 
 ## LAYOUT NO REPO INTEIRO — conversor verificado (set/2026) ✅
 Pedido do dono: *"coloca esse layout em TUDO menos respostas simples e templates
