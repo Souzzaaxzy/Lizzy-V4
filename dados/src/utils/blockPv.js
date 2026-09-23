@@ -275,7 +275,7 @@ export const menuCommandsMap = {
     },
     menuadm: {
         menuName: 'Admin',
-        commands: ['ban', 'kick', 'add', 'promover', 'rebaixar', 'setfoto', 'setnome', 'desc', 'link', 'tagall', 'hidetag', 'mt', 'marcar', 'rall', 'banlist', 'adminlist', 'infogp', 'voteban', 'approve', 'blockconversa', 'desbloquear', 'trancar', 'destrancar', 'abrir', 'ativarevento', 'desativarevento']
+        commands: ['ban', 'kick', 'add', 'promover', 'rebaixar', 'setfoto', 'setnome', 'desc', 'link', 'tagall', 'hidetag', 'mt', 'marcar', 'rall', 'banlist', 'adminlist', 'infogp', 'voteban', 'approve', 'blockconversa', 'desbloquear', 'trancar', 'destrancar', 'abrir', 'ativarevento', 'desativarevento', 'antibot']
     },
     menubn: {
         menuName: 'Diversão',
