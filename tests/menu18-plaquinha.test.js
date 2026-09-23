@@ -8,7 +8,7 @@
  *
  * Cobre:
  *   1. o menu (`!menu18` + aliases) responde e usa o layout dos outros menus;
- *   2. a categoria lista os 10 comandos, com ✅ só nos que têm mídia;
+ *   2. a categoria lista os 10 comandos, cada um só com o emoji 🖼️;
  *   3. `!plaq1`..`!plaq10` enviam a mídia da pasta (imagem e vídeo/GIF);
  *   4. sem mídia, o comando AVISA em vez de mandar nada;
  *   5. a pasta é restrita: só os 10 nomes são atendidos;
@@ -288,18 +288,17 @@ await test('aliases do menu funcionam', async () => {
   }
 });
 
-await test('o menu marca ✅ só os comandos que TÊM mídia', async () => {
-  limparPlaq();
-  criarPlaq('plaq1', 'png');
-  criarPlaq('plaq5', 'jpg');
+await test('o menu só tem o emoji 🖼️ (sem ✅/▫️ de status)', async () => {
   const { groupJid, people, participants } = setup(2);
   const out = await run({ groupJid, sender: people[0], text: '!menu18', participants });
-  // plaq1 e plaq5 têm arquivo; plaq2 não.
-  const linha1 = out.text.split('\n').find((l) => l.includes('!plaq1'));
-  const linha2 = out.text.split('\n').find((l) => l.includes('!plaq2'));
-  ok(linha1 && linha1.includes('✅'), 'plaq1 marcado como tendo mídia');
-  ok(linha2 && linha2.includes('▫️'), 'plaq2 marcado como sem mídia');
-  limparPlaq();
+  // O menu LISTA os comandos; não é painel de configuração. O ✅/▫️ saiu a
+  // pedido do dono, então a linha tem o 🖼️ e nada de check/vazio.
+  const linhas = out.text.split('\n').filter((l) => /!plaq\d/.test(l));
+  ok(linhas.length === 10, `as 10 linhas de comando (veio ${linhas.length})`);
+  for (const l of linhas) {
+    ok(l.includes('🖼️'), `linha com o emoji de imagem: ${l}`);
+    ok(!l.includes('✅') && !l.includes('▫️'), `linha sem ✅/▫️: ${l}`);
+  }
 });
 
 // ============================================================================

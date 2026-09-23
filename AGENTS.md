@@ -4308,7 +4308,8 @@ isolado; em produção não precisa definir nada.
 Dois pedidos do dono na mesma rodada:
 
 **1. Emoji 🖼️ antes de cada comando no menu18.** Cada linha ficou
-`｜ 🖼️ ✅ !plaq1` (o ✅/▫️ continua indicando se já existe mídia).
+`｜ 🖼️ !plaq1`. O `✅`/`▫️` que indicava se já existe mídia **foi removido**
+depois, a pedido do dono: o menu lista os comandos, não é painel de status.
 
 **2. A mídia só é visível para quem pediu o comando.** Antes dela vai um aviso em
 TEXTO (esse sim todos veem):
