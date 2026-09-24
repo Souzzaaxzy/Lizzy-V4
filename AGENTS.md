@@ -4495,6 +4495,48 @@ senão o comando não apareceria no bloqueio de menu.
 `tests/menu18-plaquinha.test.js` ganhou a mesma checagem pelo **handler real**
 (`!menu18`) + `vab18` no `blockPv` → 20 testes / 85 asserções.
 
+## COMANDO `!eununca18` — "Eu nunca" +18 (set/2026) ✅
+Pedido do dono: um `!eununca` picante na **mesma categoria BRINCADEIRAS** do
+`menu18`, com **mesma ideia do `!eununca`** e 200 frases novas.
+
+### Onde as frases moram
+`dados/src/funcs/json/eununca18.json` — **lista de 200 strings**, mesmo formato
+do `iNever` do `tools.json` (o `!eununca` normal lê de lá). Blocos, na ordem:
+1–50 corpo/olhares · 51–100 fantasias · 101–150 íntimo · 151–200 ciúmes &
+tensão. Todas começam com `Eu nunca ` (é o que a enquete espera).
+
+Carregado por **`eununca18Json()`** — mesmo caminho dos outros JSONs
+(`funcs/exports.js`: `loadJsonSync('json/eununca18.json')`), importado no
+`index.js`.
+
+### O comando
+`case 'eununca18'` (`index.js`, logo depois do `case 'eununca'`): **cópia fiel
+da mecânica** do `!eununca` — só a lista muda. Enquete `selectableCount: 1`,
+`quoted: info`, exige grupo + `modobrincadeira`, opções fixas
+`Eu nunca` / `Eu já`. Título **`🔞 EU NUNCA\n\n<frase>`** (emoji +18, para
+distinguir do `🙈` do normal).
+
+### Menu 18 — mesma categoria BRINCADEIRAS
+Entrou na lista declarativa `BRINCADEIRA_COMMANDS` (`menus/menu18.js`), com o
+emoji `🔞`:
+```
+╭━━━꧁༺ ㅤ😈 𝑩𝑹𝑰𝑵𝑪𝑨𝑫𝑬𝑰𝑹𝑨𝑺 😈ㅤ ༻꧂━━━╮
+｜ 😈 !vab18
+｜ 🔞 !eununca18
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
+```
+O `blockPv` (`menuCommandsMap.menu18`) também recebeu `eununca18`.
+
+### Testes — `tests/eununca18.test.js` (**9 testes / 33 asserções**)
+- arquivo: 200 frases, primeira/última conferidas, nenhuma repetida, todas com
+  o prefixo `Eu nunca `, e os 4 blocos na ordem;
+- handler real: opções `Eu nunca`/`Eu já`, `selectableCount: 1`, frase no
+  título com o emoji `🔞`, coerência em 10 execuções, só grupo + modo
+  brincadeira, e **regressão do `!eununca`** (continua com `🙈`);
+- menu: categoria BRINCADEIRAS lista o `!eununca18` (e o `!vab18` segue lá).
+`tests/menu18-plaquinha.test.js` cobre o mesmo pelo **handler real** +
+`eununca18` no `blockPv` → 20 testes / 87 asserções.
+
 ### Emoji trocado — no `!eununca` (não no menu18)
 O pedido era *"trocar o 🔞 do comando `!eununca`"*, e eu tinha entendido que era o
 **menu18** — troquei o lugar errado e depois reverti.

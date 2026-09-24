@@ -1725,6 +1725,7 @@ const {
   toolsJson,
   vabJson,
   vab18Json,
+  eununca18Json,
   Lyrics,
   commandStats,
   //ia,
@@ -37657,6 +37658,47 @@ case 'eununca':
       {
         poll: {
           name: `🙈 EU NUNCA\n\n${pergunta}`,
+          values: [
+            'Eu nunca',
+            'Eu já'
+          ],
+          selectableCount: 1
+        }
+      },
+      {
+        quoted: info
+      }
+    );
+  } catch (e) {
+    console.error(e);
+    await reply(
+      "❌ Ocorreu um erro interno. Tente novamente em alguns minutos."
+    );
+  }
+break;
+// !eununca18 — mesma mecânica do `!eununca` (enquete "Eu nunca"/"Eu já"), com
+// a lista picante (`eununca18.json`, 200 frases). Vive no menu18, na categoria
+// BRINCADEIRAS.
+case 'eununca18':
+  try {
+    if (!isGroup) {
+      return sendAbyssWarning("◈ Este comando é só para grupos.");
+    }
+    if (!isModoBn) {
+      return reply('❌ O modo brincadeira não esta ativo nesse grupo');
+    }
+    const listaEuNunca18 = eununca18Json();
+    const pergunta18 =
+      listaEuNunca18[
+        Math.floor(
+          Math.random() * listaEuNunca18.length
+        )
+      ];
+    await nazu.sendMessage(
+      from,
+      {
+        poll: {
+          name: `🔞 EU NUNCA\n\n${pergunta18}`,
           values: [
             'Eu nunca',
             'Eu já'

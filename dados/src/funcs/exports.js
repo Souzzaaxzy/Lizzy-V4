@@ -164,9 +164,11 @@ async function loadModules() {
         const toolsJsonData = loadJsonSync('json/tools.json');
         const vabJsonData = loadJsonSync('json/vab.json');
         const vab18JsonData = loadJsonSync('json/vab18.json');
+        const eununca18JsonData = loadJsonSync('json/eununca18.json');
         modules.toolsJson = () => toolsJsonData;
         modules.vabJson = () => vabJsonData;
         modules.vab18Json = () => vab18JsonData;
+        modules.eununca18Json = () => eununca18JsonData;
 
         return modules;
     })();
