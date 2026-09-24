@@ -139,6 +139,18 @@ async function rodar({ text = '!eununca18', groupData = {} } = {}) {
   };
 }
 
+
+/**
+ * O título da enquete agora vem no LAYOUT do bot: caixa em cima, a PERGUNTA no
+ * meio e o rodapé com o nome do bot embaixo. A pergunta é a linha do meio.
+ */
+function perguntaDaEnquete(name) {
+  return String(name).split('\n')[1] ?? '';
+}
+function topoDaEnquete(name) {
+  return String(name).split('\n')[0] ?? '';
+}
+
 // ============================================================================
 // 1. O ARQUIVO
 // ============================================================================
@@ -177,15 +189,16 @@ await test('!eununca18 publica enquete com as duas opções', async () => {
 
 await test('a pergunta da enquete vem da lista eununca18', async () => {
   const { enquete } = await rodar();
-  ok(enquete.name.startsWith('🔞 EU NUNCA'), 'título com o emoji +18');
-  const pergunta = enquete.name.replace(/^🔞 EU NUNCA\n\n/, '');
+  ok(topoDaEnquete(enquete.name).includes('🔞'), 'topo da caixa com o emoji +18');
+  ok(topoDaEnquete(enquete.name).startsWith('╭━━━꧁༺'), 'título no layout do bot (caixa ꧁༺)');
+  const pergunta = perguntaDaEnquete(enquete.name);
   ok(FRASES.includes(pergunta), `a pergunta é uma das frases da lista ("${pergunta}")`);
 });
 
 await test('10 execuções trazem frases da lista', async () => {
   for (let i = 0; i < 10; i++) {
     const { enquete } = await rodar();
-    const pergunta = enquete.name.replace(/^🔞 EU NUNCA\n\n/, '');
+    const pergunta = perguntaDaEnquete(enquete.name);
     ok(FRASES.includes(pergunta), `execução ${i + 1}: frase veio da lista`);
   }
 });
@@ -199,7 +212,7 @@ await test('só roda em grupo e com modo brincadeira', async () => {
 await test('!eununca (antigo) continua funcionando — regressão', async () => {
   const { enquete } = await rodar({ text: '!eununca' });
   ok(Boolean(enquete), 'o !eununca ainda publica enquete');
-  ok(enquete.name.startsWith('🙈 EU NUNCA'), 'o !eununca mantém o emoji amigável');
+  ok(topoDaEnquete(enquete.name).includes('🙈'), 'o !eununca mantém o emoji amigável');
 });
 
 // ============================================================================

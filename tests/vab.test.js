@@ -115,6 +115,18 @@ async function rodar({ text = '!vab', groupData = {} } = {}) {
   };
 }
 
+
+/**
+ * O título da enquete agora vem no LAYOUT do bot: caixa em cima, a PERGUNTA no
+ * meio e o rodapé com o nome do bot embaixo. A pergunta é a linha do meio.
+ */
+function perguntaDaEnquete(name) {
+  return String(name).split('\n')[1] ?? '';
+}
+function topoDaEnquete(name) {
+  return String(name).split('\n')[0] ?? '';
+}
+
 // ============================================================================
 // 1. O ARQUIVO
 // ============================================================================
@@ -167,14 +179,15 @@ await test('!vab publica enquete com a PERGUNTA no título e as duas opções', 
   ok(enquete.values.length === 2, 'duas opções');
   ok(enquete.selectableCount === 1, 'uma escolha só');
   // O título tem o emoji + a pergunta do item.
-  ok(enquete.name.startsWith('🤔 '), 'mantém o emoji de dúvida');
-  const pergunta = enquete.name.replace(/^🤔 /, '');
+  ok(topoDaEnquete(enquete.name).includes('🤔'), 'topo da caixa com o emoji de dúvida');
+  ok(topoDaEnquete(enquete.name).startsWith('╭━━━꧁༺'), 'título no layout do bot (caixa ꧁༺)');
+  const pergunta = perguntaDaEnquete(enquete.name);
   ok(VAB.some((i) => i.pergunta === pergunta), `título é uma pergunta da lista ("${pergunta}")`);
 });
 
 await test('as opções do título correspondem ao MESMO item', async () => {
   const { enquete } = await rodar();
-  const pergunta = enquete.name.replace(/^🤔 /, '');
+  const pergunta = perguntaDaEnquete(enquete.name);
   // A pergunta pode existir em mais de um item, então a identidade é o
   // conjunto completo: pergunta + as duas opções.
   const item = VAB.find((i) =>
@@ -187,7 +200,7 @@ await test('as opções do título correspondem ao MESMO item', async () => {
 await test('10 execuções: título e opções sempre coerentes com o item', async () => {
   for (let i = 0; i < 10; i++) {
     const { enquete } = await rodar();
-    const pergunta = enquete.name.replace(/^🤔 /, '');
+    const pergunta = perguntaDaEnquete(enquete.name);
     const item = VAB.find((x) =>
       x.pergunta === pergunta
       && x.option1 === enquete.values[0]

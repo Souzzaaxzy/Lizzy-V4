@@ -139,6 +139,18 @@ async function rodar({ text = '!vab18', groupData = {} } = {}) {
   };
 }
 
+
+/**
+ * O título da enquete agora vem no LAYOUT do bot: caixa em cima, a PERGUNTA no
+ * meio e o rodapé com o nome do bot embaixo. A pergunta é a linha do meio.
+ */
+function perguntaDaEnquete(name) {
+  return String(name).split('\n')[1] ?? '';
+}
+function topoDaEnquete(name) {
+  return String(name).split('\n')[0] ?? '';
+}
+
 // ============================================================================
 // 1. O ARQUIVO
 // ============================================================================
@@ -182,14 +194,15 @@ await test('!vab18 publica enquete com a PERGUNTA no título e as duas opções'
   ok(Boolean(enquete), 'mandou enquete');
   ok(enquete.values.length === 2, 'duas opções');
   ok(enquete.selectableCount === 1, 'uma escolha só');
-  ok(enquete.name.startsWith('😈 '), 'traz o emoji +18 no título');
-  const pergunta = enquete.name.replace(/^😈 /, '');
+  ok(topoDaEnquete(enquete.name).includes('😈'), 'topo da caixa com o emoji +18');
+  ok(topoDaEnquete(enquete.name).startsWith('╭━━━꧁༺'), 'título no layout do bot (caixa ꧁༺)');
+  const pergunta = perguntaDaEnquete(enquete.name);
   ok(VAB18.some((i) => i.pergunta === pergunta), `título é uma pergunta da lista ("${pergunta}")`);
 });
 
 await test('as opções do título correspondem ao MESMO item', async () => {
   const { enquete } = await rodar();
-  const pergunta = enquete.name.replace(/^😈 /, '');
+  const pergunta = perguntaDaEnquete(enquete.name);
   const item = VAB18.find((i) =>
     i.pergunta === pergunta
     && i.option1 === enquete.values[0]
@@ -200,7 +213,7 @@ await test('as opções do título correspondem ao MESMO item', async () => {
 await test('10 execuções: título e opções sempre coerentes com o item', async () => {
   for (let i = 0; i < 10; i++) {
     const { enquete } = await rodar();
-    const pergunta = enquete.name.replace(/^😈 /, '');
+    const pergunta = perguntaDaEnquete(enquete.name);
     const item = VAB18.find((x) =>
       x.pergunta === pergunta
       && x.option1 === enquete.values[0]
@@ -218,7 +231,7 @@ await test('só roda em grupo e com modo brincadeira', async () => {
 await test('!vab (antigo) continua funcionando — regressão', async () => {
   const { enquete } = await rodar({ text: '!vab' });
   ok(Boolean(enquete), 'o !vab ainda publica enquete');
-  ok(enquete.name.startsWith('🤔 '), 'o !vab mantém o emoji de dúvida');
+  ok(topoDaEnquete(enquete.name).includes('🤔'), 'o !vab mantém o emoji de dúvida');
 });
 
 // ============================================================================

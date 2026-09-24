@@ -27,6 +27,7 @@ import { parseImagePollArgs, collectPollImages, resolveAttachments, buildOptionN
 import { toOggOpus } from './utils/oggOpus.js';
 import { converterGifParaMp4 } from './utils/gifMedia.js';
 import * as ghostDetection from './utils/ghostDetection.js';
+import { bold as boldLayout } from './menus/layout.js';
 import {
   isGroupStatusContent,
   buildGroupStatusRevokePayloads,
@@ -522,6 +523,29 @@ function logRajaEnvio(content, mentions, msgId) {
  */
 function generateRajaMessageId() {
   return '3EB0' + crypto.randomBytes(9).toString('hex').toUpperCase();
+}
+
+/**
+ * Título de enquete no LAYOUT do resto do bot (`꧁༺ ✦ ༻꧂`).
+ *
+ * Os quatro comandos de enquete (`!eununca`, `!eununca18`, `!vab`, `!vab18`)
+ * montam o nome assim: caixa com o TÍTULO em bold, a pergunta e o rodapé com o
+ * nome do bot. Antes cada um tinha um formato solto (`🙈 EU NUNCA\n\n<frase>`),
+ * fora do padrão.
+ *
+ * O título vai em MATHEMATICAL BOLD (mesma fonte dos menus) e a caixa abre/fecha
+ * com os mesmos `꧁༺ ✦ ༻꧂`. O emoji do comando fica ao lado do título.
+ *
+ * @param {string} titulo  rótulo do jogo (ex.: 'EU NUNCA'); vai em bold
+ * @param {string} emoji   emoji do comando (ex.: '🔞')
+ * @param {string} pergunta  a frase/pergunta sorteada
+ * @param {string} [botName] nome do bot para o rodapé
+ * @returns {string} nome da enquete
+ */
+function buildPollTitle(titulo, emoji, pergunta, botName = 'Bot') {
+  const topo = `╭━━━꧁༺ ${emoji} ${boldLayout(titulo)} ${emoji} ༻꧂━━━╮`;
+  const rodape = `╰━━━꧁༺ ✦ ${botName} ✦ ༻꧂━━━╯`;
+  return `${topo}\n${pergunta}\n${rodape}`;
 }
 
 // ============================================================
@@ -37657,7 +37681,7 @@ case 'eununca':
       from,
       {
         poll: {
-          name: `🙈 EU NUNCA\n\n${pergunta}`,
+          name: buildPollTitle('EU NUNCA', '🙈', pergunta, nomebot),
           values: [
             'Eu nunca',
             'Eu já'
@@ -37698,7 +37722,7 @@ case 'eununca18':
       from,
       {
         poll: {
-          name: `🔞 EU NUNCA\n\n${pergunta18}`,
+          name: buildPollTitle('EU NUNCA', '🔞', pergunta18, nomebot),
           values: [
             'Eu nunca',
             'Eu já'
@@ -37731,11 +37755,13 @@ case 'vab':
           Math.random() * vabJson().length
         )
       ];
-    // A pergunta agora vai NO TÍTULO da enquete (`item.pergunta`). Antes o
-    // título era fixo e cada item só tinha as duas opções soltas, sem contexto.
-    const tituloVab = vabs.pergunta
-      ? `🤔 ${vabs.pergunta}`
-      : '🤔 O QUE VOCÊ PREFERE?';
+    // A pergunta vai NO TÍTULO da enquete (`item.pergunta`), no layout do bot.
+    const tituloVab = buildPollTitle(
+      'ISSO OU AQUILO',
+      '🤔',
+      vabs.pergunta || 'O QUE VOCÊ PREFERE?',
+      nomebot
+    );
     await nazu.sendMessage(
       from,
       {
@@ -37772,10 +37798,13 @@ case 'vab18':
     }
     const listaVab18 = vab18Json();
     const vabs18 = listaVab18[Math.floor(Math.random() * listaVab18.length)];
-    // A pergunta vai NO TÍTULO da enquete, igual ao `!vab`.
-    const tituloVab18 = vabs18.pergunta
-      ? `😈 ${vabs18.pergunta}`
-      : '😈 O QUE VOCÊ PREFERE?';
+    // A pergunta vai NO TÍTULO da enquete, no layout do bot.
+    const tituloVab18 = buildPollTitle(
+      'ISSO OU AQUILO',
+      '😈',
+      vabs18.pergunta || 'O QUE VOCÊ PREFERE?',
+      nomebot
+    );
     await nazu.sendMessage(
       from,
       {

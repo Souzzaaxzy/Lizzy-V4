@@ -115,6 +115,18 @@ async function rodar({ text = '!eununca', sender = null, groupData = {} } = {}) 
   return { sent, enquete: sent.find((x) => x.content?.poll)?.content.poll, texto: sent.map((x) => x.content?.text ?? '').filter(Boolean).join('\n') };
 }
 
+
+/**
+ * O título da enquete agora vem no LAYOUT do bot: caixa em cima, a PERGUNTA no
+ * meio e o rodapé com o nome do bot embaixo. A pergunta é a linha do meio.
+ */
+function perguntaDaEnquete(name) {
+  return String(name).split('\n')[1] ?? '';
+}
+function topoDaEnquete(name) {
+  return String(name).split('\n')[0] ?? '';
+}
+
 // ============================================================================
 // 1. A LISTA
 // ============================================================================
@@ -167,13 +179,15 @@ await test('!eununca publica uma enquete com as duas opções', async () => {
 await test('a pergunta da enquete vem da lista iNever', async () => {
   const { enquete } = await rodar();
   const frases = TOOLS.iNever;
-  ok(frases.includes(enquete.name.replace(/^🙈 EU NUNCA\n\n/, '')), 'a pergunta é uma das frases da lista');
+  ok(frases.includes(perguntaDaEnquete(enquete.name)), 'a pergunta é uma das frases da lista');
 });
 
 await test('o cabeçalho da enquete usa o emoji amigável', async () => {
   const { enquete } = await rodar();
-  ok(enquete.name.startsWith('🙈 EU NUNCA'), 'título com o emoji amigável');
+  ok(topoDaEnquete(enquete.name).includes('🙈'), 'topo da caixa com o emoji amigável');
+  ok(topoDaEnquete(enquete.name).startsWith('╭━━━꧁༺'), 'título no layout do bot (caixa ꧁༺)');
   ok(!enquete.name.includes('🔞'), 'não usa mais o emoji de proibido');
+  ok(enquete.name.split('\n').length === 3, 'título tem 3 linhas (caixa + pergunta + rodapé)');
 });
 
 await test('só roda em grupo e com modo brincadeira', async () => {
@@ -187,7 +201,7 @@ await test('10 execuções trazem frases da lista nova', async () => {
   const frases = new Set(TOOLS.iNever);
   for (let i = 0; i < 10; i++) {
     const { enquete } = await rodar();
-    const texto = enquete.name.replace(/^🙈 EU NUNCA\n\n/, '');
+    const texto = perguntaDaEnquete(enquete.name);
     ok(frases.has(texto), `pergunta ${i + 1} veio da lista`);
   }
 });

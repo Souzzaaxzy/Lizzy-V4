@@ -4432,7 +4432,8 @@ existe no repo (conferido por grep), então a mudança fica contida.
 
 ### O comando
 `case 'vab'` (`index.js`) agora usa a pergunta **no TÍTULO** da enquete:
-`🤔 ${item.pergunta}`. Antes o título era fixo (`🤔 O QUE VOCÊ PREFERE?`) e
+`🤔 ${item.pergunta}` (hoje com o layout do bot — ver “LAYOUT das 4 enquetes”).
+Antes o título era fixo (`🤔 O QUE VOCÊ PREFERE?`) e
 a pergunta do item se perdia — o usuário via só duas opções soltas, sem saber o
 que estava escolhendo. Fallback preservado: item sem `pergunta` cai no título
 antigo. As duas opções e o `selectableCount: 1` continuam iguais.
@@ -4471,7 +4472,8 @@ Carregado por **`vab18Json()`** — mesmo caminho do `vabJson`
 `case 'vab18'` (`index.js`, logo depois do `case 'vab'`): **cópia fiel da
 mecânica** do `!vab` — só a lista muda. Enquete com `selectableCount: 1`,
 `quoted: info`, exige grupo + `modobrincadeira`. Título
-**`😈 ${item.pergunta}`** (emoji +18, coerente com o tom do menu). Fallback
+**`😈 ${item.pergunta}`** (emoji +18), hoje no **layout do bot** — ver
+“LAYOUT das 4 enquetes”. Fallback
 `'😈 O QUE VOCÊ PREFERE?'` para item sem pergunta.
 
 ### Menu 18 — categoria BRINCADEIRAS
@@ -4513,8 +4515,8 @@ Carregado por **`eununca18Json()`** — mesmo caminho dos outros JSONs
 `case 'eununca18'` (`index.js`, logo depois do `case 'eununca'`): **cópia fiel
 da mecânica** do `!eununca` — só a lista muda. Enquete `selectableCount: 1`,
 `quoted: info`, exige grupo + `modobrincadeira`, opções fixas
-`Eu nunca` / `Eu já`. Título **`🔞 EU NUNCA\n\n<frase>`** (emoji +18, para
-distinguir do `🙈` do normal).
+`Eu nunca` / `Eu já`. Título no **layout do bot** (emoji +18 `🔞` no topo da caixa)
+— ver “LAYOUT das 4 enquetes”.
 
 ### Menu 18 — mesma categoria BRINCADEIRAS
 Entrou na lista declarativa `BRINCADEIRA_COMMANDS` (`menus/menu18.js`), com o
@@ -4536,6 +4538,59 @@ O `blockPv` (`menuCommandsMap.menu18`) também recebeu `eununca18`.
 - menu: categoria BRINCADEIRAS lista o `!eununca18` (e o `!vab18` segue lá).
 `tests/menu18-plaquinha.test.js` cobre o mesmo pelo **handler real** +
 `eununca18` no `blockPv` → 20 testes / 87 asserções.
+
+## LAYOUT das 4 enquetes — `!eununca`, `!eununca18`, `!vab`, `!vab18` (set/2026) ✅
+Pedido do dono: os quatro comandos de enquete devem usar **o mesmo layout do
+resto do bot**. Antes cada um montava o título num formato solto
+(`🙈 EU NUNCA\n\n<frase>` e `🤔 <pergunta>`), fora do padrão.
+
+### O helper — `buildPollTitle` (`index.js`, escopo do módulo, ~linha 528)
+Uma função só, usada pelos **quatro**, para não voltarem a divergir:
+```js
+function buildPollTitle(titulo, emoji, pergunta, botName = 'Bot') {
+  const topo   = `╭━━━꧁༺ ${emoji} ${boldLayout(titulo)} ${emoji} ༻꧂━━━╮`;
+  const rodape = `╰━━━꧁༺ ✦ ${botName} ✦ ༻꧂━━━╯`;
+  return `${topo}\n${pergunta}\n${rodape}`;
+}
+```
+O **título vai em MATHEMATICAL BOLD** — `bold as boldLayout` importado de
+`menus/layout.js` (fonte única do bold dos menus; nada de tabela de code points
+duplicada). O **nome do bot** vem do `nomebot` do config (o mesmo do `!me` e dos
+menus).
+
+### O que sai
+```
+╭━━━꧁༺ 🙈 𝐄𝐔 𝐍𝐔𝐍𝐂𝐀 🙈 ༻꧂━━━╮
+Eu nunca me senti desiludido por alguém que amava.
+╰━━━꧁༺ ✦ 𝐋𝐢𝐳𝐳𝐲 𝐝𝐨 𝐩𝐫𝐢𝐯𝐲 ✦ ༻꧂━━━╯
+```
+Rótulos: `EU NUNCA` (`!eununca` 🙈 / `!eununca18` 🔞) e `ISSO OU
+AQUILO` (`!vab` 🤔 / `!vab18` 😈). As opções (`Eu nunca`/`Eu já`,
+`option1`/`option2`) e o `selectableCount: 1` **não mudaram**.
+
+### Testes — `tests/poll-layout.test.js` (novo, **5 testes / 61 asserções**)
+Roda o **handler real** para os quatro e compara lado a lado: 3 linhas (caixa +
+pergunta + rodapé), prefixo/sufixo da caixa, **rodapé idêntico nos quatro**,
+título em MATHEMATICAL BOLD (e que **não** voltou ao ASCII), emoji no topo e os
+cantos/decorativos únicos.
+**O arquivo é 100% ASCII**: os glifos do layout são montados por code point
+(`String.fromCodePoint`) em vez de literais — nenhuma ferramenta de edição
+consegue corromper os caracteres (ver a armadilha abaixo).
+
+Os quatro testes de comando foram ajustados: em vez de fatiar o título antigo,
+usam `perguntaDaEnquete()`/`topoDaEnquete()` (linha do meio / topo). Suítes:
+`eununca` 9/37, `eununca18` 9/34, `vab` 9/29, `vab18` 11/36.
+
+### ARMADILHA (custou uma rodada) — o editor corrompe os glifos
+Escrever este arquivo com `file_editor`/heredoc **trocou os caracteres de caixa**
+(`╭━━━꧁` virou `в•ӯв”...`) e os **emojis sumiram** — o teste
+media outra coisa. O mesmo vale para `index.js`: a primeira tentativa de inserir
+o helper pelo editor gerou mojibake visível no preview.
+
+**Regra**: em arquivo com glifos, editar com `open(path,'rb') → decode('utf-8') →
+operar em str → encode('utf-8')` (ou, melhor, **construir os caracteres por code
+point** no próprio código). Sempre conferir depois com
+`python3 -c "all(x<128 for x in open(f,'rb').read())"` / `node --check`.
 
 ### Emoji trocado — no `!eununca` (não no menu18)
 O pedido era *"trocar o 🔞 do comando `!eununca`"*, e eu tinha entendido que era o
