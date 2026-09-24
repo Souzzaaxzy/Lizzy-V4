@@ -635,10 +635,16 @@ await test('!raja: cada envio tem ID próprio (o WhatsApp descarta ID repetido)'
   ok(JSON.stringify(rotated[0].message) === JSON.stringify(rotated[1].message), 'conteúdo reaproveitado');
 });
 
-await test('!raja: teto rígido de 50 (ferramenta de teste, não gerador de flood)', async () => {
-  const { rotated, text } = await runOwner("!raja 999 texto");
-  ok(rotated.length === 50, `respeitou o teto (${rotated.length})`);
-  includes(text, 'limitado', 'avisou sobre o limite');
+await test('!setmsgraja: teto de 500 (ferramenta de teste, não gerador de flood)', async () => {
+  // O teto vive no `!setmsgraja` (é ele quem grava a quantidade). O `!raja`
+  // antigo (que recebia a quantidade direto) foi removido; esta asserção antes
+  // media a interface antiga e por isso estava vermelha.
+  const groupJid = makeGroup();
+  const { sent } = await runOwner('!setmsgraja 999 texto', { groupJid });
+  includes(textOf(sent), 'limitado', 'avisou sobre o limite');
+  await new Promise((r) => setTimeout(r, 150));
+  const salvo = JSON.parse(fs.readFileSync(path.join(TMP_DB, 'dono', 'rajaMsg.json'), 'utf-8'));
+  ok(salvo.quantidade === 500, `guardou no máximo 500 (${salvo.quantidade})`);
 });
 
 await test('!raja: o que ele gera é detectado pela própria proteção anti-raja', async () => {

@@ -201,8 +201,8 @@ Ferramenta do dono para validar a proteção anti-raja em grupo de teste.
   (sem duplicar categoria existente).
 - **Testes em `tests/defensive-protection.test.js`**: permissão (não-dono
   bloqueado), só em grupo, validação de quantidade/texto, N mensagens no formato
-  exato, IDs distintos, teto de 50, o que ele gera é detectado pela própria
-  `classifyMessage` e presença no menudono.
+  exato, IDs distintos, teto de 500 (no `!setmsgraja`), o que ele gera é
+  detectado pela própria `classifyMessage` e presença no menudono.
 
 ## ANÁLISE DA MECÂNICA DO "RAJA" INVISÍVEL (set/2026) — correções de detecção ✅
 Investigação pedida pelo dono: *como o "raja" fica invisível, olhando forks da
@@ -315,7 +315,8 @@ Reorganização pedida pelo dono (set/2026). Categoria do menu dono:
   em qualquer grupo. (Antes era `groupData.msgraja`, por grupo; mudado a pedido
   do dono — só o escopo do armazenamento, nada do transporte/conteúdo.)
 - `!raja` e `!rajar` são do **dono** e só funcionam em grupo.
-- Teto de **50** mensagens (herdado do raja antigo), avisando quando limita.
+- Teto de **500** mensagens (era 50; elevado a pedido do dono em set/2026),
+  avisando quando limita. Vive no `!setmsgraja` (`MAX_RAJA = 500`).
 - `!rajar` mantém o conteúdo (`buildRajaContent` → `requestPaymentMessage` com
   `amount1000: "0"` e o texto na NOTA) e o transporte **seletivo** (rotação de
   Sender Key só para membros comuns). **Falha fechado** se a fork não expuser a
@@ -341,7 +342,7 @@ enviar…` + `Nada foi enviado…`; exceção → `❌ Não foi possível dispar
 
 ### Testes — `tests/raja-selective.test.js` (23 asserções, 14 testes)
 Salvamento global, `!raja` que só mostra, `!rajar` usando o que foi salvo,
-teto de 50, **estado global (salvar no A vale no B)**, autorização só dos
+teto de 500, **estado global (salvar no A vale no B)**, autorização só dos
 membros comuns (nenhum admin), conteúdo intacto, messageId único por envio,
 **`!rajar` entrega SÓ as mensagens (sem resumo no grupo)** e falha fechada sem a
 API. Os testes que esperam "nada salvo" zeram o slot global antes

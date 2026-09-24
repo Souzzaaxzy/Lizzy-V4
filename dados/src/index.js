@@ -33054,8 +33054,8 @@ break;
             );
           }
 
-          // Teto rígido: continua sendo ferramenta de teste, não gerador de flood.
-          const MAX_RAJA = 50;
+          // Teto: continua sendo ferramenta de teste, não gerador de flood.
+          const MAX_RAJA = 500;
           const quantidade = Math.min(qtd, MAX_RAJA);
 
           saveRajaMsg(quantidade, texto);

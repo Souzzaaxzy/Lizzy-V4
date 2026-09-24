@@ -252,12 +252,12 @@ await test('o estado é GLOBAL: salvar no A vale no B', async () => {
   );
 });
 
-await test('!setmsgraja aplica o teto de 50', async () => {
+await test('!setmsgraja aplica o teto de 500', async () => {
   const groupJid = makeGroup();
   const r = await rodar({ groupJid, text: '!setmsgraja 999 teto' });
   await esperarDisco();
   const salvo = JSON.parse(fs.readFileSync(path.join(TMP_DB, 'dono', 'rajaMsg.json'), 'utf-8'));
-  assert.equal(salvo.quantidade, 50, 'guardou no máximo 50');
+  assert.equal(salvo.quantidade, 500, 'guardou no máximo 500');
   ok(r.textos.includes('limitado'), 'informou que limitou');
 });
 
