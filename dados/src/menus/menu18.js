@@ -18,11 +18,20 @@
 import { boldItalic } from './layout.js';
 import { PLAQ_COMMANDS } from '../funcs/utils/plaq.js';
 
+// Comandos da categoria BRINCADEIRAS (jogos de enquete do menu +18).
+// `vab18` é o "Isso ou Aquilo" picante — mesma mecânica do `!vab`.
+const BRINCADEIRA_COMMANDS = [
+  { cmd: 'vab18', emoji: '😈' },
+];
+
 export default async function menu18(prefix, botName = 'MeuBot', userName = 'Usuário') {
   // Uma linha por comando, só com o emoji de imagem. Antes havia também um ✅/▫️
   // indicando se a mídia já existia — saiu a pedido do dono: o menu lista os
   // comandos, não é painel de status do configuração.
   const linhas = PLAQ_COMMANDS.map((cmd) => `｜ 🖼️ ${prefix}${cmd}`);
+  const linhasBrincadeira = BRINCADEIRA_COMMANDS.map(
+    ({ cmd, emoji }) => `｜ ${emoji} ${prefix}${cmd}`
+  );
 
   return `╭━━━꧁༺ ✦ ${botName} ✦ ༻꧂━━━╮
 ┃ 𖤐 𝐎𝐥á, @${userName}
@@ -33,6 +42,11 @@ export default async function menu18(prefix, botName = 'MeuBot', userName = 'Usu
 
 ╭━━━꧁༺ ㅤ🔞 ${boldItalic('PLAQUINHA')} 🔞ㅤ ༻꧂━━━╮
 ${linhas.join('\n')}
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
+
+
+╭━━━꧁༺ ㅤ😈 ${boldItalic('BRINCADEIRAS')} 😈ㅤ ༻꧂━━━╮
+${linhasBrincadeira.join('\n')}
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 `;
 }

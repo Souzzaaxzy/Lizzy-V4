@@ -381,6 +381,17 @@ await test('menu18/plaq registrados no blockPv', async () => {
   includes(bp, "'menu18': { key: 'menu18'", 'blockPv tem o menu');
   const bloco = bp.slice(bp.indexOf('menu18: {'), bp.indexOf('menu18: {') + 300);
   includes(bloco, 'plaq1', 'o menu18 do blockPv lista os comandos');
+  includes(bloco, 'vab18', 'o menu18 do blockPv lista o vab18 (brincadeiras)');
+});
+
+await test('menu18 tem a categoria BRINCADEIRAS com o !vab18', async () => {
+  const { groupJid, people, participants } = setup(2);
+  const out = await run({ groupJid, sender: people[0], text: '!menu18', participants });
+  includesTxt(out.text, 'BRINCADEIRAS', 'tem a categoria BRINCADEIRAS');
+  includes(out.text, '!vab18', 'lista o !vab18');
+  // PLAQUINHA continua existindo e vem antes.
+  ok(desbold(out.text).indexOf('PLAQUINHA') < desbold(out.text).indexOf('BRINCADEIRAS'),
+    'PLAQUINHA antes de BRINCADEIRAS');
 });
 
 await test('regressão: !menufig / !menusticker continuam funcionando', async () => {

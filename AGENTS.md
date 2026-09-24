@@ -4453,6 +4453,48 @@ exigir que o dono reescrevesse o texto que ele mesmo mandou.
   MESMO item**, `selectableCount: 1`, o emoji preservado, coerência em 10
   execuções, e a exigência de grupo + modo brincadeira.
 
+## COMANDO `!vab18` — "Isso ou Aquilo" +18 (set/2026) ✅
+Pedido do dono: um `!vab` picante, **mesmo estilo do `!vab`** (enquete de duas
+opções, pergunta no título), com 200 perguntas novas divididas em 4 blocos, e
+numa **categoria nova "BRINCADEIRAS"** do `menu18`.
+
+### Onde os itens moram
+`dados/src/funcs/json/vab18.json` — **200 itens**, cada um com
+`{ pergunta, option1, option2 }` (mesmo formato do `vab.json`). Blocos, na ordem:
+1–50 atração & corpo · 51–100 pegação & provocação · 101–150 fantasias & desejos
+· 151–200 adulto, ciúmes & tensão.
+
+Carregado por **`vab18Json()`** — mesmo caminho do `vabJson`
+(`funcs/exports.js`: `loadJsonSync('json/vab18.json')`), importado no `index.js`.
+
+### O comando
+`case 'vab18'` (`index.js`, logo depois do `case 'vab'`): **cópia fiel da
+mecânica** do `!vab` — só a lista muda. Enquete com `selectableCount: 1`,
+`quoted: info`, exige grupo + `modobrincadeira`. Título
+**`😈 ${item.pergunta}`** (emoji +18, coerente com o tom do menu). Fallback
+`'😈 O QUE VOCÊ PREFERE?'` para item sem pergunta.
+
+### Menu 18 — categoria BRINCADEIRAS
+`menus/menu18.js` ganhou a segunda categoria, **depois** de PLAQUINHA:
+```
+╭━━━꧁༺ ㅤ😈 𝑩𝑹𝑰𝑵𝑪𝑨𝑫𝑬𝑰𝑹𝑨𝑺 😈ㅤ ༻꧂━━━╮
+｜ 😈 !vab18
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
+```
+Lista declarativa `BRINCADEIRA_COMMANDS` no topo do módulo (é onde entram as
+próximas brincadeiras). O `blockPv` (`menuCommandsMap.menu18`) recebeu `vab18`,
+senão o comando não apareceria no bloqueio de menu.
+
+### Testes — `tests/vab18.test.js` (**11 testes / 35 asserções**)
+- arquivo: 200 itens, primeira/última conferidas, todos completos, nenhuma
+  opção repetida no mesmo item, nenhum trio duplicado, e os 4 blocos na ordem;
+- handler real: pergunta no título (com o emoji `😈`), as duas opções do MESMO
+  item, `selectableCount: 1`, coerência em 10 execuções, só grupo + modo
+  brincadeira, e **regressão do `!vab`** (continua com `🤔` e funcionando);
+- menu: categoria BRINCADEIRAS presente, com `!vab18`, e PLAQUINHA antes dela.
+`tests/menu18-plaquinha.test.js` ganhou a mesma checagem pelo **handler real**
+(`!menu18`) + `vab18` no `blockPv` → 20 testes / 85 asserções.
+
 ### Emoji trocado — no `!eununca` (não no menu18)
 O pedido era *"trocar o 🔞 do comando `!eununca`"*, e eu tinha entendido que era o
 **menu18** — troquei o lugar errado e depois reverti.

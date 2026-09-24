@@ -1724,6 +1724,7 @@ const {
   tictactoe,
   toolsJson,
   vabJson,
+  vab18Json,
   Lyrics,
   commandStats,
   //ia,
@@ -37701,6 +37702,46 @@ case 'vab':
           values: [
             vabs.option1,
             vabs.option2
+          ],
+          selectableCount: 1
+        }
+      },
+      {
+        quoted: info
+      }
+    );
+  } catch (e) {
+    console.error(e);
+    await reply(
+      "❌ Ocorreu um erro interno. Tente novamente em alguns minutos."
+    );
+  }
+break;
+// !vab18 — "Isso ou Aquilo" +18, MESMO formato do `!vab` (enquete de duas
+// opções, pergunta no título). O que muda é só a lista: `vab18.json`, com as
+// 200 perguntas picantes. Vive no menu18, na categoria BRINCADEIRAS.
+case 'vab18':
+  try {
+    if (!isGroup) {
+      return sendAbyssWarning("◈ Este comando é só para grupos.");
+    }
+    if (!isModoBn) {
+      return reply('❌ O modo brincadeira não esta ativo nesse grupo');
+    }
+    const listaVab18 = vab18Json();
+    const vabs18 = listaVab18[Math.floor(Math.random() * listaVab18.length)];
+    // A pergunta vai NO TÍTULO da enquete, igual ao `!vab`.
+    const tituloVab18 = vabs18.pergunta
+      ? `😈 ${vabs18.pergunta}`
+      : '😈 O QUE VOCÊ PREFERE?';
+    await nazu.sendMessage(
+      from,
+      {
+        poll: {
+          name: tituloVab18,
+          values: [
+            vabs18.option1,
+            vabs18.option2
           ],
           selectableCount: 1
         }
