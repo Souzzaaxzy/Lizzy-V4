@@ -75,6 +75,8 @@ function desbold(text) {
 
 const QUESTIONS = JSON.parse(fs.readFileSync(path.join(ROOT, 'dados/src/funcs/json/akinator/questions.json'), 'utf-8')).questions;
 const BASE_CHARS = JSON.parse(fs.readFileSync(path.join(ROOT, 'dados/src/funcs/json/akinator/characters.json'), 'utf-8')).characters;
+const IMP = JSON.parse(fs.readFileSync(path.join(ROOT, 'dados/src/funcs/json/akinator/characters-imported.json'), 'utf-8'));
+const IMP_CHARS = IMP.characters;
 
 const engineMod = await import(new URL('../dados/src/funcs/utils/akinator-engine.js', import.meta.url).href);
 const gameMod = await import(new URL('../dados/src/funcs/utils/akinator-game.js', import.meta.url).href);
@@ -216,6 +218,72 @@ await test('todo personagem e distinguivel (nao ha assinatura duplicada)', () =>
     sig.add(k);
   }
   ok(dups === 0, `nenhum personagem indistinguivel (dups: ${dups})`);
+});
+
+// ============================================================================
+// 1b. BASE IMPORTADA DE APIs PUBLICAS
+// ============================================================================
+
+await test('base importada: existe, tem fonte e licenca declaradas', () => {
+  ok(Array.isArray(IMP_CHARS) && IMP_CHARS.length > 100, `tem personagens (${IMP_CHARS.length})`);
+  ok(Array.isArray(IMP.meta?.sources) && IMP.meta.sources.length > 0, 'declara as fontes');
+  ok(IMP.meta.sources.every((s) => s.name && s.license), 'toda fonte tem nome e licenca');
+  ok(IMP.meta.sources.every((s) => /BSD|CC0|MIT|Apache/i.test(s.license)), 'licenca permissiva (sem copyleft)');
+});
+
+await test('base importada: ids unicos e so perguntas existentes', () => {
+  const qids = new Set(QUESTIONS.map((q) => q.id));
+  ok(new Set(IMP_CHARS.map((c) => c.id)).size === IMP_CHARS.length, 'ids unicos');
+  const ruins = [];
+  for (const c of IMP_CHARS) {
+    for (const qid of Object.keys(c.answers || {})) if (!qids.has(qid)) ruins.push(`${c.id}:${qid}`);
+  }
+  ok(ruins.length === 0, `sem pergunta orfa (ruins: ${ruins.slice(0, 3).join(', ')})`);
+});
+
+await test('base importada: todo personagem e distinguivel (garantia do importador)', () => {
+  const sig = new Map();
+  let dups = 0;
+  for (const c of IMP_CHARS) {
+    const k = JSON.stringify(Object.entries(c.answers || {}).sort());
+    if (sig.has(k)) dups++;
+    sig.set(k, c.name);
+  }
+  ok(dups === 0, `nenhum indistinguivel (dups: ${dups})`);
+});
+
+await test('base COMBINADA (autoral + importada): sem indistinguiveis e ids unicos', () => {
+  const todos = BASE_CHARS.concat(IMP_CHARS);
+  ok(new Set(todos.map((c) => c.id)).size === todos.length, 'ids unicos na combinada');
+  const sig = new Set();
+  let dups = 0;
+  for (const c of todos) {
+    const k = JSON.stringify(Object.entries(c.answers || {}).sort());
+    if (sig.has(k)) dups++;
+    sig.add(k);
+  }
+  ok(dups === 0, `sem indistinguivel na combinada (dups: ${dups})`);
+});
+
+await test('base importada: converge para os personagens dela (>=95%)', () => {
+  const kb = new KnowledgeBase({ questions: QUESTIONS, characters: BASE_CHARS.concat(IMP_CHARS) });
+  let acertos = 0;
+  for (const alvo of IMP_CHARS) {
+    const e = new Engine(kb);
+    let passos = 0;
+    let palpite = null;
+    while (passos < 25) {
+      if (e.podePalpitar || e.atingiuTeto || e.semPerguntas) { palpite = e.bestGuess(); break; }
+      const j = e.selectNextQuestion();
+      if (j < 0) { palpite = e.bestGuess(); break; }
+      e.applyAnswer(j, alvo.answers[QUESTIONS[j].id] === undefined ? 0.5 : alvo.answers[QUESTIONS[j].id]);
+      passos++;
+    }
+    if (!palpite) palpite = e.bestGuess();
+    if (palpite.char && palpite.char.name === alvo.name) acertos++;
+  }
+  const pct = (100 * acertos) / IMP_CHARS.length;
+  ok(pct >= 95, `acerta >=95% da base importada (veio ${pct.toFixed(1)}%)`);
 });
 
 // ============================================================================

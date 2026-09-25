@@ -181,6 +181,10 @@ async function loadModules() {
         // Bancos do engine proprio (repo, versionados).
         modules.akinatorQuestionsJson = () => loadJsonSync('json/akinator/questions.json');
         modules.akinatorCharactersJson = () => loadJsonSync('json/akinator/characters.json');
+        // Base IMPORTADA de APIs publicas (PokeAPI/SWAPI, BSD-3-Clause).
+        // Arquivo separado de proposito: a base autoral fica intocada e a
+        // procedencia/licenca de cada uma e explicita.
+        modules.akinatorImportedJson = () => loadJsonSync('json/akinator/characters-imported.json');
         const hotseatJsonData = loadJsonSync('json/hotseat.json');
         modules.hotseatJson = () => hotseatJsonData;
 

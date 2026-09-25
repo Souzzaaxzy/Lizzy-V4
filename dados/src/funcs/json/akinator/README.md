@@ -9,7 +9,12 @@ engine de adivinhacao probabilistico proprio, rodando dentro do bot.
 | Arquivo | Papel |
 |---|---|
 | `questions.json` | o banco de perguntas (ids estaveis) -- **versionado aqui** |
-| `characters.json` | a base de personagens (atributos) -- **versionada aqui** |
+| `characters.json` | a base **autoral** (curada a mao) -- versionada aqui |
+| `characters-imported.json` | base **importada de APIs publicas** -- versionada aqui |
+
+As duas bases somam **249 personagens** e o engine trata igual. Elas ficam
+separadas de proposito: assim a **procedencia e a licenca** de cada uma sao
+explicitas, e a base autoral nunca e misturada com dado de terceiro.
 
 A base acima e a **autoral**. O que o jogo aprende e o que a comunidade sugere
 ficam **fora** dela, no database (para nao sujar a base versionada):
@@ -100,6 +105,48 @@ gm.promoverCorrecoes();                     // promove quem tiver votos
 
 Sessoes marcadas como **adversariais** (respostas contraditorias em serie) nao
 geram correcao nem treinam a base -- e a defesa contra troll.
+
+## Importar personagens de APIs publicas
+
+O script `tools/import-characters.py` (na raiz do projeto) le APIs publicas,
+DERIVA os atributos para as perguntas do engine e grava a base. Roda **offline
+uma vez** -- o bot nao chama API em runtime (a base fica versionada).
+
+```bash
+# amostra das duas fontes, sem gravar
+python3 tools/import-characters.py
+
+# gen 1 (151 pokemon) + star wars
+python3 tools/import-characters.py --source all --limit 151 \
+  --out dados/src/funcs/json/akinator/characters-imported.json
+
+# so pokemon
+python3 tools/import-characters.py --source pokemon --limit 151 --out /tmp/pk.json
+```
+
+### Fontes e licenca (medido)
+
+| Fonte | Licenca | Tamanho | Importada? |
+|---|---|---|---|
+| PokeAPI | **BSD-3-Clause** | 1351 | sim (a melhor: tipo, cor, habitat, forma, evolucao, geracao, raridade) |
+| SWAPI | **BSD-3-Clause** | 93 | sim (genero, cabelo, olho, altura, peso, nascimento) |
+| Rick & Morty API | BSD-3-Clause | 826 | nao (so status/especie/genero -- separa mal) |
+| Disney API | **sem licenca** | ~4824 | nao (sem licenca clara, nao se redistribui) |
+| **Wikidata** | CC0 | **109.264** | nao (MEDIDO: genero em 153, cabelo em 84, olho em 89 -- quase sem atributo) |
+| Jikan/AniList (anime) | -- | grande | nao (nome+imagem, sem atributo; Jikan deu HTTP 504) |
+
+**Por que nao usar uma API "com todos os personagens"**: ela nao existe com
+atributos. As grandes bases de anime/filme dao nome e imagem, mas o engine vive
+de **atributo** (e humano? e loiro? usa espada?) -- sem isso a pergunta nao tem
+como ser feita. A base de anime/filmes continua **autoral** por esse motivo; as
+APIs entram onde realmente agregam (pokemon e star wars).
+
+### Garantias do importador
+
+- descarta personagem que ficasse **indistinguivel** de outro (sem atributo que
+  os separe, o engine nunca acertaria);
+- confere que todo atributo aponta para pergunta **existente**;
+- registra `meta.sources` com nome, URL e **licenca** de cada fonte no arquivo.
 
 ## Como rodar os testes
 

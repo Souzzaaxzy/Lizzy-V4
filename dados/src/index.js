@@ -1756,6 +1756,7 @@ const {
   AkinatorGameManager,
   akinatorQuestionsJson,
   akinatorCharactersJson,
+  akinatorImportedJson,
   Lyrics,
   commandStats,
   //ia,
@@ -3375,14 +3376,18 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     if (!globalThis.__lizzyAkinatorManager && typeof AkinatorGameManager === 'function') {
       const _akQ = akinatorQuestionsJson();
       const _akC = akinatorCharactersJson();
+      const _akI = akinatorImportedJson();
+      // Base autoral + base importada (PokeAPI/SWAPI). A importada e separada
+      // para deixar clara a procedencia; o engine trata as duas igual.
+      const _chars = ((_akC && _akC.characters) || []).concat((_akI && _akI.characters) || []);
       globalThis.__lizzyAkinatorManager = new AkinatorGameManager({
         questions: (_akQ && _akQ.questions) || [],
-        characters: (_akC && _akC.characters) || [],
+        characters: _chars,
         learnedFile: pathz.join(DATABASE_DIR, 'akinator', 'learned.json'),
         pendingFile: pathz.join(DATABASE_DIR, 'akinator', 'pending.json'),
         botName: nomebot,
       });
-      console.log(`[AKINATOR] engine proprio | personagens=${((_akC && _akC.characters) || []).length} | perguntas=${((_akQ && _akQ.questions) || []).length}`);
+      console.log(`[AKINATOR] engine proprio | personagens=${_chars.length} | perguntas=${((_akQ && _akQ.questions) || []).length}`);
     }
     const akinatorManager = globalThis.__lizzyAkinatorManager;
     const isOnlyAdmin = groupData.soadm;

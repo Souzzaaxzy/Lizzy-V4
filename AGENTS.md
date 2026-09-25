@@ -1219,12 +1219,51 @@ Tres arquivos, tres responsabilidades: **base autoral** no repo, **aprendizado**
 6. Correcao vai para a FILA e precisa de votos (`MIN_VOTES_TO_PROMOTE = 2`) para
    ser promovida -- usuario nenhum injeta dado ruim direto na base.
 
-### Base atual (autoral)
-**51 personagens** em **9 categorias** (anime, game, movies, comics, cartoon,
-sports, music, internet, real_people) e **110 perguntas**. Nenhum personagem e
-indistinguivel de outro (conferido por teste de assinatura). Gerada por um script
-com validacao de ids (`/tmp/build_kb.py` na rodada; o formato final e o
-`characters.json`).
+### As bases (autoral + importada)
+| Base | Personagens | Origem | Licenca |
+|---|---|---|---|
+| `characters.json` | 51 | autoral (curada a mao) | da Lizzy |
+| `characters-imported.json` | 198 | PokeAPI + SWAPI | **BSD-3-Clause** |
+| **total** | **249** | -- | -- |
+
+Em **9+ categorias** (anime, game, movies, comics, cartoon, sports, music,
+internet, real_people, pokemon, star_wars) e **160 perguntas**. As bases ficam
+em **arquivos separados** de proposito: a procedencia/licenca de cada uma fica
+explicita e a autoral nunca se mistura com dado de terceiro. **Zero personagens
+indistinguiveis** (garantia do importador, conferida por teste).
+
+**Importador**: `tools/import-characters.py` -- roda offline, deriva atributos
+das APIs para as perguntas do engine, descarta quem ficasse indistinguivel,
+valida os ids e grava `meta.sources` (nome/URL/licenca). O bot **nao chama API
+em runtime**: a base fica versionada.
+
+### Pesquisa de fontes de personagens (o que existe de verdade) -- medido
+| Fonte | Licenca | Tamanho | Serve? |
+|---|---|---|---|
+| PokeAPI | BSD-3-Clause | 1351 | **sim** -- tipo, cor, habitat, forma, evolucao, geracao, raridade |
+| SWAPI | BSD-3-Clause | 93 | **sim** -- genero, cabelo, olho, altura, peso |
+| Rick & Morty | BSD-3-Clause | 826 | nao (so status/especie/genero: separa mal) |
+| Disney API | **sem licenca** | ~4824 | nao (sem licenca clara nao se redistribui) |
+| **Wikidata** | CC0 | **109.264** | **nao** -- MEDIDO: genero em 153, cabelo em 84, olho em 89 |
+| Jikan/AniList (anime) | -- | grande | nao (nome+imagem, sem atributo; Jikan deu 504) |
+
+**Conclusao honesta**: nao existe API publica "com todos os personagens" que
+sirva ao engine, porque as bases grandes de anime/filme trazem **nome e imagem,
+nao atributo** -- e o engine vive de atributo. A base de anime/filmes segue
+autoral; as APIs entram onde agregam (pokemon e star wars).
+
+### Convergencia medida (249 personagens)
+**98,4%** dos personagens da base sao acertados, media **10,9 perguntas**
+(51/51 na base autoral em 6,4; 198 na importada). Os 4 que erram empatam em
+personagens genuinamente parecidos no dado publico (Jigglypuff/Clefairy,
+Pinsir/Kangaskhan). As perguntas "parecidas" (`pokemon`, `star_wars`,
+`lendario`, `cor_*`, `primeira_forma`...) foram adicionadas para dar separacao.
+
+### Escala do arquivo (para crescer)
+198 personagens ~= 228 KB (~1,15 KB cada). 5.000 personagens ~= **5,6 MB** de
+JSON carregado na memoria uma vez (~77 ms de indexacao). O teto pratico e a
+memoria do container, nao o algoritmo -- medido: 10.200 personagens a 138 ms por
+pergunta.
 
 ### Integracao (sem sistema paralelo)
 - `exports.js` carrega os dois modulos + os dois JSONs (mesmo padrao dos outros).
@@ -1253,7 +1292,7 @@ com saida antecipada quando a pergunta nao separa ninguem. Depois: **138 ms** po
 pergunta a 10.2k (6,7×), indexacao 77 ms uma vez. Na base atual: **3,0 ms**.
 Sessoes: 100 simultaneas = ~8,5 ms por resposta.
 
-### Testes — `tests/akinator.test.js` (**36 testes / 130 assercoes**)
+### Testes — `tests/akinator.test.js` (**41 testes / 140 assercoes**)
 Base (ids unicos, sem pergunta orfa, >=5 categorias, sem personagem
 indistinguivel); engine (entropia, compatibilidade calibrada, os 5 niveis,
 sessao nova, a 1a pergunta divide a base, a incerteza cai, **convergencia para
