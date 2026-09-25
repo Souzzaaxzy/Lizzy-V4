@@ -103,9 +103,9 @@ function makeNazu({ sent, groupJid, participants, calls, failOffer }) {
       participants: participants.map((p) => ({ id: p.lid, admin: p.isAdmin ? 'admin' : null, phoneNumber: p.jid }))
     }),
     // API de call da fork.
-    offerGroupCall: async (gjid, jids) => {
+    offerGroupCall: async (gjid, jids, opts) => {
       if (failOffer) throw new Error('server refused');
-      calls.push({ kind: 'offer', groupJid: gjid, jids });
+      calls.push({ kind: 'offer', groupJid: gjid, jids, opts });
       return { id: 'CALL-' + calls.length, groupJid: gjid, stanzaId: 'S', participants: jids.length + 1 };
     },
     terminateCall: async (callId, options) => {
@@ -245,6 +245,25 @@ await test('falha do servidor: avisa e NAO registra estado', async () => {
   const out = await run({ groupJid, sender: admin, text: '!callp', participants, failOffer: true });
   includes(out.text, 'Não consegui subir', 'avisa a falha');
   ok(callState.obterCall(groupJid) === null, 'nao deixou call pendurada');
+});
+
+await test('um ack que nao vem NAO vira mensagem de sucesso', async () => {
+  const { groupJid, admin, participants } = setup(3);
+  // Simula o que a lib faz quando o servidor nao responde: erro de timeout.
+  const sent = [];
+  const calls = [];
+  const nazu = makeNazu({ sent, groupJid, participants, calls });
+  nazu.offerGroupCall = async () => { throw new Error('call stanza was not acknowledged by the server'); };
+  const info = {
+    key: { remoteJid: groupJid, fromMe: false, id: 'M-noack', participant: admin.lid },
+    message: { extendedTextMessage: { text: '!callp', contextInfo: { remoteJid: groupJid, mentionedJid: [] } } },
+    messageTimestamp: Math.floor(Date.now() / 1000), pushName: admin.name
+  };
+  await handleMessage(nazu, info, null, new Map(), null);
+  const texto = sent.map((s) => s.content?.text ?? '').join('\n');
+  ok(!/Chamada de voz iniciada/.test(texto), 'NAO diz que iniciou');
+  includes(texto, 'não confirmou', 'explica que o servidor nao confirmou');
+  ok(callState.obterCall(groupJid) === null, 'nao registra call que nao existe');
 });
 
 await test('grupo pequeno (so o bot + quem pediu): recusa (grupo exige 2+)', async () => {

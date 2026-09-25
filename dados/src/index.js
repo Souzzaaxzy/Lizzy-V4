@@ -33358,10 +33358,19 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
 
           let callRes;
           try {
-            callRes = await nazu.offerGroupCall(from, convidados);
+            callRes = await nazu.offerGroupCall(from, convidados, { timeoutMs: 20000 });
           } catch (e) {
+            // Um ack que nao vem NAO e' sucesso: sem a confirmacao do servidor a
+            // chamada nao existe para ninguem. Antes o comando dizia "iniciada" e
+            // nada tocava em lugar nenhum.
             console.warn('[CALLP] offerGroupCall falhou:', e?.message);
-            return reply(`❌ Não consegui subir a chamada.\n\n_${e?.message || 'erro desconhecido'}_`);
+            const motivo = /not acknowledged|timed out/i.test(String(e?.message))
+              ? 'O servidor não confirmou a chamada (sem resposta). Nada foi iniciado.'
+              : (e?.message || 'erro desconhecido');
+            return reply(`❌ Não consegui subir a chamada.\n\n_${motivo}_`);
+          }
+          if (!callRes || !callRes.id) {
+            return reply('❌ O servidor não confirmou a chamada. Nada foi iniciado.');
           }
 
           // Guarda a call para o `encerrar` — registro em MEMORIA (nao no JSON

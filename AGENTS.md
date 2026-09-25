@@ -4331,6 +4331,31 @@ Pedido do dono: um comando `!callp` que **sobe a call no grupo, mas apenas isso*
 (ativa a chamada; nao toca audio). O `!testcall` (que ja existia) e' outro
 recurso: ele so' **notifica** chamadas recebidas.
 
+### CORRECAO 2 (set/2026): a chamada nao subia — dois bugs reais
+O dono reportou: a mensagem *"Chamada de voz iniciada"* aparecia, mas **nada
+chegava no grupo**. A causa eram dois defeitos, ambos corrigidos na fork
+(`66bc0f6`):
+
+1. **Roster com o JID errado.** O `<user jid>` ia com o JID **qualificado por
+   device** (`x:14@lid`). A captura autoritativa do `meowcaller`
+   (`voip-initial-group-call`) mostra o **jid BARE** no `<user>` e o qualificado
+   **so no `<device>`**:
+   ```xml
+   <user jid="156535032389744@lid">
+     <device jid="156535032389744:14@lid"><capability ver="1">...</capability></device>
+   </user>
+   ```
+   Com o jid errado no `<user>`, o servidor **nao reconhece os participantes** e
+   nao ha roster de chamada.
+2. **Sucesso sem ack.** O socket transforma *timeout* de `query` em `undefined`,
+   e o metodo tratava isso como **sucesso** — o bot anunciava "iniciada" sem o
+   servidor ter confirmado nada. Agora ha um `sendCallStanza()` que **exige o
+   ack** e lanca quando ele nao vem; o comando passa a responder
+   *"O servidor não confirmou a chamada"* em vez de mentir.
+
+Testes que travam os dois: o formato exato da captura nos builders e
+*"sem ack = falha"* no socket real.
+
 ### CORRECAO (set/2026): a sinalizacao foi para a FORK
 A primeira versao montava a stanza **por fora da lib** e o dono reportou que
 **nao funcionou**. O diagnostico: a fork nao expunha nenhuma forma de *iniciar*
