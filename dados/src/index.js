@@ -37936,6 +37936,10 @@ case 'akinator': {
       if (r.reason === 'bloqueio') {
         return reply(akinatorManager.mensagemBloqueio());
       }
+      if (r.reason === 'indisponivel') {
+        // O serviço respondeu, mas mudou o formato -- não é proxy.
+        return reply(akinatorManager.mensagemIndisponivel());
+      }
       return reply(akinatorManager.mensagemErroRede());
     }
 

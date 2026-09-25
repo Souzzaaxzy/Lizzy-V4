@@ -399,14 +399,31 @@ await test('transportFromEnv: vazio sem variaveis; proxy e scraperapi quando set
   ok(transportFromEnv({ AKINATOR_PROXY: '   ' }).proxy === undefined, 'proxy em branco ignorado');
 });
 
-await test('classificarFalha separa BLOQUEIO de erro de rede', () => {
+await test('classificarFalha separa EXTRACAO, BLOQUEIO e REDE', () => {
+  // O servico RESPONDEU mas a lib nao leu -> nao e proxy, e formato novo.
   for (const m of [
     'Failed to extract session/signature from HTML response.',
-    'Just a moment...', 'HTTP 403 Forbidden', 'Vital API blocked', 'cloudflare challenge',
+    'Failed to extract something',
+  ]) ok(classificarFalha(m) === 'extracao', `"${m}" -> extracao`);
+  // Cloudflare barrando a conexao -> proxy/IP resolve.
+  for (const m of [
+    'Just a moment...', 'HTTP 403 Forbidden', 'Vital API blocked',
+    'cloudflare challenge', 'HTTP error starting game: 403',
   ]) ok(classificarFalha(m) === 'bloqueio', `"${m}" -> bloqueio`);
   for (const m of ['connect ECONNREFUSED', 'ETIMEDOUT', 'socket hang up']) {
     ok(classificarFalha(m) === 'rede', `"${m}" -> rede`);
   }
+});
+
+await test('mudanca de formato do site NAO manda configurar proxy', async () => {
+  const c = makeFakeClient({ start: async () => { throw new Error('Failed to extract session/signature from HTML response.'); } });
+  const mgr = makeManager(() => c);
+  const r = await mgr.iniciar({ groupId: 'g@g.us', userId: 'u@lid' });
+  ok(r.success === false && r.reason === 'indisponivel', 'reason = indisponivel');
+  const m = desbold(mgr.mensagemIndisponivel());
+  ok(/mudou o formato/i.test(m), 'explica que o formato mudou');
+  ok(!m.includes('AKINATOR_PROXY'), 'NAO manda configurar proxy (causa errada)');
+  ok(!/stack|Error:/i.test(m), 'sem detalhe tecnico');
 });
 
 await test('o transporte chega ao construtor do cliente', async () => {
@@ -423,13 +440,14 @@ await test('o transporte chega ao construtor do cliente', async () => {
 });
 
 await test('bloqueio do Cloudflare vira mensagem ESPECIFICA (nao erro generico)', async () => {
-  const c = makeFakeClient({ start: async () => { throw new Error('Failed to extract session/signature from HTML response.'); } });
+  // Bloqueio REAL = Cloudflare barrando a conexao (403 / Just a moment).
+  const c = makeFakeClient({ start: async () => { throw new Error('Just a moment...'); } });
   const mgr = makeManager(() => c);
   const r = await mgr.iniciar({ groupId: 'g@g.us', userId: 'u@lid' });
   ok(r.success === false && r.reason === 'bloqueio', 'reason = bloqueio');
-  const m = mgr.mensagemBloqueio();
-  ok(/bloqueando o ip/i.test(desbold(m)), 'explica que o IP esta bloqueado');
-  ok(desbold(m).includes('AKINATOR_PROXY'), 'aponta a configuracao que resolve');
+  const m = desbold(mgr.mensagemBloqueio());
+  ok(/bloqueando o ip/i.test(m), 'explica que o IP esta bloqueado');
+  ok(m.includes('AKINATOR_PROXY'), 'aponta a configuracao que resolve');
   ok(!/stack|Error:|session=|signature=/i.test(m), 'sem detalhe tecnico');
 });
 
@@ -454,6 +472,15 @@ await test('!akinator no handler mostra o aviso de bloqueio quando o IP e recusa
   const r = await enviar({ groupJid: grupo, pessoa: p, text: '!akinator' });
   ok(/bloqueando o ip/i.test(desbold(r.texto)), 'avisou o bloqueio (nao o erro generico)');
   ok(desbold(r.texto).includes('AKINATOR_PROXY'), 'mostrou como resolver');
+});
+
+await test('!akinator no handler mostra o aviso de FORMATO quando o site mudou', async () => {
+  injetarManager(() => makeFakeClient({ start: async () => { throw new Error('Failed to extract session/signature from HTML response.'); } }));
+  const grupo = makeGroup();
+  const p = nextPerson();
+  const r = await enviar({ groupJid: grupo, pessoa: p, text: '!akinator' });
+  ok(/mudou o formato/i.test(desbold(r.texto)), 'avisou a mudanca de formato');
+  ok(!desbold(r.texto).includes('AKINATOR_PROXY'), 'nao sugeriu proxy');
 });
 
 // ============================================================================

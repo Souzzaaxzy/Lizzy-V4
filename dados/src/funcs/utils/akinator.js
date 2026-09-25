@@ -56,17 +56,33 @@ function transportFromEnv(env) {
 
 /**
  * Classifica a falha do cliente para dar uma mensagem util.
- * `bloqueio` = Cloudflare/anti-bot (precisa de proxy); `rede` = o resto.
+ *
+ * IMPORTANTE -- sao DOIS problemas diferentes, medidos:
+ *
+ *   `extracao`  o servico RESPONDEU (200) mas a lib nao conseguiu ler os campos
+ *               que esperava. Acontece quando o site muda o HTML: hoje o
+ *               `/game` responde 200 com a pergunta e o `session`, porem SEM o
+ *               campo `signature` que a akinator-client@1.3.0 exige. Proxy NAO
+ *               resolve isso -- e desatualizacao do cliente.
+ *   `bloqueio`  Cloudflare barrou a propria conexao (403 "Just a moment...").
+ *               Esse sim costuma pedir proxy/IP diferente.
+ *   `rede`      falha de conexao generica (ECONNREFUSED, timeout...).
+ *
+ * A ordem importa: a mensagem "Failed to extract session/signature" contem a
+ * palavra `signature`, mas NAO e bloqueio.
  */
 function classificarFalha(mensagem) {
   const m = String(mensagem || '').toLowerCase();
+  if (m.includes('session/signature') || m.includes('failed to extract')) {
+    return 'extracao';
+  }
   if (
-    m.includes('session/signature') ||
     m.includes('just a moment') ||
-    m.includes('403') ||
     m.includes('vital api blocked') ||
     m.includes('cloudflare') ||
-    m.includes('challenge')
+    m.includes('challenge') ||
+    m.includes('http error starting game') ||
+    (/\b403\b/.test(m) && !m.includes('extract'))
   ) {
     return 'bloqueio';
   }
@@ -387,6 +403,7 @@ class AkinatorManager {
       const causa = classificarFalha(e && e.message);
       // O detalhe tecnico fica no terminal; o usuario recebe so o necessário.
       console.warn(`[AKINATOR] falha ao iniciar (${causa}):`, e && e.message);
+      if (causa === 'extracao') return { success: false, reason: 'indisponivel' };
       return { success: false, reason: causa === 'bloqueio' ? 'bloqueio' : 'erro_rede' };
     }
   }
@@ -608,6 +625,29 @@ class AkinatorManager {
       '',
       `O administrador pode liberar configurando`,
       `um proxy em ${bold('AKINATOR_PROXY')} no .env.`,
+      RODAPE(this.botName),
+    ].join('\n');
+  }
+
+  /**
+   * Servico respondeu, mas a lib nao conseguiu ler a partida.
+   *
+   * Aqui NAO adianta falar de proxy: o problema nao e conexao, e o formato que
+   * o site passou a devolver. Dizer "configure proxy" seria mandar o admin
+   * perder tempo atras da causa errada.
+   */
+  mensagemIndisponivel() {
+    return [
+      TOPO('AKINATOR'),
+      '',
+      `\u26a0\ufe0f O Akinator mudou o formato das respostas`,
+      `e a vers\u00e3o da integra\u00e7\u00e3o ficou desatualizada.`,
+      '',
+      `N\u00e3o \u00e9 problema de conex\u00e3o nem do`,
+      `seu proxy: o servi\u00e7o em si est\u00e1 fora do`,
+      `formato esperado.`,
+      '',
+      `Tente novamente mais tarde.`,
       RODAPE(this.botName),
     ].join('\n');
   }

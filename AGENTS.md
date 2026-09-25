@@ -1203,7 +1203,7 @@ Sessao expira em **30min** (`SESSION_TIMEOUT_MS`), avisa e limpa (spec 21).
 (usado no `ERROU`) depende do endpoint `/exclude`, que tem anti-bot **proprio**;
 se falhar, **nada de bypass**: avisa e encerra com seguranca (spec 15).
 
-### Testes — `tests/akinator.test.js` (**38 testes / 134 assercoes**)
+### Testes — `tests/akinator.test.js` (**40 testes / 142 assercoes**)
 Handler real com socket falso + **cliente falso injetado**. Cobre o checklist da
 spec 36: as 5 respostas (enum real), 2 usuarios simultaneos, isolamento (B nao
 responde pela partida de A), cancelamento, timeout, `won`, `ko`, erro de rede
@@ -1212,6 +1212,49 @@ descricao truncada, botao de sessao antiga recusado, e que **nenhum menu** ganho
 o comando. Cobre tambem o **transporte**: `transportFromEnv`, `classificarFalha`,
 que o proxy chega ao construtor do cliente, e as duas mensagens de bloqueio. Os botoes foram validados pelo `proto.Message.encode/decode` REAL:
 viram `quick_reply` com os 5 ids intactos.
+
+### CAUSA RAIZ MEDIDA: o SITE mudou (nao e proxy) — set/2026 ✅
+Depois do fix de proxy, o dono ainda via erro. Investigando de novo, com
+medicao, a causa e **outra** — e a mensagem anterior estava errada:
+
+| teste | resultado |
+|---|---|
+| `curl` no akinator.com | **200** (passa) |
+| `fetch`/`https`/`http2` do Node | 403 (fingerprint TLS) |
+| `got-scraping` (o transporte que a lib usa) | **200** — NAO e bloqueio |
+| `POST /game` | **200**, com a pergunta e o `session` (`zQx6YshKDtDq...`) |
+| campo `signature` no `/game` | **0 ocorrencias** (o site parou de mandar) |
+| `POST /answer` sem `signature` | **200** JSON (`{"completion":"KO"}`) |
+
+Ou seja: **nao havia bloqueio de IP** — o servidor respondia 200. O que quebrou
+foi que a **lib exige `signature`** (`client.js` ~257:
+`/name="signature" id="signature" value="(...)"/`), e o site **nao envia mais**
+esse campo (conferido tambem em `pt`). A `akinator-client` esta parada em
+**08/09**; o site mudou depois. A mensagem "Failed to extract session/signature"
+**contem a palavra signature mas NAO e bloqueio** — era isso que enganava o
+diagnostico.
+
+Tentado (sem sucesso, e registrado para nao repetir): tolerar `signature` vazio
+faz o `start()` funcionar, mas o `/answer` responde `KO` para **todas** as
+formas testadas (sem signature / vazia / = session / com step) — o protocolo
+mudou alem do campo ausente. Sem bypass, sem scraping: nao se reinventa o
+protocolo do site.
+
+### Correcao aplicada: diagnostico HONESTO (3 causas)
+`classificarFalha` passou a separar **tres** casos, na ordem certa:
+`extracao` (servico respondeu, lib nao leu — **nao** resolve com proxy) →
+`bloqueio` (Cloudflare 403/Just a moment — proxy/IP resolve) → `rede`. A
+mensagem de `extracao` diz explicitamente *"O Akinator mudou o formato das
+respostas... Nao e problema de conexao nem do seu proxy"* — **nao** manda mais
+configurar proxy para a causa errada.
+Testes: `tests/akinator.test.js` **40 testes / 142 assercoes** (cobre as 3
+classificacoes e as duas mensagens pelo handler real).
+
+**Estado honesto**: o jogo nao funciona hoje porque o servico do Akinator
+quebrou o contrato com a lib. Nao ha correcao segura do lado da Lizzy — exige
+atualizacao da `akinator-client` (ou um cliente novo). O que esta garantido e
+que (a) o bot **nao quebra**, (b) a mensagem **nao mente** sobre a causa, e (c)
+quando o pacote for corrigido, a integracao volta a funcionar sem mexer aqui.
 
 ### LIMITE DE REDE (medido) + CORRECAO do "nao foi possivel conectar" ✅
 O IP de datacenter deste sandbox e **bloqueado pelo Cloudflare** do akinator.com:
