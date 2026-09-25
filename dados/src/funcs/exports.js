@@ -79,7 +79,7 @@ async function loadModules() {
             reputationMod, qrcodeMod, notesMod, calculatorMod, audioEditMod,
             transmissaoMod, gdriveMod, mediafireMod, twitterMod, searchMod,
             imagetoolsMod, freefireMod, smmApiMod, adoptionMod, hotseatMod,
-            akinatorMod
+            akinatorEngineMod, akinatorGameMod
         ] = await Promise.all([
             import('./utils/gerarnick.js'),
             import('./utils/logotipos.js'),
@@ -111,7 +111,8 @@ async function loadModules() {
             import('./smmApi.js'),
             import('./utils/adoptionManager.js'),
             import('./utils/hotseat.js'),
-            import('./utils/akinator.js'),
+            import('./utils/akinator-engine.js'),
+            import('./utils/akinator-game.js'),
         ]);
 
         modules.styleText = styleTextMod.default ?? styleTextMod;
@@ -144,16 +145,10 @@ async function loadModules() {
         modules.smmApi = smmApiMod.default ?? smmApiMod;
         modules.adoptionManager = adoptionMod.default ?? adoptionMod;
         modules.hotseat = hotseatMod.default ?? hotseatMod;
-        modules.AkinatorManager = akinatorMod.AkinatorManager ?? akinatorMod.default;
-        // A biblioteca do Akinator e carregada aqui e injetada no manager
-        // (enums + fabrica de cliente). Se faltar, o comando degrada com aviso
-        // em vez de derrubar o boot.
-        try {
-            modules.akinatorLib = await import('akinator-client');
-        } catch (e) {
-            console.warn('[EXPORTS] akinator-client indisponivel:', e && e.message);
-            modules.akinatorLib = null;
-        }
+        // ENGINE PROPRIO do !akinator (sem dependencia externa): o engine
+        // probabilistico e a camada de jogo/sessoes sao modulos da Lizzy.
+        modules.AkinatorEngine = akinatorEngineMod.Engine ?? akinatorEngineMod.default;
+        modules.AkinatorGameManager = akinatorGameMod.AkinatorGameManager ?? akinatorGameMod.default;
 
         if (modules.stickerModule && modules.stickerModule.sendSticker) {
             modules.sendSticker = modules.stickerModule.sendSticker;
@@ -183,6 +178,9 @@ async function loadModules() {
         modules.vabJson = () => vabJsonData;
         modules.vab18Json = () => vab18JsonData;
         modules.eununca18Json = () => eununca18JsonData;
+        // Bancos do engine proprio (repo, versionados).
+        modules.akinatorQuestionsJson = () => loadJsonSync('json/akinator/questions.json');
+        modules.akinatorCharactersJson = () => loadJsonSync('json/akinator/characters.json');
         const hotseatJsonData = loadJsonSync('json/hotseat.json');
         modules.hotseatJson = () => hotseatJsonData;
 

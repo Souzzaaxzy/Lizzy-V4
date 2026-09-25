@@ -1752,8 +1752,10 @@ const {
   eununca18Json,
   hotseatJson,
   hotseat,
-  AkinatorManager,
-  akinatorLib,
+  AkinatorEngine,
+  AkinatorGameManager,
+  akinatorQuestionsJson,
+  akinatorCharactersJson,
   Lyrics,
   commandStats,
   //ia,
@@ -3367,19 +3369,20 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     }
     const hotseatManager = globalThis.__lizzyHotseatManager;
     // Gerenciador do !akinator. UMA instancia por processo (mesmo padrao do
-    // hotseat): a fabrica de cliente e os enums vem da lib, INJETADOS aqui
-    // para o modulo seguir testavel sem rede. Cada partida cria a SUA
-    // instancia de AkinatorClient -- nunca uma global.
-    if (!globalThis.__lizzyAkinatorManager && typeof AkinatorManager === 'function' && akinatorLib) {
-      globalThis.__lizzyAkinatorManager = new AkinatorManager({
-        createClient: (opts) => new akinatorLib.AkinatorClient(opts),
-        enums: { Answers: akinatorLib.Answers, Themes: akinatorLib.Themes, Languages: akinatorLib.Languages },
-        // O transporte (AKINATOR_PROXY / AKINATOR_SCRAPERAPI_KEY) e lido do
-        // ambiente pelo proprio manager. Sem essas variaveis ele tenta direto,
-        // e o Cloudflare pode bloquear IP de VPS/datacenter -- caso em que o
-        // comando explica a causa em vez de um erro generico.
+    // hotseat). Usa o ENGINE PROPRIO da Lizzy -- sem Akinator.com, sem
+    // akinator-client, sem rede: a base de personagens vem do repo e o que o
+    // jogo aprende vai para o database (arquivos separados da base autoral).
+    if (!globalThis.__lizzyAkinatorManager && typeof AkinatorGameManager === 'function') {
+      const _akQ = akinatorQuestionsJson();
+      const _akC = akinatorCharactersJson();
+      globalThis.__lizzyAkinatorManager = new AkinatorGameManager({
+        questions: (_akQ && _akQ.questions) || [],
+        characters: (_akC && _akC.characters) || [],
+        learnedFile: pathz.join(DATABASE_DIR, 'akinator', 'learned.json'),
+        pendingFile: pathz.join(DATABASE_DIR, 'akinator', 'pending.json'),
         botName: nomebot,
       });
+      console.log(`[AKINATOR] engine proprio | personagens=${((_akC && _akC.characters) || []).length} | perguntas=${((_akQ && _akQ.questions) || []).length}`);
     }
     const akinatorManager = globalThis.__lizzyAkinatorManager;
     const isOnlyAdmin = groupData.soadm;
@@ -5861,8 +5864,8 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
         // mensagem segue o fluxo normal).
         if (akinatorManager && body) {
           try {
-            const akRes = await akinatorManager.processMessage({
-              groupId: from,
+            const akRes = akinatorManager.processMessage({
+              chatId: from,
               userId: sender,
               text: body,
             });
@@ -37911,9 +37914,11 @@ case 'vab18':
     );
   }
 break;
-// !akinator - adivinhacao de pessoa/personagem via `akinator-client`.
-// NAO esta em nenhum menu nesta versao (spec 3). Subcomando: !akinator cancelar.
-// As respostas vem por mensagem/botao e sao consumidas no bloco de mensagens.
+// !akinator - adivinhacao de pessoa/personagem pelo ENGINE PROPRIO da Lizzy
+// (sem Akinator.com, sem akinator-client, sem rede). A base de personagens e
+// versionada no repo; o que o jogo aprende vai para o database.
+// Subcomando: !akinator cancelar. As respostas vem por mensagem/botao e sao
+// consumidas no bloco de mensagens (nao ha listener dedicado).
 case 'akinator': {
   try {
     if (!akinatorManager || typeof akinatorManager.iniciar !== 'function') {
@@ -37923,28 +37928,23 @@ case 'akinator': {
     const sub = normalizar((args[0] || '')).trim();
 
     if (sub === 'cancelar' || sub === 'cancel' || sub === 'parar') {
-      const r = akinatorManager.cancelar({ groupId: from, userId: sender });
+      const r = akinatorManager.cancelar({ chatId: from, userId: sender });
       return reply(r.message);
     }
 
-    const r = await akinatorManager.iniciar({ groupId: from, userId: sender });
+    const r = akinatorManager.iniciar({ chatId: from, userId: sender });
 
     if (!r.success) {
       if (r.reason === 'ja_em_partida') {
         return reply(akinatorManager.mensagemJaEmPartida());
       }
-      if (r.reason === 'bloqueio') {
-        return reply(akinatorManager.mensagemBloqueio());
-      }
-      if (r.reason === 'indisponivel') {
-        // O serviço respondeu, mas mudou o formato -- não é proxy.
+      if (r.reason === 'knowledge_invalid') {
         return reply(akinatorManager.mensagemIndisponivel());
       }
-      return reply(akinatorManager.mensagemErroRede());
+      return reply(akinatorManager.mensagemIndisponivel());
     }
 
-    // Abertura + primeira pergunta com os 5 botoes.
-    await reply(akinatorManager.mensagemAbertura());
+    // Primeira pergunta (ou palpite, se a base for minuscula) com os botoes.
     await sendInteractiveMessage(nazu, from, {
       text: r.message,
       footer: nomebot,
@@ -37952,7 +37952,7 @@ case 'akinator': {
     });
   } catch (e) {
     console.error('[AKINATOR] Erro:', e && e.message);
-    await reply('\u26a0\ufe0f N\u00e3o consegui conectar ao Akinator agora.\n\nTente novamente em alguns instantes.');
+    await reply('\u26a0\ufe0f Ocorreu um erro no Akinator. Tente novamente em alguns instantes.');
   }
   break;
 }

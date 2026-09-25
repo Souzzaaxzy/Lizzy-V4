@@ -1153,141 +1153,126 @@ novo (4/40). É uma corrida do próprio teste com o `persistGroupData()` async.
 **Não** tem relação com o Hot Seat (o bloco novo nem foi acionado: não imprimiu
 nada quando instrumentado). Rodar de novo costuma passar.
 
-## COMANDO `!akinator` — adivinhacao via `akinator-client` (set/2026) ✅
-Adivinhacao de pessoa/personagem usando o servico do Akinator. **Sem banco de
-personagens** na Lizzy: o conhecimento vem do servico (spec 29).
+## COMANDO `!akinator` — ENGINE PROPRIO (set/2026) ✅
+O `!akinator` **nao depende mais do Akinator.com** nem de `akinator-client`.
+Agora usa um **engine de adivinhacao probabilistico proprio**, com base de
+personagens controlada pela Lizzy. Nenhuma API externa, nenhum proxy, nenhum
+cookie, nenhuma sessao de terceiro.
 
-### Dependencia
-`akinator-client@^1.3.0` (mesmo repo que a spec indica). Instalado com o
-gerenciador do projeto (`npm install ... --legacy-peer-deps --allow-git=all`) e
-**fixado em `package.json` + `package-lock.json` + `yarn.lock`**. Os enums sao os
-REAIS do pacote — conferidos por introspecao, nunca numeros magicos:
-`Answers = { Yes:0, No:1, IDontKnow:2, Probably:3, ProbablyNot:4 }`,
-`Themes = { Character:1, Objects:2, Animals:14 }`, `Languages.Portuguese='pt'`.
-O Baileys **nao** foi tocado.
+### Por que trocou (causa raiz, medida na rodada anterior)
+O site do Akinator mudou o protocolo: o `/game` responde 200 mas **nao envia mais
+o campo `signature`** que a `akinator-client@1.3.0` exigia -- a lib esta parada
+desde 08/09. Tolerar o campo fazia o `start()` funcionar, mas o `/answer`
+devolvia `KO` para todas as formas testadas. Sem bypass possivel, a decisao foi
+**remover a dependencia** e implementar o engine.
 
-### Arquitetura — nada paralelo
-Mesma familia do `tictactoe.js`/`connect4.js`/`hotseat.js`:
-- **`dados/src/funcs/utils/akinator.js`** — motor + `AkinatorManager`. Mapa de
-  sessoes EM MEMORIA (sem banco), `_cleanup()` com timer `unref()`, layout via
-  `menus/layout.js`.
-- **Handler central**: o bloco em `index.js` (dentro do `if (isGroup)`, ao lado do
-  hotseat) chama `akinatorManager.processMessage(...)`. **Nao existe listener por
-  partida** — era o risco de leak apontado na spec 28.
-- O manager e injetado (`createClient` + `enums`): o modulo roda **sem rede nos
-  testes**, e em producao a fabrica e `new akinatorLib.AkinatorClient(opts)`.
+### Referencia estudada e LICENCA (o ponto sensivel)
+Referencia arquitetural: **"Sensei Knows" / Aaklon/akinator**
+(https://github.com/Aaklon/akinator), engine de 20 perguntas em Go sob
+**AGPL-3.0** (confirmado pela API do GitHub). Estudado o README, `akinator/`
+(`engine.go`, `knowledge_base.go`, `types.go`) e o `data/`.
 
-### Fluxo e botoes
-`!akinator` → abertura + 1a pergunta com **5 botoes** `quick_reply`
-(`SIM`/`NÃO`/`NÃO SEI`/`PROVAVELMENTE`/`PROVAVELMENTE NÃO`), enviados pelo
-`sendInteractiveMessage` que o projeto JA usa (`nativeFlowMessage.buttons`). O
-`id` do botao carrega o `sessionId` (`<sessionId>:ak_sim`), entao a POSSE e
-validada sem mapa global de buttonId. Ao adivinhar, os botoes viram
-`ACERTOU`/`ERROU`; o palpite sai com **nome + descricao (truncada)** e, quando ha
-`pictureUrl`, a **imagem** (falha de imagem nao impede o resultado).
+**Nenhum codigo foi copiado nem traduzido, e nenhum dado foi reutilizado.**
+Motivo: AGPL-3.0 e copyleft forte com **clausula de rede** -- incorporar ou
+traduzir aquele codigo obrigaria a relicenciar o bot inteiro sob AGPL e oferecer
+o fonte a quem usa o bot pela rede. Isso e decisao juridica do dono, nao tecnica.
+Entao foi feita uma **implementacao independente em JavaScript**, usando apenas
+as **tecnicas publicas** que o projeto descreve (posterior Bayesiana, entropia de
+Shannon / ganho de informacao esperado, suavizacao por prior Beta, deteccao de
+resposta adversarial por colapso de massa, correcoes em fila com votos). O
+`data/` do projeto original esta **vazio** (so `.gitkeep`), entao nao havia
+dataset a reusar; a base da Lizzy e autoral. Credito e a analise da licenca estao
+em `dados/src/funcs/json/akinator/README.md`.
 
-`!akinator cancelar` encerra so a partida do usuario. Nao ha `!aki`/aliases, nem
-stats/ranking/painel (spec 22/23/39).
+### Arquitetura escolhida: OPTION C (engine proprio integrado, em JS)
+Descartados: (A) engine Go separado -- exigiria compilar binario e supervisionar
+processo no Bronxys/Pterodactyl (historico de dor com yt-dlp/ffmpeg) e adiciona
+IPC como ponto de falha; (B) reaproveitar codigo AGPL -- barrado pela licenca.
+A opcao C mantem tudo em Node, sem build, sem rede, no mesmo padrao de
+sessao/botoes/erro dos outros jogos.
 
-### Isolamento, lock e timeout
-Chave = **`groupId::userId`** — o mesmo usuario pode jogar em grupos diferentes,
-mas nao abre 2 partidas no mesmo grupo (spec 9/31). Cada jogador tem a **sua**
-instancia de `AkinatorClient` (spec 8). `processing` bloqueia clique duplo: as
-respostas simultaneas caem em `'processing'` e so a primeira avanca (spec 34/35).
-Sessao expira em **30min** (`SESSION_TIMEOUT_MS`), avisa e limpa (spec 21).
-
-### Erros
-`start`/`answer` que lancam viram mensagem amigavel
-(*"Não consegui conectar ao Akinator agora"*), com o detalhe **so no console**
-— nada de stack/cookie/session/signature para o usuario (spec 19). `continue()`
-(usado no `ERROU`) depende do endpoint `/exclude`, que tem anti-bot **proprio**;
-se falhar, **nada de bypass**: avisa e encerra com seguranca (spec 15).
-
-### Testes — `tests/akinator.test.js` (**40 testes / 142 assercoes**)
-Handler real com socket falso + **cliente falso injetado**. Cobre o checklist da
-spec 36: as 5 respostas (enum real), 2 usuarios simultaneos, isolamento (B nao
-responde pela partida de A), cancelamento, timeout, `won`, `ko`, erro de rede
-(no inicio e ao responder), clique duplicado (so 1 avanca), imagem indisponivel,
-descricao truncada, botao de sessao antiga recusado, e que **nenhum menu** ganhou
-o comando. Cobre tambem o **transporte**: `transportFromEnv`, `classificarFalha`,
-que o proxy chega ao construtor do cliente, e as duas mensagens de bloqueio. Os botoes foram validados pelo `proto.Message.encode/decode` REAL:
-viram `quick_reply` com os 5 ids intactos.
-
-### CAUSA RAIZ MEDIDA: o SITE mudou (nao e proxy) — set/2026 ✅
-Depois do fix de proxy, o dono ainda via erro. Investigando de novo, com
-medicao, a causa e **outra** — e a mensagem anterior estava errada:
-
-| teste | resultado |
+### Arquivos
+| Caminho | Papel |
 |---|---|
-| `curl` no akinator.com | **200** (passa) |
-| `fetch`/`https`/`http2` do Node | 403 (fingerprint TLS) |
-| `got-scraping` (o transporte que a lib usa) | **200** — NAO e bloqueio |
-| `POST /game` | **200**, com a pergunta e o `session` (`zQx6YshKDtDq...`) |
-| campo `signature` no `/game` | **0 ocorrencias** (o site parou de mandar) |
-| `POST /answer` sem `signature` | **200** JSON (`{"completion":"KO"}`) |
+| `dados/src/funcs/utils/akinator-engine.js` | a MATEMATICA (KB + Engine) |
+| `dados/src/funcs/utils/akinator-game.js` | sessoes, correcoes, persistencia, layout |
+| `dados/src/funcs/json/akinator/questions.json` | banco de perguntas (versionado) |
+| `dados/src/funcs/json/akinator/characters.json` | base de personagens (versionada) |
+| `dados/src/funcs/json/akinator/README.md` | documentacao do engine + licenca |
+| `database/akinator/learned.json` | aprendido (runtime, gitignored) |
+| `database/akinator/pending.json` | correcoes pendentes (runtime, gitignored) |
 
-Ou seja: **nao havia bloqueio de IP** — o servidor respondia 200. O que quebrou
-foi que a **lib exige `signature`** (`client.js` ~257:
-`/name="signature" id="signature" value="(...)"/`), e o site **nao envia mais**
-esse campo (conferido tambem em `pt`). A `akinator-client` esta parada em
-**08/09**; o site mudou depois. A mensagem "Failed to extract session/signature"
-**contem a palavra signature mas NAO e bloqueio** — era isso que enganava o
-diagnostico.
+Tres arquivos, tres responsabilidades: **base autoral** no repo, **aprendizado** e
+**correcoes** no database. Aprendizado nunca sobrescreve a base.
 
-Tentado (sem sucesso, e registrado para nao repetir): tolerar `signature` vazio
-faz o `start()` funcionar, mas o `/answer` responde `KO` para **todas** as
-formas testadas (sem signature / vazia / = session / com step) — o protocolo
-mudou alem do campo ausente. Sem bypass, sem scraping: nao se reinventa o
-protocolo do site.
+### Como o engine funciona
+1. Cada personagem guarda `answers: { idDaPergunta: 0..1 }`
+   (1 sim · 0.75 provavelmente · 0.5 nao sei · 0.25 provavelmente nao · 0 nao).
+2. Posterior Bayesiana com **suavizacao Beta**: resposta ruim penaliza mas nao
+   zera -- o candidato pode se recuperar (por isso contradicao nao quebra).
+3. A proxima pergunta e a de **maior ganho de informacao esperado** (entropia),
+   com bonus UCB para perguntas pouco usadas.
+4. Palpita por confianca alta (>=85%), por **lideranca clara** (lider >= 2x o 2o,
+   >= 30%) ou por poucos candidatos restantes. As tres exigem minimo de perguntas.
+5. **Anti-troll**: se a massa de probabilidade colapsa em >= 40% das respostas, a
+   sessao e marcada adversarial e **nao treina nem gera correcao**.
+6. Correcao vai para a FILA e precisa de votos (`MIN_VOTES_TO_PROMOTE = 2`) para
+   ser promovida -- usuario nenhum injeta dado ruim direto na base.
 
-### Correcao aplicada: diagnostico HONESTO (3 causas)
-`classificarFalha` passou a separar **tres** casos, na ordem certa:
-`extracao` (servico respondeu, lib nao leu — **nao** resolve com proxy) →
-`bloqueio` (Cloudflare 403/Just a moment — proxy/IP resolve) → `rede`. A
-mensagem de `extracao` diz explicitamente *"O Akinator mudou o formato das
-respostas... Nao e problema de conexao nem do seu proxy"* — **nao** manda mais
-configurar proxy para a causa errada.
-Testes: `tests/akinator.test.js` **40 testes / 142 assercoes** (cobre as 3
-classificacoes e as duas mensagens pelo handler real).
+### Base atual (autoral)
+**51 personagens** em **9 categorias** (anime, game, movies, comics, cartoon,
+sports, music, internet, real_people) e **110 perguntas**. Nenhum personagem e
+indistinguivel de outro (conferido por teste de assinatura). Gerada por um script
+com validacao de ids (`/tmp/build_kb.py` na rodada; o formato final e o
+`characters.json`).
 
-**Estado honesto**: o jogo nao funciona hoje porque o servico do Akinator
-quebrou o contrato com a lib. Nao ha correcao segura do lado da Lizzy — exige
-atualizacao da `akinator-client` (ou um cliente novo). O que esta garantido e
-que (a) o bot **nao quebra**, (b) a mensagem **nao mente** sobre a causa, e (c)
-quando o pacote for corrigido, a integracao volta a funcionar sem mexer aqui.
+### Integracao (sem sistema paralelo)
+- `exports.js` carrega os dois modulos + os dois JSONs (mesmo padrao dos outros).
+- `index.js`: manager unico por processo (`globalThis.__lizzyAkinatorManager`),
+  criado no handler; `processMessage` **sincrono** chamado no bloco de mensagens
+  do `if (isGroup)` (ao lado do hotseat). **Sem listener dedicado.**
+- Botoes no formato de fio (`quick_reply`) enviados pelo `sendInteractiveMessage`
+  que o projeto ja usa; o `id` carrega o `sessionId`, entao a POSSE e validada
+  sem mapa global de buttonId.
+- `!akinator` e `!akinator cancelar`. **NAO esta em nenhum menu** (FASE 19) e
+  **nao alterou nenhum menu**.
 
-### LIMITE DE REDE (medido) + CORRECAO do "nao foi possivel conectar" ✅
-O IP de datacenter deste sandbox e **bloqueado pelo Cloudflare** do akinator.com:
-`GET /` responde **403 "Just a moment..."** e o `start()` falha com
-*"Failed to extract session/signature from HTML response"*. Testado tambem em
-`en`/`es`/`fr`: **mesmo resultado** — e o dominio inteiro, nao o idioma. Isso e
-**ambiental, nao bug de codigo**.
+### Removido (FASE 18)
+`dados/src/funcs/utils/akinator.js` (modulo antigo, deletado), a dependencia
+`akinator-client` (uninstalled: saiu do `package.json`, `package-lock.json` e
+`yarn.lock`; `got-scraping` veio junto e saiu tambem), `AkinatorManager`/
+`akinatorLib` do `index.js`, e as variaveis `AKINATOR_PROXY`/
+`AKINATOR_SCRAPERAPI_*` do `.env.example`. **Baileys nao foi tocado.**
 
-O dono recebeu *"nao foi possivel conectar"* no servidor dele — sintoma desse
-bloqueio, sem forma de saber a causa. Corrigido em duas frentes:
+### Performance (FASE 21) — medida
+A selecao de pergunta e O(personagens × perguntas). Medido ANTES: 10.200
+personagens → **922 ms por pergunta** (bloqueava o event loop). Duas mudancas:
+matriz peso/amostra **materializada** no load (troca lookup de objeto com chave
+string por leitura de `Float64Array`) e iteracao **apenas nos candidatos vivos**
+com saida antecipada quando a pergunta nao separa ninguem. Depois: **138 ms** por
+pergunta a 10.2k (6,7×), indexacao 77 ms uma vez. Na base atual: **3,0 ms**.
+Sessoes: 100 simultaneas = ~8,5 ms por resposta.
 
-1. **Diagnostico**: `classificarFalha(msg)` separa **`bloqueio`** (Cloudflare:
-   *session/signature*, *just a moment*, *403*, *vital api blocked*, *challenge*)
-   de **`rede`** (ECONNREFUSED, timeout...). O `iniciar` devolve
-   `reason: 'bloqueio'` e o comando mostra um aviso **especifico**
-   (*"O Akinator está bloqueando o IP deste servidor... proteção do próprio
-   serviço (Cloudflare)"*), apontando `AKINATOR_PROXY`. Erro comum de rede segue
-   com a mensagem genérica. Detalhe técnico só no console.
-2. **Saida oficial**: `transportFromEnv(env)` lê **`AKINATOR_PROXY`** e
-   **`AKINATOR_SCRAPERAPI_KEY`**/`AKINATOR_SCRAPERAPI_SESSION` do `.env` e
-   repassa ao construtor do cliente (`proxy`/`scraperApiKey`/`scraperApiSession`)
-   — as duas opções que o **próprio pacote** documenta para este bloqueio.
-   **Nada de bypass, nada de scraping, nada de credencial no código**: só a
-   configuração do administrador. Documentado no `.env.example`.
+### Testes — `tests/akinator.test.js` (**36 testes / 130 assercoes**)
+Base (ids unicos, sem pergunta orfa, >=5 categorias, sem personagem
+indistinguivel); engine (entropia, compatibilidade calibrada, os 5 niveis,
+sessao nova, a 1a pergunta divide a base, a incerteza cai, **convergencia para
+TODOS os 51** com media <=15 perguntas, categorias diferentes, base vazia,
+**contradicoes nao quebram**, troll sinalizavel, aprendizado ajusta peso); sessao
+(criar/recuperar/isolar, sem duplicata, cancelar so a propria, expiracao,
+cleanup, sem sessao -> null, **posse do botao**, base invalida); correcao (fila,
+nao entra na base, votos para promover); integracao pelo **handler real**
+(abertura com 5 botoes, partida inteira ate acertar, **palpite errado ->
+informar -> fila**, sessao ativa, cancelar, B nao responde pelo A, 2 simultaneas,
+**personagem desconhecido nunca inventado**); e as guardas de FASE 19 (nenhum
+menu) e de dependencia (sem `akinator-client`, sem listener dedicado, modulo
+antigo ausente).
 
-Detalhe de UX: se o admin **ja** configurou proxy e mesmo assim bloqueou, a
-mensagem **nao** manda configurar proxy de novo (seria inutil) — so avisa para
-tentar mais tarde.
-
-Estado: **fluxo, layout, botoes, isolamento, erros e transporte** estao cobertos
-por teste (38 testes). A partida real fica para o dono validar no servidor dele
-(se o IP tambem for bloqueado, configurar `AKINATOR_PROXY` ou a key da
-ScraperAPI resolve).
+### LIMITE HONESTO
+O engine e bom no que a base cobre: **51/51 dos personagens da base, em media 6,4
+perguntas**. Fora da base, ele **nao inventa** -- aponta o mais proximo e o
+usuario corrige (vai para a fila). Ampliar a cobertura e **adicionar
+personagens** no `characters.json` (nao ha scraping nem dependencia externa).
 
 ## GERENCIAMENTO do Plugin Fantasma — `!ghostcmd` / `!addghostcmd` / `!delghostcmd` ✅
 Sistema pequeno, **exclusivo do dono**, para administrar a distribuição do plugin

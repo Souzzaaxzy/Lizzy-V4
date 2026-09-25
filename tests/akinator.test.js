@@ -1,14 +1,12 @@
 /**
- * !akinator — adivinhacao de pessoa/personagem via `akinator-client`.
+ * !akinator com ENGINE PROPRIO -- testes.
  *
- * Roda o HANDLER REAL com socket falso e um CLIENTE FALSO injetado: o modulo
- * recebe a fabrica de cliente e os enums de fora, entao o jogo inteiro roda sem
- * rede. E assim que testamos o fluxo mesmo quando o servico do Akinator esta
- * bloqueado (Cloudflare) no IP da maquina.
- *
- * Cobre o checklist da spec secao 36: inicializacao, as 5 respostas, dois
- * usuarios simultaneos, isolamento, cancelamento, timeout, won, ko, erro de
- * rede, clique duplicado e imagem indisponivel.
+ * Cobre as FASEs 23/26/27/28 do pedido: engine (pergunta, respostas, candidatos,
+ * palpite, confianca, empates, sem candidato), sessao (criacao, recuperacao,
+ * multiplas, expiracao, cancelamento, isolamento), integracao pelo handler real
+ * (inicio, resposta por botao, palpite, confirmacao, correcao, encerramento),
+ * personagens conhecidos de categorias diferentes, personagem desconhecido e
+ * respostas contraditorias (troll).
  *
  * Uso: node tests/akinator.test.js
  */
@@ -75,59 +73,52 @@ function desbold(text) {
 
 // ============================================================================
 
-const akinatorModule = await import(new URL('../dados/src/funcs/utils/akinator.js', import.meta.url).href);
-const { AkinatorManager, parseAnswerInput, toAnswerEnum, encurtar, percentual, buildAnswerButtons,
-  transportFromEnv, classificarFalha } = akinatorModule;
-const realLib = await import('akinator-client');
+const QUESTIONS = JSON.parse(fs.readFileSync(path.join(ROOT, 'dados/src/funcs/json/akinator/questions.json'), 'utf-8')).questions;
+const BASE_CHARS = JSON.parse(fs.readFileSync(path.join(ROOT, 'dados/src/funcs/json/akinator/characters.json'), 'utf-8')).characters;
+
+const engineMod = await import(new URL('../dados/src/funcs/utils/akinator-engine.js', import.meta.url).href);
+const gameMod = await import(new URL('../dados/src/funcs/utils/akinator-game.js', import.meta.url).href);
+const { Engine, KnowledgeBase, ANSWER_VALUE, entropy, calibratedMatch, bucketValue } = engineMod;
+const { AkinatorGameManager } = gameMod;
 
 const indexModule = await import(new URL('../dados/src/index.js', import.meta.url).href);
 const handleMessage = indexModule.default ?? indexModule;
 
 const BOT_JID = '5599999999999@s.whatsapp.net';
 const BOT_LID = '111111111111111@lid';
-const ENUMS = { Answers: realLib.Answers, Themes: realLib.Themes, Languages: realLib.Languages };
 
-/** Cliente falso: roteiro controlado, sem rede. */
-function makeFakeClient(overrides = {}) {
-  const chamadas = { answer: [], back: 0, submitWin: 0, continue: 0 };
-  const client = {
-    chamadas,
-    winResult: { name: 'Naruto Uzumaki', pictureUrl: 'https://x.invalid/n.png', description: 'Um ninja muito famoso. ' .repeat(30) },
-    start: async () => ({ question: 'E uma pessoa real?', progression: 0, step: 0, won: false, ko: false }),
-    answer: async (a) => { chamadas.answer.push(a); return { question: `Pergunta apos resposta ${a}`, progression: 20 + chamadas.answer.length * 10, won: false, ko: false }; },
-    back: async () => { chamadas.back += 1; return { question: 'Voltou', progression: 10, won: false, ko: false }; },
-    submitWin: async () => { chamadas.submitWin += 1; },
-    continue: async () => { chamadas.continue += 1; return { question: 'Nova pergunta', progression: 50, won: false, ko: false }; },
-    ...overrides,
-  };
-  return client;
+/** Joga uma partida inteira contra o engine, respondendo como `alvo`. */
+function jogarEngine(alvo) {
+  const e = new Engine(new KnowledgeBase({ questions: QUESTIONS, characters: BASE_CHARS }));
+  let passos = 0;
+  let palpite = null;
+  while (passos < 25) {
+    if (e.podePalpitar || e.atingiuTeto || e.semPerguntas) { palpite = e.bestGuess(); break; }
+    const j = e.selectNextQuestion();
+    if (j < 0) { palpite = e.bestGuess(); break; }
+    const valor = alvo.answers[QUESTIONS[j].id];
+    e.applyAnswer(j, valor === undefined ? 0.5 : valor);
+    passos++;
+  }
+  if (!palpite) palpite = e.bestGuess();
+  return { passos, palpite, engine: e };
 }
-
-/** Cria um manager com a fabrica de cliente dada. */
-function makeManager(factory, botName = 'Lizzy') {
-  return new AkinatorManager({ createClient: factory || (() => makeFakeClient()), enums: ENUMS, botName });
-}
-
-/** Id real de um botao no formato de fio. */
-const btnId = (b) => { try { return JSON.parse(b.buttonParamsJson).id; } catch (e) { return null; } };
 
 let groupCounter = 0;
 function makeGroup(extra = {}) {
   groupCounter += 1;
-  const jid = `120363990000000${String(groupCounter).padStart(3, '0')}@g.us`;
+  const jid = `120363960000000${String(groupCounter).padStart(3, '0')}@g.us`;
   fs.writeFileSync(path.join(GRUPOS_DIR, `${jid}.json`),
     JSON.stringify({ groupName: `AK ${groupCounter}`, modobrincadeira: true, ...extra }, null, 2));
   return jid;
 }
-
 let senderSeq = 0;
 function nextPerson() {
   senderSeq += 1;
   const n = String(senderSeq).padStart(4, '0');
-  return { lid: `5578${n}000000@lid`, jid: `5510${n}999999@s.whatsapp.net`, name: `5578${n}000000` };
+  return { lid: `5579${n}000000@lid`, jid: `5511${n}999999@s.whatsapp.net`, name: `5579${n}000000` };
 }
 
-/** Envia pelo handler real; devolve textos e os botoes enviados. */
 async function enviar({ groupJid, pessoa, text, participants }) {
   const sent = [];
   const nazu = {
@@ -135,7 +126,7 @@ async function enviar({ groupJid, pessoa, text, participants }) {
     sendMessage: async (jid, content, options) => { sent.push({ jid, content, options }); return { key: { id: `S${sent.length}` } }; },
     relayMessage: async (jid, message, options) => { sent.push({ jid, message, options, via: 'relay' }); return options?.messageId; },
     user: { id: `${BOT_JID.split('@')[0]}:5@s.whatsapp.net`, lid: BOT_LID, name: 'Lizzy' },
-    onWhatsApp: async (jid) => [{ jid, exists: true, lid: pessoa.lid }],  // PN -> LID fiel ao remetente
+    onWhatsApp: async (jid) => [{ jid, exists: true, lid: pessoa.lid }],
     signalRepository: { lidMapping: { getPNForLID: async () => null, getLIDForPN: async () => null } },
     groupMetadata: async () => ({
       id: groupJid, subject: 'AK',
@@ -158,368 +149,400 @@ async function enviar({ groupJid, pessoa, text, participants }) {
     messageTimestamp: Math.floor(Date.now() / 1000), pushName: pessoa.name,
   }, null, new Map(), null);
   const textos = sent.map((s) => s.content?.text ?? s.message?.viewOnceMessage?.message?.interactiveMessage?.body?.text ?? '').filter(Boolean);
-  // Os botoes vao por relayMessage (interactiveMessage -> nativeFlowMessage),
-  // com o id dentro do paramsJson. Extraimos o id real (que carrega o sessionId).
-  const brutos = sent
+  const botoes = sent
     .map((s) => s.message?.viewOnceMessage?.message?.interactiveMessage?.nativeFlowMessage?.buttons)
-    .filter(Boolean)
-    .flat();
-  const botoes = brutos.map((bt) => {
-    let params = {};
-    try { params = JSON.parse(bt.buttonParamsJson || '{}'); } catch (e) { params = {}; }
-    return { name: bt.name, text: params.display_text, id: params.id };
-  });
-  const botoesTexto = botoes.map((x) => x.text).filter(Boolean);
-  return { sent, textos, texto: textos.join('\n'), botoes, botoesTexto, viaRelay: sent.filter((s) => s.via === 'relay').length };
+    .filter(Boolean).flat()
+    .map((b) => { try { return JSON.parse(b.buttonParamsJson); } catch (e) { return null; } }).filter(Boolean);
+  return { sent, textos, texto: textos.join('\n'), botoes };
 }
 
-// ============================================================================
-// 1. FUNCOES PURAS
-// ============================================================================
-
-await test('parseAnswerInput: id de botao dos 5 + ACERTOU/ERROU', () => {
-  ok(parseAnswerInput('ak1:ak_sim').resposta === 'SIM', 'ak_sim -> SIM');
-  ok(parseAnswerInput('ak1:ak_nao').resposta === 'NAO', 'ak_nao -> NAO');
-  ok(parseAnswerInput('ak1:ak_nao_sei').resposta === 'NAO_SEI', 'ak_nao_sei -> NAO_SEI');
-  ok(parseAnswerInput('ak1:ak_provavelmente').resposta === 'PROVAVELMENTE', 'ak_provavelmente');
-  ok(parseAnswerInput('ak1:ak_provavelmente_nao').resposta === 'PROVAVELMENTE_NAO', 'ak_provavelmente_nao');
-  ok(parseAnswerInput('ak1:ak_acertou').resposta === 'ACERTOU', 'ak_acertou');
-  ok(parseAnswerInput('ak1:ak_errou').resposta === 'ERROU', 'ak_errou');
-  ok(parseAnswerInput('ak1:ak_sim').sessionId === 'ak1', 'devolve o sessionId do botao');
-});
-
-await test('parseAnswerInput: texto digitado tambem funciona', () => {
-  for (const v of ['sim', 'SIM', 's']) ok(parseAnswerInput(v).resposta === 'SIM', `"${v}" -> SIM`);
-  for (const v of ['não', 'NAO', 'nao', 'n']) ok(parseAnswerInput(v).resposta === 'NAO', `"${v}" -> NAO`);
-  for (const v of ['não sei', 'nao sei']) ok(parseAnswerInput(v).resposta === 'NAO_SEI', `"${v}" -> NAO_SEI`);
-  ok(parseAnswerInput('provavelmente').resposta === 'PROVAVELMENTE', 'provavelmente');
-  ok(parseAnswerInput('provavelmente não').resposta === 'PROVAVELMENTE_NAO', 'provavelmente nao');
-});
-
-await test('parseAnswerInput: lixo devolve null (nao vira resposta)', () => {
-  for (const v of ['bom dia', 'qualquer coisa longa demais para ser resposta', '', 'http://x.com', '!menu']) {
-    ok(parseAnswerInput(v) === null, `"${v}" -> null`);
-  }
-});
-
-await test('toAnswerEnum usa os valores REAIS do pacote (sem numero magico)', () => {
-  ok(toAnswerEnum(ENUMS.Answers, 'SIM') === ENUMS.Answers.Yes, 'SIM -> Answers.Yes');
-  ok(toAnswerEnum(ENUMS.Answers, 'NAO') === ENUMS.Answers.No, 'NAO -> Answers.No');
-  ok(toAnswerEnum(ENUMS.Answers, 'NAO_SEI') === ENUMS.Answers.IDontKnow, 'NAO_SEI -> IDontKnow');
-  ok(toAnswerEnum(ENUMS.Answers, 'PROVAVELMENTE') === ENUMS.Answers.Probably, 'PROVAVELMENTE -> Probably');
-  ok(toAnswerEnum(ENUMS.Answers, 'PROVAVELMENTE_NAO') === ENUMS.Answers.ProbablyNot, 'PROV_NAO -> ProbablyNot');
-  ok(toAnswerEnum(ENUMS.Answers, 'x') === null, 'desconhecido -> null');
-  // Sanidade: os enums do pacote sao os que a doc diz.
-  ok(ENUMS.Answers.Yes === 0 && ENUMS.Answers.No === 1 && ENUMS.Answers.IDontKnow === 2, 'valores 0..4 conferidos');
-});
-
-await test('buildAnswerButtons: 5 botoes com id que carrega a partida', () => {
-  const b = buildAnswerButtons('akX');
-  ok(b.length === 5, '5 botoes');
-  ok(b.every((x) => btnId(x) && btnId(x).startsWith('akX:')), 'todos carregam o sessionId');
-  const rot = b.map((x) => JSON.parse(x.buttonParamsJson).display_text);
-  ok(rot[0] === 'SIM' && rot[1] === 'NÃO', 'rotulos SIM / NAO');
-});
-
-await test('encurtar e percentual', () => {
-  ok(encurtar('abc') === 'abc', 'texto curto intacto');
-  ok(encurtar('x'.repeat(500)).length === 240, 'trunca em 240');
-  ok(encurtar('x'.repeat(500)).endsWith('\u2026'), 'termina com reticencias');
-  ok(percentual(46.7) === 47, 'arredonda');
-  ok(percentual(undefined) === 0, 'undefined -> 0');
-  ok(percentual(-5) === 0 && percentual(300) === 100, 'clampa em 0..100');
-});
-
-// ============================================================================
-// 2. SESSAO (manager puro, sem handler)
-// ============================================================================
-
-await test('iniciar cria a partida com a 1a pergunta e os 5 botoes', async () => {
-  const mgr = makeManager();
-  const r = await mgr.iniciar({ groupId: 'g@g.us', userId: 'u@lid' });
-  ok(r.success, 'criou');
-  ok(/E uma pessoa real\?/.test(r.message), 'mostra a pergunta do cliente');
-  ok(r.buttons.length === 5, 'os 5 botoes');
-  ok(mgr.activeCount === 1, '1 sessao ativa');
-});
-
-await test('cada jogador tem a SUA propria instancia de cliente', async () => {
-  const criados = [];
-  const mgr = makeManager(() => { const c = makeFakeClient(); criados.push(c); return c; });
-  await mgr.iniciar({ groupId: 'g@g.us', userId: 'a@lid' });
-  await mgr.iniciar({ groupId: 'g@g.us', userId: 'b@lid' });
-  ok(criados.length === 2, '2 clientes criados (um por jogador)');
-  ok(criados[0] !== criados[1], 'instancias diferentes');
-});
-
-await test('mesmo usuario nao abre duas partidas (spec 9)', async () => {
-  const mgr = makeManager();
-  await mgr.iniciar({ groupId: 'g@g.us', userId: 'u@lid' });
-  const r2 = await mgr.iniciar({ groupId: 'g@g.us', userId: 'u@lid' });
-  ok(r2.success === false && r2.reason === 'ja_em_partida', 'recusa a 2a partida');
-  ok(mgr.activeCount === 1, 'continua com 1 sessao');
-});
-
-await test('mesmo usuario pode jogar em GRUPOS diferentes (spec 31)', async () => {
-  const mgr = makeManager();
-  const a = await mgr.iniciar({ groupId: 'A@g.us', userId: 'u@lid' });
-  const b = await mgr.iniciar({ groupId: 'B@g.us', userId: 'u@lid' });
-  ok(a.success && b.success, 'abriu nos dois grupos');
-  ok(mgr.activeCount === 2, '2 sessoes (isoladas por grupo)');
-});
-
-await test('respostas usam o enum do pacote', async () => {
-  const c = makeFakeClient();
-  const mgr = makeManager(() => c);
-  const ini = await mgr.iniciar({ groupId: 'g@g.us', userId: 'u@lid' });
-  await mgr.processMessage({ groupId: 'g@g.us', userId: 'u@lid', text: btnId(ini.buttons[0]) });
-  await mgr.processMessage({ groupId: 'g@g.us', userId: 'u@lid', text: btnId(ini.buttons[2]) });
-  ok(c.chamadas.answer[0] === ENUMS.Answers.Yes, '1a resposta foi Yes');
-  ok(c.chamadas.answer[1] === ENUMS.Answers.IDontKnow, '2a resposta foi IDontKnow');
-});
-
-await test('won -> palpite com nome/imagem/descricao; ACERTOU chama submitWin', async () => {
-  const c = makeFakeClient();
-  const mgr = makeManager(() => c);
-  const ini = await mgr.iniciar({ groupId: 'g@g.us', userId: 'u@lid' });
-  c.answer = async () => ({ won: true });
-  const r = await mgr.processMessage({ groupId: 'g@g.us', userId: 'u@lid', text: btnId(ini.buttons[0]) });
-  ok(r.kind === 'palpite', 'devolveu palpite');
-  ok(/Naruto Uzumaki/.test(desbold(r.message)), 'mostra o nome');
-  ok(r.imageUrl === 'https://x.invalid/n.png', 'imagem disponivel');
-  ok(r.buttons.length === 2 && JSON.parse(r.buttons[0].buttonParamsJson).display_text === 'ACERTOU', 'botoes ACERTOU/ERROU');
-
-  const r2 = await mgr.processMessage({ groupId: 'g@g.us', userId: 'u@lid', text: btnId(r.buttons[0]) });
-  ok(r2.kind === 'acertou', 'confirmou');
-  ok(c.chamadas.submitWin === 1, 'chamou submitWin');
-  ok(mgr.activeCount === 0, 'sessao liberada');
-});
-
-await test('ko -> derrota e limpa a sessao', async () => {
-  const c = makeFakeClient();
-  const mgr = makeManager(() => c);
-  const ini = await mgr.iniciar({ groupId: 'g@g.us', userId: 'u@lid' });
-  c.answer = async () => ({ ko: true });
-  const r = await mgr.processMessage({ groupId: 'g@g.us', userId: 'u@lid', text: btnId(ini.buttons[0]) });
-  ok(r.kind === 'derrota', 'devolveu derrota');
-  ok(/voc\u00ea venceu o akinator/i.test(desbold(r.message)), 'mensagem de vitoria do usuario');
-  ok(mgr.activeCount === 0, 'sessao limpa');
-});
-
-await test('ERROU chama continue(); se falhar, encerra com seguranca (spec 15)', async () => {
-  // continue() funcionando
-  const c1 = makeFakeClient();
-  const m1 = makeManager(() => c1);
-  const i1 = await m1.iniciar({ groupId: 'g@g.us', userId: 'u@lid' });
-  c1.answer = async () => ({ won: true });
-  const p1 = await m1.processMessage({ groupId: 'g@g.us', userId: 'u@lid', text: btnId(i1.buttons[0]) });
-  const r1 = await m1.processMessage({ groupId: 'g@g.us', userId: 'u@lid', text: btnId(p1.buttons[1]) });
-  ok(r1.kind === 'pergunta', 'continue() ok -> volta a perguntar');
-  ok(c1.chamadas.continue === 1, 'chamou continue');
-
-  // continue() bloqueado (anti-bot)
-  const c2 = makeFakeClient({ continue: async () => { throw new Error('Vital API blocked'); } });
-  const m2 = makeManager(() => c2);
-  const i2 = await m2.iniciar({ groupId: 'g@g.us', userId: 'u2@lid' });
-  c2.answer = async () => ({ won: true });
-  const p2 = await m2.processMessage({ groupId: 'g@g.us', userId: 'u2@lid', text: btnId(i2.buttons[0]) });
-  const r2 = await m2.processMessage({ groupId: 'g@g.us', userId: 'u2@lid', text: btnId(p2.buttons[1]) });
-  ok(r2.kind === 'continue_indisponivel', 'tratou o bloqueio');
-  ok(m2.activeCount === 0, 'encerrou sem deixar sessao presa');
-});
-
-await test('cancelar encerra so a partida do usuario (spec 10)', async () => {
-  const mgr = makeManager();
-  await mgr.iniciar({ groupId: 'g@g.us', userId: 'a@lid' });
-  await mgr.iniciar({ groupId: 'g@g.us', userId: 'b@lid' });
-  const r = mgr.cancelar({ groupId: 'g@g.us', userId: 'a@lid' });
-  ok(r.encerrada === true, 'encerrou a do A');
-  ok(mgr.activeCount === 1, 'a do B continua');
-  ok(Boolean(mgr.getSession('g@g.us', 'b@lid')), 'B segue ativo');
-  const r2 = mgr.cancelar({ groupId: 'g@g.us', userId: 'a@lid' });
-  ok(r2.encerrada === false, 'segundo cancelar avisa que nao havia partida');
-});
-
-await test('timeout: sessao expirada nao aceita resposta (spec 21)', async () => {
-  const mgr = makeManager();
-  const ini = await mgr.iniciar({ groupId: 'g@g.us', userId: 'u@lid' });
-  const s = mgr.getSession('g@g.us', 'u@lid');
-  s.lastActivity = Date.now() - (akinatorModule.CONFIG.SESSION_TIMEOUT_MS + 1000);
-  const r = await mgr.processMessage({ groupId: 'g@g.us', userId: 'u@lid', text: btnId(ini.buttons[0]) });
-  ok(r && r.reason === 'timeout', 'devolveu timeout');
-  ok(/expirou/i.test(desbold(r.message)), 'avisou a expiracao');
-  ok(mgr.activeCount === 0, 'sessao removida');
-});
-
-await test('clique duplo: so o primeiro avanca (spec 34/35)', async () => {
-  let liberar;
-  const gate = new Promise((res) => { liberar = res; });
-  let respostas = 0;
-  const c = makeFakeClient({ answer: async () => { respostas += 1; await gate; return { question: 'prox', progression: 30 }; } });
-  const mgr = makeManager(() => c);
-  const ini = await mgr.iniciar({ groupId: 'g@g.us', userId: 'u@lid' });
-  const id = btnId(ini.buttons[0]);
-
-  // Dispara 3 "cliques" quase ao mesmo tempo.
-  const p1 = mgr.processMessage({ groupId: 'g@g.us', userId: 'u@lid', text: id });
-  const p2 = mgr.processMessage({ groupId: 'g@g.us', userId: 'u@lid', text: id });
-  const p3 = mgr.processMessage({ groupId: 'g@g.us', userId: 'u@lid', text: id });
-  liberar();
-  const [r1, r2, r3] = await Promise.all([p1, p2, p3]);
-
-  ok(respostas === 1, `o cliente recebeu 1 resposta (veio ${respostas})`);
-  ok(r1.kind === 'pergunta', '1a processou');
-  const bloqueadas = [r2, r3].filter((r) => r && r.reason === 'processing').length;
-  ok(bloqueadas >= 1, `as outras foram bloqueadas por 'processing' (${bloqueadas})`);
-  ok(mgr.activeCount === 1, 'sessao continua consistente');
-});
-
-await test('cleanup remove sessoes encerradas e expiradas (sem fantasma)', async () => {
-  const mgr = makeManager();
-  await mgr.iniciar({ groupId: 'g@g.us', userId: 'a@lid' });
-  await mgr.iniciar({ groupId: 'g@g.us', userId: 'b@lid' });
-  const sa = mgr.getSession('g@g.us', 'a@lid');
-  sa.state = 'FINISHED';
-  const sb = mgr.getSession('g@g.us', 'b@lid');
-  sb.lastActivity = Date.now() - (akinatorModule.CONFIG.SESSION_TIMEOUT_MS + 1000);
-  mgr._cleanup();
-  ok(mgr.activeCount === 0, 'nada de sessao orfa');
-  ok(sa.client === null, 'referencia do cliente liberada');
-});
-
-// ============================================================================
-// 2b. TRANSPORTE (proxy/scraperapi) E DIAGNOSTICO DE BLOQUEIO
-// ============================================================================
-
-await test('transportFromEnv: vazio sem variaveis; proxy e scraperapi quando setadas', () => {
-  ok(Object.keys(transportFromEnv({})).length === 0, 'sem env -> sem opcoes');
-  ok(transportFromEnv({ AKINATOR_PROXY: 'http://u:p@h:8080' }).proxy === 'http://u:p@h:8080', 'proxy lido');
-  const s = transportFromEnv({ AKINATOR_SCRAPERAPI_KEY: 'k', AKINATOR_SCRAPERAPI_SESSION: '55' });
-  ok(s.scraperApiKey === 'k' && s.scraperApiSession === 55, 'scraperapi + session lidos');
-  ok(transportFromEnv({ AKINATOR_PROXY: '   ' }).proxy === undefined, 'proxy em branco ignorado');
-});
-
-await test('classificarFalha separa EXTRACAO, BLOQUEIO e REDE', () => {
-  // O servico RESPONDEU mas a lib nao leu -> nao e proxy, e formato novo.
-  for (const m of [
-    'Failed to extract session/signature from HTML response.',
-    'Failed to extract something',
-  ]) ok(classificarFalha(m) === 'extracao', `"${m}" -> extracao`);
-  // Cloudflare barrando a conexao -> proxy/IP resolve.
-  for (const m of [
-    'Just a moment...', 'HTTP 403 Forbidden', 'Vital API blocked',
-    'cloudflare challenge', 'HTTP error starting game: 403',
-  ]) ok(classificarFalha(m) === 'bloqueio', `"${m}" -> bloqueio`);
-  for (const m of ['connect ECONNREFUSED', 'ETIMEDOUT', 'socket hang up']) {
-    ok(classificarFalha(m) === 'rede', `"${m}" -> rede`);
-  }
-});
-
-await test('mudanca de formato do site NAO manda configurar proxy', async () => {
-  const c = makeFakeClient({ start: async () => { throw new Error('Failed to extract session/signature from HTML response.'); } });
-  const mgr = makeManager(() => c);
-  const r = await mgr.iniciar({ groupId: 'g@g.us', userId: 'u@lid' });
-  ok(r.success === false && r.reason === 'indisponivel', 'reason = indisponivel');
-  const m = desbold(mgr.mensagemIndisponivel());
-  ok(/mudou o formato/i.test(m), 'explica que o formato mudou');
-  ok(!m.includes('AKINATOR_PROXY'), 'NAO manda configurar proxy (causa errada)');
-  ok(!/stack|Error:/i.test(m), 'sem detalhe tecnico');
-});
-
-await test('o transporte chega ao construtor do cliente', async () => {
-  let recebido = null;
-  const mgr = new AkinatorManager({
-    createClient: (o) => { recebido = o; return makeFakeClient(); },
-    enums: ENUMS,
-    transport: { proxy: 'http://p:8080' },
-    botName: 'L',
+/** Injeta um manager proprio no global usado pelo handler. */
+function injetarManager(deps = {}) {
+  globalThis.__lizzyAkinatorManager = new AkinatorGameManager({
+    questions: QUESTIONS,
+    characters: BASE_CHARS,
+    learnedFile: path.join(TMP_DB, 'akinator', 'learned.json'),
+    pendingFile: path.join(TMP_DB, 'akinator', 'pending.json'),
+    botName: 'Lizzy do privy',
+    ...deps,
   });
-  await mgr.iniciar({ groupId: 'g@g.us', userId: 'u@lid' });
-  ok(recebido && recebido.proxy === 'http://p:8080', 'proxy repassado ao cliente');
-  ok(recebido.language === 'pt' && recebido.theme === ENUMS.Themes.Character, 'idioma pt + tema Character mantidos');
-});
-
-await test('bloqueio do Cloudflare vira mensagem ESPECIFICA (nao erro generico)', async () => {
-  // Bloqueio REAL = Cloudflare barrando a conexao (403 / Just a moment).
-  const c = makeFakeClient({ start: async () => { throw new Error('Just a moment...'); } });
-  const mgr = makeManager(() => c);
-  const r = await mgr.iniciar({ groupId: 'g@g.us', userId: 'u@lid' });
-  ok(r.success === false && r.reason === 'bloqueio', 'reason = bloqueio');
-  const m = desbold(mgr.mensagemBloqueio());
-  ok(/bloqueando o ip/i.test(m), 'explica que o IP esta bloqueado');
-  ok(m.includes('AKINATOR_PROXY'), 'aponta a configuracao que resolve');
-  ok(!/stack|Error:|session=|signature=/i.test(m), 'sem detalhe tecnico');
-});
-
-await test('com proxy JA configurado, a mensagem nao manda configurar de novo', () => {
-  const c = makeFakeClient();
-  const mgr = new AkinatorManager({ createClient: () => c, enums: ENUMS, transport: { proxy: 'http://p:8080' }, botName: 'L' });
-  ok(!desbold(mgr.mensagemBloqueio()).includes('AKINATOR_PROXY'), 'nao sugere o que ja esta configurado');
-});
-
-await test('erro de rede comum continua com a mensagem generica', async () => {
-  const c = makeFakeClient({ start: async () => { throw new Error('connect ECONNREFUSED'); } });
-  const mgr = makeManager(() => c);
-  const r = await mgr.iniciar({ groupId: 'g@g.us', userId: 'u@lid' });
-  ok(r.reason === 'erro_rede', 'reason = erro_rede (nao bloqueio)');
-  ok(/não consegui conectar/i.test(desbold(mgr.mensagemErroRede())), 'mensagem generica de rede');
-});
-
-await test('!akinator no handler mostra o aviso de bloqueio quando o IP e recusado', async () => {
-  injetarManager(() => makeFakeClient({ start: async () => { throw new Error('Just a moment...'); } }));
-  const grupo = makeGroup();
-  const p = nextPerson();
-  const r = await enviar({ groupJid: grupo, pessoa: p, text: '!akinator' });
-  ok(/bloqueando o ip/i.test(desbold(r.texto)), 'avisou o bloqueio (nao o erro generico)');
-  ok(desbold(r.texto).includes('AKINATOR_PROXY'), 'mostrou como resolver');
-});
-
-await test('!akinator no handler mostra o aviso de FORMATO quando o site mudou', async () => {
-  injetarManager(() => makeFakeClient({ start: async () => { throw new Error('Failed to extract session/signature from HTML response.'); } }));
-  const grupo = makeGroup();
-  const p = nextPerson();
-  const r = await enviar({ groupJid: grupo, pessoa: p, text: '!akinator' });
-  ok(/mudou o formato/i.test(desbold(r.texto)), 'avisou a mudanca de formato');
-  ok(!desbold(r.texto).includes('AKINATOR_PROXY'), 'nao sugeriu proxy');
-});
-
-// ============================================================================
-// 3. HANDLER REAL
-// ============================================================================
-
-/** O handler usa o manager global — injetamos o nosso no globalThis. */
-function injetarManager(factory) {
-  globalThis.__lizzyAkinatorManager = makeManager(factory);
   return globalThis.__lizzyAkinatorManager;
 }
 
-await test('!akinator no handler real: abertura + pergunta com 5 botoes', async () => {
-  const mgr = injetarManager();
+function perguntaDe(texto) {
+  return QUESTIONS.find((q) => texto.split('\n').some((l) => l.trim() === q.text)) || null;
+}
+function chaveParaValor(v) {
+  if (v >= 0.99) return 'ak_sim';
+  if (v <= 0.01) return 'ak_nao';
+  if (v === 0.5) return 'ak_nao_sei';
+  return v > 0.5 ? 'ak_provavelmente' : 'ak_provavelmente_nao';
+}
+
+// ============================================================================
+// 1. BASE DE CONHECIMENTO (FASE 5/6/7)
+// ============================================================================
+
+await test('a base tem personagens e perguntas validos', () => {
+  ok(BASE_CHARS.length >= 40, `personagens suficientes (${BASE_CHARS.length})`);
+  ok(QUESTIONS.length >= 50, `perguntas suficientes (${QUESTIONS.length})`);
+  ok(new Set(QUESTIONS.map((q) => q.id)).size === QUESTIONS.length, 'ids de pergunta unicos');
+  ok(new Set(BASE_CHARS.map((c) => c.id)).size === BASE_CHARS.length, 'ids de personagem unicos');
+});
+
+await test('todo personagem referencia apenas perguntas existentes', () => {
+  const ids = new Set(QUESTIONS.map((q) => q.id));
+  const ruins = [];
+  for (const c of BASE_CHARS) {
+    for (const qid of Object.keys(c.answers || {})) {
+      if (!ids.has(qid)) ruins.push(`${c.id}:${qid}`);
+    }
+  }
+  ok(ruins.length === 0, `sem pergunta orfa (ruins: ${ruins.slice(0, 3).join(', ')})`);
+});
+
+await test('a base cobre varias categorias (FASE 6)', () => {
+  const cats = new Set(BASE_CHARS.map((c) => c.category));
+  ok(cats.size >= 5, `pelo menos 5 categorias (${cats.size}: ${[...cats].join(', ')})`);
+  for (const c of ['anime', 'game', 'movies', 'comics']) ok(cats.has(c), `tem a categoria ${c}`);
+});
+
+await test('todo personagem e distinguivel (nao ha assinatura duplicada)', () => {
+  const sig = new Set();
+  let dups = 0;
+  for (const c of BASE_CHARS) {
+    const k = JSON.stringify(Object.entries(c.answers || {}).sort());
+    if (sig.has(k)) dups++;
+    sig.add(k);
+  }
+  ok(dups === 0, `nenhum personagem indistinguivel (dups: ${dups})`);
+});
+
+// ============================================================================
+// 2. ENGINE (FASE 23 -- engine)
+// ============================================================================
+
+await test('engine: entropia e compatibilidade calibrada', () => {
+  ok(Math.abs(entropy([1, 0]) - 0) < 1e-9, 'entropia de certeza = 0');
+  ok(Math.abs(entropy([0.5, 0.5]) - 1) < 1e-9, 'entropia de 2 iguais = 1 bit');
+  ok(calibratedMatch(1, 1, 0, false) === 1, 'resposta igual ao guardado = 1');
+  const piso = calibratedMatch(0, 1, 50, false);
+  ok(piso > 0 && piso < 0.2, `resposta oposta cai no piso baixo (${piso.toFixed(3)})`);
+  ok(calibratedMatch(0, 1, 1000, false) <= piso, 'com mais amostra o piso nao sobe');
+});
+
+await test('engine: bucketValue arredonda para os 5 niveis', () => {
+  ok(bucketValue(0.9) === 1, '0.9 -> sim');
+  ok(bucketValue(0.6) === 0.5, '0.6 -> nao sei');
+  ok(bucketValue(0.1) === 0, '0.1 -> nao');
+});
+
+await test('engine: sessao nova comeca com todos os candidatos', () => {
+  const e = new Engine(new KnowledgeBase({ questions: QUESTIONS, characters: BASE_CHARS }));
+  ok(e.restantes === BASE_CHARS.length, 'todos vivos no inicio');
+  ok(Math.abs(e.posterior.reduce((a, b) => a + b, 0) - 1) < 1e-9, 'probabilidades somam 1');
+  ok(e.askedCount === 0, 'nenhuma pergunta feita');
+  ok(!e.podePalpitar, 'nao palpita sem perguntar');
+});
+
+await test('engine: a 1a pergunta escolhida divide a base (ganho de informacao)', () => {
+  const e = new Engine(new KnowledgeBase({ questions: QUESTIONS, characters: BASE_CHARS }));
+  const j = e.selectNextQuestion();
+  ok(j >= 0, 'escolheu uma pergunta');
+  const valores = BASE_CHARS.map((c) => c.answers[QUESTIONS[j].id]);
+  const sim = valores.filter((v) => v >= 0.75).length;
+  const nao = valores.filter((v) => v <= 0.25).length;
+  ok(sim > 0 && nao > 0, `a pergunta separa a base (sim=${sim}, nao=${nao})`);
+});
+
+await test('engine: aplicar resposta reduz os candidatos', () => {
+  const e = new Engine(new KnowledgeBase({ questions: QUESTIONS, characters: BASE_CHARS }));
+  const j = e.selectNextQuestion();
+  const H_antes = entropy(e.posterior);
+  const r = e.applyAnswer(j, 1);
+  const H_depois = entropy(e.posterior);
+  ok(H_depois < H_antes, `a incerteza caiu (${H_antes.toFixed(2)} -> ${H_depois.toFixed(2)} bits)`);
+  ok(r.z > 0, 'massa de probabilidade valida');
+  ok(Math.abs(e.posterior.reduce((a, b) => a + b, 0) - 1) < 1e-9, 'segue somando 1');
+  ok(e.bestGuess().p > 1 / BASE_CHARS.length, 'o lider se destaca da media');
+});
+
+await test('engine: as 5 respostas produzem resultados diferentes', () => {
+  const resultados = ['SIM', 'NAO', 'NAO_SEI', 'PROVAVELMENTE', 'PROVAVELMENTE_NAO'].map((k) => {
+    const e = new Engine(new KnowledgeBase({ questions: QUESTIONS, characters: BASE_CHARS }));
+    const j = e.selectNextQuestion();
+    e.applyAnswer(j, ANSWER_VALUE[k]);
+    return e.bestGuess().char.name;
+  });
+  ok(resultados.length === 5, '5 respostas processadas');
+  ok(resultados.every((n) => typeof n === 'string' && n.length > 0), 'todas devolvem melhor candidato');
+  ok(new Set(resultados).size > 1, `respostas diferentes mudam o favorito (${new Set(resultados).size})`);
+});
+
+await test('engine: converge para o personagem certo em TODOS da base', () => {
+  let acertos = 0;
+  let soma = 0;
+  for (const alvo of BASE_CHARS) {
+    const { passos, palpite } = jogarEngine(alvo);
+    soma += passos;
+    if (palpite.char && palpite.char.name === alvo.name) acertos++;
+  }
+  ok(acertos === BASE_CHARS.length, `acerta os ${BASE_CHARS.length} (veio ${acertos})`);
+  const media = soma / BASE_CHARS.length;
+  ok(media <= 15, `converge rapido (media ${media.toFixed(1)} perguntas)`);
+});
+
+await test('engine: personagens de CATEGORIAS diferentes (FASE 26)', () => {
+  const alvos = ['Naruto Uzumaki', 'Goku', 'Mario', 'Sonic', 'Batman', 'Homem-Aranha', 'Harry Potter', 'Pikachu', 'Kratos', 'Neymar Jr', 'Bill Gates', 'Michael Jackson'];
+  for (const nome of alvos) {
+    const alvo = BASE_CHARS.find((c) => c.name === nome);
+    if (!alvo) continue;
+    const { palpite } = jogarEngine(alvo);
+    ok(palpite.char && palpite.char.name === nome, `acerta ${nome} (veio ${palpite.char && palpite.char.name})`);
+  }
+});
+
+await test('engine: base vazia nao quebra (sem candidato)', () => {
+  const e = new Engine(new KnowledgeBase({ questions: QUESTIONS, characters: [] }));
+  ok(e.restantes === 0, 'sem candidatos');
+  ok(e.bestGuess().char === null, 'bestGuess devolve null sem base');
+});
+
+await test('engine: respostas contraditorias NAO quebram (FASE 28)', () => {
+  const e = new Engine(new KnowledgeBase({ questions: QUESTIONS, characters: BASE_CHARS }));
+  const seq = [1, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0];
+  let semExcecao = true;
+  for (let i = 0; i < seq.length; i++) {
+    const j = e.selectNextQuestion();
+    if (j < 0) break;
+    try { e.applyAnswer(j, seq[i]); } catch (err) { semExcecao = false; }
+  }
+  ok(semExcecao, 'nenhuma excecao com respostas contraditorias');
+  ok(Math.abs(e.posterior.reduce((a, b) => a + b, 0) - 1) < 1e-9, 'probabilidades normalizadas');
+  ok(e.bestGuess().char !== null, 'ainda ha melhor candidato');
+});
+
+await test('engine: troll e sinalizavel como adversarial', () => {
+  const e = new Engine(new KnowledgeBase({ questions: QUESTIONS, characters: BASE_CHARS }));
+  for (let i = 0; i < 20; i++) {
+    const j = e.selectNextQuestion();
+    if (j < 0) break;
+    e.applyAnswer(j, i % 2 === 0 ? 1 : 0);
+  }
+  ok(typeof e.flaggedAdversarial === 'boolean', 'flag adversarial e booleano');
+  ok(e.zCollapses >= 0, 'contador de colapsos existe');
+});
+
+await test('engine: aprender com acerto ajusta os pesos', () => {
+  const kb = new KnowledgeBase({ questions: QUESTIONS, characters: BASE_CHARS });
+  const e = new Engine(kb);
+  const idx = BASE_CHARS.findIndex((c) => c.name === 'Goku');
+  const jAnime = QUESTIONS.findIndex((q) => q.id === 'anime');
+  e.applyAnswer(jAnime, 1);
+  const antes = kb.weight(idx, jAnime);
+  const ajustes = e.learnCorrect(idx);
+  ok(ajustes > 0, `aprendeu (${ajustes} ajustes)`);
+  ok(kb.weight(idx, jAnime) >= antes, 'peso nao piorou com resposta consistente');
+  ok(kb.learned[BASE_CHARS[idx].id] !== undefined, 'delta guardado no learned');
+});
+
+// ============================================================================
+// 3. SESSAO (FASE 23 -- sessao)
+// ============================================================================
+
+await test('manager: criar, recuperar e isolar sessoes', () => {
+  const gm = new AkinatorGameManager({ questions: QUESTIONS, characters: BASE_CHARS, botName: 'L' });
+  const a = gm.iniciar({ chatId: 'g1@g.us', userId: 'a@lid' });
+  const b = gm.iniciar({ chatId: 'g1@g.us', userId: 'b@lid' });
+  const c = gm.iniciar({ chatId: 'g2@g.us', userId: 'a@lid' });
+  ok(a.success && b.success && c.success, 'tres sessoes criadas');
+  ok(gm.activeCount === 3, 'tres sessoes ativas');
+  ok(a.sessionId !== b.sessionId && a.sessionId !== c.sessionId, 'ids distintos');
+  ok(Boolean(gm.getSession('g1@g.us', 'a@lid')), 'recupera por chat+user');
+  ok(gm.getSession('g1@g.us', 'z@lid') === null, 'inexistente devolve null');
+});
+
+await test('manager: mesmo usuario nao abre duas no mesmo chat', () => {
+  const gm = new AkinatorGameManager({ questions: QUESTIONS, characters: BASE_CHARS });
+  gm.iniciar({ chatId: 'g@g.us', userId: 'a@lid' });
+  const r2 = gm.iniciar({ chatId: 'g@g.us', userId: 'a@lid' });
+  ok(r2.success === false && r2.reason === 'ja_em_partida', 'recusa a segunda');
+  ok(gm.activeCount === 1, 'continua com uma');
+});
+
+await test('manager: cancelar encerra so a sessao do usuario', () => {
+  const gm = new AkinatorGameManager({ questions: QUESTIONS, characters: BASE_CHARS });
+  gm.iniciar({ chatId: 'g@g.us', userId: 'a@lid' });
+  gm.iniciar({ chatId: 'g@g.us', userId: 'b@lid' });
+  const r = gm.cancelar({ chatId: 'g@g.us', userId: 'a@lid' });
+  ok(r.encerrada === true, 'encerrou a do A');
+  ok(gm.activeCount === 1, 'a do B continua');
+  ok(Boolean(gm.getSession('g@g.us', 'b@lid')), 'B segue ativa');
+  ok(gm.cancelar({ chatId: 'g@g.us', userId: 'a@lid' }).encerrada === false, 'segundo cancelar avisa');
+});
+
+await test('manager: expiracao por inatividade', () => {
+  const gm = new AkinatorGameManager({ questions: QUESTIONS, characters: BASE_CHARS });
+  gm.iniciar({ chatId: 'g@g.us', userId: 'a@lid' });
+  const s = gm.getSession('g@g.us', 'a@lid');
+  s.ultimaAtividade = Date.now() - (gameMod.CONFIG.SESSION_TIMEOUT_MS + 1000);
+  const r = gm.processMessage({ chatId: 'g@g.us', userId: 'a@lid', text: 'sim' });
+  ok(r && r.reason === 'expired', 'devolveu expired');
+  ok(/inatividade/i.test(desbold(r.message)), 'avisou a inatividade');
+  ok(gm.activeCount === 0, 'sessao removida');
+});
+
+await test('manager: cleanup remove sessoes abandonadas', () => {
+  const gm = new AkinatorGameManager({ questions: QUESTIONS, characters: BASE_CHARS });
+  gm.iniciar({ chatId: 'g@g.us', userId: 'a@lid' });
+  gm.iniciar({ chatId: 'g@g.us', userId: 'b@lid' });
+  gm.getSession('g@g.us', 'a@lid').ultimaAtividade = Date.now() - (gameMod.CONFIG.SESSION_TIMEOUT_MS + 1000);
+  gm._cleanup();
+  ok(gm.activeCount === 1, 'so a expirada saiu');
+});
+
+await test('manager: nao processa mensagem sem sessao (fluxo normal)', () => {
+  const gm = new AkinatorGameManager({ questions: QUESTIONS, characters: BASE_CHARS });
+  ok(gm.processMessage({ chatId: 'g@g.us', userId: 'x@lid', text: 'sim' }) === null, 'sem sessao -> null');
+  ok(gm.processMessage({ chatId: 'g@g.us', userId: 'x@lid', text: 'bom dia' }) === null, 'texto qualquer -> null');
+});
+
+await test('manager: botao de OUTRA sessao e recusado (posse)', () => {
+  const gm = new AkinatorGameManager({ questions: QUESTIONS, characters: BASE_CHARS });
+  const a = gm.iniciar({ chatId: 'g@g.us', userId: 'a@lid' });
+  const idAntigo = a.sessionId;
+  gm.cancelar({ chatId: 'g@g.us', userId: 'a@lid' });
+  gm.iniciar({ chatId: 'g@g.us', userId: 'a@lid' });
+  const r = gm.processMessage({ chatId: 'g@g.us', userId: 'a@lid', text: `${idAntigo}:ak_sim` });
+  ok(r && r.reason === 'nao_e_sua', 'recusou o id da sessao antiga');
+});
+
+await test('manager: base invalida -> knowledge_invalid', () => {
+  const gm = new AkinatorGameManager({ questions: [], characters: [], botName: 'L' });
+  const r = gm.iniciar({ chatId: 'g@g.us', userId: 'a@lid' });
+  ok(r.success === false && r.reason === 'knowledge_invalid', 'recusou com knowledge_invalid');
+  ok(/base de personagens/i.test(desbold(gm.mensagemIndisponivel())), 'mensagem propria');
+});
+
+// ============================================================================
+// 4. CORRECOES / APRENDIZADO (FASE 15/16)
+// ============================================================================
+
+await test('correcao vai para a FILA e nao entra direto na base', () => {
+  const pendFile = path.join(TMP_DB, 'pend-test.json');
+  const gm = new AkinatorGameManager({ questions: QUESTIONS, characters: BASE_CHARS, pendingFile: pendFile, botName: 'L' });
+  const antes = gm.characters.length;
+  gm.iniciar({ chatId: 'g@g.us', userId: 'a@lid' });
+  gm.getSession('g@g.us', 'a@lid').estado = 'INFORMAR';
+  const r = gm.processMessage({ chatId: 'g@g.us', userId: 'a@lid', text: 'Personagem Inventado' });
+  ok(r && r.kind === 'correcao', 'registrou a correcao');
+  ok(gm.pendingCount === 1, 'foi para a fila');
+  ok(gm.characters.length === antes, 'a base NAO mudou');
+  ok(fs.existsSync(pendFile), 'gravou o arquivo de pendentes');
+});
+
+await test('correcao precisa de votos para ser promovida', () => {
+  const gm = new AkinatorGameManager({ questions: QUESTIONS, characters: BASE_CHARS, botName: 'L' });
+  gm.iniciar({ chatId: 'g@g.us', userId: 'a@lid' });
+  gm.getSession('g@g.us', 'a@lid').estado = 'INFORMAR';
+  gm.processMessage({ chatId: 'g@g.us', userId: 'a@lid', text: 'Criatura Nova' });
+  ok(gm.promoverCorrecoes() === 0, 'com 1 voto ainda nao promove');
+  gm.iniciar({ chatId: 'g@g.us', userId: 'b@lid' });
+  gm.getSession('g@g.us', 'b@lid').estado = 'INFORMAR';
+  gm.processMessage({ chatId: 'g@g.us', userId: 'b@lid', text: 'Criatura Nova' });
+  const promovidas = gm.promoverCorrecoes();
+  ok(promovidas === 1, `promoveu com 2 votos (${promovidas})`);
+  ok(gm.characters.some((c) => c.name === 'Criatura Nova'), 'entrou na base ativa');
+  ok(gm.pendingCount === 0, 'saiu da fila');
+});
+
+// ============================================================================
+// 5. INTEGRACAO PELO HANDLER (FASE 23 -- integracao)
+// ============================================================================
+
+await test('!akinator no handler: abre a partida com os 5 botoes', async () => {
+  const gm = injetarManager();
   const grupo = makeGroup();
   const p = nextPerson();
   const r = await enviar({ groupJid: grupo, pessoa: p, text: '!akinator' });
   ok(/AKINATOR/.test(desbold(r.texto)), 'mandou o painel');
-  ok(/pense em uma pessoa ou personagem/i.test(desbold(r.texto)), 'a abertura pede para pensar');
-  ok(r.botoes.length === 5, `enviou os 5 botoes (veio ${r.botoes.length})`);
-  ok(r.botoes.every((x) => x.name === 'quick_reply' && x.id && x.text), 'os botoes sao quick_reply com id e texto');
-  ok(mgr.activeCount === 1, 'criou a sessao');
+  ok(/Pergunta 1/i.test(desbold(r.texto)), 'mostrou a pergunta 1');
+  ok(r.botoes.length === 5, `5 botoes (veio ${r.botoes.length})`);
+  ok(r.botoes.every((b) => b.id && b.display_text), 'todos os botoes tem id e rotulo');
+  ok(gm.activeCount === 1, 'criou a sessao');
 });
 
-await test('!akinator + botao avanca a pergunta pelo handler', async () => {
-  const c = makeFakeClient();
-  const mgr = injetarManager(() => c);
+await test('!akinator: partida inteira pelo handler ate acertar', async () => {
+  const gm = injetarManager();
   const grupo = makeGroup();
   const p = nextPerson();
-  const r0 = await enviar({ groupJid: grupo, pessoa: p, text: '!akinator' });
-  const r = await enviar({ groupJid: grupo, pessoa: p, text: r0.botoes[0].id });
-  ok(c.chamadas.answer.length === 1, 'enviou a resposta ao cliente');
-  ok(c.chamadas.answer[0] === ENUMS.Answers.Yes, 'foi Yes');
-  ok(/progresso/i.test(desbold(r.texto)), 'mostra o progresso');
+  const alvo = BASE_CHARS.find((c) => c.name === 'Batman');
+  let r = await enviar({ groupJid: grupo, pessoa: p, text: '!akinator' });
+  let passos = 0;
+  while (passos < 25) {
+    if (r.botoes.some((b) => b.id.endsWith('ak_acertou'))) break;
+    const q = perguntaDe(r.texto);
+    ok(Boolean(q), `a mensagem traz uma pergunta do banco (passo ${passos + 1})`);
+    if (!q) break;
+    const chave = chaveParaValor(alvo.answers[q.id] === undefined ? 0.5 : alvo.answers[q.id]);
+    const btn = r.botoes.find((b) => b.id.endsWith(chave));
+    ok(Boolean(btn), `botao ${chave} presente`);
+    if (!btn) break;
+    r = await enviar({ groupJid: grupo, pessoa: p, text: btn.id });
+    passos++;
+  }
+  ok(r.botoes.some((b) => b.id.endsWith('ak_acertou')), 'chegou ao palpite');
+  ok(/Batman/.test(desbold(r.texto)), 'o palpite e o Batman');
+  const conf = await enviar({ groupJid: grupo, pessoa: p, text: r.botoes.find((b) => b.id.endsWith('ak_acertou')).id });
+  ok(/Acertei/i.test(desbold(conf.texto)), 'confirmou o acerto');
+  ok(gm.activeCount === 0, 'sessao liberada');
+  ok(passos <= 20, `no maximo 20 perguntas (${passos})`);
 });
 
-await test('isolamento: usuario B nao responde pela partida de A (spec 7/32)', async () => {
-  const c = makeFakeClient();
-  const mgr = injetarManager(() => c);
+await test('!akinator: palpite errado -> informa -> vai para a fila', async () => {
+  const gm = injetarManager();
+  const grupo = makeGroup();
+  const p = nextPerson();
+  const alvo = BASE_CHARS.find((c) => c.name === 'Sonic');
+  let r = await enviar({ groupJid: grupo, pessoa: p, text: '!akinator' });
+  let passos = 0;
+  while (passos < 25 && !r.botoes.some((b) => b.id.endsWith('ak_errou'))) {
+    const q = perguntaDe(r.texto);
+    if (!q) break;
+    const chave = chaveParaValor(alvo.answers[q.id] === undefined ? 0.5 : alvo.answers[q.id]);
+    r = await enviar({ groupJid: grupo, pessoa: p, text: r.botoes.find((b) => b.id.endsWith(chave)).id });
+    passos++;
+  }
+  ok(r.botoes.some((b) => b.id.endsWith('ak_errou')), 'chegou ao palpite');
+  const err = await enviar({ groupJid: grupo, pessoa: p, text: r.botoes.find((b) => b.id.endsWith('ak_errou')).id });
+  ok(/Errei/i.test(desbold(err.texto)), 'aceitou o erro');
+  ok(/dizer quem era/i.test(desbold(err.texto)), 'pediu o nome');
+  const info = await enviar({ groupJid: grupo, pessoa: p, text: 'Zezinho da Silva' });
+  ok(/Anotei/i.test(desbold(info.texto)), 'registrou a correcao');
+  ok(gm.pendingCount === 1, 'foi para a fila');
+});
+
+await test('!akinator: sessao ativa avisa e nao cria outra', async () => {
+  injetarManager();
+  const grupo = makeGroup();
+  const p = nextPerson();
+  await enviar({ groupJid: grupo, pessoa: p, text: '!akinator' });
+  const r = await enviar({ groupJid: grupo, pessoa: p, text: '!akinator' });
+  ok(/j\u00e1 est\u00e1 em uma partida/i.test(desbold(r.texto)), 'avisou que ja tem partida');
+});
+
+await test('!akinator cancelar encerra pelo handler', async () => {
+  const gm = injetarManager();
+  const grupo = makeGroup();
+  const p = nextPerson();
+  await enviar({ groupJid: grupo, pessoa: p, text: '!akinator' });
+  const r = await enviar({ groupJid: grupo, pessoa: p, text: '!akinator cancelar' });
+  ok(/encerrada/i.test(desbold(r.texto)), 'confirmou o encerramento');
+  ok(gm.activeCount === 0, 'sessao removida');
+});
+
+await test('!akinator: usuario B nao responde pela partida de A', async () => {
+  const gm = injetarManager();
   const grupo = makeGroup();
   const a = nextPerson();
   const b = nextPerson();
@@ -529,96 +552,13 @@ await test('isolamento: usuario B nao responde pela partida de A (spec 7/32)', a
     { id: BOT_LID, phoneNumber: BOT_JID, admin: 'admin' },
   ];
   const rA = await enviar({ groupJid: grupo, pessoa: a, text: '!akinator', participants: participantes });
-  const idDeA = rA.botoes[0].id;
-
-  // B clica no botao da partida de A.
-  const rB = await enviar({ groupJid: grupo, pessoa: b, text: idDeA, participants: participantes });
-  ok(c.chamadas.answer.length === 0, 'o cliente de A NAO recebeu resposta de B');
-  ok(rB.textos.length === 0, 'o handler nao processou nada para B (sem sessao dele)');
-  ok(mgr.activeCount === 1, 'a sessao de A segue intacta');
+  const rB = await enviar({ groupJid: grupo, pessoa: b, text: rA.botoes[0].id, participants: participantes });
+  ok(rB.textos.length === 0, 'B nao recebeu resposta (sem sessao dele)');
+  ok(gm.activeCount === 1, 'a sessao de A segue intacta');
 });
 
-await test('botao de OUTRA sessao do MESMO usuario e recusado', async () => {
-  const mgr = makeManager();
-  // Sessao de A no grupo 1 (id antigo) e outra no grupo 2 (id novo).
-  await mgr.iniciar({ groupId: 'g1@g.us', userId: 'u@lid' });
-  const idAntigo = mgr.getSession('g1@g.us', 'u@lid').sessionId;
-  mgr.cancelar({ groupId: 'g1@g.us', userId: 'u@lid' });
-  await mgr.iniciar({ groupId: 'g1@g.us', userId: 'u@lid' });
-  const r = await mgr.processMessage({ groupId: 'g1@g.us', userId: 'u@lid', text: `${idAntigo}:ak_sim` });
-  ok(r && r.reason === 'nao_e_sua', 'recusou o id da partida antiga');
-});
-
-await test('!akinator cancelar encerra a partida pelo handler', async () => {
-  const mgr = injetarManager();
-  const grupo = makeGroup();
-  const p = nextPerson();
-  await enviar({ groupJid: grupo, pessoa: p, text: '!akinator' });
-  ok(mgr.activeCount === 1, 'partida ativa');
-  const r = await enviar({ groupJid: grupo, pessoa: p, text: '!akinator cancelar' });
-  ok(/encerrada/i.test(desbold(r.texto)), 'avisou o encerramento');
-  ok(mgr.activeCount === 0, 'sessao removida');
-});
-
-await test('!akinator com partida ativa avisa (nao cria outra) (spec 9)', async () => {
-  injetarManager();
-  const grupo = makeGroup();
-  const p = nextPerson();
-  await enviar({ groupJid: grupo, pessoa: p, text: '!akinator' });
-  const r = await enviar({ groupJid: grupo, pessoa: p, text: '!akinator' });
-  ok(/j\u00e1 est\u00e1 em uma partida/i.test(desbold(r.texto)), 'avisou que ja tem partida');
-});
-
-await test('erro de rede no iniciar: avisa e nao derruba (spec 19)', async () => {
-  injetarManager(() => makeFakeClient({ start: async () => { throw new Error('ECONNREFUSED'); } }));
-  const grupo = makeGroup();
-  const p = nextPerson();
-  const r = await enviar({ groupJid: grupo, pessoa: p, text: '!akinator' });
-  ok(/n\u00e3o consegui conectar/i.test(desbold(r.texto)), 'mensagem amigavel de erro');
-  ok(!/stack|Error:|ECONNREFUSED/i.test(r.texto), 'nao vaza detalhe tecnico');
-  ok(globalThis.__lizzyAkinatorManager.activeCount === 0, 'nao deixou sessao presa');
-});
-
-await test('erro de rede ao responder: avisa e mantem o bot vivo (spec 19)', async () => {
-  const c = makeFakeClient({ answer: async () => { throw new Error('timeout'); } });
-  const mgr = injetarManager(() => c);
-  const grupo = makeGroup();
-  const p = nextPerson();
-  const r0 = await enviar({ groupJid: grupo, pessoa: p, text: '!akinator' });
-  const r = await enviar({ groupJid: grupo, pessoa: p, text: r0.botoes[0].id });
-  ok(/n\u00e3o consegui conectar/i.test(desbold(r.texto)), 'avisou o erro de rede');
-  ok(!/stack|ECONNREFUSED|Error:/i.test(r.texto), 'sem detalhe tecnico');
-});
-
-await test('resultado sem imagem continua funcionando (spec 17)', async () => {
-  const c = makeFakeClient();
-  const mgr = injetarManager(() => c);
-  const grupo = makeGroup();
-  const p = nextPerson();
-  const r0 = await enviar({ groupJid: grupo, pessoa: p, text: '!akinator' });
-  const id = r0.botoes[0].id;
-  c.winResult = { name: 'Sem Foto', pictureUrl: '', description: '' };
-  c.answer = async () => ({ won: true });
-  const r = await enviar({ groupJid: grupo, pessoa: p, text: id });
-  ok(/Sem Foto/.test(desbold(r.texto)), 'mostrou o nome');
-  ok(r.textos.length >= 1, 'mandou o resultado em texto (sem imagem)');
-});
-
-await test('descricao gigante e truncada (spec 18)', async () => {
-  const c = makeFakeClient();
-  const mgr = injetarManager(() => c);
-  const grupo = makeGroup();
-  const p = nextPerson();
-  const r0 = await enviar({ groupJid: grupo, pessoa: p, text: '!akinator' });
-  const id = r0.botoes[0].id;
-  c.winResult = { name: 'X', pictureUrl: '', description: 'z'.repeat(5000) };
-  c.answer = async () => ({ won: true });
-  const r = await enviar({ groupJid: grupo, pessoa: p, text: id });
-  ok(r.texto.length < 1200, `mensagem nao ficou gigante (${r.texto.length} chars)`);
-});
-
-await test('duas partidas simultaneas no MESMO grupo (spec 8)', async () => {
-  const mgr = injetarManager();
+await test('!akinator: duas partidas simultaneas no mesmo grupo', async () => {
+  const gm = injetarManager();
   const grupo = makeGroup();
   const a = nextPerson();
   const b = nextPerson();
@@ -629,34 +569,55 @@ await test('duas partidas simultaneas no MESMO grupo (spec 8)', async () => {
   ];
   await enviar({ groupJid: grupo, pessoa: a, text: '!akinator', participants: participantes });
   await enviar({ groupJid: grupo, pessoa: b, text: '!akinator', participants: participantes });
-  ok(mgr.activeCount === 2, 'duas partidas ativas no mesmo grupo');
+  ok(gm.activeCount === 2, 'duas partidas ativas');
+  const sa = gm.getSession(grupo, a.lid);
+  const sb = gm.getSession(grupo, b.lid);
+  ok(sa && sb && sa.sessionId !== sb.sessionId, 'sessoes independentes');
+  ok(sa.engine !== sb.engine, 'engines independentes');
+});
 
-  // O handler identifica o remetente e converte PN->LID (getLidFromJidCached),
-  // entao a chave da sessao e o LID real de cada um.
-  const sa = mgr.getSession(grupo, a.lid);
-  const sb = mgr.getSession(grupo, b.lid);
-  ok(sa.sessionId !== sb.sessionId, 'ids diferentes');
-  ok(sa.client !== sb.client, 'clientes independentes');
+await test('!akinator: personagem DESCONHECIDO nunca e inventado (FASE 27)', () => {
+  const gm = new AkinatorGameManager({ questions: QUESTIONS, characters: BASE_CHARS, botName: 'L' });
+  gm.iniciar({ chatId: 'g@g.us', userId: 'a@lid' });
+  let s = gm.getSession('g@g.us', 'a@lid');
+  let r = null;
+  for (let i = 0; i < 25; i++) {
+    if (!s) break;
+    r = gm.processMessage({ chatId: 'g@g.us', userId: 'a@lid', text: 'sim' });
+    s = gm.getSession('g@g.us', 'a@lid');
+    if (!s || (r && (r.kind === 'palpite' || r.kind === 'sem_candidato'))) break;
+  }
+  const nomes = new Set(BASE_CHARS.map((c) => c.name));
+  if (r && r.kind === 'palpite') {
+    ok([...nomes].some((n) => desbold(r.message).includes(n)), 'o palpite e sempre da base (nao inventa)');
+  } else {
+    ok(true, 'sem candidato: nao inventou personagem');
+  }
 });
 
 // ============================================================================
-// 4. MENU (spec 3: NAO pode estar em menu)
+// 6. FASE 19 -- menu intacto / sem sistema paralelo
 // ============================================================================
 
-await test('!akinator NAO foi adicionado a nenhum menu (spec 3)', () => {
+await test('!akinator NAO esta em nenhum menu (FASE 19)', () => {
   const menu18 = fs.readFileSync(path.join(ROOT, 'dados/src/menus/menu18.js'), 'utf-8');
   const menuJs = fs.readFileSync(path.join(ROOT, 'dados/src/menus/menu.js'), 'utf-8');
+  const bp = fs.readFileSync(path.join(ROOT, 'dados/src/utils/blockPv.js'), 'utf-8');
   ok(!menu18.includes('akinator'), 'menu18 sem akinator');
   ok(!menuJs.includes('akinator'), 'menu principal sem akinator');
-  const bp = fs.readFileSync(path.join(ROOT, 'dados/src/utils/blockPv.js'), 'utf-8');
   ok(!bp.includes('akinator'), 'blockPv sem akinator');
 });
 
-await test('ainda existe um unico manager (nao cria sistema paralelo)', () => {
+await test('sem dependencia externa nem listener dedicado', () => {
+  const pkg = fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8');
+  ok(!pkg.includes('akinator-client'), 'akinator-client fora do package.json');
   const src = fs.readFileSync(path.join(ROOT, 'dados/src/index.js'), 'utf-8');
-  const occur = (src.match(/__lizzyAkinatorManager = new /g) || []).length;
-  ok(occur === 1, `uma unica criacao do manager (veio ${occur})`);
-  ok(!src.includes('akinatorManager.ev.on'), 'nao registra listener por partida');
+  // Nao basta "nao citar": o comentario explica que NAO usa. O que importa e nao
+  // haver IMPORT/uso real da lib.
+  ok(!/import\(['"]akinator-client/.test(src), 'index.js nao importa akinator-client');
+  ok(!/require\(['"]akinator-client/.test(src), 'index.js nao requer akinator-client');
+  ok(!src.includes('akinatorManager.ev.on'), 'nao registra listener dedicado');
+  ok(!fs.existsSync(path.join(ROOT, 'dados/src/funcs/utils/akinator.js')), 'modulo antigo removido');
 });
 
 // ============================================================================
