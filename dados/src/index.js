@@ -1066,6 +1066,10 @@ import {
   normalizePlaqCommand
 } from './funcs/utils/plaq.js';
 import {
+  isMenu18Command,
+  isModo18Ativo
+} from './funcs/utils/menu18Mode.js';
+import {
   sendRestrictedMedia,
   normalizeRestrictedTargets,
   resolveSenderJid
@@ -7105,6 +7109,17 @@ if (isCmd && command && !isOwner) {
     // `responderPrefixo` (função de módulo) não a alcançava — dava
     // "gerarContextNewsletter is not defined" e a resposta do prefixo não saía.
     // ======================================================
+    // MENU +18 (`!modo18`): quando desligado, os comandos do menu18 nao
+    // respondem. Ponto UNICO de guarda, ANTES do switch, para valer para todos
+    // (menu18/plaquinhas/brincadeiras picantes) -- nada de repetir a checagem em
+    // cada case. O rodape de saida nao se repetiria de bom grado, entao so'
+    // avisa no comando de entrada do menu (`!menu18`, sem args).
+    if (isGroup && isMenu18Command(command) && !isModo18Ativo(groupData)) {
+      if (command === 'menu18' && !args.length) {
+        await reply('🚫 O *Modo +18* está desativado neste grupo.\n\nUm administrador pode liberar com `!modo18`.');
+      }
+      return;
+    }
 switch (command) {
       // ═══════════════════════════════════════════════════════════════
       // 💌 SISTEMA DE CONFISSÕES
@@ -28155,6 +28170,7 @@ ${nomebot}  By  👑 ${nomedono}`;
             ["Bem-vindo", !!groupData.bemvindo],
             ["X9 (promo/rebaix)", !!groupData.x9],
             ["Modo Lite", !!isModoLite],
+            ["Modo +18", !!isModo18Ativo(groupData)],
             ["Modo Brincadeira", !!isModoBn],
             ["Modo RPG", !!groupData.modorpg]
           ];
@@ -34913,8 +34929,15 @@ case 'set-bannerbv':
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
           if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
           const groupFilePath = buildGroupFilePath(from);
+          // O modo lite filtra o conteudo picante; o modo +18 existe so' para
+          // ele. Ligar os dois seria contraditorio -- por isso sao exclusivos.
+          // Ao ativar o modo lite, o `modo18` e' desligado no mesmo ato.
           if (!groupData.modolite) {
             groupData.modolite = true;
+            groupData.modo18 = false;
+            if (groupData.hasOwnProperty('modo18Off')) {
+              delete groupData.modo18Off;
+            }
             if (groupData.hasOwnProperty('modoliteOff')) {
               delete groupData.modoliteOff;
             }
@@ -34928,9 +34951,40 @@ case 'set-bannerbv':
           }
           fs.writeFileSync(groupFilePath, JSON.stringify(groupData, null, 2));
           if (groupData.modolite) {
-            await reply('👶 *Modo Lite ativado!* O conteúdo inapropriado para crianças será filtrado neste grupo.');
+            await reply('👶 *Modo Lite ativado!* O conteúdo inapropriado para crianças será filtrado neste grupo.\n\n🔞 O *Modo +18* foi desativado (os dois não podem ficar ligados juntos).');
           } else {
             await reply('🔞 *Modo Lite desativado!* O conteúdo do menu de brincadeiras será exibido completamente.');
+          }
+        } catch (e) {
+          console.error(e);
+          await reply("Ocorreu um erro 💔");
+        }
+        break;
+      case 'modo18':
+      case 'modomenu18':
+        try {
+          if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
+          if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
+          const groupFilePath18 = buildGroupFilePath(from);
+          // Exclusividade com o modo lite: os dois nao podem ficar ligados
+          // juntos (o lite filtra exatamente o conteudo +18). Se o lite esta'
+          // ativo, o modo +18 nao liga -- avisa e nao muda nada.
+          const liteAtivo = isModoLiteActive(groupData, modoLiteGlobal);
+          const novoModo18 = !isModo18Ativo(groupData);
+          if (novoModo18 && liteAtivo) {
+            return reply('⚠️ Não dá para ativar o *Modo +18* com o *Modo Lite* ligado.\n\nDesative o Modo Lite primeiro (`!modolite`) — os dois não podem ficar ligados juntos.');
+          }
+          groupData.modo18 = novoModo18;
+          if (!novoModo18) {
+            groupData.modo18Off = true;
+          } else if (groupData.hasOwnProperty('modo18Off')) {
+            delete groupData.modo18Off;
+          }
+          fs.writeFileSync(groupFilePath18, JSON.stringify(groupData, null, 2));
+          if (groupData.modo18) {
+            await reply('🔞 *Modo +18 ativado!* O menu e os comandos +18 (`!menu18`, plaquinhas e brincadeiras picantes) estão liberados neste grupo.');
+          } else {
+            await reply('🚫 *Modo +18 desativado!* O menu e os comandos +18 não respondem mais neste grupo.');
           }
         } catch (e) {
           console.error(e);

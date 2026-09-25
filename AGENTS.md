@@ -4326,6 +4326,70 @@ configuráveis** (bem-vindo/saída/`global.json`) **não** ganharam caixa — de
 do dono. As caixas de **largura fixa** também ficaram no estilo antigo: o layout
 novo não tem borda direita, então converter só topo/rodapé desalinharia.
 
+## COMANDO `!modo18` — LIGA/DESLIGA o menu +18 (set/2026) ✅
+Pedido do dono: um comando `!modo18` que **ativa e desativa o menu 18** com os
+comandos dele, e a regra de exclusividade: **`!modo18` e `!modolite` não podem
+ficar ligados juntos**.
+
+### O que ele controla
+O flag booleano `modo18` no JSON do grupo (ao lado do `modolite`). Com o modo
+**desligado**, os comandos do menu +18 não respondem:
+
+| Grupo | Comandos |
+|---|---|
+| Entrada do menu | `menu18`, `menuplaquinha`, `menuplaquinhas`, `menupraq` |
+| PLAQUINHA | `plaq1`..`plaq10` |
+| BRINCADEIRAS | `vab18`, `eununca18`, `hotseat` |
+
+A lista vive em **`dados/src/funcs/utils/menu18Mode.js`** (`MENU18_COMMANDS` +
+`isMenu18Command` + `isModo18Ativo`). Ela é a mesma do
+`menuCommandsMap.menu18` do `blockPv` — e o teste confere o **paridade** entre as
+duas para não divergirem quando o menu ganhar categoria nova.
+
+### Estado: opt-in (a ausência NÃO libera)
+`isModo18Ativo()` só devolve `true` com `modo18 === true`. Grupo sem o campo ⇒
+**menu +18 bloqueado**. É o contrário do modo lite, que tem modo global; o +18 é
+por grupo e ninguém ganha por omissão. O `!modo18` grava `true`/`false`
+explícito (e o `modo18Off`, espelhando o `modoliteOff`).
+
+### Exclusividade com o `!modolite` — nos DOIS sentidos
+O modo lite filtra exatamente o conteúdo picante; manter os dois ligados seria
+contraditório. A regra é garantida em dois pontos:
+
+1. **`!modo18` com o lite ativo NÃO liga**: avisa o conflito e **não muda nada**
+   (`modo18` continua `false`).
+2. **`!modolite` ligando DESLIGA o `modo18` no mesmo ato** (grava
+   `modo18 = false`), e a resposta avisa que o +18 caiu junto.
+
+Assim o invariante **`modolite && modo18` nunca é verdadeiro** — o teste
+`modo18.test.js` exercita um ciclo de alternâncias e confere isso a cada passo.
+
+### A guarda é um ponto único, antes do `switch`
+O handler central checa uma vez, **antes do `switch (command)`**: se é comando do
+menu +18 e o `modo18` está off, `return` imediato. Nada de repetir a checagem em
+cada `case` (eram 17). O único comando que **avisa** é o `!menu18` sem
+argumentos (o usuário precisa saber *por que* não veio o menu); os demais ficam
+mudos, para não virar spam em cada `!plaqN`.
+
+**Ajuste nos testes existentes:** os fixtures de `menu18-plaquinha`,
+`plaq-midia-restrita`, `vab18` e `hotseat` passaram a gravar `modo18: true` —
+antes eles só tinham `modobrincadeira: true`, e sem o novo flag os comandos
+ficariam mudos (o guard novo é opt-in). Todos seguem verdes.
+
+### Visibilidade
+- `!modo18` entrou no **menu de admin** (`menus/menuadm.js`, logo abaixo do
+  `!modolite`) e no **status do grupo** (`Configurações → Recursos`, linha
+  *Modo +18*), ao lado do *Modo Lite*.
+- Arquivos: `dados/src/funcs/utils/menu18Mode.js` (novo), `index.js` (guarda +
+  `case 'modo18'` + exclusão no `modolite`), `menus/menuadm.js`,
+  `tests/modo18.test.js` (novo, **11 testes / 48 asserções**).
+
+### Testes — `tests/modo18.test.js` (11 testes / 48 asserções)
+Módulo (lista + leitura do flag + paridade com o `blockPv`); toggle
+(liga/desliga e grava); permissão (membro comum não muda nada); exclusividade nos
+dois sentidos + varredura do invariante; e o comportamento pelo **handler real**
+(`!menu18` avisa e não envia; com o modo ligado envia; `!plaq1`/`!vab18`/
+`!eununca18`/`!hotseat` mudos no off; `!vab18` verde no on).
 
 ## MENU 18 (`!menu18`, +18) + PLAQUINHAS (`!plaq1`..`!plaq10`) ✅
 Pedido do dono: um menu novo chamado `!menu18`, na categoria **COMUNIDADE** do

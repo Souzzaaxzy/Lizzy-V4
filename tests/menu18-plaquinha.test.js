@@ -171,7 +171,7 @@ async function run({ groupJid, sender, text, participants, sent = [] }) {
 }
 
 function setup(n) {
-  const groupJid = makeGroup({ modobrincadeira: true });
+  const groupJid = makeGroup({ modobrincadeira: true, modo18: true });
   const people = [];
   for (let i = 0; i < n; i++) people.push(makePerson());
   const participants = [...people, { lid: BOT_LID, jid: BOT_JID, name: 'Lizzy', isAdmin: true }];

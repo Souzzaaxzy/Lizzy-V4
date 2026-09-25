@@ -97,7 +97,7 @@ function makeGroup() {
   groupCounter += 1;
   const jid = `120363900000000${String(groupCounter).padStart(3, '0')}@g.us`;
   fs.writeFileSync(path.join(GRUPOS_DIR, `${jid}.json`),
-    JSON.stringify({ groupName: `GP ${groupCounter}`, modobrincadeira: true }, null, 2));
+    JSON.stringify({ groupName: `GP ${groupCounter}`, modobrincadeira: true, modo18: true }, null, 2));
   return jid;
 }
 
