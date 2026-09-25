@@ -4331,6 +4331,37 @@ Pedido do dono: um comando `!callp` que **sobe a call no grupo, mas apenas isso*
 (ativa a chamada; nao toca audio). O `!testcall` (que ja existia) e' outro
 recurso: ele so' **notifica** chamadas recebidas.
 
+### CORRECAO (set/2026): a sinalizacao foi para a FORK
+A primeira versao montava a stanza **por fora da lib** e o dono reportou que
+**nao funcionou**. O diagnostico: a fork nao expunha nenhuma forma de *iniciar*
+chamada (so' `rejectCall`/`preacceptCall`, ambos do lado de RECEBER), e montar a
+stanza a partir do bot usava primitivos que a lib nao garante publicamente.
+
+A correcao foi implementar a sinalizacao **dentro da fork**
+(`Souzzaaxzy/baileys`, commit `39b8cfc`):
+
+| Na fork | O que e' |
+|---|---|
+| `lib/Utils/call-signaling.js` | os construtores puros das stanzas |
+| `sock.offerCall(toJid, { isVideo })` | offer **1:1** (chave por device via `createParticipantNodes`) |
+| `sock.offerGroupCall(groupJid, jids, { isVideo })` | offer **de grupo** (roster via `getUSyncDevices`) |
+| `sock.terminateCall(callId, { to, reason })` | encerra |
+| `tests/call-signaling.test.js` | 19 testes (forma das stanzas) |
+| `tests/call-socket.test.js` | 5 testes (caminho real do socket) |
+
+O bot agora **so' decide quem convidar** e chama `nazu.offerGroupCall(...)`. O
+modulo local `dados/src/funcs/utils/callOffer.js` ficou apenas com o registro
+das calls ativas (estado do bot), e o `montarOfferGrupo`/`subirCallNoGrupo`
+caseiros foram **removidos**.
+
+**Ordem dos filhos do `<offer>` e' obrigatoria** — o servidor rejeita fora dela
+com **erro 439**: `audio(8000)` -> `audio(16000)` -> `[video]` -> `net(medium=3)`
+-> `capability` -> (`destination` | `group_info`) -> `encopt`.
+
+**Armadilha medida**: device **non-zero** sem `key-index` e' **descartado** pelo
+`extractDeviceJids` — o roster ficava com 1 device onde havia 2. Nao e' bug do
+codigo de producao, mas quebrou o teste falso ate' eu enviar o `key-index`.
+
 ### O que da' para fazer (pesquisa, com fonte)
 A midia de uma call do WhatsApp viaja por **SRTP/UDP** com a chave negociada por
 Signal. O Baileys (e a fork) **nao carregam essa stack** — a doc oficial diz

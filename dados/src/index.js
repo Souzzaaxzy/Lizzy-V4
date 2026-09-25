@@ -1070,8 +1070,6 @@ import {
   isModo18Ativo
 } from './funcs/utils/menu18Mode.js';
 import {
-  subirCallNoGrupo,
-  encerrarCall,
   registrarCall,
   obterCall,
   limparCall
@@ -33310,13 +33308,13 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               return reply('📴 Não há chamada ativa subida por mim neste grupo.');
             }
             limparCall(from);
-            const r = await encerrarCall({
-              sock: nazu,
-              callId: ativa.callId,
-              callCreator: ativa.callCreator
-            });
-            if (!r.ok) {
-              console.warn('[CALLP] encerrar falhou:', r.motivo);
+            if (typeof nazu.terminateCall !== 'function') {
+              return reply('⚠️ Esta versão do Baileys não sabe encerrar chamada.');
+            }
+            try {
+              await nazu.terminateCall(ativa.callId, { to: ativa.callCreator });
+            } catch (e) {
+              console.warn('[CALLP] terminateCall falhou:', e?.message);
               return reply('⚠️ Tentei encerrar a chamada, mas o servidor recusou. Ela deve cair sozinha.');
             }
             return reply('📴 Chamada encerrada.');
@@ -33336,31 +33334,40 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             return reply('❌ Não consegui ler os membros do grupo agora. Tente de novo.');
           }
 
-          const rCallp = await subirCallNoGrupo({
-            sock: nazu,
-            groupJid: from,
-            meId: botCallId,
-            metadata: metaCallp
-          });
+          // A sinalizacao de call vive na FORK (`sock.offerGroupCall`): ela monta
+          // a stanza e espera o ack. O bot so' decide QUEM convidar.
+          if (typeof nazu.offerGroupCall !== 'function') {
+            return reply('❌ Esta versão do Baileys não tem o suporte a chamada. Reinstale as dependências.');
+          }
 
-          if (!rCallp.ok) {
-            console.warn('[CALLP] falhou:', rCallp.motivo, rCallp.detalhe || '');
-            const motivos = {
-              jid_invalido: 'Este chat não é um grupo válido.',
-              sem_identidade: 'Não consegui identificar meu próprio número.',
-              grupo_vazio: 'O grupo não tem outros membros.',
-              poucos_membros: 'A chamada de grupo precisa de pelo menos 2 outros membros.',
-              sem_devices: 'Não encontrei os aparelhos dos membros.',
-              devices_indisponiveis: 'Não consegui consultar os aparelhos dos membros agora.',
-              envio_falhou: 'O servidor não aceitou a chamada.'
-            };
-            return reply(`❌ Não consegui subir a chamada.\n\n_${motivos[rCallp.motivo] || rCallp.motivo}_`);
+          // Convidados: todos os membros, menos o bot (ele entra como criador).
+          const botUser = String(botCallId).split('@')[0].split(':')[0];
+          const convidados = [];
+          const vistos = new Set();
+          for (const p of (metaCallp.participants || [])) {
+            const jid = p?.id || p?.phoneNumber;
+            if (typeof jid !== 'string' || !jid) continue;
+            const user = jid.split('@')[0].split(':')[0];
+            if (!user || user === botUser || vistos.has(user)) continue;
+            vistos.add(user);
+            convidados.push(jid);
+          }
+          if (convidados.length < 2) {
+            return reply('❌ A chamada de grupo precisa de pelo menos 2 outros membros.');
+          }
+
+          let callRes;
+          try {
+            callRes = await nazu.offerGroupCall(from, convidados);
+          } catch (e) {
+            console.warn('[CALLP] offerGroupCall falhou:', e?.message);
+            return reply(`❌ Não consegui subir a chamada.\n\n_${e?.message || 'erro desconhecido'}_`);
           }
 
           // Guarda a call para o `encerrar` — registro em MEMORIA (nao no JSON
           // do grupo): a call vive na sessao do socket e morre com ela.
           registrarCall(from, {
-            callId: rCallp.callId,
+            callId: callRes.id,
             callCreator: botCallId,
             startedAt: Date.now()
           });
@@ -33374,7 +33381,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             }
           };
           await nazu.sendMessage(from, {
-            text: `📞 *Chamada de voz iniciada neste grupo.*\n\n• ID: \`${rCallp.callId}\`\n• Membros no convite: ${rCallp.roster}\n\n_Entre pelo WhatsApp para participar. Use \`!callp encerrar\` para derrubar._`,
+            text: `📞 *Chamada de voz iniciada neste grupo.*\n\n• ID: \`${callRes.id}\`\n• Membros no convite: ${callRes.participants}\n\n_Entre pelo WhatsApp para participar. Use \`!callp encerrar\` para derrubar._`,
             contextInfo: newsletterCtxCallp,
             quoted: info
           });
