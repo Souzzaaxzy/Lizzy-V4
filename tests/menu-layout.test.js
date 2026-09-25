@@ -275,9 +275,9 @@ const COMANDOS_POR_MENU = {
   menuia: 17, menudown: 20, ferramentas: 26, menufig: 16, menulogo: 44,
   menuedits: 5, alteradores: 58, menumemb: 54,
   // menuadm: 172 -> 170 (removidos `fotomenug` e `videomenug`).
-  // 170 -> 171 (adicionado `!modo18`).
+  // 170 -> 171 (`!modo18`) -> 172 (`!callp`).
   // menudono: 166 -> 165 (`fotomenu` + `videomenu` -> `midiamenu`).
-  menuadm: 171, menudono: 165,
+  menuadm: 172, menudono: 165,
   menubn: 348, menufut: 42, menurpg: 149,
   // menuvip nao tem comando cadastrado; o `!` contado e o `!addcmdvip` da
   // instrucao ("Use: !addcmdvip"), que no original tambem estava fixo.

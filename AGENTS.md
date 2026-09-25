@@ -4326,6 +4326,91 @@ configuráveis** (bem-vindo/saída/`global.json`) **não** ganharam caixa — de
 do dono. As caixas de **largura fixa** também ficaram no estilo antigo: o layout
 novo não tem borda direita, então converter só topo/rodapé desalinharia.
 
+## COMANDO `!callp` — SOBE CHAMADA DE VOZ NO GRUPO (set/2026) ✅
+Pedido do dono: um comando `!callp` que **sobe a call no grupo, mas apenas isso**
+(ativa a chamada; nao toca audio). O `!testcall` (que ja existia) e' outro
+recurso: ele so' **notifica** chamadas recebidas.
+
+### O que da' para fazer (pesquisa, com fonte)
+A midia de uma call do WhatsApp viaja por **SRTP/UDP** com a chave negociada por
+Signal. O Baileys (e a fork) **nao carregam essa stack** — a doc oficial diz
+literalmente *"Baileys cannot accept or carry voice/video calls"*. O que a lib
+tem e' a **sinalizacao** (`<call>` com `offer`/`accept`/`reject`/`terminate`).
+Entao o alcance honesto e' subir a chamada (o grupo passa a mostra-la como ativa)
+— exatamente o que o dono pediu — e **nao** transmitir musica.
+
+Fontes usadas (todas publicas):
+- **wacrg** (WhatsApp Calls Research Group) — spec das stanzas de call
+  (`docs/signaling/stanza-reference.md`): envelope, ordem obrigatoria dos filhos
+  do `<offer>` e o papel do `group_info`.
+- **`meowcaller`** (Go, purpshell) — a unica implementacao publica que poe call
+  de **grupo** de pe'. `signaling/group.go` -> `BuildInitialGroupOffer` foi a
+  fonte direta da forma da stanza; `engine_group_api.go` -> `placeGroupCall`
+  mostra a sequencia (roster -> offer -> transmitir).
+- **`offerCall`** (variante que circula nas forks do Baileys) — a versao 1:1,
+  confirma envelope, `call-id`, `call-creator` e `query(stanza)`.
+
+### A diferenca que decidiu a implementacao: 1:1 x GRUPO
+| | 1:1 (`offerCall`) | **grupo** (`BuildInitialGroupOffer`) |
+|---|---|---|
+| `to` do wrapper | JID do contato | **`<call-id>@call`** (objeto da call) |
+| chave de midia | `<destination>` + `<enc>` por device | **nao vai no offer** (vem por `enc_rekey`, o epoch do grupo) |
+| roster | — | **`<group_info>`** com `<user>`/`<device>` |
+| `group-jid` | — | presente (call amarrada ao grupo) |
+
+O pedido e' subir a call **no grupo**, entao o caminho e' o segundo. Ordem dos
+filhos (o servidor rejeita fora dela com **erro 439**):
+`audio(8000)` -> `audio(16000)` -> `[video]` -> `net(medium=3)` -> `group_info`.
+
+**Capability**: blob fixo `01 05 f7 09 e0 bb 13` (ver=1). O `e4 bb 13` que
+circula em outras notas e' variacao de build; o `meowcaller` usa `e0 bb 13`.
+
+### Arquivos
+| Caminho | Papel |
+|---|---|
+| `dados/src/funcs/utils/callOffer.js` | monta as stanzas + roster + registro das calls ativas |
+| `dados/src/index.js` | `case 'callp'` (guardas, mensagens, `encerrar`) |
+| `dados/src/menus/menuadm.js` | `!callp` no menu de admin |
+| `tests/callp.test.js` | 18 testes / 53 asserções |
+
+### Como funciona
+1. `!callp` (grupo + admin) resolve o **roster**: o bot + os outros membros
+   (deduplicados por `user`, porque o metadata traz LID **e** PN da mesma pessoa).
+2. Descobre os **devices** de cada membro com `getUSyncDevices` (o mesmo caminho
+   multi-device das mensagens) e garante as sessoes Signal (`assertSessions`).
+3. Monta o `<call><offer>` de grupo e envia pela `query` — que **espera o ack**
+   do servidor (timeout proprio de 20s, para nao segurar o handler pelos 60s
+   padrao da lib).
+4. Guarda a call no **registro em memoria** e avisa no grupo com o **cabeçalho
+   de canal**.
+5. `!callp encerrar` manda o `<terminate>` e limpa o registro.
+
+### Decisoes que evitaram bugs
+- **Registro em MEMORIA, nao no JSON do grupo.** A call vive na sessao do
+  socket: se o bot reinicia, ela morre. Um `callpCall` persistido faria o
+  `!callp` recusar para sempre. Alem disso, o cache do `groupData` **clona** o
+  objeto, entao mutar `groupData` nao se propaga na hora — era uma corrida real
+  (o teste pegou: a segunda chamada passava). O `Map` em memoria e' correto e
+  deterministico.
+- **Minimo de 2 outros membros.** O `BuildInitialGroupOffer` exige
+  `len(participants) < 3` -> erro; o servidor recusa call de grupo menor. O
+  comando avisa antes de mandar stanza que seria descartada.
+- **PV e nao-admin nao mandam stanza**: a guarda vem antes de qualquer I/O.
+
+### Testes — `tests/callp.test.js` (18 testes / 53 asserções)
+Forma da stanza (envelope, ordem obrigatoria, `group-jid`, sem `enc`/
+`destination`, `group_info` com devices, blob de capability, `terminate`,
+`call-id` aleatorio); guardas (grupo, admin, minimo de membros); pelo **handler
+real** (envia UMA stanza, avisa com cabeçalho de canal, registra a call ativa,
+recusa duplicata, `encerrar` manda `<terminate>` e limpa, falha do servidor nao
+deixa estado). Rodado 3x para conferir que nao e' flaky.
+
+### LIMITE HONESTO
+**Nao ha audio.** O comando sobe a chamada; quem quiser ouvir entra pelo
+WhatsApp. Reproduzir musica exigiria implementar o stack de midia (SRTP + codec
+MLOW/Opus + relay), que e' outro projeto — e nenhuma lib JS publica faz isso
+hoje. Se o dono quiser esse passo, e' uma conversa separada.
+
 ## COMANDO `!modo18` — LIGA/DESLIGA o menu +18 (set/2026) ✅
 Pedido do dono: um comando `!modo18` que **ativa e desativa o menu 18** com os
 comandos dele, e a regra de exclusividade: **`!modo18` e `!modolite` não podem

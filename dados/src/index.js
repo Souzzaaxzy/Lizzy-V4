@@ -1070,6 +1070,13 @@ import {
   isModo18Ativo
 } from './funcs/utils/menu18Mode.js';
 import {
+  subirCallNoGrupo,
+  encerrarCall,
+  registrarCall,
+  obterCall,
+  limparCall
+} from './funcs/utils/callOffer.js';
+import {
   sendRestrictedMedia,
   normalizeRestrictedTargets,
   resolveSenderJid
@@ -33276,6 +33283,103 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
           persistGroupData();
         } catch (e) {
           console.error('[TESTCALL] Erro:', e);
+          await reply("Ocorreu um erro 💔");
+        }
+        break;
+      // !callp — sobe uma chamada de VOZ no grupo (sinalizacao apenas).
+      //
+      // Envia a stanza `<call><offer>` de grupo: a chamada passa a existir no
+      // grupo e os membros veem "chamada em andamento". NAO ha audio — a midia
+      // de uma call do WhatsApp vai por SRTP/UDP, stack que o Baileys nao tem.
+      // O formato e a pesquisa estao em `funcs/utils/callOffer.js`.
+      //
+      // `!callp encerrar` derruba a ultima call subida por aqui (o registro das
+      // calls ativas fica em MEMORIA, no proprio `callOffer.js`), para nao
+      // deixar chamada pendurada.
+      case 'callp':
+        try {
+          if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
+          if (!isGroupAdmin) return reply("Você precisa ser adm 💔");
+
+          const subCallp = normalizar((args[0] || '')).trim();
+
+          // Encerra a call que ESTE comando subiu (se houver).
+          if (subCallp === 'encerrar' || subCallp === 'parar' || subCallp === 'desligar') {
+            const ativa = obterCall(from);
+            if (!ativa || !ativa.callId) {
+              return reply('📴 Não há chamada ativa subida por mim neste grupo.');
+            }
+            limparCall(from);
+            const r = await encerrarCall({
+              sock: nazu,
+              callId: ativa.callId,
+              callCreator: ativa.callCreator
+            });
+            if (!r.ok) {
+              console.warn('[CALLP] encerrar falhou:', r.motivo);
+              return reply('⚠️ Tentei encerrar a chamada, mas o servidor recusou. Ela deve cair sozinha.');
+            }
+            return reply('📴 Chamada encerrada.');
+          }
+
+          if (obterCall(from)) {
+            return reply('📞 Já existe uma chamada subida por mim neste grupo.\n\nUse `!callp encerrar` para derrubar.');
+          }
+
+          const botCallId = getBotNumber(nazu);
+          if (!botCallId) {
+            return reply('❌ Não consegui identificar meu próprio número para subir a chamada.');
+          }
+
+          const metaCallp = await nazu.groupMetadata(from).catch(() => null);
+          if (!metaCallp) {
+            return reply('❌ Não consegui ler os membros do grupo agora. Tente de novo.');
+          }
+
+          const rCallp = await subirCallNoGrupo({
+            sock: nazu,
+            groupJid: from,
+            meId: botCallId,
+            metadata: metaCallp
+          });
+
+          if (!rCallp.ok) {
+            console.warn('[CALLP] falhou:', rCallp.motivo, rCallp.detalhe || '');
+            const motivos = {
+              jid_invalido: 'Este chat não é um grupo válido.',
+              sem_identidade: 'Não consegui identificar meu próprio número.',
+              grupo_vazio: 'O grupo não tem outros membros.',
+              poucos_membros: 'A chamada de grupo precisa de pelo menos 2 outros membros.',
+              sem_devices: 'Não encontrei os aparelhos dos membros.',
+              devices_indisponiveis: 'Não consegui consultar os aparelhos dos membros agora.',
+              envio_falhou: 'O servidor não aceitou a chamada.'
+            };
+            return reply(`❌ Não consegui subir a chamada.\n\n_${motivos[rCallp.motivo] || rCallp.motivo}_`);
+          }
+
+          // Guarda a call para o `encerrar` — registro em MEMORIA (nao no JSON
+          // do grupo): a call vive na sessao do socket e morre com ela.
+          registrarCall(from, {
+            callId: rCallp.callId,
+            callCreator: botCallId,
+            startedAt: Date.now()
+          });
+
+          const newsletterCtxCallp = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          await nazu.sendMessage(from, {
+            text: `📞 *Chamada de voz iniciada neste grupo.*\n\n• ID: \`${rCallp.callId}\`\n• Membros no convite: ${rCallp.roster}\n\n_Entre pelo WhatsApp para participar. Use \`!callp encerrar\` para derrubar._`,
+            contextInfo: newsletterCtxCallp,
+            quoted: info
+          });
+        } catch (e) {
+          console.error('[CALLP] Erro:', e);
           await reply("Ocorreu um erro 💔");
         }
         break;
