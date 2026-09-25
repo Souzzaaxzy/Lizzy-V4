@@ -1219,12 +1219,34 @@ Tres arquivos, tres responsabilidades: **base autoral** no repo, **aprendizado**
 6. Correcao vai para a FILA e precisa de votos (`MIN_VOTES_TO_PROMOTE = 2`) para
    ser promovida -- usuario nenhum injeta dado ruim direto na base.
 
-### As bases (autoral + importada)
-| Base | Personagens | Origem | Licenca |
+### As bases: pequena no repo, GRANDE por URL (com cache) ✅
+| Base | Personagens | Onde fica | Licenca |
 |---|---|---|---|
-| `characters.json` | 51 | autoral (curada a mao) | da Lizzy |
-| `characters-imported.json` | 198 | PokeAPI + SWAPI | **BSD-3-Clause** |
-| **total** | **249** | -- | -- |
+| `characters.json` | 51 | **no repo** (autoral) | da Lizzy |
+| importada | 198 | **branch de dados + URL** (cache local) | **BSD-3-Clause** |
+| **total ativo** | **249** | -- | -- |
+
+**Decisao do dono (set/2026):** a base grande **nao fica no repositorio** porque
+pesaria no clone e no `git pull` de todos. Ela mora num branch dedicado
+(`akinator-data`) e o comando **baixa por URL com cache**:
+
+```
+https://raw.githubusercontent.com/Souzzaaxzy/Lizzy-V4/akinator-data/akinator/characters.json
+```
+
+Como funciona (`carregarBase` em `akinator-game.js`):
+- roda **no boot, em segundo plano** (nao atrasa a subida) e o comando espera a
+  promessa (`manager.pronta`) antes de comecar;
+- **cache** em `database/akinator/characters-cache.json`, TTL **1 dia** -- nao
+  baixa a cada partida;
+- **fallback em cascata**: cache valido -> download -> cache vencido (rede caiu)
+  -> base local do repo -> indisponivel (o comando segue com a base pequena);
+- teto de **12 MB** (recusa arquivo absurdo) + timeout de 30s (`AbortController`);
+- URL trocavel por **`AKINATOR_BASE_URL`** no `.env`;
+- `adicionarPersonagens()` soma sem duplicar id (a base local tem prioridade).
+
+**Consequencia pratica**: quem da `git pull` baixa ~140 KB de base, nao 370 KB.
+O arquivo de 233 KB saiu do `main` e vive no branch `akinator-data`.
 
 Em **9+ categorias** (anime, game, movies, comics, cartoon, sports, music,
 internet, real_people, pokemon, star_wars) e **160 perguntas**. As bases ficam
@@ -1292,7 +1314,7 @@ com saida antecipada quando a pergunta nao separa ninguem. Depois: **138 ms** po
 pergunta a 10.2k (6,7×), indexacao 77 ms uma vez. Na base atual: **3,0 ms**.
 Sessoes: 100 simultaneas = ~8,5 ms por resposta.
 
-### Testes — `tests/akinator.test.js` (**41 testes / 140 assercoes**)
+### Testes — `tests/akinator.test.js` (**48 testes / 154 assercoes**)
 Base (ids unicos, sem pergunta orfa, >=5 categorias, sem personagem
 indistinguivel); engine (entropia, compatibilidade calibrada, os 5 niveis,
 sessao nova, a 1a pergunta divide a base, a incerteza cai, **convergencia para

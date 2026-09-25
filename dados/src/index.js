@@ -1754,9 +1754,9 @@ const {
   hotseat,
   AkinatorEngine,
   AkinatorGameManager,
+  carregarBase: akinatorCarregarBase,
   akinatorQuestionsJson,
   akinatorCharactersJson,
-  akinatorImportedJson,
   Lyrics,
   commandStats,
   //ia,
@@ -3376,10 +3376,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     if (!globalThis.__lizzyAkinatorManager && typeof AkinatorGameManager === 'function') {
       const _akQ = akinatorQuestionsJson();
       const _akC = akinatorCharactersJson();
-      const _akI = akinatorImportedJson();
-      // Base autoral + base importada (PokeAPI/SWAPI). A importada e separada
-      // para deixar clara a procedencia; o engine trata as duas igual.
-      const _chars = ((_akC && _akC.characters) || []).concat((_akI && _akI.characters) || []);
+      const _chars = ((_akC && _akC.characters) || []);
       globalThis.__lizzyAkinatorManager = new AkinatorGameManager({
         questions: (_akQ && _akQ.questions) || [],
         characters: _chars,
@@ -3387,7 +3384,25 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
         pendingFile: pathz.join(DATABASE_DIR, 'akinator', 'pending.json'),
         botName: nomebot,
       });
-      console.log(`[AKINATOR] engine proprio | personagens=${_chars.length} | perguntas=${((_akQ && _akQ.questions) || []).length}`);
+      console.log(`[AKINATOR] engine proprio | base local=${_chars.length} | perguntas=${((_akQ && _akQ.questions) || []).length}`);
+
+      // A base GRANDE vem de uma URL (nao fica no repo, para nao pesar no pull).
+      // Roda em segundo plano: o download nao atrasa o boot e, se falhar, o
+      // comando segue com a base local. O cache evita baixar a cada partida.
+      const AK_BASE_URL = process.env.AKINATOR_BASE_URL
+        || 'https://raw.githubusercontent.com/Souzzaaxzy/Lizzy-V4/akinator-data/akinator/characters.json';
+      globalThis.__lizzyAkinatorManager.pronta = akinatorCarregarBase({
+        url: AK_BASE_URL,
+        cacheFile: pathz.join(DATABASE_DIR, 'akinator', 'characters-cache.json'),
+        locais: [pathz.join(__dirname, 'funcs', 'json', 'akinator', 'characters-imported.json')],
+      }).then((r) => {
+        const add = globalThis.__lizzyAkinatorManager.adicionarPersonagens(r.characters);
+        console.log(`[AKINATOR] base remota: origem=${r.origem} | +${add} personagens | total=${globalThis.__lizzyAkinatorManager.baseCharacters.length}${r.erro ? ` | aviso=${r.erro}` : ''}`);
+        return r;
+      }).catch((e) => {
+        console.warn('[AKINATOR] base remota falhou (usando a local):', e && e.message);
+        return { characters: [], origem: 'indisponivel', erro: e && e.message };
+      });
     }
     const akinatorManager = globalThis.__lizzyAkinatorManager;
     const isOnlyAdmin = groupData.soadm;
@@ -37928,6 +37943,12 @@ case 'akinator': {
   try {
     if (!akinatorManager || typeof akinatorManager.iniciar !== 'function') {
       return reply('Sistema do Akinator temporariamente indisponivel.');
+    }
+
+    // Garante que a base remota ja foi considerada (o download roda no boot;
+    // aqui so esperamos a promessa, que normalmente ja resolveu).
+    if (akinatorManager.pronta && typeof akinatorManager.pronta.then === 'function') {
+      await akinatorManager.pronta;
     }
 
     const sub = normalizar((args[0] || '')).trim();

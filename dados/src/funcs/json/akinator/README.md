@@ -10,11 +10,22 @@ engine de adivinhacao probabilistico proprio, rodando dentro do bot.
 |---|---|
 | `questions.json` | o banco de perguntas (ids estaveis) -- **versionado aqui** |
 | `characters.json` | a base **autoral** (curada a mao) -- versionada aqui |
-| `characters-imported.json` | base **importada de APIs publicas** -- versionada aqui |
+| (a base importada **nao fica aqui**) | ela e servida por **URL** e cacheada pelo comando |
 
-As duas bases somam **249 personagens** e o engine trata igual. Elas ficam
-separadas de proposito: assim a **procedencia e a licenca** de cada uma sao
-explicitas, e a base autoral nunca e misturada com dado de terceiro.
+A base grande (personagens importados de APIs) **nao fica no repositorio**: ela
+pesaria no clone e no `git pull` de todos. Em vez disso, ela mora num **branch de
+dados** do proprio repo e o comando baixa com **cache**:
+
+```
+https://raw.githubusercontent.com/Souzzaaxzy/Lizzy-V4/akinator-data/akinator/characters.json
+```
+
+- o download roda **no boot, em segundo plano** (nao atrasa a subida);
+- fica em **cache local** (`database/akinator/characters-cache.json`), valido por
+  **1 dia** -- nao baixa a cada partida;
+- se a rede cair: usa o **cache**; se nao houver cache, cai na **base local**;
+- se tudo falhar, o comando segue funcionando com a base pequena;
+- da para trocar a URL em **`AKINATOR_BASE_URL`** (`.env`).
 
 A base acima e a **autoral**. O que o jogo aprende e o que a comunidade sugere
 ficam **fora** dela, no database (para nao sujar a base versionada):

@@ -149,6 +149,9 @@ async function loadModules() {
         // probabilistico e a camada de jogo/sessoes sao modulos da Lizzy.
         modules.AkinatorEngine = akinatorEngineMod.Engine ?? akinatorEngineMod.default;
         modules.AkinatorGameManager = akinatorGameMod.AkinatorGameManager ?? akinatorGameMod.default;
+        // loader da base remota (URL + cache), para o comando nao depender
+        // de um arquivo grande dentro do repositorio
+        modules.carregarBase = akinatorGameMod.carregarBase;
 
         if (modules.stickerModule && modules.stickerModule.sendSticker) {
             modules.sendSticker = modules.stickerModule.sendSticker;
@@ -181,10 +184,6 @@ async function loadModules() {
         // Bancos do engine proprio (repo, versionados).
         modules.akinatorQuestionsJson = () => loadJsonSync('json/akinator/questions.json');
         modules.akinatorCharactersJson = () => loadJsonSync('json/akinator/characters.json');
-        // Base IMPORTADA de APIs publicas (PokeAPI/SWAPI, BSD-3-Clause).
-        // Arquivo separado de proposito: a base autoral fica intocada e a
-        // procedencia/licenca de cada uma e explicita.
-        modules.akinatorImportedJson = () => loadJsonSync('json/akinator/characters-imported.json');
         const hotseatJsonData = loadJsonSync('json/hotseat.json');
         modules.hotseatJson = () => hotseatJsonData;
 

@@ -23,6 +23,13 @@ import { Engine, KnowledgeBase, ANSWER_VALUE, CONFIG as ENGINE_CONFIG } from './
 const CONFIG = {
   SESSION_TIMEOUT_MS: 30 * 60 * 1000,
   CLEANUP_INTERVAL_MS: 5 * 60 * 1000,
+  // --- base remota ---
+  // A base GRANDE nao fica no repositorio do bot (pesaria no pull). O comando
+  // baixa de uma URL e guarda num CACHE local: o download acontece uma vez por
+  // TTL, nao a cada partida.
+  CACHE_TTL_MS: 24 * 60 * 60 * 1000,   // 1 dia
+  FETCH_TIMEOUT_MS: 30 * 1000,
+  MAX_BYTES: 12 * 1024 * 1024,          // teto de seguranca do arquivo
 };
 
 // --- LAYOUT (mesmo desenho do resto da bot) ---
@@ -133,6 +140,93 @@ function gravarJson(file, dados) {
   }
 }
 
+/**
+ * Baixa uma base de personagens por URL, com cache em disco.
+ *
+ * Por que existe: a base grande (milhares de personagens) nao deve ficar no
+ * repositorio do bot -- ela engorda o clone e o `git pull` de todos. Aqui o
+ * comando busca de uma URL (ex.: um branch de dados no GitHub) e guarda um
+ * cache local; so baixa de novo quando o cache vence (CACHE_TTL_MS).
+ *
+ * Resiliencia: se a rede falhar e houver cache, usa o cache; se nao houver
+ * cache, cai na base local do repo. Nunca derruba o comando.
+ *
+ * @param {object} p
+ * @param {string}  p.url        URL da base remota
+ * @param {string}  p.cacheFile  caminho do cache local
+ * @param {string[]} p.locais    arquivos locais de fallback (na ordem)
+ * @param {number} [p.ttlMs]     validade do cache
+ * @param {Function} [p.fetchImpl] fetch injetavel (testes)
+ * @param {boolean} [p.forcar]   ignora o TTL e baixa agora
+ * @returns {Promise<{characters:Array, origem:string, erro:string|null}>}
+ */
+async function carregarBase({ url, cacheFile, locais = [], ttlMs, fetchImpl, forcar = false } = {}) {
+  const doFetch = fetchImpl || (typeof fetch === 'function' ? fetch : null);
+  const ttl = ttlMs === undefined ? CONFIG.CACHE_TTL_MS : ttlMs;
+
+  const lerArquivo = (f) => {
+    try {
+      if (!f || !fs.existsSync(f)) return null;
+      const d = JSON.parse(fs.readFileSync(f, 'utf-8'));
+      const lista = Array.isArray(d) ? d : d.characters;
+      return Array.isArray(lista) && lista.length ? lista : null;
+    } catch (e) {
+      console.warn('[AKINATOR] arquivo de base invalido:', f, e && e.message);
+      return null;
+    }
+  };
+
+  // 1) cache valido?
+  const meta = (() => {
+    try { return cacheFile && fs.existsSync(cacheFile) ? fs.statSync(cacheFile).mtimeMs : 0; } catch (e) { return 0; }
+  })();
+  if (!forcar && meta && (Date.now() - meta) < ttl) {
+    const emCache = lerArquivo(cacheFile);
+    if (emCache) return { characters: emCache, origem: 'cache', erro: null };
+  }
+
+  // 2) tenta baixar
+  let erro = null;
+  if (url && doFetch) {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), CONFIG.FETCH_TIMEOUT_MS);
+      try {
+        const r = await doFetch(url, { signal: ctrl.signal, headers: { 'User-Agent': 'LizzyAkinator/1.0' } });
+        if (!r || !r.ok) throw new Error(`HTTP ${r && r.status}`);
+        const texto = await r.text();
+        if (texto.length > CONFIG.MAX_BYTES) throw new Error('arquivo acima do teto');
+        const d = JSON.parse(texto);
+        const lista = Array.isArray(d) ? d : d.characters;
+        if (!Array.isArray(lista) || !lista.length) throw new Error('base vazia');
+        // grava o cache (nao bloqueia o jogo se falhar)
+        if (cacheFile) {
+          try {
+            gravarJson(cacheFile, d);
+          } catch (e) { console.warn('[AKINATOR] nao consegui gravar o cache:', e && e.message); }
+        }
+        return { characters: lista, origem: 'remoto', erro: null };
+      } finally {
+        clearTimeout(timer);
+      }
+    } catch (e) {
+      erro = e && e.message ? e.message : String(e);
+      console.warn('[AKINATOR] falha ao baixar a base remota:', erro);
+    }
+  }
+
+  // 3) cache vencido mas existente (rede caiu)
+  const emCache = lerArquivo(cacheFile);
+  if (emCache) return { characters: emCache, origem: 'cache-expirado', erro };
+
+  // 4) fallback local (repo)
+  for (const f of locais) {
+    const l = lerArquivo(f);
+    if (l) return { characters: l, origem: 'local', erro };
+  }
+  return { characters: [], origem: 'indisponivel', erro };
+}
+
 // --- GERENCIADOR ---
 class AkinatorGameManager {
   /**
@@ -186,6 +280,25 @@ class AkinatorGameManager {
 
   getSession(chatId, userId) {
     return this.sessions.get(sessionKey(chatId, userId)) || null;
+  }
+
+  /**
+   * Acrescenta personagens vindos de fora (ex.: base remota) sem apagar o que
+   * ja existe. Usado na subida do bot e depois de um donwload em runtime.
+   * Ignora id repetido (a base local tem prioridade).
+   */
+  adicionarPersonagens(lista) {
+    if (!Array.isArray(lista) || !lista.length) return 0;
+    const ids = new Set(this.baseCharacters.map((c) => c.id));
+    let n = 0;
+    for (const c of lista) {
+      if (!c || !c.id || ids.has(c.id)) continue;
+      ids.add(c.id);
+      this.baseCharacters.push(c);
+      n++;
+    }
+    if (n > 0) this.promovidos = this.promovidos || [];
+    return n;
   }
 
   /**
@@ -571,6 +684,7 @@ class AkinatorGameManager {
 
 export {
   AkinatorGameManager,
+  carregarBase,
   parseInput,
   buildAnswerButtons,
   buildGuessButtons,
