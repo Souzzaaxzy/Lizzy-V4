@@ -799,16 +799,115 @@ await test('!akinator NAO esta em nenhum menu (FASE 19)', () => {
   ok(!bp.includes('akinator'), 'blockPv sem akinator');
 });
 
-await test('sem dependencia externa nem listener dedicado', () => {
-  const pkg = fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8');
-  ok(!pkg.includes('akinator-client'), 'akinator-client fora do package.json');
+await test('akinator-client e OPCIONAL e isolado (nao quebra sem ele)', () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8'));
+  // O pacote esta declarado (modo remoto opt-in).
+  ok(!!pkg.dependencies['akinator-client'], 'akinator-client declarado no package.json');
+
   const src = fs.readFileSync(path.join(ROOT, 'dados/src/index.js'), 'utf-8');
-  // Nao basta "nao citar": o comentario explica que NAO usa. O que importa e nao
-  // haver IMPORT/uso real da lib.
-  ok(!/import\(['"]akinator-client/.test(src), 'index.js nao importa akinator-client');
-  ok(!/require\(['"]akinator-client/.test(src), 'index.js nao requer akinator-client');
+  // O import vive no modulo de rede, NAO no index (isolamento).
+  ok(!/import\(['"]akinator-client/.test(src), 'index.js nao importa akinator-client direto');
+  ok(!/require\(['"]akinator-client/.test(src), 'index.js nao requer akinator-client direto');
+
+  // O import do pacote e' DINAMICO e tolerante (o bot nao quebra sem ele).
+  const remoto = fs.readFileSync(path.join(ROOT, 'dados/src/funcs/utils/akinator-remote.js'), 'utf-8');
+  ok(/import\(\s*'akinator-client'\s*\)/.test(remoto), 'import dinamico no modulo remoto');
+  ok(/catch/.test(remoto), 'import tolerante a falha');
+
+  // O modo remoto e' OPT-IN: local e' o padrao.
+  ok(/MODO_REMOTO_PADRAO:\s*'local'/.test(fs.readFileSync(path.join(ROOT, 'dados/src/funcs/utils/akinator-game.js'), 'utf-8')),
+    'modo local e o padrao');
   ok(!src.includes('akinatorManager.ev.on'), 'nao registra listener dedicado');
   ok(!fs.existsSync(path.join(ROOT, 'dados/src/funcs/utils/akinator.js')), 'modulo antigo removido');
+});
+
+// ============================================================================
+// MODO REMOTO (akinator-client) -- sem rede: so o adaptador e o fallback.
+// ============================================================================
+
+const remoteMod = await import(new URL('../dados/src/funcs/utils/akinator-remote.js', import.meta.url).href);
+const { normalizarResultado, mapaRespostas, palpiteRemoto } = remoteMod;
+
+await test('remoto: normalizarResultado cobre won/ko/pergunta', () => {
+  const p = normalizarResultado({ won: false, ko: false, question: 'E humano?', progression: 0.1 });
+  ok(p.kind === 'pergunta', 'pergunta identificada');
+  ok(p.pergunta === 'E humano?', 'texto preservado');
+
+  const w = normalizarResultado({ won: true, ko: false, progression: 0.93, question: '' });
+  ok(w.kind === 'palpite', 'won -> palpite');
+  ok(w.percentual === 93, 'percentual arredondado');
+
+  const k = normalizarResultado({ won: false, ko: true });
+  ok(k.kind === 'sem_candidato', 'ko -> sem candidato');
+
+  ok(normalizarResultado(null).kind === 'erro', 'null -> erro');
+});
+
+await test('remoto: mapaRespostas liga rotulos aos enums', () => {
+  const fake = { Answers: { Yes: 0, No: 1, IDontKnow: 2, Probably: 3, ProbablyNot: 4 } };
+  const m = mapaRespostas(fake);
+  ok(m.SIM === 0 && m.NAO === 1 && m.NAO_SEI === 2, 'sim/nao/nao_sei');
+  ok(m.PROVAVELMENTE === 3 && m.PROVAVELMENTE_NAO === 4, 'provavelmente');
+});
+
+await test('remoto: palpiteRemoto usa o winResult', () => {
+  const c = { winResult: { propositionId: 42, name: 'Naruto', pictureUrl: 'http://x/p.jpg', description: 'Ninja' } };
+  const p = palpiteRemoto(c);
+  ok(p.name === 'Naruto', 'nome');
+  ok(p.imageUrl === 'http://x/p.jpg', 'imagem');
+  ok(/42/.test(p.id), 'id do palpite');
+  ok(palpiteRemoto({}) !== null, 'sem winResult nao lanca');
+});
+
+await test('remoto: manager cai pro LOCAL quando o remoto falha (sem rede)', async () => {
+  // modoEfetivo remoto + remotoMod nulo -> START deve explodir e cair pro local.
+  const gm = new AkinatorGameManager({
+    questions: QUESTIONS,
+    characters: BASE_CHARS,
+    learnedFile: path.join(TMP_DB, 'ak-remote-learned.json'),
+    pendingFile: path.join(TMP_DB, 'ak-remote-pending.json'),
+    botName: 'Lizzy',
+    modo: 'remoto',
+  });
+  gm.modoEfetivo = 'remoto';   // forca o caminho remoto
+  gm.remotoMod = null;         // sem modulo -> iniciarRemoto lanca
+  const r = await gm.iniciar({ chatId: 'gr@g.us', userId: 'u1@lid' });
+  ok(r.success === true, 'iniciou mesmo assim');
+  ok(r.kind === 'pergunta', 'caiu no local e trouxe pergunta');
+  ok(gm.modoEfetivo === 'local', 'voltou pro modo local');
+  ok(!!gm.remotoMotivo, 'registrou o motivo');
+});
+
+await test('remoto: modo local (padrao) nem tenta a rede', async () => {
+  const gm = new AkinatorGameManager({
+    questions: QUESTIONS,
+    characters: BASE_CHARS,
+    learnedFile: path.join(TMP_DB, 'ak-rem2-learned.json'),
+    pendingFile: path.join(TMP_DB, 'ak-rem2-pending.json'),
+    botName: 'Lizzy',
+  });
+  const prep = await gm.prepararModo();
+  ok(prep.modo === 'local', 'modo local');
+  const r = gm.iniciar({ chatId: 'gr2@g.us', userId: 'u2@lid' });
+  ok(r.kind === 'pergunta', 'iniciar sincrono no local');
+  ok(typeof r.then !== 'function', 'no local `iniciar` NAO devolve Promise');
+});
+
+await test('remoto: !akinator status mostra o motor', async () => {
+  const gm = new AkinatorGameManager({
+    questions: QUESTIONS,
+    characters: BASE_CHARS,
+    learnedFile: path.join(TMP_DB, 'ak-rem3-learned.json'),
+    pendingFile: path.join(TMP_DB, 'ak-rem3-pending.json'),
+    botName: 'Lizzy',
+    modo: 'remoto',
+  });
+  gm.modoEfetivo = 'local';
+  gm.remotoMotivo = 'bloqueio do Cloudflare neste IP';
+  const t = desbold(gm.mensagemStatus());
+  ok(/LOCAL/.test(t), 'diz que esta no local');
+  ok(/Cloudflare/.test(t), 'explica o motivo do remoto nao subir');
+  ok(String(gm.baseCharacters.length).length > 0, 'lista a base');
 });
 
 // ============================================================================

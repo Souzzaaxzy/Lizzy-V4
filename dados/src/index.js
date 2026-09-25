@@ -3370,9 +3370,12 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     }
     const hotseatManager = globalThis.__lizzyHotseatManager;
     // Gerenciador do !akinator. UMA instancia por processo (mesmo padrao do
-    // hotseat). Usa o ENGINE PROPRIO da Lizzy -- sem Akinator.com, sem
-    // akinator-client, sem rede: a base de personagens vem do repo e o que o
-    // jogo aprende vai para o database (arquivos separados da base autoral).
+    // hotseat). Dois motores possiveis:
+    //   - LOCAL (padrao): engine proprio, sem rede, base por URL.
+    //   - REMOTO (opt-in via AKINATOR_MODE=remoto): akinator-client, que usa o
+    //     Akinator.com. So liga se o START de teste passar -- o Akinator fica
+    //     atras do Cloudflare e costuma bloquear IP de VPS/datacenter, entao em
+    //     falha o jogo continua no LOCAL. Ver `prepararModo`.
     if (!globalThis.__lizzyAkinatorManager && typeof AkinatorGameManager === 'function') {
       const _akQ = akinatorQuestionsJson();
       const _akC = akinatorCharactersJson();
@@ -3383,8 +3386,18 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
         learnedFile: pathz.join(DATABASE_DIR, 'akinator', 'learned.json'),
         pendingFile: pathz.join(DATABASE_DIR, 'akinator', 'pending.json'),
         botName: nomebot,
+        modo: process.env.AKINATOR_MODE || 'local',
       });
       console.log(`[AKINATOR] engine proprio | base local=${_chars.length} | perguntas=${((_akQ && _akQ.questions) || []).length}`);
+
+      // Decide o modo em segundo plano (nao atrasa o boot). Se pediram remoto,
+      // faz um START de teste; se o Akinator bloquear, cai pro local sozinho.
+      globalThis.__lizzyAkinatorManager.modoPronto = globalThis.__lizzyAkinatorManager
+        .prepararModo()
+        .catch((e) => {
+          console.warn('[AKINATOR] falha ao preparar o modo (seguindo no local):', e && e.message);
+          return { modo: 'local', motivo: e && e.message };
+        });
 
       // A base GRANDE vem de uma URL (nao fica no repo, para nao pesar no pull).
       // Roda em segundo plano: o download nao atrasa o boot e, se falhar, o
@@ -5891,7 +5904,9 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
         // mensagem segue o fluxo normal).
         if (akinatorManager && body) {
           try {
-            const akRes = akinatorManager.processMessage({
+            // `processMessage` pode devolver Promise (modo remoto). No local e'
+            // sincrono; o `await` cobre os dois casos.
+            const akRes = await akinatorManager.processMessage({
               chatId: from,
               userId: sender,
               text: body,
@@ -37957,6 +37972,10 @@ case 'akinator': {
     if (akinatorManager.pronta && typeof akinatorManager.pronta.then === 'function') {
       await akinatorManager.pronta;
     }
+    // Espera a decisao do modo (remoto x local), se houver.
+    if (akinatorManager.modoPronto && typeof akinatorManager.modoPronto.then === 'function') {
+      await akinatorManager.modoPronto;
+    }
 
     const sub = normalizar((args[0] || '')).trim();
 
@@ -37965,7 +37984,13 @@ case 'akinator': {
       return reply(r.message);
     }
 
-    const r = akinatorManager.iniciar({ chatId: from, userId: sender });
+    // Diagnostico: mostra qual motor esta' atendendo.
+    if (sub === 'status' || sub === 'modo') {
+      return reply(akinatorManager.mensagemStatus());
+    }
+
+    // `iniciar` pode devolver Promise (modo remoto); o await cobre os dois.
+    const r = await akinatorManager.iniciar({ chatId: from, userId: sender });
 
     if (!r.success) {
       if (r.reason === 'ja_em_partida') {

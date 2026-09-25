@@ -19,6 +19,14 @@ import path from 'path';
 import { bold } from '../../menus/layout.js';
 import { normalizar } from '../../utils/helpers.js';
 import { Engine, KnowledgeBase, ANSWER_VALUE, CONFIG as ENGINE_CONFIG } from './akinator-engine.js';
+import {
+  carregarClient,
+  iniciarRemoto,
+  responderRemoto,
+  palpiteRemoto,
+  testarRemoto,
+  mapaRespostas,
+} from './akinator-remote.js';
 
 const CONFIG = {
   SESSION_TIMEOUT_MS: 30 * 60 * 1000,
@@ -30,7 +38,13 @@ const CONFIG = {
   CACHE_TTL_MS: 24 * 60 * 60 * 1000,   // 1 dia
   FETCH_TIMEOUT_MS: 30 * 1000,
   MAX_BYTES: 12 * 1024 * 1024,          // teto de seguranca do arquivo
+  // --- modo remoto (akinator-client) ---
+  // O remoto depende de rede e do Akinator.com, que bloqueia IP de datacenter.
+  // Por isso e' opt-in e cai pro local em qualquer falha.
+  MODO_REMOTO_PADRAO: 'local',          // 'local' | 'remoto'
+  REMOTO_TIMEOUT_MS: 25 * 1000,
 };
+
 
 // --- LAYOUT (mesmo desenho do resto da bot) ---
 const TOPO = (titulo, emoji) => {
@@ -274,11 +288,58 @@ class AkinatorGameManager {
     this.learned = this.learnedFile ? lerJson(this.learnedFile, {}) : {};
     this.pending = this.pendingFile ? lerJson(this.pendingFile, []) : [];
 
+    // Modo de jogo: 'local' (engine proprio) ou 'remoto' (akinator-client).
+    // O remoto e' sempre uma TENTATIVA: `_modoEfetivo` so vira 'remoto' depois
+    // de um START real dar certo. Enquanto isso, o local atende tudo.
+    this.modoPedido = String(deps.modo || CONFIG.MODO_REMOTO_PADRAO).toLowerCase() === 'remoto'
+      ? 'remoto'
+      : 'local';
+    this.modoEfetivo = 'local';
+    this.remotoMod = null;
+    this.remotoValores = null;
+    this.remotoMotivo = null;
+    this.remotoOpcoes = deps.remotoOpcoes || {
+      proxy: process.env.AKINATOR_PROXY || undefined,
+      scraperApiKey: process.env.SCRAPERAPI_KEY || undefined,
+      retries: Number.isFinite(Number(process.env.AKINATOR_RETRIES))
+        ? Number(process.env.AKINATOR_RETRIES)
+        : 2,
+    };
+
     this.sessions = new Map();
     this._seq = 0;
     this.cleanupTimer = setInterval(() => this._cleanup(), CONFIG.CLEANUP_INTERVAL_MS);
     if (this.cleanupTimer && typeof this.cleanupTimer.unref === 'function') this.cleanupTimer.unref();
   }
+
+  /**
+   * Prepara o modo remoto, se pedido. Faz um START de teste: se o Akinator
+   * responder (rede ok e sem bloqueio), passa a usar o remoto; se nao, registra
+   * o motivo e segue no local. Nunca lanca.
+   */
+  async prepararModo() {
+    if (this.modoPedido !== 'remoto') {
+      this.remotoMotivo = 'modo local (padrao)';
+      return { modo: this.modoEfetivo, motivo: this.remotoMotivo };
+    }
+    const teste = await testarRemoto({
+      options: this.remotoOpcoes,
+      timeoutMs: CONFIG.REMOTO_TIMEOUT_MS,
+    });
+    if (teste.ok) {
+      this.remotoMod = teste.mod;
+      this.remotoValores = mapaRespostas(teste.mod);
+      this.modoEfetivo = 'remoto';
+      this.remotoMotivo = null;
+      console.log('[AKINATOR] modo REMOTO ativo (akinator-client)');
+    } else {
+      this.modoEfetivo = 'local';
+      this.remotoMotivo = teste.motivo;
+      console.warn(`[AKINATOR] modo remoto indisponivel -> usando o LOCAL: ${teste.motivo}`);
+    }
+    return { modo: this.modoEfetivo, motivo: this.remotoMotivo };
+  }
+
 
   /** A base esta utilizavel? (FASE 29: KNOWLEDGE_INVALID) */
   get disponivel() {
@@ -330,14 +391,25 @@ class AkinatorGameManager {
   /**
    * Inicia uma partida. Nao cria duas para o mesmo usuario no mesmo chat
    * (FASE 11) e nunca interfere em partidas de outros.
+   *
+   * No modo LOCAL devolve o resultado na hora (sincrono). No modo REMOTO o
+   * START e' uma chamada de rede, entao devolve uma Promise -- o handler do
+   * comando faz `await` nos dois casos, entao a interface nao muda.
    */
   iniciar({ chatId, userId }) {
     if (!chatId || !userId) return { success: false, reason: 'bad_args' };
-    if (!this.disponivel) return { success: false, reason: 'knowledge_invalid' };
 
     const atual = this.getSession(chatId, userId);
     if (atual && atual.estado !== 'FIM') return { success: false, reason: 'ja_em_partida' };
 
+    if (this.modoEfetivo === 'remoto') return this._iniciarRemoto({ chatId, userId });
+
+    if (!this.disponivel) return { success: false, reason: 'knowledge_invalid' };
+    return this._iniciarLocal({ chatId, userId });
+  }
+
+  /** Partida com o engine proprio (sincrono). */
+  _iniciarLocal({ chatId, userId }) {
     this._seq += 1;
     const sessionId = `ak${Date.now().toString(36)}${this._seq.toString(36)}`;
     const engine = new Engine(this._novaKb());
@@ -345,6 +417,7 @@ class AkinatorGameManager {
       sessionId,
       chatId,
       userId,
+      modo: 'local',
       engine,
       estado: 'PERGUNTANDO',   // PERGUNTANDO | PALPITE | INFORMAR | FIM
       perguntaIdx: -1,
@@ -357,6 +430,111 @@ class AkinatorGameManager {
 
     const proxima = this._proximaPergunta(sessao);
     return { success: true, sessionId, ...proxima };
+  }
+
+  /** Partida com o Akinator.com (assincrono). */
+  async _iniciarRemoto({ chatId, userId }) {
+    this._seq += 1;
+    const sessionId = `akr${Date.now().toString(36)}${this._seq.toString(36)}`;
+    try {
+      const { client, resultado } = await iniciarRemoto({
+        mod: this.remotoMod,
+        options: this.remotoOpcoes,
+      });
+      const sessao = {
+        sessionId,
+        chatId,
+        userId,
+        modo: 'remoto',
+        client,
+        estado: 'PERGUNTANDO',
+        perguntaAtual: null,
+        ultimoPalpite: null,
+        criadaEm: Date.now(),
+        ultimaAtividade: Date.now(),
+        perguntas: 0,
+      };
+      this.sessions.set(sessionKey(chatId, userId), sessao);
+      return { success: true, sessionId, ...this._proximaRemota(sessao, resultado) };
+    } catch (e) {
+      // Uma falha de rede no meio do jogo nao pode derrubar o comando: cai pro
+      // local na hora (a base local ja esta carregada).
+      const msg = e && e.message ? e.message : String(e);
+      console.warn(`[AKINATOR] START remoto falhou, caindo pro local: ${msg}`);
+      this.modoEfetivo = 'local';
+      this.remotoMotivo = msg;
+      return this._iniciarLocal({ chatId, userId });
+    }
+  }
+
+
+  /** Monta a mensagem da pergunta (comum aos dois modos). */
+  _renderPerguntaTexto(texto, numero) {
+    return [
+      TOPO('AKINATOR'),
+      '',
+      `\u2753 ${bold('Pergunta ' + numero + ':')}`,
+      ``,
+      texto,
+      RODAPE(this.botName),
+    ].join('\n');
+  }
+
+  /**
+   * Traduz o estado devolvido pelo Akinator (pergunta ou palpite) para o
+   * formato da interface. `resultado.kind`:
+   *   'pergunta'      -> proxima pergunta
+   *   'palpite'       -> acertou (won)
+   *   'sem_candidato' -> ko
+   *   'erro'          -> falha de rede
+   */
+  _proximaRemota(sessao, resultado) {
+    if (!resultado || resultado.kind === 'erro') {
+      // Falha no meio do jogo: encerra a sessao sem quebrar o comando.
+      this.sessions.delete(sessionKey(sessao.chatId, sessao.userId));
+      return {
+        kind: 'erro_remoto',
+        message: `${TOPO('AKINATOR')}\n\n\u26a0\ufe0f O Akinator n\u00e3o respondeu agora.\nTente de novo em instantes.\n\n${RODAPE(this.botName)}`,
+      };
+    }
+
+    if (resultado.kind === 'palpite') {
+      const char = palpiteRemoto(sessao.client) || {
+        name: '?', category: 'akinator', description: '', imageUrl: null,
+      };
+      sessao.estado = 'PALPITE';
+      sessao.ultimoPalpite = char;
+      return {
+        kind: 'palpite',
+        message: this._renderPalpite(char, resultado.percentual || 0),
+        buttons: buildGuessButtons(sessao.sessionId),
+        imageUrl: char.imageUrl || undefined,
+      };
+    }
+
+    if (resultado.kind === 'sem_candidato') {
+      this.sessions.delete(sessionKey(sessao.chatId, sessao.userId));
+      return {
+        kind: 'sem_candidato',
+        message: [
+          TOPO('AKINATOR'),
+          '',
+          `\u{1F914} N\u00e3o consegui chegar a nenhum personagem.`,
+          '',
+          `Tente de novo com outro personagem.`,
+          RODAPE(this.botName),
+        ].join('\n'),
+      };
+    }
+
+    sessao.estado = 'PERGUNTANDO';
+    sessao.perguntaAtual = resultado.pergunta;
+    sessao.perguntas += 1;
+    return {
+      kind: 'pergunta',
+      message: this._renderPerguntaTexto(resultado.pergunta, sessao.perguntas),
+      buttons: buildAnswerButtons(sessao.sessionId),
+    };
   }
 
   /** Escolhe a proxima pergunta (ou o palpite, se ja for hora). */
@@ -444,6 +622,9 @@ class AkinatorGameManager {
 
     sessao.ultimaAtividade = Date.now();
 
+    // --- Sessao REMOTA: pergunta/palpite vivem no Akinator.com ---
+    if (sessao.modo === 'remoto') return this._processarRemoto(sessao, entrada, text);
+
     // --- Etapa de INFORMAR o personagem (depois de errar) ---
     if (sessao.estado === 'INFORMAR') {
       const nome = String(text).trim().slice(0, 60);
@@ -486,6 +667,67 @@ class AkinatorGameManager {
     if (j < 0) return null;
     sessao.engine.applyAnswer(j, valor);
     return { success: true, ...this._proximaPergunta(sessao) };
+  }
+
+  /**
+   * Processa uma mensagem de uma sessao REMOTA. Assincrono: cada resposta e'
+   * uma chamada de rede. Em falha, encerra a sessao com aviso (sem quebrar).
+   */
+  async _processarRemoto(sessao, entrada, text) {
+    // Palpite remoto: ACERTOU / ERREI.
+    if (sessao.estado === 'PALPITE') {
+      if (entrada.resposta === 'ACERTOU') {
+        const char = sessao.ultimoPalpite;
+        this.sessions.delete(sessionKey(sessao.chatId, sessao.userId));
+        console.log(`[AKINATOR] sessao remota finalizada | acerto=${char ? char.name : '?'} | perguntas=${sessao.perguntas}`);
+        return {
+          success: true,
+          kind: 'acertou',
+          message: [
+            TOPO('AKINATOR'),
+            '',
+            `\u{1F3AF} ${bold('Acertei!')} \u{1F60E}`,
+            ``,
+            `Era ${bold(char ? char.name : '?')}.`,
+            char && char.description ? `\u{1F4DD} ${char.description}` : '',
+            ``,
+            `\u{1F52E} Partida encerrada.`,
+            RODAPE(this.botName),
+          ].filter((l) => l !== '').join('\n'),
+        };
+      }
+      if (entrada.resposta === 'ERROU') {
+        // No remoto nao ha "ensinar em texto": o Akinator trabalha com a base
+        // dele, e as perguntas dele nao sao as nossas -- nao da' para virar
+        // atributo do motor local. So agradece e encerra.
+        this.sessions.delete(sessionKey(sessao.chatId, sessao.userId));
+        return {
+          success: true,
+          kind: 'errou',
+          message: `${TOPO('AKINATOR')}\n\n\u{1F64F} Errei mesmo. Obrigado por jogar!\n\n${RODAPE(this.botName)}`,
+        };
+      }
+      return { success: true, kind: 'invalido', message: this._mensagemInvalidaPalpite() };
+    }
+
+    // Pergunta remota: precisa de uma resposta valida (enum do pacote).
+    if (!entrada.resposta || !Object.prototype.hasOwnProperty.call(this.remotoValores, entrada.resposta)) {
+      return { success: true, kind: 'invalido', message: this._mensagemInvalida() };
+    }
+    try {
+      const valorPacote = this.remotoValores[entrada.resposta];
+      const resultado = await responderRemoto(sessao.client, valorPacote);
+      return { success: true, ...this._proximaRemota(sessao, resultado) };
+    } catch (e) {
+      const msg = e && e.message ? e.message : String(e);
+      console.warn(`[AKINATOR] remoto falhou no meio da partida: ${msg}`);
+      this.sessions.delete(sessionKey(sessao.chatId, sessao.userId));
+      return {
+        success: true,
+        kind: 'erro_remoto',
+        message: `${TOPO('AKINATOR')}\n\n\u26a0\ufe0f Perdi a conex\u00e3o com o Akinator.\nA partida foi encerrada. Tente de novo.\n\n${RODAPE(this.botName)}`,
+      };
+    }
   }
 
   _confirmarAcerto(sessao) {
@@ -697,6 +939,24 @@ class AkinatorGameManager {
     return `${TOPO('AKINATOR')}\n\n\u26a0\ufe0f A base de personagens n\u00e3o est\u00e1 dispon\u00edvel agora.\n\n${RODAPE(this.botName)}`;
   }
 
+  /** Diagnostico: qual motor esta' atendendo e por que. */
+  mensagemStatus() {
+    const modo = this.modoEfetivo === 'remoto' ? 'REMOTO (Akinator.com)' : 'LOCAL (engine proprio)';
+    const linhas = [
+      TOPO('AKINATOR'),
+      '',
+      `\u{1F9E0} Motor: ${bold(modo)}`,
+    ];
+    if (this.modoPedido === 'remoto' && this.modoEfetivo !== 'remoto' && this.remotoMotivo) {
+      linhas.push(`\u26a0\ufe0f Remoto indispon\u00edvel: ${this.remotoMotivo}`);
+    }
+    if (this.modoEfetivo === 'local') {
+      linhas.push(`\u{1F4DA} Personagens na base: ${bold(String(this.baseCharacters.length))}`);
+    }
+    linhas.push(RODAPE(this.botName));
+    return linhas.join('\n');
+  }
+
   _cleanup() {
     const now = Date.now();
     for (const [key, s] of Array.from(this.sessions.entries())) {
@@ -719,5 +979,14 @@ export {
   ROTULO,
   BOTAO_PARA_RESPOSTA,
 };
+
+export {
+  carregarClient,
+  testarRemoto,
+  iniciarRemoto,
+  responderRemoto,
+  palpiteRemoto,
+  mapaRespostas,
+} from './akinator-remote.js';
 
 export default AkinatorGameManager;
