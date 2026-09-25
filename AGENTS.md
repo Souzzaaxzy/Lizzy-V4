@@ -1347,6 +1347,23 @@ parecia **vencido** e era baixado de novo. Agora ha **tolerancia de skew**
 (`SKEW_TOLERANCIA_MS = 60s`): idade levemente negativa conta como "recem
 escrito". Verificado: 5 execucoes seguidas verdes (antes falhava ~1 em 3).
 
+**PROXY residencial / IP do CELULAR (set/2026)** — gratuito, verificado
+O `akinator-client` aceita `proxyUrl`; mapeado para `AKINATOR_PROXY`. Confirmado
+por teste que o trafego passa pelo proxy (log do `CONNECT pt.akinator.com:443`).
+
+**Descoberta importante (medida)**: um **Chromium headless real esperou 30s e
+NUNCA passou** o challenge do Akinator (`cf_clearance` nao foi emitido). Ou seja:
+o truque de "pegar cookies do Chrome" (padrao do yt-dlp) **nao funciona** aqui —
+o Cloudflare amarra o `cf_clearance` ao IP e bloqueia a faixa de datacenter antes
+de emitir cookie.
+
+**Solucao gratuita: usar o IP do celular.** `tools/proxy-termux.js` (proxy HTTP
++ CONNECT, zero dependencia) roda no Termux; como a operadora usa CGNAT, o
+celular **abre o tunel** (`ssh -R 8888:127.0.0.1:8888 user@vps`) e o VPS aponta
+`AKINATOR_PROXY=http://127.0.0.1:8888`. Guia completo em
+`tools/COMO-USAR-CELULAR.md`. **IP sozinho NAO e' proxy** — o celular precisa
+rodar o servico.
+
 **Peso medido do pacote**: `npm install akinator-client@^1.3.0` = **4,64 MiB** de
 arquivos / **11 MiB** em disco (1.693 arquivos, 50 pacotes; `caniuse-lite` sozinho
 e' 4,3 MB). O `akinator-client` em si e' 164 KB.
