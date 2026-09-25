@@ -306,6 +306,40 @@ await test('manager.adicionarPersonagens: soma sem duplicar id', () => {
   ok(gm.baseCharacters.length === antes + 1, 'somou 1');
 });
 
+await test('carregarBase: VARIAS urls somam as bases', async () => {
+  const fake = async (u) => {
+    if (u.includes('ruim')) return { ok: false, status: 404 };
+    return { ok: true, status: 200, text: async () => JSON.stringify({ characters: [{ id: u.includes('b') ? 'b1' : 'a1', name: u, answers: { real: 1 } }] }) };
+  };
+  const r = await carregarBase({
+    urls: ['http://a/x.json', 'http://ruim/y.json', 'http://b/z.json'],
+    cacheFile: path.join(TMP_DB, 'multi-cache.json'), ttlMs: 0, fetchImpl: fake,
+  });
+  ok(r.origem === 'remoto', `baixou (veio ${r.origem})`);
+  ok(r.characters.length === 2, `somou as duas boas (${r.characters.length})`);
+  ok(r.fontes.length === 2, 'registrou as 2 fontes que funcionaram');
+  ok(Boolean(r.erro), 'informou o erro da fonte ruim');
+});
+
+await test('carregarBase: uma fonte ruim NAO derruba as outras', async () => {
+  const fake = async (u) => {
+    if (u.includes('quebrada')) throw new Error('ENOTFOUND');
+    return { ok: true, status: 200, text: async () => JSON.stringify({ characters: [{ id: 'ok1', name: 'OK', answers: { real: 1 } }] }) };
+  };
+  const r = await carregarBase({
+    urls: ['http://quebrada/x.json', 'http://boa/y.json'],
+    cacheFile: path.join(TMP_DB, 'mix-cache.json'), ttlMs: 0, fetchImpl: fake,
+  });
+  ok(r.origem === 'remoto' && r.characters.length === 1, 'a boa foi usada mesmo com a ruim quebrando');
+});
+
+await test('carregarBase: url e urls sao equivalentes', async () => {
+  const fake = async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ characters: [{ id: 'x', name: 'X', answers: { real: 1 } }] }) });
+  const comUrl = await carregarBase({ url: 'http://a/b.json', cacheFile: path.join(TMP_DB, 'u1.json'), ttlMs: 0, fetchImpl: fake });
+  const comUrls = await carregarBase({ urls: ['http://a/b.json'], cacheFile: path.join(TMP_DB, 'u2.json'), ttlMs: 0, fetchImpl: fake });
+  ok(comUrl.characters.length === comUrls.characters.length, 'mesmo resultado');
+});
+
 // ============================================================================
 // 1b. BASE IMPORTADA DE APIs PUBLICAS
 // ============================================================================

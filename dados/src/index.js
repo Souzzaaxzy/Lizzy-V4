@@ -3389,15 +3389,22 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       // A base GRANDE vem de uma URL (nao fica no repo, para nao pesar no pull).
       // Roda em segundo plano: o download nao atrasa o boot e, se falhar, o
       // comando segue com a base local. O cache evita baixar a cada partida.
-      const AK_BASE_URL = process.env.AKINATOR_BASE_URL
-        || 'https://raw.githubusercontent.com/Souzzaaxzy/Lizzy-V4/akinator-data/akinator/characters.json';
+      // Fontes da base: AKINATOR_BASE_URL aceita UMA url ou VARIAS separadas por
+      // virgula (o dono pode ter o repositorio dele E o padrao ao mesmo tempo --
+      // as bases somam). Sem a env, usa o branch de dados do repo.
+      const AK_PADRAO = 'https://raw.githubusercontent.com/Souzzaaxzy/Lizzy-V4/akinator-data/akinator/characters.json';
+      const AK_BASE_URLS = String(process.env.AKINATOR_BASE_URL || AK_PADRAO)
+        .split(',')
+        .map((u) => u.trim())
+        .filter(Boolean);
       globalThis.__lizzyAkinatorManager.pronta = akinatorCarregarBase({
-        url: AK_BASE_URL,
+        urls: AK_BASE_URLS,
         cacheFile: pathz.join(DATABASE_DIR, 'akinator', 'characters-cache.json'),
         locais: [pathz.join(__dirname, 'funcs', 'json', 'akinator', 'characters-imported.json')],
       }).then((r) => {
         const add = globalThis.__lizzyAkinatorManager.adicionarPersonagens(r.characters);
-        console.log(`[AKINATOR] base remota: origem=${r.origem} | +${add} personagens | total=${globalThis.__lizzyAkinatorManager.baseCharacters.length}${r.erro ? ` | aviso=${r.erro}` : ''}`);
+        const det = Array.isArray(r.fontes) ? r.fontes.map((f) => `${f.personagens}`).join('+') : '';
+        console.log(`[AKINATOR] base remota: origem=${r.origem}${det ? ` (fontes: ${det})` : ''} | +${add} personagens | total=${globalThis.__lizzyAkinatorManager.baseCharacters.length}${r.erro ? ` | aviso=${r.erro}` : ''}`);
         return r;
       }).catch((e) => {
         console.warn('[AKINATOR] base remota falhou (usando a local):', e && e.message);

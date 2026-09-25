@@ -1242,8 +1242,25 @@ Como funciona (`carregarBase` em `akinator-game.js`):
 - **fallback em cascata**: cache valido -> download -> cache vencido (rede caiu)
   -> base local do repo -> indisponivel (o comando segue com a base pequena);
 - teto de **12 MB** (recusa arquivo absurdo) + timeout de 30s (`AbortController`);
-- URL trocavel por **`AKINATOR_BASE_URL`** no `.env`;
+- URL trocavel por **`AKINATOR_BASE_URL`** no `.env` -- aceita **varias URLs
+  separadas por virgula** e as bases **somam** (o dono pode ter o repositorio
+  dele E o padrao ao mesmo tempo);
 - `adicionarPersonagens()` soma sem duplicar id (a base local tem prioridade).
+
+### Hospedar a base no repositorio do DONO (set/2026) ✅
+Pedido do dono: *"tem como eu criar um repositorio, colocar todos os personagens
+la, e colocar o bot para puxar de la?"* -- **sim**, e ja esta pronto:
+`tools/preparar-base-remota.py` monta a pasta, **valida** (ids unicos, sem
+pergunta orfa, sem indistinguivel) e imprime o passo a passo com a URL exata.
+O dono so cria o repo publico, faz `git push` e poe a URL no `AKINATOR_BASE_URL`.
+**Multi-fonte**: uma URL que falhar nao derruba as outras nem o comando.
+
+**BUG DE BORDA corrigido no caminho** (achado porque o teste ficou *flaky*): o
+cache comparava `Date.now() - mtime < ttl` sem checar sinal. Se o `mtime` viesse
+**adiantado** em relacao ao relogio (skew), a idade saia **negativa** e
+`negativo < ttl` dava "cache valido" **mesmo com TTL 0** -- servindo cache velho
+como se fosse novo. Agora exige `idade >= 0` e TTL > 0. Verificado: 5 execucoes
+seguidas verdes (antes falhava de vez em quando).
 
 **Consequencia pratica**: quem da `git pull` baixa ~140 KB de base, nao 370 KB.
 O arquivo de 233 KB saiu do `main` e vive no branch `akinator-data`.
@@ -1314,7 +1331,7 @@ com saida antecipada quando a pergunta nao separa ninguem. Depois: **138 ms** po
 pergunta a 10.2k (6,7×), indexacao 77 ms uma vez. Na base atual: **3,0 ms**.
 Sessoes: 100 simultaneas = ~8,5 ms por resposta.
 
-### Testes — `tests/akinator.test.js` (**48 testes / 154 assercoes**)
+### Testes — `tests/akinator.test.js` (**51 testes / 160 assercoes**)
 Base (ids unicos, sem pergunta orfa, >=5 categorias, sem personagem
 indistinguivel); engine (entropia, compatibilidade calibrada, os 5 niveis,
 sessao nova, a 1a pergunta divide a base, a incerteza cai, **convergencia para

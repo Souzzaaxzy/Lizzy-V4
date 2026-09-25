@@ -25,7 +25,31 @@ https://raw.githubusercontent.com/Souzzaaxzy/Lizzy-V4/akinator-data/akinator/cha
   **1 dia** -- nao baixa a cada partida;
 - se a rede cair: usa o **cache**; se nao houver cache, cai na **base local**;
 - se tudo falhar, o comando segue funcionando com a base pequena;
-- da para trocar a URL em **`AKINATOR_BASE_URL`** (`.env`).
+- da para trocar a URL em **`AKINATOR_BASE_URL`** (`.env`), aceitando **varias
+  URLs separadas por virgula** (as bases somam).
+
+### Hospedar a base no SEU repositorio
+
+Dá para manter a base num repositorio **seu** e o bot puxar de la:
+
+```bash
+# 1) monta a pasta com a base (autoral + importada) e valida
+python3 tools/preparar-base-remota.py --out ./akinator-base --importar /tmp/pokemon.json
+
+# 2) o script imprime o passo a passo; resumo:
+cd akinator-base && git init && git add . && git commit -m "base"
+git remote add origin https://github.com/SEU_USUARIO/lizzy-akinator-base.git
+git push -u origin main
+
+# 3) aponte no .env do bot:
+#    AKINATOR_BASE_URL=https://raw.githubusercontent.com/SEU_USUARIO/lizzy-akinator-base/main/characters.json
+```
+
+Pontos importantes:
+- o repositorio precisa ser **publico** (raw de repo privado exige token, e a
+  Lizzy **nao** guarda credencial para isso, de proposito);
+- pode juntar o seu com o padrao, separando por virgula;
+- uma URL que falhar **nao** derruba as outras nem o comando.
 
 A base acima e a **autoral**. O que o jogo aprende e o que a comunidade sugere
 ficam **fora** dela, no database (para nao sujar a base versionada):

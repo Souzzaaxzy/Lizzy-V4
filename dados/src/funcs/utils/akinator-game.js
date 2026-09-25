@@ -160,9 +160,14 @@ function gravarJson(file, dados) {
  * @param {boolean} [p.forcar]   ignora o TTL e baixa agora
  * @returns {Promise<{characters:Array, origem:string, erro:string|null}>}
  */
-async function carregarBase({ url, cacheFile, locais = [], ttlMs, fetchImpl, forcar = false } = {}) {
+async function carregarBase({ url, urls, cacheFile, locais = [], ttlMs, fetchImpl, forcar = false } = {}) {
   const doFetch = fetchImpl || (typeof fetch === 'function' ? fetch : null);
   const ttl = ttlMs === undefined ? CONFIG.CACHE_TTL_MS : ttlMs;
+  // Aceita UMA url ou uma LISTA (`urls`). Com varias fontes, o dono pode ter o
+  // repositorio dele E o padrao ao mesmo tempo -- as bases somam.
+  const listaUrls = (Array.isArray(urls) ? urls : (url ? [url] : []))
+    .map((u) => String(u || '').trim())
+    .filter(Boolean);
 
   const lerArquivo = (f) => {
     try {
@@ -180,38 +185,59 @@ async function carregarBase({ url, cacheFile, locais = [], ttlMs, fetchImpl, for
   const meta = (() => {
     try { return cacheFile && fs.existsSync(cacheFile) ? fs.statSync(cacheFile).mtimeMs : 0; } catch (e) { return 0; }
   })();
-  if (!forcar && meta && (Date.now() - meta) < ttl) {
+  // A idade precisa ser >= 0: se o mtime estiver ligeiramente ADIANTADO em
+  // relacao ao relogio (skew), a idade sai negativa e `negativo < ttl` daria
+  // "cache valido" mesmo com TTL 0 -- servindo cache velho como se fosse novo.
+  const idade = meta ? Date.now() - meta : -1;
+  const ttlEfetivo = Number.isFinite(ttl) && ttl > 0 ? ttl : 0;
+  if (!forcar && meta && idade >= 0 && idade < ttlEfetivo) {
     const emCache = lerArquivo(cacheFile);
     if (emCache) return { characters: emCache, origem: 'cache', erro: null };
   }
 
-  // 2) tenta baixar
+  // 2) tenta baixar (de UMA OU MAIS fontes; as bases somam)
   let erro = null;
-  if (url && doFetch) {
-    try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), CONFIG.FETCH_TIMEOUT_MS);
+  if (listaUrls.length && doFetch) {
+    const todas = [];
+    const usadas = [];
+    const ids = new Set();
+    for (const u of listaUrls) {
       try {
-        const r = await doFetch(url, { signal: ctrl.signal, headers: { 'User-Agent': 'LizzyAkinator/1.0' } });
-        if (!r || !r.ok) throw new Error(`HTTP ${r && r.status}`);
-        const texto = await r.text();
-        if (texto.length > CONFIG.MAX_BYTES) throw new Error('arquivo acima do teto');
-        const d = JSON.parse(texto);
-        const lista = Array.isArray(d) ? d : d.characters;
-        if (!Array.isArray(lista) || !lista.length) throw new Error('base vazia');
-        // grava o cache (nao bloqueia o jogo se falhar)
-        if (cacheFile) {
-          try {
-            gravarJson(cacheFile, d);
-          } catch (e) { console.warn('[AKINATOR] nao consegui gravar o cache:', e && e.message); }
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), CONFIG.FETCH_TIMEOUT_MS);
+        try {
+          const r = await doFetch(u, { signal: ctrl.signal, headers: { 'User-Agent': 'LizzyAkinator/1.0' } });
+          if (!r || !r.ok) throw new Error(`HTTP ${r && r.status}`);
+          const texto = await r.text();
+          if (texto.length > CONFIG.MAX_BYTES) throw new Error('arquivo acima do teto');
+          const d = JSON.parse(texto);
+          const lista = Array.isArray(d) ? d : d.characters;
+          if (!Array.isArray(lista) || !lista.length) throw new Error('base vazia');
+          let novos = 0;
+          for (const c of lista) {
+            if (!c || !c.id || ids.has(c.id)) continue;
+            ids.add(c.id);
+            todas.push(c);
+            novos++;
+          }
+          usadas.push({ url: u, personagens: novos });
+        } finally {
+          clearTimeout(timer);
         }
-        return { characters: lista, origem: 'remoto', erro: null };
-      } finally {
-        clearTimeout(timer);
+      } catch (e) {
+        // uma fonte ruim nao derruba as outras
+        const msg = e && e.message ? e.message : String(e);
+        erro = erro ? `${erro}; ${msg}` : msg;
+        console.warn(`[AKINATOR] falha ao baixar ${u}:`, msg);
       }
-    } catch (e) {
-      erro = e && e.message ? e.message : String(e);
-      console.warn('[AKINATOR] falha ao baixar a base remota:', erro);
+    }
+    if (todas.length) {
+      if (cacheFile) {
+        try {
+          gravarJson(cacheFile, { meta: { descricao: 'cache da base remota do akinator', sources: usadas }, characters: todas });
+        } catch (e) { console.warn('[AKINATOR] nao consegui gravar o cache:', e && e.message); }
+      }
+      return { characters: todas, origem: 'remoto', fontes: usadas, erro };
     }
   }
 
