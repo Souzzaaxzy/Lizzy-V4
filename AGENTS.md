@@ -1153,6 +1153,76 @@ novo (4/40). É uma corrida do próprio teste com o `persistGroupData()` async.
 **Não** tem relação com o Hot Seat (o bloco novo nem foi acionado: não imprimiu
 nada quando instrumentado). Rodar de novo costuma passar.
 
+## COMANDO `!akinator` — adivinhacao via `akinator-client` (set/2026) ✅
+Adivinhacao de pessoa/personagem usando o servico do Akinator. **Sem banco de
+personagens** na Lizzy: o conhecimento vem do servico (spec 29).
+
+### Dependencia
+`akinator-client@^1.3.0` (mesmo repo que a spec indica). Instalado com o
+gerenciador do projeto (`npm install ... --legacy-peer-deps --allow-git=all`) e
+**fixado em `package.json` + `package-lock.json` + `yarn.lock`**. Os enums sao os
+REAIS do pacote — conferidos por introspecao, nunca numeros magicos:
+`Answers = { Yes:0, No:1, IDontKnow:2, Probably:3, ProbablyNot:4 }`,
+`Themes = { Character:1, Objects:2, Animals:14 }`, `Languages.Portuguese='pt'`.
+O Baileys **nao** foi tocado.
+
+### Arquitetura — nada paralelo
+Mesma familia do `tictactoe.js`/`connect4.js`/`hotseat.js`:
+- **`dados/src/funcs/utils/akinator.js`** — motor + `AkinatorManager`. Mapa de
+  sessoes EM MEMORIA (sem banco), `_cleanup()` com timer `unref()`, layout via
+  `menus/layout.js`.
+- **Handler central**: o bloco em `index.js` (dentro do `if (isGroup)`, ao lado do
+  hotseat) chama `akinatorManager.processMessage(...)`. **Nao existe listener por
+  partida** — era o risco de leak apontado na spec 28.
+- O manager e injetado (`createClient` + `enums`): o modulo roda **sem rede nos
+  testes**, e em producao a fabrica e `new akinatorLib.AkinatorClient(opts)`.
+
+### Fluxo e botoes
+`!akinator` → abertura + 1a pergunta com **5 botoes** `quick_reply`
+(`SIM`/`NÃO`/`NÃO SEI`/`PROVAVELMENTE`/`PROVAVELMENTE NÃO`), enviados pelo
+`sendInteractiveMessage` que o projeto JA usa (`nativeFlowMessage.buttons`). O
+`id` do botao carrega o `sessionId` (`<sessionId>:ak_sim`), entao a POSSE e
+validada sem mapa global de buttonId. Ao adivinhar, os botoes viram
+`ACERTOU`/`ERROU`; o palpite sai com **nome + descricao (truncada)** e, quando ha
+`pictureUrl`, a **imagem** (falha de imagem nao impede o resultado).
+
+`!akinator cancelar` encerra so a partida do usuario. Nao ha `!aki`/aliases, nem
+stats/ranking/painel (spec 22/23/39).
+
+### Isolamento, lock e timeout
+Chave = **`groupId::userId`** — o mesmo usuario pode jogar em grupos diferentes,
+mas nao abre 2 partidas no mesmo grupo (spec 9/31). Cada jogador tem a **sua**
+instancia de `AkinatorClient` (spec 8). `processing` bloqueia clique duplo: as
+respostas simultaneas caem em `'processing'` e so a primeira avanca (spec 34/35).
+Sessao expira em **30min** (`SESSION_TIMEOUT_MS`), avisa e limpa (spec 21).
+
+### Erros
+`start`/`answer` que lancam viram mensagem amigavel
+(*"Não consegui conectar ao Akinator agora"*), com o detalhe **so no console**
+— nada de stack/cookie/session/signature para o usuario (spec 19). `continue()`
+(usado no `ERROU`) depende do endpoint `/exclude`, que tem anti-bot **proprio**;
+se falhar, **nada de bypass**: avisa e encerra com seguranca (spec 15).
+
+### Testes — `tests/akinator.test.js` (**31 testes / 111 assercoes**)
+Handler real com socket falso + **cliente falso injetado**. Cobre o checklist da
+spec 36: as 5 respostas (enum real), 2 usuarios simultaneos, isolamento (B nao
+responde pela partida de A), cancelamento, timeout, `won`, `ko`, erro de rede
+(no inicio e ao responder), clique duplicado (so 1 avanca), imagem indisponivel,
+descricao truncada, botao de sessao antiga recusado, e que **nenhum menu** ganhou
+o comando. Os botoes foram validados pelo `proto.Message.encode/decode` REAL:
+viram `quick_reply` com os 5 ids intactos.
+
+### LIMITE DE REDE (honesto, medido)
+O IP de datacenter deste sandbox e **bloqueado pelo Cloudflare** do akinator.com:
+`GET /` responde **403 "Just a moment..."** e o `start()` falha com
+*"Failed to extract session/signature from HTML response"*. Testado tambem em
+`en`/`es`/`fr`: **mesmo resultado** — e o dominio inteiro, nao o idioma. Isso e
+**ambiental, nao bug de codigo**: o proprio README do pacote documenta o bloqueio
+e oferece `proxy`/`scraperApiKey` para contornar (a Lizzy **nao** faz bypass). Em
+VPS/IP residencial o fluxo funciona. O que esta provado aqui e o **fluxo, o
+layout, os botoes e o tratamento de erro** — a partida real fica para o dono
+validar no servidor dele.
+
 ## GERENCIAMENTO do Plugin Fantasma — `!ghostcmd` / `!addghostcmd` / `!delghostcmd` ✅
 Sistema pequeno, **exclusivo do dono**, para administrar a distribuição do plugin
 remoto. Só isso: nada de marketplace, registry, dashboard ou permissões novas.

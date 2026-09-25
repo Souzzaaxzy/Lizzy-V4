@@ -78,7 +78,8 @@ async function loadModules() {
             connect4Mod, unoMod, memoriaMod, achievementsMod, giftsMod,
             reputationMod, qrcodeMod, notesMod, calculatorMod, audioEditMod,
             transmissaoMod, gdriveMod, mediafireMod, twitterMod, searchMod,
-            imagetoolsMod, freefireMod, smmApiMod, adoptionMod, hotseatMod
+            imagetoolsMod, freefireMod, smmApiMod, adoptionMod, hotseatMod,
+            akinatorMod
         ] = await Promise.all([
             import('./utils/gerarnick.js'),
             import('./utils/logotipos.js'),
@@ -110,6 +111,7 @@ async function loadModules() {
             import('./smmApi.js'),
             import('./utils/adoptionManager.js'),
             import('./utils/hotseat.js'),
+            import('./utils/akinator.js'),
         ]);
 
         modules.styleText = styleTextMod.default ?? styleTextMod;
@@ -142,6 +144,16 @@ async function loadModules() {
         modules.smmApi = smmApiMod.default ?? smmApiMod;
         modules.adoptionManager = adoptionMod.default ?? adoptionMod;
         modules.hotseat = hotseatMod.default ?? hotseatMod;
+        modules.AkinatorManager = akinatorMod.AkinatorManager ?? akinatorMod.default;
+        // A biblioteca do Akinator e carregada aqui e injetada no manager
+        // (enums + fabrica de cliente). Se faltar, o comando degrada com aviso
+        // em vez de derrubar o boot.
+        try {
+            modules.akinatorLib = await import('akinator-client');
+        } catch (e) {
+            console.warn('[EXPORTS] akinator-client indisponivel:', e && e.message);
+            modules.akinatorLib = null;
+        }
 
         if (modules.stickerModule && modules.stickerModule.sendSticker) {
             modules.sendSticker = modules.stickerModule.sendSticker;

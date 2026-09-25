@@ -1752,6 +1752,8 @@ const {
   eununca18Json,
   hotseatJson,
   hotseat,
+  AkinatorManager,
+  akinatorLib,
   Lyrics,
   commandStats,
   //ia,
@@ -3364,6 +3366,18 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       globalThis.__lizzyHotseatManager = new hotseat.HotSeatManager(hotseatJson() || []);
     }
     const hotseatManager = globalThis.__lizzyHotseatManager;
+    // Gerenciador do !akinator. UMA instancia por processo (mesmo padrao do
+    // hotseat): a fabrica de cliente e os enums vem da lib, INJETADOS aqui
+    // para o modulo seguir testavel sem rede. Cada partida cria a SUA
+    // instancia de AkinatorClient -- nunca uma global.
+    if (!globalThis.__lizzyAkinatorManager && typeof AkinatorManager === 'function' && akinatorLib) {
+      globalThis.__lizzyAkinatorManager = new AkinatorManager({
+        createClient: (opts) => new akinatorLib.AkinatorClient(opts),
+        enums: { Answers: akinatorLib.Answers, Themes: akinatorLib.Themes, Languages: akinatorLib.Languages },
+        botName: nomebot,
+      });
+    }
+    const akinatorManager = globalThis.__lizzyAkinatorManager;
     const isOnlyAdmin = groupData.soadm;
     const soadmBypassCommands = ['suporte', 'ticketsuporte', 'suporteticket', 'ticket', 'promover', 'promote', 'rebaixar', 'demote'];
     // Se modo soadm ativo e não é admin, ignorar aliases silenciosamente
@@ -5835,6 +5849,42 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
               mentions: hsRes.mentions || [sender],
             });
             return;
+          }
+        }
+        // AKINATOR: responde por MENSAGEM (clique no botao ou texto). O botao
+        // carrega o `sessionId`, entao aqui so processamos se a POSSE bater --
+        // e so quando ha sessao (sem sessao, `processMessage` devolve null e a
+        // mensagem segue o fluxo normal).
+        if (akinatorManager && body) {
+          try {
+            const akRes = await akinatorManager.processMessage({
+              groupId: from,
+              userId: sender,
+              text: body,
+            });
+            if (akRes && akRes.success) {
+              if (akRes.buttons && akRes.buttons.length) {
+                await sendInteractiveMessage(nazu, from, {
+                  text: akRes.message,
+                  footer: nomebot,
+                  interactiveButtons: akRes.buttons,
+                });
+              } else if (akRes.imageUrl) {
+                await nazu.sendMessage(from, {
+                  image: { url: akRes.imageUrl },
+                  caption: akRes.message,
+                }).catch(async () => {
+                  // Falha de imagem NAO impede o resultado (spec 17).
+                  await nazu.sendMessage(from, { text: akRes.message });
+                });
+              } else {
+                await nazu.sendMessage(from, { text: akRes.message });
+              }
+              return;
+            }
+          } catch (e) {
+            // Nada do Akinator pode derrubar o handler.
+            console.warn('[AKINATOR] erro no consumo de mensagem:', e && e.message);
           }
         }
         if (antitoxic && antitoxic.isEnabled && antitoxic.isEnabled(from) && body && ia) {
@@ -37857,6 +37907,44 @@ case 'vab18':
     );
   }
 break;
+// !akinator - adivinhacao de pessoa/personagem via `akinator-client`.
+// NAO esta em nenhum menu nesta versao (spec 3). Subcomando: !akinator cancelar.
+// As respostas vem por mensagem/botao e sao consumidas no bloco de mensagens.
+case 'akinator': {
+  try {
+    if (!akinatorManager || typeof akinatorManager.iniciar !== 'function') {
+      return reply('Sistema do Akinator temporariamente indisponivel.');
+    }
+
+    const sub = normalizar((args[0] || '')).trim();
+
+    if (sub === 'cancelar' || sub === 'cancel' || sub === 'parar') {
+      const r = akinatorManager.cancelar({ groupId: from, userId: sender });
+      return reply(r.message);
+    }
+
+    const r = await akinatorManager.iniciar({ groupId: from, userId: sender });
+
+    if (!r.success) {
+      if (r.reason === 'ja_em_partida') {
+        return reply(akinatorManager.mensagemJaEmPartida());
+      }
+      return reply(akinatorManager.mensagemErroRede());
+    }
+
+    // Abertura + primeira pergunta com os 5 botoes.
+    await reply(akinatorManager.mensagemAbertura());
+    await sendInteractiveMessage(nazu, from, {
+      text: r.message,
+      footer: nomebot,
+      interactiveButtons: r.buttons,
+    });
+  } catch (e) {
+    console.error('[AKINATOR] Erro:', e && e.message);
+    await reply('\u26a0\ufe0f N\u00e3o consegui conectar ao Akinator agora.\n\nTente novamente em alguns instantes.');
+  }
+  break;
+}
 // !hotseat (+18) - 5 perguntas aleatorias entre 100, respondidas por MENSAGEM
 // NORMAL (SIM / NAO / PULAR). Sem mencao, o proprio remetente participa; com
 // mencao, o marcado e o participante (o iniciador NAO participa). O estado vive
