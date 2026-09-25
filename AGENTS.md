@@ -1364,6 +1364,16 @@ celular **abre o tunel** (`ssh -R 8888:127.0.0.1:8888 user@vps`) e o VPS aponta
 `tools/COMO-USAR-CELULAR.md`. **IP sozinho NAO e' proxy** — o celular precisa
 rodar o servico.
 
+**IP da INTERNET DE CASA (set/2026)** — recomendado para 24/7
+Melhor que o celular (o Android mata o Termux; PC/Raspberry nao). MAS IP nao
+basta: medido que **CGNAT e' padrao nos planos residenciais BR** (Vivo/Claro/TIM/
+Oi usam 100.64.0.0/10) e a **Vivo bloqueia 80/443/25** -> o VPS nao alcanca a
+casa. Mesma solucao do celular: a CASA abre o tunel.
+- `tools/tunel-casa.sh`: sobe o proxy e mantem `ssh -R` com **reconexao
+  automatica** (loop de 5s; usa autossh se instalado). Testado: sobe o proxy,
+  detecta queda e reconecta.
+- `tools/akinator-proxy.service`: systemd com `Restart=always`/`RestartSec=5` +
+  `enable` para **voltar ate' depois de reboot**. Guia: `tools/COMO-USAR-CASA.md`.
 **Peso medido do pacote**: `npm install akinator-client@^1.3.0` = **4,64 MiB** de
 arquivos / **11 MiB** em disco (1.693 arquivos, 50 pacotes; `caniuse-lite` sozinho
 e' 4,3 MB). O `akinator-client` em si e' 164 KB.

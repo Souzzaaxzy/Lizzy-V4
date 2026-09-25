@@ -1,0 +1,34 @@
+[Unit]
+Description=AkinatorUrl - proxy de casa + tunel SSH reverso para o VPS
+Documentation=file:///opt/lizzy/tools/COMO-USAR-CASA.md
+After=network-online.target
+Wants=network-online.target
+# Reinicia mesmo se falhar muitas vezes (sem isso o systemd desiste).
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+# AJUSTE: usuario da maquina de casa.
+User=pi
+WorkingDirectory=/opt/lizzy
+
+# AJUSTE: Host/porta. O `%h` e' o home do usuario.
+Environment=PORTA=8888
+Environment=PROXY_PORT=8888
+Environment=LOG_DIR=%h/.lizzy
+
+# AJUSTE: usuario@IP_DO_VPS
+ExecStart=/opt/lizzy/tools/tunel-casa.sh usuario@SEU_VPS
+
+# 24/7: sempre volta, com espera curta entre tentativas.
+Restart=always
+RestartSec=5
+# Se o tunel travar sem sair, o systemd mata em 30s e reinicia.
+WatchdogSec=30
+TimeoutStopSec=10
+
+StandardOutput=append:%h/.lizzy/service.log
+StandardError=append:%h/.lizzy/service.log
+
+[Install]
+WantedBy=multi-user.target
