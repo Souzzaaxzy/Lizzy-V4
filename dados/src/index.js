@@ -1752,11 +1752,6 @@ const {
   eununca18Json,
   hotseatJson,
   hotseat,
-  AkinatorEngine,
-  AkinatorGameManager,
-  carregarBase: akinatorCarregarBase,
-  akinatorQuestionsJson,
-  akinatorCharactersJson,
   Lyrics,
   commandStats,
   //ia,
@@ -3369,61 +3364,6 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       globalThis.__lizzyHotseatManager = new hotseat.HotSeatManager(hotseatJson() || []);
     }
     const hotseatManager = globalThis.__lizzyHotseatManager;
-    // Gerenciador do !akinator. UMA instancia por processo (mesmo padrao do
-    // hotseat). O modo e' REMOTO (Akinator.com via akinator-client) e EXCLUSIVO
-    // por padrao: se o Akinator nao responder, o comando avisa e nao joga -- nao
-    // troca para o engine proprio escondido. `AKINATOR_MODE=local` usa o engine
-    // proprio; `AKINATOR_REMOTO_FALLBACK=local` reabilita a queda automatica.
-    if (!globalThis.__lizzyAkinatorManager && typeof AkinatorGameManager === 'function') {
-      const _akQ = akinatorQuestionsJson();
-      const _akC = akinatorCharactersJson();
-      const _chars = ((_akC && _akC.characters) || []);
-      globalThis.__lizzyAkinatorManager = new AkinatorGameManager({
-        questions: (_akQ && _akQ.questions) || [],
-        characters: _chars,
-        learnedFile: pathz.join(DATABASE_DIR, 'akinator', 'learned.json'),
-        pendingFile: pathz.join(DATABASE_DIR, 'akinator', 'pending.json'),
-        botName: nomebot,
-        modo: process.env.AKINATOR_MODE || 'remoto',
-      });
-      console.log(`[AKINATOR] engine proprio | base local=${_chars.length} | perguntas=${((_akQ && _akQ.questions) || []).length}`);
-
-      // Decide o modo em segundo plano (nao atrasa o boot). Faz um START de
-      // teste contra o Akinator; se falhar, registra o motivo (e, no modo
-      // exclusivo, o comando passa a avisar em vez de jogar com outro motor).
-      globalThis.__lizzyAkinatorManager.modoPronto = globalThis.__lizzyAkinatorManager
-        .prepararModo()
-        .catch((e) => {
-          console.warn('[AKINATOR] falha ao preparar o modo:', e && e.message);
-          return { modo: globalThis.__lizzyAkinatorManager.modoEfetivo, motivo: e && e.message };
-        });
-
-      // A base GRANDE vem de uma URL (nao fica no repo, para nao pesar no pull).
-      // Roda em segundo plano: o download nao atrasa o boot e, se falhar, o
-      // comando segue com a base local. O cache evita baixar a cada partida.
-      // Fontes da base: AKINATOR_BASE_URL aceita UMA url ou VARIAS separadas por
-      // virgula (o dono pode ter o repositorio dele E o padrao ao mesmo tempo --
-      // as bases somam). Sem a env, usa o branch de dados do repo.
-      const AK_PADRAO = 'https://raw.githubusercontent.com/Souzzaaxzy/Lizzy-V4/akinator-data/akinator/characters.json';
-      const AK_BASE_URLS = String(process.env.AKINATOR_BASE_URL || AK_PADRAO)
-        .split(',')
-        .map((u) => u.trim())
-        .filter(Boolean);
-      globalThis.__lizzyAkinatorManager.pronta = akinatorCarregarBase({
-        urls: AK_BASE_URLS,
-        cacheFile: pathz.join(DATABASE_DIR, 'akinator', 'characters-cache.json'),
-        locais: [pathz.join(__dirname, 'funcs', 'json', 'akinator', 'characters-imported.json')],
-      }).then((r) => {
-        const add = globalThis.__lizzyAkinatorManager.adicionarPersonagens(r.characters);
-        const det = Array.isArray(r.fontes) ? r.fontes.map((f) => `${f.personagens}`).join('+') : '';
-        console.log(`[AKINATOR] base remota: origem=${r.origem}${det ? ` (fontes: ${det})` : ''} | +${add} personagens | total=${globalThis.__lizzyAkinatorManager.baseCharacters.length}${r.erro ? ` | aviso=${r.erro}` : ''}`);
-        return r;
-      }).catch((e) => {
-        console.warn('[AKINATOR] base remota falhou (usando a local):', e && e.message);
-        return { characters: [], origem: 'indisponivel', erro: e && e.message };
-      });
-    }
-    const akinatorManager = globalThis.__lizzyAkinatorManager;
     const isOnlyAdmin = groupData.soadm;
     const soadmBypassCommands = ['suporte', 'ticketsuporte', 'suporteticket', 'ticket', 'promover', 'promote', 'rebaixar', 'demote'];
     // Se modo soadm ativo e não é admin, ignorar aliases silenciosamente
@@ -5895,44 +5835,6 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
               mentions: hsRes.mentions || [sender],
             });
             return;
-          }
-        }
-        // AKINATOR: responde por MENSAGEM (clique no botao ou texto). O botao
-        // carrega o `sessionId`, entao aqui so processamos se a POSSE bater --
-        // e so quando ha sessao (sem sessao, `processMessage` devolve null e a
-        // mensagem segue o fluxo normal).
-        if (akinatorManager && body) {
-          try {
-            // `processMessage` pode devolver Promise (modo remoto). No local e'
-            // sincrono; o `await` cobre os dois casos.
-            const akRes = await akinatorManager.processMessage({
-              chatId: from,
-              userId: sender,
-              text: body,
-            });
-            if (akRes && akRes.success) {
-              if (akRes.buttons && akRes.buttons.length) {
-                await sendInteractiveMessage(nazu, from, {
-                  text: akRes.message,
-                  footer: nomebot,
-                  interactiveButtons: akRes.buttons,
-                });
-              } else if (akRes.imageUrl) {
-                await nazu.sendMessage(from, {
-                  image: { url: akRes.imageUrl },
-                  caption: akRes.message,
-                }).catch(async () => {
-                  // Falha de imagem NAO impede o resultado (spec 17).
-                  await nazu.sendMessage(from, { text: akRes.message });
-                });
-              } else {
-                await nazu.sendMessage(from, { text: akRes.message });
-              }
-              return;
-            }
-          } catch (e) {
-            // Nada do Akinator pode derrubar o handler.
-            console.warn('[AKINATOR] erro no consumo de mensagem:', e && e.message);
           }
         }
         if (antitoxic && antitoxic.isEnabled && antitoxic.isEnabled(from) && body && ia) {
@@ -37955,67 +37857,6 @@ case 'vab18':
     );
   }
 break;
-// !akinator - adivinhacao de pessoa/personagem pelo ENGINE PROPRIO da Lizzy
-// (sem Akinator.com, sem akinator-client, sem rede). A base de personagens e
-// versionada no repo; o que o jogo aprende vai para o database.
-// Subcomando: !akinator cancelar. As respostas vem por mensagem/botao e sao
-// consumidas no bloco de mensagens (nao ha listener dedicado).
-case 'akinator': {
-  try {
-    if (!akinatorManager || typeof akinatorManager.iniciar !== 'function') {
-      return reply('Sistema do Akinator temporariamente indisponivel.');
-    }
-
-    // Garante que a base remota ja foi considerada (o download roda no boot;
-    // aqui so esperamos a promessa, que normalmente ja resolveu).
-    if (akinatorManager.pronta && typeof akinatorManager.pronta.then === 'function') {
-      await akinatorManager.pronta;
-    }
-    // Espera a decisao do modo (remoto x local), se houver.
-    if (akinatorManager.modoPronto && typeof akinatorManager.modoPronto.then === 'function') {
-      await akinatorManager.modoPronto;
-    }
-
-    const sub = normalizar((args[0] || '')).trim();
-
-    if (sub === 'cancelar' || sub === 'cancel' || sub === 'parar') {
-      const r = akinatorManager.cancelar({ chatId: from, userId: sender });
-      return reply(r.message);
-    }
-
-    // Diagnostico: mostra qual motor esta' atendendo.
-    if (sub === 'status' || sub === 'modo') {
-      return reply(akinatorManager.mensagemStatus());
-    }
-
-    // `iniciar` pode devolver Promise (modo remoto); o await cobre os dois.
-    const r = await akinatorManager.iniciar({ chatId: from, userId: sender });
-
-    if (!r.success) {
-      if (r.reason === 'ja_em_partida') {
-        return reply(akinatorManager.mensagemJaEmPartida());
-      }
-      if (r.reason === 'remoto_indisponivel') {
-        return reply(akinatorManager.mensagemRemotoIndisponivel());
-      }
-      if (r.reason === 'knowledge_invalid') {
-        return reply(akinatorManager.mensagemIndisponivel());
-      }
-      return reply(akinatorManager.mensagemIndisponivel());
-    }
-
-    // Primeira pergunta (ou palpite, se a base for minuscula) com os botoes.
-    await sendInteractiveMessage(nazu, from, {
-      text: r.message,
-      footer: nomebot,
-      interactiveButtons: r.buttons,
-    });
-  } catch (e) {
-    console.error('[AKINATOR] Erro:', e && e.message);
-    await reply('\u26a0\ufe0f Ocorreu um erro no Akinator. Tente novamente em alguns instantes.');
-  }
-  break;
-}
 // !hotseat (+18) - 5 perguntas aleatorias entre 100, respondidas por MENSAGEM
 // NORMAL (SIM / NAO / PULAR). Sem mencao, o proprio remetente participa; com
 // mencao, o marcado e o participante (o iniciador NAO participa). O estado vive

@@ -78,8 +78,7 @@ async function loadModules() {
             connect4Mod, unoMod, memoriaMod, achievementsMod, giftsMod,
             reputationMod, qrcodeMod, notesMod, calculatorMod, audioEditMod,
             transmissaoMod, gdriveMod, mediafireMod, twitterMod, searchMod,
-            imagetoolsMod, freefireMod, smmApiMod, adoptionMod, hotseatMod,
-            akinatorEngineMod, akinatorGameMod
+            imagetoolsMod, freefireMod, smmApiMod, adoptionMod, hotseatMod
         ] = await Promise.all([
             import('./utils/gerarnick.js'),
             import('./utils/logotipos.js'),
@@ -111,8 +110,6 @@ async function loadModules() {
             import('./smmApi.js'),
             import('./utils/adoptionManager.js'),
             import('./utils/hotseat.js'),
-            import('./utils/akinator-engine.js'),
-            import('./utils/akinator-game.js'),
         ]);
 
         modules.styleText = styleTextMod.default ?? styleTextMod;
@@ -145,13 +142,6 @@ async function loadModules() {
         modules.smmApi = smmApiMod.default ?? smmApiMod;
         modules.adoptionManager = adoptionMod.default ?? adoptionMod;
         modules.hotseat = hotseatMod.default ?? hotseatMod;
-        // ENGINE PROPRIO do !akinator (sem dependencia externa): o engine
-        // probabilistico e a camada de jogo/sessoes sao modulos da Lizzy.
-        modules.AkinatorEngine = akinatorEngineMod.Engine ?? akinatorEngineMod.default;
-        modules.AkinatorGameManager = akinatorGameMod.AkinatorGameManager ?? akinatorGameMod.default;
-        // loader da base remota (URL + cache), para o comando nao depender
-        // de um arquivo grande dentro do repositorio
-        modules.carregarBase = akinatorGameMod.carregarBase;
 
         if (modules.stickerModule && modules.stickerModule.sendSticker) {
             modules.sendSticker = modules.stickerModule.sendSticker;
@@ -181,9 +171,6 @@ async function loadModules() {
         modules.vabJson = () => vabJsonData;
         modules.vab18Json = () => vab18JsonData;
         modules.eununca18Json = () => eununca18JsonData;
-        // Bancos do engine proprio (repo, versionados).
-        modules.akinatorQuestionsJson = () => loadJsonSync('json/akinator/questions.json');
-        modules.akinatorCharactersJson = () => loadJsonSync('json/akinator/characters.json');
         const hotseatJsonData = loadJsonSync('json/hotseat.json');
         modules.hotseatJson = () => hotseatJsonData;
 
