@@ -1320,33 +1320,32 @@ pergunta.
 `akinatorLib` do `index.js`, e as variaveis `AKINATOR_PROXY`/
 `AKINATOR_SCRAPERAPI_*` do `.env.example`. **Baileys nao foi tocado.**
 
-### Modo REMOTO opcional via `akinator-client` (set/2026) ✅
-Pedido do dono: *"usa isso na bot"* -- o `akinator-client` **voltou**, agora como
-**modo opt-in**, sem perder o engine proprio.
+### Modo REMOTO EXCLUSIVO via `akinator-client` (set/2026) ✅
+Pedido do dono: *"faça a bot usar o remoto exclusivamente o akinator que você
+instalou agora"*.
 
-- `AKINATOR_MODE=local` (**padrao**): engine proprio, sem rede. Sempre funciona.
-- `AKINATOR_MODE=remoto`: usa o Akinator.com (`akinator-client@^1.3.0`) para ter
-  a base gigante e o palpite com **imagem**.
-- `!akinator status` mostra qual motor esta' atendendo e, se o remoto nao subiu,
-  **por que**.
-- `dados/src/funcs/utils/akinator-remote.js`: adaptador com import **dinamico e
-  tolerante** do pacote (se nao estiver instalado, o bot nao quebra) e o mapa
-  rotulo->`Answers`.
-- `prepararModo()` faz um **START de teste** no boot: se falhar, cai pro local e
-  registra o motivo. Uma falha de rede no meio da partida tambem cai pro local
-  (`_iniciarRemoto` -> `_iniciarLocal`) -- **o jogo nunca quebra**.
-- `iniciar`/`processMessage` passam a poder devolver **Promise** no modo remoto;
-  o `index.js` faz `await` nos dois casos (no local continua sincrono).
+- `AKINATOR_MODE=remoto` e' o **PADRAO**. O `!akinator` usa **so'** o
+  Akinator.com (`akinator-client@^1.3.0`).
+- **EXCLUSIVO**: `REMOTO_EXCLUSIVO = true`. Se o Akinator nao responder, o
+  comando **AVISA** (`remoto_indisponivel` + `mensagemRemotoIndisponivel()`) e
+  **nao joga** -- nada de trocar para o engine proprio escondido.
+- `AKINATOR_MODE=local` = engine proprio (opcional).
+- `AKINATOR_REMOTO_FALLBACK=local` = reabilita a queda automatica (opt-in).
+- `!akinator status` mostra o motor e, se o remoto caiu, o motivo.
 
-**MEDIDO (nao suposto)**: neste ambiente o Akinator.com responde **403 "Just a
-moment..."** (challenge do Cloudflare) para o IP do servidor, e o `akinator-client`
-falha com *"Failed to extract session/signature from HTML response"*. Ou seja: o
-"bypass Cloudflare" do pacote **nao vale para IP de VPS/datacenter**. Por isso o
-padrao continua **local** e o remoto e' opt-in. Para usar o remoto de verdade,
-precisa de proxy residencial (`AKINATOR_PROXY`) ou ScraperAPI.
-Verificado: `testarRemoto` detecta o bloqueio **sem travar** o boot (`prepararModo`
--> `{modo:'local', motivo:'bloqueio do Cloudflare...'}`) e `iniciar` ainda devolve
-pergunta normalmente.
+**IMPORTANTE (medido, nao suposto)**: neste VPS o Akinator.com responde **403
+"Just a moment..."** (challenge do Cloudflare) e o pacote falha com *"Failed to
+extract session/signature from HTML response"*. Ou seja: **com o modo exclusivo,
+o `!akinator` NAO funciona neste servidor** -- ele avisa o motivo em vez de
+jogar. Para funcionar, precisa de proxy residencial (`AKINATOR_PROXY`) ou
+ScraperAPI. Foi implementado como o dono pediu, e o aviso e' honesto na mensagem.
+
+**BUG DE BORDA corrigido no caminho** (achado por teste *flaky*): o cache
+comparava `Date.now() - mtime < ttl` e exigia `idade >= 0`. Quando o `mtime`
+ficava alguns ms ADIANTADO do relogio (resolucao do FS), um cache recem-escrito
+parecia **vencido** e era baixado de novo. Agora ha **tolerancia de skew**
+(`SKEW_TOLERANCIA_MS = 60s`): idade levemente negativa conta como "recem
+escrito". Verificado: 5 execucoes seguidas verdes (antes falhava ~1 em 3).
 
 **Peso medido do pacote**: `npm install akinator-client@^1.3.0` = **4,64 MiB** de
 arquivos / **11 MiB** em disco (1.693 arquivos, 50 pacotes; `caniuse-lite` sozinho

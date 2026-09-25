@@ -179,6 +179,7 @@ function injetarManager(deps = {}) {
     learnedFile: path.join(TMP_DB, 'akinator', 'learned.json'),
     pendingFile: path.join(TMP_DB, 'akinator', 'pending.json'),
     botName: 'Lizzy do privy',
+    modo: 'local',
     ...deps,
   });
   return globalThis.__lizzyAkinatorManager;
@@ -296,7 +297,7 @@ await test('carregarBase: base acima do teto e recusada (seguranca)', async () =
 });
 
 await test('manager.adicionarPersonagens: soma sem duplicar id', () => {
-  const gm = new AkinatorGameManager({ questions: QUESTIONS, characters: BASE_CHARS, botName: 'L' });
+  const gm = new AkinatorGameManager({ questions: QUESTIONS, characters: BASE_CHARS, botName: 'L', modo: 'local' });
   const antes = gm.baseCharacters.length;
   const add = gm.adicionarPersonagens([
     { id: BASE_CHARS[0].id, name: 'repetido', answers: {} },
@@ -542,7 +543,7 @@ await test('engine: aprender com acerto ajusta os pesos', () => {
 // ============================================================================
 
 await test('manager: criar, recuperar e isolar sessoes', () => {
-  const gm = new AkinatorGameManager({ questions: QUESTIONS, characters: BASE_CHARS, botName: 'L' });
+  const gm = new AkinatorGameManager({ questions: QUESTIONS, characters: BASE_CHARS, botName: 'L', modo: 'local' });
   const a = gm.iniciar({ chatId: 'g1@g.us', userId: 'a@lid' });
   const b = gm.iniciar({ chatId: 'g1@g.us', userId: 'b@lid' });
   const c = gm.iniciar({ chatId: 'g2@g.us', userId: 'a@lid' });
@@ -554,7 +555,7 @@ await test('manager: criar, recuperar e isolar sessoes', () => {
 });
 
 await test('manager: mesmo usuario nao abre duas no mesmo chat', () => {
-  const gm = new AkinatorGameManager({ questions: QUESTIONS, characters: BASE_CHARS });
+  const gm = new AkinatorGameManager({ questions: QUESTIONS, characters: BASE_CHARS, modo: 'local' });
   gm.iniciar({ chatId: 'g@g.us', userId: 'a@lid' });
   const r2 = gm.iniciar({ chatId: 'g@g.us', userId: 'a@lid' });
   ok(r2.success === false && r2.reason === 'ja_em_partida', 'recusa a segunda');
@@ -562,7 +563,7 @@ await test('manager: mesmo usuario nao abre duas no mesmo chat', () => {
 });
 
 await test('manager: cancelar encerra so a sessao do usuario', () => {
-  const gm = new AkinatorGameManager({ questions: QUESTIONS, characters: BASE_CHARS });
+  const gm = new AkinatorGameManager({ questions: QUESTIONS, characters: BASE_CHARS, modo: 'local' });
   gm.iniciar({ chatId: 'g@g.us', userId: 'a@lid' });
   gm.iniciar({ chatId: 'g@g.us', userId: 'b@lid' });
   const r = gm.cancelar({ chatId: 'g@g.us', userId: 'a@lid' });
@@ -573,7 +574,7 @@ await test('manager: cancelar encerra so a sessao do usuario', () => {
 });
 
 await test('manager: expiracao por inatividade', () => {
-  const gm = new AkinatorGameManager({ questions: QUESTIONS, characters: BASE_CHARS });
+  const gm = new AkinatorGameManager({ questions: QUESTIONS, characters: BASE_CHARS, modo: 'local' });
   gm.iniciar({ chatId: 'g@g.us', userId: 'a@lid' });
   const s = gm.getSession('g@g.us', 'a@lid');
   s.ultimaAtividade = Date.now() - (gameMod.CONFIG.SESSION_TIMEOUT_MS + 1000);
@@ -584,7 +585,7 @@ await test('manager: expiracao por inatividade', () => {
 });
 
 await test('manager: cleanup remove sessoes abandonadas', () => {
-  const gm = new AkinatorGameManager({ questions: QUESTIONS, characters: BASE_CHARS });
+  const gm = new AkinatorGameManager({ questions: QUESTIONS, characters: BASE_CHARS, modo: 'local' });
   gm.iniciar({ chatId: 'g@g.us', userId: 'a@lid' });
   gm.iniciar({ chatId: 'g@g.us', userId: 'b@lid' });
   gm.getSession('g@g.us', 'a@lid').ultimaAtividade = Date.now() - (gameMod.CONFIG.SESSION_TIMEOUT_MS + 1000);
@@ -593,13 +594,13 @@ await test('manager: cleanup remove sessoes abandonadas', () => {
 });
 
 await test('manager: nao processa mensagem sem sessao (fluxo normal)', () => {
-  const gm = new AkinatorGameManager({ questions: QUESTIONS, characters: BASE_CHARS });
+  const gm = new AkinatorGameManager({ questions: QUESTIONS, characters: BASE_CHARS, modo: 'local' });
   ok(gm.processMessage({ chatId: 'g@g.us', userId: 'x@lid', text: 'sim' }) === null, 'sem sessao -> null');
   ok(gm.processMessage({ chatId: 'g@g.us', userId: 'x@lid', text: 'bom dia' }) === null, 'texto qualquer -> null');
 });
 
 await test('manager: botao de OUTRA sessao e recusado (posse)', () => {
-  const gm = new AkinatorGameManager({ questions: QUESTIONS, characters: BASE_CHARS });
+  const gm = new AkinatorGameManager({ questions: QUESTIONS, characters: BASE_CHARS, modo: 'local' });
   const a = gm.iniciar({ chatId: 'g@g.us', userId: 'a@lid' });
   const idAntigo = a.sessionId;
   gm.cancelar({ chatId: 'g@g.us', userId: 'a@lid' });
@@ -609,7 +610,7 @@ await test('manager: botao de OUTRA sessao e recusado (posse)', () => {
 });
 
 await test('manager: base invalida -> knowledge_invalid', () => {
-  const gm = new AkinatorGameManager({ questions: [], characters: [], botName: 'L' });
+  const gm = new AkinatorGameManager({ questions: [], characters: [], botName: 'L', modo: 'local' });
   const r = gm.iniciar({ chatId: 'g@g.us', userId: 'a@lid' });
   ok(r.success === false && r.reason === 'knowledge_invalid', 'recusou com knowledge_invalid');
   ok(/base de personagens/i.test(desbold(gm.mensagemIndisponivel())), 'mensagem propria');
@@ -621,7 +622,7 @@ await test('manager: base invalida -> knowledge_invalid', () => {
 
 await test('correcao vai para a FILA e nao entra direto na base', () => {
   const pendFile = path.join(TMP_DB, 'pend-test.json');
-  const gm = new AkinatorGameManager({ questions: QUESTIONS, characters: BASE_CHARS, pendingFile: pendFile, botName: 'L' });
+  const gm = new AkinatorGameManager({ questions: QUESTIONS, characters: BASE_CHARS, pendingFile: pendFile, botName: 'L', modo: 'local' });
   const antes = gm.characters.length;
   gm.iniciar({ chatId: 'g@g.us', userId: 'a@lid' });
   gm.getSession('g@g.us', 'a@lid').estado = 'INFORMAR';
@@ -633,7 +634,7 @@ await test('correcao vai para a FILA e nao entra direto na base', () => {
 });
 
 await test('correcao precisa de votos para ser promovida', () => {
-  const gm = new AkinatorGameManager({ questions: QUESTIONS, characters: BASE_CHARS, botName: 'L' });
+  const gm = new AkinatorGameManager({ questions: QUESTIONS, characters: BASE_CHARS, botName: 'L', modo: 'local' });
   gm.iniciar({ chatId: 'g@g.us', userId: 'a@lid' });
   gm.getSession('g@g.us', 'a@lid').estado = 'INFORMAR';
   gm.processMessage({ chatId: 'g@g.us', userId: 'a@lid', text: 'Criatura Nova' });
@@ -768,7 +769,7 @@ await test('!akinator: duas partidas simultaneas no mesmo grupo', async () => {
 });
 
 await test('!akinator: personagem DESCONHECIDO nunca e inventado (FASE 27)', () => {
-  const gm = new AkinatorGameManager({ questions: QUESTIONS, characters: BASE_CHARS, botName: 'L' });
+  const gm = new AkinatorGameManager({ questions: QUESTIONS, characters: BASE_CHARS, botName: 'L', modo: 'local' });
   gm.iniciar({ chatId: 'g@g.us', userId: 'a@lid' });
   let s = gm.getSession('g@g.us', 'a@lid');
   let r = null;
@@ -814,11 +815,40 @@ await test('akinator-client e OPCIONAL e isolado (nao quebra sem ele)', () => {
   ok(/import\(\s*'akinator-client'\s*\)/.test(remoto), 'import dinamico no modulo remoto');
   ok(/catch/.test(remoto), 'import tolerante a falha');
 
-  // O modo remoto e' OPT-IN: local e' o padrao.
-  ok(/MODO_REMOTO_PADRAO:\s*'local'/.test(fs.readFileSync(path.join(ROOT, 'dados/src/funcs/utils/akinator-game.js'), 'utf-8')),
-    'modo local e o padrao');
+  // O modo remoto e' o PADRAO e EXCLUSIVO (pedido do dono).
+  const gameSrc = fs.readFileSync(path.join(ROOT, 'dados/src/funcs/utils/akinator-game.js'), 'utf-8');
+  ok(/MODO_REMOTO_PADRAO:\s*'remoto'/.test(gameSrc), 'modo remoto e o padrao');
+  ok(/REMOTO_EXCLUSIVO:\s*true/.test(gameSrc), 'remoto exclusivo por padrao');
   ok(!src.includes('akinatorManager.ev.on'), 'nao registra listener dedicado');
   ok(!fs.existsSync(path.join(ROOT, 'dados/src/funcs/utils/akinator.js')), 'modulo antigo removido');
+});
+await test('!akinator (handler) modo REMOTO indisponivel: avisa e NAO joga local', async () => {
+  const gm = injetarManager({ modo: 'remoto' });
+  gm.modoEfetivo = 'remoto';
+  gm.remotoMod = null;
+  gm.remotoMotivo = 'bloqueio do Cloudflare neste IP';
+  const pessoa = nextPerson();
+  const groupJid = makeGroup();
+  const r = await enviar({ groupJid, pessoa, text: '!akinator' });
+  const t = desbold(r.texto);
+  ok(/Akinator\.com/.test(t), 'avisa que o Akinator nao respondeu');
+  ok(/Cloudflare/i.test(t), 'explica o bloqueio');
+  ok(/não vou jogar com outro motor|nao vou jogar com outro motor/.test(t), 'deixa claro que e exclusivo');
+  ok(r.botoes.length === 0, 'nao mostrou botoes de jogo');
+  ok(gm.getSession(groupJid, pessoa.lid) === null, 'nao criou sessao');
+});
+
+await test('!akinator status (handler) informa o motor remoto indisponivel', async () => {
+  const gm = injetarManager({ modo: 'remoto' });
+  gm.modoEfetivo = 'remoto';
+  gm.remotoMod = null;
+  gm.remotoMotivo = 'timeout de rede';
+  const pessoa = nextPerson();
+  const groupJid = makeGroup();
+  const r = await enviar({ groupJid, pessoa, text: '!akinator status' });
+  const t = desbold(r.texto);
+  ok(/REMOTO/.test(t), 'diz REMOTO');
+  ok(/indispon/i.test(t), 'diz indisponivel');
 });
 
 // ============================================================================
@@ -859,36 +889,78 @@ await test('remoto: palpiteRemoto usa o winResult', () => {
   ok(palpiteRemoto({}) !== null, 'sem winResult nao lanca');
 });
 
-await test('remoto: manager cai pro LOCAL quando o remoto falha (sem rede)', async () => {
-  // modoEfetivo remoto + remotoMod nulo -> START deve explodir e cair pro local.
+await test('remoto EXCLUSIVO: sem resposta NAO cai pro local (avisa)', async () => {
+  // Forca o caminho remoto sem modulo -> START explode. Exclusivo = nao pode
+  // trocar de motor; tem que recusar com `remoto_indisponivel`.
   const gm = new AkinatorGameManager({
     questions: QUESTIONS,
     characters: BASE_CHARS,
-    learnedFile: path.join(TMP_DB, 'ak-remote-learned.json'),
-    pendingFile: path.join(TMP_DB, 'ak-remote-pending.json'),
+    learnedFile: path.join(TMP_DB, 'ak-excl-learned.json'),
+    pendingFile: path.join(TMP_DB, 'ak-excl-pending.json'),
     botName: 'Lizzy',
     modo: 'remoto',
   });
-  gm.modoEfetivo = 'remoto';   // forca o caminho remoto
-  gm.remotoMod = null;         // sem modulo -> iniciarRemoto lanca
-  const r = await gm.iniciar({ chatId: 'gr@g.us', userId: 'u1@lid' });
+  gm.modoEfetivo = 'remoto';
+  gm.remotoMod = null;
+  const r = await gm.iniciar({ chatId: 'ex@g.us', userId: 'u1@lid' });
+  ok(r.success === false, 'recusou iniciar');
+  ok(r.reason === 'remoto_indisponivel', 'motivo remoto_indisponivel');
+  ok(gm.modoEfetivo === 'remoto', 'continua no remoto (nao trocou de motor)');
+  ok(gm.getSession('ex@g.us', 'u1@lid') === null, 'nao criou sessao');
+  const msg = desbold(gm.mensagemRemotoIndisponivel());
+  ok(/Akinator\.com/.test(msg), 'avisa que o Akinator nao respondeu');
+  ok(/SÓ o Akinator|SO o Akinator/.test(msg), 'explica que o modo e exclusivo');
+});
+
+await test('remoto EXCLUSIVO: prepararModo mantem remoto e guarda o motivo', async () => {
+  const gm = new AkinatorGameManager({
+    questions: QUESTIONS,
+    characters: BASE_CHARS,
+    learnedFile: path.join(TMP_DB, 'ak-excl2-learned.json'),
+    pendingFile: path.join(TMP_DB, 'ak-excl2-pending.json'),
+    botName: 'Lizzy',
+    modo: 'remoto',
+  });
+  const prep = await gm.prepararModo();
+  ok(prep.modo === 'remoto', 'continua remoto');
+  ok(prep.exclusivo === true, 'marcado como exclusivo');
+  ok(gm.remotoAtivo === false, 'remotoAtivo false sem modulo');
+  const t = desbold(gm.mensagemStatus());
+  ok(/REMOTO/.test(t), 'status diz REMOTO');
+  ok(/indispon/i.test(t), 'status diz que esta indisponivel');
+});
+
+await test('remoto NAO-exclusivo (opt-in): cai pro local quando falha', async () => {
+  const gm = new AkinatorGameManager({
+    questions: QUESTIONS,
+    characters: BASE_CHARS,
+    learnedFile: path.join(TMP_DB, 'ak-naoexcl-learned.json'),
+    pendingFile: path.join(TMP_DB, 'ak-naoexcl-pending.json'),
+    botName: 'Lizzy',
+    modo: 'remoto',
+    remotoExclusivo: false,
+  });
+  gm.modoEfetivo = 'remoto';
+  gm.remotoMod = null;
+  const r = await gm.iniciar({ chatId: 'ne@g.us', userId: 'u1@lid' });
   ok(r.success === true, 'iniciou mesmo assim');
   ok(r.kind === 'pergunta', 'caiu no local e trouxe pergunta');
   ok(gm.modoEfetivo === 'local', 'voltou pro modo local');
   ok(!!gm.remotoMotivo, 'registrou o motivo');
 });
 
-await test('remoto: modo local (padrao) nem tenta a rede', async () => {
+await test('modo local explicito continua disponivel', async () => {
   const gm = new AkinatorGameManager({
     questions: QUESTIONS,
     characters: BASE_CHARS,
-    learnedFile: path.join(TMP_DB, 'ak-rem2-learned.json'),
-    pendingFile: path.join(TMP_DB, 'ak-rem2-pending.json'),
+    learnedFile: path.join(TMP_DB, 'ak-loc-learned.json'),
+    pendingFile: path.join(TMP_DB, 'ak-loc-pending.json'),
     botName: 'Lizzy',
+    modo: 'local',
   });
   const prep = await gm.prepararModo();
   ok(prep.modo === 'local', 'modo local');
-  const r = gm.iniciar({ chatId: 'gr2@g.us', userId: 'u2@lid' });
+  const r = gm.iniciar({ chatId: 'lw@g.us', userId: 'u2@lid' });
   ok(r.kind === 'pergunta', 'iniciar sincrono no local');
   ok(typeof r.then !== 'function', 'no local `iniciar` NAO devolve Promise');
 });
@@ -900,14 +972,12 @@ await test('remoto: !akinator status mostra o motor', async () => {
     learnedFile: path.join(TMP_DB, 'ak-rem3-learned.json'),
     pendingFile: path.join(TMP_DB, 'ak-rem3-pending.json'),
     botName: 'Lizzy',
-    modo: 'remoto',
+    modo: 'local',
   });
   gm.modoEfetivo = 'local';
-  gm.remotoMotivo = 'bloqueio do Cloudflare neste IP';
   const t = desbold(gm.mensagemStatus());
   ok(/LOCAL/.test(t), 'diz que esta no local');
-  ok(/Cloudflare/.test(t), 'explica o motivo do remoto nao subir');
-  ok(String(gm.baseCharacters.length).length > 0, 'lista a base');
+  ok(/Personagens na base/.test(t), 'lista a base');
 });
 
 // ============================================================================

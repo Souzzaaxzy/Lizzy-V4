@@ -39,9 +39,12 @@ const CONFIG = {
   FETCH_TIMEOUT_MS: 30 * 1000,
   MAX_BYTES: 12 * 1024 * 1024,          // teto de seguranca do arquivo
   // --- modo remoto (akinator-client) ---
-  // O remoto depende de rede e do Akinator.com, que bloqueia IP de datacenter.
-  // Por isso e' opt-in e cai pro local em qualquer falha.
-  MODO_REMOTO_PADRAO: 'local',          // 'local' | 'remoto'
+  // O dono pediu para o bot usar o REMOTO EXCLUSIVAMENTE: nao existe mais
+  // fallback silencioso pro engine proprio. Se o Akinator.com nao responder
+  // (rede, Cloudflare, etc.), o comando AVISA e nao joga -- em vez de trocar de
+  // motor sem o usuario saber.
+  MODO_REMOTO_PADRAO: 'remoto',         // 'remoto' | 'local'
+  REMOTO_EXCLUSIVO: true,               // true = sem fallback pro engine local
   REMOTO_TIMEOUT_MS: 25 * 1000,
 };
 
@@ -199,12 +202,17 @@ async function carregarBase({ url, urls, cacheFile, locais = [], ttlMs, fetchImp
   const meta = (() => {
     try { return cacheFile && fs.existsSync(cacheFile) ? fs.statSync(cacheFile).mtimeMs : 0; } catch (e) { return 0; }
   })();
-  // A idade precisa ser >= 0: se o mtime estiver ligeiramente ADIANTADO em
-  // relacao ao relogio (skew), a idade sai negativa e `negativo < ttl` daria
-  // "cache valido" mesmo com TTL 0 -- servindo cache velho como se fosse novo.
+  // A idade precisa ser ">= 0" para valer, mas com TOLERANCIA: o `mtime` pode
+  // ficar alguns ms ADIANTADO em relacao ao relogio (resolucao do FS / skew),
+  // e um cache recem-escrito parecia "vencido" (idade negativa). Antes isso dava
+  // "cache valido" mesmo com TTL 0 (o bug antigo); agora exigimos `>= 0` mas
+  // tratamos uma folga pequena de skew como "recem escrito" = valido.
+  const SKEW_TOLERANCIA_MS = 60 * 1000;
   const idade = meta ? Date.now() - meta : -1;
+  const idadeValida = meta > 0 && idade >= -SKEW_TOLERANCIA_MS;
+  const idadeParaTtl = Math.max(0, idade);
   const ttlEfetivo = Number.isFinite(ttl) && ttl > 0 ? ttl : 0;
-  if (!forcar && meta && idade >= 0 && idade < ttlEfetivo) {
+  if (!forcar && idadeValida && idadeParaTtl < ttlEfetivo) {
     const emCache = lerArquivo(cacheFile);
     if (emCache) return { characters: emCache, origem: 'cache', erro: null };
   }
@@ -288,13 +296,19 @@ class AkinatorGameManager {
     this.learned = this.learnedFile ? lerJson(this.learnedFile, {}) : {};
     this.pending = this.pendingFile ? lerJson(this.pendingFile, []) : [];
 
-    // Modo de jogo: 'local' (engine proprio) ou 'remoto' (akinator-client).
-    // O remoto e' sempre uma TENTATIVA: `_modoEfetivo` so vira 'remoto' depois
-    // de um START real dar certo. Enquanto isso, o local atende tudo.
-    this.modoPedido = String(deps.modo || CONFIG.MODO_REMOTO_PADRAO).toLowerCase() === 'remoto'
-      ? 'remoto'
-      : 'local';
-    this.modoEfetivo = 'local';
+    // Modo de jogo: 'remoto' (padrao, akinator-client) ou 'local' (engine
+    // proprio). O remoto e' EXCLUSIVO por padrao: nada de fallback silencioso.
+    // `remotoExclusivo` pode ser desligado por deps/env, mas o padrao e' ligado.
+    this.modoPedido = String(deps.modo || CONFIG.MODO_REMOTO_PADRAO).toLowerCase() === 'local'
+      ? 'local'
+      : 'remoto';
+    this.remotoExclusivo = deps.remotoExclusivo === undefined
+      ? CONFIG.REMOTO_EXCLUSIVO
+      : !!deps.remotoExclusivo;
+    if (String(process.env.AKINATOR_REMOTO_FALLBACK || '').toLowerCase() === 'local') {
+      this.remotoExclusivo = false;
+    }
+    this.modoEfetivo = this.modoPedido;
     this.remotoMod = null;
     this.remotoValores = null;
     this.remotoMotivo = null;
@@ -313,13 +327,17 @@ class AkinatorGameManager {
   }
 
   /**
-   * Prepara o modo remoto, se pedido. Faz um START de teste: se o Akinator
-   * responder (rede ok e sem bloqueio), passa a usar o remoto; se nao, registra
-   * o motivo e segue no local. Nunca lanca.
+   * Prepara o modo remoto. Faz um START de teste: se o Akinator responder, liga
+   * o remoto; se nao, guarda o motivo.
+   *
+   * No modo EXCLUSIVO (padrao) uma falha NAO troca para o engine proprio: o
+   * comando passa a avisar que o Akinator esta indisponivel. Assim ninguem
+   * recebe um jogo diferente do que foi pedido sem perceber.
    */
   async prepararModo() {
     if (this.modoPedido !== 'remoto') {
-      this.remotoMotivo = 'modo local (padrao)';
+      this.modoEfetivo = 'local';
+      this.remotoMotivo = 'modo local (AKINATOR_MODE=local)';
       return { modo: this.modoEfetivo, motivo: this.remotoMotivo };
     }
     const teste = await testarRemoto({
@@ -333,11 +351,22 @@ class AkinatorGameManager {
       this.remotoMotivo = null;
       console.log('[AKINATOR] modo REMOTO ativo (akinator-client)');
     } else {
-      this.modoEfetivo = 'local';
+      // Sem fallback: continua em 'remoto', so' que indisponivel.
+      this.modoEfetivo = 'remoto';
       this.remotoMotivo = teste.motivo;
-      console.warn(`[AKINATOR] modo remoto indisponivel -> usando o LOCAL: ${teste.motivo}`);
+      if (this.remotoExclusivo) {
+        console.warn(`[AKINATOR] modo remoto INDISPONIVEL (sem fallback): ${teste.motivo}`);
+      } else {
+        this.modoEfetivo = 'local';
+        console.warn(`[AKINATOR] modo remoto indisponivel -> usando o LOCAL: ${teste.motivo}`);
+      }
     }
-    return { modo: this.modoEfetivo, motivo: this.remotoMotivo };
+    return { modo: this.modoEfetivo, motivo: this.remotoMotivo, exclusivo: this.remotoExclusivo };
+  }
+
+  /** O remoto esta' realmente pronto para atender? */
+  get remotoAtivo() {
+    return this.modoEfetivo === 'remoto' && !!this.remotoMod && !!this.remotoValores;
   }
 
 
@@ -434,6 +463,11 @@ class AkinatorGameManager {
 
   /** Partida com o Akinator.com (assincrono). */
   async _iniciarRemoto({ chatId, userId }) {
+    // Sem o modulo pronto (o START de teste falhou) o remoto nao tem como jogar:
+    // avisa em vez de trocar de motor nas escondidas.
+    if (!this.remotoAtivo && this.remotoExclusivo) {
+      return { success: false, reason: 'remoto_indisponivel', motivo: this.remotoMotivo };
+    }
     this._seq += 1;
     const sessionId = `akr${Date.now().toString(36)}${this._seq.toString(36)}`;
     try {
@@ -457,12 +491,16 @@ class AkinatorGameManager {
       this.sessions.set(sessionKey(chatId, userId), sessao);
       return { success: true, sessionId, ...this._proximaRemota(sessao, resultado) };
     } catch (e) {
-      // Uma falha de rede no meio do jogo nao pode derrubar o comando: cai pro
-      // local na hora (a base local ja esta carregada).
       const msg = e && e.message ? e.message : String(e);
+      this.remotoMotivo = msg;
+      // EXCLUSIVO: nao cai pro engine proprio. AVISA e nao inicia a partida.
+      if (this.remotoExclusivo) {
+        console.warn(`[AKINATOR] START remoto falhou (sem fallback): ${msg}`);
+        return { success: false, reason: 'remoto_indisponivel', motivo: msg };
+      }
+      // Nao-exclusivo: cai pro local (comportamento antigo, opt-in).
       console.warn(`[AKINATOR] START remoto falhou, caindo pro local: ${msg}`);
       this.modoEfetivo = 'local';
-      this.remotoMotivo = msg;
       return this._iniciarLocal({ chatId, userId });
     }
   }
@@ -721,11 +759,12 @@ class AkinatorGameManager {
     } catch (e) {
       const msg = e && e.message ? e.message : String(e);
       console.warn(`[AKINATOR] remoto falhou no meio da partida: ${msg}`);
+      this.remotoMotivo = msg;
       this.sessions.delete(sessionKey(sessao.chatId, sessao.userId));
       return {
         success: true,
         kind: 'erro_remoto',
-        message: `${TOPO('AKINATOR')}\n\n\u26a0\ufe0f Perdi a conex\u00e3o com o Akinator.\nA partida foi encerrada. Tente de novo.\n\n${RODAPE(this.botName)}`,
+        message: `${TOPO('AKINATOR')}\n\n\u26a0\ufe0f Perdi a conex\u00e3o com o Akinator.\nA partida foi encerrada. Tente de novo em instantes.\n\n${RODAPE(this.botName)}`,
       };
     }
   }
@@ -939,6 +978,30 @@ class AkinatorGameManager {
     return `${TOPO('AKINATOR')}\n\n\u26a0\ufe0f A base de personagens n\u00e3o est\u00e1 dispon\u00edvel agora.\n\n${RODAPE(this.botName)}`;
   }
 
+  /**
+   * Mensagem quando o modo e' o Akinator.com (remoto) e ele nao respondeu.
+   * Explica o motivo mais provavel em vez de um "erro" generico.
+   */
+  mensagemRemotoIndisponivel() {
+    const motivo = this.remotoMotivo || '';
+    const cf = /403|cloudflare|challenge|session\/signature|timeout/i.test(motivo);
+    return [
+      TOPO('AKINATOR'),
+      '',
+      `\u26a0\ufe0f O ${bold('Akinator.com')} n\u00e3o respondeu agora.`,
+      '',
+      cf
+        ? `A prote\u00e7\u00e3o dele (Cloudflare) est\u00e1 bloqueando o IP deste servidor.`
+        : `Pode ser instabilidade da rede ou do servi\u00e7o.`,
+      ``,
+      `O comando est\u00e1 configurado para usar S\u00d3 o Akinator,`,
+      `ent\u00e3o n\u00e3o vou jogar com outro motor.`,
+      ``,
+      `_Se for bloqueio de IP, configure um proxy em AKINATOR_PROXY._`,
+      RODAPE(this.botName),
+    ].join('\n');
+  }
+
   /** Diagnostico: qual motor esta' atendendo e por que. */
   mensagemStatus() {
     const modo = this.modoEfetivo === 'remoto' ? 'REMOTO (Akinator.com)' : 'LOCAL (engine proprio)';
@@ -947,10 +1010,14 @@ class AkinatorGameManager {
       '',
       `\u{1F9E0} Motor: ${bold(modo)}`,
     ];
-    if (this.modoPedido === 'remoto' && this.modoEfetivo !== 'remoto' && this.remotoMotivo) {
-      linhas.push(`\u26a0\ufe0f Remoto indispon\u00edvel: ${this.remotoMotivo}`);
-    }
-    if (this.modoEfetivo === 'local') {
+    if (this.modoEfetivo === 'remoto') {
+      if (this.remotoAtivo) {
+        linhas.push(`\u2705 Akinator respondendo${this.remotoExclusivo ? ' (exclusivo)' : ''}.`);
+      } else {
+        linhas.push(`\u26a0\ufe0f Akinator indispon\u00edvel: ${this.remotoMotivo || 'sem resposta'}`);
+        if (this.remotoExclusivo) linhas.push(`Sem fallback: o comando n\u00e3o joga at\u00e9 voltar.`);
+      }
+    } else {
       linhas.push(`\u{1F4DA} Personagens na base: ${bold(String(this.baseCharacters.length))}`);
     }
     linhas.push(RODAPE(this.botName));

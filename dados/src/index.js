@@ -3370,12 +3370,10 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     }
     const hotseatManager = globalThis.__lizzyHotseatManager;
     // Gerenciador do !akinator. UMA instancia por processo (mesmo padrao do
-    // hotseat). Dois motores possiveis:
-    //   - LOCAL (padrao): engine proprio, sem rede, base por URL.
-    //   - REMOTO (opt-in via AKINATOR_MODE=remoto): akinator-client, que usa o
-    //     Akinator.com. So liga se o START de teste passar -- o Akinator fica
-    //     atras do Cloudflare e costuma bloquear IP de VPS/datacenter, entao em
-    //     falha o jogo continua no LOCAL. Ver `prepararModo`.
+    // hotseat). O modo e' REMOTO (Akinator.com via akinator-client) e EXCLUSIVO
+    // por padrao: se o Akinator nao responder, o comando avisa e nao joga -- nao
+    // troca para o engine proprio escondido. `AKINATOR_MODE=local` usa o engine
+    // proprio; `AKINATOR_REMOTO_FALLBACK=local` reabilita a queda automatica.
     if (!globalThis.__lizzyAkinatorManager && typeof AkinatorGameManager === 'function') {
       const _akQ = akinatorQuestionsJson();
       const _akC = akinatorCharactersJson();
@@ -3386,17 +3384,18 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
         learnedFile: pathz.join(DATABASE_DIR, 'akinator', 'learned.json'),
         pendingFile: pathz.join(DATABASE_DIR, 'akinator', 'pending.json'),
         botName: nomebot,
-        modo: process.env.AKINATOR_MODE || 'local',
+        modo: process.env.AKINATOR_MODE || 'remoto',
       });
       console.log(`[AKINATOR] engine proprio | base local=${_chars.length} | perguntas=${((_akQ && _akQ.questions) || []).length}`);
 
-      // Decide o modo em segundo plano (nao atrasa o boot). Se pediram remoto,
-      // faz um START de teste; se o Akinator bloquear, cai pro local sozinho.
+      // Decide o modo em segundo plano (nao atrasa o boot). Faz um START de
+      // teste contra o Akinator; se falhar, registra o motivo (e, no modo
+      // exclusivo, o comando passa a avisar em vez de jogar com outro motor).
       globalThis.__lizzyAkinatorManager.modoPronto = globalThis.__lizzyAkinatorManager
         .prepararModo()
         .catch((e) => {
-          console.warn('[AKINATOR] falha ao preparar o modo (seguindo no local):', e && e.message);
-          return { modo: 'local', motivo: e && e.message };
+          console.warn('[AKINATOR] falha ao preparar o modo:', e && e.message);
+          return { modo: globalThis.__lizzyAkinatorManager.modoEfetivo, motivo: e && e.message };
         });
 
       // A base GRANDE vem de uma URL (nao fica no repo, para nao pesar no pull).
@@ -37995,6 +37994,9 @@ case 'akinator': {
     if (!r.success) {
       if (r.reason === 'ja_em_partida') {
         return reply(akinatorManager.mensagemJaEmPartida());
+      }
+      if (r.reason === 'remoto_indisponivel') {
+        return reply(akinatorManager.mensagemRemotoIndisponivel());
       }
       if (r.reason === 'knowledge_invalid') {
         return reply(akinatorManager.mensagemIndisponivel());
