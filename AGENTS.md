@@ -4366,30 +4366,61 @@ Assim o invariante **`modolite && modo18` nunca é verdadeiro** — o teste
 
 ### A guarda é um ponto único, antes do `switch`
 O handler central checa uma vez, **antes do `switch (command)`**: se é comando do
-menu +18 e o `modo18` está off, `return` imediato. Nada de repetir a checagem em
-cada `case` (eram 17). O único comando que **avisa** é o `!menu18` sem
-argumentos (o usuário precisa saber *por que* não veio o menu); os demais ficam
-mudos, para não virar spam em cada `!plaqN`.
+menu +18 e o `modo18` está ligado no grupo de origem, segue; se não, `return`
+imediato **com aviso** (`🚫 O *Modo +18* está desativado...`). Nada de repetir a
+checagem em cada `case` (eram 17).
+
+**Correções da rodada seguinte (set/2026)** — dois problemas relatados pelo dono:
+
+1. **"Quando desativado ainda tem como puxar o menu".** Três causas, todas
+   fechadas:
+   - **Cache de `groupData` não invalidado.** O `!modo18` e o `!modolite`
+     gravavam com `fs.writeFileSync` mas **não** chamavam
+     `optimizer.invalidateGroup(from)` (o resto do bot chama). O handler tinha
+     5s de cache, então logo após desativar o menu **ainda abria**. Agora os
+     dois invalidam o cache no mesmo ato.
+   - **PV escapava da guarda.** A checagem era `isGroup && ...`; no privado o
+     `groupData` é `{}` e o `!menu18` **enviava o menu**. Agora a guarda vale em
+     grupo **e** no privado (`isMenu18Command(command) && !isModo18Ativo(groupData)`):
+     sem grupo não há `modo18` ligado, então não vaza.
+   - **Comando não listado.** O alias `menupraq` (e os demais) já estavam na
+     lista; o teste cobre a lista inteira contra o `blockPv` para não sobrar
+     alias fora.
+2. **Feedback em todos os comandos.** Antes só o `!menu18` avisava; `!plaqN`/
+   `!vab18`/`!eununca18`/`!hotseat` ficavam **mudos**, o que parecia "comando
+   quebrado". Agora **todos** respondem o mesmo aviso — o dono pediu correção e
+   o silêncio confundia mais do que o ruído.
+
+### Cabeçalho de canal ("Ver canal") nos avisos
+Os avisos de **ativar** e **desativar** (do `!modo18` e do `!modolite`) saem com
+o **cabeçalho de newsletter** (`gerarContextNewsletter()` →
+`forwardedNewsletterMessageInfo`), o mesmo que o `responderPrefixo` e o resto do
+bot usam: é o que faz o cliente mostrar **"Ver canal"** no topo. Como o helper
+`reply()` não aceita `contextInfo`, esses avisos passam a usar
+`nazu.sendMessage(from, { text, contextInfo, quoted })` direto — mesmo caminho
+dos outros toggles (ex.: `!antilinkgp`, `!modofut`).
 
 **Ajuste nos testes existentes:** os fixtures de `menu18-plaquinha`,
 `plaq-midia-restrita`, `vab18` e `hotseat` passaram a gravar `modo18: true` —
 antes eles só tinham `modobrincadeira: true`, e sem o novo flag os comandos
-ficariam mudos (o guard novo é opt-in). Todos seguem verdes.
+ficariam bloqueados (o guard novo é opt-in). Todos seguem verdes.
 
 ### Visibilidade
 - `!modo18` entrou no **menu de admin** (`menus/menuadm.js`, logo abaixo do
   `!modolite`) e no **status do grupo** (`Configurações → Recursos`, linha
   *Modo +18*), ao lado do *Modo Lite*.
 - Arquivos: `dados/src/funcs/utils/menu18Mode.js` (novo), `index.js` (guarda +
-  `case 'modo18'` + exclusão no `modolite`), `menus/menuadm.js`,
-  `tests/modo18.test.js` (novo, **11 testes / 48 asserções**).
+  `case 'modo18'` + exclusão/invalidação no `modolite`), `menus/menuadm.js`,
+  `tests/modo18.test.js` (novo, **14 testes / 60 asserções**).
 
-### Testes — `tests/modo18.test.js` (11 testes / 48 asserções)
+### Testes — `tests/modo18.test.js` (14 testes / 60 asserções)
 Módulo (lista + leitura do flag + paridade com o `blockPv`); toggle
 (liga/desliga e grava); permissão (membro comum não muda nada); exclusividade nos
-dois sentidos + varredura do invariante; e o comportamento pelo **handler real**
-(`!menu18` avisa e não envia; com o modo ligado envia; `!plaq1`/`!vab18`/
-`!eununca18`/`!hotseat` mudos no off; `!vab18` verde no on).
+dois sentidos + varredura do invariante; e o comportamento pelo **handler real**:
+`!menu18` avisa e não envia; com o modo ligado envia; **todos** os comandos +18
+avisam no off (inclusive `menupraq`); **não vaza pelo PV**; **não abre logo após
+desativar** (cache invalidado); o aviso carrega o **cabeçalho de canal**; e
+`!vab18` verde no on.
 
 ## MENU 18 (`!menu18`, +18) + PLAQUINHAS (`!plaq1`..`!plaq10`) ✅
 Pedido do dono: um menu novo chamado `!menu18`, na categoria **COMUNIDADE** do

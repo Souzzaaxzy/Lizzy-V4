@@ -126,11 +126,12 @@ function makeNazu({ sent, groupJid, participants }) {
 }
 
 /** Executa uma mensagem no handler (remetente novo por chamada, throttle 3/5s). */
-async function run({ groupJid, sender, text, participants, sent = [] }) {
+async function run({ groupJid, sender, text, participants, sent = [], remoteJid = null }) {
+  const alvo = remoteJid || groupJid;
   const nazu = makeNazu({ sent, groupJid, participants });
   const info = {
-    key: { remoteJid: groupJid, fromMe: false, id: `M-${Math.random().toString(36).slice(2, 10)}`, participant: sender.lid },
-    message: { extendedTextMessage: { text, contextInfo: { remoteJid: groupJid, mentionedJid: [] } } },
+    key: { remoteJid: alvo, fromMe: false, id: `M-${Math.random().toString(36).slice(2, 10)}`, participant: sender.lid },
+    message: { extendedTextMessage: { text, contextInfo: { remoteJid: alvo, mentionedJid: [] } } },
     messageTimestamp: Math.floor(Date.now() / 1000),
     pushName: sender.name
   };
@@ -138,6 +139,7 @@ async function run({ groupJid, sender, text, participants, sent = [] }) {
   return {
     text: sent.map((s) => s.content?.text ?? '').filter(Boolean).join('\n'),
     poll: sent.find((s) => s.content?.poll)?.content.poll,
+    newsletter: sent.some((s) => s.content?.contextInfo?.forwardedNewsletterMessageInfo?.newsletterJid),
     sent
   };
 }
@@ -253,12 +255,40 @@ await test('!menu18 funciona com o modo18 ligado', async () => {
   ok(out.text.includes('PLAQUINHA') || out.text.includes('!plaq1'), 'enviou o menu');
 });
 
-await test('os comandos +18 ficam mudos com o modo18 desligado', async () => {
-  const { groupJid, admin, participants } = setup({ modo18: false });
-  for (const cmd of ['!plaq1', '!vab18', '!eununca18', '!hotseat']) {
-    const out = await run({ groupJid, sender: admin, text: cmd, participants });
-    ok(!/PLAQUINHA|ISSO OU AQUILO|EU NUNCA/i.test(out.text), `${cmd} nao responde`);
+await test('os comandos +18 avisam que o modo esta off (nada de silencio)', async () => {
+  const { groupJid, participants } = setup({ modo18: false });
+  // Remetente novo por comando: `sendMessage` e' limitado a 3/5s por remetente.
+  for (const cmd of ['!plaq1', '!vab18', '!eununca18', '!hotseat', '!menupraq']) {
+    const quem = makePerson();
+    const out = await run({ groupJid, sender: quem, text: cmd, participants });
+    includes(out.text, 'Modo +18', `${cmd} avisa o motivo`);
+    ok(!/PLAQUINHA|ISSO OU AQUILO|EU NUNCA/i.test(out.text), `${cmd} nao entrega o conteudo`);
   }
+});
+
+await test('!menu18 nao vaza pelo PRIVADO com o modo off (correcao)', async () => {
+  const { groupJid, admin, participants } = setup({ modo18: true });
+  // No PV nao ha grupo dono; o menu +18 nao pode abrir por esse caminho.
+  const out = await run({ groupJid, sender: admin, text: '!menu18', participants, remoteJid: admin.jid });
+  ok(!out.text.includes('PLAQUINHA'), 'nao enviou o menu no PV');
+  includes(out.text, 'Modo +18', 'avisa que esta desativado');
+});
+
+await test('logo apos desativar, o menu ja nao abre (cache invalidado)', async () => {
+  const { groupJid, admin, participants } = setup({ modo18: true });
+  // Antes da correcao o cache de groupData sobrevivia ate' 5s e o menu ainda saia.
+  await run({ groupJid, sender: admin, text: '!modo18', participants }); // desliga
+  const out = await run({ groupJid, sender: admin, text: '!menu18', participants });
+  ok(!out.text.includes('PLAQUINHA'), 'o menu nao abre logo apos desativar');
+  includes(out.text, 'Modo +18', 'avisa o motivo');
+});
+
+await test('o aviso de ativar/desativar carrega o cabecalho de canal', async () => {
+  const { groupJid, admin, participants } = setup({ modo18: true });
+  const off = await run({ groupJid, sender: admin, text: '!modo18', participants });
+  ok(off.newsletter, 'o aviso de desativar tem o cabecalho de canal');
+  const on = await run({ groupJid, sender: admin, text: '!modo18', participants });
+  ok(on.newsletter, 'o aviso de ativar tem o cabecalho de canal');
 });
 
 await test('!vab18 segue funcionando com o modo18 ligado (regressao)', async () => {

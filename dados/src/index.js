@@ -7109,16 +7109,13 @@ if (isCmd && command && !isOwner) {
     // `responderPrefixo` (função de módulo) não a alcançava — dava
     // "gerarContextNewsletter is not defined" e a resposta do prefixo não saía.
     // ======================================================
-    // MENU +18 (`!modo18`): quando desligado, os comandos do menu18 nao
-    // respondem. Ponto UNICO de guarda, ANTES do switch, para valer para todos
-    // (menu18/plaquinhas/brincadeiras picantes) -- nada de repetir a checagem em
-    // cada case. O rodape de saida nao se repetiria de bom grado, entao so'
-    // avisa no comando de entrada do menu (`!menu18`, sem args).
-    if (isGroup && isMenu18Command(command) && !isModo18Ativo(groupData)) {
-      if (command === 'menu18' && !args.length) {
-        await reply('🚫 O *Modo +18* está desativado neste grupo.\n\nUm administrador pode liberar com `!modo18`.');
-      }
-      return;
+    // MENU +18 (`!modo18`): so' funciona com o modo +18 LIGADO no grupo. A
+    // guarda cobre TODOS os comandos do menu (menu18/plaquinhas/brincadeiras
+    // picantes), em grupo E no privado -- em PV o `groupData` fica `{}`, entao o
+    // modo aparece como desligado e o menu NAO vaza por esse caminho.
+    // Ponto unico, ANTES do switch, para nao repetir a checagem em cada case.
+    if (isMenu18Command(command) && !isModo18Ativo(groupData)) {
+      return reply('🚫 O *Modo +18* está desativado.\n\nUm administrador do grupo pode liberar com `!modo18`.');
     }
 switch (command) {
       // ═══════════════════════════════════════════════════════════════
@@ -34950,10 +34947,21 @@ case 'set-bannerbv':
             }
           }
           fs.writeFileSync(groupFilePath, JSON.stringify(groupData, null, 2));
+          // Sem invalidar o cache, o handler continuaria lendo o estado antigo
+          // por ate' 5s -- e o menu +18 ainda abriria logo apos' desativar.
+          optimizer.invalidateGroup(from);
           if (groupData.modolite) {
-            await reply('👶 *Modo Lite ativado!* O conteúdo inapropriado para crianças será filtrado neste grupo.\n\n🔞 O *Modo +18* foi desativado (os dois não podem ficar ligados juntos).');
+            await nazu.sendMessage(from, {
+              text: '👶 *Modo Lite ativado!* O conteúdo inapropriado para crianças será filtrado neste grupo.\n\n🔞 O *Modo +18* foi desativado (os dois não podem ficar ligados juntos).',
+              contextInfo: gerarContextNewsletter(),
+              quoted: info
+            });
           } else {
-            await reply('🔞 *Modo Lite desativado!* O conteúdo do menu de brincadeiras será exibido completamente.');
+            await nazu.sendMessage(from, {
+              text: '🔞 *Modo Lite desativado!* O conteúdo do menu de brincadeiras será exibido completamente.',
+              contextInfo: gerarContextNewsletter(),
+              quoted: info
+            });
           }
         } catch (e) {
           console.error(e);
@@ -34972,7 +34980,11 @@ case 'set-bannerbv':
           const liteAtivo = isModoLiteActive(groupData, modoLiteGlobal);
           const novoModo18 = !isModo18Ativo(groupData);
           if (novoModo18 && liteAtivo) {
-            return reply('⚠️ Não dá para ativar o *Modo +18* com o *Modo Lite* ligado.\n\nDesative o Modo Lite primeiro (`!modolite`) — os dois não podem ficar ligados juntos.');
+            return nazu.sendMessage(from, {
+              text: '⚠️ Não dá para ativar o *Modo +18* com o *Modo Lite* ligado.\n\nDesative o Modo Lite primeiro (`!modolite`) — os dois não podem ficar ligados juntos.',
+              contextInfo: gerarContextNewsletter(),
+              quoted: info
+            });
           }
           groupData.modo18 = novoModo18;
           if (!novoModo18) {
@@ -34981,10 +34993,21 @@ case 'set-bannerbv':
             delete groupData.modo18Off;
           }
           fs.writeFileSync(groupFilePath18, JSON.stringify(groupData, null, 2));
+          // Invalida o cache do grupo: sem isso, o estado antigo sobrevive ate'
+          // 5s e o menu +18 ainda abriria logo apos' desativar (bug relatado).
+          optimizer.invalidateGroup(from);
           if (groupData.modo18) {
-            await reply('🔞 *Modo +18 ativado!* O menu e os comandos +18 (`!menu18`, plaquinhas e brincadeiras picantes) estão liberados neste grupo.');
+            await nazu.sendMessage(from, {
+              text: '🔞 *Modo +18 ativado!* O menu e os comandos +18 (`!menu18`, plaquinhas e brincadeiras picantes) estão liberados neste grupo.',
+              contextInfo: gerarContextNewsletter(),
+              quoted: info
+            });
           } else {
-            await reply('🚫 *Modo +18 desativado!* O menu e os comandos +18 não respondem mais neste grupo.');
+            await nazu.sendMessage(from, {
+              text: '🚫 *Modo +18 desativado!* O menu e os comandos +18 não respondem mais neste grupo.',
+              contextInfo: gerarContextNewsletter(),
+              quoted: info
+            });
           }
         } catch (e) {
           console.error(e);
