@@ -78,7 +78,7 @@ async function loadModules() {
             connect4Mod, unoMod, memoriaMod, achievementsMod, giftsMod,
             reputationMod, qrcodeMod, notesMod, calculatorMod, audioEditMod,
             transmissaoMod, gdriveMod, mediafireMod, twitterMod, searchMod,
-            imagetoolsMod, freefireMod, smmApiMod, adoptionMod
+            imagetoolsMod, freefireMod, smmApiMod, adoptionMod, hotseatMod
         ] = await Promise.all([
             import('./utils/gerarnick.js'),
             import('./utils/logotipos.js'),
@@ -109,6 +109,7 @@ async function loadModules() {
             import('./utils/freefire.js'),
             import('./smmApi.js'),
             import('./utils/adoptionManager.js'),
+            import('./utils/hotseat.js'),
         ]);
 
         modules.styleText = styleTextMod.default ?? styleTextMod;
@@ -140,6 +141,7 @@ async function loadModules() {
         modules.freefire = freefireMod.default ?? freefireMod;
         modules.smmApi = smmApiMod.default ?? smmApiMod;
         modules.adoptionManager = adoptionMod.default ?? adoptionMod;
+        modules.hotseat = hotseatMod.default ?? hotseatMod;
 
         if (modules.stickerModule && modules.stickerModule.sendSticker) {
             modules.sendSticker = modules.stickerModule.sendSticker;
@@ -169,6 +171,8 @@ async function loadModules() {
         modules.vabJson = () => vabJsonData;
         modules.vab18Json = () => vab18JsonData;
         modules.eununca18Json = () => eununca18JsonData;
+        const hotseatJsonData = loadJsonSync('json/hotseat.json');
+        modules.hotseatJson = () => hotseatJsonData;
 
         return modules;
     })();

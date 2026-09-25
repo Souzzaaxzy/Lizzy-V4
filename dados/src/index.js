@@ -1750,6 +1750,8 @@ const {
   vabJson,
   vab18Json,
   eununca18Json,
+  hotseatJson,
+  hotseat,
   Lyrics,
   commandStats,
   //ia,
@@ -3354,6 +3356,14 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       });
     }
     const isModoBn = groupData.modobrincadeira;
+    // Gerenciador do !hotseat (+18). UMA instancia por processo, criada na
+    // primeira mensagem (aqui o destructuring dos modulos ja rodou). O
+    // handler central chama `processMessage` em toda mensagem - mesmo padrao
+    // do tictactoe/connect4, sem listener por sessao.
+    if (!globalThis.__lizzyHotseatManager && hotseat?.HotSeatManager) {
+      globalThis.__lizzyHotseatManager = new hotseat.HotSeatManager(hotseatJson() || []);
+    }
+    const hotseatManager = globalThis.__lizzyHotseatManager;
     const isOnlyAdmin = groupData.soadm;
     const soadmBypassCommands = ['suporte', 'ticketsuporte', 'suporteticket', 'ticket', 'promover', 'promote', 'rebaixar', 'demote'];
     // Se modo soadm ativo e não é admin, ignorar aliases silenciosamente
@@ -5805,6 +5815,25 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
             } else if (result.message) {
               await reply(result.message);
             }
+            return;
+          }
+        }
+        // HOT SEAT (+18): a brincadeira responde por MENSAGEM NORMAL (nao existe
+        // "!responder"). Mesmo padrao do tictactoe/connect4: o handler central
+        // consulta a sessao e o modulo decide. So o PARTICIPANTE tem efeito -
+        // mensagem de outra pessoa devolve null e segue o fluxo normal.
+        if (hotseatManager && budy2) {
+          const hsRes = hotseatManager.processMessage({
+            groupId: from,
+            participantId: sender,
+            text: body,
+            botName: nomebot,
+          });
+          if (hsRes && hsRes.success) {
+            await nazu.sendMessage(from, {
+              text: hsRes.message,
+              mentions: hsRes.mentions || [sender],
+            });
             return;
           }
         }
@@ -37828,6 +37857,55 @@ case 'vab18':
     );
   }
 break;
+// !hotseat (+18) - 5 perguntas aleatorias entre 100, respondidas por MENSAGEM
+// NORMAL (SIM / NAO / PULAR). Sem mencao, o proprio remetente participa; com
+// mencao, o marcado e o participante (o iniciador NAO participa). O estado vive
+// no `hotseatManager`; as respostas sao consumidas no bloco de mensagens.
+case 'hotseat': {
+  try {
+    if (!isGroup) {
+      return sendAbyssWarning("\u25c8 Este comando e so para grupos.");
+    }
+    if (!isModoBn) {
+      return reply('\u274c O modo brincadeira n\u00e3o esta ativo nesse grupo');
+    }
+    if (!hotseatManager || typeof hotseatManager.start !== 'function') {
+      console.warn('[HOTSEAT] manager indisponivel');
+      return reply('Sistema do Hot Seat temporariamente indisponivel.');
+    }
+
+    // Com mencao, o PARTICIPANTE e o marcado; sem mencao, e quem enviou.
+    const participante = menc_os2 || sender;
+
+    const hs = hotseatManager.start({
+      groupId: from,
+      participantId: participante,
+      initiatorId: sender,
+      botName: nomebot,
+    });
+
+    if (!hs.success) {
+      if (hs.reason === 'already_in_session') {
+        return reply(
+          `\u{1F525} Voc\u00ea j\u00e1 est\u00e1 em uma cadeira quente.\n\nFinalize sua sess\u00e3o atual primeiro. \u{1F440}`
+        );
+      }
+      if (hs.reason === 'no_bank') {
+        return reply('\u274c Banco de perguntas do Hot Seat indisponivel.');
+      }
+      return reply('\u274c N\u00e3o foi poss\u00edvel iniciar o Hot Seat.');
+    }
+
+    await nazu.sendMessage(from, {
+      text: hs.message,
+      mentions: hs.mentions,
+    });
+  } catch (e) {
+    console.error('[HOTSEAT] Erro:', e?.message || e);
+    await reply("\u274c Ocorreu um erro interno. Tente novamente em alguns minutos.");
+  }
+  break;
+}
       case 'conselho':
         try {
           const conselhos = toolsJson().Conselhos;

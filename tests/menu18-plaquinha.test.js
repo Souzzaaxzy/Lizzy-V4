@@ -383,6 +383,7 @@ await test('menu18/plaq registrados no blockPv', async () => {
   includes(bloco, 'plaq1', 'o menu18 do blockPv lista os comandos');
   includes(bloco, 'vab18', 'o menu18 do blockPv lista o vab18 (brincadeiras)');
   includes(bloco, 'eununca18', 'o menu18 do blockPv lista o eununca18 (brincadeiras)');
+  includes(bloco, 'hotseat', 'o menu18 do blockPv lista o hotseat (brincadeiras)');
 });
 
 await test('menu18 tem a categoria BRINCADEIRAS com o !vab18', async () => {
@@ -391,6 +392,7 @@ await test('menu18 tem a categoria BRINCADEIRAS com o !vab18', async () => {
   includesTxt(out.text, 'BRINCADEIRAS', 'tem a categoria BRINCADEIRAS');
   includes(out.text, '!vab18', 'lista o !vab18');
   includes(out.text, '!eununca18', 'lista o !eununca18');
+  includes(out.text, '!hotseat', 'lista o !hotseat');
   // PLAQUINHA continua existindo e vem antes.
   ok(desbold(out.text).indexOf('PLAQUINHA') < desbold(out.text).indexOf('BRINCADEIRAS'),
     'PLAQUINHA antes de BRINCADEIRAS');

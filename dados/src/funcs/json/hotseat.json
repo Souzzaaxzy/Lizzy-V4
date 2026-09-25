@@ -1,0 +1,402 @@
+[
+    {
+        "id": 1,
+        "text": "Você já ficou encarando o corpo de alguém tentando disfarçar?"
+    },
+    {
+        "id": 2,
+        "text": "Você já mandou mensagem de madrugada com segundas intenções?"
+    },
+    {
+        "id": 3,
+        "text": "Você já beijou alguém só porque a tensão estava insuportável?"
+    },
+    {
+        "id": 4,
+        "text": "Você já tirou uma foto pensando em provocar uma pessoa específica?"
+    },
+    {
+        "id": 5,
+        "text": "Você já ficou com vontade de tirar a roupa de alguém durante um beijo?"
+    },
+    {
+        "id": 6,
+        "text": "Você já imaginou alguém sem roupa enquanto conversava com essa pessoa?"
+    },
+    {
+        "id": 7,
+        "text": "Você já deixou alguém beijar seu pescoço e gostou demais?"
+    },
+    {
+        "id": 8,
+        "text": "Você já sentiu desejo só de ouvir a voz de alguém?"
+    },
+    {
+        "id": 9,
+        "text": "Você já ficou olhando para a boca de alguém imaginando um beijo?"
+    },
+    {
+        "id": 10,
+        "text": "Você já mandou \"vem aqui\" sabendo exatamente o que estava insinuando?"
+    },
+    {
+        "id": 11,
+        "text": "Você já dividiu uma cama com alguém e passou a noite pensando besteira?"
+    },
+    {
+        "id": 12,
+        "text": "Você já dançou colado(a) em alguém só para sentir o corpo da pessoa?"
+    },
+    {
+        "id": 13,
+        "text": "Você já contou uma fantasia íntima para alguém e esperou a reação?"
+    },
+    {
+        "id": 14,
+        "text": "Você já descobriu que alguém fantasiava com você?"
+    },
+    {
+        "id": 15,
+        "text": "Você já perguntou qual parte do seu corpo a pessoa mais gostava?"
+    },
+    {
+        "id": 16,
+        "text": "Você já perguntou se alguém já imaginou vocês dois juntos?"
+    },
+    {
+        "id": 17,
+        "text": "Você já deixou claro que queria alguém sem dizer uma palavra?"
+    },
+    {
+        "id": 18,
+        "text": "Você já foi encontrar alguém de madrugada por pura vontade?"
+    },
+    {
+        "id": 19,
+        "text": "Você já sussurrou algo no ouvido de alguém só para provocar?"
+    },
+    {
+        "id": 20,
+        "text": "Você já puxou alguém pela cintura durante um beijo?"
+    },
+    {
+        "id": 21,
+        "text": "Você já ficou abraçado(a) com alguém tentando esconder o quanto desejava?"
+    },
+    {
+        "id": 22,
+        "text": "Você já ficou excitado(a) só com um olhar?"
+    },
+    {
+        "id": 23,
+        "text": "Você já apagou uma mensagem porque achou que foi longe demais?"
+    },
+    {
+        "id": 24,
+        "text": "Você já escreveu uma mensagem muito mais ousada do que pretendia enviar?"
+    },
+    {
+        "id": 25,
+        "text": "Você já esperou de propósito alguém tomar a iniciativa?"
+    },
+    {
+        "id": 26,
+        "text": "Você já provocou alguém até a pessoa admitir que estava com desejo?"
+    },
+    {
+        "id": 27,
+        "text": "Você já deu uma mordida durante um beijo só para provocar?"
+    },
+    {
+        "id": 28,
+        "text": "Você já recebeu uma foto que mudou completamente o rumo da conversa?"
+    },
+    {
+        "id": 29,
+        "text": "Você já tirou uma foto mostrando mais do corpo só para provocar?"
+    },
+    {
+        "id": 30,
+        "text": "Você já reparou no volume da roupa de alguém e fingiu que não viu?"
+    },
+    {
+        "id": 31,
+        "text": "Você já foi pego(a) olhando para a bunda de alguém?"
+    },
+    {
+        "id": 32,
+        "text": "Você já perdeu a concentração vendo alguém sem camisa?"
+    },
+    {
+        "id": 33,
+        "text": "Você já teve vontade de dormir sem roupa ao lado de alguém que desejava?"
+    },
+    {
+        "id": 34,
+        "text": "Você já tomou banho com alguém?"
+    },
+    {
+        "id": 35,
+        "text": "Você já ficou imaginando alguém no banho?"
+    },
+    {
+        "id": 36,
+        "text": "Você já beijou alguém depois de uma discussão porque a tensão estava enorme?"
+    },
+    {
+        "id": 37,
+        "text": "Você já percebeu que uma discussão tinha virado desejo?"
+    },
+    {
+        "id": 38,
+        "text": "Você já sentiu desejo por alguém que deveria evitar?"
+    },
+    {
+        "id": 39,
+        "text": "Você já quis alguém sabendo que era uma péssima ideia?"
+    },
+    {
+        "id": 40,
+        "text": "Você já teve atração por alguém comprometido?"
+    },
+    {
+        "id": 41,
+        "text": "Você já precisou esconder uma atração para não complicar tudo?"
+    },
+    {
+        "id": 42,
+        "text": "Você já ficou pensando em alguém que sabia que não deveria?"
+    },
+    {
+        "id": 43,
+        "text": "Você já teve vontade de voltar para um ex por causa da química?"
+    },
+    {
+        "id": 44,
+        "text": "Você já reencontrou alguém e sentiu desejo na hora?"
+    },
+    {
+        "id": 45,
+        "text": "Você já reencontrou alguém e pensou \"eu ainda quero essa pessoa\"?"
+    },
+    {
+        "id": 46,
+        "text": "Você já beijou alguém sabendo que poderia dar problema depois?"
+    },
+    {
+        "id": 47,
+        "text": "Você já teve uma noite que começou inocente e terminou completamente diferente?"
+    },
+    {
+        "id": 48,
+        "text": "Você já passou horas beijando alguém?"
+    },
+    {
+        "id": 49,
+        "text": "Você já desejou que uma noite não terminasse?"
+    },
+    {
+        "id": 50,
+        "text": "Você já ficou em um quarto com alguém e pensou \"isso vai dar problema\"?"
+    },
+    {
+        "id": 51,
+        "text": "Você já trancou uma porta porque queria privacidade com alguém?"
+    },
+    {
+        "id": 52,
+        "text": "Você já ficou com alguém em um lugar onde não deveria?"
+    },
+    {
+        "id": 53,
+        "text": "Você já sentiu a adrenalina de estar escondido(a) com alguém?"
+    },
+    {
+        "id": 54,
+        "text": "Você já ficou com alguém só porque a tensão estava forte demais?"
+    },
+    {
+        "id": 55,
+        "text": "Você já fez algo por impulso porque estava desejando alguém?"
+    },
+    {
+        "id": 56,
+        "text": "Você já se arrependeu de ter resistido a alguém?"
+    },
+    {
+        "id": 57,
+        "text": "Você já pensou \"eu deveria ter aproveitado aquele momento\"?"
+    },
+    {
+        "id": 58,
+        "text": "Você já se arrependeu de ter ficado com alguém?"
+    },
+    {
+        "id": 59,
+        "text": "Você já ficou pensando em uma pessoa depois de uma noite intensa?"
+    },
+    {
+        "id": 60,
+        "text": "Você já sentiu ciúmes vendo alguém flertar com quem você queria?"
+    },
+    {
+        "id": 61,
+        "text": "Você já gostou de saber que alguém sentia ciúmes de você?"
+    },
+    {
+        "id": 62,
+        "text": "Você já provocou alguém porque sabia que ele estava com ciúmes?"
+    },
+    {
+        "id": 63,
+        "text": "Você já usou uma roupa específica para chamar a atenção de alguém?"
+    },
+    {
+        "id": 64,
+        "text": "Você já recebeu um elogio tão direto sobre seu corpo que ficou sem reação?"
+    },
+    {
+        "id": 65,
+        "text": "Você já ouviu alguém dizer que queria muito seu corpo?"
+    },
+    {
+        "id": 66,
+        "text": "Você já disse para alguém que queria muito o corpo dela?"
+    },
+    {
+        "id": 67,
+        "text": "Você já perguntou o que alguém faria se vocês estivessem sozinhos?"
+    },
+    {
+        "id": 68,
+        "text": "Você já ouviu \"se estivéssemos sozinhos...\" e ficou imaginando o resto?"
+    },
+    {
+        "id": 69,
+        "text": "Você já teve uma conversa tão picante que ficou com vergonha depois?"
+    },
+    {
+        "id": 70,
+        "text": "Você já flertou com alguém sabendo que não pretendia parar por aí?"
+    },
+    {
+        "id": 71,
+        "text": "Você já deixou alguém dormir com você porque queria ver no que dava?"
+    },
+    {
+        "id": 72,
+        "text": "Você já ficou deitado(a) ao lado de alguém esperando que algo acontecesse?"
+    },
+    {
+        "id": 73,
+        "text": "Você já tomou iniciativa porque não aguentava mais esperar?"
+    },
+    {
+        "id": 74,
+        "text": "Você já quis levar alguém para um lugar mais reservado depois de um beijo?"
+    },
+    {
+        "id": 75,
+        "text": "Você já sentiu o coração acelerar porque alguém chegou muito perto?"
+    },
+    {
+        "id": 76,
+        "text": "Você já ficou arrepiado(a) com um simples toque na cintura?"
+    },
+    {
+        "id": 77,
+        "text": "Você já desejou alguém enquanto fingia estar completamente tranquilo(a)?"
+    },
+    {
+        "id": 78,
+        "text": "Você já olhou para alguém e pensou imediatamente em beijá-la?"
+    },
+    {
+        "id": 79,
+        "text": "Você já olhou para alguém e pensou coisas bem mais ousadas que um beijo?"
+    },
+    {
+        "id": 80,
+        "text": "Você já sentiu que uma pessoa era uma tentação impossível de ignorar?"
+    },
+    {
+        "id": 81,
+        "text": "Você já ouviu \"eu quero você\" e ficou sem saber o que responder?"
+    },
+    {
+        "id": 82,
+        "text": "Você já disse \"eu quero você\" quando a tensão estava no limite?"
+    },
+    {
+        "id": 83,
+        "text": "Você já ficou com alguém e pensou que aquela pessoa era perigosa demais para você?"
+    },
+    {
+        "id": 84,
+        "text": "Você já encontrou alguém que despertou um desejo impossível de fingir?"
+    },
+    {
+        "id": 85,
+        "text": "Você já ficou com duas pessoas na mesma semana?"
+    },
+    {
+        "id": 86,
+        "text": "Você teria coragem de ficar com duas pessoas na mesma noite?"
+    },
+    {
+        "id": 87,
+        "text": "Você já beijou alguém e continuou pensando em outra pessoa?"
+    },
+    {
+        "id": 88,
+        "text": "Você já ficou com o(a) ex de um amigo?"
+    },
+    {
+        "id": 89,
+        "text": "Você já ficou com alguém que está neste grupo hoje?"
+    },
+    {
+        "id": 90,
+        "text": "Você já sentiu algo por alguém que está neste grupo agora?"
+    },
+    {
+        "id": 91,
+        "text": "Você já mandou nude para alguém?"
+    },
+    {
+        "id": 92,
+        "text": "Você já recebeu nude de alguém?"
+    },
+    {
+        "id": 93,
+        "text": "Você já gravou um áudio com a voz mais provocante de propósito?"
+    },
+    {
+        "id": 94,
+        "text": "Você já ficou com alguém que acabou de conhecer no mesmo dia?"
+    },
+    {
+        "id": 95,
+        "text": "Você já ficou com alguém só pelo corpo, sem nenhum sentimento?"
+    },
+    {
+        "id": 96,
+        "text": "Você já ficou com alguém mais velho(a) que você?"
+    },
+    {
+        "id": 97,
+        "text": "Você já ficou com alguém mais novo(a) que você?"
+    },
+    {
+        "id": 98,
+        "text": "Você já teve um sonho quente com alguém que conhece?"
+    },
+    {
+        "id": 99,
+        "text": "Você contaria a verdade se eu perguntasse com quem você fantasia?"
+    },
+    {
+        "id": 100,
+        "text": "Você responderia SIM para qualquer pergunta desta cadeira se a pessoa fosse certa?"
+    }
+]

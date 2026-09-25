@@ -303,7 +303,7 @@ export const menuCommandsMap = {
     },
     menu18: {
         menuName: 'Plaquinhas',
-        commands: ['plaq1', 'plaq2', 'plaq3', 'plaq4', 'plaq5', 'plaq6', 'plaq7', 'plaq8', 'plaq9', 'plaq10', 'vab18', 'eununca18']
+        commands: ['plaq1', 'plaq2', 'plaq3', 'plaq4', 'plaq5', 'plaq6', 'plaq7', 'plaq8', 'plaq9', 'plaq10', 'vab18', 'eununca18', 'hotseat']
     },
     alteradores: {
         menuName: 'Alteradores',

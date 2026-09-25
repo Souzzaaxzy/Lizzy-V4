@@ -1075,6 +1075,84 @@ ir para o status**.
   sempre `open(path, 'rb')` → `.decode('utf-8')` → operar em `str` → gravar com
   `.encode('utf-8')`, e conferir com `b.count(b'\xd0\x93\xc2\xa9') == 0`.
 
+## COMANDO `!hotseat` — jogo da CADEIRA QUENTE +18 (set/2026) ✅
+Brincadeira de 5 perguntas SIM / NÃO / PULAR, respondidas por **mensagem normal**
+(não existe `!responder`). Categoria **BRINCADEIRAS** do `menu18`.
+
+### Arquitetura — nada paralelo
+Segue a MESMA família do `tictactoe.js` / `connect4.js`:
+- **`dados/src/funcs/utils/hotseat.js`** — motor + gerenciador (`HotSeatManager`),
+  com **Mapa de sessões em memória** (sessão é efêmera; nenhum banco novo) e
+  `_cleanup()` periódico (timer com `unref()`, não segura o processo).
+- **`dados/src/funcs/json/hotseat.json`** — banco com **exatamente 100** perguntas
+  `{ id, text }`, ids 1..100. Carregado por `hotseatJson()` (mesmo caminho dos
+  outros JSONs) e **injetado** no manager (`new HotSeatManager(hotseatJson())`),
+  então o módulo segue puro/testável.
+- **Handler central**: o bloco em `index.js` (dentro do `if (isGroup)`, ao lado do
+  `tictactoe`) chama `hotseatManager.processMessage(...)` em toda mensagem. **Não
+  existe listener por sessão** — era o risco de memory leak apontado no pedido.
+- **Layout**: `bold`/`boldItalic` de `menus/layout.js` + as caixas `╭━━━꧁༺ ✦ ༻꧂━━━╯`,
+  o mesmo desenho dos menus. Nada de estilo inventado.
+
+### Estados e fluxo
+`WAITING_START` → (confirmação) → `WAITING_ANSWER` ×5 → `FINISHED`.
+Sem estado por pergunta: o número vem de `session.currentQuestion`.
+
+1. `!hotseat` — sem menção o **próprio remetente** participa; com `@alguém`, o
+   **marcado** é o participante e o iniciador **não** participa. Mostra o painel
+   e espera `"pronto para começar"` (aceita pronto/pronta/vamos/pode começar...).
+2. No início real: sorteia **5 de 100 sem repetição** (`pickQuestions`) e guarda
+   os ids na sessão (não re-sorteia a cada resposta).
+3. Cada resposta: `classifyAnswer` usa o **`normalizar` do projeto** (nada de um
+   segundo normalizador) — `sim/SIM/Sim/s` → SIM, `não/nao/NÃO/n` → NAO,
+   `pular/pulo/passo/skip` → PULAR. Qualquer outra coisa → mensagem de opções e
+   **não avança**.
+4. **Pulos**: `maxSkips = 2`. O 1º informa `1/2`; o 2º avisa que foi o último; o
+   3º é **bloqueado** (avisa e não avança).
+5. Resultado: contagem SIM/NÃO/PULOS + **Índice Hot** + lista das 5 respostas +
+   frase final aleatória (`FRASES_FINAIS`).
+
+### Isolamento (o ponto crítico)
+A chave da sessão é **`groupId::participantId`**. `processMessage` só age quando
+`participantId` é o participante daquela sessão — mensagem de qualquer outra
+pessoa devolve `null` e **segue o fluxo normal** (não responde, não consome).
+Sessões **coexistem** no mesmo grupo para participantes diferentes.
+
+### Índice Hot (determinístico, sem IA)
+`SIM ÷ (SIM + NÃO) × 100`. Pulo não entra no divisor. Tudo pulado → **N/A**
+(nunca divide por zero). `3 SIM + 1 NÃO + 1 PULO = 75%` (exemplo do pedido).
+
+### Expiração
+`SESSION_TIMEOUT_MS = 30min` sem atividade. O `_cleanup()` remove a sessão; o
+`processMessage` avisa *"encerrado por inatividade"* e limpa. Sessão `FINISHED`
+também sai do mapa (sem fantasma) — e depois dela o mesmo usuário pode iniciar
+outra. `!hotseat` com sessão ativa → recusa (não cria duas).
+
+### Menu 18
+Entrou na lista declarativa `BRINCADEIRA_COMMANDS` (`menus/menu18.js`) com o
+emoji `🔥`, ao lado de `vab18`/`eununca18`, e o `blockPv`
+(`menuCommandsMap.menu18`) recebeu `hotseat`.
+
+### Testes — `tests/hotseat.test.js` (**39 testes / 401 asserções**)
+Roda o **handler real** com socket falso. Cobre o checklist do pedido:
+banco (100 + ids únicos), funções puras (todas as variações de SIM/NAO/PULAR,
+confirmação de início, sorteio sem repetição, fórmula do índice), inicialização
+com/sem menção, etapa "pronto" (e que intruso não inicia), 5 perguntas únicas
+(20 sessões), respostas, **mensagem inválida não avança**, pulos (1º/2º/3º
+bloqueado), **isolamento** (outra pessoa não altera; outro grupo não captura),
+sessão duplicada, resultado (75%/100%/0%/N/A), frase final, pós-final não altera,
+**concorrência** (2 sessões no mesmo grupo), **timeout/limpeza** e menu18/blockPv.
+`tests/menu18-plaquinha.test.js` cobre o `!hotseat` no menu pelo handler real →
+20 testes / 89 asserções.
+
+### `tests/testcall.test.js` é FLAKY (pré-existente, não é regressão)
+Ao validar, o `testcall` falhou em ~1 de cada 10 execuções
+(*"persistiu testcall=true (obtido: undefined)"*). Medido com **40 execuções
+na baseline (sem as mudanças): 4 falhas** — exatamente a mesma taxa do código
+novo (4/40). É uma corrida do próprio teste com o `persistGroupData()` async.
+**Não** tem relação com o Hot Seat (o bloco novo nem foi acionado: não imprimiu
+nada quando instrumentado). Rodar de novo costuma passar.
+
 ## GERENCIAMENTO do Plugin Fantasma — `!ghostcmd` / `!addghostcmd` / `!delghostcmd` ✅
 Sistema pequeno, **exclusivo do dono**, para administrar a distribuição do plugin
 remoto. Só isso: nada de marketplace, registry, dashboard ou permissões novas.

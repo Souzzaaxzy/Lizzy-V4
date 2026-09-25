@@ -18,12 +18,14 @@
 import { boldItalic } from './layout.js';
 import { PLAQ_COMMANDS } from '../funcs/utils/plaq.js';
 
-// Comandos da categoria BRINCADEIRAS (jogos de enquete do menu +18).
+// Comandos da categoria BRINCADEIRAS do menu +18.
 // `vab18` é o "Isso ou Aquilo" picante e `eununca18` o "Eu nunca" picante —
-// mesma mecânica das versões normais, só a lista muda.
+// mesma mecânica das versões normais, só a lista muda. `hotseat` é o jogo da
+// cadeira quente (5 perguntas SIM/NÃO/PULAR respondidas por mensagem normal).
 const BRINCADEIRA_COMMANDS = [
   { cmd: 'vab18', emoji: '😈' },
   { cmd: 'eununca18', emoji: '🔞' },
+  { cmd: 'hotseat', emoji: '🔥' },
 ];
 
 export default async function menu18(prefix, botName = 'MeuBot', userName = 'Usuário') {
