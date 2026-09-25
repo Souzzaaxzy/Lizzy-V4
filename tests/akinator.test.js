@@ -76,7 +76,8 @@ function desbold(text) {
 // ============================================================================
 
 const akinatorModule = await import(new URL('../dados/src/funcs/utils/akinator.js', import.meta.url).href);
-const { AkinatorManager, parseAnswerInput, toAnswerEnum, encurtar, percentual, buildAnswerButtons } = akinatorModule;
+const { AkinatorManager, parseAnswerInput, toAnswerEnum, encurtar, percentual, buildAnswerButtons,
+  transportFromEnv, classificarFalha } = akinatorModule;
 const realLib = await import('akinator-client');
 
 const indexModule = await import(new URL('../dados/src/index.js', import.meta.url).href);
@@ -384,6 +385,75 @@ await test('cleanup remove sessoes encerradas e expiradas (sem fantasma)', async
   mgr._cleanup();
   ok(mgr.activeCount === 0, 'nada de sessao orfa');
   ok(sa.client === null, 'referencia do cliente liberada');
+});
+
+// ============================================================================
+// 2b. TRANSPORTE (proxy/scraperapi) E DIAGNOSTICO DE BLOQUEIO
+// ============================================================================
+
+await test('transportFromEnv: vazio sem variaveis; proxy e scraperapi quando setadas', () => {
+  ok(Object.keys(transportFromEnv({})).length === 0, 'sem env -> sem opcoes');
+  ok(transportFromEnv({ AKINATOR_PROXY: 'http://u:p@h:8080' }).proxy === 'http://u:p@h:8080', 'proxy lido');
+  const s = transportFromEnv({ AKINATOR_SCRAPERAPI_KEY: 'k', AKINATOR_SCRAPERAPI_SESSION: '55' });
+  ok(s.scraperApiKey === 'k' && s.scraperApiSession === 55, 'scraperapi + session lidos');
+  ok(transportFromEnv({ AKINATOR_PROXY: '   ' }).proxy === undefined, 'proxy em branco ignorado');
+});
+
+await test('classificarFalha separa BLOQUEIO de erro de rede', () => {
+  for (const m of [
+    'Failed to extract session/signature from HTML response.',
+    'Just a moment...', 'HTTP 403 Forbidden', 'Vital API blocked', 'cloudflare challenge',
+  ]) ok(classificarFalha(m) === 'bloqueio', `"${m}" -> bloqueio`);
+  for (const m of ['connect ECONNREFUSED', 'ETIMEDOUT', 'socket hang up']) {
+    ok(classificarFalha(m) === 'rede', `"${m}" -> rede`);
+  }
+});
+
+await test('o transporte chega ao construtor do cliente', async () => {
+  let recebido = null;
+  const mgr = new AkinatorManager({
+    createClient: (o) => { recebido = o; return makeFakeClient(); },
+    enums: ENUMS,
+    transport: { proxy: 'http://p:8080' },
+    botName: 'L',
+  });
+  await mgr.iniciar({ groupId: 'g@g.us', userId: 'u@lid' });
+  ok(recebido && recebido.proxy === 'http://p:8080', 'proxy repassado ao cliente');
+  ok(recebido.language === 'pt' && recebido.theme === ENUMS.Themes.Character, 'idioma pt + tema Character mantidos');
+});
+
+await test('bloqueio do Cloudflare vira mensagem ESPECIFICA (nao erro generico)', async () => {
+  const c = makeFakeClient({ start: async () => { throw new Error('Failed to extract session/signature from HTML response.'); } });
+  const mgr = makeManager(() => c);
+  const r = await mgr.iniciar({ groupId: 'g@g.us', userId: 'u@lid' });
+  ok(r.success === false && r.reason === 'bloqueio', 'reason = bloqueio');
+  const m = mgr.mensagemBloqueio();
+  ok(/bloqueando o ip/i.test(desbold(m)), 'explica que o IP esta bloqueado');
+  ok(desbold(m).includes('AKINATOR_PROXY'), 'aponta a configuracao que resolve');
+  ok(!/stack|Error:|session=|signature=/i.test(m), 'sem detalhe tecnico');
+});
+
+await test('com proxy JA configurado, a mensagem nao manda configurar de novo', () => {
+  const c = makeFakeClient();
+  const mgr = new AkinatorManager({ createClient: () => c, enums: ENUMS, transport: { proxy: 'http://p:8080' }, botName: 'L' });
+  ok(!desbold(mgr.mensagemBloqueio()).includes('AKINATOR_PROXY'), 'nao sugere o que ja esta configurado');
+});
+
+await test('erro de rede comum continua com a mensagem generica', async () => {
+  const c = makeFakeClient({ start: async () => { throw new Error('connect ECONNREFUSED'); } });
+  const mgr = makeManager(() => c);
+  const r = await mgr.iniciar({ groupId: 'g@g.us', userId: 'u@lid' });
+  ok(r.reason === 'erro_rede', 'reason = erro_rede (nao bloqueio)');
+  ok(/não consegui conectar/i.test(desbold(mgr.mensagemErroRede())), 'mensagem generica de rede');
+});
+
+await test('!akinator no handler mostra o aviso de bloqueio quando o IP e recusado', async () => {
+  injetarManager(() => makeFakeClient({ start: async () => { throw new Error('Just a moment...'); } }));
+  const grupo = makeGroup();
+  const p = nextPerson();
+  const r = await enviar({ groupJid: grupo, pessoa: p, text: '!akinator' });
+  ok(/bloqueando o ip/i.test(desbold(r.texto)), 'avisou o bloqueio (nao o erro generico)');
+  ok(desbold(r.texto).includes('AKINATOR_PROXY'), 'mostrou como resolver');
 });
 
 // ============================================================================

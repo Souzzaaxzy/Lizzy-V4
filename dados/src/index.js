@@ -3374,6 +3374,10 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       globalThis.__lizzyAkinatorManager = new AkinatorManager({
         createClient: (opts) => new akinatorLib.AkinatorClient(opts),
         enums: { Answers: akinatorLib.Answers, Themes: akinatorLib.Themes, Languages: akinatorLib.Languages },
+        // O transporte (AKINATOR_PROXY / AKINATOR_SCRAPERAPI_KEY) e lido do
+        // ambiente pelo proprio manager. Sem essas variaveis ele tenta direto,
+        // e o Cloudflare pode bloquear IP de VPS/datacenter -- caso em que o
+        // comando explica a causa em vez de um erro generico.
         botName: nomebot,
       });
     }
@@ -37928,6 +37932,9 @@ case 'akinator': {
     if (!r.success) {
       if (r.reason === 'ja_em_partida') {
         return reply(akinatorManager.mensagemJaEmPartida());
+      }
+      if (r.reason === 'bloqueio') {
+        return reply(akinatorManager.mensagemBloqueio());
       }
       return reply(akinatorManager.mensagemErroRede());
     }

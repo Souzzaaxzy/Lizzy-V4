@@ -1203,25 +1203,48 @@ Sessao expira em **30min** (`SESSION_TIMEOUT_MS`), avisa e limpa (spec 21).
 (usado no `ERROU`) depende do endpoint `/exclude`, que tem anti-bot **proprio**;
 se falhar, **nada de bypass**: avisa e encerra com seguranca (spec 15).
 
-### Testes — `tests/akinator.test.js` (**31 testes / 111 assercoes**)
+### Testes — `tests/akinator.test.js` (**38 testes / 134 assercoes**)
 Handler real com socket falso + **cliente falso injetado**. Cobre o checklist da
 spec 36: as 5 respostas (enum real), 2 usuarios simultaneos, isolamento (B nao
 responde pela partida de A), cancelamento, timeout, `won`, `ko`, erro de rede
 (no inicio e ao responder), clique duplicado (so 1 avanca), imagem indisponivel,
 descricao truncada, botao de sessao antiga recusado, e que **nenhum menu** ganhou
-o comando. Os botoes foram validados pelo `proto.Message.encode/decode` REAL:
+o comando. Cobre tambem o **transporte**: `transportFromEnv`, `classificarFalha`,
+que o proxy chega ao construtor do cliente, e as duas mensagens de bloqueio. Os botoes foram validados pelo `proto.Message.encode/decode` REAL:
 viram `quick_reply` com os 5 ids intactos.
 
-### LIMITE DE REDE (honesto, medido)
+### LIMITE DE REDE (medido) + CORRECAO do "nao foi possivel conectar" ✅
 O IP de datacenter deste sandbox e **bloqueado pelo Cloudflare** do akinator.com:
 `GET /` responde **403 "Just a moment..."** e o `start()` falha com
 *"Failed to extract session/signature from HTML response"*. Testado tambem em
 `en`/`es`/`fr`: **mesmo resultado** — e o dominio inteiro, nao o idioma. Isso e
-**ambiental, nao bug de codigo**: o proprio README do pacote documenta o bloqueio
-e oferece `proxy`/`scraperApiKey` para contornar (a Lizzy **nao** faz bypass). Em
-VPS/IP residencial o fluxo funciona. O que esta provado aqui e o **fluxo, o
-layout, os botoes e o tratamento de erro** — a partida real fica para o dono
-validar no servidor dele.
+**ambiental, nao bug de codigo**.
+
+O dono recebeu *"nao foi possivel conectar"* no servidor dele — sintoma desse
+bloqueio, sem forma de saber a causa. Corrigido em duas frentes:
+
+1. **Diagnostico**: `classificarFalha(msg)` separa **`bloqueio`** (Cloudflare:
+   *session/signature*, *just a moment*, *403*, *vital api blocked*, *challenge*)
+   de **`rede`** (ECONNREFUSED, timeout...). O `iniciar` devolve
+   `reason: 'bloqueio'` e o comando mostra um aviso **especifico**
+   (*"O Akinator está bloqueando o IP deste servidor... proteção do próprio
+   serviço (Cloudflare)"*), apontando `AKINATOR_PROXY`. Erro comum de rede segue
+   com a mensagem genérica. Detalhe técnico só no console.
+2. **Saida oficial**: `transportFromEnv(env)` lê **`AKINATOR_PROXY`** e
+   **`AKINATOR_SCRAPERAPI_KEY`**/`AKINATOR_SCRAPERAPI_SESSION` do `.env` e
+   repassa ao construtor do cliente (`proxy`/`scraperApiKey`/`scraperApiSession`)
+   — as duas opções que o **próprio pacote** documenta para este bloqueio.
+   **Nada de bypass, nada de scraping, nada de credencial no código**: só a
+   configuração do administrador. Documentado no `.env.example`.
+
+Detalhe de UX: se o admin **ja** configurou proxy e mesmo assim bloqueou, a
+mensagem **nao** manda configurar proxy de novo (seria inutil) — so avisa para
+tentar mais tarde.
+
+Estado: **fluxo, layout, botoes, isolamento, erros e transporte** estao cobertos
+por teste (38 testes). A partida real fica para o dono validar no servidor dele
+(se o IP tambem for bloqueado, configurar `AKINATOR_PROXY` ou a key da
+ScraperAPI resolve).
 
 ## GERENCIAMENTO do Plugin Fantasma — `!ghostcmd` / `!addghostcmd` / `!delghostcmd` ✅
 Sistema pequeno, **exclusivo do dono**, para administrar a distribuição do plugin

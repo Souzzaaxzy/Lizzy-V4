@@ -29,6 +29,50 @@ const CONFIG = {
   TEMA: 'Character',
 };
 
+/**
+ * Transporte OPCIONAL do cliente.
+ *
+ * O akinator.com coloca Cloudflare na frente: de IP de datacenter/VPS a pagina
+ * inicial volta `403 Just a moment...` e o `start()` falha com "Failed to
+ * extract session/signature". O proprio pacote documenta duas saidas OFICIAIS
+ * para isso -- proxy HTTP e ScraperAPI. Nao fazemos bypass: apenas repassamos a
+ * configuracao do administrador para o construtor do cliente.
+ *
+ * Nada de credencial no codigo: tudo vem do ambiente.
+ */
+function transportFromEnv(env) {
+  const e = env || {};
+  const opts = {};
+  const proxy = String(e.AKINATOR_PROXY || '').trim();
+  const apiKey = String(e.AKINATOR_SCRAPERAPI_KEY || '').trim();
+  if (proxy) opts.proxy = proxy;
+  if (apiKey) {
+    opts.scraperApiKey = apiKey;
+    const sess = parseInt(e.AKINATOR_SCRAPERAPI_SESSION, 10);
+    if (Number.isFinite(sess)) opts.scraperApiSession = sess;
+  }
+  return opts;
+}
+
+/**
+ * Classifica a falha do cliente para dar uma mensagem util.
+ * `bloqueio` = Cloudflare/anti-bot (precisa de proxy); `rede` = o resto.
+ */
+function classificarFalha(mensagem) {
+  const m = String(mensagem || '').toLowerCase();
+  if (
+    m.includes('session/signature') ||
+    m.includes('just a moment') ||
+    m.includes('403') ||
+    m.includes('vital api blocked') ||
+    m.includes('cloudflare') ||
+    m.includes('challenge')
+  ) {
+    return 'bloqueio';
+  }
+  return 'rede';
+}
+
 // --- LAYOUT (mesmo desenho do resto da bot) ---
 const TOPO = (titulo, emoji) => {
   const e = emoji === undefined ? '\u{1F52E}' : emoji;
@@ -141,6 +185,7 @@ class AkinatorGame {
     this.botName = p.botName || 'Bot';
     this.enums = p.enums;
     this.createClient = p.createClient;
+    this.transport = p.transport || {};
 
     this.client = null;
     this.state = 'STARTING';
@@ -161,6 +206,7 @@ class AkinatorGame {
         language: this.enums.Languages.Portuguese,
         theme: this.enums.Themes.Character,
         retries: CONFIG.RETRIES,
+        ...(this.transport || {}),
       });
       const res = await this.client.start();
       this.state = 'ANSWERING';
@@ -289,6 +335,7 @@ class AkinatorManager {
     this.createClient = d.createClient;
     this.enums = d.enums;
     this.botName = d.botName || 'Bot';
+    this.transport = d.transport || transportFromEnv(process.env);
     this.sessions = new Map();
     this._seq = 0;
     this.cleanupTimer = setInterval(() => this._cleanup(), CONFIG.CLEANUP_INTERVAL_MS);
@@ -322,6 +369,7 @@ class AkinatorManager {
       groupId, userId, sessionId,
       createClient: this.createClient,
       enums: this.enums,
+      transport: this.transport,
       botName: this.botName,
     });
     this.sessions.set(sessionKey(groupId, userId), game);
@@ -336,8 +384,10 @@ class AkinatorManager {
       };
     } catch (e) {
       this.sessions.delete(sessionKey(groupId, userId));
-      console.warn('[AKINATOR] falha ao iniciar:', e && e.message);
-      return { success: false, reason: 'erro_rede' };
+      const causa = classificarFalha(e && e.message);
+      // O detalhe tecnico fica no terminal; o usuario recebe so o necessário.
+      console.warn(`[AKINATOR] falha ao iniciar (${causa}):`, e && e.message);
+      return { success: false, reason: causa === 'bloqueio' ? 'bloqueio' : 'erro_rede' };
     }
   }
 
@@ -529,6 +579,39 @@ class AkinatorManager {
     ].join('\n');
   }
 
+  /**
+   * Aviso especifico do bloqueio do provedor.
+   *
+   * So sugere configurar proxy quando o administrador AINDA nao configurou --
+   * se ja configurou e mesmo assim bloqueou, dizer "configure o proxy" seria
+   * inutil (e confuso).
+   */
+  mensagemBloqueio() {
+    const temProxy = !!(this.transport && (this.transport.proxy || this.transport.scraperApiKey));
+    if (temProxy) {
+      return [
+        TOPO('AKINATOR'),
+        '',
+        `\u26a0\ufe0f O Akinator recusou a conex\u00e3o do servidor.`,
+        '',
+        `Tente novamente mais tarde.`,
+        RODAPE(this.botName),
+      ].join('\n');
+    }
+    return [
+      TOPO('AKINATOR'),
+      '',
+      `\u26a0\ufe0f O Akinator est\u00e1 bloqueando o IP deste servidor.`,
+      '',
+      `Isso \u00e9 prote\u00e7\u00e3o do pr\u00f3prio servi\u00e7o (Cloudflare) e`,
+      `acontece com IP de VPS/datacenter.`,
+      '',
+      `O administrador pode liberar configurando`,
+      `um proxy em ${bold('AKINATOR_PROXY')} no .env.`,
+      RODAPE(this.botName),
+    ].join('\n');
+  }
+
   mensagemErroRede() {
     return [
       TOPO('AKINATOR'),
@@ -586,6 +669,8 @@ export {
   CONFIG,
   BOTAO_PARA_RESPOSTA,
   EMOJI_RESPOSTA,
+  transportFromEnv,
+  classificarFalha,
 };
 
 export default AkinatorManager;
