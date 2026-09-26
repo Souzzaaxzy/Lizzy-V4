@@ -134,6 +134,26 @@ export async function pararAudioDaCall(grupo) {
   return media.pararAudio(grupo);
 }
 
+/**
+ * Descarta a pilha de mídia após um erro nela.
+ *
+ * O motor roda em pthreads e pode falhar de formas que escapam do try/catch (um
+ * throw dentro do worker, por exemplo). Quando isso acontece o processo do bot
+ * NÃO deve reiniciar — o registro das calls é em memória e se perderia — mas a
+ * instância de mídia precisa ser jogada fora, senão fica num estado quebrado e
+ * todo `!musicap` seguinte falha em cima dela.
+ *
+ * Chamado pelo handler de `uncaughtException` do connect.js.
+ */
+export function resetarMidia() {
+  try {
+    mediaInstance = null;
+    mod = null;
+    carregado = false;
+    loadError = null;
+  } catch { /* nada a fazer */ }
+}
+
 /** Sai da call e libera a pilha de mídia. */
 export async function sairDaCallComMidia(grupo) {
   if (dubleEntrar) return dubleEntrar.sair(grupo);

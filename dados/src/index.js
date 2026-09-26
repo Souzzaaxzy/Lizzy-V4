@@ -33419,6 +33419,13 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
 
           const callAtiva = obterCall(from);
           if (!callAtiva || !callAtiva.callId) {
+            // Se a pilha de midia ainda tem sessao para este grupo, a chamada
+            // EXISTE mas o registro se perdeu (tipicamente porque o processo do
+            // bot reiniciou). Dizer so 'nao existe call' esconderia isso.
+            const estagioAtual = await estagioMidia(from);
+            if (estagioAtual !== 'indisponivel' && estagioAtual !== 'parado') {
+              return reply(`⚠️ A chamada existe (midia: _${estagioAtual}_) mas perdi o registro dela.\n\nUse \`!callp encerrar\` e suba de novo.`);
+            }
             return reply('❌ Não há chamada ativa neste grupo.\n\nUse `!callp` primeiro.');
           }
 

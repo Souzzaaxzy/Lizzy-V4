@@ -4348,6 +4348,46 @@ com o **suporte a grupo** que o original não tinha. Ele roda no socket que o bo
 | `group-media` | sessão por grupo: entra na call, espera a mídia ficar pronta, toca arquivo |
 | `audio-feeder` | **bug corrigido**: o emissor parava quando o ffmpeg saía, então só ~40 ms de qualquer arquivo tocava (medido: 2 chunks de um tom de 4 s). Agora drena a fila (medido: 201 chunks) |
 
+### CORRECAO 7 (set/2026): call "carregando" para sempre, `!musicap` sem call, e a call caindo
+Três sintomas do dono, todos do MESMO ciclo: a call sobe, o número do bot fica
+**"carregando"** indefinidamente, o `!musicap` diz **"não existe call"**, e
+depois de alguns segundos **a call fecha sozinha**.
+
+**Causa raiz MEDIDA** (`tests/call-state-dump.mjs` no pacote): o motor emite
+
+```
+call_result=4  call_setup_error_type=1  is_group_call_created_on_server=false
+```
+
+e logo depois `call_state=0` com `call_ending=true` — **o motor encerra a call**.
+Ele **precisa do ack** do servidor para concluir o setup; sem essa confirmação a
+negociação trava (o "carregando") e o servidor derruba a chamada.
+
+**Por que o ack não chegava:** o `waitForMessage` da lib usa
+`defaultQueryTimeoutMs` como timeout padrão, e o **sub-bot** estava configurado
+com:
+
+```js
+defaultQueryTimeoutMs: undefined,   // = SEM timeout
+```
+
+Sem timeout a espera **nunca resolve nem rejeita** — trava para sempre. O bot
+principal já tinha corrigido isso (`60_000`, com o comentário "era undefined…
+causando acúmulo"), mas o `subBotManager.js` ficou com o valor antigo.
+
+**Correções:**
+1. `subBotManager.js`: `defaultQueryTimeoutMs: 60_000` (igual ao bot principal).
+2. `signaling`: guarda quando o socket não sabe esperar por ack — avisa em vez de
+   travar, com os hooks `onAckMissing`/`onAckReceived`.
+3. `group-media`: o estado da call agora é logado **resumido**
+   (`state/result/setupError/noServidor/participantes`) e há um aviso explícito
+   quando o setup falha. O objeto cru tinha milhares de caracteres e escondia o
+   `call_result: 4`.
+
+**A lição:** `undefined` em `defaultQueryTimeoutMs` não é "sem limite
+configurado", é "espere para sempre". Numa negociação isso vira travamento
+silencioso.
+
 ### CORRECAO 6 (set/2026): a call NÃO subia (offer de grupo ia para o lugar errado)
 Sintoma do dono: *"não iniciou a call"*, e o log mostrou a sinalização saindo
 (482 bytes) mas o servidor respondendo **`call_result: 4`** e

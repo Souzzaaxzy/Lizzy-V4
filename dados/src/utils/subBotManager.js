@@ -167,7 +167,13 @@ async function initializeSubBot(botId, phoneNumber, ownerNumber, generatePairing
             retryRequestDelayMs: 5000,
             qrTimeout: 180000,
             keepAliveIntervalMs: 30_000,
-            defaultQueryTimeoutMs: undefined,
+            // `defaultQueryTimeoutMs: undefined` significa SEM timeout: o
+            // `waitForMessage` da lib espera para sempre, nunca resolve nem
+            // rejeita. O motor de call precisa do ack para concluir o setup, e
+            // sem timeout a espera trava — a call fica "carregando" e o servidor
+            // acaba derrubando. O bot principal já usa 60s aqui; o sub-bot
+            // ficava com o valor antigo.
+            defaultQueryTimeoutMs: 60_000,
             msgRetryCounterCache,
             auth: state,
             shouldResendMessageOn475AckError: true

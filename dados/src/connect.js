@@ -2249,7 +2249,7 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 process.on('uncaughtException', async (error) => {
-     /*
+    /*
      CORREÇÃO: Antes, o handler apenas logava o erro e não fazia nada.
      Erros não capturados em Promises matavam o WebSocket interno silenciosamente,
      mas o processo continuava "vivo" sem conexão ativa — o bot aparecia rodando
@@ -2258,6 +2258,29 @@ process.on('uncaughtException', async (error) => {
      */
     console.error('🚨 Erro não capturado — reiniciando processo:', error.message);
     console.error(error.stack);
+
+    // EXCEÇÃO DELIBERADA: erro vindo da pilha de MÍDIA de chamada (WASM) NÃO
+    // reinicia o bot.
+    //
+    // Aquele motor roda em pthreads (worker_threads) e pode lançar exceções
+    // próprias. Reiniciar por causa disso é pior que o erro: o registro das
+    // calls ativas vive EM MEMÓRIA, então o processo novo perde o estado — o
+    // `!musicap` passa a dizer "não existe call" — e a chamada cai junto com a
+    // sessão. Era exatamente o ciclo que o dono descreveu.
+    //
+    // Aqui o erro é registrado e o bot segue; a pilha de mídia é descartada para
+    // não ficar num estado inconsistente.
+    const daMidia = /lizzy-call|WasmEngine|wasm-engine|group-media|AudioFeeder|wrtc/i.test(
+        String(error?.stack || '') + ' ' + String(error?.message || '')
+    );
+    if (daMidia) {
+        console.error('🎧 Erro na pilha de MÍDIA — o bot NÃO será reiniciado (o estado das calls é em memória).');
+        try {
+            const { resetarMidia } = await import('./funcs/utils/callMedia.js');
+            resetarMidia?.();
+        } catch { /* melhor seguir sem mídia do que derrubar o bot */ }
+        return;
+    }
 
     if (error.message.includes('ENOSPC') || error.message.includes('ENOMEM')) {
         try {
