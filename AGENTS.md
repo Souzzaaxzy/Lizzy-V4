@@ -5827,3 +5827,96 @@ Suite `lizzy-call`: **73/73**. A correção da porta é medida e testada
 (`tests/relay-port.test.mjs`). Se a call ainda não convergir, o próximo suspeito é
 o **SFrame** do keying de grupo — que a própria especificação marca como não
 especificado.
+
+## CALL — INVESTIGAÇÃO COMPARATIVA contra as referências (set/2026)
+
+Investigação pedida pelo dono: engenharia reversa comparativa do Group Call,
+contra implementações de referência, sem correção por chute.
+
+### As referências (todas FORA do bot e da fork)
+
+A `wacrg` (`WhiskeySockets/wacrg`) classifica as implementações por maturidade —
+e foi aí que descobri um erro de método meu:
+
+| Implementação | Maturidade | Cobre |
+|---|---|---|
+| `zapo-caller` (`vinikjkkj/zapo`, TS) | **working** | signaling, keying, transport |
+| `whatsapp-rust` (`oxidezap/whatsapp-rust`) | **working** | signaling, keying, media, transport |
+| `meowcaller` (Go) | apenas **partial** | media |
+
+**Eu vinha calibrando só contra o `partial`.** O `whatsapp-rust` tem a stack
+VoIP completa: `group_media.rs`, `sframe.rs`, `warp.rs`, `hbh_srtp.rs`, `stun.rs`,
+e `voip_control/` (roster, SSRC, relay parse, transport).
+
+### Descobertas concretas do `whatsapp-rust`
+
+| Item | Referência | Efeito |
+|---|---|---|
+| **SSRC** | **determinístico**: `HKDF-SHA256(salt=slot_word LE32, ikm=call_id, info=lid, 4)` → u32 LE | não é aleatório nem contador |
+| **Grade de streams** | **9 slots**: `[0,1,4,2,3,5,7,8,6]` (áudio/FEC/NACK, vídeo/FEC/NACK, HBH FEC tx/rx, app-data) | um SSRC por slot por participante |
+| **Normalização de LID** | `user@lid` → `user:0@lid`; `:N@lid` mantém; resto passa | o `info` do HKDF usa essa forma |
+| **Porta do relay** | `WEB_CLIENT_RELAY_PORT = 3480` (issue #1098) | já corrigido em `d2f966e` |
+| **`te2`** | 6 bytes = IPv4+porta; **18 bytes = IPv6+porta** | **o nosso só trata 6** |
+| **Epoch de grupo** | exatamente 32 bytes, buffered (máx 8), com regra de conflito | — |
+| **Validação de roster** | PID 0 **é rejeitado** para remoto; SSRCs precisam ser únicos | — |
+
+### Hipóteses REFUTADAS por medição (não viraram mudança)
+
+| Hipótese | Teste | Resultado |
+|---|---|---|
+| alimentar PCM sem caminho de mídia derruba o motor | `tests/audio-sem-midia.test.mjs` | **NÃO derruba** |
+| destruir o motor com o feeder ativo derruba | `tests/audio-e-destroy.test.mjs` | **NÃO derruba** |
+
+Os dois ficam na suíte como guarda (agora que há ffmpeg, o PCM chega ao motor).
+
+### Divergência encontrada mas NÃO provada (não alterada)
+
+**`a=ice-ufrag`** — as duas referências que funcionam **CONFLITAM**:
+
+- `whatsapp-rust`: o ufrag é o `<auth_token>`; o `<token>` *"is never a ufrag"*.
+- `zapo-caller`: usa `authToken || token`, com **medição em chamada real** no
+  MESMO transporte (`RTCPeerConnection`): **4 de 6 legs** conectaram com o token
+  no ufrag e áudio nos dois sentidos, contra **0 de 6** com ufrag aleatório.
+
+O `whatsapp-rust` disca **UDP cru**, e a própria doc dele diz que o ufrag é algo
+que *"a platform whose transport is an `RTCPeerConnection` needs and the native
+dialer does not"* — sua leitura é **raciocinada, não medida**. O contexto que
+corresponde ao nosso é o do **zapo**.
+
+**Uma tentativa minha de "corrigir" para o auth_token estrito foi REVERTIDA**,
+por dois motivos: contraria a medição no mesmo transporte, e sem `auth_token` o
+ufrag fica vazio e o `wrtc` **LANÇA** (`Called with SDP without ice-ufrag and
+ice-pwd`) — derrubaria o processo. Registrado no código para não ser retentado
+sem evidência nova (a doc do zapo pede o mesmo).
+
+### Entregue: observabilidade das etapas do relay (Fase 3)
+
+Antes, o log só dizia `relay list inválida` quando a lista **não** parseava — e
+nada quando ela chegava. Não dava para distinguir *"o relay não chegou"* de
+*"chegou, escolheu endpoint, tentou conectar e falhou"* — causas com correções
+diferentes.
+
+Agora existe `onStage` com as etapas:
+
+```
+endpoint_selecionado → transporte_iniciando → conexao_aberta | conexao_falhou
+                                          → stun_alloc_visto → midia_enviada
+```
+
+**Política de log: só `id`, tamanho e estado — nunca credencial.** Há teste que
+verifica que nem o token nem o auth_token aparecem na saída.
+
+Medido no teste (endpoint em 3480): `tokenLen=260`, `authTokenLen=96`. O
+`tokenLen=260` é exatamente o defeito conhecido que o zapo documenta (token de
+~194 bytes → 260 chars, acima do teto de 256 do `ice-ufrag`).
+
+### Suíte
+`lizzy-call`: **77/77** (era 73; +4 testes: 2 de áudio, 2 de etapas do relay).
+Fork `044236e`; bot `7de7885`.
+
+### O que falta (honesto)
+Com a instrumentação, o próximo log diz **ONDE** a call para. Se aparecer
+`transporte_iniciando` e nenhum desfecho, morre no ICE. Se nem
+`endpoint_selecionado` aparecer, o relay não chegou. Nenhuma correção pode ser
+escolhida sem esse dado — e é por isso que ele foi entregue antes de qualquer
+mudança adicional.
