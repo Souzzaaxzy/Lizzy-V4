@@ -33355,6 +33355,17 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             return reply('❌ A chamada de grupo precisa de pelo menos 2 outros membros.');
           }
 
+          // Aviso de memória: a pilha de mídia aloca centenas de MB. Se a
+          // máquina estiver apertada, o OOM killer mata o processo (SIGKILL) no
+          // meio da call e o sintoma vira "o bot reiniciou sozinho", sem log.
+          // Melhor avisar antes do que descobrir depois.
+          try {
+            const livreMb = Math.round(os.freemem() / 1048576);
+            if (livreMb < 700) {
+              console.warn(`[CALLP] memória livre baixa: ${livreMb} MB — a pilha de mídia precisa de ~600 MB`);
+            }
+          } catch { /* aviso é best-effort */ }
+
           const midia = await entrarNaCallComMidia({
             grupo: from,
             participantes: convidados,
