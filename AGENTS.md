@@ -5384,3 +5384,20 @@ Suíte do `lizzy-call`: **52/52**. Testes do bot: `callp` 13/13, `musicap` 10/10
 Quando a lista de participantes é reconstruída, **o próprio cliente fica fora
 dela**. E o modo de falha do WASM aqui é *silêncio*, não erro — então a única
 forma de não repetir é um teste que observe o motor emitindo (ou não) a stanza.
+
+## CALL — A CALL SOBE (set/2026) ✅ — MARCO
+A chamada **passa a subir no grupo**. Confirmado pelo dono e medido nos testes:
+o offer de grupo sai (1 stanza, para `<call-id>@call`), com PN resolvido e
+devices reais, e o próprio bot **fora** da lista de convidados.
+
+Sequência de causas encontradas até aqui (cada uma publicada e testada):
+
+| # | Sintoma | Causa | Commit |
+|---|---|---|---|
+| 1 | `!callp` travava o bot 46s | esperava um callback que o WASM não emite + aguardava a mídia no handler | `657d7db` |
+| 2 | call não subia | offer ia para um device em vez de `<call-id>@call` | `7f1f63b` |
+| 3 | "conectando..." e morria | o **ack** era perdido (enviava antes de escutar) | `ae690d8` |
+| 4 | não subia mais | o roster levava o **próprio bot** como convidado | `52b99e8` |
+
+**Ponto de partida:** a call existe no servidor. O que falta é a **mídia
+convergir** — o número do bot ainda fica "conectando..." — e o áudio fluir.
