@@ -5753,3 +5753,77 @@ com `Invalid ICE parameters`. Formato inválido ⇒ conclusão inválida.
 Falta a linha `MORTO POR SINAL: SIGxxx` e `dmesg | grep -i oom`. O consumo de
 ~900 MB é a causa **mais provável** do `SIGKILL`, mas "provável" não é "medido".
 A redução é segura de qualquer forma.
+
+## CALL — A CAUSA RAIZ: discávamos o relay na porta errada (set/2026) ✅
+
+Encontrada na **busca global fora do bot e da fork**, como o dono pediu.
+
+### As fontes (todas externas)
+
+| Fonte | O que é | Relevância |
+|---|---|---|
+| **wacrg** (`WhiskeySockets/wacrg`) | WhatsApp Calls Research Group — a especificação das calls | lista as implementações por maturidade |
+| **zapo-caller** (`vinikjkkj/zapo`, pkg `voip`) | implementação **TypeScript**, `working` | mesma linguagem do bot; doc mais útil |
+| **whatsapp-rust** | implementação Rust, `working` | — |
+| `meowcaller` (Go) | apenas **`partial`** | era a NOSSA única referência — daí o erro |
+| POC do dono (Drive) | whatsmeow completo + cliente de Sender Keys | confirma o vocabulário das stanzas; não cobre call |
+
+A `wacrg/spec/flavors.md` classifica: `zapo-caller` e `whatsapp-rust` são
+**working**; `meowcaller` é **partial**. Eu vinha medindo só contra o partial.
+
+### A causa raiz
+
+`WaVoipCoordinatorOptions.useOriginalRelayPort` (zapo), verbatim:
+
+> *"Dial each relay on the port its `<te2>` endpoint advertises instead of on
+> TRUE_WEB_CLIENT_RELAY_PORT. **Defaults to `false`**, which is what WhatsApp Web
+> does. Against WhatsApp's own relays this is the **wrong choice** and the call
+> goes **silently one way**: the endpoints advertise a mix of ports, and one
+> reached on **3478** completes the handshake and carries the uplink **without
+> ever forwarding the peer's stream back**."*
+
+**Era exatamente o nosso sintoma**, palavra por palavra: a sinalização toda
+acontece, o uplink vai, o número do bot fica **"conectando..."** e nada volta.
+
+E o nosso padrão estava em `original` — a porta anunciada, tipicamente **3478** —
+ou seja, **o modo que a referência que funciona diz ser o ERRADO**. O modo `web`
+(3480) estava lá, mas não era o padrão.
+
+**Correção** (`d2f966e`): padrão passou a `web` (**3480**), como o WhatsApp Web.
+`CALL_RELAY_PORT_MODE=original` continua disponível.
+
+### O que a busca revelou sobre o LIMITE do que existe hoje
+
+Isto é importante para calibrar expectativa:
+
+- A wacrg classifica **group call** como `SIG-06 status: **draft**`, com o texto
+  literal **"TODO — not yet fully specified"**, e lista como **"Unspecified"**:
+  *"the participant roster stanza, join/leave signalling, and group key
+  distribution/rotation on join/leave"*. Ou seja: **o keying de grupo é questão
+  aberta até para a especificação**.
+- O `zapo-caller` — `working` em signaling/keying/transport — **não implementa
+  grupo**, só 1:1.
+- O keying de grupo é **SFrame** (AES-128-GCM; `callKey` = `salt16 || ikm16`),
+  **diferente** do E2E-SRTP do 1:1 (AES-128-CTR, salt zero). Não implementamos
+  SFrame.
+- Group calls no WhatsApp Web são **beta** (só alguns testadores), conforme a
+  imprensa especializada.
+
+### Divergência de capability: medida e NÃO aplicada
+
+| Fonte | blob |
+|---|---|
+| wacrg (autoritativo) | `01 05 f7 09 **e4** bb 13` |
+| zapo (working) | `01 05 f7 09 **e4** bb 07` |
+| nossa fork | `01 05 f7 09 **e0** bb 13` |
+
+**Medido** (`probe-capability`): o offer de **GRUPO** que o motor emite **não tem**
+nó `capability` — os filhos são `audio,audio,net,group_info`. Então essa
+divergência **não afeta** o caminho de grupo, e **não foi alterada** (mexer seria
+chute). Fica registrado para o caso 1:1.
+
+### Estado
+Suite `lizzy-call`: **73/73**. A correção da porta é medida e testada
+(`tests/relay-port.test.mjs`). Se a call ainda não convergir, o próximo suspeito é
+o **SFrame** do keying de grupo — que a própria especificação marca como não
+especificado.
