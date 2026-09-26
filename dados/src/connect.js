@@ -1225,6 +1225,11 @@ async function createBotSocket(authDir) {
 
         const AbyssSock = makeWASocket({
             version: version,
+            // CLIENTE DESKTOP/UWP: requisito para o servidor habilitar a stack de
+            // VOZ nas chamadas. O padrão da lib é macOS/Chrome, e nesse modo a
+            // mídia da call fica indisponível — a chamada sobe e fica
+            // "carregando" para sempre. Ver `docs` do requisito no AGENTS.md.
+            browser: ['Windows', 'UWP', '10.0.22631'],
             emitOwnEvents: true,
             fireInitQueries: true,
             generateHighQualityLinkPreview: true,

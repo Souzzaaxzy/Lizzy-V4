@@ -4348,6 +4348,46 @@ com o **suporte a grupo** que o original não tinha. Ele roda no socket que o bo
 | `group-media` | sessão por grupo: entra na call, espera a mídia ficar pronta, toca arquivo |
 | `audio-feeder` | **bug corrigido**: o emissor parava quando o ffmpeg saía, então só ~40 ms de qualquer arquivo tocava (medido: 2 chunks de um tom de 4 s). Agora drena a fila (medido: 201 chunks) |
 
+### CORRECAO 8 (set/2026): A CAUSA RAIZ — o cliente precisa se anunciar como DESKTOP/UWP
+Os sintomas anteriores persistiam ("carregando" infinito). Pesquisando a fundo,
+encontrei um **SDK comercial de call para Baileys** (`voice-calls-baileys`) que
+documenta o requisito que faltava:
+
+> *"Voice calls require a patched `validate-connection.js` so Baileys advertises
+> a **desktop/UWP client**. Without it, calls won't get voice through."*
+
+Ou seja: **não era só sinalização.** O servidor **só habilita a stack de mídia
+se o cliente se anunciar como desktop/UWP**. A lib anuncia `macOS/Chrome` por
+padrão → a mídia fica indisponível → a call sobe, fica "carregando" e o servidor
+derruba. Exatamente o sintoma.
+
+**Patch aplicado na fork (`Souzzaaxzy/baileys`, commit `e87a288`):**
+
+| Campo | Antes | Agora |
+|---|---|---|
+| `device` | `Desktop` | `Desktop` (mantido) |
+| `webSubPlatform` | `WEB_BROWSER` (0) | **`WIN_HYBRID` (5)** — cliente desktop/UWP |
+| `platformType` | caía em `CHROME` (1) | **`UWP` (21)** quando o browser é UWP |
+| `passive` (login) | `true` | **`false`** |
+| `lidDbMigrated` | `false` | **`true`** |
+| `appVersion` | 3 partes | 3 + `quaternary` quando houver |
+| history sync | flags parciais | + `supportCallLogHistory`, `onDemandReady`, `completeOnDemandReady` |
+
+**No bot** (`connect.js` e `subBotManager.js`): `browser: ['Windows', 'UWP', …]`
+— sem isso o `platformType` não sai UWP e o patch não tem efeito.
+
+Verificado no payload real de login:
+`device=Desktop · webSubPlatform=5 (WIN_HYBRID) · passive=false · lidDbMigrated=true`.
+
+**IMPORTANTE — precisa reconectar:** o payload do cliente é enviado **no login**.
+Uma sessão já pareada continua anunciando o cliente antigo, então é preciso
+**parear de novo** (novo QR) para o servidor ver o cliente desktop. Sem isso o
+patch não surte efeito na sessão existente.
+
+**A lição:** o servidor decide se o cliente TEM voz pelo que ele anuncia no
+login. Nenhuma quantidade de trabalho em sinalização/mídia resolve isso — é um
+pré-requisito de identidade do cliente.
+
 ### CORRECAO 7 (set/2026): call "carregando" para sempre, `!musicap` sem call, e a call caindo
 Três sintomas do dono, todos do MESMO ciclo: a call sobe, o número do bot fica
 **"carregando"** indefinidamente, o `!musicap` diz **"não existe call"**, e

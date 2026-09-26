@@ -82,7 +82,7 @@
 
 "@itsliaaa/baileys@github:Souzzaaxzy/baileys":
   version "0.3.18-final"
-  resolved "git+ssh://git@github.com/Souzzaaxzy/baileys.git#66bc0f69cb5c46c662fd2d94504544738a16d7c2"
+  resolved "git+ssh://git@github.com/Souzzaaxzy/baileys.git#e87a288962d3ef8054a15a792d8cfa657d0fc185"
   dependencies:
     "@adiwajshing/keyed-db" "^0.2.4"
     "@cacheable/node-cache" "^1.4.0"

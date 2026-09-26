@@ -157,7 +157,9 @@ async function initializeSubBot(botId, phoneNumber, ownerNumber, generatePairing
         const sock = makeWASocket({
             version,
             logger,
-            browser: ['Windows', 'Edge', '143.0.3650.66'],
+            // CLIENTE DESKTOP/UWP: requisito para o servidor habilitar a VOZ nas
+            // chamadas (o padrao macOS/Chrome deixa a midia indisponivel).
+            browser: ['Windows', 'UWP', '10.0.22631'],
             emitOwnEvents: true,
             fireInitQueries: true,
             generateHighQualityLinkPreview: true,
