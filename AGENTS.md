@@ -5556,3 +5556,67 @@ Duas armadilhas de plataforma, não de protocolo:
 E a lição de operação: uma proteção que **não cobre o caso real** é pior que
 nenhuma, porque dá a impressão de que o problema está resolvido. A regex de
 mídia existia, mas não pegava o `ENOENT` do ffmpeg.
+
+## CALL — o processo MORRIA POR SINAL: áudio num motor sem call (set/2026) ✅
+
+Log do dono (o `BindingError` havia sumido — as correções anteriores funcionaram):
+
+```
+[CALLP] A CALL FALHOU NO SETUP (result=4, setupError=1)
+[CALLP] estado da call: state=1 result=4 setupError=1 noServidor=false
+[CALLP] ack trouxe group_info/relay - aplicando o roster inicial
+[CALLP] roster tx=15 participantes=6 conectados=1 midia=false
+[CALLP] tocando audio: silence
+AO bot terminou com erro (código: null). Reiniciando...
+```
+
+### A pista estava no código de saída
+
+`código: null` **não** é "erro desconhecido": significa que o processo foi
+**morto por sinal**, sem `process.exit`. Ou seja, **não era uma exceção JS
+comum** — as proteções de `uncaughtException` não pegariam. Era a pilha WASM
+derrubando o processo.
+
+### Causa raiz
+
+O motor recusou o setup (`result=4`, `is_group_call_created_on_server=false`) —
+a call **não existe no servidor**. Mesmo assim:
+
+1. o `startCaptureJS` chegou,
+2. o `#onCaptureStart` iniciou o feeder,
+3. o feeder começou a escrever PCM no uplink de um motor **sem call**.
+
+Escrever áudio num motor nesse estado deixa a pilha WASM inconsistente e ela
+**derruba o processo**.
+
+**Agravante:** `sendAudioData` chamava `#ensureInitialized()` **fora** do
+`try`. E ele roda dentro do **timer** do feeder — um throw em callback de
+`setTimeout` **não passa** pelo try/catch do chamador: vira `uncaughtException`.
+
+### Correção (fork `c5302a9`)
+
+| Peça | O quê |
+|---|---|
+| `podeAlimentarCaptura` (pura) | a captura **não** alimenta áudio quando o setup falhou |
+| `setupDaCallFalhou` (pura) | interpreta o evento de estado, marca `callFalhou` e para o feeder |
+| `sendAudioData` | `#ensureInitialized()` **dentro** do `try` — descartar um chunk é melhor que morrer |
+
+As duas primeiras foram extraídas como **funções puras** justamente para a regra
+ser testável sem WASM (`tests/capture-gate.test.mjs`), com o estado **exato** do
+log do dono.
+
+### Lição
+1. **`código: null` = sinal.** Antes de procurar exceção no código, suspeitar de
+   crash nativo (WASM/nativo) — nenhum handler de JS pega isso.
+2. **Não insistir numa call que o servidor recusou.** `result=4` +
+   `noServidor=false` é o servidor dizendo "não criei essa call". Alimentar áudio
+   ali é pior que não fazer nada.
+3. **Throw dentro de timer não é pego pelo try do chamador.** Todo callback
+   agendado precisa se proteger por conta própria.
+
+### O que ainda falta (honesto)
+`midia=false` mostra que a call **não fica pronta**: o servidor recusa o setup
+(`result=4`). Agora o bot não morre e não insiste — mas **por que o servidor
+recusa** é o próximo passo. O log confirma que a ponte está funcionando
+(`ack trouxe group_info/relay`), então o problema está depois: na negociação
+com o relay ou no próprio offer que o motor emite.
