@@ -5477,3 +5477,82 @@ Nos dois casos o dado **estava chegando** e era descartado por detalhe de
 formato: o roster vinha dentro do ack (e não como stanza própria), e o epoch
 vinha cifrado (e não como chave crua). Medir contra uma implementação que
 **funciona** foi o que revelou os dois — o código parecia correto isoladamente.
+
+## CALL — a call DERRUBAVA o bot: BindingError + ffmpeg sem handler (set/2026) ✅
+
+Log do dono:
+
+```
+[CALLP] erro ao processar stanza: BindingError
+[CALLP] tocando audio: silence
+AO bot terminou com erro (código: null). Reiniciando...
+```
+
+Eram **dois** defeitos, um de cada lado.
+
+### 1. `BindingError`: `null` no lugar do `Uint8List`
+
+`handleGroupUpdate` e `handleEncRekey` chamavam
+`handleIncomingSignalingMessage(..., null)`. O último argumento é um
+**`Uint8List`** (tcToken) e o WASM **recusa `null`** com `BindingError`.
+
+Medido (`probe-null.mjs`, motor real):
+
+```
+handleSignalingMessage (Uint8List) -> OK
+handleGroupUpdate      (null)      -> BindingError
+handleEncRekey         (null)      -> BindingError
+```
+
+O contraste é a pista: `handleSignalingMessage` **já** construía a lista
+(`#createUint8List`), os dois de grupo passavam `null` literal.
+
+**Consequência dupla:** o `group_update` nunca era aplicado (roster e relay
+ficavam **fora** do motor — a mídia não tinha caminho) e o erro derrubava o
+processamento da stanza.
+
+### 2. O `AudioFeeder` derrubava o **processo** sem ffmpeg
+
+`spawn("ffmpeg")` emite `'error'` (ENOENT) quando o binário não está no PATH. O
+feeder escutava `stdout`, `stderr` e `exit` — **mas não `'error'`**. E um evento
+`'error'` **sem listener** em um EventEmitter **LANÇA** (comportamento do Node):
+
+```
+uncaughtException -> o bot REINICIAVA no meio da call
+```
+
+Era o "terminou com erro (código: null)" logo após `tocando audio:`.
+
+### 3. A regex do bot não cobria o ffmpeg
+
+Terceira peça: o handler de `uncaughtException` do `connect.js` já tinha uma
+lista de erros de mídia que **não** reinicia o bot — mas `spawn ffmpeg ENOENT`
+**não casava** com ela. Então o bot reiniciava mesmo com a proteção existente.
+
+Ampliada para `ffmpeg|ffprobe|spawn .* ENOENT`, e o `error.code` passou a entrar
+na detecção.
+
+### Correções
+| Onde | O quê |
+|---|---|
+| fork `lizzy-call` `7e95690` | os dois métodos de grupo constroem o `Uint8List` (como o `handleSignalingMessage` já fazia) |
+| fork `lizzy-call` `7e95690` | handler de `'error'` no spawn do ffmpeg: avisa e mantém call e bot de pé |
+| bot `connect.js` | regex de mídia ampliada (ffmpeg/ffprobe/spawn ENOENT) + `error.code` |
+
+### Teste
+`lizzy-call/tests/media-nao-derruba.test.mjs`: prova que os dois métodos de grupo
+não lançam e que o feeder não derruba o processo sem ffmpeg. Verificado que o
+teste do feeder **falha** com o código anterior.
+
+Suite do `lizzy-call`: **61/61**. Bot: `callp` 13/13, `musicap` 10/10.
+
+### Lição
+Duas armadilhas de plataforma, não de protocolo:
+1. um argumento `null` onde o binding espera **objeto embind** estoura
+   `BindingError` — e o erro só aparece se alguém chamar aquele caminho;
+2. `spawn` que falha emite `'error'`, e **`'error'` sem listener derruba o
+   processo**. Todo `spawn` precisa de handler de `'error'`.
+
+E a lição de operação: uma proteção que **não cobre o caso real** é pior que
+nenhuma, porque dá a impressão de que o problema está resolvido. A regex de
+mídia existia, mas não pegava o `ENOENT` do ffmpeg.
