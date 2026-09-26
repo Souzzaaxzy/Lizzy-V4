@@ -5935,3 +5935,73 @@ para SFrame/SRTP: quem implementa é o motor, não nós.
 
 O que **É nosso**, e por isso comparável: **signaling** (as stanzas), **relay**
 (parse, escolha de endpoint, transporte) e **roster** (parse, prontidão).
+
+## CALL — CAUSA MEDIDA: o motor subia DOIS pools de workers (set/2026) ✅
+
+Esta é a primeira correção desta investigação sustentada por **medição objetiva**
+— e não por leitura de código ou inferência.
+
+### Como foi encontrado (o método que faltava)
+
+Em vez de ler código e supor, instrumentei as **threads reais do processo**
+(`/proc/self/task`) enquanto o motor sobe:
+
+```
+ANTES  threads= 7   rss= 51 MB
+DEPOIS threads=33   rss=644 MB      -> 26 workers = 6 (nosso) + 20 (do WASM)
+```
+
+O número `26 = 6 + 20` denunciou a duplicação. E o WASM diz por que o segundo
+pool é ruim — no log dele:
+
+```
+voip: ThreadPoolManager: pthread worker prewarm timed out after 15000ms;
+continuing with 0 ready workers
+```
+
+### O defeito
+
+`worker-modules.js`, `ThreadPoolManager.initMainThread`:
+
+```js
+for (var e = typeof h.pthreadPoolSizeOverride == "number"
+           ? h.pthreadPoolSizeOverride : 20; e--;)
+    nn.allocateUnusedWorker();
+```
+
+O WASM tem o **próprio** pool, default **20**. O nosso `#initPThreadPool` criava
+**outro** pool e **nunca passava `pthreadPoolSizeOverride`** — então os dois
+coexistiam. O pool do WASM é o que falha no prewarm (15s → 0 workers prontos).
+
+Dois efeitos somados: **dobro de memória** e o motor com **0 workers prontos**
+para a mídia.
+
+### Correção
+
+`wasmLoader({ ..., pthreadPoolSizeOverride: PTHREAD_POOL_SIZE })` — o WASM usa o
+**nosso** pool, que carregamos e cuja prontidão esperamos.
+
+| | Antes | Depois |
+|---|---|---|
+| threads | 33 | **19** |
+| RSS | 644 MB | **344 MB** |
+| aviso de prewarm | presente | **ausente** |
+
+Medido também com o pacote instalado: **12 workers**, **+292 MB**, e o offer
+continua sendo emitido.
+
+### Por que as tentativas anteriores falhavam
+
+Todas as correções anteriores mexeram em **porta**, **timing** ou **handlers** —
+todas plausíveis, nenhuma medida. Esta só apareceu quando parei de ler código e
+comecei a **contar recursos do processo**.
+
+A lição: `26 workers` é um fato; "deve ser o relay" é uma hipótese. Instrumentar
+o processo (threads, RSS, sinais) respondeu em minutos o que a leitura de código
+não respondeu em várias rodadas.
+
+### Ainda aberto (honesto)
+O crash **não foi reproduzido** localmente em nenhuma das três montagens do
+caminho completo (só `GroupMedia`, motor+relay, motor+ack). O que a correção
+garante: **−300 MB** e o fim do estado degradado de 0 workers. Se o OOM era a
+causa do `SIGKILL`, isso deve resolver; se não, o próximo log dirá.
