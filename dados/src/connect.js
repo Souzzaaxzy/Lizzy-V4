@@ -2275,8 +2275,15 @@ process.on('uncaughtException', async (error) => {
     //
     // Aqui o erro é registrado e o bot segue; a pilha de mídia é descartada para
     // não ficar num estado inconsistente.
-    const daMidia = /lizzy-call|WasmEngine|wasm-engine|group-media|AudioFeeder|wrtc/i.test(
-        String(error?.stack || '') + ' ' + String(error?.message || '')
+    //
+    // O `spawn ffmpeg ENOENT` entra na lista de propósito: sem o ffmpeg no PATH,
+    // o Node emite `'error'` no processo filho, e um erro de spawn sem handler
+    // vira `uncaughtException`. Como o ffmpeg só é usado pela MÍDIA da call, o
+    // bot não pode reiniciar por causa dele — a chamada fica sem áudio, mas o
+    // processo segue. (O feeder também trata isso localmente; isto é a segunda
+    // linha de defesa.)
+    const daMidia = /lizzy-call|WasmEngine|wasm-engine|group-media|AudioFeeder|wrtc|ffmpeg|ffprobe|spawn .* ENOENT/i.test(
+        String(error?.stack || '') + ' ' + String(error?.message || '') + ' ' + String(error?.code || '')
     );
     if (daMidia) {
         console.error('🎧 Erro na pilha de MÍDIA — o bot NÃO será reiniciado (o estado das calls é em memória).');
