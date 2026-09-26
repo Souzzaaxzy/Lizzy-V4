@@ -5249,3 +5249,82 @@ falha de pareamento.
 Confira que a fork instalada é a `863681b` (o boot mostra o commit em
 "Baileys:"; ver "BOOT mostra a fork do Baileys REALMENTE instalada"). Lockfile
 antigo = código antigo. Reinstalar: `npm install --allow-git=all`.
+
+## CALL — o "conectando..." infinito que morria: o ACK era PERDIDO (set/2026) ✅
+Sintoma do dono: `!callp` sobe a call, o número do bot fica **"conectando..."**
+para sempre e depois de alguns segundos **a chamada cai**. No log:
+
+```
+call_result=4  call_setup_error_type=1  is_group_call_created_on_server=false
+```
+
+As correções anteriores (motor cria a call, rota `<call-id>@call`, cliente
+DESKTOP/UWP, `defaultQueryTimeoutMs`) estavam certas e **não** eram a causa
+deste sintoma.
+
+### Causa raiz (MEDIDA)
+
+O motor **precisa do ack do servidor** para concluir o setup da call. Em
+`lizzy-call` (`src/signaling.mts`, `#sendCallStanza`) a ordem era:
+
+```js
+await sock.sendNode(node);                              // envia
+ack = await sock.waitForMessage(stanzaId, ACK_TIMEOUT_MS); // só DEPOIS escuta
+```
+
+O ack é um **frame do WebSocket**. Se ele chega enquanto o `sendNode` ainda está
+rodando, **não existe listener registrado** e o frame é descartado. O motor
+nunca sabe que o servidor aceitou o offer → a negociação trava → o servidor
+derruba a chamada. É exatamente o "conectando..." que nunca sai do lugar.
+
+O `query()` da própria lib do Baileys registra a espera **antes** de enviar,
+justamente por isso. O bridge agora faz o mesmo.
+
+**Teste que trava isso:** `tests/signaling-ack-race.test.mjs` — um socket falso
+que manda o ack **durante** o `sendNode` (pior caso). Verificado que o teste
+**falha** com a ordem antiga.
+
+### Segundo defeito: o roster ia com identidades erradas
+
+`entrarNaCall` montava os participantes só a partir dos JIDs dos membros:
+`pn: null` e **um** device igual ao próprio JID da conta. Num grupo moderno os
+membros são **LIDs**, então o motor recebia **LIDs no lugar dos telefones** e uma
+lista de devices que nunca veio de uma descoberta real.
+
+`buildParticipantLists` também preenchia o slot de PN com `user.pn || user.jid`,
+o que transformava a lista de PN numa **cópia da lista de LIDs** sempre que o
+roster não trazia `user_pn` (o caso normal).
+
+**Correção:** novo `buildCallRoster` (exportado de `group-media`) que:
+1. resolve **LID → PN** pelo mapping do socket
+   (`signalRepository.lidMapping.getPNsForLIDs`);
+2. descobre os **devices** com `getUSyncDevices` (o mesmo caminho das mensagens);
+3. cai para o LID no slot de PN quando o número é desconhecido, **preservando o
+   alinhamento por índice** (o motor faz zip por índice — listas de tamanhos
+   diferentes deslocariam todos os participantes).
+
+**Teste que trava isso:** `tests/roster.test.mjs` — verificado que falha no
+comportamento antigo (PN `null` e 1 device por conta).
+
+### Arquivos
+| Caminho | Papel |
+|---|---|
+| `lizzy-call/src/signaling.mts` | espera o ack **antes** de enviar |
+| `lizzy-call/src/group-media.mts` | `buildCallRoster` (PN + devices reais) |
+| `lizzy-call/src/group-bridge.mts` | `buildParticipantLists` sem duplicar o LID |
+| `lizzy-call/tests/signaling-ack-race.test.mjs` | prova a ordem do ack |
+| `lizzy-call/tests/roster.test.mjs` | prova o roster (PN, devices, alinhamento) |
+
+Fork `Souzzaaxzy/lizzy-call`, commit **`ae690d8`**; lockfiles repinados.
+Nada mudou em `dados/src/index.js` / `callMedia.js`: o bot já passa o `sock`
+para `entrarNaCall`, e é dele que saem o mapping e a descoberta de devices.
+
+Suite do `lizzy-call`: **48/48**. Testes do bot: `callp` 13/13 (31 asserções),
+`musicap` 10/10 (18 asserções).
+
+### LIMITE HONESTO
+A convergência final (áudio saindo na call) depende de rodar num grupo real com
+gente dentro. O que está provado por teste: a ordem do ack, o roster correto e
+toda a montagem/parse das stanzas. O `!callp` deve parar de ficar "conectando...";
+se a mídia ainda não fluir, o log agora diz em qual estágio parou
+(`aguardando_roster` / `aguardando_relay` / `aguardando_epoch`).
