@@ -4348,6 +4348,38 @@ com o **suporte a grupo** que o original não tinha. Ele roda no socket que o bo
 | `group-media` | sessão por grupo: entra na call, espera a mídia ficar pronta, toca arquivo |
 | `audio-feeder` | **bug corrigido**: o emissor parava quando o ffmpeg saía, então só ~40 ms de qualquer arquivo tocava (medido: 2 chunks de um tom de 4 s). Agora drena a fila (medido: 201 chunks) |
 
+### CORRECAO 5 (set/2026): bot TRAVAVA e depois dizia que iniciou
+Sintoma do dono: a call não iniciava, **o bot travava** (nenhum comando
+funcionava), e depois de um tempo voltava dizendo que a call foi iniciada — sem
+call real.
+
+**Causa raiz MEDIDA** (`tests/event-loop-lag-join.mjs` no pacote):
+
+| Etapa | Antes | Depois |
+|---|---|---|
+| `entrarNaCall` (o comando inteiro) | **46.535 ms** | **1.568 ms** |
+| Boot do motor (`initialize` + ready) | 16.267 ms | 1.221 ms |
+| Dos quais: espera por `onVoipReady` | **15.000 ms** | 23 ms |
+
+Dois defeitos somados:
+
+1. **Espera por um sinal que não existe.** O SDK esperava o callback
+   `onVoipReady` do WASM — mas esse nome **não aparece em lugar nenhum** do
+   `worker-modules.js`. O `Promise.race` sempre caía no timeout de 15 s, **em
+   toda chamada**. A pilha está pronta quando `initVoipStack` (síncrono)
+   retorna; agora é isso que marca a prontidão.
+2. **O comando esperava a mídia.** Depois do boot, `entrarNaCall` ainda aguardava
+   até 30 s pelo `group_update`. Enquanto o handler não retorna, o bot não
+   responde a mais nada — era o "travou e depois voltou". Agora o comando
+   responde na hora e a prontidão é acompanhada **em background**, com log.
+
+Também: a sinalização passou a ser **logada** (o bridge engole os próprios
+erros), senão uma falha de envio fica invisível e o sintoma vira "a call não
+inicia" sem motivo aparente.
+
+Lição registrada: **não esperar por callback que o binário não emite**. O sinal
+existia só no código do SDK, e o custo era 15 s por chamada.
+
 ### CORRECAO 4 (set/2026): "Could not import @whiskeysockets/baileys"
 Sintoma do dono: `!callp` respondia *"Não consegui subir a chamada. _Could not
 import @whiskeysockets/baileys. Install it as a peer dependency._"*
