@@ -5620,3 +5620,63 @@ log do dono.
 recusa** é o próximo passo. O log confirma que a ponte está funcionando
 (`ack trouxe group_info/relay`), então o problema está depois: na negociação
 com o relay ou no próprio offer que o motor emite.
+
+## CALL — o crash persiste: faltava o MOTIVO (set/2026) 🔍
+
+Log do dono **depois** das correções anteriores:
+
+```
+[CALLP] A CALL FALHOU NO SETUP (result=4, setupError=1)
+[CALLP] ack trouxe group_info/relay - aplicando o roster inicial
+[CALLP] roster tx=15 ... midia=false
+[CALLP] captura pedida com o setup FALHO - nao vou alimentar audio
+[CALLP] roster tx=17 ... midia=false
+[CALLP] roster tx=19 ... midia=false
+bot terminou com erro (código: null). Reiniciando...
+```
+
+### O que o log PROVA (as correções funcionaram)
+
+- `ack trouxe group_info/relay` → a ponte do ACK está funcionando.
+- `captura pedida com o setup FALHO — nao vou alimentar audio` → a guarda
+  funciona; o crash **não** vem mais do feeder.
+- O crash agora acontece **depois** dos `roster tx=15/17/19`.
+
+### O problema: o log não diz POR QUE
+
+`código: null` = morto por sinal, mas **qual** sinal não aparecia. Isso é o que
+impedia o diagnóstico: não dá para separar "acabou a memória" de "a pilha nativa
+abortou" — causas com correções completamente diferentes.
+
+### Duas lacunas de diagnóstico fechadas (`9fc4c06` + `63c83e1`)
+
+| Onde | O quê |
+|---|---|
+| `wasm-engine` | o Emscripten chama `onAbort(motivo)` **antes** de lançar; o hook não era escutado, então o motivo ia para o vazio. Agora sai como `[WASM ABORT] …` |
+| `start.js` | o handler de `close` passa a receber e reportar o **sinal**: `SIGKILL` (provável OOM), `SIGABRT` (abort nativo), `SIGSEGV` (falha de memória) |
+
+### Hipóteses DESCARTADAS com medição
+
+| Hipótese | Como foi testada | Resultado |
+|---|---|---|
+| alimentar `group_update` após o setup falhar derruba | `probe-seq`: 3 updates (tx=15/17/19) no motor | sobreviveu |
+| a relay list derruba (WebRTC nativo) | `probe-relay2` com tokens em **base64** (formato real) | sobreviveu |
+
+**Atenção a um falso positivo:** um probe anterior (`probe-relay`) sugeria crash
+no `wrtc` (`Invalid ICE parameters: ICE ufrag must contain only alphanumeric`).
+Ele passava os tokens como **array de números**, não base64 — o `ice-ufrag` virava
+`"1,1,1,…"` e o wrtc abortava. Formato inválido ⇒ conclusão inválida. Lição:
+**probe com dado irreal produz diagnóstico irreal.**
+
+### Hipótese ainda ABERTA (não medida)
+
+`PTHREAD_POOL_SIZE = 20`: o motor sobe **20 workers** com uma `WebAssembly.Memory`
+`shared` de até 32 GiB. Em VPS pequena isso pode estourar a memória e o OOM killer
+manda `SIGKILL` — que é exatamente "morto por sinal, sem log". **Não confirmado:**
+precisa do sinal no log (agora aparece) ou de `dmesg`/`journalctl -k | grep -i oom`.
+
+### Próximo passo (depende do log novo)
+Rodar e olhar:
+1. `[WASM ABORT] …` — se aparecer, o motivo está ali;
+2. `MORTO POR SINAL: SIGxxx` — separa OOM de abort nativo;
+3. `dmesg | grep -i oom` no servidor, se o sinal for `SIGKILL`.
