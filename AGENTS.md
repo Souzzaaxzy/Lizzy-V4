@@ -6005,3 +6005,71 @@ O crash **não foi reproduzido** localmente em nenhuma das três montagens do
 caminho completo (só `GroupMedia`, motor+relay, motor+ack). O que a correção
 garante: **−300 MB** e o fim do estado degradado de 0 workers. Se o OOM era a
 causa do `SIGKILL`, isso deve resolver; se não, o próximo log dirá.
+
+## CALL — CAUSA RAIZ do ufrag inválido: `auth_token_id` ausente (set/2026) ✅
+
+O log do dono trouxe a prova que faltava:
+
+```
+[RELAY] conexao_falhou - 157.240.27.52:3480 (dus1c01) state=ice_timeout_20000ms
+Promise rejeitada sem tratamento: [DOMException [InvalidAccessError]:
+  Failed to set remote answer sdp: ... Invalid ICE parameters:
+  ICE ufrag must be between 4 and 256 characters long.]
+```
+
+**Este é o ponto exato onde a call morria** — e o instrumento da Fase 3 foi o que
+o revelou.
+
+### A cadeia de evidências (tudo MEDIDO, nada inferido)
+
+| # | Evidência | Fonte |
+|---|---|---|
+| 1 | o erro diz ufrag fora de **4..256** | log do dono |
+| 2 | `tokenLen=260`, `authTokenLen=96` | meu `[RELAY] endpoint_selecionado` |
+| 3 | **260 > 256** → o TOKEN estoura; o AUTH_TOKEN cabe | cálculo |
+| 4 | o código fazia `authToken ?? token`; sem `auth_token_id` → `undefined` → caiu no token | leitura do código |
+| 5 | ausente deve ser **0**, não `undefined` | `whatsapp-rust`, `voip/engine.rs` |
+
+A referência é literal:
+
+> *"`auth_token_id` is an ordinary index, exactly as `token_id` is: both
+> **default to 0** when the attribute is absent, and slot 0 is a real slot. It is
+> *not* a sentinel — treating it as one would **blank the ufrag for every offer
+> that omits the attribute, which is the common shape**."*
+
+**Era exatamente o defeito.** E a própria referência já o tinha documentado.
+
+### Reprodução exata e correção
+
+Com os tamanhos reais do WhatsApp (token 193 bytes → 260 chars; auth_token 70
+bytes → 96 chars) e uma relay list **sem** `auth_token_id`:
+
+| | `authTokenLen` | ufrag | rejeições |
+|---|---|---|---|
+| Antes | **0** | **260 chars (inválido)** | 1 |
+| Depois | **96** | **96 chars (válido)** | **0** |
+
+**Correções** (fork `c605f4e`):
+1. `auth_token_id` ausente vale **0** (slot real) — o ufrag sai do auth_token.
+2. `void this.#ensureConnection(info)` ganhou **`.catch`** nos dois pontos: sem
+   ele, um SDP recusado virava "Promise rejeitada sem tratamento", ruído que
+   escondia a causa.
+
+### A lição (a mais importante desta investigação)
+
+**O instrumento resolveu o que a leitura de código não resolveu.**
+
+Durante várias rodadas eu li código, comparei referências e levantei hipóteses.
+Nada disso achou o defeito. Foi o `[RELAY] endpoint_selecionado` — que eu só
+implementei na Fase 3, medindo `tokenLen=260` — que entregou o número que fechou
+o caso. O `260 > 256` é aritmética; todo o resto era opinião.
+
+E há uma ironia registrada: **eu já tinha mexido nessa linha** e a **revertido**
+por não ter evidência. A reversão foi correta no método (não provar por leitura),
+mas a evidência existia — só não estava sendo coletada. Instrumentar veio antes
+de decidir.
+
+### Ainda aberto
+A call agora **não deve mais falhar no ICE** com esse erro. Se a convergência
+ainda não vier, o próximo suspeito é o **epoch de chave** (`sem_epoch_de_chave`),
+que também aparece no log (`midia=false`) e cuja entrega depende do `enc_rekey`.
