@@ -4348,6 +4348,29 @@ com o **suporte a grupo** que o original não tinha. Ele roda no socket que o bo
 | `group-media` | sessão por grupo: entra na call, espera a mídia ficar pronta, toca arquivo |
 | `audio-feeder` | **bug corrigido**: o emissor parava quando o ffmpeg saía, então só ~40 ms de qualquer arquivo tocava (medido: 2 chunks de um tom de 4 s). Agora drena a fila (medido: 201 chunks) |
 
+### CORRECAO 6 (set/2026): a call NÃO subia (offer de grupo ia para o lugar errado)
+Sintoma do dono: *"não iniciou a call"*, e o log mostrou a sinalização saindo
+(482 bytes) mas o servidor respondendo **`call_result: 4`** e
+**`is_group_call_created_on_server: false`**.
+
+**Causa raiz MEDIDA** (`tests/wasm-group-offer-variants.mjs` no pacote): o motor
+emite o offer de grupo **corretamente** — endereçado a `<call-id>@call`, com
+`group-jid` e `<group_info>` (o roster) — quando há **2+ convidados**. Com **1
+convidado** ele emite um offer **1:1** (sem `group-jid`), comportamento do
+próprio motor.
+
+O defeito estava no **bridge**: ele reescrevia o destino com helpers que só
+conhecem `@lid` e `@s.whatsapp.net`, mandando o offer para o **device de um
+participante** em vez do objeto da call. O servidor recusa — e a call não é
+criada.
+
+**Correção**: um offer que tenha `group-jid` **ou** `<group_info>` vai para
+`<call-id>@call`, sem passar pelos helpers de device. `tests/signaling-route`
+trava isso.
+
+Também: `sendSignaling` engolia os próprios erros (`catch(() => {})`), o que
+escondia falhas de envio; agora existe `sendSignalingChecked` para diagnóstico.
+
 ### CORRECAO 5 (set/2026): bot TRAVAVA e depois dizia que iniciou
 Sintoma do dono: a call não iniciava, **o bot travava** (nenhum comando
 funcionava), e depois de um tempo voltava dizendo que a call foi iniciada — sem
