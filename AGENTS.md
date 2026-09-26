@@ -5401,3 +5401,79 @@ Sequência de causas encontradas até aqui (cada uma publicada e testada):
 
 **Ponto de partida:** a call existe no servidor. O que falta é a **mídia
 convergir** — o número do bot ainda fica "conectando..." — e o áudio fluir.
+
+## CALL — os DOIS bloqueadores do "conectando..." (set/2026) ✅
+
+Depois do marco (a call sobe), o "conectando..." infinito tinha **duas causas
+distintas**, ambas encontradas na busca global fora do bot e da fork.
+
+Fonte: **`meowcaller`** (purpshell, Go) — a única implementação pública de call de
+**grupo** com mídia. Os arquivos decisivos foram `signaling/group.go`
+(`ParseInitialGroupCallAck`, `ParseGroupCallEncRekey`) e os datasheets
+(`group-media-receive.md`, `group-media-key-epoch.md`).
+
+### Bloqueador 1 — o roster inicial vem no ACK do offer
+
+`ParseInitialGroupCallAck` mostra que o servidor responde ao `<offer>` de grupo
+com um **`ack`** contendo:
+
+- `<group_info>` — o roster inicial: `transaction-id`, `self_pid`, usuários e devices;
+- `<relay>` — a alocação de mídia: chave, tokens e endpoints `te2`.
+
+O SDK repassava o ack ao motor como **base64 cru** e **ninguém lia o
+`<group_info>`**. O motor ficava sem roster e sem relay: a chamada existia, mas
+não havia caminho de mídia.
+
+**Correção** (`7c94fea`): `#entregarGroupInfoDoAck` extrai `group_info`+`relay`
+do ack e entrega pelo hook `onGroupInfoFromAck`, embrulhado num nó
+`group_update` — o formato que `#onIncomingCallStanza` **já** sabia processar.
+Nenhum parse novo: o caminho existia, só não recebia o dado.
+
+### Bloqueador 2 — o epoch de chave chega CIFRADO
+
+`ParseGroupCallEncRekey` mostra o formato real:
+
+```xml
+<enc_rekey call-id call-creator transaction-id>
+  <encopt keygen="2"/>
+  <enc type="msg|pkmsg" v="2">CIPHERTEXT</enc>
+</enc_rekey>
+```
+
+O código procurava um filho `<key>` **cru** e exigia ≥ 32 bytes. Esse filho **não
+existe** nesse formato, e o ciphertext tem outro tamanho — então o epoch nunca
+era aceito, `mediaReady` ficava preso em `sem_epoch_de_chave` **para sempre**.
+
+**Correção** (`8956277`): lê o `<enc>` (formato real) além do `<key>` cru
+(compatibilidade); `applyKeyEpoch` recusa só vazio; e o motivo da recusa passa a
+ser logado (antes falhava em silêncio).
+
+**Quem decifra é o motor** — ele tem as sessões Signal. O `applyKeyEpoch` só
+precisa reconhecer que o epoch chegou, para o portão de prontidão abrir.
+
+### Verificado end-to-end (com o pacote instalado)
+
+```
+1. ACK entregou group_info? true | relay? true
+2. roster aplicado: true | tx = 21 | participantes = 2
+3. epoch cifrado aceito? true | tx = 14
+4. mídia: {"ready":true,"peer":"200000000000002@lid","endpoint":"157.240.17.133"}
+```
+
+O portão de prontidão (`mediaReady`) exige as **três** coisas: epoch de chave,
+relay utilizável e um remoto conectado com PID. Com as três, a mídia fica
+pronta e o `!musicap` pode tocar.
+
+### Testes
+| Arquivo | Trava |
+|---|---|
+| `tests/ack-group-info.test.mjs` | o ack entrega roster+relay e é parseável |
+| `tests/enc-rekey-cifrado.test.mjs` | o ciphertext é aceito; roster+relay+epoch = **pronta** |
+
+Suíte do `lizzy-call`: **59/59**.
+
+### Lição
+Nos dois casos o dado **estava chegando** e era descartado por detalhe de
+formato: o roster vinha dentro do ack (e não como stanza própria), e o epoch
+vinha cifrado (e não como chave crua). Medir contra uma implementação que
+**funciona** foi o que revelou os dois — o código parecia correto isoladamente.
