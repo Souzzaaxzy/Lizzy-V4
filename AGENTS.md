@@ -5680,3 +5680,76 @@ Rodar e olhar:
 1. `[WASM ABORT] …` — se aparecer, o motivo está ali;
 2. `MORTO POR SINAL: SIGxxx` — separa OOM de abort nativo;
 3. `dmesg | grep -i oom` no servidor, se o sinal for `SIGKILL`.
+
+## CALL — o alarme falso do `result=4` e o consumo de ~900 MB (set/2026)
+
+Duas descobertas, uma delas **erro meu**.
+
+### 1. `result=4` é o ESTADO INICIAL — eu tratei como falha
+
+Medido com o motor real, com o **tempo** de cada evento (`probe-estados`):
+
+```
+[t= 1357ms] state=1 result=4 setup=1 noSrv=false ending=false  <- logo após criar
+[t=16469ms] state=0 result=8 ending=true                       <- falha REAL
+```
+
+O `result=4` aparece **~100 ms** depois de `startGroupCall`, **antes** de qualquer
+resposta do servidor. É o **estado inicial** ("ainda não conectada") — presente em
+**toda** call, inclusive nas saudáveis.
+
+**Meu erro:** eu tratei `call_result != 0` como falha. Isso fez o log dizer
+`A CALL FALHOU NO SETUP (result=4, setupError=1)` em toda chamada, e me levou a
+perseguir uma causa que **não existia** por várias rodadas.
+
+**Correção** (`984a3e9`): falha real é o motor **derrubar** a call —
+`call_ending === true`, ou `state === 0` com `result` de erro (8 = FAILED). O log
+agora diz `a call ESTA CAINDO (motivo)` e inclui `encerrando=` no resumo.
+
+**Lição:** um campo chamado `result` com valor ≠ 0 *parece* erro. Sem medir a
+**linha do tempo**, não dá para distinguir estado inicial de falha. Eu inferi em
+vez de medir. O probe com `t=` em cada evento foi o que resolveu.
+
+### 2. 20 workers WASM = ~900 MB por call
+
+Medido (`probe-memoria`):
+
+| workers | delta de RSS após initialize |
+|---|---|
+| 1 | 488 MB |
+| 2 | 512 MB |
+| 6 | 599 MB |
+| **20** (padrão do SDK) | **873 MB** |
+
+≈ 465 MB **fixos** + ~20 MB por worker. Com 20 workers, **uma call custa
+~900 MB**. Numa VPS pequena isso estoura a memória, e o OOM killer manda
+`SIGKILL` — exatamente "morto por sinal, sem log" (`código: null`), sem chance de
+nenhum handler JS rodar.
+
+**Correção** (`e98c826`): `PTHREAD_POOL_SIZE` virou configurável
+(`CALL_PTHREAD_POOL_SIZE`) e o padrão caiu de 20 para **6**. Medido que com
+**2 workers o offer continua sendo emitido** (stanzas=1, call não cai) — reduzir
+não quebra a call.
+
+O 20 vinha do SDK original, pensado para um **navegador**, não para uma VPS com
+bot + outros processos. Não havia justificativa no código.
+
+No bot (`32c5c12`): `!callp` avisa no log quando a memória livre está abaixo de
+700 MB, **antes** de subir a call.
+
+### Hipóteses DESCARTADAS com medição
+
+| Hipótese | Resultado |
+|---|---|
+| alimentar `group_update` após o setup falhar derruba | sobreviveu (3 updates) |
+| a relay list derruba (WebRTC nativo) | sobreviveu (tokens em base64) |
+| `destroy()` após a call cair derruba | sobreviveu |
+
+**Falso positivo que quase me enganou:** um probe passava tokens como **array de
+números** em vez de base64; o `ice-ufrag` virava `"1,1,1,…"` e o wrtc abortava
+com `Invalid ICE parameters`. Formato inválido ⇒ conclusão inválida.
+
+### Ainda NÃO confirmado no servidor
+Falta a linha `MORTO POR SINAL: SIGxxx` e `dmesg | grep -i oom`. O consumo de
+~900 MB é a causa **mais provável** do `SIGKILL`, mas "provável" não é "medido".
+A redução é segura de qualquer forma.
