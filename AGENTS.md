@@ -4348,6 +4348,23 @@ com o **suporte a grupo** que o original não tinha. Ele roda no socket que o bo
 | `group-media` | sessão por grupo: entra na call, espera a mídia ficar pronta, toca arquivo |
 | `audio-feeder` | **bug corrigido**: o emissor parava quando o ffmpeg saía, então só ~40 ms de qualquer arquivo tocava (medido: 2 chunks de um tom de 4 s). Agora drena a fila (medido: 201 chunks) |
 
+### CORRECAO 4 (set/2026): "Could not import @whiskeysockets/baileys"
+Sintoma do dono: `!callp` respondia *"Não consegui subir a chamada. _Could not
+import @whiskeysockets/baileys. Install it as a peer dependency._"*
+
+**Causa**: o SDK de mídia tinha o nome do pacote **fixo em dois lugares**
+(`index` e `signaling`). O bot usa o **fork** `@itsliaaa/baileys`, então o
+`import("@whiskeysockets/baileys")` falhava e o erro subia como se a chamada
+tivesse falhado.
+
+**Correção**: os dois carregadores agora tentam **`@itsliaaa/baileys` primeiro** e
+depois `@whiskeysockets/baileys`; se nenhum existir, a mensagem lista o que foi
+tentado. Um teste (`tests/baileys-loader.test.mjs`) trava isso — inclusive
+proibindo a mensagem fixa antiga de voltar.
+
+Verificado com a instalação real: `SignalingBridge.init()` carrega o Baileys do
+fork com sucesso.
+
 ### CORRECAO 3 (set/2026): "conectando..." infinito ao entrar na call
 Sintoma do dono: ao entrar na call, o WhatsApp ficava **"conectando..." para
 sempre** e nunca conectava.
