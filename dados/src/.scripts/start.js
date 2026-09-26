@@ -329,11 +329,27 @@ async function startBot(codeMode = false) {
     restartBot(codeMode);
   });
 
-  botProcess.on('close', (code) => {
+  botProcess.on('close', (code, signal) => {
+    // O `signal` e a informacao que faltava: `code: null` significa que o
+    // processo NAO saiu sozinho — foi MORTO POR SINAL. Sem registrar QUAL
+    // sinal, nao da para distinguir as causas:
+    //   SIGKILL (9)  -> OOM killer (a maquina ficou sem memoria)
+    //   SIGABRT (6)  -> abort nativo (WASM/wrtc) ou assert do Node
+    //   SIGSEGV (11) -> crash de memoria em codigo nativo
+    // O log antigo dizia so "codigo: null", o que escondia a causa.
+    const porSinal = signal ? ` | sinal: ${signal}` : '';
     if (code === 0) {
       info(`✅ O bot terminou normalmente (código: ${code}). Reiniciando...`);
+    } else if (signal) {
+      const causa = {
+        SIGKILL: 'provavel OOM (memória esgotada) — verifique o limite de memória da máquina',
+        SIGABRT: 'abort de código nativo (WASM/wrtc) — veja o [WASM ABORT] nas linhas acima',
+        SIGSEGV: 'falha de memória em código nativo',
+        SIGBUS: 'falha de acesso a memória',
+      }[signal] || 'processo morto por sinal';
+      aviso(`⚠️ O bot foi MORTO POR SINAL: ${signal} (${causa}). Reiniciando...`);
     } else {
-      aviso(`⚠️ O bot terminou com erro (código: ${code}). Reiniciando...`);
+      aviso(`⚠️ O bot terminou com erro (código: ${code}${porSinal}). Reiniciando...`);
     }
     restartBot(codeMode);
   });
