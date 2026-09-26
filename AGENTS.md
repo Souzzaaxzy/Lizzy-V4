@@ -5920,3 +5920,18 @@ Com a instrumentação, o próximo log diz **ONDE** a call para. Se aparecer
 `endpoint_selecionado` aparecer, o relay não chegou. Nenhuma correção pode ser
 escolhida sem esse dado — e é por isso que ele foi entregue antes de qualquer
 mudança adicional.
+
+### Nota de escopo: SSRC não é nosso (verificado)
+
+A referência `whatsapp-rust` deriva o SSRC **por conta própria** (HKDF, grade de
+9 slots) porque reimplementa a stack inteira. **Nós não**: o SSRC é derivado
+**dentro do motor WASM**, e o nosso código não tem uma única linha de SSRC —
+verificado (`grep -c ssrc` = 0 em `wasm-engine.mts`, `group-bridge.mts`,
+`relay-transport.mts`).
+
+Ou seja: o achado do SSRC é **informativo**, não uma divergência acionável. Vale
+registrar para não virar "tarefa" indevida no futuro. O mesmo raciocínio vale
+para SFrame/SRTP: quem implementa é o motor, não nós.
+
+O que **É nosso**, e por isso comparável: **signaling** (as stanzas), **relay**
+(parse, escolha de endpoint, transporte) e **roster** (parse, prontidão).
