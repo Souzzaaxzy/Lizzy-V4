@@ -20,7 +20,7 @@ import { execFile } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { gitDependencyDrift } from './git-drift.js';
+import { gitDependencyDrifts } from './git-drift.js';
 import { sincronizarCodigo } from './git-sync.js';
 import {
     DB_DIR,
@@ -89,17 +89,18 @@ async function nodeDeps() {
         treeOk = false;
     }
 
-    const drift = fs.existsSync('node_modules') ? gitDependencyDrift(process.cwd()) : null;
+    const drifts = fs.existsSync('node_modules') ? gitDependencyDrifts(process.cwd()) : [];
 
-    if (treeOk && fs.existsSync('node_modules') && !drift) {
+    if (treeOk && fs.existsSync('node_modules') && !drifts.length) {
         log('Dependências já atualizadas');
         return;
     }
 
-    if (drift) {
-        log('Dependência de git em commit desatualizado:');
-        log(`  instalado: ${drift.instalado}`);
-        log(`  esperado : ${drift.esperado}`);
+    if (drifts.length) {
+        log('Dependência(s) de git em commit desatualizado:');
+        for (const d of drifts) {
+            log(`  ${d.pacote}: instalado ${d.instalado} | esperado ${d.esperado}`);
+        }
     }
 
     log('Instalando dependências');
@@ -131,17 +132,21 @@ function temDependencias(cwd = process.cwd()) {
 }
 
 /**
- * Valida que a fork INSTALADA está no commit pedido pelo `package-lock.json`.
- * `npm ls` compara versão, não commit — a fork mantém `0.3.18-final` entre
- * commits, então esta é a única checagem que pega a fork no commit errado.
+ * Valida que TODAS as dependências git INSTALADAS estão no commit pedido pelo
+ * `package-lock.json`.
+ * `npm ls` compara versão, não commit — a fork do Baileys mantém `0.3.18-final`
+ * e o `lizzy-call` mantém `0.2.0` entre commits, então esta é a única checagem
+ * que pega uma dependência no commit errado.
  */
 function validarForkInstalada() {
-    const drift = fs.existsSync('node_modules') ? gitDependencyDrift(process.cwd()) : null;
-    if (!drift) {
-        log('[UPDATE] Baileys validado');
+    const drifts = fs.existsSync('node_modules') ? gitDependencyDrifts(process.cwd()) : [];
+    if (!drifts.length) {
+        log('[UPDATE] Dependências git validadas');
         return true;
     }
-    log('[UPDATE] Baileys em commit diferente do esperado');
+    for (const d of drifts) {
+        log(`[UPDATE] ${d.pacote} em commit diferente do esperado (${d.instalado} != ${d.esperado})`);
+    }
     return false;
 }
 
@@ -153,13 +158,15 @@ function validarForkInstalada() {
  * rótulo fica genérico — e o SHA NUNCA vai para a UI, só o nome.
  */
 async function nomeCommitFork() {
-    const esperado = gitDependencyDrift(process.cwd())?.esperado
-        || (() => {
-            try {
-                const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf-8'));
-                return lock?.packages?.['node_modules/@itsliaaa/baileys']?.resolved?.split('#')[1] || null;
-            } catch { return null; }
-        })();
+    // Commit da FORK especificamente: `gitDependencyDrift` agora varre TODAS as
+    // dependências git, então pegar o `esperado` genérico poderia devolver o
+    // commit do `lizzy-call` — e a API seria consultada no repositório errado.
+    const esperado = (() => {
+        try {
+            const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf-8'));
+            return lock?.packages?.['node_modules/@itsliaaa/baileys']?.resolved?.split('#')[1] || null;
+        } catch { return null; }
+    })();
 
     if (esperado) {
         try {

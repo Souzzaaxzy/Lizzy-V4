@@ -7,7 +7,7 @@ import { exec, spawn } from 'child_process';
 import readline from 'readline';
 import os from 'os';
 import { promisify } from 'util';
-import { gitDependencyDrift } from './git-drift.js';
+import { gitDependencyDrifts } from './git-drift.js';
 
 const execAsync = promisify(exec);
 
@@ -264,17 +264,18 @@ async function installNodeDependencies() {
      *
      * A lógica fica em `git-drift.js` (mesma usada pelo `.scripts/update.js`).
      */
-    const checkGitDependencyDrift = () => gitDependencyDrift(process.cwd());
+    const checkGitDependencyDrift = () => gitDependencyDrifts(process.cwd());
 
     // Verificar se já existe node_modules
     if (fsSync.existsSync(nodeModulesPath)) {
         print.message('📦 node_modules já existe, verificando dependências...');
         const tree = await checkDependencyTree();
-        const drift = checkGitDependencyDrift();
-        if (drift) {
-            print.warning('⚠️ Dependência de git em commit desatualizado:');
-            print.warning(`   • instalado: ${drift.instalado}`);
-            print.warning(`   • esperado : ${drift.esperado}`);
+        const drifts = checkGitDependencyDrift();
+        if (drifts.length) {
+            print.warning('⚠️ Dependência(s) de git em commit desatualizado:');
+            for (const d of drifts) {
+                print.warning(`   • ${d.pacote}: instalado ${d.instalado} | esperado ${d.esperado}`);
+            }
             print.message('⚠️ Reinstalando para aplicar a versão correta da dependência...');
         } else if (tree.ok) {
             print.message('✅ Dependências já estão instaladas.');
