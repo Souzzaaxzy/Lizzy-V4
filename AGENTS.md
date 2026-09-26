@@ -5328,3 +5328,59 @@ gente dentro. O que está provado por teste: a ordem do ack, o roster correto e
 toda a montagem/parse das stanzas. O `!callp` deve parar de ficar "conectando...";
 se a mídia ainda não fluir, o log agora diz em qual estágio parou
 (`aguardando_roster` / `aguardando_relay` / `aguardando_epoch`).
+
+## CALL — "não liga mais": o roster levava o PRÓPRIO bot como convidado (set/2026) ✅
+Sintoma do dono, depois das correções anteriores: *"não está mais tocando a
+ligação"* — não subia call e não saía áudio.
+
+### Causa raiz (MEDIDA)
+
+`startVoipGroupCall` recebe os **convidados**, e o motor já conhece a si mesmo
+pelo `initVoipStack`. Com o JID do **próprio bot** na lista, o motor emite
+**ZERO stanzas**:
+
+```
+COM self  -> STANZAS = 0   (nenhum offer; a call nunca sobe)
+SEM self  -> STANZAS = 1   (offer de grupo normal)
+```
+
+**Nenhum erro é reportado.** Tudo "funciona", só não liga — foi por isso que o
+sintoma apareceu como "não toca mais", sem mensagem de falha.
+
+O roster antigo **não** incluía o bot. A correção do commit `ae690d8` (roster com
+PN resolvido + devices reais) passou a incluir — **regressão introduzida ali**.
+Vale registrar: a correção do ack (a causa do "conectando...") estava certa e
+continua valendo; este era um defeito **diferente**, criado pela correção
+seguinte.
+
+### Correção (fork `Souzzaaxzy/lizzy-call`, commit `52b99e8`)
+
+1. **`buildCallRoster`**: o próprio bot nunca entra na lista de convidados
+   (comparação por JID **bare**, então `x@lid` == `x:14@lid`); convidados
+   repetidos são deduplicados.
+2. **Defesa no motor** (`wasm-engine`): `#semSelf` remove o cliente das **três**
+   listas (`pn`, `lid`, `devices`) antes de chamar o WASM.
+   **Por índice, não por lista**: o motor faz *zip por índice*, então filtrar
+   cada lista isoladamente desalinharia os participantes (`pn[i]` deixaria de
+   corresponder a `devices[i]`). Medido que filtrar só `pn`+`lid` **não basta** —
+   o CSV de devices ainda levava o device do bot e o motor continuava mudo.
+3. `initVoipStack` guarda a própria identidade (`#selfJid`), que a guarda usa.
+
+### Testes
+| Arquivo | O que trava |
+|---|---|
+| `lizzy-call/tests/group-offer-emitted.test.mjs` | motor REAL: o offer sai; com o bot na lista ele fica mudo; a guarda devolve o offer no fluxo real (`selfJid` = LID) |
+| `lizzy-call/tests/roster.test.mjs` | o bot **nunca** é convidado de si mesmo; deduplicação; PN/devices |
+
+**Sem teste no nível do motor isto é invisível**: nada falha, só não liga. O
+teste acima é o que impede a regressão de voltar.
+
+### Verificação
+Com o socket do bot e o pacote instalado: roster sem o bot, PN resolvido,
+devices reais, e **1 stanza** emitida para `<call-id>@call`.
+Suíte do `lizzy-call`: **52/52**. Testes do bot: `callp` 13/13, `musicap` 10/10.
+
+### Lição
+Quando a lista de participantes é reconstruída, **o próprio cliente fica fora
+dela**. E o modo de falha do WASM aqui é *silêncio*, não erro — então a única
+forma de não repetir é um teste que observe o motor emitindo (ou não) a stanza.
