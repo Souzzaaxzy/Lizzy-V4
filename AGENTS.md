@@ -4326,6 +4326,60 @@ configuráveis** (bem-vindo/saída/`global.json`) **não** ganharam caixa — de
 do dono. As caixas de **largura fixa** também ficaram no estilo antigo: o layout
 novo não tem borda direita, então converter só topo/rodapé desalinharia.
 
+## COMANDO `!musicap` — TOCA ÁUDIO NA CALL DO GRUPO (set/2026) ✅
+Pedido do dono: `!callp` põe o bot na call e, depois, `!musicap` respondendo um
+áudio faz o bot **reproduzir aquele áudio dentro da chamada** — sem vincular um
+segundo dispositivo na conta.
+
+### Como foi feito (e o que mudou de verdade)
+A sinalização (o `<call><offer>`) só faz a chamada *existir*: ela não carrega
+som. Mídia de call é RTP/SRTP sobre UDP até um relay, cifrada com chave negociada
+à parte. Quem implementa isso é o **motor WASM do próprio WhatsApp Web**.
+
+O pacote **`lizzy-call`** (`github:Souzzaaxzy/lizzy-call`) é um fork do
+[baileys-caller](https://github.com/SheIITear/baileys-caller) (MIT, ShellTear)
+com o **suporte a grupo** que o original não tinha. Ele roda no socket que o bot
+**já tem** — nenhum dispositivo extra.
+
+| Peça | O que faz |
+|---|---|
+| `wasm-engine` | `startGroupCall` / `joinOngoingGroupCall` / `checkOngoingCalls` / `inviteToCall` — embrulham `startVoipGroupCall` / `joinVoipOngoingCall`, que o SDK original nunca chamava |
+| `group-bridge` | parseia `group_update` (**roster, PIDs por device, alocação de relay**) e `enc_rekey` (epoch de chave). O SDK original **nunca tratava `group_update`** — era por isso que call de grupo não tinha caminho de mídia |
+| `group-media` | sessão por grupo: entra na call, espera a mídia ficar pronta, toca arquivo |
+| `audio-feeder` | **bug corrigido**: o emissor parava quando o ffmpeg saía, então só ~40 ms de qualquer arquivo tocava (medido: 2 chunks de um tom de 4 s). Agora drena a fila (medido: 201 chunks) |
+
+### Fluxo do usuário
+1. `!callp` — sobe a chamada **e** a pilha de mídia. A resposta diz o estado do
+   áudio (`pronto`, `aguardando…` ou `indisponível`), sem prometer o que não há.
+2. Alguém entra na chamada.
+3. `!musicap` respondendo um áudio (ou `!musicap <link>`) — o bot toca na call.
+4. `!musicap parar` interrompe sem derrubar a chamada; `!callp encerrar` derruba
+   tudo (mídia inclusive).
+
+### Honestidade embutida
+A mídia só fica `pronta` quando as **três** coisas existem: epoch de chave, relay
+utilizável e um remoto conectado com PID. O comando informa o estágio real em vez
+de dizer que está tocando quando não está.
+
+### Arquivos
+| Caminho | Papel |
+|---|---|
+| `dados/src/funcs/utils/callMedia.js` | ponte para o pacote (carregamento tolerante + dublê de teste) |
+| `dados/src/index.js` | `case 'musicap'`; `!callp` agora sobe a mídia |
+| `tests/musicap.test.js` | 10 testes / 18 asserções |
+| `lizzy-call` (repo separado) | motor + bridge + sessão de mídia (testes próprios) |
+
+**Requisitos no servidor**: `ffmpeg` no PATH (decodifica o áudio) e ~10 MB de
+WASM. Sem o pacote, o `!callp` continua funcionando como sinalização e o
+`!musicap` avisa que a mídia não está disponível — nada quebra.
+
+### LIMITE HONESTO
+Não foi possível validar fim-a-fim aqui (sem sessão autenticada e sem grupo de
+teste). O que está provado por teste: a montagem/parse das stanzas de grupo, o
+portão de prontidão, a sessão de mídia com roster+relay+epoch, a decodificação
+por ffmpeg e o comando do bot. A convergência contra uma call real depende de
+rodar no grupo.
+
 ## COMANDO `!callp` — SOBE CHAMADA DE VOZ NO GRUPO (set/2026) ✅
 Pedido do dono: um comando `!callp` que **sobe a call no grupo, mas apenas isso**
 (ativa a chamada; nao toca audio). O `!testcall` (que ja existia) e' outro

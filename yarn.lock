@@ -451,6 +451,23 @@
   resolved "https://registry.npmjs.org/@protobufjs/utf8/-/utf8-1.1.1.tgz"
   integrity sha512-oOAWABowe8EAbMyWKM0tYDKi8Yaox52D+HWZhAIJqQXbqe0xI/GV7FhLWqlEKreMkfDjshR5FKgi3mnle0h6Eg==
 
+"@roamhq/wrtc-linux-x64@0.10.0":
+  version "0.10.0"
+  resolved "https://registry.npmjs.org/@roamhq/wrtc-linux-x64/-/wrtc-linux-x64-0.10.0.tgz"
+  integrity sha512-H32lK2eFg3sVb/9nkHIX5HIisxFoS82Gpesuea+zqAyRpRzSd5NpFXx28bVy9wQyRrNtj8k0bTUgEzWRzSbYCA==
+
+"@roamhq/wrtc@^0.10.0":
+  version "0.10.0"
+  resolved "https://registry.npmjs.org/@roamhq/wrtc/-/wrtc-0.10.0.tgz"
+  integrity sha512-yFqQQ0EV1ZUHaphh3tmjoxPi2wzhW2vjmzoAVNRRLUjXYd2e1nvwi9TKfE2w4WNvNws/hBkouvOt23Xo9FkXkQ==
+  optionalDependencies:
+    "@roamhq/wrtc-darwin-arm64" "0.10.0"
+    "@roamhq/wrtc-darwin-x64" "0.10.0"
+    "@roamhq/wrtc-linux-arm64" "0.10.0"
+    "@roamhq/wrtc-linux-x64" "0.10.0"
+    "@roamhq/wrtc-win32-x64" "0.10.0"
+    domexception "^4.0.0"
+
 "@tokenizer/inflate@^0.4.1":
   version "0.4.1"
   resolved "https://registry.npmjs.org/@tokenizer/inflate/-/inflate-0.4.1.tgz"
@@ -468,6 +485,23 @@
   version "16.9.1"
   resolved "https://registry.npmjs.org/@types/node/-/node-16.9.1.tgz"
   integrity sha512-QpLcX9ZSsq3YYUUnD3nFDY8H7wctAhQj/TFKL8Ya8v5fMm3CFXxo8zStsLAl780ltoYoo1WvKUVGBQK+1ifr7g==
+
+"@whiskeysockets/baileys@^7.0.0-rc11":
+  version "7.0.0-rc14"
+  resolved "https://registry.npmjs.org/@whiskeysockets/baileys/-/baileys-7.0.0-rc14.tgz"
+  integrity sha512-WK+X8ju8TPGxvWIsP8hrY6JB6FltYuFe+vsqKfjOYX25JObij9qLf2c3ZGdl1Q+vhFwbnT+AZmWAB5pTvzmSiQ==
+  dependencies:
+    "@cacheable/node-cache" "^1.4.0"
+    "@hapi/boom" "^9.1.3"
+    async-mutex "^0.5.0"
+    libsignal "^6.0.0"
+    lru-cache "^11.1.0"
+    music-metadata "^11.12.3"
+    p-queue "^9.0.0"
+    pino "^9.6"
+    protobufjs "^7.5.6"
+    whatsapp-rust-bridge "0.5.4"
+    ws "^8.13.0"
 
 agent-base@6:
   version "6.0.2"
@@ -801,6 +835,13 @@ domelementtype@^2.3.0:
   version "2.3.0"
   resolved "https://registry.npmjs.org/domelementtype/-/domelementtype-2.3.0.tgz"
   integrity sha512-OLETBj6w0OsagBwdXnPdN0cnMfF9opN69co+7ZrbfPGrdpPVNBUj02spi6B1N7wChLQiPn4CSH/zJvXw56gmHw==
+
+domexception@^4.0.0:
+  version "4.0.0"
+  resolved "https://registry.npmjs.org/domexception/-/domexception-4.0.0.tgz"
+  integrity sha512-A2is4PLG+eeSfoTMA95/s4pvAoSo2mKtiM5jlHkAVewmiO8ISFTFKZjH7UAM1Atli/OT/7JHOrJRJiMKUZKYBw==
+  dependencies:
+    webidl-conversions "^7.0.0"
 
 domhandler@^5.0.2, domhandler@^5.0.3:
   version "5.0.3"
@@ -1202,12 +1243,19 @@ linkedom@^0.18.12:
     htmlparser2 "^10.0.0"
     uhyphen "^0.2.0"
 
+"lizzy-call@git+https://github.com/Souzzaaxzy/lizzy-call.git":
+  version "0.2.0"
+  resolved "git+ssh://git@github.com/Souzzaaxzy/lizzy-call.git#49b3704225fdcd3d93589c73b91209c7323379ff"
+  dependencies:
+    "@roamhq/wrtc" "^0.10.0"
+    qrcode-terminal "^0.12.0"
+
 long@^5.3.2:
   version "5.3.2"
   resolved "https://registry.npmjs.org/long/-/long-5.3.2.tgz"
   integrity sha512-mNAgZ1GmyNhD7AuqnTG3/VQ26o760+ZYBPKjPvugO8+nLbYfX6TVpJPseBvopbdY+qpZ/lKUnmEc1LeZYS3QAA==
 
-lru-cache@^11.2.6:
+lru-cache@^11.1.0, lru-cache@^11.2.6:
   version "11.5.2"
   resolved "https://registry.npmjs.org/lru-cache/-/lru-cache-11.5.2.tgz"
   integrity sha512-4pfM1Ff0x50o0tQwb5ucw/RzNyD0/YJME6IVcStalZuMWxdt3sR3huStTtxz4PUmvZfRguvDejasvQ2kifR11g==
@@ -1359,7 +1407,7 @@ onetime@^5.1.0:
   dependencies:
     mimic-fn "^2.1.0"
 
-p-queue@^9.1.0:
+p-queue@^9.0.0, p-queue@^9.1.0:
   version "9.3.2"
   resolved "https://registry.npmjs.org/p-queue/-/p-queue-9.3.2.tgz"
   integrity sha512-pCsnA4piiqkrwAJ555Xh/lc717SijJrTBr96P1q6BRnUdm2XPB4v91oiXVAUr5HbIbXW4D8kIslfJUE28Rud6A==
@@ -1462,6 +1510,23 @@ pino@^10.1.0:
     safe-stable-stringify "^2.3.1"
     sonic-boom "^4.0.1"
     thread-stream "^4.0.0"
+
+pino@^9.6:
+  version "9.14.0"
+  resolved "https://registry.npmjs.org/pino/-/pino-9.14.0.tgz"
+  integrity sha512-8OEwKp5juEvb/MjpIc4hjqfgCNysrS94RIOMXYvpYCdm/jglrKEiAYmiumbmGhCvs+IcInsphYDFwqrjr7398w==
+  dependencies:
+    "@pinojs/redact" "^0.4.0"
+    atomic-sleep "^1.0.0"
+    on-exit-leak-free "^2.1.0"
+    pino-abstract-transport "^2.0.0"
+    pino-std-serializers "^7.0.0"
+    process-warning "^5.0.0"
+    quick-format-unescaped "^4.0.3"
+    real-require "^0.2.0"
+    safe-stable-stringify "^2.3.1"
+    sonic-boom "^4.0.1"
+    thread-stream "^3.0.0"
 
 pino@^9.6.0:
   version "9.14.0"
@@ -1769,6 +1834,16 @@ utif2@^4.1.0:
   dependencies:
     pako "^1.0.11"
 
+webidl-conversions@^7.0.0:
+  version "7.0.0"
+  resolved "https://registry.npmjs.org/webidl-conversions/-/webidl-conversions-7.0.0.tgz"
+  integrity sha512-VwddBukDzu71offAQR975unBIGqfKZpM+8ZX6ySk8nYhVoo5CYaZyzt3YBvYtRtO+aoGlqxPg/B87NGVZ/fu6g==
+
+whatsapp-rust-bridge@0.5.4:
+  version "0.5.4"
+  resolved "https://registry.npmjs.org/whatsapp-rust-bridge/-/whatsapp-rust-bridge-0.5.4.tgz"
+  integrity sha512-yYO1qSs0Fe7tGtnxOFHomocUD6IZtoAgmA4oDFyGIRZ67D3QZk3w7swA6XXFXNQngiyrg2k7tul6IrM3eUFh7A==
+
 whatsapp-rust-bridge@0.5.5:
   version "0.5.5"
   resolved "https://registry.npmjs.org/whatsapp-rust-bridge/-/whatsapp-rust-bridge-0.5.5.tgz"
@@ -1798,7 +1873,7 @@ win-guid@^0.2.1:
   resolved "https://registry.npmjs.org/win-guid/-/win-guid-0.2.1.tgz"
   integrity sha512-gEIQU4mkgl2OPeoNrWflcJFJ3Ae2BPd4eCsHHA/XikslkIVms/nHhvnvzIZV7VLmBvtFlDOzLt9rrZT+n6D67A==
 
-ws@^8.19.0:
+ws@^8.13.0, ws@^8.19.0:
   version "8.21.1"
   resolved "https://registry.npmjs.org/ws/-/ws-8.21.1.tgz"
   integrity sha512-+0NTnW77fFN/DjQi6k/Sq/Yvk4Sgajw7urW8V+asjXnRgDs9gyGkdb7EzgfhA4goXsRIZKE28fzIXBHEzhuiWw==

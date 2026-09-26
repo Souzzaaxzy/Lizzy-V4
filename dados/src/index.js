@@ -1075,6 +1075,13 @@ import {
   limparCall
 } from './funcs/utils/callOffer.js';
 import {
+  entrarNaCallComMidia,
+  tocarAudioNaCall,
+  pararAudioDaCall,
+  sairDaCallComMidia,
+  estagioMidia
+} from './funcs/utils/callMedia.js';
+import {
   sendRestrictedMedia,
   normalizeRestrictedTargets,
   resolveSenderJid
@@ -33308,6 +33315,9 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               return reply('📴 Não há chamada ativa subida por mim neste grupo.');
             }
             limparCall(from);
+            // Derruba a pilha de mídia junto com a sinalização, senão o motor
+            // fica vivo segurando o relay depois que a chamada acabou.
+            await sairDaCallComMidia(from).catch(() => {});
             if (typeof nazu.terminateCall !== 'function') {
               return reply('⚠️ Esta versão do Baileys não sabe encerrar chamada.');
             }
@@ -33381,6 +33391,17 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             startedAt: Date.now()
           });
 
+          // Sobe a pilha de MIDIA: sem ela a chamada existe mas nao carrega som.
+          // Best-effort: se nao subir, a chamada continua aberta e o aviso diz.
+          const midia = await entrarNaCallComMidia({
+            grupo: from,
+            callId: callRes.id,
+            callCreator: botCallId,
+            sock: nazu
+          });
+          const midiaOk = midia?.ok === true;
+          const estagio = midiaOk ? await estagioMidia(from) : 'falhou';
+
           const newsletterCtxCallp = {
             forwardingScore: 999,
             isForwarded: true,
@@ -33389,13 +33410,134 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               newsletterName: "Lizzy"
             }
           };
+          const linhaMidia = midiaOk
+            ? (estagio === 'pronta'
+              ? '🎵 Áudio: pronto — use `!musicap` respondendo um áudio para tocar.'
+              : `🎵 Áudio: aguardando a chamada ficar ativa (${estagio}). Use \`!musicap\` quando alguém entrar.`)
+            : `🎵 Áudio: indisponível neste servidor${midia?.detalhe ? ` (${midia.detalhe})` : ''}.`;
           await nazu.sendMessage(from, {
-            text: `📞 *Chamada de voz iniciada neste grupo.*\n\n• ID: \`${callRes.id}\`\n• Membros no convite: ${callRes.participants}\n\n_Entre pelo WhatsApp para participar. Use \`!callp encerrar\` para derrubar._`,
+            text: `📞 *Chamada de voz iniciada neste grupo.*\n\n• ID: \`${callRes.id}\`\n• Membros no convite: ${callRes.participants}\n${linhaMidia}\n\n_Entre pelo WhatsApp para participar. Use \`!callp encerrar\` para derrubar._`,
             contextInfo: newsletterCtxCallp,
             quoted: info
           });
         } catch (e) {
           console.error('[CALLP] Erro:', e);
+          await reply("Ocorreu um erro 💔");
+        }
+        break;
+      // !musicap — toca um áudio NA CALL do grupo.
+      //
+      // Fluxo: `!callp` abre a chamada (e sobe a pilha de mídia), depois
+      // `!musicap` respondendo um áudio faz o bot reproduzir aquele arquivo
+      // dentro da chamada. Também aceita um link/URL.
+      //
+      // `!musicap parar` interrompe sem derrubar a chamada.
+      case 'musicap':
+      case 'tocarnacall':
+        try {
+          if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
+          if (!isGroupAdmin) return reply("Você precisa ser adm 💔");
+
+          const callAtiva = obterCall(from);
+          if (!callAtiva || !callAtiva.callId) {
+            return reply('❌ Não há chamada ativa neste grupo.\n\nUse `!callp` primeiro.');
+          }
+
+          const subMusicap = normalizar((args[0] || '')).trim();
+          if (subMusicap === 'parar' || subMusicap === 'stop') {
+            const r = await pararAudioDaCall(from);
+            return reply(r.ok ? '⏹️ Áudio parado (a chamada continua).' : '⚠️ Não havia áudio tocando.');
+          }
+
+          const estagio = await estagioMidia(from);
+          if (estagio === 'indisponivel') {
+            return reply('❌ A mídia da chamada não está disponível neste servidor.\n\n_A chamada em si continua aberta._');
+          }
+          if (estagio !== 'pronta') {
+            return reply(`⏳ A chamada ainda não está pronta para áudio (_${estagio}_).\n\nAlguém precisa entrar na chamada; depois tente de novo.`);
+          }
+
+          // O áudio vem da mensagem respondida (nota de voz, audio, video) ou
+          // de uma URL passada direto.
+          const urlDireta = /^https?:\/\//i.test(q || '') ? q.trim() : null;
+
+          let arquivo = urlDireta;
+          let arquivoTemporario = null;
+          if (!arquivo) {
+            const citado = extractQuoted(info.message);
+            if (!citado) {
+              return reply('❌ Responda um *áudio* (ou mande `!musicap <link>`) para eu tocar na chamada.');
+            }
+            const tipoCitado = getContentType(citado);
+            // Só tipos de MÍDIA servem. Checar apenas "existe um campo com esse
+            // nome" aceitaria `conversation` (texto), cujo valor é uma string e
+            // não um descritor de mídia — e o download falharia depois.
+            const TIPOS_DE_MIDIA = [
+              'audioMessage', 'videoMessage', 'imageMessage', 'documentMessage', 'ptvMessage'
+            ];
+            if (!tipoCitado || !TIPOS_DE_MIDIA.includes(tipoCitado) || !citado[tipoCitado]) {
+              return reply('❌ A mensagem respondida não tem mídia.\n\nResponda um *áudio* ou mande `!musicap <link>`.');
+            }
+            const mediaKey = citado[tipoCitado];
+            // `downloadContentFromMessage` faz fetch sem signal: sem timeout, um
+            // servidor de mídia que aceita e não responde pendura o handler.
+            const mediaType = tipoCitado.replace(/Message$/, '');
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 30000);
+            try {
+              const stream = await downloadContentFromMessage(mediaKey, mediaType, {
+                options: { signal: controller.signal }
+              });
+              let buffer = Buffer.from([]);
+              for await (const chunk of stream) buffer = Buffer.concat([buffer, chunk]);
+              if (!buffer.length) throw new Error('buffer vazio');
+              arquivoTemporario = pathz.join(
+                os.tmpdir(),
+                `callp-audio-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.ogg`
+              );
+              fs.writeFileSync(arquivoTemporario, buffer);
+              arquivo = arquivoTemporario;
+            } catch (e) {
+              console.warn('[MUSICAP] download falhou:', e?.message);
+              return reply('❌ Não consegui baixar esse áudio.');
+            } finally {
+              clearTimeout(timer);
+            }
+          }
+
+          const r = await tocarAudioNaCall(from, arquivo);
+          // O arquivo temporário pode sair: o ffmpeg já o leu inteiro para a
+          // fila de PCM quando `tocarAudio` resolve.
+          if (arquivoTemporario) {
+            setTimeout(() => { try { fs.unlinkSync(arquivoTemporario); } catch {} }, 5000);
+          }
+          if (!r.ok) {
+            const motivos = {
+              sem_call: 'Não há chamada ativa.',
+              midia_nao_pronta: 'A chamada ainda não está pronta para áudio.',
+              ja_tocando: 'Já tem um áudio tocando. Use `!musicap parar` antes.',
+              captura_ainda_nao_iniciada: 'A chamada ainda não liberou o canal de áudio. Tente em alguns segundos.',
+              pacote_de_midia_ausente: 'A mídia não está instalada neste servidor.'
+            };
+            return reply(`❌ Não consegui tocar.\n\n_${motivos[r.motivo] || r.motivo}_`);
+          }
+
+          const newsletterCtxMusica = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          await nazu.sendMessage(from, {
+            text: `🎵 *Tocando na chamada!*\n\n_Use \`!musicap parar\` para interromper._`,
+            contextInfo: newsletterCtxMusica,
+            quoted: info
+          });
+
+        } catch (e) {
+          console.error('[MUSICAP] Erro:', e);
           await reply("Ocorreu um erro 💔");
         }
         break;
