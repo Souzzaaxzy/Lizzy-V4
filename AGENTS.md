@@ -4348,6 +4348,30 @@ com o **suporte a grupo** que o original não tinha. Ele roda no socket que o bo
 | `group-media` | sessão por grupo: entra na call, espera a mídia ficar pronta, toca arquivo |
 | `audio-feeder` | **bug corrigido**: o emissor parava quando o ffmpeg saía, então só ~40 ms de qualquer arquivo tocava (medido: 2 chunks de um tom de 4 s). Agora drena a fila (medido: 201 chunks) |
 
+### CORRECAO 3 (set/2026): "conectando..." infinito ao entrar na call
+Sintoma do dono: ao entrar na call, o WhatsApp ficava **"conectando..." para
+sempre** e nunca conectava.
+
+**Causa raiz MEDIDA** (`tests/wasm-call-ownership.mjs` no pacote `lizzy-call`):
+
+| Chamada no motor | O que ele emite |
+|---|---|
+| `startGroupCall` | o `<call><offer>` **(1 stanza, 156 bytes)** — o motor dirige a chamada |
+| `joinVoipOngoingCall` | **silêncio (0 stanzas)**, a menos que o motor JÁ conheça a call |
+
+A versão anterior criava a chamada por **sinalização separada** e depois pedia
+`joinVoipOngoingCall`. O motor **nunca via aquele offer**, então não tinha estado
+de call — e a negociação de mídia nunca completava. Era exatamente o
+"conectando..." que não sai do lugar: a chamada existia, mas sem ninguém capaz de
+carregá-la.
+
+**Correção**: agora **o motor cria a chamada** (`startGroupCall`) e a sinalização
+dele sai pelo socket. `!callp` deixou de usar `offerGroupCall` — a criação e a
+sinalização são a mesma coisa.
+
+Lição registrada: para call com mídia, **quem cria é o motor**. Criar a chamada
+por fora e "entrar" depois não funciona, porque o estado da call vive dentro dele.
+
 ### Fluxo do usuário
 1. `!callp` — sobe a chamada **e** a pilha de mídia. A resposta diz o estado do
    áudio (`pronto`, `aguardando…` ou `indisponível`), sem prometer o que não há.

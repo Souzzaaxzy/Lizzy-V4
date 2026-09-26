@@ -34,6 +34,14 @@ export function __setDuble(novo) {
   duble = novo;
 }
 
+/** Dublê do caminho de ENTRAR/SAIR da call (usado pelos testes do !callp). */
+let dubleEntrar = null;
+
+/** Instala (ou remove, com null) o dublê de entrar/sair. */
+export function __setDubleEntrar(novo) {
+  dubleEntrar = novo;
+}
+
 /**
  * Carrega o pacote de mídia uma vez.
  *
@@ -84,13 +92,14 @@ export async function obterMedia() {
  * Best-effort de propósito: se falhar, devolve o motivo e o `!callp` segue
  * reportando a chamada como aberta (só sem áudio), em vez de dizer que não subiu.
  */
-export async function entrarNaCallComMidia({ grupo, callId, callCreator, sock }) {
+export async function entrarNaCallComMidia({ grupo, callId, callCreator, participantes, sock }) {
+  if (dubleEntrar) return dubleEntrar.entrar({ grupo, callId, callCreator, participantes, sock });
   const media = await obterMedia();
   if (!media) {
     return { ok: false, motivo: 'pacote_de_midia_ausente', detalhe: loadError };
   }
   try {
-    const r = await media.entrarNaCall({ grupo, callId, callCreator, sock, groupInfo: null });
+    const r = await media.entrarNaCall({ grupo, callId, participantes, sock, groupInfo: null });
     return r;
   } catch (e) {
     return { ok: false, motivo: 'falha_ao_entrar', detalhe: e?.message || String(e) };
@@ -127,6 +136,7 @@ export async function pararAudioDaCall(grupo) {
 
 /** Sai da call e libera a pilha de mídia. */
 export async function sairDaCallComMidia(grupo) {
+  if (dubleEntrar) return dubleEntrar.sair(grupo);
   const media = await obterMedia();
   if (!media) return { ok: false, motivo: 'pacote_de_midia_ausente' };
   try {

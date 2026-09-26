@@ -1,14 +1,17 @@
 /**
  * `!callp` — sobe uma chamada de VOZ no grupo.
  *
- * Roda o handler REAL com socket falso. A montagem da stanza de call e o envio
- * vivem na FORK (`sock.offerGroupCall` / `sock.terminateCall`) e sao testados
- * la (`tests/call-signaling.test.js`). Aqui se mede o que e' do BOT:
+ * Roda o handler REAL com socket falso. Desde a correção do "conectando..."
+ * infinito, **quem cria a chamada é o motor de mídia** (medido no pacote
+ * `lizzy-call`: `startGroupCall` faz o motor emitir o `<call><offer>`;
+ * `joinVoipOngoingCall` é silencioso sem estado de call). Então o que este teste
+ * mede é o que é do BOT:
  *
- *   - guardas (grupo, admin, minimo de membros);
- *   - QUEM e' convidado (todos menos o bot, deduplicado);
+ *   - guardas (grupo, admin, mínimo de membros);
+ *   - QUEM é convidado (todos menos o bot, deduplicado);
+ *   - que a criação vai para a MÍDIA, não para a sinalização separada;
  *   - o registro da call ativa e o `encerrar`;
- *   - as mensagens (cabecalho de canal) e o tratamento de falha.
+ *   - mensagens honestas quando a mídia não está disponível.
  *
  * Uso: node tests/callp.test.js
  */
@@ -64,6 +67,7 @@ const handleMessage = indexModule.default ?? indexModule;
 if (typeof handleMessage !== 'function') throw new Error('index.js não exporta o handler');
 
 const callState = await import(new URL('../dados/src/funcs/utils/callOffer.js', import.meta.url).href);
+const callMedia = await import(new URL('../dados/src/funcs/utils/callMedia.js', import.meta.url).href);
 
 const BOT_JID = '5599999999999@s.whatsapp.net';
 const BOT_LID = '111111111111111@lid';
@@ -85,15 +89,28 @@ function makePerson() {
 }
 
 /**
- * Socket falso. `offerGroupCall`/`terminateCall` simulam a API da fork:
- * registram a chamada e devolvem o formato real (`{ id, participants }`).
+ * Dublê do motor de mídia: registra a criação/encerramento e permite forçar
+ * falha. Assim o teste mede o CONTRATO do bot sem carregar WASM.
  */
-function makeNazu({ sent, groupJid, participants, calls, failOffer }) {
+function instalarDubleMidia({ ok = true, motivo = null, stage = 'pronta', callId = 'CALL-1' } = {}) {
+  const chamadas = [];
+  callMedia.__setDubleEntrar({
+    entrar: async ({ grupo, participantes }) => {
+      chamadas.push({ tipo: 'entrar', grupo, participantes });
+      if (!ok) return { ok: false, motivo, stage: 'falhou' };
+      return { ok: true, callId, stage };
+    },
+    sair: async (grupo) => { chamadas.push({ tipo: 'sair', grupo }); return { ok: true }; },
+    estagio: () => stage
+  });
+  return chamadas;
+}
+
+function makeNazu({ sent, groupJid, participants }) {
   const map = {};
   for (const p of participants) { map[p.jid] = p.lid; map[p.lid] = p.jid; }
   return {
     sent,
-    calls,
     sendMessage: async (jid, content) => { sent.push({ jid, content }); return { key: { id: 'SENT' } }; },
     user: { id: `${BOT_JID.split('@')[0]}:5@s.whatsapp.net`, lid: BOT_LID, name: 'Lizzy' },
     onWhatsApp: async (jid) => (map[jid] ? [{ jid, exists: true, lid: map[jid] }] : [{ jid, exists: false }]),
@@ -102,16 +119,6 @@ function makeNazu({ sent, groupJid, participants, calls, failOffer }) {
       id: groupJid, subject: 'Grupo Callp',
       participants: participants.map((p) => ({ id: p.lid, admin: p.isAdmin ? 'admin' : null, phoneNumber: p.jid }))
     }),
-    // API de call da fork.
-    offerGroupCall: async (gjid, jids, opts) => {
-      if (failOffer) throw new Error('server refused');
-      calls.push({ kind: 'offer', groupJid: gjid, jids, opts });
-      return { id: 'CALL-' + calls.length, groupJid: gjid, stanzaId: 'S', participants: jids.length + 1 };
-    },
-    terminateCall: async (callId, options) => {
-      calls.push({ kind: 'terminate', callId, options });
-      return { id: callId };
-    },
     groupParticipantsUpdate: async () => ({}),
     groupRequestParticipantsList: async () => [],
     groupRequestParticipantsUpdate: async () => ({}),
@@ -121,8 +128,8 @@ function makeNazu({ sent, groupJid, participants, calls, failOffer }) {
   };
 }
 
-async function run({ groupJid, sender, text, participants, sent = [], calls = [], failOffer = false }) {
-  const nazu = makeNazu({ sent, groupJid, participants, calls, failOffer });
+async function run({ groupJid, sender, text, participants, sent = [] }) {
+  const nazu = makeNazu({ sent, groupJid, participants });
   const info = {
     key: { remoteJid: groupJid, fromMe: false, id: `M-${Math.random().toString(36).slice(2, 10)}`, participant: sender.lid },
     message: { extendedTextMessage: { text, contextInfo: { remoteJid: groupJid, mentionedJid: [] } } },
@@ -133,7 +140,6 @@ async function run({ groupJid, sender, text, participants, sent = [], calls = []
   return {
     text: sent.map((s) => s.content?.text ?? '').filter(Boolean).join('\n'),
     newsletter: sent.some((s) => s.content?.contextInfo?.forwardedNewsletterMessageInfo?.newsletterJid),
-    calls,
     sent
   };
 }
@@ -141,27 +147,25 @@ async function run({ groupJid, sender, text, participants, sent = [], calls = []
 function setup(n = 3) {
   const groupJid = makeGroup();
   const admin = makePerson();
-  const membro = makePerson();
   const outros = [];
   for (let i = 0; i < n; i++) outros.push(makePerson());
   const participants = [
     { lid: admin.lid, jid: admin.jid, isAdmin: true },
-    { lid: membro.lid, jid: membro.jid, isAdmin: false },
     ...outros.map((p) => ({ lid: p.lid, jid: p.jid, isAdmin: false })),
     { lid: BOT_LID, jid: BOT_JID, name: 'Lizzy', isAdmin: true }
   ];
-  return { groupJid, admin, membro, participants };
+  return { groupJid, admin, participants };
 }
 
 // ============================================================================
 // 1) ESTADO
 // ============================================================================
 
-await test('o registro de calls ativas comeca vazio e e isolado por grupo', () => {
-  ok(callState.obterCall('a@g.us') === null, 'grupo desconhecido nao tem call');
+await test('o registro de calls ativas começa vazio e é isolado por grupo', () => {
+  ok(callState.obterCall('a@g.us') === null, 'grupo desconhecido não tem call');
   callState.registrarCall('a@g.us', { callId: 'X' });
   ok(callState.obterCall('a@g.us').callId === 'X', 'registrou');
-  ok(callState.obterCall('b@g.us') === null, 'outro grupo nao ve a call');
+  ok(callState.obterCall('b@g.us') === null, 'outro grupo não vê a call');
   callState.limparCall('a@g.us');
   ok(callState.obterCall('a@g.us') === null, 'limpou');
 });
@@ -170,134 +174,137 @@ await test('o registro de calls ativas comeca vazio e e isolado por grupo', () =
 // 2) GUARDAS
 // ============================================================================
 
-await test('!callp so em grupo', async () => {
+await test('!callp só em grupo', async () => {
   const { admin, participants } = setup(2);
+  const chamadas = instalarDubleMidia();
   const out = await run({ groupJid: admin.jid, sender: admin, text: '!callp', participants });
-  ok(out.calls.length === 0, 'nao tentou subir chamada no PV');
+  ok(chamadas.length === 0, 'não criou call no PV');
+  void out;
 });
 
-await test('!callp so para admins', async () => {
-  const { groupJid, membro, participants } = setup(2);
+await test('!callp só para admins', async () => {
+  const { groupJid, participants } = setup(2);
+  const membro = makePerson();
+  participants.push({ lid: membro.lid, jid: membro.jid, isAdmin: false });
+  const chamadas = instalarDubleMidia();
   const out = await run({ groupJid, sender: membro, text: '!callp', participants });
   includes(out.text, 'adm', 'avisa que precisa ser adm');
-  ok(out.calls.length === 0, 'membro comum nao sobe chamada');
+  ok(chamadas.length === 0, 'membro comum não sobe chamada');
 });
 
-// ============================================================================
-// 3) SUBIR A CHAMADA
-// ============================================================================
-
-await test('!callp convida todos os membros menos o bot', async () => {
-  const { groupJid, admin, participants } = setup(3);
-  const out = await run({ groupJid, sender: admin, text: '!callp', participants });
-  ok(out.calls.length === 1, 'chamou offerGroupCall uma vez');
-  const { jids, groupJid: gjid } = out.calls[0];
-  ok(gjid === groupJid, 'passou o grupo certo');
-  // admin + membro + 3 outros = 5 pessoas; o bot nao entra na lista de convidados.
-  ok(jids.length === 5, `convidou os 5 membros humanos (veio ${jids.length})`);
-  ok(!jids.some((j) => String(j).startsWith(BOT_LID.split('@')[0])), 'nao convidou a si mesmo');
-  ok(new Set(jids.map((j) => String(j).split('@')[0])).size === jids.length, 'sem convidado repetido');
-});
-
-await test('!callp avisa no grupo com o cabecalho de canal', async () => {
-  const { groupJid, admin, participants } = setup(3);
-  const out = await run({ groupJid, sender: admin, text: '!callp', participants });
-  includes(out.text, 'Chamada de voz iniciada', 'avisa que subiu');
-  ok(out.newsletter, 'tem o cabecalho de newsletter (Ver canal)');
-});
-
-await test('guarda a call ativa em memoria (para o encerrar)', async () => {
-  const { groupJid, admin, participants } = setup(3);
-  const out = await run({ groupJid, sender: admin, text: '!callp', participants });
-  const ativa = callState.obterCall(groupJid);
-  ok(ativa && ativa.callId, 'registrou a call ativa');
-  ok(ativa.callId.startsWith('CALL-'), `guardou o id devolvido pela lib (veio ${ativa.callId})`);
-  ok(!('callpCall' in JSON.parse(fs.readFileSync(path.join(GRUPOS_DIR, `${groupJid}.json`), 'utf-8'))),
-    'nao persistiu no JSON do grupo');
-});
-
-await test('nao sobe duas ao mesmo tempo', async () => {
-  const { groupJid, admin, participants } = setup(3);
-  await run({ groupJid, sender: admin, text: '!callp', participants });
-  const out2 = await run({ groupJid, sender: admin, text: '!callp', participants });
-  includes(out2.text, 'Já existe', 'avisa que ja tem uma');
-  ok(out2.calls.length === 0, 'nao chamou offerGroupCall de novo');
-});
-
-await test('!callp encerrar derruba e limpa o estado', async () => {
-  const { groupJid, admin, participants } = setup(3);
-  await run({ groupJid, sender: admin, text: '!callp', participants });
-  const out = await run({ groupJid, sender: admin, text: '!callp encerrar', participants });
-  ok(out.calls.length === 1 && out.calls[0].kind === 'terminate', 'chamou terminateCall');
-  includes(out.text, 'encerrada', 'avisa que encerrou');
-  ok(callState.obterCall(groupJid) === null, 'limpou a call ativa');
-});
-
-await test('!callp encerrar sem call ativa nao inventa', async () => {
-  const { groupJid, admin, participants } = setup(2);
-  const out = await run({ groupJid, sender: admin, text: '!callp encerrar', participants });
-  includes(out.text, 'Não há chamada', 'avisa que nao ha chamada');
-  ok(out.calls.length === 0, 'nao chamou terminateCall');
-});
-
-await test('falha do servidor: avisa e NAO registra estado', async () => {
-  const { groupJid, admin, participants } = setup(3);
-  const out = await run({ groupJid, sender: admin, text: '!callp', participants, failOffer: true });
-  includes(out.text, 'Não consegui subir', 'avisa a falha');
-  ok(callState.obterCall(groupJid) === null, 'nao deixou call pendurada');
-});
-
-await test('um ack que nao vem NAO vira mensagem de sucesso', async () => {
-  const { groupJid, admin, participants } = setup(3);
-  // Simula o que a lib faz quando o servidor nao responde: erro de timeout.
-  const sent = [];
-  const calls = [];
-  const nazu = makeNazu({ sent, groupJid, participants, calls });
-  nazu.offerGroupCall = async () => { throw new Error('call stanza was not acknowledged by the server'); };
-  const info = {
-    key: { remoteJid: groupJid, fromMe: false, id: 'M-noack', participant: admin.lid },
-    message: { extendedTextMessage: { text: '!callp', contextInfo: { remoteJid: groupJid, mentionedJid: [] } } },
-    messageTimestamp: Math.floor(Date.now() / 1000), pushName: admin.name
-  };
-  await handleMessage(nazu, info, null, new Map(), null);
-  const texto = sent.map((s) => s.content?.text ?? '').join('\n');
-  ok(!/Chamada de voz iniciada/.test(texto), 'NAO diz que iniciou');
-  includes(texto, 'não confirmou', 'explica que o servidor nao confirmou');
-  ok(callState.obterCall(groupJid) === null, 'nao registra call que nao existe');
-});
-
-await test('grupo pequeno (so o bot + quem pediu): recusa (grupo exige 2+)', async () => {
+await test('grupo pequeno (só o bot + quem pediu): recusa', async () => {
   const groupJid = makeGroup();
   const admin = makePerson();
   const participants = [
     { lid: admin.lid, jid: admin.jid, isAdmin: true },
     { lid: BOT_LID, jid: BOT_JID, name: 'Lizzy', isAdmin: true }
   ];
+  const chamadas = instalarDubleMidia();
   const out = await run({ groupJid, sender: admin, text: '!callp', participants });
-  ok(out.calls.length === 0, 'nao chamou offerGroupCall');
+  ok(chamadas.length === 0, 'não criou call');
   includes(out.text, 'pelo menos 2 outros membros', 'explica a regra');
 });
 
-await test('Baileys sem suporte a call: avisa em vez de quebrar', async () => {
-  const { groupJid, participants } = setup(3);
-  // Remetente novo E admin: `sendMessage` e' limitado a 3/5s por remetente, e o
-  // comando exige adm — criar um admin proprio isola as duas coisas.
-  const quem = makePerson();
-  participants.unshift({ lid: quem.lid, jid: quem.jid, isAdmin: true });
-  const sent = [];
-  const nazu = makeNazu({ sent, groupJid, participants, calls: [] });
-  delete nazu.offerGroupCall; // versao antiga da lib
-  const info = {
-    key: { remoteJid: groupJid, fromMe: false, id: 'M-nosupport', participant: quem.lid },
-    message: { extendedTextMessage: { text: '!callp', contextInfo: { remoteJid: groupJid, mentionedJid: [] } } },
-    messageTimestamp: Math.floor(Date.now() / 1000), pushName: quem.name
-  };
-  await handleMessage(nazu, info, null, new Map(), null);
-  const texto = sent.map((s) => s.content?.text ?? '').join('\n');
-  includes(texto, 'não tem o suporte', 'explica que a lib nao tem a API');
+// ============================================================================
+// 3) CRIAÇÃO — pelo MOTOR, não pela sinalização
+// ============================================================================
+
+await test('!callp cria a chamada pelo MOTOR de mídia', async () => {
+  const { groupJid, admin, participants } = setup(3);
+  const chamadas = instalarDubleMidia();
+  const out = await run({ groupJid, sender: admin, text: '!callp', participants });
+  const criou = chamadas.find((c) => c.tipo === 'entrar');
+  ok(Boolean(criou), 'chamou o motor para criar a call');
+  ok(criou.grupo === groupJid, 'passou o grupo certo');
+  includes(out.text, 'Chamada de voz iniciada', 'avisa no grupo');
+});
+
+await test('!callp convida todos os membros menos o bot', async () => {
+  const { groupJid, admin, participants } = setup(3);
+  const chamadas = instalarDubleMidia();
+  await run({ groupJid, sender: admin, text: '!callp', participants });
+  const criou = chamadas.find((c) => c.tipo === 'entrar');
+  const jids = criou.participantes;
+  // admin + 3 outros = 4 humanos; o bot não entra na lista de convidados.
+  ok(jids.length === 4, `convidou os 4 membros humanos (veio ${jids.length})`);
+  ok(!jids.some((j) => String(j).startsWith(BOT_LID.split('@')[0])), 'não convidou a si mesmo');
+  ok(new Set(jids.map((j) => String(j).split('@')[0])).size === jids.length, 'sem convidado repetido');
+});
+
+await test('o aviso carrega o cabeçalho de canal e o estado do áudio', async () => {
+  const { groupJid, admin, participants } = setup(3);
+  instalarDubleMidia({ stage: 'pronta' });
+  const out = await run({ groupJid, sender: admin, text: '!callp', participants });
+  ok(out.newsletter, 'tem o cabeçalho de newsletter');
+  includes(out.text, 'Áudio: pronto', 'diz que o áudio está pronto');
+  includes(out.text, '!musicap', 'ensina o comando');
+});
+
+await test('quando a mídia ainda está conectando, o aviso diz o estágio', async () => {
+  const { groupJid, admin, participants } = setup(3);
+  instalarDubleMidia({ stage: 'aguardando_roster' });
+  const out = await run({ groupJid, sender: admin, text: '!callp', participants });
+  includes(out.text, 'conectando', 'avisa que está conectando');
+  includes(out.text, 'aguardando_roster', 'mostra o estágio');
+});
+
+await test('guarda a call ativa em memória', async () => {
+  const { groupJid, admin, participants } = setup(3);
+  instalarDubleMidia({ callId: 'CALL-ABC' });
+  await run({ groupJid, sender: admin, text: '!callp', participants });
+  const ativa = callState.obterCall(groupJid);
+  ok(ativa && ativa.callId === 'CALL-ABC', 'registrou o id do motor');
+  ok(!('callpCall' in JSON.parse(fs.readFileSync(path.join(GRUPOS_DIR, `${groupJid}.json`), 'utf-8'))),
+    'não persistiu no JSON do grupo');
+  callState.limparCall(groupJid);
+});
+
+await test('não sobe duas ao mesmo tempo', async () => {
+  const { groupJid, admin, participants } = setup(3);
+  instalarDubleMidia();
+  await run({ groupJid, sender: admin, text: '!callp', participants });
+  const chamadas2 = instalarDubleMidia();
+  const out2 = await run({ groupJid, sender: admin, text: '!callp', participants });
+  includes(out2.text, 'Já existe', 'avisa que já tem uma');
+  ok(chamadas2.length === 0, 'não criou de novo');
+  callState.limparCall(groupJid);
 });
 
 // ============================================================================
+// 4) FALHAS E ENCERRAR
+// ============================================================================
+
+await test('mídia ausente: avisa e NÃO registra call', async () => {
+  const { groupJid, admin, participants } = setup(3);
+  instalarDubleMidia({ ok: false, motivo: 'pacote_de_midia_ausente' });
+  const out = await run({ groupJid, sender: admin, text: '!callp', participants });
+  includes(out.text, 'Não consegui subir', 'avisa');
+  includes(out.text, 'lizzy-call', 'diz o que falta');
+  ok(callState.obterCall(groupJid) === null, 'não deixou call pendurada');
+});
+
+await test('!callp encerrar derruba a mídia e limpa o estado', async () => {
+  const { groupJid, admin, participants } = setup(3);
+  instalarDubleMidia();
+  await run({ groupJid, sender: admin, text: '!callp', participants });
+  const chamadas2 = instalarDubleMidia();
+  const out = await run({ groupJid, sender: admin, text: '!callp encerrar', participants });
+  ok(chamadas2.some((c) => c.tipo === 'sair'), 'derrubou a pilha de mídia');
+  includes(out.text, 'encerrada', 'avisa');
+  ok(callState.obterCall(groupJid) === null, 'limpou o registro');
+});
+
+await test('!callp encerrar sem call ativa não inventa', async () => {
+  const { groupJid, admin, participants } = setup(2);
+  instalarDubleMidia();
+  const out = await run({ groupJid, sender: admin, text: '!callp encerrar', participants });
+  includes(out.text, 'Não há chamada', 'avisa');
+});
+
+// ============================================================================
+
+callMedia.__setDubleEntrar(null);
+callMedia.__setDuble(null);
 
 const totalOk = RESULTS.reduce((a, r) => a + r.passed, 0);
 const totalFail = RESULTS.reduce((a, r) => a + r.failed, 0);

@@ -1245,7 +1245,7 @@ linkedom@^0.18.12:
 
 "lizzy-call@git+https://github.com/Souzzaaxzy/lizzy-call.git":
   version "0.2.0"
-  resolved "git+ssh://git@github.com/Souzzaaxzy/lizzy-call.git#49b3704225fdcd3d93589c73b91209c7323379ff"
+  resolved "git+ssh://git@github.com/Souzzaaxzy/lizzy-call.git#fbe0317acaab6e335cbc1b1149f8e82ec9d66e8a"
   dependencies:
     "@roamhq/wrtc" "^0.10.0"
     qrcode-terminal "^0.12.0"

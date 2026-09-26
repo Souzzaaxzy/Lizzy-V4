@@ -33291,16 +33291,18 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
           await reply("Ocorreu um erro 💔");
         }
         break;
-      // !callp — sobe uma chamada de VOZ no grupo (sinalizacao apenas).
+      // !callp — sobe uma chamada de VOZ no grupo.
       //
-      // Envia a stanza `<call><offer>` de grupo: a chamada passa a existir no
-      // grupo e os membros veem "chamada em andamento". NAO ha audio — a midia
-      // de uma call do WhatsApp vai por SRTP/UDP, stack que o Baileys nao tem.
-      // O formato e a pesquisa estao em `funcs/utils/callOffer.js`.
+      // QUEM CRIA A CHAMADA É O MOTOR DE MÍDIA, não a sinalização. Isso foi
+      // medido (`wasm-call-ownership` no pacote `lizzy-call`): `startGroupCall`
+      // faz o motor EMITIR o `<call><offer>`; `joinVoipOngoingCall` fica em
+      // silêncio a menos que o motor já conheça a call.
       //
-      // `!callp encerrar` derruba a ultima call subida por aqui (o registro das
-      // calls ativas fica em MEMORIA, no proprio `callOffer.js`), para nao
-      // deixar chamada pendurada.
+      // Criar a chamada por fora (só sinalização) deixava o motor SEM estado de
+      // call, e a negociação nunca terminava — era o "conectando..." infinito.
+      // Agora o motor cria, e a sinalização dele sai pelo socket.
+      //
+      // `!callp encerrar` derruba a chamada e a pilha de mídia.
       case 'callp':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
@@ -33315,18 +33317,9 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               return reply('📴 Não há chamada ativa subida por mim neste grupo.');
             }
             limparCall(from);
-            // Derruba a pilha de mídia junto com a sinalização, senão o motor
-            // fica vivo segurando o relay depois que a chamada acabou.
+            // Derruba a pilha de mídia junto: senão o motor fica vivo segurando
+            // o relay depois que a chamada acabou.
             await sairDaCallComMidia(from).catch(() => {});
-            if (typeof nazu.terminateCall !== 'function') {
-              return reply('⚠️ Esta versão do Baileys não sabe encerrar chamada.');
-            }
-            try {
-              await nazu.terminateCall(ativa.callId, { to: ativa.callCreator });
-            } catch (e) {
-              console.warn('[CALLP] terminateCall falhou:', e?.message);
-              return reply('⚠️ Tentei encerrar a chamada, mas o servidor recusou. Ela deve cair sozinha.');
-            }
             return reply('📴 Chamada encerrada.');
           }
 
@@ -33342,12 +33335,6 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
           const metaCallp = await nazu.groupMetadata(from).catch(() => null);
           if (!metaCallp) {
             return reply('❌ Não consegui ler os membros do grupo agora. Tente de novo.');
-          }
-
-          // A sinalizacao de call vive na FORK (`sock.offerGroupCall`): ela monta
-          // a stanza e espera o ack. O bot so' decide QUEM convidar.
-          if (typeof nazu.offerGroupCall !== 'function') {
-            return reply('❌ Esta versão do Baileys não tem o suporte a chamada. Reinstale as dependências.');
           }
 
           // Convidados: todos os membros, menos o bot (ele entra como criador).
@@ -33366,41 +33353,38 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             return reply('❌ A chamada de grupo precisa de pelo menos 2 outros membros.');
           }
 
-          let callRes;
-          try {
-            callRes = await nazu.offerGroupCall(from, convidados, { timeoutMs: 20000 });
-          } catch (e) {
-            // Um ack que nao vem NAO e' sucesso: sem a confirmacao do servidor a
-            // chamada nao existe para ninguem. Antes o comando dizia "iniciada" e
-            // nada tocava em lugar nenhum.
-            console.warn('[CALLP] offerGroupCall falhou:', e?.message);
-            const motivo = /not acknowledged|timed out/i.test(String(e?.message))
-              ? 'O servidor não confirmou a chamada (sem resposta). Nada foi iniciado.'
-              : (e?.message || 'erro desconhecido');
-            return reply(`❌ Não consegui subir a chamada.\n\n_${motivo}_`);
-          }
-          if (!callRes || !callRes.id) {
-            return reply('❌ O servidor não confirmou a chamada. Nada foi iniciado.');
+          const midia = await entrarNaCallComMidia({
+            grupo: from,
+            participantes: convidados,
+            sock: nazu
+          });
+
+          if (!midia?.ok) {
+            console.warn('[CALLP] mídia falhou:', midia?.motivo, midia?.detalhe || '');
+            const motivos = {
+              pacote_de_midia_ausente: 'A mídia não está instalada neste servidor (falta o pacote `lizzy-call`).',
+              sem_identidade: 'Não consegui identificar meu próprio número.',
+              ja_na_call: 'Já existe uma chamada de mídia neste grupo.',
+              falha_ao_entrar: 'O motor de mídia não subiu.'
+            };
+            const detalhe = motivos[midia?.motivo] || midia?.motivo || 'erro desconhecido';
+            return reply(`❌ Não consegui subir a chamada.\n\n_${detalhe}_${midia?.detalhe ? `\n\n\`${midia.detalhe}\`` : ''}`);
           }
 
-          // Guarda a call para o `encerrar` — registro em MEMORIA (nao no JSON
-          // do grupo): a call vive na sessao do socket e morre com ela.
+          const callRes = { id: midia.callId, participants: convidados.length + 1 };
+
+          // Guarda a call para o `encerrar` — registro em MEMÓRIA (não no JSON
+          // do grupo): a call vive na sessão do socket e morre com ela.
           registrarCall(from, {
             callId: callRes.id,
             callCreator: botCallId,
             startedAt: Date.now()
           });
 
-          // Sobe a pilha de MIDIA: sem ela a chamada existe mas nao carrega som.
-          // Best-effort: se nao subir, a chamada continua aberta e o aviso diz.
-          const midia = await entrarNaCallComMidia({
-            grupo: from,
-            callId: callRes.id,
-            callCreator: botCallId,
-            sock: nazu
-          });
-          const midiaOk = midia?.ok === true;
-          const estagio = midiaOk ? await estagioMidia(from) : 'falhou';
+          const estagio = midia.stage;
+          const linhaMidia = estagio === 'pronta'
+            ? '🎵 Áudio: pronto — use `!musicap` respondendo um áudio para tocar.'
+            : `🎵 Áudio: conectando (${estagio}). Assim que alguém entrar, use \`!musicap\`.`;
 
           const newsletterCtxCallp = {
             forwardingScore: 999,
@@ -33410,11 +33394,6 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               newsletterName: "Lizzy"
             }
           };
-          const linhaMidia = midiaOk
-            ? (estagio === 'pronta'
-              ? '🎵 Áudio: pronto — use `!musicap` respondendo um áudio para tocar.'
-              : `🎵 Áudio: aguardando a chamada ficar ativa (${estagio}). Use \`!musicap\` quando alguém entrar.`)
-            : `🎵 Áudio: indisponível neste servidor${midia?.detalhe ? ` (${midia.detalhe})` : ''}.`;
           await nazu.sendMessage(from, {
             text: `📞 *Chamada de voz iniciada neste grupo.*\n\n• ID: \`${callRes.id}\`\n• Membros no convite: ${callRes.participants}\n${linhaMidia}\n\n_Entre pelo WhatsApp para participar. Use \`!callp encerrar\` para derrubar._`,
             contextInfo: newsletterCtxCallp,
