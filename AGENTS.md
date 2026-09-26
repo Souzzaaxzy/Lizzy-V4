@@ -5206,3 +5206,46 @@ O que continua existindo e **nao** foi tocado: os antis do proprio bot
 (`!antifantasma`, `!antimidia`, `!antidelete`, `!antiflood`, `antilink*`,
 `!antibotao`/`antibtn`), o `!get` com o `invisibleAnalyzer`, o
 `ghostDetection`/pontuacao de fantasmas e o `!raja`/`!rajar`.
+
+## PAREAMENTO por CÓDIGO — código rejeitado no celular (set/2026) ✅
+Sintoma do dono: o bot gerava o código de pareamento, mas ao digitá-lo no
+celular o WhatsApp respondia **inválido** — testado em vários aparelhos. O QR
+Code sempre funcionou.
+
+### Causa raiz (dois defeitos, ambos na fork)
+1. **`companion_platform_display` não canônico.** O link-code era montado como
+   `` `${browser[1]} (${browser[0]})` ``. Desde a CORREÇÃO 8 o bot se anuncia como
+   **UWP** (para a voz nas calls), então o rótulo saía **"UWP (Windows)"** — que
+   o WhatsApp **rejeita**. O QR Code tolera rótulo customizado; o link-code
+   **não**. Era por isso que o QR funcionava e o código não.
+   Mesma causa da issue upstream WhiskeySockets/Baileys#2560 (fix na PR #2559).
+2. **Corrida com o `pair-device`.** `requestPairingCode` disparava o
+   `link_code_companion_reg` imediatamente. O servidor só aceita esse stanza
+   **depois** de responder o `pair-device`; pedir antes devolvia um código morto.
+
+### Correção
+- **Fork** (`Souzzaaxzy/baileys`, commit `863681b`):
+  - `lib/Utils/companion-reg-client-utils.js`: novo `getPairingCodePlatform`
+    normaliza o display para um par canônico
+    (`Chrome|Firefox|IE|Opera|Safari|Edge` + `Mac OS|Windows|Ubuntu`). O
+    `companion_platform_id` do link-code também passa a ser o id canônico (1-6).
+  - `lib/Socket/socket.js`: `requestPairingCode` **espera** o `pair-device`
+    (fila) em vez de disparar cedo; rejeita pedido concorrente; usa `query`
+    (com ack) em vez de `sendNode`; limpa `creds.pairingCode` se falhar.
+    `end()` rejeita a espera pendente quando a conexão cai antes do `pair-device`
+    (antes a Promise ficava pendurada para sempre).
+  - `tests/pairing-code.test.js`: prova o shape no wire e a ordem de prontidão
+    no socket real (fake WebSocket). Verificado que **falha** no código antigo.
+- **Lizzy**: `package-lock.json` e `yarn.lock` repinados para `863681b`.
+  Nenhuma mudança em `connect.js`/`subBotManager.js` foi necessária — o
+  `browser: ['Windows','UWP',…]` (voz) continua, e agora o pareamento aceita.
+
+### Nota operacional
+Após parear, o WhatsApp normalmente fecha com **515 (restartRequired)** — isso é
+esperado; reconectar com o mesmo auth state conclui o login. Não tratar 515 como
+falha de pareamento.
+
+### Se o código continuar inválido
+Confira que a fork instalada é a `863681b` (o boot mostra o commit em
+"Baileys:"; ver "BOOT mostra a fork do Baileys REALMENTE instalada"). Lockfile
+antigo = código antigo. Reinstalar: `npm install --allow-git=all`.
