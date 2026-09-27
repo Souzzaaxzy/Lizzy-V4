@@ -39,6 +39,8 @@ const AXML_START_TAG = 0x0102;
 const SIG_BLOCK_MAGIC = 'APK Sig Block 42';
 const SIG_BLOCK_ID_V2 = 0x7109871a;
 const SIG_BLOCK_ID_V3 = 0xf05368c0;
+// v3.1: rotação de chave por faixa de SDK (mesma estrutura de bloco).
+const SIG_BLOCK_ID_V31 = 0x1b93ad61;
 const ANDROID_NS = 'http://schemas.android.com/apk/res/android';
 
 /** Teto da janela lida para achar o diretório central (comentário ZIP + folga). */
@@ -321,21 +323,31 @@ export function readSignerFingerprints(input) {
   const source = toSource(input);
   try {
     const out = [];
-    const collect = (scheme, der) => out.push({
-      scheme,
-      sha256: sha256Hex(der),
-      // SHA-1 é o formato que o Aptoide publica (`file.signature.sha1`), então
-      // guardamos os dois para poder comparar contra cada fonte.
-      sha1: crypto.createHash('sha1').update(der).digest('hex').toUpperCase(),
-    });
+    const collect = (scheme, der) => {
+      const sha256 = sha256Hex(der);
+      const sha1 = crypto.createHash('sha1').update(der).digest('hex').toUpperCase();
+      // Evita duplicar o mesmo certificado vindo de v2 e v3.
+      if (out.some((s) => s.sha256 === sha256)) return;
+      out.push({ scheme, sha256, sha1 });
+    };
     const eocd = findEocd(source);
     if (!eocd) return out;
 
     const pairs = readSigningBlockPairs(source, eocd.cdOffset);
     for (const [id, value] of pairs) {
-      if (id !== SIG_BLOCK_ID_V2 && id !== SIG_BLOCK_ID_V3) continue;
-      for (const der of readSchemeCertificates(value)) {
-        collect(id === SIG_BLOCK_ID_V2 ? 'v2' : 'v3', der);
+      // v2, v3 e v3.1 (rotação de chave por faixa de SDK). O Aptoide às vezes
+      // publica o signer do bloco v3.1 — sem lê-lo, um APK legítimo seria
+      // recusado. Todos usam a mesma estrutura de "scheme".
+      const scheme = id === SIG_BLOCK_ID_V2 ? 'v2'
+        : id === SIG_BLOCK_ID_V3 ? 'v3'
+          : id === SIG_BLOCK_ID_V31 ? 'v3.1' : null;
+      if (!scheme) continue;
+      for (const der of readSchemeCertificates(value)) collect(scheme, der);
+      // A ROTATION LINEAGE (atributo proof-of-rotation) guarda certificados
+      // ANTERIORES de um app que trocou de chave — alguns publicadores usam esse
+      // fingerprint histórico.
+      for (const der of readRotationLineageCertificates(value)) {
+        collect('rotation-lineage', der);
       }
     }
 
@@ -346,6 +358,69 @@ export function readSignerFingerprints(input) {
   } finally {
     if (own) source.close();
   }
+}
+
+/** ID do atributo "proof-of-rotation" no bloco de assinatura v3. */
+const SIG_ATTR_PROOF_ROTATION = 0x3ba06f8c;
+
+/**
+ * Certificados da lineage de rotação (atributo proof-of-rotation do v3).
+ * Devolve os DERs dos certificados dos nós da cadeia (o mais antigo primeiro).
+ */
+function readRotationLineageCertificates(value) {
+  const out = [];
+  try {
+    const attr = readSigningBlockAttribute(value, SIG_ATTR_PROOF_ROTATION);
+    if (!attr) return out;
+    // ProofOfRotation: signedData (digests + certificates) + flags + signature.
+    let off = 0;
+    const readLen = () => { const n = attr.readUInt32LE(off); off += 4; return n; };
+    const signedDataLen = readLen();
+    const signedDataEnd = off + signedDataLen;
+    const digestsLen = readLen();
+    off += digestsLen;
+    const certsLen = readLen();
+    const certsEnd = off + certsLen;
+    while (off < certsEnd && off + 4 <= attr.length) {
+      const n = readLen();
+      out.push(attr.subarray(off, off + n));
+      off += n;
+    }
+    off = signedDataEnd;
+  } catch {
+    // estrutura inesperada: devolve o que já achou
+  }
+  return out;
+}
+
+/** Lê um atributo adicional (id + value) dentro de um bloco de signer v2/v3. */
+function readSigningBlockAttribute(value, wantedId) {
+  try {
+    let off = 0;
+    const readLen = () => { const n = value.readUInt32LE(off); off += 4; return n; };
+    const signersLen = readLen();
+    const signersEnd = off + signersLen;
+    while (off < signersEnd && off + 4 <= value.length) {
+      const signerEnd = off + readLen();
+      const signedDataEnd = off + readLen();
+      off += readLen(); // digests
+      const certsLen = readLen();
+      off += certsLen;
+      const attrsLen = readLen();
+      const attrsEnd = off + attrsLen;
+      while (off < attrsEnd && off + 8 <= value.length) {
+        const id = value.readUInt32LE(off); off += 4;
+        const len = value.readUInt32LE(off); off += 4;
+        const attr = value.subarray(off, off + len);
+        off += len;
+        if (id === wantedId) return attr;
+      }
+      off = Math.max(signedDataEnd, signerEnd);
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 /** Lê os pares (id, value) do APK Signing Block. Vazio quando não existe. */
@@ -427,8 +502,7 @@ function readV1Certificates(source) {
     if (!/^META-INF\/.*\.(RSA|DSA|EC)$/i.test(name)) continue;
     try {
       const pkcs7 = readZipEntry(source, entry);
-      const der = firstCertificateFromPkcs7(pkcs7);
-      if (der) out.push(der);
+      for (const der of certificatesFromPkcs7(pkcs7)) out.push(der);
     } catch {
       continue;
     }
@@ -437,13 +511,14 @@ function readV1Certificates(source) {
 }
 
 /**
- * Primeiro certificado X.509 dentro de um SignedData PKCS#7.
- *
- * Sem biblioteca ASN.1: um `Certificate` é um SEQUENCE que começa com
- * `30 82 .. .. 30 82 .. ..` (tbsCertificate + AlgorithmIdentifier). Aceitamos a
- * primeira ocorrência plausível; a comparação de fingerprint é o juiz final.
+ * Todos os certificados de um PKCS#7 (scheme v1). Devolve DERs.
+ * Tolerante: se o caminho conhecido falhar, cai num scan DER das SEQUENCEs de
+ * certificado (30 82 .. .. 30 82 .. ..) — o que não deixa passar em branco.
  */
-function firstCertificateFromPkcs7(der) {
+export function certificatesFromPkcs7(der) {
+  const byPath = readPkcs7Certificates(der);
+  if (byPath.length) return byPath;
+  const out = [];
   for (let i = 0; i + 8 < der.length; i++) {
     if (der[i] !== 0x30 || (der[i + 1] & 0x80) !== 0x80) continue;
     const lenBytes = der[i + 1] & 0x7f;
@@ -451,11 +526,60 @@ function firstCertificateFromPkcs7(der) {
     const total = lenBytes === 2 ? der.readUInt16BE(i + 2) : der.readUIntBE(i + 2, 3);
     const contentStart = i + 1 + lenBytes;
     if (contentStart + 6 > der.length) continue;
-    if (der[contentStart] !== 0x30) continue;
+    if (der[contentStart] !== 0x30 || der[contentStart + 1] !== 0x82) continue;
     if (contentStart + total > der.length) continue;
-    return der.subarray(i, contentStart + total);
+    out.push(der.subarray(i, contentStart + total));
   }
-  return null;
+  return out;
+}
+
+/** Leitor DER mínimo (tag + length + conteúdo). */
+function derChildren(buf) {
+  const out = [];
+  let i = 0;
+  while (i < buf.length) {
+    const tag = buf[i];
+    let len = buf[i + 1];
+    let hdr = 2;
+    if (len === undefined) break;
+    if (len & 0x80) {
+      const n = len & 0x7f;
+      if (n === 0 || n > 4 || i + 2 + n > buf.length) break;
+      len = buf.readUIntBE(i + 2, n);
+      hdr = 2 + n;
+    }
+    const start = i + hdr;
+    const end = start + len;
+    if (end > buf.length) break;
+    out.push({ tag, content: buf.subarray(start, end), full: buf.subarray(i, end) });
+    i = end;
+  }
+  return out;
+}
+
+/** Caminha ContentInfo → SignedData → certificates [0]. */
+function readPkcs7Certificates(der) {
+  try {
+    const ci = derChildren(der)[0];
+    if (!ci || ci.tag !== 0x30) return [];
+    const ciKids = derChildren(ci.content);
+    const signedDataWrap = ciKids.find((c) => c.tag === 0xa0);
+    if (!signedDataWrap) return [];
+    const sd = derChildren(signedDataWrap.content)[0];
+    if (!sd || sd.tag !== 0x30) return [];
+    for (const child of derChildren(sd.content)) {
+      // certificates: [0] IMPLICIT SET OF Certificate
+      if (child.tag !== 0xa0) continue;
+      const out = [];
+      for (const cert of derChildren(child.content)) {
+        if (cert.tag === 0x30) out.push(cert.full);
+      }
+      if (out.length) return out;
+    }
+  } catch {
+    return [];
+  }
+  return [];
 }
 
 export function sha256Hex(buf) {

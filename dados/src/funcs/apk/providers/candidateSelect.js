@@ -1,59 +1,81 @@
 /**
  * Pontuação e escolha do candidato vencedor.
  *
- * Regras (nada de "primeiro que apareceu"):
- *   - correspondência FORTE de nome ou package é obrigatória;
- *   - APK único > bundle (bundle só é aceito se nada mais existir);
- *   - variante: universal > nodpi > mais arquiteturas;
- *   - integridade disponível na fonte (hash/assinatura) soma;
- *   - prioridade da fonte só desempata.
+ * O problema que isto resolve: a busca textual de qualquer loja devolve
+ * vizinhos (procurar "whatsapp" lista "WhatsApp Business", "WhatsApp Spy";
+ * "tiktok" lista "TikTok for Android TV", "TikTok Lite"). Pegar "o primeiro" dá
+ * o app errado. A escolha precisa olhar SINAIS OBJETIVOS antes de "quem veio
+ * primeiro":
+ *
+ *   1. o TOKEN do termo bate com o último segmento do package id
+ *      ("com.whatsapp" para "whatsapp") — é o app canônico, não um vizinho;
+ *   2. o nome COMEÇA com o termo ("WhatsApp Messenger");
+ *   3. popularidade (a Aptoide informa os downloads) — o oficial tem ordens de
+ *      grandeza mais;
+ *   4. APK único, variante (universal > nodpi > mais ABIs), hash/assinatura;
+ *   5. canal estável (beta/debug/nightly perdem);
+ *   6. prioridade da fonte — só para desempate.
  *
  * A pontuação é INTERNA (seleção técnica); não é mostrada ao usuário.
  */
 
 import { isSingleApk, architectureScore } from './providerUtils.js';
 
-/**
- * Correspondência entre a consulta e o candidato (0..1).
- *
- * O package entra na conta: um app chamado "NewPipe" de package
- * `org.musicdownloader.mytube` é um clone, enquanto `org.schabi.newpipe` casa o
- * termo também no package — isso separa o oficial do sósia, o que a tarefa
- * exige ("não selecionar apenas porque o nome contém a palavra").
- */
-export function matchScore(query, candidate) {
+/** Canais instáveis: não são o que o usuário quer por padrão. */
+const UNSTABLE = ['beta', 'alpha', 'debug', 'nightly', 'dev', 'canary', 'preview', 'eval', 'test'];
+/** Qualificadores de VARIANTE do MESMO app (Lite, Go, TV, Business, Pro...). */
+const VARIANTS = ['lite', 'go', 'tv', 'watch', 'business', 'b4b', 'pro', 'plus', 'pad', 'wear', 'androidtv', 'beta'];
+/** Ruído claro: app diferente que só menciona o termo. */
+const NOISE = ['wallpaper', 'theme', 'launcher', 'icon pack', 'widget', 'sticker', 'simulator', 'keyboard', 'guide', 'tips', 'downloader', 'spy', 'hidden', 'hide', 'clone', 'mod'];
+
+function norm(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').trim();
+}
+
+function tokens(s) {
+  return norm(s).split(/[^a-z0-9]+/).filter(Boolean);
+}
+
+/** Os tokens de `needle` aparecem em sequência em `hay`? */
+function subsequence(needle, hay) {
+  for (let i = 0; i + needle.length <= hay.length; i++) {
+    if (needle.every((t, k) => hay[i + k] === t)) return true;
+  }
+  return false;
+}
+
+/** Sinais derivados do par (consulta, candidato), todos objetivos. */
+export function signals(query, candidate) {
   const q = norm(query);
-  if (!q) return 0;
   const name = norm(candidate.name);
   const pkg = norm(candidate.packageName);
-
   const qTokens = tokens(query);
   const nameTokens = tokens(candidate.name);
   const pkgTokens = tokens(candidate.packageName);
-  const pkgHasQ = pkgTokens.includes(q) || pkgTokens[pkgTokens.length - 1] === q;
-  const nameHasQ = nameTokens.includes(q) || (nameTokens[0] === q);
 
-  // Package id exato digitado pelo usuário: identidade máxima.
-  if (pkg && pkg === q) return 1;
-  // Nome exato E package relacionado ao termo: identidade máxima.
-  if (name === q && pkgHasQ) return 1;
-  // Nome exato, package sem relação: ainda é bom, mas não é prova do oficial.
-  if (name === q) return 0.9;
-  // Package contém o termo (sinal forte de que é o app canônico).
-  if (pkgHasQ) return 0.85;
-  // O nome COMEÇA com o termo: "spotify" -> "Spotify: Music and Podcasts".
-  if (nameTokens[0] === q) return 0.8;
-  // Tokens da consulta em sequência no nome.
-  if (qTokens.length && nameHasQ && subsequence(qTokens, nameTokens)) return 0.78;
-  // Termo como token isolado no nome.
-  if (nameTokens.includes(q)) return 0.7;
-  // Substring no nome (termo colado).
-  if (name.includes(q)) return 0.5;
-  return 0;
+  const pkgLast = pkgTokens.length ? pkgTokens[pkgTokens.length - 1] : '';
+  const nameHasQ = nameTokens.includes(q);
+
+  return {
+    q,
+    exactPkg: pkg === q,
+    // O token do termo é um segmento do package (com.whatsapp): sinal FORTE de
+    // app canônico. `pkgEndToken` é o caso mais forte (último segmento).
+    pkgExactToken: pkgTokens.includes(q),
+    pkgEndToken: pkgLast === q,
+    nameExact: name === q,
+    nameStartsWith: Boolean(nameTokens[0]) && nameTokens[0].startsWith(q),
+    nameHasQ,
+    nameSubsequence: qTokens.length > 1 && subsequence(qTokens, nameTokens),
+    nameSubstring: name.includes(q),
+    noise: NOISE.some((w) => name.includes(w)),
+    variant: VARIANTS.some((w) => nameTokens.includes(w) || pkgTokens.includes(w)),
+    unstable: isUnstable(candidate),
+    singleApk: isSingleApk(candidate.type),
+    popularity: Number(candidate.popularity || 0),
+    hasSigner: Boolean(candidate.signerSha256 || candidate.signerSha1),
+  };
 }
-
-/** Canais instáveis: não são o que o usuário quer por padrão. */
-const UNSTABLE = ['beta', 'alpha', 'debug', 'nightly', 'dev', 'canary', 'test', 'rc'];
 
 /** Sinaliza variante/canal instável em nome, versão ou package. */
 export function isUnstable(candidate) {
@@ -61,48 +83,85 @@ export function isUnstable(candidate) {
   return UNSTABLE.some((w) => new RegExp(`(^|[^a-z])${w}([^a-z]|$)`).test(hay));
 }
 
-/** Correspondência suficiente para considerar o candidato? */
+/**
+ * É candidato relevante para a consulta? (filtro, não ordenação)
+ * Relevante = o termo identifica o app: nome começa/contém o termo, ou o
+ * package id traz o termo como token. Ruído evidente fica de fora.
+ */
+export function isRelevant(query, candidate) {
+  const s = signals(query, candidate);
+  if (!s.q) return false;
+  if (s.noise && !s.exactPkg && !s.nameExact) return false;
+  return s.pkgExactToken || s.pkgEndToken || s.exactPkg || s.nameExact || s.nameStartsWith
+    || s.nameHasQ || s.nameSubsequence || s.nameSubstring;
+}
+
+/** Compatibilidade com o nome antigo. */
 export function isStrongMatch(query, candidate) {
-  return matchScore(query, candidate) >= 0.7;
+  return isRelevant(query, candidate);
 }
 
 /**
- * Pontuação total do candidato (para ordenar).
+ * Pontuação total do candidato (para ordenar). Maior = melhor.
+ *
+ * A base é IDENTIDADE, e a popularidade é o desempate objetivo que separa o app
+ * oficial de um sósia com nome parecido (2 bilhões de downloads vs 3 mil). Sem
+ * esse desempate, "WhatsApp Spy" ou "Curiosidades WhatsApp" competiriam de
+ * igual para igual com o oficial.
+ *
  * @param {object} candidate
- * @param {{priority?: number, query?: string}} ctx
+ * @param {{query?: string, priority?: number}} ctx
  */
 export function candidateScore(candidate, ctx = {}) {
+  const query = ctx.query || '';
+  const s = signals(query, candidate);
   let score = 0;
 
-  score += matchScore(ctx.query || '', candidate) * 100;
+  // --- identidade ---
+  if (s.exactPkg) {
+    score += 250;                     // o usuário digitou o package id
+  } else if (s.nameStartsWith) {
+    score += 100;                     // "WhatsApp Messenger" p/ "whatsapp"
+  } else if (s.nameExact) {
+    score += 100;
+  } else if (s.nameHasQ) {
+    score += 40;                      // termo como token no meio do nome
+  } else if (s.nameSubsequence) {
+    score += 35;
+  } else if (s.nameSubstring) {
+    score += 20;
+  }
+  // Package terminando/tendo o termo como token reforça que é o canônico, mas
+  // sozinho não basta (um clone pode ter "whatsapp" no meio do package).
+  if (!s.exactPkg && s.pkgEndToken) score += 50;
+  else if (!s.exactPkg && s.pkgExactToken) score += 30;
 
-  // Formato: APK único vale muito; bundle é último recurso.
-  score += isSingleApk(candidate.type) ? 40 : -30;
+  // --- penalidades de "app errado" ---
+  if (s.noise) score -= 60;
+  // Variante do MESMO app (Lite/Go/TV/Business): válida, mas nunca antes do
+  // canal principal quando ele existe.
+  if (s.variant && !s.exactPkg) score -= 40;
+  if (s.unstable && !s.exactPkg) score -= 30;
 
-  // Variante.
+  // --- formato e variante ---
+  score += s.singleApk ? 40 : -200;   // bundle nunca ganha de APK único
   score += architectureScore(candidate.architecture) / 10;
 
-  // Integridade verificável na fonte.
-  if (candidate.sha256) score += 12;
-  if (candidate.md5) score += 8;
-  if (candidate.signerSha256 || candidate.signerSha1) score += 10;
+  // --- integridade verificável na fonte ---
+  if (candidate.sha256) score += 12;  // sha256 > md5 (mais forte)
+  else if (candidate.md5) score += 8;
+  if (s.hasSigner) score += 10;
 
-  // Tamanho informado ajuda (permite checar o limite antes de baixar).
-  if (candidate.size) score += 3;
+  // --- popularidade: desempate OBJETIVO entre candidatos de nome parecido ---
+  // 2B downloads → +58; 1M → +39; 3k → +22; 100 → +13. Log para não atropelar
+  // a identidade, mas forte o bastante para o oficial ganhar do clone.
+  if (s.popularity > 0) score += Math.min(60, Math.log10(s.popularity) * 6.5);
 
-  // Canal instável (beta/debug/nightly) perde para o estável.
-  if (isUnstable(candidate)) score -= 25;
+  // --- prioridade da fonte: só desempate ---
+  if (typeof ctx.priority === 'number') score += Math.max(0, 8 - ctx.priority);
 
-  // O package refletir o termo é um bom sinal do app canônico.
-  const q = norm(ctx.query || '');
-  const pkgTokens = tokens(candidate.packageName);
-  if (q && (pkgTokens.includes(q) || pkgTokens[pkgTokens.length - 1] === q)) score += 15;
-
-  // Desempate por prioridade da fonte (menor índice = maior prioridade).
-  if (typeof ctx.priority === 'number') score += Math.max(0, 10 - ctx.priority);
-
-  // Um candidato que a fonte não consegue entregar fica por último.
-  if (candidate.downloadable === false) score -= 100;
+  // --- resultado que a fonte não consegue entregar vai para o fim ---
+  if (candidate.downloadable === false) score -= 500;
 
   return score;
 }
@@ -121,39 +180,25 @@ export function rankCandidates(candidates, opts = {}) {
 }
 
 /**
- * Melhor APK ÚNICO entre os candidatos (ignora bundles).
- * Devolve `null` quando só há bundles/sem correspondência.
+ * Melhor APK ÚNICO entre os candidatos relevantes (ignora bundles).
+ * Devolve `null` quando só há bundles / nada relevante.
  */
 export function pickBestSingleApk(candidates, query) {
-  const singles = candidates.filter((c) => isSingleApk(c.type) && c.downloadable !== false && isStrongMatch(query, c));
+  const singles = candidates.filter((c) => isSingleApk(c.type) && c.downloadable !== false && isRelevant(query, c));
   return singles.length ? rankCandidates(singles, { query })[0] : null;
 }
 
 /** Há apenas resultados em bundle? (para a mensagem específica) */
 export function onlyBundles(candidates, query) {
-  const relevant = candidates.filter((c) => isStrongMatch(query, c));
+  const relevant = candidates.filter((c) => isRelevant(query, c));
   return relevant.length > 0 && relevant.every((c) => !isSingleApk(c.type));
 }
 
-function norm(s) {
-  return String(s || '').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').trim();
-}
-
-function tokens(s) {
-  return norm(s).split(/[^a-z0-9]+/).filter(Boolean);
-}
-
-/** Os tokens de `needle` aparecem em sequência em `hay`? */
-function subsequence(needle, hay) {
-  for (let i = 0; i + needle.length <= hay.length; i++) {
-    if (needle.every((t, k) => hay[i + k] === t)) return true;
-  }
-  return false;
-}
-
 export default {
-  matchScore,
+  signals,
+  isRelevant,
   isStrongMatch,
+  isUnstable,
   candidateScore,
   rankCandidates,
   pickBestSingleApk,

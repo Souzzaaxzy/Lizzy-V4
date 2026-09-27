@@ -6242,3 +6242,76 @@ oficial — "primeiro VÁLIDO", não "primeira resposta". `!apk telegram` → Ap
 ### Dependências
 Nenhuma adicionada. Reutiliza `httpClient.js` (axios), `apkFile.js` (ZIP/AXML),
 `apkDownload.js` e `apkCache.js` já existentes.
+
+## `!apk` — velocidade, busca correta e entrega garantida (set/2026, 2ª rodada)
+
+Três problemas medidos e corrigidos. Números são de execução real.
+
+### 1. VELOCIDADE — a 1ª busca levava 114 s
+Medição inicial: `!apk whatsapp` → **114 905 ms de busca**. Causa: o provider
+F-Droid baixava o índice inteiro (~60 MB) ANTES de responder, e o comando
+esperava esse provider.
+
+Correção:
+- o F-Droid agora usa a API de busca oficial + um caminho por package
+  (`api/v1/packages` + um HEAD, ≈500 B por candidato, poucos em paralelo);
+- o índice de 60 MB carrega em **segundo plano** (`warmCatalog`), aquecido no
+  boot (`connect.js`) e no início de cada busca — nunca bloqueia o usuário;
+- quando o catálogo já está pronto, ele só ENRIQUECE (acrescenta sha256 e o
+  signer do pacote).
+
+Resultado: busca de **114 s → ~150 ms** (medido: whatsapp 860 ms na primeira
+chamada do processo, 145-160 ms depois).
+
+### 2. BUSCA — o app errado era escolhido
+`!apk whatsapp` entregava `WhatsApp Business` e `!apk tiktok` entregava
+`TikTok for Android TV`. O ranking dava a mesma pontuação de identidade para o
+app oficial e para o vizinho porque ambos têm "whatsapp"/"tiktok" no package.
+
+Correção (`candidateSelect.js`), tudo por sinal OBJETIVO:
+- identidade: package id digitado > nome começa com o termo > termo como token;
+- **popularidade** (a Aptoide informa os downloads) como desempate em escala
+  logarítmica — o oficial tem ordens de grandeza mais que o clone;
+- penalidade para variante do MESMO app (Lite/Go/TV/Business/Watch) e para canal
+  instável (beta/debug/nightly);
+- penalidade para ruído evidente (wallpaper/theme/spy/hide/clone/...);
+- busca do provider com `limit=25` (era 10) — mais candidatos, mesma 1 requisição.
+
+Resultado real: `whatsapp` → `com.whatsapp` 2.26.39.1; `tiktok` →
+`com.zhiliaoapp.musically` 46.9.2; `vlc` → `org.videolan.vlc`; `spotify` →
+`com.spotify.music`; `instagram` → `com.instagram.android`; `telegram` →
+`org.telegram.messenger.web`.
+
+### 3. DOWNLOAD — APKs oficiais eram recusados
+Achados reais que faziam o bot cair para um app errado (ou falhar):
+
+- **v3.1 (rotação de chave)**: o WhatsApp publica no bloco v3.1
+  (`0x1b93ad61`) o certificado de rotação, e o Aptoide publica ESSE fingerprint.
+  O código só lia v2/v3 → "assinatura não confere" num APK oficial. Agora o
+  bloco v3.1 é lido.
+- **v1 (JAR/PKCS#7)**: o "VLC" antigo (e vários APKs legítimos) é assinado só no
+  esquema v1. A extração do certificado usava heurística e falhava → "sem
+  certificado". Agora há um leitor DER de verdade
+  (ContentInfo → SignedData → certificates [0]).
+- **tamanho**: o TikTok oficial tem 342 MB e era barrado pelo teto de 300 MB.
+  O padrão subiu para **600 MB** (`APK_MAX_BYTES` continua configurável).
+
+Além disso, o `acquire()` ganhou um **fallback por package**: se todos os
+candidatos da busca falharem, ele tenta o MESMO package id em toda fonte que
+expõe `getByPackage` (Aptoide e F-Droid). É o que sustenta "qualquer app
+encontrado envia o APK".
+
+### Configuração nova
+| variável | padrão | função |
+|---|---|---|
+| `APK_APTOIDE_LIMIT` | 25 | candidatos por busca na Aptoide |
+| `APK_FDROID_MAX_ENRICH` | 6 | candidatos do F-Droid com versão+HEAD |
+| `APK_COOLDOWN_MS` | 8 s | cooldown por usuário (era 20 s) |
+| `APK_MAX_BYTES` | 600 MB | teto do APK (era 300 MB) |
+
+### Testes
+`tests/apk-command.test.js` — **46 testes / 127 asserções** (eram 39/110).
+Novos: v1-only aceito, v3.1 (rotação) lido, popularidade desempata o clone,
+variante não vence o canal principal, consulta por package id, `isPackageId` e
+o fallback por package. `tests/helpers/apk-builders.js` ganhou construtores de
+APK assinado v1 (PKCS#7 DER real) e v2/v3/v3.1.

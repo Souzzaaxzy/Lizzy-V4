@@ -1974,6 +1974,14 @@ async function createBotSocket(authDir) {
                     attachCallListener(); // Notificações de chamada (!testcall)
                     startCacheCleanup(); // Inicia o sistema de limpeza de cache
 
+                    // Aquece o catálogo do `!apk` em segundo plano: o índice do
+                    // F-Droid tem ~60 MB e a primeira busca não pode esperar por
+                    // ele. Aqui ele carrega enquanto o bot atende; quando estiver
+                    // pronto, as buscas do F-Droid ganham hash/assinatura de graça.
+                    void import('./funcs/apk/providers/fdroidProvider.js')
+                        .then((p) => p.warmup?.())
+                        .catch(() => {});
+
                     // Envia mensagem de boas-vindas para o dono
                     try {
                         const msgBotOnConfig = loadMsgBotOn();

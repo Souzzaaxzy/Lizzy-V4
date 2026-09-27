@@ -19720,7 +19720,7 @@ case 'addaluguel':
           // As fontes devolvem vários candidatos e só sabemos qual é válido
           // depois de baixar+validar. Então aqui NÃO anunciamos "o" app (poderia
           // ser o candidato errado); só confirmamos que achamos e vamos baixar.
-          await setProgress(`📦 *${best.name || best.packageName}*\n📦 Encontrado nas fontes! Baixando...`);
+          await setProgress(`📦 *${best.name || best.packageName}*\n📦 APK encontrado! Baixando...`);
 
           // acquire() tenta o melhor candidato e, se ele falhar na validação,
           // passa para o próximo — "primeiro resultado VÁLIDO", não "primeira resposta".

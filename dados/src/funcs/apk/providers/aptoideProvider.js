@@ -13,9 +13,9 @@
  * segunda fonte funcional é a Aptoide, que tem API oficial e devolve
  * package/versão/tamanho/md5/assinatura (SHA-1 do certificado)/URL direta.
  *
- * Endpoints usados (somente leitura, um por consulta):
+ * Endpoints usados (somente leitura):
  *   - busca:   /api/7/apps/search?query=<q>&limit=<n>
- *   - detalhe: /api/7/app/getMeta?package_name=<pkg>
+ *   - pacote:  /api/7/app/getMeta?package_name=<pkg>  (caminho rápido por package)
  */
 
 import { providerRequest, normalizeCandidate, providerError, APK_TYPE, PROVIDER_LABELS, parseArchitecture } from './providerUtils.js';
@@ -28,33 +28,67 @@ export const ALLOWED_HOSTS = Object.freeze([
 ]);
 
 const API_BASE = 'https://ws75.aptoide.com/api/7';
-const SEARCH_LIMIT = 10;
+// Limit maior = mais candidatos para escolher o app CERTO (não o primeiro).
+// Ainda é UMA única requisição — não é flood.
+const SEARCH_LIMIT = Number(process.env.APK_APTOIDE_LIMIT) || 25;
 
 /** Busca por nome/package na API oficial. */
 export async function search(query, opts = {}) {
   const q = String(query || '').trim();
   if (!q) return { ok: false, reason: 'APK_QUERY_EMPTY', provider: ID, candidates: [] };
 
+  // Caminho rápido: a consulta já é um package id (ex.: "com.whatsapp"). Uma
+  // requisição por package resolve o app exato, sem depender da relevância da
+  // busca textual.
+  const candidates = [];
+  if (isPackageId(q)) {
+    const exact = await getByPackage(q, opts).catch(() => null);
+    if (exact) candidates.push(exact);
+  }
+
+  const url = `${API_BASE}/apps/search?query=${encodeURIComponent(q)}&limit=${SEARCH_LIMIT}`;
   let payload;
   try {
-    const url = `${API_BASE}/apps/search?query=${encodeURIComponent(q)}&limit=${SEARCH_LIMIT}`;
     const res = await providerRequest(url, { asJson: true, timeoutMs: opts.timeoutMs });
     payload = res.data;
   } catch (error) {
+    // Se o caminho por package já achou algo, não falha por causa da busca.
+    if (candidates.length) return { ok: true, provider: ID, candidates };
     const isAbort = error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError' || /aborted|timeout/i.test(String(error?.message));
     throw providerError(ID, isAbort ? 'TIMEOUT' : 'SEARCH_ERROR', { cause: error?.message });
   }
 
   const list = payload?.datalist?.list;
   if (!Array.isArray(list)) {
+    if (candidates.length) return { ok: true, provider: ID, candidates };
     throw providerError(ID, 'INVALID_RESULT', { got: typeof list });
   }
 
-  const candidates = list
-    .map((app) => toCandidate(app, opts))
-    .filter((c) => c.name && c.packageName);
+  const seen = new Set(candidates.map((c) => c.packageName));
+  for (const app of list) {
+    const c = toCandidate(app, opts);
+    if (c.name && c.packageName && !seen.has(c.packageName)) {
+      candidates.push(c);
+      seen.add(c.packageName);
+    }
+  }
 
   return { ok: true, provider: ID, candidates };
+}
+
+/** Resolve um package id exato na API oficial. */
+export async function getByPackage(packageName, opts = {}) {
+  const url = `${API_BASE}/app/getMeta?package_name=${encodeURIComponent(packageName)}`;
+  const res = await providerRequest(url, { asJson: true, timeoutMs: opts.timeoutMs });
+  const app = res.data?.data;
+  if (!app || !app.package) return null;
+  const c = toCandidate(app, opts);
+  return c.name && c.packageName ? c : null;
+}
+
+/** A consulta parece um package id (contém ponto e não tem espaços)? */
+export function isPackageId(q) {
+  return /^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z0-9_]+){1,}$/.test(q);
 }
 
 /** Converte um item da API no candidato comum. */
@@ -78,6 +112,10 @@ export function toCandidate(app, opts = {}) {
     // A Aptoide publica SHA-1 do certificado (não SHA-256).
     signerSha1: sig.sha1 ?? null,
     architecture: parseArchitecture(file.tags?.join(' ') || '') || 'universal',
+    // Sinal objetivo de popularidade: o app oficial tem MUITO mais downloads que
+    // um clone. Usado só para desempate técnico (não aparece para o usuário).
+    popularity: Number(app.stats?.pdownloads || 0) || null,
+    developer: app.developer?.name || null,
     downloadable: hostOk && type === APK_TYPE.APK,
   });
 }
@@ -93,4 +131,4 @@ function hostAllowed(url, allowedHosts) {
   }
 }
 
-export default { ID, LABEL, ALLOWED_HOSTS, search };
+export default { ID, LABEL, ALLOWED_HOSTS, search, getByPackage };

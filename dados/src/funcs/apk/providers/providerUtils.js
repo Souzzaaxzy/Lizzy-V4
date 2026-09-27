@@ -101,6 +101,9 @@ export function normalizeCandidate(raw = {}) {
     signerSha1: raw.signerSha1 || null,
     architecture: parseArchitecture(raw.architecture) || null,
     minAndroid: raw.minAndroid || null,
+    // Sinais objetivos de "qual é o app oficial" (só desempate técnico).
+    popularity: raw.popularity != null ? Number(raw.popularity) : null,
+    developer: raw.developer || null,
     // `downloadable: false` marca resultado que não tem APK único pela fonte.
     downloadable: raw.downloadable !== false && Boolean(downloadUrl),
   };
@@ -123,10 +126,10 @@ export function providerError(providerId, reason, details) {
 }
 
 /**
- * GET de JSON/HTML com timeout, teto de bytes e cancelamento.
+ * GET/HEAD com timeout, teto de bytes e cancelamento.
  *
  * @param {string} url
- * @param {{timeoutMs?: number, asJson?: boolean, html?: boolean, headers?: object}} [opts]
+ * @param {{timeoutMs?: number, asJson?: boolean, html?: boolean, headers?: object, method?: string}} [opts]
  */
 export async function providerRequest(url, opts = {}) {
   const timeoutMs = opts.timeoutMs ?? PROVIDER_TIMEOUT_MS;
@@ -134,10 +137,11 @@ export async function providerRequest(url, opts = {}) {
   // HTML de scraping (scrapingClient) e binário (mediaClient). O mediaClient é
   // arraybuffer, então JSON NUNCA deve passar por ele.
   const client = opts.asJson ? apiClient : (opts.html ? scrapingClient : mediaClient);
+  const method = String(opts.method || 'get').toLowerCase();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await client.get(url, {
+    const res = await client[method](url, {
       timeout: timeoutMs,
       signal: controller.signal,
       maxContentLength: MAX_PROVIDER_RESPONSE_BYTES,

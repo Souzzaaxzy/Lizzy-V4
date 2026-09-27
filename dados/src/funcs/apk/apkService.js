@@ -120,7 +120,7 @@ export function downloadStats() {
  * impede alguém pedir 3 APKs grandes em sequência). Evita que um usuário só
  * dispare vários downloads.
  */
-const APK_COOLDOWN_MS = Number(process.env.APK_COOLDOWN_MS) || 20000;
+const APK_COOLDOWN_MS = Number(process.env.APK_COOLDOWN_MS) || 8000;
 const lastUseByUser = new Map();
 
 export function checkCooldown(userId, now = Date.now()) {
@@ -215,6 +215,16 @@ export async function search(query, opts = {}) {
       return { ok: false, code: APK_CODES.ALL_PROVIDERS_FAILED, errors };
     }
     return { ok: false, code: APK_CODES.NOT_FOUND, errors };
+  }
+
+  // Candidatos do F-Droid podem vir sem nome (o enriquecimento devolve só
+  // package/versão). Preenchemos com o nome de outro candidato do MESMO package.
+  const nameByPackage = new Map();
+  for (const c of candidates) {
+    if (c.name && !nameByPackage.has(c.packageName)) nameByPackage.set(c.packageName, c.name);
+  }
+  for (const c of candidates) {
+    if (!c.name) c.name = nameByPackage.get(c.packageName) || c.packageName;
   }
 
   const ranked = rankCandidates(candidates, { query: q, priorityOf });
@@ -421,9 +431,11 @@ export async function acquire(query, opts = {}) {
   if (!res.ok) return res;
 
   const attempts = [];
-  for (const candidate of res.candidates) {
-    if (!isSingleApk(candidate.type) || candidate.downloadable === false) continue;
-    if (!isStrongMatch(query, candidate)) continue;
+  const tried = new Set();
+
+  const tryCandidate = async (candidate) => {
+    if (!candidate || !isSingleApk(candidate.type) || candidate.downloadable === false) return null;
+    if (!isStrongMatch(query, candidate)) return null;
     try {
       const prepared = await prepareApk(candidate, opts);
       log(`[APK] provider winner=${candidate.source}`);
@@ -431,13 +443,54 @@ export async function acquire(query, opts = {}) {
     } catch (error) {
       attempts.push({ source: candidate.source, code: error?.code, message: error?.message });
       log(`[APK] candidate failed source=${candidate.source} code=${error?.code} detail=${error?.message}`);
-      // Segue para o próximo candidato (outra fonte ou outra variante).
+      return null;
+    }
+  };
+
+  // 1ª passada: todos os candidatos relevantes, na ordem de pontuação.
+  for (const candidate of res.candidates) {
+    const key = `${candidate.source}:${candidate.packageName}`;
+    tried.add(key);
+    const won = await tryCandidate(candidate);
+    if (won) return won;
+  }
+
+  // 2ª passada (fallback): para cada package relevante que NENHUM provider
+  // entregou, tenta resolver direto pelo package id nas fontes que têm busca
+  // por package. É o que faz "qualquer app encontrado" sair, mesmo quando só
+  // uma fonte respondeu e o arquivo dela falhou.
+  const relevantPackages = new Set(
+    res.candidates.filter((c) => isStrongMatch(query, c)).map((c) => c.packageName)
+  );
+  for (const packageName of relevantPackages) {
+    log(`[APK] package fallback package=${packageName}`);
+    const extra = await resolveByPackage(packageName, opts).catch(() => []);
+    for (const candidate of extra) {
+      const key = `${candidate.source}:${candidate.packageName}`;
+      if (tried.has(key)) continue;
+      tried.add(key);
+      const won = await tryCandidate(candidate);
+      if (won) return won;
     }
   }
 
   // Nenhum candidato passou na validação.
   const lastCode = attempts.length ? attempts[attempts.length - 1].code : APK_CODES.NOT_FOUND;
   return { ok: false, code: lastCode || APK_CODES.NOT_FOUND, attempts, candidates: res.candidates };
+}
+
+/**
+ * Tenta resolver um package id em todas as fontes habilitadas que expõem busca
+ * por pacote (caminho rápido e alvo). Devolve candidatos prontos para tentar.
+ */
+export async function resolveByPackage(packageName, opts = {}) {
+  const targets = providers().filter((p) => typeof p.getByPackage === 'function');
+  const results = await Promise.allSettled(targets.map((p) => p.getByPackage(packageName, opts)));
+  const out = [];
+  for (const r of results) {
+    if (r.status === 'fulfilled' && r.value) out.push(r.value);
+  }
+  return out;
 }
 
 /** Compatibilidade: pesquisa + adquire. */
@@ -456,6 +509,7 @@ export default {
   findApp,
   prepareApk,
   acquire,
+  resolveByPackage,
   resolveApk,
   downloadStats,
   checkCooldown,

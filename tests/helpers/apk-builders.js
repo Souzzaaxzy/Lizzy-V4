@@ -194,38 +194,132 @@ export function buildApk({ packageName = 'com.example.app', versionName = '1.0',
  * APK sintético COM bloco de assinatura v2. O "certificado" é um DER bem
  * formado (SEQUENCE de OCTET STRING); o teste compara só o fingerprint.
  */
-export function buildSignedApk({ packageName = 'com.signed.app', versionName = '1.0', versionCode = 1, certSeed = 7 } = {}) {
-  const base = buildApk({ packageName, versionName, versionCode });
-
-  const payload = Buffer.alloc(64, certSeed);
-  const cert = Buffer.concat([
-    Buffer.from([0x30, 0x82, 0x00, payload.length + 4]),
-    Buffer.from([0x04, 0x82, 0x00, payload.length]),
-    payload,
-  ]);
+/** Constrói um bloco de signer v2/v3 (mesma estrutura) com o certificado dado. */
+function buildSignerBlock(id, cert) {
   const u32 = (n) => { const b = Buffer.alloc(4); b.writeUInt32LE(n); return b; };
-  const digests = Buffer.concat([u32(4), u32(0), u32(8)]); // 1 entrada: len+alg+digest
+  const digests = Buffer.concat([u32(4), u32(0), u32(8)]);
   const certsBlob = Buffer.concat([u32(cert.length), cert]);
   const signedData = Buffer.concat([u32(digests.length), digests, u32(certsBlob.length), certsBlob]);
   const signer = Buffer.concat([u32(signedData.length), signedData]);
   const signers = Buffer.concat([u32(signer.length), signer]);
   const schemeValue = Buffer.concat([u32(signers.length), signers]);
-  const pair = Buffer.concat([Big64(4 + schemeValue.length), u32(0x7109871a), schemeValue]);
+  const pair = Buffer.concat([Big64(4 + schemeValue.length), u32(id), schemeValue]);
+  return pair;
+}
+
+/** Certificado DER sintético determinístico. */
+function syntheticCert(seed) {
+  const payload = Buffer.alloc(64, seed);
+  return Buffer.concat([
+    Buffer.from([0x30, 0x82, 0x00, payload.length + 4]),
+    Buffer.from([0x04, 0x82, 0x00, payload.length]),
+    payload,
+  ]);
+}
+
+/** Insere um APK Signing Block entre o conteúdo e o diretório central. */
+function insertSigningBlock(base, pairs, { extraTopPair = null } = {}) {
   const magic = Buffer.from('APK Sig Block 42');
-  // O tamanho declarado EXCLUI o campo inicial de 8 bytes e INCLUI o par
-  // (tamanho + id + valor) mais o campo final de 8 bytes + a magic.
-  const blockSize = 8 + pair.length + 16;
-  const block = Buffer.concat([Big64(blockSize), pair, Big64(blockSize), magic]);
+  const allPairs = extraTopPair ? [extraTopPair, ...pairs] : pairs;
+  const body = Buffer.concat(allPairs);
+  const blockSize = 8 + body.length + 16;
+  const block = Buffer.concat([Big64(blockSize), body, Big64(blockSize), magic]);
 
   const eocdOff = base.length - 22;
   const cdOffset = base.readUInt32LE(eocdOff + 16);
-  const body = base.subarray(0, cdOffset);
+  const head = base.subarray(0, cdOffset);
   const cd = base.subarray(cdOffset, eocdOff);
   const eocd = Buffer.from(base.subarray(eocdOff));
   eocd.writeUInt32LE(cdOffset + block.length, 16);
-  const apk = Buffer.concat([body, block, cd, eocd]);
+  return Buffer.concat([head, block, cd, eocd]);
+}
 
-  return { apk, expectedSignerSha256: crypto.createHash('sha256').update(cert).digest('hex') };
+/**
+ * APK sintético com assinatura v2/v3 (opcionalmente v3.1 com certificado
+ * diferente, para exercitar a rotação de chave).
+ */
+export function buildSignedApk({ packageName = 'com.signed.app', versionName = '1.0', versionCode = 1, certSeed = 7, v31Seed = null } = {}) {
+  const base = buildApk({ packageName, versionName, versionCode });
+  const cert = syntheticCert(certSeed);
+  const pairs = [buildSignerBlock(0x7109871a, cert), buildSignerBlock(0xf05368c0, cert)];
+  const v31Cert = v31Seed != null ? syntheticCert(v31Seed) : null;
+  if (v31Cert) pairs.push(buildSignerBlock(0x1b93ad61, v31Cert));
+
+  const apk = insertSigningBlock(base, pairs);
+  return {
+    apk,
+    expectedSignerSha256: crypto.createHash('sha256').update(cert).digest('hex'),
+    expectedSignerSha1: crypto.createHash('sha1').update(cert).digest('hex').toUpperCase(),
+    v31SignerSha1: v31Cert ? crypto.createHash('sha1').update(v31Cert).digest('hex').toUpperCase() : null,
+  };
+}
+
+/**
+ * APK assinado SOMENTE no esquema v1 (JAR): `META-INF/CERT.RSA` com um PKCS#7
+ * real (ContentInfo → SignedData → certificates). Antes, esses APKs eram
+ * recusados por "sem certificado".
+ */
+export function buildV1SignedApk({ packageName = 'com.v1.app', versionName = '1.0', versionCode = 1, certSeed = 3 } = {}) {
+  const cert = syntheticCert(certSeed);
+  const signedData = derWrap(0x30, Buffer.concat([
+    derWrap(0x02, Buffer.from([0x01])),                       // version
+    derWrap(0x31, Buffer.alloc(0)),                           // digestAlgorithms
+    derWrap(0x30, Buffer.from([0x06, 0x01, 0x00])),           // contentInfo
+    derWrap(0x31, Buffer.alloc(0)),                           // signerInfos
+    // certificates [0] IMPLICIT SET OF Certificate: os certificados entram
+    // DIRETO dentro do [0], como no PKCS#7 real.
+    derWrap(0xa0, cert),
+  ]));
+  const pkcs7 = derWrap(0x30, Buffer.concat([
+    derWrap(0x06, Buffer.from([0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x07, 0x02])), // signedData OID
+    derWrap(0xa0, signedData),
+  ]));
+
+  const base = buildApk({ packageName, versionName, versionCode });
+  const apk = buildZip([
+    { name: 'AndroidManifest.xml', data: extractManifest(base) },
+    { name: 'classes.dex', data: Buffer.from('dex\n035\0', 'latin1') },
+    { name: 'META-INF/MANIFEST.MF', data: Buffer.from('Manifest-Version: 1.0\n\n') },
+    { name: 'META-INF/CERT.SF', data: Buffer.from('Signature-Version: 1.0\n\n') },
+    { name: 'META-INF/CERT.RSA', data: pkcs7 },
+  ]);
+  return { apk, expectedSignerSha1: crypto.createHash('sha1').update(cert).digest('hex').toUpperCase() };
+}
+
+/** Extrai o AndroidManifest.xml de um APK construído (para reempacotar). */
+import zlib from 'node:zlib';
+function extractManifest(apk) {
+  const eocd = apk.length - 22;
+  const cdOffset = apk.readUInt32LE(eocd + 16);
+  const cdSize = apk.readUInt32LE(eocd + 12);
+  let p = cdOffset;
+  while (p < cdOffset + cdSize && apk.readUInt32LE(p) === 0x02014b50) {
+    const method = apk.readUInt16LE(p + 10);
+    const csize = apk.readUInt32LE(p + 20);
+    const nameLen = apk.readUInt16LE(p + 28);
+    const extraLen = apk.readUInt16LE(p + 30);
+    const cmtLen = apk.readUInt16LE(p + 32);
+    const lho = apk.readUInt32LE(p + 42);
+    const name = apk.toString('utf8', p + 46, p + 46 + nameLen);
+    if (name === 'AndroidManifest.xml') {
+      const nl = apk.readUInt16LE(lho + 26);
+      const el = apk.readUInt16LE(lho + 28);
+      const start = lho + 30 + nl + el;
+      const raw = apk.subarray(start, start + csize);
+      if (method === 8) return zlib.inflateRawSync(raw);
+      return raw;
+    }
+    p += 46 + nameLen + extraLen + cmtLen;
+  }
+  throw new Error('manifest não encontrado no APK de teste');
+}
+
+/** Envolve um conteúdo em um TLV DER (tag + length). */
+function derWrap(tag, content) {
+  const len = content.length;
+  if (len < 0x80) return Buffer.concat([Buffer.from([tag, len]), content]);
+  if (len < 0x100) return Buffer.concat([Buffer.from([tag, 0x81, len]), content]);
+  return Buffer.concat([Buffer.from([tag, 0x82, (len >> 8) & 0xff, len & 0xff]), content]);
 }
 
 function Big64(n) {

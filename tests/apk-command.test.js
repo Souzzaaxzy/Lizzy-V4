@@ -28,7 +28,7 @@ import path from 'path';
 import http from 'http';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
-import { buildApk, buildSignedApk } from './helpers/apk-builders.js';
+import { buildApk, buildSignedApk, buildV1SignedApk } from './helpers/apk-builders.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT = path.resolve(HERE, '..');
@@ -392,6 +392,91 @@ await test('15b. assinatura por SHA-1 (formato do Aptoide) é comparável', () =
   ok(signers.length > 0 && signers[0].sha1 && signers[0].sha1.length === 40, 'fingerprint SHA-1 exposto');
   eq(apkFile.validateApk(apk, { packageName: 'com.signed.app', signerSha1: signers[0].sha1 }).ok, true, 'comparação por sha1');
   eq(apkFile.validateApk(apk, { packageName: 'com.signed.app', signerSha1: 'AA:BB' }).code, 'APK_SIGNATURE_ERROR', 'sha1 errado recusado');
+});
+
+await test('15c. APK v1-only (JAR/PKCS#7) tem o certificado lido e aceito', () => {
+  // Antes o v1 era lido por heurística e falhava: APK legítimo (ex.: VLC antigo)
+  // era recusado com "sem certificado". Agora o DER é caminhado de verdade.
+  const { apk, expectedSignerSha1 } = buildV1SignedApk({ packageName: 'com.v1.app', versionCode: 1 });
+  const signers = apkFile.readSignerFingerprints(apk);
+  ok(signers.some((s) => s.scheme === 'v1'), 'certificado v1 encontrado');
+  eq(apkFile.validateApk(apk, { packageName: 'com.v1.app', signerSha1: expectedSignerSha1 }).ok, true, 'v1 valida pelo SHA-1');
+  eq(apkFile.validateApk(apk, { packageName: 'com.v1.app', signerSha1: 'AA:BB' }).code, 'APK_SIGNATURE_ERROR', 'sha1 errado recusado');
+});
+
+await test('15d. rotação de chave: v3.1 também é lido (fingerprint histórico)', () => {
+  // Apps grandes (WhatsApp) publicam no v3.1 o certificado de rotação; o Aptoide
+  // publica ESSE fingerprint. Sem lê-lo, o APK oficial seria recusado.
+  const { apk, v31SignerSha1, expectedSignerSha1 } = buildSignedApk({ packageName: 'com.rot.app', versionCode: 1, v31Seed: 42 });
+  const signers = apkFile.readSignerFingerprints(apk);
+  ok(signers.some((s) => s.scheme === 'v3.1'), 'bloco v3.1 lido');
+  ok(signers.some((s) => s.sha1 === v31SignerSha1), 'fingerprint do v3.1 presente');
+  eq(apkFile.validateApk(apk, { packageName: 'com.rot.app', signerSha1: v31SignerSha1 }).ok, true, 'valida pelo signer do v3.1');
+  eq(apkFile.validateApk(apk, { packageName: 'com.rot.app', signerSha1: expectedSignerSha1 }).ok, true, 'valida também pelo signer do v2/v3');
+});
+
+// ============================================================================
+// SELEÇÃO — ESCALA DE POPULARIDADE / VARIANTe
+// ============================================================================
+
+await test('SELEÇÃO: popularidade desempata o oficial do clone (log, não bruto)', () => {
+  const official = { source: 'a', name: 'WhatsApp Messenger', packageName: 'com.whatsapp', type: 'apk', downloadable: true, popularity: 2000000000 };
+  const clone = { source: 'a', name: 'WhatsApp Spy', packageName: 'net.oz.team.chat.lives', type: 'apk', downloadable: true, popularity: 352659 };
+  const spyScore = select.candidateScore(clone, { query: 'whatsapp' });
+  const offScore = select.candidateScore(official, { query: 'whatsapp' });
+  ok(offScore > spyScore, `oficial (${offScore.toFixed(1)}) > clone (${spyScore.toFixed(1)})`);
+});
+
+await test('SELEÇÃO: variante do mesmo app (Lite/TV/Business) nunca vence o canal principal', () => {
+  const main = { source: 'a', name: 'WhatsApp Messenger', packageName: 'com.whatsapp', type: 'apk', downloadable: true, popularity: 2000000000 };
+  const biz = { source: 'a', name: 'WhatsApp Business', packageName: 'com.whatsapp.w4b', type: 'apk', downloadable: true, popularity: 1000000000 };
+  ok(select.candidateScore(main, { query: 'whatsapp' }) > select.candidateScore(biz, { query: 'whatsapp' }), 'main > business');
+  const tv = { source: 'a', name: 'TikTok for Android TV', packageName: 'com.tiktok.tv', type: 'apk', downloadable: true, popularity: 10000000 };
+  const tt = { source: 'a', name: 'TikTok - Videos', packageName: 'com.zhiliaoapp.musically', type: 'apk', downloadable: true, popularity: 1000000000 };
+  ok(select.candidateScore(tt, { query: 'tiktok' }) > select.candidateScore(tv, { query: 'tiktok' }), 'tiktok > tiktok tv');
+});
+
+await test('SELEÇÃO: consulta por package id é identidade máxima', () => {
+  const exact = { source: 'a', name: 'Qualquer', packageName: 'com.whatsapp', type: 'apk', downloadable: true };
+  const other = { source: 'a', name: 'WhatsApp Messenger', packageName: 'com.whatsapp.w4b', type: 'apk', downloadable: true, popularity: 1000000000 };
+  ok(select.candidateScore(exact, { query: 'com.whatsapp' }) > select.candidateScore(other, { query: 'com.whatsapp' }), 'package exato ganha');
+});
+
+// ============================================================================
+// BUSCA POR PACKAGE (caminho rápido) E FALLBACK
+// ============================================================================
+
+await test('isPackageId reconhece package id e não confunde com nome', () => {
+  eq(fdroidProviderModule.isPackageId('com.whatsapp'), true, 'package id');
+  eq(fdroidProviderModule.isPackageId('org.videolan.vlc'), true, 'package id 3 níveis');
+  eq(fdroidProviderModule.isPackageId('whatsapp'), false, 'nome simples não é package');
+  eq(fdroidProviderModule.isPackageId('whats app'), false, 'com espaço não é package');
+});
+
+await test('fallback por package: acquire resolve por package quando o candidato falha', async () => {
+  // Candidato do provider "a" aponta para um APK de OUTRO package (falha). O
+  // fallback deve tentar o MESMO package em outra fonte que exponha getByPackage.
+  const server = await startServer(APK_OK);
+  await apkCache.clearCache();
+  const wrong = buildApk({ packageName: 'com.other.pkg', versionCode: 9 });
+  const A = fakeProvider('a', {
+    hosts: server.hosts,
+    candidates: [candidateFor(wrong, { source: 'a', packageName: 'com.fake.app', name: 'fake app', base: server.base, hosts: server.hosts })],
+  });
+  // Provider B não aparece na busca, mas expõe getByPackage e entrega o certo.
+  const B = {
+    ID: 'b', LABEL: 'b', ALLOWED_HOSTS: server.hosts, enabled: true,
+    search: async () => ({ ok: true, provider: 'b', candidates: [] }),
+    getByPackage: async (pkg) => (pkg === 'com.fake.app'
+      ? candidateFor(APK_OK, { source: 'b', packageName: 'com.fake.app', name: 'fake app', base: server.base, hosts: server.hosts })
+      : null),
+  };
+  registry.setProvidersForTest([A, B]);
+  const res = await apkService.acquire('fake', { log: () => {} });
+  await server.close();
+  registry.setProvidersForTest(null);
+  eq(res.ok, true, 'adquiriu pelo fallback');
+  eq(res.candidate?.source, 'b', 'quem entregou foi o fallback por package');
 });
 
 // ============================================================================

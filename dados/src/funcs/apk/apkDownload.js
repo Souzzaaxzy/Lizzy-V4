@@ -25,7 +25,7 @@ import { DATABASE_DIR } from '../../utils/paths.js';
 import { assertAllowedUrl } from './fdroidIndex.js';
 
 /** Teto de tamanho do APK. Configurável e documentado. */
-export const MAX_APK_BYTES = Number(process.env.APK_MAX_BYTES) || 300 * 1024 * 1024;
+export const MAX_APK_BYTES = Number(process.env.APK_MAX_BYTES) || 600 * 1024 * 1024;
 /** Timeout de conexão/primeira resposta. */
 export const CONNECT_TIMEOUT_MS = Number(process.env.APK_CONNECT_TIMEOUT_MS) || 30000;
 /** Tempo máximo sem receber bytes antes de abortar. */

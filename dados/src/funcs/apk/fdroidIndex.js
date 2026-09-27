@@ -264,6 +264,22 @@ export function setCatalogForTest(next) {
 }
 
 /**
+ * Dispara o carregamento do catálogo em SEGUNDO PLANO, sem bloquear.
+ *
+ * O índice tem ~60 MB e leva dezenas de segundos. Nada que o usuário espera
+ * pode depender disso — as buscas usam a API de busca + o caminho por package
+ * (rápidos) e, se o catálogo já estiver pronto, ele enriquece o resultado.
+ */
+export function warmCatalog() {
+  if (isCatalogFresh() || catalogPromise) return catalogPromise;
+  catalogPromise = loadCatalog().catch((error) => {
+    console.warn(`[APK] catálogo F-Droid indisponível em segundo plano: ${error?.message || error}`);
+    return null;
+  });
+  return catalogPromise;
+}
+
+/**
  * Garante o catálogo carregado. Requisições concorrentes compartilham a MESMA
  * promessa — o índice não é baixado duas vezes ao mesmo tempo.
  *
@@ -272,14 +288,19 @@ export function setCatalogForTest(next) {
 export async function ensureCatalog(opts = {}) {
   if (!opts.force && isCatalogFresh()) return catalog;
   if (catalogPromise) return catalogPromise;
+  catalogPromise = loadCatalog();
+  return catalogPromise;
+}
 
-  catalogPromise = (async () => {
-    const started = Date.now();
-    const map = new Map();
-    let repoAddress = 'https://f-droid.org/repo';
-    let timestamp = 0;
-    let bytes = 0;
+/** Baixa e monta o catálogo (uma vez por processo). */
+async function loadCatalog() {
+  const started = Date.now();
+  const map = new Map();
+  let repoAddress = 'https://f-droid.org/repo';
+  let timestamp = 0;
+  let bytes = 0;
 
+  try {
     const res = await mediaClient.get(INDEX_URL, {
       responseType: 'stream',
       timeout: 120000,
@@ -298,6 +319,7 @@ export async function ensureCatalog(opts = {}) {
           return; // pacote malformado: ignora, não derruba o índice inteiro
         }
         const record = toCatalogRecord(pkgId, pkg);
+
         if (record) map.set(pkgId, record);
       },
       (key, raw) => {
@@ -343,14 +365,35 @@ export async function ensureCatalog(opts = {}) {
     };
     console.log(`[APK] catálogo F-Droid carregado: ${map.size} apps em ${Date.now() - started}ms (${(bytes / 1048576).toFixed(1)} MB)`);
     return catalog;
-  })();
-
-  try {
-    return await catalogPromise;
   } catch (error) {
     catalogPromise = null; // permite tentar de novo
     throw error;
   }
+}
+
+/**
+ * Busca um pacote específico no catálogo (quando já carregado).
+ * Devolve `null` se o catálogo ainda não estiver pronto — é o que mantém a
+ * busca rápida (nunca espera os 60 MB).
+ */
+export function lookupCatalog(packageName) {
+  if (!catalog?.map) return null;
+  return catalog.map.get(String(packageName)) || null;
+}
+
+/** O catálogo está pronto em memória? */
+export function isCatalogReady() {
+  return Boolean(catalog?.map?.size);
+}
+
+/** Endereço do repositório conhecido (do catálogo, ou o padrão). */
+export function repoAddress() {
+  return catalog?.repoAddress || 'https://f-droid.org/repo';
+}
+
+/** Hosts permitidos conhecidos (do catálogo, ou os padrões). */
+export function allowedHosts() {
+  return catalog?.allowedHosts || new Set(DEFAULT_ALLOWED_HOSTS);
 }
 
 function hostOf(url) {
@@ -517,7 +560,12 @@ export default {
   DEFAULT_ALLOWED_HOSTS,
   IndexScanner,
   ensureCatalog,
+  warmCatalog,
   isCatalogFresh,
+  isCatalogReady,
+  lookupCatalog,
+  repoAddress,
+  allowedHosts,
   setCatalogForTest,
   searchCatalog,
   searchAppIndex,
