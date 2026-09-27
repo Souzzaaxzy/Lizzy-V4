@@ -29,15 +29,34 @@ import path from 'path';
 /** Caminho do banco, relativo à raiz do projeto (cwd do atualizador). */
 export const DB_DIR = 'dados/database';
 
-/** Lista recursiva de arquivos (relativos), pulando nada. */
+/**
+ * Diretórios dentro do banco que NÃO entram no backup.
+ *
+ * Por que: o backup é RECURSIVO justamente para não perder arquivos ignorados.
+ * Mas há pastas que são CACHE DESCARTÁVEL, não estado do bot — e copiá-las
+ * quebra a atualização. Aconteceu em produção: um APK de 135 MB em
+ * `apk-cache/` fez o backup encher o disco:
+ *
+ *     ENOSPC: no space left on device, copyfile '.../apk-cache/....apk'
+ *
+ * Cache se regenera; estado do bot não. Então cache fora do backup — e, como
+ * reforço, o `!apk` grava fora do banco hoje (ver `funcs/apk/apkCache.js`).
+ */
+export const DIRS_PULADOS = Object.freeze(['apk-cache']);
+
+/** Lista recursiva de arquivos (relativos), pulando os diretórios descartáveis. */
 const listarArquivos = (raiz) => {
     const out = [];
     if (!fs.existsSync(raiz)) return out;
     const walk = (dir) => {
         for (const entrada of fs.readdirSync(dir, { withFileTypes: true })) {
             const full = path.join(dir, entrada.name);
-            if (entrada.isDirectory()) walk(full);
-            else if (entrada.isFile()) out.push(path.relative(raiz, full));
+            if (entrada.isDirectory()) {
+                if (DIRS_PULADOS.includes(entrada.name)) continue;
+                walk(full);
+            } else if (entrada.isFile()) {
+                out.push(path.relative(raiz, full));
+            }
         }
     };
     walk(raiz);
@@ -71,6 +90,16 @@ export const criarBackupDatabase = (opts = {}) => {
         }
         return { ok: true, backupDir, count: arquivos.length, arquivos };
     } catch (e) {
+        // ENOSPC merece um motivo próprio: o operador precisa saber que é DISCO,
+        // não um arquivo corrompido.
+        const semEspaco = e?.code === 'ENOSPC' || /no space left on device/i.test(e?.message || '');
+        if (semEspaco) {
+            return {
+                ok: false,
+                reason: 'disco_cheio',
+                detalhe: 'Sem espaço em disco para o backup do database. Libere espaço (ou reduza APK_CACHE_MAX_BYTES/apague data/apk-cache) e tente de novo.',
+            };
+        }
         return { ok: false, reason: 'backup_falhou', detalhe: e?.message || String(e) };
     }
 };

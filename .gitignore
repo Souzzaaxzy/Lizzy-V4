@@ -43,6 +43,11 @@ logs/
 dist/
 build/
 
-# Cache de APKs baixados pelo !apk (binários grandes, nunca versionar)
-dados/database/apk-cache/
+# Cache/temporários de APK do !apk (binários grandes, nunca versionar).
+# Ficam em data/ (fora do banco), então NÃO entram no backup do atualizador.
+data/apk-cache/
+data/apk-tmp/
 *.apk
+*.part
+# Diretório antigo (migrado para data/); mantido ignorado para não sobrar lixo.
+dados/database/apk-cache/

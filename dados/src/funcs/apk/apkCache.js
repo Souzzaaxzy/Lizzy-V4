@@ -11,16 +11,29 @@
  *     extensões de mídia conhecidas e NÃO conhece `.apk`.
  *
  * Não havia cache de ARQUIVO binário com verificação de integridade. Então este
- * módulo existe, isolado e pequeno, sobre o diretório que o bot já usa:
+ * módulo existe, isolado e pequeno:
  *
- *   DATABASE_DIR/apk-cache/<packageName>/
+ *   APK_CACHE_ROOT/<packageName>/
  *     metadata.json
  *     <arquivo>.apk
  *
- * O `metadata.json` guarda packageName, name, versionName, versionCode, sha256,
- * size, source, downloadedAt e signerSha256 (o que também serve de auditoria).
+ * POR QUE O CACHE **NÃO** FICA EM `dados/database`
+ * -------------------------------------------------
+ * Ele ficava, e isso quebrou a ATUALIZAÇÃO do bot em produção: o atualizador faz
+ * backup RECURSIVO de `dados/database` antes do `git reset --hard`, e um APK de
+ * 135 MB (Instagram) fez o backup estourar o disco:
  *
- * Integridade é reconferida a CADA leitura (tamanho + SHA-256 + identidade do
+ *     ENOSPC: no space left on device, copyfile '.../apk-cache/com.instagram.android.apk'
+ *
+ * O cache é descartável e pode ter centenas de MB; ele não é estado do bot e não
+ * tem nada que ser preservado por backup. Agora vive fora do banco, em
+ * `APK_CACHE_ROOT` (padrão: `<raiz do projeto>/data/apk-cache`, ou
+ * `APK_CACHE_DIR`). `dados/database` volta a ser só o estado operacional.
+ *
+ * O `metadata.json` guarda packageName, name, versionName, versionCode, sha256,
+ * md5, size, source, pageUrl e os signers (o que também serve de auditoria).
+ *
+ * Integridade é reconferida a CADA leitura (tamanho + hash + identidade do
  * APK): cache não é fonte de confiança, é só economia de banda. Se qualquer
  * coisa não bater, o arquivo é descartado e o chamador baixa de novo.
  *
@@ -30,10 +43,22 @@
 import fs from 'fs';
 import fsp from 'fs/promises';
 import path from 'path';
-import { DATABASE_DIR } from '../../utils/paths.js';
+import { ROOT_DIR, DATABASE_DIR } from '../../utils/paths.js';
 import { FileSource, hashSource, APK_ERROR, ApkValidationError, readApkIdentity } from './apkFile.js';
 
-export const CACHE_DIR = path.join(DATABASE_DIR, 'apk-cache');
+/**
+ * Raiz do cache. Fora do banco de propósito (ver o comentário acima).
+ * `APK_CACHE_DIR` permite apontar para outro disco/volume.
+ */
+export const APK_CACHE_ROOT = process.env.APK_CACHE_DIR
+  ? path.resolve(process.env.APK_CACHE_DIR)
+  : path.join(ROOT_DIR, '..', 'data', 'apk-cache');
+
+/** Diretório ANTIGO (dentro do banco), que o updater tentava copiar. */
+export const LEGACY_CACHE_DIR = path.join(DATABASE_DIR, 'apk-cache');
+
+/** @deprecated use APK_CACHE_ROOT. Mantido para compatibilidade. */
+export const CACHE_DIR = APK_CACHE_ROOT;
 
 /** Limites do cache — isolados e ajustáveis por ambiente. */
 export const CACHE_LIMITS = Object.freeze({
@@ -46,7 +71,7 @@ export const CACHE_LIMITS = Object.freeze({
 /** Caminhos de uma entrada do cache. O packageName vem do índice, nunca do usuário. */
 export function cachePaths(packageName) {
   const safe = String(packageName).replace(/[^A-Za-z0-9._-]/g, '_');
-  const dir = path.join(CACHE_DIR, safe);
+  const dir = path.join(APK_CACHE_ROOT, safe);
   return { dir, metaFile: path.join(dir, 'metadata.json'), apkFile: path.join(dir, `${safe}.apk`) };
 }
 
@@ -156,10 +181,19 @@ export async function storeApk(entry) {
   const { dir, metaFile, apkFile } = cachePaths(packageName);
   await fsp.mkdir(dir, { recursive: true });
 
-  const tmp = `${apkFile}.part`;
-  await fsp.copyFile(fromPath, tmp);
-  // Nome final fixo por pacote: uma versão nova substitui a antiga.
-  await fsp.rename(tmp, apkFile);
+  // Nome do temporário ÚNICO por escrita: com nome fixo, dois downloads do mesmo
+  // app em paralelo escrevem no MESMO arquivo, um sobrescreve o outro (cache
+  // corrompido) e o que "perde" deixa um lixo para trás.
+  const tmp = `${apkFile}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.part`;
+  try {
+    await fsp.copyFile(fromPath, tmp);
+    // Nome final fixo por pacote: uma versão nova substitui a antiga. `rename`
+    // é atômico no mesmo diretório, então o cache nunca aparece pela metade.
+    await fsp.rename(tmp, apkFile);
+  } catch (error) {
+    await fsp.rm(tmp, { force: true }).catch(() => {});
+    throw error;
+  }
 
   const metadata = {
     packageName,
@@ -179,14 +213,56 @@ export async function storeApk(entry) {
   return { path: apkFile, metadata };
 }
 
+/** Removem `.part` órfãos (de uma interrupção) no diretório do cache. */
+export async function cleanupCacheParts() {
+  let removed = 0;
+  try {
+    for (const name of await fsp.readdir(APK_CACHE_ROOT)) {
+      const dir = path.join(APK_CACHE_ROOT, name);
+      let entries = [];
+      try { entries = await fsp.readdir(dir); } catch { continue; }
+      for (const f of entries) {
+        if (!f.endsWith('.part')) continue;
+        await fsp.rm(path.join(dir, f), { force: true }).catch(() => {});
+        removed++;
+      }
+    }
+  } catch {
+    // diretório ausente: nada a limpar
+  }
+  return { removed };
+}
+
+/**
+ * Remove o diretório de cache ANTIGO, que ficava dentro do banco.
+ *
+ * Existe porque a versão anterior gravava em `dados/database/apk-cache`, e esses
+ * APKs (centenas de MB) ficavam no caminho do backup do atualizador — foi o que
+ * causou o ENOSPC em produção. Rodar uma vez libera o espaço e evita que o
+ * backup continue copiando lixo. Nunca lança.
+ */
+export async function removeLegacyCache() {
+  // Se o cache ATUAL aponta para o mesmo caminho (ex.: APK_CACHE_DIR foi
+  // configurado dentro do banco), a "limpeza do legado" apagaria o cache em uso.
+  if (path.resolve(LEGACY_CACHE_DIR) === path.resolve(APK_CACHE_ROOT)) return false;
+  try {
+    await fsp.rm(LEGACY_CACHE_DIR, { recursive: true, force: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Poda o cache: remove entradas velhas e, se ainda passar do teto, as mais
  * antigas até caber. Nunca deixa o diretório crescer sem controle.
+ * Também remove o diretório legado (dentro do banco), se ainda existir.
  */
 export async function pruneCache(limits = CACHE_LIMITS) {
+  await removeLegacyCache();
   let names;
   try {
-    names = await fsp.readdir(CACHE_DIR);
+    names = await fsp.readdir(APK_CACHE_ROOT);
   } catch {
     return { removed: 0 };
   }
@@ -225,10 +301,12 @@ export async function pruneCache(limits = CACHE_LIMITS) {
 
 /** Esvazia o cache (usado em testes e em manutenção manual). */
 export async function clearCache() {
-  await fsp.rm(CACHE_DIR, { recursive: true, force: true }).catch(() => {});
+  await fsp.rm(APK_CACHE_ROOT, { recursive: true, force: true }).catch(() => {});
 }
 
 export default {
+  APK_CACHE_ROOT,
+  LEGACY_CACHE_DIR,
   CACHE_DIR,
   CACHE_LIMITS,
   cachePaths,
@@ -237,5 +315,6 @@ export default {
   storeApk,
   pruneCache,
   removeCacheEntry,
+  removeLegacyCache,
   clearCache,
 };

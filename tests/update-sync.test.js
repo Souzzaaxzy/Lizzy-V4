@@ -259,6 +259,57 @@ await test('TESTE 4/5 — backup é COMPLETO e recursivo (rastreado e ignorado)'
     bk.descartarBackupDatabase(b);
 });
 
+await test('REGRESSÃO ENOSPC — cache de APK NÃO entra no backup (quebrava !atualizar)', () => {
+    // Em produção o cache do `!apk` ficava dentro do banco e um APK de 135 MB
+    // estourou o disco no backup: "ENOSPC ... copyfile '.../apk-cache/....apk'".
+    // O cache é DESCARTÁVEL: não deve ser copiado; o ESTADO deve.
+    const root = tmpDb({
+        'global.json': '{"saldo":10}',
+        'economia.json': '{"nunca":"perder"}',
+        'apk-cache/com.instagram.android/com.instagram.android.apk': 'APK-GRANDE',
+        'apk-cache/com.instagram.android/metadata.json': '{"packageName":"com.instagram.android"}',
+    });
+    const b = bk.criarBackupDatabase({ cwd: root });
+    ok(b.ok === true, 'backup ok mesmo com o cache presente');
+    ok(!(b.arquivos || []).some((f) => f.includes('apk-cache')), 'NENHUM arquivo do apk-cache foi copiado');
+    ok(b.arquivos.includes('global.json'), 'estado (global.json) preservado');
+    ok(b.arquivos.includes('economia.json'), 'estado (economia.json) preservado');
+    eq(b.count, 2, 'só os 2 arquivos de estado');
+    fs.rmSync(root, { recursive: true, force: true });
+    bk.descartarBackupDatabase(b);
+});
+
+await test('disco cheio (ENOSPC) vira motivo claro: disco_cheio', () => {
+    // Simula ENOSPC interceptando o copyFileSync.
+    const root = tmpDb({ 'global.json': '{}' });
+    const orig = fs.copyFileSync;
+    fs.copyFileSync = () => {
+        const e = new Error('ENOSPC: no space left on device, copyfile');
+        e.code = 'ENOSPC';
+        throw e;
+    };
+    let b;
+    try {
+        b = bk.criarBackupDatabase({ cwd: root });
+    } finally {
+        fs.copyFileSync = orig;
+    }
+    ok(b.ok === false, 'backup falhou');
+    eq(b.reason, 'disco_cheio', 'motivo específico de disco');
+    ok(/espaço|space/i.test(b.detalhe || ''), 'detalhe orienta liberar espaço');
+    fs.rmSync(root, { recursive: true, force: true });
+    if (b?.backupDir) bk.descartarBackupDatabase(b);
+});
+
+await test('cache do !apk fica FORA do database (não volta para o caminho do backup)', async () => {
+    const cache = await import(new URL('../dados/src/funcs/apk/apkCache.js', import.meta.url).href);
+    const dl = await import(new URL('../dados/src/funcs/apk/apkDownload.js', import.meta.url).href);
+    const db = path.join(process.cwd(), 'dados', 'database');
+    ok(!cache.APK_CACHE_ROOT.startsWith(db), `cache fora do banco (${cache.APK_CACHE_ROOT})`);
+    ok(!dl.TMP_DIR.startsWith(db), `temporário fora do banco (${dl.TMP_DIR})`);
+    ok(cache.LEGACY_CACHE_DIR.startsWith(db), 'o caminho legado (dentro do banco) é conhecido para limpeza');
+});
+
 await test('TESTE 4 — restore devolve o conteúdo EXATO (código novo + database antigo)', () => {
     const root = tmpDb({ 'global.json': '{"saldo":10}', 'grupos/g1.json': '{"membros":3}' });
     const b = bk.criarBackupDatabase({ cwd: root });

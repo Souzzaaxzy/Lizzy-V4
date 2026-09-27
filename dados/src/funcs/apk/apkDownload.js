@@ -21,7 +21,7 @@ import fsp from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
 import { mediaClient } from '../../utils/httpClient.js';
-import { DATABASE_DIR } from '../../utils/paths.js';
+import { APK_CACHE_ROOT } from './apkCache.js';
 import { assertAllowedUrl } from './fdroidIndex.js';
 
 /** Teto de tamanho do APK. Configurável e documentado. */
@@ -33,8 +33,17 @@ export const IDLE_TIMEOUT_MS = Number(process.env.APK_IDLE_TIMEOUT_MS) || 60000;
 /** Tempo máximo total do download. */
 export const TOTAL_TIMEOUT_MS = Number(process.env.APK_TOTAL_TIMEOUT_MS) || 10 * 60 * 1000;
 
-/** Pasta de temporários: a mesma que o bot já usa. */
-export const TMP_DIR = path.join(DATABASE_DIR, 'tmp');
+/**
+ * Pasta de temporários do download de APK.
+ *
+ * NÃO usa `DATABASE_DIR/tmp`: aquela pasta está DENTRO de `dados/database`, que o
+ * atualizador copia inteiro no backup — um `.part` de centenas de MB no meio do
+ * backup foi o que estourou o disco (ENOSPC). Fica ao lado do cache, fora do
+ * banco, no mesmo volume descartável.
+ */
+export const TMP_DIR = process.env.APK_TMP_DIR
+  ? path.resolve(process.env.APK_TMP_DIR)
+  : path.join(path.dirname(APK_CACHE_ROOT), 'apk-tmp');
 
 /**
  * HTTP puro só é permitido para loopback, e SOMENTE quando o ambiente de teste

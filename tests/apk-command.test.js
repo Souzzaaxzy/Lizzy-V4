@@ -37,6 +37,10 @@ const PROJECT = path.resolve(HERE, '..');
 const TMP_DB = fs.mkdtempSync(path.join(os.tmpdir(), 'lizzy-apk-db-'));
 process.env.DATABASE_PATH = TMP_DB;
 process.env.APK_COOLDOWN_MS = '0'; // sem cooldown entre os testes
+// Isola cache/temporário no diretório do teste: o teste NUNCA escreve no
+// `data/` do repositório.
+process.env.APK_CACHE_DIR = path.join(TMP_DB, 'apk-cache');
+process.env.APK_TMP_DIR = path.join(TMP_DB, 'apk-tmp');
 fs.mkdirSync(path.join(TMP_DB, 'grupos'), { recursive: true });
 
 const RESULTS = [];
@@ -94,6 +98,7 @@ const select = await import(new URL('../dados/src/funcs/apk/providers/candidateS
 const putils = await import(new URL('../dados/src/funcs/apk/providers/providerUtils.js', import.meta.url).href);
 const blocked = await import(new URL('../dados/src/funcs/apk/providers/blockedDetect.js', import.meta.url).href);
 const fdroidProviderModule = await import(new URL('../dados/src/funcs/apk/providers/fdroidProvider.js', import.meta.url).href);
+const apkDownload = await import(new URL('../dados/src/funcs/apk/apkDownload.js', import.meta.url).href);
 
 // ============================================================================
 // FIXTURES — providers FAKE e servidor local
@@ -600,7 +605,7 @@ await test('26. download truncado -> erro e nenhum .part sobrando', async () => 
     source: 'fake', packageName: 'com.fake.app', base: server.base, hosts: server.hosts,
     size: APK_OK.length,
   });
-  const tmpDir = path.join(TMP_DB, 'tmp');
+  const tmpDir = apkDownload.TMP_DIR;
   const parts = () => (fs.existsSync(tmpDir) ? fs.readdirSync(tmpDir).filter((f) => f.endsWith('.part')).length : 0);
   const before = parts();
   let code = null;
@@ -653,7 +658,7 @@ await test('26b. falha de validação não deixa temporário', async () => {
   await server.close();
   registry.setProvidersForTest(null);
   eq(code, 'APK_PACKAGE_MISMATCH', 'mismatch detectado');
-  const tmpDir = path.join(TMP_DB, 'tmp');
+  const tmpDir = apkDownload.TMP_DIR;
   const parts = fs.existsSync(tmpDir) ? fs.readdirSync(tmpDir).filter((f) => f.endsWith('.part')).length : 0;
   eq(parts, 0, 'nenhum .part sobrou');
 });
@@ -675,6 +680,38 @@ await test('27. concorrência respeita o semáforo e não trava slots', async ()
   eq(after.waiting, 0, 'sem waiter preso');
   await server.close();
   registry.setProvidersForTest(null);
+});
+
+await test('27b. concorrência no MESMO app: cache íntegro e nenhum .part órfão', async () => {
+  // Bug real: `storeApk` gravava num `.part` de nome FIXO. Dois downloads do
+  // mesmo app em paralelo escreviam no mesmo arquivo, um sobrescrevia o outro
+  // (cache podia ficar corrompido) e o perdedor deixava lixo.
+  const server = await startServer(APK_OK);
+  await apkCache.clearCache();
+  registry.setProvidersForTest([fakeProvider('fake', { hosts: server.hosts })]);
+  const cand = candidateFor(APK_OK, { source: 'fake', packageName: 'com.fake.app', base: server.base, hosts: server.hosts });
+
+  const runs = await Promise.all(Array.from({ length: 8 }, () => apkService.prepareApk(cand).catch((e) => e)));
+  await server.close();
+  registry.setProvidersForTest(null);
+
+  const wins = runs.filter((r) => r && r.path);
+  ok(wins.length >= 1, `ao menos um concluiu (${wins.length}/8)`);
+
+  // O cache resultante tem de estar ÍNTEGRO (hash confere).
+  const hit = await apkCache.getCachedApk('com.fake.app', { sha256: crypto.createHash('sha256').update(APK_OK).digest('hex') });
+  eq(hit.hit, true, 'cache íntegro depois da corrida');
+
+  // E nenhum `.part` pode sobrar — nem no temporário, nem dentro do cache.
+  const partsIn = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir, { recursive: true }).filter((f) => String(f).endsWith('.part')).length : 0);
+  eq(partsIn(apkDownload.TMP_DIR), 0, 'nenhum .part no diretório de download');
+  eq(partsIn(apkCache.APK_CACHE_ROOT), 0, 'nenhum .part no cache');
+});
+
+await test('27c. storeApk usa nome de temporário único (não colide entre escritas)', async () => {
+  const src = fs.readFileSync(path.join(PROJECT, 'dados/src/funcs/apk/apkCache.js'), 'utf-8');
+  ok(/\.part`/.test(src), 'o temporário do cache termina em .part');
+  ok(/process\.pid/.test(src) && /Math\.random/.test(src), 'o nome do temporário inclui pid + aleatório (único)');
 });
 
 await test('28. cooldown por usuário: segundo pedido imediato é bloqueado', () => {

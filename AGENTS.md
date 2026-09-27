@@ -6348,3 +6348,64 @@ APKPure. O host de download do APKPure (`d.apkpure.com`) ainda publica
 download (`/r2?u=`, `dl?token=`) no robots. O IzzyOnDroid foi checado como fonte
 extra: o robots dele também bloqueia `/*.apk$`. Ficam, portanto, os dois
 providers legítimos: **Aptoide** (API oficial) e **F-Droid**.
+
+## BUG CORRIGIDO — `!apk` quebrava o `!atualizar` (ENOSPC) (set/2026)
+
+### Sintoma
+O atualizador (`!atualizar`) falhava na etapa **BACKUP**:
+
+```
+⚠️ ENOSPC: no space left on device, copyfile
+  '/home/container/dados/database/apk-cache/com.instagram.android/com.instagram.android.apk'
+  -> '/tmp/lizzy-db-backup-angoYG/apk-cache/com.instagram.android/com.instagram.android.apk'
+```
+
+### Causa raiz (erro MEU, introduzido no `!apk`)
+O cache de APKs foi criado em `DATABASE_DIR/apk-cache` — **dentro do banco**. O
+atualizador faz backup **recursivo** de `dados/database` antes do
+`git reset --hard` (é recursivo de propósito, para não perder arquivos que o
+`git status` não enxerga). Só que o cache do `!apk` guarda APKs **inteiros** de
+centenas de MB, e copiar isso estourou o disco. Cache é DESCARTÁVEL; estado do
+bot não. Eram a mesma pasta.
+
+### Correções (defesa em profundidade)
+
+1. **Cache e temporários saem do banco** (`funcs/apk/apkCache.js`,
+   `apkDownload.js`):
+   - cache → `data/apk-cache` (ou `APK_CACHE_DIR`);
+   - temporário → `data/apk-tmp` (ou `APK_TMP_DIR`);
+   - `dados/database` volta a ser só estado operacional — o backup deixa de
+     topar com APK.
+2. **O backup ignora cache descartável** (`.scripts/database-backup.js`):
+   `DIRS_PULADOS = ['apk-cache']`. Mesmo com o diretório legado ainda presente,
+   ele não é copiado. O ESTADO continua sendo copiado normalmente.
+3. **ENOSPC tem motivo próprio**: `criarBackupDatabase` detecta `ENOSPC` e
+   devolve `reason: 'disco_cheio'` com instrução (liberar espaço / reduzir
+   `APK_CACHE_MAX_BYTES` / apagar `data/apk-cache`), em vez do genérico
+   `backup_falhou`.
+4. **Limpeza do diretório legado**: `removeLegacyCache()` apaga
+   `dados/database/apk-cache` (chamado pelo `pruneCache`), liberando o espaço na
+   primeira poda. Tem guarda para não apagar o cache em uso caso
+   `APK_CACHE_DIR` aponte para lá.
+
+### Bug adicional achado na investigação
+`storeApk` gravava num `.part` de **nome fixo** dentro do cache: dois downloads
+do MESMO app em paralelo escreviam no mesmo arquivo — um sobrescrevia o outro
+(cache podia ficar corrompido) e o perdedor deixava lixo. Agora o temporário tem
+nome único (`pid` + timestamp + aleatório) e há `cleanupCacheParts()` para
+órfãos.
+
+### Configuração
+| variável | padrão | função |
+|---|---|---|
+| `APK_CACHE_DIR` | `<raiz>/data/apk-cache` | raiz do cache (fora do banco) |
+| `APK_TMP_DIR` | `<raiz>/data/apk-tmp` | temporários do download |
+
+### Testes
+- `tests/update-sync.test.js`: **22 testes / 76 asserções** (eram 19/65). Novos:
+  cache NÃO entra no backup; estado continua entrando; ENOSPC vira
+  `disco_cheio`; cache/temporário ficam fora do banco.
+- `tests/apk-command.test.js`: **51 testes / 138 asserções** (eram 49/132).
+  Novos: concorrência no mesmo app deixa o cache íntegro e nenhum `.part`;
+  nome de temporário é único. O teste agora isola `APK_CACHE_DIR`/`APK_TMP_DIR`
+  no diretório temporário — nunca escreve no `data/` do repositório.
