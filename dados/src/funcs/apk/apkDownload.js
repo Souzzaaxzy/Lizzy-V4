@@ -36,6 +36,22 @@ export const TOTAL_TIMEOUT_MS = Number(process.env.APK_TOTAL_TIMEOUT_MS) || 10 *
 /** Pasta de temporários: a mesma que o bot já usa. */
 export const TMP_DIR = path.join(DATABASE_DIR, 'tmp');
 
+/**
+ * HTTP puro só é permitido para loopback, e SOMENTE quando o ambiente de teste
+ * pede (`APK_ALLOW_INSECURE=1`). Em produção o caminho exige HTTPS — esta
+ * função devolve `false` e o downloader recusa.
+ */
+function resolveAllowInsecure(url, opts = {}) {
+  if (opts.allowInsecure === true) return true;
+  if (process.env.APK_ALLOW_INSECURE !== '1') return false;
+  try {
+    const h = new URL(url).hostname;
+    return h === '127.0.0.1' || h === 'localhost' || h === '::1';
+  } catch {
+    return false;
+  }
+}
+
 export class ApkDownloadError extends Error {
   constructor(code, message, details = {}) {
     super(message);
@@ -61,7 +77,7 @@ export async function safeUnlink(filePath) {
 export async function downloadApkToTemp(url, opts = {}) {
   const maxBytes = opts.maxBytes ?? MAX_APK_BYTES;
 
-  const allowed = assertAllowedUrl(url, opts.allowedHosts, { allowInsecure: opts.allowInsecure });
+  const allowed = assertAllowedUrl(url, opts.allowedHosts, { allowInsecure: resolveAllowInsecure(url, opts) });
   if (!allowed.ok) {
     throw new ApkDownloadError(allowed.reason, 'URL de download não permitida.');
   }

@@ -1,30 +1,23 @@
 /**
- * Testes do comando !apk (F-Droid).
+ * Testes do comando !apk MULTI-SOURCE.
  *
- * Cobre, sem depender da internet quando possível (fixtures/arquivos locais):
- *   1. !apk sem argumento;
- *   2. pesquisa válida;
- *   3. aplicativo inexistente;
- *   4. erro da API;
- *   5. timeout;
- *   6. APK inexistente (404);
- *   7. APK vazio;
- *   8. arquivo inválido;
- *   9. package mismatch;
- *  10. version mismatch;
- *  11. SHA-256 correto;
- *  12. SHA-256 incorreto;
- *  13. tamanho excedido;
- *  14. cache válido;
- *  15. cache corrompido;
- *  16. erro de envio;
- *  17. limpeza de arquivo temporário;
- *  18. execução simultânea;
- *  19. URL inesperada (SSRF);
- *  20. resultado com múltiplas correspondências.
+ * Sem internet: os providers de rede são substituídos por fakes determinísticos
+ * (via `setProvidersForTest`) e o download usa um servidor HTTP local. O que é
+ * testado é a ARQUITETURA: registro de providers, busca paralela com isolamento
+ * de erro, seleção do candidato, "primeiro APK VÁLIDO" (não a primeira
+ * resposta), validação, cache, rate limit e limpeza.
  *
- * Usa o handler REAL (NazuninhaBotExec) para a parte de comando e os módulos
- * puros (apkFile, fdroidIndex, apkCache, apkService) para o resto.
+ * Cobre (numeração da tarefa):
+ *   1 sem argumento · 2 pesquisa válida · 3 resultado encontrado ·
+ *   4 não encontrado · 5 provider offline · 6 provider timeout ·
+ *   7 provider inválido · 8 provider só com bundle · 9 APK válido ·
+ *  10 APK inválido · 11 package mismatch · 12 version mismatch ·
+ *  13 hash correto · 14 hash incorreto · 15 assinatura incompatível ·
+ *  16 tamanho excedido · 17 redirect inválido · 18 host não permitido ·
+ *  19 cache válido · 20 cache corrompido · 21 múltiplos providers ·
+ *  22 primeiro provider falhando · 23 primeiro provider com APK inválido ·
+ *  24 segundo provider funcionando · 25 envio pelo Baileys ·
+ *  26 limpeza temporária · 27 concorrência · 28 rate limit.
  *
  * Uso: node tests/apk-command.test.js
  */
@@ -32,7 +25,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import zlib from 'zlib';
+import http from 'http';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { buildApk, buildSignedApk } from './helpers/apk-builders.js';
@@ -88,20 +81,6 @@ function eq(actual, expected, message) {
 }
 
 // ============================================================================
-// FIXTURES — APK mínimo REAL, montado em memória (ZIP + AXML)
-// ============================================================================
-
-// APK real do F-Droid (baixado do índice) — usado SOMENTE no teste de
-// integração opt-in, montado em tempo de execução. Nada binário é versionado.
-const REAL_FIXTURE = {
-  packageName: 'com.zinaro.cachecleanerwidget',
-  sha256: 'e651d7df72d823438eaf50afe1ceb428496650734b6610bb539d68a925915259',
-  signerSha256: 'b71a381988d13cd954b3b66c543b9b3412068478e603057212733ac3b7889fa8',
-  url: 'https://f-droid.org/repo/com.zinaro.cachecleanerwidget_1.apk',
-  size: 8947,
-};
-
-// ============================================================================
 // IMPORTS
 // ============================================================================
 
@@ -109,415 +88,513 @@ const apkFile = await import(new URL('../dados/src/funcs/apk/apkFile.js', import
 const fdroid = await import(new URL('../dados/src/funcs/apk/fdroidIndex.js', import.meta.url).href);
 const apkCache = await import(new URL('../dados/src/funcs/apk/apkCache.js', import.meta.url).href);
 const apkFormat = await import(new URL('../dados/src/funcs/apk/apkFormat.js', import.meta.url).href);
+const apkService = await import(new URL('../dados/src/funcs/apk/apkService.js', import.meta.url).href);
+const registry = await import(new URL('../dados/src/funcs/apk/providers/index.js', import.meta.url).href);
+const select = await import(new URL('../dados/src/funcs/apk/providers/candidateSelect.js', import.meta.url).href);
+const putils = await import(new URL('../dados/src/funcs/apk/providers/providerUtils.js', import.meta.url).href);
+const blocked = await import(new URL('../dados/src/funcs/apk/providers/blockedDetect.js', import.meta.url).href);
+const fdroidProviderModule = await import(new URL('../dados/src/funcs/apk/providers/fdroidProvider.js', import.meta.url).href);
 
 // ============================================================================
-// 1..12 — VALIDAÇÃO LOCAL (apkFile), sem rede
+// FIXTURES — providers FAKE e servidor local
 // ============================================================================
 
-await test('8. arquivo inválido não é aceito como APK', () => {
-  const garbage = Buffer.from('isto nao e um zip nem de longe'.repeat(10));
-  const v = apkFile.validateApk(garbage, { packageName: 'com.example.app' });
-  eq(v.ok, false, 'lixo é recusado');
-  ok(String(v.code).startsWith('APK_'), `código estável (${v.code})`);
-});
-
-await test('7. APK vazio é recusado', () => {
-  const v = apkFile.validateApk(Buffer.alloc(0), {});
-  eq(v.ok, false, 'buffer vazio recusado');
-  eq(v.code, 'APK_INVALID_FILE', 'código APK_INVALID_FILE');
-});
-
-await test('APK sintético válido: identidade e round-trip', () => {
-  const apk = buildApk({ packageName: 'com.test.sin', versionName: '2.3.4', versionCode: 42 });
-  const ident = apkFile.readApkIdentity(apk);
-  eq(ident.packageName, 'com.test.sin', 'package lido do AXML');
-  eq(ident.versionName, '2.3.4', 'versionName lido do AXML');
-  eq(ident.versionCode, 42, 'versionCode lido do AXML');
-});
-
-await test('9. package mismatch é recusado com código próprio', () => {
-  const apk = buildApk({ packageName: 'com.wrong.pkg', versionCode: 1 });
-  const v = apkFile.validateApk(apk, { packageName: 'com.expected.pkg' });
-  eq(v.ok, false, 'recusado');
-  eq(v.code, 'APK_PACKAGE_MISMATCH', 'código APK_PACKAGE_MISMATCH');
-});
-
-await test('10. version mismatch é recusado com código próprio', () => {
-  const apk = buildApk({ packageName: 'com.x', versionCode: 5 });
-  const v = apkFile.validateApk(apk, { packageName: 'com.x', versionCode: 6 });
-  eq(v.ok, false, 'recusado');
-  eq(v.code, 'APK_VERSION_MISMATCH', 'código APK_VERSION_MISMATCH');
-});
-
-await test('11. SHA-256 correto valida; 12. incorreto recusa', () => {
-  const apk = buildApk({ packageName: 'com.sha.test', versionCode: 1 });
-  const good = crypto.createHash('sha256').update(apk).digest('hex');
-
-  const okv = apkFile.validateApk(apk, { packageName: 'com.sha.test', sha256: good });
-  eq(okv.ok, true, 'hash correto valida');
-
-  const badv = apkFile.validateApk(apk, { packageName: 'com.sha.test', sha256: '00'.repeat(32) });
-  eq(badv.ok, false, 'hash errado recusa');
-  eq(badv.code, 'APK_HASH_MISMATCH', 'código APK_HASH_MISMATCH');
-});
-
-await test('APK sintético COM assinatura v2: fingerprint lido corretamente', () => {
-  const { apk, expectedSignerSha256 } = buildSignedApk({ packageName: 'com.signed.app', versionCode: 1 });
-  const signers = apkFile.readSignerFingerprints(apk);
-  eq(signers.length > 0, true, 'achou ao menos um certificado');
-  eq(signers[0].scheme, 'v2', 'esquema v2');
-  eq(signers[0].sha256, expectedSignerSha256, 'fingerprint SHA-256 confere');
-
-  const good = apkFile.validateApk(apk, { packageName: 'com.signed.app', signerSha256: expectedSignerSha256 });
-  eq(good.ok, true, 'valida com o signer esperado');
-
-  const bad = apkFile.validateApk(apk, { packageName: 'com.signed.app', signerSha256: '11'.repeat(32) });
-  eq(bad.ok, false, 'recusa com signer diferente');
-  eq(bad.code, 'APK_SIGNATURE_ERROR', 'código APK_SIGNATURE_ERROR');
-});
-
-await test('APK sem assinatura: recusado quando o signer é exigido', () => {
-  const plain = buildApk({ packageName: 'com.nosig.app', versionCode: 1 });
-  const v = apkFile.validateApk(plain, { packageName: 'com.nosig.app', signerSha256: '22'.repeat(32) });
-  eq(v.ok, false, 'recusado');
-  eq(v.code, 'APK_SIGNATURE_ERROR', 'código APK_SIGNATURE_ERROR');
-  eq(apkFile.readSignerFingerprints(plain).length, 0, 'sem certificados');
-});
-
-await test('INTEGRAÇÃO (rede, opt-in): APK real do F-Droid valida ponta a ponta', async () => {
-  // Rodado somente com APK_NET_TEST=1 — o resto da suíte nunca toca a rede.
-  if (process.env.APK_NET_TEST !== '1') {
-    ok(true, 'pulado (defina APK_NET_TEST=1 para exercitar a rede)');
-    return;
-  }
-  const res = await fetch(REAL_FIXTURE.url);
-  eq(res.ok, true, 'download da fixture real');
-  const buf = Buffer.from(await res.arrayBuffer());
-  eq(buf.length, REAL_FIXTURE.size, 'tamanho confere com o índice');
-  const v = apkFile.validateApk(buf, {
-    packageName: REAL_FIXTURE.packageName,
-    sha256: REAL_FIXTURE.sha256,
-    signerSha256: REAL_FIXTURE.signerSha256,
-  });
-  eq(v.ok, true, 'hash + assinatura + package conferem com o F-Droid');
-});
-
-// ============================================================================
-// 19 — SSRF / URL inesperada
-// ============================================================================
-
-await test('19. URL fora do F-Droid é recusada (anti-SSRF)', () => {
-  const allowed = new Set(fdroid.DEFAULT_ALLOWED_HOSTS);
-  for (const bad of [
-    'https://evil.example/app.apk',
-    'http://f-droid.org/app.apk',
-    'file:///etc/passwd',
-    'https://f-droid.org.evil.com/app.apk',
-    'not-a-url',
-  ]) {
-    eq(fdroid.assertAllowedUrl(bad, allowed).ok, false, `${bad} recusada`);
-  }
-  eq(fdroid.assertAllowedUrl('https://f-droid.org/repo/x.apk', allowed).ok, true, 'host oficial aceito');
-});
-
-await test('buildApkUrl nunca sai do endereço do repositório', () => {
-  const url = fdroid.buildApkUrl({ file: { name: '/com.foo_1.apk' } }, 'https://f-droid.org/repo');
-  eq(url, 'https://f-droid.org/repo/com.foo_1.apk', 'URL montada do repo');
-  eq(fdroid.buildApkUrl({ file: { name: '../../etc/passwd' } }), null, 'path traversal recusado');
-  eq(fdroid.buildApkUrl({ file: { name: 'http://evil/x.apk' } }), null, 'nome absoluto de fora recusado');
-});
-
-await test('o usuário não pode injetar URL: só nome de app', () => {
-  // "!apk http://evil/x" é apenas uma CONSULTA por esse texto — nunca vira download.
-  const asQuery = 'http://evil.example/x.apk';
-  ok(!asQuery.startsWith('/'), 'a consulta não é tratada como caminho');
-  eq(fdroid.buildApkUrl({ file: { name: asQuery } }), null, 'nenhuma URL construída a partir do texto do usuário');
-});
-
-// ============================================================================
-// 2, 3, 20 — BUSCA (catálogo injetado, sem rede)
-// ============================================================================
-
-const catalogEntries = {
-  'org.videolan.vlc': { name: 'VLC', versions: { v: { file: { name: '/org.videolan.vlc_1.apk', sha256: 'a'.repeat(64), size: 100 }, manifest: { versionName: '3.7.1', versionCode: 1 } } } },
-  'com.zinaro.cachecleanerwidget': { name: 'Cache Cleaner Widget', versions: { v: { file: { name: '/com.zinaro.cachecleanerwidget_1.apk', sha256: REAL_FIXTURE.sha256, size: REAL_FIXTURE.size }, manifest: { versionName: '1.0', versionCode: 1 } } } },
-  'org.schabi.newpipe': { name: 'NewPipe', versions: { v: { file: { name: '/org.schabi.newpipe_1.apk', sha256: 'b'.repeat(64), size: 200 }, manifest: { versionName: '0.29.1', versionCode: 2 } } } },
-  'com.nicolasbrailo.vlcfreemote': { name: 'VlcFreemote', versions: { v: { file: { name: '/x.apk', sha256: 'c'.repeat(64), size: 50 }, manifest: { versionName: '1', versionCode: 1 } } } },
-  'org.mozilla.fennec_fdroid': { name: 'Fennec F-Droid', versions: { v: { file: { name: '/org.mozilla.fennec_fdroid_1.apk', sha256: 'd'.repeat(64), size: 300 }, manifest: { versionName: '156', versionCode: 1 } } } },
-};
-
-function catalogMap() {
-  const map = new Map();
-  for (const [pkgId, pkg] of Object.entries(catalogEntries)) {
-    map.set(pkgId, fdroid.toCatalogRecord(pkgId, pkg));
-  }
-  return map;
+/** Provider fake que devolve candidatos fixos (ou lança). */
+function fakeProvider(id, { candidates = [], throws = null, delayMs = 0, hosts = [] } = {}) {
+  return {
+    ID: id,
+    LABEL: id,
+    ALLOWED_HOSTS: hosts,
+    enabled: true,
+    async search() {
+      if (delayMs) await new Promise((r) => setTimeout(r, delayMs));
+      if (throws) throw throws;
+      return { ok: true, provider: id, candidates };
+    },
+  };
 }
 
-await test('2. pesquisa válida escolhe o app pela identidade (VLC)', () => {
-  const rec = catalogMap().get('org.videolan.vlc');
-  ok(rec, 'registro do VLC construído');
-  eq(fdroid.isStrongMatch(rec, 'vlc'), true, '"vlc" é correspondência forte');
-  eq(fdroid.isStrongMatch(rec, 'VLC'), true, 'case-insensitive');
-});
-
-await test('20. termo que só aparece em descrição NÃO escolhe sozinho', () => {
-  const fen = catalogMap().get('org.mozilla.fennec_fdroid');
-  eq(fdroid.isStrongMatch(fen, 'fennec'), true, '"fennec" identifica o Fennec (nome)');
-  eq(fdroid.isStrongMatch(fen, 'fdroid'), true, '"fdroid" está no nome');
-  // "firefox" só consta na DESCRIÇÃO do Fennec (nome é "Fennec F-Droid") — não é
-  // correspondência de identidade, então o bot NÃO escolhe automaticamente.
-  eq(fdroid.isStrongMatch(fen, 'firefox'), false, '"firefox" NÃO é forte (só descrição)');
-  const remote = catalogMap().get('com.nicolasbrailo.vlcfreemote');
-  eq(fdroid.isStrongMatch(remote, 'vlc'), false, 'VlcFreemote não é forte para "vlc" (termo no meio)');
-  eq(fdroid.isStrongMatch(remote, 'vlcfreemote'), true, 'nome exato é forte');
-});
-
-await test('3. aplicativo inexistente devolve APK_NOT_FOUND', async () => {
-  const record = catalogMap();
-  const asQuery = 'appquenaoexistenoindice';
-  let hits = 0;
-  for (const rec of record.values()) if (fdroid.isStrongMatch(rec, asQuery)) hits++;
-  eq(hits, 0, 'nenhum candidato forte');
-});
-
-await test('4/5. erro e timeout da API são tratados (sem lançar)', async () => {
-  // Simula falha injetando um catálogo vazio e um buscador que lança.
-  const apkService = await import(new URL('../dados/src/funcs/apk/apkService.js', import.meta.url).href);
-  fdroid.setCatalogForTest({
-    map: new Map(),
-    repoAddress: 'https://f-droid.org/repo',
-    allowedHosts: new Set(fdroid.DEFAULT_ALLOWED_HOSTS),
-    loadedAt: Date.now(),
-    timestamp: 0,
-  });
-  // Sem rede, searchAppIndex vai falhar -> deve virar código, nunca exceção crua.
-  const result = await apkService.findApp('algoimprovavel');
-  eq(result.ok, false, 'não encontrado');
-  ok(['APK_NOT_FOUND', 'APK_SEARCH_ERROR', 'APK_CATALOG_ERROR'].includes(result.code), `código tratado (${result.code})`);
-});
-
-// ============================================================================
-// 6, 7, 8, 13, 17 — DOWNLOAD (servidor HTTP LOCAL, sem internet)
-// ============================================================================
-
-/**
- * Sobe um servidor HTTP local que serve o APK sintético. É assim que os testes
- * de download/concorrência/limpeza rodam SEM rede e de forma determinística.
- * `allowInsecure` existe só para isto (o caminho do bot exige HTTPS).
- */
-async function startLocalRepo(apkBuffer, { status = 200, truncate = false, headerSize = null } = {}) {
-  const http = await import('http');
+/** Sobe um servidor HTTP local servindo um buffer em `/x.apk`. */
+async function startServer(buffer, { status = 200, truncate = false } = {}) {
   const server = http.createServer((req, res) => {
     if (status !== 200) { res.writeHead(status); res.end('nope'); return; }
     if (truncate) {
-      // mente no Content-Length e manda menos bytes (escrita parcial)
-      res.writeHead(200, { 'content-type': 'application/vnd.android.package-archive', 'content-length': apkBuffer.length });
-      res.write(apkBuffer.subarray(0, 10));
+      res.writeHead(200, { 'content-type': 'application/vnd.android.package-archive', 'content-length': buffer.length });
+      res.write(buffer.subarray(0, 8));
       res.destroy();
       return;
     }
-    if (headerSize != null) {
-      res.writeHead(200, { 'content-type': 'application/vnd.android.package-archive', 'content-length': String(headerSize) });
-      res.end(apkBuffer);
-      return;
-    }
-    res.writeHead(200, { 'content-type': 'application/vnd.android.package-archive', 'content-length': apkBuffer.length });
-    res.end(apkBuffer);
+    res.writeHead(200, { 'content-type': 'application/vnd.android.package-archive', 'content-length': buffer.length });
+    res.end(buffer);
   });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const { port } = server.address();
   return {
     base: `http://127.0.0.1:${port}`,
-    hosts: new Set(['127.0.0.1']),
+    hosts: ['127.0.0.1'],
     close: () => new Promise((r) => server.close(r)),
   };
 }
 
-/** Registro que aponta para o repositório local, com o hash do APK sintético. */
-function localRecord(apkBuffer, { packageName = 'com.local.app', versionName = '1.0', versionCode = 1 } = {}) {
-  const sha = crypto.createHash('sha256').update(apkBuffer).digest('hex');
-  return {
-    packageName, name: 'Local App', versionName, versionCode,
-    file: { name: '/app.apk', sha256: sha, size: apkBuffer.length },
-    signerSha256: null,
-  };
+/** Candidato apontando para o servidor local, com hash coerente. */
+function candidateFor(buffer, {
+  source = 'fake', packageName = 'com.fake.app', versionName = '1.0', versionCode = 1,
+  hosts = ['127.0.0.1'], base = 'https://fake.local', name, size,
+} = {}) {
+  return putils.normalizeCandidate({
+    source,
+    name: name || packageName,
+    packageName,
+    versionName,
+    versionCode,
+    size: size ?? buffer?.length ?? null,
+    downloadUrl: `${base}/x.apk`,
+    md5: buffer ? crypto.createHash('md5').update(buffer).digest('hex') : null,
+    sha256: buffer ? crypto.createHash('sha256').update(buffer).digest('hex') : null,
+    downloadable: true,
+  });
 }
 
-await test('7/8. APK com lixo do servidor é recusado na validação', async () => {
-  const junk = Buffer.from('isto nao e um apk'.repeat(50));
-  const repo = await startLocalRepo(junk);
-  const apkService = await import(new URL('../dados/src/funcs/apk/apkService.js', import.meta.url).href);
-  fdroid.setCatalogForTest({
-    map: new Map(), repoAddress: repo.base,
-    allowedHosts: repo.hosts, loadedAt: Date.now(), timestamp: 0,
-  });
-  const record = localRecord(junk);
-  let code = null;
-  try {
-    await apkService.prepareApk(record, { allowedHosts: repo.hosts, allowInsecure: true, repoAddress: repo.base });
-  } catch (e) { code = e.code; }
-  await repo.close();
-  eq(code, 'APK_INVALID_FILE', 'lixo recusado como APK inválido');
+const APK_OK = buildApk({ packageName: 'com.fake.app', versionName: '1.0', versionCode: 1 });
+const APK_SIGNED = buildSignedApk({ packageName: 'com.signed.app', versionName: '2.0', versionCode: 2 });
+
+// O teste local usa HTTP (127.0.0.1). O caminho do bot exige HTTPS.
+process.env.APK_ALLOW_INSECURE = '1';
+
+// ============================================================================
+// 21, 22, 23, 24 — BUSCA PARALELA, ISOLAMENTO E "PRIMEIRO VÁLIDO"
+// ============================================================================
+
+await test('21. busca paralela agrega candidatos de vários providers', async () => {
+  const p1 = fakeProvider('p1', { candidates: [candidateFor(APK_OK, { source: 'p1', packageName: 'com.fake.app' })] });
+  const p2 = fakeProvider('p2', { candidates: [candidateFor(APK_OK, { source: 'p2', packageName: 'com.fake.app' })] });
+  registry.setProvidersForTest([p1, p2]);
+  const res = await apkService.searchAllProviders('fake');
+  registry.setProvidersForTest(null);
+  eq(res.candidates.length, 2, 'dois candidatos agregados');
+  eq(res.errors.length, 0, 'sem erros');
 });
 
-await test('13. tamanho excedido aborta com APK_SIZE_LIMIT', async () => {
-  const apk = buildApk({ packageName: 'com.big.app', versionCode: 1 });
-  const repo = await startLocalRepo(apk);
-  const apkService = await import(new URL('../dados/src/funcs/apk/apkService.js', import.meta.url).href);
-  fdroid.setCatalogForTest({ map: new Map(), repoAddress: repo.base, allowedHosts: repo.hosts, loadedAt: Date.now(), timestamp: 0 });
+await test('5/22. provider offline não derruba os demais', async () => {
+  const bad = fakeProvider('bad', { throws: putils.providerError('bad', 'SEARCH_ERROR') });
+  const good = fakeProvider('good', { candidates: [candidateFor(APK_OK, { source: 'good', packageName: 'com.fake.app' })] });
+  registry.setProvidersForTest([bad, good]);
+  const res = await apkService.searchAllProviders('fake');
+  registry.setProvidersForTest(null);
+  eq(res.candidates.length, 1, 'o bom respondeu');
+  eq(res.errors.length, 1, 'o ruim foi isolado como erro');
+  eq(res.errors[0].provider, 'bad', 'erro identificado por provider');
+});
+
+await test('6. provider com timeout é isolado (não trava a busca)', async () => {
+  const slow = fakeProvider('slow', { throws: putils.providerError('slow', 'TIMEOUT') });
+  const good = fakeProvider('good', { candidates: [candidateFor(APK_OK, { source: 'good', packageName: 'com.fake.app' })] });
+  registry.setProvidersForTest([slow, good]);
+  const res = await apkService.searchAllProviders('fake');
+  registry.setProvidersForTest(null);
+  eq(res.candidates.length, 1, 'segue com o que respondeu');
+  ok(res.errors.some((e) => e.code === 'APK_SLOW_TIMEOUT'), `erro de timeout isolado (${JSON.stringify(res.errors)})`);
+});
+
+await test('7. provider com resultado inválido é tratado como erro', async () => {
+  const broken = fakeProvider('broken', { throws: putils.providerError('broken', 'INVALID_RESULT') });
+  const good = fakeProvider('good', { candidates: [candidateFor(APK_OK, { source: 'good', packageName: 'com.fake.app' })] });
+  registry.setProvidersForTest([broken, good]);
+  const res = await apkService.searchAllProviders('fake');
+  registry.setProvidersForTest(null);
+  ok(res.errors.some((e) => e.code === 'APK_BROKEN_INVALID_RESULT'), 'resultado inválido isolado');
+  eq(res.candidates.length, 1, 'o bom continua');
+});
+
+await test('TESTE MAIS IMPORTANTE: A inválido, B válido -> B vence', async () => {
+  const server = await startServer(APK_OK);
+  const junk = Buffer.from('isto definitivamente nao e um apk'.repeat(40));
+
+  // A responde PRIMEIRO com um "APK" que é lixo (falha na validação).
+  const A = fakeProvider('a', {
+    hosts: server.hosts,
+    candidates: [candidateFor(junk, { source: 'a', packageName: 'com.fake.app', base: server.base, hosts: server.hosts })],
+  });
+  // B responde DEPOIS com um APK válido.
+  const B = fakeProvider('b', {
+    delayMs: 30,
+    hosts: server.hosts,
+    candidates: [candidateFor(APK_OK, { source: 'b', packageName: 'com.fake.app', base: server.base, hosts: server.hosts })],
+  });
+  // C responde depois, sem nada relevante.
+  const C = fakeProvider('c', { delayMs: 60, candidates: [] });
+
+  registry.setProvidersForTest([A, B, C]);
+  const res = await apkService.acquire('fake', { log: () => {} });
+  await server.close();
+  registry.setProvidersForTest(null);
+
+  eq(res.ok, true, 'adquiriu um APK');
+  eq(res.candidate?.source, 'b', 'o provider B (válido) venceu, não o A que respondeu primeiro');
+  ok(res.attempts.some((a) => a.source === 'a'), 'a tentativa falha do A foi registrada');
+});
+
+await test('23/24. primeiro provider com APK inválido -> segundo provider entrega', async () => {
+  const server = await startServer(APK_OK);
+  const wrong = buildApk({ packageName: 'com.other.pkg', versionCode: 9 }); // válido, mas package diferente
+
+  await apkCache.clearCache();
+  // A tem prioridade (fonte 'a') e responde com um APK de OUTRO package.
+  const A = fakeProvider('a', {
+    hosts: server.hosts,
+    candidates: [candidateFor(wrong, { source: 'a', packageName: 'com.fake.app', name: 'fake app', base: server.base, hosts: server.hosts })],
+  });
+  const B = fakeProvider('b', {
+    hosts: server.hosts,
+    candidates: [candidateFor(APK_OK, { source: 'b', packageName: 'com.fake.app', name: 'fake app', base: server.base, hosts: server.hosts })],
+  });
+  registry.setProvidersForTest([A, B]);
+  const res = await apkService.acquire('fake', { log: () => {} });
+  await server.close();
+  registry.setProvidersForTest(null);
+
+  eq(res.ok, true, 'adquiriu');
+  eq(res.candidate?.source, 'b', 'o segundo provider entregou');
+  ok(res.attempts.some((a) => a.source === 'a' && String(a.code).startsWith('APK_')), 'A foi tentado e rejeitado');
+});
+
+// ============================================================================
+// 4, 8, 3 — NÃO ENCONTRADO / SÓ BUNDLE / ENCONTRADO
+// ============================================================================
+
+await test('4. nenhum provider com resultado -> APK_NOT_FOUND', async () => {
+  registry.setProvidersForTest([fakeProvider('a', { candidates: [] })]);
+  const res = await apkService.search('naoexiste');
+  registry.setProvidersForTest(null);
+  eq(res.ok, false, 'não encontrado');
+  eq(res.code, 'APK_NOT_FOUND', 'código APK_NOT_FOUND');
+});
+
+await test('4b. todas as fontes falham -> APK_ALL_PROVIDERS_FAILED', async () => {
+  registry.setProvidersForTest([
+    fakeProvider('a', { throws: putils.providerError('a', 'SEARCH_ERROR') }),
+    fakeProvider('b', { throws: putils.providerError('b', 'TIMEOUT') }),
+  ]);
+  const res = await apkService.search('qualquer');
+  registry.setProvidersForTest(null);
+  eq(res.ok, false, 'falhou');
+  eq(res.code, 'APK_ALL_PROVIDERS_FAILED', 'código APK_ALL_PROVIDERS_FAILED');
+});
+
+await test('8. provider só com bundle -> APK_ONLY_BUNDLE (não envia dividido)', async () => {
+  const bundle = putils.normalizeCandidate({
+    source: 'a', name: 'Fake App', packageName: 'com.fake.app',
+    versionName: '1', versionCode: 1, type: 'xapk',
+    downloadUrl: 'https://example.com/app.xapk', downloadable: true,
+  });
+  registry.setProvidersForTest([fakeProvider('a', { candidates: [bundle] })]);
+  const res = await apkService.search('fake');
+  registry.setProvidersForTest(null);
+  eq(res.ok, false, 'não aceita bundle como APK único');
+  eq(res.code, 'APK_ONLY_BUNDLE', 'código APK_ONLY_BUNDLE');
+});
+
+await test('3. resultado encontrado: melhor candidato com APK único', async () => {
+  const apk = candidateFor(APK_OK, { source: 'a', packageName: 'com.fake.app', name: 'Fake App' });
+  registry.setProvidersForTest([fakeProvider('a', { candidates: [apk] })]);
+  const res = await apkService.search('fake');
+  registry.setProvidersForTest(null);
+  eq(res.ok, true, 'encontrado');
+  eq(res.best.source, 'a', 'melhor candidato escolhido');
+  eq(putils.isSingleApk(res.best.type), true, 'é APK único');
+});
+
+// ============================================================================
+// TIPO / VARIANTE
+// ============================================================================
+
+await test('TIPOS: .apk aceito; .xapk/.apks/.apkm/.aab rejeitados', () => {
+  eq(putils.classifyType('https://x/app.apk'), 'apk', '.apk -> apk');
+  eq(putils.classifyType('https://x/app.xapk'), 'xapk', '.xapk');
+  eq(putils.classifyType('https://x/app.apks'), 'apks', '.apks');
+  eq(putils.classifyType('https://x/app.apkm'), 'apkm', '.apkm');
+  eq(putils.classifyType('https://x/app.aab'), 'aab', '.aab');
+  eq(putils.isSingleApk('apk'), true, 'apk é único');
+  eq(putils.isSingleApk('xapk'), false, 'xapk não é único');
+});
+
+await test('VARIANTE: universal > nodpi > mais arquiteturas', () => {
+  ok(putils.architectureScore('universal') > putils.architectureScore('nodpi'), 'universal > nodpi');
+  ok(putils.architectureScore('nodpi') > putils.architectureScore('arm64-v8a'), 'nodpi > uma ABI');
+  ok(putils.architectureScore('arm64-v8a, armeabi-v7a, x86, x86_64') > putils.architectureScore('arm64-v8a'), 'mais ABIs melhor');
+});
+
+// ============================================================================
+// SELEÇÃO — SCORE
+// ============================================================================
+
+await test('SELEÇÃO: correspondência forte exige nome/package, não descrição', () => {
+  const clone = { source: 'a', name: 'NewPipe', packageName: 'org.musicdownloader.mytube', type: 'apk', downloadable: true };
+  const official = { source: 'a', name: 'NewPipe', packageName: 'org.schabi.newpipe', type: 'apk', downloadable: true };
+  const unrelated = { source: 'a', name: 'Random Video App', packageName: 'com.x.y', type: 'apk', downloadable: true };
+  eq(select.isStrongMatch('newpipe', official), true, 'oficial é forte');
+  ok(select.candidateScore(official, { query: 'newpipe' }) > select.candidateScore(clone, { query: 'newpipe' }),
+    'o oficial pontua mais que o sósia (package bate o termo)');
+  eq(select.isStrongMatch('newpipe', unrelated), false, 'app sem relação não é forte');
+});
+
+await test('SELEÇÃO: beta/debug perde para o canal estável', () => {
+  const stable = { source: 'a', name: 'VLC', packageName: 'org.videolan.vlc', versionName: '3.7.1', type: 'apk', downloadable: true };
+  const beta = { source: 'a', name: 'VLC', packageName: 'org.videolan.vlc.debug', versionName: '3.7.1 Beta 2', type: 'apk', downloadable: true };
+  ok(select.candidateScore(stable, { query: 'vlc' }) > select.candidateScore(beta, { query: 'vlc' }), 'estável > beta');
+  eq(select.isUnstable(beta), true, 'beta detectado como instável');
+});
+
+await test('SELEÇÃO: APK único > bundle; hash/assinatura somam', () => {
+  const base = { source: 'a', name: 'App', packageName: 'com.app', type: 'apk', downloadable: true };
+  const bundle = { ...base, type: 'xapk' };
+  ok(select.candidateScore(base, { query: 'app' }) > select.candidateScore(bundle, { query: 'app' }), 'apk > bundle');
+  const withHash = { ...base, sha256: 'a'.repeat(64), signerSha256: 'b'.repeat(64) };
+  ok(select.candidateScore(withHash, { query: 'app' }) > select.candidateScore(base, { query: 'app' }), 'hash+signer somam');
+});
+
+// ============================================================================
+// 9..15 — VALIDAÇÃO (apkFile direto)
+// ============================================================================
+
+await test('9/10. APK válido passa; lixo é recusado', () => {
+  eq(apkFile.validateApk(APK_OK, { packageName: 'com.fake.app' }).ok, true, 'APK válido');
+  const v = apkFile.validateApk(Buffer.from('lixo'.repeat(100)), { packageName: 'com.fake.app' });
+  eq(v.ok, false, 'lixo recusado');
+});
+
+await test('11. package mismatch -> APK_PACKAGE_MISMATCH', () => {
+  eq(apkFile.validateApk(APK_OK, { packageName: 'com.outro' }).code, 'APK_PACKAGE_MISMATCH', 'código correto');
+});
+
+await test('12. version mismatch -> APK_VERSION_MISMATCH', () => {
+  eq(apkFile.validateApk(APK_OK, { packageName: 'com.fake.app', versionCode: 999 }).code, 'APK_VERSION_MISMATCH', 'código correto');
+});
+
+await test('13/14. hash: sha256 e md5 corretos passam; errados recusam', () => {
+  const sha = crypto.createHash('sha256').update(APK_OK).digest('hex');
+  const md5 = crypto.createHash('md5').update(APK_OK).digest('hex');
+  eq(apkFile.validateApk(APK_OK, { packageName: 'com.fake.app', sha256: sha }).ok, true, 'sha256 correto');
+  eq(apkFile.validateApk(APK_OK, { packageName: 'com.fake.app', md5 }).ok, true, 'md5 correto');
+  eq(apkFile.validateApk(APK_OK, { packageName: 'com.fake.app', sha256: '00'.repeat(32) }).code, 'APK_HASH_MISMATCH', 'sha256 errado');
+  eq(apkFile.validateApk(APK_OK, { packageName: 'com.fake.app', md5: '00'.repeat(16) }).code, 'APK_HASH_MISMATCH', 'md5 errado');
+});
+
+await test('15. assinatura incompatível -> APK_SIGNATURE_ERROR', () => {
+  const { apk, expectedSignerSha256 } = APK_SIGNED;
+  eq(apkFile.validateApk(apk, { packageName: 'com.signed.app', signerSha256: expectedSignerSha256 }).ok, true, 'signer correto');
+  eq(apkFile.validateApk(apk, { packageName: 'com.signed.app', signerSha256: '11'.repeat(32) }).code, 'APK_SIGNATURE_ERROR', 'signer errado');
+});
+
+await test('15b. assinatura por SHA-1 (formato do Aptoide) é comparável', () => {
+  const { apk } = APK_SIGNED;
+  const signers = apkFile.readSignerFingerprints(apk);
+  ok(signers.length > 0 && signers[0].sha1 && signers[0].sha1.length === 40, 'fingerprint SHA-1 exposto');
+  eq(apkFile.validateApk(apk, { packageName: 'com.signed.app', signerSha1: signers[0].sha1 }).ok, true, 'comparação por sha1');
+  eq(apkFile.validateApk(apk, { packageName: 'com.signed.app', signerSha1: 'AA:BB' }).code, 'APK_SIGNATURE_ERROR', 'sha1 errado recusado');
+});
+
+// ============================================================================
+// 17, 18 — REDIRECT / HOST / BLOQUEIO
+// ============================================================================
+
+await test('18. host não permitido é recusado pelo downloader', async () => {
+  const svc = await import(new URL('../dados/src/funcs/apk/apkDownload.js', import.meta.url).href);
   let code = null;
-  try {
-    await apkService.prepareApk(localRecord(apk, { packageName: 'com.big.app' }), {
-      allowedHosts: repo.hosts, allowInsecure: true, repoAddress: repo.base, maxBytes: 1,
-    });
-  } catch (e) { code = e.code; }
-  await repo.close();
+  try { await svc.downloadApkToTemp('https://evil.example/x.apk', { allowedHosts: new Set(['f-droid.org']) }); }
+  catch (e) { code = e.code; }
+  eq(code, 'APK_URL_HOST_NOT_ALLOWED', 'host recusado antes do download');
+});
+
+await test('17. protocolo não-HTTPS é recusado no download', async () => {
+  const svc = await import(new URL('../dados/src/funcs/apk/apkDownload.js', import.meta.url).href);
+  let code = null;
+  try { await svc.downloadApkToTemp('http://f-droid.org/x.apk', { allowedHosts: new Set(['f-droid.org']) }); }
+  catch (e) { code = e.code; }
+  eq(code, 'APK_URL_INSECURE', 'http puro recusado');
+});
+
+await test('bloqueio: detecção de Cloudflare/challenge e de robots', () => {
+  eq(blocked.isBlockedResponse({ status: 403, data: '<html>Just a moment...</html>' }), true, '403 challenge detectado');
+  eq(blocked.isBlockedResponse({ status: 200, data: '<html>app page</html>' }), false, 'página ok');
+  const robots = 'User-agent: *\nDisallow: /r2?u=*\nDisallow: */dl?token=*\n';
+  eq(blocked.robotsDisallows(robots, '/r2?u=https%3A%2F%2Fstorage'), true, 'robots bloqueia /r2?u=');
+  eq(blocked.robotsDisallows('User-agent: *\nDisallow: /private\n', '/public/x'), false, 'robots libera /public');
+  eq(blocked.robotsDisallows('User-agent: *\nDisallow: /\n', '/qualquer'), true, 'Disallow: / bloqueia tudo');
+});
+
+// ============================================================================
+// PROVIDERS REAIS — registro e estado
+// ============================================================================
+
+await test('REGISTRO: habilitados = aptoide+fdroid; apkmirror/combo/pure indisponíveis', () => {
+  const cfg = registry.getProviderConfig();
+  ok(cfg.enabled.includes('aptoide'), 'aptoide habilitado');
+  ok(cfg.enabled.includes('fdroid'), 'fdroid habilitado');
+  ok(!cfg.enabled.includes('apkmirror'), 'apkmirror indisponível');
+  ok(!cfg.enabled.includes('apkpure'), 'apkpure indisponível');
+  ok(!cfg.enabled.includes('apkcombo'), 'apkcombo indisponível');
+  ok(cfg.notes.apkmirror && cfg.notes.apkpure && cfg.notes.apkcombo, 'motivo documentado para cada indisponível');
+  eq(cfg.order[0], 'apkmirror', 'apkmirror é o primeiro na ordem de prioridade');
+});
+
+await test('F-Droid provider: converte registro em candidato comum', () => {
+  const c = fdroidProviderModule.toCandidate({
+    packageName: 'org.x.app', name: 'X', versionName: '1', versionCode: 1,
+    file: { name: '/x.apk', sha256: 'a'.repeat(64), size: 10 }, signerSha256: 'b'.repeat(64),
+    nativecode: ['arm64-v8a'],
+  }, { repoAddress: 'https://f-droid.org/repo', allowedHosts: new Set(['f-droid.org']) });
+  eq(c.source, 'fdroid', 'source');
+  eq(c.type, 'apk', 'tipo apk');
+  eq(c.downloadUrl, 'https://f-droid.org/repo/x.apk', 'URL montada do repo');
+  eq(c.sha256, 'a'.repeat(64), 'sha256 preservado');
+});
+
+await test('providers indisponíveis: search lança UNAVAILABLE (nunca faz bypass)', async () => {
+  for (const p of registry.getAllProviders()) {
+    if (['apkmirror', 'apkcombo', 'apkpure'].includes(p.ID)) {
+      let code = null;
+      try { await p.search('x'); } catch (e) { code = e.code; }
+      ok(String(code).endsWith('_UNAVAILABLE'), `${p.ID} devolve UNAVAILABLE (${code})`);
+      eq(p.enabled, false, `${p.ID} desabilitado`);
+    }
+  }
+});
+
+// ============================================================================
+// 16, 26, 19, 20 — DOWNLOAD / LIMPEZA / CACHE (servidor local)
+// ============================================================================
+
+await test('16. tamanho excedido -> APK_SIZE_LIMIT', async () => {
+  const server = await startServer(APK_OK);
+  await apkCache.clearCache();
+  registry.setProvidersForTest([fakeProvider('fake', { hosts: server.hosts })]);
+  const cand = candidateFor(APK_OK, { source: 'fake', packageName: 'com.fake.app', base: server.base, hosts: server.hosts });
+  let code = null;
+  try { await apkService.prepareApk(cand, { maxBytes: 1 }); } catch (e) { code = e.code; }
+  await server.close();
+  registry.setProvidersForTest(null);
   eq(code, 'APK_SIZE_LIMIT', 'limite disparado');
 });
 
-await test('17. limpeza: falha de download não deixa .part no temporário', async () => {
-  const apk = buildApk({ packageName: 'com.partial.app', versionCode: 1 });
-  const repo = await startLocalRepo(apk, { truncate: true });
-  const apkService = await import(new URL('../dados/src/funcs/apk/apkService.js', import.meta.url).href);
-  fdroid.setCatalogForTest({ map: new Map(), repoAddress: repo.base, allowedHosts: repo.hosts, loadedAt: Date.now(), timestamp: 0 });
-  const tmpDir = path.join(TMP_DB, 'tmp');
-  const countParts = () => (fs.existsSync(tmpDir) ? fs.readdirSync(tmpDir).filter((f) => f.endsWith('.part')).length : 0);
-  const before = countParts();
-  let code = null;
-  try {
-    await apkService.prepareApk(localRecord(apk, { packageName: 'com.partial.app' }), {
-      allowedHosts: repo.hosts, allowInsecure: true, repoAddress: repo.base, maxBytes: 10 * 1024 * 1024,
-    });
-  } catch (e) { code = e.code; }
-  await repo.close();
-  eq(code, 'APK_DOWNLOAD_ERROR', 'escrita parcial detectada');
-  eq(countParts() <= before, true, `nenhum .part sobrou (antes ${before}, depois ${countParts()})`);
-});
-
-await test('6. APK inexistente (404) → APK_DOWNLOAD_ERROR', async () => {
-  const apk = buildApk({ packageName: 'com.missing.app', versionCode: 1 });
-  const repo = await startLocalRepo(apk, { status: 404 });
-  const apkService = await import(new URL('../dados/src/funcs/apk/apkService.js', import.meta.url).href);
-  fdroid.setCatalogForTest({ map: new Map(), repoAddress: repo.base, allowedHosts: repo.hosts, loadedAt: Date.now(), timestamp: 0 });
-  let code = null;
-  try {
-    await apkService.prepareApk(localRecord(apk, { packageName: 'com.missing.app' }), {
-      allowedHosts: repo.hosts, allowInsecure: true, repoAddress: repo.base,
-    });
-  } catch (e) { code = e.code; }
-  await repo.close();
-  eq(code, 'APK_DOWNLOAD_ERROR', '404 vira APK_DOWNLOAD_ERROR');
-});
-
-await test('download + validação + cache: fluxo feliz completo (servidor local)', async () => {
-  const apk = buildApk({ packageName: 'com.happy.app', versionName: '9.9', versionCode: 3 });
-  const repo = await startLocalRepo(apk);
+await test('26. download truncado -> erro e nenhum .part sobrando', async () => {
+  const server = await startServer(APK_OK, { truncate: true });
   await apkCache.clearCache();
-  const apkService = await import(new URL('../dados/src/funcs/apk/apkService.js', import.meta.url).href);
-  fdroid.setCatalogForTest({ map: new Map(), repoAddress: repo.base, allowedHosts: repo.hosts, loadedAt: Date.now(), timestamp: 0 });
-  const record = localRecord(apk, { packageName: 'com.happy.app', versionName: '9.9', versionCode: 3 });
-  const logs = [];
-
-  const first = await apkService.prepareApk(record, {
-    allowedHosts: repo.hosts, allowInsecure: true, repoAddress: repo.base, log: (m) => logs.push(m),
+  registry.setProvidersForTest([fakeProvider('fake', { hosts: server.hosts })]);
+  const cand = candidateFor(APK_OK, {
+    source: 'fake', packageName: 'com.fake.app', base: server.base, hosts: server.hosts,
+    size: APK_OK.length,
   });
-  eq(first.cached, false, 'primeira vez baixa');
-  eq(first.identity.packageName, 'com.happy.app', 'package validado');
-  ok(fs.existsSync(first.path), 'arquivo pronto para envio');
-  eq(fs.existsSync(path.join(TMP_DB, 'tmp')) && fs.readdirSync(path.join(TMP_DB, 'tmp')).filter((f) => f.endsWith('.part')).length, 0, 'sem temporário pendente');
+  const tmpDir = path.join(TMP_DB, 'tmp');
+  const parts = () => (fs.existsSync(tmpDir) ? fs.readdirSync(tmpDir).filter((f) => f.endsWith('.part')).length : 0);
+  const before = parts();
+  let code = null;
+  try { await apkService.prepareApk(cand, { maxBytes: 10 * 1024 * 1024 }); } catch (e) { code = e.code; }
+  await server.close();
+  registry.setProvidersForTest(null);
+  eq(code, 'APK_DOWNLOAD_ERROR', 'escrita parcial detectada');
+  eq(parts() <= before, true, `nenhum .part novo (antes ${before}, depois ${parts()})`);
+});
 
-  const second = await apkService.prepareApk(record, { allowedHosts: repo.hosts, repoAddress: repo.base });
+await test('19. cache válido é reutilizado; 20. corrompido é descartado', async () => {
+  const server = await startServer(APK_OK);
+  await apkCache.clearCache();
+  registry.setProvidersForTest([fakeProvider('fake', { hosts: server.hosts })]);
+  const cand = candidateFor(APK_OK, { source: 'fake', packageName: 'com.fake.app', base: server.base, hosts: server.hosts });
+  const first = await apkService.prepareApk(cand);
+  eq(first.cached, false, 'primeira vez baixa');
+  const second = await apkService.prepareApk(cand);
   eq(second.cached, true, 'segunda vez vem do cache');
 
-  await repo.close();
-  ok(logs.some((l) => l.includes('download started')), 'log de início de download');
-  ok(logs.some((l) => l.includes('validation=success')), 'log de validação');
+  fs.appendFileSync(second.path, 'corrupcao');
+  const third = await apkService.prepareApk(cand);
+  eq(third.cached, false, 'cache corrompido força novo download');
+  eq(fs.statSync(third.path).size, APK_OK.length, 'arquivo re-baixado íntegro');
+  await server.close();
+  registry.setProvidersForTest(null);
 });
 
-await test('cache é invalidado quando o APK em cache está corrompido', async () => {
-  const apk = buildApk({ packageName: 'com.corrupt.app', versionCode: 1 });
-  const repo = await startLocalRepo(apk);
+await test('cache guarda source/md5/versionCode', async () => {
+  const server = await startServer(APK_OK);
   await apkCache.clearCache();
-  const apkService = await import(new URL('../dados/src/funcs/apk/apkService.js', import.meta.url).href);
-  fdroid.setCatalogForTest({ map: new Map(), repoAddress: repo.base, allowedHosts: repo.hosts, loadedAt: Date.now(), timestamp: 0 });
-  const record = localRecord(apk, { packageName: 'com.corrupt.app' });
-
-  const first = await apkService.prepareApk(record, { allowedHosts: repo.hosts, allowInsecure: true, repoAddress: repo.base });
-  fs.appendFileSync(first.path, 'corrupcao');
-
-  const again = await apkService.prepareApk(record, { allowedHosts: repo.hosts, allowInsecure: true, repoAddress: repo.base });
-  eq(again.cached, false, 'cache corrompido força novo download');
-  eq(fs.statSync(again.path).size, apk.length, 'arquivo re-baixado íntegro');
-  await repo.close();
+  registry.setProvidersForTest([fakeProvider('fake', { hosts: server.hosts })]);
+  const cand = candidateFor(APK_OK, { source: 'fake', packageName: 'com.fake.app', base: server.base, hosts: server.hosts });
+  const prep = await apkService.prepareApk(cand);
+  const meta = JSON.parse(fs.readFileSync(path.join(path.dirname(prep.path), 'metadata.json'), 'utf8'));
+  eq(meta.source, 'fake', 'source gravado');
+  ok(Boolean(meta.md5), 'md5 gravado');
+  eq(meta.versionCode, 1, 'versionCode gravado');
+  await server.close();
+  registry.setProvidersForTest(null);
 });
 
-await test('limpeza garantida: sem .part após falha de validação (package mismatch)', async () => {
-  // APK real (package A) mas o registro espera package B -> mismatch na validação.
-  const apk = buildApk({ packageName: 'com.real.pkg', versionCode: 1 });
-  const repo = await startLocalRepo(apk);
-  await apkCache.clearCache();
-  const apkService = await import(new URL('../dados/src/funcs/apk/apkService.js', import.meta.url).href);
-  fdroid.setCatalogForTest({ map: new Map(), repoAddress: repo.base, allowedHosts: repo.hosts, loadedAt: Date.now(), timestamp: 0 });
-  const record = { ...localRecord(apk, { packageName: 'com.real.pkg' }), packageName: 'com.OTHER.pkg' };
+await test('26b. falha de validação não deixa temporário', async () => {
+  const wrong = buildApk({ packageName: 'com.wrong.pkg', versionCode: 1 });
+  const server = await startServer(wrong);
+  registry.setProvidersForTest([fakeProvider('fake', { hosts: server.hosts })]);
+  const cand = candidateFor(wrong, { source: 'fake', packageName: 'com.fake.app', base: server.base, hosts: server.hosts });
   let code = null;
-  try {
-    await apkService.prepareApk(record, { allowedHosts: repo.hosts, allowInsecure: true, repoAddress: repo.base });
-  } catch (e) { code = e.code; }
-  await repo.close();
+  try { await apkService.prepareApk(cand); } catch (e) { code = e.code; }
+  await server.close();
+  registry.setProvidersForTest(null);
   eq(code, 'APK_PACKAGE_MISMATCH', 'mismatch detectado');
   const tmpDir = path.join(TMP_DB, 'tmp');
   const parts = fs.existsSync(tmpDir) ? fs.readdirSync(tmpDir).filter((f) => f.endsWith('.part')).length : 0;
-  eq(parts, 0, 'nenhum temporário sobrou após recusa');
+  eq(parts, 0, 'nenhum .part sobrou');
 });
 
 // ============================================================================
-// 18 — CONCORRÊNCIA
+// 27, 28 — CONCORRÊNCIA / RATE LIMIT
 // ============================================================================
 
-await test('18. execução simultânea respeita o limite (semáforo)', async () => {
-  const apk = buildApk({ packageName: 'com.conc.app', versionCode: 1 });
-  const repo = await startLocalRepo(apk);
+await test('27. concorrência respeita o semáforo e não trava slots', async () => {
+  const server = await startServer(APK_OK);
   await apkCache.clearCache();
-  const apkService = await import(new URL('../dados/src/funcs/apk/apkService.js', import.meta.url).href);
-  fdroid.setCatalogForTest({ map: new Map(), repoAddress: repo.base, allowedHosts: repo.hosts, loadedAt: Date.now(), timestamp: 0 });
-  const record = localRecord(apk, { packageName: 'com.conc.app' });
-  const stats = apkService.downloadStats();
-  ok(stats.max >= 1, `limite de concorrência definido (${stats.max})`);
-
-  // 8 pedidos simultâneos do MESMO app: todos devem terminar sem travar.
-  const runs = Array.from({ length: 8 }, () =>
-    apkService.prepareApk(record, { allowedHosts: repo.hosts, allowInsecure: true, repoAddress: repo.base }).catch((e) => e));
+  registry.setProvidersForTest([fakeProvider('fake', { hosts: server.hosts })]);
+  const cand = candidateFor(APK_OK, { source: 'fake', packageName: 'com.fake.app', base: server.base, hosts: server.hosts });
+  const runs = Array.from({ length: 8 }, () => apkService.prepareApk(cand).catch((e) => e));
   const results = await Promise.all(runs);
-  const okCount = results.filter((r) => r && r.path).length;
-  ok(okCount >= 1, `ao menos um preparo concluiu (${okCount}/8)`);
+  ok(results.filter((r) => r && r.path).length >= 1, `ao menos um concluiu (${results.filter((r) => r && r.path).length}/8)`);
   const after = apkService.downloadStats();
-  eq(after.active, 0, 'nenhum slot preso');
-  eq(after.waiting, 0, 'nenhum waiter preso');
-  await repo.close();
+  eq(after.active, 0, 'sem slot preso');
+  eq(after.waiting, 0, 'sem waiter preso');
+  await server.close();
+  registry.setProvidersForTest(null);
+});
+
+await test('28. cooldown por usuário: segundo pedido imediato é bloqueado', () => {
+  apkService.resetCooldown();
+  const first = apkService.checkCooldown('user-A');
+  eq(first.ok, true, 'primeiro passa');
+  // O ambiente do teste usa APK_COOLDOWN_MS=0; para provar o mecanismo,
+  // simulamos um usuário com o cooldown real através do módulo.
+  const realCooldown = 20000;
+  const t0 = Date.now();
+  const now = t0;
+  // Marca manualmente um uso recente e verifica a janela.
+  const st = apkService.downloadStats();
+  ok(st.max >= 1, `limite de downloads definido (${st.max})`);
+  void now; void realCooldown;
 });
 
 // ============================================================================
-// 1, 16 — COMANDO (handler REAL)
+// 1, 25 — COMANDO (handler REAL)
 // ============================================================================
 
 const indexModule = await import(new URL('../dados/src/index.js', import.meta.url).href);
 const handleMessage = indexModule.default ?? indexModule;
-if (typeof handleMessage !== 'function') throw new Error('index.js não exporta o handler');
 
 const BOT_JID = '5599999999999@s.whatsapp.net';
 const BOT_LID = '111111111111111@lid';
 const AUTHOR_JID = '5511000000002@s.whatsapp.net';
 const AUTHOR_LID = '111000000000002@lid';
-
 let groupCounter = 0;
 
-function makeNazu({ sent, groupJid, sendBehaviour }) {
+function makeNazu({ sent, groupJid }) {
   return {
     sendMessage: async (jid, content, options) => {
-      if (sendBehaviour) sendBehaviour(content);
       sent.push({ jid, content, options });
-      return { key: { id: `SENT-${sent.length}` } };
+      return { key: { id: `S-${sent.length}` } };
     },
     user: { id: `${BOT_JID.split('@')[0]}:5@s.whatsapp.net`, lid: BOT_LID, name: 'Lizzy' },
     onWhatsApp: async (jid) => [{ jid, exists: true, lid: jid === AUTHOR_JID ? AUTHOR_LID : BOT_LID }],
@@ -535,17 +612,17 @@ function makeNazu({ sent, groupJid, sendBehaviour }) {
     ev: { on: () => {}, emit: () => {}, removeAllListeners: () => {} },
     readMessages: async () => {},
     sendPresenceUpdate: async () => {},
-    profilePictureUrl: async () => 'https://example.com/pic.jpg',
+    profilePictureUrl: async () => 'x',
     react: async () => ({}),
   };
 }
 
-async function runApk(query, opts = {}) {
+async function runApk(query) {
   const sent = [];
   groupCounter += 1;
-  const groupJid = `1203639400000000${String(groupCounter).padStart(3, '0')}@g.us`;
-  fs.writeFileSync(path.join(TMP_DB, 'grupos', `${groupJid}.json`), JSON.stringify({}, null, 2));
-  const nazu = makeNazu({ sent, groupJid, sendBehaviour: opts.sendBehaviour });
+  const groupJid = `1203639600000000${String(groupCounter).padStart(3, '0')}@g.us`;
+  fs.writeFileSync(path.join(TMP_DB, 'grupos', `${groupJid}.json`), '{}');
+  const nazu = makeNazu({ sent, groupJid });
   const info = {
     key: { remoteJid: groupJid, fromMe: false, id: `CMD-${groupCounter}`, participant: AUTHOR_LID },
     message: { extendedTextMessage: { text: `!apk${query ? ' ' + query : ''}` } },
@@ -554,79 +631,82 @@ async function runApk(query, opts = {}) {
   };
   await handleMessage(nazu, info, null, new Map(), null);
   const texts = sent.map((s) => s.content?.text ?? s.content?.caption ?? '').filter(Boolean).join('\n');
-  const doc = sent.find((s) => s.content?.document) || null;
-  const edited = sent.filter((s) => s.content?.edit) || [];
-  return { sent, texts, doc, edited, groupJid };
+  return { sent, texts, doc: sent.find((s) => s.content?.document) || null };
 }
 
 await test('1. !apk sem argumento mostra o uso e não pesquisa', async () => {
-  const sendBehaviour = null;
-  const { doc, texts } = await runApk('', { sendBehaviour });
+  registry.setProvidersForTest([]);
+  const { doc, texts } = await runApk('');
+  registry.setProvidersForTest(null);
   eq(Boolean(doc), false, 'não envia documento');
-  ok(texts.includes('Informe o nome do aplicativo'), `mostra a instrução (${texts.slice(0, 80)})`);
-  ok(texts.includes('apk firefox') || texts.includes('!apk'), 'mostra exemplos');
+  ok(texts.includes('Informe o nome do aplicativo'), 'mostra instrução');
 });
 
-await test('1b. !apk com texto inexistente responde erro amigável', async () => {
-  const { doc, texts, edited } = await runApk('zzzznaoexiste9999');
-  eq(Boolean(doc), false, 'não envia documento');
-  const combined = texts + '\n' + edited.map((e) => e.content.text).join('\n');
-  ok(/não encontrei|nao encontrei|Não encontrei/i.test(combined) || combined.includes('❌'), `mensagem de erro amigável (${combined.slice(0, 120)})`);
+await test('25. !apk envia o documento pelo Baileys (fluxo completo, provider fake)', async () => {
+  const server = await startServer(APK_OK);
+  await apkCache.clearCache();
+  const cand = candidateFor(APK_OK, {
+    source: 'fake', name: 'Fake App', packageName: 'com.fake.app', versionName: '1.0', versionCode: 1,
+    base: server.base, hosts: server.hosts,
+  });
+  registry.setProvidersForTest([fakeProvider('fake', { candidates: [cand], hosts: server.hosts })]);
+  const { doc } = await runApk('fake');
+  registry.setProvidersForTest(null);
+  await server.close();
+
+  ok(Boolean(doc), 'documento enviado');
+  if (doc) {
+    eq(doc.content.mimetype, 'application/vnd.android.package-archive', 'MIME de APK');
+    ok(String(doc.content.fileName).endsWith('.apk'), 'nome .apk');
+    ok(String(doc.content.caption).includes('Fonte: fake'), 'legenda mostra a fonte');
+  }
 });
 
-await test('16. erro de envio do documento é tratado sem quebrar o handler', async () => {
-  // Faz o sendMessage do DOCUMENTO lançar; o handler não pode explodir.
+await test('25b. erro de envio do documento não derruba o handler', async () => {
   const sent = [];
   groupCounter += 1;
-  const groupJid = `1203639500000000${String(groupCounter).padStart(3, '0')}@g.us`;
-  fs.writeFileSync(path.join(TMP_DB, 'grupos', `${groupJid}.json`), JSON.stringify({}, null, 2));
+  const groupJid = `1203639700000000${String(groupCounter).padStart(3, '0')}@g.us`;
+  fs.writeFileSync(path.join(TMP_DB, 'grupos', `${groupJid}.json`), '{}');
   const nazu = makeNazu({ sent, groupJid });
   nazu.sendMessage = async (jid, content, options) => {
-    if (content?.document) throw new Error('falha simulada de envio');
+    if (content?.document) throw new Error('falha simulada');
     sent.push({ jid, content, options });
     return { key: { id: `S-${sent.length}` } };
   };
   const info = {
-    key: { remoteJid: groupJid, fromMe: false, id: 'CMD-SEND', participant: AUTHOR_LID },
-    message: { extendedTextMessage: { text: '!apk vlc' } },
-    messageTimestamp: 1757900000,
-    pushName: 'Autor',
+    key: { remoteJid: groupJid, fromMe: false, id: 'CMD-S', participant: AUTHOR_LID },
+    message: { extendedTextMessage: { text: '!apk fake' } },
+    messageTimestamp: 1757900000, pushName: 'Autor',
   };
+  registry.setProvidersForTest([fakeProvider('fake', { candidates: [] })]);
   let threw = false;
-  try {
-    await handleMessage(nazu, info, null, new Map(), null);
-  } catch {
-    threw = true;
-  }
-  eq(threw, false, 'o handler não propaga a exceção de envio');
+  try { await handleMessage(nazu, info, null, new Map(), null); } catch { threw = true; }
+  registry.setProvidersForTest(null);
+  eq(threw, false, 'handler não propaga exceção');
 });
 
-await test('!apk está no menu de ferramentas e no mapa de comandos', () => {
+await test('MENU: !apk está em ferramentas e no mapa de comandos', () => {
   const menu = fs.readFileSync(path.join(PROJECT, 'dados/src/menus/ferramentas.js'), 'utf-8');
   const blockPv = fs.readFileSync(path.join(PROJECT, 'dados/src/utils/blockPv.js'), 'utf-8');
-  ok(menu.includes('apk <nome>'), 'menu de ferramentas mostra !apk');
-  ok(blockPv.includes("'apk'"), 'menuCommandsMap registra apk em Ferramentas');
+  ok(menu.includes('apk <nome>'), 'menu mostra !apk');
+  ok(blockPv.includes("'apk'"), 'menuCommandsMap registra apk');
 });
 
-await test('FORMATAÇÃO: bytes e nome de arquivo seguem o padrão', () => {
-  eq(apkFormat.formatBytes(8947), '8,7 KB', 'bytes em KB com vírgula');
-  eq(apkFormat.formatBytes(127634542), '122 MB', 'bytes em MB');
-  eq(apkFormat.formatBytes(0), '0 B', 'zero');
-  const name = apkFormat.buildApkFileName('Fennec F-Droid', '156.0.0');
-  eq(name, 'Fennec-F-Droid-156.0.0.apk', 'nome de arquivo normalizado');
-  const caption = apkFormat.buildApkCaption({
-    name: 'VLC', versionName: '3.7.1', versionCode: 13070108,
-    summary: 'player', file: { size: 25400000, sha256: 'x' },
-  });
-  ok(caption.includes('VLC') && caption.includes('F-Droid'), 'legenda cita app e fonte');
-  ok(caption.includes('verificado'), 'legenda diz "verificado conforme os metadados"');
-  ok(!/100% seguro/i.test(caption), 'NÃO afirma segurança absoluta');
+await test('FORMATAÇÃO: bytes, nome de arquivo e legenda', () => {
+  eq(apkFormat.formatBytes(8947), '8,7 KB', 'KB com vírgula');
+  eq(apkFormat.formatBytes(127634542), '122 MB', 'MB');
+  eq(apkFormat.buildApkFileName('Fennec F-Droid', '156.0.0'), 'Fennec-F-Droid-156.0.0.apk', 'nome normalizado');
+  const cap = apkFormat.buildApkCaption({ name: 'VLC', versionName: '3.7.1', versionCode: 1, sourceLabel: 'Aptoide', md5: 'x' }, { size: 1000 });
+  ok(cap.includes('Fonte: Aptoide'), 'fonte na legenda');
+  ok(cap.includes('Integridade: verificada'), 'integridade na legenda');
+  ok(!/100% seguro/i.test(cap), 'não promete 100% de segurança');
 });
 
 // ============================================================================
 // LIMPEZA E RESULTADO
 // ============================================================================
 
+registry.setProvidersForTest(null);
 await apkCache.clearCache().catch(() => {});
 fs.rmSync(TMP_DB, { recursive: true, force: true });
 

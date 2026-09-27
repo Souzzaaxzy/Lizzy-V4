@@ -6143,109 +6143,102 @@ validado é o protocolo no fio (stanza + proto decifrado) e o handler real.
 
 ---
 
-## Comando `!apk` — download de APK do F-Droid (set/2026)
+---
 
-Baixa o APK OFICIAL de um app do índice do F-Droid e envia como documento.
+## Comando `!apk` — download MULTI-SOURCE de APK (set/2026)
 
-### Fonte (estrutura, não scraping)
-- **Índice oficial** `https://f-droid.org/repo/index-v2.json` — é a fonte
-  ESTRUTURADA: por versão traz `file.sha256`, `file.size`, `versionCode`,
-  `versionName`, `nativecode` e `manifest.signer.sha256`. É o que a validação
-  precisa. A página de busca do F-Droid é HTML e NÃO tem hash/tamanho — por isso
-  a busca por nome usa o endpoint JSON oficial
-  `https://search.f-droid.org/api/search_apps?q=...` (documentado em
-  https://f-droid.org/en/docs/All_our_APIs/), e os metadados vêm do índice.
-- Nenhuma outra fonte. Sem APKPure/APKCombo/APKMirror, sem Google, sem fallback.
+Baixa o APK de um app pesquisando em várias fontes e envia como documento.
+Substitui a versão F-Droid-only: o F-Droid **continua** existindo como provider.
 
-### Arquitetura (`dados/src/funcs/apk/`)
-O `case 'apk'` no `index.js` é FINO: só valida, mostra progresso e envia. A
-lógica está nos módulos (todos sem Baileys, testáveis):
-- `fdroidIndex.js` — catálogo e busca. `IndexScanner` lê o índice em STREAMING e
-  emite só os campos usados de cada pacote (o índice tem ~60 MB / ~250 MB se
-  `JSON.parse` inteiro; o bot não pode pagar esse pico). `searchCatalog` pontua
-  candidatos por identidade (nome/package) e só aceita correspondência FORTE.
-- `apkFile.js` — leitura local do APK sobre uma "fonte" com acesso aleatório
-  (`FileSource`): estrutura ZIP, `AndroidManifest.xml` BINÁRIO (AXML: `package`,
-  `versionName`, `versionCode`) e fingerprint SHA-256 do certificado do APK
-  Signing Block (v2/v3) / META-INF v1. Nada do APK inteiro vai para a memória.
-- `apkDownload.js` — download em streaming para `DATABASE_DIR/tmp`, com teto de
-  tamanho (antes e durante), timeout de conexão/ociosidade/total, SHA-256
-  calculado durante a escrita e limpeza garantida.
-- `apkCache.js` — cache em `DATABASE_DIR/apk-cache/<package>/`
-  (`metadata.json` + `<package>.apk`), com revalidação a cada leitura (tamanho +
-  SHA-256 + package). Cache é economia de banda, NÃO fonte de confiança: se algo
-  não bate, apaga e baixa de novo. Poda por idade e por tamanho total.
-- `apkService.js` — orquestra (busca → cache → download → validação → cache),
-  semáforo de downloads simultâneos e cooldown por usuário.
-- `apkFormat.js` — formatação de bytes, nome do arquivo e legenda.
+### Providers
 
-### Validações (todas locais, contra os metadados do F-Droid)
-1. ZIP válido + `AndroidManifest.xml` presente;
-2. `package` do APK == package do índice (senão `APK_PACKAGE_MISMATCH`);
-3. `versionCode` == o do índice quando informado (`APK_VERSION_MISMATCH`);
-4. **SHA-256** do arquivo == o do índice (`APK_HASH_MISMATCH`) — a checagem mais
-   forte disponível;
-5. **signer** — o fingerprint do certificado do APK tem de constar entre os
-   signers do F-Droid (`APK_SIGNATURE_ERROR`). É checagem de IDENTIDADE do
-   certificado, NÃO verificação criptográfica da assinatura (isso exigiria
-   `apksigner`/Java, indisponível). Documentado como
-   *"APK verificado conforme os metadados do F-Droid"* — nunca "100% seguro".
-
-### Limites e configuração (variáveis de ambiente, com padrão)
-| variável | padrão | função |
+| provider | estado | método |
 |---|---|---|
-| `APK_MAX_BYTES` | 300 MB | teto do APK |
-| `APK_MAX_CONCURRENT` | 2 | downloads simultâneos |
-| `APK_CONNECT_TIMEOUT_MS` | 30 s | timeout de conexão |
-| `APK_IDLE_TIMEOUT_MS` | 60 s | sem bytes → aborta |
-| `APK_TOTAL_TIMEOUT_MS` | 10 min | teto total |
-| `APK_COOLDOWN_MS` | 20 s | cooldown por usuário |
-| `APK_CACHE_MAX_BYTES` | 512 MB | teto do cache |
-| `APK_CACHE_MAX_AGE_MS` | 30 dias | idade máxima do cache |
+| `aptoide` | **ativo** | **API pública oficial** `https://ws75.aptoide.com/api/7/apps/search` (JSON). Devolve package, versão, tamanho, **md5**, assinatura (**SHA-1** do certificado) e URL direta em `pool.apk.aptoide.com`. |
+| `fdroid` | **ativo** | índice oficial assinado `index-v2.json` (streaming) + `search.f-droid.org/api/search_apps`. Devolve **SHA-256**, tamanho, versionCode e `signer.sha256`. |
+| `apkmirror` | indisponível | `www.apkmirror.com` responde **403 Cloudflare** ("Just a moment...") em TODO caminho, inclusive `/robots.txt`. `download.`/`api.apkmirror.com` não resolvem. Sem API pública. |
+| `apkpure` | indisponível | `apkpure.com`/`m.apkpure.com` = **403 Cloudflare**; `d.apkpure.com` publica **`Disallow: /`**; `api.pureapk.com` devolve `INVALID_COMMAND`. Termos proíbem automação. |
+| `apkcombo` | indisponível | HTML responde, mas o download real passa por `/r2?u=` e por caminhos `dl?token=`, ambos **`Disallow:`** no robots.txt. |
 
-### Anti-SSRF / anti-abuso
-O usuário manda só o NOME. A URL do APK vem sempre do índice
-(`buildApkUrl`) e passa por `assertAllowedUrl`: só HTTPS e só hosts do F-Droid
-(o próprio + espelhos oficiais listados no índice assinado). `../` no nome do
-arquivo é recusado. Cooldown por usuário + semáforo de downloads.
+**Nada de bypass**: os três indisponíveis fazem UMA requisição normal e devolvem
+`APK_<PROVIDER>_UNAVAILABLE`. Se a fonte voltar a ser acessível sem desafio, a
+implementação é reativada sem mudar o resto (a interface do provider já existe).
 
-### Erros (códigos estáveis → mensagem curta ao usuário; stack só no log)
-`APK_QUERY_EMPTY`, `APK_NOT_FOUND`, `APK_NO_CONFIDENT_MATCH`, `APK_AMBIGUOUS`,
-`APK_SEARCH_ERROR`, `APK_METADATA_ERROR`, `APK_CATALOG_ERROR`,
-`APK_DOWNLOAD_ERROR`, `APK_DOWNLOAD_TIMEOUT`, `APK_SIZE_LIMIT`,
-`APK_INVALID_FILE`, `APK_PACKAGE_MISMATCH`, `APK_VERSION_MISMATCH`,
-`APK_HASH_MISMATCH`, `APK_SIGNATURE_ERROR`, `APK_SEND_ERROR`, `APK_CACHE_ERROR`,
-`APK_URL_NOT_ALLOWED`.
+### Arquitetura (`dados/src/funcs/apk/providers/`)
+- `providerUtils.js` — interface comum: `normalizeCandidate`, `classifyType`
+  (apk/xapk/apks/apkm/aab), `architectureScore`, `providerRequest` (JSON via
+  `apiClient`, HTML via `scrapingClient`; timeout + teto de bytes + AbortController).
+- `fdroidProvider.js`, `aptoideProvider.js` — providers ativos.
+- `legacySourcesProvider.js` — os indisponíveis + `probe()` (confirma o bloqueio
+  sem contornar).
+- `blockedDetect.js` — reconhece challenge Cloudflare e parseia `robots.txt`.
+- `candidateSelect.js` — pontuação e escolha do vencedor.
+- `index.js` — registro, ordem de prioridade, habilitados/indisponíveis.
+  Config: `APK_PROVIDERS=a,b` (só estes) e `APK_PROVIDERS_ENABLE=x` (força um).
 
-### Menu
-Adicionado em **Ferramentas** (`menus/ferramentas.js`, categoria
-`📦 APPS (F-DROID)`) e ao `menuCommandsMap` (`utils/blockPv.js`). Sem menu novo.
+O `case 'apk'` no `index.js` é FINO: chama `apkService.search` e `acquire`.
 
-### Desambiguação
-`!apk firefox` NÃO baixa nada: no F-Droid o app do Firefox se chama "Fennec
-F-Droid" (o nome não contém "firefox"; o termo só aparece na descrição de vários
-apps). Como exige correspondência por NOME ou PACKAGE, o bot responde
-*"Não encontrei um aplicativo correspondente"* e sugere o nome exato ou o
-package id. `!apk fennec`, `!apk vlc`, `!apk newpipe` e `!apk telegram`
-funcionam. Exceção: dois apps com o mesmo nome forte → `APK_AMBIGUOUS`.
+### Seleção (o que "primeiro resultado VÁLIDO" significa)
+1. busca **paralela** em todos os providers habilitados, com **isolamento de
+   erro** (um provider falhando não derruba os outros);
+2. ordena por pontuação: correspondência de **nome/package** (o package bater o
+   termo é sinal do app canônico, o que separa o oficial do sósia) + APK único +
+   variante (universal > nodpi > mais arquiteturas) + hash/assinatura + tamanho +
+   prioridade da fonte. Canal instável (beta/debug/nightly) perde;
+3. `acquire()` tenta o melhor e, se ele **falhar na validação**, passa para o
+   próximo — isso garante que "primeira resposta" (de um provider que devolveu
+   lixo) NÃO seja confundida com "primeiro APK válido".
+
+### Tipos e variantes
+Só **APK único** é aceito. `.xapk/.apks/.apkm/.aab` (bundles/divididos) são
+rejeitados; se só houver bundle → `APK_ONLY_BUNDLE` ("somente em formato
+dividido"). Variantes preferidas: universal > nodpi > mais ABIs.
+
+### Validação (contra os metadados DA FONTE do candidato)
+ZIP + `AndroidManifest.xml`; `package` sempre; `versionCode` quando informado;
+**hash** quando informado (SHA-256 e/ou **MD5** — cada um contra o seu
+algoritmo); **assinatura** quando informada (SHA-256 do certificado no F-Droid,
+**SHA-1** no Aptoide; o `apkFile` expõe os dois fingerprints). É checagem de
+IDENTIDADE do certificado, não verificação criptográfica (exigiria
+apksigner/Java) — a legenda diz "verificado conforme os metadados de <fonte>".
+
+### Segurança
+Usuário só informa o NOME. Toda URL vem do provider e passa por
+`assertAllowedUrl`: HTTPS obrigatório e host na lista do provider (anti-SSRF).
+`downloadApkToTemp` recusa host/protocolo antes de qualquer requisição; redirect
+para host fora da lista não é seguido. HTTP puro só é liberado para loopback e
+apenas em teste (`APK_ALLOW_INSECURE=1`).
+
+### Cache, limites, rate limit
+Cache em `DATABASE_DIR/apk-cache/<package>/` com `metadata.json` (source,
+package, versão, versionCode, sha256, md5, tamanho, assinaturas, pageUrl,
+downloadedAt); revalidado a cada leitura (tamanho + hash + package). Variáveis:
+`APK_MAX_BYTES` (300 MB), `APK_MAX_CONCURRENT` (2), `APK_CONNECT_TIMEOUT_MS` (30s),
+`APK_IDLE_TIMEOUT_MS` (60s), `APK_TOTAL_TIMEOUT_MS` (10min), `APK_COOLDOWN_MS`
+(20s por usuário), `APK_PROVIDER_TIMEOUT_MS` (10s por requisição de provider),
+`APK_CACHE_MAX_BYTES` (512 MB), `APK_CACHE_MAX_AGE_MS` (30d).
+
+### Logs
+`[APK] query=... provider=<id> started/result/failed`, `[APK] search sources=...
+candidates=... errors=...`, `[APK] best candidate source=...`, `[APK] download
+started`, `[APK] validation success`, `[APK] provider winner=...`, `[APK]
+success`. Sem tokens/cookies/credenciais.
 
 ### Testes
-- `tests/apk-command.test.js` — **29 testes / 81 asserções**, sem rede (usa
-  servidor HTTP local + APKs sintéticos de `tests/helpers/apk-builders.js`:
-  ZIP+AXML em memória, incl. um APK com bloco de assinatura v2). Cobre os 20
-  cenários pedidos. Nada binário é versionado.
-- Integração real (opt-in): `APK_NET_TEST=1 node tests/apk-command.test.js`
-  baixa `com.zinaro.cachecleanerwidget_1.apk` do F-Droid e confere hash+signer.
-- **Teste manual real** (executado): handler completo contra o F-Droid para
-  `vlc`, `newpipe`, `telegram`, `fennec` — download, validação e envio como
-  documento (`application/vnd.android.package-archive`) com nome
-  `VLC-3.7.1.apk` etc.; temporários limpos; cache funcionando no 2º pedido.
+`tests/apk-command.test.js` — **39 testes / 110 asserções**, sem internet
+(providers fake via `setProvidersForTest` + servidor HTTP local + APKs sintéticos
+de `tests/helpers/apk-builders.js`). Inclui o teste mais importante: **A inválido
+responde primeiro, B válido responde depois → B vence**. Nada binário versionado.
 
-### Observabilidade
-Logs `[APK] query=... package=... download started / downloaded size=/sha256= /
-validation=success / success`. O `trackCommandUsage` existente já contabiliza o
-comando (não há sistema de métricas próprio).
+### Teste real (executado)
+`!apk spotify` → Aptoide, `com.spotify.music` 9.1.84.2231 (md5 conferido,
+assinatura SHA-1 conferida). `!apk vlc` → F-Droid, `org.videolan.vlc` 3.7.1
+(SHA-256 conferido). `!apk firefox` → o F-Droid não tem correspondência forte,
+mas a Aptoide tem `org.mozilla.firefox` 156.0.1; o sistema rejeitou os primeiros
+candidatos (`org.mozilla.tv.firefox` e um clone sem certificado) e entregou o
+oficial — "primeiro VÁLIDO", não "primeira resposta". `!apk telegram` → Aptoide
+`org.telegram.messenger.web` 12.9.2. Temporários limpos.
 
 ### Dependências
-Nenhuma adicionada. Zlib/AXZ/ZIP usam o módulo `zlib`/`fs` do Node; o HTTP usa o
-`httpClient.js` (axios) já existente.
+Nenhuma adicionada. Reutiliza `httpClient.js` (axios), `apkFile.js` (ZIP/AXML),
+`apkDownload.js` e `apkCache.js` já existentes.

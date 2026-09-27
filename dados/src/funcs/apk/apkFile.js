@@ -321,6 +321,13 @@ export function readSignerFingerprints(input) {
   const source = toSource(input);
   try {
     const out = [];
+    const collect = (scheme, der) => out.push({
+      scheme,
+      sha256: sha256Hex(der),
+      // SHA-1 é o formato que o Aptoide publica (`file.signature.sha1`), então
+      // guardamos os dois para poder comparar contra cada fonte.
+      sha1: crypto.createHash('sha1').update(der).digest('hex').toUpperCase(),
+    });
     const eocd = findEocd(source);
     if (!eocd) return out;
 
@@ -328,14 +335,12 @@ export function readSignerFingerprints(input) {
     for (const [id, value] of pairs) {
       if (id !== SIG_BLOCK_ID_V2 && id !== SIG_BLOCK_ID_V3) continue;
       for (const der of readSchemeCertificates(value)) {
-        out.push({ scheme: id === SIG_BLOCK_ID_V2 ? 'v2' : 'v3', sha256: sha256Hex(der) });
+        collect(id === SIG_BLOCK_ID_V2 ? 'v2' : 'v3', der);
       }
     }
 
     if (out.length === 0) {
-      for (const der of readV1Certificates(source)) {
-        out.push({ scheme: 'v1', sha256: sha256Hex(der) });
-      }
+      for (const der of readV1Certificates(source)) collect('v1', der);
     }
     return out;
   } finally {
@@ -457,6 +462,26 @@ export function sha256Hex(buf) {
   return crypto.createHash('sha256').update(buf).digest('hex');
 }
 
+/** Hashes de uma fonte, em blocos (não carrega o arquivo inteiro na RAM). */
+export function hashSource(input, algorithms = ['sha256']) {
+  const own = !(input instanceof BufferSource) && !(input instanceof FileSource);
+  const source = toSource(input);
+  try {
+    const hashes = {};
+    for (const algo of algorithms) {
+      const h = crypto.createHash(algo);
+      const CHUNK = 1 << 20;
+      for (let off = 0; off < source.size; off += CHUNK) {
+        h.update(source.read(off, Math.min(CHUNK, source.size - off)));
+      }
+      hashes[algo] = h.digest('hex');
+    }
+    return hashes;
+  } finally {
+    if (own) source.close();
+  }
+}
+
 /** SHA-256 de uma fonte lida em blocos (não carrega o arquivo inteiro na RAM). */
 export function sha256Source(input) {
   const own = !(input instanceof BufferSource) && !(input instanceof FileSource);
@@ -517,39 +542,57 @@ export function validateApk(input, expected = {}) {
       };
     }
 
-    // SHA-256 do arquivo: a validação mais forte disponível. Só é pulada quando
-    // o índice não informa o hash.
-    if (expected.sha256) {
-      const actual = sha256Source(source);
-      if (actual.toLowerCase() !== String(expected.sha256).toLowerCase()) {
+    // Hash do arquivo. SHA-256 é o preferido, mas fontes como o Aptoide só
+    // publicam MD5 — quando é o único hash confiável disponível, ele vale.
+    // Qualquer divergência de hash disponível é rejeição. Quando a fonte publica
+    // os DOIS, ambos são conferidos (cada um contra o seu próprio algoritmo).
+    const wantSha256 = expected.sha256 ? String(expected.sha256).toLowerCase() : null;
+    const wantMd5 = expected.md5 ? String(expected.md5).toLowerCase() : null;
+    if (wantSha256 || wantMd5) {
+      const algos = [];
+      if (wantSha256) algos.push('sha256');
+      if (wantMd5) algos.push('md5');
+      const got = hashSource(source, algos);
+      if (wantSha256 && got.sha256.toLowerCase() !== wantSha256) {
         return {
           ok: false,
           code: APK_ERROR.HASH_MISMATCH,
           message: 'SHA-256 do arquivo não confere.',
           identity,
-          actualSha256: actual,
+          actualSha256: got.sha256,
+        };
+      }
+      if (wantMd5 && got.md5.toLowerCase() !== wantMd5) {
+        return {
+          ok: false,
+          code: APK_ERROR.HASH_MISMATCH,
+          message: 'MD5 do arquivo não confere.',
+          identity,
+          actualMd5: got.md5,
         };
       }
     }
 
-    // Assinatura: quando o F-Droid publica o fingerprint do signer, ele TEM de
-    // constar entre os certificados do APK — é a prova de que o binário foi
-    // assinado pelo signer que o F-Droid conhece. Não é verificação
-    // criptográfica da assinatura (exigiria apksigner/Java); é a checagem de
-    // identidade do certificado, que é o que dá para fazer com segurança e sem
-    // dependência nova.
+    // Assinatura: quando a fonte publica o fingerprint do certificado, ele TEM
+    // de constar entre os certificados do APK. Cada fonte usa um algoritmo:
+    // F-Droid publica SHA-256 do certificado, Aptoide publica SHA-1.
     let signers = [];
-    if (expected.signerSha256) {
+    const wantSignerSha256 = expected.signerSha256 ? String(expected.signerSha256).toLowerCase() : null;
+    const wantSignerSha1 = expected.signerSha1 ? String(expected.signerSha1).replace(/:/g, '').toUpperCase() : null;
+    if (wantSignerSha256 || wantSignerSha1) {
       signers = readSignerFingerprints(source);
       if (signers.length === 0) {
         return { ok: false, code: APK_ERROR.SIGNATURE_ERROR, message: 'APK sem certificado de assinatura.', identity };
       }
-      const wanted = String(expected.signerSha256).toLowerCase();
-      if (!signers.some((s) => s.sha256.toLowerCase() === wanted)) {
+      const matches = signers.some((s) => (
+        (wantSignerSha256 && s.sha256.toLowerCase() === wantSignerSha256)
+        || (wantSignerSha1 && s.sha1 && s.sha1 === wantSignerSha1)
+      ));
+      if (!matches) {
         return {
           ok: false,
           code: APK_ERROR.SIGNATURE_ERROR,
-          message: 'Certificado de assinatura não é o do F-Droid.',
+          message: 'Certificado de assinatura não confere com a fonte.',
           identity,
           signers,
         };
@@ -575,6 +618,7 @@ export default {
   readApkIdentity,
   readSignerFingerprints,
   sha256Hex,
+  hashSource,
   sha256Source,
   validateApk,
 };

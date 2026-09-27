@@ -31,7 +31,7 @@ import fs from 'fs';
 import fsp from 'fs/promises';
 import path from 'path';
 import { DATABASE_DIR } from '../../utils/paths.js';
-import { FileSource, sha256Source, APK_ERROR, ApkValidationError, readApkIdentity } from './apkFile.js';
+import { FileSource, hashSource, APK_ERROR, ApkValidationError, readApkIdentity } from './apkFile.js';
 
 export const CACHE_DIR = path.join(DATABASE_DIR, 'apk-cache');
 
@@ -98,9 +98,14 @@ export async function getCachedApk(packageName, expected = {}) {
     return { hit: false, reason: 'APK_CACHE_SIZE_MISMATCH' };
   }
 
-  // SHA-256 do arquivo em cache.
-  const sha = sha256Source(apkFile);
-  if (metadata.sha256 && sha.toLowerCase() !== String(metadata.sha256).toLowerCase()) {
+  // Hash do arquivo em cache. A fonte pode ter publicado sha256 OU md5 (a
+  // Aptoide só publica md5); conferimos o que estiver registrado.
+  const sha = hashSource(apkFile, ['sha256', 'md5']);
+  if (metadata.sha256 && sha.sha256.toLowerCase() !== String(metadata.sha256).toLowerCase()) {
+    await removeCacheEntry(packageName);
+    return { hit: false, reason: 'APK_CACHE_HASH_MISMATCH' };
+  }
+  if (metadata.md5 && sha.md5.toLowerCase() !== String(metadata.md5).toLowerCase()) {
     await removeCacheEntry(packageName);
     return { hit: false, reason: 'APK_CACHE_HASH_MISMATCH' };
   }
@@ -119,7 +124,10 @@ export async function getCachedApk(packageName, expected = {}) {
 
   // Se a consulta de agora espera um hash/versão diferente (app atualizou),
   // o cache antigo não serve.
-  if (expected.sha256 && String(expected.sha256).toLowerCase() !== sha.toLowerCase()) {
+  if (expected.sha256 && String(expected.sha256).toLowerCase() !== sha.sha256.toLowerCase()) {
+    return { hit: false, reason: 'APK_CACHE_STALE' };
+  }
+  if (expected.md5 && String(expected.md5).toLowerCase() !== sha.md5.toLowerCase()) {
     return { hit: false, reason: 'APK_CACHE_STALE' };
   }
   if (expected.versionCode != null && metadata.versionCode != null
@@ -140,9 +148,10 @@ export async function getCachedApk(packageName, expected = {}) {
  *          versionCode?: number, sha256: string, size: number, signerSha256?: string}} entry
  */
 export async function storeApk(entry) {
-  const { packageName, fromPath, sha256 } = entry;
-  if (!packageName || !fromPath || !sha256) {
-    throw new Error('storeApk: packageName, fromPath e sha256 são obrigatórios');
+  const { packageName, fromPath } = entry;
+  // sha256 OU md5: algumas fontes (Aptoide) só publicam md5. Exigir um deles.
+  if (!packageName || !fromPath || (!entry.sha256 && !entry.md5)) {
+    throw new Error('storeApk: packageName, fromPath e sha256/md5 são obrigatórios');
   }
   const { dir, metaFile, apkFile } = cachePaths(packageName);
   await fsp.mkdir(dir, { recursive: true });
@@ -157,10 +166,13 @@ export async function storeApk(entry) {
     name: entry.name || packageName,
     versionName: entry.versionName ?? null,
     versionCode: entry.versionCode ?? null,
-    sha256,
+    sha256: entry.sha256 ?? null,
+    md5: entry.md5 ?? null,
     size: entry.size ?? null,
     signerSha256: entry.signerSha256 ?? null,
-    source: 'fdroid',
+    signerSha1: entry.signerSha1 ?? null,
+    source: entry.source || 'unknown',
+    pageUrl: entry.pageUrl ?? null,
     downloadedAt: new Date().toISOString(),
   };
   await fsp.writeFile(metaFile, JSON.stringify(metadata, null, 2), 'utf8');

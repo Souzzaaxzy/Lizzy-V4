@@ -19670,8 +19670,8 @@ case 'addaluguel':
           reply('❌ Ocorreu um erro ao verificar o link. Tente novamente.');
         }
         break;
-      // APK (F-Droid) — baixa o APK oficial de um app do índice do F-Droid.
-      // O case é FINO: toda a lógica vive em funcs/apk/ (search/download/validate/cache).
+      // APK (multi-source) — pesquisa em providers e envia o APK oficial.
+      // O case é FINO: toda a lógica vive em funcs/apk/ e funcs/apk/providers/.
       case 'apk':
       case 'apkdl':
       case 'baixarapk': {
@@ -19692,14 +19692,14 @@ case 'addaluguel':
         // usa: envia -> guarda o id -> edita). Não gera uma mensagem por etapa.
         // Se a primeira mensagem não puder ser criada, cai para `reply`.
         let progressKey = null;
-        let progressText = '🔎 Pesquisando no F-Droid...';
+        let progressText = `🔎 Procurando "${apkQuery}"...`;
         const loading = await nazu.sendMessage(from, { text: progressText }, {}).catch(() => null);
         progressKey = loading?.key?.id || null;
         const setProgress = async (text) => {
           if (!text || text === progressText) return;
           progressText = text;
           if (!progressKey) {
-              try { await reply(text); } catch { /* progresso é best-effort */ }
+            try { await reply(text); } catch { /* progresso é best-effort */ }
             return;
           }
           await nazu.sendMessage(from, { text, edit: { id: progressKey } }).catch(() => {});
@@ -19707,35 +19707,51 @@ case 'addaluguel':
         let apkPathToClean = null;
 
         try {
-          const found = await apkService.findApp(apkQuery);
+          await setProgress('⚡ Consultando fontes disponíveis...');
+          const found = await apkService.search(apkQuery, { log: apkLog });
           if (!found.ok) {
-            apkLog(`[APK] invalid query result code=${found.code} query=${apkQuery}`);
+            apkLog(`[APK] search failed code=${found.code} query=${apkQuery}`);
             await setProgress(apkService.userMessageFor(found.code));
             return;
           }
 
-          const record = found.record;
-          apkLog(`[APK] package=${record.packageName} version=${record.versionName}`);
+          const best = found.best;
+          apkLog(`[APK] best candidate source=${best.source} package=${best.packageName} version=${best.versionName}`);
+          // As fontes devolvem vários candidatos e só sabemos qual é válido
+          // depois de baixar+validar. Então aqui NÃO anunciamos "o" app (poderia
+          // ser o candidato errado); só confirmamos que achamos e vamos baixar.
+          await setProgress(`📦 *${best.name || best.packageName}*\n📦 Encontrado nas fontes! Baixando...`);
 
-          // Cache: quando já existe íntegro, pulamos a etapa de download.
-          const cached = await apkCache.getCachedApk(record.packageName, {
-            sha256: record.file.sha256,
-            versionCode: record.versionCode,
-          }).catch(() => ({ hit: false }));
-          await setProgress(
-            cached.hit
-              ? `📦 ${record.name}\n📱 Versão: ${record.versionName || '?'}\n♻️ Já tenho em cache, enviando...`
-              : `📦 *${record.name}* encontrado\n📱 Versão: ${record.versionName || '?'}\n📦 Tamanho: ${formatBytes(record.file.size)}\n\n⬇️ Baixando APK...`
-          );
+          // acquire() tenta o melhor candidato e, se ele falhar na validação,
+          // passa para o próximo — "primeiro resultado VÁLIDO", não "primeira resposta".
+          const acquired = await apkService.acquire(apkQuery, { log: apkLog, candidates: found.candidates });
+          if (!acquired.ok) {
+            apkLog(`[APK] acquire failed code=${acquired.code} query=${apkQuery}`);
+            await setProgress(apkService.userMessageFor(acquired.code));
+            return;
+          }
 
-          const prepared = await apkService.prepareApk(record, { log: apkLog });
+          const { candidate, prepared } = acquired;
           if (prepared.temporary) apkPathToClean = prepared.path;
 
-          await setProgress('🔐 Validando arquivo...');
+          await setProgress(
+            `📦 *${candidate.name || candidate.packageName}*\n`
+            + `📱 Versão: ${prepared.identity?.versionName ?? candidate.versionName ?? '?'}\n`
+            + `📦 Tamanho: ${formatBytes(prepared.size)}\n`
+            + `🌐 Fonte: ${candidate.sourceLabel}\n\n🔐 Verificando arquivo...`
+          );
 
-          const fileName = buildApkFileName(record.name, prepared.identity?.versionName ?? record.versionName);
+          const fileName = buildApkFileName(
+            candidate.name || candidate.packageName,
+            prepared.identity?.versionName ?? candidate.versionName
+          );
           const caption = buildApkCaption(
-            { ...record, versionName: prepared.identity?.versionName ?? record.versionName },
+            {
+              ...candidate,
+              versionName: prepared.identity?.versionName ?? candidate.versionName,
+              versionCode: prepared.identity?.versionCode ?? candidate.versionCode,
+              sourceLabel: candidate.sourceLabel,
+            },
             { size: prepared.size, sha256: prepared.sha256 }
           );
 
@@ -19752,12 +19768,12 @@ case 'addaluguel':
             await nazu.sendMessage(from, { delete: progressKey }, {}).catch(() => {});
           }
           await nazu.react('✅', { key: info.key }).catch(() => {});
-          apkLog(`[APK] success package=${record.packageName} size=${prepared.size} cached=${prepared.cached}`);
+          apkLog(`[APK] success source=${candidate.source} package=${candidate.packageName} size=${prepared.size} cached=${prepared.cached}`);
         } catch (e) {
           const code = e?.code || 'APK_UNKNOWN';
           apkLog(`[APK] failed code=${code} query=${apkQuery} detail=${e?.message || e}`);
           console.error('[APK] erro no comando apk:', e?.stack || e);
-          await setProgress(`❌ ${apkService.userMessageFor(code).replace(/^❌\s*/, '')}`);
+          await setProgress(apkService.userMessageFor(code));
         } finally {
           // Arquivo temporário (cache indisponível) NUNCA fica para trás.
           if (apkPathToClean) {

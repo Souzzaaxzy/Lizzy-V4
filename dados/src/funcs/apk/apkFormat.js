@@ -33,27 +33,32 @@ export function buildApkFileName(name, versionName, fallback = 'app') {
 /**
  * Legenda do documento. Segue o padrão do bot (título em negrito, linhas
  * "rótulo: valor", fonte ao final). NÃO afirma que o APK é "seguro": diz que foi
- * verificado conforme os metadados do F-Droid.
+ * verificado conforme os metadados da fonte.
  */
 export function buildApkCaption(record, extra = {}) {
+  const sourceLabel = record.sourceLabel || 'fonte';
+  const checked = Boolean(record.sha256 || record.md5 || record.signerSha256 || record.signerSha1 || extra.sha256);
   const lines = [
     `📦 *${record.name}*`,
     `📱 Versão: ${record.versionName || 'não informada'}`,
   ];
   if (record.versionCode != null) lines.push(`🔢 Código: ${record.versionCode}`);
   if (record.summary) lines.push(`📝 ${record.summary}`);
-  const size = extra.size ?? record.file?.size;
+  const size = extra.size ?? record.size;
   if (size) lines.push(`📦 Tamanho: ${formatBytes(size)}`);
-  if (extra.sha256 || record.file?.sha256) lines.push(`🔐 SHA-256: verificado`);
-  lines.push(`🌐 Fonte: F-Droid`);
+  const algos = [];
+  if (record.sha256 || extra.sha256) algos.push('SHA-256');
+  if (record.md5) algos.push('MD5');
+  lines.push(`🔐 Integridade: ${checked ? `verificada${algos.length ? ` (${algos.join(' + ')})` : ''}` : 'não disponível na fonte'}`);
+  lines.push(`🌐 Fonte: ${sourceLabel}`);
   lines.push('');
-  lines.push('_APK verificado conforme os metadados do F-Droid._');
+  lines.push(`_APK verificado conforme os metadados do ${sourceLabel}._`);
   return lines.join('\n');
 }
 
 /** Texto do `/apk` sem argumento. */
 export function apkUsage(prefix = '!') {
-  return `❌ Informe o nome do aplicativo.\n\n📝 *Uso:* ${prefix}apk <nome>\n\n💡 *Exemplos:*\n${prefix}apk firefox\n${prefix}apk vlc\n${prefix}apk newpipe\n\n_Fonte: F-Droid._`;
+  return `❌ Informe o nome do aplicativo.\n\n📝 *Uso:* ${prefix}apk <nome>\n\n💡 *Exemplos:*\n${prefix}apk firefox\n${prefix}apk vlc\n${prefix}apk newpipe\n\n_Busca em múltiplas fontes (F-Droid, Aptoide...)._`;
 }
 
 export default { formatBytes, buildApkFileName, buildApkCaption, apkUsage };
