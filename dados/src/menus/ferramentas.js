@@ -47,6 +47,11 @@ export default async function menuFerramentas(prefix, botName = "MeuBot", userNa
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
+╭━━━꧁༺ ㅤ📦 ${boldItalic('APPS (F-DROID)')} 📦ㅤ ༻꧂━━━╮
+│ 📦 ${prefix}apk <nome>
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
+
+
 ╭━━━꧁༺ ㅤ🔒 ${boldItalic('SEGURANÇA')} 🔒ㅤ ༻꧂━━━╮
 │ 🛡️ ${prefix}verificar <link>
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯

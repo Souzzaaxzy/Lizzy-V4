@@ -124,6 +124,8 @@ import {
 import {
   getSocialProfile
 } from './funcs/utils/socialProfile.js';
+// APK (F-Droid) - helpers puros usados no comando `!apk`.
+import { formatBytes, buildApkFileName, buildApkCaption, apkUsage } from './funcs/apk/apkFormat.js';
 import { 
   setApiKey, 
   deleteApiKey, 
@@ -1795,7 +1797,9 @@ const {
   antipalavra,
   transmissao,
   canvas,
-  smmApi
+  smmApi,
+  apkService,
+  apkCache
 } = modules.default;
 async function createGroupMessage(AbyssSock, groupMetadata, participants, settings, isWelcome = true) {
   const globalJson = JSON.parse(
@@ -19666,6 +19670,103 @@ case 'addaluguel':
           reply('❌ Ocorreu um erro ao verificar o link. Tente novamente.');
         }
         break;
+      // APK (F-Droid) — baixa o APK oficial de um app do índice do F-Droid.
+      // O case é FINO: toda a lógica vive em funcs/apk/ (search/download/validate/cache).
+      case 'apk':
+      case 'apkdl':
+      case 'baixarapk': {
+        const apkQuery = (q || '').trim();
+        if (!apkQuery) return reply(apkUsage(groupPrefix));
+
+        // Cooldown próprio: o throttle global (3 cmd/5s) não impede pedir
+        // vários APKs grandes seguidos.
+        const cd = apkService.checkCooldown(sender);
+        if (!cd.ok) {
+          return reply(`⏳ Aguarde ${Math.ceil(cd.remainingMs / 1000)}s para baixar outro APK.`);
+        }
+
+        const apkLog = (m, extra) => console.log(extra ? `${m} ${JSON.stringify(extra)}` : m);
+        apkLog(`[APK] query=${apkQuery} user=${sender}`);
+
+        // Mensagem de progresso EDITADA no lugar (mesmo mecanismo que o bot já
+        // usa: envia -> guarda o id -> edita). Não gera uma mensagem por etapa.
+        // Se a primeira mensagem não puder ser criada, cai para `reply`.
+        let progressKey = null;
+        let progressText = '🔎 Pesquisando no F-Droid...';
+        const loading = await nazu.sendMessage(from, { text: progressText }, {}).catch(() => null);
+        progressKey = loading?.key?.id || null;
+        const setProgress = async (text) => {
+          if (!text || text === progressText) return;
+          progressText = text;
+          if (!progressKey) {
+              try { await reply(text); } catch { /* progresso é best-effort */ }
+            return;
+          }
+          await nazu.sendMessage(from, { text, edit: { id: progressKey } }).catch(() => {});
+        };
+        let apkPathToClean = null;
+
+        try {
+          const found = await apkService.findApp(apkQuery);
+          if (!found.ok) {
+            apkLog(`[APK] invalid query result code=${found.code} query=${apkQuery}`);
+            await setProgress(apkService.userMessageFor(found.code));
+            return;
+          }
+
+          const record = found.record;
+          apkLog(`[APK] package=${record.packageName} version=${record.versionName}`);
+
+          // Cache: quando já existe íntegro, pulamos a etapa de download.
+          const cached = await apkCache.getCachedApk(record.packageName, {
+            sha256: record.file.sha256,
+            versionCode: record.versionCode,
+          }).catch(() => ({ hit: false }));
+          await setProgress(
+            cached.hit
+              ? `📦 ${record.name}\n📱 Versão: ${record.versionName || '?'}\n♻️ Já tenho em cache, enviando...`
+              : `📦 *${record.name}* encontrado\n📱 Versão: ${record.versionName || '?'}\n📦 Tamanho: ${formatBytes(record.file.size)}\n\n⬇️ Baixando APK...`
+          );
+
+          const prepared = await apkService.prepareApk(record, { log: apkLog });
+          if (prepared.temporary) apkPathToClean = prepared.path;
+
+          await setProgress('🔐 Validando arquivo...');
+
+          const fileName = buildApkFileName(record.name, prepared.identity?.versionName ?? record.versionName);
+          const caption = buildApkCaption(
+            { ...record, versionName: prepared.identity?.versionName ?? record.versionName },
+            { size: prepared.size, sha256: prepared.sha256 }
+          );
+
+          await setProgress('📤 Enviando...');
+          await nazu.sendMessage(from, {
+            document: { url: prepared.path },
+            mimetype: 'application/vnd.android.package-archive',
+            fileName,
+            caption,
+          }, { quoted: info });
+
+          // Some com a mensagem de progresso: a entrega É a mensagem.
+          if (progressKey) {
+            await nazu.sendMessage(from, { delete: progressKey }, {}).catch(() => {});
+          }
+          await nazu.react('✅', { key: info.key }).catch(() => {});
+          apkLog(`[APK] success package=${record.packageName} size=${prepared.size} cached=${prepared.cached}`);
+        } catch (e) {
+          const code = e?.code || 'APK_UNKNOWN';
+          apkLog(`[APK] failed code=${code} query=${apkQuery} detail=${e?.message || e}`);
+          console.error('[APK] erro no comando apk:', e?.stack || e);
+          await setProgress(`❌ ${apkService.userMessageFor(code).replace(/^❌\s*/, '')}`);
+        } finally {
+          // Arquivo temporário (cache indisponível) NUNCA fica para trás.
+          if (apkPathToClean) {
+            const { safeUnlink } = await import('./funcs/apk/apkDownload.js');
+            await safeUnlink(apkPathToClean);
+          }
+        }
+        break;
+      }
       // FUSO HORÁRIO MUNDIAL (versão alternativa)
       case 'horamundial':
       case 'worldtime':

@@ -71,6 +71,19 @@ async function loadModules() {
         const apiFacade = (await import('./api-downloads.js')).default;
         modules.API = apiFacade;
 
+        // --- APK (F-Droid) ---
+        // Módulos do `!apk`. O case do comando só chama o serviço; a lógica vive
+        // em funcs/apk/. Não confundir com `funcs/downloads/apkmod.js` (APK MOD,
+        // fonte apkmodct.com, comando próprio) — são fontes diferentes.
+        const [apkServiceMod, apkCacheMod, apkFileMod] = await Promise.all([
+            import('./apk/apkService.js'),
+            import('./apk/apkCache.js'),
+            import('./apk/apkFile.js'),
+        ]);
+        modules.apkService = apkServiceMod.default ?? apkServiceMod;
+        modules.apkCache = apkCacheMod.default ?? apkCacheMod;
+        modules.apkFile = apkFileMod.default ?? apkFileMod;
+
         // --- utils ---
         const [
             styleTextMod, LogosMod, LogosMod2, verifyUpdateMod, emojiMixMod,

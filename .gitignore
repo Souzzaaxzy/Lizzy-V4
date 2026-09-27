@@ -42,3 +42,7 @@ logs/
 # Build
 dist/
 build/
+
+# Cache de APKs baixados pelo !apk (binários grandes, nunca versionar)
+dados/database/apk-cache/
+*.apk
