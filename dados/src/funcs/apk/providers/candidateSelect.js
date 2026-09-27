@@ -120,10 +120,10 @@ export function candidateScore(candidate, ctx = {}) {
   // --- identidade ---
   if (s.exactPkg) {
     score += 250;                     // o usuário digitou o package id
-  } else if (s.nameStartsWith) {
-    score += 100;                     // "WhatsApp Messenger" p/ "whatsapp"
   } else if (s.nameExact) {
-    score += 100;
+    score += 140;                     // o nome É o termo ("Telegram")
+  } else if (s.nameStartsWith) {
+    score += 100;                     // nome começa com o termo ("Telegram X")
   } else if (s.nameHasQ) {
     score += 40;                      // termo como token no meio do nome
   } else if (s.nameSubsequence) {
@@ -157,6 +157,21 @@ export function candidateScore(candidate, ctx = {}) {
   // a identidade, mas forte o bastante para o oficial ganhar do clone.
   if (s.popularity > 0) score += Math.min(60, Math.log10(s.popularity) * 6.5);
 
+  // --- relevância que a PRÓPRIA fonte calcula (posição na resposta) ---
+  // O app oficial costuma vir em 1º na busca da loja; usamos isso como sinal,
+  // sem deixar que sozinho atropele a identidade.
+  if (typeof ctx.relRank === 'number') {
+    score += Math.max(0, 40 - ctx.relRank * 8);
+  }
+
+  // --- popularidade RELATIVA ao conjunto de candidatos ---
+  // 100M vs 3M precisa separar de verdade; comparar com o máximo do conjunto é
+  // o desempate objetivo, e não depende da escala de cada fonte.
+  if (ctx.maxPopularity > 0 && s.popularity > 0) {
+    const ratio = Math.log10(s.popularity) / Math.log10(ctx.maxPopularity);
+    score += Math.max(0, ratio) * 40;
+  }
+
   // --- prioridade da fonte: só desempate ---
   if (typeof ctx.priority === 'number') score += Math.max(0, 8 - ctx.priority);
 
@@ -173,8 +188,23 @@ export function candidateScore(candidate, ctx = {}) {
  */
 export function rankCandidates(candidates, opts = {}) {
   const priorityOf = opts.priorityOf || (() => 99);
-  return [...candidates]
-    .map((c) => ({ candidate: c, score: candidateScore(c, { query: opts.query, priority: priorityOf(c.source) }) }))
+  const pool = [...candidates];
+
+  // Contexto por provider: a posição que ele deu (rank) e o maior número de
+  // downloads do conjunto. Serve para o desempate ser RELATIVO, não preso à
+  // escala de uma fonte.
+  const maxPopularity = pool.reduce((max, c) => Math.max(max, Number(c.popularity || 0)), 0);
+
+  return pool
+    .map((c) => ({
+      candidate: c,
+      score: candidateScore(c, {
+        query: opts.query,
+        priority: priorityOf(c.source),
+        relRank: c.rank,
+        maxPopularity,
+      }),
+    }))
     .sort((a, b) => b.score - a.score)
     .map((x) => ({ ...x.candidate, _score: x.score }));
 }

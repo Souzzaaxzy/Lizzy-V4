@@ -104,6 +104,9 @@ export function normalizeCandidate(raw = {}) {
     // Sinais objetivos de "qual é o app oficial" (só desempate técnico).
     popularity: raw.popularity != null ? Number(raw.popularity) : null,
     developer: raw.developer || null,
+    // Posição na resposta do provider (a relevância que a própria loja calcula).
+    // É sinal útil: o app oficial costuma vir em 1º na busca da fonte.
+    rank: raw.rank != null ? Number(raw.rank) : null,
     // `downloadable: false` marca resultado que não tem APK único pela fonte.
     downloadable: raw.downloadable !== false && Boolean(downloadUrl),
   };

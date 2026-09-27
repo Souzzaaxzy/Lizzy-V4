@@ -6315,3 +6315,36 @@ Novos: v1-only aceito, v3.1 (rotação) lido, popularidade desempata o clone,
 variante não vence o canal principal, consulta por package id, `isPackageId` e
 o fallback por package. `tests/helpers/apk-builders.js` ganhou construtores de
 APK assinado v1 (PKCS#7 DER real) e v2/v3/v3.1.
+
+### Correção 2ª rodada: relevância do provider e nome exato (set/2026)
+
+Dois casos reais ainda escolhiam o app errado, corrigidos:
+
+- `!apk signal` entregava `com.xyz.signal` ("Signal Generator") em vez do
+  `org.thoughtcrime.securesms` (Signal oficial). A causa: a Aptoide devolve o
+  oficial em **1º** na busca, e nós **descartávamos essa ordem**. Agora o
+  candidato carrega `rank` (posição na resposta da fonte) e a pontuação usa essa
+  relevância — além da **popularidade relativa** ao conjunto (log do valor sobre
+  o log do máximo), que separa 100M de 3M de verdade.
+- `!apk telegram` entregava "Telegram X" porque "nome começa com o termo"
+  pontuava igual a "nome exato". Agora **nome exato** (140) > **começa com**
+  (100), então "Telegram" vence "Telegram X" mesmo com menos downloads e pior
+  rank na fonte.
+
+Verificado ao vivo: signal, telegram, whatsapp, vlc, tiktok, spotify, instagram,
+firefox e newpipe — todos no package oficial. Testes: 49 / 132 asserções.
+
+### Sobre "usar cookies" para liberar APKMirror/APKPure
+Avaliado e **não aplicável**. No YouTube os cookies são um consentimento/estado
+de conta que o próprio usuário gera (`cookies.txt` Netscape) para o yt-dlp; o
+site responde 200 e o cookie personaliza a sessão. APKMirror e APKPure não
+respondem 403 por falta de sessão: respondem `cf-mitigated: challenge` (desafio
+JS do Cloudflare) em **todos** os caminhos — inclusive `/robots.txt`, `/wp-json`
+e os hosts de API — sem API pública. Um cookie de sessão legítima não resolve um
+challenge JS; o que resolveria seria automatizar a resolução do challenge, que é
+exatamente o "contornar Cloudflare" proibido pela tarefa e pelos termos do
+APKPure. O host de download do APKPure (`d.apkpure.com`) ainda publica
+`Disallow: /` no robots.txt, e o APKCombo bloqueia seu próprio caminho de
+download (`/r2?u=`, `dl?token=`) no robots. O IzzyOnDroid foi checado como fonte
+extra: o robots dele também bloqueia `/*.apk$`. Ficam, portanto, os dois
+providers legítimos: **Aptoide** (API oficial) e **F-Droid**.

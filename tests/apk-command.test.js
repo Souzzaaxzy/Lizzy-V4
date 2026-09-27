@@ -442,6 +442,36 @@ await test('SELEÇÃO: consulta por package id é identidade máxima', () => {
   ok(select.candidateScore(exact, { query: 'com.whatsapp' }) > select.candidateScore(other, { query: 'com.whatsapp' }), 'package exato ganha');
 });
 
+await test('SELEÇÃO: nome EXATO vence "começa com" (Telegram vs Telegram X)', () => {
+  // Caso real: "Telegram X" vinha em 1º na busca da fonte e vencia o oficial,
+  // porque "começa com" pontuava igual a "nome exato".
+  const exact = { source: 'a', name: 'Telegram', packageName: 'org.telegram.messenger.web', type: 'apk', downloadable: true, popularity: 88687, rank: 2 };
+  const starts = { source: 'a', name: 'Telegram X', packageName: 'org.thunderdog.challegram', type: 'apk', downloadable: true, popularity: 100000000, rank: 0 };
+  const ranked = select.rankCandidates([starts, exact], { query: 'telegram' });
+  eq(ranked[0].packageName, 'org.telegram.messenger.web', 'o nome exato vence, mesmo com menos downloads e pior rank');
+});
+
+await test('SELEÇÃO: posição na fonte (rank) e popularidade relativa são usados', () => {
+  // "Signal Generator" (com.xyz.signal) vem longe na busca da loja; o oficial
+  // org.thoughtcrime.securesms vem em 1º. O rank precisa contar.
+  const official = { source: 'a', name: 'Signal - Private Messenger', packageName: 'org.thoughtcrime.securesms', type: 'apk', downloadable: true, popularity: 100000000, rank: 0 };
+  const noise = { source: 'a', name: 'Signal Generator', packageName: 'com.xyz.signal', type: 'apk', downloadable: true, popularity: 0, rank: 16 };
+  const ranked = select.rankCandidates([noise, official], { query: 'signal' });
+  eq(ranked[0].packageName, 'org.thoughtcrime.securesms', 'oficial (rank 0) vence o ruído (rank 16)');
+});
+
+await test('provider Aptoide: candidato carrega rank, popularidade e developer', async () => {
+  const aptoide = await import(new URL('../dados/src/funcs/apk/providers/aptoideProvider.js', import.meta.url).href);
+  const c = aptoide.toCandidate({
+    name: 'App', package: 'com.app', size: 10,
+    file: { path: 'https://pool.apk.aptoide.com/a.apk', filesize: 10, vername: '1', vercode: 1, md5sum: 'a'.repeat(32) },
+    stats: { pdownloads: 12345 }, developer: { name: 'Dev' },
+  }, { allowedHosts: new Set(['pool.apk.aptoide.com']) }, 4);
+  eq(c.rank, 4, 'rank preservado');
+  eq(c.popularity, 12345, 'popularidade preservada');
+  eq(c.developer, 'Dev', 'developer preservado');
+});
+
 // ============================================================================
 // BUSCA POR PACKAGE (caminho rápido) E FALLBACK
 // ============================================================================

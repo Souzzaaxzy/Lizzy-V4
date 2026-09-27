@@ -65,13 +65,13 @@ export async function search(query, opts = {}) {
   }
 
   const seen = new Set(candidates.map((c) => c.packageName));
-  for (const app of list) {
-    const c = toCandidate(app, opts);
+  list.forEach((app, i) => {
+    const c = toCandidate(app, opts, i);
     if (c.name && c.packageName && !seen.has(c.packageName)) {
       candidates.push(c);
       seen.add(c.packageName);
     }
-  }
+  });
 
   return { ok: true, provider: ID, candidates };
 }
@@ -91,8 +91,8 @@ export function isPackageId(q) {
   return /^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z0-9_]+){1,}$/.test(q);
 }
 
-/** Converte um item da API no candidato comum. */
-export function toCandidate(app, opts = {}) {
+/** Converte um item da API no candidato comum. `rank` = posição na busca. */
+export function toCandidate(app, opts = {}, rank = null) {
   const file = app.file || {};
   const path = file.path || file.path_alt || null;
   const type = path ? (String(path).toLowerCase().endsWith('.apk') ? APK_TYPE.APK : APK_TYPE.UNKNOWN) : APK_TYPE.UNKNOWN;
@@ -116,6 +116,7 @@ export function toCandidate(app, opts = {}) {
     // um clone. Usado só para desempate técnico (não aparece para o usuário).
     popularity: Number(app.stats?.pdownloads || 0) || null,
     developer: app.developer?.name || null,
+    rank,
     downloadable: hostOk && type === APK_TYPE.APK,
   });
 }
