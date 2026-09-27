@@ -22,7 +22,8 @@ import {
   toSafeObject
 } from './utils/messageInspector.js';
 import { buildCmdNotFoundExtras } from './utils/commandSuggest.js';
-import { extractMedia, resolveMedia, isViewOnce, describeMediaError, extractQuoted, extractText } from './utils/viewOnce.js';
+import { extractMedia, resolveMedia, isViewOnce, describeMediaError, extractQuoted, extractQuotedContext, extractText } from './utils/viewOnce.js';
+import { parsePinDuration, buildPinKeyFromContext, isPinControlMessage } from './utils/pinMessage.js';
 import { parseImagePollArgs, collectPollImages, resolveAttachments, buildOptionName } from './utils/pollImages.js';
 import { toOggOpus } from './utils/oggOpus.js';
 import { converterGifParaMp4 } from './utils/gifMedia.js';
@@ -3432,6 +3433,13 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     }
     if (type === 'reactionMessage') {
       await processReactionMessage();
+      return;
+    }
+    // Pin/unpin é mensagem de CONTROLE (add-on), não conteúdo: o WhatsApp
+    // reenvia o evento para o grupo inteiro. Sem este descarte ela seria lida
+    // como mensagem normal (contador, auto-respostas, NPC, custom reacts) e o
+    // pin apareceria como "mensagem" no grupo. Mesmo tratamento dado à reação.
+    if (type === 'pinInChatMessage' || isPinControlMessage(info.message)) {
       return;
     }
     if (isGroup && groupData.minMessage && (isImage || isVideo || isVisuU || isVisuU2) && !isGroupAdmin && !isOwner) {
@@ -31250,6 +31258,67 @@ break;
           await reply("❌ Ocorreu um erro ao configurar captcha.");
         }
         break;
+      case 'fixar': {
+        try {
+          if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
+          if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+          if (!isBotAdmin) return sendAbyssWarning("Eu preciso ser administrador para fixar mensagens.");
+
+          const quotedContext = extractQuotedContext(info.message);
+          const targetKey = buildPinKeyFromContext(quotedContext, {
+            remoteJid: from,
+            botIds: [getBotId(nazu), botId, nazu?.user?.lid]
+          });
+          if (!targetKey) {
+            return reply(`📌 *Como fixar:* responda a mensagem que deseja fixar com *${groupPrefix}fixar*.\n\n💡 Durações: *${groupPrefix}fixar 24h*, *${groupPrefix}fixar 7d* ou *${groupPrefix}fixar 30d*.`);
+          }
+
+          const duration = parsePinDuration(q);
+          if (!duration.ok) {
+            return reply(`⚠️ Duração inválida. Use *24h*, *7d* ou *30d*.`);
+          }
+
+          await nazu.sendMessage(from, {
+            pin: targetKey,
+            type: proto.Message.PinInChatMessage.Type.PIN_FOR_ALL,
+            time: duration.seconds
+          });
+
+          await reply(`📌 Mensagem fixada com sucesso.\n\n📍 Duração: ${duration.label}`);
+        } catch (e) {
+          console.error('[PIN] Erro ao fixar mensagem:', e?.stack || e);
+          await reply("❌ Não consegui fixar essa mensagem.");
+        }
+        break;
+      }
+      case 'desfixar':
+      case 'unpin': {
+        try {
+          if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
+          if (!isGroupAdmin && !isOwner && !isSubOwner) return reply("Comando restrito a Administradores ou Moderadores com permissão. 💔");
+          if (!isBotAdmin) return sendAbyssWarning("Eu preciso ser administrador para desfixar mensagens.");
+
+          const quotedContext = extractQuotedContext(info.message);
+          const targetKey = buildPinKeyFromContext(quotedContext, {
+            remoteJid: from,
+            botIds: [getBotId(nazu), botId, nazu?.user?.lid]
+          });
+          if (!targetKey) {
+            return reply(`📌 *Como desfixar:* responda a mensagem fixada com *${groupPrefix}desfixar*.`);
+          }
+
+          await nazu.sendMessage(from, {
+            pin: targetKey,
+            type: proto.Message.PinInChatMessage.Type.UNPIN_FOR_ALL
+          });
+
+          await reply("📌 Mensagem desfixada com sucesso.");
+        } catch (e) {
+          console.error('[PIN] Erro ao desfixar mensagem:', e?.stack || e);
+          await reply("❌ Não consegui desfixar essa mensagem.");
+        }
+        break;
+      }
       case 'promover':
       case 'promote':
         try {
@@ -36353,8 +36422,9 @@ ${groupPrefix}nota buscar <termo> - Busca nas notas`);
             return reply(`❌ Subcomando desconhecido. Use ${groupPrefix}nota para ver ajuda.`);
         }
         break;
-      // COMANDOS DE FIXAR/DESFIXAR FORAM REMOVIDOS
-      // A API do WhatsApp não suporta fixar mensagens individuais em grupos
+      // FIXAR/DESFIXAR mensagem: implementado no bloco de administração
+      // (`case 'fixar'` / `case 'desfixar'`). O Baileys do fork expõe o pin
+      // nativo (`pinInChatMessage`), então a nota antiga de "não suporta" caiu.
       // ========================
       case 'notas':
       case 'notes':

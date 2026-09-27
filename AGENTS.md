@@ -6073,3 +6073,70 @@ de decidir.
 A call agora **não deve mais falhar no ICE** com esse erro. Se a convergência
 ainda não vier, o próximo suspeito é o **epoch de chave** (`sem_epoch_de_chave`),
 que também aparece no log (`midia=false`) e cuja entrega depende do `enc_rekey`.
+
+---
+
+## Comandos de fixar/desfixar mensagem (`!fixar` / `!desfixar`)
+
+Suporte nativo ao pin do WhatsApp reutilizando o proto do fork — **sem** novo
+proto, sem `chatModify` e sem API paralela.
+
+### Baileys (fork) — já suportava; validado no fio
+O fork em uso (`863681b`) **já tem** o suporte, igual ao upstream:
+`lib/Utils/messages.js` trata `hasNonNullishProperty(message, 'pin')` montando
+`pinInChatMessage` (`key`, `type`, `senderTimestampMs = Date.now()`) mais
+`messageContextInfo.messageAddOnDurationInSecs` (só quando `type === 1`, senão
+`0`); `lib/Socket/messages-send.js` reconhece o pin como add-on (`edit=2` +
+nó `<meta content_type="add_on">`). **Nenhuma alteração de código foi necessária
+no fork** — só o teste `tests/pin-message.test.js`.
+
+O enum real do `WAProto` local (`WAProto/index.d.ts`) é:
+`UNKNOWN_TYPE = 0`, `PIN_FOR_ALL = 1`, `UNPIN_FOR_ALL = 2`. O código usa
+`WAProto.Message.PinInChatMessage.Type.*`, nunca número mágico.
+
+### Lizzy — o que foi adicionado
+- **`dados/src/utils/pinMessage.js`** (puro, testável sem socket):
+  `parsePinDuration` (24h/7d/30d + padrão 24h, recusa valor arbitrário),
+  `formatPinDuration`, `buildPinKeyFromContext` (monta a `WAMessageKey` a partir
+  do `contextInfo` da citação, nunca pelo texto) e `extractPinInfo`/
+  `isPinControlMessage` (reconhece pin RECEBIDO).
+- **`dados/src/utils/viewOnce.js`**: novo `extractQuotedContext` — `extractQuoted`
+  devolve só o `quotedMessage`; fixar precisa do `contextInfo` inteiro (é onde
+  vive `stanzaId`/`participant`).
+- **`dados/src/index.js`**:
+  - `case 'fixar'` / `case 'desfixar'` (alias `unpin`), no bloco de
+    administração. Só em grupo (padrão `sendAbyssWarning` dos comandos de
+    admin), exige admin/moderador (`isGroupAdmin`, sistema já existente) e o
+    bot admin (`isBotAdmin`). Sem reply, responde como usar. Sem duplicar
+    `isAdmin`/`getQuoted`/etc.
+  - Descarte antecipado de pin RECEBIDO (`type === 'pinInChatMessage'` ou
+    `isPinControlMessage`), ao lado do tratamento de `reactionMessage`: pin não
+    vira contador, auto-resposta, NPC nem comando.
+- **`dados/src/menus/menuadm.js`** + **`utils/blockPv.js`**: `!fixar`/`!desfixar`
+  na categoria existente **GESTÃO DO GRUPO** (sem menu novo).
+- **`tests/pin-message.test.js`**: 23 testes / 118 asserções (handler real).
+
+### Semântica
+- `!fixar` → `{ pin: key, type: PIN_FOR_ALL, time: 86400 }` (padrão 24h);
+  aceita `24h`, `7d`, `30d`.
+- `!desfixar` → `{ pin: key, type: UNPIN_FOR_ALL }` (sem `time`; nunca
+  `PIN_FOR_ALL` com duração zero).
+- Key do alvo: `{ remoteJid, fromMe, id }`; `participant` só quando a mensagem
+  NÃO é do bot (`fromMe` decidido comparando o `participant` com os ids do bot,
+  aceitando JID, LID e sufixo `:XX`).
+- Funciona com qualquer tipo de mensagem respondida (o pin age sobre a key):
+  texto, mídia, documento, sticker, localização, contato, encaminhada,
+  ephemeral.
+
+### Testes
+- Fork: `node --test tests/pin-message.test.js` — 9 testes, incluindo o caminho
+  REAL `sendMessage → relayMessage`, decifrando o ciphertext com a Sender Key do
+  recebedor e conferindo `pinInChatMessage` + `messageAddOnDurationInSecs` no fio.
+- Lizzy: `node tests/pin-message.test.js` — 23 testes / 118 asserções.
+- Regressão: suíte completa do fork (249 testes) e do bot; `menu-layout.test.js`
+  teve o baseline do `menuadm` atualizado de 172 → 174 (os dois comandos novos).
+
+### Não testado (limitação honesta)
+Teste visual real (bot num grupo de WhatsApp fixando e conferindo no app) **não**
+foi executado: não há sessão de WhatsApp disponível neste ambiente. O que foi
+validado é o protocolo no fio (stanza + proto decifrado) e o handler real.
