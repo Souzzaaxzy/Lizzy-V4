@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { DATABASE_DIR } from './paths.js';
 
 export function isContactPayload(message) {
   const seen = new Set();
@@ -17,7 +17,7 @@ export function isContactPayload(message) {
   return false;
 }
 
-export function createAntiCtt({filePath = fileURLToPath(new URL('../../database/antictt.json', import.meta.url)), now = Date.now, log = console.warn} = {}) {
+export function createAntiCtt({filePath = process.env.ANTICTT_FILE || path.join(DATABASE_DIR, 'antictt.json'), now = Date.now, log = console.warn} = {}) {
   let settings;
   const messages = new Map(), removals = new Map();
   function load() {

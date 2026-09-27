@@ -24,6 +24,8 @@ import {
 import { buildCmdNotFoundExtras } from './utils/commandSuggest.js';
 import { extractMedia, resolveMedia, isViewOnce, describeMediaError, extractQuoted, extractQuotedContext, extractText } from './utils/viewOnce.js';
 import { parsePinDuration, buildPinKeyFromContext, isPinControlMessage } from './utils/pinMessage.js';
+// AntiContato: apaga contatos/listas de contatos e remove quem enviou.
+import { antiCtt, isContactPayload } from './utils/antiCtt.js';
 import { parseImagePollArgs, collectPollImages, resolveAttachments, buildOptionName } from './utils/pollImages.js';
 import { toOggOpus } from './utils/oggOpus.js';
 import { converterGifParaMp4 } from './utils/gifMedia.js';
@@ -424,6 +426,28 @@ function gerarContextNewsletter(externalAdReply = null) {
     base.externalAdReply = externalAdReply;
   }
   return base;
+}
+
+/**
+ * A mensagem é uma LISTA de contatos (`contactsArrayMessage`)?
+ *
+ * Percorre os mesmos wrappers que o `isContactPayload` da util (efêmera, view
+ * once, etc.) sem importar detalhe interno dela. Serve só para o AVISO de
+ * banimento dizer "lista de contatos" em vez de "contato".
+ */
+function isContactList(message) {
+  const seen = new Set();
+  for (let depth = 0; depth < 32 && message && typeof message === 'object'; depth++) {
+    if (seen.has(message)) return false;
+    seen.add(message);
+    if (Object.hasOwn(message, 'contactsArrayMessage')) return true;
+    let next;
+    for (const wrapper of ['ephemeralMessage', 'viewOnceMessage', 'viewOnceMessageV2', 'viewOnceMessageV2Extension', 'documentWithCaptionMessage', 'deviceSentMessage', 'botForwardedMessage']) {
+      if (message[wrapper]?.message) { next = message[wrapper].message; break; }
+    }
+    message = next;
+  }
+  return false;
 }
 
 /**
@@ -3376,6 +3400,47 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
         botNumber: botNumberLid?.substring(0, 30)
       });
     }
+    // ANTICTT: contatos sem prefixo também passam por esta fiscalização.
+    if (
+      isGroup &&
+      !info?.key?.fromMe &&
+      !isOwnerOrSub &&
+      !idInArray(sender, groupAdmins) &&
+      isContactPayload(info?.message) &&
+      antiCtt.isEnabled(from)
+    ) {
+      // Apagar e remover são tentativas independentes.
+      // Não cita, não encaminha e não imprime o conteúdo do contato.
+      void antiCtt.enforce({
+        sock: nazu,
+        info,
+        group: from,
+        sender,
+        isGroup,
+        isBotAdmin,
+        protectedSender: false
+      }).then((outcome) => {
+        // Aviso de banimento SÓ quando a remoção foi confirmada: sem isso a
+        // mensagem diria "banido" mesmo quando o bot não conseguiu remover.
+        const removido = Array.isArray(outcome?.results)
+          && outcome.results.some((r) => r?.operation === 'remove' && r.ok);
+        if (!removido) return;
+        const alvo = info?.key?.participant || sender;
+        // Distingue contato único de lista de contatos pelo próprio conteúdo.
+        const lista = Boolean(info?.message?.contactsArrayMessage) || isContactList(info?.message);
+        nazu.sendMessage(from, {
+          text: `🚫 @${String(alvo).split('@')[0]} foi *banido*!\n\n📝 *Motivo:* enviou ${lista ? 'uma lista de contatos' : 'um contato'} no grupo (AntiContato ativado).`,
+          mentions: [alvo],
+          contextInfo: gerarContextNewsletter(),
+        }, { quoted: info }).catch((error) => {
+          console.error('[ANTICTT] Falha ao avisar banimento:', error?.code || 'erro');
+        });
+      }).catch(error => {
+        console.error('[ANTICTT] Falha interna:', error?.code || 'erro');
+      });
+      return; // Impede o contato bloqueado de seguir para os outros handlers.
+    }
+
     const isModoBn = groupData.modobrincadeira;
     // Gerenciador do !hotseat (+18). UMA instancia por processo, criada na
     // primeira mensagem (aqui o destructuring dos modulos ja rodou). O
@@ -32568,6 +32633,61 @@ break;
           await reply("Ocorreu um erro 💔");
         }
         break;
+      case 'antictt':
+      case 'anticontato':
+      case 'anticontatos': {
+        try {
+          if (!isGroup) return reply('Isso só pode ser usado em grupo 💔');
+          // `isGroupAdmin` já cobre moderador/alpha autorizado, dono e subdono
+          // (mesmo critério dos outros antis) — não reimplementar a checagem.
+          if (!isGroupAdmin) return reply('Você precisa ser administrador do grupo 💔');
+          const acao = String(args[0] || 'status').toLowerCase();
+          if (!['on', 'off', '1', '0', 'status'].includes(acao)) {
+            return reply(`╭━━━꧁༺ 📵 𝐀𝐍𝐓𝐈𝐂𝐎𝐍𝐓𝐀𝐓𝐎 ༻꧂━━━╮
+┃
+┃ 📝 *Uso:*
+┃ • ${groupPrefix}antictt on
+┃ • ${groupPrefix}antictt off
+┃ • ${groupPrefix}antictt
+┃
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`);
+          }
+          if (acao === 'status') {
+            return reply(`╭━━━꧁༺ 📵 𝐀𝐍𝐓𝐈𝐂𝐎𝐍𝐓𝐀𝐓𝐎 ༻꧂━━━╮
+┃
+┃ 📊 Status: ${antiCtt.isEnabled(from) ? '🟢 ATIVADO' : '🔴 DESATIVADO'}
+┃
+┃ 🗑 Apaga contatos e listas de
+┃ contatos enviados por membros
+┃ e tenta remover o remetente.
+┃
+┃ 🛡 Admins, dono e subdonos
+┃ ficam isentos.
+┃
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯${!isBotAdmin ? '\n\n⚠️ Eu preciso ser administrador para apagar e remover.' : ''}`);
+          }
+          const ativar = acao === 'on' || acao === '1';
+          if (ativar && !isBotAdmin) {
+            return reply('Preciso ser administrador para apagar os contatos e remover quem enviar 💔');
+          }
+          antiCtt.setEnabled(from, ativar);
+          await reply(`╭━━━꧁༺ 📵 𝐀𝐍𝐓𝐈𝐂𝐎𝐍𝐓𝐀𝐓𝐎 ༻꧂━━━╮
+┃
+┃ ${ativar ? '✅ Ativado!' : '❌ Desativado.'}
+┃
+┃ ${ativar
+              ? 'Contatos e listas de contatos\n┃ enviados por membros serão\n┃ apagados, e o remetente\n┃ será removido.'
+              : 'Contatos enviados não serão\n┃ mais apagados neste grupo.'}
+┃
+┃ 🛡 Admins, dono e subdonos\n┃ ficam isentos.
+┃
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`);
+        } catch (error) {
+          console.error('[ANTICTT] Configuração:', error?.code || 'erro');
+          await reply('❌ Não consegui ler ou salvar a configuração do AntiContato. Confira o log e o espaço disponível na hospedagem.');
+        }
+        break;
+      }
       case 'antis':
         try {
           if (!isGroup) return reply("Este comando só pode ser usado em grupos! 💔");
@@ -32594,6 +32714,7 @@ break;
             { key: 'antigore', name: 'Antigore', isObject: false },
             { key: 'antidel', name: 'Antidelete', isObject: false },
             { key: 'antiinvi', name: 'AntiFantasma', isObject: false },
+            { key: 'antictt', name: 'AntiContato', isFile: true, file: 'antictt' },
             { key: 'antisocial', name: 'AntiSocial', isObject: false, desc: 'Bloqueia links de redes sociais (Discord, Instagram, YouTube, TikTok e Spotify)' },
           ];
           // Verificar status de cada sistema
@@ -32603,8 +32724,16 @@ break;
           antiSystems.forEach(system => {
             let isActive = false;
             if (system.isFile) {
-              const fileData = JSON.parse(fs.readFileSync(DATABASE_DIR + `/${system.file}.json`, 'utf-8'));
-              isActive = fileData[from]?.enabled;
+              // Cada anti com arquivo próprio guarda o estado de um jeito:
+              // `antiflood`/`antispam` usam `{ [grupo]: { enabled: true } }`; o
+              // `antictt` usa `{ [grupo]: true }`. Lê os DOIS formatos e tolera
+              // arquivo ausente (antes, um JSON faltando derrubava o painel).
+              let fileData = {};
+              try {
+                fileData = JSON.parse(fs.readFileSync(DATABASE_DIR + `/${system.file}.json`, 'utf-8'));
+              } catch { /* arquivo ausente/inválido = desativado */ }
+              const entry = fileData?.[from];
+              isActive = entry === true || entry?.enabled === true || Boolean(entry);
             } else if (system.isObject) {
               const obj = groupData[system.key];
               isActive = obj && (system.subKey ? obj[system.subKey] : Object.keys(obj).some(k => obj[k]));

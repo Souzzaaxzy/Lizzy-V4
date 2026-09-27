@@ -6409,3 +6409,48 @@ nome único (`pid` + timestamp + aleatório) e há `cleanupCacheParts()` para
   Novos: concorrência no mesmo app deixa o cache íntegro e nenhum `.part`;
   nome de temporário é único. O teste agora isola `APK_CACHE_DIR`/`APK_TMP_DIR`
   no diretório temporário — nunca escreve no `data/` do repositório.
+
+## Comando `!antictt` (AntiContato) + `!antifantasma` no menu (set/2026)
+
+### `!antictt` (`anticontato`, `anticontatos`)
+Apaga **contatos** e **listas de contatos** enviados por membros no grupo e
+remove o remetente. Só em grupo; exige admin (`isGroupAdmin`, que já cobre
+moderador/alpha autorizado, dono e subdono) e o bot admin para ligar. Dono,
+subdonos e admins ficam **isentos** da fiscalização.
+
+- `!antictt on` / `off` / sem argumento = status. Argumento inválido mostra o uso.
+- Layout: caixas `╭━━━꧁༺ … ༻꧂━━━╮` + cabeçalho de canal (newsletter) — este vem do
+  próprio `reply` (que já injeta `gerarContextNewsletter()`), então não é preciso
+  passar `contextInfo`.
+- Fiscalização fica **fora** do `switch`, logo após a identificação de admins:
+  roda no `antiCtt.enforce(...)` e dá `return` para o contato não seguir para os
+  outros handlers (auto-resposta/NPC/contador).
+- **Aviso de banimento com motivo**: só é enviado quando a remoção foi
+  CONFIRMADA (`outcome.results` com `operation: 'remove'` e `ok`), para não dizer
+  "banido" quando o bot não conseguiu remover. O texto distingue
+  "um contato" de "uma lista de contatos" (helper `isContactList`).
+
+### `!antifantasma` no menu
+Adicionado à categoria de antis do `!menuadm` (junto de `antictt`), onde faltava.
+
+### Mini menu `!antis`
+O painel passou a listar **AntiContato**. O leitor de arquivo foi corrigido: ele
+só entendia `{ [grupo]: { enabled: true } }` e estourava se o JSON faltasse.
+Agora lê os dois formatos (`{ [grupo]: true }` do antictt e
+`{ [grupo]: { enabled } }` do antiflood/antispam) e tolera arquivo ausente.
+
+### Correção na util `antiCtt.js`
+O arquivo de estado era resolvido por caminho relativo ao módulo
+(`../../database/antictt.json`), **ignorando `DATABASE_PATH`** — em sub-bot
+(instalação multi-tenant) ele gravaria no banco errado, e os testes sujavam o
+banco real. Agora usa `DATABASE_DIR` (de `utils/paths.js`) com override
+`ANTICTT_FILE`.
+
+### Testes
+`tests/antictt.test.js` — **15 testes / 38 asserções** com o handler real:
+status/on/off, recusa de não-admin e fora de grupo, bot admin exigido para
+ligar, contato e lista apagados + remetente removido + aviso com motivo, admin
+isento, anti desligado não age, texto normal não é afetado, sem bot admin não
+remove/anuncia, e a mensagem não segue para outros handlers. Também valida
+`menuadm` (antictt + antifantasma na categoria de antis) e o painel `!antis`.
+O teste isola `DATABASE_PATH`/`ANTICTT_FILE` no temporário.

@@ -166,6 +166,8 @@ export default async function menuadm(prefix, botName = "MeuBot", userName = "Us
 │ ⚠ ${prefix}antilinksoft
 │ 🔞 ${prefix}antiporn
 │ 📲 ${prefix}antistatus
+│ 📵 ${prefix}antictt
+│ 👻 ${prefix}antifantasma
 │ ☣ ${prefix}antitoxic
 │ ⚙ ${prefix}antitoxic config
 │ 🎚 ${prefix}antitoxic sensibilidade
