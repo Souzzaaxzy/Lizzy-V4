@@ -1,4 +1,4 @@
-import { useMultiFileAuthState, DisconnectReason, makeCacheableSignalKeyStore, makeWASocket, fetchLatestBaileysVersion, isJidBroadcast, isJidNewsletter, isJidStatusBroadcast } from '@itsliaaa/baileys';
+import { useMultiFileAuthState, DisconnectReason, makeCacheableSignalKeyStore, makeWASocket, fetchLatestBaileysVersion, isJidBroadcast, isJidNewsletter, isJidStatusBroadcast, VOICE_CAPABLE_VERSION, isVoiceCapableConfig } from '@itsliaaa/baileys';
 import { Boom } from '@hapi/boom';
 import NodeCache from 'node-cache';
 import readline from 'readline';
@@ -1204,7 +1204,22 @@ let _cachedWAVersion = null;
 
 async function getWAVersion() {
     if (_cachedWAVersion) return _cachedWAVersion;
-    const { version } = await fetchLatestBaileysVersion();
+    // A versao precisa manter o BUILD ID de 5 partes: e' ele que faz o servidor
+    // habilitar a VOZ nas calls (cliente desktop/UWP). Se o fetch devolver menos
+    // de 5 partes (rede antiga, fonte mudou), completamos com o build id fixado
+    // em vez de anunciar um cliente de 3 partes — que sinaliza a call mas fica
+    // sem audio.
+    let version;
+    try {
+        ({ version } = await fetchLatestBaileysVersion());
+    } catch {
+        version = null;
+    }
+    if (!Array.isArray(version) || version.length < 3) {
+        version = VOICE_CAPABLE_VERSION;
+    } else if (version.length < 5) {
+        version = [...version, ...VOICE_CAPABLE_VERSION.slice(version.length)];
+    }
     _cachedWAVersion = version;
     return version;
 }
@@ -1223,12 +1238,18 @@ async function createBotSocket(authDir) {
         const version = await getWAVersion();
         console.log(`📱 Usando versão do WhatsApp: ${version.join('.')}`);
 
+        // CLIENTE DESKTOP/UWP + build id de 5 partes: os DOIS sao requisito para o
+        // servidor habilitar a stack de VOZ. So' o browser UWP nao basta — com um
+        // version de 3 partes o cliente anunciado e' outro, e a call sobe sem
+        // audio ("carregando" para sempre). Ver o requisito no AGENTS.md.
+        const voiceIdentity = { browser: ['Windows', 'UWP', '10.0.22631'], version };
+        const vozOk = isVoiceCapableConfig(voiceIdentity);
+        if (!vozOk.ok) {
+            console.warn(`⚠️ Cliente SEM voz nas calls: ${vozOk.reason}`);
+        }
+
         const AbyssSock = makeWASocket({
             version: version,
-            // CLIENTE DESKTOP/UWP: requisito para o servidor habilitar a stack de
-            // VOZ nas chamadas. O padrão da lib é macOS/Chrome, e nesse modo a
-            // mídia da call fica indisponível — a chamada sobe e fica
-            // "carregando" para sempre. Ver `docs` do requisito no AGENTS.md.
             browser: ['Windows', 'UWP', '10.0.22631'],
             emitOwnEvents: true,
             fireInitQueries: true,

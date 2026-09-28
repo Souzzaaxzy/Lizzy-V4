@@ -1,4 +1,4 @@
-import a, { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, makeCacheableSignalKeyStore } from '@itsliaaa/baileys';
+import a, { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, makeCacheableSignalKeyStore, VOICE_CAPABLE_VERSION } from '@itsliaaa/baileys';
 const makeWASocket = a.default;
 import { Boom } from '@hapi/boom';
 import NodeCache from 'node-cache';
@@ -150,7 +150,10 @@ async function initializeSubBot(botId, phoneNumber, ownerNumber, generatePairing
         const { config, dirs } = createSubBotConfig(botId, phoneNumber, ownerNumber);
         
         const { state, saveCreds } = await useMultiFileAuthState(dirs.authDir, makeCacheableSignalKeyStore);
-        const version = [2, 3000, 1031821793];
+        // Versao FIXA com o build id de 5 partes: e' o que faz o servidor
+        // habilitar a VOZ nas calls (cliente desktop/UWP). Uma versao de 3 partes
+        // faz a call subir sem audio.
+        const version = VOICE_CAPABLE_VERSION;
 
         const msgRetryCounterCache = new NodeCache();
 
