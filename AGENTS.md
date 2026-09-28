@@ -6787,3 +6787,45 @@ testes que comparam texto passaram a falhar** (`amigos`, `menu-layout`,
 estava íntegro. **Regra**: depois de QUALQUER edição no `index.js`, conferir
 `python3 -c "s=open(...,'rb').read().decode('utf-8'); print(s.count('в”'))"` == 0
 E rodar as suítes de texto — não confiar só no `node --check`.
+
+## `sharp` é DEPENDÊNCIA DIRETA do bot (set/2026) ✅
+**Sintoma do dono**: `!togif` respondia *"Conversão de figurinha precisa do sharp
+instalado (libvips). Instale "sharp"."*
+
+### Causa raiz (medida)
+O `sharp` é **peer dependency** da fork (`"sharp": "*"` em `peerDependencies`),
+**não** dependência normal. O bot instala com
+**`--legacy-peer-deps`** (ver `config.js`/`update.js`), e esse modo **não instala
+peer deps** — então na máquina de outro usuário o pacote vem **sem** o `sharp` e
+a conversão falha com o erro acima. Neste sandbox ele coexistia só porque o
+`lizzy-call` (via `@whiskeysockets/baileys`) também traz `sharp@0.35.4`.
+
+### Correção
+- **`sharp` adicionado às `dependencies` do bot** (`package.json`): `^0.35.4`,
+  reordenado alfabeticamente. Agora todo install o traz.
+- `package-lock.json` + `yarn.lock` regenerados: a raiz passa a declarar
+  `sharp`, e `sharp@*`/`sharp@^0.35.4` ficam numa única entrada (deduplicado).
+- **Fork** (commit `6ee8148`): a mensagem de erro do `requireSharp` virou
+  acionável — *"Adicione 'sharp' às dependências e rode o install (npm i sharp)"* —
+  e o README ganhou a seção **"🎞️ Sticker → GIF/MP4"** com os requisitos
+  (**sharp obrigatório**; **ffmpeg só para o MP4**).
+- Locks do bot pinados no commit novo da fork (`6ee8148…`, hash completo).
+
+### Verificação
+- Simulei o cenário quebrado (escondi `node_modules/sharp`): a conversão falha
+  com exatamente o erro do dono. Restaurando, funciona.
+- `node -e "import('sharp')"` → `sharp 0.35.4 / vips 8.18.6` carrega o binário.
+- Suítes verdes: `togif` 10/25, `amigos` 27/56, `contact-name` 16/37,
+  `menu-layout`, `cmd-suggest`, `sticker-convert`, `gifsbn-media`.
+
+### Por que NÃO trocar o install para `--legacy-peer-deps` → sem a flag
+Instalar peer deps resolveria o `sharp`, mas o repo carrega **fork git**
+(`@itsliaaa/baileys`) e `lizzy-call` de git, e o `--legacy-peer-deps` existe
+justamente por conflitos de peer entre esses pacotes. Tornar o `sharp` direto é
+a correção cirúrgica: resolve o problema sem mexer na política de install.
+
+### Nota
+`sharp` também é exigido por outros caminhos da lib (thumbnails, sticker pack) —
+é o mesmo pacote usado no `getImageProcessingLibrary()`. Sem ele, quem já tinha
+os caminhos de mídia funcionando continua funcionando (a lib cai para jimp), mas
+a **conversão de figurinha** precisa dele.
