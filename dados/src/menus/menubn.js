@@ -315,6 +315,7 @@ ${isLiteMode ? '' : `╭━━━꧁༺ ㅤ🔞 ${boldItalic('INTERAÇÕES "PICA
 │ 🤥 ${prefix}trair
 │ 📜 ${prefix}historicotraicao
 │ 🏳️ ${prefix}lesbica
+│ 💙 ${prefix}ma
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 

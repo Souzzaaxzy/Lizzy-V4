@@ -6508,3 +6508,57 @@ guarda para a call que ele mesmo criou. O que os testes provam é o **repasse**
 do flag até o motor; a validação visual real (não tocar no grupo) exige uma
 sessão de WhatsApp, que não existe neste ambiente. `!musicap` funciona igual nos
 dois modos (a call existir é o que importa para o áudio).
+
+## COMANDO `!ma` / `!melhoresamigos` / `!bestfriends` — melhores amigos (set/2026) ✅
+Comando migrado de outro bot e **adaptado** ao handler da Lizzy. Lista pessoal de
+até **20** melhores amigos, com **`add` / `del` / `limpar`** — alvo = a mensagem
+**respondida**. Categoria **RELACIONAMENTOS** do `menubn`, junto de
+`!ficante`/`!namoro`/`!trisal`.
+
+### Adaptações em relação ao código original (todas obrigatórias)
+| No original | Na Lizzy | Por quê |
+|---|---|---|
+| `yuta.sendMessage` / `yt` | `nazu.sendMessage` / `info` | nomes do handler |
+| `__ctxMencoesGlobal()` + `__normalizarAlvoUsuario()` | `menc_os2` | o handler já resolve o alvo respondido e o converte para **LID** (a mesma forma do `sender`) |
+| `canalInfo([sender])` | `gerarContextNewsletter()` **dentro do content** | a fork lê `message.contextInfo`; em `options` seria ignorado |
+| `path.join(process.cwd(),'src','dados','func',…)` | `DONO_DIR/melhoresamigos.json` | o caminho era do projeto de origem |
+| `fs.writeFileSync` cru | `writeJsonFile` | escrita atômica (tmp único + rename), cria a pasta |
+| `jidNum` / `pushnames` / `buscarMembroPorJid` | `groupMetadata.participants` + `nazu.getName` + número | essas funções **não existem** aqui |
+
+### Detalhes de implementação
+- **Guarda**: só em grupo e exige `isModoBn` — coerente com os demais comandos
+  da categoria RELACIONAMENTOS (todos exigem o modo brincadeira).
+- **Nome (`pegarNomeMA`)**: prefere o **específico** do metadata
+  (`notify`/`name`/`pushName`) e só então `nazu.getName`, **filtrando respostas
+  genéricas** (`Usuário`/`user`/`unknown`). O padrão é o **número** — nunca o
+  JID cru (mesmo cuidado do `!me`).
+- **`alvoRespondido === sender`** bloqueia adicionar a si mesmo; a comparação é
+  direta porque ambos já são LID.
+- **Persistência**: `DONO_DIR/melhoresamigos.json`, chaveado por `sender` (LID),
+  valor = `[{ id, desde }]`. `writeJsonFile` faz tmp único + rename (o bug do
+  `.tmp` compartilhado já foi resolvido no repo).
+- **Limite**: 20 por usuário; ao exceder, recusa antes de gravar.
+- **Erro**: `try/catch` responde mensagem amigável (sem stack) e loga
+  `ERRO MELHORES AMIGOS:` no console.
+- O cabeçalho sai em **MATHEMATICAL SANS-SERIF BOLD ITALIC** (`𝙈𝙀𝙇𝙃𝙊𝙍𝙀𝙎`),
+  como no código original.
+
+### Menu / blockPv
+- `menubn` (categoria RELACIONAMENTOS): `│ 💙 ${prefix}ma` — baseline do
+  `menu-layout` passou de **348 → 349** comandos (atualizado o teste 16/17).
+- `utils/blockPv.js` (`menuCommandsMap.menubn`): recebeu
+  `ma`, `melhoresamigos`, `bestfriends` (senão o comando não apareceria no
+  bloqueio de menu).
+
+### Testes — `tests/melhores-amigos.test.js` (**18 testes / 37 asserções**)
+Roda o **handler real** com socket falso: guardas (fora de grupo, modo
+brincadeira off), `add` (sem resposta, auto-add, válido com persistência +
+menção, repetido), lista (vazia e com amigo — medalha/nick/tempo), `del`
+(válido, inexistente, sem resposta), `limpar` (válido e vazio), o **limite de
+20**, o **newsletter** no `content`, os **aliases** (`!melhoresamigos`,
+`!bestfriends`), a **persistência em `DONO_DIR`** (e que o caminho do outro
+projeto **não** é criado) e que o alvo é gravado **pelo LID**.
+**Armadilha**: o throttle é por remetente (3 comandos/5s) — os testes rodam como
+o próprio bot (`fromMe: true`) para pular o throttle. E o `desbold` do teste
+cobre também o bloco **SANS-SERIF BOLD ITALIC** (U+1D63C), que é o dos
+cabeçalhos; só o MATHEMATICAL BOLD não bastaria.

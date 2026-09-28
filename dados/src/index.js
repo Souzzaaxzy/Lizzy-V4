@@ -37777,6 +37777,231 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
         }, { quoted: info });
         break;
       }
+      // ==================== MELHORES AMIGOS ====================
+      // Comando `!ma` / `!melhoresamigos` / `!bestfriends`, migrado de outro
+      // bot. Adaptações em relação ao original:
+      //   - `yuta` -> `nazu` (socket real do handler) e `yt` -> `info`;
+      //   - `__ctxMencoesGlobal()`/`__normalizarAlvoUsuario()` -> `menc_os2`
+      //     (já resolvido e convertido para LID pelo handler, igual ao sender);
+      //   - `canalInfo(...)` -> `gerarContextNewsletter()` dentro do content
+      //     (é o que a fork lê; em `options` seria ignorado);
+      //   - `path.join(process.cwd(), 'src', 'dados', 'func', ...)` (caminho de
+      //     outro projeto) -> `DONO_DIR`, o diretório de dados do bot;
+      //   - `fs.writeFileSync` direto -> `writeJsonFile` (atômico, cria a pasta);
+      //   - `jidNum`/`pushnames`/`buscarMembroPorJid` (inexistentes aqui) ->
+      //     nome real pelo metadata do grupo + `nazu.getName`, caindo no número.
+      case 'ma':
+      case 'melhoresamigos':
+      case 'bestfriends': {
+        try {
+          if (!isGroup) {
+            await reply('⚠️ Esse comando só funciona em grupos.');
+            break;
+          }
+          // Mesma exigência dos demais comandos da categoria RELACIONAMENTOS.
+          if (!isModoBn) {
+            await reply('❌ O modo brincadeira está desligado neste grupo.');
+            break;
+          }
+
+          const MAX_AMIGOS = 20;
+          const caminhoMA = pathz.join(DONO_DIR, 'melhoresamigos.json');
+
+          let bancoMA = loadJsonFile(caminhoMA, {});
+          if (!bancoMA || typeof bancoMA !== 'object' || Array.isArray(bancoMA)) {
+            bancoMA = {};
+          }
+
+          const usuarioMA = String(sender);
+          if (!Array.isArray(bancoMA[usuarioMA])) bancoMA[usuarioMA] = [];
+          const amigos = bancoMA[usuarioMA];
+
+          // Alvo = mensagem respondida/citada. O handler já entrega isso como
+          // LID (a mesma forma do `sender`), então a comparação e as menções
+          // casam mesmo quando o WhatsApp endereça por LID ou por número.
+          const alvoRespondido = menc_os2 ? String(menc_os2) : '';
+
+          const salvarMA = () => writeJsonFile(caminhoMA, bancoMA);
+
+          // Nome amigável: prefere o que é ESPECÍFICO (nome/notify do
+          // participante) e descarta respostas genéricas do `getName`. O
+          // padrão é o número — nunca o JID cru.
+          const pegarNomeMA = async (jid) => {
+            const id = String(jid || '');
+            const base = id.split('@')[0].split(':')[0];
+            try {
+              const membro = (groupMetadata.participants || []).find((p) => {
+                const ids = [p?.id, p?.lid, p?.phoneNumber, p?.pn]
+                  .filter(Boolean)
+                  .map((v) => String(v).split('@')[0].split(':')[0]);
+                return ids.includes(base);
+              });
+              const cand = membro?.notify || membro?.name || membro?.pushName;
+              if (cand && String(cand).trim()) return String(cand).trim();
+            } catch (e) {}
+            try {
+              const nome = await nazu.getName(from, id);
+              if (nome && !/^(usu[aá]rio|user|unknown|desconhecido)/i.test(String(nome).trim())) {
+                return String(nome).trim();
+              }
+            } catch (e) {}
+            return base || 'Usuário';
+          };
+
+          const calcularTempoMA = (inicio) => {
+            const agora = Date.now();
+            const diferenca = Math.max(0, agora - Number(inicio || agora));
+            const totalHoras = Math.floor(diferenca / (1000 * 60 * 60));
+            return { dias: Math.floor(totalHoras / 24), horas: totalHoras % 24 };
+          };
+
+          const primeiroArgMA = String(args[0] || '').toLowerCase();
+
+          // -------- ADD --------
+          if (['add', 'adicionar', 'novo', 'registrar'].includes(primeiroArgMA)) {
+            if (!alvoRespondido) {
+              await reply(`╭━━〔 💙 𝙈𝙀𝙇𝙃𝙊𝙍 𝘼𝙈𝙄𝙂𝙊 〕━━╮
+┃
+┃ 💡 Responda a mensagem da pessoa
+┃ que você deseja adicionar.
+┃
+┃ 📌 Exemplo:
+┃ ${groupPrefix}ma add
+┃
+╰━━━━━━━━━━━━━━━━━━━━╯`);
+              break;
+            }
+            if (alvoRespondido === String(sender)) {
+              await reply('❌ Você não pode adicionar você mesmo aos melhores amigos.');
+              break;
+            }
+            const existente = amigos.find((a) => String(a.id) === alvoRespondido);
+            if (existente) {
+              const tempo = calcularTempoMA(existente.desde);
+              await nazu.sendMessage(from, {
+                text: `💙 *@${alvoRespondido.split('@')[0]}* já está nos seus melhores amigos!\n\n⏱️ Tempo de amizade:\n📅 ${tempo.dias} dias\n⏰ ${tempo.horas} horas`,
+                mentions: [alvoRespondido],
+                contextInfo: gerarContextNewsletter()
+              }, { quoted: info });
+              break;
+            }
+            if (amigos.length >= MAX_AMIGOS) {
+              await reply(`❌ Você já possui os ${MAX_AMIGOS} melhores amigos permitidos.\n\n👥 Limite atual: ${MAX_AMIGOS} amigos\n\nRemova alguém antes de adicionar outra pessoa:\n\n${groupPrefix}ma del`);
+              break;
+            }
+
+            amigos.push({ id: alvoRespondido, desde: Date.now() });
+            salvarMA();
+            const nomeNovo = await pegarNomeMA(alvoRespondido);
+
+            await nazu.sendMessage(from, {
+              text: `╭━━〔 💙 𝙉𝙊𝙑𝙊 𝙈𝙀𝙇𝙃𝙊𝙍 𝘼𝙈𝙄𝙂𝙊 〕━━╮
+┃
+┃ 👤 Amigo: @${alvoRespondido.split('@')[0]}
+┃ 💙 Nick: ${nomeNovo}
+┃
+┃ 🕐 Amizade iniciada agora!
+┃
+┃ 👥 ${amigos.length}/${MAX_AMIGOS} amigos
+┃
+╰━━━━━━━━━━━━━━━━━━━━╯`,
+              mentions: [alvoRespondido],
+              contextInfo: gerarContextNewsletter()
+            }, { quoted: info });
+            break;
+          }
+
+          // -------- DEL --------
+          if (['del', 'remover', 'remove', 'rm'].includes(primeiroArgMA)) {
+            if (!alvoRespondido) {
+              await reply(`❌ Responda a mensagem do amigo que deseja remover.\n\nExemplo:\n${groupPrefix}ma del`);
+              break;
+            }
+            const indice = amigos.findIndex((a) => String(a.id) === alvoRespondido);
+            if (indice === -1) {
+              await reply('❌ Essa pessoa não está na sua lista de melhores amigos.');
+              break;
+            }
+            amigos.splice(indice, 1);
+            salvarMA();
+            await nazu.sendMessage(from, {
+              text: `💔 @${alvoRespondido.split('@')[0]} foi removido dos seus melhores amigos.\n\n👥 Agora você possui ${amigos.length}/${MAX_AMIGOS} melhores amigos.`,
+              mentions: [alvoRespondido],
+              contextInfo: gerarContextNewsletter()
+            }, { quoted: info });
+            break;
+          }
+
+          // -------- LIMPAR --------
+          if (['limpar', 'clear', 'reset'].includes(primeiroArgMA)) {
+            if (amigos.length === 0) {
+              await reply('❌ Você não possui melhores amigos cadastrados.');
+              break;
+            }
+            bancoMA[usuarioMA] = [];
+            salvarMA();
+            await reply('🗑️ Sua lista de melhores amigos foi limpa com sucesso.');
+            break;
+          }
+
+          // -------- LISTA --------
+          if (amigos.length === 0) {
+            await reply(`╭━━〔 💙 𝙈𝙀𝙇𝙃𝙊𝙍𝙀𝙎 𝘼𝙈𝙄𝙂𝙊𝙎 〕━━╮
+┃
+┃ Você ainda não possui
+┃ melhores amigos cadastrados.
+┃
+┃ 👥 Limite: ${MAX_AMIGOS} amigos
+┃
+┃ 💡 Para adicionar alguém:
+┃ Responda a mensagem da pessoa
+┃ e use:
+┃
+┃ ${groupPrefix}ma add
+┃
+╰━━━━━━━━━━━━━━━━━━━━╯`);
+            break;
+          }
+
+          amigos.sort((a, b) => Number(a.desde || 0) - Number(b.desde || 0));
+          const lista = amigos.slice(0, MAX_AMIGOS);
+
+          let texto = `╭━━〔 💙 𝙈𝙀𝙇𝙃𝙊𝙍𝙀𝙎 𝘼𝙈𝙄𝙂𝙊𝙎 〕━━╮\n` +
+            `┃ 👥 Limite: ${MAX_AMIGOS} amigos\n` +
+            `┃ 📊 Cadastrados: ${lista.length}/${MAX_AMIGOS}\n` +
+            `╰━━━━━━━━━━━━━━━━━━━━╯\n\n`;
+
+          const mentions = [];
+          const medalhas = ['🥇', '🥈', '🥉'];
+
+          for (let index = 0; index < lista.length; index++) {
+            const amigo = lista[index];
+            const id = String(amigo.id);
+            const tempo = calcularTempoMA(amigo.desde);
+            const nomeItem = await pegarNomeMA(id);
+            mentions.push(id);
+            const medalha = medalhas[index] || '👤';
+            texto += `${medalha} *${index + 1}º* — @${id.split('@')[0]}\n` +
+              `💙 *Nick:* ${nomeItem}\n` +
+              `📅 *Amizade:* ${tempo.dias} dias e ${tempo.horas} horas\n\n`;
+          }
+
+          texto += `━━━━━━━━━━━━━━━━━━━━\n` +
+            `💡 Para adicionar: *${groupPrefix}ma add*\n` +
+            `💔 Para remover: *${groupPrefix}ma del*\n` +
+            `👥 Limite: *${MAX_AMIGOS} amigos*`;
+
+          await nazu.sendMessage(from, {
+            text: texto,
+            mentions: mentions,
+            contextInfo: gerarContextNewsletter()
+          }, { quoted: info });
+        } catch (e) {
+          console.log('ERRO MELHORES AMIGOS:', e);
+          await reply('❌ Ocorreu um erro no sistema de melhores amigos.');
+        }
+        break;
+      }
       case 'casais':
       case 'couples':
       case 'listacasais': {

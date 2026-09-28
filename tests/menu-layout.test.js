@@ -280,7 +280,8 @@ const COMANDOS_POR_MENU = {
   // -> 176 (`!antictt`, `!antifantasma`) -> 177 (`!vozp`).
   // menudono: 166 -> 165 (`fotomenu` + `videomenu` -> `midiamenu`).
   menuadm: 177, menudono: 165,
-  menubn: 348, menufut: 42, menurpg: 149,
+  // menubn: 348 -> 349 (`!ma` / `!melhoresamigos` / `!bestfriends`).
+  menubn: 349, menufut: 42, menurpg: 149,
   // menuvip nao tem comando cadastrado; o `!` contado e o `!addcmdvip` da
   // instrucao ("Use: !addcmdvip"), que no original tambem estava fixo.
   menuvip: 1, menugames: 28,
@@ -310,12 +311,12 @@ await test('16. NENHUM comando se perdeu (contagem por menu vs baseline)', async
   }
 });
 
-await test('17. menubn: os 348 comandos estão TODOS lá (o mais crítico)', async () => {
+await test('17. menubn: os 349 comandos estão TODOS lá (o mais crítico)', async () => {
   const mod = await import(new URL('../dados/src/menus/menubn.js', import.meta.url).href);
   const texto = await mod.default('!', 'Abyss', 'Kannon');
-  eq((texto.match(/!/g) || []).length, 348, '348 comandos no modo completo');
+  eq((texto.match(/!/g) || []).length, 349, '349 comandos no modo completo');
   // Amostras de cada categoria (inclusive as condicionais).
-  for (const c of ['!tictactoe', '!uno criar', '!conselho', '!tapa', '!surubao', '!pgpau', '!medirpau', '!rankputo', '!casal']) {
+  for (const c of ['!tictactoe', '!uno criar', '!conselho', '!tapa', '!surubao', '!pgpau', '!medirpau', '!rankputo', '!casal', '!ma']) {
     contem(texto, c, `tem ${c}`);
   }
   // Modo LITE: continua escondendo as "picantes" e mantendo o resto.
