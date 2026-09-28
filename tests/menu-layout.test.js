@@ -273,7 +273,7 @@ await test('13. o index compõe visible + lerMais + rest (não só concatena tud
 // TRAVA: se algum comando sumir numa mexida futura, o teste falha.
 const COMANDOS_POR_MENU = {
   // ferramentas: 26 -> 27 (`!apk`, categoria APPS (F-DROID)).
-  menuia: 17, menudown: 20, ferramentas: 27, menufig: 16, menulogo: 44,
+  menuia: 17, menudown: 20, ferramentas: 27, menufig: 17, menulogo: 44,
   menuedits: 5, alteradores: 58, menumemb: 54,
   // menuadm: 172 -> 170 (removidos `fotomenug` e `videomenug`).
   // 170 -> 171 (`!modo18`) -> 172 (`!callp`) -> 174 (`!fixar`, `!desfixar`)

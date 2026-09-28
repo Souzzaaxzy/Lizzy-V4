@@ -10,7 +10,10 @@ import {
   DisconnectReason,
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
-  proto
+  proto,
+  stickerToGif,
+  stickerToMp4,
+  isAnimatedWebP
 } from '@itsliaaa/baileys';
 import {
   buildMessageReport,
@@ -28858,6 +28861,65 @@ ${nomebot}  By  👑 ${nomedono}`;
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
         }
         break;
+      case 'togif':
+      case 'tomp4': {
+        // Figurinha (webp animado) → GIF ou MP4. O decoder de WebP do FFmpeg
+        // ignora os chunks ANIM/ANMF, então a conversão vive na fork (sharp lê
+        // os frames); ver lib/Utils/sticker-convert.js.
+        const stickerTogif = quotedMessageContent?.stickerMessage
+          || info.message?.stickerMessage
+          || quotedMessageContent?.viewOnceMessage?.message?.stickerMessage
+          || quotedMessageContent?.viewOnceMessageV2?.message?.stickerMessage;
+        if (!stickerTogif) {
+          return reply(`╭━━━⊱ 🎞️ *FIGURINHA → MÍDIA* 🎞️ ⊱━━━╮
+│
+│ ❌ Marque uma figurinha animada
+│    para converter!
+│
+│ 💡 Responda uma figurinha com:
+│ ${groupPrefix}${command}
+│
+╰━━━━━━━━━━━━━━━━━━━━━━━╯`);
+        }
+        try {
+          const buffer = await getFileBuffer(stickerTogif, 'sticker');
+          if (!buffer || !buffer.length) {
+            return reply('❌ Não foi possível ler a figurinha.');
+          }
+          // Figurinha estática não vira GIF/vídeo útil — manda para o !toimg.
+          if (!isAnimatedWebP(buffer)) {
+            return reply(`⚠️ Essa figurinha é *estática*, não tem animação para converter.\n\n💡 Para tirar a imagem, use *${groupPrefix}toimg*.`);
+          }
+          const querMp4 = command === 'tomp4';
+          let converted;
+          try {
+            converted = querMp4 ? await stickerToMp4(buffer) : await stickerToGif(buffer);
+          } catch (convError) {
+            console.error('[TOGIF] falha na conversão:', convError?.message || convError);
+            return reply(`❌ Não consegui converter essa figurinha.\n\n${convError?.message || ''}`.trim());
+          }
+          // O WhatsApp anima MP4 com `gifPlayback`; para o GIF, entregamos o
+          // arquivo .gif como DOCUMENTO (o app não reproduz gif inline).
+          if (querMp4) {
+            await nazu.sendMessage(from, {
+              video: converted.buffer,
+              mimetype: 'video/mp4',
+              gifPlayback: true
+            }, { quoted: info });
+          } else {
+            await nazu.sendMessage(from, {
+              document: converted.buffer,
+              mimetype: 'image/gif',
+              fileName: 'figurinha.gif',
+              caption: '🎞️ Figurinha convertida em GIF'
+            }, { quoted: info });
+          }
+        } catch (error) {
+          console.error('[TOGIF] erro:', error?.message || error);
+          await reply('❌ Ocorreu um erro interno. Tente novamente em alguns minutos.');
+        }
+        break;
+      }
 case 'removebg':
 case 'rmbg':
 case 'sbg':

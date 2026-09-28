@@ -6716,3 +6716,74 @@ Reinstalar: `npm install --allow-git=all`. **Sem esse commit instalado, o
 ### Testes do bot
 `tests/contact-name.test.js` **16/37**; `tests/amigos.test.js` **27/56**
 (inclui **19d**: sem a API nova, ainda resolve pelo `store.contacts`).
+
+## COMANDO `!togif` / `!tomp4` — figurinha → GIF/MP4 (set/2026) ✅
+Fica junto do `!toimg` (categoria **GERENCIAMENTO DE FIGURINHAS** do `menufig`).
+Responde uma figurinha e devolve a animação: `!togif` manda **GIF**, `!tomp4`
+manda **MP4** (vídeo com `gifPlayback`). `!toimg` continua sendo o estático→imagem.
+
+### A CAUSA RAIZ: o FFmpeg NÃO decodifica WebP animado
+Medido: o decoder de WebP do FFmpeg **ignora** os chunks `ANIM`/`ANMF` —
+`skipping unsupported chunk: ANIM/ANMF` — e devolve **0 frames**. Ou seja,
+FFmpeg sozinho **não converte figurinha animada** (a cota de erro estoura e a
+saída fica vazia). Por isso a conversão foi para a **fork**.
+
+### FORK (`Souzzaaxzy/baileys`, commit `0192212`, branch `feat/sticker-to-gif-mp4`)
+**`lib/Utils/sticker-convert.js`**:
+| Função | Como |
+|---|---|
+| `stickerToGif(buf, opts)` | `sharp(buf,{animated:true}).gif({loop,delay})` — o vips **decodifica** os frames e escreve o GIF animado direto. |
+| `stickerToMp4(buf, opts)` | `sharp(...,{animated:true}).ensureAlpha().raw()` → frames RGBA crus → **FFmpeg** via `pipe:0` (`-f rawvideo -pix_fmt rgba`) → H.264 (yuv420p, faststart). **Não** usa o decoder de WebP do FFmpeg. |
+| `getStickerFramesInfo(buf)` | `pages`, `pageHeight`, `delays`, `delayMs`, `fps`, `loop` (do `sharp`). |
+| `isWebP` / `isAnimatedWebP` | lê VP8X (flag de animação) e o chunk `ANIM`. |
+| `convertSticker(buf, 'gif'\|'mp4'\|'video', opts)` | atalho; formato inválido → erro. |
+
+- **Armadilha medida**: o muxer **MP4 exige saída SEEKABLE** — `pipe:1` falha com
+  `muxer does not support non seekable output`. O MP4 é escrito em **arquivo
+  temporário** (`mkdtemp`) e lido de volta; o temp é **sempre** limpo em `finally`.
+- **Guardas**: buffer vazio (`Figurinha vazia`), não-imagem (o `sharp` rejeita),
+  **teto de frames** (600), **timeout** (60s, SIGKILL), botão **FFmpeg ausente**
+  (`FFmpeg não disponível`), **sharp ausente** (`precisa do sharp instalado`).
+- Exportado por `@souzzaaxzy/baileys` (`lib/Utils/index.js` + `.d.ts`).
+- **Testes da fork**: `tests/sticker-convert.test.js` (**9 testes**) — usa um
+  **webp animado real** de fixture (gerado com `libwebp_anim` ou montado à mão
+  com chunks VP8X+ANIM+ANMF) e cobre GIF, MP4, frames, formatos e erros.
+
+### BOT (`dados/src/index.js`, junto do `case 'toimg'`)
+- Importa `stickerToGif`/`stickerToMp4`/`isAnimatedWebP` de `@itsliaaa/baileys`.
+- `case 'togif'` / `case 'tomp4'`: resolve o `stickerMessage` (citado, direto ou
+  view-once), baixa o buffer (`getFileBuffer(...,'sticker')`), confere se é
+  **animado** e converte.
+- **Figurinha estática** → avisa e manda usar **`!toimg`** (em vez de gerar um
+  GIF/vídeo de 1 frame, que seria inútil).
+- Envio: **MP4** como `video` + `gifPlayback: true` (é o que o WhatsApp anima);
+  **GIF** como **documento** `.gif` (o app não reproduz GIF inline).
+- Erros: mensagem amigável sem stack; detalhe no console (`[TOGIF] ...`).
+
+### Menu / testes
+- `menufig`: linha `🎞️ ${prefix}togif` + `togif`/`tomp4` no `menuCommandsMap.menufig`
+  do `blockPv`. Baseline do `menu-layout` **menufig 16 → 17**.
+- `tests/togif.test.js` (**10 testes / 25 asserções**) — sem figurinha; a fork
+  converte GIF/MP4; `isAnimatedWebP`; export; **ponta a ponta** com figurinha
+  **cifrada de verdade** (hkdf + AES-256-CBC, servidor HTTP local): `!tomp4` →
+  vídeo `ftyp` + `gifPlayback`; `!togif` → documento GIF; estática → avisa;
+  menu/blockPv.
+
+### Dependência
+`package-lock.json` + `yarn.lock` → `01922126a6d3969db7de3d85de32cf31d3cdb2ab`
+(hash completo). Reinstalar: `npm install --allow-git=all`. **Sem o commit
+instalado**, o bot importa `stickerToGif` que não existe e o `index.js` não carrega.
+
+### Requisitos
+- **sharp** (já vem na fork) para ler os frames — obrigatório.
+- **FFmpeg** no PATH (ou `FFMPEG_PATH`) **apenas para o MP4**; o GIF funciona sem.
+
+### ARMADILHA de método (registrada)
+Durante a edição do `index.js` (file de ~2 MB, com glifos de caixa), uma
+ferramenta re-codificou o arquivo (mojibake `в”` no lugar dos `─│┃`) e **todos os
+testes que comparam texto passaram a falhar** (`amigos`, `menu-layout`,
+`cmd-suggest`) mesmo o `node --check` passando. A causa foi confirmada com
+`git show HEAD:dados/src/index.js | count('só funciona em grupos')` — o HEAD
+estava íntegro. **Regra**: depois de QUALQUER edição no `index.js`, conferir
+`python3 -c "s=open(...,'rb').read().decode('utf-8'); print(s.count('в”'))"` == 0
+E rodar as suítes de texto — não confiar só no `node --check`.

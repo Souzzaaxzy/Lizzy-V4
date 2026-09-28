@@ -299,7 +299,7 @@ export const menuCommandsMap = {
     },
     menufig: {
         menuName: 'Figurinhas',
-        commands: ['sticker', 's', 'f', 'fig', 'sg', 'sf', 'toimg', 'rmbg', 'semfundo', 'attp', 'attp2', 'dado', 'fsticker']
+        commands: ['sticker', 's', 'f', 'fig', 'sg', 'sf', 'toimg', 'togif', 'tomp4', 'rmbg', 'semfundo', 'attp', 'attp2', 'dado', 'fsticker']
     },
     menu18: {
         menuName: 'Plaquinhas',
