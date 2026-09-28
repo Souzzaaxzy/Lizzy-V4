@@ -279,9 +279,9 @@ const COMANDOS_POR_MENU = {
   // 170 -> 171 (`!modo18`) -> 172 (`!callp`) -> 174 (`!fixar`, `!desfixar`)
   // -> 176 (`!antictt`, `!antifantasma`) -> 177 (`!vozp`).
   // menudono: 166 -> 165 (`fotomenu` + `videomenu` -> `midiamenu`).
-  // menuadm: 177 -> 186 (categoria SUBDONOS, 9 comandos).
+  // Subdonos ficam SÓ no menudono (removidos do menuadm).
   // menudono: 165 -> 168 (sub.permitir/revogar/perms).
-  menuadm: 186, menudono: 168,
+  menuadm: 177, menudono: 168,
   // menubn: 348 -> 349 (`!ma` / `!melhoresamigos` / `!bestfriends`).
   menubn: 349, menufut: 42, menurpg: 149,
   // menuvip nao tem comando cadastrado; o `!` contado e o `!addcmdvip` da

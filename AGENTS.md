@@ -6919,3 +6919,7 @@ A verificação de "subdono" depende do WhatsApp expor `participantAlt`/`phoneNu
 para o remetente. Quando não expõe, vale o `formasDeId` (LID↔número) e o alias
 explícito (`addAlias`). Não há como resolver LID→PN sem a tabela do WhatsApp; é a
 mesma limitação do bot de referência.
+
+**Ajuste (set/2026)**: a categoria de subdonos ficou **SÓ no ** (a pedido
+do dono). O  voltou ao baseline de **177** comandos; o  segue
+com **168**.

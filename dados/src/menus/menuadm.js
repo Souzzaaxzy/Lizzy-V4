@@ -253,18 +253,6 @@ export default async function menuadm(prefix, botName = "MeuBot", userName = "Us
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭━━━꧁༺ ㅤ👑 ${boldItalic('SUBDONOS')} 👑ㅤ ༻꧂━━━╮
-│ 👑 ${prefix}addsubdono
-│ ❌ ${prefix}delsubdono
-│ 📋 ${prefix}listasubdonos
-│ ➕ ${prefix}grantsubcmd
-│ ❌ ${prefix}delsubcmd
-│ 📋 ${prefix}listsubcmd
-│ 🔑 ${prefix}sub.permitir
-│ 🚫 ${prefix}sub.revogar
-│ 📄 ${prefix}sub.perms
-╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
-
 ╭─────────────────╮
 ╰─────────────────╯
 `;
