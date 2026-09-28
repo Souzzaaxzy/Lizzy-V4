@@ -1,5 +1,5 @@
 /**
- * Testes do comando `!cf` (`!cafe`) — GRUPO de amizades.
+ * Testes do comando `!cf` (`!melhoresamigos`) — GRUPO de amizades.
  *
  * O comando veio de outro bot e foi REFATORADO em relação à primeira versão
  * (que era `!ma` com uma lista solta). Agora é um grupo por criador:
@@ -476,11 +476,11 @@ await test('21. limite de 20: o 21º não entra', async () => {
   ok(readCF()[user.lid].membros.length === 20, 'não passou de 20');
 });
 
-await test('22. alias !cafe é o mesmo comando', async () => {
+await test('22. alias !melhoresamigos é o mesmo comando', async () => {
   resetCF();
   const { groupJid, user, participants } = setup();
-  const s1 = await run({ groupJid, sender: user, text: '!cafe', participants });
-  includes(textOf(s1), 'CAFÉ', 'cafe responde');
+  const s1 = await run({ groupJid, sender: user, text: '!melhoresamigos', participants });
+  includes(textOf(s1), 'CAFÉ', 'melhoresamigos responde');
 });
 
 await test('23. persistência: grava em DONO_DIR/cafe.json', async () => {

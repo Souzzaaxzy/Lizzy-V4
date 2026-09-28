@@ -37778,7 +37778,7 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
         break;
       }
       // ==================== CAFÉ (GRUPO DE AMIZADES) ====================
-      // Comando `!cf` (`!cafe`), migrado de outro bot e REFATORADO para o
+      // Comando `!cf` (`!melhoresamigos`), migrado de outro bot e REFATORADO para o
       // conceito de GRUPO de amizades (um por criador):
       //   !cf criar <nome>   cria/renomeia o grupo
       //   !cf add @a @b ...  adiciona um ou vários (por menção OU resposta)
@@ -37797,7 +37797,7 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
       //     `store.contacts`/`groupMetadata`/`nazu.getName`, com o NÚMERO de
       //     telefone como padrão (nunca o LID cru).
       case 'cf':
-      case 'cafe': {
+      case 'melhoresamigos': {
         try {
           if (!isGroup) {
             await reply('⚠️ Esse comando só funciona em grupos.');

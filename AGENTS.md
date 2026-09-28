@@ -6509,11 +6509,11 @@ do flag até o motor; a validação visual real (não tocar no grupo) exige uma
 sessão de WhatsApp, que não existe neste ambiente. `!musicap` funciona igual nos
 dois modos (a call existir é o que importa para o áudio).
 
-## COMANDO `!cf` (`!cafe`) — GRUPO de amizades (set/2026) ✅
+## COMANDO `!cf` (`!melhoresamigos`) — GRUPO de amizades (set/2026) ✅
 Comando migrado de outro bot. A primeira versão era `!ma` (lista solta de
 "melhores amigos"); o dono **refatorou** para o conceito de **grupo de
 amizades** com nome, comandos separados e um mini menu. Nome principal
-**`!cf`** (alias `!cafe`). Categoria **RELACIONAMENTOS** do `menubn`.
+**`!cf`** (alias `!melhoresamigos`). Categoria **RELACIONAMENTOS** do `menubn`.
 
 ### Comandos
 | Comando | O que faz |
@@ -6595,7 +6595,7 @@ alvo, antes de criar, por **menção**, por **resposta**, **múltiplo**, já
 existente, de si mesmo); `kick` (um, **múltiplo**, inexistente, sem alvo);
 `del` (válido e sem grupo); **mini menu** (caixa/medalhas/tempo/rodapés);
 **Nick = nome do contato, nunca o LID**; sem grupo criado; **limite de 20**;
-alias `!cafe`; persistência em `DONO_DIR/cafe.json`; **newsletter**.
+alias `!melhoresamigos`; persistência em `DONO_DIR/cafe.json`; **newsletter**.
 **Armadilha**: o throttle é por remetente (3/5s) — os testes rodam como o bot
 (`fromMe: true`). O `desbold` cobre MATHEMATICAL BOLD, SANS-SERIF BOLD e
 SANS-SERIF BOLD ITALIC.
