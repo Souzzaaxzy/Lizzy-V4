@@ -28,6 +28,7 @@ import { parsePinDuration, buildPinKeyFromContext, isPinControlMessage } from '.
 import { antiCtt, isContactPayload } from './utils/antiCtt.js';
 import { parseImagePollArgs, collectPollImages, resolveAttachments, buildOptionName } from './utils/pollImages.js';
 import { toOggOpus } from './utils/oggOpus.js';
+import { resolverNomeContato, resolverNomesContatos, acharParticipantePorId, nomeInutil, baseId } from './utils/contactName.js';
 import { converterGifParaMp4 } from './utils/gifMedia.js';
 import * as ghostDetection from './utils/ghostDetection.js';
 import { bold as boldLayout } from './menus/layout.js';
@@ -37830,60 +37831,10 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
 
           const salvarCF = () => writeJsonFile(caminhoCF, bancoCF);
 
-          // Nome amigável: prioriza o NOME DO CONTATO e descarta o que é
-          // genérico ou o próprio número. O padrão final é o telefone — nunca
-          // o LID. `ehNumero` protege contra o `getName` do Baileys devolver o
-          // próprio JID/número (o que faria o Nick cair no número).
-          const ehGenericoNome = (v) => !v || /^(usu[aá]rio|user|unknown|desconhecido|voc[eê])/i.test(String(v).trim());
-          const ehNumeroNome = (v) => /^\+?\d+$/.test(String(v).trim()) || /^\d+@(s\.whatsapp\.net|lid)$/.test(String(v).trim());
-
-          // Encontra o participante do grupo por qualquer uma das identidades.
-          const acharMembroCF = (base) => (groupMetadata.participants || []).find((p) => {
-            const ids = [p?.id, p?.lid, p?.phoneNumber, p?.pn]
-              .filter(Boolean)
-              .map((v) => String(v).split('@')[0].split(':')[0]);
-            return ids.includes(base);
-          });
-
-          const pegarNomeCF = async (jid) => {
-            const id = String(jid || '');
-            const base = id.split('@')[0].split(':')[0];
-            const membro = (() => { try { return acharMembroCF(base); } catch (e) { return null; } })();
-            const numerosDoMembro = [membro?.phoneNumber, membro?.pn]
-              .filter(Boolean)
-              .map((v) => String(v).split('@')[0].split(':')[0]);
-            const ehNumeroDoMembro = (v) =>
-              ehNumeroNome(v) || numerosDoMembro.includes(String(v).trim().replace(/^\+/, ''));
-
-            // 1) `getName` do socket: é o que devolve o NOME DO CONTATO salvo
-            //    na agenda (com queda para o pushName). É a fonte preferida.
-            try {
-              const nome = await nazu.getName(from, id);
-              if (!ehGenericoNome(nome) && !ehNumeroDoMembro(nome)) return String(nome).trim();
-            } catch (e) {}
-
-            // 2) Contatos da sessão (varia por versão do Baileys).
-            try {
-              const contacts = nazu.store?.contacts || {};
-              for (const key of Object.keys(contacts)) {
-                if (String(key).split('@')[0].split(':')[0] !== base) continue;
-                const c = contacts[key] || {};
-                const cand = c.notify || c.verifiedName || c.name || c.subject;
-                if (!ehGenericoNome(cand) && !ehNumeroDoMembro(cand)) return String(cand).trim();
-              }
-            } catch (e) {}
-
-            // 3) Metadata do grupo (notify/name).
-            try {
-              const cand = membro?.notify || membro?.name || membro?.pushName;
-              if (!ehGenericoNome(cand) && !ehNumeroDoMembro(cand)) return String(cand).trim();
-            } catch (e) {}
-
-            // 4) Padrão: o número de telefone do membro (nunca o LID).
-            if (numerosDoMembro.length) return numerosDoMembro[0];
-
-            return base || 'Usuário';
-          };
+          // Nome amigável: delegado ao resolvedor ÚNICO (`utils/contactName.js`),
+          // que prioriza o NOME DO CONTATO (nunca o LID/número). Aqui só ligamos
+          // as dependências que o handler tem em mãos.
+          const pegarNomeCF = (jid) => resolverNomeContato(jid, { nazu, metadata: groupMetadata, from });
 
           const calcularTempoCF = (inicio) => {
             const agora = Date.now();

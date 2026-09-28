@@ -6608,3 +6608,70 @@ alias `!melhoresamigos`; persistência em `DONO_DIR/amigos.json`; **newsletter**
 **Armadilha**: o throttle é por remetente (3/5s) — os testes rodam como o bot
 (`fromMe: true`). O `desbold` cobre MATHEMATICAL BOLD, SANS-SERIF BOLD e
 SANS-SERIF BOLD ITALIC.
+
+## `utils/contactName.js` — resolvedor ÚNICO de NOME DE CONTATO (set/2026) ✅
+O nome "bonito" de alguém estava espalhado em cada comando (o `!me` lia
+`store.contacts`, o `!cf` lia metadata, outros usavam o `pushname` do contador),
+então o mesmo usuário aparecia com nomes diferentes — ou com o **LID/número
+cru**. Agora existe **uma fonte só**, pura e testável.
+
+### API
+```js
+import { resolverNomeContato, resolverNomesContatos,
+         acharParticipantePorId, numerosDoParticipante,
+         nomeInutil, baseId } from './utils/contactName.js';
+
+const nome = await resolverNomeContato(jid, { nazu, metadata: groupMetadata, from });
+// lista, com fallback por id (ex.: pushname do contador):
+const mapa = await resolverNomesContatos(ids, {
+  nazu, metadata: groupMetadata, from,
+  fallbackPorId: (id) => groupData.contador?.find(u => idsMatch(u.id, id))?.pushname,
+});
+mapa.get(id); // nome
+```
+
+### Ordem de resolução (NUNCA cai no LID/número quando há nome)
+1. **`nazu.getName(from, id)`** — o NOME DO CONTATO salvo na agenda (com queda
+   para o pushName). Tenta também o **telefone do membro** se a identidade não
+   render nome (em grupo o alvo costuma chegar como LID, mas a agenda é
+   indexada por PN).
+2. `store.contacts` da sessão (`notify`/`verifiedName`/`name`/`subject`) —
+   procurado pela **base do id E pelos telefones do membro**.
+3. Participantes do `groupMetadata` (`notify`/`name`/`pushName`).
+4. **`fallback`** do chamador (ex.: `pushname` do contador de atividade).
+5. Número de telefone do membro.
+6. O próprio id (base).
+
+Em todas as etapas é **descartado** o que é genérico (`Usuário`/`user`/
+`unknown`/…) e o que é **número ou JID cru** — inclusive o **número do próprio
+membro** (protege contra `getName` devolver o id cru). Tudo com `try/catch`:
+uma fonte que lança não derruba a resolução.
+
+### Por que puro
+As dependências (`nazu`, `metadata`, `from`, `fallback`) entram **por
+parâmetro** — então o módulo serve dentro do handler (que tem tudo) e fora dele,
+sem abrir socket em teste.
+
+### Uso para nomear rankings (`userActivity`, `contador`, etc.)
+No lugar de `name: user?.pushname || jid.split('@')[0]`:
+```js
+const nome = await resolverNomeContato(jid, {
+  nazu, metadata: groupMetadata, from,
+  fallback: user?.pushname,          // o pushname do contador vira FALLBACK
+});
+```
+O `pushname` continua útil, mas como **4º** da ordem — assim um contato salvo na
+agenda (ou o `pushName` da mensagem) vence o apelido antigo do contador, e o
+ranking para de mostrar o número/LID.
+
+### `!cf` usa esta fonte
+O `!cf` não tem mais resolvedor próprio: `pegarNomeCF(jid)` chama
+`resolverNomeContato`. Uma mudança aqui vale para o comando inteiro.
+
+### Testes — `tests/contact-name.test.js` (**15 testes / 36 asserções**)
+Helpers puros (`baseId`, `nomeInutil`, `acharParticipantePorId`,
+`numerosDoParticipante`) e a ordem completa: `getName` vence o metadata;
+`getName` genérico/número é descartado; `store.contacts` indexado por telefone
+casando um alvo em LID; metadata; fallback do chamador; fallback que é número é
+descartado; sem nome nenhum cai no número (nunca no LID); sem metadata não
+quebra; `getName` que lança não derruba; lista com `fallbackPorId`.
