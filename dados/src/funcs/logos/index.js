@@ -76,29 +76,91 @@ const STYLES = {
 };
 
 /**
- * Estilos de DOIS textos (linha de cima + linha de baixo).
+ * Estilos de DOIS textos, com o layout MEDIDO das logos originais.
  *
- * Substituem a API externa (`apisnodz.com.br/api/logotipos`) que o `!pornhub`,
- * `!avengers` e companhia usavam: o comando travava e devolvia um link de API
- * em vez de gerar a imagem no bot. Aqui tudo roda local, com jimp.
+ * ## Como estas cores/posicoes foram obtidas
  *
- * `accent` e' a cor do bloco de destaque (o retangulo do pornhub, o emblema do
- * avengers); `top`/`bottom` sao os gradientes do fundo.
+ * Baixei as imagens dos modelos originais (textpro.me / ephoto360) e analisei
+ * pixel a pixel (`ffmpeg` -> rawvideo). O padrao que TODAS seguem:
+ *
+ *   - fundo **preto** (rgb 0,0,0) nos quatro cantos;
+ *   - o texto no **centro** (faixas de y ~180-380 de 500);
+ *   - um **brilho radial** na cor do tema ATRAS do texto, concentrado no centro
+ *     (e' o que da o efeito de profundidade; sem ele sobra "texto colorido solto"
+ *     num fundo chapado, que era o defeito da 1a versao).
+ *
+ * Cores de destaque medidas (hex dos pixels saturados no centro):
+ *   thor #c00000/#e00000 + metal dourado | deadpool #a00000 | blackpink #e0a0c0
+ *   pornhub #e08000 + branco | avengers #002060 (azul) | neon #80e0e0 (ciano)
+ *   stone cinza #404040 (sem saturacao)
+ *
+ * `bg` e' o fundo (preto, como nas originais), `glow` e' o brilho radial, `top`
+ * e `bottom` sao as cores da 1a e da 2a linha.
  */
 const STYLES2 = {
-  pornhub:        { bg: [0x0a0a0a, 0x1c1c1c], top: [0xffffff, 0xffffff], bottom: [0xffffff, 0xffffff], accent: 0xffa31a, badge: true },
-  avengers:       { bg: [0x0b0f1a, 0x1d2a44], top: [0xffffff, 0xdbe6ff], bottom: [0xffd34d, 0xff8a00], accent: 0xffd700, outline: 0x0b1a33, glow: { color: 0x4d8cff, blur: 10 } },
-  graffiti:       { bg: [0x141414, 0x2e2e2e], top: [0xff2ea6, 0xff2ea6], bottom: [0x00e5ff, 0x00e5ff], outline: 0x000000, shadow: { color: 0x000000, blur: 4, dx: 5, dy: 5 } },
-  captainamerica: { bg: [0x0a1a4d, 0x123c9c], top: [0xffffff, 0xdbe6ff], bottom: [0xff4d4d, 0xb30000], outline: 0x0a1a4d, stars: true },
-  stone3d:        { bg: [0x1a1a1a, 0x3d3d3d], top: [0xcfcfcf, 0x8a8a8a], bottom: [0xf5f5f5, 0xa8a8a8], outline: 0x050505, shadow: { color: 0x000000, blur: 6, dx: 5, dy: 7 } },
-  neon2:          { bg: [0x050510, 0x0e0e24], top: [0x9be7ff, 0x00b3ff], bottom: [0xff9bf0, 0xff00c8], glow: { color: 0x00e5ff, blur: 14 } },
-  thor:           { bg: [0x0b0f1a, 0x22304d], top: [0xffffff, 0xcfe6ff], bottom: [0x8ad4ff, 0x2b8cff], glow: { color: 0x66c2ff, blur: 14 }, outline: 0x0a1a33 },
-  deadpool:       { bg: [0x1a0202, 0x3d0505], top: [0xff4d4d, 0xb30000], bottom: [0xffffff, 0xd9d9d9], outline: 0x000000, shadow: { color: 0x000000, blur: 5, dx: 5, dy: 6 } },
-  blackpink:      { bg: [0x0a0208, 0x24081a], top: [0xff9bd4, 0xff2ea6], bottom: [0xffffff, 0xd9d9d9], glow: { color: 0xff2ea6, blur: 12 } },
-  amongus2:       { bg: [0x0b1026, 0x1b2a4e], top: [0xffffff, 0xdbe6ff], bottom: [0xff4d4d, 0xb3001b], outline: 0xffffff, stars: true }
+  // duas palavras: "Porn" branco + "hub" preto sobre caixa laranja
+  pornhub:        { bg: 0x000000, top: [0xffffff, 0xf0f0f0], bottom: [0x000000, 0x101010], accent: 0xe08000, twoPart: true },
+  avengers:       { bg: 0x000000, top: [0xffffff, 0xcfe0ff], bottom: [0xffffff, 0xcfe0ff], glow: 0x2b6cff, glowStrength: 3.0, glowRadius: 0.44, emblem: 0x0a2a6b, emblemScale: 0.36, outline: 0x061a45 },
+  graffiti:       { bg: 0x0a0a0a, top: [0xff2ea6, 0xd0007a], bottom: [0x00e5ff, 0x0090b0], outline: 0x000000, glow: 0xff2ea6 },
+  captainamerica: { bg: 0x000000, top: [0xffffff, 0xdbe6ff], bottom: [0xff4d4d, 0xb30000], glow: 0x2b4cff, outline: 0x0a1a4d },
+  stone3d:        { gradient: [0x1c1c1c, 0x050505], top: [0xe0e0e0, 0x9a9a9a], bottom: [0xffffff, 0xbdbdbd], outline: 0x0a0a0a, glow: 0x9a9a9a, glowRadius: 0.5, glowStrength: 1.1, shadow: { color: 0x000000, blur: 6, dx: 5, dy: 7 } },
+  neon2:          { bg: 0x000a0a, top: [0x9be7ff, 0x00b3ff], bottom: [0xff9bf0, 0xff00c8], glow: 0x00e5ff, glowRadius: 0.46, glowStrength: 2.2 },
+  thor:           { bg: 0x000000, top: [0xf5e6c8, 0xb08a3c], bottom: [0xf5e6c8, 0xb08a3c], glow: 0xc00000, glowStrength: 1.9, glowRadius: 0.48, outline: 0x2a1400 },
+  deadpool:       { bg: 0x000000, top: [0xd60000, 0x7a0000], bottom: [0xd60000, 0x7a0000], outline: 0x000000, glow: 0xb00000, glowStrength: 2.6, glowRadius: 0.42 },
+  blackpink:      { bg: 0x000000, top: [0xf0b0c8, 0xd080a0], bottom: [0xf0b0c8, 0xd080a0], glow: 0xe0a0c0, glowRadius: 0.30, glowStrength: 2.1 },
+  amongus2:       { bg: 0x05060f, top: [0xffffff, 0xdbe6ff], bottom: [0xff4d4d, 0xb3001b], glow: 0x2b4cff, outline: 0xffffff }
 };
 /** Estilos que exigem dois textos (o proprio comando escolhe o estilo). */
 const TWO_TEXT_TYPES = Object.keys(STYLES2);
+
+/**
+ * Brilho radial na cor do tema, ATRAS do texto.
+ *
+ * E' o que da o efeito das logos originais: as referencias medidas tem fundo
+ * preto (rgb 0,0,0 nos cantos) e um halo colorido concentrado no centro, onde o
+ * texto fica. Sem isto sobra "texto colorido" num fundo chapado — que era
+ * exatamente o defeito da primeira versao.
+ */
+function radialGlow(img, hex, strength = 0.75, radiusScale = 0.40) {
+  const c = hexToRgb(hex);
+  const cx = img.width / 2;
+  // o halo acompanha a altura do bloco de texto, nao o centro do canvas
+  const cy = img.height * 0.48;
+  const maxR = Math.min(img.width, img.height * 1.6) * radiusScale;
+  img.scan((x, y, idx) => {
+    const d = Math.hypot(x - cx, y - cy) / maxR;
+    if (d >= 1) return;
+    const k = (1 - d) * (1 - d) * strength; // queda suave
+    img.bitmap.data[idx] = Math.min(255, img.bitmap.data[idx] + c.r * k);
+    img.bitmap.data[idx + 1] = Math.min(255, img.bitmap.data[idx + 1] + c.g * k);
+    img.bitmap.data[idx + 2] = Math.min(255, img.bitmap.data[idx + 2] + c.b * k);
+  });
+  return img;
+}
+
+/**
+ * Fundo do logo.
+ *
+ * - `gradient: [topoHex, baseHex]` — gradiente vertical (a stone3d original e'
+ *   cinza claro no topo escurecendo para preto na base; medido: brilho 44 no
+ *   topo e 12 na base).
+ * - senao, cor solida de `bg` (as demais originais sao preto liso).
+ * O brilho do tema e' aplicado depois por `radialGlow`, por cima.
+ */
+function makeBackground(cfg) {
+  const bg = new Jimp({ width: CANVAS_W, height: CANVAS_H, color: (cfg.bg ?? 0x000000) * 256 + 0xff });
+  if (cfg.gradient) verticalGradient(bg, cfg.gradient[0], cfg.gradient[1]);
+  if (cfg.stars) addStars(bg);
+  return bg;
+}
+
+/** Bloco de texto: alinhado como as referencias (centro a ~42% da altura). */
+function blitTextBlock(bg, textLayer, cfg) {
+  const baseX = Math.round((CANVAS_W - textLayer.width) / 2);
+  const baseY = Math.round(CANVAS_H * 0.50 - textLayer.height / 2);
+  bg.composite(textLayer, baseX, baseY);
+  return { baseX, baseY };
+}
 
 function hexToRgb(hex) {
   return { r: (hex >> 16) & 0xff, g: (hex >> 8) & 0xff, b: hex & 0xff };
@@ -233,7 +295,7 @@ function solidWhite(img) {
 /** Empilha dois textos (cima/baixo) numa unica camada, centrados. */
 async function renderTwoTextBlock(font, topText, bottomText, cfg) {
   const gap = Math.round(CANVAS_H * 0.06);
-  const each = Math.round((TEXT_MAX_H - gap) / 2);
+  const each = Math.round((TEXT_MAX_H - gap) / 2 * 1.25);
   const a = await renderTextBlock(font, topText, cfg.top, each);
   const b = await renderTextBlock(font, bottomText, cfg.bottom, each);
 
@@ -258,47 +320,46 @@ async function renderTwoTextBlock(font, topText, bottomText, cfg) {
 
 async function renderLogo(query, cfg) {
   const font = await getFont();
-  const bg = new Jimp({ width: CANVAS_W, height: CANVAS_H, color: 0x000000ff });
-  verticalGradient(bg, cfg.bg[0], cfg.bg[1]);
-  if (cfg.stars) addStars(bg);
+  const bg = makeBackground(cfg);
 
+  // Brilho do tema ANTES do texto (fica atras dele, como nas logos originais).
+  if (cfg.glow != null) radialGlow(bg, cfg.glow, cfg.glowStrength ?? 0.75, cfg.glowRadius ?? 0.40);
+
+  const twoText = Array.isArray(query);
   let textLayer;
-  let maskLayer = null; // silhueta branca, para sombra/glow/contorno em 2 textos
-  if (Array.isArray(query)) {
-    // ESTILO DE DOIS TEXTOS (o handler passa [texto1, texto2])
+  let maskLayer = null;
+
+  if (twoText && cfg.twoPart) {
+    // Pornhub: "Porn" branco + "hub" preto dentro de uma caixa laranja, na MESMA
+    // linha — o layout assinatura. (O ephoto original pinta a 2a palavra por
+    // cima do retangulo, nao em outra linha.)
+    const built = await renderTwoPartLine(font, String(query[0]), String(query[1]), cfg);
+    textLayer = built.layer;
+    maskLayer = built.layer;
+  } else if (twoText) {
     const two = await renderTwoTextBlock(font, String(query[0]), String(query[1] ?? ''), cfg);
     textLayer = two.colored;
     maskLayer = two.mask;
   } else {
-    // Camada de texto isolada para permitir efeitos e centralização
     const layer = new Jimp({ width: CANVAS_W, height: TEXT_MAX_H + 120, color: 0x00000000 });
     layer.print({
-      font,
-      x: 0,
-      y: 0,
-      text: query,
-      maxWidth: TEXT_MAX_W,
-      maxHeight: TEXT_MAX_H + 120,
-      alignmentX: HorizontalAlign.CENTER,
-      alignmentY: VerticalAlign.MIDDLE,
+      font, x: 0, y: 0, text: query,
+      maxWidth: TEXT_MAX_W, maxHeight: TEXT_MAX_H + 120,
+      alignmentX: HorizontalAlign.CENTER, alignmentY: VerticalAlign.MIDDLE,
     });
     const bbox = alphaBBox(layer);
     if (!bbox) throw new Error('Texto vazio ou não renderizável.');
     textLayer = layer.crop({ x: bbox.x, y: bbox.y, w: bbox.w, h: bbox.h });
-
-    // Reduz escala se o texto embrulhado exceder a área útil
     const fit = Math.min(TEXT_MAX_W / textLayer.width, TEXT_MAX_H / textLayer.height, 1);
     if (fit < 1) textLayer = textLayer.scale(fit);
   }
 
-  // A `styled` e' o que vai por CIMA. Em 2 textos a camada ja' esta' colorida
-  // linha a linha, entao NAO se aplica um gradiente unico (ele apagaria a paleta
-  // de cada linha). Em 1 texto, colore-se normalmente.
-  const styled = maskLayer
+  // Em DOIS textos a camada ja' vem colorida (cada linha com a sua paleta, e no
+  // pornhub a caixa laranja junto). Recolorir aqui pintaria a caixa de branco e
+  // a logo sairia sem o retangulo — que foi exatamente o defeito observado.
+  const styled = twoText
     ? textLayer
-    : colorizeTextLayer(textLayer.clone(), cfg.text?.[0] ?? cfg.top[0], cfg.text?.[1] ?? cfg.top[1]);
-  // Silhueta usada pelos efeitos: em 2 textos e' a mascara branca das duas
-  // linhas; em 1 texto e' a propria camada de texto.
+    : colorizeTextLayer(textLayer.clone(), cfg.text?.[0] ?? cfg.top?.[0] ?? 0xffffff, cfg.text?.[1] ?? cfg.top?.[1] ?? 0xffffff);
   const effectSource = maskLayer ?? textLayer;
   const layers = [];
 
@@ -314,9 +375,9 @@ async function renderLogo(query, cfg) {
     sh.blur(cfg.shadow.blur);
     layers.push({ img: sh, dx: cfg.shadow.dx, dy: cfg.shadow.dy });
   }
-  if (cfg.glow) {
-    const gl = colorizeTextLayer(effectSource.clone(), cfg.glow.color, cfg.glow.color);
-    gl.blur(cfg.glow.blur);
+  if (cfg.glowText) {
+    const gl = colorizeTextLayer(effectSource.clone(), cfg.glowText, cfg.glowText);
+    gl.blur(cfg.glowBlur ?? 10);
     layers.push({ img: gl, dx: 0, dy: 0 });
   }
   if (cfg.outline != null) {
@@ -327,21 +388,34 @@ async function renderLogo(query, cfg) {
   layers.push({ img: styled, dx: 0, dy: 0 });
 
   const baseX = Math.round((CANVAS_W - textLayer.width) / 2);
-  const baseY = Math.round((CANVAS_H - textLayer.height) / 2);
+  const baseY = Math.round(CANVAS_H * 0.50 - textLayer.height / 2);
 
-  // Bloco de destaque (o retangulo laranja do pornhub): vai ATRAS do texto, para
-  // o estilo ter o fundo caracteristico em vez de so' texto solto no gradiente.
-  if (cfg.badge && cfg.accent != null) {
-    const padX = Math.round(textLayer.width * 0.07) + 28;
-    const padY = Math.round(textLayer.height * 0.07) + 22;
-    const bw = textLayer.width + padX * 2;
-    const bh = textLayer.height + padY * 2;
-    const bx = Math.max(0, Math.round((CANVAS_W - bw) / 2));
-    const by = Math.max(0, Math.round((CANVAS_H - bh) / 2));
-    const badge = new Jimp({ width: bw, height: bh, color: cfg.accent * 256 + 0xff });
-    roundCorners(badge, Math.round(Math.min(bw, bh) * 0.12));
-    bg.composite(badge, bx, by);
+  // Emblema (o circulo do avengers): atras do texto, no centro.
+  if (cfg.emblem != null) {
+    const r = Math.min(CANVAS_W, CANVAS_H) * (cfg.emblemScale ?? 0.30);
+    const emblem = new Jimp({ width: Math.round(r * 2), height: Math.round(r * 2), color: 0x00000000 });
+    for (let y = 0; y < emblem.height; y++) {
+      for (let x = 0; x < emblem.width; x++) {
+        const dx = x - r;
+        const dy = y - r;
+        const d = Math.hypot(dx, dy);
+        if (d <= r) {
+          const i = (y * emblem.width + x) * 4;
+          const c = hexToRgb(cfg.emblem);
+          const k = 0.35 + 0.65 * (1 - d / r); // mais forte no centro
+          emblem.bitmap.data[i] = Math.round(c.r * k);
+          emblem.bitmap.data[i + 1] = Math.round(c.g * k);
+          emblem.bitmap.data[i + 2] = Math.round(c.b * k);
+          emblem.bitmap.data[i + 3] = 255;
+        }
+      }
+    }
+    // Sem `mode`: o jimp so' aceita os nomes do BlendMode dele (`blend` nao
+    // existe e estourava "blendmode is not a function"). O emblema ja' vem com
+    // alpha, entao o composite padrao (SRC_OVER) e' o correto.
+    bg.composite(emblem, Math.round((CANVAS_W - emblem.width) / 2), Math.round(CANVAS_H * 0.50 - emblem.height / 2));
   }
+
   for (const { img, dx, dy } of layers) {
     bg.composite(img, baseX + dx, baseY + dy);
   }
@@ -349,15 +423,65 @@ async function renderLogo(query, cfg) {
 }
 
 /**
- * Gera um logo LOCALMENTE (jimp), sem nenhuma API externa.
+ * "Porn" (branco, fundo preto) + "hub" (preto, fundo laranja) na MESMA linha.
  *
- * `query` pode ser:
- *  - string  -> estilo de 1 texto (tabela `STYLES`)
- *  - array   -> estilo de 2 textos `[linhaDeCima, linhaDeBaixo]` (`STYLES2`)
- *
- * O comando `!amongus` aparece nas duas tabelas: quando vem array ele usa
- * `amongus2` (2 textos), senao `amongus` (1 texto).
+ * E' o layout assinatura do modelo: sem a caixa laranja atras da segunda palavra
+ * nao e' a logo do pornhub, e' so' texto.
  */
+async function renderTwoPartLine(font, left, right, cfg) {
+  const renderWord = (text, color) => {
+    const l = new Jimp({ width: TEXT_MAX_W, height: 260, color: 0x00000000 });
+    l.print({
+      font, x: 0, y: 0, text, maxWidth: TEXT_MAX_W, maxHeight: 260,
+      alignmentX: HorizontalAlign.CENTER, alignmentY: VerticalAlign.MIDDLE,
+    });
+    const bbox = alphaBBox(l);
+    if (!bbox) return null;
+    let out = l.crop({ x: bbox.x, y: bbox.y, w: bbox.w, h: bbox.h });
+    return colorizeTextLayer(out, color, color);
+  };
+
+  const a = renderWord(left, 0xffffff);
+  const b = renderWord(right, 0x000000);
+  if (!a || !b) throw new Error('Texto vazio ou não renderizável.');
+
+  // reduz para caber lado a lado com folga
+  const gap = 14;
+  const padX = 34;
+  const padY = 44;
+  const totalW = a.width + gap + b.width + padX * 2;
+  const fit = Math.min(1, (CANVAS_W * 0.86) / totalW);
+  if (fit < 1) { a.scale(fit); b.scale(fit); }
+
+  const gapPx = Math.round(gap * fit);
+  const boxPadX = Math.round(padX * fit);
+  const boxPadY = Math.round(padY * fit);
+  const textW = a.width + gapPx + b.width;
+  const textH = Math.max(a.height, b.height);
+
+  // A caixa e' MAIOR que o texto (padding), entao o canvas precisa comportar a
+  // caixa inteira. Sem esta margem o jimp recortava a caixa para fora (offset
+  // negativo) e a logo do pornhub saia sem o retangulo laranja — que e' o que a
+  // define.
+  const outW = textW + boxPadX * 2;
+  const outH = textH + boxPadY * 2;
+  const out = new Jimp({ width: outW, height: outH, color: 0x00000000 });
+
+  // caixa laranja atras da parte preta (a 2a palavra)
+  const boxX = boxPadX + a.width + gapPx;
+  const box = new Jimp({
+    width: b.width + boxPadX * 2,
+    height: textH + boxPadY * 2,
+    color: (cfg.accent ?? 0xe08000) * 256 + 0xff
+  });
+  roundCorners(box, Math.round(Math.min(box.width, box.height) * 0.14));
+  out.composite(box, boxX - boxPadX, boxPadY - boxPadY);
+
+  out.composite(a, boxPadX, Math.round(boxPadY + (textH - a.height) / 2));
+  out.composite(b, boxX, Math.round(boxPadY + (textH - b.height) / 2));
+  return { layer: out };
+}
+
 async function gerarLogo({ query, type }) {
   try {
     if (!query || !type) {

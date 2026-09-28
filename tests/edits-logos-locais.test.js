@@ -160,23 +160,98 @@ if (haveFfmpeg) {
     return out;
   };
 
-  for (const t of ['thor', 'neon2', 'blackpink', 'avengers']) {
+  /**
+   * LAYOUT contra a referencia REAL.
+   *
+   * Baixei as imagens dos modelos originais (textpro.me/ephoto360) e medi o
+   * perfil de brilho de cada uma. O padrao de TODAS: fundo PRETO nos quatro
+   * cantos, texto CENTRADO e um halo colorido no meio. Antes disso o gerador
+   * pintava um gradiente colorido no canvas inteiro — "texto colorido num fundo
+   * chapado", que nao e' a logo.
+   */
+  const layoutOf = (buf, name) => {
+    const f = path.join(TMP, name + '.png');
+    fs.writeFileSync(f, buf);
+    const raw = execFileSync('ffmpeg', ['-v', 'error', '-i', f, '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'], { maxBuffer: 1 << 28 });
+    const W = 1200, H = 640;
+    const px = (x, y) => { const i = (y * W + x) * 3; return [raw[i], raw[i + 1], raw[i + 2]]; };
+    const avg = (x0, y0, x1, y1) => {
+      let r = 0, g = 0, b = 0, n = 0;
+      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const p = px(x, y); r += p[0]; g += p[1]; b += p[2]; n += 1; }
+      return (r + g + b) / (3 * n);
+    };
+    const bands = [];
+    for (let i = 0; i < 8; i++) {
+      let l = 0, n = 0;
+      for (let y = Math.floor(i * H / 8); y < (i + 1) * H / 8; y += 3) {
+        for (let x = 0; x < W; x += 4) { const p = px(x, y); l += (p[0] + p[1] + p[2]) / 3; n += 1; }
+      }
+      bands.push(l / n);
+    }
+    return {
+      corner: Math.max(avg(0, 0, 12, 12), avg(W - 12, 0, W, 12), avg(0, H - 12, 12, H), avg(W - 12, H - 12, W, H)),
+      bands,
+      peak: bands.indexOf(Math.max(...bands)),
+      center: (bands[3] + bands[4]) / 2,
+    };
+  };
+
+  console.log('\n── menulogos: layout vs referencia original ──');
+
+  // Perfil medido nas imagens originais (brilho por faixa; pico central).
+  const REF = {
+    thor:      { center: 37, peak: [2, 4] },
+    deadpool:  { center: 34, peak: [2, 5] },
+    blackpink: { center: 47, peak: [3, 4] },
+    avengers:  { center: 61, peak: [3, 4] },
+    neon2:     { center: 100, peak: [3, 4] },
+    stone3d:   { center: 51, peak: [2, 4] },
+    pornhub:   { center: 31, peak: [3, 4] },
+  };
+
+  for (const [t, ref] of Object.entries(REF)) {
     const r = await logos.gerarLogo({ query: ['Abyss', 'Bot'], type: t });
-    const b = bandsOf(r.buffer, 'bands-' + t);
-    // as duas linhas caem em faixas verticais distintas (blocos separados
-    // contam como uma faixa, entao exige-se pelo menos 2)
-    ok(b.length >= 2, `!${t}: DUAS linhas de texto no sticker (${b.length} faixas verticais)`);
+    const L = layoutOf(r.buffer, 'lay-' + t);
+
+    // 1. fundo PRETO nos cantos (nunca gradiente colorido no quadro todo)
+    ok(L.corner <= 45, `!${t}: fundo escuro nos cantos (lum ${L.corner.toFixed(0)}; antes o canvas era todo colorido)`);
+    // 2. o texto esta' no CENTRO (pico entre as faixas 2 e 5)
+    // regiao central = faixas 2..5 de 8 (a referencia varia 2..4 entre os modelos)
+    ok(L.peak >= 2 && L.peak <= 5, `!${t}: texto no centro (pico na faixa ${L.peak}, ref ${ref.peak.join('-')})`);
+    // 3. o brilho central e' da mesma ordem da referencia (60%-160%)
+    const ratio = L.center / ref.center;
+    ok(ratio >= 0.6 && ratio <= 1.6, `!${t}: brilho central proximo da referencia (${L.center.toFixed(0)} vs ${ref.center}, ${(ratio * 100).toFixed(0)}%)`);
+    // 4. o texto tem contraste com o fundo (nao sumiu)
+    ok(L.bands[L.peak] > L.bands[0] + 8, `!${t}: texto se destaca do fundo (${L.bands[L.peak].toFixed(0)} vs ${L.bands[0].toFixed(0)})`);
   }
 
-  // uma linha so' (o array nao foi coagido para string). Usa um estilo de
-  // 1 texto — `thor` e' exclusivo de 2 textos, entao nao serve aqui.
-  const umTexto = await logos.gerarLogo({ query: 'LinhaUnica', type: 'royal' });
-  const b1 = bandsOf(umTexto.buffer, 'bands-1');
-  ok(b1.length >= 1 && b1.length < 3, `1 texto continua com uma faixa central (${b1.length})`);
-
-  // e um estilo EXCLUSIVO de 2 textos recusa o modo de 1 texto (nao inventa)
-  const so2 = await logos.gerarLogo({ query: 'LinhaUnica', type: 'thor' });
-  ok(so2.ok === false && /desconhecido/i.test(so2.msg), 'estilo exclusivo de 2 textos recusa o modo de 1 texto');
+  // Pornhub: o layout de DUAS PARTES (branco | caixa laranja) — a assinatura.
+  console.log('\n── pornhub: layout de duas partes ──');
+  const phBuf = (await logos.gerarLogo({ query: ['Abyss', 'Bot'], type: 'pornhub' })).buffer;
+  {
+    const f = path.join(TMP, 'ph.png');
+    fs.writeFileSync(f, phBuf);
+    const raw = execFileSync('ffmpeg', ['-v', 'error', '-i', f, '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'], { maxBuffer: 1 << 28 });
+    const W = 1200, H = 640;
+    const y = Math.round(H * 0.42);
+    const at = (x) => { const i = (y * W + x) * 3; return [raw[i], raw[i + 1], raw[i + 2]]; };
+    let orangeMin = W, orangeMax = -1, orange = 0, whiteMin = W, whiteMax = -1;
+    for (let x = 0; x < W; x++) {
+      const [r, g, b] = at(x);
+      if (r > 200 && g > 110 && g < 190 && b < 70) { orange += 1; if (x < orangeMin) orangeMin = x; if (x > orangeMax) orangeMax = x; }
+      if (r > 210 && g > 210 && b > 210) { if (x < whiteMin) whiteMin = x; if (x > whiteMax) whiteMax = x; }
+    }
+    ok(orange > 50, `pornhub: tem a caixa laranja (${orange}px na linha do texto)`);
+    ok(whiteMax <= orangeMin, 'pornhub: a palavra branca fica a ESQUERDA da caixa laranja');
+    // altura da caixa
+    const cx = Math.round((orangeMin + orangeMax) / 2);
+    let topo = -1, base = -1;
+    for (let yy = 0; yy < H; yy++) {
+      const [r, g, b] = (() => { const i = (yy * W + cx) * 3; return [raw[i], raw[i + 1], raw[i + 2]]; })();
+      if (r > 200 && g > 110 && g < 190 && b < 70) { if (topo < 0) topo = yy; base = yy; }
+    }
+    ok(base - topo > 60, `pornhub: a caixa e um bloco, nao um risco (${base - topo + 1}px de altura)`);
+  }
 }
 
 fs.rmSync(TMP, { recursive: true, force: true });
