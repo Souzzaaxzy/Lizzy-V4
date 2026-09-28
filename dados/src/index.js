@@ -11,7 +11,6 @@ import {
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
   proto,
-  stickerToGif,
   stickerToMp4,
   isAnimatedWebP
 } from '@itsliaaa/baileys';
@@ -28863,9 +28862,10 @@ ${nomebot}  By  👑 ${nomedono}`;
         break;
       case 'togif':
       case 'tomp4': {
-        // Figurinha (webp animado) → GIF ou MP4. O decoder de WebP do FFmpeg
-        // ignora os chunks ANIM/ANMF, então a conversão vive na fork (sharp lê
-        // os frames); ver lib/Utils/sticker-convert.js.
+        // Figurinha (webp animado) → GIF animado do WhatsApp (um MP4 com
+        // `gifPlayback`). O decoder de WebP do FFmpeg ignora os chunks
+        // ANIM/ANMF, então a conversão vive na fork (sharp lê os frames);
+        // ver lib/Utils/sticker-convert.js.
         const stickerTogif = quotedMessageContent?.stickerMessage
           || info.message?.stickerMessage
           || quotedMessageContent?.viewOnceMessage?.message?.stickerMessage
@@ -28890,30 +28890,26 @@ ${nomebot}  By  👑 ${nomedono}`;
           if (!isAnimatedWebP(buffer)) {
             return reply(`⚠️ Essa figurinha é *estática*, não tem animação para converter.\n\n💡 Para tirar a imagem, use *${groupPrefix}toimg*.`);
           }
-          const querMp4 = command === 'tomp4';
+          // Sempre MP4: é o único container que o WhatsApp anima (com
+          // `gifPlayback`). Um .gif de verdade só sairia como ARQUIVO no chat.
           let converted;
           try {
-            converted = querMp4 ? await stickerToMp4(buffer) : await stickerToGif(buffer);
+            converted = await stickerToMp4(buffer);
           } catch (convError) {
             console.error('[TOGIF] falha na conversão:', convError?.message || convError);
-            return reply(`❌ Não consegui converter essa figurinha.\n\n${convError?.message || ''}`.trim());
+            const semFfmpeg = /ffmpeg/i.test(convError?.message || '');
+            return reply(semFfmpeg
+              ? '❌ Para gerar o GIF animado preciso do *FFmpeg* instalado no servidor.'
+              : `❌ Não consegui converter essa figurinha.\n\n${convError?.message || ''}`.trim());
           }
-          // O WhatsApp anima MP4 com `gifPlayback`; para o GIF, entregamos o
-          // arquivo .gif como DOCUMENTO (o app não reproduz gif inline).
-          if (querMp4) {
-            await nazu.sendMessage(from, {
-              video: converted.buffer,
-              mimetype: 'video/mp4',
-              gifPlayback: true
-            }, { quoted: info });
-          } else {
-            await nazu.sendMessage(from, {
-              document: converted.buffer,
-              mimetype: 'image/gif',
-              fileName: 'figurinha.gif',
-              caption: '🎞️ Figurinha convertida em GIF'
-            }, { quoted: info });
-          }
+          // O WhatsApp "GIF" é um MP4 em loop com `gifPlayback: true` — é assim
+          // que o próprio app manda e anima. Então o `!togif` publica esse vídeo
+          // (sem som, em loop) em vez de um arquivo .gif no chat.
+          await nazu.sendMessage(from, {
+            video: converted.buffer,
+            mimetype: 'video/mp4',
+            gifPlayback: true
+          }, { quoted: info });
         } catch (error) {
           console.error('[TOGIF] erro:', error?.message || error);
           await reply('❌ Ocorreu um erro interno. Tente novamente em alguns minutos.');

@@ -310,15 +310,17 @@ await test('8. !tomp4 (figurinha animada): envia VÍDEO mp4 com gifPlayback', as
   ok(Buffer.isBuffer(video?.content?.video) && video.content.video.slice(4, 8).toString('latin1') === 'ftyp', 'container MP4');
 });
 
-await test('9. !togif (figurinha animada): envia o GIF como documento', async () => {
+await test('9. !togif (figurinha animada): envia como GIF animado (MP4 + gifPlayback)', async () => {
   const groupJid = makeGroup();
   const sticker = publicarSticker(ANIMATED);
   const sent = await run({ groupJid, text: '!togif', sticker });
-  const doc = sent.find((s) => s.content?.document);
-  ok(!!doc, 'enviou o documento');
-  ok(doc?.content?.mimetype === 'image/gif', 'mimetype gif');
-  ok(doc?.content?.document?.slice(0, 3).toString('latin1') === 'GIF', 'magic GIF');
-  ok(doc?.content?.fileName === 'figurinha.gif', 'nome do arquivo');
+  // O WhatsApp "GIF" é um vídeo MP4 com gifPlayback — NÃO um arquivo .gif.
+  const video = sent.find((s) => s.content?.video);
+  ok(!!video, 'enviou um vídeo (GIF animado)');
+  ok(video?.content?.mimetype === 'video/mp4', 'mimetype mp4');
+  ok(video?.content?.gifPlayback === true, 'gifPlayback ligado');
+  ok(video?.content?.video?.slice(4, 8).toString('latin1') === 'ftyp', 'container MP4');
+  ok(!sent.some((s) => s.content?.document), 'NÃO manda documento .gif');
 });
 
 await test('10. figurinha ESTÁTICA: avisa para usar o !toimg', async () => {
@@ -328,6 +330,18 @@ await test('10. figurinha ESTÁTICA: avisa para usar o !toimg', async () => {
   const t = textOf(sent);
   includes(t, 'estática', 'avisa que é estática');
   includes(t, 'toimg', 'sugere o toimg');
+});
+
+await test('11. o payload vira `videoMessage.gifPlayback` na fork (renderiza como GIF)', async () => {
+  const { generateWAMessageContent } = baileys;
+  const mp4 = await baileys.stickerToMp4(ANIMATED);
+  const content = await generateWAMessageContent(
+    { video: mp4.buffer, mimetype: 'video/mp4', gifPlayback: true },
+    { upload: async () => ({ url: 'https://mmg.whatsapp.net/v/x', directPath: '/v/x' }), userJid: '5599999999999@s.whatsapp.net' }
+  );
+  const msg = content.videoMessage;
+  ok(!!msg, 'gerou videoMessage');
+  ok(msg?.gifPlayback === true, 'gifPlayback: true no proto (é o que o app usa para animar/loop)');
 });
 
 // ============================================================================

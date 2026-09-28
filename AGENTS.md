@@ -6753,21 +6753,30 @@ saída fica vazia). Por isso a conversão foi para a **fork**.
 - Importa `stickerToGif`/`stickerToMp4`/`isAnimatedWebP` de `@itsliaaa/baileys`.
 - `case 'togif'` / `case 'tomp4'`: resolve o `stickerMessage` (citado, direto ou
   view-once), baixa o buffer (`getFileBuffer(...,'sticker')`), confere se é
-  **animado** e converte.
+  **animado** e converte para MP4 (`stickerToMp4`). Sem FFmpeg → mensagem
+  específica ("preciso do FFmpeg instalado").
 - **Figurinha estática** → avisa e manda usar **`!toimg`** (em vez de gerar um
   GIF/vídeo de 1 frame, que seria inútil).
-- Envio: **MP4** como `video` + `gifPlayback: true` (é o que o WhatsApp anima);
-  **GIF** como **documento** `.gif` (o app não reproduz GIF inline).
+- Envio: **SEMPRE** `video` MP4 + **`gifPlayback: true`**. É assim que o
+  WhatsApp representa "GIF": o app anima/loop um **vídeo** marcado; um `.gif`
+  de verdade só sai como **ARQUIVO** no chat (era o comportamento antigo do
+  `!togif`, corrigido a pedido do dono). Logo **os dois** comandos convertem via
+  `stickerToMp4` — o `stickerToGif` da fork continua existindo, mas o bot não o
+  usa no envio (GIF só interessa como caso de teste).
 - Erros: mensagem amigável sem stack; detalhe no console (`[TOGIF] ...`).
 
 ### Menu / testes
 - `menufig`: linha `🎞️ ${prefix}togif` + `togif`/`tomp4` no `menuCommandsMap.menufig`
   do `blockPv`. Baseline do `menu-layout` **menufig 16 → 17**.
-- `tests/togif.test.js` (**10 testes / 25 asserções**) — sem figurinha; a fork
+- `tests/togif.test.js` (**11 testes / 28 asserções**) — sem figurinha; a fork
   converte GIF/MP4; `isAnimatedWebP`; export; **ponta a ponta** com figurinha
-  **cifrada de verdade** (hkdf + AES-256-CBC, servidor HTTP local): `!tomp4` →
-  vídeo `ftyp` + `gifPlayback`; `!togif` → documento GIF; estática → avisa;
-  menu/blockPv.
+  **cifrada de verdade** (hkdf + AES-256-CBC, servidor HTTP local): `!tomp4` e
+  `!togif` → **vídeo** `ftyp` + `gifPlayback` (e **nenhum documento**); estática
+  → avisa; menu/blockPv; e o **payload real** passado pelo
+  `generateWAMessageContent` da fork vira `videoMessage.gifPlayback === true`.
+- **Pré-existente (não é regressão)**: `tests/midiaprefix.test.js` falha no
+  sandbox por causa do caminho do ffmpeg — confirmado com `git stash` no HEAD
+  limpo (mesma falha sem as mudanças).
 
 ### Dependência
 `package-lock.json` + `yarn.lock` → `01922126a6d3969db7de3d85de32cf31d3cdb2ab`
