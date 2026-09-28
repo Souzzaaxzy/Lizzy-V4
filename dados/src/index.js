@@ -21354,7 +21354,9 @@ ${groupPrefix}brat Vex API
 ⚡ Padrão:
 Se não definir cores:
 - fundo = branco
-- texto = preto`
+- texto = preto
+😀 Emojis são suportados (saem coloridos)
+📏 Textos longos são reajustados para caber automaticamente`
             );
           }
           const datinha = await canvas.gerarbrat(
@@ -21411,7 +21413,9 @@ ${groupPrefix}bratvid vex api
 - text_color = cor do texto (ex: white, black)
 - bpm = velocidade da animação (padrão 120)
 ⚡ Dica:
-Se não definir cores, a API usa padrão automaticamente.`
+Se não definir cores, a API usa padrão automaticamente.
+😀 Emojis são suportados (saem coloridos)
+📏 Textos longos são reajustados para caber automaticamente`
             );
           }
           const datinha = await canvas.gerarbratvid(

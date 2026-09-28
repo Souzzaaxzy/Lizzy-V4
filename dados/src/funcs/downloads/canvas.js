@@ -1,4 +1,5 @@
 import { Jimp, loadFont, measureText, HorizontalAlign, VerticalAlign } from 'jimp';
+import { splitEmoji, preloadEmoji, hasEmoji } from './emojiRender.js';
 import { spawn } from 'child_process';
 import { promises as fsp } from 'fs';
 import os from 'os';
@@ -118,37 +119,287 @@ async function pngToWebp(pngBuffer, outFile) {
   return fsp.readFile(outFile);
 }
 
-function renderTextLayer(font, text, maxW, maxH, colorHex, blurPx = 0, opts = {}) {
+/** Escala da fonte bitmap por glifo. */
+const FONT_SCALE = (font) => font?.common?.lineHeight / 113 || 1;
+
+/**
+ * Largura de um trecho para a fonte bitmap (soma dos xadvance, como o jimp faz).
+ *
+ * `measureText` do jimp devolve 0 para qualquer char ausente da fonte — que e'
+ * exatamente o caso do emoji. Por isso o emoji NUNCA entra nesta conta: ele tem
+ * largura propria (a altura da linha) e e' desenhado como imagem.
+ */
+function measureRun(font, text) {
+  return measureText(font, text);
+}
+
+/** Limite de caracteres do texto (o auto-ajuste da escala cuida do resto). */
+const MAX_TEXT_CHARS = 300;
+
+/**
+ * Recorta o texto ao limite, preservando o emoji inteiro.
+ *
+ * O corte e' por code point (spread), nunca por indice de string: cortar no meio
+ * de um par surrogate quebraria o emoji, e cortar dentro de um ZWJ mudaria a
+ * figurinha (`👨‍👩‍👧` viraria outra coisa).
+ */
+function clampText(text, max = MAX_TEXT_CHARS) {
+  const t = String(text);
+  if (t.length <= max) return t;
+  return [...t].slice(0, max).join('') + '…';
+}
+
+/**
+ * Largura de uma palavra mista (texto + emoji) na escala da fonte.
+ *
+ * Espelha o que o jimp faria com o texto, trocando cada emoji pela largura da
+ * linha — assim a quebra de linha do bitmap font continua valendo com emoji no
+ * meio, e um emoji "cabe" como um caractere.
+ *
+ * E' exportado porque e' o unico jeito de medir texto com emoji: o `measureText`
+ * do jimp devolve 0 para o emoji (char ausente da fonte).
+ */
+export function measureMixed(font, text, emojiWidth = null) {
+  const scale = FONT_SCALE(font);
+  const emW = emojiWidth ?? (font?.common?.lineHeight || 113) * scale;
+  let w = 0;
+  for (const run of splitEmoji(text)) {
+    w += run.type === 'emoji' ? emW : measureRun(font, run.value);
+  }
+  return w;
+}
+
+/**
+ * Quebra um texto em linhas na largura dada, respeitando emoji.
+ *
+ * E' a fonte UNICA da quebra de linha: o mesmo calculo alimenta o desenho
+ * (`renderMixedLayer`) e a escolha de escala (`renderScaledLayer`). Sem isso,
+ * medir a altura exigiria renderizar o texto so' para contar as linhas.
+ *
+ * @returns {{ lines, widths, maxWidth, height, lineHeight, emojiSize, spaceW }}
+ */
+export function layoutLines(font, text, maxW, emojiImages = new Map()) {
+  const lineHeight = font?.common?.lineHeight || 113;
+  const emojiSize = Math.round(lineHeight);
+  const spaceW = measureRun(font, ' ');
+
+  /**
+   * Quebra uma palavra larga demais em pedacos que caibam.
+   *
+   * Sem isto, uma palavra/URL sem espacos maior que a largura faria o texto
+   * inteiro ser reduzido por escala — medido: 200 caracteres viravam um risco de
+   * 462x5 px, ilegivel.
+   */
+  const breakWord = (word, limit) => {
+    const out = [];
+    for (const run of splitEmoji(word)) {
+      const units = run.type === 'emoji'
+        ? [{ type: 'emoji', value: run.value }]
+        : [...run.value].map((ch) => ({ type: 'text', value: ch }));
+      let chunk = '';
+      let chunkW = 0;
+      let emojis = 0;
+      for (const unit of units) {
+        const uW = unit.type === 'emoji' ? emojiSize : measureRun(font, unit.value);
+        if (chunk && chunkW + uW > limit) {
+          out.push({ word: chunk, w: chunkW, emojis });
+          chunk = '';
+          chunkW = 0;
+          emojis = 0;
+        }
+        chunk += unit.value;
+        if (unit.type === 'emoji') emojis += 1;
+        chunkW += uW;
+      }
+      if (chunk) out.push({ word: chunk, w: chunkW, emojis });
+    }
+    return out;
+  };
+
+  const lines = [];
+  const widths = [];
+  let current = [];
+  let currentW = 0;
+  const flush = () => {
+    lines.push(current);
+    widths.push(currentW);
+    current = [];
+    currentW = 0;
+  };
+  for (const rawWord of String(text).replace(/[\r\n]+/g, ' \n').split(' ')) {
+    for (const piece of breakWord(rawWord, maxW)) {
+      if (current.length && currentW + spaceW + piece.w > maxW) flush();
+      current.push(piece);
+      currentW += (current.length > 1 ? spaceW : 0) + piece.w;
+    }
+  }
+  flush();
+  if (lines.length > 1 && lines[lines.length - 1].length === 0) {
+    lines.pop();
+    widths.pop();
+  }
+  return {
+    lines,
+    widths,
+    maxWidth: widths.length ? Math.max(...widths) : 0,
+    height: lines.length * lineHeight,
+    lineHeight,
+    emojiSize,
+    spaceW,
+  };
+}
+
+/**
+ * Desenha texto (fonte bitmap) + emoji (imagem) numa layer propria.
+ *
+ * ## Como o layout funciona
+ *
+ * O jimp desenha uma linha de cada vez, e o emoji nao pode entrar no `print()`
+ * (a fonte nao tem o glifo e o jimp o troca por "?"). Entao:
+ *
+ *   1. `layoutLines` quebra o texto em linhas (descontando a largura do emoji);
+ *   2. o TEXTO vai para uma layer propria, que e' recolorida e desfocada;
+ *   3. os EMOJIS entram depois por `composite()`, na linha de base do texto, e
+ *      por isso mantem a cor original.
+ *
+ * @param emojiImages Map cluster -> Jimp image (de `preloadEmoji`)
+ */
+export function renderMixedLayer(font, text, maxW, maxH, colorHex, blurPx = 0, opts = {}) {
   const {
     alignX = HorizontalAlign.CENTER,
     alignY = VerticalAlign.MIDDLE,
     y = 0,
+    emojiImages = new Map(),
   } = opts;
-  const layer = new Jimp({ width: maxW, height: maxH, color: 0x00000000 });
-  layer.print({
-    font,
-    x: 0,
-    y,
-    text,
-    maxWidth: maxW,
-    maxHeight: maxH,
-    alignmentX: alignX,
-    alignmentY: alignY,
+
+  const { lines, widths, lineHeight, emojiSize, spaceW } = layoutLines(font, text, maxW, emojiImages);
+  const totalH = lines.length * lineHeight;
+  let startY = y;
+  if (alignY === VerticalAlign.MIDDLE) startY = y + Math.max(0, (maxH - totalH) / 2);
+  else if (alignY === VerticalAlign.BOTTOM) startY = y + Math.max(0, maxH - totalH);
+
+  const layerH = Math.max(1, Math.ceil(startY + totalH));
+  const textLayer = new Jimp({ width: maxW, height: layerH, color: 0x00000000 });
+  const placements = [];
+
+  lines.forEach((line, li) => {
+    const lineW = widths[li];
+    let x = 0;
+    if (alignX === HorizontalAlign.CENTER) x = Math.max(0, (maxW - lineW) / 2);
+    else if (alignX === HorizontalAlign.RIGHT) x = Math.max(0, maxW - lineW);
+
+    const baseY = Math.round(startY + li * lineHeight);
+
+    line.forEach((piece, pi) => {
+      if (pi) x += spaceW;
+      for (const run of splitEmoji(piece.word)) {
+        if (run.type === 'text') {
+          if (run.value) {
+            textLayer.print({
+              font, x: Math.round(x), y: baseY, text: run.value,
+              maxWidth: maxW, maxHeight: layerH,
+              alignmentX: HorizontalAlign.LEFT, alignmentY: VerticalAlign.TOP,
+            });
+            x += measureRun(font, run.value);
+          }
+          continue;
+        }
+        const img = emojiImages.get(run.value);
+        if (img) {
+          placements.push({ img, x: Math.round(x), y: Math.round(baseY + (lineHeight - emojiSize) / 2) });
+        } else {
+          // sem imagem (rede fora): mantem o "?" do jimp, em vez de sumir com o
+          // caractere — o usuario ve' que algo ficou de fora
+          textLayer.print({
+            font, x: Math.round(x), y: baseY, text: '?',
+            maxWidth: maxW, maxHeight: layerH,
+            alignmentX: HorizontalAlign.LEFT, alignmentY: VerticalAlign.TOP,
+          });
+        }
+        x += emojiSize;
+      }
+    });
   });
+
   const rgb = {
     r: (colorHex >> 16) & 0xff,
     g: (colorHex >> 8) & 0xff,
     b: colorHex & 0xff,
   };
-  layer.scan((x, y, idx) => {
-    if (layer.bitmap.data[idx + 3] > 0) {
-      layer.bitmap.data[idx] = rgb.r;
-      layer.bitmap.data[idx + 1] = rgb.g;
-      layer.bitmap.data[idx + 2] = rgb.b;
+  textLayer.scan((x, y, idx) => {
+    if (textLayer.bitmap.data[idx + 3] > 0) {
+      textLayer.bitmap.data[idx] = rgb.r;
+      textLayer.bitmap.data[idx + 1] = rgb.g;
+      textLayer.bitmap.data[idx + 2] = rgb.b;
     }
   });
-  if (blurPx > 0) layer.blur(Math.min(blurPx, 100));
+  if (blurPx > 0) textLayer.blur(Math.min(blurPx, 100));
+
+  const layer = new Jimp({ width: maxW, height: layerH, color: 0x00000000 });
+  layer.composite(textLayer, 0, 0);
+  for (const p of placements) {
+    layer.composite(p.img.clone().resize({ w: emojiSize, h: emojiSize }), p.x, p.y);
+  }
   return layer;
+}
+
+/** Numero de passos da busca binaria de escala. */
+const FIT_STEPS = 22;
+/** Menor escala considerada (abaixo disto o texto e' ilegivel de qualquer forma). */
+const MIN_FIT_SCALE = 0.08;
+
+/**
+ * Renderiza TEXTO + EMOJI centralizado num box, escolhendo a maior escala que caiba.
+ *
+ * ## Por que a escala e' da FONTE, e nao do bloco depois de desenhado
+ *
+ * A fonte tem 113 px de altura de linha: em 460 px cabem so' ~4 linhas de ~7
+ * caracteres. A abordagem anterior desenhava nesse tamanho e depois reduzia o
+ * bloco inteiro por escala, o que encolhia TUDO junto — medido: uma frase de 94
+ * caracteres virava uma tira de 128 px de largura com 15 linhas.
+ *
+ * Aqui a escala entra na LARGURA usada para quebrar: com a fonte menor, cabem
+ * mais palavras por linha e o bloco fica naturalmente mais quadrado. A busca
+ * binaria acha a maior escala cujo bloco cabe no box — sem renderizar 22 vezes,
+ * porque a altura vem do layout (`layoutLines`), nao dos pixels.
+ */
+export async function renderScaledLayer(font, text, boxW, boxH, colorHex, blurPx = 0) {
+  const emojiImages = await preloadEmoji(text);
+
+  const layoutAt = (scale) => layoutLines(font, text, boxW / scale, emojiImages);
+  const fits = (scale) => {
+    const L = layoutAt(scale);
+    return L.height * scale <= boxH && L.maxWidth * scale <= boxW;
+  };
+
+  let lo = MIN_FIT_SCALE;
+  let hi = 1;
+  let best = fits(1) ? 1 : lo;
+  if (best !== 1) {
+    for (let i = 0; i < FIT_STEPS; i++) {
+      const mid = (lo + hi) / 2;
+      if (fits(mid)) {
+        best = mid;
+        lo = mid;
+      } else {
+        hi = mid;
+      }
+    }
+  }
+
+  const layout = layoutAt(best);
+  const drawW = Math.max(1, Math.ceil(boxW / best));
+  const layer = renderMixedLayer(font, text, drawW, Math.max(1, Math.ceil(layout.height)), colorHex, blurPx, {
+    alignX: HorizontalAlign.LEFT,
+    alignY: VerticalAlign.TOP,
+    emojiImages,
+  });
+  if (best < 1) layer.scale(best);
+
+  const out = new Jimp({ width: boxW, height: boxH, color: 0x00000000 });
+  out.composite(layer, Math.max(0, Math.round((boxW - layer.width) / 2)), Math.max(0, Math.round((boxH - layer.height) / 2)));
+
+  return { layer: out, scale: best, blockW: layer.width, blockH: layer.height, emojiImages };
 }
 
 async function withTempDir(fn) {
@@ -177,8 +428,11 @@ async function gerarbrat(query, bg, text_color, blur) {
     const blurPx = Math.max(0, parseInt(blur, 10) || 0);
 
     const font = await getFont();
+    const texto = clampText(query);
     const img = new Jimp({ width: 512, height: 512, color: bgHex * 256 + 0xff });
-    const textLayer = renderTextLayer(font, String(query), 460, 460, textHex, blurPx);
+    // Auto-ajuste + emoji: a frase inteira cabe (o `print()` sozinho parava em
+    // ~4 linhas curtas) e o emoji sai desenhado, nao como "?".
+    const { layer: textLayer } = await renderScaledLayer(font, texto, 460, 460, textHex, blurPx);
     img.composite(textLayer, 26, 26);
     const pngBuffer = await img.getBuffer('image/png');
 
@@ -223,72 +477,65 @@ async function gerarbratvid(query, bg, text_color, bpm, blur) {
     const words = String(query).trim().split(/\s+/);
     const wordsPerStep = Math.max(1, Math.ceil(words.length / 20)); // teto de ~20 passos
     const steps = Math.ceil(words.length / wordsPerStep);
-    const fps = Math.max(1, Math.round(bpmNum / 60)); // 1 palavra por batida
-    const holdFrames = Math.max(2, fps); // pausa com a frase completa antes do loop
+    /**
+     * Ritmo da animacao — TODA palavra fica o mesmo tempo na tela.
+     *
+     * Duas armadilhas, as duas medidas no arquivo gerado:
+     *
+     * 1. O codigo antigo usava `fps = round(bpm/60)` (2 fps a 120 bpm), o que ja'
+     *    dava um video a 2 quadros por segundo.
+     * 2. Ele somava `holdFrames = max(2, fps)` quadros PARADOS com a frase
+     *    completa "para o loop respirar". Mas o encoder de webp FUNDE frames
+     *    identicos e soma as duracoes, entao o hold nao era uma pausa separada:
+     *    ele entrava na conta da ultima palavra. Resultado medido:
+     *    `duracoes = [500, 500, 1500]` — a palavra final 3x mais lenta, que e' o
+     *    "a palavra final demora uns 2 segundos".
+     *
+     * Agora o video roda a 25 fps (o maximo que o WhatsApp exibe) e cada passo
+     * ocupa `framesPerStep` quadros iguais; nao ha hold, entao a ultima palavra
+     * dura exatamente o mesmo que as demais (medido: `[520]` a 120 bpm).
+     */
+    const FPS = 25;
+    const framesPerStep = Math.max(1, Math.round((FPS * 60) / bpmNum)); // 1 palavra por batida
+
+    const texto = clampText(query);
+    const fullText = words.join(' ');
 
     const buffer = await withTempDir(async dir => {
-      // A fonte bitmap tem tamanho fixo: frases longas não caberiam em
-      // 460x460 (o print do jimp clipa o excedente). Mede-se o texto
-      // completo sem limite de altura e, se necessário, renderiza-se mais
-      // largo e reduz com escala — assim a frase inteira sempre cabe.
-      const renderLoose = (text, width) =>
-        renderTextLayer(font, text, width, 8192, textHex, 0, {
-          alignX: HorizontalAlign.LEFT,
-          alignY: VerticalAlign.TOP,
-        });
-      const inkBox = layer => {
-        let minX = layer.width, maxX = -1, minY = layer.height, maxY = -1;
-        layer.scan((x, y, idx) => {
-          if (layer.bitmap.data[idx + 3] > 0) {
-            if (x < minX) minX = x;
-            if (x > maxX) maxX = x;
-            if (y < minY) minY = y;
-            if (y > maxY) maxY = y;
-          }
-        });
-        return maxX >= 0
-          ? { w: maxX - minX + 1, h: maxY - minY + 1 }
-          : { w: 0, h: 0 };
-      };
-
-      const fullText = words.join(' ');
-      // Palavra mais larga que o canvas seria truncada pelo print (a quebra
-      // de linha do jimp usa largura de avanço, não a bbox de tinta — por
-      // isso mede-se com measureText): renderiza na largura dela e reduz.
-      let maxWordW = 0;
-      for (const w of words) {
-        const ww = measureText(font, w);
-        if (ww > maxWordW) maxWordW = ww;
-      }
-      let textWidth = Math.max(460, maxWordW);
-      let box = inkBox(renderLoose(fullText, textWidth));
-      if (!box.w || !box.h) {
-        throw new Error('Não foi possível renderizar o texto');
-      }
-      if (box.h > 460 && maxWordW <= 460) {
-        // altura ≈ box.h * 460 / textWidth ao refluir: textWidth >= sqrt(h*460)
-        // faz o bloco refluído caber em 460x460 após a escala
-        textWidth = Math.max(460, Math.ceil(Math.sqrt(box.h * 460)));
-        box = inkBox(renderLoose(fullText, textWidth));
-      }
-      const scale = Math.min(1, 460 / box.h, 460 / box.w, 460 / textWidth);
-      const blockH = box.h * scale; // altura final (fixa) do bloco completo
-
-      // Origem fixa para todos os frames: com alinhamento à esquerda/topo,
-      // as palavras já exibidas não se movem enquanto as novas aparecem.
-      const originX = 26 + Math.round((460 - textWidth * scale) / 2);
-      const originY = 26 + Math.round((460 - blockH) / 2);
+      // Auto-ajuste (o mesmo do !brat): a frase inteira cabe em 460x460 sem
+      // depender do teto de altura do print(); textos longos passam a caber.
+      // E o emoji entra como imagem — a fonte bitmap nao tem esse glifo.
+      // A escala e' a MESMA em todos os frames (calculada pela frase completa),
+      // entao as palavras ja' exibidas nao se movem quando as novas aparecem.
+      const { scale } = await renderScaledLayer(font, fullText, 460, 460, textHex, blurPx);
+      const emojiImages = await preloadEmoji(texto);
 
       let frameIdx = 0;
+      // Cache por conteudo: cada passo e' escrito framesPerStep vezes, entao sem
+      // isto o mesmo frame seria rasterizado varias vezes sem necessidade.
+      const pngByText = new Map();
       const writeFrame = async text => {
-        const frame = new Jimp({ width: 512, height: 512, color: bgHex * 256 + 0xff });
-        const textLayer = renderTextLayer(font, text, textWidth, 8192, textHex, blurPx, {
-          alignX: HorizontalAlign.LEFT,
-          alignY: VerticalAlign.TOP,
-        });
-        if (scale < 1) textLayer.scale(scale);
-        frame.composite(textLayer, originX, originY);
-        const png = await frame.getBuffer('image/png');
+        let png = pngByText.get(text);
+        if (!png) {
+          // Cada frame usa a MESMA largura de quebra e a MESMA escala da frase
+          // completa: as palavras que ja' apareceram ficam exatamente onde
+          // estavam, e o bloco e' centralizado verticalmente no box.
+          const drawW = Math.max(1, Math.ceil(460 / scale));
+          const layer = renderMixedLayer(font, text, drawW, 8192, textHex, blurPx, {
+            alignX: HorizontalAlign.LEFT,
+            alignY: VerticalAlign.TOP,
+            emojiImages,
+          });
+          if (scale < 1) layer.scale(scale);
+          const frame = new Jimp({ width: 512, height: 512, color: bgHex * 256 + 0xff });
+          frame.composite(
+            layer,
+            26 + Math.max(0, Math.round((460 - layer.width) / 2)),
+            26 + Math.max(0, Math.round((460 - layer.height) / 2))
+          );
+          png = await frame.getBuffer('image/png');
+          pngByText.set(text, png);
+        }
         await fsp.writeFile(
           path.join(dir, `frame-${String(frameIdx++).padStart(3, '0')}.png`),
           png
@@ -296,15 +543,12 @@ async function gerarbratvid(query, bg, text_color, bpm, blur) {
       };
 
       for (let i = 0; i < steps; i++) {
-        await writeFrame(words.slice(0, (i + 1) * wordsPerStep).join(' '));
+        const stepText = words.slice(0, (i + 1) * wordsPerStep).join(' ');
+        for (let r = 0; r < framesPerStep; r++) await writeFrame(stepText);
       }
-      for (let i = 0; i < holdFrames; i++) {
-        await writeFrame(fullText);
-      }
-
       const outFile = path.join(dir, 'out.webp');
       await runFfmpeg([
-        '-framerate', String(fps),
+        '-framerate', String(FPS),
         '-i', path.join(dir, 'frame-%03d.png'),
         '-c:v', 'libwebp_anim', '-lossless', '0', '-q:v', '75',
         '-loop', '0', '-preset', 'default',
