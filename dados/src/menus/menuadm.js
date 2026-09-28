@@ -217,6 +217,7 @@ export default async function menuadm(prefix, botName = "MeuBot", userName = "Us
 │ 🌙 ${prefix}modolite
 │ 🔞 ${prefix}modo18
 │ 📞 ${prefix}callp
+│ 🎙️ ${prefix}vozp
 │ 👋 ${prefix}bemvindo
 │ 👋 ${prefix}bemvindo2
 │ 🚪 ${prefix}saida

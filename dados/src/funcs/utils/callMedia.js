@@ -89,17 +89,21 @@ export async function obterMedia() {
 /**
  * Entra na call de grupo como participante de MÍDIA.
  *
+ * `voiceChat: true` pede ao motor o CHAT DE VOZ (offer "lightweight": entra sem
+ * tocar para todos), em vez da chamada que toca. O bot que decide é o comando;
+ * aqui só repassamos.
+ *
  * Best-effort de propósito: se falhar, devolve o motivo e o `!callp` segue
  * reportando a chamada como aberta (só sem áudio), em vez de dizer que não subiu.
  */
-export async function entrarNaCallComMidia({ grupo, callId, callCreator, participantes, sock }) {
-  if (dubleEntrar) return dubleEntrar.entrar({ grupo, callId, callCreator, participantes, sock });
+export async function entrarNaCallComMidia({ grupo, callId, callCreator, participantes, sock, voiceChat = false }) {
+  if (dubleEntrar) return dubleEntrar.entrar({ grupo, callId, callCreator, participantes, sock, voiceChat });
   const media = await obterMedia();
   if (!media) {
     return { ok: false, motivo: 'pacote_de_midia_ausente', detalhe: loadError };
   }
   try {
-    const r = await media.entrarNaCall({ grupo, callId, participantes, sock, groupInfo: null });
+    const r = await media.entrarNaCall({ grupo, callId, participantes, sock, groupInfo: null, isLightWeight: !!voiceChat });
     return r;
   } catch (e) {
     return { ok: false, motivo: 'falha_ao_entrar', detalhe: e?.message || String(e) };

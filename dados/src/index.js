@@ -3441,6 +3441,73 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       return; // Impede o contato bloqueado de seguir para os outros handlers.
     }
 
+    /**
+     * Sobe uma chamada/chamada de voz neste grupo e registra para o `encerrar`.
+     *
+     * Ponto ÚNICO usado pelo `!callp` (chamada) e pelo `!vozp` (chat de voz): os
+     * dois só mudam `voiceChat`, então duplicar o fluxo deixaria as duas versões
+     * divergindo na primeira correção. Nada de sinalização aqui: quem CRIA a
+     * call é o motor de mídia (medido no pacote `lizzy-call`).
+     *
+     * @returns {Promise<{ok: boolean, callId?: string, stage?: string, motivo?: string, detalhe?: string}>}
+     */
+    const subirCallDoGrupo = async ({ voiceChat = false } = {}) => {
+      const botCallId = getBotNumber(nazu);
+      if (!botCallId) {
+        return { ok: false, motivo: 'sem_identidade' };
+      }
+
+      const meta = await nazu.groupMetadata(from).catch(() => null);
+      if (!meta) {
+        return { ok: false, motivo: 'sem_metadata' };
+      }
+
+      // Convidados: todos os membros, menos o bot (ele entra como criador).
+      const botUser = String(botCallId).split('@')[0].split(':')[0];
+      const convidados = [];
+      const vistos = new Set();
+      for (const part of (meta.participants || [])) {
+        const jid = part?.id || part?.phoneNumber;
+        if (typeof jid !== 'string' || !jid) continue;
+        const user = jid.split('@')[0].split(':')[0];
+        if (!user || user === botUser || vistos.has(user)) continue;
+        vistos.add(user);
+        convidados.push(jid);
+      }
+      if (convidados.length < 2) {
+        return { ok: false, motivo: 'grupo_pequeno' };
+      }
+
+      // Aviso de memória: a pilha de mídia aloca centenas de MB. Se a máquina
+      // estiver apertada, o OOM killer mata o processo (SIGKILL) no meio da call
+      // e o sintoma vira "o bot reiniciou sozinho", sem log.
+      try {
+        const livreMb = Math.round(os.freemem() / 1048576);
+        if (livreMb < 700) {
+          console.warn(`[CALLP] memória livre baixa: ${livreMb} MB — a pilha de mídia precisa de ~600 MB`);
+        }
+      } catch { /* aviso é best-effort */ }
+
+      const midia = await entrarNaCallComMidia({
+        grupo: from,
+        participantes: convidados,
+        sock: nazu,
+        voiceChat
+      });
+      if (!midia?.ok) return midia || { ok: false, motivo: 'falha_ao_entrar' };
+
+      // Guarda a call para o `encerrar` — registro em MEMÓRIA (não no JSON do
+      // grupo): a call vive na sessão do socket e morre com ela.
+      registrarCall(from, {
+        callId: midia.callId,
+        callCreator: botCallId,
+        startedAt: Date.now(),
+        voiceChat: !!voiceChat
+      });
+
+      return { ok: true, callId: midia.callId, stage: midia.stage };
+    };
+
     const isModoBn = groupData.modobrincadeira;
     // Gerenciador do !hotseat (+18). UMA instancia por processo, criada na
     // primeira mensagem (aqui o destructuring dos modulos ja rodou). O
@@ -33620,10 +33687,75 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
       // Agora o motor cria, e a sinalização dele sai pelo socket.
       //
       // `!callp encerrar` derruba a chamada e a pilha de mídia.
+      // !vozp — CHAT DE VOZ no grupo (o "voice chat" do WhatsApp).
+      //
+      // Mesmo fluxo do `!callp`, com uma diferença que é o ponto todo: o motor
+      // sobe a call com o marcador de VOICE CHAT (offer "lightweight"), então a
+      // chamada NÃO toca para o grupo — os membros veem o chat de voz e entram
+      // se quiserem. No `!callp` a chamada toca.
+      //
+      // Evidência no WASM (`lizzy-call`): `voice_chat.cc` com `is_voice_chat` /
+      // `is_lightweight` / `lightweight-key`, e o parâmetro `isLightWeight` do
+      // `startVoipGroupCall`, que `entrarNaCallComMidia` repassa como
+      // `isLightWeight` (ver `dados/src/funcs/utils/callMedia.js`).
+      case 'vozp':
+      case 'voicechat':
+      case 'chatvoz':
+        try {
+          if (!isGroup) return reply('Isso só pode ser usado em grupo 💔');
+          if (!isGroupAdmin) return reply('Você precisa ser adm 💔');
+
+          const subVoz = normalizar((args[0] || '')).trim();
+
+          if (subVoz === 'encerrar' || subVoz === 'parar' || subVoz === 'desligar') {
+            const ativa = obterCall(from);
+            if (!ativa || !ativa.callId) {
+              return reply('📴 Não há chat de voz ativo subido por mim neste grupo.');
+            }
+            limparCall(from);
+            await sairDaCallComMidia(from).catch(() => {});
+            return reply('📴 Chat de voz encerrado.');
+          }
+
+          const jaAtiva = obterCall(from);
+          if (jaAtiva) {
+            const tipoAtual = jaAtiva.voiceChat ? 'chat de voz' : 'chamada';
+            return reply(`📞 Já existe um(a) ${tipoAtual} subido(a) por mim neste grupo.\n\nUse \`!vozp encerrar\` para derrubar.`);
+          }
+
+          const r = await subirCallDoGrupo({ voiceChat: true });
+          if (!r.ok) {
+            const motivos = {
+              sem_identidade: 'Não consegui identificar meu próprio número para iniciar o chat de voz.',
+              sem_metadata: 'Não consegui ler os membros do grupo agora. Tente de novo.',
+              grupo_pequeno: 'O chat de voz precisa de pelo menos 2 outros membros.',
+              pacote_de_midia_ausente: 'A mídia não está instalada neste servidor (falta o pacote `lizzy-call`).',
+              ja_na_call: 'Já existe uma chamada de mídia neste grupo.',
+              falha_ao_entrar: 'O motor de mídia não subiu.'
+            };
+            const detalhe = motivos[r.motivo] || r.motivo || 'erro desconhecido';
+            return reply(`❌ Não consegui iniciar o chat de voz.\n\n_${detalhe}_${r.detalhe ? `\n\n\`${r.detalhe}\`` : ''}`);
+          }
+
+          const linhaMidia = r.stage === 'pronta'
+            ? '🎵 Áudio: pronto — use `!musicap` respondendo um áudio para tocar.'
+            : `🎵 Áudio: conectando (${r.stage}). Assim que alguém entrar, use \`!musicap\`.`;
+
+          await nazu.sendMessage(from, {
+            text: `🎙️ *Chat de voz iniciado neste grupo.*\n\n• ID: \`${r.callId}\`\n• Sem tocar: quem quiser entra pelo cartão do chat de voz.\n${linhaMidia}\n\n_Use \`!vozp encerrar\` para terminar._`,
+            contextInfo: gerarContextNewsletter(),
+            quoted: info
+          });
+        } catch (e) {
+          console.error('[VOZP] Erro:', e);
+          await reply('Ocorreu um erro 💔');
+        }
+        break;
+
       case 'callp':
         try {
-          if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!isGroupAdmin) return reply("Você precisa ser adm 💔");
+          if (!isGroup) return reply('Isso só pode ser usado em grupo 💔');
+          if (!isGroupAdmin) return reply('Você precisa ser adm 💔');
 
           const subCallp = normalizar((args[0] || '')).trim();
 
@@ -33641,97 +33773,40 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
           }
 
           if (obterCall(from)) {
-            return reply('📞 Já existe uma chamada subida por mim neste grupo.\n\nUse `!callp encerrar` para derrubar.');
+            const atual = obterCall(from);
+            const tipoAtual = atual.voiceChat ? 'chat de voz' : 'chamada';
+            return reply(`📞 Já existe um(a) ${tipoAtual} subido(a) por mim neste grupo.\n\nUse \`!callp encerrar\` para derrubar.`);
           }
 
-          const botCallId = getBotNumber(nazu);
-          if (!botCallId) {
-            return reply('❌ Não consegui identificar meu próprio número para subir a chamada.');
-          }
-
-          const metaCallp = await nazu.groupMetadata(from).catch(() => null);
-          if (!metaCallp) {
-            return reply('❌ Não consegui ler os membros do grupo agora. Tente de novo.');
-          }
-
-          // Convidados: todos os membros, menos o bot (ele entra como criador).
-          const botUser = String(botCallId).split('@')[0].split(':')[0];
-          const convidados = [];
-          const vistos = new Set();
-          for (const p of (metaCallp.participants || [])) {
-            const jid = p?.id || p?.phoneNumber;
-            if (typeof jid !== 'string' || !jid) continue;
-            const user = jid.split('@')[0].split(':')[0];
-            if (!user || user === botUser || vistos.has(user)) continue;
-            vistos.add(user);
-            convidados.push(jid);
-          }
-          if (convidados.length < 2) {
-            return reply('❌ A chamada de grupo precisa de pelo menos 2 outros membros.');
-          }
-
-          // Aviso de memória: a pilha de mídia aloca centenas de MB. Se a
-          // máquina estiver apertada, o OOM killer mata o processo (SIGKILL) no
-          // meio da call e o sintoma vira "o bot reiniciou sozinho", sem log.
-          // Melhor avisar antes do que descobrir depois.
-          try {
-            const livreMb = Math.round(os.freemem() / 1048576);
-            if (livreMb < 700) {
-              console.warn(`[CALLP] memória livre baixa: ${livreMb} MB — a pilha de mídia precisa de ~600 MB`);
-            }
-          } catch { /* aviso é best-effort */ }
-
-          const midia = await entrarNaCallComMidia({
-            grupo: from,
-            participantes: convidados,
-            sock: nazu
-          });
-
-          if (!midia?.ok) {
-            console.warn('[CALLP] mídia falhou:', midia?.motivo, midia?.detalhe || '');
+          const r = await subirCallDoGrupo({ voiceChat: false });
+          if (!r.ok) {
             const motivos = {
+              sem_identidade: 'Não consegui identificar meu próprio número para subir a chamada.',
+              sem_metadata: 'Não consegui ler os membros do grupo agora. Tente de novo.',
+              grupo_pequeno: 'A chamada de grupo precisa de pelo menos 2 outros membros.',
               pacote_de_midia_ausente: 'A mídia não está instalada neste servidor (falta o pacote `lizzy-call`).',
-              sem_identidade: 'Não consegui identificar meu próprio número.',
               ja_na_call: 'Já existe uma chamada de mídia neste grupo.',
               falha_ao_entrar: 'O motor de mídia não subiu.'
             };
-            const detalhe = motivos[midia?.motivo] || midia?.motivo || 'erro desconhecido';
-            return reply(`❌ Não consegui subir a chamada.\n\n_${detalhe}_${midia?.detalhe ? `\n\n\`${midia.detalhe}\`` : ''}`);
+            const detalhe = motivos[r.motivo] || r.motivo || 'erro desconhecido';
+            return reply(`❌ Não consegui subir a chamada.\n\n_${detalhe}_${r.detalhe ? `\n\n\`${r.detalhe}\`` : ''}`);
           }
 
-          const callRes = { id: midia.callId, participants: convidados.length + 1 };
-
-          // Guarda a call para o `encerrar` — registro em MEMÓRIA (não no JSON
-          // do grupo): a call vive na sessão do socket e morre com ela.
-          registrarCall(from, {
-            callId: callRes.id,
-            callCreator: botCallId,
-            startedAt: Date.now()
-          });
-
-          const estagio = midia.stage;
-          const linhaMidia = estagio === 'pronta'
+          const linhaMidia = r.stage === 'pronta'
             ? '🎵 Áudio: pronto — use `!musicap` respondendo um áudio para tocar.'
-            : `🎵 Áudio: conectando (${estagio}). Assim que alguém entrar, use \`!musicap\`.`;
+            : `🎵 Áudio: conectando (${r.stage}). Assim que alguém entrar, use \`!musicap\`.`;
 
-          const newsletterCtxCallp = {
-            forwardingScore: 999,
-            isForwarded: true,
-            forwardedNewsletterMessageInfo: {
-              newsletterJid: "120363410980452460@newsletter",
-              newsletterName: "Lizzy"
-            }
-          };
           await nazu.sendMessage(from, {
-            text: `📞 *Chamada de voz iniciada neste grupo.*\n\n• ID: \`${callRes.id}\`\n• Membros no convite: ${callRes.participants}\n${linhaMidia}\n\n_Entre pelo WhatsApp para participar. Use \`!callp encerrar\` para derrubar._`,
-            contextInfo: newsletterCtxCallp,
+            text: `📞 *Chamada de voz iniciada neste grupo.*\n\n• ID: \`${r.callId}\`\n${linhaMidia}\n\n_Entre pelo WhatsApp para participar. Use \`!callp encerrar\` para derrubar._`,
+            contextInfo: gerarContextNewsletter(),
             quoted: info
           });
         } catch (e) {
           console.error('[CALLP] Erro:', e);
-          await reply("Ocorreu um erro 💔");
+          await reply('Ocorreu um erro 💔');
         }
         break;
+
       // !musicap — toca um áudio NA CALL do grupo.
       //
       // Fluxo: `!callp` abre a chamada (e sobe a pilha de mídia), depois

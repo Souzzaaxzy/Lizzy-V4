@@ -6454,3 +6454,57 @@ isento, anti desligado não age, texto normal não é afetado, sem bot admin nã
 remove/anuncia, e a mensagem não segue para outros handlers. Também valida
 `menuadm` (antictt + antifantasma na categoria de antis) e o painel `!antis`.
 O teste isola `DATABASE_PATH`/`ANTICTT_FILE` no temporário.
+
+## Comando `!vozp` — CHAT DE VOZ no grupo (set/2026)
+
+Mesmo fluxo do `!callp`/`!musicap`, com UMA diferença que é o ponto todo: o
+motor sobe a call com o marcador de **voice chat**, então a chamada **não toca**
+para o grupo — os membros veem o cartão de chat de voz e entram se quiserem. No
+`!callp` a chamada toca. Aliases: `voicechat`, `chatvoz`.
+
+### Evidência no motor (WASM), não em exemplo de internet
+O `assets/wasm/whatsapp.wasm` instalado pelo pacote `lizzy-call` carrega o
+caminho próprio `xplat/wa-voip/wacall/system/src/features/voice_chat.cc`, com
+`is_voice_chat`, `is_lightweight`, `lightweight-key` e `is_scheduled_call`, além
+da string `preprocess_offer: sending missed call event for voice chat init`. O
+`startVoipGroupCall` do motor já tem o parâmetro dedicado (`isLightWeight`).
+
+### `lizzy-call` — o flag estava fixo em `false`
+`GroupCallMedia.entrarNaCall` repassava `isLightWeight` **sempre `false`**, então
+só existia a chamada que toca. O commit `8b6e7b0` expõe a opção e a repassa ao
+motor (`isLightWeight: true` = chat de voz). `false` (padrão) preserva o
+comportamento antigo, então o `!callp` fica intacto. `dist/` reconstruído
+(`npm run build`) — o pacote publica arquivos compilados.
+
+> **Pino do lockfile**: `package-lock.json` + `yarn.lock` foram de `c605f4e`
+> para `8b6e7b0`. Sem esse bump, um `npm install` traria o commit antigo, que
+> **ignora** o flag — o `!vozp` funcionaria como `!callp` silenciosamente.
+
+### Lizzy — o que foi adicionado
+- **`dados/src/funcs/utils/callMedia.js`**: `entrarNaCallComMidia` aceita
+  `voiceChat` e o repassa como `isLightWeight` ao pacote.
+- **`dados/src/index.js`**:
+  - Helper `subirCallDoGrupo({ voiceChat })` — **ponto único** do `!callp` e do
+    `!vozp`: guardas (identidade, metadata, mínimo de 2 convidados, aviso de
+    memória), chamada à mídia e registro (`registrarCall` com `voiceChat`).
+    Duplicar o fluxo deixaria as duas versões divergindo na primeira correção.
+  - `case 'vozp'` (`voicechat`, `chatvoz`): só em grupo, exige admin; subcomandos
+    `encerrar`/`parar`/`desligar`; recusa quando já há call ativa dizendo **qual**
+    é (chamada ou chat de voz); mensagem de layout + newsletter informando que
+    **não toca**.
+  - `case 'callp'` reescrito para usar o helper, com a mensagem "já existe"
+    distinguindo chamada de chat de voz.
+- **`dados/src/menus/menuadm.js`** + **`utils/blockPv.js`**: `!vozp` na categoria
+  existente **MODOS & ATIVAÇÕES**, junto do `!callp`.
+- **`tests/vozp.test.js`**: 17 testes / 34 asserções com o handler real, usando
+  um dublê do motor de mídia — prova que o flag CHEGA no motor (`isLightWeight`),
+  que o `!callp` manda `false`, e o contrato todo (guardas, registro, encerrar,
+  recusa cruzada call↔chat de voz, mídia ausente, menu).
+
+### Limite honesto
+O `<call><offer>` emitido é **byte-idêntico** para `isLightWeight` true/false
+neste ambiente, então o flag não é verificável offline: ele é estado que o motor
+guarda para a call que ele mesmo criou. O que os testes provam é o **repasse**
+do flag até o motor; a validação visual real (não tocar no grupo) exige uma
+sessão de WhatsApp, que não existe neste ambiente. `!musicap` funciona igual nos
+dois modos (a call existir é o que importa para o áudio).
