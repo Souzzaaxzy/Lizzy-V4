@@ -2801,13 +2801,15 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       if (isSubOwner && subdonosModule.podeUsarEntre(formasRemetenteArr, cmd)) return true;
       return false;
     };
-    // Subdono com ACESSO TOTAL (`!sub.permitir @user all`): usa qualquer comando
-    // do bot como o dono. `podeDonoTotal()` e o gate unico dos comandos que
-    // antes eram `if (!isOwner)`. Ele NAO abre os comandos de hierarquia
-    // (addsubdono, sub.permitir...), entao o dono principal continua no topo.
-    const isSubdonoTotal = isSubOwner && subdonosModule.temAcessoTotalEntre(formasRemetenteArr);
+    // Gate unico dos comandos que antes eram `if (!isOwner)`. O subdono passa
+    // quando o comando foi liberado para ele (`!sub.permitir @user <cmd>`) OU
+    // quando ele tem ACESSO TOTAL (`!sub.permitir @user all`). Os comandos de
+    // HIERARQUIA (addsubdono, sub.permitir, numero-dono...) NUNCA passam por
+    // aqui — so o dono principal —, entao a hierarquia se mantem.
     const podeDonoTotal = () => isOwner ||
-      (isSubdonoTotal && !subdonosModule.ehComandoDeHierarquia(command));
+      (isSubOwner &&
+        !subdonosModule.ehComandoDeHierarquia(command) &&
+        subdonosModule.podeUsarEntre(formasRemetenteArr, command));
 
     // Debug: log das verificações de permissão
     debugLog('Verificações de permissão:', {

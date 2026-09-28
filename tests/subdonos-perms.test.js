@@ -183,6 +183,32 @@ await test('5. com acesso total o subdono usa comando exclusivo do dono', async 
   contem(r, 'INFORMAÇÕES DO SERVIDOR', 'executou comando de dono');
 });
 
+await test('5b. permissao ESPECIFICA tambem abre comando antes owner-only (!menudono)', async () => {
+  limpar();
+  sub.adicionar(SUB_LID);
+  const r = await comoDono(`!sub.permitir @${SUB_LID.split('@')[0]} menudono`, [SUB_LID]);
+  contem(r, 'liberado', 'liberou menudono');
+  const exec = await comoSub('!menudono');
+  naoContem(exec, 'exclusivo para o dono e sub-donos', 'subdono abre o menudono');
+  naoContem(exec, 'não está disponível para subdonos', 'nao caiu no gate de subdono');
+});
+
+await test('5c. permissao ESPECIFICA de comando de dono (!infoserver) funciona', async () => {
+  limpar();
+  sub.adicionar(SUB_LID);
+  await comoDono(`!sub.permitir @${SUB_LID.split('@')[0]} infoserver`, [SUB_LID]);
+  const exec = await comoSub('!infoserver');
+  contem(exec, 'INFORMAÇÕES DO SERVIDOR', 'executou o comando liberado');
+});
+
+await test('5d. sem permissao o comando owner-only segue barrado', async () => {
+  limpar();
+  sub.adicionar(SUB_LID);
+  const r = await comoSub('!menudono');
+  ok(r.includes('exclusivo para o dono e sub-donos') || r.includes('não está disponível para subdonos'),
+     'barrado sem permissao (gate de subdono ou do menu)');
+});
+
 await test('6. HIERARQUIA: acesso total NAO abre a gestao de subdonos', async () => {
   limpar();
   sub.adicionar(SUB_LID);
@@ -201,6 +227,14 @@ await test('7. HIERARQUIA: acesso total NAO redefine a identidade do dono', asyn
   contem(r, 'exclusivo para o meu dono', 'numero-dono barrado');
   const n = await comoSub('!nomedono Hack');
   contem(n, 'exclusivo para o meu dono', 'nomedono barrado');
+});
+
+await test('7b. HIERARQUIA: conceder addsubdono EXPLICITO ainda e barrado', async () => {
+  limpar();
+  sub.adicionar(SUB_LID);
+  await comoDono(`!sub.permitir @${SUB_LID.split('@')[0]} addsubdono`, [SUB_LID]);
+  const r = await comoSub('!addsubdono 5511000000000');
+  contem(r, 'Apenas o Dono', 'hierarquia vence a permissao explicita');
 });
 
 await test('8. `!sub.revogar all` tira o acesso total', async () => {

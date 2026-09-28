@@ -6954,9 +6954,15 @@ Ao conceder `all`, as permissões avulsas são limpas (fica só `all`). O `!sub.
 mostra `ACESSO TOTAL (todos os comandos)`.
 
 **4. HIERARQUIA preservada.** O gate do handler virou `podeDonoTotal()`
-(`isOwner || (isSubdonoTotal && !ehComandoDeHierarquia(command))`), aplicado nos
-**160** `if (!isOwner)` DENTRO do `switch (command)` (fora dele — antipv, alarme —
-não foi tocado). `HIERARQUIA_COMMANDS` (em `subdonos.js`) é o que o `all` **não**
+(`isOwner || (isSubOwner && !ehComandoDeHierarquia(command) && podeUsarEntre(...))`),
+aplicado nos **160** `if (!isOwner)` DENTRO do `switch (command)` (fora dele —
+antipv, alarme — não foi tocado). **Correção importante**: a primeira versão
+considerava só o `all` (`isSubdonoTotal`), então uma permissão **ESPECÍFICA**
+(`!sub.permitir @user menudono`) **não** abria os comandos antes owner-only — o
+dono via *"⚠️ Este menu é exclusivo para o dono e sub-donos do bot."* ao pedir
+`!menudono`. Agora o gate usa `podeUsarEntre(formasRemetenteArr, command)`, que
+cobre a permissão específica **e** o `all` (o `all` faz `podeUsar` retornar
+`true` para qualquer comando). Validado com `!menudono`, `!infoserver` e `!setgif`. `HIERARQUIA_COMMANDS` (em `subdonos.js`) é o que o `all` **não**
 cobre: `addsubdono`/`delsubdono`/`remsubdono`/`rmsubdono`,
 `sub.permitir`/`sub.revogar`, `numero-dono`/`nomedono`/`nome-bot`. Sem isso, um
 subdono com `all` se promoveria ou redefiniria a identidade do dono. Validado: com
@@ -6968,11 +6974,12 @@ subdono com `all` se promoveria ou redefiniria a identidade do dono. Validado: c
 `👤 1º — Nome` + `📱 wa.me/<numero>`. No `!donos`, a linha do subdono passou de
 `wa.me/... (Nome)` para `• Nome` + `📱 wa.me/...`.
 
-**Testes**: `tests/subdonos-perms.test.js` (novo) — **11 testes / 24 asserções**,
+**Testes**: `tests/subdonos-perms.test.js` (novo) — **15 testes / 30 asserções**,
 handler real: comandos removidos, cadastro-por-número + menção LID, bloqueio sem
-permissão, `all`, uso de comando de dono com `all`, hierarquia (gestão + identidade
-do dono), revogar `all`, limpeza das avulsas, `!sub.perms` e ordem nome→número no
-`!listasubdonos`. `tests/donos.test.js` 5/17 e `tests/menu-layout.test.js` 25/251
+permissão, `all`, uso de comando de dono com `all` **e com permissão específica**
+(`!menudono`, `!infoserver`), bloqueio sem permissão, hierarquia (gestão +
+identidade do dono + concessão explícita de comando de hierarquia), revogar `all`,
+limpeza das avulsas, `!sub.perms` e ordem nome→número no `!listasubdonos`. `tests/donos.test.js` 5/17 e `tests/menu-layout.test.js` 25/251
 atualizados. Regressões verdes: `subdonos` 20/61, `dono-perfil` 47/0,
 `get-message-inspector` 54/269, `cmd-suggest` 21/68, `me-profile` 44/0,
 `relationships-multi` 19/86, `antictt` 15/38, `antimidia` 14/29, `gifsbn-media`
