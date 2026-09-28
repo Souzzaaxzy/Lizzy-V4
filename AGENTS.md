@@ -6999,6 +6999,57 @@ feita por **faixa de linhas** (`switch (command) {` … último `};` do arquivo)
 (`!isGroupAdmin && !isOwner`) e em comentários — essas **não** mudaram; só as
 guardas `if (!isOwner)` / `else if (!isOwner)`.
 
+### SUBDONO JÁ TEM OS COMANDOS DE ADMIN (set/2026) ✅
+Pedido do dono: *"quando o subdono for registrado, ele consegue usar qualquer
+comando de adm, menos os de dono, e só conseguem usar comando de dono quando o
+dono principal der a permissão"*. O segundo trecho já existia (`!sub.permitir`);
+o que faltava era o **primeiro**.
+
+**Antes**: o subdono só usava o que estivesse na lista `perms`. Qualquer comando
+sem liberação explícita caía em *"Este comando não está disponível para
+subdonos"* — inclusive os de **admin** (banir, mutar, trancar, antilink…). Na
+prática o subdono não usava nada além do que o dono liberasse um a um.
+
+**Agora**: `podeUsar`/`podeUsarEntre` devolvem `true` quando o comando **NÃO é
+exclusivo do dono** — admin, membro, diversão e menus entram de berço. Os
+exclusivos do dono continuam exigindo `!sub.permitir @user <cmd>` (e `all` cobre
+tudo). A hierarquia (`addsubdono`, `delsubdono`, `sub.permitir`, `sub.revogar`,
+`numero-dono`, `nomedono`, `nome-bot`) segue só do Dono principal, mesmo
+concedida explicitamente.
+
+**Sem lista paralela de "comandos de admin"** (que envelheceria e divergiria do
+código): o módulo **classifica os comandos lendo o PRÓPRIO `index.js`**.
+`extrairBlocosDoSwitch()` agrupa os rótulos `case 'x':` até o primeiro corpo e
+marca como **exclusivo do dono** todo bloco cujo corpo chama
+`podeDonoTotal()`/`!isOwner`. Medido: **295 comandos exclusivos do dono, 0 em
+comum** com os que têm guarda `!isGroupAdmin`. Ao adicionar/remover a guarda de
+dono de um comando, a classificação acompanha sozinha — nada a manter à mão.
+Leitura **cacheada** (uma vez por processo, ~2 MB) via `comandosExclusivosDoDono()`;
+`ehComandoDeDono(cmd)`, `podeUsarSemLiberacao(cmd)` e `limparCacheDono()` são as
+portas públicas (o `HIERARQUIA_COMMANDS` entra sempre por cima). Se o `index.js`
+não for legível, o conjunto sai com só a hierarquia (conservador) e as
+permissões explícitas seguem funcionando.
+
+**`!sub.perms`** agora diz `🛡️ Base: adm/membro/menu (automático)` +
+`🔑 Extras: …` (só o que foi liberado além do automático, ou `ACESSO TOTAL`),
+porque listar o automático como se fosse permissão era enganoso.
+
+**Não-subdono não ganha nada**: `podeUsarEntre` só devolve `true` se alguma das
+formas do remetente for subdono.
+
+**Testes**: `tests/subdonos-perms.test.js` **21 testes / 58 asserções** (novos:
+subdono não-admin usa comandos de adm sem liberação, livre/membro já funcionam,
+comandos de dono continuam barrados, liberação explícita vence, classificador
+adm×dono, e não-subdono não ganha de graça). `tests/subdonos.test.js` 20/62 —
+os testes 9/12/13 passaram a usar um comando **exclusivo do dono** (`menudono`)
+porque com a regra nova um comando comum já é livre para todo subdono (o teste
+antigo media a semântica velha). Regressões verdes: `donos` 5/17, `menu-layout`
+25/251, `dono-perfil` 47/0, `me-profile` 44/0, `get-message-inspector` 54/269,
+`cmd-suggest` 21/68, `antictt` 15/38.
+
+**Efeito no `!menu`**: o menu do subdono mostra `Cargo: Admin`, coerente com o
+novo privilégio.
+
 ## COMANDO `!donos` — painel do dono + subdonos (set/2026) ✅
 Alias `!listadonos`. Sem restrição (qualquer um pode consultar, como o `!dono`).
 **Layout dos MENUS**: cabeçalho `꧁༺ ✦ <bot> ✦ ༻꧂` + caixa de categoria

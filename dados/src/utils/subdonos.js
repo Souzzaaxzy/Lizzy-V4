@@ -89,6 +89,115 @@ export function ehComandoDeHierarquia(cmd) {
 }
 
 /**
+ * COMANDOS EXCLUSIVOS DO DONO — derivados do PRÓPRIO `index.js`.
+ *
+ * O dono pediu: *"quando o subdono for registrado, ele consegue usar qualquer
+ * comando de adm, menos os de dono"*. Em vez de manter uma segunda lista de
+ * comandos de admin (que envelheceria e divergiria do código), o classificador
+ * lê o `switch (command)` do `index.js` e marca como EXCLUSIVO DO DONO todo
+ * bloco cujo corpo chama `podeDonoTotal()` (ex-`if (!isOwner)`).
+ *
+ * Assim o conjunto nasce CORRETO e se mantém sozinho: ao adicionar/remover a
+ * guarda de dono num comando, a classificação acompanha sem mexer aqui.
+ * `HIERARQUIA_COMMANDS` continua valendo por cima (gestão de subdonos e
+ * identidade do dono são sempre do principal).
+ *
+ * O parser é conservador (na dúvida, marca como "de dono" e NÃO libera): se o
+ * arquivo não existir ou não for parseável, devolve um conjunto vazio e o
+ * caminho das permissões explícitas continua funcionando.
+ */
+let _donoCache = null;
+
+function extrairBlocosDoSwitch(fonte) {
+  const linhas = fonte.split('\n');
+  const iSwitch = linhas.findIndex((l) => l.trim() === 'switch (command) {');
+  if (iSwitch < 0) return [];
+  const blocos = [];
+  let labels = null;
+  let aberto = null;
+  for (let i = iSwitch + 1; i < linhas.length; i++) {
+    const l = linhas[i];
+    const m = l.match(/^\s*case\s+'([^']+)'\s*:/);
+    if (m) {
+      if (!labels) labels = [];
+      labels.push(m[1]);
+      continue;
+    }
+    const t = l.trim();
+    const vazio = t === '' || t.startsWith('//') || t.startsWith('/*') ||
+      t.startsWith('*') || t.startsWith('*/');
+    if (labels && !vazio) { aberto = { labels, dono: false }; blocos.push(aberto); labels = null; }
+    if (labels) continue;
+    if (vazio || !aberto) continue;
+    if (/if\s*\(\s*!podeDonoTotal\(\)\s*\)/.test(l) || /if\s*\(\s*!isOwner\s*\)/.test(l)) {
+      aberto.dono = true;
+    }
+  }
+  return blocos;
+}
+
+function carregarArquivoIndex() {
+  const candidatos = [
+    `${__dirname}/../index.js`,
+    new URL('../index.js', import.meta.url),
+  ];
+  for (const c of candidatos) {
+    try {
+      if (typeof c === 'string') {
+        if (fs.existsSync(c)) return fs.readFileSync(c, 'utf-8');
+      } else if (fs.existsSync(c)) {
+        return fs.readFileSync(c, 'utf-8');
+      }
+    } catch { /* tenta o proximo */ }
+  }
+  return null;
+}
+
+/** Conjunto (cacheado) dos comandos exclusivos do dono. */
+export function comandosExclusivosDoDono() {
+  if (_donoCache) return _donoCache;
+  const out = new Set();
+  try {
+    const fonte = carregarArquivoIndex();
+    if (fonte) {
+      for (const b of extrairBlocosDoSwitch(fonte)) {
+        if (b.dono) for (const c of b.labels) out.add(c);
+      }
+    }
+  } catch (error) {
+    console.warn('⚠️ Não foi possível classificar os comandos de dono:', error?.message || error);
+  }
+  for (const c of HIERARQUIA_COMMANDS) out.add(c);
+  _donoCache = out;
+  return out;
+}
+
+/** `true` se o comando é exclusivo do Dono principal (não vai para o subdono). */
+export function ehComandoDeDono(cmd) {
+  const c = String(cmd || '').replace(/^[!/.]/, '').toLowerCase().trim();
+  if (!c) return false;
+  return comandosExclusivosDoDono().has(c) || HIERARQUIA_COMMANDS.has(c);
+}
+
+/**
+ * `true` se o subdono pode usar o comando SEM liberação explícita.
+ *
+ * Regra do dono: **todo comando que NÃO é exclusivo do dono** (ou seja, os de
+ * admin, os de membro e os livres) é liberado de imediato. Os exclusivos do dono
+ * exigem `!sub.permitir @user <cmd>` (a permissão explícita vence).
+ */
+export function podeUsarSemLiberacao(comando) {
+  const c = String(comando || '').replace(/^[!/.]/, '').toLowerCase().trim();
+  if (!c) return false;
+  return !ehComandoDeDono(c);
+}
+
+/** Limpa o cache (usado em teste). */
+export function limparCacheDono() {
+  _donoCache = null;
+}
+
+/**
  * O que um subdono pode fazer além dos comandos liberados.
  * São PORTAS (funcionalidades), não comandos individuais — é assim que o
  * modelo de "papéis" do bot de referência é expressado aqui.
@@ -297,13 +406,17 @@ export function permissoesDe(id) {
 
 /**
  * `true` se o subdono pode usar o comando.
- * Cobre o coringa `all` (`!sub.permitir @user all`).
+ *
+ * Regra do dono: o subdono já tem **todos os comandos que NÃO são exclusivos do
+ * dono** (admin, membro, livres). Os exclusivos do dono só com liberação
+ * explícita (`!sub.permitir @user <cmd>`), e o coringa `all` cobre tudo.
  */
 export function podeUsar(id, comando) {
   const cmd = String(comando || '').replace(/^[!/.]/, '').toLowerCase().trim();
   if (!cmd) return false;
   if (!isSubdono(id)) return false;
-  return permsIncluem(permissoesDe(id), cmd);
+  if (permsIncluem(permissoesDe(id), cmd)) return true;
+  return !ehComandoDeDono(cmd);
 }
 
 export function listarBasePerms() {
@@ -476,12 +589,18 @@ export function permissoesEntre(ids) {
 
 /**
  * `true` se QUALQUER forma do usuário pode usar o comando.
- * Cobre o coringa `all` (`!sub.permitir @user all`).
+ *
+ * Mesma regra do `podeUsar`: admin/membro/livre já entram; exclusivo do dono só
+ * com liberação explícita; `all` cobre tudo. Só devolve `true` para quem é
+ * subdono (um não-subdono continua barrado).
  */
 export function podeUsarEntre(ids, comando) {
   const cmd = String(comando || '').replace(/^[!/.]/, '').toLowerCase().trim();
   if (!cmd) return false;
-  return permsIncluem(permissoesEntre(ids), cmd);
+  const formas = Array.isArray(ids) ? ids : [ids];
+  if (!formas.some((id) => !!acharSubdono(id))) return false;
+  if (permsIncluem(permissoesEntre(formas), cmd)) return true;
+  return !ehComandoDeDono(cmd);
 }
 
 /** `true` se qualquer forma do usuário tem ACESSO TOTAL (`all`). */

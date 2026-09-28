@@ -288,6 +288,71 @@ await test('11. `!listasubdonos` mostra NOME antes do NUMERO', async () => {
 });
 
 // ============================================================================
+// 6) SUBDONO JA TEM OS COMANDOS DE ADMIN (sem liberacao)
+// ============================================================================
+
+await test('12. subdono NAO-admin ja usa comandos de adm (nao cai no gate de subdono)', async () => {
+  limpar();
+  sub.adicionar(SUB_LID);
+  // `!ban`/`!kick`/`!promover` sao de admin: o subdono passa o gate e chega no
+  // corpo (no harness o BOT nao e admin, entao a recusa e a do proprio comando).
+  for (const c of ['!ban 5511000000000', '!kick 5511000000000', '!promover 5511000000000', '!hidetag oi', '!mute 5511000000000']) {
+    const r = await comoSub(c);
+    naoContem(r, 'não está disponível para subdonos', `${c} passa o gate de subdono`);
+  }
+});
+
+await test('13. subdono NAO-admin usa comando livre e de membro', async () => {
+  limpar();
+  sub.adicionar(SUB_LID);
+  const ping = await comoSub('!ping');
+  naoContem(ping, 'não está disponível para subdonos', '!ping liberado');
+  contem(ping, 'Latência', '!ping executou');
+});
+
+await test('14. subdono continua BARRADO nos comandos de DONO', async () => {
+  limpar();
+  sub.adicionar(SUB_LID);
+  for (const c of ['!infoserver', '!menudono', '!nomedono', '!numero-dono 55', '!setgif x', '!divulgar x']) {
+    const r = await comoSub(c);
+    contem(r, 'não está disponível para subdonos', `${c} barrado sem permissao`);
+  }
+});
+
+await test('15. liberacao EXPLICITA continua vencendo para comando de dono', async () => {
+  limpar();
+  sub.adicionar(SUB_LID);
+  await comoDono(`!sub.permitir @${SUB_LID.split('@')[0]} infoserver`, [SUB_LID]);
+  const r = await comoSub('!infoserver');
+  contem(r, 'INFORMAÇÕES DO SERVIDOR', 'liberacao explicita abre o de dono');
+  // e outro comando de dono NAO liberado segue barrado
+  const outro = await comoSub('!nomedono');
+  contem(outro, 'não está disponível para subdonos', 'outro de dono segue barrado');
+});
+
+await test('16. CLASSIFICADOR: adm livre, dono restrito', () => {
+  ok(sub.ehComandoDeDono('infoserver'), 'infoserver e de dono');
+  ok(sub.ehComandoDeDono('menudono'), 'menudono e de dono');
+  ok(sub.ehComandoDeDono('addsubdono'), 'addsubdono e de dono');
+  ok(!sub.ehComandoDeDono('ban'), 'ban NAO e de dono');
+  ok(!sub.ehComandoDeDono('kick'), 'kick NAO e de dono');
+  ok(!sub.ehComandoDeDono('trancar'), 'trancar NAO e de dono');
+  ok(!sub.ehComandoDeDono('ping'), 'ping NAO e de dono');
+  ok(!sub.ehComandoDeDono('sticker'), 'sticker NAO e de dono');
+  ok(sub.podeUsarSemLiberacao('ban'), 'adm liberado sem liberacao');
+  ok(!sub.podeUsarSemLiberacao('menudono'), 'dono exige liberacao');
+  ok(sub.comandosExclusivosDoDono().size > 100, 'classificou uma quantidade plausivel de comandos de dono');
+});
+
+await test('17. NAO-subdono NAO ganha nada de graca', async () => {
+  limpar();
+  const r = await run({ text: '!ban 5511000000000', senderLid: '999000000000009@lid', senderJid: '5511999990009@s.whatsapp.net' });
+  // um nao-subdono nao comum nao vira admin: cai na recusa do proprio comando.
+  ok(!r.includes('Latência') && r.length > 0, 'nao-subdono nao executou comando de adm');
+  contem(r, 'restrito a Administradores', 'recusa do comando de adm');
+});
+
+// ============================================================================
 // RESUMO
 // ============================================================================
 

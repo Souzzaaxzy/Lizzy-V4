@@ -170,9 +170,14 @@ await test('9. permissões POR SUBDONO (o outro subdono NÃO herda)', () => {
   reset();
   sub.adicionar('5511000000001@s.whatsapp.net');
   sub.adicionar('5511000000002@s.whatsapp.net');
-  sub.liberarComando('5511000000001@s.whatsapp.net', 'play');
-  ok(sub.podeUsar('5511000000001@s.whatsapp.net', 'play'), 'o 1 pode');
-  ok(!sub.podeUsar('5511000000002@s.whatsapp.net', 'play'), 'o 2 NÃO pode');
+  // Usa um comando EXCLUSIVO DO DONO: os de admin/membro já são livres para
+  // todo subdono (regra nova), então o que precisa ser testado é a liberação
+  // individual de um comando de dono.
+  sub.liberarComando('5511000000001@s.whatsapp.net', 'menudono');
+  ok(sub.podeUsar('5511000000001@s.whatsapp.net', 'menudono'), 'o 1 pode');
+  ok(!sub.podeUsar('5511000000002@s.whatsapp.net', 'menudono'), 'o 2 NÃO pode');
+  // E um comando que NÃO é de dono é livre para os dois.
+  ok(sub.podeUsar('5511000000002@s.whatsapp.net', 'ban'), 'adm é livre para o 2');
 });
 
 await test('10. a LISTA BASE vale para todos os subdonos', () => {
@@ -197,19 +202,19 @@ await test('11. permissão efetiva = base + específicas', () => {
 await test('12. revogar remove a permissão específica', () => {
   reset();
   sub.adicionar('5511000000001@s.whatsapp.net');
-  sub.liberarComando('5511000000001@s.whatsapp.net', 'play');
-  ok(sub.podeUsar('5511000000001@s.whatsapp.net', 'play'), 'pode antes');
-  const r = sub.revogarComando('5511000000001@s.whatsapp.net', 'play');
+  sub.liberarComando('5511000000001@s.whatsapp.net', 'menudono');
+  ok(sub.podeUsar('5511000000001@s.whatsapp.net', 'menudono'), 'pode antes');
+  const r = sub.revogarComando('5511000000001@s.whatsapp.net', 'menudono');
   ok(r.success, 'revogou');
-  ok(!sub.podeUsar('5511000000001@s.whatsapp.net', 'play'), 'não pode depois');
+  ok(!sub.podeUsar('5511000000001@s.whatsapp.net', 'menudono'), 'não pode depois');
 });
 
-await test('13. comandos com prefixo (!play) são normalizados', () => {
+await test('13. comandos com prefixo (!menudono) são normalizados', () => {
   reset();
   sub.adicionar('5511000000001@s.whatsapp.net');
-  sub.liberarComando('5511000000001@s.whatsapp.net', '!play');
-  ok(sub.podeUsar('5511000000001@s.whatsapp.net', 'play'), 'gravou sem prefixo');
-  ok(sub.podeUsar('5511000000001@s.whatsapp.net', '/play'), 'aceita /');
+  sub.liberarComando('5511000000001@s.whatsapp.net', '!menudono');
+  ok(sub.podeUsar('5511000000001@s.whatsapp.net', 'menudono'), 'gravou sem prefixo');
+  ok(sub.podeUsar('5511000000001@s.whatsapp.net', '/menudono'), 'aceita /');
 });
 
 await test('14. gerir permissão de quem NÃO é subdono falha', () => {

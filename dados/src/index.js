@@ -40507,8 +40507,14 @@ ${groupData.rules.length}. ${q}`);
             return reply('❌ Este usuário não é subdono.');
           }
           const total = perms.includes(subdonosModule.ALL_PERM);
-          const lista = total ? 'ACESSO TOTAL (todos os comandos)' : (perms.length ? perms.map(c => groupPrefix + c).join(', ') : 'nenhuma');
-          return reply(`╭━━〔 🔑 𝙋𝙀𝙍𝙈𝙄𝙎𝙎𝙊𝙀𝙎 〕━━╮\n┃ 👤 @${getUserName(alvoSub)}\n┃ 📋 ${lista}\n╰━━━━━━━━━━━━━━━━━━━━╯`);
+          // O subdono já tem, de berço, TODO comando que não é exclusivo do dono
+          // (admin, membro e livres). Aqui listamos só o que ele ganhou ALÉM
+          // disso: o acesso total ou as liberações de comando de dono.
+          const avulsas = perms.filter(c => c !== subdonosModule.ALL_PERM);
+          const detalhe = total
+            ? 'ACESSO TOTAL (todos os comandos)'
+            : (avulsas.length ? avulsas.map(c => groupPrefix + c).join(', ') : 'nenhuma extra');
+          return reply(`╭━━〔 🔑 𝙋𝙀𝙍𝙈𝙄𝙎𝙎𝙊𝙀𝙎 〕━━╮\n┃ 👤 @${getUserName(alvoSub)}\n┃ 🛡️ Base: adm/membro/menu (automático)\n┃ 🔑 Extras: ${detalhe}\n╰━━━━━━━━━━━━━━━━━━━━╯`);
         } catch (e) {
           console.error('Erro no sub.perms:', e);
           return reply('Ocorreu um erro 💔');
