@@ -7050,6 +7050,80 @@ antigo media a semântica velha). Regressões verdes: `donos` 5/17, `menu-layout
 **Efeito no `!menu`**: o menu do subdono mostra `Cargo: Admin`, coerente com o
 novo privilégio.
 
+## COMANDO `!antiroubo` — REFATORADO (modelo RAVENA-BOT/Kimori) (set/2026) ✅
+O sistema de anti-roubo foi reescrito a partir do bot de referência que o dono
+mandou (a RAVENA-BOT / Kimori, `arquivos/funcoes/AntiRoubo.js` +
+`case 'anti-arqv'`/`donogp`/`rmdonogp`/`donosgp`/`clearperm` do `kimori.js`).
+
+### O que o sistema faz
+Protege **promoção** (`promote`) e **rebaixamento** (`demote`) de admins. Com o
+anti ligado, só quem é **autorizado** pode promover/rebaixar — e quem tentar sem
+permissão é **revertido na hora**: o executor perde o admin e a vítima é
+restaurada (promoção vira rebaixamento das vítimas; rebaixamento vira
+re-promoção delas).
+
+### A mudança central: permissão em DUAS listas (telefone + LID)
+O modelo antigo da Lizzy guardava só `antiRoubo.authorizedUsers` (uma lista de
+JIDs) dentro do `groupData`. O de referência separa `ar_permitidos` (telefone) e
+`ar_permitidos_lid` (LID) — é isso que faz a pessoa autorizada ser reconhecida
+mesmo quando o WhatsApp entrega a mensagem como **LID** e ela foi cadastrada
+pelo **número** (ou o inverso). A Lizzy passou a fazer o mesmo.
+
+### Módulo novo `dados/src/funcs/utils/antiRoubo.js` (puro)
+Sem socket, sem arquivo, sem formatação — recebe o estado, os JIDs e o metadata e
+devolve resultado estruturado. Portas: `toNum`, `baseJid`, `isLid`,
+`estadoVazio`, `normalizarEstado` (migra o `authorizedUsers` antigo),
+`estaAtivo`, `mapaIdentidades`, `resolverAlvo`, `formasDoAlvo`,
+`estaAutorizado`, `listarTelefonesAutorizados`, `contarAutorizados`,
+`limparPermissoes`, `adicionarPermissao`, `removerPermissao`, `definirAtivo`,
+`decidirEnforcement`, `acoesDeReversao`.
+
+### Estado em ARQUIVO PRÓPRIO (`dono/antiRoubo/<grupo>.json`)
+Como o `ATIVAÇÕES-GRUPO` do bot de referência. **Motivo medido**: o handler
+salva o `groupData` inteiro de forma **assíncrona** (o `groupName`, a cada
+mensagem) e essa escrita carregava o estado antigo, **sobrescrevendo** o
+anti-roubo recém-gravado — a corrida apareceu em teste (o `!antiroubo on`
+respondia "ativado" e o `!perm` seguinte dizia "ative o anti primeiro"). Com
+arquivo próprio o estado é consistente. O `groupData.antiRoubo` continua sendo
+espelhado para compatibilidade, e a leitura cai nele como migração.
+
+### Comandos
+| Comando | O que faz |
+|---|---|
+| `!antiroubo` / `!antiroubo menu` | painel: status, dono do grupo, autorizados (LID→telefone resolvido) e os comandos |
+| `!antiroubo on` / `off` | liga/desliga (exige admin do grupo ou dono; bot precisa ser admin) |
+| `!perm @a @b` / `!perm` (respondendo) | autoriza (aceita menção, citação e número); **liga o anti** |
+| `!delp @a` | remove a autorização |
+| `!listperm` | lista os autorizados (telefone resolvido) |
+| `!limparperm` | limpa todas as permissões |
+
+- **`!perm`/`!delp`/`!limparperm` são exclusivos do DONO DO BOT**
+  (`podeDonoTotal()`), como no `case 'donogp'` de referência (`if (!SoDono)`).
+- Aliases novos: `addperm`, `rmperm`, `listapermissao`, `clearperm`.
+- Menu: `menuadm` ganhou `antiroubo on/off`, `listperm`, `limparperm`
+  (baseline 177 → 180) e o `blockPv` recebeu os 5 comandos.
+
+### Enforcement
+Os três pontos que decidiam "autorizado?" passaram a usar o módulo:
+`handleGroupParticipantsUpdate` (promote e demote) e os comandos `!promover`/
+`!rebaixar`. Todos usam `decidirEnforcement`, que libera: anti desligado, o
+próprio bot (`eBot` — o guard inicial do bot só compara a base do telefone, então
+o LID do bot também é aceito), dono do bot, dono do grupo e autorizado (por
+telefone OU LID). O resto é punido com a reversão.
+
+### Testes — `tests/antiroubo.test.js` (**20 testes / 62 asserções**)
+Módulo puro (normalização, migração, mapa LID↔telefone, resolverAlvo,
+add/remove/listar/autorizar, decisão de enforcement) + handler real
+(menu/on/off/perm/delp/listperm/limparperm, permissão de dono) + ENFORCEMENT
+(promoção não autorizada revertida; autorizado por LID e por telefone passa;
+rebaixamento não autorizado re-promove a vítima; dono do grupo passa; anti
+desligado não age; ações do bot ignoradas). Rodado 10× sem flake.
+Regressões verdes: `subdonos` 20/62, `subdonos-perms` 21/58, `donos` 5/17,
+`menu-layout` 25/251, `antictt` 15/38, `dono-perfil` 47/0, `me-profile` 44/0,
+`get-message-inspector` 54/269, `cmd-suggest` 21/68, `blacklist-number` 12/38,
+`antimidia` 14/29, `gifsbn-media` 16/61, `relationships-multi` 19/86,
+`viewonce-v2` 18/77, `raja-selective` 23/0, `antifantasma-classificacao` 18/0.
+
 ## COMANDO `!donos` — painel do dono + subdonos (set/2026) ✅
 Alias `!listadonos`. Sem restrição (qualquer um pode consultar, como o `!dono`).
 **Layout dos MENUS**: cabeçalho `꧁༺ ✦ <bot> ✦ ༻꧂` + caixa de categoria

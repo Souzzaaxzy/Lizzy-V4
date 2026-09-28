@@ -25,6 +25,7 @@ import {
 } from './utils/messageInspector.js';
 import { buildCmdNotFoundExtras } from './utils/commandSuggest.js';
 import { extractMedia, resolveMedia, isViewOnce, describeMediaError, extractQuoted, extractQuotedContext, extractText } from './utils/viewOnce.js';
+import * as antiRoubo from './funcs/utils/antiRoubo.js';
 import { parsePinDuration, buildPinKeyFromContext, isPinControlMessage } from './utils/pinMessage.js';
 // AntiContato: apaga contatos/listas de contatos e remove quem enviou.
 import { antiCtt, isContactPayload } from './utils/antiCtt.js';
@@ -928,26 +929,25 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
                         mentions.push(authorId);
                     }
                 }
-                // ANTI ROUBO - Promove
-                // Verificações de bot/owner já feitas no início da função
+                // ANTI ROUBO - Promove (fonte única: funcs/utils/antiRoubo.js)
+                // Verificações de bot/owner já feitas no início da função.
                 if (hasAntiRoubo && authorId) {
                     const authorNum = authorId.split('@')[0];
-                    const groupCreator = groupMetadata?.owner?.split('@')[0] || '';
-                    const isCreator = authorNum === groupCreator;
-                    // Verificação de autorizados - normalizar números para comparação correta
-                    const isAuth = groupSettings.antiRoubo?.authorizedUsers?.some(u => {
-                      const authNum = (u.split('@')[0] || '').replace(/\D/g, '');
-                      const authorNormalized = (authorNum || '').replace(/\D/g, '');
-                      return authNum === authorNormalized || authNum.includes(authorNormalized) || authorNormalized.includes(authNum);
+                    const participantsAR = groupMetadata?.participants || [];
+                    const alvoAR = antiRoubo.resolverAlvo({ alvoRaw: authorId, participants: participantsAR });
+                    const formasAutor = antiRoubo.formasDoAlvo({ telNum: alvoAR.telNum, lidNum: alvoAR.lidNum, formas: [authorId] });
+                    const groupCreatorNum = antiRoubo.toNum(groupMetadata?.owner);
+                    const ownerNumAR = ownerNumber ? antiRoubo.toNum(ownerNumber) : '';
+                    const botLidBase = String(nazu.user?.lid || '').split('@')[0].split(':')[0];
+                    const decisao = antiRoubo.decidirEnforcement({
+                        antiRoubo: groupSettings.antiRoubo,
+                        acao: 'promote',
+                        formasAutor,
+                        eBot: !!botLidBase && formasAutor.includes(botLidBase),
+                        isDonoGrupo: !!groupCreatorNum && formasAutor.includes(groupCreatorNum),
+                        isDonoBot: !!ownerNumAR && formasAutor.includes(ownerNumAR),
                     });
-                    if (!isCreator && !isAuth) {
-                        // Verificar se o executor é o dono do bot
-                        const ownerNum = ownerNumber ? String(ownerNumber).replace(/\D/g, '') : '';
-                        const authorNorm = authorNum.replace(/\D/g, '');
-                        const isBotOwner = ownerNum && authorNorm && (ownerNum === authorNorm || ownerNum.includes(authorNorm) || authorNorm.includes(ownerNum));
-                        if (isBotOwner) {
-                            return; // Dono do bot é sempre permitido
-                        }
+                    if (decisao.acao === 'punir') {
                         // ADICIONAR LOCK ANTES de executar reversões (anti-loop)
                         addAntiRouboLock(id);
                         // REBAIXAR executor primeiro
@@ -956,17 +956,9 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
                         if (promotedIds.length > 0) {
                             await nazu.groupParticipantsUpdate(id, promotedIds, 'demote').catch(e => console.error(`\x1b[31m[ANTI-ROUBO]\x1b[0m Erro ao reverter promoção: ${e.message}`));
                         }
-                        const msg = `[ANTI-ROUBO] Promocoes e rebaixamentos sao protegidos.
-@${authorNum} nao possui permissao e foi rebaixado.`;
-                        const newsletterCtxAnti2 = {
-                            forwardingScore: 999,
-                            isForwarded: true,
-                            forwardedNewsletterMessageInfo: {
-                                newsletterJid: "120363410980452460@newsletter",
-                                newsletterName: "Lizzy"
-                            }
-                        };
-                        await nazu.sendMessage(id, { text: msg, mentions: [authorId], contextInfo: newsletterCtxAnti2 }).catch(e => console.error(`\x1b[31m[ANTI-ROUBO]\x1b[0m Erro ao enviar mensagem: ${e.message}`));
+                        const msg = `🛡️ [ANTI-ROUBO] Promoções e rebaixamentos são protegidos.
+@${authorNum} não possui permissão e foi rebaixado.`;
+                        await nazu.sendMessage(id, { text: msg, mentions: [authorId], contextInfo: gerarContextNewsletter() }).catch(e => console.error(`\x1b[31m[ANTI-ROUBO]\x1b[0m Erro ao enviar mensagem: ${e.message}`));
                     }
                 }
                 if (hasX9) {
@@ -999,26 +991,25 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
                         mentions.push(authorId);
                     }
                 }
-                // ANTI ROUBO - Demote
-                // Verificações de bot/owner já feitas no início da função
+                // ANTI ROUBO - Demote (fonte única: funcs/utils/antiRoubo.js)
+                // Verificações de bot/owner já feitas no início da função.
                 if (hasAntiRoubo && authorId) {
                     const authorNum = authorId.split('@')[0];
-                    const groupCreator = groupMetadata?.owner?.split('@')[0] || '';
-                    const isCreator = authorNum === groupCreator;
-                    // Verificação de autorizados - normalizar números para comparação correta
-                    const isAuth = groupSettings.antiRoubo?.authorizedUsers?.some(u => {
-                      const authNum = (u.split('@')[0] || '').replace(/\D/g, '');
-                      const authorNormalized = (authorNum || '').replace(/\D/g, '');
-                      return authNum === authorNormalized || authNum.includes(authorNormalized) || authorNormalized.includes(authNum);
+                    const participantsAR = groupMetadata?.participants || [];
+                    const alvoAR = antiRoubo.resolverAlvo({ alvoRaw: authorId, participants: participantsAR });
+                    const formasAutor = antiRoubo.formasDoAlvo({ telNum: alvoAR.telNum, lidNum: alvoAR.lidNum, formas: [authorId] });
+                    const groupCreatorNum = antiRoubo.toNum(groupMetadata?.owner);
+                    const ownerNumAR = ownerNumber ? antiRoubo.toNum(ownerNumber) : '';
+                    const botLidBase = String(nazu.user?.lid || '').split('@')[0].split(':')[0];
+                    const decisao = antiRoubo.decidirEnforcement({
+                        antiRoubo: groupSettings.antiRoubo,
+                        acao: 'demote',
+                        formasAutor,
+                        eBot: !!botLidBase && formasAutor.includes(botLidBase),
+                        isDonoGrupo: !!groupCreatorNum && formasAutor.includes(groupCreatorNum),
+                        isDonoBot: !!ownerNumAR && formasAutor.includes(ownerNumAR),
                     });
-                    if (!isCreator && !isAuth) {
-                        // Verificar se o executor é o dono do bot
-                        const ownerNum = ownerNumber ? String(ownerNumber).replace(/\D/g, '') : '';
-                        const authorNorm = authorNum.replace(/\D/g, '');
-                        const isBotOwner = ownerNum && authorNorm && (ownerNum === authorNorm || ownerNum.includes(authorNorm) || authorNorm.includes(ownerNum));
-                        if (isBotOwner) {
-                            return; // Dono do bot é sempre permitido
-                        }
+                    if (decisao.acao === 'punir') {
                         // ADICIONAR LOCK ANTES de executar reversões (anti-loop)
                         addAntiRouboLock(id);
                         // REBAIXAR executor (quem rebaixou perde admin)
@@ -1027,17 +1018,9 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
                         if (demotedIds.length > 0) {
                             await nazu.groupParticipantsUpdate(id, demotedIds, 'promote').catch(e => console.error(`\x1b[31m[ANTI-ROUBO]\x1b[0m Erro ao restaurar vítima: ${e.message}`));
                         }
-                        const msg = `[ANTI-ROUBO] Rebaixamentos sao protegidos.
-@${authorNum} nao possui permissao e foi rebaixado.`;
-                        const newsletterCtxAnti = {
-                            forwardingScore: 999,
-                            isForwarded: true,
-                            forwardedNewsletterMessageInfo: {
-                                newsletterJid: "120363410980452460@newsletter",
-                                newsletterName: "Lizzy"
-                            }
-                        };
-                        await nazu.sendMessage(id, { text: msg, mentions: [authorId], contextInfo: newsletterCtxAnti }).catch(e => console.error(`\x1b[31m[ANTI-ROUBO]\x1b[0m Erro ao enviar mensagem: ${e.message}`));
+                        const msg = `🛡️ [ANTI-ROUBO] Rebaixamentos são protegidos.
+@${authorNum} não possui permissão e foi rebaixado.`;
+                        await nazu.sendMessage(id, { text: msg, mentions: [authorId], contextInfo: gerarContextNewsletter() }).catch(e => console.error(`\x1b[31m[ANTI-ROUBO]\x1b[0m Erro ao enviar mensagem: ${e.message}`));
                     }
                 }
                 if (hasX9) {
@@ -2945,6 +2928,51 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     }
     const sender_ou_n = menc_os2 || sender;
     const groupFile = buildGroupFilePath(from);
+
+    // ─── ANTI-ROUBO (fonte única: funcs/utils/antiRoubo.js) ───
+    // Estado em ARQUIVO PRÓPRIO (`antiRoubo/<grupo>.json`), como o
+    // `ATIVAÇÕES-GRUPO` do bot de referência. Motivo medido: o handler salva o
+    // `groupData` inteiro de forma ASSÍNCRONA (o `groupName`, por exemplo) a
+    // cada mensagem; essa escrita carregava o estado antigo e sobrescrevia o
+    // anti-roubo recém-gravado. Com arquivo próprio, o estado é consistente e
+    // nenhuma outra escrita do grupo o alcança.
+    const antiRouboFile = pathz.join(DONO_DIR, 'antiRoubo', `${from}.json`);
+    const getAntiRoubo = () => {
+      try {
+        const bruto = loadJsonFile(antiRouboFile, null);
+        if (bruto && typeof bruto === 'object') return antiRoubo.normalizarEstado(bruto);
+      } catch (e) {
+        console.error('[ANTI-ROUBO] erro ao ler:', e?.message || e);
+      }
+      // Fallback de migração: estado antigo guardado dentro do groupData.
+      return antiRoubo.normalizarEstado(groupData.antiRoubo);
+    };
+    const salvarAntiRoubo = (estado) => {
+      const limpo = {
+        enabled: !!estado.enabled,
+        ar_permitidos: estado.ar_permitidos || [],
+        ar_permitidos_lid: estado.ar_permitidos_lid || [],
+      };
+      // Espelha no groupData (compatibilidade de leitura) e grava no arquivo
+      // próprio de forma SÍNCRONA.
+      groupData.antiRoubo = limpo;
+      try {
+        writeJsonFile(antiRouboFile, limpo);
+      } catch (e) {
+        console.error('[ANTI-ROUBO] erro ao gravar:', e?.message || e);
+      }
+    };
+    // Formas de identidade do alvo (telefone + LID) resolvidas contra o metadata
+    // do grupo. O `menc_os2` já vem como LID; `mencOs2JidOriginal` guarda o PN.
+    const formasAntiRouboDe = (jidOrJidOriginal, metadata) => {
+      const participants = metadata?.participants || groupMetadata?.participants || [];
+      const alvo = antiRoubo.resolverAlvo({
+        alvoRaw: jidOrJidOriginal,
+        participants,
+      });
+      return alvo;
+    };
+
     // Otimização: Carregar groupData com cache (TTL curto de 5 segundos)
     let groupData = {};
     if (isGroup) {
@@ -31641,18 +31669,23 @@ break;
       case 'promote':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
-          // Verificação antiRoubo
-          if (groupData.antiRoubo?.enabled) {
-            const groupMetadata = await nazu.groupMetadata(from);
-            const groupCreator = groupMetadata?.owner?.split('@')[0] || '';
-            const senderNum = sender.split('@')[0];
-            const isCreator = senderNum === groupCreator;
-            const isAuth = groupData.antiRoubo?.authorizedUsers?.some(u => {
-              const authNum = (u.split('@')[0] || '').replace(/\D/g, '');
-              const senderNormalized = (senderNum || '').replace(/\D/g, '');
-              return authNum === senderNormalized || authNum.includes(senderNormalized) || senderNormalized.includes(authNum);
+          // Verificação antiRoubo (fonte única: funcs/utils/antiRoubo.js)
+          if (antiRoubo.estaAtivo(groupData.antiRoubo)) {
+            const metadataAR = await nazu.groupMetadata(from).catch(() => null);
+            const participantsAR = metadataAR?.participants || groupMetadata?.participants || [];
+            const alvoAR = antiRoubo.resolverAlvo({ alvoRaw: sender, participants: participantsAR });
+            const formasAutor = antiRoubo.formasDoAlvo({
+              telNum: alvoAR.telNum, lidNum: alvoAR.lidNum,
+              formas: formasRemetenteArr,
             });
-            if (!isCreator && !isAuth && !isOwner && !isSubOwner) {
+            const decisaoAR = antiRoubo.decidirEnforcement({
+              antiRoubo: groupData.antiRoubo,
+              acao: 'promote',
+              formasAutor,
+              isDonoGrupo: formasAutor.includes(antiRoubo.toNum(metadataAR?.owner)),
+              isDonoBot: isOwner || isSubOwner,
+            });
+            if (decisaoAR.acao === 'punir') {
               return reply("❌ Você não tem permissão para usar este comando. Apenas o dono do grupo ou usuários autorizados podem usar.");
             }
           }
@@ -31671,18 +31704,23 @@ break;
       case 'demote':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
-          // Verificação antiRoubo
-          if (groupData.antiRoubo?.enabled) {
-            const groupMetadata = await nazu.groupMetadata(from);
-            const groupCreator = groupMetadata?.owner?.split('@')[0] || '';
-            const senderNum = sender.split('@')[0];
-            const isCreator = senderNum === groupCreator;
-            const isAuth = groupData.antiRoubo?.authorizedUsers?.some(u => {
-              const authNum = (u.split('@')[0] || '').replace(/\D/g, '');
-              const senderNormalized = (senderNum || '').replace(/\D/g, '');
-              return authNum === senderNormalized || authNum.includes(senderNormalized) || senderNormalized.includes(authNum);
+          // Verificação antiRoubo (fonte única: funcs/utils/antiRoubo.js)
+          if (antiRoubo.estaAtivo(groupData.antiRoubo)) {
+            const metadataAR = await nazu.groupMetadata(from).catch(() => null);
+            const participantsAR = metadataAR?.participants || groupMetadata?.participants || [];
+            const alvoAR = antiRoubo.resolverAlvo({ alvoRaw: sender, participants: participantsAR });
+            const formasAutor = antiRoubo.formasDoAlvo({
+              telNum: alvoAR.telNum, lidNum: alvoAR.lidNum,
+              formas: formasRemetenteArr,
             });
-            if (!isCreator && !isAuth && !isOwner && !isSubOwner) {
+            const decisaoAR = antiRoubo.decidirEnforcement({
+              antiRoubo: groupData.antiRoubo,
+              acao: 'demote',
+              formasAutor,
+              isDonoGrupo: formasAutor.includes(antiRoubo.toNum(metadataAR?.owner)),
+              isDonoBot: isOwner || isSubOwner,
+            });
+            if (decisaoAR.acao === 'punir') {
               return reply("❌ Você não tem permissão para usar este comando. Apenas o dono do grupo ou usuários autorizados podem usar.");
             }
           }
@@ -33343,193 +33381,195 @@ break;
         break;
       case 'antiroubo':
         try {
-          if (!isGroup) return reply("Isso sÃ³ pode ser usado em grupo ");
-          const args = body.trim().toLowerCase().split(' ');
-          if (args.length === 1 || args[1] === 'menu') {
-            // Mostrar menu do antiroubo
-            const status = groupData.antiRoubo?.enabled ? '🟢 ATIVO' : '🔴 INATIVO';
-            // Obter dono do grupo (EXATAMENTE a mesma logica do !infogrupo)
-            const metadata = await nazu.groupMetadata(from);
-            const owner = metadata?.owner || from.split('-')[0] + '@s.whatsapp.net';
-            const ownerNum = owner.split('@')[0];
-            const ownerDisplay = '@' + ownerNum;
-            const ownerJid = owner;
-            const authUsers = groupData.antiRoubo?.authorizedUsers || [];
-            const mentions = [];
-            let authList = '*Nenhum usuÃ¡rio autorizado*';
-            if (authUsers.length > 0) {
-              authList = authUsers.map(u => {
-                if (!mentions.includes(u)) mentions.push(u);
-                return '░ @' + u.split('@')[0];
-              }).join('\n');
-            }
-            // Adicionar dono do grupo às menções se existir
-            if (ownerJid && !mentions.includes(ownerJid)) {
-              mentions.push(ownerJid);
-            }
-            const menuText = '┏━━━━━━━━━━━━━━━┓\n' +
-              '┃   🛡️ ANTI ROUBO 🛡️   ┃\n' +
-              '┗━━━━━━━━━━━━━━━┛\n' +
-              '┃\n' +
-              '┃ 🟢 *Status:* ' + status + '\n' +
-              '┃\n' +
-              '┃ 👑 *Dono do Grupo:*\n' +
-              '┃ ' + ownerDisplay + '\n' +
-              '┃\n' +
-              '┃ 👤 *UsuÃ¡rios Permitidos:*\n' +
-              '┃ ' + authList + '\n' +
-              '┃\n' +
-              '━━━━━━━━━━━━━━━━━━\n' +
-              '┃\n' +
-              '┃ 🔧 *Comandos*\n' +
-              '┃\n' +
-              '┃ 🟢 ' + prefix + 'antiroubo on\n' +
-              '┃ 🔴 ' + prefix + 'antiroubo off\n' +
-              '┃\n' +
-              '┃ 👤 ' + prefix + 'perm @usuÃ¡rio\n' +
-              '┃ 👤 ' + prefix + 'delp @usuÃ¡rio\n' +
-              '┃\n' +
-              '┗━━━━━━━━━━━━━━━━━━━━━━┛';
-            const adReply = {
-              title: "📢 Canal Lizzy",
-              body: "Ver canal",
-              showAdAttribution: false,
-            };
-            const newsletterContext = gerarContextNewsletter(adReply);
-            await reply(menuText, { mentions, contextInfo: newsletterContext });
-          } else if (args[1] === 'on') {
-            if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
+          if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
+          const arArgs = body.trim().split(/\s+/);
+          const arSub = (arArgs[1] || '').toLowerCase();
+          const estadoAR = getAntiRoubo();
+
+          if (!arSub || arSub === 'menu' || arSub === 'status') {
+            const metadataAR = await nazu.groupMetadata(from).catch(() => null);
+            const participantsAR = metadataAR?.participants || groupMetadata?.participants || [];
+            const donoGrupo = metadataAR?.owner || `${from.split('-')[0]}@s.whatsapp.net`;
+            const telefones = antiRoubo.listarTelefonesAutorizados(estadoAR, participantsAR);
+            const mentionsAR = [donoGrupo, ...telefones.map((n) => `${n}@s.whatsapp.net`)];
+            const listaPerm = telefones.length
+              ? telefones.map((n) => `│    • @${n}`).join('\n')
+              : '│    • nenhum';
+            const menuAR = `╭━━━꧁༺ ✦ 🛡️ ANTI-ROUBO ✦ ༻꧂━━━╮
+┃ 📊 Status: ${estadoAR.enabled ? '🟢 ATIVO' : '🔴 INATIVO'}
+┃
+┃ 👑 Dono do grupo:
+┃    • @${String(donoGrupo).split('@')[0]}
+┃
+┃ ✅ Autorizados (${telefones.length}):
+${listaPerm}
+┃
+┃ 🔧 Comandos:
+┃    • ${prefix}antiroubo on/off
+┃    • ${prefix}perm @usuário
+┃    • ${prefix}delp @usuário
+┃    • ${prefix}listperm
+┃    • ${prefix}limparperm
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
+            await nazu.sendMessage(from, {
+              text: menuAR,
+              mentions: [...new Set(mentionsAR)],
+              contextInfo: gerarContextNewsletter(),
+            });
+          } else if (arSub === 'on') {
+            if (!isGroupAdmin && !podeDonoTotal()) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
             if (!isBotAdmin) return reply("Preciso ser admin para isso 💔");
-            if (!groupData.antiRoubo) groupData.antiRoubo = {};
-            groupData.antiRoubo.enabled = true;
-            groupData.antiRoubo.authorizedUsers = groupData.antiRoubo.authorizedUsers || [];
-            fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
-            const newsletterAntiRoubo = {
-              forwardingScore: 999,
-              isForwarded: true,
-              forwardedNewsletterMessageInfo: {
-                newsletterJid: "120363410980452460@newsletter",
-                newsletterName: "Lizzy"
-              }
-            };
-            await nazu.sendMessage(from, { text: "✅ *Anti Roubo de Administração ativado.*\n\nPromoções e rebaixamentos só poderão ser feitos pelo Dono do Grupo ou usuários autorizados." , contextInfo: newsletterAntiRoubo, quoted: info });
-          } else if (args[1] === 'off') {
-            if (!isGroupAdmin) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
-            if (groupData.antiRoubo) {
-              groupData.antiRoubo.enabled = false;
-            }
-            fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
-            const newsletterAntiRouboOff = {
-              forwardingScore: 999,
-              isForwarded: true,
-              forwardedNewsletterMessageInfo: {
-                newsletterJid: "120363410980452460@newsletter",
-                newsletterName: "Lizzy"
-              }
-            };
-            await nazu.sendMessage(from, { text: "❌ *Anti Roubo de Administração desativado.*" , contextInfo: newsletterAntiRouboOff, quoted: info });
+            salvarAntiRoubo(antiRoubo.definirAtivo(estadoAR, true));
+            await nazu.sendMessage(from, {
+              text: "🛡️ *Anti-Roubo ATIVADO.*\n\nSó o dono do grupo e os autorizados podem promover/rebaixar. Quem tentar sem permissão é revertido na hora.",
+              contextInfo: gerarContextNewsletter(),
+            });
+          } else if (arSub === 'off') {
+            if (!isGroupAdmin && !podeDonoTotal()) return replyAdminError(nazu, from, ADMIN_ERROR_MESSAGE, info);
+            salvarAntiRoubo(antiRoubo.definirAtivo(estadoAR, false));
+            await nazu.sendMessage(from, {
+              text: "❌ *Anti-Roubo DESATIVADO.*\n\nPromoções e rebaixamentos voltam ao normal.",
+              contextInfo: gerarContextNewsletter(),
+            });
           } else {
-            await reply(`❌ Uso incorreto!\n\nUse:\n• ${prefix}antiroubo - menu\n• ${prefix}antiroubo on/off`);
+            await reply(`❌ Uso incorreto!\n\nUse:\n• ${prefix}antiroubo — menu\n• ${prefix}antiroubo on/off`);
           }
         } catch (e) {
-          console.error(e);
+          console.error('[ANTI-ROUBO] erro:', e?.message || e);
           await reply("Ocorreu um erro 💔");
         }
         break;
       case 'perm':
+      case 'addperm':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!podeDonoTotal()) return reply("Apenas o Dono do Bot pode usar este comando!");
-          // Obter múltiplos usuários mencionados
-          const mentionedUsers = info.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-          const quoted = info.message?.extendedTextMessage?.contextInfo?.quotedMessage?.conversation;
-          // Se não há usuários mencionados nem citação
-          if (mentionedUsers.length === 0 && !quoted) {
-            const helpMsg = '❌ Marque um ou mais usuários ou responda uma mensagem.\n\nExemplos:\n' + prefix + 'perm @usuario1 @usuario2\n' + prefix + 'perm @usuario1';
-            return reply(helpMsg);
+          if (!podeDonoTotal()) return reply("Apenas o Dono do Bot pode gerenciar o anti-roubo!");
+          const arPerm = getAntiRoubo();
+          if (!arPerm.enabled) {
+            return reply(`⚠️ Ative o anti-roubo primeiro:\n${prefix}antiroubo on`);
           }
-          // Processar usuários mencionados
-          const usersToAdd = [...mentionedUsers];
-          // Se há citação mas não menção, extrair números do texto citado
-          if (usersToAdd.length === 0 && quoted) {
-            const numbersInQuote = quoted.match(/\d{6,}/g) || [];
-            numbersInQuote.forEach(num => {
-              usersToAdd.push(num + '@s.whatsapp.net');
-            });
+          const metadataPerm = await nazu.groupMetadata(from).catch(() => null);
+          const participantsPerm = metadataPerm?.participants || groupMetadata?.participants || [];
+          const ctxt = info.message?.extendedTextMessage?.contextInfo || {};
+          const mencoes = ctxt.mentionedJid || [];
+          const citado = ctxt.participant || null;
+          const textoSemCmd = body.replace(/^\S+\s*/, '');
+
+          // Alvos: menções + o citado (se não repetido) + números digitados.
+          const alvosPerm = [];
+          for (const m of mencoes) alvosPerm.push(m);
+          if (citado && !alvosPerm.some((a) => antiRoubo.toNum(a) === antiRoubo.toNum(citado))) alvosPerm.push(citado);
+          if (!alvosPerm.length) {
+            for (const n of (textoSemCmd.match(/\d{8,15}/g) || [])) alvosPerm.push(n);
           }
-          if (usersToAdd.length === 0) {
-            return reply("❌ Não consegui identificar nenhum usuário.");
+          if (!alvosPerm.length) {
+            return reply(`❌ Marque um ou mais usuários ou responda uma mensagem.\n\nExemplo: ${prefix}perm @usuario`);
           }
-          // Garantir estrutura do antiRoubo
-          if (!groupData.antiRoubo) groupData.antiRoubo = {};
-          if (!groupData.antiRoubo.authorizedUsers) groupData.antiRoubo.authorizedUsers = [];
-          const added = [];
-          const alreadyExists = [];
-          const mentions = [];
-          for (const userJid of usersToAdd) {
-            const userNum = userJid.split('@')[0];
-            // Verificar se já está na lista
-            const alreadyAuth = groupData.antiRoubo.authorizedUsers.some(u => {
-              const uNum = u.split('@')[0];
-              return uNum === userNum || uNum.includes(userNum) || userNum.includes(uNum);
-            });
-            if (alreadyAuth) {
-              alreadyExists.push(userNum);
-            } else {
-              groupData.antiRoubo.authorizedUsers.push(userJid);
-              added.push(userNum);
-              mentions.push(userJid);
-            }
+
+          let estadoAtual = arPerm;
+          const adicionados = [];
+          const jaTinham = [];
+          for (const alvo of alvosPerm) {
+            const { telNum, lidNum } = antiRoubo.resolverAlvo({ alvoRaw: alvo, participants: participantsPerm });
+            const r = antiRoubo.adicionarPermissao(estadoAtual, { telNum, lidNum });
+            estadoAtual = r.estado;
+            const rotulo = telNum || lidNum;
+            if (r.jaExistia) jaTinham.push(rotulo);
+            else adicionados.push(rotulo);
           }
-          // Habilitar antiRoubo se necessário
-          if (!groupData.antiRoubo.enabled && added.length > 0) {
-            groupData.antiRoubo.enabled = true;
-          }
-          fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
-          // Montar mensagem de resposta
-          let responseMsg = '';
-          if (added.length > 0) {
-            responseMsg += '✅ *Adicionados (' + added.length + '):*\n' + added.map(u => '░ @' + u).join('\n') + '\n\n';
-          }
-          if (alreadyExists.length > 0) {
-            responseMsg += '⚠️ *Já autorizados (' + alreadyExists.length + '):*\n' + alreadyExists.map(u => '░ @' + u).join('\n') + '\n';
-          }
-          // Adicionar menções do já existentes também
-          alreadyExists.forEach(num => {
-            mentions.push(num + '@s.whatsapp.net');
-          });
-          await reply(responseMsg.trim(), { mentions: [...new Set(mentions)] });
+          // Autorizar alguém já liga o anti (como no bot de referência).
+          estadoAtual.enabled = true;
+          salvarAntiRoubo(estadoAtual);
+
+          const mentions = adicionados.concat(jaTinham).filter(Boolean).map((n) => `${n}@s.whatsapp.net`);
+          let msg = '';
+          if (adicionados.length) msg += `✅ *Autorizados (${adicionados.length}):*\n${adicionados.map((n) => `░ @${n}`).join('\n')}\n\n`;
+          if (jaTinham.length) msg += `⚠️ *Já autorizados (${jaTinham.length}):*\n${jaTinham.map((n) => `░ @${n}`).join('\n')}`;
+          await reply(msg.trim() || '✅ Permissões atualizadas.', { mentions: [...new Set(mentions)] });
         } catch (e) {
-          console.error(e);
+          console.error('[ANTI-ROUBO] erro no perm:', e?.message || e);
           await reply("Ocorreu um erro 💔");
         }
         break;
       case 'delp':
+      case 'rmperm':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!podeDonoTotal()) return reply("Apenas o Dono do Bot pode usar este comando!");
-          const mentioned = info.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
-          const quoted = info.message?.extendedTextMessage?.contextInfo?.quotedMessage?.conversation;
-          if (!mentioned && !quoted) {
+          if (!podeDonoTotal()) return reply("Apenas o Dono do Bot pode gerenciar o anti-roubo!");
+          const arDel = getAntiRoubo();
+          if (!arDel.enabled) {
+            return reply(`⚠️ O anti-roubo está desativado.\n${prefix}antiroubo on`);
+          }
+          const metadataDel = await nazu.groupMetadata(from).catch(() => null);
+          const participantsDel = metadataDel?.participants || groupMetadata?.participants || [];
+          const ctxtDel = info.message?.extendedTextMessage?.contextInfo || {};
+          const mencoesDel = ctxtDel.mentionedJid || [];
+          const citadoDel = ctxtDel.participant || null;
+          const alvosDel = [...mencoesDel];
+          if (citadoDel && !alvosDel.some((a) => antiRoubo.toNum(a) === antiRoubo.toNum(citadoDel))) alvosDel.push(citadoDel);
+          if (!alvosDel.length) {
             return reply(`❌ Marque um usuário ou responda uma mensagem.\n\nExemplo: ${prefix}delp @usuario`);
           }
-          const userJid = mentioned || (quoted ? quoted.split('\n')[0].replace(/[^0-9]/g, '') + '@s.whatsapp.net' : null);
-          if (!userJid) {
-            return reply("❌ Não consegui identificar o usuário.");
+          let estadoDel = arDel;
+          const removidos = [];
+          const naoEstavam = [];
+          for (const alvo of alvosDel) {
+            const { telNum, lidNum } = antiRoubo.resolverAlvo({ alvoRaw: alvo, participants: participantsDel });
+            const r = antiRoubo.removerPermissao(estadoDel, { telNum, lidNum });
+            estadoDel = r.estado;
+            (r.encontrado ? removidos : naoEstavam).push(telNum || lidNum);
           }
-          const userNum = userJid.split('@')[0];
-          if (!groupData.antiRoubo?.authorizedUsers) {
-            return reply("⚠️ A lista de autorizados está vazia.");
-          }
-          const idx = groupData.antiRoubo.authorizedUsers.findIndex(u => u.includes(userNum) || userNum.includes(u.split('@')[0]));
-          if (idx === -1) {
-            return reply(`⚠️ @${userNum} não está na lista de autorizados.`, { mentions: [userJid] });
-          }
-          groupData.antiRoubo.authorizedUsers.splice(idx, 1);
-          fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
-          await reply(`✅ @${userNum} removido da lista de autorizados!`, { mentions: [userJid] });
+          salvarAntiRoubo(estadoDel);
+          const mentionsDel = removidos.map((n) => `${n}@s.whatsapp.net`);
+          let msgDel = '';
+          if (removidos.length) msgDel += `✅ *Removidos (${removidos.length}):*\n${removidos.map((n) => `░ @${n}`).join('\n')}\n\n`;
+          if (naoEstavam.length) msgDel += `⚠️ *Não estavam autorizados:*\n${naoEstavam.map((n) => `░ @${n}`).join('\n')}`;
+          await reply(msgDel.trim() || 'Nada para remover.', { mentions: [...new Set(mentionsDel)] });
         } catch (e) {
-          console.error(e);
+          console.error('[ANTI-ROUBO] erro no delp:', e?.message || e);
+          await reply("Ocorreu um erro 💔");
+        }
+        break;
+      case 'listperm':
+      case 'listapermissao':
+        try {
+          if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
+          if (!podeDonoTotal() && !isGroupAdmin) return reply("Apenas admins podem ver a lista.");
+          const arList = getAntiRoubo();
+          if (!arList.enabled) {
+            return reply(`⚠️ O anti-roubo está desativado.\n${prefix}antiroubo on`);
+          }
+          const metadataList = await nazu.groupMetadata(from).catch(() => null);
+          const participantsList = metadataList?.participants || groupMetadata?.participants || [];
+          const telefonesList = antiRoubo.listarTelefonesAutorizados(arList, participantsList);
+          if (!telefonesList.length) {
+            return reply("🤷 Ninguém autorizado no anti-roubo.");
+          }
+          const mentionsList = telefonesList.map((n) => `${n}@s.whatsapp.net`);
+          const linhasList = telefonesList.map((n) => `• @${n}`).join('\n');
+          await nazu.sendMessage(from, {
+            text: `🛡️ *AUTORIZADOS NO ANTI-ROUBO* (${telefonesList.length}):\n\n${linhasList}`,
+            mentions: mentionsList,
+            contextInfo: gerarContextNewsletter(),
+          });
+        } catch (e) {
+          console.error('[ANTI-ROUBO] erro no listperm:', e?.message || e);
+          await reply("Ocorreu um erro 💔");
+        }
+        break;
+      case 'limparperm':
+      case 'clearperm':
+        try {
+          if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
+          if (!podeDonoTotal()) return reply("Apenas o Dono do Bot pode limpar as permissões!");
+          const arClear = getAntiRoubo();
+          if (!arClear.enabled) {
+            return reply(`⚠️ O anti-roubo está desativado.\n${prefix}antiroubo on`);
+          }
+          salvarAntiRoubo(antiRoubo.limparPermissoes(arClear));
+          await reply("🧹 *Todas as permissões foram limpas.*\n> Ninguém está autorizado.");
+        } catch (e) {
+          console.error('[ANTI-ROUBO] erro no limparperm:', e?.message || e);
           await reply("Ocorreu um erro 💔");
         }
         break;

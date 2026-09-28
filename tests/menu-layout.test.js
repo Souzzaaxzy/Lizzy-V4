@@ -282,7 +282,8 @@ const COMANDOS_POR_MENU = {
   // Subdonos ficam SÓ no menudono (removidos do menuadm).
   // menudono: 165 -> 168 (sub.permitir/revogar/perms) -> 165
   // (removidos grantsubcmd/delsubcmd/listsubcmd).
-  menuadm: 177, menudono: 165,
+  // menuadm: 177 -> 180 (`antiroubo on/off`, `listperm`, `limparperm`).
+  menuadm: 180, menudono: 165,
   // menubn: 348 -> 349 (`!ma` / `!melhoresamigos` / `!bestfriends`).
   menubn: 349, menufut: 42, menurpg: 149,
   // menuvip nao tem comando cadastrado; o `!` contado e o `!addcmdvip` da

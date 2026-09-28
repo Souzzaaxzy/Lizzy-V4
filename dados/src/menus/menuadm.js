@@ -152,6 +152,7 @@ export default async function menuadm(prefix, botName = "MeuBot", userName = "Us
 │ 🕵 ${prefix}x9
 │ 🃏 ${prefix}card on/off
 │ 🔐 ${prefix}antiroubo
+│ 🛡️ ${prefix}antiroubo on/off
 │ 🛡️ ${prefix}antis
 │ 📄 ${prefix}antidoc
 │ 📍 ${prefix}antiloc
@@ -175,6 +176,8 @@ export default async function menuadm(prefix, botName = "MeuBot", userName = "Us
 │ 🌐 ${prefix}antisocial
 │ 👤 ${prefix}perm @user
 │ 👤 ${prefix}delp @user
+│ 📋 ${prefix}listperm
+│ 🧹 ${prefix}limparperm
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
