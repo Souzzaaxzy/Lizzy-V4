@@ -259,10 +259,10 @@ await test('1. !togif sem figurinha marcada: pede para marcar', async () => {
   includes(textOf(sent), 'Marque uma figurinha', 'avisa');
 });
 
-await test('2. !tomp4 sem figurinha marcada: pede para marcar', async () => {
+await test('2. !tomp4 foi UNIFICADO no !togif (não existe mais)', async () => {
   const groupJid = makeGroup();
   const sent = await run({ groupJid, text: '!tomp4' });
-  includes(textOf(sent), 'Marque uma figurinha', 'avisa');
+  ok(!textOf(sent).includes('Marque uma figurinha'), '!tomp4 não é mais um comando');
 });
 
 // ============================================================================
@@ -299,18 +299,7 @@ await test('6. a fork exporta as funções (o bot importa direto)', async () => 
 
 await subirServidor();
 
-await test('8. !tomp4 (figurinha animada): envia VÍDEO mp4 com gifPlayback', async () => {
-  const groupJid = makeGroup();
-  const sticker = publicarSticker(ANIMATED);
-  const sent = await run({ groupJid, text: '!tomp4', sticker });
-  const video = sent.find((s) => s.content?.video);
-  ok(!!video, 'enviou um vídeo');
-  ok(video?.content?.mimetype === 'video/mp4', 'mimetype mp4');
-  ok(video?.content?.gifPlayback === true, 'gifPlayback ligado');
-  ok(Buffer.isBuffer(video?.content?.video) && video.content.video.slice(4, 8).toString('latin1') === 'ftyp', 'container MP4');
-});
-
-await test('9. !togif (figurinha animada): envia como GIF animado (MP4 + gifPlayback)', async () => {
+await test('8. !togif (figurinha animada): envia como GIF animado (MP4 + gifPlayback)', async () => {
   const groupJid = makeGroup();
   const sticker = publicarSticker(ANIMATED);
   const sent = await run({ groupJid, text: '!togif', sticker });
@@ -323,7 +312,7 @@ await test('9. !togif (figurinha animada): envia como GIF animado (MP4 + gifPlay
   ok(!sent.some((s) => s.content?.document), 'NÃO manda documento .gif');
 });
 
-await test('10. figurinha ESTÁTICA: avisa para usar o !toimg', async () => {
+await test('9. figurinha ESTÁTICA: avisa para usar o !toimg', async () => {
   const groupJid = makeGroup();
   const sticker = publicarSticker(STATIC);
   const sent = await run({ groupJid, text: '!togif', sticker });
@@ -332,7 +321,7 @@ await test('10. figurinha ESTÁTICA: avisa para usar o !toimg', async () => {
   includes(t, 'toimg', 'sugere o toimg');
 });
 
-await test('11. o payload vira `videoMessage.gifPlayback` na fork (renderiza como GIF)', async () => {
+await test('10. o payload vira `videoMessage.gifPlayback` na fork (renderiza como GIF)', async () => {
   const { generateWAMessageContent } = baileys;
   const mp4 = await baileys.stickerToMp4(ANIMATED);
   const content = await generateWAMessageContent(
@@ -354,7 +343,7 @@ await test('7. !togif está no menufig e no blockPv', async () => {
   includes(texto, '!togif', 'menufig lista o togif');
   const bp = await import(new URL('../dados/src/utils/blockPv.js', import.meta.url).href);
   ok(bp.menuCommandsMap.menufig.commands.includes('togif'), 'blockPv inclui togif');
-  ok(bp.menuCommandsMap.menufig.commands.includes('tomp4'), 'blockPv inclui tomp4');
+  ok(!bp.menuCommandsMap.menufig.commands.includes('tomp4'), 'blockPv NÃO tem tomp4 (unificado)');
 });
 
 // ============================================================================

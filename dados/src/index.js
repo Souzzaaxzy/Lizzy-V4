@@ -28860,8 +28860,7 @@ ${nomebot}  By  👑 ${nomedono}`;
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
         }
         break;
-      case 'togif':
-      case 'tomp4': {
+      case 'togif': {
         // Figurinha (webp animado) → GIF animado do WhatsApp (um MP4 com
         // `gifPlayback`). O decoder de WebP do FFmpeg ignora os chunks
         // ANIM/ANMF, então a conversão vive na fork (sharp lê os frames);

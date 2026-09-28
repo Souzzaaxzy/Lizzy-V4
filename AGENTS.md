@@ -6717,10 +6717,14 @@ Reinstalar: `npm install --allow-git=all`. **Sem esse commit instalado, o
 `tests/contact-name.test.js` **16/37**; `tests/amigos.test.js` **27/56**
 (inclui **19d**: sem a API nova, ainda resolve pelo `store.contacts`).
 
-## COMANDO `!togif` / `!tomp4` — figurinha → GIF/MP4 (set/2026) ✅
+## COMANDO `!togif` — figurinha → GIF animado (set/2026) ✅
 Fica junto do `!toimg` (categoria **GERENCIAMENTO DE FIGURINHAS** do `menufig`).
-Responde uma figurinha e devolve a animação: `!togif` manda **GIF**, `!tomp4`
-manda **MP4** (vídeo com `gifPlayback`). `!toimg` continua sendo o estático→imagem.
+Responde uma figurinha animada e devolve o **GIF animado do WhatsApp** (um vídeo
+MP4 com `gifPlayback`). `!toimg` continua sendo estático→imagem.
+
+**`!tomp4` foi UNIFICADO neste comando e deixou de existir** (set/2026): ele já
+fazia exatamente a mesma coisa, então virou um só. `!tomp4` agora cai no menu de
+comando não encontrado; se alguém digitar, recebe o aviso padrão.
 
 ### A CAUSA RAIZ: o FFmpeg NÃO decodifica WebP animado
 Medido: o decoder de WebP do FFmpeg **ignora** os chunks `ANIM`/`ANMF` —
@@ -6751,10 +6755,10 @@ saída fica vazia). Por isso a conversão foi para a **fork**.
 
 ### BOT (`dados/src/index.js`, junto do `case 'toimg'`)
 - Importa `stickerToGif`/`stickerToMp4`/`isAnimatedWebP` de `@itsliaaa/baileys`.
-- `case 'togif'` / `case 'tomp4'`: resolve o `stickerMessage` (citado, direto ou
-  view-once), baixa o buffer (`getFileBuffer(...,'sticker')`), confere se é
-  **animado** e converte para MP4 (`stickerToMp4`). Sem FFmpeg → mensagem
-  específica ("preciso do FFmpeg instalado").
+- `case 'togif'`: resolve o `stickerMessage` (citado, direto ou view-once),
+  baixa o buffer (`getFileBuffer(...,'sticker')`), confere se é **animado** e
+  converte para MP4 (`stickerToMp4`). Sem FFmpeg → mensagem específica
+  ("preciso do FFmpeg instalado").
 - **Figurinha estática** → avisa e manda usar **`!toimg`** (em vez de gerar um
   GIF/vídeo de 1 frame, que seria inútil).
 - Envio: **SEMPRE** `video` MP4 + **`gifPlayback: true`**. É assim que o
@@ -6766,14 +6770,16 @@ saída fica vazia). Por isso a conversão foi para a **fork**.
 - Erros: mensagem amigável sem stack; detalhe no console (`[TOGIF] ...`).
 
 ### Menu / testes
-- `menufig`: linha `🎞️ ${prefix}togif` + `togif`/`tomp4` no `menuCommandsMap.menufig`
-  do `blockPv`. Baseline do `menu-layout` **menufig 16 → 17**.
-- `tests/togif.test.js` (**11 testes / 28 asserções**) — sem figurinha; a fork
-  converte GIF/MP4; `isAnimatedWebP`; export; **ponta a ponta** com figurinha
-  **cifrada de verdade** (hkdf + AES-256-CBC, servidor HTTP local): `!tomp4` e
-  `!togif` → **vídeo** `ftyp` + `gifPlayback` (e **nenhum documento**); estática
-  → avisa; menu/blockPv; e o **payload real** passado pelo
-  `generateWAMessageContent` da fork vira `videoMessage.gifPlayback === true`.
+- `menufig`: linha `🎞️ ${prefix}togif` + `togif` no `menuCommandsMap.menufig`
+  do `blockPv` (o `tomp4` foi removido de lá). Baseline do `menu-layout`
+  **menufig 16 → 17**.
+- `tests/togif.test.js` (**10 testes / 24 asserções**) — sem figurinha; `!tomp4`
+  **não existe mais** (unificado); a fork converte GIF/MP4; `isAnimatedWebP`;
+  export; **ponta a ponta** com figurinha **cifrada de verdade** (hkdf +
+  AES-256-CBC, servidor HTTP local): `!togif` → **vídeo** `ftyp` + `gifPlayback`
+  (e **nenhum documento**); estática → avisa; menu/blockPv; e o **payload real**
+  passado pelo `generateWAMessageContent` da fork vira
+  `videoMessage.gifPlayback === true`.
 - **Pré-existente (não é regressão)**: `tests/midiaprefix.test.js` falha no
   sandbox por causa do caminho do ffmpeg — confirmado com `git stash` no HEAD
   limpo (mesma falha sem as mudanças).
