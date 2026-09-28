@@ -37777,22 +37777,27 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
         }, { quoted: info });
         break;
       }
-      // ==================== MELHORES AMIGOS ====================
-      // Comando `!ma` / `!melhoresamigos` / `!bestfriends`, migrado de outro
-      // bot. Adaptações em relação ao original:
-      //   - `yuta` -> `nazu` (socket real do handler) e `yt` -> `info`;
-      //   - `__ctxMencoesGlobal()`/`__normalizarAlvoUsuario()` -> `menc_os2`
-      //     (já resolvido e convertido para LID pelo handler, igual ao sender);
-      //   - `canalInfo(...)` -> `gerarContextNewsletter()` dentro do content
-      //     (é o que a fork lê; em `options` seria ignorado);
-      //   - `path.join(process.cwd(), 'src', 'dados', 'func', ...)` (caminho de
-      //     outro projeto) -> `DONO_DIR`, o diretório de dados do bot;
-      //   - `fs.writeFileSync` direto -> `writeJsonFile` (atômico, cria a pasta);
-      //   - `jidNum`/`pushnames`/`buscarMembroPorJid` (inexistentes aqui) ->
-      //     nome real pelo metadata do grupo + `nazu.getName`, caindo no número.
-      case 'ma':
-      case 'melhoresamigos':
-      case 'bestfriends': {
+      // ==================== CAFÉ (GRUPO DE AMIZADES) ====================
+      // Comando `!cf` (`!cafe`), migrado de outro bot e REFATORADO para o
+      // conceito de GRUPO de amizades (um por criador):
+      //   !cf criar <nome>   cria/renomeia o grupo
+      //   !cf add @a @b ...  adiciona um ou vários (por menção OU resposta)
+      //   !cf kick @a @b ... remove um ou vários
+      //   !cf del            apaga o grupo de amizade atual
+      //   !cf                mostra o mini menu do grupo
+      //
+      // Adaptações em relação ao original (as mesmas da rodada anterior):
+      //   - `yuta` -> `nazu` (socket real) e `yt` -> `info`;
+      //   - `__ctxMencoesGlobal()`/`__normalizarAlvoUsuario()` -> menções
+      //     (`menc_jid2`, já em LID) e `menc_os2` (respondido, em LID);
+      //   - `canalInfo(...)` -> `gerarContextNewsletter()` dentro do content;
+      //   - caminho do outro projeto -> `DONO_DIR/cafe.json`;
+      //   - `fs.writeFileSync` cru -> `writeJsonFile` (atômico);
+      //   - `jidNum`/`pushnames`/`buscarMembroPorJid` (inexistentes) ->
+      //     `store.contacts`/`groupMetadata`/`nazu.getName`, com o NÚMERO de
+      //     telefone como padrão (nunca o LID cru).
+      case 'cf':
+      case 'cafe': {
         try {
           if (!isGroup) {
             await reply('⚠️ Esse comando só funciona em grupos.');
@@ -37804,31 +37809,47 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
             break;
           }
 
-          const MAX_AMIGOS = 20;
-          const caminhoMA = pathz.join(DONO_DIR, 'melhoresamigos.json');
+          const MAX_CF = 20;
+          const caminhoCF = pathz.join(DONO_DIR, 'cafe.json');
+          // 1 grupo de amizades por pessoa (chave = o criador).
+          const chaveCF = String(sender);
 
-          let bancoMA = loadJsonFile(caminhoMA, {});
-          if (!bancoMA || typeof bancoMA !== 'object' || Array.isArray(bancoMA)) {
-            bancoMA = {};
+          // Normaliza para a forma de LID do handler (remove :device).
+          function normCF(id) {
+            const s = String(id || '');
+            if (!s) return '';
+            return s.includes(':')
+              ? s.split(':')[0] + (s.includes('@lid') ? '@lid' : '@s.whatsapp.net')
+              : s;
           }
 
-          const usuarioMA = String(sender);
-          if (!Array.isArray(bancoMA[usuarioMA])) bancoMA[usuarioMA] = [];
-          const amigos = bancoMA[usuarioMA];
+          let bancoCF = loadJsonFile(caminhoCF, {});
+          if (!bancoCF || typeof bancoCF !== 'object' || Array.isArray(bancoCF)) {
+            bancoCF = {};
+          }
 
-          // Alvo = mensagem respondida/citada. O handler já entrega isso como
-          // LID (a mesma forma do `sender`), então a comparação e as menções
-          // casam mesmo quando o WhatsApp endereça por LID ou por número.
-          const alvoRespondido = menc_os2 ? String(menc_os2) : '';
+          const salvarCF = () => writeJsonFile(caminhoCF, bancoCF);
 
-          const salvarMA = () => writeJsonFile(caminhoMA, bancoMA);
-
-          // Nome amigável: prefere o que é ESPECÍFICO (nome/notify do
-          // participante) e descarta respostas genéricas do `getName`. O
-          // padrão é o número — nunca o JID cru.
-          const pegarNomeMA = async (jid) => {
+          // Nome amigável: prioriza NOME e descarta o que é genérico ou o
+          // próprio número. O padrão final é o telefone — nunca o LID.
+          const pegarNomeCF = async (jid) => {
             const id = String(jid || '');
             const base = id.split('@')[0].split(':')[0];
+            const ehGenerico = (v) => !v || /^(usu[aá]rio|user|unknown|desconhecido|voc[eê])/i.test(String(v).trim());
+            const ehNumero = (v) => /^\+?\d+$/.test(String(v).trim());
+
+            // 1) Contatos da agenda da sessão (o nome que a pessoa salvou).
+            try {
+              const contacts = nazu.store?.contacts || {};
+              for (const key of Object.keys(contacts)) {
+                if (String(key).split('@')[0].split(':')[0] !== base) continue;
+                const c = contacts[key] || {};
+                const cand = c.notify || c.verifiedName || c.name || c.subject;
+                if (!ehGenerico(cand) && !ehNumero(cand)) return String(cand).trim();
+              }
+            } catch (e) {}
+
+            // 2) Metadata do grupo (notify/name).
             try {
               const membro = (groupMetadata.participants || []).find((p) => {
                 const ids = [p?.id, p?.lid, p?.phoneNumber, p?.pn]
@@ -37837,168 +37858,243 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
                 return ids.includes(base);
               });
               const cand = membro?.notify || membro?.name || membro?.pushName;
-              if (cand && String(cand).trim()) return String(cand).trim();
+              if (!ehGenerico(cand) && !ehNumero(cand)) return String(cand).trim();
             } catch (e) {}
+
+            // 3) `getName` do socket.
             try {
               const nome = await nazu.getName(from, id);
-              if (nome && !/^(usu[aá]rio|user|unknown|desconhecido)/i.test(String(nome).trim())) {
-                return String(nome).trim();
-              }
+              if (!ehGenerico(nome) && !ehNumero(nome)) return String(nome).trim();
             } catch (e) {}
+
+            // 4) Padrão: o número de telefone do membro (nunca o LID).
+            try {
+              const membro = (groupMetadata.participants || []).find((p) => {
+                const ids = [p?.id, p?.lid, p?.phoneNumber, p?.pn]
+                  .filter(Boolean)
+                  .map((v) => String(v).split('@')[0].split(':')[0]);
+                return ids.includes(base);
+              });
+              const pn = membro?.phoneNumber || membro?.pn;
+              if (pn) return String(pn).split('@')[0].split(':')[0];
+            } catch (e) {}
+
             return base || 'Usuário';
           };
 
-          const calcularTempoMA = (inicio) => {
+          const calcularTempoCF = (inicio) => {
             const agora = Date.now();
             const diferenca = Math.max(0, agora - Number(inicio || agora));
             const totalHoras = Math.floor(diferenca / (1000 * 60 * 60));
             return { dias: Math.floor(totalHoras / 24), horas: totalHoras % 24 };
           };
 
-          const primeiroArgMA = String(args[0] || '').toLowerCase();
+          const subcmd = String(args[0] || '').toLowerCase();
 
-          // -------- ADD --------
-          if (['add', 'adicionar', 'novo', 'registrar'].includes(primeiroArgMA)) {
-            if (!alvoRespondido) {
-              await reply(`╭━━〔 💙 𝙈𝙀𝙇𝙃𝙊𝙍 𝘼𝙈𝙄𝙂𝙊 〕━━╮
+          // IDs mencionados (LID) — o handler já normaliza `menc_jid2`.
+          const idsMencionados = (Array.isArray(menc_jid2) ? menc_jid2 : [])
+            .map(normCF)
+            .filter(Boolean);
+          // Alvo respondido (LID) — `menc_os2` também já vem normalizado.
+          const alvoRespondido = menc_os2 ? normCF(menc_os2) : '';
+          const alvos = idsMencionados.length
+            ? [...new Set(idsMencionados)]
+            : (alvoRespondido ? [alvoRespondido] : []);
+
+          // -------------------- CRIAR (renomear) --------------------
+          if (['criar', 'create', 'novo', 'nome', 'setnome'].includes(subcmd)) {
+            const nomeGrupo = String(args.slice(1).join(' ') || '').trim();
+            if (!nomeGrupo) {
+              await reply(`╭━━〔 💙 CAFÉ 〕━━╮
 ┃
-┃ 💡 Responda a mensagem da pessoa
-┃ que você deseja adicionar.
+┃ 💡 Informe o nome do grupo.
 ┃
 ┃ 📌 Exemplo:
-┃ ${groupPrefix}ma add
+┃ ${groupPrefix}cf criar Melhores Amigos
 ┃
 ╰━━━━━━━━━━━━━━━━━━━━╯`);
               break;
             }
-            if (alvoRespondido === String(sender)) {
-              await reply('❌ Você não pode adicionar você mesmo aos melhores amigos.');
-              break;
-            }
-            const existente = amigos.find((a) => String(a.id) === alvoRespondido);
-            if (existente) {
-              const tempo = calcularTempoMA(existente.desde);
-              await nazu.sendMessage(from, {
-                text: `💙 *@${alvoRespondido.split('@')[0]}* já está nos seus melhores amigos!\n\n⏱️ Tempo de amizade:\n📅 ${tempo.dias} dias\n⏰ ${tempo.horas} horas`,
-                mentions: [alvoRespondido],
-                contextInfo: gerarContextNewsletter()
-              }, { quoted: info });
-              break;
-            }
-            if (amigos.length >= MAX_AMIGOS) {
-              await reply(`❌ Você já possui os ${MAX_AMIGOS} melhores amigos permitidos.\n\n👥 Limite atual: ${MAX_AMIGOS} amigos\n\nRemova alguém antes de adicionar outra pessoa:\n\n${groupPrefix}ma del`);
-              break;
-            }
-
-            amigos.push({ id: alvoRespondido, desde: Date.now() });
-            salvarMA();
-            const nomeNovo = await pegarNomeMA(alvoRespondido);
-
+            const atual = bancoCF[chaveCF];
+            const membrosAtuais = (atual && Array.isArray(atual.membros)) ? atual.membros : [];
+            bancoCF[chaveCF] = {
+              nome: nomeGrupo.slice(0, 60),
+              criadoEm: (atual && atual.criadoEm) || Date.now(),
+              membros: membrosAtuais
+            };
+            salvarCF();
             await nazu.sendMessage(from, {
-              text: `╭━━〔 💙 𝙉𝙊𝙑𝙊 𝙈𝙀𝙇𝙃𝙊𝙍 𝘼𝙈𝙄𝙂𝙊 〕━━╮
-┃
-┃ 👤 Amigo: @${alvoRespondido.split('@')[0]}
-┃ 💙 Nick: ${nomeNovo}
-┃
-┃ 🕐 Amizade iniciada agora!
-┃
-┃ 👥 ${amigos.length}/${MAX_AMIGOS} amigos
-┃
-╰━━━━━━━━━━━━━━━━━━━━╯`,
-              mentions: [alvoRespondido],
+              text: `╭━━〔 ${bancoCF[chaveCF].nome} 〕━━╮\n` +
+                `┃ 👥 Membros: ${MAX_CF}\n` +
+                `┃ 📊 Integrantes: ${membrosAtuais.length}/${MAX_CF}\n` +
+                `╰━━━━━━━━━━━━━━━━━━━━╯\n\n` +
+                `✅ Grupo de amizades salvo!`,
               contextInfo: gerarContextNewsletter()
             }, { quoted: info });
             break;
           }
 
-          // -------- DEL --------
-          if (['del', 'remover', 'remove', 'rm'].includes(primeiroArgMA)) {
-            if (!alvoRespondido) {
-              await reply(`❌ Responda a mensagem do amigo que deseja remover.\n\nExemplo:\n${groupPrefix}ma del`);
+          // -------------------- ADD --------------------
+          if (['add', 'adicionar'].includes(subcmd)) {
+            if (!alvos.length) {
+              await reply(`╭━━〔 💙 CAFÉ 〕━━╮
+┃
+┃ 💡 Marque quem você quer adicionar
+┃ ou responda a mensagem da pessoa.
+┃
+┃ 📌 Exemplo:
+┃ ${groupPrefix}cf add @fulano @fulana
+┃
+╰━━━━━━━━━━━━━━━━━━━━╯`);
               break;
             }
-            const indice = amigos.findIndex((a) => String(a.id) === alvoRespondido);
-            if (indice === -1) {
-              await reply('❌ Essa pessoa não está na sua lista de melhores amigos.');
+
+            const atual = bancoCF[chaveCF];
+            if (!atual) {
+              await reply(`⚠️ Você ainda não criou seu grupo de amizades.\n\n📌 Crie primeiro:\n${groupPrefix}cf criar Meus Amigos`);
               break;
             }
-            amigos.splice(indice, 1);
-            salvarMA();
+            if (!Array.isArray(atual.membros)) atual.membros = [];
+            const membros = atual.membros;
+
+            const adicionados = [];
+            const jaTinha = [];
+            let self = false;
+            let cheio = false;
+
+            for (const alvo of alvos) {
+              if (alvo === chaveCF) { self = true; continue; }
+              if (membros.some((m) => m.id === alvo)) { jaTinha.push(alvo); continue; }
+              if (membros.length >= MAX_CF) { cheio = true; break; }
+              membros.push({ id: alvo, desde: Date.now() });
+              adicionados.push(alvo);
+            }
+            if (adicionados.length) salvarCF();
+
+            const linhas = [];
+            if (adicionados.length) {
+              const nomes = [];
+              for (const a of adicionados) nomes.push(`@${a.split('@')[0]} (${await pegarNomeCF(a)})`);
+              linhas.push(`✅ Adicionados: ${nomes.join(', ')}`);
+            }
+            if (jaTinha.length) linhas.push(`ℹ️ Já estavam: ${jaTinha.map((a) => `@${a.split('@')[0]}`).join(', ')}`);
+            if (self) linhas.push('❌ Não dá para adicionar você mesmo.');
+            if (cheio) linhas.push(`🚫 Limite de ${MAX_CF} membros atingido — o resto não entrou.`);
+
             await nazu.sendMessage(from, {
-              text: `💔 @${alvoRespondido.split('@')[0]} foi removido dos seus melhores amigos.\n\n👥 Agora você possui ${amigos.length}/${MAX_AMIGOS} melhores amigos.`,
-              mentions: [alvoRespondido],
+              text: `╭━━〔 ${atual.nome || 'CAFÉ'} 〕━━╮\n` +
+                linhas.join('\n') + '\n' +
+                `┃ 📊 Integrantes: ${membros.length}/${MAX_CF}\n` +
+                `╰━━━━━━━━━━━━━━━━━━━━╯`,
+              mentions: [...new Set([...adicionados, ...jaTinha])],
               contextInfo: gerarContextNewsletter()
             }, { quoted: info });
             break;
           }
 
-          // -------- LIMPAR --------
-          if (['limpar', 'clear', 'reset'].includes(primeiroArgMA)) {
-            if (amigos.length === 0) {
-              await reply('❌ Você não possui melhores amigos cadastrados.');
+          // -------------------- KICK --------------------
+          if (['kick', 'remover', 'remove', 'rm'].includes(subcmd)) {
+            const atual = bancoCF[chaveCF];
+            if (!atual || !Array.isArray(atual.membros) || atual.membros.length === 0) {
+              await reply('❌ Você ainda não tem membros no seu grupo de amizades.');
               break;
             }
-            bancoMA[usuarioMA] = [];
-            salvarMA();
-            await reply('🗑️ Sua lista de melhores amigos foi limpa com sucesso.');
+            if (!alvos.length) {
+              await reply(`❌ Marque quem deseja remover ou responda a mensagem.\n\nExemplo:\n${groupPrefix}cf kick @fulano`);
+              break;
+            }
+
+            const removidos = [];
+            const naoTinha = [];
+            for (const alvo of alvos) {
+              const idx = atual.membros.findIndex((m) => m.id === alvo);
+              if (idx === -1) { naoTinha.push(alvo); continue; }
+              atual.membros.splice(idx, 1);
+              removidos.push(alvo);
+            }
+            if (removidos.length) salvarCF();
+
+            const linhas = [];
+            if (removidos.length) linhas.push(`💔 Removidos: ${removidos.map((a) => `@${a.split('@')[0]}`).join(', ')}`);
+            if (naoTinha.length) linhas.push(`ℹ️ Não estavam: ${naoTinha.map((a) => `@${a.split('@')[0]}`).join(', ')}`);
+
+            await nazu.sendMessage(from, {
+              text: `╭━━〔 ${atual.nome || 'CAFÉ'} 〕━━╮\n` +
+                linhas.join('\n') + '\n' +
+                `┃ 📊 Integrantes: ${atual.membros.length}/${MAX_CF}\n` +
+                `╰━━━━━━━━━━━━━━━━━━━━╯`,
+              mentions: [...new Set([...removidos, ...naoTinha])],
+              contextInfo: gerarContextNewsletter()
+            }, { quoted: info });
             break;
           }
 
-          // -------- LISTA --------
-          if (amigos.length === 0) {
-            await reply(`╭━━〔 💙 𝙈𝙀𝙇𝙃𝙊𝙍𝙀𝙎 𝘼𝙈𝙄𝙂𝙊𝙎 〕━━╮
+          // -------------------- DEL (apaga o grupo) --------------------
+          if (['del', 'delete', 'apagar', 'deletar', 'excluir'].includes(subcmd)) {
+            if (!bancoCF[chaveCF]) {
+              await reply('❌ Você não possui um grupo de amizades para apagar.');
+              break;
+            }
+            delete bancoCF[chaveCF];
+            salvarCF();
+            await reply('🗑️ Seu grupo de amizades foi apagado com sucesso.');
+            break;
+          }
+
+          // -------------------- MINI MENU --------------------
+          const grupoCF = bancoCF[chaveCF];
+          if (!grupoCF) {
+            await reply(`╭━━〔 💙 CAFÉ 〕━━╮
 ┃
-┃ Você ainda não possui
-┃ melhores amigos cadastrados.
+┃ Você ainda não possui um
+┃ grupo de amizades criado.
 ┃
-┃ 👥 Limite: ${MAX_AMIGOS} amigos
+┃ 👥 Limite: ${MAX_CF} membros
 ┃
-┃ 💡 Para adicionar alguém:
-┃ Responda a mensagem da pessoa
-┃ e use:
-┃
-┃ ${groupPrefix}ma add
+┃ 💡 Para criar:
+┃ ${groupPrefix}cf criar Meus Amigos
 ┃
 ╰━━━━━━━━━━━━━━━━━━━━╯`);
             break;
           }
 
-          amigos.sort((a, b) => Number(a.desde || 0) - Number(b.desde || 0));
-          const lista = amigos.slice(0, MAX_AMIGOS);
+          if (!Array.isArray(grupoCF.membros)) grupoCF.membros = [];
+          grupoCF.membros.sort((a, b) => Number(a.desde || 0) - Number(b.desde || 0));
+          const listaCF = grupoCF.membros.slice(0, MAX_CF);
 
-          let texto = `╭━━〔 💙 𝙈𝙀𝙇𝙃𝙊𝙍𝙀𝙎 𝘼𝙈𝙄𝙂𝙊𝙎 〕━━╮\n` +
-            `┃ 👥 Limite: ${MAX_AMIGOS} amigos\n` +
-            `┃ 📊 Cadastrados: ${lista.length}/${MAX_AMIGOS}\n` +
+          let textoCF = `╭━━〔 ${grupoCF.nome || 'CAFÉ'} 〕━━╮\n` +
+            `┃ 👥 Membros: ${MAX_CF}\n` +
+            `┃ 📊 Integrantes: ${listaCF.length}/${MAX_CF}\n` +
             `╰━━━━━━━━━━━━━━━━━━━━╯\n\n`;
 
-          const mentions = [];
+          const mencCF = [];
           const medalhas = ['🥇', '🥈', '🥉'];
 
-          for (let index = 0; index < lista.length; index++) {
-            const amigo = lista[index];
+          for (let index = 0; index < listaCF.length; index++) {
+            const amigo = listaCF[index];
             const id = String(amigo.id);
-            const tempo = calcularTempoMA(amigo.desde);
-            const nomeItem = await pegarNomeMA(id);
-            mentions.push(id);
+            const tempo = calcularTempoCF(amigo.desde);
+            const nomeItem = await pegarNomeCF(id);
+            mencCF.push(id);
             const medalha = medalhas[index] || '👤';
-            texto += `${medalha} *${index + 1}º* — @${id.split('@')[0]}\n` +
-              `💙 *Nick:* ${nomeItem}\n` +
-              `📅 *Amizade:* ${tempo.dias} dias e ${tempo.horas} horas\n\n`;
+            textoCF += `${medalha} ${index + 1}º — @${id.split('@')[0]}\n` +
+              `💙 Nick: ${nomeItem}\n` +
+              `📅 No grupo há ${tempo.dias} dias e ${tempo.horas} horas\n\n`;
           }
 
-          texto += `━━━━━━━━━━━━━━━━━━━━\n` +
-            `💡 Para adicionar: *${groupPrefix}ma add*\n` +
-            `💔 Para remover: *${groupPrefix}ma del*\n` +
-            `👥 Limite: *${MAX_AMIGOS} amigos*`;
+          textoCF += `━━━━━━━━━━━━━━━━━━━━\n` +
+            `💡 Para adicionar: *${groupPrefix}cf add*\n` +
+            `💔 Para remover: *${groupPrefix}cf kick*\n` +
+            `👥 Limite: *${MAX_CF} membros*`;
 
           await nazu.sendMessage(from, {
-            text: texto,
-            mentions: mentions,
+            text: textoCF,
+            mentions: mencCF,
             contextInfo: gerarContextNewsletter()
           }, { quoted: info });
         } catch (e) {
-          console.log('ERRO MELHORES AMIGOS:', e);
-          await reply('❌ Ocorreu um erro no sistema de melhores amigos.');
+          console.log('ERRO CAFÉ:', e);
+          await reply('❌ Ocorreu um erro no sistema de café.');
         }
         break;
       }
