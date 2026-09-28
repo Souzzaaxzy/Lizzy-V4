@@ -126,24 +126,32 @@ await test('numerosDoParticipante: devolve os telefones do membro', () => {
 // 2) RESOLUÇÃO — ORDEM
 // ============================================================================
 
-await test('1º: usa o `getName` (nome do contato da agenda)', async () => {
+await test('1º: usa o `contacts.getName` (nome do contato da agenda)', async () => {
   const nome = await resolverNomeContato(LID, {
-    nazu: { getName: async () => 'Nome Da Agenda' },
+    nazu: { contacts: { getName: () => 'Nome Da Agenda' } },
     metadata: metadata({ notify: 'NomeDoGrupo' }),
     from: 'g@g.us',
   });
-  eq(nome, 'Nome Da Agenda', 'preferiu o getName ao metadata');
+  eq(nome, 'Nome Da Agenda', 'preferiu o contacts.getName ao metadata');
+});
+
+await test('atalho `nazu.getName` (fork antiga / impl. própria) também serve', async () => {
+  const nome = await resolverNomeContato(LID, {
+    nazu: { getName: () => 'Nome Do Atalho' },
+    metadata: metadata({ notify: 'NomeDoGrupo' }),
+  });
+  eq(nome, 'Nome Do Atalho', 'usou o atalho getName');
 });
 
 await test('`getName` genérico/número é DESCARTADO (não vira Nick)', async () => {
   const g = await resolverNomeContato(LID, {
-    nazu: { getName: async () => 'Usuário' },
+    nazu: { contacts: { getName: () => 'Usuário' } },
     metadata: metadata({ notify: 'NomeDoGrupo' }),
   });
   eq(g, 'NomeDoGrupo', 'pulou o getName genérico');
 
   const n = await resolverNomeContato(LID, {
-    nazu: { getName: async () => NUM },
+    nazu: { contacts: { getName: () => NUM } },
     metadata: metadata({ notify: 'NomeDoGrupo' }),
   });
   eq(n, 'NomeDoGrupo', 'pulou o getName=numero');
@@ -152,7 +160,7 @@ await test('`getName` genérico/número é DESCARTADO (não vira Nick)', async (
 await test('2º: store.contacts quando o getName não serve', async () => {
   const nome = await resolverNomeContato(LID, {
     nazu: {
-      getName: async () => '',
+      contacts: { getName: () => undefined },
       store: { contacts: { [JID]: { notify: 'Contato Salvo' } } },
     },
     metadata: metadata({ notify: 'NomeDoGrupo' }),
@@ -193,9 +201,9 @@ await test('sem metadata: último recurso é o próprio id (não quebra)', async
   eq(nome, '999-xl', 'devolveu a base do id');
 });
 
-await test('getIdName que LANÇA não derruba a resolução', async () => {
+await test('getName que LANÇA não derruba a resolução', async () => {
   const nome = await resolverNomeContato(LID, {
-    nazu: { getName: async () => { throw new Error('boom'); } },
+    nazu: { contacts: { getName: () => { throw new Error('boom'); } } },
     metadata: metadata({ notify: 'NomeDoGrupo' }),
   });
   eq(nome, 'NomeDoGrupo', 'seguiu para o metadata');
@@ -219,7 +227,7 @@ await test('resolverNomesContatos: mapa id->nome, com fallbackPorId', async () =
 
 await test('resolverNomesContatos: nome real vence o fallback', async () => {
   const mapa = await resolverNomesContatos([LID], {
-    nazu: { getName: async () => 'Nome Real' },
+    nazu: { contacts: { getName: () => 'Nome Real' } },
     metadata: metadata(),
     fallbackPorId: () => 'fallback',
   });

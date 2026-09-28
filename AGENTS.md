@@ -6675,3 +6675,44 @@ Helpers puros (`baseId`, `nomeInutil`, `acharParticipantePorId`,
 casando um alvo em LID; metadata; fallback do chamador; fallback que é número é
 descartado; sem nome nenhum cai no número (nunca no LID); sem metadata não
 quebra; `getName` que lança não derruba; lista com `fallbackPorId`.
+
+## FORK: cache de CONTATOS + `sock.getName` (set/2026) ✅
+**A causa raiz do "nick não aparece":** a fork **não tinha** `nazu.getName` nem
+`nazu.store` — o código chamava isso dentro de `try/catch`, então **lançava em
+silêncio** e o nome caía no número. A lib emitia `contacts.upsert` /
+`contacts.update` mas **não guardava nada** e **não oferecia** nenhuma forma de
+perguntar o nome de um contato.
+
+### Fork (`Souzzaaxzy/baileys`, commit `22a11d9`, branch `feat/contact-name-store`)
+- **`lib/Store/contact-store.js`** (`makeContactStore`): cache com resolução
+  **`name` (agenda) → `notify` → `verifiedName` → `username`**; recusa genérico
+  (`Usuário`/`user`/…), **número** e **JID cru** (devolve `undefined`); apelidos
+  **LID ↔ PN** para o mesmo nome (um `lid`+`phoneNumber` no registro indexa os
+  dois); **update parcial não apaga** o nome já conhecido; teto (`max`, 5000) e
+  TTL (`ttlMs`, 7 dias), com relógio injetável.
+- **Socket**: instancia o cache, assina `contacts.upsert`/`contacts.update` e
+  expõe **`sock.contacts.{getName,getContact,getAll,upsert,remove,clear}`** +
+  atalho **`sock.getName(jid)`** (tolerante: aceita `getName(jid)` e
+  `getName(chat, jid)` — usa o ÚLTIMO argumento que parece JID).
+- **Export**: `makeContactStore` também sai por `@souzzaaxzy/baileys`
+  (`lib/Store/index.js` + `index.d.ts`).
+- **Testes**: `tests/contact-store.test.js` (**15 testes**) — ordem de nomes,
+  device, LID↔PN, update parcial, renomear, rejeição de genérico/número/JID,
+  TTL, teto, eventos.
+- README: seção **"🧑 Contact names (`sock.contacts.getName`)"**.
+
+### Bot — `utils/contactName.js` agora usa a API da fork
+`resolverNomeContato` tenta na ordem: **`nazu.contacts.getName`** (fork nova) →
+**`nazu.getName`** (atalho/impl. própria) → `store.contacts` → metadata →
+`fallback` do chamador → número → id. O `await` no `contacts.getName` aceita
+retorno síncrono **e** assíncrono.
+
+### Pin de dependência
+`package-lock.json` + `yarn.lock` → `22a11d95133b7acde328cd9d4cb905730c9c13ef`
+(hash **completo**; hash curto gera falso drift no `gitDependencyDrift`).
+Reinstalar: `npm install --allow-git=all`. **Sem esse commit instalado, o
+`getName` não existe e o nick volta ao número.**
+
+### Testes do bot
+`tests/contact-name.test.js` **16/37**; `tests/amigos.test.js` **27/56**
+(inclui **19d**: sem a API nova, ainda resolve pelo `store.contacts`).

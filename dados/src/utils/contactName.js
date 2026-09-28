@@ -108,12 +108,24 @@ export async function resolverNomeContato(id, opts = {}) {
   const aceito = (v) => !nomeInutil(v) && !ehNumeroDeste(v);
   const limpo = (v) => String(v).trim();
 
-  // 1) `getName` — nome do contato na agenda (fonte preferida). Tenta a
-  //    própria identidade e, se ela não render nome, o telefone do membro.
-  if (nazu && typeof nazu.getName === 'function') {
-    for (const alvo of [id, numeros[0] && `${numeros[0]}@s.whatsapp.net`].filter(Boolean)) {
+  // 1) Cache de contatos da própria lib (`sock.contacts.getName`) — é a fonte
+  //    que guarda o NOME DO CONTATO (agenda > notify > verifiedName > username).
+  //    Depois o atalho tolerante `nazu.getName` (aceita `getName(jid)` e
+  //    `getName(chat, jid)`), para quem implementa por conta própria.
+  const alvosGetName = [id, numeros[0] && `${numeros[0]}@s.whatsapp.net`].filter(Boolean);
+  if (nazu?.contacts && typeof nazu.contacts.getName === 'function') {
+    for (const alvo of alvosGetName) {
       try {
-        const nome = await nazu.getName(from, alvo);
+        // A da lib é síncrona, mas aceitamos retorno assíncrono também.
+        const nome = await nazu.contacts.getName(alvo);
+        if (aceito(nome)) return limpo(nome);
+      } catch { /* segue */ }
+    }
+  }
+  if (nazu && typeof nazu.getName === 'function') {
+    for (const alvo of alvosGetName) {
+      try {
+        const nome = await nazu.getName(alvo);
         if (aceito(nome)) return limpo(nome);
       } catch { /* segue */ }
     }

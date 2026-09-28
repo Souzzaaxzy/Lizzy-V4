@@ -135,7 +135,7 @@ function makePerson(label) {
   };
 }
 
-function makeNazu({ sent, groupJid, participants, getNameImpl, metaNotifyImpl, contactsExtra }) {
+function makeNazu({ sent, groupJid, participants, getNameImpl, metaNotifyImpl, contactsExtra, noContactsApi }) {
   const map = {};
   const contacts = {};
   for (const p of participants) {
@@ -145,7 +145,13 @@ function makeNazu({ sent, groupJid, participants, getNameImpl, metaNotifyImpl, c
     if (p.name) contacts[p.jid] = { notify: p.name };
   }
   Object.assign(contacts, contactsExtra || {});
-  return {
+  // Resolvedor do nome, no formato da lib: `contacts.getName(jid)`.
+  const contactsGetName = getNameImpl
+    || ((jid) => {
+      const p = participants.find((x) => x.lid === jid || x.jid === jid || String(x.jid).split('@')[0] === String(jid).split('@')[0]);
+      return p?.name;
+    });
+  const nazu = {
     sent,
     store: { contacts },
     sendMessage: async (jid, content, options) => {
@@ -158,11 +164,7 @@ function makeNazu({ sent, groupJid, participants, getNameImpl, metaNotifyImpl, c
       return lid ? [{ jid, exists: true, lid }] : [{ jid, exists: false }];
     },
     signalRepository: { lidMapping: { getPNForLID: async (lid) => map[lid] || null } },
-    getName: getNameImpl || (async (_group, jid) => {
-      // O bot devolve o NOME DO CONTATO (agenda) — é a fonte preferida.
-      const p = participants.find((x) => x.lid === jid || x.jid === jid);
-      return p?.name || String(jid || '').split('@')[0];
-    }),
+    contacts: noContactsApi ? undefined : { getName: async (jid) => contactsGetName(jid) },
     groupMetadata: async () => ({
       id: groupJid,
       subject: 'Grupo CF',
@@ -183,6 +185,7 @@ function makeNazu({ sent, groupJid, participants, getNameImpl, metaNotifyImpl, c
     profilePictureUrl: async () => 'https://example.com/pic.jpg',
     react: async () => ({}),
   };
+  return nazu;
 }
 
 /**
@@ -194,8 +197,8 @@ function makeNazu({ sent, groupJid, participants, getNameImpl, metaNotifyImpl, c
  * - `mentionIds`: JIDs/LIDs marcados (o handler normaliza para LID);
  * - `quoted`: pessoa RESPONDIDA (o alvo quando não há menção).
  */
-async function run({ groupJid, sender, text, mentions = [], quoted = null, sent = [], participants, getNameImpl, metaNotifyImpl, contactsExtra }) {
-  const nazu = makeNazu({ sent, groupJid, participants, getNameImpl, metaNotifyImpl, contactsExtra });
+async function run({ groupJid, sender, text, mentions = [], quoted = null, sent = [], participants, getNameImpl, metaNotifyImpl, contactsExtra, noContactsApi }) {
+  const nazu = makeNazu({ sent, groupJid, participants, getNameImpl, metaNotifyImpl, contactsExtra, noContactsApi });
   const contextInfo = { remoteJid: groupJid };
   if (mentions.length) contextInfo.mentionedJid = mentions.map((m) => m.lid || m);
   if (quoted) contextInfo.participant = quoted.lid;
@@ -469,10 +472,10 @@ await test('19b. o nome vem do `getName` do contato — não do metadata/número
     [user.lid]: { nome: 'Grupo', criadoEm: Date.now(), membros: [{ id: alvo.lid, desde: Date.now() }] },
   }, null, 2));
 
-  // `getName` devolve o NOME DA AGENDA; o metadata devolve o NÚMERO.
+  // `contacts.getName` devolve o NOME DA AGENDA; o metadata devolve o NÚMERO.
   const sent = await run({
     groupJid, sender: user, text: '!cf', participants,
-    getNameImpl: async (_g, jid) => (jid.includes(alvo.lid.split('@')[0]) ? 'NomeDaAgenda' : user.name),
+    getNameImpl: (jid) => (jid.includes(alvo.lid.split('@')[0]) ? 'NomeDaAgenda' : user.name),
     metaNotifyImpl: (p) => p.jid.split('@')[0], // metadata entrega o número
     contactsExtra: { [alvo.jid]: {} },
   });
@@ -498,13 +501,35 @@ await test('19c. sem nome nenhum: cai no NÚMERO (nunca no LID)', async () => {
   const nLid = alvo.lid.split('@')[0];
   const sent = await run({
     groupJid, sender: user, text: '!cf', participants,
-    getNameImpl: async (_g, jid) => jid.split('@')[0],  // devolve o id cru
-    metaNotifyImpl: () => '',                          // metadata sem nome
-    contactsExtra: { [alvo.jid]: {} },                 // agenda sem nome
+    getNameImpl: (jid) => jid.split('@')[0],  // devolve o id cru
+    metaNotifyImpl: () => '',                  // metadata sem nome
+    contactsExtra: { [alvo.jid]: {} },         // agenda sem nome
   });
   const t = textOf(sent);
   includes(t, `💙 Nick: ${alvo.number}`, 'cai no número de telefone');
   notIncludes(t, `💙 Nick: ${nLid}`, 'NUNCA cai no LID');
+});
+
+await test('19d. sem a API nova da fork: ainda usa `store.contacts`', async () => {
+  resetCF();
+  const groupJid = makeGroup();
+  const user = makePerson('Usuario');
+  const alvo = makePerson('Alvo');
+  const participants = [
+    { lid: user.lid, jid: user.jid, name: user.name, isAdmin: true },
+    { lid: alvo.lid, jid: alvo.jid, name: alvo.name },
+    { lid: BOT_LID, jid: BOT_JID, name: 'Lizzy', isAdmin: true },
+  ];
+  fs.writeFileSync(CF_FILE, JSON.stringify({
+    [user.lid]: { nome: 'Grupo', criadoEm: Date.now(), membros: [{ id: alvo.lid, desde: Date.now() }] },
+  }, null, 2));
+  // `noContactsApi`: sem `contacts.getName`; a agenda ainda precisa resolver.
+  const sent = await run({
+    groupJid, sender: user, text: '!cf', participants,
+    noContactsApi: true,
+    metaNotifyImpl: (p) => p.jid.split('@')[0],
+  });
+  includes(textOf(sent), `💙 Nick: ${alvo.name}`, 'resolveu pelo store.contacts (sem a API nova)');
 });
 
 await test('20. sem grupo criado: o mini menu convida a criar', async () => {
