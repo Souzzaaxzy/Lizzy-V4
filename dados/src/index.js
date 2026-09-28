@@ -1784,7 +1784,6 @@ const {
   styleText,
   logos,
   edits,
-  Logos2,
   emojiMix,
   upload,
   mcPlugin,
@@ -26548,19 +26547,25 @@ ${groupPrefix}togglecmdvip premium_ia off`);
           if (!texto1 || !texto2) return reply(`❌ Cadê os textos?\nExemplo: ${prefix + command} Abyss/Bot`);
           const modelo = command; // O próprio comando é o modelo
           await reply(`⏳ Gerando logotipo *${modelo.charAt(0).toUpperCase() + modelo.slice(1)}*... aguarde!`);
-          const logoGenerator = new Logos2(texto1, texto2, modelo);
-          const resultado = await logoGenerator.gerarLogotipo();
-          if (resultado.success) {
-            // Formatar nome do modelo para exibição
-            const nomeModelo = modelo === 'deadpool' ? 'deadpool' :
-              modelo.charAt(0).toUpperCase() + modelo.slice(1);
-            await nazu.sendMessage(from, {
-              image: { url: resultado.imageUrl },
-              caption: `✅ *Logotipo ${nomeModelo} gerado com sucesso!*`
-            }, { quoted: info });
-          } else {
-            await reply(`❌ Erro ao gerar logotipo: ${resultado.error}`);
+          // Geração LOCAL (jimp): antes isto chamava a API externa
+          // (`apisnodz.com.br/api/logotipos`) e o comando travava, devolvendo um
+          // link de API em vez da imagem. Agora o `logos` desenha os dois textos
+          // no proprio bot — o array indica o modo de 2 textos.
+          const resultado = await logos.gerarLogo({ query: [texto1, texto2], type: modelo });
+          if (!resultado || typeof resultado === 'string') {
+            return reply(resultado || '❌ Erro desconhecido');
           }
+          if (!resultado.ok) {
+            return reply(`${resultado.msg}`);
+          }
+          if (!resultado.buffer) {
+            return reply('❌ Não foi possível gerar o logotipo');
+          }
+          const nomeModelo = modelo.charAt(0).toUpperCase() + modelo.slice(1);
+          await nazu.sendMessage(from, {
+            image: resultado.buffer,
+            caption: `✅ *Logotipo ${nomeModelo} gerado com sucesso!*`
+          }, { quoted: info });
         } catch (e) {
           console.error(`Erro no comando ${command}:`, e);
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
@@ -26575,17 +26580,18 @@ ${groupPrefix}togglecmdvip premium_ia off`);
         try {
           if (!isQuotedImage) return reply('❌ Marque uma imagem.');
           var foto1 = isQuotedImage ? info.message.extendedTextMessage.contextInfo.quotedMessage.imageMessage : {};
-          await reply('⏳ Enviando imagem e gerando edição... ☀️');
-          let media = await getFileBuffer(foto1, "image");
+          await reply('⏳ Gerando edição da imagem... ☀️');
+          const media = await getFileBuffer(foto1, "image");
           if (!media) {
             return reply('❌ Falha ao obter a mídia.');
           }
-          let linkz = await upload(media);
-          if (!linkz) {
-            return reply('❌ Falha ao fazer upload da imagem.');
-          }
+          // SEM upload: o efeito e' aplicado localmente (jimp). Antes a imagem era
+          // enviada para o GitHub, o comando baixava de volta pela URL e so' entao
+          // editava — dependia de rede + token de terceiros para algo que e' local,
+          // e qualquer falha nesse passeio virava "erro interno" em TODOS os
+          // comandos do menuedits. O `geraredit` aceita o Buffer direto.
           const resultado = await edits.geraredit({
-            query: linkz,
+            query: media,
             type: command
           });
           if (!resultado) {

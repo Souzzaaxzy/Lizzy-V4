@@ -1,20 +1,20 @@
 /**
- * Edits - Implementação própria (sem VexAPI)
+ * Edits - Implementação própria (sem VexAPI e sem upload)
  *
  * Filtros de imagem aplicados localmente com **jimp** (dependência já
  * existente no projeto). Conteúdo público, sem login, sem bypass.
  *
- * - geraredit({ query, type }): `query` é a URL da imagem (o comando faz
- *   upload da imagem marcada e manda o link). Baixa a imagem, aplica o
- *   efeito local e retorna o buffer da imagem.
+ * - geraredit({ query, type }): `query` é o **Buffer** da imagem marcada (o
+ *   comando baixa a mídia e passa direto). Também aceita string/URL por
+ *   compatibilidade, mas o caminho normal do bot é o Buffer — sem passar pelo
+ *   GitHub/upload. Aplica o efeito local e retorna o buffer da imagem.
  *
  * Tipos suportados localmente:
  *   blackwhite → grayscale
  *   desfoque   → blur
  *   jornal     → grayscale + contraste + posterize (efeito jornal)
  *   cinema     → barras letterbox (efeito cinemático)
- *   wojakreaction → exige template/arte própria (não implementado) →
- *                   erro controlado
+ *   wojakreaction → estilização local (P&B alto contraste + vinheta + faixa)
  *
  * Formato de retorno preservado (idêntico ao módulo original):
  *   { ok, buffer } | { ok: false, msg }
@@ -91,6 +91,35 @@ const EFFECTS = {
     const barH = Math.max(2, Math.round(img.height * 0.125));
     const bar = new Jimp({ width: img.width, height: barH, color: 0x000000ff });
     return img.composite(bar, 0, 0).composite(bar, 0, img.height - barH);
+  },
+  /**
+   * Estetica "wojak reaction" — estilizacao LOCAL, sem template externo.
+   *
+   * Honestidade: isto NAO e' a arte do meme (nao existe template no repo, e a
+   * arte original e' de terceiros). E' um tratamento que evoca a estetica:
+   * preto e branco de alto contraste (a la lapide/desenho), vinheta fechando as
+   * bordas e uma faixa escura embaixo, onde o meme costuma levar a legenda.
+   *
+   * Antes este tipo devolvia "temporariamente indisponivel" e o comando do menu
+   * ficava sem funcionar; agora entrega uma edicao de verdade.
+   */
+  wojakreaction(img) {
+    img = img.greyscale().contrast(0.6);
+    // vinheta: escurece proporcionalmente a distancia do centro
+    const cx = img.width / 2;
+    const cy = img.height / 2;
+    const maxD = Math.sqrt(cx * cx + cy * cy);
+    img.scan((x, y, idx) => {
+      const d = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2) / maxD;
+      const k = Math.max(0.25, 1 - d * d * 0.9);
+      img.bitmap.data[idx] = Math.round(img.bitmap.data[idx] * k);
+      img.bitmap.data[idx + 1] = Math.round(img.bitmap.data[idx + 1] * k);
+      img.bitmap.data[idx + 2] = Math.round(img.bitmap.data[idx + 2] * k);
+    });
+    // faixa inferior (onde a legenda do meme fica)
+    const stripH = Math.max(2, Math.round(img.height * 0.14));
+    const strip = new Jimp({ width: img.width, height: stripH, color: 0x000000ff });
+    return img.composite(strip, 0, img.height - stripH);
   }
 };
 
@@ -104,19 +133,17 @@ async function geraredit({ query, type }) {
 
     const effect = EFFECTS[type];
     if (!effect) {
-      if (type === 'wojakreaction') {
-        return {
-          ok: false,
-          msg: '❌ Edição "wojakreaction" temporariamente indisponível (requer arte/template próprio).'
-        };
-      }
       return {
         ok: false,
-        msg: `❌ Tipo de edição inválido. Use: ${['wojakreaction', ...EDIT_TYPES].join(', ')}`
+        msg: `❌ Tipo de edição inválido. Use: ${EDIT_TYPES.join(', ')}`
       };
     }
 
-    const cacheKey = `edit:${type}:${typeof query === 'string' ? query : 'buffer'}`;
+    // Buffer nao tem identidade estavel: usa um resumo (tamanho + primeiros bytes
+    // + ultimos) para o cache ainda acertar em edicoes repetidas da mesma imagem.
+    const cacheKey = `edit:${type}:${typeof query === 'string'
+      ? query
+      : `${query.length}:${query.subarray(0, 32).toString('hex')}:${query.subarray(-32).toString('hex')}`}`;
     const cached = getCached(cacheKey);
     if (cached) return { ok: true, ...cached, cached: true };
 

@@ -1,6 +1,13 @@
 /*
- * Logotipos usando api Nodz
- * Função usando axios para requisição
+ * Logotipos 2 textos via API Nodz — NAO USADO PELO BOT.
+ *
+ * O `!pornhub`, `!avengers` e companhia chamavam esta classe, que dependia da API
+ * externa `apisnodz.com.br/api/logotipos`: o comando travava e devolvia um link
+ * de API em vez da imagem. Agora quem gera os 2 textos e o motor LOCAL
+ * (`funcs/logos/index.js`, tabela `STYLES2`), sem rede.
+ *
+ * Este arquivo fica como referencia; pode ser removido quando ninguem mais
+ * importar (hoje so `funcs/exports.js` o registra).
  */
 
 import axios from 'axios';

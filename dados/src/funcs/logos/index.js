@@ -75,6 +75,31 @@ const STYLES = {
   comics:         { bg: [0x0d2a6b, 0x123c9c], text: [0xffe14d, 0xffb300], outline: 0x000000, shadow: { color: 0x000000, blur: 3, dx: 6, dy: 7 } },
 };
 
+/**
+ * Estilos de DOIS textos (linha de cima + linha de baixo).
+ *
+ * Substituem a API externa (`apisnodz.com.br/api/logotipos`) que o `!pornhub`,
+ * `!avengers` e companhia usavam: o comando travava e devolvia um link de API
+ * em vez de gerar a imagem no bot. Aqui tudo roda local, com jimp.
+ *
+ * `accent` e' a cor do bloco de destaque (o retangulo do pornhub, o emblema do
+ * avengers); `top`/`bottom` sao os gradientes do fundo.
+ */
+const STYLES2 = {
+  pornhub:        { bg: [0x0a0a0a, 0x1c1c1c], top: [0xffffff, 0xffffff], bottom: [0xffffff, 0xffffff], accent: 0xffa31a, badge: true },
+  avengers:       { bg: [0x0b0f1a, 0x1d2a44], top: [0xffffff, 0xdbe6ff], bottom: [0xffd34d, 0xff8a00], accent: 0xffd700, outline: 0x0b1a33, glow: { color: 0x4d8cff, blur: 10 } },
+  graffiti:       { bg: [0x141414, 0x2e2e2e], top: [0xff2ea6, 0xff2ea6], bottom: [0x00e5ff, 0x00e5ff], outline: 0x000000, shadow: { color: 0x000000, blur: 4, dx: 5, dy: 5 } },
+  captainamerica: { bg: [0x0a1a4d, 0x123c9c], top: [0xffffff, 0xdbe6ff], bottom: [0xff4d4d, 0xb30000], outline: 0x0a1a4d, stars: true },
+  stone3d:        { bg: [0x1a1a1a, 0x3d3d3d], top: [0xcfcfcf, 0x8a8a8a], bottom: [0xf5f5f5, 0xa8a8a8], outline: 0x050505, shadow: { color: 0x000000, blur: 6, dx: 5, dy: 7 } },
+  neon2:          { bg: [0x050510, 0x0e0e24], top: [0x9be7ff, 0x00b3ff], bottom: [0xff9bf0, 0xff00c8], glow: { color: 0x00e5ff, blur: 14 } },
+  thor:           { bg: [0x0b0f1a, 0x22304d], top: [0xffffff, 0xcfe6ff], bottom: [0x8ad4ff, 0x2b8cff], glow: { color: 0x66c2ff, blur: 14 }, outline: 0x0a1a33 },
+  deadpool:       { bg: [0x1a0202, 0x3d0505], top: [0xff4d4d, 0xb30000], bottom: [0xffffff, 0xd9d9d9], outline: 0x000000, shadow: { color: 0x000000, blur: 5, dx: 5, dy: 6 } },
+  blackpink:      { bg: [0x0a0208, 0x24081a], top: [0xff9bd4, 0xff2ea6], bottom: [0xffffff, 0xd9d9d9], glow: { color: 0xff2ea6, blur: 12 } },
+  amongus2:       { bg: [0x0b1026, 0x1b2a4e], top: [0xffffff, 0xdbe6ff], bottom: [0xff4d4d, 0xb3001b], outline: 0xffffff, stars: true }
+};
+/** Estilos que exigem dois textos (o proprio comando escolhe o estilo). */
+const TWO_TEXT_TYPES = Object.keys(STYLES2);
+
 function hexToRgb(hex) {
   return { r: (hex >> 16) & 0xff, g: (hex >> 8) & 0xff, b: hex & 0xff };
 }
@@ -122,6 +147,29 @@ function alphaBBox(img) {
   return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
 }
 
+/**
+ * Arredonda os cantos de uma imagem, deixando o resto com alpha 0.
+ *
+ * Usado pelo bloco de destaque (o retangulo do pornhub tem cantos arredondados).
+ */
+function roundCorners(img, radius) {
+  const r = Math.max(0, Math.min(radius, Math.floor(Math.min(img.width, img.height) / 2)));
+  if (!r) return img;
+  for (let y = 0; y < img.height; y++) {
+    for (let x = 0; x < img.width; x++) {
+      // distancia ate' o centro do circulo de canto mais proximo
+      const cx = x < r ? r : x >= img.width - r ? img.width - 1 - r : x;
+      const cy = y < r ? r : y >= img.height - r ? img.height - 1 - r : y;
+      const dx = x - cx;
+      const dy = y - cy;
+      if (dx * dx + dy * dy > r * r) {
+        img.bitmap.data[(y * img.width + x) * 4 + 3] = 0;
+      }
+    }
+  }
+  return img;
+}
+
 function addStars(img, count = 90) {
   let seed = 42;
   const rand = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
@@ -143,54 +191,136 @@ function addStars(img, count = 90) {
   return img;
 }
 
+/**
+ * Renderiza uma camada de texto com a paleta dada, ja' recortada e ajustada.
+ *
+ * `maxH` limita a altura de cada linha: com dois textos o espaco vertical e'
+ * dividido, senao as duas linhas juntas estourariam o canvas.
+ */
+async function renderTextBlock(font, text, palette, maxH = TEXT_MAX_H) {
+  const layer = new Jimp({ width: CANVAS_W, height: maxH + 160, color: 0x00000000 });
+  layer.print({
+    font,
+    x: 0,
+    y: 0,
+    text,
+    maxWidth: TEXT_MAX_W,
+    maxHeight: maxH + 160,
+    alignmentX: HorizontalAlign.CENTER,
+    alignmentY: VerticalAlign.MIDDLE,
+  });
+  const bbox = alphaBBox(layer);
+  if (!bbox) throw new Error('Texto vazio ou não renderizável.');
+  let out = layer.crop({ x: bbox.x, y: bbox.y, w: bbox.w, h: bbox.h });
+  const fit = Math.min(TEXT_MAX_W / out.width, maxH / out.height, 1);
+  if (fit < 1) out = out.scale(fit);
+  return { img: out, colored: colorizeTextLayer(out.clone(), palette[0], palette[1]) };
+}
+
+/** Deixa a camada com texto branco solido — e' a mascara usada pelos efeitos. */
+function solidWhite(img) {
+  const out = img.clone();
+  out.scan((x, y, idx) => {
+    if (out.bitmap.data[idx + 3] > 0) {
+      out.bitmap.data[idx] = 255;
+      out.bitmap.data[idx + 1] = 255;
+      out.bitmap.data[idx + 2] = 255;
+    }
+  });
+  return out;
+}
+
+/** Empilha dois textos (cima/baixo) numa unica camada, centrados. */
+async function renderTwoTextBlock(font, topText, bottomText, cfg) {
+  const gap = Math.round(CANVAS_H * 0.06);
+  const each = Math.round((TEXT_MAX_H - gap) / 2);
+  const a = await renderTextBlock(font, topText, cfg.top, each);
+  const b = await renderTextBlock(font, bottomText, cfg.bottom, each);
+
+  const w = Math.max(a.img.width, b.img.width);
+  const h = a.img.height + gap + b.img.height;
+
+  // Camada COLORIDA: cada linha com a SUA paleta (cima/baixo).
+  const colored = new Jimp({ width: w, height: h, color: 0x00000000 });
+  colored.composite(a.colored, Math.round((w - a.img.width) / 2), 0);
+  colored.composite(b.colored, Math.round((w - b.img.width) / 2), a.img.height + gap);
+
+  // Camada MASCARA: as duas linhas em branco solido. Os efeitos (sombra, glow,
+  // contorno) sao construidos a partir DESTA camada, porque eles precisam de uma
+  // silhueta unica — colorir a mascara de novo com um unico gradiente apagaria a
+  // paleta propria de cada linha.
+  const mask = new Jimp({ width: w, height: h, color: 0x00000000 });
+  mask.composite(solidWhite(a.img), Math.round((w - a.img.width) / 2), 0);
+  mask.composite(solidWhite(b.img), Math.round((w - b.img.width) / 2), a.img.height + gap);
+
+  return { colored, mask };
+}
+
 async function renderLogo(query, cfg) {
   const font = await getFont();
   const bg = new Jimp({ width: CANVAS_W, height: CANVAS_H, color: 0x000000ff });
   verticalGradient(bg, cfg.bg[0], cfg.bg[1]);
   if (cfg.stars) addStars(bg);
 
-  // Camada de texto isolada para permitir efeitos e centralização
-  const layer = new Jimp({ width: CANVAS_W, height: TEXT_MAX_H + 120, color: 0x00000000 });
-  layer.print({
-    font,
-    x: 0,
-    y: 0,
-    text: query,
-    maxWidth: TEXT_MAX_W,
-    maxHeight: TEXT_MAX_H + 120,
-    alignmentX: HorizontalAlign.CENTER,
-    alignmentY: VerticalAlign.MIDDLE,
-  });
-  const bbox = alphaBBox(layer);
-  if (!bbox) throw new Error('Texto vazio ou não renderizável.');
-  let textLayer = layer.crop({ x: bbox.x, y: bbox.y, w: bbox.w, h: bbox.h });
+  let textLayer;
+  let maskLayer = null; // silhueta branca, para sombra/glow/contorno em 2 textos
+  if (Array.isArray(query)) {
+    // ESTILO DE DOIS TEXTOS (o handler passa [texto1, texto2])
+    const two = await renderTwoTextBlock(font, String(query[0]), String(query[1] ?? ''), cfg);
+    textLayer = two.colored;
+    maskLayer = two.mask;
+  } else {
+    // Camada de texto isolada para permitir efeitos e centralização
+    const layer = new Jimp({ width: CANVAS_W, height: TEXT_MAX_H + 120, color: 0x00000000 });
+    layer.print({
+      font,
+      x: 0,
+      y: 0,
+      text: query,
+      maxWidth: TEXT_MAX_W,
+      maxHeight: TEXT_MAX_H + 120,
+      alignmentX: HorizontalAlign.CENTER,
+      alignmentY: VerticalAlign.MIDDLE,
+    });
+    const bbox = alphaBBox(layer);
+    if (!bbox) throw new Error('Texto vazio ou não renderizável.');
+    textLayer = layer.crop({ x: bbox.x, y: bbox.y, w: bbox.w, h: bbox.h });
 
-  // Reduz escala se o texto embrulhado exceder a área útil
-  const fit = Math.min(TEXT_MAX_W / textLayer.width, TEXT_MAX_H / textLayer.height, 1);
-  if (fit < 1) textLayer = textLayer.scale(fit);
+    // Reduz escala se o texto embrulhado exceder a área útil
+    const fit = Math.min(TEXT_MAX_W / textLayer.width, TEXT_MAX_H / textLayer.height, 1);
+    if (fit < 1) textLayer = textLayer.scale(fit);
+  }
 
-  const styled = colorizeTextLayer(textLayer.clone(), cfg.text[0], cfg.text[1]);
+  // A `styled` e' o que vai por CIMA. Em 2 textos a camada ja' esta' colorida
+  // linha a linha, entao NAO se aplica um gradiente unico (ele apagaria a paleta
+  // de cada linha). Em 1 texto, colore-se normalmente.
+  const styled = maskLayer
+    ? textLayer
+    : colorizeTextLayer(textLayer.clone(), cfg.text?.[0] ?? cfg.top[0], cfg.text?.[1] ?? cfg.top[1]);
+  // Silhueta usada pelos efeitos: em 2 textos e' a mascara branca das duas
+  // linhas; em 1 texto e' a propria camada de texto.
+  const effectSource = maskLayer ?? textLayer;
   const layers = [];
 
   if (cfg.glitch) {
-    const red = colorizeTextLayer(textLayer.clone(), 0xff0000, 0xff0000);
-    const cyan = colorizeTextLayer(textLayer.clone(), 0x00e5ff, 0x00e5ff);
+    const red = colorizeTextLayer(effectSource.clone(), 0xff0000, 0xff0000);
+    const cyan = colorizeTextLayer(effectSource.clone(), 0x00e5ff, 0x00e5ff);
     red.scan((x, y, idx) => { red.bitmap.data[idx + 3] = red.bitmap.data[idx + 3] > 0 ? 200 : 0; });
     cyan.scan((x, y, idx) => { cyan.bitmap.data[idx + 3] = cyan.bitmap.data[idx + 3] > 0 ? 200 : 0; });
     layers.push({ img: red, dx: -4, dy: 0 }, { img: cyan, dx: 4, dy: 0 });
   }
   if (cfg.shadow) {
-    const sh = colorizeTextLayer(textLayer.clone(), cfg.shadow.color, cfg.shadow.color);
+    const sh = colorizeTextLayer(effectSource.clone(), cfg.shadow.color, cfg.shadow.color);
     sh.blur(cfg.shadow.blur);
     layers.push({ img: sh, dx: cfg.shadow.dx, dy: cfg.shadow.dy });
   }
   if (cfg.glow) {
-    const gl = colorizeTextLayer(textLayer.clone(), cfg.glow.color, cfg.glow.color);
+    const gl = colorizeTextLayer(effectSource.clone(), cfg.glow.color, cfg.glow.color);
     gl.blur(cfg.glow.blur);
     layers.push({ img: gl, dx: 0, dy: 0 });
   }
   if (cfg.outline != null) {
-    const ol = colorizeTextLayer(textLayer.clone(), cfg.outline, cfg.outline);
+    const ol = colorizeTextLayer(effectSource.clone(), cfg.outline, cfg.outline);
     ol.blur(2);
     layers.push({ img: ol, dx: 0, dy: 0 });
   }
@@ -198,12 +328,36 @@ async function renderLogo(query, cfg) {
 
   const baseX = Math.round((CANVAS_W - textLayer.width) / 2);
   const baseY = Math.round((CANVAS_H - textLayer.height) / 2);
+
+  // Bloco de destaque (o retangulo laranja do pornhub): vai ATRAS do texto, para
+  // o estilo ter o fundo caracteristico em vez de so' texto solto no gradiente.
+  if (cfg.badge && cfg.accent != null) {
+    const padX = Math.round(textLayer.width * 0.07) + 28;
+    const padY = Math.round(textLayer.height * 0.07) + 22;
+    const bw = textLayer.width + padX * 2;
+    const bh = textLayer.height + padY * 2;
+    const bx = Math.max(0, Math.round((CANVAS_W - bw) / 2));
+    const by = Math.max(0, Math.round((CANVAS_H - bh) / 2));
+    const badge = new Jimp({ width: bw, height: bh, color: cfg.accent * 256 + 0xff });
+    roundCorners(badge, Math.round(Math.min(bw, bh) * 0.12));
+    bg.composite(badge, bx, by);
+  }
   for (const { img, dx, dy } of layers) {
     bg.composite(img, baseX + dx, baseY + dy);
   }
   return bg.getBuffer('image/png');
 }
 
+/**
+ * Gera um logo LOCALMENTE (jimp), sem nenhuma API externa.
+ *
+ * `query` pode ser:
+ *  - string  -> estilo de 1 texto (tabela `STYLES`)
+ *  - array   -> estilo de 2 textos `[linhaDeCima, linhaDeBaixo]` (`STYLES2`)
+ *
+ * O comando `!amongus` aparece nas duas tabelas: quando vem array ele usa
+ * `amongus2` (2 textos), senao `amongus` (1 texto).
+ */
 async function gerarLogo({ query, type }) {
   try {
     if (!query || !type) {
@@ -211,16 +365,26 @@ async function gerarLogo({ query, type }) {
     }
 
     const normalizedType = String(type).toLowerCase().trim();
-    const cfg = STYLES[normalizedType];
+    const twoText = Array.isArray(query);
+    // `amongus` existe nos dois modos: o sufixo evita a colisao das tabelas
+    const styleKey = twoText && normalizedType === 'amongus' ? 'amongus2' : normalizedType;
+    const cfg = twoText ? STYLES2[styleKey] : STYLES[styleKey];
     if (!cfg) {
       return { ok: false, msg: `❌ Tipo de logo desconhecido: "${normalizedType}".` };
     }
+    if (twoText && (!query[0] || !query[1])) {
+      return { ok: false, msg: '❌ Este logotipo precisa de dois textos (ex: Abyss/Bot).' };
+    }
 
-    const cacheKey = `logo:${normalizedType}:${query}`;
+    const cacheKey = `logo:${styleKey}:${twoText ? `${query[0]}|${query[1]}` : query}`;
     const cached = getCached(cacheKey);
     if (cached) return { ok: true, ...cached, cached: true };
 
-    const buffer = await renderLogo(String(query), cfg);
+    // NAO converter com String(): em 2 textos o `query` e' um array
+    // (`['abyss','bot']`) e `String()` o viraria "abyss,bot" numa unica linha —
+    // era por isso que a segunda linha nunca aparecia. O `renderLogo` decide pelo
+    // tipo (array = 2 textos).
+    const buffer = await renderLogo(Array.isArray(query) ? query.map(String) : String(query), cfg);
     if (!buffer || buffer.length === 0) {
       return { ok: false, msg: '❌ Resposta não é uma imagem válida.' };
     }
@@ -235,4 +399,4 @@ async function gerarLogo({ query, type }) {
   }
 }
 
-export { gerarLogo, STYLES };
+export { gerarLogo, STYLES, STYLES2, TWO_TEXT_TYPES };
