@@ -6844,3 +6844,78 @@ a correção cirúrgica: resolve o problema sem mexer na política de install.
 é o mesmo pacote usado no `getImageProcessingLibrary()`. Sem ele, quem já tinha
 os caminhos de mídia funcionando continua funcionando (a lib cai para jimp), mas
 a **conversão de figurinha** precisa dele.
+
+## REFATORAÇÃO COMPLETA do sistema de SUBDONOS (set/2026) ✅
+Reescrito com base no bot de referência **RAVENA-BOT (Kimori)** — `arquivos/funcoes/jidUtils.js`
+(identidade por conjunto de formas: LID, JID, `participantAlt`, `phoneNumber`/`pn`) e a
+lista de donos `numerodono` de `kimori.js` (comparação por MÚLTIPLAS formas).
+
+### O que estava errado (medido no código antigo)
+| Problema | Consequência |
+|---|---|
+| `subdonos.json` + `subOwnerCommands.json` + `subowner_perms.json` | **3 fontes** que discordavam |
+| `subowner_perms.json` (`grantSubOwnerCmd`/`revokeSubOwnerCmd`) | **código morto** — nada lia |
+| `canUseOwnerCmd` lia o código morto (`hasSubOwnerCmdPerm`) | permissão por-subdono **nunca** funcionou |
+| `addcmd-subdono` / `removecmd-subdono` / `listcmd-subdono` | **duplicavam** `grantsubcmd`/`delsubcmd`/`listsubcmd` |
+| comparação por "base do número" só | LID ≠ número → **subdono não reconhecido** |
+| `fs.writeFileSync` cru espalhado no `index.js` | sem escrita atômica |
+
+### O novo desenho — `dados/src/utils/subdonos.js` (fonte única)
+- **Permissões POR SUBDONO** (`perms`) + uma **lista base** opcional (`basePerms`,
+  herança de TODOS os subdonos — o que era a "lista base" antiga).
+- **Identidade por conjunto de formas**: `formasDeId`, `mesmoUsuario`,
+  `isSubdonoEntre`, `podeUsarEntre`, `permissoesEntre`, `addAlias`. É o ponto que
+  faz a pessoa ser reconhecida mesmo chegando como **LID** quando foi cadastrada
+  pelo **número** (bases diferentes).
+- **Escrita atômica** (tmp único + rename), com `try/catch` que nunca derruba.
+- **Migração automática**: lista v1 (`{ subdonos: ["id"] }`) → v2 (objetos) e a
+  `subOwnerCommands.json` antiga → `basePerms`, **sem perder ninguém nem permissão**.
+  Formato corrompido → vazio (não explode).
+- Formato em disco (`dono/subdonos.json`):
+  ```json
+  { "version": 2,
+    "subdonos": [{ "id": "5511...@s.whatsapp.net", "aliases": [], "perms": ["play"], "addedAt": 0 }],
+    "basePerms": ["ping"] }
+  ```
+
+### Comandos (todos exclusivos do Dono, exceto a listagem)
+| Comando | O que faz |
+|---|---|
+| `!addsubdono @user` (ou número) | adiciona (recusa o Dono; não duplica; aceita permissões iniciais) |
+| `!delsubdono @user` (ou **índice**) | remove |
+| `!listasubdonos` | lista com **extras por subdono** + a base |
+| `!grantsubcmd <cmd>` / `!delsubcmd <cmd>` | gerencia a **lista base** (todos) |
+| `!listsubcmd` | mostra a base |
+| `!sub.permitir @sub <cmd>` | libera um comando para **UM** subdono ← novo |
+| `!sub.revogar @sub <cmd>` | revoga de um subdono ← novo |
+| `!sub.perms [@sub]` | mostra as permissões efetivas ← novo |
+
+### Integração no `index.js`
+- `formasRemetenteArr` é montado por mensagem: `sender` + `info.key.participantAlt`
+  + `senderJidOriginal` + o `phoneNumber`/`pn` do participante no metadata.
+- `isSubOwner`, `canUseOwnerCmd` e o **gate** de comandos passam a usar
+  `isSubdonoEntre`/`podeUsarEntre` com esse conjunto (não mais só o `sender`).
+- Gate reescrito (sem a leitura crua de `subOwnerCommands.json`).
+- **Removidos** os 3 comandos duplicados (`addcmd-subdono`/`removecmd-subdono`/
+  `listcmd-subdono`) — ficou a família `grantsubcmd`/`delsubcmd`/`listsubcmd`.
+- `utils/database.js` virou **adaptador** dos nomes antigos sobre o módulo novo.
+
+### Menus
+- Nova categoria **👑 SUBDONOS** no **`menuadm`** (9 comandos).
+- `menudono` (PERMISSÕES SUBDONO) ganhou `sub.permitir`/`sub.revogar`/`sub.perms`.
+- Baselines do `menu-layout`: **menuadm 177 → 186**, **menudono 165 → 168**.
+
+### Testes
+- `tests/subdonos.test.js` — **19 testes / 53 asserções**: identidade (normalizar/
+  formas/mesmoUsuario), migração v1 e da lista base, JSON corrompido, CRUD
+  (adicionar/duplicado/dono/remover por id e índice), **permissões por subdono x
+  lista base**, revogar, normalização de prefixo, permissão de não-subdono,
+  escrita atômica, id inválido, e **LID x número** (o caso que quebrava) + alias.
+- Integração verificada com o handler real: sem permissão → **recusa**; com
+  `liberarComando` → **passa**, mesmo com o remetente chegando como LID.
+
+### Limite honesto
+A verificação de "subdono" depende do WhatsApp expor `participantAlt`/`phoneNumber`
+para o remetente. Quando não expõe, vale o `formasDeId` (LID↔número) e o alias
+explícito (`addAlias`). Não há como resolver LID→PN sem a tabela do WhatsApp; é a
+mesma limitação do bot de referência.

@@ -1359,6 +1359,7 @@ import {
   getMoments,
   deleteMoment,
 } from './utils/database.js';
+import * as subdonosModule from './utils/subdonos.js';
 import { parseCustomCommandMeta, buildUsageFromParams, parseArgsFromString, escapeRegExp, validateParamValue } from './utils/helpers.js';
 import {
 
@@ -2768,10 +2769,24 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       return;
     }
     const pushname = info.pushName || '';
+    // Formas de identidade do remetente (LID, PN/`participantAlt` e o telefone
+    // do metadata). Em grupo o MESMO usuário chega por LID numa mensagem e o
+    // número real vive em `phoneNumber` — as bases diferem, então o sistema de
+    // subdonos precisa do conjunto para reconhecer a pessoa.
+    const formasRemetente = new Set(
+      [sender, info.key?.participantAlt, senderJidOriginal].filter(Boolean)
+    );
+    try {
+      const metaRem = groupMetadata?.participants?.find(p =>
+        [p?.id, p?.lid].filter(Boolean).some(x => String(x).split('@')[0].split(':')[0] === String(sender).split('@')[0].split(':')[0])
+      );
+      for (const v of [metaRem?.phoneNumber, metaRem?.pn]) if (v) formasRemetente.add(v);
+    } catch { /* metadata opcional */ }
+    const formasRemetenteArr = [...formasRemetente];
     const isStatus = from?.endsWith('@broadcast') || false;
     const nmrdn = buildUserId(numerodono, config);
     const subDonoList = loadSubdonos();
-    const isSubOwner = isSubdono(sender);
+    const isSubOwner = isSubdono(sender) || subdonosModule.isSubdonoEntre(formasRemetenteArr);
     const ownerJid = `${numerodono}@s.whatsapp.net`;
     const botId = getBotId(nazu);
     const isBotSender = sender === botId || sender === nazu.user?.id?.split(':')[0] + '@s.whatsapp.net' || sender === nazu.user?.id?.split(':')[0] + '@lid';
@@ -2790,7 +2805,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     // Função para verificar se pode usar comando de dono (chamar dentro do case)
     const canUseOwnerCmd = (cmd) => {
       if (isOwner) return true;
-      if (isSubOwner && hasSubOwnerCmdPerm(sender, cmd)) return true;
+      if (isSubOwner && subdonosModule.podeUsarEntre(formasRemetenteArr, cmd)) return true;
       return false;
     };
 
@@ -7221,25 +7236,18 @@ Entre em contato com o dono do bot:
       }
     }
 // ==================== VERIFICAÇÃO DE COMANDOS PARA SUBDONOS ====================
+// Fonte única: `utils/subdonos.js` (permissões por subdono + lista base).
 if (isCmd && command && !isOwner) {
   try {
-    const subOwnerFile = pathz.join(DATABASE_DIR, 'subOwnerCommands.json');
-    let baseSubOwnerCommands = [];
-    if (fs.existsSync(subOwnerFile)) {
-      baseSubOwnerCommands = JSON.parse(fs.readFileSync(subOwnerFile, 'utf-8'));
-    }
-    // Se comando está na lista base, subdono pode usar
-    if (baseSubOwnerCommands.includes(command)) {
-      if (!isSubOwner) {
-        return reply('Apenas o Dono pode usar este comando!');
+    if (isSubOwner) {
+      if (!subdonosModule.podeUsarEntre(formasRemetenteArr, command)) {
+        return reply(`Este comando não está disponível para subdonos: ${prefix}${command}`);
       }
-    }
-    // Se NÃO está na lista base e é subdono, bloquear
-    else if (isSubOwner) {
-      return reply(`Este comando não está disponível para subdonos: ${prefix}${command}`);
+    } else if (subdonosModule.listarBasePerms().includes(command)) {
+      return reply('Apenas o Dono pode usar este comando!');
     }
   } catch (e) {
-    console.error('Erro ao verificar lista de comandos de subdonos:', e);
+    console.error('Erro ao verificar permissão de subdono:', e);
   }
 }
     // Verificar bloqueio de PV
@@ -17002,22 +17010,29 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
           if (subdonos.length === 0) {
             return reply("◈ Nenhum subdono cadastrado no momento.");
           }
-          let listaMsg = "🌌 *Lista de Subdonos Atuais:*\n\n";
-          const mentions = [];
           let participantsInfo = {};
-          if (isGroup && groupMetadata.participants) {
+          if (isGroup && groupMetadata?.participants) {
             groupMetadata.participants.forEach(p => {
               participantsInfo[p.lid || p.id] = p.pushname || getUserName(p.lid || p.id);
             });
           }
-          subdonos.forEach((jid, index) => {
+          const registros = subdonosModule.listar();
+          const base = subdonosModule.listarBasePerms();
+          let listaMsg = `╭━━〔 👑 𝙎𝙐𝘽𝘿𝙊𝙉𝙊𝙎 〕━━╮\n`;
+          listaMsg += `┃ 👥 Total: ${registros.length}\n`;
+          listaMsg += `┃ 📋 Base (todos): ${base.length ? base.map(c => prefix + c).join(', ') : 'nenhum'}\n`;
+          listaMsg += `╰━━━━━━━━━━━━━━━━━━━━╯\n\n`;
+          const mentions = [];
+          registros.forEach((reg, index) => {
+            const jid = reg.id;
             const nameOrNumber = participantsInfo[jid] || getUserName(jid);
-            listaMsg += `${index + 1}. @${getUserName(jid)} (${nameOrNumber})\n`;
+            const extras = (reg.perms || []).filter(c => !base.includes(c));
+            listaMsg += `👤 *${index + 1}º* — @${getUserName(jid)}\n`;
+            listaMsg += `   📛 ${nameOrNumber}\n`;
+            listaMsg += `   🔑 Extras: ${extras.length ? extras.map(c => prefix + c).join(', ') : '—'}\n\n`;
             mentions.push(jid);
           });
-          await reply(listaMsg.trim(), {
-            mentions
-          });
+          await reply(listaMsg.trim(), { mentions });
         } catch (e) {
           console.error("Erro ao listar subdonos:", e);
           await reply("❌ Ocorreu um erro inesperado ao tentar listar os subdonos.");
@@ -23361,87 +23376,6 @@ Precisa de ajuda? Entre em contato:
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
         }
         break;
-case 'addcmd-subdono':
-  if (!isOwner) return reply("Este comando é apenas para o meu dono");
-  try {
-    const cmdToAdd = q?.toLowerCase().trim();
-    if (!cmdToAdd) {
-      return reply(
-        '❌ Informe o comando a adicionar!\nEx.: ' +
-        prefix + 'addcmd-subdono play'
-      );
-    }
-    const subOwnerFile = pathz.join(DATABASE_DIR, 'subOwnerCommands.json');
-    let subOwnerCommands = [];
-    if (fs.existsSync(subOwnerFile)) {
-      subOwnerCommands = JSON.parse(fs.readFileSync(subOwnerFile));
-    }
-    if (subOwnerCommands.includes(cmdToAdd)) {
-      return reply(`❌ O comando *${cmdToAdd}* já está liberado para subdonos!`);
-    }
-    subOwnerCommands.push(cmdToAdd);
-    fs.writeFileSync(
-      subOwnerFile,
-      JSON.stringify(subOwnerCommands, null, 2)
-    );
-    await reply(`✅ Comando *${cmdToAdd}* adicionado para subdonos!`);
-  } catch (e) {
-    console.error(e);
-    await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
-  }
-  break;
-  case 'removecmd-subdono':
-  if (!isOwner) return reply("Este comando é apenas para o meu dono");
-  try {
-    const cmdToRemove = q?.toLowerCase().trim();
-    if (!cmdToRemove) {
-      return reply(
-        '❌ Informe o comando a remover!\nEx.: ' +
-        prefix + 'removecmd-subdono play'
-      );
-    }
-    const subOwnerFile = pathz.join(DATABASE_DIR, 'subOwnerCommands.json');
-    let subOwnerCommands = [];
-    if (fs.existsSync(subOwnerFile)) {
-      subOwnerCommands = JSON.parse(fs.readFileSync(subOwnerFile));
-    }
-    if (!subOwnerCommands.includes(cmdToRemove)) {
-      return reply(`❌ O comando *${cmdToRemove}* não está liberado!`);
-    }
-    subOwnerCommands = subOwnerCommands.filter(
-      cmd => cmd !== cmdToRemove
-    );
-    fs.writeFileSync(
-      subOwnerFile,
-      JSON.stringify(subOwnerCommands, null, 2)
-    );
-    await reply(`✅ Comando *${cmdToRemove}* removido dos subdonos!`);
-  } catch (e) {
-    console.error(e);
-    await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
-  }
-  break;
-  case 'listcmd-subdono':
-  if (!isOwner) return reply("Este comando é apenas para o meu dono");
-  try {
-    const subOwnerFile = pathz.join(DATABASE_DIR, 'subOwnerCommands.json');
-    let subOwnerCommands = [];
-    if (fs.existsSync(subOwnerFile)) {
-      subOwnerCommands = JSON.parse(fs.readFileSync(subOwnerFile));
-    }
-    if (!subOwnerCommands.length) {
-      return reply('❌ Nenhum comando liberado para subdonos.');
-    }
-    let txt = `📜 *Comandos liberados para subdonos:*\n\n`;
-    txt += subOwnerCommands
-      .map((cmd, i) => `${i + 1}. ${groupPrefix}${cmd}`)
-      .join('\n');
-    await reply(txt);
-  } catch (e) {
-    console.error(e);
-    await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
-  }
-  break;
       case 'blockuserg':
         if (!isOwner) return reply("Este comando é apenas para o meu dono");
         try {
@@ -40525,6 +40459,52 @@ Nenhum comando na lista base.`);
         } catch (e) {
           console.error('Erro no listsubcmd:', e);
           await reply("Ocorreu um erro 💔");
+        }
+        break;
+      // ─── Permissões POR SUBDONO (modelo novo) ───
+      case 'sub.permitir':
+      case 'subpermitir':
+        try {
+          if (!isOwner) return reply('Apenas o Dono pode gerenciar permissões de subdonos.');
+          const partes = (q || '').trim().split(/\s+/).filter(Boolean);
+          const cmdAlvo = partes.pop();
+          if (!cmdAlvo) return reply(`📝 *Uso:* ${prefix}sub.permitir @subdono <comando>\nEx: ${prefix}sub.permitir @fulano play`);
+          const alvoSub = (menc_jid2 && menc_jid2[0]) || partes.join(' ');
+          if (!alvoSub) return reply('❌ Marque o subdono ou informe o número.');
+          return reply(subdonosModule.liberarComando(alvoSub, cmdAlvo).message);
+        } catch (e) {
+          console.error('Erro no sub.permitir:', e);
+          return reply('Ocorreu um erro 💔');
+        }
+        break;
+      case 'sub.revogar':
+      case 'subrevogar':
+        try {
+          if (!isOwner) return reply('Apenas o Dono pode gerenciar permissões de subdonos.');
+          const partes = (q || '').trim().split(/\s+/).filter(Boolean);
+          const cmdAlvo = partes.pop();
+          if (!cmdAlvo) return reply(`📝 *Uso:* ${prefix}sub.revogar @subdono <comando>\nEx: ${prefix}sub.revogar @fulano play`);
+          const alvoSub = (menc_jid2 && menc_jid2[0]) || partes.join(' ');
+          if (!alvoSub) return reply('❌ Marque o subdono ou informe o número.');
+          return reply(subdonosModule.revogarComando(alvoSub, cmdAlvo).message);
+        } catch (e) {
+          console.error('Erro no sub.revogar:', e);
+          return reply('Ocorreu um erro 💔');
+        }
+        break;
+      case 'sub.perms':
+      case 'subperms':
+        try {
+          if (!isOwner && !isSubOwner) return reply('Apenas o Dono ou subdonos podem ver isso.');
+          const alvoSub = (menc_jid2 && menc_jid2[0]) || (q || '').trim() || sender;
+          const perms = subdonosModule.permissoesDe(alvoSub);
+          if (!perms.length && !subdonosModule.isSubdono(alvoSub)) {
+            return reply('❌ Este usuário não é subdono.');
+          }
+          return reply(`╭━━〔 🔑 𝙋𝙀𝙍𝙈𝙄𝙎𝙎𝙊𝙀𝙎 〕━━╮\n┃ 👤 @${getUserName(alvoSub)}\n┃ 📋 ${perms.length ? perms.map(c => groupPrefix + c).join(', ') : 'nenhuma'}\n╰━━━━━━━━━━━━━━━━━━━━╯`);
+        } catch (e) {
+          console.error('Erro no sub.perms:', e);
+          return reply('Ocorreu um erro 💔');
         }
         break;
       case 'wl.add':

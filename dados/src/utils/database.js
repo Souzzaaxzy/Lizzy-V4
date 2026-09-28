@@ -2,6 +2,7 @@ import fs from 'fs';
 import pathz from 'path';
 import crypto from 'crypto';
 
+import * as subdonos from './subdonos.js';
 import { ensureDirectoryExists, ensureJsonFileExists, loadJsonFile, normalizar, getUserName, isGroupId, isUserId, isValidLid, isValidJid, buildUserId, getLidFromJidCached, idsMatch, loadJsonFileSafe, saveJsonFileSafe, validateLevelingUser, validateEconomyUser, validateGroupData, createBackup, normalizeParam, compareParams, findKeyIgnoringAccents, findInArrayIgnoringAccents, resolveParamAlias, matchParam, PARAM_ALIASES } from './helpers.js';
 import { recalcEquipmentBonuses } from './equipment.js';
 
@@ -862,265 +863,65 @@ const saveDonoDivulgacao = (data) => {
   }
 };
 
-const loadSubdonos = () => {
-  return loadJsonFile(SUBDONOS_FILE, {
-    subdonos: []
-  }).subdonos || [];
+// ─── SUBDONOS (delegado à fonte única: utils/subdonos.js) ───────────────────
+// O sistema vive em `subdonos.js`. Aqui ficam só adaptadores com os nomes que o
+// resto do bot já usava, para não quebrar chamadas existentes.
+const loadSubdonos = () => subdonos.listar().map(s => s.id);
+const saveSubdonos = (lista) => {
+  // Compatibilidade: aceita a lista crua de ids e regrava no formato novo,
+  // preservando as permissões de quem já existia.
+  const banco = subdonos.carregar();
+  const atuais = new Map(banco.subdonos.map(s => [subdonos.baseNumero(s.id), s]));
+  banco.subdonos = (Array.isArray(lista) ? lista : [])
+    .map(id => subdonos.normalizarJid(id))
+    .filter(Boolean)
+    .map((id) => atuais.get(subdonos.baseNumero(id)) || { id, aliases: [], perms: [], addedAt: Date.now() });
+  return subdonos.salvarBanco(banco);
 };
-
-const saveSubdonos = subdonoList => {
-  try {
-    ensureDirectoryExists(DONO_DIR);
-    fs.writeFileSync(SUBDONOS_FILE, JSON.stringify({
-      subdonos: subdonoList
-    }, null, 2));
-    return true;
-  } catch (error) {
-    console.error('❌ Erro ao salvar subdonos:', error);
-    return false;
-  }
-};
-
-const isSubdono = userId => {
-  if (!userId) return false;
-  const currentSubdonos = loadSubdonos();
-
-  // Verificar se o userId ou qualquer variação (com @s.whatsapp.net ou @lid) está na lista
-  const userIdBase = userId.replace(/@s\.whatsapp\.net|@lid/g, '');
-
-  return currentSubdonos.some(subdonoId => {
-    const subdonoBase = subdonoId.replace(/@s\.whatsapp\.net|@lid/g, '');
-    return subdonoId === userId || subdonoBase === userIdBase;
-  });
-};
-
+const isSubdono = (userId) => subdonos.isSubdono(userId);
 const addSubdono = async (userId, numerodono, nazu = null) => {
-  if (!userId || typeof userId !== 'string' || (!isUserId(userId) && !isValidJid(userId))) {
-    return {
-      success: false,
-      message: 'ID de usuário inválido. Use o LID ou marque o usuário.'
-    };
-  }
-  // Normalizar JID para LID se possível
+  let id = userId;
   if (nazu && isValidJid(userId)) {
     try {
       const lid = await getLidFromJidCached(nazu, userId);
-      if (lid && lid.includes('@lid')) {
-        userId = lid;
-      }
+      if (lid && lid.includes('@lid')) id = lid;
     } catch (e) {
       console.warn('Erro ao normalizar JID para LID em addSubdono:', e.message);
     }
   }
-  let currentSubdonos = loadSubdonos();
-
-  // Verificar se já existe (comparando base do número)
-  const userIdBase = userId.replace(/@s\.whatsapp\.net|@lid/g, '');
-  const alreadyExists = currentSubdonos.some(subdonoId => {
-    const subdonoBase = subdonoId.replace(/@s\.whatsapp\.net|@lid/g, '');
-    return subdonoBase === userIdBase;
-  });
-
-  if (alreadyExists) {
-    return {
-      success: false,
-      message: '✨ Este usuário já é um subdono!'
-    };
-  }
-
-  // Carrega config localmente para não depender de variável global
-  const config = loadJsonFile(CONFIG_FILE, {});
-  const nmrdn_check = buildUserId(numerodono, config);
-  const ownerJid = `${numerodono}@s.whatsapp.net`;
-  const ownerBase = numerodono.toString().replace(/\D/g, '');
-  const userBase = userId.replace(/\D/g, '');
-
-  // Verificar se está tentando adicionar o dono
-  if (userId === nmrdn_check ||
-    userId === ownerJid ||
-    (config.lidowner && userId === config.lidowner) ||
-    userBase === ownerBase) {
-    return {
-      success: false,
-      message: '🤔 O Dono principal já tem todos os superpoderes! Não dá pra adicionar como subdono. 😉'
-    };
-  }
-
-  currentSubdonos.push(userId);
-  if (saveSubdonos(currentSubdonos)) {
-    return {
-      success: true,
-      message: '🎉 Pronto! Novo subdono adicionado com sucesso! ✨'
-    };
-  } else {
-    return {
-      success: false,
-      message: '❌ Erro ao salvar a lista de subdonos. Tente novamente.'
-    };
-  }
+  return subdonos.adicionar(id, { numerodono, config: loadJsonFile(CONFIG_FILE, {}) });
 };
-
 const removeSubdono = async (userId, nazu = null) => {
-  if (!userId || typeof userId !== 'string' || (!isUserId(userId) && !isValidJid(userId))) {
-    return {
-      success: false,
-      message: 'ID de usuário inválido. Use o LID ou marque o usuário.'
-    };
-  }
+  let id = userId;
   if (nazu && isValidJid(userId)) {
     try {
       const lid = await getLidFromJidCached(nazu, userId);
-      if (lid && lid.includes('@lid')) userId = lid;
+      if (lid && lid.includes('@lid')) id = lid;
     } catch (e) {
       console.warn('Erro ao normalizar JID para LID em removeSubdono:', e.message);
     }
   }
-  let currentSubdonos = loadSubdonos();
-
-  // Verificar se existe (comparando base do número)
-  const userIdBase = userId.replace(/@s\.whatsapp\.net|@lid/g, '');
-  const foundSubdono = currentSubdonos.find(subdonoId => {
-    const subdonoBase = subdonoId.replace(/@s\.whatsapp\.net|@lid/g, '');
-    return subdonoBase === userIdBase;
-  });
-
-  if (!foundSubdono) {
-    return {
-      success: false,
-      message: '🤔 Este usuário não está na lista de subdonos.'
-    };
-  }
-
-  const initialLength = currentSubdonos.length;
-  // Remover pelo ID encontrado
-  currentSubdonos = currentSubdonos.filter(id => {
-    const idBase = id.replace(/@s\.whatsapp\.net|@lid/g, '');
-    return idBase !== userIdBase;
-  });
-
-  if (currentSubdonos.length === initialLength) {
-    return {
-      success: false,
-      message: 'Usuário não encontrado na lista (erro inesperado). 🤷'
-    };
-  }
-  if (saveSubdonos(currentSubdonos)) {
-    return {
-      success: true,
-      message: '👋 Pronto! Subdono removido com sucesso! ✨'
-    };
-  } else {
-    return {
-      success: false,
-      message: '❌ Erro ao salvar a lista após remover o subdono. Tente novamente.'
-    };
-  }
+  return subdonos.remover(id);
 };
+const getSubdonos = () => subdonos.listar().map(s => s.id);
 
-const getSubdonos = () => {
-  return [...loadSubdonos()];
-};
-
-// ─── Permissões de Subdono ───
-const SUBOWNER_PERMS_FILE = path.join(DONO_DIR, 'subowner_perms.json');
-const SUBCOMMANDS_FILE = path.join(DATABASE_DIR, 'subOwnerCommands.json');
-
+// ─── Permissões de Subdono (também delegadas) ───
 const loadSubOwnerPerms = () => {
-  return loadJsonFile(SUBOWNER_PERMS_FILE, {});
+  // Mapa userIdBase -> perms próprias (sem a base), só para leitura.
+  const out = {};
+  for (const s of subdonos.listar()) out[subdonos.baseNumero(s.id)] = (s.perms || []).slice();
+  return out;
 };
-
-// Lista base de comandos para todos os subdonos
-const loadSubOwnerBaseCommands = () => {
-  return loadJsonFile(SUBCOMMANDS_FILE, []);
-};
-
-const saveSubOwnerBaseCommands = (cmds) => {
-  try {
-    ensureDirectoryExists(DATABASE_DIR);
-    fs.writeFileSync(SUBCOMMANDS_FILE, JSON.stringify(cmds, null, 2));
-    return true;
-  } catch (error) {
-    console.error('Erro ao salvar lista base de subcomandos:', error);
-    return false;
-  }
-};
-
-const addSubOwnerBaseCmd = (cmd) => {
-  const cmds = loadSubOwnerBaseCommands();
-  const normalizedCmd = cmd.toLowerCase().replace(/^!|\s/g, '');
-  if (!cmds.includes(normalizedCmd)) {
-    cmds.push(normalizedCmd);
-    saveSubOwnerBaseCommands(cmds);
-    return true;
-  }
-  return false;
-};
-
-const removeSubOwnerBaseCmd = (cmd) => {
-  const cmds = loadSubOwnerBaseCommands();
-  const normalizedCmd = cmd.toLowerCase().replace(/^!|\s/g, '');
-  const filtered = cmds.filter(c => c !== normalizedCmd);
-  saveSubOwnerBaseCommands(filtered);
-  return filtered.length < cmds.length;
-};
-
-const isSubOwnerBaseCmd = (cmd) => {
-  const cmds = loadSubOwnerBaseCommands();
-  return cmds.includes(cmd.toLowerCase().replace(/^!|\s/g, ''));
-};
-
-const saveSubOwnerPerms = (data) => {
-  try {
-    ensureDirectoryExists(DONO_DIR);
-    fs.writeFileSync(SUBOWNER_PERMS_FILE, JSON.stringify(data, null, 2));
-    return true;
-  } catch (error) {
-    console.error('Erro ao salvar permissões de subdono:', error);
-    return false;
-  }
-};
-
-const grantSubOwnerCmd = (userId, command) => {
-  const perms = loadSubOwnerPerms();
-  const userIdBase = userId.replace(/@s\.whatsapp\.net|@lid/g, '');
-  
-  if (!perms[userIdBase]) {
-    perms[userIdBase] = [];
-  }
-  
-  if (!perms[userIdBase].includes(command)) {
-    perms[userIdBase].push(command);
-    saveSubOwnerPerms(perms);
-    return true;
-  }
-  return false;
-};
-
-const revokeSubOwnerCmd = (userId, command) => {
-  const perms = loadSubOwnerPerms();
-  const userIdBase = userId.replace(/@s\.whatsapp\.net|@lid/g, '');
-  
-  if (perms[userIdBase]) {
-    const index = perms[userIdBase].indexOf(command);
-    if (index > -1) {
-      perms[userIdBase].splice(index, 1);
-      saveSubOwnerPerms(perms);
-      return true;
-    }
-  }
-  return false;
-};
-
-const getSubOwnerCmds = (userId) => {
-  const perms = loadSubOwnerPerms();
-  const userIdBase = userId.replace(/@s\.whatsapp\.net|@lid/g, '');
-  return perms[userIdBase] || [];
-};
-
-const hasSubOwnerCmdPerm = (userId, command) => {
-  const cmds = getSubOwnerCmds(userId);
-  return cmds.includes(command);
-};
+const loadSubOwnerBaseCommands = () => subdonos.listarBasePerms();
+const saveSubOwnerBaseCommands = () => true; // a escrita é feita por add/removeBasePerm
+const addSubOwnerBaseCmd = (cmd) => subdonos.addBasePerm(cmd).success;
+const removeSubOwnerBaseCmd = (cmd) => subdonos.removeBasePerm(cmd).success;
+const isSubOwnerBaseCmd = (cmd) => subdonos.listarBasePerms().includes(String(cmd).toLowerCase().replace(/^!|\s/g, ''));
+const saveSubOwnerPerms = () => true;
+const grantSubOwnerCmd = (userId, command) => subdonos.liberarComando(userId, command).success;
+const revokeSubOwnerCmd = (userId, command) => subdonos.revogarComando(userId, command).success;
+const getSubOwnerCmds = (userId) => subdonos.permsProprias(userId);
+const hasSubOwnerCmdPerm = (userId, command) => subdonos.podeUsar(userId, command);
 
 const loadRentalData = () => {
   return loadJsonFile(ALUGUEIS_FILE, {
