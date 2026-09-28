@@ -916,7 +916,8 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
         // 5. X9 - Lógica de PROMOÇÃO (novos admins)
         else if (action === 'promote') {
             const hasX9 = groupSettings.x9;
-            const hasAntiRoubo = groupSettings.antiRoubo?.enabled;
+            const antiRouboEstado = lerAntiRouboDoGrupo(id, groupSettings);
+            const hasAntiRoubo = antiRouboEstado.enabled;
             if (hasX9 || hasAntiRoubo) {
                                 const promotedIds = participants.map(p => typeof p === 'string' ? p : (p.id || p.jid || p.toString()));
                 let mentions = [...promotedIds];
@@ -940,7 +941,7 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
                     const ownerNumAR = ownerNumber ? antiRoubo.toNum(ownerNumber) : '';
                     const botLidBase = String(nazu.user?.lid || '').split('@')[0].split(':')[0];
                     const decisao = antiRoubo.decidirEnforcement({
-                        antiRoubo: groupSettings.antiRoubo,
+                        antiRoubo: antiRouboEstado,
                         acao: 'promote',
                         formasAutor,
                         eBot: !!botLidBase && formasAutor.includes(botLidBase),
@@ -978,7 +979,8 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
         // 6. X9 - Lógica de REBAIXAMENTO (remover admin)
         else if (action === 'demote') {
             const hasX9 = groupSettings.x9;
-            const hasAntiRoubo = groupSettings.antiRoubo?.enabled;
+            const antiRouboEstado = lerAntiRouboDoGrupo(id, groupSettings);
+            const hasAntiRoubo = antiRouboEstado.enabled;
             if (hasX9 || hasAntiRoubo) {
                                 const demotedIds = participants.map(p => typeof p === 'string' ? p : (p.id || p.jid || p.toString()));
                 let mentions = [...demotedIds];
@@ -1002,7 +1004,7 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
                     const ownerNumAR = ownerNumber ? antiRoubo.toNum(ownerNumber) : '';
                     const botLidBase = String(nazu.user?.lid || '').split('@')[0].split(':')[0];
                     const decisao = antiRoubo.decidirEnforcement({
-                        antiRoubo: groupSettings.antiRoubo,
+                        antiRoubo: antiRouboEstado,
                         acao: 'demote',
                         formasAutor,
                         eBot: !!botLidBase && formasAutor.includes(botLidBase),
@@ -1871,6 +1873,25 @@ async function createGroupMessage(AbyssSock, groupMetadata, participants, settin
   }
   return message;
 }
+/**
+ * Estado do ANTI-ROUBO de um grupo.
+ *
+ * O estado vive em arquivo PRÓPRIO (`dono/antiRoubo/<grupo>.json`), o mesmo que
+ * o handler grava — ler o `groupData` aqui dava "anti desligado" porque o
+ * espelho é sobrescrito pela escrita assíncrona do handler (bug do "não
+ * acontece nada"). A queda para `groupSettings.antiRoubo` é a migração do
+ * formato antigo.
+ */
+function lerAntiRouboDoGrupo(groupId, groupSettings = null) {
+  try {
+    const bruto = loadJsonFile(pathz.join(DONO_DIR, 'antiRoubo', `${groupId}.json`), null);
+    if (bruto && typeof bruto === 'object') return antiRoubo.normalizarEstado(bruto);
+  } catch (e) {
+    console.error('[ANTI-ROUBO] erro ao ler o estado:', e?.message || e);
+  }
+  return antiRoubo.normalizarEstado(groupSettings?.antiRoubo);
+}
+
 async function loadGroupSettings(groupId) {
   const groupFilePath = path.join(DATABASE_DIR, 'grupos', `${groupId}.json`);
   try {
@@ -31670,7 +31691,8 @@ break;
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
           // Verificação antiRoubo (fonte única: funcs/utils/antiRoubo.js)
-          if (antiRoubo.estaAtivo(groupData.antiRoubo)) {
+          const estadoARcmd = getAntiRoubo();
+          if (antiRoubo.estaAtivo(estadoARcmd)) {
             const metadataAR = await nazu.groupMetadata(from).catch(() => null);
             const participantsAR = metadataAR?.participants || groupMetadata?.participants || [];
             const alvoAR = antiRoubo.resolverAlvo({ alvoRaw: sender, participants: participantsAR });
@@ -31679,7 +31701,7 @@ break;
               formas: formasRemetenteArr,
             });
             const decisaoAR = antiRoubo.decidirEnforcement({
-              antiRoubo: groupData.antiRoubo,
+              antiRoubo: estadoARcmd,
               acao: 'promote',
               formasAutor,
               isDonoGrupo: formasAutor.includes(antiRoubo.toNum(metadataAR?.owner)),
@@ -31705,7 +31727,8 @@ break;
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
           // Verificação antiRoubo (fonte única: funcs/utils/antiRoubo.js)
-          if (antiRoubo.estaAtivo(groupData.antiRoubo)) {
+          const estadoARcmd = getAntiRoubo();
+          if (antiRoubo.estaAtivo(estadoARcmd)) {
             const metadataAR = await nazu.groupMetadata(from).catch(() => null);
             const participantsAR = metadataAR?.participants || groupMetadata?.participants || [];
             const alvoAR = antiRoubo.resolverAlvo({ alvoRaw: sender, participants: participantsAR });
@@ -31714,7 +31737,7 @@ break;
               formas: formasRemetenteArr,
             });
             const decisaoAR = antiRoubo.decidirEnforcement({
-              antiRoubo: groupData.antiRoubo,
+              antiRoubo: estadoARcmd,
               acao: 'demote',
               formasAutor,
               isDonoGrupo: formasAutor.includes(antiRoubo.toNum(metadataAR?.owner)),

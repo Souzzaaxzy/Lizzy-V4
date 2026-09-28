@@ -7111,7 +7111,21 @@ próprio bot (`eBot` — o guard inicial do bot só compara a base do telefone, 
 o LID do bot também é aceito), dono do bot, dono do grupo e autorizado (por
 telefone OU LID). O resto é punido com a reversão.
 
-### Testes — `tests/antiroubo.test.js` (**20 testes / 62 asserções**)
+**BUG CORRIGIDO (set/2026) — "quando alguém não permitido rebaixa alguém não
+acontece nada".** O enforcement lia `groupSettings.antiRoubo` (o JSON do grupo),
+mas desde a refatoração o estado vive no **arquivo próprio**
+(`dono/antiRoubo/<grupo>.json`) — e o espelho no `groupData` é sobrescrito pela
+escrita assíncrona do handler. Resultado: o enforcement enxergava o anti
+**desligado** e não revertia nada. Novo `lerAntiRouboDoGrupo(groupId,
+groupSettings)` (module-level) lê o arquivo próprio, com queda para o
+`groupSettings.antiRoubo` (migração). Os três pontos passaram a usá-lo
+(`antiRouboEstado` no `participants.update`; `getAntiRoubo()` nos comandos).
+**Verificado**: revertendo o loader, os testes 14 (promoção revertida) e 17
+(rebaixamento re-promove a vítima) **falham**; com o fix, 22/68 verdes. Dois
+testes E2E novos cobrem o fluxo real do dono: ligar pelo `!antiroubo on` +
+rebaixamento de intruso → revertido; autorizado pelo `!perm` → nada revertido.
+
+### Testes — `tests/antiroubo.test.js` (**22 testes / 68 asserções**)
 Módulo puro (normalização, migração, mapa LID↔telefone, resolverAlvo,
 add/remove/listar/autorizar, decisão de enforcement) + handler real
 (menu/on/off/perm/delp/listperm/limparperm, permissão de dono) + ENFORCEMENT

@@ -91,6 +91,17 @@ const AR_DIR = path.join(DONO_DIR, 'antiRoubo');
 function lerAntiRoubo(jid) {
   try { return JSON.parse(fs.readFileSync(path.join(AR_DIR, `${jid}.json`), 'utf-8')); } catch { return {}; }
 }
+// Escreve o estado onde o SISTEMA lê de fato (arquivo próprio). É o que o
+// `!antiroubo on` faz; o enforcement precisa enxergar isso.
+function gravarAntiRoubo(jid, estado) {
+  fs.mkdirSync(AR_DIR, { recursive: true });
+  fs.writeFileSync(path.join(AR_DIR, `${jid}.json`), JSON.stringify(estado, null, 2));
+}
+function makeGroupComAnti(estado) {
+  const gid = makeGroup();
+  gravarAntiRoubo(gid, { enabled: true, ar_permitidos: [], ar_permitidos_lid: [], ...estado });
+  return gid;
+}
 
 function participantes() {
   return [
@@ -297,7 +308,7 @@ function orch(over = {}) {
 }
 
 await test('14. ENFORCEMENT: promocao NAO autorizada e revertida', async () => {
-  const gid = makeGroup({ antiRoubo: { enabled: true, ar_permitidos: [], ar_permitidos_lid: [] } });
+  const gid = makeGroupComAnti({});
   const { nazu, sent, calls } = orch();
   await handleParticipants(nazu, {
     id: gid, action: 'promote', participants: ['5511999990009@s.whatsapp.net'],
@@ -310,7 +321,7 @@ await test('14. ENFORCEMENT: promocao NAO autorizada e revertida', async () => {
 });
 
 await test('15. ENFORCEMENT: autorizado (LID na lista) passa, sem reversao', async () => {
-  const gid = makeGroup({ antiRoubo: { enabled: true, ar_permitidos: [], ar_permitidos_lid: [SUB_LID] } });
+  const gid = makeGroupComAnti({ ar_permitidos_lid: [SUB_LID] });
   const { nazu, calls } = orch();
   await handleParticipants(nazu, {
     id: gid, action: 'promote', participants: ['5511999990009@s.whatsapp.net'],
@@ -320,7 +331,7 @@ await test('15. ENFORCEMENT: autorizado (LID na lista) passa, sem reversao', asy
 });
 
 await test('16. ENFORCEMENT: autorizado cadastrado por TELEFONE passa (mensagem por LID)', async () => {
-  const gid = makeGroup({ antiRoubo: { enabled: true, ar_permitidos: [SUB_JID], ar_permitidos_lid: [] } });
+  const gid = makeGroupComAnti({ ar_permitidos: [SUB_JID] });
   const { nazu, calls } = orch();
   await handleParticipants(nazu, {
     id: gid, action: 'demote', participants: ['5511999990009@s.whatsapp.net'],
@@ -330,7 +341,7 @@ await test('16. ENFORCEMENT: autorizado cadastrado por TELEFONE passa (mensagem 
 });
 
 await test('17. ENFORCEMENT: rebaixamento NAO autorizado re-promove a vitima', async () => {
-  const gid = makeGroup({ antiRoubo: { enabled: true, ar_permitidos: [], ar_permitidos_lid: [] } });
+  const gid = makeGroupComAnti({});
   const { nazu, calls } = orch();
   await handleParticipants(nazu, {
     id: gid, action: 'demote', participants: [CREATOR_JID],
@@ -341,7 +352,7 @@ await test('17. ENFORCEMENT: rebaixamento NAO autorizado re-promove a vitima', a
 });
 
 await test('18. ENFORCEMENT: dono do grupo passa', async () => {
-  const gid = makeGroup({ antiRoubo: { enabled: true, ar_permitidos: [], ar_permitidos_lid: [] } });
+  const gid = makeGroupComAnti({});
   const { nazu, calls } = orch();
   await handleParticipants(nazu, {
     id: gid, action: 'promote', participants: ['5511999990009@s.whatsapp.net'],
@@ -351,7 +362,7 @@ await test('18. ENFORCEMENT: dono do grupo passa', async () => {
 });
 
 await test('19. ENFORCEMENT: anti desligado nao faz nada', async () => {
-  const gid = makeGroup({ antiRoubo: { enabled: false } });
+  const gid = makeGroup();  // anti desligado: nenhum arquivo
   const { nazu, calls } = orch();
   await handleParticipants(nazu, {
     id: gid, action: 'promote', participants: ['5511999990009@s.whatsapp.net'],
@@ -361,13 +372,45 @@ await test('19. ENFORCEMENT: anti desligado nao faz nada', async () => {
 });
 
 await test('20. ENFORCEMENT: acoes do proprio bot sao ignoradas', async () => {
-  const gid = makeGroup({ antiRoubo: { enabled: true, ar_permitidos: [], ar_permitidos_lid: [] } });
+  const gid = makeGroupComAnti({});
   const { nazu, calls } = orch();
   await handleParticipants(nazu, {
     id: gid, action: 'promote', participants: ['5511999990009@s.whatsapp.net'],
     author: BOT_LID,
   }, String(DONO_NUM));
   ok(calls.length === 0, 'bot ignorado');
+});
+
+await test('21. E2E: ligar pelo comando e rebaixar sem permissao e REVERTIDO', async () => {
+  // Fluxo real do dono: liga pelo comando, autoriza alguem, e um intruso
+  // rebaixa -> tem que reverter. Este e o cenario do "nao acontece nada".
+  const gid = makeGroup();
+  await comoDono('!antiroubo on', { from: gid });
+  ok(lerAntiRoubo(gid).enabled === true, 'anti ligado pelo comando');
+
+  const { nazu, calls, sent } = orch();
+  await handleParticipants(nazu, {
+    id: gid, action: 'demote', participants: [CREATOR_JID],
+    author: '999000000000009@lid',
+  }, String(DONO_NUM));
+
+  ok(calls.some((c) => c.action === 'demote' && c.list.includes('999000000000009@lid')), 'rebaixou o intruso');
+  ok(calls.some((c) => c.action === 'promote' && c.list.includes(CREATOR_JID)), 'restaurou a vitima');
+  ok(sent.some((s) => /ANTI-ROUBO/.test(s.content?.text || '')), 'avisou o grupo');
+});
+
+await test('22. E2E: autorizado pelo comando pode rebaixar (nada e revertido)', async () => {
+  const gid = makeGroup();
+  await comoDono('!antiroubo on', { from: gid });
+  await comoDono(`!perm @${SUB_LID.split('@')[0]}`, { from: gid, mentions: [SUB_LID] });
+  ok(lerAntiRoubo(gid).ar_permitidos_lid.includes(SUB_LID), 'autorizado gravado');
+
+  const { nazu, calls } = orch();
+  await handleParticipants(nazu, {
+    id: gid, action: 'demote', participants: [CREATOR_JID],
+    author: SUB_LID,
+  }, String(DONO_NUM));
+  ok(calls.length === 0, 'autorizado nao foi revertido');
 });
 
 // ============================================================================
