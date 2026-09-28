@@ -45,6 +45,9 @@ const __dirname = dirname(__filename);
 
 const SUBCOMMANDS_FILE_LEGACY = `${DATABASE_DIR}/subOwnerCommands.json`;
 
+/** Teto de subdonos. O `!donos` lista exatamente esses (até o máximo). */
+export const MAX_SUBDONOS = 5;
+
 /**
  * O que um subdono pode fazer além dos comandos liberados.
  * São PORTAS (funcionalidades), não comandos individuais — é assim que o
@@ -299,6 +302,12 @@ export function adicionar(id, { numerodono = null, config = {}, perms = [], alia
   if (numerodono && ehDono(jid, numerodono, config)) {
     return { success: false, message: '🤔 O Dono principal já tem todos os superpoderes! Não dá pra adicionar como subdono. 😉' };
   }
+  if (banco.subdonos.length >= MAX_SUBDONOS) {
+    return {
+      success: false,
+      message: `🚫 Limite de ${MAX_SUBDONOS} subdonos atingido. Remova um antes de adicionar outro.`,
+    };
+  }
   banco.subdonos.push({
     id: jid,
     aliases: [...new Set((Array.isArray(aliases) ? aliases : []).map(normalizarJid).filter((a) => a && a !== jid))],
@@ -423,6 +432,10 @@ export function addAlias(id, alias) {
   return { success: true };
 }
 
+/** Apaga TODOS os subdonos e a lista base (usado em testes/admin). */
+export function limparTudo() {
+  return escrever({ version: 2, subdonos: [], basePerms: [] });
+}
 /** Permissões extras de um subdono (sem a base), para exibição. */
 export function permsProprias(id) {
   const sub = acharSubdono(id);

@@ -33,7 +33,7 @@ import { toOggOpus } from './utils/oggOpus.js';
 import { resolverNomeContato, resolverNomesContatos, acharParticipantePorId, nomeInutil, baseId } from './utils/contactName.js';
 import { converterGifParaMp4 } from './utils/gifMedia.js';
 import * as ghostDetection from './utils/ghostDetection.js';
-import { bold as boldLayout } from './menus/layout.js';
+import { bold as boldLayout, boldItalic as boldItalicLayout, abrirCategoria, fecharCategoria } from './menus/layout.js';
 import {
   isGroupStatusContent,
   buildGroupStatusRevokePayloads,
@@ -28536,6 +28536,67 @@ ${nomebot}  By  👑 ${nomedono}`;
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
         }
         break;
+      case 'donos':
+      case 'listadonos': {
+        // `!dono` mostra o dono principal (catálogo + card). O `!donos` mantém o
+        // mesmo layout de caixa no TEXTO: o dono principal e, abaixo, os
+        // subdonos (no máximo MAX_SUBDONOS).
+        try {
+          const numerosDono = numerodono ? String(numerodono).replace(/\D/g, '') : '';
+          const soDigitos = (v) => String(v ?? '').replace(/\D/g, '');
+          const toWa = (jid) => {
+            const base = String(jid || '').split('@')[0].split(':')[0];
+            return base ? `wa.me/${base}` : '—';
+          };
+
+          // Nome do principal pelo resolvedor ÚNICO (nunca o número/LID).
+          let nomePrincipal = nomedono || nomebot || 'Dono';
+          try {
+            const doContato = await resolverNomeContato(
+              numerosDono ? `${numerosDono}@s.whatsapp.net` : '',
+              { nazu, metadata: groupMetadata, from, fallback: nomedono }
+            );
+            if (doContato) nomePrincipal = doContato;
+          } catch { /* mantém o do config */ }
+
+          const registros = subdonosModule.listar().slice(0, subdonosModule.MAX_SUBDONOS);
+
+          const linhasSub = [];
+          for (const reg of registros) {
+            let nomeSub = '';
+            try {
+              nomeSub = await resolverNomeContato(reg.id, { nazu, metadata: groupMetadata, from });
+            } catch { /* sem nome: só o link */ }
+            // Só mostra o nome entre parênteses quando ele NÃO é o próprio número.
+            const temNome = nomeSub && soDigitos(nomeSub) !== soDigitos(reg.id);
+            linhasSub.push(`│    • ${toWa(reg.id)}${temNome ? ` (${nomeSub})` : ''}`);
+          }
+          // Layout dos MENUS: cabeçalho com o bot + caixa de categoria com os
+          // itens em `│`. Usa as MESMAS primitivas de `menus/layout.js`, para
+          // não divergir do resto do bot.
+          const botNome = nomebot || 'Bot';
+          let texto = `╭━━━꧁༺ ✦ ${botNome} ✦ ༻꧂━━━╮\n`;
+          texto += `┃ 🌌 ${boldLayout('DONOS DO BOT')}\n`;
+          texto += `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n\n`;
+          texto += abrirCategoria('DONOS', '👑') + '\n';
+          texto += `│ 👑 *Dono Principal:*\n`;
+          texto += `│    • ${nomePrincipal}\n`;
+          texto += `│    • ${numerosDono ? `wa.me/${numerosDono}` : 'não configurado'}\n`;
+          texto += `│\n`;
+          texto += `│ 🛡️ *Subdonos:* ${registros.length}/${subdonosModule.MAX_SUBDONOS}\n`;
+          texto += linhasSub.length ? (linhasSub.join('\n') + '\n') : `│    • nenhum\n`;
+          texto += fecharCategoria();
+
+          await nazu.sendMessage(from, {
+            text: texto,
+            contextInfo: gerarContextNewsletter()
+          }, { quoted: info });
+        } catch (e) {
+          console.error('[DONOS] erro:', e?.message || e);
+          await reply('❌ Ocorreu um erro interno. Tente novamente em alguns minutos.');
+        }
+        break;
+      }
       case 'criador':
         try {
           const numeroCriadorFormatado = numerodono ? String(numerodono).replace(/\D/g, '') : 'Não configurado';

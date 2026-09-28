@@ -269,6 +269,17 @@ await test('19. alias explícito passa a resolver a outra forma', () => {
   sub.addAlias(PN_USER, LID_USER);
   ok(sub.isSubdono(LID_USER), 'agora o LID resolve sozinho');
 });
+await test('20. MAX_SUBDONOS (5): o 6º não entra', () => {
+  reset();
+  for (let i = 1; i <= 5; i++) {
+    ok(sub.adicionar(`551100000000${i}@s.whatsapp.net`).success, `adicionou o ${i}`);
+  }
+  eq(sub.listar().length, 5, '5 subdonos');
+  const r6 = sub.adicionar('5511000000006@s.whatsapp.net');
+  ok(!r6.success && /Limite de 5 subdonos/.test(r6.message), 'recusou o 6º com o teto');
+  eq(sub.listar().length, 5, 'continua 5');
+});
+
 // ============================================================================
 // RESUMO
 // ============================================================================

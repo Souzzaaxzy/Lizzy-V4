@@ -6923,3 +6923,49 @@ mesma limitação do bot de referência.
 **Ajuste (set/2026)**: a categoria de subdonos ficou **SÓ no ** (a pedido
 do dono). O  voltou ao baseline de **177** comandos; o  segue
 com **168**.
+
+## COMANDO `!donos` — painel do dono + subdonos (set/2026) ✅
+Alias `!listadonos`. Sem restrição (qualquer um pode consultar, como o `!dono`).
+**Layout dos MENUS**: cabeçalho `꧁༺ ✦ <bot> ✦ ༻꧂` + caixa de categoria
+(`abrirCategoria`/`fecharCategoria` de `menus/layout.js`) — mesmas primitivas, para
+não divergir do resto do bot.
+
+```
+╭━━━꧁༺ ✦ 𝐋𝐢𝐳𝐳𝐲 𝐝𝐨 𝐩𝐫𝐢𝐯𝐲 ✦ ༻꧂━━━╮
+┃ 🌌 𝐃𝐎𝐍𝐎𝐒 𝐃𝐎 𝐁𝐎𝐓
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
+
+╭━━━꧁༺ ㅤ👑 𝑫𝑶𝑵𝑶𝑺 👑ㅤ ༻꧂━━━╮
+│ 👑 *Dono Principal:*
+│    • 𝐊𝐚𝐧𝐧𝐨𝐧 𖤐 ˢᵉᶦᵗᵃ ᵐᵗˣ
+│    • wa.me/5511978819676
+│
+│ 🛡️ *Subdonos:* 2/5
+│    • wa.me/5511000000001 (Fulano da Silva)
+│    • wa.me/5511000000002
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
+```
+
+- **Dono principal**: nome pelo resolvedor ÚNICO (`utils/contactName.js`, nunca o
+  número) com queda para o `nomedono` do config; o número vem do `numerodono`.
+- **Subdonos**: até **`MAX_SUBDONOS` (5)**; cada linha traz o `wa.me` e o **nome**
+  entre parênteses **quando existe** (se o resolvedor devolveu o próprio número,
+  não repete).
+- Exibe a contagem `x/5`. Sem subdonos → `│    • nenhum`.
+
+### `MAX_SUBDONOS = 5` (novo teto)
+Antes não havia limite. Agora `subdonos.adicionar` **recusa o 6º** com
+*"Limite de 5 subdonos atingido"*. O `!donos` nunca lista mais que 5 mesmo se o
+arquivo for editado à mão (corta com `slice`).
+
+### Testes — `tests/donos.test.js` (**5 testes / 15 asserções**)
+Handler real: layout (título/caixa/links), principal + "nenhum", com subdonos
+(`2/5` + links), nome do subdono entre parênteses, **teto de 5** (arquivo com 6 →
+mostra `5/5` e omite o 6º) e o alias `!listadonos`.
+`tests/subdonos.test.js` ganhou o teste do **MAX_SUBDONOS**.
+
+### Armadilha (registrada)
+No teste, importar `paths.js` **estaticamente** no topo é içado ANTES de setar
+`DATABASE_PATH` — então o `SUBDONOS_FILE` apontava para o **banco real** e os
+testes liam dados de verdade. Solução: ler a config com `fs`/`path` (sem importar
+`paths.js`) e resetar com `subdonos.limparTudo()`.
