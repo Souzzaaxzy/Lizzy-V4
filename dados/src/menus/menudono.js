@@ -129,9 +129,6 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 
 
 ╭━━━꧁༺ ㅤ🔐 ${boldItalic('PERMISSÕES SUBDONO')} 🔐ㅤ ༻꧂━━━╮
-│ ➕ ${prefix}grantsubcmd
-│ ❌ ${prefix}delsubcmd
-│ 📋 ${prefix}listsubcmd
 │ 🔑 ${prefix}sub.permitir
 │ 🚫 ${prefix}sub.revogar
 │ 📄 ${prefix}sub.perms

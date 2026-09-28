@@ -6924,6 +6924,74 @@ mesma limitação do bot de referência.
 do dono). O  voltou ao baseline de **177** comandos; o  segue
 com **168**.
 
+### REVISÃO (set/2026) — menos comandos, permissão que FUNCIONA, `all` e hierarquia ✅
+Quatro pedidos do dono, todos medidos com o handler real.
+
+**1. `!grantsubcmd` / `!delsubcmd` / `!listsubcmd` REMOVIDOS.** Eram a "lista base"
+global e **duplicavam** a família `!sub.permitir`/`!sub.revogar`/`!sub.perms` (as
+casas `case` sumiram do `index.js`, as linhas saíram do `menudono` e os imports
+órfãos de `loadSubOwnerBaseCommands`/`addSubOwnerBaseCmd`/`removeSubOwnerBaseCmd`/
+`grantSubOwnerCmd`/`revokeSubOwnerCmd`/`getSubOwnerCmds`/`hasSubOwnerCmdPerm`
+saíram do `index.js`). Agora respondem **"Comando não encontrado"**. A função
+`basePerms` do módulo continua (o `!sub.perms` a lê), mas **não há mais comando
+para editá-la** — quem precisar usa `perms` por subdono.
+Baseline do `menu-layout`: `menudono` **168 → 165**.
+
+**2. BUG: `!sub.permitir` recusava subdono cadastrado pelo NÚMERO.** A menção em
+grupo chega como **LID** (`@lid`), mas o `adicionar` grava o subdono pelo
+**telefone** (`@s.whatsapp.net`) — bases diferentes, então `acharSubdono(menção)`
+não casava e vinha *"Este usuário não é subdono"*. **Correção**: novo
+`formasParaAlvo(id, metadata)` (puro) junta LID/PN/`phoneNumber`/`jid` do
+participante; `liberarComandoEntre`/`revogarComandoEntre` acham o registro por
+QUALQUER forma e o handler passa essas formas. O `!sub.perms` também passou a usar
+`permissoesEntre`/`isSubdonoEntre`. Validado: cadastrado pelo número → `!play`
+**executa** (antes: aviso de bloqueio).
+
+**3. `!sub.permitir @user all` = ACESSO TOTAL.** Coringa `all` (aceita também
+`todos`/`tudo`/`*`) gravado em `perms`. `podeUsar`/`podeUsarEntre` cobrem o `all`;
+`temAcessoTotal`/`temAcessoTotalEntre` expõem o estado; `!sub.revogar all` tira.
+Ao conceder `all`, as permissões avulsas são limpas (fica só `all`). O `!sub.perms`
+mostra `ACESSO TOTAL (todos os comandos)`.
+
+**4. HIERARQUIA preservada.** O gate do handler virou `podeDonoTotal()`
+(`isOwner || (isSubdonoTotal && !ehComandoDeHierarquia(command))`), aplicado nos
+**160** `if (!isOwner)` DENTRO do `switch (command)` (fora dele — antipv, alarme —
+não foi tocado). `HIERARQUIA_COMMANDS` (em `subdonos.js`) é o que o `all` **não**
+cobre: `addsubdono`/`delsubdono`/`remsubdono`/`rmsubdono`,
+`sub.permitir`/`sub.revogar`, `numero-dono`/`nomedono`/`nome-bot`. Sem isso, um
+subdono com `all` se promoveria ou redefiniria a identidade do dono. Validado: com
+`all` o subdono roda `!infoserver` (comando de dono), mas `!addsubdono`,
+`!delsubdono`, `!numero-dono` e `!nomedono` seguem barrados.
+
+**5. `!listasubdonos` e `!donos`: NOME primeiro, NÚMERO depois.** Antes o
+`!listasubdonos` repetia o `@menção` e mostrava o nome numa linha separada; agora
+`👤 1º — Nome` + `📱 wa.me/<numero>`. No `!donos`, a linha do subdono passou de
+`wa.me/... (Nome)` para `• Nome` + `📱 wa.me/...`.
+
+**Testes**: `tests/subdonos-perms.test.js` (novo) — **11 testes / 24 asserções**,
+handler real: comandos removidos, cadastro-por-número + menção LID, bloqueio sem
+permissão, `all`, uso de comando de dono com `all`, hierarquia (gestão + identidade
+do dono), revogar `all`, limpeza das avulsas, `!sub.perms` e ordem nome→número no
+`!listasubdonos`. `tests/donos.test.js` 5/17 e `tests/menu-layout.test.js` 25/251
+atualizados. Regressões verdes: `subdonos` 20/61, `dono-perfil` 47/0,
+`get-message-inspector` 54/269, `cmd-suggest` 21/68, `me-profile` 44/0,
+`relationships-multi` 19/86, `antictt` 15/38, `antimidia` 14/29, `gifsbn-media`
+16/61, `antifantasma-classificacao` 18/0, `raja-selective` 23/0.
+
+**Armadilha de método (registrada)**: `file_editor` **corrompe a codificação** do
+`index.js` (glifos viram mojibake `Г`/`в”`, `Verificação` vira `VerificaГ§ГЈo`) —
+`node --check` **passa** e o estrago só aparece nos testes de texto. Nesta rodada o
+`index.js` foi editado por **Python** (`open(rb) → decode('utf-8') → replace →
+encode('utf-8')`), com verificação `s.count('Г') == 0`. O mesmo vale para
+`subdonos.js` e `AGENTS.md`. (O `file_editor` funcionou para o teste NOVO
+`tests/subdonos-perms.test.js`; a corrupção é nos arquivos que já tinham glifos.)
+**Armadilha 2**: um contador de chaves ingênuo no Python fecha o `switch` cedo —
+chaves dentro de **template literals** contam; por isso a troca dos gates foi
+feita por **faixa de linhas** (`switch (command) {` … último `};` do arquivo).
+**Armadilha 3**: `!isOwner` também aparece em condições compostas
+(`!isGroupAdmin && !isOwner`) e em comentários — essas **não** mudaram; só as
+guardas `if (!isOwner)` / `else if (!isOwner)`.
+
 ## COMANDO `!donos` — painel do dono + subdonos (set/2026) ✅
 Alias `!listadonos`. Sem restrição (qualquer um pode consultar, como o `!dono`).
 **Layout dos MENUS**: cabeçalho `꧁༺ ✦ <bot> ✦ ༻꧂` + caixa de categoria
@@ -6941,16 +7009,17 @@ não divergir do resto do bot.
 │    • wa.me/5511978819676
 │
 │ 🛡️ *Subdonos:* 2/5
-│    • wa.me/5511000000001 (Fulano da Silva)
+│    • Fulano da Silva
+│      📱 wa.me/5511000000001
 │    • wa.me/5511000000002
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 ```
 
 - **Dono principal**: nome pelo resolvedor ÚNICO (`utils/contactName.js`, nunca o
   número) com queda para o `nomedono` do config; o número vem do `numerodono`.
-- **Subdonos**: até **`MAX_SUBDONOS` (5)**; cada linha traz o `wa.me` e o **nome**
-  entre parênteses **quando existe** (se o resolvedor devolveu o próprio número,
-  não repete).
+- **Subdonos**: até **`MAX_SUBDONOS` (5)**; cada linha traz o **NOME primeiro** e
+  o **número (`wa.me`) logo abaixo** (pedido do dono em set/2026 — antes era
+  `wa.me/... (Nome)`). Sem nome resolvido, sai só o `wa.me`.
 - Exibe a contagem `x/5`. Sem subdonos → `│    • nenhum`.
 
 ### `MAX_SUBDONOS = 5` (novo teto)

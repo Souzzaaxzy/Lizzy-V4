@@ -49,6 +49,46 @@ const SUBCOMMANDS_FILE_LEGACY = `${DATABASE_DIR}/subOwnerCommands.json`;
 export const MAX_SUBDONOS = 5;
 
 /**
+ * Permissão TOTAL (`!sub.permitir @user all`).
+ *
+ * Um subdono com esta permissão usa **qualquer** comando do bot, como o dono.
+ * Fica representada pelo literal `all` na lista `perms` do registro (não é um
+ * comando, é um coringa). A hierarquia é preservada fora daqui: os comandos de
+ * GESTÃO de subdonos continuam exigindo o Dono principal (ver `index.js`).
+ */
+export const ALL_PERM = 'all';
+
+/** Normaliza um token de permissão; `all`/`todos`/`tudo`/`*` viram `all`. */
+function normalizarPerm(p) {
+  const raw = String(p ?? '').toLowerCase().replace(/^[!/.]/, '').trim();
+  if (!raw) return '';
+  if (raw === '*' || raw === 'all' || raw === 'todos' || raw === 'tudo') return ALL_PERM;
+  return raw;
+}
+
+/** `true` quando a lista de permissões cobre o comando (ou tem `all`). */
+function permsIncluem(perms, cmd) {
+  return perms.includes(ALL_PERM) || perms.includes(cmd);
+}
+
+/**
+ * Comandos que a permissão TOTAL (`all`) NÃO cobre — são o que sustenta a
+ * HIERARQUIA (dono principal > subdono). Sem esta lista, um subdono com `all`
+ * poderia se promover (é a origem da própria permissão) ou redefinir a
+ * identidade do dono, deixando de ser subdono.
+ */
+export const HIERARQUIA_COMMANDS = new Set([
+  'addsubdono', 'delsubdono', 'remsubdono', 'rmsubdono',
+  'sub.permitir', 'subpermitir', 'sub.revogar', 'subrevogar',
+  'numero-dono', 'nomedono', 'nome-bot',
+]);
+
+/** `true` se o comando é sensível à hierarquia (só o Dono principal). */
+export function ehComandoDeHierarquia(cmd) {
+  return HIERARQUIA_COMMANDS.has(String(cmd || '').replace(/^[!/.]/, '').toLowerCase().trim());
+}
+
+/**
  * O que um subdono pode fazer além dos comandos liberados.
  * São PORTAS (funcionalidades), não comandos individuais — é assim que o
  * modelo de "papéis" do bot de referência é expressado aqui.
@@ -157,7 +197,7 @@ export function normalizarBanco(raw) {
       out.subdonos.push({
         id,
         aliases: Array.isArray(item.aliases) ? item.aliases.map(normalizarJid).filter(Boolean) : [],
-        perms: Array.isArray(item.perms) ? [...new Set(item.perms.map((p) => String(p).toLowerCase().trim()).filter(Boolean))] : [],
+        perms: Array.isArray(item.perms) ? [...new Set(item.perms.map(normalizarPerm).filter(Boolean))] : [],
         addedAt: Number(item.addedAt) || 0,
       });
     }
@@ -173,7 +213,7 @@ export function normalizarBanco(raw) {
   });
 
   if (Array.isArray(raw.basePerms)) {
-    out.basePerms = [...new Set(raw.basePerms.map((c) => String(c).toLowerCase().trim()).filter(Boolean))];
+    out.basePerms = [...new Set(raw.basePerms.map(normalizarPerm).filter(Boolean))];
   }
   return out;
 }
@@ -255,12 +295,15 @@ export function permissoesDe(id) {
   return [...new Set([...banco.basePerms, ...(sub.perms || [])])];
 }
 
-/** `true` se o subdono pode usar o comando. */
+/**
+ * `true` se o subdono pode usar o comando.
+ * Cobre o coringa `all` (`!sub.permitir @user all`).
+ */
 export function podeUsar(id, comando) {
   const cmd = String(comando || '').replace(/^[!/.]/, '').toLowerCase().trim();
   if (!cmd) return false;
   if (!isSubdono(id)) return false;
-  return permissoesDe(id).includes(cmd);
+  return permsIncluem(permissoesDe(id), cmd);
 }
 
 export function listarBasePerms() {
@@ -291,7 +334,7 @@ export function adicionar(id, { numerodono = null, config = {}, perms = [], alia
   const existente = acharSubdono(jid, banco);
   if (existente) {
     // Reaproveita para apenas somar permissões novas.
-    const novas = perms.map((p) => String(p).toLowerCase().trim()).filter((p) => p && !existente.perms.includes(p));
+    const novas = perms.map(normalizarPerm).filter((p) => p && !existente.perms.includes(p));
     if (novas.length) {
       existente.perms.push(...novas);
       salvar(banco);
@@ -311,7 +354,7 @@ export function adicionar(id, { numerodono = null, config = {}, perms = [], alia
   banco.subdonos.push({
     id: jid,
     aliases: [...new Set((Array.isArray(aliases) ? aliases : []).map(normalizarJid).filter((a) => a && a !== jid))],
-    perms: [...new Set(perms.map((p) => String(p).toLowerCase().trim()).filter(Boolean))],
+    perms: [...new Set(perms.map(normalizarPerm).filter(Boolean))],
     addedAt: Date.now(),
   });
   if (!salvar(banco)) {
@@ -341,35 +384,54 @@ export function remover(idOuIndice) {
   return { success: true, message: '👋 Pronto! Subdono removido com sucesso! ✨' };
 }
 
-/** Libera um comando para UM subdono. */
+/**
+ * Libera um comando para UM subdono.
+ *
+ * `!sub.permitir @user <comando>` libera um comando; `!sub.permitir @user all`
+ * libera o coringa que dá acesso a **todo** comando do bot (como o dono).
+ */
 export function liberarComando(id, comando) {
-  const cmd = String(comando || '').replace(/^[!/.]/, '').toLowerCase().trim();
+  const cmd = normalizarPerm(comando);
   if (!cmd) return { success: false, message: '❌ Informe o comando.' };
   const banco = carregar();
   const sub = acharSubdono(id, banco);
   if (!sub) return { success: false, message: '🤔 Este usuário não é subdono.' };
-  if (sub.perms.includes(cmd)) return { success: false, message: `⚠️ ${cmd} já está liberado para este subdono.` };
-  sub.perms.push(cmd);
+  if (sub.perms.includes(cmd)) {
+    const rotulo = cmd === ALL_PERM ? 'ACESSO TOTAL' : cmd;
+    return { success: false, message: `⚠️ ${rotulo} já está liberado para este subdono.` };
+  }
+  // `all` torna redundante qualquer permissão individual: limpa as avulsas.
+  if (cmd === ALL_PERM) sub.perms = [ALL_PERM];
+  else sub.perms.push(cmd);
   if (!salvar(banco)) return { success: false, message: '❌ Erro ao salvar as permissões.' };
+  if (cmd === ALL_PERM) {
+    return { success: true, message: '✅ ACESSO TOTAL liberado para este subdono — ele já pode usar todos os comandos do bot.' };
+  }
   return { success: true, message: `✅ ${cmd} liberado para este subdono.` };
 }
 
-/** Remove um comando de UM subdono. */
+/** Remove um comando de UM subdono (aceita `all` para revogar o acesso total). */
 export function revogarComando(id, comando) {
-  const cmd = String(comando || '').replace(/^[!/.]/, '').toLowerCase().trim();
+  const cmd = normalizarPerm(comando);
   if (!cmd) return { success: false, message: '❌ Informe o comando.' };
   const banco = carregar();
   const sub = acharSubdono(id, banco);
   if (!sub) return { success: false, message: '🤔 Este usuário não é subdono.' };
-  if (!sub.perms.includes(cmd)) return { success: false, message: `⚠️ ${cmd} não está liberado para este subdono.` };
+  if (!sub.perms.includes(cmd)) {
+    const rotulo = cmd === ALL_PERM ? 'ACESSO TOTAL' : cmd;
+    return { success: false, message: `⚠️ ${rotulo} não está liberado para este subdono.` };
+  }
   sub.perms = sub.perms.filter((c) => c !== cmd);
   if (!salvar(banco)) return { success: false, message: '❌ Erro ao salvar as permissões.' };
+  if (cmd === ALL_PERM) {
+    return { success: true, message: '✅ ACESSO TOTAL revogado deste subdono.' };
+  }
   return { success: true, message: `✅ ${cmd} revogado deste subdono.` };
 }
 
 /** Adiciona comando(s) à lista BASE (todo subdono pode usar). */
 export function addBasePerm(comando) {
-  const cmd = String(comando || '').replace(/^[!/.]/, '').toLowerCase().trim().split(/\s+/)[0];
+  const cmd = normalizarPerm(String(comando || '').split(/\s+/)[0]);
   if (!cmd) return { success: false, message: '❌ Informe o comando.' };
   const banco = carregar();
   if (banco.basePerms.includes(cmd)) return { success: false, message: `⚠️ ${cmd} já está na lista base.` };
@@ -380,7 +442,7 @@ export function addBasePerm(comando) {
 
 /** Remove da lista BASE. */
 export function removeBasePerm(comando) {
-  const cmd = String(comando || '').replace(/^[!/.]/, '').toLowerCase().trim().split(/\s+/)[0];
+  const cmd = normalizarPerm(String(comando || '').split(/\s+/)[0]);
   if (!cmd) return { success: false, message: '❌ Informe o comando.' };
   const banco = carregar();
   if (!banco.basePerms.includes(cmd)) return { success: false, message: `⚠️ ${cmd} não está na lista base.` };
@@ -412,11 +474,72 @@ export function permissoesEntre(ids) {
   return [...new Set(listas.flat())];
 }
 
-/** `true` se QUALQUER forma do usuário pode usar o comando. */
+/**
+ * `true` se QUALQUER forma do usuário pode usar o comando.
+ * Cobre o coringa `all` (`!sub.permitir @user all`).
+ */
 export function podeUsarEntre(ids, comando) {
   const cmd = String(comando || '').replace(/^[!/.]/, '').toLowerCase().trim();
   if (!cmd) return false;
-  return permissoesEntre(ids).includes(cmd);
+  return permsIncluem(permissoesEntre(ids), cmd);
+}
+
+/** `true` se qualquer forma do usuário tem ACESSO TOTAL (`all`). */
+export function temAcessoTotalEntre(ids) {
+  return permissoesEntre(ids).includes(ALL_PERM);
+}
+
+/** `true` se o id tem ACESSO TOTAL (`all`). */
+export function temAcessoTotal(id) {
+  return permissoesDe(id).includes(ALL_PERM);
+}
+
+/** Acha o registro considerando QUALQUER uma das formas dadas. */
+function acharSubdonoEntre(ids, banco = carregar()) {
+  for (const id of (Array.isArray(ids) ? ids : [ids])) {
+    const sub = acharSubdono(id, banco);
+    if (sub) return sub;
+  }
+  return null;
+}
+
+/**
+ * Libera comando para um subdono identificado por QUALQUER forma conhecida
+ * (LID, PN, número). É o caminho do handler: em grupo a menção chega como LID,
+ * mas o subdono pode ter sido cadastrado pelo telefone — as bases diferem.
+ */
+export function liberarComandoEntre(ids, comando) {
+  const alvo = acharSubdonoEntre(ids);
+  if (!alvo) return { success: false, message: '🤔 Este usuário não é subdono.' };
+  return liberarComando(alvo.id, comando);
+}
+
+/** Revoga comando de um subdono identificado por QUALQUER forma conhecida. */
+export function revogarComandoEntre(ids, comando) {
+  const alvo = acharSubdonoEntre(ids);
+  if (!alvo) return { success: false, message: '🤔 Este usuário não é subdono.' };
+  return revogarComando(alvo.id, comando);
+}
+
+/**
+ * Todas as formas conhecidas de um alvo (ex.: a menção) para casar com um
+ * registro de subdono. A menção em grupo costuma chegar como LID; o telefone
+ * real vive no `phoneNumber`/`pn` (ou `jid`/`lid`) do participante do metadata.
+ * Puro: recebe o metadata por parâmetro.
+ */
+export function formasParaAlvo(id, metadata = null) {
+  const alvo = String(id ?? '').trim();
+  if (!alvo) return [];
+  const out = new Set([alvo, ...formasDeId(alvo)]);
+  const base = baseNumero(alvo);
+  try {
+    const p = (metadata?.participants || []).find((part) =>
+      [part?.id, part?.lid, part?.phoneNumber, part?.pn]
+        .filter(Boolean)
+        .some((x) => baseNumero(x) === base));
+    for (const v of [p?.id, p?.lid, p?.phoneNumber, p?.pn]) if (v) out.add(v);
+  } catch { /* metadata opcional */ }
+  return [...out];
 }
 
 /** Registra uma forma extra (ex.: o PN quando o subdono foi salvo por LID). */

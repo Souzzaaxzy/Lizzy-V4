@@ -1199,13 +1199,6 @@ import {
   addSubdono,
   removeSubdono,
   getSubdonos,
-  grantSubOwnerCmd,
-  revokeSubOwnerCmd,
-  getSubOwnerCmds,
-  hasSubOwnerCmdPerm,
-  addSubOwnerBaseCmd,
-  removeSubOwnerBaseCmd,
-  loadSubOwnerBaseCommands,
   loadRentalData,
   saveRentalData,
   isRentalModeActive,
@@ -2808,6 +2801,13 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       if (isSubOwner && subdonosModule.podeUsarEntre(formasRemetenteArr, cmd)) return true;
       return false;
     };
+    // Subdono com ACESSO TOTAL (`!sub.permitir @user all`): usa qualquer comando
+    // do bot como o dono. `podeDonoTotal()` e o gate unico dos comandos que
+    // antes eram `if (!isOwner)`. Ele NAO abre os comandos de hierarquia
+    // (addsubdono, sub.permitir...), entao o dono principal continua no topo.
+    const isSubdonoTotal = isSubOwner && subdonosModule.temAcessoTotalEntre(formasRemetenteArr);
+    const podeDonoTotal = () => isOwner ||
+      (isSubdonoTotal && !subdonosModule.ehComandoDeHierarquia(command));
 
     // Debug: log das verificações de permissão
     debugLog('Verificações de permissão:', {
@@ -16864,7 +16864,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
         }
         break;
       case 'addsubdono':
-        if (!isOwner) return reply("Apenas o Dono pode adicionar subdonos!");
+        if (!podeDonoTotal()) return reply("Apenas o Dono pode adicionar subdonos!");
         // Permissão estendida para subdonos
         // if (isSubOwner && !isOwner) return reply("Subdonos não podem adicionar outros subdonos!");
         try {
@@ -16932,7 +16932,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
       case 'remsubdono':
       case 'rmsubdono':
       case 'delsubdono':
-        if (!isOwner) return reply("Apenas o Dono pode remover subdonos!");
+        if (!podeDonoTotal()) return reply("Apenas o Dono pode remover subdonos!");
         // Permissão estendida para subdonos
         // if (isSubOwner && !isOwner) return reply("Subdonos não podem remover outros subdonos!");
         try {
@@ -17023,15 +17023,17 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
           listaMsg += `┃ 📋 Base (todos): ${base.length ? base.map(c => prefix + c).join(', ') : 'nenhum'}\n`;
           listaMsg += `╰━━━━━━━━━━━━━━━━━━━━╯\n\n`;
           const mentions = [];
-          registros.forEach((reg, index) => {
+          for (const [index, reg] of registros.entries()) {
             const jid = reg.id;
-            const nameOrNumber = participantsInfo[jid] || getUserName(jid);
+            const nome = participantsInfo[jid] || await resolverNomeContato(jid, { nazu, metadata: groupMetadata, from });
+            const temNome = nome && String(nome).replace(/\D/g, '') !== String(jid).replace(/\D/g, '');
             const extras = (reg.perms || []).filter(c => !base.includes(c));
-            listaMsg += `👤 *${index + 1}º* — @${getUserName(jid)}\n`;
-            listaMsg += `   📛 ${nameOrNumber}\n`;
+            // NOME primeiro, depois o número (pedido do dono).
+            listaMsg += `👤 *${index + 1}º* ${temNome ? `— ${nome}` : ''}\n`;
+            listaMsg += `   📱 wa.me/${String(jid).split('@')[0].split(':')[0]}\n`;
             listaMsg += `   🔑 Extras: ${extras.length ? extras.map(c => prefix + c).join(', ') : '—'}\n\n`;
             mentions.push(jid);
-          });
+          }
           await reply(listaMsg.trim(), { mentions });
         } catch (e) {
           console.error("Erro ao listar subdonos:", e);
@@ -17074,7 +17076,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
       case 'removesubbot':
       case 'delsubbot':
       case 'rmsubbot':
-        if (!isOwner) return reply("Apenas o Dono principal pode remover sub-bots!");
+        if (!podeDonoTotal()) return reply("Apenas o Dono principal pode remover sub-bots!");
         try {
           const subBotManager = await import('./utils/subBotManager.js');
           if (!q || !q.trim()) {
@@ -17114,7 +17116,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
       case 'listarsubbots':
       case 'listsubbots':
       case 'subbots':
-        if (!isOwner) return reply("Apenas o Dono principal pode ver os sub-bots!");
+        if (!podeDonoTotal()) return reply("Apenas o Dono principal pode ver os sub-bots!");
         try {
           const subBotManager = await import('./utils/subBotManager.js');
           const result = subBotManager.listSubBots();
@@ -17147,7 +17149,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
         break;
       case 'conectarsubbot':
       case 'reconnectsubbot':
-        if (!isOwner) return reply("Apenas o Dono principal pode reconectar sub-bots!");
+        if (!podeDonoTotal()) return reply("Apenas o Dono principal pode reconectar sub-bots!");
         try {
           const subBotManager = await import('./utils/subBotManager.js');
           if (!q || !q.trim()) {
@@ -17214,7 +17216,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
         break;
       case 'viewmsg':
         try {
-          if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
+          if (!podeDonoTotal()) return reply(OWNER_ONLY_MESSAGE);
           if (!q) return reply(`Use: ${groupPrefix}viewmsg [on/off]`);
           const botStateFile = DATABASE_DIR + '/botState.json';
           let botState = loadJsonFile(botStateFile, {
@@ -17238,7 +17240,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
         }
         break;
       case 'modoaluguel':
-        if (!isOwner) return reply("Apenas o Dono ou Subdono pode gerenciar o modo de aluguel!");
+        if (!podeDonoTotal()) return reply("Apenas o Dono ou Subdono pode gerenciar o modo de aluguel!");
         try {
           const action = q.toLowerCase().trim();
           if (action === 'on' || action === 'ativar') {
@@ -17265,7 +17267,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
       case 'restaurar':
       case 'restore':
       case 'restaurarbit':
-        if (!isOwner) return reply("⚠️ Apenas o Dono ou Subdono pode restaurar backups!");
+        if (!podeDonoTotal()) return reply("⚠️ Apenas o Dono ou Subdono pode restaurar backups!");
         try {
           const { handleRestaurar } = await import('./commands/restaurar.js');
           await handleRestaurar(nazu, info, body, prefix, sender, isOwnerOrSub, reply, downloadContentFromMessage);
@@ -17277,7 +17279,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
       case 'atualizar':
       case 'update':
       case 'atualizarbot':
-        if (!isOwner) return reply("Apenas o Dono ou Subdono pode atualizar o bot!");
+        if (!podeDonoTotal()) return reply("Apenas o Dono ou Subdono pode atualizar o bot!");
         try {
           const updateScriptPath = pathz.join(__dirname, '.scripts', 'update.js');
           // Verifica se o script de atualização existe
@@ -17510,7 +17512,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
         }
         break;
       case 'jidcanal':
-        if (!isOwner) return reply('Só o dono pode usar esse comando.');
+        if (!podeDonoTotal()) return reply('Só o dono pode usar esse comando.');
         if (!q) return reply('Envie o link do canal.');
         const invite = q.split('/').pop().trim();
         try {
@@ -17527,7 +17529,7 @@ ${data.id}`;
       case 'reiniciar':
       case 'restart':
       case 'reboot':
-        if (!isOwner) return reply("Apenas o Dono principal pode reiniciar o bot!");
+        if (!podeDonoTotal()) return reply("Apenas o Dono principal pode reiniciar o bot!");
         reply(`🔄 *REINICIANDO O BOT...*
 ⏸️ Pausando processamento de mensagens...
 🔄 O bot voltará online em alguns segundos!`).then(() => {
@@ -17548,7 +17550,7 @@ ${data.id}`;
         break;
       case 'update':
       case 'upgrade':
-        if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
+        if (!podeDonoTotal()) return reply(OWNER_ONLY_MESSAGE);
         // Instância singleton do UpdateCommand
         if (!global.updateCommandInstance) {
           global.updateCommandInstance = new UpdateCommand();
@@ -17624,7 +17626,7 @@ ${data.id}`;
       case 'listaluguel':
       case 'listaaluguel':
         try {
-          if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
+          if (!podeDonoTotal()) return reply(OWNER_ONLY_MESSAGE);
           const rentalData = loadRentalData();
           const globalMode = rentalData.globalMode ? '🟢 Ativo' : '🔴 Desativado';
           const groupRentals = rentalData.groups || {};
@@ -17714,7 +17716,7 @@ ${data.id}`;
         await reply(levelText);
         break;
       case 'addxp':
-        if (!isOwner) return reply("Apenas o dono pode usar este comando.");
+        if (!podeDonoTotal()) return reply("Apenas o dono pode usar este comando.");
         if (!menc_os2 || !q) return reply("Marque um usuário e especifique a quantidade de XP.");
         const xpToAdd = parseInt(q);
         if (isNaN(xpToAdd)) return reply("Quantidade de XP inválida.");
@@ -17728,7 +17730,7 @@ ${data.id}`;
         });
         break;
       case 'delxp':
-        if (!isOwner) return reply("Apenas o dono pode usar este comando.");
+        if (!podeDonoTotal()) return reply("Apenas o dono pode usar este comando.");
         if (!menc_os2 || !q) return reply("Marque um usuário e especifique a quantidade de XP.");
         const xpToRemove = parseInt(q);
         if (isNaN(xpToRemove)) return reply("Quantidade de XP inválida.");
@@ -17743,7 +17745,7 @@ ${data.id}`;
         break;
       case 'dayfree':
         try {
-          if (!isOwner) return reply('❌ Este comando é exclusivo para o dono ou subdonos.');
+          if (!podeDonoTotal()) return reply('❌ Este comando é exclusivo para o dono ou subdonos.');
           if (!q) return reply(`Uso: ${groupPrefix}${command} <dias> [motivo opcional]\nEx: ${groupPrefix}adddiasaluguel 7 Manutenção compensatória`);
           const parts = q.split(' ');
           const extraDays = parseInt(parts[0]);
@@ -17783,7 +17785,7 @@ ${data.id}`;
         }
         break;
 case 'addaluguel':
-    if (!isOwner) {
+    if (!podeDonoTotal()) {
         return reply("Apenas o Dono principal pode adicionar aluguel!");
     }
     if (!isGroup) {
@@ -17810,7 +17812,7 @@ case 'addaluguel':
       case 'listaraluguel':
       case 'veralugueis':
       case 'listrentals':
-        if (!isOwner) return reply("Apenas o Dono principal pode ver a lista de aluguéis!");
+        if (!podeDonoTotal()) return reply("Apenas o Dono principal pode ver a lista de aluguéis!");
         try {
           const rentalData = loadRentalData();
           const groupIds = Object.keys(rentalData.groups || {});
@@ -17889,7 +17891,7 @@ case 'addaluguel':
       case 'removeraluguel':
       case 'deletaraluguel':
       case 'cancelaraluguel':
-        if (!isOwner) return reply("Apenas o Dono principal pode remover aluguéis!");
+        if (!podeDonoTotal()) return reply("Apenas o Dono principal pode remover aluguéis!");
         try {
           let targetGroupId = q?.trim() || '';
           // Se não passou ID e está no grupo, usa o grupo atual
@@ -17946,7 +17948,7 @@ case 'addaluguel':
       case 'estenderaluguel':
       case 'adddiasaluguel':
       case 'extenderrental':
-        if (!isOwner) return reply("Apenas o Dono principal pode estender aluguéis!");
+        if (!podeDonoTotal()) return reply("Apenas o Dono principal pode estender aluguéis!");
         try {
           const parts = q?.trim().split(' ') || [];
           let targetGroupId;
@@ -18012,7 +18014,7 @@ case 'addaluguel':
       case 'infoaluguel':
       case 'statusaluguel':
       case 'detalhesaluguel':
-        if (!isOwner) return reply("Apenas o Dono principal pode ver informações de aluguel!");
+        if (!podeDonoTotal()) return reply("Apenas o Dono principal pode ver informações de aluguel!");
         try {
           let targetGroupId = q.trim();
           // Se não passou ID, usa o grupo atual
@@ -18089,7 +18091,7 @@ case 'addaluguel':
         break;
       case 'gerarcodigobr':
       case 'gerarcod':
-        if (!isOwner) return reply("Apenas o Dono principal pode gerar códigos!");
+        if (!podeDonoTotal()) return reply("Apenas o Dono principal pode gerar códigos!");
         try {
           const parts = q.trim().split(' ');
           const durationArg = parts[0]?.toLowerCase();
@@ -18129,7 +18131,7 @@ case 'addaluguel':
         break;
       case 'limparaluguel':
         try {
-          if (!isOwner) return reply("Apenas o dono pode usar este comando.");
+          if (!podeDonoTotal()) return reply("Apenas o dono pode usar este comando.");
           await reply("🔄 Iniciando limpeza completa de aluguéis...");
           let rentalData = loadRentalData();
           let groupsCleaned = 0;
@@ -18284,7 +18286,7 @@ case 'addaluguel':
       case 'addautoresponse':
       case 'addauto':
         try {
-          if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
+          if (!podeDonoTotal()) return reply(OWNER_ONLY_MESSAGE);
           if (!q || !q.includes('/')) return reply(`Por favor, forneça a mensagem recebida e a resposta separadas por /. Ex: ${groupPrefix}addauto bom dia/Olá, bom dia!`);
           const [received, response] = q.split('/').map(s => s.trim());
           if (!received || !response) return reply("Formato inválido. Use: mensagem recebida/mensagem do bot");
@@ -18305,7 +18307,7 @@ case 'addaluguel':
       case 'addautomedia':
       case 'addautomidia':
         try {
-          if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
+          if (!podeDonoTotal()) return reply(OWNER_ONLY_MESSAGE);
           if (!q) return reply(`📝 Como usar:\n\n1️⃣ ${groupPrefix}addautomidia [trigger]\n2️⃣ Responda uma mídia (imagem, vídeo, áudio ou sticker)\n3️⃣ Opcionalmente adicione uma legenda\n\nExemplo: ${groupPrefix}addautomidia oi (respondendo uma imagem)`);
           const trigger = q.trim();
           let responseData = null;
@@ -18432,7 +18434,7 @@ case 'addaluguel':
       case 'listautoresponses':
       case 'listauto':
         try {
-          if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
+          if (!podeDonoTotal()) return reply(OWNER_ONLY_MESSAGE);
           const autoResponses = loadCustomAutoResponses();
           if (autoResponses.length === 0) return reply("📜 Nenhuma auto-resposta global definida.");
           let responseText = `📜 *Auto-Respostas Globais (${autoResponses.length})*\n\n`;
@@ -18502,7 +18504,7 @@ case 'addaluguel':
       case 'delautoresponse':
       case 'delauto':
         try {
-          if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
+          if (!podeDonoTotal()) return reply(OWNER_ONLY_MESSAGE);
           if (!q || isNaN(parseInt(q))) return reply(`Por favor, forneça o número da auto-resposta a ser removida. Ex: ${groupPrefix}delauto 1`);
           const index = parseInt(q) - 1;
           const autoResponses = loadCustomAutoResponses();
@@ -18609,7 +18611,7 @@ case 'addaluguel':
       case 'addnoprefix':
       case 'addnopref':
         try {
-          if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
+          if (!podeDonoTotal()) return reply(OWNER_ONLY_MESSAGE);
           if (!q || !q.includes('/')) return reply(`Por favor, forneça a mensagem e o comando separados por /. Ex: ${groupPrefix}addnoprefix f/grupo f\nVocê pode incluir parâmetros fixos no comando!`);
           const [trigger, ...commandParts] = q.split('/');
           const targetCommand = commandParts.join('/').trim();
@@ -18646,7 +18648,7 @@ case 'addaluguel':
       case 'listnoprefix':
       case 'listnopref':
         try {
-          if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
+          if (!podeDonoTotal()) return reply(OWNER_ONLY_MESSAGE);
           // Otimização: Cache de comandos sem prefixo
           const noPrefixCommands = await optimizer.memoize(
             `noprefix:${from}`,
@@ -18668,7 +18670,7 @@ case 'addaluguel':
       case 'delnoprefix':
       case 'delnopref':
         try {
-          if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
+          if (!podeDonoTotal()) return reply(OWNER_ONLY_MESSAGE);
           if (!q || isNaN(parseInt(q))) return reply(`Por favor, forneça o número do comando sem prefixo a ser removido. Ex: ${groupPrefix}delnoprefix 1`);
           const index = parseInt(q) - 1;
           // Otimização: Cache de comandos sem prefixo
@@ -18693,7 +18695,7 @@ case 'addaluguel':
         break;
       case 'addalias':
         try {
-          if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
+          if (!podeDonoTotal()) return reply(OWNER_ONLY_MESSAGE);
           if (!q || !q.includes('/')) return reply(`Por favor, forneça o apelido e o comando separados por /. Ex: ${groupPrefix}addalias h/hidetag\nVocê pode incluir parâmetros fixos no comando!`);
           const [alias, ...commandParts] = q.split('/');
           const targetCommand = commandParts.join('/').trim();
@@ -18722,7 +18724,7 @@ case 'addaluguel':
         break;
       case 'listalias':
         try {
-          if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
+          if (!podeDonoTotal()) return reply(OWNER_ONLY_MESSAGE);
           const aliases = loadCommandAliases();
           if (aliases.length === 0) return reply("📜 Nenhum apelido de comando definido.");
           let responseText = `📜 *Apelidos de Comandos do Grupo ${groupName}*\n\n`;
@@ -18738,7 +18740,7 @@ case 'addaluguel':
         break;
       case 'delalias':
         try {
-          if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
+          if (!podeDonoTotal()) return reply(OWNER_ONLY_MESSAGE);
           if (!q || isNaN(parseInt(q))) return reply(`Por favor, forneça o número do apelido a ser removido. Ex: ${groupPrefix}delalias 1`);
           const index = parseInt(q) - 1;
           const aliases = loadCommandAliases();
@@ -18757,7 +18759,7 @@ case 'addaluguel':
       case 'addcmd':
       case 'adicionarcmd':
         try {
-          if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
+          if (!podeDonoTotal()) return reply(OWNER_ONLY_MESSAGE);
           const allTokens = q.trim().split(/ +/);
           const trigger = allTokens.shift();
           // parse meta tokens like [admin], [owner], [group], [private], [param:name:required]
@@ -18811,7 +18813,7 @@ case 'addaluguel':
       case 'edcmd':
       case 'editcmd':
         try {
-          if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
+          if (!podeDonoTotal()) return reply(OWNER_ONLY_MESSAGE);
           if (!q) return reply(`❌ Forneça o gatilho do comando a ser editado. Ex: ${groupPrefix}edcmd saudacao [param:name:required] Nova resposta aqui`);
           const allTokens = q.trim().split(/ +/);
           const trigger = allTokens.shift();
@@ -18853,7 +18855,7 @@ case 'addaluguel':
       case 'edcmdmidia':
       case 'editcmdmidia':
         try {
-          if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
+          if (!podeDonoTotal()) return reply(OWNER_ONLY_MESSAGE);
           if (!q) return reply(`❌ Forneça o gatilho do comando a ser editado. Ex: ${groupPrefix}edcmdmidia logo (responda imagem)`);
           const allTokens = q.trim().split(/ +/);
           const trigger = allTokens.shift();
@@ -18912,7 +18914,7 @@ case 'addaluguel':
       case 'addcmdmidia':
       case 'addcmdmedia':
         try {
-          if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
+          if (!podeDonoTotal()) return reply(OWNER_ONLY_MESSAGE);
           if (!q) {
             return reply(`📝 *Como usar o comando addcmdmidia:*\n\n1️⃣ Responda uma mídia (imagem, vídeo, áudio ou figurinha)\n2️⃣ Use: ${groupPrefix}addcmdmidia <comando> <legenda opcional>\n\n*Parâmetros disponíveis na legenda:*\n• {prefixo} - Prefixo do bot\n• {nomedono} - Nome do dono\n• {numerodono} - Número do dono\n• {nomebot} - Nome do bot\n• {user} - Nome do usuário\n• {grupo} - Nome do grupo\n\n*Exemplo:*\n${groupPrefix}addcmdmidia logo (respondendo uma imagem)`);
           }
@@ -19005,7 +19007,7 @@ case 'addaluguel':
       case 'listarcmd':
       case 'comandospersonalizados':
         try {
-          if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
+          if (!podeDonoTotal()) return reply(OWNER_ONLY_MESSAGE);
           // Otimização: Cache de comandos personalizados
           const commands = await optimizer.memoize(
             `customcmds:${from}`,
@@ -19064,7 +19066,7 @@ case 'addaluguel':
       case 'delcmd':
       case 'removercmd':
         try {
-          if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
+          if (!podeDonoTotal()) return reply(OWNER_ONLY_MESSAGE);
           if (!q) {
             return reply(`❌ Forneça o número ou nome do comando.\n\nExemplo:\n• ${groupPrefix}delcmd 1\n• ${groupPrefix}delcmd bemvindo`);
           }
@@ -19111,7 +19113,7 @@ case 'addaluguel':
       case 'testcmd':
       case 'testarcmd':
         try {
-          if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
+          if (!podeDonoTotal()) return reply(OWNER_ONLY_MESSAGE);
           if (!q) {
             return reply(`❌ Forneça o nome do comando para testar.\n\nExemplo: ${groupPrefix}testcmd bemvindo`);
           }
@@ -19399,7 +19401,7 @@ case 'addaluguel':
         break;
       case 'addblackglobal':
         try {
-          if (!isOwner) return reply("Apenas o dono pode adicionar usuários à blacklist global.");
+          if (!podeDonoTotal()) return reply("Apenas o dono pode adicionar usuários à blacklist global.");
           if (!menc_os2 && !q) return reply(`Forneça número(s) (ex: ${groupPrefix}addblackglobal 5511999998888|5511888887777 motivo).`);
           
           // Extrai motivo (último argumento que não é número)
@@ -19481,7 +19483,7 @@ case 'addaluguel':
         break;
       case 'rmblackglobal':
         try {
-          if (!isOwner) return reply("Apenas o dono pode remover usuários da blacklist global.");
+          if (!podeDonoTotal()) return reply("Apenas o dono pode remover usuários da blacklist global.");
           if (!menc_os2 && !q) return reply(`Forneça número(s) (ex: ${groupPrefix}remblackglobal 5511999998888|5511888887777).`);
           
           // Coleta usuários mencionados
@@ -19528,7 +19530,7 @@ case 'addaluguel':
         break;
       case 'listblackglobal':
         try {
-          if (!isOwner) return reply("Apenas o dono pode listar a blacklist global.");
+          if (!podeDonoTotal()) return reply("Apenas o dono pode listar a blacklist global.");
           const blacklistData = getGlobalBlacklist();
           if (Object.keys(blacklistData.users).length === 0) {
             return reply("🛑 A blacklist global está vazia.");
@@ -19620,7 +19622,7 @@ case 'addaluguel':
       // COMANDOS DO DONO - ADD/DEL CASE
       case 'addcase':
         try {
-          if (!isOwner) return reply("Apenas o dono pode usar este comando.");
+          if (!podeDonoTotal()) return reply("Apenas o dono pode usar este comando.");
           if (!q) return reply(`⚙️ *Adicionar Case*\n\n📝 Use: ${groupPrefix}addcase case 'nome': { ... }`);
           
           const newCase = q.trim();
@@ -19659,7 +19661,7 @@ case 'addaluguel':
         break;
       case 'delcase':
         try {
-          if (!isOwner) return reply("Apenas o dono pode usar este comando.");
+          if (!podeDonoTotal()) return reply("Apenas o dono pode usar este comando.");
           if (!q) return reply(`⚙️ *Deletar Case*\n\n📝 Use: ${groupPrefix}delcase nome_da_case`);
           
           const caseName = q.trim().toLowerCase();
@@ -19686,7 +19688,7 @@ case 'addaluguel':
       // SET GIF PARA COMANDOS DE BRINCADEIRA
       case 'setgif':
         try {
-          if (!isOwner) return reply("❌ Apenas o dono do bot pode utilizar este comando.");
+          if (!podeDonoTotal()) return reply("❌ Apenas o dono do bot pode utilizar este comando.");
           
           if (!q) return reply(`❌ Informe o nome do comando.\n\nExemplo:\n${groupPrefix}setgif tapa`);
           
@@ -21468,7 +21470,7 @@ Se não definir cores, a API usa padrão automaticamente.
         break;
       case 'blockmenupv': {
         try {
-          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
+          if (!podeDonoTotal()) return reply("Este comando é exclusivo para o dono do bot!");
           if (!q) {
             let menusList = "📋 Menus disponíveis:\n";
             for (const [key, data] of Object.entries(blockPv.menuCommandsMap)) {
@@ -21494,7 +21496,7 @@ Se não definir cores, a API usa padrão automaticamente.
       }
       case 'unblockmenupv': {
         try {
-          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
+          if (!podeDonoTotal()) return reply("Este comando é exclusivo para o dono do bot!");
           if (!q) {
             const blockList = blockPv.listBlockPV();
             if (blockList.menus.length === 0) {
@@ -21516,7 +21518,7 @@ Se não definir cores, a API usa padrão automaticamente.
       }
       case 'blockcmdpv': {
         try {
-          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
+          if (!podeDonoTotal()) return reply("Este comando é exclusivo para o dono do bot!");
           if (!q) {
             return reply("📋 Use: !blockcmdpv <comando>\nExemplo: !blockcmdpv play");
           }
@@ -21537,7 +21539,7 @@ Se não definir cores, a API usa padrão automaticamente.
       }
       case 'unblockcmdpv': {
         try {
-          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
+          if (!podeDonoTotal()) return reply("Este comando é exclusivo para o dono do bot!");
           if (!q) {
             const blockList = blockPv.listBlockPV();
             if (blockList.commands.length === 0) {
@@ -21560,7 +21562,7 @@ Se não definir cores, a API usa padrão automaticamente.
       case 'listblockpv':
       case 'listblock': {
         try {
-          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
+          if (!podeDonoTotal()) return reply("Este comando é exclusivo para o dono do bot!");
           const blockList = blockPv.listBlockPV();
           if (blockList.menus.length === 0 && blockList.commands.length === 0) {
             return reply("📋 Nenhum menu ou comando está bloqueado no PV.");
@@ -21905,7 +21907,7 @@ case 'menuadm':
         }
         break;
       case 'configerroradm':
-        if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
+        if (!podeDonoTotal()) return reply(OWNER_ONLY_MESSAGE);
         const subcmdAdm = args[0]?.toLowerCase();
         if (!subcmdAdm) {
           return reply(`💔 *Configurar Mensagem de Erro Admin*
@@ -21972,7 +21974,7 @@ ${ADMIN_ERROR_MESSAGE_DEFAULT}`);
         break;
       case 'configcmdnotfound':
       case 'setcmdmsg':
-        if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
+        if (!podeDonoTotal()) return reply(OWNER_ONLY_MESSAGE);
         const cmdNotFoundConfig = loadCmdNotFoundConfig();
         const subcommand = args[0]?.toLowerCase();
         if (!subcommand) {
@@ -22095,7 +22097,7 @@ ${ADMIN_ERROR_MESSAGE_DEFAULT}`);
       case 'guia':
       case 'ajuda':
         try {
-          if (!isOwner) {
+          if (!podeDonoTotal()) {
             await reply("⚠️ Este comando é exclusivo para o dono do bot.");
             return;
           }
@@ -22542,7 +22544,7 @@ Precisa de ajuda? Entre em contato:
       case 'menudono':
       case 'ownermenu':
         try {
-          if (!isOwner) {
+          if (!podeDonoTotal()) {
             await reply("⚠️ Este menu é exclusivo para o dono e sub-donos do bot.");
             return;
           }
@@ -22724,7 +22726,7 @@ Precisa de ajuda? Entre em contato:
         }
       case 'antipv3':
         try {
-          if (!isOwner) return reply("Este comando é apenas para o meu dono 💔");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono 💔");
           antipvData.mode = antipvData.mode === 'antipv3' ? null : 'antipv3';
           writeJsonFile(ANTIPV_FILE, antipvData);
           await reply(`✅ Antipv3 ${antipvData.mode ? 'ativado' : 'desativado'}! O bot agora ${antipvData.mode ? 'bloqueia usuários que usam comandos no privado' : 'responde normalmente no privado'}.`);
@@ -22735,7 +22737,7 @@ Precisa de ajuda? Entre em contato:
         break;
       case 'antipv2':
         try {
-          if (!isOwner) return reply("Este comando é apenas para o meu dono 💔");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono 💔");
           antipvData.mode = antipvData.mode === 'antipv2' ? null : 'antipv2';
           writeJsonFile(ANTIPV_FILE, antipvData);
           await reply(`✅ Antipv2 ${antipvData.mode ? 'ativado' : 'desativado'}! O bot agora ${antipvData.mode ? 'avisa que comandos só funcionam em grupos no privado' : 'responde normalmente no privado'}.`);
@@ -22746,7 +22748,7 @@ Precisa de ajuda? Entre em contato:
         break;
       case 'setfigban':
         try {
-          if (!isOwner) return reply("Este comando e apenas para o meu dono.");
+          if (!podeDonoTotal()) return reply("Este comando e apenas para o meu dono.");
           if (!quotedMessageContent || !quotedMessageContent.stickerMessage) {
             return reply("❌ Responda a uma figurinha.");
           }
@@ -22778,7 +22780,7 @@ Precisa de ajuda? Entre em contato:
         break;
       case 'delfigban':
         try {
-          if (!isOwner) return reply("Este comando e apenas para o meu dono.");
+          if (!podeDonoTotal()) return reply("Este comando e apenas para o meu dono.");
           const args = q.trim();
           const list = getFigBanList();
           if (list.length === 0) {
@@ -22807,7 +22809,7 @@ Precisa de ajuda? Entre em contato:
         break;
       case 'listfigban':
         try {
-          if (!isOwner) return reply("Este comando e apenas para o meu dono.");
+          if (!podeDonoTotal()) return reply("Este comando e apenas para o meu dono.");
           const list = getFigBanList();
           if (list.length === 0) {
             return reply("❌ Nenhuma figurinha de ban configurada.\n\nUse !setfigban respondendo a uma figurinha para adicionar.");
@@ -22827,7 +22829,7 @@ Precisa de ajuda? Entre em contato:
         break;
       case 'antipv4':
         try {
-          if (!isOwner) return reply("Este comando é apenas para o meu dono 💔");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono 💔");
           antipvData.mode = antipvData.mode === 'antipv4' ? null : 'antipv4';
           writeJsonFile(ANTIPV_FILE, antipvData);
           await reply(`✅ Antipv4 ${antipvData.mode ? 'ativado' : 'desativado'}! O bot agora ${antipvData.mode ? 'avisa que o bot so funciona em grupos' : 'responde normalmente no privado'}.`);
@@ -22839,7 +22841,7 @@ Precisa de ajuda? Entre em contato:
       case 'antipvmessage':
       case 'antipvmsg':
         try {
-          if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
+          if (!podeDonoTotal()) return reply(OWNER_ONLY_MESSAGE);
           if (!q) return reply(`Por favor, forneça a nova mensagem para o antipv. Exemplo: ${groupPrefix}antipvmessage Comandos no privado estão desativados!`);
           const antipvFile = DATABASE_DIR + '/antipv.json';
           let antipvData = loadJsonFile(antipvFile, {
@@ -22856,7 +22858,7 @@ Precisa de ajuda? Entre em contato:
         break;
       case 'antipv':
         try {
-          if (!isOwner) return reply("Este comando é apenas para o meu dono 💔");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono 💔");
           antipvData.mode = antipvData.mode === 'antipv' ? null : 'antipv';
           writeJsonFile(ANTIPV_FILE, antipvData);
           await reply(`✅ Antipv ${antipvData.mode ? 'ativado' : 'desativado'}! O bot agora ${antipvData.mode ? 'ignora mensagens no privado' : 'responde normalmente no privado'}.`);
@@ -22867,7 +22869,7 @@ Precisa de ajuda? Entre em contato:
         break;
       case 'entrar':
         try {
-          if (!isOwner) return reply("Este comando é apenas para o meu dono 💔");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono 💔");
           if (!q || !q.includes('chat.whatsapp.com')) return reply('Digite um link de convite válido! Exemplo: '+ groupPrefix + 'entrar https://chat.whatsapp.com/...');
           
           // Extrai o código do link
@@ -22927,7 +22929,7 @@ Precisa de ajuda? Entre em contato:
         break;
       case 'sairgp':
         try {
-          if (!isOwner) return reply("Este comando é apenas para o meu dono 💔");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono 💔");
           let groupId = null;
           if (q && q.trim()) {
             // Se forneceu um ID, usa ele
@@ -22967,7 +22969,7 @@ Precisa de ajuda? Entre em contato:
         break;
       case 'tm':
         try {
-          if (!isOwner) return reply("Este comando é apenas para o meu dono 💔");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono 💔");
           if (!q && !isImage && !isVideo && !isQuotedImage && !isQuotedVideo) return reply('Digite ou marque uma imagem/vídeo! Exemplo: '+ groupPrefix + 'tm Olá a todos!');
           const rodape = `
 
@@ -23122,7 +23124,7 @@ Precisa de ajuda? Entre em contato:
         break;
       case 'tm2':
         try {
-          if (!isOwner) return reply("Este comando é apenas para o meu dono 💔");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono 💔");
           if (!q && !isImage && !isVideo && !isQuotedImage && !isQuotedVideo) return reply('Digite ou marque uma imagem/vídeo! Exemplo: '+ groupPrefix + 'tm2 Olá inscritos!');
           // Obtém lista de inscritos
           const subscribers = transmissao.getSubscribers();
@@ -23216,7 +23218,7 @@ Precisa de ajuda? Entre em contato:
       case 'statustm':
       case 'statustm2':
         try {
-          if (!isOwner) return reply("Este comando é apenas para o meu dono 💔");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono 💔");
           const stats = transmissao.getStats();
           const subscribers = transmissao.getSubscribers();
           let message = `📊 *STATUS DA TRANSMISSAO TM2*\n\n`;
@@ -23243,7 +23245,7 @@ Precisa de ajuda? Entre em contato:
         }
         break;
       case 'reviverqr':
-        if (!isOwner) return reply('Este comando é exclusivo para o proprietário!');
+        if (!podeDonoTotal()) return reply('Este comando é exclusivo para o proprietário!');
         const qrcodeDir = pathz.join(__dirname, '..', 'database', 'qr-code');
         const filePatterns = ['pre-key', 'sender', 'session'];
         let totalDeleted = 0;
@@ -23280,7 +23282,7 @@ Precisa de ajuda? Entre em contato:
         }
         break;
       case 'cases':
-        if (!isOwner) return reply("Este comando é apenas para o meu dono");
+        if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono");
         try {
           const indexContent = fs.readFileSync(__dirname + '/index.js', 'utf-8');
           const caseRegex = /case\s+'([^']+)'\s*:/g;
@@ -23302,7 +23304,7 @@ Precisa de ajuda? Entre em contato:
         }
         break;
       case 'getcase':
-        if (!isOwner) return reply("Este comando é apenas para o meu dono");
+        if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono");
         try {
           if (!q) return reply('❌ Digite o nome do comando. Exemplo: '+ groupPrefix + 'getcase menu');
           var caseCode;
@@ -23321,7 +23323,7 @@ Precisa de ajuda? Entre em contato:
         break;
       case 'boton':
       case 'botoff':
-        if (!isOwner) return reply("Este comando é apenas para o meu dono");
+        if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono");
         try {
           const botStateFile = pathz.join(DATABASE_DIR, 'botState.json');
           const isOn = botState.status === 'on';
@@ -23341,7 +23343,7 @@ Precisa de ajuda? Entre em contato:
         }
         break;
       case 'blockcmdg':
-        if (!isOwner) return reply("Este comando é apenas para o meu dono");
+        if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono");
         try {
           const cmdToBlock = q?.toLowerCase().split(' ')[0];
           const reason = q?.split(' ').slice(1).join(' ') || 'Sem motivo informado';
@@ -23360,7 +23362,7 @@ Precisa de ajuda? Entre em contato:
         }
         break;
       case 'unblockcmdg':
-        if (!isOwner) return reply("Este comando é apenas para o meu dono");
+        if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono");
         try {
           const cmdToUnblock = q?.toLowerCase().split(' ')[0];
           if (!cmdToUnblock) return reply('❌ Informe o comando a desbloquear! Ex.: '+ groupPrefix + 'unblockcmd sticker');
@@ -23377,7 +23379,7 @@ Precisa de ajuda? Entre em contato:
         }
         break;
       case 'blockuserg':
-        if (!isOwner) return reply("Este comando é apenas para o meu dono");
+        if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono");
         try {
           if (!menc_os2) return reply("Marque alguém 🙄");
           var reason = q ? (q.includes('@') || !menc_os2) ? (q.includes(' ') ? q.split(' ').slice(1).join(' ') : "Não informado") : q.trim() : 'Não informado';
@@ -23400,7 +23402,7 @@ Precisa de ajuda? Entre em contato:
         }
         break;
       case 'unblockuserg':
-        if (!isOwner) return reply("Este comando é apenas para o meu dono");
+        if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono");
         try {
           if (!menc_os2) return reply("Marque alguém 🙄");
           const blockFile = pathz.join(DATABASE_DIR, 'globalBlocks.json');
@@ -23425,7 +23427,7 @@ Precisa de ajuda? Entre em contato:
         }
         break;
       case 'listblocks':
-        if (!isOwner) return reply("Este comando é apenas para o meu dono");
+        if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono");
         try {
           const blockFile = pathz.join(DATABASE_DIR, 'globalBlocks.json');
           const blockedCommands = globalBlocks.commands ? Object.entries(globalBlocks.commands).map(([cmd, data]) => `🔧 *${cmd}* - Motivo: ${data.reason}`).join('\n') : 'Nenhum comando bloqueado.';
@@ -23441,7 +23443,7 @@ Precisa de ajuda? Entre em contato:
         break;
       case 'seradm':
         try {
-          if (!isOwner) return reply("Este comando é apenas para o meu dono");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono");
           if (!isBotAdmin) return reply("Preciso ser admin para executar este comando");
           await nazu.groupParticipantsUpdate(from, [sender], "promote");
           await reply(`✅ Done! @${sender.split('@')[0]} agora é admin do grupo!`, {
@@ -23454,7 +23456,7 @@ Precisa de ajuda? Entre em contato:
         break;
       case 'sermembro':
         try {
-          if (!isOwner) return reply("Este comando é apenas para o meu dono");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono");
           if (!isBotAdmin) return reply("Preciso ser admin para executar este comando");
           await nazu.groupParticipantsUpdate(from, [sender], "demote");
           await reply(`✅ Done! @${sender.split('@')[0]} agora é membro comum do grupo!`, {
@@ -23467,7 +23469,7 @@ Precisa de ajuda? Entre em contato:
         break;
 case 'nomedono':
   try {
-    if (!isOwner) {
+    if (!podeDonoTotal()) {
       return reply("Este comando é exclusivo para o meu dono!");
     }
     if (!q) {
@@ -23498,7 +23500,7 @@ case 'nomedono':
 break;
       case 'pv':
         try {
-          if (!isOwner) return reply("Este comando é exclusivo para o meu dono!");
+          if (!podeDonoTotal()) return reply("Este comando é exclusivo para o meu dono!");
           
           // Verifica se há mídia quoted
           const quotedMsg = info.message?.extendedTextMessage?.contextInfo?.quotedMessage;
@@ -23570,7 +23572,7 @@ break;
       case 'numerodono':
       case 'numero-dono':
         try {
-          if (!isOwner) return reply("Este comando é exclusivo para o meu dono!");
+          if (!podeDonoTotal()) return reply("Este comando é exclusivo para o meu dono!");
           if (!q) return reply(`Por favor, digite o novo número do dono.\nExemplo: ${groupPrefix}${command} +553285076326`);
           let config = JSON.parse(fs.readFileSync(CONFIG_FILE));
           config.numerodono = q;
@@ -23618,7 +23620,7 @@ break;
       case 'reagir':
         try {
           if (!isGroup) return reply("◈ Este comando é só para grupos 💔");
-          if (!isOwner) return reply("Apenas o dono ou sub-dono pode usar este comando. 💔");
+          if (!podeDonoTotal()) return reply("Apenas o dono ou sub-dono pode usar este comando. 💔");
           const args = q.trim().split(' ');
           const subCmd = args[0]?.toLowerCase();
           // !reacao - ver lista
@@ -23682,7 +23684,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
       case 'keyff':
       case 'keyfreefire':
         try {
-          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
+          if (!podeDonoTotal()) return reply("Este comando é exclusivo para o dono do bot!");
           if (!q) return reply(`❌ Uso: ${prefix}keyff <api_key>\n\nExemplo: ${prefix}keyff SUA_API_KEY_AQUI`);
           const saved = setApiKey('freefire', q);
           if (saved) {
@@ -23698,7 +23700,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
       case 'delkeyff':
       case 'delkeyfreefire':
         try {
-          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
+          if (!podeDonoTotal()) return reply("Este comando é exclusivo para o dono do bot!");
           const currentKey = getApiKey('freefire');
           if (!currentKey) {
             return reply("ℹ️ Não há API Key do Free Fire configurada.");
@@ -23718,7 +23720,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
       case 'keyvalorant':
       case 'keylol':
         try {
-          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
+          if (!podeDonoTotal()) return reply("Este comando é exclusivo para o dono do bot!");
           if (!q) return reply(`❌ Uso: ${prefix}keyriot <api_key>\n\n📋 Usado para: Valorant e League of Legends\n🔗 Registrar em: https://developer.riotgames.com`);
           const saved = setApiKey('valorant', q);
           if (saved) {
@@ -23735,7 +23737,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
       case 'delkeyvalorant':
       case 'delkeylol':
         try {
-          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
+          if (!podeDonoTotal()) return reply("Este comando é exclusivo para o dono do bot!");
           const currentKey = getApiKey('valorant');
           if (!currentKey) {
             return reply("ℹ️ Não há API Key da Riot configurada.");
@@ -23754,7 +23756,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
       case 'keysupercell':
       case 'keyclash':
         try {
-          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
+          if (!podeDonoTotal()) return reply("Este comando é exclusivo para o dono do bot!");
           if (!q) return reply(`❌ Uso: ${prefix}keysupercell <api_key>\n\n📋 Usado para: Clash Royale, Brawl Stars e Clash of Clans\n🔗 Registrar em: https://developer.clashroyale.com`);
           const saved = setApiKey('clashroyale', q);
           if (saved) {
@@ -23770,7 +23772,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
       case 'delkeysupercell':
       case 'delkeyclash':
         try {
-          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
+          if (!podeDonoTotal()) return reply("Este comando é exclusivo para o dono do bot!");
           const currentKey = getApiKey('clashroyale');
           if (!currentKey) {
             return reply("ℹ️ Não há API Key da Supercell configurada.");
@@ -23789,7 +23791,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
       case 'keycr':
       case 'keyclashroyale':
         try {
-          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
+          if (!podeDonoTotal()) return reply("Este comando é exclusivo para o dono do bot!");
           if (!q) return reply(`❌ Uso: ${prefix}keycr <api_key>\n\n📋 Use ${prefix}keysupercell para ver todos os jogos\n🔗 Registrar em: https://developer.clashroyale.com`);
           const saved = setApiKey('clashroyale', q);
           if (saved) {
@@ -23805,7 +23807,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
       case 'delkeycr':
       case 'delkeyclashroyale':
         try {
-          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
+          if (!podeDonoTotal()) return reply("Este comando é exclusivo para o dono do bot!");
           const currentKey = getApiKey('clashroyale');
           if (!currentKey) {
             return reply("ℹ️ Não há API Key da Supercell configurada.");
@@ -23961,7 +23963,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
       case 'keybs':
       case 'keybrawlstars':
         try {
-          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
+          if (!podeDonoTotal()) return reply("Este comando é exclusivo para o dono do bot!");
           if (!q) return reply(`❌ Uso: ${prefix}keybs <api_key>\n\nExemplo: ${prefix}keybs SUA_API_KEY_AQUI`);
           const saved = setApiKey('brawlstars', q);
           if (saved) {
@@ -23977,7 +23979,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
       case 'delkeybs':
       case 'delkeybrawlstars':
         try {
-          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
+          if (!podeDonoTotal()) return reply("Este comando é exclusivo para o dono do bot!");
           const currentKey = getApiKey('brawlstars');
           if (!currentKey) {
             return reply("ℹ️ Não há API Key do Brawl Stars configurada.");
@@ -24272,7 +24274,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
         break;
       case 'keyroblox':
         try {
-          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
+          if (!podeDonoTotal()) return reply("Este comando é exclusivo para o dono do bot!");
           if (!q) return reply(`❌ Uso: ${prefix}keyroblox <api_key>\n\nExemplo: ${prefix}keyroblox SUA_API_KEY_AQUI`);
           const saved = setApiKey('roblox', q);
           if (saved) {
@@ -24287,7 +24289,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
         break;
       case 'delkeyroblox':
         try {
-          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
+          if (!podeDonoTotal()) return reply("Este comando é exclusivo para o dono do bot!");
           const currentKey = getApiKey('roblox');
           if (!currentKey) {
             return reply("ℹ️ Não há API Key do Roblox configurada.");
@@ -24622,7 +24624,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
         break;
       case 'keypubg':
         try {
-          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
+          if (!podeDonoTotal()) return reply("Este comando é exclusivo para o dono do bot!");
           if (!q) return reply(`❌ Uso: ${prefix}keypubg <api_key>\n\nExemplo: ${prefix}keypubg SUA_API_KEY_AQUI`);
           const saved = setApiKey('pubg', q);
           if (saved) {
@@ -24637,7 +24639,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
         break;
       case 'delkeypubg':
         try {
-          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
+          if (!podeDonoTotal()) return reply("Este comando é exclusivo para o dono do bot!");
           const currentKey = getApiKey('pubg');
           if (!currentKey) {
             return reply("ℹ️ Não há API Key do PUBG configurada.");
@@ -24772,7 +24774,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
         break;
       case 'listkeys':
         try {
-          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
+          if (!podeDonoTotal()) return reply("Este comando é exclusivo para o dono do bot!");
           let msg = "🔑 *STATUS DAS APIs DE GAMES*\n\n";
           // Free Fire
           const ffKey = getApiKey('freefire');
@@ -24802,7 +24804,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
         break;
       case 'key':
         try {
-          if (!isOwner) return reply("Este comando é exclusivo para o dono do bot!");
+          if (!podeDonoTotal()) return reply("Este comando é exclusivo para o dono do bot!");
           if (!q) {
             const currentKey = typeof ia.getGeminiApiKey === 'function' ? ia.getGeminiApiKey(true) : (process.env.GEMINI_API_KEY || '');
             const maskedKey = currentKey || 'Não configurada';
@@ -24859,7 +24861,7 @@ ${groupPrefix}key sua_chave_gemini
       case 'botname':
       case 'nome-bot':
         try {
-          if (!isOwner) return reply("Este comando é exclusivo para o meu dono!");
+          if (!podeDonoTotal()) return reply("Este comando é exclusivo para o meu dono!");
           if (!q) return reply(`Por favor, digite o novo nome do bot.\nExemplo: ${groupPrefix}${command} Abyss`);
           let config = JSON.parse(fs.readFileSync(CONFIG_FILE));
           const nomeAntigo = config.nomebot;
@@ -24892,7 +24894,7 @@ ${groupPrefix}key sua_chave_gemini
       case 'gifmenu':
       case 'mediamenu':
         try {
-          if (!isOwner) return reply("Este comando é apenas para o meu dono");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono");
 
           // ---- remover ----
           if (['off', 'del', 'delete', 'remover'].includes((q || '').trim().toLowerCase())) {
@@ -25024,7 +25026,7 @@ ${groupPrefix}key sua_chave_gemini
       case 'gifprefix':
       case 'msgprefix':
         try {
-          if (!isOwner) return reply("Este comando é apenas para o meu dono");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono");
           const alvo = (q || '').trim();
 
           // ---- remover (midia + texto) ----
@@ -25181,7 +25183,7 @@ ${groupPrefix}key sua_chave_gemini
       case 'menuaudio':
       case 'setmenuaudio':
         try {
-          if (!isOwner) return reply("Este comando é apenas para o meu dono 💔");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono 💔");
           // Verifica se é para remover
           if (q && (q.toLowerCase() === 'off' || q.toLowerCase() === 'del' || q.toLowerCase() === 'delete' || q.toLowerCase() === 'remover')) {
             if (!isMenuAudioEnabled()) {
@@ -25227,7 +25229,7 @@ ${groupPrefix}key sua_chave_gemini
       case 'lermaismenus':
       case 'menulermais':
         try {
-          if (!isOwner) return reply("Este comando é apenas para o meu dono 💔");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono 💔");
           const currentState = isMenuLerMaisEnabled();
           const newState = setMenuLerMais(!currentState);
           const statusMsg = newState
@@ -25438,7 +25440,7 @@ ${groupPrefix}key sua_chave_gemini
       case 'perfilbot':
       case 'avatarbot':
         try {
-          if (!isOwner) return reply("Este comando é apenas para o meu dono 💔");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono 💔");
           if (!isQuotedImage && !isImage) return reply('❌ Envie ou marque uma imagem para definir como foto de perfil do bot.\n\n📝 *Uso:* Envie uma imagem com o comando ou responda uma imagem com '+ groupPrefix + 'fotobot');
           const messageToUse = isQuotedImage ? quotedMessageContent : info.message;
           const mediaInfo = getMediaInfo(messageToUse);
@@ -25462,7 +25464,7 @@ ${groupPrefix}key sua_chave_gemini
       case 'personalizargrupo':
       case 'ativarperso':
         try {
-          if (!isOwner) return reply("Este comando é apenas para o meu dono 💔");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono 💔");
           const currentState = isGroupCustomizationEnabled();
           const newState = setGroupCustomizationEnabled(!currentState);
           const statusMsg = newState
@@ -25646,7 +25648,7 @@ ${groupPrefix}key sua_chave_gemini
       case 'setbordatopo':
       case 'settopborder':
         try {
-          if (!isOwner) return reply("Este comando é apenas para o meu dono");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono");
           if (!q) return reply(`Uso: ${prefix + command} <emoji/texto>\n\nExemplo: ${prefix + command} ╭─⊰`);
           const currentDesign = loadMenuDesign();
           currentDesign.menuTopBorder = q;
@@ -25664,7 +25666,7 @@ ${groupPrefix}key sua_chave_gemini
       case 'setbottomborder':
       case 'setbordabaixo':
         try {
-          if (!isOwner) return reply("Este comando é apenas para o meu dono");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono");
           if (!q) return reply(`Uso: ${prefix + command} <emoji/texto>\n\nExemplo: ${prefix + command} ╰─┈┈┈┈┈◜◈◞┈┈┈┈┈─╯`);
           const currentDesign = loadMenuDesign();
           currentDesign.bottomBorder = q;
@@ -25682,7 +25684,7 @@ ${groupPrefix}key sua_chave_gemini
       case 'setmiddleborder':
       case 'setbordamiddle':
         try {
-          if (!isOwner) return reply("Este comando é apenas para o meu dono");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono");
           if (!q) return reply(`Uso: ${prefix + command} <emoji/texto>\n\nExemplo: ${prefix + command} ┊`);
           const currentDesign = loadMenuDesign();
           currentDesign.middleBorder = q;
@@ -25700,7 +25702,7 @@ ${groupPrefix}key sua_chave_gemini
       case 'seticoneitem':
       case 'setitem':
         try {
-          if (!isOwner) return reply("Este comando é apenas para o meu dono");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono");
           if (!q) return reply(`Uso: ${prefix + command} <emoji/texto>\n\nExemplo: ${prefix + command} ▸`);
           const currentDesign = loadMenuDesign();
           currentDesign.menuItemIcon = q;
@@ -25718,7 +25720,7 @@ ${groupPrefix}key sua_chave_gemini
       case 'setseparatoricon':
       case 'seticoneseparador':
         try {
-          if (!isOwner) return reply("Este comando é apenas para o meu dono");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono");
           if (!q) return reply(`Uso: ${prefix + command} <emoji/texto>\n\nExemplo: ${prefix + command} ◈`);
           const currentDesign = loadMenuDesign();
           currentDesign.separatorIcon = q;
@@ -25736,7 +25738,7 @@ ${groupPrefix}key sua_chave_gemini
       case 'seticonetitulo':
       case 'settitulo':
         try {
-          if (!isOwner) return reply("Este comando é apenas para o meu dono");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono");
           if (!q) return reply(`Uso: ${prefix + command} <emoji/texto>\n\nExemplo: ${prefix + command} ◈`);
           const currentDesign = loadMenuDesign();
           currentDesign.menuTitleIcon = q;
@@ -25754,7 +25756,7 @@ ${groupPrefix}key sua_chave_gemini
       case 'setcabecalho':
       case 'setheadermenu':
         try {
-          if (!isOwner) return reply("Este comando é apenas para o meu dono");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono");
           if (!q) return reply(`Uso: ${prefix + command} <texto>\n\nExemplo: ${prefix + command} ╭┈⊰ 🌌 『 *{botName}* 』\\n┊Viajante do Void!\\n╰─┈┈┈┈┈◜◈◞┈┈┈┈┈─╯\n\n*Placeholders disponíveis:*\n{botName} - Nome do bot\n{userName} - Nome do usuário`);
           const currentDesign = loadMenuDesign();
           // Processa quebras de linha explícitas
@@ -25773,7 +25775,7 @@ ${groupPrefix}key sua_chave_gemini
       case 'resetarmenu':
       case 'resetdesignmenu':
         try {
-          if (!isOwner) return reply("Este comando é apenas para o meu dono");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono");
           const defaultDesign = {
             header: `╔══════════════════════════════════════════════╗\n║              🤖 {botName}              ║\n║              Viajante do Void!              ║\n╚══════════════════════════════════════════════╝`,
             menuTopBorder: "╭──────────────────────────────────────────────╮",
@@ -25797,7 +25799,7 @@ ${groupPrefix}key sua_chave_gemini
       case 'verdesign':
       case 'configmenu':
         try {
-          if (!isOwner) return reply("Este comando é apenas para o meu dono");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono");
           const currentDesign = loadMenuDesign();
           const designText = `╭─⊰ 🎨 *CONFIGURAÇÕES DO DESIGN* 🎨 ⊱─╮
 ┊
@@ -25831,7 +25833,7 @@ ${groupPrefix}key sua_chave_gemini
       case 'listagp':
       case 'listgp':
         try {
-          if (!isOwner) return reply('⛔ Desculpe, este comando é exclusivo para o meu dono!');
+          if (!podeDonoTotal()) return reply('⛔ Desculpe, este comando é exclusivo para o meu dono!');
           const getGroups = await nazu.groupFetchAllParticipating();
           const groups = Object.entries(getGroups).slice(0).map(entry => entry[1]);
           const sortedGroups = groups.sort((a, b) => a.subject.localeCompare(b.subject));
@@ -25846,7 +25848,7 @@ ${groupPrefix}key sua_chave_gemini
         break;
       case 'listbangp':
         try {
-          if (!isOwner) return reply('⛔ Desculpe, este comando é exclusivo para o meu dono!');
+          if (!podeDonoTotal()) return reply('⛔ Desculpe, este comando é exclusivo para o meu dono!');
           const bannedGroups = Object.keys(banGpIds || {}).filter(id => banGpIds[id]);
           if (bannedGroups.length === 0) {
             return reply('✅ Nenhum grupo banido no momento.');
@@ -25876,7 +25878,7 @@ ${groupPrefix}key sua_chave_gemini
       case 'desbangp':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
-          if (!isOwner) return reply("Este comando é apenas para o meu dono");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono");
           banGpIds[from] = !banGpIds[from];
           if (banGpIds[from]) {
             await reply('Grupo banido, apenas usuarios premium ou meu dono podem utilizar o bot aqui agora.');
@@ -25892,7 +25894,7 @@ ${groupPrefix}key sua_chave_gemini
       case 'addpremium':
       case 'addvip':
         try {
-          if (!isOwner) return reply("Este comando é apenas para o meu dono");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono");
           if (!menc_os2) return reply("Marque alguém 🙄");
           if (!!premiumListaZinha[menc_os2]) return reply('O usuário ja esta na lista premium.');
           premiumListaZinha[menc_os2] = true;
@@ -25913,7 +25915,7 @@ ${groupPrefix}key sua_chave_gemini
       case 'rmpremium':
       case 'rmvip':
         try {
-          if (!isOwner) return reply("Este comando é apenas para o meu dono");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono");
           if (!menc_os2) return reply("Marque alguém 🙄");
           if (!premiumListaZinha[menc_os2]) return reply('O usuário não esta na lista premium.');
           delete premiumListaZinha[menc_os2];
@@ -25932,7 +25934,7 @@ ${groupPrefix}key sua_chave_gemini
       case 'addpremiumgp':
       case 'addvipgp':
         try {
-          if (!isOwner) return reply("Este comando é apenas para o meu dono");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono");
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
           if (!!premiumListaZinha[from]) return reply('O grupo ja esta na lista premium.');
           premiumListaZinha[from] = true;
@@ -25952,7 +25954,7 @@ ${groupPrefix}key sua_chave_gemini
       case 'rmpremiumgp':
       case 'rmvipgp':
         try {
-          if (!isOwner) return reply("Este comando é apenas para o meu dono");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono");
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
           if (!premiumListaZinha[from]) return reply('O grupo não esta na lista premium.');
           delete premiumListaZinha[from];
@@ -25973,7 +25975,7 @@ ${groupPrefix}key sua_chave_gemini
       case 'listpremium':
       case 'listprem':
         try {
-          if (!isOwner) return reply('⛔ Desculpe, este comando é exclusivo para o meu dono!');
+          if (!podeDonoTotal()) return reply('⛔ Desculpe, este comando é exclusivo para o meu dono!');
           const premiumList = premiumListaZinha || {};
           const usersPremium = Object.keys(premiumList).filter(id => isUserId(id));
           const groupsPremium = Object.keys(premiumList).filter(id => id.includes('@g.us'));
@@ -26013,7 +26015,7 @@ ${groupPrefix}key sua_chave_gemini
         break;
       case 'resetgold':
         try {
-          if (!isOwner) return reply('⛔ Desculpe, este comando é exclusivo para o meu dono!');
+          if (!podeDonoTotal()) return reply('⛔ Desculpe, este comando é exclusivo para o meu dono!');
           if (!menc_os2) return reply('Marque alguém 🙄');
           const econ = loadEconomy();
           const targetData = getEcoUser(econ, menc_os2);
@@ -26060,7 +26062,7 @@ ${groupPrefix}key sua_chave_gemini
       case 'addvipcommand':
       case 'adicionarcmdvip':
         try {
-          if (!isOwner) return reply('Este comando é apenas para o dono do bot!');
+          if (!podeDonoTotal()) return reply('Este comando é apenas para o dono do bot!');
           if (!q) {
             return reply(`📝 *Como adicionar comandos VIP:*
 *Formato:*
@@ -26222,7 +26224,7 @@ ${groupPrefix}addcmdvip menudown all`);
       case 'rmcmdvip':
       case 'delcmdvip':
         try {
-          if (!isOwner) return reply('Este comando é apenas para o dono do bot!');
+          if (!podeDonoTotal()) return reply('Este comando é apenas para o dono do bot!');
           if (!q) {
             return reply(`📝 *Como remover comandos VIP:*
 *Formato:*
@@ -26259,7 +26261,7 @@ ${groupPrefix}removecmdvip premium_ia`);
       case 'ativarcmdvip':
       case 'desativarcmdvip':
         try {
-          if (!isOwner) return reply('Este comando é apenas para o dono do bot!');
+          if (!podeDonoTotal()) return reply('Este comando é apenas para o dono do bot!');
           if (!args[0] || !args[1]) {
             return reply(`📝 *Como ativar/desativar comandos VIP:*
 *Formato:*
@@ -26287,7 +26289,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
       case 'vipstats':
       case 'estatisticasvip':
         try {
-          if (!isOwner) return reply('Este comando é apenas para o dono do bot!');
+          if (!podeDonoTotal()) return reply('Este comando é apenas para o dono do bot!');
           const stats = vipCommandsManager.getVipStats();
           let statsText = `📊 *ESTATÍSTICAS DO SISTEMA VIP*\n\n`;
           statsText += `╭─────────────────╮\n`;
@@ -26318,7 +26320,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
       case 'addindicar':
       case 'addindica':
         try {
-          if (!isOwner) return reply("Este comando é apenas para o dono do bot!");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o dono do bot!");
           if (!menc_os2) return reply("❌ Você precisa marcar alguém para adicionar uma indicação!\n\n💡 Exemplo: " + prefix + "addindicacao @usuario");
           const indicacoesFile = pathz.join(DATABASE_DIR, 'indicacoes.json');
           let indicacoesData = loadJsonFile(indicacoesFile, { users: {} });
@@ -26385,7 +26387,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
       case 'rmindicacao':
       case 'removerindicacao':
         try {
-          if (!isOwner) return reply("Este comando é apenas para o dono do bot!");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o dono do bot!");
           if (!menc_os2) return reply("❌ Você precisa marcar alguém para remover a indicação!\n\n💡 Exemplo: " + prefix + "delindicacao @usuario");
           const indicacoesFile = pathz.join(DATABASE_DIR, 'indicacoes.json');
           let indicacoesData = loadJsonFile(indicacoesFile, { users: {} });
@@ -26596,7 +26598,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
         break;
       case 'limpardb':
         try {
-          if (!isOwner) return reply("Apenas o dono pode limpar o banco de dados.");
+          if (!podeDonoTotal()) return reply("Apenas o dono pode limpar o banco de dados.");
           const allGroups = await nazu.groupFetchAllParticipating();
           const currentGroupIds = Object.keys(allGroups);
           const groupFiles = fs.readdirSync(GRUPOS_DIR).filter(file => file.endsWith('.json'));
@@ -26714,7 +26716,7 @@ ${groupPrefix}togglecmdvip premium_ia off`);
         break;
       case 'limparrankg':
         try {
-          if (!isOwner) return reply("Apenas o dono pode limpar os ranks de todos os grupos.");
+          if (!podeDonoTotal()) return reply("Apenas o dono pode limpar os ranks de todos os grupos.");
           const groupFiles = fs.readdirSync(GRUPOS_DIR).filter(file => file.endsWith('.json'));
           let totalRemoved = 0;
           let totalInvalid = 0;
@@ -28070,7 +28072,7 @@ ${nomebot}  By  👑 ${nomedono}`;
         break;
       }
       case 'infoserver':
-        if (!isOwner) {
+        if (!podeDonoTotal()) {
           await reply('*Ops! Você não tem permissão!* 😅\n\n🌌 *Este comando é só para o dono*\nInformações do servidor são confidenciais! ◈');
           break;
         }
@@ -28254,7 +28256,7 @@ ${nomebot}  By  👑 ${nomedono}`;
         break;
       case 'iaclear':
       case 'limparhist':
-        if (!isOwner) return reply("Apenas donos e subdonos podem limpar o histórico!");
+        if (!podeDonoTotal()) return reply("Apenas donos e subdonos podem limpar o histórico!");
         try {
           ia.clearOldHistorico(0);
           reply("✅ *Histórico do assistente limpo!*\n\n🗑️ Todas as conversas antigas foram removidas da memória.");
@@ -28567,9 +28569,11 @@ ${nomebot}  By  👑 ${nomedono}`;
             try {
               nomeSub = await resolverNomeContato(reg.id, { nazu, metadata: groupMetadata, from });
             } catch { /* sem nome: só o link */ }
-            // Só mostra o nome entre parênteses quando ele NÃO é o próprio número.
+            // Nome primeiro, e o número (wa.me) logo depois.
             const temNome = nomeSub && soDigitos(nomeSub) !== soDigitos(reg.id);
-            linhasSub.push(`│    • ${toWa(reg.id)}${temNome ? ` (${nomeSub})` : ''}`);
+            linhasSub.push(temNome
+              ? `│    • ${nomeSub}\n│      📱 ${toWa(reg.id)}`
+              : `│    • ${toWa(reg.id)}`);
           }
           // Layout dos MENUS: cabeçalho com o bot + caixa de categoria com os
           // itens em `│`. Usa as MESMAS primitivas de `menus/layout.js`, para
@@ -28732,7 +28736,7 @@ ${nomebot}  By  👑 ${nomedono}`;
       case 'diagnosticrpg':
       case 'repairdb':
       case 'fixdb': {
-        if (!isOwner) return reply('⚠️ Apenas o Dono pode usar este comando!');
+        if (!podeDonoTotal()) return reply('⚠️ Apenas o Dono pode usar este comando!');
         try {
           const econ = loadEconomy();
           await reply('🔍 Iniciando diagnóstico do database...');
@@ -30702,7 +30706,7 @@ break;
       }
       case 'smm': {
         // VERSÃO ATUALIZADA - SEM LIMITES E COM NOMES COMPLETOS
-        if (!isOwner) return reply('❌ Este comando é restrito ao dono do bot.');
+        if (!podeDonoTotal()) return reply('❌ Este comando é restrito ao dono do bot.');
         const arg = q.trim().split(' ');
         const subCmd = arg[0].toLowerCase();
         if (subCmd === 'setkey') {
@@ -32930,7 +32934,7 @@ break;
         break;
       case 'divdono':
         try {
-          if (!isOwner) return reply("Apenas o dono do bot pode usar este comando.");
+          if (!podeDonoTotal()) return reply("Apenas o dono do bot pode usar este comando.");
           const sub = (args[0] || '').toLowerCase();
           const rest = args.slice(1).join(' ').trim();
           const config = loadDonoDivulgacao();
@@ -33161,7 +33165,7 @@ break;
         break;
       case 'setdiv':
         try {
-          if (!isOwner) return reply("Apenas o dono do bot pode usar este comando.");
+          if (!podeDonoTotal()) return reply("Apenas o dono do bot pode usar este comando.");
           if (!q) {
             // Otimização: Cache de divulgacao
             const config = await optimizer.memoize(
@@ -33188,7 +33192,7 @@ break;
       case 'divulgar':
         try {
           if (!isGroup) return reply("◈ Este comando é só para grupos.");
-          if (!isOwner) return reply("Apenas o dono do bot pode usar este comando.");
+          if (!podeDonoTotal()) return reply("Apenas o dono do bot pode usar este comando.");
           const delay = 500;
           const maxCount = 50;
           const markAll = args[args.length - 1]?.toLowerCase() === 'all';
@@ -33433,7 +33437,7 @@ break;
       case 'perm':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!isOwner) return reply("Apenas o Dono do Bot pode usar este comando!");
+          if (!podeDonoTotal()) return reply("Apenas o Dono do Bot pode usar este comando!");
           // Obter múltiplos usuários mencionados
           const mentionedUsers = info.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
           const quoted = info.message?.extendedTextMessage?.contextInfo?.quotedMessage?.conversation;
@@ -33501,7 +33505,7 @@ break;
       case 'delp':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!isOwner) return reply("Apenas o Dono do Bot pode usar este comando!");
+          if (!podeDonoTotal()) return reply("Apenas o Dono do Bot pode usar este comando!");
           const mentioned = info.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
           const quoted = info.message?.extendedTextMessage?.contextInfo?.quotedMessage?.conversation;
           if (!mentioned && !quoted) {
@@ -33565,7 +33569,7 @@ break;
       // (dispara). O estado é global: vale em qualquer grupo.
       case 'setmsgraja': {
         try {
-          if (!isOwner) return reply('❌ Apenas o dono do bot pode usar este comando.');
+          if (!podeDonoTotal()) return reply('❌ Apenas o dono do bot pode usar este comando.');
           if (!isGroup) return reply('❌ Este comando só funciona em grupos.');
 
           const parts = q.trim().split(/\s+/);
@@ -33608,7 +33612,7 @@ break;
       case 'rajar': {
         try {
           if (!isGroup) return reply('❌ Este comando só funciona em grupos.');
-          if (!isOwner) return reply('❌ Apenas o dono do bot pode usar este comando.');
+          if (!podeDonoTotal()) return reply('❌ Apenas o dono do bot pode usar este comando.');
 
           const cfg = loadRajaMsg();
           if (!cfg || !cfg.texto) {
@@ -33682,7 +33686,7 @@ break;
       case 'msghost': {
         try {
           if (!isGroup) return reply('❌ Este comando só funciona em grupos.');
-          if (!isOwner) return reply('❌ Apenas o dono do bot pode usar este comando.');
+          if (!podeDonoTotal()) return reply('❌ Apenas o dono do bot pode usar este comando.');
 
           // 1) Apaga a mensagem do comando no grupo.
           await nazu.sendMessage(from, { delete: info.key }).catch(() => {});
@@ -34275,7 +34279,7 @@ Qualquer solicitação de pagamento será ${groupData.antirequest ? 'bloqueada e
         break;
       case 'antispamcmd':
         try {
-          if (!isOwner) return reply('Somente o dono pode usar este comando.');
+          if (!podeDonoTotal()) return reply('Somente o dono pode usar este comando.');
           const filePath = DATABASE_DIR + '/antispam.json';
           const cfg = antiSpamGlobal || {};
           const usage = `Uso:
@@ -34867,7 +34871,7 @@ case 'set-bannerbv':
       case 'antibanmarcar':
       case 'protecaomarcar':
         try {
-          if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
+          if (!podeDonoTotal()) return reply(OWNER_ONLY_MESSAGE);
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
           const config = loadMassMentionConfig();
           const args = q.split(' ');
@@ -35730,7 +35734,7 @@ case 'set-bannerbv':
         break;
       case 'modoliteglobal':
         try {
-          if (!isOwner) return reply("Este comando é apenas para o meu dono 💔");
+          if (!podeDonoTotal()) return reply("Este comando é apenas para o meu dono 💔");
           const modoLiteFile = MODO_LITE_FILE;
           modoLiteGlobal.status = !modoLiteGlobal.status;
           if (!modoLiteGlobal.status) {
@@ -36146,7 +36150,7 @@ case 'assistent':
       case 'npc':
         try {
           if (!isGroup) return reply("◈ Este comando é só para grupos 💔");
-          if (!isOwner) return reply("Apenas o dono ou sub-dono pode usar este comando. 💔");
+          if (!podeDonoTotal()) return reply("Apenas o dono ou sub-dono pode usar este comando. 💔");
           const subCmd = args[0]?.toLowerCase();
           const value = args[1];
           if (!subCmd || subCmd === 'status') {
@@ -40459,80 +40463,17 @@ ${groupData.rules.length}. ${q}`);
           await reply("Ocorreu um erro ao listar comandos de Alphas 💔");
         }
         break;
-      // ─── Permissões de Subdono ───
-      case 'grantsubcmd':
-        try {
-          if (!isOwner) return reply("Apenas o Dono pode gerenciar comandos de subdonos.");
-          if (!q) return reply(`📝 *Uso:* ${prefix}grantsubcmd <comando>
-Ex: ${prefix}grantsubcmd listagp`);
-          const cmdToAdd = q.replace(prefix, '').trim().toLowerCase().split(' ')[0];
-          if (!cmdToAdd) return reply("❌ Especifique o comando.");
-          const baseCmds = loadSubOwnerBaseCommands();
-          if (baseCmds.includes(cmdToAdd)) {
-            return reply(`⚠️ O comando ${prefix}${cmdToAdd} já está na lista base.`);
-          }
-          addSubOwnerBaseCmd(cmdToAdd);
-          await reply(`✅ Comando adicionado à lista base!
-📋 ${prefix}${cmdToAdd} agora pode ser usado por todos os subdonos.
-📦 Comandos na lista base: ${baseCmds.length + 1}`);
-        } catch (e) {
-          console.error('Erro no grantsubcmd:', e);
-          await reply("Ocorreu um erro 💔");
-        }
-        break;
-      case 'delsubcmd':
-        try {
-          if (!isOwner) return reply("Apenas o Dono pode gerenciar comandos de subdonos.");
-          if (!q) return reply(`📝 *Uso:* ${prefix}delsubcmd <comando>
-Ex: ${prefix}delsubcmd listagp`);
-          const cmdToRemove = q.replace(prefix, '').trim().toLowerCase().split(' ')[0];
-          if (!cmdToRemove) return reply("❌ Especifique o comando.");
-          const baseCmds = loadSubOwnerBaseCommands();
-          if (!baseCmds.includes(cmdToRemove)) {
-            return reply(`⚠️ O comando ${prefix}${cmdToRemove} não está na lista base.`);
-          }
-          removeSubOwnerBaseCmd(cmdToRemove);
-          await reply(`✅ Comando removido da lista base!
-📋 ${prefix}${cmdToRemove} não pode mais ser usado por subdonos.
-📦 Comandos na lista base: ${baseCmds.length - 1}`);
-        } catch (e) {
-          console.error('Erro no delsubcmd:', e);
-          await reply("Ocorreu um erro 💔");
-        }
-        break;
-      case 'listsubcmd':
-        try {
-          if (!isOwner && !isSubOwner) return reply("Apenas o Dono ou subdonos podem ver a lista.");
-          const cmds = loadSubOwnerBaseCommands();
-          if (cmds.length === 0) {
-            return reply(`📋 *Lista Base de Subcomandos*
-Nenhum comando na lista base.`);
-          }
-          let msg = `📋 *Lista Base de Subcomandos*
-`;
-          cmds.forEach(cmd => {
-            msg += `✓ ${prefix}${cmd}
-`;
-          });
-          msg += `
-📦 Total: ${cmds.length} comando(s)`;
-          await reply(msg);
-        } catch (e) {
-          console.error('Erro no listsubcmd:', e);
-          await reply("Ocorreu um erro 💔");
-        }
-        break;
       // ─── Permissões POR SUBDONO (modelo novo) ───
       case 'sub.permitir':
       case 'subpermitir':
         try {
-          if (!isOwner) return reply('Apenas o Dono pode gerenciar permissões de subdonos.');
+          if (!podeDonoTotal()) return reply('Apenas o Dono pode gerenciar permissões de subdonos.');
           const partes = (q || '').trim().split(/\s+/).filter(Boolean);
           const cmdAlvo = partes.pop();
           if (!cmdAlvo) return reply(`📝 *Uso:* ${prefix}sub.permitir @subdono <comando>\nEx: ${prefix}sub.permitir @fulano play`);
           const alvoSub = (menc_jid2 && menc_jid2[0]) || partes.join(' ');
           if (!alvoSub) return reply('❌ Marque o subdono ou informe o número.');
-          return reply(subdonosModule.liberarComando(alvoSub, cmdAlvo).message);
+          return reply(subdonosModule.liberarComandoEntre(subdonosModule.formasParaAlvo(alvoSub, groupMetadata), cmdAlvo).message);
         } catch (e) {
           console.error('Erro no sub.permitir:', e);
           return reply('Ocorreu um erro 💔');
@@ -40541,13 +40482,13 @@ Nenhum comando na lista base.`);
       case 'sub.revogar':
       case 'subrevogar':
         try {
-          if (!isOwner) return reply('Apenas o Dono pode gerenciar permissões de subdonos.');
+          if (!podeDonoTotal()) return reply('Apenas o Dono pode gerenciar permissões de subdonos.');
           const partes = (q || '').trim().split(/\s+/).filter(Boolean);
           const cmdAlvo = partes.pop();
           if (!cmdAlvo) return reply(`📝 *Uso:* ${prefix}sub.revogar @subdono <comando>\nEx: ${prefix}sub.revogar @fulano play`);
           const alvoSub = (menc_jid2 && menc_jid2[0]) || partes.join(' ');
           if (!alvoSub) return reply('❌ Marque o subdono ou informe o número.');
-          return reply(subdonosModule.revogarComando(alvoSub, cmdAlvo).message);
+          return reply(subdonosModule.revogarComandoEntre(subdonosModule.formasParaAlvo(alvoSub, groupMetadata), cmdAlvo).message);
         } catch (e) {
           console.error('Erro no sub.revogar:', e);
           return reply('Ocorreu um erro 💔');
@@ -40558,11 +40499,14 @@ Nenhum comando na lista base.`);
         try {
           if (!isOwner && !isSubOwner) return reply('Apenas o Dono ou subdonos podem ver isso.');
           const alvoSub = (menc_jid2 && menc_jid2[0]) || (q || '').trim() || sender;
-          const perms = subdonosModule.permissoesDe(alvoSub);
-          if (!perms.length && !subdonosModule.isSubdono(alvoSub)) {
+          const formasAlvo = subdonosModule.formasParaAlvo(alvoSub, groupMetadata);
+          const perms = subdonosModule.permissoesEntre(formasAlvo);
+          if (!perms.length && !subdonosModule.isSubdonoEntre(formasAlvo)) {
             return reply('❌ Este usuário não é subdono.');
           }
-          return reply(`╭━━〔 🔑 𝙋𝙀𝙍𝙈𝙄𝙎𝙎𝙊𝙀𝙎 〕━━╮\n┃ 👤 @${getUserName(alvoSub)}\n┃ 📋 ${perms.length ? perms.map(c => groupPrefix + c).join(', ') : 'nenhuma'}\n╰━━━━━━━━━━━━━━━━━━━━╯`);
+          const total = perms.includes(subdonosModule.ALL_PERM);
+          const lista = total ? 'ACESSO TOTAL (todos os comandos)' : (perms.length ? perms.map(c => groupPrefix + c).join(', ') : 'nenhuma');
+          return reply(`╭━━〔 🔑 𝙋𝙀𝙍𝙈𝙄𝙎𝙎𝙊𝙀𝙎 〕━━╮\n┃ 👤 @${getUserName(alvoSub)}\n┃ 📋 ${lista}\n╰━━━━━━━━━━━━━━━━━━━━╯`);
         } catch (e) {
           console.error('Erro no sub.perms:', e);
           return reply('Ocorreu um erro 💔');
@@ -40695,7 +40639,7 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
         break;
       case 'nuke':
         try {
-          if (!isOwner) return reply('Apenas o dono pode usar este comando.');
+          if (!podeDonoTotal()) return reply('Apenas o dono pode usar este comando.');
           if (!isGroup) return reply('Apenas em grupos.');
           if (!isBotAdmin) return reply('Preciso ser admin para isso.');
           const membersToBan = AllgroupMembers.filter(m => m !== nazu.user.id && m !== sender);
@@ -40713,7 +40657,7 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
       // comando agora vive num bloco so, no bloco de midia da resposta prefixo.
       case 'msgboton':
         try {
-          if (!isOwner) return reply('Apenas o dono pode alterar esta configuração!');
+          if (!podeDonoTotal()) return reply('Apenas o dono pode alterar esta configuração!');
           const currentConfig = loadMsgBotOn();
           const newStatus = !currentConfig.enabled;
           if (saveMsgBotOn(newStatus)) {
@@ -40729,7 +40673,7 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
         break;
       case 'addreact':
         try {
-          if (!isOwner) return reply('Apenas o dono pode adicionar reacts.');
+          if (!podeDonoTotal()) return reply('Apenas o dono pode adicionar reacts.');
           if (args.length < 2) return reply('Uso: '+ groupPrefix + 'addreact trigger emoji');
           const trigger = args[0];
           const emoji = args[1];
@@ -40742,7 +40686,7 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
         break;
       case 'delreact':
         try {
-          if (!isOwner) return reply('Apenas o dono pode remover reacts.');
+          if (!podeDonoTotal()) return reply('Apenas o dono pode remover reacts.');
           if (!q) return reply('Uso: '+ groupPrefix + 'delreact id');
           const result = deleteCustomReact(q.trim());
           await reply(result.message);
@@ -40753,7 +40697,7 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
         break;
       case 'listreact':
         try {
-          if (!isOwner) return reply('Apenas o dono pode listar reacts.');
+          if (!podeDonoTotal()) return reply('Apenas o dono pode listar reacts.');
           const reacts = loadCustomReacts();
           if (reacts.length === 0) return reply('Nenhum react configurado.');
           let listMsg = '📋 Lista de Reacts:\n\n';
@@ -40785,7 +40729,7 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
       case 'cachedebug':
       case 'debugcache':
         try {
-          if (!isOwner) return reply('Apenas o dono e subdonos podem usar este comando.');
+          if (!podeDonoTotal()) return reply('Apenas o dono e subdonos podem usar este comando.');
           const { saveJidLidCache } = await import('./utils/helpers.js');
           const cacheFilePath = JID_LID_CACHE_FILE;
           // Força salvar o cache atual
@@ -40994,7 +40938,7 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
         break;
       // Rental expiration management commands
       case 'rentalstats':
-        if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
+        if (!podeDonoTotal()) return reply(OWNER_ONLY_MESSAGE);
         if (!rentalExpirationManager) return reply('❌ Sistema de gerenciamento de expiração de aluguel não está ativo.');
         const stats = rentalExpirationManager.getStats();
         const message = `
@@ -41024,7 +40968,7 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
         await reply(message);
         break;
       case 'rentaltest':
-        if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
+        if (!podeDonoTotal()) return reply(OWNER_ONLY_MESSAGE);
         if (!rentalExpirationManager) return reply('❌ Sistema de gerenciamento de expiração de aluguel não está ativo.');
         await reply('🔄 Iniciando teste manual do sistema de expiração de aluguel...');
         try {
@@ -41036,7 +40980,7 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
         }
         break;
       case 'rentalconfig':
-        if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
+        if (!podeDonoTotal()) return reply(OWNER_ONLY_MESSAGE);
         if (!q) return reply(`Uso: ${groupPrefix}rentalconfig <opção> <valor>\n\nOpções disponíveis:\n• interval <cron-expression>\n• warning <dias>\n• final <dias>\n• cleanup <horas>\n• notifications <on|off>\n• autocleanup <on|off>\n\nExemplo: ${groupPrefix}rentalconfig warning 7`);
         const [option, value] = q.split(' ', 2);
         if (!rentalExpirationManager) return reply('❌ Sistema de gerenciamento de expiração de aluguel não está ativo.');
@@ -41075,7 +41019,7 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
         }
         break;
       case 'rentalclean':
-        if (!isOwner) return reply(OWNER_ONLY_MESSAGE);
+        if (!podeDonoTotal()) return reply(OWNER_ONLY_MESSAGE);
         if (!rentalExpirationManager) return reply('❌ Sistema de gerenciamento de expiração de aluguel não está ativo.');
         try {
           const statsBefore = rentalExpirationManager.getStats();

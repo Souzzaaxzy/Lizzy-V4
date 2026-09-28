@@ -156,7 +156,13 @@ await test('3. !donos mostra o NOME do subdono quando disponível', async () => 
     groupJid, text: '!donos',
     getName: (jid) => (String(jid).includes('5511000000001') ? 'Fulano da Silva' : undefined),
   });
-  includes(txt(sent), '(Fulano da Silva)', 'nome entre parênteses');
+  const t = txt(sent);
+  includes(t, 'Fulano da Silva', 'nome aparece');
+  // NOME primeiro, NÚMERO (wa.me) depois.
+  const iNome = t.indexOf('Fulano da Silva');
+  const iNum = t.indexOf('wa.me/5511000000001');
+  ok(iNome !== -1 && iNum !== -1 && iNome < iNum, 'nome antes do número');
+  ok(!t.includes('(Fulano da Silva)'), 'sem parênteses antigos');
 });
 
 await test('4. !donos respeita o teto de 5 (nunca lista mais)', async () => {
