@@ -37777,7 +37777,7 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
         }, { quoted: info });
         break;
       }
-      // ==================== CAFÉ (GRUPO DE AMIZADES) ====================
+      // ==================== AMIGOS (GRUPO DE AMIZADES) ====================
       // Comando `!cf` (`!melhoresamigos`), migrado de outro bot e REFATORADO para o
       // conceito de GRUPO de amizades (um por criador):
       //   !cf criar <nome>   cria/renomeia o grupo
@@ -37791,7 +37791,7 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
       //   - `__ctxMencoesGlobal()`/`__normalizarAlvoUsuario()` -> menções
       //     (`menc_jid2`, já em LID) e `menc_os2` (respondido, em LID);
       //   - `canalInfo(...)` -> `gerarContextNewsletter()` dentro do content;
-      //   - caminho do outro projeto -> `DONO_DIR/cafe.json`;
+      //   - caminho do outro projeto -> `DONO_DIR/amigos.json`;
       //   - `fs.writeFileSync` cru -> `writeJsonFile` (atômico);
       //   - `jidNum`/`pushnames`/`buscarMembroPorJid` (inexistentes) ->
       //     `store.contacts`/`groupMetadata`/`nazu.getName`, com o NÚMERO de
@@ -37810,7 +37810,7 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
           }
 
           const MAX_CF = 20;
-          const caminhoCF = pathz.join(DONO_DIR, 'cafe.json');
+          const caminhoCF = pathz.join(DONO_DIR, 'amigos.json');
           // 1 grupo de amizades por pessoa (chave = o criador).
           const chaveCF = String(sender);
 
@@ -37830,54 +37830,57 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
 
           const salvarCF = () => writeJsonFile(caminhoCF, bancoCF);
 
-          // Nome amigável: prioriza NOME e descarta o que é genérico ou o
-          // próprio número. O padrão final é o telefone — nunca o LID.
+          // Nome amigável: prioriza o NOME DO CONTATO e descarta o que é
+          // genérico ou o próprio número. O padrão final é o telefone — nunca
+          // o LID. `ehNumero` protege contra o `getName` do Baileys devolver o
+          // próprio JID/número (o que faria o Nick cair no número).
+          const ehGenericoNome = (v) => !v || /^(usu[aá]rio|user|unknown|desconhecido|voc[eê])/i.test(String(v).trim());
+          const ehNumeroNome = (v) => /^\+?\d+$/.test(String(v).trim()) || /^\d+@(s\.whatsapp\.net|lid)$/.test(String(v).trim());
+
+          // Encontra o participante do grupo por qualquer uma das identidades.
+          const acharMembroCF = (base) => (groupMetadata.participants || []).find((p) => {
+            const ids = [p?.id, p?.lid, p?.phoneNumber, p?.pn]
+              .filter(Boolean)
+              .map((v) => String(v).split('@')[0].split(':')[0]);
+            return ids.includes(base);
+          });
+
           const pegarNomeCF = async (jid) => {
             const id = String(jid || '');
             const base = id.split('@')[0].split(':')[0];
-            const ehGenerico = (v) => !v || /^(usu[aá]rio|user|unknown|desconhecido|voc[eê])/i.test(String(v).trim());
-            const ehNumero = (v) => /^\+?\d+$/.test(String(v).trim());
+            const membro = (() => { try { return acharMembroCF(base); } catch (e) { return null; } })();
+            const numerosDoMembro = [membro?.phoneNumber, membro?.pn]
+              .filter(Boolean)
+              .map((v) => String(v).split('@')[0].split(':')[0]);
+            const ehNumeroDoMembro = (v) =>
+              ehNumeroNome(v) || numerosDoMembro.includes(String(v).trim().replace(/^\+/, ''));
 
-            // 1) Contatos da agenda da sessão (o nome que a pessoa salvou).
+            // 1) `getName` do socket: é o que devolve o NOME DO CONTATO salvo
+            //    na agenda (com queda para o pushName). É a fonte preferida.
+            try {
+              const nome = await nazu.getName(from, id);
+              if (!ehGenericoNome(nome) && !ehNumeroDoMembro(nome)) return String(nome).trim();
+            } catch (e) {}
+
+            // 2) Contatos da sessão (varia por versão do Baileys).
             try {
               const contacts = nazu.store?.contacts || {};
               for (const key of Object.keys(contacts)) {
                 if (String(key).split('@')[0].split(':')[0] !== base) continue;
                 const c = contacts[key] || {};
                 const cand = c.notify || c.verifiedName || c.name || c.subject;
-                if (!ehGenerico(cand) && !ehNumero(cand)) return String(cand).trim();
+                if (!ehGenericoNome(cand) && !ehNumeroDoMembro(cand)) return String(cand).trim();
               }
             } catch (e) {}
 
-            // 2) Metadata do grupo (notify/name).
+            // 3) Metadata do grupo (notify/name).
             try {
-              const membro = (groupMetadata.participants || []).find((p) => {
-                const ids = [p?.id, p?.lid, p?.phoneNumber, p?.pn]
-                  .filter(Boolean)
-                  .map((v) => String(v).split('@')[0].split(':')[0]);
-                return ids.includes(base);
-              });
               const cand = membro?.notify || membro?.name || membro?.pushName;
-              if (!ehGenerico(cand) && !ehNumero(cand)) return String(cand).trim();
-            } catch (e) {}
-
-            // 3) `getName` do socket.
-            try {
-              const nome = await nazu.getName(from, id);
-              if (!ehGenerico(nome) && !ehNumero(nome)) return String(nome).trim();
+              if (!ehGenericoNome(cand) && !ehNumeroDoMembro(cand)) return String(cand).trim();
             } catch (e) {}
 
             // 4) Padrão: o número de telefone do membro (nunca o LID).
-            try {
-              const membro = (groupMetadata.participants || []).find((p) => {
-                const ids = [p?.id, p?.lid, p?.phoneNumber, p?.pn]
-                  .filter(Boolean)
-                  .map((v) => String(v).split('@')[0].split(':')[0]);
-                return ids.includes(base);
-              });
-              const pn = membro?.phoneNumber || membro?.pn;
-              if (pn) return String(pn).split('@')[0].split(':')[0];
-            } catch (e) {}
+            if (numerosDoMembro.length) return numerosDoMembro[0];
 
             return base || 'Usuário';
           };
@@ -37905,7 +37908,7 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
           if (['criar', 'create', 'novo', 'nome', 'setnome'].includes(subcmd)) {
             const nomeGrupo = String(args.slice(1).join(' ') || '').trim();
             if (!nomeGrupo) {
-              await reply(`╭━━〔 💙 CAFÉ 〕━━╮
+              await reply(`╭━━〔 💙 Amigos 〕━━╮
 ┃
 ┃ 💡 Informe o nome do grupo.
 ┃
@@ -37937,7 +37940,7 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
           // -------------------- ADD --------------------
           if (['add', 'adicionar'].includes(subcmd)) {
             if (!alvos.length) {
-              await reply(`╭━━〔 💙 CAFÉ 〕━━╮
+              await reply(`╭━━〔 💙 Amigos 〕━━╮
 ┃
 ┃ 💡 Marque quem você quer adicionar
 ┃ ou responda a mensagem da pessoa.
@@ -37982,7 +37985,7 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
             if (cheio) linhas.push(`🚫 Limite de ${MAX_CF} membros atingido — o resto não entrou.`);
 
             await nazu.sendMessage(from, {
-              text: `╭━━〔 ${atual.nome || 'CAFÉ'} 〕━━╮\n` +
+              text: `╭━━〔 ${atual.nome || 'Amigos'} 〕━━╮\n` +
                 linhas.join('\n') + '\n' +
                 `┃ 📊 Integrantes: ${membros.length}/${MAX_CF}\n` +
                 `╰━━━━━━━━━━━━━━━━━━━━╯`,
@@ -38019,7 +38022,7 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
             if (naoTinha.length) linhas.push(`ℹ️ Não estavam: ${naoTinha.map((a) => `@${a.split('@')[0]}`).join(', ')}`);
 
             await nazu.sendMessage(from, {
-              text: `╭━━〔 ${atual.nome || 'CAFÉ'} 〕━━╮\n` +
+              text: `╭━━〔 ${atual.nome || 'Amigos'} 〕━━╮\n` +
                 linhas.join('\n') + '\n' +
                 `┃ 📊 Integrantes: ${atual.membros.length}/${MAX_CF}\n` +
                 `╰━━━━━━━━━━━━━━━━━━━━╯`,
@@ -38044,7 +38047,7 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
           // -------------------- MINI MENU --------------------
           const grupoCF = bancoCF[chaveCF];
           if (!grupoCF) {
-            await reply(`╭━━〔 💙 CAFÉ 〕━━╮
+            await reply(`╭━━〔 💙 Amigos 〕━━╮
 ┃
 ┃ Você ainda não possui um
 ┃ grupo de amizades criado.
@@ -38062,7 +38065,7 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
           grupoCF.membros.sort((a, b) => Number(a.desde || 0) - Number(b.desde || 0));
           const listaCF = grupoCF.membros.slice(0, MAX_CF);
 
-          let textoCF = `╭━━〔 ${grupoCF.nome || 'CAFÉ'} 〕━━╮\n` +
+          let textoCF = `╭━━〔 ${grupoCF.nome || 'Amigos'} 〕━━╮\n` +
             `┃ 👥 Membros: ${MAX_CF}\n` +
             `┃ 📊 Integrantes: ${listaCF.length}/${MAX_CF}\n` +
             `╰━━━━━━━━━━━━━━━━━━━━╯\n\n`;
@@ -38093,8 +38096,8 @@ ${tempo.includes('nunca') ? '😂 Brincadeira! Nunca desista dos seus sonhos!' :
             contextInfo: gerarContextNewsletter()
           }, { quoted: info });
         } catch (e) {
-          console.log('ERRO CAFÉ:', e);
-          await reply('❌ Ocorreu um erro no sistema de café.');
+          console.log('ERRO AMIGOS:', e);
+          await reply('❌ Ocorreu um erro no sistema de amigos.');
         }
         break;
       }

@@ -13,7 +13,7 @@
  * O "Nick" passa a ser o NOME DO CONTATO (store.contacts) — nunca o LID. Aqui
  * o socket falso fornece `store.contacts` justamente para provar isso.
  *
- * Roda o HANDLER REAL com socket falso. Uso: node tests/cafe.test.js
+ * Roda o HANDLER REAL com socket falso. Uso: node tests/amigos.test.js
  */
 
 import fs from 'fs';
@@ -24,14 +24,14 @@ import { fileURLToPath } from 'url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 // Banco temporário ANTES de importar o bot (paths.js lê DATABASE_PATH no load).
-const TMP_DB = fs.mkdtempSync(path.join(os.tmpdir(), 'lizzy-cf-db-'));
+const TMP_DB = fs.mkdtempSync(path.join(os.tmpdir(), 'lizzy-amigos-db-'));
 process.env.DATABASE_PATH = TMP_DB;
 const GRUPOS_DIR = path.join(TMP_DB, 'grupos');
 const DONO_DIR = path.join(TMP_DB, 'dono');
 fs.mkdirSync(GRUPOS_DIR, { recursive: true });
 fs.mkdirSync(DONO_DIR, { recursive: true });
 
-const CF_FILE = path.join(DONO_DIR, 'cafe.json');
+const CF_FILE = path.join(DONO_DIR, 'amigos.json');
 
 const RESULTS = [];
 let CURRENT = null;
@@ -135,7 +135,7 @@ function makePerson(label) {
   };
 }
 
-function makeNazu({ sent, groupJid, participants }) {
+function makeNazu({ sent, groupJid, participants, getNameImpl, metaNotifyImpl, contactsExtra }) {
   const map = {};
   const contacts = {};
   for (const p of participants) {
@@ -144,6 +144,7 @@ function makeNazu({ sent, groupJid, participants }) {
     // `store.contacts` é a AGENDA da sessão: aqui é a fonte do "Nick".
     if (p.name) contacts[p.jid] = { notify: p.name };
   }
+  Object.assign(contacts, contactsExtra || {});
   return {
     sent,
     store: { contacts },
@@ -157,11 +158,11 @@ function makeNazu({ sent, groupJid, participants }) {
       return lid ? [{ jid, exists: true, lid }] : [{ jid, exists: false }];
     },
     signalRepository: { lidMapping: { getPNForLID: async (lid) => map[lid] || null } },
-    getName: async (_group, jid) => {
-      // O bot devolve o PUSH/nome do contato; aqui simulamos o `notify` da agenda.
+    getName: getNameImpl || (async (_group, jid) => {
+      // O bot devolve o NOME DO CONTATO (agenda) — é a fonte preferida.
       const p = participants.find((x) => x.lid === jid || x.jid === jid);
       return p?.name || String(jid || '').split('@')[0];
-    },
+    }),
     groupMetadata: async () => ({
       id: groupJid,
       subject: 'Grupo CF',
@@ -169,7 +170,7 @@ function makeNazu({ sent, groupJid, participants }) {
         id: p.lid,
         lid: p.lid,
         phoneNumber: p.jid,
-        notify: p.name,
+        notify: metaNotifyImpl ? metaNotifyImpl(p) : p.name,
         admin: p.isAdmin ? 'admin' : null,
       })),
     }),
@@ -193,8 +194,8 @@ function makeNazu({ sent, groupJid, participants }) {
  * - `mentionIds`: JIDs/LIDs marcados (o handler normaliza para LID);
  * - `quoted`: pessoa RESPONDIDA (o alvo quando não há menção).
  */
-async function run({ groupJid, sender, text, mentions = [], quoted = null, sent = [], participants }) {
-  const nazu = makeNazu({ sent, groupJid, participants });
+async function run({ groupJid, sender, text, mentions = [], quoted = null, sent = [], participants, getNameImpl, metaNotifyImpl, contactsExtra }) {
+  const nazu = makeNazu({ sent, groupJid, participants, getNameImpl, metaNotifyImpl, contactsExtra });
   const contextInfo = { remoteJid: groupJid };
   if (mentions.length) contextInfo.mentionedJid = mentions.map((m) => m.lid || m);
   if (quoted) contextInfo.participant = quoted.lid;
@@ -452,6 +453,60 @@ await test('19. Nick é o NOME DO CONTATO — nunca o LID', async () => {
   includes(t, `@${alvo.lid.split('@')[0]}`, 'mostra a menção @numero');
 });
 
+await test('19b. o nome vem do `getName` do contato — não do metadata/número', async () => {
+  resetCF();
+  // Grupo NOVO + membro pré-gravado: assim o ÚNICO comando naquele grupo é o
+  // `!cf` final, e o metadata cacheado (TTL 10s) é o que passamos com override.
+  const groupJid = makeGroup();
+  const user = makePerson('Usuario');
+  const alvo = makePerson('Alvo');
+  const participants = [
+    { lid: user.lid, jid: user.jid, name: user.name, isAdmin: true },
+    { lid: alvo.lid, jid: alvo.jid, name: alvo.name },
+    { lid: BOT_LID, jid: BOT_JID, name: 'Lizzy', isAdmin: true },
+  ];
+  fs.writeFileSync(CF_FILE, JSON.stringify({
+    [user.lid]: { nome: 'Grupo', criadoEm: Date.now(), membros: [{ id: alvo.lid, desde: Date.now() }] },
+  }, null, 2));
+
+  // `getName` devolve o NOME DA AGENDA; o metadata devolve o NÚMERO.
+  const sent = await run({
+    groupJid, sender: user, text: '!cf', participants,
+    getNameImpl: async (_g, jid) => (jid.includes(alvo.lid.split('@')[0]) ? 'NomeDaAgenda' : user.name),
+    metaNotifyImpl: (p) => p.jid.split('@')[0], // metadata entrega o número
+    contactsExtra: { [alvo.jid]: {} },
+  });
+  const t = textOf(sent);
+  includes(t, '💙 Nick: NomeDaAgenda', 'usa o nome do contato (getName)');
+  notIncludes(t, `Nick: ${alvo.number}`, 'não usa o número do metadata');
+});
+
+await test('19c. sem nome nenhum: cai no NÚMERO (nunca no LID)', async () => {
+  resetCF();
+  const groupJid = makeGroup();
+  const user = makePerson('Usuario');
+  const alvo = makePerson('Alvo');
+  const participants = [
+    { lid: user.lid, jid: user.jid, name: user.name, isAdmin: true },
+    { lid: alvo.lid, jid: alvo.jid, name: alvo.name },
+    { lid: BOT_LID, jid: BOT_JID, name: 'Lizzy', isAdmin: true },
+  ];
+  fs.writeFileSync(CF_FILE, JSON.stringify({
+    [user.lid]: { nome: 'Grupo', criadoEm: Date.now(), membros: [{ id: alvo.lid, desde: Date.now() }] },
+  }, null, 2));
+
+  const nLid = alvo.lid.split('@')[0];
+  const sent = await run({
+    groupJid, sender: user, text: '!cf', participants,
+    getNameImpl: async (_g, jid) => jid.split('@')[0],  // devolve o id cru
+    metaNotifyImpl: () => '',                          // metadata sem nome
+    contactsExtra: { [alvo.jid]: {} },                 // agenda sem nome
+  });
+  const t = textOf(sent);
+  includes(t, `💙 Nick: ${alvo.number}`, 'cai no número de telefone');
+  notIncludes(t, `💙 Nick: ${nLid}`, 'NUNCA cai no LID');
+});
+
 await test('20. sem grupo criado: o mini menu convida a criar', async () => {
   resetCF();
   const { groupJid, user, participants } = setup();
@@ -480,14 +535,14 @@ await test('22. alias !melhoresamigos é o mesmo comando', async () => {
   resetCF();
   const { groupJid, user, participants } = setup();
   const s1 = await run({ groupJid, sender: user, text: '!melhoresamigos', participants });
-  includes(textOf(s1), 'CAFÉ', 'melhoresamigos responde');
+  includes(textOf(s1), 'Amigos', 'melhoresamigos responde');
 });
 
-await test('23. persistência: grava em DONO_DIR/cafe.json', async () => {
+await test('23. persistência: grava em DONO_DIR/amigos.json', async () => {
   resetCF();
   const { groupJid, user, participants } = setup();
   await run({ groupJid, sender: user, text: '!cf criar Grupo', participants });
-  ok(fs.existsSync(CF_FILE), 'existe cafe.json em dono/');
+  ok(fs.existsSync(CF_FILE), 'existe amigos.json em dono/');
 });
 
 await test('24. newsletter: a resposta leva o cabeçalho de canal', async () => {

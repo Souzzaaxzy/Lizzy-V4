@@ -6509,7 +6509,7 @@ do flag até o motor; a validação visual real (não tocar no grupo) exige uma
 sessão de WhatsApp, que não existe neste ambiente. `!musicap` funciona igual nos
 dois modos (a call existir é o que importa para o áudio).
 
-## COMANDO `!cf` (`!melhoresamigos`) — GRUPO de amizades (set/2026) ✅
+## COMANDO `!cf` (`!melhoresamigos`) — GRUPO de amizades / "Amigos" (set/2026) ✅
 Comando migrado de outro bot. A primeira versão era `!ma` (lista solta de
 "melhores amigos"); o dono **refatorou** para o conceito de **grupo de
 amizades** com nome, comandos separados e um mini menu. Nome principal
@@ -6549,18 +6549,27 @@ amizades** com nome, comandos separados e um mini menu. Nome principal
 ```
 Medalhas 🥇/🥈/🥉 para os três primeiros, 👤 para o resto; ordenado por antiguidade.
 
-### "Nick" = NOME DO CONTATO (era o LID — corrigido)
+### "Nick" = NOME DO CONTATO (era o LID/número — corrigido)
 `pegarNomeCF(id)` resolve, nesta ordem:
-1. **`store.contacts`** da sessão (`notify`/`verifiedName`/`name`) — o nome que a
-   pessoa salvou na **agenda**;
-2. `groupMetadata.participants` (`notify`/`name`);
-3. `nazu.getName`;
+1. **`nazu.getName(from, id)`** — é a fonte que devolve o **NOME DO CONTATO**
+   salvo na agenda (com queda para o pushName). **Primeira** de propósito: era a
+   última e por isso o Nick caía no número;
+2. `store.contacts` da sessão (`notify`/`verifiedName`/`name`/`subject`) —
+   varia conforme a versão do Baileys;
+3. `groupMetadata.participants` (`notify`/`name`/`pushName`);
 4. **número de telefone** do membro (fallback);
 5. o próprio id como último recurso.
 
-**Descarta** o que é genérico (`Usuário`/`user`/`unknown`/…) e o que é **número**
-nas etapas 1-3, para o "Nick" nunca cair no LID nem repetir o @menção. Teste 19
-prova: com `store.contacts` preenchido, o Nick é o nome; **não** é o LID nem o número.
+**Descarta** o que é genérico (`Usuário`/`user`/`unknown`/…) e o que é **número
+ou JID** — inclusive o número **do próprio membro** (protege contra o `getName`
+do Baileys devolver o id cru, o que faria o Nick cair no número). Nunca é o LID
+nem repete o @menção. Testes 19/19b/19c provam os três caminhos:
+nome do contato, precedência do `getName`, e o fallback no número (nunca no LID).
+
+### Rótulo da caixa
+O placeholder é **`Amigos`** (era `CAFÉ`) — vale para o mini menu sem grupo
+criado, para o `criar` sem nome e para o cabeçalho sem nome definido. O arquivo
+de persistência também é **`amigos.json`**.
 
 ### Adaptações em relação ao código original
 (As mesmas da versão anterior, mantidas.)
@@ -6569,7 +6578,7 @@ prova: com `store.contacts` preenchido, o Nick é o nome; **não** é o LID nem 
 | `yuta.sendMessage` / `yt` | `nazu.sendMessage` / `info` | nomes do handler |
 | `__ctxMencoesGlobal()` + `__normalizarAlvoUsuario()` | menções (`menc_jid2`, LID) + `menc_os2` (respondido, LID) | o handler já resolve/converte para LID |
 | `canalInfo([sender])` | `gerarContextNewsletter()` **dentro do content** | a fork lê `message.contextInfo`; em `options` seria ignorado |
-| caminho do outro projeto | `DONO_DIR/cafe.json` | caminho era do projeto de origem |
+| caminho do outro projeto | `DONO_DIR/amigos.json` | caminho era do projeto de origem |
 | `fs.writeFileSync` cru | `writeJsonFile` | escrita atômica (tmp único + rename) |
 | `jidNum`/`pushnames`/`buscarMembroPorJid` | `store.contacts` + `groupMetadata` + `nazu.getName` + número | essas funções **não existem** aqui |
 
@@ -6579,7 +6588,7 @@ prova: com `store.contacts` preenchido, o Nick é o nome; **não** é o LID nem 
   nome de usuário pode ter qualquer caractere).
 - `normCF(id)` normaliza para a forma de LID do handler (remove `:device`).
 - **Erro**: `try/catch` responde mensagem amigável (sem stack) e loga
-  `ERRO CAFÉ:` no console.
+  `ERRO AMIGOS:` no console.
 
 ### Menu / blockPv
 - `menubn` (RELACIONAMENTOS): `│ 💙 ${prefix}cf` (era `!ma`). Baseline do
@@ -6588,14 +6597,14 @@ prova: com `store.contacts` preenchido, o Nick é o nome; **não** é o LID nem 
 - O antigo **`!ma` e os aliases `melhoresamigos`/`bestfriends` foram removidos** —
   `!ma` agora cai no menu de comando não encontrado.
 
-### Testes — `tests/cafe.test.js` (**24 testes / 51 asserções**)
+### Testes — `tests/amigos.test.js` (**26 testes / 55 asserções**)
 Roda o **handler real** com socket falso: guardas (fora de grupo, modo
 brincadeira off); `criar` (sem nome e válido, com persistência); `add` (sem
 alvo, antes de criar, por **menção**, por **resposta**, **múltiplo**, já
 existente, de si mesmo); `kick` (um, **múltiplo**, inexistente, sem alvo);
 `del` (válido e sem grupo); **mini menu** (caixa/medalhas/tempo/rodapés);
 **Nick = nome do contato, nunca o LID**; sem grupo criado; **limite de 20**;
-alias `!melhoresamigos`; persistência em `DONO_DIR/cafe.json`; **newsletter**.
+alias `!melhoresamigos`; persistência em `DONO_DIR/amigos.json`; **newsletter**.
 **Armadilha**: o throttle é por remetente (3/5s) — os testes rodam como o bot
 (`fromMe: true`). O `desbold` cobre MATHEMATICAL BOLD, SANS-SERIF BOLD e
 SANS-SERIF BOLD ITALIC.
