@@ -7085,10 +7085,27 @@ O `generateWAMessageContent` da fork **não conhece**
 `generateWAMessage`/`sendMessage` (verificado: `getContentType` devolve
 `newsletterFollowerInviteMessageV2`). Sem isso, nenhum card sai.
 
+### FOTO e NOME do canal no card
+O card **já levava o nome** (`newsletterName`); a **foto** entrou como
+**`jpegThumbnail`** — é o campo que o `NewsletterFollowerInviteMessageV2` usa
+para a imagem no proto (verificado: sobrevive ao `encode`/`decode`).
+
+- **De onde vem a foto**: o `newsletterMetadata` já pede
+  `fetch_full_image: true`, então a resposta traz o **`preview`** (blob base64)
+  **pronto** — sem download extra. `fotoDoMetadataNewsletter(meta)` extrai
+  (aceita string base64, data-URI e `{ base64 }`). Se só vier
+  `picture.directPath`, o handler baixa por `getUrlFromDirectPath`.
+- **Cache de 30 min** por JID (`_canalFotoCache`): buscar em toda divulgação
+  seria desperdício e o preview muda pouco.
+- **A foto nunca derruba o envio**: qualquer falha (metadata fora, download,
+  base64 inválido) devolve `null` e o card sai **só com o nome** — melhor que um
+  thumbnail vazio ou o envio falhando.
+
 ### Módulo novo `dados/src/utils/canalDivulgacao.js` (puro)
 `normalizarIdGrupo` (aceita `@g.us` ou dígitos; recusa não-grupo), `ehJidCanal`,
-`buildFollowChannelContent` (monta o card com `raw`), `normalizarGrupos`
-(tolera formato antigo/errado e deduplica), `adicionarGrupo`, `removerGrupo`.
+`buildFollowChannelContent` (monta o card com `raw` e `foto`→`jpegThumbnail`),
+`fotoDoMetadataNewsletter` (extrai o preview), `normalizarGrupos` (tolera
+formato antigo/errado e deduplica), `adicionarGrupo`, `removerGrupo`.
 Sem socket e sem arquivo — testável direto.
 
 ### Storage próprio
@@ -7102,7 +7119,7 @@ O `!divdono` tem `time/addtime/deltime` com cron. Aqui **não** entrou: o dono
 pediu "mesma ideia de comandos" para o CARD, e o envio manual cobre o uso. Se
 quiser agendar depois, é uma adição em cima da mesma base.
 
-### Testes — `tests/divcanal.test.js` (**14 testes / 49 asserções**)
+### Testes — `tests/divcanal.test.js` (**17 testes / 58 asserções**)
 Módulo puro (validação do id de grupo, card, normalização/CRUD) + handler real:
 `add` sem id registra o **grupo atual**, `add` por id, duplicado, envio **nos
 grupos registrados** apontando para o **canal do bot**, recusa sem grupo
@@ -7111,8 +7128,9 @@ intacto**, legenda salva/avulsa, list, status, rem por número/id, help,
 permissão de dono, e que o `divcanal` está na mesma seção do `divdono`.
 **Verificado que os testes MEDEM as mudanças**: removendo o `raw` do card, os
 testes **2 e 7** falham; voltando o `add` a salvar CANAL e o envio a usar
-"canais", os testes **5/6** e **4/7/8** falham. Baseline do `menu-layout`
-`menudono` 165 → **171**.
+"canais", os testes **5/6** e **4/7/8** falham; e **desligando a busca da foto**,
+o teste **14** falha (2 asserções). Baseline do `menu-layout` `menudono`
+165 → **171**.
 
 Regressões verdes: `menu-layout` 25/251, `statusgrupo` 49/143,
 `statusgrupo-figurinha` 16/36, `ia` 17/42, `delete-status` 11/55, `donos` 5/17,

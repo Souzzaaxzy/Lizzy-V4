@@ -43,10 +43,10 @@ export function ehJidCanal(jid) {
 /**
  * Conteúdo do card "seguir canal".
  *
- * @param {{ jid: string, nome?: string, caption?: string }} p
+ * @param {{ jid: string, nome?: string, caption?: string, foto?: Buffer }} p
  * @returns {{ object: object, tipo: string }}
  */
-export function buildFollowChannelContent({ jid, nome = '', caption = '' } = {}) {
+export function buildFollowChannelContent({ jid, nome = '', caption = '', foto = null } = {}) {
   if (!ehJidCanal(jid)) {
     throw new Error('JID de canal inválido');
   }
@@ -55,11 +55,42 @@ export function buildFollowChannelContent({ jid, nome = '', caption = '' } = {})
     newsletterName: String(nome || 'Canal'),
   };
   if (caption) interno.caption = String(caption);
+  // A foto do canal entra como `jpegThumbnail` (é o campo que o card usa no
+  // proto). Sem foto, o campo fica de fora — o card sai só com nome, que é
+  // melhor do que um thumbnail vazio.
+  if (Buffer.isBuffer(foto) && foto.length > 0) interno.jpegThumbnail = foto;
   return {
     tipo: 'newsletterFollowerInviteMessageV2',
     // `raw` faz o proto passar direto pelo generateWAMessageContent.
     object: { raw: true, newsletterFollowerInviteMessageV2: interno },
   };
+}
+
+/**
+ * O `newsletterMetadata` devolve a foto em `preview` (blob base64) **ou** em
+ * `picture.directPath` (que precisa de download à parte). Este helper extrai a
+ * foto PRONTA quando ela vem no `preview` — é o caminho simples e sem rede.
+ *
+ * @param {object} meta resposta de `sock.newsletterMetadata(...)`
+ * @returns {Buffer|null}
+ */
+export function fotoDoMetadataNewsletter(meta) {
+  const preview = meta?.preview;
+  if (!preview) return null;
+  let b64 = null;
+  if (typeof preview === 'string') {
+    b64 = preview;
+  } else if (typeof preview === 'object') {
+    b64 = preview.base64 || preview.preview || null;
+  }
+  if (!b64 || typeof b64 !== 'string') return null;
+  try {
+    const limpo = b64.includes(',') ? b64.split(',').pop() : b64;
+    const buf = Buffer.from(limpo, 'base64');
+    return buf.length > 0 ? buf : null;
+  } catch {
+    return null;
+  }
 }
 
 /**

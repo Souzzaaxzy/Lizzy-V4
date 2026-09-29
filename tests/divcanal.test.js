@@ -30,6 +30,8 @@ fs.mkdirSync(DONO_DIR, { recursive: true });
 
 // Canal do PROJETO (global.json -> channel), como o bot usa nos cabecalhos.
 const CANAL_PROJETO = '120363410980452460@newsletter';
+// JPEG minimo (base64) para provar que a foto vai no card
+const FOTO_B64 = '/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==';
 fs.writeFileSync(path.join(TMP_DB, 'global.json'), JSON.stringify({
   channel: { channelJid: CANAL_PROJETO, channelName: 'Lizzy' },
 }, null, 2));
@@ -141,6 +143,12 @@ async function rodar(text, { registrar = null } = {}) {
     signalRepository: { lidMapping: { getPNForLID: async () => null } },
     contacts: { getName: () => undefined }, getName: () => undefined,
     // newsletterMetadata resolve o LINK -> JID (é o que o `add` usa)
+    // preview = blob base64 (caminho simples, sem download) — como a fork devolve
+    newsletterMetadata: async (tipo, valor) => ({
+      id: tipo === 'jid' ? valor : CANAL_PROJETO,
+      name: 'Canal',
+      preview: FOTO_B64,
+    }),
     groupMetadata: async (jidAlvo) => ({
       id: jidAlvo || grupoAtual, subject: 'Grupo Destino', owner: `${DONO_NUM}@s.whatsapp.net`,
       participants: [
@@ -296,6 +304,33 @@ await test('13. menu: divcanal na MESMA categoria do divdono', () => {
   const iCanal = src.indexOf('${prefix}divcanal add');
   const iFim = src.indexOf('╰', iDiv);
   ok(iDiv > 0 && iCanal > iDiv && iCanal < iFim, 'esta na mesma secao (entre divdono e o fim da caixa)');
+});
+
+await test('14. o card leva a FOTO do canal (jpegThumbnail)', async () => {
+  limpar();
+  await rodar('!divcanal add 120363000000000790@g.us');
+  const { cards } = await rodar('!divcanal send');
+  const inner = cards[0].content.newsletterFollowerInviteMessageV2;
+  ok(Buffer.isBuffer(inner.jpegThumbnail) && inner.jpegThumbnail.length > 0, 'tem thumbnail');
+  const { proto } = await import('@itsliaaa/baileys');
+  const dec = proto.Message.decode(proto.Message.encode({ newsletterFollowerInviteMessageV2: inner }).finish());
+  ok(dec.newsletterFollowerInviteMessageV2.jpegThumbnail?.length === inner.jpegThumbnail.length, 'thumb sobrevive ao encode');
+});
+
+await test('15. o card sai mesmo se a foto falhar (nunca quebra)', async () => {
+  limpar();
+  await rodar('!divcanal add 120363000000000791@g.us');
+  const { texto, cards } = await rodar('!divcanal send');
+  ok(cards.length === 1, 'o card saiu');
+  contem(texto, 'Enviados: 1', 'confirmou o envio');
+});
+
+await test('16. fotoDoMetadataNewsletter extrai o preview (e tolera lixo)', () => {
+  ok(mod.fotoDoMetadataNewsletter({ preview: FOTO_B64 })?.length > 0, 'preview base64');
+  ok(mod.fotoDoMetadataNewsletter({ preview: `data:image/jpeg;base64,${FOTO_B64}` })?.length > 0, 'data-uri');
+  ok(mod.fotoDoMetadataNewsletter({ preview: { base64: FOTO_B64 } })?.length > 0, 'objeto com base64');
+  ok(mod.fotoDoMetadataNewsletter({}) === null, 'sem preview -> null');
+  ok(mod.fotoDoMetadataNewsletter(null) === null, 'null tolerado');
 });
 
 // ============================================================================

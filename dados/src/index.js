@@ -12,7 +12,8 @@ import {
   makeCacheableSignalKeyStore,
   proto,
   stickerToMp4,
-  isAnimatedWebP
+  isAnimatedWebP,
+  getUrlFromDirectPath
 } from '@itsliaaa/baileys';
 import {
   buildMessageReport,
@@ -34,7 +35,7 @@ import { toOggOpus } from './utils/oggOpus.js';
 import { resolverNomeContato, resolverNomesContatos, acharParticipantePorId, nomeInutil, baseId } from './utils/contactName.js';
 import { converterGifParaMp4 } from './utils/gifMedia.js';
 import { figurinhaParaStatus } from './utils/stickerStatus.js';
-import { normalizarIdGrupo, ehJidCanal, buildFollowChannelContent, normalizarGrupos, adicionarGrupo, removerGrupo } from './utils/canalDivulgacao.js';
+import { normalizarIdGrupo, ehJidCanal, buildFollowChannelContent, fotoDoMetadataNewsletter, normalizarGrupos, adicionarGrupo, removerGrupo } from './utils/canalDivulgacao.js';
 import sharp from 'sharp';
 import * as ghostDetection from './utils/ghostDetection.js';
 import { bold as boldLayout, boldItalic as boldItalicLayout, abrirCategoria, fecharCategoria } from './menus/layout.js';
@@ -1425,6 +1426,42 @@ ADMIN_ERROR_MESSAGE = loadAdminErrorMessage();
  * Canal do PROJETO (o mesmo que o bot usa nos cabecalhos de newsletter).
  * Lido de `global.json -> channel`. Devolve `null` quando nao configurado.
  */
+// Cache da foto do canal (thumb do card). Buscar em toda divulgacao seria
+// desperdicio; o preview do canal muda pouco. TTL curto para nao ficar velho.
+const _canalFotoCache = new Map(); // jid -> { buffer, at }
+const CANAL_FOTO_TTL_MS = 30 * 60 * 1000;
+
+/**
+ * Foto (thumbnail) do canal para o card.
+ *
+ * O `newsletterMetadata` pede `fetch_full_image: true`, entao a resposta costuma
+ * trazer o `preview` (blob base64) PRONTO — sem download extra. Se vier so o
+ * `picture.directPath`, baixamos desse caminho. Falha em qualquer passo devolve
+ * `null`: o card sai sem foto, nunca quebra por causa dela.
+ */
+async function fotoDoCanal(nazuInstance, canal) {
+  if (!canal?.jid) return null;
+  const cache = _canalFotoCache.get(canal.jid);
+  if (cache && (Date.now() - cache.at) < CANAL_FOTO_TTL_MS) return cache.buffer;
+
+  let buffer = null;
+  try {
+    const meta = await nazuInstance.newsletterMetadata('jid', canal.jid);
+    buffer = fotoDoMetadataNewsletter(meta);
+    if (!buffer && meta?.picture?.directPath) {
+      const url = getUrlFromDirectPath(meta.picture.directPath);
+      const resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 20000 });
+      const buf = Buffer.from(resp.data || []);
+      if (buf.length) buffer = buf;
+    }
+  } catch (e) {
+    console.error('[DivCanal] nao consegui obter a foto do canal:', e?.message || e);
+  }
+
+  if (buffer) _canalFotoCache.set(canal.jid, { buffer, at: Date.now() });
+  return buffer;
+}
+
 function canalDoProjeto() {
   try {
     const g = JSON.parse(fs.readFileSync(pathz.join(DATABASE_DIR, 'global.json'), 'utf-8'));
@@ -5328,11 +5365,13 @@ Código: *${roleCode}*`,
         return { success: false, message: `❌ Nenhum grupo registrado. Use ${groupPrefix}divcanal add (no grupo) ou !divcanal add <id>.` };
       }
       const caption = String(captionOverride ?? cfg.caption ?? '').trim();
+      // Foto do canal (uma vez so, com cache) — vai como thumbnail do card.
+      const foto = await fotoDoCanal(nazuInstance, canal);
       let sent = 0;
       let failed = 0;
       for (const destino of destinos) {
         try {
-          const { object } = buildFollowChannelContent({ jid: canal.jid, nome: canal.nome, caption });
+          const { object } = buildFollowChannelContent({ jid: canal.jid, nome: canal.nome, caption, foto });
           await nazuInstance.sendMessage(destino, object);
           sent++;
         } catch (e) {
