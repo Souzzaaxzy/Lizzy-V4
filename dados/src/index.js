@@ -5450,7 +5450,7 @@ Código: *${roleCode}*`,
      * (`newsletterFollowerInviteMessageV2`) montado pelo módulo puro — com
      * `raw: true`, senão a fork lança `Invalid media type`.
      */
-    const runDivCanalSend = async (nazuInstance, captionOverride = null, destinoOverride = null) => {
+    const runDivCanalSend = async (nazuInstance, captionOverride = null, destinoOverride = null, source = 'manual') => {
       // O CANAL e sempre o padrao do bot (global.json -> channel). O JID, o NOME
       // e a FOTO vem RESOLVIDOS pelo welcomeUrl — o `channelName` guardado pode
       // ser generico e nao refletir o canal real.
@@ -5480,7 +5480,8 @@ Código: *${roleCode}*`,
       }
       cfg.stats = cfg.stats || { totalSent: 0, lastManual: null, lastAuto: null };
       cfg.stats.totalSent = (cfg.stats.totalSent || 0) + sent;
-      cfg.stats.lastManual = new Date().toISOString();
+      if (source === 'auto') cfg.stats.lastAuto = new Date().toISOString();
+      else cfg.stats.lastManual = new Date().toISOString();
       saveDonoDivCanal(cfg);
       return { success: true, sent, failed };
     };
@@ -5530,6 +5531,72 @@ Código: *${roleCode}*`,
         }
       }
     };
+    // ─── Agendamento do !divcanal (mesma linha do !divdono) ───
+    const divCanalCronJobs = [];
+    const unscheduleDivCanalJobs = () => {
+      for (const job of divCanalCronJobs) {
+        if (job && typeof job.stop === 'function') {
+          try { job.stop(); } catch (e) { /* já parado */ }
+        }
+      }
+      divCanalCronJobs.length = 0;
+      global.divCanalCronJobs = [];
+    };
+    const scheduleDivCanalJob = (timeStr, nazuInstance) => {
+      const normalized = normalizeScheduleTime(timeStr);
+      if (!normalized) return false;
+      const [hh, mm] = normalized.split(':');
+      if (typeof hh === 'undefined' || typeof mm === 'undefined') return false;
+      const cronExpr = `${parseInt(mm, 10)} ${parseInt(hh, 10)} * * *`;
+      try {
+        const task = cron.schedule(cronExpr, async () => {
+          try {
+            const cfg = loadDonoDivCanal();
+            const schedule = cfg.schedule || {};
+            if (!schedule.enabled || !schedule.times || schedule.times.length === 0) return;
+            const targetTime = normalizeScheduleTime(timeStr);
+            if (!targetTime) return;
+            const today = getTodayStr();
+            if (hasRunForScheduleToday(schedule.lastRun, today, targetTime)) return;
+            const result = await runDivCanalSend(nazuInstance, null, null, 'auto');
+            if (result.success) {
+              recordScheduleRun(schedule, targetTime, today, targetTime);
+              cfg.schedule = schedule;
+              saveDonoDivCanal(cfg);
+            }
+          } catch (e) {
+            console.error('[DivCanal] Erro no agendamento:', e);
+          }
+        }, { timezone: 'America/Sao_Paulo' });
+        task.start();
+        divCanalCronJobs.push(task);
+        global.divCanalCronJobs = divCanalCronJobs;
+        return true;
+      } catch (e) {
+        console.error('[DivCanal] Falha ao agendar job', cronExpr, e);
+        return false;
+      }
+    };
+    const scheduleAllDivCanalJobs = (nazuInstance) => {
+      unscheduleDivCanalJobs();
+      const cfg = loadDonoDivCanal();
+      if (cfg.schedule?.enabled && cfg.schedule?.times) {
+        for (const time of cfg.schedule.times) scheduleDivCanalJob(time, nazuInstance);
+      }
+    };
+    let divCanalWorkerStarted = global.divCanalWorkerStarted || false;
+    const startDivCanalWorker = (nazuInstance) => {
+      try {
+        if (divCanalWorkerStarted) return;
+        divCanalWorkerStarted = true;
+        global.divCanalWorkerStarted = true;
+        scheduleAllDivCanalJobs(nazuInstance);
+      } catch (e) {
+        console.error('[DivCanal] Erro ao iniciar worker:', e);
+      }
+    };
+    startDivCanalWorker(nazu);
+
     const startDonoDivulgacaoWorker = (nazuInstance) => {
       try {
         if (donoDivulgacaoWorkerStarted) return;
@@ -33463,6 +33530,7 @@ break;
             `• ${groupPrefix}divcanal name [texto] — nome do card\n` +
             `• ${groupPrefix}divcanal foto — foto do card (responda a imagem)\n` +
             `• ${groupPrefix}divcanal send — envia o card nos grupos\n` +
+            `• ${groupPrefix}divcanal time <HH:MM|off> — agenda (até 7)\n` +
             `• ${groupPrefix}divcanal status — resumo\n\n` +
             `📺 *Canal usado (padrão do bot):* ${canalInfo}`;
 
@@ -33594,9 +33662,69 @@ break;
             return reply(`✅ Card(s) enviado(s).\n📨 Enviados: ${result.sent}\n⚠️ Falhas: ${result.failed}`);
           }
 
+          if (subCanal === 'time' || subCanal === 'hora' || subCanal === 'agendar'
+              || subCanal === 'addtime' || subCanal === 'deltime' || subCanal === 'removetime') {
+            const schedule = cfgCanal.schedule || { enabled: false, times: [], lastRun: null };
+            // Le SEMPRE o estado atual do cfg (o update troca o objeto inteiro;
+            // ler o `schedule` capturado mostraria o valor antigo).
+            const mostrarHorarios = () => {
+              const atual = cfgCanal.schedule || schedule;
+              const times = atual.times || [];
+              const lista = times.length ? times.map((t, i) => `  ${i + 1}. ${t}`).join('\n') : '  nenhum';
+              return `⏰ *Agendamento:* ${atual.enabled ? 'ativado' : 'desativado'}\n📋 Horários (${times.length}/7):\n${lista}`;
+            };
+
+            // `deltime <n>` remove pelo número
+            if (subCanal === 'deltime' || subCanal === 'removetime') {
+              if (!restCanal) return reply(`💡 Use: ${groupPrefix}divcanal deltime <número>`);
+              const idx = parseInt(restCanal, 10);
+              const times = schedule.times || [];
+              if (isNaN(idx) || idx < 1 || idx > times.length) {
+                return reply(`❌ Número inválido. Há ${times.length} horário(s) configurado(s).`);
+              }
+              const removido = times[idx - 1];
+              schedule.times = times.filter((_, i) => i !== idx - 1);
+              if (schedule.times.length === 0) schedule.enabled = false;
+              cfgCanal.schedule = schedule;
+              saveDonoDivCanal(cfgCanal);
+              scheduleAllDivCanalJobs(nazu);
+              return reply(`✅ Horário ${removido} removido.\n${mostrarHorarios()}`);
+            }
+
+            // `time` sem argumento: mostra o estado
+            if (!restCanal) return reply(`${mostrarHorarios()}\n\n💡 Adicionar: ${groupPrefix}divcanal time HH:MM\n💡 Remover: ${groupPrefix}divcanal deltime <n>\n💡 Desligar: ${groupPrefix}divcanal time off`);
+
+            // `time off`: desliga e limpa
+            if (['off', 'desligar', 'desativar'].includes(restCanal.toLowerCase())) {
+              cfgCanal.schedule = { enabled: false, times: [], lastRun: null };
+              saveDonoDivCanal(cfgCanal);
+              unscheduleDivCanalJobs();
+              return reply('✅ Agendamento desativado e horários removidos.');
+            }
+
+            const normalized = normalizeScheduleTime(restCanal);
+            if (!normalized) return reply('❌ Formato inválido. Use HH:MM (ex: 09:30).');
+            const times = schedule.times || [];
+            if (times.length >= 7) {
+              return reply(`❌ Limite máximo de 7 horários atingido. Use ${groupPrefix}divcanal deltime <n> para remover um.`);
+            }
+            if (times.includes(normalized)) return reply('⚠️ Este horário já está configurado.');
+            cfgCanal.schedule = {
+              enabled: true,
+              times: [...times, normalized],
+              lastRun: schedule.lastRun || null,
+            };
+            saveDonoDivCanal(cfgCanal);
+            scheduleAllDivCanalJobs(nazu);
+            return reply(`✅ Horário ${normalized} adicionado.\n${mostrarHorarios()}`);
+          }
+
           if (subCanal === 'status') {
             const legenda = String(cfgCanal.caption || '').trim();
             const lastManual = cfgCanal.stats?.lastManual ? new Date(cfgCanal.stats.lastManual).toLocaleString('pt-BR') : '—';
+            const lastAuto = cfgCanal.stats?.lastAuto ? new Date(cfgCanal.stats.lastAuto).toLocaleString('pt-BR') : '—';
+            const sched = cfgCanal.schedule || {};
+            const timesSched = sched.times || [];
             let txt = `📢 *STATUS — DIVULGAÇÃO DE CANAL*\n\n`;
             txt += `📺 Canal usado: ${canalInfo}\n`;
             txt += `👥 Grupos registrados: ${gruposCfg.length}\n`;
@@ -33604,8 +33732,11 @@ break;
             txt += `📛 Nome do card: ${String(cfgCanal.nome || '').trim() || 'automático (canal resolvido)'}\n`;
             txt += `📷 Foto do card: ${cfgCanal.fotoPath ? 'definida' : 'automática (canal resolvido)'}\n`;
             txt += `🧾 Legenda: ${legenda ? legenda.slice(0, 80) + (legenda.length > 80 ? '...' : '') : 'Nenhuma'}\n`;
+            txt += `⏰ Agendamento: ${sched.enabled ? 'ativado' : 'desativado'} (${timesSched.length}/7)\n`;
+            if (timesSched.length) txt += timesSched.map((t, i) => `  ${i + 1}. ${t}`).join('\n') + '\n';
             txt += `📨 Total enviado: ${cfgCanal.stats?.totalSent || 0}\n`;
-            txt += `🗓️ Último envio: ${lastManual}`;
+            txt += `🗓️ Último manual: ${lastManual}\n`;
+            txt += `🤖 Último automático: ${lastAuto}`;
             return reply(txt);
           }
 

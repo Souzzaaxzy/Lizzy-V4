@@ -7065,6 +7065,8 @@ o canal selecionado **no projeto inteiro** (newsletter). Mesma categoria do
 | `!divcanal msg <texto>` | legenda do card |
 | `!divcanal name [texto\|limpar]` | nome do card (vence o resolvido) |
 | `!divcanal foto [limpar]` | foto do card — responda uma imagem |
+| `!divcanal time <HH:MM\|off>` | agenda o envio (até 7 horários) |
+| `!divcanal deltime <n>` | remove um horário |
 | `!divcanal send [texto]` | envia o card **nos grupos registrados** |
 | `!divcanal status` | canal usado, grupos, legenda e total enviado |
 
@@ -7158,12 +7160,20 @@ Sem socket e sem arquivo — testável direto.
 do projeto). Arquivo separado do `divulgacao_dono.json` — não mistura os dois
 sistemas de divulgação.
 
-### Sem agendamento (de propósito)
-O `!divdono` tem `time/addtime/deltime` com cron. Aqui **não** entrou: o dono
-pediu "mesma ideia de comandos" para o CARD, e o envio manual cobre o uso. Se
-quiser agendar depois, é uma adição em cima da mesma base.
+### Agendamento (`time` / `addtime` / `deltime`) — igual ao `!divdono`
+Pedido do dono (set/2026). **Mesma linha** do `!divdono time`: `cron.schedule`
+com `timezone: 'America/Sao_Paulo'`, **até 7 horários**, dedup, `time off`
+desliga e limpa, `deltime <n>` remove pelo número. Cada job tem **lista
+própria** (`divCanalCronJobs` + flag `global.divCanalWorkerStarted`), separada da
+do `divdono` — nenhuma das duas cancela a outra. O `lastRun` por horário evita
+disparo duplicado no mesmo dia, e o envio automático marca
+`stats.lastAuto` (o manual marca `lastManual`).
+**Armadilha medida**: o `mostrarHorarios()` lia o objeto `schedule` capturado
+antes da gravação, então a resposta dizia "desativado (0/7)" logo depois de
+adicionar um horário — o teste pegou. Agora ele lê o `cfgCanal.schedule` **atual**
+(a escrita troca o objeto inteiro).
 
-### Testes — `tests/divcanal.test.js` (**24 testes / 89 asserções**)
+### Testes — `tests/divcanal.test.js` (**28 testes / 112 asserções**)
 Módulo puro (validação do id de grupo, card, normalização/CRUD) + handler real:
 `add` sem id registra o **grupo atual**, `add` por id, duplicado, envio **nos
 grupos registrados** apontando para o **canal do bot**, recusa sem grupo
@@ -7176,7 +7186,7 @@ resolvido do convite (e a foto), nunca o genérico.
 **Verificado que os testes MEDEM as mudanças**: removendo o `raw` do card, os
 testes **2 e 7** falham; desligando a **resolução pelo welcomeUrl**, os testes
 **9 e 17** falham; desligando os **manuais** (`name`/`foto`), os testes **19 e 20**
-falham; voltando o `add` a salvar CANAL e o envio a usar
+falham; removendo o `time`, os testes **23/24/25** falham; voltando o `add` a salvar CANAL e o envio a usar
 "canais", os testes **5/6** e **4/7/8** falham; e **desligando a busca da foto**,
 o teste **14** falha (2 asserções). Baseline do `menu-layout` `menudono`
 165 → **171**.

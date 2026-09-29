@@ -483,6 +483,98 @@ await test('22. help lista name e foto', async () => {
   contem(h.texto, 'divcanal foto', 'help tem foto');
 });
 
+await test('23. `!divcanal time` agenda (adiciona, dedup, limite de 7, deltime)', async () => {
+  limpar();
+  await rodar('!divcanal add 120363000000000799@g.us');
+
+  // estado inicial
+  const vazio = await rodar('!divcanal time');
+  contem(vazio.texto, 'Agendamento:* desativado', 'desativado no inicio');
+  contem(vazio.texto, 'nenhum', 'sem horarios');
+
+  // adicionar
+  const add = await rodar('!divcanal time 09:30');
+  contem(add.texto, '09:30 adicionado', 'adicionou');
+  contem(add.texto, 'Agendamento:* ativado', 'ativou');
+  let cfg = lerCfg();
+  ok(cfg.schedule?.enabled === true, 'persistiu ativado');
+  ok(cfg.schedule.times.includes('09:30'), 'gravou o horario');
+
+  // normaliza (9:5 -> 09:05) e dedup
+  await rodar('!divcanal time 9:05');
+  ok(lerCfg().schedule.times.includes('09:05'), 'normalizou 9:05 -> 09:05');
+  const dup = await rodar('!divcanal time 09:30');
+  contem(dup.texto, 'já está configurado', 'nao duplica');
+
+  // formato invalido
+  const invalido = await rodar('!divcanal time 25:99');
+  contem(invalido.texto, 'Formato inválido', 'recusa invalido');
+
+  // limite de 7
+  const restantes = ['10:00', '11:00', '12:00', '13:00', '14:00'];
+  for (const t of restantes) await rodar(`!divcanal time ${t}`);
+  ok(lerCfg().schedule.times.length === 7, `chegou a 7 (tem ${lerCfg().schedule.times.length})`);
+  const acima = await rodar('!divcanal time 15:00');
+  contem(acima.texto, 'Limite máximo de 7', 'recusa o 8o');
+
+  // deltime remove por numero
+  const del = await rodar('!divcanal deltime 1');
+  contem(del.texto, 'removido', 'removeu');
+  ok(lerCfg().schedule.times.length === 6, 'sobrou 6');
+
+  // off limpa tudo
+  const off = await rodar('!divcanal time off');
+  contem(off.texto, 'desativado', 'desligou');
+  cfg = lerCfg();
+  ok(cfg.schedule.enabled === false && cfg.schedule.times.length === 0, 'zerou horarios');
+});
+
+await test('24. `!divcanal addtime`/`deltime` funcionam como atalhos', async () => {
+  limpar();
+  await rodar('!divcanal addtime 08:00');
+  ok(lerCfg().schedule.times.includes('08:00'), 'addtime adicionou');
+  const del = await rodar('!divcanal deltime 1');
+  contem(del.texto, 'removido', 'deltime removeu');
+  ok(lerCfg().schedule.times.length === 0, 'zerou');
+});
+
+await test('25. `!divcanal status` mostra o agendamento', async () => {
+  limpar();
+  await rodar('!divcanal time 07:15');
+  const st = await rodar('!divcanal status');
+  contem(st.texto, 'Agendamento: ativado', 'mostra ativado');
+  contem(st.texto, '07:15', 'lista o horario');
+  contem(st.texto, 'Último automático', 'tem o campo do automatico');
+});
+
+await test('26. `!divcanal time` e so do dono', async () => {
+  limpar();
+  const sent = [];
+  const gid = makeGroup();
+  const invasor = '333000000000098@lid';
+  const nazu = {
+    sendMessage: async (jid, content) => { sent.push({ jid, content }); return { key: { id: 'S' } }; },
+    user: { id: `${BOT_JID.split('@')[0]}:5@s.whatsapp.net`, lid: BOT_LID },
+    onWhatsApp: async (j) => [{ jid: j, exists: true }],
+    signalRepository: { lidMapping: { getPNForLID: async () => null } },
+    contacts: { getName: () => undefined }, getName: () => undefined,
+    newsletterMetadata: async (t, v) => ({ id: v, name: 'C' }),
+    groupMetadata: async () => ({ id: gid, subject: 'G', owner: `${DONO_NUM}@s.whatsapp.net`, participants: [{ id: invasor, lid: invasor, admin: 'admin' }] }),
+    profilePictureUrl: async () => 'x', react: async () => ({}),
+    groupParticipantsUpdate: async () => ({}), readMessages: async () => {}, sendPresenceUpdate: async () => {},
+    ev: { on: () => {}, emit: () => {}, removeAllListeners: () => {} },
+  };
+  await handleMessage(nazu, {
+    key: { remoteJid: gid, fromMe: false, id: 'M1', participant: invasor },
+    message: { extendedTextMessage: { text: '!divcanal time 09:00', contextInfo: { remoteJid: gid } } },
+    messageTimestamp: 1757900000, pushName: 'X',
+  }, null, new Map(), null);
+  await new Promise((r) => setTimeout(r, 200));
+  const t = sent.map((s) => s.content?.text ?? '').join('\n');
+  contem(t, 'dono do bot', 'barra quem nao e dono');
+  ok(!lerCfg().schedule?.times?.length, 'nada foi agendado');
+});
+
 // ============================================================================
 // RESUMO
 // ============================================================================

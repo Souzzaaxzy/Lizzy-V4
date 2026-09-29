@@ -226,6 +226,7 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 │ 📛 ${prefix}divcanal name
 │ 📷 ${prefix}divcanal foto
 │ 📤 ${prefix}divcanal send
+│ ⏰ ${prefix}divcanal time
 │ 📊 ${prefix}divcanal status
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
