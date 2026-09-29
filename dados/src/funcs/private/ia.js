@@ -1529,19 +1529,85 @@ Usuário: "muta esse maluco" (com tem_mencao=true)
 
 // ========== FUNÇÃO GOOGLE GEMINI ==========
 // Modelo Gemini padrão (estável e disponível na API — verificado em ago/2026)
-// Modelos VÁLIDOS da Gemini API (nomes que existem de verdade). O id vinha
-// como `gemini-3.7-flash`, que não existe — TODA chamada dava 404.
-const GEMINI_DEFAULT_MODEL = 'gemini-2.5-flash';
-const GEMINI_FALLBACK_MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro'];
-const GEMINI_VALID_MODELS = new Set([...GEMINI_FALLBACK_MODELS, 'gemini-2.5-flash-lite']);
+// Alias ROLANTE: o Google mantém `gemini-flash-latest` apontando para a release
+// atual de Flash — o nome NÃO envelhece (ao contrário de `gemini-2.5-flash`,
+// que passou a responder 404 "no longer available to new users").
+const GEMINI_ROLLING_ALIASES = ['gemini-flash-latest', 'gemini-pro-latest'];
+const GEMINI_DEFAULT_MODEL = GEMINI_ROLLING_ALIASES[0];
 
-// Seam de HTTP: o teste injeta um poster falso para exercitar a cadeia de
-// modelos e a classificação de erro sem abrir rede. Em produção é o axios.
+// Último recurso: nomes conhecidos + os que o próprio Google sugeriu na
+// mensagem de erro. A ordem importa (flash primeiro: mais rápido/barato).
+const GEMINI_FALLBACK_MODELS = [
+  ...GEMINI_ROLLING_ALIASES,
+  'gemini-3-flash-preview',
+  'gemini-3.1-pro-preview',
+  'gemini-3-pro-preview',
+  'gemini-2.5-flash',
+  'gemini-2.5-flash-lite',
+  'gemini-2.5-pro',
+];
+const GEMINI_VALID_MODELS = new Set(GEMINI_FALLBACK_MODELS);
+
+// Seam de HTTP: o teste injeta poster/getter falsos para exercitar a cadeia de
+// modelos sem abrir rede. Em produção é o axios.
 let _httpPost = null;
-function setGeminiHttpForTest(fn) {
-  _httpPost = typeof fn === 'function' ? fn : null;
+let _httpGet = null;
+function setGeminiHttpForTest(postFn, getFn) {
+  _httpPost = typeof postFn === 'function' ? postFn : null;
+  _httpGet = typeof getFn === 'function' ? getFn : null;
 }
 const postGemini = (url, data, config) => (_httpPost ? _httpPost(url, data, config) : axios.post(url, data, config));
+const getGemini = (url, config) => (_httpGet ? _httpGet(url, config) : axios.get(url, config));
+
+// Cache da descoberta de modelos (por key). TTL curto: se o Google mudar os
+// nomes, o bot se atualiza no máximo em 1h.
+const _modelosCache = { key: null, at: 0, modelos: [] };
+const MODELOS_TTL_MS = 60 * 60 * 1000;
+
+/**
+ * Descobre, na conta do usuário, quais modelos existem e suportam
+ * `generateContent`. É o que impede o bot de morrer quando o Google renomeia os
+ * modelos. Em qualquer falha devolve `[]` (e a lista estática entra em ação).
+ */
+async function descobrirModelos(apiKey) {
+  const agora = Date.now();
+  if (_modelosCache.key === apiKey && (agora - _modelosCache.at) < MODELOS_TTL_MS) {
+    return _modelosCache.modelos;
+  }
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}&pageSize=1000`;
+    const resp = await getGemini(url, { timeout: 20000 });
+    const lista = Array.isArray(resp?.data?.models) ? resp.data.models : [];
+    const nomes = lista
+      .filter((m) => Array.isArray(m?.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent'))
+      .map((m) => String(m.name || '').replace(/^models\//, ''))
+      .filter((n) => n && !/embedding|aqa|tts|image|audio|live|transcribe|veo|imagen|robotics/i.test(n));
+    // Prefere flash/estáveis; evita experimental quando houver alternativa.
+    const nota = (n) => {
+      let sc = 0;
+      if (/flash/i.test(n)) sc += 4;
+      if (/pro/i.test(n)) sc += 2;
+      if (/latest$/i.test(n)) sc += 3;
+      if (/preview|exp|experimental/i.test(n)) sc -= 2;
+      const v = n.match(/(\d+)\.(\d+)/);
+      if (v) sc += (Number(v[1]) * 10 + Number(v[2])) / 100;
+      return sc;
+    };
+    const ordenados = [...new Set(nomes)].sort((a, b) => nota(b) - nota(a));
+    // Só cacheia resultado ÚTIL: cachear lista vazia (falha momentânea da
+    // ListModels) travaria a descoberta por 1h e derrubaria os comandos.
+    if (ordenados.length) {
+      _modelosCache.key = apiKey;
+      _modelosCache.at = agora;
+      _modelosCache.modelos = ordenados;
+      console.log('[Gemini API] Modelos disponíveis na conta:', ordenados.slice(0, 5).join(', '));
+    }
+    return ordenados;
+  } catch (e) {
+    console.warn('[Gemini API] Não consegui listar os modelos:', e?.message || e);
+    return [];
+  }
+}
 
 /**
  * Normaliza o id de modelo que chega do chamador.
@@ -1555,7 +1621,6 @@ const postGemini = (url, data, config) => (_httpPost ? _httpPost(url, data, conf
 function normalizeModelId(modelo) {
   const m = String(modelo || '').trim();
   if (!m) return GEMINI_DEFAULT_MODEL;
-  if (GEMINI_VALID_MODELS.has(m)) return m;
   if (m.startsWith('gemini-')) return m;
   return GEMINI_DEFAULT_MODEL;
 }
@@ -1661,7 +1726,11 @@ async function makeGeminiRequest(modelo, texto, systemPrompt = null, historico =
     });
   };
 
-  const cadeia = [model, ...GEMINI_FALLBACK_MODELS.filter((m) => m !== model)];
+  // Ordem da cadeia: o modelo pedido (normalmente um alias rolante) e, se ele
+  // não existir mais, os que a CONTA realmente tem (descobertos) e por fim a
+  // lista estática. Assim um rename do Google não derruba mais nada.
+  const descobertos = await descobrirModelos(apiKey);
+  const cadeia = [...new Set([model, ...GEMINI_ROLLING_ALIASES, ...descobertos, ...GEMINI_FALLBACK_MODELS])];
   let ultimoErro = null;
 
   for (const modelName of cadeia) {
@@ -3514,6 +3583,8 @@ export {
   getGeminiApiKey,
   GEMINI_DEFAULT_MODEL,
   GEMINI_FALLBACK_MODELS,
+  GEMINI_ROLLING_ALIASES,
   normalizeModelId,
+  descobrirModelos,
   setGeminiHttpForTest,
 };

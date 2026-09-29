@@ -7067,10 +7067,33 @@ conhece esses nomes. Troquei os 32 por `ia.GEMINI_DEFAULT_MODEL` e adicionei
 `normalizeModelId()`: qualquer id fora de `gemini-*` cai no default, então um
 call site esquecido no futuro não volta a quebrar.
 
-### 3. Fallback automático de modelo (à prova de depreciação)
+### 3. Fallback automático + MODELO DINÂMICO (à prova de depreciação) ✅
 `makeGeminiRequest` tenta o modelo pedido e, em **404/400** ("esse modelo não
 existe"), passa para o próximo da lista em vez de queimar as tentativas no mesmo
 nome. Em **401/403** (key) falha na hora — insistir não adianta.
+
+**Segunda rodada (o dono testou e os modelos `gemini-2.5-*` também davam 404):**
+o log dele mostrou
+`This model models/gemini-2.5-pro is no longer available to new users. Please
+update your code to use models/gemini-3.1-pro-preview`. Modelo hardcoded
+**sempre** envelhece — então a correção definitiva foi parar de depender de um
+nome fixo:
+
+1. **Alias ROLANTE** (`gemini-flash-latest` → `GEMINI_DEFAULT_MODEL`): o Google
+   documenta esses nomes como apontando para a release atual da variação; não
+   envelhecem (`GEMINI_ROLLING_ALIASES = ['gemini-flash-latest',
+   'gemini-pro-latest']`).
+2. **Descoberta (`descobrirModelos`)**: `GET /v1beta/models` com a key do usuário
+   lista os modelos que a conta enxerga e filtra os que suportam
+   `generateContent` (e não são embedding/tts/imagem/etc). Ordena por
+   flash/estável. A cadeia de tentativa passou a ser
+   `[modelo pedido, aliases rolantes, DESCOBERTOS, lista estática]`. Quando o
+   Google renomear tudo de novo, o bot se adapta sozinho.
+3. **Lista estática** de último recurso, já incluindo os nomes sugeridos no 404
+   (`gemini-3-flash-preview`, `gemini-3.1-pro-preview`, `gemini-3-pro-preview`).
+4. **Cache só de resultado útil** (1h, por key): cachear a lista **vazia** de uma
+   falha momentânea da ListModels travaria a descoberta e derrubaria os comandos
+   (bug pego pelo teste 15).
 
 ### 4. A mensagem de erro nunca aparecia
 Todo comando checava `e.message.includes('API key inválida')`, mas o módulo
@@ -7091,7 +7114,7 @@ mas aceita injeção via **`setGeminiHttpForTest(fn)`** — é o que permite tes
 cadeia de modelos e a classificação de erro **sem rede** (o sandbox não tem key
 Gemini).
 
-### Testes — `tests/ia.test.js` (**14 testes / 34 asserções**)
+### Testes — `tests/ia.test.js` (**17 testes / 42 asserções**)
 Modelos válidos + `normalizeModelId`; nenhum call site com modelo de outra API;
 URL usa o modelo válido; **404 cai para o fallback**; sem key pede configuração;
 401/403 falha rápido (1 chamada só); 429 classificado; resposta formatada ao
@@ -7099,7 +7122,8 @@ usuário; erro de key orienta o `!key`; erro de limite avisa; o helper único co
 a região dos comandos de IA; `!imagine` existe e o `generateImage` devolve URL.
 **Verificado que os testes MEDEM os bugs**: revertendo o default para
 `gemini-3.7-flash` e o `normalizeModelId` para repassar o id cru, **5 asserções
-falham**. Regressões verdes: `menu-layout` 25/251, `subdonos` 20/62,
+falham**; removendo a DESCOBERTA da cadeia, o teste 15 (medido com um nome que
+**só existe na conta**, `gemini-5.0-flash`) **falha**. Regressões verdes: `menu-layout` 25/251, `subdonos` 20/62,
 `subdonos-perms` 21/58, `donos` 5/17, `antictt` 15/38, `antiroubo` 22/68,
 `dono-perfil` 47/0, `me-profile` 44/0, `get-message-inspector` 54/269,
 `cmd-suggest` 21/68, `blacklist-number` 12/38, `antimidia` 14/29,

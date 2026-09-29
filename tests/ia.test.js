@@ -69,11 +69,14 @@ function erroHttp(status, message = 'erro') {
 // 1) MODELOS
 // ============================================================================
 
-await test('1. modelo default e um nome VALIDO da Gemini API', () => {
-  ok(ia.GEMINI_DEFAULT_MODEL.startsWith('gemini-'), 'prefixo gemini-');
-  ok(!/3\.7|3\.6|4\./.test(ia.GEMINI_DEFAULT_MODEL), 'nao usa versao inexistente');
-  ok(Array.isArray(ia.GEMINI_FALLBACK_MODELS) && ia.GEMINI_FALLBACK_MODELS.length >= 1, 'tem fallback');
+await test('1. default usa ALIAS ROLANTE (nao envelhece) e ha fallbacks', () => {
+  ok(ia.GEMINI_DEFAULT_MODEL.endsWith('-latest'), 'default e alias rolante');
+  ok(ia.GEMINI_ROLLING_ALIASES.includes(ia.GEMINI_DEFAULT_MODEL), 'esta na lista de aliases');
+  ok(ia.GEMINI_ROLLING_ALIASES.every((m) => m.endsWith('-latest')), 'todos os aliases sao rolantes');
+  ok(Array.isArray(ia.GEMINI_FALLBACK_MODELS) && ia.GEMINI_FALLBACK_MODELS.length >= 3, 'tem fallback');
   ok(ia.GEMINI_FALLBACK_MODELS.every((m) => m.startsWith('gemini-')), 'fallbacks validos');
+  // nomes que o proprio Google sugeriu no 404 do dono
+  ok(ia.GEMINI_FALLBACK_MODELS.some((m) => /gemini-3.*(pro|flash)/.test(m)), 'inclui os nomes sugeridos pelo 404');
 });
 
 await test('2. normalizeModelId traduz id de outra API para um modelo Gemini', () => {
@@ -96,7 +99,7 @@ await test('3. NENHUM call site usa modelo de outra API', () => {
 
 await test('4. usa o modelo valido na URL e devolve o texto', async () => {
   let urlVista = null;
-  ia.setGeminiHttpForTest(async (url) => { urlVista = url; return respostaGemini('Ola do Gemini'); });
+  ia.setGeminiHttpForTest(async (url) => { urlVista = url; return respostaGemini('Ola do Gemini'); }, async () => ({ data: { models: [] } }));
   ia.setGeminiApiKey('chave-de-teste');
   const r = await ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', 'oi', null);
   contem(urlVista, ia.GEMINI_DEFAULT_MODEL, 'URL com o modelo valido');
@@ -111,7 +114,7 @@ await test('5. 404 no modelo pedido cai para o fallback (nao falha)', async () =
     vistas.push(url);
     if (url.includes('gemini-9.9-nova')) throw erroHttp(404, 'model not found');
     return respostaGemini('veio do fallback');
-  });
+  }, async () => ({ data: { models: [] } }));
   ia.setGeminiApiKey('chave-de-teste');
   const r = await ia.makeCognimaRequest('gemini-9.9-nova', 'oi', null);
   ok(vistas.length >= 2, 'tentou mais de um modelo');
@@ -130,7 +133,7 @@ await test('6. sem key lanca erro claro de configuracao', async () => {
 
 await test('7. 401/403 nao insiste em outro modelo (falha rapido)', async () => {
   let chamadas = 0;
-  ia.setGeminiHttpForTest(async () => { chamadas += 1; throw erroHttp(403, 'API key not valid'); });
+  ia.setGeminiHttpForTest(async () => { chamadas += 1; throw erroHttp(403, 'API key not valid'); }, async () => ({ data: { models: [] } }));
   ia.setGeminiApiKey('chave-ruim');
   let erro = null;
   try { await ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, 'oi', null); } catch (e) { erro = e; }
@@ -140,7 +143,7 @@ await test('7. 401/403 nao insiste em outro modelo (falha rapido)', async () => 
 });
 
 await test('8. 429 esgota as tentativas e lanca erro classificado', async () => {
-  ia.setGeminiHttpForTest(async () => { throw erroHttp(429, 'quota'); });
+  ia.setGeminiHttpForTest(async () => { throw erroHttp(429, 'quota'); }, async () => ({ data: { models: [] } }));
   ia.setGeminiApiKey('chave-de-teste');
   let erro = null;
   try { await ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, 'oi', null, [], 1); } catch (e) { erro = e; }
@@ -203,7 +206,7 @@ async function runIA(text, { waitMs = 250 } = {}) {
 }
 
 await test('9. resposta de IA chega formatada ao usuario', async () => {
-  ia.setGeminiHttpForTest(async () => respostaGemini('**Negrito** e texto normal'));
+  ia.setGeminiHttpForTest(async () => respostaGemini('**Negrito** e texto normal'), async () => ({ data: { models: [] } }));
   ia.setGeminiApiKey('chave-de-teste');
   const t = await runIA('!cog quem descobriu o Brasil?');
   contem(t, 'Negrito', 'conteudo da IA');
@@ -212,7 +215,7 @@ await test('9. resposta de IA chega formatada ao usuario', async () => {
 });
 
 await test('10. erro de key mostra a orientacao de configurar (!key)', async () => {
-  ia.setGeminiHttpForTest(async () => { throw erroHttp(403, 'API key not valid'); });
+  ia.setGeminiHttpForTest(async () => { throw erroHttp(403, 'API key not valid'); }, async () => ({ data: { models: [] } }));
   ia.setGeminiApiKey('chave-ruim');
   const t = await runIA('!cog teste');
   contem(t, 'key', 'orienta a configurar a key');
@@ -220,7 +223,7 @@ await test('10. erro de key mostra a orientacao de configurar (!key)', async () 
 });
 
 await test('11. erro de limite avisa para aguardar (nao some)', async () => {
-  ia.setGeminiHttpForTest(async () => { throw erroHttp(429, 'quota'); });
+  ia.setGeminiHttpForTest(async () => { throw erroHttp(429, 'quota'); }, async () => ({ data: { models: [] } }));
   ia.setGeminiApiKey('chave-de-teste');
   // o 429 tem backoff exponencial (1s + 2s) antes de desistir
   const t = await runIA('!resumir um texto qualquer aqui', { waitMs: 6000 });
@@ -255,6 +258,43 @@ await test('13. !imagine existe e envia uma imagem', async () => {
 await test('14. generateImage devolve URL http', async () => {
   const url = await ia.generateImage('um gato');
   ok(typeof url === 'string' && /^https?:\/\//.test(url), 'URL valida');
+});
+
+await test('15. DESCOBERTA: usa a ListModels da conta quando o modelo pedido sumiu', async () => {
+  // O nome `gemini-5.0-flash` NAO esta na lista estatica: so a conta o conhece.
+  // Sem a descoberta o bot morreria no 404; com ela, se adapta sozinho.
+  const NOME_NOVO = 'gemini-5.0-flash';
+  ok(!ia.GEMINI_FALLBACK_MODELS.includes(NOME_NOVO), 'o nome de teste nao esta na lista estatica');
+  const vistas = [];
+  ia.setGeminiHttpForTest(
+    async (url) => {
+      vistas.push(url);
+      if (!url.includes(NOME_NOVO)) throw erroHttp(404, 'models/gemini-2.5-flash is no longer available to new users');
+      return respostaGemini('respondeu com o modelo da conta');
+    },
+    async () => ({ data: { models: [
+      { name: `models/${NOME_NOVO}`, supportedGenerationMethods: ['generateContent'] },
+      { name: 'models/embedding-001', supportedGenerationMethods: ['embedContent'] },
+    ] } }),
+  );
+  ia.setGeminiApiKey('chave-de-teste');
+  const r = await ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, 'oi', null);
+  ok(vistas.some((u) => u.includes(NOME_NOVO)), 'usou o modelo que a conta tem (descoberto)');
+  ok(r.data.choices[0].message.content === 'respondeu com o modelo da conta', 'respondeu');
+  ia.setGeminiHttpForTest(null);
+});
+
+await test('16. DESCOBERTA ignora modelos sem generateContent', async () => {
+  const modelos = await ia.descobrirModelos('chave-x');
+  ok(Array.isArray(modelos), 'devolve lista');
+  ok(!modelos.some((m) => /embedding/.test(m)), 'filtra embedding');
+});
+
+await test('17. DESCOBERTA falha em silencio (ListModels fora do ar)', async () => {
+  ia.setGeminiHttpForTest(null, async () => { throw new Error('sem rede'); });
+  const modelos = await ia.descobrirModelos('chave-y');
+  ok(Array.isArray(modelos) && modelos.length === 0, 'devolve [] e nao lanca');
+  ia.setGeminiHttpForTest(null);
 });
 
 // ============================================================================
