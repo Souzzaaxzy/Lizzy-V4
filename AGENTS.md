@@ -7050,6 +7050,77 @@ antigo media a semântica velha). Regressões verdes: `donos` 5/17, `menu-layout
 **Efeito no `!menu`**: o menu do subdono mostra `Cargo: Admin`, coerente com o
 novo privilégio.
 
+## `!statusgrupo` — FIGURINHA no status + MENÇÃO vira NICK (set/2026) ✅
+Dois pedidos do dono no mesmo comando.
+
+### 1. Figurinha direto para o status
+Antes a figurinha caía em "mídia não suportada" (o status aceita `image`,
+`video` e `audio`; a figurinha é **WebP**). Agora **responder uma figurinha com
+`!statusgrupo`** publica a mídia no status, com a mesma transformação da família
+`!togif`/`!toimg`:
+
+| entrada | vira | como |
+|---|---|---|
+| figurinha **animada** | **MP4 em loop** (`gifPlayback: true`) | `stickerToMp4` da fork (o decoder de WebP do FFmpeg ignora `ANIM`/`ANMF`) |
+| figurinha **estática** | **PNG** | `sharp` (preserva o alfa) |
+
+**Módulo novo `dados/src/utils/stickerStatus.js`** (`figurinhaParaStatus`) — não
+depende do handler: recebe o buffer e devolve
+`{ type, buffer, mimetype, gifPlayback? }`. As dependências entram por parâmetro
+(`stickerToMp4`, `isAnimatedWebP`, `sharpLib`), então é testável sem elas. Tem
+`isWebP`/`detectImageFormat` próprios e um detector de animação **de reserva**
+(procura os chunks `ANIM`/`ANMF`/flag do `VP8X`) caso a fork não esteja
+disponível. Erros são controlados: sem FFmpeg → mensagem pedindo o FFmpeg; sem
+sharp e sem formato aceito → mensagem pedindo o sharp. View once também funciona
+(o resolvedor descasca o encapsulamento).
+
+`gifPlayback` **sobrevive ao encapsulamento** em `groupStatusMessageV2` —
+verificado com o encode real da fork.
+
+### 2. Menção vira NICK (era o LID)
+O texto de uma mensagem com menção carrega `@<base>` — em grupo, a base do LID.
+No status o cliente **não resolve** isso, então o dono via o LID (ex.:
+`@123456789012345`) em vez do nick. Novo helper **`trocarMencoesPorNome`**
+(`index.js`, escopo do módulo): para cada `@<base>` conhecido (o que está em
+`mentionedJid`, os telefones do metadata e o próprio alvo), resolve o nome com o
+resolvedor ÚNICO (`utils/contactName.js` — agenda > notify > verifiedName >
+metadata > fallback) e troca no texto. Aplicado nos **três** caminhos: status de
+**texto**, **legenda** de imagem/vídeo e **legenda** da figurinha.
+
+**O que não casa fica como está** — melhor manter `@numero` do que apagar a
+menção ou inventar um nome. A regex usa `(?![0-9])` para não casar prefixo de
+outro id, e o nome só substitui quando é um nome **real** (nunca quando o
+resolvedor devolve o próprio número).
+
+### Testes — `tests/statusgrupo-figurinha.test.js` (novo, **12 testes / 29 asserções**)
+Handler real + caminho real da fork (`generateWAMessageContent`) + webp animado
+**de verdade** (chunks `VP8X[ANIM]`+`ANIM`+`ANMF`, montados à mão como no
+`togif.test.js`) e webp estático do `sharp`, servidos **cifrados** por HTTP local
+(hkdf + AES). Cobre: animada → `videoMessage` com `gifPlayback` (payload e
+envio), estática → `imageMessage` PNG, legenda, view once, "não publica sticker
+cru", e as três trocas de menção (texto, legenda, sem menção, id desconhecido).
+**Verificado que os testes MEDEM as duas mudanças**: revertendo o ramo da
+figurinha e o helper de menções, **17 asserções falham**.
+
+**PRÉ-REQUISITO**: FFmpeg no PATH para a figurinha **animada** (a estática usa
+só o sharp). Sem FFmpeg a suíte roda, mas os casos de animada falham por falta do
+binário — não por bug do comando. Para rodar aqui: ffmpeg estático em
+`/workspace/bin` e `PATH="/workspace/bin:$PATH" node tests/...`.
+
+**Correção de teste pré-existente**: o `tests/statusgrupo.test.js` tinha 2
+falhas — (a) o teste "figurinha respondida não vira status" media o
+comportamento ANTIGO e foi reescrito para o novo; (b) a asserção do `menuadm`
+comparava `GESTÃO DO GRUPO` em ASCII, mas o título sai em MATHEMATICAL BOLD
+ITALIC (`boldItalic`, base `U+1D468`) — falhava no baseline também (confirmado
+com `git stash`). Agora usa `desbold()` com a faixa certa: **49 testes / 143
+asserções, 0 falhas**.
+
+Regressões verdes: `delete-status` 11/55, `menu-layout` 25/251, `ia` 17/42,
+`subdonos` 20/62, `subdonos-perms` 21/58, `antiroubo` 22/68, `donos` 5/17,
+`antictt` 15/38, `togif` 10/24, `dono-perfil` 47/0, `me-profile` 44/0,
+`get-message-inspector` 54/269. `viewonce-v2` mantém a falha **pré-existente**
+do temporário quando o FFmpeg está no PATH (documentada).
+
 ## SISTEMA DE IA — CORREÇÃO GERAL (provider Google Gemini) (set/2026) ✅
 O dono relatou que **todos** os comandos de IA estavam quebrados (usando
 Meta/Gemini de API). Eram **quatro** defeitos somados — cada um derrubava a

@@ -33,6 +33,8 @@ import { parseImagePollArgs, collectPollImages, resolveAttachments, buildOptionN
 import { toOggOpus } from './utils/oggOpus.js';
 import { resolverNomeContato, resolverNomesContatos, acharParticipantePorId, nomeInutil, baseId } from './utils/contactName.js';
 import { converterGifParaMp4 } from './utils/gifMedia.js';
+import { figurinhaParaStatus } from './utils/stickerStatus.js';
+import sharp from 'sharp';
 import * as ghostDetection from './utils/ghostDetection.js';
 import { bold as boldLayout, boldItalic as boldItalicLayout, abrirCategoria, fecharCategoria } from './menus/layout.js';
 import {
@@ -1482,6 +1484,41 @@ const mensagemErroIA = (e) => {
   }
   return '😓 Ops, a IA não respondeu agora. Tente novamente em alguns instantes. 🌈';
 };
+
+/**
+ * Troca as menções de uma mensagem pelos NOMES das pessoas.
+ *
+ * O texto de uma mensagem com menção carrega `@<base>` (em grupo, a base do
+ * LID). No status isso não é resolvido pelo cliente — e o dono via o LID em vez
+ * do nick. Aqui cada `@<base>` conhecido (o que está em `mentionedJid`, os
+ * telefones do metadata e o próprio alvo) é trocado pelo nome resolvido.
+ *
+ * O que NÃO casar fica como está: melhor manter `@numero` do que apagar a
+ * menção ou inventar um nome.
+ *
+ * @returns {Promise<string>} o texto com os nomes no lugar dos `@base`
+ */
+async function trocarMencoesPorNome(texto, ids, { nazu, metadata, from } = {}) {
+  let out = String(texto ?? '');
+  if (!out.includes('@')) return out;
+  const lista = [...new Set((Array.isArray(ids) ? ids : [ids]).filter(Boolean))];
+  if (!lista.length) return out;
+
+  for (const id of lista) {
+    const base = baseId(id);
+    if (!base) continue;
+    // Pode aparecer como `@base` exato ou com dígitos extras (device).
+    const re = new RegExp(`@${base}(?![0-9])`, 'g');
+    if (!re.test(out)) continue;
+    let nome = base;
+    try {
+      nome = await resolverNomeContato(id, { nazu, metadata, from });
+    } catch { /* mantém a base */ }
+    if (!nome || nome === base) continue; // sem nome real: não troca
+    out = out.replace(re, `@${nome}`);
+  }
+  return out;
+}
 
 const formatAIResponse = (text) => {
   if (!text || typeof text !== 'string') return text;
@@ -29201,7 +29238,8 @@ packname: `${nomebot}`,
           // que as implementações de Group Status em uso colocam junto do flag;
           // `canReceiveMultiReact` acompanha o `canBeReshared` no mesmo bloco.
           // O botão em si é do WhatsApp — o bot só declara a permissão.
-          // MÍDIA nos tipos aceitos: imagem, vídeo e áudio.
+          // MÍDIA nos tipos aceitos: imagem, vídeo e áudio. A FIGURINHA entra
+          // pela conversão (webp não é aceito no status) — tratada mais abaixo.
           const TIPOS_STATUS = ['image', 'video', 'audio'];
           const statusContent = {
             groupStatus: true,
@@ -29213,7 +29251,62 @@ packname: `${nomebot}`,
             }
           };
 
-          if (midiaStatus && TIPOS_STATUS.includes(midiaStatus.type)) {
+          // FIGURINHA (webp) responde ao comando → converte e publica.
+          // Anima (webp animado) vira MP4 com `gifPlayback`; estática vira PNG.
+          if (midiaStatus && midiaStatus.type === 'sticker') {
+            let stickerBuf;
+            try {
+              stickerBuf = await getFileBuffer(midiaStatus.media, 'sticker');
+            } catch (dlErr) {
+              const motivo = describeMediaError(dlErr);
+              return reply(
+                motivo
+                  ? `❌ Não consegui baixar essa figurinha: ${motivo}.`
+                  : '❌ Não foi possível baixar a figurinha marcada.'
+              );
+            }
+            if (!stickerBuf || !Buffer.isBuffer(stickerBuf) || stickerBuf.length === 0) {
+              return reply('❌ A figurinha marcada veio vazia. Tente novamente.');
+            }
+
+            let convertida;
+            try {
+              convertida = await figurinhaParaStatus(stickerBuf, {
+                stickerToMp4,
+                isAnimatedWebP,
+                sharpLib: sharp,
+              });
+            } catch (convErr) {
+              console.error('[STATUSGRUPO] Falha ao converter figurinha:', convErr?.message || convErr);
+              const semFfmpeg = /ffmpeg|stickerToMp4/i.test(String(convErr?.message));
+              const semSharp = /sharp/i.test(String(convErr?.message));
+              return reply(
+                semFfmpeg
+                  ? '❌ Para publicar a figurinha animada preciso do *FFmpeg* instalado no servidor.'
+                  : semSharp
+                    ? '❌ Para publicar a figurinha preciso do *sharp* instalado (rode o install).'
+                    : '❌ Não consegui converter essa figurinha para o status.'
+              );
+            }
+
+            statusContent[convertida.type] = convertida.buffer;
+            statusContent.mimetype = convertida.mimetype;
+            if (convertida.type === 'video') {
+              // MP4 em loop: é assim que o WhatsApp anima (mesmo caminho do
+              // `!togif`). Sem isso o vídeo sairia parado no status.
+              statusContent.gifPlayback = true;
+            }
+            // Legenda: o texto digitado no comando vence; senão a legenda da
+            // figurinha (raramente existe) — e as menções viram NOME.
+            const legendaSticker = legendaStatus || extractText(quotedStatus);
+            if (legendaSticker) {
+              statusContent.caption = await trocarMencoesPorNome(
+                legendaSticker,
+                [...(menc_jid2 || []), menc_os2, mencOs2JidOriginal],
+                { nazu, metadata: groupMetadata, from }
+              );
+            }
+          } else if (midiaStatus && TIPOS_STATUS.includes(midiaStatus.type)) {
             // Baixa UMA vez, com o mesmo caminho dos outros comandos
             // (downloadContentFromMessage + mediaKey). Sem sistema paralelo.
             let buffer;
@@ -29270,7 +29363,14 @@ packname: `${nomebot}`,
               // legenda que já acompanhava a mídia respondida.
               const legendaDaMidia = extractText(quotedStatus);
               const caption = legendaStatus || legendaDaMidia;
-              if (caption) statusContent.caption = caption;
+              if (caption) {
+                // Menção vira NOME (o cliente não resolve `@lid` num status).
+                statusContent.caption = await trocarMencoesPorNome(
+                  caption,
+                  [...(menc_jid2 || []), menc_os2, mencOs2JidOriginal],
+                  { nazu, metadata: groupMetadata, from }
+                );
+              }
             }
           } else {
             // Sem mídia dos tipos aceitos. Se o alvo for uma mídia NÃO suportada
@@ -29281,16 +29381,22 @@ packname: `${nomebot}`,
 
             // Texto digitado no comando ou o texto da mensagem respondida
             // (mensagem de texto pura também vira status).
-            const textoStatus = legendaStatus || (!midiaNaoSuportada && extractText(quotedStatus));
-            if (!textoStatus) {
+            const textoStatusBruto = legendaStatus || (!midiaNaoSuportada && extractText(quotedStatus));
+            if (!textoStatusBruto) {
               return reply(
                 '❌ Responda a uma mensagem (foto, vídeo, áudio ou texto) ou digite o conteúdo.\n\n' +
-                '• Mídia: responda a foto/vídeo/áudio e use `!statusgrupo`\n' +
+                '• Mídia: responda a foto/vídeo/áudio/figurinha e use `!statusgrupo`\n' +
                 '• Mídia com legenda: `!statusgrupo Minha legenda` (respondendo a mídia)\n' +
                 '• Texto: `!statusgrupo Bom dia, grupo!`'
               );
             }
-            statusContent.text = textoStatus;
+            // Menção vira NOME: o dono via o LID no status; o cliente não
+            // resolve `@lid` no texto de uma publicação.
+            statusContent.text = await trocarMencoesPorNome(
+              textoStatusBruto,
+              [...(menc_jid2 || []), menc_os2, mencOs2JidOriginal],
+              { nazu, metadata: groupMetadata, from }
+            );
           }
 
           // Aviso temporário de processamento.

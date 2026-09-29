@@ -689,15 +689,19 @@ await test('documento COM legenda não vira status de texto (não engana)', asyn
   includes(texto, 'Responda a uma mensagem', 'explica o uso em vez de usar a legenda do doc');
 });
 
-await test('figurinha respondida não vira status', async () => {
+await test('figurinha respondida vira status (converte para midia)', async () => {
+  // Antes a figurinha caia em "midia nao suportada". Agora ela e convertida:
+  // animada -> MP4 (gifPlayback), estatica -> PNG. Aqui usamos uma URL falsa
+  // (nao da para baixar) e conferimos que o comando TENTA o caminho da
+  // figurinha (avisa que nao conseguiu baixar) em vez de recusar de saida.
   const groupJid = makeGroup();
   const { texto, publicacao } = await rodar({
     groupJid,
     text: '!statusgrupo',
     quoted: { stickerMessage: { url: 'https://x/y', mimetype: 'image/webp' } },
   });
-  ok(!publicacao, 'não publica figurinha');
-  includes(texto, 'Responda a uma mensagem', 'explica o uso');
+  includes(texto, 'figurinha', 'reconhece a figurinha como midia publicavel');
+  ok(!publicacao, 'nao publica sem conseguir baixar');
 });
 
 // ============================================================================
@@ -918,7 +922,23 @@ await test('menuadm: statusgrupo listado (comando de administração)', async ()
   const mod = await import(new URL('../dados/src/menus/menuadm.js', import.meta.url).href);
   const texto = String(await (mod.default ?? mod)('!', 'Lizzy', 'Teste'));
   includes(texto, '!statusgrupo', 'a saída do menuadm traz o comando');
-  includes(texto, 'GESTÃO DO GRUPO', 'está na seção de gestão do grupo');
+  // O título da categoria sai em MATHEMATICAL BOLD ITALIC; converte antes de
+  // comparar (mesma solução dos outros testes de layout). Era uma falha
+  // pré-existente deste teste.
+  const desbold = (t) => {
+    let out = '';
+    for (const ch of String(t)) {
+      const cp = ch.codePointAt(0);
+      if (cp >= 0x1d400 && cp <= 0x1d419) out += String.fromCharCode(65 + (cp - 0x1d400));
+      else if (cp >= 0x1d41a && cp <= 0x1d433) out += String.fromCharCode(97 + (cp - 0x1d41a));
+      // MATHEMATICAL BOLD ITALIC (o `boldItalic` dos menus): base U+1D468.
+      else if (cp >= 0x1d468 && cp <= 0x1d481) out += String.fromCharCode(65 + (cp - 0x1d468));
+      else if (cp >= 0x1d482 && cp <= 0x1d49b) out += String.fromCharCode(97 + (cp - 0x1d482));
+      else out += ch;
+    }
+    return out;
+  };
+  includes(desbold(texto), 'GESTÃO DO GRUPO', 'está na seção de gestão do grupo');
 });
 
 await test('menumemb: statusgrupo NÃO aparece mais (é de admin)', async () => {
