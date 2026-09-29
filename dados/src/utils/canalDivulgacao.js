@@ -87,8 +87,18 @@ export function buildFollowChannelContent({
 
   return {
     tipo: 'newsletterFollowerInviteMessageV2',
-    // `raw` faz o proto passar direto pelo generateWAMessageContent.
-    object: { raw: true, newsletterFollowerInviteMessageV2: interno },
+    // Formato NATIVO da fork (`newsletterInvite`): ela monta e valida o proto
+    // `NewsletterFollowerInviteMessageV2` (campo 113). O cabeçalho "Ver canal"
+    // vai no `contextInfo`, que a fork mescla no card.
+    object: {
+      newsletterInvite: {
+        jid: interno.newsletterJid,
+        name: interno.newsletterName,
+        text: interno.caption,
+        thumbnail: interno.jpegThumbnail,
+      },
+      contextInfo: interno.contextInfo,
+    },
   };
 }
 

@@ -17,7 +17,7 @@ import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-import { generateWAMessage, getContentType } from '@itsliaaa/baileys';
+import { generateWAMessage, generateWAMessageContent, getContentType } from '@itsliaaa/baileys';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -76,14 +76,15 @@ await test('1b. ehJidCanal valida o canal padrao', () => {
   ok(!mod.ehJidCanal('120363000000000001@g.us'), 'grupo nao e canal');
 });
 
-await test('2. buildFollowChannelContent monta o card do CANAL com raw:true', () => {
+await test('2. buildFollowChannelContent usa o formato NATIVO (newsletterInvite)', async () => {
   const { object, tipo } = mod.buildFollowChannelContent({ jid: CANAL_PROJETO, nome: 'Lizzy', caption: 'Siga!' });
   ok(tipo === 'newsletterFollowerInviteMessageV2', 'tipo do card');
-  ok(object.raw === true, 'raw: true (senao a fork lanca Invalid media type)');
-  const inner = object.newsletterFollowerInviteMessageV2;
-  ok(inner.newsletterJid === CANAL_PROJETO, 'jid no card');
-  ok(inner.newsletterName === 'Lizzy', 'nome no card');
-  ok(inner.caption === 'Siga!', 'legenda no card');
+  ok(object.newsletterInvite?.jid === CANAL_PROJETO, 'formato nativo da fork');
+  // o card MONTADO (pela fork) tem os campos do proto
+  const card = await cardDe(object);
+  ok(card?.newsletterJid === CANAL_PROJETO, 'jid no card');
+  ok(card?.newsletterName === 'Lizzy', 'nome no card');
+  ok(card?.caption === 'Siga!', 'legenda no card');
   let erro = null;
   try { mod.buildFollowChannelContent({ jid: 'abc@s.whatsapp.net' }); } catch (e) { erro = e; }
   ok(erro && /canal/i.test(erro.message), 'recusa jid que nao e canal');
@@ -168,8 +169,20 @@ async function rodar(text, { registrar = null } = {}) {
   await handleMessage(nazu, info, null, new Map(), null);
   await new Promise((r) => setTimeout(r, 250));
   const texto = sent.map((s) => s.content?.text ?? s.content?.caption ?? '').filter(Boolean).join('\n');
-  const cards = sent.filter((s) => s.content?.newsletterFollowerInviteMessageV2);
+  const cards = sent.filter((s) => s.content?.newsletterInvite || s.content?.newsletterFollowerInviteMessageV2);
   return { sent, texto, cards, gid: grupoAtual };
+}
+
+/**
+ * Extrai o card MONTADO a partir do conteudo enviado. O comando manda o formato
+ * nativo (`newsletterInvite`); quem monta o `NewsletterFollowerInviteMessageV2`
+ * e o `generateWAMessageContent` da fork — entao o teste passa pelo caminho real.
+ */
+async function cardDe(content) {
+  if (content?.newsletterFollowerInviteMessageV2) return content.newsletterFollowerInviteMessageV2;
+  const { proto } = await import('@itsliaaa/baileys');
+  const gerado = await generateWAMessageContent(content, { userJid: '5599999999999@s.whatsapp.net', upload: async () => ({ url: 'x', directPath: '/v' }) });
+  return gerado?.newsletterFollowerInviteMessageV2 || proto.Message.decode(proto.Message.encode(gerado).finish()).newsletterFollowerInviteMessageV2;
 }
 
 /** Passa o card pelo caminho REAL da fork e devolve o tipo que chega. */
@@ -228,11 +241,11 @@ await test('8. a legenda salva vai no card e no envio', async () => {
   limpar();
   await rodar('!divcanal add 120363000000000780@g.us');
   await rodar('!divcanal msg Entre no canal 💜');
-  const { cards } = await rodar('!divcanal send');
-  ok(cards[0].content.newsletterFollowerInviteMessageV2.caption === 'Entre no canal 💜', 'legenda salva usada');
+  const a = await rodar('!divcanal send');
+  ok((await cardDe(a.cards[0].content)).caption === 'Entre no canal 💜', 'legenda salva usada');
   // texto passado no send sobrescreve
   const r = await rodar('!divcanal send Legenda pontual');
-  ok(r.cards[0].content.newsletterFollowerInviteMessageV2.caption === 'Legenda pontual', 'legenda do send vence');
+  ok((await cardDe(r.cards[0].content)).caption === 'Legenda pontual', 'legenda do send vence');
 });
 
 await test('9. list e status mostram os GRUPOS e o canal padrao', async () => {
@@ -310,8 +323,8 @@ await test('14. o card leva a FOTO do canal (jpegThumbnail)', async () => {
   limpar();
   await rodar('!divcanal add 120363000000000790@g.us');
   const { cards } = await rodar('!divcanal send');
-  const inner = cards[0].content.newsletterFollowerInviteMessageV2;
-  ok(Buffer.isBuffer(inner.jpegThumbnail) && inner.jpegThumbnail.length > 0, 'tem thumbnail');
+  const inner = await cardDe(cards[0].content);
+  ok(inner.jpegThumbnail?.length > 0, 'tem thumbnail');
   const { proto } = await import('@itsliaaa/baileys');
   const dec = proto.Message.decode(proto.Message.encode({ newsletterFollowerInviteMessageV2: inner }).finish());
   ok(dec.newsletterFollowerInviteMessageV2.jpegThumbnail?.length === inner.jpegThumbnail.length, 'thumb sobrevive ao encode');
@@ -329,13 +342,13 @@ await test('16b. a mensagem setada leva o cabecalho "Ver canal" (newsletter)', a
   limpar();
   await rodar('!divcanal add 120363000000000792@g.us');
   const { cards } = await rodar('!divcanal send');
-  const ci = cards[0].content.newsletterFollowerInviteMessageV2.contextInfo;
+  const inner = await cardDe(cards[0].content);
+  const ci = inner.contextInfo;
   ok(ci, 'tem contextInfo');
   ok(ci.forwardedNewsletterMessageInfo?.newsletterJid === CANAL_PROJETO, `cabecalho aponta o canal (${ci.forwardedNewsletterMessageInfo?.newsletterJid})`);
   ok(ci.isForwarded === true && ci.forwardingScore === 999, 'encaminhamento de canal');
   // e sobrevive ao encode do proto (e o que chega no destino)
   const { proto } = await import('@itsliaaa/baileys');
-  const inner = cards[0].content.newsletterFollowerInviteMessageV2;
   const dec = proto.Message.decode(proto.Message.encode({ newsletterFollowerInviteMessageV2: inner }).finish());
   ok(dec.newsletterFollowerInviteMessageV2.contextInfo?.forwardedNewsletterMessageInfo?.newsletterJid === CANAL_PROJETO, 'sobrevive ao encode');
 });

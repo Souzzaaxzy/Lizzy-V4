@@ -7077,13 +7077,34 @@ o canal selecionado **no projeto inteiro** (newsletter). Mesma categoria do
   para ele.
 - **Exclusivo do dono** (`podeDonoTotal()`), como o `!divdono`.
 
-### O detalhe que faz o card funcionar: `raw: true`
-O `generateWAMessageContent` da fork **não conhece**
-`newsletterFollowerInviteMessageV2`; sem `raw` ele cai no
-`prepareWAMessageMedia`, que **lança `Invalid media type`** (medido). O
-**`raw: true`** faz o proto passar direto — e o tipo chega intacto no
-`generateWAMessage`/`sendMessage` (verificado: `getContentType` devolve
-`newsletterFollowerInviteMessageV2`). Sem isso, nenhum card sai.
+### O SUporte NATIVO na fork (substituiu o `raw: true`)
+**Antes**: o `generateWAMessageContent` da fork **não conhecia**
+`newsletterFollowerInviteMessageV2`; sem `raw` ele caía no
+`prepareWAMessageMedia`, que lançava `Invalid media type`. O `raw: true` era um
+**passthrough** — passava o proto cru, sem montar nem validar nada.
+
+**Agora** (fork `b84913d`, commit do PR `feat(messages): suporte nativo ao card
+de seguir canal`): existe o formato nativo
+
+```js
+{ newsletterInvite: { jid, name, text?, thumbnail? } }
+```
+
+O branch monta o `NewsletterFollowerInviteMessageV2` (campo **113** do proto)
+com jid, nome, legenda e `jpegThumbnail`; se `thumbnail` não vier, tenta o hook
+`getProfilePicUrl` e baixa a URL (falha ali é engolida de propósito — o card sai
+sem foto em vez de falhar). O `raw: true` **continua funcionando** para quem já
+mandava o proto na mão.
+
+**Armadilha medida na implementação**: adicionar o card à lista de
+*future-proof/wrapper messages* (`getFutureProofMessage`) **quebra a leitura** —
+ele é **FOLHA** (não tem `.message`), e o `extractMessageContent` desembrulhava
+para `undefined` nesse caminho. O teste da fork pegou isso (o card é folha,
+não wrapper).
+
+O bot passou a usar o **formato nativo** (`dados/src/utils/canalDivulgacao.js`);
+o cabeçalho "Ver canal" continua indo pelo `contextInfo`, que a fork mescla no
+card. Lockfiles (`package-lock.json` + `yarn.lock`) pinados no commit novo.
 
 ### FOTO, NOME e CABEÇALHO "Ver canal" no card
 O card leva **nome** (`newsletterName`), **foto** (`jpegThumbnail`) e o
