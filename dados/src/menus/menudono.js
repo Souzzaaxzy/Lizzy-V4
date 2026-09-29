@@ -219,6 +219,12 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 │ 📤 ${prefix}divdono send
 │ ⏰ ${prefix}divdono time
 │ 📊 ${prefix}divdono status
+│ ➕ ${prefix}divcanal add
+│ ❌ ${prefix}divcanal rem
+│ 📋 ${prefix}divcanal list
+│ 💬 ${prefix}divcanal msg
+│ 📤 ${prefix}divcanal send
+│ 📊 ${prefix}divcanal status
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 

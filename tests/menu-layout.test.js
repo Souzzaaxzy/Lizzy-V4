@@ -283,7 +283,8 @@ const COMANDOS_POR_MENU = {
   // menudono: 165 -> 168 (sub.permitir/revogar/perms) -> 165
   // (removidos grantsubcmd/delsubcmd/listsubcmd).
   // menuadm: 177 -> 180 (`antiroubo on/off`, `listperm`, `limparperm`).
-  menuadm: 180, menudono: 165,
+  // menudono: 165 -> 171 (`divcanal` add/rem/list/msg/send/status).
+  menuadm: 180, menudono: 171,
   // menubn: 348 -> 349 (`!ma` / `!melhoresamigos` / `!bestfriends`).
   menubn: 349, menufut: 42, menurpg: 149,
   // menuvip nao tem comando cadastrado; o `!` contado e o `!addcmdvip` da

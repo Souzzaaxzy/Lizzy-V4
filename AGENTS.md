@@ -7050,6 +7050,71 @@ antigo media a semântica velha). Regressões verdes: `donos` 5/17, `menu-layout
 **Efeito no `!menu`**: o menu do subdono mostra `Cargo: Admin`, coerente com o
 novo privilégio.
 
+## COMANDO `!divcanal` — divulgação do CARD de "seguir canal" (set/2026) ✅
+Pedido do dono: na **mesma linha do `!divdono`**, um `!divcanal` que envia o
+**cardzinho nativo de "seguir canal"** (`newsletterFollowerInviteMessageV2`) com
+o canal selecionado **no projeto inteiro** (newsletter). Mesma categoria do
+`divdono` no menu (**TRANSMISSÕES**).
+
+### Comandos
+| Comando | O que faz |
+|---|---|
+| `!divcanal add <link\|JID>` | registra um canal (salva JID + nome) |
+| `!divcanal rem <JID\|nº>` | remove (aceita o número da lista) |
+| `!divcanal list` | lista os canais + o canal do projeto |
+| `!divcanal msg <texto>` | legenda do card |
+| `!divcanal send [texto]` | envia o(s) card(s) **na conversa atual** |
+| `!divcanal status` | canais, canal do projeto, legenda e total enviado |
+
+- **`add` com LINK resolve o JID**: o código do link (`whatsapp.com/channel/XXXX`)
+  **não é** o JID — quem resolve é o `newsletterMetadata('invite', …)`, que
+  também devolve o nome. Aceita JID pronto (`...@newsletter`) e o código cru.
+- **Canal do PROJETO como padrão**: sem nenhum canal registrado, o envio usa o
+  canal que o bot já usa nos cabeçalhos (`global.json → channel.channelJid` /
+  `channelName`) — a fonte que o `replyAdminError` já lia. Assim o comando
+  funciona "de berço", sem o dono precisar configurar.
+- **Exclusivo do dono** (`podeDonoTotal()`), como o `!divdono`.
+
+### O detalhe que faz o card funcionar: `raw: true`
+O `generateWAMessageContent` da fork **não conhece**
+`newsletterFollowerInviteMessageV2`; sem `raw` ele cai no
+`prepareWAMessageMedia`, que **lança `Invalid media type`** (medido). O
+**`raw: true`** faz o proto passar direto — e o tipo chega intacto no
+`generateWAMessage`/`sendMessage` (verificado: `getContentType` devolve
+`newsletterFollowerInviteMessageV2`). Sem isso, nenhum card sai.
+
+### Módulo novo `dados/src/utils/canalDivulgacao.js` (puro)
+`interpretarCanalEntrada` (jid/link/código), `ehJidCanal`,
+`buildFollowChannelContent` (monta o card com `raw`), `normalizarCanais`
+(tolera formato antigo/errado e deduplica), `adicionarCanal`, `removerCanal`.
+Sem socket e sem arquivo — testável direto.
+
+### Storage próprio
+`dono/divulgacao_canal.json` (`canais[]`, `caption`, `stats`) via
+`loadDonoDivCanal`/`saveDonoDivCanal` (`utils/database.js`, atomicidade do resto
+do projeto). Arquivo separado do `divulgacao_dono.json` — não mistura os dois
+sistemas de divulgação.
+
+### Sem agendamento (de propósito)
+O `!divdono` tem `time/addtime/deltime` com cron. Aqui **não** entrou: o dono
+pediu "mesma ideia de comandos" para o CARD, e o envio manual cobre o uso. Se
+quiser agendar depois, é uma adição em cima da mesma base.
+
+### Testes — `tests/divcanal.test.js` (**13 testes / 43 asserções**)
+Módulo puro (entrada, card, normalização/CRUD) + handler real: envio usando o
+**canal do projeto** quando nada está registrado, `add` por link (resolve via
+metadata) e por JID, duplicado não duplica, **o card passa pelo
+`generateWAMessage` real e o tipo chega intacto**, legenda salva/avulsa, list,
+status, rem por número e por JID, help, e a permissão de dono. Mais a checagem
+de que o `divcanal` está **na mesma seção** do `divdono` no menu.
+**Verificado que os testes MEDEM o `raw`**: removendo-o, os testes **2 e 7
+falham**. Baseline do `menu-layout` `menudono` 165 → **171**.
+
+Regressões verdes: `menu-layout` 25/251, `statusgrupo` 49/143,
+`statusgrupo-figurinha` 16/36, `ia` 17/42, `delete-status` 11/55, `donos` 5/17,
+`subdonos` 20/62, `subdonos-perms` 21/58, `antiroubo` 22/68, `antictt` 15/38,
+`me-profile` 44/0, `get-message-inspector` 54/269.
+
 ## `!statusgrupo` — FIGURINHA no status + MENÇÃO vira NICK (set/2026) ✅
 Dois pedidos do dono no mesmo comando.
 

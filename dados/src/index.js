@@ -34,6 +34,7 @@ import { toOggOpus } from './utils/oggOpus.js';
 import { resolverNomeContato, resolverNomesContatos, acharParticipantePorId, nomeInutil, baseId } from './utils/contactName.js';
 import { converterGifParaMp4 } from './utils/gifMedia.js';
 import { figurinhaParaStatus } from './utils/stickerStatus.js';
+import { interpretarCanalEntrada, ehJidCanal, buildFollowChannelContent, normalizarCanais, adicionarCanal, removerCanal } from './utils/canalDivulgacao.js';
 import sharp from 'sharp';
 import * as ghostDetection from './utils/ghostDetection.js';
 import { bold as boldLayout, boldItalic as boldItalicLayout, abrirCategoria, fecharCategoria } from './menus/layout.js';
@@ -1180,6 +1181,8 @@ import {
   saveDivulgacao,
   loadDonoDivulgacao,
   saveDonoDivulgacao,
+  loadDonoDivCanal,
+  saveDonoDivCanal,
   loadSubdonos,
   saveSubdonos,
   isSubdono,
@@ -1418,6 +1421,21 @@ ADMIN_ERROR_MESSAGE = loadAdminErrorMessage();
 
 
 // Função para enviar mensagem de erro admin com canal
+/**
+ * Canal do PROJETO (o mesmo que o bot usa nos cabecalhos de newsletter).
+ * Lido de `global.json -> channel`. Devolve `null` quando nao configurado.
+ */
+function canalDoProjeto() {
+  try {
+    const g = JSON.parse(fs.readFileSync(pathz.join(DATABASE_DIR, 'global.json'), 'utf-8'));
+    const jid = String(g?.channel?.channelJid || '').trim();
+    if (!/@newsletter$/i.test(jid)) return null;
+    return { jid, nome: String(g?.channel?.channelName || 'Canal').trim() };
+  } catch {
+    return null;
+  }
+}
+
 async function replyAdminError(sock, jid, message, quotedMsg = null) {
   try {
     // Carregar config do canal
@@ -5290,6 +5308,44 @@ Código: *${roleCode}*`,
       saveDonoDivulgacao(config);
       return { success: true, sent, failed };
     };
+    /**
+     * Envia o CARD de "seguir canal" para os canais registrados.
+     *
+     * Mesma linha do `runDonoDivulgacaoSend`, mas o conteúdo é o card nativo
+     * (`newsletterFollowerInviteMessageV2`) montado pelo módulo puro — com
+     * `raw: true`, senão a fork lança `Invalid media type`.
+     */
+    const runDivCanalSend = async (nazuInstance, captionOverride = null, destinoOverride = null) => {
+      // Canal do PROJETO (global.json -> channel) e usado como padrao quando o
+      // dono ainda nao registrou nenhum canal no `!divcanal`.
+      const canalPadrao = canalDoProjeto();
+      const canais = normalizarCanais(loadDonoDivCanal().canais);
+      const alvos = canais.length ? canais : (canalPadrao ? [canalPadrao] : []);
+      const caption = String(captionOverride ?? loadDonoDivCanal().caption ?? '').trim();
+      if (alvos.length === 0) {
+        return { success: false, message: '❌ Nenhum canal registrado. Use !divcanal add <link/JID>.' };
+      }
+      const destino = destinoOverride || from;
+      let sent = 0;
+      let failed = 0;
+      for (const canal of alvos) {
+        try {
+          const { object } = buildFollowChannelContent({ jid: canal.jid, nome: canal.nome, caption });
+          await nazuInstance.sendMessage(destino, object);
+          sent++;
+        } catch (e) {
+          console.error('[DivCanal] falha ao enviar:', e?.message || e);
+          failed++;
+        }
+      }
+      const config = loadDonoDivCanal();
+      config.stats = config.stats || { totalSent: 0, lastManual: null, lastAuto: null };
+      config.stats.totalSent = (config.stats.totalSent || 0) + sent;
+      config.stats.lastManual = new Date().toISOString();
+      saveDonoDivCanal(config);
+      return { success: true, sent, failed };
+    };
+
     const scheduleDonoDivulgacaoJob = (timeStr, nazuInstance) => {
       const normalized = normalizeScheduleTime(timeStr);
       if (!normalized) return false;
@@ -33243,6 +33299,132 @@ break;
           return reply(helpText);
         } catch (e) {
           console.error('Erro no comando divdono:', e);
+          await reply('💔 Ocorreu um erro ao processar o comando.');
+        }
+        break;
+      // ─── Divulgação de CANAL (cardzinho de "seguir canal") ───
+      // Mesma linha do `!divdono`: o dono registra os canais, salva uma legenda
+      // e dispara. O que muda é o conteúdo — vai o CARD NATIVO de seguir canal
+      // (`newsletterFollowerInviteMessageV2`), não texto/imagem.
+      case 'divcanal':
+        try {
+          if (!podeDonoTotal()) return reply('Apenas o dono do bot pode usar este comando.');
+          const subCanal = (args[0] || '').toLowerCase();
+          const restCanal = args.slice(1).join(' ').trim();
+          const cfgCanal = loadDonoDivCanal();
+          const canaisCfg = normalizarCanais(cfgCanal.canais);
+          const projeto = canalDoProjeto();
+          const helpCanal = `📢 *DIVULGAÇÃO DE CANAL (CARD DE SEGUIR)*\n\n` +
+            `• ${groupPrefix}divcanal add <link|JID> — registra um canal\n` +
+            `• ${groupPrefix}divcanal rem <JID|número> — remove\n` +
+            `• ${groupPrefix}divcanal list — lista os canais\n` +
+            `• ${groupPrefix}divcanal msg <texto> — legenda do card\n` +
+            `• ${groupPrefix}divcanal send [texto] — envia o(s) card(s) aqui\n` +
+            `• ${groupPrefix}divcanal status — resumo\n\n` +
+            `💡 Sem \`add\`, o envio usa o canal do PROJETO${projeto ? ` (${projeto.nome})` : ' (nenhum configurado)'}.`;
+
+          if (!subCanal || subCanal === 'help' || subCanal === 'menu') {
+            return reply(helpCanal);
+          }
+
+          if (subCanal === 'add' || subCanal === 'registrar') {
+            if (!restCanal) return reply(`💡 Use: ${groupPrefix}divcanal add <link_do_canal | JID>\nEx: ${groupPrefix}divcanal add https://whatsapp.com/channel/XXXXXXX`);
+            const entrada = interpretarCanalEntrada(restCanal);
+            if (!entrada) return reply('❌ Link/JID inválido.');
+            let jid = entrada.valor;
+            let nome = '';
+            if (entrada.tipo === 'codigo') {
+              // O código do link NÃO é o JID: quem resolve é o newsletterMetadata.
+              try {
+                const meta = await nazu.newsletterMetadata('invite', entrada.valor);
+                jid = meta?.id || '';
+                nome = meta?.name || '';
+              } catch (e) {
+                console.error('[DivCanal] invite:', e?.message || e);
+                return reply('❌ Não consegui identificar esse canal. Confira o link.');
+              }
+            }
+            if (!ehJidCanal(jid)) return reply('❌ Esse link não é de um canal válido.');
+            if (!nome) {
+              try {
+                const meta = await nazu.newsletterMetadata('jid', jid);
+                nome = meta?.name || '';
+              } catch { /* segue sem nome */ }
+            }
+            let res;
+            try {
+              res = adicionarCanal(canaisCfg, { jid, nome });
+            } catch (e) {
+              return reply('❌ JID de canal inválido.');
+            }
+            cfgCanal.canais = res.canais;
+            saveDonoDivCanal(cfgCanal);
+            return reply(res.adicionado
+              ? `✅ Canal registrado.\n📺 ${nome || jid}\n📌 Total: ${res.canais.length}`
+              : `♻️ Esse canal já estava registrado${nome ? ` — nome atualizado para "${nome}"` : ''}.\n📌 Total: ${res.canais.length}`);
+          }
+
+          if (subCanal === 'rem' || subCanal === 'remove' || subCanal === 'del') {
+            if (!restCanal) return reply(`💡 Use: ${groupPrefix}divcanal rem <JID|número da lista>`);
+            // aceita o número da lista (1-based) ou o JID
+            let alvoJid = restCanal.trim();
+            if (/^\d+$/.test(alvoJid)) {
+              const idx = Number(alvoJid) - 1;
+              if (idx < 0 || idx >= canaisCfg.length) {
+                return reply(`❌ Número inválido. Há ${canaisCfg.length} canal(is) registrado(s).`);
+              }
+              alvoJid = canaisCfg[idx].jid;
+            }
+            const res = removerCanal(canaisCfg, alvoJid);
+            if (!res.removido) return reply('⚠️ Canal não encontrado na lista.');
+            cfgCanal.canais = res.canais;
+            saveDonoDivCanal(cfgCanal);
+            return reply(`✅ Canal removido.\n📌 Total: ${res.canais.length}`);
+          }
+
+          if (subCanal === 'list' || subCanal === 'lista') {
+            if (!canaisCfg.length) {
+              return reply(`⚠️ Nenhum canal registrado.\n\n💡 Registre: ${groupPrefix}divcanal add <link>\n📺 Canal do projeto: ${projeto ? `${projeto.nome} (${projeto.jid})` : 'não configurado'}`);
+            }
+            let txt = `📢 *CANAIS REGISTRADOS (${canaisCfg.length})*\n`;
+            canaisCfg.forEach((c, i) => { txt += `\n${i + 1}. ${c.nome ? c.nome + ' — ' : ''}${c.jid}`; });
+            if (projeto) txt += `\n\n📺 *Canal do projeto:* ${projeto.nome} (${projeto.jid})`;
+            return reply(txt);
+          }
+
+          if (subCanal === 'msg' || subCanal === 'legenda' || subCanal === 'caption') {
+            if (!restCanal) {
+              const atual = String(cfgCanal.caption || '').trim() || 'Nenhuma legenda salva.';
+              return reply(`📝 *Legenda atual do card:*\n${atual}`);
+            }
+            cfgCanal.caption = restCanal;
+            saveDonoDivCanal(cfgCanal);
+            return reply('✅ Legenda do card salva.');
+          }
+
+          if (subCanal === 'send' || subCanal === 'enviar') {
+            const legenda = restCanal || null;
+            const result = await runDivCanalSend(nazu, legenda, from);
+            if (!result.success) return reply(result.message);
+            return reply(`✅ Card(s) enviado(s).\n📨 Enviados: ${result.sent}\n⚠️ Falhas: ${result.failed}`);
+          }
+
+          if (subCanal === 'status') {
+            const legenda = String(cfgCanal.caption || '').trim();
+            const lastManual = cfgCanal.stats?.lastManual ? new Date(cfgCanal.stats.lastManual).toLocaleString('pt-BR') : '—';
+            let txt = `📢 *STATUS — DIVULGAÇÃO DE CANAL*\n\n`;
+            txt += `📺 Canais registrados: ${canaisCfg.length}\n`;
+            if (canaisCfg.length) txt += canaisCfg.map((c, i) => `  ${i + 1}. ${c.nome || c.jid}`).join('\n') + '\n';
+            txt += `📺 Canal do projeto: ${projeto ? `${projeto.nome} (${projeto.jid})` : 'não configurado'}\n`;
+            txt += `🧾 Legenda: ${legenda ? legenda.slice(0, 80) + (legenda.length > 80 ? '...' : '') : 'Nenhuma'}\n`;
+            txt += `📨 Total enviado: ${cfgCanal.stats?.totalSent || 0}\n`;
+            txt += `🗓️ Último envio: ${lastManual}`;
+            return reply(txt);
+          }
+
+          return reply(helpCanal);
+        } catch (e) {
+          console.error('Erro no comando divcanal:', e);
           await reply('💔 Ocorreu um erro ao processar o comando.');
         }
         break;

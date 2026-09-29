@@ -17,6 +17,7 @@ import {
   CUSTOM_AUTORESPONSES_FILE,
   DIVULGACAO_FILE,
   DONO_DIVULGACAO_FILE,
+  DONO_DIVCANAL_FILE,
   NO_PREFIX_COMMANDS_FILE,
   COMMAND_ALIASES_FILE,
   GLOBAL_BLACKLIST_FILE,
@@ -114,6 +115,13 @@ ensureJsonFileExists(GLOBAL_BLACKLIST_FILE, {
   users: {},
   groups: {}
 });
+ensureJsonFileExists(DONO_DIVCANAL_FILE, {
+  canais: [],
+  caption: '',
+  schedule: { enabled: false, times: [], lastRun: null },
+  stats: { totalSent: 0, lastManual: null, lastAuto: null }
+});
+
 ensureJsonFileExists(DONO_DIVULGACAO_FILE, {
   groups: [],
   message: '',
@@ -862,6 +870,37 @@ const saveDonoDivulgacao = (data) => {
     return false;
   }
 };
+
+const loadDonoDivCanal = () => {
+  return loadJsonFile(DONO_DIVCANAL_FILE, {
+    canais: [],
+    caption: '',
+    schedule: {
+      enabled: false,
+      times: [],
+      lastRun: null
+    },
+    stats: {
+      totalSent: 0,
+      lastManual: null,
+      lastAuto: null
+    },
+    createdAt: new Date().toISOString()
+  });
+};
+
+const saveDonoDivCanal = (data) => {
+  try {
+    ensureDirectoryExists(DONO_DIR);
+    fs.writeFileSync(DONO_DIVCANAL_FILE, JSON.stringify(data, null, 2));
+    return true;
+  } catch (error) {
+    console.error('❌ Erro ao salvar divulgacao_canal.json:', error);
+    return false;
+  }
+};
+
+
 
 // ─── SUBDONOS (delegado à fonte única: utils/subdonos.js) ───────────────────
 // O sistema vive em `subdonos.js`. Aqui ficam só adaptadores com os nomes que o
@@ -3410,6 +3449,8 @@ export {
   saveDivulgacao,
   loadDonoDivulgacao,
   saveDonoDivulgacao,
+  loadDonoDivCanal,
+  saveDonoDivCanal,
   loadSubdonos,
   saveSubdonos,
   isSubdono,

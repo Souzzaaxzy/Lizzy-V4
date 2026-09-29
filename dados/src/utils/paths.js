@@ -21,6 +21,7 @@ const LEVELING_FILE = path.join(DATABASE_DIR, 'leveling.json');
 const CUSTOM_AUTORESPONSES_FILE = path.join(DATABASE_DIR, 'customAutoResponses.json');
 const DIVULGACAO_FILE = path.join(DONO_DIR, 'divulgacao.json');
 const DONO_DIVULGACAO_FILE = path.join(DONO_DIR, 'divulgacao_dono.json');
+const DONO_DIVCANAL_FILE = path.join(DONO_DIR, 'divulgacao_canal.json');
 const NO_PREFIX_COMMANDS_FILE = path.join(DATABASE_DIR, 'noPrefixCommands.json');
 const COMMAND_ALIASES_FILE = path.join(DATABASE_DIR, 'commandAliases.json');
 const GLOBAL_BLACKLIST_FILE = path.join(DONO_DIR, 'globalBlacklist.json');
@@ -83,6 +84,7 @@ export {
   CUSTOM_AUTORESPONSES_FILE,
   DIVULGACAO_FILE,
   DONO_DIVULGACAO_FILE,
+  DONO_DIVCANAL_FILE,
   NO_PREFIX_COMMANDS_FILE,
   COMMAND_ALIASES_FILE,
   GLOBAL_BLACKLIST_FILE,
