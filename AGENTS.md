@@ -7081,18 +7081,30 @@ verificado com o encode real da fork.
 O texto de uma mensagem com menção carrega `@<base>` — em grupo, a base do LID.
 No status o cliente **não resolve** isso, então o dono via o LID (ex.:
 `@123456789012345`) em vez do nick. Novo helper **`trocarMencoesPorNome`**
-(`index.js`, escopo do módulo): para cada `@<base>` conhecido (o que está em
-`mentionedJid`, os telefones do metadata e o próprio alvo), resolve o nome com o
-resolvedor ÚNICO (`utils/contactName.js` — agenda > notify > verifiedName >
-metadata > fallback) e troca no texto. Aplicado nos **três** caminhos: status de
+(`index.js`, escopo do módulo), aplicado nos **três** caminhos: status de
 **texto**, **legenda** de imagem/vídeo e **legenda** da figurinha.
 
-**O que não casa fica como está** — melhor manter `@numero` do que apagar a
-menção ou inventar um nome. A regex usa `(?![0-9])` para não casar prefixo de
-outro id, e o nome só substitui quando é um nome **real** (nunca quando o
-resolvedor devolve o próprio número).
+**Segunda rodada — "o nome no status ainda está como o LID".** A primeira versão
+percorria apenas os ids **conhecidos** (o `mentionedJid` + o alvo). No aparelho a
+menção pode vir só no texto, ou com uma base (o LID) enquanto o
+participant/metadata conhece SÓ outra (o telefone) — aí não casava e o LID
+sobrava. Reescrito:
 
-### Testes — `tests/statusgrupo-figurinha.test.js` (novo, **12 testes / 29 asserções**)
+1. extrai **TODOS os `@<dígitos>` do texto** (é assim que o WhatsApp escreve a
+   menção — a base varia por cliente);
+2. cruza cada base com **todos os participantes** do metadata (`id`, `lid`,
+   `phoneNumber`, `pn`) **e** os ids passados;
+3. sem casar, tenta **LID → PN pelo socket**
+   (`signalRepository.lidMapping.getPNForLID`);
+4. resolve pelo resolvedor ÚNICO (`utils/contactName.js` — agenda > notify >
+   verifiedName > metadata > fallback);
+5. **só troca por valor útil**: se o resolvedor cair no próprio LID, usa o
+   **telefone** do participante (mostrar número é melhor que mostrar LID); se
+   nem isso existir, mantém `@<base>` (nunca apaga a menção nem inventa nome).
+   Um resultado que é número sai **sem** o `@` (não é menção que o cliente
+   resolva).
+
+### Testes — `tests/statusgrupo-figurinha.test.js` (novo, **16 testes / 36 asserções**)
 Handler real + caminho real da fork (`generateWAMessageContent`) + webp animado
 **de verdade** (chunks `VP8X[ANIM]`+`ANIM`+`ANMF`, montados à mão como no
 `togif.test.js`) e webp estático do `sharp`, servidos **cifrados** por HTTP local
@@ -7100,7 +7112,10 @@ Handler real + caminho real da fork (`generateWAMessageContent`) + webp animado
 envio), estática → `imageMessage` PNG, legenda, view once, "não publica sticker
 cru", e as três trocas de menção (texto, legenda, sem menção, id desconhecido).
 **Verificado que os testes MEDEM as duas mudanças**: revertendo o ramo da
-figurinha e o helper de menções, **17 asserções falham**.
+figurinha e o helper de menções, **17 asserções falham**. E os testes **13**
+(menção LID **sem** `mentionedJid`, com o nome indexado só pelo telefone) e
+**15** (LID fora do metadata, resolvido por `getPNForLID`) **reprovam a versão
+antiga do helper** — são exatamente o caso do aparelho.
 
 **PRÉ-REQUISITO**: FFmpeg no PATH para a figurinha **animada** (a estática usa
 só o sharp). Sem FFmpeg a suíte roda, mas os casos de animada falham por falta do

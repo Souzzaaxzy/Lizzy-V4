@@ -1501,21 +1501,69 @@ const mensagemErroIA = (e) => {
 async function trocarMencoesPorNome(texto, ids, { nazu, metadata, from } = {}) {
   let out = String(texto ?? '');
   if (!out.includes('@')) return out;
-  const lista = [...new Set((Array.isArray(ids) ? ids : [ids]).filter(Boolean))];
-  if (!lista.length) return out;
 
-  for (const id of lista) {
-    const base = baseId(id);
-    if (!base) continue;
-    // Pode aparecer como `@base` exato ou com dígitos extras (device).
-    const re = new RegExp(`@${base}(?![0-9])`, 'g');
-    if (!re.test(out)) continue;
-    let nome = base;
+  // 1) TODOS os `@<digitos>` do texto. É assim que o WhatsApp escreve uma
+  //    menção — e a base pode ser o LID ou o telefone, dependendo do cliente.
+  const basesNoTexto = [...new Set([...out.matchAll(/@(\d{6,20})/g)].map((m) => m[1]))];
+  if (!basesNoTexto.length) return out;
+
+  // 2) Todas as formas conhecidas: os ids passados + TODOS os participantes do
+  //    metadata. Cruzar as duas listas é o que cobre "texto com LID, metadata
+  //    com telefone" e o inverso.
+  const candidatos = [];
+  for (const id of (Array.isArray(ids) ? ids : [ids])) if (id) candidatos.push(id);
+  for (const p of metadata?.participants || []) {
+    for (const v of [p?.id, p?.lid, p?.phoneNumber, p?.pn]) if (v) candidatos.push(v);
+  }
+  const idPorBase = new Map();
+  const telefonePorBase = new Map();
+  for (const c of candidatos) {
+    const b = baseId(c);
+    if (!b) continue;
+    if (!idPorBase.has(b)) idPorBase.set(b, c);
+    // Guarda o telefone de quem tem essa base (pode ser LID com phoneNumber).
+    const digitos = String(c).split('@')[0].split(':')[0].replace(/\D/g, '');
+    if (digitos && !String(c).includes('@lid')) telefonePorBase.set(b, digitos);
+  }
+  // Preenche telefone para bases de LID a partir do participante que as declara.
+  for (const p of metadata?.participants || []) {
+    const lidBase = baseId(p?.lid || (String(p?.id || '').includes('@lid') ? p.id : ''));
+    const tel = String(p?.phoneNumber || p?.pn || '').split('@')[0].split(':')[0].replace(/\D/g, '');
+    if (lidBase && tel && !telefonePorBase.has(lidBase)) telefonePorBase.set(lidBase, tel);
+  }
+
+  const ehNumero = (v) => /^\+?[\d\s().-]{5,}$/.test(String(v ?? '').trim());
+
+  for (const base of basesNoTexto) {
+    let alvo = idPorBase.get(base);
+    // 3) Sem participante direto: tenta LID -> PN pelo socket.
+    if (!alvo && nazu?.signalRepository?.lidMapping?.getPNForLID) {
+      try {
+        const pn = await nazu.signalRepository.lidMapping.getPNForLID(`${base}@lid`);
+        if (pn) alvo = pn;
+      } catch { /* segue sem */ }
+    }
+
+    let nome = null;
     try {
-      nome = await resolverNomeContato(id, { nazu, metadata, from });
-    } catch { /* mantém a base */ }
-    if (!nome || nome === base) continue; // sem nome real: não troca
-    out = out.replace(re, `@${nome}`);
+      nome = await resolverNomeContato(alvo || base, { nazu, metadata, from });
+    } catch { /* mantém */ }
+
+    // 4) O resolvedor cai no próprio LID quando não acha nada: nesse caso usa o
+    //    telefone do participante (número é menos pior que LID).
+    if (!nome || baseId(nome) === base) {
+      const tel = telefonePorBase.get(base);
+      if (tel) nome = tel;
+    }
+
+    // 5) Só troca por valor útil: nunca a própria base. Se o resultado for um
+    //    número, mostra sem o `@` (não é uma menção que o cliente resolva).
+    if (!nome || baseId(nome) === base) continue;
+    if (ehNumero(nome)) {
+      out = out.replace(new RegExp(`@${base}(?![0-9])`, 'g'), String(nome).replace(/\D/g, ''));
+      continue;
+    }
+    out = out.replace(new RegExp(`@${base}(?![0-9])`, 'g'), `@${nome}`);
   }
   return out;
 }
