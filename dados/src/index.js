@@ -1457,6 +1457,32 @@ const react = async (emoji, sock, messageKey, fromJid) => {
   }
 };
 // Função para formatar respostas de IA para WhatsApp (converte ** para *)
+/**
+ * Resposta padronizada para os comandos de IA (todos os call sites).
+ *
+ * Antes cada comando repetia o mesmo bloco de `.then/.catch` e checava
+ * `e.message.includes('API key inválida')` — mas o `ia.js` lança
+ * `[AI_ERROR] Falha na requisição: ...`. Ou seja, a checagem nunca casava e o
+ * usuário via a mensagem genérica em vez da orientação de configurar a key.
+ * Aqui a classificação é feita pelo TEXTO REAL do erro.
+ */
+const mensagemErroIA = (e) => {
+  const msg = String(e?.message || '');
+  if (/API key|401|403|inválida|não configurada|permiss/i.test(msg)) {
+    return '🤖 *Sistema de IA temporariamente indisponível*\n\n😅 Problema com a chave de IA. O administrador pode configurar com o comando *key*.';
+  }
+  if (/Limite de requisições|429/i.test(msg)) {
+    return '⏳ *Muitas requisições de IA agora.* Aguarde alguns instantes e tente de novo.';
+  }
+  if (/Tempo esgotado|ECONNABORTED|ETIMEDOUT/i.test(msg)) {
+    return '⌛ A IA demorou demais para responder. Tente novamente.';
+  }
+  if (/Falha de rede|ENOTFOUND|ECONNREFUSED|EAI_AGAIN/i.test(msg)) {
+    return '🌐 Não consegui falar com a IA (falha de rede). Tente novamente em instantes.';
+  }
+  return '😓 Ops, a IA não respondeu agora. Tente novamente em alguns instantes. 🌈';
+};
+
 const formatAIResponse = (text) => {
   if (!text || typeof text !== 'string') return text;
   return text
@@ -6067,7 +6093,7 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
         }
         if (antitoxic && antitoxic.isEnabled && antitoxic.isEnabled(from) && body && ia) {
           const aiFunction = (prompt) => {
-            return ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', prompt, null)
+            return ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, prompt, null)
               .then(response => response?.data?.choices?.[0]?.message?.content || '');
           };
           antitoxic.analyzeMessage(body, aiFunction).then(toxicResult => {
@@ -14405,278 +14431,152 @@ switch (command) {
       case 'gemma':
         if (!q) return reply(`🤔 Qual sua dúvida para o Gemma? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
         reply(`⏳ Só um segundinho, estou consultando o Gemma... ◈`).then(() => {
-          ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
+          ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, q, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
-          }).catch((e) => {
-            console.error('Erro na API Gemma:', e);
-            if (e.message && e.message.includes('API key inválida')) {
-              reply('🤖 *Sistema de IA temporariamente indisponível*\n\n😅 Estou com problemas técnicos no momento. O administrador já foi notificado!\n\n⏰ Tente novamente em alguns minutos.');
-            } else {
-              reply(`😓 Poxa, algo deu errado com o Gemma! Tente novamente em alguns instantes, tá? 🌈`);
-            }
-          });
+          }).catch((e) => { console.error('[IA] erro:', e?.message || e); reply(mensagemErroIA(e)); });
         });
         break;
       case 'phi':
       case 'phi3':
         if (!q) return reply(`🤔 Qual sua dúvida para o Phi? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
         reply(`⏳ Só um segundinho, estou consultando o Phi... ◈`).then(() => {
-          ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
+          ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, q, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
-          }).catch((e) => {
-            console.error('Erro na API Phi:', e);
-            if (e.message && e.message.includes('API key inválida')) {
-              reply('🤖 *Sistema de IA temporariamente indisponível*\n\n😅 Estou com problemas técnicos no momento. O administrador já foi notificado!\n\n⏰ Tente novamente em alguns minutos.');
-            } else {
-              reply(`😓 Poxa, algo deu errado com o Phi! Tente novamente em alguns instantes, tá? 🌈`);
-            }
-          });
+          }).catch((e) => { console.error('[IA] erro:', e?.message || e); reply(mensagemErroIA(e)); });
         });
         break;
       case 'qwen2':
         if (!q) return reply(`🤔 Qual sua dúvida para o Qwen2? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
         reply(`⏳ Só um segundinho, estou consultando o Qwen2... ◈`).then(() => {
-          ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
+          ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, q, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
-          }).catch((e) => {
-            console.error('Erro na API Qwen2:', e);
-            if (e.message && e.message.includes('API key inválida')) {
-              reply('🤖 *Sistema de IA temporariamente indisponível*\n\n😅 Estou com problemas técnicos no momento. O administrador já foi notificado!\n\n⏰ Tente novamente em alguns minutos.');
-            } else {
-              reply(`😓 Poxa, algo deu errado com o Qwen2! Tente novamente em alguns instantes, tá? 🌈`);
-            }
-          });
+          }).catch((e) => { console.error('[IA] erro:', e?.message || e); reply(mensagemErroIA(e)); });
         });
         break;
       case 'qwen':
       case 'qwen3':
         if (!q) return reply(`🤔 Qual sua dúvida para o Qwen? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
         reply(`⏳ Só um segundinho, estou consultando o Qwen... ◈`).then(() => {
-          ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
+          ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, q, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
-          }).catch((e) => {
-            console.error('Erro na API Qwen:', e);
-            if (e.message && e.message.includes('API key inválida')) {
-              reply('🤖 *Sistema de IA temporariamente indisponível*\n\n😅 Estou com problemas técnicos no momento. O administrador já foi notificado!\n\n⏰ Tente novamente em alguns minutos.');
-            } else {
-              reply(`😓 Poxa, algo deu errado com o Qwen! Tente novamente em alguns instantes, tá? 🌈`);
-            }
-          });
+          }).catch((e) => { console.error('[IA] erro:', e?.message || e); reply(mensagemErroIA(e)); });
         });
         break;
       case 'llama':
       case 'llama3':
         if (!q) return reply(`🤔 Qual sua dúvida para o Llama? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
         reply(`⏳ Só um segundinho, estou consultando o Llama... ◈`).then(() => {
-          ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
+          ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, q, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
-          }).catch((e) => {
-            console.error('Erro na API Llama:', e);
-            if (e.message && e.message.includes('API key inválida')) {
-              reply('🤖 *Sistema de IA temporariamente indisponível*\n\n😅 Estou com problemas técnicos no momento. O administrador já foi notificado!\n\n⏰ Tente novamente em alguns minutos.');
-            } else {
-              reply(`😓 Poxa, algo deu errado com o Llama! Tente novamente em alguns instantes, tá? 🌈`);
-            }
-          });
+          }).catch((e) => { console.error('[IA] erro:', e?.message || e); reply(mensagemErroIA(e)); });
         });
         break;
       case 'baichuan':
       case 'baichuan2':
         if (!q) return reply(`🤔 Qual sua dúvida para o Baichuan? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
         reply(`⏳ Só um segundinho, estou consultando o Baichuan... ◈`).then(() => {
-          ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
+          ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, q, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
-          }).catch((e) => {
-            console.error('Erro na API Baichuan:', e);
-            if (e.message && e.message.includes('API key inválida')) {
-              reply('🤖 *Sistema de IA temporariamente indisponível*\n\n😅 Estou com problemas técnicos no momento. O administrador já foi notificado!\n\n⏰ Tente novamente em alguns minutos.');
-            } else {
-              reply(`😓 Poxa, algo deu errado com o Baichuan! Tente novamente em alguns instantes, tá? 🌈`);
-            }
-          });
+          }).catch((e) => { console.error('[IA] erro:', e?.message || e); reply(mensagemErroIA(e)); });
         });
         break;
       case 'marin':
         if (!q) return reply(`🤔 Qual sua dúvida para o Marin? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
         reply(`⏳ Só um segundinho, estou consultando o Marin... ◈`).then(() => {
-          ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
+          ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, q, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
-          }).catch((e) => {
-            console.error('Erro na API Marin:', e);
-            if (e.message && e.message.includes('API key inválida')) {
-              reply('🤖 *Sistema de IA temporariamente indisponível*\n\n😅 Estou com problemas técnicos no momento. O administrador já foi notificado!\n\n⏰ Tente novamente em alguns minutos.');
-            } else {
-              reply(`😓 Poxa, algo deu errado com o Marin! Tente novamente em alguns instantes, tá? 🌈`);
-            }
-          });
+          }).catch((e) => { console.error('[IA] erro:', e?.message || e); reply(mensagemErroIA(e)); });
         });
         break;
       case 'kimi':
       case 'kimik2':
         if (!q) return reply(`🤔 Qual sua dúvida para o Kimi? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
         reply(`⏳ Só um segundinho, estou consultando o Kimi... ◈`).then(() => {
-          ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
+          ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, q, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
-          }).catch((e) => {
-            console.error('Erro na API Kimi:', e);
-            if (e.message && e.message.includes('API key inválida')) {
-              reply('🤖 *Sistema de IA temporariamente indisponível*\n\n😅 Estou com problemas técnicos no momento. O administrador já foi notificado!\n\n⏰ Tente novamente em alguns minutos.');
-            } else {
-              reply(`😓 Poxa, algo deu errado com o Kimi! Tente novamente em alguns instantes, tá? 🌈`);
-            }
-          });
+          }).catch((e) => { console.error('[IA] erro:', e?.message || e); reply(mensagemErroIA(e)); });
         });
         break;
       case 'mistral':
         if (!q) return reply(`🤔 Qual sua dúvida para o Mistral? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
         reply(`⏳ Só um segundinho, estou consultando o Mistral... ◈`).then(() => {
-          ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
+          ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, q, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
-          }).catch((e) => {
-            console.error('Erro na API Mistral:', e);
-            if (e.message && e.message.includes('API key inválida')) {
-              reply('🤖 *Sistema de IA temporariamente indisponível*\n\n😅 Estou com problemas técnicos no momento. O administrador já foi notificado!\n\n⏰ Tente novamente em alguns minutos.');
-            } else {
-              reply(`😓 Poxa, algo deu errado com o Mistral! Tente novamente em alguns instantes, tá? 🌈`);
-            }
-          });
+          }).catch((e) => { console.error('[IA] erro:', e?.message || e); reply(mensagemErroIA(e)); });
         });
         break;
       case 'magistral':
         if (!q) return reply(`🤔 Qual sua dúvida para o Magistral? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
         reply(`⏳ Só um segundinho, estou consultando o Magistral... ◈`).then(() => {
-          ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
+          ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, q, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
-          }).catch((e) => {
-            console.error('Erro na API Magistral:', e);
-            if (e.message && e.message.includes('API key inválida')) {
-              reply('🤖 *Sistema de IA temporariamente indisponível*\n\n😅 Estou com problemas técnicos no momento. O administrador já foi notificado!\n\n⏰ Tente novamente em alguns minutos.');
-            } else {
-              reply(`😓 Poxa, algo deu errado com o Magistral! Tente novamente em alguns instantes, tá? 🌈`);
-            }
-          });
+          }).catch((e) => { console.error('[IA] erro:', e?.message || e); reply(mensagemErroIA(e)); });
         });
         break;
       case 'rakutenai':
       case 'rocket':
         if (!q) return reply(`🤔 Qual sua dúvida para o RakutenAI? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
         reply(`⏳ Só um segundinho, estou consultando o RakutenAI... ◈`).then(() => {
-          ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
+          ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, q, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
-          }).catch((e) => {
-            console.error('Erro na API RakutenAI:', e);
-            if (e.message && e.message.includes('API key inválida')) {
-              reply('🤖 *Sistema de IA temporariamente indisponível*\n\n😅 Estou com problemas técnicos no momento. O administrador já foi notificado!\n\n⏰ Tente novamente em alguns minutos.');
-            } else {
-              reply(`😓 Poxa, algo deu errado com o RakutenAI! Tente novamente em alguns instantes, tá? 🌈`);
-            }
-          });
+          }).catch((e) => { console.error('[IA] erro:', e?.message || e); reply(mensagemErroIA(e)); });
         });
         break;
       case 'yi':
         if (!q) return reply(`🤔 Qual sua dúvida para o Yi? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
         reply(`⏳ Só um segundinho, estou consultando o Yi... ◈`).then(() => {
-          ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
+          ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, q, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
-          }).catch((e) => {
-            console.error('Erro na API Yi:', e);
-            if (e.message && e.message.includes('API key inválida')) {
-              reply('🤖 *Sistema de IA temporariamente indisponível*\n\n😅 Estou com problemas técnicos no momento. O administrador já foi notificado!\n\n⏰ Tente novamente em alguns minutos.');
-            } else {
-              reply(`😓 Poxa, algo deu errado com o Yi! Tente novamente em alguns instantes, tá? 🌈`);
-            }
-          });
+          }).catch((e) => { console.error('[IA] erro:', e?.message || e); reply(mensagemErroIA(e)); });
         });
         break;
       case 'gemma2':
         if (!q) return reply(`🤔 Qual sua dúvida para o Gemma2? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
         reply(`⏳ Só um segundinho, estou consultando o Gemma2... ◈`).then(() => {
-          ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
+          ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, q, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
-          }).catch((e) => {
-            console.error('Erro na API Gemma2:', e);
-            if (e.message && e.message.includes('API key inválida')) {
-              reply('🤖 *Sistema de IA temporariamente indisponível*\n\n😅 Estou com problemas técnicos no momento. O administrador já foi notificado!\n\n⏰ Tente novamente em alguns minutos.');
-            } else {
-              reply(`😓 Poxa, algo deu errado com o Gemma2! Tente novamente em alguns instantes, tá? 🌈`);
-            }
-          });
+          }).catch((e) => { console.error('[IA] erro:', e?.message || e); reply(mensagemErroIA(e)); });
         });
         break;
       case 'swallow':
         if (!q) return reply(`🤔 Qual sua dúvida para o Swallow? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
         reply(`⏳ Só um segundinho, estou consultando o Swallow... ◈`).then(() => {
-          ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
+          ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, q, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
-          }).catch((e) => {
-            console.error('Erro na API Swallow:', e);
-            if (e.message && e.message.includes('API key inválida')) {
-              reply('🤖 *Sistema de IA temporariamente indisponível*\n\n😅 Estou com problemas técnicos no momento. O administrador já foi notificado!\n\n⏰ Tente novamente em alguns minutos.');
-            } else {
-              reply(`😓 Poxa, algo deu errado com o Swallow! Tente novamente em alguns instantes, tá? 🌈`);
-            }
-          });
+          }).catch((e) => { console.error('[IA] erro:', e?.message || e); reply(mensagemErroIA(e)); });
         });
         break;
       case 'falcon':
         if (!q) return reply(`🤔 Qual sua dúvida para o Falcon? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
         reply(`⏳ Só um segundinho, estou consultando o Falcon... ◈`).then(() => {
-          ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
+          ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, q, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
-          }).catch((e) => {
-            console.error('Erro na API Falcon:', e);
-            if (e.message && e.message.includes('API key inválida')) {
-              reply('🤖 *Sistema de IA temporariamente indisponível*\n\n😅 Estou com problemas técnicos no momento. O administrador já foi notificado!\n\n⏰ Tente novamente em alguns minutos.');
-            } else {
-              reply(`😓 Poxa, algo deu errado com o Falcon! Tente novamente em alguns instantes, tá? 🌈`);
-            }
-          });
+          }).catch((e) => { console.error('[IA] erro:', e?.message || e); reply(mensagemErroIA(e)); });
         });
         break;
       case 'qwencoder':
         if (!q) return reply(`🤔 Qual sua dúvida para o Qwencoder? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
         reply(`⏳ Só um segundinho, estou consultando o Qwencoder... ◈`).then(() => {
-          ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
+          ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, q, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
-          }).catch((e) => {
-            console.error('Erro na API Qwencoder:', e);
-            if (e.message && e.message.includes('API key inválida')) {
-              reply('🤖 *Sistema de IA temporariamente indisponível*\n\n😅 Estou com problemas técnicos no momento. O administrador já foi notificado!\n\n⏰ Tente novamente em alguns minutos.');
-            } else {
-              reply(`😓 Poxa, algo deu errado com o Qwencoder! Tente novamente em alguns instantes, tá? 🌈`);
-            }
-          });
+          }).catch((e) => { console.error('[IA] erro:', e?.message || e); reply(mensagemErroIA(e)); });
         });
         break;
       case 'codegemma':
         if (!q) return reply(`🤔 Qual sua dúvida para o CodeGemma? Informe a pergunta após o comando! Exemplo: ${groupPrefix}${command} quem descobriu o Brasil? 🌍`);
         reply(`⏳ Só um segundinho, estou consultando o CodeGemma... ◈`).then(() => {
-          ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
+          ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, q, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
-          }).catch((e) => {
-            console.error('Erro na API CodeGemma:', e);
-            if (e.message && e.message.includes('API key inválida')) {
-              reply('🤖 *Sistema de IA temporariamente indisponível*\n\n😅 Estou com problemas técnicos no momento. O administrador já foi notificado!\n\n⏰ Tente novamente em alguns minutos.');
-            } else {
-              reply(`😓 Poxa, algo deu errado com o CodeGemma! Tente novamente em alguns instantes, tá? 🌈`);
-            }
-          });
+          }).catch((e) => { console.error('[IA] erro:', e?.message || e); reply(mensagemErroIA(e)); });
         });
         break;
       case 'resumir':
         if (!q) return reply(`📝 *Resumidor de Texto*\n\n💡 *Como usar:*\n• Envie o texto que deseja resumir após o comando\n• Ex: ${groupPrefix}resumir [seu texto aqui]\n\n◈ O texto será resumido de forma clara e objetiva!`);
         reply('⏳ Aguarde enquanto preparo um resumo bem caprichado... ◈').then(() => {
           const prompt = `Resuma o seguinte texto em poucos parágrafos, de forma clara e objetiva, destacando as informações mais importantes:\n\n${q}`;
-          ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', prompt, null).then((response) => {
+          ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, prompt, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
-          }).catch((e) => {
-            console.error('Erro ao resumir texto:', e);
-            if (e.message && e.message.includes('API key inválida')) {
-              reply('🤖 *Sistema de IA temporariamente indisponível*\n\n😅 Estou com problemas técnicos no momento. O administrador já foi notificado!\n\n⏰ Tente novamente em alguns minutos.');
-            } else {
-              reply('😓 Ops, não consegui resumir agora! Que tal tentar de novo? 🌟');
-            }
-          });
+          }).catch((e) => { console.error('[IA] erro:', e?.message || e); reply(mensagemErroIA(e)); });
         });
         break;
       case 'resumirurl':
@@ -14699,25 +14599,10 @@ switch (command) {
               return;
             }
             const prompt = `Resuma o seguinte conteúdo extraído de uma página web em poucos parágrafos, de forma clara e objetiva, destacando os pontos principais:\n\n${cleanText.substring(0, 5000)}`;
-            ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', prompt, null).then((iaResponse) => {
+            ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, prompt, null).then((iaResponse) => {
               reply(formatAIResponse(iaResponse.data.choices[0].message.content));
-            }).catch((e) => {
-              console.error('Erro ao resumir URL (IA):', e.message);
-              if (e.message && e.message.includes('API key inválida')) {
-                reply('🤖 *Sistema de IA temporariamente indisponível*\n\n😅 Estou com problemas técnicos no momento. O administrador já foi notificado!\n\n⏰ Tente novamente em alguns minutos.');
-              } else {
-                reply('😓 Vixe, algo deu errado ao resumir a página! Tente novamente em breve, combinado? 🌈');
-              }
-            });
-          }).catch((e) => {
-            console.error('Erro ao resumir URL:', e.message);
-            if (e.code === 'ECONNABORTED') {
-              reply('😓 Ops, a página demorou muito para responder! Tente outra URL. 🌐');
-            } else if (e.response) {
-              reply(`😓 Não consegui acessar a página (código ${e.response.status}). Verifique a URL e tente novamente, tá? 🌟`);
-            } else {
-              reply('😓 Vixe, algo deu errado ao resumir a página! Tente novamente em breve, combinado? 🌈');
-            }
+            }).catch((e) => { console.error('[IA] erro:', e?.message || e); reply(mensagemErroIA(e)); });
+          }).catch((e) => { console.error('[IA] erro:', e?.message || e); reply(mensagemErroIA(e));
           });
         });
         break;
@@ -14726,16 +14611,9 @@ switch (command) {
         if (!q) return reply(`💡 Quer ideias criativas? Diga o tema após o comando ${groupPrefix}ideias! Exemplo: ${groupPrefix}ideias nomes para um aplicativo de receitas 😊`);
         reply('⏳ Um segundinho, estou pensando em ideias incríveis... ◈').then(() => {
           const prompt = `Gere 15 ideias criativas e detalhadas para o seguinte tema: ${q}`;
-          ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', prompt, null).then((response) => {
+          ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, prompt, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
-          }).catch((e) => {
-            console.error('Erro ao gerar ideias:', e);
-            if (e.message && e.message.includes('API key inválida')) {
-              reply('🤖 *Sistema de IA temporariamente indisponível*\n\n😅 Estou com problemas técnicos no momento. O administrador já foi notificado!\n\n⏰ Tente novamente em alguns minutos.');
-            } else {
-              reply('😓 Poxa, não consegui gerar ideias agora! Tente de novo em breve, tá? 🌈');
-            }
-          });
+          }).catch((e) => { console.error('[IA] erro:', e?.message || e); reply(mensagemErroIA(e)); });
         });
         break;
       case 'explicar':
@@ -14743,16 +14621,9 @@ switch (command) {
         if (!q) return reply(`🤓 Quer entender algo? Diga o que deseja explicar após o comando ${groupPrefix}explicar! Exemplo: ${groupPrefix}explicar o que é inteligência artificial 😊`);
         reply('⏳ Um momentinho, estou preparando uma explicação bem clara... ◈').then(() => {
           const prompt = `Explique o seguinte conceito de forma simples e clara, como se fosse para alguém sem conhecimento prévio: ${q}`;
-          ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', prompt, null).then((response) => {
+          ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, prompt, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
-          }).catch((e) => {
-            console.error('Erro ao explicar conceito:', e);
-            if (e.message && e.message.includes('API key inválida')) {
-              reply('🤖 *Sistema de IA temporariamente indisponível*\n\n😅 Estou com problemas técnicos no momento. O administrador já foi notificado!\n\n⏰ Tente novamente em alguns minutos.');
-            } else {
-              reply('😓 Vixe, não consegui explicar agora! Tente de novo em alguns instantes, tá? 🌈');
-            }
-          });
+          }).catch((e) => { console.error('[IA] erro:', e?.message || e); reply(mensagemErroIA(e)); });
         });
         break;
       case 'corrigir':
@@ -14760,11 +14631,9 @@ switch (command) {
         if (!q) return reply(`✍️ Quer corrigir um texto? Envie o texto após o comando ${groupPrefix}corrigir! Exemplo: ${groupPrefix}corrigir Eu foi no mercado e comprei frutas. 😊`);
         reply('⏳ Aguarde enquanto dou um polimento no seu texto... ◈').then(() => {
           const prompt = `Corrija os erros gramaticais, ortográficos e de estilo no seguinte texto, mantendo o significado original: ${q}`;
-          ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', prompt, null).then((response) => {
+          ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, prompt, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
-          }).catch((e) => {
-            console.error('Erro ao corrigir texto:', e);
-            reply('😓 Ops, não consegui corrigir o texto agora! Tente novamente, tá? 🌟');
+          }).catch((e) => { console.error('[IA] erro:', e?.message || e); reply(mensagemErroIA(e));
           });
         });
         break;
@@ -14835,16 +14704,12 @@ Identifique:
 Conversa:
 ${conversaTexto.substring(0, 8000)}
 Faça um resumo conciso mas completo, destacando o que é mais relevante.`;
-          return ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', prompt, null);
+          return ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, prompt, null);
         }).then(response => {
           return reply(`💬 *Resumo da Conversa* (últimas mensagens)\n\n${formatAIResponse(response.data.choices[0].message.content)}`);
         }).catch(e => {
-          console.error('Erro ao resumir conversa:', e);
-          if (e.message?.includes('API key inválida')) {
-            return reply('🤖 *Sistema de IA temporariamente indisponível*\n\nO administrador já foi notificado!');
-          } else {
-            return reply('😓 Não consegui resumir a conversa agora! Tente novamente em breve. 🌈');
-          }
+          console.error('[IA] erro:', e?.message || e);
+          return reply(mensagemErroIA(e));
         });
         break;
       }
@@ -14888,15 +14753,10 @@ Faça um resumo conciso mas completo, destacando o que é mais relevante.`;
 - Um desfecho memorável
 - Entre 400 e 600 palavras
 Seja criativo e original. Não use clichês. A história deve ser envolvente do início ao fim.`;
-          const response = await ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', prompt, null);
+          const response = await ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, prompt, null);
           await reply(`📖◈ *Sua História*\n\n${formatAIResponse(response.data.choices[0].message.content)}`);
         } catch (e) {
-          console.error('Erro ao gerar história:', e);
-          if (e.message?.includes('API key inválida')) {
-            await reply('🤖 *Sistema de IA temporariamente indisponível*\n\nO administrador já foi notificado!');
-          } else {
-            await reply('😓 Não consegui escrever a história agora! Tente novamente em breve. 🌈');
-          }
+          console.error('[IA] erro:', e?.message || e); reply(mensagemErroIA(e));
         }
         break;
       }
@@ -14933,15 +14793,10 @@ Para cada recomendação, forneça:
 3. Por que é bom
 4. Nota de popularidade (de 1 a 10)
 Seja específico e recomende opções variadas (populares e menos conhecidas). Formate de forma clara e organizada.`;
-          const response = await ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', prompt, null);
+          const response = await ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, prompt, null);
           await reply(`${tipoInfo.emoji} *Recomendações de ${tipoInfo.nome.charAt(0).toUpperCase() + tipoInfo.nome.slice(1)}*\n\n${formatAIResponse(response.data.choices[0].message.content)}`);
         } catch (e) {
-          console.error('Erro ao gerar recomendações:', e);
-          if (e.message?.includes('API key inválida')) {
-            await reply('🤖 *Sistema de IA temporariamente indisponível*\n\nO administrador já foi notificado!');
-          } else {
-            await reply('😓 Não consegui buscar recomendações agora! Tente novamente em breve. 🌈');
-          }
+          console.error('[IA] erro:', e?.message || e); reply(mensagemErroIA(e));
         }
         break;
       }
@@ -16626,13 +16481,29 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
       case 'cog':
         if (!q) return reply(`📢 Ei, falta a pergunta! Me diga o que quer saber após o comando ${groupPrefix}cog! 😴`);
         reply('⏳ Um momentinho, estou pensando na melhor resposta... 🌟').then(() => {
-          ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', q, null).then((response) => {
+          ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, q, null).then((response) => {
             reply(formatAIResponse(response.data.choices[0].message.content));
-          }).catch((e) => {
-            console.error('Erro na API CognimAI:', e);
-            reply('😓 Vixe, algo deu errado por aqui! Tente novamente em breve, combinado? 🌈');
+          }).catch((e) => { console.error('[IA] erro:', e?.message || e); reply(mensagemErroIA(e));
           });
         });
+        break;
+      // Geração de imagem por IA (o menu `menuia` listava `imagine` mas o
+      // comando não existia — agora usa o `ia.generateImage`).
+      case 'imagine':
+      case 'gerarimagem':
+      case 'imgai':
+        if (!q) return reply(`🎨 *Gerar Imagem com IA*\n\n💡 Use: ${groupPrefix}imagine <descrição>\n📌 Ex: ${groupPrefix}imagine um gato astronauta em Marte`);
+        try {
+          await reply('🎨 Criando sua imagem... aguarde um instante ◈');
+          const imgUrl = await ia.generateImage(q);
+          await nazu.sendMessage(from, {
+            image: { url: imgUrl },
+            caption: `🎨 *Imagem gerada por IA*\n\n📝 ${q.substring(0, 180)}`,
+          }, { quoted: info });
+        } catch (e) {
+          console.error('[IA] erro no imagine:', e?.message || e);
+          await reply('😓 Não consegui gerar a imagem agora. Tente novamente em instantes. 🌈');
+        }
         break;
       case 'historico':
       case 'history':
@@ -16755,11 +16626,9 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
           const texto = partes.slice(1).join('|').trim();
           reply('Aguarde um momentinho... ☀️').then(() => {
             const prompt = `Traduza o seguinte texto para ${idioma}:\n\n${texto}\n\nForneça apenas a tradução, sem explicações adicionais.`;
-            ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', prompt, null).then((bahz) => {
+            ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, prompt, null).then((bahz) => {
               reply(`🌐◈ *Prontinho! Sua tradução para ${idioma.toUpperCase()} está aqui:*\n\n${formatAIResponse(bahz.data.choices[0].message.content)}`);
-            }).catch((e) => {
-              console.error("Erro ao traduzir texto:", e);
-              reply("❌ Não foi possível realizar a tradução no momento. Tente novamente mais tarde.");
+            }).catch((e) => { console.error('[IA] erro:', e?.message || e); reply(mensagemErroIA(e));
             });
           });
         }
@@ -16882,12 +16751,9 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
             }
           }).catch(() => {
             const prompt = `Defina a palavra "${palavra}" em português de forma completa e fofa. Inclua a classe gramatical, os principais significados e um exemplo de uso em uma frase curta e bonitinha.`;
-            ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', prompt, null).then((bahz) => {
+            ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, prompt, null).then((bahz) => {
               reply(formatAIResponse(bahz.data.choices[0].message.content));
-            }).catch((e) => {
-              // Erro silencioso no console para não poluir o chat
-              console.error("Erro geral ao buscar no dicionário (IA Fallback):", e.message);
-              reply("❌ Não consegui encontrar o significado desta palavra no momento. Verifique a ortografia ou tente novamente mais tarde.");
+            }).catch((e) => { console.error('[IA] erro:', e?.message || e); reply(mensagemErroIA(e));
             });
           });
         });
@@ -36941,7 +36807,7 @@ ${groupPrefix}resolver Qual a área de um círculo de raio 5?`);
 PROBLEMA: ${q}
 Resolva passo a passo e explique cada etapa.`;
           const response = await ia.makeCognimaRequest(
-            'meta/llama-3.1-nemotron-70b-instruct',
+            ia.GEMINI_DEFAULT_MODEL,
             mathPrompt,
             'Você é um professor de matemática expert. Responda de forma clara, passo a passo, usando formatação simples.',
             [],
@@ -36954,8 +36820,8 @@ Resolva passo a passo e explique cada etapa.`;
             return reply("❌ Não foi possível resolver. Tente novamente!");
           }
         } catch (e) {
-          console.error('Erro resolver:', e.message);
-          return reply(`❌ Erro: ${e.message}`);
+          console.error('[IA] erro no resolver:', e?.message || e);
+          return reply(mensagemErroIA(e));
         }
         break;
       // ═══════════════════════════════════════════════════════════════
@@ -37216,13 +37082,14 @@ Use ${groupPrefix}horoscopo <signo> para ver a previsão!`);
         reply("💬 Analisando argumentos...");
         // Função wrapper para a IA
         const aiFunctionDebate = (prompt) => {
-          return ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', prompt, null)
+          return ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, prompt, null)
             .then(response => response?.data?.choices?.[0]?.message?.content || '');
         };
         iaExpanded.generateDebate(q, aiFunctionDebate, prefix).then(resultDebate => {
           reply(resultDebate.message);
         }).catch(err => {
-          reply('❌ Erro ao gerar debate. Tente novamente!');
+          console.error('[IA] erro no debater:', err?.message || err);
+          reply(mensagemErroIA(err));
         });
         break;
       // ═══════════════════════════════════════════════════════════════
@@ -37235,7 +37102,7 @@ Use ${groupPrefix}horoscopo <signo> para ver a previsão!`);
         const subCmdStory = args[0]?.toLowerCase();
         // Função wrapper para a IA
         const aiFunctionStory = (prompt) => {
-          return ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', prompt, null)
+          return ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, prompt, null)
             .then(response => response?.data?.choices?.[0]?.message?.content || '');
         };
         if (!subCmdStory) {

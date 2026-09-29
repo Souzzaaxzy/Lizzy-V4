@@ -1529,7 +1529,36 @@ Usuário: "muta esse maluco" (com tem_mencao=true)
 
 // ========== FUNÇÃO GOOGLE GEMINI ==========
 // Modelo Gemini padrão (estável e disponível na API — verificado em ago/2026)
-const GEMINI_DEFAULT_MODEL = 'gemini-3.7-flash';
+// Modelos VÁLIDOS da Gemini API (nomes que existem de verdade). O id vinha
+// como `gemini-3.7-flash`, que não existe — TODA chamada dava 404.
+const GEMINI_DEFAULT_MODEL = 'gemini-2.5-flash';
+const GEMINI_FALLBACK_MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro'];
+const GEMINI_VALID_MODELS = new Set([...GEMINI_FALLBACK_MODELS, 'gemini-2.5-flash-lite']);
+
+// Seam de HTTP: o teste injeta um poster falso para exercitar a cadeia de
+// modelos e a classificação de erro sem abrir rede. Em produção é o axios.
+let _httpPost = null;
+function setGeminiHttpForTest(fn) {
+  _httpPost = typeof fn === 'function' ? fn : null;
+}
+const postGemini = (url, data, config) => (_httpPost ? _httpPost(url, data, config) : axios.post(url, data, config));
+
+/**
+ * Normaliza o id de modelo que chega do chamador.
+ *
+ * Os comandos da Lizzy foram escritos para uma API compatível com OpenAI
+ * (Cognima) e passavam `meta/llama-3.1-405b-instruct` — a Gemini API NÃO
+ * conhece esse nome e responde 404. Qualquer id fora de `gemini-*` cai no
+ * modelo default (o comportamento é o mesmo para o usuário: é o modelo de IA
+ * do bot quem responde).
+ */
+function normalizeModelId(modelo) {
+  const m = String(modelo || '').trim();
+  if (!m) return GEMINI_DEFAULT_MODEL;
+  if (GEMINI_VALID_MODELS.has(m)) return m;
+  if (m.startsWith('gemini-')) return m;
+  return GEMINI_DEFAULT_MODEL;
+}
 
 // Converte mensagens do formato OpenAI (system/user/assistant) para o formato Gemini (contents + systemInstruction)
 function buildGeminiPayload(modelo, texto, systemPrompt, historico) {
@@ -1619,61 +1648,73 @@ async function makeGeminiRequest(modelo, texto, systemPrompt = null, historico =
     throw new Error('Chave da IA não configurada.Use !key para configurar.');
   }
 
-  const model = typeof modelo === 'string' && modelo.trim() ? modelo.trim() : GEMINI_DEFAULT_MODEL;
+  const model = normalizeModelId(modelo);
   const payload = buildGeminiPayload(modelo, texto, systemPrompt, historico);
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
 
-  for (let attempt = 0; attempt < retries; attempt++) {
-    try {
-      const response = await axios.post(
-        url,
-        payload,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': apiKey
-          },
-          timeout: 90000
+  // Tenta o modelo pedido e, se ele não existir/estiver indisponível, cai para
+  // os modelos válidos — assim uma depreciação futura não derruba os comandos.
+  const tentarComModelo = async (modelName) => {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent`;
+    return postGemini(url, payload, {
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      timeout: 90000,
+    });
+  };
+
+  const cadeia = [model, ...GEMINI_FALLBACK_MODELS.filter((m) => m !== model)];
+  let ultimoErro = null;
+
+  for (const modelName of cadeia) {
+    for (let attempt = 0; attempt < retries; attempt++) {
+      try {
+        const response = await tentarComModelo(modelName);
+        const data = normalizeGeminiResponse(response.data);
+        if (modelName !== model) console.warn(`[Gemini API] ⚠️ Modelo "${model}" indisponível; usando "${modelName}".`);
+        console.log('[Gemini API] ✅ Resposta recebida com sucesso');
+        return { success: true, data };
+      } catch (error) {
+        const status = error.response?.status;
+        const apiMessage = error.response?.data?.error?.message || error.message;
+        ultimoErro = error;
+
+        // 404/400 costumam significar "esse modelo não existe" — tenta o próximo
+        // modelo em vez de queimar as tentativas no mesmo nome.
+        if (status === 404 || status === 400) {
+          console.warn(`[Gemini API] Modelo "${modelName}" indisponível (${status}); tentando o próximo.`);
+          break;
         }
-      );
 
-      const data = normalizeGeminiResponse(response.data);
-      console.log('[Gemini API] ✅ Resposta recebida com sucesso');
+        let friendlyMessage;
+        if (status === 401 || status === 403) {
+          friendlyMessage = 'API key inválida ou sem permissão de acesso à Google Gemini API.';
+        } else if (status === 429) {
+          friendlyMessage = 'Limite de requisições da Google Gemini API atingido. Tente novamente mais tarde.';
+        } else if (status === 408 || error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+          friendlyMessage = 'Tempo esgotado ao chamar a Google Gemini API.';
+        } else if (!status || error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED' || error.code === 'EAI_AGAIN') {
+          friendlyMessage = 'Falha de rede ao chamar a Google Gemini API.';
+        } else {
+          friendlyMessage = apiMessage || 'Erro desconhecido na Google Gemini API.';
+        }
 
-      return {
-        success: true,
-        data
-      };
+        // 401/403 = key: não adianta tentar de novo nem outro modelo.
+        if (status === 401 || status === 403) {
+          throw new Error(`[AI_ERROR] Falha na requisição: ${friendlyMessage}`);
+        }
 
-    } catch (error) {
-      const status = error.response?.status;
-      const apiMessage = error.response?.data?.error?.message || error.message;
+        console.warn(`[Gemini API] Tentativa ${attempt + 1}/${retries} falhou (${modelName}):`, { status, message: apiMessage });
 
-      // Mapear erros para mensagens amigáveis/roteáveis pelos call sites existentes
-      let friendlyMessage;
-      if (status === 400 || status === 401 || status === 403) {
-        friendlyMessage = 'API key inválida ou sem permissão de acesso à Google Gemini API.';
-      } else if (status === 404) {
-        friendlyMessage = 'Modelo de IA indisponível na Google Gemini API (' + model + ').';
-      } else if (status === 429) {
-        friendlyMessage = 'Limite de requisições da Google Gemini API atingido. Tente novamente mais tarde.';
-      } else if (status === 408 || error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
-        friendlyMessage = 'Tempo esgotado ao chamar a Google Gemini API.';
-      } else if (!status || error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED' || error.code === 'EAI_AGAIN') {
-        friendlyMessage = 'Falha de rede ao chamar a Google Gemini API.';
-      } else {
-        friendlyMessage = apiMessage || 'Erro desconhecido na Google Gemini API.';
+        if (attempt === retries - 1) {
+          throw new Error(`[AI_ERROR] Falha na requisição: ${friendlyMessage}`);
+        }
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
       }
-
-      console.warn(`[Gemini API] Tentativa ${attempt + 1}/${retries} falhou:`, { status, message: apiMessage });
-
-      if (attempt === retries - 1) {
-        throw new Error(`[AI_ERROR] Falha na requisição: ${friendlyMessage}`);
-      }
-
-      await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
     }
   }
+
+  const status = ultimoErro?.response?.status;
+  const apiMessage = ultimoErro?.response?.data?.error?.message || ultimoErro?.message;
+  throw new Error(`[AI_ERROR] Falha na requisição: ${status === 404 ? (apiMessage || 'Nenhum modelo de IA disponível.') : (apiMessage || 'Erro desconhecido na Google Gemini API.')}`);
 }
 
 // ========== FUNÇÃO PRINCIPAL (IA — provider Gemini) ==========
@@ -3472,4 +3513,7 @@ export {
   setGeminiApiKey,
   getGeminiApiKey,
   GEMINI_DEFAULT_MODEL,
+  GEMINI_FALLBACK_MODELS,
+  normalizeModelId,
+  setGeminiHttpForTest,
 };

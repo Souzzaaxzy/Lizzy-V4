@@ -7050,6 +7050,65 @@ antigo media a semântica velha). Regressões verdes: `donos` 5/17, `menu-layout
 **Efeito no `!menu`**: o menu do subdono mostra `Cargo: Admin`, coerente com o
 novo privilégio.
 
+## SISTEMA DE IA — CORREÇÃO GERAL (provider Google Gemini) (set/2026) ✅
+O dono relatou que **todos** os comandos de IA estavam quebrados (usando
+Meta/Gemini de API). Eram **quatro** defeitos somados — cada um derrubava a
+cadeia inteira.
+
+### 1. O modelo default não existia (404 em TODA chamada)
+`GEMINI_DEFAULT_MODEL = 'gemini-3.7-flash'` — **esse modelo não existe** na
+Gemini API. Toda requisição respondia 404. Agora é **`gemini-2.5-flash`**, com a
+lista `GEMINI_FALLBACK_MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro']`.
+
+### 2. Os 32 call sites pediam um modelo de OUTRA API
+Os comandos de IA foram escritos para uma API compatível com OpenAI (Cognima) e
+passavam **`meta/llama-3.1-405b-instruct`** (e um nemotron) — a Gemini API não
+conhece esses nomes. Troquei os 32 por `ia.GEMINI_DEFAULT_MODEL` e adicionei
+`normalizeModelId()`: qualquer id fora de `gemini-*` cai no default, então um
+call site esquecido no futuro não volta a quebrar.
+
+### 3. Fallback automático de modelo (à prova de depreciação)
+`makeGeminiRequest` tenta o modelo pedido e, em **404/400** ("esse modelo não
+existe"), passa para o próximo da lista em vez de queimar as tentativas no mesmo
+nome. Em **401/403** (key) falha na hora — insistir não adianta.
+
+### 4. A mensagem de erro nunca aparecia
+Todo comando checava `e.message.includes('API key inválida')`, mas o módulo
+lança `[AI_ERROR] Falha na requisição: ...` — a condição **nunca casava**, então
+o usuário recebia a mensagem genérica em vez da orientação. Criei um
+**`mensagemErroIA(e)`** único no `index.js` que classifica pelo texto REAL do
+erro (key / limite 429 / timeout / rede / genérico) e substituí os **~30**
+blocos `.catch` repetidos dos comandos de IA por ele.
+
+### `!imagine` (existia no menu e não existia no código)
+O `menuia` listava `imagine` mas **não havia `case`** — cai no "comando não
+encontrado". Implementado usando o `ia.generateImage` (Pollinations), com
+aliases `gerarimagem`/`imgai`.
+
+### Detalhe de teste: seam de HTTP
+`makeGeminiRequest` passou a usar `postGemini(...)`, que por padrão é o `axios`,
+mas aceita injeção via **`setGeminiHttpForTest(fn)`** — é o que permite testar a
+cadeia de modelos e a classificação de erro **sem rede** (o sandbox não tem key
+Gemini).
+
+### Testes — `tests/ia.test.js` (**14 testes / 34 asserções**)
+Modelos válidos + `normalizeModelId`; nenhum call site com modelo de outra API;
+URL usa o modelo válido; **404 cai para o fallback**; sem key pede configuração;
+401/403 falha rápido (1 chamada só); 429 classificado; resposta formatada ao
+usuário; erro de key orienta o `!key`; erro de limite avisa; o helper único cobre
+a região dos comandos de IA; `!imagine` existe e o `generateImage` devolve URL.
+**Verificado que os testes MEDEM os bugs**: revertendo o default para
+`gemini-3.7-flash` e o `normalizeModelId` para repassar o id cru, **5 asserções
+falham**. Regressões verdes: `menu-layout` 25/251, `subdonos` 20/62,
+`subdonos-perms` 21/58, `donos` 5/17, `antictt` 15/38, `antiroubo` 22/68,
+`dono-perfil` 47/0, `me-profile` 44/0, `get-message-inspector` 54/269,
+`cmd-suggest` 21/68, `blacklist-number` 12/38, `antimidia` 14/29,
+`gifsbn-media` 16/61, `relationships-multi` 19/86, `viewonce-v2` 18/77,
+`raja-selective` 23/0, `antifantasma-classificacao` 18/0. Boot OK.
+
+**Configuração**: a key é a mesma (`GEMINI_API_KEY`, definida com `!key`), então
+não há nada a migrar — o que estava errado era o **modelo**, não a credencial.
+
 ## COMANDO `!antiroubo` — REFATORADO (modelo RAVENA-BOT/Kimori) (set/2026) ✅
 O sistema de anti-roubo foi reescrito a partir do bot de referência que o dono
 mandou (a RAVENA-BOT / Kimori, `arquivos/funcoes/AntiRoubo.js` +
