@@ -62,15 +62,19 @@ function naoContem(h, n, l) { ok(typeof h === 'string' && !h.includes(n), `${l ?
 // 1) MODULO PURO
 // ============================================================================
 
-await test('1. interpretarCanalEntrada entende link, JID e codigo', () => {
-  ok(mod.interpretarCanalEntrada(CANAL_PROJETO)?.tipo === 'jid', 'JID pronto');
-  const link = mod.interpretarCanalEntrada('https://whatsapp.com/channel/0029VaAbCdEfGh');
-  ok(link?.tipo === 'codigo' && link.valor === '0029VaAbCdEfGh', 'link -> codigo');
-  ok(mod.interpretarCanalEntrada('0029VaAbCdEfGh')?.tipo === 'codigo', 'codigo cru');
-  ok(mod.interpretarCanalEntrada('') === null, 'vazio -> null');
+await test('1. normalizarIdGrupo aceita JID e digitos, recusa nao-grupo', () => {
+  ok(mod.normalizarIdGrupo('120363000000000001@g.us') === '120363000000000001@g.us', 'JID pronto');
+  ok(mod.normalizarIdGrupo('120363000000000001') === '120363000000000001@g.us', 'digitos ganham sufixo');
+  ok(mod.normalizarIdGrupo('') === null, 'vazio -> null');
+  ok(mod.normalizarIdGrupo(CANAL_PROJETO) === null, 'canal NAO e grupo');
 });
 
-await test('2. buildFollowChannelContent monta o card com raw:true', () => {
+await test('1b. ehJidCanal valida o canal padrao', () => {
+  ok(mod.ehJidCanal(CANAL_PROJETO), 'canal valido');
+  ok(!mod.ehJidCanal('120363000000000001@g.us'), 'grupo nao e canal');
+});
+
+await test('2. buildFollowChannelContent monta o card do CANAL com raw:true', () => {
   const { object, tipo } = mod.buildFollowChannelContent({ jid: CANAL_PROJETO, nome: 'Lizzy', caption: 'Siga!' });
   ok(tipo === 'newsletterFollowerInviteMessageV2', 'tipo do card');
   ok(object.raw === true, 'raw: true (senao a fork lanca Invalid media type)');
@@ -83,16 +87,17 @@ await test('2. buildFollowChannelContent monta o card com raw:true', () => {
   ok(erro && /canal/i.test(erro.message), 'recusa jid que nao e canal');
 });
 
-await test('3. normalizar/adicionar/remover canais', () => {
-  ok(mod.normalizarCanais([CANAL_PROJETO, { jid: '120363000000000001@newsletter', nome: 'X' }]).length === 2, 'normaliza');
-  ok(mod.normalizarCanais([CANAL_PROJETO, CANAL_PROJETO]).length === 1, 'dedup');
-  ok(mod.normalizarCanais(['lixo', null, 42]).length === 0, 'descarta invalidos');
-  const a = mod.adicionarCanal([], { jid: CANAL_PROJETO, nome: 'Lizzy' });
-  ok(a.adicionado && a.canais.length === 1, 'adiciona');
-  const a2 = mod.adicionarCanal(a.canais, { jid: CANAL_PROJETO, nome: 'Novo' });
-  ok(!a2.adicionado && a2.canais[0].nome === 'Novo', 'nao duplica, atualiza o nome');
-  ok(mod.removerCanal(a.canais, CANAL_PROJETO).removido, 'remove');
-  ok(!mod.removerCanal(a.canais, 'x@newsletter').removido, 'remover inexistente');
+await test('3. normalizar/adicionar/remover GRUPOS', () => {
+  const g1 = '120363000000000001@g.us';
+  const g2 = '120363000000000002';
+  ok(mod.normalizarGrupos([g1, g2]).length === 2, 'normaliza (aceita digitos)');
+  ok(mod.normalizarGrupos([g1, g1]).length === 1, 'dedup');
+  ok(mod.normalizarGrupos(['lixo', null, 42, CANAL_PROJETO]).length === 0, 'descarta invalidos e canal');
+  const a = mod.adicionarGrupo([], g1);
+  ok(a.adicionado && a.grupos.length === 1, 'adiciona');
+  ok(!mod.adicionarGrupo(a.grupos, g1).adicionado, 'nao duplica');
+  ok(mod.removerGrupo(a.grupos, g1).removido, 'remove por jid');
+  ok(mod.removerGrupo(a.grupos, 'x@newsletter').removido === false, 'remover inexistente');
 });
 
 // ============================================================================
@@ -124,9 +129,11 @@ function makeGroup() {
 const CONFIG_FILE = path.join(DONO_DIR, 'divulgacao_canal.json');
 function lerCfg() { try { return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8')); } catch { return {}; } }
 
-async function rodar(text, { link = null } = {}) {
+async function rodar(text, { registrar = null } = {}) {
   const sent = [];
   const gid = makeGroup();
+  // `registrar` = JID que o comando deve ver como "o grupo onde rodou".
+  const grupoAtual = registrar || gid;
   const nazu = {
     sendMessage: async (jid, content, options) => { sent.push({ jid, content, options }); return { key: { id: `SENT-${sent.length}` } }; },
     user: { id: `${BOT_JID.split('@')[0]}:5@s.whatsapp.net`, lid: BOT_LID, name: 'Lizzy' },
@@ -134,12 +141,8 @@ async function rodar(text, { link = null } = {}) {
     signalRepository: { lidMapping: { getPNForLID: async () => null } },
     contacts: { getName: () => undefined }, getName: () => undefined,
     // newsletterMetadata resolve o LINK -> JID (é o que o `add` usa)
-    newsletterMetadata: async (tipo, valor) => {
-      if (tipo === 'invite') return { id: link || CANAL_PROJETO, name: 'Canal do Link' };
-      return { id: valor, name: 'Canal' };
-    },
-    groupMetadata: async () => ({
-      id: gid, subject: 'G', owner: `${DONO_NUM}@s.whatsapp.net`,
+    groupMetadata: async (jidAlvo) => ({
+      id: jidAlvo || grupoAtual, subject: 'Grupo Destino', owner: `${DONO_NUM}@s.whatsapp.net`,
       participants: [
         { id: BOT_LID, lid: BOT_LID, phoneNumber: BOT_JID, admin: 'admin' },
         { id: OWNER_LID, lid: OWNER_LID, phoneNumber: OWNER_JID, admin: 'admin' },
@@ -150,15 +153,15 @@ async function rodar(text, { link = null } = {}) {
     ev: { on: () => {}, emit: () => {}, removeAllListeners: () => {} },
   };
   const info = {
-    key: { remoteJid: gid, fromMe: true, id: `M-${Math.random().toString(36).slice(2, 8)}`, participant: OWNER_LID },
-    message: { extendedTextMessage: { text, contextInfo: { remoteJid: gid } } },
+    key: { remoteJid: grupoAtual, fromMe: true, id: `M-${Math.random().toString(36).slice(2, 8)}`, participant: OWNER_LID },
+    message: { extendedTextMessage: { text, contextInfo: { remoteJid: grupoAtual } } },
     messageTimestamp: 1757900000, pushName: 'Dono',
   };
   await handleMessage(nazu, info, null, new Map(), null);
   await new Promise((r) => setTimeout(r, 250));
   const texto = sent.map((s) => s.content?.text ?? s.content?.caption ?? '').filter(Boolean).join('\n');
   const cards = sent.filter((s) => s.content?.newsletterFollowerInviteMessageV2);
-  return { sent, texto, cards, gid };
+  return { sent, texto, cards, gid: grupoAtual };
 }
 
 /** Passa o card pelo caminho REAL da fork e devolve o tipo que chega. */
@@ -174,44 +177,48 @@ async function tipoDoPayload(content) {
 // limpa o estado entre os testes de handler
 function limpar() { try { fs.rmSync(CONFIG_FILE, { force: true }); } catch {} }
 
-await test('4. sem nada registrado, o envio usa o CANAL DO PROJETO', async () => {
+await test('4. sem grupo registrado, o envio RECUSA (nao sabe para onde mandar)', async () => {
   limpar();
-  const { cards } = await rodar('!divcanal send');
-  ok(cards.length === 1, 'enviou 1 card');
-  const inner = cards[0].content.newsletterFollowerInviteMessageV2;
-  ok(inner.newsletterJid === CANAL_PROJETO, `usou o canal do projeto (${inner.newsletterJid})`);
+  const { cards, texto } = await rodar('!divcanal send');
+  ok(cards.length === 0, 'nao enviou card');
+  contem(texto, 'Nenhum grupo registrado', 'explica que falta registrar');
 });
 
-await test('5. add com LINK resolve via newsletterMetadata e registra', async () => {
+await test('5. add SEM id registra o GRUPO onde o comando foi usado', async () => {
   limpar();
-  const { texto } = await rodar('!divcanal add https://whatsapp.com/channel/0029VaXyz', { link: CANAL_PROJETO });
-  contem(texto, 'Canal registrado', 'confirmou');
+  const g = '120363000000000777@g.us';
+  const { texto } = await rodar('!divcanal add', { registrar: g });
+  contem(texto, 'Grupo registrado', 'confirmou');
   const cfg = lerCfg();
-  ok(cfg.canais?.length === 1, 'gravou 1 canal');
-  ok(cfg.canais[0].jid === CANAL_PROJETO, 'gravou o JID resolvido (nao o codigo)');
+  ok(cfg.groups?.length === 1, 'gravou 1 grupo');
+  ok(cfg.groups[0] === g, `gravou o grupo atual (${cfg.groups[0]})`); 
 });
 
-await test('6. add com JID direto tambem funciona; duplicado nao duplica', async () => {
+await test('6. add com ID direto funciona; duplicado nao duplica', async () => {
   limpar();
-  await rodar(`!divcanal add ${CANAL_PROJETO}`);
-  const r2 = await rodar(`!divcanal add ${CANAL_PROJETO}`);
-  contem(r2.texto, 'já estava registrado', 'avisa duplicado');
-  ok(lerCfg().canais?.length === 1, 'continua com 1');
+  const g = '120363000000000778@g.us';
+  await rodar(`!divcanal add ${g}`);
+  const r2 = await rodar(`!divcanal add ${g}`);
+  contem(r2.texto, 'já está registrado', 'avisa duplicado');
+  ok(lerCfg().groups?.length === 1, 'continua com 1');
 });
 
-await test('7. send envia o CARD com tipo intacto no payload da fork', async () => {
+await test('7. send envia o CARD (do canal do bot) com tipo intacto no payload', async () => {
   limpar();
-  await rodar(`!divcanal add ${CANAL_PROJETO}`);
+  const g = '120363000000000779@g.us';
+  await rodar(`!divcanal add ${g}`);
   const { cards } = await rodar('!divcanal send');
   ok(cards.length === 1, 'um card');
+  // o destino e o GRUPO registrado, e o card aponta para o CANAL do bot
+  ok(cards[0].jid === g, `enviou para o grupo registrado (${cards[0].jid})`);
   const p = await tipoDoPayload(cards[0].content);
   ok(p.tipo === 'newsletterFollowerInviteMessageV2', `tipo no payload (${p.tipo})`);
-  ok(p.card?.newsletterJid === CANAL_PROJETO, 'jid no payload');
+  ok(p.card?.newsletterJid === CANAL_PROJETO, 'jid do CANAL no payload');
 });
 
 await test('8. a legenda salva vai no card e no envio', async () => {
   limpar();
-  await rodar(`!divcanal add ${CANAL_PROJETO}`);
+  await rodar('!divcanal add 120363000000000780@g.us');
   await rodar('!divcanal msg Entre no canal 💜');
   const { cards } = await rodar('!divcanal send');
   ok(cards[0].content.newsletterFollowerInviteMessageV2.caption === 'Entre no canal 💜', 'legenda salva usada');
@@ -220,34 +227,38 @@ await test('8. a legenda salva vai no card e no envio', async () => {
   ok(r.cards[0].content.newsletterFollowerInviteMessageV2.caption === 'Legenda pontual', 'legenda do send vence');
 });
 
-await test('9. list e status mostram os canais', async () => {
+await test('9. list e status mostram os GRUPOS e o canal padrao', async () => {
   limpar();
-  await rodar(`!divcanal add ${CANAL_PROJETO}`);
+  const g = '120363000000000781@g.us';
+  await rodar(`!divcanal add ${g}`);
   const l = await rodar('!divcanal list');
-  contem(l.texto, 'CANAIS REGISTRADOS', 'titulo da lista');
-  contem(l.texto, CANAL_PROJETO, 'mostra o jid');
-  const s = await rodar('!divcanal status');
-  contem(s.texto, 'DIVULGAÇÃO DE CANAL', 'titulo do status');
-  contem(s.texto, 'Canal do projeto', 'mostra o canal do projeto');
+  contem(l.texto, 'GRUPOS REGISTRADOS', 'titulo da lista');
+  contem(l.texto, g, 'mostra o grupo');
+  contem(l.texto, CANAL_PROJETO, 'mostra o canal padrao usado');
+  const st = await rodar('!divcanal status');
+  contem(st.texto, 'DIVULGAÇÃO DE CANAL', 'titulo do status');
+  contem(st.texto, 'Canal usado', 'mostra o canal');
+  contem(st.texto, CANAL_PROJETO, 'jid do canal');
 });
 
-await test('10. rem remove por JID e por numero da lista', async () => {
+await test('10. rem remove por numero e por id', async () => {
   limpar();
-  await rodar(`!divcanal add ${CANAL_PROJETO}`);
-  await rodar('!divcanal add 120363000000000001@newsletter');
-  ok(lerCfg().canais.length === 2, 'tem 2');
+  await rodar('!divcanal add 120363000000000782@g.us');
+  await rodar('!divcanal add 120363000000000783@g.us');
+  ok(lerCfg().groups.length === 2, 'tem 2');
   const r = await rodar('!divcanal rem 1');
   contem(r.texto, 'removido', 'removeu pelo numero');
-  ok(lerCfg().canais.length === 1, 'sobrou 1');
-  await rodar(`!divcanal rem ${CANAL_PROJETO}`);
-  contem((await rodar(`!divcanal rem x@newsletter`)).texto, 'não encontrado', 'inexistente avisa');
+  ok(lerCfg().groups.length === 1, 'sobrou 1');
+  await rodar('!divcanal rem 120363000000000783@g.us');
+  ok(lerCfg().groups.length === 0, 'removeu pelo id');
+  contem((await rodar('!divcanal rem 999@g.us')).texto, 'não encontrado', 'inexistente avisa');
 });
 
 await test('11. add sem argumento mostra o uso', async () => {
   limpar();
   const { texto } = await rodar('!divcanal');
   contem(texto, 'divcanal add', 'mostra o help');
-  contem(texto, 'canal do PROJETO', 'explica o padrao do projeto');
+  contem(texto, 'Canal usado', 'explica qual canal sera usado');
 });
 
 await test('12. so o dono usa o comando', async () => {

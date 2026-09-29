@@ -34,7 +34,7 @@ import { toOggOpus } from './utils/oggOpus.js';
 import { resolverNomeContato, resolverNomesContatos, acharParticipantePorId, nomeInutil, baseId } from './utils/contactName.js';
 import { converterGifParaMp4 } from './utils/gifMedia.js';
 import { figurinhaParaStatus } from './utils/stickerStatus.js';
-import { interpretarCanalEntrada, ehJidCanal, buildFollowChannelContent, normalizarCanais, adicionarCanal, removerCanal } from './utils/canalDivulgacao.js';
+import { normalizarIdGrupo, ehJidCanal, buildFollowChannelContent, normalizarGrupos, adicionarGrupo, removerGrupo } from './utils/canalDivulgacao.js';
 import sharp from 'sharp';
 import * as ghostDetection from './utils/ghostDetection.js';
 import { bold as boldLayout, boldItalic as boldItalicLayout, abrirCategoria, fecharCategoria } from './menus/layout.js';
@@ -5316,19 +5316,21 @@ Código: *${roleCode}*`,
      * `raw: true`, senão a fork lança `Invalid media type`.
      */
     const runDivCanalSend = async (nazuInstance, captionOverride = null, destinoOverride = null) => {
-      // Canal do PROJETO (global.json -> channel) e usado como padrao quando o
-      // dono ainda nao registrou nenhum canal no `!divcanal`.
-      const canalPadrao = canalDoProjeto();
-      const canais = normalizarCanais(loadDonoDivCanal().canais);
-      const alvos = canais.length ? canais : (canalPadrao ? [canalPadrao] : []);
-      const caption = String(captionOverride ?? loadDonoDivCanal().caption ?? '').trim();
-      if (alvos.length === 0) {
-        return { success: false, message: '❌ Nenhum canal registrado. Use !divcanal add <link/JID>.' };
+      // O CANAL e sempre o padrao do bot (global.json -> channel) — o dono nao
+      // registra canal, so os GRUPOS que vao receber a divulgacao.
+      const canal = canalDoProjeto();
+      if (!canal) {
+        return { success: false, message: '❌ Nenhum canal configurado no bot (global.json -> channel).' };
       }
-      const destino = destinoOverride || from;
+      const cfg = loadDonoDivCanal();
+      const destinos = destinoOverride ? [destinoOverride] : normalizarGrupos(cfg.groups);
+      if (destinos.length === 0) {
+        return { success: false, message: `❌ Nenhum grupo registrado. Use ${groupPrefix}divcanal add (no grupo) ou !divcanal add <id>.` };
+      }
+      const caption = String(captionOverride ?? cfg.caption ?? '').trim();
       let sent = 0;
       let failed = 0;
-      for (const canal of alvos) {
+      for (const destino of destinos) {
         try {
           const { object } = buildFollowChannelContent({ jid: canal.jid, nome: canal.nome, caption });
           await nazuInstance.sendMessage(destino, object);
@@ -5338,11 +5340,10 @@ Código: *${roleCode}*`,
           failed++;
         }
       }
-      const config = loadDonoDivCanal();
-      config.stats = config.stats || { totalSent: 0, lastManual: null, lastAuto: null };
-      config.stats.totalSent = (config.stats.totalSent || 0) + sent;
-      config.stats.lastManual = new Date().toISOString();
-      saveDonoDivCanal(config);
+      cfg.stats = cfg.stats || { totalSent: 0, lastManual: null, lastAuto: null };
+      cfg.stats.totalSent = (cfg.stats.totalSent || 0) + sent;
+      cfg.stats.lastManual = new Date().toISOString();
+      saveDonoDivCanal(cfg);
       return { success: true, sent, failed };
     };
 
@@ -33303,92 +33304,76 @@ break;
         }
         break;
       // ─── Divulgação de CANAL (cardzinho de "seguir canal") ───
-      // Mesma linha do `!divdono`: o dono registra os canais, salva uma legenda
-      // e dispara. O que muda é o conteúdo — vai o CARD NATIVO de seguir canal
-      // (`newsletterFollowerInviteMessageV2`), não texto/imagem.
+      // Mesma linha do `!divdono`: o dono registra os GRUPOS de destino, salva
+      // uma legenda e dispara. O CANAL não é registrado — é o canal padrão do
+      // bot (`global.json -> channel`); o que vai na mensagem é o card nativo
+      // de "seguir canal".
       case 'divcanal':
         try {
           if (!podeDonoTotal()) return reply('Apenas o dono do bot pode usar este comando.');
           const subCanal = (args[0] || '').toLowerCase();
           const restCanal = args.slice(1).join(' ').trim();
           const cfgCanal = loadDonoDivCanal();
-          const canaisCfg = normalizarCanais(cfgCanal.canais);
-          const projeto = canalDoProjeto();
+          const gruposCfg = normalizarGrupos(cfgCanal.groups);
+          const canalProjeto = canalDoProjeto();
+          const canalInfo = canalProjeto ? `${canalProjeto.nome} (${canalProjeto.jid})` : 'não configurado';
           const helpCanal = `📢 *DIVULGAÇÃO DE CANAL (CARD DE SEGUIR)*\n\n` +
-            `• ${groupPrefix}divcanal add <link|JID> — registra um canal\n` +
-            `• ${groupPrefix}divcanal rem <JID|número> — remove\n` +
-            `• ${groupPrefix}divcanal list — lista os canais\n` +
+            `• ${groupPrefix}divcanal add [id] — registra o GRUPO de destino\n` +
+            `• ${groupPrefix}divcanal rem <id|número> — remove\n` +
+            `• ${groupPrefix}divcanal list — lista os grupos\n` +
             `• ${groupPrefix}divcanal msg <texto> — legenda do card\n` +
-            `• ${groupPrefix}divcanal send [texto] — envia o(s) card(s) aqui\n` +
+            `• ${groupPrefix}divcanal send — envia o card nos grupos\n` +
             `• ${groupPrefix}divcanal status — resumo\n\n` +
-            `💡 Sem \`add\`, o envio usa o canal do PROJETO${projeto ? ` (${projeto.nome})` : ' (nenhum configurado)'}.`;
+            `📺 *Canal usado (padrão do bot):* ${canalInfo}`;
 
           if (!subCanal || subCanal === 'help' || subCanal === 'menu') {
             return reply(helpCanal);
           }
 
           if (subCanal === 'add' || subCanal === 'registrar') {
-            if (!restCanal) return reply(`💡 Use: ${groupPrefix}divcanal add <link_do_canal | JID>\nEx: ${groupPrefix}divcanal add https://whatsapp.com/channel/XXXXXXX`);
-            const entrada = interpretarCanalEntrada(restCanal);
-            if (!entrada) return reply('❌ Link/JID inválido.');
-            let jid = entrada.valor;
-            let nome = '';
-            if (entrada.tipo === 'codigo') {
-              // O código do link NÃO é o JID: quem resolve é o newsletterMetadata.
-              try {
-                const meta = await nazu.newsletterMetadata('invite', entrada.valor);
-                jid = meta?.id || '';
-                nome = meta?.name || '';
-              } catch (e) {
-                console.error('[DivCanal] invite:', e?.message || e);
-                return reply('❌ Não consegui identificar esse canal. Confira o link.');
-              }
-            }
-            if (!ehJidCanal(jid)) return reply('❌ Esse link não é de um canal válido.');
-            if (!nome) {
-              try {
-                const meta = await nazu.newsletterMetadata('jid', jid);
-                nome = meta?.name || '';
-              } catch { /* segue sem nome */ }
+            // Sem id, registra o GRUPO onde o comando foi usado (como o divdono).
+            let alvoGrupo = restCanal;
+            if (!alvoGrupo && isGroup) alvoGrupo = from;
+            if (!alvoGrupo) return reply(`💡 Use: ${groupPrefix}divcanal add [id_do_grupo] (ou use o comando no grupo)`);
+            const jidGrupo = normalizarIdGrupo(alvoGrupo);
+            if (!jidGrupo) {
+              return reply('❌ ID de grupo inválido! Deve terminar com @g.us (ou ser o grupo onde o comando foi usado).');
             }
             let res;
             try {
-              res = adicionarCanal(canaisCfg, { jid, nome });
+              res = adicionarGrupo(gruposCfg, jidGrupo);
             } catch (e) {
-              return reply('❌ JID de canal inválido.');
+              return reply('❌ ID de grupo inválido.');
             }
-            cfgCanal.canais = res.canais;
+            cfgCanal.groups = res.grupos;
             saveDonoDivCanal(cfgCanal);
-            return reply(res.adicionado
-              ? `✅ Canal registrado.\n📺 ${nome || jid}\n📌 Total: ${res.canais.length}`
-              : `♻️ Esse canal já estava registrado${nome ? ` — nome atualizado para "${nome}"` : ''}.\n📌 Total: ${res.canais.length}`);
+            if (!res.adicionado) return reply(`⚠️ Este grupo já está registrado.\n📌 Total: ${res.grupos.length}`);
+            let nomeGrupo = '';
+            try { nomeGrupo = (await nazu.groupMetadata(jidGrupo).catch(() => null))?.subject || ''; } catch { /* sem nome */ }
+            return reply(`✅ Grupo registrado para divulgação.${nomeGrupo ? `\n📛 ${nomeGrupo}` : ''}\n📌 Total: ${res.grupos.length}`);
           }
 
           if (subCanal === 'rem' || subCanal === 'remove' || subCanal === 'del') {
-            if (!restCanal) return reply(`💡 Use: ${groupPrefix}divcanal rem <JID|número da lista>`);
-            // aceita o número da lista (1-based) ou o JID
-            let alvoJid = restCanal.trim();
-            if (/^\d+$/.test(alvoJid)) {
-              const idx = Number(alvoJid) - 1;
-              if (idx < 0 || idx >= canaisCfg.length) {
-                return reply(`❌ Número inválido. Há ${canaisCfg.length} canal(is) registrado(s).`);
-              }
-              alvoJid = canaisCfg[idx].jid;
-            }
-            const res = removerCanal(canaisCfg, alvoJid);
-            if (!res.removido) return reply('⚠️ Canal não encontrado na lista.');
-            cfgCanal.canais = res.canais;
+            if (!restCanal) return reply(`💡 Use: ${groupPrefix}divcanal rem <id_do_grupo|número>`);
+            const res = removerGrupo(gruposCfg, restCanal);
+            if (!res.removido) return reply('⚠️ Grupo não encontrado na lista.');
+            cfgCanal.groups = res.grupos;
             saveDonoDivCanal(cfgCanal);
-            return reply(`✅ Canal removido.\n📌 Total: ${res.canais.length}`);
+            return reply(`✅ Grupo removido da divulgação.\n📌 Total: ${res.grupos.length}`);
           }
 
           if (subCanal === 'list' || subCanal === 'lista') {
-            if (!canaisCfg.length) {
-              return reply(`⚠️ Nenhum canal registrado.\n\n💡 Registre: ${groupPrefix}divcanal add <link>\n📺 Canal do projeto: ${projeto ? `${projeto.nome} (${projeto.jid})` : 'não configurado'}`);
+            if (!gruposCfg.length) {
+              return reply(`⚠️ Nenhum grupo registrado.\n\n💡 Registre com ${groupPrefix}divcanal add (no grupo) ou ${groupPrefix}divcanal add <id>.\n📺 Canal usado: ${canalInfo}`);
             }
-            let txt = `📢 *CANAIS REGISTRADOS (${canaisCfg.length})*\n`;
-            canaisCfg.forEach((c, i) => { txt += `\n${i + 1}. ${c.nome ? c.nome + ' — ' : ''}${c.jid}`; });
-            if (projeto) txt += `\n\n📺 *Canal do projeto:* ${projeto.nome} (${projeto.jid})`;
+            let txt = `📢 *GRUPOS REGISTRADOS (${gruposCfg.length})*\n`;
+            for (let i = 0; i < gruposCfg.length; i++) {
+              const gid = gruposCfg[i];
+              let nome = '';
+              try { nome = (await nazu.groupMetadata(gid).catch(() => null))?.subject || ''; } catch { /* sem nome */ }
+              txt += `\n${i + 1}. ${nome ? nome + ' — ' : ''}${gid}`;
+            }
+            txt += `\n\n📺 *Canal usado (padrão do bot):* ${canalInfo}`;
             return reply(txt);
           }
 
@@ -33403,8 +33388,7 @@ break;
           }
 
           if (subCanal === 'send' || subCanal === 'enviar') {
-            const legenda = restCanal || null;
-            const result = await runDivCanalSend(nazu, legenda, from);
+            const result = await runDivCanalSend(nazu, restCanal || null, null);
             if (!result.success) return reply(result.message);
             return reply(`✅ Card(s) enviado(s).\n📨 Enviados: ${result.sent}\n⚠️ Falhas: ${result.failed}`);
           }
@@ -33413,9 +33397,9 @@ break;
             const legenda = String(cfgCanal.caption || '').trim();
             const lastManual = cfgCanal.stats?.lastManual ? new Date(cfgCanal.stats.lastManual).toLocaleString('pt-BR') : '—';
             let txt = `📢 *STATUS — DIVULGAÇÃO DE CANAL*\n\n`;
-            txt += `📺 Canais registrados: ${canaisCfg.length}\n`;
-            if (canaisCfg.length) txt += canaisCfg.map((c, i) => `  ${i + 1}. ${c.nome || c.jid}`).join('\n') + '\n';
-            txt += `📺 Canal do projeto: ${projeto ? `${projeto.nome} (${projeto.jid})` : 'não configurado'}\n`;
+            txt += `📺 Canal usado: ${canalInfo}\n`;
+            txt += `👥 Grupos registrados: ${gruposCfg.length}\n`;
+            if (gruposCfg.length) txt += gruposCfg.map((g, i) => `  ${i + 1}. ${g}`).join('\n') + '\n';
             txt += `🧾 Legenda: ${legenda ? legenda.slice(0, 80) + (legenda.length > 80 ? '...' : '') : 'Nenhuma'}\n`;
             txt += `📨 Total enviado: ${cfgCanal.stats?.totalSent || 0}\n`;
             txt += `🗓️ Último envio: ${lastManual}`;

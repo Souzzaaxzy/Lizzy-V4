@@ -116,7 +116,7 @@ ensureJsonFileExists(GLOBAL_BLACKLIST_FILE, {
   groups: {}
 });
 ensureJsonFileExists(DONO_DIVCANAL_FILE, {
-  canais: [],
+  groups: [],
   caption: '',
   schedule: { enabled: false, times: [], lastRun: null },
   stats: { totalSent: 0, lastManual: null, lastAuto: null }
@@ -873,7 +873,7 @@ const saveDonoDivulgacao = (data) => {
 
 const loadDonoDivCanal = () => {
   return loadJsonFile(DONO_DIVCANAL_FILE, {
-    canais: [],
+    groups: [],
     caption: '',
     schedule: {
       enabled: false,

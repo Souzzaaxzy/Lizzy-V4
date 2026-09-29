@@ -7059,20 +7059,22 @@ o canal selecionado **no projeto inteiro** (newsletter). Mesma categoria do
 ### Comandos
 | Comando | O que faz |
 |---|---|
-| `!divcanal add <link\|JID>` | registra um canal (salva JID + nome) |
-| `!divcanal rem <JID\|nº>` | remove (aceita o número da lista) |
-| `!divcanal list` | lista os canais + o canal do projeto |
+| `!divcanal add [id]` | registra o **GRUPO** de destino (sem id, usa o grupo onde rodou) |
+| `!divcanal rem <id\|nº>` | remove o grupo (aceita o número da lista) |
+| `!divcanal list` | lista os grupos + o canal usado |
 | `!divcanal msg <texto>` | legenda do card |
-| `!divcanal send [texto]` | envia o(s) card(s) **na conversa atual** |
-| `!divcanal status` | canais, canal do projeto, legenda e total enviado |
+| `!divcanal send [texto]` | envia o card **nos grupos registrados** |
+| `!divcanal status` | canal usado, grupos, legenda e total enviado |
 
-- **`add` com LINK resolve o JID**: o código do link (`whatsapp.com/channel/XXXX`)
-  **não é** o JID — quem resolve é o `newsletterMetadata('invite', …)`, que
-  também devolve o nome. Aceita JID pronto (`...@newsletter`) e o código cru.
-- **Canal do PROJETO como padrão**: sem nenhum canal registrado, o envio usa o
-  canal que o bot já usa nos cabeçalhos (`global.json → channel.channelJid` /
-  `channelName`) — a fonte que o `replyAdminError` já lia. Assim o comando
-  funciona "de berço", sem o dono precisar configurar.
+- **`add` salva o GRUPO, não o canal** (ajuste pedido pelo dono em set/2026):
+  igual ao `!divdono`, o que se registra é o **destino** da divulgação. Sem
+  argumento, registra o grupo onde o comando foi usado; com id, aceita
+  `...@g.us` ou só os dígitos. `normalizarIdGrupo` exige `^\d{8,}@g\.us$`, então
+  `42`/`lixo`/um `@newsletter` são recusados.
+- **O CANAL é o padrão do bot** (`global.json → channel.channelJid` /
+  `channelName`) — a mesma fonte que o `replyAdminError` já lia. O dono **não**
+  registra canal: `list`/`status` mostram qual está sendo usado, e o card aponta
+  para ele.
 - **Exclusivo do dono** (`podeDonoTotal()`), como o `!divdono`.
 
 ### O detalhe que faz o card funcionar: `raw: true`
@@ -7084,13 +7086,13 @@ O `generateWAMessageContent` da fork **não conhece**
 `newsletterFollowerInviteMessageV2`). Sem isso, nenhum card sai.
 
 ### Módulo novo `dados/src/utils/canalDivulgacao.js` (puro)
-`interpretarCanalEntrada` (jid/link/código), `ehJidCanal`,
-`buildFollowChannelContent` (monta o card com `raw`), `normalizarCanais`
-(tolera formato antigo/errado e deduplica), `adicionarCanal`, `removerCanal`.
+`normalizarIdGrupo` (aceita `@g.us` ou dígitos; recusa não-grupo), `ehJidCanal`,
+`buildFollowChannelContent` (monta o card com `raw`), `normalizarGrupos`
+(tolera formato antigo/errado e deduplica), `adicionarGrupo`, `removerGrupo`.
 Sem socket e sem arquivo — testável direto.
 
 ### Storage próprio
-`dono/divulgacao_canal.json` (`canais[]`, `caption`, `stats`) via
+`dono/divulgacao_canal.json` (`groups[]`, `caption`, `stats`) via
 `loadDonoDivCanal`/`saveDonoDivCanal` (`utils/database.js`, atomicidade do resto
 do projeto). Arquivo separado do `divulgacao_dono.json` — não mistura os dois
 sistemas de divulgação.
@@ -7100,15 +7102,17 @@ O `!divdono` tem `time/addtime/deltime` com cron. Aqui **não** entrou: o dono
 pediu "mesma ideia de comandos" para o CARD, e o envio manual cobre o uso. Se
 quiser agendar depois, é uma adição em cima da mesma base.
 
-### Testes — `tests/divcanal.test.js` (**13 testes / 43 asserções**)
-Módulo puro (entrada, card, normalização/CRUD) + handler real: envio usando o
-**canal do projeto** quando nada está registrado, `add` por link (resolve via
-metadata) e por JID, duplicado não duplica, **o card passa pelo
-`generateWAMessage` real e o tipo chega intacto**, legenda salva/avulsa, list,
-status, rem por número e por JID, help, e a permissão de dono. Mais a checagem
-de que o `divcanal` está **na mesma seção** do `divdono` no menu.
-**Verificado que os testes MEDEM o `raw`**: removendo-o, os testes **2 e 7
-falham**. Baseline do `menu-layout` `menudono` 165 → **171**.
+### Testes — `tests/divcanal.test.js` (**14 testes / 49 asserções**)
+Módulo puro (validação do id de grupo, card, normalização/CRUD) + handler real:
+`add` sem id registra o **grupo atual**, `add` por id, duplicado, envio **nos
+grupos registrados** apontando para o **canal do bot**, recusa sem grupo
+registrado, **o card passa pelo `generateWAMessage` real e o tipo chega
+intacto**, legenda salva/avulsa, list, status, rem por número/id, help,
+permissão de dono, e que o `divcanal` está na mesma seção do `divdono`.
+**Verificado que os testes MEDEM as mudanças**: removendo o `raw` do card, os
+testes **2 e 7** falham; voltando o `add` a salvar CANAL e o envio a usar
+"canais", os testes **5/6** e **4/7/8** falham. Baseline do `menu-layout`
+`menudono` 165 → **171**.
 
 Regressões verdes: `menu-layout` 25/251, `statusgrupo` 49/143,
 `statusgrupo-figurinha` 16/36, `ia` 17/42, `delete-status` 11/55, `donos` 5/17,
