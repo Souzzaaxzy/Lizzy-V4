@@ -38,6 +38,9 @@ let PORTA_MIDIA = 0;
   PORTA_MIDIA = srv.address().port;
 }
 
+// Registra os tipos de metadata pedidos (o teste 27 confere que so usa INVITE).
+globalThis.__tiposMetadata = globalThis.__tiposMetadata || [];
+
 const TMP_DB = fs.mkdtempSync(path.join(os.tmpdir(), 'lizzy-divcanal-'));
 process.env.DATABASE_PATH = TMP_DB;
 const GRUPOS_DIR = path.join(TMP_DB, 'grupos');
@@ -169,7 +172,7 @@ async function rodar(text, { registrar = null, quoted = null } = {}) {
     // newsletterMetadata resolve o LINK -> JID (é o que o `add` usa)
     // preview = blob base64 (caminho simples, sem download) — como a fork devolve.
     // No CONVITE devolve o canal REAL (nome/jid diferentes do global.json).
-    newsletterMetadata: async (tipo, valor) => (tipo === 'invite'
+    newsletterMetadata: async (tipo, valor) => (globalThis.__tiposMetadata.push(tipo), tipo === 'invite'
       ? { id: CANAL_REAL_JID, name: CANAL_REAL_NOME, preview: FOTO_B64 }
       : { id: valor, name: CANAL_REAL_NOME, preview: FOTO_B64 }),
     groupMetadata: async (jidAlvo) => ({
@@ -573,6 +576,24 @@ await test('26. `!divcanal time` e so do dono', async () => {
   const t = sent.map((s) => s.content?.text ?? '').join('\n');
   contem(t, 'dono do bot', 'barra quem nao e dono');
   ok(!lerCfg().schedule?.times?.length, 'nada foi agendado');
+});
+
+await test('27. NAO usa newsletterMetadata("jid") — o servidor responde Not Allowed', async () => {
+  // A resolucao e cacheada (por isso pode nao haver chamada nova aqui), entao
+  // conferimos as DUAS pontas: tudo que foi pedido na suite E o codigo-fonte.
+  const tipos = [...new Set(globalThis.__tiposMetadata.map((t) => String(t).toLowerCase()))];
+  ok(tipos.every((t) => t === 'invite'), `so usa INVITE (usou: ${tipos.join(',') || '—'})`);
+  ok(!tipos.includes('jid'), 'nunca pede por JID');
+  const src = fs.readFileSync(new URL('../dados/src/index.js', import.meta.url), 'utf-8');
+  // Remove comentarios antes de checar (a linha que explica a remocao cita 'jid')
+  const codigo = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  ok(!/newsletterMetadata\(\s*'jid'/.test(codigo), 'nao ha mais chamada com jid');
+});
+
+await test('28. falha na resolucao nao spamma o log (avisa UMA vez)', async () => {
+  const src = fs.readFileSync(new URL('../dados/src/index.js', import.meta.url), 'utf-8');
+  ok(/_divCanalFotoAvisou/.test(src), 'usa a flag de aviso unico');
+  ok(!/nao consegui obter a foto do canal/.test(src), 'o log do caminho jid foi removido');
 });
 
 // ============================================================================

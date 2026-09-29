@@ -1422,46 +1422,16 @@ ADMIN_ERROR_MESSAGE = loadAdminErrorMessage();
 
 
 // Função para enviar mensagem de erro admin com canal
+// O caminho de foto por `newsletterMetadata('jid', ...)` foi REMOVIDO: o
+// servidor responde "GraphQL server error: Not Allowed" para esse type. O
+// unico caminho permitido e o CONVITE (`type: 'INVITE'`), que e exatamente o
+// que o `welcomeUrl` fornece — e o nome e a foto vem junto da resolucao.
+let _divCanalFotoAvisou = false;
+
 /**
  * Canal do PROJETO (o mesmo que o bot usa nos cabecalhos de newsletter).
- * Lido de `global.json -> channel`. Devolve `null` quando nao configurado.
+ * Lido de `global.json -> channel`. Devolve os campos vazios quando ausente.
  */
-// Cache da foto do canal (thumb do card). Buscar em toda divulgacao seria
-// desperdicio; o preview do canal muda pouco. TTL curto para nao ficar velho.
-const _canalFotoCache = new Map(); // jid -> { buffer, at }
-const CANAL_FOTO_TTL_MS = 30 * 60 * 1000;
-
-/**
- * Foto (thumbnail) do canal para o card.
- *
- * O `newsletterMetadata` pede `fetch_full_image: true`, entao a resposta costuma
- * trazer o `preview` (blob base64) PRONTO — sem download extra. Se vier so o
- * `picture.directPath`, baixamos desse caminho. Falha em qualquer passo devolve
- * `null`: o card sai sem foto, nunca quebra por causa dela.
- */
-async function fotoDoCanal(nazuInstance, canal) {
-  if (!canal?.jid) return null;
-  const cache = _canalFotoCache.get(canal.jid);
-  if (cache && (Date.now() - cache.at) < CANAL_FOTO_TTL_MS) return cache.buffer;
-
-  let buffer = null;
-  try {
-    const meta = await nazuInstance.newsletterMetadata('jid', canal.jid);
-    buffer = fotoDoMetadataNewsletter(meta);
-    if (!buffer && meta?.picture?.directPath) {
-      const url = getUrlFromDirectPath(meta.picture.directPath);
-      const resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 20000 });
-      const buf = Buffer.from(resp.data || []);
-      if (buf.length) buffer = buf;
-    }
-  } catch (e) {
-    console.error('[DivCanal] nao consegui obter a foto do canal:', e?.message || e);
-  }
-
-  if (buffer) _canalFotoCache.set(canal.jid, { buffer, at: Date.now() });
-  return buffer;
-}
-
 function configCanalProjeto() {
   try {
     const g = JSON.parse(fs.readFileSync(pathz.join(DATABASE_DIR, 'global.json'), 'utf-8'));
@@ -1540,13 +1510,12 @@ async function canalDoProjetoResolvido(nazuInstance) {
         } catch { /* segue sem foto */ }
       }
     } catch (e) {
-      console.error('[DivCanal] nao consegui resolver o canal pelo link:', e?.message || e);
+      // Avisa UMA vez: a resolucao roda a cada envio e o log repetido so poluia.
+      if (!_divCanalFotoAvisou) {
+        _divCanalFotoAvisou = true;
+        console.warn('[DivCanal] nao consegui resolver o canal pelo link (seguindo com o nome/foto salvos):', e?.message || e);
+      }
     }
-  }
-
-  // B) sem convite util, tenta pelo JID guardado (nome/foto)
-  if (!foto && nazuInstance && jid) {
-    foto = await fotoDoCanal(nazuInstance, { jid });
   }
 
   if (!/@newsletter$/i.test(jid)) {

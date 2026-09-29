@@ -7082,6 +7082,12 @@ o canal selecionado **no projeto inteiro** (newsletter). Mesma categoria do
   no lugar). `limpar` zera cada um e volta ao automático; o `status` mostra qual
   está em uso. A foto é baixada com o mesmo `getFileBuffer` dos outros comandos
   (desencriptada) e salva em `dono/divcanal/foto_<ts>.jpg`.
+- **Log "GraphQL server error: Not Allowed" (corrigido)**: o bot também tentava
+  a foto por `newsletterMetadata('jid', …)`, e **o servidor recusa esse type**
+  (só o `INVITE` é permitido). Esse caminho foi **removido** — o único é o
+  convite (`welcomeUrl`), que já traz jid + nome + foto. O aviso de falha na
+  resolução passou a sair **uma vez por processo** (`_divCanalFotoAvisou`), em
+  vez de a cada envio.
 - **O CANAL é o padrão do bot, RESOLVIDO pelo link** (`global.json → channel`):
   o dono **não** registra canal. A fonte da verdade é o **`welcomeUrl`**
   (`https://whatsapp.com/channel/XXXX`), **não** o `channelName` guardado — esse
@@ -7173,7 +7179,7 @@ antes da gravação, então a resposta dizia "desativado (0/7)" logo depois de
 adicionar um horário — o teste pegou. Agora ele lê o `cfgCanal.schedule` **atual**
 (a escrita troca o objeto inteiro).
 
-### Testes — `tests/divcanal.test.js` (**28 testes / 112 asserções**)
+### Testes — `tests/divcanal.test.js` (**30 testes / 117 asserções**)
 Módulo puro (validação do id de grupo, card, normalização/CRUD) + handler real:
 `add` sem id registra o **grupo atual**, `add` por id, duplicado, envio **nos
 grupos registrados** apontando para o **canal do bot**, recusa sem grupo
@@ -7186,7 +7192,8 @@ resolvido do convite (e a foto), nunca o genérico.
 **Verificado que os testes MEDEM as mudanças**: removendo o `raw` do card, os
 testes **2 e 7** falham; desligando a **resolução pelo welcomeUrl**, os testes
 **9 e 17** falham; desligando os **manuais** (`name`/`foto`), os testes **19 e 20**
-falham; removendo o `time`, os testes **23/24/25** falham; voltando o `add` a salvar CANAL e o envio a usar
+falham; removendo o `time`, os testes **23/24/25** falham; reintroduzindo a
+chamada com `'jid'`, o teste **27** falha; voltando o `add` a salvar CANAL e o envio a usar
 "canais", os testes **5/6** e **4/7/8** falham; e **desligando a busca da foto**,
 o teste **14** falha (2 asserções). Baseline do `menu-layout` `menudono`
 165 → **171**.
