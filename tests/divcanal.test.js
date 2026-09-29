@@ -325,6 +325,21 @@ await test('15. o card sai mesmo se a foto falhar (nunca quebra)', async () => {
   contem(texto, 'Enviados: 1', 'confirmou o envio');
 });
 
+await test('16b. a mensagem setada leva o cabecalho "Ver canal" (newsletter)', async () => {
+  limpar();
+  await rodar('!divcanal add 120363000000000792@g.us');
+  const { cards } = await rodar('!divcanal send');
+  const ci = cards[0].content.newsletterFollowerInviteMessageV2.contextInfo;
+  ok(ci, 'tem contextInfo');
+  ok(ci.forwardedNewsletterMessageInfo?.newsletterJid === CANAL_PROJETO, `cabecalho aponta o canal (${ci.forwardedNewsletterMessageInfo?.newsletterJid})`);
+  ok(ci.isForwarded === true && ci.forwardingScore === 999, 'encaminhamento de canal');
+  // e sobrevive ao encode do proto (e o que chega no destino)
+  const { proto } = await import('@itsliaaa/baileys');
+  const inner = cards[0].content.newsletterFollowerInviteMessageV2;
+  const dec = proto.Message.decode(proto.Message.encode({ newsletterFollowerInviteMessageV2: inner }).finish());
+  ok(dec.newsletterFollowerInviteMessageV2.contextInfo?.forwardedNewsletterMessageInfo?.newsletterJid === CANAL_PROJETO, 'sobrevive ao encode');
+});
+
 await test('16. fotoDoMetadataNewsletter extrai o preview (e tolera lixo)', () => {
   ok(mod.fotoDoMetadataNewsletter({ preview: FOTO_B64 })?.length > 0, 'preview base64');
   ok(mod.fotoDoMetadataNewsletter({ preview: `data:image/jpeg;base64,${FOTO_B64}` })?.length > 0, 'data-uri');

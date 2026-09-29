@@ -5371,7 +5371,7 @@ Código: *${roleCode}*`,
       let failed = 0;
       for (const destino of destinos) {
         try {
-          const { object } = buildFollowChannelContent({ jid: canal.jid, nome: canal.nome, caption, foto });
+          const { object } = buildFollowChannelContent({ jid: canal.jid, nome: canal.nome, caption, foto, canalJid: canal.jid, canalNome: canal.nome });
           await nazuInstance.sendMessage(destino, object);
           sent++;
         } catch (e) {

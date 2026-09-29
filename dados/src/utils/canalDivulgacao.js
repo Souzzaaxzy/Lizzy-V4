@@ -43,10 +43,22 @@ export function ehJidCanal(jid) {
 /**
  * Conteúdo do card "seguir canal".
  *
- * @param {{ jid: string, nome?: string, caption?: string, foto?: Buffer }} p
+ * O cabeçalho **"Ver canal"** (o mesmo dos outros envios do bot) vai no
+ * `contextInfo` da PRÓPRIA mensagem do card — é a forma que o cliente lê para
+ * desenhar o encaminhamento de canal em cima dela.
+ *
+ * @param {object} p
+ * @param {string} p.jid
+ * @param {string} [p.nome]
+ * @param {string} [p.caption]
+ * @param {Buffer} [p.foto]
+ * @param {string} [p.canalJid]   canal do cabeçalho (padrão: o próprio)
+ * @param {string} [p.canalNome]
  * @returns {{ object: object, tipo: string }}
  */
-export function buildFollowChannelContent({ jid, nome = '', caption = '', foto = null } = {}) {
+export function buildFollowChannelContent({
+  jid, nome = '', caption = '', foto = null, canalJid = null, canalNome = '',
+} = {}) {
   if (!ehJidCanal(jid)) {
     throw new Error('JID de canal inválido');
   }
@@ -59,6 +71,20 @@ export function buildFollowChannelContent({ jid, nome = '', caption = '', foto =
   // proto). Sem foto, o campo fica de fora — o card sai só com nome, que é
   // melhor do que um thumbnail vazio.
   if (Buffer.isBuffer(foto) && foto.length > 0) interno.jpegThumbnail = foto;
+
+  // Cabeçalho "Ver canal" (forwardedNewsletterMessageInfo). Fica no contextInfo
+  // DA MENSAGEM (é o que o cliente lê) — verificado que sobrevive ao
+  // encode/decode do proto.
+  const headerCanal = ehJidCanal(canalJid) ? String(canalJid) : String(jid);
+  interno.contextInfo = {
+    forwardingScore: 999,
+    isForwarded: true,
+    forwardedNewsletterMessageInfo: {
+      newsletterJid: headerCanal,
+      newsletterName: String(canalNome || nome || 'Canal'),
+    },
+  };
+
   return {
     tipo: 'newsletterFollowerInviteMessageV2',
     // `raw` faz o proto passar direto pelo generateWAMessageContent.

@@ -7085,10 +7085,18 @@ O `generateWAMessageContent` da fork **não conhece**
 `generateWAMessage`/`sendMessage` (verificado: `getContentType` devolve
 `newsletterFollowerInviteMessageV2`). Sem isso, nenhum card sai.
 
-### FOTO e NOME do canal no card
-O card **já levava o nome** (`newsletterName`); a **foto** entrou como
-**`jpegThumbnail`** — é o campo que o `NewsletterFollowerInviteMessageV2` usa
-para a imagem no proto (verificado: sobrevive ao `encode`/`decode`).
+### FOTO, NOME e CABEÇALHO "Ver canal" no card
+O card leva **nome** (`newsletterName`), **foto** (`jpegThumbnail`) e o
+**cabeçalho de canal** — todos verificados por `encode`/`decode` do proto.
+
+**Cabeçalho "Ver canal"** (ajuste pedido pelo dono em set/2026: *"muda isso
+apenas para a mensagem setada com o cabeçalho de ver canal na mensagem setada"*):
+vai no `contextInfo` **da própria mensagem do card** —
+`forwardedNewsletterMessageInfo { newsletterJid, newsletterName }` +
+`forwardingScore: 999` + `isForwarded: true` —, que é o que o cliente lê para
+desenhar o encabezado de canal em cima da mensagem setada. O
+`buildFollowChannelContent` aceita `canalJid`/`canalNome` para o cabeçalho
+(padrão: o próprio canal do card).
 
 - **De onde vem a foto**: o `newsletterMetadata` já pede
   `fetch_full_image: true`, então a resposta traz o **`preview`** (blob base64)
@@ -7119,7 +7127,7 @@ O `!divdono` tem `time/addtime/deltime` com cron. Aqui **não** entrou: o dono
 pediu "mesma ideia de comandos" para o CARD, e o envio manual cobre o uso. Se
 quiser agendar depois, é uma adição em cima da mesma base.
 
-### Testes — `tests/divcanal.test.js` (**17 testes / 58 asserções**)
+### Testes — `tests/divcanal.test.js` (**18 testes / 62 asserções**)
 Módulo puro (validação do id de grupo, card, normalização/CRUD) + handler real:
 `add` sem id registra o **grupo atual**, `add` por id, duplicado, envio **nos
 grupos registrados** apontando para o **canal do bot**, recusa sem grupo
