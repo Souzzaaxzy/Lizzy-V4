@@ -7063,6 +7063,8 @@ o canal selecionado **no projeto inteiro** (newsletter). Mesma categoria do
 | `!divcanal rem <id\|nº>` | remove o grupo (aceita o número da lista) |
 | `!divcanal list` | lista os grupos + o canal usado |
 | `!divcanal msg <texto>` | legenda do card |
+| `!divcanal name [texto\|limpar]` | nome do card (vence o resolvido) |
+| `!divcanal foto [limpar]` | foto do card — responda uma imagem |
 | `!divcanal send [texto]` | envia o card **nos grupos registrados** |
 | `!divcanal status` | canal usado, grupos, legenda e total enviado |
 
@@ -7071,6 +7073,13 @@ o canal selecionado **no projeto inteiro** (newsletter). Mesma categoria do
   argumento, registra o grupo onde o comando foi usado; com id, aceita
   `...@g.us` ou só os dígitos. `normalizarIdGrupo` exige `^\d{8,}@g\.us$`, então
   `42`/`lixo`/um `@newsletter` são recusados.
+- **`name`/`foto` manuais (set/2026)** — pedido do dono (*"é mais fácil criar mais
+  2 comandos para setar nome e foto do card"*). `!divcanal name <texto>` e
+  `!divcanal foto` (respondendo uma imagem) gravam em `dono/divulgacao_canal.json`
+  (`nome`, `fotoPath`) e **vencem a resolução automática** no card (por cima, não
+  no lugar). `limpar` zera cada um e volta ao automático; o `status` mostra qual
+  está em uso. A foto é baixada com o mesmo `getFileBuffer` dos outros comandos
+  (desencriptada) e salva em `dono/divcanal/foto_<ts>.jpg`.
 - **O CANAL é o padrão do bot, RESOLVIDO pelo link** (`global.json → channel`):
   o dono **não** registra canal. A fonte da verdade é o **`welcomeUrl`**
   (`https://whatsapp.com/channel/XXXX`), **não** o `channelName` guardado — esse
@@ -7154,7 +7163,7 @@ O `!divdono` tem `time/addtime/deltime` com cron. Aqui **não** entrou: o dono
 pediu "mesma ideia de comandos" para o CARD, e o envio manual cobre o uso. Se
 quiser agendar depois, é uma adição em cima da mesma base.
 
-### Testes — `tests/divcanal.test.js` (**19 testes / 66 asserções**)
+### Testes — `tests/divcanal.test.js` (**24 testes / 89 asserções**)
 Módulo puro (validação do id de grupo, card, normalização/CRUD) + handler real:
 `add` sem id registra o **grupo atual**, `add` por id, duplicado, envio **nos
 grupos registrados** apontando para o **canal do bot**, recusa sem grupo
@@ -7166,7 +7175,8 @@ O teste **17** é o caso do dono: o `global.json` de teste tem `channelName`
 resolvido do convite (e a foto), nunca o genérico.
 **Verificado que os testes MEDEM as mudanças**: removendo o `raw` do card, os
 testes **2 e 7** falham; desligando a **resolução pelo welcomeUrl**, os testes
-**9 e 17** falham; voltando o `add` a salvar CANAL e o envio a usar
+**9 e 17** falham; desligando os **manuais** (`name`/`foto`), os testes **19 e 20**
+falham; voltando o `add` a salvar CANAL e o envio a usar
 "canais", os testes **5/6** e **4/7/8** falham; e **desligando a busca da foto**,
 o teste **14** falha (2 asserções). Baseline do `menu-layout` `menudono`
 165 → **171**.

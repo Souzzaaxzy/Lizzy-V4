@@ -1493,10 +1493,32 @@ const CANAL_RESOLVIDO_TTL_MS = 60 * 60 * 1000;
  */
 async function canalDoProjetoResolvido(nazuInstance) {
   const cfg = configCanalProjeto();
-  if (_canalResolvido.dados && (Date.now() - _canalResolvido.at) < CANAL_RESOLVIDO_TTL_MS) {
-    return _canalResolvido.dados;
+  const cfgManual = loadDonoDivCanal(); // nome/foto setados com !divcanal name|foto
+  const nomeManual = String(cfgManual?.nome || '').trim();
+  // Foto manual: lida do disco a cada chamada barata (o caminho pode mudar) —
+  // fica no cache de resolucao de qualquer forma.
+  let fotoManual = null;
+  if (cfgManual?.fotoPath) {
+    try {
+      if (fs.existsSync(cfgManual.fotoPath)) fotoManual = fs.readFileSync(cfgManual.fotoPath);
+    } catch (e) {
+      console.error('[DivCanal] nao consegui ler a foto setada:', e?.message || e);
+    }
   }
-  if (!cfg.codigo && !/@newsletter$/i.test(cfg.jid)) return null;
+  // O que o dono setou na mao VENCE a resolucao automatica.
+  const aplicarManuais = (dados) => ({
+    ...dados,
+    nome: nomeManual || dados.nome,
+    foto: fotoManual || dados.foto,
+  });
+
+  if (_canalResolvido.dados && (Date.now() - _canalResolvido.at) < CANAL_RESOLVIDO_TTL_MS) {
+    return aplicarManuais(_canalResolvido.dados);
+  }
+  if (!cfg.codigo && !/@newsletter$/i.test(cfg.jid)) {
+    // Sem canal resolvivel, mas com nome/foto manual da para montar o card.
+    return nomeManual ? aplicarManuais({ jid: cfg.jid, nome: nomeManual, foto: fotoManual }) : null;
+  }
 
   let jid = /@newsletter$/i.test(cfg.jid) ? cfg.jid : '';
   let nome = cfg.nome;
@@ -1532,16 +1554,13 @@ async function canalDoProjetoResolvido(nazuInstance) {
     if (!cfg.codigo) return null;
   }
 
-  const dados = { jid: jid || cfg.jid, nome: nome || 'Canal', foto };
-  console.log(`[DivCanal] canal do projeto: ${dados.nome} (${dados.jid}) | foto: ${dados.foto ? dados.foto.length + ' bytes' : 'sem foto'}`);
-  if (_canalResolvido.dados === null && dados.jid) {
+  const base = { jid: jid || cfg.jid, nome: nome || 'Canal', foto };
+  if (_canalResolvido.dados === null) {
     _canalResolvido.at = Date.now();
-    _canalResolvido.dados = dados;
-  } else if (_canalResolvido.dados === null) {
-    // ainda sem jid: guarda o que temos para nao repetir a resolucao
-    _canalResolvido.at = Date.now();
-    _canalResolvido.dados = dados;
+    _canalResolvido.dados = base;
   }
+  const dados = aplicarManuais(base);
+  console.log(`[DivCanal] canal do projeto: ${dados.nome} (${dados.jid}) | foto: ${dados.foto ? dados.foto.length + ' bytes' : 'sem foto'}${nomeManual || fotoManual ? ' [manual]' : ''}`);
   return dados;
 }
 
@@ -33441,6 +33460,8 @@ break;
             `• ${groupPrefix}divcanal rem <id|número> — remove\n` +
             `• ${groupPrefix}divcanal list — lista os grupos\n` +
             `• ${groupPrefix}divcanal msg <texto> — legenda do card\n` +
+            `• ${groupPrefix}divcanal name [texto] — nome do card\n` +
+            `• ${groupPrefix}divcanal foto — foto do card (responda a imagem)\n` +
             `• ${groupPrefix}divcanal send — envia o card nos grupos\n` +
             `• ${groupPrefix}divcanal status — resumo\n\n` +
             `📺 *Canal usado (padrão do bot):* ${canalInfo}`;
@@ -33506,6 +33527,67 @@ break;
             return reply('✅ Legenda do card salva.');
           }
 
+          if (subCanal === 'name' || subCanal === 'nome') {
+            if (!restCanal) {
+              const atualNome = String(cfgCanal.nome || '').trim();
+              return reply(`📛 *Nome atual do card:*\n${atualNome || 'não definido (usando o canal resolvido)'}\n\n💡 Use: ${groupPrefix}divcanal name <nome>\n💡 Limpar: ${groupPrefix}divcanal name limpar`);
+            }
+            if (['limpar', 'reset', 'apagar', 'remover', 'off'].includes(restCanal.toLowerCase())) {
+              cfgCanal.nome = '';
+              saveDonoDivCanal(cfgCanal);
+              _canalResolvido.dados = null; // recarrega o automatico
+              return reply('✅ Nome do card limpo — voltou a usar o canal resolvido.');
+            }
+            cfgCanal.nome = restCanal;
+            saveDonoDivCanal(cfgCanal);
+            _canalResolvido.dados = null;
+            return reply(`✅ Nome do card definido:\n📛 ${restCanal}`);
+          }
+
+          if (subCanal === 'foto' || subCanal === 'fotocanal' || subCanal === 'img') {
+            const imgMarcada = quotedMessageContent?.imageMessage
+              || info.message?.imageMessage
+              || quotedMessageContent?.viewOnceMessageV2?.message?.imageMessage;
+            if (['limpar', 'reset', 'apagar', 'remover', 'off'].includes(restCanal.toLowerCase()) && !imgMarcada) {
+              const antiga = cfgCanal.fotoPath;
+              cfgCanal.fotoPath = null;
+              saveDonoDivCanal(cfgCanal);
+              _canalResolvido.dados = null;
+              if (antiga && fs.existsSync(antiga)) { try { fs.unlinkSync(antiga); } catch { /* já foi */ } }
+              return reply('✅ Foto do card removida — voltou a usar a foto do canal (se houver).');
+            }
+            if (!imgMarcada) {
+              return reply(`📷 *Foto do card*\n\nResponda a uma imagem com *${groupPrefix}divcanal foto* para usa-la no card.\n💡 Limpar: ${groupPrefix}divcanal foto limpar`);
+            }
+            let bufFoto;
+            try {
+              bufFoto = await getFileBuffer(imgMarcada, 'image');
+            } catch (e) {
+              const motivo = describeMediaError(e);
+              return reply(motivo ? `❌ Não consegui baixar essa imagem: ${motivo}.` : '❌ Não foi possível baixar a imagem marcada.');
+            }
+            if (!bufFoto || !Buffer.isBuffer(bufFoto) || bufFoto.length === 0) {
+              return reply('❌ A imagem marcada veio vazia.');
+            }
+            try {
+              const dirFoto = pathz.join(DONO_DIR, 'divcanal');
+              ensureDirectoryExists(dirFoto);
+              // apaga a anterior (nome unico, para nao ter cache do cliente)
+              if (cfgCanal.fotoPath && fs.existsSync(cfgCanal.fotoPath)) {
+                try { fs.unlinkSync(cfgCanal.fotoPath); } catch { /* já foi */ }
+              }
+              const caminhoFoto = pathz.join(dirFoto, `foto_${Date.now()}.jpg`);
+              fs.writeFileSync(caminhoFoto, bufFoto);
+              cfgCanal.fotoPath = caminhoFoto;
+              saveDonoDivCanal(cfgCanal);
+              _canalResolvido.dados = null;
+              return reply(`✅ Foto do card definida (${bufFoto.length} bytes).\n📷 Ela será usada como thumbnail do card.`);
+            } catch (e) {
+              console.error('[DivCanal] erro ao salvar a foto:', e?.message || e);
+              return reply('❌ Não consegui salvar a foto do card.');
+            }
+          }
+
           if (subCanal === 'send' || subCanal === 'enviar') {
             const result = await runDivCanalSend(nazu, restCanal || null, null);
             if (!result.success) return reply(result.message);
@@ -33519,6 +33601,8 @@ break;
             txt += `📺 Canal usado: ${canalInfo}\n`;
             txt += `👥 Grupos registrados: ${gruposCfg.length}\n`;
             if (gruposCfg.length) txt += gruposCfg.map((g, i) => `  ${i + 1}. ${g}`).join('\n') + '\n';
+            txt += `📛 Nome do card: ${String(cfgCanal.nome || '').trim() || 'automático (canal resolvido)'}\n`;
+            txt += `📷 Foto do card: ${cfgCanal.fotoPath ? 'definida' : 'automática (canal resolvido)'}\n`;
             txt += `🧾 Legenda: ${legenda ? legenda.slice(0, 80) + (legenda.length > 80 ? '...' : '') : 'Nenhuma'}\n`;
             txt += `📨 Total enviado: ${cfgCanal.stats?.totalSent || 0}\n`;
             txt += `🗓️ Último envio: ${lastManual}`;

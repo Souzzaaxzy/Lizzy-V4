@@ -118,6 +118,8 @@ ensureJsonFileExists(GLOBAL_BLACKLIST_FILE, {
 ensureJsonFileExists(DONO_DIVCANAL_FILE, {
   groups: [],
   caption: '',
+  nome: '',
+  fotoPath: null,
   schedule: { enabled: false, times: [], lastRun: null },
   stats: { totalSent: 0, lastManual: null, lastAuto: null }
 });
@@ -875,6 +877,8 @@ const loadDonoDivCanal = () => {
   return loadJsonFile(DONO_DIVCANAL_FILE, {
     groups: [],
     caption: '',
+    nome: '',
+    fotoPath: null,
     schedule: {
       enabled: false,
       times: [],

@@ -12,6 +12,7 @@
  * Uso: node tests/divcanal.test.js
  */
 
+import crypto from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -20,6 +21,22 @@ import { fileURLToPath } from 'url';
 import { generateWAMessage, generateWAMessageContent, getContentType } from '@itsliaaa/baileys';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+// Servidor HTTP local para servir a midia CIFRADA (o `getFileBuffer` baixa e
+// descriptografa com a mediaKey — servir bytes crus nao funcionaria).
+import http from 'http';
+const SERVIDOS = new Map();
+let PORTA_MIDIA = 0;
+{
+  const srv = http.createServer((req, res) => {
+    const c = SERVIDOS.get(req.url);
+    if (!c) { res.writeHead(404).end('nada'); return; }
+    res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Content-Length': c.length });
+    res.end(c);
+  });
+  await new Promise((r) => srv.listen(0, '127.0.0.1', r));
+  PORTA_MIDIA = srv.address().port;
+}
 
 const TMP_DB = fs.mkdtempSync(path.join(os.tmpdir(), 'lizzy-divcanal-'));
 process.env.DATABASE_PATH = TMP_DB;
@@ -138,7 +155,7 @@ function makeGroup() {
 const CONFIG_FILE = path.join(DONO_DIR, 'divulgacao_canal.json');
 function lerCfg() { try { return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8')); } catch { return {}; } }
 
-async function rodar(text, { registrar = null } = {}) {
+async function rodar(text, { registrar = null, quoted = null } = {}) {
   const sent = [];
   const gid = makeGroup();
   // `registrar` = JID que o comando deve ver como "o grupo onde rodou".
@@ -168,7 +185,7 @@ async function rodar(text, { registrar = null } = {}) {
   };
   const info = {
     key: { remoteJid: grupoAtual, fromMe: true, id: `M-${Math.random().toString(36).slice(2, 8)}`, participant: OWNER_LID },
-    message: { extendedTextMessage: { text, contextInfo: { remoteJid: grupoAtual } } },
+    message: { extendedTextMessage: { text, contextInfo: { remoteJid: grupoAtual, ...(quoted ? { quotedMessage: quoted, participant: grupoAtual } : {}) } } },
     messageTimestamp: 1757900000, pushName: 'Dono',
   };
   await handleMessage(nazu, info, null, new Map(), null);
@@ -380,6 +397,90 @@ await test('17. o card usa o canal RESOLVIDO pelo link (nome/foto reais, nao o g
   const { proto } = await import('@itsliaaa/baileys');
   const dec = proto.Message.decode(proto.Message.encode({ newsletterFollowerInviteMessageV2: card }).finish());
   ok(dec.newsletterFollowerInviteMessageV2.newsletterName === CANAL_REAL_NOME, 'sobrevive ao encode');
+});
+
+await test('18. `!divcanal name` define o nome do card (e limpar volta ao automatico)', async () => {
+  limpar();
+  await rodar('!divcanal add 120363000000000796@g.us');
+  const semNome = await rodar('!divcanal name');
+  contem(semNome.texto, 'Nome atual do card', 'mostra o estado');
+  contem(semNome.texto, 'não definido', 'nenhum setado');
+
+  const setou = await rodar('!divcanal name Kannon By Kannon');
+  contem(setou.texto, 'Nome do card definido', 'confirmou');
+  contem(setou.texto, 'Kannon By Kannon', 'mostrou o nome');
+  ok(lerCfg().nome === 'Kannon By Kannon', 'gravou no config');
+
+  // o card usa o nome setado
+  const { cards } = await rodar('!divcanal send');
+  const card = await cardDe(cards[0].content);
+  ok(card.newsletterName === 'Kannon By Kannon', `nome setado no card (${card.newsletterName})`);
+  ok(card.newsletterName !== 'Lizzy', 'nao usa o generico');
+
+  const limpou = await rodar('!divcanal name limpar');
+  contem(limpou.texto, 'limpo', 'limpou');
+  ok(!lerCfg().nome, 'nome zerado no config');
+});
+
+await test('19. `!divcanal foto` define a foto do card (respondendo imagem)', async () => {
+  limpar();
+  await rodar('!divcanal add 120363000000000797@g.us');
+  const semFoto = await rodar('!divcanal foto');
+  contem(semFoto.texto, 'Responda a uma imagem', 'explica o uso');
+
+  // imagem de verdade, cifrada, servida por HTTP local (mesmo caminho do
+  // `getFileBuffer` usado pelos outros comandos)
+  const { proto, hkdf, MEDIA_HKDF_KEY_MAPPING } = await import('@itsliaaa/baileys');
+  const mediaKey = crypto.randomBytes(32);
+  const plain = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from('foto-do-card-'.repeat(20)), Buffer.from([0xff, 0xd9])]);
+  const expandido = Buffer.from(hkdf(mediaKey, 112, { info: `WhatsApp ${MEDIA_HKDF_KEY_MAPPING['image']} Keys` }));
+  const cipher = crypto.createCipheriv('aes-256-cbc', expandido.subarray(16, 48), expandido.subarray(0, 16));
+  const cifrado = Buffer.concat([cipher.update(plain), cipher.final()]);
+  const rota = `/foto-${Math.random().toString(36).slice(2)}.enc`;
+  SERVIDOS.set(rota, cifrado);
+  const imgProto = { imageMessage: proto.Message.ImageMessage.create({
+    url: `http://127.0.0.1:${PORTA_MIDIA}${rota}`, mediaKey, mimetype: 'image/jpeg', fileLength: plain.length,
+  }) };
+
+  const r = await rodar('!divcanal foto', { quoted: imgProto });
+  contem(r.texto, 'Foto do card definida', 'confirmou');
+  ok(lerCfg().fotoPath, 'gravou o caminho da foto');
+  ok(fs.existsSync(lerCfg().fotoPath), 'arquivo existe no disco');
+  ok(fs.readFileSync(lerCfg().fotoPath).length === plain.length, 'gravou os bytes desencriptados');
+
+  // o card leva a foto setada
+  const { cards } = await rodar('!divcanal send');
+  const card = await cardDe(cards[0].content);
+  ok(card.jpegThumbnail?.length === plain.length, 'card usa a foto setada');
+
+  const limpou = await rodar('!divcanal foto limpar');
+  contem(limpou.texto, 'Foto do card removida', 'limpou');
+  ok(!lerCfg().fotoPath, 'caminho zerado');
+});
+
+await test('20. name/foto manuais vencem a resolucao automatica', async () => {
+  limpar();
+  await rodar('!divcanal add 120363000000000798@g.us');
+  await rodar('!divcanal name Meu Canal Manual');
+  const { cards } = await rodar('!divcanal send');
+  const card = await cardDe(cards[0].content);
+  // o global.json aponta para o canal do projeto (que resolveria outro nome)
+  ok(card.newsletterName === 'Meu Canal Manual', 'manual vence o resolvido');
+});
+
+await test('21. status mostra o nome/foto do card', async () => {
+  limpar();
+  await rodar('!divcanal name Teste Status');
+  const st = await rodar('!divcanal status');
+  contem(st.texto, 'Nome do card', 'linha do nome');
+  contem(st.texto, 'Teste Status', 'nome setado');
+  contem(st.texto, 'Foto do card', 'linha da foto');
+});
+
+await test('22. help lista name e foto', async () => {
+  const h = await rodar('!divcanal');
+  contem(h.texto, 'divcanal name', 'help tem name');
+  contem(h.texto, 'divcanal foto', 'help tem foto');
 });
 
 // ============================================================================
