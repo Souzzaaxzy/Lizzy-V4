@@ -1462,15 +1462,94 @@ async function fotoDoCanal(nazuInstance, canal) {
   return buffer;
 }
 
-function canalDoProjeto() {
+function configCanalProjeto() {
   try {
     const g = JSON.parse(fs.readFileSync(pathz.join(DATABASE_DIR, 'global.json'), 'utf-8'));
-    const jid = String(g?.channel?.channelJid || '').trim();
-    if (!/@newsletter$/i.test(jid)) return null;
-    return { jid, nome: String(g?.channel?.channelName || 'Canal').trim() };
+    const url = String(g?.channel?.welcomeUrl || '').trim();
+    // do link sai o codigo do convite (o trecho final)
+    const codigo = url ? url.split('?')[0].replace(/\/+$/, '').split('/').pop() : '';
+    return {
+      url,
+      codigo,
+      jid: String(g?.channel?.channelJid || '').trim(),
+      nome: String(g?.channel?.channelName || '').trim(),
+    };
   } catch {
-    return null;
+    return { url: '', codigo: '', jid: '', nome: '' };
   }
+}
+
+// Cache do canal RESOLVIDO (jid/nome/foto). O link nao muda; 1h basta.
+const _canalResolvido = { at: 0, dados: null };
+const CANAL_RESOLVIDO_TTL_MS = 60 * 60 * 1000;
+
+/**
+ * Canal do projeto com jid, NOME e FOTO REAIS.
+ *
+ * O `channelName` do `global.json` costuma ser generico (ex.: "Lizzy"); a fonte
+ * da verdade e o `welcomeUrl`. Resolver o convite devolve o JID, o nome e a foto
+ * verdadeiros daquele canal — e o JID resolvido e usado como DESTINO do card
+ * (e um alias melhor do que o codigo, se o canal um dia migrar).
+ */
+async function canalDoProjetoResolvido(nazuInstance) {
+  const cfg = configCanalProjeto();
+  if (_canalResolvido.dados && (Date.now() - _canalResolvido.at) < CANAL_RESOLVIDO_TTL_MS) {
+    return _canalResolvido.dados;
+  }
+  if (!cfg.codigo && !/@newsletter$/i.test(cfg.jid)) return null;
+
+  let jid = /@newsletter$/i.test(cfg.jid) ? cfg.jid : '';
+  let nome = cfg.nome;
+  let foto = null;
+
+  // A) resolve pelo CONVITE (welcomeUrl) — traz jid + nome + foto do canal
+  if (cfg.codigo) {
+    try {
+      const meta = await nazuInstance.newsletterMetadata('invite', cfg.codigo);
+      if (meta?.id) jid = meta.id;
+      if (meta?.name) nome = meta.name;
+      foto = fotoDoMetadataNewsletter(meta);
+      if (!foto && meta?.picture?.directPath) {
+        try {
+          const url = getUrlFromDirectPath(meta.picture.directPath);
+          const resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 20000 });
+          const buf = Buffer.from(resp.data || []);
+          if (buf.length) foto = buf;
+        } catch { /* segue sem foto */ }
+      }
+    } catch (e) {
+      console.error('[DivCanal] nao consegui resolver o canal pelo link:', e?.message || e);
+    }
+  }
+
+  // B) sem convite util, tenta pelo JID guardado (nome/foto)
+  if (!foto && nazuInstance && jid) {
+    foto = await fotoDoCanal(nazuInstance, { jid });
+  }
+
+  if (!/@newsletter$/i.test(jid)) {
+    // Sem JID nao da para publicar
+    if (!cfg.codigo) return null;
+  }
+
+  const dados = { jid: jid || cfg.jid, nome: nome || 'Canal', foto };
+  console.log(`[DivCanal] canal do projeto: ${dados.nome} (${dados.jid}) | foto: ${dados.foto ? dados.foto.length + ' bytes' : 'sem foto'}`);
+  if (_canalResolvido.dados === null && dados.jid) {
+    _canalResolvido.at = Date.now();
+    _canalResolvido.dados = dados;
+  } else if (_canalResolvido.dados === null) {
+    // ainda sem jid: guarda o que temos para nao repetir a resolucao
+    _canalResolvido.at = Date.now();
+    _canalResolvido.dados = dados;
+  }
+  return dados;
+}
+
+function canalDoProjeto() {
+  const cfg = configCanalProjeto();
+  const jid = cfg.jid;
+  if (!/@newsletter$/i.test(jid)) return null;
+  return { jid, nome: cfg.nome || 'Canal' };
 }
 
 async function replyAdminError(sock, jid, message, quotedMsg = null) {
@@ -5353,10 +5432,11 @@ Código: *${roleCode}*`,
      * `raw: true`, senão a fork lança `Invalid media type`.
      */
     const runDivCanalSend = async (nazuInstance, captionOverride = null, destinoOverride = null) => {
-      // O CANAL e sempre o padrao do bot (global.json -> channel) — o dono nao
-      // registra canal, so os GRUPOS que vao receber a divulgacao.
-      const canal = canalDoProjeto();
-      if (!canal) {
+      // O CANAL e sempre o padrao do bot (global.json -> channel). O JID, o NOME
+      // e a FOTO vem RESOLVIDOS pelo welcomeUrl — o `channelName` guardado pode
+      // ser generico e nao refletir o canal real.
+      const canal = await canalDoProjetoResolvido(nazuInstance);
+      if (!canal || !/@newsletter$/i.test(canal.jid)) {
         return { success: false, message: '❌ Nenhum canal configurado no bot (global.json -> channel).' };
       }
       const cfg = loadDonoDivCanal();
@@ -5365,8 +5445,8 @@ Código: *${roleCode}*`,
         return { success: false, message: `❌ Nenhum grupo registrado. Use ${groupPrefix}divcanal add (no grupo) ou !divcanal add <id>.` };
       }
       const caption = String(captionOverride ?? cfg.caption ?? '').trim();
-      // Foto do canal (uma vez so, com cache) — vai como thumbnail do card.
-      const foto = await fotoDoCanal(nazuInstance, canal);
+      // Foto do canal — ja resolveu junto do nome (mesma chamada de metadata).
+      const foto = canal.foto || null;
       let sent = 0;
       let failed = 0;
       for (const destino of destinos) {
@@ -33354,7 +33434,7 @@ break;
           const restCanal = args.slice(1).join(' ').trim();
           const cfgCanal = loadDonoDivCanal();
           const gruposCfg = normalizarGrupos(cfgCanal.groups);
-          const canalProjeto = canalDoProjeto();
+          const canalProjeto = (await canalDoProjetoResolvido(nazu).catch(() => null)) || canalDoProjeto();
           const canalInfo = canalProjeto ? `${canalProjeto.nome} (${canalProjeto.jid})` : 'não configurado';
           const helpCanal = `📢 *DIVULGAÇÃO DE CANAL (CARD DE SEGUIR)*\n\n` +
             `• ${groupPrefix}divcanal add [id] — registra o GRUPO de destino\n` +

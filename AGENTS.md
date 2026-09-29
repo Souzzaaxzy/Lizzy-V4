@@ -7071,10 +7071,16 @@ o canal selecionado **no projeto inteiro** (newsletter). Mesma categoria do
   argumento, registra o grupo onde o comando foi usado; com id, aceita
   `...@g.us` ou só os dígitos. `normalizarIdGrupo` exige `^\d{8,}@g\.us$`, então
   `42`/`lixo`/um `@newsletter` são recusados.
-- **O CANAL é o padrão do bot** (`global.json → channel.channelJid` /
-  `channelName`) — a mesma fonte que o `replyAdminError` já lia. O dono **não**
-  registra canal: `list`/`status` mostram qual está sendo usado, e o card aponta
-  para ele.
+- **O CANAL é o padrão do bot, RESOLVIDO pelo link** (`global.json → channel`):
+  o dono **não** registra canal. A fonte da verdade é o **`welcomeUrl`**
+  (`https://whatsapp.com/channel/XXXX`), **não** o `channelName` guardado — esse
+  costuma ser genérico. Reproduzido no bot real: o `channelName` estava
+  **"Lizzy"** (nome do bot) e o card saía sem foto. `canalDoProjetoResolvido()`
+  resolve o **convite** (`newsletterMetadata('invite', codigo)`) e pega **JID,
+  nome e foto REAIS** do canal; se o convite não resolver, cai para o JID
+  guardado. Resultado em cache por 1h, com uma linha de log
+  (`[DivCanal] canal do projeto: <nome> (<jid>) | foto: <n> bytes`). O JID
+  resolvido é usado como **destino** do card e no cabeçalho "Ver canal".
 - **Exclusivo do dono** (`podeDonoTotal()`), como o `!divdono`.
 
 ### O SUporte NATIVO na fork (substituiu o `raw: true`)
@@ -7148,15 +7154,19 @@ O `!divdono` tem `time/addtime/deltime` com cron. Aqui **não** entrou: o dono
 pediu "mesma ideia de comandos" para o CARD, e o envio manual cobre o uso. Se
 quiser agendar depois, é uma adição em cima da mesma base.
 
-### Testes — `tests/divcanal.test.js` (**18 testes / 62 asserções**)
+### Testes — `tests/divcanal.test.js` (**19 testes / 66 asserções**)
 Módulo puro (validação do id de grupo, card, normalização/CRUD) + handler real:
 `add` sem id registra o **grupo atual**, `add` por id, duplicado, envio **nos
 grupos registrados** apontando para o **canal do bot**, recusa sem grupo
 registrado, **o card passa pelo `generateWAMessage` real e o tipo chega
 intacto**, legenda salva/avulsa, list, status, rem por número/id, help,
 permissão de dono, e que o `divcanal` está na mesma seção do `divdono`.
+O teste **17** é o caso do dono: o `global.json` de teste tem `channelName`
+**genérico** ("Lizzy") e um `welcomeUrl`; o card tem que trazer o **nome real**
+resolvido do convite (e a foto), nunca o genérico.
 **Verificado que os testes MEDEM as mudanças**: removendo o `raw` do card, os
-testes **2 e 7** falham; voltando o `add` a salvar CANAL e o envio a usar
+testes **2 e 7** falham; desligando a **resolução pelo welcomeUrl**, os testes
+**9 e 17** falham; voltando o `add` a salvar CANAL e o envio a usar
 "canais", os testes **5/6** e **4/7/8** falham; e **desligando a busca da foto**,
 o teste **14** falha (2 asserções). Baseline do `menu-layout` `menudono`
 165 → **171**.

@@ -30,10 +30,16 @@ fs.mkdirSync(DONO_DIR, { recursive: true });
 
 // Canal do PROJETO (global.json -> channel), como o bot usa nos cabecalhos.
 const CANAL_PROJETO = '120363410980452460@newsletter';
+// O canal de TESTE tem nome/jid DIFERENTES do que esta salvo no global.json —
+// e assim que o teste prova que o comando usa o canal RESOLVIDO (nao o generico).
+const CANAL_REAL_JID = '120363400000000099@newsletter';
+const CANAL_REAL_NOME = 'Kannon By Kannon';
+const CANAL_LINK = 'https://whatsapp.com/channel/0029Vb8VWbG3WHTWX9ZPnj0Y';
 // JPEG minimo (base64) para provar que a foto vai no card
 const FOTO_B64 = '/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==';
+// Como no bot real: o welcomeUrl e a fonte da verdade; o channelName e generico.
 fs.writeFileSync(path.join(TMP_DB, 'global.json'), JSON.stringify({
-  channel: { channelJid: CANAL_PROJETO, channelName: 'Lizzy' },
+  channel: { welcomeUrl: CANAL_LINK, channelJid: CANAL_PROJETO, channelName: 'Lizzy' },
 }, null, 2));
 
 const mod = await import(new URL('../dados/src/utils/canalDivulgacao.js', import.meta.url).href);
@@ -144,12 +150,11 @@ async function rodar(text, { registrar = null } = {}) {
     signalRepository: { lidMapping: { getPNForLID: async () => null } },
     contacts: { getName: () => undefined }, getName: () => undefined,
     // newsletterMetadata resolve o LINK -> JID (é o que o `add` usa)
-    // preview = blob base64 (caminho simples, sem download) — como a fork devolve
-    newsletterMetadata: async (tipo, valor) => ({
-      id: tipo === 'jid' ? valor : CANAL_PROJETO,
-      name: 'Canal',
-      preview: FOTO_B64,
-    }),
+    // preview = blob base64 (caminho simples, sem download) — como a fork devolve.
+    // No CONVITE devolve o canal REAL (nome/jid diferentes do global.json).
+    newsletterMetadata: async (tipo, valor) => (tipo === 'invite'
+      ? { id: CANAL_REAL_JID, name: CANAL_REAL_NOME, preview: FOTO_B64 }
+      : { id: valor, name: CANAL_REAL_NOME, preview: FOTO_B64 }),
     groupMetadata: async (jidAlvo) => ({
       id: jidAlvo || grupoAtual, subject: 'Grupo Destino', owner: `${DONO_NUM}@s.whatsapp.net`,
       participants: [
@@ -234,7 +239,7 @@ await test('7. send envia o CARD (do canal do bot) com tipo intacto no payload',
   ok(cards[0].jid === g, `enviou para o grupo registrado (${cards[0].jid})`);
   const p = await tipoDoPayload(cards[0].content);
   ok(p.tipo === 'newsletterFollowerInviteMessageV2', `tipo no payload (${p.tipo})`);
-  ok(p.card?.newsletterJid === CANAL_PROJETO, 'jid do CANAL no payload');
+  ok(p.card?.newsletterJid === CANAL_REAL_JID, `jid do CANAL resolvido no payload (${p.card?.newsletterJid})`);
 });
 
 await test('8. a legenda salva vai no card e no envio', async () => {
@@ -255,11 +260,11 @@ await test('9. list e status mostram os GRUPOS e o canal padrao', async () => {
   const l = await rodar('!divcanal list');
   contem(l.texto, 'GRUPOS REGISTRADOS', 'titulo da lista');
   contem(l.texto, g, 'mostra o grupo');
-  contem(l.texto, CANAL_PROJETO, 'mostra o canal padrao usado');
+  contem(l.texto, CANAL_REAL_JID, 'mostra o canal RESOLVIDO usado');
   const st = await rodar('!divcanal status');
   contem(st.texto, 'DIVULGAÇÃO DE CANAL', 'titulo do status');
   contem(st.texto, 'Canal usado', 'mostra o canal');
-  contem(st.texto, CANAL_PROJETO, 'jid do canal');
+  contem(st.texto, CANAL_REAL_JID, 'jid do canal resolvido');
 });
 
 await test('10. rem remove por numero e por id', async () => {
@@ -345,12 +350,12 @@ await test('16b. a mensagem setada leva o cabecalho "Ver canal" (newsletter)', a
   const inner = await cardDe(cards[0].content);
   const ci = inner.contextInfo;
   ok(ci, 'tem contextInfo');
-  ok(ci.forwardedNewsletterMessageInfo?.newsletterJid === CANAL_PROJETO, `cabecalho aponta o canal (${ci.forwardedNewsletterMessageInfo?.newsletterJid})`);
+  ok(ci.forwardedNewsletterMessageInfo?.newsletterJid === CANAL_REAL_JID, `cabecalho aponta o canal resolvido (${ci.forwardedNewsletterMessageInfo?.newsletterJid})`);
   ok(ci.isForwarded === true && ci.forwardingScore === 999, 'encaminhamento de canal');
   // e sobrevive ao encode do proto (e o que chega no destino)
   const { proto } = await import('@itsliaaa/baileys');
   const dec = proto.Message.decode(proto.Message.encode({ newsletterFollowerInviteMessageV2: inner }).finish());
-  ok(dec.newsletterFollowerInviteMessageV2.contextInfo?.forwardedNewsletterMessageInfo?.newsletterJid === CANAL_PROJETO, 'sobrevive ao encode');
+  ok(dec.newsletterFollowerInviteMessageV2.contextInfo?.forwardedNewsletterMessageInfo?.newsletterJid === CANAL_REAL_JID, 'sobrevive ao encode');
 });
 
 await test('16. fotoDoMetadataNewsletter extrai o preview (e tolera lixo)', () => {
@@ -359,6 +364,22 @@ await test('16. fotoDoMetadataNewsletter extrai o preview (e tolera lixo)', () =
   ok(mod.fotoDoMetadataNewsletter({ preview: { base64: FOTO_B64 } })?.length > 0, 'objeto com base64');
   ok(mod.fotoDoMetadataNewsletter({}) === null, 'sem preview -> null');
   ok(mod.fotoDoMetadataNewsletter(null) === null, 'null tolerado');
+});
+
+await test('17. o card usa o canal RESOLVIDO pelo link (nome/foto reais, nao o generico)', async () => {
+  limpar();
+  await rodar('!divcanal add 120363000000000795@g.us');
+  const { cards } = await rodar('!divcanal send');
+  const card = await cardDe(cards[0].content);
+  // O global.json tem channelName generico ("Lizzy"); o card tem que trazer o
+  // nome REAL do canal, resolvido pelo welcomeUrl.
+  ok(card.newsletterName === CANAL_REAL_NOME, `nome real do canal (${card.newsletterName})`);
+  ok(card.newsletterName !== 'Lizzy', 'nao usa o nome generico do global.json');
+  ok(card.jpegThumbnail?.length > 0, 'leva a foto do canal');
+  // o destino e o JID resolvido (alias melhor que o codigo do convite)
+  const { proto } = await import('@itsliaaa/baileys');
+  const dec = proto.Message.decode(proto.Message.encode({ newsletterFollowerInviteMessageV2: card }).finish());
+  ok(dec.newsletterFollowerInviteMessageV2.newsletterName === CANAL_REAL_NOME, 'sobrevive ao encode');
 });
 
 // ============================================================================
