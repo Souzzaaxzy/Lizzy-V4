@@ -199,7 +199,7 @@ await test('cita TODOS os membros do grupo (mencoes reais)', async () => {
 // 2) DETECCAO — o ponto do experimento
 // ============================================================================
 
-await test('passa NORMAL no detector (o !rajar continua detectado)', async () => {
+await test('AGORA e detectado: INV-024 (o furo foi fechado)', async () => {
   const groupJid = makeGroup();
   const { relayed } = await rodar({ groupJid });
 
@@ -210,18 +210,14 @@ await test('passa NORMAL no detector (o !rajar continua detectado)', async () =>
     content: relayed[0].message,
   };
   const a = analyzeInvisibleMessage(info);
+  const ids = (a.indicators || []).map((i) => i.id);
 
-  ok(a.classification === 'NORMAL', `classificacao = ${a.classification} (esperado NORMAL)`);
-  ok(a.detected === false, 'detected = false');
-
-  // Indicadores INFORMATIVOS (peso 0) podem aparecer — o `INV-011`
-  // (enderecamento por LID) surge porque as mencoes sao LIDs. O que importa e
-  // que NENHUM tenha peso: se tivesse, somaria e mudaria a classificacao.
-  const comPeso = (a.indicators || []).filter((i) => Number(i.peso || 0) > 0);
-  ok(
-    comPeso.length === 0,
-    `nenhum indicador com peso (com peso: ${comPeso.map((i) => `${i.id}=${i.peso}`).join(',') || 'nenhum'})`
-  );
+  // CONTRATO MUDOU DE PROPOSITO: quando o !rajar2 foi criado, ele passava
+  // NORMAL (era o furo). Depois do INV-024, ele E detectado -- o envelope de
+  // pagamento sem valor usado como carreador de texto passou a pontuar.
+  ok(ids.includes('INV-024'), `dispara INV-024 (tem: ${ids.join(',') || 'nenhum'})`);
+  ok(a.classification === 'SUSPEITA', `classificacao = ${a.classification} (esperado SUSPEITA)`);
+  ok(a.detected === true, 'detected = true');
 });
 
 // ============================================================================

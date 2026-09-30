@@ -560,6 +560,54 @@ de dono, e um guard estrutural de que **nao esta em menu nenhum** nem no
 `tests/rajar.test.js` — 6 falhas, **identicas no baseline** (confirmado com
 `git stash`). Ele testa o `recipientMode`, que o `!rajar` deixou de usar quando
 migrou para a rotacao de Sender Key.
+
+### O FURO QUE O `!rajar2` REVELOU — fechado com `INV-024` (set/2026) ✅
+O teste de campo do `!rajar2` respondeu duas coisas: (a) o cliente mostra
+*"atualizar WhatsApp"* para o `splitPaymentMessage` (ou seja, o tipo NAO e
+invisivel — e nao-suportado); e (b) **o detector do bot nao pegava** — ele
+passava **NORMAL**.
+
+**Causa raiz**: o `classifyMessage` so conhecia **3** tipos de pagamento
+(`requestPaymentMessage`, `sendPaymentMessage`, `paymentInviteMessage`). Os
+demais do proto (`splitPaymentMessage`, `paymentReminderMessage`,
+`declinePaymentRequestMessage`, `cancelPaymentRequestMessage`, `invoiceMessage`)
+eram **invisiveis para a classificacao central** — nunca entravam em
+`isPayment`, entao nenhuma regra de pagamento os alcancava.
+
+**Correcao (criterio OBJETIVO, sem depender de montar nada)**:
+- **`classifyMessage`** passou a reconhecer **todos** os tipos de pagamento do
+  proto, e a ler o texto tambem do `description` (o `splitPaymentMessage` nao
+  tem `noteMessage`) e o `contextInfo` de dentro do `splitPaymentMessage`;
+- **`INV-024`** no `invisibleAnalyzer` (peso **3**, severidade media):
+  *"tipo de pagamento que nao seja request/send carregando TEXTO e SEM valor
+  declarado"*. O card nao tem lastro, so o texto embutido;
+- **`ghostDetection`** ganhou o sinal `pagamentoSemValorComTexto` (peso 3),
+  alimentado por `isPayment` + `temValor: false` + texto. Score 3 = `observar`.
+
+**A trava contra falso positivo**: o criterio exige **AUSENCIA de valor
+positivo**. Pagamento legitimo declara valor (`amount1000: 1500`,
+`totalAmount.value: 5000`, `amount.value: 2500`) — entao **nao entra**. Medido:
+os 3 legitimos ficam com `score 0 / ignorar`, e as 3 variantes sem valor ficam
+`score 3 / observar` + `SUSPEITA` no `!get`.
+
+**O raja classico nao foi tocado**: continua disparando `INV-023` (e o `INV-024`
+**nao** se aplica a ele, que e `sendPaymentMessage`).
+
+**Testes**: `tests/pagamento-sem-valor.test.js` — **7 testes / 53 assercoes**:
+o indicador no catalogo, `classifyMessage` nos tipos antes invisiveis, o
+`!get` dando SUSPEITA, o `ghostDetection` pontuando, **e o falso positivo
+barrado** nos 3 pagamentos legitimos. **Verificado: voltando o `isPayment` para
+os 3 tipos, 5 assercoes falham.**
+
+**`tests/rajar2-invisivel.test.js` foi atualizado** — o contrato mudou de
+proposito: onde antes exigia `NORMAL`, agora exige `INV-024` + `SUSPEITA`
+(o furo foi fechado). 7/23.
+
+### LIMITE HONESTO (o que o teste de campo mostrou)
+O `splitPaymentMessage` **nao serve** como mensagem invisivel: o cliente
+responde *"atualizar WhatsApp"*. Ele foi util como **caso de teste** (revelou o
+furo do detector), nao como novo `!rajar`. Procurar outro tipo continua sendo
+trabalho de teste de campo, com sessao pareada.
 ## COMANDOS EXPERIMENTAIS (rajar2 / rajar3 / rajar4) — NÃO DOCUMENTADOS AQUI
 A documentação do mecanismo de visibilidade seletiva foi deliberadamente removida
 deste arquivo (que é público) a pedido do dono, para não servir de receita a

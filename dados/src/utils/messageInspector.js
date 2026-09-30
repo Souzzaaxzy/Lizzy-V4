@@ -608,13 +608,32 @@ export function classifyMessage(message) {
   const requestPayment = leaf.requestPaymentMessage || null;
   const sendPayment = leaf.sendPaymentMessage || null;
   const paymentInvite = leaf.paymentInviteMessage || null;
-  const isPayment = Boolean(requestPayment || sendPayment || paymentInvite);
+
+  // Os demais tipos de pagamento do proto. Antes so os 3 acima entravam no
+  // `isPayment`, entao `splitPaymentMessage`/`paymentReminderMessage`/... eram
+  // invisiveis para a classificacao central — e foi exatamente por um deles
+  // (splitPaymentMessage) que o `!rajar2` passou como NORMAL.
+  const splitPayment = leaf.splitPaymentMessage || null;
+  const paymentReminder = leaf.paymentReminderMessage || null;
+  const declinePayment = leaf.declinePaymentRequestMessage || null;
+  const cancelPayment = leaf.cancelPaymentRequestMessage || null;
+  const invoicePayment = leaf.invoiceMessage || null;
+
+  const isPayment = Boolean(
+    requestPayment || sendPayment || paymentInvite ||
+    splitPayment || paymentReminder || declinePayment || cancelPayment || invoicePayment
+  );
 
   // O texto do "raja" vive dentro da NOTA do pagamento, não em conversation.
   const noteMessage = requestPayment?.noteMessage || sendPayment?.noteMessage || null;
   const noteExt = noteMessage?.extendedTextMessage || null;
-  const noteText = noteExt?.text ?? noteMessage?.conversation ?? null;
-  const noteContextInfo = noteExt?.contextInfo || noteMessage?.contextInfo || null;
+  // Alguns tipos de pagamento nao tem nota: o texto vive em `description`.
+  // Sem isto, um `splitPaymentMessage` com texto ficava sem `noteText` e nao
+  // entrava na regra de envelope sem valor.
+  const descricaoPagamento = splitPayment?.description || paymentReminder?.description || null;
+  const noteText = noteExt?.text ?? noteMessage?.conversation ?? descricaoPagamento ?? null;
+  const noteContextInfo = noteExt?.contextInfo || noteMessage?.contextInfo
+    || splitPayment?.contextInfo || null;
 
   const noteMentions = noteContextInfo?.mentionedJid;
   const mentionCount = Array.isArray(noteMentions) ? noteMentions.length : 0;
@@ -642,6 +661,24 @@ export function classifyMessage(message) {
     : (!primarySpeaks && innerAmountZeroish) ? 'amount.value'
     : null;
   const isZero = amountZeroPath !== null;
+
+  // Valor declarado pelos tipos que nao tem `amount1000`: `totalAmount`
+  // (split) ou `amount` (reminder). Serve para distinguir pagamento LEGITIMO
+  // (declara valor positivo) de envelope usado como carreador de texto.
+  const valorExtra = splitPayment?.totalAmount?.value ?? paymentReminder?.amount?.value ?? null;
+  const valorExtraPresente = valorExtra !== null && valorExtra !== undefined;
+  const valorExtraStr = valorExtraPresente ? String(valorExtra).trim() : '';
+  const valorExtraPositivo = valorExtraPresente && valorExtraStr !== '' && !ZERO_LIKE.test(valorExtraStr);
+
+  // Envelope de pagamento SEM valor carregando TEXTO: e o card sem lastro usado
+  // como transporte de mensagem. Vale para os tipos fora de request/send (esses
+  // ja tem `paymentAmount.isZero`). Exige AUSENCIA de valor positivo, entao o
+  // pagamento legitimo NAO entra.
+  const pagamentoSemValorComTexto = Boolean(
+    (splitPayment || paymentReminder) &&
+    !valorExtraPositivo &&
+    typeof noteText === 'string' && noteText.trim().length > 0
+  );
 
   const forwardedScore = noteContextInfo?.forwardingScore;
   const isForwardedBurst = Boolean(noteExt && (noteContextInfo?.isForwarded === true || (typeof forwardedScore === 'number' && forwardedScore >= 100)));
@@ -746,6 +783,8 @@ export function classifyMessage(message) {
 
   return {
     type, isPayment,
+    pagamentoSemValorComTexto,
+    temValor: Boolean(primarySpeaks || valorExtraPositivo),
     isRequestPayment: Boolean(requestPayment),
     paymentAmount: { raw: rawAmount ?? null, isZero, present: amountPresent, zeroPath: amountZeroPath, innerValue: innerAmountStr || null },
     noteText: typeof noteText === 'string' ? noteText : null,

@@ -85,6 +85,7 @@ export const INDICADORES = Object.freeze({
   INV_020: { id: 'INV-020', nome: 'Nota com texto sem conteudo visivel', categoria: 'payment', severidade: 'media', peso: 2, descricao: 'O texto da NOTA existe mas so tem espaco/zero-width: o cliente desenha ~nada. Sozinho e ambiguo (varios envios usam caracteres invisiveis para "vazio"); pesa apenas quando ja ha outro indicador de pagamento na mesma mensagem.' },
   INV_021: { id: 'INV-021', nome: 'ID com sufixo de fonte/historico', categoria: 'estrutura', severidade: 'baixa', peso: 1, descricao: 'ID no formato `<id>_L0` (sufixo de origem/historico). Nao e o formato dos clientes (`3EB0...`) e pode indicar historico/relay, nao um envio direto. Ambiguo: nao e prova de nada.' },
   INV_022: { id: 'INV-022', nome: 'sendPaymentMessage sem referencia ao pedido', categoria: 'payment', severidade: 'media', peso: 3, descricao: 'O proto `SendPaymentMessage` tem `requestMessageKey` — o ponteiro para o pedido que este envio responde. Aqui ele esta AUSENTE e nao ha `amount` nenhum: o card nao responde a pedido algum e nao carrega valor. Severidade MEDIA de proposito: o campo existe no proto, mas nao ha amostra benigna confirmada que prove que ele sempre acompanha um envio legitimo — entao isto corrobora, nao prova.' },
+  INV_024: { id: 'INV-024', nome: 'Pagamento sem valor usado como carreador de texto', categoria: 'payment', severidade: 'media', peso: 3, descricao: 'Tipo de pagamento que NAO seja request/send (esses ja tem INV-007/019/022/023) carregando TEXTO embutido (`noteMessage` ou `description`) e SEM valor monetario declarado. E o envelope de pagamento usado como transporte de texto: sem lastro, o card nao tem o que desenhar. Medido no `splitPaymentMessage` (texto no `description`, `totalAmount` zerado). NAO dispara em pagamento legitimo, porque esse declara valor positivo.' },
   INV_023: { id: 'INV-023', nome: 'Envelope de pagamento com texto invisivel', categoria: 'payment', severidade: 'alta', peso: 6, descricao: 'ASSINATURA MEDIDA do raja: `sendPaymentMessage` cuja nota carrega texto INVISIVEL (`.` + zero-width). O `sendPaymentMessage` e o tipo de um envio de pagamento e, sozinho, nao carrega `amount` — com a nota invisivel, o card nao mostra nada e o texto viaja escondido. Confirmado contra o raja REAL e contra o espelho que o `!rajar` monta.' },
 });
 
@@ -594,6 +595,24 @@ export function analisarPagamento(content = {}) {
   const primarySpeaks = amount1000Presente && amount1000 !== null && amount1000 !== undefined && !zero1000;
   const zeroPath = zero1000 ? 'amount1000' : (!primarySpeaks && zeroValor ? 'amount.value' : null);
 
+  // Tipos de pagamento que o detector NAO cobria (split/reminder/invite/...).
+  // Eles nao tem `noteMessage`, entao precisamos olhar os campos deles.
+  const split = isObj(leaf.splitPaymentMessage) ? leaf.splitPaymentMessage : null;
+  const reminder = isObj(leaf.paymentReminderMessage) ? leaf.paymentReminderMessage : null;
+  const invite = isObj(leaf.paymentInviteMessage) ? leaf.paymentInviteMessage : null;
+  const decline = isObj(leaf.declinePaymentRequestMessage) ? leaf.declinePaymentRequestMessage : null;
+  const cancel = isObj(leaf.cancelPaymentRequestMessage) ? leaf.cancelPaymentRequestMessage : null;
+  const tipoSemCobertura = !request && !send;
+
+  // Valor declarado por esses tipos (quando existir).
+  const valorObj = isObj(split?.totalAmount) ? split.totalAmount : (isObj(reminder?.amount) ? reminder.amount : null);
+  const valorExtraPresente = valorObj ? has(valorObj, 'value') : false;
+  const valorExtra = valorObj ? valorObj.value : undefined;
+  const valorExtraZero = valorExtraPresente && isZeroLike(valorExtra);
+
+  // Texto embutido: a nota OU o `description` (campo livre desses tipos).
+  const descricao = str(split?.description || reminder?.description || '');
+
   const noteMsg = isObj(base?.noteMessage) ? base.noteMessage : null;
   const noteExt = isObj(noteMsg?.extendedTextMessage) ? noteMsg.extendedTextMessage : null;
   const noteTexto = noteExt ? str(noteExt.text) : (noteMsg && typeof noteMsg.conversation === 'string' ? noteMsg.conversation : '');
@@ -607,6 +626,18 @@ export function analisarPagamento(content = {}) {
   const requestMessageKey = isObj(send?.requestMessageKey) ? send.requestMessageKey : null;
   const referenciaAusente = Boolean(send && !requestMessageKey);
   const cardZeradoSemReferencia = referenciaAusente && !request;
+
+  // ── Envelope de pagamento como CARREADOR de texto (INV-024) ──────────────
+  // Vale para os tipos que o detector nao cobria. O criterio e objetivo:
+  // carrega texto (nota ou `description`) E nao declara valor positivo.
+  // Pagamento legitimo declara valor, entao NAO entra aqui.
+  const textoEmbutido = noteTexto || descricao;
+  const temValorPositivo = primarySpeaks || (valorExtraPresente && !valorExtraZero);
+  const semValorComTexto = Boolean(tipoSemCobertura && textoEmbutido.length > 0 && !temValorPositivo);
+
+  // contextInfo desses tipos (o `splitPaymentMessage` declara o campo).
+  const ctxExtra = isObj(split?.contextInfo) ? split.contextInfo : null;
+  const mencoesExtra = Array.isArray(ctxExtra?.mentionedJid) ? ctxExtra.mentionedJid.length : 0;
 
   return {
     disponivel: true,
@@ -634,6 +665,12 @@ export function analisarPagamento(content = {}) {
       : null,
     referenciaAusente,
     cardZeradoSemReferencia,
+    tipoSemCobertura,
+    valorExtra: { presente: valorExtraPresente, valor: valorExtraPresente ? safeValue(valorExtra) : null, zero: valorExtraZero },
+    textoEmbutido: textoEmbutido || null,
+    descricao: descricao || null,
+    semValorComTexto,
+    mencoesExtra,
     nota: noteMsg
       ? {
         presente: true,
@@ -898,6 +935,16 @@ export function correlacionar(analises = {}) {
     // incompleto. É um indicador próprio (não é a rajada, que é request+zero).
     if (payment.cardZeradoSemReferencia) {
       push('INV_022', 'sendPaymentMessage sem `requestMessageKey` e sem `amount`');
+    }
+    // Envelope de pagamento usado como CARREADOR de texto nos tipos que o
+    // detector nao cobria (split/reminder/invite/...). Sem valor declarado, o
+    // card nao tem lastro; o texto viaja embutido (nota ou `description`).
+    if (payment.semValorComTexto) {
+      push(
+        'INV_024',
+        `${payment.tipoPrincipal} com texto embutido (${payment.textoEmbutido.length} chars) e sem valor declarado` +
+        (payment.mencoesExtra ? ` | ${payment.mencoesExtra} mencoes` : '')
+      );
     }
   }
 

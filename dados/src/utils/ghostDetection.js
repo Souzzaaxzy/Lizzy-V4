@@ -54,6 +54,11 @@ export const PESOS = Object.freeze({
   // porque a combinação é específica — é o comportamento que a produção já
   // tinha (`isBurstByAmount`), preservado aqui.
   rajadaPaymentZerado: 6,
+  // Envelope de pagamento (tipo que nao seja request/send) carregando texto e
+  // SEM valor declarado: o card nao tem lastro, so o texto embutido. Mesmo
+  // peso da mencao em massa — e conteudo, nao transporte, e nao aparece em
+  // pagamento legitimo (esse declara valor).
+  pagamentoSemValorComTexto: 3,
   mencaoEmMassa: 3,
 
   // ── Fracos: ambíguos de propósito (aparecem em fluxo normal) ──────────────
@@ -116,6 +121,13 @@ export function extrairSinais(entrada = {}) {
     // ataque.
     notaDePagamento: typeof (e.noteText ?? e.nota) === 'string' && String(e.noteText ?? e.nota).trim().length > 0,
     rajadaPaymentZerado: e.zeroValuePayment === true || e.pagamento?.amount1000 === '0' || e.pagamento?.amount1000 === 0,
+    // Envelope de pagamento usado como carreador de texto: a producao
+    // (`classifyMessage`) marca quando o tipo nao tem valor declarado e a nota
+    // carrega texto. Sem esta trava, o pagamento legitimo (valor positivo)
+    // pontuaria — por isso o criterio exige AUSENCIA de valor.
+    pagamentoSemValorComTexto:
+      e.pagamentoSemValorComTexto === true ||
+      (e.isPayment === true && e.temValor === false && typeof (e.noteText ?? e.nota) === 'string' && String(e.noteText ?? e.nota).trim().length > 0),
     mencaoEmMassa: typeof e.mentionCount === 'number' && e.mentionCount > 50,
   };
 }
@@ -152,6 +164,7 @@ export function avaliar(entrada = {}, opts = {}) {
   somar('decryptFailHide', s.temReport && s.decryptFailHide);
   somar('payloadPareado', s.payloadPareado);
   somar('rajadaPaymentZerado', s.rajadaPaymentZerado && s.notaDePagamento);
+  somar('pagamentoSemValorComTexto', s.pagamentoSemValorComTexto);
   somar('mencaoEmMassa', s.mencaoEmMassa && s.notaDePagamento);
   somar('stubCiphertext', s.stubCiphertext);
   somar('mensagemVazia', s.mensagemVazia);
