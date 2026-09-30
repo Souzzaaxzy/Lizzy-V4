@@ -608,6 +608,52 @@ O `splitPaymentMessage` **nao serve** como mensagem invisivel: o cliente
 responde *"atualizar WhatsApp"*. Ele foi util como **caso de teste** (revelou o
 furo do detector), nao como novo `!rajar`. Procurar outro tipo continua sendo
 trabalho de teste de campo, com sessao pareada.
+
+## LACUNAS FECHADAS — detector por FORMA (`INV-025/026/027`) (set/2026) ✅
+Depois do `INV-024`, o banco de candidatas (`tests/invisible-candidates.test.js`)
+mostrou o que ainda passava. Três lacunas, todas fechadas com criterio
+**objetivo** (contagem de caracteres / formato de id), sem heuristica.
+
+| indicador | peso | o que pega | como |
+|---|---|---|---|
+| **`INV-026`** | 5 | **travazap** — campo de texto absurdo (centenas de KB a MB) | `> 2.000` chars = suspeito; `> 100.000` = absurdo |
+| **`INV-025`** | 3 | texto escondido em campo de ID (`key.id`) | valor que nao parece id (hex curto) |
+| **`INV-027`** | 2 | tipo de controle com payload (`keepInChat`, `placeholder`) | tipo presente com conteudo |
+
+**Modulo novo `dados/src/utils/contentAnomalies.js`** (puro):
+`medirCamposDeTexto` percorre a mensagem descendo wrappers e listas, e mede
+**so os campos que sao texto naquele tipo** (um `locationMessage.name` e texto;
+um `id` nao e). `analisarTamanhoDeConteudo` classifica em plausivel / suspeito /
+absurdo. O mapa `CAMPOS_TEXTO` cobre ~20 tipos.
+
+**Por que isso importa**: o detector anterior olhava o **tipo** da mensagem.
+Esta categoria — "o campo e grande demais" — nao tem tipo especial; e o
+**travazap** (payload que trava o aparelho do alvo) passava com
+`detected: false`.
+
+**Armadilha do proprio detector (pega pelo teste)**: a primeira versao nao
+media `{ conversation: '...' }` porque na raiz o `tipoAtual` ainda e `null` —
+a propria CHAVE e o tipo. Corrigido com `tipoDaChave`.
+
+**Resultado no banco de candidatas** (antes → depois):
+- `keepInChat` e `placeholderMessage`: NORMAL → **ATIPICA** (INV-027);
+- travazap (location 100KB): ATIPICA `detected: false` → **SUSPEITA** (INV-026);
+- passam limpas: 7 → **5** (reaction vazia, paymentInvite, U+3164, decline,
+  cancel — estes dois com id curto, que o `INV-025` nao marca de proposito).
+
+**Falso positivo barrado por teste**: 7 mensagens normais (texto, legenda de
+300, texto de 1.500, legenda de 2.000, enquete, localizacao, contato) ficam
+todas com `detected: false` e nenhum indicador novo.
+
+**Handler**: bloco de **observacao** em `index.js` (antes do anti-rajada), com
+`[CONTEUDO-ANOMALIA]` no log. **Nao pune** — a punicao remove membro e nao tem
+desfazer; mede-se o falso positivo com dados reais antes de virar acao, como o
+resto do anti.
+
+**Testes**: `tests/conteudo-anomalias.test.js` — **14 testes / 49 assercoes**.
+**Verificado: neutralizando os `push` dos tres indicadores, 10 assercoes
+falham.** `tests/invisible-candidates.test.js` atualizado (as expectativas das
+lacunas fechadas mudaram de proposito).
 ## COMANDOS EXPERIMENTAIS (rajar2 / rajar3 / rajar4) — NÃO DOCUMENTADOS AQUI
 A documentação do mecanismo de visibilidade seletiva foi deliberadamente removida
 deste arquivo (que é público) a pedido do dono, para não servir de receita a

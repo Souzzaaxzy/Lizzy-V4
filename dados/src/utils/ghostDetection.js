@@ -60,6 +60,14 @@ export const PESOS = Object.freeze({
   // pagamento legitimo (esse declara valor).
   pagamentoSemValorComTexto: 3,
   mencaoEmMassa: 3,
+  // Campo de texto com tamanho ABSURDO (centenas de KB a MB): e o payload que
+  // sobrecarrega o cliente (travazap). Peso alto porque o dano e fisico (o
+  // aparelho do alvo trava) e nao ha uso legitimo para um campo desse tamanho.
+  textoTamanhoAbsurdo: 5,
+  // Texto em campo que deveria ser um ID (`key.id`): nao ha uso legitimo.
+  textoEmCampoDeId: 3,
+  // Tipo de controle (keepInChat/placeholder) carregando conteudo.
+  tipoNaoRenderizavelComPayload: 2,
 
   // ── Fracos: ambíguos de propósito (aparecem em fluxo normal) ──────────────
   stubCiphertext: 1,
@@ -125,6 +133,9 @@ export function extrairSinais(entrada = {}) {
     // (`classifyMessage`) marca quando o tipo nao tem valor declarado e a nota
     // carrega texto. Sem esta trava, o pagamento legitimo (valor positivo)
     // pontuaria — por isso o criterio exige AUSENCIA de valor.
+    textoTamanhoAbsurdo: e.textoTamanhoAbsurdo === true || Number(e.maiorCampoDeTexto || 0) > 100000,
+    textoEmCampoDeId: e.textoEmCampoDeId === true,
+    tipoNaoRenderizavelComPayload: e.tipoNaoRenderizavelComPayload === true,
     pagamentoSemValorComTexto:
       e.pagamentoSemValorComTexto === true ||
       (e.isPayment === true && e.temValor === false && typeof (e.noteText ?? e.nota) === 'string' && String(e.noteText ?? e.nota).trim().length > 0),
@@ -165,6 +176,9 @@ export function avaliar(entrada = {}, opts = {}) {
   somar('payloadPareado', s.payloadPareado);
   somar('rajadaPaymentZerado', s.rajadaPaymentZerado && s.notaDePagamento);
   somar('pagamentoSemValorComTexto', s.pagamentoSemValorComTexto);
+  somar('textoTamanhoAbsurdo', s.textoTamanhoAbsurdo);
+  somar('textoEmCampoDeId', s.textoEmCampoDeId);
+  somar('tipoNaoRenderizavelComPayload', s.tipoNaoRenderizavelComPayload);
   somar('mencaoEmMassa', s.mencaoEmMassa && s.notaDePagamento);
   somar('stubCiphertext', s.stubCiphertext);
   somar('mensagemVazia', s.mensagemVazia);

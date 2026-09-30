@@ -66,7 +66,8 @@ const CANDIDATAS = [
     build: () => generateWAMessage(GRUPO, {
       keep: { remoteJid: GRUPO, id: 'ABC', fromMe: false }, type: 1,
     }, { userJid: USER_JID }),
-    analise: 'NORMAL',
+    // Fechado pelo INV-027 (tipo de controle com payload).
+    analise: 'ATIPICA',
   },
   {
     nome: 'declinePaymentRequest',
@@ -88,7 +89,8 @@ const CANDIDATAS = [
     nome: 'placeholderMessage',
     tipoEsperado: 'placeholderMessage',
     build: () => generateWAMessageFromContent(GRUPO, { placeholderMessage: {} }, { userJid: USER_JID }),
-    analise: 'NORMAL',
+    // Fechado pelo INV-027 (tipo de controle com payload).
+    analise: 'ATIPICA',
   },
   {
     nome: 'protocolMessage type 25',
@@ -187,9 +189,11 @@ ok(
   detectadas.some((n) => n.includes('raja atual')),
   'o raja atual continua FORTEMENTE_COMPATIVEL'
 );
+// Depois de fechar as lacunas (INV-025/026/027), o numero de candidatas
+// LIMPAS caiu -- e isso e o resultado esperado: o detector passou a ver mais.
 ok(
-  limpas.length >= 6,
-  `ha candidatas limpas suficientes para escolher um !rajar2 (${limpas.length})`
+  limpas.length >= 1,
+  `ainda ha candidatas limpas para investigar (${limpas.length})`
 );
 
 // Todas produzem um tipo de conteudo valido (nenhuma saiu vazia).

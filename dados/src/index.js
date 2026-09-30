@@ -24,6 +24,7 @@ import {
   splitTextForWhatsApp,
   toSafeObject
 } from './utils/messageInspector.js';
+import { analisarAnomaliasDeConteudo } from './utils/invisibleAnalyzer.js';
 import { buildCmdNotFoundExtras } from './utils/commandSuggest.js';
 import { extractMedia, resolveMedia, isViewOnce, describeMediaError, extractQuoted, extractQuotedContext, extractText } from './utils/viewOnce.js';
 import * as antiRoubo from './funcs/utils/antiRoubo.js';
@@ -4095,6 +4096,37 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       }
     }
     
+    // Anti-Anomalias de CONTEUDO — mede a FORMA, nao o tipo.
+    //
+    // Cobre a categoria que o detector por tipo deixava passar: campo de texto
+    // com tamanho ABSURDO (o "travazap", que trava o aparelho do alvo) e texto
+    // escondido em campo que nao e de conteudo. O criterio e objetivo (contagem
+    // de caracteres / formato de id), nao heuristica.
+    //
+    // Roda em OBSERVACAO, como o resto do anti: registra no log para o dono
+    // medir o falso positivo com dados reais antes de virar punicao. A punicao
+    // aqui e CARA (remove membro) e nao tem desfazer.
+    if (isGroup && isAntiInvi && !info.key.fromMe && info.message) {
+      try {
+        const anom = analisarAnomaliasDeConteudo(info.message);
+        const marcas = [];
+        if (anom.tamanho?.absurdos?.length || anom.tamanho?.suspeitos?.length) marcas.push('INV-026');
+        if (anom.idSuspeitos?.length) marcas.push('INV-025');
+        if (anom.naoRenderizavel?.length) marcas.push('INV-027');
+
+        if (marcas.length > 0) {
+          console.log(
+            `[CONTEUDO-ANOMALIA] indicadores=${marcas.join(',')} ` +
+            `maiorCampo=${anom.tamanho?.maior?.tamanho ?? 0} ` +
+            `autor=${(info.key?.participantAlt || sender || '').split('@')[0]}`
+          );
+        }
+      } catch (e) {
+        // Diagnostico nunca derruba o handler.
+        console.error('[CONTEUDO-ANOMALIA] falha ao medir:', e?.message || e);
+      }
+    }
+
     // Anti-Mensagem Invisível (rajadas) - Usa participantAlt para detectar invasores
     // Detecta payment com amount zerado e texto na nota (padrão de rajada).
     // Usa a classificação (que desembrulha ViewOnce) em vez do caminho cru

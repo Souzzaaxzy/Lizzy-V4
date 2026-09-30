@@ -62,6 +62,8 @@
  *   informativos (peso 0, so contexto): LID detectado, nota de pagamento,
  *   protocolMessage de edicao, SKDM observado.
  */
+import { analisarTamanhoDeConteudo } from './contentAnomalies.js';
+
 export const INDICADORES = Object.freeze({
   INV_001: { id: 'INV-001', nome: 'Distribuicao seletiva registrada', categoria: 'distribuicao', severidade: 'alta', peso: 5, descricao: 'A fork anexou `selectiveDistribution` ao evento: um skmsg de grupo nao decifrou para este dispositivo e o remetente marcou decrypt-fail. E assinatura de TRANSPORTE.' },
   INV_002: { id: 'INV-002', nome: 'decrypt-fail="hide" presente', categoria: 'criptografia', severidade: 'media', peso: 2, descricao: 'O remetente pediu para os clientes esconderem a entrada indecifravel. E ligado pelo remetente, entao sozinho nao prova intencao (o rereg_recovery do WhatsApp tambem carrega o atributo e decifra).' },
@@ -85,6 +87,9 @@ export const INDICADORES = Object.freeze({
   INV_020: { id: 'INV-020', nome: 'Nota com texto sem conteudo visivel', categoria: 'payment', severidade: 'media', peso: 2, descricao: 'O texto da NOTA existe mas so tem espaco/zero-width: o cliente desenha ~nada. Sozinho e ambiguo (varios envios usam caracteres invisiveis para "vazio"); pesa apenas quando ja ha outro indicador de pagamento na mesma mensagem.' },
   INV_021: { id: 'INV-021', nome: 'ID com sufixo de fonte/historico', categoria: 'estrutura', severidade: 'baixa', peso: 1, descricao: 'ID no formato `<id>_L0` (sufixo de origem/historico). Nao e o formato dos clientes (`3EB0...`) e pode indicar historico/relay, nao um envio direto. Ambiguo: nao e prova de nada.' },
   INV_022: { id: 'INV-022', nome: 'sendPaymentMessage sem referencia ao pedido', categoria: 'payment', severidade: 'media', peso: 3, descricao: 'O proto `SendPaymentMessage` tem `requestMessageKey` — o ponteiro para o pedido que este envio responde. Aqui ele esta AUSENTE e nao ha `amount` nenhum: o card nao responde a pedido algum e nao carrega valor. Severidade MEDIA de proposito: o campo existe no proto, mas nao ha amostra benigna confirmada que prove que ele sempre acompanha um envio legitimo — entao isto corrobora, nao prova.' },
+  INV_025: { id: 'INV-025', nome: 'Texto em campo de identificador', categoria: 'estrutura', severidade: 'media', peso: 3, descricao: 'Campo que deveria ser um ID (ou metadado curto) carregando TEXTO longo. Medido no `declinePaymentRequestMessage.key.id` e no `cancelPaymentRequestMessage.key.id`, onde o texto da mensagem viaja dentro de um campo de chave. Um id de mensagem real e hex de 22-40 chars; texto livre ali nao tem uso legitimo.' },
+  INV_026: { id: 'INV-026', nome: 'Campo de texto com tamanho absurdo', categoria: 'estrutura', severidade: 'alta', peso: 5, descricao: 'Campo de texto muito acima do plausivel (centenas de KB a MB). E o payload que sobrecarrega o cliente ("travazap"): o aparelho do alvo trava ou fecha ao processar. Medido no `IosInvisible` (~2,9 MB em `locationMessage.name`/`address` e `extendedTextMessage.text`). O criterio e objetivo: nenhum humano escreve um nome de lugar com 300 KB.' },
+  INV_027: { id: 'INV-027', nome: 'Tipo nao-renderizavel com payload', categoria: 'estrutura', severidade: 'media', peso: 2, descricao: 'Tipo que existe para controle interno (keepInChat, placeholder, protocolo) carregando conteudo de mensagem. O cliente nao desenha esses tipos como mensagem normal, entao o conteudo fica invisivel. Ambiguo: alguns tem uso legitimo, por isso o peso e medio.' },
   INV_024: { id: 'INV-024', nome: 'Pagamento sem valor usado como carreador de texto', categoria: 'payment', severidade: 'media', peso: 3, descricao: 'Tipo de pagamento que NAO seja request/send (esses ja tem INV-007/019/022/023) carregando TEXTO embutido (`noteMessage` ou `description`) e SEM valor monetario declarado. E o envelope de pagamento usado como transporte de texto: sem lastro, o card nao tem o que desenhar. Medido no `splitPaymentMessage` (texto no `description`, `totalAmount` zerado). NAO dispara em pagamento legitimo, porque esse declara valor positivo.' },
   INV_023: { id: 'INV-023', nome: 'Envelope de pagamento com texto invisivel', categoria: 'payment', severidade: 'alta', peso: 6, descricao: 'ASSINATURA MEDIDA do raja: `sendPaymentMessage` cuja nota carrega texto INVISIVEL (`.` + zero-width). O `sendPaymentMessage` e o tipo de um envio de pagamento e, sozinho, nao carrega `amount` — com a nota invisivel, o card nao mostra nada e o texto viaja escondido. Confirmado contra o raja REAL e contra o espelho que o `!rajar` monta.' },
 });
@@ -890,8 +895,50 @@ export function analisarCamposDesconhecidos({ content = {}, contextInfo = null, 
  * Monta o conjunto de indicadores a partir das analises e soma os pesos.
  * Regra de ouro: indicador isolado NAO classifica; combinacao eleva.
  */
+/**
+ * ContentAnomalyAnalyzer: tamanho dos campos de texto e campos de ID com texto.
+ *
+ * E o detector que NAO olha o tipo — olha a FORMA. Cobre a categoria que
+ * escapava: payload gigante (travazap) e texto escondido em campo de chave.
+ */
+export function analisarAnomaliasDeConteudo(content = {}) {
+  const tamanho = analisarTamanhoDeConteudo(content);
+
+  // Texto escondido em campo de ID: um id de mensagem real e hex curto
+  // (`3EB0...`, 22-40 chars). Texto livre com espaco/acento ali nao tem uso
+  // legitimo — foi medido no `declinePaymentRequestMessage.key.id`.
+  const idSuspeitos = [];
+  const visitarIds = (node, caminho, profundidade) => {
+    if (!isObj(node) || profundidade > 8) return;
+    for (const [chave, valor] of Object.entries(node)) {
+      const novoCaminho = caminho ? `${caminho}.${chave}` : chave;
+      if (chave === 'id' && typeof valor === 'string' && valor.length > 0) {
+        const pareceId = /^[A-Za-z0-9_\-.:+\/]{1,64}$/.test(valor);
+        if (!pareceId || valor.length > 64) {
+          idSuspeitos.push({ caminho: novoCaminho, tamanho: valor.length, valor: valor.slice(0, 40) });
+        }
+      } else if (isObj(valor)) {
+        visitarIds(valor, novoCaminho, profundidade + 1);
+      }
+    }
+  };
+  visitarIds(content, '', 0);
+
+  // Tipo nao-renderizavel carregando payload.
+  const leaf = resolverFolha(content);
+  const tiposNaoRenderizaveis = ['keepInChatMessage', 'placeholderMessage'];
+  const naoRenderizavel = tiposNaoRenderizaveis.filter((t) => isObj(leaf[t]));
+
+  return {
+    disponivel: tamanho.disponivel || idSuspeitos.length > 0 || naoRenderizavel.length > 0,
+    tamanho,
+    idSuspeitos,
+    naoRenderizavel,
+  };
+}
+
 export function correlacionar(analises = {}) {
-  const { key, lid, distribution, decryption, senderKey, payment, context, quoted, wrappers, stub, protocol, unknown, contentDisponivel = false } = analises;
+  const { key, lid, distribution, decryption, senderKey, payment, context, quoted, wrappers, stub, protocol, unknown, anomalia, contentDisponivel = false } = analises;
   const indicadores = [];
   const evidencias = [];
 
@@ -978,6 +1025,27 @@ export function correlacionar(analises = {}) {
   if (quoted?.disponivel && quoted.referencia && !quoted.referencia.stanzaId) push('INV_014', 'citacao sem stanzaId');
   if (unknown?.disponivel) push('INV_015', `${unknown.total} campo(s) fora do mapa conhecido`);
   if (protocol?.disponivel) push('INV_016', `protocolMessage type=${safeValue(protocol.tipo)}`);
+
+  // ── Anomalias de CONTEUDO (forma, nao tipo) ──────────────────────────────
+  // Tamanho: e o travazap. O criterio e objetivo (contagem de caracteres).
+  if (anomalia?.tamanho?.absurdos?.length) {
+    const m = anomalia.tamanho.absurdos[0];
+    push('INV_026', `${m.caminho} com ${m.tamanho.toLocaleString('pt-BR')} caracteres`);
+  } else if (anomalia?.tamanho?.suspeitos?.length) {
+    const m = anomalia.tamanho.suspeitos[0];
+    push('INV_026', `${m.caminho} com ${m.tamanho.toLocaleString('pt-BR')} caracteres (acima do plausivel)`);
+  }
+
+  // Texto em campo de ID.
+  if (anomalia?.idSuspeitos?.length) {
+    const a = anomalia.idSuspeitos[0];
+    push('INV_025', `${a.caminho} com ${a.tamanho} caracteres (nao parece um id)`);
+  }
+
+  // Tipo nao-renderizavel com payload.
+  if (anomalia?.naoRenderizavel?.length) {
+    push('INV_027', `tipo de controle com conteudo: ${anomalia.naoRenderizavel.join(', ')}`);
+  }
   if (senderKey?.skdmObservado) push('INV_018', 'senderKeyDistributionMessage decifrado');
 
   const score = indicadores.reduce((acc, i) => acc + (Number(i.peso) || 0), 0);
@@ -1135,11 +1203,13 @@ export function analyzeInvisibleMessage(entrada = {}) {
   const wrapA = analisarWrappers(content);
   const stubA = analisarStub({ ...envelope, ...(isObj(entradaSegura.envelopeExtra) ? entradaSegura.envelopeExtra : {}) });
   const protoA = analisarProtocolo(content);
+  const anomaliaA = analisarAnomaliasDeConteudo(content);
   const unknownA = analisarCamposDesconhecidos({ content, contextInfo: ctxA.disponivel ? contextoBruto(content) : null, key, envelope });
 
   const contentDisponivel = isObj(content) && keysOf(content).length > 0;
 
   const correlacao = correlacionar({
+    anomalia: anomaliaA,
     key: keyA, lid: lidA, distribution: distA, decryption: decA, senderKey: skA,
     payment: payA, context: ctxA, quoted: quotedA, wrappers: wrapA, stub: stubA,
     protocol: protoA, unknown: unknownA, contentDisponivel,
@@ -1185,6 +1255,7 @@ export function analyzeInvisibleMessage(entrada = {}) {
     stub: stubA,
     protocol: protoA,
     unknownFields: unknownA,
+    anomalia: anomaliaA,
     correlation: {
       score: correlacao.score,
       indice: correlacao.indice,
