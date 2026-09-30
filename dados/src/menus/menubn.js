@@ -102,7 +102,24 @@ ${isLiteMode ? '' : `╭━━━꧁༺ ㅤ🔞 ${boldItalic('INTERAÇÕES "PICA
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-`}╭━━━꧁༺ ㅤ😆 ${boldItalic('BRINCADEIRAS MASCULINAS')} 😆ㅤ ༻꧂━━━╮
+`}╭━━━꧁༺ ㅤ💑 ${boldItalic('RELACIONAMENTOS')} 💑ㅤ ༻꧂━━━╮
+│ 💌 ${prefix}ficante
+│ 💍 ${prefix}namoro
+│ 💒 ${prefix}casamento
+│ 💍💍💍 ${prefix}trisal
+│ 💍💍💍💍 ${prefix}quadrisal
+│ 💕 ${prefix}relacionamento
+│ 💔 ${prefix}terminar
+│ 💔 ${prefix}terminartrisal
+│ 💔 ${prefix}terminarquadrisal
+│ 🤥 ${prefix}trair
+│ 📜 ${prefix}historicotraicao
+│ 🏳️ ${prefix}lesbica
+│ 💙 ${prefix}cf
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
+
+
+╭━━━꧁༺ ㅤ😆 ${boldItalic('BRINCADEIRAS')} 😆ㅤ ༻꧂━━━╮
 │ 📏 ${prefix}medirpau
 │ 🏳️ ${prefix}gay
 │ 🧠 ${prefix}burro
@@ -300,23 +317,6 @@ ${isLiteMode ? '' : `╭━━━꧁༺ ㅤ🔞 ${boldItalic('INTERAÇÕES "PICA
 │ 😩 ${prefix}vagabundo
 │ 😩 ${prefix}vagabunda
 │ 🕵 ${prefix}pilantra
-╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
-
-
-╭━━━꧁༺ ㅤ💑 ${boldItalic('RELACIONAMENTOS')} 💑ㅤ ༻꧂━━━╮
-│ 💌 ${prefix}ficante
-│ 💍 ${prefix}namoro
-│ 💒 ${prefix}casamento
-│ 💍💍💍 ${prefix}trisal
-│ 💍💍💍💍 ${prefix}quadrisal
-│ 💕 ${prefix}relacionamento
-│ 💔 ${prefix}terminar
-│ 💔 ${prefix}terminartrisal
-│ 💔 ${prefix}terminarquadrisal
-│ 🤥 ${prefix}trair
-│ 📜 ${prefix}historicotraicao
-│ 🏳️ ${prefix}lesbica
-│ 💙 ${prefix}cf
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 

@@ -5052,6 +5052,28 @@ So em grupo (`sendAbyssWarning`, como os outros comandos de brincadeira) e exige
 
 ### Menu / blockPv
 Linha do `!ppp` na **primeira categoria** do `menubn`, logo apos o `!sn`; e
+
+### Reorganizacao de categorias do `menubn` (set/2026) ✅
+Dois ajustes pedidos no mesmo menu:
+1. **`BRINCADEIRAS MASCULINAS` -> `BRINCADEIRAS`** (o emoji ficou);
+2. **as duas categorias foram invertidas**: agora **RELACIONAMENTOS em cima** e
+   **BRINCADEIRAS abaixo**.
+
+A ordem final das categorias no `menubn` ficou:
+`JOGOS & DIVERSAO` · `NGL ANONIMO` · `FRASES & TEXTOS` · `INTERACOES SOCIAIS` ·
+`INTERACOES "PICANTES"` (so no modo completo) · **`RELACIONAMENTOS`** ·
+**`BRINCADEIRAS`** · `RANKINGS MASCULINOS` · `RANKINGS FEMININOS`.
+
+**Detalhe que exigiu cuidado**: o bloco `INTERACOES "PICANTES"` esta dentro de um
+template condicional do modo lite, e o **fechamento do condicional** (`` `} ``)
+estava **colado no cabecalho de BRINCADEIRAS**. Como esse bloco passou a ser o
+**segundo** (e o RELACIONAMENTOS virou o primeiro), o prefixo teve de migrar
+junto — senao o modo lite quebraria. Conferido: completo **350** comandos (mesmo
+numero de antes) e lite **336**, com as picantes escondidas e as duas categorias
+presentes.
+
+Nenhuma linha de comando foi tocada — so o cabecalho de uma categoria e a posicao
+dos dois blocos.
 `'ppp'` na lista `menuCommandsMap.menubn` do `blockPv`. Baseline do
 `menu-layout`: **menubn 349 -> 350**.
 
