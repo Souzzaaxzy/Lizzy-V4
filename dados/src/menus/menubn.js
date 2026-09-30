@@ -129,7 +129,7 @@ ${isLiteMode ? '' : `╭━━━꧁༺ ㅤ🔞 ${boldItalic('INTERAÇÕES "PICA
 │ 🗿 ${prefix}rizz
 │ 🗿 ${prefix}delulu
 │ 🗿 ${prefix}chad
-│ 🗿 ${prefix}mogado
+│ 🗿 ${prefix}mogar
 │ 🧠 ${prefix}brainrot
 │ 😖 ${prefix}cringe
 │ 🗿 ${prefix}based
@@ -141,7 +141,6 @@ ${isLiteMode ? '' : `╭━━━꧁༺ ㅤ🔞 ${boldItalic('INTERAÇÕES "PICA
 │ 🚽 ${prefix}skibidi
 │ 6️⃣ ${prefix}sixseven
 │ 🌪️ ${prefix}ohio
-│ 🗿 ${prefix}looksmaxxing
 │ 🎭 ${prefix}gag
 │ 🧠 ${prefix}burro
 │ 🧠 ${prefix}burra

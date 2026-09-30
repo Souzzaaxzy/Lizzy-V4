@@ -292,8 +292,9 @@ const COMANDOS_POR_MENU = {
   // `!frio`, `!fria` entraram na categoria BRINCADEIRAS)
   // -> 375 (pacote meme: `!rizz`, `!delulu`, `!brainrot`, `!cringe`, `!based`,
   // `!yap`, `!glazing`, `!mogado`, `!chad`, `!beta`, `!mewing`, `!gyatt`,
-  // `!skibidi`, `!sixseven`, `!ohio`, `!looksmaxxing`, `!gag`).
-  menubn: 375, menufut: 42, menurpg: 149,
+  // `!skibidi`, `!sixseven`, `!ohio`, `!looksmaxxing`, `!gag`)
+  // -> 374 (`!mogado` -> `!mogar` e `!looksmaxxing` removido).
+  menubn: 374, menufut: 42, menurpg: 149,
   // menuvip nao tem comando cadastrado; o `!` contado e o `!addcmdvip` da
   // instrucao ("Use: !addcmdvip"), que no original tambem estava fixo.
   menuvip: 1, menugames: 28,
@@ -323,12 +324,12 @@ await test('16. NENHUM comando se perdeu (contagem por menu vs baseline)', async
   }
 });
 
-await test('17. menubn: os 375 comandos estão TODOS lá (o mais crítico)', async () => {
+await test('17. menubn: os 374 comandos estão TODOS lá (o mais crítico)', async () => {
   const mod = await import(new URL('../dados/src/menus/menubn.js', import.meta.url).href);
   const texto = await mod.default('!', 'Abyss', 'Kannon');
-  eq((texto.match(/!/g) || []).length, 375, '375 comandos no modo completo');
+  eq((texto.match(/!/g) || []).length, 374, '374 comandos no modo completo');
   // Amostras de cada categoria (inclusive as condicionais).
-  for (const c of ['!tictactoe', '!uno criar', '!conselho', '!tapa', '!surubao', '!pgpau', '!medirpau', '!rankputo', '!casal', '!ma', '!aura', '!sigma', '!hetero', '!hetera', '!ceu', '!inferno', '!frio', '!fria', '!rizz', '!delulu', '!skibidi', '!sixseven', '!looksmaxxing', '!gag']) {
+  for (const c of ['!tictactoe', '!uno criar', '!conselho', '!tapa', '!surubao', '!pgpau', '!medirpau', '!rankputo', '!casal', '!ma', '!aura', '!sigma', '!hetero', '!hetera', '!ceu', '!inferno', '!frio', '!fria', '!rizz', '!delulu', '!skibidi', '!sixseven', '!mogar', '!chad', '!gag']) {
     contem(texto, c, `tem ${c}`);
   }
   // Modo LITE: continua escondendo as "picantes" e mantendo o resto.

@@ -8037,8 +8037,8 @@ atuais (2025) para ficarem fiéis ao que circula na internet.
 
 ### Comandos
 `!rizz`, `!delulu`, `!brainrot`, `!cringe`, `!based`, `!yap`, `!glazing`,
-`!mogado`, `!chad`, `!beta`, `!mewing`, `!gyatt`, `!skibidi`, `!sixseven`,
-`!ohio`, `!looksmaxxing`, `!gag` — **5 frases** por comando, no mesmo molde do
+`!mogar`, `!chad`, `!beta`, `!mewing`, `!gyatt`, `!skibidi`, `!sixseven`,
+`!ohio`, `!gag` — **5 frases** por comando, no mesmo molde do
 `!aura`/`!sigma` (menção real do alvo, mídia de `gifsbn/<cmd>.*` via
 `resolveBrincadeiraMedia`, `!setgif` aceita todos).
 
@@ -8050,21 +8050,26 @@ atuais (2025) para ficarem fiéis ao que circula na internet.
 - **cringe** — vergonha alheia/cafona (ex.: "bom dia princesa" com girassol).
 - **based** — opinião corajosa/verdadeira, sem pedir desculpa.
 - **yap** — falar demais; `glazing` — elogiar/puxar saco exageradamente.
-- **mogado** — `mogging`, dominar pela aparência (looksmaxxing/manosfera).
+- **mogar** — `mogging`, dominar pela aparência (looksmaxxing/manosfera). É o
+  único meme com frase de **duas pessoas** (autor + alvo): *"O betinha
+  @usuario1 foi mogado pelo @usuario2 e foi chorar no colo da mamãe 😂😂😂"* —
+  `@usuario1` vira quem mandou o comando e `@usuario2` o alvo marcado, com
+  menção real dos dois (`mentions: [sender, target]`).
 - **chad** / **beta** — o alpha respeitado vs o que só concorda.
 - **mewing** — exercício de maxilar/jawline; **gyatt** — "goddamn" (glúteos).
 - **skibidi** — série Skibidi Toilet, sem definição fixa; **ohio** — caos/absurdo.
 - **sixseven** — meme 6-7 (LaMelo Ball 6'7", música "Doot Doot" do Skrilla,
-  gesto da balança); **looksmaxxing** — ascender/ficar chad.
+  gesto da balança).
 - **gag** — choque/espanto (cultura drag, RuPaul's Drag Race).
 
 ### Menu / blockPv
 Linhas na categoria BRINCADEIRAS, logo após o `!sigma`; registrados em
 `menuCommandsMap.menubn` (`utils/blockPv.js`). Baseline do `menu-layout`:
-**menubn 358 -> 375**.
+**menubn 358 -> 374** (`!mogado` virou `!mogar` e o `!looksmaxxing` saiu).
 
-### Testes — `tests/brincadeiras-novas.test.js` (**39 testes / 369 asserções**)
-Os 17 memes no handler real (frase + menção, sem `undefined`/`null`/`NaN`),
-sorteio variando em 30 execuções, GIF (`gifsbn/delulu.gif`) e imagem
+### Testes — `tests/brincadeiras-novas.test.js` (**39 testes / 366 asserções**)
+Os 16 memes no handler real (frase + menção, sem `undefined`/`null`/`NaN`),
+sorteio variando em 30 execuções, a frase do betinha do `!mogar` com **duas
+menções** (autor e alvo), GIF (`gifsbn/delulu.gif`) e imagem
 (`gifsbn/sixseven.jpg`), fora de grupo recusando, presença no `menubn` (uma vez
-cada) e no `blockPv`, e `!setgif` aceitando os 17.
+cada) e no `blockPv`, e `!setgif` aceitando todos.

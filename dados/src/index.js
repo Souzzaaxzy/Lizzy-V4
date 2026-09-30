@@ -19996,7 +19996,7 @@ case 'addaluguel':
           const cmdName = q.trim().toLowerCase();
           
           // Lista de comandos de brincadeira válidos
-          const validCommands = ['tapa', 'soco', 'socar', 'beijo', 'beijar', 'beijob', 'beijarb', 'abraco', 'abracar', 'mata', 'matar', 'tapar', 'goza', 'gozar', 'mamar', 'mamada', 'cafune', 'morder', 'mordida', 'lamber', 'lambida', 'explodir', 'sexo', 'siririca', 'punheta', 'chute', 'chutar', 'tomate', 'compatibilidade', 'rankputo', 'rankputa', 'rankpauzudo', 'rankbucetuda', 'pgpau', 'pgpeito', 'pgbunda', 'aura', 'sigma', 'ceu', 'inferno', 'frio', 'fria', 'rizz', 'delulu', 'brainrot', 'cringe', 'based', 'yap', 'glazing', 'mogado', 'chad', 'beta', 'mewing', 'gyatt', 'skibidi', 'sixseven', 'ohio', 'looksmaxxing', 'gag'];
+          const validCommands = ['tapa', 'soco', 'socar', 'beijo', 'beijar', 'beijob', 'beijarb', 'abraco', 'abracar', 'mata', 'matar', 'tapar', 'goza', 'gozar', 'mamar', 'mamada', 'cafune', 'morder', 'mordida', 'lamber', 'lambida', 'explodir', 'sexo', 'siririca', 'punheta', 'chute', 'chutar', 'tomate', 'compatibilidade', 'rankputo', 'rankputa', 'rankpauzudo', 'rankbucetuda', 'pgpau', 'pgpeito', 'pgbunda', 'aura', 'sigma', 'ceu', 'inferno', 'frio', 'fria', 'rizz', 'delulu', 'brainrot', 'cringe', 'based', 'yap', 'glazing', 'mogar', 'chad', 'beta', 'mewing', 'gyatt', 'skibidi', 'sixseven', 'ohio', 'gag'];
           
           if (!validCommands.includes(cmdName)) {
             return reply(`❌ Esse comando não existe.\n\nComandos disponíveis:\n${validCommands.join(', ')}`);
@@ -40035,7 +40035,7 @@ case 'hotseat': {
       case 'based':
       case 'yap':
       case 'glazing':
-      case 'mogado':
+      case 'mogar':
       case 'chad':
       case 'beta':
       case 'mewing':
@@ -40043,7 +40043,6 @@ case 'hotseat': {
       case 'skibidi':
       case 'sixseven':
       case 'ohio':
-      case 'looksmaxxing':
       case 'gag':
         try {
           if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
@@ -40051,6 +40050,7 @@ case 'hotseat': {
 
           const targetUser = menc_os2 || sender;
           const targetName = `@${getUserName(targetUser)}`;
+          const autorName = `@${getUserName(sender)}`;
 
           const FRASES_MEME = {
             rizz: [
@@ -40102,7 +40102,8 @@ case 'hotseat': {
               `${targetName} glazing desnecessário detectado, segura o exagero 🚨`,
               `${targetName} é o rei do glazing, elogia até quem não merece 👑`
             ],
-            mogado: [
+            mogar: [
+              'O betinha @usuario1 foi mogado pelo @usuario2 e foi chorar no colo da mamãe 😂😂😂',
               `${targetName} foi mogado e nem percebeu, não sobrou nada 💀`,
               `${targetName} entrou na foto e mogou todo mundo, que isso 🗿`,
               `${targetName} tentou competir e foi mogado na hora 😬`,
@@ -40175,7 +40176,15 @@ case 'hotseat': {
           };
 
           const frases = FRASES_MEME[command] || [`${targetName} é puro ${command} 🗿`];
-          const responseText = frases[Math.floor(Math.random() * frases.length)];
+          const responseText = frases[Math.floor(Math.random() * frases.length)]
+            .replaceAll('@usuario1', autorName)
+            .replaceAll('@usuario2', targetName);
+
+          // A frase do !mogar cita as DUAS pessoas (autor e alvo), entao as duas
+          // precisam de mencao real; nos outros memes basta o alvo.
+          const mentionsToSend = responseText.includes(autorName) && sender !== targetUser
+            ? [sender, targetUser].filter((jid, i, arr) => jid && arr.indexOf(jid) === i)
+            : [targetUser];
 
           // Media do !setgif / arquivo solto na pasta gifsbn.
           let gamesDataMeme = fs.existsSync(__dirname + '/funcs/json/games.json') ? JSON.parse(fs.readFileSync(__dirname + '/funcs/json/games.json')) : { games2: {} };
@@ -40185,23 +40194,23 @@ case 'hotseat': {
           if (media?.image) {
             const imagePath = resolveMediaPath(typeof media.image === 'object' ? media.image.url : media.image);
             if (imagePath.startsWith('http')) {
-              await nazu.sendMessage(from, { image: { url: imagePath }, caption: responseText, mentions: [targetUser] });
+              await nazu.sendMessage(from, { image: { url: imagePath }, caption: responseText, mentions: mentionsToSend });
             } else if (fs.existsSync(imagePath)) {
-              await nazu.sendMessage(from, { image: fs.readFileSync(imagePath), caption: responseText, mentions: [targetUser] });
+              await nazu.sendMessage(from, { image: fs.readFileSync(imagePath), caption: responseText, mentions: mentionsToSend });
             } else {
-              await nazu.sendMessage(from, { text: responseText, mentions: [targetUser] });
+              await nazu.sendMessage(from, { text: responseText, mentions: mentionsToSend });
             }
           } else if (media?.video) {
             const videoPath = resolveMediaPath(typeof media.video === 'object' ? media.video.url : media.video);
             if (videoPath.startsWith('http')) {
-              await nazu.sendMessage(from, { video: { url: videoPath }, caption: responseText, mentions: [targetUser], gifPlayback: true });
+              await nazu.sendMessage(from, { video: { url: videoPath }, caption: responseText, mentions: mentionsToSend, gifPlayback: true });
             } else if (fs.existsSync(videoPath)) {
-              await nazu.sendMessage(from, { video: fs.readFileSync(videoPath), caption: responseText, mentions: [targetUser], gifPlayback: true });
+              await nazu.sendMessage(from, { video: fs.readFileSync(videoPath), caption: responseText, mentions: mentionsToSend, gifPlayback: true });
             } else {
-              await nazu.sendMessage(from, { text: responseText, mentions: [targetUser] });
+              await nazu.sendMessage(from, { text: responseText, mentions: mentionsToSend });
             }
           } else {
-            await nazu.sendMessage(from, { text: responseText, mentions: [targetUser] });
+            await nazu.sendMessage(from, { text: responseText, mentions: mentionsToSend });
           }
         } catch (e) {
           console.error(e);

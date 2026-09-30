@@ -181,7 +181,7 @@ async function runCommand(command, { withTarget = true, groupJid = makeGroup() }
   const text = sent.map((s) => s.content?.text ?? s.content?.caption ?? '').filter(Boolean).join('\n');
   const mediaMsg = sent.find((s) => s.content?.video || s.content?.image) || null;
   const allMentions = sent.flatMap((s) => s.content?.mentions || s.options?.mentions || []);
-  return { sent, text, mediaMsg, allMentions, targetLid, targetJid };
+  return { sent, text, mediaMsg, allMentions, authorLid, authorJid, targetLid, targetJid };
 }
 
 /** Extrai a porcentagem do texto (formato "... *NN%*" ou "[barra] NN%"). */
@@ -351,8 +351,8 @@ await test('!setgif aceita os comandos novos', () => {
 // ============================================================================
 
 const MEMES = ['rizz', 'delulu', 'brainrot', 'cringe', 'based', 'yap', 'glazing',
-  'mogado', 'chad', 'beta', 'mewing', 'gyatt', 'skibidi', 'sixseven', 'ohio',
-  'looksmaxxing', 'gag'];
+  'mogar', 'chad', 'beta', 'mewing', 'gyatt', 'skibidi', 'sixseven', 'ohio',
+  'gag'];
 
 for (const cmd of MEMES) {
   await test(`!${cmd}: frase + menção real (sem mídia)`, async () => {
@@ -367,6 +367,27 @@ for (const cmd of MEMES) {
     includes(run.text, `@${run.targetLid.split('@')[0]}`, 'texto menciona o alvo');
   });
 }
+
+await test('!mogar: a frase do betinha cita AUTOR e ALVO com menções reais', async () => {
+  let achou = null;
+  for (let i = 0; i < 60 && !achou; i++) {
+    const run = await runCommand('mogar');
+    if (run.text.includes('betinha') && run.text.includes('colo da mamãe')) achou = run;
+  }
+  ok(Boolean(achou), 'a frase do betinha saiu em até 60 execuções');
+  if (achou) {
+    // Os placeholders foram trocados pelos dois nomes, na ordem autor -> alvo.
+    notIncludes(achou.text, '@usuario1', 'sem placeholder @usuario1');
+    notIncludes(achou.text, '@usuario2', 'sem placeholder @usuario2');
+    includes(achou.text, `@${achou.authorLid.split('@')[0]}`, 'cita o autor (quem mogou)');
+    includes(achou.text, `@${achou.targetLid.split('@')[0]}`, 'cita o alvo (o betinha)');
+    ok(achou.allMentions.includes(achou.authorJid) || achou.allMentions.includes(achou.authorLid),
+      `autor nas mentions: ${JSON.stringify(achou.allMentions)}`);
+    ok(achou.allMentions.includes(achou.targetJid) || achou.allMentions.includes(achou.targetLid),
+      `alvo nas mentions: ${JSON.stringify(achou.allMentions)}`);
+    ok(achou.allMentions.length === 2, `duas menções, obtidas: ${achou.allMentions.length}`);
+  }
+});
 
 await test('!rizz: frases são sorteadas (não sai sempre a mesma)', async () => {
   const vistas = new Set();
