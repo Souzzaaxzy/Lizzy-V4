@@ -42077,6 +42077,30 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
         }
         break;
 
+      case 'footer': {
+        // Teste da proto `audioFooter` (InteractiveMessage.Footer.audioMessage):
+        // card interativo com um áudio nativo no rodapé. `audioFooter` substitui
+        // o `footer` de texto (o ramo do áudio tem prioridade na fork).
+        try {
+          const footerAudioPath = pathz.join(__dirname, '../midias/footer_test.ogg');
+          if (!fs.existsSync(footerAudioPath)) {
+            return reply('❌ Áudio de teste não encontrado em dados/src/midias/footer_test.ogg');
+          }
+          await nazu.sendMessage(from, {
+            text: '🎧 *Teste do audioFooter*\nCard interativo com áudio nativo no rodapé.',
+            audioFooter: fs.readFileSync(footerAudioPath),
+            nativeFlow: [
+              { text: '👍🏻 Curti', id: '#footer-ok', icon: 'review' },
+              { text: '👎🏻 Passei', id: '#footer-nok', icon: 'default' }
+            ]
+          }, { quoted: info });
+        } catch (e) {
+          console.error('Erro no comando footer:', e);
+          await reply('❌ Ocorreu um erro ao enviar o teste 💔');
+        }
+        break;
+      }
+
       default:
         if (isCmd) {
           const cmdNotFoundConfig = loadCmdNotFoundConfig();
