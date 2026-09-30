@@ -1029,6 +1029,55 @@ ir para o status**.
   77/77. Não foi corrigido aqui por estar fora do escopo do pedido.
 
 ## COMANDO `!d` reescrito + MINI SISTEMA de apagar GROUP STATUS (set/2026) ✅
+
+### `!d` em PAYMENT — apagamento REAL (set/2026) ✅
+O trecho que dizia "apaga o payment" era **falso**: mandava um REVOKE direto, que o
+servidor **ignora** para card de pagamento — a mensagem continuava visível.
+
+**O que foi corrigido** (`index.js`, bloco `if (isPaymentContent(quotedMessage))`):
+o caminho que funciona é **editar o alvo primeiro**. Cria uma mensagem temporária
+(só para gerar um id descartável) e manda uma **EDIÇÃO** com
+`options.messageId = <id do pagamento>` e `edit.id = <id temporário>` — a inversão
+é o ponto: o alvo da edição é o temporário, mas a stanza sai **com o id do
+pagamento**. Depois disso a revogação daquele id vale. Então: revoga o pagamento,
+revoga o temporário.
+
+**Cobertura ampliada** (o `if` antigo só via `quotedMessage?.requestPaymentMessage`
+no topo):
+- `isPaymentContent()` reconhece os 7 tipos de pagamento do proto e **desembrulha
+  invólucros** (viewOnce V2/V2Extension, ephemeral, documentWithCaption,
+  editedMessage) — um payment citado encapsulado caía no caminho comum, que é
+  justamente o que não apaga;
+- o autor pode ser **o próprio bot** (key `fromMe: true`, sem participant) ou um
+  terceiro; `isBotAuthor()` decide comparando por **base** (`:device` fora);
+- quando o `participant` vem como **LID**, `resolveParticipantPn()` busca o PN
+  (`signalRepository.lidMapping.getPNForLID`) e `buildPaymentDeleteKeys()` tenta as
+  formas em ordem (LID+PN → PN → LID → sem participant), **parando na primeira que
+  o servidor aceitar** — antes uma única key errada significava "não apagou".
+
+**Módulo**: `dados/src/utils/deletePayment.js` (puro, sem socket): `PAYMENT_KEYS`,
+`isPaymentContent`, `baseId`, `isBotAuthor`, `buildPaymentDeleteKeys`,
+`buildPaymentEditContent`, `resolveParticipantPn`.
+
+**Mensagem de retorno honesta**: o comando agora diz *"❌ Não consegui apagar a
+mensagem de pagamento"* quando **nenhuma** key funcionou — antes afirmava sucesso
+sem confirmar nada.
+
+**Testes**: `tests/delete-payment.test.js` — **12 testes / 63 asserções** com o
+handler real: a edição sai com `messageId` = id do pagamento e `edit.id` = id
+temporário, a revogação é do **pagamento** (não do temporário), o temporário é
+revogado como `fromMe: true`, `sendPaymentMessage` e payment em view once também
+passam pelo caminho especial, participant em LID usa o PN resolvido, payment do
+bot usa `fromMe: true`, e a **regressão** da mensagem comum (não entra no caminho
+de edição). **Verificado que o teste MEDE a mudança: revertendo o bloco para o
+código antigo, 8 asserções falham.**
+`tests/delete-status.test.js` segue **11/55** (o mini sistema de status intacto).
+
+**LIMITE HONESTO**: a mecânica (editar → revogar) é a mesma das implementações que
+apagam payment (`L1ghtzin/chainy`, `bakizinho/Kyara-High-Tech`), mas **não foi
+validada em aparelho real** — não há sessão de WhatsApp neste ambiente. O que
+está provado por teste é o payload/stanza montados pelo handler.
+
 - **Case trocada** por um bloco novo (pedido do dono): a permissão virou
   `if (!isGroupAdmin && !isPremium)`, o alvo é resolvido por
   `extendedTextMessage.contextInfo.stanzaId || viewOnceMessage.contextInfo.stanzaId || info.key.id`,

@@ -38,6 +38,7 @@ import { figurinhaParaStatus } from './utils/stickerStatus.js';
 import { normalizarIdGrupo, ehJidCanal, buildFollowChannelContent, fotoDoMetadataNewsletter, normalizarGrupos, adicionarGrupo, removerGrupo } from './utils/canalDivulgacao.js';
 import sharp from 'sharp';
 import * as ghostDetection from './utils/ghostDetection.js';
+import { isPaymentContent, buildPaymentDeleteKeys, buildPaymentEditContent, resolveParticipantPn, isBotAuthor } from './utils/deletePayment.js';
 import { bold as boldLayout, boldItalic as boldItalicLayout, abrirCategoria, fecharCategoria } from './menus/layout.js';
 import {
   isGroupStatusContent,
@@ -30035,59 +30036,65 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
 
         if (!menc_prt) return reply("Marque a mensagem do usuário que deseja apagar, do bot ou de alguém..");
 
-        // Se for mensagem de pagamento, usa o método especial
-        if (quotedMessage?.requestPaymentMessage) {
+        // Se for mensagem de pagamento, usa o método especial.
+        //
+        // A revogação direta NÃO funciona para card de pagamento: o servidor
+        // ignora o REVOKE e a mensagem continua visível. O caminho que funciona
+        // passa por editar o alvo primeiro — cria uma mensagem temporária e
+        // manda uma EDIÇÃO cujo alvo é o id do pagamento, enviada COM o id do
+        // pagamento (`messageId`). Depois disso a revogação daquele id vale.
+        if (isPaymentContent(quotedMessage)) {
           try {
-            // PASSO 1: CRIA MENSAGEM VAZIA PARA GERAR ID
-            const msgcagada = await nazu.sendMessage(from, { text: '' });
-            const idEditada = msgcagada.key.id;
+            // PASSO 1: mensagem temporária, só para gerar um id descartável.
+            const msgTemp = await nazu.sendMessage(from, { text: '' });
+            const idTemp = msgTemp?.key?.id;
+            if (!idTemp) throw new Error('falha ao gerar ID temporario');
 
-            if (!idEditada) throw new Error('falha ao gerar ID');
-
-            // PASSO 2: EDITA A MENSAGEM DE PAGAMENTO
-            await nazu.sendMessage(from, {
-              text: '🗑️ Mensagem de pagamento removida',
-              edit: { id: idEditada }
-            }, { messageId: stanzaId });
+            // PASSO 2: edita com o id do PAGAMENTO como id da stanza.
+            await nazu.sendMessage(from, buildPaymentEditContent('🗑️ Mensagem de pagamento removida', idTemp), { messageId: stanzaId });
 
             await sleep(500);
 
-            // PASSO 3: APAGA A MENSAGEM ORIGINAL (PAYMENT)
-            await nazu.sendMessage(from, {
-              delete: {
-                remoteJid: from,
-                id: stanzaId,
-                fromMe: false,
-                participant: menc_prt
-              }
+            // PASSO 3: revoga o pagamento. O autor pode ser o próprio bot (a
+            // key muda) ou um terceiro; tenta-se o LID e o PN do participant.
+            const paymentParticipantPn = await resolveParticipantPn(
+              (jid) => nazu?.signalRepository?.lidMapping?.getPNForLID?.(jid),
+              menc_prt
+            );
+            const botIdentities = [nazu?.user?.id, nazu?.user?.lid];
+            const paymentKeys = buildPaymentDeleteKeys({
+              remoteJid: from,
+              id: stanzaId,
+              participant: menc_prt,
+              participantPn: paymentParticipantPn,
+              fromMe: isBotAuthor([menc_prt], botIdentities)
             });
 
-            await sleep(500);
-
-            // PASSO 4: APAGA A MENSAGEM EDITADA DO BOT
-            try {
-              await nazu.sendMessage(from, {
-                delete: {
-                  remoteJid: from,
-                  id: idEditada,
-                  fromMe: true
-                }
-              });
-            } catch (e) {
+            let apagouPayment = false;
+            for (const key of paymentKeys) {
               try {
-                await nazu.sendMessage(from, {
-                  delete: {
-                    remoteJid: from,
-                    id: idEditada,
-                    fromMe: false,
-                    participant: nazu.user.id
-                  }
-                });
-              } catch (err) {
+                await nazu.sendMessage(from, { delete: key });
+                apagouPayment = true;
+                break;
+              } catch (keyErr) {
+                console.error('[DELETE-PAYMENT] tentativa de key falhou:', keyErr?.message || keyErr);
               }
             }
 
-            reply("✅ Mensagem de pagamento deletada com sucesso!");
+            await sleep(500);
+
+            // PASSO 4: apaga a mensagem temporária (é do bot).
+            try {
+              await nazu.sendMessage(from, { delete: { remoteJid: from, id: idTemp, fromMe: true } });
+            } catch {
+              await nazu.sendMessage(from, {
+                delete: { remoteJid: from, id: idTemp, fromMe: false, participant: nazu.user.id }
+              }).catch(() => {});
+            }
+
+            reply(apagouPayment
+              ? "✅ Mensagem de pagamento deletada com sucesso!"
+              : "❌ Não consegui apagar a mensagem de pagamento 💔");
 
           } catch (error) {
             console.error('Erro ao deletar payment:', error);
