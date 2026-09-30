@@ -1078,6 +1078,41 @@ apagam payment (`L1ghtzin/chainy`, `bakizinho/Kyara-High-Tech`), mas **não foi
 validada em aparelho real** — não há sessão de WhatsApp neste ambiente. O que
 está provado por teste é o payload/stanza montados pelo handler.
 
+#### CAUSA RAIZ do "mesmo efeito do del antigo" (set/2026) ✅
+A 1ª versão desta correção **não funcionou** porque o envio ia por
+`nazu.sendMessage(from, content, { messageId: stanzaId })` — e a **fork
+sobrescreve esse `messageId`**.
+
+Medido no `lib/Socket/messages-send.js` da fork: as options são montadas com
+`...options` e **SÓ DEPOIS** vem `messageId: generateMessageIDV2(userJid)`. Ou
+seja, o id pedido é **descartado** e a stanza sai com um id novo. O truque
+depende de a edição sair **com o id do pagamento** como id da stanza — sem
+isso, nada muda no servidor e o resultado é idêntico ao del antigo (exatamente o
+sintoma relatado).
+
+Medição direta (fork instalada):
+
+```
+messageId pedido : 3EB0PAYMENTID...
+messageId final  : 3EB0GERADO...      => respeitado? FALSE   (sendMessage)
+key.id da stanza : 3EB0PAYMENTID...   => alvo do edit OK? TRUE (relayMessage)
+```
+
+**Correção**: o envio passou a ir por **`generateWAMessage` + `relayMessage`**
+(`sendProtocol()`, no próprio bloco) — o `relayMessage` usa o `messageId`
+explícito, que é a mesma técnica do `!raja`/`!divulgar`. A mensagem temporária
+(que não precisa de id específico) continua por `sendMessage`.
+
+**Por que o teste anterior não pegou**: ele usava um socket FALSO que ignorava
+`options` — media a **intenção** do código, não o que a fork faz. Agora o dublê
+tem `relayMessage` e as asserções exigem o caminho do relay (e proíbem a edição
+por `sendMessage`). **Verificado: reintroduzindo o `sendMessage` na edição, 7
+asserções falham.** (Mesma lição de método do bug do `require` em ESM: um dublê
+mais permissivo que a realidade esconde o defeito.)
+
+`tests/delete-status.test.js` foi ajustado ao novo contrato (relay) — **11/56**.
+`tests/delete-payment.test.js` — **12 testes / 64 asserções**.
+
 - **Case trocada** por um bloco novo (pedido do dono): a permissão virou
   `if (!isGroupAdmin && !isPremium)`, o alvo é resolvido por
   `extendedTextMessage.contextInfo.stanzaId || viewOnceMessage.contextInfo.stanzaId || info.key.id`,

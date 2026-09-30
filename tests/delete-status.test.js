@@ -85,11 +85,16 @@ function makeGroup() {
 }
 
 let senderCounter = 0;
-function makeNazu({ sent, groupJid, sender, comoAdmin = true }) {
+function makeNazu({ sent, relayed, groupJid, sender, comoAdmin = true }) {
   return {
     sendMessage: async (jid, content, options) => {
       sent.push({ jid, content, options });
       return { key: { id: `SENT-${sent.length}` } };
+    },
+    // O fluxo de PAYMENT envia pelo relay (respeita o messageId explícito).
+    relayMessage: async (jid, message, options) => {
+      relayed.push({ jid, message, options });
+      return options?.messageId;
     },
     user: { id: `${BOT_JID.split('@')[0]}:5@s.whatsapp.net`, lid: BOT_LID, name: 'Lizzy' },
     onWhatsApp: async (jid) => [{ jid, exists: true, lid: jid.replace('@s.whatsapp.net', '@lid') }],
@@ -122,7 +127,8 @@ async function rodar({ groupJid, text, quoted = null, autor = '5511888888888@s.w
   senderCounter += 1;
   const sender = `22200000${String(senderCounter).padStart(5, '0')}@lid`;
   const sent = [];
-  const nazu = makeNazu({ sent, groupJid, sender, comoAdmin: admin });
+  const relayed = [];
+  const nazu = makeNazu({ sent, relayed, groupJid, sender, comoAdmin: admin });
   const contextInfo = { remoteJid: groupJid };
   if (quoted) {
     contextInfo.quotedMessage = quoted;
@@ -137,7 +143,7 @@ async function rodar({ groupJid, text, quoted = null, autor = '5511888888888@s.w
   }, null, new Map(), null);
 
   const texto = sent.map((s) => s.content?.text ?? s.content?.caption ?? '').filter(Boolean).join('\n');
-  return { sent, texto, nazu };
+  return { sent, relayed, texto, nazu };
 }
 
 // ============================================================================
@@ -309,7 +315,7 @@ await test('!d em mensagem de pagamento: mantém o fluxo especial (edita e apaga
   gs.clearPublishedGroupStatuses();
   const groupJid = makeGroup();
 
-  const { sent, texto } = await rodar({
+  const { sent, relayed, texto } = await rodar({
     groupJid,
     text: '!d',
     quoted: { requestPaymentMessage: { currencyCodeIso4217: 'BRL', amount1000: '0' } },
@@ -317,16 +323,18 @@ await test('!d em mensagem de pagamento: mantém o fluxo especial (edita e apaga
   });
 
   includes(texto, 'pagamento deletada', 'confirma o fluxo de pagamento');
-  // Passo 1: cria mensagem vazia; Passo 2: edita.
+  // Passo 1: cria mensagem vazia (pode ir por sendMessage).
   const criada = sent.find((s) => s.content?.text === '');
   ok(Boolean(criada), 'criou a mensagem vazia para gerar ID');
-  const editada = sent.find((s) => s.content?.edit);
-  ok(Boolean(editada), 'mandou a edição');
-  includes(editada?.content?.text || '', 'pagamento removida', 'texto da edição');
-  // Passo 3: apaga o payment original.
-  const apagaPay = sent.find((s) => s.content?.delete?.id === 'MSG-ALVO');
+  // Passo 2: a EDIÇÃO sai pelo relay, com o id do pagamento como id da stanza.
+  const editada = relayed.find((r) => r.message?.protocolMessage?.type === 14);
+  ok(Boolean(editada), 'mandou a edição (pelo relay)');
+  ok(editada?.options?.messageId === 'MSG-ALVO', 'a edição usa o id do pagamento');
+  includes(JSON.stringify(editada?.message?.protocolMessage?.editedMessage || {}), 'pagamento removida', 'texto da edição');
+  // Passo 3: apaga o payment original (pelo relay).
+  const apagaPay = relayed.find((r) => r.message?.protocolMessage?.type === 0 && r.message?.protocolMessage?.key?.id === 'MSG-ALVO');
   ok(Boolean(apagaPay), 'apagou o payment original');
-  ok(apagaPay?.content?.delete?.participant === '5511888888888@s.whatsapp.net', 'com o participant do autor citado');
+  ok(apagaPay?.message?.protocolMessage?.key?.participant === '5511888888888@s.whatsapp.net', 'com o participant do autor citado');
 });
 
 await test('!d sem alvo e SEM status no registro: não apaga nada e avisa', async () => {

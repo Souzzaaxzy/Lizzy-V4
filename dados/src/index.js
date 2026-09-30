@@ -30038,20 +30038,37 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
 
         // Se for mensagem de pagamento, usa o método especial.
         //
-        // A revogação direta NÃO funciona para card de pagamento: o servidor
-        // ignora o REVOKE e a mensagem continua visível. O caminho que funciona
-        // passa por editar o alvo primeiro — cria uma mensagem temporária e
-        // manda uma EDIÇÃO cujo alvo é o id do pagamento, enviada COM o id do
-        // pagamento (`messageId`). Depois disso a revogação daquele id vale.
+        // A revogação direta NÃO funciona para card de pagamento. O caminho que
+        // funciona passa por editar o alvo primeiro: cria uma mensagem
+        // temporária (id descartável) e manda uma EDIÇÃO cujo ALVO é o id do
+        // pagamento, enviada COM o id do pagamento como id da stanza. Depois
+        // disso a revogação daquele id vale.
+        //
+        // IMPORTANTE (medido): `nazu.sendMessage(..., { messageId })` NÃO serve
+        // aqui. A fork monta as options com `...options` e SÓ DEPOIS
+        // `messageId: generateMessageIDV2(...)`, então o id pedido é
+        // sobrescrito — a stanza sairia com um id novo e o truque não teria
+        // efeito (o sintoma "mesmo efeito do del antigo"). Por isso o envio vai
+        // por `generateWAMessage` + `relayMessage`, que usa o id explícito
+        // (mesma técnica do `!raja`/`!divulgar`).
         if (isPaymentContent(quotedMessage)) {
           try {
+            const sendProtocol = async (content, targetId) => {
+              const built = await generateWAMessage(from, content, {
+                userJid: nazu?.user?.id,
+                messageId: targetId,
+              });
+              await nazu.relayMessage(from, built.message, { messageId: built.key.id });
+              return built;
+            };
+
             // PASSO 1: mensagem temporária, só para gerar um id descartável.
             const msgTemp = await nazu.sendMessage(from, { text: '' });
             const idTemp = msgTemp?.key?.id;
             if (!idTemp) throw new Error('falha ao gerar ID temporario');
 
             // PASSO 2: edita com o id do PAGAMENTO como id da stanza.
-            await nazu.sendMessage(from, buildPaymentEditContent('🗑️ Mensagem de pagamento removida', idTemp), { messageId: stanzaId });
+            await sendProtocol(buildPaymentEditContent('🗑️ Mensagem de pagamento removida', idTemp), stanzaId);
 
             await sleep(500);
 
@@ -30073,7 +30090,7 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
             let apagouPayment = false;
             for (const key of paymentKeys) {
               try {
-                await nazu.sendMessage(from, { delete: key });
+                await sendProtocol({ delete: key });
                 apagouPayment = true;
                 break;
               } catch (keyErr) {
@@ -30085,9 +30102,9 @@ packname: `${nomebot}`,            type: isVideo2 ? 'video' : 'image'
 
             // PASSO 4: apaga a mensagem temporária (é do bot).
             try {
-              await nazu.sendMessage(from, { delete: { remoteJid: from, id: idTemp, fromMe: true } });
+              await sendProtocol({ delete: { remoteJid: from, id: idTemp, fromMe: true } });
             } catch {
-              await nazu.sendMessage(from, {
+              await sendProtocol({
                 delete: { remoteJid: from, id: idTemp, fromMe: false, participant: nazu.user.id }
               }).catch(() => {});
             }

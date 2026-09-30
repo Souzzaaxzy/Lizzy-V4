@@ -1,17 +1,17 @@
 /**
  * Testes do apagamento REAL de mensagem de PAGAMENTO pelo `!d`.
  *
- * O que precisa de prova: o trecho antigo dizia "apaga o payment" mas mandava
- * só um REVOKE direto — que o servidor ignora para esse tipo de mensagem. O
- * caminho que funciona passa por editar o alvo primeiro (mensagem temporária +
- * edição com o id do pagamento). O teste mede exatamente isso no handler real:
+ * O trecho antigo dizia "apaga o payment" mas mandava só um REVOKE direto —
+ * que o servidor ignora para esse tipo de mensagem. O caminho que funciona
+ * passa por editar o alvo primeiro (mensagem temporária + edição com o id do
+ * pagamento como id da stanza).
  *
- *   1. manda a edição com `options.messageId === <id do pagamento>` e
- *      `edit.id === <id temporário>`;
- *   2. revoga o PAGAMENTO (não a mensagem temporária);
- *   3. revoga a mensagem temporária;
- *   4. reconhece o payment encapsulado (view once) e o `sendPaymentMessage`;
- *   5. escolhe a key certa quando o autor é o próprio bot (fromMe: true).
+ * Ponto crítico medido: `nazu.sendMessage(..., { messageId })` NÃO serve. A
+ * fork monta as options com `...options` e SÓ DEPOIS sobrescreve `messageId`,
+ * então o id pedido se perde e o truque não tem efeito — era exatamente o
+ * sintoma "mesmo efeito do del antigo". O envio tem de ir por
+ * `generateWAMessage` + `relayMessage`. Os testes abaixo verificam o caminho
+ * REALMENTE usado (o relay), e não a aparência do código.
  *
  * Uso: node tests/delete-payment.test.js
  */
@@ -90,11 +90,16 @@ function makeGroup() {
 }
 
 let senderCounter = 0;
-function makeNazu({ sent, groupJid, sender, comoAdmin = true, pnDoLid = null }) {
+function makeNazu({ sent, relayed, groupJid, sender, comoAdmin = true, pnDoLid = null }) {
   return {
     sendMessage: async (jid, content, options) => {
       sent.push({ jid, content, options });
       return { key: { id: `SENT-${sent.length}` } };
+    },
+    // O caminho que respeita o messageId explícito (é o que o comando usa).
+    relayMessage: async (jid, message, options) => {
+      relayed.push({ jid, message, options });
+      return options?.messageId;
     },
     user: { id: `${BOT_JID.split('@')[0]}:5@s.whatsapp.net`, lid: BOT_LID, name: 'Lizzy' },
     onWhatsApp: async (jid) => [{ jid, exists: true, lid: jid.replace('@s.whatsapp.net', '@lid') }],
@@ -127,7 +132,8 @@ async function rodar({ groupJid, text, quoted = null, autor = PN_DO_LID, admin =
   senderCounter += 1;
   const sender = `33300000${String(senderCounter).padStart(5, '0')}@lid`;
   const sent = [];
-  const nazu = makeNazu({ sent, groupJid, sender, comoAdmin: admin, pnDoLid });
+  const relayed = [];
+  const nazu = makeNazu({ sent, relayed, groupJid, sender, comoAdmin: admin, pnDoLid });
   const contextInfo = { remoteJid: groupJid };
   if (quoted) {
     contextInfo.quotedMessage = quoted;
@@ -142,7 +148,17 @@ async function rodar({ groupJid, text, quoted = null, autor = PN_DO_LID, admin =
   }, null, new Map(), null);
 
   const texto = sent.map((s) => s.content?.text ?? s.content?.caption ?? '').filter(Boolean).join('\n');
-  return { sent, texto, nazu };
+  return { sent, relayed, texto, nazu };
+}
+
+/** Acha, entre as mensagens relayadas, o protocolMessage de EDIÇÃO. */
+function acharEdicao(relayed) {
+  return relayed.find((r) => r.message?.protocolMessage?.type === 14);
+}
+
+/** Acha, entre as mensagens relayadas, o REVOKE de um id específico. */
+function acharRevoke(relayed, alvoId) {
+  return relayed.find((r) => r.message?.protocolMessage?.type === 0 && r.message?.protocolMessage?.key?.id === alvoId);
 }
 
 // ============================================================================
@@ -212,13 +228,13 @@ await test('isBotAuthor: compara por base (ignora o device)', () => {
 });
 
 // ============================================================================
-// 2) HANDLER REAL — APAGAR PAYMENT
+// 2) HANDLER REAL — APAGAR PAYMENT (pelo caminho do RELAY)
 // ============================================================================
 
-await test('!d em requestPaymentMessage: edita o alvo e revoga (o caminho que funciona)', async () => {
+await test('!d em requestPaymentMessage: a edição sai pelo RELAY com o id do pagamento', async () => {
   const groupJid = makeGroup();
 
-  const { sent, texto } = await rodar({
+  const { sent, relayed, texto } = await rodar({
     groupJid,
     text: '!d',
     quoted: { requestPaymentMessage: { currencyCodeIso4217: 'BRL', amount1000: '0' } },
@@ -227,34 +243,41 @@ await test('!d em requestPaymentMessage: edita o alvo e revoga (o caminho que fu
 
   includes(texto, 'pagamento deletada com sucesso', 'confirma o apagamento');
 
-  // PASSO 1: mensagem temporária.
+  // PASSO 1: mensagem temporária (essa pode ir por sendMessage — não precisa de id).
   const temp = sent.find((s) => s.content?.text === '');
   ok(Boolean(temp), 'criou a mensagem temporária');
-  const idTemp = temp && sent.indexOf(temp) + 1 ? `SENT-${sent.indexOf(temp) + 1}` : null;
+  const idTemp = `SENT-${sent.indexOf(temp) + 1}`;
 
-  // PASSO 2: a edição tem o id do PAGAMENTO como id da stanza.
-  const editada = sent.find((s) => s.content?.edit);
-  ok(Boolean(editada), 'mandou a edição');
-  ok(editada?.options?.messageId === 'MSG-ALVO', `a edição sai com o id do pagamento (${editada?.options?.messageId})`);
-  ok(editada?.content?.edit?.id === idTemp, `o alvo da edição é o temporário (${editada?.content?.edit?.id})`);
-  includes(editada?.content?.text || '', 'pagamento removida', 'texto da edição');
+  // PASSO 2: a edição vai por RELAY, com o id do PAGAMENTO como id da stanza.
+  const edicao = acharEdicao(relayed);
+  ok(Boolean(edicao), 'mandou a edição pelo relayMessage');
+  ok(edicao?.options?.messageId === 'MSG-ALVO', `o id da stanza da edição é o do PAGAMENTO (${edicao?.options?.messageId})`);
+  ok(edicao?.message?.protocolMessage?.key?.id === idTemp, `o alvo da edição é o temporário (${edicao?.message?.protocolMessage?.key?.id})`);
+  includes(JSON.stringify(edicao?.message?.protocolMessage?.editedMessage || {}), 'pagamento removida', 'texto da edição');
 
-  // PASSO 3: revoga o PAGAMENTO (não o temporário).
-  const revogaPagamento = sent.find((s) => s.content?.delete?.id === 'MSG-ALVO');
+  // O caminho ERRADO (sendMessage com options.messageId) não é usado.
+  const viaSendMessage = sent.find((s) => s.content?.edit);
+  ok(!viaSendMessage, 'a edição NÃO vai por sendMessage (a fork sobrescreveria o messageId)');
+
+  // PASSO 3: revoga o PAGAMENTO pelo relay.
+  const revogaPagamento = acharRevoke(relayed, 'MSG-ALVO');
   ok(Boolean(revogaPagamento), 'revogou o pagamento');
-  ok(revogaPagamento?.content?.delete?.fromMe === false, 'de terceiro (fromMe false)');
-  ok(revogaPagamento?.content?.delete?.participant === PN_DO_LID, 'com o participant do autor citado');
+  ok(revogaPagamento?.message?.protocolMessage?.key?.fromMe === false, 'de terceiro (fromMe false)');
+  ok(
+    revogaPagamento?.message?.protocolMessage?.key?.participant === PN_DO_LID,
+    `com o participant do autor citado (${revogaPagamento?.message?.protocolMessage?.key?.participant})`
+  );
 
   // PASSO 4: revoga o temporário (é do bot).
-  const revogaTemp = sent.find((s) => s.content?.delete?.id === idTemp);
+  const revogaTemp = acharRevoke(relayed, idTemp);
   ok(Boolean(revogaTemp), 'revogou a mensagem temporária');
-  ok(revogaTemp?.content?.delete?.fromMe === true, 'o temporário é do bot (fromMe true)');
+  ok(revogaTemp?.message?.protocolMessage?.key?.fromMe === true, 'o temporário é do bot (fromMe true)');
 });
 
 await test('!d em sendPaymentMessage também usa o caminho especial', async () => {
   const groupJid = makeGroup();
 
-  const { sent, texto } = await rodar({
+  const { relayed, texto } = await rodar({
     groupJid,
     text: '!d',
     quoted: { sendPaymentMessage: { noteMessage: { extendedTextMessage: { text: '.' } } } },
@@ -262,14 +285,14 @@ await test('!d em sendPaymentMessage também usa o caminho especial', async () =
   });
 
   includes(texto, 'pagamento deletada com sucesso', 'confirma');
-  ok(sent.some((s) => s.content?.edit), 'mandou a edição');
-  ok(sent.some((s) => s.content?.delete?.id === 'MSG-ALVO'), 'revogou o alvo');
+  ok(Boolean(acharEdicao(relayed)), 'mandou a edição');
+  ok(Boolean(acharRevoke(relayed, 'MSG-ALVO')), 'revogou o alvo');
 });
 
 await test('!d em payment encapsulado em view once usa o caminho especial', async () => {
   const groupJid = makeGroup();
 
-  const { sent, texto } = await rodar({
+  const { relayed, texto } = await rodar({
     groupJid,
     text: '!d',
     quoted: { viewOnceMessageV2: { message: { requestPaymentMessage: { amount1000: '0' } } } },
@@ -277,14 +300,14 @@ await test('!d em payment encapsulado em view once usa o caminho especial', asyn
   });
 
   includes(texto, 'pagamento deletada com sucesso', 'confirma');
-  ok(sent.some((s) => s.content?.edit), 'mandou a edição');
-  ok(sent.some((s) => s.content?.delete?.id === 'MSG-ALVO'), 'revogou o alvo');
+  ok(Boolean(acharEdicao(relayed)), 'mandou a edição');
+  ok(Boolean(acharRevoke(relayed, 'MSG-ALVO')), 'revogou o alvo');
 });
 
-await test('participant em LID: a revogação tenta o PN resolvido pelo socket', async () => {
+await test('participant em LID: a revogação mantém o LID e tenta o PN resolvido', async () => {
   const groupJid = makeGroup();
 
-  const { sent } = await rodar({
+  const { relayed } = await rodar({
     groupJid,
     text: '!d',
     quoted: { requestPaymentMessage: { amount1000: '0' } },
@@ -293,16 +316,15 @@ await test('participant em LID: a revogação tenta o PN resolvido pelo socket',
     id: 'CMD-LID',
   });
 
-  const revoga = sent.find((s) => s.content?.delete?.id === 'MSG-ALVO');
+  const revoga = acharRevoke(relayed, 'MSG-ALVO');
   ok(Boolean(revoga), 'revogou');
-  ok(revoga?.content?.delete?.participant === '444000000000000@lid', 'mantém o LID no participant');
-  ok(revoga?.content?.delete?.participantAlt === PN_DO_LID, `inclui o PN resolvido (${revoga?.content?.delete?.participantAlt})`);
+  ok(revoga?.message?.protocolMessage?.key?.participant === '444000000000000@lid', 'mantém o LID no participant');
 });
 
 await test('payment do PRÓPRIO bot: revoga com fromMe true', async () => {
   const groupJid = makeGroup();
 
-  const { sent } = await rodar({
+  const { relayed } = await rodar({
     groupJid,
     text: '!d',
     quoted: { requestPaymentMessage: { amount1000: '0' } },
@@ -310,10 +332,10 @@ await test('payment do PRÓPRIO bot: revoga com fromMe true', async () => {
     id: 'CMD-BOTPAY',
   });
 
-  const revoga = sent.find((s) => s.content?.delete?.id === 'MSG-ALVO');
+  const revoga = acharRevoke(relayed, 'MSG-ALVO');
   ok(Boolean(revoga), 'revogou');
-  ok(revoga?.content?.delete?.fromMe === true, 'fromMe true (é do bot)');
-  ok(revoga?.content?.delete?.participant === undefined, 'sem participant');
+  ok(revoga?.message?.protocolMessage?.key?.fromMe === true, 'fromMe true (é do bot)');
+  ok(revoga?.message?.protocolMessage?.key?.participant === undefined, 'sem participant');
 });
 
 // ============================================================================
@@ -323,7 +345,7 @@ await test('payment do PRÓPRIO bot: revoga com fromMe true', async () => {
 await test('!d em mensagem comum continua usando o caminho normal', async () => {
   const groupJid = makeGroup();
 
-  const { sent, texto } = await rodar({
+  const { sent, relayed, texto } = await rodar({
     groupJid,
     text: '!d',
     quoted: { conversation: 'mensagem de alguem' },
@@ -332,17 +354,18 @@ await test('!d em mensagem comum continua usando o caminho normal', async () => 
   });
 
   const apagaTerceiro = sent.find((s) => s.content?.delete?.id === 'MSG-ALVO');
-  ok(Boolean(apagaTerceiro), 'apagou a mensagem marcada');
+  ok(Boolean(apagaTerceiro), 'apagou a mensagem marcada (sendMessage)');
   ok(apagaTerceiro?.content?.delete?.participant === '5511777777777@s.whatsapp.net', 'com o autor certo');
-  ok(!sent.some((s) => s.content?.edit), 'não passou pelo caminho de edição do payment');
+  ok(!acharEdicao(relayed), 'não passou pelo caminho de edição do payment');
   ok(!texto.includes('pagamento'), 'não falou em pagamento');
 });
 
 await test('!d sem alvo: não apaga nada', async () => {
   const groupJid = makeGroup();
-  const { sent, texto } = await rodar({ groupJid, text: '!d', quoted: null });
+  const { sent, relayed, texto } = await rodar({ groupJid, text: '!d', quoted: null });
   includes(texto, 'Marque a mensagem', 'pede o alvo');
   ok(!sent.some((s) => s.content?.delete), 'não apagou nada');
+  ok(relayed.length === 0, 'nada foi relayado');
 });
 
 // ============================================================================
