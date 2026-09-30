@@ -8029,3 +8029,42 @@ Handler real com socket falso: `!aura`/`!sigma` (frase + menção, GIF/imagem do
 abaixo de 50% em 25 execuções), `!inferno` (0-100%), `!frio`/`!fria` (0-100% +
 GIF), presença dos 8 no `menubn`/`blockPv` e no `validCommands` do `!setgif`.
 Usa `DATABASE_PATH` temporário: **não toca** o `dados/database` real.
+
+## Pacote MEME — 17 gírias da geração Z no `menubn` (set/2026) ✅
+Segundo pedido do dono (depois dos 8 de BRINCADEIRAS): comandos de meme com
+frase sorteada + GIF do `!setgif`. As frases foram pesquisadas nas gírias
+atuais (2025) para ficarem fiéis ao que circula na internet.
+
+### Comandos
+`!rizz`, `!delulu`, `!brainrot`, `!cringe`, `!based`, `!yap`, `!glazing`,
+`!mogado`, `!chad`, `!beta`, `!mewing`, `!gyatt`, `!skibidi`, `!sixseven`,
+`!ohio`, `!looksmaxxing`, `!gag` — **5 frases** por comando, no mesmo molde do
+`!aura`/`!sigma` (menção real do alvo, mídia de `gifsbn/<cmd>.*` via
+`resolveBrincadeiraMedia`, `!setgif` aceita todos).
+
+### Base das frases (pesquisa)
+- **rizz** — abreviação de charisma; `W rizz` (ganhou), `L rizz` (fumbleou),
+  `unspoken rizz`, `rizzler` (Kai Cenat/TikTok).
+- **delulu** — de "delusional"; lema `delulu is the solulu`.
+- **brainrot** — "podridão cerebral"; `Tralalero Tralala` (brainrot italiano).
+- **cringe** — vergonha alheia/cafona (ex.: "bom dia princesa" com girassol).
+- **based** — opinião corajosa/verdadeira, sem pedir desculpa.
+- **yap** — falar demais; `glazing` — elogiar/puxar saco exageradamente.
+- **mogado** — `mogging`, dominar pela aparência (looksmaxxing/manosfera).
+- **chad** / **beta** — o alpha respeitado vs o que só concorda.
+- **mewing** — exercício de maxilar/jawline; **gyatt** — "goddamn" (glúteos).
+- **skibidi** — série Skibidi Toilet, sem definição fixa; **ohio** — caos/absurdo.
+- **sixseven** — meme 6-7 (LaMelo Ball 6'7", música "Doot Doot" do Skrilla,
+  gesto da balança); **looksmaxxing** — ascender/ficar chad.
+- **gag** — choque/espanto (cultura drag, RuPaul's Drag Race).
+
+### Menu / blockPv
+Linhas na categoria BRINCADEIRAS, logo após o `!sigma`; registrados em
+`menuCommandsMap.menubn` (`utils/blockPv.js`). Baseline do `menu-layout`:
+**menubn 358 -> 375**.
+
+### Testes — `tests/brincadeiras-novas.test.js` (**39 testes / 369 asserções**)
+Os 17 memes no handler real (frase + menção, sem `undefined`/`null`/`NaN`),
+sorteio variando em 30 execuções, GIF (`gifsbn/delulu.gif`) e imagem
+(`gifsbn/sixseven.jpg`), fora de grupo recusando, presença no `menubn` (uma vez
+cada) e no `blockPv`, e `!setgif` aceitando os 17.

@@ -19996,7 +19996,7 @@ case 'addaluguel':
           const cmdName = q.trim().toLowerCase();
           
           // Lista de comandos de brincadeira válidos
-          const validCommands = ['tapa', 'soco', 'socar', 'beijo', 'beijar', 'beijob', 'beijarb', 'abraco', 'abracar', 'mata', 'matar', 'tapar', 'goza', 'gozar', 'mamar', 'mamada', 'cafune', 'morder', 'mordida', 'lamber', 'lambida', 'explodir', 'sexo', 'siririca', 'punheta', 'chute', 'chutar', 'tomate', 'compatibilidade', 'rankputo', 'rankputa', 'rankpauzudo', 'rankbucetuda', 'pgpau', 'pgpeito', 'pgbunda', 'aura', 'sigma', 'ceu', 'inferno', 'frio', 'fria'];
+          const validCommands = ['tapa', 'soco', 'socar', 'beijo', 'beijar', 'beijob', 'beijarb', 'abraco', 'abracar', 'mata', 'matar', 'tapar', 'goza', 'gozar', 'mamar', 'mamada', 'cafune', 'morder', 'mordida', 'lamber', 'lambida', 'explodir', 'sexo', 'siririca', 'punheta', 'chute', 'chutar', 'tomate', 'compatibilidade', 'rankputo', 'rankputa', 'rankpauzudo', 'rankbucetuda', 'pgpau', 'pgpeito', 'pgbunda', 'aura', 'sigma', 'ceu', 'inferno', 'frio', 'fria', 'rizz', 'delulu', 'brainrot', 'cringe', 'based', 'yap', 'glazing', 'mogado', 'chad', 'beta', 'mewing', 'gyatt', 'skibidi', 'sixseven', 'ohio', 'looksmaxxing', 'gag'];
           
           if (!validCommands.includes(cmdName)) {
             return reply(`❌ Esse comando não existe.\n\nComandos disponíveis:\n${validCommands.join(', ')}`);
@@ -39993,6 +39993,188 @@ case 'hotseat': {
           ];
 
           const frases = command === 'sigma' ? frasesSigma : frasesAura;
+          const responseText = frases[Math.floor(Math.random() * frases.length)];
+
+          // Media do !setgif / arquivo solto na pasta gifsbn.
+          let gamesDataMeme = fs.existsSync(__dirname + '/funcs/json/games.json') ? JSON.parse(fs.readFileSync(__dirname + '/funcs/json/games.json')) : { games2: {} };
+          const { media } = resolveBrincadeiraMedia(gamesDataMeme.games2?.[command], command);
+          const resolveMediaPath = (url) => resolveGifsbnMediaUrl(url, __dirname);
+
+          if (media?.image) {
+            const imagePath = resolveMediaPath(typeof media.image === 'object' ? media.image.url : media.image);
+            if (imagePath.startsWith('http')) {
+              await nazu.sendMessage(from, { image: { url: imagePath }, caption: responseText, mentions: [targetUser] });
+            } else if (fs.existsSync(imagePath)) {
+              await nazu.sendMessage(from, { image: fs.readFileSync(imagePath), caption: responseText, mentions: [targetUser] });
+            } else {
+              await nazu.sendMessage(from, { text: responseText, mentions: [targetUser] });
+            }
+          } else if (media?.video) {
+            const videoPath = resolveMediaPath(typeof media.video === 'object' ? media.video.url : media.video);
+            if (videoPath.startsWith('http')) {
+              await nazu.sendMessage(from, { video: { url: videoPath }, caption: responseText, mentions: [targetUser], gifPlayback: true });
+            } else if (fs.existsSync(videoPath)) {
+              await nazu.sendMessage(from, { video: fs.readFileSync(videoPath), caption: responseText, mentions: [targetUser], gifPlayback: true });
+            } else {
+              await nazu.sendMessage(from, { text: responseText, mentions: [targetUser] });
+            }
+          } else {
+            await nazu.sendMessage(from, { text: responseText, mentions: [targetUser] });
+          }
+        } catch (e) {
+          console.error(e);
+          await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
+        }
+        break;
+
+      // PACOTE MEME — gírias/memes da geração Z (frase sorteada + GIF do !setgif).
+      case 'rizz':
+      case 'delulu':
+      case 'brainrot':
+      case 'cringe':
+      case 'based':
+      case 'yap':
+      case 'glazing':
+      case 'mogado':
+      case 'chad':
+      case 'beta':
+      case 'mewing':
+      case 'gyatt':
+      case 'skibidi':
+      case 'sixseven':
+      case 'ohio':
+      case 'looksmaxxing':
+      case 'gag':
+        try {
+          if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
+          if (!isModoBn) return reply('❌ O modo brincadeira não está ativo nesse grupo.');
+
+          const targetUser = menc_os2 || sender;
+          const targetName = `@${getUserName(targetUser)}`;
+
+          const FRASES_MEME = {
+            rizz: [
+              `${targetName} tem W rizz, chegou na conversa e dominou tudo 😎`,
+              `${targetName} tá com L rizz, tentou flertar e fumbleou feio 💀`,
+              `${targetName} é o rizzler oficial do grupo, ninguém resiste 👑`,
+              `${targetName} tem unspoken rizz: só ficou parado na parede e ainda chamou atenção 🗿`,
+              `${targetName} farmou rizz de milhões hoje, tá impossível competir 🔥`
+            ],
+            delulu: [
+              `${targetName} tá delulu achando que o crush vai responder o story 💭`,
+              `${targetName} vivendo o lema: delulu is the solulu ✨`,
+              `${targetName} tá delulu nível "ele curtiu, então já tô escolhendo o vestido" 👰`,
+              `${targetName} delulu de milhões, mas confiante como ninguém 🧠`,
+              `${targetName} dormiu delulu e acordou delulu de novo, é estilo de vida 😌`
+            ],
+            brainrot: [
+              `${targetName} tá com brainrot nível Tralalero Tralala 🦈👟`,
+              `${targetName} assistiu 6h de brainrot e agora só fala "skibidi" 🧠📉`,
+              `${targetName} foi buscar o cérebro no achados e perdidos, o brainrot levou 🧠🔍`,
+              `${targetName} tá com brainrot italiano, só pensa em capivara de tênis 🦫👟`,
+              `${targetName} entrou em modo brainrot: dopamina rápida e zero neurônio 📱💥`
+            ],
+            cringe: [
+              `${targetName} mandou "bom dia princesa" com emoji de girassol. cringe até dizer chega 🌻😬`,
+              `${targetName} dançou a dancinha no meio do grupo. cringe pesado 😖`,
+              `${targetName} tá com cringe de postar print de conversa 🖼️😖`,
+              `${targetName} respondeu a própria mensagem pra farmar atenção, cringe puro 🙈`,
+              `${targetName} explicou a própria piada, cringe nível máximo 😬`
+            ],
+            based: [
+              `${targetName} falou a verdade sem medo: based demais 🗿`,
+              `${targetName} tem opinião based, o grupo não estava pronto 🧊`,
+              `${targetName} tá based, ninguém pode negar 👑`,
+              `${targetName} disse o que todos pensavam e virou o based do dia 🏆`,
+              `${targetName} é based até quando tá errado, e isso é o mais based possível 😎`
+            ],
+            yap: [
+              `${targetName} tá yapping há 3 horas e ainda não chegou no ponto 🗣️`,
+              `${targetName} mandou 47 áudios seguidos, yap level lendário 🎙️`,
+              `${targetName} tá de yap infinito, alguém dá um pause nele ⏸️`,
+              `${targetName} escreveu um texto maior que a bíblia. yap master 📜`,
+              `${targetName} yapping tanto que o grupo virou podcast dele 🎧`
+            ],
+            glazing: [
+              `${targetName} tá glazing o crush tanto que já dá pra ver o brilho ✨`,
+              `${targetName} glazing nível "ele é perfeito" e o cara nem sabe que existe 🫠`,
+              `${targetName} tá de glazing, só falta passar cera no ego do outro 🧴`,
+              `${targetName} glazing desnecessário detectado, segura o exagero 🚨`,
+              `${targetName} é o rei do glazing, elogia até quem não merece 👑`
+            ],
+            mogado: [
+              `${targetName} foi mogado e nem percebeu, não sobrou nada 💀`,
+              `${targetName} entrou na foto e mogou todo mundo, que isso 🗿`,
+              `${targetName} tentou competir e foi mogado na hora 😬`,
+              `${targetName} mogou geral na foto de perfil, é o chad do grupo 📸`,
+              `${targetName} foi mogado no looksmaxxing, precisa voltar pra prancheta 📋`
+            ],
+            chad: [
+              `${targetName} é o chad do grupo, respeita o gigachad 🗿`,
+              `${targetName} acordou, treinou e tomou banho gelado. chad certificado 🧊`,
+              `${targetName} virou chad depois de parar de reclamar 💪`,
+              `${targetName} é chad de verdade, nem precisa falar nada 🐺`,
+              `${targetName} tá com energia de chad: calado, focado e no shape 👑`
+            ],
+            beta: [
+              `${targetName} tá no modo beta, deixa o alpha passar 😔`,
+              `${targetName} virou beta depois de pedir desculpa sem motivo 🫠`,
+              `${targetName} tem energia beta: só concorda e nunca reclama 📉`,
+              `${targetName} beta demais, cedeu o lugar no debate pro chad 😅`,
+              `${targetName} tá beta mode, perdeu a discussão e ainda agradeceu 🤝`
+            ],
+            mewing: [
+              `${targetName} tá mewing, não pode falar agora pra não perder o ângulo 🗿`,
+              `${targetName} faz mewing desde os 12, o maxilar é um monumento 🦴`,
+              `${targetName} tá com mewing streak de 3 anos, jawline de vidro 💎`,
+              `${targetName} tá mewing até dormindo, foco total no maxilar 😤`,
+              `${targetName} virou mewing god, já corta papel com o queixo 📄`
+            ],
+            gyatt: [
+              `${targetName} viu a gyatt e travou o sistema 🍑😳`,
+              `${targetName} tá com gyatt de nível lendário, o grupo parou 🍑`,
+              `${targetName} soltou um "GYATT" e o grupo inteiro entendeu 🍑🗣️`,
+              `${targetName} é gyatt certified, respeita o patrimônio 🍑👑`,
+              `${targetName} virou meme de gyatt, todo mundo comentou 🍑😂`
+            ],
+            skibidi: [
+              `${targetName} tá skibidi demais hoje, ninguém entendeu nada 🚽`,
+              `${targetName} virou skibidi, só fala coisa sem sentido 🚽🗣️`,
+              `${targetName} tá com energia skibidi toilet, subiu no vaso e saiu 🚽`,
+              `${targetName} skibidi sigma rizz, o combo completo do brainrot 🚽🗿`,
+              `${targetName} tá skibidi até no bom dia, já nem traduz mais 🚽😵`
+            ],
+            sixseven: [
+              `${targetName} soltou o six seven e o grupo respondeu em coro 6️⃣7️⃣`,
+              `${targetName} faz o gesto da balança e fala "six seven" do nada 🗿`,
+              `${targetName} tá com energia 6-7: sem significado, mas muito engajado 📈`,
+              `${targetName} respondeu "6-7" pra uma pergunta séria e ninguém reclamou 6️⃣7️⃣`,
+              `${targetName} virou o six seven kid do grupo, repete isso o dia todo 🔁`
+            ],
+            ohio: [
+              `${targetName} tá no modo Ohio, as regras não se aplicam mais 🌪️`,
+              `${targetName} fez uma coisa tão estranha que só pode ser em Ohio 🏚️`,
+              `${targetName} é direto de Ohio, aqui nada faz sentido 🐄`,
+              `${targetName} só em Ohio pra isso acontecer, o grupo tá chocado 🌪️`,
+              `${targetName} tá com energia Ohio: caótico, estranho e inexplicável 🌀`
+            ],
+            looksmaxxing: [
+              `${targetName} entrou no looksmaxxing e já quer ascender 🗿`,
+              `${targetName} tá no hardmaxxing, comendo só frango e arroz 🍗`,
+              `${targetName} no grind do looksmaxxing pra virar chad 📈`,
+              `${targetName} descobriu o looksmaxxing e agora só fala de jawline 🦴`,
+              `${targetName} vai ascender depois do looksmaxxing, aguardem 🚀`
+            ],
+            gag: [
+              `${targetName} fez isso e o grupo todo ficou gag 😳`,
+              `${targetName} entregou um gag de la gag, nível máximo de choque 💅`,
+              `${targetName} tá gag com a fofoca nova, sem palavras 😱`,
+              `${targetName} causou um gag coletivo, todos paralisados 🫢`,
+              `${targetName} é puro gag: cada mensagem é um evento 🎭`
+            ]
+          };
+
+          const frases = FRASES_MEME[command] || [`${targetName} é puro ${command} 🗿`];
           const responseText = frases[Math.floor(Math.random() * frases.length)];
 
           // Media do !setgif / arquivo solto na pasta gifsbn.

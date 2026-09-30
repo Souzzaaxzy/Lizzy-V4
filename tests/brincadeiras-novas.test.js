@@ -347,6 +347,93 @@ await test('!setgif aceita os comandos novos', () => {
 });
 
 // ============================================================================
+// 5) PACOTE MEME (gírias geração Z)
+// ============================================================================
+
+const MEMES = ['rizz', 'delulu', 'brainrot', 'cringe', 'based', 'yap', 'glazing',
+  'mogado', 'chad', 'beta', 'mewing', 'gyatt', 'skibidi', 'sixseven', 'ohio',
+  'looksmaxxing', 'gag'];
+
+for (const cmd of MEMES) {
+  await test(`!${cmd}: frase + menção real (sem mídia)`, async () => {
+    const run = await runCommand(cmd);
+    ok(run.sent.length >= 1, 'enviou resposta');
+    ok(run.text.length > 0, 'tem texto');
+    notIncludes(run.text, 'undefined', 'sem undefined');
+    notIncludes(run.text, 'null', 'sem null');
+    notIncludes(run.text, 'NaN', 'sem NaN');
+    ok(run.allMentions.includes(run.targetJid) || run.allMentions.includes(run.targetLid),
+      `alvo presente nas mentions: ${JSON.stringify(run.allMentions)}`);
+    includes(run.text, `@${run.targetLid.split('@')[0]}`, 'texto menciona o alvo');
+  });
+}
+
+await test('!rizz: frases são sorteadas (não sai sempre a mesma)', async () => {
+  const vistas = new Set();
+  for (let i = 0; i < 30; i++) vistas.add((await runCommand('rizz')).text);
+  ok(vistas.size >= 2, `frases variam (${vistas.size} distintas em 30)`);
+});
+
+await test('!delulu: usa gifsbn/delulu.gif quando definido', async () => {
+  criarMidia('delulu', 'gif');
+  const run = await runCommand('delulu');
+  ok(Boolean(run.mediaMsg?.content?.video), 'enviou o GIF');
+  ok(run.mediaMsg?.content?.gifPlayback === true, 'gifPlayback ativo');
+  ok((run.mediaMsg?.content?.caption || '').length > 0, 'frase foi na legenda');
+});
+
+await test('!sixseven: usa gifsbn/sixseven.jpg (imagem)', async () => {
+  criarMidia('sixseven', 'jpg', Buffer.from('fake-jpg'));
+  const run = await runCommand('sixseven');
+  ok(Boolean(run.mediaMsg?.content?.image), 'enviou a imagem');
+  ok((run.mediaMsg?.content?.caption || '').length > 0, 'frase foi na legenda');
+});
+
+await test('!skibidi: fora de grupo é recusado', async () => {
+  const sent = [];
+  const nazu = makeNazu({ sent, groupJid: 'x@g.us', authorLid: '1@lid', authorJid: '1@s.whatsapp.net', targetLid: '2@lid', targetJid: '2@s.whatsapp.net' });
+  const info = {
+    key: { remoteJid: '5511999998888@s.whatsapp.net', fromMe: false, id: 'PV-MEME', participant: '1@lid' },
+    message: { extendedTextMessage: { text: '!skibidi', contextInfo: {} } },
+    messageTimestamp: 1757900000,
+    pushName: 'Autor',
+  };
+  await handleMessage(nazu, info, null, new Map(), null);
+  const text = sent.map((s) => s.content?.text ?? s.content?.caption ?? '').join('\n');
+  includes(text, 'grupos', 'avisa que é só para grupos');
+});
+
+await test('menubn: os 17 memes estão na categoria BRINCADEIRAS', async () => {
+  const menus = await import(new URL('../dados/src/menus/menubn.js', import.meta.url).href);
+  const layout = await import(new URL('../dados/src/menus/layout.js', import.meta.url).href);
+  const texto = String(await menus.default('!', 'Lizzy', 'Tester', false));
+  const idx = texto.indexOf(layout.boldItalic('BRINCADEIRAS'));
+  ok(idx !== -1, 'categoria BRINCADEIRAS presente');
+  const bloco = texto.slice(idx, texto.indexOf('╰', idx));
+  for (const cmd of MEMES) {
+    includes(bloco, `!${cmd}`, `${cmd} na categoria BRINCADEIRAS`);
+    ok((texto.match(new RegExp(`!${cmd}\\b`, 'g')) || []).length === 1, `!${cmd} aparece uma única vez`);
+  }
+});
+
+await test('blockPv: os 17 memes estão registrados no menubn', async () => {
+  const blockPv = await import(new URL('../dados/src/utils/blockPv.js', import.meta.url).href);
+  const lista = blockPv.menuCommandsMap?.menubn?.commands || [];
+  for (const cmd of MEMES) {
+    ok(lista.includes(cmd), `${cmd} registrado no menubn`);
+  }
+});
+
+await test('!setgif aceita os memes', () => {
+  const src = fs.readFileSync(path.join(PROJECT, 'dados/src/index.js'), 'utf-8');
+  const match = /const validCommands = \[([^\]]+)\];/.exec(src);
+  ok(Boolean(match), 'lista de comandos válidos encontrada');
+  for (const cmd of MEMES) {
+    includes(match[1], `'${cmd}'`, `setgif aceita ${cmd}`);
+  }
+});
+
+// ============================================================================
 
 for (const f of criados) {
   try { fs.rmSync(f, { force: true }); } catch { /* já removido */ }
