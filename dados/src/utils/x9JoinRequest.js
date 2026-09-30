@@ -113,23 +113,51 @@ export function recordJoinRequest(databaseDir, inf) {
  * @param {Function} [deps.loadGroupSettings]  carrega as configs do grupo
  * @returns {Promise<{ignorado: boolean, motivo?: string, card?: object}>}
  */
-export async function handleJoinRequestEvent({ sock, inf, databaseDir, processNewJoinRequest, loadGroupSettings }) {
+export async function handleJoinRequestEvent({ sock, inf, databaseDir, processNewJoinRequest, loadGroupSettings, notifyRejection }) {
   const { id: groupId, action } = inf || {};
 
-  if (!isNewJoinRequest(action)) {
-    return { ignorado: true, motivo: `action=${action}` };
+  // PEDIDO NOVO -> card de solicitação.
+  if (isNewJoinRequest(action)) {
+    if (groupId && databaseDir) recordJoinRequest(databaseDir, inf);
+
+    if (!sock || typeof processNewJoinRequest !== 'function') {
+      return { acao: 'novo', card: null };
+    }
+
+    const groupSettings = typeof loadGroupSettings === 'function'
+      ? await loadGroupSettings(groupId)
+      : { x9: true };
+
+    const card = await processNewJoinRequest(sock, inf, groupSettings);
+    return { acao: 'novo', card };
   }
 
-  if (groupId && databaseDir) recordJoinRequest(databaseDir, inf);
+  // RECUSA -> card de "quem recusou".
+  //
+  // MEDIDO: a recusa NÃO gera `group-participants.update`. Em `messages-recv.js`
+  // o `revoked_membership_requests` só preenche `messageStubType`/
+  // `messageStubParameters` — o `emitParticipantsUpdate` é chamado apenas nos
+  // casos de `add`/`remove`/`promote`/`demote`. Então quem chega aqui é a ÚNICA
+  // oportunidade de emitir o card de recusa; sem isto, o adm recusa e nada é
+  // enviado.
+  //
+  // O solicitante vem do PN (o `normalizeJid` do x9System devolve `null` para
+  // LID, então o store é chaveado pelo número) e o ator é quem recusou.
+  if (action === 'rejected') {
+    const requester = resolveJoinRequester(inf);
+    const actor = resolveJoinActor(inf);
 
-  if (!sock || typeof processNewJoinRequest !== 'function') {
-    return { ignorado: false, card: null };
+    if (groupId && databaseDir) recordJoinRequest(databaseDir, inf);
+
+    if (!sock || !groupId || !requester || !actor || typeof notifyRejection !== 'function') {
+      return { acao: 'recusa', enviado: false, requester, actor };
+    }
+
+    const card = await notifyRejection({ sock, groupId, requester, actor, inf });
+    return { acao: 'recusa', enviado: Boolean(card), card, requester, actor };
   }
 
-  const groupSettings = typeof loadGroupSettings === 'function'
-    ? await loadGroupSettings(groupId)
-    : { x9: true };
-
-  const card = await processNewJoinRequest(sock, inf, groupSettings);
-  return { ignorado: false, card };
+  // CANCELAMENTO pelo próprio solicitante: o pedido saiu, mas "negado por @X"
+  // seria mentira (o ator é o próprio solicitante). Não se envia card.
+  return { acao: 'ignorado', motivo: `action=${action}` };
 }

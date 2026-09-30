@@ -31,6 +31,7 @@ import {
     processNewJoinRequest,
     notifyWhatsAppApproval,
     notifyWhatsAppRejection,
+    notifyRejection,
     notifyGroupChange,
     isGroupAdmin,
     cleanupX9System
@@ -1510,10 +1511,20 @@ async function createBotSocket(authDir) {
                 databaseDir: DATABASE_DIR,
                 processNewJoinRequest,
                 loadGroupSettings,
+                notifyRejection,
             });
 
-            if (resultado.ignorado) {
-                console.log(`[X9] Evento ignorado (${resultado.motivo}): so "created" e pedido novo`);
+            if (resultado.acao === 'recusa') {
+                // A recusa NAO gera `group-participants.update` (medido no
+                // messages-recv.js): este e o unico ponto que pode emitir o card.
+                console.log(resultado.enviado
+                    ? `[X9] Card de recusa enviado (por ${resultado.actor})`
+                    : '[X9] Recusa sem pedido pendente para avisar');
+                return;
+            }
+
+            if (resultado.acao === 'ignorado') {
+                console.log(`[X9] Evento ignorado (${resultado.motivo})`);
                 return;
             }
 

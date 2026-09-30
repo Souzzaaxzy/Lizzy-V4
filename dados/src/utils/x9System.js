@@ -848,6 +848,82 @@ export async function notifyWhatsAppRejection(sock, groupId, participantJid, adm
 }
 
 /**
+ * Envia o card de REJEIÇÃO a partir do evento de recusa.
+ *
+ * Diferente de `updateCardOnReject` (usado pelo comando `!recusarsolic`), aqui
+ * NÃO há `quotedMessage` — a origem é o evento `group.join-request`, que só
+ * carrega os JIDs. A pessoa vem do PN: o store é chaveado pelo número (o
+ * `normalizeJid` devolve `null` para LID), então buscar pelo LID não acharia
+ * nada.
+ *
+ * Devolve a mensagem enviada, ou `null` quando não há pedido pendente para essa
+ * pessoa (ex.: o bot reiniciou e o store em memória se perdeu).
+ *
+ * @param {{sock: object, groupId: string, requester: string, actor: string}} deps
+ */
+export async function notifyRejection({ sock, groupId, requester, actor }) {
+    if (!sock || !groupId || !requester) return null;
+
+    const req = x9Store.get(groupId, requester)
+        || x9Store.getByParticipantNumber(String(requester).split('@')[0]);
+
+    if (!req || req.status !== 'pending') {
+        console.log('[X9] Recusa sem pedido pendente para', requester);
+        return null;
+    }
+
+    const now = new Date();
+    const vars = {
+        numero: req.participantNumber,
+        hora: formatTime(now),
+        admin: String(actor).split('@')[0],
+        pais: req.pais || 'Desconhecido 🌐'
+    };
+
+    const rejectedText = parseTemplate(X9_REJECTED_TEMPLATE, vars);
+
+    // Apaga o card de solicitação original, se ainda existir.
+    if (req.messageId) {
+        try {
+            await sock.sendMessage(groupId, {
+                delete: { id: req.messageId, remoteJid: groupId, fromMe: true }
+            });
+        } catch (e) {
+            console.log('[X9] Erro ao deletar card na recusa:', e.message);
+        }
+    }
+
+    let photoUrl = null;
+    try {
+        photoUrl = await sock.profilePictureUrl(req.participantJid, 'image');
+    } catch (e) {
+        console.log('[X9] Sem foto de perfil');
+    }
+
+    const mentions = [req.participantJid, actor].filter(Boolean);
+
+    let sent;
+    if (photoUrl) {
+        sent = await sock.sendMessage(groupId, {
+            image: { url: photoUrl },
+            caption: rejectedText,
+            contextInfo: X9_NEWSLETTER_CTX,
+            mentions
+        });
+    } else {
+        sent = await sock.sendMessage(groupId, {
+            text: rejectedText,
+            contextInfo: X9_NEWSLETTER_CTX,
+            mentions
+        });
+    }
+
+    x9Store.update(groupId, req.participantJid, { status: 'rejected' });
+    console.log(`[X9] Recusado por ${vars.admin}`);
+    return sent;
+}
+
+/**
  * Envia notificação de mudança no grupo (nome, descrição, etc)
  */
 export async function notifyGroupChange(sock, groupId, changeType, adminJid, extraData = {}) {

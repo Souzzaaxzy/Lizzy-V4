@@ -5094,6 +5094,38 @@ reenviado").
 
 ### Dependencia
 `package-lock.json` + `yarn.lock` pinados em `e6ed0a7` (hash completo). Sem o
+
+#### CORRECAO: a recusa NAO gera `group-participants.update` (set/2026) ✅
+A primeira correcao parou o card errado, mas **nao** fez o certo: o dono relatou
+que a recusa **nao enviava card nenhum**.
+
+**Causa medida** (`lib/Socket/messages-recv.js`): o stub
+`revoked_membership_requests` apenas preenche `messageStubType`/
+`messageStubParameters`. O `emitParticipantsUpdate` so e chamado nos casos de
+`add` / `remove` / `promote` / `demote`. Ou seja: a recusa **nao emite**
+`group-participants.update` — o unico ponto que podia emitir o card de recusa
+era o proprio listener de `group.join-request`.
+
+(O `add` da APROVACAO funciona porque aprovacao realmente gera
+`group-participants.update` com `action: 'add'`. Por isso a aprovacao nunca teve
+o problema — so a recusa.)
+
+**Correcao**: `handleJoinRequestEvent` passou a ter TRES saidas explicitas:
+- `acao: 'novo'` -> card de solicitacao;
+- `acao: 'recusa'` -> card de "negado por @X" (novo `notifyRejection` no
+  `x9System.js`, que busca o pendente pelo **PN** — o `normalizeJid` do modulo
+  devolve `null` para LID, entao o store e chaveado pelo numero);
+- `acao: 'ignorado'` -> cancelamento (`revoked`): nao envia nada, porque
+  "negado por @X" seria mentira (o ator e o proprio solicitante).
+
+**Bug pego pelo proprio teste**: o `notifyRejection` estava sendo chamado sem o
+`sock`, entao nunca enviava. O teste de integracao falhou (4 assercoes) e
+apontou exatamente isso — o mesmo tipo de erro que a rodada anterior deixou
+passar.
+
+**Teste**: `tests/x9-join-request.test.js` **11 testes / 49 assercoes**. A
+recusa agora exige o card de NEGADA (com o PN de quem recusou) e proibe o card
+de solicitacao. Removendo o `sock` da chamada, **4 assercoes falham**.
 commit instalado, a `action` volta a chegar `undefined` e a recusa reenvia o
 card. Reinstalar: `npm install --allow-git=all`.
 

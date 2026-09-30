@@ -89,8 +89,14 @@ async function fluxoDoListener(sock, inf) {
     databaseDir: TMP_DB,
     processNewJoinRequest: (s, i, gs) => x9.processNewJoinRequest(s, i, gs),
     loadGroupSettings: async () => ({ x9: true, card: true }),
+    notifyRejection: (deps) => x9.notifyRejection(deps),
   });
-  return { processou: !resultado.ignorado, ignorado: resultado.ignorado, motivo: resultado.motivo };
+  return {
+    acao: resultado.acao,
+    processou: resultado.acao === 'novo',
+    enviado: resultado.enviado,
+    ignorado: resultado.acao === 'ignorado',
+  };
 }
 
 let grupoCounter = 0;
@@ -155,7 +161,8 @@ await test('o connect.js DELEGA ao módulo (não tem cópia da regra)', () => {
   const src = fs.readFileSync(new URL('../dados/src/connect.js', import.meta.url), 'utf8');
   includes(src, "from './utils/x9JoinRequest.js'", 'importa o módulo');
   includes(src, 'handleJoinRequestEvent({', 'o listener chama o corpo do módulo');
-  includes(src, 'resultado.ignorado', 'usa o resultado para decidir');
+  includes(src, "resultado.acao === 'recusa'", 'trata a recusa no listener');
+  includes(src, 'notifyRejection', 'passa o notifyRejection');
   includes(src, 'resolveJoinActor(', 'usa o helper para o ator');
 
   // A condição antiga (nomes que o stub nunca emite) não pode voltar.
@@ -169,11 +176,21 @@ await test('o connect.js DELEGA ao módulo (não tem cópia da regra)', () => {
 // 2) INTEGRAÇÃO — O DEFEITO RELATADO
 // ============================================================================
 
-await test('RECUSA (rejected): NÃO reenvia o card de solicitação', async () => {
+await test('RECUSA (rejected): envia o card de QUEM RECUSOU (não o de solicitação)', async () => {
   const groupId = makeGroup();
   const sock = makeSock();
 
-  const { processou } = await fluxoDoListener(sock, {
+  // Primeiro o pedido novo, para o store ter o pendente.
+  await fluxoDoListener(sock, {
+    id: groupId,
+    action: 'created',
+    participant: SOLICITANTE_LID,
+    participantPn: SOLICITANTE_PN,
+    method: 'invite_link',
+  });
+  sock.sent.length = 0;
+
+  const { acao, enviado } = await fluxoDoListener(sock, {
     id: groupId,
     action: 'rejected',
     author: ADMIN_LID,
@@ -182,16 +199,22 @@ await test('RECUSA (rejected): NÃO reenvia o card de solicitação', async () =
     participantPn: SOLICITANTE_PN,
   });
 
-  ok(processou === false, 'o evento não foi tratado como pedido novo');
-  ok(sock.sent.length === 0, `nenhuma mensagem enviada (${sock.sent.length})`);
-  ok(!sock.sent.some((s) => s.content?.text?.includes(BOLD_SOLICITACAO)), 'o card de solicitação NÃO foi reenviado');
+  ok(acao === 'recusa', 'o evento foi tratado como recusa');
+  ok(enviado === true, 'o card de recusa foi enviado');
+
+  const recusa = sock.sent.find((s) => (s.content?.text || s.content?.caption || '').includes(BOLD_NEGADA));
+  ok(Boolean(recusa), 'mandou o card de NEGADA');
+  const texto = recusa?.content?.text || recusa?.content?.caption || '';
+  includes(texto, ADMIN_PN.split('@')[0], 'mostra o número de quem recusou');
+  ok(recusa?.content?.mentions?.includes(ADMIN_PN), 'menciona quem recusou');
+  ok(!sock.sent.some((s) => (s.content?.text || '').includes(BOLD_SOLICITACAO)), 'NÃO reenviou o card de solicitação');
 });
 
-await test('CANCELAMENTO (revoked): NÃO reenvia o card de solicitação', async () => {
+await test('CANCELAMENTO (revoked): não envia card nenhum', async () => {
   const groupId = makeGroup();
   const sock = makeSock();
 
-  const { processou } = await fluxoDoListener(sock, {
+  const { acao } = await fluxoDoListener(sock, {
     id: groupId,
     action: 'revoked',
     author: SOLICITANTE_LID,
@@ -200,8 +223,8 @@ await test('CANCELAMENTO (revoked): NÃO reenvia o card de solicitação', async
     participantPn: SOLICITANTE_PN,
   });
 
-  ok(processou === false, 'não tratado como pedido novo');
-  ok(sock.sent.length === 0, 'nada enviado');
+  ok(acao === 'ignorado', 'cancelamento é ignorado (não é recusa de admin)');
+  ok(sock.sent.length === 0, 'nada enviado — "negado por @X" seria mentira');
 });
 
 await test('PEDIDO NOVO (created): envia o card e registra o histórico', async () => {
