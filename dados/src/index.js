@@ -42079,16 +42079,67 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
 
       case 'footer': {
         // Teste da proto `audioFooter` (InteractiveMessage.Footer.audioMessage):
-        // card interativo com um áudio nativo no rodapé. `audioFooter` substitui
-        // o `footer` de texto (o ramo do áudio tem prioridade na fork).
+        // card interativo com áudio nativo no rodapé. O áudio vem da mensagem
+        // RESPONDIDA (ou de um link direto), não de um arquivo fixo.
+        //
+        // O áudio é transcodificado para OGG/Opus antes de enviar: a fork rotula
+        // o rodapé como `audio/ogg; codecs=opus` sem inspecionar os bytes, então
+        // mandar um mp3 cru iria mal rotulado e o player não renderiza.
         try {
-          const footerAudioPath = pathz.join(__dirname, '../midias/footer_test.ogg');
-          if (!fs.existsSync(footerAudioPath)) {
-            return reply('❌ Áudio de teste não encontrado em dados/src/midias/footer_test.ogg');
+          const urlDiretaFooter = /^https?:\/\//i.test(q || '') ? q.trim() : null;
+          let audioFooterBuffer = null;
+
+          if (urlDiretaFooter) {
+            const resp = await fetch(urlDiretaFooter, { signal: AbortSignal.timeout(30000) });
+            if (!resp.ok) return reply(`❌ Não consegui baixar esse link (HTTP ${resp.status}).`);
+            audioFooterBuffer = Buffer.from(await resp.arrayBuffer());
+          } else {
+            const citadoFooter = extractQuoted(info.message);
+            if (!citadoFooter) {
+              return reply(
+                `🎧 Responda um *áudio* com ${groupPrefix}footer (ou mande ${groupPrefix}footer <link>).`
+              );
+            }
+            const tipoCitadoFooter = getContentType(citadoFooter);
+            if (tipoCitadoFooter !== 'audioMessage' || !citadoFooter.audioMessage) {
+              return reply('❌ A mensagem respondida não é um áudio.');
+            }
+            const controllerFooter = new AbortController();
+            const timerFooter = setTimeout(() => controllerFooter.abort(), 30000);
+            try {
+              const streamFooter = await downloadContentFromMessage(
+                citadoFooter.audioMessage,
+                'audio',
+                { options: { signal: controllerFooter.signal } }
+              );
+              const partesFooter = [];
+              for await (const chunk of streamFooter) partesFooter.push(chunk);
+              audioFooterBuffer = Buffer.concat(partesFooter);
+            } catch (e) {
+              console.warn('[FOOTER] download falhou:', e?.message);
+              return reply('❌ Não consegui baixar esse áudio.');
+            } finally {
+              clearTimeout(timerFooter);
+            }
           }
+
+          if (!audioFooterBuffer || !audioFooterBuffer.length) {
+            return reply('❌ O áudio veio vazio.');
+          }
+
+          await reply('🎧 Convertendo o áudio...');
+
+          let audioFooterOgg;
+          try {
+            audioFooterOgg = await toOggOpus(audioFooterBuffer);
+          } catch (e) {
+            console.warn('[FOOTER] conversão falhou:', e?.message);
+            return reply('❌ Não consegui converter esse áudio para OGG/Opus.');
+          }
+
           await nazu.sendMessage(from, {
             text: '🎧 *Teste do audioFooter*\nCard interativo com áudio nativo no rodapé.',
-            audioFooter: fs.readFileSync(footerAudioPath),
+            audioFooter: audioFooterOgg,
             nativeFlow: [
               { text: '👍🏻 Curti', id: '#footer-ok', icon: 'review' },
               { text: '👎🏻 Passei', id: '#footer-nok', icon: 'default' }

@@ -58,8 +58,19 @@ if (!saida) {
 // WebP 1x1 real (RIFF/WEBP).
 const WEBP_1PX = Buffer.from('UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA', 'base64');
 
+// OGG/Opus mínimo válido (assinatura + OpusHead), para quem pede `.ogg` — é o
+// formato que o WhatsApp exige para áudio. Um header OggS sozinho não passa em
+// validações que procuram "OpusHead", por isso os dois vão juntos.
+const OGG_OPUS = Buffer.concat([
+  Buffer.from([0x4f, 0x67, 0x67, 0x53]), // OggS
+  Buffer.from('OpusHead'),
+  Buffer.from('fake-para-testes'),
+]);
+
+const saidaFinal = saida.endsWith('.ogg') ? OGG_OPUS : WEBP_1PX;
+
 try {
-  fs.writeFileSync(saida, WEBP_1PX);
+  fs.writeFileSync(saida, saidaFinal);
   process.exit(0);
 } catch (e) {
   process.stderr.write(String(e.message) + '\n');
