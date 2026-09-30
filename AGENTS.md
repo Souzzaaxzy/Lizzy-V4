@@ -654,6 +654,54 @@ resto do anti.
 **Verificado: neutralizando os `push` dos tres indicadores, 10 assercoes
 falham.** `tests/invisible-candidates.test.js` atualizado (as expectativas das
 lacunas fechadas mudaram de proposito).
+
+## COBERTURA COMPLETA DE PAGAMENTO — os 3 NIVEIS (`INV-028`/`INV-029`) (set/2026) ✅
+Levantamento no WAProto mostrou que os campos de pagamento vivem em **tres
+niveis diferentes**, e o anti so cobria um deles.
+
+| nivel | campos | detector |
+|---|---|---|
+| **conteudo** (`Message`) | os 8 tipos + os que ja tinhamos | `analisarPagamento` (INV-007/019/022/023/024) |
+| **envelope** (`WebMessageInfo`) | `paymentInfo`, `quotedPaymentInfo` | **`INV-028`** (peso 6) |
+| **extendedText** (`ExtendedTextMessage`) | `paymentLinkMetadata`, `paymentExtendedMetadata` | **`INV-029`** (peso 2) |
+
+**Medido antes da correcao**: as quatro passavam como **NORMAL** — o
+`paymentInfo` vive no envelope, e nenhuma regra de CONTEUDO o alcancava.
+
+### `INV-028` — envelope de pagamento VAZIO (peso 6)
+"Vazio" e objetivo: **sem** `amount1000`/`currency`/`primaryAmount`/
+`exchangeAmount` **e sem** `status`. E a mesma ideia do card sem valor
+(INV-007), mas no ENVELOPE. Peso 6 porque nao ha uso benigno para um envelope de
+pagamento vazio.
+
+**A trava contra falso positivo**: `paymentInfo` **COM** valor (qualquer um dos
+cinco campos) **nao** dispara. Testado com `amount1000: 1500`, so `currency`, so
+`primaryAmount` e so `status` — os quatro ficam limpos.
+
+### `INV-029` — metadados de pagamento (peso 2)
+`paymentLinkMetadata`/`paymentExtendedMetadata` dentro de um
+`extendedTextMessage` comum. Sao metadados anexados a uma conversa — nao ha uso
+normal. Peso 2 de proposito: nao ha amostra benigna confirmada, entao corrobora.
+
+### `TIPOS_PAGAMENTO` foi SEPARADO por nivel
+Antes, `paymentLinkMetadata` e `paymentExtendedMetadata` estavam na lista de
+TIPOS DE CONTEUDO — mas eles sao campos de `ExtendedTextMessage`, nao tipos de
+mensagem. Procurar por eles no `message` (`leaf[t]`) nunca funcionaria. Agora
+sao tres listas: `TIPOS_PAGAMENTO` (8 de conteudo),
+`CAMPOS_PAGAMENTO_ENVELOPE` (2) e `CAMPOS_PAGAMENTO_METADADOS` (2).
+
+### `ghostDetection`
+Ganhou `envelopePagamentoVazio` (peso 6 -> `punir` sozinho) e
+`metadadosPagamento` (peso 2).
+
+### Testes — `tests/pagamento-envelope.test.js` (**10 testes / 48 assercoes**)
+Cobertura dos 3 niveis, envelope vazio detectado, metadados detectados,
+**os 4 casos de pagamento legitimo barrados**, mensagens normais limpas, e a
+regressao do raja/pagamento legitimo de conteudo.
+**Verificado: neutralizando os `push` de INV-028/INV-029, 5 assercoes falham.**
+
+**Nao aplicado no handler**: o bloco de observacao do `index.js` ainda cobre so
+`INV-025/026/027`. Os dois novos entram pelo `!get` (o relatorio completo).
 ## COMANDOS EXPERIMENTAIS (rajar2 / rajar3 / rajar4) — NÃO DOCUMENTADOS AQUI
 A documentação do mecanismo de visibilidade seletiva foi deliberadamente removida
 deste arquivo (que é público) a pedido do dono, para não servir de receita a

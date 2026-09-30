@@ -68,6 +68,12 @@ export const PESOS = Object.freeze({
   textoEmCampoDeId: 3,
   // Tipo de controle (keepInChat/placeholder) carregando conteudo.
   tipoNaoRenderizavelComPayload: 2,
+  // Envelope (`paymentInfo`/`quotedPaymentInfo`) sem valor: mesma ideia do card
+  // sem valor, mas no ENVELOPE — o cliente nao tem o que desenhar. Peso alto
+  // porque nao ha uso benigno para um envelope de pagamento vazio.
+  envelopePagamentoVazio: 6,
+  // Metadados de pagamento sem valor (`paymentLinkMetadata`/`...Extended`).
+  metadadosPagamento: 2,
 
   // ── Fracos: ambíguos de propósito (aparecem em fluxo normal) ──────────────
   stubCiphertext: 1,
@@ -136,6 +142,8 @@ export function extrairSinais(entrada = {}) {
     textoTamanhoAbsurdo: e.textoTamanhoAbsurdo === true || Number(e.maiorCampoDeTexto || 0) > 100000,
     textoEmCampoDeId: e.textoEmCampoDeId === true,
     tipoNaoRenderizavelComPayload: e.tipoNaoRenderizavelComPayload === true,
+    envelopePagamentoVazio: e.envelopePagamentoVazio === true,
+    metadadosPagamento: e.metadadosPagamento === true,
     pagamentoSemValorComTexto:
       e.pagamentoSemValorComTexto === true ||
       (e.isPayment === true && e.temValor === false && typeof (e.noteText ?? e.nota) === 'string' && String(e.noteText ?? e.nota).trim().length > 0),
@@ -179,6 +187,8 @@ export function avaliar(entrada = {}, opts = {}) {
   somar('textoTamanhoAbsurdo', s.textoTamanhoAbsurdo);
   somar('textoEmCampoDeId', s.textoEmCampoDeId);
   somar('tipoNaoRenderizavelComPayload', s.tipoNaoRenderizavelComPayload);
+  somar('envelopePagamentoVazio', s.envelopePagamentoVazio);
+  somar('metadadosPagamento', s.metadadosPagamento);
   somar('mencaoEmMassa', s.mencaoEmMassa && s.notaDePagamento);
   somar('stubCiphertext', s.stubCiphertext);
   somar('mensagemVazia', s.mensagemVazia);

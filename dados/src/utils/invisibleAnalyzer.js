@@ -87,6 +87,8 @@ export const INDICADORES = Object.freeze({
   INV_020: { id: 'INV-020', nome: 'Nota com texto sem conteudo visivel', categoria: 'payment', severidade: 'media', peso: 2, descricao: 'O texto da NOTA existe mas so tem espaco/zero-width: o cliente desenha ~nada. Sozinho e ambiguo (varios envios usam caracteres invisiveis para "vazio"); pesa apenas quando ja ha outro indicador de pagamento na mesma mensagem.' },
   INV_021: { id: 'INV-021', nome: 'ID com sufixo de fonte/historico', categoria: 'estrutura', severidade: 'baixa', peso: 1, descricao: 'ID no formato `<id>_L0` (sufixo de origem/historico). Nao e o formato dos clientes (`3EB0...`) e pode indicar historico/relay, nao um envio direto. Ambiguo: nao e prova de nada.' },
   INV_022: { id: 'INV-022', nome: 'sendPaymentMessage sem referencia ao pedido', categoria: 'payment', severidade: 'media', peso: 3, descricao: 'O proto `SendPaymentMessage` tem `requestMessageKey` — o ponteiro para o pedido que este envio responde. Aqui ele esta AUSENTE e nao ha `amount` nenhum: o card nao responde a pedido algum e nao carrega valor. Severidade MEDIA de proposito: o campo existe no proto, mas nao ha amostra benigna confirmada que prove que ele sempre acompanha um envio legitimo — entao isto corrobora, nao prova.' },
+  INV_028: { id: 'INV-028', nome: 'Envelope de pagamento vazio (paymentInfo)', categoria: 'payment', severidade: 'alta', peso: 6, descricao: 'O envelope da mensagem (WebMessageInfo) carrega `paymentInfo`/`quotedPaymentInfo` SEM valor: sem `amount1000`/`currency`/`primaryAmount`/`exchangeAmount` e sem `status`. E a mesma ideia do card sem valor (INV-007), mas no ENVELOPE em vez do conteudo — o cliente nao tem o que desenhar. Cobre o tipo de pagamento que vive fora do `message`, que nenhuma regra de conteudo alcancava.' },
+  INV_029: { id: 'INV-029', nome: 'Metadados de pagamento sem valor', categoria: 'payment', severidade: 'media', peso: 2, descricao: '`extendedTextMessage.paymentLinkMetadata`/`paymentExtendedMetadata` presentes sem valor associado. Sao metadados de pagamento anexados a uma mensagem — nao ha uso para uma conversa comum. Peso medio: nao ha amostra benigna confirmada, entao corrobora em vez de provar.' },
   INV_025: { id: 'INV-025', nome: 'Texto em campo de identificador', categoria: 'estrutura', severidade: 'media', peso: 3, descricao: 'Campo que deveria ser um ID (ou metadado curto) carregando TEXTO longo. Medido no `declinePaymentRequestMessage.key.id` e no `cancelPaymentRequestMessage.key.id`, onde o texto da mensagem viaja dentro de um campo de chave. Um id de mensagem real e hex de 22-40 chars; texto livre ali nao tem uso legitimo.' },
   INV_026: { id: 'INV-026', nome: 'Campo de texto com tamanho absurdo', categoria: 'estrutura', severidade: 'alta', peso: 5, descricao: 'Campo de texto muito acima do plausivel (centenas de KB a MB). E o payload que sobrecarrega o cliente ("travazap"): o aparelho do alvo trava ou fecha ao processar. Medido no `IosInvisible` (~2,9 MB em `locationMessage.name`/`address` e `extendedTextMessage.text`). O criterio e objetivo: nenhum humano escreve um nome de lugar com 300 KB.' },
   INV_027: { id: 'INV-027', nome: 'Tipo nao-renderizavel com payload', categoria: 'estrutura', severidade: 'media', peso: 2, descricao: 'Tipo que existe para controle interno (keepInChat, placeholder, protocolo) carregando conteudo de mensagem. O cliente nao desenha esses tipos como mensagem normal, entao o conteudo fica invisivel. Ambiguo: alguns tem uso legitimo, por isso o peso e medio.' },
@@ -126,8 +128,26 @@ export const CAMPOS_ENVELOPE = Object.freeze([
 ]);
 
 /** Tipos de mensagem de pagamento do proto. */
+/**
+ * Tipos de pagamento que vivem DENTRO do conteudo (`Message`).
+ *
+ * Fonte: WAProto. `paymentLinkMetadata`/`paymentExtendedMetadata` NAO entram
+ * aqui — eles sao campos de `ExtendedTextMessage`, nao tipos de mensagem; e
+ * `paymentInfo`/`quotedPaymentInfo` vivem no ENVELOPE (`WebMessageInfo`), que e
+ * outro nivel. Cada grupo tem o seu detector.
+ */
 export const TIPOS_PAGAMENTO = Object.freeze([
-  'requestPaymentMessage', 'sendPaymentMessage', 'paymentInviteMessage', 'declinePaymentRequestMessage', 'cancelPaymentRequestMessage', 'paymentReminderMessage', 'splitPaymentMessage', 'invoiceMessage', 'paymentLinkMetadata', 'paymentExtendedMetadata',
+  'requestPaymentMessage', 'sendPaymentMessage', 'paymentInviteMessage', 'declinePaymentRequestMessage', 'cancelPaymentRequestMessage', 'paymentReminderMessage', 'splitPaymentMessage', 'invoiceMessage',
+]);
+
+/** Campos de pagamento que ficam em `ExtendedTextMessage` (metadados). */
+export const CAMPOS_PAGAMENTO_METADADOS = Object.freeze([
+  'paymentLinkMetadata', 'paymentExtendedMetadata',
+]);
+
+/** Campos de pagamento que ficam no ENVELOPE (`WebMessageInfo`). */
+export const CAMPOS_PAGAMENTO_ENVELOPE = Object.freeze([
+  'paymentInfo', 'quotedPaymentInfo',
 ]);
 
 /** Campos de ExtendedTextMessage (usados no escaneamento de campos desconhecidos). */
@@ -937,8 +957,53 @@ export function analisarAnomaliasDeConteudo(content = {}) {
   };
 }
 
+/**
+ * EnvelopePaymentAnalyzer: `paymentInfo` / `quotedPaymentInfo` no ENVELOPE.
+ *
+ * Estes campos ficam no `WebMessageInfo` (o envelope), nao dentro do `message`
+ * — por isso NENHUMA regra de conteudo os alcancava. Medido: `paymentInfo` com
+ * conteudo passava como NORMAL.
+ *
+ * "Vazio" e objetivo: sem valor (`amount1000`, `currency`, `primaryAmount`,
+ * `exchangeAmount`) E sem `status`.
+ */
+export function analisarPagamentoNoEnvelope(envelope = {}) {
+  const presentes = CAMPOS_PAGAMENTO_ENVELOPE.filter((c) => isObj(envelope[c]));
+  if (!presentes.length) {
+    return { disponivel: false, presentes: [], vazios: [], comValor: [] };
+  }
+  const vazios = [];
+  const comValor = [];
+  for (const campo of presentes) {
+    const info = envelope[campo];
+    const temAmount1000 = has(info, 'amount1000') && !isZeroLike(info.amount1000);
+    const temCurrency = typeof info.currency === 'string' && info.currency.trim().length > 0;
+    const temPrimary = isObj(info.primaryAmount) && has(info.primaryAmount, 'value') && !isZeroLike(info.primaryAmount.value);
+    const temExchange = isObj(info.exchangeAmount) && has(info.exchangeAmount, 'value') && !isZeroLike(info.exchangeAmount.value);
+    const temStatus = has(info, 'status') && info.status !== 0 && info.status !== null && info.status !== undefined;
+    const temValor = temAmount1000 || temCurrency || temPrimary || temExchange || temStatus;
+    if (temValor) comValor.push({ campo, amount1000: safeValue(info.amount1000), currency: info.currency ?? null, status: safeValue(info.status) });
+    else vazios.push({ campo, campos: keysOf(info) });
+  }
+  return { disponivel: true, presentes, vazios, comValor };
+}
+
+/**
+ * PaymentMetadataAnalyzer: metadados de pagamento dentro de `ExtendedTextMessage`.
+ *
+ * `paymentLinkMetadata`/`paymentExtendedMetadata` sao campos do proprio
+ * `ExtendedTextMessage` (nao tipos de mensagem) — por isso tambem escapavam.
+ */
+export function analisarMetadadosDePagamento(content = {}) {
+  const leaf = resolverFolha(content);
+  const ext = isObj(leaf.extendedTextMessage) ? leaf.extendedTextMessage : null;
+  if (!ext) return { disponivel: false, presentes: [] };
+  const presentes = CAMPOS_PAGAMENTO_METADADOS.filter((c) => isObj(ext[c]));
+  return { disponivel: presentes.length > 0, presentes };
+}
+
 export function correlacionar(analises = {}) {
-  const { key, lid, distribution, decryption, senderKey, payment, context, quoted, wrappers, stub, protocol, unknown, anomalia, contentDisponivel = false } = analises;
+  const { key, lid, distribution, decryption, senderKey, payment, context, quoted, wrappers, stub, protocol, unknown, anomalia, envelopePayment, paymentMetadata, contentDisponivel = false } = analises;
   const indicadores = [];
   const evidencias = [];
 
@@ -1040,6 +1105,15 @@ export function correlacionar(analises = {}) {
   if (anomalia?.idSuspeitos?.length) {
     const a = anomalia.idSuspeitos[0];
     push('INV_025', `${a.caminho} com ${a.tamanho} caracteres (nao parece um id)`);
+  }
+
+  // ── Pagamento no ENVELOPE e metadados (categorias que escapavam) ─────────
+  if (envelopePayment?.vazios?.length) {
+    const v = envelopePayment.vazios[0];
+    push('INV_028', `${v.campo} sem valor e sem status (campos: ${v.campos.join(',') || 'nenhum'})`);
+  }
+  if (paymentMetadata?.presentes?.length) {
+    push('INV_029', `extendedTextMessage com ${paymentMetadata.presentes.join(', ')}`);
   }
 
   // Tipo nao-renderizavel com payload.
@@ -1204,12 +1278,16 @@ export function analyzeInvisibleMessage(entrada = {}) {
   const stubA = analisarStub({ ...envelope, ...(isObj(entradaSegura.envelopeExtra) ? entradaSegura.envelopeExtra : {}) });
   const protoA = analisarProtocolo(content);
   const anomaliaA = analisarAnomaliasDeConteudo(content);
+  const envelopeA = analisarPagamentoNoEnvelope(envelope);
+  const metadadosA = analisarMetadadosDePagamento(content);
   const unknownA = analisarCamposDesconhecidos({ content, contextInfo: ctxA.disponivel ? contextoBruto(content) : null, key, envelope });
 
   const contentDisponivel = isObj(content) && keysOf(content).length > 0;
 
   const correlacao = correlacionar({
     anomalia: anomaliaA,
+    envelopePayment: envelopeA,
+    paymentMetadata: metadadosA,
     key: keyA, lid: lidA, distribution: distA, decryption: decA, senderKey: skA,
     payment: payA, context: ctxA, quoted: quotedA, wrappers: wrapA, stub: stubA,
     protocol: protoA, unknown: unknownA, contentDisponivel,
@@ -1256,6 +1334,8 @@ export function analyzeInvisibleMessage(entrada = {}) {
     protocol: protoA,
     unknownFields: unknownA,
     anomalia: anomaliaA,
+    envelopePayment: envelopeA,
+    paymentMetadata: metadadosA,
     correlation: {
       score: correlacao.score,
       indice: correlacao.indice,
