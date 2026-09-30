@@ -283,9 +283,10 @@ const COMANDOS_POR_MENU = {
   // menudono: 165 -> 168 (sub.permitir/revogar/perms) -> 165
   // (removidos grantsubcmd/delsubcmd/listsubcmd).
   // menuadm: 177 -> 180 (`antiroubo on/off`, `listperm`, `limparperm`).
+  // -> 181 (`syncaction`, categoria DIAGNÓSTICO DE PROTO).
   // menudono: 165 -> 171 (`divcanal` add/rem/list/msg/send/status)
   // -> 173 (`divcanal name`, `divcanal foto`) -> 174 (`divcanal time`).
-  menuadm: 180, menudono: 174,
+  menuadm: 181, menudono: 174,
   // menubn: 349 -> 350 (`!ppp` entrou na 1a categoria).
   menubn: 350, menufut: 42, menurpg: 149,
   // menuvip nao tem comando cadastrado; o `!` contado e o `!addcmdvip` da
