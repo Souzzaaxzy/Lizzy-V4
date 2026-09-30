@@ -201,6 +201,68 @@ Sao 8 tecnicas sem deteccao e sem validacao em aparelho real. Testar em grupo
 exige sessao pareada — o que da para fazer **offline** ja foi feito: elas montam,
 o proto fica correto e o bot nao as classifica.
 
+## ACHADO para o `!rajar2` — texto em campo OCULTO
+
+Testei 8 variantes do envelope de pagamento (mantendo o mecanismo que funciona)
+e 8 posicoes de texto em campos inesperados. **Nenhuma variante de pagamento
+escapa** da deteccao atual — mas **duas posicoes de texto sim**.
+
+### A ideia
+
+O raja atual poe o texto na **nota** do card. Se o texto for para um campo que o
+cliente **nao desenha** (e que o detector tambem nao olha), ele fica invisivel
+**em dois sentidos**: nao aparece na tela **e** nao e detectado.
+
+### Resultado medido (nada enviado)
+
+| posicao do texto | tipo | bytes | texto viaja? | deteccao |
+|---|---|---|---|---|
+| nota (baseline raja) | `sendPaymentMessage` | 36 | sim | SUSPEITA (INV-008, INV-022) |
+| `background.mimetype` | `sendPaymentMessage` | 62 | sim | SUSPEITA (INV-022) |
+| `background.id` | `sendPaymentMessage` | 57 | sim | SUSPEITA (INV-022) |
+| `transactionData` | `sendPaymentMessage` | 29 | sim | SUSPEITA (INV-022) |
+| `currencyCodeIso4217` | `requestPaymentMessage` | 45 | sim | ATIPICA (INV-019) |
+| `requestPayment.requestFrom` | `requestPaymentMessage` | 50 | sim | ATIPICA (INV-019) |
+| **`paymentInviteMessage.referralId`** | `paymentInviteMessage` | 34 | **sim** | **NORMAL** |
+| **`declinePaymentRequestMessage.key.id`** | `declinePaymentRequestMessage` | 36 | **sim** | **NORMAL** |
+
+### As duas candidatas limpas
+
+```
+A) paymentInviteMessage: { serviceType: 3 (UPI), expiryTimestamp: 0, referralId: <texto> }
+B) declinePaymentRequestMessage: { key: { id: <texto>, remoteJid: '', fromMe: false } }
+```
+
+Ambas: **montam**, o **texto sobrevive ao encode/decode** (provado por
+round-trip real do proto) e a deteccao e **NORMAL** (indice 0).
+
+### Por que isso e uma forma NOVA
+
+- o raja usa `sendPaymentMessage` / `requestPaymentMessage` — **ja detectados**;
+- a candidata A usa **`paymentInviteMessage`**, que **nao tem `amount`** (nao ha
+  valor a zerar) — o detector atual procura por pagamento **com valor**, entao
+  ela nao entra em nenhum caminho;
+- a candidata B usa **`declinePaymentRequestMessage`**, que so tem `key` — o
+  texto vai no `id` da chave, um campo que o detector nunca le como conteudo;
+- nenhuma das duas tem `noteMessage`, entao os indicadores de nota
+  (`INV-008`, `INV-020`, `INV-023`) nao disparam.
+
+### LIMITE HONESTO (importante)
+
+O que esta **provado**: o proto monta, o texto viaja e o detector nao classifica.
+O que **NAO esta provado**: que a mensagem **nao aparece** no aparelho.
+
+Pelo mecanismo (card sem valor / tipo sem conteudo renderizavel), a expectativa
+e que **nao desenhe** — mas isso **so se confirma num grupo real**, e nao ha
+sessao pareada aqui. Antes de virar comando, precisa do teste no aparelho.
+
+### Se for implementar
+
+O `!rajar2` deve reaproveitar a estrutura do `!rajar` (mesmo gate de dono, mesma
+entrega por **rotacao de Sender Key** para membros comuns) e trocar **apenas** o
+`buildRajaContent` pela candidata escolhida. A decisao de qual das duas vai
+depender do que o teste no aparelho mostrar.
+
 ## Comparativo (o que serve para o `!rajar`)
 
 | técnica | invisível de verdade? | precisa de fork? | risco de travar cliente | validado aqui? |
