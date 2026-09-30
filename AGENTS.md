@@ -5020,6 +5020,50 @@ teste cria um remetente novo por execução; e o dublê do socket precisa de
 
 
 ## COMANDO `!eununca` — frases trocadas (set/2026) ✅
+
+## COMANDO `!ppp` — foto aleatoria + enquete Pego/Passo/Penso (set/2026) ✅
+Categoria **JOGOS & DIVERSÃO** (a **primeira** do `menubn`). Ao executar, o bot
+sorteia **um membro aleatorio** do grupo, envia a **foto dele** e, **abaixo**, uma
+enquete com o titulo sendo a **mencao do alvo** e as opcoes **Pego / Passo /
+Penso** (tres opcoes separadas).
+
+### O titulo e a MENCAO (e isso exige o `mentions` no poll)
+O titulo e `@<numero>` **dentro** do `buildPollTitle` (mesmo helper das outras
+quatro enquetes do bot — `!eununca`, `!eununca18`, `!vab`, `!vab18`). Para o `@`
+resolver e ficar em negrito, o poll precisa de `mentions: [alvo]` no **mesmo**
+content — medido: sem ele o `contextInfo.mentionedJid` **nao existe** e o `@` sai
+como texto morto. Com ele, o proto sai `pollCreationMessageV3` +
+`contextInfo.mentionedJid: [alvo]`. (O `contextInfo` do poll **nao** carrega
+`quotedMessage` — nao ha mensagem citada no envio.)
+
+### Sorteio
+- Membros vem do `AllgroupMembers` que o handler **ja resolve** (LID/PN), sem
+  consulta extra; o **proprio bot e excluido** (nao faz sentido o grupo votar na
+  foto do bot) e o conjunto e deduplicado.
+- **Fisher-Yates** para o sorteio nao depender da ordem do metadata.
+- **Procura quem TEM foto** (teto de 5 tentativas, para nao pendurar o handler):
+  quem nao tem foto (`profilePictureUrl` lanca) e pulado e o proximo e tentado.
+  Sem ninguem com foto, o comando **nao fica mudo**: manda so a enquete, e a foto
+  e a mencao apontam sempre para o **mesmo** alvo.
+
+### Guardas
+So em grupo (`sendAbyssWarning`, como os outros comandos de brincadeira) e exige
+`isModoBn` — o mesmo gate do `!eununca`/`!vab`.
+
+### Menu / blockPv
+Linha do `!ppp` na **primeira categoria** do `menubn`, logo apos o `!sn`; e
+`'ppp'` na lista `menuCommandsMap.menubn` do `blockPv`. Baseline do
+`menu-layout`: **menubn 349 -> 350**.
+
+### Testes — `tests/ppp.test.js` (**12 testes / 45 assercoes**)
+Handler real: foto **antes** da enquete; 3 opcoes na ordem; titulo em 3 linhas no
+layout (caixa + bold Unicode + emoji — e **nao** markdown); linha do meio sendo
+`@<numero>`; **mencao real** (o `mentions` do poll e o mesmo alvo da foto); alvo
+**aleatorio** (15 execucoes -> 2+ distintos); o **bot nunca** e sorteado; sem foto
+manda so a enquete; alguem sem foto nao impede achar quem tem; fora de grupo e
+modo brincadeira off recusam; o payload pelo caminho **real da fork**
+(`generateWAMessage`) vira `pollCreationMessageV3` com `mentionedJid`; e o comando
+esta no `menubn` **antes da segunda categoria** e no `blockPv`.
 Pedido do dono: substituir **todas** as frases do `!eununca` por uma lista nova de
 **200** (50 de relacionamento/afeto + 150 de dia a dia, amizade, música, etc.).
 

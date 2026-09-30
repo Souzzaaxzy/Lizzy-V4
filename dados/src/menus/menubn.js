@@ -33,6 +33,7 @@ export default async function menubn(prefix, botName = "MeuBot", userName = "Usu
 │ 💕 ${prefix}casal
 │ 💘 ${prefix}shipo
 │ 👀 ${prefix}sn
+│ 💘 ${prefix}ppp
 │ ✋ ${prefix}ppt
 │ 🛑 ${prefix}stop
 │ 💀 ${prefix}suicidio

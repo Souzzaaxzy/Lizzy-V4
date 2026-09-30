@@ -39341,6 +39341,85 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
           await reply("Ocorreu um erro 💔");
         }
         break;
+// !ppp — foto de um membro aleatório + enquete "Pego / Passo / Penso".
+//
+// A enquete carrega o alvo no TÍTULO (`@<numero>`) e o `mentions` põe o JID no
+// `contextInfo.mentionedJid` do próprio poll — sem isso o `@` sairia como texto
+// morto e o título não ficaria em negrito. Verificado no proto da fork.
+case 'ppp':
+  try {
+    if (!isGroup) {
+      return sendAbyssWarning("◈ Este comando é só para grupos.");
+    }
+    if (!isModoBn) {
+      return reply('❌ O modo brincadeira não esta ativo nesse grupo');
+    }
+
+    // Membros do grupo, sem o próprio bot (não faz sentido o grupo votar na
+    // foto do bot) e sem repetição.
+    const candidatos = [...new Set(
+      (AllgroupMembers || []).filter((id) =>
+        id && !idsMatch(id, botNumberLid) && !idsMatch(id, botNumber)
+      )
+    )];
+    if (candidatos.length === 0) {
+      return reply('❌ Não consegui listar os membros do grupo.');
+    }
+
+    // Embaralha (Fisher-Yates) para o sorteio não depender da ordem do metadata.
+    const embaralhados = [...candidatos];
+    for (let i = embaralhados.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [embaralhados[i], embaralhados[j]] = [embaralhados[j], embaralhados[i]];
+    }
+
+    // Procura alguém COM foto visível (teto de tentativas para não pendurar o
+    // handler); se ninguém tiver, usa o primeiro sorteado e manda só a enquete.
+    const TENTATIVAS_FOTO = Math.min(embaralhados.length, 5);
+    let alvo = embaralhados[0];
+    let fotoUrl = null;
+    for (let i = 0; i < TENTATIVAS_FOTO; i++) {
+      const candidato = embaralhados[i];
+      let url = null;
+      try {
+        url = await nazu.profilePictureUrl(candidato, 'image');
+      } catch {
+        url = null;
+      }
+      if (url && typeof url === 'string' && url.startsWith('http')) {
+        alvo = candidato;
+        fotoUrl = url;
+        break;
+      }
+    }
+
+    const alvoNumero = String(alvo).split('@')[0].split(':')[0];
+
+    // 1) A foto (sem legenda — o alvo é identificado pela enquete abaixo).
+    if (fotoUrl) {
+      try {
+        await nazu.sendMessage(from, { image: { url: fotoUrl } });
+      } catch (fotoErr) {
+        console.error('[PPP] falha ao enviar a foto:', fotoErr?.message || fotoErr);
+      }
+    }
+
+    // 2) A enquete, com o alvo no título (menção real) e as três opções.
+    await nazu.sendMessage(from, {
+      poll: {
+        name: buildPollTitle('PPP', '💘', `@${alvoNumero}`, nomebot),
+        values: ['Pego', 'Passo', 'Penso'],
+        selectableCount: 1
+      },
+      mentions: [alvo]
+    });
+  } catch (e) {
+    console.error(e);
+    await reply(
+      "❌ Ocorreu um erro interno. Tente novamente em alguns minutos."
+    );
+  }
+break;
 case 'eununca':
   try {
     if (!isGroup) {

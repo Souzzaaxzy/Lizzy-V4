@@ -286,8 +286,8 @@ const COMANDOS_POR_MENU = {
   // menudono: 165 -> 171 (`divcanal` add/rem/list/msg/send/status)
   // -> 173 (`divcanal name`, `divcanal foto`) -> 174 (`divcanal time`).
   menuadm: 180, menudono: 174,
-  // menubn: 348 -> 349 (`!ma` / `!melhoresamigos` / `!bestfriends`).
-  menubn: 349, menufut: 42, menurpg: 149,
+  // menubn: 349 -> 350 (`!ppp` entrou na 1a categoria).
+  menubn: 350, menufut: 42, menurpg: 149,
   // menuvip nao tem comando cadastrado; o `!` contado e o `!addcmdvip` da
   // instrucao ("Use: !addcmdvip"), que no original tambem estava fixo.
   menuvip: 1, menugames: 28,
@@ -317,10 +317,10 @@ await test('16. NENHUM comando se perdeu (contagem por menu vs baseline)', async
   }
 });
 
-await test('17. menubn: os 349 comandos estão TODOS lá (o mais crítico)', async () => {
+await test('17. menubn: os 350 comandos estão TODOS lá (o mais crítico)', async () => {
   const mod = await import(new URL('../dados/src/menus/menubn.js', import.meta.url).href);
   const texto = await mod.default('!', 'Abyss', 'Kannon');
-  eq((texto.match(/!/g) || []).length, 349, '349 comandos no modo completo');
+  eq((texto.match(/!/g) || []).length, 350, '350 comandos no modo completo');
   // Amostras de cada categoria (inclusive as condicionais).
   for (const c of ['!tictactoe', '!uno criar', '!conselho', '!tapa', '!surubao', '!pgpau', '!medirpau', '!rankputo', '!casal', '!ma']) {
     contem(texto, c, `tem ${c}`);
