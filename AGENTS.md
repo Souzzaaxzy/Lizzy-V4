@@ -498,6 +498,68 @@ o material da Sender Key não é distribuído aos admins, então eles não decif
   passaria como membro comum e o teste de admin mediria a coisa errada.
   **Verificado: removendo o `recipientMode`, 4 dos 16 falham.**
 
+## `!rajar2` — NOVO (set/2026): mensagem invisivel com TIPO DIFERENTE ✅
+Comando **experimental**, criado para descobrir tipos novos de mensagem
+invisivel. **Nao esta em menu nenhum** e nao tem alias — e `case` solta, como o
+dono pediu. Exclusivo do dono, so em grupo.
+
+### Pre-configurado (pedido do dono)
+- **5 mensagens**;
+- texto fixo: `teste teste teste teste teste teste teste teste testte teste teste
+  teste teste teste teste`;
+- **cita TODOS os membros** do grupo (mesma fonte do `!rajar`: `AllgroupMembers`);
+- entrega igual a do `!rajar`: **rotacao de Sender Key** para membros comuns
+  (admins nao decifram). Sem resumo no grupo — so as mensagens saem.
+
+### O tipo e DIFERENTE: `splitPaymentMessage`
+O `!rajar` usa `requestPaymentMessage`/`sendPaymentMessage` — justamente os
+**dois** que o detector do bot reconhece. O `!rajar2` usa
+**`splitPaymentMessage`**, com o texto no campo `description`.
+
+Por que esse tipo (tudo MEDIDO offline, nada enviado):
+
+| tipo de pagamento | tem `noteMessage`? | mantem mencoes? | deteccao |
+|---|---|---|---|
+| `sendPaymentMessage` | sim | **3/3** | SUSPEITA |
+| `requestPaymentMessage` | sim | **3/3** | FORTEMENTE |
+| **`splitPaymentMessage`** | nao | **3/3** | **NORMAL** |
+| `paymentInviteMessage` | nao | 0/3 | NORMAL |
+| `declinePaymentRequestMessage` | nao | 0/3 | NORMAL |
+| `cancelPaymentRequestMessage` | nao | 0/3 | NORMAL |
+| `paymentReminderMessage` | nao | 0/3 | NORMAL |
+
+**Achado que decidiu o design**: `splitPaymentMessage` e o **unico** tipo de
+pagamento, alem dos dois do raja, que tem campo `contextInfo` — por isso e o
+unico que **carrega as mencoes**. Testei tambem levar `contextInfo` no topo do
+content, no wrapper do `viewOnce` e via `messageContextInfo`: **nenhum** caminho
+mantem o `mentionedJid` fora do tipo que declara o campo (0/3 em todos).
+
+E ele passa **NORMAL** (indice 0) no `analyzeInvisibleMessage`, enquanto o raja
+da SUSPEITA/FORTEMENTE. O unico indicador que aparece e o `INV-011`
+(enderecamento por LID), **informativo, peso 0** — nao soma.
+
+### LIMITE HONESTO (o que NAO esta provado)
+O provado: o proto monta, o texto e as mencoes **sobrevivem ao encode/decode**
+(round-trip real) e o detector **nao classifica**. O que **nao** esta provado:
+que a mensagem **nao desenhe** no aparelho — isso exige grupo real, e nao ha
+sessao pareada aqui. O comando existe justamente para esse teste de campo.
+
+### Testes — `tests/rajar2-invisivel.test.js` (**7 testes / 23 assercoes**)
+Handler real: 5 envios por rotacao, **admin fora** da lista de autorizados, IDs
+distintos, tipo `splitPaymentMessage` (e **nao** os dois do raja), texto no
+`description`, mencoes no proto, deteccao NORMAL sem indicador com peso, guarda
+de dono, e um guard estrutural de que **nao esta em menu nenhum** nem no
+`blockPv`. **Verificado: trocando para o tipo do raja, 7 assercoes falham.**
+
+**Armadilha de nome**: ja existia `tests/rajar2.test.js`, do `rajar2` **antigo**
+(retransmissao pairwise, removido do bot). Ele **ja falhava antes** desta mudanca
+(confirmado com `git stash`: mesmas 6 falhas). O teste novo e
+`tests/rajar2-invisivel.test.js` para nao destruir o antigo.
+
+### Pre-existente (nao e regressao)
+`tests/rajar.test.js` — 6 falhas, **identicas no baseline** (confirmado com
+`git stash`). Ele testa o `recipientMode`, que o `!rajar` deixou de usar quando
+migrou para a rotacao de Sender Key.
 ## COMANDOS EXPERIMENTAIS (rajar2 / rajar3 / rajar4) — NÃO DOCUMENTADOS AQUI
 A documentação do mecanismo de visibilidade seletiva foi deliberadamente removida
 deste arquivo (que é público) a pedido do dono, para não servir de receita a

