@@ -7990,3 +7990,42 @@ No teste, importar `paths.js` **estaticamente** no topo é içado ANTES de setar
 `DATABASE_PATH` — então o `SUBDONOS_FILE` apontava para o **banco real** e os
 testes liam dados de verdade. Solução: ler a config com `fs`/`path` (sem importar
 `paths.js`) e resetar com `subdonos.limparTudo()`.
+
+## Comandos novos de BRINCADEIRAS do `menubn` (set/2026) ✅
+Oito comandos pedidos pelo dono, todos na categoria **BRINCADEIRAS** do
+`menus/menubn.js` (mesma familia do `!gay`/`!medirpau`).
+
+### `!aura` / `!sigma` — meme de "farmar aura"
+Frase sorteada + mídia do `!setgif`. Pesquisa de memes (2025): "farmar aura" é
+acumular carisma/presença (ações estilosas = `+1000 aura`, gafes = perder aura);
+"sigma" é o lobo solitário, sem validação alheia, com "sigma grindset".
+São **5 frases** por comando; o alvo marcado (`menc_os2`) tem menção real.
+
+Mídia: `gifsbn/aura.*` / `gifsbn/sigma.*` (arquivo solto vence o `games.json`),
+via `resolveBrincadeiraMedia` — o `!setgif aura` / `!setgif sigma` passou a ser
+aceito (`validCommands`). Sem mídia, manda só o texto.
+
+### `!hetero` / `!hetera` — mesma lógica do `!gay`
+Entraram nos dois `case` da familia de porcentagem (`rateConfig` + grupos
+masculino/feminino) e no `gamestext.json` / `gamestext2.json`. Saída no padrão:
+`💑 *Teste de hétero*` + barra + `NN%`.
+
+### `!ceu` / `!inferno` / `!frio` / `!fria` — sorteio com base fixa
+Pedido: `ceu` com **chance de ir ao céu**, `inferno` **chance de ir ao inferno**,
+`frio`/`fria` **% de frieza**. O "puro" é a base: `ceu` começa em **50%** e
+`frio`/`fria` em **0%**; o valor final é `base + random(101 - base)`. `inferno`
+é sorteio puro (0-100%). Saída: título + barra + `NN%` + frase sorteada.
+Mídia pelo mesmo caminho (`gifsbn/ceu.*` etc.) e `!setgif` aceita os quatro.
+
+### Menu / blockPv
+Linhas novas na categoria BRINCADEIRAS (hetero/hetera logo abaixo do
+`!medirpau`; aura/sigma abaixo do `!lesbica`; ceu/inferno/frio/fria no fim, após
+o `!pilantra`). Registrados em `menuCommandsMap.menubn` (`utils/blockPv.js`).
+Baseline do `menu-layout`: **menubn 350 -> 358**.
+
+### Testes — `tests/brincadeiras-novas.test.js` (**15 testes / 173 asserções**)
+Handler real com socket falso: `!aura`/`!sigma` (frase + menção, GIF/imagem do
+`gifsbn`, fora de grupo recusa), `!hetero`/`!hetera` (0-100%), `!ceu` (nunca
+abaixo de 50% em 25 execuções), `!inferno` (0-100%), `!frio`/`!fria` (0-100% +
+GIF), presença dos 8 no `menubn`/`blockPv` e no `validCommands` do `!setgif`.
+Usa `DATABASE_PATH` temporário: **não toca** o `dados/database` real.

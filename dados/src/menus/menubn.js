@@ -120,8 +120,12 @@ ${isLiteMode ? '' : `╭━━━꧁༺ ㅤ🔞 ${boldItalic('INTERAÇÕES "PICA
 
 ╭━━━꧁༺ ㅤ😆 ${boldItalic('BRINCADEIRAS')} 😆ㅤ ༻꧂━━━╮
 │ 📏 ${prefix}medirpau
+│ 💑 ${prefix}hetero
+│ 💑 ${prefix}hetera
 │ 🏳️ ${prefix}gay
 │ 🏳️ ${prefix}lesbica
+│ 🗿 ${prefix}aura
+│ 🗿 ${prefix}sigma
 │ 🧠 ${prefix}burro
 │ 🧠 ${prefix}burra
 │ 🧠 ${prefix}inteligente
@@ -317,6 +321,10 @@ ${isLiteMode ? '' : `╭━━━꧁༺ ㅤ🔞 ${boldItalic('INTERAÇÕES "PICA
 │ 😩 ${prefix}vagabundo
 │ 😩 ${prefix}vagabunda
 │ 🕵 ${prefix}pilantra
+│ ☁️ ${prefix}ceu
+│ 🔥 ${prefix}inferno
+│ 🧊 ${prefix}frio
+│ 🧊 ${prefix}fria
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 

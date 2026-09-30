@@ -19996,7 +19996,7 @@ case 'addaluguel':
           const cmdName = q.trim().toLowerCase();
           
           // Lista de comandos de brincadeira válidos
-          const validCommands = ['tapa', 'soco', 'socar', 'beijo', 'beijar', 'beijob', 'beijarb', 'abraco', 'abracar', 'mata', 'matar', 'tapar', 'goza', 'gozar', 'mamar', 'mamada', 'cafune', 'morder', 'mordida', 'lamber', 'lambida', 'explodir', 'sexo', 'siririca', 'punheta', 'chute', 'chutar', 'tomate', 'compatibilidade', 'rankputo', 'rankputa', 'rankpauzudo', 'rankbucetuda', 'pgpau', 'pgpeito', 'pgbunda'];
+          const validCommands = ['tapa', 'soco', 'socar', 'beijo', 'beijar', 'beijob', 'beijarb', 'abraco', 'abracar', 'mata', 'matar', 'tapar', 'goza', 'gozar', 'mamar', 'mamada', 'cafune', 'morder', 'mordida', 'lamber', 'lambida', 'explodir', 'sexo', 'siririca', 'punheta', 'chute', 'chutar', 'tomate', 'compatibilidade', 'rankputo', 'rankputa', 'rankpauzudo', 'rankbucetuda', 'pgpau', 'pgpeito', 'pgbunda', 'aura', 'sigma', 'ceu', 'inferno', 'frio', 'fria'];
           
           if (!validCommands.includes(cmdName)) {
             return reply(`❌ Esse comando não existe.\n\nComandos disponíveis:\n${validCommands.join(', ')}`);
@@ -39965,8 +39965,160 @@ case 'hotseat': {
           reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
         });
         break;
-      
+
+      // AURA / SIGMA — meme de "farmar aura": frase sorteada + GIF do !setgif
+      // (a media sai de gifsbn/aura.* ou gifsbn/sigma.*; sem arquivo, so texto).
+      case 'aura':
+      case 'sigma':
+        try {
+          if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
+          if (!isModoBn) return reply('❌ O modo brincadeira não está ativo nesse grupo.');
+
+          const targetUser = menc_os2 || sender;
+          const targetName = `@${getUserName(targetUser)}`;
+
+          const frasesAura = [
+            `${targetName} entrou na sala sem falar nada e farmou +1000 de aura 🗿`,
+            `${targetName} respondeu "kkk" e perdeu 500 de aura na hora 📉`,
+            `${targetName} farmou aura infinita só de existir ✨`,
+            `${targetName} tropeçou na própria sombra e perdeu toda a aura que tinha 💀`,
+            `${targetName} passou reto sem olhar pra trás e ganhou +999 de aura 😎`
+          ];
+          const frasesSigma = [
+            `${targetName} acordou às 5h, treinou em silêncio e nem postou story. Sigma demais 🗿`,
+            `${targetName} está no sigma grindset: sem drama, sem explicação, só resultado 🐺`,
+            `${targetName} ouviu tudo, não respondeu nada e ainda saiu por cima. Aura de lobo solitário 🌑`,
+            `${targetName} não pede validação, não corre atrás e ainda é o mais respeitado do grupo 👑`,
+            `${targetName} virou sigma depois de perceber que ninguém estava prestando atenção mesmo 🚶`
+          ];
+
+          const frases = command === 'sigma' ? frasesSigma : frasesAura;
+          const responseText = frases[Math.floor(Math.random() * frases.length)];
+
+          // Media do !setgif / arquivo solto na pasta gifsbn.
+          let gamesDataMeme = fs.existsSync(__dirname + '/funcs/json/games.json') ? JSON.parse(fs.readFileSync(__dirname + '/funcs/json/games.json')) : { games2: {} };
+          const { media } = resolveBrincadeiraMedia(gamesDataMeme.games2?.[command], command);
+          const resolveMediaPath = (url) => resolveGifsbnMediaUrl(url, __dirname);
+
+          if (media?.image) {
+            const imagePath = resolveMediaPath(typeof media.image === 'object' ? media.image.url : media.image);
+            if (imagePath.startsWith('http')) {
+              await nazu.sendMessage(from, { image: { url: imagePath }, caption: responseText, mentions: [targetUser] });
+            } else if (fs.existsSync(imagePath)) {
+              await nazu.sendMessage(from, { image: fs.readFileSync(imagePath), caption: responseText, mentions: [targetUser] });
+            } else {
+              await nazu.sendMessage(from, { text: responseText, mentions: [targetUser] });
+            }
+          } else if (media?.video) {
+            const videoPath = resolveMediaPath(typeof media.video === 'object' ? media.video.url : media.video);
+            if (videoPath.startsWith('http')) {
+              await nazu.sendMessage(from, { video: { url: videoPath }, caption: responseText, mentions: [targetUser], gifPlayback: true });
+            } else if (fs.existsSync(videoPath)) {
+              await nazu.sendMessage(from, { video: fs.readFileSync(videoPath), caption: responseText, mentions: [targetUser], gifPlayback: true });
+            } else {
+              await nazu.sendMessage(from, { text: responseText, mentions: [targetUser] });
+            }
+          } else {
+            await nazu.sendMessage(from, { text: responseText, mentions: [targetUser] });
+          }
+        } catch (e) {
+          console.error(e);
+          await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
+        }
+        break;
+
+      // CEU / INFERNO / FRIO / FRIA — sorteio com base fixa (50% / 0%) + incremento.
+      case 'ceu':
+      case 'inferno':
+      case 'frio':
+      case 'fria':
+        try {
+          if (!isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
+          if (!isModoBn) return reply('❌ O modo brincadeira não está ativo nesse grupo.');
+
+          const targetUser = menc_os2 || sender;
+          const targetName = `@${getUserName(targetUser)}`;
+
+          const frasesCeu = [
+            `${targetName} tem *{p}%* de chance de ir pro céu ☁️😇`,
+            `${targetName} foi pesado na balança divina: *{p}%* de chance de subir pro céu 🕊️`,
+            `São Pedro abriu a lista e o nome de ${targetName} tem *{p}%* de chance de entrar no céu ✨`
+          ];
+          const frasesInferno = [
+            `${targetName} tem *{p}%* de chance de ir pro inferno 🔥😈`,
+            `${targetName} já tem vaga reservada no inferno: *{p}%* de chance 🔥`,
+            `O capeta conferiu a lista e ${targetName} tem *{p}%* de chance de cair no inferno 😱`
+          ];
+          const frasesFrio = [
+            `${targetName} tem *{p}%* de frieza 🧊`,
+            `Nível de frieza de ${targetName}: *{p}%* 🥶`,
+            `Medidor de frieza quebrou com ${targetName}: *{p}%* ❄️`
+          ];
+          const frasesFria = [
+            `${targetName} tem *{p}%* de frieza 🧊`,
+            `Nível de frieza de ${targetName}: *{p}%* 🥶`,
+            `A frieza de ${targetName} chegou a *{p}%* e congelou o grupo ❄️`
+          ];
+
+          const frases = command === 'ceu' ? frasesCeu
+            : command === 'inferno' ? frasesInferno
+              : command === 'fria' ? frasesFria
+                : frasesFrio;
+
+          // Base fixa: ceu (50%) e frio/fria (0%) sao "puros" -- o valor final e a
+          // base + um complemento aleatorio. Inferno e so aleatorio (0-100%).
+          const base = command === 'ceu' ? 50 : 0;
+          const incremento = command === 'ceu' || command === 'frio' || command === 'fria'
+            ? Math.floor(Math.random() * (101 - base))
+            : Math.floor(Math.random() * 101);
+          const porcentagem = base + incremento;
+
+          const barraTamanho = 15;
+          const barraPreenchida = Math.floor((porcentagem / 100) * barraTamanho);
+          const barra = '█'.repeat(barraPreenchida) + '░'.repeat(barraTamanho - barraPreenchida);
+
+          const emoji = command === 'ceu' ? '☁️' : command === 'inferno' ? '🔥' : '🧊';
+          const rotulo = command === 'ceu' ? 'chance de ir ao céu'
+            : command === 'inferno' ? 'chance de ir ao inferno'
+              : 'nível de frieza';
+
+          const frase = frases[Math.floor(Math.random() * frases.length)].replaceAll('{p}', String(porcentagem));
+          const responseText = `${emoji} *${rotulo.toUpperCase()}*\n\n👤 ${targetName}\n\n[${barra}] ${porcentagem}%\n\n${frase}`;
+
+          // Media do !setgif / arquivo solto na pasta gifsbn.
+          let gamesDataClima = fs.existsSync(__dirname + '/funcs/json/games.json') ? JSON.parse(fs.readFileSync(__dirname + '/funcs/json/games.json')) : { games2: {} };
+          const { media } = resolveBrincadeiraMedia(gamesDataClima.games2?.[command], command);
+          const resolveMediaPath = (url) => resolveGifsbnMediaUrl(url, __dirname);
+
+          if (media?.image) {
+            const imagePath = resolveMediaPath(typeof media.image === 'object' ? media.image.url : media.image);
+            if (imagePath.startsWith('http')) {
+              await nazu.sendMessage(from, { image: { url: imagePath }, caption: responseText, mentions: [targetUser] });
+            } else if (fs.existsSync(imagePath)) {
+              await nazu.sendMessage(from, { image: fs.readFileSync(imagePath), caption: responseText, mentions: [targetUser] });
+            } else {
+              await nazu.sendMessage(from, { text: responseText, mentions: [targetUser] });
+            }
+          } else if (media?.video) {
+            const videoPath = resolveMediaPath(typeof media.video === 'object' ? media.video.url : media.video);
+            if (videoPath.startsWith('http')) {
+              await nazu.sendMessage(from, { video: { url: videoPath }, caption: responseText, mentions: [targetUser], gifPlayback: true });
+            } else if (fs.existsSync(videoPath)) {
+              await nazu.sendMessage(from, { video: fs.readFileSync(videoPath), caption: responseText, mentions: [targetUser], gifPlayback: true });
+            } else {
+              await nazu.sendMessage(from, { text: responseText, mentions: [targetUser] });
+            }
+          } else {
+            await nazu.sendMessage(from, { text: responseText, mentions: [targetUser] });
+          }
+        } catch (e) {
+          console.error(e);
+          await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
+        }
+        break;
+
       case 'gay':
+      case 'hetero':
       case 'burro':
       case 'inteligente':
       case 'otaku':
@@ -40106,6 +40258,7 @@ case 'hotseat': {
           
           const rateConfig = {
             'gay': { emoji: '🏳️‍🌈', nome: 'gay' },
+            'hetero': { emoji: '💑', nome: 'hétero' },
             'burro': { emoji: '🤪', nome: 'burro' },
             'inteligente': { emoji: '🧠', nome: 'inteligente' },
             'otaku': { emoji: '🗾', nome: 'otaku' },
@@ -40371,6 +40524,7 @@ ${groupPrefix}setngl https://ngl.link/...`);
         }
         break;
       case 'lesbica':
+      case 'hetera':
       case 'burra':
       case 'corna':
       case 'gostosa':
