@@ -35,6 +35,7 @@ import {
     isGroupAdmin,
     cleanupX9System
 } from './utils/x9System.js';
+import { handleJoinRequestEvent, resolveJoinActor } from './utils/x9JoinRequest.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const modules = await import('./funcs/exports.js');
@@ -775,7 +776,9 @@ async function handleWhatsAppNativeAction(AbyssSock, inf) {
         }
         
         const targetParticipant = participant || (participants && participants[0]);
-        const adminJid = author || authorPn;
+        // Ator = quem aprovou/recusou. Preferimos o PN: o LID nao resolve a
+        // mencao (@<lid> nao renderiza no cliente), e o card mostra "por @X".
+        const adminJid = resolveJoinActor({ author, authorPn });
         
         if (!targetParticipant || !adminJid) {
             console.log('[X9] Dados insuficientes');
@@ -1495,51 +1498,25 @@ async function createBotSocket(authDir) {
             console.log('║  🔎 X9 System v2.0                  ║');
             console.log('╚══════════════════════════════════════╝');
             console.log('Full Event Data:', JSON.stringify(inf, null, 2));
-            
-            const { id: groupId, author, participant, action, method } = inf;
-            
-            // Ignora eventos de rejeição - não processa novamente
-            if (action === 'revoke' || action === 'reject') {
-                console.log('[X9] Evento de rejeição ignorado');
+
+            // A decisao (so `created` e pedido novo) e o registro do historico
+            // vivem no modulo puro, para o teste rodar o MESMO caminho da
+            // producao. Antes o filtro era `action === 'revoke' || 'reject'` --
+            // nomes que o stub nunca emite (as actions sao `created`/`revoked`/
+            // `rejected`), entao a RECUSA passava e o card era reenviado.
+            const resultado = await handleJoinRequestEvent({
+                sock: AbyssSock,
+                inf,
+                databaseDir: DATABASE_DIR,
+                processNewJoinRequest,
+                loadGroupSettings,
+            });
+
+            if (resultado.ignorado) {
+                console.log(`[X9] Evento ignorado (${resultado.motivo}): so "created" e pedido novo`);
                 return;
             }
-            
-            // Salva registro da solicitação para histórico
-            if (groupId) {
-                try {
-                    const groupFile = path.join(DATABASE_DIR, 'grupos', `${groupId}.json`);
-                    let groupData = {};
-                    
-                    if (fs.existsSync(groupFile)) {
-                        groupData = JSON.parse(fs.readFileSync(groupFile, 'utf-8'));
-                    }
-                    
-                    if (!groupData.joinRequests) {
-                        groupData.joinRequests = [];
-                    }
-                    
-                    const registro = {
-                        autor: author || null,
-                        vitima: participant || null,
-                        acao: action,
-                        metodo: method || null,
-                        data: new Date().toLocaleDateString('pt-BR'),
-                        hora: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-                        timestamp: Date.now()
-                    };
-                    
-                    groupData.joinRequests.push(registro);
-                    
-                    if (groupData.joinRequests.length > 100) {
-                        groupData.joinRequests = groupData.joinRequests.slice(-100);
-                    }
-                    
-                    fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
-                } catch (e) {
-                    console.error('Erro ao salvar join request:', e.message);
-                }
-            }
-            
+
             await handleGroupJoinRequest(AbyssSock, inf);
         });
 

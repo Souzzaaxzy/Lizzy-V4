@@ -5022,6 +5022,81 @@ teste cria um remetente novo por execução; e o dublê do socket precisa de
 ## COMANDO `!eununca` — frases trocadas (set/2026) ✅
 
 ## COMANDO `!ppp` — foto aleatoria + enquete Pego/Passo/Penso (set/2026) ✅
+
+## X9 — pedido de entrada: a RECUSA reenviava o card (set/2026) ✅
+Sintoma do dono: ao RECUSAR um usuario com o X9 ativo, o bot reenviava o card
+de solicitacao (o mesmo card de antes) em vez de dizer quem recusou. A
+aprovacao funcionava.
+
+### Causa raiz (medida, nao suposta)
+O listener de `group.join-request` filtrava:
+```js
+if (action === 'revoke' || action === 'reject') { return; }
+```
+Esses nomes **nao existem**: as actions canonicas do stub sao
+`created` / `revoked` / `rejected` (upstream, `Types/GroupMetadata.ts`).
+Entao o filtro nunca casava, `rejected` passava direto e caia em
+`processNewJoinRequest`, que **reenviava o card** como se fosse um pedido novo.
+
+### O que a FORK passou a entregar
+PR **#4** (`Souzzaaxzy/baileys`), merge commit `e6ed0a7`. A `action` agora e
+**sempre** derivada (antes so o caminho de `revoked_membership_requests` a
+definia; nos demais vinha `undefined`):
+
+| situacao | action |
+|---|---|
+| action canonica veio do stub | preservada |
+| ator == afetado | `revoked` (o proprio solicitante cancelou) |
+| ator != afetado | `rejected` (um admin resolveu) |
+| sem afetado | `created` (nao se inventa "revoked") |
+
+Novo `lib/Utils/join-request.js` (`deriveJoinRequestAction`), exportado por
+`@souzzaaxzy/baileys`. A comparacao ignora o device (`:N`) mas **mantem o
+servidor** — `222@lid` e `222@s.whatsapp.net` sao namespaces diferentes.
+Testes da fork: `tests/join-request-action.test.js` (12); revertendo a
+derivacao, **3 falham**.
+
+### O que o BOT passou a fazer
+Novo modulo puro **`dados/src/utils/x9JoinRequest.js`**:
+`isNewJoinRequest`, `isResolvedJoinRequest`, `resolveJoinActor`,
+`resolveJoinRequester`, `recordJoinRequest` e **`handleJoinRequestEvent`** —
+este ultimo e o CORPO do listener.
+
+**O corpo do listener vive no modulo puro de proposito.** O listener real fica
+dentro de `createBotSocket`, e importar o `connect.js` num teste **abre socket
+de verdade**. Na primeira versao o teste REPLICAVA a logica — e por isso
+passava enquanto a producao estava quebrada. Agora o `connect.js` so faz a
+fiacao (`handleJoinRequestEvent({...})`) e o teste roda o **mesmo** codigo.
+
+Mudancas no `connect.js`:
+- o filtro passou a ser `if (!isNewJoinRequest(action))` — **so `created`**
+  segue para o card; `rejected`/`revoked` (e qualquer valor inesperado) sao
+  ignorados, sem anunciar uma solicitacao ja resolvida;
+- o **ator** (quem aprovou/recusou) passou a preferir o **PN**: a mencao
+  `@<lid>` **nao renderiza** no cliente, entao o card dizia "por @<numero
+  interno>" em vez do contato;
+- o historico (`joinRequests`) ganhou `autorPn`/`vitimaPn`.
+
+O caminho da APROVACAO nao foi tocado (ja funcionava): quem trata os dois e o
+listener de `group-participants.update` -> `handleWhatsAppNativeAction`.
+
+### Testes — `tests/x9-join-request.test.js` (**11 testes / 45 assercoes**)
+Modulo puro (so `created` e pedido novo; `revoked`/`rejected`/nomes antigos/
+valor desconhecido nao sao) + o **caminho real** (`handleJoinRequestEvent`):
+recusa e cancelamento **nao** reenviam o card; pedido novo envia e registra o
+historico; o card de recusa/aprovacao mostra quem agiu **pelo PN** (e nao
+mostra o LID); e um guard estrutural de que o `connect.js` **delega** (nao tem
+copia da regra).
+
+**Prova de que o teste mede a mudanca**: reintroduzindo a condicao antiga no
+codigo REAL, **5 assercoes falham** (inclusive "o card de solicitacao NAO foi
+reenviado").
+
+### Dependencia
+`package-lock.json` + `yarn.lock` pinados em `e6ed0a7` (hash completo). Sem o
+commit instalado, a `action` volta a chegar `undefined` e a recusa reenvia o
+card. Reinstalar: `npm install --allow-git=all`.
+
 Categoria **JOGOS & DIVERSÃO** (a **primeira** do `menubn`). Ao executar, o bot
 sorteia **um membro aleatorio** do grupo, envia a **foto dele** e, **abaixo**, uma
 enquete com o titulo sendo a **mencao do alvo** e as opcoes **Pego / Passo /
