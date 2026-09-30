@@ -75,10 +75,6 @@ export default async function menuFerramentas(prefix, botName = "MeuBot", userNa
 │ ❌ ${prefix}apagalembrete
 │ 🎂 ${prefix}aniversario
 │ 📊 ${prefix}estatisticas
-
-╭━━━꧁༺ ㅤ🧪 ${boldItalic('TESTES DE PROTO')} 🧪ㅤ ༻꧂━━━╮
-│ 🎧 ${prefix}footer
-╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━━━╯
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 ╭─────────────────╮
