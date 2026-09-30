@@ -158,6 +158,49 @@ cliente, não mandar uma mensagem limpa.
 
 ---
 
+## Resultado MEDIDO (offline, sem enviar nada)
+
+Rodei um probe local: montei cada tecnica com a fork instalada, medi o tamanho no
+proto (`proto.Message.encode`) e passei pelo **proprio analisador do bot**
+(`analyzeInvisibleMessage`). Nada foi enviado.
+
+> Detalhe da API: `analyzeInvisibleMessage` precisa de **`content` explicito**
+> (`{ ...info, content: info.message }`). Sem isso ele le `content` vazio e
+> classifica tudo como NORMAL — foi o primeiro resultado (errado) que o probe deu.
+
+| # | tecnica | bytes no proto | classificacao do bot | indice |
+|---|---|---|---|---|
+| 1 | reaction vazia | 76 | NORMAL | 0 |
+| 2 | `paymentInviteServiceType: 3` | 49 | NORMAL | 0 |
+| 3 | texto `U+3164` | 44 | NORMAL | 0 |
+| 4 | keepInChat | 83 | NORMAL | 0 |
+| 5 | **raja atual** (`sendPaymentMessage`) | 23 | **FORTEMENTE_COMPATIVEL** | 40 |
+| 6 | `declinePaymentRequestMessage` | 35 | NORMAL | 0 |
+| 7 | `cancelPaymentRequestMessage` | 35 | NORMAL | 0 |
+| 8 | `protocolMessage` type 25 | 4 | NORMAL | INV-016 (informativo) |
+| 9 | `placeholderMessage` | 3 | NORMAL | 0 |
+| 10 | `requestPaymentMessage` amount 0 | 29 | **FORTEMENTE_COMPATIVEL** | 90 |
+
+### O que isso diz
+
+1. **Todas as 10 sao PRODUZIVEIS** pela fork — inclusive as que nao tem ramo
+   proprio no send (`declinePaymentRequest`, `cancelPaymentRequest`,
+   `protocolMessage`, `placeholderMessage`): basta
+   `generateWAMessageFromContent`, que passa o proto direto.
+2. **O bot ja pega as duas variantes de pagamento** (5 e 10). O resto passa
+   limpo — sao invisiveis **e** indetectaveis hoje.
+3. **`INV-016`** (mensagem de sistema/protocolo) e **informativo** (peso 0), entao
+   o `protocolMessage` nao pontua.
+4. Os tamanhos sao **minusculos** (3 a 83 bytes) comparados ao travazap
+   (~2,9 MB). Ou seja: as tecnicas limpas sao baratas; a que "trava" e que e
+   gigante — e e a unica que hoje nao e pega por tamanho.
+
+### Proximo passo (nao executado)
+
+Sao 8 tecnicas sem deteccao e sem validacao em aparelho real. Testar em grupo
+exige sessao pareada — o que da para fazer **offline** ja foi feito: elas montam,
+o proto fica correto e o bot nao as classifica.
+
 ## Comparativo (o que serve para o `!rajar`)
 
 | técnica | invisível de verdade? | precisa de fork? | risco de travar cliente | validado aqui? |
