@@ -5074,6 +5074,11 @@ presentes.
 
 Nenhuma linha de comando foi tocada — so o cabecalho de uma categoria e a posicao
 dos dois blocos.
+
+Ajuste seguinte (set/2026): o **`!lesbica` saiu de RELACIONAMENTOS e entrou em
+BRINCADEIRAS**, logo abaixo do `!gay` (mesmo emoji, mesma familia dos outros
+"roles" — `!gay`, `!otaku`, `!fiel`, `!corno`...). Continua aparecendo **uma
+unica vez** no menu e a contagem nao mudou (completo **350**, lite **336**).
 `'ppp'` na lista `menuCommandsMap.menubn` do `blockPv`. Baseline do
 `menu-layout`: **menubn 349 -> 350**.
 

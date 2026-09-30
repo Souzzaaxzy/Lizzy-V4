@@ -114,7 +114,6 @@ ${isLiteMode ? '' : `╭━━━꧁༺ ㅤ🔞 ${boldItalic('INTERAÇÕES "PICA
 │ 💔 ${prefix}terminarquadrisal
 │ 🤥 ${prefix}trair
 │ 📜 ${prefix}historicotraicao
-│ 🏳️ ${prefix}lesbica
 │ 💙 ${prefix}cf
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
@@ -122,6 +121,7 @@ ${isLiteMode ? '' : `╭━━━꧁༺ ㅤ🔞 ${boldItalic('INTERAÇÕES "PICA
 ╭━━━꧁༺ ㅤ😆 ${boldItalic('BRINCADEIRAS')} 😆ㅤ ༻꧂━━━╮
 │ 📏 ${prefix}medirpau
 │ 🏳️ ${prefix}gay
+│ 🏳️ ${prefix}lesbica
 │ 🧠 ${prefix}burro
 │ 🧠 ${prefix}burra
 │ 🧠 ${prefix}inteligente
