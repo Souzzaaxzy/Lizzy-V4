@@ -678,31 +678,13 @@ export async function updateCardOnReject(sock, groupId, participantJid, adminJid
             }
         }
         
-        // Envia novo card de rejeição com foto
-        let photoUrl = null;
-        try {
-            photoUrl = await sock.profilePictureUrl(req.participantJid, 'image');
-        } catch (e) {
-            console.log('[X9] Sem foto de perfil');
-        }
-        
-        let sent;
-        if (photoUrl) {
-            sent = await sock.sendMessage(groupId, {
-                image: { url: photoUrl },
-                caption: rejectedText,
-                contextInfo: X9_NEWSLETTER_CTX,
-                mentions: [req.participantJid, adminJid]
-            });
-            console.log('[X9] ✅ Card de rejeição com foto enviado');
-        } else {
-            sent = await sock.sendMessage(groupId, {
-                text: rejectedText,
-                contextInfo: X9_NEWSLETTER_CTX,
-                mentions: [req.participantJid, adminJid]
-            });
-            console.log('[X9] ✅ Card de rejeição enviado');
-        }
+        // Sem foto: a recusa sai como TEXTO, igual a aprovacao.
+        const sent = await sock.sendMessage(groupId, {
+            text: rejectedText,
+            contextInfo: X9_NEWSLETTER_CTX,
+            mentions: [req.participantJid, adminJid]
+        });
+        console.log('[X9] Card de rejeicao enviado');
         
         x9Store.update(groupId, req.participantJid, { status: 'rejected' });
         console.log(`[X9] ❌ Rejeitado por ${adminNumber}`);
@@ -815,30 +797,13 @@ export async function notifyWhatsAppRejection(sock, groupId, participantJid, adm
             }
         }
 
-        // Envia novo card de rejeição com foto
-        let photoUrl = null;
-        try {
-            photoUrl = await sock.profilePictureUrl(req.participantJid, 'image');
-        } catch (e) {
-            console.log('[X9] Sem foto de perfil');
-        }
-
-        if (photoUrl) {
-            await sock.sendMessage(groupId, {
-                image: { url: photoUrl },
-                caption: notification,
-                contextInfo: X9_NEWSLETTER_CTX,
-                mentions: [req.participantJid, adminJid].filter(Boolean)
-            });
-            console.log('[X9] ✅ Card de rejeição com foto enviado');
-        } else {
-            await sock.sendMessage(groupId, {
-                text: notification,
-                contextInfo: X9_NEWSLETTER_CTX,
-                mentions: [req.participantJid, adminJid].filter(Boolean)
-            });
-            console.log('[X9] ✅ Card de rejeição enviado');
-        }
+        // Sem foto: a recusa sai como TEXTO, igual a aprovacao.
+        await sock.sendMessage(groupId, {
+            text: notification,
+            contextInfo: X9_NEWSLETTER_CTX,
+            mentions: [req.participantJid, adminJid].filter(Boolean)
+        });
+        console.log('[X9] Card de rejeicao enviado');
 
         x9Store.update(groupId, req.participantJid, { status: 'rejected' });
         console.log('[X9] ✅ Rejeição processada');
@@ -893,30 +858,12 @@ export async function notifyRejection({ sock, groupId, requester, actor }) {
         }
     }
 
-    let photoUrl = null;
-    try {
-        photoUrl = await sock.profilePictureUrl(req.participantJid, 'image');
-    } catch (e) {
-        console.log('[X9] Sem foto de perfil');
-    }
-
-    const mentions = [req.participantJid, actor].filter(Boolean);
-
-    let sent;
-    if (photoUrl) {
-        sent = await sock.sendMessage(groupId, {
-            image: { url: photoUrl },
-            caption: rejectedText,
-            contextInfo: X9_NEWSLETTER_CTX,
-            mentions
-        });
-    } else {
-        sent = await sock.sendMessage(groupId, {
-            text: rejectedText,
-            contextInfo: X9_NEWSLETTER_CTX,
-            mentions
-        });
-    }
+    // Sem foto: a recusa sai como TEXTO, igual a aprovacao.
+    const sent = await sock.sendMessage(groupId, {
+        text: rejectedText,
+        contextInfo: X9_NEWSLETTER_CTX,
+        mentions: [req.participantJid, actor].filter(Boolean)
+    });
 
     x9Store.update(groupId, req.participantJid, { status: 'rejected' });
     console.log(`[X9] Recusado por ${vars.admin}`);

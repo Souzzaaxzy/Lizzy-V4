@@ -105,15 +105,21 @@ function makeGroup() {
   return `1203636000000000${String(grupoCounter).padStart(3, '0')}@g.us`;
 }
 
-function makeSock() {
+function makeSock({ temFoto = false } = {}) {
   const sent = [];
+  const chamadasDeFoto = [];
   return {
     sent,
+    chamadasDeFoto,
     sendMessage: async (jid, content) => {
       sent.push({ jid, content });
       return { key: { id: `SENT-${sent.length}` } };
     },
-    profilePictureUrl: async () => { throw new Error('sem foto'); },
+    profilePictureUrl: async (jid) => {
+      chamadasDeFoto.push(jid);
+      if (!temFoto) throw new Error('sem foto');
+      return 'https://cdn.exemplo/foto.jpg';
+    },
   };
 }
 
@@ -255,6 +261,89 @@ await test('o nome antigo ("revoke"/"reject") também não dispara o card', asyn
 
   ok(r1.processou === false && r2.processou === false, 'nenhum tratado como pedido novo');
   ok(sock.sent.length === 0, 'nada enviado');
+});
+
+// ============================================================================
+// 2b) RECUSA SEM FOTO (igual a aprovacao)
+// ============================================================================
+
+await test('RECUSA: card sai como TEXTO, sem foto — igual à aprovação', async () => {
+  const groupId = makeGroup();
+  // O sock TEM foto disponível: se a recusa pedisse, ela viria.
+  const sock = makeSock({ temFoto: true });
+
+  await fluxoDoListener(sock, {
+    id: groupId,
+    action: 'created',
+    participant: SOLICITANTE_LID,
+    participantPn: SOLICITANTE_PN,
+    method: 'invite_link',
+  });
+
+  // O card de SOLICITAÇÃO pode ter foto (não é o que estamos medindo).
+  const solicitacao = sock.sent.find((s) => (s.content?.text || s.content?.caption || '').includes(BOLD_SOLICITACAO));
+  ok(Boolean(solicitacao), 'o card de solicitação foi enviado');
+
+  sock.sent.length = 0;
+  sock.chamadasDeFoto.length = 0;
+
+  await fluxoDoListener(sock, {
+    id: groupId,
+    action: 'rejected',
+    author: ADMIN_LID,
+    authorPn: ADMIN_PN,
+    participant: SOLICITANTE_LID,
+    participantPn: SOLICITANTE_PN,
+  });
+
+  const recusa = sock.sent.find((s) => (s.content?.text || s.content?.caption || '').includes(BOLD_NEGADA));
+  ok(Boolean(recusa), 'mandou o card de NEGADA');
+  ok(!recusa?.content?.image, 'a recusa NÃO tem imagem');
+  ok(typeof recusa?.content?.text === 'string', 'a recusa sai como texto');
+  ok(sock.chamadasDeFoto.length === 0, `nem busca a foto (chamadas: ${sock.chamadasDeFoto.length})`);
+});
+
+await test('APROVAÇÃO: card sai como TEXTO, sem foto', async () => {
+  const groupId = makeGroup();
+  const sock = makeSock({ temFoto: true });
+
+  await fluxoDoListener(sock, {
+    id: groupId,
+    action: 'created',
+    participant: SOLICITANTE_LID,
+    participantPn: SOLICITANTE_PN,
+    method: 'invite_link',
+  });
+  sock.sent.length = 0;
+
+  await x9.updateCardOnApprove(sock, groupId, SOLICITANTE_PN, ADMIN_PN);
+
+  const aprov = sock.sent.find((s) => (s.content?.text || '').includes(BOLD_APROVADA));
+  ok(Boolean(aprov), 'mandou o card de APROVADA');
+  ok(!aprov?.content?.image, 'a aprovação NÃO tem imagem');
+  ok(typeof aprov?.content?.text === 'string', 'sai como texto');
+});
+
+await test('o !recusarsolic (comando) também não usa foto', async () => {
+  const groupId = makeGroup();
+  const sock = makeSock({ temFoto: true });
+
+  await fluxoDoListener(sock, {
+    id: groupId,
+    action: 'created',
+    participant: SOLICITANTE_LID,
+    participantPn: SOLICITANTE_PN,
+    method: 'invite_link',
+  });
+  sock.sent.length = 0;
+  sock.chamadasDeFoto.length = 0;
+
+  await x9.updateCardOnReject(sock, groupId, SOLICITANTE_PN, ADMIN_PN);
+
+  const recusa = sock.sent.find((s) => (s.content?.text || s.content?.caption || '').includes(BOLD_NEGADA));
+  ok(Boolean(recusa), 'mandou o card de NEGADA');
+  ok(!recusa?.content?.image, 'sem imagem');
+  ok(sock.chamadasDeFoto.length === 0, 'nem busca a foto');
 });
 
 // ============================================================================

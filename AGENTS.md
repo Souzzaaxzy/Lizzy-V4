@@ -5126,6 +5126,24 @@ passar.
 **Teste**: `tests/x9-join-request.test.js` **11 testes / 49 assercoes**. A
 recusa agora exige o card de NEGADA (com o PN de quem recusou) e proibe o card
 de solicitacao. Removendo o `sock` da chamada, **4 assercoes falham**.
+
+#### Recusa SEM FOTO, igual a aprovacao (set/2026) ✅
+Pedido do dono: *"a recusa nao deve ter foto, igual a aceitacao"*.
+
+Antes, **tres** caminhos de recusa tentavam mandar a foto do perfil:
+`notifyRejection` (evento), `updateCardOnReject` (`!recusarsolic`) e
+`notifyWhatsAppRejection`. Os tres passaram a enviar **so texto**, exatamente
+como `updateCardOnApprove`/`notifyWhatsAppApproval` ja faziam.
+
+Conferido por medicao: no `x9System.js` sobrou **uma unica** chamada a
+`profilePictureUrl` — a do `processNewJoinRequest` (o card de SOLICITACAO, que
+e o unico que deve ter foto).
+
+**Testes**: `tests/x9-join-request.test.js` **14 testes / 60 assercoes**. Os
+novos usam um socket que **TEM** foto disponivel (com contador de chamadas), e
+exigem: a recusa sai como texto, **nao** tem `image` e **nem busca** a foto; a
+aprovacao idem; e o `!recusarsolic` tambem. Reintroduzindo a foto na recusa,
+**3 assercoes falham**.
 commit instalado, a `action` volta a chegar `undefined` e a recusa reenvia o
 card. Reinstalar: `npm install --allow-git=all`.
 
