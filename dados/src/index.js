@@ -1131,6 +1131,7 @@ import {
 import { montarRankBn } from './menus/rankbn.js';
 import {
   minJogadores as minJogadoresImpostor,
+  maxJogadores as maxJogadoresImpostor,
   parseOpcoesCriar as parseOpcoesCriarImpostor,
   criarLobby as criarLobbyImpostor,
   entrarNoLobby as entrarNoLobbyImpostor,
@@ -15681,6 +15682,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
               `🕵️ *IMPOSTOR* — Among Us de texto\n\n` +
               `🎮 ${groupPrefix}impostor criar [tempo] [impostores] — abre a sala\n` +
               `   • tempo: 1 a 15 min (ex.: 5m) · impostores: 1 ou 2\n` +
+              `   • 2 impostores: de 4 a 5 jogadores\n` +
               `   • ex.: ${groupPrefix}impostor criar 5m 2 · ${groupPrefix}impostor criar 2\n` +
               `🚪 ${groupPrefix}impostor entrar — entra na sala\n` +
               `📋 ${groupPrefix}impostor — status da sala/partida\n` +
@@ -15720,7 +15722,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
               ? `⏱️ Tempo: *${Math.round(sala.duracaoMs / 60000)} min*${avisoTempo}\n`
               : `⏱️ Tempo: sem limite (acaba na votação)\n`;
             const impostoresTxt = sala.quantidadeImpostores > 1
-              ? `😈 Impostores: *${sala.quantidadeImpostores}* (mínimo ${minJogadoresImpostor(sala.quantidadeImpostores)} jogadores)\n`
+              ? `😈 Impostores: *${sala.quantidadeImpostores}* (de ${minJogadoresImpostor(sala.quantidadeImpostores)} a ${maxJogadoresImpostor(sala.quantidadeImpostores)} jogadores)\n`
               : `😈 Impostores: *1* (mínimo ${minJogadoresImpostor(1)} jogadores)\n`;
             return reply(
               `🕵️ *SALA DO IMPOSTOR CRIADA!*\n\n` +
@@ -15739,11 +15741,16 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
             if (!impGame || impGame.fase !== 'lobby') return reply(`❌ Nenhuma sala aberta. Crie com ${groupPrefix}impostor criar`);
             const r = entrarNoLobbyImpostor(impGame, sender);
             if (!r.ok) {
-              return reply(r.motivo === 'ja_esta' ? '⚠️ Você já está na sala!' : '❌ Não foi possível entrar.');
+              if (r.motivo === 'ja_esta') return reply('⚠️ Você já está na sala!');
+              if (r.motivo === 'sala_cheia') return reply(`❌ A sala está cheia! Com *${impGame.quantidadeImpostores || 1}* impostor(es) o limite é *${r.maximo}* jogadores.`);
+              return reply('❌ Não foi possível entrar.');
             }
+            const tetoTxt = Number.isFinite(maxJogadoresImpostor(impGame.quantidadeImpostores || 1))
+              ? ` (máx. ${maxJogadoresImpostor(impGame.quantidadeImpostores || 1)})`
+              : '';
             return reply(
               `✅ ${impNome(sender)} entrou na sala!\n\n` +
-              `👥 Jogadores (${impGame.jogadores.length}): ${listaNomes(impGame.jogadores)}\n\n` +
+              `👥 Jogadores (${impGame.jogadores.length}${tetoTxt}): ${listaNomes(impGame.jogadores)}\n\n` +
               `▶️ Iniciar: ${groupPrefix}impostor iniciar (só o criador)\n` +
               `🚶 Sair: ${groupPrefix}impostor sair`,
               { mentions: impGame.jogadores }
@@ -15914,14 +15921,16 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
           if (impGame.fase === 'lobby') {
             const q = impGame.quantidadeImpostores || 1;
             const minimo = minJogadoresImpostor(q);
+            const teto = maxJogadoresImpostor(q);
             const faltam = Math.max(minimo - impGame.jogadores.length, 0);
             const tempoTxt = impGame.duracaoMs
               ? `⏱️ Tempo: *${Math.round(impGame.duracaoMs / 60000)} min*\n`
               : `⏱️ Tempo: sem limite\n`;
+            const tetoTxt = Number.isFinite(teto) ? ` (máx. ${teto})` : '';
             return reply(
               `🕵️ *SALA DO IMPOSTOR*\n\n` +
               `👑 Criador: ${impNome(impGame.criador)}\n` +
-              `👥 Jogadores (${impGame.jogadores.length}): ${listaNomes(impGame.jogadores)}\n` +
+              `👥 Jogadores (${impGame.jogadores.length}${tetoTxt}): ${listaNomes(impGame.jogadores)}\n` +
               `😈 Impostores: *${q}*\n` +
               `${tempoTxt}` +
               `${faltam > 0 ? `⏳ Faltam *${faltam}* para o mínimo de ${minimo}.\n` : `✅ Pronto para iniciar!\n`}\n` +

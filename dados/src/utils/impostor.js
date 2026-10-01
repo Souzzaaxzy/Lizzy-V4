@@ -26,6 +26,9 @@ export const MIN_JOGADORES = 3;
 /** Máximo de impostores por partida. */
 export const MAX_IMPOSTORES = 2;
 
+/** Limite de jogadores numa partida com 2 impostores. */
+export const MAX_JOGADORES_2_IMPOSTORES = 5;
+
 /** Tempo máximo de partida (15 minutos). */
 export const DURACAO_MAX_MS = 15 * 60 * 1000;
 
@@ -39,6 +42,20 @@ export const DURACAO_MAX_MS = 15 * 60 * 1000;
 export function minJogadores(quantidadeImpostores = 1) {
   const q = Math.min(Math.max(Number(quantidadeImpostores) || 1, 1), MAX_IMPOSTORES);
   return MIN_JOGADORES + (q - 1);
+}
+
+/**
+ * Máximo de jogadores para `q` impostores.
+ *
+ * Partida com **2 impostores** tem teto de **5 jogadores**; com 1 impostor não
+ * há teto (o grupo inteiro pode jogar).
+ *
+ * @param {number} [quantidadeImpostores]
+ * @returns {number}
+ */
+export function maxJogadores(quantidadeImpostores = 1) {
+  const q = Math.min(Math.max(Number(quantidadeImpostores) || 1, 1), MAX_IMPOSTORES);
+  return q > 1 ? MAX_JOGADORES_2_IMPOSTORES : Infinity;
 }
 
 /**
@@ -149,11 +166,15 @@ export function criarLobby(criador, duracaoMs = 0, quantidadeImpostores = 1) {
   };
 }
 
-/** Entra na sala (só no lobby). */
+/** Entra na sala (só no lobby). Respeita o teto de jogadores (5 com 2 impostores). */
 export function entrarNoLobby(lobby, jid) {
   if (!lobby || lobby.fase !== 'lobby') return { ok: false, motivo: 'sem_sala' };
   if (!jid) return { ok: false, motivo: 'jid_invalido' };
   if (lobby.jogadores.includes(jid)) return { ok: false, motivo: 'ja_esta' };
+  const teto = maxJogadores(lobby.quantidadeImpostores || 1);
+  if (Number.isFinite(teto) && lobby.jogadores.length >= teto) {
+    return { ok: false, motivo: 'sala_cheia', maximo: teto };
+  }
   lobby.jogadores.push(jid);
   return { ok: true };
 }
@@ -486,8 +507,10 @@ export function formatarResultado(jogo, nomeDe = (jid) => `@${String(jid).split(
 export default {
   MIN_JOGADORES,
   MAX_IMPOSTORES,
+  MAX_JOGADORES_2_IMPOSTORES,
   DURACAO_MAX_MS,
   minJogadores,
+  maxJogadores,
   parseDuracao,
   parseQuantidadeImpostores,
   parseOpcoesCriar,

@@ -8504,3 +8504,16 @@ compatibilidade). `escolherImpostores(membros, qtd, rng)` sorteia sem repetir.
 `tests/impostor.test.js`: **46 testes / 391 asserções** (parse em qualquer ordem,
 mínimos 3/4, sorteio de 2 sem repetir, 2 cartões de impostor na entrega, e o
 veredito de 2 impostores).
+
+### Ajuste (set/2026): teto de 5 jogadores para 2 impostores
+Partida com **2 impostores** passa a ter **limite de 5 jogadores** (antes podia
+encher com o grupo inteiro). Com **1 impostor** não há teto.
+
+- `maxJogadores(q)` (novo): `5` para 2 impostores, `Infinity` para 1.
+- `entrarNoLobby` recusa o 6º com `motivo: 'sala_cheia'` e `maximo: 5`.
+- As mensagens mostram o teto: na criação *"Impostores: 2 (de 4 a 5 jogadores)"*,
+  ao entrar *"Jogadores (5/ máx. 5)"* e no status *"(máx. 5)"*. Ajuda atualizada.
+
+Faixa final com 2 impostores: **de 4 a 5 jogadores**. `tests/impostor.test.js`:
+**49 testes / 406 asserções** (teto de 5 no módulo puro e no handler, 6º recusado,
+e 1 impostor sem teto).

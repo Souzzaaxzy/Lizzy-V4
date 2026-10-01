@@ -336,6 +336,27 @@ await test('impostor: parseOpcoesCriar aceita tempo e impostores em QUALQUER ord
   ok(j.erro, 'quantidade repetida -> erro');
 });
 
+await test('impostor: com 2 impostores a sala tem teto de 5 jogadores', () => {
+  ok(impostor.maxJogadores(1) === Infinity, '1 impostor: sem teto');
+  ok(impostor.maxJogadores(2) === 5, '2 impostores: teto 5');
+  const lobby = impostor.criarLobby('a', 0, 2);
+  ok(impostor.entrarNoLobby(lobby, 'b').ok === true, 'b entrou');
+  ok(impostor.entrarNoLobby(lobby, 'c').ok === true, 'c entrou');
+  ok(impostor.entrarNoLobby(lobby, 'd').ok === true, 'd entrou');
+  ok(impostor.entrarNoLobby(lobby, 'e').ok === true, 'e entrou (5º)');
+  ok(lobby.jogadores.length === 5, 'sala com 5');
+  const cheio = impostor.entrarNoLobby(lobby, 'f');
+  ok(cheio.ok === false && cheio.motivo === 'sala_cheia', 'o 6º é recusado');
+  ok(cheio.maximo === 5, 'avisa o máximo');
+  ok(lobby.jogadores.length === 5, 'a sala segue com 5');
+});
+
+await test('impostor: com 1 impostor não há teto de jogadores', () => {
+  const lobby = impostor.criarLobby('a', 0, 1);
+  for (const j of ['b', 'c', 'd', 'e', 'f', 'g']) impostor.entrarNoLobby(lobby, j);
+  ok(lobby.jogadores.length === 7, 'entrou todo mundo (sem teto)');
+});
+
 // ============================================================================
 // 2) MÓDULO PURO — LOBBY
 // ============================================================================
@@ -523,6 +544,19 @@ await test('!impostor criar 5m 2: tempo E 2 impostores (em qualquer ordem)', asy
   includes(r2.text, '5 min', 'tempo (ordem invertida)');
   includes(r2.text, 'Impostores: *2*', 'impostores (ordem invertida)');
   ok(global.impostorGames[g2.jid].quantidadeImpostores === 2, 'guardou 2');
+});
+
+await test('!impostor entrar: com 2 impostores a sala enche em 5', async () => {
+  const group = makeGroup(6);
+  await rodar(group, '!impostor criar 2', { sender: group.members[0] });
+  for (let i = 1; i <= 4; i++) {
+    await rodar(group, '!impostor entrar', { sender: group.members[i] });
+  }
+  ok(global.impostorGames[group.jid].jogadores.length === 5, '5 jogadores na sala');
+  const cheio = await rodar(group, '!impostor entrar', { sender: group.members[5] });
+  includes(cheio.text, 'cheia', 'o 6º é recusado');
+  includes(cheio.text, '5', 'avisa o limite');
+  ok(global.impostorGames[group.jid].jogadores.length === 5, 'a sala segue com 5');
 });
 
 await test('!impostor iniciar com 2 impostores: exige 4 jogadores e entrega 2 cartões de impostor', async () => {
