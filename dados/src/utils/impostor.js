@@ -26,36 +26,19 @@ export const MIN_JOGADORES = 3;
 /** Máximo de impostores por partida. */
 export const MAX_IMPOSTORES = 2;
 
-/** Limite de jogadores numa partida com 2 impostores. */
-export const MAX_JOGADORES_2_IMPOSTORES = 5;
-
 /** Tempo máximo de partida (15 minutos). */
 export const DURACAO_MAX_MS = 15 * 60 * 1000;
 
 /**
- * Mínimo de jogadores para `q` impostores: 3 com 1, 4 com 2 (precisa sobrar
- * tripulação).
+ * Mínimo de jogadores para `q` impostores: **3 com 1, 5 com 2** (2*q + 1) —
+ * precisa sobrar tripulação em número suficiente. Não há teto de jogadores.
  *
  * @param {number} [quantidadeImpostores]
  * @returns {number}
  */
 export function minJogadores(quantidadeImpostores = 1) {
   const q = Math.min(Math.max(Number(quantidadeImpostores) || 1, 1), MAX_IMPOSTORES);
-  return MIN_JOGADORES + (q - 1);
-}
-
-/**
- * Máximo de jogadores para `q` impostores.
- *
- * Partida com **2 impostores** tem teto de **5 jogadores**; com 1 impostor não
- * há teto (o grupo inteiro pode jogar).
- *
- * @param {number} [quantidadeImpostores]
- * @returns {number}
- */
-export function maxJogadores(quantidadeImpostores = 1) {
-  const q = Math.min(Math.max(Number(quantidadeImpostores) || 1, 1), MAX_IMPOSTORES);
-  return q > 1 ? MAX_JOGADORES_2_IMPOSTORES : Infinity;
+  return 2 * q + 1;
 }
 
 /**
@@ -166,15 +149,11 @@ export function criarLobby(criador, duracaoMs = 0, quantidadeImpostores = 1) {
   };
 }
 
-/** Entra na sala (só no lobby). Respeita o teto de jogadores (5 com 2 impostores). */
+/** Entra na sala (só no lobby). Não há teto de jogadores. */
 export function entrarNoLobby(lobby, jid) {
   if (!lobby || lobby.fase !== 'lobby') return { ok: false, motivo: 'sem_sala' };
   if (!jid) return { ok: false, motivo: 'jid_invalido' };
   if (lobby.jogadores.includes(jid)) return { ok: false, motivo: 'ja_esta' };
-  const teto = maxJogadores(lobby.quantidadeImpostores || 1);
-  if (Number.isFinite(teto) && lobby.jogadores.length >= teto) {
-    return { ok: false, motivo: 'sala_cheia', maximo: teto };
-  }
   lobby.jogadores.push(jid);
   return { ok: true };
 }
@@ -345,20 +324,40 @@ export async function iniciarPartida({ membros, banco, categoria, enviarSecreto,
   };
 }
 
-/** Registra o voto de um jogador. */
+/** Registra o voto de um jogador (só quem ainda está na partida). */
 export function votar(jogo, votante, alvo) {
   if (!jogo || !Array.isArray(jogo.jogadores)) return { ok: false, motivo: 'sem_jogo' };
-  if (!jogo.jogadores.includes(votante)) return { ok: false, motivo: 'nao_jogador' };
-  if (!jogo.jogadores.includes(alvo)) return { ok: false, motivo: 'alvo_invalido' };
+  const vivos = jogoJogadores(jogo);
+  if (!vivos.includes(votante)) return { ok: false, motivo: 'nao_jogador' };
+  if (!vivos.includes(alvo)) return { ok: false, motivo: 'alvo_invalido' };
   if (votante === alvo) return { ok: false, motivo: 'voto_em_si' };
   jogo.votos[votante] = alvo;
   return { ok: true };
 }
 
-/** Todos os jogadores já votaram? */
+/**
+ * Jogadores AINDA na partida (expulsos saem). Na 1ª rodada é a lista inteira.
+ */
+export function jogoJogadores(jogo) {
+  const todos = Array.isArray(jogo?.jogadores) ? jogo.jogadores : [];
+  const expulsos = Array.isArray(jogo?.expulsos) ? jogo.expulsos : [];
+  return todos.filter((j) => !expulsos.includes(j));
+}
+
+/** Impostores que ainda estão na partida (não foram expulsos). */
+export function impostoresVivos(jogo) {
+  const impostores = Array.isArray(jogo?.impostores) && jogo.impostores.length
+    ? jogo.impostores
+    : (jogo?.impostor ? [jogo.impostor] : []);
+  const expulsos = Array.isArray(jogo?.expulsos) ? jogo.expulsos : [];
+  return impostores.filter((i) => !expulsos.includes(i));
+}
+
+/** Todos os jogadores vivos já votaram? */
 export function todosVotaram(jogo) {
-  if (!jogo || !Array.isArray(jogo.jogadores) || !jogo.jogadores.length) return false;
-  return Object.keys(jogo.votos || {}).length >= jogo.jogadores.length;
+  const vivos = jogoJogadores(jogo);
+  if (!vivos.length) return false;
+  return vivos.every((j) => jogo.votos && jogo.votos[j] !== undefined);
 }
 
 /** Milissegundos restantes da partida (0 se não tem tempo ou já acabou). */
@@ -374,21 +373,20 @@ export function tempoEsgotado(jogo, agora = Date.now()) {
 }
 
 /**
- * Decide se a votação já pode encerrar, SEM esperar todos.
+ * Decide se a RODADA de votação já pode fechar, SEM esperar todos.
  *
- * Regras (o voto é do grupo inteiro, ninguém é obrigado a votar):
- *   1. **Maioria absoluta**: alguém tem mais da metade dos jogadores -> encerra.
- *      Ex.: 5 jogadores, 3 votos no mesmo alvo -> já decidiu (3 > 2,5).
- *   2. **Todos votaram**: encerra (mesmo empatado — aí o resultado é empate).
- *   3. **Inalcançável**: o líder é único e os que faltam nem somando alcançam.
- *   4. Caso contrário: **aguarda** (pode virar empate).
+ * Regras (o voto é do grupo, ninguém é obrigado a votar):
+ *   1. **Maioria absoluta** entre os VIVOS: alguém tem mais da metade -> fecha.
+ *   2. **Todos os vivos votaram**: fecha (mesmo empatado).
+ *   3. **Inalcançável**: líder único e os pendentes nem somando alcançam.
+ *   4. Caso contrário: **aguarda**.
  *
  * @param {object} jogo
- * @returns {{decidido: boolean, motivo: string, maisVotado?: string|null,
- *            pendentes: number, maxVotos: number}}
+ * @returns {{decidido: boolean, motivo: string, maisVotado: string|null,
+ *            pendentes: number, maxVotos: number, total: number}}
  */
 export function checarVotacao(jogo) {
-  const total = Array.isArray(jogo?.jogadores) ? jogo.jogadores.length : 0;
+  const total = jogoJogadores(jogo).length;
   const votos = Object.keys(jogo?.votos || {}).length;
   const pendentes = Math.max(total - votos, 0);
   const lista = contarVotos(jogo?.votos);
@@ -397,26 +395,23 @@ export function checarVotacao(jogo) {
   const segundo = lista[1] ? lista[1].votos : 0;
   const empatadosNoTopo = lista.filter((x) => x.votos === maxVotos && maxVotos > 0);
 
-  // 1) Maioria absoluta.
   if (maxVotos > total / 2) {
-    return { decidido: true, motivo: 'maioria_absoluta', maisVotado: topo.alvo, pendentes, maxVotos };
+    return { decidido: true, motivo: 'maioria_absoluta', maisVotado: topo.alvo, pendentes, maxVotos, total };
   }
-  // 2) Todos votaram.
   if (pendentes <= 0) {
     return {
       decidido: true,
       motivo: empatadosNoTopo.length > 1 ? 'empate' : 'todos_votaram',
       maisVotado: topo ? topo.alvo : null,
       pendentes,
-      maxVotos
+      maxVotos,
+      total
     };
   }
-  // 3) Líder único e inalcançável (nem somando todos os pendentes ele empata).
   if (topo && empatadosNoTopo.length === 1 && maxVotos > segundo + pendentes) {
-    return { decidido: true, motivo: 'inalcancavel', maisVotado: topo.alvo, pendentes, maxVotos };
+    return { decidido: true, motivo: 'inalcancavel', maisVotado: topo.alvo, pendentes, maxVotos, total };
   }
-  // 4) Aguarda.
-  return { decidido: false, motivo: 'aguardando', maisVotado: topo ? topo.alvo : null, pendentes, maxVotos };
+  return { decidido: false, motivo: 'aguardando', maisVotado: topo ? topo.alvo : null, pendentes, maxVotos, total };
 }
 
 /** Votos (por alvo) e contagem. */
@@ -440,13 +435,130 @@ export function resolverVotacao(votos) {
   return { empate: empatados.length > 1, maisVotado: topo.alvo, votos: topo.votos, lista };
 }
 
-/** Encerra a partida com o resultado da votação. */
+/**
+ * Resolve a RODADA: conta os votos e decide o que acontece.
+ *
+ * - empate -> ninguém sai; a rodada reinicia (`reiniciar: true`).
+ * - expulsou um IMPOSTOR -> ele sai; se ainda sobrou impostor, a partida
+ *   **continua** em outra rodada (`continua: true`); se era o último, o grupo
+ *   ganhou (`fim: 'grupo'`).
+ * - expulsou um INOCENTE -> os impostores ganham (`fim: 'impostores'`).
+ *
+ * @returns {{empate: boolean, maisVotado: string|null, votos: number, lista: Array,
+ *            expulsou: string|null, eraImpostor: boolean, reiniciar: boolean,
+ *            continua: boolean, fim: 'grupo'|'impostores'|null,
+ *            impostoresVivos: string[], impostoresRestantes: number}}
+ */
+export function resolverRodada(jogo) {
+  const { empate, maisVotado, votos, lista } = resolverVotacao(jogo?.votos);
+  const vivosAntes = jogoJogadores(jogo);
+  const impostoresAntes = impostoresVivos(jogo);
+
+  if (empate || !maisVotado) {
+    return {
+      empate: true, maisVotado: maisVotado || null, votos, lista,
+      expulsou: null, eraImpostor: false, reiniciar: true, continua: false,
+      fim: null, impostoresVivos: impostoresAntes, impostoresRestantes: impostoresAntes.length
+    };
+  }
+
+  const eraImpostor = impostoresAntes.includes(maisVotado);
+  const restantes = eraImpostor ? impostoresAntes.filter((i) => i !== maisVotado) : impostoresAntes;
+  const inocentesRestantes = vivosAntes.filter((j) => j !== maisVotado && !impostoresAntes.includes(j));
+
+  let fim = null;
+  let continua = false;
+  if (eraImpostor) {
+    if (restantes.length === 0) fim = 'grupo';
+    else continua = true;
+  } else {
+    // Expulsou um inocente. Se não há mais inocentes que os impostores, os
+    // impostores venceram (não dá mais para votar um impostor para fora).
+    if (inocentesRestantes.length <= restantes.length) fim = 'impostores';
+    else continua = true;
+  }
+
+  return {
+    empate: false, maisVotado, votos, lista,
+    expulsou: maisVotado, eraImpostor, reiniciar: false, continua, fim,
+    impostoresVivos: restantes, impostoresRestantes: restantes.length
+  };
+}
+
+/**
+ * Aplica o resultado de uma rodada ao estado do jogo.
+ *
+ * @param {object} jogo
+ * @returns {{texto: string, mentions: string[], rodada: object}}
+ */
+export function aplicarRodada(jogo, nomeDe = (jid) => `@${String(jid).split('@')[0]}`) {
+  const rodada = resolverRodada(jogo);
+  const lista = rodada.lista.length
+    ? rodada.lista.map((x, i) => `• ${i + 1}º ${nomeDe(x.alvo)} — ${x.votos} voto(s)`).join('\n')
+    : '• Ninguém votou 😅';
+
+  const mentions = [...new Set([...rodada.impostoresVivos, rodada.maisVotado, ...rodada.lista.map((x) => x.alvo)].filter(Boolean))];
+  let cabeca;
+  if (rodada.empate) {
+    cabeca = `⚖️ *EMPATE!* Ninguém foi expulso nesta rodada.\n🗳️ Votem de novo!`;
+  } else if (rodada.eraImpostor) {
+    cabeca = `🎯 *${nomeDe(rodada.expulsou)} foi expulso… e ERA IMPOSTOR!* 😈`;
+  } else {
+    cabeca = `💀 *${nomeDe(rodada.expulsou)} foi expulso… mas era INOCENTE!* 😢`;
+  }
+
+  let rodape = '';
+  if (rodada.reiniciar) {
+    rodape = '🗳️ Nova rodada: votem em quem acham que é o impostor.';
+  } else if (rodada.continua) {
+    rodape = `😈 Ainda há *${rodada.impostoresRestantes}* impostor(es) entre vocês!\n🗳️ Votem de novo no próximo comando de voto.`;
+  } else if (rodada.fim === 'grupo') {
+    rodape = '🏆 *O GRUPO GANHOU!* Todos os impostores foram expulsos!';
+  } else if (rodada.fim === 'impostores') {
+    rodape = '😈 *OS IMPOSTORES GANHARAM!*';
+  }
+
+  const texto =
+    `🕵️ *RESULTADO DA RODADA*\n\n` +
+    `🗳️ *Votos:*\n${lista}\n\n` +
+    `${cabeca}\n\n` +
+    `${rodape}\n\n` +
+    `😈 Impostor(es) vivo(s): ${rodada.impostoresVivos.map(nomeDe).join(', ') || 'nenhum'}\n` +
+    `🧑 Palavra do grupo: *${jogo?.palavraComum || ''}*`;
+
+  return { texto, mentions, rodada };
+}
+
+/**
+ * Consome a rodada no estado do jogo: marca o expulso, limpa os votos e decide
+ * se a partida segue ou terminou.
+ *
+ * @returns {{rodada: object, terminou: boolean}}
+ */
+export function consumirRodada(jogo) {
+  const rodada = resolverRodada(jogo);
+  if (rodada.empate) {
+    jogo.votos = {};
+    return { rodada, terminou: false };
+  }
+  jogo.expulsos = Array.isArray(jogo.expulsos) ? jogo.expulsos : [];
+  if (rodada.expulsou && !jogo.expulsos.includes(rodada.expulsou)) jogo.expulsos.push(rodada.expulsou);
+  jogo.votos = {};
+  jogo.rodada = (jogo.rodada || 1) + 1;
+  const terminou = !rodada.continua;
+  return { rodada, terminou };
+}
+
+/**
+ * Encerra a partida com o resultado final (tempo esgotado ou encerrar manual).
+ */
 export function encerrarPartida(jogo) {
   const { empate, maisVotado, lista } = resolverVotacao(jogo?.votos);
   const impostores = Array.isArray(jogo?.impostores) && jogo.impostores.length
     ? jogo.impostores
     : (jogo?.impostor ? [jogo.impostor] : []);
-  const acertouImpostor = !empate && !!maisVotado && impostores.includes(maisVotado);
+  const vivos = impostoresVivos(jogo);
+  const acertouImpostor = !empate && !!maisVotado && vivos.includes(maisVotado);
   return {
     impostores,
     quantidadeImpostores: impostores.length,
@@ -455,22 +567,15 @@ export function encerrarPartida(jogo) {
     maisVotado,
     empate,
     acertaram: acertouImpostor,
-    restantes: impostores.filter((i) => i !== maisVotado).length,
+    restantes: Math.max(vivos.length - (acertouImpostor ? 1 : 0), 0),
+    expulsos: Array.isArray(jogo?.expulsos) ? jogo.expulsos : [],
     lista
   };
 }
 
 /**
- * Monta o texto do resultado (usado no encerrar manual e no auto-encerramento
- * por maioria).
- *
- * IMPORTANTE: o `nomeDe` é aplicado em TODOS os alvos de voto (não só nos
- * impostores/mais votado) — senão quem só aparece na lista de votos ficaria como
- * `@<lid>` no texto. O `mentions` cobre impostores + mais votado + todos os alvos.
- *
- * @param {object} jogo
- * @param {(jid: string) => string} [nomeDe]
- * @returns {{texto: string, mentions: string[], resultado: object}}
+ * Texto do encerramento (tempo esgotado / encerrar manual): revela quem eram os
+ * impostores e o que sobrou.
  */
 export function formatarResultado(jogo, nomeDe = (jid) => `@${String(jid).split('@')[0]}`) {
   const res = encerrarPartida(jogo);
@@ -478,22 +583,12 @@ export function formatarResultado(jogo, nomeDe = (jid) => `@${String(jid).split(
   const linhasVotos = res.lista.length
     ? res.lista.map((x, i) => `• ${i + 1}º ${nomeDe(x.alvo)} — ${x.votos} voto(s)`).join('\n')
     : '• Ninguém votou 😅';
+  const vivos = impostoresVivos(jogo);
+  const veredito = vivos.length
+    ? `😈 *O(S) IMPOSTOR(ES) GANHARAM!* Sobrou ${vivos.map(nomeDe).join(', ')}.`
+    : `🏆 *O GRUPO GANHOU!* Todos os impostores foram expulsos!`;
 
-  let veredito;
-  if (res.empate) {
-    veredito = '⚖️ *EMPATE!* Ninguém foi expulso — o(s) impostor(es) escaparam 😈';
-  } else if (res.acertaram) {
-    veredito = varios
-      ? (res.restantes > 0
-        ? `🎉 *ACERTOU UM!* ${nomeDe(res.maisVotado)} era impostor — mas ainda falta *${res.restantes}* impostor(es) 😈`
-        : `🎉 *O GRUPO GANHOU!* Expulsaram TODOS os impostores! 🏆`)
-      : `🎉 *O GRUPO GANHOU!* ${nomeDe(res.maisVotado)} era o impostor!`;
-  } else {
-    veredito = `😈 *O IMPOSTOR GANHOU!* Expulsaram ${nomeDe(res.maisVotado)}, que era inocente.`;
-  }
-
-  const alvosVotados = res.lista.map((x) => x.alvo);
-  const mentions = [...new Set([...res.impostores, res.maisVotado, ...alvosVotados].filter(Boolean))];
+  const mentions = [...new Set([...res.impostores, res.maisVotado, ...res.lista.map((x) => x.alvo)].filter(Boolean))];
   const texto =
     `🕵️ *RESULTADO DO IMPOSTOR*\n\n` +
     `🗳️ *Votos:*\n${linhasVotos}\n\n` +
@@ -507,10 +602,8 @@ export function formatarResultado(jogo, nomeDe = (jid) => `@${String(jid).split(
 export default {
   MIN_JOGADORES,
   MAX_IMPOSTORES,
-  MAX_JOGADORES_2_IMPOSTORES,
   DURACAO_MAX_MS,
   minJogadores,
-  maxJogadores,
   parseDuracao,
   parseQuantidadeImpostores,
   parseOpcoesCriar,
@@ -525,12 +618,17 @@ export default {
   textoAtribuicao,
   iniciarPartida,
   votar,
+  jogoJogadores,
+  impostoresVivos,
   todosVotaram,
   msRestantes,
   tempoEsgotado,
   checarVotacao,
   contarVotos,
   resolverVotacao,
+  resolverRodada,
+  aplicarRodada,
+  consumirRodada,
   encerrarPartida,
   formatarResultado
 };

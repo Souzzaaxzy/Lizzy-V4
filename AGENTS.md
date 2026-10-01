@@ -8517,3 +8517,36 @@ encher com o grupo inteiro). Com **1 impostor** não há teto.
 Faixa final com 2 impostores: **de 4 a 5 jogadores**. `tests/impostor.test.js`:
 **49 testes / 406 asserções** (teto de 5 no módulo puro e no handler, 6º recusado,
 e 1 impostor sem teto).
+
+### Correção (set/2026): mínimo 5 para 2 impostores + votação por RODADAS
+Duas correções ao ajuste anterior:
+
+**1) 5 é o MÍNIMO (não o máximo).** Partida com 2 impostores exige **no mínimo
+5 jogadores** e **não tem teto**. O teto que eu havia posto foi removido.
+- `minJogadores(q) = 2*q + 1` → **3 com 1, 5 com 2**.
+- `maxJogadores` foi **removido**; `entrarNoLobby` não recusa mais ninguém por
+  lotação (só "já está na sala").
+
+**2) Votação por RODADAS** (a lógica que faltava): expulsar um impostor não
+encerra a partida se ainda sobrar outro.
+- `resolverRodada(jogo)` decide o que acontece: **empate** → ninguém sai e a
+  rodada reinicia; **expulsou impostor** → ele sai e, se ainda há impostor, a
+  partida **CONTINUA** (`continua: true`); se era o último → **grupo ganhou**;
+  **expulsou inocente** → se os inocentes restantes ≤ impostores, **impostores
+  ganham**, senão continua.
+- `consumirRodada(jogo)` marca o expulso em `expulsos[]`, limpa os votos e
+  avança `rodada`. `jogoJogadores`/`impostoresVivos` filtram os expulsos —
+  expulso não vota nem é votado.
+- `aplicarRodada(jogo)` monta o texto da rodada (*"@x foi expulso… e ERA
+  IMPOSTOR! Ainda há 1 impostor entre vocês!"* ou *"…mas era INOCENTE!"*).
+- O handler: ao fechar a rodada, **formata ANTES de consumir** (consumir limpa os
+  votos), aplica e só encerra a partida quando `terminou`.
+
+O `!impostor encerrar` (manual) e o tempo esgotado continuam revelando os
+impostores e se ainda sobrou algum (`formatarResultado`).
+
+`tests/impostor.test.js`: **54 testes / 426 asserções** — mínimos 3/5 sem teto,
+`resolverRodada` (continua / grupo ganha / impostores ganham / empate),
+`consumirRodada` (expulsos, votos limpos, rodada+1), voto de expulso recusado, e
+o fluxo completo no handler (expulsar um → nova rodada → expulsar o outro →
+grupo ganha).

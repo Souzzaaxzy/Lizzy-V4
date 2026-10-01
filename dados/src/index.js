@@ -1131,7 +1131,6 @@ import {
 import { montarRankBn } from './menus/rankbn.js';
 import {
   minJogadores as minJogadoresImpostor,
-  maxJogadores as maxJogadoresImpostor,
   parseOpcoesCriar as parseOpcoesCriarImpostor,
   criarLobby as criarLobbyImpostor,
   entrarNoLobby as entrarNoLobbyImpostor,
@@ -1139,7 +1138,10 @@ import {
   podeIniciar as podeIniciarImpostor,
   iniciarPartida as iniciarPartidaImpostor,
   votar as votarImpostor,
+  jogoJogadores as jogoJogadoresImpostor,
   checarVotacao as checarVotacaoImpostor,
+  consumirRodada as consumirRodadaImpostor,
+  aplicarRodada as aplicarRodadaImpostor,
   tempoEsgotado as tempoEsgotadoImpostor,
   msRestantes as msRestantesImpostor,
   formatarResultado as formatarResultadoImpostor
@@ -15682,7 +15684,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
               `🕵️ *IMPOSTOR* — Among Us de texto\n\n` +
               `🎮 ${groupPrefix}impostor criar [tempo] [impostores] — abre a sala\n` +
               `   • tempo: 1 a 15 min (ex.: 5m) · impostores: 1 ou 2\n` +
-              `   • 2 impostores: de 4 a 5 jogadores\n` +
+              `   • 2 impostores: mínimo 5 jogadores (sem limite máximo)\n` +
               `   • ex.: ${groupPrefix}impostor criar 5m 2 · ${groupPrefix}impostor criar 2\n` +
               `🚪 ${groupPrefix}impostor entrar — entra na sala\n` +
               `📋 ${groupPrefix}impostor — status da sala/partida\n` +
@@ -15722,7 +15724,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
               ? `⏱️ Tempo: *${Math.round(sala.duracaoMs / 60000)} min*${avisoTempo}\n`
               : `⏱️ Tempo: sem limite (acaba na votação)\n`;
             const impostoresTxt = sala.quantidadeImpostores > 1
-              ? `😈 Impostores: *${sala.quantidadeImpostores}* (de ${minJogadoresImpostor(sala.quantidadeImpostores)} a ${maxJogadoresImpostor(sala.quantidadeImpostores)} jogadores)\n`
+              ? `😈 Impostores: *${sala.quantidadeImpostores}* (mínimo ${minJogadoresImpostor(sala.quantidadeImpostores)} jogadores)\n`
               : `😈 Impostores: *1* (mínimo ${minJogadoresImpostor(1)} jogadores)\n`;
             return reply(
               `🕵️ *SALA DO IMPOSTOR CRIADA!*\n\n` +
@@ -15742,15 +15744,11 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
             const r = entrarNoLobbyImpostor(impGame, sender);
             if (!r.ok) {
               if (r.motivo === 'ja_esta') return reply('⚠️ Você já está na sala!');
-              if (r.motivo === 'sala_cheia') return reply(`❌ A sala está cheia! Com *${impGame.quantidadeImpostores || 1}* impostor(es) o limite é *${r.maximo}* jogadores.`);
               return reply('❌ Não foi possível entrar.');
             }
-            const tetoTxt = Number.isFinite(maxJogadoresImpostor(impGame.quantidadeImpostores || 1))
-              ? ` (máx. ${maxJogadoresImpostor(impGame.quantidadeImpostores || 1)})`
-              : '';
             return reply(
               `✅ ${impNome(sender)} entrou na sala!\n\n` +
-              `👥 Jogadores (${impGame.jogadores.length}${tetoTxt}): ${listaNomes(impGame.jogadores)}\n\n` +
+              `👥 Jogadores (${impGame.jogadores.length}): ${listaNomes(impGame.jogadores)}\n\n` +
               `▶️ Iniciar: ${groupPrefix}impostor iniciar (só o criador)\n` +
               `🚶 Sair: ${groupPrefix}impostor sair`,
               { mentions: impGame.jogadores }
@@ -15795,20 +15793,24 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
               return reply(msg);
             }
             const votaram = Object.keys(impGame.votos).length;
-            const total = impGame.jogadores.length;
+            const vivos = jogoJogadoresImpostor(impGame);
+            const total = vivos.length;
 
             // Maioria decide sem esperar todos; empate/zebra aguardam.
             const checagem = checarVotacaoImpostor(impGame);
             if (checagem.decidido) {
-              const { texto, mentions } = formatarResultadoImpostor(impGame, impNome);
-              delete global.impostorGames[impKey];
+              // Formata ANTES de consumir (consumir limpa os votos) e depois
+              // aplica a rodada: expulsa (ou empata) e decide se a partida segue.
+              const { texto, mentions } = aplicarRodadaImpostor(impGame, impNome);
+              const { terminou } = consumirRodadaImpostor(impGame);
+              if (terminou) delete global.impostorGames[impKey];
               const textoFinal = await trocarMencoesPorNome(texto, mentions, { nazu, metadata: groupMetadata, from });
               return nazu.sendMessage(from, { text: textoFinal, mentions });
             }
 
-            // Lista de quem já votou (e de quem falta).
-            const votaramJids = Object.keys(impGame.votos);
-            const faltamJids = impGame.jogadores.filter((j) => !impGame.votos[j]);
+            // Lista de quem já votou (e de quem falta) — só entre os vivos.
+            const votaramJids = Object.keys(impGame.votos).filter((j) => vivos.includes(j));
+            const faltamJids = vivos.filter((j) => !impGame.votos[j]);
             const listaVotou = votaramJids.length ? votaramJids.map(impNome).join(', ') : 'ninguém ainda';
             const listaFalta = faltamJids.length ? faltamJids.map(impNome).join(', ') : 'ninguém';
 
@@ -15921,17 +15923,15 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
           if (impGame.fase === 'lobby') {
             const q = impGame.quantidadeImpostores || 1;
             const minimo = minJogadoresImpostor(q);
-            const teto = maxJogadoresImpostor(q);
             const faltam = Math.max(minimo - impGame.jogadores.length, 0);
             const tempoTxt = impGame.duracaoMs
               ? `⏱️ Tempo: *${Math.round(impGame.duracaoMs / 60000)} min*\n`
               : `⏱️ Tempo: sem limite\n`;
-            const tetoTxt = Number.isFinite(teto) ? ` (máx. ${teto})` : '';
             return reply(
               `🕵️ *SALA DO IMPOSTOR*\n\n` +
               `👑 Criador: ${impNome(impGame.criador)}\n` +
-              `👥 Jogadores (${impGame.jogadores.length}${tetoTxt}): ${listaNomes(impGame.jogadores)}\n` +
-              `😈 Impostores: *${q}*\n` +
+              `👥 Jogadores (${impGame.jogadores.length}): ${listaNomes(impGame.jogadores)}\n` +
+              `😈 Impostores: *${q}* (mínimo ${minimo} jogadores)\n` +
               `${tempoTxt}` +
               `${faltam > 0 ? `⏳ Faltam *${faltam}* para o mínimo de ${minimo}.\n` : `✅ Pronto para iniciar!\n`}\n` +
               `🚪 ${groupPrefix}impostor entrar\n` +
@@ -15942,20 +15942,21 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
           }
 
           // Partida em andamento.
-          const votaram = Object.keys(impGame.votos || {}).length;
+          const vivosJogo = jogoJogadoresImpostor(impGame);
+          const votaram = Object.keys(impGame.votos || {}).filter((j) => vivosJogo.includes(j)).length;
           const restanteMs = msRestantesImpostor(impGame);
           const tempoRestante = restanteMs > 0
             ? `⏱️ Tempo restante: *${Math.ceil(restanteMs / 60000)} min*\n`
             : '';
           return reply(
-            `🕵️ *PARTIDA EM ANDAMENTO*\n\n` +
-            `👥 Jogadores: ${listaNomes(impGame.jogadores)}\n` +
+            `🕵️ *PARTIDA EM ANDAMENTO* (rodada ${impGame.rodada || 1})\n\n` +
+            `👥 Vivos (${vivosJogo.length}): ${listaNomes(vivosJogo)}\n` +
             `😈 Impostores: *${impGame.quantidadeImpostores || 1}*\n` +
-            `🗳️ Votos: ${votaram}/${impGame.jogadores.length}\n` +
+            `🗳️ Votos: ${votaram}/${vivosJogo.length}\n` +
             `${tempoRestante}\n` +
             `🗳️ Votar: ${groupPrefix}impostor votar @alguem\n` +
             `✅ Encerrar: ${groupPrefix}impostor encerrar`,
-            { mentions: impGame.jogadores }
+            { mentions: vivosJogo }
           );
         } catch (e) {
           console.error('[IMPOSTOR] erro:', e);
