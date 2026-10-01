@@ -8422,3 +8422,16 @@ partida só acaba na votação.
 `tests/impostor.test.js`: **39 testes / 350 asserções** (parse/trava de 15,
 `msRestantes`/`tempoEsgotado`, criação com/sem tempo, tempo inválido, anúncio com
 prazo e o encerramento automático quando o tempo acaba).
+
+## REMOÇÃO do `!syncaction` (set/2026) ✅
+Comando removido por completo, a pedido do dono. O que saiu:
+- **handler**: a `case 'syncaction'` inteira em `index.js` (o medidor de
+  app-state que montava o patch e chamava `nazu.chatModify`);
+- **menu**: a categoria **🧪 DIAGNÓSTICO DE PROTO** do `menuadm` (que só tinha
+  essa linha) — `menuadm` voltou de **181 para 180** comandos;
+- **teste**: `tests/syncaction.test.js` apagado;
+- **baseline** do `menu-layout` atualizado (180).
+
+O que **NÃO** foi mexido (não é o comando): as referências a
+`proto.SyncActionValue` (namespace do proto) no
+`tests/testverify-what-it-does.test.js` e a nota do tema em `AGENTS.md`.

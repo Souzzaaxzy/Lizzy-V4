@@ -256,10 +256,6 @@ export default async function menuadm(prefix, botName = "MeuBot", userName = "Us
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-
-╭━━━꧁༺ ㅤ🧪 ${boldItalic('DIAGNÓSTICO DE PROTO')} 🧪ㅤ ༻꧂━━━╮
-│ 🧪 ${prefix}syncaction <ação> on|off
-╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━━━╯
 ╭─────────────────╮
 ╰─────────────────╯
 `;
