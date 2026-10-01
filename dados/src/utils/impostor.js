@@ -20,11 +20,26 @@
  * um `enviarSecreto` que faz a entrega invisível.
  */
 
-/** Mínimo de jogadores para uma partida. */
+/** Mínimo de jogadores para uma partida (com 1 impostor). */
 export const MIN_JOGADORES = 3;
+
+/** Máximo de impostores por partida. */
+export const MAX_IMPOSTORES = 2;
 
 /** Tempo máximo de partida (15 minutos). */
 export const DURACAO_MAX_MS = 15 * 60 * 1000;
+
+/**
+ * Mínimo de jogadores para `q` impostores: 3 com 1, 4 com 2 (precisa sobrar
+ * tripulação).
+ *
+ * @param {number} [quantidadeImpostores]
+ * @returns {number}
+ */
+export function minJogadores(quantidadeImpostores = 1) {
+  const q = Math.min(Math.max(Number(quantidadeImpostores) || 1, 1), MAX_IMPOSTORES);
+  return MIN_JOGADORES + (q - 1);
+}
 
 /**
  * Interpreta a duração digitada em `!impostor criar <tempo>`.
@@ -45,18 +60,92 @@ export function parseDuracao(texto) {
   return { minutos, ms: minutos * 60 * 1000, excedeu: bruto > minutos };
 }
 
+/**
+ * Interpreta a QUANTIDADE de impostores (1 ou 2).
+ *
+ * @param {string|number} texto
+ * @returns {number|null}
+ */
+export function parseQuantidadeImpostores(texto) {
+  if (texto === null || texto === undefined) return null;
+  const m = /^(\d{1,2})$/.exec(String(texto).trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 10);
+  if (n < 1 || n > MAX_IMPOSTORES) return null;
+  return n;
+}
+
+/**
+ * Interpreta os argumentos de `!impostor criar`, em QUALQUER ordem.
+ *
+ * Regras (para resolver a ambiguidade do número solto):
+ *   - token COM sufixo de tempo (`5m`, `10min`, `15 minutos`) -> duração;
+ *   - número solto **1** ou **2** -> quantidade de impostores;
+ *   - número solto **>= 3** -> duração em minutos (compatível com `criar 5`);
+ *   - qualquer outra coisa -> erro.
+ *
+ * Ex.: `criar 5m 2` | `criar 2 5m` | `criar 2` | `criar 5m` | `criar`.
+ *
+ * @param {string[]} args
+ * @returns {{duracaoMs: number, excedeuTempo: boolean, quantidadeImpostores: number, erro: string|null}}
+ */
+export function parseOpcoesCriar(args) {
+  const lista = (Array.isArray(args) ? args : []).map((a) => String(a ?? '').trim()).filter(Boolean);
+  let duracaoMs = 0;
+  let excedeuTempo = false;
+  let quantidadeImpostores = 1;
+  let viuDuracao = false;
+  let viuQtd = false;
+
+  for (const token of lista) {
+    const temSufixo = /^(m|min|mins|minuto|minutos)$/i.test(token.replace(/^\d+/, ''));
+    // 1) Duração explícita (com sufixo).
+    if (temSufixo) {
+      const dur = parseDuracao(token);
+      if (!dur) return { duracaoMs: 0, excedeuTempo: false, quantidadeImpostores: 1, erro: `Tempo inválido: ${token}` };
+      if (viuDuracao) return { duracaoMs: 0, excedeuTempo: false, quantidadeImpostores: 1, erro: 'Informe o tempo só uma vez.' };
+      duracaoMs = dur.ms;
+      excedeuTempo = dur.excedeu;
+      viuDuracao = true;
+      continue;
+    }
+    // 2) Número solto.
+    if (/^\d{1,4}$/.test(token)) {
+      const n = parseInt(token, 10);
+      // 1 ou 2 -> impostores; >= 3 -> minutos.
+      if (n <= MAX_IMPOSTORES) {
+        if (viuQtd) return { duracaoMs: 0, excedeuTempo: false, quantidadeImpostores: 1, erro: 'Informe a quantidade de impostores só uma vez.' };
+        quantidadeImpostores = n;
+        viuQtd = true;
+      } else {
+        const dur = parseDuracao(token);
+        if (!dur) return { duracaoMs: 0, excedeuTempo: false, quantidadeImpostores: 1, erro: `Tempo inválido: ${token}` };
+        if (viuDuracao) return { duracaoMs: 0, excedeuTempo: false, quantidadeImpostores: 1, erro: 'Informe o tempo só uma vez.' };
+        duracaoMs = dur.ms;
+        excedeuTempo = dur.excedeu;
+        viuDuracao = true;
+      }
+      continue;
+    }
+    return { duracaoMs: 0, excedeuTempo: false, quantidadeImpostores: 1, erro: `Opção inválida: ${token}` };
+  }
+
+  return { duracaoMs, excedeuTempo, quantidadeImpostores, erro: null };
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // LOBBY
 // ════════════════════════════════════════════════════════════════════════════
 
 /** Cria a sala; quem cria já entra como jogador. */
-export function criarLobby(criador, duracaoMs = 0) {
+export function criarLobby(criador, duracaoMs = 0, quantidadeImpostores = 1) {
   return {
     fase: 'lobby',
     criador,
     jogadores: [criador],
     criadoEm: Date.now(),
-    duracaoMs: Number(duracaoMs) > 0 ? Number(duracaoMs) : 0
+    duracaoMs: Number(duracaoMs) > 0 ? Number(duracaoMs) : 0,
+    quantidadeImpostores: parseQuantidadeImpostores(quantidadeImpostores) || 1
   };
 }
 
@@ -81,12 +170,13 @@ export function sairDoLobby(lobby, jid) {
   return { ok: true, fechou: false };
 }
 
-/** Só o criador inicia, e precisa do mínimo de jogadores. */
+/** Só o criador inicia, e precisa do mínimo de jogadores (depende dos impostores). */
 export function podeIniciar(lobby, jid) {
   if (!lobby || lobby.fase !== 'lobby') return { ok: false, motivo: 'sem_sala' };
   if (lobby.criador !== jid) return { ok: false, motivo: 'nao_criador' };
-  if (lobby.jogadores.length < MIN_JOGADORES) {
-    return { ok: false, motivo: 'poucos_jogadores', faltam: MIN_JOGADORES - lobby.jogadores.length };
+  const minimo = minJogadores(lobby.quantidadeImpostores || 1);
+  if (lobby.jogadores.length < minimo) {
+    return { ok: false, motivo: 'poucos_jogadores', faltam: minimo - lobby.jogadores.length, minimo };
   }
   return { ok: true };
 }
@@ -96,17 +186,25 @@ export function podeIniciar(lobby, jid) {
 // ════════════════════════════════════════════════════════════════════════════
 
 /**
- * Escolhe o impostor.
+ * Escolhe os impostores (1 ou 2, sem repetir).
  *
  * @param {string[]} membros
+ * @param {number} [quantidade] 1 ou 2
  * @param {() => number} [rng]
- * @returns {{impostor: string|null}}
+ * @returns {{impostores: string[]}}
  */
-export function escolherImpostor(membros, rng = Math.random) {
+export function escolherImpostores(membros, quantidade = 1, rng = Math.random) {
   const lista = [...new Set((membros || []).filter(Boolean))];
-  if (lista.length < MIN_JOGADORES) return { impostor: null };
-  const idx = Math.floor(rng() * lista.length) % lista.length;
-  return { impostor: lista[idx] };
+  const q = Math.min(Math.max(Number(quantidade) || 1, 1), MAX_IMPOSTORES);
+  if (lista.length < minJogadores(q)) return { impostores: [] };
+  const pool = [...lista];
+  const escolhidos = [];
+  for (let i = 0; i < q && pool.length; i++) {
+    const idx = Math.floor(rng() * pool.length) % pool.length;
+    escolhidos.push(pool[idx]);
+    pool.splice(idx, 1);
+  }
+  return { impostores: escolhidos };
 }
 
 /**
@@ -129,11 +227,21 @@ export function sortearPar(banco, categoria, rng = Math.random) {
   return { comum: par[0], impostor: par[1], categoria: escolhida };
 }
 
-/** Atribuição de cada jogador (comum recebe a palavra comum). */
-export function montarAtribuicoes(membros, par, impostor) {
+/**
+ * Atribuição de cada jogador (comum recebe a palavra comum; impostores recebem
+ * o cartão de impostor, sem palavra).
+ *
+ * @param {string[]} membros
+ * @param {object} par
+ * @param {string[]|string} impostores  um jid ou a lista de impostores
+ */
+export function montarAtribuicoes(membros, par, impostores) {
+  const lista = Array.isArray(impostores) ? impostores : [impostores];
+  const set = new Set(lista.filter(Boolean));
   return (membros || []).map((jid) => ({
     jid,
-    palavra: jid === impostor ? par.impostor : par.comum
+    palavra: set.has(jid) ? par.impostor : par.comum,
+    ehImpostor: set.has(jid)
   }));
 }
 
@@ -170,24 +278,25 @@ export function textoAtribuicao(palavra, ehImpostor) {
  * @param {() => number} [opts.rng]
  * @returns {Promise<{ok: boolean, motivo?: string, jogo?: object}>}
  */
-export async function iniciarPartida({ membros, banco, categoria, enviarSecreto, anunciar, duracaoMs = 0, rng = Math.random }) {
+export async function iniciarPartida({ membros, banco, categoria, enviarSecreto, anunciar, duracaoMs = 0, quantidadeImpostores = 1, rng = Math.random }) {
   const lista = [...new Set((membros || []).filter(Boolean))];
-  if (lista.length < MIN_JOGADORES) return { ok: false, motivo: 'poucos_jogadores' };
+  const q = Math.min(Math.max(Number(quantidadeImpostores) || 1, 1), MAX_IMPOSTORES);
+  if (lista.length < minJogadores(q)) return { ok: false, motivo: 'poucos_jogadores' };
   const par = sortearPar(banco, categoria, rng);
   if (!par) return { ok: false, motivo: 'sem_palavras' };
 
-  const { impostor } = escolherImpostor(lista, rng);
-  const atribuicoes = montarAtribuicoes(lista, par, impostor);
+  const { impostores } = escolherImpostores(lista, q, rng);
+  const atribuicoes = montarAtribuicoes(lista, par, impostores);
 
   // 1) Anúncio público (regras + dica) ANTES das palavras.
   if (typeof anunciar === 'function') {
-    await anunciar({ categoria: par.categoria, jogadores: lista, total: lista.length, duracaoMs });
+    await anunciar({ categoria: par.categoria, jogadores: lista, total: lista.length, duracaoMs, quantidadeImpostores: q });
   }
 
   // 2) Entrega o cartão de cada um (invisível). Falha fechado se algum falhar.
   let entregues = 0;
   for (const a of atribuicoes) {
-    const ok = await enviarSecreto(a.jid, textoAtribuicao(a.palavra, a.jid === impostor));
+    const ok = await enviarSecreto(a.jid, textoAtribuicao(a.palavra, a.ehImpostor));
     if (ok) entregues += 1;
   }
   if (entregues < lista.length) {
@@ -199,7 +308,9 @@ export async function iniciarPartida({ membros, banco, categoria, enviarSecreto,
     ok: true,
     jogo: {
       fase: 'jogando',
-      impostor,
+      impostores,
+      quantidadeImpostores: q,
+      impostor: impostores[0],
       palavraComum: par.comum,
       palavraImpostor: par.impostor,
       categoria: par.categoria,
@@ -311,12 +422,19 @@ export function resolverVotacao(votos) {
 /** Encerra a partida com o resultado da votação. */
 export function encerrarPartida(jogo) {
   const { empate, maisVotado, lista } = resolverVotacao(jogo?.votos);
+  const impostores = Array.isArray(jogo?.impostores) && jogo.impostores.length
+    ? jogo.impostores
+    : (jogo?.impostor ? [jogo.impostor] : []);
+  const acertouImpostor = !empate && !!maisVotado && impostores.includes(maisVotado);
   return {
-    impostor: jogo?.impostor || null,
+    impostores,
+    quantidadeImpostores: impostores.length,
+    impostor: impostores[0] || null,
     palavraComum: jogo?.palavraComum || '',
     maisVotado,
     empate,
-    acertaram: !empate && maisVotado === jogo?.impostor,
+    acertaram: acertouImpostor,
+    restantes: impostores.filter((i) => i !== maisVotado).length,
     lista
   };
 }
@@ -325,9 +443,9 @@ export function encerrarPartida(jogo) {
  * Monta o texto do resultado (usado no encerrar manual e no auto-encerramento
  * por maioria).
  *
- * IMPORTANTE: o `nomeDe` é aplicado em TODOS os alvos de voto (não só no
- * impostor/mais votado) — senão quem só aparece na lista de votos ficaria como
- * `@<lid>` no texto. O `mentions` cobre impostor + mais votado + todos os alvos.
+ * IMPORTANTE: o `nomeDe` é aplicado em TODOS os alvos de voto (não só nos
+ * impostores/mais votado) — senão quem só aparece na lista de votos ficaria como
+ * `@<lid>` no texto. O `mentions` cobre impostores + mais votado + todos os alvos.
  *
  * @param {object} jogo
  * @param {(jid: string) => string} [nomeDe]
@@ -335,22 +453,31 @@ export function encerrarPartida(jogo) {
  */
 export function formatarResultado(jogo, nomeDe = (jid) => `@${String(jid).split('@')[0]}`) {
   const res = encerrarPartida(jogo);
+  const varios = res.impostores.length > 1;
   const linhasVotos = res.lista.length
     ? res.lista.map((x, i) => `• ${i + 1}º ${nomeDe(x.alvo)} — ${x.votos} voto(s)`).join('\n')
     : '• Ninguém votou 😅';
-  const veredito = res.empate
-    ? '⚖️ *EMPATE!* Ninguém foi expulso — o impostor escapou 😈'
-    : res.acertaram
-      ? `🎉 *O GRUPO GANHOU!* ${nomeDe(res.maisVotado)} era o impostor!`
-      : `😈 *O IMPOSTOR GANHOU!* Expulsaram ${nomeDe(res.maisVotado)}, que era inocente.`;
+
+  let veredito;
+  if (res.empate) {
+    veredito = '⚖️ *EMPATE!* Ninguém foi expulso — o(s) impostor(es) escaparam 😈';
+  } else if (res.acertaram) {
+    veredito = varios
+      ? (res.restantes > 0
+        ? `🎉 *ACERTOU UM!* ${nomeDe(res.maisVotado)} era impostor — mas ainda falta *${res.restantes}* impostor(es) 😈`
+        : `🎉 *O GRUPO GANHOU!* Expulsaram TODOS os impostores! 🏆`)
+      : `🎉 *O GRUPO GANHOU!* ${nomeDe(res.maisVotado)} era o impostor!`;
+  } else {
+    veredito = `😈 *O IMPOSTOR GANHOU!* Expulsaram ${nomeDe(res.maisVotado)}, que era inocente.`;
+  }
 
   const alvosVotados = res.lista.map((x) => x.alvo);
-  const mentions = [...new Set([res.impostor, res.maisVotado, ...alvosVotados].filter(Boolean))];
+  const mentions = [...new Set([...res.impostores, res.maisVotado, ...alvosVotados].filter(Boolean))];
   const texto =
     `🕵️ *RESULTADO DO IMPOSTOR*\n\n` +
     `🗳️ *Votos:*\n${linhasVotos}\n\n` +
     `${veredito}\n\n` +
-    `😈 Impostor: ${nomeDe(res.impostor)}\n` +
+    `😈 Impostor${varios ? 'es' : ''}: ${res.impostores.map(nomeDe).join(', ') || '-'}\n` +
     `🧑 Palavra do grupo: *${res.palavraComum}*`;
 
   return { texto, mentions, resultado: res };
@@ -358,13 +485,17 @@ export function formatarResultado(jogo, nomeDe = (jid) => `@${String(jid).split(
 
 export default {
   MIN_JOGADORES,
+  MAX_IMPOSTORES,
   DURACAO_MAX_MS,
+  minJogadores,
   parseDuracao,
+  parseQuantidadeImpostores,
+  parseOpcoesCriar,
   criarLobby,
   entrarNoLobby,
   sairDoLobby,
   podeIniciar,
-  escolherImpostor,
+  escolherImpostores,
   sortearPar,
   montarAtribuicoes,
   embaralhar,

@@ -110,22 +110,33 @@ await test('impostor: sortearPar respeita a categoria e devolve comum != imposto
   ok(aleatorio && aleatorio.comum, 'sorteia sem categoria');
 });
 
-await test('impostor: escolherImpostor exige o mínimo e é determinístico com rng', () => {
-  ok(impostor.escolherImpostor(['a', 'b']).impostor === null, 'menos de 3 -> null');
-  const r = impostor.escolherImpostor(['a', 'b', 'c'], () => 0);
-  ok(r.impostor === 'a', 'rng 0 pega o primeiro');
-  const r2 = impostor.escolherImpostor(['a', 'b', 'c'], () => 0.99);
-  ok(r2.impostor === 'c', 'rng alto pega o último');
+await test('impostor: escolherImpostores exige o mínimo e é determinístico com rng', () => {
+  ok(impostor.escolherImpostores(['a', 'b']).impostores.length === 0, 'menos de 3 -> vazio');
+  const r = impostor.escolherImpostores(['a', 'b', 'c'], 1, () => 0);
+  ok(r.impostores.length === 1 && r.impostores[0] === 'a', 'rng 0 pega o primeiro');
+  const r2 = impostor.escolherImpostores(['a', 'b', 'c'], 1, () => 0.99);
+  ok(r2.impostores.length === 1 && r2.impostores[0] === 'c', 'rng alto pega o último');
 });
 
-await test('impostor: montarAtribuicoes dá a comum a todos e a do impostor a um só', () => {
+await test('impostor: escolherImpostores com 2 não repete e exige 4 jogadores', () => {
+  ok(impostor.escolherImpostores(['a', 'b', 'c'], 2).impostores.length === 0, '3 jogadores não bastam para 2');
+  const r = impostor.escolherImpostores(['a', 'b', 'c', 'd'], 2, () => 0);
+  ok(r.impostores.length === 2, 'escolheu 2');
+  ok(new Set(r.impostores).size === 2, 'sem repetir');
+  ok(impostor.minJogadores(1) === 3 && impostor.minJogadores(2) === 4, 'mínimos 3 e 4');
+});
+
+await test('impostor: montarAtribuicoes dá a comum aos inocentes e marca os impostores', () => {
   const par = { comum: 'leão', impostor: 'tigre', categoria: 'animais' };
   const atr = impostor.montarAtribuicoes(['a', 'b', 'c'], par, 'b');
   ok(atr.length === 3, 'um por jogador');
-  const comuns = atr.filter((x) => x.palavra === 'leão');
-  const impostores = atr.filter((x) => x.palavra === 'tigre');
-  ok(comuns.length === 2, 'dois com a palavra comum');
-  ok(impostores.length === 1 && impostores[0].jid === 'b', 'só o b é impostor');
+  ok(atr.filter((x) => x.ehImpostor).length === 1, 'um impostor');
+  ok(atr.find((x) => x.jid === 'b').ehImpostor === true, 'o b é impostor');
+  ok(atr.filter((x) => !x.ehImpostor).every((x) => x.palavra === 'leão'), 'inocentes com a comum');
+
+  const dois = impostor.montarAtribuicoes(['a', 'b', 'c', 'd'], par, ['a', 'd']);
+  ok(dois.filter((x) => x.ehImpostor).length === 2, 'dois impostores marcados');
+  ok(dois.filter((x) => !x.ehImpostor).length === 2, 'dois inocentes');
 });
 
 await test('impostor: textoAtribuicao NÃO revela a palavra ao impostor', () => {
@@ -199,17 +210,46 @@ await test('impostor: formatarResultado não deixa LID solto na lista de votos',
   ok(mentions.includes('555@lid'), 'o impostor entra nas mentions');
 });
 
-await test('impostor: encerrarPartida acerta se o mais votado é o impostor', () => {
-  const jogo = { impostor: 'b', palavraComum: 'leão', votos: { a: 'b', c: 'b' } };
+await test('impostor: encerrarPartida acerta se o mais votado é um impostor', () => {
+  const jogo = { impostores: ['b'], palavraComum: 'leão', votos: { a: 'b', c: 'b' } };
   const res = impostor.encerrarPartida(jogo);
   ok(res.acertaram === true, 'grupo acertou');
   ok(res.palavraComum === 'leão', 'revela a palavra do grupo');
 
-  const errado = impostor.encerrarPartida({ impostor: 'b', votos: { a: 'c', c: 'c' } });
+  const errado = impostor.encerrarPartida({ impostores: ['b'], votos: { a: 'c', c: 'c' } });
   ok(errado.acertaram === false, 'grupo errou');
 
-  const empatado = impostor.encerrarPartida({ impostor: 'b', votos: { a: 'b', c: 'a' } });
+  const empatado = impostor.encerrarPartida({ impostores: ['b'], votos: { a: 'b', c: 'a' } });
   ok(empatado.acertaram === false && empatado.empate === true, 'empate não acerta');
+});
+
+await test('impostor: encerrarPartida com 2 impostores sabe se ainda falta algum', () => {
+  // Expulsaram um impostor (b), mas o outro (d) continua.
+  const umDeDois = impostor.encerrarPartida({ impostores: ['b', 'd'], votos: { a: 'b', c: 'b', e: 'b' } });
+  ok(umDeDois.acertaram === true, 'acertou um impostor');
+  ok(umDeDois.restantes === 1, 'ainda resta 1 impostor');
+  ok(umDeDois.quantidadeImpostores === 2, 'sabe que eram 2');
+
+  // Expulsaram o inocente -> impostores ganharam.
+  const inocente = impostor.encerrarPartida({ impostores: ['b', 'd'], votos: { a: 'c', d: 'c' } });
+  ok(inocente.acertaram === false, 'expulsou inocente');
+
+  // Empate entre um impostor e um inocente -> empate.
+  const empate = impostor.encerrarPartida({ impostores: ['b', 'd'], votos: { a: 'b', c: 'd' } });
+  ok(empate.empate === true && empate.acertaram === false, 'empate não acerta');
+});
+
+await test('impostor: formatarResultado com 2 impostores avisa que falta um', () => {
+  const nomeDe = (jid) => `@${jid}`;
+  const r1 = impostor.formatarResultado(
+    { impostores: ['b', 'd'], palavraComum: 'leão', votos: { a: 'b', c: 'b', e: 'b' } }, nomeDe);
+  includes(r1.texto, 'ACERTOU UM', 'avisa que acertou só um');
+  includes(r1.texto, 'ainda falta', 'avisa que falta um');
+  includes(r1.texto, 'Impostores: @b, @d', 'lista os dois impostores');
+
+  const r2 = impostor.formatarResultado(
+    { impostores: ['b', 'd'], palavraComum: 'leão', votos: { a: 'c', e: 'c' } }, nomeDe);
+  includes(r2.texto, 'IMPOSTOR GANHOU', 'inocente expulso -> impostor ganha');
 });
 
 await test('impostor: iniciarPartida anuncia ANTES e entrega por enviarSecreto (sem PV)', async () => {
@@ -271,6 +311,29 @@ await test('impostor: msRestantes e tempoEsgotado', () => {
   ok(impostor.tempoEsgotado(jogo, 1000) === true, 'no prazo, esgotou');
   ok(impostor.tempoEsgotado({}, 999999) === false, 'sem tempo, nunca esgota');
   ok(impostor.msRestantes({}, 999) === 0, 'sem tempo, 0');
+});
+
+await test('impostor: parseOpcoesCriar aceita tempo e impostores em QUALQUER ordem', () => {
+  const a = impostor.parseOpcoesCriar(['5m', '2']);
+  ok(a.duracaoMs === 300000 && a.quantidadeImpostores === 2 && !a.erro, '5m 2');
+  const b = impostor.parseOpcoesCriar(['2', '5m']);
+  ok(b.duracaoMs === 300000 && b.quantidadeImpostores === 2 && !b.erro, '2 5m');
+  const c = impostor.parseOpcoesCriar(['2']);
+  ok(c.duracaoMs === 0 && c.quantidadeImpostores === 2 && !c.erro, '2 (sem tempo)');
+  const d = impostor.parseOpcoesCriar(['5m']);
+  ok(d.duracaoMs === 300000 && d.quantidadeImpostores === 1 && !d.erro, '5m (1 impostor)');
+  const e = impostor.parseOpcoesCriar(['5']);
+  ok(e.duracaoMs === 300000 && e.quantidadeImpostores === 1 && !e.erro, '5 solto = 5 minutos');
+  const f = impostor.parseOpcoesCriar([]);
+  ok(f.duracaoMs === 0 && f.quantidadeImpostores === 1 && !f.erro, 'vazio = 1 impostor sem tempo');
+  const g = impostor.parseOpcoesCriar(['20m', '2']);
+  ok(g.excedeuTempo === true && g.duracaoMs === 900000, '20m trava em 15');
+  const h = impostor.parseOpcoesCriar(['abc']);
+  ok(h.erro, 'token inválido -> erro');
+  const i = impostor.parseOpcoesCriar(['3m', '4']);
+  ok(i.erro, '4 impostores -> erro');
+  const j = impostor.parseOpcoesCriar(['1', '2']);
+  ok(j.erro, 'quantidade repetida -> erro');
 });
 
 // ============================================================================
@@ -433,11 +496,52 @@ await test('!impostor criar: tempo acima de 15m trava em 15', async () => {
   ok(global.impostorGames[group.jid].duracaoMs === 15 * 60 * 1000, 'guardou 15 minutos');
 });
 
-await test('!impostor criar: tempo inválido é recusado', async () => {
+await test('!impostor criar: tempo/opção inválida é recusada', async () => {
   const group = makeGroup();
   const r = await rodar(group, '!impostor criar abc', { sender: group.members[0] });
-  includes(r.text, 'Tempo inválido', 'recusa');
+  includes(r.text, 'inválida', 'recusa opção inválida');
   ok(global.impostorGames[group.jid] === undefined, 'não criou sala');
+});
+
+await test('!impostor criar 2: sala com 2 impostores e sem tempo', async () => {
+  const group = makeGroup();
+  const r = await rodar(group, '!impostor criar 2', { sender: group.members[0] });
+  includes(r.text, 'Impostores: *2*', 'mostra 2 impostores');
+  includes(r.text, 'sem limite', 'sem tempo');
+  const sala = global.impostorGames[group.jid];
+  ok(sala.quantidadeImpostores === 2, 'guardou 2 impostores');
+  ok(sala.duracaoMs === 0, 'sem duração');
+});
+
+await test('!impostor criar 5m 2: tempo E 2 impostores (em qualquer ordem)', async () => {
+  const group = makeGroup();
+  const r = await rodar(group, '!impostor criar 5m 2', { sender: group.members[0] });
+  includes(r.text, '5 min', 'tempo');
+  includes(r.text, 'Impostores: *2*', 'impostores');
+  const g2 = makeGroup();
+  const r2 = await rodar(g2, '!impostor criar 2 5m', { sender: g2.members[0] });
+  includes(r2.text, '5 min', 'tempo (ordem invertida)');
+  includes(r2.text, 'Impostores: *2*', 'impostores (ordem invertida)');
+  ok(global.impostorGames[g2.jid].quantidadeImpostores === 2, 'guardou 2');
+});
+
+await test('!impostor iniciar com 2 impostores: exige 4 jogadores e entrega 2 cartões de impostor', async () => {
+  const group = makeGroup(4);
+  await rodar(group, '!impostor criar 2', { sender: group.members[0] });
+  await rodar(group, '!impostor entrar', { sender: group.members[1] });
+  await rodar(group, '!impostor entrar', { sender: group.members[2] });
+  // Com 3 ainda falta 1 (mínimo 4 para 2 impostores).
+  const cedo = await rodar(group, '!impostor iniciar', { sender: group.members[0] });
+  includes(cedo.text, 'Faltam jogadores', 'com 3 não inicia para 2 impostores');
+
+  await rodar(group, '!impostor entrar', { sender: group.members[3] });
+  const r = await rodar(group, '!impostor iniciar', { sender: group.members[0] });
+  includes(r.text, '*Impostores:* 2', 'anúncio avisa 2 impostores');
+  ok(r.relay.length === 4, 'um cartão por jogador');
+  const cartoes = r.relay.map(textoDoRelay);
+  ok(cartoes.filter((c) => c.includes('IMPOSTOR')).length === 2, 'exatamente 2 cartões de impostor');
+  ok(cartoes.filter((c) => c.includes('Sua palavra é')).length === 2, '2 inocentes com palavra');
+  ok(global.impostorGames[group.jid].impostores.length === 2, 'jogo guarda 2 impostores');
 });
 
 await test('!impostor iniciar: partida com prazo mostra o tempo e cria expiraEm', async () => {

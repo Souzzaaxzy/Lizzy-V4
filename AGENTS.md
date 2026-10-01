@@ -8474,3 +8474,33 @@ assume e mostra os números.
 de IG e Spotify sem vazar `undefined`/`null`/`NaN`), `formatErrorProfile`
 (não-encontrado x erro), validação de entrada e o contrato dos providers. Teste
 **offline** (não depende de rede).
+
+### Ajuste (set/2026): 2 impostores (e tempo/impostores em qualquer ordem)
+`!impostor criar` agora aceita **quantidade de impostores** (1 ou 2) junto com o
+tempo, **em qualquer ordem**:
+- `!impostor criar 5m 2` — 5 minutos e 2 impostores
+- `!impostor criar 2 5m` — o mesmo
+- `!impostor criar 2` — 2 impostores, sem tempo
+- `!impostor criar 5m` / `criar 5` — 5 minutos, 1 impostor (como antes)
+
+**Como a ambiguidade do número solto foi resolvida** (`parseOpcoesCriar`):
+token **com sufixo** (`5m`, `10min`) é sempre tempo; número solto **1 ou 2** é
+quantidade de impostores; número solto **>= 3** é minutos (compatível com o
+`criar 5` que já existia). Token estranho ou quantidade repetida -> erro com o
+uso.
+
+**Mínimo de jogadores** passou a depender dos impostores (`minJogadores`):
+3 com 1 impostor, **4 com 2** (precisa sobrar tripulação). O lobby, o status e o
+erro de "faltam jogadores" mostram o mínimo certo.
+
+**Resultado com 2 impostores** (`encerrarPartida`/`formatarResultado`):
+- acertar UM impostor -> *"ACERTOU UM! … mas ainda falta 1 impostor"*;
+- expulsar um inocente -> *"O IMPOSTOR GANHOU"*;
+- empate -> empate. O veredito lista **todos** os impostores.
+
+O jogo guarda `impostores: [...]` (e mantém `impostor` = o primeiro, por
+compatibilidade). `escolherImpostores(membros, qtd, rng)` sorteia sem repetir.
+
+`tests/impostor.test.js`: **46 testes / 391 asserções** (parse em qualquer ordem,
+mínimos 3/4, sorteio de 2 sem repetir, 2 cartões de impostor na entrega, e o
+veredito de 2 impostores).

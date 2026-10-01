@@ -1130,8 +1130,8 @@ import {
 } from './utils/rankbn.js';
 import { montarRankBn } from './menus/rankbn.js';
 import {
-  MIN_JOGADORES as IMPOSTOR_MIN_JOGADORES,
-  parseDuracao as parseDuracaoImpostor,
+  minJogadores as minJogadoresImpostor,
+  parseOpcoesCriar as parseOpcoesCriarImpostor,
   criarLobby as criarLobbyImpostor,
   entrarNoLobby as entrarNoLobbyImpostor,
   sairDoLobby as sairDoLobbyImpostor,
@@ -15679,7 +15679,9 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
           if (impSub === 'ajuda' || impSub === 'help') {
             return reply(
               `🕵️ *IMPOSTOR* — Among Us de texto\n\n` +
-              `🎮 ${groupPrefix}impostor criar [tempo] — abre a sala (ex.: criar 5m; máximo 15m)\n` +
+              `🎮 ${groupPrefix}impostor criar [tempo] [impostores] — abre a sala\n` +
+              `   • tempo: 1 a 15 min (ex.: 5m) · impostores: 1 ou 2\n` +
+              `   • ex.: ${groupPrefix}impostor criar 5m 2 · ${groupPrefix}impostor criar 2\n` +
               `🚪 ${groupPrefix}impostor entrar — entra na sala\n` +
               `📋 ${groupPrefix}impostor — status da sala/partida\n` +
               `🚶 ${groupPrefix}impostor sair — sai da sala\n` +
@@ -15696,34 +15698,37 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
             if (impGame && impGame.fase === 'lobby') return reply('⚠️ Já existe uma sala aberta. Use `' + groupPrefix + 'impostor` para ver o status.');
             if (impGame && impGame.fase === 'jogando') return reply('⚠️ Já tem uma partida rolando!');
 
-            // Tempo opcional: `!impostor criar 5m` (máximo 15 minutos).
-            let duracaoMs = 0;
-            let avisoTempo = '';
-            if (args[1]) {
-              const dur = parseDuracaoImpostor(args[1]);
-              if (!dur) {
-                return reply(
-                  `❌ Tempo inválido: *${args[1]}*.\n\n` +
-                  `⏱️ Use de 1 a 15 minutos, ex.: ${groupPrefix}impostor criar 5m\n` +
-                  `💡 Sem tempo, a partida só acaba na votação.`
-                );
-              }
-              duracaoMs = dur.ms;
-              if (dur.excedeu) avisoTempo = `\n⚠️ O máximo é 15 minutos — usei *15m*.`;
+            // Opções em QUALQUER ordem: `criar 5m 2`, `criar 2 5m`, `criar 2`, `criar 5m`.
+            // Número solto 1/2 = impostores; >= 3 = minutos; com sufixo = tempo.
+            const opcoes = parseOpcoesCriarImpostor(args.slice(1));
+            if (opcoes.erro) {
+              return reply(
+                `❌ ${opcoes.erro}\n\n` +
+                `⏱️ Uso: ${groupPrefix}impostor criar [tempo] [impostores]\n` +
+                `• Tempo: de 1 a 15 minutos (ex.: 5m, 10m)\n` +
+                `• Impostores: 1 ou 2 (ex.: 2)\n` +
+                `💡 Ex.: ${groupPrefix}impostor criar 5m 2 · ${groupPrefix}impostor criar 2`
+              );
             }
+            const duracaoMs = opcoes.duracaoMs;
+            const quantidadeImpostores = opcoes.quantidadeImpostores;
+            const avisoTempo = opcoes.excedeuTempo ? `\n⚠️ O máximo é 15 minutos — usei *15m*.` : '';
 
-            global.impostorGames[impKey] = criarLobbyImpostor(sender, duracaoMs);
+            global.impostorGames[impKey] = criarLobbyImpostor(sender, duracaoMs, quantidadeImpostores);
             const sala = global.impostorGames[impKey];
             const tempoTxt = sala.duracaoMs
               ? `⏱️ Tempo: *${Math.round(sala.duracaoMs / 60000)} min*${avisoTempo}\n`
               : `⏱️ Tempo: sem limite (acaba na votação)\n`;
+            const impostoresTxt = sala.quantidadeImpostores > 1
+              ? `😈 Impostores: *${sala.quantidadeImpostores}* (mínimo ${minJogadoresImpostor(sala.quantidadeImpostores)} jogadores)\n`
+              : `😈 Impostores: *1* (mínimo ${minJogadoresImpostor(1)} jogadores)\n`;
             return reply(
               `🕵️ *SALA DO IMPOSTOR CRIADA!*\n\n` +
               `👑 Criador: ${impNome(sala.criador)}\n` +
               `👥 Jogadores (${sala.jogadores.length}): ${listaNomes(sala.jogadores)}\n` +
-              `${tempoTxt}\n` +
+              `${tempoTxt}${impostoresTxt}\n` +
               `🚪 Entrar: ${groupPrefix}impostor entrar\n` +
-              `▶️ Iniciar: ${groupPrefix}impostor iniciar (só o criador, mínimo ${IMPOSTOR_MIN_JOGADORES} jogadores)\n` +
+              `▶️ Iniciar: ${groupPrefix}impostor iniciar (só o criador)\n` +
               `🔒 Fechar: ${groupPrefix}impostor fechar`,
               { mentions: sala.jogadores }
             );
@@ -15826,7 +15831,10 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
             const pode = podeIniciarImpostor(impGame, sender);
             if (!pode.ok) {
               if (pode.motivo === 'nao_criador') return reply(`▶️ Só quem criou a sala pode iniciar (${impNome(impGame.criador)}).`);
-              if (pode.motivo === 'poucos_jogadores') return reply(`❌ Faltam jogadores: precisa de *${IMPOSTOR_MIN_JOGADORES}* (tem ${impGame.jogadores.length}).\n\n🚪 Entrar: ${groupPrefix}impostor entrar`);
+              if (pode.motivo === 'poucos_jogadores') {
+                const min = pode.minimo || minJogadoresImpostor(impGame.quantidadeImpostores || 1);
+                return reply(`❌ Faltam jogadores: com *${impGame.quantidadeImpostores || 1}* impostor(es) precisa de *${min}* (tem ${impGame.jogadores.length}).\n\n🚪 Entrar: ${groupPrefix}impostor entrar`);
+              }
               return reply('❌ Não foi possível iniciar.');
             }
 
@@ -15850,21 +15858,25 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
               banco: impBanco,
               categoria: args[1] ? args[1].toLowerCase() : undefined,
               duracaoMs: impGame.duracaoMs || 0,
+              quantidadeImpostores: impGame.quantidadeImpostores || 1,
               enviarSecreto,
-              anunciar: async ({ categoria, jogadores, total, duracaoMs }) => {
+              anunciar: async ({ categoria, jogadores, total, duracaoMs, quantidadeImpostores }) => {
                 const tempoLinha = duracaoMs > 0
                   ? `⏱️ *Tempo:* ${Math.round(duracaoMs / 60000)} minutos — quando acabar, a partida encerra sozinha.\n`
+                  : '';
+                const impLinha = (quantidadeImpostores || 1) > 1
+                  ? `😈 *Impostores:* ${quantidadeImpostores} — cuidado, tem mais de um!\n`
                   : '';
                 await nazu.sendMessage(from, {
                   text:
                     `🕵️ *IMPOSTOR* — a partida começou!\n\n` +
                     `📖 *Regras básicas:*\n` +
-                    `• Todos receberam uma palavra secreta — *menos o impostor*.\n` +
+                    `• Todos receberam uma palavra secreta — *menos o(s) impostor(es)*.\n` +
                     `• O impostor não sabe a palavra e vai tentar se passar por inocente.\n` +
                     `• Um de cada vez, descrevam a palavra de vocês *sem falar direto* qual é.\n` +
                     `• Depois votem em quem acham que é o impostor.\n\n` +
                     `💡 *Dica:* a palavra é da categoria *${categoria}*.\n` +
-                    `${tempoLinha}\n` +
+                    `${impLinha}${tempoLinha}\n` +
                     `👥 *Jogadores (${total}):* ${listaNomes(jogadores)}\n\n` +
                     `📩 Logo abaixo, cada jogador recebeu a palavra selecionada.\n` +
                     `🗳️ Votar: ${groupPrefix}impostor votar @alguem\n` +
@@ -15876,7 +15888,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
 
             if (!iniciou.ok) {
               if (iniciou.motivo === 'poucos_jogadores') {
-                return reply(`❌ Preciso de pelo menos *${IMPOSTOR_MIN_JOGADORES}* jogadores.`);
+                return reply(`❌ Preciso de pelo menos *${minJogadoresImpostor(impGame.quantidadeImpostores || 1)}* jogadores para ${impGame.quantidadeImpostores || 1} impostor(es).`);
               }
               return reply(
                 `❌ Não consegui entregar as palavras secretas.\n\n` +
@@ -15900,12 +15912,19 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
           }
 
           if (impGame.fase === 'lobby') {
-            const faltam = Math.max(IMPOSTOR_MIN_JOGADORES - impGame.jogadores.length, 0);
+            const q = impGame.quantidadeImpostores || 1;
+            const minimo = minJogadoresImpostor(q);
+            const faltam = Math.max(minimo - impGame.jogadores.length, 0);
+            const tempoTxt = impGame.duracaoMs
+              ? `⏱️ Tempo: *${Math.round(impGame.duracaoMs / 60000)} min*\n`
+              : `⏱️ Tempo: sem limite\n`;
             return reply(
               `🕵️ *SALA DO IMPOSTOR*\n\n` +
               `👑 Criador: ${impNome(impGame.criador)}\n` +
               `👥 Jogadores (${impGame.jogadores.length}): ${listaNomes(impGame.jogadores)}\n` +
-              `${faltam > 0 ? `⏳ Faltam *${faltam}* para o mínimo de ${IMPOSTOR_MIN_JOGADORES}.\n` : `✅ Pronto para iniciar!\n`}\n` +
+              `😈 Impostores: *${q}*\n` +
+              `${tempoTxt}` +
+              `${faltam > 0 ? `⏳ Faltam *${faltam}* para o mínimo de ${minimo}.\n` : `✅ Pronto para iniciar!\n`}\n` +
               `🚪 ${groupPrefix}impostor entrar\n` +
               `▶️ ${groupPrefix}impostor iniciar (só o criador)\n` +
               `🔒 ${groupPrefix}impostor fechar (só o criador)`,
@@ -15922,6 +15941,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
           return reply(
             `🕵️ *PARTIDA EM ANDAMENTO*\n\n` +
             `👥 Jogadores: ${listaNomes(impGame.jogadores)}\n` +
+            `😈 Impostores: *${impGame.quantidadeImpostores || 1}*\n` +
             `🗳️ Votos: ${votaram}/${impGame.jogadores.length}\n` +
             `${tempoRestante}\n` +
             `🗳️ Votar: ${groupPrefix}impostor votar @alguem\n` +
