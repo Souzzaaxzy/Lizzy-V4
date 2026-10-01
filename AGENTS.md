@@ -8337,3 +8337,31 @@ jogadores) e `textoAtribuicao` deixou de mostrar a palavra ao impostor.
 `tests/impostor.test.js` foi de 21 para **22 testes / 169 asserções**, validando a
 ordem (anúncio antes), o conteúdo do anúncio (regras + dica + "recebeu a palavra
 selecionada") e que o impostor não recebe a palavra.
+
+### Ajuste (set/2026): lobby + voto em LID + auto-encerramento + mensagem normal
+Cinco correções pedidas:
+1. **Voto em LID, não número** — o alvo do voto é o JID/LID real do jogador
+   (`menc_os2`, já normalizado para LID pelo handler); o texto mostra
+   `@<lid>`, nunca o número.
+2. **Auto-encerramento** — quando **todos** votam (`todosVotaram`), a partida
+   encerra sozinha e publica o resultado (não precisa de `!impostor encerrar`).
+3. **Sala com lobby**: `!impostor criar` (quem cria já entra) · `!impostor
+   entrar` · `!impostor` (status da sala/partida) · `!impostor sair` ·
+   `!impostor fechar` (só quem criou) · `!impostor iniciar` (só quem criou).
+   O **criador sair fecha a sala** (sem ele ninguém iniciaria).
+4. **A palavra vira mensagem NORMAL** — a entrega invisível deixou de usar
+   `buildRajaContent`/`requestPaymentMessage`: agora é um `generateWAMessage`
+   com `{ text, mentions }`, e o sigilo continua vindo só do **transporte**
+   (`relayGroupMessageWithSenderKeyRotation` com `allowedParticipants: [jogador]`).
+5. **A sala só inicia com `!impostor iniciar` do criador** (mínimo 3 jogadores;
+   o bot não conta).
+
+Módulo `utils/impostor.js` ganhou `criarLobby`, `entrarNoLobby`, `sairDoLobby`,
+`podeIniciar`, `todosVotaram` e `formatarResultado` (texto + mentions do
+resultado, reusado no manual e no automático). `encerrarPartida` não devolve mais
+`palavraImpostor` (o impostor não tem palavra).
+
+`tests/impostor.test.js` foi de 22 para **29 testes / 197 asserções**: lobby
+(criar/entrar/sair/fechar/iniciar, criador fecha ao sair, mínimo, só o criador
+inicia), voto com LID, auto-encerramento ao votar todos, e a entrega como
+mensagem normal (sem `requestPaymentMessage`).

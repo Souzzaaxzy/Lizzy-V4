@@ -1131,9 +1131,14 @@ import {
 import { montarRankBn } from './menus/rankbn.js';
 import {
   MIN_JOGADORES as IMPOSTOR_MIN_JOGADORES,
+  criarLobby as criarLobbyImpostor,
+  entrarNoLobby as entrarNoLobbyImpostor,
+  sairDoLobby as sairDoLobbyImpostor,
+  podeIniciar as podeIniciarImpostor,
   iniciarPartida as iniciarPartidaImpostor,
   votar as votarImpostor,
-  encerrarPartida as encerrarPartidaImpostor
+  todosVotaram as todosVotaramImpostor,
+  formatarResultado as formatarResultadoImpostor
 } from './utils/impostor.js';
 import {
   isMenu18Command,
@@ -15633,10 +15638,11 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
       }
       // ═══════════════════════════════════════════════════════════════
       // 🕵️ IMPOSTOR - Among Us de texto, SEM privado.
+      //   Sala (lobby): criar / entrar / sair / fechar / iniciar.
       //   A palavra secreta de cada um vai por MENSAGEM INVISÍVEL no grupo
-      //   (mesma entrega do !rajar: requestPaymentMessage + rotação de Sender
-      //   Key restrita a `allowedParticipants: [jogador]`). Só aquele jogador
-      //   decifra; ninguém mais (nem admins) vê. Nada no PV.
+      //   (mesma entrega do !rajar: rotação de Sender Key restrita a
+      //   `allowedParticipants: [jogador]`) — a mensagem é normal, só o
+      //   transporte é restrito. Nada no PV.
       // ═══════════════════════════════════════════════════════════════
       case 'impostor':
       case 'among':
@@ -15651,31 +15657,89 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
 
           if (!global.impostorGames) global.impostorGames = {};
           const impKey = from;
-          const impGame = global.impostorGames[impKey];
+          let impGame = global.impostorGames[impKey];
           const impSub = (args[0] || '').toLowerCase();
+          const impNome = (jid) => `@${getUserName(jid)}`;
+          const listaNomes = (jids) => (jids || []).map(impNome).join(', ');
 
           // ── Ajuda ──
           if (impSub === 'ajuda' || impSub === 'help') {
             return reply(
               `🕵️ *IMPOSTOR* — Among Us de texto\n\n` +
-              `🎮 ${groupPrefix}impostor — começa a partida (a palavra secreta chega pra cada um *aqui no grupo*, invisível)\n` +
+              `🎮 ${groupPrefix}impostor criar — abre a sala\n` +
+              `🚪 ${groupPrefix}impostor entrar — entra na sala\n` +
+              `📋 ${groupPrefix}impostor — status da sala/partida\n` +
+              `🚶 ${groupPrefix}impostor sair — sai da sala\n` +
+              `🔒 ${groupPrefix}impostor fechar — fecha a sala (só quem criou)\n` +
+              `▶️ ${groupPrefix}impostor iniciar — começa (só quem criou)\n` +
               `🗳️ ${groupPrefix}impostor votar @alguem — seu voto\n` +
-              `✅ ${groupPrefix}impostor encerrar — conta os votos e revela\n` +
-              `🚪 ${groupPrefix}impostor cancelar — cancela\n\n` +
-              `💡 *Como jogar:* todos recebem a mesma palavra — MENOS o impostor, que NÃO sabe a palavra e tenta se passar por inocente. Cada um descreve a sua; o impostor disfarça. Depois votem em quem acham que é o impostor!`
+              `✅ ${groupPrefix}impostor encerrar — encerra a votação na mão\n\n` +
+              `💡 Todos recebem a mesma palavra — MENOS o impostor, que NÃO sabe a palavra. Descrevam a sua; depois votem. Quando todos votarem, o resultado sai sozinho!`
             );
           }
 
-          // ── Cancelar ──
-          if (impSub === 'cancelar' || impSub === 'sair') {
-            if (!impGame) return reply('❌ Nenhuma partida em andamento.');
-            delete global.impostorGames[impKey];
-            return reply('🚪 Partida de impostor cancelada.');
+          // ── CRIAR ──
+          if (impSub === 'criar') {
+            if (impGame && impGame.fase === 'lobby') return reply('⚠️ Já existe uma sala aberta. Use `' + groupPrefix + 'impostor` para ver o status.');
+            if (impGame && impGame.fase === 'jogando') return reply('⚠️ Já tem uma partida rolando!');
+            global.impostorGames[impKey] = criarLobbyImpostor(sender);
+            const sala = global.impostorGames[impKey];
+            return reply(
+              `🕵️ *SALA DO IMPOSTOR CRIADA!*\n\n` +
+              `👑 Criador: ${impNome(sala.criador)}\n` +
+              `👥 Jogadores (${sala.jogadores.length}): ${listaNomes(sala.jogadores)}\n\n` +
+              `🚪 Entrar: ${groupPrefix}impostor entrar\n` +
+              `▶️ Iniciar: ${groupPrefix}impostor iniciar (só o criador, mínimo ${IMPOSTOR_MIN_JOGADORES} jogadores)\n` +
+              `🔒 Fechar: ${groupPrefix}impostor fechar`,
+              { mentions: sala.jogadores }
+            );
           }
 
-          // ── Votar ──
+          // ── ENTRAR ──
+          if (impSub === 'entrar' || impSub === 'join') {
+            if (!impGame || impGame.fase !== 'lobby') return reply(`❌ Nenhuma sala aberta. Crie com ${groupPrefix}impostor criar`);
+            const r = entrarNoLobbyImpostor(impGame, sender);
+            if (!r.ok) {
+              return reply(r.motivo === 'ja_esta' ? '⚠️ Você já está na sala!' : '❌ Não foi possível entrar.');
+            }
+            return reply(
+              `✅ ${impNome(sender)} entrou na sala!\n\n` +
+              `👥 Jogadores (${impGame.jogadores.length}): ${listaNomes(impGame.jogadores)}\n\n` +
+              `▶️ Iniciar: ${groupPrefix}impostor iniciar (só o criador)\n` +
+              `🚶 Sair: ${groupPrefix}impostor sair`,
+              { mentions: impGame.jogadores }
+            );
+          }
+
+          // ── SAIR ──
+          if (impSub === 'sair') {
+            if (!impGame || impGame.fase !== 'lobby') return reply('❌ Você não está numa sala.');
+            const r = sairDoLobbyImpostor(impGame, sender);
+            if (!r.ok) return reply(r.motivo === 'nao_esta' ? '❌ Você não está na sala.' : '❌ Não foi possível sair.');
+            if (r.fechou) {
+              delete global.impostorGames[impKey];
+              return reply(`🚪 ${impNome(sender)} (criador) saiu — a sala foi *fechada*.`);
+            }
+            return reply(
+              `🚶 ${impNome(sender)} saiu da sala.\n\n` +
+              `👥 Jogadores (${impGame.jogadores.length}): ${listaNomes(impGame.jogadores)}`,
+              { mentions: impGame.jogadores }
+            );
+          }
+
+          // ── FECHAR ──
+          if (impSub === 'fechar' || impSub === 'cancelar') {
+            if (!impGame) return reply('❌ Nenhuma sala/partida ativa.');
+            if (impGame.criador && impGame.criador !== sender) {
+              return reply(`🔒 Só quem criou a sala pode fechá-la (${impNome(impGame.criador)}).`);
+            }
+            delete global.impostorGames[impKey];
+            return reply('🔒 Sala/partida fechada.');
+          }
+
+          // ── VOTAR ──
           if (impSub === 'votar' || impSub === 'voto') {
-            if (!impGame) return reply(`❌ Nenhuma partida em andamento. Comece com ${groupPrefix}impostor`);
+            if (!impGame || impGame.fase !== 'jogando') return reply(`❌ Nenhuma partida em andamento. Crie uma sala com ${groupPrefix}impostor criar`);
             if (!menc_os2) return reply(`🗳️ Marque em quem você vota.\n\n💡 Exemplo: ${groupPrefix}impostor votar @alguem`);
             const r = votarImpostor(impGame, sender, menc_os2);
             if (!r.ok) {
@@ -15684,123 +15748,139 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
                   : '❌ Voto inválido.';
               return reply(msg);
             }
-            return reply(`🗳️ Voto de @${getUserName(sender)} registrado em @${getUserName(menc_os2)}!\n\n👥 Votos: ${Object.keys(impGame.votos).length}/${impGame.jogadores.length}\n\n💡 Encerre com ${groupPrefix}impostor encerrar`);
+            const votaram = Object.keys(impGame.votos).length;
+            const total = impGame.jogadores.length;
+
+            // Todos votaram -> encerra sozinho.
+            if (todosVotaramImpostor(impGame)) {
+              const { texto, mentions } = formatarResultadoImpostor(impGame, impNome);
+              delete global.impostorGames[impKey];
+              return nazu.sendMessage(from, { text: texto, mentions });
+            }
+
+            return reply(
+              `🗳️ Voto de ${impNome(sender)} registrado em ${impNome(menc_os2)}!\n\n` +
+              `👥 Votos: ${votaram}/${total}\n\n` +
+              `💡 Quando todos votarem, o resultado sai sozinho.`,
+              { mentions: [sender, menc_os2] }
+            );
           }
 
-          // ── Encerrar e revelar ──
+          // ── ENCERRAR (manual) ──
           if (impSub === 'encerrar' || impSub === 'fim' || impSub === 'resultado') {
-            if (!impGame) return reply(`❌ Nenhuma partida em andamento. Comece com ${groupPrefix}impostor`);
-            const res = encerrarPartidaImpostor(impGame);
+            if (!impGame || impGame.fase !== 'jogando') return reply(`❌ Nenhuma partida em andamento. Crie uma sala com ${groupPrefix}impostor criar`);
+            const { texto, mentions } = formatarResultadoImpostor(impGame, impNome);
             delete global.impostorGames[impKey];
+            return nazu.sendMessage(from, { text: texto, mentions });
+          }
 
-            const linhasVotos = res.lista.length
-              ? res.lista.map((x, i) => `• ${i + 1}º @${getUserName(x.alvo)} — ${x.votos} voto(s)`).join('\n')
-              : '• Ninguém votou 😅';
+          // ── INICIAR ──
+          if (impSub === 'iniciar' || impSub === 'start' || impSub === 'comecar' || impSub === 'começar') {
+            if (!impGame || impGame.fase !== 'lobby') {
+              return reply(`❌ Nenhuma sala aberta. Crie com ${groupPrefix}impostor criar`);
+            }
+            const pode = podeIniciarImpostor(impGame, sender);
+            if (!pode.ok) {
+              if (pode.motivo === 'nao_criador') return reply(`▶️ Só quem criou a sala pode iniciar (${impNome(impGame.criador)}).`);
+              if (pode.motivo === 'poucos_jogadores') return reply(`❌ Faltam jogadores: precisa de *${IMPOSTOR_MIN_JOGADORES}* (tem ${impGame.jogadores.length}).\n\n🚪 Entrar: ${groupPrefix}impostor entrar`);
+              return reply('❌ Não foi possível iniciar.');
+            }
 
-            const veredito = res.empate
-              ? `⚖️ *EMPATE!* Ninguém foi expulso — o impostor escapou 😈`
-              : res.acertaram
-                ? `🎉 *O GRUPO GANHOU!* @${getUserName(res.maisVotado)} era o impostor!`
-                : `😈 *O IMPOSTOR GANHOU!* Expulsaram @${getUserName(res.maisVotado)}, que era inocente.`;
+            const enviarSecreto = async (jid, texto) => {
+              if (typeof nazu.relayGroupMessageWithSenderKeyRotation !== 'function') return false;
+              try {
+                const baseMsg = await generateWAMessage(from, { text: texto, mentions: [jid] }, { userJid: nazu?.user?.id });
+                await nazu.relayGroupMessageWithSenderKeyRotation(from, baseMsg.message, {
+                  allowedParticipants: [jid],
+                  messageId: generateRajaMessageId()
+                });
+                return true;
+              } catch (e) {
+                console.error('[IMPOSTOR] entrega invisível falhou:', e?.message || e);
+                return false;
+              }
+            };
 
+            const iniciou = await iniciarPartidaImpostor({
+              membros: impGame.jogadores,
+              banco: impBanco,
+              categoria: args[1] ? args[1].toLowerCase() : undefined,
+              enviarSecreto,
+              anunciar: async ({ categoria, jogadores, total }) => {
+                await nazu.sendMessage(from, {
+                  text:
+                    `🕵️ *IMPOSTOR* — a partida começou!\n\n` +
+                    `📖 *Regras básicas:*\n` +
+                    `• Todos receberam uma palavra secreta — *menos o impostor*.\n` +
+                    `• O impostor não sabe a palavra e vai tentar se passar por inocente.\n` +
+                    `• Um de cada vez, descrevam a palavra de vocês *sem falar direto* qual é.\n` +
+                    `• Depois votem em quem acham que é o impostor.\n\n` +
+                    `💡 *Dica:* a palavra é da categoria *${categoria}*.\n\n` +
+                    `👥 *Jogadores (${total}):* ${listaNomes(jogadores)}\n\n` +
+                    `📩 Logo abaixo, cada jogador recebeu a palavra selecionada.\n` +
+                    `🗳️ Votar: ${groupPrefix}impostor votar @alguem\n` +
+                    `✅ Encerrar: ${groupPrefix}impostor encerrar`,
+                  mentions: jogadores
+                });
+              }
+            });
+
+            if (!iniciou.ok) {
+              if (iniciou.motivo === 'poucos_jogadores') {
+                return reply(`❌ Preciso de pelo menos *${IMPOSTOR_MIN_JOGADORES}* jogadores.`);
+              }
+              return reply(
+                `❌ Não consegui entregar as palavras secretas.\n\n` +
+                `• jogadores: ${iniciou.total || impGame.jogadores.length}\n` +
+                `• entregues: ${iniciou.entregues || 0}\n\n` +
+                `Nada foi iniciado — em vez de rodar uma partida sem alguém saber a palavra.`
+              );
+            }
+
+            global.impostorGames[impKey] = iniciou.jogo;
+            return;
+          }
+
+          // ── STATUS (sem subcomando) ──
+          if (!impGame) {
             return reply(
-              `🕵️ *RESULTADO DO IMPOSTOR*\n\n` +
-              `🗳️ *Votos:*\n${linhasVotos}\n\n` +
-              `${veredito}\n\n` +
-              `😈 Impostor: @${getUserName(res.impostor)}\n` +
-              `🧑 Palavra do grupo: *${res.palavraComum}*\n` +
-              `🕵️ Palavra do impostor: *${res.palavraImpostor}*`
+              `🕵️ *IMPOSTOR* — nenhuma sala aberta.\n\n` +
+              `🎮 Criar sala: ${groupPrefix}impostor criar\n` +
+              `❓ Ajuda: ${groupPrefix}impostor ajuda`
             );
           }
 
-          // ── Já tem partida: avisa e sai ──
-          if (impGame) {
-            return reply(`🎮 Já tem uma partida rolando!\n\n🗳️ Vote com ${groupPrefix}impostor votar @alguem\n✅ Encerre com ${groupPrefix}impostor encerrar\n🚪 Cancele com ${groupPrefix}impostor cancelar`);
-          }
-
-          // ── Começar partida ──
-          // O bot não joga: ele conduz. Fica fora da lista de jogadores.
-          const impParticipantes = (Array.isArray(AllgroupMembers) ? AllgroupMembers : [])
-            .filter((j) => j && j !== botNumberLid);
-          if (impParticipantes.length < IMPOSTOR_MIN_JOGADORES) {
-            return reply(`❌ Preciso de pelo menos *${IMPOSTOR_MIN_JOGADORES}* membros no grupo para o impostor.`);
-          }
-
-          // Mencionados (se houver) viram os jogadores; senão, o grupo inteiro.
-          let impJogadores = [];
-          if (Array.isArray(menc_jid2) && menc_jid2.length > 0) {
-            for (const m of menc_jid2) {
-              impJogadores.push(isValidJid(m) ? await getLidFromJidCached(nazu, m) : m);
-            }
-            impJogadores = [...new Set(impJogadores)].filter((j) => impParticipantes.includes(j));
-            if (impJogadores.length < IMPOSTOR_MIN_JOGADORES) {
-              return reply(`❌ Marque pelo menos *${IMPOSTOR_MIN_JOGADORES}* membros do grupo para jogar.`);
-            }
-          } else {
-            impJogadores = impParticipantes;
-          }
-
-          // Entrega invisível: só o alvo decifra (rotação de Sender Key).
-          const enviarSecreto = async (jid, texto) => {
-            if (typeof nazu.relayGroupMessageWithSenderKeyRotation !== 'function') return false;
-            try {
-              const conteudo = buildRajaContent(texto, [jid]);
-              const baseMsg = await generateWAMessageFromContent(from, conteudo, { userJid: nazu?.user?.id });
-              await nazu.relayGroupMessageWithSenderKeyRotation(from, baseMsg.message, {
-                allowedParticipants: [jid],
-                messageId: generateRajaMessageId()
-              });
-              return true;
-            } catch (e) {
-              console.error('[IMPOSTOR] entrega invisível falhou:', e?.message || e);
-              return false;
-            }
-          };
-
-          const iniciou = await iniciarPartidaImpostor({
-            membros: impJogadores,
-            banco: impBanco,
-            categoria: args[1] ? args[1].toLowerCase() : undefined,
-            enviarSecreto,
-            // Anúncio público ANTES das palavras: regras + a DICA (categoria).
-            anunciar: async ({ categoria, jogadores, total }) => {
-              await nazu.sendMessage(from, {
-                text:
-                  `🕵️ *IMPOSTOR* — a partida começou!\n\n` +
-                  `📖 *Regras básicas:*\n` +
-                  `• Todos receberam uma palavra secreta — *menos o impostor*.\n` +
-                  `• O impostor não sabe a palavra e vai tentar se passar por inocente.\n` +
-                  `• Um de cada vez, descrevam a palavra de vocês *sem falar direto* qual é.\n` +
-                  `• Depois votem em quem acham que é o impostor.\n\n` +
-                  `💡 *Dica:* a palavra é da categoria *${categoria}*.\n\n` +
-                  `👥 *Jogadores (${total}):* ${jogadores.map((j) => `@${getUserName(j)}`).join(', ')}\n\n` +
-                  `📩 Logo abaixo, cada jogador recebeu a palavra selecionada.\n` +
-                  `🗳️ Votar: ${groupPrefix}impostor votar @alguem\n` +
-                  `✅ Encerrar: ${groupPrefix}impostor encerrar`,
-                mentions: jogadores
-              });
-            }
-          });
-
-          if (!iniciou.ok) {
-            if (iniciou.motivo === 'poucos_jogadores') {
-              return reply(`❌ Preciso de pelo menos *${IMPOSTOR_MIN_JOGADORES}* jogadores.`);
-            }
+          if (impGame.fase === 'lobby') {
+            const faltam = Math.max(IMPOSTOR_MIN_JOGADORES - impGame.jogadores.length, 0);
             return reply(
-              `❌ Não consegui entregar as palavras secretas.\n\n` +
-              `• jogadores: ${iniciou.total || impJogadores.length}\n` +
-              `• entregues: ${iniciou.entregues || 0}\n\n` +
-              `Nada foi iniciado — em vez de rodar uma partida sem alguém saber a palavra.`
+              `🕵️ *SALA DO IMPOSTOR*\n\n` +
+              `👑 Criador: ${impNome(impGame.criador)}\n` +
+              `👥 Jogadores (${impGame.jogadores.length}): ${listaNomes(impGame.jogadores)}\n` +
+              `${faltam > 0 ? `⏳ Faltam *${faltam}* para o mínimo de ${IMPOSTOR_MIN_JOGADORES}.\n` : `✅ Pronto para iniciar!\n`}\n` +
+              `🚪 ${groupPrefix}impostor entrar\n` +
+              `▶️ ${groupPrefix}impostor iniciar (só o criador)\n` +
+              `🔒 ${groupPrefix}impostor fechar (só o criador)`,
+              { mentions: impGame.jogadores }
             );
           }
 
-          global.impostorGames[impKey] = iniciou.jogo;
+          // Partida em andamento.
+          const votaram = Object.keys(impGame.votos || {}).length;
+          return reply(
+            `🕵️ *PARTIDA EM ANDAMENTO*\n\n` +
+            `👥 Jogadores: ${listaNomes(impGame.jogadores)}\n` +
+            `🗳️ Votos: ${votaram}/${impGame.jogadores.length}\n\n` +
+            `🗳️ Votar: ${groupPrefix}impostor votar @alguem\n` +
+            `✅ Encerrar: ${groupPrefix}impostor encerrar`,
+            { mentions: impGame.jogadores }
+          );
         } catch (e) {
           console.error('[IMPOSTOR] erro:', e);
           await reply('❌ Ocorreu um erro interno. Tente novamente em alguns minutos.');
         }
         break;
       }
+
       // ═══════════════════════════════════════════════════════════════
       // 🎯 FORCA - Jogo da Forca em Grupo
       // ═══════════════════════════════════════════════════════════════

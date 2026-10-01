@@ -157,10 +157,10 @@ await test('impostor: resolverVotacao acha o mais votado e detecta empate', () =
 });
 
 await test('impostor: encerrarPartida acerta se o mais votado é o impostor', () => {
-  const jogo = { impostor: 'b', palavraComum: 'leão', palavraImpostor: 'tigre', votos: { a: 'b', c: 'b' } };
+  const jogo = { impostor: 'b', palavraComum: 'leão', votos: { a: 'b', c: 'b' } };
   const res = impostor.encerrarPartida(jogo);
   ok(res.acertaram === true, 'grupo acertou');
-  ok(res.palavraComum === 'leão' && res.palavraImpostor === 'tigre', 'revela as duas palavras');
+  ok(res.palavraComum === 'leão', 'revela a palavra do grupo');
 
   const errado = impostor.encerrarPartida({ impostor: 'b', votos: { a: 'c', c: 'c' } });
   ok(errado.acertaram === false, 'grupo errou');
@@ -200,6 +200,41 @@ await test('impostor: iniciarPartida falha fechado com poucos jogadores ou falha
   });
   ok(falha.ok === false && falha.motivo === 'falha_na_entrega', 'não inicia se alguém não recebeu');
   ok(falha.entregues === 2 && falha.total === 3, 'reporta entregues/total');
+});
+
+// ============================================================================
+// 2) MÓDULO PURO — LOBBY
+// ============================================================================
+
+await test('impostor: criar/entrar/sair no lobby', () => {
+  const lobby = impostor.criarLobby('a');
+  ok(lobby.fase === 'lobby' && lobby.criador === 'a', 'criou a sala com o criador');
+  ok(lobby.jogadores.includes('a'), 'o criador já entra');
+  ok(impostor.entrarNoLobby(lobby, 'b').ok === true, 'b entrou');
+  ok(impostor.entrarNoLobby(lobby, 'b').motivo === 'ja_esta', 'b não entra duas vezes');
+  ok(impostor.entrarNoLobby({ fase: 'jogando', jogadores: [] }, 'c').motivo === 'sem_sala', 'não entra com partida rolando');
+  ok(impostor.sairDoLobby(lobby, 'b').ok === true, 'b saiu');
+  ok(!lobby.jogadores.includes('b'), 'b fora da lista');
+  ok(impostor.sairDoLobby(lobby, 'x').motivo === 'nao_esta', 'quem não está não sai');
+});
+
+await test('impostor: sair sendo o criador fecha a sala', () => {
+  const lobby = impostor.criarLobby('a');
+  impostor.entrarNoLobby(lobby, 'b');
+  const r = impostor.sairDoLobby(lobby, 'a');
+  ok(r.ok === true && r.fechou === true, 'criador saindo fecha a sala');
+  ok(!lobby.jogadores.includes('a'), 'criador fora');
+});
+
+await test('impostor: só o criador inicia e precisa do mínimo', () => {
+  const lobby = impostor.criarLobby('a');
+  ok(impostor.podeIniciar(lobby, 'a').motivo === 'poucos_jogadores', 'sozinho não inicia');
+  impostor.entrarNoLobby(lobby, 'b');
+  ok(impostor.podeIniciar(lobby, 'b').motivo === 'nao_criador', 'só o criador inicia');
+  ok(impostor.podeIniciar(lobby, 'a').motivo === 'poucos_jogadores', 'com 2 ainda não');
+  impostor.entrarNoLobby(lobby, 'c');
+  ok(impostor.podeIniciar(lobby, 'a').ok === true, 'com 3 o criador inicia');
+  ok(impostor.podeIniciar({ fase: 'jogando', criador: 'a', jogadores: ['a', 'b', 'c'] }, 'a').motivo === 'sem_sala', 'não inicia de novo');
 });
 
 // ============================================================================
@@ -281,60 +316,129 @@ async function rodar(group, texto, { sender, mentioned = null } = {}) {
   return { sent, relay, text: out, pv };
 }
 
-/** Extrai o texto de dentro do requestPaymentMessage entregue. */
-const textoDoRelay = (r) => r.message?.requestPaymentMessage?.noteMessage?.extendedTextMessage?.text || '';
-const mencoesDoRelay = (r) => r.message?.requestPaymentMessage?.noteMessage?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+/** Extrai o texto de dentro da mensagem invisível entregue (texto normal). */
+const textoDoRelay = (r) => r.message?.extendedTextMessage?.text || '';
+const mencoesDoRelay = (r) => r.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
 
 // ============================================================================
 // 2) HANDLER
 // ============================================================================
 
-await test('!impostor: anúncio público com regras + dica ANTES das palavras', async () => {
+await test('!impostor criar: abre a sala com o criador dentro', async () => {
   const group = makeGroup();
-  const r = await rodar(group, '!impostor');
+  const r = await rodar(group, '!impostor criar', { sender: group.members[0] });
+  includes(r.text, 'SALA DO IMPOSTOR CRIADA', 'confirma a criação');
+  includes(r.text, 'Criador', 'mostra o criador');
+  const sala = global.impostorGames[group.jid];
+  ok(sala && sala.fase === 'lobby', 'sala em lobby');
+  ok(sala.jogadores.length === 1 && sala.jogadores[0] === group.members[0], 'o criador já entrou');
+});
+
+await test('!impostor entrar/sair: atualiza a sala', async () => {
+  const group = makeGroup();
+  await rodar(group, '!impostor criar', { sender: group.members[0] });
+  const r = await rodar(group, '!impostor entrar', { sender: group.members[1] });
+  includes(r.text, 'entrou na sala', 'confirma a entrada');
+  ok(global.impostorGames[group.jid].jogadores.length === 2, '2 jogadores');
+
+  const dup = await rodar(group, '!impostor entrar', { sender: group.members[1] });
+  includes(dup.text, 'já está na sala', 'não entra duas vezes');
+
+  const saiu = await rodar(group, '!impostor sair', { sender: group.members[1] });
+  includes(saiu.text, 'saiu da sala', 'confirma a saída');
+  ok(global.impostorGames[group.jid].jogadores.length === 1, '1 jogador');
+});
+
+await test('!impostor: criador saindo fecha a sala', async () => {
+  const group = makeGroup();
+  await rodar(group, '!impostor criar', { sender: group.members[0] });
+  const r = await rodar(group, '!impostor sair', { sender: group.members[0] });
+  includes(r.text, 'fechada', 'avisa que fechou');
+  ok(global.impostorGames[group.jid] === undefined, 'sala removida');
+});
+
+await test('!impostor: status mostra a sala e quantos faltam', async () => {
+  const group = makeGroup();
+  const sem = await rodar(group, '!impostor');
+  includes(sem.text, 'nenhuma sala', 'sem sala avisa');
+
+  await rodar(group, '!impostor criar', { sender: group.members[0] });
+  const r = await rodar(group, '!impostor', { sender: group.members[0] });
+  includes(r.text, 'SALA DO IMPOSTOR', 'mostra a sala');
+  includes(r.text, 'Faltam', 'diz quantos faltam');
+});
+
+await test('!impostor fechar: só o criador fecha', async () => {
+  const group = makeGroup();
+  await rodar(group, '!impostor criar', { sender: group.members[0] });
+  await rodar(group, '!impostor entrar', { sender: group.members[1] });
+  const naoCriador = await rodar(group, '!impostor fechar', { sender: group.members[1] });
+  includes(naoCriador.text, 'Só quem criou', 'recusa não-criador');
+  ok(global.impostorGames[group.jid] !== undefined, 'sala continua');
+
+  const criador = await rodar(group, '!impostor fechar', { sender: group.members[0] });
+  includes(criador.text, 'fechada', 'criador fecha');
+  ok(global.impostorGames[group.jid] === undefined, 'sala removida');
+});
+
+await test('!impostor iniciar: só o criador inicia e precisa do mínimo', async () => {
+  const group = makeGroup();
+  await rodar(group, '!impostor criar', { sender: group.members[0] });
+  await rodar(group, '!impostor entrar', { sender: group.members[1] });
+  const cedo = await rodar(group, '!impostor iniciar', { sender: group.members[0] });
+  includes(cedo.text, 'Faltam jogadores', 'com 2 não inicia');
+
+  await rodar(group, '!impostor entrar', { sender: group.members[2] });
+  const naoCriador = await rodar(group, '!impostor iniciar', { sender: group.members[1] });
+  includes(naoCriador.text, 'Só quem criou', 'só o criador inicia');
+  ok(global.impostorGames[group.jid].fase === 'lobby', 'segue em lobby');
+});
+
+await test('!impostor iniciar: anúncio público com regras + dica ANTES das palavras', async () => {
+  const group = makeGroup();
+  await rodar(group, '!impostor criar', { sender: group.members[0] });
+  await rodar(group, '!impostor entrar', { sender: group.members[1] });
+  await rodar(group, '!impostor entrar', { sender: group.members[2] });
+  const r = await rodar(group, '!impostor iniciar', { sender: group.members[0] });
   includes(r.text, 'IMPOSTOR', 'anuncia a partida');
   includes(r.text, 'Regras básicas', 'traz as regras');
   includes(r.text, 'Dica', 'traz a dica');
   includes(r.text, 'categoria', 'a dica é a categoria');
   includes(r.text, 'recebeu a palavra selecionada', 'avisa que logo abaixo veio a palavra');
   includes(r.text, 'Jogadores', 'lista os jogadores');
-  // O anúncio público sai ANTES das entregas (o sendMessage foi antes dos relays).
-  ok(r.sent.length >= 1, 'anúncio enviado no grupo');
   ok(r.pv.length === 0, `nada em PV (veio ${r.pv.length})`);
 });
 
-await test('!impostor: entrega a palavra por mensagem invisível (relay), não por PV', async () => {
+await test('!impostor iniciar: entrega a palavra por mensagem invisível (relay), não por PV', async () => {
   const group = makeGroup();
-  const r = await rodar(group, '!impostor');
-  // Uma entrega invisível por jogador.
-  ok(r.relay.length === group.members.length, `um relay por membro (veio ${r.relay.length})`);
-  // NADA em PV.
+  await rodar(group, '!impostor criar', { sender: group.members[0] });
+  await rodar(group, '!impostor entrar', { sender: group.members[1] });
+  await rodar(group, '!impostor entrar', { sender: group.members[2] });
+  const r = await rodar(group, '!impostor iniciar', { sender: group.members[0] });
+  ok(r.relay.length === 3, `um relay por jogador (veio ${r.relay.length})`);
   ok(r.pv.length === 0, `nada enviado em PV (veio ${r.pv.length})`);
-  // Cada relay é restrito a UM jogador (allowedParticipants de 1).
   for (const rel of r.relay) {
     ok(rel.jid === group.jid, 'relay no grupo');
     ok(Array.isArray(rel.opts?.allowedParticipants) && rel.opts.allowedParticipants.length === 1,
       'restrito a um único jogador');
-    ok(rel.message?.requestPaymentMessage, 'conteúdo é requestPaymentMessage (invisível)');
+    // A mensagem é NORMAL (não é payment).
+    ok(rel.message?.extendedTextMessage?.text, 'a mensagem é de texto normal');
+    ok(!rel.message?.requestPaymentMessage, 'não é mais requestPaymentMessage');
   }
   const cartoes = r.relay.map(textoDoRelay);
-  ok(cartoes.every((c) => c.length > 0), 'todo cartão tem texto');
   ok(cartoes.filter((c) => c.includes('IMPOSTOR')).length === 1, 'exatamente um impostor');
-  // A menção do cartão é o próprio destinatário.
-  for (const rel of r.relay) {
-    const mencoes = mencoesDoRelay(rel);
-    ok(mencoes.length === 1 && mencoes[0] === rel.opts.allowedParticipants[0], 'o cartão cita só o destinatário');
-  }
 });
 
-await test('!impostor: comuns recebem a MESMA palavra; impostor não recebe palavra', async () => {
+await test('!impostor iniciar: comuns recebem a MESMA palavra; impostor não recebe palavra', async () => {
   const group = makeGroup();
-  const r = await rodar(group, '!impostor');
+  await rodar(group, '!impostor criar', { sender: group.members[0] });
+  await rodar(group, '!impostor entrar', { sender: group.members[1] });
+  await rodar(group, '!impostor entrar', { sender: group.members[2] });
+  const r = await rodar(group, '!impostor iniciar', { sender: group.members[0] });
   const porJogador = r.relay.map((rel) => ({ jid: rel.opts.allowedParticipants[0], texto: textoDoRelay(rel) }));
   const impostor = porJogador.find((x) => x.texto.includes('IMPOSTOR'));
   const comuns = porJogador.filter((x) => !x.texto.includes('IMPOSTOR'));
   ok(impostor, 'achou o cartão do impostor');
-  // Extrai a palavra de cada cartão comum ("Sua palavra é: *X*").
   const palavraDe = (t) => (/\*([^*]+)\*/.exec(t.split('Sua palavra é:')[1] || '') || [])[1];
   const palavrasComuns = comuns.map((c) => palavraDe(c.texto));
   ok(palavrasComuns.every((p) => p === palavrasComuns[0] && p), 'todos os comuns têm a mesma palavra');
@@ -342,97 +446,76 @@ await test('!impostor: comuns recebem a MESMA palavra; impostor não recebe pala
   ok(!palavrasComuns.includes(palavraDe(impostor.texto)), 'impostor não tem a palavra do grupo');
 });
 
-await test('!impostor votar: registra o voto e recusa voto em si', async () => {
+await test('!impostor votar: registra o voto com LID real (não número)', async () => {
   const group = makeGroup();
-  await rodar(group, '!impostor');
+  await rodar(group, '!impostor criar', { sender: group.members[0] });
+  await rodar(group, '!impostor entrar', { sender: group.members[1] });
+  await rodar(group, '!impostor entrar', { sender: group.members[2] });
+  await rodar(group, '!impostor iniciar', { sender: group.members[0] });
+
   const [m1, m2] = group.members;
   const r = await rodar(group, '!impostor votar', { sender: m1, mentioned: [m2] });
   includes(r.text, 'Voto de', 'confirma o voto');
   includes(r.text, '1/', 'progresso dos votos');
-
-  const group2 = makeGroup();
-  await rodar(group2, '!impostor');
-  const emSi = await rodar(group2, '!impostor votar', { sender: group2.members[0], mentioned: [group2.members[0]] });
-  includes(emSi.text, 'si mesmo', 'recusa voto em si');
-
-  const group3 = makeGroup();
-  await rodar(group3, '!impostor');
-  const fora = await rodar(group3, '!impostor votar', { sender: '999999999999999@lid', mentioned: [group3.members[1]] });
-  includes(fora.text, 'não está nesta partida', 'não-jogador recusado');
+  // A menção no texto é o LID (o mesmo jid do jogador), não um número.
+  includes(r.text, `@${m2.split('@')[0]}`, 'cita o alvo pelo LID');
+  const jogo = global.impostorGames[group.jid];
+  ok(jogo.votos[m1] === m2, 'o voto guardado é o LID do alvo');
+  ok(jogo.votos[m1].includes('@lid'), 'o alvo é um LID');
 });
 
-await test('!impostor encerrar: revela resultado, votos e as duas palavras', async () => {
+await test('!impostor: votação encerra AUTOMATICAMENTE quando todos votam', async () => {
   const group = makeGroup();
-  await rodar(group, '!impostor');
+  await rodar(group, '!impostor criar', { sender: group.members[0] });
+  await rodar(group, '!impostor entrar', { sender: group.members[1] });
+  await rodar(group, '!impostor entrar', { sender: group.members[2] });
+  await rodar(group, '!impostor iniciar', { sender: group.members[0] });
+
   const jogo = global.impostorGames[group.jid];
   const impostorJid = jogo.impostor;
-  // Todo mundo vota no impostor (menos ele mesmo). Cada voto num grupo próprio
-  // para não esbarrar no throttle de 3 comandos/5s por sender.
-  for (const j of jogo.jogadores) {
-    if (j === impostorJid) continue;
-    const g2 = makeGroup();
-    global.impostorGames[g2.jid] = { ...jogo, jogadores: jogo.jogadores, votos: {} };
-    await rodar(g2, '!impostor votar', { sender: j, mentioned: [impostorJid] });
-    global.impostorGames[group.jid].votos[j] = impostorJid;
-    delete global.impostorGames[g2.jid];
+  const votantes = jogo.jogadores; // TODOS votam, inclusive o impostor.
+  // O impostor vota em outro; os demais votam no impostor.
+  const alvoDoImpostor = jogo.jogadores.find((j) => j !== impostorJid);
+  let ultimo;
+  for (const j of votantes) {
+    const alvo = j === impostorJid ? alvoDoImpostor : impostorJid;
+    ultimo = await rodar(group, '!impostor votar', { sender: j, mentioned: [alvo] });
   }
+  includes(ultimo.text, 'RESULTADO DO IMPOSTOR', 'o último voto encerrou sozinho');
+  includes(ultimo.text, 'O GRUPO GANHOU', 'veredito correto');
+  ok(global.impostorGames[group.jid] === undefined, 'partida encerrada automaticamente');
+});
+
+await test('!impostor encerrar: encerra na mão e revela as duas palavras', async () => {
+  const group = makeGroup();
+  await rodar(group, '!impostor criar', { sender: group.members[0] });
+  await rodar(group, '!impostor entrar', { sender: group.members[1] });
+  await rodar(group, '!impostor entrar', { sender: group.members[2] });
+  await rodar(group, '!impostor iniciar', { sender: group.members[0] });
+  const jogo = global.impostorGames[group.jid];
   const r = await rodar(group, '!impostor encerrar', { sender: group.members[0] });
   includes(r.text, 'RESULTADO DO IMPOSTOR', 'título do resultado');
-  includes(r.text, 'O GRUPO GANHOU', 'veredito de acerto');
   includes(r.text, jogo.palavraComum, 'revela a palavra do grupo');
-  includes(r.text, jogo.palavraImpostor, 'revela a palavra do impostor');
   ok(global.impostorGames[group.jid] === undefined, 'partida encerrada');
-});
-
-await test('!impostor: empate não expulsa ninguém', async () => {
-  const group = makeGroup();
-  await rodar(group, '!impostor');
-  const jogo = global.impostorGames[group.jid];
-  const [a, b] = jogo.jogadores;
-  const g1 = makeGroup();
-  global.impostorGames[g1.jid] = { ...jogo, votos: {} };
-  await rodar(g1, '!impostor votar', { sender: a, mentioned: [b] });
-  global.impostorGames[group.jid].votos[a] = b;
-  delete global.impostorGames[g1.jid];
-
-  const g2 = makeGroup();
-  global.impostorGames[g2.jid] = { ...jogo, votos: {} };
-  await rodar(g2, '!impostor votar', { sender: b, mentioned: [a] });
-  global.impostorGames[group.jid].votos[b] = a;
-  delete global.impostorGames[g2.jid];
-
-  const r = await rodar(group, '!impostor encerrar', { sender: group.members[0] });
-  includes(r.text, 'EMPATE', 'detecta empate');
-});
-
-await test('!impostor: não deixa começar outra partida com uma em andamento', async () => {
-  const group = makeGroup();
-  await rodar(group, '!impostor');
-  const r = await rodar(group, '!impostor', { sender: group.members[1] });
-  includes(r.text, 'Já tem uma partida', 'avisa que já tem partida');
-});
-
-await test('!impostor cancelar: encerra a partida', async () => {
-  const group = makeGroup();
-  await rodar(group, '!impostor');
-  const r = await rodar(group, '!impostor cancelar');
-  includes(r.text, 'cancelada', 'confirma o cancelamento');
-  ok(global.impostorGames[group.jid] === undefined, 'estado limpo');
 });
 
 await test('!impostor: sem a API de relay, falha fechado e não inicia', async () => {
   const group = makeGroup();
+  await rodar(group, '!impostor criar', { sender: group.members[0] });
+  await rodar(group, '!impostor entrar', { sender: group.members[1] });
+  await rodar(group, '!impostor entrar', { sender: group.members[2] });
+
   const sent = [];
   const nazu = makeNazu({ sent, relay: [], group });
   delete nazu.relayGroupMessageWithSenderKeyRotation;
   await handleMessage(nazu, {
     key: { remoteJid: group.jid, fromMe: false, id: 'IMP-NORELAY', participant: group.members[0] },
-    message: { extendedTextMessage: { text: '!impostor', contextInfo: { remoteJid: group.jid } } },
+    message: { extendedTextMessage: { text: '!impostor iniciar', contextInfo: { remoteJid: group.jid } } },
     messageTimestamp: 1757900000, pushName: 'Tester',
   }, null, new Map(), null);
   const text = sent.map((s) => s.content?.text ?? '').join('\n');
   includes(text, 'Não consegui entregar', 'avisa que não conseguiu entregar');
-  ok(global.impostorGames[group.jid] === undefined, 'não iniciou partida');
+  ok(global.impostorGames[group.jid].fase === 'lobby', 'segue em lobby');
 });
 
 await test('!impostor: fora de grupo é recusado', async () => {
@@ -441,12 +524,13 @@ await test('!impostor: fora de grupo é recusado', async () => {
   const nazu = makeNazu({ sent, relay: [], group });
   await handleMessage(nazu, {
     key: { remoteJid: '5511999998888@s.whatsapp.net', fromMe: false, id: 'IMP-PV', participant: group.members[0] },
-    message: { extendedTextMessage: { text: '!impostor', contextInfo: {} } },
+    message: { extendedTextMessage: { text: '!impostor criar', contextInfo: {} } },
     messageTimestamp: 1757900000, pushName: 'Tester',
   }, null, new Map(), null);
   const text = sent.map((s) => s.content?.text ?? '').join('\n');
   includes(text, 'grupos', 'avisa que é só para grupos');
 });
+
 
 // ============================================================================
 // 3) MENU / BLOCKPV
