@@ -8365,3 +8365,27 @@ resultado, reusado no manual e no automático). `encerrarPartida` não devolve m
 (criar/entrar/sair/fechar/iniciar, criador fecha ao sair, mínimo, só o criador
 inicia), voto com LID, auto-encerramento ao votar todos, e a entrega como
 mensagem normal (sem `requestPaymentMessage`).
+
+### Ajuste (set/2026): fim dos LIDs no resultado + votação por MAIORIA
+Duas correções:
+1. **Sem LID na mensagem final** — a causa: a lista de votos citava alvos que
+   NÃO estavam no array `mentions` (só impostor/mais votado estavam), então o
+   `trocarMencoesPorNome` não os resolvia e sobrava `@<lid>`. Correções:
+   - `formatarResultado` agora inclui **todos os alvos votados** em `mentions`;
+   - o handler passa o resultado por `trocarMencoesPorNome(texto, mentions,
+     { nazu, metadata: groupMetadata, from })` (o mesmo resolvedor do
+     `!statusgrupo`), trocando `@<lid>` pelo NOME do contato.
+2. **Votação por maioria** (`checarVotacao`, novo): a votação **não espera
+   todos** votarem. Decide quando:
+   - **maioria absoluta**: alguém tem mais da metade dos jogadores
+     (ex.: 5 jogadores, 3 votos no mesmo -> decide; 3x2 -> decide);
+   - **todos votaram** (mesmo empatado -> empate);
+   - **inalcançável**: líder único e os pendentes nem somando alcançam.
+   Caso contrário **aguarda** (pode virar empate). O `!impostor encerrar`
+   manual continua para forçar.
+
+`tests/impostor.test.js` foi de 29 para **32 testes / 210 asserções**: casos de
+`checarVotacao` (maioria, 3x2, empate parcial aguardando, empate com todos),
+`formatarResultado` incluindo o alvo votado nas mentions, e o handler garantindo
+que a mensagem final não tem `@<lid>` (o mock ganhou telefone distinto + um
+resolvedor de nome, como em produção).

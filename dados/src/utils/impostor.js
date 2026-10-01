@@ -198,6 +198,52 @@ export function todosVotaram(jogo) {
   return Object.keys(jogo.votos || {}).length >= jogo.jogadores.length;
 }
 
+/**
+ * Decide se a votação já pode encerrar, SEM esperar todos.
+ *
+ * Regras (o voto é do grupo inteiro, ninguém é obrigado a votar):
+ *   1. **Maioria absoluta**: alguém tem mais da metade dos jogadores -> encerra.
+ *      Ex.: 5 jogadores, 3 votos no mesmo alvo -> já decidiu (3 > 2,5).
+ *   2. **Todos votaram**: encerra (mesmo empatado — aí o resultado é empate).
+ *   3. **Inalcançável**: o líder é único e os que faltam nem somando alcançam.
+ *   4. Caso contrário: **aguarda** (pode virar empate).
+ *
+ * @param {object} jogo
+ * @returns {{decidido: boolean, motivo: string, maisVotado?: string|null,
+ *            pendentes: number, maxVotos: number}}
+ */
+export function checarVotacao(jogo) {
+  const total = Array.isArray(jogo?.jogadores) ? jogo.jogadores.length : 0;
+  const votos = Object.keys(jogo?.votos || {}).length;
+  const pendentes = Math.max(total - votos, 0);
+  const lista = contarVotos(jogo?.votos);
+  const topo = lista[0] || null;
+  const maxVotos = topo ? topo.votos : 0;
+  const segundo = lista[1] ? lista[1].votos : 0;
+  const empatadosNoTopo = lista.filter((x) => x.votos === maxVotos && maxVotos > 0);
+
+  // 1) Maioria absoluta.
+  if (maxVotos > total / 2) {
+    return { decidido: true, motivo: 'maioria_absoluta', maisVotado: topo.alvo, pendentes, maxVotos };
+  }
+  // 2) Todos votaram.
+  if (pendentes <= 0) {
+    return {
+      decidido: true,
+      motivo: empatadosNoTopo.length > 1 ? 'empate' : 'todos_votaram',
+      maisVotado: topo ? topo.alvo : null,
+      pendentes,
+      maxVotos
+    };
+  }
+  // 3) Líder único e inalcançável (nem somando todos os pendentes ele empata).
+  if (topo && empatadosNoTopo.length === 1 && maxVotos > segundo + pendentes) {
+    return { decidido: true, motivo: 'inalcancavel', maisVotado: topo.alvo, pendentes, maxVotos };
+  }
+  // 4) Aguarda.
+  return { decidido: false, motivo: 'aguardando', maisVotado: topo ? topo.alvo : null, pendentes, maxVotos };
+}
+
 /** Votos (por alvo) e contagem. */
 export function contarVotos(votos) {
   const contagem = new Map();
@@ -234,7 +280,11 @@ export function encerrarPartida(jogo) {
 
 /**
  * Monta o texto do resultado (usado no encerrar manual e no auto-encerramento
- * quando todos votam).
+ * por maioria).
+ *
+ * IMPORTANTE: o `nomeDe` é aplicado em TODOS os alvos de voto (não só no
+ * impostor/mais votado) — senão quem só aparece na lista de votos ficaria como
+ * `@<lid>` no texto. O `mentions` cobre impostor + mais votado + todos os alvos.
  *
  * @param {object} jogo
  * @param {(jid: string) => string} [nomeDe]
@@ -251,7 +301,8 @@ export function formatarResultado(jogo, nomeDe = (jid) => `@${String(jid).split(
       ? `🎉 *O GRUPO GANHOU!* ${nomeDe(res.maisVotado)} era o impostor!`
       : `😈 *O IMPOSTOR GANHOU!* Expulsaram ${nomeDe(res.maisVotado)}, que era inocente.`;
 
-  const mentions = [...new Set([res.impostor, res.maisVotado].filter(Boolean))];
+  const alvosVotados = res.lista.map((x) => x.alvo);
+  const mentions = [...new Set([res.impostor, res.maisVotado, ...alvosVotados].filter(Boolean))];
   const texto =
     `🕵️ *RESULTADO DO IMPOSTOR*\n\n` +
     `🗳️ *Votos:*\n${linhasVotos}\n\n` +
@@ -276,6 +327,7 @@ export default {
   iniciarPartida,
   votar,
   todosVotaram,
+  checarVotacao,
   contarVotos,
   resolverVotacao,
   encerrarPartida,

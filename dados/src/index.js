@@ -1137,7 +1137,7 @@ import {
   podeIniciar as podeIniciarImpostor,
   iniciarPartida as iniciarPartidaImpostor,
   votar as votarImpostor,
-  todosVotaram as todosVotaramImpostor,
+  checarVotacao as checarVotacaoImpostor,
   formatarResultado as formatarResultadoImpostor
 } from './utils/impostor.js';
 import {
@@ -15674,7 +15674,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
               `▶️ ${groupPrefix}impostor iniciar — começa (só quem criou)\n` +
               `🗳️ ${groupPrefix}impostor votar @alguem — seu voto\n` +
               `✅ ${groupPrefix}impostor encerrar — encerra a votação na mão\n\n` +
-              `💡 Todos recebem a mesma palavra — MENOS o impostor, que NÃO sabe a palavra. Descrevam a sua; depois votem. Quando todos votarem, o resultado sai sozinho!`
+              `💡 Todos recebem a mesma palavra — MENOS o impostor, que NÃO sabe a palavra. Descrevam a sua; depois votem. Quando alguém tiver maioria, o resultado sai sozinho!`
             );
           }
 
@@ -15751,17 +15751,19 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
             const votaram = Object.keys(impGame.votos).length;
             const total = impGame.jogadores.length;
 
-            // Todos votaram -> encerra sozinho.
-            if (todosVotaramImpostor(impGame)) {
+            // Maioria decide sem esperar todos; empate/zebra aguardam.
+            const checagem = checarVotacaoImpostor(impGame);
+            if (checagem.decidido) {
               const { texto, mentions } = formatarResultadoImpostor(impGame, impNome);
               delete global.impostorGames[impKey];
-              return nazu.sendMessage(from, { text: texto, mentions });
+              const textoFinal = await trocarMencoesPorNome(texto, mentions, { nazu, metadata: groupMetadata, from });
+              return nazu.sendMessage(from, { text: textoFinal, mentions });
             }
 
             return reply(
               `🗳️ Voto de ${impNome(sender)} registrado em ${impNome(menc_os2)}!\n\n` +
               `👥 Votos: ${votaram}/${total}\n\n` +
-              `💡 Quando todos votarem, o resultado sai sozinho.`,
+              `💡 O resultado sai quando alguém tiver maioria (ou todos votarem).`,
               { mentions: [sender, menc_os2] }
             );
           }
@@ -15771,7 +15773,8 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
             if (!impGame || impGame.fase !== 'jogando') return reply(`❌ Nenhuma partida em andamento. Crie uma sala com ${groupPrefix}impostor criar`);
             const { texto, mentions } = formatarResultadoImpostor(impGame, impNome);
             delete global.impostorGames[impKey];
-            return nazu.sendMessage(from, { text: texto, mentions });
+            const textoFinal = await trocarMencoesPorNome(texto, mentions, { nazu, metadata: groupMetadata, from });
+            return nazu.sendMessage(from, { text: textoFinal, mentions });
           }
 
           // ── INICIAR ──

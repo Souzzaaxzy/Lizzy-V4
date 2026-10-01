@@ -156,6 +156,49 @@ await test('impostor: resolverVotacao acha o mais votado e detecta empate', () =
   ok(vazio.maisVotado === null && vazio.lista.length === 0, 'sem votos');
 });
 
+await test('impostor: checarVotacao decide por maioria SEM esperar todos', () => {
+  // 5 jogadores, 3 votos no mesmo alvo -> maioria absoluta (3 > 2,5).
+  const jogo = { jogadores: ['a', 'b', 'c', 'd', 'e'], votos: { a: 'x', b: 'x', c: 'x' } };
+  const r = impostor.checarVotacao(jogo);
+  ok(r.decidido === true && r.motivo === 'maioria_absoluta', 'maioria absoluta decide');
+  ok(r.pendentes === 2, 'ainda faltavam 2 votos');
+
+  // 5 jogadores, 3 votam num e 2 em outro -> decidiu mesmo assim.
+  const dividido = { jogadores: ['a', 'b', 'c', 'd', 'e'], votos: { a: 'x', b: 'x', c: 'x', d: 'y', e: 'y' } };
+  ok(impostor.checarVotacao(dividido).decidido === true, '3x2 decide sem esperar');
+
+  // Empate parcial (2x2, 1 pendente) -> aguarda.
+  const empateParcial = { jogadores: ['a', 'b', 'c', 'd', 'e'], votos: { a: 'x', b: 'x', c: 'y', d: 'y' } };
+  ok(impostor.checarVotacao(empateParcial).decidido === false, 'empate parcial aguarda');
+  ok(impostor.checarVotacao(empateParcial).motivo === 'aguardando', 'motivo aguardando');
+
+  // 3 jogadores, 1 voto -> aguarda.
+  const comecando = { jogadores: ['a', 'b', 'c'], votos: { a: 'b' } };
+  ok(impostor.checarVotacao(comecando).decidido === false, '1 voto de 3 aguarda');
+
+  // 3 jogadores, 2 votos no mesmo -> maioria absoluta (2 > 1,5) decide.
+  const dois = { jogadores: ['a', 'b', 'c'], votos: { a: 'b', c: 'b' } };
+  ok(impostor.checarVotacao(dois).decidido === true, '2 de 3 decide');
+
+  // Todos votaram com empate -> decide (empate).
+  const empatou = { jogadores: ['a', 'b', 'c', 'd'], votos: { a: 'b', b: 'a', c: 'b', d: 'a' } };
+  const re = impostor.checarVotacao(empatou);
+  ok(re.decidido === true && re.motivo === 'empate', 'empate com todos votando decide');
+});
+
+await test('impostor: formatarResultado não deixa LID solto na lista de votos', () => {
+  const jogo = {
+    impostor: '555@lid', palavraComum: 'leão',
+    votos: { a: '555@lid', b: '555@lid', c: '777@lid' }
+  };
+  const nomeDe = (jid) => `@${jid.split('@')[0]}`;
+  const { texto, mentions } = impostor.formatarResultado(jogo, nomeDe);
+  includes(texto, '@555', 'impostor com nome');
+  includes(texto, '@777', 'o outro alvo votado TAMBÉM vira nome');
+  ok(mentions.includes('777@lid'), 'o alvo votado entra nas mentions (o cliente resolve o @)');
+  ok(mentions.includes('555@lid'), 'o impostor entra nas mentions');
+});
+
 await test('impostor: encerrarPartida acerta se o mais votado é o impostor', () => {
   const jogo = { impostor: 'b', palavraComum: 'leão', votos: { a: 'b', c: 'b' } };
   const res = impostor.encerrarPartida(jogo);
@@ -257,8 +300,10 @@ function makeGroup(n = 4) {
   const participants = [{ id: BOT_LID2, lid: BOT_LID2, phoneNumber: BOT_JID, admin: 'admin' }];
   for (let i = 0; i < n; i++) {
     const lid = `77${String(groupCounter).padStart(4, '0')}${String(i).padStart(3, '0')}@lid`;
+    // Telefone DISTINTO do LID, para o resolvedor de nome ter o que usar.
+    const pn = `55119${String(groupCounter).padStart(4, '0')}${String(i).padStart(3, '0')}@s.whatsapp.net`;
     members.push(lid);
-    participants.push({ id: lid, lid, phoneNumber: `${lid.split('@')[0]}@s.whatsapp.net`, admin: null });
+    participants.push({ id: lid, lid, phoneNumber: pn, admin: null });
   }
   fs.writeFileSync(
     path.join(GRUPOS_DIR, `${jid}.json`),
@@ -283,6 +328,14 @@ function makeNazu({ sent, relay, group }) {
       return { key: { id: `RELAY-${relay.length}` } };
     },
     user: { id: `${BOT_JID.split('@')[0]}:5@s.whatsapp.net`, lid: BOT_LID2, name: 'Lizzy' },
+    // Resolvedor de nome da lib: devolve um NOME por JID/LID (como em produção).
+    contacts: {
+      getName: (jid) => {
+        const base = String(jid).split('@')[0];
+        const p = group.participants.find((x) => String(x.id).split('@')[0] === base || String(x.lid).split('@')[0] === base || String(x.phoneNumber).split('@')[0] === base);
+        return p && p.admin ? 'Lizzy' : (p ? `User${base.slice(-3)}` : null);
+      }
+    },
     onWhatsApp: async (jid) => [{ jid, exists: true, lid: jid.replace('@s.whatsapp.net', '@lid') }],
     signalRepository: { lidMapping: { getPNForLID: async () => null } },
     groupMetadata: async () => ({ id: group.jid, subject: 'Grupo Impostor', participants: group.participants }),
@@ -464,7 +517,7 @@ await test('!impostor votar: registra o voto com LID real (não número)', async
   ok(jogo.votos[m1].includes('@lid'), 'o alvo é um LID');
 });
 
-await test('!impostor: votação encerra AUTOMATICAMENTE quando todos votam', async () => {
+await test('!impostor: votação encerra AUTOMATICAMENTE por maioria (sem esperar todos)', async () => {
   const group = makeGroup();
   await rodar(group, '!impostor criar', { sender: group.members[0] });
   await rodar(group, '!impostor entrar', { sender: group.members[1] });
@@ -473,17 +526,33 @@ await test('!impostor: votação encerra AUTOMATICAMENTE quando todos votam', as
 
   const jogo = global.impostorGames[group.jid];
   const impostorJid = jogo.impostor;
-  const votantes = jogo.jogadores; // TODOS votam, inclusive o impostor.
-  // O impostor vota em outro; os demais votam no impostor.
-  const alvoDoImpostor = jogo.jogadores.find((j) => j !== impostorJid);
+  // 3 jogadores: 2 votos no impostor já é maioria (2 > 1,5) -> encerra sem o 3º.
+  const votantes = jogo.jogadores.filter((j) => j !== impostorJid);
   let ultimo;
   for (const j of votantes) {
-    const alvo = j === impostorJid ? alvoDoImpostor : impostorJid;
-    ultimo = await rodar(group, '!impostor votar', { sender: j, mentioned: [alvo] });
+    ultimo = await rodar(group, '!impostor votar', { sender: j, mentioned: [impostorJid] });
   }
-  includes(ultimo.text, 'RESULTADO DO IMPOSTOR', 'o último voto encerrou sozinho');
+  includes(ultimo.text, 'RESULTADO DO IMPOSTOR', 'a maioria encerrou sozinha');
   includes(ultimo.text, 'O GRUPO GANHOU', 'veredito correto');
   ok(global.impostorGames[group.jid] === undefined, 'partida encerrada automaticamente');
+});
+
+await test('!impostor: a mensagem final não tem LID solto', async () => {
+  const group = makeGroup();
+  await rodar(group, '!impostor criar', { sender: group.members[0] });
+  await rodar(group, '!impostor entrar', { sender: group.members[1] });
+  await rodar(group, '!impostor entrar', { sender: group.members[2] });
+  await rodar(group, '!impostor iniciar', { sender: group.members[0] });
+  const jogo = global.impostorGames[group.jid];
+  const impostorJid = jogo.impostor;
+  const votantes = jogo.jogadores.filter((j) => j !== impostorJid);
+  let ultimo;
+  for (const j of votantes) {
+    ultimo = await rodar(group, '!impostor votar', { sender: j, mentioned: [impostorJid] });
+  }
+  // Nenhuma menção do texto deve sobrar como `@<base numérica>` (LID cru).
+  const basesLid = [...ultimo.text.matchAll(/@\d{6,}/g)].map((m) => m[0]);
+  ok(basesLid.length === 0, `sem @<lid> no texto final (achou: ${JSON.stringify(basesLid)})`);
 });
 
 await test('!impostor encerrar: encerra na mão e revela as duas palavras', async () => {
