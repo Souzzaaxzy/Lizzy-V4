@@ -1,88 +1,714 @@
 {
   "categorias": {
     "animais": [
-      ["leão", "tigre"],
-      ["cachorro", "gato"],
-      ["elefante", "rinoceronte"],
-      ["golfinho", "baleia"],
-      ["coruja", "águia"],
-      ["cavalo", "zebra"],
-      ["jacaré", "crocodilo"],
-      ["abelha", "vespa"],
-      ["tartaruga", "jabuti"],
-      ["lobo", "raposa"]
+      [
+        "leão",
+        "tigre"
+      ],
+      [
+        "cachorro",
+        "gato"
+      ],
+      [
+        "elefante",
+        "rinoceronte"
+      ],
+      [
+        "golfinho",
+        "baleia"
+      ],
+      [
+        "coruja",
+        "águia"
+      ],
+      [
+        "cavalo",
+        "zebra"
+      ],
+      [
+        "jacaré",
+        "crocodilo"
+      ],
+      [
+        "abelha",
+        "vespa"
+      ],
+      [
+        "tartaruga",
+        "jabuti"
+      ],
+      [
+        "lobo",
+        "raposa"
+      ],
+      [
+        "formiga",
+        "cupim"
+      ],
+      [
+        "urso",
+        "panda"
+      ],
+      [
+        "girafa",
+        "avestruz"
+      ],
+      [
+        "papagaio",
+        "arara"
+      ],
+      [
+        "cobra",
+        "lagarto"
+      ],
+      [
+        "sapo",
+        "rã"
+      ],
+      [
+        "galinha",
+        "peru"
+      ],
+      [
+        "porco",
+        "javali"
+      ],
+      [
+        "ovelha",
+        "cabra"
+      ],
+      [
+        "morcego",
+        "corvo"
+      ],
+      [
+        "camelo",
+        "lhama"
+      ],
+      [
+        "polvo",
+        "lula"
+      ],
+      [
+        "caranguejo",
+        "lagosta"
+      ],
+      [
+        "pinguim",
+        "foca"
+      ],
+      [
+        "golfinho",
+        "orca"
+      ]
     ],
     "objetos": [
-      ["cadeira", "banco"],
-      ["caneta", "lápis"],
-      ["celular", "tablet"],
-      ["guarda-chuva", "sombrinha"],
-      ["espelho", "janela"],
-      ["relógio", "cronômetro"],
-      ["travesseiro", "almofada"],
-      ["garfo", "colher"],
-      ["mochila", "mala"],
-      ["vassoura", "rodo"]
+      [
+        "cadeira",
+        "banco"
+      ],
+      [
+        "caneta",
+        "lápis"
+      ],
+      [
+        "celular",
+        "tablet"
+      ],
+      [
+        "guarda-chuva",
+        "sombrinha"
+      ],
+      [
+        "espelho",
+        "janela"
+      ],
+      [
+        "relógio",
+        "cronômetro"
+      ],
+      [
+        "travesseiro",
+        "almofada"
+      ],
+      [
+        "garfo",
+        "colher"
+      ],
+      [
+        "mochila",
+        "mala"
+      ],
+      [
+        "vassoura",
+        "rodo"
+      ],
+      [
+        "escova de dentes",
+        "pente"
+      ],
+      [
+        "toalha",
+        "lençol"
+      ],
+      [
+        "sofá",
+        "poltrona"
+      ],
+      [
+        "televisão",
+        "monitor"
+      ],
+      [
+        "geladeira",
+        "freezer"
+      ],
+      [
+        "fogão",
+        "micro-ondas"
+      ],
+      [
+        "panela",
+        "frigideira"
+      ],
+      [
+        "copo",
+        "caneca"
+      ],
+      [
+        "prato",
+        "tigela"
+      ],
+      [
+        "chinelo",
+        "sandália"
+      ],
+      [
+        "boné",
+        "chapéu"
+      ],
+      [
+        "óculos",
+        "lupa"
+      ],
+      [
+        "carteira",
+        "porta-moedas"
+      ],
+      [
+        "fone de ouvido",
+        "caixa de som"
+      ],
+      [
+        "controle remoto",
+        "teclado"
+      ]
     ],
     "comida": [
-      ["pizza", "esfiha"],
-      ["hambúrguer", "sanduíche"],
-      ["sushi", "temaki"],
-      ["chocolate", "bombom"],
-      ["sorvete", "picolé"],
-      ["café", "chá"],
-      ["pão", "bolo"],
-      ["macarrão", "lasanha"],
-      ["pipoca", "amendoim"],
-      ["queijo", "requeijão"]
+      [
+        "pizza",
+        "esfiha"
+      ],
+      [
+        "hambúrguer",
+        "sanduíche"
+      ],
+      [
+        "sushi",
+        "temaki"
+      ],
+      [
+        "chocolate",
+        "bombom"
+      ],
+      [
+        "sorvete",
+        "picolé"
+      ],
+      [
+        "café",
+        "chá"
+      ],
+      [
+        "pão",
+        "bolo"
+      ],
+      [
+        "macarrão",
+        "lasanha"
+      ],
+      [
+        "pipoca",
+        "amendoim"
+      ],
+      [
+        "queijo",
+        "requeijão"
+      ],
+      [
+        "arroz",
+        "macarrão"
+      ],
+      [
+        "feijão",
+        "lentilha"
+      ],
+      [
+        "batata",
+        "mandioca"
+      ],
+      [
+        "cenoura",
+        "beterraba"
+      ],
+      [
+        "banana",
+        "manga"
+      ],
+      [
+        "uva",
+        "morango"
+      ],
+      [
+        "laranja",
+        "tangerina"
+      ],
+      [
+        "limão",
+        "maracujá"
+      ],
+      [
+        "abacaxi",
+        "melancia"
+      ],
+      [
+        "mel",
+        "açúcar"
+      ],
+      [
+        "leite",
+        "iogurte"
+      ],
+      [
+        "manteiga",
+        "margarina"
+      ],
+      [
+        "presunto",
+        "salame"
+      ],
+      [
+        "bolo",
+        "torta"
+      ],
+      [
+        "salada de fruta",
+        "açaí"
+      ]
     ],
     "lugares": [
-      ["praia", "piscina"],
-      ["escola", "faculdade"],
-      ["hospital", "farmácia"],
-      ["cinema", "teatro"],
-      ["shopping", "mercado"],
-      ["aeroporto", "rodoviária"],
-      ["igreja", "templo"],
-      ["parque", "praça"],
-      ["hotel", "pousada"],
-      ["biblioteca", "livraria"]
+      [
+        "praia",
+        "piscina"
+      ],
+      [
+        "escola",
+        "faculdade"
+      ],
+      [
+        "hospital",
+        "farmácia"
+      ],
+      [
+        "cinema",
+        "teatro"
+      ],
+      [
+        "shopping",
+        "mercado"
+      ],
+      [
+        "aeroporto",
+        "rodoviária"
+      ],
+      [
+        "igreja",
+        "templo"
+      ],
+      [
+        "parque",
+        "praça"
+      ],
+      [
+        "hotel",
+        "pousada"
+      ],
+      [
+        "biblioteca",
+        "livraria"
+      ],
+      [
+        "praça",
+        "parque"
+      ],
+      [
+        "rua",
+        "avenida"
+      ],
+      [
+        "praia",
+        "lago"
+      ],
+      [
+        "floresta",
+        "selva"
+      ],
+      [
+        "deserto",
+        "savana"
+      ],
+      [
+        "montanha",
+        "vulcão"
+      ],
+      [
+        "ilha",
+        "península"
+      ],
+      [
+        "rio",
+        "córrego"
+      ],
+      [
+        "cachoeira",
+        "cascata"
+      ],
+      [
+        "caverna",
+        "gruta"
+      ],
+      [
+        "ponte",
+        "viaduto"
+      ],
+      [
+        "túnel",
+        "passarela"
+      ],
+      [
+        "porto",
+        "aeroporto"
+      ],
+      [
+        "fazenda",
+        "sítio"
+      ],
+      [
+        "castelo",
+        "palácio"
+      ]
     ],
     "esportes": [
-      ["futebol", "futsal"],
-      ["basquete", "vôlei"],
-      ["natação", "polo aquático"],
-      ["corrida", "maratona"],
-      ["boxe", "MMA"],
-      ["ciclismo", "moto"],
-      ["surfe", "skate"],
-      ["tênis", "badminton"],
-      ["judô", "caratê"],
-      ["golfe", "sinuca"]
+      [
+        "futebol",
+        "futsal"
+      ],
+      [
+        "basquete",
+        "vôlei"
+      ],
+      [
+        "natação",
+        "polo aquático"
+      ],
+      [
+        "corrida",
+        "maratona"
+      ],
+      [
+        "boxe",
+        "MMA"
+      ],
+      [
+        "ciclismo",
+        "moto"
+      ],
+      [
+        "surfe",
+        "skate"
+      ],
+      [
+        "tênis",
+        "badminton"
+      ],
+      [
+        "judô",
+        "caratê"
+      ],
+      [
+        "golfe",
+        "sinuca"
+      ],
+      [
+        "handebol",
+        "futsal"
+      ],
+      [
+        "vôlei de praia",
+        "futevôlei"
+      ],
+      [
+        "atletismo",
+        "corrida"
+      ],
+      [
+        "ginástica",
+        "balé"
+      ],
+      [
+        "esgrima",
+        "arco e flecha"
+      ],
+      [
+        "levantamento de peso",
+        "crossfit"
+      ],
+      [
+        "canoagem",
+        "remo"
+      ],
+      [
+        "patinação",
+        "patins"
+      ],
+      [
+        "escalada",
+        "alpinismo"
+      ],
+      [
+        "rafting",
+        "surfe"
+      ],
+      [
+        "beisebol",
+        "críquete"
+      ],
+      [
+        "hóquei",
+        "patinação no gelo"
+      ],
+      [
+        "hipismo",
+        "turfe"
+      ],
+      [
+        "taekwondo",
+        "muay thai"
+      ],
+      [
+        "polo",
+        "equitação"
+      ]
     ],
     "profissões": [
-      ["médico", "enfermeiro"],
-      ["professor", "diretor"],
-      ["bombeiro", "policial"],
-      ["piloto", "comissário"],
-      ["cozinheiro", "garçom"],
-      ["dentista", "ortodontista"],
-      ["advogado", "juiz"],
-      ["pedreiro", "pintor"],
-      ["astronauta", "cientista"],
-      ["carteiro", "motoboy"]
+      [
+        "médico",
+        "enfermeiro"
+      ],
+      [
+        "professor",
+        "diretor"
+      ],
+      [
+        "bombeiro",
+        "policial"
+      ],
+      [
+        "piloto",
+        "comissário"
+      ],
+      [
+        "cozinheiro",
+        "garçom"
+      ],
+      [
+        "dentista",
+        "ortodontista"
+      ],
+      [
+        "advogado",
+        "juiz"
+      ],
+      [
+        "pedreiro",
+        "pintor"
+      ],
+      [
+        "astronauta",
+        "cientista"
+      ],
+      [
+        "carteiro",
+        "motoboy"
+      ],
+      [
+        "engenheiro",
+        "arquiteto"
+      ],
+      [
+        "padeiro",
+        "confeiteiro"
+      ],
+      [
+        "jardineiro",
+        "agricultor"
+      ],
+      [
+        "pescador",
+        "marinheiro"
+      ],
+      [
+        "mecânico",
+        "eletricista"
+      ],
+      [
+        "encanador",
+        "pedreiro"
+      ],
+      [
+        "costureira",
+        "estilista"
+      ],
+      [
+        "barbeiro",
+        "cabeleireiro"
+      ],
+      [
+        "veterinário",
+        "zoólogo"
+      ],
+      [
+        "farmacêutico",
+        "químico"
+      ],
+      [
+        "jornalista",
+        "escritor"
+      ],
+      [
+        "ator",
+        "dublador"
+      ],
+      [
+        "cantor",
+        "músico"
+      ],
+      [
+        "dançarino",
+        "coreógrafo"
+      ],
+      [
+        "pintor",
+        "escultor"
+      ]
     ],
     "filmes": [
-      ["Titanic", "Romeu e Julieta"],
-      ["Star Wars", "Star Trek"],
-      ["Matrix", "Interestelar"],
-      ["Shrek", "Monstros S.A."],
-      ["Frozen", "Enrolados"],
-      ["Batman", "Homem-Aranha"],
-      ["Coringa", "Venom"],
-      ["Toy Story", "Carros"],
-      ["O Rei Leão", "Tarzan"],
-      ["Jurassic Park", "Godzilla"]
+      [
+        "Titanic",
+        "Romeu e Julieta"
+      ],
+      [
+        "Star Wars",
+        "Star Trek"
+      ],
+      [
+        "Matrix",
+        "Interestelar"
+      ],
+      [
+        "Shrek",
+        "Monstros S.A."
+      ],
+      [
+        "Frozen",
+        "Enrolados"
+      ],
+      [
+        "Batman",
+        "Homem-Aranha"
+      ],
+      [
+        "Coringa",
+        "Venom"
+      ],
+      [
+        "Toy Story",
+        "Carros"
+      ],
+      [
+        "O Rei Leão",
+        "Tarzan"
+      ],
+      [
+        "Jurassic Park",
+        "Godzilla"
+      ],
+      [
+        "Vingadores",
+        "Liga da Justiça"
+      ],
+      [
+        "Homem de Ferro",
+        "Homem-Formiga"
+      ],
+      [
+        "Toy Story",
+        "Monstros S.A."
+      ],
+      [
+        "Procurando Nemo",
+        "Procurando Dory"
+      ],
+      [
+        "Shrek",
+        "Madagascar"
+      ],
+      [
+        "Kung Fu Panda",
+        "A Era do Gelo"
+      ],
+      [
+        "Harry Potter",
+        "O Senhor dos Anéis"
+      ],
+      [
+        "Velozes e Furiosos",
+        "Need for Speed"
+      ],
+      [
+        "Rocky",
+        "Creed"
+      ],
+      [
+        "O Poderoso Chefão",
+        "Scarface"
+      ],
+      [
+        "Pulp Fiction",
+        "Kill Bill"
+      ],
+      [
+        "Corra!",
+        "Nós"
+      ],
+      [
+        "O Exorcista",
+        "A Freira"
+      ],
+      [
+        "Sexta-Feira 13",
+        "Halloween"
+      ]
     ]
   }
 }

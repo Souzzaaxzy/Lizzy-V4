@@ -99,7 +99,7 @@ await test('impostor: banco com categorias e pares válidos', () => {
       total += 1;
     }
   }
-  ok(total >= 50, `pares suficientes (${total})`);
+  ok(total === 174, `174 pares (veio ${total})`);
 });
 
 await test('impostor: sortearPar respeita a categoria e devolve comum != impostor', () => {
@@ -366,7 +366,8 @@ async function rodar(group, texto, { sender, mentioned = null } = {}) {
   }, null, new Map(), null);
   const out = sent.map((s) => s.content?.text ?? '').filter(Boolean).join('\n');
   const pv = sent.filter((s) => s.jid && (s.jid.endsWith('@s.whatsapp.net') || s.jid.endsWith('@lid')));
-  return { sent, relay, text: out, pv };
+  const mentions = sent.flatMap((s) => s.content?.mentions || s.options?.mentions || []);
+  return { sent, relay, text: out, pv, mentions };
 }
 
 /** Extrai o texto de dentro da mensagem invisível entregue (texto normal). */
@@ -509,12 +510,18 @@ await test('!impostor votar: registra o voto com LID real (não número)', async
   const [m1, m2] = group.members;
   const r = await rodar(group, '!impostor votar', { sender: m1, mentioned: [m2] });
   includes(r.text, 'Voto de', 'confirma o voto');
-  includes(r.text, '1/', 'progresso dos votos');
+  includes(r.text, 'Já votaram', 'mostra quem já votou');
+  includes(r.text, 'Faltam', 'mostra quem falta');
+  includes(r.text, '1/3', 'progresso dos votos');
   // A menção no texto é o LID (o mesmo jid do jogador), não um número.
   includes(r.text, `@${m2.split('@')[0]}`, 'cita o alvo pelo LID');
   const jogo = global.impostorGames[group.jid];
   ok(jogo.votos[m1] === m2, 'o voto guardado é o LID do alvo');
   ok(jogo.votos[m1].includes('@lid'), 'o alvo é um LID');
+  // Quem votou e quem falta aparecem pelo LID (o cliente resolve o @).
+  includes(r.text, `@${m1.split('@')[0]}`, 'quem já votou aparece na lista');
+  ok(r.mentions.includes(m1) && r.mentions.includes(m2), 'mentions cobrem votante e alvo');
+  ok(r.mentions.includes(group.members[2]), 'quem falta também entra nas mentions');
 });
 
 await test('!impostor: votação encerra AUTOMATICAMENTE por maioria (sem esperar todos)', async () => {

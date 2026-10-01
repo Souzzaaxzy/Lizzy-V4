@@ -15760,11 +15760,18 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
               return nazu.sendMessage(from, { text: textoFinal, mentions });
             }
 
+            // Lista de quem já votou (e de quem falta).
+            const votaramJids = Object.keys(impGame.votos);
+            const faltamJids = impGame.jogadores.filter((j) => !impGame.votos[j]);
+            const listaVotou = votaramJids.length ? votaramJids.map(impNome).join(', ') : 'ninguém ainda';
+            const listaFalta = faltamJids.length ? faltamJids.map(impNome).join(', ') : 'ninguém';
+
             return reply(
               `🗳️ Voto de ${impNome(sender)} registrado em ${impNome(menc_os2)}!\n\n` +
-              `👥 Votos: ${votaram}/${total}\n\n` +
+              `✅ *Já votaram (${votaramJids.length}/${total}):* ${listaVotou}\n` +
+              `⏳ *Faltam:* ${listaFalta}\n\n` +
               `💡 O resultado sai quando alguém tiver maioria (ou todos votarem).`,
-              { mentions: [sender, menc_os2] }
+              { mentions: [...new Set([...votaramJids, ...faltamJids, sender, menc_os2])] }
             );
           }
 

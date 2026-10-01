@@ -8389,3 +8389,15 @@ Duas correções:
 `formatarResultado` incluindo o alvo votado nas mentions, e o handler garantindo
 que a mensagem final não tem `@<lid>` (o mock ganhou telefone distinto + um
 resolvedor de nome, como em produção).
+
+### Ajuste (set/2026): +100 pares e lista de quem votou
+1. **Banco maior**: `funcs/json/impostor.json` foi de 70 para **174 pares**
+   (+104 em todas as 7 categorias: animais, objetos, comida, lugares, esportes,
+   profissões, filmes). O teste do banco trava em **174**.
+2. **Lista de quem já votou**: a mensagem de cada voto agora mostra
+   `✅ Já votaram (x/total): @a, @b` e `⏳ Faltam: @c, @d` — as `mentions`
+   cobrem votantes + faltantes (o cliente resolve os `@`). O voto em si
+   continua sendo gravado pelo LID.
+
+`tests/impostor.test.js`: **32 testes / 319 asserções** (o teste de voto confere
+a lista de quem votou/falta e as mentions; o do banco trava em 174 pares).
