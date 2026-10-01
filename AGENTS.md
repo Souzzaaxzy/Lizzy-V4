@@ -8435,3 +8435,42 @@ Comando removido por completo, a pedido do dono. O que saiu:
 O que **NÃO** foi mexido (não é o comando): as referências a
 `proto.SyncActionValue` (namespace do proto) no
 `tests/testverify-what-it-does.test.js` e a nota do tema em `AGENTS.md`.
+
+## CORREÇÃO do `!pinsta` e do `!pspotify` (set/2026) ✅
+Os dois comandos existiam mas **não cumpriam o papel** (achar o perfil). Causas
+distintas, medidas na hora:
+
+### `!pinsta` (Instagram)
+- A consulta já funcionava via `curl` (a API privada `web_profile_info` responde
+  200 com UA de app), MAS **usuário inexistente** devolvia **404 com HTML** — e o
+  código tentava `JSON.parse` do HTML, caindo em "erro de API" em vez de
+  "perfil não encontrado".
+- **Correção**: o `curl` agora usa `-w '\n__HTTP_%{http_code}__'` e lê o status.
+  **404 -> `not_found`** (não tenta o axios); 401/403/429 -> rate limit; só então
+  faz o parse do JSON. Resultado: perfil certo quando existe, "não encontrado"
+  quando não existe.
+
+### `!pspotify` (Spotify)
+- **Causa raiz**: o endpoint oficial **`GET /v1/users/{id}` foi REMOVIDO** pela
+  Spotify (changelog de **fev/2026**, "No replacement"). Além disso o token
+  anônimo do web player é bloqueado (403) e a página do usuário não traz dados
+  sem UA de crawler. Ou seja: sem credenciais o comando **nunca** funcionava; e
+  mesmo com credenciais o endpoint não existe mais.
+- **Correção**: novo caminho público `getSpotifyProfilePublic` — pede
+  `https://open.spotify.com/user/<id>` com **UA de crawler**
+  (`facebookexternalhit`), que responde `og:title`/`og:image` (nome + avatar) e
+  **404 para usuário inexistente**. O `getSpotifyProfile` usa esse caminho quando
+  não há credenciais e como fallback quando a API oficial falha. As credenciais
+  viraram **opcionais** (`.env.example` atualizado).
+
+### Limite honesto
+O caminho público do Spotify entrega **nome, @usuário e avatar** (e "não
+encontrado"); **não** traz seguidores/playlists (a página não os expõe). Com
+credenciais válidas, se/quando a API voltar a expor o perfil, o caminho oficial
+assume e mostra os números.
+
+### Testes — `tests/social-profile.test.js` (**7 testes / 37 asserções**)
+`normalizeUsername` (handle/@/URL/meio de texto), `formatSocialProfile` (cartão
+de IG e Spotify sem vazar `undefined`/`null`/`NaN`), `formatErrorProfile`
+(não-encontrado x erro), validação de entrada e o contrato dos providers. Teste
+**offline** (não depende de rede).

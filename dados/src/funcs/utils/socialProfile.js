@@ -1,7 +1,8 @@
 /**
  * Social Profile — consulta de perfis de redes sociais por @username
- * Providers: TikTok (página pública), Instagram (API anônima pública),
- *            X (fxtwitter), Spotify (API oficial, requer SPOTIFY_CLIENT_ID/SECRET)
+ * Providers: TikTok (página pública), Instagram (API anônima pública via curl),
+ *            X (fxtwitter), Spotify (API oficial quando há credenciais;
+ *            senão, scraping da página pública com UA de crawler).
  *
  * Contrato do provider:
  *   getProfile(username) -> Promise<{ ok: true, profile: { ...modelo } } | { ok: false, msg, code } >
@@ -22,6 +23,20 @@ const HTTP_TIMEOUT = 10000;
 const PROFILE_CACHE_TTL = 5 * 60 * 1000;
 const MAX_CACHE_SIZE = 300;
 const UA_DESKTOP = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+/** UA de "crawler de link": o Spotify serve og tags (nome/avatar) só para ele. */
+const UA_CRAWLER = 'facebookexternalhit/1.1';
+
+/** Decodifica as entidades HTML que aparecem nos meta tags (ex.: `&amp;`). */
+function decodeHtml(s) {
+  if (!s) return '';
+  return String(s)
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;/g, "'")
+    .replace(/&apos;/g, "'");
+}
 
 const profileCache = new Map(); // key -> { ts, data }
 
@@ -166,32 +181,50 @@ async function fetchInstagramViaCurl(username) {
     '-H', 'X-IG-App-ID: 936619743392459',
     '-H', 'Accept: application/json',
     '-H', 'Accept-Language: en-US,en;q=0.9',
+    // Escreve o HTTP status numa linha própria no fim: 404 = usuário inexistente.
+    '-w', '\n__HTTP_%{http_code}__',
     'https://www.instagram.com/api/v1/users/web_profile_info/?username=' + encodeURIComponent(username),
   ];
   const { stdout } = await execFileP('curl', args, { timeout: HTTP_TIMEOUT + 5000, maxBuffer: 20 * 1024 * 1024 });
-  const data = JSON.parse(stdout);
+  const statusMatch = /__HTTP_(\d{3})__\s*$/.exec(stdout);
+  const status = statusMatch ? Number(statusMatch[1]) : 0;
+  // 404 -> perfil não existe (o IG devolve uma página HTML, não JSON).
+  if (status === 404) {
+    const err = new Error('instagram: not found');
+    err.response = { status: 404 };
+    throw err;
+  }
+  // 401/403/429 -> rate limit / bloqueio (não é "não encontrado").
+  if (status === 401 || status === 403 || status === 429) {
+    const err = new Error(`instagram: rate limited via curl (${status})`);
+    err.response = { status };
+    throw err;
+  }
+  // Sem status claro e sem JSON -> trata como erro de API.
+  const jsonStart = stdout.indexOf('{');
+  if (jsonStart === -1) {
+    const err = new Error(`instagram: resposta inesperada (status ${status})`);
+    err.response = { status: status || 0 };
+    throw err;
+  }
+  const data = JSON.parse(stdout.slice(jsonStart, statusMatch ? statusMatch.index : undefined));
   return data?.data?.user || null;
 }
 
 async function fetchInstagramUser(username) {
   // curl passa no fingerprint do IG; axios é o fallback para ambientes sem curl.
-
-
-
-
   try {
     return await fetchInstagramViaCurl(username);
   } catch (curlErr) {
-    const status = curlErr?.stderr ? String(curlErr.stderr) : '';
-    if (curlErr?.code === 'ENOENT' && /401|403|429/.test(status)) {
-      const rateErr = new Error('instagram: rate limited via curl');
-      rateErr.response = { status: 429 };
-      throw rateErr;
+    // 404 do curl = perfil não existe: não adianta tentar o axios.
+    if (curlErr?.response?.status === 404) {
+      const err = new Error('instagram: not found');
+      err.response = { status: 404 };
+      throw err;
     }
-    if (status && !/404/.test(status)) console.error('socialProfile/instagram/curl:', status.slice(0, 200));
     let lastErr = curlErr;
     for (const base of IG_ENDPOINTS) {
-      for (let attempt =   0; attempt < 2; attempt++) {
+      for (let attempt = 0; attempt < 2; attempt++) {
         try {
           const res = await axios.get(base + encodeURIComponent(username), {
             timeout: HTTP_TIMEOUT,
@@ -313,7 +346,66 @@ async function getSpotifyToken() {
   return token;
 }
 
+/**
+ * Spotify SEM credenciais — scraping da página pública do usuário.
+ *
+ * O endpoint oficial `GET /users/{id}` foi REMOVIDO (fev/2026) e o token
+ * anônimo do web player é bloqueado (403). O que ainda funciona: pedir a página
+ * do usuário com **UA de crawler** (`facebookexternalhit`) — o Spotify responde
+ * `og:title`/`og:image` com o NOME e o AVATAR, e **404** para usuário inexistente.
+ * A contagem de seguidores/playlists não aparece nessa página (limite honesto).
+ */
+async function getSpotifyProfilePublic(username) {
+  const url = `https://open.spotify.com/user/${encodeURIComponent(username)}`;
+  const res = await axios.get(url, {
+    timeout: HTTP_TIMEOUT,
+    headers: { 'User-Agent': UA_CRAWLER, 'Accept-Language': 'en-US,en;q=0.9' },
+    validateStatus: () => true,
+    maxRedirects: 5
+  });
+  if (res.status === 404) return { ok: false, msg: '❌ Perfil não encontrado.', code: 'not_found' };
+  const html = typeof res.data === 'string' ? res.data : '';
+  if (!html) return { ok: false, msg: '❌ Não foi possível consultar este perfil agora.', code: 'API_ERROR' };
+
+  const meta = (prop) => {
+    const m = new RegExp(`<meta property="og:${prop}" content="([^"]*)"`, 'i').exec(html);
+    return m ? decodeHtml(m[1]) : null;
+  };
+  const titulo = meta('title');
+  const descricao = meta('description') || '';
+  const avatar = meta('image') || null;
+
+  // Página de erro/genérica do Spotify -> perfil não encontrado.
+  if (!titulo || /web player|music for everyone/i.test(titulo) || /digital music service/i.test(descricao)) {
+    return { ok: false, msg: '❌ Perfil não encontrado.', code: 'not_found' };
+  }
+
+  const displayName = titulo.trim();
+  const profile = {
+    platform: 'spotify',
+    username,
+    displayName: displayName || username,
+    avatar: avatar || null,
+    profileUrl: `https://open.spotify.com/user/${username}`
+  };
+  return { ok: true, profile };
+}
+
 async function getSpotifyProfile(username) {
+  const temCredenciais = !!(process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET);
+
+  // Sem credenciais: cai no scraping público (o endpoint oficial não existe mais
+  // e o token anônimo é bloqueado). Assim o comando CUMPRE o papel.
+  if (!temCredenciais) {
+    try {
+      return await getSpotifyProfilePublic(username);
+    } catch (e) {
+      if (e?.response?.status === 404) return { ok: false, msg: '❌ Perfil não encontrado.', code: 'not_found' };
+      console.error('socialProfile/spotify/public:', e.message || e);
+      return { ok: false, msg: '❌ Não foi possível consultar este perfil agora.', code: 'API_ERROR' };
+    }
+  }
+
   try {
     const token = await getSpotifyToken();
     const res = await axios.get(`https://api.spotify.com/v1/users/${encodeURIComponent(username)}`, {
@@ -321,7 +413,7 @@ async function getSpotifyProfile(username) {
       headers: { Authorization: `Bearer ${token}` }
     });
     const u = res.data;
-    if (!u || !u.id) return { ok: false, msg: '❌ Perfil não encontrado.' };
+    if (!u || !u.id) return { ok: false, msg: '❌ Perfil não encontrado.', code: 'not_found' };
     let playlists = u.public_playlists_count ?? undefined;
     // A API isolada não expõe contagem; consulta o endpoint de playlists públicas (best-effort)
     if (playlists === undefined) {
@@ -346,13 +438,29 @@ async function getSpotifyProfile(username) {
     };
     return { ok: true, profile };
   } catch (e) {
-    if (e?.response?.status === 404) return { ok: false, msg: '❌ Perfil não encontrado.' };
+    if (e?.response?.status === 404) {
+      // Credenciais válidas mas endpoint removido/usuário ausente: tenta o público.
+      try {
+        return await getSpotifyProfilePublic(username);
+      } catch (e2) {
+        return { ok: false, msg: '❌ Perfil não encontrado.', code: 'not_found' };
+      }
+    }
     if (e.message === 'SPOTIFY_CREDENTIALS_MISSING') {
-      console.error('socialProfile/spotify: SPOTIFY_CLIENT_ID/SECRET não configurados no .env');
-      return { ok: false, msg: '❌ Não foi possível consultar este perfil agora.', code: 'NOT_CONFIGURED' };
+      // Corrida: credenciais sumiram — usa o público.
+      try {
+        return await getSpotifyProfilePublic(username);
+      } catch (e2) {
+        return { ok: false, msg: '❌ Não foi possível consultar este perfil agora.', code: 'NOT_CONFIGURED' };
+      }
     }
     console.error('socialProfile/spotify:', e.message || e);
-    return { ok: false, msg: '❌ Não foi possível consultar este perfil agora.', code: 'API_ERROR' };
+    // Qualquer outra falha da API oficial: ainda tenta o caminho público.
+    try {
+      return await getSpotifyProfilePublic(username);
+    } catch (e2) {
+      return { ok: false, msg: '❌ Não foi possível consultar este perfil agora.', code: 'API_ERROR' };
+    }
   }
 }
 
