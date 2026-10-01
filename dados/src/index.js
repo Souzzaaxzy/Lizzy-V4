@@ -15662,7 +15662,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
               `🗳️ ${groupPrefix}impostor votar @alguem — seu voto\n` +
               `✅ ${groupPrefix}impostor encerrar — conta os votos e revela\n` +
               `🚪 ${groupPrefix}impostor cancelar — cancela\n\n` +
-              `💡 *Como jogar:* cada um recebe uma palavra. Todos têm a mesma — MENOS o impostor, que tem uma parecida. Cada um descreve a sua; o impostor tenta disfarçar. Depois votem em quem acham que é o impostor!`
+              `💡 *Como jogar:* todos recebem a mesma palavra — MENOS o impostor, que NÃO sabe a palavra e tenta se passar por inocente. Cada um descreve a sua; o impostor disfarça. Depois votem em quem acham que é o impostor!`
             );
           }
 
@@ -15761,7 +15761,25 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
             membros: impJogadores,
             banco: impBanco,
             categoria: args[1] ? args[1].toLowerCase() : undefined,
-            enviarSecreto
+            enviarSecreto,
+            // Anúncio público ANTES das palavras: regras + a DICA (categoria).
+            anunciar: async ({ categoria, jogadores, total }) => {
+              await nazu.sendMessage(from, {
+                text:
+                  `🕵️ *IMPOSTOR* — a partida começou!\n\n` +
+                  `📖 *Regras básicas:*\n` +
+                  `• Todos receberam uma palavra secreta — *menos o impostor*.\n` +
+                  `• O impostor não sabe a palavra e vai tentar se passar por inocente.\n` +
+                  `• Um de cada vez, descrevam a palavra de vocês *sem falar direto* qual é.\n` +
+                  `• Depois votem em quem acham que é o impostor.\n\n` +
+                  `💡 *Dica:* a palavra é da categoria *${categoria}*.\n\n` +
+                  `👥 *Jogadores (${total}):* ${jogadores.map((j) => `@${getUserName(j)}`).join(', ')}\n\n` +
+                  `📩 Logo abaixo, cada jogador recebeu a palavra selecionada.\n` +
+                  `🗳️ Votar: ${groupPrefix}impostor votar @alguem\n` +
+                  `✅ Encerrar: ${groupPrefix}impostor encerrar`,
+                mentions: jogadores
+              });
+            }
           });
 
           if (!iniciou.ok) {
@@ -15777,21 +15795,6 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
           }
 
           global.impostorGames[impKey] = iniciou.jogo;
-
-          const mencoesImpostor = iniciou.jogo.jogadores;
-          await nazu.sendMessage(from, {
-            text:
-              `🕵️ *IMPOSTOR* — a partida começou!\n\n` +
-              `👥 Jogadores: ${mencoesImpostor.map((j) => `@${getUserName(j)}`).join(', ')}\n\n` +
-              `📩 Cada um recebeu a *palavra secreta* aqui no grupo — e só você consegue ver a sua (mensagem invisível).\n\n` +
-              `💬 *Como jogar:*\n` +
-              `• Descrevam a palavra de vocês, um de cada vez, sem falar direto qual é.\n` +
-              `• Todos têm a mesma palavra, MENOS o impostor, que tem uma parecida.\n` +
-              `• Achem o impostor!\n\n` +
-              `🗳️ Votar: ${groupPrefix}impostor votar @alguem\n` +
-              `✅ Encerrar: ${groupPrefix}impostor encerrar`,
-            mentions: mencoesImpostor
-          });
         } catch (e) {
           console.error('[IMPOSTOR] erro:', e);
           await reply('❌ Ocorreu um erro interno. Tente novamente em alguns minutos.');

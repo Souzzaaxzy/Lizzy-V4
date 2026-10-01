@@ -128,10 +128,11 @@ await test('impostor: montarAtribuicoes dá a comum a todos e a do impostor a um
   ok(impostores.length === 1 && impostores[0].jid === 'b', 'só o b é impostor');
 });
 
-await test('impostor: textoAtribuicao avisa o impostor e esconde dos demais', () => {
+await test('impostor: textoAtribuicao NÃO revela a palavra ao impostor', () => {
   const doImpostor = impostor.textoAtribuicao('tigre', true);
   includes(doImpostor, 'IMPOSTOR', 'avisa o impostor');
-  includes(doImpostor, 'tigre', 'mostra a palavra do impostor');
+  includes(doImpostor, 'não ser descoberto', 'dá a missão do impostor');
+  notIncludes(doImpostor, 'tigre', 'impostor NÃO recebe a palavra');
   const doComum = impostor.textoAtribuicao('leão', false);
   notIncludes(doComum, 'IMPOSTOR', 'não avisa impostor pro comum');
   includes(doComum, 'leão', 'mostra a palavra comum');
@@ -168,16 +169,21 @@ await test('impostor: encerrarPartida acerta se o mais votado é o impostor', ()
   ok(empatado.acertaram === false && empatado.empate === true, 'empate não acerta');
 });
 
-await test('impostor: iniciarPartida entrega por enviarSecreto (sem PV)', async () => {
+await test('impostor: iniciarPartida anuncia ANTES e entrega por enviarSecreto (sem PV)', async () => {
+  const ordem = [];
   const entregas = [];
   const r = await impostor.iniciarPartida({
     membros: ['a', 'b', 'c'],
     banco: BANCO,
     rng: () => 0,
-    enviarSecreto: async (jid, texto) => { entregas.push({ jid, texto }); return true; }
+    anunciar: async (info) => { ordem.push({ tipo: 'anuncio', info }); },
+    enviarSecreto: async (jid, texto) => { ordem.push({ tipo: 'entrega', jid }); entregas.push({ jid, texto }); return true; }
   });
   ok(r.ok === true, 'partida iniciou');
-  ok(entregas.length === 3, `entregou 3 cartões (veio ${entregas.length})`);
+  ok(ordem[0]?.tipo === 'anuncio', 'o anúncio sai primeiro');
+  ok(ordem[0].info.categoria, 'o anúncio traz a categoria (dica)');
+  ok(ordem[0].info.total === 3, 'o anúncio traz o total de jogadores');
+  ok(ordem.filter((x) => x.tipo === 'entrega').length === 3, 'três entregas depois');
   ok(entregas.every((e) => ['a', 'b', 'c'].includes(e.jid)), 'um cartão por jogador');
   const impostores = entregas.filter((e) => e.texto.includes('IMPOSTOR'));
   ok(impostores.length === 1, 'exatamente um impostor');
@@ -283,14 +289,26 @@ const mencoesDoRelay = (r) => r.message?.requestPaymentMessage?.noteMessage?.ext
 // 2) HANDLER
 // ============================================================================
 
-await test('!impostor: entrega a palavra por mensagem invisível (relay), não por PV', async () => {
+await test('!impostor: anúncio público com regras + dica ANTES das palavras', async () => {
   const group = makeGroup();
   const r = await rodar(group, '!impostor');
   includes(r.text, 'IMPOSTOR', 'anuncia a partida');
-  includes(r.text, 'invisível', 'explica que a palavra é invisível');
+  includes(r.text, 'Regras básicas', 'traz as regras');
+  includes(r.text, 'Dica', 'traz a dica');
+  includes(r.text, 'categoria', 'a dica é a categoria');
+  includes(r.text, 'recebeu a palavra selecionada', 'avisa que logo abaixo veio a palavra');
+  includes(r.text, 'Jogadores', 'lista os jogadores');
+  // O anúncio público sai ANTES das entregas (o sendMessage foi antes dos relays).
+  ok(r.sent.length >= 1, 'anúncio enviado no grupo');
+  ok(r.pv.length === 0, `nada em PV (veio ${r.pv.length})`);
+});
+
+await test('!impostor: entrega a palavra por mensagem invisível (relay), não por PV', async () => {
+  const group = makeGroup();
+  const r = await rodar(group, '!impostor');
   // Uma entrega invisível por jogador.
   ok(r.relay.length === group.members.length, `um relay por membro (veio ${r.relay.length})`);
-  // NADA em PV: todas as entregas usam o relay (grupo) e o sendMessage foi só o anúncio.
+  // NADA em PV.
   ok(r.pv.length === 0, `nada enviado em PV (veio ${r.pv.length})`);
   // Cada relay é restrito a UM jogador (allowedParticipants de 1).
   for (const rel of r.relay) {
@@ -299,7 +317,6 @@ await test('!impostor: entrega a palavra por mensagem invisível (relay), não p
       'restrito a um único jogador');
     ok(rel.message?.requestPaymentMessage, 'conteúdo é requestPaymentMessage (invisível)');
   }
-  // Todos os membros receberam; exatamente um cartão de impostor.
   const cartoes = r.relay.map(textoDoRelay);
   ok(cartoes.every((c) => c.length > 0), 'todo cartão tem texto');
   ok(cartoes.filter((c) => c.includes('IMPOSTOR')).length === 1, 'exatamente um impostor');
@@ -310,20 +327,19 @@ await test('!impostor: entrega a palavra por mensagem invisível (relay), não p
   }
 });
 
-await test('!impostor: cada jogador recebe a SUA palavra (comuns iguais, impostor diferente)', async () => {
+await test('!impostor: comuns recebem a MESMA palavra; impostor não recebe palavra', async () => {
   const group = makeGroup();
   const r = await rodar(group, '!impostor');
   const porJogador = r.relay.map((rel) => ({ jid: rel.opts.allowedParticipants[0], texto: textoDoRelay(rel) }));
   const impostor = porJogador.find((x) => x.texto.includes('IMPOSTOR'));
   const comuns = porJogador.filter((x) => !x.texto.includes('IMPOSTOR'));
   ok(impostor, 'achou o cartão do impostor');
-  // Extrai a palavra de cada cartão ("Sua palavra é: *X*").
+  // Extrai a palavra de cada cartão comum ("Sua palavra é: *X*").
   const palavraDe = (t) => (/\*([^*]+)\*/.exec(t.split('Sua palavra é:')[1] || '') || [])[1];
-  const palavraImpostor = palavraDe(impostor.texto);
   const palavrasComuns = comuns.map((c) => palavraDe(c.texto));
-  ok(palavraImpostor, `impostor tem palavra (${palavraImpostor})`);
-  ok(palavrasComuns.every((p) => p === palavrasComuns[0]), 'todos os comuns têm a mesma palavra');
-  ok(palavraImpostor !== palavrasComuns[0], 'impostor tem palavra diferente');
+  ok(palavrasComuns.every((p) => p === palavrasComuns[0] && p), 'todos os comuns têm a mesma palavra');
+  includes(impostor.texto, 'não ser descoberto', 'impostor recebe só a missão');
+  ok(!palavrasComuns.includes(palavraDe(impostor.texto)), 'impostor não tem a palavra do grupo');
 });
 
 await test('!impostor votar: registra o voto e recusa voto em si', async () => {

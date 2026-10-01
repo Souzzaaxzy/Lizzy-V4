@@ -76,8 +76,8 @@ export function embaralhar(lista, rng = Math.random) {
 /** Texto do "cartão secreto" de um jogador (vai na mensagem invisível). */
 export function textoAtribuicao(palavra, ehImpostor) {
   return ehImpostor
-    ? `🕵️ *VOCÊ É O IMPOSTOR!*\n\nSua palavra é: *${palavra}*\n\n😈 Finja que sabe a palavra do grupo. Não deixe ninguém perceber!`
-    : `🧑 *Sua palavra é:* *${palavra}*\n\n🕵️ Tem um impostor entre vocês com uma palavra parecida.\n🤫 Descreva a sua sem falar direto e descubra quem é!`;
+    ? `🕵️ *VOCÊ É O IMPOSTOR!*\n\nFaça o máximo para não ser descoberto! 😈`
+    : `🧑 *Sua palavra é:* *${palavra}*\n\n🤫 Descreva sem falar direto e descubra o impostor!`;
 }
 
 /** Votos (por jogador) e contagem. */
@@ -107,8 +107,12 @@ export function resolverVotacao(votos) {
 }
 
 /**
- * Inicia a partida: sorteia o par, escolhe o impostor, monta as atribuições e
- * ENTREGA cada uma por `enviarSecreto` (a mensagem invisível).
+ * Inicia a partida: sorteia o par, escolhe o impostor, monta as atribuições,
+ * ANUNCIA (mensagem pública com as regras + a dica) e ENTREGA cada cartão por
+ * `enviarSecreto` (a mensagem invisível).
+ *
+ * Ordem pedida: o anúncio público sai ANTES, dizendo que logo abaixo os
+ * jogadores receberam a palavra. Depois vêm os cartões invisíveis.
  *
  * Falha fechada: se não houver jogadores suficientes, devolve
  * `{ ok: false, motivo }` sem enviar nada.
@@ -118,10 +122,11 @@ export function resolverVotacao(votos) {
  * @param {object} opts.banco
  * @param {string} [opts.categoria]
  * @param {(jid: string, texto: string) => Promise<boolean>} opts.enviarSecreto
+ * @param {(info: {categoria: string, jogadores: string[], total: number}) => Promise<void>} [opts.anunciar]
  * @param {() => number} [opts.rng]
  * @returns {Promise<{ok: boolean, motivo?: string, jogo?: object}>}
  */
-export async function iniciarPartida({ membros, banco, categoria, enviarSecreto, rng = Math.random }) {
+export async function iniciarPartida({ membros, banco, categoria, enviarSecreto, anunciar, rng = Math.random }) {
   const lista = [...new Set((membros || []).filter(Boolean))];
   if (lista.length < MIN_JOGADORES) {
     return { ok: false, motivo: 'poucos_jogadores' };
@@ -132,7 +137,12 @@ export async function iniciarPartida({ membros, banco, categoria, enviarSecreto,
   const { impostor } = escolherImpostor(lista, rng);
   const atribuicoes = montarAtribuicoes(lista, par, impostor);
 
-  // Entrega o cartão de cada um (invisível). Se a entrega falhar, a partida
+  // 1) Anúncio público (regras + dica) antes das palavras.
+  if (typeof anunciar === 'function') {
+    await anunciar({ categoria: par.categoria, jogadores: lista, total: lista.length });
+  }
+
+  // 2) Entrega o cartão de cada um (invisível). Se a entrega falhar, a partida
   // NÃO começa — melhor avisar do que rodar sem alguém saber a palavra.
   let entregues = 0;
   for (const a of atribuicoes) {

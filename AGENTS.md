@@ -8318,3 +8318,22 @@ e que **nada vai para PV**; cada jogador recebe a sua palavra; voto e recusas;
 encerrar/empate; bot fora da partida; sem a API de relay falha fechado; fora de
 grupo recusado; e presença no `menubn`/`blockPv`. Cada grupo de teste tem LIDs
 próprios para não esbarrar no throttle de 3 comandos/5s por sender.
+
+### Ajuste (set/2026): anúncio público + impostor SEM a palavra
+Dois pedidos:
+1. **Mínimo de jogadores**: continua **3** (`MIN_JOGADORES`). O bot NÃO entra na
+   contagem (ele conduz).
+2. **Mensagem pública com as regras + a dica, ANTES das palavras**: a partida
+   começa com um anúncio no grupo — regras básicas, a **dica** (a categoria) e a
+   lista de jogadores — terminando com *"Logo abaixo, cada jogador recebeu a
+   palavra selecionada."* Só então vêm os cartões invisíveis.
+3. **O impostor NÃO recebe a palavra**: ele recebe
+   *"🕵️ VOCÊ É O IMPOSTOR! Faça o máximo para não ser descoberto! 😈"*. Os comuns
+   recebem *"🧑 Sua palavra é: X"*.
+
+Implementação: `iniciarPartida` ganhou o callback `anunciar`, chamado **antes**
+das entregas (`enviarSecreto`). O handler monta o anúncio (regras + categoria +
+jogadores) e `textoAtribuicao` deixou de mostrar a palavra ao impostor.
+`tests/impostor.test.js` foi de 21 para **22 testes / 169 asserções**, validando a
+ordem (anúncio antes), o conteúdo do anúncio (regras + dica + "recebeu a palavra
+selecionada") e que o impostor não recebe a palavra.
