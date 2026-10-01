@@ -8073,3 +8073,39 @@ sorteio variando em 30 execuções, a frase do betinha do `!mogar` com **duas
 menções** (autor e alvo), GIF (`gifsbn/delulu.gif`) e imagem
 (`gifsbn/sixseven.jpg`), fora de grupo recusando, presença no `menubn` (uma vez
 cada) e no `blockPv`, e `!setgif` aceitando todos.
+
+## Jogo `!quemsoueu` — adivinhe o personagem (set/2026) ✅
+Alias `!quemsou`. O bot descreve um personagem em primeira pessoa
+("Sou um ninja loiro e teimoso que carrega uma raposa de nove caudas dentro de
+mim.") e o grupo adivinha quem é.
+
+### Onde moram os personagens
+`dados/src/funcs/json/quemsoueu.json` → chave **`personagens`** (61 itens).
+Cada item: `p` (descrição), `r` (lista de respostas aceitas), `d` (nome de
+exibição) e `dicas` (2 pistas progressivas). Mesmo formato do `quiz.json`, o que
+deixa o comando e os testes triviais. Tem animes, games, filmes/séries, esportes,
+música, ciência/história e desenhos.
+
+### Fluxo (mesmo molde do `!quiz`)
+Estado em `global.quemSouEuGames[isGroup ? from : sender]`, com
+`descricao`, `respostas`, `display`, `dicas`, `dicasUsadas` e `iniciado`.
+- `!quemsoueu` → sorteia um personagem e mostra a descrição + instruções.
+- `!quemsoueu <chute>` → **errou mantém o jogo aberto** (o grupo continua
+  tentando), acertou encerra e revela (com tempo e pontos; a pontuação cai
+  conforme o tempo e as dicas usadas).
+- `!quemsoueu dica` → entrega as dicas **em ordem** sem encerrar o jogo.
+- `!quemsoueu pular` (ou `desistir`) → revela a resposta e encerra.
+O acerto aceita tanto as respostas de `r` quanto o `display`, com a mesma
+normalização do quiz (`normalizar`).
+
+### Menu / blockPv
+Linha em **JOGOS & DIVERSÃO** do `menubn`, logo abaixo do `!quiz`; e `'quemsoueu'`
+em `menuCommandsMap.menubn` (`utils/blockPv.js`). Baseline do `menu-layout`:
+**menubn 374 -> 375**.
+
+### Testes — `tests/quemsoueu.test.js` (**12 testes / 277 asserções**)
+Handler real com socket falso: JSON válido (61 personagens, sem duplicados),
+início do jogo, chute errado mantendo aberto, dicas em ordem, acerto por `r` e
+por `display`, `pular`, novo jogo depois do acerto, alias `!quemsou`, sorteio
+variando em 20 partidas, e presença no `menubn`/`blockPv`. Usa `DATABASE_PATH`
+temporário: **não toca** o `dados/database` real.

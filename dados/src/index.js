@@ -15364,6 +15364,80 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
         break;
       }
       // ═══════════════════════════════════════════════════════════════
+      // 🕵️ QUEM SOU EU - o bot descreve um personagem e o grupo adivinha
+      // ═══════════════════════════════════════════════════════════════
+      case 'quemsoueu':
+      case 'quemsou': {
+        // Carregar personagens do JSON (mesmo padrao do quiz.json).
+        const qsePath = pathz.join(__dirname, 'funcs', 'json', 'quemsoueu.json');
+        let qseDB = [];
+        try {
+          const qseData = JSON.parse(fs.readFileSync(qsePath, 'utf-8'));
+          qseDB = Array.isArray(qseData.personagens) ? qseData.personagens : [];
+        } catch (e) {
+          console.error('Erro ao carregar quemsoueu.json:', e);
+        }
+        if (!qseDB.length) {
+          qseDB = [{ p: 'Sou um ninja loiro com uma raposa de nove caudas.', r: ['naruto'], d: 'Naruto', dicas: ['Meu sonho é virar Hokage.'] }];
+        }
+
+        // Estado dos jogos de "Quem sou eu" ativos (mesmo molde do quiz).
+        if (!global.quemSouEuGames) global.quemSouEuGames = {};
+        const qseKey = isGroup ? from : sender;
+        const game = global.quemSouEuGames[qseKey];
+        const sub = (args[0] || '').toLowerCase();
+
+        // Desistir / pular o personagem atual.
+        if (game && (sub === 'pular' || sub === 'desistir')) {
+          const resposta = game.display;
+          delete global.quemSouEuGames[qseKey];
+          return reply(`⏭️ *Desistiu!*\n\n✅ A resposta era: *${resposta}*`);
+        }
+
+        // Pedir uma dica (sem encerrar o jogo).
+        if (game && (sub === 'dica' || sub === 'dicas')) {
+          if (game.dicasUsadas >= game.dicas.length) {
+            return reply(`💡 Não tenho mais dicas!\n\n👤 Ainda é: *${game.display}*\n\n💭 Chute com: ${groupPrefix}quemsoueu [resposta]`);
+          }
+          const dica = game.dicas[game.dicasUsadas];
+          game.dicasUsadas++;
+          return reply(`💡 *DICA ${game.dicasUsadas}/${game.dicas.length}*\n\n${dica}\n\n💭 Chute com: ${groupPrefix}quemsoueu [resposta]`);
+        }
+
+        // Já tem jogo ativo e o jogador mandou um chute.
+        if (game && args.length > 0) {
+          const chute = normalizar(args.join(' '));
+          const acertou = game.respostas.some(r => normalizar(r) === chute || chute.includes(normalizar(r)));
+          if (!acertou) {
+            // Errou: mantém o jogo aberto para o grupo continuar tentando.
+            return reply(`❌ *Errou!* Não sou *${args.join(' ')}*.\n\n👤 Continuo sendo um personagem misterioso...\n💭 Tente de novo: ${groupPrefix}quemsoueu [resposta]\n💡 Dica: ${groupPrefix}quemsoueu dica\n🚪 Desistir: ${groupPrefix}quemsoueu pular`);
+          }
+          const tempoResposta = ((Date.now() - game.iniciado) / 1000).toFixed(1);
+          const pontos = Math.max(50 - Math.floor(parseFloat(tempoResposta) * 2) - (game.dicasUsadas * 5), 10);
+          const dicasUsadas = game.dicasUsadas;
+          delete global.quemSouEuGames[qseKey];
+          return reply(`🎉 *ACERTOU!*\n\n✅ Era: *${game.display}*\n⏱️ Tempo: ${tempoResposta}s\n💡 Dicas usadas: ${dicasUsadas}\n🏆 +${pontos} pontos`);
+        }
+
+        // Já tem jogo ativo e ninguém chutou: relembra o personagem.
+        if (game) {
+          return reply(`🕵️ *QUEM SOU EU?*\n\n${game.descricao}\n\n💭 Chute com: ${groupPrefix}quemsoueu [resposta]\n💡 Dica: ${groupPrefix}quemsoueu dica\n🚪 Desistir: ${groupPrefix}quemsoueu pular`);
+        }
+
+        // Sem jogo ativo: sorteia um personagem novo.
+        const escolhido = qseDB[Math.floor(Math.random() * qseDB.length)];
+        global.quemSouEuGames[qseKey] = {
+          descricao: escolhido.p,
+          respostas: escolhido.r,
+          display: escolhido.d,
+          dicas: Array.isArray(escolhido.dicas) ? escolhido.dicas : [],
+          dicasUsadas: 0,
+          iniciado: Date.now()
+        };
+        await reply(`🕵️ *QUEM SOU EU?*\n\n${escolhido.p}\n\n💭 Chute com: ${groupPrefix}quemsoueu [resposta]\n💡 Dica: ${groupPrefix}quemsoueu dica\n🚪 Desistir: ${groupPrefix}quemsoueu pular`);
+        break;
+      }
+      // ═══════════════════════════════════════════════════════════════
       // 🎯 FORCA - Jogo da Forca em Grupo
       // ═══════════════════════════════════════════════════════════════
       case 'forca':

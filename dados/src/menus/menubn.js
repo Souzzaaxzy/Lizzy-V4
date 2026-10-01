@@ -18,6 +18,7 @@ export default async function menubn(prefix, botName = "MeuBot", userName = "Usu
 │ 🏆 ${prefix}memoria ranking
 │ 📝 ${prefix}wordle
 │ ❓ ${prefix}quiz
+│ 🕵️ ${prefix}quemsoueu
 │ 🎭 ${prefix}forca
 │ ⌨️ ${prefix}digitar
 │ 🚢 ${prefix}batalhanaval
