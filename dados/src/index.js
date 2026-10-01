@@ -1130,6 +1130,12 @@ import {
 } from './utils/rankbn.js';
 import { montarRankBn } from './menus/rankbn.js';
 import {
+  PREFIXO_BUSCA,
+  montarTermoBusca,
+  montarPack,
+  conteudoPack
+} from './funcs/utils/stickerPack.js';
+import {
   minJogadores as minJogadoresImpostor,
   parseOpcoesCriar as parseOpcoesCriarImpostor,
   criarLobby as criarLobbyImpostor,
@@ -30129,7 +30135,50 @@ packname: `${nomebot}`,
           var isVideoMidia = midiaComando?.type === 'video';
           var boij = isVideoMidia ? midiaComando.media : null;
           var boij2 = midiaComando?.type === 'image' ? midiaComando.media : null;
-          if (!boij && !boij2) return reply(`Marque uma imagem ou um vídeo de até 9.9 segundos para fazer figurinha, com o comando: ${prefix + command} (mencionando a mídia)`);
+
+          // ── Nova funcionalidade: `!s <prompt>` sem mídia marcada ──
+          // Pesquisa no Pinterest (prefixando "icon"), converte as imagens em
+          // figurinhas e envia TUDO como um PACOTE (stickerPackMessage).
+          if (!boij && !boij2) {
+            const prompt = (q || '').trim();
+            if (!prompt) {
+              return reply(`🎨 *Figurinha por busca*\n\n• Marque uma imagem/vídeo e use ${prefix + command} → faz figurinha dela.\n• Ou digite ${prefix + command} <pesquisa> → eu busco "${PREFIXO_BUSCA} <pesquisa>" no Pinterest e mando um *pack de figurinhas*!`);
+            }
+            await react('🔍', nazu, info.key, from);
+            const termo = montarTermoBusca(prompt);
+            const busca = await pinterest.search(termo);
+            if (!busca.ok || !busca.urls || !busca.urls.length) {
+              await react('❌', nazu, info.key, from);
+              return reply(`❌ Não encontrei imagens para "${prompt}". Tente outro termo.`);
+            }
+            await reply(`🎨 Encontrei imagens para *${prompt}*! Montando o pack de figurinhas… ⏳`);
+            // Baixa os bytes da imagem; a CONVERSÃO para figurinha (webp) é
+            // feita pela própria fork (`prepareStickerPackMessage` usa o sharp),
+            // então não dependemos do ffmpeg aqui.
+            const baixarImagem = async (url) => {
+              const resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 30000 });
+              const buf = Buffer.from(resp.data);
+              if (!buf.length) return null;
+              return buf;
+            };
+            const pack = await montarPack({ urls: busca.urls, converter: baixarImagem, nome: `${nomebot} · ${prompt}`, publisher: pushname || nomebot });
+            if (!pack.ok) {
+              await react('❌', nazu, info.key, from);
+              return reply('❌ Não consegui montar o pack agora. Tente de novo em instantes.');
+            }
+            try {
+              await nazu.sendMessage(from, conteudoPack(pack), { quoted: info });
+            } catch (packErr) {
+              console.error('[!s pack] falha ao enviar o pack:', packErr?.message || packErr);
+              // Fallback: manda as figurinhas uma por uma.
+              for (const s of pack.stickers) {
+                await nazu.sendMessage(from, { sticker: s.data }).catch(() => {});
+              }
+            }
+            await react('✅', nazu, info.key, from);
+            return;
+          }
+
           var isVideo2 = isVideoMidia;
           if (isVideo2 && boij.seconds > 9.9) return reply(`O vídeo precisa ter no máximo 9.9 segundos para ser convertido em figurinha.`);
           var buffer = await getFileBuffer(isVideo2 ? boij : boij2, isVideo2 ? 'video' : 'image');

@@ -8574,3 +8574,42 @@ revelação final.
 `tests/impostor.test.js`: **56 testes / 435 asserções** — dois testes novos:
 a rodada que continua NÃO vaza o impostor vivo (texto e mentions) nem a palavra;
 e o fim de jogo revela os impostores e a palavra.
+
+## `!s <prompt>` → pack de figurinhas (set/2026) ✅
+Nova funcionalidade embutida no `!s` (aliases `!st`, `!stk`, `!sticker`): além de
+fazer figurinha de uma mídia marcada (como antes), agora `!s <pesquisa>` **busca
+imagens e envia um pacote de figurinhas**.
+
+### Fluxo (pedido do dono)
+1. usuário digita `!s <pesquisa>`;
+2. o bot pesquisa **prefixando "icon"** — a busca real é `icon <pesquisa>`
+   (`montarTermoBusca`; `PREFIXO_BUSCA = 'icon'`);
+3. pega de **10 a 15** imagens;
+4. converte em figurinha e envia **tudo num pacote** (`stickerPackMessage`:
+   capa + figurinhas).
+
+Sem `q`, o comando mostra o uso (mídia marcada **ou** `!s <pesquisa>`).
+
+### Módulo puro `funcs/utils/stickerPack.js`
+- `montarTermoBusca(prompt)` → `icon <prompt>`.
+- `escolherQuantidade(disponiveis, rng)` → 10..15 (limitado ao que existe).
+- `montarPack({ urls, converter, nome, publisher, quantidade, rng })` — baixa
+  via `converter` e ignora as que falham; a **primeira vira a capa**; teto de 60
+  (limite do pacote). Falha fechado (`sem_imagens` / `conversao_falhou`).
+- `conteudoPack(pack)` → `{ stickers, cover, name, publisher, description }`, o
+  formato que a fork espera para `stickerPackMessage`.
+
+### Conversão
+O bot **baixa os bytes crus** da imagem e deixa a **fork converter para webp com
+o `sharp`** (`prepareStickerPackMessage`), então **não depende do ffmpeg** — o
+`convertToWebp` do bot usa ffmpeg e falharia onde ele não estiver instalado.
+
+### Pinterest
+`pinterest.search` passou a devolver até **30** URLs (antes 10) — dá folga para
+o pack chegar às 10..15 mesmo com imagens que falham. Testado ao vivo: `icon
+gatinho` → 11 figurinhas; `icon cachorro fofo` → 14; `icon paisagem` → 12.
+
+### Testes — `tests/sticker-pack.test.js` (**8 testes / 28 asserções**)
+Prefixo "icon" (normalização), faixa 10..15 (rng determinístico), montagem
+(capa = 1ª figurinha), falha de URL não derruba o pack, sem imagens /
+conversão falhou, só URL http(s), teto de 60 e o formato do `conteudoPack`.

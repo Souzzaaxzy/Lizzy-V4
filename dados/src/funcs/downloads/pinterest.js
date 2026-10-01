@@ -147,7 +147,7 @@ async function search(query) {
 
     const urls = [...new Set(murls)]
       .filter((u) => /^https?:\/\//i.test(u))
-      .slice(0, 10);
+      .slice(0, 30);
 
     if (!urls.length) {
       return { ok: false, msg: 'Nenhuma imagem encontrada' };
