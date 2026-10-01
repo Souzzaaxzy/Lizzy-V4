@@ -77,50 +77,6 @@ export function ranking(store, limite = LIMITE_RANKBN) {
 }
 
 /**
- * Monta o texto do ranking no layout pedido:
- *
- *   Rank Brincadeiras
- *
- *   1 @Fulano
- *   emojiquiz: 120
- *   filme: 80
- *   total: 200
- *
- * @param {object} store mapa `{ jid: { jogo: pontos } }`
- * @param {object} [opts]
- * @param {string} [opts.titulo] título (ex.: 'Rank Brincadeiras')
- * @param {number} [opts.limite] quantos jogadores exibir
- * @param {(jid: string) => string} [opts.nomeDe] como exibir o jogador
- * @returns {{texto: string, mentions: string[]}}
- */
-export function formatarRanking(store, opts = {}) {
-  const titulo = opts.titulo || 'Rank Brincadeiras';
-  const limite = typeof opts.limite === 'number' ? opts.limite : LIMITE_RANKBN;
-  const nomeDe = typeof opts.nomeDe === 'function' ? opts.nomeDe : (jid) => `@${String(jid).split('@')[0]}`;
-
-  const top = ranking(store, limite);
-  const mentions = top.map((x) => x.jid);
-
-  if (!top.length) {
-    const jogos = JOGOS_RANKBN.map((j) => j.nome).join(', ');
-    return { texto: `🎮 *${titulo}*\n\nNenhuma pontuação registrada ainda.\n\n💡 Jogue (${jogos}) para aparecer aqui!`, mentions: [] };
-  }
-
-  const linhas = top.map((x, i) => {
-    const partes = [`*${i + 1}.* ${nomeDe(x.jid)}`, ''];
-    // Só os jogos que o jogador pontuou (na ordem canônica de JOGOS_RANKBN).
-    for (const jogo of JOGOS_RANKBN) {
-      const valor = Number(x.jogos[jogo.id]) || 0;
-      if (valor > 0) partes.push(`${jogo.nome}: ${valor}`);
-    }
-    partes.push(`total: ${x.total}`);
-    return partes.join('\n');
-  });
-
-  return { texto: `🎮 *${titulo}*\n\n${linhas.join('\n\n')}`, mentions };
-}
-
-/**
  * Junta vários mapas (ex.: todos os grupos) num único mapa global.
  *
  * @param {Array<object>} mapas
@@ -149,6 +105,5 @@ export default {
   registrarPontos,
   totalDoJogador,
   ranking,
-  formatarRanking,
   agregarMapas
 };

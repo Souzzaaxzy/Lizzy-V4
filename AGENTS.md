@@ -8237,3 +8237,33 @@ quatro jogos gravando no `rankbn` do grupo + os comandos no handler real
 (top 5 do grupo com pontuação individual e total, corte em 5, grupo sem pontos,
 global somando dois grupos, global no privado, rankbn recusado fora de grupo) +
 presença no `menubn`/`blockPv`. Usa `DATABASE_PATH` temporário.
+
+### Ajuste (set/2026): layout do bot + primeira categoria do `menubn`
+Dois pedidos:
+1. **layout do bot** nos rankings — o texto agora usa as primitivas de
+   `menus/layout.js` (`cabecalho`, `abrirCategoria`, `RODAPE_BLOCO`), com o
+   cabeçalho `꧁༺ ✦ <bot> ✦ ༻꧂`, a saudação e uma caixa de categoria:
+   ```
+   ╭━━━꧁༺ ✦ Abyss ✦ ༻꧂━━━╮
+   ┃ 𖤐 𝐎𝐥á, @Fulano
+   ┃ 〆 🏆 𝐑𝐚𝐧𝐤 𝐁𝐫𝐢𝐧𝐜𝐚𝐝𝐞𝐢𝐫𝐚𝐬
+   ┃ 🏆 Ranking de pontos do grupo
+   ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━━━╯
+
+   ╭━━━꧁༺ ㅤ🏆 𝑷𝑶𝑵𝑻𝑶𝑺 🏆ㅤ ༻꧂━━━╮
+   ┃ 🥇 *1º* @Fulano
+   ┃     🧩 emojiquiz: 120
+   ┃     🎬 filme: 80
+   ┃     💠 total: *200*
+   ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
+   ```
+   Sem pontuação, a caixa vira `💤 𝑺𝑬𝑴 𝑷𝑶𝑵𝑻𝑶𝑺` com a dica dos jogos.
+   **Mudança de arquitetura**: a montagem do texto saiu do `utils/rankbn.js`
+   (que ficou só com dados/cálculo: registrar, ranking, agregar) e foi para
+   `menus/rankbn.js` → `montarRankBn({ top, jogos, botName, userName, global, nomeDe })`.
+2. **os dois comandos foram para a PRIMEIRA categoria** do `menubn`
+   (`JOGOS & DIVERSÃO`), logo após o `!jogodavelha`, em vez de ficarem em
+   BRINCADEIRAS. Continuam aparecendo uma única vez e a contagem segue **379**.
+
+`tests/rankbn.test.js` passou a validar o layout (cabeçalho/caixa/medalhas) e a
+posição na primeira categoria — **19 testes / 79 asserções**.

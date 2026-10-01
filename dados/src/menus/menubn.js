@@ -28,6 +28,8 @@ export default async function menubn(prefix, botName = "MeuBot", userName = "Usu
 │ ⚔️ ${prefix}dueloquiz
 │ 🔤 ${prefix}cacapalavras
 │ ❌ ${prefix}jogodavelha
+│ 🏆 ${prefix}rankbn
+│ 🌍 ${prefix}rankbng
 │ 🎉 ${prefix}eununca
 │ 💭 ${prefix}vab
 │ 🎲 ${prefix}chance
@@ -344,8 +346,6 @@ ${isLiteMode ? '' : `╭━━━꧁༺ ㅤ🔞 ${boldItalic('INTERAÇÕES "PICA
 │ 🔥 ${prefix}inferno
 │ 🧊 ${prefix}frio
 │ 🧊 ${prefix}fria
-│ 🏆 ${prefix}rankbn
-│ 🌍 ${prefix}rankbng
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 

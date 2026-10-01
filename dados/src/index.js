@@ -1125,9 +1125,10 @@ import {
   JOGOS_RANKBN,
   LIMITE_RANKBN,
   registrarPontos as registrarPontosRankbn,
-  formatarRanking as formatarRankingRankbn,
+  ranking as rankingRankbn,
   agregarMapas as agregarMapasRankbn
 } from './utils/rankbn.js';
+import { montarRankBn } from './menus/rankbn.js';
 import {
   isMenu18Command,
   isModo18Ativo
@@ -41236,9 +41237,13 @@ ${groupPrefix}setngl https://ngl.link/...`);
             store = (groupData && groupData.rankbn && typeof groupData.rankbn === 'object') ? groupData.rankbn : {};
           }
 
-          const { texto, mentions } = formatarRankingRankbn(store, {
-            titulo: ehGlobal ? 'Rank Brincadeiras Global' : 'Rank Brincadeiras',
-            limite: LIMITE_RANKBN,
+          const top = rankingRankbn(store, LIMITE_RANKBN);
+          const { texto, mentions } = montarRankBn({
+            top,
+            jogos: JOGOS_RANKBN.map(j => j.id),
+            botName: nomebot || 'Bot',
+            userName: pushname,
+            global: ehGlobal,
             nomeDe: (jid) => `@${getUserName(jid)}`
           });
 

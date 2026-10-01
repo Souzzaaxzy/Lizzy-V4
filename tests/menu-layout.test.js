@@ -297,7 +297,7 @@ const COMANDOS_POR_MENU = {
   // -> 375 (`!quemsoueu` entrou em JOGOS & DIVERSÃO)
   // -> 376 (`!filme` entrou em JOGOS & DIVERSÃO)
   // -> 377 (`!emojiquiz` entrou em JOGOS & DIVERSÃO)
-  // -> 379 (`!rankbn` e `!rankbng` entraram em BRINCADEIRAS).
+  // -> 379 (`!rankbn` e `!rankbng` entraram na 1a categoria, JOGOS & DIVERSÃO).
   menubn: 379, menufut: 42, menurpg: 149,
   // menuvip nao tem comando cadastrado; o `!` contado e o `!addcmdvip` da
   // instrucao ("Use: !addcmdvip"), que no original tambem estava fixo.

@@ -73,6 +73,8 @@ function notIncludes(haystack, needle, label) {
 // ============================================================================
 
 const rankbn = await import(new URL('../dados/src/utils/rankbn.js', import.meta.url).href);
+const rankbnMenu = await import(new URL('../dados/src/menus/rankbn.js', import.meta.url).href);
+const layout = await import(new URL('../dados/src/menus/layout.js', import.meta.url).href);
 const indexModule = await import(new URL('../dados/src/index.js', import.meta.url).href);
 const handleMessage = indexModule.default ?? indexModule;
 if (typeof handleMessage !== 'function') throw new Error('index.js não exporta o handler');
@@ -122,28 +124,46 @@ await test('rankbn: ignora jogadores sem pontos e desempata de forma estável', 
   ok(top[0].jid === 'b' && top[1].jid === 'c', 'empate em ordem estável (b antes de c)');
 });
 
-await test('rankbn: formatarRanking usa o layout pedido', () => {
+await test('rankbn: montarRankBn usa o layout do bot (cabeçalho + caixa)', () => {
   const store = {
     '5511@lid': { emojiquiz: 120, filme: 80 },
     '5522@lid': { emojiquiz: 300 },
   };
-  const { texto, mentions } = rankbn.formatarRanking(store, { nomeDe: (jid) => `@${jid.split('@')[0]}` });
-  includes(texto, 'Rank Brincadeiras', 'título');
-  includes(texto, '*1.* @5522', '1º com o nome');
-  includes(texto, '*2.* @5511', '2º com o nome');
-  includes(texto, 'emojiquiz: 120', 'pontuação individual do emojiquiz');
-  includes(texto, 'filme: 80', 'pontuação individual do filme');
-  includes(texto, 'total: 200', 'total do jogador');
-  includes(texto, 'total: 300', 'total do 1º');
+  const top = rankbn.ranking(store, 5);
+  const { texto, mentions } = rankbnMenu.montarRankBn({
+    top, jogos: rankbn.JOGOS_RANKBN.map(j => j.id),
+    botName: 'Abyss', userName: 'Kannon', nomeDe: (jid) => `@${jid.split('@')[0]}`
+  });
+  // Cabeçalho do bot (nome em bold no título do menu).
+  includes(texto, layout.TOPO('Abyss'), 'topo com o nome do bot');
+  includes(texto, '┃ 𖤐 𝐎𝐥á, @Kannon', 'saudação');
+  includes(texto, layout.bold('Rank Brincadeiras'), 'título em bold');
+  includes(texto, layout.abrirCategoria('PONTOS', '🏆'), 'caixa de categoria');
+  includes(texto, layout.RODAPE_BLOCO, 'fecha a caixa');
+  // Conteúdo.
+  includes(texto, '🥇 *1º* @5522', '1º com medalha');
+  includes(texto, '🥈 *2º* @5511', '2º com medalha');
+  includes(texto, '🧩 emojiquiz: 120', 'pontuação individual do emojiquiz');
+  includes(texto, '🎬 filme: 80', 'pontuação individual do filme');
+  includes(texto, '💠 total: *200*', 'total do jogador');
+  includes(texto, '💠 total: *300*', 'total do 1º');
   ok(mentions.includes('5522@lid') && mentions.includes('5511@lid'), 'mentions com os dois jids');
   ok(mentions[0] === '5522@lid', 'mentions na ordem do ranking');
+  ok(!texto.includes('╭─❖'), 'não usa a borda antiga');
 });
 
-await test('rankbn: ranking vazio devolve aviso e sem mentions', () => {
-  const { texto, mentions } = rankbn.formatarRanking({});
-  includes(texto, 'Rank Brincadeiras', 'título');
-  includes(texto, 'Nenhuma pontuação', 'aviso de vazio');
+await test('rankbn: montarRankBn sem pontos avisa e sem mentions', () => {
+  const { texto, mentions } = rankbnMenu.montarRankBn({ top: [], jogos: ['emojiquiz'], botName: 'Abyss', userName: 'Kannon' });
+  includes(texto, layout.bold('Rank Brincadeiras'), 'título');
+  includes(texto, layout.abrirCategoria('SEM PONTOS', '💤'), 'caixa de vazio');
+  includes(texto, 'Ninguém pontuou', 'aviso');
   ok(mentions.length === 0, 'sem mentions');
+});
+
+await test('rankbn: montarRankBn (global) troca o título', () => {
+  const top = rankbn.ranking({ 'a@lid': { filme: 10 } }, 5);
+  const { texto } = rankbnMenu.montarRankBn({ top, jogos: ['filme'], botName: 'Abyss', userName: 'X', global: true });
+  includes(texto, layout.bold('Rank Brincadeiras Global'), 'título global');
 });
 
 await test('rankbn: agregarMapas soma o mesmo jogador em grupos diferentes', () => {
@@ -281,11 +301,12 @@ await test('!rankbn: mostra o top 5 do grupo no layout (com pontuação por jogo
   fs.writeFileSync(path.join(GRUPOS_DIR, `${g}.json`), JSON.stringify(dados, null, 2));
 
   const r = await rodar(g, '!rankbn');
-  includes(r.text, 'Rank Brincadeiras', 'título do grupo');
-  includes(r.text, '1.', 'tem o 1º');
+  includes(r.text, "╭━━━꧁༺ ✦ ", "cabeçalho do bot no grupo");
+  includes(r.text, layout.bold('Rank Brincadeiras'), 'título do grupo');
+  includes(r.text, '🥇 *1º*', 'tem o 1º com medalha');
   includes(r.text, 'emojiquiz: 120', 'pontuação individual');
   includes(r.text, 'filme: 80', 'pontuação individual do filme');
-  includes(r.text, 'total: 200', 'total do jogador');
+  includes(r.text, '💠 total: *200*', 'total do jogador');
   // Ordem: j2 (300) antes de j1 (200) antes de j3 (70).
   ok(r.text.indexOf('5522') < r.text.indexOf('5511'), 'j2 acima de j1');
   ok(r.text.indexOf('5511') < r.text.indexOf('5533'), 'j1 acima de j3');
@@ -313,8 +334,8 @@ await test('!rankbn: só os 5 melhores aparecem', async () => {
 await test('!rankbn: sem pontuação avisa e não quebra', async () => {
   const g = makeGroup();
   const r = await rodar(g, '!rankbn');
-  includes(r.text, 'Rank Brincadeiras', 'título');
-  includes(r.text, 'Nenhuma pontuação', 'aviso');
+  includes(r.text, "╭━━━꧁༺ ✦ ", "cabeçalho");
+  includes(r.text, 'Ninguém pontuou', 'aviso');
   ok(r.mentions.length === 0, 'sem mentions');
 });
 
@@ -333,11 +354,11 @@ await test('!rankbng: soma todos os grupos (global)', async () => {
   fs.writeFileSync(path.join(GRUPOS_DIR, `${g2}.json`), JSON.stringify(d2, null, 2));
 
   const r = await rodar(g1, '!rankbng');
-  includes(r.text, 'Rank Brincadeiras Global', 'título global');
+  includes(r.text, layout.bold('Rank Brincadeiras Global'), 'título global');
   includes(r.text, 'emojiquiz: 140', 'emojiquiz somado entre grupos');
   includes(r.text, 'filme: 60', 'filme do outro grupo');
-  includes(r.text, 'total: 200', 'total do 5999');
-  includes(r.text, 'total: 30', 'total do 5888');
+  includes(r.text, '💠 total: *200*', 'total do 5999');
+  includes(r.text, '💠 total: *30*', 'total do 5888');
   ok(r.text.indexOf('5999') < r.text.indexOf('5888'), '5999 (200) acima de 5888 (30)');
   ok(r.mentions.includes('5999@lid') && r.mentions.includes('5888@lid'), 'mentions dos dois');
 });
@@ -353,7 +374,7 @@ await test('!rankbng funciona fora de grupo (é global)', async () => {
     pushName: 'Autor',
   }, null, new Map(), null);
   const text = sent.map((s) => s.content?.text ?? '').join('\n');
-  includes(text, 'Rank Brincadeiras Global', 'respondeu no privado');
+  includes(text, layout.bold('Rank Brincadeiras Global'), 'respondeu no privado');
 });
 
 await test('!rankbn: fora de grupo é recusado', async () => {
@@ -373,15 +394,21 @@ await test('!rankbn: fora de grupo é recusado', async () => {
 // 4) MENU / BLOCKPV
 // ============================================================================
 
-await test('menubn: !rankbn e !rankbng estão em BRINCADEIRAS', async () => {
+await test('menubn: !rankbn e !rankbng estão na PRIMEIRA categoria (JOGOS & DIVERSÃO)', async () => {
   const menus = await import(new URL('../dados/src/menus/menubn.js', import.meta.url).href);
-  const layout = await import(new URL('../dados/src/menus/layout.js', import.meta.url).href);
   const texto = String(await menus.default('!', 'Lizzy', 'Tester', false));
-  const idx = texto.indexOf(layout.boldItalic('BRINCADEIRAS'));
-  const bloco = texto.slice(idx, texto.indexOf('╰', idx));
-  includes(bloco, '!rankbn', 'rankbn na BRINCADEIRAS');
-  includes(bloco, '!rankbng', 'rankbng na BRINCADEIRAS');
+  // Recorta só a primeira categoria (antes da segunda).
+  const idxIni = texto.indexOf(layout.boldItalic('JOGOS & DIVERSÃO'));
+  const idxFim = texto.indexOf(layout.boldItalic('NGL ANÔNIMO'));
+  ok(idxIni !== -1 && idxFim !== -1 && idxFim > idxIni, 'achou a primeira categoria');
+  const bloco = texto.slice(idxIni, idxFim);
+  includes(bloco, '!rankbn', 'rankbn na primeira categoria');
+  includes(bloco, '!rankbng', 'rankbng na primeira categoria');
   ok((texto.match(/!rankbn\b/g) || []).length === 1, '!rankbn aparece uma única vez');
+  ok((texto.match(/!rankbng\b/g) || []).length === 1, '!rankbng aparece uma única vez');
+  // Não ficou na BRINCADEIRAS (categoria mais abaixo).
+  const idxBrinc = texto.indexOf(layout.boldItalic('BRINCADEIRAS'));
+  ok(idxBrinc === -1 || !texto.slice(idxBrinc).includes('!rankbn'), 'não ficou na BRINCADEIRAS');
 });
 
 await test('blockPv: rankbn e rankbng registrados no menubn', async () => {
