@@ -8550,3 +8550,27 @@ impostores e se ainda sobrou algum (`formatarResultado`).
 `consumirRodada` (expulsos, votos limpos, rodada+1), voto de expulso recusado, e
 o fluxo completo no handler (expulsar um → nova rodada → expulsar o outro →
 grupo ganha).
+
+### Correção (set/2026): a rodada NÃO revela o impostor que sobrou
+Bug relatado: quando um impostor era expulso e ainda sobrava outro, a mensagem
+da rodada **entregava quem era o impostor restante** (e a palavra do grupo).
+
+Causa: `aplicarRodada` listava `😈 Impostor(es) vivo(s): @…`, revelava
+`🧑 Palavra do grupo` e ainda punha os **impostores vivos nas `mentions`** — a
+menção sozinha já entregava.
+
+Correção (`aplicarRodada`):
+- enquanto a partida **CONTINUA**: o texto traz só o expulso (e o que ele era) e
+  a **contagem** — *"Ainda há N impostor(es) escondido(s) entre vocês!"* —, sem
+  nome, sem palavra e **sem os impostores nas `mentions`**;
+- as `mentions` passam a ser **só o expulso e os alvos votados**; os impostores
+  vivos entram **apenas quando a partida termina**;
+- quando **TERMINA** (grupo ganhou / impostores ganharam): aí sim revela
+  `😈 Impostor(es): …` e `🧑 Palavra do grupo: …`.
+
+`resolverRodada` passou a devolver também `impostores` (a lista completa), para a
+revelação final.
+
+`tests/impostor.test.js`: **56 testes / 435 asserções** — dois testes novos:
+a rodada que continua NÃO vaza o impostor vivo (texto e mentions) nem a palavra;
+e o fim de jogo revela os impostores e a palavra.

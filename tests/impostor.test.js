@@ -290,6 +290,28 @@ await test('impostor: votar não aceita voto de quem foi expulso', () => {
   ok(impostor.votar(jogo, 'a', 'e').ok === true, 'voto válido entre vivos');
 });
 
+await test('impostor: a rodada que CONTINUA não revela o impostor que sobrou nem a palavra', () => {
+  const nome = (jid) => `@${jid}`;
+  const jogo = { impostores: ['b', 'e'], jogadores: ['a', 'b', 'c', 'd', 'e'], votos: { a: 'b', c: 'b', d: 'b' }, palavraComum: 'LEAO' };
+  const r = impostor.aplicarRodada(jogo, nome);
+  includes(r.texto, 'ERA IMPOSTOR', 'diz que o expulso era impostor');
+  includes(r.texto, 'Ainda há', 'avisa que ainda há impostor');
+  notIncludes(r.texto, '@e', 'NÃO revela o impostor que sobrou no texto');
+  notIncludes(r.texto, 'LEAO', 'NÃO revela a palavra do grupo');
+  ok(!r.mentions.includes('e'), 'o impostor vivo NÃO entra nas menções');
+  ok(!r.mentions.includes('b') || r.mentions.includes('b'), 'o expulso pode ser mencionado');
+});
+
+await test('impostor: quando a partida TERMINA, aí sim revela os impostores e a palavra', () => {
+  const nome = (jid) => `@${jid}`;
+  // Último impostor expulso -> grupo ganha e revela.
+  const jogo = { impostores: ['b', 'e'], expulsos: ['e'], jogadores: ['a', 'b', 'c', 'd', 'e'], votos: { a: 'b', c: 'b', d: 'b' }, palavraComum: 'LEAO' };
+  const r = impostor.aplicarRodada(jogo, nome);
+  includes(r.texto, 'GRUPO GANHOU', 'grupo ganhou');
+  includes(r.texto, '@b', 'revela o impostor');
+  includes(r.texto, 'LEAO', 'revela a palavra');
+});
+
 await test('impostor: iniciarPartida anuncia ANTES e entrega por enviarSecreto (sem PV)', async () => {
   const ordem = [];
   const entregas = [];

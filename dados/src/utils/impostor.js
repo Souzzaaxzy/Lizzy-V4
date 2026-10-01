@@ -458,7 +458,8 @@ export function resolverRodada(jogo) {
     return {
       empate: true, maisVotado: maisVotado || null, votos, lista,
       expulsou: null, eraImpostor: false, reiniciar: true, continua: false,
-      fim: null, impostoresVivos: impostoresAntes, impostoresRestantes: impostoresAntes.length
+      fim: null, impostores: impostoresAntes, impostoresVivos: impostoresAntes,
+      impostoresRestantes: impostoresAntes.length
     };
   }
 
@@ -481,12 +482,18 @@ export function resolverRodada(jogo) {
   return {
     empate: false, maisVotado, votos, lista,
     expulsou: maisVotado, eraImpostor, reiniciar: false, continua, fim,
-    impostoresVivos: restantes, impostoresRestantes: restantes.length
+    impostores: impostoresAntes, impostoresVivos: restantes,
+    impostoresRestantes: restantes.length
   };
 }
 
 /**
  * Aplica o resultado de uma rodada ao estado do jogo.
+ *
+ * SIGILO: enquanto a partida CONTINUA, o texto NÃO revela quem são os impostores
+ * que sobraram, NÃO revela a palavra do grupo e NÃO os coloca nas menções — só
+ * o expulso (e o que ele era) e a CONTAGEM de impostores restantes. A revelação
+ * só acontece quando a partida TERMINA.
  *
  * @param {object} jogo
  * @returns {{texto: string, mentions: string[], rodada: object}}
@@ -497,36 +504,46 @@ export function aplicarRodada(jogo, nomeDe = (jid) => `@${String(jid).split('@')
     ? rodada.lista.map((x, i) => `• ${i + 1}º ${nomeDe(x.alvo)} — ${x.votos} voto(s)`).join('\n')
     : '• Ninguém votou 😅';
 
-  const mentions = [...new Set([...rodada.impostoresVivos, rodada.maisVotado, ...rodada.lista.map((x) => x.alvo)].filter(Boolean))];
+  const terminou = rodada.fim === 'grupo' || rodada.fim === 'impostores';
+
+  // Menções: o expulso e os alvos votados. Enquanto a partida continua, NUNCA
+  // incluir os impostores vivos (a menção entregaria quem é).
+  const mentions = [...new Set([
+    rodada.expulsou,
+    ...rodada.lista.map((x) => x.alvo),
+    ...(terminou ? rodada.impostoresVivos : [])
+  ].filter(Boolean))];
+
   let cabeca;
   if (rodada.empate) {
-    cabeca = `⚖️ *EMPATE!* Ninguém foi expulso nesta rodada.\n🗳️ Votem de novo!`;
+    cabeca = '⚖️ *EMPATE!* Ninguém foi expulso nesta rodada.';
   } else if (rodada.eraImpostor) {
     cabeca = `🎯 *${nomeDe(rodada.expulsou)} foi expulso… e ERA IMPOSTOR!* 😈`;
   } else {
     cabeca = `💀 *${nomeDe(rodada.expulsou)} foi expulso… mas era INOCENTE!* 😢`;
   }
 
-  let rodape = '';
-  if (rodada.reiniciar) {
-    rodape = '🗳️ Nova rodada: votem em quem acham que é o impostor.';
+  const linhas = [`🕵️ *RESULTADO DA RODADA*`, '', `🗳️ *Votos:*`, lista, '', cabeca, ''];
+
+  if (rodada.empate) {
+    linhas.push('🗳️ Nova rodada: votem em quem acham que é o impostor.');
   } else if (rodada.continua) {
-    rodape = `😈 Ainda há *${rodada.impostoresRestantes}* impostor(es) entre vocês!\n🗳️ Votem de novo no próximo comando de voto.`;
+    // NÃO revela quem sobrou nem a palavra.
+    linhas.push(`😈 Ainda há *${rodada.impostoresRestantes}* impostor(es) escondido(s) entre vocês!`);
+    linhas.push('🗳️ Votem de novo para descobrir quem é.');
   } else if (rodada.fim === 'grupo') {
-    rodape = '🏆 *O GRUPO GANHOU!* Todos os impostores foram expulsos!';
+    linhas.push('🏆 *O GRUPO GANHOU!* Todos os impostores foram expulsos!');
+    linhas.push('');
+    linhas.push(`😈 Impostor(es): ${rodada.impostores.map(nomeDe).join(', ')}`);
+    linhas.push(`🧑 Palavra do grupo: *${jogo?.palavraComum || ''}*`);
   } else if (rodada.fim === 'impostores') {
-    rodape = '😈 *OS IMPOSTORES GANHARAM!*';
+    linhas.push('😈 *OS IMPOSTORES GANHARAM!*');
+    linhas.push('');
+    linhas.push(`😈 Impostor(es): ${rodada.impostores.map(nomeDe).join(', ')}`);
+    linhas.push(`🧑 Palavra do grupo: *${jogo?.palavraComum || ''}*`);
   }
 
-  const texto =
-    `🕵️ *RESULTADO DA RODADA*\n\n` +
-    `🗳️ *Votos:*\n${lista}\n\n` +
-    `${cabeca}\n\n` +
-    `${rodape}\n\n` +
-    `😈 Impostor(es) vivo(s): ${rodada.impostoresVivos.map(nomeDe).join(', ') || 'nenhum'}\n` +
-    `🧑 Palavra do grupo: *${jogo?.palavraComum || ''}*`;
-
-  return { texto, mentions, rodada };
+  return { texto: linhas.join('\n'), mentions, rodada };
 }
 
 /**
