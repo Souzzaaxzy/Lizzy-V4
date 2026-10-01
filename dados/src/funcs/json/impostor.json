@@ -1,0 +1,88 @@
+{
+  "categorias": {
+    "animais": [
+      ["leão", "tigre"],
+      ["cachorro", "gato"],
+      ["elefante", "rinoceronte"],
+      ["golfinho", "baleia"],
+      ["coruja", "águia"],
+      ["cavalo", "zebra"],
+      ["jacaré", "crocodilo"],
+      ["abelha", "vespa"],
+      ["tartaruga", "jabuti"],
+      ["lobo", "raposa"]
+    ],
+    "objetos": [
+      ["cadeira", "banco"],
+      ["caneta", "lápis"],
+      ["celular", "tablet"],
+      ["guarda-chuva", "sombrinha"],
+      ["espelho", "janela"],
+      ["relógio", "cronômetro"],
+      ["travesseiro", "almofada"],
+      ["garfo", "colher"],
+      ["mochila", "mala"],
+      ["vassoura", "rodo"]
+    ],
+    "comida": [
+      ["pizza", "esfiha"],
+      ["hambúrguer", "sanduíche"],
+      ["sushi", "temaki"],
+      ["chocolate", "bombom"],
+      ["sorvete", "picolé"],
+      ["café", "chá"],
+      ["pão", "bolo"],
+      ["macarrão", "lasanha"],
+      ["pipoca", "amendoim"],
+      ["queijo", "requeijão"]
+    ],
+    "lugares": [
+      ["praia", "piscina"],
+      ["escola", "faculdade"],
+      ["hospital", "farmácia"],
+      ["cinema", "teatro"],
+      ["shopping", "mercado"],
+      ["aeroporto", "rodoviária"],
+      ["igreja", "templo"],
+      ["parque", "praça"],
+      ["hotel", "pousada"],
+      ["biblioteca", "livraria"]
+    ],
+    "esportes": [
+      ["futebol", "futsal"],
+      ["basquete", "vôlei"],
+      ["natação", "polo aquático"],
+      ["corrida", "maratona"],
+      ["boxe", "MMA"],
+      ["ciclismo", "moto"],
+      ["surfe", "skate"],
+      ["tênis", "badminton"],
+      ["judô", "caratê"],
+      ["golfe", "sinuca"]
+    ],
+    "profissões": [
+      ["médico", "enfermeiro"],
+      ["professor", "diretor"],
+      ["bombeiro", "policial"],
+      ["piloto", "comissário"],
+      ["cozinheiro", "garçom"],
+      ["dentista", "ortodontista"],
+      ["advogado", "juiz"],
+      ["pedreiro", "pintor"],
+      ["astronauta", "cientista"],
+      ["carteiro", "motoboy"]
+    ],
+    "filmes": [
+      ["Titanic", "Romeu e Julieta"],
+      ["Star Wars", "Star Trek"],
+      ["Matrix", "Interestelar"],
+      ["Shrek", "Monstros S.A."],
+      ["Frozen", "Enrolados"],
+      ["Batman", "Homem-Aranha"],
+      ["Coringa", "Venom"],
+      ["Toy Story", "Carros"],
+      ["O Rei Leão", "Tarzan"],
+      ["Jurassic Park", "Godzilla"]
+    ]
+  }
+}

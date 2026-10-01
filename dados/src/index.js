@@ -1130,6 +1130,12 @@ import {
 } from './utils/rankbn.js';
 import { montarRankBn } from './menus/rankbn.js';
 import {
+  MIN_JOGADORES as IMPOSTOR_MIN_JOGADORES,
+  iniciarPartida as iniciarPartidaImpostor,
+  votar as votarImpostor,
+  encerrarPartida as encerrarPartidaImpostor
+} from './utils/impostor.js';
+import {
   isMenu18Command,
   isModo18Ativo
 } from './funcs/utils/menu18Mode.js';
@@ -15623,6 +15629,173 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
           iniciado: Date.now()
         };
         await reply(`🧩 *EMOJI QUIZ* (${escolhido.c || categoriaEscolhida})\n\n${escolhido.e}\n\n💭 Chute com: ${groupPrefix}emojiquiz [resposta]\n💡 Dica: ${groupPrefix}emojiquiz dica\n🚪 Desistir: ${groupPrefix}emojiquiz pular`);
+        break;
+      }
+      // ═══════════════════════════════════════════════════════════════
+      // 🕵️ IMPOSTOR - Among Us de texto, SEM privado.
+      //   A palavra secreta de cada um vai por MENSAGEM INVISÍVEL no grupo
+      //   (mesma entrega do !rajar: requestPaymentMessage + rotação de Sender
+      //   Key restrita a `allowedParticipants: [jogador]`). Só aquele jogador
+      //   decifra; ninguém mais (nem admins) vê. Nada no PV.
+      // ═══════════════════════════════════════════════════════════════
+      case 'impostor':
+      case 'among':
+      case 'amongus': {
+        try {
+          if (!isGroup) return reply('❌ Este comando só funciona em grupos.');
+          if (!isModoBn) return reply('❌ O modo brincadeira não está ativo nesse grupo.');
+
+          const impPath = pathz.join(__dirname, 'funcs', 'json', 'impostor.json');
+          let impBanco = { categorias: {} };
+          try { impBanco = JSON.parse(fs.readFileSync(impPath, 'utf-8')); } catch (e) { console.error('[IMPOSTOR] banco:', e.message); }
+
+          if (!global.impostorGames) global.impostorGames = {};
+          const impKey = from;
+          const impGame = global.impostorGames[impKey];
+          const impSub = (args[0] || '').toLowerCase();
+
+          // ── Ajuda ──
+          if (impSub === 'ajuda' || impSub === 'help') {
+            return reply(
+              `🕵️ *IMPOSTOR* — Among Us de texto\n\n` +
+              `🎮 ${groupPrefix}impostor — começa a partida (a palavra secreta chega pra cada um *aqui no grupo*, invisível)\n` +
+              `🗳️ ${groupPrefix}impostor votar @alguem — seu voto\n` +
+              `✅ ${groupPrefix}impostor encerrar — conta os votos e revela\n` +
+              `🚪 ${groupPrefix}impostor cancelar — cancela\n\n` +
+              `💡 *Como jogar:* cada um recebe uma palavra. Todos têm a mesma — MENOS o impostor, que tem uma parecida. Cada um descreve a sua; o impostor tenta disfarçar. Depois votem em quem acham que é o impostor!`
+            );
+          }
+
+          // ── Cancelar ──
+          if (impSub === 'cancelar' || impSub === 'sair') {
+            if (!impGame) return reply('❌ Nenhuma partida em andamento.');
+            delete global.impostorGames[impKey];
+            return reply('🚪 Partida de impostor cancelada.');
+          }
+
+          // ── Votar ──
+          if (impSub === 'votar' || impSub === 'voto') {
+            if (!impGame) return reply(`❌ Nenhuma partida em andamento. Comece com ${groupPrefix}impostor`);
+            if (!menc_os2) return reply(`🗳️ Marque em quem você vota.\n\n💡 Exemplo: ${groupPrefix}impostor votar @alguem`);
+            const r = votarImpostor(impGame, sender, menc_os2);
+            if (!r.ok) {
+              const msg = r.motivo === 'nao_jogador' ? '❌ Você não está nesta partida.'
+                : r.motivo === 'voto_em_si' ? '❌ Você não pode votar em si mesmo.'
+                  : '❌ Voto inválido.';
+              return reply(msg);
+            }
+            return reply(`🗳️ Voto de @${getUserName(sender)} registrado em @${getUserName(menc_os2)}!\n\n👥 Votos: ${Object.keys(impGame.votos).length}/${impGame.jogadores.length}\n\n💡 Encerre com ${groupPrefix}impostor encerrar`);
+          }
+
+          // ── Encerrar e revelar ──
+          if (impSub === 'encerrar' || impSub === 'fim' || impSub === 'resultado') {
+            if (!impGame) return reply(`❌ Nenhuma partida em andamento. Comece com ${groupPrefix}impostor`);
+            const res = encerrarPartidaImpostor(impGame);
+            delete global.impostorGames[impKey];
+
+            const linhasVotos = res.lista.length
+              ? res.lista.map((x, i) => `• ${i + 1}º @${getUserName(x.alvo)} — ${x.votos} voto(s)`).join('\n')
+              : '• Ninguém votou 😅';
+
+            const veredito = res.empate
+              ? `⚖️ *EMPATE!* Ninguém foi expulso — o impostor escapou 😈`
+              : res.acertaram
+                ? `🎉 *O GRUPO GANHOU!* @${getUserName(res.maisVotado)} era o impostor!`
+                : `😈 *O IMPOSTOR GANHOU!* Expulsaram @${getUserName(res.maisVotado)}, que era inocente.`;
+
+            return reply(
+              `🕵️ *RESULTADO DO IMPOSTOR*\n\n` +
+              `🗳️ *Votos:*\n${linhasVotos}\n\n` +
+              `${veredito}\n\n` +
+              `😈 Impostor: @${getUserName(res.impostor)}\n` +
+              `🧑 Palavra do grupo: *${res.palavraComum}*\n` +
+              `🕵️ Palavra do impostor: *${res.palavraImpostor}*`
+            );
+          }
+
+          // ── Já tem partida: avisa e sai ──
+          if (impGame) {
+            return reply(`🎮 Já tem uma partida rolando!\n\n🗳️ Vote com ${groupPrefix}impostor votar @alguem\n✅ Encerre com ${groupPrefix}impostor encerrar\n🚪 Cancele com ${groupPrefix}impostor cancelar`);
+          }
+
+          // ── Começar partida ──
+          // O bot não joga: ele conduz. Fica fora da lista de jogadores.
+          const impParticipantes = (Array.isArray(AllgroupMembers) ? AllgroupMembers : [])
+            .filter((j) => j && j !== botNumberLid);
+          if (impParticipantes.length < IMPOSTOR_MIN_JOGADORES) {
+            return reply(`❌ Preciso de pelo menos *${IMPOSTOR_MIN_JOGADORES}* membros no grupo para o impostor.`);
+          }
+
+          // Mencionados (se houver) viram os jogadores; senão, o grupo inteiro.
+          let impJogadores = [];
+          if (Array.isArray(menc_jid2) && menc_jid2.length > 0) {
+            for (const m of menc_jid2) {
+              impJogadores.push(isValidJid(m) ? await getLidFromJidCached(nazu, m) : m);
+            }
+            impJogadores = [...new Set(impJogadores)].filter((j) => impParticipantes.includes(j));
+            if (impJogadores.length < IMPOSTOR_MIN_JOGADORES) {
+              return reply(`❌ Marque pelo menos *${IMPOSTOR_MIN_JOGADORES}* membros do grupo para jogar.`);
+            }
+          } else {
+            impJogadores = impParticipantes;
+          }
+
+          // Entrega invisível: só o alvo decifra (rotação de Sender Key).
+          const enviarSecreto = async (jid, texto) => {
+            if (typeof nazu.relayGroupMessageWithSenderKeyRotation !== 'function') return false;
+            try {
+              const conteudo = buildRajaContent(texto, [jid]);
+              const baseMsg = await generateWAMessageFromContent(from, conteudo, { userJid: nazu?.user?.id });
+              await nazu.relayGroupMessageWithSenderKeyRotation(from, baseMsg.message, {
+                allowedParticipants: [jid],
+                messageId: generateRajaMessageId()
+              });
+              return true;
+            } catch (e) {
+              console.error('[IMPOSTOR] entrega invisível falhou:', e?.message || e);
+              return false;
+            }
+          };
+
+          const iniciou = await iniciarPartidaImpostor({
+            membros: impJogadores,
+            banco: impBanco,
+            categoria: args[1] ? args[1].toLowerCase() : undefined,
+            enviarSecreto
+          });
+
+          if (!iniciou.ok) {
+            if (iniciou.motivo === 'poucos_jogadores') {
+              return reply(`❌ Preciso de pelo menos *${IMPOSTOR_MIN_JOGADORES}* jogadores.`);
+            }
+            return reply(
+              `❌ Não consegui entregar as palavras secretas.\n\n` +
+              `• jogadores: ${iniciou.total || impJogadores.length}\n` +
+              `• entregues: ${iniciou.entregues || 0}\n\n` +
+              `Nada foi iniciado — em vez de rodar uma partida sem alguém saber a palavra.`
+            );
+          }
+
+          global.impostorGames[impKey] = iniciou.jogo;
+
+          const mencoesImpostor = iniciou.jogo.jogadores;
+          await nazu.sendMessage(from, {
+            text:
+              `🕵️ *IMPOSTOR* — a partida começou!\n\n` +
+              `👥 Jogadores: ${mencoesImpostor.map((j) => `@${getUserName(j)}`).join(', ')}\n\n` +
+              `📩 Cada um recebeu a *palavra secreta* aqui no grupo — e só você consegue ver a sua (mensagem invisível).\n\n` +
+              `💬 *Como jogar:*\n` +
+              `• Descrevam a palavra de vocês, um de cada vez, sem falar direto qual é.\n` +
+              `• Todos têm a mesma palavra, MENOS o impostor, que tem uma parecida.\n` +
+              `• Achem o impostor!\n\n` +
+              `🗳️ Votar: ${groupPrefix}impostor votar @alguem\n` +
+              `✅ Encerrar: ${groupPrefix}impostor encerrar`,
+            mentions: mencoesImpostor
+          });
+        } catch (e) {
+          console.error('[IMPOSTOR] erro:', e);
+          await reply('❌ Ocorreu um erro interno. Tente novamente em alguns minutos.');
+        }
         break;
       }
       // ═══════════════════════════════════════════════════════════════

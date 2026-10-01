@@ -8267,3 +8267,54 @@ Dois pedidos:
 
 `tests/rankbn.test.js` passou a validar o layout (cabeçalho/caixa/medalhas) e a
 posição na primeira categoria — **19 testes / 79 asserções**.
+
+## Jogo `!impostor` — Among Us de texto SEM privado (set/2026) ✅
+Aliases `!among` e `!amongus`. Todos recebem a mesma palavra — MENOS o impostor,
+que recebe uma parecida. Cada um descreve a sua e o grupo vota em quem acha que
+é o impostor.
+
+### A entrega é INVISÍVEL (nada no PV)
+A palavra secreta de cada jogador NÃO vai por privado: vai por **mensagem
+invisível dentro do grupo**, com a MESMA entrega do `!rajar` —
+`buildRajaContent` (um `requestPaymentMessage`) + `relayGroupMessageWithSenderKeyRotation`
+com `allowedParticipants: [jogador]`. Ou seja, só aquele jogador decifra o
+material da Sender Key; nem os outros jogadores nem os admins leem. A menção do
+cartão é o próprio destinatário.
+
+### Módulo `utils/impostor.js` (puro)
+- `sortearPar(banco, categoria, rng)` — sorteia (comum, impostor) do banco.
+- `escolherImpostor(membros, rng)` / `montarAtribuicoes(membros, par, impostor)`.
+- `textoAtribuicao(palavra, ehImpostor)` — cartão secreto (o do impostor avisa;
+  o do comum esconde).
+- `votar(jogo, votante, alvo)` — valida jogador, alvo e voto em si.
+- `resolverVotacao(votos)` / `contarVotos(votos)` — mais votado + empate.
+- `encerrarPartida(jogo)` — veredito (acertaram se o mais votado é o impostor).
+- `iniciarPartida({membros, banco, categoria, enviarSecreto, rng})` — sorteia,
+  monta e **entrega cada cartão** pelo `enviarSecreto` (a mensagem invisível).
+  **Falha fechado**: com menos de 3 jogadores ou se algum cartão não for
+  entregue, devolve `{ ok: false, motivo }` sem iniciar.
+
+### Banco
+`funcs/json/impostor.json` → `categorias` (7 categorias / **70 pares**:
+animais, objetos, comida, lugares, esportes, profissões, filmes).
+
+### Fluxo (estado em `global.impostorGames[grupo]`)
+- `!impostor` — começa (o bot NÃO entra na lista; ele conduz). Mencionados viram
+  os jogadores; sem menção, o grupo inteiro.
+- `!impostor votar @alguem` — registra o voto.
+- `!impostor encerrar` — conta os votos, revela o veredito e as duas palavras.
+- `!impostor cancelar` — cancela. `!impostor ajuda` — explica as regras.
+
+### Menu / blockPv
+Linha em **JOGOS & DIVERSÃO** do `menubn`, logo após o `!emojiquiz`; e
+`'impostor'` em `menuCommandsMap.menubn` (`utils/blockPv.js`). Baseline do
+`menu-layout`: **menubn 379 -> 380**.
+
+### Testes — `tests/impostor.test.js` (**21 testes / 159 asserções**)
+Módulo puro (banco, sorteio, atribuições, votação, empate, encerrar, falha
+fechado) + handler real: confirma que a entrega é por **relay invisível** (um
+envio por jogador, `allowedParticipants` de 1, conteúdo `requestPaymentMessage`)
+e que **nada vai para PV**; cada jogador recebe a sua palavra; voto e recusas;
+encerrar/empate; bot fora da partida; sem a API de relay falha fechado; fora de
+grupo recusado; e presença no `menubn`/`blockPv`. Cada grupo de teste tem LIDs
+próprios para não esbarrar no throttle de 3 comandos/5s por sender.
