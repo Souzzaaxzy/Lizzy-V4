@@ -8109,3 +8109,39 @@ início do jogo, chute errado mantendo aberto, dicas em ordem, acerto por `r` e
 por `display`, `pular`, novo jogo depois do acerto, alias `!quemsou`, sorteio
 variando em 20 partidas, e presença no `menubn`/`blockPv`. Usa `DATABASE_PATH`
 temporário: **não toca** o `dados/database` real.
+
+## Jogo `!filme` — adivinhe o filme pelos emojis (set/2026) ✅
+Aliases `!filmes` e `!emojifilme`. O bot mostra uma sequência de emojis
+("🦁👑") e o grupo adivinha o filme.
+
+### Onde moram os filmes
+`dados/src/funcs/json/filmes.json` → chave **`filmes`** (70 itens). Cada item:
+`e` (emojis), `r` (respostas aceitas), `d` (nome de exibição) e `dicas`
+(2 pistas progressivas). Mesmo formato do `quiz.json`/`quemsoueu.json` — o
+comando e os testes são triviais. Cobre animações (Disney/Pixar), clássicos,
+super-heróis, terror, ficção e filmes brasileiros.
+
+### Fluxo (mesmo molde do `!quiz`/`!quemsoueu`)
+Estado em `global.filmeEmojiGames[isGroup ? from : sender]`, com `emojis`,
+`respostas`, `display`, `dicas`, `dicasUsadas` e `iniciado`.
+- `!filme` → sorteia um filme e mostra os emojis + instruções.
+- `!filme <chute>` → **errou mantém o jogo aberto** (o grupo continua
+  tentando), acertou encerra e revela (com tempo e pontos; a pontuação cai
+  conforme o tempo e as dicas usadas).
+- `!filme dica` → entrega as dicas **em ordem** sem encerrar o jogo.
+- `!filme pular` (ou `desistir`) → revela a resposta e encerra.
+O acerto aceita tanto as respostas de `r` quanto o `display`, com a mesma
+normalização do quiz (`normalizar`).
+
+### Menu / blockPv
+Linha em **JOGOS & DIVERSÃO** do `menubn`, logo abaixo do `!quemsoueu`; e
+`'filme'` em `menuCommandsMap.menubn` (`utils/blockPv.js`). Baseline do
+`menu-layout`: **menubn 375 -> 376**.
+
+### Testes — `tests/filme.test.js` (**12 testes / 315 asserções**)
+Handler real com socket falso: JSON válido (70 filmes, sem duplicados),
+início do jogo (com os emojis na resposta), chute errado mantendo aberto,
+dicas em ordem, acerto por `r` e por `display`, `pular`, novo jogo depois do
+acerto, aliases `!filmes`/`!emojifilme`, sorteio variando em 20 partidas, e
+presença no `menubn`/`blockPv`. Usa `DATABASE_PATH` temporário: **não toca** o
+`dados/database` real.

@@ -1,0 +1,833 @@
+{
+  "filmes": [
+    {
+      "e": "🦁👑",
+      "r": [
+        "rei leao",
+        "o rei leao",
+        "lion king"
+      ],
+      "d": "O Rei Leão",
+      "dicas": [
+        "Animação da Disney de 1994.",
+        "Tem um leãozinho chamado Simba."
+      ]
+    },
+    {
+      "e": "❄️👸🧊",
+      "r": [
+        "frozen",
+        "uma aventura congelante"
+      ],
+      "d": "Frozen",
+      "dicas": [
+        "Duas irmãs: Elsa e Anna.",
+        "A música é 'Let It Go'."
+      ]
+    },
+    {
+      "e": "🎈🏠👴",
+      "r": [
+        "up",
+        "up altas aventuras",
+        "altas aventuras"
+      ],
+      "d": "Up: Altas Aventuras",
+      "dicas": [
+        "Um velho sobe a casa com balões.",
+        "Tem um escoteiro chamado Russell."
+      ]
+    },
+    {
+      "e": "🐀👨‍🍳🇫🇷",
+      "r": [
+        "ratatouille",
+        "ratatoille"
+      ],
+      "d": "Ratatouille",
+      "dicas": [
+        "Um rato que quer ser chef em Paris.",
+        "O rato se chama Remy."
+      ]
+    },
+    {
+      "e": "🤖❤️🌱",
+      "r": [
+        "wall-e",
+        "walle",
+        "wall e"
+      ],
+      "d": "WALL-E",
+      "dicas": [
+        "Robô que limpa o lixo da Terra.",
+        "Se apaixona pela EVE."
+      ]
+    },
+    {
+      "e": "🐟🔍🌊",
+      "r": [
+        "procurando nemo",
+        "nemo"
+      ],
+      "d": "Procurando Nemo",
+      "dicas": [
+        "Um peixinho laranja se perde no oceano.",
+        "O pai dele se chama Marlin."
+      ]
+    },
+    {
+      "e": "🐠💙🔍",
+      "r": [
+        "procurando dory",
+        "dory"
+      ],
+      "d": "Procurando Dory",
+      "dicas": [
+        "A peixinha azul tem memória curta.",
+        "Ela procura os pais na Califórnia."
+      ]
+    },
+    {
+      "e": "🐼🥋",
+      "r": [
+        "kung fu panda"
+      ],
+      "d": "Kung Fu Panda",
+      "dicas": [
+        "Um panda gordinho vira mestre de kung fu.",
+        "Ele se chama Po."
+      ]
+    },
+    {
+      "e": "🚗⚡🏁",
+      "r": [
+        "carros",
+        "cars"
+      ],
+      "d": "Carros",
+      "dicas": [
+        "Filme da Pixar com carros falantes.",
+        "O protagonista é o Relâmpago McQueen."
+      ]
+    },
+    {
+      "e": "🧸🤠🚀",
+      "r": [
+        "toy story"
+      ],
+      "d": "Toy Story",
+      "dicas": [
+        "Os brinquedos ganham vida quando ninguém vê.",
+        "Tem o Woody e o Buzz Lightyear."
+      ]
+    },
+    {
+      "e": "🐝🎬",
+      "r": [
+        "bee movie",
+        "o filme da abelha"
+      ],
+      "d": "Bee Movie",
+      "dicas": [
+        "Um filme de animação sobre abelhas.",
+        "O protagonista é o Barry B. Benson."
+      ]
+    },
+    {
+      "e": "🐢🥷🟢",
+      "r": [
+        "tartarugas ninja",
+        "as tartarugas ninja"
+      ],
+      "d": "As Tartarugas Ninja",
+      "dicas": [
+        "Quatro tartarugas treinam artes marciais.",
+        "Elas adoram pizza."
+      ]
+    },
+    {
+      "e": "🧜‍♀️🐚🌊",
+      "r": [
+        "a pequena sereia",
+        "pequena sereia"
+      ],
+      "d": "A Pequena Sereia",
+      "dicas": [
+        "Uma sereia quer virar humana.",
+        "Ela se chama Ariel."
+      ]
+    },
+    {
+      "e": "🍎👸😴",
+      "r": [
+        "branca de neve",
+        "branca de neve e os sete anoes"
+      ],
+      "d": "Branca de Neve",
+      "dicas": [
+        "Ela morde uma maçã envenenada.",
+        "Mora com sete anões."
+      ]
+    },
+    {
+      "e": "👠🕛🎃",
+      "r": [
+        "cinderela"
+      ],
+      "d": "Cinderela",
+      "dicas": [
+        "Ela perde o sapatinho de cristal.",
+        "Tem uma fada madrinha."
+      ]
+    },
+    {
+      "e": "🌹🥀👹",
+      "r": [
+        "a bela e a fera",
+        "bela e a fera"
+      ],
+      "d": "A Bela e a Fera",
+      "dicas": [
+        "Uma rosa encantada marca o tempo.",
+        "A Bela se apaixona por uma fera."
+      ]
+    },
+    {
+      "e": "💇‍♀️🏰👑",
+      "r": [
+        "enrolados",
+        "rapunzel"
+      ],
+      "d": "Enrolados",
+      "dicas": [
+        "A princesa tem cabelos mágicos muito longos.",
+        "Ela vive numa torre."
+      ]
+    },
+    {
+      "e": "🧞‍♂️🪔",
+      "r": [
+        "aladdin",
+        "aladim"
+      ],
+      "d": "Aladdin",
+      "dicas": [
+        "Tem um gênio dentro de uma lâmpada.",
+        "O vilão é o Jafar."
+      ]
+    },
+    {
+      "e": "🐒🌴🌳",
+      "r": [
+        "tarzan",
+        "tarzã"
+      ],
+      "d": "Tarzan",
+      "dicas": [
+        "Um menino criado por gorilas na selva.",
+        "Ele ama a Jane."
+      ]
+    },
+    {
+      "e": "🐘🪶🎪",
+      "r": [
+        "dumbo"
+      ],
+      "d": "Dumbo",
+      "dicas": [
+        "Um elefante com orelhas gigantes.",
+        "Ele aprende a voar."
+      ]
+    },
+    {
+      "e": "🐉🔥🧔",
+      "r": [
+        "como treinar seu dragao",
+        "como treinar o seu dragao"
+      ],
+      "d": "Como Treinar Seu Dragão",
+      "dicas": [
+        "Um viking faz amizade com um dragão.",
+        "O dragão se chama Banguela."
+      ]
+    },
+    {
+      "e": "🐧🎶🏝️",
+      "r": [
+        "madagascar"
+      ],
+      "d": "Madagascar",
+      "dicas": [
+        "Animais do zoológico fogem para a África.",
+        "Tem o leão Alex e a zebra Marty."
+      ]
+    },
+    {
+      "e": "🐜🍃",
+      "r": [
+        "vida de inseto",
+        "formiguinhaz"
+      ],
+      "d": "Vida de Inseto",
+      "dicas": [
+        "Animação da Pixar sobre formigas.",
+        "O vilão é o gafanhoto Hopper."
+      ]
+    },
+    {
+      "e": "🐔🏃🚪",
+      "r": [
+        "fuga das galinhas",
+        "a fuga das galinhas"
+      ],
+      "d": "A Fuga das Galinhas",
+      "dicas": [
+        "Galinhas tentam fugir de uma fazenda.",
+        "Tem o galo Rocky e a Ginger."
+      ]
+    },
+    {
+      "e": "🐕🐕🎬",
+      "r": [
+        "101 dalmatas",
+        "cento e um dalmatas"
+      ],
+      "d": "101 Dálmatas",
+      "dicas": [
+        "Muitos filhotes de cachorro malhados.",
+        "A vilã é a Cruella de Vil."
+      ]
+    },
+    {
+      "e": "🐻🍯",
+      "r": [
+        "ursinho pooh",
+        "pooh"
+      ],
+      "d": "Ursinho Pooh",
+      "dicas": [
+        "Um urso que adora mel.",
+        "Seu amigo é o Tigrão."
+      ]
+    },
+    {
+      "e": "🐺👧🧺",
+      "r": [
+        "chapeuzinho vermelho"
+      ],
+      "d": "Chapeuzinho Vermelho",
+      "dicas": [
+        "Ela leva uma cesta para a vovó.",
+        "Encontra um lobo pelo caminho."
+      ]
+    },
+    {
+      "e": "🐷🐷🐷🐺",
+      "r": [
+        "os tres porquinhos",
+        "tres porquinhos"
+      ],
+      "d": "Os Três Porquinhos",
+      "dicas": [
+        "Três irmãos constroem casas.",
+        "O lobo sopra e derruba as casas."
+      ]
+    },
+    {
+      "e": "🦆🦢",
+      "r": [
+        "o patinho feio",
+        "patinho feio"
+      ],
+      "d": "O Patinho Feio",
+      "dicas": [
+        "Um filhote diferente dos irmãos.",
+        "No fim ele vira um cisne."
+      ]
+    },
+    {
+      "e": "🐸👑💋",
+      "r": [
+        "a princesa e o sapo",
+        "princesa e o sapo"
+      ],
+      "d": "A Princesa e o Sapo",
+      "dicas": [
+        "Um sapo que era príncipe.",
+        "A história se passa em Nova Orleans."
+      ]
+    },
+    {
+      "e": "🍫🏭🎩",
+      "r": [
+        "a fantastica fabrica de chocolate",
+        "fantastica fabrica de chocolate"
+      ],
+      "d": "A Fantástica Fábrica de Chocolate",
+      "dicas": [
+        "Tem um bilhete dourado.",
+        "O dono da fábrica é o Willy Wonka."
+      ]
+    },
+    {
+      "e": "🐧🕺🎵",
+      "r": [
+        "happy feet",
+        "pinguins"
+      ],
+      "d": "Happy Feet",
+      "dicas": [
+        "Um pinguim que não sabe cantar, só dançar.",
+        "O protagonista é o Mumble."
+      ]
+    },
+    {
+      "e": "🦖🏝️🌋",
+      "r": [
+        "jurassic park",
+        "parque dos dinossauros"
+      ],
+      "d": "Jurassic Park",
+      "dicas": [
+        "Dinossauros clonados num parque.",
+        "O T-Rex escapa e causa o caos."
+      ]
+    },
+    {
+      "e": "🦈🌊😱",
+      "r": [
+        "tubarao",
+        "jaws"
+      ],
+      "d": "Tubarão",
+      "dicas": [
+        "Um tubarão gigante ataca uma praia.",
+        "Tem a famosa música de suspense."
+      ]
+    },
+    {
+      "e": "👻🔫🏢",
+      "r": [
+        "ghostbusters",
+        "cacafantasmas"
+      ],
+      "d": "Ghostbusters",
+      "dicas": [
+        "Eles caçam fantasmas em Nova York.",
+        "Usam mochilas com raios."
+      ]
+    },
+    {
+      "e": "🤖🔫🕶️",
+      "r": [
+        "o exterminador do futuro",
+        "exterminador do futuro",
+        "terminator"
+      ],
+      "d": "O Exterminador do Futuro",
+      "dicas": [
+        "Um robô vem do futuro para matar.",
+        "A frase é 'I'll be back'."
+      ]
+    },
+    {
+      "e": "🕶️💊🟢",
+      "r": [
+        "matrix",
+        "the matrix"
+      ],
+      "d": "Matrix",
+      "dicas": [
+        "Pílula vermelha ou pílula azul.",
+        "O protagonista é o Neo."
+      ]
+    },
+    {
+      "e": "⭐⚔️🌌",
+      "r": [
+        "star wars",
+        "guerra nas estrelas"
+      ],
+      "d": "Star Wars",
+      "dicas": [
+        "Jedi contra Sith com sabres de luz.",
+        "Tem o Darth Vader e o Luke."
+      ]
+    },
+    {
+      "e": "🚢🧊💘",
+      "r": [
+        "titanic"
+      ],
+      "d": "Titanic",
+      "dicas": [
+        "Um navio bate num iceberg.",
+        "O casal é Jack e Rose."
+      ]
+    },
+    {
+      "e": "🧙‍♂️💍🌋",
+      "r": [
+        "o senhor dos aneis",
+        "senhor dos aneis"
+      ],
+      "d": "O Senhor dos Anéis",
+      "dicas": [
+        "Um hobbit precisa destruir um anel.",
+        "O hobbit se chama Frodo."
+      ]
+    },
+    {
+      "e": "🧹⚡🏰",
+      "r": [
+        "harry potter"
+      ],
+      "d": "Harry Potter",
+      "dicas": [
+        "Um menino bruxo com cicatriz na testa.",
+        "Ele estuda em Hogwarts."
+      ]
+    },
+    {
+      "e": "🕷️🧑‍🎓🕸️",
+      "r": [
+        "homem aranha",
+        "spiderman",
+        "aranha"
+      ],
+      "d": "Homem-Aranha",
+      "dicas": [
+        "Foi picado por uma aranha radioativa.",
+        "O nome dele é Peter Parker."
+      ]
+    },
+    {
+      "e": "🦇🃏🏙️",
+      "r": [
+        "batman",
+        "o cavaleiro das trevas"
+      ],
+      "d": "Batman",
+      "dicas": [
+        "Um bilionário vira morcego.",
+        "A cidade dele é Gotham."
+      ]
+    },
+    {
+      "e": "🔨⚡🦸‍♂️",
+      "r": [
+        "thor"
+      ],
+      "d": "Thor",
+      "dicas": [
+        "Um deus do trovão com um martelo.",
+        "Ele é da Marvel."
+      ]
+    },
+    {
+      "e": "🛡️🇺🇸🦸‍♂️",
+      "r": [
+        "capitao america",
+        "capitão america"
+      ],
+      "d": "Capitão América",
+      "dicas": [
+        "Ele carrega um escudo com estrela.",
+        "O nome dele é Steve Rogers."
+      ]
+    },
+    {
+      "e": "🐆🖤👑",
+      "r": [
+        "pantera negra",
+        "black panther"
+      ],
+      "d": "Pantera Negra",
+      "dicas": [
+        "O reino secreto é Wakanda.",
+        "O herói é o T'Challa."
+      ]
+    },
+    {
+      "e": "🦸‍♀️🛡️⚔️",
+      "r": [
+        "mulher maravilha",
+        "mulher-maravilha"
+      ],
+      "d": "Mulher-Maravilha",
+      "dicas": [
+        "Ela tem um laço da verdade.",
+        "É uma heroína da DC."
+      ]
+    },
+    {
+      "e": "🐜🦸‍♂️",
+      "r": [
+        "homem formiga",
+        "homem-formiga"
+      ],
+      "d": "Homem-Formiga",
+      "dicas": [
+        "Ele fica do tamanho de uma formiga.",
+        "O herói é o Scott Lang."
+      ]
+    },
+    {
+      "e": "🤖🚗💥",
+      "r": [
+        "transformers"
+      ],
+      "d": "Transformers",
+      "dicas": [
+        "Robôs gigantes que viram veículos.",
+        "Tem os Autobots e os Decepticons."
+      ]
+    },
+    {
+      "e": "🏎️💨👨‍👩‍👧",
+      "r": [
+        "velozes e furiosos",
+        "velozes furiosos"
+      ],
+      "d": "Velozes e Furiosos",
+      "dicas": [
+        "Filme de corrida com carros tunados.",
+        "O protagonista é o Dominic Toretto."
+      ]
+    },
+    {
+      "e": "🦍🏙️🗽",
+      "r": [
+        "king kong"
+      ],
+      "d": "King Kong",
+      "dicas": [
+        "Um gorila gigante numa ilha.",
+        "Ele sobe num prédio famoso."
+      ]
+    },
+    {
+      "e": "👽🚲🌕",
+      "r": [
+        "e.t.",
+        "et",
+        "e o extraterrestre",
+        "et o extraterrestre"
+      ],
+      "d": "E.T. o Extraterrestre",
+      "dicas": [
+        "Um alien faz amizade com um menino.",
+        "Eles andam de bicicleta e voam."
+      ]
+    },
+    {
+      "e": "🤠🐍🏺",
+      "r": [
+        "indiana jones"
+      ],
+      "d": "Indiana Jones",
+      "dicas": [
+        "Ele usa um chicote e um chapéu.",
+        "Ele tem medo de cobras."
+      ]
+    },
+    {
+      "e": "🌪️👠🧙‍♀️",
+      "r": [
+        "o magico de oz",
+        "magico de oz"
+      ],
+      "d": "O Mágico de Oz",
+      "dicas": [
+        "Uma menina vai para uma terra mágica.",
+        "Ela anda pela estrada de tijolos amarelos."
+      ]
+    },
+    {
+      "e": "🤡🎈🎪",
+      "r": [
+        "it",
+        "it a coisa",
+        "a coisa"
+      ],
+      "d": "It: A Coisa",
+      "dicas": [
+        "Um palhaço assustador em Derry.",
+        "O palhaço se chama Pennywise."
+      ]
+    },
+    {
+      "e": "🧛‍♂️🩸🌙",
+      "r": [
+        "dracula",
+        "drácula"
+      ],
+      "d": "Drácula",
+      "dicas": [
+        "Um conde que se transforma em morcego.",
+        "Ele teme alho e crucifixos."
+      ]
+    },
+    {
+      "e": "🧟🧟‍♀️🏃",
+      "r": [
+        "guerra mundial z",
+        "apocalipse zumbi"
+      ],
+      "d": "Guerra Mundial Z",
+      "dicas": [
+        "Uma pandemia transforma pessoas em zumbis.",
+        "O protagonista é o Brad Pitt."
+      ]
+    },
+    {
+      "e": "😱🔪🚿",
+      "r": [
+        "psicose",
+        "psycho"
+      ],
+      "d": "Psicose",
+      "dicas": [
+        "Um clássico de terror de Hitchcock.",
+        "Tem a famosa cena do chuveiro."
+      ]
+    },
+    {
+      "e": "📺📼👧",
+      "r": [
+        "o chamado",
+        "the ring"
+      ],
+      "d": "O Chamado",
+      "dicas": [
+        "Um vídeo amaldiçoado mata em 7 dias.",
+        "A menina sai da TV."
+      ]
+    },
+    {
+      "e": "🎃🔪👻",
+      "r": [
+        "halloween"
+      ],
+      "d": "Halloween",
+      "dicas": [
+        "Um assassino mascarado em Haddonfield.",
+        "O vilão é o Michael Myers."
+      ]
+    },
+    {
+      "e": "🐊🌊😨",
+      "r": [
+        "anaconda"
+      ],
+      "d": "Anaconda",
+      "dicas": [
+        "Uma cobra gigante na Amazônia.",
+        "Ela ataca uma equipe de documentário."
+      ]
+    },
+    {
+      "e": "🧑‍🚀🌌⏳",
+      "r": [
+        "interestelar",
+        "interstellar"
+      ],
+      "d": "Interestelar",
+      "dicas": [
+        "Astronautas buscam um novo lar.",
+        "Tem buracos negros e viagem no tempo."
+      ]
+    },
+    {
+      "e": "🎮👑🦁",
+      "r": [
+        "jumanji"
+      ],
+      "d": "Jumanji",
+      "dicas": [
+        "Um jogo de tabuleiro que vira realidade.",
+        "Tem animais selvagens saindo do jogo."
+      ]
+    },
+    {
+      "e": "🌕💕🧛",
+      "r": [
+        "crepusculo",
+        "twilight"
+      ],
+      "d": "Crepúsculo",
+      "dicas": [
+        "Uma humana se apaixona por um vampiro.",
+        "O casal é Bella e Edward."
+      ]
+    },
+    {
+      "e": "🎤🏫🎸",
+      "r": [
+        "high school musical"
+      ],
+      "d": "High School Musical",
+      "dicas": [
+        "Musical da Disney numa escola.",
+        "O casal é Troy e Gabriella."
+      ]
+    },
+    {
+      "e": "🦈🌪️",
+      "r": [
+        "sharknado"
+      ],
+      "d": "Sharknado",
+      "dicas": [
+        "Tubarões voam dentro de um furacão.",
+        "É um filme trash famoso."
+      ]
+    },
+    {
+      "e": "🐍✈️😱",
+      "r": [
+        "serpentes a bordo",
+        "snakes on a plane"
+      ],
+      "d": "Serpentes a Bordo",
+      "dicas": [
+        "Cobras soltas num avião em pleno voo.",
+        "O ator principal é o Samuel L. Jackson."
+      ]
+    },
+    {
+      "e": "🕵️🔫🕶️",
+      "r": [
+        "missao impossivel",
+        "missão impossível"
+      ],
+      "d": "Missão Impossível",
+      "dicas": [
+        "Um espião faz missões arriscadas.",
+        "O protagonista é o Ethan Hunt."
+      ]
+    },
+    {
+      "e": "🚨🔫🏙️",
+      "r": [
+        "tropa de elite"
+      ],
+      "d": "Tropa de Elite",
+      "dicas": [
+        "Filme brasileiro sobre o BOPE.",
+        "O personagem é o Capitão Nascimento."
+      ]
+    },
+    {
+      "e": "🏙️🔫🧒",
+      "r": [
+        "cidade de deus"
+      ],
+      "d": "Cidade de Deus",
+      "dicas": [
+        "Filme brasileiro numa favela do Rio.",
+        "Tem o Buscapé e o Zé Pequeno."
+      ]
+    }
+  ]
+}

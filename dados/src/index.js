@@ -15438,6 +15438,81 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
         break;
       }
       // ═══════════════════════════════════════════════════════════════
+      // 🎬 FILME - adivinhe o filme pela sequencia de emojis
+      // ═══════════════════════════════════════════════════════════════
+      case 'filme':
+      case 'filmes':
+      case 'emojifilme': {
+        // Carregar filmes do JSON (mesmo padrao do quiz.json/quemsoueu.json).
+        const filmePath = pathz.join(__dirname, 'funcs', 'json', 'filmes.json');
+        let filmeDB = [];
+        try {
+          const filmeData = JSON.parse(fs.readFileSync(filmePath, 'utf-8'));
+          filmeDB = Array.isArray(filmeData.filmes) ? filmeData.filmes : [];
+        } catch (e) {
+          console.error('Erro ao carregar filmes.json:', e);
+        }
+        if (!filmeDB.length) {
+          filmeDB = [{ e: '🦁👑', r: ['rei leao', 'o rei leao'], d: 'O Rei Leão', dicas: ['Animação da Disney.'] }];
+        }
+
+        // Estado dos jogos de "adivinhe o filme" ativos (mesmo molde do quiz).
+        if (!global.filmeEmojiGames) global.filmeEmojiGames = {};
+        const filmeKey = isGroup ? from : sender;
+        const game = global.filmeEmojiGames[filmeKey];
+        const sub = (args[0] || '').toLowerCase();
+
+        // Desistir / pular o filme atual.
+        if (game && (sub === 'pular' || sub === 'desistir')) {
+          const resposta = game.display;
+          delete global.filmeEmojiGames[filmeKey];
+          return reply(`⏭️ *Desistiu!*\n\n🎬 O filme era: *${resposta}*`);
+        }
+
+        // Pedir uma dica (sem encerrar o jogo).
+        if (game && (sub === 'dica' || sub === 'dicas')) {
+          if (game.dicasUsadas >= game.dicas.length) {
+            return reply(`💡 Não tenho mais dicas!\n\n🎬 Ainda é: *${game.display}*\n\n💭 Chute com: ${groupPrefix}filme [resposta]`);
+          }
+          const dica = game.dicas[game.dicasUsadas];
+          game.dicasUsadas++;
+          return reply(`💡 *DICA ${game.dicasUsadas}/${game.dicas.length}*\n\n${dica}\n\n💭 Chute com: ${groupPrefix}filme [resposta]`);
+        }
+
+        // Já tem jogo ativo e o jogador mandou um chute.
+        if (game && args.length > 0) {
+          const chute = normalizar(args.join(' '));
+          const acertou = game.respostas.some(r => normalizar(r) === chute || chute.includes(normalizar(r)));
+          if (!acertou) {
+            // Errou: mantém o jogo aberto para o grupo continuar tentando.
+            return reply(`❌ *Errou!* Não é *${args.join(' ')}*.\n\n🎬 Continuo sendo um filme misterioso...\n💭 Tente de novo: ${groupPrefix}filme [resposta]\n💡 Dica: ${groupPrefix}filme dica\n🚪 Desistir: ${groupPrefix}filme pular`);
+          }
+          const tempoResposta = ((Date.now() - game.iniciado) / 1000).toFixed(1);
+          const pontos = Math.max(50 - Math.floor(parseFloat(tempoResposta) * 2) - (game.dicasUsadas * 5), 10);
+          const dicasUsadas = game.dicasUsadas;
+          delete global.filmeEmojiGames[filmeKey];
+          return reply(`🎉 *ACERTOU!*\n\n🎬 Era: *${game.display}*\n⏱️ Tempo: ${tempoResposta}s\n💡 Dicas usadas: ${dicasUsadas}\n🏆 +${pontos} pontos`);
+        }
+
+        // Já tem jogo ativo e ninguém chutou: relembra os emojis.
+        if (game) {
+          return reply(`🎬 *ADIVINHE O FILME*\n\n${game.emojis}\n\n💭 Chute com: ${groupPrefix}filme [resposta]\n💡 Dica: ${groupPrefix}filme dica\n🚪 Desistir: ${groupPrefix}filme pular`);
+        }
+
+        // Sem jogo ativo: sorteia um filme novo.
+        const escolhido = filmeDB[Math.floor(Math.random() * filmeDB.length)];
+        global.filmeEmojiGames[filmeKey] = {
+          emojis: escolhido.e,
+          respostas: escolhido.r,
+          display: escolhido.d,
+          dicas: Array.isArray(escolhido.dicas) ? escolhido.dicas : [],
+          dicasUsadas: 0,
+          iniciado: Date.now()
+        };
+        await reply(`🎬 *ADIVINHE O FILME*\n\n${escolhido.e}\n\n💭 Chute com: ${groupPrefix}filme [resposta]\n💡 Dica: ${groupPrefix}filme dica\n🚪 Desistir: ${groupPrefix}filme pular`);
+        break;
+      }
+      // ═══════════════════════════════════════════════════════════════
       // 🎯 FORCA - Jogo da Forca em Grupo
       // ═══════════════════════════════════════════════════════════════
       case 'forca':
