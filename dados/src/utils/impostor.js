@@ -23,13 +23,41 @@
 /** Mínimo de jogadores para uma partida. */
 export const MIN_JOGADORES = 3;
 
+/** Tempo máximo de partida (15 minutos). */
+export const DURACAO_MAX_MS = 15 * 60 * 1000;
+
+/**
+ * Interpreta a duração digitada em `!impostor criar <tempo>`.
+ *
+ * Aceita `5`, `5m`, `5min`, `5 minutos`. **Trava no máximo de 15 minutos**
+ * (marca `excedeu: true` quando o valor digitado passou disso).
+ *
+ * @param {string} texto
+ * @returns {{minutos: number, ms: number, excedeu: boolean}|null}
+ */
+export function parseDuracao(texto) {
+  if (texto === null || texto === undefined) return null;
+  const m = /^(\d{1,4})\s*(m|min|mins|minuto|minutos)?$/i.exec(String(texto).trim());
+  if (!m) return null;
+  const bruto = parseInt(m[1], 10);
+  if (!Number.isFinite(bruto) || bruto <= 0) return null;
+  const minutos = Math.min(bruto, DURACAO_MAX_MS / 60000);
+  return { minutos, ms: minutos * 60 * 1000, excedeu: bruto > minutos };
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // LOBBY
 // ════════════════════════════════════════════════════════════════════════════
 
 /** Cria a sala; quem cria já entra como jogador. */
-export function criarLobby(criador) {
-  return { fase: 'lobby', criador, jogadores: [criador], criadoEm: Date.now() };
+export function criarLobby(criador, duracaoMs = 0) {
+  return {
+    fase: 'lobby',
+    criador,
+    jogadores: [criador],
+    criadoEm: Date.now(),
+    duracaoMs: Number(duracaoMs) > 0 ? Number(duracaoMs) : 0
+  };
 }
 
 /** Entra na sala (só no lobby). */
@@ -142,7 +170,7 @@ export function textoAtribuicao(palavra, ehImpostor) {
  * @param {() => number} [opts.rng]
  * @returns {Promise<{ok: boolean, motivo?: string, jogo?: object}>}
  */
-export async function iniciarPartida({ membros, banco, categoria, enviarSecreto, anunciar, rng = Math.random }) {
+export async function iniciarPartida({ membros, banco, categoria, enviarSecreto, anunciar, duracaoMs = 0, rng = Math.random }) {
   const lista = [...new Set((membros || []).filter(Boolean))];
   if (lista.length < MIN_JOGADORES) return { ok: false, motivo: 'poucos_jogadores' };
   const par = sortearPar(banco, categoria, rng);
@@ -153,7 +181,7 @@ export async function iniciarPartida({ membros, banco, categoria, enviarSecreto,
 
   // 1) Anúncio público (regras + dica) ANTES das palavras.
   if (typeof anunciar === 'function') {
-    await anunciar({ categoria: par.categoria, jogadores: lista, total: lista.length });
+    await anunciar({ categoria: par.categoria, jogadores: lista, total: lista.length, duracaoMs });
   }
 
   // 2) Entrega o cartão de cada um (invisível). Falha fechado se algum falhar.
@@ -166,6 +194,7 @@ export async function iniciarPartida({ membros, banco, categoria, enviarSecreto,
     return { ok: false, motivo: 'falha_na_entrega', entregues, total: lista.length };
   }
 
+  const dur = Number(duracaoMs) > 0 ? Number(duracaoMs) : 0;
   return {
     ok: true,
     jogo: {
@@ -177,7 +206,9 @@ export async function iniciarPartida({ membros, banco, categoria, enviarSecreto,
       jogadores: lista,
       atribuicoes,
       votos: {},
-      iniciado: Date.now()
+      iniciado: Date.now(),
+      duracaoMs: dur,
+      expiraEm: dur > 0 ? Date.now() + dur : 0
     }
   };
 }
@@ -196,6 +227,18 @@ export function votar(jogo, votante, alvo) {
 export function todosVotaram(jogo) {
   if (!jogo || !Array.isArray(jogo.jogadores) || !jogo.jogadores.length) return false;
   return Object.keys(jogo.votos || {}).length >= jogo.jogadores.length;
+}
+
+/** Milissegundos restantes da partida (0 se não tem tempo ou já acabou). */
+export function msRestantes(jogo, agora = Date.now()) {
+  if (!jogo || !jogo.expiraEm) return 0;
+  return Math.max(jogo.expiraEm - agora, 0);
+}
+
+/** O tempo da partida acabou? */
+export function tempoEsgotado(jogo, agora = Date.now()) {
+  if (!jogo || !jogo.expiraEm) return false;
+  return agora >= jogo.expiraEm;
 }
 
 /**
@@ -315,6 +358,8 @@ export function formatarResultado(jogo, nomeDe = (jid) => `@${String(jid).split(
 
 export default {
   MIN_JOGADORES,
+  DURACAO_MAX_MS,
+  parseDuracao,
   criarLobby,
   entrarNoLobby,
   sairDoLobby,
@@ -327,6 +372,8 @@ export default {
   iniciarPartida,
   votar,
   todosVotaram,
+  msRestantes,
+  tempoEsgotado,
   checarVotacao,
   contarVotos,
   resolverVotacao,

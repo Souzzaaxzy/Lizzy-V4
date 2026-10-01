@@ -1131,6 +1131,7 @@ import {
 import { montarRankBn } from './menus/rankbn.js';
 import {
   MIN_JOGADORES as IMPOSTOR_MIN_JOGADORES,
+  parseDuracao as parseDuracaoImpostor,
   criarLobby as criarLobbyImpostor,
   entrarNoLobby as entrarNoLobbyImpostor,
   sairDoLobby as sairDoLobbyImpostor,
@@ -1138,6 +1139,8 @@ import {
   iniciarPartida as iniciarPartidaImpostor,
   votar as votarImpostor,
   checarVotacao as checarVotacaoImpostor,
+  tempoEsgotado as tempoEsgotadoImpostor,
+  msRestantes as msRestantesImpostor,
   formatarResultado as formatarResultadoImpostor
 } from './utils/impostor.js';
 import {
@@ -15662,11 +15665,21 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
           const impNome = (jid) => `@${getUserName(jid)}`;
           const listaNomes = (jids) => (jids || []).map(impNome).join(', ');
 
+          // Tempo esgotado: encerra sozinho, em qualquer subcomando (a partida
+          // tem prazo). O resultado sai com o veredito dos votos que houver.
+          if (impGame && impGame.fase === 'jogando' && tempoEsgotadoImpostor(impGame)) {
+            const { texto, mentions } = formatarResultadoImpostor(impGame, impNome);
+            delete global.impostorGames[impKey];
+            const textoFinal = await trocarMencoesPorNome(texto, mentions, { nazu, metadata: groupMetadata, from });
+            await nazu.sendMessage(from, { text: `⏰ *Tempo esgotado!*\n\n${textoFinal}`, mentions });
+            return;
+          }
+
           // ── Ajuda ──
           if (impSub === 'ajuda' || impSub === 'help') {
             return reply(
               `🕵️ *IMPOSTOR* — Among Us de texto\n\n` +
-              `🎮 ${groupPrefix}impostor criar — abre a sala\n` +
+              `🎮 ${groupPrefix}impostor criar [tempo] — abre a sala (ex.: criar 5m; máximo 15m)\n` +
               `🚪 ${groupPrefix}impostor entrar — entra na sala\n` +
               `📋 ${groupPrefix}impostor — status da sala/partida\n` +
               `🚶 ${groupPrefix}impostor sair — sai da sala\n` +
@@ -15682,12 +15695,33 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
           if (impSub === 'criar') {
             if (impGame && impGame.fase === 'lobby') return reply('⚠️ Já existe uma sala aberta. Use `' + groupPrefix + 'impostor` para ver o status.');
             if (impGame && impGame.fase === 'jogando') return reply('⚠️ Já tem uma partida rolando!');
-            global.impostorGames[impKey] = criarLobbyImpostor(sender);
+
+            // Tempo opcional: `!impostor criar 5m` (máximo 15 minutos).
+            let duracaoMs = 0;
+            let avisoTempo = '';
+            if (args[1]) {
+              const dur = parseDuracaoImpostor(args[1]);
+              if (!dur) {
+                return reply(
+                  `❌ Tempo inválido: *${args[1]}*.\n\n` +
+                  `⏱️ Use de 1 a 15 minutos, ex.: ${groupPrefix}impostor criar 5m\n` +
+                  `💡 Sem tempo, a partida só acaba na votação.`
+                );
+              }
+              duracaoMs = dur.ms;
+              if (dur.excedeu) avisoTempo = `\n⚠️ O máximo é 15 minutos — usei *15m*.`;
+            }
+
+            global.impostorGames[impKey] = criarLobbyImpostor(sender, duracaoMs);
             const sala = global.impostorGames[impKey];
+            const tempoTxt = sala.duracaoMs
+              ? `⏱️ Tempo: *${Math.round(sala.duracaoMs / 60000)} min*${avisoTempo}\n`
+              : `⏱️ Tempo: sem limite (acaba na votação)\n`;
             return reply(
               `🕵️ *SALA DO IMPOSTOR CRIADA!*\n\n` +
               `👑 Criador: ${impNome(sala.criador)}\n` +
-              `👥 Jogadores (${sala.jogadores.length}): ${listaNomes(sala.jogadores)}\n\n` +
+              `👥 Jogadores (${sala.jogadores.length}): ${listaNomes(sala.jogadores)}\n` +
+              `${tempoTxt}\n` +
               `🚪 Entrar: ${groupPrefix}impostor entrar\n` +
               `▶️ Iniciar: ${groupPrefix}impostor iniciar (só o criador, mínimo ${IMPOSTOR_MIN_JOGADORES} jogadores)\n` +
               `🔒 Fechar: ${groupPrefix}impostor fechar`,
@@ -15815,8 +15849,12 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
               membros: impGame.jogadores,
               banco: impBanco,
               categoria: args[1] ? args[1].toLowerCase() : undefined,
+              duracaoMs: impGame.duracaoMs || 0,
               enviarSecreto,
-              anunciar: async ({ categoria, jogadores, total }) => {
+              anunciar: async ({ categoria, jogadores, total, duracaoMs }) => {
+                const tempoLinha = duracaoMs > 0
+                  ? `⏱️ *Tempo:* ${Math.round(duracaoMs / 60000)} minutos — quando acabar, a partida encerra sozinha.\n`
+                  : '';
                 await nazu.sendMessage(from, {
                   text:
                     `🕵️ *IMPOSTOR* — a partida começou!\n\n` +
@@ -15825,7 +15863,8 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
                     `• O impostor não sabe a palavra e vai tentar se passar por inocente.\n` +
                     `• Um de cada vez, descrevam a palavra de vocês *sem falar direto* qual é.\n` +
                     `• Depois votem em quem acham que é o impostor.\n\n` +
-                    `💡 *Dica:* a palavra é da categoria *${categoria}*.\n\n` +
+                    `💡 *Dica:* a palavra é da categoria *${categoria}*.\n` +
+                    `${tempoLinha}\n` +
                     `👥 *Jogadores (${total}):* ${listaNomes(jogadores)}\n\n` +
                     `📩 Logo abaixo, cada jogador recebeu a palavra selecionada.\n` +
                     `🗳️ Votar: ${groupPrefix}impostor votar @alguem\n` +
@@ -15876,10 +15915,15 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
 
           // Partida em andamento.
           const votaram = Object.keys(impGame.votos || {}).length;
+          const restanteMs = msRestantesImpostor(impGame);
+          const tempoRestante = restanteMs > 0
+            ? `⏱️ Tempo restante: *${Math.ceil(restanteMs / 60000)} min*\n`
+            : '';
           return reply(
             `🕵️ *PARTIDA EM ANDAMENTO*\n\n` +
             `👥 Jogadores: ${listaNomes(impGame.jogadores)}\n` +
-            `🗳️ Votos: ${votaram}/${impGame.jogadores.length}\n\n` +
+            `🗳️ Votos: ${votaram}/${impGame.jogadores.length}\n` +
+            `${tempoRestante}\n` +
             `🗳️ Votar: ${groupPrefix}impostor votar @alguem\n` +
             `✅ Encerrar: ${groupPrefix}impostor encerrar`,
             { mentions: impGame.jogadores }

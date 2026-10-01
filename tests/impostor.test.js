@@ -246,6 +246,34 @@ await test('impostor: iniciarPartida falha fechado com poucos jogadores ou falha
 });
 
 // ============================================================================
+// 2) MÓDULO PURO — TEMPO
+// ============================================================================
+
+await test('impostor: parseDuracao aceita 5/5m e trava em 15 minutos', () => {
+  ok(impostor.parseDuracao('5').minutos === 5, '5 -> 5 min');
+  ok(impostor.parseDuracao('5m').ms === 5 * 60 * 1000, '5m -> ms');
+  ok(impostor.parseDuracao('10min').minutos === 10, '10min');
+  ok(impostor.parseDuracao('15m').excedeu === false, '15m não excede');
+  const excedeu = impostor.parseDuracao('30m');
+  ok(excedeu.minutos === 15 && excedeu.excedeu === true, '30m trava em 15 e marca excedeu');
+  ok(impostor.parseDuracao('0') === null, '0 é inválido');
+  ok(impostor.parseDuracao('abc') === null, 'texto inválido');
+  ok(impostor.parseDuracao('') === null, 'vazio inválido');
+  ok(impostor.DURACAO_MAX_MS === 15 * 60 * 1000, 'máximo é 15 min');
+});
+
+await test('impostor: msRestantes e tempoEsgotado', () => {
+  const jogo = { expiraEm: 1000 };
+  ok(impostor.msRestantes(jogo, 400) === 600, 'faltam 600ms');
+  ok(impostor.msRestantes(jogo, 1000) === 0, 'no fim, 0');
+  ok(impostor.msRestantes(jogo, 2000) === 0, 'depois do fim, 0 (não negativo)');
+  ok(impostor.tempoEsgotado(jogo, 999) === false, 'antes do prazo, não esgotou');
+  ok(impostor.tempoEsgotado(jogo, 1000) === true, 'no prazo, esgotou');
+  ok(impostor.tempoEsgotado({}, 999999) === false, 'sem tempo, nunca esgota');
+  ok(impostor.msRestantes({}, 999) === 0, 'sem tempo, 0');
+});
+
+// ============================================================================
 // 2) MÓDULO PURO — LOBBY
 // ============================================================================
 
@@ -383,9 +411,60 @@ await test('!impostor criar: abre a sala com o criador dentro', async () => {
   const r = await rodar(group, '!impostor criar', { sender: group.members[0] });
   includes(r.text, 'SALA DO IMPOSTOR CRIADA', 'confirma a criação');
   includes(r.text, 'Criador', 'mostra o criador');
+  includes(r.text, 'sem limite', 'sem tempo = sem limite');
   const sala = global.impostorGames[group.jid];
   ok(sala && sala.fase === 'lobby', 'sala em lobby');
   ok(sala.jogadores.length === 1 && sala.jogadores[0] === group.members[0], 'o criador já entrou');
+  ok(sala.duracaoMs === 0, 'sem duração definida');
+});
+
+await test('!impostor criar 5m: sala com tempo definido', async () => {
+  const group = makeGroup();
+  const r = await rodar(group, '!impostor criar 5m', { sender: group.members[0] });
+  includes(r.text, '5 min', 'mostra o tempo na criação');
+  ok(global.impostorGames[group.jid].duracaoMs === 5 * 60 * 1000, 'guardou 5 minutos');
+});
+
+await test('!impostor criar: tempo acima de 15m trava em 15', async () => {
+  const group = makeGroup();
+  const r = await rodar(group, '!impostor criar 99m', { sender: group.members[0] });
+  includes(r.text, '15 min', 'travou em 15');
+  includes(r.text, 'máximo', 'avisa do máximo');
+  ok(global.impostorGames[group.jid].duracaoMs === 15 * 60 * 1000, 'guardou 15 minutos');
+});
+
+await test('!impostor criar: tempo inválido é recusado', async () => {
+  const group = makeGroup();
+  const r = await rodar(group, '!impostor criar abc', { sender: group.members[0] });
+  includes(r.text, 'Tempo inválido', 'recusa');
+  ok(global.impostorGames[group.jid] === undefined, 'não criou sala');
+});
+
+await test('!impostor iniciar: partida com prazo mostra o tempo e cria expiraEm', async () => {
+  const group = makeGroup();
+  await rodar(group, '!impostor criar 5m', { sender: group.members[0] });
+  await rodar(group, '!impostor entrar', { sender: group.members[1] });
+  await rodar(group, '!impostor entrar', { sender: group.members[2] });
+  const r = await rodar(group, '!impostor iniciar', { sender: group.members[0] });
+  includes(r.text, 'Tempo', 'anúncio mostra o tempo');
+  const jogo = global.impostorGames[group.jid];
+  ok(jogo.duracaoMs === 5 * 60 * 1000, 'jogo tem 5 min');
+  ok(jogo.expiraEm > Date.now(), 'expiraEm no futuro');
+});
+
+await test('!impostor: quando o tempo acaba, a partida encerra sozinha', async () => {
+  const group = makeGroup();
+  await rodar(group, '!impostor criar 5m', { sender: group.members[0] });
+  await rodar(group, '!impostor entrar', { sender: group.members[1] });
+  await rodar(group, '!impostor entrar', { sender: group.members[2] });
+  await rodar(group, '!impostor iniciar', { sender: group.members[0] });
+  const jogo = global.impostorGames[group.jid];
+  // Simula o tempo esgotado (expiraEm no passado).
+  jogo.expiraEm = Date.now() - 1000;
+  const r = await rodar(group, '!impostor', { sender: group.members[1] });
+  includes(r.text, 'Tempo esgotado', 'avisa que o tempo acabou');
+  includes(r.text, 'RESULTADO DO IMPOSTOR', 'publica o resultado');
+  ok(global.impostorGames[group.jid] === undefined, 'partida encerrada');
 });
 
 await test('!impostor entrar/sair: atualiza a sala', async () => {

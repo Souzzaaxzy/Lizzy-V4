@@ -8401,3 +8401,24 @@ resolvedor de nome, como em produção).
 
 `tests/impostor.test.js`: **32 testes / 319 asserções** (o teste de voto confere
 a lista de quem votou/falta e as mentions; o do banco trava em 174 pares).
+
+### Ajuste (set/2026): partida com tempo (máximo 15 minutos)
+`!impostor criar <tempo>` aceita `5`, `5m`, `10m`, `15m` (ou `min`/`minutos`).
+**Trava no máximo de 15 minutos** — acima disso usa 15 e avisa. Sem tempo, a
+partida só acaba na votação.
+
+- `parseDuracao(texto)` (novo) → `{ minutos, ms, excedeu }`; `DURACAO_MAX_MS` = 15 min.
+- `criarLobby(criador, duracaoMs)` guarda o tempo na sala; o lobby mostra
+  `⏱️ Tempo: 5 min` (ou "sem limite").
+- `iniciarPartida` recebe `duracaoMs`, grava `duracaoMs`/`expiraEm` no jogo e o
+  anúncio público ganha a linha `⏱️ Tempo: 5 minutos — quando acabar, a partida
+  encerra sozinha.`
+- `msRestantes(jogo, agora)` / `tempoEsgotado(jogo, agora)` (novos) — puros.
+- **Encerramento por tempo**: ao receber QUALQUER subcomando, se
+  `tempoEsgotado(jogo)`, o bot publica `⏰ Tempo esgotado!` + o resultado (com os
+  votos que houver) e encerra. O status em andamento mostra
+  `⏱️ Tempo restante: X min`.
+
+`tests/impostor.test.js`: **39 testes / 350 asserções** (parse/trava de 15,
+`msRestantes`/`tempoEsgotado`, criação com/sem tempo, tempo inválido, anúncio com
+prazo e o encerramento automático quando o tempo acaba).
