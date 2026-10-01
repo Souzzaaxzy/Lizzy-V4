@@ -296,8 +296,9 @@ const COMANDOS_POR_MENU = {
   // -> 374 (`!mogado` -> `!mogar` e `!looksmaxxing` removido)
   // -> 375 (`!quemsoueu` entrou em JOGOS & DIVERSÃO)
   // -> 376 (`!filme` entrou em JOGOS & DIVERSÃO)
-  // -> 377 (`!emojiquiz` entrou em JOGOS & DIVERSÃO).
-  menubn: 377, menufut: 42, menurpg: 149,
+  // -> 377 (`!emojiquiz` entrou em JOGOS & DIVERSÃO)
+  // -> 379 (`!rankbn` e `!rankbng` entraram em BRINCADEIRAS).
+  menubn: 379, menufut: 42, menurpg: 149,
   // menuvip nao tem comando cadastrado; o `!` contado e o `!addcmdvip` da
   // instrucao ("Use: !addcmdvip"), que no original tambem estava fixo.
   menuvip: 1, menugames: 28,
@@ -327,12 +328,12 @@ await test('16. NENHUM comando se perdeu (contagem por menu vs baseline)', async
   }
 });
 
-await test('17. menubn: os 377 comandos estão TODOS lá (o mais crítico)', async () => {
+await test('17. menubn: os 379 comandos estão TODOS lá (o mais crítico)', async () => {
   const mod = await import(new URL('../dados/src/menus/menubn.js', import.meta.url).href);
   const texto = await mod.default('!', 'Abyss', 'Kannon');
-  eq((texto.match(/!/g) || []).length, 377, '377 comandos no modo completo');
+  eq((texto.match(/!/g) || []).length, 379, '379 comandos no modo completo');
   // Amostras de cada categoria (inclusive as condicionais).
-  for (const c of ['!tictactoe', '!uno criar', '!conselho', '!tapa', '!surubao', '!pgpau', '!medirpau', '!rankputo', '!casal', '!ma', '!aura', '!sigma', '!hetero', '!hetera', '!ceu', '!inferno', '!frio', '!fria', '!rizz', '!delulu', '!skibidi', '!sixseven', '!mogar', '!chad', '!gag', '!quemsoueu', '!filme', '!emojiquiz']) {
+  for (const c of ['!tictactoe', '!uno criar', '!conselho', '!tapa', '!surubao', '!pgpau', '!medirpau', '!rankputo', '!casal', '!ma', '!aura', '!sigma', '!hetero', '!hetera', '!ceu', '!inferno', '!frio', '!fria', '!rizz', '!delulu', '!skibidi', '!sixseven', '!mogar', '!chad', '!gag', '!quemsoueu', '!filme', '!emojiquiz', '!rankbn', '!rankbng']) {
     contem(texto, c, `tem ${c}`);
   }
   // Modo LITE: continua escondendo as "picantes" e mantendo o resto.

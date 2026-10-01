@@ -1122,6 +1122,13 @@ import {
   normalizePlaqCommand
 } from './funcs/utils/plaq.js';
 import {
+  JOGOS_RANKBN,
+  LIMITE_RANKBN,
+  registrarPontos as registrarPontosRankbn,
+  formatarRanking as formatarRankingRankbn,
+  agregarMapas as agregarMapasRankbn
+} from './utils/rankbn.js';
+import {
   isMenu18Command,
   isModo18Ativo
 } from './funcs/utils/menu18Mode.js';
@@ -15253,6 +15260,8 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
           if (chute === game.palavra) {
             const pontos = Math.max(100 - (game.tentativas - 1) * 15, 10);
             delete global.wordleGames[gameKey];
+            registrarPontosRankbn(groupData.rankbn || (groupData.rankbn = {}), 'wordle', sender, pontos);
+            try { fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2)); } catch (e) { console.error('[RANKBN] falha ao gravar wordle:', e.message); }
             return reply(`🎉 *PARABÉNS!*\n\n${game.historico.join('\n')}\n\n✅ Você acertou em ${game.tentativas}/6 tentativas!\n🏆 +${pontos} pontos\n\nA palavra era: *${game.palavra.toUpperCase()}*`);
           }
           if (game.tentativas >= 6) {
@@ -15324,6 +15333,9 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
           if (acertou) {
             const tempoResposta = ((Date.now() - game.iniciado) / 1000).toFixed(1);
             const pontos = Math.max(50 - Math.floor(parseFloat(tempoResposta) * 2), 10);
+            // Pontuação do !rankbn (por grupo) — grava no JSON do grupo.
+            registrarPontosRankbn(groupData.rankbn || (groupData.rankbn = {}), 'quiz', sender, pontos);
+            try { fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2)); } catch (e) { console.error('[RANKBN] falha ao gravar quiz:', e.message); }
             return reply(`🎉 *CORRETO!*\n\n✅ Resposta: *${game.display}*\n⏱️ Tempo: ${tempoResposta}s\n🏆 +${pontos} pontos`);
           } else {
             return reply(`❌ *ERRADO!*\n\n✅ A resposta correta era: *${game.display}*\n\nMais sorte na próxima!`);
@@ -15416,6 +15428,8 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
           const pontos = Math.max(50 - Math.floor(parseFloat(tempoResposta) * 2) - (game.dicasUsadas * 5), 10);
           const dicasUsadas = game.dicasUsadas;
           delete global.quemSouEuGames[qseKey];
+          registrarPontosRankbn(groupData.rankbn || (groupData.rankbn = {}), 'quemsoueu', sender, pontos);
+          try { fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2)); } catch (e) { console.error('[RANKBN] falha ao gravar quemsoueu:', e.message); }
           return reply(`🎉 *ACERTOU!*\n\n✅ Era: *${game.display}*\n⏱️ Tempo: ${tempoResposta}s\n💡 Dicas usadas: ${dicasUsadas}\n🏆 +${pontos} pontos`);
         }
 
@@ -15491,6 +15505,8 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
           const pontos = Math.max(50 - Math.floor(parseFloat(tempoResposta) * 2) - (game.dicasUsadas * 5), 10);
           const dicasUsadas = game.dicasUsadas;
           delete global.filmeEmojiGames[filmeKey];
+          registrarPontosRankbn(groupData.rankbn || (groupData.rankbn = {}), 'filme', sender, pontos);
+          try { fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2)); } catch (e) { console.error('[RANKBN] falha ao gravar filme:', e.message); }
           return reply(`🎉 *ACERTOU!*\n\n🎬 Era: *${game.display}*\n⏱️ Tempo: ${tempoResposta}s\n💡 Dicas usadas: ${dicasUsadas}\n🏆 +${pontos} pontos`);
         }
 
@@ -15572,6 +15588,8 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
           const pontos = Math.max(50 - Math.floor(parseFloat(tempoResposta) * 2) - (game.dicasUsadas * 5), 10);
           const dicasUsadas = game.dicasUsadas;
           delete global.emojiQuizGames[emojiKey];
+          registrarPontosRankbn(groupData.rankbn || (groupData.rankbn = {}), 'emojiquiz', sender, pontos);
+          try { fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2)); } catch (e) { console.error('[RANKBN] falha ao gravar emojiquiz:', e.message); }
           return reply(`🎉 *ACERTOU!*\n\n🧩 Era: *${game.display}* (${game.categoria})\n⏱️ Tempo: ${tempoResposta}s\n💡 Dicas usadas: ${dicasUsadas}\n🏆 +${pontos} pontos`);
         }
 
@@ -15649,8 +15667,11 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
           // Chutar palavra inteira
           if (chute.length > 1) {
             if (chute === normalizar(game.palavra)) {
+              const pontosForca = Math.max(100 - game.erros * 15, 10);
               delete global.forcaGames[forcaKey];
-              return reply(`🎉 *PARABÉNS!*\n\n✅ Você acertou a palavra!\n\n🏆 A palavra era: *${game.palavra.toUpperCase()}*`);
+              registrarPontosRankbn(groupData.rankbn || (groupData.rankbn = {}), 'forca', sender, pontosForca);
+              try { fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2)); } catch (e) { console.error('[RANKBN] falha ao gravar forca:', e.message); }
+              return reply(`🎉 *PARABÉNS!*\n\n✅ Você acertou a palavra!\n\n🏆 A palavra era: *${game.palavra.toUpperCase()}*\n🏅 +${pontosForca} pontos`);
             } else {
               game.erros += 2;
               if (game.erros >= 6) {
@@ -15676,8 +15697,11 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
             }
             // Verificar vitória
             if (!game.progresso.includes('_')) {
+              const pontosForca = Math.max(100 - game.erros * 15, 10);
               delete global.forcaGames[forcaKey];
-              return reply(`🎉 *PARABÉNS!*\n\n📝 ${game.progresso.join(' ')}\n\n✅ Vocês descobriram a palavra!\n🏆 *${game.palavra.toUpperCase()}*`);
+              registrarPontosRankbn(groupData.rankbn || (groupData.rankbn = {}), 'forca', sender, pontosForca);
+              try { fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2)); } catch (e) { console.error('[RANKBN] falha ao gravar forca:', e.message); }
+              return reply(`🎉 *PARABÉNS!*\n\n📝 ${game.progresso.join(' ')}\n\n✅ Vocês descobriram a palavra!\n🏆 *${game.palavra.toUpperCase()}*\n🏅 +${pontosForca} pontos`);
             }
             return reply(`${desenhoForca[game.erros]}\n\n✅ Letra "${letra.toUpperCase()}" correta!\n\n📝 ${game.progresso.join(' ')}\n\n❌ Letras erradas: ${game.letrasErradas.join(', ') || 'Nenhuma'}\n⚠️ Erros: ${game.erros}/6\n\n💡 Use ${groupPrefix}forca dica para ver a dica`);
           } else {
@@ -41175,6 +41199,52 @@ ${groupPrefix}setngl https://ngl.link/...`);
           }
         } catch (e) {
           console.error(e);
+          await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
+        }
+        break;
+      // ═══════════════════════════════════════════════════════════════
+      // 🎮 RANK BN - pontuação real dos jogos de brincadeiras
+      //   !rankbn  -> top 5 do GRUPO
+      //   !rankbng -> top 5 GLOBAL (soma de todos os grupos)
+      // ═══════════════════════════════════════════════════════════════
+      case 'rankbn':
+      case 'rankbrincadeiras':
+      case 'rankbng':
+      case 'rankbnglobal':
+      case 'rankbrincadeirasglobal':
+        try {
+          const ehGlobal = command === 'rankbng' || command === 'rankbnglobal' || command === 'rankbrincadeirasglobal';
+          if (!ehGlobal && !isGroup) return sendAbyssWarning("◈ Este comando é só para grupos.");
+
+          let store;
+          if (ehGlobal) {
+            // Soma o `rankbn` de TODOS os arquivos de grupo.
+            const mapas = [];
+            try {
+              const arquivos = fs.readdirSync(GRUPOS_DIR).filter(f => f.endsWith('.json') && f.endsWith('@g.us.json'));
+              for (const arquivo of arquivos) {
+                try {
+                  const dados = JSON.parse(fs.readFileSync(pathz.join(GRUPOS_DIR, arquivo), 'utf-8'));
+                  if (dados && dados.rankbn && typeof dados.rankbn === 'object') mapas.push(dados.rankbn);
+                } catch { /* arquivo inválido: ignora */ }
+              }
+            } catch (e) {
+              console.error('[RANKBN] falha ao ler os grupos:', e.message);
+            }
+            store = agregarMapasRankbn(mapas);
+          } else {
+            store = (groupData && groupData.rankbn && typeof groupData.rankbn === 'object') ? groupData.rankbn : {};
+          }
+
+          const { texto, mentions } = formatarRankingRankbn(store, {
+            titulo: ehGlobal ? 'Rank Brincadeiras Global' : 'Rank Brincadeiras',
+            limite: LIMITE_RANKBN,
+            nomeDe: (jid) => `@${getUserName(jid)}`
+          });
+
+          await nazu.sendMessage(from, { text: texto, mentions });
+        } catch (e) {
+          console.error('[RANKBN] erro:', e);
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
         }
         break;

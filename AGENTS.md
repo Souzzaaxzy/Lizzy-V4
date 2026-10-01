@@ -8184,3 +8184,56 @@ Linha em **JOGOS & DIVERSÃO** do `menubn`, logo abaixo do `!filme`; e
   categoria inválida, alias `!emojis`, sorteio variando e presença no
   `menubn`/`blockPv`.
 - `tests/filme.test.js` — agora **12 testes / 520 asserções** (trava 121 filmes).
+
+## `!rankbn` (grupo) e `!rankbng` (global) — pontuação real dos jogos (set/2026) ✅
+Contam os pontos que os jogos de brincadeiras JÁ exibiam ("🏆 +X pontos") mas
+que não eram persistidos. Agora ficam gravados no JSON do grupo.
+
+### Módulo `utils/rankbn.js` (puro, testável)
+- `JOGOS_RANKBN` — lista canônica dos jogos (define a ORDEM exibida):
+  `emojiquiz`, `filme`, `quemsoueu`, `quiz`, `wordle`, `forca`.
+- `registrarPontos(store, jogo, jid, pontos)` — soma no mapa (ignora 0/negativo/
+  jid vazio).
+- `ranking(store, limite=5)` — ordena por total (desc), desempata pelo jid
+  (estável), corta no top 5.
+- `formatarRanking(store, {titulo, limite, nomeDe})` — monta o texto no layout
+  pedido e devolve `{ texto, mentions }`.
+- `agregarMapas(mapas)` — soma os `rankbn` de vários grupos (usado no global).
+
+Layout do texto:
+```
+🎮 *Rank Brincadeiras*
+
+*1.* @Fulano
+
+emojiquiz: 120
+filme: 80
+total: 200
+```
+(só os jogos em que o jogador pontuou aparecem; depois vem o `total`)
+
+### Onde a pontuação é gravada
+No JSON do grupo, chave **`rankbn`** → `{ "<jid>": { "<jogo>": pontos } }`.
+Cada jogo, ao acertar, chama `registrarPontosRankbn(groupData.rankbn ||= {}, jogo,
+sender, pontos)` e grava com `fs.writeFileSync(groupFile, ...)`. Jogos ligados:
+`emojiquiz`, `filme`, `quemsoueu`, `quiz`, `wordle` e `forca` (este ganhou
+pontuação, que antes não tinha: `max(100 - erros*15, 10)`).
+
+### Comandos
+- `!rankbn` (aliases `!rankbrincadeiras`) — top 5 do **grupo**; só em grupo.
+- `!rankbng` (aliases `!rankbnglobal`, `!rankbrincadeirasglobal`) — top 5
+  **global**, somando o `rankbn` de todos os arquivos `*@g.us.json` de `GRUPOS_DIR`
+  via `agregarMapas`. Funciona também no privado.
+Os dois usam `mentions` reais (o `@nome` renderiza) e o `getUserName` do bot.
+
+### Menu / blockPv
+Linhas `🏆 !rankbn` e `🌍 !rankbng` no fim da categoria **BRINCADEIRAS**; e
+`'rankbn'`/`'rankbng'` em `menuCommandsMap.menubn` (`utils/blockPv.js`). Baseline
+do `menu-layout`: **menubn 377 -> 379**.
+
+### Testes — `tests/rankbn.test.js` (**18 testes / 68 asserções**)
+Módulo puro (registrar/total/ranking/top 5/desempate/layout/agregação) + os
+quatro jogos gravando no `rankbn` do grupo + os comandos no handler real
+(top 5 do grupo com pontuação individual e total, corte em 5, grupo sem pontos,
+global somando dois grupos, global no privado, rankbn recusado fora de grupo) +
+presença no `menubn`/`blockPv`. Usa `DATABASE_PATH` temporário.

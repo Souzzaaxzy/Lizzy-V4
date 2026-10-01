@@ -344,6 +344,8 @@ ${isLiteMode ? '' : `╭━━━꧁༺ ㅤ🔞 ${boldItalic('INTERAÇÕES "PICA
 │ 🔥 ${prefix}inferno
 │ 🧊 ${prefix}frio
 │ 🧊 ${prefix}fria
+│ 🏆 ${prefix}rankbn
+│ 🌍 ${prefix}rankbng
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
