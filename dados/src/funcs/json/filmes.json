@@ -828,6 +828,604 @@
         "Filme brasileiro numa favela do Rio.",
         "Tem o Buscapé e o Zé Pequeno."
       ]
+    },
+    {
+      "e": "👽🛸🏙️",
+      "r": [
+        "independence day",
+        "o dia da independencia"
+      ],
+      "d": "Independence Day",
+      "dicas": [
+        "Aliens atacam a Terra no 4 de Julho.",
+        "O presidente faz um discurso famoso."
+      ]
+    },
+    {
+      "e": "🦖🦕🎢",
+      "r": [
+        "jurassic world",
+        "mundo jurassico"
+      ],
+      "d": "Jurassic World",
+      "dicas": [
+        "Dinossauros num parque temático novo.",
+        "Tem o Indominus Rex."
+      ]
+    },
+    {
+      "e": "🐉🏙️🔥",
+      "r": [
+        "godzilla"
+      ],
+      "d": "Godzilla",
+      "dicas": [
+        "Um monstro gigante destrói Tóquio.",
+        "Ele é um kaiju gigante."
+      ]
+    },
+    {
+      "e": "🕶️👽🚔",
+      "r": [
+        "mib",
+        "homens de preto",
+        "men in black"
+      ],
+      "d": "MIB: Homens de Preto",
+      "dicas": [
+        "Agentes secretos cuidam dos aliens na Terra.",
+        "Eles apagam a memória das pessoas."
+      ]
+    },
+    {
+      "e": "🚀👽😱",
+      "r": [
+        "alien",
+        "alien o oitavo passageiro"
+      ],
+      "d": "Alien: O Oitavo Passageiro",
+      "dicas": [
+        "Um alienígena entra numa nave espacial.",
+        "A protagonista é a Ripley."
+      ]
+    },
+    {
+      "e": "🤖🔫👮",
+      "r": [
+        "robocop"
+      ],
+      "d": "RoboCop",
+      "dicas": [
+        "Um policial vira um cyborg.",
+        "A história se passa em Detroit."
+      ]
+    },
+    {
+      "e": "🐺🌕👦",
+      "r": [
+        "lobisomem",
+        "o lobisomem"
+      ],
+      "d": "Lobisomem",
+      "dicas": [
+        "Um homem se transforma em lobo na lua cheia.",
+        "A maldição vem de uma mordida."
+      ]
+    },
+    {
+      "e": "🧑‍🚀🥔🚀",
+      "r": [
+        "perdido em marte",
+        "the martian"
+      ],
+      "d": "Perdido em Marte",
+      "dicas": [
+        "Um astronauta fica preso em Marte.",
+        "Ele planta batatas para sobreviver."
+      ]
+    },
+    {
+      "e": "🧑‍🚀🌍🛰️",
+      "r": [
+        "gravidade",
+        "gravity"
+      ],
+      "d": "Gravidade",
+      "dicas": [
+        "Uma astronauta fica à deriva no espaço.",
+        "A protagonista é a Sandra Bullock."
+      ]
+    },
+    {
+      "e": "🦸‍♂️🕶️💥",
+      "r": [
+        "deadpool"
+      ],
+      "d": "Deadpool",
+      "dicas": [
+        "Um anti-herói tagarela da Marvel.",
+        "Ele quebra a quarta parede."
+      ]
+    },
+    {
+      "e": "🦸‍♂️⚡🧙",
+      "r": [
+        "shazam"
+      ],
+      "d": "Shazam!",
+      "dicas": [
+        "Um adolescente vira um super-herói ao dizer uma palavra.",
+        "A palavra mágica é o título."
+      ]
+    },
+    {
+      "e": "🦸‍♀️💥🌟",
+      "r": [
+        "capita marvel",
+        "capitã marvel",
+        "capita marvel"
+      ],
+      "d": "Capitã Marvel",
+      "dicas": [
+        "Uma heroína da Marvel com poderes cósmicos.",
+        "A atriz é a Brie Larson."
+      ]
+    },
+    {
+      "e": "🧜‍♂️🔱🌊",
+      "r": [
+        "aquaman"
+      ],
+      "d": "Aquaman",
+      "dicas": [
+        "O rei da Atlântida.",
+        "Ele fala com os peixes e usa um tridente."
+      ]
+    },
+    {
+      "e": "🦍🦖⚔️",
+      "r": [
+        "godzilla vs kong",
+        "godzilla vs. kong"
+      ],
+      "d": "Godzilla vs. Kong",
+      "dicas": [
+        "Dois monstros gigantes se enfrentam.",
+        "Um é gorila e o outro é réptil."
+      ]
+    },
+    {
+      "e": "🏹👑🌳",
+      "r": [
+        "robin hood"
+      ],
+      "d": "Robin Hood",
+      "dicas": [
+        "Ele rouba dos ricos para dar aos pobres.",
+        "Vive na floresta de Sherwood."
+      ]
+    },
+    {
+      "e": "🤠🐴🌵",
+      "r": [
+        "django livre",
+        "django"
+      ],
+      "d": "Django Livre",
+      "dicas": [
+        "Faroeste do Tarantino sobre um caçador de recompensas.",
+        "O protagonista é o Django."
+      ]
+    },
+    {
+      "e": "🥋🐝🧑‍🎓",
+      "r": [
+        "karate kid",
+        "karatê kid"
+      ],
+      "d": "Karatê Kid",
+      "dicas": [
+        "Um garoto aprende caratê com um mestre.",
+        "O mestre ensina 'encera, cera, encera'."
+      ]
+    },
+    {
+      "e": "🚀🌕🇺🇸",
+      "r": [
+        "apollo 13"
+      ],
+      "d": "Apollo 13",
+      "dicas": [
+        "Uma missão espacial que quase dá errado.",
+        "A frase é 'Houston, temos um problema'."
+      ]
+    },
+    {
+      "e": "🚀🪐🕰️",
+      "r": [
+        "2001",
+        "2001 uma odisseia no espaco"
+      ],
+      "d": "2001: Uma Odisseia no Espaço",
+      "dicas": [
+        "Filme clássico de ficção de Kubrick.",
+        "Tem o computador HAL 9000."
+      ]
+    },
+    {
+      "e": "🦾🤖🧠",
+      "r": [
+        "eu robo",
+        "i robot"
+      ],
+      "d": "Eu, Robô",
+      "dicas": [
+        "Um detetive investiga um robô suspeito.",
+        "O protagonista é o Will Smith."
+      ]
+    },
+    {
+      "e": "🤖💊🏙️",
+      "r": [
+        "blade runner",
+        "o cacador de androides"
+      ],
+      "d": "Blade Runner",
+      "dicas": [
+        "Um caçador de androides num futuro distópico.",
+        "Tem a famosa frase 'lágrimas na chuva'."
+      ]
+    },
+    {
+      "e": "🐒🗽🚀",
+      "r": [
+        "planeta dos macacos"
+      ],
+      "d": "Planeta dos Macacos",
+      "dicas": [
+        "Macacos inteligentes dominam o mundo.",
+        "Um astronauta chega a esse planeta."
+      ]
+    },
+    {
+      "e": "🦥🌰🧊",
+      "r": [
+        "a era do gelo",
+        "era do gelo"
+      ],
+      "d": "A Era do Gelo",
+      "dicas": [
+        "Animação com um mamute e um bicho-preguiça.",
+        "Tem o esquilo Scrat atrás de uma noz."
+      ]
+    },
+    {
+      "e": "🐻🦌🌲",
+      "r": [
+        "irmao urso",
+        "irmão urso"
+      ],
+      "d": "Irmão Urso",
+      "dicas": [
+        "Animação da Disney sobre um menino que vira urso.",
+        "O protagonista é o Kenai."
+      ]
+    },
+    {
+      "e": "🐉🦎💎",
+      "r": [
+        "raya e o ultimo dragao",
+        "raya"
+      ],
+      "d": "Raya e o Último Dragão",
+      "dicas": [
+        "Animação da Disney sobre uma guerreira.",
+        "Ela procura o último dragão."
+      ]
+    },
+    {
+      "e": "🌺👧🎶",
+      "r": [
+        "moana",
+        "vaiana"
+      ],
+      "d": "Moana",
+      "dicas": [
+        "Uma menina navega pelo oceano para salvar sua ilha.",
+        "Tem o semideus Maui."
+      ]
+    },
+    {
+      "e": "⚔️🌸🪖",
+      "r": [
+        "mulan"
+      ],
+      "d": "Mulan",
+      "dicas": [
+        "Uma jovem se disfarça de soldado.",
+        "Ela luta na China antiga."
+      ]
+    },
+    {
+      "e": "🦌🐰🌸",
+      "r": [
+        "bambi"
+      ],
+      "d": "Bambi",
+      "dicas": [
+        "Animação da Disney sobre um cervo.",
+        "A mãe dele morre cedo no filme."
+      ]
+    },
+    {
+      "e": "🐧🎩🕺",
+      "r": [
+        "pinguins de madagascar",
+        "os pinguins de madagascar"
+      ],
+      "d": "Pinguins de Madagascar",
+      "dicas": [
+        "Spin-off de Madagascar.",
+        "Eles são uma equipe secreta de pinguins."
+      ]
+    },
+    {
+      "e": "🐕🦮❤️",
+      "r": [
+        "sempre ao seu lado",
+        "hachiko"
+      ],
+      "d": "Sempre ao Seu Lado",
+      "dicas": [
+        "Um cachorro espera o dono todos os dias.",
+        "Baseado numa história real japonesa."
+      ]
+    },
+    {
+      "e": "🎸👑🎤",
+      "r": [
+        "bohemian rhapsody"
+      ],
+      "d": "Bohemian Rhapsody",
+      "dicas": [
+        "Filme sobre a banda Queen.",
+        "Mostra o vocalista Freddie Mercury."
+      ]
+    },
+    {
+      "e": "💃🕺🎶",
+      "r": [
+        "la la land",
+        "la la land cantando estacoes"
+      ],
+      "d": "La La Land",
+      "dicas": [
+        "Musical com Ryan Gosling e Emma Stone.",
+        "Conta a história de um pianista e uma atriz."
+      ]
+    },
+    {
+      "e": "🎤🌧️🕺",
+      "r": [
+        "cantando na chuva",
+        "singin in the rain"
+      ],
+      "d": "Cantando na Chuva",
+      "dicas": [
+        "Clássico musical de Hollywood.",
+        "Tem a famosa cena dançando na chuva."
+      ]
+    },
+    {
+      "e": "👨‍💼🔫🍝",
+      "r": [
+        "o poderoso chefao",
+        "poderoso chefao"
+      ],
+      "d": "O Poderoso Chefão",
+      "dicas": [
+        "Máfia italiana em Nova York.",
+        "A família é os Corleone."
+      ]
+    },
+    {
+      "e": "🧑‍🎤👑🎸",
+      "r": [
+        "elvis"
+      ],
+      "d": "Elvis",
+      "dicas": [
+        "Filme sobre o rei do rock.",
+        "O protagonista é o Elvis Presley."
+      ]
+    },
+    {
+      "e": "🦊🐕🎩",
+      "r": [
+        "o fantastico sr raposo",
+        "fantastico sr raposo"
+      ],
+      "d": "O Fantástico Sr. Raposo",
+      "dicas": [
+        "Animação em stop motion de Wes Anderson.",
+        "O protagonista é uma raposa ladra."
+      ]
+    },
+    {
+      "e": "🐷🕷️🕸️",
+      "r": [
+        "a menina e o porquinho",
+        "charlotte web"
+      ],
+      "d": "A Menina e o Porquinho",
+      "dicas": [
+        "Uma aranha ajuda um porquinho a não virar bacon.",
+        "A aranha se chama Charlotte."
+      ]
+    },
+    {
+      "e": "🐯🐻🐍",
+      "r": [
+        "o livro da selva",
+        "mogli"
+      ],
+      "d": "O Livro da Selva",
+      "dicas": [
+        "Um menino criado por animais na selva.",
+        "O menino se chama Mogli."
+      ]
+    },
+    {
+      "e": "🐿️🌰🎸",
+      "r": [
+        "alvin e os esquilos",
+        "alvin"
+      ],
+      "d": "Alvin e os Esquilos",
+      "dicas": [
+        "Três esquilos que cantam.",
+        "Eles atrapalham o Dave."
+      ]
+    },
+    {
+      "e": "🚂🎄🎅",
+      "r": [
+        "o expresso polar",
+        "expresso polar"
+      ],
+      "d": "O Expresso Polar",
+      "dicas": [
+        "Um trem mágico leva crianças ao Polo Norte.",
+        "Animação com o Tom Hanks."
+      ]
+    },
+    {
+      "e": "🧝‍♂️💍🌋",
+      "r": [
+        "o hobbit"
+      ],
+      "d": "O Hobbit",
+      "dicas": [
+        "Um hobbit sai numa aventura com anões.",
+        "O protagonista é o Bilbo Bolseiro."
+      ]
+    },
+    {
+      "e": "🏛️⚔️👑",
+      "r": [
+        "gladiador"
+      ],
+      "d": "Gladiador",
+      "dicas": [
+        "Um general romano vira gladiador.",
+        "O protagonista é o Maximus."
+      ]
+    },
+    {
+      "e": "🏐🏝️✈️",
+      "r": [
+        "o naufrago",
+        "naufrago"
+      ],
+      "d": "O Náufrago",
+      "dicas": [
+        "Um homem fica preso numa ilha deserta.",
+        "O protagonista é o Tom Hanks e fala com uma bola."
+      ]
+    },
+    {
+      "e": "🧟🌆🏃",
+      "r": [
+        "exterminio",
+        "28 days later"
+      ],
+      "d": "Extermínio",
+      "dicas": [
+        "Filme de zumbis rápidos na Inglaterra.",
+        "Os infectados correm muito rápido."
+      ]
+    },
+    {
+      "e": "🕵️‍♂️🔍🎩",
+      "r": [
+        "sherlock holmes"
+      ],
+      "d": "Sherlock Holmes",
+      "dicas": [
+        "O detetive mais famoso do mundo.",
+        "Seu parceiro é o Dr. Watson."
+      ]
+    },
+    {
+      "e": "🐺🧛‍♂️🏰",
+      "r": [
+        "hotel transilvania",
+        "hotel transilvânia"
+      ],
+      "d": "Hotel Transilvânia",
+      "dicas": [
+        "Animação com monstros num hotel.",
+        "O dono é o Drácula."
+      ]
+    },
+    {
+      "e": "🐻🦝🦌",
+      "r": [
+        "os sem floresta",
+        "sem floresta"
+      ],
+      "d": "Os Sem-Floresta",
+      "dicas": [
+        "Animais descobrem a comida dos humanos.",
+        "Tem um esquilo e um guaxinim."
+      ]
+    },
+    {
+      "e": "🪖🏖️💥",
+      "r": [
+        "o resgate do soldado ryan",
+        "resgate do soldado ryan"
+      ],
+      "d": "O Resgate do Soldado Ryan",
+      "dicas": [
+        "Filme de guerra de Spielberg.",
+        "A cena inicial é o desembarque na Normandia."
+      ]
+    },
+    {
+      "e": "🐊👦🌴",
+      "r": [
+        "peter pan"
+      ],
+      "d": "Peter Pan",
+      "dicas": [
+        "O menino que não quer crescer.",
+        "Ele luta contra o Capitão Gancho."
+      ]
+    },
+    {
+      "e": "👻🚗🏚️",
+      "r": [
+        "a casa monstro",
+        "monster house"
+      ],
+      "d": "A Casa Monstro",
+      "dicas": [
+        "Animação sobre uma casa assombrada.",
+        "A casa come quem chega perto."
+      ]
+    },
+    {
+      "e": "🐧🥶🏔️",
+      "r": [
+        "os pinguins do papai",
+        "happy feet dois"
+      ],
+      "d": "Os Pinguins do Papai",
+      "dicas": [
+        "Comédia com pinguins e Jim Carrey.",
+        "Se passa num zoológico."
+      ]
     }
   ]
 }

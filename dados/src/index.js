@@ -15513,6 +15513,100 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
         break;
       }
       // ═══════════════════════════════════════════════════════════════
+      // 🧩 EMOJI QUIZ - adivinhe o que os emojis representam (varias categorias)
+      // ═══════════════════════════════════════════════════════════════
+      case 'emojiquiz':
+      case 'emojis': {
+        // Carregar itens do JSON (mesmo padrao do quiz.json/quemsoueu.json).
+        const emojiPath = pathz.join(__dirname, 'funcs', 'json', 'emojiquiz.json');
+        let emojiDB = [];
+        try {
+          const emojiData = JSON.parse(fs.readFileSync(emojiPath, 'utf-8'));
+          emojiDB = Array.isArray(emojiData.itens) ? emojiData.itens : [];
+        } catch (e) {
+          console.error('Erro ao carregar emojiquiz.json:', e);
+        }
+        if (!emojiDB.length) {
+          emojiDB = [{ e: '🦁👑', r: ['rei leao'], d: 'O Rei Leão', c: 'filmes', dicas: ['Categoria: filmes'] }];
+        }
+        const categorias = [...new Set(emojiDB.map(x => x.c))].filter(Boolean).sort();
+
+        // Estado dos jogos de emoji quiz ativos (mesmo molde do quiz).
+        if (!global.emojiQuizGames) global.emojiQuizGames = {};
+        const emojiKey = isGroup ? from : sender;
+        const game = global.emojiQuizGames[emojiKey];
+        const sub = (args[0] || '').toLowerCase();
+
+        // Listar categorias disponíveis.
+        if (!game && (sub === 'categorias' || sub === 'listar' || sub === 'categoria')) {
+          const linhas = categorias.map(c => `• ${groupPrefix}emojiquiz ${c}`).join('\n');
+          return reply(`🧩 *EMOJI QUIZ - Categorias*\n\n${linhas}\n\n💡 Sem categoria eu sorteio de todas!`);
+        }
+
+        // Desistir / pular o item atual.
+        if (game && (sub === 'pular' || sub === 'desistir')) {
+          const resposta = game.display;
+          delete global.emojiQuizGames[emojiKey];
+          return reply(`⏭️ *Desistiu!*\n\n🧩 A resposta era: *${resposta}*`);
+        }
+
+        // Pedir uma dica (sem encerrar o jogo).
+        if (game && (sub === 'dica' || sub === 'dicas')) {
+          if (game.dicasUsadas >= game.dicas.length) {
+            return reply(`💡 Não tenho mais dicas!\n\n🧩 Ainda é: *${game.display}*\n\n💭 Chute com: ${groupPrefix}emojiquiz [resposta]`);
+          }
+          const dica = game.dicas[game.dicasUsadas];
+          game.dicasUsadas++;
+          return reply(`💡 *DICA ${game.dicasUsadas}/${game.dicas.length}*\n\n${dica}\n\n💭 Chute com: ${groupPrefix}emojiquiz [resposta]`);
+        }
+
+        // Já tem jogo ativo e o jogador mandou um chute.
+        if (game && args.length > 0) {
+          const chute = normalizar(args.join(' '));
+          const acertou = game.respostas.some(r => normalizar(r) === chute || chute.includes(normalizar(r)));
+          if (!acertou) {
+            // Errou: mantém o jogo aberto para o grupo continuar tentando.
+            return reply(`❌ *Errou!* Não é *${args.join(' ')}*.\n\n🧩 Continuo sendo um enigma misterioso...\n💭 Tente de novo: ${groupPrefix}emojiquiz [resposta]\n💡 Dica: ${groupPrefix}emojiquiz dica\n🚪 Desistir: ${groupPrefix}emojiquiz pular`);
+          }
+          const tempoResposta = ((Date.now() - game.iniciado) / 1000).toFixed(1);
+          const pontos = Math.max(50 - Math.floor(parseFloat(tempoResposta) * 2) - (game.dicasUsadas * 5), 10);
+          const dicasUsadas = game.dicasUsadas;
+          delete global.emojiQuizGames[emojiKey];
+          return reply(`🎉 *ACERTOU!*\n\n🧩 Era: *${game.display}* (${game.categoria})\n⏱️ Tempo: ${tempoResposta}s\n💡 Dicas usadas: ${dicasUsadas}\n🏆 +${pontos} pontos`);
+        }
+
+        // Já tem jogo ativo e ninguém chutou: relembra os emojis.
+        if (game) {
+          return reply(`🧩 *EMOJI QUIZ* (${game.categoria})\n\n${game.emojis}\n\n💭 Chute com: ${groupPrefix}emojiquiz [resposta]\n💡 Dica: ${groupPrefix}emojiquiz dica\n🚪 Desistir: ${groupPrefix}emojiquiz pular`);
+        }
+
+        // Sem jogo ativo: escolhe a categoria (ou sorteia de todas) e um item.
+        let pool = emojiDB;
+        let categoriaEscolhida = 'aleatório';
+        if (args.length > 0) {
+          const pedida = normalizar(args.join(' '));
+          const match = categorias.find(c => normalizar(c) === pedida || normalizar(c).startsWith(pedida));
+          if (!match) {
+            const linhas = categorias.map(c => `• ${groupPrefix}emojiquiz ${c}`).join('\n');
+            return reply(`❌ Categoria "*${args.join(' ')}*" não encontrada!\n\n🧩 *Categorias disponíveis:*\n${linhas}`);
+          }
+          pool = emojiDB.filter(x => x.c === match);
+          categoriaEscolhida = match;
+        }
+        const escolhido = pool[Math.floor(Math.random() * pool.length)];
+        global.emojiQuizGames[emojiKey] = {
+          emojis: escolhido.e,
+          respostas: escolhido.r,
+          display: escolhido.d,
+          categoria: escolhido.c,
+          dicas: Array.isArray(escolhido.dicas) ? escolhido.dicas : [],
+          dicasUsadas: 0,
+          iniciado: Date.now()
+        };
+        await reply(`🧩 *EMOJI QUIZ* (${escolhido.c || categoriaEscolhida})\n\n${escolhido.e}\n\n💭 Chute com: ${groupPrefix}emojiquiz [resposta]\n💡 Dica: ${groupPrefix}emojiquiz dica\n🚪 Desistir: ${groupPrefix}emojiquiz pular`);
+        break;
+      }
+      // ═══════════════════════════════════════════════════════════════
       // 🎯 FORCA - Jogo da Forca em Grupo
       // ═══════════════════════════════════════════════════════════════
       case 'forca':

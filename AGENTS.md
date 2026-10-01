@@ -8145,3 +8145,42 @@ dicas em ordem, acerto por `r` e por `display`, `pular`, novo jogo depois do
 acerto, aliases `!filmes`/`!emojifilme`, sorteio variando em 20 partidas, e
 presença no `menubn`/`blockPv`. Usa `DATABASE_PATH` temporário: **não toca** o
 `dados/database` real.
+
+## `!filme` ganhou +51 filmes e nasceu o `!emojiquiz` (set/2026) ✅
+
+### `!filme` — agora com 121 filmes
+O banco `funcs/json/filmes.json` passou de 70 para **121 filmes** (adicionei 51:
+clássicos, terror, ficção, animações e mais). Nenhuma linha do handler mudou — é
+só dado. O teste do JSON agora trava em **121** itens.
+
+### `!emojiquiz` — adivinhe o que os emojis representam
+Alias `!emojis`. Mesmo molde do `!quiz`/`!filme`, mas com **categorias**.
+Banco: `funcs/json/emojiquiz.json` → chave **`itens`** (**200 itens**), cada um
+com `e` (emojis), `r` (respostas), `d` (display), `c` (categoria) e `dicas`.
+Distribuição: séries 30 · games 30 · lugares 25 · comida 20 · objetos 20 ·
+animais 15 · esportes 15 · marcas 15 · internet 10 · profissões 10 ·
+personagens 10.
+
+### Fluxo
+Estado em `global.emojiQuizGames[isGroup ? from : sender]`.
+- `!emojiquiz` → sorteia de **todas** as categorias.
+- `!emojiquiz <categoria>` → só daquela categoria (aceita prefixo/acento via
+  `normalizar`); categoria inválida lista as opções.
+- `!emojiquiz categorias` (ou `listar`) → mostra as categorias disponíveis.
+- `!emojiquiz <chute>` → errou mantém aberto; acertou revela (com categoria,
+  tempo e pontos; a pontuação cai com o tempo e as dicas).
+- `!emojiquiz dica` → dicas em ordem sem encerrar; `!emojiquiz pular` → revela.
+A primeira dica é sempre "Categoria: <c>", a segunda é a dica específica.
+
+### Menu / blockPv
+Linha em **JOGOS & DIVERSÃO** do `menubn`, logo abaixo do `!filme`; e
+`'emojiquiz'` em `menuCommandsMap.menubn` (`utils/blockPv.js`). Baseline do
+`menu-layout`: **menubn 376 -> 377**.
+
+### Testes
+- `tests/emojiquiz.test.js` — **14 testes / 1056 asserções**: JSON (200 itens,
+  11 categorias, sem duplicados), início do jogo, chute errado, dicas em ordem,
+  acerto por `r`/`display`, `pular`, lista de categorias, jogo por categoria,
+  categoria inválida, alias `!emojis`, sorteio variando e presença no
+  `menubn`/`blockPv`.
+- `tests/filme.test.js` — agora **12 testes / 520 asserções** (trava 121 filmes).

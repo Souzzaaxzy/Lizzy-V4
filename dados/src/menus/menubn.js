@@ -20,6 +20,7 @@ export default async function menubn(prefix, botName = "MeuBot", userName = "Usu
 │ ❓ ${prefix}quiz
 │ 🕵️ ${prefix}quemsoueu
 │ 🎬 ${prefix}filme
+│ 🧩 ${prefix}emojiquiz
 │ 🎭 ${prefix}forca
 │ ⌨️ ${prefix}digitar
 │ 🚢 ${prefix}batalhanaval
