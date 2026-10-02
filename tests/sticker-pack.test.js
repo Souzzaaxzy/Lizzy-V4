@@ -140,6 +140,60 @@ await test('stickerPack: conteudoPack tem stickers, cover, name e publisher', as
 });
 
 // ============================================================================
+// 5) Nome da figurinha (nome cadastrado > nick > pushname)
+// ============================================================================
+
+await test('stickerPack: nome CADASTRADO (take.json) vence o nick', async () => {
+  const nome = await sp.resolverNomeFigurinha({
+    sender: 'a@lid',
+    takeData: { 'a@lid': { author: 'Meu Nome', pack: 'X' } },
+    resolverNick: async () => 'Nick do Contato',
+    fallback: 'push'
+  });
+  eq(nome, 'Meu Nome', 'usa o nome cadastrado');
+});
+
+await test('stickerPack: sem cadastro usa o NICK (nome do contato)', async () => {
+  const nome = await sp.resolverNomeFigurinha({
+    sender: 'a@lid',
+    takeData: {},
+    resolverNick: async () => 'Nick do Contato',
+    fallback: 'push'
+  });
+  eq(nome, 'Nick do Contato', 'cai no nick');
+});
+
+await test('stickerPack: sem cadastro e sem nick usa o fallback (pushname)', async () => {
+  const nome = await sp.resolverNomeFigurinha({
+    sender: 'a@lid',
+    takeData: {},
+    resolverNick: async () => null,
+    fallback: 'pushname'
+  });
+  eq(nome, 'pushname', 'cai no fallback');
+});
+
+await test('stickerPack: author vazio no take.json NÃO conta como cadastrado', async () => {
+  const nome = await sp.resolverNomeFigurinha({
+    sender: 'a@lid',
+    takeData: { 'a@lid': { author: '   ' } },
+    resolverNick: async () => 'Nick',
+    fallback: 'push'
+  });
+  eq(nome, 'Nick', 'author em branco -> nick');
+});
+
+await test('stickerPack: nick que lança não derruba (cai no fallback)', async () => {
+  const nome = await sp.resolverNomeFigurinha({
+    sender: 'a@lid',
+    takeData: {},
+    resolverNick: async () => { throw new Error('falhou'); },
+    fallback: 'push'
+  });
+  eq(nome, 'push', 'erro no nick -> fallback');
+});
+
+// ============================================================================
 
 const totalOk = RESULTS.reduce((a, r) => a + r.passed, 0);
 const totalFail = RESULTS.reduce((a, r) => a + r.failed, 0);

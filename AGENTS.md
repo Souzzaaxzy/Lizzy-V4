@@ -8613,3 +8613,27 @@ gatinho` → 11 figurinhas; `icon cachorro fofo` → 14; `icon paisagem` → 12.
 Prefixo "icon" (normalização), faixa 10..15 (rng determinístico), montagem
 (capa = 1ª figurinha), falha de URL não derruba o pack, sem imagens /
 conversão falhou, só URL http(s), teto de 60 e o formato do `conteudoPack`.
+
+### Ajuste (set/2026): nome da figurinha no `!s` (cadastrado > nick)
+Pedido: quando alguém cria figurinha com o `!s`, o bot deve **já assinar a
+figurinha com o nome da pessoa** — se tiver **nome cadastrado**, usa ele; senão,
+usa o **nick** (nome do contato).
+
+- **Nome cadastrado** = o `author` que a pessoa salvou no
+  `dados/database/users/take.json` pelo **`!rgtake`** (o mesmo arquivo que o
+  `!take` lê). É o "nome configurado" do usuário.
+- **Nick** = o nome do contato, resolvido por `resolverNomeContato` (agenda →
+  notify → verifiedName → username), a mesma fonte do `!me`/`!cf`.
+- **Fallback** = `pushname` (só se nada resolver).
+
+Novo helper puro `resolverNomeFigurinha({ sender, takeData, resolverNick,
+fallback })` em `funcs/utils/stickerPack.js`: cadastrado (não vazio) → nick →
+fallback; erro no nick não derruba.
+
+Aplicado nos **dois** fluxos do `!s`:
+- **`!s` com mídia marcada** → `author` da figurinha = nome resolvido (antes era
+  sempre o `pushname`);
+- **`!s <pesquisa>` (pack)** → o **publisher** do pacote = nome resolvido.
+
+Validado ao vivo: com `take.json` → publisher `Fulano Cadastrado`; sem → `Nick do
+Contato`. `tests/sticker-pack.test.js`: **13 testes / 33 asserções**.

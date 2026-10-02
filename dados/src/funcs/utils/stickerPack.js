@@ -104,6 +104,41 @@ export function conteudoPack({ stickers, cover, nome, publisher, descricao = '' 
   };
 }
 
+/**
+ * Resolve o NOME que vai na figurinha (pedido do dono).
+ *
+ *   1. se a pessoa tem um **nome cadastrado** no `take.json`
+ *      (`dados/database/users/take.json`, o mesmo do `!rgtake`) → usa esse nome;
+ *   2. senão → usa o **nick** (nome do contato, via `resolverNomeContato`);
+ *   3. se nada resolver → cai no `fallback` (ex.: pushname).
+ *
+ * O `author` do `take.json` é o nome que a pessoa configurou; o `pack` de lá
+ * **não** é usado (o pack do `!s` é o do bot).
+ *
+ * @param {object} opts
+ * @param {string} opts.sender
+ * @param {object} [opts.takeData]  conteúdo do take.json (mapa por usuário)
+ * @param {() => Promise<string|null>} [opts.resolverNick]
+ * @param {string} [opts.fallback]
+ * @returns {Promise<string>}
+ */
+export async function resolverNomeFigurinha({ sender, takeData, resolverNick, fallback = '' }) {
+  // 1) Nome cadastrado (take.json).
+  const cadastrado = takeData && takeData[sender] ? takeData[sender].author : '';
+  if (cadastrado && String(cadastrado).trim()) return String(cadastrado).trim();
+
+  // 2) Nick (nome do contato).
+  if (typeof resolverNick === 'function') {
+    try {
+      const nick = await resolverNick();
+      if (nick && String(nick).trim()) return String(nick).trim();
+    } catch { /* segue para o fallback */ }
+  }
+
+  // 3) Fallback (pushname).
+  return String(fallback ?? '').trim();
+}
+
 export default {
   PREFIXO_BUSCA,
   MIN_FIGURINHAS,
@@ -112,5 +147,6 @@ export default {
   montarTermoBusca,
   escolherQuantidade,
   montarPack,
-  conteudoPack
+  conteudoPack,
+  resolverNomeFigurinha
 };
