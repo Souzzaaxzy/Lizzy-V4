@@ -8637,3 +8637,23 @@ Aplicado nos **dois** fluxos do `!s`:
 
 Validado ao vivo: com `take.json` → publisher `Fulano Cadastrado`; sem → `Nick do
 Contato`. `tests/sticker-pack.test.js`: **13 testes / 33 asserções**.
+
+### Correção (set/2026): nome da figurinha do `!s` — `pack` do `!rgtake`
+Bug: a figurinha/pack não vinha com o nome cadastrado. Causa: o **`!rgtake`**
+salva `{ author, pack }`, e **sem a barra** ele põe o valor em **`pack`**
+(`!rgtake Nome` → `author: ""`, `pack: "Nome"`); com barra (`!rgtake A/B`) vai em
+`author`. Eu lia **só o `author`**, então o caso comum (só o nome, sem `/`) saía
+vazio e caía no nick.
+
+Correções:
+- `resolverNomeFigurinha` passa a aceitar **`author` OU `pack`** (author primeiro);
+- a figurinha do `!s` (single) sai com **apenas o nome cadastrado nos dois slots**
+  (`author` e `packname` = nome resolvido), sem o nome do bot;
+- o **pack** do `!s <pesquisa>` usa o nome resolvido como **`name` e `publisher`**
+  (antes o `name` levava `${nomebot} · ${prompt}`).
+
+Validado ao vivo: `!rgtake MeuNome` (sem barra) → pack com `name` e `publisher`
+= `MeuNome`; sem cadastro → nick do contato.
+
+`tests/sticker-pack.test.js`: **14 testes / 34 asserções** (o caso `!rgtake` sem
+barra agora tem teste próprio).

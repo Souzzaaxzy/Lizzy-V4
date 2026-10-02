@@ -30176,7 +30176,7 @@ packname: `${nomebot}`,
               fallback: pushname || nomebot
             });
 
-            const pack = await montarPack({ urls: busca.urls, converter: baixarImagem, nome: `${nomebot} · ${prompt}`, publisher: nomeFigurinha });
+            const pack = await montarPack({ urls: busca.urls, converter: baixarImagem, nome: nomeFigurinha, publisher: nomeFigurinha });
             if (!pack.ok) {
               await react('❌', nazu, info.key, from);
               return reply('❌ Não consegui montar o pack agora. Tente de novo em instantes.');
@@ -30220,7 +30220,7 @@ packname: `${nomebot}`,
           await sendSticker(nazu, from, {
             sticker: buffer,
             author: authorFigurinha,
-            packname: `${nomebot}`,
+            packname: authorFigurinha,
             type: isVideo2 ? 'video' : 'image',
             forceSquare: true
           }, {

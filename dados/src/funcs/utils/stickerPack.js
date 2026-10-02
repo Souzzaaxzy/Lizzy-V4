@@ -112,8 +112,9 @@ export function conteudoPack({ stickers, cover, nome, publisher, descricao = '' 
  *   2. senão → usa o **nick** (nome do contato, via `resolverNomeContato`);
  *   3. se nada resolver → cai no `fallback` (ex.: pushname).
  *
- * O `author` do `take.json` é o nome que a pessoa configurou; o `pack` de lá
- * **não** é usado (o pack do `!s` é o do bot).
+ * O `!rgtake` salva `{ author, pack }`: com `!rgtake A/B` o nome vai em
+ * `author`; com `!rgtake Nome` (sem barra) ele vai em **`pack`** — por isso os
+ * dois campos são considerados (`author` primeiro).
  *
  * @param {object} opts
  * @param {string} opts.sender
@@ -123,9 +124,12 @@ export function conteudoPack({ stickers, cover, nome, publisher, descricao = '' 
  * @returns {Promise<string>}
  */
 export async function resolverNomeFigurinha({ sender, takeData, resolverNick, fallback = '' }) {
-  // 1) Nome cadastrado (take.json).
-  const cadastrado = takeData && takeData[sender] ? takeData[sender].author : '';
-  if (cadastrado && String(cadastrado).trim()) return String(cadastrado).trim();
+  // 1) Nome cadastrado (take.json) — `author` OU `pack` (o !rgtake usa os dois).
+  const entrada = takeData && takeData[sender] ? takeData[sender] : null;
+  if (entrada) {
+    const cadastrado = String(entrada.author || '').trim() || String(entrada.pack || '').trim();
+    if (cadastrado) return cadastrado;
+  }
 
   // 2) Nick (nome do contato).
   if (typeof resolverNick === 'function') {
