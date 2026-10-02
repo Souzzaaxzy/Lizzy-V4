@@ -8657,3 +8657,21 @@ Validado ao vivo: `!rgtake MeuNome` (sem barra) → pack com `name` e `publisher
 
 `tests/sticker-pack.test.js`: **14 testes / 34 asserções** (o caso `!rgtake` sem
 barra agora tem teste próprio).
+
+### Correção (set/2026): author e pack SEPARADOS (não repetir o nome)
+Bug: a figurinha vinha com **dois nomes iguais** (autor = pacote). Eu havia
+posto o nome resolvido nos dois slots. O certo é respeitar o `take.json`:
+- `!rgtake Autor/Pack` → mostra **Autor** e **Pack**;
+- `!rgtake MeuPack` (sem barra) → mostra **só** `MeuPack` (author vazio);
+- nada configurado → **nick** (nome do contato) no slot do pack; sem nick →
+  pushname.
+
+`resolverNomesFigurinha` (substitui `resolverNomeFigurinha`) devolve
+`{ author, pack }` **separados**, sem repetir: campo não configurado fica vazio.
+
+No handler:
+- `!s` (mídia) → `author = nomes.author`, `packname = nomes.pack`;
+- `!s <pesquisa>` (pack) → `name = nomes.pack`, `publisher = nomes.author`.
+
+Validado ao vivo: `{ author:"", pack:"MeuPacote" }` → pack `name = "MeuPacote"`,
+`publisher = ""`. `tests/sticker-pack.test.js`: **14 testes / 38 asserções**.

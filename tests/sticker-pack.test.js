@@ -143,65 +143,65 @@ await test('stickerPack: conteudoPack tem stickers, cover, name e publisher', as
 // 5) Nome da figurinha (nome cadastrado > nick > pushname)
 // ============================================================================
 
-await test('stickerPack: nome CADASTRADO (take.json) vence o nick', async () => {
-  const nome = await sp.resolverNomeFigurinha({
+await test('stickerPack: nomes SEPARADOS — só o pack configurado mostra só o pack', async () => {
+  const n = await sp.resolverNomesFigurinha({
     sender: 'a@lid',
-    takeData: { 'a@lid': { author: 'Meu Nome', pack: 'X' } },
-    resolverNick: async () => 'Nick do Contato',
-    fallback: 'push'
+    takeData: { 'a@lid': { author: '', pack: 'Meu Pack' } },
+    resolverNick: async () => 'Nick do Contato'
   });
-  eq(nome, 'Meu Nome', 'usa o nome cadastrado (author)');
+  eq(n.pack, 'Meu Pack', 'pack = nome do pacote');
+  eq(n.author, '', 'author fica VAZIO (não repete o pack)');
 });
 
-await test('stickerPack: !rgtake Nome (sem barra) salva em pack — também vale', async () => {
-  // O !rgtake, sem "/", põe o valor em `pack` e deixa `author` vazio.
-  const nome = await sp.resolverNomeFigurinha({
+await test('stickerPack: autor E pack configurados mostram os dois', async () => {
+  const n = await sp.resolverNomesFigurinha({
     sender: 'a@lid',
-    takeData: { 'a@lid': { author: '', pack: 'Meu Nome' } },
-    resolverNick: async () => 'Nick do Contato',
-    fallback: 'push'
+    takeData: { 'a@lid': { author: 'Autor', pack: 'Pacote' } },
+    resolverNick: async () => 'Nick'
   });
-  eq(nome, 'Meu Nome', 'usa o pack como nome quando o author está vazio');
+  eq(n.author, 'Autor', 'author = autor');
+  eq(n.pack, 'Pacote', 'pack = pacote');
 });
 
-await test('stickerPack: sem cadastro usa o NICK (nome do contato)', async () => {
-  const nome = await sp.resolverNomeFigurinha({
+await test('stickerPack: só o autor configurado mostra só o autor', async () => {
+  const n = await sp.resolverNomesFigurinha({
+    sender: 'a@lid',
+    takeData: { 'a@lid': { author: 'Autor', pack: '' } },
+    resolverNick: async () => 'Nick'
+  });
+  eq(n.author, 'Autor', 'author = autor');
+  eq(n.pack, '', 'pack fica VAZIO');
+});
+
+await test('stickerPack: sem nada configurado usa o NICK (nome do contato)', async () => {
+  const n = await sp.resolverNomesFigurinha({
     sender: 'a@lid',
     takeData: {},
     resolverNick: async () => 'Nick do Contato',
     fallback: 'push'
   });
-  eq(nome, 'Nick do Contato', 'cai no nick');
+  eq(n.pack, 'Nick do Contato', 'pack = nick');
+  eq(n.author, '', 'author vazio');
 });
 
 await test('stickerPack: sem cadastro e sem nick usa o fallback (pushname)', async () => {
-  const nome = await sp.resolverNomeFigurinha({
+  const n = await sp.resolverNomesFigurinha({
     sender: 'a@lid',
     takeData: {},
     resolverNick: async () => null,
     fallback: 'pushname'
   });
-  eq(nome, 'pushname', 'cai no fallback');
-});
-
-await test('stickerPack: author vazio no take.json NÃO conta como cadastrado', async () => {
-  const nome = await sp.resolverNomeFigurinha({
-    sender: 'a@lid',
-    takeData: { 'a@lid': { author: '   ', pack: '' } },
-    resolverNick: async () => 'Nick',
-    fallback: 'push'
-  });
-  eq(nome, 'Nick', 'author e pack em branco -> nick');
+  eq(n.pack, 'pushname', 'pack = fallback');
 });
 
 await test('stickerPack: nick que lança não derruba (cai no fallback)', async () => {
-  const nome = await sp.resolverNomeFigurinha({
+  const n = await sp.resolverNomesFigurinha({
     sender: 'a@lid',
     takeData: {},
     resolverNick: async () => { throw new Error('falhou'); },
     fallback: 'push'
   });
-  eq(nome, 'push', 'erro no nick -> fallback');
+  eq(n.pack, 'push', 'erro no nick -> fallback');
 });
 
 // ============================================================================

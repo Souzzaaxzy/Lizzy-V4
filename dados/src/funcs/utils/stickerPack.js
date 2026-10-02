@@ -105,42 +105,41 @@ export function conteudoPack({ stickers, cover, nome, publisher, descricao = '' 
 }
 
 /**
- * Resolve o NOME que vai na figurinha (pedido do dono).
+ * Resolve os NOMES que vão na figurinha (pedido do dono).
  *
- *   1. se a pessoa tem um **nome cadastrado** no `take.json`
- *      (`dados/database/users/take.json`, o mesmo do `!rgtake`) → usa esse nome;
- *   2. senão → usa o **nick** (nome do contato, via `resolverNomeContato`);
- *   3. se nada resolver → cai no `fallback` (ex.: pushname).
+ * Devolve **separado** o `author` e o `pack`, exatamente como o `!rgtake` salvou
+ * no `take.json`:
+ *   - `!rgtake Autor/Pack` → `author` = Autor, `pack` = Pack;
+ *   - `!rgtake Nome`       → `pack`   = Nome,  `author` = "" (vazio).
  *
- * O `!rgtake` salva `{ author, pack }`: com `!rgtake A/B` o nome vai em
- * `author`; com `!rgtake Nome` (sem barra) ele vai em **`pack`** — por isso os
- * dois campos são considerados (`author` primeiro).
+ * Regras:
+ *   - cada campo configurado vai para o seu slot (author → publisher, pack → nome);
+ *   - campo não configurado fica **vazio** (não repete o outro);
+ *   - se **nada** foi configurado, cai no **nick** (nome do contato) e, na falta
+ *     dele, no `fallback` (pushname) — no slot do `pack`.
  *
  * @param {object} opts
  * @param {string} opts.sender
  * @param {object} [opts.takeData]  conteúdo do take.json (mapa por usuário)
  * @param {() => Promise<string|null>} [opts.resolverNick]
  * @param {string} [opts.fallback]
- * @returns {Promise<string>}
+ * @returns {Promise<{author: string, pack: string}>}
  */
-export async function resolverNomeFigurinha({ sender, takeData, resolverNick, fallback = '' }) {
-  // 1) Nome cadastrado (take.json) — `author` OU `pack` (o !rgtake usa os dois).
+export async function resolverNomesFigurinha({ sender, takeData, resolverNick, fallback = '' }) {
   const entrada = takeData && takeData[sender] ? takeData[sender] : null;
-  if (entrada) {
-    const cadastrado = String(entrada.author || '').trim() || String(entrada.pack || '').trim();
-    if (cadastrado) return cadastrado;
+  const author = entrada ? String(entrada.author || '').trim() : '';
+  let pack = entrada ? String(entrada.pack || '').trim() : '';
+
+  // Nada configurado -> usa o nick (nome do contato), senão o fallback, no `pack`.
+  if (!author && !pack) {
+    let nick = '';
+    if (typeof resolverNick === 'function') {
+      try { nick = String((await resolverNick()) || '').trim(); } catch { /* segue */ }
+    }
+    pack = nick || String(fallback ?? '').trim();
   }
 
-  // 2) Nick (nome do contato).
-  if (typeof resolverNick === 'function') {
-    try {
-      const nick = await resolverNick();
-      if (nick && String(nick).trim()) return String(nick).trim();
-    } catch { /* segue para o fallback */ }
-  }
-
-  // 3) Fallback (pushname).
-  return String(fallback ?? '').trim();
+  return { author, pack };
 }
 
 export default {
@@ -152,5 +151,5 @@ export default {
   escolherQuantidade,
   montarPack,
   conteudoPack,
-  resolverNomeFigurinha
+  resolverNomesFigurinha
 };

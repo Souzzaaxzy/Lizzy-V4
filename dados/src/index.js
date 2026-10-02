@@ -1134,7 +1134,7 @@ import {
   montarTermoBusca,
   montarPack,
   conteudoPack,
-  resolverNomeFigurinha
+  resolverNomesFigurinha
 } from './funcs/utils/stickerPack.js';
 import {
   minJogadores as minJogadoresImpostor,
@@ -30162,21 +30162,20 @@ packname: `${nomebot}`,
               if (!buf.length) return null;
               return buf;
             };
-            // Nome da figurinha: usa o nome CADASTRADO (take.json) se houver,
-            // senão o nick (nome do contato). Sem nada, cai no pushname.
+            // Nomes da figurinha: author e pack SEPARADOS, como no take.json.
             let takeDataFig = {};
             try {
               const takePath = pathz.join(USERS_DIR, 'take.json');
               if (fs.existsSync(takePath)) takeDataFig = JSON.parse(fs.readFileSync(takePath, 'utf-8'));
             } catch { takeDataFig = {}; }
-            const nomeFigurinha = await resolverNomeFigurinha({
+            const nomesFig = await resolverNomesFigurinha({
               sender,
               takeData: takeDataFig,
               resolverNick: () => resolverNomeContato(sender, { nazu, metadata: groupMetadata, from, fallback: pushname }),
               fallback: pushname || nomebot
             });
 
-            const pack = await montarPack({ urls: busca.urls, converter: baixarImagem, nome: nomeFigurinha, publisher: nomeFigurinha });
+            const pack = await montarPack({ urls: busca.urls, converter: baixarImagem, nome: nomesFig.pack, publisher: nomesFig.author });
             if (!pack.ok) {
               await react('❌', nazu, info.key, from);
               return reply('❌ Não consegui montar o pack agora. Tente de novo em instantes.');
@@ -30197,13 +30196,13 @@ packname: `${nomebot}`,
           var isVideo2 = isVideoMidia;
           if (isVideo2 && boij.seconds > 9.9) return reply(`O vídeo precisa ter no máximo 9.9 segundos para ser convertido em figurinha.`);
           var buffer = await getFileBuffer(isVideo2 ? boij : boij2, isVideo2 ? 'video' : 'image');
-          // Nome da figurinha: nome CADASTRADO (take.json) > nick > pushname.
+          // Nomes da figurinha: author e pack SEPARADOS, como no take.json.
           let takeDataSingle = {};
           try {
             const takePathSingle = pathz.join(USERS_DIR, 'take.json');
             if (fs.existsSync(takePathSingle)) takeDataSingle = JSON.parse(fs.readFileSync(takePathSingle, 'utf-8'));
           } catch { takeDataSingle = {}; }
-          const authorFigurinha = await resolverNomeFigurinha({
+          const nomesSingle = await resolverNomesFigurinha({
             sender,
             takeData: takeDataSingle,
             resolverNick: () => resolverNomeContato(sender, { nazu, metadata: groupMetadata, from, fallback: pushname }),
@@ -30219,8 +30218,8 @@ packname: `${nomebot}`,
           };
           await sendSticker(nazu, from, {
             sticker: buffer,
-            author: authorFigurinha,
-            packname: authorFigurinha,
+            author: nomesSingle.author,
+            packname: nomesSingle.pack,
             type: isVideo2 ? 'video' : 'image',
             forceSquare: true
           }, {
