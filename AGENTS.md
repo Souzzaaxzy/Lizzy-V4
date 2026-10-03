@@ -8691,3 +8691,17 @@ Adicionado em todos os pontos que o `!gay` usa:
 
 Saída no mesmo layout: `😇 *Teste de virgem*` + barra + `NN%` + frase. Baseline
 do `menu-layout`: **menubn 380 -> 381**.
+
+## Comando `!santo` (set/2026) ✅
+Pedido do dono: um `!santo` no **mesmo esquema/layout do `!gay`/`!virgem`**
+(teste de porcentagem da familia BRINCADEIRAS).
+
+Adicionado nos mesmos pontos:
+- **handler**: `case 'santo'` no grupo de porcentagem + `'santo': { emoji: '😇',
+  nome: 'santo' }` no `rateConfig`;
+- **frase**: `gamestext.json` → `"santo"` (molde do `"gay"`, com `#nome#`/`#level#`);
+- **menu**: `│ 😇 ${prefix}santo` na categoria **BRINCADEIRAS**, logo abaixo do
+  `!virgem` (uma única vez);
+- **blockPv**: `'santo'` na lista do `menubn`.
+
+Baseline do `menu-layout`: **menubn 381 -> 382**.

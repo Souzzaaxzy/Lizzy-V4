@@ -130,6 +130,7 @@ ${isLiteMode ? '' : `╭━━━꧁༺ ㅤ🔞 ${boldItalic('INTERAÇÕES "PICA
 │ 💑 ${prefix}hetera
 │ 🏳️ ${prefix}gay
 │ 😇 ${prefix}virgem
+│ 😇 ${prefix}santo
 │ 🏳️ ${prefix}lesbica
 │ 🗿 ${prefix}aura
 │ 🗿 ${prefix}sigma
