@@ -298,8 +298,9 @@ const COMANDOS_POR_MENU = {
   // -> 376 (`!filme` entrou em JOGOS & DIVERSÃO)
   // -> 377 (`!emojiquiz` entrou em JOGOS & DIVERSÃO)
   // -> 379 (`!rankbn` e `!rankbng` entraram na 1a categoria, JOGOS & DIVERSÃO)
-  // -> 380 (`!impostor` entrou em JOGOS & DIVERSÃO).
-  menubn: 380, menufut: 42, menurpg: 149,
+  // -> 380 (`!impostor` entrou em JOGOS & DIVERSÃO)
+  // -> 381 (`!virgem` entrou em BRINCADEIRAS, na familia do `!gay`).
+  menubn: 381, menufut: 42, menurpg: 149,
   // menuvip nao tem comando cadastrado; o `!` contado e o `!addcmdvip` da
   // instrucao ("Use: !addcmdvip"), que no original tambem estava fixo.
   menuvip: 1, menugames: 28,
@@ -329,12 +330,12 @@ await test('16. NENHUM comando se perdeu (contagem por menu vs baseline)', async
   }
 });
 
-await test('17. menubn: os 380 comandos estão TODOS lá (o mais crítico)', async () => {
+await test('17. menubn: os 381 comandos estão TODOS lá (o mais crítico)', async () => {
   const mod = await import(new URL('../dados/src/menus/menubn.js', import.meta.url).href);
   const texto = await mod.default('!', 'Abyss', 'Kannon');
-  eq((texto.match(/!/g) || []).length, 380, '380 comandos no modo completo');
+  eq((texto.match(/!/g) || []).length, 381, '381 comandos no modo completo');
   // Amostras de cada categoria (inclusive as condicionais).
-  for (const c of ['!tictactoe', '!uno criar', '!conselho', '!tapa', '!surubao', '!pgpau', '!medirpau', '!rankputo', '!casal', '!ma', '!aura', '!sigma', '!hetero', '!hetera', '!ceu', '!inferno', '!frio', '!fria', '!rizz', '!delulu', '!skibidi', '!sixseven', '!mogar', '!chad', '!gag', '!quemsoueu', '!filme', '!emojiquiz', '!impostor', '!rankbn', '!rankbng']) {
+  for (const c of ['!tictactoe', '!uno criar', '!conselho', '!tapa', '!surubao', '!pgpau', '!medirpau', '!rankputo', '!casal', '!ma', '!aura', '!sigma', '!hetero', '!hetera', '!ceu', '!inferno', '!frio', '!fria', '!rizz', '!delulu', '!skibidi', '!sixseven', '!mogar', '!chad', '!gag', '!quemsoueu', '!filme', '!emojiquiz', '!impostor', '!virgem', '!rankbn', '!rankbng']) {
     contem(texto, c, `tem ${c}`);
   }
   // Modo LITE: continua escondendo as "picantes" e mantendo o resto.

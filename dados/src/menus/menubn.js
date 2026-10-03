@@ -129,6 +129,7 @@ ${isLiteMode ? '' : `╭━━━꧁༺ ㅤ🔞 ${boldItalic('INTERAÇÕES "PICA
 │ 💑 ${prefix}hetero
 │ 💑 ${prefix}hetera
 │ 🏳️ ${prefix}gay
+│ 😇 ${prefix}virgem
 │ 🏳️ ${prefix}lesbica
 │ 🗿 ${prefix}aura
 │ 🗿 ${prefix}sigma

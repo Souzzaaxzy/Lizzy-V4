@@ -40992,6 +40992,7 @@ case 'hotseat': {
         break;
 
       case 'gay':
+      case 'virgem':
       case 'hetero':
       case 'burro':
       case 'inteligente':
@@ -41132,6 +41133,7 @@ case 'hotseat': {
           
           const rateConfig = {
             'gay': { emoji: '🏳️‍🌈', nome: 'gay' },
+            'virgem': { emoji: '😇', nome: 'virgem' },
             'hetero': { emoji: '💑', nome: 'hétero' },
             'burro': { emoji: '🤪', nome: 'burro' },
             'inteligente': { emoji: '🧠', nome: 'inteligente' },

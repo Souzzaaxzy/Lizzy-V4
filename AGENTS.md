@@ -8675,3 +8675,19 @@ No handler:
 
 Validado ao vivo: `{ author:"", pack:"MeuPacote" }` → pack `name = "MeuPacote"`,
 `publisher = ""`. `tests/sticker-pack.test.js`: **14 testes / 38 asserções**.
+
+## Comando `!virgem` (set/2026) ✅
+Pedido do dono: um `!virgem` no **mesmo esquema/layout do `!gay`** (o "teste de
+porcentagem" da familia BRINCADEIRAS).
+
+Adicionado em todos os pontos que o `!gay` usa:
+- **handler**: `case 'virgem'` no grupo de porcentagem (junto do `gay`/`hetero`),
+  + `'virgem': { emoji: '😇', nome: 'virgem' }` no `rateConfig`;
+- **frases**: `gamestext.json` → `"virgem"` (mesmo molde do `"gay"`, com
+  `#nome#`/`#level#`);
+- **menu**: linha `│ 😇 ${prefix}virgem` na categoria **BRINCADEIRAS**, logo
+  abaixo do `!gay` (uma única vez);
+- **blockPv**: `'virgem'` na lista `menuCommandsMap.menubn`.
+
+Saída no mesmo layout: `😇 *Teste de virgem*` + barra + `NN%` + frase. Baseline
+do `menu-layout`: **menubn 380 -> 381**.
