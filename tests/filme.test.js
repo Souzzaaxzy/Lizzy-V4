@@ -148,7 +148,7 @@ await test('filmes.json: itens com e/r/d/dicas, emojis e sem duplicados', () => 
   const data = JSON.parse(fs.readFileSync(path.join(PROJECT, 'dados/src/funcs/json/filmes.json'), 'utf-8'));
   const lista = data.filmes;
   ok(Array.isArray(lista), 'tem a lista de filmes');
-  ok(lista.length === 121, `121 filmes (veio ${lista?.length})`);
+  ok(lista.length === 282, `282 filmes (veio ${lista?.length})`);
   const displays = new Set();
   for (const x of lista) {
     ok(typeof x.e === 'string' && x.e.trim().length > 0, 'emojis presentes');
@@ -259,6 +259,61 @@ await test('!filme: o filme é sorteado (varia entre partidas)', async () => {
     await rodar(g, `!filme ${game.respostas[0]}`);
   }
   ok(vistos.size >= 2, `emojis variam (${vistos.size} distintos em 20)`);
+});
+
+// ============================================================================
+// 2b) BUG DO CHUTE — ponto/maiúscula/caixa não podem invalidar a resposta
+// ============================================================================
+
+/** Semeia um jogo com o display/respostas que o teste quiser. */
+function semear(g, { display, respostas }) {
+  global.filmeEmojiGames[g] = {
+    emojis: '🦇🃏🏙️',
+    respostas,
+    display,
+    dicas: ['dica 1', 'dica 2'],
+    dicasUsadas: 0,
+    iniciado: Date.now(),
+  };
+}
+
+await test('BUG: display "Batman." aceita o chute "batman" (e variações)', async () => {
+  for (const chute of ['batman', 'Batman', 'BATMAN', 'batman.', 'batman ', ' o batman ']) {
+    const g = makeGroup();
+    semear(g, { display: 'Batman.', respostas: ['batman', 'o cavaleiro das trevas'] });
+    const { text } = await rodar(g, `!filme ${chute}`);
+    includes(text, 'ACERTOU', `chute "${chute}" deveria acertar`);
+    ok(jogoAtivo(g) === null, `jogo encerrado no chute "${chute}"`);
+  }
+});
+
+await test('BUG: a RESPOSTA com ponto/maiúscula também é aceita', async () => {
+  const g = makeGroup();
+  semear(g, { display: 'O Rei Leão', respostas: ['O Rei Leão.', 'Lion King'] });
+  const { text } = await rodar(g, '!filme o rei leao');
+  includes(text, 'ACERTOU', 'acento/ponto na resposta não impedem');
+});
+
+await test('BUG: chute com hífen/espaço é a mesma resposta', async () => {
+  const g = makeGroup();
+  semear(g, { display: 'Homem-Aranha', respostas: ['homem aranha', 'spiderman'] });
+  const { text } = await rodar(g, '!filme homem aranha');
+  includes(text, 'ACERTOU', '"homem aranha" acerta "homem-aranha"');
+});
+
+await test('BUG: não dá falso positivo — "disso" não contém "it"', async () => {
+  const g = makeGroup();
+  semear(g, { display: 'It: A Coisa', respostas: ['it', 'a coisa'] });
+  const { text } = await rodar(g, '!filme acho que nao e nada disso');
+  includes(text, 'Errou', 'frase que contém "disso" NÃO pode acertar "it"');
+  ok(jogoAtivo(g) !== null, 'jogo continua aberto');
+});
+
+await test('!filme: frase com a resposta inteira no meio ainda acerta', async () => {
+  const g = makeGroup();
+  semear(g, { display: 'Batman', respostas: ['batman'] });
+  const { text } = await rodar(g, '!filme eu acho que e o batman');
+  includes(text, 'ACERTOU', 'palavra inteira dentro da frase acerta');
 });
 
 // ============================================================================

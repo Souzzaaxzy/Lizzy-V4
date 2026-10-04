@@ -8185,6 +8185,56 @@ Linha em **JOGOS & DIVERSÃO** do `menubn`, logo abaixo do `!filme`; e
   `menubn`/`blockPv`.
 - `tests/filme.test.js` — agora **12 testes / 520 asserções** (trava 121 filmes).
 
+## `!filme` — +161 filmes (282 no total) + correção do chute (set/2026) ✅
+
+### Banco ampliado: 121 -> **282 filmes**
+`funcs/json/filmes.json` ganhou **161** entradas novas em quatro blocos:
+**Disney** (princesas, personagens e continuações), **heróis** (Marvel/DC e
+outros), **atores/franquias** (Harry Potter, Senhor dos Anéis, Star Wars,
+Missão Impossível, Velozes, Jurassic...) e **extras** (games, esportes, comédia).
+Todas com emojis, respostas e **duas dicas** (as antigas tinham só uma em vários
+casos — o teste do `dica` passou a exigir as duas).
+
+Regras aplicadas na geração (script fora do repo, em `/tmp`):
+- a **resposta base** é sempre derivada do nome de exibição (sem acento/caixa),
+  e aliases são extras — assim "Batman: O Cavaleiro das Trevas" também aceita
+  "batman";
+- **sem display duplicado**, **sem emoji repetido** (dois filmes com os mesmos
+  emojis tornariam o jogo ambíguo) e **sem resposta apontando para dois filmes
+  diferentes** (a única exceção é `batman`, que aponta para Batman e para a
+  variante "O Cavaleiro das Trevas" — é o mesmo herói).
+
+### BUG CORRIGIDO — pontuação/caixa invalidavam o chute
+Relato do dono: o display é "Batman." e o chute "batman" era recusado.
+
+**Causa**: a comparação era `normalizar(r) === chute || chute.includes(normalizar(r))`.
+O `normalizar` do projeto só tira acento e baixa a caixa — **não** tira
+pontuação. Então "batman" ≠ "batman." e o chute era recusado. E o
+`chute.includes(resposta)` tinha o **falso positivo** oposto: com a resposta
+"it", a frase "acho que nao e nada **disso**" era aceita.
+
+**Módulo novo `funcs/utils/answerMatch.js`** (puro):
+- `canonizarResposta` — sem acento, caixa, **pontuação** e espaços;
+- `respostaCorreta(chute, respostas)` — aceita quando o chute é a resposta
+  inteira (ignorando tudo isso) **ou** quando contém a resposta como **palavra/
+  sequência inteira** (nunca como substring solta).
+
+Aplicado nos **quatro** jogos que compartilhavam a mesma linha: `!quiz`,
+`!quemsoueu`, `!filme` e `!emojiquiz` (5 call sites no `index.js`).
+
+### Testes
+- `tests/answer-match.test.js` (novo) — **10 testes / 37 asserções**: o caso do
+  dono (display com ponto e chute limpo, nos dois sentidos), hífen/espaço,
+  acento, o falso positivo do "it"/"disso", e a varredura do banco real
+  (todo display casa consigo mesmo).
+- `tests/filme.test.js` — **17 testes / 1181 asserções**: contagem 282, os 4
+  novos testes de bug pelo **handler real** (semeando o jogo com display
+  "Batman.") e a trava de dicas/emoji/respostas ambíguas.
+- Regressões verdes: `quemsoueu` 12/277, `emojiquiz` 14/1056, `rankbn` 19/79,
+  `impostor` 56/435, `brincadeiras-novas` 39/366, `cmd-suggest` 21/68.
+- **Pré-existentes** (confirmados com `git stash` na baseline, sem relação):
+  `poll-layout` 17 falhas e `menu-layout` 1 falha.
+
 ## `!rankbn` (grupo) e `!rankbng` (global) — pontuação real dos jogos (set/2026) ✅
 Contam os pontos que os jogos de brincadeiras JÁ exibiam ("🏆 +X pontos") mas
 que não eram persistidos. Agora ficam gravados no JSON do grupo.

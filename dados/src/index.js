@@ -1136,6 +1136,7 @@ import {
   conteudoPack,
   resolverNomesFigurinha
 } from './funcs/utils/stickerPack.js';
+import { respostaCorreta as respostaCorretaJogo } from './funcs/utils/answerMatch.js';
 import {
   minJogadores as minJogadoresImpostor,
   parseOpcoesCriar as parseOpcoesCriarImpostor,
@@ -15353,7 +15354,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
         if (global.quizGames[quizKey] && args.length > 0 && !categoriasDisponiveis.includes(args[0].toLowerCase())) {
           const game = global.quizGames[quizKey];
           const resposta = normalizar(args.join(' ').toLowerCase());
-          const acertou = game.respostas.some(r => normalizar(r) === resposta || resposta.includes(normalizar(r)));
+          const acertou = respostaCorretaJogo(resposta, game.respostas);
           delete global.quizGames[quizKey];
           if (acertou) {
             const tempoResposta = ((Date.now() - game.iniciado) / 1000).toFixed(1);
@@ -15444,7 +15445,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
         // Já tem jogo ativo e o jogador mandou um chute.
         if (game && args.length > 0) {
           const chute = normalizar(args.join(' '));
-          const acertou = game.respostas.some(r => normalizar(r) === chute || chute.includes(normalizar(r)));
+          const acertou = respostaCorretaJogo(chute, game.respostas);
           if (!acertou) {
             // Errou: mantém o jogo aberto para o grupo continuar tentando.
             return reply(`❌ *Errou!* Não sou *${args.join(' ')}*.\n\n👤 Continuo sendo um personagem misterioso...\n💭 Tente de novo: ${groupPrefix}quemsoueu [resposta]\n💡 Dica: ${groupPrefix}quemsoueu dica\n🚪 Desistir: ${groupPrefix}quemsoueu pular`);
@@ -15521,7 +15522,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
         // Já tem jogo ativo e o jogador mandou um chute.
         if (game && args.length > 0) {
           const chute = normalizar(args.join(' '));
-          const acertou = game.respostas.some(r => normalizar(r) === chute || chute.includes(normalizar(r)));
+          const acertou = respostaCorretaJogo(chute, game.respostas);
           if (!acertou) {
             // Errou: mantém o jogo aberto para o grupo continuar tentando.
             return reply(`❌ *Errou!* Não é *${args.join(' ')}*.\n\n🎬 Continuo sendo um filme misterioso...\n💭 Tente de novo: ${groupPrefix}filme [resposta]\n💡 Dica: ${groupPrefix}filme dica\n🚪 Desistir: ${groupPrefix}filme pular`);
@@ -15604,7 +15605,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
         // Já tem jogo ativo e o jogador mandou um chute.
         if (game && args.length > 0) {
           const chute = normalizar(args.join(' '));
-          const acertou = game.respostas.some(r => normalizar(r) === chute || chute.includes(normalizar(r)));
+          const acertou = respostaCorretaJogo(chute, game.respostas);
           if (!acertou) {
             // Errou: mantém o jogo aberto para o grupo continuar tentando.
             return reply(`❌ *Errou!* Não é *${args.join(' ')}*.\n\n🧩 Continuo sendo um enigma misterioso...\n💭 Tente de novo: ${groupPrefix}emojiquiz [resposta]\n💡 Dica: ${groupPrefix}emojiquiz dica\n🚪 Desistir: ${groupPrefix}emojiquiz pular`);
@@ -16924,9 +16925,7 @@ Seja específico e recomende opções variadas (populares e menos conhecidas). F
           }
           const perguntaAtual = game.perguntas[game.perguntaAtual];
           const resposta = normalizar(args.join(' ').toLowerCase());
-          const acertou = perguntaAtual.pergunta.r.some(r =>
-            normalizar(r) === resposta || resposta.includes(normalizar(r))
-          );
+          const acertou = respostaCorretaJogo(resposta, perguntaAtual.pergunta.r);
           // Registrar resposta
           if (sender === game.jogador1) {
             game.respostas1.push({ acertou, tempo: Date.now() - game.iniciado });

@@ -1426,6 +1426,1901 @@
         "Comédia com pinguins e Jim Carrey.",
         "Se passa num zoológico."
       ]
+    },
+    {
+      "e": "👸🐸💚",
+      "d": "Tiana",
+      "r": [
+        "tiana",
+        "a tiana"
+      ],
+      "dicas": [
+        "Princesa que vira sapo em Nova Orleans.",
+        "Ela sonha em abrir um restaurante."
+      ]
+    },
+    {
+      "e": "💤🌹🧚",
+      "d": "A Bela Adormecida",
+      "r": [
+        "a bela adormecida",
+        "bela adormecida",
+        "aurora"
+      ],
+      "dicas": [
+        "Princesa amaldicoada por uma fada ma.",
+        "Ela dorme ate um beijo."
+      ]
+    },
+    {
+      "e": "🐭🎩🏰",
+      "d": "Mickey Mouse",
+      "r": [
+        "mickey mouse",
+        "mickey"
+      ],
+      "dicas": [
+        "O rato mais famoso da Disney.",
+        "Usa luvas brancas."
+      ]
+    },
+    {
+      "e": "🦆🎩🚢",
+      "d": "Donald Duck",
+      "r": [
+        "donald duck",
+        "donald",
+        "pato donald"
+      ],
+      "dicas": [
+        "Pato irritadico da Disney.",
+        "Nao usa calca."
+      ]
+    },
+    {
+      "e": "🐶🖤🤍",
+      "d": "Pluto",
+      "r": [
+        "pluto"
+      ],
+      "dicas": [
+        "Cachorro amarelo do Mickey.",
+        "E o cachorro do Mickey."
+      ]
+    },
+    {
+      "e": "🐭👠👗",
+      "d": "Minnie Mouse",
+      "r": [
+        "minnie mouse",
+        "minnie"
+      ],
+      "dicas": [
+        "Namorada do Mickey.",
+        "Usa laco na cabeca."
+      ]
+    },
+    {
+      "e": "🐕🦴🐾",
+      "d": "Goofy",
+      "r": [
+        "goofy",
+        "pateta"
+      ],
+      "dicas": [
+        "Cachorro alto e atrapalhado.",
+        "Amigo do Mickey."
+      ]
+    },
+    {
+      "e": "🐕💛🦊",
+      "d": "A Dama e o Vagabundo",
+      "r": [
+        "a dama e o vagabundo",
+        "dama e o vagabundo"
+      ],
+      "dicas": [
+        "Romance entre uma cachorra de classe e um vira-lata.",
+        "O jantar e espaguete."
+      ]
+    },
+    {
+      "e": "😼🎩🐱",
+      "d": "O Gato de Botas",
+      "r": [
+        "o gato de botas",
+        "gato de botas"
+      ],
+      "dicas": [
+        "Gato espadachim de botas.",
+        "Aparece no Shrek."
+      ]
+    },
+    {
+      "e": "🧜‍♀️🎶🔱",
+      "d": "Moana 2",
+      "r": [
+        "moana 2",
+        "moana dois"
+      ],
+      "dicas": [
+        "A continuacao da Moana.",
+        "A protagonista navega pelo oceano."
+      ]
+    },
+    {
+      "e": "🤠🐍🌵",
+      "d": "Toy Story 2",
+      "r": [
+        "toy story 2"
+      ],
+      "dicas": [
+        "A continuacao do Toy Story.",
+        "Um colecionador de brinquedos rouba o Woody."
+      ]
+    },
+    {
+      "e": "🤠🚀🌙",
+      "d": "Toy Story 3",
+      "r": [
+        "toy story 3"
+      ],
+      "dicas": [
+        "A continuacao do Toy Story 2.",
+        "Os brinquedos vao parar numa creche."
+      ]
+    },
+    {
+      "e": "🤠🧸4️⃣",
+      "d": "Toy Story 4",
+      "r": [
+        "toy story 4"
+      ],
+      "dicas": [
+        "Aparece a boneca Gabby Gabby.",
+        "O Woody conhece a Betty."
+      ]
+    },
+    {
+      "e": "🧸🚀🌟",
+      "d": "Buzz Lightyear",
+      "r": [
+        "buzz lightyear",
+        "buzz"
+      ],
+      "dicas": [
+        "O astronauta do Toy Story.",
+        "Frase: ao infinito e alem."
+      ]
+    },
+    {
+      "e": "🤠🐴🎯",
+      "d": "Woody",
+      "r": [
+        "woody"
+      ],
+      "dicas": [
+        "O cowboy de brinquedo do Toy Story.",
+        "Ele tem uma cordinha nas costas."
+      ]
+    },
+    {
+      "e": "🚗🔥🏁",
+      "d": "Carros 2",
+      "r": [
+        "carros 2"
+      ],
+      "dicas": [
+        "A continuacao do Carros.",
+        "A corrida acontece em Tóquio."
+      ]
+    },
+    {
+      "e": "🚗🏜️🎬",
+      "d": "Carros 3",
+      "r": [
+        "carros 3"
+      ],
+      "dicas": [
+        "A continuacao do Carros 2.",
+        "O McQueen treina uma novata."
+      ]
+    },
+    {
+      "e": "🚗🏎️9️⃣5️⃣",
+      "d": "Relampago McQueen",
+      "r": [
+        "relampago mcqueen",
+        "mcqueen",
+        "relampago"
+      ],
+      "dicas": [
+        "Carro de corrida vermelho.",
+        "Numero 95."
+      ]
+    },
+    {
+      "e": "👧🎈🌌",
+      "d": "Lilo e Stitch",
+      "r": [
+        "lilo e stitch"
+      ],
+      "dicas": [
+        "Menina havaiana e um alien azul.",
+        "A menina se chama Lilo."
+      ]
+    },
+    {
+      "e": "👽🌺🏄",
+      "d": "Stitch",
+      "r": [
+        "stitch"
+      ],
+      "dicas": [
+        "Alien azul chamado Experimento 626.",
+        "Ele veio de outro planeta."
+      ]
+    },
+    {
+      "e": "🐕🦴🎬",
+      "d": "Bolt",
+      "r": [
+        "bolt"
+      ],
+      "dicas": [
+        "Cachorro que acha que tem superpoderes.",
+        "Ele e um cachorro branco de serie de TV."
+      ]
+    },
+    {
+      "e": "❄️👸🏔️",
+      "d": "Frozen II",
+      "r": [
+        "frozen ii",
+        "frozen 2",
+        "frozen dois"
+      ],
+      "dicas": [
+        "A continuacao do Frozen.",
+        "A Elsa descobre a origem dos poderes."
+      ]
+    },
+    {
+      "e": "🐻❄️👑🔮",
+      "d": "Elsa",
+      "r": [
+        "elsa"
+      ],
+      "dicas": [
+        "Rainha do gelo do Frozen.",
+        "Ela canta Let It Go."
+      ]
+    },
+    {
+      "e": "👸🍂🌊",
+      "d": "Anna",
+      "r": [
+        "anna"
+      ],
+      "dicas": [
+        "Irma da Elsa, do Frozen.",
+        "Ela e a irma ruiva."
+      ]
+    },
+    {
+      "e": "☃️🥕🌨️",
+      "d": "Olaf",
+      "r": [
+        "olaf"
+      ],
+      "dicas": [
+        "Boneco de neve que adora abracos.",
+        "Ele derrete no calor."
+      ]
+    },
+    {
+      "e": "🐉🧔🔥",
+      "d": "Como Treinar Seu Dragao 2",
+      "r": [
+        "como treinar seu dragao 2"
+      ],
+      "dicas": [
+        "A continuacao do Como Treinar Seu Dragao.",
+        "O Soluco ja e adulto."
+      ]
+    },
+    {
+      "e": "🐉🧔⚡",
+      "d": "Banguela",
+      "r": [
+        "banguela",
+        "toothless"
+      ],
+      "dicas": [
+        "O dragao Furia da Noite.",
+        "Amigo do Soluco."
+      ]
+    },
+    {
+      "e": "🐧🏝️🎶",
+      "d": "Madagascar 2",
+      "r": [
+        "madagascar 2"
+      ],
+      "dicas": [
+        "A continuacao do Madagascar.",
+        "Os animais vao para a Africa."
+      ]
+    },
+    {
+      "e": "🦁👑🌍",
+      "d": "O Rei Leao II",
+      "r": [
+        "o rei leao ii",
+        "rei leao 2"
+      ],
+      "dicas": [
+        "A continuacao do Rei Leao.",
+        "A protagonista e a Kiara."
+      ]
+    },
+    {
+      "e": "💀🎸🎶",
+      "d": "Coco",
+      "r": [
+        "coco"
+      ],
+      "dicas": [
+        "Animacao da Pixar sobre o Dia dos Mortos.",
+        "O menino se chama Miguel."
+      ]
+    },
+    {
+      "e": "🦁🌅👑",
+      "d": "Simba",
+      "r": [
+        "simba"
+      ],
+      "dicas": [
+        "O filhote de leao do Rei Leao.",
+        "Ele e o filho do Mufasa."
+      ]
+    },
+    {
+      "e": "🦁😈🌵",
+      "d": "Scar",
+      "r": [
+        "scar"
+      ],
+      "dicas": [
+        "O tio malvado do Simba.",
+        "Ele tem uma cicatriz no olho."
+      ]
+    },
+    {
+      "e": "🐗🍖🌴",
+      "d": "Timao",
+      "r": [
+        "timao",
+        "timon"
+      ],
+      "dicas": [
+        "O suricato amigo do Simba.",
+        "Ele vive com o Pumba."
+      ]
+    },
+    {
+      "e": "🐗🐗🌴",
+      "d": "Pumba",
+      "r": [
+        "pumba"
+      ],
+      "dicas": [
+        "O javali amigo do Simba.",
+        "Ele e o javali companheiro do Timao."
+      ]
+    },
+    {
+      "e": "🦊🐰🏙️",
+      "d": "Zootopia",
+      "r": [
+        "zootopia",
+        "zootropolis"
+      ],
+      "dicas": [
+        "Animais antropomorficos numa cidade.",
+        "A cidade tem bairros de gelo e de selva."
+      ]
+    },
+    {
+      "e": "🐰👮🦊",
+      "d": "Judy Hopps",
+      "r": [
+        "judy hopps",
+        "judy"
+      ],
+      "dicas": [
+        "Coelha policial de Zootopia.",
+        "Ela e a primeira coelha policial."
+      ]
+    },
+    {
+      "e": "🦊😼🏙️",
+      "d": "Nick Wilde",
+      "r": [
+        "nick wilde",
+        "nick"
+      ],
+      "dicas": [
+        "Raposa vigarista de Zootopia.",
+        "Ele e uma raposa esperta."
+      ]
+    },
+    {
+      "e": "🐀👨‍🍳🧀",
+      "d": "Remy",
+      "r": [
+        "remy"
+      ],
+      "dicas": [
+        "Rato chef de cozinha do Ratatouille.",
+        "Ele controla o Linguini por baixo do chapeu."
+      ]
+    },
+    {
+      "e": "🐟🌊🦈",
+      "d": "Marlin",
+      "r": [
+        "marlin"
+      ],
+      "dicas": [
+        "O pai do Nemo.",
+        "Ele e um peixe palhaco."
+      ]
+    },
+    {
+      "e": "🐻🌲💧",
+      "d": "Koda",
+      "r": [
+        "koda"
+      ],
+      "dicas": [
+        "O filhote de urso do Irmao Urso.",
+        "Ele e adotado por um urso maior."
+      ]
+    },
+    {
+      "e": "🦸‍♂️⚡🔨",
+      "d": "Os Vingadores",
+      "r": [
+        "os vingadores",
+        "vingadores",
+        "avengers"
+      ],
+      "dicas": [
+        "Reune varios herois da Marvel.",
+        "Tem o Homem de Ferro e o Thor."
+      ]
+    },
+    {
+      "e": "🤖❤️🦾",
+      "d": "Homem de Ferro",
+      "r": [
+        "homem de ferro",
+        "iron man",
+        "tony stark"
+      ],
+      "dicas": [
+        "Bilionario em armadura tecnologica.",
+        "Seu nome e Tony Stark."
+      ]
+    },
+    {
+      "e": "🐜🦸‍♀️💥",
+      "d": "Vespa",
+      "r": [
+        "vespa",
+        "a vespa",
+        "wasp"
+      ],
+      "dicas": [
+        "Parceira do Homem-Formiga.",
+        "Ela e a Hope van Dyne."
+      ]
+    },
+    {
+      "e": "🕷️🕸️🧑‍🎓",
+      "d": "Homem-Aranha 2",
+      "r": [
+        "homem-aranha 2",
+        "homem aranha 2"
+      ],
+      "dicas": [
+        "A continuacao do Homem-Aranha.",
+        "O vilao e o Doutor Octopus."
+      ]
+    },
+    {
+      "e": "🕷️🌌🕸️",
+      "d": "Homem-Aranha no Aranhaverso",
+      "r": [
+        "homem-aranha no aranhaverso",
+        "aranhaverso"
+      ],
+      "dicas": [
+        "Animacao com varios Homens-Aranha.",
+        "O protagonista e o Miles."
+      ]
+    },
+    {
+      "e": "🦇🏍️🌃",
+      "d": "Batman: O Cavaleiro das Trevas",
+      "r": [
+        "batman",
+        "batman: o cavaleiro das trevas",
+        "o cavaleiro das trevas"
+      ],
+      "dicas": [
+        "O Coringa e o vilao.",
+        "Tem o ator Heath Ledger."
+      ]
+    },
+    {
+      "e": "🦇🦸‍♂️🤝",
+      "d": "Batman v Superman",
+      "r": [
+        "batman v superman",
+        "batman vs superman"
+      ],
+      "dicas": [
+        "Batalha entre Batman e Superman.",
+        "Os dois herois brigam por causa do Superman."
+      ]
+    },
+    {
+      "e": "🦇🃏💚",
+      "d": "Coringa",
+      "r": [
+        "coringa"
+      ],
+      "dicas": [
+        "Vilao palhaco de Gotham.",
+        "Ele trabalha como palhaco de rua."
+      ]
+    },
+    {
+      "e": "🦇🐈🖤",
+      "d": "Mulher-Gato",
+      "r": [
+        "mulher-gato",
+        "mulher gato",
+        "catwoman"
+      ],
+      "dicas": [
+        "Ladra felina de Gotham.",
+        "Ela usa um colar com garras."
+      ]
+    },
+    {
+      "e": "🦸‍♂️🔥💀",
+      "d": "Motoqueiro Fantasma",
+      "r": [
+        "motoqueiro fantasma",
+        "ghost rider"
+      ],
+      "dicas": [
+        "Caveira em chamas numa moto.",
+        "O heroi faz um pacto com o demonio."
+      ]
+    },
+    {
+      "e": "🦸‍♂️💎🔨",
+      "d": "Doutor Estranho",
+      "r": [
+        "doutor estranho",
+        "dr estranho"
+      ],
+      "dicas": [
+        "Mago que abre portais.",
+        "Ele era um cirurgiao antes de ser mago."
+      ]
+    },
+    {
+      "e": "🦸‍♂️🐍🌌",
+      "d": "Doutor Estranho no Multiverso da Loucura",
+      "r": [
+        "doutor estranho no multiverso da loucura",
+        "multiverso da loucura"
+      ],
+      "dicas": [
+        "A continuacao do Doutor Estranho.",
+        "Aparece a Feiticeira Escarlate."
+      ]
+    },
+    {
+      "e": "🦸‍♂️🐜🌌",
+      "d": "Homem-Formiga e a Vespa",
+      "r": [
+        "homem-formiga e a vespa",
+        "homem formiga e a vespa"
+      ],
+      "dicas": [
+        "Dupla de herois que encolhem.",
+        "Eles encolhem e crescem de tamanho."
+      ]
+    },
+    {
+      "e": "🦸‍♂️🖤🌌",
+      "d": "Venom",
+      "r": [
+        "venom"
+      ],
+      "dicas": [
+        "Simbiote alienigena.",
+        "O hospedeiro e o jornalista Eddie Brock."
+      ]
+    },
+    {
+      "e": "🦸‍♂️🕸️🖤",
+      "d": "Venom: Tempo de Carnificina",
+      "r": [
+        "venom: tempo de carnificina",
+        "tempo de carnificina"
+      ],
+      "dicas": [
+        "Tem o vilao Carnificina.",
+        "O vilao e o serial killer Cletus."
+      ]
+    },
+    {
+      "e": "🦸‍♂️🐾🌙",
+      "d": "Pantera Negra 2",
+      "r": [
+        "pantera negra 2",
+        "wakanda forever"
+      ],
+      "dicas": [
+        "A continuacao do Pantera Negra.",
+        "A historia acontece depois da morte do T'Challa."
+      ]
+    },
+    {
+      "e": "🦸‍♂️⚡🌩️",
+      "d": "Thor: Ragnarok",
+      "r": [
+        "thor: ragnarok",
+        "ragnarok"
+      ],
+      "dicas": [
+        "O Hulk aparece nesse filme.",
+        "A irma vilã e a Hela."
+      ]
+    },
+    {
+      "e": "🦸‍♂️💚🔨",
+      "d": "Hulk",
+      "r": [
+        "hulk",
+        "o incrivel hulk"
+      ],
+      "dicas": [
+        "Cientista que vira gigante verde.",
+        "Ele fica verde quando fica nervoso."
+      ]
+    },
+    {
+      "e": "🦸‍♂️🦾🔴",
+      "d": "Homem de Ferro 3",
+      "r": [
+        "homem de ferro 3",
+        "iron man 3"
+      ],
+      "dicas": [
+        "A continuacao do Homem de Ferro.",
+        "O vilao e o Mandarim."
+      ]
+    },
+    {
+      "e": "🦸‍♀️🌟💥",
+      "d": "Capitã Marvel 2",
+      "r": [
+        "capita marvel 2",
+        "as marvels"
+      ],
+      "dicas": [
+        "A continuacao da Capita Marvel.",
+        "As heroinas trocam de lugar entre si."
+      ]
+    },
+    {
+      "e": "🦸‍♂️🛡️🇺🇸",
+      "d": "Capitão América: Soldado Invernal",
+      "r": [
+        "capitao america: soldado invernal",
+        "soldado invernal"
+      ],
+      "dicas": [
+        "Tem o Soldado Invernal.",
+        "O inimigo e o melhor amigo do Steve."
+      ]
+    },
+    {
+      "e": "🦸‍♂️🕰️🌌",
+      "d": "Guardiões da Galáxia",
+      "r": [
+        "guardioes da galaxia",
+        "guardians of the galaxy"
+      ],
+      "dicas": [
+        "Tem um guaxinim e uma arvore falante.",
+        "A trilha sonora e dos anos 70."
+      ]
+    },
+    {
+      "e": "🦝🌳🚀",
+      "d": "Guardiões da Galáxia Vol. 2",
+      "r": [
+        "guardioes da galaxia vol. 2",
+        "guardioes da galaxia 2"
+      ],
+      "dicas": [
+        "A continuacao dos Guardioes.",
+        "O pai do Peter Quill aparece."
+      ]
+    },
+    {
+      "e": "🦸‍♂️🌌🦝",
+      "d": "Rocket Raccoon",
+      "r": [
+        "rocket raccoon",
+        "rocket"
+      ],
+      "dicas": [
+        "Guaxinim que fala.",
+        "Ele e um guaxinim que conserta armas."
+      ]
+    },
+    {
+      "e": "🌳🦸‍♂️💬",
+      "d": "Groot",
+      "r": [
+        "groot"
+      ],
+      "dicas": [
+        "Arvore que so fala Eu sou Groot.",
+        "Ele e uma arvore falante."
+      ]
+    },
+    {
+      "e": "🦸‍♂️🟢💍",
+      "d": "Besouro Verde",
+      "r": [
+        "besouro verde",
+        "lanterna verde",
+        "green lantern"
+      ],
+      "dicas": [
+        "Heroi verde com um anel de poder.",
+        "O heroi usa um anel alienigena."
+      ]
+    },
+    {
+      "e": "🐢🔴🥷",
+      "d": "Raphael",
+      "r": [
+        "raphael",
+        "rafael"
+      ],
+      "dicas": [
+        "Tartaruga ninja de faixa vermelha.",
+        "Ele e o mais nervoso das tartarugas."
+      ]
+    },
+    {
+      "e": "🐢🔵🥷",
+      "d": "Leonardo",
+      "r": [
+        "leonardo"
+      ],
+      "dicas": [
+        "Tartaruga ninja de faixa azul.",
+        "Ele e o lider das tartarugas."
+      ]
+    },
+    {
+      "e": "🐢🟠🥷",
+      "d": "Michelangelo",
+      "r": [
+        "michelangelo",
+        "michelanjelo"
+      ],
+      "dicas": [
+        "Tartaruga ninja de faixa laranja.",
+        "Ele e o mais brincalhao das tartarugas."
+      ]
+    },
+    {
+      "e": "🐢🟣🥷",
+      "d": "Donatello",
+      "r": [
+        "donatello"
+      ],
+      "dicas": [
+        "Tartaruga ninja de faixa roxa.",
+        "Ele e o mais inteligente das tartarugas."
+      ]
+    },
+    {
+      "e": "🦸‍♂️🦯🏙️",
+      "d": "Demolidor",
+      "r": [
+        "demolidor",
+        "daredevil"
+      ],
+      "dicas": [
+        "Heroi cego de Nova York.",
+        "Ele perdeu a visao quando era crianca."
+      ]
+    },
+    {
+      "e": "🦸‍♂️⚔️🌩️",
+      "d": "Punho de Ferro",
+      "r": [
+        "punho de ferro",
+        "iron fist"
+      ],
+      "dicas": [
+        "Heroi com punhos de ferro.",
+        "Ele treinou numa cidade mística."
+      ]
+    },
+    {
+      "e": "🦸‍♂️🟣🐉",
+      "d": "Shang-Chi",
+      "r": [
+        "shang-chi",
+        "shang chi"
+      ],
+      "dicas": [
+        "Heroi mestre das artes marciais.",
+        "Tem a lenda dos dez aneis."
+      ]
+    },
+    {
+      "e": "🦸‍♂️🌊🔱",
+      "d": "Aquaman 2",
+      "r": [
+        "aquaman 2"
+      ],
+      "dicas": [
+        "A continuacao do Aquaman.",
+        "O vilao e o Arraia Negra."
+      ]
+    },
+    {
+      "e": "🦸‍♂️⚡⚫",
+      "d": "Adão Negro",
+      "r": [
+        "adao negro",
+        "black adam"
+      ],
+      "dicas": [
+        "Anti-heroi com poderes magicos.",
+        "O ator e o Dwayne Johnson."
+      ]
+    },
+    {
+      "e": "🦸‍♀️🕸️💫",
+      "d": "Mulher-Aranha",
+      "r": [
+        "mulher-aranha",
+        "spider woman"
+      ],
+      "dicas": [
+        "Versao feminina do heroi aracnideo.",
+        "Ela e uma versao do universo alternativo."
+      ]
+    },
+    {
+      "e": "🦸‍♂️🟢🛡️",
+      "d": "Doutor Destino",
+      "r": [
+        "doutor destino",
+        "dr destino",
+        "dr doom"
+      ],
+      "dicas": [
+        "Vilao com armadura verde do Quarteto Fantastico.",
+        "Ele e o vilao do Quarteto Fantastico."
+      ]
+    },
+    {
+      "e": "🦸‍♂️🟣💪",
+      "d": "Thanos",
+      "r": [
+        "thanos"
+      ],
+      "dicas": [
+        "Vilao que quer as joias do infinito.",
+        "Ele estala os dedos."
+      ]
+    },
+    {
+      "e": "🦸‍♂️🟢🐍",
+      "d": "Loki",
+      "r": [
+        "loki"
+      ],
+      "dicas": [
+        "Irmao adotivo do Thor.",
+        "Deus da trapacearia."
+      ]
+    },
+    {
+      "e": "🦸‍♂️🤖🔴",
+      "d": "Ultron",
+      "r": [
+        "ultron"
+      ],
+      "dicas": [
+        "Inteligencia artificial vilã dos Vingadores.",
+        "Ele e um robo que quer destruir a humanidade."
+      ]
+    },
+    {
+      "e": "🕶️🥋2️⃣",
+      "d": "Matrix 2",
+      "r": [
+        "matrix 2",
+        "matrix reloaded"
+      ],
+      "dicas": [
+        "A continuacao do Matrix.",
+        "Neo luta contra varios agentes Smith."
+      ]
+    },
+    {
+      "e": "🕶️🤖3️⃣",
+      "d": "Matrix Revolutions",
+      "r": [
+        "matrix revolutions"
+      ],
+      "dicas": [
+        "O terceiro filme do Matrix.",
+        "A batalha final acontece em Zion."
+      ]
+    },
+    {
+      "e": "🥋🐝2️⃣",
+      "d": "Karatê Kid 2",
+      "r": [
+        "karate kid 2"
+      ],
+      "dicas": [
+        "A continuacao do Karate Kid.",
+        "O Daniel viaja para o Japao."
+      ]
+    },
+    {
+      "e": "🥋🐉3️⃣",
+      "d": "Karatê Kid 3",
+      "r": [
+        "karate kid 3"
+      ],
+      "dicas": [
+        "A terceira parte do Karate Kid.",
+        "O mestre Miyagi treina o Daniel de novo."
+      ]
+    },
+    {
+      "e": "🕵️🔫2️⃣",
+      "d": "Missão Impossível 2",
+      "r": [
+        "missao impossivel 2"
+      ],
+      "dicas": [
+        "A continuacao do Missao Impossivel.",
+        "O Ethan Hunt escala uma montanha."
+      ]
+    },
+    {
+      "e": "🕵️🔫🏍️",
+      "d": "Missão Impossível: Fallout",
+      "r": [
+        "missao impossivel: fallout",
+        "fallout"
+      ],
+      "dicas": [
+        "Tem uma cena de helicoptero.",
+        "O Ethan Hunt persegue um vilao em Paris."
+      ]
+    },
+    {
+      "e": "🕵️🔫🚂",
+      "d": "Missão Impossível: Acerto de Contas",
+      "r": [
+        "missao impossivel: acerto de contas",
+        "acerto de contas"
+      ],
+      "dicas": [
+        "Tem uma cena de trem.",
+        "O vilao e a Inteligencia Artificial."
+      ]
+    },
+    {
+      "e": "🕵️🕶️💻",
+      "d": "Jason Bourne",
+      "r": [
+        "jason bourne"
+      ],
+      "dicas": [
+        "Espiao com amnesia.",
+        "O ator e o Matt Damon."
+      ]
+    },
+    {
+      "e": "🕵️🍸🔫",
+      "d": "007: Cassino Royale",
+      "r": [
+        "007: cassino royale",
+        "cassino royale"
+      ],
+      "dicas": [
+        "O primeiro Bond com Daniel Craig.",
+        "O Bond joga poker em Montenegro."
+      ]
+    },
+    {
+      "e": "🕵️🍸🇬🇧",
+      "d": "James Bond",
+      "r": [
+        "james bond",
+        "007",
+        "bond"
+      ],
+      "dicas": [
+        "Espiao britanico codigo 007.",
+        "Gosta de martini."
+      ]
+    },
+    {
+      "e": "🧙‍♂️⚡🏰",
+      "d": "Harry Potter e a Pedra Filosofal",
+      "r": [
+        "harry potter e a pedra filosofal",
+        "pedra filosofal"
+      ],
+      "dicas": [
+        "O primeiro filme do Harry Potter.",
+        "O Harry descobre que e um bruxo."
+      ]
+    },
+    {
+      "e": "🧙‍♂️🐍🏰",
+      "d": "Harry Potter e a Camara Secreta",
+      "r": [
+        "harry potter e a camara secreta",
+        "camara secreta"
+      ],
+      "dicas": [
+        "O segundo filme do Harry Potter.",
+        "Aparece um basilisco."
+      ]
+    },
+    {
+      "e": "🧙‍♂️🦌🏰",
+      "d": "Harry Potter e o Prisioneiro de Azkaban",
+      "r": [
+        "harry potter e o prisioneiro de azkaban",
+        "prisioneiro de azkaban"
+      ],
+      "dicas": [
+        "O terceiro filme do Harry Potter.",
+        "O padrinho do Harry aparece."
+      ]
+    },
+    {
+      "e": "🧙‍♂️🔥🏆",
+      "d": "Harry Potter e o Calice de Fogo",
+      "r": [
+        "harry potter e o calice de fogo",
+        "calice de fogo"
+      ],
+      "dicas": [
+        "O quarto filme do Harry Potter.",
+        "O torneio tem tres provas."
+      ]
+    },
+    {
+      "e": "🧙‍♂️🐸🏰",
+      "d": "Harry Potter e a Ordem da Fênix",
+      "r": [
+        "harry potter e a ordem da fenix",
+        "ordem da fenix"
+      ],
+      "dicas": [
+        "O quinto filme do Harry Potter.",
+        "A Umbridge aparece."
+      ]
+    },
+    {
+      "e": "🧙‍♂️🕳️🏰",
+      "d": "Harry Potter e o Enigma do Príncipe",
+      "r": [
+        "harry potter e o enigma do principe",
+        "enigma do principe"
+      ],
+      "dicas": [
+        "O sexto filme do Harry Potter.",
+        "O Dumbledore morre."
+      ]
+    },
+    {
+      "e": "🧙‍♂️💀🏰",
+      "d": "Harry Potter e as Relíquias da Morte",
+      "r": [
+        "harry potter e as reliquias da morte",
+        "reliquias da morte"
+      ],
+      "dicas": [
+        "O final do Harry Potter.",
+        "O Harry caça os Horcruxes."
+      ]
+    },
+    {
+      "e": "🧝‍♂️💍2️⃣",
+      "d": "O Senhor dos Anéis: As Duas Torres",
+      "r": [
+        "o senhor dos aneis: as duas torres",
+        "as duas torres"
+      ],
+      "dicas": [
+        "O segundo filme da trilogia.",
+        "A batalha acontece no Abismo de Helm."
+      ]
+    },
+    {
+      "e": "🧝‍♂️💍3️⃣",
+      "d": "O Senhor dos Anéis: O Retorno do Rei",
+      "r": [
+        "o senhor dos aneis: o retorno do rei",
+        "o retorno do rei"
+      ],
+      "dicas": [
+        "O terceiro filme da trilogia.",
+        "O anel e destruido no Monte da Perdicao."
+      ]
+    },
+    {
+      "e": "🧝‍♂️🌋🪨",
+      "d": "Gollum",
+      "r": [
+        "gollum"
+      ],
+      "dicas": [
+        "Criatura obcecada pelo anel.",
+        "Ele chama o anel de meu precioso."
+      ]
+    },
+    {
+      "e": "🧝‍♂️🧙‍♂️🔥",
+      "d": "Gandalf",
+      "r": [
+        "gandalf"
+      ],
+      "dicas": [
+        "O mago da Terra Media.",
+        "Ele diz: voce nao pode passar."
+      ]
+    },
+    {
+      "e": "🧝‍♂️🐉🏹",
+      "d": "O Hobbit: A Desolacao de Smaug",
+      "r": [
+        "o hobbit: a desolacao de smaug",
+        "a desolacao de smaug",
+        "smaug"
+      ],
+      "dicas": [
+        "O segundo filme do Hobbit.",
+        "O dragao Smaug guarda um tesouro."
+      ]
+    },
+    {
+      "e": "🧝‍♂️⚔️👑",
+      "d": "O Hobbit: A Batalha dos Cinco Exércitos",
+      "r": [
+        "o hobbit: a batalha dos cinco exercitos",
+        "batalha dos cinco exercitos"
+      ],
+      "dicas": [
+        "O terceiro filme do Hobbit.",
+        "Humanos, elfos e anoes se unem."
+      ]
+    },
+    {
+      "e": "🚀⚔️🌌",
+      "d": "Star Wars: O Império Contra-Ataca",
+      "r": [
+        "star wars: o imperio contra-ataca",
+        "o imperio contra ataca",
+        "imperio contra ataca"
+      ],
+      "dicas": [
+        "O segundo filme da trilogia original.",
+        "O Luke descobre quem e o pai dele."
+      ]
+    },
+    {
+      "e": "🚀⚔️👑",
+      "d": "Star Wars: O Retorno de Jedi",
+      "r": [
+        "star wars: o retorno de jedi",
+        "o retorno de jedi",
+        "retorno de jedi"
+      ],
+      "dicas": [
+        "O terceiro filme da trilogia original.",
+        "O Luke enfrenta o Imperador."
+      ]
+    },
+    {
+      "e": "🚀🌌😱",
+      "d": "Star Wars: A Ameaça Fantasma",
+      "r": [
+        "star wars: a ameaca fantasma",
+        "a ameaca fantasma",
+        "ameaca fantasma"
+      ],
+      "dicas": [
+        "O primeiro episodio da nova trilogia.",
+        "Aparece o menino Anakin."
+      ]
+    },
+    {
+      "e": "🚀⚔️💥",
+      "d": "Star Wars: A Vingança dos Sith",
+      "r": [
+        "star wars: a vinganca dos sith",
+        "a vinganca dos sith",
+        "vinganca dos sith"
+      ],
+      "dicas": [
+        "A origem do Darth Vader.",
+        "O Anakin vira Darth Vader."
+      ]
+    },
+    {
+      "e": "⚫🎭🌌",
+      "d": "Darth Vader",
+      "r": [
+        "darth vader",
+        "vader"
+      ],
+      "dicas": [
+        "Vilao de Star Wars.",
+        "E o pai do Luke."
+      ]
+    },
+    {
+      "e": "🟢⚔️🌟",
+      "d": "Yoda",
+      "r": [
+        "yoda"
+      ],
+      "dicas": [
+        "Mestre Jedi verde e pequeno.",
+        "Ele fala de tras para frente."
+      ]
+    },
+    {
+      "e": "🦾🚀🌌",
+      "d": "The Mandalorian",
+      "r": [
+        "the mandalorian",
+        "mandaloriano"
+      ],
+      "dicas": [
+        "Serie do universo Star Wars.",
+        "Ele carrega o Baby Yoda."
+      ]
+    },
+    {
+      "e": "🏹🔥🌲",
+      "d": "Jogos Vorazes",
+      "r": [
+        "jogos vorazes",
+        "hunger games"
+      ],
+      "dicas": [
+        "Jovens lutam ate a morte.",
+        "A heroina e a Katniss."
+      ]
+    },
+    {
+      "e": "🏹🕊️🔥",
+      "d": "Jogos Vorazes: Em Chamas",
+      "r": [
+        "jogos vorazes: em chamas",
+        "em chamas"
+      ],
+      "dicas": [
+        "A continuacao de Jogos Vorazes.",
+        "A Katniss volta para a arena."
+      ]
+    },
+    {
+      "e": "🐉👸⚔️",
+      "d": "Shrek 2",
+      "r": [
+        "shrek 2"
+      ],
+      "dicas": [
+        "A continuacao do Shrek.",
+        "Aparece o Gato de Botas."
+      ]
+    },
+    {
+      "e": "🐉👸🐴",
+      "d": "Burro",
+      "r": [
+        "burro",
+        "o burro"
+      ],
+      "dicas": [
+        "O burro falante amigo do Shrek.",
+        "Ele e o melhor amigo do Shrek."
+      ]
+    },
+    {
+      "e": "🧛🌙🩸",
+      "d": "Crepúsculo: Lua Nova",
+      "r": [
+        "crepusculo: lua nova",
+        "lua nova"
+      ],
+      "dicas": [
+        "A continuacao do Crepusculo.",
+        "A Bella fica depressiva."
+      ]
+    },
+    {
+      "e": "🧛🌑💔",
+      "d": "Crepúsculo: Eclipse",
+      "r": [
+        "crepusculo: eclipse",
+        "eclipse"
+      ],
+      "dicas": [
+        "A terceira parte da saga Crepusculo.",
+        "A Bella precisa escolher entre Edward e Jacob."
+      ]
+    },
+    {
+      "e": "🧟🧠🏃",
+      "d": "Zumbilândia",
+      "r": [
+        "zumbilandia",
+        "zombieland"
+      ],
+      "dicas": [
+        "Comedia com zumbis.",
+        "As regras de sobrevivencia sao numeradas."
+      ]
+    },
+    {
+      "e": "🧟🚂🏃",
+      "d": "Trem para Busan",
+      "r": [
+        "trem para busan",
+        "train to busan"
+      ],
+      "dicas": [
+        "Filme de zumbi coreano.",
+        "A historia se passa dentro de um trem."
+      ]
+    },
+    {
+      "e": "🎭👑🗡️",
+      "d": "Hamlet",
+      "r": [
+        "hamlet"
+      ],
+      "dicas": [
+        "Adaptacao da peca de Shakespeare.",
+        "O principe da Dinamarca busca vinganca."
+      ]
+    },
+    {
+      "e": "🎭💀🗡️",
+      "d": "Romeu e Julieta",
+      "r": [
+        "romeu e julieta"
+      ],
+      "dicas": [
+        "Tragedia de Shakespeare.",
+        "As familias sao os Montecchio e os Capuleto."
+      ]
+    },
+    {
+      "e": "🏎️🔧💥",
+      "d": "Need for Speed",
+      "r": [
+        "need for speed"
+      ],
+      "dicas": [
+        "Filme baseado no jogo de corrida.",
+        "O protagonista e um piloto de rua."
+      ]
+    },
+    {
+      "e": "🎮🍄🏰",
+      "d": "Super Mario Bros",
+      "r": [
+        "super mario bros",
+        "mario",
+        "super mario"
+      ],
+      "dicas": [
+        "Filme baseado no jogo do encanador.",
+        "Tem o Luigi e a Princesa Peach."
+      ]
+    },
+    {
+      "e": "🎮🦔💨",
+      "d": "Sonic",
+      "r": [
+        "sonic",
+        "o filme do sonic"
+      ],
+      "dicas": [
+        "Ourico azul veloz.",
+        "Ele e azul e corre na velocidade do som."
+      ]
+    },
+    {
+      "e": "🎮👻🔦",
+      "d": "Sonic 2",
+      "r": [
+        "sonic 2"
+      ],
+      "dicas": [
+        "A continuacao do Sonic.",
+        "Aparece o Knuckles."
+      ]
+    },
+    {
+      "e": "🎮🐊👊",
+      "d": "Mortal Kombat",
+      "r": [
+        "mortal kombat"
+      ],
+      "dicas": [
+        "Filme baseado no jogo de luta.",
+        "Tem o Scorpion e o Sub-Zero."
+      ]
+    },
+    {
+      "e": "🎮🔫💥",
+      "d": "Doom",
+      "r": [
+        "doom"
+      ],
+      "dicas": [
+        "Filme baseado no jogo de tiro.",
+        "A historia se passa em Marte."
+      ]
+    },
+    {
+      "e": "🎮🧟🔫",
+      "d": "Resident Evil",
+      "r": [
+        "resident evil"
+      ],
+      "dicas": [
+        "Filme com zumbis de laboratorio.",
+        "A protagonista e a Alice."
+      ]
+    },
+    {
+      "e": "🎮👸🏰",
+      "d": "Uncharted",
+      "r": [
+        "uncharted",
+        "uncharted fora do mapa"
+      ],
+      "dicas": [
+        "Filme do caca-tesouros Nathan Drake.",
+        "O protagonista e o Nathan Drake."
+      ]
+    },
+    {
+      "e": "🧸👦🏙️",
+      "d": "Paddington",
+      "r": [
+        "paddington"
+      ],
+      "dicas": [
+        "Urso peruano que mora em Londres.",
+        "Ele adora marmelada."
+      ]
+    },
+    {
+      "e": "🐻🇵🇪🍊",
+      "d": "Paddington 2",
+      "r": [
+        "paddington 2"
+      ],
+      "dicas": [
+        "A continuacao do Paddington.",
+        "O ursinho procura um livro para dar de presente."
+      ]
+    },
+    {
+      "e": "🐿️🎸🎶",
+      "d": "Alvin e os Esquilos 2",
+      "r": [
+        "alvin e os esquilos 2",
+        "alvin 2"
+      ],
+      "dicas": [
+        "A continuacao do Alvin.",
+        "Os esquilos vao para a escola."
+      ]
+    },
+    {
+      "e": "🐺🧛‍♂️2️⃣",
+      "d": "Hotel Transilvânia 2",
+      "r": [
+        "hotel transilvania 2"
+      ],
+      "dicas": [
+        "A continuacao do Hotel Transilvania.",
+        "O Drácula e o pai superprotetor."
+      ]
+    },
+    {
+      "e": "🧟🌆2️⃣",
+      "d": "Extermínio 2",
+      "r": [
+        "exterminio 2",
+        "28 semanas depois"
+      ],
+      "dicas": [
+        "A continuacao do Exterminio.",
+        "O virus zumbi se espalha pela Inglaterra."
+      ]
+    },
+    {
+      "e": "🕵️‍♂️🔍2️⃣",
+      "d": "Sherlock Holmes: Jogo de Sombras",
+      "r": [
+        "sherlock holmes: jogo de sombras",
+        "jogo de sombras"
+      ],
+      "dicas": [
+        "A continuacao do Sherlock Holmes.",
+        "O vilao e o professor Moriarty."
+      ]
+    },
+    {
+      "e": "🦍🦍🧬",
+      "d": "Cesar",
+      "r": [
+        "cesar"
+      ],
+      "dicas": [
+        "O macaco lider da revolucao.",
+        "Planeta dos Macacos."
+      ]
+    },
+    {
+      "e": "🦍🗽✈️",
+      "d": "Planeta dos Macacos: A Origem",
+      "r": [
+        "planeta dos macacos: a origem",
+        "a origem"
+      ],
+      "dicas": [
+        "A continuacao do Planeta dos Macacos.",
+        "O Cesar lidera a revolta dos macacos."
+      ]
+    },
+    {
+      "e": "🦍🌋⚔️",
+      "d": "Planeta dos Macacos: A Guerra",
+      "r": [
+        "planeta dos macacos: a guerra",
+        "a guerra"
+      ],
+      "dicas": [
+        "O terceiro filme da nova trilogia.",
+        "Os macacos lutam contra os humanos."
+      ]
+    },
+    {
+      "e": "🦖🏝️🎢",
+      "d": "Jurassic World 2",
+      "r": [
+        "jurassic world 2",
+        "reino ameacado"
+      ],
+      "dicas": [
+        "A continuacao do Jurassic World.",
+        "O vulcao da ilha entra em erupcao."
+      ]
+    },
+    {
+      "e": "🦖🌋🦕",
+      "d": "Jurassic World: Dominion",
+      "r": [
+        "jurassic world: dominion",
+        "dominion"
+      ],
+      "dicas": [
+        "O terceiro filme do Jurassic World.",
+        "Os dinossauros vivem entre os humanos."
+      ]
+    },
+    {
+      "e": "🦖🧬🧪",
+      "d": "Jurassic Park 3",
+      "r": [
+        "jurassic park 3"
+      ],
+      "dicas": [
+        "A continuacao do Jurassic Park.",
+        "Aparece um Spinosaurus."
+      ]
+    },
+    {
+      "e": "🦖🌊🚢",
+      "d": "Jurassic Park: O Mundo Perdido",
+      "r": [
+        "jurassic park: o mundo perdido",
+        "o mundo perdido"
+      ],
+      "dicas": [
+        "O segundo filme do Jurassic Park.",
+        "Existe uma segunda ilha com dinossauros."
+      ]
+    },
+    {
+      "e": "🚗🔧🏁",
+      "d": "Velozes e Furiosos 5",
+      "r": [
+        "velozes e furiosos 5",
+        "operacao rio"
+      ],
+      "dicas": [
+        "A continuacao de Velozes e Furiosos.",
+        "A equipe faz um assalto no Rio de Janeiro."
+      ]
+    },
+    {
+      "e": "🚗🌍🏁",
+      "d": "Velozes e Furiosos 8",
+      "r": [
+        "velozes e furiosos 8"
+      ],
+      "dicas": [
+        "A continuacao da franquia.",
+        "O vilao e a Cipher."
+      ]
+    },
+    {
+      "e": "🚗🛩️🏁",
+      "d": "Velozes e Furiosos: Desafio em Tóquio",
+      "r": [
+        "velozes e furiosos: desafio em toquio",
+        "desafio em toquio",
+        "tokyo drift"
+      ],
+      "dicas": [
+        "Tem corridas no Japao.",
+        "O protagonista e o Sean."
+      ]
+    },
+    {
+      "e": "🚗💥🏁",
+      "d": "Velozes e Furiosos: Hobbs & Shaw",
+      "r": [
+        "velozes e furiosos: hobbs & shaw",
+        "hobbs e shaw",
+        "hobbs and shaw"
+      ],
+      "dicas": [
+        "Spin-off da franquia.",
+        "Os dois rivais precisam trabalhar juntos."
+      ]
+    },
+    {
+      "e": "🏎️🌪️🏆",
+      "d": "F1: A Fúria de um Campeão",
+      "r": [
+        "f1: a furia de um campeao",
+        "f1 o filme",
+        "f1"
+      ],
+      "dicas": [
+        "Filme de Formula 1.",
+        "O protagonista volta a correr depois de um acidente."
+      ]
+    },
+    {
+      "e": "⚽🏆🌍",
+      "d": "Pelé: O Nascimento de uma Lenda",
+      "r": [
+        "pele: o nascimento de uma lenda",
+        "pele"
+      ],
+      "dicas": [
+        "Filme sobre o rei do futebol.",
+        "O filme mostra a infancia do Pelé."
+      ]
+    },
+    {
+      "e": "⚽👑🇵🇹",
+      "d": "Cristiano Ronaldo",
+      "r": [
+        "cristiano ronaldo",
+        "cr7"
+      ],
+      "dicas": [
+        "Documentario sobre o jogador.",
+        "O jogador e portugues."
+      ]
+    },
+    {
+      "e": "🏀🐐👑",
+      "d": "Michael Jordan: Air",
+      "r": [
+        "michael jordan: air",
+        "air",
+        "michael jordan"
+      ],
+      "dicas": [
+        "Filme sobre o basquete.",
+        "O filme conta a historia do tenis Air Jordan."
+      ]
+    },
+    {
+      "e": "🥊🐐🏆",
+      "d": "Rocky",
+      "r": [
+        "rocky",
+        "rocky um lutador"
+      ],
+      "dicas": [
+        "Boxeador de Filadelfia.",
+        "O ator e o Sylvester Stallone."
+      ]
+    },
+    {
+      "e": "🥊🇷🇺4️⃣",
+      "d": "Rocky IV",
+      "r": [
+        "rocky iv"
+      ],
+      "dicas": [
+        "O adversario e o Drago, da Russia.",
+        "O Rocky luta contra o Ivan Drago."
+      ]
+    },
+    {
+      "e": "🥊🏆👴",
+      "d": "Rocky Balboa",
+      "r": [
+        "rocky balboa"
+      ],
+      "dicas": [
+        "O sexto filme do Rocky.",
+        "O Rocky volta ao ringue ja mais velho."
+      ]
+    },
+    {
+      "e": "🥊👊🏆",
+      "d": "Creed",
+      "r": [
+        "creed"
+      ],
+      "dicas": [
+        "Spin-off do Rocky com o filho do Apollo.",
+        "O protagonista e o filho do Apollo Creed."
+      ]
+    },
+    {
+      "e": "🪖🔫🌲",
+      "d": "Rambo",
+      "r": [
+        "rambo",
+        "rambo programado para matar"
+      ],
+      "dicas": [
+        "Veterano de guerra interpretado por Stallone.",
+        "O protagonista e um veterano da guerra do Vietna."
+      ]
+    },
+    {
+      "e": "🚔🤖🦾",
+      "d": "RoboCop 2",
+      "r": [
+        "robocop 2"
+      ],
+      "dicas": [
+        "A continuacao do RoboCop.",
+        "O policial robo ganha um novo vilao."
+      ]
+    },
+    {
+      "e": "🤖🔫🚛",
+      "d": "O Exterminador do Futuro 2",
+      "r": [
+        "o exterminador do futuro 2",
+        "exterminador do futuro 2",
+        "terminator 2"
+      ],
+      "dicas": [
+        "A continuacao do Exterminador.",
+        "O T-1000 e o vilao."
+      ]
+    },
+    {
+      "e": "👽🏹🌴",
+      "d": "Predador",
+      "r": [
+        "predador",
+        "o predador"
+      ],
+      "dicas": [
+        "Alien cacador na selva.",
+        "O alien cacador tem visao termica."
+      ]
+    },
+    {
+      "e": "👽🚀🫧",
+      "d": "Aliens: O Resgate",
+      "r": [
+        "aliens: o resgate",
+        "aliens o resgate"
+      ],
+      "dicas": [
+        "A continuacao do Alien.",
+        "A Ripley volta para enfrentar a rainha."
+      ]
+    },
+    {
+      "e": "🏝️🐒✈️",
+      "d": "Aviões",
+      "r": [
+        "avioes"
+      ],
+      "dicas": [
+        "Animacao com avioes que falam.",
+        "O protagonista e um aviao agricultor."
+      ]
+    },
+    {
+      "e": "🐌🏁💨",
+      "d": "Turbo",
+      "r": [
+        "turbo"
+      ],
+      "dicas": [
+        "Caracol que quer ser piloto de corrida.",
+        "O caracol ganha supervelocidade."
+      ]
+    },
+    {
+      "e": "👊🐉🏙️",
+      "d": "Operação Dragão",
+      "r": [
+        "operacao dragao"
+      ],
+      "dicas": [
+        "Filme de artes marciais com Bruce Lee.",
+        "O ator principal e o Bruce Lee."
+      ]
     }
   ]
 }
