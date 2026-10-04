@@ -28,6 +28,7 @@ export default async function menuFig(prefix, botName = "MeuBot", userName = "Us
 │ 🖼️ ${prefix}toimg
 │ 🎞️ ${prefix}togif
 │ 😎 ${prefix}brat
+│ 📗 ${prefix}bratg
 │ 🎥 ${prefix}bratvid
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
