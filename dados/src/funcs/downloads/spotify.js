@@ -335,7 +335,6 @@ async function resolveTrackMetadata(url) {
 const AUDIO_MAX_BYTES = 256 * 1024 * 1024;
 const AUDIO_TIMEOUT_MS = 180000;
 const PROBE_TIMEOUT_MS = 15000;
-const AUDIO_CLIENTS = ['web_safari', 'mweb', 'web', 'android_vr'];
 
 let ytdlpResolved;
 let ffmpegResolved;
@@ -413,6 +412,8 @@ async function resolveFfmpeg() {
 function mapYtDlpError(stderr) {
   const s = String(stderr || '');
   if (/Sign in to confirm|not a bot|captcha/i.test(s)) return 'O YouTube pediu verificação (bloqueio temporário). Tente novamente em alguns minutos.';
+  if (/HTTP Error 40[13]|Forbidden/i.test(s)) return 'O YouTube bloqueou temporariamente este servidor (403). Tente novamente em alguns minutos.';
+  if (/Requested format is not available/i.test(s)) return 'O YouTube não liberou o áudio desta faixa. Tente outra música.';
   if (/age/i.test(s)) return 'Este conteúdo tem restrição de idade.';
   if (/unavailable|not available|removed/i.test(s)) return 'Vídeo indisponível no YouTube.';
   if (/ffmpeg/i.test(s)) return 'O FFmpeg não está instalado no servidor.';
@@ -434,6 +435,10 @@ async function baixarAudioYtDlp(termo) {
   }
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'spotify-'));
+  // NÃO força `--extractor-args youtube:player_client=...`: forçar um cliente
+  // fixo faz o yt-dlp perder os formatos de áudio de alguns vídeos
+  // ("Requested format is not available"). Deixamos o yt-dlp escolher o
+  // cliente, como o `!play` faz.
   const args = [
     ...ytdlp.base,
     '--no-playlist',
@@ -452,20 +457,8 @@ async function baixarAudioYtDlp(termo) {
   ];
 
   try {
-    let stdout = null;
-    let lastErr = null;
-    for (const client of AUDIO_CLIENTS) {
-      const clientArgs = [...args, '--extractor-args', `youtube:player_client=${client}`];
-      try {
-        const result = await runProcess(ytdlp.cmd, clientArgs, AUDIO_TIMEOUT_MS);
-        stdout = result.stdout;
-        break;
-      } catch (err) {
-        lastErr = err;
-        await new Promise(r => setTimeout(r, 800));
-      }
-    }
-    if (!stdout) throw lastErr || new Error('yt-dlp não retornou dados');
+    const result = await runProcess(ytdlp.cmd, args, AUDIO_TIMEOUT_MS);
+    const stdout = result.stdout;
 
     const meta = (() => {
       try {
