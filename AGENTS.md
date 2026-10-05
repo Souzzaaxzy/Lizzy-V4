@@ -8755,3 +8755,54 @@ Adicionado nos mesmos pontos:
 - **blockPv**: `'santo'` na lista do `menubn`.
 
 Baseline do `menu-layout`: **menubn 381 -> 382**.
+
+## CORREÇÃO do `!play2` (Spotify) — busca e áudio (set/2026) ✅
+O `!play2` **não buscava E não baixava**. Três dependências do módulo
+`funcs/downloads/spotify.js` deixaram de existir, medido:
+
+| fonte que o código usava | resultado medido |
+|---|---|
+| Brave Search (busca) | **429** (bloqueio de automação) |
+| `vreden.my.id` (busca) | **404** `"Router api ini tidak ditemukan!"` |
+| `spotisaver.net` (download) | **403** `{"error":"request_verification_failed"}` (Cloudflare Turnstile + assinatura HMAC no payload) |
+
+Também confirmado: `api.spotifydown.com`, `spotify.download`, `api.zotify.com`
+**não resolvem** (DNS). E a API oficial do Spotify **nunca** entrega o áudio —
+só metadados. Ou seja: **não existe caminho público de áudio dentro do Spotify**.
+
+### O que o módulo passou a usar (tudo público, sem chave)
+- **BUSCA** -> API pública do **Deezer** (`api.deezer.com/search`, sem chave); a
+  relevância é ordenada localmente (`rankResults`) e o iTunes entra como reserva.
+  Se `SPOTIFY_CLIENT_ID/SECRET` existirem, a busca oficial do Spotify é tentada
+  **primeiro** (melhor metadado), com queda para o Deezer.
+- **METADADOS do link** -> oEmbed do Spotify + tags OpenGraph da página do track
+  com UA de crawler (`facebookexternalhit`) — traz título, artista, álbum e ano.
+- **ÁUDIO** -> **yt-dlp** no servidor (o mesmo motor que o `!play` já usa e que o
+  bot já exige). O bloco é **autossuficiente dentro do `spotify.js`**: resolve o
+  binário (`YTDLP_PATH` -> `yt-dlp` -> `~/.local/bin` -> `python3 -m yt_dlp`),
+  exige FFmpeg, roda com timeout/SIGKILL e limpa o tempdir. **Não importa nem
+  altera o `youtube.js`.**
+
+### O áudio vem do YouTube — e isso é avisado
+Como o Spotify não entrega áudio, o áudio vem do YouTube (mesma música). O
+`!play2` mostra **"Áudio via YouTube: <título>"**, em vez de fingir que é
+Spotify. Sem yt-dlp/FFmpeg o comando **não quebra** — a busca e a prévia
+funcionam e o erro do áudio explica o que falta.
+
+### Compatibilidade (o `index.js` NÃO mudou)
+A busca agora devolve link do **Deezer**, então o `download()` passou a aceitar
+**os dois** formatos (Spotify e Deezer) e produz o mesmo retorno. Assim o
+`!spotifydl`/autodownload (link do Spotify) e o `!play2` (link do Deezer) usam o
+mesmo `download()` **sem tocar no `index.js`** — o escopo desta correção é só o
+Spotify (`spotify.js` + o teste novo).
+
+### Testes — `tests/spotify.test.js` (**12 testes / 38 asserções**)
+Puros (`extractTrackId`, `isValidSpotifyUrl`, `secondsToMs`, `normalizeText`,
+`rankResults` com "Ao Vivo" penalizado), contrato do módulo (as 5 funções que o
+`index.js` usa) e o erro controlado de link/query inválidos; mais os de rede
+(busca real no Deezer, metadados do link, `searchDownload` falhando de forma
+controlada sem yt-dlp). Pular rede com `OFFLINE=1`.
+
+### Requisito
+`yt-dlp` + `FFmpeg` no servidor (o bot já exige ambos para o `!play`). Sem eles,
+só o áudio falha — com mensagem específica.

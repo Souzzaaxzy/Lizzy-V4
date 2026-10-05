@@ -1,45 +1,56 @@
 /**
- * Spotify Download - Implementação direta sem API externa
- * Busca: API oficial do Spotify (Client Credentials, requer SPOTIFY_CLIENT_ID/SECRET no .env)
- *         com fallback para Brave Search e vreden.my.id
- * Download: spotisaver.net (terceiro, não oficial)
+ * Spotify (busca + download de áudio) — caminhos públicos, sem API paga.
+ *
+ * POR QUE ESTE ARQUIVO FOI REESCRITO (set/2026)
+ * ---------------------------------------------
+ * A versão anterior tinha três dependências que NÃO funcionam mais:
+ *   1. busca via Brave Search   -> responde 429 (bloqueio de automação);
+ *   2. busca via vreden.my.id   -> endpoint removido (404 "Router não encontrado");
+ *   3. download via spotisaver.net -> responde 403
+ *      {"error":"request_verification_failed"} (Cloudflare Turnstile + assinatura
+ *      HMAC no payload). Ou seja: o `!play2` não buscava E não baixava.
+ *
+ * O que sobrou de público e estável:
+ *   - BUSCA:  API pública do Deezer (sem chave) — a mais relevante em PT-BR;
+ *             iTunes Search (sem chave) como reserva.
+ *   - METADADOS do link: Spotify oEmbed (título + capa, sem auth) e as tags
+ *             OpenGraph da página do track com UA de crawler (traz artista,
+ *             álbum e ano).
+ *   - ÁUDIO:  yt-dlp no próprio servidor (o MESMO motor que o `!play` usa e que
+ *             o bot já exige/instala — `YTDLP_PATH` / `python3 -m yt_dlp`).
+ *
+ * O Spotify NÃO entrega o áudio por API pública — nenhum caminho oficial faz
+ * isso. Por isso o áudio vem do YouTube (mesma música) via yt-dlp. Se o
+ * servidor não tiver yt-dlp/FFmpeg, a busca e a prévia continuam funcionando e
+ * o erro do áudio é claro — o comando não quebra.
+ *
+ * Se o administrador definir SPOTIFY_CLIENT_ID/SPOTIFY_CLIENT_SECRET, a busca
+ * oficial do Spotify passa a ser tentada PRIMEIRO (metadados melhores), com
+ * queda para o Deezer.
  */
 
 import axios from 'axios';
 import dotenv from 'dotenv';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { spawn } from 'node:child_process';
 
 dotenv.config();
 
-const SEARCH_BASE_URL = 'https://vreden.my.id';
 const SPOTIFY_API_BASE = 'https://api.spotify.com/v1';
-const DOWNLOAD_BASE_URL = 'https://spotisaver.net';
-const BRAVE_SEARCH_URL = 'https://search.brave.com/search';
-const BRAVE_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
+const SPOTIFY_OEMBED = 'https://open.spotify.com/oembed';
+const DEEZER_API = 'https://api.deezer.com';
+const ITUNES_API = 'https://itunes.apple.com';
 
-// Cache de busca Brave (parcial, por query)
-const braveCache = new Map();
-const BRAVE_CACHE_TTL = 60 * 60 * 1000;
-function getBraveCached(key) {
-  const item = braveCache.get(key);
-  if (!item) return null;
-  if (Date.now() - item.ts > BRAVE_CACHE_TTL) {
-    braveCache.delete(key);
-    return null;
-  }
-  return item.val;
-}
-function setBraveCache(key, val) {
-  if (braveCache.size >= 500) {
-    const oldestKey = braveCache.keys().next().value;
-    braveCache.delete(oldestKey);
-  }
-  braveCache.set(key, { val, ts: Date.now() });
-}
+/** UA de "crawler de link": o Spotify serve as og tags (artista/álbum/ano) só para ele. */
+const CRAWLER_UA = 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)';
 
-// Cache simples
+const HTTP_TIMEOUT = 15000;
+
+// ── cache (busca, metadados e download) ──────────────────────────────
 const cache = new Map();
 const CACHE_TTL = 30 * 60 * 1000;
-
 function getCached(key) {
   const item = cache.get(key);
   if (!item) return null;
@@ -49,103 +60,41 @@ function getCached(key) {
   }
   return item.val;
 }
-
 function setCache(key, val) {
-  if (cache.size >= 500) {
-    const oldestKey = cache.keys().next().value;
-    cache.delete(oldestKey);
-  }
+  if (cache.size >= 500) cache.delete(cache.keys().next().value);
   cache.set(key, { val, ts: Date.now() });
 }
 
-// Headers para spotisaver
-const SPOTISAVER_HEADERS = {
-  'accept': '*/*',
-  'accept-language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-  'sec-fetch-dest': 'empty',
-  'sec-fetch-mode': 'cors',
-  'sec-fetch-site': 'same-origin',
-  'user-agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1'
-};
-
-/**
- * Extrair ID da track do Spotify de uma URL
- */
+// ── utilidades ───────────────────────────────────────────────────────
 function extractTrackId(url) {
-  if (!url) return null;
-  const trackMatch = url.match(/track\/([a-zA-Z0-9]+)/);
-  return trackMatch ? trackMatch[1] : null;
+  const m = String(url || '').match(/track\/([a-zA-Z0-9]{16,})/);
+  return m ? m[1] : null;
 }
 
-/**
- * Valida se é uma URL válida do Spotify
- */
 function isValidSpotifyUrl(url) {
-  if (!url || typeof url !== 'string') return false;
-  return url.includes('open.spotify.com/') || url.includes('spotify.com/');
+  return typeof url === 'string' && /open\.spotify\.com\/track\//.test(url);
 }
 
-/**
- * Busca músicas no Spotify
- * @param {string} query - Nome da música ou artista
- * @param {number} limit - Número de resultados
- * @returns {Promise<Object>} Resultados da busca
- */
-/**
- * Busca tracks do Spotify via Brave Search (HTML publico, sem API)
- */
-async function searchViaBrave(query) {
-  try {
-    const cached = getBraveCached('brave:' + query);
-    if (cached) return cached;
-    const response = await fetch(BRAVE_SEARCH_URL + '?q=' + encodeURIComponent(query + ' site:open.spotify.com/track'), {
-      headers: {
-        'User-Agent': BRAVE_USER_AGENT,
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-        'Referer': 'https://search.brave.com/',
-        'Sec-Fetch-Dest': 'document',
-        'Sec-Fetch-Mode': 'navigate',
-        'Sec-Fetch-Site': 'same-origin',
-        'Upgrade-Insecure-Requests': '1'
-      },
-      redirect: 'follow',
-      signal: AbortSignal.timeout(45000)
-    });
-    if (!response.ok) {
-      return { ok: false, msg: 'Busca Brave indisponível (status ' + response.status + ')' };
-    }
-    const html = await response.text();
-    const urlRegex = new RegExp('https://open\\.spotify\\.com/track/[a-zA-Z0-9]+', 'g');
-    const uniqueUrls = [...new Set(html.match(urlRegex) || [])].slice(0, 5);
-    const found = [];
-    for (const url of uniqueUrls) {
-      const pos = html.indexOf(url);
-      const segment = html.slice(pos, pos + 3000);
-      const tm = segment.match(/title="([^"]+)"[^>]*>[^<]*/);
-      let title = tm ? tm[1].replace(/\| Spotify$/i, '').trim() : url;
-      const titleMatch = title.match(/^(.*?)\s*-\s*song and lyrics by (.*)$/i);
-      const name = titleMatch ? titleMatch[1].trim() : title.split('|')[0].trim();
-      const artist = titleMatch ? titleMatch[2].trim() : '';
-      found.push({ name, artist, song_link: url, link: url, source: 'brave' });
-    }
-    if (!found.length) return { ok: false, msg: 'Nenhuma música encontrada no Brave Search' };
-    setBraveCache('brave:' + query, found);
-    return { ok: true, results: found };
-  } catch (error) {
-    console.error('Erro na busca Brave do Spotify:', error.message);
-    return { ok: false, msg: 'Erro na busca Brave do Spotify: ' + error.message };
-  }
+/** Converte a duração do Deezer (segundos) para ms, mantendo o contrato. */
+function secondsToMs(sec) {
+  const n = Number(sec);
+  return Number.isFinite(n) && n > 0 ? Math.round(n * 1000) : null;
 }
 
-// ── Busca oficial (API do Spotify, Client Credentials) ────────────────
+function normalizeText(t) {
+  return String(t || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+// ── BUSCA: Spotify oficial (se houver credenciais) ───────────────────
 let spotifyTokenCache = null;
 async function getSpotifyToken() {
   const id = process.env.SPOTIFY_CLIENT_ID;
   const secret = process.env.SPOTIFY_CLIENT_SECRET;
-
   if (spotifyTokenCache && spotifyTokenCache.expiresAt > Date.now() + 60000) {
-
     return spotifyTokenCache.token;
   }
   if (!id || !secret) throw new Error('SPOTIFY_CREDENTIALS_MISSING');
@@ -153,11 +102,8 @@ async function getSpotifyToken() {
   const res = await axios.post('https://accounts.spotify.com/api/token',
     new URLSearchParams({ grant_type: 'client_credentials' }),
     {
-      timeout: 15000,
-      headers: {
-        Authorization: `Basic ${basic}`,
-        'Content-Type': 'application/x-www-form-urlencoded'
-      }
+      timeout: HTTP_TIMEOUT,
+      headers: { Authorization: `Basic ${basic}`, 'Content-Type': 'application/x-www-form-urlencoded' }
     }
   );
   const token = res.data?.access_token;
@@ -166,16 +112,15 @@ async function getSpotifyToken() {
   return token;
 }
 
-/** Monta o mesmo formato devolvido pela busca (results[].name/artist/song_link/link). */
 function mapSpotifyTrack(track) {
-
   const artists = Array.isArray(track.artists) ? track.artists.map(a => a.name) : [];
+  const link = track.external_urls?.spotify || `https://open.spotify.com/track/${track.id}`;
   return {
     name: track.name,
     artist: artists.join(', '),
-    artists: artists,
-    song_link: track.external_urls?.spotify || `https://open.spotify.com/track/${track.id}`,
-    link: track.external_urls?.spotify || `https://open.spotify.com/track/${track.id}`,
+    artists,
+    song_link: link,
+    link,
     id: track.id,
     duration_ms: track.duration_ms,
     album: track.album?.name,
@@ -185,325 +130,519 @@ function mapSpotifyTrack(track) {
 }
 
 async function searchViaSpotifyAPI(query) {
-  try {
-    const token = await getSpotifyToken();
-    const res = await axios.get(`${SPOTIFY_API_BASE}/search`, {
-      params: {
-        q: query,
-        type: 'track',
-        limit: 5
-      },
-      timeout: 15000,
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    const tracks = res.data?.tracks?.items;
-    if (!Array.isArray(tracks) || !tracks.length) return { ok: false, msg: 'Nenhuma música encontrada no Spotify' };
-    const results = tracks.filter(t => t && t.id && t.external_urls?.spotify).map(mapSpotifyTrack);
-    if (!results.length) return { ok: false, msg: 'Nenhuma música encontrada no Spotify' };
-    return { ok: true, results };
-  } catch (error) {
-    if (error.message === 'SPOTIFY_CREDENTIALS_MISSING' || error.message === 'SPOTIFY_TOKEN_FAIL') {
-      return { ok: false, msg: error.message, code: 'NOT_CONFIGURED' };
-    }
-    console.error('Falha na busca oficial do Spotify:', error.message);
-    return { ok: false, msg: 'Falha na busca oficial do Spotify: ' + error.message };
-  }
+  const token = await getSpotifyToken();
+  const res = await axios.get(`${SPOTIFY_API_BASE}/search`, {
+    params: { q: query, type: 'track', limit: 5 },
+    timeout: HTTP_TIMEOUT,
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const tracks = res.data?.tracks?.items;
+  if (!Array.isArray(tracks) || !tracks.length) return { ok: false, msg: 'Nenhuma música encontrada no Spotify' };
+  const results = tracks.filter(t => t && t.id && t.external_urls?.spotify).map(mapSpotifyTrack);
+  if (!results.length) return { ok: false, msg: 'Nenhuma música encontrada no Spotify' };
+  return { ok: true, results };
+}
+
+// ── BUSCA: Deezer (público, sem chave) ───────────────────────────────
+async function searchViaDeezer(query) {
+  const res = await axios.get(`${DEEZER_API}/search`, {
+    params: { q: query, limit: 8 },
+    timeout: HTTP_TIMEOUT
+  });
+  const list = Array.isArray(res.data?.data) ? res.data.data : [];
+  if (!list.length) return { ok: false, msg: 'Nenhuma música encontrada' };
+  const results = list.map(d => ({
+    name: d.title_short || d.title,
+    artist: d.artist?.name || '',
+    artists: d.artist?.name ? [d.artist.name] : [],
+    song_link: d.link,
+    link: d.link,
+    id: String(d.id),
+    duration_ms: secondsToMs(d.duration),
+    album: d.album?.title,
+    image: d.album?.cover_medium || d.album?.cover_big || null,
+    source: 'deezer'
+  }));
+  return { ok: true, results };
+}
+
+// ── BUSCA: iTunes (público, sem chave) — reserva ─────────────────────
+async function searchViaItunes(query) {
+  const res = await axios.get(`${ITUNES_API}/search`, {
+    params: { term: query, entity: 'song', limit: 8 },
+    timeout: HTTP_TIMEOUT
+  });
+  const list = Array.isArray(res.data?.results) ? res.data.results : [];
+  if (!list.length) return { ok: false, msg: 'Nenhuma música encontrada' };
+  const results = list.map(t => ({
+    name: t.trackName,
+    artist: t.artistName,
+    artists: t.artistName ? [t.artistName] : [],
+    song_link: t.trackViewUrl,
+    link: t.trackViewUrl,
+    id: String(t.trackId),
+    duration_ms: Number.isFinite(t.trackTimeMillis) ? t.trackTimeMillis : null,
+    album: t.collectionName,
+    image: (t.artworkUrl100 || '').replace('100x100bb', '600x600bb') || null,
+    source: 'itunes'
+  }));
+  return { ok: true, results };
+}
+
+/**
+ * Ordena os resultados pela relevância em relação à consulta (título + artista).
+ * O primeiro colocado é o que o `!play2` vai baixar, então isto importa.
+ */
+function rankResults(results, query) {
+  const termos = normalizeText(query).split(/\s+/).filter(Boolean);
+  return results
+    .map(r => {
+      const alvo = normalizeText(`${r.name} ${r.artist}`);
+      let score = 0;
+      for (const t of termos) {
+        if (normalizeText(r.name).includes(t)) score += 3;
+        if (alvo.includes(t)) score += 1;
+      }
+      if (normalizeText(r.name) === normalizeText(query)) score += 4;
+      if (/ao vivo|remix|cover|karaoke|instrumental|sped up|slowed/i.test(r.name)) score -= 3;
+      if (r.image) score += 1;
+      return { r, score };
+    })
+    .sort((a, b) => b.score - a.score)
+    .map(x => x.r);
 }
 
 async function search(query) {
+  if (!query || typeof query !== 'string' || !query.trim()) {
+    return { ok: false, msg: 'Digite o nome da música ou do artista.' };
+  }
+  const q = query.trim();
+  const cached = getCached(`search:${normalizeText(q)}`);
+  if (cached) return cached;
+
+  // 1) Spotify oficial (só se houver credenciais) — melhor metadado
   try {
-    if (!query || typeof query !== 'string') {
-      return {
-        ok: false,
-        msg: 'Query inválida'
-      };
+    const official = await searchViaSpotifyAPI(q);
+    if (official.ok && official.results.length) {
+      const result = { ok: true, query: q, total: official.results.length, results: official.results, source: 'spotify-api' };
+      setCache(`search:${normalizeText(q)}`, result);
+      return result;
     }
+  } catch (e) {
+    if (e.message !== 'SPOTIFY_CREDENTIALS_MISSING' && e.message !== 'SPOTIFY_TOKEN_FAIL') {
+      console.error('[Spotify] busca oficial falhou:', e.message);
+    }
+  }
 
-    const cached = getCached(`search:${query}`);
-    if (cached) return cached;
+  // 2) Deezer (público, sem chave) — o caminho principal
+  try {
+    const deezer = await searchViaDeezer(q);
+    if (deezer.ok && deezer.results.length) {
+      const results = rankResults(deezer.results, q);
+      const result = { ok: true, query: q, total: results.length, results, source: 'deezer' };
+      setCache(`search:${normalizeText(q)}`, result);
+      return result;
+    }
+  } catch (e) {
+    console.error('[Spotify] busca Deezer falhou:', e.message);
+  }
 
+  // 3) iTunes (público, sem chave)
+  try {
+    const itunes = await searchViaItunes(q);
+    if (itunes.ok && itunes.results.length) {
+      const results = rankResults(itunes.results, q);
+      const result = { ok: true, query: q, total: results.length, results, source: 'itunes' };
+      setCache(`search:${normalizeText(q)}`, result);
+      return result;
+    }
+  } catch (e) {
+    console.error('[Spotify] busca iTunes falhou:', e.message);
+  }
+
+  return { ok: false, query: q, msg: 'Nenhuma música encontrada com esse nome.' };
+}
+
+// ── METADADOS de um link do Spotify (oEmbed + OpenGraph) ─────────────
+function parseOg(html, prop) {
+  const re = new RegExp(`property=["']og:${prop}["']\\s+content=["']([^"']*)["']`, 'i');
+  const m = String(html || '').match(re);
+  return m ? m[1] : null;
+}
+
+async function fetchTrackPageMetadata(trackId) {
+  const res = await axios.get(`https://open.spotify.com/track/${trackId}`, {
+    timeout: HTTP_TIMEOUT,
+    headers: { 'User-Agent': CRAWLER_UA },
+    maxRedirects: 5
+  });
+  const html = typeof res.data === 'string' ? res.data : '';
+  const title = parseOg(html, 'title');
+  const description = parseOg(html, 'description') || '';
+  const image = parseOg(html, 'image');
+  // "Rick Astley · Whenever You Need Somebody · Song · 1987"
+  const partes = description.split('·').map(s => s.trim());
+  return {
+    name: title || null,
+    artist: partes[0] || null,
+    album: partes[1] || null,
+    year: (description.match(/·\s*(\d{4})\s*$/) || [])[1] || null,
+    image: image || null
+  };
+}
+
+async function fetchOembedMetadata(trackId) {
+  const res = await axios.get(SPOTIFY_OEMBED, {
+    params: { url: `https://open.spotify.com/track/${trackId}` },
+    timeout: HTTP_TIMEOUT
+  });
+  return {
+    name: res.data?.title || null,
+    image: res.data?.thumbnail_url || null
+  };
+}
+
+async function resolveTrackMetadata(url) {
+  const trackId = extractTrackId(url);
+  if (!trackId) return null;
+  const cached = getCached(`meta:${trackId}`);
+  if (cached) return cached;
+
+  let meta = { name: null, artist: null, album: null, year: null, image: null };
+  try {
+    meta = { ...meta, ...(await fetchTrackPageMetadata(trackId)) };
+  } catch (e) {
+    console.error('[Spotify] og tags falharam:', e.message);
+  }
+  if (!meta.name || !meta.image) {
     try {
-      const official = await searchViaSpotifyAPI(query);
-      if (official.ok && official.results.length) {
-        const result = {
-          ok: true,
-          query,
-          total: official.results.length,
-          results: official.results,
-          source: 'spotify-api'
-        };
-        setCache(`search:${query}`, result);
-        return result;
-      }
-    } catch (officialError) {
-      console.error('Falha na busca oficial do Spotify, tentando Brave:', officialError.message);
+      const oe = await fetchOembedMetadata(trackId);
+      meta.name = meta.name || oe.name;
+      meta.image = meta.image || oe.image;
+    } catch (e) {
+      console.error('[Spotify] oEmbed falhou:', e.message);
     }
+  }
+  if (meta.name) setCache(`meta:${trackId}`, meta);
+  return meta;
+}
 
-    try {
-      const brave = await searchViaBrave(query);
-      if (brave.ok && brave.results.length) {
-        const result = {
-          ok: true,
-          query,
-          total: brave.results.length,
-          results: brave.results,
-          source: 'brave'
-        };
-        setCache(`search:${query}`, result);
-        return result;
-      }
-      if (brave.msg) {
-        return { ok: false, query, msg: brave.msg };
-      }
-    } catch (braveError) {
-      console.error('Falha na busca Brave, tentando vreden:', braveError.message);
-    }
+// ── ÁUDIO (autossuficiente: yt-dlp no servidor) ──────────────────────
+// O Spotify não expõe áudio por API pública — nenhum caminho oficial faz isso.
+// O áudio vem do YouTube (mesma música) pelo yt-dlp, que é o motor que o bot
+// já exige e usa no `!play`. Este bloco resolve e chama o yt-dlp por conta
+// própria, sem depender de nenhum outro módulo do bot.
+const AUDIO_MAX_BYTES = 256 * 1024 * 1024;
+const AUDIO_TIMEOUT_MS = 180000;
+const PROBE_TIMEOUT_MS = 15000;
+const AUDIO_CLIENTS = ['web_safari', 'mweb', 'web', 'android_vr'];
 
-    const response = await axios.get(`${SEARCH_BASE_URL}/api/v2/search/spotify`, {
-      params: {
-        query: query,
-      },
-      timeout: 120000
+let ytdlpResolved;
+let ffmpegResolved;
+
+function runProcess(cmd, args, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const detached = process.platform !== 'win32';
+    const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], detached });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', d => { if (stdout.length < 4_000_000) stdout += d; });
+    child.stderr.on('data', d => { if (stderr.length < 64_000) stderr += d; });
+    const timer = setTimeout(() => {
+      try {
+        if (detached && child.pid) process.kill(-child.pid, 'SIGKILL');
+        else child.kill('SIGKILL');
+      } catch {
+        try { child.kill('SIGKILL'); } catch { /* já morto */ }
+      }
+      const err = new Error('Download expirou (timeout)');
+      err.stderr = stderr;
+      reject(err);
+    }, timeoutMs);
+    child.on('error', err => { clearTimeout(timer); reject(err); });
+    child.on('close', code => {
+      clearTimeout(timer);
+      if (code === 0) return resolve({ stdout, stderr });
+      const err = new Error('yt-dlp falhou (código ' + code + ')');
+      err.stderr = stderr;
+      reject(err);
     });
+  });
+}
 
-    if (!response.data || (response.data.status_code !== undefined && response.data.status_code !== 200)) {
-      const apiMsg = response.data?.message || response.data?.msg || 'Erro ao buscar no Spotify';
-      return {
-        ok: false,
-        msg: apiMsg
-      };
+/** Resolve o yt-dlp (sucesso cacheado; falha re-testada a cada chamada). */
+async function resolveYtDlp() {
+  if (ytdlpResolved) return ytdlpResolved;
+  const home = os.homedir();
+  const candidates = [];
+  if (process.env.YTDLP_PATH) candidates.push({ cmd: process.env.YTDLP_PATH, base: [] });
+  candidates.push({ cmd: 'yt-dlp', base: [] });
+  candidates.push({ cmd: path.join(home, '.local', 'bin', 'yt-dlp'), base: [] });
+  candidates.push({ cmd: '/home/container/.local/bin/yt-dlp', base: [] });
+  candidates.push({ cmd: '/root/.local/bin/yt-dlp', base: [] });
+  candidates.push({ cmd: '/usr/local/bin/yt-dlp', base: [] });
+  candidates.push({ cmd: 'python3', base: ['-m', 'yt_dlp'] });
+  candidates.push({ cmd: 'python', base: ['-m', 'yt_dlp'] });
+  for (const c of candidates) {
+    try {
+      await runProcess(c.cmd, [...c.base, '--version'], PROBE_TIMEOUT_MS);
+      ytdlpResolved = c;
+      return c;
+    } catch { /* tenta o próximo */ }
+  }
+  ytdlpResolved = null;
+  return null;
+}
+
+async function resolveFfmpeg() {
+  if (ffmpegResolved) return ffmpegResolved;
+  const home = os.homedir();
+  const candidates = [process.env.FFMPEG_PATH || 'ffmpeg'];
+  candidates.push(path.join(home, '.local', 'bin', 'ffmpeg'), '/home/container/.local/bin/ffmpeg', '/root/.local/bin/ffmpeg', '/usr/bin/ffmpeg', '/usr/local/bin/ffmpeg');
+  for (const cmd of candidates) {
+    try {
+      await runProcess(cmd, ['-version'], PROBE_TIMEOUT_MS);
+      ffmpegResolved = cmd;
+      return cmd;
+    } catch { /* tenta o próximo */ }
+  }
+  ffmpegResolved = null;
+  return null;
+}
+
+function mapYtDlpError(stderr) {
+  const s = String(stderr || '');
+  if (/Sign in to confirm|not a bot|captcha/i.test(s)) return 'O YouTube pediu verificação (bloqueio temporário). Tente novamente em alguns minutos.';
+  if (/age/i.test(s)) return 'Este conteúdo tem restrição de idade.';
+  if (/unavailable|not available|removed/i.test(s)) return 'Vídeo indisponível no YouTube.';
+  if (/ffmpeg/i.test(s)) return 'O FFmpeg não está instalado no servidor.';
+  return 'Não foi possível baixar o áudio.';
+}
+
+/**
+ * Baixa o áudio de uma busca ("Artista - Título") via yt-dlp, sem passar pelo
+ * `youtube.js` (o comando é sobre o Spotify; este módulo é autossuficiente).
+ */
+async function baixarAudioYtDlp(termo) {
+  const ytdlp = await resolveYtDlp();
+  if (!ytdlp) {
+    return { ok: false, msg: 'O áudio precisa do yt-dlp no servidor (instale com: python3 -m pip install -U yt-dlp).' };
+  }
+  const ffmpeg = await resolveFfmpeg();
+  if (!ffmpeg) {
+    return { ok: false, msg: 'O áudio precisa do FFmpeg instalado no servidor.' };
+  }
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'spotify-'));
+  const args = [
+    ...ytdlp.base,
+    '--no-playlist',
+    '--no-warnings',
+    '--no-progress',
+    '--socket-timeout', '30',
+    '--retries', '1',
+    '--max-filesize', String(AUDIO_MAX_BYTES),
+    '--js-runtimes', `node:${process.execPath}`,
+    '--ffmpeg-location', ffmpeg,
+    '-f', 'bestaudio/best',
+    '-x', '--audio-format', 'mp3', '--audio-quality', '128K',
+    '-o', path.join(dir, 'audio.%(ext)s'),
+    '--print-json',
+    `ytsearch1:${termo}`
+  ];
+
+  try {
+    let stdout = null;
+    let lastErr = null;
+    for (const client of AUDIO_CLIENTS) {
+      const clientArgs = [...args, '--extractor-args', `youtube:player_client=${client}`];
+      try {
+        const result = await runProcess(ytdlp.cmd, clientArgs, AUDIO_TIMEOUT_MS);
+        stdout = result.stdout;
+        break;
+      } catch (err) {
+        lastErr = err;
+        await new Promise(r => setTimeout(r, 800));
+      }
     }
+    if (!stdout) throw lastErr || new Error('yt-dlp não retornou dados');
 
-    const raw = response.data.result ?? response.data.data ?? response.data.results ?? [];
-    const list = Array.isArray(raw)
-      ? raw
-      : Array.isArray(raw.search_data)
-        ? raw.search_data
-        : Array.isArray(raw.tracks)
-          ? raw.tracks
-          : Array.isArray(raw.data)
-            ? raw.data
-            : [];
+    const meta = (() => {
+      try {
+        const linha = String(stdout).trim().split('\n').filter(Boolean).pop();
+        return JSON.parse(linha);
+      } catch { return {}; }
+    })();
+    const arquivo = fs.readdirSync(dir).find(f => f.endsWith('.mp3'));
+    if (!arquivo) return { ok: false, msg: 'O yt-dlp não gerou o arquivo de áudio.' };
+    const full = path.join(dir, arquivo);
+    const stat = fs.statSync(full);
+    if (!stat.size) return { ok: false, msg: 'Áudio vazio.' };
+    if (stat.size > AUDIO_MAX_BYTES) return { ok: false, msg: 'Áudio maior que o limite permitido.' };
 
-    const result = {
-      ok: true,
-      query,
-      total: list.length,
-      results: list
-    };
-
-    setCache(`search:${query}`, result);
-    return result;
-  } catch (error) {
-    console.error('Erro na busca do Spotify:', error.message);
-    return {
-      ok: false,
-      msg: 'Erro ao buscar no Spotify: ' + error.message
-    };
+    return { ok: true, buffer: fs.readFileSync(full), youtubeTitle: meta?.title || null };
+  } catch (err) {
+    return { ok: false, msg: mapYtDlpError(err?.stderr) + (err?.stderr ? '' : ' (' + err.message + ')') };
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 }
 
 /**
- * Faz download direto de uma música do Spotify via URL
- * @param {string} url - URL do track do Spotify
- * @returns {Promise<Object>} Dados do download
+ * Obtém o áudio de uma faixa. O Spotify não expõe áudio por API pública, então
+ * o áudio vem do YouTube (mesma música) pelo yt-dlp.
+ */
+async function fetchAudio({ query, title, artist, allowYouTube = true }) {
+  if (!allowYouTube) return { ok: false, msg: 'Download de áudio desativado.' };
+  const termo = (query || `${artist || ''} ${title || ''}`).trim();
+  if (!termo) return { ok: false, msg: 'Sem termo para buscar o áudio.' };
+  return baixarAudioYtDlp(termo);
+}
+
+// ── DOWNLOAD (contrato preservado) ───────────────────────────────────
+/** Metadados de um link do Deezer (usado quando a busca devolve link do Deezer). */
+async function resolveDeezerMetadata(url) {
+  const m = String(url || '').match(/deezer\.com\/(?:[a-z]{2}\/)?track\/(\d+)/i);
+  if (!m) return null;
+  const id = m[1];
+  const cached = getCached(`deezerMeta:${id}`);
+  if (cached) return cached;
+  const res = await axios.get(`${DEEZER_API}/track/${id}`, { timeout: HTTP_TIMEOUT });
+  const d = res.data || {};
+  const meta = {
+    name: d.title_short || d.title || null,
+    artist: d.artist?.name || null,
+    album: d.album?.title || null,
+    year: (d.release_date || '').slice(0, 4) || null,
+    image: d.album?.cover_big || d.album?.cover_medium || null,
+    duration: secondsToMs(d.duration)
+  };
+  if (meta.name) setCache(`deezerMeta:${id}`, meta);
+  return meta;
+}
+
+/**
+ * @param {string} url  link do Spotify (track) OU link do Deezer (o `!play2`
+ *   busca e recebe um link do Deezer; o `!spotifydl` e o autodownload recebem
+ *   link do Spotify). Os dois caminhos produzem o mesmo retorno.
+ * @returns {Promise<Object>} { ok, buffer, title, artists, artist, albumImage,
+ *   image, year, duration, filename, source, youtubeTitle } | { ok:false, msg }
  */
 async function download(url) {
   try {
-    // Validação melhorada da URL
-    if (!isValidSpotifyUrl(url)) {
-      console.log('[Spotify] URL inválida:', url);
-      return {
-        ok: false,
-        msg: 'URL inválida do Spotify. Certifique-se de usar uma URL do Spotify válida.'
-      };
+    const isSpotify = isValidSpotifyUrl(url);
+    const isDeezer = /deezer\.com\/(?:[a-z]{2}\/)?track\/\d+/i.test(String(url || ''));
+    if (!isSpotify && !isDeezer) {
+      return { ok: false, msg: 'Link inválido. Use um link de música do Spotify (open.spotify.com/track/...) ou do Deezer.' };
     }
-
-    // Verificar cache
     const cached = getCached(`download:${url}`);
     if (cached) return cached;
 
-    // Extrair ID da track
-    const trackId = extractTrackId(url);
-    if (!trackId) {
-      console.log('[Spotify] Não foi possível extrair ID da URL:', url);
-      return {
-        ok: false,
-        msg: 'Não foi possível extrair o ID da música. Verifique se a URL está correta.'
-      };
-    }
-
-    console.log(`[Spotify] Processando track ID: ${trackId}`);
-
-    // Etapa 1: Obter informações da faixa
-    const infoResponse = await axios.get(`${DOWNLOAD_BASE_URL}/api/get_playlist.php`, {
-      params: {
-        id: trackId,
-        type: 'track',
-        lang: 'en'
-      },
-      headers: {
-        ...SPOTISAVER_HEADERS,
-        'referer': `${DOWNLOAD_BASE_URL}/en/track/${trackId}/`
-      },
-      timeout: 120000
-    });
-
-    const trackData = infoResponse.data?.tracks?.[0];
-    
-    if (!trackData) {
-      return {
-        ok: false,
-        msg: 'Informações da música não encontradas'
-      };
-    }
-
-    console.log(`[Spotify] 🎵 Música: ${trackData.name}`);
-    console.log(`[Spotify] 🎤 Artista: ${trackData.artists?.[0]}`);
-
-    // Etapa 2: Preparar payload para download
-    const payload = {
-      track: {
-        name: trackData.name,
-        artists: trackData.artists || [],
-        album: trackData.album,
-        image: {
-          url: trackData.image?.url,
-          width: trackData.image?.width || 640,
-          height: trackData.image?.height || 640
-        },
-        id: trackId,
-        external_url: trackData.external_url,
-        duration_ms: trackData.duration_ms,
-        preview_url: trackData.preview_url || null,
-        explicit: trackData.explicit || false,
-        release_date: trackData.release_date
-      },
-      download_dir: 'downloads',
-      filename_tag: 'SPOTISAVER',
-      user_ip: '138.118.236.9',
-      is_premium: false
-    };
-
-    // Etapa 3: Baixar a música
-    console.log(`[Spotify] ⬇️  Iniciando download...`);
-    
-    const downloadResponse = await axios.post(
-      `${DOWNLOAD_BASE_URL}/api/download_track.php`,
-      payload,
-      {
-        headers: {
-          ...SPOTISAVER_HEADERS,
-          'content-type': 'application/json',
-          'origin': DOWNLOAD_BASE_URL,
-          'referer': `${DOWNLOAD_BASE_URL}/en/track/${trackId}/`
-        },
-        timeout: 120000,
-        responseType: 'arraybuffer'
+    let meta = {};
+    if (isSpotify) {
+      if (!extractTrackId(url)) {
+        return { ok: false, msg: 'Não foi possível extrair o ID da música. Verifique o link.' };
       }
-    );
+      meta = (await resolveTrackMetadata(url)) || {};
+    } else {
+      meta = (await resolveDeezerMetadata(url)) || {};
+    }
 
-    console.log(`[Spotify] ✅ Download concluído`);
+    const title = meta.name || 'Música';
+    const artists = meta.artist ? [meta.artist] : [];
 
-    const artists = Array.isArray(trackData.artists) ? trackData.artists : [trackData.artists];
+    const audio = await fetchAudio({
+      query: [meta.artist, title].filter(Boolean).join(' - ') || title,
+      title,
+      artist: meta.artist
+    });
+    if (!audio.ok) return { ok: false, msg: audio.msg };
 
     const result = {
       ok: true,
-      buffer: Buffer.from(downloadResponse.data),
-      title: trackData.name,
-      artists: artists,
-      albumImage: trackData.image?.url,
-      year: trackData.release_date?.split('-')[0],
-      duration: trackData.duration_ms,
-      filename: `${artists.join(', ')} - ${trackData.name}.mp3`
+      buffer: audio.buffer,
+      title,
+      artists,
+      artist: meta.artist || '',
+      album: meta.album || null,
+      albumImage: meta.image || null,
+      image: meta.image || null,
+      year: meta.year || null,
+      duration: meta.duration || null,
+      filename: `${(meta.artist ? meta.artist + ' - ' : '')}${title}.mp3`,
+      source: isSpotify ? 'spotify+ytdlp' : 'deezer+ytdlp',
+      youtubeTitle: audio.youtubeTitle || null
     };
 
     setCache(`download:${url}`, result);
     return result;
   } catch (error) {
-    console.error('Erro no download do Spotify:', error.message);
-    
-    if (error.response?.status === 404) {
-      return {
-        ok: false,
-        msg: 'Música não encontrada no Spotify'
-      };
-    }
-    
+    console.error('[Spotify] erro no download:', error.message);
     if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
-      return {
-        ok: false,
-        msg: 'Timeout ao baixar a música. Tente novamente.'
-      };
+      return { ok: false, msg: 'Timeout ao processar a música. Tente novamente.' };
     }
-
-    return {
-      ok: false,
-      msg: error.message || 'Erro ao baixar do Spotify'
-    };
+    return { ok: false, msg: error.message || 'Erro ao processar a música.' };
   }
 }
 
 /**
- * Busca e faz download de uma música do Spotify
- * @param {string} query - Nome da música ou artista
- * @returns {Promise<Object>} Dados da busca e download
+ * Busca + download em uma chamada (contrato antigo preservado).
  */
 async function searchDownload(query) {
-  try {
-    // Buscar primeiro resultado
-    const searchResult = await search(query);
-    
-    if (!searchResult.ok || !searchResult.results?.length) {
-      return {
-        ok: false,
-        msg: 'Nenhuma música encontrada com esse nome'
-      };
-    }
-
-    const track = searchResult.results[0];
-    
-    if (!track.song_link) {
-      return {
-        ok: false,
-        msg: 'Link da música não encontrado'
-      };
-    }
-
-    // Fazer download
-    const downloadResult = await download(track.song_link);
-    
-    if (!downloadResult.ok) {
-      return downloadResult;
-    }
-
-    return {
-      ok: true,
-      buffer: downloadResult.buffer,
-      query,
-      track: {
-        name: track.name,
-        artists: track.artists,
-        link: track.link
-      },
-      title: downloadResult.title,
-      artists: downloadResult.artists,
-      albumImage: downloadResult.albumImage,
-      year: downloadResult.year,
-      duration: downloadResult.duration,
-      filename: downloadResult.filename
-    };
-  } catch (error) {
-    console.error('Erro na busca/download do Spotify:', error.message);
-    return {
-      ok: false,
-      msg: error.message || 'Erro ao buscar no Spotify'
-    };
+  const searchResult = await search(query);
+  if (!searchResult.ok || !searchResult.results?.length) {
+    return { ok: false, msg: searchResult.msg || 'Nenhuma música encontrada com esse nome.' };
   }
+  const track = searchResult.results[0];
+  const dl = await download(track.song_link);
+  if (!dl.ok) return dl;
+  return { ...dl, query, track: { name: track.name, artists: track.artists, link: track.link } };
+}
+
+/**
+ * Baixa o áudio de um item já vindo da BUSCA (que pode ser Deezer/iTunes, e não
+ * um link do Spotify). Mantém o mesmo contrato do `download(url)`.
+ * @param {Object} track item de `search().results[]`
+ */
+async function downloadTrack(track) {
+  if (!track || !track.name) return { ok: false, msg: 'Música inválida.' };
+  const cacheKey = `downloadTrack:${normalizeText(`${track.artist} ${track.name}`)}`;
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
+
+  const audio = await fetchAudio({
+    query: [track.artist, track.name].filter(Boolean).join(' - '),
+    title: track.name,
+    artist: track.artist
+  });
+  if (!audio.ok) return { ok: false, msg: audio.msg };
+
+  const result = {
+    ok: true,
+    buffer: audio.buffer,
+    title: track.name,
+    artists: Array.isArray(track.artists) && track.artists.length ? track.artists : (track.artist ? [track.artist] : []),
+    artist: track.artist || '',
+    album: track.album || null,
+    albumImage: track.image || null,
+    image: track.image || null,
+    year: null,
+    duration: track.duration_ms || null,
+    filename: `${(track.artist ? track.artist + ' - ' : '')}${track.name}.mp3`,
+    source: 'search+ytdlp',
+    youtubeTitle: audio.youtubeTitle || null
+  };
+  setCache(cacheKey, result);
+  return result;
 }
 
 export default {
   download,
+  downloadTrack,
   search,
-  searchDownload
+  searchDownload,
+  resolveTrackMetadata
 };
+
+// Exportados para teste (puros, sem I/O).
+export { extractTrackId, isValidSpotifyUrl, normalizeText, rankResults, secondsToMs };
