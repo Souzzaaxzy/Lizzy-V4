@@ -1,5 +1,58 @@
 # AGENTS.md — Lizzy-V4 / Abyss Bot
 
+## 🏎️ `!topgear` — EXPERIMENTAL: Rich/Web (webview) + WASM (out/2026)
+Prova de conceito **isolada** (não está em menu nenhum, por pedido). Objetivo:
+validar a infraestrutura Rich/Web/WASM da fork antes de pensar em emulador SNES.
+
+### ANÁLISE DA FORK (medida no código real, commit `e6ed0a7`)
+O que **existe**:
+- **`nativeFlow` + `useWebview: true`** → botão `cta_url` com
+  `webview_interaction: true` (`lib/Utils/messages.js:529`). É o **único**
+  mecanismo da fork que faz o cliente abrir uma **URL externa dentro do webview
+  do WhatsApp**. Verificado: `generateWAMessage` gera `interactiveMessage` e o
+  payload sobrevive ao `encode`/`decode` real (226 bytes no fio).
+- **`richResponse` / `richResponseMessage`** (`rich-message-utils.js`) — é o
+  AI-rich (texto/código/tabela/látex/imagem inline). `tokenizeCode` suporta
+  `html` **só como linguagem de destaque de código** — não renderiza HTML.
+- **`bloksWidget`** (`InteractiveMessage`) — framework de mini-app da Meta; só
+  carrega bloks aprovados pela Meta, não HTML nosso.
+- **`additionalNodes`** em `relayMessage` — para nós binários extras.
+
+O que **NÃO existe** (conferido nos 107 campos de `Message` do WAProto):
+- nenhum campo `html`, `webview`, `miniapp`, `mini_app`, `wasm`, `game`,
+  `canvas`, `iframe` ou `script`. A busca por esses nomes deu **zero**.
+
+O **WASM** que a fork carrega (`lib/Voip/wasm-engine.js`) é o **da call de voz** —
+nada a ver com jogo.
+
+### CONCLUSÃO (honesta)
+O WhatsApp **não executa HTML/JS nosso dentro do app**. O caminho real é o
+**webview apontando para uma URL nossa** — e aí HTML/CSS/JS/Canvas/WASM rodam
+**no webview**, não no WhatsApp. Sem um servidor público com HTTPS, o botão não
+carrega no aparelho (o webview do WhatsApp exige URL pública).
+
+### O que foi implementado
+- **`dados/src/topgear/`** — `index.html` + `app.js` (canvas + controles touch),
+  **`engine/emulator.wasm`** (114 bytes, **homebrew**, gerada por
+  `build-engine.cjs` — **nenhuma ROM comercial**) e **`server.js`** (servidor
+  HTTP estático, sem dependência nova: `node:http`; anti path-traversal;
+  `TOPGEAR_PORT`/`TOPGEAR_PUBLIC_URL`).
+- **`case 'topgear'`** no `index.js` — só grupo, só dono. Sobe o servidor, gera
+  o `interactiveMessage` com o botão webview e envia por `relayMessage`.
+- **NÃO** entrou em menu, blockPv, ajuda ou aliases (há teste que varre os menus
+  e falha se alguém adicionar).
+
+### Testes — `tests/topgear.test.js` (**7 testes / 52 asserções**)
+Servidor (content-types), **WASM executando de verdade** (`seed()` = 42),
+path-traversal bloqueado, handler gerando `cta_url` + `webview_interaction`,
+só-grupo/só-dono, ausência nos menus/blockPv e ausência de ROM.
+
+### LIMITE (o que falta para o teste real no aparelho)
+O botão só abre no celular com **URL pública HTTPS**. Em teste local o servidor
+fica em `localhost` (o comando avisa). O `webview` do WhatsApp também pode
+recusar domínios não verificados. **Não foi validado em aparelho real** — o que
+está provado é o payload/stanza e o servidor servindo HTML/JS/WASM.
+
 ## Arquitetura geral
 - Bot de WhatsApp (Baileys) em **ESM** (`"type": "module"` no `package.json`).
 - Entry: `package.json` main → `dados/src/connect.js` → importa `dados/src/index.js` (handlers) e `dados/src/funcs/exports.js` (carregador central de módulos).

@@ -1179,6 +1179,7 @@ import { getInfo as twitterGetInfo } from './funcs/utils/twitter.js';
 import { search, searchNews } from './funcs/utils/search.js';
 import { removeBg, upscale } from './funcs/utils/imagetools.js';
 import spotifyModule from './funcs/downloads/spotify.js';
+import topgearServer from './topgear/server.js';
 import captchaIndex, { initCaptchaIndex, addCaptcha, removeCaptcha, getCaptcha, hasPendingCaptcha } from './utils/captchaIndex.js';
 import CaptchaIndex from './utils/captchaIndex.js';
 import npcManager from './utils/npcManager.js';
@@ -21465,6 +21466,31 @@ case 'pin':
           reply("❌ Ocorreu um erro ao processar sua solicitação.");
         }
         break;
+      case 'topgear': {
+        try {
+          if (!isGroup) return reply('◈ Este comando só funciona em grupos.');
+          if (!podeDonoTotal()) return reply(OWNER_ONLY_MESSAGE);
+
+          const port = await topgearServer.iniciar();
+          const base = topgearServer.baseUrl();
+          if (!port || !base) return reply('❌ Não consegui subir o servidor do jogo.');
+
+          const url = `${base}/index.html`;
+          const msg = await generateWAMessage(from, {
+            text: '🏎️ *TOP GEAR* — experiência experimental',
+            footer: 'Lizzy · teste',
+            nativeFlow: [{ text: '🎮 JOGAR', url, useWebview: true }]
+          }, { userJid: nazu.user.id, upload: nazu.waUploadToServer });
+          await nazu.relayMessage(from, msg.message, { messageId: msg.key.id });
+
+          const local = base.includes('localhost') ? `\n\n💡 Em teste local: abra ${url} no navegador do celular (mesma rede).` : '';
+          await reply(`✅ Experiência enviada (porta ${port}).${local}`);
+        } catch (e) {
+          console.error('[TOPGEAR]', e);
+          await reply('❌ Falha ao iniciar o Top Gear experimental.');
+        }
+        break;
+      }
       case 'play2':
       case 'playsoundcloud':
         try {
