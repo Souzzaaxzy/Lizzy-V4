@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { generateWAMessage } from '@itsliaaa/baileys';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 
@@ -24,4 +25,39 @@ function pagina(jogoId) {
   return jogoId ? `${base}/?jogo=${encodeURIComponent(jogoId)}` : base;
 }
 
-export default { pagina, raiz, config: lerConfig };
+/**
+ * Monta e envia o card do jogo: capa (video/imagem) + texto + botao webview.
+ * Tudo em UMA mensagem. Se a capa falhar, cai para texto + botao.
+ */
+async function enviarCard({ nazu, from, jogo }) {
+  const base = raiz();
+  if (!base) return { ok: false, msg: 'URL do jogo nao configurada.' };
+  if (!jogo || !jogo.id) return { ok: false, msg: 'Jogo invalido.' };
+
+  const url = pagina(jogo.id);
+  const texto = `${jogo.emoji || '🎮'} *${jogo.nome}*\n\n${jogo.descricao}\n\n🎮 Toque em *JOGAR* para abrir o jogo.`;
+  const botao = [{ text: '🎮 JOGAR', url, useWebview: true }];
+  const footer = 'Lizzy · EmuGames';
+
+  const capaUrl = `${base}/capas/${encodeURIComponent(jogo.id)}.${jogo.capaExt || 'mp4'}`;
+
+  let msg;
+  try {
+    msg = await generateWAMessage(from, {
+      video: { url: capaUrl },
+      gifPlayback: true,
+      caption: texto,
+      footer,
+      nativeFlow: botao
+    }, { userJid: nazu.user.id, upload: nazu.waUploadToServer });
+  } catch (e) {
+    console.error(`[EMUGAMES] capa falhou (${jogo.id}), enviando so texto:`, e?.message);
+    msg = await generateWAMessage(from, { text: texto, footer, nativeFlow: botao },
+      { userJid: nazu.user.id, upload: nazu.waUploadToServer });
+  }
+
+  await nazu.relayMessage(from, msg.message, { messageId: msg.key.id });
+  return { ok: true };
+}
+
+export default { pagina, raiz, enviarCard, config: lerConfig };

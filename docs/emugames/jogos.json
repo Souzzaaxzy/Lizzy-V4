@@ -6,6 +6,22 @@
       "console": "snes",
       "descricao": "Corrida clássica de SNES: 16 países, 4 carros, pit stop e trilha sonora marcante. Escolha o carro, administre o combustível e chegue em 1º.",
       "rom": "jogos/snes/topgear2.smc"
+    },
+    {
+      "id": "metalslug",
+      "nome": "Metal Slug",
+      "console": "arcade",
+      "descricao": "Run and gun clássico da SNK: atire em tudo, resgate reféns, pilote o tanque e sobreviva à chuva de inimigos.",
+      "rom": "jogos/arcade/mslug.zip",
+      "bios": "jogos/arcade/neogeo.zip"
+    },
+    {
+      "id": "kof97",
+      "nome": "The King of Fighters '97",
+      "console": "arcade",
+      "descricao": "Luta clássica da SNK: times de 3, sistema de Advanced/Extra e o lendário confronto com Orochi.",
+      "rom": "jogos/arcade/kof97.zip",
+      "bios": "jogos/arcade/neogeo.zip"
     }
   ]
 }

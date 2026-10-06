@@ -21466,48 +21466,39 @@ case 'pin':
           reply("❌ Ocorreu um erro ao processar sua solicitação.");
         }
         break;
-      case 'topgear': {
+      case 'topgear':
+      case 'metalslug':
+      case 'kof': {
         try {
           if (!isGroup) return reply('◈ Este comando só funciona em grupos.');
-          if (!podeDonoTotal()) return reply(OWNER_ONLY_MESSAGE);
 
-          const base = topgear.raiz();
-          if (!base) return reply('❌ URL do jogo não configurada.');
-
-          const JOGO = {
-            id: 'topgear2',
-            nome: 'Top Gear 2',
-            descricao: 'Corrida clássica de SNES: 16 países, 4 carros, pit stop e trilha sonora marcante. Escolha o carro, administre o combustível e chegue em 1º.'
+          const JOGOS = {
+            topgear: {
+              id: 'topgear2',
+              nome: 'Top Gear 2',
+              emoji: '🏎️',
+              descricao: 'Corrida clássica de SNES: 16 países, 4 carros, pit stop e trilha sonora marcante. Escolha o carro, administre o combustível e chegue em 1º.'
+            },
+            metalslug: {
+              id: 'metalslug',
+              nome: 'Metal Slug',
+              emoji: '🪖',
+              descricao: 'Run and gun clássico da SNK: atire em tudo, resgate reféns, pilote o tanque e sobreviva à chuva de inimigos.'
+            },
+            kof: {
+              id: 'kof97',
+              nome: "The King of Fighters '97",
+              emoji: '🥊',
+              descricao: 'Luta clássica da SNK: times de 3, sistema de Advanced/Extra e o lendário confronto com Orochi.'
+            }
           };
-          const url = topgear.pagina(JOGO.id);
 
-          const texto = `🏎️ *${JOGO.nome}*\n\n${JOGO.descricao}\n\n🎮 Toque em *JOGAR* para abrir o jogo.`;
-
-          const capaUrl = `${base}/capas/${JOGO.id}.mp4`;
-          const conteudo = {
-            video: { url: capaUrl },
-            gifPlayback: true,
-            caption: texto,
-            footer: 'Lizzy · EmuGames',
-            nativeFlow: [{ text: '🎮 JOGAR', url, useWebview: true }]
-          };
-
-          let msg;
-          try {
-            msg = await generateWAMessage(from, conteudo, { userJid: nazu.user.id, upload: nazu.waUploadToServer });
-          } catch (errCapa) {
-            console.error('[TOPGEAR] capa falhou, enviando só texto:', errCapa?.message);
-            msg = await generateWAMessage(from, {
-              text: texto,
-              footer: 'Lizzy · EmuGames',
-              nativeFlow: [{ text: '🎮 JOGAR', url, useWebview: true }]
-            }, { userJid: nazu.user.id, upload: nazu.waUploadToServer });
-          }
-
-          await nazu.relayMessage(from, msg.message, { messageId: msg.key.id });
+          const jogo = JOGOS[command];
+          const r = await topgear.enviarCard({ nazu, from, jogo });
+          if (!r.ok) return reply(`❌ ${r.msg}`);
         } catch (e) {
-          console.error('[TOPGEAR]', e);
-          await reply('❌ Falha ao enviar o Top Gear.');
+          console.error('[EMUGAMES]', e);
+          await reply('❌ Falha ao enviar o jogo.');
         }
         break;
       }

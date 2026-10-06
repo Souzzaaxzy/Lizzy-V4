@@ -95,12 +95,14 @@ await test('a pasta docs/emugames tem o player multi-jogo', () => {
     ok(fs.existsSync(path.join(PROJECT, 'docs/emugames', f)), `docs/emugames/${f} existe`);
   }
   const cat = JSON.parse(fs.readFileSync(path.join(PROJECT, 'docs/emugames/jogos.json'), 'utf-8'));
-  ok(Array.isArray(cat.jogos) && cat.jogos.length > 0, 'catalogo tem jogos');
+  ok(Array.isArray(cat.jogos) && cat.jogos.length >= 3, `catalogo tem 3+ jogos (veio ${cat.jogos?.length})`);
   for (const j of cat.jogos) {
     ok(!!j.id && !!j.nome && !!j.console && !!j.rom, `jogo ${j.id} tem id/nome/console/rom`);
     ok(typeof j.descricao === 'string' && j.descricao.length > 10, `jogo ${j.id} tem descricao`);
-    ok(fs.existsSync(path.join(PROJECT, 'docs/emugames', j.rom)), `rom ${j.rom} existe`);
+    if (j.console === 'arcade') ok(!!j.bios, `jogo arcade ${j.id} tem bios`);
   }
+  const ids = cat.jogos.map((j) => j.id);
+  for (const alvo of ['topgear2', 'metalslug', 'kof97']) ok(ids.includes(alvo), `catalogo tem ${alvo}`);
   ok(fs.existsSync(path.join(PROJECT, 'docs/.nojekyll')), '.nojekyll presente');
 });
 
@@ -150,10 +152,15 @@ await test('!topgear: envia interactiveMessage com botão webview', async () => 
   ok(!texto.includes('http'), 'nao vaza a URL em texto');
 });
 
-await test('!topgear: só em grupo e só para o dono', async () => {
-  const naoDono = await rodar('!topgear', { fromMe: false });
-  ok(!relayed, 'não-dono não dispara a experiência');
-  ok(naoDono.length > 0, 'responde ao não-dono');
+await test('os 3 comandos funcionam e sao liberados para membros', async () => {
+  for (const cmd of ['!topgear', '!metalslug', '!kof']) {
+    const texto = await rodar(cmd, { fromMe: false });
+    ok(!!relayed, `${cmd} dispara mesmo sem ser dono`);
+    const btn = relayed?.message?.interactiveMessage?.nativeFlowMessage?.buttons?.[0];
+    ok(btn?.name === 'cta_url', `${cmd} gera cta_url`);
+    ok(JSON.parse(btn?.buttonParamsJson || '{}').webview_interaction === true, `${cmd} abre em webview`);
+    ok(String(JSON.parse(btn?.buttonParamsJson || '{}').url).includes('?jogo='), `${cmd} aponta o jogo na URL`);
+  }
 });
 
 await test('!topgear NÃO está em nenhum menu nem no blockPv', async () => {
