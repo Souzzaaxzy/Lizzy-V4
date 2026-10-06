@@ -1,8 +1,8 @@
 /**
  * !topgear — experiência Rich/Web (webview) experimental.
  *
- * O jogo é servido pelo GitHub Pages (docs/emugames/). O comando só monta o
- * payload interactiveMessage com o botão cta_url (webview_interaction: true)
+ * O jogo é servido pelo Cloudflare Workers (docs/emugames/). O comando só monta
+ * o payload interactiveMessage com o botão cta_url (webview_interaction: true)
  * e envia por relayMessage.
  *
  * Uso: node tests/topgear.test.js
@@ -104,7 +104,13 @@ await test('a pasta docs/emugames tem o player multi-jogo', () => {
   }
   const ids = cat.jogos.map((j) => j.id);
   for (const alvo of ['topgear2', 'metalslug', 'kof97']) ok(ids.includes(alvo), `catalogo tem ${alvo}`);
-  ok(fs.existsSync(path.join(PROJECT, 'docs/.nojekyll')), '.nojekyll presente');
+  // Sem GitHub Pages: o host e o Cloudflare Workers (config em wrangler.jsonc).
+  const wrangler = path.join(PROJECT, 'wrangler.jsonc');
+  ok(fs.existsSync(wrangler), 'wrangler.jsonc presente (Cloudflare)');
+  if (fs.existsSync(wrangler)) {
+    const w = JSON.parse(fs.readFileSync(wrangler, 'utf-8').replace(/^\s*\/\/.*$/gm, ''));
+    ok(w?.assets?.directory === './docs/emugames', 'Cloudflare serve docs/emugames');
+  }
 });
 
 await test('index.html: player multi-jogo com os caminhos certos', () => {
@@ -309,10 +315,13 @@ await test('o kof97.zip esta fora do upload do Cloudflare (.assetsignore)', () =
   ok(linhas.length === 1, `exclui so o arquivo grande (veio ${linhas.length} regra(s))`);
 });
 
-await test('o espelho serve o romset grande com CORS', async () => {
-  const r = await fetch('https://souzzaaxzy.github.io/Lizzy-V4/emugames/jogos/arcade/kof97.zip', { method: 'HEAD' });
-  ok(r.status === 200, `kof97.zip no espelho -> ${r.status}`);
-  ok(r.headers.get('access-control-allow-origin') === '*', 'o espelho manda CORS *');
+await test('o host (Cloudflare) nao depende de espelho externo', () => {
+  // O GitHub Pages foi abandonado: tudo sai do MESMO host (Cloudflare). O
+  // kof97.zip grande nao sobe (esta no .assetsignore) — quem sobe sao as partes.
+  const ig = fs.readFileSync(path.join(PROJECT, 'docs/emugames/.assetsignore'), 'utf-8');
+  const linhas = ig.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
+  ok(linhas.includes('jogos/arcade/kof97.zip'), 'o zip grande nao sobe');
+  ok(!linhas.some((l) => l.endsWith('.p1') || l.endsWith('.p2')), 'as partes sobem normalmente');
 });
 
 await test('o player NAO define EJS_paths (quebra o boot do EmulatorJS)', () => {
@@ -382,7 +391,7 @@ await test('ROM grande e servida em PARTES e remontada no player', () => {
       soma += tp;
     }
     ok(soma === tam, `${j.id}: as partes somam o zip inteiro (${soma} == ${tam})`);
-    ok(j.mirror === undefined, `${j.id} nao depende mais do espelho`);
+    ok(j.mirror === undefined, `${j.id} nao depende de espelho`);
   }
 
   // o player remonta num Blob e da o nome do ARQUIVO ao romset (arcade)

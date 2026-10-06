@@ -42,8 +42,9 @@ Com 2+ jogos, o botão **☰ JOGOS** troca de jogo sem recarregar.
 
 ## Hospedagem
 
-Servido por **Cloudflare Workers** (static assets). Também funciona em GitHub
-Pages ou qualquer host estático.
+Servido por **Cloudflare Workers** (static assets) — é o único host usado.
+Config em `wrangler.jsonc` (`assets.directory` = `./docs/emugames`); deploy com
+`wrangler deploy`.
 
 ### Limite de 25 MiB por arquivo (importante)
 
@@ -62,5 +63,5 @@ nao somarem o zip inteiro.
 
 ### Cloudflare
 
-*Framework* None, *Build command* **vazio**, *Build output directory*
-`docs/emugames`.
+`wrangler.jsonc` (`assets.directory` = `./docs/emugames`) + `wrangler deploy`.
+No painel: *Framework* None, *Build command* **vazio**.

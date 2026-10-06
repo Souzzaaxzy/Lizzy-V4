@@ -16,8 +16,8 @@ não só um.
       └── README.md
   ```
 - **`dados/src/topgear/`** continua sendo a cópia-fonte (config + testes).
-- **URL**: `https://souzzaaxzy.github.io/Lizzy-V4/emugames/index.html`
-  (o `config.json` e o `.env` apontam para `/emugames`).
+- **URL**: `https://emugames.kannonmtx.workers.dev`
+  (o `config.json` e o `.env` apontam para ela; a raiz já é `/emugames`).
 
 ### Como adicionar um jogo (sem mexer em código)
 1. Soltar a ROM em `docs/emugames/jogos/<console>/`
@@ -40,9 +40,9 @@ tem entradas completas e que cada `rom` existe de fato, que os romsets de arcade
 batem com os CRCs oficiais (MAME/FBNeo) e que as capas dos jogos existem.
 
 ### Hospedagem
-**Cloudflare Workers** (static assets) + **GitHub Pages** como espelho.
-No Cloudflare: *Framework* None, *Build command* **vazio**, *Build output
-directory* `docs/emugames`.
+**Cloudflare Workers** (static assets) — único host. Config em `wrangler.jsonc`
+(`assets.directory` = `./docs/emugames`); deploy com `wrangler deploy`.
+*Framework* None, *Build command* **vazio**.
 
 **Limite de 25 MiB por arquivo (medido)**: o Cloudflare recusa qualquer asset
 acima de 25 MiB e **o deploy inteiro falha** (não sobe nada). O `kof97.zip`
@@ -57,16 +57,12 @@ procura o romset **pelo nome do arquivo** — com o nome bonito ("The King of
 Fighters 97") o FS ficava só com a BIOS e o FBNeo não achava o `kof97`. Por isso
 em `arcade` o `EJS_gameName` é o **nome do zip** (`kof97.zip`), não o do jogo.
 
-> **Espelho (GitHub Pages)**: chegou a ser usado e foi **abandonado** — a ROM
-> vinda de outro domínio travava o carregamento em rede de celular. As partes
-> eliminam a dependência de host externo.
-
 O EmulatorJS **aceita** zip/7z/rar (detecta por magic bytes em
 `compression.js`), **mas** para `arcade` ele escreve o arquivo **como está** no
 FS (`emulator.js` → `if (["arcade","mame"].includes(core)) writeFile(fileName,
 data)`) — o FBNeo exige **zip**. Então 7z/rar não servem para arcade, e o
 `kof97.zip` também não comprime abaixo de 25 MiB nem com deflate máximo
-(27,4 MiB). Daí o espelho ser o caminho certo.
+(27,4 MiB). Daí as partes serem o caminho certo.
 
 ### 🚨 A CAUSA RAIZ do "não roda": `EJS_paths` (set/2026) ✅
 O jogo **nunca iniciava** — em **todos** os consoles (SNES, arcade). O menu de
