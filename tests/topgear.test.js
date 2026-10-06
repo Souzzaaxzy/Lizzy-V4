@@ -355,6 +355,35 @@ await test('o player NAO define EJS_paths (quebra o boot do EmulatorJS)', () => 
   ok(/window\.EJS_gameUrl = urlRom\(j\)/.test(html), 'o EJS_gameUrl passa pelo espelho');
 });
 
+await test('a BIOS e entregue como ZIP (dontExtractBIOS) e fica na raiz', () => {
+  const html = fs.readFileSync(path.join(PROJECT, 'docs/emugames/index.html'), 'utf-8');
+  // O EmulatorJS, por padrao, EXTRAI a BIOS em arquivos soltos. O FBNeo procura
+  // "neogeo.zip" -- sem o zip ele acusa "one of your romsets is missing files".
+  ok(/window\.EJS_dontExtractBIOS = true/.test(html), 'liga EJS_dontExtractBIOS');
+  ok(/if \(j\.bios\)/.test(html), 'so quando o jogo tem BIOS');
+
+  const cat = JSON.parse(fs.readFileSync(path.join(PROJECT, 'docs/emugames/jogos.json'), 'utf-8'));
+  for (const j of cat.jogos) {
+    if (!j.bios) continue;
+    // a BIOS tem de estar na RAIZ do site: o EJS grava o arquivo no CWD do FS
+    // e o FBNeo procura o zip pelo nome na raiz.
+    ok(!j.bios.includes('/'), `${j.id}: bios na raiz do site (veio ${j.bios})`);
+    ok(fs.existsSync(path.join(PROJECT, 'docs/emugames', j.bios)), `${j.id}: ${j.bios} existe`);
+  }
+  // e o zip da BIOS tem os arquivos essenciais do FBNeo
+  const essenciais = { 'sm1.sm1': '94416d67', 'sfix.sfix': 'c2ea0cfd', '000-lo.lo': '5a86cff2' };
+  const entradas = (nome) => {
+    const m = new Map();
+    for (const { nome: n, dados } of lerZip(path.join(PROJECT, 'docs/emugames', nome))) m.set(n, dados);
+    return m;
+  };
+  const bios = entradas('neogeo.zip');
+  for (const [nome, esperado] of Object.entries(essenciais)) {
+    ok(bios.has(nome) && (zlib.crc32(bios.get(nome)) >>> 0).toString(16).padStart(8, '0') === esperado,
+      `BIOS tem ${nome} com CRC oficial`);
+  }
+});
+
 const totalOk = RESULTS.reduce((a, r) => a + r.passed, 0);
 const totalFail = RESULTS.reduce((a, r) => a + r.failed, 0);
 console.log('\n════════════════════════════════════════');

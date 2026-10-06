@@ -104,7 +104,14 @@
     window.EJS_volume = 0.6;
     window.EJS_askBeforeExit = false;
     window.EJS_controlScheme = j.console;
-    if (j.bios) window.EJS_biosUrl = urlRom({ rom: j.bios, mirror: j.biosMirror ?? j.mirror });
+    if (j.bios) {
+      // A BIOS tem de chegar ao emulador como ZIP. O EmulatorJS, por padrao,
+      // EXTRAI a BIOS em arquivos soltos -- e o FBNeo procura "neogeo.zip", que
+      // entao nao existe (erro "one of your romsets is missing files").
+      // dontExtractBIOS mantem o zip, que e o que o core espera.
+      window.EJS_dontExtractBIOS = true;
+      window.EJS_biosUrl = urlRom({ rom: j.bios, mirror: j.biosMirror ?? j.mirror });
+    }
     window.EJS_Buttons = {
       playPause: true, restart: true, mute: true, settings: true, fullscreen: true,
       saveState: false, loadState: false, screenRecord: false, gamepad: false,

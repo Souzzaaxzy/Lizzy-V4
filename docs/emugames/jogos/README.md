@@ -69,10 +69,16 @@ varios arquivos internos (`232-p1.p1`, `232-c1.c1`, `232-v1.v1`...).
 ### Exemplo: KOF 97 (Neo Geo)
 
 ```
-jogos/arcade/
-├── kof97.zip       <- o romset (NAO extrair)
-└── neogeo.zip      <- a BIOS (obrigatoria)
+docs/emugames/
+├── neogeo.zip      <- a BIOS (obrigatoria) — fica na RAIZ do site
+└── jogos/arcade/
+    └── kof97.zip   <- o romset (NAO extrair)
 ```
+
+A BIOS fica **na raiz** (nao em `jogos/arcade/`): o player liga
+`EJS_dontExtractBIOS`, e assim a BIOS chega ao emulador como **zip** — que e o
+que o FBNeo procura. Sem isso o emulador extrai a BIOS em arquivos soltos e o
+FBNeo acusa "romsets is missing files".
 
 ```json
 {
@@ -81,7 +87,7 @@ jogos/arcade/
   "console": "arcade",
   "descricao": "Luta classica da SNK com 35 personagens.",
   "rom": "jogos/arcade/kof97.zip",
-  "bios": "jogos/arcade/neogeo.zip"
+  "bios": "neogeo.zip"
 }
 ```
 

@@ -34,7 +34,7 @@ do tema. Consoles: `snes` `nes` `gba` `gb` `genesis` `n64` `psx` `arcade`...
 - Mantidos: **PARAR**, inatividade (3 min), sair/voltar reinicia sozinho,
   controles de toque **abaixo** da tela (medido em viewport Android).
 
-### Testes — `tests/topgear.test.js` (**16 testes / 171 asserções**)
+### Testes — `tests/topgear.test.js` (**17 testes / 180 asserções**)
 Inclui a validação de que a URL aponta para `/emugames/`, que o `jogos.json`
 tem entradas completas e que cada `rom` existe de fato, que os romsets de arcade
 batem com os CRCs oficiais (MAME/FBNeo) e que as capas dos jogos existem.
@@ -92,6 +92,42 @@ exata do player, removendo **uma** opção por vez. `EJS_gameName`, `EJS_languag
 — a tela aparece preta até no demo oficial. O sinal confiável é
 `EJS_emulator.started` + `EJS_emulator.fileName` (lidos do DOM).
 
+### 🚨 A BIOS tem de chegar como ZIP — `dontExtractBIOS` (set/2026) ✅
+Depois do `EJS_paths`, o jogo ainda parava com a mensagem **do próprio FBNeo**:
+
+> *"This game is known but one of your romsets is missing files for THIS VERSION
+> of FBNeo... ROM with name sm1.sm1 and CRC 0x94416d67 is missing"* (etc.)
+
+**Causa medida** (lendo o FS do emulador em runtime):
+
+| | FS do emulador | resultado |
+|---|---|---|
+| **padrão** | `kof97.zip` + `sm1.sm1`, `sfix.sfix`, `000-lo.lo`... **soltos** (a BIOS **extraída**) | FBNeo procura `neogeo.zip` → **não existe** → erro |
+| **`dontExtractBIOS: true`** | `kof97.zip` + **`neogeo.zip`** (zip inteiro) | FBNeo acha e carrega |
+
+O EmulatorJS **extrai** a BIOS por padrão; o FBNeo (libretro) procura a BIOS como
+**`neogeo.zip`** na raiz. Sem o zip, ele acusa os arquivos faltando.
+
+**Correção** (`docs/emugames/index.html`):
+```js
+if (j.bios) {
+  window.EJS_dontExtractBIOS = true;   // mantem o zip
+  window.EJS_biosUrl = urlRom({ rom: j.bios, ... });
+}
+```
+E a BIOS passou a ficar **na raiz do site** (`docs/emugames/neogeo.zip`) — o
+EmulatorJS grava o arquivo no CWD do FS e o FBNeo procura o zip pelo nome. O
+`jogos.json` aponta `"bios": "neogeo.zip"` (sem subpasta).
+
+**Prova (log do core com `EJS_DEBUG_XX`)**: antes o FBNeo imprimia os
+`is missing`; agora imprime
+`[FBNeo] Romset found at /mslug`, `[FBNeo] Romset found at /neogeo` e
+`Using ROM with known crc 0x08d8daa5 and name 201-p1.p1` — **todos os arquivos,
+CRC conhecido**, para os 3 jogos de arcade.
+
+> Para diagnosticar de novo: `window.EJS_DEBUG_XX = true` faz o EJS logar o
+> `print`/`printErr` do core no console. É onde o FBNeo diz o que achou/faltou.
+
 ### Capas dos jogos (`docs/emugames/capas/<id>.png`)
 Geradas por **`tools/gerar-capas.mjs`** (sharp, já é dep) a partir do
 `jogos.json` — 1280×720, um PNG por jogo. O `enviarCard`
@@ -137,7 +173,7 @@ e faltavam os essenciais. Trocar a BIOS **não** resolveu (o problema era o
 `EJS_paths`, acima) e a BIOS completa anterior foi **restaurada**. Regra: antes
 de trocar a BIOS, conferir os CRCs dos essenciais contra a tabela do FBNeo.
 
-**Testes**: `tests/topgear.test.js` **16 testes / 171 asserções**. As novas
+**Testes**: `tests/topgear.test.js` **17 testes / 180 asserções**. As novas
 seções validam: romset mslug **9/9** e kof97 **13/13** com **nome oficial + CRC
 oficial** (o zip antigo do mslug reprova — **10 asserções falham**; o kof
 incompleto reprova — **14 falham**), `kof2.zip` não existe mais, as 3 capas são
