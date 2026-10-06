@@ -4,8 +4,18 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
-const PORT = Number(process.env.TOPGEAR_PORT || 8099);
-const HOST = process.env.TOPGEAR_HOST || '0.0.0.0';
+
+function lerConfig() {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json'), 'utf-8'));
+  } catch {
+    return {};
+  }
+}
+
+const cfg = lerConfig();
+const PORT = Number(process.env.TOPGEAR_PORT || cfg.port || 8099);
+const HOST = process.env.TOPGEAR_HOST || cfg.host || '0.0.0.0';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -77,7 +87,7 @@ export function portaEmUso() {
 }
 
 export function baseUrl() {
-  return process.env.TOPGEAR_PUBLIC_URL || (porta ? `http://localhost:${porta}` : '');
+  return process.env.TOPGEAR_PUBLIC_URL || cfg.publicUrl || (porta ? `http://localhost:${porta}` : '');
 }
 
 export default { iniciar, portaEmUso, baseUrl };
