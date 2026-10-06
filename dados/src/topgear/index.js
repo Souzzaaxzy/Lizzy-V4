@@ -29,7 +29,7 @@ function pagina(jogoId) {
  * Monta e envia o card do jogo: capa (GIF animado) + texto + botao webview.
  * Tudo em UMA mensagem. Se a capa falhar, cai para texto + botao.
  *
- * A capa e um `.gif` (docs/emugames/capas/<id>.gif). O WhatsApp nao anima um
+ * A capa e um `.gif` (dados/emugames/capas/<id>.gif). O WhatsApp nao anima um
  * `.gif` cru como imagem/video — ele exige MP4 + `gifPlayback`. Quem faz essa
  * conversao e a fork (`@itsliaaa/baileys`), pelo tipo `gif:` (vira
  * videoMessage com gifPlayback), que o header interativo aceita.

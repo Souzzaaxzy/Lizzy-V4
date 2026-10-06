@@ -1,5 +1,5 @@
 /**
- * Gera capas PLACEHOLDER dos jogos do EmuGames (docs/emugames/capas/<id>.gif).
+ * Gera capas PLACEHOLDER dos jogos do EmuGames (dados/emugames/capas/<id>.gif).
  *
  * As capas sao o "capa" que aparece no card do !topgear / !metalslug / !kof.
  * O card procura `capas/<id>.gif` (GIF animado); o WhatsApp nao anima um `.gif`
@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const DEST = path.join(RAIZ, 'docs/emugames/capas');
+const DEST = path.join(RAIZ, 'dados/emugames/capas');
 
 const CORES = {
   snes: ['#1d4ed8', '#0b1b46'],
@@ -57,7 +57,7 @@ function svg({ nome, console }) {
 </svg>`;
 }
 
-const catalogo = JSON.parse(fs.readFileSync(path.join(RAIZ, 'docs/emugames/jogos.json'), 'utf-8'));
+const catalogo = JSON.parse(fs.readFileSync(path.join(RAIZ, 'dados/emugames/jogos.json'), 'utf-8'));
 fs.mkdirSync(DEST, { recursive: true });
 
 for (const jogo of catalogo.jogos || []) {

@@ -1,7 +1,7 @@
 /**
  * !topgear — experiência Rich/Web (webview) experimental.
  *
- * O jogo é servido pelo Cloudflare Workers (docs/emugames/). O comando só monta
+ * O jogo é servido pelo Cloudflare Workers (dados/emugames/). O comando só monta
  * o payload interactiveMessage com o botão cta_url (webview_interaction: true)
  * e envia por relayMessage.
  *
@@ -91,11 +91,11 @@ await test('config: a URL do jogo está definida', () => {
   ok(topgear.pagina('topgear2').includes('?jogo=topgear2'), 'aceita ?jogo=<id>');
 });
 
-await test('a pasta docs/emugames tem o player multi-jogo', () => {
+await test('a pasta dados/emugames tem o player multi-jogo', () => {
   for (const f of ['index.html', 'style.css', 'jogos.json', 'jogos/README.md', 'capas/README.md']) {
-    ok(fs.existsSync(path.join(PROJECT, 'docs/emugames', f)), `docs/emugames/${f} existe`);
+    ok(fs.existsSync(path.join(PROJECT, 'dados/emugames', f)), `dados/emugames/${f} existe`);
   }
-  const cat = JSON.parse(fs.readFileSync(path.join(PROJECT, 'docs/emugames/jogos.json'), 'utf-8'));
+  const cat = JSON.parse(fs.readFileSync(path.join(PROJECT, 'dados/emugames/jogos.json'), 'utf-8'));
   ok(Array.isArray(cat.jogos) && cat.jogos.length >= 3, `catalogo tem 3+ jogos (veio ${cat.jogos?.length})`);
   for (const j of cat.jogos) {
     ok(!!j.id && !!j.nome && !!j.console && !!j.rom, `jogo ${j.id} tem id/nome/console/rom`);
@@ -109,12 +109,12 @@ await test('a pasta docs/emugames tem o player multi-jogo', () => {
   ok(fs.existsSync(wrangler), 'wrangler.jsonc presente (Cloudflare)');
   if (fs.existsSync(wrangler)) {
     const w = JSON.parse(fs.readFileSync(wrangler, 'utf-8').replace(/^\s*\/\/.*$/gm, ''));
-    ok(w?.assets?.directory === './docs/emugames', 'Cloudflare serve docs/emugames');
+    ok(w?.assets?.directory === './dados/emugames', 'Cloudflare serve dados/emugames');
   }
 });
 
 await test('index.html: player multi-jogo com os caminhos certos', () => {
-  const html = fs.readFileSync(path.join(PROJECT, 'docs/emugames/index.html'), 'utf-8');
+  const html = fs.readFileSync(path.join(PROJECT, 'dados/emugames/index.html'), 'utf-8');
   ok(html.includes('cdn.emulatorjs.org'), 'carrega do CDN do EmulatorJS');
   ok(html.includes('src/'), 'aponta os scripts para src/');
   ok(html.includes('EJS_gameUrl'), 'define a ROM');
@@ -130,7 +130,7 @@ await test('index.html: player multi-jogo com os caminhos certos', () => {
   ok(html.includes('id="parar"'), 'tem botao PARAR');
   ok(html.includes('3 * 60 * 1000'), 'desliga por inatividade (3 min)');
   ok(html.includes('visibilitychange'), 'para ao sair da aba');
-  const css = fs.readFileSync(path.join(PROJECT, 'docs/emugames/style.css'), 'utf-8');
+  const css = fs.readFileSync(path.join(PROJECT, 'dados/emugames/style.css'), 'utf-8');
   ok(css.includes('ejs_virtualGamepad_parent'), 'reposiciona os controles de toque (css)');
   ok(/height:\s*calc\(.*200px\)/.test(css), 'a caixa reserva a faixa dos controles');
   ok(/ejs_canvas_parent[^}]*height:\s*calc\(100% - 200px\)/s.test(css), 'a tela ocupa so o andar de cima');
@@ -246,7 +246,7 @@ await test('romsets de arcade batem com os CRCs oficiais (MAME/FBNeo)', () => {
 
   const entradas = (nomeZip) => {
     const m = new Map();
-    for (const { nome, dados } of lerZip(path.join(PROJECT, 'docs/emugames/jogos/arcade', nomeZip))) {
+    for (const { nome, dados } of lerZip(path.join(PROJECT, 'dados/emugames/jogos/arcade', nomeZip))) {
       if (nome.endsWith('.html')) continue;
       m.set(nome, dados);
     }
@@ -274,18 +274,18 @@ await test('romsets de arcade batem com os CRCs oficiais (MAME/FBNeo)', () => {
   ok(kof.size === 13, `kof97 tem 13 arquivos (veio ${kof.size})`);
 
   // Nao pode sobrar o zip da segunda parte ao lado (ja foi unificado).
-  const pasta = path.join(PROJECT, 'docs/emugames/jogos/arcade');
+  const pasta = path.join(PROJECT, 'dados/emugames/jogos/arcade');
   ok(!fs.existsSync(path.join(pasta, 'kof2.zip')), 'kof2.zip nao existe mais (foi unificado)');
 });
 
 await test('as capas dos jogos existem (senao o card cai para texto)', () => {
-  const cat = JSON.parse(fs.readFileSync(path.join(PROJECT, 'docs/emugames/jogos.json'), 'utf-8'));
+  const cat = JSON.parse(fs.readFileSync(path.join(PROJECT, 'dados/emugames/jogos.json'), 'utf-8'));
   for (const j of cat.jogos) {
     // O card procura `capas/<capa>`; sem o campo `capa`, cai no convencional
     // `<id>.gif`. A capa e um GIF animado (a fork converte p/ MP4 no envio).
     const arquivo = j.capa || `${j.id}.gif`;
     ok(arquivo.endsWith('.gif'), `${j.id}: a capa e um .gif (veio ${arquivo})`);
-    const capa = path.join(PROJECT, 'docs/emugames/capas', arquivo);
+    const capa = path.join(PROJECT, 'dados/emugames/capas', arquivo);
     ok(fs.existsSync(capa), `capa ${arquivo} existe`);
     if (fs.existsSync(capa)) {
       const b = fs.readFileSync(capa);
@@ -307,7 +307,7 @@ await test('o conversor de romset Neo Geo esta no repositorio', () => {
 });
 
 await test('o kof97.zip esta fora do upload do Cloudflare (.assetsignore)', () => {
-  const ig = path.join(PROJECT, 'docs/emugames/.assetsignore');
+  const ig = path.join(PROJECT, 'dados/emugames/.assetsignore');
   ok(fs.existsSync(ig), '.assetsignore existe');
   const txt = fs.readFileSync(ig, 'utf-8');
   const linhas = txt.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
@@ -318,14 +318,14 @@ await test('o kof97.zip esta fora do upload do Cloudflare (.assetsignore)', () =
 await test('o host (Cloudflare) nao depende de espelho externo', () => {
   // O GitHub Pages foi abandonado: tudo sai do MESMO host (Cloudflare). O
   // kof97.zip grande nao sobe (esta no .assetsignore) — quem sobe sao as partes.
-  const ig = fs.readFileSync(path.join(PROJECT, 'docs/emugames/.assetsignore'), 'utf-8');
+  const ig = fs.readFileSync(path.join(PROJECT, 'dados/emugames/.assetsignore'), 'utf-8');
   const linhas = ig.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
   ok(linhas.includes('jogos/arcade/kof97.zip'), 'o zip grande nao sobe');
   ok(!linhas.some((l) => l.endsWith('.p1') || l.endsWith('.p2')), 'as partes sobem normalmente');
 });
 
 await test('o player NAO define EJS_paths (quebra o boot do EmulatorJS)', () => {
-  const html = fs.readFileSync(path.join(PROJECT, 'docs/emugames/index.html'), 'utf-8');
+  const html = fs.readFileSync(path.join(PROJECT, 'dados/emugames/index.html'), 'utf-8');
   // O loader.js do EmulatorJS resolve os caminhos sozinho (data/ e data/src/).
   // Definir EJS_paths sobrescreve esses caminhos e o jogo NUNCA inicia
   // (EJS_emulator.started fica false) -- medido nos dois consoles.
@@ -339,25 +339,25 @@ await test('o player NAO define EJS_paths (quebra o boot do EmulatorJS)', () => 
 });
 
 await test('a BIOS e entregue como ZIP (dontExtractBIOS) e fica na raiz', () => {
-  const html = fs.readFileSync(path.join(PROJECT, 'docs/emugames/index.html'), 'utf-8');
+  const html = fs.readFileSync(path.join(PROJECT, 'dados/emugames/index.html'), 'utf-8');
   // O EmulatorJS, por padrao, EXTRAI a BIOS em arquivos soltos. O FBNeo procura
   // "neogeo.zip" -- sem o zip ele acusa "one of your romsets is missing files".
   ok(/window\.EJS_dontExtractBIOS = true/.test(html), 'liga EJS_dontExtractBIOS');
   ok(/if \(j\.bios\)/.test(html), 'so quando o jogo tem BIOS');
 
-  const cat = JSON.parse(fs.readFileSync(path.join(PROJECT, 'docs/emugames/jogos.json'), 'utf-8'));
+  const cat = JSON.parse(fs.readFileSync(path.join(PROJECT, 'dados/emugames/jogos.json'), 'utf-8'));
   for (const j of cat.jogos) {
     if (!j.bios) continue;
     // a BIOS tem de estar na RAIZ do site: o EJS grava o arquivo no CWD do FS
     // e o FBNeo procura o zip pelo nome na raiz.
     ok(!j.bios.includes('/'), `${j.id}: bios na raiz do site (veio ${j.bios})`);
-    ok(fs.existsSync(path.join(PROJECT, 'docs/emugames', j.bios)), `${j.id}: ${j.bios} existe`);
+    ok(fs.existsSync(path.join(PROJECT, 'dados/emugames', j.bios)), `${j.id}: ${j.bios} existe`);
   }
   // e o zip da BIOS tem os arquivos essenciais do FBNeo
   const essenciais = { 'sm1.sm1': '94416d67', 'sfix.sfix': 'c2ea0cfd', '000-lo.lo': '5a86cff2' };
   const entradas = (nome) => {
     const m = new Map();
-    for (const { nome: n, dados } of lerZip(path.join(PROJECT, 'docs/emugames', nome))) m.set(n, dados);
+    for (const { nome: n, dados } of lerZip(path.join(PROJECT, 'dados/emugames', nome))) m.set(n, dados);
     return m;
   };
   const bios = entradas('neogeo.zip');
@@ -368,15 +368,15 @@ await test('a BIOS e entregue como ZIP (dontExtractBIOS) e fica na raiz', () => 
 });
 
 await test('ROM grande e servida em PARTES e remontada no player', () => {
-  const cat = JSON.parse(fs.readFileSync(path.join(PROJECT, 'docs/emugames/jogos.json'), 'utf-8'));
-  const html = fs.readFileSync(path.join(PROJECT, 'docs/emugames/index.html'), 'utf-8');
+  const cat = JSON.parse(fs.readFileSync(path.join(PROJECT, 'dados/emugames/jogos.json'), 'utf-8'));
+  const html = fs.readFileSync(path.join(PROJECT, 'dados/emugames/index.html'), 'utf-8');
   const LIMITE = 25 * 1024 * 1024;
-  const pasta = path.join(PROJECT, 'docs/emugames/jogos/arcade');
+  const pasta = path.join(PROJECT, 'dados/emugames/jogos/arcade');
 
   // Toda ROM acima do limite do Cloudflare tem de vir em partes, e cada parte
   // tem de caber no limite (senao o deploy inteiro falha).
   for (const j of cat.jogos) {
-    const p = path.join(PROJECT, 'docs/emugames', j.rom);
+    const p = path.join(PROJECT, 'dados/emugames', j.rom);
     if (!fs.existsSync(p)) continue;
     const tam = fs.statSync(p).size;
     if (tam <= LIMITE) continue;
@@ -402,7 +402,7 @@ await test('ROM grande e servida em PARTES e remontada no player', () => {
     'em arcade o nome do arquivo e o do romset (o core procura pelo nome)');
 
   // o .assetsignore exclui SO o zip grande (as partes precisam subir)
-  const ig = fs.readFileSync(path.join(PROJECT, 'docs/emugames/.assetsignore'), 'utf-8');
+  const ig = fs.readFileSync(path.join(PROJECT, 'dados/emugames/.assetsignore'), 'utf-8');
   const linhas = ig.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
   ok(linhas.includes('jogos/arcade/kof97.zip'), 'exclui o zip grande do Cloudflare');
   ok(!linhas.some((l) => l.endsWith('.p1') || l.endsWith('.p2')), 'NAO exclui as partes');

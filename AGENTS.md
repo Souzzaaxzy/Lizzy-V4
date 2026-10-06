@@ -5,9 +5,10 @@ Evolução do `!topgear`: o mesmo comando agora abre um **catálogo de jogos**,
 não só um.
 
 ### Onde fica
-- **`docs/emugames/`** (era `docs/topgear/` — renomeado a pedido do dono):
+- **`dados/emugames/`** (era `dados/emugames/`; movido a pedido do dono para
+  junto de `dados/src`, `dados/database` e `dados/midias`):
   ```
-  docs/emugames/
+  dados/emugames/
   ├── index.html      ← player (lê o catálogo)
   ├── style.css
   ├── jogos.json      ← CATÁLOGO (id, nome, console, rom)
@@ -20,7 +21,7 @@ não só um.
   (o `config.json` e o `.env` apontam para ela; a raiz já é `/emugames`).
 
 ### Como adicionar um jogo (sem mexer em código)
-1. Soltar a ROM em `docs/emugames/jogos/<console>/`
+1. Soltar a ROM em `dados/emugames/jogos/<console>/`
 2. Adicionar uma linha no `jogos.json`:
    ```json
    { "id": "meujogo", "nome": "Meu Jogo", "console": "nes", "rom": "jogos/nes/meujogo.nes" }
@@ -41,7 +42,7 @@ batem com os CRCs oficiais (MAME/FBNeo) e que as capas dos jogos existem.
 
 ### Hospedagem
 **Cloudflare Workers** (static assets) — único host. Config em `wrangler.jsonc`
-(`assets.directory` = `./docs/emugames`); deploy com `wrangler deploy`.
+(`assets.directory` = `./dados/emugames`); deploy com `wrangler deploy`.
 *Framework* None, *Build command* **vazio**.
 
 **Limite de 25 MiB por arquivo (medido)**: o Cloudflare recusa qualquer asset
@@ -111,14 +112,14 @@ Depois do `EJS_paths`, o jogo ainda parava com a mensagem **do próprio FBNeo**:
 O EmulatorJS **extrai** a BIOS por padrão; o FBNeo (libretro) procura a BIOS como
 **`neogeo.zip`** na raiz. Sem o zip, ele acusa os arquivos faltando.
 
-**Correção** (`docs/emugames/index.html`):
+**Correção** (`dados/emugames/index.html`):
 ```js
 if (j.bios) {
   window.EJS_dontExtractBIOS = true;   // mantem o zip
   window.EJS_biosUrl = urlRom({ rom: j.bios, ... });
 }
 ```
-E a BIOS passou a ficar **na raiz do site** (`docs/emugames/neogeo.zip`) — o
+E a BIOS passou a ficar **na raiz do site** (`dados/emugames/neogeo.zip`) — o
 EmulatorJS grava o arquivo no CWD do FS e o FBNeo procura o zip pelo nome. O
 `jogos.json` aponta `"bios": "neogeo.zip"` (sem subpasta).
 
@@ -131,7 +132,7 @@ CRC conhecido**, para os 3 jogos de arcade.
 > Para diagnosticar de novo: `window.EJS_DEBUG_XX = true` faz o EJS logar o
 > `print`/`printErr` do core no console. É onde o FBNeo diz o que achou/faltou.
 
-### Capas dos jogos (`docs/emugames/capas/`) — GIF ANIMADO ✅
+### Capas dos jogos (`dados/emugames/capas/`) — GIF ANIMADO ✅
 A capa é um **GIF animado**. O `enviarCard` (`dados/src/topgear/index.js`) usa o
 campo **`capa`** do jogo em `jogos.json` (ex.: `"capa": "topgear.gif"`); sem
 esse campo, cai no convencional `<id>.gif`. Se a capa faltar, cai para

@@ -69,7 +69,7 @@ varios arquivos internos (`232-p1.p1`, `232-c1.c1`, `232-v1.v1`...).
 ### Exemplo: KOF 97 (Neo Geo)
 
 ```
-docs/emugames/
+dados/emugames/
 ├── neogeo.zip      <- a BIOS (obrigatoria) — fica na RAIZ do site
 └── jogos/arcade/
     └── kof97.zip   <- o romset (NAO extrair)
