@@ -1,30 +1,49 @@
-# roms/
+# roms/ — só colocar o arquivo aqui
 
-Coloque aqui a ROM que você tem **direito de usar**.
+Solte o arquivo da ROM nesta pasta. **O nome pode ser qualquer um** — a página
+procura sozinha.
 
-O arquivo esperado por padrão é:
+## Passo a passo
+
+1. Coloque o arquivo nesta pasta (`docs/topgear/roms/`).
+
+   Pelo site do GitHub: abra a pasta `docs/topgear/roms` → **Add file** →
+   **Upload files** → arraste o arquivo → **Commit changes**.
+
+2. Espere ~1 minuto (o GitHub Pages republica sozinho).
+
+3. Abra e pronto:
+   `https://souzzaaxzy.github.io/Lizzy-V4/topgear/index.html`
+
+## Nomes que a página reconhece automaticamente
+
+Qualquer um destes funciona, sem editar nada:
 
 ```
-roms/topgear.sfc
+topgear.sfc     topgear.smc
+topgear2.sfc    topgear2.smc
+game.sfc        game.smc
+rom.sfc         rom.smc
 ```
 
-Se usar outro nome, ajuste `window.TOPGEAR_ROM` no topo de
-`docs/topgear/index.html`.
+Se o seu arquivo tiver outro nome, use uma das duas opções:
+
+- **Renomeie** para um dos nomes acima, ou
+- **Edite** a primeira linha de `window.TOPGEAR_ROM_CANDIDATOS` no
+  `docs/topgear/index.html` com o nome do seu arquivo.
+
+## Ou carregue do aparelho (sem subir arquivo nenhum)
+
+Se o arquivo não estiver na pasta, a página mostra um botão para **escolher o
+arquivo do celular**. A ROM nunca sai do aparelho.
 
 ## Formatos aceitos (snes9x)
 
-`.sfc` `.smc` `.fig` `.swc` `.gd3` `.gd7` `.dx2` `.bsx`
+`.sfc` `.smc` `.fig` `.swc` `.zip`
 
-## Importante
+## Arquivos grandes
 
-Nenhuma ROM comercial está versionada neste repositório — por direito autoral,
-o arquivo **não** pode ir para o Git.
+O GitHub tem limite de **100 MB por arquivo** (e avisa acima de 50 MB). Uma ROM
+de SNES normalmente tem de 0,5 a 4 MB — não deve dar problema.
 
-Como o GitHub Pages não serve arquivos que não estão no repositório, para
-funcionar no ar a ROM precisa estar em um destes lugares:
-
-1. **No repositório** (só se você tiver direito de redistribuir — ex.: uma ROM
-   homebrew). Nesse caso, comite `roms/topgear.sfc` normalmente.
-2. **Em outra URL pública HTTPS** — mude `window.TOPGEAR_ROM` para a URL.
-3. **No aparelho** — o EmulatorJS também aceita o usuário escolher o arquivo
-   (arrastar/soltar) quando não há `gameUrl`.
+Se der, use a opção de carregar do aparelho.

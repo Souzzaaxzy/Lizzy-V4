@@ -18,9 +18,11 @@
   <section id="sem-rom" hidden>
     <p>Emulador SNES pronto — falta a ROM.</p>
     <p class="dica">
-      Coloque um arquivo <code>.sfc</code> que você tenha direito de usar em
-      <code>roms/</code> e aponte <code>window.TOPGEAR_ROM</code> no topo deste arquivo.
+      Solte um arquivo <code>.sfc</code> (ou <code>.smc</code>) em
+      <code>docs/topgear/roms/</code>. O nome pode ser qualquer um.
     </p>
+    <p class="dica">Ou escolha o arquivo do seu aparelho:</p>
+    <input id="arquivo" type="file" accept=".sfc,.smc,.fig,.swc,.zip">
   </section>
 </main>
 
@@ -29,57 +31,83 @@
 </footer>
 
 <script>
-  window.TOPGEAR_ROM = './roms/topgear.sfc';
   window.TOPGEAR_DATA = 'https://cdn.emulatorjs.org/stable/data/';
+  window.TOPGEAR_ROM = './roms/topgear.sfc';
+  window.TOPGEAR_ROM_CANDIDATOS = [
+    './roms/topgear.sfc',
+    './roms/topgear.smc',
+    './roms/topgear2.sfc',
+    './roms/topgear2.smc',
+    './roms/game.sfc',
+    './roms/game.smc',
+    './roms/rom.sfc',
+    './roms/rom.smc'
+  ];
 </script>
 
 <script>
 (function () {
-  const ROM = window.TOPGEAR_ROM;
   const DATA = window.TOPGEAR_DATA;
   const alvo = document.getElementById('game');
   const semRom = document.getElementById('sem-rom');
+  const input = document.getElementById('arquivo');
+  const SRC = DATA + 'src/';
 
-  function mostrarAviso() {
+  function configurar(romUrl) {
+    window.EJS_player = '#game';
+    window.EJS_core = 'snes';
+    window.EJS_gameUrl = romUrl;
+    window.EJS_gameName = 'Top Gear';
+    window.EJS_pathtodata = DATA;
+    window.EJS_startOnLoaded = true;
+    window.EJS_color = '#1d4ed8';
+    window.EJS_backgroundColor = '#0b0d12';
+    window.EJS_language = 'pt-BR';
+    window.EJS_paths = {
+      'GameManager.js': SRC + 'GameManager.js',
+      'compression.js': SRC + 'compression.js',
+      'emulator.js': SRC + 'emulator.js',
+      'gamepad.js': SRC + 'gamepad.js',
+      'loader.js': DATA + 'loader.js',
+      'nipplejs.js': SRC + 'nipplejs.js',
+      'shaders.js': SRC + 'shaders.js',
+      'socket.io.min.js': SRC + 'socket.io.min.js',
+      'storage.js': SRC + 'storage.js',
+      'emulator.min.css': DATA + 'emulator.min.css'
+    };
+    semRom.hidden = true;
+    alvo.hidden = false;
+    const s = document.createElement('script');
+    s.src = DATA + 'loader.js';
+    document.body.appendChild(s);
+  }
+
+  function aviso() {
     alvo.hidden = true;
     semRom.hidden = false;
   }
 
-  const SRC = DATA + 'src/';
-  window.EJS_player = '#game';
-  window.EJS_core = 'snes';
-  window.EJS_gameUrl = ROM;
-  window.EJS_gameName = 'Top Gear';
-  window.EJS_pathtodata = DATA;
-  window.EJS_startOnLoaded = true;
-  window.EJS_color = '#1d4ed8';
-  window.EJS_backgroundColor = '#0b0d12';
-  window.EJS_language = 'pt-BR';
-  window.EJS_paths = {
-    'GameManager.js': SRC + 'GameManager.js',
-    'compression.js': SRC + 'compression.js',
-    'emulator.js': SRC + 'emulator.js',
-    'gamepad.js': SRC + 'gamepad.js',
-    'loader.js': DATA + 'loader.js',
-    'nipplejs.js': SRC + 'nipplejs.js',
-    'shaders.js': SRC + 'shaders.js',
-    'socket.io.min.js': SRC + 'socket.io.min.js',
-    'storage.js': SRC + 'storage.js',
-    'emulator.min.css': DATA + 'emulator.min.css'
-  };
+  input.addEventListener('change', () => {
+    const f = input.files && input.files[0];
+    if (!f) return;
+    configurar(URL.createObjectURL(f));
+  });
 
-  fetch(ROM, { method: 'HEAD' })
-    .then((r) => {
-      if (!r.ok) {
-        mostrarAviso();
-        return;
-      }
-      const s = document.createElement('script');
-      s.src = DATA + 'loader.js';
-      s.onerror = mostrarAviso;
-      document.body.appendChild(s);
-    })
-    .catch(mostrarAviso);
+  async function procurar() {
+    const lista = [window.TOPGEAR_ROM, ...(window.TOPGEAR_ROM_CANDIDATOS || [])];
+    for (const url of lista) {
+      try {
+        const r = await fetch(url, { method: 'HEAD' });
+        if (r.ok) return url;
+      } catch { /* tenta o próximo */ }
+    }
+    return null;
+  }
+
+  procurar().then((rom) => {
+    if (rom) configurar(rom);
+    else aviso();
+  });
 })();
 </script>
 </body>
