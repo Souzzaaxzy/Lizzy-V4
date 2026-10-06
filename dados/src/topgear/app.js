@@ -113,8 +113,9 @@ async function loadEngine() {
     const { instance } = await WebAssembly.instantiate(bytes, {});
     state.wasm = instance.exports;
     return true;
-  } catch {
+  } catch (e) {
     state.wasm = null;
+    state.motivo = String(e && e.message || e);
     return false;
   }
 }
@@ -124,13 +125,17 @@ playBtn.addEventListener('click', () => {
   playBtn.textContent = 'RODANDO';
   info.textContent = state.wasm
     ? 'Engine WASM carregada. Sem ROM — modo demonstração.'
-    : 'Engine WASM ausente (engine/emulator.wasm). Modo demonstração.';
+    : 'Sem WASM (CSP) — modo demonstração em canvas.';
 });
 
 loadEngine().then((ok) => {
-  info.textContent = ok
-    ? 'WASM ok — aguardando ROM.'
-    : 'WASM não encontrada — demonstração de canvas.';
+  if (ok) {
+    info.textContent = 'WASM ok — aguardando ROM.';
+  } else if (/wasm-unsafe-eval|CompileError|instantiate/i.test(state.motivo || '')) {
+    info.textContent = 'WASM bloqueada pelo CSP do site — modo demonstração em canvas.';
+  } else {
+    info.textContent = 'WASM não encontrada — demonstração de canvas.';
+  }
   playBtn.disabled = false;
   requestAnimationFrame(loop);
 });

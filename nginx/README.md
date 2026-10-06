@@ -1,90 +1,97 @@
 # TOPGEAR — o que fazer (passo a passo)
 
 O código já está no repositório. Falta só **publicar os arquivos do jogo** no
-seu domínio `aleatoryconteudos.com`.
+seu site `aleatoryconteudos.com`.
 
-## ⚠️ Antes: por que NÃO usar a pasta do site
-
-O site de vocês aplica este CSP (verificado no servidor):
-
-```
-script-src 'self' 'sha256-...'   <- sem 'wasm-unsafe-eval'
-style-src 'self'                 <- sem 'unsafe-inline'
-media-src 'none'
-```
-
-Colocar o jogo na **mesma pasta do site** faria o navegador **bloquear o
-WebAssembly** (`wasm-unsafe-eval`) e o áudio (`media-src 'none'`).
-
-Por isso o caminho certo é o **nginx com o bloco do `topgear.conf`**: ele serve
-os arquivos com os cabeçalhos corretos.
+Você **não precisa** mexer no nginx nem usar terminal: é só **subir arquivos
+pelo gerenciador de arquivos** do site.
 
 ---
 
-## Passo a passo (Opção 1 — nginx)
+## Passo 1 — Achar a pasta do site
 
-### 1. Descobrir o arquivo do nginx
-
-Pelo gerenciador de arquivos do host, procure em:
+No gerenciador de arquivos do **site** (o mesmo lugar onde você edita o
+`index.html` do aleatoryconteudos.com), descubra qual é a pasta raiz.
+Normalmente é uma destas:
 
 ```
-/etc/nginx/sites-available/     (procure um com "aleatoryconteudos")
-/etc/nginx/conf.d/
-/etc/nginx/nginx.conf
+/var/www/aleatoryconteudos/
+/var/www/html/
+/public_html/
+/home/aleatoryconteudos/public_html/
 ```
 
-### 2. Adicionar o bloco
+> Dica: é a pasta que tem o `index.html` que aparece quando você abre
+> https://aleatoryconteudos.com/
 
-Copie o conteúdo de **`nginx/topgear.conf`** para **dentro** do `server { }`
-que tem `server_name aleatoryconteudos.com;`.
+## Passo 2 — Criar a subpasta e enviar os 4 arquivos
 
-Veja **`nginx/EXEMPLO-server.conf`** para um mapa de onde encaixar.
+Dentro dessa pasta raiz, crie uma pasta chamada **`topgear`** e envie:
 
-> O `location /topgear/` tem que ficar **antes** do `}` que fecha o `server`.
+| Enviar este arquivo (do repo) | Para |
+|---|---|
+| `dados/src/topgear/index.html` | `topgear/index.html` |
+| `dados/src/topgear/style.css` | `topgear/style.css` |
+| `dados/src/topgear/app.js` | `topgear/app.js` |
+| `dados/src/topgear/engine/emulator.wasm` | `topgear/engine/emulator.wasm` |
 
-### 3. Recarregar o nginx
+**Atenção à subpasta `engine/`** — crie ela e coloque o `emulator.wasm` dentro.
 
-Pelo painel do host (reload/restart do serviço nginx), ou por terminal se tiver:
-`sudo nginx -t && sudo systemctl reload nginx`
+Deve ficar assim:
 
----
+```
+<pasta do site>/
+├── index.html          (o site de vocês, já existe)
+├── ...                 (outros arquivos do site)
+└── topgear/
+    ├── index.html
+    ├── style.css
+    ├── app.js
+    └── engine/
+        └── emulator.wasm
+```
 
-## Passo a passo (Opção 2 — sem nginx)
+## Passo 3 — Testar
 
-Se não puder mexer no nginx, copie os arquivos para uma pasta servida:
+Abra no navegador:
 
-1. De `dados/src/topgear/` copie para a pasta do site:
-   - `index.html`
-   - `style.css`
-   - `app.js`
-   - `engine/emulator.wasm` (mantendo a subpasta `engine/`)
+```
+https://aleatoryconteudos.com/topgear/index.html
+```
 
-2. Ficaria:
-   ```
-   <pasta do site>/topgear/
-   ├── index.html
-   ├── style.css
-   ├── app.js
-   └── engine/
-       └── emulator.wasm
-   ```
-
-> Nesta opção o CSP do site pode bloquear o WASM; o canvas e os controles ainda
-> aparecem (modo demonstração).
-
----
-
-## Como testar
-
-1. A URL precisa responder 200:
-   `https://aleatoryconteudos.com/topgear/index.html`
-
-2. No grupo (só o dono): `!topgear`
-
-3. Toque no botão **JOGAR** -> abre no webview do WhatsApp.
+Deve aparecer o **TOP GEAR** com o canvas e os controles.
 
 ---
 
-## Depois de funcionar
+## O que esperar (importante)
+
+O site de vocês tem um **CSP** restritivo (verificado no servidor):
+
+```
+script-src 'self' ...   <- sem 'wasm-unsafe-eval'
+```
+
+Isso significa:
+
+| Parte | Funciona? |
+|---|---|
+| Página / HTML / CSS | sim |
+| Canvas + controles (o "jogo") | **sim** |
+| **WebAssembly** | **não** (o navegador bloqueia) |
+
+Ou seja: **a experiência roda** (canvas, controles, animação) e o WASM cai em
+modo degradado — a página avisa "WASM bloqueada pelo CSP".
+
+**Se quiser o WASM rodando**, só é possível de duas formas:
+
+1. **Tirar o `wasm-unsafe-eval` do CSP** — quem cuida do site/Cloudflare ajusta
+   o header (no nginx: `add_header Content-Security-Policy "... script-src
+   'self' 'wasm-unsafe-eval' ..."`).
+2. **Subdomínio próprio** (ex.: `game.aleatoryconteudos.com`) — aí o CSP do site
+   principal não se aplica.
+
+---
+
+## Depois de subir
 
 Me avise que eu testo a URL de fora e confirmo se está servindo certo.
