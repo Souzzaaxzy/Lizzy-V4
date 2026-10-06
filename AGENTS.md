@@ -8756,6 +8756,43 @@ Adicionado nos mesmos pontos:
 
 Baseline do `menu-layout`: **menubn 381 -> 382**.
 
+## `!play2` ANTIGO (Spotify) REMOVIDO e `!play3` virou `!play2` (out/2026) ✅
+Pedido do dono: apagar o `!play2` (Spotify) por completo, tirar os arquivos que
+ele usava e renomear o `!play3` (SoundCloud) para `!play2`.
+
+### O que saiu
+- **Bloco `case 'play2': case 'playspotify':`** do `index.js` (67 linhas) — o
+  comando de busca do Spotify (Deezer-only, com prévia de 30s) **não existe mais**.
+- **Funções `searchDeezerOnly` / `downloadDeezerPreview`** do módulo
+  `funcs/downloads/spotify.js` — eram exclusivas do `!play2` antigo (conferido por
+  grep: nenhum outro consumidor). O módulo **não foi apagado** porque o
+  `!spotifydl` (`!spotify`) e o autodownload de link do Spotify ainda usam
+  `download()`/`search()`.
+- **Testes** das funções removidas em `tests/spotify.test.js` (o arquivo fica,
+  cobrindo o módulo que o `!spotifydl` usa).
+
+### O que mudou de nome
+- **`case 'play3':` -> `case 'play2':`** (o alias `playsoundcloud` continua).
+  O SoundCloud agora responde em `!play2`. Logs internos e a dica do
+  `!soundclouddl` ("use o comando play2") foram atualizados.
+- **Menu** (`menus/menudown.js`): a linha virou `☁️ ${prefix}play2`.
+- **`funcs/private/ia.js`**: a descrição do `play2` passou a "Baixa música do
+  SoundCloud".
+- **`utils/blockPv.js`**: já listava `play2` (e não `play3`) — ficou consistente
+  sem mudança.
+
+### Verificado com o handler real
+- `!play2` -> painel `🎵 SOUNDCLOUD PLAY` com os exemplos já em `!play2`.
+- `!play3` -> **"Comando não encontrado"** (o nome deixou de existir).
+- `node --check` e boot do `index.js` OK; regressões verdes (`filme`,
+  `answer-match`, `cmd-suggest`, `spotify` 12/38, `menu-layout` — a 1 falha é
+  pré-existente).
+
+### Nota
+O áudio completo do Deezer exigiria `arl` (cookie de conta, grátis em 128 kbps) +
+decrypt Blowfish — o Node não tem Blowfish nativo. Ficou registrado como caminho
+possível, **não** implementado (o `!play2` antigo entregava só a prévia de 30s).
+
 ## CORREÇÃO do `!play2` (Spotify) — busca e áudio (set/2026) ✅
 O `!play2` **não buscava E não baixava**. Três dependências do módulo
 `funcs/downloads/spotify.js` deixaram de existir, medido:

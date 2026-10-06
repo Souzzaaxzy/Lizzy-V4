@@ -19,7 +19,7 @@ export default async function menuDown(prefix, botName = "MeuBot", userName = "U
 ╭━━━꧁༺ ㅤ🎵 ${boldItalic('MÚSICA & ÁUDIO')} 🎵ㅤ ༻꧂━━━╮
 │ 🎼 ${prefix}letra
 │ ▶️ ${prefix}play
-│ 🎧 ${prefix}play2
+│ ☁️ ${prefix}play2
 │ 🟢 ${prefix}spotify
 │ ☁️ ${prefix}soundcloud
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯

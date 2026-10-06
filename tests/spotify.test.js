@@ -1,10 +1,10 @@
 /**
  * Testes do módulo do Spotify (`funcs/downloads/spotify.js`).
  *
- * Cobre o que foi corrigido no `!play2`: a busca (Brave 429 e vreden 404 não
- * existem mais) passou a usar o Deezer; o download do spotisaver (403
- * Cloudflare) passou a vir do yt-dlp; e o link do Deezer devolvido pela busca
- * agora é aceito pelo `download()`.
+ * Cobre o modulo usado pelo `!spotifydl` (link do Spotify) e pelo autodownload:
+ * a busca antiga (Brave 429 / vreden 404) passou a usar o Deezer, o download do
+ * spotisaver (403 Cloudflare) passou a vir do yt-dlp, e o `download()` aceita
+ * link do Spotify e do Deezer.
  *
  * Testes offline (sem rede): os puros. O teste de rede (busca ao vivo) é
  * marcado e pode ser pulado com OFFLINE=1.
@@ -128,26 +128,6 @@ await test('downloadTrack: item inválido não quebra', async () => {
   ok(r2.ok === false, 'sem nome -> ok:false');
 });
 
-await test('!play2 usa SOMENTE o Deezer (funções expostas)', () => {
-  ok(typeof API.searchDeezerOnly === 'function', 'searchDeezerOnly existe');
-  ok(typeof API.downloadDeezerPreview === 'function', 'downloadDeezerPreview existe');
-});
-
-await test('searchDeezerOnly: entrada vazia devolve erro claro (sem rede)', async () => {
-  const r1 = await API.searchDeezerOnly('');
-  ok(r1.ok === false, 'vazio -> ok:false');
-  ok(typeof r1.msg === 'string' && r1.msg.length > 0, 'com mensagem');
-  const r2 = await API.searchDeezerOnly(null);
-  ok(r2.ok === false, 'null -> ok:false');
-});
-
-await test('downloadDeezerPreview: item inválido não quebra', async () => {
-  const r = await API.downloadDeezerPreview(null);
-  ok(r.ok === false, 'null -> ok:false');
-  const r2 = await API.downloadDeezerPreview({});
-  ok(r2.ok === false, 'sem id -> ok:false');
-});
-
 // ============================================================================
 // 3) REDE (pode ser pulado com OFFLINE=1)
 // ============================================================================
@@ -162,21 +142,6 @@ if (process.env.OFFLINE === '1') {
     ok(r.results[0].name.toLowerCase().includes('te vi de canto'), `1º é o hit (veio "${r.results[0].name}")`);
     ok(typeof r.results[0].song_link === 'string' && r.results[0].song_link.length > 0, 'tem link');
     ok(r.results[0].image, 'tem capa');
-  });
-
-  await test('!play2 (Deezer): busca só no Deezer e devolve a prévia de 30s', async () => {
-    const s = await API.searchDeezerOnly('te vi de canto');
-    ok(s.ok === true, `busca ok (msg: ${s.msg || '-'})`);
-    ok(s.source === 'deezer', `fonte é o Deezer (veio "${s.source}")`);
-    ok(s.results[0].name.toLowerCase().includes('te vi de canto'), `1º é o hit (veio "${s.results[0].name}")`);
-    ok(s.results[0].song_link.includes('deezer.com'), 'link é do Deezer');
-
-    const d = await API.downloadDeezerPreview(s.results[0]);
-    ok(d.ok === true, `áudio ok (msg: ${d.msg || '-'})`);
-    ok(Buffer.isBuffer(d.buffer) && d.buffer.length > 0, 'veio buffer');
-    ok(d.isPreview === true, 'marcado como prévia (o Deezer público só dá 30s)');
-    ok(d.buffer.slice(0, 3).toString() === 'ID3', 'é um MP3 válido');
-    ok(/previa/i.test(d.filename), 'o nome do arquivo diz que é prévia');
   });
 
   await test('resolveTrackMetadata: lê título/artista do link do Spotify', async () => {

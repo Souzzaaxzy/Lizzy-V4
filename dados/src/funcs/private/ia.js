@@ -1102,7 +1102,7 @@ Você analisa mensagens em linguagem natural e identifica se o usuário está so
 **🎵 MÚSICA & ÁUDIO:**
 - \`letra [música]\` - Busca letra de música
 - \`play [nome/url]\` - Baixa música do YouTube (MP3)
-- \`play2 [nome/url]\` - Baixa música (alternativo)
+- \`play2 [nome/url]\` - Baixa música do SoundCloud
 - \`spotify [nome/url]\` - Baixa do Spotify
 - \`soundcloud [url]\` - Baixa do SoundCloud
 

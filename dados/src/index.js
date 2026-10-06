@@ -21393,74 +21393,6 @@ case 'pin':
     reply("Ocorreu um erro ao processar o Pinterest 💔");
   }
   break;
-              case 'play2':
-      case 'playspotify':
-        try {
-          if (!q) {
-            return reply(`╭━━━⊱ 🎵 *SPOTIFY PLAY* 🎵 ⊱━━━╮
-│
-│ 📝 Digite o nome da música ou artista
-│
-│  *Exemplos:*
-│  ${prefix + command} Te vi de canto
-│  ${prefix + command} Rô Rosa
-│
-╰━━━━━━━━━━━━━━━━━━━━━━━━━╯`);
-          }
-          await nazu.sendMessage(from, { react: { text: '🔍', key: info.key } });
-          // 1. Buscar a música (somente no Deezer)
-          const searchResult = await spotifyModule.searchDeezerOnly(q);
-          if (!searchResult.ok) {
-            return reply(`❌ ${searchResult.msg || 'Erro ao buscar no Deezer. Tente novamente.'}`);
-          }
-          if (!searchResult.results?.length) {
-            return reply('❌ Nenhuma música encontrada no Deezer com esse nome.');
-          }
-          const track = searchResult.results[0];
-          // Novo layout do player de música
-          const playerLayout = formatMusicPlayer(
-            track.name,
-            track.artist || 'Artista desconhecido',
-            null,
-            0,
-            75
-          );
-          const searchCaption = `${playerLayout}\n\n⏳ *Baixando...*`;
-          await reply(searchCaption);
-          await nazu.sendMessage(from, { react: { text: '⏳', key: info.key } });
-          // 2. Baixar o áudio no Deezer (prévia de 30s — o áudio completo exige conta premium)
-          const downloadResult = await spotifyModule.downloadDeezerPreview(track);
-          if (!downloadResult.ok) {
-            return reply(`❌ ${downloadResult.msg}`);
-          }
-          try {
-            await nazu.sendMessage(from, {
-              audio: downloadResult.buffer,
-              mimetype: 'audio/mpeg',
-              fileName: downloadResult.filename
-            }, { quoted: info });
-            if (downloadResult.isPreview) {
-              await reply('ℹ️ *Prévia de 30s do Deezer.* O áudio completo exige conta premium.');
-            }
-            await nazu.sendMessage(from, { react: { text: '✅', key: info.key } });
-          } catch (audioError) {
-            if (String(audioError).includes("ENOSPC") || String(audioError).includes("size")) {
-              await reply('📦 Arquivo muito grande, enviando como documento...');
-              await nazu.sendMessage(from, {
-                document: downloadResult.buffer,
-                fileName: downloadResult.filename,
-                mimetype: 'audio/mpeg'
-              }, { quoted: info });
-            } else {
-              console.error('Erro ao enviar áudio do Spotify:', audioError);
-              reply('❌ Ocorreu um erro ao enviar o áudio.');
-            }
-          }
-        } catch (error) {
-          console.error('Erro no comando play2:', error);
-          reply("❌ Ocorreu um erro ao processar sua solicitação.");
-        }
-        break;
       case 'soundclouddl':
       case 'soundcloud':
         try {
@@ -21475,7 +21407,7 @@ case 'pin':
 ╰━━━━━━━━━━━━━━━━━━━━━━━━━╯`);
           }
           if (!q.includes('soundcloud.com/')) {
-            return reply('❌ Por favor, envie um link válido do SoundCloud.\n\n💡 Dica: Use o comando play3 para buscar por nome!');
+            return reply('❌ Por favor, envie um link válido do SoundCloud.\n\n💡 Dica: Use o comando play2 para buscar por nome!');
           }
           await reply('🎵 Baixando do SoundCloud... Aguarde um momento!');
           soundcloud.download(q)
@@ -21533,7 +21465,7 @@ case 'pin':
           reply("❌ Ocorreu um erro ao processar sua solicitação.");
         }
         break;
-      case 'play3':
+      case 'play2':
       case 'playsoundcloud':
         try {
           if (!q) {
@@ -21624,14 +21556,14 @@ case 'pin':
                 };
             visualSent = await nazu.sendMessage(from, visualContent, { quoted: info });
           } catch (imgErr) {
-            console.error('Erro ao enviar mensagem visual do play3:', imgErr);
+            console.error('Erro ao enviar mensagem visual do play2:', imgErr);
             // Fallback sem botão nativo — o link vai na própria legenda
             if (thumbnailUrl) {
               visualSent = await nazu.sendMessage(from, {
                 image: { url: thumbnailUrl },
                 caption: `${caption}\n\n🔗 ${musicUrl}`
               }, { quoted: info }).catch(async (fallbackErr) => {
-                console.error('Erro no fallback de imagem do play3:', fallbackErr);
+                console.error('Erro no fallback de imagem do play2:', fallbackErr);
                 await reply(`❌ Não foi possível exibir a música.\n\n🔗 ${musicUrl}`);
                 return null;
               });
@@ -21657,7 +21589,7 @@ case 'pin':
                 mimetype: 'audio/mpeg'
               });
             } else {
-              console.error('Erro ao enviar áudio do play3:', audioError);
+              console.error('Erro ao enviar áudio do play2 (SoundCloud):', audioError);
               // Remove a mensagem visual para não deixar apresentação sem áudio
               if (visualSent) {
                 await nazu.sendMessage(from, { delete: visualSent.key }).catch(() => {});
@@ -21666,7 +21598,7 @@ case 'pin':
             }
           }
         } catch (error) {
-          console.error('Erro no comando play3:', error);
+          console.error('Erro no comando play2 (SoundCloud):', error);
           reply("❌ Ocorreu um erro ao processar sua solicitação.");
         }
         break;
