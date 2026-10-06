@@ -240,6 +240,20 @@ await test('os cards viram UM carrossel real na fork (todos com header de mídia
   ok(car.cards[3].footer?.audioMessage, 'card #4 mantém o player de áudio no footer');
 });
 
+await test('montarCards gera capa sob demanda para repost antigo sem capa', async () => {
+  const d = JSON.parse(fs.readFileSync(ARQUIVO, 'utf-8'));
+  const alvo = d.reposts.find((r) => r.tipo === 'text');
+  delete alvo.capa;
+  fs.writeFileSync(ARQUIVO, JSON.stringify(d, null, 2));
+
+  const cards = await reposts.montarCards();
+  const card = cards.find((c) => c.caption && c.caption.includes('depois do delete')) || cards[0];
+  ok(card.image && card.image.url && fs.existsSync(card.image.url), 'gerou a capa e o card tem header');
+
+  const recarregado = JSON.parse(fs.readFileSync(ARQUIVO, 'utf-8')).reposts.find((r) => r.numero === alvo.numero);
+  ok(!!recarregado.capa && fs.existsSync(reposts.caminhoMidia(recarregado.capa)), 'a capa ficou persistida no registro');
+});
+
 const totalOk = RESULTS.reduce((a, r) => a + r.passed, 0);
 const totalFail = RESULTS.reduce((a, r) => a + r.failed, 0);
 console.log('\n════════════════════════════════════════');

@@ -230,12 +230,37 @@ export function montarCard(r) {
   return card;
 }
 
+// Cards prontos para enviar. Gera a capa sob demanda para reposts de texto/áudio
+// salvos por versões antigas (sem capa), senão o carrossel inteiro é rejeitado.
+export async function montarCards(agora = Date.now()) {
+  const d = ler();
+  const ativos = d.reposts
+    .filter((r) => r.expiraEm > agora)
+    .sort((a, b) => a.numero - b.numero);
+
+  let mudou = false;
+  for (const r of ativos) {
+    if ((r.tipo === 'text' || r.tipo === 'audio') && (!r.capa || !fs.existsSync(caminhoMidia(r.capa)))) {
+      try {
+        r.capa = await gerarCapa(r.numero, r.tipo, r.texto || '');
+        mudou = true;
+      } catch {
+        /* fica sem capa; montarCard ainda devolve o card */
+      }
+    }
+  }
+  if (mudou) gravar(d);
+
+  return ativos.map(montarCard);
+}
+
 export default {
   MAX_CARDS,
   criar,
   listar,
   remover,
   montarCard,
+  montarCards,
   limparExpirados,
   caminhoMidia
 };

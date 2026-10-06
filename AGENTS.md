@@ -44,13 +44,14 @@ do WhatsApp.
   10 primeiros em ordem crescente.
 
 ### Testes
-`tests/reposts.test.js` — **15 testes / 64 asserções**: os 4 tipos, ordem,
-`montarCard` por tipo (**todo card com header de mídia**), exclusão sem renumerar,
-expiração individual, persistência em disco, erros (sem resposta, documento,
-falha de download, mídia vazia) e um teste de integração que monta o **carrossel
-REAL** pela fork (`generateWAMessageContent`) conferindo que os 4 cards têm
-header (image/video/capa) e o áudio no footer. Usa `DATABASE_PATH` temporário
-(não toca o banco real).
+`tests/reposts.test.js` — **16 testes / 66 asserções**: os 4 tipos, ordem,
+`montarCard` por tipo (**todo card com header de mídia**), geração de capa sob
+demanda para reposts antigos, exclusão sem renumerar, expiração individual,
+persistência em disco, erros (sem resposta, documento, falha de download, mídia
+vazia) e um teste de integração que monta o **carrossel REAL** pela fork
+(`generateWAMessageContent`) conferindo que os 4 cards têm header
+(image/video/capa) e o áudio no footer. Usa `DATABASE_PATH` temporário (não toca
+o banco real).
 
 ### Fork
 O carrossel de **texto puro** e o **áudio no footer** já existiam na fork — não

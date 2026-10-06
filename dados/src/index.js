@@ -21497,10 +21497,8 @@ case 'pin':
       case 'reposts': {
         try {
           reposts.limparExpirados();
-          const ativos = reposts.listar();
-          if (!ativos.length) return reply('📭 Nenhum repost ativo no momento.');
-
-          const cards = ativos.slice(0, reposts.MAX_CARDS).map((r) => reposts.montarCard(r));
+          const cards = (await reposts.montarCards()).slice(0, reposts.MAX_CARDS);
+          if (!cards.length) return reply('📭 Nenhum repost ativo no momento.');
           await nazu.sendMessage(from, {
             text: '📌 *Reposts ativos*',
             cards
