@@ -90,23 +90,26 @@ await test('config: a URL do jogo está definida', () => {
 });
 
 await test('arquivos do jogo estão em docs/ (GitHub Pages)', () => {
-  for (const f of ['index.html', 'style.css', 'roms/README.md']) {
+  for (const f of ['index.html', 'style.css', 'jogos.json', 'jogos/README.md']) {
     ok(fs.existsSync(path.join(PROJECT, 'docs/topgear', f)), `docs/topgear/${f} existe`);
+  }
+  const cat = JSON.parse(fs.readFileSync(path.join(PROJECT, 'docs/topgear/jogos.json'), 'utf-8'));
+  ok(Array.isArray(cat.jogos) && cat.jogos.length > 0, 'catalogo tem jogos');
+  for (const j of cat.jogos) {
+    ok(!!j.id && !!j.nome && !!j.console && !!j.rom, `jogo ${j.id} tem id/nome/console/rom`);
+    ok(fs.existsSync(path.join(PROJECT, 'docs/topgear', j.rom)), `rom ${j.rom} existe`);
   }
   ok(fs.existsSync(path.join(PROJECT, 'docs/.nojekyll')), '.nojekyll presente');
 });
 
-await test('index.html: usa o EmulatorJS (SNES) com os caminhos certos', () => {
+await test('index.html: player multi-jogo com os caminhos certos', () => {
   const html = fs.readFileSync(path.join(PROJECT, 'docs/topgear/index.html'), 'utf-8');
-  ok(html.includes("EJS_core = 'snes'"), 'core snes');
   ok(html.includes('cdn.emulatorjs.org'), 'carrega do CDN do EmulatorJS');
   ok(html.includes('src/'), 'aponta os scripts para src/');
   ok(html.includes('EJS_gameUrl'), 'define a ROM');
-  ok(html.includes('TOPGEAR_ROM'), 'ROM configurável');
-  ok(html.includes('roms/'), 'procura a ROM em roms/');
-  ok(html.includes('TOPGEAR_ROM_CANDIDATOS'), 'procura por varios nomes de ROM');
-  ok(html.includes('type="file"'), 'permite carregar a ROM do aparelho');
-  ok(html.includes('api.github.com'), 'descobre a ROM pela API do GitHub');
+  ok(html.includes('jogos.json'), 'le o catalogo de jogos');
+  ok(html.includes("get('jogo')"), 'aceita ?jogo=<id>');
+  ok(html.includes('EJS_core = jogo.console'), 'o core vem do console do jogo');
   ok(html.includes('EJS_Buttons'), 'controla os botoes do player');
   ok(html.includes('exitEmulation: true'), 'tem botao de sair');
   ok(html.includes('EJS_onExit'), 'detecta a saida');
@@ -165,7 +168,7 @@ await test('o bot não abre porta/servidor local', () => {
 });
 
 await test('nenhuma ROM comercial no repositório', () => {
-  for (const dir of ['dados/src/topgear', 'docs/topgear']) {
+  for (const dir of ['dados/src/topgear']) {
     for (const f of fs.readdirSync(path.join(PROJECT, dir))) {
       ok(!/\.(sfc|smc|fig|swc|rom|bin|zip)$/i.test(f), `${dir}/${f} não é ROM`);
     }

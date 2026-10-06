@@ -88,6 +88,7 @@ input[type=file] { margin-top: 10px; color: #b9c3d3; font-size: 12px; }
   align-items: center;
   justify-content: center;
   gap: 12px;
+  flex-wrap: wrap;
 }
 #parar {
   background: #b91c1c;
@@ -100,4 +101,29 @@ input[type=file] { margin-top: 10px; color: #b9c3d3; font-size: 12px; }
   letter-spacing: 1px;
 }
 #parar:disabled { opacity: .4; }
+#trocar {
+  background: #1d4ed8;
+  color: #fff;
+  border: 0;
+  border-radius: 6px;
+  padding: 9px 16px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
 #status { font-size: 11px; color: #8b98ad; }
+
+#lista { display: flex; flex-direction: column; gap: 10px; }
+#jogos { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.jogo {
+  background: #1a2029;
+  border: 1px solid #2b3543;
+  border-radius: 8px;
+  color: #e8ecf3;
+  padding: 14px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+.jogo:active { background: #1d4ed8; }
+

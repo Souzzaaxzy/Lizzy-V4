@@ -1,49 +1,49 @@
-# TOPGEAR — Top Gear (SNES, 1992) no webview
+# TOPGEAR — emulador multi-jogo no webview
 
-**Top Gear** é o jogo de corrida de 1992 da **Gremlin Graphics** publicado pela
-**Kemco** para o **Super Nintendo** (no Japão se chama *Top Racer*). Ficou
-famoso no Brasil pela locadora.
+Roda jogos de console dentro do webview do WhatsApp, via
+[EmulatorJS](https://emulatorjs.org) (cores WebAssembly).
 
-Esta pasta publica esse jogo dentro do webview do WhatsApp, usando um emulador
-de SNES real.
-
-## Como funciona
-
-```
-!topgear (bot)
-    -> botão webview aponta para o GitHub Pages
-        -> index.html carrega o EmulatorJS (core snes9x, WebAssembly)
-            -> a ROM roda no aparelho
-```
-
-A emulação é feita pelo [EmulatorJS](https://emulatorjs.org) — open-source, core
-**snes9x** em WebAssembly, carregado do CDN oficial. Não há nada de emulação
-neste repositório; só a página que inicializa o player.
-
-## URL
-
-```
-https://souzzaaxzy.github.io/Lizzy-V4/topgear/index.html
-```
-
-## A ROM
-
-Nenhuma ROM comercial está no repositório (direito autoral). Coloque o arquivo
-em `roms/` — veja `roms/README.md`.
-
-Se o arquivo não existir, a página mostra um aviso em vez de um player vazio.
-
-## Arquivos
+## Estrutura
 
 ```
 docs/topgear/
-├── index.html      (inicializa o EmulatorJS)
+├── index.html      ← player (lê o catálogo)
 ├── style.css
-└── roms/
-    └── README.md   (onde colocar a ROM)
+├── jogos.json      ← CATÁLOGO: onde se adiciona jogo
+└── jogos/
+    ├── snes/
+    │   └── topgear2.smc
+    └── README.md   ← como adicionar jogos
 ```
 
-## Controles
+## Adicionar um jogo
 
-O EmulatorJS já traz controle na tela (touch), suporte a gamepad e teclado.
-No celular, dentro do webview, aparece o D-pad virtual automaticamente.
+1. Coloque a ROM em `jogos/<console>/`
+2. Adicione uma linha no `jogos.json`
+
+Pronto — aparece na lista automaticamente. Detalhes em `jogos/README.md`.
+
+## Abrir
+
+```
+index.html              → primeiro jogo do catálogo
+index.html?jogo=topgear2 → jogo específico
+```
+
+Com 2+ jogos, o botão **☰ JOGOS** troca de jogo sem recarregar.
+
+## Recursos
+
+- **PARAR** — desliga o emulador
+- **Inatividade** — 3 min sem toque desliga sozinho
+- **Fechar/voltar** — sai da aba e volta, o jogo reinicia sozinho
+- **Controles de toque** — embaixo da tela (não cobrem o jogo)
+- **Cores por console** — a cor do tema muda conforme o console
+
+## Hospedagem
+
+Servido por **Cloudflare Pages** (funciona com repositório privado).
+Também funciona em GitHub Pages ou qualquer host estático.
+
+**Importante**: é site **estático** — no build do Cloudflare deixe o
+*Build command* vazio e o *Build output directory* como `docs/topgear`.

@@ -3,58 +3,63 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Top Gear</title>
+<title>Jogos</title>
 <link rel="stylesheet" href="./style.css">
 </head>
 <body>
 <header>
-  <h1>TOP GEAR</h1>
+  <h1 id="titulo">JOGOS</h1>
+  <p class="sub" id="subtitulo"></p>
 </header>
 
 <main>
   <div id="game"></div>
 
+  <section id="lista" hidden>
+    <p class="dica">Escolha um jogo:</p>
+    <div id="jogos"></div>
+  </section>
+
   <section id="sem-rom" hidden>
-    <p>Falta a ROM.</p>
-    <p class="dica">Solte um <code>.sfc</code>/<code>.smc</code> em <code>docs/topgear/roms/</code> ou escolha do aparelho:</p>
-    <input id="arquivo" type="file" accept=".sfc,.smc,.fig,.swc,.zip">
+    <p>Nenhum jogo disponível.</p>
+    <p class="dica">Adicione a ROM em <code>jogos/&lt;console&gt;/</code> e registre no <code>jogos.json</code>.</p>
   </section>
 
   <div id="controles">
     <button id="parar" type="button" disabled>■ PARAR</button>
+    <button id="trocar" type="button" hidden>☰ JOGOS</button>
     <span id="status"></span>
   </div>
 </main>
 
 <script>
-  window.TOPGEAR_DATA = 'https://cdn.emulatorjs.org/stable/data/';
-  window.TOPGEAR_REPO = 'Souzzaaxzy/Lizzy-V4';
-  window.TOPGEAR_DIR = 'docs/topgear/roms';
-  window.TOPGEAR_INATIVIDADE_MS = 3 * 60 * 1000;
-  window.TOPGEAR_ROM = './roms/topgear.sfc';
-  window.TOPGEAR_ROM_CANDIDATOS = [
-    './roms/topgear.sfc', './roms/topgear.smc',
-    './roms/topgear2.sfc', './roms/topgear2.smc',
-    './roms/TopGear.sfc', './roms/TopGear.smc',
-    './roms/TopGear2.sfc', './roms/TopGear2.smc',
-    './roms/game.sfc', './roms/game.smc',
-    './roms/rom.sfc', './roms/rom.smc'
-  ];
+  window.EJS_DATA = 'https://cdn.emulatorjs.org/stable/data/';
+  window.INATIVIDADE_MS = 3 * 60 * 1000;
 </script>
 
 <script>
 (function () {
-  const DATA = window.TOPGEAR_DATA;
+  const DATA = window.EJS_DATA;
   const SRC = DATA + 'src/';
+  const LIMITE = window.INATIVIDADE_MS;
+
   const alvo = document.getElementById('game');
+  const lista = document.getElementById('lista');
+  const listaJogos = document.getElementById('jogos');
   const semRom = document.getElementById('sem-rom');
-  const input = document.getElementById('arquivo');
+  const titulo = document.getElementById('titulo');
+  const subtitulo = document.getElementById('subtitulo');
   const pararBtn = document.getElementById('parar');
+  const trocarBtn = document.getElementById('trocar');
   const status = document.getElementById('status');
 
+  let catalogo = [];
+  let atual = null;
   let rodando = false;
-  let ocioso = 0;
-  const LIMITE = window.TOPGEAR_INATIVIDADE_MS;
+  let ocioso = Date.now();
+
+  const CORES = { snes: '#1d4ed8', nes: '#b91c1c', gba: '#7c3aed', gb: '#166534', genesis: '#0369a1', n64: '#b45309' };
+  const NOMES = { snes: 'Super Nintendo', nes: 'Nintendo', gba: 'Game Boy Advance', gb: 'Game Boy', genesis: 'Mega Drive', n64: 'Nintendo 64' };
 
   function marcarAtividade() { ocioso = Date.now(); }
 
@@ -62,58 +67,50 @@
     rodando = false;
     pararBtn.disabled = true;
     pararBtn.textContent = '■ PARAR';
-    status.textContent = '';
     alvo.innerHTML = '';
-    semRom.hidden = true;
   }
 
   function parar() {
     const emu = window.EJS_emulator;
     if (emu) {
-      try { emu.pause(); } catch { /* já pausado */ }
-      try { emu.callEvent('exit'); } catch { /* já saiu */ }
-      try { emu.callEvent('unload'); } catch { /* sem unload */ }
+      try { emu.pause(); } catch { /* ok */ }
+      try { emu.callEvent('exit'); } catch { /* ok */ }
+      try { emu.callEvent('unload'); } catch { /* ok */ }
     }
     aoSair();
   }
 
   window.EJS_onExit = aoSair;
 
-  function iniciarEmulador(romUrl) {
-    romAtual = romUrl;
+  function iniciar(jogo) {
+    atual = jogo;
     alvo.innerHTML = '';
     window.EJS_emulator = null;
+
+    titulo.textContent = jogo.nome;
+    subtitulo.textContent = NOMES[jogo.console] || jogo.console;
+    lista.hidden = true;
+    semRom.hidden = true;
+    alvo.hidden = false;
+    trocarBtn.hidden = false;
+
     window.EJS_player = '#game';
-    window.EJS_core = 'snes';
-    window.EJS_gameUrl = romUrl;
-    window.EJS_gameName = 'Top Gear';
+    window.EJS_core = jogo.console;
+    window.EJS_gameUrl = jogo.rom;
+    window.EJS_gameName = jogo.nome;
     window.EJS_pathtodata = DATA;
     window.EJS_startOnLoaded = true;
     window.EJS_language = 'pt-BR';
-    window.EJS_color = '#1d4ed8';
+    window.EJS_color = CORES[jogo.console] || '#1d4ed8';
     window.EJS_backgroundColor = '#0b0d12';
     window.EJS_volume = 0.6;
     window.EJS_askBeforeExit = false;
-    window.EJS_disableAutoUnload = false;
-    window.EJS_controlScheme = 'snes';
+    window.EJS_controlScheme = jogo.console;
     window.EJS_Buttons = {
-      playPause: true,
-      restart: true,
-      mute: true,
-      settings: true,
-      fullscreen: true,
-      saveState: false,
-      loadState: false,
-      screenRecord: false,
-      gamepad: false,
-      cheat: false,
-      volume: true,
-      saveSavFiles: false,
-      loadSavFiles: false,
-      quickSave: false,
-      quickLoad: false,
-      screenshot: false,
-      cacheManager: false,
+      playPause: true, restart: true, mute: true, settings: true, fullscreen: true,
+      saveState: false, loadState: false, screenRecord: false, gamepad: false,
+      cheat: false, volume: true, saveSavFiles: false, loadSavFiles: false,
+      quickSave: false, quickLoad: false, screenshot: false, cacheManager: false,
       exitEmulation: true
     };
     window.EJS_paths = {
@@ -129,8 +126,6 @@
       'emulator.min.css': DATA + 'emulator.min.css'
     };
 
-    semRom.hidden = true;
-    alvo.hidden = false;
     rodando = true;
     pararBtn.disabled = false;
     marcarAtividade();
@@ -140,57 +135,49 @@
     document.body.appendChild(s);
   }
 
-  function aviso() {
-    alvo.hidden = true;
-    semRom.hidden = false;
-    rodando = false;
-    pararBtn.disabled = true;
-  }
-
-  pararBtn.addEventListener('click', parar);
-  input.addEventListener('change', () => {
-    const f = input.files && input.files[0];
-    if (f) iniciarEmulador(URL.createObjectURL(f));
-  });
-
-  ['pointerdown', 'keydown', 'touchstart'].forEach((ev) => {
-    addEventListener(ev, marcarAtividade, { passive: true });
-  });
-
-  /*
-    Fechar o webview do WhatsApp nem sempre dispara visibilitychange/pagehide
-    (o navegador interno pode manter a pagina viva). Por isso:
-    - visibilitychange/pagehide/freeze param o emulador na hora;
-    - ao VOLTAR (pageshow / visibilitychange visivel) a pagina REINICIA o
-      emulador sozinha, sem precisar recarregar na mao.
-  */
-  let saiuDaPagina = false;
-  let romAtual = null;
-
-  function aoSairDaPagina() {
-    saiuDaPagina = true;
+  function mostrarLista() {
     parar();
-  }
-
-  function aoVoltarParaPagina() {
-    if (!saiuDaPagina) return;
-    saiuDaPagina = false;
-    ocioso = Date.now();
-    if (!rodando && romAtual) {
-      window.EJS_emulator = null;
-      iniciarEmulador(romAtual);
+    alvo.hidden = true;
+    semRom.hidden = true;
+    lista.hidden = false;
+    trocarBtn.hidden = catalogo.length < 2;
+    titulo.textContent = 'JOGOS';
+    subtitulo.textContent = catalogo.length + ' disponível(is)';
+    listaJogos.innerHTML = '';
+    for (const j of catalogo) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'jogo';
+      b.textContent = j.nome;
+      b.addEventListener('click', () => iniciar(j));
+      listaJogos.appendChild(b);
+    }
+    if (!catalogo.length) {
+      lista.hidden = true;
+      semRom.hidden = false;
     }
   }
 
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) aoSairDaPagina();
-    else aoVoltarParaPagina();
-  });
+  pararBtn.addEventListener('click', parar);
+  trocarBtn.addEventListener('click', mostrarLista);
+
+  ['pointerdown', 'keydown', 'touchstart'].forEach((ev) => addEventListener(ev, marcarAtividade, { passive: true }));
+
+  let saiu = false;
+  function aoSairDaPagina() { saiu = true; parar(); }
+  function aoVoltar() {
+    if (!saiu) return;
+    saiu = false;
+    ocioso = Date.now();
+    if (!rodando && atual) iniciar(atual);
+  }
+
+  document.addEventListener('visibilitychange', () => { document.hidden ? aoSairDaPagina() : aoVoltar(); });
   addEventListener('pagehide', aoSairDaPagina);
   addEventListener('beforeunload', aoSairDaPagina);
   addEventListener('freeze', aoSairDaPagina);
-  addEventListener('pageshow', aoVoltarParaPagina);
-  addEventListener('resume', aoVoltarParaPagina);
+  addEventListener('pageshow', aoVoltar);
+  addEventListener('resume', aoVoltar);
 
   setInterval(() => {
     if (!rodando) return;
@@ -199,34 +186,20 @@
     status.textContent = 'desligado por inatividade (3 min)';
   }, 5000);
 
-  const EXT = /\.(sfc|smc|fig|swc|zip)$/i;
-
-  async function viaApi() {
-    try {
-      const r = await fetch(`https://api.github.com/repos/${window.TOPGEAR_REPO}/contents/${window.TOPGEAR_DIR}`);
-      if (!r.ok) return null;
-      const lista = await r.json();
-      const rom = Array.isArray(lista) ? lista.find((x) => EXT.test(x.name)) : null;
-      return rom ? `./roms/${encodeURIComponent(rom.name)}` : null;
-    } catch {
-      return null;
-    }
-  }
-
-  async function viaCandidatos() {
-    for (const url of [window.TOPGEAR_ROM, ...(window.TOPGEAR_ROM_CANDIDATOS || [])]) {
-      try {
-        const r = await fetch(url, { method: 'HEAD' });
-        if (r.ok) return url;
-      } catch { /* tenta o próximo */ }
-    }
-    return null;
-  }
-
   (async () => {
-    const rom = (await viaApi()) || (await viaCandidatos());
-    if (rom) iniciarEmulador(rom);
-    else aviso();
+    try {
+      const r = await fetch('./jogos.json', { cache: 'no-store' });
+      const d = await r.json();
+      catalogo = (Array.isArray(d.jogos) ? d.jogos : []).filter((j) => j && j.id && j.rom && j.console);
+    } catch {
+      catalogo = [];
+    }
+
+    const id = new URLSearchParams(location.search).get('jogo');
+    const escolhido = id ? catalogo.find((j) => j.id === id) : catalogo[0];
+
+    if (escolhido) iniciar(escolhido);
+    else mostrarLista();
   })();
 })();
 </script>
