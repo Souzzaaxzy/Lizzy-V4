@@ -2,14 +2,14 @@
 
 Capa de cada jogo — a imagem animada que aparece no topo do card do bot.
 
-O nome do arquivo tem que ser o **`id` do jogo** em `jogos.json`, com extensao
-**`.gif`** (e o que o card procura):
+O card procura o campo **`capa`** do jogo em `jogos.json` (ex.: `"capa":
+"topgear.gif"`). Sem esse campo, cai no convencional **`<id>.gif`**:
 
 ```
 capas/
-├── topgear2.gif
-├── metalslug.gif
-└── kof97.gif
+├── topgear.gif    ← topgear2
+├── metalslug.gif  ← metalslug
+└── kof.gif        ← kof97
 ```
 
 ## Por que GIF (e nao PNG)
@@ -32,8 +32,9 @@ As capas do repositorio foram geradas por:
 node tools/gerar-capas.mjs
 ```
 
-Ele le o `jogos.json` e escreve `capas/<id>.gif` (1280x720). Para usar uma arte
-propria, e so **substituir o GIF** mantendo o nome.
+Ele le o `jogos.json` e escreve `capas/<capa>` (1280x720). Para usar uma arte
+propria, e so **substituir o GIF** mantendo o nome (ou apontar `capa` para
+outro arquivo).
 
 ## Sem capa?
 

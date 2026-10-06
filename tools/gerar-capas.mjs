@@ -61,7 +61,8 @@ const catalogo = JSON.parse(fs.readFileSync(path.join(RAIZ, 'docs/emugames/jogos
 fs.mkdirSync(DEST, { recursive: true });
 
 for (const jogo of catalogo.jogos || []) {
-  const destino = path.join(DEST, `${jogo.id}.gif`);
+  const arquivo = jogo.capa || `${jogo.id}.gif`;
+  const destino = path.join(DEST, arquivo);
   await sharp(Buffer.from(svg(jogo))).gif().toFile(destino);
   console.log(`capa: ${path.relative(RAIZ, destino)}`);
 }

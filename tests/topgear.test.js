@@ -275,15 +275,20 @@ await test('romsets de arcade batem com os CRCs oficiais (MAME/FBNeo)', () => {
 await test('as capas dos jogos existem (senao o card cai para texto)', () => {
   const cat = JSON.parse(fs.readFileSync(path.join(PROJECT, 'docs/emugames/jogos.json'), 'utf-8'));
   for (const j of cat.jogos) {
-    const capa = path.join(PROJECT, 'docs/emugames/capas', `${j.id}.gif`);
-    ok(fs.existsSync(capa), `capa ${j.id}.gif existe`);
+    // O card procura `capas/<capa>`; sem o campo `capa`, cai no convencional
+    // `<id>.gif`. A capa e um GIF animado (a fork converte p/ MP4 no envio).
+    const arquivo = j.capa || `${j.id}.gif`;
+    ok(arquivo.endsWith('.gif'), `${j.id}: a capa e um .gif (veio ${arquivo})`);
+    const capa = path.join(PROJECT, 'docs/emugames/capas', arquivo);
+    ok(fs.existsSync(capa), `capa ${arquivo} existe`);
     if (fs.existsSync(capa)) {
       const b = fs.readFileSync(capa);
-      ok(b.slice(0, 3).toString('latin1') === 'GIF', `${j.id}.gif e um GIF`);
+      ok(b.slice(0, 3).toString('latin1') === 'GIF', `${arquivo} e um GIF`);
     }
   }
   const card = fs.readFileSync(path.join(PROJECT, 'dados/src/topgear/index.js'), 'utf-8');
   ok(card.includes('capas/'), 'o card procura a capa em capas/');
+  ok(card.includes('jogo.capa'), 'o card usa o campo capa do catalogo');
   ok(card.includes('gif: { url: capaUrl }'), 'o card usa a capa como GIF (a fork converte p/ MP4)');
 });
 

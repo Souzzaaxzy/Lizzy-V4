@@ -135,18 +135,19 @@ CRC conhecido**, para os 3 jogos de arcade.
 > Para diagnosticar de novo: `window.EJS_DEBUG_XX = true` faz o EJS logar o
 > `print`/`printErr` do core no console. É onde o FBNeo diz o que achou/faltou.
 
-### Capas dos jogos (`docs/emugames/capas/<id>.gif`) — GIF ANIMADO ✅
-A capa é um **GIF animado**, com o nome igual ao **`id` do jogo** em
-`jogos.json` (`topgear2.gif`, `metalslug.gif`, `kof97.gif`). O `enviarCard`
-(`dados/src/topgear/index.js`) usa o tipo **`gif: { url: capaUrl }`**; se a capa
-faltar, cai para texto+botão (não quebra). `tools/gerar-capas.mjs` (sharp, já é
-dep) gera um GIF placeholder 1280×720 a partir do `jogos.json`.
+### Capas dos jogos (`docs/emugames/capas/`) — GIF ANIMADO ✅
+A capa é um **GIF animado**. O `enviarCard` (`dados/src/topgear/index.js`) usa o
+campo **`capa`** do jogo em `jogos.json` (ex.: `"capa": "topgear.gif"`); sem
+esse campo, cai no convencional `<id>.gif`. Se a capa faltar, cai para
+texto+botão (não quebra). `tools/gerar-capas.mjs` (sharp, já é dep) gera um GIF
+placeholder 1280×720 a partir do `jogos.json`.
 
 **Bug corrigido (out/2026)**: o card pedia `capas/<id>.png` e mandava como
 `image` — mas na pasta só havia **`.gif`**, então o fetch dava **404**, o card
 caía para texto puro e a capa "não pegava" (o log dizia
-`capa falhou … Failed to fetch stream`). Os GIFs também estavam com o nome
-errado (`topgear.gif`/`kof.gif` em vez de `topgear2.gif`/`kof97.gif`).
+`capa falhou … Failed to fetch stream`). O nome dos GIFs também não seguia o
+`id` do jogo (`topgear.gif`/`kof.gif`) — resolvido com o campo `capa` no
+catálogo, que aponta o arquivo certo sem renomear nada.
 
 **Por que o card usa `gif:` e não `image:`**: o WhatsApp **não anima** um `.gif`
 cru enviado como imagem/vídeo — ele exige um **MP4 (H.264) em loop com

@@ -44,7 +44,8 @@ async function enviarCard({ nazu, from, jogo }) {
   const botao = [{ text: '🎮 JOGAR', url, useWebview: true }];
   const footer = 'Lizzy · EmuGames';
 
-  const capaUrl = `${base}/capas/${encodeURIComponent(jogo.id)}.gif`;
+  const capaArquivo = jogo.capa || `${jogo.id}.gif`;
+  const capaUrl = `${base}/capas/${encodeURIComponent(capaArquivo)}`;
 
   let msg;
   try {

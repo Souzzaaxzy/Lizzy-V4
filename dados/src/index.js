@@ -21477,18 +21477,21 @@ case 'pin':
               id: 'topgear2',
               nome: 'Top Gear 2',
               emoji: '🏎️',
+              capa: 'topgear.gif',
               descricao: 'Corrida clássica de SNES: 16 países, 4 carros, pit stop e trilha sonora marcante. Escolha o carro, administre o combustível e chegue em 1º.'
             },
             metalslug: {
               id: 'metalslug',
               nome: 'Metal Slug',
               emoji: '🪖',
+              capa: 'metalslug.gif',
               descricao: 'Run and gun clássico da SNK: atire em tudo, resgate reféns, pilote o tanque e sobreviva à chuva de inimigos.'
             },
             kof: {
               id: 'kof97',
               nome: "The King of Fighters '97",
               emoji: '🥊',
+              capa: 'kof.gif',
               descricao: 'Luta clássica da SNK: times de 3, sistema de Advanced/Extra e o lendário confronto com Orochi.'
             }
           };
