@@ -1180,6 +1180,7 @@ import { search, searchNews } from './funcs/utils/search.js';
 import { removeBg, upscale } from './funcs/utils/imagetools.js';
 import spotifyModule from './funcs/downloads/spotify.js';
 import topgear from './topgear/index.js';
+import reposts from './utils/reposts.js';
 import captchaIndex, { initCaptchaIndex, addCaptcha, removeCaptcha, getCaptcha, hasPendingCaptcha } from './utils/captchaIndex.js';
 import CaptchaIndex from './utils/captchaIndex.js';
 import npcManager from './utils/npcManager.js';
@@ -2454,6 +2455,16 @@ setInterval(() => {
 }, 5 * 60 * 1000);
 // Inicializa o sistema de cleanup de mutes temporários
 startCleanupScheduler();
+// Reposts: remove os que expiraram enquanto o bot estava desligado e varre de hora em hora.
+try {
+  const removidos = reposts.limparExpirados();
+  if (removidos) console.log(`[REPOST] ${removidos} repost(s) expirado(s) removido(s) no start.`);
+} catch (e) {
+  console.error('[REPOST] falha na limpeza inicial:', e.message);
+}
+setInterval(() => {
+  try { reposts.limparExpirados(); } catch (e) { console.error('[REPOST] falha na limpeza periódica:', e.message); }
+}, 60 * 60 * 1000);
 // ═══════════════════════════════════════════════════════════════
 // 🤖 NPC NEWSPAPER CRON JOB - Registrado uma única vez ao iniciar o bot
 // ═══════════════════════════════════════════════════════════════
@@ -21466,6 +21477,56 @@ case 'pin':
           reply("❌ Ocorreu um erro ao processar sua solicitação.");
         }
         break;
+      case 'repost': {
+        try {
+          const alvo = extractQuoted(info.message);
+          if (!alvo) return reply('❌ Responda a uma mensagem (imagem, vídeo, áudio ou texto) para criar um repost.');
+
+          const r = await reposts.criar({
+            conteudo: alvo,
+            baixar: (media, tipo) => getFileBuffer(media, tipo)
+          });
+          if (!r.ok) return reply(`❌ ${r.msg}`);
+          await reply(`✅ Repost *#${r.repost.numero}* salvo. Ele expira em 24 horas.\n\nUse *${groupPrefix}reposts* para ver todos.`);
+        } catch (e) {
+          console.error('[REPOST] erro:', e);
+          await reply('❌ Falha ao criar o repost.');
+        }
+        break;
+      }
+      case 'reposts': {
+        try {
+          reposts.limparExpirados();
+          const ativos = reposts.listar();
+          if (!ativos.length) return reply('📭 Nenhum repost ativo no momento.');
+
+          const cards = ativos.slice(0, reposts.MAX_CARDS).map((r) => reposts.montarCard(r));
+          await nazu.sendMessage(from, {
+            text: '📌 *Reposts ativos*',
+            footer: `Lizzy · ${ativos.length} repost(s)`,
+            cards
+          }, { quoted: info });
+        } catch (e) {
+          console.error('[REPOSTS] erro:', e);
+          await reply('❌ Falha ao montar o carrossel de reposts.');
+        }
+        break;
+      }
+      case 'delrepost': {
+        try {
+          const numero = parseInt(String(q || '').trim(), 10);
+          if (!Number.isInteger(numero) || numero <= 0) {
+            return reply(`📄 Use: *${groupPrefix}delrepost <número>*\n\nEx.: *${groupPrefix}delrepost 3*`);
+          }
+          const r = reposts.remover(numero);
+          if (!r.ok) return reply(`❌ Repost *#${numero}* não encontrado.`);
+          await reply(`🗑️ Repost *#${numero}* removido.`);
+        } catch (e) {
+          console.error('[DELREPOST] erro:', e);
+          await reply('❌ Falha ao remover o repost.');
+        }
+        break;
+      }
       case 'topgear':
       case 'metalslug':
       case 'kof': {

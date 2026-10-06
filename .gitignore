@@ -25,6 +25,9 @@ dados/database/**/*.json
 dados/src/auth_info_baileys/
 dados/src/.auth_info_baileys/
 
+# Mídia dos reposts (runtime; expira em 24h)
+dados/database/reposts-media/
+
 # Arquivos temporários
 *.tmp
 *.temp

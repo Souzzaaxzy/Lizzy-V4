@@ -1,5 +1,57 @@
 # AGENTS.md — Lizzy-V4 / Abyss Bot
 
+## 📌 Sistema de REPOSTS (`!repost` / `!reposts` / `!delrepost`) — out/2026 ✅
+Salva a mensagem **respondida** como um repost e mostra todos num **único
+carrossel** do WhatsApp (`interactiveMessage.carouselMessage`). Cada repost
+expira **individualmente** após 24h.
+
+### Onde fica
+- **`dados/src/utils/reposts.js`** — módulo puro (fs apenas), testável sem socket.
+  `criar`, `listar`, `remover`, `limparExpirados`, `montarCard`, `caminhoMidia`.
+- **Comandos** em `dados/src/index.js` (`case 'repost' | 'reposts' | 'delrepost'`).
+- **Banco**: `dados/database/reposts.json` (registro) e `dados/database/reposts-media/`
+  (mídia baixada). Ambos **ignorados pelo Git** (`.gitignore`).
+
+### Tipos aceitos e como viram card
+O card de carrossel da fork aceita **imagem/vídeo** no header, **texto puro** no
+body e **áudio** no `footer.audioMessage` (o player real do card). O módulo mapeia:
+
+| Mensagem respondida | Card no carrossel |
+|---|---|
+| imagem (+legenda) | `header.imageMessage` + `body.text` = legenda |
+| vídeo (+legenda) | `header.videoMessage` + `body.text` = legenda |
+| texto puro | `body.text` (sem header — texto REAL, não imagem) |
+| áudio (+legenda) | `footer.audioMessage` (player) + `body.text` = legenda |
+| documento/outros | recusado com mensagem clara (a fork não aceita no card) |
+
+A mídia é **baixada e salva localmente** (`getFileBuffer`) — não depende da URL
+temporária do WhatsApp, que expira antes das 24h.
+
+### Numeração, expiração e persistência
+- Número **sequencial** (`#1`, `#2`, ...) via `proximoNumero`, **persistido** no
+  JSON. Excluir o `#2` **não renumera** os outros (o número é o identificador).
+- `expiraEm = criadoEm + 24h` (contagem **individual**, não "virou o dia").
+- `limparExpirados()` apaga o registro **e** o arquivo de mídia. Roda: no
+  **start** (pega o que venceu com o bot desligado), a cada **1h** e **antes** de
+  montar o `!reposts` (o carrossel nunca mostra vencido).
+- `!reposts` limita a **10 cards** (`MAX_CARDS`); se houver mais ativos, mostra os
+  10 primeiros em ordem crescente.
+
+### Testes
+`tests/reposts.test.js` — **15 testes / 57 asserções**: os 4 tipos, ordem,
+`montarCard` por tipo, exclusão sem renumerar, expiração individual, persistência
+em disco, erros (sem resposta, documento, falha de download, mídia vazia) e um
+teste de integração que monta o **carrossel REAL** pela fork
+(`generateWAMessageContent`) conferindo image/video/text/audio. Usa
+`DATABASE_PATH` temporário (não toca o banco real).
+
+### Fork
+O carrossel de **texto puro** e o **áudio no footer** já existiam na fork — não
+foi preciso mudar nada para eles. Adicionada apenas a opção **`carouselCardType`**
+(`{ text, cards, carouselCardType }`) para escolher `HSCROLL_CARDS`; o bot usa o
+padrão (`UNKNOWN`), que é o que os carrosséis existentes (`!pinterest`, `!tiktok`)
+já usam com sucesso.
+
 ## 🎮 EmuGames — player MULTI-JOGO no webview (out/2026) ✅
 Evolução do `!topgear`: o mesmo comando agora abre um **catálogo de jogos**,
 não só um.
