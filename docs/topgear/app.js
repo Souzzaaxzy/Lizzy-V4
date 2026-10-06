@@ -97,13 +97,48 @@ function draw() {
 }
 
 let last = performance.now();
+let rodando = false;
+let rafId = 0;
+
 function loop(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   update(dt);
   draw();
-  requestAnimationFrame(loop);
+  rafId = requestAnimationFrame(loop);
 }
+
+function iniciarLoop() {
+  if (rodando) return;
+  rodando = true;
+  last = performance.now();
+  rafId = requestAnimationFrame(loop);
+}
+
+function pararLoop() {
+  if (!rodando) return;
+  rodando = false;
+  cancelAnimationFrame(rafId);
+}
+
+function resetar() {
+  pararLoop();
+  state.car = { x: W / 2, y: H - 52, speed: 0, steer: 0 };
+  state.road = 0;
+  state.t = 0;
+  state.frames = 0;
+  playBtn.disabled = false;
+  playBtn.textContent = 'JOGAR';
+  draw();
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) pararLoop();
+  else if (playBtn.textContent === 'RODANDO') iniciarLoop();
+});
+
+addEventListener('pagehide', pararLoop);
+addEventListener('blur', pararLoop);
 
 async function loadEngine() {
   try {
@@ -121,11 +156,16 @@ async function loadEngine() {
 }
 
 playBtn.addEventListener('click', () => {
+  if (playBtn.textContent === 'RODANDO') {
+    resetar();
+    return;
+  }
   playBtn.disabled = true;
   playBtn.textContent = 'RODANDO';
   info.textContent = state.wasm
     ? 'Engine WASM carregada. Sem ROM — modo demonstração.'
     : 'Sem WASM (CSP) — modo demonstração em canvas.';
+  iniciarLoop();
 });
 
 loadEngine().then((ok) => {
@@ -137,5 +177,5 @@ loadEngine().then((ok) => {
     info.textContent = 'WASM não encontrada — demonstração de canvas.';
   }
   playBtn.disabled = false;
-  requestAnimationFrame(loop);
+  draw();
 });

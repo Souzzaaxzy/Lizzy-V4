@@ -1179,7 +1179,7 @@ import { getInfo as twitterGetInfo } from './funcs/utils/twitter.js';
 import { search, searchNews } from './funcs/utils/search.js';
 import { removeBg, upscale } from './funcs/utils/imagetools.js';
 import spotifyModule from './funcs/downloads/spotify.js';
-import topgearServer from './topgear/server.js';
+import topgear from './topgear/index.js';
 import captchaIndex, { initCaptchaIndex, addCaptcha, removeCaptcha, getCaptcha, hasPendingCaptcha } from './utils/captchaIndex.js';
 import CaptchaIndex from './utils/captchaIndex.js';
 import npcManager from './utils/npcManager.js';
@@ -21471,25 +21471,19 @@ case 'pin':
           if (!isGroup) return reply('◈ Este comando só funciona em grupos.');
           if (!podeDonoTotal()) return reply(OWNER_ONLY_MESSAGE);
 
-          const port = await topgearServer.iniciar();
-          const base = topgearServer.baseUrl();
-          if (!port || !base) return reply('❌ Não consegui subir o servidor do jogo.');
+          const url = topgear.pagina();
+          if (!url) return reply('❌ URL do Top Gear não configurada.');
 
-          const url = `${base.replace(/\/$/, '')}/index.html`;
           const msg = await generateWAMessage(from, {
             text: '🏎️ *TOP GEAR* — experiência experimental',
             footer: 'Lizzy · teste',
             nativeFlow: [{ text: '🎮 JOGAR', url, useWebview: true }]
           }, { userJid: nazu.user.id, upload: nazu.waUploadToServer });
           await nazu.relayMessage(from, msg.message, { messageId: msg.key.id });
-
-          const aviso = base.includes('localhost') || base.includes('127.0.0.1')
-            ? `\n\n⚠️ Sem TOPGEAR_PUBLIC_URL: o botão não abre no aparelho. Local: ${url}`
-            : '';
-          await reply(`✅ Experiência enviada (porta ${port}).${aviso}`);
+          await reply(`✅ Experiência enviada.\n🔗 ${url}`);
         } catch (e) {
           console.error('[TOPGEAR]', e);
-          await reply('❌ Falha ao iniciar o Top Gear experimental.');
+          await reply('❌ Falha ao enviar o Top Gear experimental.');
         }
         break;
       }
