@@ -80,6 +80,9 @@
   window.EJS_onExit = aoSair;
 
   function iniciarEmulador(romUrl) {
+    romAtual = romUrl;
+    alvo.innerHTML = '';
+    window.EJS_emulator = null;
     window.EJS_player = '#game';
     window.EJS_core = 'snes';
     window.EJS_gameUrl = romUrl;
@@ -156,31 +159,38 @@
 
   /*
     Fechar o webview do WhatsApp nem sempre dispara visibilitychange/pagehide
-    (o navegador interno pode manter a página viva). Por isso:
-    - visibilitychange/pagehide/freeze disparam parar() imediatamente;
-    - ao VOLTAR (pageshow/visibilitychange visível) a página recarrega o
-      emulador do zero, em vez de continuar a sessão antiga.
+    (o navegador interno pode manter a pagina viva). Por isso:
+    - visibilitychange/pagehide/freeze param o emulador na hora;
+    - ao VOLTAR (pageshow / visibilitychange visivel) a pagina REINICIA o
+      emulador sozinha, sem precisar recarregar na mao.
   */
   let saiuDaPagina = false;
+  let romAtual = null;
 
   function aoSairDaPagina() {
     saiuDaPagina = true;
     parar();
   }
 
+  function aoVoltarParaPagina() {
+    if (!saiuDaPagina) return;
+    saiuDaPagina = false;
+    ocioso = Date.now();
+    if (!rodando && romAtual) {
+      window.EJS_emulator = null;
+      iniciarEmulador(romAtual);
+    }
+  }
+
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) aoSairDaPagina();
+    else aoVoltarParaPagina();
   });
   addEventListener('pagehide', aoSairDaPagina);
   addEventListener('beforeunload', aoSairDaPagina);
   addEventListener('freeze', aoSairDaPagina);
-
-  addEventListener('pageshow', () => {
-    if (saiuDaPagina && !rodando) {
-      saiuDaPagina = false;
-      ocioso = Date.now();
-    }
-  });
+  addEventListener('pageshow', aoVoltarParaPagina);
+  addEventListener('resume', aoVoltarParaPagina);
 
   setInterval(() => {
     if (!rodando) return;
