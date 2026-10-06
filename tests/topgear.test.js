@@ -115,6 +115,7 @@ await test('index.html: player multi-jogo com os caminhos certos', () => {
   ok(!html.includes('id="trocar"'), 'nao tem botao de trocar jogo');
   ok(html.includes('EJS_core = j.console'), 'o core vem do console do jogo');
   ok(html.includes('EJS_Buttons'), 'controla os botoes do player');
+  ok(html.includes('EJS_biosUrl'), 'suporta BIOS (arcade/Neo Geo)');
   ok(html.includes('exitEmulation: true'), 'tem botao de sair');
   ok(html.includes('EJS_onExit'), 'detecta a saida');
   ok(html.includes('id="parar"'), 'tem botao PARAR');
