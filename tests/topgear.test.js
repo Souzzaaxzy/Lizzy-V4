@@ -85,9 +85,9 @@ async function rodar(texto, { fromMe = true } = {}) {
 await test('config: a URL do jogo está definida', () => {
   const url = topgear.pagina();
   ok(typeof url === 'string' && url.length > 0, 'pagina() devolve uma URL');
-  ok(url.endsWith('/index.html'), `termina em /index.html (veio ${url})`);
   ok(url.startsWith('https://'), 'usa HTTPS (o webview exige)');
-  ok(url.includes('/emugames/'), `aponta para a pasta emugames (veio ${url})`);
+  ok(!url.endsWith('/index.html'), `usa a raiz (sem /index.html; veio ${url})`);
+  ok(topgear.pagina('topgear2').includes('?jogo=topgear2'), 'aceita ?jogo=<id>');
 });
 
 await test('a pasta docs/emugames tem o player multi-jogo', () => {
@@ -141,7 +141,7 @@ await test('!topgear: envia interactiveMessage com botão webview', async () => 
   ok(btn?.name === 'cta_url', `botão é cta_url (veio ${btn?.name})`);
   const params = JSON.parse(btn?.buttonParamsJson || '{}');
   ok(params.webview_interaction === true, 'abre em webview');
-  ok(String(params.url).endsWith('/index.html'), `url aponta o index.html (veio ${params.url})`);
+  ok(String(params.url).startsWith('https://'), `url e https (veio ${params.url})`);
   ok(texto.includes('Experiência enviada'), 'confirma o envio');
 });
 

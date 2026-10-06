@@ -12,11 +12,12 @@ function lerConfig() {
   }
 }
 
-function pagina() {
+function pagina(jogoId) {
   const cfg = lerConfig();
   const base = process.env.TOPGEAR_PUBLIC_URL || cfg.publicUrl;
   if (!base) return '';
-  return `${String(base).replace(/\/$/, '')}/index.html`;
+  const raiz = String(base).replace(/\/$/, '').replace(/\/index\.html$/, '');
+  return jogoId ? `${raiz}/?jogo=${encodeURIComponent(jogoId)}` : raiz;
 }
 
 export default { pagina, config: lerConfig };
