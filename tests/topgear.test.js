@@ -90,26 +90,28 @@ await test('config: a URL do jogo está definida', () => {
 });
 
 await test('arquivos do jogo estão em docs/ (GitHub Pages)', () => {
-  for (const f of ['index.html', 'style.css', 'app.js', 'engine/emulator.wasm']) {
+  for (const f of ['index.html', 'style.css', 'roms/README.md']) {
     ok(fs.existsSync(path.join(PROJECT, 'docs/topgear', f)), `docs/topgear/${f} existe`);
   }
   ok(fs.existsSync(path.join(PROJECT, 'docs/.nojekyll')), '.nojekyll presente');
 });
 
-await test('WASM: a engine é válida e executa', async () => {
-  const bytes = fs.readFileSync(path.join(PROJECT, 'docs/topgear/engine/emulator.wasm'));
-  const { instance } = await WebAssembly.instantiate(bytes, {});
-  ok(instance.exports.seed() === 42, 'seed() responde 42');
+await test('index.html: usa o EmulatorJS (SNES) com os caminhos certos', () => {
+  const html = fs.readFileSync(path.join(PROJECT, 'docs/topgear/index.html'), 'utf-8');
+  ok(html.includes("EJS_core = 'snes'"), 'core snes');
+  ok(html.includes('cdn.emulatorjs.org'), 'carrega do CDN do EmulatorJS');
+  ok(html.includes('src/'), 'aponta os scripts para src/');
+  ok(html.includes('EJS_gameUrl'), 'define a ROM');
+  ok(html.includes('TOPGEAR_ROM'), 'ROM configurável');
+  ok(html.includes('roms/'), 'procura a ROM em roms/');
 });
 
-await test('app.js: pausa o loop e reseta (não roda pra sempre)', () => {
-  const app = fs.readFileSync(path.join(PROJECT, 'docs/topgear/app.js'), 'utf-8');
-  ok(app.includes('cancelAnimationFrame'), 'usa cancelAnimationFrame');
-  ok(app.includes('visibilitychange'), 'pausa quando a aba fica em segundo plano');
-  ok(app.includes('pagehide'), 'para ao fechar a página');
-  ok(/function resetar\(/.test(app), 'tem reset');
-  const inicio = app.indexOf('loadEngine().then');
-  ok(!app.slice(inicio).includes('requestAnimationFrame(loop)'), 'não inicia o loop no load (só no clique)');
+await test('EmulatorJS: os assets do CDN respondem 200', async () => {
+  const base = 'https://cdn.emulatorjs.org/stable/data/';
+  for (const f of ['loader.js', 'emulator.min.css', 'src/emulator.js', 'src/GameManager.js', 'cores/snes9x-wasm.data']) {
+    const r = await fetch(base + f, { method: 'HEAD' });
+    ok(r.status === 200, `${f} -> ${r.status}`);
+  }
 });
 
 await test('!topgear: envia interactiveMessage com botão webview', async () => {

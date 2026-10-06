@@ -1,55 +1,49 @@
-# TOPGEAR — como funciona
+# TOPGEAR — Top Gear (SNES, 1992) no webview
 
-**Não é preciso fazer nada no servidor.** O jogo é servido pelo **GitHub Pages**
-do próprio repositório.
+**Top Gear** é o jogo de corrida de 1992 da **Gremlin Graphics** publicado pela
+**Kemco** para o **Super Nintendo** (no Japão se chama *Top Racer*). Ficou
+famoso no Brasil pela locadora.
 
-## URL do jogo
+Esta pasta publica esse jogo dentro do webview do WhatsApp, usando um emulador
+de SNES real.
+
+## Como funciona
+
+```
+!topgear (bot)
+    -> botão webview aponta para o GitHub Pages
+        -> index.html carrega o EmulatorJS (core snes9x, WebAssembly)
+            -> a ROM roda no aparelho
+```
+
+A emulação é feita pelo [EmulatorJS](https://emulatorjs.org) — open-source, core
+**snes9x** em WebAssembly, carregado do CDN oficial. Não há nada de emulação
+neste repositório; só a página que inicializa o player.
+
+## URL
 
 ```
 https://souzzaaxzy.github.io/Lizzy-V4/topgear/index.html
 ```
 
-Já está no ar. Os arquivos estão em `docs/topgear/` no repositório, e o GitHub
-Pages publica a pasta `docs/` automaticamente.
+## A ROM
 
-## Como usar
+Nenhuma ROM comercial está no repositório (direito autoral). Coloque o arquivo
+em `roms/` — veja `roms/README.md`.
 
-No grupo (só o dono):
-
-```
-!topgear
-```
-
-O bot manda uma mensagem com o botão **JOGAR**, que abre o jogo no webview do
-WhatsApp.
-
-## Como atualizar o jogo
-
-Edite os arquivos em `docs/topgear/` e dê push. O Pages republica sozinho em
-~1 minuto.
-
-Os arquivos em `dados/src/topgear/` são a versão "fonte" (usada pelos testes e
-pelo servidor local opcional). Se mudar um, copie para `docs/topgear/`.
+Se o arquivo não existir, a página mostra um aviso em vez de um player vazio.
 
 ## Arquivos
 
 ```
 docs/topgear/
-├── index.html
+├── index.html      (inicializa o EmulatorJS)
 ├── style.css
-├── app.js
-└── engine/
-    └── emulator.wasm     (engine homebrew, 114 bytes — nenhuma ROM comercial)
+└── roms/
+    └── README.md   (onde colocar a ROM)
 ```
 
-## Por que aqui e não no site
+## Controles
 
-O domínio `aleatoryconteudos.com` tem um CSP restritivo (`script-src 'self'`,
-sem `wasm-unsafe-eval`), que **bloquearia o WebAssembly**. O GitHub Pages não tem
-esse CSP, então o jogo roda completo (canvas + WASM).
-
-## Servidor local (opcional)
-
-Existe também um servidor local (`dados/src/topgear/server.js`) para quem quiser
-servir o jogo pela própria máquina do bot (porta 8099). Ele **não é necessário**
-— é só uma alternativa para desenvolvimento.
+O EmulatorJS já traz controle na tela (touch), suporte a gamepad e teclado.
+No celular, dentro do webview, aparece o D-pad virtual automaticamente.

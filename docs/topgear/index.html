@@ -3,20 +3,84 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>TOP GEAR</title>
+<title>Top Gear (SNES)</title>
 <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-<h1>TOP GEAR</h1>
-<canvas id="stage" width="320" height="240"></canvas>
-<div id="info">carregando engine…</div>
-<button id="play" disabled>JOGAR</button>
-<div id="pad">
-  <div></div><div data-k="up">▲</div><div></div>
-  <div data-k="left">◀</div><div data-k="down">▼</div><div data-k="right">▶</div>
-  <div data-k="b">B</div><div data-k="a">A</div><div></div>
-</div>
-<script src="./app.js"></script>
+<header>
+  <h1>TOP GEAR</h1>
+  <p class="sub">Super Nintendo · 1992 · Gremlin Graphics / Kemco</p>
+</header>
+
+<main>
+  <div id="game"></div>
+
+  <section id="sem-rom" hidden>
+    <p>Emulador SNES pronto — falta a ROM.</p>
+    <p class="dica">
+      Coloque um arquivo <code>.sfc</code> que você tenha direito de usar em
+      <code>roms/</code> e aponte <code>window.TOPGEAR_ROM</code> no topo deste arquivo.
+    </p>
+  </section>
+</main>
+
+<footer>
+  <p>Emulação via <a href="https://emulatorjs.org" target="_blank" rel="noopener">EmulatorJS</a> (snes9x, WebAssembly).</p>
+</footer>
+
+<script>
+  window.TOPGEAR_ROM = './roms/topgear.sfc';
+  window.TOPGEAR_DATA = 'https://cdn.emulatorjs.org/stable/data/';
+</script>
+
+<script>
+(function () {
+  const ROM = window.TOPGEAR_ROM;
+  const DATA = window.TOPGEAR_DATA;
+  const alvo = document.getElementById('game');
+  const semRom = document.getElementById('sem-rom');
+
+  function mostrarAviso() {
+    alvo.hidden = true;
+    semRom.hidden = false;
+  }
+
+  const SRC = DATA + 'src/';
+  window.EJS_player = '#game';
+  window.EJS_core = 'snes';
+  window.EJS_gameUrl = ROM;
+  window.EJS_gameName = 'Top Gear';
+  window.EJS_pathtodata = DATA;
+  window.EJS_startOnLoaded = true;
+  window.EJS_color = '#1d4ed8';
+  window.EJS_backgroundColor = '#0b0d12';
+  window.EJS_language = 'pt-BR';
+  window.EJS_paths = {
+    'GameManager.js': SRC + 'GameManager.js',
+    'compression.js': SRC + 'compression.js',
+    'emulator.js': SRC + 'emulator.js',
+    'gamepad.js': SRC + 'gamepad.js',
+    'loader.js': DATA + 'loader.js',
+    'nipplejs.js': SRC + 'nipplejs.js',
+    'shaders.js': SRC + 'shaders.js',
+    'socket.io.min.js': SRC + 'socket.io.min.js',
+    'storage.js': SRC + 'storage.js',
+    'emulator.min.css': DATA + 'emulator.min.css'
+  };
+
+  fetch(ROM, { method: 'HEAD' })
+    .then((r) => {
+      if (!r.ok) {
+        mostrarAviso();
+        return;
+      }
+      const s = document.createElement('script');
+      s.src = DATA + 'loader.js';
+      s.onerror = mostrarAviso;
+      document.body.appendChild(s);
+    })
+    .catch(mostrarAviso);
+})();
+</script>
 </body>
 </html>
-
