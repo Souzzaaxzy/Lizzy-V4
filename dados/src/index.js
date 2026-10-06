@@ -21511,18 +21511,24 @@ case 'pin':
             }, { quoted: info });
           }
 
-          // O carrossel não reproduz áudio (card só aceita imagem/vídeo), então
-          // os reposts de áudio saem como mensagens de áudio de verdade.
+          // O carrossel não tem card de áudio (o card só aceita header image/video
+          // e o cliente ignora footer no card). Cada áudio vira uma mensagem
+          // interativa com o áudio no footer — o player real do WhatsApp.
           if (audios.length) {
             await nazu.sendMessage(from, {
               text: `🎵 *Áudios dos reposts* (${audios.map((a) => `#${a.numero}`).join(', ')})`
             });
             for (const a of audios) {
-              await nazu.sendMessage(from, {
-                audio: fs.readFileSync(a.arquivo),
-                mimetype: 'audio/ogg; codecs=opus',
-                ptt: false
-              });
+              try {
+                await nazu.sendMessage(from, reposts.mensagemAudio(a));
+              } catch (err) {
+                console.error(`[REPOSTS] audio #${a.numero} footer falhou, enviando audio puro:`, err?.message);
+                await nazu.sendMessage(from, {
+                  audio: fs.readFileSync(a.arquivo),
+                  mimetype: 'audio/ogg; codecs=opus',
+                  ptt: false
+                });
+              }
             }
           }
         } catch (e) {

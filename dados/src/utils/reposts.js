@@ -252,13 +252,20 @@ export async function montarCards(agora = Date.now()) {
   return ativos.map(montarCard);
 }
 
-// Reposts de áudio ativos, prontos para enviar como áudio (o carrossel não
-// consegue reproduzi-los).
+// Reposts de áudio ativos. O carrossel não aceita card de áudio, então cada um
+// vira uma mensagem interativa com o áudio no footer (player real do WhatsApp).
 export function audiosAtivos(agora = Date.now()) {
   return ler()
     .reposts.filter((r) => r.expiraEm > agora && r.tipo === 'audio' && r.arquivo)
     .sort((a, b) => a.numero - b.numero)
     .map((r) => ({ numero: r.numero, arquivo: caminhoMidia(r.arquivo), texto: r.texto || '' }));
+}
+
+// Conteúdo de uma mensagem interativa que carrega o áudio no footer (o player
+// real do WhatsApp; o carrossel não tem card de áudio).
+export function mensagemAudio({ numero, arquivo, texto }) {
+  const corpo = texto ? `Repost #${numero}\n\n${corpoCard(texto)}` : `Repost #${numero}`;
+  return { text: corpo, audioFooter: { url: arquivo }, nativeFlow: [] };
 }
 
 export default {
@@ -269,6 +276,7 @@ export default {
   montarCard,
   montarCards,
   audiosAtivos,
+  mensagemAudio,
   limparExpirados,
   caminhoMidia
 };

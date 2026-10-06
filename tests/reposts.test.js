@@ -137,6 +137,25 @@ await test('audiosAtivos devolve só os áudios ativos, em ordem', () => {
   ok(fs.existsSync(audios[0].arquivo), 'arquivo de áudio existe');
 });
 
+await test('mensagemAudio vira interactiveMessage com áudio no footer (player real)', async () => {
+  const { generateWAMessageContent } = await import('@itsliaaa/baileys');
+  const a = reposts.audiosAtivos()[0];
+
+  const conteudo = reposts.mensagemAudio(a);
+  ok(conteudo.audioFooter?.url === a.arquivo, 'o áudio vai no audioFooter');
+  ok(conteudo.nativeFlow, 'tem nativeFlow (mensagem interativa)');
+
+  const upload = async () => ({ url: 'https://mmg.whatsapp.net/fake', directPath: '/v/fake' });
+  const m = await generateWAMessageContent(conteudo, {
+    userJid: '5599999999999:5@s.whatsapp.net', upload, jid: '120363826666666601@g.us'
+  });
+  const im = m.interactiveMessage;
+  ok(!!im, 'gerou interactiveMessage');
+  ok(!!im.footer?.audioMessage, 'o footer tem o áudio (player)');
+  ok(im.footer?.hasMediaAttachment === true, 'footer marcado com mídia');
+  ok(im.body?.text?.includes('#4'), 'o corpo identifica o repost');
+});
+
 await test('remover #2 apaga registro, mídia e capa, sem renumerar', async () => {
   const antes = reposts.listar().find((r) => r.numero === 2);
   const arquivo = reposts.caminhoMidia(antes.arquivo);

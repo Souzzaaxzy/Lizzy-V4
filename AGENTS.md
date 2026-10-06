@@ -27,8 +27,14 @@ ignora qualquer áudio dentro do card.
 | imagem (+legenda) | card com `header.imageMessage` + `body.text` = legenda |
 | vídeo (+legenda) | card com `header.videoMessage` + `body.text` = legenda |
 | texto puro | card com `header.imageMessage` (capa gerada) + `body.text` = texto real |
-| áudio (+legenda) | **fora do carrossel**: sai como mensagem de áudio de verdade (`audiosAtivos`), com um cabeçalho `🎵 Áudios dos reposts (#N)` |
+| áudio (+legenda) | **fora do carrossel**: mensagem **interativa** com o áudio no `footer.audioMessage` — o player real do WhatsApp (`mensagemAudio`), com `Repost #N` no corpo |
 | documento/outros | recusado com mensagem clara (a fork não aceita no card) |
+
+> **Card × mensagem interativa**: o `audioFooter` da fork é para **mensagem
+> interativa** (com `nativeFlow`), onde o cliente renderiza um **player de áudio
+> no footer** — é o recurso documentado ("Native Flow with Audio in the Footer").
+> **Card de carrossel não tem footer** (o cliente ignora), por isso o áudio não
+> pode ir como card; ele vai como mensagem interativa própria.
 
 A **capa** de texto é um PNG gerado pelo `sharp` (640×360, cor por tipo, com o
 `Repost #N` e um resumo) — não é a mensagem "virando imagem": o texto real
@@ -47,12 +53,13 @@ do WhatsApp.
   10 primeiros em ordem crescente.
 
 ### Testes
-`tests/reposts.test.js` — **17 testes / 65 asserções**: os 4 tipos, ordem,
+`tests/reposts.test.js` — **18 testes / 71 asserções**: os 4 tipos, ordem,
 `montarCard` por tipo (**todo card com header de mídia**), `audiosAtivos`,
-geração de capa sob demanda para reposts antigos, exclusão sem renumerar,
-expiração individual, persistência em disco, erros (sem resposta, documento,
-falha de download, mídia vazia) e um teste de integração que monta o **carrossel
-REAL** pela fork (`generateWAMessageContent`) conferindo que os cards têm header
+`mensagemAudio` (interactiveMessage com áudio no footer), geração de capa sob
+demanda para reposts antigos, exclusão sem renumerar, expiração individual,
+persistência em disco, erros (sem resposta, documento, falha de download, mídia
+vazia) e um teste de integração que monta o **carrossel REAL** pela fork
+(`generateWAMessageContent`) conferindo que os cards têm header
 (image/video/capa). Usa `DATABASE_PATH` temporário (não toca o banco real).
 
 ### Fork
