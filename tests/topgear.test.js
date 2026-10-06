@@ -106,6 +106,7 @@ await test('index.html: usa o EmulatorJS (SNES) com os caminhos certos', () => {
   ok(html.includes('roms/'), 'procura a ROM em roms/');
   ok(html.includes('TOPGEAR_ROM_CANDIDATOS'), 'procura por varios nomes de ROM');
   ok(html.includes('type="file"'), 'permite carregar a ROM do aparelho');
+  ok(html.includes('api.github.com'), 'descobre a ROM pela API do GitHub');
 });
 
 await test('EmulatorJS: os assets do CDN respondem 200', async () => {

@@ -32,16 +32,16 @@
 
 <script>
   window.TOPGEAR_DATA = 'https://cdn.emulatorjs.org/stable/data/';
+  window.TOPGEAR_REPO = 'Souzzaaxzy/Lizzy-V4';
+  window.TOPGEAR_DIR = 'docs/topgear/roms';
   window.TOPGEAR_ROM = './roms/topgear.sfc';
   window.TOPGEAR_ROM_CANDIDATOS = [
-    './roms/topgear.sfc',
-    './roms/topgear.smc',
-    './roms/topgear2.sfc',
-    './roms/topgear2.smc',
-    './roms/game.sfc',
-    './roms/game.smc',
-    './roms/rom.sfc',
-    './roms/rom.smc'
+    './roms/topgear.sfc', './roms/topgear.smc',
+    './roms/topgear2.sfc', './roms/topgear2.smc',
+    './roms/TopGear.sfc', './roms/TopGear.smc',
+    './roms/TopGear2.sfc', './roms/TopGear2.smc',
+    './roms/game.sfc', './roms/game.smc',
+    './roms/rom.sfc', './roms/rom.smc'
   ];
 </script>
 
@@ -89,11 +89,24 @@
 
   input.addEventListener('change', () => {
     const f = input.files && input.files[0];
-    if (!f) return;
-    configurar(URL.createObjectURL(f));
+    if (f) configurar(URL.createObjectURL(f));
   });
 
-  async function procurar() {
+  const EXT = /\.(sfc|smc|fig|swc|zip)$/i;
+
+  async function viaApi() {
+    try {
+      const r = await fetch(`https://api.github.com/repos/${window.TOPGEAR_REPO}/contents/${window.TOPGEAR_DIR}`);
+      if (!r.ok) return null;
+      const lista = await r.json();
+      const rom = Array.isArray(lista) ? lista.find((x) => EXT.test(x.name)) : null;
+      return rom ? `./roms/${encodeURIComponent(rom.name)}` : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function viaCandidatos() {
     const lista = [window.TOPGEAR_ROM, ...(window.TOPGEAR_ROM_CANDIDATOS || [])];
     for (const url of lista) {
       try {
@@ -104,10 +117,11 @@
     return null;
   }
 
-  procurar().then((rom) => {
+  (async () => {
+    const rom = (await viaApi()) || (await viaCandidatos());
     if (rom) configurar(rom);
     else aviso();
-  });
+  })();
 })();
 </script>
 </body>
