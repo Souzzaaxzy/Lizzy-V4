@@ -21,7 +21,8 @@
       "console": "arcade",
       "descricao": "Luta clássica da SNK: times de 3, sistema de Advanced/Extra e o lendário confronto com Orochi.",
       "rom": "jogos/arcade/kof97.zip",
-      "bios": "jogos/arcade/neogeo.zip"
+      "bios": "jogos/arcade/neogeo.zip",
+      "mirror": true
     }
   ]
 }

@@ -34,15 +34,32 @@ do tema. Consoles: `snes` `nes` `gba` `gb` `genesis` `n64` `psx` `arcade`...
 - Mantidos: **PARAR**, inatividade (3 min), sair/voltar reinicia sozinho,
   controles de toque **abaixo** da tela (medido em viewport Android).
 
-### Testes — `tests/topgear.test.js` (**12 testes / 153 asserções**)
+### Testes — `tests/topgear.test.js` (**15 testes / 166 asserções**)
 Inclui a validação de que a URL aponta para `/emugames/`, que o `jogos.json`
 tem entradas completas e que cada `rom` existe de fato, que os romsets de arcade
 batem com os CRCs oficiais (MAME/FBNeo) e que as capas dos jogos existem.
 
 ### Hospedagem
-GitHub Pages (repo público) ou **Cloudflare Pages** (funciona com repo
-privado). No Cloudflare: *Framework* None, *Build command* **vazio**,
-*Build output directory* `docs/emugames`.
+**Cloudflare Workers** (static assets) + **GitHub Pages** como espelho.
+No Cloudflare: *Framework* None, *Build command* **vazio**, *Build output
+directory* `docs/emugames`.
+
+**Limite de 25 MiB por arquivo (medido)**: o Cloudflare recusa qualquer asset
+acima de 25 MiB e **o deploy inteiro falha** (não sobe nada). O `kof97.zip`
+(27,6 MiB) estourava — o site ficou ~30 min servindo a versão antiga sem
+ninguém perceber. Correção em 3 partes:
+1. `docs/emugames/.assetsignore` exclui o `kof97.zip` do upload;
+2. o arquivo é servido pelo **espelho** (GitHub Pages, que não tem o limite e
+   manda `access-control-allow-origin: *`);
+3. o `jogos.json` marca o jogo com **`"mirror": true`** e o player troca a URL
+   (`window.ROM_MIRROR` + `urlRom()`), no `EJS_gameUrl` **e** no `EJS_biosUrl`.
+
+O EmulatorJS **aceita** zip/7z/rar (detecta por magic bytes em
+`compression.js`), **mas** para `arcade` ele escreve o arquivo **como está** no
+FS (`emulator.js` → `if (["arcade","mame"].includes(core)) writeFile(fileName,
+data)`) — o FBNeo exige **zip**. Então 7z/rar não servem para arcade, e o
+`kof97.zip` também não comprime abaixo de 25 MiB nem com deflate máximo
+(27,4 MiB). Daí o espelho ser o caminho certo.
 
 ### Capas dos jogos (`docs/emugames/capas/<id>.png`)
 Geradas por **`tools/gerar-capas.mjs`** (sharp, já é dep) a partir do
@@ -77,7 +94,7 @@ para os nomes oficiais e **valida cada CRC** contra a tabela do FBNeo
 | `kof97.zip` | 3/13 | **13/13** — veio em duas partes (`kof97.zip` + `kof2.zip`, nomes `kof97_*.rom`) e foi **unificado** num zip só com os nomes oficiais `232-*`. O `kof2.zip` foi removido. |
 | `neogeo.zip` | BIOS completa (essenciais OK) | inalterada |
 
-**Testes**: `tests/topgear.test.js` **12 testes / 153 asserções**. As novas
+**Testes**: `tests/topgear.test.js` **15 testes / 166 asserções**. As novas
 seções validam: romset mslug **9/9** e kof97 **13/13** com **nome oficial + CRC
 oficial** (o zip antigo do mslug reprova — **10 asserções falham**; o kof
 incompleto reprova — **14 falham**), `kof2.zip` não existe mais, as 3 capas são

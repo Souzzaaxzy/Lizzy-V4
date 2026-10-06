@@ -29,6 +29,9 @@
 <script>
   window.EJS_DATA = 'https://cdn.emulatorjs.org/stable/data/';
   window.INATIVIDADE_MS = 3 * 60 * 1000;
+  // Espelho externo (GitHub Pages) usado so para as ROMs que passam do limite
+  // de 25 MiB por arquivo do Cloudflare Workers (hoje: o kof97.zip).
+  window.ROM_MIRROR = 'https://souzzaaxzy.github.io/Lizzy-V4/emugames/';
 </script>
 
 <script>
@@ -52,6 +55,14 @@
   const NOMES = { snes: 'Super Nintendo', nes: 'Nintendo', gba: 'Game Boy Advance', gb: 'Game Boy', genesis: 'Mega Drive', n64: 'Nintendo 64' };
 
   function marcarAtividade() { ocioso = Date.now(); }
+
+  // O Cloudflare Workers limita cada asset a 25 MiB — o kof97.zip passa disso e
+  // o deploy falha. Essas ROMs sao servidas pelo espelho (GitHub Pages, CORS *).
+  function urlRom(j) {
+    if (!j) return '';
+    if (j.mirror && window.ROM_MIRROR) return window.ROM_MIRROR + j.rom;
+    return j.rom;
+  }
 
   function aoSair() {
     rodando = false;
@@ -84,7 +95,7 @@
 
     window.EJS_player = '#game';
     window.EJS_core = j.console;
-    window.EJS_gameUrl = j.rom;
+    window.EJS_gameUrl = urlRom(j);
     window.EJS_gameName = j.nome;
     window.EJS_pathtodata = DATA;
     window.EJS_startOnLoaded = true;
@@ -94,7 +105,7 @@
     window.EJS_volume = 0.6;
     window.EJS_askBeforeExit = false;
     window.EJS_controlScheme = j.console;
-    if (j.bios) window.EJS_biosUrl = j.bios;
+    if (j.bios) window.EJS_biosUrl = urlRom({ rom: j.bios, mirror: j.biosMirror ?? j.mirror });
     window.EJS_Buttons = {
       playPause: true, restart: true, mute: true, settings: true, fullscreen: true,
       saveState: false, loadState: false, screenRecord: false, gamepad: false,

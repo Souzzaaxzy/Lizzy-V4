@@ -295,6 +295,52 @@ await test('o conversor de romset Neo Geo esta no repositorio', () => {
   ok(src.includes('72813676'), 'traz a tabela de CRCs oficiais (mslug)');
 });
 
+await test('ROMs acima de 25 MiB usam o espelho (limite do Cloudflare)', () => {
+  const html = fs.readFileSync(path.join(PROJECT, 'docs/emugames/index.html'), 'utf-8');
+  ok(html.includes('ROM_MIRROR'), 'o player tem o espelho configurado');
+  ok(html.includes('function urlRom'), 'o player resolve a URL da ROM');
+  ok(/EJS_gameUrl = urlRom\(j\)/.test(html), 'o EJS_gameUrl passa pelo espelho');
+  ok(/EJS_biosUrl = urlRom\(/.test(html), 'a BIOS tambem passa pelo espelho');
+
+  const espelho = (html.match(/ROM_MIRROR = '([^']+)'/) || [])[1];
+  ok(!!espelho && espelho.startsWith('https://'), `espelho e https (veio ${espelho})`);
+
+  const cat = JSON.parse(fs.readFileSync(path.join(PROJECT, 'docs/emugames/jogos.json'), 'utf-8'));
+  const LIMITE = 25 * 1024 * 1024;
+
+  // A regra que mantem o deploy de pe: ROM acima do limite TEM que ser espelhada.
+  for (const j of cat.jogos) {
+    const p = path.join(PROJECT, 'docs/emugames', j.rom);
+    if (!fs.existsSync(p)) continue;
+    const tam = fs.statSync(p).size;
+    if (tam > LIMITE) {
+      ok(j.mirror === true, `${j.id} (${(tam / 1048576).toFixed(1)} MiB) tem mirror:true`);
+    }
+  }
+  // O kof97 e o caso concreto.
+  const kof = cat.jogos.find((j) => j.id === 'kof97');
+  ok(kof?.mirror === true, 'kof97 esta marcado como espelhado');
+
+  // A URL final tem que existir de verdade no espelho.
+  const alvo = espelho.replace(/\/$/, '') + '/' + kof.rom;
+  ok(alvo.startsWith('https://souzzaaxzy.github.io/'), `URL do espelho (veio ${alvo})`);
+});
+
+await test('o kof97.zip esta fora do upload do Cloudflare (.assetsignore)', () => {
+  const ig = path.join(PROJECT, 'docs/emugames/.assetsignore');
+  ok(fs.existsSync(ig), '.assetsignore existe');
+  const txt = fs.readFileSync(ig, 'utf-8');
+  const linhas = txt.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
+  ok(linhas.includes('jogos/arcade/kof97.zip'), 'exclui o kof97.zip do upload');
+  ok(linhas.length === 1, `exclui so o arquivo grande (veio ${linhas.length} regra(s))`);
+});
+
+await test('o espelho serve o romset grande com CORS', async () => {
+  const r = await fetch('https://souzzaaxzy.github.io/Lizzy-V4/emugames/jogos/arcade/kof97.zip', { method: 'HEAD' });
+  ok(r.status === 200, `kof97.zip no espelho -> ${r.status}`);
+  ok(r.headers.get('access-control-allow-origin') === '*', 'o espelho manda CORS *');
+});
+
 const totalOk = RESULTS.reduce((a, r) => a + r.passed, 0);
 const totalFail = RESULTS.reduce((a, r) => a + r.failed, 0);
 console.log('\n════════════════════════════════════════');

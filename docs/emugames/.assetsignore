@@ -1,0 +1,9 @@
+# Arquivos que NAO devem subir para o Cloudflare Workers.
+#
+# O Cloudflare limita cada asset a 25 MiB. O kof97.zip tem ~27,6 MiB, o que
+# faz o deploy inteiro falhar. Ele e servido pelo espelho (GitHub Pages), que
+# nao tem esse limite e manda CORS `*` — o player busca de la (campo "mirror"
+# no jogos.json).
+#
+# Os outros romsets ficam aqui normalmente (< 25 MiB).
+jogos/arcade/kof97.zip
