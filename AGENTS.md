@@ -34,7 +34,7 @@ do tema. Consoles: `snes` `nes` `gba` `gb` `genesis` `n64` `psx` `arcade`...
 - Mantidos: **PARAR**, inatividade (3 min), sair/voltar reinicia sozinho,
   controles de toque **abaixo** da tela (medido em viewport Android).
 
-### Testes — `tests/topgear.test.js` (**17 testes / 180 asserções**)
+### Testes — `tests/topgear.test.js` (**17 testes / 185 asserções**)
 Inclui a validação de que a URL aponta para `/emugames/`, que o `jogos.json`
 tem entradas completas e que cada `rom` existe de fato, que os romsets de arcade
 batem com os CRCs oficiais (MAME/FBNeo) e que as capas dos jogos existem.
@@ -46,13 +46,20 @@ directory* `docs/emugames`.
 
 **Limite de 25 MiB por arquivo (medido)**: o Cloudflare recusa qualquer asset
 acima de 25 MiB e **o deploy inteiro falha** (não sobe nada). O `kof97.zip`
-(27,6 MiB) estourava — o site ficou ~30 min servindo a versão antiga sem
-ninguém perceber. Correção em 3 partes:
-1. `docs/emugames/.assetsignore` exclui o `kof97.zip` do upload;
-2. o arquivo é servido pelo **espelho** (GitHub Pages, que não tem o limite e
-   manda `access-control-allow-origin: *`);
-3. o `jogos.json` marca o jogo com **`"mirror": true`** e o player troca a URL
-   (`window.ROM_MIRROR` + `urlRom()`), no `EJS_gameUrl` **e** no `EJS_biosUrl`.
+(27,6 MiB) estourava. Correção: a ROM grande é servida em **PARTES**
+(`kof97.zip.p1/.p2`, ~13,8 MiB cada), que o player baixa e **remonta num Blob**
+(`remontarRom`), passado como `EJS_gameUrl`. O `.assetsignore` exclui **só o zip
+grande**; as partes sobem normalmente. Assim **tudo sai do mesmo host** do site.
+
+**Armadilha do Blob (custou um round)**: quando o `EJS_gameUrl` é um Blob, o
+EmulatorJS nomeia o arquivo do FS com o **`EJS_gameName`**. Em arcade o core
+procura o romset **pelo nome do arquivo** — com o nome bonito ("The King of
+Fighters 97") o FS ficava só com a BIOS e o FBNeo não achava o `kof97`. Por isso
+em `arcade` o `EJS_gameName` é o **nome do zip** (`kof97.zip`), não o do jogo.
+
+> **Espelho (GitHub Pages)**: chegou a ser usado e foi **abandonado** — a ROM
+> vinda de outro domínio travava o carregamento em rede de celular. As partes
+> eliminam a dependência de host externo.
 
 O EmulatorJS **aceita** zip/7z/rar (detecta por magic bytes em
 `compression.js`), **mas** para `arcade` ele escreve o arquivo **como está** no
@@ -173,7 +180,7 @@ e faltavam os essenciais. Trocar a BIOS **não** resolveu (o problema era o
 `EJS_paths`, acima) e a BIOS completa anterior foi **restaurada**. Regra: antes
 de trocar a BIOS, conferir os CRCs dos essenciais contra a tabela do FBNeo.
 
-**Testes**: `tests/topgear.test.js` **17 testes / 180 asserções**. As novas
+**Testes**: `tests/topgear.test.js` **17 testes / 185 asserções**. As novas
 seções validam: romset mslug **9/9** e kof97 **13/13** com **nome oficial + CRC
 oficial** (o zip antigo do mslug reprova — **10 asserções falham**; o kof
 incompleto reprova — **14 falham**), `kof2.zip` não existe mais, as 3 capas são

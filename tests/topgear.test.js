@@ -295,37 +295,6 @@ await test('o conversor de romset Neo Geo esta no repositorio', () => {
   ok(src.includes('72813676'), 'traz a tabela de CRCs oficiais (mslug)');
 });
 
-await test('ROMs acima de 25 MiB usam o espelho (limite do Cloudflare)', () => {
-  const html = fs.readFileSync(path.join(PROJECT, 'docs/emugames/index.html'), 'utf-8');
-  ok(html.includes('ROM_MIRROR'), 'o player tem o espelho configurado');
-  ok(html.includes('function urlRom'), 'o player resolve a URL da ROM');
-  ok(/EJS_gameUrl = urlRom\(j\)/.test(html), 'o EJS_gameUrl passa pelo espelho');
-  ok(/EJS_biosUrl = urlRom\(/.test(html), 'a BIOS tambem passa pelo espelho');
-
-  const espelho = (html.match(/ROM_MIRROR = '([^']+)'/) || [])[1];
-  ok(!!espelho && espelho.startsWith('https://'), `espelho e https (veio ${espelho})`);
-
-  const cat = JSON.parse(fs.readFileSync(path.join(PROJECT, 'docs/emugames/jogos.json'), 'utf-8'));
-  const LIMITE = 25 * 1024 * 1024;
-
-  // A regra que mantem o deploy de pe: ROM acima do limite TEM que ser espelhada.
-  for (const j of cat.jogos) {
-    const p = path.join(PROJECT, 'docs/emugames', j.rom);
-    if (!fs.existsSync(p)) continue;
-    const tam = fs.statSync(p).size;
-    if (tam > LIMITE) {
-      ok(j.mirror === true, `${j.id} (${(tam / 1048576).toFixed(1)} MiB) tem mirror:true`);
-    }
-  }
-  // O kof97 e o caso concreto.
-  const kof = cat.jogos.find((j) => j.id === 'kof97');
-  ok(kof?.mirror === true, 'kof97 esta marcado como espelhado');
-
-  // A URL final tem que existir de verdade no espelho.
-  const alvo = espelho.replace(/\/$/, '') + '/' + kof.rom;
-  ok(alvo.startsWith('https://souzzaaxzy.github.io/'), `URL do espelho (veio ${alvo})`);
-});
-
 await test('o kof97.zip esta fora do upload do Cloudflare (.assetsignore)', () => {
   const ig = path.join(PROJECT, 'docs/emugames/.assetsignore');
   ok(fs.existsSync(ig), '.assetsignore existe');
@@ -350,9 +319,9 @@ await test('o player NAO define EJS_paths (quebra o boot do EmulatorJS)', () => 
   ok(!/window\.EJS_paths\s*=/.test(codigo), 'o codigo nao seta window.EJS_paths');
   ok(!/\bconst SRC\b/.test(codigo), 'nao monta o prefixo src/ (nao e mais preciso)');
   ok(html.includes('EJS_paths'), 'o motivo esta documentado num comentario');
-  // o espelho das ROMs grandes continua
-  ok(/function urlRom/.test(html), 'mantem o resolvedor de espelho');
-  ok(/window\.EJS_gameUrl = urlRom\(j\)/.test(html), 'o EJS_gameUrl passa pelo espelho');
+  // a ROM grande continua resolvida (em partes -> Blob)
+  ok(/function remontarRom/.test(html), 'mantem a remontagem das partes');
+  ok(/window\.EJS_gameUrl = gameUrl/.test(html), 'o EJS_gameUrl usa a ROM (ou o Blob)');
 });
 
 await test('a BIOS e entregue como ZIP (dontExtractBIOS) e fica na raiz', () => {
@@ -382,6 +351,47 @@ await test('a BIOS e entregue como ZIP (dontExtractBIOS) e fica na raiz', () => 
     ok(bios.has(nome) && (zlib.crc32(bios.get(nome)) >>> 0).toString(16).padStart(8, '0') === esperado,
       `BIOS tem ${nome} com CRC oficial`);
   }
+});
+
+await test('ROM grande e servida em PARTES e remontada no player', () => {
+  const cat = JSON.parse(fs.readFileSync(path.join(PROJECT, 'docs/emugames/jogos.json'), 'utf-8'));
+  const html = fs.readFileSync(path.join(PROJECT, 'docs/emugames/index.html'), 'utf-8');
+  const LIMITE = 25 * 1024 * 1024;
+  const pasta = path.join(PROJECT, 'docs/emugames/jogos/arcade');
+
+  // Toda ROM acima do limite do Cloudflare tem de vir em partes, e cada parte
+  // tem de caber no limite (senao o deploy inteiro falha).
+  for (const j of cat.jogos) {
+    const p = path.join(PROJECT, 'docs/emugames', j.rom);
+    if (!fs.existsSync(p)) continue;
+    const tam = fs.statSync(p).size;
+    if (tam <= LIMITE) continue;
+    ok(Array.isArray(j.partes) && j.partes.length >= 2, `${j.id} tem partes (${j.partes?.length})`);
+    let soma = 0;
+    for (const parte of j.partes || []) {
+      const pp = path.join(pasta, parte);
+      ok(fs.existsSync(pp), `${j.id}: parte ${parte} existe`);
+      if (!fs.existsSync(pp)) continue;
+      const tp = fs.statSync(pp).size;
+      ok(tp <= LIMITE, `${parte} cabe em 25 MiB (${(tp / 1048576).toFixed(1)} MiB)`);
+      soma += tp;
+    }
+    ok(soma === tam, `${j.id}: as partes somam o zip inteiro (${soma} == ${tam})`);
+    ok(j.mirror === undefined, `${j.id} nao depende mais do espelho`);
+  }
+
+  // o player remonta num Blob e da o nome do ARQUIVO ao romset (arcade)
+  ok(/function remontarRom/.test(html), 'o player remonta as partes');
+  ok(/new Blob\(/.test(html), 'remonta num Blob');
+  ok(/j\.partes/.test(html), 'usa o campo partes do catalogo');
+  ok(/j\.console === 'arcade'\) window\.EJS_gameName = j\.rom\.split\('\/'\)\.pop\(\)/.test(html),
+    'em arcade o nome do arquivo e o do romset (o core procura pelo nome)');
+
+  // o .assetsignore exclui SO o zip grande (as partes precisam subir)
+  const ig = fs.readFileSync(path.join(PROJECT, 'docs/emugames/.assetsignore'), 'utf-8');
+  const linhas = ig.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
+  ok(linhas.includes('jogos/arcade/kof97.zip'), 'exclui o zip grande do Cloudflare');
+  ok(!linhas.some((l) => l.endsWith('.p1') || l.endsWith('.p2')), 'NAO exclui as partes');
 });
 
 const totalOk = RESULTS.reduce((a, r) => a + r.passed, 0);

@@ -48,21 +48,17 @@ Pages ou qualquer host estático.
 ### Limite de 25 MiB por arquivo (importante)
 
 O Cloudflare limita **cada asset a 25 MiB** — e se algum arquivo passar disso,
-**o deploy inteiro falha** (não sobe nada). Foi o que aconteceu quando o
-`kof97.zip` passou de 25 MiB.
+**o deploy inteiro falha**. Foi o que acontecia com o `kof97.zip` (27,6 MiB).
 
-Por isso:
+Por isso a ROM grande vai em **PARTES** (`kof97.zip.p1/.p2`, ~13,8 MiB cada):
 
-1. o arquivo grande vai para o **`.assetsignore`** (`docs/emugames/.assetsignore`),
-   entao ele **nao** sobe para o Cloudflare;
-2. ele e servido pelo **espelho** — o mesmo caminho no **GitHub Pages**, que nao
-   tem esse limite e manda CORS `*`;
-3. no `jogos.json`, o jogo leva **`"mirror": true`**, e o player troca a URL da
-   ROM pelo espelho (`window.ROM_MIRROR`).
+1. o **zip inteiro** fica no `.assetsignore` e **nao** sobe;
+2. as **partes** sobem normalmente e o player as baixa e **remonta num Blob**;
+3. no `jogos.json`, o jogo leva o campo **`"partes": ["kof97.zip.p1", ...]`**.
 
-**Ao adicionar uma ROM grande** (> 25 MiB): ponha `"mirror": true` no jogo, o
-caminho no `.assetsignore` e garanta que o arquivo esta no GitHub Pages. Ha teste
-que falha se uma ROM acima do limite nao estiver espelhada.
+Assim tudo sai do **mesmo host** do site. Ha teste que falha se uma ROM acima do
+limite nao estiver dividida, se alguma parte passar de 25 MiB, ou se as partes
+nao somarem o zip inteiro.
 
 ### Cloudflare
 

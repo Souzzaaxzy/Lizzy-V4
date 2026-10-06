@@ -29,9 +29,6 @@
 <script>
   window.EJS_DATA = 'https://cdn.emulatorjs.org/stable/data/';
   window.INATIVIDADE_MS = 3 * 60 * 1000;
-  // Espelho externo (GitHub Pages) usado so para as ROMs que passam do limite
-  // de 25 MiB por arquivo do Cloudflare Workers (hoje: o kof97.zip).
-  window.ROM_MIRROR = 'https://souzzaaxzy.github.io/Lizzy-V4/emugames/';
 </script>
 
 <script>
@@ -55,12 +52,16 @@
 
   function marcarAtividade() { ocioso = Date.now(); }
 
-  // O Cloudflare Workers limita cada asset a 25 MiB — o kof97.zip passa disso e
-  // o deploy falha. Essas ROMs sao servidas pelo espelho (GitHub Pages, CORS *).
-  function urlRom(j) {
-    if (!j) return '';
-    if (j.mirror && window.ROM_MIRROR) return window.ROM_MIRROR + j.rom;
-    return j.rom;
+  // ROM acima de 25 MiB nao cabe num asset do Cloudflare. Nesses casos o zip e
+  // guardado em PARTES (kof97.zip.p1, .p2...) e remontado aqui num Blob, que o
+  // EmulatorJS aceita como EJS_gameUrl. Assim tudo sai do MESMO host do site.
+  function remontarRom(j) {
+    const base = j.rom.replace(/\/[^/]+$/, '');
+    const partes = (j.partes || []).map((p) => `${base}/${p}`);
+    return Promise.all(partes.map((p) => fetch(p).then((r) => {
+      if (!r.ok) throw new Error(`${p} -> HTTP ${r.status}`);
+      return r.arrayBuffer();
+    }))).then((bufs) => new Blob(bufs, { type: 'application/zip' }));
   }
 
   function aoSair() {
@@ -82,7 +83,7 @@
 
   window.EJS_onExit = aoSair;
 
-  function iniciar(j) {
+  async function iniciar(j) {
     jogo = j;
     alvo.innerHTML = '';
     window.EJS_emulator = null;
@@ -92,10 +93,29 @@
     erro.hidden = true;
     alvo.hidden = false;
 
+    // ROM em partes: baixa e remonta antes de ligar o emulador (mostra o
+    // progresso no lugar do titulo, senao parece que travou).
+    let gameUrl = j.rom;
+    if (j.partes && j.partes.length) {
+      subtitulo.textContent = 'Baixando o jogo...';
+      try {
+        gameUrl = await remontarRom(j);
+      } catch (e) {
+        console.error('[EMUGAMES] falha ao remontar', j.id, e);
+        subtitulo.textContent = 'Falha ao baixar o jogo';
+        return;
+      }
+      subtitulo.textContent = NOMES[j.console] || j.console;
+    }
+
     window.EJS_player = '#game';
     window.EJS_core = j.console;
-    window.EJS_gameUrl = urlRom(j);
+    window.EJS_gameUrl = gameUrl;
     window.EJS_gameName = j.nome;
+    // Em arcade o core procura o romset PELO NOME DO ARQUIVO. Quando a ROM vem
+    // em partes (Blob), o EmulatorJS nomeia o arquivo com o gameName -- entao
+    // ele tem de ser o nome do zip (kof97.zip), nao o nome bonito do jogo.
+    if (j.console === 'arcade') window.EJS_gameName = j.rom.split('/').pop();
     window.EJS_pathtodata = DATA;
     window.EJS_startOnLoaded = true;
     window.EJS_language = 'pt-BR';
@@ -110,7 +130,7 @@
       // entao nao existe (erro "one of your romsets is missing files").
       // dontExtractBIOS mantem o zip, que e o que o core espera.
       window.EJS_dontExtractBIOS = true;
-      window.EJS_biosUrl = urlRom({ rom: j.bios, mirror: j.biosMirror ?? j.mirror });
+      window.EJS_biosUrl = j.bios;
     }
     window.EJS_Buttons = {
       playPause: true, restart: true, mute: true, settings: true, fullscreen: true,
