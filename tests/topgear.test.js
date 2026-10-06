@@ -275,16 +275,16 @@ await test('romsets de arcade batem com os CRCs oficiais (MAME/FBNeo)', () => {
 await test('as capas dos jogos existem (senao o card cai para texto)', () => {
   const cat = JSON.parse(fs.readFileSync(path.join(PROJECT, 'docs/emugames/jogos.json'), 'utf-8'));
   for (const j of cat.jogos) {
-    const capa = path.join(PROJECT, 'docs/emugames/capas', `${j.id}.png`);
-    ok(fs.existsSync(capa), `capa ${j.id}.png existe`);
+    const capa = path.join(PROJECT, 'docs/emugames/capas', `${j.id}.gif`);
+    ok(fs.existsSync(capa), `capa ${j.id}.gif existe`);
     if (fs.existsSync(capa)) {
       const b = fs.readFileSync(capa);
-      ok(b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47, `${j.id}.png e um PNG`);
+      ok(b.slice(0, 3).toString('latin1') === 'GIF', `${j.id}.gif e um GIF`);
     }
   }
   const card = fs.readFileSync(path.join(PROJECT, 'dados/src/topgear/index.js'), 'utf-8');
   ok(card.includes('capas/'), 'o card procura a capa em capas/');
-  ok(card.includes('image: { url: capaUrl }'), 'o card usa a capa como imagem');
+  ok(card.includes('gif: { url: capaUrl }'), 'o card usa a capa como GIF (a fork converte p/ MP4)');
 });
 
 await test('o conversor de romset Neo Geo esta no repositorio', () => {

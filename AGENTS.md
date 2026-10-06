@@ -135,15 +135,30 @@ CRC conhecido**, para os 3 jogos de arcade.
 > Para diagnosticar de novo: `window.EJS_DEBUG_XX = true` faz o EJS logar o
 > `print`/`printErr` do core no console. É onde o FBNeo diz o que achou/faltou.
 
-### Capas dos jogos (`docs/emugames/capas/<id>.png`)
-Geradas por **`tools/gerar-capas.mjs`** (sharp, já é dep) a partir do
-`jogos.json` — 1280×720, um PNG por jogo. O `enviarCard`
-(`dados/src/topgear/index.js`) usa **`image: { url: capaUrl }`**; se a capa
-faltar, cai para texto+botão (não quebra).
+### Capas dos jogos (`docs/emugames/capas/<id>.gif`) — GIF ANIMADO ✅
+A capa é um **GIF animado**, com o nome igual ao **`id` do jogo** em
+`jogos.json` (`topgear2.gif`, `metalslug.gif`, `kof97.gif`). O `enviarCard`
+(`dados/src/topgear/index.js`) usa o tipo **`gif: { url: capaUrl }`**; se a capa
+faltar, cai para texto+botão (não quebra). `tools/gerar-capas.mjs` (sharp, já é
+dep) gera um GIF placeholder 1280×720 a partir do `jogos.json`.
 
-**Bug corrigido**: o card tentava `video: { url: <id>.mp4 }` — mas **não existia
-nenhum mp4** em `capas/`, então todo card caía para texto puro (o log dizia
-`capa falhou … Failed to fetch stream`). Agora as capas existem e são imagem.
+**Bug corrigido (out/2026)**: o card pedia `capas/<id>.png` e mandava como
+`image` — mas na pasta só havia **`.gif`**, então o fetch dava **404**, o card
+caía para texto puro e a capa "não pegava" (o log dizia
+`capa falhou … Failed to fetch stream`). Os GIFs também estavam com o nome
+errado (`topgear.gif`/`kof.gif` em vez de `topgear2.gif`/`kof97.gif`).
+
+**Por que o card usa `gif:` e não `image:`**: o WhatsApp **não anima** um `.gif`
+cru enviado como imagem/vídeo — ele exige um **MP4 (H.264) em loop com
+`gifPlayback: true`**. Quem faz essa conversão é a **fork**
+(`@itsliaaa/baileys`, `lib/Utils/messages.js` → `prepareWAMessageMedia`): o tipo
+`gif:` lê o arquivo, valida o magic bytes, converte (sharp lê os frames + FFmpeg
+codifica H.264) e devolve um `videoMessage` com `gifPlayback: true` — que o
+**header interativo** do card aceita (`hasValidInteractiveHeader` conhece
+`videoMessage`). Sem sharp/ffmpeg, a fork cai para imagem estática.
+
+> O commit da fork que trouxe o `gif:` é `71b6602` — os lockfiles do bot
+> (`yarn.lock`/`package-lock.json`) apontam para ele.
 
 ### ROMSET de arcade — a conversão NeoRAGEx (set/2026) ✅
 **Conclusão anterior estava ERRADA.** O agente anterior afirmou que os romsets do

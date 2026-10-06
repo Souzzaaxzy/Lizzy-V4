@@ -26,8 +26,13 @@ function pagina(jogoId) {
 }
 
 /**
- * Monta e envia o card do jogo: capa (video/imagem) + texto + botao webview.
+ * Monta e envia o card do jogo: capa (GIF animado) + texto + botao webview.
  * Tudo em UMA mensagem. Se a capa falhar, cai para texto + botao.
+ *
+ * A capa e um `.gif` (docs/emugames/capas/<id>.gif). O WhatsApp nao anima um
+ * `.gif` cru como imagem/video — ele exige MP4 + `gifPlayback`. Quem faz essa
+ * conversao e a fork (`@itsliaaa/baileys`), pelo tipo `gif:` (vira
+ * videoMessage com gifPlayback), que o header interativo aceita.
  */
 async function enviarCard({ nazu, from, jogo }) {
   const base = raiz();
@@ -39,12 +44,12 @@ async function enviarCard({ nazu, from, jogo }) {
   const botao = [{ text: '🎮 JOGAR', url, useWebview: true }];
   const footer = 'Lizzy · EmuGames';
 
-  const capaUrl = `${base}/capas/${encodeURIComponent(jogo.id)}.png`;
+  const capaUrl = `${base}/capas/${encodeURIComponent(jogo.id)}.gif`;
 
   let msg;
   try {
     msg = await generateWAMessage(from, {
-      image: { url: capaUrl },
+      gif: { url: capaUrl },
       caption: texto,
       footer,
       nativeFlow: botao

@@ -1,8 +1,12 @@
 /**
- * Gera as capas dos jogos do EmuGames (docs/emugames/capas/<id>.png).
+ * Gera capas PLACEHOLDER dos jogos do EmuGames (docs/emugames/capas/<id>.gif).
  *
  * As capas sao o "capa" que aparece no card do !topgear / !metalslug / !kof.
- * Antes elas nao existiam e o card caia para texto puro.
+ * O card procura `capas/<id>.gif` (GIF animado); o WhatsApp nao anima um `.gif`
+ * cru, entao a fork converte para MP4 + gifPlayback no envio.
+ *
+ * Estes arquivos sao so um fallback: para usar uma arte/animação propria, e so
+ * substituir o `.gif` mantendo o nome (o `id` do jogo).
  *
  * Uso: node tools/gerar-capas.mjs
  * Requer: sharp (ja e dependencia do bot).
@@ -57,8 +61,8 @@ const catalogo = JSON.parse(fs.readFileSync(path.join(RAIZ, 'docs/emugames/jogos
 fs.mkdirSync(DEST, { recursive: true });
 
 for (const jogo of catalogo.jogos || []) {
-  const destino = path.join(DEST, `${jogo.id}.png`);
-  await sharp(Buffer.from(svg(jogo))).png().toFile(destino);
+  const destino = path.join(DEST, `${jogo.id}.gif`);
+  await sharp(Buffer.from(svg(jogo))).gif().toFile(destino);
   console.log(`capa: ${path.relative(RAIZ, destino)}`);
 }
 console.log('ok');

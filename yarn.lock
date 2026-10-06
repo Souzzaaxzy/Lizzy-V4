@@ -349,7 +349,7 @@ __metadata:
 
 "@itsliaaa/baileys@github:Souzzaaxzy/baileys":
   version: 0.3.18-final
-  resolution: "@itsliaaa/baileys@https://github.com/Souzzaaxzy/baileys.git#commit=e6ed0a76913015f4cac570897ba01b34df5d156c"
+  resolution: "@itsliaaa/baileys@https://github.com/Souzzaaxzy/baileys.git#commit=71b6602e81f57232558abdd886ad2b9e8957f400"
   dependencies:
     "@adiwajshing/keyed-db": "npm:^0.2.4"
     "@cacheable/node-cache": "npm:^1.4.0"
