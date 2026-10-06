@@ -132,8 +132,21 @@ await test('index.html: player multi-jogo com os caminhos certos', () => {
   ok(html.includes('visibilitychange'), 'para ao sair da aba');
   const css = fs.readFileSync(path.join(PROJECT, 'dados/emugames/style.css'), 'utf-8');
   ok(css.includes('ejs_virtualGamepad_parent'), 'reposiciona os controles de toque (css)');
-  ok(/height:\s*calc\(.*200px\)/.test(css), 'a caixa reserva a faixa dos controles');
-  ok(/ejs_canvas_parent[^}]*height:\s*calc\(100% - 200px\)/s.test(css), 'a tela ocupa so o andar de cima');
+  ok(/--ctl:\s*200px/.test(css), 'a faixa dos controles tem 200px (var --ctl)');
+  ok(/height:\s*calc\(.*var\(--ctl\)\)/.test(css), 'a caixa reserva a faixa dos controles');
+  ok(/ejs_canvas_parent[^}]*height:\s*calc\(100% - var\(--ctl\)\)/s.test(css), 'a tela ocupa so o andar de cima');
+  // Controles maiores: escala dos clusters (dpad/joystick e botoes).
+  ok(/--joy-scale:\s*1\.16/.test(css), 'dpad/analogico +20px em retrato (--joy-scale 1.16)');
+  ok(/--btn-scale:\s*1\.4/.test(css), 'botoes +20px em retrato (--btn-scale 1.4)');
+  ok(/transform:\s*scale\(var\(--joy-scale\)\)/.test(css), 'escala o cluster esquerdo (dpad/joystick)');
+  ok(/transform:\s*scale\(var\(--btn-scale\)\)/.test(css), 'escala o cluster direito (botoes)');
+  // Paisagem: tela cheia + controles +40px.
+  ok(/@media\s*\(orientation:\s*landscape\)/.test(css), 'tem o modo paisagem');
+  ok(/orientation:\s*landscape[\s\S]*--joy-scale:\s*1\.32/.test(css), 'paisagem: dpad/analogico +40px (1.32)');
+  ok(/orientation:\s*landscape[\s\S]*--btn-scale:\s*1\.8/.test(css), 'paisagem: botoes +40px (1.8)');
+  ok(/orientation:\s*landscape[\s\S]*position:\s*fixed/.test(css), 'paisagem: o player ocupa a tela cheia');
+  ok(/orientation:\s*landscape[\s\S]*header\s*\{\s*display:\s*none/.test(css), 'paisagem: esconde o cabecalho');
+  ok(/orientation:\s*landscape[\s\S]*\.b_r\s*\{\s*top:\s*-70px/.test(css), 'paisagem: aproxima o ombro R (nao sai da tela)');
   ok(html.includes("callEvent('exit')"), 'para o emulador pela API real (callEvent exit)');
   ok(html.includes('freeze'), 'trata o congelamento do webview');
   ok(html.includes('pageshow'), 'reage ao voltar para a pagina');

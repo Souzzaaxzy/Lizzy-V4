@@ -34,6 +34,16 @@ do tema. Consoles: `snes` `nes` `gba` `gb` `genesis` `n64` `psx` `arcade`...
 - Com 2+ jogos aparece o botão **☰ JOGOS** (troca sem recarregar).
 - Mantidos: **PARAR**, inatividade (3 min), sair/voltar reinicia sozinho,
   controles de toque **abaixo** da tela (medido em viewport Android).
+- **Controles maiores**: o EmulatorJS fixa a POSIÇÃO de cada controle inline (px),
+  então mexer só na largura/altura faz os botões se sobreporem. A solução é
+  **escalar cada cluster** com `transform: scale()` (escala tamanho E espaçamento
+  juntos): `--joy-scale` (dpad/analógico) e `--btn-scale` (botões). Em retrato,
+  +20px (`1.16` / `1.4`).
+- **Paisagem** (`@media (orientation: landscape)`): o player vira `position: fixed`
+  cobrindo a tela inteira, o cabeçalho some e os controles **flutuam sobre o jogo**
+  com +40px (`--joy-scale: 1.32`, `--btn-scale: 1.8`). O ombro **R** (classe `b_r`)
+  é aproximado do cluster (`top: -70px`) para não sair da tela com o scale maior.
+  O **PARAR** vira botão flutuante no canto.
 
 ### Testes — `tests/topgear.test.js` (**17 testes / 185 asserções**)
 Inclui a validação de que a URL aponta para `/emugames/`, que o `jogos.json`

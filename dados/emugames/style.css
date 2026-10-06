@@ -24,20 +24,36 @@ main { width: 100%; max-width: 760px; display: flex; flex-direction: column; gap
 /*
   Layout: a caixa do player tem DOIS andares.
     - em cima: a tela do jogo (proporcao 4:3)
-    - embaixo: a faixa dos controles de toque (200px)
+    - embaixo: a faixa dos controles de toque (--ctl)
 
   O EmulatorJS posiciona o gamepad com position:absolute dentro do player.
   Aqui o player fica com altura = tela + faixa, e cada andar recebe sua area
   (sem aspect-ratio, que espremia a tela quando somado ao padding).
+
+  Tamanho dos controles: o EmulatorJS fixa a POSICAO de cada controle inline
+  (px), entao mexer so na largura/altura nao basta (os botoes se sobrepoem).
+  A solucao e escalar cada CLUSTER com transform: escala tamanho E espacamento
+  juntos. O dpad/analogico fica no cluster esquerdo e os botoes no direito, o
+  que permite escalas diferentes para cada um.
+
+    --joy-scale  dpad/analogico  (base 125px -> 1.16 = +20px)
+    --btn-scale  botoes redondos (base 50px  -> 1.4  = +20px)
+    --mid-scale  start/select/rapido/lento (base 50x31; 1 em retrato para nao
+                 encostar nos botoes; 1.7 em paisagem)
 */
 #game {
+  --ctl: 200px;
+  --joy-scale: 1.16;
+  --btn-scale: 1.4;
+  --mid-scale: 1;
+
   width: 100%;
   background: #000;
   border: 1px solid #222a36;
   border-radius: 8px;
   position: relative;
   overflow: hidden;
-  height: calc((100vw - 34px) * 0.75 + 200px);
+  height: calc((100vw - 34px) * 0.75 + var(--ctl));
   max-height: calc(100vh - 96px);
   min-height: 380px;
 }
@@ -50,7 +66,7 @@ main { width: 100%; max-width: 760px; display: flex; flex-direction: column; gap
   top: 0;
   left: 0;
   width: 100%;
-  height: calc(100% - 200px);
+  height: calc(100% - var(--ctl));
 }
 
 /* andar de baixo: os controles */
@@ -59,15 +75,80 @@ main { width: 100%; max-width: 760px; display: flex; flex-direction: column; gap
   bottom: 0;
   left: 0;
   width: 100%;
-  height: 200px;
+  height: var(--ctl);
 }
-#game .ejs_virtualGamepad_left { bottom: 18px; }
-#game .ejs_virtualGamepad_right { bottom: 18px; }
+#game .ejs_virtualGamepad_left {
+  bottom: 18px;
+  transform: scale(var(--joy-scale));
+  transform-origin: 0% 100%;
+}
+#game .ejs_virtualGamepad_right {
+  bottom: 18px;
+  transform: scale(var(--btn-scale));
+  transform-origin: 100% 100%;
+}
 #game .ejs_virtualGamepad_top { bottom: 178px; }
-#game .ejs_virtualGamepad_bottom { bottom: 4px; }
+#game .ejs_virtualGamepad_bottom {
+  bottom: 4px;
+  transform: scale(var(--mid-scale));
+  transform-origin: 50% 100%;
+}
 
 /* a barra de ferramentas fica no andar de cima (sobre a tela) */
 #game .ejs_menu_bar { z-index: 9999; }
+
+/*
+  PAISAGEM (celular deitado): o jogo ocupa a TELA INTEIRA e os controles
+  flutuam por cima, maiores (+40px). O cabecalho e o PARAR saem do fluxo; o
+  PARAR vira um botao flutuante no canto.
+*/
+@media (orientation: landscape) {
+  body { padding: 0; }
+  header { display: none; }
+
+  #game {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    max-height: none;
+    min-height: 0;
+    border: 0;
+    border-radius: 0;
+    z-index: 50;
+    --joy-scale: 1.32;   /* +40px no dpad/analogico */
+    --btn-scale: 1.8;    /* +40px nos botoes */
+    --mid-scale: 1.7;
+  }
+
+  /* a tela ocupa o quadro inteiro (sem a faixa dos controles) */
+  #game .ejs_canvas_parent { height: 100%; }
+  /* os controles flutuam SOBRE a tela */
+  #game .ejs_virtualGamepad_parent { height: 100%; }
+  #game .ejs_virtualGamepad_left { bottom: 12px; }
+  #game .ejs_virtualGamepad_right { bottom: 12px; }
+  #game .ejs_virtualGamepad_top { bottom: 168px; }
+  #game .ejs_virtualGamepad_bottom { bottom: 4px; }
+
+  /*
+    O ombro R (classe b_r) e posicionado 100px ACIMA do cluster direito. Em
+    retrato isso cai sobre a tela (visivel), mas em paisagem o cluster esta
+    colado embaixo e o scale 1.8 empurraria o R para fora do topo. Aproxima o R
+    do cluster para ele caber na tela cheia.
+  */
+  #game .b_r { top: -70px !important; }
+
+  /* PARAR flutuante, sobre o jogo */
+  #controles {
+    position: fixed;
+    top: 8px;
+    left: 8px;
+    z-index: 60;
+    gap: 6px;
+  }
+  #parar { padding: 6px 10px; font-size: 11px; opacity: .85; }
+  #status { display: none; }
+}
 
 #sem-rom {
   background: #11151c;

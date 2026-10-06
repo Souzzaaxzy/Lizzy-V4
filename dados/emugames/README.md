@@ -37,7 +37,10 @@ Com 2+ jogos, o botão **☰ JOGOS** troca de jogo sem recarregar.
 - **PARAR** — desliga o emulador
 - **Inatividade** — 3 min sem toque desliga sozinho
 - **Fechar/voltar** — sai da aba e volta, o jogo reinicia sozinho
-- **Controles de toque** — embaixo da tela (não cobrem o jogo)
+- **Controles de toque** — embaixo da tela (não cobrem o jogo), com dpad/botões maiores
+- **Paisagem** — com o celular deitado o jogo ocupa a **tela cheia** e os controles
+  ficam **+40px** maiores, flutuando sobre o jogo (o cabeçalho some e o PARAR vira
+  um botão flutuante no canto)
 - **Cores por console** — a cor do tema muda conforme o console
 
 ## Hospedagem
