@@ -629,12 +629,85 @@ async function downloadTrack(track) {
   return result;
 }
 
+/**
+ * Busca SOMENTE no Deezer (usada pelo `!play2`). Sem Spotify oficial, sem
+ * iTunes — apenas o catálogo do Deezer.
+ */
+async function searchDeezerOnly(query) {
+  if (!query || typeof query !== 'string' || !query.trim()) {
+    return { ok: false, msg: 'Digite o nome da música ou do artista.' };
+  }
+  const q = query.trim();
+  const cached = getCached(`searchDeezer:${normalizeText(q)}`);
+  if (cached) return cached;
+  try {
+    const deezer = await searchViaDeezer(q);
+    if (deezer.ok && deezer.results.length) {
+      const results = rankResults(deezer.results, q);
+      const result = { ok: true, query: q, total: results.length, results, source: 'deezer' };
+      setCache(`searchDeezer:${normalizeText(q)}`, result);
+      return result;
+    }
+    return { ok: false, msg: deezer.msg || 'Nenhuma música encontrada no Deezer.' };
+  } catch (e) {
+    console.error('[Deezer] busca falhou:', e.message);
+    return { ok: false, msg: 'Erro ao buscar no Deezer: ' + e.message };
+  }
+}
+
+/**
+ * Áudio do Deezer. O Deezer público entrega apenas a PRÉVIA de ~30s (o áudio
+ * completo exige conta premium — medido: `media.deezer.com/v1/get_url` responde
+ * 403 "License token has no sufficient rights on requested media" para sessão
+ * anônima). Por isso este caminho devolve a prévia, marcada com `isPreview`.
+ */
+async function downloadDeezerPreview(track) {
+  if (!track || !track.id) return { ok: false, msg: 'Música inválida.' };
+  const cacheKey = `preview:${track.id}`;
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const res = await axios.get(`${DEEZER_API}/track/${track.id}`, { timeout: HTTP_TIMEOUT });
+    const previewUrl = res.data?.preview;
+    if (!previewUrl) {
+      return { ok: false, msg: 'O Deezer não liberou áudio para esta faixa. Tente outra música.' };
+    }
+    const audio = await axios.get(previewUrl, { responseType: 'arraybuffer', timeout: HTTP_TIMEOUT });
+    const buffer = Buffer.from(audio.data);
+    if (!buffer.length) return { ok: false, msg: 'O Deezer devolveu áudio vazio.' };
+
+    const title = track.name || res.data?.title || 'Música';
+    const artist = track.artist || res.data?.artist?.name || '';
+    const result = {
+      ok: true,
+      buffer,
+      title,
+      artists: Array.isArray(track.artists) && track.artists.length ? track.artists : (artist ? [artist] : []),
+      artist,
+      album: track.album || res.data?.album?.title || null,
+      image: track.image || res.data?.album?.cover_big || res.data?.album?.cover_medium || null,
+      duration: 30000,
+      isPreview: true,
+      filename: `${artist ? artist + ' - ' : ''}${title} (previa 30s).mp3`,
+      source: 'deezer-preview'
+    };
+    setCache(cacheKey, result);
+    return result;
+  } catch (error) {
+    console.error('[Deezer] erro na prévia:', error.message);
+    return { ok: false, msg: 'Não foi possível obter o áudio no Deezer: ' + error.message };
+  }
+}
+
 export default {
   download,
   downloadTrack,
   search,
   searchDownload,
-  resolveTrackMetadata
+  resolveTrackMetadata,
+  searchDeezerOnly,
+  downloadDeezerPreview
 };
 
 // Exportados para teste (puros, sem I/O).

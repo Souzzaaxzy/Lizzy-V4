@@ -21408,13 +21408,13 @@ case 'pin':
 ╰━━━━━━━━━━━━━━━━━━━━━━━━━╯`);
           }
           await nazu.sendMessage(from, { react: { text: '🔍', key: info.key } });
-          // 1. Buscar a música
-          const searchResult = await spotifyModule.search(q);
+          // 1. Buscar a música (somente no Deezer)
+          const searchResult = await spotifyModule.searchDeezerOnly(q);
           if (!searchResult.ok) {
-            return reply(`❌ ${searchResult.msg || 'Erro ao buscar no Spotify. Tente novamente.'}`);
+            return reply(`❌ ${searchResult.msg || 'Erro ao buscar no Deezer. Tente novamente.'}`);
           }
           if (!searchResult.results?.length) {
-            return reply('❌ Nenhuma música encontrada com esse nome.');
+            return reply('❌ Nenhuma música encontrada no Deezer com esse nome.');
           }
           const track = searchResult.results[0];
           // Novo layout do player de música
@@ -21428,8 +21428,8 @@ case 'pin':
           const searchCaption = `${playerLayout}\n\n⏳ *Baixando...*`;
           await reply(searchCaption);
           await nazu.sendMessage(from, { react: { text: '⏳', key: info.key } });
-          // 2. Baixar a música
-          const downloadResult = await spotifyModule.download(track.song_link);
+          // 2. Baixar o áudio no Deezer (prévia de 30s — o áudio completo exige conta premium)
+          const downloadResult = await spotifyModule.downloadDeezerPreview(track);
           if (!downloadResult.ok) {
             return reply(`❌ ${downloadResult.msg}`);
           }
@@ -21439,6 +21439,9 @@ case 'pin':
               mimetype: 'audio/mpeg',
               fileName: downloadResult.filename
             }, { quoted: info });
+            if (downloadResult.isPreview) {
+              await reply('ℹ️ *Prévia de 30s do Deezer.* O áudio completo exige conta premium.');
+            }
             await nazu.sendMessage(from, { react: { text: '✅', key: info.key } });
           } catch (audioError) {
             if (String(audioError).includes("ENOSPC") || String(audioError).includes("size")) {
