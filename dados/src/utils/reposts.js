@@ -221,26 +221,24 @@ export function montarCard(r) {
     };
   }
 
-  // Texto e áudio: todo card de carrossel precisa de header de imagem/vídeo, então
-  // usam a capa gerada. O texto vai no caption (texto real, não imagem).
-  const card = { image: { url: caminhoMidia(r.capa) }, caption, title: titulo, nativeFlow: [] };
-  if (r.tipo === 'audio' && r.arquivo) {
-    card.audioFooter = { url: caminhoMidia(r.arquivo) };
-  }
-  return card;
+  // Texto: todo card de carrossel precisa de header de imagem/vídeo, então usa a
+  // capa gerada. O texto vai no caption (texto real, não imagem).
+  return { image: { url: caminhoMidia(r.capa) }, caption, title: titulo, nativeFlow: [] };
 }
 
-// Cards prontos para enviar. Gera a capa sob demanda para reposts de texto/áudio
-// salvos por versões antigas (sem capa), senão o carrossel inteiro é rejeitado.
+// Cards prontos para enviar: só imagem/vídeo/texto. O carrossel do WhatsApp NÃO
+// tem card de áudio (o card só aceita header image/video), então áudio fica de
+// fora e é enviado como mensagem de áudio de verdade (ver `audiosAtivos`).
+// Gera a capa sob demanda para reposts de texto salvos por versões antigas.
 export async function montarCards(agora = Date.now()) {
   const d = ler();
   const ativos = d.reposts
-    .filter((r) => r.expiraEm > agora)
+    .filter((r) => r.expiraEm > agora && r.tipo !== 'audio')
     .sort((a, b) => a.numero - b.numero);
 
   let mudou = false;
   for (const r of ativos) {
-    if ((r.tipo === 'text' || r.tipo === 'audio') && (!r.capa || !fs.existsSync(caminhoMidia(r.capa)))) {
+    if (r.tipo === 'text' && (!r.capa || !fs.existsSync(caminhoMidia(r.capa)))) {
       try {
         r.capa = await gerarCapa(r.numero, r.tipo, r.texto || '');
         mudou = true;
@@ -254,6 +252,15 @@ export async function montarCards(agora = Date.now()) {
   return ativos.map(montarCard);
 }
 
+// Reposts de áudio ativos, prontos para enviar como áudio (o carrossel não
+// consegue reproduzi-los).
+export function audiosAtivos(agora = Date.now()) {
+  return ler()
+    .reposts.filter((r) => r.expiraEm > agora && r.tipo === 'audio' && r.arquivo)
+    .sort((a, b) => a.numero - b.numero)
+    .map((r) => ({ numero: r.numero, arquivo: caminhoMidia(r.arquivo), texto: r.texto || '' }));
+}
+
 export default {
   MAX_CARDS,
   criar,
@@ -261,6 +268,7 @@ export default {
   remover,
   montarCard,
   montarCards,
+  audiosAtivos,
   limparExpirados,
   caminhoMidia
 };

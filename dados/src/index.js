@@ -21498,11 +21498,33 @@ case 'pin':
         try {
           reposts.limparExpirados();
           const cards = (await reposts.montarCards()).slice(0, reposts.MAX_CARDS);
-          if (!cards.length) return reply('📭 Nenhum repost ativo no momento.');
-          await nazu.sendMessage(from, {
-            text: '📌 *Reposts ativos*',
-            cards
-          }, { quoted: info });
+          const audios = reposts.audiosAtivos();
+
+          if (!cards.length && !audios.length) {
+            return reply('📭 Nenhum repost ativo no momento.');
+          }
+
+          if (cards.length) {
+            await nazu.sendMessage(from, {
+              text: '📌 *Reposts ativos*',
+              cards
+            }, { quoted: info });
+          }
+
+          // O carrossel não reproduz áudio (card só aceita imagem/vídeo), então
+          // os reposts de áudio saem como mensagens de áudio de verdade.
+          if (audios.length) {
+            await nazu.sendMessage(from, {
+              text: `🎵 *Áudios dos reposts* (${audios.map((a) => `#${a.numero}`).join(', ')})`
+            });
+            for (const a of audios) {
+              await nazu.sendMessage(from, {
+                audio: fs.readFileSync(a.arquivo),
+                mimetype: 'audio/ogg; codecs=opus',
+                ptt: false
+              });
+            }
+          }
         } catch (e) {
           console.error('[REPOSTS] erro:', e);
           await reply('❌ Falha ao montar o carrossel de reposts.');

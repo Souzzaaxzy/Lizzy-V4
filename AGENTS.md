@@ -7,28 +7,31 @@ expira **individualmente** após 24h.
 
 ### Onde fica
 - **`dados/src/utils/reposts.js`** — módulo puro (fs apenas), testável sem socket.
-  `criar`, `listar`, `remover`, `limparExpirados`, `montarCard`, `caminhoMidia`.
+  `criar`, `listar`, `remover`, `limparExpirados`, `montarCards`, `montarCard`,
+  `audiosAtivos`, `caminhoMidia`.
 - **Comandos** em `dados/src/index.js` (`case 'repost' | 'reposts' | 'delrepost'`).
 - **Banco**: `dados/database/reposts.json` (registro), `dados/database/reposts-media/`
-  (mídia baixada) e `dados/database/reposts-cards/` (capas dos cards de texto/áudio).
+  (mídia baixada) e `dados/database/reposts-cards/` (capas dos cards de texto).
   Todos **ignorados pelo Git** (`.gitignore`).
 
-### Tipos aceitos e como viram card
+### Tipos aceitos e como aparecem
 **Todo card de carrossel do WhatsApp EXIGE um header de imagem/vídeo** (texto e
 áudio não são header válido) — e o carrossel **não** aceita header/footer no
 nível da mensagem. Um card sem header faz o cliente rejeitar o carrossel inteiro
-com o aviso *"atualize o WhatsApp"*. Por isso:
+com o aviso *"atualize o WhatsApp"*. Além disso, **o card de carrossel não
+reproduz áudio** (só aceita header image/video + body + botões) — o cliente
+ignora qualquer áudio dentro do card.
 
-| Mensagem respondida | Card no carrossel |
+| Mensagem respondida | Como aparece no `!reposts` |
 |---|---|
-| imagem (+legenda) | `header.imageMessage` + `body.text` = legenda |
-| vídeo (+legenda) | `header.videoMessage` + `body.text` = legenda |
-| texto puro | `header.imageMessage` (capa gerada com o texto) + `body.text` = texto real |
-| áudio (+legenda) | `header.imageMessage` (capa gerada) + `footer.audioMessage` (player) + `body.text` |
+| imagem (+legenda) | card com `header.imageMessage` + `body.text` = legenda |
+| vídeo (+legenda) | card com `header.videoMessage` + `body.text` = legenda |
+| texto puro | card com `header.imageMessage` (capa gerada) + `body.text` = texto real |
+| áudio (+legenda) | **fora do carrossel**: sai como mensagem de áudio de verdade (`audiosAtivos`), com um cabeçalho `🎵 Áudios dos reposts (#N)` |
 | documento/outros | recusado com mensagem clara (a fork não aceita no card) |
 
-A **capa** de texto/áudio é um PNG gerado pelo `sharp` (640×360, cor por tipo,
-com o `Repost #N` e um resumo) — não é a mensagem "virando imagem": o texto real
+A **capa** de texto é um PNG gerado pelo `sharp` (640×360, cor por tipo, com o
+`Repost #N` e um resumo) — não é a mensagem "virando imagem": o texto real
 continua no `body.text` do card. A mídia original (imagem/vídeo/áudio) é
 **baixada e salva localmente** (`getFileBuffer`), sem depender da URL temporária
 do WhatsApp.
@@ -44,18 +47,17 @@ do WhatsApp.
   10 primeiros em ordem crescente.
 
 ### Testes
-`tests/reposts.test.js` — **16 testes / 66 asserções**: os 4 tipos, ordem,
-`montarCard` por tipo (**todo card com header de mídia**), geração de capa sob
-demanda para reposts antigos, exclusão sem renumerar, expiração individual,
-persistência em disco, erros (sem resposta, documento, falha de download, mídia
-vazia) e um teste de integração que monta o **carrossel REAL** pela fork
-(`generateWAMessageContent`) conferindo que os 4 cards têm header
-(image/video/capa) e o áudio no footer. Usa `DATABASE_PATH` temporário (não toca
-o banco real).
+`tests/reposts.test.js` — **17 testes / 65 asserções**: os 4 tipos, ordem,
+`montarCard` por tipo (**todo card com header de mídia**), `audiosAtivos`,
+geração de capa sob demanda para reposts antigos, exclusão sem renumerar,
+expiração individual, persistência em disco, erros (sem resposta, documento,
+falha de download, mídia vazia) e um teste de integração que monta o **carrossel
+REAL** pela fork (`generateWAMessageContent`) conferindo que os cards têm header
+(image/video/capa). Usa `DATABASE_PATH` temporário (não toca o banco real).
 
 ### Fork
-O carrossel de **texto puro** e o **áudio no footer** já existiam na fork — não
-foi preciso mudar nada para eles. Adicionada apenas a opção **`carouselCardType`**
+O carrossel de **texto puro** já existia na fork — não foi preciso mudar nada
+para ele. Adicionada apenas a opção **`carouselCardType`**
 (`{ text, cards, carouselCardType }`) para escolher `HSCROLL_CARDS`; o bot usa o
 padrão (`UNKNOWN`), que é o que os carrosséis existentes (`!pinterest`, `!tiktok`)
 já usam com sucesso.
