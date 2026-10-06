@@ -18,7 +18,7 @@ Uma pasta por **console** (`snes`, `nes`, `gba`, `gb`, `genesis`, `n64`...).
 
 ## 2. Registre no `jogos.json`
 
-Abra `docs/topgear/jogos.json` e adicione um item:
+Abra `docs/emugames/jogos.json` e adicione um item:
 
 ```json
 {

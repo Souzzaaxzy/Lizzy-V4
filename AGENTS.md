@@ -1,5 +1,48 @@
 # AGENTS.md — Lizzy-V4 / Abyss Bot
 
+## 🎮 EmuGames — player MULTI-JOGO no webview (out/2026) ✅
+Evolução do `!topgear`: o mesmo comando agora abre um **catálogo de jogos**,
+não só um.
+
+### Onde fica
+- **`docs/emugames/`** (era `docs/topgear/` — renomeado a pedido do dono):
+  ```
+  docs/emugames/
+  ├── index.html      ← player (lê o catálogo)
+  ├── style.css
+  ├── jogos.json      ← CATÁLOGO (id, nome, console, rom)
+  └── jogos/
+      ├── snes/topgear2.smc
+      └── README.md
+  ```
+- **`dados/src/topgear/`** continua sendo a cópia-fonte (config + testes).
+- **URL**: `https://souzzaaxzy.github.io/Lizzy-V4/emugames/index.html`
+  (o `config.json` e o `.env` apontam para `/emugames`).
+
+### Como adicionar um jogo (sem mexer em código)
+1. Soltar a ROM em `docs/emugames/jogos/<console>/`
+2. Adicionar uma linha no `jogos.json`:
+   ```json
+   { "id": "meujogo", "nome": "Meu Jogo", "console": "nes", "rom": "jogos/nes/meujogo.nes" }
+   ```
+O `console` define o **core** do EmulatorJS (`EJS_core = jogo.console`) e a cor
+do tema. Consoles: `snes` `nes` `gba` `gb` `genesis` `n64` `psx` `arcade`...
+
+### Comportamento
+- Sem `?jogo=<id>` abre o **primeiro** do catálogo.
+- Com 2+ jogos aparece o botão **☰ JOGOS** (troca sem recarregar).
+- Mantidos: **PARAR**, inatividade (3 min), sair/voltar reinicia sozinho,
+  controles de toque **abaixo** da tela (medido em viewport Android).
+
+### Testes — `tests/topgear.test.js` (**9 testes / 73 asserções**)
+Inclui a validação de que a URL aponta para `/emugames/`, que o `jogos.json`
+tem entradas completas e que cada `rom` existe de fato.
+
+### Hospedagem
+GitHub Pages (repo público) ou **Cloudflare Pages** (funciona com repo
+privado). No Cloudflare: *Framework* None, *Build command* **vazio**,
+*Build output directory* `docs/emugames`.
+
 ## 🏎️ `!topgear` — EXPERIMENTAL: Rich/Web (webview) + WASM (out/2026)
 Prova de conceito **isolada** (não está em menu nenhum, por pedido). Objetivo:
 validar a infraestrutura Rich/Web/WASM da fork antes de pensar em emulador SNES.

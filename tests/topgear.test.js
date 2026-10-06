@@ -1,7 +1,7 @@
 /**
  * !topgear — experiência Rich/Web (webview) experimental.
  *
- * O jogo é servido pelo GitHub Pages (docs/topgear/). O comando só monta o
+ * O jogo é servido pelo GitHub Pages (docs/emugames/). O comando só monta o
  * payload interactiveMessage com o botão cta_url (webview_interaction: true)
  * e envia por relayMessage.
  *
@@ -87,23 +87,24 @@ await test('config: a URL do jogo está definida', () => {
   ok(typeof url === 'string' && url.length > 0, 'pagina() devolve uma URL');
   ok(url.endsWith('/index.html'), `termina em /index.html (veio ${url})`);
   ok(url.startsWith('https://'), 'usa HTTPS (o webview exige)');
+  ok(url.includes('/emugames/'), `aponta para a pasta emugames (veio ${url})`);
 });
 
-await test('arquivos do jogo estão em docs/ (GitHub Pages)', () => {
+await test('a pasta docs/emugames tem o player multi-jogo', () => {
   for (const f of ['index.html', 'style.css', 'jogos.json', 'jogos/README.md']) {
-    ok(fs.existsSync(path.join(PROJECT, 'docs/topgear', f)), `docs/topgear/${f} existe`);
+    ok(fs.existsSync(path.join(PROJECT, 'docs/emugames', f)), `docs/emugames/${f} existe`);
   }
-  const cat = JSON.parse(fs.readFileSync(path.join(PROJECT, 'docs/topgear/jogos.json'), 'utf-8'));
+  const cat = JSON.parse(fs.readFileSync(path.join(PROJECT, 'docs/emugames/jogos.json'), 'utf-8'));
   ok(Array.isArray(cat.jogos) && cat.jogos.length > 0, 'catalogo tem jogos');
   for (const j of cat.jogos) {
     ok(!!j.id && !!j.nome && !!j.console && !!j.rom, `jogo ${j.id} tem id/nome/console/rom`);
-    ok(fs.existsSync(path.join(PROJECT, 'docs/topgear', j.rom)), `rom ${j.rom} existe`);
+    ok(fs.existsSync(path.join(PROJECT, 'docs/emugames', j.rom)), `rom ${j.rom} existe`);
   }
   ok(fs.existsSync(path.join(PROJECT, 'docs/.nojekyll')), '.nojekyll presente');
 });
 
 await test('index.html: player multi-jogo com os caminhos certos', () => {
-  const html = fs.readFileSync(path.join(PROJECT, 'docs/topgear/index.html'), 'utf-8');
+  const html = fs.readFileSync(path.join(PROJECT, 'docs/emugames/index.html'), 'utf-8');
   ok(html.includes('cdn.emulatorjs.org'), 'carrega do CDN do EmulatorJS');
   ok(html.includes('src/'), 'aponta os scripts para src/');
   ok(html.includes('EJS_gameUrl'), 'define a ROM');
@@ -116,7 +117,7 @@ await test('index.html: player multi-jogo com os caminhos certos', () => {
   ok(html.includes('id="parar"'), 'tem botao PARAR');
   ok(html.includes('3 * 60 * 1000'), 'desliga por inatividade (3 min)');
   ok(html.includes('visibilitychange'), 'para ao sair da aba');
-  const css = fs.readFileSync(path.join(PROJECT, 'docs/topgear/style.css'), 'utf-8');
+  const css = fs.readFileSync(path.join(PROJECT, 'docs/emugames/style.css'), 'utf-8');
   ok(css.includes('ejs_virtualGamepad_parent'), 'reposiciona os controles de toque (css)');
   ok(/height:\s*calc\(.*200px\)/.test(css), 'a caixa reserva a faixa dos controles');
   ok(/ejs_canvas_parent[^}]*height:\s*calc\(100% - 200px\)/s.test(css), 'a tela ocupa so o andar de cima');

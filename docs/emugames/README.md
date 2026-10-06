@@ -6,7 +6,7 @@ Roda jogos de console dentro do webview do WhatsApp, via
 ## Estrutura
 
 ```
-docs/topgear/
+docs/emugames/
 ├── index.html      ← player (lê o catálogo)
 ├── style.css
 ├── jogos.json      ← CATÁLOGO: onde se adiciona jogo
@@ -46,4 +46,4 @@ Servido por **Cloudflare Pages** (funciona com repositório privado).
 Também funciona em GitHub Pages ou qualquer host estático.
 
 **Importante**: é site **estático** — no build do Cloudflare deixe o
-*Build command* vazio e o *Build output directory* como `docs/topgear`.
+*Build command* vazio e o *Build output directory* como `docs/emugames`.
