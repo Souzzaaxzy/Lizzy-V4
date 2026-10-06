@@ -115,6 +115,11 @@ await test('index.html: usa o EmulatorJS (SNES) com os caminhos certos', () => {
   ok(html.includes('visibilitychange'), 'para ao sair da aba');
   const css = fs.readFileSync(path.join(PROJECT, 'docs/topgear/style.css'), 'utf-8');
   ok(css.includes('ejs_virtualGamepad_parent'), 'reposiciona os controles de toque (css)');
+  ok(/padding-bottom:\s*190px/.test(css), 'a caixa reserva espaco para os controles');
+  ok(!/#game\s*\{[^}]*overflow:\s*hidden/.test(css), 'a caixa nao corta os controles (sem overflow hidden)');
+  ok(html.includes("callEvent('exit')"), 'para o emulador pela API real (callEvent exit)');
+  ok(html.includes('freeze'), 'trata o congelamento do webview');
+  ok(html.includes('pageshow'), 'reage ao voltar para a pagina');
 });
 
 await test('EmulatorJS: os assets do CDN respondem 200', async () => {

@@ -21,15 +21,44 @@ h1 { font-size: 16px; letter-spacing: 4px; font-weight: 800; }
 
 main { width: 100%; max-width: 760px; display: flex; flex-direction: column; gap: 10px; }
 
+/*
+  O player precisa de espaço para os controles de toque EMBAIXO.
+  Por isso a caixa tem altura extra (tela + 190px) e o canvas ocupa só a parte
+  de cima. Sem isto os controles ficam por cima do jogo.
+*/
 #game {
   width: 100%;
   aspect-ratio: 4 / 3;
   background: #000;
   border: 1px solid #222a36;
   border-radius: 8px;
-  overflow: hidden;
   position: relative;
+  padding-bottom: 190px;
+  height: auto;
+  min-height: 0;
 }
+
+/* o canvas do jogo ocupa a área de cima */
+#game .ejs_canvas_parent {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: calc(100% - 190px);
+}
+
+/* os controles de toque ficam na faixa de baixo */
+#game .ejs_virtualGamepad_parent {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 190px;
+}
+#game .ejs_virtualGamepad_left { bottom: 20px; }
+#game .ejs_virtualGamepad_right { bottom: 20px; }
+#game .ejs_virtualGamepad_top { bottom: 175px; }
+#game .ejs_virtualGamepad_bottom { bottom: 0; }
 
 #sem-rom {
   background: #11151c;
@@ -63,17 +92,3 @@ input[type=file] { margin-top: 10px; color: #b9c3d3; font-size: 12px; }
 }
 #parar:disabled { opacity: .4; }
 #status { font-size: 11px; color: #8b98ad; }
-
-/*
-  O EmulatorJS desenha os controles de toque EM CIMA do jogo
-  (.ejs_virtualGamepad_* usa position:absolute dentro do player).
-  Aqui o player ganha espaço extra embaixo e os controles descem para essa área,
-  saindo de cima da tela do jogo.
-*/
-#game .ejs_parent { overflow: visible; }
-#game .ejs_canvas_parent { height: calc(100% - 190px); }
-#game .ejs_virtualGamepad_parent { bottom: -190px; height: 190px; }
-#game .ejs_virtualGamepad_left { bottom: 20px; }
-#game .ejs_virtualGamepad_right { bottom: 20px; }
-#game .ejs_virtualGamepad_top { bottom: 200px; }
-#game .ejs_virtualGamepad_bottom { bottom: 0; }

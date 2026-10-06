@@ -68,8 +68,12 @@
   }
 
   function parar() {
-    try { window.EJS_emulator && window.EJS_emulator.pause && window.EJS_emulator.pause(); } catch { /* já parado */ }
-    try { window.EJS_emulator && window.EJS_emulator.exit && window.EJS_emulator.exit(); } catch { /* já saiu */ }
+    const emu = window.EJS_emulator;
+    if (emu) {
+      try { emu.pause(); } catch { /* já pausado */ }
+      try { emu.callEvent('exit'); } catch { /* já saiu */ }
+      try { emu.callEvent('unload'); } catch { /* sem unload */ }
+    }
     aoSair();
   }
 
@@ -150,12 +154,33 @@
     addEventListener(ev, marcarAtividade, { passive: true });
   });
 
+  /*
+    Fechar o webview do WhatsApp nem sempre dispara visibilitychange/pagehide
+    (o navegador interno pode manter a página viva). Por isso:
+    - visibilitychange/pagehide/freeze disparam parar() imediatamente;
+    - ao VOLTAR (pageshow/visibilitychange visível) a página recarrega o
+      emulador do zero, em vez de continuar a sessão antiga.
+  */
+  let saiuDaPagina = false;
+
+  function aoSairDaPagina() {
+    saiuDaPagina = true;
+    parar();
+  }
+
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) parar();
-    else marcarAtividade();
+    if (document.hidden) aoSairDaPagina();
   });
-  addEventListener('pagehide', parar);
-  addEventListener('beforeunload', parar);
+  addEventListener('pagehide', aoSairDaPagina);
+  addEventListener('beforeunload', aoSairDaPagina);
+  addEventListener('freeze', aoSairDaPagina);
+
+  addEventListener('pageshow', () => {
+    if (saiuDaPagina && !rodando) {
+      saiuDaPagina = false;
+      ocioso = Date.now();
+    }
+  });
 
   setInterval(() => {
     if (!rodando) return;
