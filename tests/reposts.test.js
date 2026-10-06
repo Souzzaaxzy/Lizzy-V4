@@ -90,13 +90,18 @@ await test('imagem com legenda vira #2 e salva a mídia local', async () => {
   ok(fs.readFileSync(p).equals(JPEG), 'conteúdo da mídia correto');
 });
 
-await test('vídeo e áudio viram #3 e #4 (áudio salvo local)', async () => {
+await test('vídeo e áudio viram #3 e #4 (áudio vira vídeo com som)', async () => {
   const v = await criar(vidMsg('legenda do video'));
   const a = await criar(audMsg());
   ok(v.repost.numero === 3 && v.repost.tipo === 'video', 'video #3');
   ok(v.repost.texto === 'legenda do video', 'preserva legenda do video');
   ok(a.repost.numero === 4 && a.repost.tipo === 'audio', 'audio #4');
   ok(fs.existsSync(reposts.caminhoMidia(a.repost.arquivo)), 'audio salvo local');
+  if (a.repost.video) {
+    ok(fs.existsSync(reposts.caminhoMidia(a.repost.video)), 'gerou o vídeo (capa + áudio) para o card');
+  } else {
+    ok(true, 'ffmpeg ausente: áudio segue no fallback (footer)');
+  }
 });
 
 await test('listar devolve em ordem numérica crescente', () => {
@@ -125,21 +130,29 @@ await test('montarCard: TODO card tem header de imagem/vídeo (exigência do car
   ok(cVid.caption === 'legenda do video', 'card de vídeo mantém a legenda');
 
   const cAud = reposts.montarCard(t4);
-  ok(cAud.image && cAud.image.url, 'card de áudio usa capa (o card não reproduz áudio)');
-  ok(fs.existsSync(cAud.image.url), 'a capa do card de áudio existe');
-  ok(!cAud.audioFooter, 'não usa audioFooter (o carrossel do WhatsApp ignora)');
+  if (t4.video) {
+    ok(cAud.video && cAud.mimetype === 'video/mp4', 'card de áudio usa o vídeo (capa+áudio) — toca no carrossel');
+    ok(cAud.caption === 'Repost #4', 'card de áudio tem o número no caption');
+  } else {
+    ok(cAud.image && cAud.image.url, 'sem vídeo, card de áudio usa capa + footer');
+    ok(cAud.audioFooter, 'com fallback no footer');
+  }
 });
 
-await test('audiosAtivos devolve só os áudios ativos, em ordem', () => {
+await test('audiosAtivos só devolve áudio SEM vídeo (fallback)', () => {
   const audios = reposts.audiosAtivos();
-  ok(audios.length === 1, `1 áudio ativo (veio ${audios.length})`);
-  ok(audios[0].numero === 4, 'é o #4');
-  ok(fs.existsSync(audios[0].arquivo), 'arquivo de áudio existe');
+  const t4 = reposts.listar().find((r) => r.numero === 4);
+  if (t4.video) {
+    ok(audios.length === 0, 'com vídeo, o áudio não precisa do fallback');
+  } else {
+    ok(audios.length === 1 && audios[0].numero === 4, 'sem vídeo, o áudio entra no fallback');
+  }
 });
 
-await test('mensagemAudio vira interactiveMessage com áudio no footer (player real)', async () => {
+await test('mensagemAudio vira interactiveMessage com áudio no footer (fallback sem vídeo)', async () => {
   const { generateWAMessageContent } = await import('@itsliaaa/baileys');
-  const a = reposts.audiosAtivos()[0];
+  const t4 = reposts.listar().find((r) => r.numero === 4);
+  const a = { numero: t4.numero, arquivo: reposts.caminhoMidia(t4.arquivo), texto: t4.texto || '' };
 
   const conteudo = reposts.mensagemAudio(a);
   ok(conteudo.audioFooter?.url === a.arquivo, 'o áudio vai no audioFooter');
@@ -240,7 +253,8 @@ await test('os cards viram UM carrossel real na fork (todos com header de mídia
   const cards = [
     reposts.montarCard({ tipo: 'image', arquivo: 'reposts-media/a.jpg', capa: null, mimetype: 'image/jpeg', texto: 'legenda img' }),
     reposts.montarCard({ tipo: 'video', arquivo: 'reposts-media/a.mp4', capa: null, mimetype: 'video/mp4', texto: 'legenda vid' }),
-    reposts.montarCard({ tipo: 'text', arquivo: null, capa: 'reposts-cards/cap.png', texto: 'texto puro' })
+    reposts.montarCard({ tipo: 'text', arquivo: null, capa: 'reposts-cards/cap.png', texto: 'texto puro' }),
+    reposts.montarCard({ tipo: 'audio', arquivo: 'reposts-media/a.ogg', video: 'reposts-media/a.mp4', capa: 'reposts-cards/cap.png', mimetype: 'audio/ogg; codecs=opus', texto: 'legenda audio' })
   ];
 
   const upload = async () => ({ url: 'https://mmg.whatsapp.net/fake', directPath: '/v/fake' });
@@ -251,7 +265,7 @@ await test('os cards viram UM carrossel real na fork (todos com header de mídia
 
   const car = m.interactiveMessage?.carouselMessage;
   ok(!!car, 'gerou interactiveMessage.carouselMessage (UM carrossel)');
-  ok(car.cards.length === 3, `um card por repost (${car.cards.length})`);
+  ok(car.cards.length === 4, `um card por repost (${car.cards.length})`);
 
   ok(car.cards[0].header?.imageMessage, 'card #1 é imagem');
   ok(car.cards[0].body?.text === 'legenda img', 'card #1 mantém a legenda');
@@ -259,6 +273,8 @@ await test('os cards viram UM carrossel real na fork (todos com header de mídia
   ok(car.cards[1].body?.text === 'legenda vid', 'card #2 mantém a legenda');
   ok(car.cards[2].header?.imageMessage, 'card #3 (texto) tem header de imagem (capa) — exigência do carrossel');
   ok(car.cards[2].body?.text?.includes('texto puro'), 'card #3 carrega o texto real no body');
+  ok(car.cards[3].header?.videoMessage, 'card #4 (áudio) é VÍDEO (capa+áudio) — toca no carrossel');
+  ok(car.cards[3].body?.text === 'legenda audio', 'card #4 mantém a legenda');
 });
 
 await test('montarCards gera capa sob demanda para repost antigo sem capa', async () => {

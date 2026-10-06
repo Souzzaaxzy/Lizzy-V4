@@ -27,14 +27,15 @@ ignora qualquer áudio dentro do card.
 | imagem (+legenda) | card com `header.imageMessage` + `body.text` = legenda |
 | vídeo (+legenda) | card com `header.videoMessage` + `body.text` = legenda |
 | texto puro | card com `header.imageMessage` (capa gerada) + `body.text` = texto real |
-| áudio (+legenda) | **fora do carrossel**: mensagem **interativa** com o áudio no `footer.audioMessage` — o player real do WhatsApp (`mensagemAudio`), com `Repost #N` no corpo |
+| áudio (+legenda) | card de **VÍDEO**: o áudio vira um MP4 (capa estática + o áudio original, via ffmpeg), então **toca dentro do carrossel** |
 | documento/outros | recusado com mensagem clara (a fork não aceita no card) |
 
-> **Card × mensagem interativa**: o `audioFooter` da fork é para **mensagem
-> interativa** (com `nativeFlow`), onde o cliente renderiza um **player de áudio
-> no footer** — é o recurso documentado ("Native Flow with Audio in the Footer").
-> **Card de carrossel não tem footer** (o cliente ignora), por isso o áudio não
-> pode ir como card; ele vai como mensagem interativa própria.
+> **Áudio no carrossel**: o card não aceita áudio como header, mas aceita
+> **vídeo**. Então o áudio é convertido para um MP4 (capa 640×360 + faixa de
+> áudio) e entra no carrossel como card de vídeo — com som. Sem o `ffmpeg`, o
+> áudio cai no fallback: mensagem **interativa** com o áudio no
+> `footer.audioMessage` (o player de áudio documentado pela fork,
+> "Native Flow with Audio in the Footer").
 
 A **capa** de texto é um PNG gerado pelo `sharp` (640×360, cor por tipo, com o
 `Repost #N` e um resumo) — não é a mensagem "virando imagem": o texto real

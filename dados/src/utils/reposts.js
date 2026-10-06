@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { spawn } from 'child_process';
 import sharp from 'sharp';
 import { DATABASE_DIR } from './paths.js';
 import { extractText, resolveMedia } from './viewOnce.js';
@@ -87,6 +88,69 @@ async function gerarCapa(numero, tipo, texto) {
   return path.join('reposts-cards', nome);
 }
 
+function runFfmpeg(ffmpeg, args, timeoutMs = 60000) {
+  return new Promise((resolve, reject) => {
+    let child;
+    try {
+      child = spawn(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-y', ...args], { stdio: ['ignore', 'ignore', 'pipe'] });
+    } catch (e) {
+      reject(e);
+      return;
+    }
+    let err = '';
+    const timer = setTimeout(() => { try { child.kill('SIGKILL'); } catch { /* já morreu */ } reject(new Error('ffmpeg timeout')); }, timeoutMs);
+    child.stderr.on('data', (d) => { err += d; });
+    child.on('error', (e) => { clearTimeout(timer); reject(e); });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      if (code === 0) resolve();
+      else reject(new Error(`ffmpeg ${code}: ${String(err).slice(-200)}`));
+    });
+  });
+}
+
+// Acha o ffmpeg como o resto do bot (PATH, ~/.local/bin, /usr/bin...).
+async function acharFfmpeg() {
+  const os = await import('os');
+  const home = os.homedir();
+  const candidatos = [
+    process.env.FFMPEG_PATH || 'ffmpeg',
+    path.join(home, '.local', 'bin', 'ffmpeg'),
+    '/home/container/.local/bin/ffmpeg',
+    '/root/.local/bin/ffmpeg',
+    '/usr/bin/ffmpeg',
+    '/usr/local/bin/ffmpeg'
+  ];
+  for (const cmd of candidatos) {
+    try {
+      await runFfmpeg(cmd, ['-version'], 10000);
+      return cmd;
+    } catch {
+      /* tenta o próximo */
+    }
+  }
+  return null;
+}
+
+// Áudio -> vídeo MP4 (capa estática + o áudio original). O card de carrossel
+// aceita vídeo, então assim o áudio entra no carrossel com som de verdade.
+async function gerarVideoDeAudio(arquivoAudio, arquivoCapa, destino) {
+  const ffmpeg = await acharFfmpeg();
+  if (!ffmpeg) return false;
+  try {
+    await runFfmpeg(ffmpeg, [
+      '-loop', '1', '-i', arquivoCapa,
+      '-i', arquivoAudio,
+      '-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'stillimage', '-crf', '28',
+      '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '96k',
+      '-shortest', '-movflags', '+faststart', destino
+    ], 120000);
+    return fs.existsSync(destino) && fs.statSync(destino).size > 0;
+  } catch {
+    return false;
+  }
+}
+
 function apagarArquivo(arquivo) {
   const p = caminhoMidia(arquivo);
   if (!p) return;
@@ -100,6 +164,7 @@ function apagarArquivo(arquivo) {
 function apagarRepost(r) {
   apagarArquivo(r.arquivo);
   apagarArquivo(r.capa);
+  apagarArquivo(r.video);
 }
 
 function salvarRegistro(d, dados) {
@@ -161,14 +226,21 @@ export async function criar({ conteudo, baixar }) {
       return { ok: false, msg: 'Não consegui salvar a mídia do repost.' };
     }
 
-    // Áudio não é mídia de header de carrossel (o card só aceita imagem/vídeo),
-    // então o card leva uma capa gerada e o áudio vai no footer do card.
+    // Áudio não é header de card, mas o card aceita VÍDEO. Então geramos uma capa
+    // e um MP4 (capa + o áudio original) para o áudio entrar no carrossel com som.
     let capa = null;
+    let video = null;
     if (tipo === 'audio') {
       try {
         capa = await gerarCapa(numero, 'audio', texto || 'áudio');
       } catch {
-        /* segue sem capa; montarCard recusa o card depois */
+        /* sem capa, o card cai para o fallback */
+      }
+      if (capa) {
+        const nomeVideo = `${numero}-${Date.now()}.mp4`;
+        const destino = path.join(MIDIA_DIR, nomeVideo);
+        const ok = await gerarVideoDeAudio(path.join(MIDIA_DIR, nome), caminhoMidia(capa), destino);
+        if (ok) video = path.join('reposts-media', nomeVideo);
       }
     }
 
@@ -176,6 +248,7 @@ export async function criar({ conteudo, baixar }) {
       tipo,
       arquivo: path.join('reposts-media', nome),
       capa,
+      video,
       mimetype: media.mimetype || MIME[tipo] || null,
       texto
     });
@@ -221,19 +294,40 @@ export function montarCard(r) {
     };
   }
 
-  // Texto: todo card de carrossel precisa de header de imagem/vídeo, então usa a
-  // capa gerada. O texto vai no caption (texto real, não imagem).
+  // Texto: card com header de imagem (capa) e o texto real no caption.
+  if (r.tipo === 'text') {
+    return { image: { url: caminhoMidia(r.capa) }, caption, title: titulo, nativeFlow: [] };
+  }
+
+  // Áudio: card de VÍDEO (capa + o áudio), então toca no próprio carrossel. Sem
+  // o vídeo (ffmpeg ausente), cai para imagem + o áudio no footer.
+  if (r.tipo === 'audio') {
+    const legenda = caption || titulo;
+    if (r.video && fs.existsSync(caminhoMidia(r.video))) {
+      return {
+        video: { url: caminhoMidia(r.video) },
+        mimetype: 'video/mp4',
+        caption: legenda,
+        title: titulo,
+        nativeFlow: []
+      };
+    }
+    const card = { image: { url: caminhoMidia(r.capa) }, caption: legenda, title: titulo, nativeFlow: [] };
+    if (r.arquivo) card.audioFooter = { url: caminhoMidia(r.arquivo) };
+    return card;
+  }
+
   return { image: { url: caminhoMidia(r.capa) }, caption, title: titulo, nativeFlow: [] };
 }
 
-// Cards prontos para enviar: só imagem/vídeo/texto. O carrossel do WhatsApp NÃO
-// tem card de áudio (o card só aceita header image/video), então áudio fica de
-// fora e é enviado como mensagem de áudio de verdade (ver `audiosAtivos`).
-// Gera a capa sob demanda para reposts de texto salvos por versões antigas.
+// Cards prontos para enviar: imagem, vídeo, texto e áudio (este como vídeo
+// capa+áudio). Gera a capa sob demanda para reposts de texto salvos por versões
+// antigas. Áudio sem vídeo (ffmpeg ausente) fica de fora — vai por `audiosAtivos`.
 export async function montarCards(agora = Date.now()) {
   const d = ler();
   const ativos = d.reposts
-    .filter((r) => r.expiraEm > agora && r.tipo !== 'audio')
+    .filter((r) => r.expiraEm > agora)
+    .filter((r) => r.tipo !== 'audio' || (r.video && fs.existsSync(caminhoMidia(r.video))))
     .sort((a, b) => a.numero - b.numero);
 
   let mudou = false;
@@ -252,11 +346,12 @@ export async function montarCards(agora = Date.now()) {
   return ativos.map(montarCard);
 }
 
-// Reposts de áudio ativos. O carrossel não aceita card de áudio, então cada um
-// vira uma mensagem interativa com o áudio no footer (player real do WhatsApp).
+// Áudios que NÃO conseguiram virar vídeo (sem ffmpeg). Vão como mensagem
+// interativa com o áudio no footer, para não ficarem de fora.
 export function audiosAtivos(agora = Date.now()) {
   return ler()
     .reposts.filter((r) => r.expiraEm > agora && r.tipo === 'audio' && r.arquivo)
+    .filter((r) => !(r.video && fs.existsSync(caminhoMidia(r.video))))
     .sort((a, b) => a.numero - b.numero)
     .map((r) => ({ numero: r.numero, arquivo: caminhoMidia(r.arquivo), texto: r.texto || '' }));
 }
