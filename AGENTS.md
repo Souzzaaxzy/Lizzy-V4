@@ -34,7 +34,7 @@ do tema. Consoles: `snes` `nes` `gba` `gb` `genesis` `n64` `psx` `arcade`...
 - Mantidos: **PARAR**, inatividade (3 min), sair/voltar reinicia sozinho,
   controles de toque **abaixo** da tela (medido em viewport Android).
 
-### Testes — `tests/topgear.test.js` (**15 testes / 166 asserções**)
+### Testes — `tests/topgear.test.js` (**16 testes / 171 asserções**)
 Inclui a validação de que a URL aponta para `/emugames/`, que o `jogos.json`
 tem entradas completas e que cada `rom` existe de fato, que os romsets de arcade
 batem com os CRCs oficiais (MAME/FBNeo) e que as capas dos jogos existem.
@@ -60,6 +60,37 @@ FS (`emulator.js` → `if (["arcade","mame"].includes(core)) writeFile(fileName,
 data)`) — o FBNeo exige **zip**. Então 7z/rar não servem para arcade, e o
 `kof97.zip` também não comprime abaixo de 25 MiB nem com deflate máximo
 (27,4 MiB). Daí o espelho ser o caminho certo.
+
+### 🚨 A CAUSA RAIZ do "não roda": `EJS_paths` (set/2026) ✅
+O jogo **nunca iniciava** — em **todos** os consoles (SNES, arcade). O menu de
+configurações abria sozinho e a tela ficava preta. O dono trocou o BIOS e o
+romset sem efeito, porque o problema **não era o conteúdo**.
+
+**Causa medida** (`EJS_emulator.started`):
+| jogo | com `EJS_paths` | sem `EJS_paths` |
+|---|---|---|
+| Top Gear 2 (SNES) | `started=false` | **`started=true`** |
+| KOF 97 / Metal Slug (arcade) | `started=false` | **`started=true`** |
+
+O `loader.js` do EmulatorJS resolve os caminhos sozinho (`data/` e `data/src/`).
+O nosso player **redefinia** os 10 caminhos em `window.EJS_paths` — e o
+`emulator.js` usa `config.filePaths` para **relocalizar arquivos que ele mesmo
+pede em runtime**, o que quebrava o boot. A lista parecia idêntica aos defaults,
+mas sobrescrever o mapa é o que estragava.
+
+**Correção**: o bloco `EJS_paths` foi **removido** do `index.html` (e a const
+`SRC`, que só servia para ele). O comentário no lugar explica o porquê.
+
+**Como foi medido** (importante para não repetir): a comparação foi feita com
+uma **página mínima oficial** do EmulatorJS no MESMO CDN, carregando os MESMOS
+arquivos — ela dava `started=true`. A partir daí foi teste diferencial: cópia
+exata do player, removendo **uma** opção por vez. `EJS_gameName`, `EJS_language`,
+`EJS_Buttons`, `EJS_controlScheme` e o loader injetado **não** eram a causa; o
+`EJS_paths` era.
+
+**Não confie no screenshot para isso**: o headless **não captura canvas/WebGL**
+— a tela aparece preta até no demo oficial. O sinal confiável é
+`EJS_emulator.started` + `EJS_emulator.fileName` (lidos do DOM).
 
 ### Capas dos jogos (`docs/emugames/capas/<id>.png`)
 Geradas por **`tools/gerar-capas.mjs`** (sharp, já é dep) a partir do
@@ -94,7 +125,19 @@ para os nomes oficiais e **valida cada CRC** contra a tabela do FBNeo
 | `kof97.zip` | 3/13 | **13/13** — veio em duas partes (`kof97.zip` + `kof2.zip`, nomes `kof97_*.rom`) e foi **unificado** num zip só com os nomes oficiais `232-*`. O `kof2.zip` foi removido. |
 | `neogeo.zip` | BIOS completa (essenciais OK) | inalterada |
 
-**Testes**: `tests/topgear.test.js` **15 testes / 166 asserções**. As novas
+**BIOS: o que o FBNeo exige** (`neogeoRomDesc` em `d_neogeo.cpp`). Os
+**essenciais** (sem `BRF_OPT`) são 4: `sm1.sm1` (94416d67), `sfix.sfix`
+(c2ea0cfd), `000-lo.lo` (5a86cff2) e uma `sp-s3.sp1`/`sp-s2.sp1` (91b64be3 /
+9036d879). O `neogeo.zip` do repo tem **26 arquivos** e cobre todos.
+
+**Tentativa descartada (set/2026)**: um `neogeo.zip` de **59 KB / 4 arquivos**
+(`neo-geo.rom`, `ng-lo.rom`, `ng-sfix.rom`, `ng-sm1.rom`) foi subido — mas 2
+desses CRCs (`354029fc`, `97cf998b`) **não existem em nenhum romset do FBNeo**,
+e faltavam os essenciais. Trocar a BIOS **não** resolveu (o problema era o
+`EJS_paths`, acima) e a BIOS completa anterior foi **restaurada**. Regra: antes
+de trocar a BIOS, conferir os CRCs dos essenciais contra a tabela do FBNeo.
+
+**Testes**: `tests/topgear.test.js` **16 testes / 171 asserções**. As novas
 seções validam: romset mslug **9/9** e kof97 **13/13** com **nome oficial + CRC
 oficial** (o zip antigo do mslug reprova — **10 asserções falham**; o kof
 incompleto reprova — **14 falham**), `kof2.zip` não existe mais, as 3 capas são

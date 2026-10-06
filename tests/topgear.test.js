@@ -341,6 +341,20 @@ await test('o espelho serve o romset grande com CORS', async () => {
   ok(r.headers.get('access-control-allow-origin') === '*', 'o espelho manda CORS *');
 });
 
+await test('o player NAO define EJS_paths (quebra o boot do EmulatorJS)', () => {
+  const html = fs.readFileSync(path.join(PROJECT, 'docs/emugames/index.html'), 'utf-8');
+  // O loader.js do EmulatorJS resolve os caminhos sozinho (data/ e data/src/).
+  // Definir EJS_paths sobrescreve esses caminhos e o jogo NUNCA inicia
+  // (EJS_emulator.started fica false) -- medido nos dois consoles.
+  const codigo = html.split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
+  ok(!/window\.EJS_paths\s*=/.test(codigo), 'o codigo nao seta window.EJS_paths');
+  ok(!/\bconst SRC\b/.test(codigo), 'nao monta o prefixo src/ (nao e mais preciso)');
+  ok(html.includes('EJS_paths'), 'o motivo esta documentado num comentario');
+  // o espelho das ROMs grandes continua
+  ok(/function urlRom/.test(html), 'mantem o resolvedor de espelho');
+  ok(/window\.EJS_gameUrl = urlRom\(j\)/.test(html), 'o EJS_gameUrl passa pelo espelho');
+});
+
 const totalOk = RESULTS.reduce((a, r) => a + r.passed, 0);
 const totalFail = RESULTS.reduce((a, r) => a + r.failed, 0);
 console.log('\n════════════════════════════════════════');

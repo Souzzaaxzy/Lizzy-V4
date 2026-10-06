@@ -37,7 +37,6 @@
 <script>
 (function () {
   const DATA = window.EJS_DATA;
-  const SRC = DATA + 'src/';
   const LIMITE = window.INATIVIDADE_MS;
 
   const alvo = document.getElementById('game');
@@ -113,18 +112,8 @@
       quickSave: false, quickLoad: false, screenshot: false, cacheManager: false,
       exitEmulation: true
     };
-    window.EJS_paths = {
-      'GameManager.js': SRC + 'GameManager.js',
-      'compression.js': SRC + 'compression.js',
-      'emulator.js': SRC + 'emulator.js',
-      'gamepad.js': SRC + 'gamepad.js',
-      'loader.js': DATA + 'loader.js',
-      'nipplejs.js': SRC + 'nipplejs.js',
-      'shaders.js': SRC + 'shaders.js',
-      'socket.io.min.js': SRC + 'socket.io.min.js',
-      'storage.js': SRC + 'storage.js',
-      'emulator.min.css': DATA + 'emulator.min.css'
-    };
+    // Sem EJS_paths: o loader.js do EmulatorJS resolve os caminhos
+    // sozinho (data/src/). Definir EJS_paths QUEBRA o boot -- ver AGENTS.md.
 
     rodando = true;
     pararBtn.disabled = false;
