@@ -34,7 +34,7 @@ do tema. Consoles: `snes` `nes` `gba` `gb` `genesis` `n64` `psx` `arcade`...
 - Mantidos: **PARAR**, inatividade (3 min), sair/voltar reinicia sozinho,
   controles de toque **abaixo** da tela (medido em viewport Android).
 
-### Testes — `tests/topgear.test.js` (**12 testes / 126 asserções**)
+### Testes — `tests/topgear.test.js` (**12 testes / 153 asserções**)
 Inclui a validação de que a URL aponta para `/emugames/`, que o `jogos.json`
 tem entradas completas e que cada `rom` existe de fato, que os romsets de arcade
 batem com os CRCs oficiais (MAME/FBNeo) e que as capas dos jogos existem.
@@ -67,20 +67,22 @@ conversão padrão**, e foi medida:
 
 **Ferramenta**: `tools/romset-neogeo.py` — converte (`trocar_metades`), renomeia
 para os nomes oficiais e **valida cada CRC** contra a tabela do FBNeo
-(`d_neogeo.cpp`). Romset incompleto → avisa e **não grava** (exit 1).
+(`d_neogeo.cpp`). Romset incompleto → avisa e **não grava** (exit 1). Aceita
+**vários zips** e unifica num só.
 
 **Estado medido**:
 | romset | antes | agora |
 |---|---|---|
 | `mslug.zip` | 5/9 válidos (nomes `_c*.rom`) | **9/9** (nomes `201-*.p1/c1…`, CRC oficial) |
-| `kof97.zip` | 3/13 | **3/13** — só os arquivos de **som**; faltam 10 (sprites/programa). Não tem conserto: o dado não existe. |
+| `kof97.zip` | 3/13 | **13/13** — veio em duas partes (`kof97.zip` + `kof2.zip`, nomes `kof97_*.rom`) e foi **unificado** num zip só com os nomes oficiais `232-*`. O `kof2.zip` foi removido. |
 | `neogeo.zip` | BIOS completa (essenciais OK) | inalterada |
 
-**Testes**: `tests/topgear.test.js` **12 testes / 126 asserções**. As novas
-seções validam: romset mslug com **nome oficial + CRC oficial** (o zip antigo
-reprova — medido: **10 asserções falham**), kof97 ainda 3/13, as 3 capas são PNG
-de verdade, e a ferramenta de conversão existe. O teste traz um **leitor de ZIP
-mínimo** (EOCD + `zlib.inflateRawSync` + `zlib.crc32`), sem dependência nova.
+**Testes**: `tests/topgear.test.js` **12 testes / 153 asserções**. As novas
+seções validam: romset mslug **9/9** e kof97 **13/13** com **nome oficial + CRC
+oficial** (o zip antigo do mslug reprova — **10 asserções falham**; o kof
+incompleto reprova — **14 falham**), `kof2.zip` não existe mais, as 3 capas são
+PNG de verdade, e a ferramenta de conversão existe. O teste traz um **leitor de
+ZIP mínimo** (EOCD + `zlib.inflateRawSync` + `zlib.crc32`), sem dependência nova.
 
 
 ## 🏎️ `!topgear` — EXPERIMENTAL: Rich/Web (webview) + WASM (out/2026)

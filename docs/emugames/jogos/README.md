@@ -116,9 +116,18 @@ O script troca as metades, renomeia para os nomes oficiais e **confere cada CRC*
 contra a tabela oficial do FBNeo. Se faltar arquivo, ele avisa e **nao grava** o
 zip (romset incompleto nao tem conserto).
 
-> **Estado atual**: `mslug.zip` foi convertido e bate **9/9**. O `kof97.zip`
-> esta **incompleto** — so tem os 3 arquivos de som (3/13). Precisa de um romset
-> completo para funcionar.
+### Juntar romset que veio em partes
+
+Se o romset chegou dividido em mais de um zip, e so passar **todos** de uma vez —
+o script unifica num zip so:
+
+```bash
+python3 tools/romset-neogeo.py parte1.zip parte2.zip --out kof97.zip
+```
+
+> **Estado atual**: `mslug.zip` **9/9** e `kof97.zip` **13/13** — os dois com os
+> nomes internos oficiais e os CRCs oficiais. O KOF veio em duas partes
+> (`kof97.zip` + `kof2.zip`) e foi unificado num zip so.
 
 ## O que o MAME/FBNeo espera
 

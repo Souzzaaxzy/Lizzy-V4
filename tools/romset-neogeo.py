@@ -63,24 +63,29 @@ def trocar_metades(data: bytes) -> bytes:
     return data[meio:] + data[:meio]
 
 
-def montar(romset_zip: str, saida: str) -> int:
-    zf = zipfile.ZipFile(romset_zip)
+def montar(romset_zips, saida: str) -> int:
     # mapa crc -> arquivo interno oficial (de todos os jogos)
     por_crc = {v: k for tabela in OFICIAIS.values() for k, v in tabela.items()}
 
     encontrados = {}  # nome_oficial -> bytes
-    for nome in zf.namelist():
-        if nome.endswith(".html") or nome.endswith("/"):
-            continue
-        dados = zf.read(nome)
-        for candidato, rotulo in ((dados, "identidade"), (trocar_metades(dados), "metades")):
-            alvo = por_crc.get(crc32(candidato))
-            if alvo:
-                encontrados[alvo] = candidato
-                print(f"  {nome:16} -> {alvo:12} ({rotulo})")
-                break
-        else:
-            print(f"  {nome:16} -> sem correspondencia oficial (ignorado)")
+    for caminho in romset_zips:
+        print(f"-- {caminho}")
+        zf = zipfile.ZipFile(caminho)
+        for nome in zf.namelist():
+            if nome.endswith(".html") or nome.endswith("/"):
+                continue
+            dados = zf.read(nome)
+            for candidato, rotulo in ((dados, "identidade"), (trocar_metades(dados), "metades")):
+                alvo = por_crc.get(crc32(candidato))
+                if alvo:
+                    if alvo not in encontrados:
+                        encontrados[alvo] = candidato
+                        print(f"  {nome:16} -> {alvo:12} ({rotulo})")
+                    else:
+                        print(f"  {nome:16} -> {alvo:12} (ja tinha, ignorado)")
+                    break
+            else:
+                print(f"  {nome:16} -> sem correspondencia oficial (ignorado)")
 
     if not encontrados:
         print("Nenhum arquivo bateu com a tabela oficial.")
@@ -109,12 +114,14 @@ def montar(romset_zip: str, saida: str) -> int:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Romset Neo Geo -> MAME/FBNeo")
-    ap.add_argument("zip", help="romset de entrada")
-    ap.add_argument("--out", help="zip de saida (padrao: <entrada>.fbneo.zip)")
+    ap = argparse.ArgumentParser(
+        description="Romset Neo Geo -> MAME/FBNeo (aceita varios zips e unifica)"
+    )
+    ap.add_argument("zips", nargs="+", help="um ou mais romsets de entrada")
+    ap.add_argument("--out", help="zip de saida (padrao: <primeiro>.fbneo.zip)")
     args = ap.parse_args()
-    saida = args.out or args.zip.rsplit(".", 1)[0] + ".fbneo.zip"
-    return montar(args.zip, saida)
+    saida = args.out or args.zips[0].rsplit(".", 1)[0] + ".fbneo.zip"
+    return montar(args.zips, saida)
 
 
 if __name__ == "__main__":

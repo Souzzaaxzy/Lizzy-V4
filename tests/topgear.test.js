@@ -257,12 +257,19 @@ await test('romsets de arcade batem com os CRCs oficiais (MAME/FBNeo)', () => {
   }
   ok(mslug.size === 9, `mslug tem 9 arquivos (veio ${mslug.size})`);
 
-  // KOF 97: incompleto — so os 3 de som (arquivos `kof97_v*.rom`, ainda com
-  // nome antigo). Contados por CRC: nao da para converter o que nao existe.
-  // Se um romset completo entrar, este numero sobe.
-  const kofCrcs = new Set(Object.values(OFICIAIS.kof97));
-  const kofOk = [...entradas('kof97.zip').values()].filter((d) => kofCrcs.has(crc(d)));
-  ok(kofOk.length === 3, `kof97 segue incompleto (3/13 oficiais; veio ${kofOk.length})`);
+  // KOF 97: as duas partes foram juntadas num romset so (13/13). Antes eram
+  // `kof97.zip` (3 arquivos de som) + `kof2.zip` (10) — agora e um zip unico,
+  // com os nomes internos oficiais e o CRC oficial.
+  const kof = entradas('kof97.zip');
+  for (const [nome, esperado] of Object.entries(OFICIAIS.kof97)) {
+    ok(kof.has(nome), `kof97 contem o arquivo ${nome}`);
+    if (kof.has(nome)) ok(crc(kof.get(nome)) === esperado, `${nome} com CRC oficial (${esperado})`);
+  }
+  ok(kof.size === 13, `kof97 tem 13 arquivos (veio ${kof.size})`);
+
+  // Nao pode sobrar o zip da segunda parte ao lado (ja foi unificado).
+  const pasta = path.join(PROJECT, 'docs/emugames/jogos/arcade');
+  ok(!fs.existsSync(path.join(pasta, 'kof2.zip')), 'kof2.zip nao existe mais (foi unificado)');
 });
 
 await test('as capas dos jogos existem (senao o card cai para texto)', () => {
