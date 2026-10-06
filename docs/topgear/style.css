@@ -1,21 +1,26 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
+
 html, body {
   min-height: 100%;
   background: #0b0d12;
   color: #e8ecf3;
   font-family: system-ui, -apple-system, sans-serif;
+  overscroll-behavior: none;
 }
+
 body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 14px;
+  gap: 10px;
+  padding: 10px;
 }
+
 header { text-align: center; }
-h1 { font-size: 18px; letter-spacing: 4px; font-weight: 800; }
-.sub { font-size: 11px; color: #8b98ad; margin-top: 4px; }
-main { width: 100%; max-width: 720px; }
+h1 { font-size: 16px; letter-spacing: 4px; font-weight: 800; }
+
+main { width: 100%; max-width: 760px; display: flex; flex-direction: column; gap: 10px; }
+
 #game {
   width: 100%;
   aspect-ratio: 4 / 3;
@@ -23,18 +28,52 @@ main { width: 100%; max-width: 720px; }
   border: 1px solid #222a36;
   border-radius: 8px;
   overflow: hidden;
+  position: relative;
 }
+
 #sem-rom {
   background: #11151c;
   border: 1px solid #222a36;
   border-radius: 8px;
-  padding: 18px;
+  padding: 16px;
   text-align: center;
   font-size: 13px;
   line-height: 1.6;
   color: #b9c3d3;
 }
-.dica { color: #8b98ad; font-size: 12px; margin-top: 10px; }
+.dica { color: #8b98ad; font-size: 12px; margin-top: 8px; }
 code { background: #1a2029; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
-footer { font-size: 11px; color: #6f7c91; text-align: center; }
-a { color: #7aa2ff; }
+input[type=file] { margin-top: 10px; color: #b9c3d3; font-size: 12px; }
+
+#controles {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+#parar {
+  background: #b91c1c;
+  color: #fff;
+  border: 0;
+  border-radius: 6px;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+#parar:disabled { opacity: .4; }
+#status { font-size: 11px; color: #8b98ad; }
+
+/*
+  O EmulatorJS desenha os controles de toque EM CIMA do jogo
+  (.ejs_virtualGamepad_* usa position:absolute dentro do player).
+  Aqui o player ganha espaço extra embaixo e os controles descem para essa área,
+  saindo de cima da tela do jogo.
+*/
+#game .ejs_parent { overflow: visible; }
+#game .ejs_canvas_parent { height: calc(100% - 190px); }
+#game .ejs_virtualGamepad_parent { bottom: -190px; height: 190px; }
+#game .ejs_virtualGamepad_left { bottom: 20px; }
+#game .ejs_virtualGamepad_right { bottom: 20px; }
+#game .ejs_virtualGamepad_top { bottom: 200px; }
+#game .ejs_virtualGamepad_bottom { bottom: 0; }

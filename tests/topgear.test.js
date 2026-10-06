@@ -107,6 +107,14 @@ await test('index.html: usa o EmulatorJS (SNES) com os caminhos certos', () => {
   ok(html.includes('TOPGEAR_ROM_CANDIDATOS'), 'procura por varios nomes de ROM');
   ok(html.includes('type="file"'), 'permite carregar a ROM do aparelho');
   ok(html.includes('api.github.com'), 'descobre a ROM pela API do GitHub');
+  ok(html.includes('EJS_Buttons'), 'controla os botoes do player');
+  ok(html.includes('exitEmulation: true'), 'tem botao de sair');
+  ok(html.includes('EJS_onExit'), 'detecta a saida');
+  ok(html.includes('id="parar"'), 'tem botao PARAR');
+  ok(html.includes('3 * 60 * 1000'), 'desliga por inatividade (3 min)');
+  ok(html.includes('visibilitychange'), 'para ao sair da aba');
+  const css = fs.readFileSync(path.join(PROJECT, 'docs/topgear/style.css'), 'utf-8');
+  ok(css.includes('ejs_virtualGamepad_parent'), 'reposiciona os controles de toque (css)');
 });
 
 await test('EmulatorJS: os assets do CDN respondem 200', async () => {

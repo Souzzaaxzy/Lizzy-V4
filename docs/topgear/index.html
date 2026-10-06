@@ -3,37 +3,34 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Top Gear (SNES)</title>
+<title>Top Gear</title>
 <link rel="stylesheet" href="./style.css">
 </head>
 <body>
 <header>
   <h1>TOP GEAR</h1>
-  <p class="sub">Super Nintendo · 1992 · Gremlin Graphics / Kemco</p>
 </header>
 
 <main>
   <div id="game"></div>
 
   <section id="sem-rom" hidden>
-    <p>Emulador SNES pronto — falta a ROM.</p>
-    <p class="dica">
-      Solte um arquivo <code>.sfc</code> (ou <code>.smc</code>) em
-      <code>docs/topgear/roms/</code>. O nome pode ser qualquer um.
-    </p>
-    <p class="dica">Ou escolha o arquivo do seu aparelho:</p>
+    <p>Falta a ROM.</p>
+    <p class="dica">Solte um <code>.sfc</code>/<code>.smc</code> em <code>docs/topgear/roms/</code> ou escolha do aparelho:</p>
     <input id="arquivo" type="file" accept=".sfc,.smc,.fig,.swc,.zip">
   </section>
-</main>
 
-<footer>
-  <p>Emulação via <a href="https://emulatorjs.org" target="_blank" rel="noopener">EmulatorJS</a> (snes9x, WebAssembly).</p>
-</footer>
+  <div id="controles">
+    <button id="parar" type="button" disabled>■ PARAR</button>
+    <span id="status"></span>
+  </div>
+</main>
 
 <script>
   window.TOPGEAR_DATA = 'https://cdn.emulatorjs.org/stable/data/';
   window.TOPGEAR_REPO = 'Souzzaaxzy/Lizzy-V4';
   window.TOPGEAR_DIR = 'docs/topgear/roms';
+  window.TOPGEAR_INATIVIDADE_MS = 3 * 60 * 1000;
   window.TOPGEAR_ROM = './roms/topgear.sfc';
   window.TOPGEAR_ROM_CANDIDATOS = [
     './roms/topgear.sfc', './roms/topgear.smc',
@@ -48,21 +45,70 @@
 <script>
 (function () {
   const DATA = window.TOPGEAR_DATA;
+  const SRC = DATA + 'src/';
   const alvo = document.getElementById('game');
   const semRom = document.getElementById('sem-rom');
   const input = document.getElementById('arquivo');
-  const SRC = DATA + 'src/';
+  const pararBtn = document.getElementById('parar');
+  const status = document.getElementById('status');
 
-  function configurar(romUrl) {
+  let rodando = false;
+  let ocioso = 0;
+  const LIMITE = window.TOPGEAR_INATIVIDADE_MS;
+
+  function marcarAtividade() { ocioso = Date.now(); }
+
+  function aoSair() {
+    rodando = false;
+    pararBtn.disabled = true;
+    pararBtn.textContent = '■ PARAR';
+    status.textContent = '';
+    alvo.innerHTML = '';
+    semRom.hidden = true;
+  }
+
+  function parar() {
+    try { window.EJS_emulator && window.EJS_emulator.pause && window.EJS_emulator.pause(); } catch { /* já parado */ }
+    try { window.EJS_emulator && window.EJS_emulator.exit && window.EJS_emulator.exit(); } catch { /* já saiu */ }
+    aoSair();
+  }
+
+  window.EJS_onExit = aoSair;
+
+  function iniciarEmulador(romUrl) {
     window.EJS_player = '#game';
     window.EJS_core = 'snes';
     window.EJS_gameUrl = romUrl;
     window.EJS_gameName = 'Top Gear';
     window.EJS_pathtodata = DATA;
     window.EJS_startOnLoaded = true;
+    window.EJS_language = 'pt-BR';
     window.EJS_color = '#1d4ed8';
     window.EJS_backgroundColor = '#0b0d12';
-    window.EJS_language = 'pt-BR';
+    window.EJS_volume = 0.6;
+    window.EJS_askBeforeExit = false;
+    window.EJS_disableAutoUnload = false;
+    window.EJS_controlScheme = 'snes';
+    window.EJS_Buttons = {
+      playPause: true,
+      restart: true,
+      mute: true,
+      settings: true,
+      fullscreen: true,
+      saveState: false,
+      loadState: false,
+      screenRecord: false,
+      gamepad: false,
+      cheat: false,
+      volume: true,
+      saveSavFiles: false,
+      loadSavFiles: false,
+      quickSave: false,
+      quickLoad: false,
+      screenshot: false,
+      cacheManager: false,
+      exitEmulation: true
+    };
     window.EJS_paths = {
       'GameManager.js': SRC + 'GameManager.js',
       'compression.js': SRC + 'compression.js',
@@ -75,8 +121,13 @@
       'storage.js': SRC + 'storage.js',
       'emulator.min.css': DATA + 'emulator.min.css'
     };
+
     semRom.hidden = true;
     alvo.hidden = false;
+    rodando = true;
+    pararBtn.disabled = false;
+    marcarAtividade();
+
     const s = document.createElement('script');
     s.src = DATA + 'loader.js';
     document.body.appendChild(s);
@@ -85,12 +136,33 @@
   function aviso() {
     alvo.hidden = true;
     semRom.hidden = false;
+    rodando = false;
+    pararBtn.disabled = true;
   }
 
+  pararBtn.addEventListener('click', parar);
   input.addEventListener('change', () => {
     const f = input.files && input.files[0];
-    if (f) configurar(URL.createObjectURL(f));
+    if (f) iniciarEmulador(URL.createObjectURL(f));
   });
+
+  ['pointerdown', 'keydown', 'touchstart'].forEach((ev) => {
+    addEventListener(ev, marcarAtividade, { passive: true });
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) parar();
+    else marcarAtividade();
+  });
+  addEventListener('pagehide', parar);
+  addEventListener('beforeunload', parar);
+
+  setInterval(() => {
+    if (!rodando) return;
+    if (Date.now() - ocioso < LIMITE) return;
+    parar();
+    status.textContent = 'desligado por inatividade (3 min)';
+  }, 5000);
 
   const EXT = /\.(sfc|smc|fig|swc|zip)$/i;
 
@@ -107,8 +179,7 @@
   }
 
   async function viaCandidatos() {
-    const lista = [window.TOPGEAR_ROM, ...(window.TOPGEAR_ROM_CANDIDATOS || [])];
-    for (const url of lista) {
+    for (const url of [window.TOPGEAR_ROM, ...(window.TOPGEAR_ROM_CANDIDATOS || [])]) {
       try {
         const r = await fetch(url, { method: 'HEAD' });
         if (r.ok) return url;
@@ -119,7 +190,7 @@
 
   (async () => {
     const rom = (await viaApi()) || (await viaCandidatos());
-    if (rom) configurar(rom);
+    if (rom) iniciarEmulador(rom);
     else aviso();
   })();
 })();
