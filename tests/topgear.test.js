@@ -87,7 +87,7 @@ const port = await server.iniciar();
 const base = `http://localhost:${port}`;
 
 await test('servidor: serve HTML, JS e WASM com os content-types certos', async () => {
-  for (const [rota, tipo] of [['/index.html', 'text/html'], ['/app.js', 'text/javascript'], ['/engine/emulator.wasm', 'application/wasm']]) {
+  for (const [rota, tipo] of [['/index.html', 'text/html'], ['/style.css', 'text/css'], ['/app.js', 'text/javascript'], ['/engine/emulator.wasm', 'application/wasm']]) {
     const res = await fetch(base + rota);
     ok(res.status === 200, `${rota} responde 200 (veio ${res.status})`);
     ok((res.headers.get('content-type') || '').includes(tipo), `${rota} tem content-type ${tipo}`);

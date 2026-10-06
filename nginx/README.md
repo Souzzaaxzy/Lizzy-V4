@@ -1,59 +1,90 @@
-# TOPGEAR — config do nginx
+# TOPGEAR — o que fazer (passo a passo)
 
-Esta pasta tem o que falta para o `!topgear` abrir no aparelho.
+O código já está no repositório. Falta só **publicar os arquivos do jogo** no
+seu domínio `aleatoryconteudos.com`.
 
-## Arquivos
+## ⚠️ Antes: por que NÃO usar a pasta do site
 
-| Arquivo | Para que serve |
-|---|---|
-| `topgear.conf` | O bloco que você copia para dentro do seu nginx |
-| `EXEMPLO-server.conf` | Um mapa mostrando ONDE o bloco entra |
+O site de vocês aplica este CSP (verificado no servidor):
 
----
+```
+script-src 'self' 'sha256-...'   <- sem 'wasm-unsafe-eval'
+style-src 'self'                 <- sem 'unsafe-inline'
+media-src 'none'
+```
 
-## Opção 1 (recomendada) — nginx aponta para o servidor do bot
+Colocar o jogo na **mesma pasta do site** faria o navegador **bloquear o
+WebAssembly** (`wasm-unsafe-eval`) e o áudio (`media-src 'none'`).
 
-O bot sobe o jogo na porta **8099**. O nginx repassa a URL pública para ela.
-
-1. Ache o arquivo do nginx que atende o domínio:
-   `aleatoryconteudos.com` → normalmente
-   `/etc/nginx/sites-available/aleatoryconteudos.com`
-   ou `/etc/nginx/conf.d/aleatoryconteudos.com.conf`
-
-2. Abra e procure o `server { ... }` que tem `server_name aleatoryconteudos.com;`
-
-3. Cole o conteúdo de `topgear.conf` **dentro** desse `server { }`,
-   junto dos outros `location`. Veja o `EXEMPLO-server.conf`.
-
-4. Recarregue o nginx.
-
-> ⚠️ O `location /topgear/` tem que ficar **antes** do `}` que fecha o `server`.
-> Se ficar depois, o nginx quebra.
+Por isso o caminho certo é o **nginx com o bloco do `topgear.conf`**: ele serve
+os arquivos com os cabeçalhos corretos.
 
 ---
 
-## Opção 2 (mais simples) — sem nginx, sem porta
+## Passo a passo (Opção 1 — nginx)
 
-O jogo é **100% estático** (HTML + JS + WASM). Ele não precisa do bot no ar.
+### 1. Descobrir o arquivo do nginx
 
-1. Copie os 3 arquivos para a pasta do site que o nginx já serve:
-   - `dados/src/topgear/index.html`
-   - `dados/src/topgear/app.js`
-   - `dados/src/topgear/engine/emulator.wasm`
+Pelo gerenciador de arquivos do host, procure em:
 
-   para a pasta do domínio (ex.: `/var/www/aleatoryconteudos/topgear/`),
-   mantendo a subpasta `engine/`:
+```
+/etc/nginx/sites-available/     (procure um com "aleatoryconteudos")
+/etc/nginx/conf.d/
+/etc/nginx/nginx.conf
+```
+
+### 2. Adicionar o bloco
+
+Copie o conteúdo de **`nginx/topgear.conf`** para **dentro** do `server { }`
+que tem `server_name aleatoryconteudos.com;`.
+
+Veja **`nginx/EXEMPLO-server.conf`** para um mapa de onde encaixar.
+
+> O `location /topgear/` tem que ficar **antes** do `}` que fecha o `server`.
+
+### 3. Recarregar o nginx
+
+Pelo painel do host (reload/restart do serviço nginx), ou por terminal se tiver:
+`sudo nginx -t && sudo systemctl reload nginx`
+
+---
+
+## Passo a passo (Opção 2 — sem nginx)
+
+Se não puder mexer no nginx, copie os arquivos para uma pasta servida:
+
+1. De `dados/src/topgear/` copie para a pasta do site:
+   - `index.html`
+   - `style.css`
+   - `app.js`
+   - `engine/emulator.wasm` (mantendo a subpasta `engine/`)
+
+2. Ficaria:
    ```
-   topgear/
+   <pasta do site>/topgear/
    ├── index.html
+   ├── style.css
    ├── app.js
    └── engine/
        └── emulator.wasm
    ```
 
-2. Pronto. O nginx já serve arquivos estáticos, então
-   `https://aleatoryconteudos.com/topgear/index.html` funciona **sem mudar
-   nenhuma config**.
+> Nesta opção o CSP do site pode bloquear o WASM; o canvas e os controles ainda
+> aparecem (modo demonstração).
 
-> Nesta opção o `TOPGEAR_PORT` do bot não é usado — o `publicUrl` do
-> `dados/src/topgear/config.json` continua o mesmo.
+---
+
+## Como testar
+
+1. A URL precisa responder 200:
+   `https://aleatoryconteudos.com/topgear/index.html`
+
+2. No grupo (só o dono): `!topgear`
+
+3. Toque no botão **JOGAR** -> abre no webview do WhatsApp.
+
+---
+
+## Depois de funcionar
+
+Me avise que eu testo a URL de fora e confirmo se está servindo certo.
