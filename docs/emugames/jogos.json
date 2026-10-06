@@ -4,6 +4,7 @@
       "id": "topgear2",
       "nome": "Top Gear 2",
       "console": "snes",
+      "descricao": "Corrida clássica de SNES: 16 países, 4 carros, pit stop e trilha sonora marcante. Escolha o carro, administre o combustível e chegue em 1º.",
       "rom": "jogos/snes/topgear2.smc"
     }
   ]

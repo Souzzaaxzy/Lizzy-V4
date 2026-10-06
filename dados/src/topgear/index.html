@@ -15,19 +15,13 @@
 <main>
   <div id="game"></div>
 
-  <section id="lista" hidden>
-    <p class="dica">Escolha um jogo:</p>
-    <div id="jogos"></div>
-  </section>
-
-  <section id="sem-rom" hidden>
+  <section id="erro" hidden>
     <p>Nenhum jogo disponível.</p>
-    <p class="dica">Adicione a ROM em <code>jogos/&lt;console&gt;/</code> e registre no <code>jogos.json</code>.</p>
+    <p class="dica">Registre um jogo no <code>jogos.json</code> e coloque a ROM em <code>jogos/&lt;console&gt;/</code>.</p>
   </section>
 
   <div id="controles">
     <button id="parar" type="button" disabled>■ PARAR</button>
-    <button id="trocar" type="button" hidden>☰ JOGOS</button>
     <span id="status"></span>
   </div>
 </main>
@@ -44,17 +38,13 @@
   const LIMITE = window.INATIVIDADE_MS;
 
   const alvo = document.getElementById('game');
-  const lista = document.getElementById('lista');
-  const listaJogos = document.getElementById('jogos');
-  const semRom = document.getElementById('sem-rom');
+  const erro = document.getElementById('erro');
   const titulo = document.getElementById('titulo');
   const subtitulo = document.getElementById('subtitulo');
   const pararBtn = document.getElementById('parar');
-  const trocarBtn = document.getElementById('trocar');
   const status = document.getElementById('status');
 
-  let catalogo = [];
-  let atual = null;
+  let jogo = null;
   let rodando = false;
   let ocioso = Date.now();
 
@@ -82,30 +72,28 @@
 
   window.EJS_onExit = aoSair;
 
-  function iniciar(jogo) {
-    atual = jogo;
+  function iniciar(j) {
+    jogo = j;
     alvo.innerHTML = '';
     window.EJS_emulator = null;
 
-    titulo.textContent = jogo.nome;
-    subtitulo.textContent = NOMES[jogo.console] || jogo.console;
-    lista.hidden = true;
-    semRom.hidden = true;
+    titulo.textContent = j.nome;
+    subtitulo.textContent = NOMES[j.console] || j.console;
+    erro.hidden = true;
     alvo.hidden = false;
-    trocarBtn.hidden = false;
 
     window.EJS_player = '#game';
-    window.EJS_core = jogo.console;
-    window.EJS_gameUrl = jogo.rom;
-    window.EJS_gameName = jogo.nome;
+    window.EJS_core = j.console;
+    window.EJS_gameUrl = j.rom;
+    window.EJS_gameName = j.nome;
     window.EJS_pathtodata = DATA;
     window.EJS_startOnLoaded = true;
     window.EJS_language = 'pt-BR';
-    window.EJS_color = CORES[jogo.console] || '#1d4ed8';
+    window.EJS_color = CORES[j.console] || '#1d4ed8';
     window.EJS_backgroundColor = '#0b0d12';
     window.EJS_volume = 0.6;
     window.EJS_askBeforeExit = false;
-    window.EJS_controlScheme = jogo.console;
+    window.EJS_controlScheme = j.console;
     window.EJS_Buttons = {
       playPause: true, restart: true, mute: true, settings: true, fullscreen: true,
       saveState: false, loadState: false, screenRecord: false, gamepad: false,
@@ -135,31 +123,7 @@
     document.body.appendChild(s);
   }
 
-  function mostrarLista() {
-    parar();
-    alvo.hidden = true;
-    semRom.hidden = true;
-    lista.hidden = false;
-    trocarBtn.hidden = catalogo.length < 2;
-    titulo.textContent = "EMUGAMES";
-    subtitulo.textContent = catalogo.length + ' disponível(is)';
-    listaJogos.innerHTML = '';
-    for (const j of catalogo) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'jogo';
-      b.textContent = j.nome;
-      b.addEventListener('click', () => iniciar(j));
-      listaJogos.appendChild(b);
-    }
-    if (!catalogo.length) {
-      lista.hidden = true;
-      semRom.hidden = false;
-    }
-  }
-
   pararBtn.addEventListener('click', parar);
-  trocarBtn.addEventListener('click', mostrarLista);
 
   ['pointerdown', 'keydown', 'touchstart'].forEach((ev) => addEventListener(ev, marcarAtividade, { passive: true }));
 
@@ -169,7 +133,7 @@
     if (!saiu) return;
     saiu = false;
     ocioso = Date.now();
-    if (!rodando && atual) iniciar(atual);
+    if (!rodando && jogo) iniciar(jogo);
   }
 
   document.addEventListener('visibilitychange', () => { document.hidden ? aoSairDaPagina() : aoVoltar(); });
@@ -187,6 +151,7 @@
   }, 5000);
 
   (async () => {
+    let catalogo = [];
     try {
       const r = await fetch('./jogos.json', { cache: 'no-store' });
       const d = await r.json();
@@ -199,7 +164,11 @@
     const escolhido = id ? catalogo.find((j) => j.id === id) : catalogo[0];
 
     if (escolhido) iniciar(escolhido);
-    else mostrarLista();
+    else {
+      alvo.hidden = true;
+      erro.hidden = false;
+      subtitulo.textContent = '';
+    }
   })();
 })();
 </script>

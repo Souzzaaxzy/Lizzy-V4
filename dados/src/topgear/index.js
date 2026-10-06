@@ -12,12 +12,16 @@ function lerConfig() {
   }
 }
 
-function pagina(jogoId) {
+function raiz() {
   const cfg = lerConfig();
   const base = process.env.TOPGEAR_PUBLIC_URL || cfg.publicUrl;
-  if (!base) return '';
-  const raiz = String(base).replace(/\/$/, '').replace(/\/index\.html$/, '');
-  return jogoId ? `${raiz}/?jogo=${encodeURIComponent(jogoId)}` : raiz;
+  return base ? String(base).replace(/\/$/, '').replace(/\/index\.html$/, '') : '';
 }
 
-export default { pagina, config: lerConfig };
+function pagina(jogoId) {
+  const base = raiz();
+  if (!base) return '';
+  return jogoId ? `${base}/?jogo=${encodeURIComponent(jogoId)}` : base;
+}
+
+export default { pagina, raiz, config: lerConfig };

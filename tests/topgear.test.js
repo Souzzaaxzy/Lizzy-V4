@@ -91,13 +91,14 @@ await test('config: a URL do jogo está definida', () => {
 });
 
 await test('a pasta docs/emugames tem o player multi-jogo', () => {
-  for (const f of ['index.html', 'style.css', 'jogos.json', 'jogos/README.md']) {
+  for (const f of ['index.html', 'style.css', 'jogos.json', 'jogos/README.md', 'capas/README.md']) {
     ok(fs.existsSync(path.join(PROJECT, 'docs/emugames', f)), `docs/emugames/${f} existe`);
   }
   const cat = JSON.parse(fs.readFileSync(path.join(PROJECT, 'docs/emugames/jogos.json'), 'utf-8'));
   ok(Array.isArray(cat.jogos) && cat.jogos.length > 0, 'catalogo tem jogos');
   for (const j of cat.jogos) {
     ok(!!j.id && !!j.nome && !!j.console && !!j.rom, `jogo ${j.id} tem id/nome/console/rom`);
+    ok(typeof j.descricao === 'string' && j.descricao.length > 10, `jogo ${j.id} tem descricao`);
     ok(fs.existsSync(path.join(PROJECT, 'docs/emugames', j.rom)), `rom ${j.rom} existe`);
   }
   ok(fs.existsSync(path.join(PROJECT, 'docs/.nojekyll')), '.nojekyll presente');
@@ -110,7 +111,9 @@ await test('index.html: player multi-jogo com os caminhos certos', () => {
   ok(html.includes('EJS_gameUrl'), 'define a ROM');
   ok(html.includes('jogos.json'), 'le o catalogo de jogos');
   ok(html.includes("get('jogo')"), 'aceita ?jogo=<id>');
-  ok(html.includes('EJS_core = jogo.console'), 'o core vem do console do jogo');
+  ok(!html.includes('id="lista"'), 'nao tem lista de jogos (comando e de um jogo so)');
+  ok(!html.includes('id="trocar"'), 'nao tem botao de trocar jogo');
+  ok(html.includes('EJS_core = j.console'), 'o core vem do console do jogo');
   ok(html.includes('EJS_Buttons'), 'controla os botoes do player');
   ok(html.includes('exitEmulation: true'), 'tem botao de sair');
   ok(html.includes('EJS_onExit'), 'detecta a saida');
@@ -142,7 +145,8 @@ await test('!topgear: envia interactiveMessage com botão webview', async () => 
   const params = JSON.parse(btn?.buttonParamsJson || '{}');
   ok(params.webview_interaction === true, 'abre em webview');
   ok(String(params.url).startsWith('https://'), `url e https (veio ${params.url})`);
-  ok(texto.includes('Experiência enviada'), 'confirma o envio');
+  ok(!texto.includes('Experiência enviada'), 'nao manda mensagem extra com link');
+  ok(!texto.includes('http'), 'nao vaza a URL em texto');
 });
 
 await test('!topgear: só em grupo e só para o dono', async () => {

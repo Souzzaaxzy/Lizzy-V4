@@ -21471,19 +21471,43 @@ case 'pin':
           if (!isGroup) return reply('◈ Este comando só funciona em grupos.');
           if (!podeDonoTotal()) return reply(OWNER_ONLY_MESSAGE);
 
-          const url = topgear.pagina();
-          if (!url) return reply('❌ URL do Top Gear não configurada.');
+          const base = topgear.raiz();
+          if (!base) return reply('❌ URL do jogo não configurada.');
 
-          const msg = await generateWAMessage(from, {
-            text: '🏎️ *TOP GEAR* — experiência experimental',
-            footer: 'Lizzy · teste',
+          const JOGO = {
+            id: 'topgear2',
+            nome: 'Top Gear 2',
+            descricao: 'Corrida clássica de SNES: 16 países, 4 carros, pit stop e trilha sonora marcante. Escolha o carro, administre o combustível e chegue em 1º.'
+          };
+          const url = topgear.pagina(JOGO.id);
+
+          const texto = `🏎️ *${JOGO.nome}*\n\n${JOGO.descricao}\n\n🎮 Toque em *JOGAR* para abrir o jogo.`;
+
+          const capaUrl = `${base}/capas/${JOGO.id}.mp4`;
+          const conteudo = {
+            video: { url: capaUrl },
+            gifPlayback: true,
+            caption: texto,
+            footer: 'Lizzy · EmuGames',
             nativeFlow: [{ text: '🎮 JOGAR', url, useWebview: true }]
-          }, { userJid: nazu.user.id, upload: nazu.waUploadToServer });
+          };
+
+          let msg;
+          try {
+            msg = await generateWAMessage(from, conteudo, { userJid: nazu.user.id, upload: nazu.waUploadToServer });
+          } catch (errCapa) {
+            console.error('[TOPGEAR] capa falhou, enviando só texto:', errCapa?.message);
+            msg = await generateWAMessage(from, {
+              text: texto,
+              footer: 'Lizzy · EmuGames',
+              nativeFlow: [{ text: '🎮 JOGAR', url, useWebview: true }]
+            }, { userJid: nazu.user.id, upload: nazu.waUploadToServer });
+          }
+
           await nazu.relayMessage(from, msg.message, { messageId: msg.key.id });
-          await reply(`✅ Experiência enviada.\n🔗 ${url}`);
         } catch (e) {
           console.error('[TOPGEAR]', e);
-          await reply('❌ Falha ao enviar o Top Gear experimental.');
+          await reply('❌ Falha ao enviar o Top Gear.');
         }
         break;
       }
