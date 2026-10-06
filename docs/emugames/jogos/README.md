@@ -95,9 +95,40 @@ cd pasta-extraida
 zip -r ../kof97.zip .
 ```
 
-> Os arquivos dentro tem nomes como `232-p1.rom`, `232-c1.rom` — isso e normal,
-> e assim mesmo que o MAME/FBNeo espera. O que importa e **estarem no zip**,
-> com os nomes exatos, e a BIOS `neogeo.zip` ao lado.
+## Romset de emulador antigo (CoolROM / NeoRAGEx)
+
+Muito romset que circula vem de emuladores antigos (CoolROM, NeoRAGEx) e **nao
+abre** no EmulatorJS. Dois sinais de que e esse formato:
+
+- os arquivos internos tem **underscore** (`mslug_c1.rom`) em vez do padrao
+  MAME/FBNeo com **ponto** (`201-c1.c1`);
+- os arquivos de **sprite** (`_c1.._c4`) tem o tamanho certo mas o **CRC nao
+  bate** com o oficial.
+
+Nesse formato os arquivos de sprite estao com as **duas metades trocadas**. A
+conversao e simples:
+
+```bash
+python3 tools/romset-neogeo.py mslug.zip --out mslug.fbneo.zip
+```
+
+O script troca as metades, renomeia para os nomes oficiais e **confere cada CRC**
+contra a tabela oficial do FBNeo. Se faltar arquivo, ele avisa e **nao grava** o
+zip (romset incompleto nao tem conserto).
+
+> **Estado atual**: `mslug.zip` foi convertido e bate **9/9**. O `kof97.zip`
+> esta **incompleto** — so tem os 3 arquivos de som (3/13). Precisa de um romset
+> completo para funcionar.
+
+## O que o MAME/FBNeo espera
+
+| Jogo | Nomes internos | Tamanho |
+|---|---|---|
+| Metal Slug | `201-p1.p1`, `201-c1.c1` … `201-c4.c4`, `201-m1.m1`, `201-s1.s1`, `201-v1.v1`, `201-v2.v2` | ~14 MB |
+| KOF 97 | `232-p1.p1`, `232-p2.sp2`, `232-c1.c1` … `232-c6.c6`, `232-m1.m1`, `232-s1.s1`, `232-v1.v1` … `232-v3.v3` | ~27 MB |
+
+O que identifica o romset e o **nome interno com ponto** (`.p1`, `.c1`, `.v1`).
+Underscore = formato antigo, precisa converter.
 
 ## Consoles suportados (EmulatorJS)
 

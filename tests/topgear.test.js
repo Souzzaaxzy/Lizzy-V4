@@ -11,6 +11,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import zlib from 'node:zlib';
 import { fileURLToPath } from 'url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -186,6 +187,105 @@ await test('nenhuma ROM comercial no repositório', () => {
       ok(!/\.(sfc|smc|fig|swc|rom|bin|zip)$/i.test(f), `${dir}/${f} não é ROM`);
     }
   }
+});
+
+// Leitor de ZIP minimo (sem dependencia): deflate via zlib + CRC32 do node.
+function lerZip(caminho) {
+  const b = fs.readFileSync(caminho);
+  let eocd = -1;
+  for (let i = b.length - 22; i >= 0 && i >= b.length - 66000; i--) {
+    if (b.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) return [];
+  const total = b.readUInt16LE(eocd + 10);
+  let off = b.readUInt32LE(eocd + 16);
+  const entradas = [];
+  for (let i = 0; i < total; i++) {
+    if (b.readUInt32LE(off) !== 0x02014b50) break;
+    const metodo = b.readUInt16LE(off + 10);
+    const compSize = b.readUInt32LE(off + 20);
+    const nomeLen = b.readUInt16LE(off + 28);
+    const extraLen = b.readUInt16LE(off + 30);
+    const commentLen = b.readUInt16LE(off + 32);
+    const localOff = b.readUInt32LE(off + 42);
+    const nome = b.toString('utf8', off + 46, off + 46 + nomeLen);
+    const lNomeLen = b.readUInt16LE(localOff + 26);
+    const lExtraLen = b.readUInt16LE(localOff + 28);
+    const inicio = localOff + 30 + lNomeLen + lExtraLen;
+    const comp = b.subarray(inicio, inicio + compSize);
+    entradas.push({ nome, dados: metodo === 0 ? Buffer.from(comp) : zlib.inflateRawSync(comp) });
+    off += 46 + nomeLen + extraLen + commentLen;
+  }
+  return entradas;
+}
+
+await test('romsets de arcade batem com os CRCs oficiais (MAME/FBNeo)', () => {
+  const crc = (buf) => (zlib.crc32(buf) >>> 0).toString(16).padStart(8, '0');
+
+  // CRC32 oficiais do FBNeo (d_neogeo.cpp) — nome interno -> crc
+  const OFICIAIS = {
+    mslug: {
+      '201-p1.p1': '08d8daa5', '201-s1.s1': '2f55958d', '201-c1.c1': '72813676',
+      '201-c2.c2': '96f62574', '201-c3.c3': '5121456a', '201-c4.c4': 'f4ad59a3',
+      '201-m1.m1': 'c28b3253', '201-v1.v1': '23d22ed1', '201-v2.v2': '472cf9db'
+    },
+    kof97: {
+      '232-p1.p1': '7db81ad9', '232-p2.sp2': '158b23f6', '232-s1.s1': '8514ecf5',
+      '232-c1.c1': '5f8bf0a1', '232-c2.c2': 'e4d45c81', '232-c3.c3': '581d6618',
+      '232-c4.c4': '49bb1e68', '232-c5.c5': '34fc4e51', '232-c6.c6': '4ff4d47b',
+      '232-m1.m1': '45348747', '232-v1.v1': '22a2b5b5', '232-v2.v2': '2304e744',
+      '232-v3.v3': '759eb954'
+    }
+  };
+
+  const entradas = (nomeZip) => {
+    const m = new Map();
+    for (const { nome, dados } of lerZip(path.join(PROJECT, 'docs/emugames/jogos/arcade', nomeZip))) {
+      if (nome.endsWith('.html')) continue;
+      m.set(nome, dados);
+    }
+    return m;
+  };
+
+  // Metal Slug: o romset do CoolROM (`mslug_c1.rom` + metades trocadas) foi
+  // CONVERTIDO para o formato MAME/FBNeo (`201-c1.c1` + CRC oficial).
+  // Exige o nome interno oficial E o CRC oficial — assim o zip antigo reprova.
+  const mslug = entradas('mslug.zip');
+  for (const [nome, esperado] of Object.entries(OFICIAIS.mslug)) {
+    ok(mslug.has(nome), `mslug contem o arquivo ${nome}`);
+    if (mslug.has(nome)) ok(crc(mslug.get(nome)) === esperado, `${nome} com CRC oficial (${esperado})`);
+  }
+  ok(mslug.size === 9, `mslug tem 9 arquivos (veio ${mslug.size})`);
+
+  // KOF 97: incompleto — so os 3 de som (arquivos `kof97_v*.rom`, ainda com
+  // nome antigo). Contados por CRC: nao da para converter o que nao existe.
+  // Se um romset completo entrar, este numero sobe.
+  const kofCrcs = new Set(Object.values(OFICIAIS.kof97));
+  const kofOk = [...entradas('kof97.zip').values()].filter((d) => kofCrcs.has(crc(d)));
+  ok(kofOk.length === 3, `kof97 segue incompleto (3/13 oficiais; veio ${kofOk.length})`);
+});
+
+await test('as capas dos jogos existem (senao o card cai para texto)', () => {
+  const cat = JSON.parse(fs.readFileSync(path.join(PROJECT, 'docs/emugames/jogos.json'), 'utf-8'));
+  for (const j of cat.jogos) {
+    const capa = path.join(PROJECT, 'docs/emugames/capas', `${j.id}.png`);
+    ok(fs.existsSync(capa), `capa ${j.id}.png existe`);
+    if (fs.existsSync(capa)) {
+      const b = fs.readFileSync(capa);
+      ok(b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47, `${j.id}.png e um PNG`);
+    }
+  }
+  const card = fs.readFileSync(path.join(PROJECT, 'dados/src/topgear/index.js'), 'utf-8');
+  ok(card.includes('capas/'), 'o card procura a capa em capas/');
+  ok(card.includes('image: { url: capaUrl }'), 'o card usa a capa como imagem');
+});
+
+await test('o conversor de romset Neo Geo esta no repositorio', () => {
+  const t = path.join(PROJECT, 'tools/romset-neogeo.py');
+  ok(fs.existsSync(t), 'tools/romset-neogeo.py existe');
+  const src = fs.readFileSync(t, 'utf-8');
+  ok(src.includes('trocar_metades'), 'implementa o swap de metades');
+  ok(src.includes('72813676'), 'traz a tabela de CRCs oficiais (mslug)');
 });
 
 const totalOk = RESULTS.reduce((a, r) => a + r.passed, 0);

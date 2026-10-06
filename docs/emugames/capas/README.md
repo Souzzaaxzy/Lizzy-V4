@@ -1,29 +1,33 @@
 # capas/
 
-Coloque aqui a **capa de cada jogo** — uma imagem ou um vídeo curto.
+Capa de cada jogo — a imagem que aparece no topo do card do bot.
 
-O nome do arquivo tem que ser o **`id` do jogo** em `jogos.json`.
+O nome do arquivo tem que ser o **`id` do jogo** em `jogos.json`, com extensao
+**`.png`** (e o que o card procura):
 
 ```
 capas/
-├── topgear2.mp4     <- video (animado, estilo GIF)
-├── topgear2.jpg     <- ou imagem
-├── meujogo.png
-└── outro.gif
+├── topgear2.png
+├── metalslug.png
+└── kof97.png
 ```
 
-## Extensoes aceitas
+## Gerar / trocar
 
-`mp4` `webm` `gif` `jpg` `jpeg` `png` `webp`
+As capas do repositorio foram geradas por:
 
-Se for video, o bot manda o video no topo da mensagem (com `gifPlayback`,
-igual GIF animado). Se for imagem, manda a imagem.
+```bash
+node tools/gerar-capas.mjs
+```
+
+Ele le o `jogos.json` e escreve `capas/<id>.png` (1280x720). Para usar uma arte
+propria, e so **substituir o PNG** mantendo o nome.
 
 ## Sem capa?
 
-Se nao existir arquivo com o id do jogo, a mensagem sai **so com o texto e o
-botao** — nao quebra nada.
+Se o PNG nao existir, a mensagem sai **so com o texto e o botao** — nao quebra
+nada.
 
 ## Tamanho
 
-Prefira arquivos pequenos (idealmente < 2 MB) para carregar rapido no celular.
+Prefira arquivos pequenos (idealmente < 500 KB) para carregar rapido no celular.

@@ -34,14 +34,54 @@ do tema. Consoles: `snes` `nes` `gba` `gb` `genesis` `n64` `psx` `arcade`...
 - Mantidos: **PARAR**, inatividade (3 min), sair/voltar reinicia sozinho,
   controles de toque **abaixo** da tela (medido em viewport Android).
 
-### Testes — `tests/topgear.test.js` (**9 testes / 73 asserções**)
+### Testes — `tests/topgear.test.js` (**12 testes / 126 asserções**)
 Inclui a validação de que a URL aponta para `/emugames/`, que o `jogos.json`
-tem entradas completas e que cada `rom` existe de fato.
+tem entradas completas e que cada `rom` existe de fato, que os romsets de arcade
+batem com os CRCs oficiais (MAME/FBNeo) e que as capas dos jogos existem.
 
 ### Hospedagem
 GitHub Pages (repo público) ou **Cloudflare Pages** (funciona com repo
 privado). No Cloudflare: *Framework* None, *Build command* **vazio**,
 *Build output directory* `docs/emugames`.
+
+### Capas dos jogos (`docs/emugames/capas/<id>.png`)
+Geradas por **`tools/gerar-capas.mjs`** (sharp, já é dep) a partir do
+`jogos.json` — 1280×720, um PNG por jogo. O `enviarCard`
+(`dados/src/topgear/index.js`) usa **`image: { url: capaUrl }`**; se a capa
+faltar, cai para texto+botão (não quebra).
+
+**Bug corrigido**: o card tentava `video: { url: <id>.mp4 }` — mas **não existia
+nenhum mp4** em `capas/`, então todo card caía para texto puro (o log dizia
+`capa falhou … Failed to fetch stream`). Agora as capas existem e são imagem.
+
+### ROMSET de arcade — a conversão NeoRAGEx (set/2026) ✅
+**Conclusão anterior estava ERRADA.** O agente anterior afirmou que os romsets do
+CoolROM *"não são convertíveis"* e que *"não é nenhuma conversão padrão"*. **É
+conversão padrão**, e foi medida:
+
+- Os arquivos de **sprite** (`mslug_c1..c4.rom`) têm o **tamanho certo** (4 MB) e
+  só o **CRC diverge** → não é conteúdo faltando, é transformação reversível.
+- A transformação é o **swap das duas metades** (`data[metade:] + data[:metade]`)
+  — a conversão clássica do NeoRAGEx. Medido: os 4 batem com os CRCs oficiais
+  do FBNeo depois do swap. Os demais (`p1/s1/m1/v1/v2`) já estão corretos.
+
+**Ferramenta**: `tools/romset-neogeo.py` — converte (`trocar_metades`), renomeia
+para os nomes oficiais e **valida cada CRC** contra a tabela do FBNeo
+(`d_neogeo.cpp`). Romset incompleto → avisa e **não grava** (exit 1).
+
+**Estado medido**:
+| romset | antes | agora |
+|---|---|---|
+| `mslug.zip` | 5/9 válidos (nomes `_c*.rom`) | **9/9** (nomes `201-*.p1/c1…`, CRC oficial) |
+| `kof97.zip` | 3/13 | **3/13** — só os arquivos de **som**; faltam 10 (sprites/programa). Não tem conserto: o dado não existe. |
+| `neogeo.zip` | BIOS completa (essenciais OK) | inalterada |
+
+**Testes**: `tests/topgear.test.js` **12 testes / 126 asserções**. As novas
+seções validam: romset mslug com **nome oficial + CRC oficial** (o zip antigo
+reprova — medido: **10 asserções falham**), kof97 ainda 3/13, as 3 capas são PNG
+de verdade, e a ferramenta de conversão existe. O teste traz um **leitor de ZIP
+mínimo** (EOCD + `zlib.inflateRawSync` + `zlib.crc32`), sem dependência nova.
+
 
 ## 🏎️ `!topgear` — EXPERIMENTAL: Rich/Web (webview) + WASM (out/2026)
 Prova de conceito **isolada** (não está em menu nenhum, por pedido). Objetivo:
