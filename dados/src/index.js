@@ -21483,11 +21483,12 @@ case 'pin':
           if (!alvo) return reply('❌ Responda a uma mensagem (imagem, vídeo, áudio ou texto) para criar um repost.');
 
           const r = await reposts.criar({
+            dono: sender,
             conteudo: alvo,
             baixar: (media, tipo) => getFileBuffer(media, tipo)
           });
           if (!r.ok) return reply(`❌ ${r.msg}`);
-          await reply(`✅ Repost *#${r.repost.numero}* salvo. Ele expira em 24 horas.\n\nUse *${groupPrefix}reposts* para ver todos.`);
+          await reply(`✅ Repost *#${r.repost.numero}* salvo (só seu). Ele expira em 24 horas.\n\nUse *${groupPrefix}reposts* para ver os seus.`);
         } catch (e) {
           console.error('[REPOST] erro:', e);
           await reply('❌ Falha ao criar o repost.');
@@ -21497,11 +21498,11 @@ case 'pin':
       case 'reposts': {
         try {
           reposts.limparExpirados();
-          const cards = (await reposts.montarCards()).slice(0, reposts.MAX_CARDS);
-          const audios = reposts.audiosAtivos();
+          const cards = (await reposts.montarCards(sender)).slice(0, reposts.MAX_CARDS);
+          const audios = reposts.audiosAtivos(sender);
 
           if (!cards.length && !audios.length) {
-            return reply('📭 Nenhum repost ativo no momento.');
+            return reply('📭 Você ainda não tem reposts ativos.');
           }
 
           if (cards.length) {
@@ -21543,8 +21544,8 @@ case 'pin':
           if (!Number.isInteger(numero) || numero <= 0) {
             return reply(`📄 Use: *${groupPrefix}delrepost <número>*\n\nEx.: *${groupPrefix}delrepost 3*`);
           }
-          const r = reposts.remover(numero);
-          if (!r.ok) return reply(`❌ Repost *#${numero}* não encontrado.`);
+          const r = reposts.remover(sender, numero);
+          if (!r.ok) return reply(`❌ Você não tem um repost *#${numero}*.`);
           await reply(`🗑️ Repost *#${numero}* removido.`);
         } catch (e) {
           console.error('[DELREPOST] erro:', e);

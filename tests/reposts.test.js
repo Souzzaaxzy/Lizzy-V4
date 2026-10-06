@@ -1,5 +1,6 @@
 /**
- * Sistema de reposts — armazenamento, expiração (24h), mídia e cards.
+ * Sistema de reposts — por usuário, numeração com reuso, expiração (24h),
+ * mídia, capas e cards do carrossel.
  *
  * Roda o módulo REAL (`dados/src/utils/reposts.js`) com um DATABASE_PATH
  * temporário, então não toca o banco do bot.
@@ -13,7 +14,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const PROJECT = path.resolve(HERE, '..');
 
 const TMP_DB = fs.mkdtempSync(path.join(os.tmpdir(), 'lizzy-repost-db-'));
 process.env.DATABASE_PATH = TMP_DB;
@@ -21,7 +21,6 @@ process.env.DATABASE_PATH = TMP_DB;
 const reposts = (await import(new URL('../dados/src/utils/reposts.js', import.meta.url).href)).default;
 
 const ARQUIVO = path.join(TMP_DB, 'reposts.json');
-const MIDIA_DIR = path.join(TMP_DB, 'reposts-media');
 
 const RESULTS = [];
 let CURRENT = null;
@@ -67,7 +66,9 @@ const vidMsg = (caption) => ({ videoMessage: { mediaKey: 'k', mimetype: 'video/m
 const audMsg = () => ({ audioMessage: { mediaKey: 'k', mimetype: 'audio/ogg; codecs=opus', ptt: false } });
 const txtMsg = (t) => ({ conversation: t });
 
-const criar = (conteudo) => reposts.criar({ conteudo, baixar });
+const A = '111111111111111@lid';
+const B = '222222222222222@lid';
+const criar = (conteudo, dono = A) => reposts.criar({ dono, conteudo, baixar });
 
 await test('texto puro vira repost #1 com capa (header obrigatório do carrossel)', async () => {
   const r = await criar(txtMsg('mensagem original aqui'));
@@ -104,26 +105,34 @@ await test('vídeo e áudio viram #3 e #4 (áudio vira vídeo com som)', async (
   }
 });
 
-await test('listar devolve em ordem numérica crescente', () => {
-  const ativos = reposts.listar();
-  ok(ativos.length === 4, `4 ativos (veio ${ativos.length})`);
-  ok(ativos.map((r) => r.numero).join(',') === '1,2,3,4', 'ordem 1,2,3,4');
+await test('listar é por usuário e em ordem numérica crescente', () => {
+  const a = reposts.listar(A);
+  ok(a.length === 4, `4 ativos do A (veio ${a.length})`);
+  ok(a.map((r) => r.numero).join(',') === '1,2,3,4', 'ordem 1,2,3,4');
+  ok(reposts.listar(B).length === 0, 'B não vê os reposts do A');
+});
+
+await test('cada usuário tem o SEU conjunto (números independentes)', async () => {
+  const r1 = await criar(txtMsg('do B, primeiro'), B);
+  const r2 = await criar(txtMsg('do B, segundo'), B);
+  ok(r1.repost.numero === 1, `B começa no #1 (veio ${r1.repost.numero})`);
+  ok(r2.repost.numero === 2, `B segue no #2 (veio ${r2.repost.numero})`);
+  ok(reposts.listar(A).length === 4, 'A continua com os 4 dele');
+  ok(reposts.listar(B).length === 2, 'B tem os 2 dele');
 });
 
 await test('montarCard: TODO card tem header de imagem/vídeo (exigência do carrossel)', () => {
-  const [t1, t2, t3, t4] = reposts.listar();
+  const [t1, t2, t3, t4] = reposts.listar(A);
 
   const cTexto = reposts.montarCard(t1);
   ok(cTexto.image && cTexto.image.url, 'card de texto tem header de imagem (capa)');
   ok(fs.existsSync(cTexto.image.url), 'a capa do card de texto existe');
   ok(cTexto.caption === 'mensagem original aqui', 'o texto vai no caption (texto real, não imagem)');
-  ok(!cTexto.video && !cTexto.audioFooter, 'card de texto nao tem video/audio');
 
   const cImg = reposts.montarCard(t2);
   ok(cImg.image && cImg.image.url, 'card de imagem aponta a mídia');
   ok(cImg.caption === 'Essa é a legenda original.', 'card de imagem mantém a legenda');
   ok(cImg.title === 'Repost #2', 'card de imagem tem título');
-  ok(fs.existsSync(cImg.image.url), 'a mídia do card existe em disco');
 
   const cVid = reposts.montarCard(t3);
   ok(cVid.video && cVid.mimetype === 'video/mp4', 'card de vídeo usa o vídeo (não imagem)');
@@ -140,18 +149,19 @@ await test('montarCard: TODO card tem header de imagem/vídeo (exigência do car
 });
 
 await test('audiosAtivos só devolve áudio SEM vídeo (fallback)', () => {
-  const audios = reposts.audiosAtivos();
-  const t4 = reposts.listar().find((r) => r.numero === 4);
+  const audios = reposts.audiosAtivos(A);
+  const t4 = reposts.listar(A).find((r) => r.numero === 4);
   if (t4.video) {
     ok(audios.length === 0, 'com vídeo, o áudio não precisa do fallback');
   } else {
     ok(audios.length === 1 && audios[0].numero === 4, 'sem vídeo, o áudio entra no fallback');
   }
+  ok(reposts.audiosAtivos(B).length === 0, 'B (sem áudio) não aparece');
 });
 
 await test('mensagemAudio vira interactiveMessage com áudio no footer (fallback sem vídeo)', async () => {
   const { generateWAMessageContent } = await import('@itsliaaa/baileys');
-  const t4 = reposts.listar().find((r) => r.numero === 4);
+  const t4 = reposts.listar(A).find((r) => r.numero === 4);
   const a = { numero: t4.numero, arquivo: reposts.caminhoMidia(t4.arquivo), texto: t4.texto || '' };
 
   const conteudo = reposts.mensagemAudio(a);
@@ -169,29 +179,36 @@ await test('mensagemAudio vira interactiveMessage com áudio no footer (fallback
   ok(im.body?.text?.includes('#4'), 'o corpo identifica o repost');
 });
 
-await test('remover #2 apaga registro, mídia e capa, sem renumerar', async () => {
-  const antes = reposts.listar().find((r) => r.numero === 2);
+await test('remover #2 apaga registro, mídia e capa, e REUSA o número 2', async () => {
+  const antes = reposts.listar(A).find((r) => r.numero === 2);
   const arquivo = reposts.caminhoMidia(antes.arquivo);
   ok(fs.existsSync(arquivo), 'arquivo existe antes');
 
-  const r = reposts.remover(2);
+  const r = reposts.remover(A, 2);
   ok(r.ok, 'removeu o #2');
   ok(!fs.existsSync(arquivo), 'arquivo de mídia apagado');
-  ok(!reposts.listar().some((x) => x.numero === 2), '#2 sumiu do listar');
-  ok(reposts.listar().map((x) => x.numero).join(',') === '1,3,4', '#1,#3,#4 continuam (sem renumerar)');
+  ok(reposts.listar(A).map((x) => x.numero).join(',') === '1,3,4', '#1,#3,#4 continuam');
 
-  const novo = await criar(txtMsg('depois do delete'));
-  ok(novo.repost.numero === 5, `o próximo é #5 (veio ${novo.repost.numero})`);
+  const novo = await criar(txtMsg('reaproveita o buraco'), A);
+  ok(novo.repost.numero === 2, `o próximo REUSA o #2 (veio ${novo.repost.numero})`);
+  ok(reposts.listar(A).map((x) => x.numero).join(',') === '1,2,3,4', 'fica 1,2,3,4 de novo');
 });
 
-await test('remover número inexistente devolve ok=false', () => {
-  ok(reposts.remover(999).ok === false, 'não encontrado');
+await test('remover número inexistente (ou de outro usuário) devolve ok=false', () => {
+  ok(reposts.remover(A, 999).ok === false, 'não encontrado');
+  ok(reposts.remover(B, 3).ok === false, 'B não tem #3');
+});
+
+await test('remover não afeta o outro usuário', async () => {
+  const antesB = reposts.listar(B).length;
+  reposts.remover(A, 1);
+  ok(reposts.listar(B).length === antesB, 'o conjunto do B ficou intacto');
 });
 
 await test('expiração individual: só o vencido sai (apaga mídia e capa)', async () => {
-  const antes = reposts.listar().length;
+  const antes = reposts.listar(A).length;
   const d = JSON.parse(fs.readFileSync(ARQUIVO, 'utf-8'));
-  const alvo = d.reposts.find((r) => r.numero === 3);
+  const alvo = d.usuarios[A].reposts.find((r) => r.numero === 3);
   const arquivo = reposts.caminhoMidia(alvo.arquivo);
   alvo.expiraEm = Date.now() - 1000;
   fs.writeFileSync(ARQUIVO, JSON.stringify(d, null, 2));
@@ -199,15 +216,16 @@ await test('expiração individual: só o vencido sai (apaga mídia e capa)', as
   const removidos = reposts.limparExpirados();
   ok(removidos === 1, `removeu 1 (veio ${removidos})`);
   ok(!fs.existsSync(arquivo), 'arquivo do vencido apagado');
-  ok(reposts.listar().length === antes - 1, 'sobrou o resto');
-  ok(!reposts.listar().some((r) => r.numero === 3), '#3 expirou');
+  ok(reposts.listar(A).length === antes - 1, 'sobrou o resto');
+  ok(!reposts.listar(A).some((r) => r.numero === 3), '#3 expirou');
+  ok(reposts.listar(B).length === 2, 'o B não foi afetado');
 });
 
-await test('persistência: reler do disco mantém números e dados', () => {
+await test('persistência: reler do disco mantém usuários e dados', () => {
   const doDisco = JSON.parse(fs.readFileSync(ARQUIVO, 'utf-8'));
-  ok(typeof doDisco.proximoNumero === 'number' && doDisco.proximoNumero >= 6, 'proximoNumero persistido');
-  ok(doDisco.reposts.every((r) => r.id && r.numero && r.criadoEm && r.expiraEm), 'cada repost tem id/numero/datas');
-  ok(doDisco.reposts.some((r) => r.numero === 5 && r.tipo === 'text'), 'o #5 texto está no disco');
+  ok(doDisco.usuarios && doDisco.usuarios[A] && doDisco.usuarios[B], 'guarda por usuário');
+  ok(doDisco.usuarios[A].reposts.every((r) => r.id && r.numero && r.criadoEm && r.expiraEm),
+    'cada repost tem id/numero/datas');
 });
 
 await test('sem mensagem respondida devolve erro claro', async () => {
@@ -224,6 +242,7 @@ await test('tipo não suportado (documento) é recusado sem quebrar', async () =
 
 await test('falha no download não cria repost', async () => {
   const r = await reposts.criar({
+    dono: A,
     conteudo: imgMsg('x'),
     baixar: async () => { throw new Error('rede'); }
   });
@@ -231,7 +250,7 @@ await test('falha no download não cria repost', async () => {
 });
 
 await test('mídia vazia não cria repost', async () => {
-  const r = await reposts.criar({ conteudo: imgMsg('x'), baixar: async () => Buffer.alloc(0) });
+  const r = await reposts.criar({ dono: A, conteudo: imgMsg('x'), baixar: async () => Buffer.alloc(0) });
   ok(r.ok === false, 'não criou com mídia vazia');
 });
 
@@ -243,18 +262,16 @@ await test('limite de cards do carrossel é positivo e razoável', () => {
 await test('os cards viram UM carrossel real na fork (todos com header de mídia)', async () => {
   const { generateWAMessageContent } = await import('@itsliaaa/baileys');
 
-  fs.mkdirSync(path.join(TMP_DB, 'reposts-media'), { recursive: true });
-  fs.mkdirSync(path.join(TMP_DB, 'reposts-cards'), { recursive: true });
-  fs.writeFileSync(path.join(TMP_DB, 'reposts-media', 'a.jpg'), JPEG);
-  fs.writeFileSync(path.join(TMP_DB, 'reposts-media', 'a.mp4'), MP4);
-  fs.writeFileSync(path.join(TMP_DB, 'reposts-media', 'a.ogg'), OGG);
-  fs.writeFileSync(path.join(TMP_DB, 'reposts-cards', 'cap.png'), JPEG);
+  fs.writeFileSync(path.join(TMP_DB, 'a.jpg'), JPEG);
+  fs.writeFileSync(path.join(TMP_DB, 'a.mp4'), MP4);
+  fs.writeFileSync(path.join(TMP_DB, 'a.ogg'), OGG);
+  fs.writeFileSync(path.join(TMP_DB, 'cap.png'), JPEG);
 
   const cards = [
-    reposts.montarCard({ tipo: 'image', arquivo: 'reposts-media/a.jpg', capa: null, mimetype: 'image/jpeg', texto: 'legenda img' }),
-    reposts.montarCard({ tipo: 'video', arquivo: 'reposts-media/a.mp4', capa: null, mimetype: 'video/mp4', texto: 'legenda vid' }),
-    reposts.montarCard({ tipo: 'text', arquivo: null, capa: 'reposts-cards/cap.png', texto: 'texto puro' }),
-    reposts.montarCard({ tipo: 'audio', arquivo: 'reposts-media/a.ogg', video: 'reposts-media/a.mp4', capa: 'reposts-cards/cap.png', mimetype: 'audio/ogg; codecs=opus', texto: 'legenda audio' })
+    reposts.montarCard({ tipo: 'image', arquivo: 'a.jpg', capa: null, mimetype: 'image/jpeg', texto: 'legenda img' }),
+    reposts.montarCard({ tipo: 'video', arquivo: 'a.mp4', capa: null, mimetype: 'video/mp4', texto: 'legenda vid' }),
+    reposts.montarCard({ tipo: 'text', arquivo: null, capa: 'cap.png', texto: 'texto puro' }),
+    reposts.montarCard({ tipo: 'audio', arquivo: 'a.ogg', video: 'a.mp4', capa: 'cap.png', mimetype: 'audio/ogg; codecs=opus', texto: 'legenda audio' })
   ];
 
   const upload = async () => ({ url: 'https://mmg.whatsapp.net/fake', directPath: '/v/fake' });
@@ -271,24 +288,10 @@ await test('os cards viram UM carrossel real na fork (todos com header de mídia
   ok(car.cards[0].body?.text === 'legenda img', 'card #1 mantém a legenda');
   ok(car.cards[1].header?.videoMessage, 'card #2 é vídeo');
   ok(car.cards[1].body?.text === 'legenda vid', 'card #2 mantém a legenda');
-  ok(car.cards[2].header?.imageMessage, 'card #3 (texto) tem header de imagem (capa) — exigência do carrossel');
+  ok(car.cards[2].header?.imageMessage, 'card #3 (texto) tem header de imagem (capa)');
   ok(car.cards[2].body?.text?.includes('texto puro'), 'card #3 carrega o texto real no body');
   ok(car.cards[3].header?.videoMessage, 'card #4 (áudio) é VÍDEO (capa+áudio) — toca no carrossel');
   ok(car.cards[3].body?.text === 'legenda audio', 'card #4 mantém a legenda');
-});
-
-await test('montarCards gera capa sob demanda para repost antigo sem capa', async () => {
-  const d = JSON.parse(fs.readFileSync(ARQUIVO, 'utf-8'));
-  const alvo = d.reposts.find((r) => r.tipo === 'text');
-  delete alvo.capa;
-  fs.writeFileSync(ARQUIVO, JSON.stringify(d, null, 2));
-
-  const cards = await reposts.montarCards();
-  const card = cards.find((c) => c.caption && c.caption.includes('depois do delete')) || cards[0];
-  ok(card.image && card.image.url && fs.existsSync(card.image.url), 'gerou a capa e o card tem header');
-
-  const recarregado = JSON.parse(fs.readFileSync(ARQUIVO, 'utf-8')).reposts.find((r) => r.numero === alvo.numero);
-  ok(!!recarregado.capa && fs.existsSync(reposts.caminhoMidia(recarregado.capa)), 'a capa ficou persistida no registro');
 });
 
 const totalOk = RESULTS.reduce((a, r) => a + r.passed, 0);

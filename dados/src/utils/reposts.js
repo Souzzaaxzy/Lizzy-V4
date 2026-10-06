@@ -17,12 +17,14 @@ const MIME = { image: 'image/jpeg', video: 'video/mp4', audio: 'audio/ogg; codec
 
 const LABEL = { image: 'imagem', video: 'vídeo', audio: 'áudio', ptv: 'vídeo', text: 'texto' };
 
-const PALETA = {
-  image: ['#1d4ed8', '#0b1b46'],
-  video: ['#b45309', '#2a1608'],
-  audio: ['#7c3aed', '#221048'],
-  text: ['#0f766e', '#062a26']
+// Estilo de cada tipo de card: gradiente, acento, emoji e rótulo.
+const ESTILO = {
+  image: { c1: '#312e81', c2: '#0b1026', acento: '#818cf8', emoji: '🖼️', rotulo: 'IMAGEM' },
+  video: { c1: '#7c2d12', c2: '#180a06', acento: '#fb923c', emoji: '🎬', rotulo: 'VÍDEO' },
+  audio: { c1: '#4c1d95', c2: '#150826', acento: '#c084fc', emoji: '🎵', rotulo: 'ÁUDIO' },
+  text: { c1: '#134e4a', c2: '#04191a', acento: '#2dd4bf', emoji: '📝', rotulo: 'TEXTO' }
 };
+const estiloDe = (tipo) => ESTILO[tipo] || ESTILO.text;
 
 // O body de um card de carrossel tem limite curto (WhatsApp: ~160 chars e no
 // máximo 2 quebras). O texto COMPLETO fica no registro; aqui é só o preview.
@@ -35,35 +37,64 @@ const corpoCard = (texto) => {
   return s || undefined;
 };
 
-const svgCapa = (tipo, titulo, corpo) => {
-  const [c1, c2] = PALETA[tipo] || PALETA.text;
-  const linha1 = String(titulo || '').slice(0, 28);
-  const linha2 = String(corpo || '').replace(/\s+/g, ' ').slice(0, 46);
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
-  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-    <stop offset="0%" stop-color="${c1}"/><stop offset="100%" stop-color="${c2}"/>
-  </linearGradient></defs>
-  <rect width="640" height="360" fill="url(#bg)"/>
-  <text x="320" y="150" text-anchor="middle" fill="#ffffff" font-family="DejaVu Sans, Arial, sans-serif" font-size="46" font-weight="bold">${escaparXml(linha1)}</text>
-  <text x="320" y="215" text-anchor="middle" fill="#ffffff" fill-opacity="0.85" font-family="DejaVu Sans, Arial, sans-serif" font-size="24">${escaparXml(linha2)}</text>
-</svg>`;
-};
-
 function escaparXml(s) {
   return String(s || '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 }
 
-const vazio = () => ({ proximoNumero: 1, reposts: [] });
+// Quebra o texto em linhas de no máximo `max` caracteres (sem cortar palavras).
+function quebrar(texto, max, maxLinhas) {
+  const palavras = String(texto || '').replace(/\s+/g, ' ').trim().split(' ');
+  const linhas = [];
+  let atual = '';
+  for (const p of palavras) {
+    if (!atual) { atual = p; continue; }
+    if ((atual + ' ' + p).length <= max) atual += ' ' + p;
+    else { linhas.push(atual); atual = p; if (linhas.length === maxLinhas) break; }
+  }
+  if (atual && linhas.length < maxLinhas) linhas.push(atual);
+  return linhas.slice(0, maxLinhas);
+}
+
+const svgCapa = (tipo, numero, texto) => {
+  const { c1, c2, acento, emoji, rotulo } = estiloDe(tipo);
+  const linhas = quebrar(texto, 26, 2);
+  const t1 = linhas[0] || '';
+  const t2 = linhas[1] || '';
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="${c1}"/><stop offset="100%" stop-color="${c2}"/>
+    </linearGradient>
+    <linearGradient id="brilho" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="${acento}" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="${acento}" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="360" fill="url(#bg)"/>
+  <circle cx="560" cy="40" r="180" fill="url(#brilho)"/>
+  <circle cx="70" cy="330" r="140" fill="url(#brilho)"/>
+  <rect x="26" y="26" width="588" height="308" rx="22" fill="none" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2"/>
+  <rect x="26" y="26" width="588" height="6" rx="3" fill="${acento}"/>
+  <text x="56" y="120" font-family="DejaVu Sans, Arial, sans-serif" font-size="30" letter-spacing="6" fill="${acento}" fill-opacity="0.95">REPOST</text>
+  <text x="56" y="196" font-family="DejaVu Sans, Arial, sans-serif" font-size="88" font-weight="bold" fill="#ffffff">#${escaparXml(numero)}</text>
+  <text x="584" y="150" text-anchor="end" font-family="DejaVu Sans, Arial, sans-serif" font-size="64">${emoji}</text>
+  <text x="56" y="248" font-family="DejaVu Sans, Arial, sans-serif" font-size="26" font-weight="bold" fill="#ffffff" fill-opacity="0.95">${escaparXml(t1)}</text>
+  <text x="56" y="288" font-family="DejaVu Sans, Arial, sans-serif" font-size="24" fill="#ffffff" fill-opacity="0.72">${escaparXml(t2)}</text>
+  <text x="584" y="308" text-anchor="end" font-family="DejaVu Sans, Arial, sans-serif" font-size="16" letter-spacing="4" fill="#ffffff" fill-opacity="0.55">${rotulo}</text>
+</svg>`;
+};
+
+// Chave do dono do repost (cada usuário tem o seu conjunto).
+const chaveDono = (dono) => (dono && String(dono).trim()) || 'global';
+
+const vazio = () => ({ usuarios: {} });
 
 function ler() {
   try {
     const d = JSON.parse(fs.readFileSync(ARQUIVO, 'utf-8'));
-    if (!d || !Array.isArray(d.reposts)) return vazio();
-    if (typeof d.proximoNumero !== 'number') {
-      d.proximoNumero = d.reposts.reduce((m, r) => Math.max(m, r.numero || 0), 0) + 1;
-    }
+    if (!d || typeof d !== 'object' || !d.usuarios || typeof d.usuarios !== 'object') return vazio();
     return d;
   } catch {
     return vazio();
@@ -77,14 +108,28 @@ function gravar(d) {
   fs.renameSync(tmp, ARQUIVO);
 }
 
+function balde(d, dono, criar = false) {
+  const k = chaveDono(dono);
+  if (!d.usuarios[k] && criar) d.usuarios[k] = { reposts: [] };
+  return d.usuarios[k] || { reposts: [] };
+}
+
+// Menor número livre (reaproveita buracos deixados por exclusões/expiração).
+function proximoLivre(bal) {
+  const usados = new Set((bal.reposts || []).map((r) => r.numero));
+  let n = 1;
+  while (usados.has(n)) n += 1;
+  return n;
+}
+
 export function caminhoMidia(arquivo) {
   return arquivo ? path.join(DATABASE_DIR, arquivo) : null;
 }
 
 async function gerarCapa(numero, tipo, texto) {
-  const nome = `card-${numero}-${Date.now()}.png`;
+  const nome = `card-${numero}-${Date.now()}-${crypto.randomBytes(2).toString('hex')}.png`;
   fs.mkdirSync(CAPA_DIR, { recursive: true });
-  await sharp(Buffer.from(svgCapa(tipo, `Repost #${numero}`, texto))).png().toFile(path.join(CAPA_DIR, nome));
+  await sharp(Buffer.from(svgCapa(tipo, numero, texto))).png().toFile(path.join(CAPA_DIR, nome));
   return path.join('reposts-cards', nome);
 }
 
@@ -167,37 +212,43 @@ function apagarRepost(r) {
   apagarArquivo(r.video);
 }
 
-function salvarRegistro(d, dados) {
+function salvarRegistro(d, dono, dados) {
+  const bal = balde(d, dono, true);
   const repost = {
     id: crypto.randomUUID(),
-    numero: d.proximoNumero,
+    numero: proximoLivre(bal),
     criadoEm: Date.now(),
     expiraEm: Date.now() + TTL_MS,
     ...dados
   };
-  d.proximoNumero += 1;
-  d.reposts.push(repost);
+  bal.reposts.push(repost);
   gravar(d);
   return { ok: true, repost };
 }
 
+// Limpa os expirados de todos os usuários e devolve quantos saíram.
 export function limparExpirados(agora = Date.now()) {
   const d = ler();
-  const vencidos = d.reposts.filter((r) => r.expiraEm <= agora);
-  if (!vencidos.length) return 0;
-  for (const r of vencidos) apagarRepost(r);
-  d.reposts = d.reposts.filter((r) => r.expiraEm > agora);
-  gravar(d);
-  return vencidos.length;
+  let removidos = 0;
+  for (const k of Object.keys(d.usuarios)) {
+    const bal = d.usuarios[k];
+    if (!bal || !Array.isArray(bal.reposts)) continue;
+    const vencidos = bal.reposts.filter((r) => r.expiraEm <= agora);
+    for (const r of vencidos) apagarRepost(r);
+    bal.reposts = bal.reposts.filter((r) => r.expiraEm > agora);
+    removidos += vencidos.length;
+  }
+  if (removidos) gravar(d);
+  return removidos;
 }
 
-export function listar(agora = Date.now()) {
-  return ler()
-    .reposts.filter((r) => r.expiraEm > agora)
+export function listar(dono, agora = Date.now()) {
+  return balde(ler(), dono).reposts
+    .filter((r) => r.expiraEm > agora)
     .sort((a, b) => a.numero - b.numero);
 }
 
-export async function criar({ conteudo, baixar }) {
+export async function criar({ dono, conteudo, baixar }) {
   if (!conteudo) return { ok: false, msg: 'Responda a uma mensagem para criar um repost.' };
 
   const texto = extractText(conteudo);
@@ -216,7 +267,8 @@ export async function criar({ conteudo, baixar }) {
     if (!buffer || !buffer.length) return { ok: false, msg: 'A mídia veio vazia.' };
 
     const d = ler();
-    const numero = d.proximoNumero;
+    const bal = balde(d, dono, true);
+    const numero = proximoLivre(bal);
     const tipo = type === 'ptv' ? 'video' : type;
     const nome = `${numero}-${Date.now()}.${EXT[type]}`;
     fs.mkdirSync(MIDIA_DIR, { recursive: true });
@@ -244,7 +296,7 @@ export async function criar({ conteudo, baixar }) {
       }
     }
 
-    return salvarRegistro(d, {
+    return salvarRegistro(d, dono, {
       tipo,
       arquivo: path.join('reposts-media', nome),
       capa,
@@ -257,20 +309,22 @@ export async function criar({ conteudo, baixar }) {
   if (!texto) return { ok: false, msg: 'A mensagem respondida não tem mídia nem texto para repostar.' };
 
   const d = ler();
+  const bal = balde(d, dono, true);
   let capa;
   try {
-    capa = await gerarCapa(d.proximoNumero, 'text', texto);
+    capa = await gerarCapa(proximoLivre(bal), 'text', texto);
   } catch {
     return { ok: false, msg: 'Não consegui gerar a capa do repost.' };
   }
-  return salvarRegistro(d, { tipo: 'text', arquivo: null, capa, mimetype: null, texto });
+  return salvarRegistro(d, dono, { tipo: 'text', arquivo: null, capa, mimetype: null, texto });
 }
 
-export function remover(numero) {
+export function remover(dono, numero) {
   const d = ler();
-  const idx = d.reposts.findIndex((r) => r.numero === numero);
+  const bal = balde(d, dono);
+  const idx = bal.reposts.findIndex((r) => r.numero === numero);
   if (idx < 0) return { ok: false };
-  const [repost] = d.reposts.splice(idx, 1);
+  const [repost] = bal.reposts.splice(idx, 1);
   apagarRepost(repost);
   gravar(d);
   return { ok: true, repost };
@@ -320,12 +374,14 @@ export function montarCard(r) {
   return { image: { url: caminhoMidia(r.capa) }, caption, title: titulo, nativeFlow: [] };
 }
 
-// Cards prontos para enviar: imagem, vídeo, texto e áudio (este como vídeo
-// capa+áudio). Gera a capa sob demanda para reposts de texto salvos por versões
-// antigas. Áudio sem vídeo (ffmpeg ausente) fica de fora — vai por `audiosAtivos`.
-export async function montarCards(agora = Date.now()) {
+// Cards prontos para enviar (do usuário `dono`): imagem, vídeo, texto e áudio
+// (este como vídeo capa+áudio). Gera a capa sob demanda para reposts de texto
+// salvos por versões antigas. Áudio sem vídeo (ffmpeg ausente) fica de fora —
+// vai por `audiosAtivos`.
+export async function montarCards(dono, agora = Date.now()) {
   const d = ler();
-  const ativos = d.reposts
+  const bal = balde(d, dono);
+  const ativos = bal.reposts
     .filter((r) => r.expiraEm > agora)
     .filter((r) => r.tipo !== 'audio' || (r.video && fs.existsSync(caminhoMidia(r.video))))
     .sort((a, b) => a.numero - b.numero);
@@ -346,11 +402,11 @@ export async function montarCards(agora = Date.now()) {
   return ativos.map(montarCard);
 }
 
-// Áudios que NÃO conseguiram virar vídeo (sem ffmpeg). Vão como mensagem
-// interativa com o áudio no footer, para não ficarem de fora.
-export function audiosAtivos(agora = Date.now()) {
-  return ler()
-    .reposts.filter((r) => r.expiraEm > agora && r.tipo === 'audio' && r.arquivo)
+// Áudios (do usuário `dono`) que NÃO conseguiram virar vídeo (sem ffmpeg). Vão
+// como mensagem interativa com o áudio no footer, para não ficarem de fora.
+export function audiosAtivos(dono, agora = Date.now()) {
+  return balde(ler(), dono).reposts
+    .filter((r) => r.expiraEm > agora && r.tipo === 'audio' && r.arquivo)
     .filter((r) => !(r.video && fs.existsSync(caminhoMidia(r.video))))
     .sort((a, b) => a.numero - b.numero)
     .map((r) => ({ numero: r.numero, arquivo: caminhoMidia(r.arquivo), texto: r.texto || '' }));

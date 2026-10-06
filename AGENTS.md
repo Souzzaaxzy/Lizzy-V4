@@ -43,25 +43,37 @@ continua no `body.text` do card. A mídia original (imagem/vídeo/áudio) é
 **baixada e salva localmente** (`getFileBuffer`), sem depender da URL temporária
 do WhatsApp.
 
+### Por usuário
+Cada usuário tem o **seu próprio** conjunto: `reposts.json` guarda
+`{ usuarios: { <jid>: { reposts: [...] } } }`. O `!repost`/`!reposts`/`!delrepost`
+operam sempre no balde do `sender`, então os números e os cards são independentes
+por pessoa (um não vê nem apaga o do outro).
+
+### Numeração (reusa buracos)
+O número é o **menor livre** daquele usuário (`proximoLivre`). Apagar o `#7` e
+criar outro **volta a ser #7** (não pula para #8). Ordem sempre crescente.
+
 ### Numeração, expiração e persistência
-- Número **sequencial** (`#1`, `#2`, ...) via `proximoNumero`, **persistido** no
-  JSON. Excluir o `#2` **não renumera** os outros (o número é o identificador).
+- Número = menor livre (reaproveita o que foi apagado/expirado).
 - `expiraEm = criadoEm + 24h` (contagem **individual**, não "virou o dia").
-- `limparExpirados()` apaga o registro **e** o arquivo de mídia. Roda: no
+- `limparExpirados()` apaga registro **e** arquivos (mídia, capa, vídeo). Roda no
   **start** (pega o que venceu com o bot desligado), a cada **1h** e **antes** de
   montar o `!reposts` (o carrossel nunca mostra vencido).
-- `!reposts` limita a **10 cards** (`MAX_CARDS`); se houver mais ativos, mostra os
-  10 primeiros em ordem crescente.
+- `!reposts` limita a **10 cards** (`MAX_CARDS`).
+
+### Estilo das capas
+As capas (`svgCapa`) seguem um tema por tipo: gradiente, barra de acento, círculos
+de brilho, emoji grande, o número em destaque e o texto quebrado em até 2 linhas.
+Paleta por tipo: imagem (índigo), vídeo (laranja), áudio (roxo), texto (verde-água).
 
 ### Testes
-`tests/reposts.test.js` — **18 testes / 71 asserções**: os 4 tipos, ordem,
-`montarCard` por tipo (**todo card com header de mídia**), `audiosAtivos`,
-`mensagemAudio` (interactiveMessage com áudio no footer), geração de capa sob
-demanda para reposts antigos, exclusão sem renumerar, expiração individual,
-persistência em disco, erros (sem resposta, documento, falha de download, mídia
-vazia) e um teste de integração que monta o **carrossel REAL** pela fork
-(`generateWAMessageContent`) conferindo que os cards têm header
-(image/video/capa). Usa `DATABASE_PATH` temporário (não toca o banco real).
+`tests/reposts.test.js` — **19 testes / 75 asserções**: os 4 tipos, isolamento por
+usuário, reuso de número, `montarCard` por tipo (**todo card com header de mídia**),
+`audiosAtivos`, `mensagemAudio` (interactiveMessage com áudio no footer), exclusão
+sem afetar outro usuário, expiração individual, persistência em disco, erros (sem
+resposta, documento, falha de download, mídia vazia) e um teste de integração que
+monta o **carrossel REAL** pela fork (`generateWAMessageContent`). Usa
+`DATABASE_PATH` temporário (não toca o banco real).
 
 ### Fork
 O carrossel de **texto puro** já existia na fork — não foi preciso mudar nada
