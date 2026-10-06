@@ -4,7 +4,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
-const PORT = Number(process.env.TOPGEAR_PORT || 0);
+const PORT = Number(process.env.TOPGEAR_PORT || 8099);
+const HOST = process.env.TOPGEAR_HOST || '0.0.0.0';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -44,7 +45,9 @@ function servir(req, res) {
     res.writeHead(200, {
       'content-type': MIME[path.extname(alvo)] || 'application/octet-stream',
       'cache-control': 'public, max-age=3600',
-      'access-control-allow-origin': '*'
+      'access-control-allow-origin': '*',
+      'cross-origin-resource-policy': 'cross-origin',
+      'content-security-policy': "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' data:; connect-src 'self'; worker-src 'self' blob:"
     });
     res.end(data);
   });
@@ -60,9 +63,9 @@ export function iniciar() {
       subindo = null;
       resolve(0);
     });
-    server.listen(PORT, () => {
+    server.listen(PORT, HOST, () => {
       porta = server.address().port;
-      console.log(`[TOPGEAR] servidor de jogo em http://localhost:${porta}`);
+      console.log(`[TOPGEAR] servidor de jogo em http://${HOST}:${porta}`);
       resolve(porta);
     });
   });

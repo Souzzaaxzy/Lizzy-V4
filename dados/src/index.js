@@ -21475,7 +21475,7 @@ case 'pin':
           const base = topgearServer.baseUrl();
           if (!port || !base) return reply('❌ Não consegui subir o servidor do jogo.');
 
-          const url = `${base}/index.html`;
+          const url = `${base.replace(/\/$/, '')}/index.html`;
           const msg = await generateWAMessage(from, {
             text: '🏎️ *TOP GEAR* — experiência experimental',
             footer: 'Lizzy · teste',
@@ -21483,8 +21483,10 @@ case 'pin':
           }, { userJid: nazu.user.id, upload: nazu.waUploadToServer });
           await nazu.relayMessage(from, msg.message, { messageId: msg.key.id });
 
-          const local = base.includes('localhost') ? `\n\n💡 Em teste local: abra ${url} no navegador do celular (mesma rede).` : '';
-          await reply(`✅ Experiência enviada (porta ${port}).${local}`);
+          const aviso = base.includes('localhost') || base.includes('127.0.0.1')
+            ? `\n\n⚠️ Sem TOPGEAR_PUBLIC_URL: o botão não abre no aparelho. Local: ${url}`
+            : '';
+          await reply(`✅ Experiência enviada (porta ${port}).${aviso}`);
         } catch (e) {
           console.error('[TOPGEAR]', e);
           await reply('❌ Falha ao iniciar o Top Gear experimental.');
