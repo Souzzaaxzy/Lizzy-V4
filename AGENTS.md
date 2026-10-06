@@ -9,23 +9,29 @@ expira **individualmente** após 24h.
 - **`dados/src/utils/reposts.js`** — módulo puro (fs apenas), testável sem socket.
   `criar`, `listar`, `remover`, `limparExpirados`, `montarCard`, `caminhoMidia`.
 - **Comandos** em `dados/src/index.js` (`case 'repost' | 'reposts' | 'delrepost'`).
-- **Banco**: `dados/database/reposts.json` (registro) e `dados/database/reposts-media/`
-  (mídia baixada). Ambos **ignorados pelo Git** (`.gitignore`).
+- **Banco**: `dados/database/reposts.json` (registro), `dados/database/reposts-media/`
+  (mídia baixada) e `dados/database/reposts-cards/` (capas dos cards de texto/áudio).
+  Todos **ignorados pelo Git** (`.gitignore`).
 
 ### Tipos aceitos e como viram card
-O card de carrossel da fork aceita **imagem/vídeo** no header, **texto puro** no
-body e **áudio** no `footer.audioMessage` (o player real do card). O módulo mapeia:
+**Todo card de carrossel do WhatsApp EXIGE um header de imagem/vídeo** (texto e
+áudio não são header válido) — e o carrossel **não** aceita header/footer no
+nível da mensagem. Um card sem header faz o cliente rejeitar o carrossel inteiro
+com o aviso *"atualize o WhatsApp"*. Por isso:
 
 | Mensagem respondida | Card no carrossel |
 |---|---|
 | imagem (+legenda) | `header.imageMessage` + `body.text` = legenda |
 | vídeo (+legenda) | `header.videoMessage` + `body.text` = legenda |
-| texto puro | `body.text` (sem header — texto REAL, não imagem) |
-| áudio (+legenda) | `footer.audioMessage` (player) + `body.text` = legenda |
+| texto puro | `header.imageMessage` (capa gerada com o texto) + `body.text` = texto real |
+| áudio (+legenda) | `header.imageMessage` (capa gerada) + `footer.audioMessage` (player) + `body.text` |
 | documento/outros | recusado com mensagem clara (a fork não aceita no card) |
 
-A mídia é **baixada e salva localmente** (`getFileBuffer`) — não depende da URL
-temporária do WhatsApp, que expira antes das 24h.
+A **capa** de texto/áudio é um PNG gerado pelo `sharp` (640×360, cor por tipo,
+com o `Repost #N` e um resumo) — não é a mensagem "virando imagem": o texto real
+continua no `body.text` do card. A mídia original (imagem/vídeo/áudio) é
+**baixada e salva localmente** (`getFileBuffer`), sem depender da URL temporária
+do WhatsApp.
 
 ### Numeração, expiração e persistência
 - Número **sequencial** (`#1`, `#2`, ...) via `proximoNumero`, **persistido** no
@@ -38,12 +44,13 @@ temporária do WhatsApp, que expira antes das 24h.
   10 primeiros em ordem crescente.
 
 ### Testes
-`tests/reposts.test.js` — **15 testes / 57 asserções**: os 4 tipos, ordem,
-`montarCard` por tipo, exclusão sem renumerar, expiração individual, persistência
-em disco, erros (sem resposta, documento, falha de download, mídia vazia) e um
-teste de integração que monta o **carrossel REAL** pela fork
-(`generateWAMessageContent`) conferindo image/video/text/audio. Usa
-`DATABASE_PATH` temporário (não toca o banco real).
+`tests/reposts.test.js` — **15 testes / 64 asserções**: os 4 tipos, ordem,
+`montarCard` por tipo (**todo card com header de mídia**), exclusão sem renumerar,
+expiração individual, persistência em disco, erros (sem resposta, documento,
+falha de download, mídia vazia) e um teste de integração que monta o **carrossel
+REAL** pela fork (`generateWAMessageContent`) conferindo que os 4 cards têm
+header (image/video/capa) e o áudio no footer. Usa `DATABASE_PATH` temporário
+(não toca o banco real).
 
 ### Fork
 O carrossel de **texto puro** e o **áudio no footer** já existiam na fork — não

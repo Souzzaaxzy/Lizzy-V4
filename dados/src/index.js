@@ -21503,7 +21503,6 @@ case 'pin':
           const cards = ativos.slice(0, reposts.MAX_CARDS).map((r) => reposts.montarCard(r));
           await nazu.sendMessage(from, {
             text: '📌 *Reposts ativos*',
-            footer: `Lizzy · ${ativos.length} repost(s)`,
             cards
           }, { quoted: info });
         } catch (e) {
