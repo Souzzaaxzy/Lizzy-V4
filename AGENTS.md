@@ -37,6 +37,66 @@ são L/R). Fica como está — mudar o idioma trocaria o resto da UI; é só ró
 que não há exceção de esquema). Verificado: sem o bloco CSS, **4 asserções
 falham**.
 
+## 🎮 EmuGames — SALAS MULTIPLAYER no `!kof` (netplay) (out/2026) ✅
+`!kof @fulano` (ou respondendo a mensagem da pessoa) agora abre um **CONVITE**
+em vez do card solo; o convidado responde **`sim`**/`nao` e, ao aceitar, a sala
+e criada e os DOIS recebem o link de entrada.
+
+### Fluxo
+1. `!kof @fulano` -> caixa `SALA DE ARCADE` com o jogo e "responda *sim*/*nao*"
+   (mencao real dos dois, cabecalho de canal). Sem mencao/respondido -> card
+   solo de sempre.
+2. Convidado responde `sim` -> caixa `SALA CRIADA` com o **codigo** e os **dois
+   links** (`host=1` para quem entra primeiro, sem flag para o segundo).
+3. `nao` -> avisa a recusa. Convite expira em **5 min**.
+
+### O estado e o modulo
+- **`dados/src/utils/arcadeRooms.js`** (novo, puro — sem socket/arquivo/timer):
+  `criarConvite`/`convitePendente`/`removerConvite`, `criarSala`/`buscarSala`/
+  `estaNaSala`, `gerarCodigo` (sem 0/O/1/I), `limparExpirados`, `mesmoUsuario`
+  (LID x JID x numero).
+- **Estado em MEMORIA** (igual as calls do `!callp`): a sala e efemera e morre
+  com o processo; persistir em JSON faria **sala zumbi** depois de um restart.
+  Convite TTL 5 min; sala TTL 6h.
+
+### O aceite e uma mensagem NORMAL
+O `sim`/`nao` NAO e comando: o bloco roda no **escopo do handler** (antes do
+`switch`, logo apos a guarda do modo +18), consome o convite e da `return` — o
+texto nao vira auto-resposta/NPC/contador. Sem convite pendente, `sim`/`nao`
+seguem o fluxo normal.
+
+### O player (`dados/emugames/index.html`)
+- `?sala=CODIGO` (e `?host=1`) liga o **modo sala**: `EJS_EXPERIMENTAL_NETPLAY`
+  + `EJS_DEBUG_XX` (as DUAS flags sao exigidas pelo netplay experimental) e
+  `EJS_netplayServer` de `netplay.json`/env. Ao ficar pronto (`EJS_ready`),
+  cria (`openRoom`) ou entra (`joinRoom`) sozinho.
+- **Nao fecha no X**: `exitEmulation: !EM_SALA` e o `aoSairDaPagina` ignora a
+  saida em modo sala. O webview do WhatsApp pode fechar, mas o jogo continua no
+  servidor — a sala morre so por **INATIVIDADE (3 min sem toque)**, entao sair
+  nao derruba o outro jogador. Fora da sala, tudo como sempre (PARAR, X, etc).
+- Config: **`dados/emugames/netplay.json`** (`server` + `iceServers`) ou env
+  `EMUGAMES_NETPLAY_URL`. Vazio = so single-player (o convite avisa que a sala
+  nao esta configurada).
+
+### LIMITE HONESTO — o servidor de netplay NAO foi incluido
+O **EmulatorJS-Netplay** (servidor) precisa de **processo persistente + TCP** e
+**TLS** (o site e https, entao `ws://` e bloqueado pelo navegador -> precisa de
+proxy TLS na frente). O Cloudflare Workers **nao** serve (nao mantem WebSocket
+longo). Medido pelo agente: o servidor e **Socket.IO puro** (nao usa WebRTC/UDP
+no lado do servidor), ~**80 MB** e **3%** de CPU com 10 salas x 4 jogadores —
+cabe no host do bot. **Esta integracao ja esta pronta e so aponta para ele** via
+`EMUGAMES_NETPLAY_URL`. O netplay do EmulatorJS e **experimental** (o proprio
+codigo tem `//control syncing - broken`): a qualidade depende do ping.
+
+### Testes — `tests/arcade-room.test.js` (11 testes / 35 assercoes)
+Handler real + socket falso: convite (nao o card), convite pendente, `sim` cria
+a sala e manda os DOIS links, `nao` recusa, terceiro nao e tratado, sem env
+avisa, expiracao em 5 min, e as guardas do player (netplay ligado, sem botao de
+fechar, nao desliga ao sair da aba, inatividade de 3 min). **Verificado que o
+teste MEDE**: desabilitando o convite (`if (false && convidado)`), **17
+assercoes falham**. `tests/topgear.test.js` acompanhou o `exitEmulation:
+!EM_SALA` (250/0).
+
 ## ☁️ BUILD do Cloudflare falhava: checksum STALE no `yarn.lock` (out/2026) ✅
 O build do Worker (EmuGames) morria em `Installing project dependencies: yarn` com:
 
