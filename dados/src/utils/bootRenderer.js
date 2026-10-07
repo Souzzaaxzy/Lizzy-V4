@@ -38,7 +38,7 @@ const STAGES = [
   { id: 'core', num: '01', label: 'CORE ENGINE' },
   { id: 'deps', num: '02', label: 'DEPENDENCIES' },
   { id: 'ytdlp', num: '03', label: 'YT-DLP' },
-  { id: 'abyss', num: '04', label: 'ABYSS CORE' },
+  { id: 'abyss', num: '04', label: 'LIZZY CORE' },
   { id: 'wa', num: '05', label: 'WHATSAPP ENGINE' },
   { id: 'opt', num: '06', label: 'OPTIMIZATION SYSTEM' },
   { id: 'plugins', num: '07', label: 'PLUGIN MANAGER' },
@@ -249,15 +249,23 @@ export class BootRenderer {
 
   _environment() {
     const ba = this.snapshot.baileys;
-    let baileys = '—';
+    let baileys = `${C.dim}—${C.reset}`;
+    let fork = `${C.dim}—${C.reset}`;
     if (ba) {
-      baileys = `${ba.version}`;
-      if (ba.repo) baileys += `     ${C.gray}│ FORK ──►${C.reset} ${ba.repo}`;
+      baileys = ba.version || baileys;
+      if (ba.repo) fork = `${C.cyan}https://github.com/${ba.repo}${C.reset}`;
     }
+    const sub = this.snapshot.subBots == null
+      ? `${C.gray}· PENDING${C.reset}`
+      : (this.snapshot.subBots.total === 0
+        ? 'Nenhum sub-bot para inicializar.'
+        : `${this.snapshot.subBots.active}/${this.snapshot.subBots.total} ATIVOS`);
     return this._section('ENVIRONMENT', [
       ['SERVER IP', this.snapshot.serverIp || `${C.dim}detectando…${C.reset}`],
+      ['FORK', fork],
       ['BAILEYS', baileys],
       ['WHATSAPP', this.snapshot.waVersion || `${C.dim}conectando…${C.reset}`],
+      ['SUB-BOTS', sub],
     ]);
   }
 
@@ -272,17 +280,11 @@ export class BootRenderer {
 
   _system() {
     const st = (v) => (etapaOk(v) ? `${C.green}✓ ACTIVE${C.reset}` : v === 'failed' ? `${C.red}✗ FAILED${C.reset}` : `${C.gray}· PENDING${C.reset}`);
-    const sub = this.snapshot.subBots == null
-      ? `${C.gray}· PENDING${C.reset}`
-      : (this.snapshot.subBots.total === 0
-        ? `${C.dim}nenhum${C.reset}`
-        : `${this.snapshot.subBots.active}/${this.snapshot.subBots.total} ATIVOS`);
     return this._section('SYSTEM', [
       ['OPTIMIZATION', st(this.snapshot.optimization)],
       ['MESSAGE COUNTER', st(this.snapshot.messageCounter)],
       ['AUTO RESET', st(this.snapshot.autoReset)],
       ['PLUGIN MANAGER', st(this.snapshot.pluginManager)],
-      ['SUB-BOTS', sub],
     ]);
   }
 

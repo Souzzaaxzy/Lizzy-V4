@@ -35,15 +35,17 @@ animação). Se o QR aparecer (`!state.creds.registered`), o renderer é destru�
 - **BOOT SEQUENCE** — 8 etapas; estados **reais**: `✓ ONLINE/READY/CONNECTED/
   ACTIVE`, em andamento `◐ LOADING/CHECKING/CONNECTING` (com spinner `◐◓◑◒` que
   **acompanha o evento real**, não simula conexão), `! WARNING`, `✗ FAILED`.
-- **ENVIRONMENT** — IP do servidor (do `start.js`, via `LIZZY_BOOT_IP`),
-  **Baileys** (versão + `Souzzaaxzy/baileys` do `baileysInfo.js`), **WhatsApp**
-  (versão real de `getWAVersion()`).
+  A etapa 04 é **`LIZZY CORE`** (era "ABYSS CORE").
+- **ENVIRONMENT** (logo abaixo do BOOT SEQUENCE) — `SERVER IP`, **`FORK`** (link
+  `https://github.com/Souzzaaxzy/baileys`), **`BAILEYS`** (versão instalada),
+  `WHATSAPP` (versão real de `getWAVersion()`) e `SUB-BOTS` (quando não há
+  sub-bots, mostra **"Nenhum sub-bot para inicializar."**, o mesmo texto do
+  `subBotManager`, no layout das outras linhas).
 - **SESSION** — `RESTORED`, `AUTO CONNECT`, `JID-LID N ENTRIES`
   (`getJidLidCacheSize()` novo em `helpers.js`), `CAPTCHA N PENDING`
   (`CaptchaIndex.stats().active`).
 - **SYSTEM** — otimização/contador/auto-reset/plugin manager (todos os sistemas
-  que o `connect.js` inicializa) e **sub-bots** reais (`listSubBots()` → total e
-  ativos).
+  que o `connect.js` inicializa). Sub-bots ficam no ENVIRONMENT, não aqui.
 - **BOT** — nome/prefixo/dono do `config.json` e o **paralelismo** real da
   `messageQueue` (`batchSize` lotes × `messagesPerBatch`).
 - **Final** — só depois de `connection === 'open'` e da inicialização: caixa

@@ -132,6 +132,7 @@ await test('STAGES tem as 8 etapas esperadas e ids únicos', () => {
   ok(STAGES.length === 8, '8 etapas');
   ok(new Set(STAGES.map((s) => s.id)).size === 8, 'ids únicos');
   ok(STAGES.map((s) => s.id).join(',') === 'core,deps,ytdlp,abyss,wa,opt,plugins,subbots', 'ordem/ids');
+  ok(STAGES.find((s) => s.id === 'abyss').label === 'LIZZY CORE', 'etapa 04 é LIZZY CORE');
 });
 
 await test('helpers: getJidLidCacheSize devolve número > 0', () => {
@@ -227,11 +228,20 @@ await test('render completo (TTY): painel, seções reais e tela ONLINE', async 
 
     ok(plain.includes('L I Z Z Y'), 'nome no topo');
     ok(plain.includes('◈ BOOT SEQUENCE'), 'seção BOOT SEQUENCE');
+    ok(plain.includes('LIZZY CORE'), 'etapa LIZZY CORE');
+    ok(!plain.includes('ABYSS CORE'), 'não deve mais ter ABYSS CORE');
     ok(plain.includes('WHATSAPP ENGINE') && plain.includes('CONNECTED'), 'etapa WA conectada');
     ok(plain.includes('◈ ENVIRONMENT'), 'seção ENVIRONMENT');
     ok(plain.includes('203.0.113.7'), 'IP real');
-    ok(plain.includes('Souzzaaxzy/baileys'), 'fork real');
+    ok(plain.includes('https://github.com/Souzzaaxzy/baileys'), 'fork como link real');
+    ok(plain.includes('0.3.18-final'), 'versão real do Baileys');
     ok(plain.includes('2.3000.1234567'), 'versão real do WhatsApp');
+    ok(plain.includes('Nenhum sub-bot para inicializar.'), 'mensagem de sub-bot no layout');
+    const envIdx = plain.indexOf('◈ ENVIRONMENT');
+    const sysIdx = plain.indexOf('◈ SYSTEM');
+    ok(envIdx !== -1 && sysIdx !== -1 && envIdx < sysIdx, 'ENVIRONMENT vem logo abaixo do BOOT SEQUENCE');
+    const sysBlock = plain.slice(sysIdx);
+    ok((sysBlock.match(/SUB-BOTS/g) || []).length === 0, 'SUB-BOTS não duplicado no SYSTEM');
     ok(plain.includes('◈ SESSION') && plain.includes('RESTORED') && plain.includes('AUTO CONNECT'), 'sessão restaurada');
     ok(plain.includes('38 ENTRIES'), 'JID-LID real');
     ok(plain.includes('0 PENDING'), 'captcha real');

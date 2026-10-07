@@ -540,7 +540,7 @@ async function initializeAllSubBots() {
         const keys = Object.keys(subbots);
 
         if (keys.length === 0) {
-            console.log('📋 Nenhum sub-bot para inicializar.');
+            if (process.env.LIZZY_SESSION_BOOT !== '1') console.log('📋 Nenhum sub-bot para inicializar.');
             return;
         }
 
