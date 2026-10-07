@@ -317,13 +317,39 @@ await test('o player tem o modo sala (netplay) e nao fecha no X', () => {
   ok(html.includes('EJS_EXPERIMENTAL_NETPLAY'), 'liga o netplay (flag experimental)');
   ok(html.includes('EJS_netplayServer'), 'aponta o servidor de netplay');
   ok(html.includes('EJS_onGameStart'), 'entra na sala no evento de INICIO do jogo');
-  ok(!html.includes('EJS_ready = () =>'), 'nao usa mais o EJS_ready (o Module ainda e undefined ali)');
+  // O `ready` NAO serve para criar o netplay (o Module ainda e undefined ali),
+  // mas fica como REDE DE SEGURANCA para o jogo nao iniciar sozinho.
+  ok(/EJS_ready = \(\) => \{/.test(html) && /startButtonClicked/.test(html), 'ready garante o inicio do jogo (rede de seguranca)');
+  ok(!/EJS_ready = \(\) => \{\s*try \{\s*const np = window\.EJS_emulator\?\.netplay/.test(html), 'nao volta a usar netplay no ready');
   ok(/openNetplayMenu\(\)/.test(html), 'abre o menu para criar emu.netplay antes de entrar');
   ok(/sessionid: SALA/.test(html), 'usa o NOSSO codigo como id da sala');
   ok(/open-room/.test(html) && /join-room/.test(html), 'cria/entra na sala automaticamente');
   ok(/exitEmulation:\s*!EM_SALA/.test(html), 'sem botao de fechar em modo sala');
   ok(/if \(EM_SALA\) return;/.test(html), 'modo sala NAO desliga ao sair da aba (so inatividade)');
   ok(html.includes("'desligado por inatividade"), 'inatividade continua fechando (3 min)');
+});
+
+await test('o player define o playerID e habilita o controle do P2', () => {
+  const html = read('dados/emugames/index.html');
+  // Sem `playerID` o `getUserIndex` devolve -1 e o `netplay.simulateInput`
+  // DESCARTA todo input (`player !== 0 && !resp`) -- os dois ficam "sozinhos".
+  ok(/np\.playerID\s*=/.test(html), 'define np.playerID antes de entrar');
+  ok(/extra\.userid\s*=\s*np\.playerID/.test(html), 'userid e o MESMO valor que o playerID');
+  // O EmulatorJS deixa os controles 1..3 vazios: sem isso o P2 nao mexe em nada.
+  ok(/habilitarControleDoJogador/.test(html), 'tem o habilitador de controle');
+  ok(/defaultControllers\?\.\[0\]/.test(html), 'copia o mapa do P1 para o jogador novo');
+  ok(/habilitarControleDoJogador\(emu, eu\)/.test(html), 'habilita o controle pelo indice no roster');
+  // O menu de netplay e um OVERLAY (z-index 9999) por cima do canvas: se
+  // ficar aberto, o jogo fica SEM TOQUE. Tem de ser escondido ao entrar.
+  ok(/emu\.netplayMenu\.style\.display\s*=\s*'none'/.test(html), 'esconde o overlay do menu (senao o jogo fica sem toque)');
+});
+
+await test('quem entra primeiro e P1 e quem entra depois e P2', () => {
+  const html = read('dados/emugames/index.html');
+  // O servidor guarda os jogadores na ordem de entrada; o EmulatorJS usa a
+  // posicao no roster como numero do jogador.
+  ok(/lista\.indexOf\(np\.playerID\)/.test(html), 'usa o indice no roster como numero do jogador');
+  ok(/você é o \$\{papel\}/.test(html) || /papel = eu >= 0/.test(html), 'mostra o papel (P1/P2) na tela');
 });
 
 await test('a inatividade de 3 min continua valendo', () => {

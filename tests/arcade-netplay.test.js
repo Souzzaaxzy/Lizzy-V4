@@ -200,13 +200,16 @@ await test('a sala so fecha quando os DOIS saem', async () => {
   ok((await status()).rooms === 0, 'saiu o ultimo, a sala fecha');
 });
 
-await test('o player usa o codigo da sala E o evento de INICIO (nao o "ready")', () => {
+await test('o player usa o codigo da sala E o evento de INICIO', () => {
   const html = fs.readFileSync(path.join(PROJECT, 'dados', 'emugames', 'index.html'), 'utf8');
   ok(/sessionid:\s*SALA/.test(html), 'sessionid = codigo da sala');
   ok(/EJS_onGameStart/.test(html), 'usa o evento de inicio do jogo');
-  ok(!/EJS_ready\s*=\s*\(\)\s*=>/.test(html), 'nao usa o EJS_ready (Module ainda e undefined)');
+  // O `ready` roda ANTES do wasm; criar o netplay ali estourava em
+  // `Module.postMainLoop`. Ele so pode tocar o netplay DEPOIS do Module.
+  ok(/if \(!emu\.Module\) return Promise\.reject/.test(html), 'nao mexe no netplay antes do Module existir');
+  ok(/startButtonClicked/.test(html), 'ready garante o inicio do jogo');
   ok(/openNetplayMenu\(\)/.test(html), 'abre o menu para criar emu.netplay');
-  ok(/userid:\s*`\$\{SALA\}/.test(html), 'userid distingue host e convidado');
+  ok(/userid:\s*np\.playerID|extra\.userid = np\.playerID/.test(html), 'userid casa com o playerID');
 });
 
 // ─────────────────────────────── resumo ───────────────────────────────

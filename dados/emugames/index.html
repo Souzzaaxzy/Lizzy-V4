@@ -231,6 +231,15 @@
           subtitulo.textContent = 'Falha ao entrar na sala';
         });
       };
+      // Rede de seguranca: se o jogo NAO iniciar sozinho (o wasm pode demorar
+      // mais que o `EJS_startOnLoaded` espera), entra na sala assim que o
+      // emulador ficar pronto. `tentarEntrar` espera o Module e a funcao e
+      // idempotente (`np.socket.connected`), entao disparar nos dois eventos
+      // nao abre duas salas.
+      window.EJS_ready = () => {
+        if (!window.EJS_emulator?.started) window.EJS_emulator?.startButtonClicked?.();
+        tentarEntrar().catch((e) => console.error('[EMUGAMES] ready:', e));
+      };
     }
 
     /**
@@ -240,6 +249,10 @@
     function entrarNaSala() {
       const emu = window.EJS_emulator;
       if (!emu) return Promise.reject(new Error('emulador indisponivel'));
+      // `openNetplayMenu` -> `defineNetplayFunctions` escreve em
+      // `Module.postMainLoop`; com o Module ainda `undefined` isso LANCA
+      // ("Cannot set properties of undefined"). So entramos depois do wasm.
+      if (!emu.Module) return Promise.reject(new Error('emulador ainda nao subiu'));
       // Cria `emu.netplay` + as funcoes (openRoom/joinRoom/startSocketIO).
       // Idempotente: so age uma vez por emulador.
       emu.openNetplayMenu();
@@ -248,10 +261,13 @@
       if (np.socket?.connected) return Promise.resolve();
       np.name = (params.get('nome') || (EH_HOST ? 'Jogador 1' : 'Jogador 2')).slice(0, 20);
 
-      // O menu so serve para criar `emu.netplay`; depois de entrar ele sai da
-      // frente (senao ficaria um popup de "Set Player Name" pedindo o nome que
-      // ja temos, em cima do jogo).
+      // O menu de netplay e um OVERLAY (z-index 9999) POR CIMA do canvas do
+      // jogo -- medido: com ele aberto, o elemento no centro da tela e o
+      // `ejs_popup_body` dele e o jogo fica SEM TOQUE. Fechamos para jogar.
+      // (O canvas NAO mora dentro dele: fica em `#game.ejs_parent`.)
       try { emu.netplayMenu.style.display = 'none'; } catch { /* ok */ }
+      // Fecha o popup de "Set Player Name" (ja temos o nome da URL) e para a
+      // lista de salas, que ficaria consultando o servidor a toa.
       try { np.updateList?.stop(); } catch { /* ok */ }
       try { emu.netplayMenu.querySelector('.ejs_popup_container')?.remove(); } catch { /* ok */ }
 
@@ -272,12 +288,22 @@
         // Sem o ack do servidor, nao pode ficar pendurado para sempre.
         const prazo = setTimeout(() => falhou('o servidor da sala nao respondeu'), 15000);
 
+        // O ID do jogador e um GUID proprio. TEM de existir ANTES do
+        // `roomJoined`, porque e ele que o `getUserIndex` usa para saber QUEM
+        // eu sou na sala -- sem isso `getUserIndex` devolve -1 e o
+        // `netplay.simulateInput` DESCARTA todo input (`player !== 0`),
+        // deixando os dois "jogando sozinhos" mesmo conectados.
+        if (!np.playerID) np.playerID = `${SALA}-${EH_HOST ? 'host' : 'guest'}-${Math.random().toString(16).slice(2)}`;
+        // `userid` e o `playerID`: o servidor indexa os jogadores por ele e o
+        // `getUserIndex` casa a MESMA string -- precisam ser iguais.
+        extra.userid = np.playerID;
+
         np.startSocketIO(() => {
           if (EH_HOST) {
             np.socket.emit('open-room', { extra, maxPlayers: 2, password: '' }, (err) => {
               if (err) return falhou(err);
               clearTimeout(prazo);
-              np.players = { [extra.userid]: extra };
+              np.players = { [np.playerID]: extra };
               np.roomJoined(true, extra.room_name, '', SALA);
               subtitulo.textContent = `Sala ${SALA} — aguardando o outro jogador...`;
               ok();
@@ -296,19 +322,54 @@
       });
     }
 
-    /** Atualiza o subtitulo com quantos jogadores estao na sala. */
+    /**
+     * Habilita o controle do SEGUNDO jogador.
+     *
+     * O EmulatorJS so' preenche o mapa do jogador 0; os outros vem VAZIOS
+     * (`1: {}, 2: {}, 3: {}`). Sem isso o `netplay.simulateInput` calcula
+     * `player !== 0 && !resp` e DESCARTA todo input de quem entrou segundo --
+     * o P2 nao mexe em nada. Damos a ele as mesmas teclas do P1 (duas pessoas,
+     * dois teclados/controles) e o analogico do controle.
+     */
+    function habilitarControleDoJogador(emu, indice) {
+      if (!indice || indice < 1) return; // P1 ja vem configurado
+      if (!emu.controls) return;
+      const base = JSON.parse(JSON.stringify(emu.defaultControllers?.[0] || emu.controls[0] || {}));
+      emu.controls[indice] = base;
+      emu.defaultControllers[indice] = JSON.parse(JSON.stringify(base));
+    }
+
+    /**
+     * Acompanha a sala: quem entrou primeiro e P1, quem entrou depois e P2.
+     *
+     * O servidor guarda os jogadores na ORDEM DE ENTRADA e o EmulatorJS usa a
+     * posicao no roster como numero do jogador. Entao o indice do meu id no
+     * roster E' o meu controle: 0 = P1, 1 = P2. Aqui habilitamos o controle do
+     * slot certo (o P2 nao vem configurado) e mostramos o papel na tela.
+     */
     function acompanharSala() {
-      const np = window.EJS_emulator?.netplay;
+      const emu = window.EJS_emulator;
+      const np = emu?.netplay;
       if (!np) return;
-      np.socket?.on('users-updated', (users) => {
-        const n = users ? Object.keys(users).length : 0;
-        subtitulo.textContent = n >= 2
-          ? `Sala ${SALA} — ${n} jogadores conectados`
-          : `Sala ${SALA} — aguardando o outro jogador...`;
-      });
+
+      const aplicar = (users) => {
+        const lista = Object.keys(users || np.players || {});
+        const eu = lista.indexOf(np.playerID);
+        const n = lista.length;
+        if (eu >= 0) habilitarControleDoJogador(emu, eu);
+        if (n < 2) {
+          subtitulo.textContent = `Sala ${SALA} — aguardando o outro jogador...`;
+        } else {
+          const papel = eu >= 0 ? `P${eu + 1}` : 'espectador';
+          subtitulo.textContent = `Sala ${SALA} — você é o ${papel} · ${n} jogadores`;
+        }
+      };
+
+      np.socket?.on('users-updated', aplicar);
       np.socket?.on('disconnect', () => {
         subtitulo.textContent = `Sala ${SALA} — conexao perdida`;
       });
+      aplicar(np.players);
     }
 
     rodando = true;

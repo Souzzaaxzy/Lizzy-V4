@@ -40,6 +40,58 @@ falham**.
 ## 🎮 EmuGames — SALA MULTIPLAYER que CONECTA DE VERDADE (out/2026) ✅
 O dono relatou: *"os dois usuários entram na sala, um escrevendo 'criando' e
 outro 'entrando', mas não acontece nada de conexão — é como se os dois
+estivessem jogando sozinhos; e ainda tá abrindo fora do WhatsApp"*. Depois:
+*"agora nada funciona, só entra no jogo"* e pediu **P1 automático para quem
+entra primeiro**.
+
+Eram **SEIS defeitos**, todos MEDIDOS com o player real rodando (Chromium
+headless + CDP, dois navegadores, servidor de netplay de verdade).
+
+### 5. O input era DESCARTADO: faltava o `playerID` (a causa do "jogando sozinhos")
+O `netplay.simulateInput` faz `player = this.netplay.getUserIndex(this.netplay.playerID)`
+e depois **descarta** se `player !== 0`. Como o meu código emitia o
+`open-room`/`join-room` na mão, `np.playerID` ficava **undefined** →
+`getUserIndex` devolvia **-1** → **todo input era jogado fora**. Medido:
+`playerID: undefined`, `getUserIndex: -1`, `simulateInput` enviava **0**
+`data-message`. Agora o `playerID` é gerado antes de entrar e o `userid`
+**é o mesmo valor** (é por ele que o `getUserIndex` casa a string).
+
+### 6. O P2 não tinha controle (o "só entra no jogo")
+O EmulatorJS preenche **só** o mapa do jogador 0 — `defaultControllers` tem
+`1: {}, 2: {}, 3: {}`. Com o mapa vazio, o `simulateInput` cai no mesmo
+`player !== 0` e **descarta** o input de quem entrou segundo: o P2 não mexe em
+nada. Medido: `ctrl0: 30 teclas`, `ctrl1: 0`. Agora
+`habilitarControleDoJogador(emu, indice)` copia o mapa do P1 para o slot do
+jogador.
+
+### 5+6 juntos = P1 e P2 automáticos (o que o dono pediu)
+O servidor guarda os jogadores **na ordem de entrada** e o EmulatorJS usa a
+**posição no roster** como número do jogador. Então o índice do meu id no roster
+**é** o meu controle: 0 = **P1**, 1 = **P2**. `acompanharSala` lê isso, habilita
+o controle do slot certo e mostra na tela *"você é o P1/P2"*. Medido com dois
+navegadores: host `idx=0`, convidado `idx=1`, e o input do convidado chega ao
+host como `connected_input: [1,0,1]` (jogador 1).
+
+### 7. O overlay do menu cobria o jogo (e o "nada funciona")
+O `netplayMenu` **não** é o pai do canvas (medi: a cadeia é
+`#game.ejs_parent` → `.ejs_canvas_parent` → `.ejs_canvas`) — ele é um
+**overlay** com `z-index: 9999` **por cima**. Com ele aberto, o
+`document.elementFromPoint` no centro da tela devolvia o `ejs_popup_body` do
+menu e o **jogo ficava SEM TOQUE**. Por isso ele é escondido ao entrar (tentei
+remover esse `display='none'` acreditando que o canvas morava dentro dele — a
+medição provou o contrário e eu voltei atrás).
+
+### 8. Rede de segurança para o jogo INICIAR
+Se o wasm demora mais que o `EJS_startOnLoaded` espera, o jogo não começa e o
+`onGameStart` (que entra na sala) nunca dispara — foi o *"só entra no jogo"*.
+O `EJS_ready` agora chama `startButtonClicked()` quando o jogo não iniciou e
+tenta entrar na sala também. Como `entrarNaSala` é idempotente
+(`np.socket.connected`) e exige o `Module` (que já existe nesse ponto), os dois
+eventos não abrem duas salas.
+
+
+O dono relatou: *"os dois usuários entram na sala, um escrevendo 'criando' e
+outro 'entrando', mas não acontece nada de conexão — é como se os dois
 estivessem jogando sozinhos; e ainda tá abrindo fora do WhatsApp"*.
 
 Eram **quatro defeitos**, todos MEDIDOS com o player real rodando (Chromium
