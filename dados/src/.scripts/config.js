@@ -328,6 +328,29 @@ async function installNodeDependencies() {
     }
 }
 
+/**
+ * O servidor de netplay (salas do arcade) tem as PRÓPRIAS dependências
+ * (express/socket.io/cors) num pacote separado — de propósito, para não inflar
+ * as do bot. Sem elas o bot sobe, mas a sala multiplayer falha na hora.
+ */
+async function installNetplayDependencies() {
+    const dir = path.join(process.cwd(), 'tools', 'netplay-server');
+    if (!fsSync.existsSync(path.join(dir, 'server.js'))) {
+        return { name: 'Netplay Server', status: `${colors.yellow}— ausente${colors.reset}` };
+    }
+    if (fsSync.existsSync(path.join(dir, 'node_modules'))) {
+        return { name: 'Netplay Server', status: `${colors.green}✅ Já instalado${colors.reset}` };
+    }
+    try {
+        await execAsync('npm install --no-audit --no-fund', { cwd: dir, shell: true, timeout: 300000 });
+        return { name: 'Netplay Server', status: `${colors.green}✅ Instalado${colors.reset}` };
+    } catch (e) {
+        // Não aborta: sem netplay o resto do bot funciona.
+        print.warning(`⚠️ Falha ao instalar as dependências do netplay: ${e.message}`);
+        return { name: 'Netplay Server', status: `${colors.red}❌ Falha${colors.reset}` };
+    }
+}
+
 async function main() {
     process.on('SIGINT', () => { print.warning('\n🛑 Configuração cancelada.'); process.exit(0); });
 
@@ -336,9 +359,10 @@ async function main() {
     if (process.argv.includes('--install')) {
         const nodeReport = await installNodeDependencies();
         const systemReport = await installSystemDependencies();
+        const netplayReport = await installNetplayDependencies();
         print.separator();
         print.info("📋 Relatório Final de Instalação:");
-        [...systemReport, nodeReport].forEach(r => console.log(`- ${r.name}: ${r.status}`));
+        [...systemReport, nodeReport, netplayReport].forEach(r => console.log(`- ${r.name}: ${r.status}`));
         print.separator();
         process.exit(0);
     }
@@ -385,9 +409,10 @@ async function main() {
         rl.close();
         const nodeReport = await installNodeDependencies();
         const systemReport = await installSystemDependencies();
+        const netplayReport = await installNetplayDependencies();
         print.separator();
         print.info("📋 Relatório Final de Instalação:");
-        [...systemReport, nodeReport].forEach(r => console.log(`- ${r.name}: ${r.status}`));
+        [...systemReport, nodeReport, netplayReport].forEach(r => console.log(`- ${r.name}: ${r.status}`));
         print.separator();
     } else {
         rl.close();

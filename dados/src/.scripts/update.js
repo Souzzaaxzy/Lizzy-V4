@@ -116,6 +116,27 @@ async function nodeDeps() {
         throw new Error('npm install terminou mas node_modules não foi criado');
     }
     log('Dependências instaladas');
+    await netplayDeps();
+}
+
+/**
+ * O servidor de netplay (salas do arcade) tem as PRÓPRIAS dependências
+ * (express/socket.io/cors), num pacote separado — de propósito, para não inflar
+ * as do bot. Sem elas o bot sobe, mas o servidor não: a sala falha na hora.
+ * Aqui a gente instala quando o pacote existe e ainda não tem node_modules.
+ */
+async function netplayDeps() {
+    const dir = path.join(process.cwd(), 'tools', 'netplay-server');
+    if (!fs.existsSync(path.join(dir, 'server.js'))) return;
+    if (fs.existsSync(path.join(dir, 'node_modules'))) return;
+    log('Instalando dependências do servidor de netplay');
+    try {
+        await execAsync('npm', ['install', '--no-audit', '--no-fund'], { cwd: dir, timeout: 300000 });
+        log('Dependências do netplay instaladas');
+    } catch (e) {
+        // Não aborta a atualização: sem netplay o resto do bot funciona.
+        log(`Aviso: falha ao instalar as dependências do netplay (${e?.message || e})`);
+    }
 }
 
 /** O package.json declara dependências (deps, devDeps, optional, peer)? */
