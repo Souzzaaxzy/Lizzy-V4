@@ -56,6 +56,3 @@ data/apk-tmp/
 # Diretório antigo (migrado para data/); mantido ignorado para não sobrar lixo.
 dados/database/apk-cache/
 
-# Binario do cloudflared (tunel do netplay) -- baixado pelo instalador.
-# 40 MB: nunca vai para o git; ver tools/netplay-server/baixar-cloudflared.mjs
-tools/netplay-server/bin/

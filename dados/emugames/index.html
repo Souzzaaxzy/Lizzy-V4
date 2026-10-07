@@ -29,22 +29,6 @@
 <script>
   window.EJS_DATA = 'https://cdn.emulatorjs.org/stable/data/';
   window.INATIVIDADE_MS = 3 * 60 * 1000;
-  // Servidor de netplay (salas multiplayer). Vazio = so single-player: o modo
-  // sala so liga quando o bot manda `?sala=` E este valor esta preenchido.
-  // Configurado em dados/emugames/netplay.json (fora do bundle) ou por env no
-  // deploy; o arquivo abaixo e lido antes do player rodar.
-  window.EJS_NETPLAY_SERVER = window.EJS_NETPLAY_SERVER || '';
-  window.EJS_NETPLAY_ICE = window.EJS_NETPLAY_ICE || [];
-</script>
-<script>
-  // Le a config de netplay (se existir). Nao quebra se o arquivo faltar.
-  window.__netplayPronto = fetch('./netplay.json', { cache: 'no-store' })
-    .then((r) => (r.ok ? r.json() : null))
-    .then((cfg) => {
-      if (cfg && cfg.server) window.EJS_NETPLAY_SERVER = cfg.server;
-      if (cfg && Array.isArray(cfg.iceServers)) window.EJS_NETPLAY_ICE = cfg.iceServers;
-    })
-    .catch(() => {});
 </script>
 
 <script>
@@ -63,21 +47,6 @@
   let rodando = false;
   let ocioso = Date.now();
 
-  // ---- SALA (multiplayer via netplay) --------------------------------------
-  // `?sala=CODIGO` = modo sala: abre o netplay e entra na sala automaticamente.
-  // `?host=1`      = este jogador CRIA a sala (o primeiro a entrar).
-  // Sem esses parametros, o player e single-player (comportamento de sempre).
-  const params = new URLSearchParams(location.search);
-  const SALA = (params.get('sala') || '').toUpperCase();
-  const EH_HOST = params.get('host') === '1';
-  // URL do servidor da sala, vinda do link do bot (`?netplay=`). O site mora no
-  // Cloudflare, mas o servidor de netplay sobe no host do bot -- entao a URL
-  // NAO pode ser fixa no bundle. `netplay.json` continua sendo o padrao.
-  const NETPLAY_DO_LINK = (params.get('netplay') || '').trim().replace(/\/+$/, '');
-  // A config de netplay e lida de `netplay.json` (assincrono). `NETPLAY_SERVER`
-  // e preenchido depois do await em `iniciar()` -- por isso e `let`.
-  let NETPLAY_SERVER = window.EJS_NETPLAY_SERVER || '';
-  let EM_SALA = Boolean(SALA) && Boolean(NETPLAY_SERVER);
 
   const CORES = { snes: '#1d4ed8', nes: '#b91c1c', gba: '#7c3aed', gb: '#166534', genesis: '#0369a1', n64: '#b45309' };
   const NOMES = { snes: 'Super Nintendo', nes: 'Nintendo', gba: 'Game Boy Advance', gb: 'Game Boy', genesis: 'Mega Drive', n64: 'Nintendo 64' };
@@ -106,8 +75,6 @@
   function parar() {
     const emu = window.EJS_emulator;
     if (emu) {
-      // Em sala, sair pelo PARAR tambem sai da sala (senao fica socket orfao).
-      if (EM_SALA) { try { emu.netplay?.leaveRoom?.(); } catch { /* ok */ } }
       try { emu.pause(); } catch { /* ok */ }
       try { emu.callEvent('exit'); } catch { /* ok */ }
       try { emu.callEvent('unload'); } catch { /* ok */ }
@@ -121,12 +88,6 @@
     jogo = j;
     alvo.innerHTML = '';
     window.EJS_emulator = null;
-
-    // Espera a config de netplay (se houver) antes de decidir o modo sala.
-    try { await window.__netplayPronto; } catch { /* ok */ }
-    // Precedencia: link do bot (`?netplay=`) > netplay.json/env.
-    NETPLAY_SERVER = NETPLAY_DO_LINK || window.EJS_NETPLAY_SERVER || '';
-    EM_SALA = Boolean(SALA) && Boolean(NETPLAY_SERVER);
 
     titulo.textContent = j.nome;
     subtitulo.textContent = NOMES[j.console] || j.console;
@@ -177,200 +138,10 @@
       saveState: false, loadState: false, screenRecord: false, gamepad: false,
       cheat: false, volume: true, saveSavFiles: false, loadSavFiles: false,
       quickSave: false, quickLoad: false, screenshot: false, cacheManager: false,
-      exitEmulation: !EM_SALA
+      exitEmulation: true
     };
     // Sem EJS_paths: o loader.js do EmulatorJS resolve os caminhos
     // sozinho (data/src/). Definir EJS_paths QUEBRA o boot -- ver AGENTS.md.
-
-    // ---- NETPLAY (sala) ----------------------------------------------------
-    // O netplay do EmulatorJS e EXPERIMENTAL e exige DUAS flags: EJS_DEBUG_XX e
-    // EJS_EXPERIMENTAL_NETPLAY. O `gameId` tem de ser unico por jogo no site --
-    // usamos o proprio id do catalogo (string), que o loader aceita.
-    if (EM_SALA) {
-      window.EJS_DEBUG_XX = true;
-      window.EJS_EXPERIMENTAL_NETPLAY = true;
-      window.EJS_gameID = j.id;
-      window.EJS_netplayServer = NETPLAY_SERVER;
-      if (Array.isArray(window.EJS_NETPLAY_ICE) && window.EJS_NETPLAY_ICE.length) {
-        window.EJS_netplayICEServers = window.EJS_NETPLAY_ICE;
-      }
-      subtitulo.textContent = `Sala ${SALA} — ${EH_HOST ? 'criando...' : 'entrando...'}`;
-
-      // Auto-join: cria (host) ou entra na sala assim que o jogo INICIA.
-      //
-      // CUIDADO (esta e a correcao do "nao acontece nada de conexao"):
-      //   1. `EJS_emulator.netplay` NAO EXISTE ate o menu de netplay ser aberto
-      //      -- quem o cria e `openNetplayMenu()` (defineNetplayFunctions).
-      //      O codigo antigo chamava `np.openRoom` no `EJS_ready`, onde `np` era
-      //      `undefined`, e o `if (!np) return;` engolia tudo em silencio: os
-      //      dois jogadores ficavam no single-player ("jogando sozinhos").
-      //   2. `defineNetplayFunctions` escreve em `this.Module.postMainLoop`, e o
-      //      `Module` SO EXISTE depois que o wasm sobe. No evento `ready` ele
-      //      ainda e `undefined` (medido: "Cannot set properties of undefined
-      //      (setting 'postMainLoop')"), entao o gancho certo e o `start`, que
-      //      dispara no fim do `startGame()` com o Module pronto.
-      //   3. O `openRoom` da lib gera um sessionId PROPRIO (GUID) e o `joinRoom`
-      //      procura a sala por esse id -- o nosso codigo de sala nao tem
-      //      relacao nenhuma com o id da sala no servidor, entao o convidado
-      //      NUNCA achava a sala do anfitriao. Aqui o `sessionid` passa a ser o
-      //      NOSSO codigo (o mesmo que vai no link dos dois).
-      //   4. `openRoom`/`joinRoom` desconectam o socket no fim da conexao, entao
-      //      quem entra depois derruba quem ja estava. Usamos `startSocketIO`
-      //      uma vez e emitimos o evento da sala na mao.
-      const tentarEntrar = async () => {
-        for (let i = 0; i < 40; i++) {
-          if (window.EJS_emulator?.Module) break;
-          await new Promise((r) => setTimeout(r, 250));
-        }
-        await entrarNaSala();
-        acompanharSala();
-      };
-      window.EJS_onGameStart = () => {
-        tentarEntrar().catch((e) => {
-          console.error('[EMUGAMES] falha ao entrar na sala:', e);
-          subtitulo.textContent = 'Falha ao entrar na sala';
-        });
-      };
-      // Rede de seguranca: se o jogo NAO iniciar sozinho (o wasm pode demorar
-      // mais que o `EJS_startOnLoaded` espera), entra na sala assim que o
-      // emulador ficar pronto. `tentarEntrar` espera o Module e a funcao e
-      // idempotente (`np.socket.connected`), entao disparar nos dois eventos
-      // nao abre duas salas.
-      window.EJS_ready = () => {
-        if (!window.EJS_emulator?.started) window.EJS_emulator?.startButtonClicked?.();
-        tentarEntrar().catch((e) => console.error('[EMUGAMES] ready:', e));
-      };
-    }
-
-    /**
-     * Entra na sala de netplay com o NOSSO codigo como id.
-     * Resolve quando o socket esta conectado e a sala existe no servidor.
-     */
-    function entrarNaSala() {
-      const emu = window.EJS_emulator;
-      if (!emu) return Promise.reject(new Error('emulador indisponivel'));
-      // `openNetplayMenu` -> `defineNetplayFunctions` escreve em
-      // `Module.postMainLoop`; com o Module ainda `undefined` isso LANCA
-      // ("Cannot set properties of undefined"). So entramos depois do wasm.
-      if (!emu.Module) return Promise.reject(new Error('emulador ainda nao subiu'));
-      // Cria `emu.netplay` + as funcoes (openRoom/joinRoom/startSocketIO).
-      // Idempotente: so age uma vez por emulador.
-      emu.openNetplayMenu();
-      const np = emu.netplay;
-      if (!np) return Promise.reject(new Error('netplay indisponivel'));
-      if (np.socket?.connected) return Promise.resolve();
-      np.name = (params.get('nome') || (EH_HOST ? 'Jogador 1' : 'Jogador 2')).slice(0, 20);
-
-      // O menu de netplay e um OVERLAY (z-index 9999) POR CIMA do canvas do
-      // jogo -- medido: com ele aberto, o elemento no centro da tela e o
-      // `ejs_popup_body` dele e o jogo fica SEM TOQUE. Fechamos para jogar.
-      // (O canvas NAO mora dentro dele: fica em `#game.ejs_parent`.)
-      try { emu.netplayMenu.style.display = 'none'; } catch { /* ok */ }
-      // Fecha o popup de "Set Player Name" (ja temos o nome da URL) e para a
-      // lista de salas, que ficaria consultando o servidor a toa.
-      try { np.updateList?.stop(); } catch { /* ok */ }
-      try { emu.netplayMenu.querySelector('.ejs_popup_container')?.remove(); } catch { /* ok */ }
-
-      // O servidor do EmulatorJS casa o id da sala pelo campo `sessionid`.
-      const extra = {
-        domain: window.location.host,
-        game_id: emu.config.gameId,
-        room_name: `Sala ${SALA}`,
-        player_name: np.name,
-        userid: `${SALA}-${EH_HOST ? 'host' : 'guest'}`,
-        sessionid: SALA,
-      };
-
-      return new Promise((resolve, reject) => {
-        let pronto = false;
-        const falhou = (motivo) => { if (!pronto) { pronto = true; reject(new Error(motivo)); } };
-        const ok = () => { if (!pronto) { pronto = true; resolve(); } };
-        // Sem o ack do servidor, nao pode ficar pendurado para sempre.
-        const prazo = setTimeout(() => falhou('o servidor da sala nao respondeu'), 15000);
-
-        // O ID do jogador e um GUID proprio. TEM de existir ANTES do
-        // `roomJoined`, porque e ele que o `getUserIndex` usa para saber QUEM
-        // eu sou na sala -- sem isso `getUserIndex` devolve -1 e o
-        // `netplay.simulateInput` DESCARTA todo input (`player !== 0`),
-        // deixando os dois "jogando sozinhos" mesmo conectados.
-        if (!np.playerID) np.playerID = `${SALA}-${EH_HOST ? 'host' : 'guest'}-${Math.random().toString(16).slice(2)}`;
-        // `userid` e o `playerID`: o servidor indexa os jogadores por ele e o
-        // `getUserIndex` casa a MESMA string -- precisam ser iguais.
-        extra.userid = np.playerID;
-
-        np.startSocketIO(() => {
-          if (EH_HOST) {
-            np.socket.emit('open-room', { extra, maxPlayers: 2, password: '' }, (err) => {
-              if (err) return falhou(err);
-              clearTimeout(prazo);
-              np.players = { [np.playerID]: extra };
-              np.roomJoined(true, extra.room_name, '', SALA);
-              subtitulo.textContent = `Sala ${SALA} — aguardando o outro jogador...`;
-              ok();
-            });
-          } else {
-            np.socket.emit('join-room', { extra }, (err, users) => {
-              if (err) return falhou(err);
-              clearTimeout(prazo);
-              np.players = users || {};
-              np.roomJoined(false, extra.room_name, '', SALA);
-              subtitulo.textContent = `Sala ${SALA} — conectado`;
-              ok();
-            });
-          }
-        });
-      });
-    }
-
-    /**
-     * Habilita o controle do SEGUNDO jogador.
-     *
-     * O EmulatorJS so' preenche o mapa do jogador 0; os outros vem VAZIOS
-     * (`1: {}, 2: {}, 3: {}`). Sem isso o `netplay.simulateInput` calcula
-     * `player !== 0 && !resp` e DESCARTA todo input de quem entrou segundo --
-     * o P2 nao mexe em nada. Damos a ele as mesmas teclas do P1 (duas pessoas,
-     * dois teclados/controles) e o analogico do controle.
-     */
-    function habilitarControleDoJogador(emu, indice) {
-      if (!indice || indice < 1) return; // P1 ja vem configurado
-      if (!emu.controls) return;
-      const base = JSON.parse(JSON.stringify(emu.defaultControllers?.[0] || emu.controls[0] || {}));
-      emu.controls[indice] = base;
-      emu.defaultControllers[indice] = JSON.parse(JSON.stringify(base));
-    }
-
-    /**
-     * Acompanha a sala: quem entrou primeiro e P1, quem entrou depois e P2.
-     *
-     * O servidor guarda os jogadores na ORDEM DE ENTRADA e o EmulatorJS usa a
-     * posicao no roster como numero do jogador. Entao o indice do meu id no
-     * roster E' o meu controle: 0 = P1, 1 = P2. Aqui habilitamos o controle do
-     * slot certo (o P2 nao vem configurado) e mostramos o papel na tela.
-     */
-    function acompanharSala() {
-      const emu = window.EJS_emulator;
-      const np = emu?.netplay;
-      if (!np) return;
-
-      const aplicar = (users) => {
-        const lista = Object.keys(users || np.players || {});
-        const eu = lista.indexOf(np.playerID);
-        const n = lista.length;
-        if (eu >= 0) habilitarControleDoJogador(emu, eu);
-        if (n < 2) {
-          subtitulo.textContent = `Sala ${SALA} — aguardando o outro jogador...`;
-        } else {
-          const papel = eu >= 0 ? `P${eu + 1}` : 'espectador';
-          subtitulo.textContent = `Sala ${SALA} — você é o ${papel} · ${n} jogadores`;
-        }
-      };
-
-      np.socket?.on('users-updated', aplicar);
-      np.socket?.on('disconnect', () => {
-        subtitulo.textContent = `Sala ${SALA} — conexao perdida`;
-      });
-      aplicar(np.players);
-    }
 
     rodando = true;
     pararBtn.disabled = false;
@@ -387,16 +158,10 @@
 
   let saiu = false;
   function aoSairDaPagina() {
-    // MODO SALA: NAO desliga ao sair da aba. O webview do WhatsApp fecha quando
-    // o usuario aperta o X, mas o jogo deve continuar no servidor de netplay --
-    // a sala so morre por INATIVIDADE (3 min sem toque). Fechar aqui derrubaria
-    // o outro jogador junto.
-    if (EM_SALA) return;
     saiu = true;
     parar();
   }
   function aoVoltar() {
-    if (EM_SALA) return; // em sala o emulador nunca foi parado; nada a retomar
     if (!saiu) return;
     saiu = false;
     ocioso = Date.now();
