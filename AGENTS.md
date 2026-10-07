@@ -1,5 +1,39 @@
 # AGENTS.md — Lizzy-V4 / Abyss Bot
 
+## 🎮 EmuGames — ORDEM DOS BOTOES (diamante A/B/X/Y) corrigida (out/2026) ✅
+O EmulatorJS posiciona cada botao do gamepad virtual por `left`/`top` **inline**
+(px), e o layout **muda conforme o `controlScheme`**. Medido no navegador:
+
+| esquema | topo | esq | dir | baixo |
+|---|---|---|---|---|
+| **snes** | **X** | **Y** | **A** | **B** | ← padrão certo |
+| **arcade / mame / default** | Y | X | B | A | ← **rotacionado** |
+
+O arcade (`!kof`, `!metalslug`) saía **girado** em relação ao padrão: X ficava na
+esquerda e Y no topo (invertidos), A/B trocados. Por isso "a ordem estava errada".
+
+**Correção** (`dados/emugames/style.css`): 4 regras com `:not(.cs_snes)` forçam o
+mesmo diamante do SNES em todos os esquemas, com `!important` (a posição vem
+inline):
+```css
+#game .ejs_virtualGamepad_button:not(.cs_snes).b_x { left: 40px !important; top: 0 !important; }
+#game .ejs_virtualGamepad_button:not(.cs_snes).b_y { left: 0 !important; top: 40px !important; }
+#game .ejs_virtualGamepad_button:not(.cs_snes).b_a { left: 80px !important; top: 40px !important; }
+#game .ejs_virtualGamepad_button:not(.cs_snes).b_b { left: 40px !important; top: 80px !important; }
+```
+O `:not(.cs_snes)` é deliberado: o SNES **já estava certo** e não deve ser tocado.
+
+**Como foi medido** (sem confiar em screenshot, que não captura WebGL): leitura do
+DOM via CDP — `getBoundingClientRect()` + `innerText` de cada
+`.ejs_virtualGamepad_button`, com `EJS_controlScheme` forçado. Resultado depois do
+fix: arcade == snes (X topo, Y esq, A dir, B baixo).
+
+**Nota**: `pt-BR` traduz os ombros **L/R** para **ESQ/DIR** (parecem setas, mas
+são L/R). Fica como está — mudar o idioma trocaria o resto da UI; é só rótulo.
+
+**Teste**: `tests/topgear.test.js` ganhou 5 asserções do diamante (as 4 posições +
+o `:not(.cs_snes)`). Verificado: sem o bloco CSS, **4 asserções falham**.
+
 ## ☁️ BUILD do Cloudflare falhava: checksum STALE no `yarn.lock` (out/2026) ✅
 O build do Worker (EmuGames) morria em `Installing project dependencies: yarn` com:
 
