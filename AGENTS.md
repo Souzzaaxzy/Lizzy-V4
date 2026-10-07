@@ -1,5 +1,44 @@
 # AGENTS.md — Lizzy-V4 / Abyss Bot
 
+## ☁️ BUILD do Cloudflare falhava: checksum STALE no `yarn.lock` (out/2026) ✅
+O build do Worker (EmuGames) morria em `Installing project dependencies: yarn` com:
+
+```
+YN0018: @itsliaaa/baileys@…git#commit=3fe6dfb…: The remote archive doesn't match the expected checksum
+YN0018: lizzy-call@…git#commit=48b9c36…: The remote archive doesn't match the expected checksum
+Failed: error occurred while installing tools or dependencies
+```
+
+**Causa**: o `yarn.lock` guarda um `checksum` (hash do pacote) por entrada. Os dois
+**git deps** (a fork do Baileys e o `lizzy-call`) tinham checksum **stale** — não
+batia com o arquivo que o GitHub serve hoje. O `npm` (que o bot usa) **não valida**
+esse campo, então o bug só aparecia no build do Cloudflare (que usa **yarn**).
+
+**Correção**: reescrever **só** os dois `checksum` (a linha do `@itsliaaa/baileys`
+e a do `lizzy-call`) no `yarn.lock`, com o valor do arquivo atual. O resto do lock
+ficou intacto.
+
+**Como medir** (reproduz o erro e valida a correção, sem sujar o repo):
+
+```bash
+corepack yarn install            # reproduz o YN0018
+corepack yarn install --check-cache   # re-baixa e valida os checksums
+```
+
+**Armadilha (custou uma rodada)**: `corepack yarn install --mode=update-lockfile`
+**não** reescreve o checksum dos git deps — ele confia no que já está no lock (e,
+com o cache local, nem re-baixa). O caminho que funcionou foi **apagar a linha de
+checksum** dos dois blocos e rodar `yarn install` com o cache dos git deps limpo,
+deixando o yarn gravar o valor certo. **Cuidado**: rodar `yarn` num repo com
+`package-lock.json` pode **rebaixar** o `yarn.lock` para o formato **v1** (do yarn
+clássico) — sempre conferir `head -2 yarn.lock` (tem que dizer
+`__metadata: version: 8`, Berry) e restaurar com `git checkout -- yarn.lock` se
+precisar.
+
+**Regra**: ao trocar o commit de um git dep (`package.json`), os DOIS locks
+precisam acompanhar — o `package-lock.json` (npm) e o `yarn.lock` (yarn, com o
+**checksum**). Trocar só um deixa um dos lados quebrado.
+
 ## 🕹️ EmuGames — MENU `!arcade` + 13 jogos SNES (out/2026) ✅
 O catálogo de emulador cresceu de 3 para **16 jogos** e ganhou um menu próprio.
 
