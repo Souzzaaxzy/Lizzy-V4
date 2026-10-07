@@ -128,19 +128,27 @@ async function nodeDeps() {
 async function netplayDeps() {
     const dir = path.join(process.cwd(), 'tools', 'netplay-server');
     if (!fs.existsSync(path.join(dir, 'server.js'))) return;
-    if (fs.existsSync(path.join(dir, 'node_modules'))) return;
-    log('Instalando dependências do servidor de netplay');
-    try {
-        await execAsync('npm', ['install', '--no-audit', '--no-fund'], { cwd: dir, timeout: 300000 });
-        log('Dependências do netplay instaladas');
-    } catch (e) {
-        // Não aborta a atualização: sem netplay o resto do bot funciona.
-        log(`Aviso: falha ao instalar as dependências do netplay (${e?.message || e})`);
+
+    // Dependencias do servidor (express/socket.io/cors).
+    if (!fs.existsSync(path.join(dir, 'node_modules'))) {
+        log('Instalando dependências do servidor de netplay');
+        try {
+            await execAsync('npm', ['install', '--no-audit', '--no-fund'], { cwd: dir, timeout: 300000 });
+            log('Dependências do netplay instaladas');
+        } catch (e) {
+            // Não aborta a atualização: sem netplay o resto do bot funciona.
+            log(`Aviso: falha ao instalar as dependências do netplay (${e?.message || e})`);
+        }
     }
-    // O `cloudflared` (tunel HTTPS do netplay) tambem e baixado aqui -- o
-    // binario tem ~40 MB e nao vai para o git.
+
+    // O `cloudflared` (tunel HTTPS do netplay) tem checagem PROPRIA: antes ele
+    // ficava depois de um `return` de "node_modules ja existe" e NUNCA era
+    // baixado no caminho comum -- era o bug de "sala indisponivel" mesmo apos
+    // atualizar. O binario tem ~40 MB e nao vai para o git.
+    const bin = path.join(dir, 'bin', 'cloudflared');
     const baixador = path.join(dir, 'baixar-cloudflared.mjs');
-    if (fs.existsSync(baixador) && !fs.existsSync(path.join(dir, 'bin', 'cloudflared'))) {
+    if (fs.existsSync(baixador) && !fs.existsSync(bin)) {
+        log('Baixando o túnel do netplay (cloudflared)');
         try {
             await execAsync(process.execPath, [baixador], { timeout: 300000 });
             log('Túnel do netplay (cloudflared) pronto');

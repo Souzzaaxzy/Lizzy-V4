@@ -338,20 +338,27 @@ async function installNetplayDependencies() {
     if (!fsSync.existsSync(path.join(dir, 'server.js'))) {
         return { name: 'Netplay Server', status: `${colors.yellow}— ausente${colors.reset}` };
     }
+    // `cloudflared`: tunel HTTPS do netplay (~40 MB, nao vai para o git). Tem
+    // checagem PROPRIA -- antes ficava depois do `return` de "ja instalado" e
+    // nunca era baixado (era o bug de "sala indisponivel" mesmo apos atualizar).
+    const bin = path.join(dir, 'bin', 'cloudflared');
+    const baixador = path.join(dir, 'baixar-cloudflared.mjs');
+    const baixarTunel = async () => {
+        if (!fsSync.existsSync(baixador) || fsSync.existsSync(bin)) return;
+        try {
+            await execAsync(`node "${baixador}"`, { shell: true, timeout: 300000 });
+            print.message('🌐 Túnel do netplay (cloudflared) pronto');
+        } catch (e) {
+            print.warning(`⚠️ Falha ao baixar o cloudflared: ${e.message}`);
+        }
+    };
     if (fsSync.existsSync(path.join(dir, 'node_modules'))) {
+        await baixarTunel();
         return { name: 'Netplay Server', status: `${colors.green}✅ Já instalado${colors.reset}` };
     }
     try {
         await execAsync('npm install --no-audit --no-fund', { cwd: dir, shell: true, timeout: 300000 });
-        // `cloudflared`: tunel HTTPS do netplay (~40 MB, nao vai para o git).
-        const baixador = path.join(dir, 'baixar-cloudflared.mjs');
-        if (fsSync.existsSync(baixador) && !fsSync.existsSync(path.join(dir, 'bin', 'cloudflared'))) {
-            try {
-                await execAsync(`node "${baixador}"`, { shell: true, timeout: 300000 });
-            } catch (e2) {
-                print.warning(`⚠️ Falha ao baixar o cloudflared: ${e2.message}`);
-            }
-        }
+        await baixarTunel();
         return { name: 'Netplay Server', status: `${colors.green}✅ Instalado${colors.reset}` };
     } catch (e) {
         // Não aborta: sem netplay o resto do bot funciona.
