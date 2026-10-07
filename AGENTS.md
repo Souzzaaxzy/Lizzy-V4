@@ -96,16 +96,26 @@ sala (sem sala orfa se o netplay falhar) e o link da sala leva `?netplay=<url>`
 (o site mora no Cloudflare; o servidor sobe no host do bot). No player, o
 `?netplay=` do link **vence** o `netplay.json`.
 
-**A URL e DETECTADA SOZINHA quando o host publica uma porta** (nao exige
-configuracao): medido que um servidor na `WORKER_1` (12000) responde em
-`https://work-1-<runtime>/` com **HTTP 200**, e na `WORKER_2` (12001) em
-`work-2-<runtime>/` — ou seja, **HTTPS de graca, sem proxy**. O id/sufixo vem de
-`RUNTIME_URL`/`RUNTIME_ID`/`HOSTNAME`. Precedencia: `EMUGAMES_NETPLAY_URL` >
-`netplay.json.server` > deteccao. Onde **nao** ha porta publicada (ex.:
-Pterodactyl), a mensagem de erro diz qual env definir — ali o TLS precisa de
-proxy proprio. Medido: o servidor e **Socket.IO puro** (~**80 MB**, **3%** de
-CPU com 10 salas x 4 jogadores) — cabe no host do bot. O netplay do EmulatorJS e
-**experimental** (`//control syncing - broken`): a qualidade depende do ping.
+**A URL e resolvida sozinha, em 3 degraus** (o dono nao precisa configurar):
+1. `EMUGAMES_NETPLAY_URL` (dominio proprio / proxy TLS);
+2. **porta publicada do host** — medido que um servidor na `WORKER_1` (12000)
+   responde em `https://work-1-<runtime>/` com HTTP 200 (HTTPS de graca);
+3. **TUNEL CLOUDFLARE** (`cloudflared`): publica o servidor local com endereco
+   **HTTPS publico, sem abrir porta, sem IP publico e SEM CONTA** (quick tunnel).
+   **Medido: HTTP 200 E WebSocket funcionando** pelo tunel, e criar sala pelo
+   endereco publico deu OK.
+
+O tunel e o que faz funcionar em host **sem porta publicada** (Bronxys/
+Pterodactyl). O binario (~40 MB) e baixado por
+`tools/netplay-server/baixar-cloudflared.mjs` e fica **fora do git**; os
+instaladores (`config.js`/`update.js`) o baixam junto das deps. Ele sobe junto
+com o servidor e cai junto (mesmo ciclo sob demanda). **Armadilha medida**: o
+subdominio do quick tunnel **muda a cada vez** e o DNS leva **~30 s** para
+propagar (os primeiros fetches dao `ENOTFOUND`) — por isso a espera e por TEMPO
+(`NETPLAY_TUNNEL_READY_MS`, padrao 90 s), nao por numero de tentativas. Medido: o
+servidor e **Socket.IO puro** (~**80 MB**, **3%** de CPU com 10 salas x 4
+jogadores) — cabe no host do bot. O netplay do EmulatorJS e **experimental**
+(`//control syncing - broken`): a qualidade depende do ping.
 
 ### Testes — `tests/arcade-room.test.js` (11 testes / 35 assercoes)
 Handler real + socket falso: convite (nao o card), convite pendente, `sim` cria
