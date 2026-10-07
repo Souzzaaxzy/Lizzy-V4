@@ -58,6 +58,19 @@ animação). Se o QR aparecer (`!state.creds.registered`), o renderer é destru�
   tela e no scrollback. Regression test cobre exatamente isso
   (`finalize NÃO limpa a tela`).
 
+### Renderização APPEND-ONLY (importante)
+O painel **não é repintado**. Cada linha é escrita **uma vez**: o header (box +
+`◈ BOOT SEQUENCE`) sai no `ready()`; cada etapa é **anexada** quando realmente
+conclui (`step`); o `summary()` anexa ENVIRONMENT/SESSION/SYSTEM/BOT; o
+`finalize()` anexa a tela ONLINE abaixo.
+
+**Por quê**: o console do Pterodactyl (e vários terminais não-xterm) não suportam
+bem "cursor para cima + `\x1b[0J`". A repintura a cada 90ms fazia o conteúdo
+**sumir** ("as coisas aparecem e somem rápido"; sobrava só o final). Sem repaint,
+não há como apagar. A animação de entrada usa repaint **escopado ao próprio bloco
+curto**, antes do painel existir — não mexe nele. Regression test:
+`o painel não deve limpar a tela`.
+
 ### Honestidade embutida
 O renderer **não executa** nada — ele só **apresenta** o que o `connect.js`
 reporta (`step/setEnv/setQueue/setSubBots/setSystem/summary/finalize`). Nunca

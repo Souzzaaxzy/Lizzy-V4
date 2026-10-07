@@ -220,7 +220,7 @@ await test('render completo (TTY): painel, seções reais e tela ONLINE', async 
     r.setQueue('10 lotes de 2 mensagens (20 msgs paralelas)');
 
     const out = await capturar(async () => {
-      await r.intro();
+      await r.ready();          // animação + header (box + BOOT SEQUENCE)
       r.summary();
       await r.finalize();
     });
@@ -251,6 +251,12 @@ await test('render completo (TTY): painel, seções reais e tela ONLINE', async 
     ok(plain.includes('ONLINE') && plain.includes('SYSTEM READY') && plain.includes('WAITING FOR COMMANDS'), 'tela final');
     ok(/L\s*I\s*Z\s*Z\s*Y/.test(plain), 'formação do nome na animação');
     ok(!plain.includes('QR'), 'sessão restaurada NÃO mostra QR');
+    // Append-only: a PARTIR do painel nada é apagado/repintado (era o que sumia
+    // no console). A animação de entrada antes do painel tem repaint próprio,
+    // escopado ao bloco dela.
+    const painelOut = out.slice(out.indexOf('\u25c8 BOOT SEQUENCE'));
+    ok(!/\x1b\[0J/.test(painelOut), 'o painel não deve limpar a tela (\\x1b[0J)');
+    ok(!/\x1b\[\d+A/.test(painelOut), 'o painel não deve mover o cursor para cima');
   } finally {
     if (descritor) Object.defineProperty(process.stdout, 'isTTY', descritor);
     else delete process.stdout.isTTY;
@@ -287,7 +293,7 @@ await test('finalize NÃO apaga o painel (ONLINE é anexado abaixo)', async () =
     r.setSubBots({ total: 0, active: 0 });
 
     const painel = await capturar(async () => {
-      await r.intro();
+      await r.ready();
       r.summary();
     });
     // Captura o finalize ISOLADO: ele NÃO pode emitir cursor-para-cima nem

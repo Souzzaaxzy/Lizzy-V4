@@ -107,6 +107,8 @@ export class BootRenderer {
     this._lastLineCount = 0;
     this._timer = null;
     this._spin = 0;
+    this._headerPrinted = false;
+    this._emitted = new Set(); // ids de etapas já anexadas ao terminal
 
     if (this.enabled && this.ttys) {
       process.stdout.write('\x1b[?25l'); // esconde o cursor
@@ -297,34 +299,39 @@ export class BootRenderer {
     ]);
   }
 
-  _render() {
-    if (!this.ttys) return;
-    const lines = [...this._box(), ''];
-    lines.push(...this._executivo());
-    lines.push(...this._environment());
-    lines.push(...this._session());
-    lines.push(...this._system());
-    lines.push(...this._bot());
-    lines.push('');
+  /** Uma linha de etapa no layout do BOOT SEQUENCE (usada no append). */
+  _stageLine(s) {
+    const emAndamento = s.state === 'loading' || s.state === 'checking' || s.state === 'connecting';
+    const est = emAndamento
+      ? `${C.yellow}${SPINNER[this._spin % SPINNER.length]} ${{ loading: 'LOADING', checking: 'CHECKING', connecting: 'CONNECTING' }[s.state]}${C.reset}`
+      : estadoEtapa(s.state);
+    const prefix = `◇ ${s.num}  ${s.label}`;
+    const dots = '.'.repeat(Math.max(2, 40 - visLen(prefix)));
+    return `${C.cyan}${prefix} ${C.gray}${dots}${C.reset} ${est}`;
+  }
 
-    if (this._lastLineCount > 0) {
-      process.stdout.write(`\x1b[${this._lastLineCount}A`);
-    }
-    process.stdout.write('\x1b[0J');
+  /** Anexa a linha de uma etapa (uma vez só). */
+  _emitStage(s) {
+    if (!this._headerPrinted || this._emitted.has(s.id)) return;
+    this._emitted.add(s.id);
+    process.stdout.write(this._stageLine(s) + '\n');
+  }
+
+  /** Anexa as etapas ainda não emitidas, na ordem (garante as 8 no fim). */
+  _flushStages() {
+    for (const s of this.stages.values()) this._emitStage(s);
+  }
+
+  _emitLines(lines) {
     for (const l of lines) process.stdout.write(l + '\n');
-    this._lastLineCount = lines.length;
-    this.rendered = true;
   }
 
-  /** Repinta o painel (sem duplicar linhas). Ignorado durante a animação. */
-  render() {
-    if (!this.enabled || !this.ttys || !this.animated || this._finished) return;
-    this._render();
-  }
+  /** No modo append-only não há repintura do painel. */
+  render() {}
 
   // ───────────────────────────── API usada pelo connect ──────────────────────
 
-  /** Marca uma etapa com um estado explícito. */
+  /** Marca uma etapa com um estado explícito e a anexa ao terminal. */
   step(id, state) {
     const s = this.stages.get(id);
     if (!s) return;
@@ -334,37 +341,27 @@ export class BootRenderer {
       s._start = null;
     }
     s.state = state;
-    this.render();
+    if (etapaOk(state)) this._emitStage(s);
   }
 
   setEnv(env = {}) {
     Object.assign(this.snapshot, env);
-    this.render();
   }
 
   setQueue(parallel) {
     this.snapshot.parallel = parallel;
-    this.render();
   }
 
   setSubBots(info) {
     this.snapshot.subBots = info;
-    this.render();
   }
 
   setSystem(patch = {}) {
     Object.assign(this.snapshot, patch);
-    this.render();
   }
 
-  /** Inicia o giro do spinner e repinta a cada ~90ms. */
+  /** Inicia o giro do spinner (não repinta: o painel é append-only). */
   startRefresh() {
-    if (!this.enabled || !this.ttys || this._timer || this._finished) return this;
-    this._timer = setInterval(() => {
-      this._spin++;
-      this._render();
-    }, 90);
-    if (this._timer.unref) this._timer.unref();
     return this;
   }
 
@@ -376,11 +373,21 @@ export class BootRenderer {
     return this;
   }
 
-  /** Conclui a animação e permite a renderização do painel. */
+  /** Conclui a animação e imprime o header (box + título do BOOT SEQUENCE). */
   async ready() {
     await this.intro();
     this.animated = true;
-    this.render();
+    if (!this.enabled || !this.ttys || this._finished) return;
+    this._emitLines(this._box());
+    this._emitLines(['']);
+    this._emitLines([`${C.bold}◈ BOOT SEQUENCE${C.reset}`, `${C.blue}${LINE}${C.reset}`]);
+    this._headerPrinted = true;
+    // Só as etapas JÁ concluídas até aqui (ex.: core/deps/ytdlp). As demais são
+    // anexadas quando realmente terminarem (via step) — nunca como "pending"
+    // fixo, que as travaria no estado errado.
+    for (const s of this.stages.values()) {
+      if (etapaOk(s.state)) this._emitStage(s);
+    }
     this.startRefresh();
   }
 
@@ -397,7 +404,14 @@ export class BootRenderer {
         if (!etapaOk(s.state)) s.state = 'failed';
       }
     }
-    this._render();
+    if (!this.enabled || !this.ttys) return;
+    this._headerPrinted = true;
+    this._flushStages();                 // garante as 8 etapas na ordem
+    this._emitLines(this._environment());
+    this._emitLines(this._session());
+    this._emitLines(this._system());
+    this._emitLines(this._bot());
+    this._emitLines(['']);
   }
 
   async finalize() {
