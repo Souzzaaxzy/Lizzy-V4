@@ -39,6 +39,39 @@ precisar.
 precisam acompanhar — o `package-lock.json` (npm) e o `yarn.lock` (yarn, com o
 **checksum**). Trocar só um deixa um dos lados quebrado.
 
+### 2ª falha: `github:` vira SSH e o Cloudflare não tem chave SSH
+Depois do checksum, o build falhou com:
+
+```
+YN0001: @itsliaaa/baileys@github:Souzzaaxzy/baileys: Failed listing refs
+  Repository URL: ssh://git@github.com/Souzzaaxzy/baileys.git
+  Fatal Error: Could not read from remote repository.
+```
+
+**Causa**: o atalho **`github:owner/repo`** resolve para **SSH** (`ssh://git@…`)
+no yarn. O Cloudflare **não tem chave SSH** — só HTTPS anônimo. (`lizzy-call`
+nunca quebrou porque já usava `git+https://…`.)
+
+**Correção**: trocar a spec para **`git+https://github.com/Souzzaaxzy/baileys.git#<commit>`**
+em `package.json`, `package-lock.json` e `yarn.lock`. Pinar o commit na URL é
+obrigatório — sem o `#<commit>` o yarn resolve para o **HEAD do main**.
+
+### ARMADILHA GRANDE: `npm install` sobrescreve o `yarn.lock` (formato v1)
+Neste repo convivem `package-lock.json` (npm, que o **bot** usa) e `yarn.lock`
+(yarn/Berry, que o **Cloudflare** usa). Rodar `npm install` **reescreve o
+`yarn.lock` no formato v1** (do yarn clássico), destruindo o lock Berry.
+
+**Ordem que funciona**: fazer o `npm install` PRIMEIRO (garante `node_modules`
+para o bot) e **restaurar/gravar o `yarn.lock` Berry por último**. Sempre conferir
+`head -2 yarn.lock` = `__metadata:` / `version: 8` antes de commitar.
+
+**Validação do lock Berry** (re-baixa e confere checksum, sem sujar o repo):
+
+```bash
+rm -f ~/.yarn/berry/cache/@itsliaaa-baileys*.zip ~/.yarn/berry/cache/lizzy-call*.zip
+corepack yarn install --check-cache
+```
+
 ## 🕹️ EmuGames — MENU `!arcade` + 13 jogos SNES (out/2026) ✅
 O catálogo de emulador cresceu de 3 para **16 jogos** e ganhou um menu próprio.
 
