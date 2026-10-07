@@ -78,15 +78,29 @@ seguem o fluxo normal.
   `EMUGAMES_NETPLAY_URL`. Vazio = so single-player (o convite avisa que a sala
   nao esta configurada).
 
-### LIMITE HONESTO — o servidor de netplay NAO foi incluido
-O **EmulatorJS-Netplay** (servidor) precisa de **processo persistente + TCP** e
-**TLS** (o site e https, entao `ws://` e bloqueado pelo navegador -> precisa de
-proxy TLS na frente). O Cloudflare Workers **nao** serve (nao mantem WebSocket
-longo). Medido pelo agente: o servidor e **Socket.IO puro** (nao usa WebRTC/UDP
-no lado do servidor), ~**80 MB** e **3%** de CPU com 10 salas x 4 jogadores —
-cabe no host do bot. **Esta integracao ja esta pronta e so aponta para ele** via
-`EMUGAMES_NETPLAY_URL`. O netplay do EmulatorJS e **experimental** (o proprio
-codigo tem `//control syncing - broken`): a qualidade depende do ping.
+### O SERVIDOR DE NETPLAY — SOB DEMANDA (out/2026) ✅
+O servidor **esta incluido** (`tools/netplay-server/`) e tem ciclo de vida
+automatico: **nao fica ligado o tempo todo**.
+
+- **Sobe** no instante em que alguem aceita uma sala (`!kof @x` + `sim`). Quem
+  sobe e o bot (`dados/src/funcs/utils/netplayServer.js`).
+- **Desliga sozinho** quando **todas** as salas fecham
+  (`NETPLAY_IDLE_SHUTDOWN_MS`, padrao 60s). Se ninguem criar sala depois de
+  subir, sai no `NETPLAY_GRACE_MS` (padrao 120s). Sala nova **cancela** a saida.
+- `NETPLAY_SELF_SHUTDOWN=0` mantem o servidor fixo (quem ja tem um rodando).
+
+Base: `EmulatorJS/EmulatorJS-Netplay` (`main`, MIT) + o auto-desligamento e um
+`GET /status`. As dependencias (`express`/`socket.io`/`cors`) vivem **no pacote
+do servidor** — nao inflam as do bot. O bot sobe o processo **antes** de criar a
+sala (sem sala orfa se o netplay falhar) e o link da sala leva `?netplay=<url>`
+(o site mora no Cloudflare; o servidor sobe no host do bot). No player, o
+`?netplay=` do link **vence** o `netplay.json`.
+
+**TLS continua necessario** para o aparelho: o site e https e o navegador
+bloqueia `ws://` -> ponha um proxy TLS na frente (ou use porta ja exposta com
+TLS). Medido: o servidor e **Socket.IO puro** (~**80 MB**, **3%** de CPU com 10
+salas x 4 jogadores) — cabe no host do bot. O netplay do EmulatorJS e
+**experimental** (`//control syncing - broken`): a qualidade depende do ping.
 
 ### Testes — `tests/arcade-room.test.js` (11 testes / 35 assercoes)
 Handler real + socket falso: convite (nao o card), convite pendente, `sim` cria
