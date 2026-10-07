@@ -147,15 +147,15 @@ await test('index.html: player multi-jogo com os caminhos certos', () => {
   ok(/orientation:\s*landscape[\s\S]*position:\s*fixed/.test(css), 'paisagem: o player ocupa a tela cheia');
   ok(/orientation:\s*landscape[\s\S]*header\s*\{\s*display:\s*none/.test(css), 'paisagem: esconde o cabecalho');
   ok(/orientation:\s*landscape[\s\S]*\.b_r\s*\{\s*top:\s*-70px/.test(css), 'paisagem: aproxima o ombro R (nao sai da tela)');
-  // Diamante dos botoes: padrao unico (X topo / Y esq / A dir / B baixo).
-  // O EmulatorJS usa esse padrao no SNES, mas em arcade/mame/default ele sai
-  // ROTACIONADO (Y topo / X esq / B dir / A baixo) -- o CSS corrige os dois
-  // esquemas que estao errados, sem tocar no SNES.
-  ok(/\.b_x\s*\{\s*left:\s*40px\s*!important;\s*top:\s*0\s*!important/.test(css), 'diamante: X no topo');
-  ok(/\.b_y\s*\{\s*left:\s*0\s*!important;\s*top:\s*40px\s*!important/.test(css), 'diamante: Y a esquerda');
-  ok(/\.b_a\s*\{\s*left:\s*80px\s*!important;\s*top:\s*40px\s*!important/.test(css), 'diamante: A a direita');
-  ok(/\.b_b\s*\{\s*left:\s*40px\s*!important;\s*top:\s*80px\s*!important/.test(css), 'diamante: B embaixo');
-  ok(css.includes(':not(.cs_snes)'), 'diamante: NAO mexe no SNES (que ja esta certo)');
+  // Diamante dos botoes: padrao unico, IGUAL AO ARCADE (pedido do dono):
+  //   topo = Y | esquerda = X | direita = B | baixo = A
+  // O EmulatorJS muda o layout por controlScheme (snes X-topo, arcade Y-topo);
+  // o CSS padroniza TUDO no do arcade, com !important (posicao vem inline).
+  ok(/\.b_y\s*\{\s*left:\s*40px\s*!important;\s*top:\s*0\s*!important/.test(css), 'diamante: Y no topo');
+  ok(/\.b_x\s*\{\s*left:\s*0\s*!important;\s*top:\s*40px\s*!important/.test(css), 'diamante: X a esquerda');
+  ok(/\.b_b\s*\{\s*left:\s*80px\s*!important;\s*top:\s*40px\s*!important/.test(css), 'diamante: B a direita');
+  ok(/\.b_a\s*\{\s*left:\s*40px\s*!important;\s*top:\s*80px\s*!important/.test(css), 'diamante: A embaixo');
+  ok(!css.includes(':not(.cs_snes)'), 'diamante: vale para TODOS os esquemas (sem excecao)');
   ok(html.includes("callEvent('exit')"), 'para o emulador pela API real (callEvent exit)');
   ok(html.includes('freeze'), 'trata o congelamento do webview');
   ok(html.includes('pageshow'), 'reage ao voltar para a pagina');

@@ -98,20 +98,19 @@ main { width: 100%; max-width: 760px; display: flex; flex-direction: column; gap
 #game .ejs_menu_bar { z-index: 9999; }
 
 /*
-  DIAMANTE DOS BOTOES — padrao unico (medido).
+  DIAMANTE DOS BOTOES — padrao unico, IGUAL AO ARCADE (pedido do dono).
   O EmulatorJS posiciona cada botao por `left`/`top` INLINE (px), e o layout
-  muda conforme o `controlScheme`:
-    - SNES  -> X topo / Y esq / A dir / B baixo   (correto)
-    - arcade, mame e o default -> Y topo / X esq / B dir / A baixo  (rotacionado)
-  O segundo sai "girado" em relacao ao padao (X em cima), o que confunde.
-  Aqui a gente forca o MESMO diamante do SNES em todos os outros esquemas.
-  O `:not(.cs_snes)` evita mexer no SNES (que ja esta certo). Precisa de
-  `!important` porque a posicao vem inline no elemento.
+  muda conforme o `controlScheme` (medido no navegador):
+    - snes -> X topo / Y esq / A dir / B baixo
+    - arcade/mame/default -> Y topo / X esq / B dir / A baixo
+  Aqui o layout do ARCADE e aplicado em TODOS os esquemas (inclusive o snes):
+      topo = Y | esquerda = X | direita = B | baixo = A
+  Precisa de `!important` porque a posicao vem inline no elemento.
 */
-#game .ejs_virtualGamepad_button:not(.cs_snes).b_x { left: 40px !important; top: 0 !important; }
-#game .ejs_virtualGamepad_button:not(.cs_snes).b_y { left: 0 !important; top: 40px !important; }
-#game .ejs_virtualGamepad_button:not(.cs_snes).b_a { left: 80px !important; top: 40px !important; }
-#game .ejs_virtualGamepad_button:not(.cs_snes).b_b { left: 40px !important; top: 80px !important; }
+#game .ejs_virtualGamepad_button.b_y { left: 40px !important; top: 0 !important; }
+#game .ejs_virtualGamepad_button.b_x { left: 0 !important; top: 40px !important; }
+#game .ejs_virtualGamepad_button.b_b { left: 80px !important; top: 40px !important; }
+#game .ejs_virtualGamepad_button.b_a { left: 40px !important; top: 80px !important; }
 
 /*
   PAISAGEM (celular deitado): o jogo ocupa a TELA INTEIRA e os controles
