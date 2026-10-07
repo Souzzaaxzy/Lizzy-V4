@@ -39,6 +39,7 @@ import { figurinhaParaStatus } from './utils/stickerStatus.js';
 import { normalizarIdGrupo, ehJidCanal, buildFollowChannelContent, fotoDoMetadataNewsletter, normalizarGrupos, adicionarGrupo, removerGrupo } from './utils/canalDivulgacao.js';
 import sharp from 'sharp';
 import * as ghostDetection from './utils/ghostDetection.js';
+import { detectarPaymentRespondida, alvoDaRemocao } from './utils/quotedPayment.js';
 import { isPaymentContent, buildPaymentDeleteKeys, buildPaymentEditContent, resolveParticipantPn, isBotAuthor } from './utils/deletePayment.js';
 import { bold as boldLayout, boldItalic as boldItalicLayout, abrirCategoria, fecharCategoria } from './menus/layout.js';
 import {
@@ -239,6 +240,23 @@ function markGhostPunished(group, author) {
     }
   }
   punishedGhosts.set(`${group}${GHOST_PUNISH_KEY_SEP}${author}`, now + GHOST_PUNISH_WINDOW_MS);
+}
+
+/**
+ * Cache de payments já tratadas por RESPOSTA suspeita (grupo|id). Vários membros
+ * respondendo o mesmo card não podem disparar N remoções do mesmo autor.
+ */
+const quotedPaymentCache = new Map();
+const QUOTED_PAYMENT_TTL_MS = 60 * 1000;
+function jaTratouQuotedPayment(group, id) {
+  if (!group || !id) return false;
+  const key = `${group}|${id}`;
+  const at = quotedPaymentCache.get(key);
+  if (at !== undefined) return true;
+  quotedPaymentCache.set(key, Date.now());
+  const t = setTimeout(() => quotedPaymentCache.delete(key), QUOTED_PAYMENT_TTL_MS);
+  t?.unref?.();
+  return false;
 }
 
 /**
@@ -4075,6 +4093,51 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     // ele acompanha quase todo tipo de mensagem, então não serve de assinatura.
     // O marcador é o valor zerado, com o tipo e as menções como reforço.
     //
+    // ── Payment RESPONDIDA (quoted) — parte do `!antifantasma` ─────────────
+    // Quando alguém RESPONDE a um card de payment com a assinatura suspeita
+    // (transactionData grande + várias menções ou link), remove o AUTOR ORIGINAL
+    // do card. É a técnica do flood por resposta a um payload antigo. O alvo é
+    // quem MANDOU o card (contextInfo.participant), não quem respondeu.
+    // Módulo puro `quotedPayment.js` decide; o efeito fica no handler.
+    // A guarda é sobre o AUTOR do card (não sobre quem responde): quem responde
+    // pode ser qualquer membro — inclusive admin — e o alvo continua sendo o
+    // autor do payment.
+    if (isGroup && isAntiInvi && !info.key.fromMe && isBotAdmin && !isUserWhitelisted(sender, 'antipagamento')) {
+      const det = detectarPaymentRespondida(info);
+      if (det.ataque && !jaTratouQuotedPayment(from, det.id)) {
+        try {
+          const metadata = await nazu.groupMetadata(from).catch(() => null);
+          const alvo = alvoDaRemocao(metadata?.participants || [], det.author);
+          if (!alvo) {
+            console.log('[QUOTED PAYMENT] Autor não resolvido ou é ADM, ignorado:', String(det.author).split('@')[0]);
+          } else {
+            console.log(
+              `[QUOTED PAYMENT] tipo=${det.paymentType} autor=${String(det.author).split('@')[0]} ` +
+              `mencoes=${det.mentions} tx=${det.transactionLength} link=${det.hasLink}`
+            );
+            const newsletterCtxQuoted = {
+              forwardingScore: 999,
+              isForwarded: true,
+              forwardedNewsletterMessageInfo: {
+                newsletterJid: "120363410980452460@newsletter",
+                newsletterName: "Lizzy"
+              }
+            };
+            await nazu.groupParticipantsUpdate(from, [alvo.jid], 'remove')
+              .catch((e) => console.error('[QUOTED PAYMENT] falha ao remover:', e?.message || e));
+            await nazu.sendMessage(from, {
+              text: `❌ @${String(det.author).split('@')[0]} foi removido por enviar um pagamento suspeito.`,
+              mentions: [det.author],
+              contextInfo: newsletterCtxQuoted,
+            }).catch(() => {});
+            markGhostPunished(from, det.author);
+          }
+        } catch (e) {
+          console.error('[QUOTED PAYMENT ERROR]', e?.message || e);
+        }
+      }
+    }
+
     // `classification.paymentAmount.isZero` cobre os dois caminhos do zero
     // (`amount1000` e `amount.value`) e desembrulha ViewOnce, então um único
     // predicado basta — não é preciso olhar o tipo interno.

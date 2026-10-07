@@ -3783,6 +3783,39 @@ passa a ser uma linha (`ghostDetection.decidir(...)` no lugar do gate).
 `tests/defensive-protection.test.js` falha (48 asserts) — **pré-existente**,
 comprovado com `git worktree` no commit anterior. Não tem relação com isto.
 
+## PAYMENT RESPONDIDA (quoted) — integrado ao `!antifantasma` (out/2026) ✅
+Quando alguém **RESPONDE** a um card de pagamento com a **assinatura suspeita**,
+o **AUTOR ORIGINAL** do card é removido do grupo (não quem respondeu). É a
+técnica do flood por resposta a um payload antigo.
+
+### Assinatura (a mesma dos outros antis — objetivo, não heurística)
+`transactionData.length >= 512` **E** (`menções >= 2` **OU** link/convite no
+texto). Exigir os dois lados evita banir por payment comum.
+
+### Módulo puro `dados/src/utils/quotedPayment.js`
+`detectarPaymentRespondida(info)` (descasca wrappers viewOnce/efêmera/editada e
+lê o `contextInfo` da folha), `tipoPaymentCitado`, `assinaturaSuspeita`,
+`tamanhoTransactionData`, `temLink`, `autorEhAdmin`, `alvoDaRemocao`.
+**Reutiliza o `classifyMessage` central** para o TEXTO e as MENÇÕES (nada de um
+segundo parser de payment) e o `findParticipantByNumber` para achar o autor.
+
+### No handler (`index.js`) — unificado, não paralelo
+O bloco roda **junto do bloco anti-pagamento**, gated por **`!antifantasma`
+(`isAntiInvi`)** — é o que o dono pediu ("adicione ao resto e unificado"). A
+guarda é sobre o **AUTOR** do card (o alvo), não sobre quem responde: quem
+responde pode ser qualquer membro, inclusive admin. Dedup por `grupo|stanzaId`
+(`jaTratouQuotedPayment`, 60s) para que N respostas ao mesmo card não disparem N
+remoções. Remoção pelo WhatsApp (`groupParticipantsUpdate ... 'remove'`), com
+aviso usando o **cabeçalho de canal**; admin do grupo é recusado.
+
+### Testes — `tests/quoted-payment.test.js` (10 testes / 31 asserções)
+Módulo puro (assinatura, helpers, detecção, alvo/admin) + **handler real**:
+remove o autor quando ligado; **não** age desligado, em payment comum, nem com
+autor admin; e **deduplica** duas respostas ao mesmo card. Verificado que, com o
+bloco neutralizado, 4 asserções falham (o teste mede a mudança).
+**Pré-existente** (não é regressão): `defensive-protection` mantém **28**
+falhas — idêntico no baseline (confirmado com `git stash`).
+
 ## `!get` — ANÁLISE FORENSE DE MENSAGEM INVISÍVEL (set/2026) ✅
 Nova categoria do `!get`: **"🕵️ ANÁLISE DE MENSAGEM INVISÍVEL"**. Ela **não**
 procura um campo chamado "invisible" — ela monta, a partir do que é realmente
