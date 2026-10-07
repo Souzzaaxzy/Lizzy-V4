@@ -363,7 +363,11 @@ async function loadCatalog() {
       loadedAt: Date.now(),
       timestamp,
     };
-    console.log(`[APK] catálogo F-Droid carregado: ${map.size} apps em ${Date.now() - started}ms (${(bytes / 1048576).toFixed(1)} MB)`);
+    // No boot da sessão já pareada o painel visual substitui esta linha; o
+    // catálogo CONTINUA carregando normalmente (só a exibição é silenciada).
+    if (process.env.LIZZY_SESSION_BOOT !== '1') {
+      console.log(`[APK] catálogo F-Droid carregado: ${map.size} apps em ${Date.now() - started}ms (${(bytes / 1048576).toFixed(1)} MB)`);
+    }
     return catalog;
   } catch (error) {
     catalogPromise = null; // permite tentar de novo

@@ -124,6 +124,11 @@ async function convertIdsToLid(nazu, ids) {
   return converted;
 }
 
+// Tamanho atual do cache JID→LID em memória (usado pelo boot da sessão).
+function getJidLidCacheSize() {
+  return jidLidMemoryCache.size;
+}
+
 // Verifica se dois IDs são equivalentes (ignora sufixo @lid/@s.whatsapp.net e :XX)
 function idsMatch(id1, id2) {
   if (!id1 || !id2) return false;
@@ -966,6 +971,7 @@ export {
   loadJsonFile,
   clearJsonFileCache,
   initJidLidCache,
+  getJidLidCacheSize,
   saveJidLidCache,
   flushJidLidCache,
   getLidFromJidCached,

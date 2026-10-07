@@ -43,9 +43,9 @@ const getVersion = () => {
 let botProcess = null;
 const version = getVersion();
 
-async function setupTermuxAutostart() {
+async function setupTermuxAutostart(quiet = false) {
   if (!isTermux) {
-    info('📱 Não está rodando no Termux. Ignorando configuração de autostart.');
+    if (!quiet) info('📱 Não está rodando no Termux. Ignorando configuração de autostart.');
     return;
   }
 
@@ -155,11 +155,11 @@ async function displayHeader() {
   console.log();
 }
 
-async function checkYtDlp() {
+async function checkYtDlp(quiet = false) {
   // Checa se yt-dlp está instalado; se não, instala automaticamente (sem root).
   // Necessário para o download local de YouTube (!play / !ytmp3 / !ytmp4).
   // Ordem: pip → ensurepip+pip → binário standalone oficial do GitHub (~/.local/bin).
-  info('📥 Verificando yt-dlp (download de YouTube)...');
+  if (!quiet) info('📥 Verificando yt-dlp (download de YouTube)...');
   const homeBin = path.join(os.homedir(), '.local', 'bin');
   const binName = isWindows ? 'yt-dlp.exe' : 'yt-dlp';
   const localBin = path.join(homeBin, binName);
@@ -213,11 +213,11 @@ async function checkYtDlp() {
   }
   aviso('⚠️ yt-dlp não instalado. Comandos de YouTube (!play) ficarão indisponíveis.');
 }
-async function checkPrerequisites() {
+async function checkPrerequisites({ quiet = false } = {}) {
   // Apenas verifica se os arquivos básicos existem
   // Sem backup/restore automático na inicialização
   
-  info('📦 Verificando dependências...');
+  if (!quiet) info('📦 Verificando dependências...');
   
   // PASSO 1: Verificar package.json
   if (!fsSync.existsSync(PACKAGE_JSON)) {
@@ -231,10 +231,10 @@ async function checkPrerequisites() {
     process.exit(1);
   }
   
-  info('✅ Verificação concluída!');
+  if (!quiet) info('✅ Verificação concluída!');
   
   // PASSO 3: Instalar/atualizar dependências
-  info('📦 Instalando dependências...');
+  if (!quiet) info('📦 Instalando dependências...');
   
   if (!fsSync.existsSync(PACKAGE_JSON)) {
     aviso(`❌ Arquivo package.json não encontrado em: ${PROJECT_ROOT}`);
@@ -251,8 +251,8 @@ async function checkPrerequisites() {
   
   for (const cmd of installCommands) {
     try {
-      info(`⏳ Executando: ${cmd}`);
-      console.log(`${colors.yellow}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${colors.reset}`);
+      if (!quiet) info(`⏳ Executando: ${cmd}`);
+      if (!quiet) console.log(`${colors.yellow}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${colors.reset}`);
       
       execSync(cmd, { 
         stdio: 'inherit', 
@@ -261,12 +261,12 @@ async function checkPrerequisites() {
         env: { ...process.env }
       });
       
-      console.log(`${colors.yellow}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${colors.reset}`);
-      mensagem(`✅ Dependências instaladas com sucesso!`);
+      if (!quiet) console.log(`${colors.yellow}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${colors.reset}`);
+      if (!quiet) mensagem(`✅ Dependências instaladas com sucesso!`);
       installed = true;
       break;
     } catch (error) {
-      aviso(`⚠️ Falhou: ${cmd}`);
+      if (!quiet) aviso(`⚠️ Falhou: ${cmd}`);
     }
   }
   
@@ -276,7 +276,7 @@ async function checkPrerequisites() {
   }
   
   // PASSO 3.5: yt-dlp (download local de YouTube)
-  await checkYtDlp();
+  await checkYtDlp(quiet);
   
   // PASSO 4: Verificar config.json
   if (!fsSync.existsSync(CONFIG_PATH)) {
@@ -309,24 +309,31 @@ async function getServerIP() {
   }
 }
 
-async function startBot(codeMode = false) {
+async function startBot(codeMode = false, sessionMode = false) {
   const args = ['--expose-gc', CONNECT_FILE];
   if (codeMode) args.push('--code');
 
-  // Mostrar IP do servidor
-  const serverIP = await getServerIP();
-  info(`🌐 IP do Servidor: ${colors.yellow}${serverIP}${colors.reset}`);
-
-  info(`📷 Iniciando com ${codeMode ? 'código de pareamento' : 'QR Code'}`);
+  // No fluxo da sessão já pareada o boot visual do connect assume a
+  // apresentação — aqui não imprimimos header/decisão de fluxo.
+  const serverIP = sessionMode ? null : await getServerIP();
+  if (!sessionMode) {
+    info(`🌐 IP do Servidor: ${colors.yellow}${serverIP}${colors.reset}`);
+    info(`📷 Iniciando com ${codeMode ? 'código de pareamento' : 'QR Code'}`);
+  }
 
   botProcess = spawn('node', args, {
     stdio: 'inherit',
-    env: { ...process.env, FORCE_COLOR: '1' },
+    env: {
+      ...process.env,
+      FORCE_COLOR: '1',
+      LIZZY_SESSION_BOOT: sessionMode ? '1' : '0',
+      LIZZY_BOOT_IP: serverIP || '',
+    },
   });
 
   botProcess.on('error', (error) => {
     aviso(`❌ Erro ao iniciar o processo do bot: ${error.message}`);
-    restartBot(codeMode);
+    restartBot(codeMode, sessionMode);
   });
 
   botProcess.on('close', (code, signal) => {
@@ -338,7 +345,17 @@ async function startBot(codeMode = false) {
     //   SIGSEGV (11) -> crash de memoria em codigo nativo
     // O log antigo dizia so "codigo: null", o que escondia a causa.
     const porSinal = signal ? ` | sinal: ${signal}` : '';
-    if (code === 0) {
+    if (sessionMode) {
+      // O boot da sessão já pareada é apresentado pelo processo filho; no
+      // encerramento basta registrar o motivo e reiniciar.
+      if (code === 0) {
+        info(`✅ O bot terminou normalmente (código: ${code}). Reiniciando...`);
+      } else if (signal) {
+        aviso(`⚠️ O bot foi MORTO POR SINAL: ${signal}. Reiniciando...`);
+      } else {
+        aviso(`⚠️ O bot terminou (código: ${code}${porSinal}). Reiniciando...`);
+      }
+    } else if (code === 0) {
       info(`✅ O bot terminou normalmente (código: ${code}). Reiniciando...`);
     } else if (signal) {
       const causa = {
@@ -351,18 +368,34 @@ async function startBot(codeMode = false) {
     } else {
       aviso(`⚠️ O bot terminou com erro (código: ${code}${porSinal}). Reiniciando...`);
     }
-    restartBot(codeMode);
+    restartBot(codeMode, sessionMode);
   });
 
   return botProcess;
 }
 
-function restartBot(codeMode) {
+function restartBot(codeMode, sessionMode = false) {
   aviso('🔄 Reiniciando o bot em 500ms...');
   setTimeout(() => {
     if (botProcess) botProcess.removeAllListeners();
-    startBot(codeMode);
+    startBot(codeMode, sessionMode);
   }, 500);
+}
+
+/**
+ * Heurística rápida: existe credencial de sessão pareada? (usado só para
+ * encurtar a verificação de dependências no fluxo de sessão existente).
+ * É conservadora: na dúvida devolve false, e aí o fluxo original roda inteiro.
+ */
+function temSessaoRegistrada() {
+  try {
+    const credsPath = path.join(QR_CODE_DIR, 'creds.json');
+    if (!fsSync.existsSync(credsPath)) return false;
+    const creds = JSON.parse(fsSync.readFileSync(credsPath, 'utf8'));
+    return Boolean(creds?.registered && creds?.me?.id);
+  } catch {
+    return false;
+  }
 }
 
 async function checkAutoConnect() {
@@ -413,17 +446,23 @@ async function promptConnectionMethod() {
 async function main() {
   try {
     setupGracefulShutdown();
-    await displayHeader();
-    await checkPrerequisites();
-    await setupTermuxAutostart();
 
-    const hasSession = await checkAutoConnect();
-    if (hasSession) {
-      mensagem('📷 Sessão de QR Code detectada. Conectando automaticamente...');
-      startBot(false);
+    // DECISÃO DE FLUXO (a mesma de antes, sem inventar condição):
+    //   FLUXO 1 — sessão existente válida  -> boot visual novo.
+    //   FLUXO 2 — primeiro login (QR/código) -> apresentação ORIGINAL, intacta.
+    const sessaoExistente = temSessaoRegistrada() || await checkAutoConnect();
+
+    if (sessaoExistente) {
+      await displayHeader();            // continua mostrando a versão/fork da lib
+      await checkPrerequisites({ quiet: true });
+      await setupTermuxAutostart(true);
+      startBot(false, true);            // FLUXO 1 — boot visual (connect)
     } else {
+      await displayHeader();
+      await checkPrerequisites();
+      await setupTermuxAutostart();
       const { method } = await promptConnectionMethod();
-      startBot(method === 'code');
+      startBot(method === 'code', false); // FLUXO 2 — original, sem alterações
     }
   } catch (error) {
     aviso(`❌ Erro inesperado: ${error.message}`);

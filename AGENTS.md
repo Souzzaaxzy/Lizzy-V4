@@ -1,5 +1,83 @@
 # AGENTS.md — Lizzy-V4 / Abyss Bot
 
+## 🚀 BOOT VISUAL da SESSÃO JÁ PAREADA (`bootRenderer.js`) — out/2026 ✅
+Quando a Lizzy **já tem sessão válida** e conecta sozinha, o boot passa a ser
+apresentado por um **renderer central** (`dados/src/utils/bootRenderer.js`) em vez
+de uma sequência de `console.log()` espalhada. O **primeiro login (QR/pairing)
+NÃO usa nada disso** — a apresentação original segue intacta.
+
+### A separação dos dois fluxos (regra principal)
+- **FLUXO 1 (sessão existente)** — `start.js` detecta credencial registrada
+  (`creds.json` com `registered` + `me.id`, ou a checagem original
+  `checkAutoConnect`), sobe o bot com `LIZZY_SESSION_BOOT=1` e no `connect.js` o
+  renderer assume **somente se** `LIZZY_SESSION_BOOT === '1'` **E**
+  `state.creds.registered`. Nesse fluxo o `start.js` fica silencioso (sem header
+  de fluxo, sem IP, sem "Iniciando com QR Code"; dependências/yt-dlp em modo
+  quiet) e as mensagens do Termux/autostart e do catálogo F-Droid são silenciadas.
+- **FLUXO 2 (primeiro login)** — `start.js` pergunta o método, sobe o bot **sem**
+  a flag; o `connect.js` **não** instancia o renderer e tudo (QR, pairing,
+  "Iniciando Abyss", header, logs, Termux, F-Droid) fica **exatamente como era**.
+
+### Como decide qual tela (condição REAL, não artificial)
+`startBot(codeMode, sessionMode)` no `start.js` propaga `LIZZY_SESSION_BOOT`.
+No `connect.js` o renderer só nasce dentro de `createBotSocket` quando
+`sessaoExistente` é verdadeiro, e só **uma vez por processo** (`_bootTentado`) —
+numa reconexão em runtime a apresentação volta ao fluxo normal (não repete a
+animação). Se o QR aparecer (`!state.creds.registered`), o renderer é destruído e
+`_boot = null`: o fluxo original assume na hora.
+
+### O que o boot mostra (tudo com dado REAL)
+- **Animação**: bola cai na diagonal → impacta o `L` → partículas `✦` → o `L`
+  **recua** (a "caidinha" lateral) → a bola **quica** → `L`→`Li`→`Lizz`→`Lizzy`
+  → `L I Z Z Y` + `SYSTEM BOOT` / `v<major>`. Usa a **mesma região** (`\r`/cursor
+  para cima + `\x1b[0J`), sem despejar linhas. Curta (~2,5s) e roda **sem
+  bloquear** o boot (o connect reporta os passos em paralelo).
+- **BOOT SEQUENCE** — 8 etapas; estados **reais**: `✓ ONLINE/READY/CONNECTED/
+  ACTIVE`, em andamento `◐ LOADING/CHECKING/CONNECTING` (com spinner `◐◓◑◒` que
+  **acompanha o evento real**, não simula conexão), `! WARNING`, `✗ FAILED`.
+- **ENVIRONMENT** — IP do servidor (do `start.js`, via `LIZZY_BOOT_IP`),
+  **Baileys** (versão + `Souzzaaxzy/baileys` do `baileysInfo.js`), **WhatsApp**
+  (versão real de `getWAVersion()`).
+- **SESSION** — `RESTORED`, `AUTO CONNECT`, `JID-LID N ENTRIES`
+  (`getJidLidCacheSize()` novo em `helpers.js`), `CAPTCHA N PENDING`
+  (`CaptchaIndex.stats().active`).
+- **SYSTEM** — otimização/contador/auto-reset/plugin manager (todos os sistemas
+  que o `connect.js` inicializa) e **sub-bots** reais (`listSubBots()` → total e
+  ativos).
+- **BOT** — nome/prefixo/dono do `config.json` e o **paralelismo** real da
+  `messageQueue` (`batchSize` lotes × `messagesPerBatch`).
+- **Final** — só depois de `connection === 'open'` e da inicialização: caixa
+  `● ONLINE` + `L I Z Z Y` + `WHATSAPP ENGINE READY` / `SYSTEM READY` /
+  `WAITING FOR COMMANDS` / `❯`.
+
+### Honestidade embutida
+O renderer **não executa** nada — ele só **apresenta** o que o `connect.js`
+reporta (`step/setEnv/setQueue/setSubBots/setSystem/summary/finalize`). Nunca
+marca uma etapa como concluída sem o evento real; em erro (`summary({error:true})`)
+as pendentes viram `✗ FAILED`. Sem terminal interativo (`isTTY` falso) ele **não
+emite ANSI** (sem quebrar logs) e apenas confirma em texto. Não há dependência
+externa — ANSI puro.
+
+### Arquivos
+| Caminho | Papel |
+|---|---|
+| `dados/src/utils/bootRenderer.js` | o renderer (animação, painel, tela final) |
+| `dados/src/connect.js` | instancia/reporta o boot (só no FLUXO 1) |
+| `dados/src/.scripts/start.js` | decide os fluxos; quiet no FLUXO 1 |
+| `dados/src/utils/helpers.js` | `getJidLidCacheSize()` |
+| `dados/src/funcs/apk/fdroidIndex.js` | log do catálogo silenciado no FLUXO 1 |
+| `tests/boot-session.test.js` | 17 testes / 65 asserções |
+
+### Testes — `tests/boot-session.test.js`
+Renderer (silêncio quando desligado; sem TTY não emite ANSI; estados reais;
+`summary(error)` não falsifica sucesso; valores reais; versão do `package.json`;
+as 8 etapas; `getJidLidCacheSize`), **separação dos fluxos** (o boot só monta com
+a flag + `registered`; QR/pairing intocados; logs originais só no `else`;
+`start.js` decide os dois fluxos; Termux quiet; F-Droid silenciado) e **render
+end-to-end** (TTY forçado): painel e seções com dados reais, sem `QR`, e que
+etapa em andamento **não** aparece como `CONNECTED`. Regressões verdes:
+`baileys-boot-info` 26/0, `message-box` 10/20, `apk-command` 51/138.
+
 ## 📌 Sistema de REPOSTS (`!repost` / `!reposts` / `!delrepost`) — out/2026 ✅
 Salva a mensagem **respondida** como um repost e mostra todos num **único
 carrossel** do WhatsApp (`interactiveMessage.carouselMessage`). Cada repost

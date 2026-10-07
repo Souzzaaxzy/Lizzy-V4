@@ -16,11 +16,13 @@ import PerformanceOptimizer from './utils/performanceOptimizer.js';
 import RentalExpirationManager from './utils/rentalExpirationManager.js';
 import ElectionManager from './utils/electionManager.js';
 import { loadMsgBotOn } from './utils/database.js';
-import { buildUserId } from './utils/helpers.js';
+import { buildUserId, getJidLidCacheSize } from './utils/helpers.js';
 import { safeJsonStringify } from './utils/messageInspector.js';
 import * as callNotifier from './utils/callNotifier.js';
 import * as paths from './utils/paths.js';
 import msgCounter from './utils/msgCounter.js';
+import { getWhatsAppLibrary } from './utils/baileysInfo.js';
+import BootRenderer, { versaoDoProjeto } from './utils/bootRenderer.js';
 // ATENÇÃO: Se o seu arquivo se chamado 'index-2(2).js', RENOMEIE PARA 'index.js'
 // ou mude o caminho abaixo para './index-2(2).js'
 import { handleGroupParticipantsUpdate } from './index.js';
@@ -1187,6 +1189,11 @@ let reconnectAttempts = 0;
 let isReconnecting = false; // Flag para evitar múltiplas reconexões simultâneas
 let reconnectTimer = null; // Timer de reconexão para poder cancelar
 let forbidden403Attempts = 0; // Contador específico para erro 403
+// Boot visual da sessão já pareada (null quando não está nesse fluxo).
+let _boot = null;
+// O boot visual só monta UMA vez por processo: numa reconexão em runtime a
+// apresentação volta ao fluxo normal (não replay a animação).
+let _bootTentado = false;
 const MAX_RECONNECT_ATTEMPTS = 10;
 const MAX_403_ATTEMPTS = 3; // Máximo de 3 tentativas para erro 403
 const RECONNECT_DELAY_BASE = 5000; // 5 segundos base
@@ -1231,9 +1238,32 @@ async function createBotSocket(authDir) {
             signalRepository
         } = await useMultiFileAuthState(authDir, makeCacheableSignalKeyStore);
 
+        // FLUXO DE SESSÃO JÁ PAREADA (LIZZY_SESSION_BOOT=1 + creds.registered).
+        // Só aqui o boot visual novo assume a apresentação. No primeiro login
+        // (QR/pairing) NADA disto roda: a apresentação original segue intacta.
+        const sessaoExistente = process.env.LIZZY_SESSION_BOOT === '1' && Boolean(state?.creds?.registered);
+        if (sessaoExistente && !_bootTentado) {
+            _bootTentado = true;
+            _boot = new BootRenderer({
+                enabled: true,
+                botName: nomebot,
+                prefix: prefixo,
+                owner: nomedono,
+                version: versaoDoProjeto(),
+                baileys: (() => { try { return getWhatsAppLibrary(); } catch { return null; } })(),
+            });
+            _boot.setEnv({ serverIp: process.env.LIZZY_BOOT_IP || null });
+            _boot.step('core', 'online');
+            _boot.step('deps', 'ready');
+            _boot.step('ytdlp', 'ready');
+            void _boot.ready();
+        }
+        const boot = _boot;
+
         // CORREÇÃO: Usa versão cacheada em vez de buscar na rede a cada reconexão.
         const version = await getWAVersion();
-        console.log(`📱 Usando versão do WhatsApp: ${version.join('.')}`);
+        if (boot) boot.setEnv({ waVersion: version.join('.') });
+        else console.log(`📱 Usando versão do WhatsApp: ${version.join('.')}`);
 
         // CLIENTE DESKTOP/UWP + build id de 5 partes: os DOIS sao requisito para o
         // servidor habilitar a stack de VOZ. So' o browser UWP nao basta — com um
@@ -1892,6 +1922,7 @@ async function createBotSocket(authDir) {
                 qr
             } = update;
             if (qr && !AbyssSock.authState.creds.registered && !codeMode) {
+                if (boot) { boot.destroy(); _boot = null; } // sessão inválida: devolve a apresentação original
                 console.log('🔗 🌌 QR do Void gerado para autenticação:');
                 qrcode.generate(qr, {
                     small: true
@@ -1915,9 +1946,17 @@ async function createBotSocket(authDir) {
                  */
                 reconnectAttempts = 0;
                 forbidden403Attempts = 0;
-                console.log(`🔄 Conexão aberta. Inicializando sistema de otimização...`);
+                if (boot) {
+                    boot.step('abyss', 'online');
+                    boot.step('wa', 'connected');
+                    boot.step('opt', 'active');
+                    boot.setEnv({ waVersion: version.join('.') });
+                } else {
+                    console.log(`🔄 Conexão aberta. Inicializando sistema de otimização...`);
+                }
 
                     await initializeOptimizedCaches(AbyssSock);
+                    if (boot) boot.setEnv({ jidLid: getJidLidCacheSize(), captcha: CaptchaIndex.stats().active, optimization: 'active', pluginManager: 'ready' });
 
                     await updateOwnerLid(AbyssSock);
 
@@ -1941,7 +1980,8 @@ async function createBotSocket(authDir) {
 
                     // Inicializa o sistema de contador de mensagens com reset automático
                     msgCounter.initResetScheduler(AbyssSock);
-                    console.log('✅ Sistema de contador de mensagens inicializado');
+                    if (boot) { boot.setSystem({ messageCounter: 'active', autoReset: 'active' }); }
+                    else console.log('✅ Sistema de contador de mensagens inicializado');
 
                     attachMessagesListener();
                     attachCallListener(); // Notificações de chamada (!testcall)
@@ -1952,8 +1992,12 @@ async function createBotSocket(authDir) {
                     // ele. Aqui ele carrega enquanto o bot atende; quando estiver
                     // pronto, as buscas do F-Droid ganham hash/assinatura de graça.
                     void import('./funcs/apk/providers/fdroidProvider.js')
-                        .then((p) => p.warmup?.())
-                        .catch(() => {});
+                        .then((p) => {
+                            const pr = p.warmup?.();
+                            if (boot && pr?.finally) pr.finally(() => boot.step('plugins', 'ready'));
+                            return pr;
+                        })
+                        .catch(() => { if (boot) boot.step('plugins', 'ready'); });
 
                     // Envia mensagem de boas-vindas para o dono
                     try {
@@ -1973,13 +2017,13 @@ async function createBotSocket(authDir) {
                                     await AbyssSock.sendMessage(ownerJid, {
                                         text: msgBotOnConfig.message
                                     });
-                                    console.log('✅ Mensagem de inicialização enviada para o dono');
+                                    if (!boot) console.log('✅ Mensagem de inicialização enviada para o dono');
                                 } catch (sendError) {
                                     console.error('❌ Erro ao enviar mensagem de inicialização:', sendError.message);
                                 }
                             }, 3000);
                         } else {
-                            console.log('ℹ️ Mensagem de inicialização desativada');
+                            if (!boot) console.log('ℹ️ Mensagem de inicialização desativada');
                         }
                     } catch (msgError) {
                         console.error('❌ Erro ao processar mensagem de inicialização:', msgError.message);
@@ -1989,7 +2033,14 @@ async function createBotSocket(authDir) {
                     try {
                         const subBotManagerModule = await import('./utils/subBotManager.js');
                         const subBotManager = subBotManagerModule.default ?? subBotManagerModule;
-                        console.log('🤖 Verificando sub-bots cadastrados...');
+                        if (boot) {
+                            const lista = subBotManager.listSubBots().subbots || [];
+                            const ativos = lista.filter((b) => b.isActive).length;
+                            boot.setSubBots({ total: lista.length, active: ativos });
+                            boot.step('subbots', 'ready');
+                        } else {
+                            console.log('🤖 Verificando sub-bots cadastrados...');
+                        }
                         // CORREÇÃO: Timer salvo em subBotInitTimer para cancelamento em reconexão.
                         if (subBotInitTimer) clearTimeout(subBotInitTimer);
                         subBotInitTimer = setTimeout(async () => {
@@ -2000,12 +2051,19 @@ async function createBotSocket(authDir) {
                         console.error('❌ Erro ao inicializar sub-bots:', error.message);
                     }
 
-                    console.log(`✅ Bot ${nomebot} iniciado com sucesso! Prefixo: ${prefixo} | Dono: ${nomedono}`);
-                    console.log(`📊 Configuração: ${messageQueue.batchSize} lotes de ${messageQueue.messagesPerBatch} mensagens (${messageQueue.batchSize * messageQueue.messagesPerBatch} msgs paralelas)`);
+                    if (boot) {
+                        boot.setQueue(`${messageQueue.batchSize} lotes de ${messageQueue.messagesPerBatch} mensagens (${messageQueue.batchSize * messageQueue.messagesPerBatch} msgs paralelas)`);
+                        boot.summary();
+                        setTimeout(() => { boot.finalize().catch(() => {}); }, 600);
+                    } else {
+                        console.log(`✅ Bot ${nomebot} iniciado com sucesso! Prefixo: ${prefixo} | Dono: ${nomedono}`);
+                        console.log(`📊 Configuração: ${messageQueue.batchSize} lotes de ${messageQueue.messagesPerBatch} mensagens (${messageQueue.batchSize * messageQueue.messagesPerBatch} msgs paralelas)`);
+                    }
                 } catch (initErr) {
                     // CORREÇÃO: Erro crítico na inicialização — loga e dispara reconexão
                     // em vez de deixar o bot em estado parcialmente inicializado.
                     console.error('❌ Erro crítico na inicialização pós-conexão:', initErr.message);
+                    if (boot) { boot.setEnv({ connectionError: initErr.message }); boot.summary({ error: true }); }
                     setTimeout(() => startNazu(), 5000);
                 }
             }
@@ -2024,6 +2082,7 @@ async function createBotSocket(authDir) {
                 }[reason] || 'Motivo desconhecido';
 
                 console.log(`❌ Conexão fechada. Código: ${reason} | Motivo: ${reasonMessage}`);
+                if (boot) { boot.destroy(); _boot = null; } // boot é só para a restauração; reconexão volta ao fluxo normal
 
                 // Limpa recursos antes de reconectar
                 if (cacheCleanupInterval) {
@@ -2128,7 +2187,9 @@ async function startNazu() {
          era apagado a cada ciclo). O reset correto acontece no evento 'connection.update'
          quando connection === 'open', confirmando conexão real.
          */
-        console.log('🚀 Iniciando Abyss...');
+        if (!_boot && process.env.LIZZY_SESSION_BOOT !== '1') {
+            console.log('🚀 Iniciando Abyss...');
+        }
 
         await createBotSocket(AUTH_DIR);
         // isReconnecting = false é feito no finally abaixo
