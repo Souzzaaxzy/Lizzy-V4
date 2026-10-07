@@ -158,14 +158,15 @@ await test('sem URL e SEM porta publicada o convite e recusado com aviso', async
     ru: process.env.RUNTIME_URL,
     hn: process.env.HOSTNAME,
   };
-  // Sem URL e sem porta publicada a deteccao automatica nao tem o que usar ->
-  // a sala fica indisponivel (comportamento correto).
+  // Sem URL, sem porta publicada E com o tunel desligado nao ha como publicar
+  // a sala -> fica indisponivel (comportamento correto).
   delete process.env.EMUGAMES_NETPLAY_URL;
   delete process.env.WORKER_1;
   delete process.env.WORKER_2;
   delete process.env.RUNTIME_ID;
   delete process.env.RUNTIME_URL;
   delete process.env.HOSTNAME;
+  process.env.EMUGAMES_NETPLAY_TUNNEL = '0';
   try {
     const grupo = makeGroup();
     const r = await run({ grupo, texto: '!kof', autorLid: P.anf, mencionados: [P.conv], isCmd: true });
@@ -179,6 +180,7 @@ await test('sem URL e SEM porta publicada o convite e recusado com aviso', async
     if (salvo.rid !== undefined) process.env.RUNTIME_ID = salvo.rid;
     if (salvo.ru !== undefined) process.env.RUNTIME_URL = salvo.ru;
     if (salvo.hn !== undefined) process.env.HOSTNAME = salvo.hn;
+    delete process.env.EMUGAMES_NETPLAY_TUNNEL;
   }
 });
 

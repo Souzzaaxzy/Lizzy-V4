@@ -137,6 +137,17 @@ async function netplayDeps() {
         // Não aborta a atualização: sem netplay o resto do bot funciona.
         log(`Aviso: falha ao instalar as dependências do netplay (${e?.message || e})`);
     }
+    // O `cloudflared` (tunel HTTPS do netplay) tambem e baixado aqui -- o
+    // binario tem ~40 MB e nao vai para o git.
+    const baixador = path.join(dir, 'baixar-cloudflared.mjs');
+    if (fs.existsSync(baixador) && !fs.existsSync(path.join(dir, 'bin', 'cloudflared'))) {
+        try {
+            await execAsync(process.execPath, [baixador], { timeout: 300000 });
+            log('Túnel do netplay (cloudflared) pronto');
+        } catch (e) {
+            log(`Aviso: falha ao baixar o cloudflared (${e?.message || e})`);
+        }
+    }
 }
 
 /** O package.json declara dependências (deps, devDeps, optional, peer)? */

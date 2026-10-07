@@ -48,11 +48,30 @@ PORT=3000 node server.js
 | `NETPLAY_GRACE_MS` | `120000` | tempo inicial sem sala antes de sair |
 | `NETPLAY_SELF_SHUTDOWN` | ligado | `0` desliga o auto-desligamento (servidor fixo) |
 
-## TLS (importante)
+## TLS — resolvido pelo TÚNEL CLOUDFLARE (sem configurar nada)
 
 O site do emulador é **https**, e o navegador **bloqueia `ws://`** a partir de
-uma página segura. O servidor é **http puro**, então ele precisa de um **proxy
-TLS** na frente (nginx/caddy) — ou de uma porta que o painel já exponha com TLS.
+uma página segura. O servidor é **http puro**.
+
+A solução é o **Cloudflare Tunnel**: o bot sobe o `cloudflared` junto com o
+servidor e ganha um endereço **HTTPS público** — **sem abrir porta, sem IP
+público e sem conta** (quick tunnel). Medido: HTTP 200 **e WebSocket**
+funcionando através do túnel.
+
+```bash
+# baixa o binário oficial (~40 MB, não vai para o git)
+node tools/netplay-server/baixar-cloudflared.mjs
+```
+
+O bot sobe o túnel **só quando alguém pede uma sala** e o derruba quando todas
+fecham — igual ao servidor. `EMUGAMES_NETPLAY_TUNNEL=0` desliga o túnel.
+
+> O subdomínio do quick tunnel **muda a cada vez** e leva ~30 s para o DNS
+> propagar — o bot espera (até `NETPLAY_TUNNEL_READY_MS`, padrão 90 s) antes de
+> mandar os links, então os jogadores não pegam um endereço que ainda não
+> resolve.
+
+Alternativa (domínio próprio ou proxy TLS): defina `EMUGAMES_NETPLAY_URL`.
 
 ## Integração com o bot
 

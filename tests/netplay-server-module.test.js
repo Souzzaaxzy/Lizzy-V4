@@ -70,11 +70,15 @@ await test('env tem prioridade sobre o json', () => {
   ok(c.porta === 9000, 'env vence a porta');
 });
 
-await test('sem URL nao esta configurado', () => {
-  const c = mod.configNetplay({}, {});
-  ok(c.configurado === false, 'nao configurado');
-  ok(mod.netplayConfigurado({}) === false, 'helper concorda');
-  ok(mod.netplayConfigurado({ EMUGAMES_NETPLAY_URL: 'https://x.com' }) === true, 'helper ve a env');
+await test('sem URL cai no tunel (ou fica indisponivel sem cloudflared)', () => {
+  const semCf = mod.configNetplay({ EMUGAMES_NETPLAY_TUNNEL: '0' }, {});
+  ok(semCf.modo === 'nenhum', 'tunel desligado -> nenhum modo');
+  ok(semCf.configurado === false, 'nao configurado');
+  // Com o tunel permitido, o modo e 'tunel' (depende do binario p/ valer).
+  const comTunel = mod.configNetplay({}, {});
+  ok(comTunel.modo === 'tunel', 'sem URL -> modo tunel');
+  ok(comTunel.tunel === true, 'marcado como tunel');
+  ok(comTunel.spawnar === true, 'sobe o processo local');
 });
 
 await test('portaNetplay devolve a porta efetiva', () => {
@@ -122,11 +126,12 @@ await test('URL explicita VENCE a deteccao', () => {
 });
 
 // ─────────────────────────── garantirNetplay ───────────────────────────
-await test('garantirNetplay sem URL: falha clara, sem lancar', async () => {
-  const r = await mod.garantirNetplay({});
+await test('garantirNetplay sem cloudflared: falha clara, sem lancar', async () => {
+  const env = { EMUGAMES_NETPLAY_TUNNEL: '1', CLOUDFLARED_PATH: '/nao/existe/cloudflared' };
+  // '1' forca o tunel; sem binario, falha com motivo (nao lanca).
+  const r = await mod.garantirNetplay(env);
   ok(r.ok === false, 'nao ok');
   ok(typeof r.motivo === 'string' && r.motivo.length > 0, 'tem motivo');
-  ok(r.motivo.includes('EMUGAMES_NETPLAY_URL'), 'motivo cita a env');
 });
 
 await test('garantirNetplay com URL externa: ok sem subir processo', async () => {

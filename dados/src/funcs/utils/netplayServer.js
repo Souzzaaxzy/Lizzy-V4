@@ -1,25 +1,29 @@
 /**
  * NETPLAY sob demanda — sobe o servidor de netplay SOMENTE quando alguem pede
- * uma sala de jogo.
+ * uma sala de jogo, e o publica na internet com HTTPS.
  *
  * Regra (pedido do dono): o servidor NAO fica ligado o tempo todo. Ele sobe no
  * instante em que uma sala e criada (`!kof @fulano` + `sim`) e se DESLIGA
  * sozinho quando todas as salas fecham (o auto-desligamento vive no proprio
  * `tools/netplay-server/server.js`).
  *
- * Configuracao (env tem prioridade sobre `dados/emugames/netplay.json`):
- *   EMUGAMES_NETPLAY_URL     URL PUBLICA do servidor (ex.: https://netplay.x.com)
- *                            Sem ela a sala nao abre (o site e https e o
- *                            navegador bloqueia ws:// -> precisa de TLS/proxy).
- *   EMUGAMES_NETPLAY_PORT    porta LOCAL do processo (padrao 3000)
- *   EMUGAMES_NETPLAY_SPAWN   '1' sobe o servidor local ao pedir sala; '0' nunca
- *                            sobe (voce ja tem um servidor rodando). Padrao:
- *                            ligado quando a URL aponta para localhost.
+ * COMO O JOGADOR CHEGA ATE ELE (o problema do TLS)
+ * O site do emulador e https; o navegador bloqueia `ws://` a partir de pagina
+ * segura. Um servidor http puro nao serve. Resolvemos com **Cloudflare Tunnel**
+ * (`cloudflared`), que da um endereco **HTTPS publico** para um servidor local
+ * sem abrir porta, sem IP publico e **sem conta** (quick tunnel). Medido: HTTP
+ * 200 e **WebSocket funcionando** atraves do tunel.
+ *
+ * Modos, em ordem de preferencia:
+ *   1. `EMUGAMES_NETPLAY_URL` definida  -> usa essa URL (dominio proprio/proxy).
+ *   2. Porta publicada pelo host (`WORKER_1/2`) -> detecta a URL HTTPS.
+ *   3. **Cloudflare Tunnel** -> publica o servidor local (padrao quando ha o
+ *      binario `cloudflared`). `EMUGAMES_NETPLAY_TUNNEL=0` desliga.
  *
  * Modulo defensivo: `garantirNetplay()` NUNCA lanca — devolve
  * `{ ok, motivo, url }` para o comando decidir a mensagem.
  */
-import { spawn } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -33,6 +37,8 @@ const NETPLAY_JSON = path.join(PROJECT_ROOT, 'dados', 'emugames', 'netplay.json'
 
 /** Processo do servidor (null quando nao foi esta subido por nos). */
 let child = null;
+/** Processo do tunel (Cloudflare). */
+let tunel = null;
 /** Promise em andamento (evita subir dois servidores em pedidos simultaneos). */
 let subindo = null;
 /** Ultimo erro/motivo, para o comando poder explicar. */
@@ -80,8 +86,7 @@ function runtimeId(env) {
 
 /**
  * URL publica para uma porta, quando o ambiente a publica com TLS.
- * `''` quando nao da para saber (nesse caso o admin define
- * `EMUGAMES_NETPLAY_URL`).
+ * `''` quando nao da para saber.
  */
 export function detectarUrlPublica(env = process.env, porta = 0) {
   const pub = portasPublicadas(env);
@@ -99,12 +104,35 @@ export function detectarUrlPublica(env = process.env, porta = 0) {
 }
 
 /**
- * Resolve a configuracao efetiva: URL publica, porta local e se devemos subir
- * o processo. `env` e injetavel para teste.
+ * Onde esta o binario do cloudflared.
  *
- * Precedencia da URL: `EMUGAMES_NETPLAY_URL` > `netplay.json > server` >
- * DETECCAO AUTOMATICA (porta publicada do runtime). Com a deteccao, o servidor
- * funciona sem nenhuma configuracao -- que e o pedido do dono.
+ * `CLOUDFLARED_PATH` e ESTRITO: quando definido, e a unica fonte consultada
+ * (sem cair para a copia local/PATH). Assim um caminho errado falha de forma
+ * previsivel em vez de silenciosamente usar outro binario.
+ */
+export function acharCloudflared(env = process.env) {
+  if (env.CLOUDFLARED_PATH) {
+    try { return fs.existsSync(env.CLOUDFLARED_PATH) ? env.CLOUDFLARED_PATH : ''; } catch { return ''; }
+  }
+  const candidatos = [
+    path.join(SERVER_DIR, 'bin', 'cloudflared'),
+    path.join(PROJECT_ROOT, 'bin', 'cloudflared'),
+  ];
+  for (const c of candidatos) {
+    try { if (fs.existsSync(c)) return c; } catch { /* segue */ }
+  }
+  try {
+    const r = spawnSync('cloudflared', ['--version'], { timeout: 8000 });
+    if (r.status === 0) return 'cloudflared';
+  } catch { /* segue */ }
+  return '';
+}
+
+/**
+ * Resolve a configuracao efetiva.
+ *
+ * Precedencia da URL: `EMUGAMES_NETPLAY_URL` > `netplay.json.server` > porta
+ * publicada do host > **tunel Cloudflare**.
  */
 export function configNetplay(env = process.env, json = null) {
   const cfg = json || lerJson();
@@ -112,13 +140,17 @@ export function configNetplay(env = process.env, json = null) {
   const portaExplicita = env.EMUGAMES_NETPLAY_PORT || cfg.port;
   const pub = portasPublicadas(env);
 
+  const flagSpawn = String(env.EMUGAMES_NETPLAY_SPAWN ?? '').trim();
+  const flagTunel = String(env.EMUGAMES_NETPLAY_TUNNEL ?? '').trim();
+
   let url = '';
   let porta = 3000;
   let host = '';
-  const auto = !explicita;
+  let modo = 'nenhum';
 
   if (explicita) {
     url = explicita;
+    modo = 'url';
     let portaDaUrl = 0;
     try {
       const u = new URL(url);
@@ -126,33 +158,43 @@ export function configNetplay(env = process.env, json = null) {
       if (u.port) portaDaUrl = Number(u.port) || 0;
     } catch { host = ''; }
     porta = Number(portaExplicita || portaDaUrl || 3000) || 3000;
-  } else {
-    // Deteccao: prefere uma porta publicada (tem HTTPS de graca).
-    porta = Number(portaExplicita || pub[0] || 3000) || 3000;
+  } else if (pub.length && flagTunel !== '1') {
+    // Porta publicada pelo host (HTTPS de graca, sem tunel).
+    porta = Number(portaExplicita || pub[0]) || pub[0];
     url = detectarUrlPublica(env, porta);
+    modo = 'porta-publicada';
+  } else {
+    // Tunel Cloudflare: publica o servidor local (precisa do binario).
+    porta = Number(portaExplicita || 3000) || 3000;
+    modo = flagTunel === '0' ? 'nenhum' : 'tunel';
   }
 
-  // Subir o processo local? '1' liga, '0' desliga; sem a env, sobe quando a URL
-  // e local OU foi detectada automaticamente (nos dois casos o processo e
-  // nosso).
-  const flag = String(env.EMUGAMES_NETPLAY_SPAWN ?? '').trim();
-  const spawnar = flag === '0' ? false : flag === '1' ? true : (auto || hostLocal(host));
+  // Subir o processo local?
+  let spawnar;
+  if (flagSpawn === '0') spawnar = false;
+  else if (flagSpawn === '1') spawnar = true;
+  else if (modo === 'url') spawnar = hostLocal(host);
+  else spawnar = modo === 'porta-publicada' || modo === 'tunel';
 
   return {
     url,
     porta,
     host,
     spawnar,
-    auto,
+    modo,
+    auto: modo !== 'url',
+    tunel: modo === 'tunel',
     // URL local (health check do processo que subimos).
     urlLocal: `http://127.0.0.1:${porta}`,
-    configurado: Boolean(url),
+    configurado: Boolean(url) || modo === 'tunel',
   };
 }
 
-/** A sala multiplayer esta configurada? (existe URL publica) */
+/** A sala multiplayer esta configurada? (URL, porta publicada ou tunel) */
 export function netplayConfigurado(env = process.env) {
-  return configNetplay(env).configurado;
+  const c = configNetplay(env);
+  if (c.modo === 'tunel') return Boolean(acharCloudflared(env));
+  return c.configurado;
 }
 
 /** Porta local configurada. */
@@ -161,7 +203,7 @@ export function portaNetplay(env = process.env) {
 }
 
 // ---------------------------------------------------------------------------
-// Health check do processo local
+// Health check
 // ---------------------------------------------------------------------------
 async function saudavel(urlLocal, timeoutMs = 1200) {
   const ctl = new AbortController();
@@ -171,6 +213,21 @@ async function saudavel(urlLocal, timeoutMs = 1200) {
     if (!r.ok) return false;
     const j = await r.json();
     // Confere que e o NOSSO servidor (nao outro servico na mesma porta).
+    return j?.plugin === 'netplay';
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+async function urlPublicaResponde(url, timeoutMs = 2500) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), timeoutMs);
+  try {
+    const r = await fetch(`${url}/status`, { signal: ctl.signal });
+    if (!r.ok) return false;
+    const j = await r.json();
     return j?.plugin === 'netplay';
   } catch {
     return false;
@@ -207,12 +264,9 @@ function ligarSaidaDoFilho(c) {
   });
 }
 
-/** Sobe o processo local (se ja houver um saudavel, nao sobe outro). */
-async function subir(env, cfg) {
-  if (await saudavel(cfg.urlLocal)) {
-    ultimoMotivo = '';
-    return true;
-  }
+/** Sobe o processo do servidor (se ja houver um saudavel, nao sobe outro). */
+async function subirServidor(env, cfg) {
+  if (await saudavel(cfg.urlLocal)) return true;
   if (!fs.existsSync(SERVER_ENTRY)) {
     ultimoMotivo = `servidor ausente em ${SERVER_ENTRY}`;
     return false;
@@ -241,10 +295,7 @@ async function subir(env, cfg) {
 
   // Espera ficar pronto (health check), ate ~8s.
   for (let i = 0; i < 40; i++) {
-    if (await saudavel(cfg.urlLocal, 800)) {
-      ultimoMotivo = '';
-      return true;
-    }
+    if (await saudavel(cfg.urlLocal, 800)) return true;
     if (c.exitCode !== null) break; // morreu antes de responder
     await aguardar(200);
   }
@@ -252,50 +303,156 @@ async function subir(env, cfg) {
   return false;
 }
 
+// ---------------------------------------------------------------------------
+// Tunel Cloudflare (HTTPS publico para o servidor local, sem conta)
+// ---------------------------------------------------------------------------
+const TUNEL_URL_RE = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/;
+/** Quanto esperar o endereco do tunel ficar acessivel (DNS propaga devagar). */
+const READY_TIMEOUT_MS = Number(process.env.NETPLAY_TUNNEL_READY_MS || 90 * 1000);
+
+/**
+ * Sobe o tunel e devolve a URL publica (`''` se falhar).
+ */
+export async function subirTunel(env, cfg, { timeoutMs = 45000 } = {}) {
+  const bin = acharCloudflared(env);
+  if (!bin) {
+    ultimoMotivo = 'cloudflared nao encontrado (baixe para tools/netplay-server/bin/cloudflared ou defina CLOUDFLARED_PATH)';
+    return '';
+  }
+  if (!(await saudavel(cfg.urlLocal, 800))) {
+    ultimoMotivo = 'o servidor local precisa estar no ar antes do tunel';
+    return '';
+  }
+
+  const c = spawn(bin, ['tunnel', '--url', cfg.urlLocal, '--no-autoupdate'], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...env },
+  });
+  tunel = c;
+
+  let buf = '';
+  let url = '';
+  const capturar = (d) => {
+    buf += String(d);
+    if (!url) {
+      const m = TUNEL_URL_RE.exec(buf);
+      if (m) url = m[0];
+    }
+  };
+  c.stdout?.on('data', capturar);
+  c.stderr?.on('data', capturar);
+  c.on('error', (e) => {
+    if (tunel === c) tunel = null;
+    ultimoMotivo = `falha no tunel: ${e?.message || e}`;
+    console.error(`[NETPLAY] ${ultimoMotivo}`);
+  });
+  c.on('exit', (code) => {
+    if (tunel === c) tunel = null;
+    console.log(`[NETPLAY] tunel encerrado (codigo ${code ?? 'null'}).`);
+  });
+
+  const limite = Date.now() + timeoutMs;
+  while (!url && Date.now() < limite) {
+    if (c.exitCode !== null) break;
+    await aguardar(400);
+  }
+  if (!url) {
+    ultimoMotivo = ultimoMotivo || 'o tunel nao devolveu a URL no tempo esperado';
+    pararTunel();
+    return '';
+  }
+
+  // Espera o endereco realmente servir. O subdominio novo do quick tunnel
+  // leva um tempo para o DNS PROPAGAR (medido: os primeiros segundos dao
+  // ENOTFOUND). Por isso a espera e por TEMPO, nao por numero de tentativas.
+  const limitePronto = Date.now() + READY_TIMEOUT_MS;
+  while (Date.now() < limitePronto) {
+    if (await urlPublicaResponde(url, 5000)) {
+      console.log(`[NETPLAY] tunel publico: ${url}`);
+      return url;
+    }
+    if (c.exitCode !== null) break;
+    await aguardar(1000);
+  }
+  ultimoMotivo = 'o tunel subiu mas a URL ainda nao respondeu';
+  pararTunel();
+  return '';
+}
+
+/** Derruba o tunel (se foi subido por nos). */
+export function pararTunel() {
+  if (!tunel) return false;
+  try { tunel.kill('SIGTERM'); } catch { /* ok */ }
+  tunel = null;
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// API publica
+// ---------------------------------------------------------------------------
 /**
  * Garante o servidor de netplay ATIVO para uma sala.
  * Devolve `{ ok, url, motivo }` — nunca lanca.
- *
- * Com servidor EXTERNO (`EMUGAMES_NETPLAY_SPAWN=0`, ou URL que nao e localhost)
- * a responsabilidade de estar no ar e do dono: aqui so devolvemos a URL, porque
- * o navegador do jogador e quem fala com ele (nao o bot). Subir processo so
- * faz sentido quando o servidor e local.
  */
 export async function garantirNetplay(env = process.env) {
   const cfg = configNetplay(env);
-  if (!cfg.configurado) {
-    return { ok: false, url: '', motivo: 'sem EMUGAMES_NETPLAY_URL configurada' };
+
+  if (cfg.modo === 'nenhum') {
+    return { ok: false, url: '', motivo: 'sem URL e sem cloudflared para publicar a sala' };
   }
-  if (!cfg.spawnar) {
+  if (cfg.modo === 'url' && !cfg.spawnar) {
     return { ok: true, url: cfg.url, motivo: '' };
   }
+
   if (!subindo) {
-    subindo = subir(env, cfg).finally(() => { subindo = null; });
+    subindo = (async () => {
+      if (cfg.spawnar) {
+        const okSrv = await subirServidor(env, cfg);
+        if (!okSrv) return { ok: false, url: cfg.url, motivo: ultimoMotivo };
+      }
+      if (cfg.modo === 'tunel') {
+        const url = await subirTunel(env, cfg);
+        if (!url) return { ok: false, url: '', motivo: ultimoMotivo };
+        return { ok: true, url, motivo: '' };
+      }
+      return { ok: true, url: cfg.url, motivo: '' };
+    })().finally(() => { subindo = null; });
   }
-  const ok = await subindo;
-  return { ok, url: cfg.url, motivo: ok ? '' : ultimoMotivo };
+  return subindo;
 }
 
-/** Derruba o processo que NOS subimos (usado no shutdown do bot). */
+/** Derruba tudo o que NOS subimos (servidor e tunel). */
 export function pararNetplay() {
-  if (!child) return false;
-  try { child.kill('SIGTERM'); } catch { /* ok */ }
-  child = null;
-  return true;
+  const t = pararTunel();
+  const s = (() => {
+    if (!child) return false;
+    try { child.kill('SIGTERM'); } catch { /* ok */ }
+    child = null;
+    return true;
+  })();
+  return t || s;
 }
 
 /** Estado para diagnostico (comando/painel). */
 export async function estadoNetplay(env = process.env) {
   const cfg = configNetplay(env);
-  if (!cfg.configurado) return { configurado: false, ativo: false, url: '', porta: cfg.porta };
-  const ativo = await saudavel(cfg.spawnar ? cfg.urlLocal : cfg.url, 1500);
-  return { configurado: true, ativo, url: cfg.url, porta: cfg.porta, local: cfg.spawnar };
+  const ativo = await saudavel(cfg.urlLocal, 1500);
+  return {
+    configurado: netplayConfigurado(env),
+    ativo,
+    url: cfg.url || (cfg.modo === 'tunel' ? '(tunel sob demanda)' : ''),
+    porta: cfg.porta,
+    modo: cfg.modo,
+    tunelAtivo: Boolean(tunel),
+    cloudflared: acharCloudflared(env),
+  };
 }
 
 // Ao encerrar o bot, nao deixa processo orfao.
 process.on('exit', () => { try { pararNetplay(); } catch { /* ok */ } });
 
 export default {
-  configNetplay, netplayConfigurado, portaNetplay,
+  configNetplay, netplayConfigurado, portaNetplay, portasPublicadas,
+  detectarUrlPublica, acharCloudflared, subirTunel, pararTunel,
   garantirNetplay, pararNetplay, estadoNetplay,
 };
