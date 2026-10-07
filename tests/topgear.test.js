@@ -125,7 +125,10 @@ await test('index.html: player multi-jogo com os caminhos certos', () => {
   ok(html.includes('EJS_core = j.console'), 'o core vem do console do jogo');
   ok(html.includes('EJS_Buttons'), 'controla os botoes do player');
   ok(html.includes('EJS_biosUrl'), 'suporta BIOS (arcade/Neo Geo)');
-  ok(html.includes('exitEmulation: true'), 'tem botao de sair');
+  // O botao de sair existe fora da sala; em MODO SALA ele e desligado
+  // (`exitEmulation: !EM_SALA`) -- no multiplayer o webview fecha sem matar o
+  // jogo, que so morre por inatividade. Ver tests/arcade-room.test.js.
+  ok(/exitEmulation:\s*!EM_SALA/.test(html), 'tem botao de sair (fora da sala)');
   ok(html.includes('EJS_onExit'), 'detecta a saida');
   ok(html.includes('id="parar"'), 'tem botao PARAR');
   ok(html.includes('3 * 60 * 1000'), 'desliga por inatividade (3 min)');

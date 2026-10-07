@@ -40,6 +40,7 @@ import { normalizarIdGrupo, ehJidCanal, buildFollowChannelContent, fotoDoMetadat
 import sharp from 'sharp';
 import * as ghostDetection from './utils/ghostDetection.js';
 import { detectarPaymentRespondida, alvoDaRemocao } from './utils/quotedPayment.js';
+import * as arcadeRooms from './utils/arcadeRooms.js';
 import { isPaymentContent, buildPaymentDeleteKeys, buildPaymentEditContent, resolveParticipantPn, isBotAuthor } from './utils/deletePayment.js';
 import { bold as boldLayout, boldItalic as boldItalicLayout, abrirCategoria, fecharCategoria } from './menus/layout.js';
 import {
@@ -257,6 +258,54 @@ function jaTratouQuotedPayment(group, id) {
   const t = setTimeout(() => quotedPaymentCache.delete(key), QUOTED_PAYMENT_TTL_MS);
   t?.unref?.();
   return false;
+}
+// ============ SALAS DE ARCADE (netplay) ============
+// Convite + aceite ("sim"/"nao") para jogar em 2 no arcade. O estado vive em
+// memoria (utils/arcadeRooms.js); aqui ficam o texto e o link.
+const NL = String.fromCharCode(10);
+
+/** URL publica do site do emulador (mesma do topgear.raiz()). */
+function arcadeBaseUrl() {
+  try { return topgear.raiz() || ''; } catch { return ''; }
+}
+
+/**
+ * Link de entrada na sala. host=1 marca quem CRIA a sala (o anfitriao); o
+ * convidado entra sem essa flag. O nome vai no netplay (rotulo do jogador).
+ */
+function arcadeRoomLink(jogoId, codigo, { host = false, nome = '' } = {}) {
+  const base = arcadeBaseUrl();
+  if (!base) return '';
+  const p = new URLSearchParams({ jogo: jogoId, sala: codigo });
+  if (host) p.set('host', '1');
+  if (nome) p.set('nome', String(nome).slice(0, 20));
+  return `${base}/?${p.toString()}`;
+}
+
+/** A sala de arcade esta configurada? (env EMUGAMES_NETPLAY_URL). */
+function arcadeNetplayConfigurado() {
+  return Boolean(process.env.EMUGAMES_NETPLAY_URL);
+}
+
+/** Caixa no layout do bot (cabecalho + linhas do corpo + fecho). */
+function caixaArcade(linhas, titulo = 'SALA DE ARCADE') {
+  const topo = `╭━━━꧁༺ 🕹️ ${boldLayout(titulo)} 🕹️ ༻꧂━━━╮`;
+  const fecho = `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
+  return topo + NL + `┃` + NL + linhas.join(NL) + NL + `┃` + NL + fecho;
+}
+
+/** Texto do convite. user1 chamou, user2 foi chamado. */
+function textoConviteArcade(jogoNome, anfitriaoTag, convidadoTag) {
+  return caixaArcade([
+    `┃ 🎮 ${boldLayout(jogoNome)}`,
+    `┃`,
+    `┃ ${convidadoTag}, ${anfitriaoTag} te chamou`,
+    `┃    para uma sala de arcade!`,
+    `┃`,
+    `┃ ✅ ${boldLayout('Aceitar')}: responda *sim*`,
+    `┃ ❌ ${boldLayout('Recusar')}: responda *nao*`,
+    `┃ ⏳ Expira em 5 min.`,
+  ]);
 }
 
 /**
@@ -7841,6 +7890,59 @@ if (isCmd && command && !isOwner) {
     if (isMenu18Command(command) && !isModo18Ativo(groupData)) {
       return reply('🚫 O *Modo +18* está desativado.\n\nUm administrador do grupo pode liberar com `!modo18`.');
     }
+
+    // ============ SALA DE ARCADE: aceite/recusa (sim/nao) ============
+    // O convite e respondido com uma mensagem NORMAL (nao e comando). Se este
+    // usuario tem convite pendente neste grupo e disse sim/nao, trata aqui e
+    // NAO segue para o pipeline (o texto nao vira auto-resposta/NPC).
+    if (isGroup && !isCmd) {
+      const resposta = normalizar(budy2 || '').trim();
+      if (resposta === 'sim' || resposta === 'nao') {
+        const convite = arcadeRooms.convitePendente(from, sender);
+        if (convite) {
+          arcadeRooms.removerConvite(from, sender);
+          const anfTag = '@' + String(convite.anfitriao).split('@')[0];
+          const convTag = '@' + String(sender).split('@')[0];
+          const jogo = topgear.porId(convite.jogoId);
+          if (resposta === 'nao') {
+            await nazu.sendMessage(from, {
+              text: caixaArcade([
+                '┃ ❌ ' + convTag + ' recusou o convite',
+                '┃    de ' + anfTag + '.',
+              ]),
+              mentions: [convite.anfitriao, sender],
+              contextInfo: gerarContextNewsletter(),
+            });
+            return;
+          }
+          const sala = jogo && arcadeRooms.criarSala({
+            grupo: from, jogo, jogadores: [convite.anfitriao, sender],
+          });
+          if (!sala) return reply('❌ Não foi possível criar a sala.');
+          const linkHost = arcadeRoomLink(jogo.id, sala.codigo, { host: true, nome: 'Jogador 1' });
+          const linkConvidado = arcadeRoomLink(jogo.id, sala.codigo, { nome: 'Jogador 2' });
+          await nazu.sendMessage(from, {
+            text: caixaArcade([
+              '┃ 🎮 ' + boldLayout(jogo.nome),
+              '┃ 🔑 Código: ' + boldLayout(sala.codigo),
+              '┃',
+              '┃ ' + anfTag + ' ' + boldLayout('entra primeiro') + ':',
+              '┃ ' + linkHost,
+              '┃',
+              '┃ ' + convTag + ' ' + boldLayout('entra depois') + ':',
+              '┃ ' + linkConvidado,
+              '┃',
+              '┃ ⏳ A sala fecha sozinha com 3 min',
+              '┃    sem toque — não precisa fechar.',
+            ], 'SALA CRIADA'),
+            mentions: [convite.anfitriao, sender],
+            contextInfo: gerarContextNewsletter(),
+          });
+          return;
+        }
+      }
+    }
+
 switch (command) {
       // ═══════════════════════════════════════════════════════════════
       // 💌 SISTEMA DE CONFISSÕES
@@ -21646,6 +21748,28 @@ case 'pin':
 
           const jogo = topgear.porId(ID_DO_COMANDO[command]);
           if (!jogo) return reply('❌ Jogo não encontrado no catálogo.');
+
+          // ---- SALA (multiplayer) ----------------------------------------
+          // `!kof @fulano` (ou respondendo a mensagem dele) abre um CONVITE em
+          // vez do card solo. So se o netplay estiver configurado no servidor
+          // (env EMUGAMES_NETPLAY_URL).
+          const convidado = menc_os2 && !idsMatch(menc_os2, sender) ? menc_os2 : null;
+          if (convidado) {
+            if (!arcadeNetplayConfigurado()) {
+              return reply('⚠️ Sala multiplayer ainda não está configurada neste servidor.');
+            }
+            if (!arcadeBaseUrl()) return reply('❌ URL do emulador não configurada.');
+            arcadeRooms.criarConvite({ grupo: from, anfitriao: sender, convidado, jogo });
+            const anfTag = '@' + String(sender).split('@')[0];
+            const convTag = '@' + String(convidado).split('@')[0];
+            await nazu.sendMessage(from, {
+              text: textoConviteArcade(jogo.nome, anfTag, convTag),
+              mentions: [sender, convidado],
+              contextInfo: gerarContextNewsletter(),
+            });
+            return;
+          }
+
           const r = await topgear.enviarCard({ nazu, from, jogo });
           if (!r.ok) return reply(`❌ ${r.msg}`);
         } catch (e) {
