@@ -54,35 +54,96 @@ function hostLocal(host) {
 }
 
 /**
+ * Portas PUBLICADAS pelo runtime (cada uma responde num subdominio HTTPS).
+ * Medido: um servidor ouvindo na 12000 responde em `https://work-1-<runtime>/`
+ * com HTTP 200, e na 12001 em `https://work-2-<runtime>/`. Fora dessas portas
+ * nao ha subdominio.
+ */
+export function portasPublicadas(env = process.env) {
+  const out = [];
+  for (const k of ['WORKER_1', 'WORKER_2']) {
+    const n = Number(env[k]);
+    if (Number.isFinite(n) && n > 0) out.push(n);
+  }
+  return out;
+}
+
+/** Id do runtime (para montar o subdominio `work-N-<id>`). */
+function runtimeId(env) {
+  if (env.RUNTIME_ID) return String(env.RUNTIME_ID);
+  try {
+    return new URL(env.RUNTIME_URL).hostname.split('.')[0];
+  } catch { /* segue */ }
+  const m = /^runtime-([a-z0-9]+)-/i.exec(String(env.HOSTNAME || ''));
+  return m ? m[1] : '';
+}
+
+/**
+ * URL publica para uma porta, quando o ambiente a publica com TLS.
+ * `''` quando nao da para saber (nesse caso o admin define
+ * `EMUGAMES_NETPLAY_URL`).
+ */
+export function detectarUrlPublica(env = process.env, porta = 0) {
+  const pub = portasPublicadas(env);
+  const idx = pub.indexOf(Number(porta));
+  if (idx < 0) return '';
+  // Reaproveita o sufixo do RUNTIME_URL (ex.: `prod-runtime.all-hands.dev`).
+  try {
+    const host = new URL(env.RUNTIME_URL).hostname;
+    const id = host.split('.')[0];
+    const sufixo = host.slice(id.length + 1);
+    if (id && sufixo) return `https://work-${idx + 1}-${id}.${sufixo}`;
+  } catch { /* segue */ }
+  const id = runtimeId(env);
+  return id ? `https://work-${idx + 1}-${id}.prod-runtime.all-hands.dev` : '';
+}
+
+/**
  * Resolve a configuracao efetiva: URL publica, porta local e se devemos subir
  * o processo. `env` e injetavel para teste.
+ *
+ * Precedencia da URL: `EMUGAMES_NETPLAY_URL` > `netplay.json > server` >
+ * DETECCAO AUTOMATICA (porta publicada do runtime). Com a deteccao, o servidor
+ * funciona sem nenhuma configuracao -- que e o pedido do dono.
  */
 export function configNetplay(env = process.env, json = null) {
   const cfg = json || lerJson();
-  const url = String(env.EMUGAMES_NETPLAY_URL || cfg.server || '').trim().replace(/\/+$/, '');
+  const explicita = String(env.EMUGAMES_NETPLAY_URL || cfg.server || '').trim().replace(/\/+$/, '');
+  const portaExplicita = env.EMUGAMES_NETPLAY_PORT || cfg.port;
+  const pub = portasPublicadas(env);
 
+  let url = '';
+  let porta = 3000;
   let host = '';
-  let portaDaUrl = 0;
-  try {
-    const u = new URL(url);
-    host = u.hostname;
-    if (u.port) portaDaUrl = Number(u.port) || 0;
-  } catch { host = ''; }
+  const auto = !explicita;
 
-  // Porta local: env/json manda; sem ela, usa a porta da propria URL (faz
-  // sentido para `http://localhost:3210`); senao 3000.
-  const porta = Number(env.EMUGAMES_NETPLAY_PORT || cfg.port || portaDaUrl || 3000) || 3000;
+  if (explicita) {
+    url = explicita;
+    let portaDaUrl = 0;
+    try {
+      const u = new URL(url);
+      host = u.hostname;
+      if (u.port) portaDaUrl = Number(u.port) || 0;
+    } catch { host = ''; }
+    porta = Number(portaExplicita || portaDaUrl || 3000) || 3000;
+  } else {
+    // Deteccao: prefere uma porta publicada (tem HTTPS de graca).
+    porta = Number(portaExplicita || pub[0] || 3000) || 3000;
+    url = detectarUrlPublica(env, porta);
+  }
 
   // Subir o processo local? '1' liga, '0' desliga; sem a env, sobe quando a URL
-  // aponta para a propria maquina (caso de dev / proxy local).
+  // e local OU foi detectada automaticamente (nos dois casos o processo e
+  // nosso).
   const flag = String(env.EMUGAMES_NETPLAY_SPAWN ?? '').trim();
-  const spawnar = flag === '0' ? false : flag === '1' ? true : hostLocal(host);
+  const spawnar = flag === '0' ? false : flag === '1' ? true : (auto || hostLocal(host));
 
   return {
     url,
     porta,
     host,
     spawnar,
+    auto,
     // URL local (health check do processo que subimos).
     urlLocal: `http://127.0.0.1:${porta}`,
     configurado: Boolean(url),

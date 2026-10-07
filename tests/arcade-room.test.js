@@ -147,17 +147,58 @@ await test('o convite fica pendente para o convidado', async () => {
   ok(arcadeRooms.mesmoUsuario(c.convidado, P.conv), 'convidado correto');
 });
 
-await test('sem EMUGAMES_NETPLAY_URL o convite e recusado com aviso', async () => {
+await test('sem URL e SEM porta publicada o convite e recusado com aviso', async () => {
   arcadeRooms.limparTudo();
   const P = novoPar();
-  const salvo = process.env.EMUGAMES_NETPLAY_URL;
+  const salvo = {
+    url: process.env.EMUGAMES_NETPLAY_URL,
+    w1: process.env.WORKER_1,
+    w2: process.env.WORKER_2,
+    rid: process.env.RUNTIME_ID,
+    ru: process.env.RUNTIME_URL,
+    hn: process.env.HOSTNAME,
+  };
+  // Sem URL e sem porta publicada a deteccao automatica nao tem o que usar ->
+  // a sala fica indisponivel (comportamento correto).
   delete process.env.EMUGAMES_NETPLAY_URL;
+  delete process.env.WORKER_1;
+  delete process.env.WORKER_2;
+  delete process.env.RUNTIME_ID;
+  delete process.env.RUNTIME_URL;
+  delete process.env.HOSTNAME;
   try {
     const grupo = makeGroup();
     const r = await run({ grupo, texto: '!kof', autorLid: P.anf, mencionados: [P.conv], isCmd: true });
-    ok(desbold(r.text).includes('não está configurada'), 'avisa que a sala nao esta configurada');
+    ok(desbold(r.text).includes('indisponível'), 'avisa que a sala esta indisponivel');
+    ok(desbold(r.text).includes('EMUGAMES_NETPLAY_URL'), 'diz qual env configurar');
     ok(!arcadeRooms.convitePendente(grupo, P.conv), 'nao cria convite');
-  } finally { process.env.EMUGAMES_NETPLAY_URL = salvo; }
+  } finally {
+    if (salvo.url !== undefined) process.env.EMUGAMES_NETPLAY_URL = salvo.url;
+    if (salvo.w1 !== undefined) process.env.WORKER_1 = salvo.w1;
+    if (salvo.w2 !== undefined) process.env.WORKER_2 = salvo.w2;
+    if (salvo.rid !== undefined) process.env.RUNTIME_ID = salvo.rid;
+    if (salvo.ru !== undefined) process.env.RUNTIME_URL = salvo.ru;
+    if (salvo.hn !== undefined) process.env.HOSTNAME = salvo.hn;
+  }
+});
+
+await test('com porta publicada o convite sai SEM configurar nada', async () => {
+  arcadeRooms.limparTudo();
+  const P = novoPar();
+  const salvo = { url: process.env.EMUGAMES_NETPLAY_URL, w1: process.env.WORKER_1, ru: process.env.RUNTIME_URL };
+  delete process.env.EMUGAMES_NETPLAY_URL;
+  process.env.WORKER_1 = '12000';
+  process.env.RUNTIME_URL = 'https://abc.prod-runtime.all-hands.dev';
+  try {
+    const grupo = makeGroup();
+    const r = await run({ grupo, texto: '!kof', autorLid: P.anf, mencionados: [P.conv], isCmd: true });
+    ok(desbold(r.text).includes('SALA DE ARCADE'), 'convite sai sem configuracao manual');
+    ok(arcadeRooms.convitePendente(grupo, P.conv), 'convite gravado');
+  } finally {
+    if (salvo.url !== undefined) process.env.EMUGAMES_NETPLAY_URL = salvo.url;
+    if (salvo.w1 !== undefined) process.env.WORKER_1 = salvo.w1; else delete process.env.WORKER_1;
+    if (salvo.ru !== undefined) process.env.RUNTIME_URL = salvo.ru; else delete process.env.RUNTIME_URL;
+  }
 });
 
 await test('!kof sem mencionar ninguem manda o card solo', async () => {

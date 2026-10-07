@@ -21773,7 +21773,14 @@ case 'pin':
           const convidado = menc_os2 && !idsMatch(menc_os2, sender) ? menc_os2 : null;
           if (convidado) {
             if (!arcadeNetplayConfigurado()) {
-              return reply('⚠️ Sala multiplayer ainda não está configurada neste servidor.');
+              // A deteccao automatica cobre ambientes com porta publicada; onde
+              // ela nao existe, o admin precisa dizer a URL.
+              return reply(
+                '⚠️ *Sala multiplayer indisponível neste servidor.*\n\n' +
+                'Não encontrei uma URL pública de netplay. Configure no `.env`:\n' +
+                '`EMUGAMES_NETPLAY_URL=https://seu-endereco`\n\n' +
+                '_Precisa ser HTTPS (o site é https e o navegador bloqueia ws://)._'
+              );
             }
             if (!arcadeBaseUrl()) return reply('❌ URL do emulador não configurada.');
             arcadeRooms.criarConvite({ grupo: from, anfitriao: sender, convidado, jogo });
