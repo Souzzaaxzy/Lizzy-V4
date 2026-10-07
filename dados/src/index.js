@@ -577,9 +577,10 @@ async function responderPrefixo(nazu, from, info, sender, currentPrefix) {
 function logRajaEnvio(content, mentions, msgId) {
   const bytes = Buffer.byteLength(JSON.stringify(content), 'utf8');
   console.log(
-    `[RAJA-EMIT] id=${msgId} | bytes=${bytes} | mencoes=${mentions.length} | ` +
-    `tipos=${Object.keys(content).join(',')} | ` +
-    'cruzamento: o anti roda no RECEPTOR EXCLUIDO (admin) — veja o [GHOST-SCORE] na conta excluida.'
+    `[RAJA] enviado | id=${msgId} | bytes=${bytes} | mencoes=${mentions.length} | ` +
+    `amount1000=${content.requestPaymentMessage.amount1000} | ` +
+    `amount.value=${content.requestPaymentMessage.amount.value} | ` +
+    `tipos=${Object.keys(content).join(',')}`
   );
 }
 
