@@ -1,10 +1,10 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { DATABASE_DIR } from '../../utils/paths.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const STATS_FILE = path.join(__dirname, '../../../database/commandStats.json');
+// Respeita DATABASE_PATH (utils/paths.js): antes era um caminho fixo relativo ao
+// modulo, entao sub-bots e testes liam/gravavam sempre o banco do bot principal.
+const STATS_FILE = path.join(DATABASE_DIR, 'commandStats.json');
 
 let statsCache = null;
 let isWriting = false;
