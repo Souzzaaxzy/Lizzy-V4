@@ -274,6 +274,39 @@ await test('render (TTY) NÃO falsifica etapa pendente como ONLINE', async () =>
   }
 });
 
+await test('finalize NÃO apaga o painel (ONLINE é anexado abaixo)', async () => {
+  const descritor = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY');
+  Object.defineProperty(process.stdout, 'isTTY', { value: true, configurable: true });
+  try {
+    const r = new BootRenderer({
+      enabled: true, botName: 'Lizzy', prefix: '!', owner: 'Kannon', version: '4',
+      baileys: { version: '0.3.18-final', repo: 'Souzzaaxzy/baileys' },
+    });
+    r.setEnv({ serverIp: '203.0.113.7', waVersion: '2.3000.1', jidLid: 38, captcha: 0 });
+    r.step('core', 'online'); r.step('abyss', 'online'); r.step('wa', 'connected');
+    r.setSubBots({ total: 0, active: 0 });
+
+    const painel = await capturar(async () => {
+      await r.intro();
+      r.summary();
+    });
+    // Captura o finalize ISOLADO: ele NÃO pode emitir cursor-para-cima nem
+    // limpar tela (isso apagaria o painel — o bug reportado).
+    const finalOut = await capturar(async () => { await r.finalize(); });
+
+    const plain = (painel + finalOut).replace(/\x1b\[[0-9;]*m/g, '');
+    ok(painel.includes('◈ ENVIRONMENT') && painel.includes('SERVER IP'), 'painel tem ENVIRONMENT antes do finalize');
+    ok(plain.includes('Nenhum sub-bot para inicializar.'), 'a linha de sub-bots continua no painel');
+    ok(plain.includes('WHATSAPP ENGINE READY'), 'a tela ONLINE aparece');
+    ok(plain.indexOf('◈ ENVIRONMENT') < plain.indexOf('WHATSAPP ENGINE READY'), 'ENVIRONMENT antes da tela ONLINE');
+    ok(!/\x1b\[0J/.test(finalOut), 'finalize NÃO limpa a tela (\\x1b[0J)');
+    ok(!/\x1b\[\d*A/.test(finalOut), 'finalize NÃO move o cursor para cima');
+  } finally {
+    if (descritor) Object.defineProperty(process.stdout, 'isTTY', descritor);
+    else delete process.stdout.isTTY;
+  }
+});
+
 // ───────────────────────────── resumo ─────────────────────────────
 
 console.log('\n' + '─'.repeat(60));

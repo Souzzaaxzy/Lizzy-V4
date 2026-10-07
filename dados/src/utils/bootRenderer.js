@@ -427,7 +427,13 @@ export class BootRenderer {
       `   ${C.green}❯${C.reset}`,
       '',
     ];
-    this._paintBlock(bloco);
+    // ANEXA abaixo do painel. NÃO usa _paintBlock: mover o cursor para cima e
+    // limpar apagaria todo o boot (BOOT SEQUENCE/ENVIRONMENT/etc) da tela e do
+    // scrollback — foi exatamente o bug "aparece com menos coisas e o
+    // ENVIRONMENT não aparece".
+    process.stdout.write('\r');
+    for (const l of bloco) process.stdout.write(l + '\n');
+    this._lastLineCount = 0;
     process.stdout.write('\x1b[?25h');
     this._restoreCursor = () => {};
   }

@@ -50,7 +50,13 @@ animação). Se o QR aparecer (`!state.creds.registered`), o renderer é destru�
   `messageQueue` (`batchSize` lotes × `messagesPerBatch`).
 - **Final** — só depois de `connection === 'open'` e da inicialização: caixa
   `● ONLINE` + `L I Z Z Y` + `WHATSAPP ENGINE READY` / `SYSTEM READY` /
-  `WAITING FOR COMMANDS` / `❯`.
+  `WAITING FOR COMMANDS` / `❯`, **ANEXADA abaixo do painel** (não substitui).
+  ⚠️ O `finalize` **não pode** usar `_paintBlock` (mover o cursor para cima +
+  `\x1b[0J`): isso **apagava o painel inteiro** — sintoma relatado "o boot aparecia
+  com menos coisas e o ENVIRONMENT não aparecia". Agora ele só usa `\r` e escreve
+  as linhas abaixo, preservando BOOT SEQUENCE/ENVIRONMENT/SESSION/SYSTEM/BOT na
+  tela e no scrollback. Regression test cobre exatamente isso
+  (`finalize NÃO limpa a tela`).
 
 ### Honestidade embutida
 O renderer **não executa** nada — ele só **apresenta** o que o `connect.js`
