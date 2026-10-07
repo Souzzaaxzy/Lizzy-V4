@@ -63,6 +63,7 @@ export default async function menu(prefix, botName = 'MeuBot', userName = 'Usuá
     categoria(prefix, 'COMUNIDADE', '🛡️', '❖', ['menumemb', 'menuadm', 'menudono', 'menubn', 'menu18']),
     categoria(prefix, 'JOGOS', '🎮', '⟢', [
       ['⚽', 'menufut'], ['🎮', 'menurpg'], ['💎', 'menuvip'], ['🎯', 'menugames'],
+      ['🕹️', 'arcade'],
     ]),
   ].join('\n\n\n');
 

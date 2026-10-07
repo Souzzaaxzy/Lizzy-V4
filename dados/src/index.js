@@ -2991,6 +2991,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     menuBuscas,
     menuBrawlStars,
     menuGames,
+    menuArcade,
     menu18
   } = menus;
   const prefix = prefixo;
@@ -22871,6 +22872,16 @@ ${groupPrefix}bratvid Vai dilma
         } catch (error) {
           console.error('Erro ao enviar menu de jogos:', error);
           await reply("❌ Ocorreu um erro ao carregar o menu de jogos");
+        }
+        break;
+      case 'arcade':
+      case 'menuarcade':
+      case 'emugames':
+        try {
+          await sendMenuWithMedia('arcade', menuArcade);
+        } catch (error) {
+          console.error('Erro ao enviar menu arcade:', error);
+          await reply("❌ Ocorreu um erro ao carregar o menu arcade");
         }
         break;
             case 'blockmenugp': {

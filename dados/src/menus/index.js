@@ -26,6 +26,7 @@ const menuModules = {
     menuRPG: './menurpg.js',
     menuVIP: './menuvip.js',
     menuGames: './menugames.js',
+    menuArcade: './menuarcade.js',
     menu18: './menu18.js'
 };
 

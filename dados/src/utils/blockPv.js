@@ -305,6 +305,10 @@ export const menuCommandsMap = {
         menuName: 'Plaquinhas',
         commands: ['plaq1', 'plaq2', 'plaq3', 'plaq4', 'plaq5', 'plaq6', 'plaq7', 'plaq8', 'plaq9', 'plaq10', 'vab18', 'eununca18', 'hotseat']
     },
+    arcade: {
+        menuName: 'Arcade',
+        commands: ['arcade', 'menuarcade', 'kof', 'metalslug', 'topgear']
+    },
     alteradores: {
         menuName: 'Alteradores',
         commands: ['alugar', 'comprar', 'vender', 'contratar', 'demitir', 'transporte', 'viajar', 'locomover', 'casar', 'divorciar', 'adotar', 'libertar', 'nomepet', 'abandonar']
