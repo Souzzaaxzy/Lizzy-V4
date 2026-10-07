@@ -68,3 +68,29 @@ nao somarem o zip inteiro.
 
 `wrangler.jsonc` (`assets.directory` = `./dados/emugames`) + `wrangler deploy`.
 No painel: *Framework* None, *Build command* **vazio**.
+
+### ⚠️ Deploy MANUAL — o site NÃO atualiza sozinho do `main`
+
+O Worker é um **deploy manual**. Mexer no `dados/emugames/` (adicionar jogo,
+ROM, capa, editar o `jogos.json`) **não** muda o site no ar até rodar o deploy.
+Se um comando novo abrir o site e aparecer *"Registre um jogo no jogos.json"* ou
+*"Jogo X não está no catálogo"*, quase sempre é isto: **o site no ar está com o
+catálogo antigo**.
+
+```bash
+# na raiz do projeto (uma vez: npm i -g wrangler  ou  npx wrangler)
+npx wrangler deploy
+```
+
+Para conferir o que está no ar sem abrir o navegador:
+
+```bash
+curl -s https://emugames.kannonmtx.workers.dev/jogos.json | grep -c '"id"'
+# 16 = atualizado | 3 = deploy pendente
+```
+
+> O `!arcade` e os comandos `!<jogo>` leem o **catálogo local** (do repositório)
+> só para montar o card e a URL; quem serve a ROM e o `jogos.json` de verdade é
+> o **site**. Por isso o card aparece mesmo com o site desatualizado — mas o jogo
+> não abre até o deploy.
+

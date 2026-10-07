@@ -16,8 +16,8 @@
   <div id="game"></div>
 
   <section id="erro" hidden>
-    <p>Nenhum jogo disponível.</p>
-    <p class="dica">Registre um jogo no <code>jogos.json</code> e coloque a ROM em <code>jogos/&lt;console&gt;/</code>.</p>
+    <p id="erro-titulo">Nenhum jogo disponível.</p>
+    <p class="dica" id="erro-dica">Registre um jogo no <code>jogos.json</code> e coloque a ROM em <code>jogos/&lt;console&gt;/</code>.</p>
   </section>
 
   <div id="controles">
@@ -179,23 +179,43 @@
   }, 5000);
 
   (async () => {
+    const erroTitulo = document.getElementById('erro-titulo');
+    const erroDica = document.getElementById('erro-dica');
     let catalogo = [];
+    let falhouCarregar = false;
     try {
       const r = await fetch('./jogos.json', { cache: 'no-store' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
       const d = await r.json();
       catalogo = (Array.isArray(d.jogos) ? d.jogos : []).filter((j) => j && j.id && j.rom && j.console);
-    } catch {
+    } catch (e) {
+      console.error('[EMUGAMES] falha ao carregar jogos.json', e);
+      falhouCarregar = true;
       catalogo = [];
     }
 
     const id = new URLSearchParams(location.search).get('jogo');
     const escolhido = id ? catalogo.find((j) => j.id === id) : catalogo[0];
 
-    if (escolhido) iniciar(escolhido);
-    else {
+    if (escolhido) {
+      iniciar(escolhido);
+    } else {
       alvo.hidden = true;
       erro.hidden = false;
       subtitulo.textContent = '';
+      // Diferencia "o jogo pedido não está no catálogo" de "o catálogo não
+      // carregou" — antes os dois mostravam a mesma dica de configurar o
+      // jogos.json, o que confundia.
+      if (falhouCarregar) {
+        erroTitulo.textContent = 'Não foi possível carregar o catálogo de jogos.';
+        erroDica.textContent = 'O jogos.json não respondeu. Tente recarregar.';
+      } else if (id) {
+        erroTitulo.textContent = `Jogo "${id}" não está no catálogo.`;
+        erroDica.textContent = 'O site no ar ainda pode estar com a versão antiga — faça o deploy para atualizar.';
+      } else {
+        erroTitulo.textContent = 'Nenhum jogo disponível.';
+        erroDica.textContent = 'Registre um jogo no jogos.json e coloque a ROM em jogos/<console>/.';
+      }
     }
   })();
 })();
