@@ -96,10 +96,15 @@ sala (sem sala orfa se o netplay falhar) e o link da sala leva `?netplay=<url>`
 (o site mora no Cloudflare; o servidor sobe no host do bot). No player, o
 `?netplay=` do link **vence** o `netplay.json`.
 
-**TLS continua necessario** para o aparelho: o site e https e o navegador
-bloqueia `ws://` -> ponha um proxy TLS na frente (ou use porta ja exposta com
-TLS). Medido: o servidor e **Socket.IO puro** (~**80 MB**, **3%** de CPU com 10
-salas x 4 jogadores) — cabe no host do bot. O netplay do EmulatorJS e
+**A URL e DETECTADA SOZINHA quando o host publica uma porta** (nao exige
+configuracao): medido que um servidor na `WORKER_1` (12000) responde em
+`https://work-1-<runtime>/` com **HTTP 200**, e na `WORKER_2` (12001) em
+`work-2-<runtime>/` — ou seja, **HTTPS de graca, sem proxy**. O id/sufixo vem de
+`RUNTIME_URL`/`RUNTIME_ID`/`HOSTNAME`. Precedencia: `EMUGAMES_NETPLAY_URL` >
+`netplay.json.server` > deteccao. Onde **nao** ha porta publicada (ex.:
+Pterodactyl), a mensagem de erro diz qual env definir — ali o TLS precisa de
+proxy proprio. Medido: o servidor e **Socket.IO puro** (~**80 MB**, **3%** de
+CPU com 10 salas x 4 jogadores) — cabe no host do bot. O netplay do EmulatorJS e
 **experimental** (`//control syncing - broken`): a qualidade depende do ping.
 
 ### Testes — `tests/arcade-room.test.js` (11 testes / 35 assercoes)
