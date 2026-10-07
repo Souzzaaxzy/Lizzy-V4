@@ -140,6 +140,37 @@ await test('garantirNetplay com URL externa: ok sem subir processo', async () =>
   ok(r.url === 'https://netplay.exemplo.com', 'devolve a URL');
 });
 
+// ─────────────────────── auto-download / sem bloqueio ───────────────────────
+await test('netplayConfigurado NAO exige o binario (baixa na hora)', () => {
+  // Antes: sem o cloudflared, isto devolvia false e o convite era bloqueado
+  // ANTES de qualquer tentativa -- e sem log. Agora so o modo 'nenhum' nega.
+  const env = { EMUGAMES_NETPLAY_TUNNEL: '1', CLOUDFLARED_PATH: '/nao/existe' };
+  ok(mod.netplayConfigurado(env) === true, 'modo tunel conta como configurado, mesmo sem binario');
+  ok(mod.netplayConfigurado({ EMUGAMES_NETPLAY_TUNNEL: '0' }) === false, 'tunel desligado e sem URL -> nao');
+});
+
+await test('garantirNetplay loga SEMPRE o modo (nao fica mudo)', async () => {
+  const orig = console.log;
+  const linhas = [];
+  console.log = (...a) => { linhas.push(a.join(' ')); };
+  try {
+    // '0' desliga o tunel -> modo nenhum -> falha, mas COM log.
+    await mod.garantirNetplay({ EMUGAMES_NETPLAY_TUNNEL: '0' });
+  } finally { console.log = orig; }
+  ok(linhas.some((l) => l.includes('[NETPLAY] modo=')), 'logou o modo');
+  ok(linhas.some((l) => l.includes('nenhum')), 'disse que nao ha como publicar');
+});
+
+await test('garantirCloudflared respeita CLOUDFLARED_PATH explicito', async () => {
+  // Caminho explicito e estrito: nao tenta baixar por cima.
+  const r = await mod.garantirCloudflared({ CLOUDFLARED_PATH: '/nao/existe/cloudflared' });
+  ok(r === '', 'nao baixa quando o dono apontou um caminho');
+});
+
+await test('garantirCloudflared e exportado', () => {
+  ok(typeof mod.garantirCloudflared === 'function', 'funcao publica');
+});
+
 // ─────────────────────────── resumo ───────────────────────────
 console.log('\n' + '─'.repeat(60));
 let passed = 0, failed = 0;

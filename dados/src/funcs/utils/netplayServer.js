@@ -190,11 +190,15 @@ export function configNetplay(env = process.env, json = null) {
   };
 }
 
-/** A sala multiplayer esta configurada? (URL, porta publicada ou tunel) */
+/**
+ * A sala multiplayer esta configurada? (URL, porta publicada ou tunel)
+ *
+ * NAO exige o binario do cloudflared: se faltar, o proprio bot o baixa na hora
+ * (ver `garantirCloudflared`). Exigir o binario aqui bloqueava o convite com
+ * "sala indisponivel" ANTES de qualquer tentativa -- e sem log nenhum.
+ */
 export function netplayConfigurado(env = process.env) {
-  const c = configNetplay(env);
-  if (c.modo === 'tunel') return Boolean(acharCloudflared(env));
-  return c.configurado;
+  return configNetplay(env).modo !== 'nenhum';
 }
 
 /** Porta local configurada. */
@@ -379,6 +383,44 @@ export async function subirTunel(env, cfg, { timeoutMs = 45000 } = {}) {
   return '';
 }
 
+/**
+ * Garante o binario do cloudflared: se nao existir, BAIXA na hora (release
+ * oficial). E o que evita o "sala indisponivel" quando o instalador falhou ou
+ * o binario nunca chegou -- o bot se resolve sozinho.
+ */
+export async function garantirCloudflared(env = process.env, { timeoutMs = 300000 } = {}) {
+  const atual = acharCloudflared(env);
+  if (atual) return atual;
+  // CLOUDFLARED_PATH explicito e estrito: nao sobrescreve o que o dono apontou.
+  if (env.CLOUDFLARED_PATH) return '';
+
+  const baixador = path.join(SERVER_DIR, 'baixar-cloudflared.mjs');
+  if (!fs.existsSync(baixador)) {
+    console.log(`[NETPLAY] baixador ausente: ${baixador}`);
+    return '';
+  }
+  console.log('[NETPLAY] cloudflared nao encontrado - baixando do release oficial...');
+  try {
+    await new Promise((resolve, reject) => {
+      const c = spawn(process.execPath, [baixador], { stdio: ['ignore', 'pipe', 'pipe'] });
+      const repassar = (b) => {
+        const t = String(b || '').trim();
+        if (t) console.log(t.split('\n').map((l) => l.trim()).filter(Boolean).join('\n'));
+      };
+      c.stdout?.on('data', repassar);
+      c.stderr?.on('data', repassar);
+      c.on('error', reject);
+      const t = setTimeout(() => { try { c.kill('SIGKILL'); } catch { /* ok */ } reject(new Error('timeout')); }, timeoutMs);
+      t.unref?.();
+      c.on('exit', (code) => { clearTimeout(t); code === 0 ? resolve() : reject(new Error(`exit ${code}`)); });
+    });
+  } catch (e) {
+    console.error(`[NETPLAY] falha ao baixar o cloudflared: ${e?.message || e}`);
+    return '';
+  }
+  return acharCloudflared(env);
+}
+
 /** Derruba o tunel (se foi subido por nos). */
 export function pararTunel() {
   if (!tunel) return false;
@@ -396,9 +438,13 @@ export function pararTunel() {
  */
 export async function garantirNetplay(env = process.env) {
   const cfg = configNetplay(env);
+  // Log SEMPRE: sem isto o "sala indisponivel" nao deixava rastro nenhum, e
+  // ficava impossivel saber onde parou.
+  console.log(`[NETPLAY] modo=${cfg.modo} porta=${cfg.porta} spawn=${cfg.spawnar} url=${cfg.url || '(a definir)'}`);
 
   if (cfg.modo === 'nenhum') {
-    return { ok: false, url: '', motivo: 'sem URL e sem cloudflared para publicar a sala' };
+    console.log('[NETPLAY] tunel desligado e sem URL - nao ha como publicar a sala');
+    return { ok: false, url: '', motivo: 'sem URL e com o tunel desligado' };
   }
   if (cfg.modo === 'url' && !cfg.spawnar) {
     return { ok: true, url: cfg.url, motivo: '' };
@@ -408,11 +454,23 @@ export async function garantirNetplay(env = process.env) {
     subindo = (async () => {
       if (cfg.spawnar) {
         const okSrv = await subirServidor(env, cfg);
-        if (!okSrv) return { ok: false, url: cfg.url, motivo: ultimoMotivo };
+        if (!okSrv) {
+          console.error(`[NETPLAY] servidor local nao subiu: ${ultimoMotivo}`);
+          return { ok: false, url: cfg.url, motivo: ultimoMotivo };
+        }
       }
       if (cfg.modo === 'tunel') {
+        // Se o binario nao chegou pelo instalador, baixa AGORA.
+        const bin = await garantirCloudflared(env);
+        if (!bin) {
+          console.error('[NETPLAY] sem cloudflared - nao consegui publicar a sala');
+          return { ok: false, url: '', motivo: ultimoMotivo || 'cloudflared indisponivel' };
+        }
         const url = await subirTunel(env, cfg);
-        if (!url) return { ok: false, url: '', motivo: ultimoMotivo };
+        if (!url) {
+          console.error(`[NETPLAY] tunel falhou: ${ultimoMotivo}`);
+          return { ok: false, url: '', motivo: ultimoMotivo };
+        }
         return { ok: true, url, motivo: '' };
       }
       return { ok: true, url: cfg.url, motivo: '' };
@@ -453,6 +511,6 @@ process.on('exit', () => { try { pararNetplay(); } catch { /* ok */ } });
 
 export default {
   configNetplay, netplayConfigurado, portaNetplay, portasPublicadas,
-  detectarUrlPublica, acharCloudflared, subirTunel, pararTunel,
+  detectarUrlPublica, acharCloudflared, garantirCloudflared, subirTunel, pararTunel,
   garantirNetplay, pararNetplay, estadoNetplay,
 };
