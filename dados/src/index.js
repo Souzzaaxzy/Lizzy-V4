@@ -21606,35 +21606,46 @@ case 'pin':
       }
       case 'topgear':
       case 'metalslug':
-      case 'kof': {
+      case 'kof':
+      case 'marioworld':
+      case 'mariokart':
+      case 'fifa98':
+      case 'fifa97':
+      case 'gtracing':
+      case 'marvel':
+      case 'mk':
+      case 'mk2':
+      case 'streetfighter5':
+      case 'streetfighter2turbo':
+      case 'streetfighterzero2':
+      case 'bomberman5':
+      case 'tekken2': {
         try {
           if (!isGroup) return reply('◈ Este comando só funciona em grupos.');
 
-          const JOGOS = {
-            topgear: {
-              id: 'topgear2',
-              nome: 'Top Gear 2',
-              emoji: '🏎️',
-              capa: 'topgear.gif',
-              descricao: 'Corrida clássica de SNES: 16 países, 4 carros, pit stop e trilha sonora marcante. Escolha o carro, administre o combustível e chegue em 1º.'
-            },
-            metalslug: {
-              id: 'metalslug',
-              nome: 'Metal Slug',
-              emoji: '🪖',
-              capa: 'metalslug.gif',
-              descricao: 'Run and gun clássico da SNK: atire em tudo, resgate reféns, pilote o tanque e sobreviva à chuva de inimigos.'
-            },
-            kof: {
-              id: 'kof97',
-              nome: "The King of Fighters '97",
-              emoji: '🥊',
-              capa: 'kof.gif',
-              descricao: 'Luta clássica da SNK: times de 3, sistema de Advanced/Extra e o lendário confronto com Orochi.'
-            }
+          // id do catálogo (jogos.json) por comando. `kof` -> kof97 (o id do
+          // catálogo mantém o 97, que é o jogo; o comando é curto).
+          const ID_DO_COMANDO = {
+            topgear: 'topgear2',
+            metalslug: 'metalslug',
+            kof: 'kof97',
+            marioworld: 'marioworld',
+            mariokart: 'mariokart',
+            fifa98: 'fifa98',
+            fifa97: 'fifa97',
+            gtracing: 'gtracing',
+            marvel: 'marvel',
+            mk: 'mk',
+            mk2: 'mk2',
+            streetfighter5: 'streetfighter5',
+            streetfighter2turbo: 'streetfighter2turbo',
+            streetfighterzero2: 'streetfighterzero2',
+            bomberman5: 'bomberman5',
+            tekken2: 'tekken2'
           };
 
-          const jogo = JOGOS[command];
+          const jogo = topgear.porId(ID_DO_COMANDO[command]);
+          if (!jogo) return reply('❌ Jogo não encontrado no catálogo.');
           const r = await topgear.enviarCard({ nazu, from, jogo });
           if (!r.ok) return reply(`❌ ${r.msg}`);
         } catch (e) {

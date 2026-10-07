@@ -58,6 +58,7 @@ const AUTHOR_LID = '111000000000900@lid';
 const AUTHOR_JID = '5511000000009@s.whatsapp.net';
 
 let groupCounter = 0;
+let authorCounter = 0;
 function makeGroup() {
   groupCounter += 1;
   const g = `1203637000000${String(groupCounter).padStart(4, '0')}@g.us`;
@@ -96,8 +97,12 @@ function makeNazu(groupJid) {
 async function run(command) {
   const groupJid = makeGroup();
   const nazu = makeNazu(groupJid);
+  // Remetente único por execução: o handler aplica throttle de 3 comandos/5s
+  // por sender, então reutilizar mediria o rate limit em vez do menu.
+  authorCounter += 1;
+  const authorLid = `77${String(authorCounter).padStart(6, '0')}666@lid`;
   const info = {
-    key: { remoteJid: groupJid, fromMe: false, id: `C-${command}`, participant: AUTHOR_LID },
+    key: { remoteJid: groupJid, fromMe: false, id: `C-${command}-${authorCounter}`, participant: authorLid },
     message: { extendedTextMessage: { text: `!${command}`, contextInfo: { remoteJid: groupJid } } },
     messageTimestamp: 1757900000,
     pushName: 'Autor',
@@ -117,6 +122,19 @@ await test('!arcade envia o menu no layout padrão com os 3 jogos', async () => 
   ok(text.includes('!kof'), 'lista !kof');
   ok(text.includes('!metalslug'), 'lista !metalslug');
   ok(text.includes('!topgear'), 'lista !topgear');
+});
+
+await test('!arcade lista TODOS os jogos do catálogo', async () => {
+  const catalogo = JSON.parse(read('dados/emugames/jogos.json')).jogos;
+  const { text } = await run('arcade');
+  const COMANDO = { topgear2: 'topgear', kof97: 'kof' };
+  const faltando = catalogo
+    .map((j) => COMANDO[j.id] || j.id)
+    .filter((c) => !text.includes(`!${c}`));
+  ok(faltando.length === 0, `todos os jogos no menu (faltando: ${faltando.join(', ')})`);
+  // Os 3 Street Fighter têm comandos SEPARADOS (não colidem).
+  ok(text.includes('!streetfighter2turbo') && text.includes('!streetfighterzero2') && text.includes('!streetfighter5'),
+    'os 3 street fighter têm nomes separados');
 });
 
 await test('alias !menuarcade e !emugames também enviam o menu', async () => {

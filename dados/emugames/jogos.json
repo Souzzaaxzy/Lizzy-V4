@@ -3,14 +3,133 @@
     {
       "id": "topgear2",
       "nome": "Top Gear 2",
+      "emoji": "🏎️",
       "console": "snes",
       "capa": "topgear.gif",
       "descricao": "Corrida clássica de SNES: 16 países, 4 carros, pit stop e trilha sonora marcante. Escolha o carro, administre o combustível e chegue em 1º.",
       "rom": "jogos/snes/topgear2.smc"
     },
     {
+      "id": "marioworld",
+      "nome": "Super Mario World",
+      "emoji": "🍄",
+      "console": "snes",
+      "capa": "marioworld.gif",
+      "descricao": "A aventura que definiu o SNES: Yoshi, capa, penas e dezenas de fases secretas em Dinosaur Land.",
+      "rom": "jogos/snes/marioworld.smc"
+    },
+    {
+      "id": "mariokart",
+      "nome": "Super Mario Kart",
+      "emoji": "🏁",
+      "console": "snes",
+      "capa": "mariokart.gif",
+      "descricao": "O kart que começou tudo: 8 personagens, cascas, bananas e o temido Modo Batalha.",
+      "rom": "jogos/snes/mariokart.smc"
+    },
+    {
+      "id": "fifa98",
+      "nome": "FIFA 98",
+      "emoji": "⚽",
+      "console": "snes",
+      "capa": "fifa98.gif",
+      "descricao": "Futebol de 32 seleções no SNES: passe, chute e disputa pela Copa do Mundo.",
+      "rom": "jogos/snes/fifa98.smc"
+    },
+    {
+      "id": "fifa97",
+      "nome": "FIFA Soccer 97",
+      "emoji": "⚽",
+      "console": "snes",
+      "capa": "fifa97.gif",
+      "descricao": "O clássico de futebol da EA: times e seleções com jogabilidade rápida de SNES.",
+      "rom": "jogos/snes/fifa97.smc"
+    },
+    {
+      "id": "gtracing",
+      "nome": "GT Racing",
+      "emoji": "🏎️",
+      "console": "snes",
+      "capa": "gtracing.gif",
+      "descricao": "Corrida de GT japonesa: circuitos variados e carros de turismo a toda velocidade.",
+      "rom": "jogos/snes/gtracing.smc"
+    },
+    {
+      "id": "marvel",
+      "nome": "Marvel Super Heroes in War of the Gems",
+      "emoji": "🦸",
+      "console": "snes",
+      "capa": "marvel.gif",
+      "descricao": "Ação com os heróis da Marvel: Homem-Aranha, Wolverine e Capitão América em luta contra Thanos.",
+      "rom": "jogos/snes/marvel.smc"
+    },
+    {
+      "id": "mk",
+      "nome": "Mortal Kombat",
+      "emoji": "🐉",
+      "console": "snes",
+      "capa": "mk.gif",
+      "descricao": "O primeiro Kombat: fatalities, golpes clássicos e a rivalidade Scorpion x Sub-Zero.",
+      "rom": "jogos/snes/mk.smc"
+    },
+    {
+      "id": "mk2",
+      "nome": "Mortal Kombat II",
+      "emoji": "🐉",
+      "console": "snes",
+      "capa": "mk2.gif",
+      "descricao": "A sequência lendária: mais lutadores, Friendships, Babalities e fatalities brutais.",
+      "rom": "jogos/snes/mk2.smc"
+    },
+    {
+      "id": "streetfighter5",
+      "nome": "Street Fighter 5 (Hack)",
+      "emoji": "🥋",
+      "console": "snes",
+      "capa": "streetfighter5.gif",
+      "descricao": "Hack de SNES com o elenco do SF2 e ajustes de Street Fighter 5: lutas de 1x1 a toda.",
+      "rom": "jogos/snes/streetfighter5.smc"
+    },
+    {
+      "id": "streetfighter2turbo",
+      "nome": "Street Fighter II Turbo",
+      "emoji": "🥋",
+      "console": "snes",
+      "capa": "streetfighter2turbo.gif",
+      "descricao": "A versão Turbo do SF2: velocidade maior, os 4 Grand Masters e os chefes jogáveis.",
+      "rom": "jogos/snes/streetfighter2turbo.smc"
+    },
+    {
+      "id": "streetfighterzero2",
+      "nome": "Street Fighter Zero 2",
+      "emoji": "🥋",
+      "console": "snes",
+      "capa": "streetfighterzero2.gif",
+      "descricao": "Street Fighter Alpha 2 no SNES: Custom Combos, novos lutadores e o sistema de Alpha Counters.",
+      "rom": "jogos/snes/streetfighterzero2.smc"
+    },
+    {
+      "id": "bomberman5",
+      "nome": "Super Bomberman 5",
+      "emoji": "💣",
+      "console": "snes",
+      "capa": "bomberman5.gif",
+      "descricao": "Bomberman em 5 jogadores: plante bombas, fuja da explosão e exploda os inimigos.",
+      "rom": "jogos/snes/bomberman5.smc"
+    },
+    {
+      "id": "tekken2",
+      "nome": "Tekken 2",
+      "emoji": "👊",
+      "console": "snes",
+      "capa": "tekken2.gif",
+      "descricao": "Adaptação de Tekken 2 para SNES: torneio de luta com o elenco clássico.",
+      "rom": "jogos/snes/tekken2.smc"
+    },
+    {
       "id": "metalslug",
       "nome": "Metal Slug",
+      "emoji": "🪖",
       "console": "arcade",
       "capa": "metalslug.gif",
       "descricao": "Run and gun clássico da SNK: atire em tudo, resgate reféns, pilote o tanque e sobreviva à chuva de inimigos.",
@@ -20,6 +139,7 @@
     {
       "id": "kof97",
       "nome": "The King of Fighters '97",
+      "emoji": "🥊",
       "console": "arcade",
       "capa": "kof.gif",
       "descricao": "Luta clássica da SNK: times de 3, sistema de Advanced/Extra e o lendário confronto com Orochi.",

@@ -183,15 +183,11 @@ await test('os 3 comandos funcionam e sao liberados para membros', async () => {
   }
 });
 
-await test('!topgear NÃO está em nenhum menu nem no blockPv', async () => {
-  const menus = fs.readdirSync(path.join(PROJECT, 'dados/src/menus'));
-  for (const m of menus) {
-    if (!m.endsWith('.js')) continue;
-    const txt = fs.readFileSync(path.join(PROJECT, 'dados/src/menus', m), 'utf-8');
-    ok(!txt.includes('topgear'), `${m} não cita topgear`);
-  }
+await test('!topgear aparece no menu arcade e no blockPv (deixou de ser experimental)', async () => {
+  const arcade = fs.readFileSync(path.join(PROJECT, 'dados/src/menus/menuarcade.js'), 'utf-8');
+  ok(arcade.includes('topgear'), 'menuarcade cita topgear');
   const blockPv = fs.readFileSync(path.join(PROJECT, 'dados/src/utils/blockPv.js'), 'utf-8');
-  ok(!blockPv.includes('topgear'), 'blockPv não cita topgear');
+  ok(blockPv.includes('topgear'), 'blockPv cita topgear');
 });
 
 await test('o bot não abre porta/servidor local', () => {

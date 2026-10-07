@@ -60,9 +60,16 @@ function svg({ nome, console }) {
 const catalogo = JSON.parse(fs.readFileSync(path.join(RAIZ, 'dados/emugames/jogos.json'), 'utf-8'));
 fs.mkdirSync(DEST, { recursive: true });
 
+// As capas reais (título do jogo) são geradas por `gerar-capas-libretro.mjs`.
+// Este script só preenche o que NÃO tem capa ainda — assim ele nunca sobrescreve
+// uma capa real. Para forçar o placeholder, apague o arquivo antes.
 for (const jogo of catalogo.jogos || []) {
   const arquivo = jogo.capa || `${jogo.id}.gif`;
   const destino = path.join(DEST, arquivo);
+  if (fs.existsSync(destino)) {
+    console.log(`pula ${arquivo} (já existe)`);
+    continue;
+  }
   await sharp(Buffer.from(svg(jogo))).gif().toFile(destino);
   console.log(`capa: ${path.relative(RAIZ, destino)}`);
 }

@@ -26,6 +26,23 @@ function pagina(jogoId) {
 }
 
 /**
+ * Catálogo de jogos (dados/emugames/jogos.json) — FONTE ÚNICA dos jogos do
+ * emulador. O handler não duplica mais a lista: ele resolve o comando pelo id.
+ */
+function catalogo() {
+  try {
+    const file = path.resolve(ROOT, '..', '..', 'emugames', 'jogos.json');
+    return JSON.parse(fs.readFileSync(file, 'utf-8')).jogos || [];
+  } catch {
+    return [];
+  }
+}
+
+function porId(id) {
+  return catalogo().find((j) => j.id === id) || null;
+}
+
+/**
  * Monta e envia o card do jogo: capa (GIF animado) + texto + botao webview.
  * Tudo em UMA mensagem. Se a capa falhar, cai para texto + botao.
  *
@@ -65,4 +82,4 @@ async function enviarCard({ nazu, from, jogo }) {
   return { ok: true };
 }
 
-export default { pagina, raiz, enviarCard, config: lerConfig };
+export default { pagina, raiz, enviarCard, catalogo, porId, config: lerConfig };

@@ -8,15 +8,23 @@
  */
 
 import { cabecalho, categoria, item } from './layout.js';
+import topgear from '../topgear/index.js';
 
-const JOGOS = [
-  { cmd: 'kof', emoji: '🥊' },
-  { cmd: 'metalslug', emoji: '🪖' },
-  { cmd: 'topgear', emoji: '🏎️' },
-];
+// Comando curto por id do catálogo (jogos.json). O menu é gerado do catálogo,
+// então adicionar um jogo lá já o faz aparecer aqui — sem lista paralela.
+const COMANDO_POR_ID = {
+  topgear2: 'topgear',
+  metalslug: 'metalslug',
+  kof97: 'kof',
+};
+
+function comandoDoJogo(jogo) {
+  return COMANDO_POR_ID[jogo.id] || jogo.id;
+}
 
 export default async function menuArcade(prefix, botName = 'MeuBot', userName = 'Usuário') {
-  const linhas = JOGOS.map(({ cmd, emoji }) => item(prefix, cmd, { emoji, marcador: '⟢' }));
+  const jogos = topgear.catalogo();
+  const linhas = jogos.map((j) => item(prefix, comandoDoJogo(j), { emoji: j.emoji || '🎮', marcador: '⟢' }));
   return `${cabecalho(botName, userName, 'ARCADE', '🕹️', [
     'Jogos de emulador direto no webview',
     'Escolha um jogo e toque em JOGAR',
@@ -26,3 +34,4 @@ export default async function menuArcade(prefix, botName = 'MeuBot', userName = 
 ${categoria('ARCADE', '🕹️', linhas)}
 `;
 }
+

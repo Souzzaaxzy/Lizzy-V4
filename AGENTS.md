@@ -1,5 +1,73 @@
 # AGENTS.md — Lizzy-V4 / Abyss Bot
 
+## 🕹️ EmuGames — MENU `!arcade` + 13 jogos SNES (out/2026) ✅
+O catálogo de emulador cresceu de 3 para **16 jogos** e ganhou um menu próprio.
+
+### Menu `!arcade`
+- Arquivo `dados/src/menus/menuarcade.js` (layout padrão via `layout.js`), com
+  aliases `!menuarcade` e `!emugames`. Entra na categoria **JOGOS** do menu
+  principal como `🕹️ ㅤ!arcade` (em `menu.js`), no loader `menus/index.js` e no
+  `blockPv`.
+- **O menu é gerado do catálogo** (`topgear.catalogo()` → `jogos.json`): adicionar
+  um jogo lá já o faz aparecer. Nada de lista paralela.
+
+### Os 13 jogos novos (SNES)
+Vieram de uma pasta do Drive; **identifiquei pelo nome**, renomeei e registrei:
+
+| comando | id | jogo |
+|---|---|---|
+| `!marioworld` | marioworld | Super Mario World |
+| `!mariokart` | mariokart | Super Mario Kart |
+| `!fifa98` | fifa98 | FIFA 98 |
+| `!fifa97` | fifa97 | FIFA Soccer 97 |
+| `!gtracing` | gtracing | GT Racing |
+| `!marvel` | marvel | Marvel Super Heroes in War of the Gems |
+| `!mk` | mk | Mortal Kombat |
+| `!mk2` | mk2 | Mortal Kombat II |
+| `!streetfighter5` | streetfighter5 | Street Fighter 5 (Hack) |
+| `!streetfighter2turbo` | streetfighter2turbo | Street Fighter II Turbo |
+| `!streetfighterzero2` | streetfighterzero2 | Street Fighter Zero 2 |
+| `!bomberman5` | bomberman5 | Super Bomberman 5 |
+| `!tekken2` | tekken2 | Tekken 2 |
+
+- **Nomes curtos e separados**: os 3 Street Fighter têm comandos distintos
+  (`streetfighter5` / `streetfighter2turbo` / `streetfighterzero2`) — nenhum
+  colide.
+- As ROMs são **`.smc`/`.sfc`** descompactadas, em `dados/emugames/jogos/snes/`
+  (a maior tem 4 MB — bem abaixo do teto de 25 MiB do Cloudflare).
+- O `kof97` **manteve o id** (só o comando é `!kof`) para não quebrar o
+  `.assetsignore`/`partes` que já existiam.
+
+### Fonte única do catálogo
+`dados/src/topgear/index.js` ganhou `catalogo()` e `porId()`. O handler
+(`case` dos jogos, em `index.js`) **não duplica mais a lista** — ele resolve o
+comando → id por um mapa `ID_DO_COMANDO` e busca o jogo no catálogo. Os campos
+`nome`/`descricao`/`capa`/`emoji` vêm todos do `jogos.json`.
+
+### Capas — TELA DE TÍTULO REAL (não placeholder)
+As capas (`dados/emugames/capas/<capa>.gif`) são a **tela de título real** do
+jogo, composta sobre a **boxart desfocada** (1280×720). Geradas por
+`tools/gerar-capas-libretro.mjs`, lendo `tools/capas-fonte/<id>.png` (título) e
+`<id>-box.png` (boxart) — imagens do repositório público
+**libretro-thumbnails** (`Named_Titles` / `Named_Boxarts`).
+
+**Por que não capturar a tela rodando o emulador**: medi — o Chromium headless
+**não captura o canvas/WebGL** do EmulatorJS (screenshot e `canvas.toDataURL` e
+`gl.readPixels` saem **preto**; o emulador até sobe, `started:true`). A tela de
+título do libretro é o retrato real, em PNG, sem depender de emulador.
+O `tools/gerar-capas.mjs` (placeholder SVG) **não sobrescreve** capa existente.
+
+### Testes
+- `tests/arcade-menu.test.js` — 7 testes / 17 asserções (handler real): o
+  `!arcade` no layout, **todos** os jogos do catálogo listados, os 3 SF separados,
+  menu principal/blockPv/loader.
+- `tests/emugames-games.test.js` — 5 testes / 11 asserções: cada jogo tem ROM e
+  capa no disco, os 13 novos estão no catálogo, nomes curtos sem colisão, e
+  **cada comando envia um card** (`relayMessage`) com botão JOGAR apontando para
+  `?jogo=<id>`.
+- `tests/topgear.test.js` atualizado: a asserção "!topgear não está em menu
+  nenhum" virou "aparece no menu arcade/blockPv" (deixou de ser experimental).
+
 ## 🚀 BOOT VISUAL da SESSÃO JÁ PAREADA (`bootRenderer.js`) — out/2026 ✅
 Quando a Lizzy **já tem sessão válida** e conecta sozinha, o boot passa a ser
 apresentado por um **renderer central** (`dados/src/utils/bootRenderer.js`) em vez

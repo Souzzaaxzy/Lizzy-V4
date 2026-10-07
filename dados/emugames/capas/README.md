@@ -3,14 +3,27 @@
 Capa de cada jogo — a imagem animada que aparece no topo do card do bot.
 
 O card procura o campo **`capa`** do jogo em `jogos.json` (ex.: `"capa":
-"topgear.gif"`). Sem esse campo, cai no convencional **`<id>.gif`**:
+"topgear.gif"`). Sem esse campo, cai no convencional **`<id>.gif`**.
 
+## Como as capas são geradas (out/2026)
+
+As capas são a **tela de título real** do jogo, composta sobre a boxart
+desfocada (1280×720). Fonte das imagens: o repositório público
+**libretro-thumbnails** (`Named_Titles` / `Named_Boxarts`).
+
+```bash
+# 1. coloque as imagens-fonte em tools/capas-fonte/<id>.png (título) e
+#    <id>-box.png (boxart)
+# 2. gere as capas:
+node tools/gerar-capas-libretro.mjs
 ```
-capas/
-├── topgear.gif    ← topgear2
-├── metalslug.gif  ← metalslug
-└── kof.gif        ← kof97
-```
+
+O `tools/gerar-capas.mjs` (placeholder SVG) continua existindo, mas **não
+sobrescreve** capa existente — só preenche o que estiver faltando.
+
+> Por que não capturar a tela rodando o emulador: o Chromium headless **não
+> captura o canvas/WebGL** do EmulatorJS (a tela sai preta). A tela de título do
+> libretro é o retrato real do jogo, em PNG, sem depender de emulador.
 
 ## Por que GIF (e nao PNG)
 
@@ -23,18 +36,6 @@ interativo do card.
 > Ate out/2026 o card pedia `capas/<id>.png` e mandava como `image`. Como so
 > existiam `.gif` na pasta, o fetch dava **404**, o card caia para texto puro e
 > a capa "nao pegava".
-
-## Gerar / trocar
-
-As capas do repositorio foram geradas por:
-
-```bash
-node tools/gerar-capas.mjs
-```
-
-Ele le o `jogos.json` e escreve `capas/<capa>` (1280x720). Para usar uma arte
-propria, e so **substituir o GIF** mantendo o nome (ou apontar `capa` para
-outro arquivo).
 
 ## Sem capa?
 
