@@ -7938,22 +7938,31 @@ if (isCmd && command && !isOwner) {
 
           const linkHost = arcadeRoomLink(jogo.id, sala.codigo, { host: true, nome: 'Jogador 1', netplay: net.url });
           const linkConvidado = arcadeRoomLink(jogo.id, sala.codigo, { nome: 'Jogador 2', netplay: net.url });
+          // Aviso no grupo (texto) + UM CARD por jogador. O card e o que faz o
+          // link abrir DENTRO do WhatsApp (botao webview), como o card solo —
+          // link em texto cru o cliente manda para o navegador de fora.
           await nazu.sendMessage(from, {
             text: caixaArcade([
               '┃ 🎮 ' + boldLayout(jogo.nome),
               '┃ 🔑 Código: ' + boldLayout(sala.codigo),
               '┃',
-              '┃ ' + anfTag + ' ' + boldLayout('entra primeiro') + ':',
-              '┃ ' + linkHost,
-              '┃',
-              '┃ ' + convTag + ' ' + boldLayout('entra depois') + ':',
-              '┃ ' + linkConvidado,
+              '┃ ' + anfTag + ', use o *card de entrada*',
+              '┃    logo abaixo 👇',
+              '┃ ' + convTag + ', o seu vem em seguida.',
               '┃',
               '┃ ⏳ A sala fecha sozinha com 3 min',
               '┃    sem toque — não precisa fechar.',
             ], 'SALA CRIADA'),
             mentions: [convite.anfitriao, sender],
             contextInfo: gerarContextNewsletter(),
+          });
+          await topgear.enviarCardSala({
+            nazu, from, jogo, url: linkHost,
+            texto: `🎮 *${jogo.nome}*\n\n${anfTag} ${boldLayout('entra primeiro')}.\n🔑 Sala: *${sala.codigo}*\n\nToque em *ENTRAR NA SALA* para jogar aqui dentro.`,
+          });
+          await topgear.enviarCardSala({
+            nazu, from, jogo, url: linkConvidado,
+            texto: `🎮 *${jogo.nome}*\n\n${convTag} ${boldLayout('entra depois')}.\n🔑 Sala: *${sala.codigo}*\n\nToque em *ENTRAR NA SALA* para jogar aqui dentro.`,
           });
           return;
         }

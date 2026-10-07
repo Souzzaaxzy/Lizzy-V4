@@ -43,11 +43,21 @@ function finish() {
 function ok(c, m) { if (c) CURRENT.passed++; else { CURRENT.failed++; CURRENT.errors.push(`ASSERT: ${m}`); } }
 const read = (rel) => fs.readFileSync(path.join(PROJECT, rel), 'utf8');
 function desbold(s) {
-  return String(s)
-    .replace(/[\u{1D400}-\u{1D433}]/gu, (c) => String.fromCharCode(65 + (c.codePointAt(0) - 0x1D400)))
-    .replace(/[\u{1D7CE}-\u{1D7FF}]/gu, (c) => String.fromCharCode(48 + (c.codePointAt(0) - 0x1D7CE)))
-    .replace(/[\u{1D468}-\u{1D49B}]/gu, (c) => String.fromCharCode(65 + (c.codePointAt(0) - 0x1D468)))
-    .replace(/[\u{1D7CE}-\u{1D7FF}]/gu, (c) => String.fromCharCode(48 + (c.codePointAt(0) - 0x1D7CE)));
+  // MATHEMATICAL BOLD (A-Z = 1D400, a-z = 1D41A), BOLD ITALIC (A-Z = 1D468,
+  // a-z = 1D482) e os digitos (1D7CE). O mapeamento antigo usava 65 para os
+  // dois casos, entao 'e' (1D41E) virava '_' e a comparacao nunca casava.
+  const faixas = [
+    [0x1D400, 0x1D419, 65], [0x1D41A, 0x1D433, 97],
+    [0x1D468, 0x1D481, 65], [0x1D482, 0x1D49B, 97],
+    [0x1D7CE, 0x1D7E7, 48],
+  ];
+  return String(s).replace(/[\u{1D400}-\u{1D7FF}]/gu, (c) => {
+    const cp = c.codePointAt(0);
+    for (const [ini, fim, base] of faixas) {
+      if (cp >= ini && cp <= fim) return String.fromCharCode(base + (cp - ini));
+    }
+    return c;
+  });
 }
 
 const arcadeRooms = await import(new URL('../dados/src/utils/arcadeRooms.js', import.meta.url).href);
@@ -74,10 +84,12 @@ function makeGroup() {
 }
 function makeNazu(groupJid, P) {
   const sent = [];
+  const relay = [];
   return {
     sent,
+    relay,
     sendMessage: async (jid, content, options) => { sent.push({ jid, content, options }); return { key: { id: 'SENT' } }; },
-    relayMessage: async () => ({}),
+    relayMessage: async (jid, message, options) => { relay.push({ jid, message, options }); return {}; },
     waUploadToServer: async () => ({}),
     user: { id: `${BOT_JID.split('@')[0]}:5@s.whatsapp.net`, lid: BOT_LID, name: 'Lizzy' },
     onWhatsApp: async () => [],
@@ -119,7 +131,19 @@ async function run({ grupo, texto, autorLid, mencionados = [], citado = null, is
   await handleMessage(nazu, info, null, new Map(), null);
   const all = nazu.sent.map((s) => s.content?.text ?? s.content?.caption ?? '').filter(Boolean).join('\n');
   const mencoes = nazu.sent.flatMap((s) => s.content?.mentions || []);
-  return { text: all, sent: nazu.sent, mencoes };
+  return { text: all, sent: nazu.sent, relay: nazu.relay, mencoes };
+}
+
+/** URLs de todos os botoes nativeFlow dos cards enviados por relayMessage. */
+function urlsDosCards(relay) {
+  const out = [];
+  for (const r of relay) {
+    const btns = r.message?.interactiveMessage?.nativeFlowMessage?.buttons || [];
+    for (const b of btns) {
+      try { out.push(JSON.parse(b.buttonParamsJson)); } catch { /* ignora */ }
+    }
+  }
+  return out;
 }
 
 // ─────────────────────────── convite ───────────────────────────
@@ -214,7 +238,7 @@ await test('!kof sem mencionar ninguem manda o card solo', async () => {
 
 // ─────────────────────────── aceite ───────────────────────────
 
-await test('responder "sim" cria a sala e manda os DOIS links', async () => {
+await test('responder "sim" cria a sala e manda os DOIS cards de entrada', async () => {
   arcadeRooms.limparTudo();
   const P = novoPar();
   const grupo = makeGroup();
@@ -223,13 +247,22 @@ await test('responder "sim" cria a sala e manda os DOIS links', async () => {
   const t = desbold(r.text);
   ok(t.includes('SALA CRIADA') || t.includes('SALA DE ARCADE'), 'caixa de sala criada');
   ok(t.includes('Código:') || t.includes('Codigo:'), 'mostra o codigo');
-  ok(t.includes('host=1'), 'link do anfitriao tem host=1');
-  ok(t.includes('sala='), 'link tem o codigo da sala');
-  // O link leva a URL do servidor da sala (`?netplay=`), porque o site mora no
-  // Cloudflare e o servidor sobe no host do bot.
-  ok(t.includes('netplay=https') || t.includes('netplay=http'), 'link aponta o servidor de netplay');
-  const links = r.text.match(/https?:\/\/[^\s]+/g) || [];
-  ok(links.length >= 2, `dois links (obtido ${links.length})`);
+  ok(t.includes('card de entrada'), 'aponta o card em vez do link cru');
+  ok(!/https?:\/\/[^\s]+/.test(t), 'o texto NAO tem link cru (senao o WhatsApp abre fora do app)');
+
+  // Cada jogador recebe o SEU card, com o botao que abre dentro do WhatsApp.
+  ok(r.relay.length === 2, `dois cards enviados (obtido ${r.relay.length})`);
+  const btns = urlsDosCards(r.relay);
+  ok(btns.length === 2, `dois botoes (obtido ${btns.length})`);
+  const urls = btns.map((b) => b.url || '');
+  ok(urls.some((u) => u.includes('host=1')), 'link do anfitriao tem host=1');
+  ok(urls.every((u) => u.includes('sala=')), 'os dois links tem o codigo da sala');
+  ok(urls.every((u) => u.includes('netplay=')), 'os dois links apontam o servidor de netplay');
+  ok(btns.every((b) => b.webview_interaction === true), 'os dois botoes abrem no webview do WhatsApp');
+  const corpos = r.relay.map((x) => desbold(x.message?.interactiveMessage?.body?.text || ''));
+  ok(corpos.some((c) => c.includes('entra primeiro')), 'card do anfitriao marcado');
+  ok(corpos.some((c) => c.includes('entra depois')), 'card do convidado marcado');
+  ok(corpos.every((c) => c.includes('ENTRAR NA SALA')), 'os cards ensinam a tocar no botao');
   ok(!arcadeRooms.convitePendente(grupo, P.conv), 'convite consumido');
 });
 
@@ -283,8 +316,11 @@ await test('o player tem o modo sala (netplay) e nao fecha no X', () => {
   const html = read('dados/emugames/index.html');
   ok(html.includes('EJS_EXPERIMENTAL_NETPLAY'), 'liga o netplay (flag experimental)');
   ok(html.includes('EJS_netplayServer'), 'aponta o servidor de netplay');
-  ok(html.includes('EJS_ready'), 'usa o hook de pronto para entrar na sala');
-  ok(/openRoom\(/.test(html) && /joinRoom\(/.test(html), 'cria/entra na sala automaticamente');
+  ok(html.includes('EJS_onGameStart'), 'entra na sala no evento de INICIO do jogo');
+  ok(!html.includes('EJS_ready = () =>'), 'nao usa mais o EJS_ready (o Module ainda e undefined ali)');
+  ok(/openNetplayMenu\(\)/.test(html), 'abre o menu para criar emu.netplay antes de entrar');
+  ok(/sessionid: SALA/.test(html), 'usa o NOSSO codigo como id da sala');
+  ok(/open-room/.test(html) && /join-room/.test(html), 'cria/entra na sala automaticamente');
   ok(/exitEmulation:\s*!EM_SALA/.test(html), 'sem botao de fechar em modo sala');
   ok(/if \(EM_SALA\) return;/.test(html), 'modo sala NAO desliga ao sair da aba (so inatividade)');
   ok(html.includes("'desligado por inatividade"), 'inatividade continua fechando (3 min)');

@@ -196,21 +196,119 @@
       }
       subtitulo.textContent = `Sala ${SALA} — ${EH_HOST ? 'criando...' : 'entrando...'}`;
 
-      // Auto-join: quando o emulador fica pronto, cria (host) ou entra na sala.
-      // `netplay.name` tem de estar setado antes, senao o menu pede o nome.
-      window.EJS_ready = () => {
-        try {
-          const np = window.EJS_emulator?.netplay;
-          if (!np) return;
-          if (!np.name) np.name = (params.get('nome') || 'Jogador').slice(0, 20);
-          if (EH_HOST) np.openRoom(`Sala ${SALA}`, 2, '');
-          else np.joinRoom(SALA, `Sala ${SALA}`);
-          subtitulo.textContent = `Sala ${SALA} — ${EH_HOST ? 'aguardando o outro jogador...' : 'conectado'}`;
-        } catch (e) {
+      // Auto-join: cria (host) ou entra na sala assim que o jogo INICIA.
+      //
+      // CUIDADO (esta e a correcao do "nao acontece nada de conexao"):
+      //   1. `EJS_emulator.netplay` NAO EXISTE ate o menu de netplay ser aberto
+      //      -- quem o cria e `openNetplayMenu()` (defineNetplayFunctions).
+      //      O codigo antigo chamava `np.openRoom` no `EJS_ready`, onde `np` era
+      //      `undefined`, e o `if (!np) return;` engolia tudo em silencio: os
+      //      dois jogadores ficavam no single-player ("jogando sozinhos").
+      //   2. `defineNetplayFunctions` escreve em `this.Module.postMainLoop`, e o
+      //      `Module` SO EXISTE depois que o wasm sobe. No evento `ready` ele
+      //      ainda e `undefined` (medido: "Cannot set properties of undefined
+      //      (setting 'postMainLoop')"), entao o gancho certo e o `start`, que
+      //      dispara no fim do `startGame()` com o Module pronto.
+      //   3. O `openRoom` da lib gera um sessionId PROPRIO (GUID) e o `joinRoom`
+      //      procura a sala por esse id -- o nosso codigo de sala nao tem
+      //      relacao nenhuma com o id da sala no servidor, entao o convidado
+      //      NUNCA achava a sala do anfitriao. Aqui o `sessionid` passa a ser o
+      //      NOSSO codigo (o mesmo que vai no link dos dois).
+      //   4. `openRoom`/`joinRoom` desconectam o socket no fim da conexao, entao
+      //      quem entra depois derruba quem ja estava. Usamos `startSocketIO`
+      //      uma vez e emitimos o evento da sala na mao.
+      const tentarEntrar = async () => {
+        for (let i = 0; i < 40; i++) {
+          if (window.EJS_emulator?.Module) break;
+          await new Promise((r) => setTimeout(r, 250));
+        }
+        await entrarNaSala();
+        acompanharSala();
+      };
+      window.EJS_onGameStart = () => {
+        tentarEntrar().catch((e) => {
           console.error('[EMUGAMES] falha ao entrar na sala:', e);
           subtitulo.textContent = 'Falha ao entrar na sala';
-        }
+        });
       };
+    }
+
+    /**
+     * Entra na sala de netplay com o NOSSO codigo como id.
+     * Resolve quando o socket esta conectado e a sala existe no servidor.
+     */
+    function entrarNaSala() {
+      const emu = window.EJS_emulator;
+      if (!emu) return Promise.reject(new Error('emulador indisponivel'));
+      // Cria `emu.netplay` + as funcoes (openRoom/joinRoom/startSocketIO).
+      // Idempotente: so age uma vez por emulador.
+      emu.openNetplayMenu();
+      const np = emu.netplay;
+      if (!np) return Promise.reject(new Error('netplay indisponivel'));
+      if (np.socket?.connected) return Promise.resolve();
+      np.name = (params.get('nome') || (EH_HOST ? 'Jogador 1' : 'Jogador 2')).slice(0, 20);
+
+      // O menu so serve para criar `emu.netplay`; depois de entrar ele sai da
+      // frente (senao ficaria um popup de "Set Player Name" pedindo o nome que
+      // ja temos, em cima do jogo).
+      try { emu.netplayMenu.style.display = 'none'; } catch { /* ok */ }
+      try { np.updateList?.stop(); } catch { /* ok */ }
+      try { emu.netplayMenu.querySelector('.ejs_popup_container')?.remove(); } catch { /* ok */ }
+
+      // O servidor do EmulatorJS casa o id da sala pelo campo `sessionid`.
+      const extra = {
+        domain: window.location.host,
+        game_id: emu.config.gameId,
+        room_name: `Sala ${SALA}`,
+        player_name: np.name,
+        userid: `${SALA}-${EH_HOST ? 'host' : 'guest'}`,
+        sessionid: SALA,
+      };
+
+      return new Promise((resolve, reject) => {
+        let pronto = false;
+        const falhou = (motivo) => { if (!pronto) { pronto = true; reject(new Error(motivo)); } };
+        const ok = () => { if (!pronto) { pronto = true; resolve(); } };
+        // Sem o ack do servidor, nao pode ficar pendurado para sempre.
+        const prazo = setTimeout(() => falhou('o servidor da sala nao respondeu'), 15000);
+
+        np.startSocketIO(() => {
+          if (EH_HOST) {
+            np.socket.emit('open-room', { extra, maxPlayers: 2, password: '' }, (err) => {
+              if (err) return falhou(err);
+              clearTimeout(prazo);
+              np.players = { [extra.userid]: extra };
+              np.roomJoined(true, extra.room_name, '', SALA);
+              subtitulo.textContent = `Sala ${SALA} — aguardando o outro jogador...`;
+              ok();
+            });
+          } else {
+            np.socket.emit('join-room', { extra }, (err, users) => {
+              if (err) return falhou(err);
+              clearTimeout(prazo);
+              np.players = users || {};
+              np.roomJoined(false, extra.room_name, '', SALA);
+              subtitulo.textContent = `Sala ${SALA} — conectado`;
+              ok();
+            });
+          }
+        });
+      });
+    }
+
+    /** Atualiza o subtitulo com quantos jogadores estao na sala. */
+    function acompanharSala() {
+      const np = window.EJS_emulator?.netplay;
+      if (!np) return;
+      np.socket?.on('users-updated', (users) => {
+        const n = users ? Object.keys(users).length : 0;
+        subtitulo.textContent = n >= 2
+          ? `Sala ${SALA} — ${n} jogadores conectados`
+          : `Sala ${SALA} — aguardando o outro jogador...`;
+      });
+      np.socket?.on('disconnect', () => {
+        subtitulo.textContent = `Sala ${SALA} — conexao perdida`;
+      });
     }
 
     rodando = true;

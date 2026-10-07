@@ -35,7 +35,10 @@ const server = http.createServer(app);
 
 const PORT = Number(process.env.PORT || 3000);
 const IDLE_SHUTDOWN_MS = Number(process.env.NETPLAY_IDLE_SHUTDOWN_MS || 60 * 1000);
-const GRACE_MS = Number(process.env.NETPLAY_GRACE_MS || 120 * 1000);
+// Tempo para o PRIMEIRO jogador abrir o link e criar a sala. A URL publica
+// (tunel Cloudflare) leva ~90 s so para propagar o DNS, e ainda falta a pessoa
+// tocar no botao — com 2 min o servidor morria antes de alguem entrar.
+const GRACE_MS = Number(process.env.NETPLAY_GRACE_MS || 10 * 60 * 1000);
 const SELF_SHUTDOWN = process.env.NETPLAY_SELF_SHUTDOWN !== '0';
 
 app.use(cors({

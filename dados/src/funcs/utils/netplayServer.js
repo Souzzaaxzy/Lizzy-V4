@@ -289,7 +289,7 @@ async function subirServidor(env, cfg) {
       PORT: String(cfg.porta),
       // Auto-desligamento do proprio servidor (o bot so o acorda).
       NETPLAY_SELF_SHUTDOWN: '1',
-      NETPLAY_GRACE_MS: String(env.NETPLAY_GRACE_MS || 120 * 1000),
+      NETPLAY_GRACE_MS: String(env.NETPLAY_GRACE_MS || 10 * 60 * 1000),
       NETPLAY_IDLE_SHUTDOWN_MS: String(env.NETPLAY_IDLE_SHUTDOWN_MS || 60 * 1000),
     },
     stdio: ['ignore', 'pipe', 'pipe'],

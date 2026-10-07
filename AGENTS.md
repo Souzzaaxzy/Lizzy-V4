@@ -37,6 +37,93 @@ são L/R). Fica como está — mudar o idioma trocaria o resto da UI; é só ró
 que não há exceção de esquema). Verificado: sem o bloco CSS, **4 asserções
 falham**.
 
+## 🎮 EmuGames — SALA MULTIPLAYER que CONECTA DE VERDADE (out/2026) ✅
+O dono relatou: *"os dois usuários entram na sala, um escrevendo 'criando' e
+outro 'entrando', mas não acontece nada de conexão — é como se os dois
+estivessem jogando sozinhos; e ainda tá abrindo fora do WhatsApp"*.
+
+Eram **quatro defeitos**, todos MEDIDOS com o player real rodando (Chromium
+headless + CDP, dois navegadores, servidor de netplay de verdade).
+
+### 1. `EJS_emulator.netplay` não existe antes do menu (a causa principal)
+`entrarNaSala` chamava `np.openRoom(...)` dentro do `EJS_ready`, onde
+`window.EJS_emulator.netplay` era **`undefined`** — e o `if (!np) return;`
+engolia tudo **em silêncio**. Os dois jogadores ficavam no single-player.
+Quem cria `netplay` é o **`openNetplayMenu()`** (`defineNetplayFunctions`).
+
+### 2. `defineNetplayFunctions` escreve em `this.Module.postMainLoop`
+E o `Module` só existe depois que o **wasm sobe**. No evento `ready` ele ainda é
+`undefined` — medido:
+`Uncaught TypeError: Cannot set properties of undefined (setting 'postMainLoop')`
+→ `defineNetplayFunctions @ emulator.js:5710` → `openNetplayMenu` → `EJS_ready`.
+Ou seja: mesmo corrigindo o item 1, abrir o menu no `ready` **estourava**.
+O gancho certo é o **`EJS_onGameStart`** (o evento `start`, disparado no fim do
+`startGame()`, com o Module pronto).
+
+### 3. O código da sala não tinha relação com o id da sala no servidor
+O `openRoom` da lib gera um `sessionid` **próprio (GUID)** e o `joinRoom` procura
+a sala por esse id. Como o link dos dois levava o **nosso** código (`ABC123`), o
+convidado **nunca** achava a sala do anfitrião. Medido: host criava a sala (1
+jogador) e o convidado entrava sozinho (não achava a sala do outro).
+**Correção**: emitir `open-room`/`join-room` com `sessionid: SALA` (o nosso
+código, o mesmo que vai no link dos dois) e `userid` distinto por jogador.
+
+### 4. `openRoom`/`joinRoom` **desconectam** o socket no fim
+Usar esses helpers faria quem entra depois derrubar quem já estava. Agora o
+player chama **`startSocketIO` uma vez** e emite o evento da sala na mão.
+
+### "Abrindo fora do WhatsApp" — link cru → CARD com botão webview
+O link da sala ia como **texto cru** na caixa, e o WhatsApp abre URL de texto no
+**navegador de fora**. Agora cada jogador recebe um **card** (capa do jogo +
+botão **🎮 ENTRAR NA SALA** com `nativeFlow` + `useWebview: true`), o **mesmo
+mecanismo do card solo** (`enviarCard`) — o cliente abre o link **dentro do
+WhatsApp**. O texto do aviso continua no grupo (código da sala + menções), mas
+**sem URL crua** (há asserção que proíbe).
+
+### Arquivos
+| Caminho | O que mudou |
+|---|---|
+| `dados/emugames/index.html` | `EJS_onGameStart` + `entrarNaSala()`/`acompanharSala()`; `sessionid: SALA`; menu fechado depois de criar o `netplay` |
+| `dados/src/topgear/index.js` | `enviarCardSala()` (card de entrada, botão webview) |
+| `dados/src/index.js` | o "sim" manda aviso em texto + **2 cards** (um por jogador) |
+| `tools/netplay-server/server.js` | `NETPLAY_GRACE_MS` padrão **10 min** (era 2 min) |
+| `dados/src/funcs/utils/netplayServer.js` | repassa o mesmo padrão ao subir o servidor |
+
+**Por que a graça subiu para 10 min**: a URL pública (túnel Cloudflare) leva
+**~90 s só para propagar o DNS**, e ainda falta a pessoa tocar no botão. Com 2
+min o servidor morria **antes** de alguém entrar — mais um motivo para "não
+acontece nada".
+
+### Medição (não é suposição)
+Duas instâncias de Chromium (uma por jogador), o player real, o servidor real:
+```
+HOST  : isNetplay=true owner=true  players=1 socketOn=true  "aguardando o outro jogador..."
+GUEST : isNetplay=true owner=false players=2 socketOn=true  "conectado"
+HOST  : players=2                                            "2 jogadores conectados"
+SERVIDOR: { rooms: 1, players: 2 }
+```
+Antes: `players=0` nos dois, `rooms=0` no servidor — exatamente o relato.
+
+### Testes
+- **`tests/arcade-netplay.test.js` (novo, 7 testes / 21 asserções)** — sobe o
+  **servidor de netplay real** e usa o **cliente socket.io real** para reproduzir
+  o payload do player: host abre, convidado **entra na MESMA sala**, o servidor
+  avisa os dois (`users-updated`), código errado é recusado (o bug antigo), e a
+  sala só fecha quando os **dois** saem.
+- **`tests/arcade-room.test.js`** atualizado para o novo contrato: o "sim" manda
+  **2 cards** com botão `webview_interaction: true` (e o texto **não** tem link
+  cru); o player usa `EJS_onGameStart` + `sessionid: SALA`.
+  **Verificado que os testes MEDEM**: revertendo o player para `EJS_ready` +
+  `openRoom`, **2 asserções falham**.
+- Regressões verdes: `topgear` 17/250, `netplay-server` 6/20,
+  `netplay-server-module` 19/51, `netplay-installer` 5/18, `arcade-menu` 7/17.
+
+### Armadilha de método (registrada)
+O `desbold` do teste mapeava **só maiúsculas** (`1D400`→`A`), então o bold
+minúsculo (`1D41A`→`a`) virava lixo (`e` → `_`) e a asserção **nunca casava**
+mesmo com o card certo. Corrigido com as faixas de caixa (`1D419/1D433`,
+`1D481/1D49B`). Vale para qualquer teste que compare texto em bold Unicode.
+
 ## 🎮 EmuGames — SALAS MULTIPLAYER no `!kof` (netplay) (out/2026) ✅
 `!kof @fulano` (ou respondendo a mensagem da pessoa) agora abre um **CONVITE**
 em vez do card solo; o convidado responde **`sim`**/`nao` e, ao aceitar, a sala
@@ -68,8 +155,11 @@ seguem o fluxo normal.
 ### O player (`dados/emugames/index.html`)
 - `?sala=CODIGO` (e `?host=1`) liga o **modo sala**: `EJS_EXPERIMENTAL_NETPLAY`
   + `EJS_DEBUG_XX` (as DUAS flags sao exigidas pelo netplay experimental) e
-  `EJS_netplayServer` de `netplay.json`/env. Ao ficar pronto (`EJS_ready`),
-  cria (`openRoom`) ou entra (`joinRoom`) sozinho.
+  `EJS_netplayServer` de `netplay.json`/env. Ao o jogo **INICIAR**
+  (`EJS_onGameStart` — no `EJS_ready` o `Module` ainda e `undefined`), abre o
+  menu de netplay (que cria `emu.netplay`) e emite `open-room`/`join-room` na
+  mao, com **`sessionid` = o NOSSO codigo** (o mesmo do link dos dois) — ver a
+  secao "SALA MULTIPLAYER que CONECTA DE VERDADE" no topo do arquivo.
 - **Nao fecha no X**: `exitEmulation: !EM_SALA` e o `aoSairDaPagina` ignora a
   saida em modo sala. O webview do WhatsApp pode fechar, mas o jogo continua no
   servidor — a sala morre so por **INATIVIDADE (3 min sem toque)**, entao sair
@@ -86,7 +176,9 @@ automatico: **nao fica ligado o tempo todo**.
   sobe e o bot (`dados/src/funcs/utils/netplayServer.js`).
 - **Desliga sozinho** quando **todas** as salas fecham
   (`NETPLAY_IDLE_SHUTDOWN_MS`, padrao 60s). Se ninguem criar sala depois de
-  subir, sai no `NETPLAY_GRACE_MS` (padrao 120s). Sala nova **cancela** a saida.
+  subir, sai no `NETPLAY_GRACE_MS` (padrao **10 min** — era 120s, que morria
+  antes de o jogador abrir o link: o tunel leva ~90 s so para propagar o DNS).
+  Sala nova **cancela** a saida.
 - `NETPLAY_SELF_SHUTDOWN=0` mantem o servidor fixo (quem ja tem um rodando).
 
 Base: `EmulatorJS/EmulatorJS-Netplay` (`main`, MIT) + o auto-desligamento e um
@@ -117,12 +209,14 @@ servidor e **Socket.IO puro** (~**80 MB**, **3%** de CPU com 10 salas x 4
 jogadores) — cabe no host do bot. O netplay do EmulatorJS e **experimental**
 (`//control syncing - broken`): a qualidade depende do ping.
 
-### Testes — `tests/arcade-room.test.js` (11 testes / 35 assercoes)
-Handler real + socket falso: convite (nao o card), convite pendente, `sim` cria
-a sala e manda os DOIS links, `nao` recusa, terceiro nao e tratado, sem env
-avisa, expiracao em 5 min, e as guardas do player (netplay ligado, sem botao de
-fechar, nao desliga ao sair da aba, inatividade de 3 min). **Verificado que o
-teste MEDE**: desabilitando o convite (`if (false && convidado)`), **17
+### Testes — `tests/arcade-room.test.js` (12 testes / 49 asserções) + `tests/arcade-netplay.test.js` (7/21)
+`arcade-room` roda o **handler real** com socket falso: convite (nao o card),
+convite pendente, `sim` cria a sala e manda o **aviso em texto + 2 cards** de
+entrada (botão `webview_interaction`, sem link cru), `nao` recusa, terceiro nao
+e tratado, sem env avisa, expiracao em 5 min, e as guardas do player (netplay
+ligado, `EJS_onGameStart`, `sessionid: SALA`, sem botao de fechar, nao desliga
+ao sair da aba, inatividade de 3 min). **Verificado que o teste MEDE**:
+desabilitando o convite (`if (false && convidado)`), **17
 assercoes falham**. `tests/topgear.test.js` acompanhou o `exitEmulation:
 !EM_SALA` (250/0).
 

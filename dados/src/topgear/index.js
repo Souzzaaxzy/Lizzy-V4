@@ -82,4 +82,43 @@ async function enviarCard({ nazu, from, jogo }) {
   return { ok: true };
 }
 
-export default { pagina, raiz, enviarCard, catalogo, porId, config: lerConfig };
+/**
+ * Card de ENTRADA NA SALA — a capa do jogo com o botao que ABRE O JOGO.
+ *
+ * Antes o link da sala ia como TEXTO CRU, e o WhatsApp abre URL de texto no
+ * navegador de fora (sai do app). Com o botao `nativeFlow` + `useWebview: true`
+ * (cta_url com webview_interaction), o cliente abre o link DENTRO do WhatsApp,
+ * do mesmo jeito que o botao JOGAR do card solo (`enviarCard`).
+ *
+ * @param {object} opts
+ * @param {string} opts.url   link da sala (ja com ?sala=&host=&netplay=)
+ * @param {string} opts.texto legenda
+ * @param {string} [opts.footer]
+ * @param {string} [opts.capaUrl] capa do jogo (opcional)
+ */
+async function enviarCardSala({ nazu, from, jogo, url, texto, footer = 'Lizzy · EmuGames' }) {
+  if (!url) return { ok: false, msg: 'Link da sala indisponivel.' };
+  const botao = [{ text: '🎮 ENTRAR NA SALA', url, useWebview: true }];
+  const capaArquivo = jogo?.capa || (jogo?.id ? `${jogo.id}.gif` : '');
+  const base = raiz();
+  const capaUrl = capaArquivo && base ? `${base}/capas/${encodeURIComponent(capaArquivo)}` : '';
+
+  let msg;
+  try {
+    if (!capaUrl) throw new Error('sem capa');
+    msg = await generateWAMessage(from, {
+      gif: { url: capaUrl },
+      caption: texto,
+      footer,
+      nativeFlow: botao
+    }, { userJid: nazu.user.id, upload: nazu.waUploadToServer });
+  } catch (e) {
+    console.error('[EMUGAMES] capa da sala falhou, enviando so texto:', e?.message);
+    msg = await generateWAMessage(from, { text: texto, footer, nativeFlow: botao },
+      { userJid: nazu.user.id, upload: nazu.waUploadToServer });
+  }
+  await nazu.relayMessage(from, msg.message, { messageId: msg.key.id });
+  return { ok: true };
+}
+
+export default { pagina, raiz, enviarCard, enviarCardSala, catalogo, porId, config: lerConfig };
