@@ -41,6 +41,7 @@ import sharp from 'sharp';
 import * as ghostDetection from './utils/ghostDetection.js';
 import { detectarPaymentRespondida, alvoDaRemocao } from './utils/quotedPayment.js';
 import * as arcadeRooms from './utils/arcadeRooms.js';
+import * as netplayServer from './funcs/utils/netplayServer.js';
 import { isPaymentContent, buildPaymentDeleteKeys, buildPaymentEditContent, resolveParticipantPn, isBotAuthor } from './utils/deletePayment.js';
 import { bold as boldLayout, boldItalic as boldItalicLayout, abrirCategoria, fecharCategoria } from './menus/layout.js';
 import {
@@ -273,18 +274,22 @@ function arcadeBaseUrl() {
  * Link de entrada na sala. host=1 marca quem CRIA a sala (o anfitriao); o
  * convidado entra sem essa flag. O nome vai no netplay (rotulo do jogador).
  */
-function arcadeRoomLink(jogoId, codigo, { host = false, nome = '' } = {}) {
+function arcadeRoomLink(jogoId, codigo, { host = false, nome = '', netplay = '' } = {}) {
   const base = arcadeBaseUrl();
   if (!base) return '';
   const p = new URLSearchParams({ jogo: jogoId, sala: codigo });
   if (host) p.set('host', '1');
   if (nome) p.set('nome', String(nome).slice(0, 20));
+  // URL do servidor de netplay (o site mora no Cloudflare; o servidor da sala
+  // fica no host do bot). Sem ela o player usa a config de netplay.json.
+  if (netplay) p.set('netplay', netplay);
   return `${base}/?${p.toString()}`;
 }
 
 /** A sala de arcade esta configurada? (env EMUGAMES_NETPLAY_URL). */
 function arcadeNetplayConfigurado() {
-  return Boolean(process.env.EMUGAMES_NETPLAY_URL);
+  // Le a env E o dados/emugames/netplay.json (fonte unica no modulo).
+  return netplayServer.netplayConfigurado();
 }
 
 /** Caixa no layout do bot (cabecalho + linhas do corpo + fecho). */
@@ -7915,12 +7920,24 @@ if (isCmd && command && !isOwner) {
             });
             return;
           }
-          const sala = jogo && arcadeRooms.criarSala({
+          if (!jogo) return reply('❌ Jogo não encontrado no catálogo.');
+
+          // O servidor de netplay sobe SO AGORA -- nao fica ligado o tempo
+          // todo. Ele se desliga sozinho quando todas as salas fecharem.
+          // Antes de criar a sala: se o servidor nao subir, nao deixamos sala
+          // orfa no registro.
+          const net = await netplayServer.garantirNetplay();
+          if (!net.ok) {
+            return reply(`⚠️ Não consegui subir o servidor da sala.\n_${net.motivo || 'netplay indisponível'}_`);
+          }
+
+          const sala = arcadeRooms.criarSala({
             grupo: from, jogo, jogadores: [convite.anfitriao, sender],
           });
           if (!sala) return reply('❌ Não foi possível criar a sala.');
-          const linkHost = arcadeRoomLink(jogo.id, sala.codigo, { host: true, nome: 'Jogador 1' });
-          const linkConvidado = arcadeRoomLink(jogo.id, sala.codigo, { nome: 'Jogador 2' });
+
+          const linkHost = arcadeRoomLink(jogo.id, sala.codigo, { host: true, nome: 'Jogador 1', netplay: net.url });
+          const linkConvidado = arcadeRoomLink(jogo.id, sala.codigo, { nome: 'Jogador 2', netplay: net.url });
           await nazu.sendMessage(from, {
             text: caixaArcade([
               '┃ 🎮 ' + boldLayout(jogo.nome),

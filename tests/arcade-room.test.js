@@ -182,6 +182,9 @@ await test('responder "sim" cria a sala e manda os DOIS links', async () => {
   ok(t.includes('Código:') || t.includes('Codigo:'), 'mostra o codigo');
   ok(t.includes('host=1'), 'link do anfitriao tem host=1');
   ok(t.includes('sala='), 'link tem o codigo da sala');
+  // O link leva a URL do servidor da sala (`?netplay=`), porque o site mora no
+  // Cloudflare e o servidor sobe no host do bot.
+  ok(t.includes('netplay=https') || t.includes('netplay=http'), 'link aponta o servidor de netplay');
   const links = r.text.match(/https?:\/\/[^\s]+/g) || [];
   ok(links.length >= 2, `dois links (obtido ${links.length})`);
   ok(!arcadeRooms.convitePendente(grupo, P.conv), 'convite consumido');

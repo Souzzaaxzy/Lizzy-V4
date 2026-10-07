@@ -70,6 +70,10 @@
   const params = new URLSearchParams(location.search);
   const SALA = (params.get('sala') || '').toUpperCase();
   const EH_HOST = params.get('host') === '1';
+  // URL do servidor da sala, vinda do link do bot (`?netplay=`). O site mora no
+  // Cloudflare, mas o servidor de netplay sobe no host do bot -- entao a URL
+  // NAO pode ser fixa no bundle. `netplay.json` continua sendo o padrao.
+  const NETPLAY_DO_LINK = (params.get('netplay') || '').trim().replace(/\/+$/, '');
   // A config de netplay e lida de `netplay.json` (assincrono). `NETPLAY_SERVER`
   // e preenchido depois do await em `iniciar()` -- por isso e `let`.
   let NETPLAY_SERVER = window.EJS_NETPLAY_SERVER || '';
@@ -120,7 +124,8 @@
 
     // Espera a config de netplay (se houver) antes de decidir o modo sala.
     try { await window.__netplayPronto; } catch { /* ok */ }
-    NETPLAY_SERVER = window.EJS_NETPLAY_SERVER || '';
+    // Precedencia: link do bot (`?netplay=`) > netplay.json/env.
+    NETPLAY_SERVER = NETPLAY_DO_LINK || window.EJS_NETPLAY_SERVER || '';
     EM_SALA = Boolean(SALA) && Boolean(NETPLAY_SERVER);
 
     titulo.textContent = j.nome;
