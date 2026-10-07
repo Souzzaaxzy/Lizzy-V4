@@ -1396,7 +1396,6 @@ async function createBotSocket(authDir) {
                                 });
                             }
                             lastKnownGroupDesc[groupId] = newDesc;
-                        } else {
                         }
                     }
 

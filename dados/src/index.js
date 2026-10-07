@@ -6322,9 +6322,17 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
     if (botState.status === 'off' && !isOwnerOrSub) return;
     if (botState.viewMessages) nazu.readMessages([info.key]);
     try {
-      if (budy2 && budy2.length > 1) {
+      const rotuloMidia = hasImage ? '📷 Foto'
+        : hasVideo ? '🎬 Vídeo'
+          : hasAudio ? '🎵 Áudio'
+            : hasSticker ? '🔖 Figurinha'
+              : (type === 'documentMessage' || type === 'documentWithCaptionMessage') ? '📄 Documento'
+                : null;
+      if ((budy2 && budy2.length > 0) || rotuloMidia) {
         const timestamp = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) + ' • ' + new Date().toLocaleTimeString('pt-BR', { hour12: false, timeZone: 'America/Sao_Paulo' });
-        const textPreview = isCmd ? `${groupPrefix}${command}${q ? ` ${q.substring(0, 23)}${q.length > 23 ? '...' : ''}` : ''}` : budy2.substring(0, 28) + (budy2.length > 28 ? '...' : '');
+        const textPreview = rotuloMidia
+          ? (budy2 ? `${rotuloMidia}: ${budy2.substring(0, 14)}${budy2.length > 14 ? '...' : ''}` : rotuloMidia)
+          : isCmd ? `${groupPrefix}${command}${q ? ` ${q.substring(0, 23)}${q.length > 23 ? '...' : ''}` : ''}` : budy2.substring(0, 28) + (budy2.length > 28 ? '...' : '');
         
         if (isGroup) {
           console.log('╭──────────────────────────╮');
