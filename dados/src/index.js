@@ -4450,8 +4450,9 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       }
       try {
         profilePic = await nazu.profilePictureUrl(participant, 'image');
-      } catch (e) {
-      }
+      } catch {
+          /* best-effort */
+        }
       clone.contextInfo = {
         isForwarded: false,
         mentionedJid: [participant],
@@ -7219,7 +7220,6 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
       const figBan = figBanList.find(f => f.hash === currentHash);
       if (!figBan) return;
       
-      console.log('[FIGBAN] Figurinha reconhecida!');
       
       // Verificação de admin robusta: além do isGroupAdmin (que depende de matching LID/JID),
       // compara diretamente o JID original de quem enviou a figurinha contra os admins do groupMetadata,
@@ -7236,12 +7236,11 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
               return pBase && senderCandidates.includes(pBase);
             });
           }
-        } catch (e) {
-          console.log('[FIGBAN] Erro ao verificar admin via metadata:', e.message);
+        } catch {
+          /* metadata indisponível: segue com o isGroupAdmin */
         }
       }
       if (!figBanSenderIsAdmin) {
-        console.log('[FIGBAN] Bloqueado: quem enviou não é admin');
         return;
       }
       
@@ -7249,7 +7248,6 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
       // Obter o participant do autor da mensagem quoted (que está no contextInfo da figurinha)
       const stickerContextInfo = currentSticker.contextInfo || {};
       const quotedMsg = stickerContextInfo.quotedMessage;
-      console.log('[FIGBAN] quotedMsg type:', quotedMsg ? Object.keys(quotedMsg)[0] : 'null');
       
       // O participant do autor da mensagem quoted está no contextInfo da mensagem quoted
       // OU pode estar diretamente no participant da figurinha (quem foi citado)
@@ -7258,37 +7256,29 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
       // Tentar obter do participant direto da figurinha (indica quem foi citado)
       if (stickerContextInfo.participant && stickerContextInfo.participant !== sender) {
         targetUser = stickerContextInfo.participant;
-        console.log('[FIGBAN] Target via stickerContextInfo.participant:', targetUser);
       }
       // Tentar do sender da mensagem quoted
       else if (quotedMsg?.sender) {
         targetUser = quotedMsg.sender;
-        console.log('[FIGBAN] Target via quotedMsg.sender:', targetUser);
       }
       // Tentar do participant dentro do contextInfo da mensagem quoted
       else if (quotedMsg?.extendedTextMessage?.contextInfo?.participant) {
         targetUser = quotedMsg.extendedTextMessage.contextInfo.participant;
-        console.log('[FIGBAN] Target via extendedTextMessage.participant:', targetUser);
       }
       else if (quotedMsg?.imageMessage?.contextInfo?.participant) {
         targetUser = quotedMsg.imageMessage.contextInfo.participant;
-        console.log('[FIGBAN] Target via imageMessage.participant:', targetUser);
       }
       else if (quotedMsg?.videoMessage?.contextInfo?.participant) {
         targetUser = quotedMsg.videoMessage.contextInfo.participant;
-        console.log('[FIGBAN] Target via videoMessage.participant:', targetUser);
       }
       else if (quotedMsg?.audioMessage?.contextInfo?.participant) {
         targetUser = quotedMsg.audioMessage.contextInfo.participant;
-        console.log('[FIGBAN] Target via audioMessage.participant:', targetUser);
       }
       else if (quotedMsg?.stickerMessage?.contextInfo?.participant) {
         targetUser = quotedMsg.stickerMessage.contextInfo.participant;
-        console.log('[FIGBAN] Target via stickerMessage.participant:', targetUser);
       }
       
       if (!targetUser) {
-        console.log('[FIGBAN] Bloqueado: não conseguiu extrair targetUser');
         return;
       }
       
@@ -7296,21 +7286,18 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
       const targetNormalized = targetUser.split('@')[0].replace(/\s/g, '');
       const senderNormalized = sender.split('@')[0].replace(/\s/g, '');
       if (targetNormalized === senderNormalized) {
-        console.log('[FIGBAN] Bloqueado: target = sender');
         return;
       }
       
       try {
         const groupMetadata = await nazu.groupMetadata(from).catch(() => null);
         if (!groupMetadata) {
-          console.log('[FIGBAN] Bloqueado: não conseguiu metadata');
           return;
         }
         
         // Verificar se bot é admin
         const botParticipant = groupMetadata.participants.find(p => p.id === botNumber);
         if (!botParticipant?.admin) {
-          console.log('[FIGBAN] Bloqueado: bot não é admin');
           return;
         }
         
@@ -7320,13 +7307,11 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
           return pId === targetNormalized || p.id === targetUser;
         });
         if (!targetParticipant) {
-          console.log('[FIGBAN] Bloqueado: alvo não está no grupo');
           return;
         }
         
         // Não remover admins
         if (targetParticipant.admin) {
-          console.log('[FIGBAN] Bloqueado: alvo é admin');
           return;
         }
         
@@ -7334,7 +7319,6 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
         if (groupMetadata.owner) {
           const ownerNorm = groupMetadata.owner.split('@')[0].replace(/\s/g, '');
           if (ownerNorm === targetNormalized) {
-            console.log('[FIGBAN] Bloqueado: alvo é dono do grupo');
             return;
           }
         }
@@ -7343,22 +7327,18 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
         const ownerNumbers = [numerodono, ...subDonoList].map(n => n.split('@')[0].replace(/\D/g, ''));
         const targetNum = targetNormalized.replace(/\D/g, '');
         if (ownerNumbers.some(on => on && (on === targetNum || targetNum.includes(on) || on.includes(targetNum)))) {
-          console.log('[FIGBAN] Bloqueado: alvo é dono/subdono do bot');
           return;
         }
         
         // Não remover o próprio bot
         const botNum = botNumber.split('@')[0].replace(/\s/g, '');
         if (targetNum === botNum) {
-          console.log('[FIGBAN] Bloqueado: alvo é o bot');
           return;
         }
         
         // Remover o usuário
-        console.log('[FIGBAN] REMOVENDO USUÁRIO:', targetUser);
         await nazu.groupParticipantsUpdate(from, [targetUser], 'remove');
       } catch (error) {
-        console.log('[FIGBAN] Erro:', error.message);
       }
     }
     if (!isCmd) {
@@ -20763,8 +20743,7 @@ case 'addaluguel':
           return reply(`⏳ Aguarde ${Math.ceil(cd.remainingMs / 1000)}s para baixar outro APK.`);
         }
 
-        const apkLog = (m, extra) => console.log(extra ? `${m} ${JSON.stringify(extra)}` : m);
-        apkLog(`[APK] query=${apkQuery} user=${sender}`);
+        const apkLog = () => { };
 
         // Mensagem de progresso EDITADA no lugar (mesmo mecanismo que o bot já
         // usa: envia -> guarda o id -> edita). Não gera uma mensagem por etapa.
@@ -23646,7 +23625,6 @@ Precisa de ajuda? Entre em contato:
             );
             break;
           }
-          console.log(`[PLAQ] enviado restrito | cmd=${plaqName} | alvo=${alvoJids.join(',')} | bytes=${plaqBuffer.length}`);
         } catch (e) {
           console.error('[PLAQ] Erro:', e);
           await reply("❌ Ocorreu um erro ao enviar a plaquinha");
@@ -32565,9 +32543,7 @@ break;
                 
                 // X9 System: Envia card de aprovação
                 if (groupData.x9) {
-                  await updateCardOnApprove(nazu, from, req.jid, sender).catch(err => {
-                    console.log('[X9] Erro ao aprovar:', err.message);
-                  });
+                  await updateCardOnApprove(nazu, from, req.jid, sender).catch(() => { });
                 }
               } catch (err) {
                 failed.push(req.jid);
@@ -32597,9 +32573,7 @@ break;
               
               // X9 System: Envia card de aprovação
               if (groupData.x9) {
-                await updateCardOnApprove(nazu, from, user, sender).catch(err => {
-                  console.log('[X9] Erro ao aprovar:', err.message);
-                });
+                await updateCardOnApprove(nazu, from, user, sender).catch(() => { });
               }
             } catch (err) {
               failed.push(user);
@@ -32646,9 +32620,7 @@ break;
               
               // X9 System: Envia card de rejeição
               if (groupData.x9) {
-                await updateCardOnReject(nazu, from, user, sender).catch(err => {
-                  console.log('[X9] Erro ao rejeitar:', err.message);
-                });
+                await updateCardOnReject(nazu, from, user, sender).catch(() => { });
               }
             } catch (err) {
               failed.push(user);
@@ -35081,17 +35053,8 @@ ${listaPerm}
           }
 
           // SEM resumo no WhatsApp: o `!rajar` entrega SÓ as mensagens
-          // invisíveis. O resultado vai para o console (diagnóstico), não para
-          // o grupo — a confirmação era ruído visível em cima da rajada.
-          if (falhas.length) {
-            console.error(
-              `[RAJAR] ${enviados}/${total} enviadas | falhas=${falhas.length} | ${falhas.slice(0, 3).join(' | ')}`
-            );
-          } else {
-            console.log(`[RAJAR] ${enviados}/${total} enviadas | mencoes=${mentions.length} | membros=${membrosComuns.length}`);
-          }
+          // invisíveis.
         } catch (e) {
-          console.error('[RAJAR] Erro:', e?.message || e);
           await reply('❌ Não foi possível disparar o raja.');
         }
         break;
@@ -35152,10 +35115,6 @@ ${listaPerm}
                 allowedParticipants: membrosComuns,
                 messageId: msgId
               });
-              console.log(
-                `[RAJAR2] enviado | id=${msgId} | tipo=splitPaymentMessage | ` +
-                `bytes=${Buffer.byteLength(JSON.stringify(content), 'utf8')} | mencoes=${mentions.length}`
-              );
               enviados += 1;
             } catch (e) {
               falhas.push(e?.message || String(e));
@@ -35164,15 +35123,7 @@ ${listaPerm}
           }
 
           // Sem resumo no grupo (mesma regra do !rajar): so as mensagens saem.
-          if (falhas.length) {
-            console.error(
-              `[RAJAR2] ${enviados}/${RAJAR2_TOTAL} enviadas | falhas=${falhas.length} | ${falhas.slice(0, 3).join(' | ')}`
-            );
-          } else {
-            console.log(`[RAJAR2] ${enviados}/${RAJAR2_TOTAL} enviadas | mencoes=${mentions.length} | membros=${membrosComuns.length}`);
-          }
         } catch (e) {
-          console.error('[RAJAR2] Erro:', e?.message || e);
           await reply('❌ Não foi possível disparar o rajar2.');
         }
         break;

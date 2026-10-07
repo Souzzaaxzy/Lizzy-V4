@@ -763,8 +763,6 @@ async function handleWhatsAppNativeAction(AbyssSock, inf) {
     try {
         const { id: groupId, action, author, authorPn, participant, participants } = inf;
         
-        console.log('[X9] ========== WHATSAPP NATIVE HANDLER ==========');
-        console.log('[X9] Action:', action);
         
         if (!groupId) return;
         
@@ -772,7 +770,6 @@ async function handleWhatsAppNativeAction(AbyssSock, inf) {
         const groupSettings = await loadGroupSettings(groupId);
         
         if (!groupSettings?.x9) {
-            console.log('[X9] X9 desativado neste grupo');
             return;
         }
         
@@ -782,7 +779,6 @@ async function handleWhatsAppNativeAction(AbyssSock, inf) {
         const adminJid = resolveJoinActor({ author, authorPn });
         
         if (!targetParticipant || !adminJid) {
-            console.log('[X9] Dados insuficientes');
             return;
         }
         
@@ -812,15 +808,12 @@ async function handleWhatsAppNativeAction(AbyssSock, inf) {
             if (/^\d+$/.test(participantJid)) {
                 participantJid = `${participantJid}@s.whatsapp.net`;
             } else {
-                console.log('[X9] JID não é número válido:', participantJid);
                 return;
             }
         } else {
-            console.log('[X9] participantJid inválido');
             return;
         }
         
-        console.log('[X9] Final participantJid:', participantJid);
         
         // Processa baseado na ação
         if (action === 'approve') {
@@ -1305,7 +1298,6 @@ async function createBotSocket(authDir) {
             AbyssSock.ev.on('groups.update', async (updates) => {
             if (!Array.isArray(updates) || updates.length === 0) return;
 
-            console.log(`\n🔔 [GROUPS UPDATE] Recebido evento com ${updates.length} atualização(ões)`);
 
             // Obter ID do bot para filtrar eventos gerados pelo próprio bot
             const botJid = AbyssSock.user?.id || '';
@@ -1331,8 +1323,6 @@ async function createBotSocket(authDir) {
                 try {
                     const groupId = ev.id;
 
-                    console.log('[X9] ========== GROUPS UPDATE ==========');
-                    console.log('[X9] Full event:', JSON.stringify(ev, null, 2));
 
                     // 🔹 Verificação de segurança: Ignorar eventos do próprio bot
                     const author = ev.subjectOwner || ev.descOwner || ev.inviteOwner || ev.author || null;
@@ -1340,7 +1330,6 @@ async function createBotSocket(authDir) {
                     if (author) {
                         authorNum = author.split('@')[0]?.replace('@s.whatsapp.net', '') || '';
                         if (authorNum === botNum) {
-                            console.log(`[X9] Ignorando evento gerado pelo próprio bot (${botNum})`);
                             return;
                         }
                     }
@@ -1348,20 +1337,14 @@ async function createBotSocket(authDir) {
                     // 🔹 Verificar se é uma mudança real
                     const hasRealChange = ev.subject || ev.desc !== undefined || ev.imgUrl || ev.picUrl || ev.inviteCode || ev.announce !== undefined || ev.restrict !== undefined || ev.ephemeralDuration !== undefined;
                     
-                    console.log('[X9] hasRealChange:', hasRealChange);
-                    console.log('[X9] author:', author);
-                    console.log('[X9] authorNum:', authorNum);
-                    console.log('[X9] botNum:', botNum);
 
                     if (!hasRealChange) {
-                        console.log('[X9] Não há mudança real, ignorando');
                         return;
                     }
 
                     // 🔹 COOLDOWN: Verificar se o último evento foi recente (evita duplicatas)
                     const now = Date.now();
                     if (lastX9Event[groupId] && (now - lastX9Event[groupId]) < X9_COOLDOWN) {
-                        console.log(`[X9] Ignorando evento em cooldown para ${groupId}`);
                         return;
                     }
                     lastX9Event[groupId] = now;
@@ -1369,20 +1352,15 @@ async function createBotSocket(authDir) {
                     // 🔹 Buscar config do grupo
                     const groupData = await getGroupData(groupId).catch(() => null);
                     if (!groupData?.x9) {
-                        console.log(`[GROUPS UPDATE] X9 desativado para ${groupId} - ignorando evento`);
                         return;
                     }
                     
-                    console.log(`[GROUPS UPDATE] X9 ativado para ${groupId} - processando evento`);
                     
                     // Formatar texto e menção do autor
                     let authorText = '';
                     if (author) {
                         const authorNum = author.split('@')[0];
                         authorText = `@${authorNum}`;
-                        console.log('[X9] Autor identificado:', authorNum);
-                    } else {
-                        console.log('[X9] Autor não identificado no evento');
                     }
 
                     // 📸 FOTO ALTERADA
@@ -1395,14 +1373,11 @@ async function createBotSocket(authDir) {
                         // Verificar se o nome realmente mudou desde o último evento
                         const previousName = lastKnownGroupName[groupId];
                         if (previousName !== ev.subject) {
-                            console.log('[X9] Nome alterado de "', previousName, '" para "', ev.subject, '"');
                             await notifyGroupChange(AbyssSock, groupId, 'name_changed', author, {
                                 oldName: previousName || '(vazio)',
                                 newName: ev.subject
                             });
                             lastKnownGroupName[groupId] = ev.subject;
-                        } else {
-                            console.log('[X9] Nome já é o mesmo, ignorando');
                         }
                     }
 
@@ -1413,18 +1388,15 @@ async function createBotSocket(authDir) {
                         
                         if (previousDesc !== newDesc) {
                             if (newDesc === null) {
-                                console.log('[X9] Descrição removida');
                                 await notifyGroupChange(AbyssSock, groupId, 'desc_removed', author);
                             } else {
                                 const descText = newDesc.substring(0, 200) + (newDesc.length > 200 ? '...' : '');
-                                console.log('[X9] Descrição alterada');
                                 await notifyGroupChange(AbyssSock, groupId, 'desc_changed', author, {
                                     newDesc: descText
                                 });
                             }
                             lastKnownGroupDesc[groupId] = newDesc;
                         } else {
-                            console.log('[X9] Descrição já é a mesma, ignorando');
                         }
                     }
 
@@ -1471,7 +1443,6 @@ async function createBotSocket(authDir) {
 
                     // 👥 TAMANHO DO GRUPO MUDOU (membros foram adicionados/removidos)
                     else if (ev.size !== undefined) {
-                        console.log('[X9] Tamanho do grupo:', ev.size);
                         // Não envia mensagem só por mudança de tamanho (já coberto por group-participants.update)
                     }
 
@@ -1517,14 +1488,10 @@ async function createBotSocket(authDir) {
             if (resultado.acao === 'recusa') {
                 // A recusa NAO gera `group-participants.update` (medido no
                 // messages-recv.js): este e o unico ponto que pode emitir o card.
-                console.log(resultado.enviado
-                    ? `[X9] Card de recusa enviado (por ${resultado.actor})`
-                    : '[X9] Recusa sem pedido pendente para avisar');
                 return;
             }
 
             if (resultado.acao === 'ignorado') {
-                console.log(`[X9] Evento ignorado (${resultado.motivo})`);
                 return;
             }
 
@@ -1807,10 +1774,8 @@ async function createBotSocket(authDir) {
 
             // Handler para detectar mensagens apagadas
             AbyssSock.ev.on('messages.delete', async (keys) => {
-                console.log('[DEBUG DELETE] Evento messages.delete recebido:', JSON.stringify(keys));
                 try {
                     for (const key of keys) {
-                        console.log('[DEBUG DELETE] Processando key:', JSON.stringify(key));
                         const groupId = key.remoteJid;
                         const senderId = key.participant || key.remoteJid;
                         
