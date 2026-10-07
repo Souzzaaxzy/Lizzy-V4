@@ -4,7 +4,13 @@
  */
 
 import axios from 'axios';
-import * as cheerio from 'cheerio';
+// Import PREGUICOSO: `cheerio` custa ~35 MB de RSS e so e usado no
+// `dl()`. Carregado no boot, pesava em TODO start do bot.
+let _cheerio = null;
+async function getCheerio() {
+  if (!_cheerio) _cheerio = await import('cheerio');
+  return _cheerio;
+}
 import { mediaClient } from '../../utils/httpClient.js';
 
 const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36";
@@ -56,6 +62,7 @@ async function dl(url) {
       timeout: 120000
     });
 
+    const cheerio = await getCheerio();
     const $ = cheerio.load(response.data);
     const scriptTag = $('script#VideoObject');
     

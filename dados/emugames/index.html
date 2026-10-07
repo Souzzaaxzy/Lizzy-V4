@@ -2,56 +2,260 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>EmuGames</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>EmuGames Lizzy</title>
 <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-<header>
-  <h1 id="titulo">EMUGAMES</h1>
-  <p class="sub" id="subtitulo"></p>
-</header>
 
-<main>
+<!-- ============================ CATALOGO ============================ -->
+<section id="catalogo">
+  <header class="cabeca">
+    <h1>EmuGames <span id="marca"></span></h1>
+    <p class="sub">Escolha um jogo para jogar</p>
+  </header>
+
+  <nav id="filtros" aria-label="Categorias"></nav>
+
+  <div id="grid"></div>
+
+  <p id="vazio" hidden>Nenhum jogo nesta categoria.</p>
+</section>
+
+<!-- ============================= JOGADOR ============================= -->
+<section id="jogador" hidden>
+  <div id="barra">
+    <span id="subtitulo"></span>
+    <button id="voltar" type="button" title="Voltar ao catálogo" aria-label="Voltar ao catálogo">
+      <span class="seta">&#8249;</span> JOGOS
+    </button>
+  </div>
+
   <div id="game"></div>
-
-  <section id="erro" hidden>
-    <p id="erro-titulo">Nenhum jogo disponível.</p>
-    <p class="dica" id="erro-dica">Registre um jogo no <code>jogos.json</code> e coloque a ROM em <code>jogos/&lt;console&gt;/</code>.</p>
-  </section>
 
   <div id="controles">
     <button id="parar" type="button" disabled>■ PARAR</button>
+    <button id="cheia" type="button">⛶ TELA CHEIA</button>
     <span id="status"></span>
   </div>
-</main>
+</section>
+
+<!-- ============================== ERRO ============================== -->
+<section id="erro" hidden>
+  <p id="erro-titulo">Nenhum jogo disponível.</p>
+  <p class="dica" id="erro-dica"></p>
+</section>
 
 <script>
   window.EJS_DATA = 'https://cdn.emulatorjs.org/stable/data/';
   window.INATIVIDADE_MS = 3 * 60 * 1000;
+
+  // "Lizzy" em MATHEMATICAL BOLD (U+1D400..), montado por code point para o
+  // arquivo continuar ASCII-safe (glifos exoticos corrompem em alguns editores).
+  (function () {
+    var AZ = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    var BOLD = 'Lizzy'.split('').map(function (c) {
+      var i = AZ.indexOf(c.toUpperCase());
+      if (i < 0) return c;
+      var base = 0x1D400 + i;                  // MATHEMATICAL BOLD CAPITAL A
+      if (c === c.toLowerCase()) base += 0x1A; // ...e o bloco minusculo
+      return String.fromCodePoint(base);
+    }).join('');
+    var el = document.getElementById('marca');
+    if (el) el.textContent = BOLD;
+  })();
 </script>
 
 <script>
 (function () {
+  'use strict';
+
   const DATA = window.EJS_DATA;
   const LIMITE = window.INATIVIDADE_MS;
 
+  // Elementos
+  const catalogo = document.getElementById('catalogo');
+  const jogador = document.getElementById('jogador');
+  const grid = document.getElementById('grid');
+  const filtros = document.getElementById('filtros');
+  const vazio = document.getElementById('vazio');
   const alvo = document.getElementById('game');
-  const erro = document.getElementById('erro');
-  const titulo = document.getElementById('titulo');
   const subtitulo = document.getElementById('subtitulo');
+  const erro = document.getElementById('erro');
+  const erroTitulo = document.getElementById('erro-titulo');
+  const erroDica = document.getElementById('erro-dica');
   const pararBtn = document.getElementById('parar');
-  const status = document.getElementById('status');
+  const voltarBtn = document.getElementById('voltar');
+  const cheiaBtn = document.getElementById('cheia');
 
-  let jogo = null;
+  // Nome bonito de cada console (o `console` do catalogo e o CORE do EmulatorJS)
+  const CONSOLES = {
+    snes: { nome: 'Super Nintendo', emoji: '🎮' },
+    nes: { nome: 'Nintendo', emoji: '🎮' },
+    gba: { nome: 'Game Boy Advance', emoji: '🎮' },
+    gb: { nome: 'Game Boy', emoji: '🎮' },
+    genesis: { nome: 'Mega Drive', emoji: '🎮' },
+    n64: { nome: 'Nintendo 64', emoji: '🎮' },
+    psx: { nome: 'PlayStation', emoji: '🎮' },
+    arcade: { nome: 'Arcade', emoji: '🕹️' },
+  };
+  const CORES = { snes: '#1d4ed8', nes: '#b91c1c', gba: '#7c3aed', gb: '#166534',
+    genesis: '#0369a1', n64: '#b45309', psx: '#475569', arcade: '#b45309' };
+
+  let catalogoJogos = [];
+  let jogoAtual = null;
   let rodando = false;
   let ocioso = Date.now();
 
-
-  const CORES = { snes: '#1d4ed8', nes: '#b91c1c', gba: '#7c3aed', gb: '#166534', genesis: '#0369a1', n64: '#b45309' };
-  const NOMES = { snes: 'Super Nintendo', nes: 'Nintendo', gba: 'Game Boy Advance', gb: 'Game Boy', genesis: 'Mega Drive', n64: 'Nintendo 64' };
-
   function marcarAtividade() { ocioso = Date.now(); }
+
+  // ==========================================================================
+  // ROTAS  (#/  = catalogo   |   #/jogo/<id>  = jogando)
+  // Usamos o HASH porque ele funciona em qualquer host estatico (o site mora
+  // no Cloudflare) e da para trocar de tela sem recarregar a pagina.
+  // ==========================================================================
+  function lerRota() {
+    const h = String(location.hash || '').replace(/^#\/?/, '');
+    if (h.startsWith('jogo/')) return { tela: 'jogo', id: decodeURIComponent(h.slice(5)) };
+    return { tela: 'catalogo' };
+  }
+  function irPara(hash) {
+    if (location.hash === hash) return;
+    location.hash = hash; // dispara `hashchange` -> aplicarRota()
+  }
+
+  // ==========================================================================
+  // CATALOGO
+  // ==========================================================================
+  function montarFiltros() {
+    const vistos = [];
+    for (const j of catalogoJogos) if (!vistos.includes(j.console)) vistos.push(j.console);
+
+    const itens = [{ id: 'todos', rotulo: 'Todos', emoji: '✨' }].concat(vistos.map((c) => ({
+      id: c,
+      rotulo: (CONSOLES[c] && CONSOLES[c].nome) || c.toUpperCase(),
+      emoji: (CONSOLES[c] && CONSOLES[c].emoji) || '🎮',
+    })));
+
+    filtros.innerHTML = '';
+    for (const it of itens) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'aba' + (it.id === 'todos' ? ' ativa' : '');
+      b.dataset.cat = it.id;
+      b.textContent = `${it.emoji} ${it.rotulo}`;
+      b.addEventListener('click', () => {
+        for (const x of filtros.children) x.classList.toggle('ativa', x === b);
+        montarGrid(it.id);
+      });
+      filtros.appendChild(b);
+    }
+  }
+
+  function montarGrid(filtro) {
+    const lista = (!filtro || filtro === 'todos')
+      ? catalogoJogos
+      : catalogoJogos.filter((j) => j.console === filtro);
+
+    grid.innerHTML = '';
+    vazio.hidden = lista.length > 0;
+
+    for (const j of lista) {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'card';
+      card.dataset.id = j.id;
+
+      const capa = document.createElement('div');
+      capa.className = 'capa';
+      const img = document.createElement('img');
+      img.loading = 'lazy';
+      img.alt = '';
+      img.src = `./capas/${encodeURIComponent(j.capa || (j.id + '.gif'))}`;
+      img.addEventListener('error', () => { img.style.display = 'none'; });
+      capa.appendChild(img);
+
+      const tag = document.createElement('span');
+      tag.className = 'tag';
+      tag.textContent = (CONSOLES[j.console] && CONSOLES[j.console].emoji) || '🎮';
+      tag.title = (CONSOLES[j.console] && CONSOLES[j.console].nome) || j.console;
+      capa.appendChild(tag);
+
+      const nome = document.createElement('span');
+      nome.className = 'nome';
+      nome.textContent = j.nome;
+
+      card.appendChild(capa);
+      card.appendChild(nome);
+      card.addEventListener('click', () => abrirJogo(j.id));
+
+      grid.appendChild(card);
+    }
+  }
+
+  // Abrir um jogo RECARREGA a pagina. E' de proposito: o EmulatorJS carrega o
+  // loader UMA vez por documento (o loader declara `EJS_STORAGE`, entre outras
+  // coisas) e reinjetar o script na mesma pagina quebra com
+  // "Identifier 'EJS_STORAGE' has already been declared". Uma navegacao nova
+  // garante um emulador limpo -- e a troca continua rapida.
+  function abrirJogo(id) {
+    location.href = `./?jogo=${encodeURIComponent(id)}#/jogo/${encodeURIComponent(id)}`;
+  }
+
+  function mostrarCatalogo() {
+    parar();
+    jogoAtual = null;
+    catalogo.hidden = false;
+    jogador.hidden = true;
+    erro.hidden = true;
+    document.body.classList.remove('jogando');
+    document.title = 'EmuGames Lizzy';
+  }
+
+  // ==========================================================================
+  // TELA CHEIA
+  // No celular `requestFullscreen` as vezes e' bloqueado (iPhone nao tem). Por
+  // isso a tela cheia e' de CSS quando a API nao responde: a caixa do jogo fica
+  // `fixed` cobrindo o viewport. O ganho visual e' o mesmo e nao depende de
+  // permissao. Em PAISAGEM ela liga SOZINHA (ver CSS).
+  // ==========================================================================
+  function estaEmTelaCheia() {
+    return Boolean(document.fullscreenElement || document.webkitFullscreenElement) ||
+      document.body.classList.contains('cheia');
+  }
+
+  function reajustar() {
+    // O EmulatorJS dimensiona o canvas a partir do container. Na rotacao o
+    // navegador muda o viewport, mas ele recalcula ANTES das medidas assentarem
+    // -- entao chamamos de novo nos dois quadros seguintes.
+    const emu = window.EJS_emulator;
+    if (!emu || typeof emu.handleResize !== 'function') return;
+    requestAnimationFrame(() => {
+      try { emu.handleResize(); } catch { /* ok */ }
+      requestAnimationFrame(() => { try { emu.handleResize(); } catch { /* ok */ } });
+    });
+  }
+
+  function alternarTelaCheia(forcar) {
+    const quer = forcar === undefined ? !estaEmTelaCheia() : Boolean(forcar);
+    document.body.classList.toggle('cheia', quer);
+
+    if (quer) {
+      if (!document.fullscreenElement && document.body.requestFullscreen) {
+        document.body.requestFullscreen().catch(() => { /* fica a CSS */ });
+      }
+    } else if (document.fullscreenElement || document.webkitFullscreenElement) {
+      (document.exitFullscreen || document.webkitExitFullscreen || (() => {})).call(document);
+    }
+
+    cheiaBtn.textContent = quer ? '⛶ SAIR' : '⛶ TELA CHEIA';
+    setTimeout(reajustar, 60);
+    setTimeout(reajustar, 350);
+  }
+
+  // ==========================================================================
+  // JOGO
+  // ==========================================================================
 
   // ROM acima de 25 MiB nao cabe num asset do Cloudflare. Nesses casos o zip e
   // guardado em PARTES (kof97.zip.p1, .p2...) e remontado aqui num Blob, que o
@@ -65,37 +269,53 @@
     }))).then((bufs) => new Blob(bufs, { type: 'application/zip' }));
   }
 
+  let parando = false;
   function aoSair() {
     rodando = false;
     pararBtn.disabled = true;
-    pararBtn.textContent = '■ PARAR';
     alvo.innerHTML = '';
   }
 
   function parar() {
     const emu = window.EJS_emulator;
-    if (emu) {
-      try { emu.pause(); } catch { /* ok */ }
-      try { emu.callEvent('exit'); } catch { /* ok */ }
-      try { emu.callEvent('unload'); } catch { /* ok */ }
-    }
+    if (parando || !emu) { aoSair(); return; }
+    parando = true;
+    // Zera ANTES de avisar o emulador: o `callEvent('exit')` chama o
+    // `EJS_onExit`, que sem isto reentraria aqui em loop.
+    window.EJS_emulator = null;
+    try { emu.pause(); } catch { /* ok */ }
+    try { emu.callEvent('exit'); } catch { /* ok */ }
+    try { emu.callEvent('unload'); } catch { /* ok */ }
+    // O EmulatorJS tem um handler PROPRIO de `beforeunload` que chama
+    // `callEvent('exit')` -> `unmount` sempre que `started` for true. Depois do
+    // nosso teardown isso remontaria o FS num estado ja desfeito e estourava
+    // "ErrnoError" ao trocar de jogo. Marcar como encerrado faz ele sair cedo.
+    try { emu.started = false; } catch { /* ok */ }
     aoSair();
+    parando = false;
   }
 
-  window.EJS_onExit = aoSair;
+  function voltarAoCatalogo() {
+    if (estaEmTelaCheia()) alternarTelaCheia(false);
+    irPara('#/');
+  }
 
   async function iniciar(j) {
-    jogo = j;
+    jogoAtual = j;
     alvo.innerHTML = '';
     window.EJS_emulator = null;
 
-    titulo.textContent = j.nome;
-    subtitulo.textContent = NOMES[j.console] || j.console;
+    catalogo.hidden = true;
     erro.hidden = true;
-    alvo.hidden = false;
+    jogador.hidden = false;
+    document.body.classList.add('jogando');
+    document.title = j.nome + ' · EmuGames Lizzy';
+
+    const nomeConsole = (CONSOLES[j.console] && CONSOLES[j.console].nome) || j.console;
+    subtitulo.textContent = nomeConsole;
 
     // ROM em partes: baixa e remonta antes de ligar o emulador (mostra o
-    // progresso no lugar do titulo, senao parece que travou).
+    // progresso no lugar do console, senao parece que travou).
     let gameUrl = j.rom;
     if (j.partes && j.partes.length) {
       subtitulo.textContent = 'Baixando o jogo...';
@@ -106,7 +326,7 @@
         subtitulo.textContent = 'Falha ao baixar o jogo';
         return;
       }
-      subtitulo.textContent = NOMES[j.console] || j.console;
+      subtitulo.textContent = nomeConsole;
     }
 
     window.EJS_player = '#game';
@@ -134,7 +354,7 @@
       window.EJS_biosUrl = j.bios;
     }
     window.EJS_Buttons = {
-      playPause: true, restart: true, mute: true, settings: true, fullscreen: true,
+      playPause: true, restart: true, mute: true, settings: true, fullscreen: false,
       saveState: false, loadState: false, screenRecord: false, gamepad: false,
       cheat: false, volume: true, saveSavFiles: false, loadSavFiles: false,
       quickSave: false, quickLoad: false, screenshot: false, cacheManager: false,
@@ -147,80 +367,127 @@
     pararBtn.disabled = false;
     marcarAtividade();
 
+    // O loader so pode ser injetado UMA vez por documento -- por isso abrir um
+    // jogo recarrega a pagina (ver `abrirJogo`).
     const s = document.createElement('script');
     s.src = DATA + 'loader.js';
     document.body.appendChild(s);
   }
 
+  // ==========================================================================
+  // EVENTOS
+  // ==========================================================================
   pararBtn.addEventListener('click', parar);
+  voltarBtn.addEventListener('click', voltarAoCatalogo);
+  cheiaBtn.addEventListener('click', () => alternarTelaCheia());
+
+  // O botao "sair" do proprio EmulatorJS volta para o catalogo.
+  window.EJS_onExit = () => {
+    window.EJS_emulator = null;
+    aoSair();
+    if (!jogador.hidden) voltarAoCatalogo();
+  };
+
+  window.addEventListener('hashchange', aplicarRota);
 
   ['pointerdown', 'keydown', 'touchstart'].forEach((ev) => addEventListener(ev, marcarAtividade, { passive: true }));
 
-  let saiu = false;
-  function aoSairDaPagina() {
-    saiu = true;
-    parar();
+  // Ao girar o aparelho (ou aparecer/sumir a barra do navegador) reajusta o
+  // canvas. `orientationchange` chega ANTES do viewport novo, entao o reajuste
+  // tambem roda no `resize` e no `visualViewport`.
+  addEventListener('orientationchange', () => { setTimeout(reajustar, 120); setTimeout(reajustar, 550); });
+  addEventListener('resize', () => { if (!jogador.hidden) reajustar(); });
+  if (window.visualViewport) {
+    visualViewport.addEventListener('resize', () => { if (!jogador.hidden) reajustar(); });
   }
+  ['fullscreenchange', 'webkitfullscreenchange'].forEach((ev) =>
+    document.addEventListener(ev, () => {
+      if (!document.fullscreenElement && !document.webkitFullscreenElement && document.body.classList.contains('cheia')) {
+        // Saiu pela API (botao do sistema): mantem o estado coerente.
+        document.body.classList.remove('cheia');
+        cheiaBtn.textContent = '⛶ TELA CHEIA';
+      }
+      reajustar();
+    }));
+
+  // Sair/voltar da aba: evita deixar o audio tocando e retoma ao voltar.
+  //
+  // IMPORTANTE: nao ha teardown no `pagehide`. Desmontar o emulador DURANTE a
+  // navegacao faz o runtime dele estourar ("unmount" -> ErrnoError, medido ao
+  // trocar de jogo); e' desnecessario, porque a pagina vai ser descartada de
+  // qualquer forma. O `visibilitychange` cuidar so do audio e' suficiente.
+  let saiu = false;
+  function aoSairDaPagina() { if (jogador.hidden) return; saiu = true; parar(); }
   function aoVoltar() {
-    if (!saiu) return;
+    if (jogador.hidden || !saiu) return;
     saiu = false;
     ocioso = Date.now();
-    if (!rodando && jogo) iniciar(jogo);
+    if (!rodando && jogoAtual) iniciar(jogoAtual);
   }
-
   document.addEventListener('visibilitychange', () => { document.hidden ? aoSairDaPagina() : aoVoltar(); });
-  addEventListener('pagehide', aoSairDaPagina);
-  addEventListener('beforeunload', aoSairDaPagina);
-  addEventListener('freeze', aoSairDaPagina);
   addEventListener('pageshow', aoVoltar);
-  addEventListener('resume', aoVoltar);
 
   setInterval(() => {
     if (!rodando) return;
     if (Date.now() - ocioso < LIMITE) return;
-    parar();
-    status.textContent = 'desligado por inatividade (3 min)';
+    voltarAoCatalogo();
   }, 5000);
 
+  // ==========================================================================
+  // BOOT
+  // ==========================================================================
+  function aplicarRota() {
+    const r = lerRota();
+    if (r.tela === 'jogo') {
+      const j = catalogoJogos.find((x) => x.id === r.id);
+      if (j) {
+        if (!jogoAtual || jogoAtual.id !== j.id) iniciar(j);
+        return;
+      }
+      mostrarCatalogo();
+      erro.hidden = false;
+      erroTitulo.textContent = `Jogo "${r.id}" não está no catálogo.`;
+      erroDica.textContent = 'Escolha outro jogo na lista.';
+      return;
+    }
+    mostrarCatalogo();
+  }
+
   (async () => {
-    const erroTitulo = document.getElementById('erro-titulo');
-    const erroDica = document.getElementById('erro-dica');
-    let catalogo = [];
-    let falhouCarregar = false;
+    let falhou = false;
     try {
       const r = await fetch('./jogos.json', { cache: 'no-store' });
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const d = await r.json();
-      catalogo = (Array.isArray(d.jogos) ? d.jogos : []).filter((j) => j && j.id && j.rom && j.console);
+      catalogoJogos = (Array.isArray(d.jogos) ? d.jogos : [])
+        .filter((j) => j && j.id && j.rom && j.console);
     } catch (e) {
       console.error('[EMUGAMES] falha ao carregar jogos.json', e);
-      falhouCarregar = true;
-      catalogo = [];
+      falhou = true;
     }
 
-    const id = new URLSearchParams(location.search).get('jogo');
-    const escolhido = id ? catalogo.find((j) => j.id === id) : catalogo[0];
-
-    if (escolhido) {
-      iniciar(escolhido);
-    } else {
-      alvo.hidden = true;
+    if (falhou || !catalogoJogos.length) {
+      catalogo.hidden = true;
+      jogador.hidden = true;
       erro.hidden = false;
-      subtitulo.textContent = '';
-      // Diferencia "o jogo pedido não está no catálogo" de "o catálogo não
-      // carregou" — antes os dois mostravam a mesma dica de configurar o
-      // jogos.json, o que confundia.
-      if (falhouCarregar) {
-        erroTitulo.textContent = 'Não foi possível carregar o catálogo de jogos.';
-        erroDica.textContent = 'O jogos.json não respondeu. Tente recarregar.';
-      } else if (id) {
-        erroTitulo.textContent = `Jogo "${id}" não está no catálogo.`;
-        erroDica.textContent = 'O site no ar ainda pode estar com a versão antiga — faça o deploy para atualizar.';
-      } else {
-        erroTitulo.textContent = 'Nenhum jogo disponível.';
-        erroDica.textContent = 'Registre um jogo no jogos.json e coloque a ROM em jogos/<console>/.';
-      }
+      erroTitulo.textContent = falhou
+        ? 'Não foi possível carregar o catálogo de jogos.'
+        : 'Nenhum jogo disponível.';
+      erroDica.textContent = falhou ? 'O jogos.json não respondeu. Tente recarregar.' : '';
+      return;
     }
+
+    montarFiltros();
+    montarGrid('todos');
+
+    // Link antigo (`?jogo=id`) continua funcionando: vira a rota nova. O
+    // `hashchange` cuida de entrar no jogo.
+    const antigo = new URLSearchParams(location.search).get('jogo');
+    if (antigo && catalogoJogos.some((j) => j.id === antigo)) {
+      if (!location.hash) { location.hash = '#/jogo/' + encodeURIComponent(antigo); return; }
+    }
+
+    aplicarRota();
   })();
 })();
 </script>

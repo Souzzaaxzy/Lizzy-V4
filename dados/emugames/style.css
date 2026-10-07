@@ -1,28 +1,152 @@
+@charset "utf-8";
 * { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --fundo: #0b0d12;
+  --painel: #141922;
+  --painel2: #1a2029;
+  --borda: #2b3543;
+  --texto: #e8ecf3;
+  --fraco: #8b98ad;
+  --acento: #1d4ed8;
+}
 
 html, body {
   min-height: 100%;
-  background: #0b0d12;
-  color: #e8ecf3;
-  font-family: system-ui, -apple-system, sans-serif;
+  background: var(--fundo);
+  color: var(--texto);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
 }
 
-body {
+body { padding: 10px; }
+
+.seta { font-size: 18px; line-height: 1; }
+
+/* ==========================================================================
+   CATALOGO
+   ========================================================================== */
+.cabeca { text-align: center; padding: 14px 4px 6px; }
+h1 {
+  font-size: clamp(18px, 5.4vw, 26px);
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+h1 #marca { letter-spacing: 2px; }
+.cabeca .sub { color: var(--fraco); font-size: 12.5px; margin-top: 6px; }
+
+/* Abas de categoria: rolam na horizontal quando nao cabem */
+#filtros {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 14px 2px 12px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+#filtros::-webkit-scrollbar { display: none; }
+
+.aba {
+  flex: 0 0 auto;
+  background: var(--painel2);
+  color: var(--texto);
+  border: 1px solid var(--borda);
+  border-radius: 999px;
+  padding: 9px 15px;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.aba.ativa { background: var(--acento); border-color: var(--acento); }
+.aba:active { transform: scale(.97); }
+
+/* Grade de cartoes */
+#grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+  padding-bottom: 20px;
+}
+
+.card {
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: 8px;
-  padding: 8px;
+  padding: 0;
+  background: var(--painel);
+  border: 1px solid var(--borda);
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--texto);
+  text-align: left;
+  transition: border-color .15s, transform .12s;
+}
+.card:active { transform: scale(.98); border-color: var(--acento); }
+
+.capa {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #05070a;
+}
+.capa img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.capa .tag {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  background: rgba(0, 0, 0, .65);
+  border-radius: 8px;
+  padding: 3px 7px;
+  font-size: 13px;
+  line-height: 1;
+}
+.nome {
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  padding: 0 10px 10px;
 }
 
-header { text-align: center; }
-h1 { font-size: 14px; letter-spacing: 4px; font-weight: 800; }
+#vazio { color: var(--fraco); text-align: center; padding: 30px 0; font-size: 13px; }
 
-main { width: 100%; max-width: 760px; display: flex; flex-direction: column; gap: 8px; }
+/* ==========================================================================
+   JOGADOR
+   ========================================================================== */
+#barra {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 2px 0 8px;
+}
+#subtitulo { font-size: 12.5px; color: var(--fraco); }
+
+/* O botao de voltar fica no TOPO SUPERIOR DIREITO */
+#voltar {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--painel2);
+  color: var(--texto);
+  border: 1px solid var(--borda);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  font-family: inherit;
+  cursor: pointer;
+}
+#voltar:active { background: var(--acento); border-color: var(--acento); }
 
 /*
-  Layout: a caixa do player tem DOIS andares.
+  A caixa do player tem DOIS andares:
     - em cima: a tela do jogo (proporcao 4:3)
     - embaixo: a faixa dos controles de toque (--ctl)
 
@@ -38,8 +162,7 @@ main { width: 100%; max-width: 760px; display: flex; flex-direction: column; gap
 
     --joy-scale  dpad/analogico  (base 125px -> 1.16 = +20px)
     --btn-scale  botoes redondos (base 50px  -> 1.4  = +20px)
-    --mid-scale  start/select/rapido/lento (base 50x31; 1 em retrato para nao
-                 encostar nos botoes; 1.7 em paisagem)
+    --mid-scale  start/select/rapido/lento (base 50x31)
 */
 #game {
   --ctl: 200px;
@@ -50,11 +173,11 @@ main { width: 100%; max-width: 760px; display: flex; flex-direction: column; gap
   width: 100%;
   background: #000;
   border: 1px solid #222a36;
-  border-radius: 8px;
+  border-radius: 10px;
   position: relative;
   overflow: hidden;
   height: calc((100vw - 34px) * 0.75 + var(--ctl));
-  max-height: calc(100vh - 96px);
+  max-height: calc(100vh - 150px);
   min-height: 380px;
 }
 
@@ -76,6 +199,7 @@ main { width: 100%; max-width: 760px; display: flex; flex-direction: column; gap
   left: 0;
   width: 100%;
   height: var(--ctl);
+  z-index: 2;
 }
 #game .ejs_virtualGamepad_left {
   bottom: 18px;
@@ -95,7 +219,7 @@ main { width: 100%; max-width: 760px; display: flex; flex-direction: column; gap
 }
 
 /* a barra de ferramentas fica no andar de cima (sobre a tela) */
-#game .ejs_menu_bar { z-index: 9999; }
+#game .ejs_menu_bar { z-index: 20; }
 
 /*
   DIAMANTE DOS BOTOES — padrao unico, IGUAL AO ARCADE (pedido do dono).
@@ -107,119 +231,154 @@ main { width: 100%; max-width: 760px; display: flex; flex-direction: column; gap
       topo = Y | esquerda = X | direita = B | baixo = A
   Precisa de `!important` porque a posicao vem inline no elemento.
 */
+/* O EmulatorJS posiciona o Fast/Slow com `top: 50px` INLINE, o que os joga
+   para BAIXO da linha Start/Select -- medido: y=538 numa caixa que termina em
+   523. Como `#game` tem overflow:hidden, eles ficavam RECORTADOS (invisiveis)
+   tanto em retrato quanto em tela cheia. Aqui eles sobem para a linha de cima. */
+#game .ejs_virtualGamepad_button.b_speed_fast,
+#game .ejs_virtualGamepad_button.b_speed_slow { top: -46px !important; }
+
 #game .ejs_virtualGamepad_button.b_y { left: 40px !important; top: 0 !important; }
 #game .ejs_virtualGamepad_button.b_x { left: 0 !important; top: 40px !important; }
 #game .ejs_virtualGamepad_button.b_b { left: 80px !important; top: 40px !important; }
 #game .ejs_virtualGamepad_button.b_a { left: 40px !important; top: 80px !important; }
 
+/* ==========================================================================
+   TELA CHEIA (de CSS) — cobre o viewport sem depender da API do navegador.
+   `body.cheia` e ligado pelo botao TELA CHEIA e tambem quando o aparelho e
+   deitado (paisagem), que e' o caso em que o dono quer o jogo ocupando tudo.
+   ========================================================================== */
+body.cheia { padding: 0; }
+body.cheia #barra,
+body.cheia #controles { display: none; }
+body.cheia #jogador { display: block; }
+body.cheia #game {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  max-height: none;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  z-index: 40;
+  --joy-scale: 1.32;
+  --btn-scale: 1.8;
+  --mid-scale: 1.7;
+}
+body.cheia #game .ejs_canvas_parent { height: 100%; }
+body.cheia #game .ejs_virtualGamepad_parent { height: 100%; }
+body.cheia #game .ejs_virtualGamepad_left { bottom: 12px; }
+body.cheia #game .ejs_virtualGamepad_right { bottom: 12px; }
+body.cheia #game .ejs_virtualGamepad_top { bottom: 168px; }
+body.cheia #game .ejs_virtualGamepad_bottom { bottom: 4px; }
+
 /*
-  PAISAGEM (celular deitado): o jogo ocupa a TELA INTEIRA e os controles
-  flutuam por cima, maiores (+40px). O cabecalho e o PARAR saem do fluxo; o
-  PARAR vira um botao flutuante no canto.
+  O ombro R (classe b_r) e posicionado 100px ACIMA do cluster direito. Com o
+  scale 1.8 ele sairia pelo topo da tela; aproxima do cluster.
+*/
+#game .b_r { top: -70px !important; }
+
+/*
+  PAISAGEM no aparelho: o jogo ocupa a TELA INTEIRA automaticamente (sem o
+  usuario precisar tocar em nada) e os controles flutuam por cima, maiores.
+  Aqui o bug relatado era o Fast/Slow (cluster do meio) caindo FORA da tela:
+  em paisagem a faixa de 200px nao cabia nos 390px de altura, entao o
+  `bottom: 4px` empurrava o cluster para baixo do viewport.
+  Correcao: o cluster do meio sobe para dentro da tela.
 */
 @media (orientation: landscape) {
   body { padding: 0; }
-  header { display: none; }
+  #barra, #controles { display: none; }
+  #catalogo { padding: 6px; }
 
-  #game {
+  /* Deitado, a secao do jogo passa a ocupar tudo SOZINHA — nao precisa mais
+     tocar no botao de tela cheia. */
+  body.jogando #game {
     position: fixed;
     inset: 0;
     width: 100vw;
     height: 100vh;
+    height: 100dvh;
     max-height: none;
     min-height: 0;
     border: 0;
     border-radius: 0;
-    z-index: 50;
-    --joy-scale: 1.32;   /* +40px no dpad/analogico */
-    --btn-scale: 1.8;    /* +40px nos botoes */
-    --mid-scale: 1.7;
+    z-index: 40;
+    --joy-scale: 1.24;
+    --btn-scale: 1.62;
+    --mid-scale: 1.45;
+  }
+  body.jogando #game .ejs_canvas_parent { height: 100%; }
+  body.jogando #game .ejs_virtualGamepad_parent { height: 100%; }
+  body.jogando #game .ejs_virtualGamepad_left { bottom: 10px; }
+  body.jogando #game .ejs_virtualGamepad_right { bottom: 10px; }
+  body.jogando #game .ejs_virtualGamepad_top { bottom: 150px; }
+
+  /* O cluster do meio (Start/Select/Fast/Slow) ANTES ficava fora da tela. Com
+     o Fast/Slow subindo para `top:-46px`, o grupo comeca ACIMA da origem --
+     entao a origem desce o suficiente para o grupo inteiro caber (46*1.45 ~=
+     67px) e some da borda superior. */
+  body.jogando #game .ejs_virtualGamepad_bottom {
+    bottom: auto;
+    top: 72px;
+    transform-origin: 50% 0%;
   }
 
-  /* a tela ocupa o quadro inteiro (sem a faixa dos controles) */
-  #game .ejs_canvas_parent { height: 100%; }
-  /* os controles flutuam SOBRE a tela */
-  #game .ejs_virtualGamepad_parent { height: 100%; }
-  #game .ejs_virtualGamepad_left { bottom: 12px; }
-  #game .ejs_virtualGamepad_right { bottom: 12px; }
-  #game .ejs_virtualGamepad_top { bottom: 168px; }
-  #game .ejs_virtualGamepad_bottom { bottom: 4px; }
-
-  /*
-    O ombro R (classe b_r) e posicionado 100px ACIMA do cluster direito. Em
-    retrato isso cai sobre a tela (visivel), mas em paisagem o cluster esta
-    colado embaixo e o scale 1.8 empurraria o R para fora do topo. Aproxima o R
-    do cluster para ele caber na tela cheia.
-  */
-  #game .b_r { top: -70px !important; }
-
-  /* PARAR flutuante, sobre o jogo */
-  #controles {
+  /* Botoes de saida flutuando sobre o jogo */
+  body.jogando #barra {
+    display: flex;
     position: fixed;
-    top: 8px;
-    left: 8px;
+    top: calc(6px + env(safe-area-inset-top, 0px));
+    right: calc(6px + env(safe-area-inset-right, 0px));
+    left: auto;
     z-index: 60;
-    gap: 6px;
+    padding: 0;
+    pointer-events: none;
   }
-  #parar { padding: 6px 10px; font-size: 11px; opacity: .85; }
-  #status { display: none; }
+  body.jogando #barra #subtitulo { display: none; }
+  body.jogando #barra #voltar { pointer-events: auto; opacity: .9; }
 }
 
-#sem-rom {
-  background: #11151c;
-  border: 1px solid #222a36;
-  border-radius: 8px;
-  padding: 16px;
-  text-align: center;
-  font-size: 13px;
-  line-height: 1.6;
-  color: #b9c3d3;
-}
-.dica { color: #8b98ad; font-size: 12px; margin-top: 8px; }
-code { background: #1a2029; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
-input[type=file] { margin-top: 10px; color: #b9c3d3; font-size: 12px; }
-
+/* ==========================================================================
+   CONTROLES (retrato)
+   ========================================================================== */
 #controles {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
+  padding-top: 4px;
 }
 #parar {
-  background: #b91c1c;
-  color: #fff;
-  border: 0;
-  border-radius: 6px;
-  padding: 9px 16px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 1px;
+  background: #b91c1c; color: #fff; border: 0; border-radius: 8px;
+  padding: 10px 16px; font-size: 12px; font-weight: 700; letter-spacing: 1px;
+  font-family: inherit; cursor: pointer;
 }
 #parar:disabled { opacity: .4; }
-#trocar {
-  background: #1d4ed8;
-  color: #fff;
-  border: 0;
-  border-radius: 6px;
-  padding: 9px 16px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 1px;
+#cheia {
+  background: var(--painel2); color: var(--texto); border: 1px solid var(--borda);
+  border-radius: 8px; padding: 10px 16px; font-size: 12px; font-weight: 700;
+  letter-spacing: 1px; font-family: inherit; cursor: pointer;
 }
-#status { font-size: 11px; color: #8b98ad; }
+#cheia:active { background: var(--acento); border-color: var(--acento); }
+#status { font-size: 11px; color: var(--fraco); }
 
-#lista { display: flex; flex-direction: column; gap: 10px; }
-#jogos { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
-.jogo {
-  background: #1a2029;
-  border: 1px solid #2b3543;
-  border-radius: 8px;
-  color: #e8ecf3;
-  padding: 14px 10px;
-  font-size: 13px;
-  font-weight: 600;
+/* ==========================================================================
+   ERRO
+   ========================================================================== */
+#erro {
+  background: var(--painel);
+  border: 1px solid var(--borda);
+  border-radius: 10px;
+  padding: 20px 16px;
   text-align: center;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #b9c3d3;
+  margin-top: 20px;
 }
-.jogo:active { background: #1d4ed8; }
-
+.dica { color: var(--fraco); font-size: 12px; margin-top: 8px; }
+code { background: #1a2029; padding: 1px 5px; border-radius: 4px; font-size: 12px; }

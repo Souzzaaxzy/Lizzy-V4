@@ -37,6 +37,83 @@ são L/R). Fica como está — mudar o idioma trocaria o resto da UI; é só ró
 que não há exceção de esquema). Verificado: sem o bloco CSS, **4 asserções
 falham**.
 
+## 🎮 EmuGames — CATALOGO no site + TELA CHEIA em rotacao (out/2026) ✅
+O dono pediu duas coisas no site (`emugames.kannonmtx.workers.dev`):
+1. o **link direto** virar um **catálogo** com todos os jogos (título
+   "EmuGames L̶i̶z̶z̶y̶" em bold, botões de categoria, tocar no jogo para jogar e
+   um **botão de voltar** no topo superior direito);
+2. ao **deitar o celular**, o jogo ficar em **tela cheia sem bugar**.
+
+### CATALOGO
+`dados/emugames/index.html` + `style.css` foram reescritos. Estrutura:
+
+- **Tela inicial** = grade de cartões (capa do GIF + nome + emoji do console).
+- **Categorias** = botões derivados do PRÓPRIO catálogo (`jogos.json`), na
+  ordem em que aparecem: ✨ Todos, 🎮 Super Nintendo, 🕹️ Arcade. Adicionar um
+  jogo de um console novo cria a aba sozinho — nada de lista paralela.
+- **Título** "EmuGames 𝐋𝐢𝐳𝐳𝐲": o bold é montado **por code point**
+  (`0x1D400 + i`, e `+0x1A` no bloco minúsculo) para o arquivo continuar
+  ASCII-safe. Literais com esses glifos corrompem em alguns editores — já
+  aconteceu neste repo (ver a armadilha de mojibake no `index.js`).
+- **Rotas por HASH** (`#/` = catálogo, `#/jogo/<id>`): funciona em host
+  estático e não exige servidor. O link antigo `?jogo=<id>` (que o bot manda
+  no card) **continua funcionando** — vira a rota nova.
+- **Botão VOLTAR** (`‹ JOGOS`) no topo superior direito.
+
+### TROCAR DE JOGO RECARREGA A PAGINA (de proposito)
+`abrirJogo()` navega (`?jogo=<id>#/jogo/<id>`) em vez de trocar no mesmo
+documento. Medido: reinjetar o `loader.js` na MESMA pagina quebra com
+`Uncaught SyntaxError: Identifier 'EJS_STORAGE' has already been declared` —
+o EmulatorJS carrega o loader **uma vez por documento**. A navegação nova
+garante um emulador limpo (e é rápido: a ROM já está no cache).
+
+### TELA CHEIA
+- **Botão** ⛶ TELA CHEIA na barra de controles. Usa a API quando disponível e
+  cai para **tela cheia de CSS** (`body.cheia`) quando o navegador bloqueia —
+  o iPhone não tem `requestFullscreen`, e o webview do WhatsApp também pode
+  recusar. O visual é o mesmo e não depende de permissão.
+- **PAISAGEM liga sozinha**: ao deitar o aparelho, `body.jogando` + o `@media
+  (orientation: landscape)` fazem a caixa do jogo cobrir o viewport, sem o
+  usuário tocar em nada. É o pedido do dono ("deitar o celular e ficar em tela
+  cheia").
+- **Reajuste do canvas**: `handleResize()` do EmulatorJS é chamado de novo no
+  `orientationchange` (2×, com atraso — ele chega ANTES do viewport novo), no
+  `resize` e no `visualViewport`, nos dois `requestAnimationFrame` seguintes.
+
+### OS DOIS BUGS QUE ISSO CORRIGIU (medidos)
+1. **Fast/Slow recortados.** O EmulatorJS posiciona esses dois botões com
+   `top: 50px` **inline**, o que os jogava para BAIXO da linha Start/Select.
+   Medido: `y=538` numa caixa que termina em `523`. Como `#game` tem
+   `overflow: hidden`, eles ficavam **invisíveis** (recortados) — em retrato e
+   em tela cheia. Correção: `top: -46px !important` (o par vai para a linha de
+   cima do cluster do meio).
+   > **Armadilha de medição**: comparar só com o *viewport* não pega isso — o
+   > botão está dentro da tela e mesmo assim não aparece. A comparação tem de
+   > ser com a **caixa do container** (por causa do `overflow: hidden`).
+2. **`ErrnoError` ao trocar de jogo.** O EmulatorJS tem um handler PRÓPRIO de
+   `beforeunload` que chama `callEvent('exit')` → `unmount` enquanto `started`
+   for `true`. Depois do nosso teardown (que já desmontou), ele remontava o FS
+   num estado desfeito. Correções: o nosso `parar()` marca `emu.started =
+   false` **e** não há teardown em `pagehide`/`freeze` (desmontar durante a
+   navegação é a causa; a página vai ser descartada mesmo). O áudio é tratado
+   no `visibilitychange` e a retomada no `pageshow`.
+
+### Testes
+`tests/topgear.test.js` — **17 testes / 255 asserções**. As asserções de
+paisagem foram recalibradas (`1.24`/`1.62`, o cluster do meio precisa caber) e
+ganharam: o Fast/Slow **não** pode voltar a `top: 50px`, e **não** pode haver
+`freeze`/`pagehide` desmontando o emulador.
+
+### Verificado no navegador de verdade
+Chromium headless + CDP, viewport de celular e UA mobile, medindo a geometria
+dos botões em relação à **caixa do jogo** (não ao viewport):
+- catálogo: 16 cartões, 3 abas, 16 capas carregadas, 2 colunas em 390px;
+- filtro "Arcade" → só Metal Slug e KOF '97;
+- entrar no jogo → `started: true`, hash correto, botão VOLTAR no topo direito;
+- **retrato / paisagem / tela cheia → `RECORTADOS: []`** (zero botão cortado);
+- fluxos (catálogo→jogo, jogo→jogo pela URL, voltar, trocar de jogo): **zero
+  exceções**.
+
 ## 🎮 EmuGames — MULTIPLAYER (netplay) REMOVIDO (out/2026) ❌
 O dono pediu a remoção: **gastava muita memória do bot** para o que entregava.
 O netplay do EmulatorJS é **experimental** (`//control syncing - broken`) e exigia

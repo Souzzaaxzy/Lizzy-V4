@@ -5,7 +5,10 @@
  */
 
 import axios from 'axios';
-import { parseHTML } from 'linkedom';
+// Import PREGUICOSO: `linkedom` custa ~18 MB de RSS no boot.
+async function parseHTMLLazy(html) {
+  return (await import('linkedom')).parseHTML(html);
+}
 
 // Configurações
 const CONFIG = {
@@ -166,7 +169,7 @@ class ModrinthClient {
       url: `/plugins?q=${encodeURIComponent(query)}`
     });
 
-    return parseHTML(response.data).document;
+    return (await parseHTMLLazy(response.data)).document;
   }
 }
 

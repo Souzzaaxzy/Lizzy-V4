@@ -4,7 +4,10 @@
  */
 
 import axios from 'axios';
-import { parseHTML } from 'linkedom';
+// Import PREGUICOSO: `linkedom` custa ~18 MB de RSS no boot.
+async function parseHTMLLazy(html) {
+  return (await import('linkedom')).parseHTML(html);
+}
 
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
@@ -59,7 +62,7 @@ async function search(query, maxResults = 10) {
       timeout: 60000
     });
 
-    const { document } = parseHTML(response.data);
+    const { document } = await parseHTMLLazy(response.data);
     const results = [];
 
     document.querySelectorAll('.result').forEach((element, index) => {

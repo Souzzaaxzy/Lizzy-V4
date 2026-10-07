@@ -55,4 +55,5 @@ data/apk-tmp/
 *.part
 # Diretório antigo (migrado para data/); mantido ignorado para não sobrar lixo.
 dados/database/apk-cache/
+dados/database/tmp/
 

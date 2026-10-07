@@ -144,11 +144,16 @@ await test('index.html: player multi-jogo com os caminhos certos', () => {
   ok(/transform:\s*scale\(var\(--btn-scale\)\)/.test(css), 'escala o cluster direito (botoes)');
   // Paisagem: tela cheia + controles +40px.
   ok(/@media\s*\(orientation:\s*landscape\)/.test(css), 'tem o modo paisagem');
-  ok(/orientation:\s*landscape[\s\S]*--joy-scale:\s*1\.32/.test(css), 'paisagem: dpad/analogico +40px (1.32)');
-  ok(/orientation:\s*landscape[\s\S]*--btn-scale:\s*1\.8/.test(css), 'paisagem: botoes +40px (1.8)');
+  // Em paisagem o jogo ocupa a tela sozinho e os controles crescem. Os valores
+  // foram recalibrados para o cluster do meio caber (ver o Fast/Slow abaixo).
+  ok(/orientation:\s*landscape[\s\S]*--joy-scale:\s*1\.24/.test(css), 'paisagem: dpad/analogico maior (1.24)');
+  ok(/orientation:\s*landscape[\s\S]*--btn-scale:\s*1\.62/.test(css), 'paisagem: botoes maiores (1.62)');
   ok(/orientation:\s*landscape[\s\S]*position:\s*fixed/.test(css), 'paisagem: o player ocupa a tela cheia');
-  ok(/orientation:\s*landscape[\s\S]*header\s*\{\s*display:\s*none/.test(css), 'paisagem: esconde o cabecalho');
-  ok(/orientation:\s*landscape[\s\S]*\.b_r\s*\{\s*top:\s*-70px/.test(css), 'paisagem: aproxima o ombro R (nao sai da tela)');
+  ok(/orientation:\s*landscape[\s\S]*#barra,\s*#controles\s*\{\s*display:\s*none/.test(css), 'paisagem: esconde a barra/cont roles');
+  ok(/\.b_r\s*\{\s*top:\s*-70px/.test(css), 'aproxima o ombro R (nao sai da tela)');
+  // O bug relatado: o Fast/Slow (top:50px INLINE) caia FORA da caixa do jogo e
+  // era recortado pelo overflow:hidden. A regra sobe os dois.
+  ok(/b_speed_fast[\s\S]{0,120}b_speed_slow\s*\{\s*top:\s*-46px/.test(css), 'Fast/Slow sobem para dentro da caixa (nao sao recortados)');
   // Diamante dos botoes: padrao unico, IGUAL AO ARCADE (pedido do dono):
   //   topo = Y | esquerda = X | direita = B | baixo = A
   // O EmulatorJS muda o layout por controlScheme (snes X-topo, arcade Y-topo);
@@ -159,7 +164,13 @@ await test('index.html: player multi-jogo com os caminhos certos', () => {
   ok(/\.b_a\s*\{\s*left:\s*40px\s*!important;\s*top:\s*80px\s*!important/.test(css), 'diamante: A embaixo');
   ok(!css.includes(':not(.cs_snes)'), 'diamante: vale para TODOS os esquemas (sem excecao)');
   ok(html.includes("callEvent('exit')"), 'para o emulador pela API real (callEvent exit)');
-  ok(html.includes('freeze'), 'trata o congelamento do webview');
+  // NAO ha teardown em unload/freeze: desmontar durante a navegacao faz o
+  // runtime do EmulatorJS estourar (medido). O audio e' tratado no
+  // `visibilitychange` e a retomada no `pageshow`.
+  ok(!/addEventListener\(\s*'freeze'/.test(html), 'nao desmonta o emulador no freeze (evita ErrnoError)');
+  ok(!/addEventListener\(\s*'pagehide'/.test(html), 'nao desmonta o emulador no pagehide');
+  ok(/visibilitychange/.test(html), 'trata a saida da aba pelo visibilitychange');
+  ok(/emu\.started = false/.test(html), 'marca o emulador como encerrado (evita remontar o FS)');
   ok(html.includes('pageshow'), 'reage ao voltar para a pagina');
 });
 

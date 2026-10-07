@@ -1,5 +1,7 @@
-// Import jimp first to ensure image processing library is available for baileys
-import 'jimp';
+// O `jimp` NAO e mais importado aqui de proposito: a propria fork
+// (`messages-media.js`) faz `import('jimp')` sozinha, sob demanda, quando
+// precisa processar imagem. Carregar no topo custava ~24 MB de RSS em TODO
+// boot do bot, para um caminho que quase nunca e usado (o padrao e o sharp).
 import {
   downloadContentFromMessage,
   generateWAMessageFromContent,
@@ -37,7 +39,6 @@ import { resolverNomeContato, resolverNomesContatos, acharParticipantePorId, nom
 import { converterGifParaMp4 } from './utils/gifMedia.js';
 import { figurinhaParaStatus } from './utils/stickerStatus.js';
 import { normalizarIdGrupo, ehJidCanal, buildFollowChannelContent, fotoDoMetadataNewsletter, normalizarGrupos, adicionarGrupo, removerGrupo } from './utils/canalDivulgacao.js';
-import sharp from 'sharp';
 import * as ghostDetection from './utils/ghostDetection.js';
 import { detectarPaymentRespondida, alvoDaRemocao } from './utils/quotedPayment.js';
 import { isPaymentContent, buildPaymentDeleteKeys, buildPaymentEditContent, resolveParticipantPn, isBotAuthor } from './utils/deletePayment.js';
@@ -1107,7 +1108,6 @@ import { exec, execSync, spawn } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 const execAsync = promisify(exec);
-import { parseHTML } from 'linkedom';
 import axios from 'axios';
 import pathz from 'path';
 import fs from 'fs';
@@ -15072,7 +15072,8 @@ switch (command) {
             headers: {
               'User-Agent': 'Mozilla/5.0 (compatible; Bot/1.0)'
             }
-          }).then((response) => {
+          }).then(async (response) => {
+            const { parseHTML } = await import('linkedom');
             const { document } = parseHTML(response.data);
             document.querySelectorAll('script, style, noscript, iframe').forEach(el => el.remove());
             const cleanText = document.body.textContent.replace(/\s+/g, ' ').trim();
@@ -30465,7 +30466,7 @@ packname: `${nomebot}`,
               convertida = await figurinhaParaStatus(stickerBuf, {
                 stickerToMp4,
                 isAnimatedWebP,
-                sharpLib: sharp,
+                sharpLib: (await import('sharp')).default,
               });
             } catch (convErr) {
               console.error('[STATUSGRUPO] Falha ao converter figurinha:', convErr?.message || convErr);

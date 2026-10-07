@@ -6,7 +6,12 @@
  */
 
 import { scrapingClient } from '../../utils/httpClient.js';
-import { DOMParser } from 'linkedom';
+// Import PREGUICOSO: `linkedom` custa ~18 MB de RSS no boot.
+let _DOMParser = null;
+async function getDOMParser() {
+  if (!_DOMParser) _DOMParser = (await import('linkedom')).DOMParser;
+  return _DOMParser;
+}
 
 // Configurações
 const CONFIG = {
@@ -84,11 +89,23 @@ class APKCache {
 // Parser de APK
 class APKParser {
   constructor() {
-    this.parser = new DOMParser();
+    // O `linkedom` (~18 MB) entra na primeira vez que se parseia algo, nao no
+    // boot do bot.
+    this.parser = null;
   }
 
-  parseDocument(html) {
-    return this.parser.parseFromString(html, 'text/html');
+  /** Garante o parser carregado (o modulo do linkedom e preguiçoso). */
+  async garantirParser() {
+    if (!this.parser) {
+      const DOMParser = await getDOMParser();
+      this.parser = new DOMParser();
+    }
+    return this.parser;
+  }
+
+  async parseDocument(html) {
+    const parser = await this.garantirParser();
+    return parser.parseFromString(html, 'text/html');
   }
 
   parseSearchResults(document) {
@@ -147,7 +164,7 @@ class APKClient {
         timeout: CONFIG.API.TIMEOUT,
         headers: CONFIG.API.HEADERS
       })).data;
-      return this.parser.parseDocument(response);
+      return await this.parser.parseDocument(response);
     } catch (error) {
       if (attempt < CONFIG.RETRY.MAX_ATTEMPTS) {
         await new Promise(resolve => setTimeout(resolve, CONFIG.RETRY.DELAY * attempt));

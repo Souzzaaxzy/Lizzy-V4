@@ -2,7 +2,6 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { spawn } from 'child_process';
-import sharp from 'sharp';
 import { DATABASE_DIR } from './paths.js';
 import { extractText, resolveMedia } from './viewOnce.js';
 
@@ -129,6 +128,7 @@ export function caminhoMidia(arquivo) {
 async function gerarCapa(numero, tipo, texto) {
   const nome = `card-${numero}-${Date.now()}-${crypto.randomBytes(2).toString('hex')}.png`;
   fs.mkdirSync(CAPA_DIR, { recursive: true });
+  const { default: sharp } = await import('sharp');
   await sharp(Buffer.from(svgCapa(tipo, numero, texto))).png().toFile(path.join(CAPA_DIR, nome));
   return path.join('reposts-cards', nome);
 }
