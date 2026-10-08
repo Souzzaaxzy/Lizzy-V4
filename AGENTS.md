@@ -10330,3 +10330,55 @@ Pedido: aumentar o botaozinho do meio do analogico, **sem passar do anel cinza**
 (< 1) do `--stick`, ele fica ~22% maior e **nunca ultrapassa o cinza** — medido
 em 320/390/430/844/768: `botao/anel = 0.55` e `botao <= anel` em todos.
 `tests/topgear.test.js` — **25 testes / 386 asserções**. Site: `3835d8a`; bot: `7da66f1`.
+
+
+## 🎮 EmuGames — REDESIGN do CATÁLOGO (biblioteca/launcher) (out/2026) ✅
+Pedido: transformar a tela de catálogo numa **biblioteca de jogos retrô moderna**,
+sem quebrar nada (emulador/ROM/controles/rotas intactos).
+
+### Análise antes de mexer (o que ja existia e foi REUTILIZADO)
+- `montarFiltros`/`montarGrid` (render do catalogo), `abrirJogo(id)` (navega e
+  inicia o emulador), `CONSOLES` (nome/emoji por console), `catalogoJogos`
+  (vem do `jogos.json`), rota por hash e `localStorage`.
+- **Não existia** busca nem historico de recentes: criados do zero, no mesmo
+  estilo do modulo.
+
+### O que mudou (so `emugames/index.html` + `style.css`)
+1. **Ordem nova**: cabecalho -> categorias -> **busca** -> **recentes** ->
+   **todos os jogos**.
+2. **Cards novos**: capa **quadrada** (`aspect-ratio:1/1`, `object-fit:cover`
+   — nao distorce), nome + **plataforma** (nome do console), bordas
+   arredondadas, sombra, gradiente sutil na base e efeito de toque
+   (`:active` scale/brilho; `:hover` elevacao **so** onde ha mouse, via
+   `@media (hover:hover)`).
+3. **Busca em tempo real**: `#busca` + `input` -> `renderCatalogo()`. Filtra
+   pelo **nome, console e id**, ignora maiusculas/acentos (`normalize('NFD')`)
+   e **trabalha junto** com a categoria. Sem resultados ->
+   "😕 Nenhum jogo encontrado".
+4. **Jogados recentemente**: `#recentes` (linha com `overflow-x:auto`, sem
+   quebrar), persistido em `localStorage['emugames.recentes']`, **sem duplicar**
+   (reabrir sobe ao topo), **teto `RECENTES_MAX=8`**, **oculto** quando vazio ou
+   durante a busca. **Registrado no `abrirJogo`** (so quando o jogo e ABERTO),
+   por **id estavel**.
+5. **Refatoracao util**: um **`montarCard(j, compacto)`** so (o mesmo card serve
+   para a grade e para os recentes — nada duplicado) e um **`renderCatalogo()`**
+   unico (categoria + busca), no lugar de `montarGrid`.
+6. **Grid responsivo** (`repeat(auto-fill, minmax(min(140px,100%),1fr))`) e
+   **safe areas** no `body` (`env(safe-area-inset-*)`). Categorias ja rolavam.
+
+### Verificado no navegador (headless, site real via http.server)
+- **21 jogos** carregam em todos os tamanhos; nenhum removido/hardcoded.
+- Categoria: Todos=21, SNES=19, Arcade=2. SNES+"mario"=3. Busca vazia ->
+  mensagem visivel.
+- Recentes: persistidos apos recarregar, **dedup + reordena** (clicar no 2o
+  sobe ao topo), registrado no clique real (`localStorage=["topgear2"]`).
+- **Clique no card**: navega para `?jogo=<id>#/jogo/<id>` (inicia o jogo) —
+  comportamento inalterado.
+- **Grid por largura**: 320/360/390/412/480 -> **2 colunas**; 600 -> 3;
+  768 -> 4; 1024 -> 6; 1280 -> 7; 1920 -> 7 (cards maiores). **Sem overflow
+  horizontal** na pagina.
+
+### Testes
+`tests/topgear.test.js` — **26 testes / 414 asserções, 0 falhas** (suite nova
+"catalogo: busca em tempo real + recentes + cards", 28 asserções) + assert de TV
+ajustado (`minmax(230px)`). Site: commit `7ba1ff9`; bot: `43aaae0`.
