@@ -359,6 +359,60 @@ await test('controle: nome AMIGAVEL (nunca o IP/MAC do aparelho)', () => {
   ok(/lista\.map\(\(g\) => esc\(g\.nome\)\)/.test(html), 'mostra o nome na lista de conectados');
 });
 
+await test('catalogo: busca em tempo real + recentes + cards', () => {
+  if (!SITE) return pular('site');
+  const html = fs.readFileSync(path.join(SITE, 'index.html'), 'utf-8');
+  const css = fs.readFileSync(path.join(SITE, 'style.css'), 'utf-8');
+
+  // Estrutura: a ordem pedida (categorias -> busca -> recentes -> todos).
+  const iFiltros = html.indexOf('id="filtros"');
+  const iBusca = html.indexOf('id="busca"');
+  const iRecentes = html.indexOf('id="recentes"');
+  const iGrid = html.indexOf('id="grid"');
+  ok(iFiltros > -1 && iBusca > iFiltros && iRecentes > iBusca && iGrid > iRecentes,
+    'ordem: categorias -> busca -> recentes -> todos os jogos');
+  ok(/id="busca"[^>]*type="search"/.test(html), 'a busca e um <input type=search>');
+  ok(/Pesquisar jogos/.test(html), 'placeholder da busca');
+
+  // Pesquisa: tempo real, sem recarregar, junto com a categoria.
+  ok(/pesquisaEl\.addEventListener\('input'/.test(html), 'busca filtra enquanto digita');
+  ok(/function renderCatalogo/.test(html), 'um unico render para grid (categoria+busca)');
+  ok(/function jogosFiltrados/.test(html)
+     && /filtroAtual !== 'todos' && j\.console !== filtroAtual/.test(html), 'busca respeita a categoria');
+  ok(/normaliza\(j\.nome\)\.includes\(termo\)/.test(html), 'procura pelo nome');
+  ok(/toLowerCase\(\)\.normalize\('NFD'\)/.test(html), 'ignora maiusculas/acentos');
+  ok(/Nenhum jogo encontrado/.test(html), 'mensagem amigavel quando nao ha resultados');
+
+  // Recentes: localStorage, sem duplicar, com teto, registrado ao ABRIR o jogo.
+  ok(/emugames\.recentes/.test(html), 'historico persistente (localStorage)');
+  ok(/function registrarRecente/.test(html) && /RECENTES_MAX/.test(html), 'registra recente com teto');
+  ok(/\[jogo\.id\]\.concat\(lerRecentes\(\)\.filter/.test(html), 'reabrir sobe ao topo sem duplicar');
+  ok(/function abrirJogo\(jogo\)[\s\S]{0,200}registrarRecente\(jogo\)/.test(html),
+    'registra SO quando o jogo e aberto (nao ao renderizar)');
+  ok(/recentesEl\.hidden = ids\.length === 0/.test(html), 'esconde a secao quando nao ha recentes');
+  ok(/montarCard\(j, true\)/.test(html), 'recentes usam o mesmo card (compacto)');
+  ok(/buscaTermo\.trim\(\)\)/.test(html), 'esconde os recentes durante a pesquisa');
+
+  // Nao hardcoda jogos: continua vindo do jogos.json.
+  ok(/fetch\('\.\/jogos\.json'/.test(html), 'catalogo continua vindo do jogos.json');
+
+  // Cards: capa com proporcao + object-fit + plataforma, sem distorcer.
+  ok(/\.capa\s*\{[^}]*aspect-ratio:\s*1\s*\/\s*1/s.test(css), 'a capa tem proporcao consistente');
+  ok(/\.capa img\s*\{[^}]*object-fit:\s*cover/s.test(css), 'a capa nao distorce (object-fit)');
+  ok(/\.card\s*\{[^}]*border-radius:\s*14px/s.test(css), 'card arredondado');
+  ok(/\.card\s*\{[^}]*box-shadow/s.test(css), 'card com sombra');
+  ok(/\.card \.plat\s*\{/.test(css) && /\.card \.nome\s*\{/.test(css), 'card tem nome + plataforma');
+  ok(/\.capa::after\s*\{[^}]*linear-gradient/s.test(css), 'gradiente na base da capa (leitura)');
+  ok(/\.card:active\s*\{[^}]*transform:\s*scale/s.test(css), 'efeito ao tocar (funciona no celular)');
+
+  // Grid responsivo + secoes com rolagem horizontal em vez de overflows.
+  ok(/grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(min\(140px/.test(css),
+    'grid responsivo (minmax/auto-fill), nao colunas fixas');
+  ok(/#recentes-lista\s*\{[^}]*overflow-x:\s*auto/s.test(css), 'recentes rolam na horizontal (1 linha)');
+  ok(/#recentes-lista\s*\{[^}]*display:\s*flex/s.test(css), 'recentes em container horizontal');
+  ok(/#filtros\s*\{[^}]*overflow-x:\s*auto/s.test(css), 'categorias rolam na horizontal');
+});
+
 await test('TV: foco visivel para controle remoto + alvos maiores', () => {
   if (!SITE) return pular('site');
   const css = fs.readFileSync(path.join(SITE, 'style.css'), 'utf-8');
@@ -370,7 +424,7 @@ await test('TV: foco visivel para controle remoto + alvos maiores', () => {
   ok(/\.card:focus-visible[\s\S]{0,400}outline:\s*3px/.test(css), 'o foco e bem visivel');
   ok(/\.card:focus-visible\s*\{[^}]*transform:\s*scale/.test(css), 'o cartao em foco cresce');
   ok(/@media\s*\(min-width:\s*1400px\)/.test(css), 'trata tela grande (TV)');
-  ok(/min-width:\s*1400px[\s\S]{0,200}minmax\(220px/.test(css), 'cartoes maiores na TV');
+  ok(/min-width:\s*1400px[\s\S]{0,200}minmax\(230px/.test(css), 'cartoes maiores na TV');
   // Os alvos ja sao <button> (focaveis de fabrica) -- sem isso o controle
   // remoto nao teria o que percorrer.
   ok(/<button[^>]*class="card"/.test(html) || /createElement\('button'\)/.test(html),
