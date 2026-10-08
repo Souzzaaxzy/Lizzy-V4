@@ -10288,3 +10288,36 @@ D-pad↔analogico >= 13px. Screenshot + pixels: `linhas-com-ambos=0`.
 documentando o **ponto 0x0** (`b_stick > div { top: 100% }`) e os ajustes
 (`--dpad-up 20px`, `--stick-right 25px`, `--stick` 1.15x, `--btn-scale` 1.55,
 cap 46vmin/34vh). Site: commit `610bb27`; bot: `09cbc01`.
+
+
+### 🎨 Analógico (cor), rótulos ESQ/DIR e ROTA do catálogo (out/2026) ✅
+Três pedidos do dono no mesmo lote.
+
+**1. Cor do analógico.** Só cor — nada novo foi adicionado (o `.back` e o
+`.front` ja existiam):
+- **anel ao redor**: cinza **opaco** (`background-color: #8b8b8b`, `opacity: 1`,
+  `background-image: none`) — antes vinha o gradiente/vermelho do nipplejs;
+- **joystick no meio**: **preto** (`#000`) com **bolinhas cinzas bem pequenas**
+  (`background-image: radial-gradient(rgba(160,160,160,.85) 1px, transparent 1.5px)`,
+  `background-size: 7px 7px`).
+
+**2. Os dois rótulos dos cantos ("DIRETA"/"ESQUERDA").** Não são do site: são os
+**ombros L/R** do EmulatorJS. O `pt-BR` traduz `L -> ESQ` e `R -> DIR` (confirmado
+no `localization/pt-BR.json`), e o handler do EJS faz `innerText = localization('L')`.
+Removidos por CSS: `#game .b_l, #game .b_r { display: none !important; }`.
+(Não há outros "JOGOS" nos cantos — só o botão `‹ JOGOS` do topo direito, que
+continua.)
+
+**3. Rota presa no jogo ao voltar.** O `voltarAoCatalogo()` fazia `irPara('#/')`,
+trocando só o hash — mas o `?jogo=<id>` FICAVA na URL, então a barra do navegador
+ainda mostrava a rota do jogo mesmo na tela de catálogo (o `?jogo` é só do BOOT,
+pra injetar o loader uma vez). Correção: `voltarAoCatalogo()` e o BOOT normalizam
+a URL para `location.pathname + '#/'` (navegação nova) quando há `?jogo` e não se
+está num jogo. O link antigo `?jogo=id` continua entrando no jogo; o botão
+`‹ JOGOS` agora limpa de verdade.
+**Medido** (harness de rota com iframe, `--dump-dom`): sair pelo JOGOS ->
+`hash='#/' search='' tela=CATALOGO` (antes: `search='?jogo=topgear2'`).
+
+Testes: `tests/topgear.test.js` — **25 testes / 385 asserções, 0 falhas** (novos:
+anel cinza opaco, joystick preto com radial-gradient, `.b_l/.b_r` ocultos, e as
+duas regras de normalização da rota). Site: commit `94b634d`; bot: `8c77a9a`.
