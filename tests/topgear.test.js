@@ -171,14 +171,14 @@ await test('index.html: player multi-jogo com os caminhos certos', () => {
   ok(/height:\s*calc\(.*var\(--ctl\)\)/.test(css), 'a caixa reserva a faixa dos controles');
   ok(/ejs_canvas_parent[^}]*height:\s*calc\(100% - var\(--ctl\)\)/s.test(css), 'a tela ocupa so o andar de cima');
   // Responsivo: tamanho sai do menor eixo do viewport (vmin/vh) com teto, sem px fixo.
-  ok(/--lado:\s*min\(clamp\([^)]*vh[^)]*\),\s*\d+vmin\)/.test(css), 'o tamanho base vem do viewport (vh) com teto em vmin');
+  ok(/--lado:\s*min\(clamp\([^)]*vh[^)]*\),\s*46vmin,\s*34vh\)/.test(css), 'o tamanho base vem do viewport (vh) com teto em vmin/vh');
   ok(/--dpad:\s*calc\(var\(--lado\)/.test(css), 'o D-pad e derivado do tamanho base');
-  ok(/--stick:\s*var\(--lado\)/.test(css), 'o analogico usa o tamanho base');
+  ok(/--stick:\s*calc\(var\(--lado\)\s*\*\s*1\.15\)/.test(css), 'o analogico e ~15% maior que a base');
   ok(/--knob:\s*min\(clamp\([^)]*vh[^)]*\),\s*\d+vmin\)/.test(css), 'o joystick interno e responsivo (clamp + teto)');
   ok(/--gap:\s*clamp\([^)]*vmin[^)]*\)/.test(css), 'o vao entre os dois e responsivo (vmin)');
   ok(!/--joy-scale/.test(css), 'nao ha mais escala fixa do cluster (era px fixo)');
   ok(!/--stick-scale/.test(css), 'nao ha mais escala fixa do analogico (era px fixo)');
-  ok(/--btn-scale:\s*1\.4/.test(css), 'botoes +20px em retrato (--btn-scale 1.4)');
+  ok(/--btn-scale:\s*1\.55/.test(css), 'botoes maiores (--btn-scale 1.55)');
   ok(/transform:\s*scale\(var\(--btn-scale\)\)/.test(css), 'escala o cluster direito (botoes)');
   // Paisagem: tela cheia + controles +40px.
   ok(/@media\s*\(orientation:\s*landscape\)/.test(css), 'tem o modo paisagem');
@@ -238,9 +238,12 @@ await test('gamepad: ANALOGICO + D-PAD em todos os jogos', () => {
   ok(/\.ejs_virtualGamepad_left\s+\.b_dpad\s*\{[^}]*top:\s*0\s*!important/s.test(css)
      && /\.ejs_virtualGamepad_left\s+\.b_dpad\s*\{[^}]*width:\s*var\(--dpad\)/s.test(css),
     'o D-pad fica no TOPO da coluna, com a propria caixa');
-  ok(/\.ejs_virtualGamepad_left\s+\.b_stick\s*\{[^}]*bottom:\s*0\s*!important/s.test(css)
-     && /\.ejs_virtualGamepad_left\s+\.b_stick\s*\{[^}]*width:\s*var\(--stick\)/s.test(css),
-    'o analogico fica na BASE da coluna (abaixo do D-pad), com a propria caixa');
+  // O analogico e' um PONTO (0x0) na base da coluna, deslocado 25px a direita.
+  ok(/\.ejs_virtualGamepad_left\s+\.b_stick\s*\{[^}]*bottom:\s*calc\(var\(--stick\)/s.test(css)
+     && /\.ejs_virtualGamepad_left\s+\.b_stick\s*\{[^}]*width:\s*0\s*!important/s.test(css),
+    'o analogico e um PONTO na base da coluna (abaixo do D-pad)');
+  ok(/--stick-right:\s*25px/.test(css) && /--dpad-up:\s*20px/.test(css),
+    'ajustes do dono: D-pad 20px p/ cima e analogico 25px p/ a direita');
   // A caixa da COLUNA tem a altura do conjunto (--stack) -> preserva o --gap.
   ok(/\.ejs_virtualGamepad_left\s*\{[^}]*width:\s*var\(--stick\)/s.test(css)
      && /--stack:\s*calc\(var\(--dpad\)[^)]*var\(--stick\)[^)]*var\(--gap\)/.test(css),
@@ -253,7 +256,9 @@ await test('gamepad: ANALOGICO + D-PAD em todos os jogos', () => {
   ok(/\.b_stick\s+\.front\s*\{[^}]*width:\s*var\(--knob\)/s.test(css),
     'o joystick interno usa --knob');
   // O nipple traz `top:100%` inline; o CSS o leva ao CENTRO da caixa .b_stick.
-  ok(/\.b_stick\s*>\s*div\s*\{[^}]*top:\s*50%\s*!important/s.test(css), 'o nipple fica no centro da caixa');
+  // O nipplejs calcula o centro como `rect da zona + top:100%`; o ponto 0x0
+  // mantem esse centro alinhado ao desenho (era o bug das direcoes).
+  ok(/\.b_stick\s*>\s*div\s*\{[^}]*top:\s*100%\s*!important/s.test(css), 'o nipple ancora no ponto da zona (top:100%)');
   ok(/--stick-scale/.test(css) === false, 'sem escala fixa do analogico (era px fixo)');
   ok(/\.b_l\s*\{\s*top:\s*-22px/.test(css), 'o ombro L nao sai da caixa com o cluster maior');
 });
