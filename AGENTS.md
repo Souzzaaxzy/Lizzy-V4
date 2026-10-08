@@ -10321,3 +10321,12 @@ está num jogo. O link antigo `?jogo=id` continua entrando no jogo; o botão
 Testes: `tests/topgear.test.js` — **25 testes / 385 asserções, 0 falhas** (novos:
 anel cinza opaco, joystick preto com radial-gradient, `.b_l/.b_r` ocultos, e as
 duas regras de normalização da rota). Site: commit `94b634d`; bot: `8c77a9a`.
+
+
+#### Botao do meio do joystick um pouco maior (out/2026) ✅
+Pedido: aumentar o botaozinho do meio do analogico, **sem passar do anel cinza**.
+`--knob` deixou de ser um `clamp` proprio e virou **proporcional ao anel**:
+`--knob: calc(var(--stick) * 0.55)` (era ~0.45 do anel). Por ser uma fracao
+(< 1) do `--stick`, ele fica ~22% maior e **nunca ultrapassa o cinza** — medido
+em 320/390/430/844/768: `botao/anel = 0.55` e `botao <= anel` em todos.
+`tests/topgear.test.js` — **25 testes / 386 asserções**. Site: `3835d8a`; bot: `7da66f1`.
