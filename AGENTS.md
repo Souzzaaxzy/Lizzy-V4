@@ -10239,3 +10239,52 @@ Botões A/B/X/Y, Start/Select, ombros L/R, diamante arcade, Fast/Slow, o mapeame
 dos índices (4..7 para D-pad e analógico), `gamepadDoJogo` e o motor dos jogos.
 Arquivos: `emugames/style.css` (commit `b7e62d4`) + `tests/topgear.test.js`
 (commit `7cde43a`).
+
+
+### 🎯 Analógico só respondia para BAIXO — causa raiz (out/2026) ✅
+Relato do dono: o analogico so movia para **baixo**; cima/esquerda/direita nao.
+
+**Causa RAIZ (MEDIDA, nao suposta):** o `.b_stick` virou uma caixa COM tamanho
+(`var(--stick)`) na correcao anterior. O nipplejs calcula o **centro de input**
+como `rect da zona + top:100%` (ver `createNipple`/`onstart` no `nipplejs.js`) —
+com uma caixa de tamanho, `top:100%` e' a **borda INFERIOR** da caixa, e nao o
+centro do desenho. O `.back` (circulo visivel) e' centralizado no meio (pelo
+`left/top:50%`), entao o **centro de input ficou deslocado para baixo** do centro
+visivel. Efeito: um arrasto horizontal era lido como diagonal (ex.: esquerda ->
+143 graus, que cai no quadrante de CIMA+ESQUERDA); "para baixo" continuava 270.
+
+**Medicao** (harness com o nipplejs REAL, `--dump-dom` + `getBoundingClientRect`):
+- 390x844: esquerda -> 180 graus (LEFT) ✓ (nao reproduzia)
+- **430x932: esquerda -> 143 graus (UP,LEFT) ✗** e direita -> 37 graus
+- **412x915: esquerda -> 155 ✗ / direita -> 25 (quase UP)**
+
+Reproduzia **dependendo do tamanho do bloco** — por isso parecia
+"so uma direcao funciona".
+
+**Correcao:** o `.b_stick` voltou a ser um **PONTO (0x0)**, como o EmulatorJS
+espera (o cluster padrao tambem e' um ponto). Posicionado no **centro visual** do
+analogico (`left: calc(50% + 25px)`; `bottom: calc(var(--stick) * 0.5)`) e o
+nipple ancora com `top:100%` (= o proprio ponto). Assim **centro de input =
+centro desenhado** e as 4 direcoes funcionam em qualquer tamanho. Verificado em
+390/412/430/360/768: `up=90, down=270, left=180, right=0/360` em todos.
+
+### Ajustes pedidos pelo dono na mesma rodada
+- **D-pad +20px para cima** (`--dpad-up: 20px` → `transform: translateY(-20px)`).
+- **Analógico +25px para a direita** (`--stick-right: 25px`).
+- **Analógico ~15% maior** (`--stick: calc(var(--lado) * 1.15)`).
+- **Botões redondos um pouco maiores** (`--btn-scale 1.4 → 1.55`).
+- O **cap do tamanho** foi ajustado para o conjunto maior caber em paisagem
+  curta: `--lado: min(clamp(150px, 24vh, 225px), 46vmin, 34vh)`.
+
+**Sem conflito de novo**: o D-pad e o analogico continuam em **caixas separadas**
+(D-pad ancorado no topo da coluna, analogico na base), e o deslocamento do
+analogico e' horizontal (para a direita) — nao invade o D-pad. Medido em **15
+viewports** (portrait/landscape/tela cheia/girado/tablet/desktop/teclado):
+**sobreposicao 0**, nada fora da tela, tudo dentro da caixa do jogo, e o vao
+D-pad↔analogico >= 13px. Screenshot + pixels: `linhas-com-ambos=0`.
+
+### Testes
+`tests/topgear.test.js` — **25 testes / 378 asserções, 0 falhas**. Assert novo
+documentando o **ponto 0x0** (`b_stick > div { top: 100% }`) e os ajustes
+(`--dpad-up 20px`, `--stick-right 25px`, `--stick` 1.15x, `--btn-scale` 1.55,
+cap 46vmin/34vh). Site: commit `610bb27`; bot: `09cbc01`.
