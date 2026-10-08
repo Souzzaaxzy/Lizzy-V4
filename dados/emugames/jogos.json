@@ -149,6 +149,51 @@
         "kof97.zip.p1",
         "kof97.zip.p2"
       ]
+    },
+    {
+      "id": "bsmario3",
+      "nome": "BS Super Mario Collection 3",
+      "emoji": "🍄",
+      "console": "snes",
+      "capa": "bsmario3.gif",
+      "descricao": "Jogo Satellaview (BS-X) com as fases do Super Mario Bros. classico: corra, pule e coma cogumelos para salvar o reino.",
+      "rom": "jogos/snes/bsmario3.smc"
+    },
+    {
+      "id": "dkc",
+      "nome": "Donkey Kong Country",
+      "emoji": "🐒",
+      "console": "snes",
+      "capa": "dkc.gif",
+      "descricao": "Donkey e Diddy Kong atras do bando do King K. Rool: fases com graficos pre-renderizados, barris, minas e plataformas.",
+      "rom": "jogos/snes/dkc.smc"
+    },
+    {
+      "id": "powerrangers",
+      "nome": "Mighty Morphin Power Rangers",
+      "emoji": "⚡",
+      "console": "snes",
+      "capa": "powerrangers.gif",
+      "descricao": "Os cinco Rangers contra Rita Repulsa: beat 'em up de porrada com Megazord no final de cada fase.",
+      "rom": "jogos/snes/powerrangers.sfc"
+    },
+    {
+      "id": "turtles",
+      "nome": "TMNT IV: Turtles in Time",
+      "emoji": "🐢",
+      "console": "snes",
+      "capa": "turtles.gif",
+      "descricao": "As Tartarugas Ninja viajam no tempo para enfrentar o Shredder: um dos melhores beat 'em up do SNES.",
+      "rom": "jogos/snes/turtles.sfc"
+    },
+    {
+      "id": "umk3",
+      "nome": "Ultimate Mortal Kombat 3",
+      "emoji": "🐉",
+      "console": "snes",
+      "capa": "umk3.gif",
+      "descricao": "A versao definitiva do MK3: elenco completo, Kombat Kodes, Brutalities e os fatalities classicos.",
+      "rom": "jogos/snes/umk3.sfc"
     }
   ]
 }

@@ -236,6 +236,23 @@
     });
   }
 
+  /**
+   * Gira a tela do aparelho.
+   *
+   * `screen.orientation.lock` so funciona em tela cheia (e o Android pode
+   * recusar de qualquer forma). Por isso o giro aqui e' SO COSMETICO: a classe
+   * `girado` deita o layout em 90 graus. Assim funciona em qualquer aparelho,
+   * inclusive no webview do WhatsApp. Quando a API REAL consegue travar, o
+   * layout nem precisa girar (a tela ja esta deitada).
+   */
+  function tentarGirar(quer) {
+    const o = screen.orientation;
+    if (o && typeof o.lock === 'function') {
+      if (quer) o.lock('landscape').catch(() => {});
+      else if (typeof o.unlock === 'function') { try { o.unlock(); } catch { /* ok */ } }
+    }
+  }
+
   function alternarTelaCheia(forcar) {
     const quer = forcar === undefined ? !estaEmTelaCheia() : Boolean(forcar);
     document.body.classList.toggle('cheia', quer);
@@ -244,8 +261,21 @@
       if (!document.fullscreenElement && document.body.requestFullscreen) {
         document.body.requestFullscreen().catch(() => { /* fica a CSS */ });
       }
-    } else if (document.fullscreenElement || document.webkitFullscreenElement) {
-      (document.exitFullscreen || document.webkitExitFullscreen || (() => {})).call(document);
+      // Aperta o botao -> a tela vira deitada.
+      tentarGirar(true);
+      // Se o aparelho NAO girou de verdade (API bloqueada / desktop), deita o
+      // layout em 90 graus para o jogo ocupar a tela toda do mesmo jeito.
+      setTimeout(() => {
+        const deitado = innerWidth > innerHeight;
+        document.body.classList.toggle('girado', !deitado);
+        reajustar();
+      }, 400);
+    } else {
+      if (document.fullscreenElement || document.webkitFullscreenElement) {
+        (document.exitFullscreen || document.webkitExitFullscreen || (() => {})).call(document);
+      }
+      document.body.classList.remove('girado');
+      tentarGirar(false);
     }
 
     cheiaBtn.textContent = quer ? '⛶ SAIR' : '⛶ TELA CHEIA';
@@ -256,6 +286,61 @@
   // ==========================================================================
   // JOGO
   // ==========================================================================
+
+  // ==========================================================================
+  // GAMEPAD de toque (EJS_VirtualGamepadSettings)
+  //
+  // O EmulatorJS ja tem um layout por console, mas o do SNES vem SO com D-pad.
+  // Aqui TODOS os jogos recebem os dois: um ANALOGICO (zona/nipple) EMBAIXO e o
+  // D-PAD (as quatro setinhas) ACIMA dele -- pedido do dono.
+  //
+  // Os dois escrevem nos MESMOS indices do controle (4=UP, 5=DOWN, 6=LEFT,
+  // 7=RIGHT), entao o jogador pode usar qualquer um.
+  //
+  // POR QUE O ANALOGICO USA OS INDICES DO DIRECIONAL (4..7) e nao os do
+  // analogico de verdade (16..19): medido no `emulator.js`, a zona com
+  // `joystickInput: true` manda o valor do eixo em 16..19 -- e o SNES NAO TEM
+  // analogico, o core so le 4..7. O analogico pareceria morto. Com
+  // `joystickInput: false` a zona manda 1/0 nos indices que ela declarar,
+  // exatamente como o D-pad (mesmo codigo do `dpad`). Ou seja: a alavanca anda
+  // o personagem, que e' o que importa.
+  // ==========================================================================
+  const DPAD = { type: 'dpad', id: 'dpad', location: 'left', left: '50%', top: '0%', joystickInput: false, inputValues: [4, 5, 6, 7] };
+  const ANALOGICO = { type: 'zone', id: 'stick', location: 'left', left: '50%', top: '100%', joystickInput: false, inputValues: [4, 5, 6, 7] };
+
+  // Botoes que NAO podem faltar em cada console (id -> rotulo/valor do SNES).
+  const BOTOES_SNES = [
+    { type: 'button', text: 'X', id: 'x', location: 'right', left: 40, bold: true, input_value: 9 },
+    { type: 'button', text: 'Y', id: 'y', location: 'right', top: 40, bold: true, input_value: 1 },
+    { type: 'button', text: 'A', id: 'a', location: 'right', left: 81, top: 40, bold: true, input_value: 8 },
+    { type: 'button', text: 'B', id: 'b', location: 'right', left: 40, top: 80, bold: true, input_value: 0 },
+  ];
+  const BOTOES_ARCADE = [
+    { type: 'button', text: 'Y', id: 'y', location: 'right', left: 40, bold: true, input_value: 1 },
+    { type: 'button', text: 'X', id: 'x', location: 'right', top: 40, bold: true, input_value: 9 },
+    { type: 'button', text: 'B', id: 'b', location: 'right', left: 81, top: 40, bold: true, input_value: 0 },
+    { type: 'button', text: 'A', id: 'a', location: 'right', left: 40, top: 80, bold: true, input_value: 8 },
+  ];
+  const CENTRO = [
+    { type: 'button', text: 'Start', id: 'start', location: 'center', left: 60, fontSize: 15, block: true, input_value: 3 },
+    { type: 'button', text: 'Select', id: 'select', location: 'center', left: -5, fontSize: 15, block: true, input_value: 2 },
+  ];
+  const OMBROS_SNES = [
+    { type: 'button', text: 'L', id: 'l', location: 'left', left: 3, top: -100, bold: true, block: true, input_value: 10 },
+    { type: 'button', text: 'R', id: 'r', location: 'right', right: 3, top: -100, bold: true, block: true, input_value: 11 },
+  ];
+
+  /**
+   * Monta a lista de controles de toque do console.
+   * `null` = deixa o EmulatorJS usar o layout padrao dele (consoles que nao
+   * conhecemos ficam como estavam).
+   */
+  function gamepadDoJogo(console) {
+    if (console === 'snes') return [ANALOGICO, DPAD, ...BOTOES_SNES, ...CENTRO, ...OMBROS_SNES];
+    // Arcade usa o mesmo diamante do SNES (o CSS padroniza isso) e nao tem L/R.
+    if (console === 'arcade') return [ANALOGICO, DPAD, ...BOTOES_ARCADE, ...CENTRO];
+    return null;
+  }
 
   // ROM acima de 25 MiB nao cabe num asset do Cloudflare. Nesses casos o zip e
   // guardado em PARTES (kof97.zip.p1, .p2...) e remontado aqui num Blob, que o
@@ -345,6 +430,7 @@
     window.EJS_volume = 0.6;
     window.EJS_askBeforeExit = false;
     window.EJS_controlScheme = j.console;
+    window.EJS_VirtualGamepadSettings = gamepadDoJogo(j.console);
     if (j.bios) {
       // A BIOS tem de chegar ao emulador como ZIP. O EmulatorJS, por padrao,
       // EXTRAI a BIOS em arquivos soltos -- e o FBNeo procura "neogeo.zip", que

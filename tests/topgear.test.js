@@ -134,11 +134,14 @@ await test('index.html: player multi-jogo com os caminhos certos', () => {
   ok(html.includes('visibilitychange'), 'para ao sair da aba');
   const css = fs.readFileSync(path.join(PROJECT, 'dados/emugames/style.css'), 'utf-8');
   ok(css.includes('ejs_virtualGamepad_parent'), 'reposiciona os controles de toque (css)');
-  ok(/--ctl:\s*200px/.test(css), 'a faixa dos controles tem 200px (var --ctl)');
+  // A faixa cresceu: agora cabem DOIS controles empilhados (D-pad + analogico).
+  ok(/--ctl:\s*300px/.test(css), 'a faixa dos controles tem 300px (dpad + analogico)');
   ok(/height:\s*calc\(.*var\(--ctl\)\)/.test(css), 'a caixa reserva a faixa dos controles');
   ok(/ejs_canvas_parent[^}]*height:\s*calc\(100% - var\(--ctl\)\)/s.test(css), 'a tela ocupa so o andar de cima');
   // Controles maiores: escala dos clusters (dpad/joystick e botoes).
-  ok(/--joy-scale:\s*1\.16/.test(css), 'dpad/analogico +20px em retrato (--joy-scale 1.16)');
+  ok(/--joy-scale:\s*1;/.test(css), 'o cluster esquerdo nao e escalado (o analogico tem a propria)');
+  ok(/--stick-scale:\s*1\.3/.test(css), 'o analogico e 30% maior (--stick-scale 1.3)');
+  ok(/\.b_stick\s*>\s*div\s*\{[^}]*scale\(var\(--stick-scale\)\)/s.test(css), 'a escala do analogico e aplicada');
   ok(/--btn-scale:\s*1\.4/.test(css), 'botoes +20px em retrato (--btn-scale 1.4)');
   ok(/transform:\s*scale\(var\(--joy-scale\)\)/.test(css), 'escala o cluster esquerdo (dpad/joystick)');
   ok(/transform:\s*scale\(var\(--btn-scale\)\)/.test(css), 'escala o cluster direito (botoes)');
@@ -172,6 +175,60 @@ await test('index.html: player multi-jogo com os caminhos certos', () => {
   ok(/visibilitychange/.test(html), 'trata a saida da aba pelo visibilitychange');
   ok(/emu\.started = false/.test(html), 'marca o emulador como encerrado (evita remontar o FS)');
   ok(html.includes('pageshow'), 'reage ao voltar para a pagina');
+});
+
+await test('gamepad: ANALOGICO + D-PAD em todos os jogos', () => {
+  const html = fs.readFileSync(path.join(PROJECT, 'dados/emugames/index.html'), 'utf-8');
+  const css = fs.readFileSync(path.join(PROJECT, 'dados/emugames/style.css'), 'utf-8');
+
+  // O EmulatorJS aceita um gamepad proprio por `EJS_VirtualGamepadSettings`.
+  ok(/EJS_VirtualGamepadSettings\s*=/.test(html), 'monta o gamepad (EJS_VirtualGamepadSettings)');
+  ok(/function gamepadDoJogo/.test(html), 'tem a funcao que monta o gamepad');
+  ok(/type:\s*'zone'/.test(html), 'usa uma ZONA (analogico)');
+  ok(/type:\s*'dpad'/.test(html), 'usa um D-PAD (as setas)');
+  ok(/inputValues:\s*\[16,\s*17,\s*18,\s*19\]/.test(html) === false,
+    'o analogico NAO usa os indices de analogico (o SNES nao tem: ficaria morto)');
+  // Os dois escrevem nos mesmos indices do direcional, entao qualquer um move.
+  ok((html.match(/inputValues:\s*\[4,\s*5,\s*6,\s*7\]/g) || []).length >= 2,
+    'analogico e dpad escrevem nos MESMOS indices (4..7)');
+  // No ARRAY o analogico vem primeiro (a ordem de declaracao das constantes nao
+  // importa; o que vale e' a ordem que vai no EJS_VirtualGamepadSettings).
+  ok(/return\s*\[ANALOGICO,\s*DPAD/.test(html), 'o analogico vem antes do dpad no gamepad');
+  ok(/if \(console === 'snes'\)/.test(html) && /if \(console === 'arcade'\)/.test(html),
+    'snes e arcade recebem o gamepad novo');
+  // O cluster esquerdo tem as duas pecas posicionadas (dpad no topo, stick abaixo).
+  ok(/\.b_stick\s*>\s*div\s*\{\s*top:\s*152px/.test(css), 'o analogico fica ABAIXO do dpad');
+  ok(/\.b_dpad\s*\{[^}]*margin-left/.test(css) && /\.b_stick\s*\{[^}]*margin-left/.test(css),
+    'as duas pecas vao um pouco para a esquerda');
+  ok(/--stick-scale:\s*1\.3/.test(css), 'analogico ~30px maior');
+  ok(/\.b_l\s*\{\s*top:\s*-22px/.test(css), 'o ombro L nao sai da caixa com o cluster maior');
+});
+
+await test('tela cheia: aperta o botao, a tela VIRA e o botao continua acessivel', () => {
+  const html = fs.readFileSync(path.join(PROJECT, 'dados/emugames/index.html'), 'utf-8');
+  const css = fs.readFileSync(path.join(PROJECT, 'dados/emugames/style.css'), 'utf-8');
+
+  ok(/function tentarGirar/.test(html), 'tem a funcao que gira a tela');
+  ok(/screen\.orientation[\s\S]{0,120}lock\('landscape'\)/.test(html), 'tenta travar em paisagem (Android)');
+  ok(/classList\.toggle\('girado'/.test(html), 'deita o layout por CSS quando a API nao gira');
+  ok(/innerWidth\s*>\s*innerHeight/.test(html), 'so gira por CSS se o aparelho nao deitou de verdade');
+  ok(/classList\.remove\('girado'\)/.test(html), 'sair da tela cheia desfaz o giro');
+
+  // O layout girado cobre a tela (senao sobraria espaco em branco).
+  ok(/body\.girado\s+#jogador\s*\{[^}]*rotate\(90deg\)/s.test(css), 'o layout girado roda 90 graus');
+  ok(/body\.girado\s+#jogador\s*\{[^}]*width:\s*100vh/s.test(css), 'as dimensoes trocam no giro');
+  ok(/body\.girado\s+#jogador\s*\{[^}]*height:\s*100vw/s.test(css), 'altura vira a largura do viewport');
+  ok(/body\.girado\s+#jogador\s*\{[^}]*margin-left:\s*100vw/s.test(css), 'a caixa girada e puxada para dentro da tela');
+
+  // O botao de tela cheia continua visivel e clicavel nos DOIS modos.
+  ok(/body\.cheia\s+#controles\s*\{[^}]*position:\s*fixed/s.test(css), 'em tela cheia a barra flutua sobre o jogo');
+  ok(/body\.cheia\s+#controles\s*\{[^}]*left:\s*50%/s.test(css), 'a barra fica no meio');
+  ok(/body\.cheia\s+#controles\s*>\s*\*\s*\{\s*pointer-events:\s*auto/.test(css), 'o botao continua clicavel');
+  ok(/body\.cheia\s+#cheia\s*\{[^}]*opacity/s.test(css), 'o botao fica translucido (nao atrapalha)');
+  ok(/body\.cheia\s+#parar,\s*\nbody\.cheia\s+#status\s*\{\s*display:\s*none/.test(css),
+    'esconde PARAR/status em tela cheia (so sobra o botao de sair)');
+  ok(/body\.girado\s+#controles\s*\{[^}]*position:\s*fixed/s.test(css), 'no layout girado a barra tambem flutua');
+  ok(/'⛶ SAIR'/.test(html), 'o texto do botao muda para SAIR');
 });
 
 await test('EmulatorJS: os assets do CDN respondem 200', async () => {

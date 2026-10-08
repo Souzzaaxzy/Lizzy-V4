@@ -165,10 +165,14 @@ h1 #marca { letter-spacing: 2px; }
     --mid-scale  start/select/rapido/lento (base 50x31)
 */
 #game {
-  --ctl: 200px;
-  --joy-scale: 1.16;
+  /* O cluster esquerdo agora tem DOIS controles empilhados (D-pad em cima,
+     analogico embaixo), entao a faixa de baixo cresceu para os dois caberem. */
+  --ctl: 300px;
+  --joy-scale: 1;
   --btn-scale: 1.4;
   --mid-scale: 1;
+  /* Analogo ~30px maior que o padrao do nipple (base 100px). */
+  --stick-scale: 1.3;
 
   width: 100%;
   background: #000;
@@ -205,6 +209,47 @@ h1 #marca { letter-spacing: 2px; }
   bottom: 18px;
   transform: scale(var(--joy-scale));
   transform-origin: 0% 100%;
+}
+
+/*
+  ANALOGICO + D-PAD no MESMO cluster (esquerdo). Os dois sao posicionados por
+  `left: 50%` / `top: 0%|100%` INLINE dentro do cluster:
+    - D-PAD  -> `top: 0%`    (em cima)
+    - STICK  -> `top: 100%`  (embaixo)
+  Aqui o conjunto todo vai um pouco para a ESQUERDA e o analogico ganha ~30px
+  (`--stick-scale`), como o dono pediu. Como cada peca tem o proprio centro, o
+  deslocamento e' aplicado em CADA uma (o `left: 50%` inline nao muda).
+*/
+/*
+  O cluster esquerdo e' o referencial das duas pecas:
+    - o D-PAD fica em `top: 0%` (inline) -> encosta no topo do cluster;
+    - o ANALOGICO fica em `top: 100%` (inline) -> encosta no fundo do cluster.
+  Entao a ALTURA do cluster posiciona o analogico: com 220px, o analogico fica
+  centrado em y=220 (embaixo do dpad, que ocupa 0..145). O `bottom: 72px` sobe
+  o conjunto o bastante para o analogico (130px) caber inteiro na faixa.
+  `left: 0` + um pequeno recuo em cada peca = o conjunto um pouco mais a
+  esquerda, sem sair da tela.
+*/
+#game .ejs_virtualGamepad_left {
+  left: 4px !important;
+  /* Ancorado no TOPO da faixa de controles: o D-pad encosta no alto e o
+     analogico cai logo abaixo, os dois dentro da faixa (a faixa tem 300px e os
+     dois somam ~275). */
+  bottom: auto;
+  top: 0;
+}
+#game .b_dpad { margin-left: -10px; }
+#game .b_stick { margin-left: -16px; }
+/*
+  O `top: 100%` inline do analogico o cola no FUNDO do cluster -- e como o
+  cluster tem altura automatica, ele ficava fora da tela. Aqui ele desce um
+  valor FIXO a partir do topo: a altura do D-pad (145px) + uma folga, ou seja,
+  logo abaixo das setinhas. O D-pad fica intacto no topo.
+*/
+#game .b_stick > div { top: 152px !important; }
+#game .b_stick > div {
+  transform: scale(var(--stick-scale));
+  transform-origin: 50% 50%;
 }
 #game .ejs_virtualGamepad_right {
   bottom: 18px;
@@ -249,9 +294,35 @@ h1 #marca { letter-spacing: 2px; }
    deitado (paisagem), que e' o caso em que o dono quer o jogo ocupando tudo.
    ========================================================================== */
 body.cheia { padding: 0; }
-body.cheia #barra,
-body.cheia #controles { display: none; }
+body.cheia #barra { display: none; }
 body.cheia #jogador { display: block; }
+
+/*
+  Em TELA CHEIA a barra de controles fica FLUTUANDO em cima do jogo, no rodape
+  e no meio (pedido do dono: o botao precisa continuar acessivel para sair do
+  modo). Ela e' pequena e translucida para nao atrapalhar a jogatina, e o
+  PARAR/status somem -- sobra o botao de tela cheia.
+*/
+body.cheia #controles {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+  z-index: 60;
+  gap: 6px;
+  padding: 0;
+  pointer-events: none;
+}
+body.cheia #controles > * { pointer-events: auto; }
+body.cheia #parar,
+body.cheia #status { display: none; }
+body.cheia #cheia {
+  opacity: .55;
+  padding: 7px 12px;
+  font-size: 11px;
+  background: rgba(20, 25, 34, .85);
+}
+body.cheia #cheia:active { opacity: 1; }
 body.cheia #game {
   position: fixed;
   inset: 0;
@@ -266,19 +337,80 @@ body.cheia #game {
   --joy-scale: 1.32;
   --btn-scale: 1.8;
   --mid-scale: 1.7;
+  --stick-scale: 1.42;
 }
 body.cheia #game .ejs_canvas_parent { height: 100%; }
 body.cheia #game .ejs_virtualGamepad_parent { height: 100%; }
-body.cheia #game .ejs_virtualGamepad_left { bottom: 12px; }
+body.cheia #game .ejs_virtualGamepad_left { bottom: 130px; top: auto; }
 body.cheia #game .ejs_virtualGamepad_right { bottom: 12px; }
 body.cheia #game .ejs_virtualGamepad_top { bottom: 168px; }
 body.cheia #game .ejs_virtualGamepad_bottom { bottom: 4px; }
 
 /*
-  O ombro R (classe b_r) e posicionado 100px ACIMA do cluster direito. Com o
-  scale 1.8 ele sairia pelo topo da tela; aproxima do cluster.
+  Os OMBROS (L e R) sao posicionados 100px ACIMA dos clusters. Agora que o
+  cluster esquerdo subiu (D-pad + analogico), o L sairia pelo TOPO da caixa; o
+  R ja era aproximado por causa do scale. Os dois encostam no cluster.
 */
 #game .b_r { top: -70px !important; }
+#game .b_l { top: -22px !important; }
+
+/*
+  GIRO DE 90 GRAUS (classe `girado`): quando o botao TELA CHEIA e' apertado mas
+  o aparelho NAO consegue girar de verdade (`screen.orientation.lock` e' do
+  Android e so funciona em tela cheia; no iPhone nem existe), o layout inteiro
+  e' deitado por CSS. Assim "apertou, a tela virou" vale em qualquer aparelho.
+
+  O truque: a secao do jogo e' girada 90 graus e as dimensoes trocam (largura
+  vira altura). Como ela ja esta `fixed`, ela cobre o viewport inteiro depois do
+  giro -- nao sobra espaco em branco.
+*/
+body.girado #jogador {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vh;
+  height: 100vw;
+  transform: rotate(90deg);
+  transform-origin: 0 0;
+  /* empurra a caixa girada para dentro do viewport */
+  margin-left: 100vw;
+  z-index: 45;
+  background: #0b0d12;
+}
+body.girado #game {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  --joy-scale: 1.24;
+  --btn-scale: 1.62;
+  --mid-scale: 1.45;
+  --stick-scale: 1.34;
+}
+body.girado #barra { display: none; }
+body.girado #game .ejs_canvas_parent { height: 100%; }
+body.girado #game .ejs_virtualGamepad_parent { height: 100%; }
+body.girado #game .ejs_virtualGamepad_left { bottom: 120px; top: auto; }
+body.girado #game .ejs_virtualGamepad_right { bottom: 10px; }
+body.girado #game .ejs_virtualGamepad_top { bottom: 150px; }
+body.girado #game .ejs_virtualGamepad_bottom { bottom: auto; top: 72px; transform-origin: 50% 0%; }
+/* O botao de sair continua acessivel, flutuando no rodape do layout girado */
+body.girado #controles {
+  position: fixed;
+  left: 50%;
+  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 70;
+  pointer-events: none;
+}
+body.girado #controles > * { pointer-events: auto; }
+body.girado #parar,
+body.girado #status { display: none; }
+body.girado #cheia { opacity: .6; padding: 7px 12px; font-size: 11px; }
 
 /*
   PAISAGEM no aparelho: o jogo ocupa a TELA INTEIRA automaticamente (sem o
@@ -309,10 +441,11 @@ body.cheia #game .ejs_virtualGamepad_bottom { bottom: 4px; }
     --joy-scale: 1.24;
     --btn-scale: 1.62;
     --mid-scale: 1.45;
+    --stick-scale: 1.34;
   }
   body.jogando #game .ejs_canvas_parent { height: 100%; }
   body.jogando #game .ejs_virtualGamepad_parent { height: 100%; }
-  body.jogando #game .ejs_virtualGamepad_left { bottom: 10px; }
+  body.jogando #game .ejs_virtualGamepad_left { bottom: 120px; top: auto; }
   body.jogando #game .ejs_virtualGamepad_right { bottom: 10px; }
   body.jogando #game .ejs_virtualGamepad_top { bottom: 150px; }
 

@@ -307,7 +307,7 @@ export const menuCommandsMap = {
     },
     arcade: {
         menuName: 'Arcade',
-        commands: ['arcade', 'menuarcade', 'emugames', 'kof', 'metalslug', 'topgear', 'marioworld', 'mariokart', 'fifa98', 'fifa97', 'gtracing', 'marvel', 'mk', 'mk2', 'streetfighter5', 'streetfighter2turbo', 'streetfighterzero2', 'bomberman5', 'tekken2']
+        commands: ['arcade', 'menuarcade', 'emugames', 'kof', 'metalslug', 'topgear', 'marioworld', 'mariokart', 'fifa98', 'fifa97', 'gtracing', 'marvel', 'mk', 'mk2', 'streetfighter5', 'streetfighter2turbo', 'streetfighterzero2', 'bomberman5', 'tekken2', 'bsmario3', 'dkc', 'powerrangers', 'turtles', 'umk3']
     },
     alteradores: {
         menuName: 'Alteradores',

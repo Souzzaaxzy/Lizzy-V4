@@ -37,6 +37,95 @@ são L/R). Fica como está — mudar o idioma trocaria o resto da UI; é só ró
 que não há exceção de esquema). Verificado: sem o bloco CSS, **4 asserções
 falham**.
 
+## 🎮 EmuGames — 5 jogos novos + ANALOGICO/D-PAD + TELA CHEIA que GIRA (out/2026) ✅
+Pedido do dono: (1) adicionar os jogos de uma pasta do Drive ao `!arcade` e ao
+catálogo, com **gif de intro** (ou foto quando não houver); (2) **todos** os
+jogos com **analógico**, ~30px maior e um pouco mais à esquerda, com as **quatro
+setinhas acima** dele; (3) o botão **TELA CHEIA** deve **girar a tela** e
+continuar acessível no meio/rodapé para sair.
+
+### Os 5 jogos (todos SNES)
+| comando | id | jogo |
+|---|---|---|
+| `!bsmario3` | bsmario3 | BS Super Mario Collection 3 (Satellaview) |
+| `!dkc` | dkc | Donkey Kong Country |
+| `!powerrangers` | powerrangers | Mighty Morphin Power Rangers |
+| `!turtles` | turtles | TMNT IV: Turtles in Time |
+| `!umk3` | umk3 | Ultimate Mortal Kombat 3 |
+
+O 6º arquivo da pasta (**Super Mario World**) **já existia** no catálogo como
+`marioworld` — não foi duplicado. As ROMs saíram dos zips do Drive e ficaram
+**descompactadas** em `dados/emugames/jogos/snes/` (a maior tem 4 MB, bem abaixo
+do teto de 25 MiB do Cloudflare).
+
+**Nada de lista paralela**: bastou acrescentar os jogos ao `jogos.json`; o menu
+`!arcade` é **gerado do catálogo** e passou a listá-los sozinho. O que precisou de
+mudança manual foi só o handler (os `case` + o mapa comando→id) e a lista do
+`blockPv`.
+
+### Capas — TELA DE TÍTULO REAL (não placeholder)
+Geradas por `tools/gerar-capas-libretro.mjs`, com as imagens do repositório
+público **libretro-thumbnails** em `tools/capas-fonte/<id>.png` (título) e
+`<id>-box.png` (boxart).
+
+**Armadilha medida**: a `BS Mario Collection 3` **não** é hack de Super Mario
+World — é um jogo **Satellaview** (`BS Super Mario Collection - Dai-3-shuu`).
+Eu tinha baixado a capa do Super Mario World por engano; a capa certa veio do
+repositório `Nintendo_-_Satellaview` (que **não tem boxart**, só título — o
+script aceita: sem boxart, o fundo vira a cor sólida). **Regra**: conferir o
+título interno da ROM antes de escolher a capa.
+
+### ANALÓGICO + D-PAD em todos os jogos
+O EmulatorJS aceita um gamepad próprio por **`EJS_VirtualGamepadSettings`** — o
+layout do SNES dele vem **só com D-pad**. Agora o player monta o gamepad
+(`gamepadDoJogo`) com:
+
+- **ANALÓGICO** (`type: 'zone'`, o nipple) — declarado primeiro, fica **embaixo**;
+- **D-PAD** (`type: 'dpad'`, as 4 setas) — fica **acima** dele;
+- o diamante de botões e Start/Select/L/R **reaproveitados** do layout do SNES
+  (copiados do `emulator.js`, para não perder nenhum botão).
+
+**Decisão que evita um analógico morto**: o `inputValues` da zona usa os
+**índices do direcional (4..7)**, e não os do analógico (16..19). Medido no
+`emulator.js`: com `joystickInput: true` a zona manda o eixo em 16..19 — e o
+**SNES não tem analógico**, o core só lê 4..7. Com `joystickInput: false` a zona
+manda 1/0 nos índices declarados, exatamente como o D-pad. Ou seja: a alavanca
+**anda o personagem**, que é o que importa.
+
+**Geometria (medida, não chutada)**: a faixa de baixo cresceu para `--ctl:
+300px` (cabem os dois) e o cluster esquerdo foi ancorado no **topo** dela
+(D-pad em `top: 0`, analógico em `top: 152px`). O analógico é 30% maior
+(`--stick-scale: 1.3`) e as duas peças foram recuadas para a esquerda. Em tela
+cheia/paisagem a âncora volta a ser embaixo, com o valor calculado para o
+analógico não sair da tela. O **ombro L** ganhou o mesmo ajuste que o R já tinha
+(`top: -22px`), senão saía pelo topo com o cluster maior.
+
+### TELA CHEIA que GIRA (e o botão para sair)
+- Apertar o botão **tenta travar em paisagem** (`screen.orientation.lock`), mas
+  essa API é **só do Android e só funciona em tela cheia** — no iPhone nem
+  existe. Então, se o aparelho **não** deitou de verdade, o **layout é deitado
+  em 90 graus por CSS** (classe `girado`): a seção do jogo troca largura por
+  altura e roda `rotate(90deg)`. Assim "apertou, a tela virou" vale em qualquer
+  aparelho, inclusive no webview do WhatsApp.
+- O botão **continua acessível**: em tela cheia a barra flutua **no meio do
+  rodapé**, translúcida, e o PARAR/status somem (sobra só o botão). O texto vira
+  **⛶ SAIR**. Apertando de novo, o giro é desfeito e o layout volta.
+
+### Testes
+`tests/topgear.test.js` — **19 testes / 310 asserções**. Os valores antigos
+(`--ctl: 200px`, `--joy-scale: 1.16`) foram recalibrados e ganharam 2 testes
+novos: **analógico+D-pad** (inclusive a trava contra voltar a usar 16..19, que
+deixaria o analógico morto) e **tela cheia** (o giro por CSS, as dimensões
+trocadas e o botão continuando clicável/visível).
+
+### Verificado no navegador (Chromium + CDP, viewport e UA de celular)
+- os **5 jogos carregam** de verdade (`started: true`, core `snes9x`, canvas
+  368x265);
+- **retrato / tela cheia / girado / paisagem**: `temDpad: true`,
+  `temAnalogico: true`, `analogicoAbaixo: true`, **zero botão recortado**, o
+  botão de tela cheia visível e dentro do viewport nos 4 modos;
+- `!arcade` lista os 5 comandos novos (o menu é gerado do catálogo).
+
 ## 🎮 EmuGames — CATALOGO no site + TELA CHEIA em rotacao (out/2026) ✅
 O dono pediu duas coisas no site (`emugames.kannonmtx.workers.dev`):
 1. o **link direto** virar um **catálogo** com todos os jogos (título

@@ -21621,7 +21621,12 @@ case 'pin':
       case 'streetfighter2turbo':
       case 'streetfighterzero2':
       case 'bomberman5':
-      case 'tekken2': {
+      case 'tekken2':
+      case 'bsmario3':
+      case 'dkc':
+      case 'powerrangers':
+      case 'turtles':
+      case 'umk3': {
         try {
           if (!isGroup) return reply('◈ Este comando só funciona em grupos.');
 
@@ -21643,7 +21648,12 @@ case 'pin':
             streetfighter2turbo: 'streetfighter2turbo',
             streetfighterzero2: 'streetfighterzero2',
             bomberman5: 'bomberman5',
-            tekken2: 'tekken2'
+            tekken2: 'tekken2',
+            bsmario3: 'bsmario3',
+            dkc: 'dkc',
+            powerrangers: 'powerrangers',
+            turtles: 'turtles',
+            umk3: 'umk3'
           };
 
           const jogo = topgear.porId(ID_DO_COMANDO[command]);
