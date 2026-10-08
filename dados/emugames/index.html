@@ -253,6 +253,20 @@
     }
   }
 
+  /**
+   * Decide se o LAYOUT precisa ser deitado por CSS.
+   *
+   * So faz sentido quando a tela NAO esta deitada: se o aparelho ja esta em
+   * paisagem, girar o layout de novo o deixa de cabeca para baixo e ocupando
+   * metade da tela (o bug relatado). A funcao e' reavaliada a cada mudanca de
+   * viewport, porque o `screen.orientation.lock` do Android chega ATRASADO --
+   * decidir uma unica vez no clique deixava a classe presa.
+   */
+  function ajustarGiro() {
+    const precisa = estaEmTelaCheia() && innerWidth <= innerHeight;
+    document.body.classList.toggle('girado', precisa);
+  }
+
   function alternarTelaCheia(forcar) {
     const quer = forcar === undefined ? !estaEmTelaCheia() : Boolean(forcar);
     document.body.classList.toggle('cheia', quer);
@@ -261,23 +275,16 @@
       if (!document.fullscreenElement && document.body.requestFullscreen) {
         document.body.requestFullscreen().catch(() => { /* fica a CSS */ });
       }
-      // Aperta o botao -> a tela vira deitada.
+      // Aperta o botao -> a tela vira deitada (quando o aparelho permite).
       tentarGirar(true);
-      // Se o aparelho NAO girou de verdade (API bloqueada / desktop), deita o
-      // layout em 90 graus para o jogo ocupar a tela toda do mesmo jeito.
-      setTimeout(() => {
-        const deitado = innerWidth > innerHeight;
-        document.body.classList.toggle('girado', !deitado);
-        reajustar();
-      }, 400);
     } else {
       if (document.fullscreenElement || document.webkitFullscreenElement) {
         (document.exitFullscreen || document.webkitExitFullscreen || (() => {})).call(document);
       }
-      document.body.classList.remove('girado');
       tentarGirar(false);
     }
 
+    ajustarGiro();
     cheiaBtn.textContent = quer ? '⛶ SAIR' : '⛶ TELA CHEIA';
     setTimeout(reajustar, 60);
     setTimeout(reajustar, 350);
@@ -481,11 +488,22 @@
   // Ao girar o aparelho (ou aparecer/sumir a barra do navegador) reajusta o
   // canvas. `orientationchange` chega ANTES do viewport novo, entao o reajuste
   // tambem roda no `resize` e no `visualViewport`.
-  addEventListener('orientationchange', () => { setTimeout(reajustar, 120); setTimeout(reajustar, 550); });
-  addEventListener('resize', () => { if (!jogador.hidden) reajustar(); });
-  if (window.visualViewport) {
-    visualViewport.addEventListener('resize', () => { if (!jogador.hidden) reajustar(); });
-  }
+  //
+  // `ajustarGiro` roda em TODA mudanca de viewport de proposito: e' o que
+  // desfaz a classe `girado` quando o aparelho finalmente deita (o lock do
+  // Android chega atrasado). Sem isso, o layout ficava girado em cima de uma
+  // tela ja deitada: de cabeca para baixo e ocupando metade da tela.
+  const aoMudarViewport = () => {
+    if (jogador.hidden) return;
+    ajustarGiro();
+    reajustar();
+  };
+  addEventListener('orientationchange', () => {
+    setTimeout(aoMudarViewport, 120);
+    setTimeout(aoMudarViewport, 550);
+  });
+  addEventListener('resize', aoMudarViewport);
+  if (window.visualViewport) visualViewport.addEventListener('resize', aoMudarViewport);
   ['fullscreenchange', 'webkitfullscreenchange'].forEach((ev) =>
     document.addEventListener(ev, () => {
       if (!document.fullscreenElement && !document.webkitFullscreenElement && document.body.classList.contains('cheia')) {
@@ -493,6 +511,7 @@
         document.body.classList.remove('cheia');
         cheiaBtn.textContent = '⛶ TELA CHEIA';
       }
+      ajustarGiro();
       reajustar();
     }));
 

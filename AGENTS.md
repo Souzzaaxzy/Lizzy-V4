@@ -37,6 +37,77 @@ são L/R). Fica como está — mudar o idioma trocaria o resto da UI; é só ró
 que não há exceção de esquema). Verificado: sem o bloco CSS, **4 asserções
 falham**.
 
+## 🐛 TELA CHEIA: jogo "na metade e de cabeca para baixo" — CORRIGIDO (out/2026) ✅
+Relato do dono: *"quando eu aperto o botão tela cheia o jogo vira 'correto', mas
+o jogo fica só na metade da tela e ainda fica de cabeça para baixo"*.
+
+### Causa (MEDIDA, nao suposta)
+Eu decidia se o layout precisava ser deitado por CSS **uma unica vez**, 400ms
+depois do clique:
+
+```js
+setTimeout(() => {
+  document.body.classList.toggle('girado', !(innerWidth > innerHeight));
+}, 400);
+```
+
+O problema e' que o **`screen.orientation.lock` do Android chega ATRASADO**.
+Reproduzido no navegador (aperta o botao em retrato e **depois** o aparelho
+gira), o estado final era:
+
+```
+vp: 844x390 (deitado)
+classes: "jogando cheia girado"   <-- a classe ficou PRESA
+angle: 90                          <-- layout girado EM CIMA de tela deitada
+sobraHorizontal: 454               <-- o jogo ocupava 390 de 844 (metade!)
+```
+
+Ou seja: o aparelho **ja tinha deitado**, mas o layout tambem estava girado --
+resultado: de cabeca para baixo e ocupando metade da tela. Exatamente o relato.
+
+### Correcao
+A decisao virou a funcao **`ajustarGiro()`**, que so deita o layout quando o modo
+tela cheia esta ligado **E** a tela **nao** esta deitada:
+
+```js
+function ajustarGiro() {
+  const precisa = estaEmTelaCheia() && innerWidth <= innerHeight;
+  document.body.classList.toggle('girado', precisa);
+}
+```
+
+E ela e' **reavaliada em toda mudanca de viewport** (`resize`, `visualViewport`,
+`orientationchange` e `fullscreenchange`), via o helper `aoMudarViewport`. Assim,
+no instante em que o aparelho deita de verdade, a classe `girado` **sai sozinha**
+e o layout acompanha.
+
+**A regra que fica**: nunca decidir rotacao por uma **leitura unica** do viewport.
+A orientacao pode mudar depois do clique (lock assincrono, barra do navegador,
+multitarefa), entao a decisao tem de ser **re-derivada** a cada mudanca.
+
+### Testes
+`tests/topgear.test.js` — **19 testes / 316 asserções**, com a regressao:
+`ajustarGiro` existe e exige `innerWidth <= innerHeight` (nunca gira em
+paisagem), o `resize`/`visualViewport`/`orientationchange` reavaliam, e **nao
+pode voltar** a existir `innerWidth > innerHeight` (a leitura unica que causava
+o bug).
+
+### Verificado no navegador (7 ciclos)
+| passo | viewport | classes | angulo | canvas |
+|---|---|---|---|---|
+| 1. retrato | 390x844 | `jogando` | 0 | 368x265 |
+| 2. apertou TELA CHEIA | 390x844 | `jogando cheia girado` | 90 | 390x844 (100%) |
+| **3. aparelho girou** | **844x390** | **`jogando cheia`** | **0** | **844x390 (100%)** |
+| 4. saiu da tela cheia | 844x390 | `jogando` | 0 | 844x390 |
+| 5. voltou ao retrato | 390x844 | `jogando` | 0 | 368x265 |
+| 6. apertou de novo | 390x844 | `jogando cheia girado` | 90 | 390x844 |
+| 7. saiu direto em paisagem | 844x390 | `jogando` | 0 | 844x390 |
+
+O passo 3 e' o bug: agora sai **`jogando cheia`** (sem `girado`), angulo **0** e
+o canvas cobrindo a tela toda. Controles seguem ok em retrato / tela cheia /
+girado / paisagem: zero botao recortado, D-pad e analogico dentro, botao de
+tela cheia visivel.
+
 ## 🎮 EmuGames — 5 jogos novos + ANALOGICO/D-PAD + TELA CHEIA que GIRA (out/2026) ✅
 Pedido do dono: (1) adicionar os jogos de uma pasta do Drive ao `!arcade` e ao
 catálogo, com **gif de intro** (ou foto quando não houver); (2) **todos** os

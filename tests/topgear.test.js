@@ -211,8 +211,24 @@ await test('tela cheia: aperta o botao, a tela VIRA e o botao continua acessivel
   ok(/function tentarGirar/.test(html), 'tem a funcao que gira a tela');
   ok(/screen\.orientation[\s\S]{0,120}lock\('landscape'\)/.test(html), 'tenta travar em paisagem (Android)');
   ok(/classList\.toggle\('girado'/.test(html), 'deita o layout por CSS quando a API nao gira');
-  ok(/innerWidth\s*>\s*innerHeight/.test(html), 'so gira por CSS se o aparelho nao deitou de verdade');
-  ok(/classList\.remove\('girado'\)/.test(html), 'sair da tela cheia desfaz o giro');
+  // Sair da tela cheia desfaz o giro: `ajustarGiro` e' chamada no fim do
+  // `alternarTelaCheia` e tira a classe quando o modo esta desligado.
+  ok(/ajustarGiro\(\);\s*\n\s*cheiaBtn\.textContent/.test(html), 'sair da tela cheia desfaz o giro');
+
+  // REGRESSAO do bug relatado ("o jogo fica so na metade e de cabeca para
+  // baixo"): a decisao de girar tem de ser REAVALIADA, e nunca girar quando a
+  // tela ja esta deitada. Antes ela era tomada UMA vez, 400ms depois do
+  // clique -- e o `screen.orientation.lock` do Android chega ATRASADO, entao a
+  // classe ficava presa: layout girado em cima de uma tela deitada.
+  ok(/function ajustarGiro/.test(html), 'tem a funcao que decide o giro (reavaliavel)');
+  ok(/ajustarGiro\(\)[\s\S]{0,80}estaEmTelaCheia\(\)\s*&&\s*innerWidth\s*<=\s*innerHeight/.test(html)
+    || /estaEmTelaCheia\(\)\s*&&\s*innerWidth\s*<=\s*innerHeight/.test(html),
+    'so deita o layout se a tela NAO estiver deitada');
+  ok(!/innerWidth\s*>\s*innerHeight/.test(html), 'nao decide o giro por uma leitura unica do viewport');
+  ok(/const aoMudarViewport/.test(html), 'reavalia em toda mudanca de viewport');
+  ok(/addEventListener\('resize',\s*aoMudarViewport\)/.test(html), 'o resize reavalia o giro');
+  ok(/visualViewport\.addEventListener\('resize',\s*aoMudarViewport\)/.test(html), 'o visualViewport reavalia o giro');
+  ok(/orientationchange[\s\S]{0,200}aoMudarViewport/.test(html), 'o orientationchange reavalia o giro');
 
   // O layout girado cobre a tela (senao sobraria espaco em branco).
   ok(/body\.girado\s+#jogador\s*\{[^}]*rotate\(90deg\)/s.test(css), 'o layout girado roda 90 graus');
