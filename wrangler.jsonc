@@ -1,8 +1,0 @@
-{
-  "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "emugames",
-  "compatibility_date": "2026-10-06",
-  "assets": {
-    "directory": "./dados/emugames"
-  }
-}

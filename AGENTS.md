@@ -37,6 +37,76 @@ são L/R). Fica como está — mudar o idioma trocaria o resto da UI; é só ró
 que não há exceção de esquema). Verificado: sem o bloco CSS, **4 asserções
 falham**.
 
+## 📦 O SITE foi para um REPO PROPRIO (`Souzzaaxzy/emugames`) (out/2026) ✅
+Pedido do dono: *"crie um novo repositório chamado emugames e coloca os arquivos
+do /emugames tudo nele, só deixa no bot o que for necessário"*.
+
+### Por que (o diagnóstico que motivou)
+O dono reclamou que o bot estava lento **até para ele mesmo**. A investigação
+achou o seguinte:
+
+- **O `emugames` NÃO rodava no servidor do bot.** Nenhuma porta, nenhum
+  `express`, nenhum processo: o site é servido pelo **Cloudflare**, de arquivos
+  estáticos. O bot nunca serviu o site para ninguém.
+- **Mas os 113 MB moravam no repositório do bot** (54 arquivos **rastreados no
+  git**). Isso pesava em todo `!atualizar` (git pull/merge dos assets) — sem
+  nenhum ganho.
+
+> O que **realmente** pesa na memória do bot é outra coisa, não o emugames: o
+> `messagesCache` guarda o objeto **inteiro** da mensagem (inclusive o buffer de
+> mídia). Isso ficou documentado no item "Cache de mídia" e é o próximo alvo.
+
+### O que o bot precisa (medido, não suposto)
+Rastreando todas as referências, o bot usa o emugames para **duas coisas**:
+1. **`dados/emugames/jogos.json`** (6,6 KB) — a **fonte única** do catálogo, que
+   o `!arcade`/menus/cards leem (`topgear.catalogo()`). Também usada pelos
+   testes de handler.
+2. A **URL pública** (`dados/src/topgear/config.json` → `publicUrl`).
+
+O bot **nunca** lê ROM nem capa — quem baixa é o navegador de quem joga.
+
+### O corte
+| ficou no BOT | foi para o repo `emugames` |
+|---|---|
+| `dados/emugames/jogos.json` (6,6 KB) | `index.html`, `style.css`, `_headers`, `.assetsignore` |
+| `dados/src/topgear/{index.js,config.json}` | `jogos/` (108 MB de ROMs) |
+| — | `capas/`, `neogeo.zip`, `README.md` |
+
+Saíram do bot também: **`wrangler.jsonc`** (config de publicação do site) e o
+script `deploy:emugames` do `package.json` — os dois são do SITE, não do bot.
+E dois arquivos **mortos** foram apagados: `dados/src/topgear/index.html` e
+`style.css` eram **cópias velhas da era PoC** (5 KB e 3 KB contra 38 KB e 23 KB
+das atuais), sem nenhuma referência no código.
+
+**Resultado: o repo do bot caiu de 113 MB para 6,6 KB de emugames.**
+
+### O acoplamento que ficou (e é obrigatório)
+`topgear/index.js` lê o `jogos.json` **do próprio repositório do bot**. Ou seja:
+ao adicionar um jogo, o `jogos.json` do bot precisa acompanhar o site. É o preço
+de o menu ser gerado do catálogo — e é o que permite o bot montar o `!arcade`
+sem baixar nada.
+
+### Testes
+Os testes que olham a **aparência** do site passaram a resolver a pasta por
+`EMUGAMES_SITE_DIR` → clone irmão `../emugames` → `dados/emugames`, e **pulam**
+(com aviso) quando o site não está à mão. Os testes do **bot** (handler, menu,
+catálogo) seguem rodando normalmente, lendo o `jogos.json` de sempre.
+
+- `tests/topgear.test.js` — **25 testes / 371 asserções**, com um teste novo
+  **"o BOT guarda so o CATALOGO"** que trava o corte: exige o `jogos.json` e
+  **proíbe** o retorno de `index.html`/`style.css`/`jogos`/`capas`/`_headers`/
+  `wrangler.jsonc` ao repo do bot.
+- `tests/emugames-games.test.js` — 5/11 (o teste de disco passa a olhar o site).
+
+### Repositório criado
+`https://github.com/Souzzaaxzy/emugames` (público) — 55 arquivos, **113 MB**
+subiram íntegros **sem Git LFS** (o push passou; confira o item "Limite" abaixo).
+
+> **Limite a saber**: o GitHub **avisa** (não bloqueia) acima de 50 MB por
+> arquivo e recomenda manter o repo abaixo de 1 GB. O maior arquivo aqui é o
+> `kof97.zip` (27,6 MB, servido em partes) — dentro do limite. Se o catálogo
+> crescer muito, convém migrar as ROMs para um bucket (S3/R2).
+
 ## 📺 RODAR NA TV + nome do controle (out/2026) ✅
 Pedido do dono: *"quero rodar isso na minha tv também"* e *"o bluetooth está por
 IP, eu quero que seja por nome pra eu conseguir identificar"*.

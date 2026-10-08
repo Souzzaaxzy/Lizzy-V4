@@ -10,8 +10,7 @@
         "dev": "nodemon dados/src/.scripts/start.js",
         "config": "node dados/src/.scripts/config.js",
         "config:install": "node dados/src/.scripts/config.js --install",
-        "update": "node dados/src/.scripts/update.js",
-        "deploy:emugames": "wrangler deploy"
+        "update": "node dados/src/.scripts/update.js"
     },
     "repository": {
         "type": "git",

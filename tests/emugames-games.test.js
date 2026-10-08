@@ -39,19 +39,33 @@ function ok(c, m) { if (c) CURRENT.passed++; else { CURRENT.failed++; CURRENT.er
 const read = (rel) => fs.readFileSync(path.join(PROJECT, rel), 'utf8');
 
 const CATALOGO = JSON.parse(read('dados/emugames/jogos.json')).jogos;
+
+// O site (player + ROMs + capas) mora num repo proprio; o bot guarda so o
+// `jogos.json`. Para os testes que olham ARQUIVO, achamos o site assim:
+//   1. `EMUGAMES_SITE_DIR`;  2. clone irmao `../emugames`;  3. `dados/emugames`.
+function acharSite() {
+  const c = [process.env.EMUGAMES_SITE_DIR,
+    path.resolve(PROJECT, '..', 'emugames'),
+    path.resolve(PROJECT, 'emugames'),
+    path.join(PROJECT, 'dados', 'emugames')].filter(Boolean);
+  for (const x of c) if (fs.existsSync(path.join(x, 'index.html'))) return x;
+  return null;
+}
+const SITE = acharSite();
 const COMANDO_POR_ID = { topgear2: 'topgear', kof97: 'kof' };
 const comandos = CATALOGO.map((j) => COMANDO_POR_ID[j.id] || j.id);
 
 // ─────────────────────────── disco ───────────────────────────
 
 await test('cada jogo do catálogo tem ROM e capa no disco', () => {
+  if (!SITE) { console.log('\u23ed\uFE0F  (pulado: site fora do repo do bot)'); return; }
   const faltandoRom = [];
   const faltandoCapa = [];
   for (const j of CATALOGO) {
-    const rom = path.join(PROJECT, 'dados/emugames', j.rom);
+    const rom = path.join(SITE, j.rom);
     if (!fs.existsSync(rom)) faltandoRom.push(j.id);
     if (j.console === 'snes') {
-      const capa = path.join(PROJECT, 'dados/emugames/capas', j.capa || `${j.id}.gif`);
+      const capa = path.join(SITE, 'capas', j.capa || `${j.id}.gif`);
       if (!fs.existsSync(capa)) faltandoCapa.push(j.id);
     }
   }
