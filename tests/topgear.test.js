@@ -197,9 +197,19 @@ await test('gamepad: ANALOGICO + D-PAD em todos os jogos', () => {
   ok(/if \(console === 'snes'\)/.test(html) && /if \(console === 'arcade'\)/.test(html),
     'snes e arcade recebem o gamepad novo');
   // O cluster esquerdo tem as duas pecas posicionadas (dpad no topo, stick abaixo).
-  ok(/\.b_stick\s*>\s*div\s*\{\s*top:\s*152px/.test(css), 'o analogico fica ABAIXO do dpad');
+  ok(/\.b_stick\s*>\s*div\s*\{[^}]*top:\s*152px/s.test(css), 'o analogico fica ABAIXO do dpad');
   ok(/\.b_dpad\s*\{[^}]*margin-left/.test(css) && /\.b_stick\s*\{[^}]*margin-left/.test(css),
     'as duas pecas vao um pouco para a esquerda');
+
+  // SEPARACAO dos dois (o dono reclamou que "estavam conflitando"): o D-pad
+  // sobe 25px e o analogico vai 25px para a direita. Medido: antes eles se
+  // sobrepunham em 38px, entao tocar a seta de baixo acertava o analogico.
+  ok(/\.ejs_dpad_main\s*\{\s*transform:\s*translateY\(-25px\)/.test(css), 'o D-pad sobe 25px');
+  ok(/\.b_stick\s+\.back\s*\{\s*left:\s*25px\s*!important/.test(css), 'o analogico vai 25px para a direita');
+  // O alvo do deslocamento e' o `.back` (o circulo visivel do nipple), nao o
+  // wrapper: mover o wrapper nao mexe no desenho.
+  ok(/\.b_stick\s*>\s*div\s*\{[^}]*top:\s*152px/s.test(css) && !/\.b_stick\s*>\s*div\s*\{[^}]*left:/s.test(css),
+    'o wrapper do analogico nao recebe left (so o circulo)');
   ok(/--stick-scale:\s*1\.3/.test(css), 'analogico ~30px maior');
   ok(/\.b_l\s*\{\s*top:\s*-22px/.test(css), 'o ombro L nao sai da caixa com o cluster maior');
 });

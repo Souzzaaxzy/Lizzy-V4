@@ -241,15 +241,38 @@ h1 #marca { letter-spacing: 2px; }
 #game .b_dpad { margin-left: -10px; }
 #game .b_stick { margin-left: -16px; }
 /*
+  SEPARACAO do D-pad e do analogico (pedido do dono: "move o analogico 25px
+  para a direita e o d-pad 25px para cima").
+  Medido antes: o D-pad ocupava y 266..391 e o analogico comecava em 353 -- os
+  dois se sobrepunham em **38px**, entao tocar a seta de baixo acertava o
+  analogico. Agora o D-pad sobe 25px e o analogico vai 25px para a direita, o
+  que deixa os dois deslocados na diagonal (cada um no seu canto).
+  `translate` e' usado de proposito: move SO o desenho, sem mexer no layout nem
+  depender de qual elemento e' o `offsetParent` de cada peca.
+*/
+#game .ejs_virtualGamepad_left .ejs_dpad_main { transform: translateY(-25px); }
+/*
   O `top: 100%` inline do analogico o cola no FUNDO do cluster -- e como o
   cluster tem altura automatica, ele ficava fora da tela. Aqui ele desce um
   valor FIXO a partir do topo: a altura do D-pad (145px) + uma folga, ou seja,
   logo abaixo das setinhas. O D-pad fica intacto no topo.
 */
-#game .b_stick > div { top: 152px !important; }
+/*
+  O circulo do analogico e' o filho `.back` do nipple (100x100 inline, escalado
+  por `--stick-scale`). E' ELE que precisa ser deslocado: mover o wrapper nao
+  mexe no desenho e o `left` do `.back` ja vem inline (`0px`), entao o nosso
+  valor tem de vencer com `!important`.
+  - `top: 152px`  -> logo abaixo do D-pad (o `top: 100%` inline o colaria no
+                     fundo do cluster, que tem altura automatica);
+  - `left: 25px`  -> 25px para a direita (pedido do dono), separando do D-pad.
+*/
 #game .b_stick > div {
+  top: 152px !important;
   transform: scale(var(--stick-scale));
   transform-origin: 50% 50%;
+}
+#game .b_stick .back {
+  left: 25px !important;
 }
 #game .ejs_virtualGamepad_right {
   bottom: 18px;

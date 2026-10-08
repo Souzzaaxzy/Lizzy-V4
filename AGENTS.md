@@ -37,6 +37,62 @@ são L/R). Fica como está — mudar o idioma trocaria o resto da UI; é só ró
 que não há exceção de esquema). Verificado: sem o bloco CSS, **4 asserções
 falham**.
 
+## 🎮 ANALOGICO e D-PAD separados (conflito de toque) — CORRIGIDO (out/2026) ✅
+Relato do dono: *"o analógico e o d-pad estão conflitando"* — e o pedido:
+**mover o analógico 25px para a direita** e **o d-pad 25px para cima**.
+
+### Causa (MEDIDA)
+Os dois controles se **sobrepunham em 38px**. Medido no navegador (posicoes
+relativas a caixa do jogo):
+
+| | antes | depois |
+|---|---|---|
+| D-pad | y **266**..391 | y **241**..366 |
+| Analógico | y **353**..483 | y 353..483 |
+| **sobreposição** | **38px** | **13px** |
+
+Como a seta de BAIXO do D-pad (y 266..391) caía dentro do círculo do analógico
+(y 353..483), tocar a seta acertava o analógico. Era o conflito.
+
+### Correcao (exatamente o que foi pedido)
+```css
+/* D-pad 25px para CIMA */
+#game .ejs_virtualGamepad_left .ejs_dpad_main { transform: translateY(-25px); }
+/* Analógico 25px para a DIREITA (no círculo, que é o que se desenha) */
+#game .b_stick .back { left: 25px !important; }
+```
+
+**Armadilha medida (custou uma tentativa)**: aplicar o `left` no **wrapper** do
+analógico (`.b_stick > div`) **nao move o desenho** — o círculo é o filho
+`.back`, com `left: 0px` **inline**, e é ele que precisa ser deslocado (com
+`!important` para vencer o inline). A primeira versao empurrou o analógico para
+`x = -35` em vez de `+25`.
+
+`translate` no D-pad foi escolha deliberada: move **so o desenho**, sem mexer no
+layout e sem depender de qual elemento é o `offsetParent` de cada peça.
+
+### Verificado com HIT-TEST (nao é suposicao)
+Em vez de olhar a posicao, perguntei ao navegador **quem recebe o toque** em cada
+ponto (`document.elementFromPoint`):
+
+| ponto tocado | quem recebe |
+|---|---|
+| seta CIMA / BAIXO | `ejs_dpad_vertical < ejs_dpad_main` |
+| seta ESQ / DIR | `ejs_dpad_horizontal < ejs_dpad_main` |
+| centro do D-pad | `ejs_dpad_bar < ejs_dpad_main` |
+| centro do analógico | `front < nipple` |
+| topo do analógico | `back < nipple` |
+
+**Cada ponto cai no controle certo** — as 4 setas no D-pad e o analógico nele
+mesmo. Rodado em `marioworld`, `kof97` (arcade), `dkc`, `umk3`, `turtles`,
+`bsmario3` e `powerrangers`: sempre `sobreposicao=13px` e `4/4 setas no dpad`.
+
+### Testes
+`tests/topgear.test.js` — **19 testes / 319 asserções**, com a regressao do
+conflito: o D-pad tem de subir 25px, o analógico tem de ir 25px para a direita
+**no círculo** (`.back`), e o wrapper **nao** pode receber `left` (é o erro que
+nao move nada).
+
 ## 🐛 TELA CHEIA: jogo "na metade e de cabeca para baixo" — CORRIGIDO (out/2026) ✅
 Relato do dono: *"quando eu aperto o botão tela cheia o jogo vira 'correto', mas
 o jogo fica só na metade da tela e ainda fica de cabeça para baixo"*.
