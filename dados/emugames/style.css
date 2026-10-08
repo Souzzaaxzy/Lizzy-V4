@@ -67,7 +67,9 @@ h1 #marca { letter-spacing: 2px; }
 /* Grade de cartoes */
 #grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  /* minmax com `min()`: em tela de TV (1920px) o cartao para de encolher e a
+     grade fica com uma coluna a menos em vez de 12 colunas de 148px. */
+  grid-template-columns: repeat(auto-fill, minmax(min(140px, 100%), 1fr));
   gap: 12px;
   padding-bottom: 20px;
 }
@@ -88,6 +90,45 @@ h1 #marca { letter-spacing: 2px; }
   transition: border-color .15s, transform .12s;
 }
 .card:active { transform: scale(.98); border-color: var(--acento); }
+
+/* ==========================================================================
+   TV / CONTROLE REMOTO
+   Na TV nao ha toque: quem navega e o direcional do controle remoto, que move
+   o FOCO do navegador. Sem um foco bem visivel nao da para saber o que esta
+   selecionado -- medido: o site nao tinha NENHUM estilo de `:focus`.
+   Os botoes/cartoes ja sao `<button>` (focaveis de fabrica), entao basta
+   pintar o foco.
+   ========================================================================== */
+.card:focus-visible,
+.aba:focus-visible,
+#voltar:focus-visible,
+#controle:focus-visible,
+#parar:focus-visible,
+#cheia:focus-visible,
+#controle-painel button:focus-visible,
+#controle-lista .item:focus-visible {
+  outline: 3px solid #fbbf24;
+  outline-offset: 2px;
+  border-color: #fbbf24;
+}
+/* Aumenta o que esta em foco para dar para ver de longe */
+.card:focus-visible { transform: scale(1.04); z-index: 2; }
+/*
+  Em telas grandes (TV) os alvos ficam maiores. Medido: em 1920px a grade
+  montava 12 colunas de 148px -- cartoes pequenos demais para se ver de longe
+  (e para acertar com o controle remoto). Aqui o cartao tem um minimo maior, o
+  que reduz o numero de colunas e aumenta cada um.
+*/
+@media (min-width: 1400px) {
+  #grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 18px; }
+  .aba { padding: 12px 20px; font-size: 14px; }
+  .nome { font-size: 14px; padding: 0 12px 12px; }
+  .capa .tag { font-size: 16px; padding: 4px 9px; }
+  #voltar, #controle, #parar, #cheia { padding: 12px 18px; font-size: 13px; }
+  h1 { font-size: 30px; }
+  .cabeca .sub { font-size: 15px; }
+  #controle-painel .caixa { max-width: 620px; font-size: 15px; }
+}
 
 .capa {
   position: relative;

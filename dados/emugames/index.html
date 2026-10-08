@@ -569,17 +569,40 @@
   const lerPreferido = () => { try { return localStorage.getItem(CHAVE_PREFERIDO) || ''; } catch { return ''; } };
   const gravarPreferido = (id) => { try { localStorage.setItem(CHAVE_PREFERIDO, id || ''); } catch { /* ok */ } };
 
+  /**
+   * NOME AMIGAVEL do controle.
+   *
+   * O `id` da Gamepad API varia por navegador: as vezes e' "8BitDo Pro 2
+   * (Bluetooth)", mas muitas vezes vem com o endereco do aparelho --
+   * `045e-02fd-Wireless Controller` (vendor/product em hex) ou ate um IP/MAC
+   * solto, que nao dizem NADA para quem esta segurando o controle.
+   * Aqui o endereco e' removido e sobra o nome de verdade; quando nao sobra
+   * nada, vira "Controle" em vez de mostrar numero.
+   */
+  function nomeDoControle(id) {
+    let s = String(id || '').trim();
+    if (!s) return 'Controle';
+    s = s.replace(/\(?\b(Vendor|Product)\b[:=]?\s*[0-9a-f]{4}\b\)?/gi, ' ');
+    s = s.replace(/\b[0-9a-f]{2}([:-][0-9a-f]{2}){5}\b/gi, ' ');  // MAC
+    s = s.replace(/\b\d{1,3}(\.\d{1,3}){3}\b/g, ' ');             // IP
+    s = s.replace(/\b[0-9a-f]{4}[-:][0-9a-f]{4}[-:]?\b/gi, ' ');  // vendor-product
+    s = s.replace(/\(?\b(STANDARD GAMEPAD|XInput|DirectInput|HID)\b\)?/gi, ' ');
+    s = s.replace(/[\s\-_]+/g, ' ').replace(/\(\s*\)/g, ' ');
+    s = s.replace(/^[\s\-:]+|[\s\-:]+$/g, '').trim();
+    return s || 'Controle';
+  }
+
   const gamepadsConectados = () =>
     Array.from(navigator.getGamepads ? navigator.getGamepads() : [])
       .filter(Boolean)
-      .map((g) => ({ id: g.id, index: g.index, mapping: g.mapping }));
+      .map((g) => ({ id: g.id, index: g.index, mapping: g.mapping, nome: nomeDoControle(g.id) }));
 
   /** Guarda o controle na lista (para reconhecer nas proximas visitas). */
   function salvarControle(gp) {
     const salvos = lerSalvos();
     const jaTem = salvos.find((s) => s.id === gp.id);
-    if (!jaTem) salvos.push({ id: gp.id, mapping: gp.mapping, visto: Date.now() });
-    else jaTem.visto = Date.now();
+    if (!jaTem) salvos.push({ id: gp.id, nome: gp.nome, mapping: gp.mapping, visto: Date.now() });
+    else { jaTem.visto = Date.now(); jaTem.nome = gp.nome; }
     gravarSalvos(salvos);
     // O primeiro que aparece vira o preferido (da' para saber qual e' o seu).
     if (!lerPreferido()) gravarPreferido(gp.id);
@@ -593,12 +616,16 @@
     if (controleBtn) controleBtn.classList.toggle('ativo', n > 0);
     if (!controleEstado) return;
 
+    const esc = (t) => String(t).replace(/[&<>]/g, '');
     const salvos = lerSalvos();
     const pref = lerPreferido();
     if (n) {
-      controleEstado.innerHTML = `<b>✅ Conectado:</b> ` +
-        lista.map((g) => String(g.id).replace(/[&<>]/g, '')).join('<br>');
-      if (pref && lista.some((g) => g.id === pref)) controleEstado.innerHTML += '<br><small>(seu controle salvo)</small>';
+      // Mostra o NOME, nunca o endereco cru.
+      controleEstado.innerHTML = '<b>✅ Conectado:</b> ' +
+        lista.map((g) => esc(g.nome)).join('<br>');
+      if (pref && lista.some((g) => g.id === pref)) {
+        controleEstado.innerHTML += '<br><small>(seu controle salvo)</small>';
+      }
     } else {
       // Ja usou controle antes? Mostra o SEU (o preferido), nao o ultimo que
       // apareceu na lista -- a lista guarda tambem aparelhos de Bluetooth que
@@ -606,8 +633,8 @@
       const controles = salvos.filter((s) => s.id);
       const meu = controles.find((s) => s.id === pref) || controles[controles.length - 1];
       if (meu) {
-        const nome = String(meu.id).replace(/[&<>]/g, '');
-        controleEstado.innerHTML = `<b>Nenhum controle conectado agora.</b><br>` +
+        const nome = esc(meu.nome || nomeDoControle(meu.id));
+        controleEstado.innerHTML = '<b>Nenhum controle conectado agora.</b><br>' +
           `Seu controle: ${nome}<br><small>Ligue-o — ele reconecta no aparelho — e toque em Testar.</small>`;
         return;
       }
@@ -792,8 +819,29 @@
   document.addEventListener('visibilitychange', () => { document.hidden ? aoSairDaPagina() : aoVoltar(); });
   addEventListener('pageshow', aoVoltar);
 
+  /**
+   * Alguem esta JOGANDO agora?
+   *
+   * Na TV (e com controle) nao existe toque nem teclado: a unica atividade vem
+   * do proprio controle. Sem olhar os botoes/analogicos, o jogo seria fechado
+   * por "inatividade" no meio de uma partida. Aqui lemos a Gamepad API: se
+   * qualquer botao estiver pressionado ou algum analogico fora do centro, isso
+   * conta como atividade.
+   */
+  function controleEmUso() {
+    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+    for (const g of pads) {
+      if (!g) continue;
+      if (Array.from(g.buttons || []).some((b) => b && (b.pressed || b.value > 0.2))) return true;
+      if (Array.from(g.axes || []).some((a) => Math.abs(a) > 0.25)) return true;
+    }
+    return false;
+  }
+
   setInterval(() => {
     if (!rodando) return;
+    // Controle em uso conta como atividade -- senao o jogo cairia sozinho.
+    if (controleEmUso()) marcarAtividade();
     if (Date.now() - ocioso < LIMITE) return;
     voltarAoCatalogo();
   }, 5000);

@@ -37,6 +37,67 @@ são L/R). Fica como está — mudar o idioma trocaria o resto da UI; é só ró
 que não há exceção de esquema). Verificado: sem o bloco CSS, **4 asserções
 falham**.
 
+## 📺 RODAR NA TV + nome do controle (out/2026) ✅
+Pedido do dono: *"quero rodar isso na minha tv também"* e *"o bluetooth está por
+IP, eu quero que seja por nome pra eu conseguir identificar"*.
+
+### O NOME DO CONTROLE (era IP/MAC)
+O `id` da Gamepad API **varia por navegador**: às vezes é o nome de verdade
+(`8BitDo Pro 2 (Bluetooth)`), mas muitas vezes vem com o **endereço do
+aparelho** — `045e-02fd-Wireless Controller` (vendor/product em hex) ou até um
+**MAC/IP solto** — que não dizem nada para quem está segurando o controle.
+
+Novo `nomeDoControle(id)` limpa isso: remove `Vendor`/`Product`, MAC, IP,
+`vendor-product` em hex e o ruído do mapeamento (`STANDARD GAMEPAD`, `XInput`,
+`DirectInput`, `HID`). O que sobra é o nome real; quando não sobra nada, vira
+**"Controle"** em vez de mostrar número.
+
+Medido (id → o que aparece):
+| id da API | mostra |
+|---|---|
+| `045e-02fd-Wireless Controller` | **Wireless Controller** |
+| `00:1a:7d:da:71:13` (MAC) | **Controle** |
+| `192.168.0.15` (IP) | **Controle** |
+| `8BitDo Pro 2 (Bluetooth)` | **8BitDo Pro 2 (Bluetooth)** |
+| `Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 05c4)` | **Wireless Controller** |
+
+O nome também é **salvo** junto do controle, então a mensagem "Seu controle: …"
+continua legível nas próximas visitas.
+
+### TV — três coisas que estavam quebradas (medidas)
+1. **Nenhum estilo de foco.** Numa TV não há toque: quem navega é o direcional
+   do **controle remoto**, que move o **foco** do navegador. Medido: o site não
+   tinha **nenhum** `:focus`. Agora há `:focus-visible` com contorno âmbar de
+   3px em tudo que é clicável, e o **cartão em foco cresce** (visível de longe).
+   Os alvos já eram `<button>` (focáveis de fábrica), então o controle remoto
+   tem o que percorrer.
+2. **Cartões pequenos demais.** Em 1920px a grade montava **12 colunas de
+   148px**. Agora, a partir de 1400px, o mínimo sobe para 220px (medido: **8
+   colunas de 223px**) e os botões/textos crescem.
+3. **A INATIVIDADE fechava o jogo.** A atividade só vinha de toque/teclado — e
+   na TV com controle não existe nenhum dos dois. O jogo cairia sozinho **no
+   meio da partida**. Novo `controleEmUso()`: se qualquer botão estiver
+   pressionado ou algum analógico fora do centro, conta como **atividade**.
+
+> O controle virtual **de dedo** não aparece na TV — e isso já estava certo: o
+> EmulatorJS decide por `hasTouchScreen`/`isMobile` (medido numa TV emulada:
+> `gamepadVirtual: none`, 0 botões de dedo, e o jogo em tela cheia).
+
+### Sobre "rodar na TV"
+O site é uma **página web** — roda em qualquer navegador, inclusive o da Smart
+TV, sem nada específico. O que a TV exige é o que foi corrigido acima (foco,
+alvos grandes, inatividade). **Um limite honesto**: navegador de Smart TV costuma
+ser mais antigo e fechado (Tizen/webOS); o EmulatorJS usa WebAssembly e WebGL,
+que as TVs recentes têm, mas em modelos antigos o desempenho pode não bastar.
+Nada disso depende do bot — é o navegador da TV.
+
+### Testes
+`tests/topgear.test.js` — **25 testes / 372 asserções**, com três suítes novas:
+**nome amigável** (as remoções de Vendor/MAC/IP e o fallback "Controle"), **TV**
+(o foco visível, o cartão que cresce, o breakpoint de 1400px com cartões de
+220px, e que os cartões são `<button>`) e **inatividade** (o `controleEmUso`, os
+botões e os analógicos).
+
 ## 🎮 CONTROLE: fluxo de busca + SALVO entre sessoes (out/2026) ✅
 Pedido do dono: *"quero que dê para conectar direto pelo site mesmo, tipo, abrir
 bluetooth, aí a caixinha começa a carregar dispositivos próximos para conectar,

@@ -267,6 +267,57 @@ await test('controle: SALVO entre sessoes (localStorage) + reconexao automatica'
   ok(/reconecta no aparelho/.test(html), 'explica que a reconexao e do aparelho');
 });
 
+await test('controle: nome AMIGAVEL (nunca o IP/MAC do aparelho)', () => {
+  const html = fs.readFileSync(path.join(PROJECT, 'dados/emugames/index.html'), 'utf-8');
+
+  ok(/function nomeDoControle/.test(html), 'tem a funcao que limpa o nome');
+  // O `id` da Gamepad API as vezes vem como endereco: vendor/product em hex
+  // (`045e-02fd-Wireless Controller`) ou MAC/IP -- que nao identificam nada.
+  // Confere pelos TRECHOS reais do codigo (regex dentro de regex e' fragil).
+  const trechoNome = html.slice(html.indexOf('function nomeDoControle'), html.indexOf('const gamepadsConectados'));
+  ok(/Vendor\|Product/.test(trechoNome), 'remove o rotulo Vendor/Product');
+  ok(/\(\[:-/.test(trechoNome) && /\{5\}/.test(trechoNome), 'remove MAC (6 pares hex)');
+  ok(/\\d\{1,3\}/.test(trechoNome) && /\{3\}/.test(trechoNome), 'remove IP');
+  ok(/STANDARD GAMEPAD\|XInput/.test(trechoNome), 'remove o ruido do mapeamento');
+  ok(/return s \|\| 'Controle'/.test(html), 'cai em "Controle" quando nao sobra nome');
+  // O nome e' guardado junto do controle, para as proximas visitas.
+  ok(/nome:\s*gp\.nome/.test(html), 'salva o nome do controle');
+  // E o estado mostra o NOME, nunca o id cru.
+  ok(/lista\.map\(\(g\) => esc\(g\.nome\)\)/.test(html), 'mostra o nome na lista de conectados');
+});
+
+await test('TV: foco visivel para controle remoto + alvos maiores', () => {
+  const css = fs.readFileSync(path.join(PROJECT, 'dados/emugames/style.css'), 'utf-8');
+  const html = fs.readFileSync(path.join(PROJECT, 'dados/emugames/index.html'), 'utf-8');
+
+  // Na TV nao ha toque: quem navega e o direcional do controle remoto, que move
+  // o FOCO. Medido: o site nao tinha NENHUM estilo de :focus.
+  ok(/:focus-visible/.test(css), 'tem estilo de foco (controle remoto)');
+  ok(/\.card:focus-visible[\s\S]{0,400}outline:\s*3px/.test(css), 'o foco e bem visivel');
+  ok(/\.card:focus-visible\s*\{[^}]*transform:\s*scale/.test(css), 'o cartao em foco cresce');
+  ok(/@media\s*\(min-width:\s*1400px\)/.test(css), 'trata tela grande (TV)');
+  ok(/min-width:\s*1400px[\s\S]{0,200}minmax\(220px/.test(css), 'cartoes maiores na TV');
+  // Os alvos ja sao <button> (focaveis de fabrica) -- sem isso o controle
+  // remoto nao teria o que percorrer.
+  ok(/<button[^>]*class="card"/.test(html) || /createElement\('button'\)/.test(html),
+    'os cartoes sao <button> (focaveis pelo controle remoto)');
+});
+
+await test('TV/controle: jogar com controle NAO conta como inatividade', () => {
+  const html = fs.readFileSync(path.join(PROJECT, 'dados/emugames/index.html'), 'utf-8');
+
+  // Medido: a atividade so vinha de toque/teclado. Numa TV com controle o jogo
+  // seria fechado por "inatividade" no meio da partida.
+  ok(/function controleEmUso/.test(html), 'tem a checagem de controle em uso');
+  ok(/controleEmUso\(\)\)\s*marcarAtividade\(\)/.test(html), 'controle em uso conta como atividade');
+  ok(/b\.pressed\s*\|\|\s*b\.value\s*>\s*0\.2/.test(html), 'le os botoes do controle');
+  ok(/Math\.abs\(a\)\s*>\s*0\.25/.test(html), 'le os analogicos do controle');
+  // Numa TV o controle virtual de DEDO nao deve aparecer (nao ha toque) --
+  // quem decide isso e' o proprio EmulatorJS (`hasTouchScreen`/`isMobile`).
+  ok(!/EJS_VirtualGamepadSettings[\s\S]{0,40}isMobile/.test(html),
+    'nao forca o gamepad de dedo (o EmulatorJS decide por hasTouchScreen)');
+});
+
 await test('desempenho: threads com deteccao + headers de isolamento', () => {
   const html = fs.readFileSync(path.join(PROJECT, 'dados/emugames/index.html'), 'utf-8');
   const raiz = path.join(PROJECT, 'dados/emugames');
