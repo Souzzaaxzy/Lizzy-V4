@@ -10163,3 +10163,79 @@ O Worker tambem precisa estar **apontado para o repo `emugames`** no painel do
 Cloudflare (Settings/Build). Se continuar ligado ao `Lizzy-V4` (que **nao tem
 mais** `wrangler.jsonc`/`index.html`), o deploy nao acha os arquivos — mesmo com
 o `.assetsignore` corrigido.
+
+
+## 🎮 EmuGames — LAYOUT dos controles REESCRITO: D-pad e analogico SEPARADOS (out/2026) ✅
+Pedido do dono: corrigir e reorganizar o layout dos controles virtuais mobile,
+com **D-pad e analogico completamente separados** (o analogico invadia o D-pad),
+tudo **responsivo** (sem px fixo), funcionando em portrait/landscape/tela cheia.
+
+### Causa raiz (MEDIDA no navegador headless)
+Reproduzi o DOM do EmulatorJS (clusters + nipple + dpad) num harness
+(`/usr/bin/chromium --dump-dom` + medicao de `getBoundingClientRect`). O baseline
+confirmou o relato: o analogico (`top:100%` dentro do cluster de 125px) subia
+para **cima** e **sobrepunha o D-pad em 13px**. A causa: o `.b_stick` era um
+wrapper **sem tamanho** cujo filho nipple (`position:absolute; top:100%`) ficava
+"no fundo do cluster", colidindo com o D-pad.
+
+### Correção (só CSS do site; nada de lógica/mapeamento)
+`emugames/style.css`, bloco do `#game`. **O JS do gamepad não foi tocado**:
+- `EJS_VirtualGamepadSettings` (ANALOGICO/DPAD/botoes/centro/ombros) **intacto**;
+- `buildRajaContent`/`ajustarGiro`/`aoMudarViewport` **intactos** (a orientação
+  já é recalculada em resize/orientationchange/visualViewport).
+
+O que mudou:
+1. **Tamanhos 100% responsivos por `clamp()` do menor eixo** (nada de px fixo):
+   ```css
+   --gap:  clamp(13px, 3.5vmin, 26px);
+   --lado: min(clamp(150px, 24vh, 225px), 44vmin);   /* o teto em vmin evita
+                                                       estourar em tela curta */
+   --dpad: calc(var(--lado) * 0.92);
+   --stick: var(--lado);
+   --knob: min(clamp(58px, 10vh, 95px), 22vmin);
+   --stack: calc(var(--dpad) + var(--stick) + var(--gap));
+   --ctl:  calc(var(--dpad) + var(--stick) + var(--gap) + 22px);
+   ```
+   A faixa `--ctl` deixou de ser **300px fixo** — agora é derivada do que os dois
+   controles ocupam. `--joy-scale`/`--stick-scale` (escalas fixas) **removidas**.
+2. **Caixas SEPARADAS na mesma coluna** (`.ejs_virtualGamepad_left`):
+   `.b_dpad` ancorado no **topo** (`top:0`) e `.b_stick` ancorado na **base**
+   (`bottom:0`), cada um com largura/altura próprias → as áreas de toque nunca se
+   tocam; sobra exatamente o `--gap`.
+3. **Nipple centralizado**: o elemento do nipplejs traz `top:100%` inline; o CSS
+   `#game .b_stick > div { top:50% !important }` o leva ao **centro** da caixa, e
+   `.back`/`.front` ganham tamanho/centragem do CSS (círculo = `--stick`,
+   joystick = `--knob`).
+4. **Modos tela cheia / girado / paisagem**: a coluna encosta na **base**
+   (`bottom: 10-12px`, `height: var(--stack)`) mantendo o vão — antes esticava
+   full-height e o analógico ia para fora.
+
+### ARMADILHA de CSS medida (custou uma rodada)
+`margin-left: calc(var(--stick) / -2)` com **divisão por número negativo** é
+**inválido** e o navegador **descarta a declaração** — o `.back` ficava com a
+posição inline e caía para fora. Troquei por **`calc(var(--stick) * -0.5)`**
+(multiplicação por `-0.5`), que é válida. Media: a variante `/ -2` "funcionava"
+em alguns casos porque o inline antigo mascarava o descarte.
+
+### Verificação (headless, sem depender de ROM)
+Harness reproduz o DOM real; mede caixa do D-pad, do analógico e **interseção**.
+**15 viewports** (portrait 280-430px, landscape 568-932px, tela cheia, girado,
+tablet, desktop, teclado aberto): **TODOS OK** — sobreposição **0**, nada fora da
+tela, e o vão D-pad↔analógico ≥ 13px em todos.
+Screenshot + análise de pixels: as linhas do D-pad e do analógico **não
+compartilham nenhuma linha** (`linhas-com-AMBOS=0`) em portrait e landscape.
+
+### Testes
+`tests/topgear.test.js` — **25 testes / 377 asserções, 0 falhas**. Asserts do
+layout atualizados: faixa derivada, tamanho por vmin/vh com teto, ausência de
+`--joy-scale`/`--stick-scale`, D-pad no topo e analógico na base (caixas
+separadas), nipple centralizado, e `.assetsignore` excluindo `.git`/`node_modules`
+/`.wrangler` (ver item do deploy Cloudflare).
+**Pré-existente (não é regressão)**: `tests/menu-layout.test.js` — 1 falha
+(`menufig: 17 comandos, veio 18`), confirmada com `git stash` na baseline.
+
+### O que NÃO mudou
+Botões A/B/X/Y, Start/Select, ombros L/R, diamante arcade, Fast/Slow, o mapeamento
+dos índices (4..7 para D-pad e analógico), `gamepadDoJogo` e o motor dos jogos.
+Arquivos: `emugames/style.css` (commit `b7e62d4`) + `tests/topgear.test.js`
+(commit `7cde43a`).
