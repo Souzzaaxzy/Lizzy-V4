@@ -235,6 +235,48 @@ body.girado #controle { top: calc(10px + env(safe-area-inset-top, 0px)); }
   cursor: pointer;
 }
 #controle-painel .acoes button:active { background: var(--acento); border-color: var(--acento); }
+
+/* Lista de aparelhos que a busca encontra */
+#controle-lista { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+#controle-lista .item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--painel2);
+  border: 1px solid var(--borda);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  text-align: left;
+  color: var(--texto);
+  font-family: inherit;
+  cursor: pointer;
+}
+#controle-lista .item:active { background: var(--acento); border-color: var(--acento); }
+#controle-lista .item small { color: var(--fraco); }
+
+/* Aviso de busca em andamento */
+#controle-busca {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #c3cddc;
+  font-size: 12.5px;
+  margin: 10px 0;
+  flex-wrap: wrap;
+}
+#controle-busca small { flex: 1 1 100%; color: var(--fraco); }
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--borda);
+  border-top-color: var(--acento);
+  border-radius: 50%;
+  animation: girar .8s linear infinite;
+  flex: 0 0 auto;
+}
+@keyframes girar { to { transform: rotate(360deg); } }
 #controle-painel #controle-fechar { flex: 0 0 auto; }
 
 /*

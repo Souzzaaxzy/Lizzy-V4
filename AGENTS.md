@@ -37,6 +37,70 @@ são L/R). Fica como está — mudar o idioma trocaria o resto da UI; é só ró
 que não há exceção de esquema). Verificado: sem o bloco CSS, **4 asserções
 falham**.
 
+## 🎮 CONTROLE: fluxo de busca + SALVO entre sessoes (out/2026) ✅
+Pedido do dono: *"quero que dê para conectar direto pelo site mesmo, tipo, abrir
+bluetooth, aí a caixinha começa a carregar dispositivos próximos para conectar,
+aí apertando no dispositivo conecta"* e *"deve salvar o controle mesmo quando
+fechar a página"*.
+
+### O que a web permite (pesquisado + medido — não é suposição)
+- **Gamepad API**: **lê** qualquer controle já pareado, em todo navegador. É o
+  caminho que funciona para controle de jogo — e o EmulatorJS já consome isso
+  (lê `navigator.getGamepads()` a cada 10 ms).
+- **Web Bluetooth API**: **não fala o protocolo de controle de jogo** — o
+  pareamento que ela faz **não alimenta a Gamepad API**. Ela serve para **abrir
+  o seletor de aparelhos do sistema**, que é exatamente o "abrir bluetooth" que
+  o dono pediu. Sites de teste de controle dizem o mesmo: *"para a maioria dos
+  controles comuns (Xbox, PlayStation, Switch Pro) você conecta pelas
+  configurações de Bluetooth do computador primeiro"*; o pareamento direto só
+  vale para alguns modelos BLE específicos.
+- **Não existe API de "controles salvos"**: quem lembra do controle entre
+  sessões é o **SO**, porque ele fica pareado.
+- **Privacidade do navegador**: o controle só aparece na `getGamepads()` depois
+  de um **toque num botão dele** — por isso o "Testar" agora diz isso.
+
+**Conclusão honesta**: um botão que *pareia* o controle sozinho não existe na
+web. O que dá para fazer — e foi feito — é abrir o seletor do sistema, mostrar o
+que aparece, **salvar** o controle e reconhecê-lo sozinho nas próximas vezes.
+
+### O que foi implementado
+1. **"Abrir Bluetooth"** abre o seletor (`requestDevice({ acceptAllDevices: true })`),
+   com o aviso **"Procurando aparelhos por perto…"** e spinner enquanto a caixa
+   do sistema está aberta. Ao escolher, o aparelho aparece com o **nome** e fica
+   registrado. Cancelar (`NotFoundError`) não quebra nada.
+2. **Lista** (`#controle-lista`) e estado prontos para receber os aparelhos.
+3. **Salvo entre sessões** (`localStorage`): `emugames.controles` guarda os
+   controles já vistos (id + mapeamento + quando) e `emugames.controlePreferido`
+   guarda **qual é o seu**. Nada de duplicar o mesmo controle.
+4. **Reconhecimento automático**: ao abrir o site, se houver controle salvo, o
+   player procura por ele por ~20 s; quando o controle volta a ser pareado, o
+   site o reconhece e avisa — sem o usuário fazer nada.
+5. **Texto honesto** quando o controle salvo não está conectado: *"Seu controle:
+   <nome> — ligue-o (ele reconecta no aparelho) e toque em Testar"*. Mostra o
+   **preferido**, não o último aparelho da lista (a lista também guarda
+   aparelhos de Bluetooth que não são controle).
+6. **Sem Web Bluetooth** (iPhone, por exemplo): cai no caminho manual, que
+   sempre funciona — parear pelas configurações do aparelho.
+
+### Verificado no navegador (com controle injetado + Web Bluetooth falso)
+| passo | resultado |
+|---|---|
+| sem controle | `CONTROLE`, cinza, "Seu controle: 8BitDo Pro 2…" (salvo) |
+| Abrir Bluetooth | o seletor foi chamado e o aparelho escolhido foi registrado |
+| controle conectado | **`CONTROLE (1)`**, **verde**, "(seu controle salvo)" |
+| **fechou e reabriu a página** | **ainda lembrava** o controle salvo |
+| reconectou | `CONTROLE (1)`, verde, reconhecido sozinho |
+| dois controles | `CONTROLE (2)`, os dois listados |
+
+Zero exceções em todo o fluxo.
+
+### Testes
+`tests/topgear.test.js` — **22 testes / 353 asserções**, com a suíte nova
+**"controle: SALVO entre sessoes"** (localStorage, os dois registros, não
+duplicar, a busca dos salvos, o texto do controle salvo) e as asserções do fluxo
+de busca (lista, spinner, `acceptAllDevices`, cancelamento tratado, e o texto
+que manda parear **pelo aparelho** em vez de prometer pareamento pela web).
+
 ## 🎮 CONTROLE Bluetooth + DESEMPENHO (threads) (out/2026) ✅
 Pedido do dono: melhorar a latência "para parar de travar" e um botãozinho no
 canto superior esquerdo para conectar controle Bluetooth.

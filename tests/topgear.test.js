@@ -240,6 +240,31 @@ await test('controle Bluetooth: botao no canto + deteccao real pela Gamepad API'
   ok(/configurações do aparelho|configuracoes de Bluetooth/.test(html), 'e ensina o caminho manual');
   ok(/Testar/.test(html), 'tem o teste honesto (so acende se a API enxergar)');
   ok(/#controle\.ativo/.test(css), 'fica verde quando ha controle (dado real)');
+
+  // FLUXO "abrir Bluetooth -> lista -> escolher"
+  ok(/id="controle-lista"/.test(html), 'tem a lista de aparelhos');
+  ok(/id="controle-busca"/.test(html) && /spinner/.test(css), 'mostra o "procurando…" com o spinner');
+  ok(/requestDevice\(\{[\s\S]{0,80}acceptAllDevices:\s*true/.test(html), 'a busca aceita todos os aparelhos');
+  ok(/device\?\.name|device\.name/.test(html), 'mostra o nome do aparelho escolhido');
+  ok(/e\?\.name\s*!==\s*'NotFoundError'|NotFoundError/.test(html), 'trata o cancelamento da busca sem quebrar');
+  // O pareamento de controle NAO e' feito pela Web Bluetooth -- o texto diz isso
+  // (nao promete o que a API nao faz) e manda pro Bluetooth do sistema.
+  ok(/configurações do aparelho|configuracoes do aparelho/.test(html),
+    'manda parear pelo Bluetooth DO APARELHO (a Web Bluetooth nao pareia controle)');
+});
+
+await test('controle: SALVO entre sessoes (localStorage) + reconexao automatica', () => {
+  const html = fs.readFileSync(path.join(PROJECT, 'dados/emugames/index.html'), 'utf-8');
+
+  ok(/localStorage/.test(html), 'usa o armazenamento local');
+  ok(/emugames\.controles/.test(html), 'guarda a lista de controles ja vistos');
+  ok(/emugames\.controlePreferido/.test(html), 'guarda qual e o controle do usuario');
+  ok(/function salvarControle/.test(html), 'tem a funcao que salva o controle');
+  ok(/salvos\.find\(\(s\)\s*=>\s*s\.id\s*===\s*gp\.id\)/.test(html), 'nao duplica o mesmo controle');
+  ok(/procurarControlesSalvos/.test(html), 'procura os controles salvos ao abrir o site');
+  ok(/Seu controle:/.test(html), 'mostra qual e o controle salvo quando ele nao esta conectado');
+  // A reconexao e' do SO (o controle fica pareado); o site so reconhece.
+  ok(/reconecta no aparelho/.test(html), 'explica que a reconexao e do aparelho');
 });
 
 await test('desempenho: threads com deteccao + headers de isolamento', () => {

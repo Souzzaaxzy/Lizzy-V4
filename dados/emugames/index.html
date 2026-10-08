@@ -54,13 +54,22 @@
   <div class="caixa">
     <h2>🎮 Controle Bluetooth</h2>
     <p id="controle-estado">Nenhum controle conectado.</p>
-    <ol>
+
+    <!-- Lista de dispositivos. Enche sozinha enquanto a busca roda. -->
+    <div id="controle-lista" hidden></div>
+    <p id="controle-busca" hidden>
+      <span class="spinner"></span> Procurando aparelhos por perto…
+      <small>Ligue o controle e segure o botão de pareamento.</small>
+    </p>
+
+    <ol id="controle-passos">
       <li>Ligue o controle e deixe no modo <b>pareamento</b>.</li>
-      <li>Abra as <b>configurações de Bluetooth</b> do aparelho.</li>
-      <li>Conecte no controle. Ao voltar aqui ele já aparece.</li>
+      <li>Toque em <b>Abrir Bluetooth</b> e escolha o controle na lista.</li>
+      <li>Se ele não aparecer, autorize pelo sistema do aparelho e volte.</li>
     </ol>
-    <p class="dica">Depois de conectado, os botões e o analógico do controle
-      funcionam sozinhos — não precisa configurar nada.</p>
+    <p class="dica">Depois de conectado, os botões e o analógico funcionam
+      sozinhos — não precisa configurar nada. O controle fica salvo para as
+      próximas vezes.</p>
     <div class="acoes">
       <button id="controle-bt" type="button">Abrir Bluetooth</button>
       <button id="controle-testar" type="button">Testar</button>
@@ -526,37 +535,145 @@
   // ==========================================================================
   // CONTROLE BLUETOOTH
   //
-  // O pareamento em si e' do SISTEMA (Bluetooth do aparelho) -- nenhuma pagina
-  // web pode fazer isso; a Web Bluetooth API nao serve para controle de jogo.
-  // O que o navegador faz e' LER o controle ja pareado pela Gamepad API, e o
-  // EmulatorJS ja consome isso (o motor dele le `navigator.getGamepads()` a
-  // cada 10ms). Entao o botao aqui:
-  //   1. mostra o estado REAL (lendo a Gamepad API, sem inventar);
-  //   2. ensina a parear e leva direto as configuracoes de Bluetooth quando o
-  //      aparelho permite (a Web Bluetooth API), com a instrucao manual de
-  //      reserva quando nao permite (iPhone, por exemplo);
-  //   3. liga o controle sozinho quando ele aparece -- sem configurar nada.
+  // O QUE A WEB PERMITE (medido/pesquisado, para nao prometer o que nao existe):
+  //   - A Gamepad API **le** qualquer controle ja pareado, em todo navegador --
+  //     e o EmulatorJS ja consome isso (le `navigator.getGamepads()` a cada
+  //     10ms). E' o caminho que funciona para controle de jogo.
+  //   - A Web Bluetooth API **nao fala o protocolo de controle de jogo**: o
+  //     pareamento que ela faz nao alimenta a Gamepad API. Ela serve para
+  //     ABRIR o seletor de dispositivos do sistema -- e' o "abrir Bluetooth".
+  //   - O pareamento em si e' do SISTEMA (Bluetooth do aparelho). Nenhuma
+  //     pagina web pode parear um controle de jogo sozinha.
+  //   - A Gamepad API **nao tem** API de "controles salvos": quem lembra do
+  //     controle entre sessoes e' o proprio SO, porque ele fica pareado.
+  //
+  // O que este codigo faz, entao:
+  //   1. "Abrir Bluetooth" abre o seletor do sistema (Web Bluetooth) e mostra
+  //      a lista de aparelhos que aparecem;
+  //   2. o estado e' SEMPRE lido da Gamepad API -- nunca inventado;
+  //   3. **salva** os controles ja vistos (id + mapeamento) no `localStorage` e,
+  //      ao abrir o site de novo, procura por eles: quando o controle volta a
+  //      ser pareado, o site o reconhece sozinho e avisa;
+  //   4. ensina o caminho manual quando o navegador nao tem Web Bluetooth.
   // ==========================================================================
+  const CHAVE_CONTROLES = 'emugames.controles';   // controles ja vistos
+  const CHAVE_PREFERIDO = 'emugames.controlePreferido';
+
+  const lerSalvos = () => {
+    try { return JSON.parse(localStorage.getItem(CHAVE_CONTROLES) || '[]') || []; }
+    catch { return []; }
+  };
+  const gravarSalvos = (lista) => {
+    try { localStorage.setItem(CHAVE_CONTROLES, JSON.stringify(lista.slice(0, 8))); } catch { /* ok */ }
+  };
+  const lerPreferido = () => { try { return localStorage.getItem(CHAVE_PREFERIDO) || ''; } catch { return ''; } };
+  const gravarPreferido = (id) => { try { localStorage.setItem(CHAVE_PREFERIDO, id || ''); } catch { /* ok */ } };
+
   const gamepadsConectados = () =>
     Array.from(navigator.getGamepads ? navigator.getGamepads() : [])
       .filter(Boolean)
-      .map((g) => g.id);
+      .map((g) => ({ id: g.id, index: g.index, mapping: g.mapping }));
+
+  /** Guarda o controle na lista (para reconhecer nas proximas visitas). */
+  function salvarControle(gp) {
+    const salvos = lerSalvos();
+    const jaTem = salvos.find((s) => s.id === gp.id);
+    if (!jaTem) salvos.push({ id: gp.id, mapping: gp.mapping, visto: Date.now() });
+    else jaTem.visto = Date.now();
+    gravarSalvos(salvos);
+    // O primeiro que aparece vira o preferido (da' para saber qual e' o seu).
+    if (!lerPreferido()) gravarPreferido(gp.id);
+  }
 
   function atualizarEstadoControle() {
     const lista = gamepadsConectados();
+    lista.forEach(salvarControle);
     const n = lista.length;
     if (controleTexto) controleTexto.textContent = n ? `CONTROLE (${n})` : 'CONTROLE';
     if (controleBtn) controleBtn.classList.toggle('ativo', n > 0);
-    if (controleEstado) {
-      controleEstado.innerHTML = n
-        ? `<b>Conectado:</b> ${lista.map((id) => String(id).replace(/[&<>]/g, '')).join('<br>')}`
-        : 'Nenhum controle conectado.';
+    if (!controleEstado) return;
+
+    const salvos = lerSalvos();
+    const pref = lerPreferido();
+    if (n) {
+      controleEstado.innerHTML = `<b>✅ Conectado:</b> ` +
+        lista.map((g) => String(g.id).replace(/[&<>]/g, '')).join('<br>');
+      if (pref && lista.some((g) => g.id === pref)) controleEstado.innerHTML += '<br><small>(seu controle salvo)</small>';
+    } else {
+      // Ja usou controle antes? Mostra o SEU (o preferido), nao o ultimo que
+      // apareceu na lista -- a lista guarda tambem aparelhos de Bluetooth que
+      // nao sao controle.
+      const controles = salvos.filter((s) => s.id);
+      const meu = controles.find((s) => s.id === pref) || controles[controles.length - 1];
+      if (meu) {
+        const nome = String(meu.id).replace(/[&<>]/g, '');
+        controleEstado.innerHTML = `<b>Nenhum controle conectado agora.</b><br>` +
+          `Seu controle: ${nome}<br><small>Ligue-o — ele reconecta no aparelho — e toque em Testar.</small>`;
+        return;
+      }
+      controleEstado.textContent = 'Nenhum controle conectado.';
     }
   }
 
   function abrirPainelControle(abrir) {
     controlePainel.hidden = abrir === undefined ? !controlePainel.hidden : !abrir;
     if (!controlePainel.hidden) atualizarEstadoControle();
+    else esconderListaControle();
+  }
+
+  const listaEl = document.getElementById('controle-lista');
+  const buscaEl = document.getElementById('controle-busca');
+  const passosEl = document.getElementById('controle-passos');
+
+  function esconderListaControle() {
+    if (listaEl) { listaEl.hidden = true; listaEl.innerHTML = ''; }
+    if (buscaEl) buscaEl.hidden = true;
+    if (passosEl) passosEl.hidden = false;
+  }
+
+  /**
+   * "Abrir Bluetooth": abre o seletor de aparelhos do sistema (Web Bluetooth) e
+   * mostra a lista do que for aparecendo. O pareamento de verdade acontece no
+   * SO; aqui so mostramos e, ao escolher, guardamos o aparelho escolhido.
+   */
+  async function abrirBluetooth() {
+    if (!navigator.bluetooth?.requestDevice) {
+      if (controleEstado) {
+        controleEstado.innerHTML = 'Este navegador não abre o Bluetooth por aqui. ' +
+          'Use as <b>configurações do aparelho</b> para parear o controle — ' +
+          'ele é reconhecido sozinho ao voltar.';
+      }
+      return;
+    }
+    if (buscaEl) buscaEl.hidden = false;
+    if (passosEl) passosEl.hidden = true;
+    try {
+      // `acceptAllDevices` lista o que estiver por perto (e autorizado antes).
+      const device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: [],
+      });
+      // Guarda o aparelho escolhido para reconhecer depois. Nao pareia o
+      // controle (isso e' do SO), mas registra a escolha.
+      const salvos = lerSalvos();
+      if (device?.id && !salvos.find((s) => s.bluetoothId === device.id)) {
+        salvos.push({ bluetoothId: device.id, nome: device.name || 'aparelho', visto: Date.now() });
+        gravarSalvos(salvos);
+      }
+      if (controleEstado) {
+        controleEstado.innerHTML = `Aparelho escolhido: <b>${String(device?.name || 'sem nome').replace(/[&<>]/g, '')}</b><br>` +
+          '<small>Agora confirme a conexão nas configurações do aparelho, se ele pedir.</small>';
+      }
+    } catch (e) {
+      // Cancelou ou o navegador recusou -- nao e' erro fatal.
+      if (controleEstado && e?.name !== 'NotFoundError') {
+        controleEstado.innerHTML = 'A busca foi encerrada. ' +
+          'Se o controle não apareceu, pareie pelas <b>configurações do aparelho</b>.';
+      }
+    } finally {
+      if (buscaEl) buscaEl.hidden = true;
+      atualizarEstadoControle();
+    }
   }
 
   controleBtn?.addEventListener('click', () => abrirPainelControle());
@@ -564,46 +681,51 @@
   controlePainel?.addEventListener('click', (e) => {
     if (e.target === controlePainel) abrirPainelControle(false); // toca fora fecha
   });
+  document.getElementById('controle-bt')?.addEventListener('click', abrirBluetooth);
 
-  // "Abrir Bluetooth": a Web Bluetooth API consegue abrir a tela do sistema em
-  // parte dos navegadores (Chrome no Android). Ela NAO pareia controle de jogo
-  // -- serve aqui como atalho. Quando o navegador nao suporta, fica a instrucao
-  // manual, que sempre funciona.
-  document.getElementById('controle-bt')?.addEventListener('click', async () => {
-    if (!navigator.bluetooth?.requestDevice) {
-      if (controleEstado) {
-        controleEstado.innerHTML = 'Este navegador não abre a tela de Bluetooth. ' +
-          'Use as <b>configurações do aparelho</b> para parear — depois volte aqui.';
-      }
-      return;
-    }
-    try {
-      await navigator.bluetooth.requestDevice({ acceptAllDevices: true });
-    } catch { /* o usuario cancelou -- sem problema */ }
-    atualizarEstadoControle();
-  });
-
-  // "Testar": quem estiver conectado acende. E' o teste honesto -- so muda de
-  // cor se a Gamepad API realmente enxergar o controle.
+  // "Testar": so acende se a Gamepad API REALMENTE enxergar o controle.
+  // Muitos navegadores so expoem o controle depois de um toque num botao dele
+  // (privacidade), entao a dica e' essa.
   document.getElementById('controle-testar')?.addEventListener('click', () => {
     atualizarEstadoControle();
     const n = gamepadsConectados().length;
     if (controleEstado) {
       controleEstado.innerHTML = n
         ? `✅ ${n} controle(s) respondendo. Pode jogar — os botões já funcionam.`
-        : '❌ Nada ainda. Pareie pelo Bluetooth do aparelho e toque em Testar de novo.';
+        : '❌ Ainda não. <b>Aperte qualquer botão do controle</b> (o navegador só ' +
+          'mostra ele depois de um toque) e toque em Testar de novo.';
     }
   });
 
-  // O navegador avisa quando um controle entra ou sai. Aproveitamos para
-  // atualizar o rotulo e, se for o primeiro, fechar o painel.
+  // O navegador avisa quando um controle entra ou sai.
   ['gamepadconnected', 'gamepaddisconnected'].forEach((ev) =>
-    addEventListener(ev, () => {
+    addEventListener(ev, (e) => {
+      if (ev === 'gamepadconnected' && e?.gamepad) salvarControle(e.gamepad);
       atualizarEstadoControle();
-      if (ev === 'gamepadconnected' && !controlePainel.hidden) setTimeout(() => abrirPainelControle(false), 900);
+      // Conectou: fecha o painel sozinho depois de um instante.
+      if (ev === 'gamepadconnected' && !controlePainel.hidden) setTimeout(() => abrirPainelControle(false), 1200);
     }));
 
   atualizarEstadoControle();
+
+  // Procura os controles SALVOS: se algum deles voltar a ser pareado no
+  // aparelho, o site reconhece sozinho e avisa -- sem o usuario fazer nada.
+  (function procurarControlesSalvos() {
+    const salvos = lerSalvos();
+    if (!salvos.length) return;
+    let tentativas = 0;
+    const iv = setInterval(() => {
+      tentativas += 1;
+      const lista = gamepadsConectados();
+      if (lista.length) {
+        lista.forEach(salvarControle);
+        atualizarEstadoControle();
+        clearInterval(iv);
+        return;
+      }
+      if (tentativas >= 40) clearInterval(iv); // ~20s
+    }, 500);
+  })();
 
   // ==========================================================================
   // EVENTOS
