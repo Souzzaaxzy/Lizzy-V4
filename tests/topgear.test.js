@@ -180,7 +180,9 @@ await test('index.html: player multi-jogo com os caminhos certos', () => {
   ok(/--lado:\s*min\(clamp\([^)]*vh[^)]*\),\s*46vmin,\s*34vh\)/.test(css), 'o tamanho base vem do viewport (vh) com teto em vmin/vh');
   ok(/--dpad:\s*calc\(var\(--lado\)/.test(css), 'o D-pad e derivado do tamanho base');
   ok(/--stick:\s*calc\(var\(--lado\)\s*\*\s*1\.15\)/.test(css), 'o analogico e ~15% maior que a base');
-  ok(/--knob:\s*min\(clamp\([^)]*vh[^)]*\),\s*\d+vmin\)/.test(css), 'o joystick interno e responsivo (clamp + teto)');
+  // O botao do meio e PROPORCIONAL ao anel (nunca passa do cinza: ratio < 1).
+  ok(/--knob:\s*calc\(var\(--stick\)\s*\*\s*0\.\d+\)/.test(css), 'o joystick interno e proporcional ao anel');
+  ok(/--knob:\s*calc\(var\(--stick\)\s*\*\s*0\.55\)/.test(css), 'o botao do meio e um pouco maior (55% do anel) e < 100% (nao passa do cinza)');
   ok(/--gap:\s*clamp\([^)]*vmin[^)]*\)/.test(css), 'o vao entre os dois e responsivo (vmin)');
   ok(!/--joy-scale/.test(css), 'nao ha mais escala fixa do cluster (era px fixo)');
   ok(!/--stick-scale/.test(css), 'nao ha mais escala fixa do analogico (era px fixo)');
