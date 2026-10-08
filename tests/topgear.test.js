@@ -161,6 +161,12 @@ await test('index.html: player multi-jogo com os caminhos certos', () => {
   ok(/exitEmulation:\s*true/.test(html), 'tem botao de sair');
   ok(!/EM_SALA|netplay/i.test(html), 'nao tem mais nada de sala/netplay');
   ok(html.includes('EJS_onExit'), 'detecta a saida');
+  // ROTAS: ao voltar (ou no catalogo), a URL e normalizada para a rota do
+  // catalogo (sem `?jogo=`), senao a barra continuava com a rota do jogo.
+  ok(/voltarAoCatalogo[\s\S]{0,400}new URLSearchParams\(location.search\)\.has\('jogo'\)/.test(html),
+    'voltar limpa o ?jogo da URL');
+  ok(/params\.has\('jogo'\)[\s\S]{0,200}#\//.test(html),
+    'no catalogo a URL e normalizada (sem ?jogo)');
   ok(html.includes('id="parar"'), 'tem botao PARAR');
   ok(html.includes('3 * 60 * 1000'), 'desliga por inatividade (3 min)');
   ok(html.includes('visibilitychange'), 'para ao sair da aba');
@@ -260,6 +266,19 @@ await test('gamepad: ANALOGICO + D-PAD em todos os jogos', () => {
   // mantem esse centro alinhado ao desenho (era o bug das direcoes).
   ok(/\.b_stick\s*>\s*div\s*\{[^}]*top:\s*100%\s*!important/s.test(css), 'o nipple ancora no ponto da zona (top:100%)');
   ok(/--stick-scale/.test(css) === false, 'sem escala fixa do analogico (era px fixo)');
+  // COR do analogico: anel cinza opaco + joystick preto com bolinhas pequenas.
+  ok(/\.b_stick\s+\.back\s*\{[^}]*background-color:\s*#8b8b8b/s.test(css),
+    'o anel do analogico e cinza opaco');
+  ok(/\.b_stick\s+\.back\s*\{[^}]*background-image:\s*none/s.test(css),
+    'o anel nao tem mais o degrade (era o gradiente do nipple)');
+  ok(/\.b_stick\s+\.front\s*\{[^}]*background-color:\s*#000/s.test(css),
+    'o joystick do analógico e preto');
+  ok(/\.b_stick\s+\.front\s*\{[^}]*radial-gradient/s.test(css)
+     && /\.b_stick\s+\.front\s*\{[^}]*background-size:\s*7px 7px/s.test(css),
+    'o joystick tem bolinhas cinzas pequenas (radial-gradient 7px)');
+  // DOIS rotulos dos cantos (ESQ/DIR = ombros L/R; pt-BR traduz L->ESQ, R->DIR).
+  ok(/\.b_l,\s*\n#game\s+\.b_r\s*\{[^}]*display:\s*none/s.test(css),
+    'os dois rotulos dos cantos (ESQ/DIR) foram removidos');
   ok(/\.b_l\s*\{\s*top:\s*-22px/.test(css), 'o ombro L nao sai da caixa com o cluster maior');
 });
 
