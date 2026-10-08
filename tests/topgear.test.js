@@ -166,23 +166,26 @@ await test('index.html: player multi-jogo com os caminhos certos', () => {
   ok(html.includes('visibilitychange'), 'para ao sair da aba');
   const css = fs.readFileSync(path.join(SITE, 'style.css'), 'utf-8');
   ok(css.includes('ejs_virtualGamepad_parent'), 'reposiciona os controles de toque (css)');
-  // A faixa cresceu: agora cabem DOIS controles empilhados (D-pad + analogico).
-  ok(/--ctl:\s*300px/.test(css), 'a faixa dos controles tem 300px (dpad + analogico)');
+  // A faixa e' DERIVADA dos controles (dpad + analogico + vao), nunca um px fixo.
+  ok(/--ctl:\s*calc\(.*--dpad.*--stick.*--gap/s.test(css), 'a faixa e a soma dos dois controles + o vao');
   ok(/height:\s*calc\(.*var\(--ctl\)\)/.test(css), 'a caixa reserva a faixa dos controles');
   ok(/ejs_canvas_parent[^}]*height:\s*calc\(100% - var\(--ctl\)\)/s.test(css), 'a tela ocupa so o andar de cima');
-  // Controles maiores: escala dos clusters (dpad/joystick e botoes).
-  ok(/--joy-scale:\s*1;/.test(css), 'o cluster esquerdo nao e escalado (o analogico tem a propria)');
-  ok(/--stick-scale:\s*1\.3/.test(css), 'o analogico e 30% maior (--stick-scale 1.3)');
-  ok(/\.b_stick\s*>\s*div\s*\{[^}]*scale\(var\(--stick-scale\)\)/s.test(css), 'a escala do analogico e aplicada');
+  // Responsivo: tamanho sai do menor eixo do viewport (vmin/vh) com teto, sem px fixo.
+  ok(/--lado:\s*min\(clamp\([^)]*vh[^)]*\),\s*\d+vmin\)/.test(css), 'o tamanho base vem do viewport (vh) com teto em vmin');
+  ok(/--dpad:\s*calc\(var\(--lado\)/.test(css), 'o D-pad e derivado do tamanho base');
+  ok(/--stick:\s*var\(--lado\)/.test(css), 'o analogico usa o tamanho base');
+  ok(/--knob:\s*min\(clamp\([^)]*vh[^)]*\),\s*\d+vmin\)/.test(css), 'o joystick interno e responsivo (clamp + teto)');
+  ok(/--gap:\s*clamp\([^)]*vmin[^)]*\)/.test(css), 'o vao entre os dois e responsivo (vmin)');
+  ok(!/--joy-scale/.test(css), 'nao ha mais escala fixa do cluster (era px fixo)');
+  ok(!/--stick-scale/.test(css), 'nao ha mais escala fixa do analogico (era px fixo)');
   ok(/--btn-scale:\s*1\.4/.test(css), 'botoes +20px em retrato (--btn-scale 1.4)');
-  ok(/transform:\s*scale\(var\(--joy-scale\)\)/.test(css), 'escala o cluster esquerdo (dpad/joystick)');
   ok(/transform:\s*scale\(var\(--btn-scale\)\)/.test(css), 'escala o cluster direito (botoes)');
   // Paisagem: tela cheia + controles +40px.
   ok(/@media\s*\(orientation:\s*landscape\)/.test(css), 'tem o modo paisagem');
   // Em paisagem o jogo ocupa a tela sozinho e os controles crescem. Os valores
   // foram recalibrados para o cluster do meio caber (ver o Fast/Slow abaixo).
-  ok(/orientation:\s*landscape[\s\S]*--joy-scale:\s*1\.24/.test(css), 'paisagem: dpad/analogico maior (1.24)');
   ok(/orientation:\s*landscape[\s\S]*--btn-scale:\s*1\.62/.test(css), 'paisagem: botoes maiores (1.62)');
+  ok(/orientation:\s*landscape[\s\S]*--stack[\s\S]*bottom:\s*10px/.test(css), 'paisagem: a coluna encosta na base (mantendo o vao)');
   ok(/orientation:\s*landscape[\s\S]*position:\s*fixed/.test(css), 'paisagem: o player ocupa a tela cheia');
   ok(/orientation:\s*landscape[\s\S]*#barra,\s*#controles\s*\{\s*display:\s*none/.test(css), 'paisagem: esconde a barra/cont roles');
   ok(/\.b_r\s*\{\s*top:\s*-70px/.test(css), 'aproxima o ombro R (nao sai da tela)');
@@ -229,21 +232,29 @@ await test('gamepad: ANALOGICO + D-PAD em todos os jogos', () => {
   ok(/return\s*\[ANALOGICO,\s*DPAD/.test(html), 'o analogico vem antes do dpad no gamepad');
   ok(/if \(console === 'snes'\)/.test(html) && /if \(console === 'arcade'\)/.test(html),
     'snes e arcade recebem o gamepad novo');
-  // O cluster esquerdo tem as duas pecas posicionadas (dpad no topo, stick abaixo).
-  ok(/\.b_stick\s*>\s*div\s*\{[^}]*top:\s*152px/s.test(css), 'o analogico fica ABAIXO do dpad');
-  ok(/\.b_dpad\s*\{[^}]*margin-left/.test(css) && /\.b_stick\s*\{[^}]*margin-left/.test(css),
-    'as duas pecas vao um pouco para a esquerda');
-
-  // SEPARACAO dos dois (o dono reclamou que "estavam conflitando"): o D-pad
-  // sobe 25px e o analogico vai 25px para a direita. Medido: antes eles se
-  // sobrepunham em 38px, entao tocar a seta de baixo acertava o analogico.
-  ok(/\.ejs_dpad_main\s*\{\s*transform:\s*translateY\(-25px\)/.test(css), 'o D-pad sobe 25px');
-  ok(/\.b_stick\s+\.back\s*\{\s*left:\s*25px\s*!important/.test(css), 'o analogico vai 25px para a direita');
-  // O alvo do deslocamento e' o `.back` (o circulo visivel do nipple), nao o
-  // wrapper: mover o wrapper nao mexe no desenho.
-  ok(/\.b_stick\s*>\s*div\s*\{[^}]*top:\s*152px/s.test(css) && !/\.b_stick\s*>\s*div\s*\{[^}]*left:/s.test(css),
-    'o wrapper do analogico nao recebe left (so o circulo)');
-  ok(/--stick-scale:\s*1\.3/.test(css), 'analogico ~30px maior');
+  // CAIXAS SEPARADAS dentro da coluna esquerda: D-pad ancorado no TOPO, o
+  // analogico ancorado na BASE. Como cada um tem a propria largura/altura
+  // (var(--dpad) / var(--stick)), as areas de toque nunca se tocam.
+  ok(/\.ejs_virtualGamepad_left\s+\.b_dpad\s*\{[^}]*top:\s*0\s*!important/s.test(css)
+     && /\.ejs_virtualGamepad_left\s+\.b_dpad\s*\{[^}]*width:\s*var\(--dpad\)/s.test(css),
+    'o D-pad fica no TOPO da coluna, com a propria caixa');
+  ok(/\.ejs_virtualGamepad_left\s+\.b_stick\s*\{[^}]*bottom:\s*0\s*!important/s.test(css)
+     && /\.ejs_virtualGamepad_left\s+\.b_stick\s*\{[^}]*width:\s*var\(--stick\)/s.test(css),
+    'o analogico fica na BASE da coluna (abaixo do D-pad), com a propria caixa');
+  // A caixa da COLUNA tem a altura do conjunto (--stack) -> preserva o --gap.
+  ok(/\.ejs_virtualGamepad_left\s*\{[^}]*width:\s*var\(--stick\)/s.test(css)
+     && /--stack:\s*calc\(var\(--dpad\)[^)]*var\(--stick\)[^)]*var\(--gap\)/.test(css),
+    'a coluna tem a largura do controle e a altura do conjunto (dpad+stick+vao)');
+  // O circulo visivel (.back) e' dimensionado/centralizado pelo CSS (nao mais
+  // pelo inline do nipple), e o joystick interno pelo --knob.
+  ok(/\.b_stick\s+\.back\s*\{[^}]*width:\s*var\(--stick\)/s.test(css)
+     && /\.b_stick\s+\.back\s*\{[^}]*margin-left:\s*calc\(var\(--stick\)/s.test(css),
+    'o circulo do analogico e dimensionado e centralizado pelo CSS');
+  ok(/\.b_stick\s+\.front\s*\{[^}]*width:\s*var\(--knob\)/s.test(css),
+    'o joystick interno usa --knob');
+  // O nipple traz `top:100%` inline; o CSS o leva ao CENTRO da caixa .b_stick.
+  ok(/\.b_stick\s*>\s*div\s*\{[^}]*top:\s*50%\s*!important/s.test(css), 'o nipple fica no centro da caixa');
+  ok(/--stick-scale/.test(css) === false, 'sem escala fixa do analogico (era px fixo)');
   ok(/\.b_l\s*\{\s*top:\s*-22px/.test(css), 'o ombro L nao sai da caixa com o cluster maior');
 });
 
@@ -594,7 +605,12 @@ await test('o kof97.zip esta fora do upload do Cloudflare (.assetsignore)', () =
   const txt = fs.readFileSync(ig, 'utf-8');
   const linhas = txt.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
   ok(linhas.includes('jogos/arcade/kof97.zip'), 'exclui o kof97.zip do upload');
-  ok(linhas.length === 1, `exclui so o arquivo grande (veio ${linhas.length} regra(s))`);
+  // .git tambem precisa sair: o wrangler varre a RAIZ e o pack do .git guarda o
+  // blob do kof97.zip (27,6 MiB) -> sem isto o deploy morre com "Asset too large".
+  ok(linhas.includes('.git'), 'exclui o .git da varredura de assets');
+  ok(linhas.includes('node_modules') && linhas.includes('.wrangler'), 'exclui node_modules/.wrangler');
+  // So regras de exclusao (nada de reincluir arquivo): nenhuma linha com `!`.
+  ok(!linhas.some((l) => l.startsWith('!')), 'nao reinclui nenhum arquivo');
 });
 
 await test('o host (Cloudflare) nao depende de espelho externo', () => {
