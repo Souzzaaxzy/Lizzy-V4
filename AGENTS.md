@@ -10106,3 +10106,60 @@ controlada sem yt-dlp). Pular rede com `OFFLINE=1`.
 ### Requisito
 `yt-dlp` + `FFmpeg` no servidor (o bot já exige ambos para o `!play`). Sem eles,
 só o áudio falha — com mensagem específica.
+
+
+## 🚑 EmuGames — DEPLOY no Cloudflare falhava com "Asset too large" (out/2026) ✅
+Sintoma: o build do Worker (EmuGames) morria na etapa **"Building list of
+assets"**:
+
+```
+✨ Read 214 files from the assets directory /opt/buildhome/repo
+✘ [ERROR] Asset too large.
+  ...found a file /opt/buildhome/repo/.git/objects/fe/6705098... with a size of 27.6 MiB.
+```
+
+### Causa raiz (MEDIDA, nao suposta)
+O `wrangler.jsonc` do repo `emugames` usa **`assets.directory = "."`** — a
+**raiz do repositorio**. E o wrangler **NAO ignora o `.git` por conta propria**:
+ele monta a lista de assets caminhando a raiz (por isso "214 files", quando a
+arvore tem 56) e **so filtra pelo `.assetsignore`** (`/.assetsignore`,
+`/_headers`, `/_redirects` + o que o arquivo lista).
+
+O pack do `.git` passa de **100 MiB** e guarda o blob do **`kof97.zip`
+(27,6 MiB)**. O `.assetsignore` só listava `jogos/arcade/kof97.zip`, então o
+blob **dentro do `.git`** entrava no scan e estourava o teto de 25 MiB.
+
+> Confirmado lendo o bundle do proprio wrangler instalado
+> (`wrangler@4.148.0`): `createAssetsIgnoreFunction` só adiciona os 3 metafiles
+> por padrão e depois faz `ignorePatterns.push(...assetsIgnore.split("\n"))`;
+> nenhuma menção a `.git`/`node_modules` no caminho de `deploy`.
+
+### Correção
+`emugames/.assetsignore` passou a excluir `.git`, `.wrangler` e `node_modules`:
+
+```
+.git
+.wrangler
+node_modules
+jogos/arcade/kof97.zip
+```
+
+### Como foi verificado (sem conta Cloudflare)
+1. **`npx wrangler deploy --dry-run --outdir=/tmp/wrangler-out`** no clone do
+   repo → `Read 108 files`, sem `Asset too large`, exit 0.
+2. Simulação do walk com a lib **`ignore`** (a mesma que o wrangler usa): de 84
+   arquivos no disco, **53 viram assets**, **0 do `.git`**, **0 acima de
+   25 MiB**.
+
+### Push: PAT do bot NAO cobre o repo `emugames`
+O token `Souzzaaxzy` (fine-grained) tem push no `Lizzy-V4` mas o **`git push` no
+`emugames` dá 403** (`Souzzaaxzy` sem permissão). O repo foi criado **depois** do
+PAT, então cai fora do allowlist dele. Contornado usando a **API do GitHub**
+(`create_or_update_file`), que tem escopo. **Regra**: ao criar repo novo, ou
+adicioná-lo ao PAT, ou escrever via API.
+
+### Acoplamento a lembrar
+O Worker tambem precisa estar **apontado para o repo `emugames`** no painel do
+Cloudflare (Settings/Build). Se continuar ligado ao `Lizzy-V4` (que **nao tem
+mais** `wrangler.jsonc`/`index.html`), o deploy nao acha os arquivos — mesmo com
+o `.assetsignore` corrigido.
