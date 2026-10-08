@@ -214,6 +214,55 @@ await test('gamepad: ANALOGICO + D-PAD em todos os jogos', () => {
   ok(/\.b_l\s*\{\s*top:\s*-22px/.test(css), 'o ombro L nao sai da caixa com o cluster maior');
 });
 
+await test('controle Bluetooth: botao no canto + deteccao real pela Gamepad API', () => {
+  const html = fs.readFileSync(path.join(PROJECT, 'dados/emugames/index.html'), 'utf-8');
+  const css = fs.readFileSync(path.join(PROJECT, 'dados/emugames/style.css'), 'utf-8');
+
+  ok(/id="controle"/.test(html), 'tem o botao de controle');
+  ok(/id="controle-painel"/.test(html), 'tem o painel do controle');
+  // O botao precisa viver FORA de `#jogador`: em tela cheia o `#jogador` e
+  // rotacionado, e um `position: fixed` dentro dele gira junto (medido: o botao
+  // aparecia deitado, na vertical).
+  const posBotao = html.indexOf('id="controle"');
+  const posJogador = html.indexOf('<section id="jogador"');
+  ok(posBotao < posJogador, 'o botao fica FORA de #jogador (nao gira junto)');
+  ok(/body\.jogando\s+#controle\s*\{[^}]*position:\s*fixed/s.test(css), 'o botao e fixo no jogo');
+  ok(/body\.jogando\s+#controle\s*\{[^}]*left:/s.test(css), 'fica no lado ESQUERDO');
+  ok(/body\.jogando\s+#controle\s*\{[^}]*top:/s.test(css), 'fica no TOPO');
+  ok(/#controle\s*\{\s*display:\s*none/.test(css), 'escondido no catalogo (so aparece jogando)');
+
+  // Deteccao REAL: le a Gamepad API e reage ao evento do navegador.
+  ok(/navigator\.getGamepads/.test(html), 'le a Gamepad API (estado real, nao inventado)');
+  ok(/gamepadconnected/.test(html) && /gamepaddisconnected/.test(html), 'reage a conexao/desconexao');
+  ok(/crossOriginIsolated/.test(css) === false && /crossOriginIsolated/.test(html), 'detecta o isolamento (threads)');
+  // O pareamento e' do SISTEMA; a Web Bluetooth e' atalho com reserva manual.
+  ok(/navigator\.bluetooth/.test(html), 'oferece abrir o Bluetooth quando o navegador permite');
+  ok(/configurações do aparelho|configuracoes de Bluetooth/.test(html), 'e ensina o caminho manual');
+  ok(/Testar/.test(html), 'tem o teste honesto (so acende se a API enxergar)');
+  ok(/#controle\.ativo/.test(css), 'fica verde quando ha controle (dado real)');
+});
+
+await test('desempenho: threads com deteccao + headers de isolamento', () => {
+  const html = fs.readFileSync(path.join(PROJECT, 'dados/emugames/index.html'), 'utf-8');
+  const raiz = path.join(PROJECT, 'dados/emugames');
+
+  // Threads: liga SO quando o isolamento existe. Medido: ligar sem
+  // SharedArrayBuffer NAO cai para o nucleo normal -- termina com
+  // `failedToStart`, entao o valor tem de ser detectado, nunca fixo em `true`.
+  ok(/EJS_threads\s*=/.test(html), 'configura as threads');
+  ok(/crossOriginIsolated/.test(html) && /SharedArrayBuffer/.test(html),
+    'so liga threads quando ha isolamento (SharedArrayBuffer)');
+  ok(!/EJS_threads\s*=\s*true\s*;/.test(html), 'NAO liga threads no escuro (quebraria o boot)');
+
+  // O arquivo de headers e' o que da o isolamento no Cloudflare.
+  const h = fs.readFileSync(path.join(raiz, '_headers'), 'utf-8');
+  ok(/Cross-Origin-Opener-Policy:\s*same-origin/.test(h), '_headers: COOP');
+  ok(/Cross-Origin-Embedder-Policy:\s*credentialless/.test(h), '_headers: COEP');
+
+  // FPS a mostra: serve para conferir que nao esta caindo de quadro.
+  ok(/EJS_defaultOptions\s*=\s*\{\s*fps/.test(html), 'mostra os FPS (para conferir travada)');
+});
+
 await test('tela cheia: aperta o botao, a tela VIRA e o botao continua acessivel', () => {
   const html = fs.readFileSync(path.join(PROJECT, 'dados/emugames/index.html'), 'utf-8');
   const css = fs.readFileSync(path.join(PROJECT, 'dados/emugames/style.css'), 'utf-8');

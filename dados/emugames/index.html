@@ -23,6 +23,15 @@
 </section>
 
 <!-- ============================= JOGADOR ============================= -->
+<!-- Botao de CONTROLE no canto superior esquerdo.
+     Fica FORA de `#jogador` de proposito: em tela cheia o layout inteiro e'
+     rotacionado (`transform`) e um `position: fixed` dentro de um elemento
+     transformado passa a girar junto -- o botao aparecia deitado, na vertical.
+     Fora, ele fica sempre em pe, no canto. -->
+<button id="controle" type="button" title="Conectar controle Bluetooth" aria-label="Conectar controle Bluetooth">
+  <span id="controle-icone">🎮</span><span id="controle-texto">CONTROLE</span>
+</button>
+
 <section id="jogador" hidden>
   <div id="barra">
     <span id="subtitulo"></span>
@@ -39,6 +48,26 @@
     <span id="status"></span>
   </div>
 </section>
+
+<!-- Painel do controle (abre ao tocar no botao) -->
+<div id="controle-painel" hidden>
+  <div class="caixa">
+    <h2>🎮 Controle Bluetooth</h2>
+    <p id="controle-estado">Nenhum controle conectado.</p>
+    <ol>
+      <li>Ligue o controle e deixe no modo <b>pareamento</b>.</li>
+      <li>Abra as <b>configurações de Bluetooth</b> do aparelho.</li>
+      <li>Conecte no controle. Ao voltar aqui ele já aparece.</li>
+    </ol>
+    <p class="dica">Depois de conectado, os botões e o analógico do controle
+      funcionam sozinhos — não precisa configurar nada.</p>
+    <div class="acoes">
+      <button id="controle-bt" type="button">Abrir Bluetooth</button>
+      <button id="controle-testar" type="button">Testar</button>
+      <button id="controle-fechar" type="button">Fechar</button>
+    </div>
+  </div>
+</div>
 
 <!-- ============================== ERRO ============================== -->
 <section id="erro" hidden>
@@ -87,6 +116,10 @@
   const pararBtn = document.getElementById('parar');
   const voltarBtn = document.getElementById('voltar');
   const cheiaBtn = document.getElementById('cheia');
+  const controleBtn = document.getElementById('controle');
+  const controleTexto = document.getElementById('controle-texto');
+  const controlePainel = document.getElementById('controle-painel');
+  const controleEstado = document.getElementById('controle-estado');
 
   // Nome bonito de cada console (o `console` do catalogo e o CORE do EmulatorJS)
   const CONSOLES = {
@@ -437,7 +470,30 @@
     window.EJS_volume = 0.6;
     window.EJS_askBeforeExit = false;
     window.EJS_controlScheme = j.console;
+    // ---- THREADS (desempenho) ----------------------------------------------
+    // O nucleo normal e' single-thread; com `EJS_threads` o emulador carrega a
+    // variante `-thread`, que espalha o trabalho por varios nucleos da CPU.
+    //
+    // ATENCAO (medido): ligar isso SEM `SharedArrayBuffer` **quebra** o boot --
+    // o emulador so avisa ("Threads is set to true, but the SharedArrayBuffer
+    // function is not exposed") e termina com `failedToStart: true`, NAO cai
+    // sozinho para o nucleo normal. `SharedArrayBuffer` so existe quando a
+    // pagina vem isolada por COOP/COEP.
+    //
+    // Por isso o valor e' DETECTADO, nao assumido: se o host mandar os headers
+    // (ver o `_headers` ao lado, para o Cloudflare) ganha o desempenho; se nao
+    // mandar, o emulador segue no nucleo normal, exatamente como antes.
+    window.EJS_threads = Boolean(window.crossOriginIsolated && typeof SharedArrayBuffer === 'function');
     window.EJS_VirtualGamepadSettings = gamepadDoJogo(j.console);
+    // ---- LATENCIA ----------------------------------------------------------
+    // `EJS_defaultOptions` vai para o ARQUIVO DE CORE OPTIONS (`getCoreSettings`
+    // -> `setupCoreSettingFile`), nao para o `retroarch.cfg` -- entao so aceita
+    // opcao que o proprio CORE declara (ex.: `fps` no snes9x). A latencia de
+    // AUDIO/VIDEO do RetroArch nao esta nesse caminho: ela vive no
+    // `retroarch.cfg`, escrito pelo `GameManager` com valor fixo.
+    // Ficar com o medidor de FPS a mostra ajuda a CONFERRAR que o emulador nao
+    // esta caindo de quadro (que e' o que o dono percebe como "travar").
+    window.EJS_defaultOptions = { fps: 'show' };
     if (j.bios) {
       // A BIOS tem de chegar ao emulador como ZIP. O EmulatorJS, por padrao,
       // EXTRAI a BIOS em arquivos soltos -- e o FBNeo procura "neogeo.zip", que
@@ -466,6 +522,88 @@
     s.src = DATA + 'loader.js';
     document.body.appendChild(s);
   }
+
+  // ==========================================================================
+  // CONTROLE BLUETOOTH
+  //
+  // O pareamento em si e' do SISTEMA (Bluetooth do aparelho) -- nenhuma pagina
+  // web pode fazer isso; a Web Bluetooth API nao serve para controle de jogo.
+  // O que o navegador faz e' LER o controle ja pareado pela Gamepad API, e o
+  // EmulatorJS ja consome isso (o motor dele le `navigator.getGamepads()` a
+  // cada 10ms). Entao o botao aqui:
+  //   1. mostra o estado REAL (lendo a Gamepad API, sem inventar);
+  //   2. ensina a parear e leva direto as configuracoes de Bluetooth quando o
+  //      aparelho permite (a Web Bluetooth API), com a instrucao manual de
+  //      reserva quando nao permite (iPhone, por exemplo);
+  //   3. liga o controle sozinho quando ele aparece -- sem configurar nada.
+  // ==========================================================================
+  const gamepadsConectados = () =>
+    Array.from(navigator.getGamepads ? navigator.getGamepads() : [])
+      .filter(Boolean)
+      .map((g) => g.id);
+
+  function atualizarEstadoControle() {
+    const lista = gamepadsConectados();
+    const n = lista.length;
+    if (controleTexto) controleTexto.textContent = n ? `CONTROLE (${n})` : 'CONTROLE';
+    if (controleBtn) controleBtn.classList.toggle('ativo', n > 0);
+    if (controleEstado) {
+      controleEstado.innerHTML = n
+        ? `<b>Conectado:</b> ${lista.map((id) => String(id).replace(/[&<>]/g, '')).join('<br>')}`
+        : 'Nenhum controle conectado.';
+    }
+  }
+
+  function abrirPainelControle(abrir) {
+    controlePainel.hidden = abrir === undefined ? !controlePainel.hidden : !abrir;
+    if (!controlePainel.hidden) atualizarEstadoControle();
+  }
+
+  controleBtn?.addEventListener('click', () => abrirPainelControle());
+  document.getElementById('controle-fechar')?.addEventListener('click', () => abrirPainelControle(false));
+  controlePainel?.addEventListener('click', (e) => {
+    if (e.target === controlePainel) abrirPainelControle(false); // toca fora fecha
+  });
+
+  // "Abrir Bluetooth": a Web Bluetooth API consegue abrir a tela do sistema em
+  // parte dos navegadores (Chrome no Android). Ela NAO pareia controle de jogo
+  // -- serve aqui como atalho. Quando o navegador nao suporta, fica a instrucao
+  // manual, que sempre funciona.
+  document.getElementById('controle-bt')?.addEventListener('click', async () => {
+    if (!navigator.bluetooth?.requestDevice) {
+      if (controleEstado) {
+        controleEstado.innerHTML = 'Este navegador não abre a tela de Bluetooth. ' +
+          'Use as <b>configurações do aparelho</b> para parear — depois volte aqui.';
+      }
+      return;
+    }
+    try {
+      await navigator.bluetooth.requestDevice({ acceptAllDevices: true });
+    } catch { /* o usuario cancelou -- sem problema */ }
+    atualizarEstadoControle();
+  });
+
+  // "Testar": quem estiver conectado acende. E' o teste honesto -- so muda de
+  // cor se a Gamepad API realmente enxergar o controle.
+  document.getElementById('controle-testar')?.addEventListener('click', () => {
+    atualizarEstadoControle();
+    const n = gamepadsConectados().length;
+    if (controleEstado) {
+      controleEstado.innerHTML = n
+        ? `✅ ${n} controle(s) respondendo. Pode jogar — os botões já funcionam.`
+        : '❌ Nada ainda. Pareie pelo Bluetooth do aparelho e toque em Testar de novo.';
+    }
+  });
+
+  // O navegador avisa quando um controle entra ou sai. Aproveitamos para
+  // atualizar o rotulo e, se for o primeiro, fechar o painel.
+  ['gamepadconnected', 'gamepaddisconnected'].forEach((ev) =>
+    addEventListener(ev, () => {
+      atualizarEstadoControle();
+      if (ev === 'gamepadconnected' && !controlePainel.hidden) setTimeout(() => abrirPainelControle(false), 900);
+    }));
+
+  atualizarEstadoControle();
 
   // ==========================================================================
   // EVENTOS

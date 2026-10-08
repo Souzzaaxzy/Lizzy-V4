@@ -37,6 +37,97 @@ são L/R). Fica como está — mudar o idioma trocaria o resto da UI; é só ró
 que não há exceção de esquema). Verificado: sem o bloco CSS, **4 asserções
 falham**.
 
+## 🎮 CONTROLE Bluetooth + DESEMPENHO (threads) (out/2026) ✅
+Pedido do dono: melhorar a latência "para parar de travar" e um botãozinho no
+canto superior esquerdo para conectar controle Bluetooth.
+
+### Botão de CONTROLE (canto superior esquerdo)
+`#controle` + painel `#controle-painel`, em `dados/emugames/`.
+
+**O que ele pode e o que não pode** (importante, para não prometer o que não
+existe): **parear não é trabalho de página web** — isso é do **Bluetooth do
+aparelho**. A Web Bluetooth API **não serve** para controle de jogo. O que o
+navegador faz é **ler** o controle já pareado, pela **Gamepad API** — e o
+EmulatorJS já consome isso sozinho (o motor lê `navigator.getGamepads()` a cada
+10 ms). Então o botão:
+
+1. mostra o estado **REAL** (lê a Gamepad API — nunca inventa "conectado");
+2. ensina a parear e oferece **"Abrir Bluetooth"** (a Web Bluetooth, que abre a
+   tela do sistema onde o navegador permite — Chrome/Android), com a instrução
+   manual de reserva quando não permite (iPhone);
+3. **"Testar"**: acende ✅ **só** se a API realmente enxergar o controle;
+4. fica **verde com o número** de controles quando há algum conectado, e reage
+   aos eventos `gamepadconnected`/`gamepaddisconnected`;
+5. **liga o controle sozinho** — não há nada a configurar depois de pareado.
+
+**Armadilha medida**: o botão estava dentro de `#jogador` e, em **tela cheia**,
+aparecia **deitado** (`33x138`) — porque `#jogador` inteiro é rotacionado
+(`transform`) e um `position: fixed` dentro de um elemento transformado **passa a
+girar junto**. Ele foi movido para **fora** de `#jogador` (fica em pé em todos os
+modos). Como agora vive fora, o CSS o esconde no catálogo (`#controle { display:
+none }`) e só mostra com `body.jogando`.
+
+### Desempenho / travada — THREADS
+O núcleo padrão é **single-thread**. Com `EJS_threads`, o EmulatorJS carrega a
+variante **`-thread`** (`snes9x-thread-…`, `fbneo-thread-…`), que espalha o
+trabalho por vários núcleos da CPU.
+
+**A armadilha que quase quebrou o site**: ligar `EJS_threads` **sem**
+`SharedArrayBuffer` **não** cai para o núcleo normal — medido, o emulador só
+avisa *"Threads is set to true, but the SharedArrayBuffer function is not
+exposed"* e termina com **`failedToStart: true`** (tela preta). Por isso o valor
+é **DETECTADO**, nunca fixo:
+
+```js
+window.EJS_threads = Boolean(window.crossOriginIsolated && typeof SharedArrayBuffer === 'function');
+```
+
+**Como liberar o `SharedArrayBuffer`**: a página precisa vir isolada por
+**COOP + COEP**. Foi criado o `dados/emugames/_headers` (o Cloudflare lê esse
+arquivo para assets):
+
+```
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: credentialless
+```
+
+`credentialless` (e não `require-corp`) porque os núcleos vêm do CDN público
+`cdn.emulatorjs.org`, que já manda `Cross-Origin-Resource-Policy: cross-origin`
+— **medido**, não suposto.
+
+**Resultado**: com os headers, o site pede `snes9x-thread-legacy-wasm.data` /
+`fbneo-thread-legacy-wasm.data`; sem eles, pede o normal — e nos **dois** casos
+`started: true` e 60 FPS. Ou seja: se o Cloudflare não honrar o `_headers`, o
+site segue funcionando exatamente como antes (o pior caso é não ganhar o
+desempenho, nunca quebrar).
+
+### O que NÃO dá para baixar por código (para não repetir a busca)
+A **latência de áudio/vídeo do RetroArch** (`audio_latency = 64`,
+`video_vsync = true`) é **escrita fixa** pelo `GameManager` no `retroarch.cfg`.
+Medido: o `EJS_defaultOptions` vai para o **arquivo de core options**
+(`getCoreSettings` → `setupCoreSettingFile`), **não** para o `retroarch.cfg` —
+então não alcança essas duas. E o carregador (`loader.js`) **não** repassa
+`EJS_retroarchOpts`. Conclusão honesta: por essas opções não dá; o ganho real e
+acessível é o **núcleo com threads**.
+
+O que ficou: **`fps: 'show'`** a mostra, para o dono **conferir** que o emulador
+não está caindo de quadro (que é o que se sente como "travar").
+
+### Testes
+`tests/topgear.test.js` — **21 testes / 339 asserções**, com duas suítes novas:
+**controle** (o botão fora de `#jogador`, fixo no canto, Gamepad API, eventos,
+Web Bluetooth com reserva manual, o teste honesto) e **desempenho** (threads
+**detectadas** — com a trava `!EJS_threads = true`, que quebraria o boot — e os
+dois headers do `_headers`).
+
+### Verificado no navegador
+- botão: invisível no catálogo, **em pé no canto** em retrato / tela cheia /
+  girado / paisagem; painel abre e fecha; com um controle injetado ele vira
+  *"CONTROLE (1)"*, fica verde e o Testar responde ✅; zero exceções.
+- threads: com headers → núcleo `-thread`; sem headers → núcleo normal; os dois
+  com `started: true` e **60 FPS** (`umk3` e `kof97`).
+
 ## 🎮 ANALOGICO e D-PAD separados (conflito de toque) — CORRIGIDO (out/2026) ✅
 Relato do dono: *"o analógico e o d-pad estão conflitando"* — e o pedido:
 **mover o analógico 25px para a direita** e **o d-pad 25px para cima**.

@@ -146,6 +146,98 @@ h1 #marca { letter-spacing: 2px; }
 #voltar:active { background: var(--acento); border-color: var(--acento); }
 
 /*
+  BOTAO DE CONTROLE — canto SUPERIOR ESQUERDO, fixo.
+  Vive fora de `#jogador` (e da `#barra`): em tela cheia o `#jogador` inteiro e'
+  rotacionado, e um `position: fixed` dentro de um elemento transformado gira
+  junto. Aqui ele fica sempre em pe, no canto.
+  So aparece quando ha um jogo aberto (`body.jogando`).
+*/
+#controle { display: none; }
+body.jogando #controle {
+  position: fixed;
+  top: calc(10px + env(safe-area-inset-top, 0px));
+  left: calc(10px + env(safe-area-inset-left, 0px));
+  z-index: 58;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--painel2);
+  color: var(--texto);
+  border: 1px solid var(--borda);
+  border-radius: 999px;
+  padding: 8px 13px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .6px;
+  font-family: inherit;
+  cursor: pointer;
+  opacity: .9;
+}
+#controle:active { background: var(--acento); border-color: var(--acento); }
+/* Verde quando ha controle conectado (dado REAL, da Gamepad API) */
+#controle.ativo { background: #15803d; border-color: #22c55e; opacity: 1; }
+#controle-icone { font-size: 13px; }
+
+/* Em tela cheia/paisagem o botao continua acessivel, um pouco menor */
+body.cheia #controle,
+body.girado #controle { opacity: .55; }
+body.cheia #controle:active,
+body.girado #controle:active { opacity: 1; }
+body.girado #controle { top: calc(10px + env(safe-area-inset-top, 0px)); }
+
+/* PAINEL do controle */
+#controle-painel {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(4, 6, 10, .72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+#controle-painel[hidden] { display: none; }
+#controle-painel .caixa {
+  width: 100%;
+  max-width: 420px;
+  background: var(--painel);
+  border: 1px solid var(--borda);
+  border-radius: 14px;
+  padding: 18px;
+  font-size: 13px;
+  line-height: 1.6;
+  max-height: 88vh;
+  overflow-y: auto;
+}
+#controle-painel h2 { font-size: 15px; margin-bottom: 10px; }
+#controle-painel ol { margin: 10px 0 10px 18px; color: #c3cddc; }
+#controle-painel li { margin-bottom: 4px; }
+#controle-estado {
+  background: var(--painel2);
+  border: 1px solid var(--borda);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 8px 0;
+  word-break: break-word;
+}
+#controle-painel .dica { color: var(--fraco); font-size: 12px; margin-top: 8px; }
+#controle-painel .acoes { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+#controle-painel .acoes button {
+  flex: 1 1 auto;
+  background: var(--painel2);
+  color: var(--texto);
+  border: 1px solid var(--borda);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+}
+#controle-painel .acoes button:active { background: var(--acento); border-color: var(--acento); }
+#controle-painel #controle-fechar { flex: 0 0 auto; }
+
+/*
   A caixa do player tem DOIS andares:
     - em cima: a tela do jogo (proporcao 4:3)
     - embaixo: a faixa dos controles de toque (--ctl)
