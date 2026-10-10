@@ -28,6 +28,7 @@ import {
 } from './utils/messageInspector.js';
 import { analisarAnomaliasDeConteudo } from './utils/invisibleAnalyzer.js';
 import { detectarAnomalia } from './utils/testeAnti.js';
+import { temLinkEscondido } from './utils/testMsg.js';
 import { buildCmdNotFoundExtras } from './utils/commandSuggest.js';
 import { extractMedia, resolveMedia, isViewOnce, describeMediaError, extractQuoted, extractQuotedContext, extractText } from './utils/viewOnce.js';
 import * as antiRoubo from './funcs/utils/antiRoubo.js';
@@ -1485,6 +1486,8 @@ let ADMIN_ERROR_MESSAGE = ADMIN_ERROR_MESSAGE_DEFAULT;
 const ADMIN_ERROR_MSG_FILE = pathz.join(DONO_DIR, 'adminErrorMsg.json');
 // Estado do `!testeanti` (teste, por grupo): { '<groupId>': { enabled, at, by } }
 const TESTE_ANTI_FILE = pathz.join(DONO_DIR, 'testeAnti.json');
+// Estado do `!testmsg` (teste, por grupo): { '<groupId>': { enabled, at, by } }
+const TEST_MSG_FILE = pathz.join(DONO_DIR, 'testMsg.json');
 
 // Carregar mensagem customizada
 const loadAdminErrorMessage = () => {
@@ -4284,6 +4287,39 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
           }
         } catch (e) {
           console.error('[TESTEANTI] falha ao analisar:', (e && e.message) || e);
+        }
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // !testmsg — detector de LINK/PREVIEW escondido (TESTE, por GRUPO).
+    //
+    // A mensagem alvo mostra o link no WhatsApp Web (o campo de preview/ad e'
+    // desenhado pelo cliente) mas o bot nao o le, porque so' olha `text`/
+    // `conversation`. Olha SOMENTE o grupo que ativou o comando.
+    //
+    // Sem LOG nenhum: quando detecta, manda "mensagem detectada" no chat.
+    // ------------------------------------------------------------------
+    if (isGroup && !info.key.fromMe && fs.existsSync(TEST_MSG_FILE)) {
+      const __testMsg = await (async () => {
+        try {
+          return await readJsonFileAsync(TEST_MSG_FILE, {});
+        } catch {
+          return {};
+        }
+      })();
+      const __tmo = __testMsg[from];
+      const __tmLigado = !!(
+        __tmo && (__tmo.enabled === true || __tmo === true
+          || (typeof __tmo === 'object' && __tmo.enabled))
+      );
+      if (__tmLigado) {
+        try {
+          if (info.message && temLinkEscondido(info.message)) {
+            await nazu.sendMessage(from, { text: 'mensagem detectada' }).catch(() => {});
+          }
+        } catch {
+          // Silencioso por desenho: o `!testmsg` nao loga.
         }
       }
     }
@@ -37368,6 +37404,36 @@ case 'set-bannerbv':
             : `┃ 🚫 *Analisador DESATIVADO.*`));
         } catch (e) {
           console.error(e);
+          await reply('Ocorreu um erro 💔');
+        }
+        break;
+      case 'testmsg':
+        try {
+          if (!isGroup) return reply('Isso só pode ser usado em grupo 💔');
+          if (!isGroupAdmin) return reply('Você precisa ser administrador do grupo 💔');
+          const acaoTestMsg = String((args[0] || 'status')).toLowerCase();
+          const grupoSeguroMsg = String(from).split('@')[0];
+          const lidosMsg = await readJsonFileAsync(TEST_MSG_FILE, {});
+          const atualMsg = lidosMsg[from];
+          const ligadoMsg = !!(atualMsg === true || (atualMsg && atualMsg.enabled));
+          const caixaTestMsg = (corpo) => `╭━━━꧁༺ 🔎 𝐓𝐄𝐒𝐓𝐌𝐒𝐆 ༻꧂━━━╮\n┃\n${corpo}\n┃\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
+          if (!['on', 'off', '1', '0', 'status'].includes(acaoTestMsg)) {
+            return reply(caixaTestMsg(`┃ 🔎 *Uso:*\n┃ • ${groupPrefix}testmsg on\n┃ • ${groupPrefix}testmsg off\n┃ • ${groupPrefix}testmsg`));
+          }
+          if (acaoTestMsg === 'status') {
+            return reply(caixaTestMsg(`┃ 📊 Status: ${ligadoMsg ? '🟢 ATIVADO' : '🔴 DESATIVADO'}\n┃\n┃ 🧩 Detecta link/preview escondido\n┃ (o WhatsApp Web mostra e o bot\n┃ não lê no texto).\n┃\n┃ 🆔 Grupo: ${grupoSeguroMsg}`));
+          }
+          const ligarMsg = acaoTestMsg === 'on' || acaoTestMsg === '1';
+          if (ligarMsg) {
+            lidosMsg[from] = { enabled: true, at: new Date().toISOString(), by: sender };
+          } else {
+            delete lidosMsg[from];
+          }
+          fs.writeFileSync(TEST_MSG_FILE, JSON.stringify(lidosMsg, null, 2));
+          return reply(caixaTestMsg(ligarMsg
+            ? `┃ ✅ *Detector ATIVADO.*\n┃\n┃ Ao detectar, envia no chat:\n┃ mensagem detectada`
+            : `┃ 🚫 *Detector DESATIVADO.*`));
+        } catch (e) {
           await reply('Ocorreu um erro 💔');
         }
         break;
