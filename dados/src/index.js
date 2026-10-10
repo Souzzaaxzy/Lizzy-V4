@@ -643,19 +643,7 @@ function generateRajaMessageId() {
  */
 function mensagemBanFantasma(jId, botName = 'Bot') {
   const base = String(jId || '').split('@')[0];
-  const t = boldLayout('MENSAGEM FANTASMA');
-  const b = boldLayout('BANIDO');
-  return [
-    `╭━━━꧁༺ ✦ ${botName} ✦ ༻꧂━━━╮`,
-    `┃`,
-    `┃ 🚫 ${b}`,
-    `┃ 👤 @${base}`,
-    `┃ 🪤 ${t}`,
-    `┃    ↳ ataque detectado`,
-    `┃ ⚖️ Punição: ban + limpeza`,
-    `┃`,
-    `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`,
-  ].join('\n');
+  return `🚫 @${base} *tentou atacar com mensagem fantasma* e foi banido 😈🪤`;
 }
 
 function buildPollTitle(titulo, emoji, pergunta, botName = 'Bot') {
