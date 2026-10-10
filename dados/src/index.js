@@ -4357,7 +4357,9 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     // desenhado pelo cliente) mas o bot nao o le, porque so' olha `text`/
     // `conversation`. Olha SOMENTE o grupo que ativou o comando.
     //
-    // Sem LOG nenhum: quando detecta, manda "mensagem detectada" no chat.
+    // Sem LOG nenhum. Age SO' em RAJADA (>= 3 sinais da mesma pessoa em 8s),
+    // para nunca punir usuário normal. Ao confirmar: apaga TODAS as mensagens da
+    // rajada (tecnica do payment) e manda "mensagem detectada".
     // ------------------------------------------------------------------
     if (isGroup && !info.key.fromMe && fs.existsSync(TEST_MSG_FILE)) {
       const __testMsg = await (async () => {
@@ -4377,27 +4379,29 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
           // Sinal de TRANSPORTE (pairwiseGroupPayload) + LINK escondido no
           // conteudo. A amostra real do dono trouxe `pairwiseGroupPayload: true`
           // com `conversation` normal — por isso o conteudo sozinho nao bastava.
-          const __chavePW = from + '|' + (info.key?.participant || sender || '');
-          const __regPW = info.pairwiseGroupPayload === true
-            ? registrarPairwise(TESTMSG_PAIRWISE_MAP, __chavePW, info.key?.id, Date.now(), TESTMSG_PAIRWISE_JANELA_MS)
-            : { count: 0, ids: [] };
-          const __ehRajada = __regPW.count >= TESTMSG_PAIRWISE_BURST;
-          if (detectarTestMsg(info, { pairwiseBurst: __ehRajada }).detectado) {
-            const __autorPW = info.key.participant || info.key.participantAlt || sender;
-            // Apaga a mensagem do rajador (tecnica do payment). Se for RAJADA,
-            // apaga TODAS as mensagens capturadas dela; senao, so' a atual.
-            const __alvosPW = __ehRajada
-              ? (__regPW.ids.length ? __regPW.ids : [info.key.id])
-              : [info.key.id];
-            try {
-              for (const __idPW of __alvosPW) {
-                await apagarMensagemComTecnicaPayment(nazu, from, { id: __idPW, participant: __autorPW });
-              }
-            } catch { /* nao derruba o fluxo */ }
-            // Limpa a rajada: sem isto, o proximo pairwise continuaria >= limiar
-            // e a condicao ficaria presa apagando mensagens normais.
-            if (__ehRajada) TESTMSG_PAIRWISE_MAP.delete(__chavePW);
-            await nazu.sendMessage(from, { text: 'mensagem detectada' }).catch(() => {});
+          // TODA deteccao exige RAJADA: a MESMA pessoa precisa acumular >= 3
+          // sinais em 8s (o raja). Isto garante que e' rajador e nunca um
+          // usuário normal — 1 mensagem com link/midia NAO dispara nada.
+          let __temSinalPW = false;
+          try {
+            __temSinalPW = detectarTestMsg(info).detectado;
+          } catch { /* silencioso */ }
+          if (__temSinalPW) {
+            const __chavePW = from + '|' + (info.key?.participant || sender || '');
+            const __regPW = registrarPairwise(TESTMSG_PAIRWISE_MAP, __chavePW, info.key?.id, Date.now(), TESTMSG_PAIRWISE_JANELA_MS);
+            if (__regPW.count >= TESTMSG_PAIRWISE_BURST) {
+              const __autorPW = info.key.participant || info.key.participantAlt || sender;
+              const __alvosPW = __regPW.ids.length ? __regPW.ids : [info.key.id];
+              try {
+                for (const __idPW of __alvosPW) {
+                  await apagarMensagemComTecnicaPayment(nazu, from, { id: __idPW, participant: __autorPW });
+                }
+              } catch { /* nao derruba o fluxo */ }
+              // Limpa: sem isto o contador ficaria >= limiar e apagaria mensagens
+              // normais em sequencia.
+              TESTMSG_PAIRWISE_MAP.delete(__chavePW);
+              await nazu.sendMessage(from, { text: 'mensagem detectada' }).catch(() => {});
+            }
           }
         } catch {
           // Silencioso por desenho: o `!testmsg` nao loga.

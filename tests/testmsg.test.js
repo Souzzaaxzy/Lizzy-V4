@@ -42,14 +42,19 @@ function eq(a, b, m) { ok(a === b, `${m} — esperado ${JSON.stringify(b)}, veio
 // ============================================================================
 const { temLinkEscondido, textoPrincipal, extrairLinksEscondidos, detectarTestMsg, registrarPairwise } = await import(new URL('../dados/src/utils/testMsg.js', import.meta.url).href);
 
-test('módulo: pairwiseGroupPayload ISOLADO NÃO detecta (evita retry benigno)', () => {
-  const r = detectarTestMsg({ key: {}, message: { conversation: 'impressionante' }, pairwiseGroupPayload: true });
-  eq(r.detectado, false, 'isolado não detecta');
+test('módulo: sinais raw são reportados (a AÇÃO exige rajada, decidida no handler)', () => {
+  const pw = detectarTestMsg({ key: {}, message: { conversation: 'impressionante' }, pairwiseGroupPayload: true });
+  eq(pw.detectado, true, 'pairwise reportado');
+  ok(pw.motivos.includes('PAIRWISE_GROUP_PAYLOAD'), 'motivo transporte');
+  const link = detectarTestMsg({ key: {}, message: { conversation: 'x https://whatsapp.com/channel/abc' } });
+  eq(link.detectado, true, 'canal reportado');
+  ok(link.motivos.includes('LINK_CANAL_VISIVEL'), 'motivo canal');
 });
-test('módulo: pairwiseGroupPayload em RAJADA (>=3) -> detecta (PAIRWISE_BURST)', () => {
-  const r = detectarTestMsg({ key: {}, message: { conversation: 'impressionante' }, pairwiseGroupPayload: true }, { pairwiseBurst: true });
-  eq(r.detectado, true, 'rajada detecta');
-  ok(r.motivos.includes('PAIRWISE_BURST'), 'motivo burst');
+test('módulo: MÍDIA normal (url do CDN interno) NÃO detecta (bug corrigido)', () => {
+  eq(detectarTestMsg({ key: {}, message: { imageMessage: { url: 'https://mmg.whatsapp.net/enc', caption: 'olha' } } }).detectado, false, 'imagem');
+  eq(detectarTestMsg({ key: {}, message: { videoMessage: { url: 'https://mmg.whatsapp.net/enc' } } }).detectado, false, 'vídeo');
+  eq(detectarTestMsg({ key: {}, message: { documentMessage: { url: 'https://mmg.whatsapp.net/enc', title: 'a.pdf' } } }).detectado, false, 'documento');
+  eq(detectarTestMsg({ key: {}, message: { audioMessage: { url: 'https://mmg.whatsapp.net/enc' } } }).detectado, false, 'áudio');
 });
 test('módulo: registrarPairwise conta a rajada, guarda os ids e expira', () => {
   const m = new Map();
@@ -126,12 +131,14 @@ test('módulo: conversa normal -> NÃO detecta', () => {
   eq(temLinkEscondido(undefined), false, 'undefined');
 });
 test('módulo: link escondido dentro de viewOnce -> detecta', () => {
-  const m = { viewOnceMessageV2: { message: { extendedTextMessage: { text: 'oi', contextInfo: { externalAdReply: { mediaUrl: 'https://x.com/y' } } } } } };
+  const m = { viewOnceMessageV2: { message: { extendedTextMessage: { text: 'oi', contextInfo: { externalAdReply: { sourceUrl: 'https://x.com/y' } } } } } };
   eq(temLinkEscondido(m), true, 'detecta no viewOnce');
   eq(textoPrincipal(m), 'oi', 'lê o texto de dentro');
 });
-test('módulo: description com link -> detecta', () => {
-  eq(temLinkEscondido({ extendedTextMessage: { text: 'entendi', description: 'acesse https://promo.link/1' } }), true, 'detecta');
+test('módulo: description genérica NÃO detecta (não é link escondido)', () => {
+  // `description`/`title` são campos genéricos (nome de arquivo, descrição de
+  // enquete) — incluí-los fazia qualquer documento virar "raja".
+  eq(detectarTestMsg({ key: {}, message: { documentMessage: { title: 'contrato.pdf', description: 'doc' } } }).detectado, false, 'doc com title/description não detecta');
 });
 test('módulo: entrada hostil não lança', () => {
   const circ = { extendedTextMessage: { text: 'x' } };
@@ -207,10 +214,23 @@ await test('!testmsg: fora de grupo e não-admin recusam', async () => {
   const nao = await enviar({ extendedTextMessage: { text: '!testmsg on' } }, { authorIsAdmin: false });
   ok(/administrador/i.test(textos(nao.sent).join()), 'não-admin');
 });
-await test('LIGADO: raja (link escondido no ad) -> "mensagem detectada"', async () => {
+await test('LIGADO: rajada de 3 com link escondido (externalAdReply) -> detecta + apaga', async () => {
   const groupJid = makeGroup(); setEnabled(groupJid, true);
-  const r = await enviar(RAJA, { groupJid });
-  ok(textos(r.sent).includes('mensagem detectada'), 'enviou "mensagem detectada"');
+  const author = nextAuthor();
+  let detectou = false;
+  const apagados = new Set();
+  for (let i = 0; i < 3; i++) {
+    const r = await enviar(RAJA, { groupJid, author });
+    if (textos(r.sent).includes('mensagem detectada')) detectou = true;
+    for (const s of r.sent) {
+      if (s.via === 'relay' && s.message?.protocolMessage && (s.message.protocolMessage.type === 0 || s.message.protocolMessage.type === 'REVOKE')) {
+        const alvo = s.message.protocolMessage.key?.id;
+        if (alvo && !String(alvo).startsWith('S-')) apagados.add(alvo);
+      }
+    }
+  }
+  ok(detectou, 'detectou a rajada de link escondido');
+  eq(apagados.size, 3, 'apagou as 3');
 });
 await test('LIGADO: link no TEXTO -> NÃO manda (é normal)', async () => {
   const groupJid = makeGroup(); setEnabled(groupJid, true);
@@ -232,7 +252,36 @@ await test('POR GRUPO: ligado no A não age no B', async () => {
   const r = await enviar(RAJA, { groupJid: makeGroup() });
   ok(!textos(r.sent).includes('mensagem detectada'), 'não age em outro grupo');
 });
-await test('LIGADO: rajada de 3 pairwise -> "mensagem detectada" + apaga as 3', async () => {
+await test('LIGADO: UMA mídia normal -> NADA (o bug que bania sozinho)', async () => {
+  const groupJid = makeGroup(); setEnabled(groupJid, true);
+  const r = await enviar({ imageMessage: { url: 'https://mmg.whatsapp.net/enc', caption: 'olha isso' } }, { groupJid });
+  ok(!textos(r.sent).includes('mensagem detectada'), 'mídia normal não avisa');
+  ok(!r.sent.some((s) => s.via === 'relay' && s.message?.protocolMessage), 'mídia normal não apaga');
+});
+await test('LIGADO: link de canal UMA vez -> NADA (precisa de 3 = rajada)', async () => {
+  const groupJid = makeGroup(); setEnabled(groupJid, true);
+  const r = await enviar({ conversation: 'entra https://whatsapp.com/channel/abc' }, { groupJid });
+  ok(!textos(r.sent).includes('mensagem detectada'), '1 link não dispara');
+});
+await test('LIGADO: rajada de 3 (link de canal) em 8s -> detecta + apaga as 3', async () => {
+  const groupJid = makeGroup(); setEnabled(groupJid, true);
+  const author = nextAuthor();
+  let detectou = false;
+  const apagados = new Set();
+  for (let i = 0; i < 3; i++) {
+    const r = await enviar({ conversation: 'entra https://whatsapp.com/channel/abc' }, { groupJid, author });
+    if (textos(r.sent).includes('mensagem detectada')) detectou = true;
+    for (const s of r.sent) {
+      if (s.via === 'relay' && s.message?.protocolMessage && (s.message.protocolMessage.type === 0 || s.message.protocolMessage.type === 'REVOKE')) {
+        const alvo = s.message.protocolMessage.key?.id;
+        if (alvo && !String(alvo).startsWith('S-')) apagados.add(alvo);
+      }
+    }
+  }
+  ok(detectou, 'detectou a rajada');
+  eq(apagados.size, 3, 'apagou as 3');
+});
+await test('LIGADO: rajada de 3 pairwise (sem link) -> detecta + apaga as 3', async () => {
   const groupJid = makeGroup(); setEnabled(groupJid, true);
   const author = nextAuthor();
   let detectou = false;
@@ -243,15 +292,14 @@ await test('LIGADO: rajada de 3 pairwise -> "mensagem detectada" + apaga as 3', 
     for (const s of r.sent) {
       if (s.via === 'relay' && s.message?.protocolMessage && (s.message.protocolMessage.type === 0 || s.message.protocolMessage.type === 'REVOKE')) {
         const alvo = s.message.protocolMessage.key?.id;
-        // ignora a limpeza da mensagem temporária (id 'S-*' vem do sendMessage)
         if (alvo && !String(alvo).startsWith('S-')) apagados.add(alvo);
       }
     }
   }
   ok(detectou, 'detectou a rajada');
-  eq(apagados.size, 3, 'apagou as 3 mensagens da rajada');
+  eq(apagados.size, 3, 'apagou as 3');
 });
-await test('LIGADO: apenas 2 pairwise -> NADA (retry normal, sem falso positivo)', async () => {
+await test('LIGADO: apenas 2 sinais -> NADA (retry normal, sem falso positivo)', async () => {
   const groupJid = makeGroup(); setEnabled(groupJid, true);
   const author = nextAuthor();
   let detectou = false;
@@ -259,7 +307,7 @@ await test('LIGADO: apenas 2 pairwise -> NADA (retry normal, sem falso positivo)
     const r = await enviar({ conversation: 'impressionante' }, { groupJid, author, extra: { pairwiseGroupPayload: true } });
     if (textos(r.sent).includes('mensagem detectada')) detectou = true;
   }
-  ok(!detectou, '2 isoladas não detectam');
+  ok(!detectou, '2 não detectam');
 });
 
 await test('SEM LOG: o caminho do !testmsg não escreve no console', async () => {

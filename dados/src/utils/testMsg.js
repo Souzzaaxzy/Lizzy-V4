@@ -19,14 +19,23 @@ const LINK_RE = /(?:https?:\/\/|www\.|wa\.me\/|chat\.whatsapp\.com\/|whatsapp\.c
 const LINK_CANAL_RE = /whatsapp\.com\/channel\/|whatsapp\.com\/Channel\/|chat\.whatsapp\.com\/|wa\.me\/|t\.me\//i;
 
 // Campos que carregam link/preview/anuncio. O bot nunca le esses; o cliente, sim.
+//
+// ATENCAO: NAO incluir campos que a MIDIA NORMAL carrega — `url`/`mediaUrl`/
+// `thumbnailUrl`/`videoContentUrl` sao o CDN interno (mmg.whatsapp.net) de
+// TODA foto/video/documento, e `title`/`description` sao genericos (nome de
+// arquivo, descricao de enquete). Inclui-los fazia QUALQUER midia virar
+// "raja" (falso positivo medido: imagem/video/doc normais davam LINK_ESCONDIDO).
 const LINK_KEYS = new Set([
-  'matchedText', 'canonicalUrl', 'linkPreviewMetadata', 'paymentLinkMetadata',
-  'paymentExtendedMetadata', 'externalAdReply', 'quotedAd', 'actionLink',
-  'sourceUrl', 'mediaUrl', 'thumbnailUrl', 'videoContentUrl', 'url', 'linkUrl',
-  'title', 'description',
+  'matchedText', 'canonicalUrl', 'linkPreviewMetadata',
+  'paymentLinkMetadata', 'paymentExtendedMetadata', 'quotedAd', 'actionLink',
+  'sourceUrl', 'linkUrl',
   // Tipos de mensagem de CANAL (o "card de canal" — a presenca deles e' o link).
   'newsletterAdminInviteMessage', 'newsletterFollowerInviteMessage', 'newsletterFollowerInviteMessageV2'
 ]);
+
+// Host INTERNO do WhatsApp (CDN de midia). Um "link" que aponta para ca' NAO e'
+// link de verdade — e' o arquivo da propria mensagem. Ignorado de proposito.
+const HOST_INTERNO_RE = /whatsapp\.net|mmg\.|media-|\.enc(\?|$)/i;
 
 /** Desembrulha wrappers (viewOnce/efemera/...) e devolve o conteudo folha. */
 function conteudoFolha(message, maxHops = 10) {
@@ -82,7 +91,7 @@ export function extrairLinksEscondidos(message, options = {}) {
     for (const [k, v] of entradas) {
       const p = caminho ? `${caminho}.${k}` : k;
       const ehTipoCanal = k === 'newsletterAdminInviteMessage' || k === 'newsletterFollowerInviteMessage' || k === 'newsletterFollowerInviteMessageV2';
-      if (typeof v === 'string' && LINK_KEYS.has(k) && LINK_RE.test(v)) {
+      if (typeof v === 'string' && LINK_KEYS.has(k) && LINK_RE.test(v) && !HOST_INTERNO_RE.test(v)) {
         achados.push({ campo: p, valor: v });
       } else if (ehTipoCanal && v && typeof v === 'object') {
         // O "card de canal": a PRESENCA do tipo ja' e' o link (o cliente
@@ -153,25 +162,24 @@ export function registrarPairwise(mapa, chave, id, agora = Date.now(), janelaMs 
 }
 
 /**
- * Decisão do `!testmsg` para uma mensagem recebida (WebMessageInfo).
+ * Sinais do `!testmsg` para UMA mensagem (raw — quem decide a rajada é o
+ * chamador). Devolve quais sinais a mensagem carrega:
  *
- * Regras (pensadas para NÃO dar falso positivo em usuário comum):
- *
+ *   • LINK_ESCONDIDO — link/preview num campo que o cliente desenha e o bot não
+ *     lê (matchedText, canonicalUrl, externalAdReply...). NUNCA inclui a URL
+ *     interna de mídia (o extrator já filtra o host do CDN).
  *   • LINK_CANAL_VISIVEL — link de canal/convite (whatsapp.com/channel,
- *     chat.whatsapp.com, wa.me, t.me) no texto. Prova por si.
- *   • LINK_ESCONDIDO — URL/preview num campo que o cliente desenha e o bot não
- *     lê (matchedText, canonicalUrl, externalAdReply...). Prova por si.
- *   • PAIRWISE_BURST — `pairwiseGroupPayload` é a assinatura de transporte do
- *     raja, MAS a própria fork avisa que um retry BENIGNO também carrega o flag.
- *     Por isso ele SÓ conclui sozinho quando aparece em RAJADA (>= 3 do mesmo
- *     autor na janela — 1 ou 2 é retry normal). Marca a rajada inteira para
- *     apagar todas as mensagens.
+ *     chat.whatsapp.com, wa.me, t.me) no texto visível.
+ *   • PAIRWISE_GROUP_PAYLOAD — `info.pairwiseGroupPayload === true` (transporte).
+ *
+ * ATENÇÃO: nenhum destes sinais, sozinho, dispara a ação. O comando só age
+ * quando a MESMA pessoa acumula >= 3 em 8s (a rajada) — é o que garante que é
+ * rajador e nunca um usuário normal (1 mensagem com link/mídia não conta).
  *
  * @param {object} info WebMessageInfo
- * @param {{pairwiseBurst?:boolean}} [opts]
  * @returns {{detectado:boolean, motivos:string[]}}
  */
-export function detectarTestMsg(info, opts = {}) {
+export function detectarTestMsg(info) {
   if (!info || typeof info !== 'object') return { detectado: false, motivos: [] };
   const motivos = [];
 
@@ -180,8 +188,7 @@ export function detectarTestMsg(info, opts = {}) {
   const texto = textoPrincipal(info.message);
   if (typeof texto === 'string' && LINK_CANAL_RE.test(texto)) motivos.push('LINK_CANAL_VISIVEL');
 
-  // `pairwiseGroupPayload` só entra com rajada (o retry benigno é isolado).
-  if (info.pairwiseGroupPayload === true && opts.pairwiseBurst) motivos.push('PAIRWISE_BURST');
+  if (info.pairwiseGroupPayload === true) motivos.push('PAIRWISE_GROUP_PAYLOAD');
 
   return { detectado: motivos.length > 0, motivos };
 }
