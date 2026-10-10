@@ -10,18 +10,42 @@
 //
 // Puro: sem socket, sem disco, sem log.
 
+const WRAPPERS = ['ephemeralMessage', 'viewOnceMessage', 'viewOnceMessageV2', 'viewOnceMessageV2Extension', 'deviceSentMessage', 'documentWithCaptionMessage'];
+
+/**
+ * O conteúdo decifrado é a PRÓPRIA distribuição de Sender Key?
+ *
+ * A Baileys gera `senderKeyDistributionMessage` NORMALMENTE (criação de grupo,
+ * device novo, re-request de chave) — sem ninguém mandar mensagem. E esse SKDM
+ * chega como enc PAREADO (`msg`/`pkmsg`), sem `skmsg`/`count`, ou seja, casa com
+ * a assinatura `pairwiseOnly`. Tratar isso como raja removia geral.
+ */
+export function contemSkdm(message) {
+  let atual = message;
+  let hops = 0;
+  while (atual && typeof atual === 'object' && hops++ < 8) {
+    if (atual.senderKeyDistributionMessage || atual.fastRatchetKeySenderKeyDistributionMessage) return true;
+    const w = WRAPPERS.find((k) => atual[k] && typeof atual[k] === 'object' && atual[k].message);
+    if (!w) break;
+    atual = atual[w].message;
+  }
+  return false;
+}
+
 /**
  * True quando a mensagem é o "raja" (enc SOMENTE pareado, sem skmsg, sem count).
  *
- * EXIGE o `groupEncInfo` (a fork calcula `pairwiseOnly`). Sem ele, retorna
- * `false` DE PROPÓSITO: o único fallback antigo (`pairwiseGroupPayload`) dispara
- * em qualquer stanza de grupo com enc pareado — mensagem normal entregue
- * pareada, retry do receptor etc. — e era a causa do "banindo geral". Sem o
- * sinal ESTRITO, é melhor não detectar do que punir usuário normal.
+ * EXIGE o `groupEncInfo` (a fork calcula `pairwiseOnly`) e NÃO conta quando o
+ * conteúdo é a distribuição de Sender Key (SKDM) — essa é gerada normalmente e
+ * também chega pareada, então era a causa do "banindo geral". Sem o sinal
+ * ESTRITO, retorna `false` de propósito: melhor não detectar do que punir
+ * usuário normal.
  */
 export function ehRajaTransporte(info) {
   if (!info || typeof info !== 'object') return false;
-  return info.groupEncInfo?.pairwiseOnly === true;
+  if (info.groupEncInfo?.pairwiseOnly !== true) return false;
+  if (contemSkdm(info.message)) return false;
+  return true;
 }
 
 /**

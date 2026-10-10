@@ -89,8 +89,17 @@ const revokes = (sent) => sent
 
 // ---------------------------------------------------------------------------
 // Módulo (puro): janela de 5s + IDs diferentes
-const { ehRajaTransporte, registrarRajada } = await import(new URL('../dados/src/utils/rajaTransport.js', import.meta.url).href);
+const { ehRajaTransporte, registrarRajada, contemSkdm } = await import(new URL('../dados/src/utils/rajaTransport.js', import.meta.url).href);
 
+await test('módulo: SKDM (senderKeyDistributionMessage) NÃO é raja (bania geral)', () => {
+  // A Baileys gera SKDM normalmente e ele chega pareado (casa com pairwiseOnly).
+  eq(ehRajaTransporte({ groupEncInfo: { pairwiseOnly: true }, message: { senderKeyDistributionMessage: { groupId: 'x' } } }), false, 'SKDM não é raja');
+  eq(ehRajaTransporte({ groupEncInfo: { pairwiseOnly: true }, message: { fastRatchetKeySenderKeyDistributionMessage: {} } }), false, 'fastRatchet não é raja');
+  eq(ehRajaTransporte({ groupEncInfo: { pairwiseOnly: true }, message: { ephemeralMessage: { message: { senderKeyDistributionMessage: {} } } } }), false, 'SKDM em ephemeral');
+  eq(contemSkdm({ senderKeyDistributionMessage: {} }), true, 'contemSkdm detecta');
+  // O raja real (conversa normal, sem SKDM) CONTINUA sendo detectado.
+  eq(ehRajaTransporte({ groupEncInfo: { pairwiseOnly: true }, message: { conversation: 'impressionante' } }), true, 'raja segue detectado');
+});
 await test('módulo: ehRajaTransporte exige groupEncInfo (sem fallback)', () => {
   eq(ehRajaTransporte({ groupEncInfo: { pairwiseOnly: true } }), true, 'pairwiseOnly true');
   eq(ehRajaTransporte({ groupEncInfo: { pairwiseOnly: false } }), false, 'pairwiseOnly false');
@@ -141,6 +150,18 @@ await test('pairwiseGroupPayload SEM groupEncInfo -> NADA (falso positivo removi
     await handleMessage(nazu, info, null, new Map(), null);
     if (i === 2) ok(removals.length === 0, 'sem groupEncInfo não bane (mesmo com 3)');
   }
+});
+await test('LIGADO: SKDM pareado via handler -> NADA (o bug do ban geral)', async () => {
+  const g = makeGroup(true); const a = nextAuthor();
+  let baniu = false;
+  for (let i = 0; i < 3; i++) {
+    const sent = []; const removals = []; const settings = [];
+    const nazu = makeNazu({ sent, removals, settings, groupJid: g, author: a });
+    const info = { key: { remoteJid: g, fromMe: false, id: `SK-${i}`, participant: a.lid, participantAlt: a.jid }, message: { senderKeyDistributionMessage: { groupId: g } }, groupEncInfo: { pairwiseOnly: true, hasPairwise: true, hasSkmsg: false, hasCount: false }, messageTimestamp: 1, pushName: 'A' };
+    await handleMessage(nazu, info, null, new Map(), null);
+    if (removals.length) baniu = true;
+  }
+  ok(!baniu, 'SKDM não bane (mesmo com 3)');
 });
 await test('enc COM skmsg (não é raja) -> NADA mesmo com 2', async () => {
   const g = makeGroup(true); const a = nextAuthor();
