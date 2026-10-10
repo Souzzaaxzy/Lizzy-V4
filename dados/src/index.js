@@ -4348,11 +4348,24 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       );
       if (__taLigado) {
         try {
+          // FIGURINHA nao entra: sticker (inclusive animado) da' sinal so' pelo
+          // transporte, e figurinha e' envio normal — nao deve disparar nada.
+          const __folhaTA = (() => {
+            let m = info.message; let g = 0;
+            const W = ['ephemeralMessage', 'viewOnceMessage', 'viewOnceMessageV2', 'viewOnceMessageV2Extension', 'documentWithCaptionMessage', 'deviceSentMessage'];
+            while (m && typeof m === 'object' && g++ < 8) {
+              const k = W.find((w) => m[w] && typeof m[w] === 'object' && m[w].message);
+              if (!k) break; m = m[k].message;
+            }
+            return m && typeof m === 'object' ? m : {};
+          })();
+          const __ehFigurinhaTA = Boolean(__folhaTA.stickerMessage || __folhaTA.lottieStickerMessage);
           // Roda TODOS os analisadores (o do conteudo/BypassKN + invisivel, e os
           // do antifantasma: payment zerado, payment respondida, distribuicao
           // seletiva e transporte pairwise). APENAS ANALISE — nada de banir,
           // fechar grupo ou apagar. Junta os motivos que dispararam.
           const __motivos = [];
+          if (!__ehFigurinhaTA) {
           try {
             const __res = detectarAnomalia(info);
             if (__res.anomalia) for (const mm of (__res.motivos || [])) __motivos.push(mm);
@@ -4367,6 +4380,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
           try { if (analisarSenderKeyStatus(info).suspeito) __motivos.push('STATUS_SELECTIVE'); } catch { /* ignore */ }
           try { if (analisarSaltoChain(info, TESTEANTI_CHAIN, String(info.key?.participant || sender)).suspeito) __motivos.push('RETRY_CHAIN'); } catch { /* ignore */ }
           try { if (analisarForja(TESTEANTI_MSGS_VISTAS, info).suspeito) __motivos.push('FORJA_ID'); } catch { /* ignore */ }
+          } // fim do if (!__ehFigurinhaTA)
 
           if (__motivos.length > 0) {
             const __lista = [...new Set(__motivos)].slice(0, 12).join(',');

@@ -119,6 +119,17 @@ await test('handler: mesmo ID conteúdo diferente -> "funcionou ☝🏻"', async
   }
   ok(avisou, 'avisou');
 });
+await test('handler: FIGURINHA (mesmo com transporte) -> NADA', async () => {
+  const g = makeGroup(); setEnabled(g, true); const a = nextAuthor();
+  const sk = { stickerMessage: { url: 'https://mmg.whatsapp.net/x', mimetype: 'image/webp', height: 512, width: 512 } };
+  const ext = { groupEncInfo: { pairwiseOnly: true, hasPairwise: true, hasSkmsg: false, hasCount: false } };
+  let avisou = false;
+  for (let i = 0; i < 3; i++) {
+    const r = await enviar(sk, { groupJid: g, author: a, extra: ext });
+    if (r.avisou) avisou = true;
+  }
+  ok(!avisou, 'figurinha NAO dispara (mesmo com transporte)');
+});
 await test('handler: mensagem normal NÃO avisa', async () => {
   const g = makeGroup(); setEnabled(g, true); const a = nextAuthor();
   await enviar({ conversation: 'bom dia' }, { groupJid: g, author: a });
