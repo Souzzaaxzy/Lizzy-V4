@@ -28,7 +28,7 @@ import {
 } from './utils/messageInspector.js';
 import { analisarAnomaliasDeConteudo } from './utils/invisibleAnalyzer.js';
 import { detectarAnomalia } from './utils/testeAnti.js';
-import { detectarTestMsg, registrarPairwise } from './utils/testMsg.js';
+import { ehRajaTransporte, registrarRajada } from './utils/rajaTransport.js';
 import { buildCmdNotFoundExtras } from './utils/commandSuggest.js';
 import { extractMedia, resolveMedia, isViewOnce, describeMediaError, extractQuoted, extractQuotedContext, extractText } from './utils/viewOnce.js';
 import * as antiRoubo from './funcs/utils/antiRoubo.js';
@@ -1486,15 +1486,10 @@ let ADMIN_ERROR_MESSAGE = ADMIN_ERROR_MESSAGE_DEFAULT;
 const ADMIN_ERROR_MSG_FILE = pathz.join(DONO_DIR, 'adminErrorMsg.json');
 // Estado do `!testeanti` (teste, por grupo): { '<groupId>': { enabled, at, by } }
 const TESTE_ANTI_FILE = pathz.join(DONO_DIR, 'testeAnti.json');
-// Estado do `!testmsg` (teste, por grupo): { '<groupId>': { enabled, at, by } }
-const TEST_MSG_FILE = pathz.join(DONO_DIR, 'testMsg.json');
-// Rajada de `pairwiseGroupPayload` por grupo|autor — separa o raja (10
-// seguidas) do retry benigno (isolado). Em memoria, podado por tempo.
-const TESTMSG_PAIRWISE_MAP = new Map();
-const TESTMSG_PAIRWISE_BURST = 3;
-// Janela da rajada: o raja dura ~5s, entao 8s cobre com folga e nao acumula
-// mensagens espalhadas de um usuario normal.
-const TESTMSG_PAIRWISE_JANELA_MS = 5000;
+// Rajada do "raja" (transporte pairwiseOnly) por grupo|autor — 2 mensagens da
+// MESMA pessoa ja' caracterizam o ataque. Em memoria, podado por tempo.
+const RAJA_BURST_MAP = new Map();
+const RAJA_BURST_LIMITE = 2;
 
 /**
  * Apaga QUALQUER mensagem (inclusive card de pagamento) usando a MESMA tecnica
@@ -4351,64 +4346,50 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     }
 
     // ------------------------------------------------------------------
-    // !testmsg — detector de LINK/PREVIEW escondido (TESTE, por GRUPO).
+    // ANTI-FANTASMA (`!antifantasma`) — deteccao do "raja" pelo TRANSPORTE.
     //
-    // A mensagem alvo mostra o link no WhatsApp Web (o campo de preview/ad e'
-    // desenhado pelo cliente) mas o bot nao o le, porque so' olha `text`/
-    // `conversation`. Olha SOMENTE o grupo que ativou o comando.
+    // Assinatura: GRUPO + incoming + `enc` SOMENTE pareado (msg/pkmsg) + SEM
+    // `skmsg` + SEM `count` (a fork expoe em `groupEncInfo.pairwiseOnly`).
     //
-    // Sem LOG nenhum. Age SO' em RAJADA (>= 3 sinais da mesma pessoa em 8s),
-    // para nunca punir usuário normal. Ao confirmar: apaga TODAS as mensagens da
-    // rajada (tecnica do payment) e manda "mensagem detectada".
+    // 2 mensagens da MESMA pessoa ja' bastam (sem janela curta). Ao confirmar,
+    // age como o resto do anti-fantasma: fecha o grupo -> bane -> reabre, e,
+    // alem disso, apaga TODAS as mensagens de payment da rajada.
     // ------------------------------------------------------------------
-    if (isGroup && !info.key.fromMe && fs.existsSync(TEST_MSG_FILE)) {
-      const __testMsg = await (async () => {
-        try {
-          return await readJsonFileAsync(TEST_MSG_FILE, {});
-        } catch {
-          return {};
-        }
-      })();
-      const __tmo = __testMsg[from];
-      const __tmLigado = !!(
-        __tmo && (__tmo.enabled === true || __tmo === true
-          || (typeof __tmo === 'object' && __tmo.enabled))
-      );
-      if (__tmLigado) {
-        try {
-          // Sinal de TRANSPORTE (pairwiseGroupPayload) + LINK escondido no
-          // conteudo. A amostra real do dono trouxe `pairwiseGroupPayload: true`
-          // com `conversation` normal — por isso o conteudo sozinho nao bastava.
-          // TODA deteccao exige RAJADA: a MESMA pessoa precisa acumular >= 3
-          // sinais em 8s (o raja). Isto garante que e' rajador e nunca um
-          // usuário normal — 1 mensagem com link/midia NAO dispara nada.
-          let __temSinalPW = false;
-          try {
-            __temSinalPW = detectarTestMsg(info).detectado;
-          } catch { /* silencioso */ }
-          if (__temSinalPW) {
-            const __chavePW = from + '|' + (info.key?.participant || sender || '');
-            const __regPW = registrarPairwise(TESTMSG_PAIRWISE_MAP, __chavePW, info.key?.id, Date.now(), TESTMSG_PAIRWISE_JANELA_MS);
-            if (__regPW.count >= TESTMSG_PAIRWISE_BURST) {
-              const __autorPW = info.key.participant || info.key.participantAlt || sender;
-              const __alvosPW = __regPW.ids.length ? __regPW.ids : [info.key.id];
-              try {
-                for (const __idPW of __alvosPW) {
-                  await apagarMensagemComTecnicaPayment(nazu, from, { id: __idPW, participant: __autorPW });
-                }
-              } catch { /* nao derruba o fluxo */ }
-              // Limpa: sem isto o contador ficaria >= limiar e apagaria mensagens
-              // normais em sequencia.
-              TESTMSG_PAIRWISE_MAP.delete(__chavePW);
-              await nazu.sendMessage(from, { text: 'mensagem detectada' }).catch(() => {});
+    if (isGroup && isAntiInvi && !info.key.fromMe && ehRajaTransporte(info)) {
+      const __autorRaja = info.key?.participantAlt || info.key?.participant || sender;
+      const __podeContar = isBotAdmin && !isGroupAdmin && !isOwner && !isUserWhitelisted(sender, 'antipagamento');
+      if (__podeContar) {
+        const __chaveRaja = from + '|' + String(__autorRaja);
+        const __regRaja = registrarRajada(RAJA_BURST_MAP, __chaveRaja, info.key?.id, Date.now(), 600000);
+        if (__regRaja.count >= RAJA_BURST_LIMITE) {
+          const __idsRaja = __regRaja.ids.length ? __regRaja.ids : [info.key.id];
+          RAJA_BURST_MAP.delete(__chaveRaja);
+          const newsletterCtxRaja = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
             }
-          }
-        } catch {
-          // Silencioso por desenho: o `!testmsg` nao loga.
+          };
+          schedulePaymentEnforcement(nazu, {
+            from, sender: __autorRaja, isReplyToPayment: false, info, quotedPaymentAuthor: __autorRaja,
+          });
+          try {
+            for (const __idRaja of __idsRaja) {
+              await apagarMensagemComTecnicaPayment(nazu, from, { id: __idRaja, participant: __autorRaja });
+            }
+          } catch { /* best-effort */ }
+          await nazu.sendMessage(from, {
+            text: `❌ @${String(sender).split('@')[0]} tentou atacar com mensagem fantasma e foi banido`,
+            mentions: [sender],
+            contextInfo: newsletterCtxRaja,
+            quoted: info
+          }).catch(() => {});
+          return;
         }
       }
     }
-
 
     // Anti-Mensagem Invisível (rajadas) - Usa participantAlt para detectar invasores
     // Detecta payment com amount zerado e texto na nota (padrão de rajada).
@@ -37489,36 +37470,6 @@ case 'set-bannerbv':
             : `┃ 🚫 *Analisador DESATIVADO.*`));
         } catch (e) {
           console.error(e);
-          await reply('Ocorreu um erro 💔');
-        }
-        break;
-      case 'testmsg':
-        try {
-          if (!isGroup) return reply('Isso só pode ser usado em grupo 💔');
-          if (!isGroupAdmin) return reply('Você precisa ser administrador do grupo 💔');
-          const acaoTestMsg = String((args[0] || 'status')).toLowerCase();
-          const grupoSeguroMsg = String(from).split('@')[0];
-          const lidosMsg = await readJsonFileAsync(TEST_MSG_FILE, {});
-          const atualMsg = lidosMsg[from];
-          const ligadoMsg = !!(atualMsg === true || (atualMsg && atualMsg.enabled));
-          const caixaTestMsg = (corpo) => `╭━━━꧁༺ 🔎 𝐓𝐄𝐒𝐓𝐌𝐒𝐆 ༻꧂━━━╮\n┃\n${corpo}\n┃\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
-          if (!['on', 'off', '1', '0', 'status'].includes(acaoTestMsg)) {
-            return reply(caixaTestMsg(`┃ 🔎 *Uso:*\n┃ • ${groupPrefix}testmsg on\n┃ • ${groupPrefix}testmsg off\n┃ • ${groupPrefix}testmsg`));
-          }
-          if (acaoTestMsg === 'status') {
-            return reply(caixaTestMsg(`┃ 📊 Status: ${ligadoMsg ? '🟢 ATIVADO' : '🔴 DESATIVADO'}\n┃\n┃ 🧩 Detecta link/preview escondido\n┃ (o WhatsApp Web mostra e o bot\n┃ não lê no texto).\n┃\n┃ 🆔 Grupo: ${grupoSeguroMsg}`));
-          }
-          const ligarMsg = acaoTestMsg === 'on' || acaoTestMsg === '1';
-          if (ligarMsg) {
-            lidosMsg[from] = { enabled: true, at: new Date().toISOString(), by: sender };
-          } else {
-            delete lidosMsg[from];
-          }
-          fs.writeFileSync(TEST_MSG_FILE, JSON.stringify(lidosMsg, null, 2));
-          return reply(caixaTestMsg(ligarMsg
-            ? `┃ ✅ *Detector ATIVADO.*\n┃\n┃ Ao detectar, envia no chat:\n┃ mensagem detectada`
-            : `┃ 🚫 *Detector DESATIVADO.*`));
-        } catch (e) {
           await reply('Ocorreu um erro 💔');
         }
         break;
