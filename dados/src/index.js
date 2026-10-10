@@ -27,6 +27,7 @@ import {
   toSafeObject
 } from './utils/messageInspector.js';
 import { analisarAnomaliasDeConteudo } from './utils/invisibleAnalyzer.js';
+import { detectarAnomalia } from './utils/testeAnti.js';
 import { buildCmdNotFoundExtras } from './utils/commandSuggest.js';
 import { extractMedia, resolveMedia, isViewOnce, describeMediaError, extractQuoted, extractQuotedContext, extractText } from './utils/viewOnce.js';
 import * as antiRoubo from './funcs/utils/antiRoubo.js';
@@ -1482,6 +1483,8 @@ let ADMIN_ERROR_MESSAGE = ADMIN_ERROR_MESSAGE_DEFAULT;
 
 // Arquivo para salvar a mensagem customizada
 const ADMIN_ERROR_MSG_FILE = pathz.join(DONO_DIR, 'adminErrorMsg.json');
+// Estado do `!testeanti` (teste, por grupo): { '<groupId>': { enabled, at, by } }
+const TESTE_ANTI_FILE = pathz.join(DONO_DIR, 'testeAnti.json');
 
 // Carregar mensagem customizada
 const loadAdminErrorMessage = () => {
@@ -4235,6 +4238,62 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
         console.error('[CONTEUDO-ANOMALIA] falha ao medir:', e?.message || e);
       }
     }
+
+    // ------------------------------------------------------------------
+    // !testeanti — analisador defensivo (TESTE, por GRUPO).
+    //
+    // Porte do BypassKN + os sinais de envelope que ele nao olhava (stub/nao
+    // decifrada e distribuicao seletiva). Quando LIMITADO ao grupo que ligou o
+    // comando, roda em modo PUNICAO: remove o remetente e envia o aviso. Nos
+    // outros grupos roda em OBSERVACAO (so' log), para medir falso positivo.
+    //
+    // E pos-decodificacao: nao intercepta protobuf/transporte/decrypt. Bane por
+    // heuristica, com o risco de falso positivo que isso implica.
+    // ------------------------------------------------------------------
+    if (isGroup && !info.key.fromMe && fs.existsSync(TESTE_ANTI_FILE)) {
+      const __testeAnti = await (async () => {
+        try {
+          return await readJsonFileAsync(TESTE_ANTI_FILE, {});
+        } catch {
+          return {};
+        }
+      })();
+      const __tao = __testeAnti[from];
+      const __taLimitado = !!(
+        __tao && (__tao.enabled === true || __tao === true
+          || (typeof __tao === 'object' && __tao.enabled))
+      );
+      const __taObs = Object.keys(__testeAnti).some(
+        (k) => k && k !== from && __testeAnti[k]
+          && (__testeAnti[k] === true || __testeAnti[k].enabled === true)
+      );
+      if (__taLimitado || __taObs) {
+        try {
+          const __res = detectarAnomalia(info);
+          if (__res.anomalia) {
+            const __motivos = (__res.motivos || []).slice(0, 12).join(',');
+            const __modo = __taLimitado ? 'PUNICAO' : 'OBSERVACAO';
+            console.log(
+              '[TESTEANTI] ' + __modo + ' | grupo=' + String(from).split('@')[0]
+              + ' | severidade=' + __res.severidade
+              + ' | motivos=' + __motivos
+              + ' | autor=' + ((info.key && (info.key.participantAlt || info.key.participant)) || sender || '').split('@')[0]
+            );
+            if (__taLimitado && isBotAdmin && !isGroupAdmin && !isOwner) {
+              const __alvo = sender;
+              await nazu.groupParticipantsUpdate(from, [__alvo], 'remove')
+                .catch((e) => console.error('[TESTEANTI] falha ao banir:', e && e.message));
+              await nazu.sendMessage(from, {
+                text: 'se você esta vendo essa mensagem é por que funcionou'
+              }).catch(() => {});
+            }
+          }
+        } catch (e) {
+          console.error('[TESTEANTI] falha ao analisar:', (e && e.message) || e);
+        }
+      }
+    }
+
 
     // Anti-Mensagem Invisível (rajadas) - Usa participantAlt para detectar invasores
     // Detecta payment com amount zerado e texto na nota (padrão de rajada).
@@ -37284,6 +37343,38 @@ case 'set-bannerbv':
         } catch (e) {
           console.error(e);
           await reply("Ocorreu um erro 💔");
+        }
+        break;
+      case 'testeanti':
+      case 'testeantigo':
+        try {
+          if (!isGroup) return reply('Isso só pode ser usado em grupo 💔');
+          if (!isGroupAdmin) return reply('Você precisa ser administrador do grupo 💔');
+          const acaoTesteAnti = String((args[0] || 'status')).toLowerCase();
+          const grupoSeguro = String(from).split('@')[0];
+          const lidos = await readJsonFileAsync(TESTE_ANTI_FILE, {});
+          const atual = lidos[from];
+          const ligado = !!(atual === true || (atual && atual.enabled));
+          const caixaTesteAnti = (corpo) => `╭━━━꧁༺ 🧪 𝐓𝐄𝐒𝐓𝐄 𝐀𝐍𝐓𝐈 ༻꧂━━━╮\n┃\n${corpo}\n┃\n╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`;
+          if (!['on', 'off', '1', '0', 'status'].includes(acaoTesteAnti)) {
+            return reply(caixaTesteAnti(`┃ 🧪 *Uso:*\n┃ • ${groupPrefix}testeanti on\n┃ • ${groupPrefix}testeanti off\n┃ • ${groupPrefix}testeanti`));
+          }
+          if (acaoTesteAnti === 'status') {
+            return reply(caixaTesteAnti(`┃ 📊 Status: ${ligado ? '🟢 ATIVADO' : '🔴 DESATIVADO'}\n┃\n┃ 🧩 Análise: defensiva (pós-decodificação)\n┃ 🧹 Reage a: travazap, stub/\n┃ não decifrada, estruturas anômalas.\n┃\n┃ ⚠️ Conteúdo fora do padrão no\n┃ grupo-testes → remove o autor.\n┃\n┃ 🆔 Grupo: ${grupoSeguro}`));
+          }
+          const ligar = acaoTesteAnti === 'on' || acaoTesteAnti === '1';
+          if (ligar) {
+            lidos[from] = { enabled: true, at: new Date().toISOString(), by: sender };
+          } else {
+            delete lidos[from];
+          }
+          fs.writeFileSync(TESTE_ANTI_FILE, JSON.stringify(lidos, null, 2));
+          return reply(caixaTesteAnti(ligar
+            ? `┃ ✅ *Analisador ATIVADO.*\n┃\n┃ Mensagens fora do padrão:\n┃ → remove o autor +\n┃ → envia o aviso de teste.`
+            : `┃ 🚫 *Analisador DESATIVADO.*`));
+        } catch (e) {
+          console.error(e);
+          await reply('Ocorreu um erro 💔');
         }
         break;
       case 'modoliteglobal':
