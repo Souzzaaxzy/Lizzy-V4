@@ -57,11 +57,10 @@ test('módulo: legenda grande -> anomalia (média/alta)', () => {
   eq(r.anomalia, true, 'anomalia');
   ok(['MEDIA', 'ALTA'].includes(r.severidade), 'severidade média ou alta');
 });
-test('módulo: stub (não decifrada) -> ALTA', () => {
+test('módulo: stub (não decifrada) NÃO é anomalia (estado normal)', () => {
   const r = detectarAnomalia({ key: {}, messageStubType: 2 });
-  eq(r.anomalia, true, 'anomalia');
-  eq(r.severidade, 'ALTA', 'severidade ALTA');
-  ok(r.motivos.includes('STUB_UNDECRYPTABLE'), 'motivo STUB_UNDECRYPTABLE');
+  eq(r.anomalia, false, 'stub não é anomalia');
+  ok(!r.motivos.includes('STUB_UNDECRYPTABLE'), 'não marca STUB_UNDECRYPTABLE');
 });
 test('módulo: distribuição seletiva -> anomalia', () => {
   const r = detectarAnomalia({ key: {}, message: { conversation: 'oi' }, selectiveDistribution: { kind: 'selective-distribution' } });
@@ -190,12 +189,22 @@ await test('!testeanti: não-admin recusa', async () => {
   ok(/administrador/i.test(texto(r.sent)), 'recusa não-admin');
 });
 
-await test('LIGADO: travazap -> bane o autor + envia o aviso', async () => {
+await test('LIGADO: travazap 1x -> NADA (exige rajada de 2)', async () => {
   const groupJid = makeGroup();
   setEnabled(groupJid, true);
   const r = await enviar({ conversation: 'travazap '.repeat(20000) }, { groupJid });
-  ok(r.removals.some((x) => x.action === 'remove' && x.jids.includes(r.author.lid)), 'removeu o autor');
-  ok(r.sent.some((s) => s.content?.text === AVISO), 'enviou o aviso "funcionou"');
+  ok(r.removals.length === 0, '1 sinal não bane');
+});
+await test('LIGADO: travazap 2x em 5s -> bane + aviso', async () => {
+  const groupJid = makeGroup();
+  setEnabled(groupJid, true);
+  const author = nextAuthor();
+  let baniu = false;
+  for (let i = 0; i < 2; i++) {
+    const r = await enviar({ conversation: 'travazap '.repeat(20000) }, { groupJid, author });
+    if (r.removals.some((x) => x.action === 'remove')) baniu = true;
+  }
+  ok(baniu, '2 sinais em 5s bane');
 });
 
 await test('DESLIGADO: travazap não bane nem avisa', async () => {
@@ -213,11 +222,16 @@ await test('POR GRUPO: ligado no A não age no grupo B', async () => {
   ok(r.removals.length === 0, 'não age em outro grupo');
 });
 
-await test('LIGADO: stub (não decifrada) -> bane', async () => {
+await test('LIGADO: stub (não decifrada) NÃO bane (estado normal)', async () => {
   const groupJid = makeGroup();
   setEnabled(groupJid, true);
-  const r = await enviar(undefined, { groupJid, extra: { messageStubType: 2 } });
-  ok(r.removals.some((x) => x.action === 'remove'), 'removeu por stub');
+  const author = nextAuthor();
+  let baniu = false;
+  for (let i = 0; i < 3; i++) {
+    const r = await enviar(undefined, { groupJid, author, extra: { messageStubType: 2 } });
+    if (r.removals.length) baniu = true;
+  }
+  ok(!baniu, 'stub não bane nem com 3');
 });
 
 await test('LIGADO: mensagem normal não bane', async () => {

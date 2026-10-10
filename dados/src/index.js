@@ -1497,6 +1497,11 @@ let ADMIN_ERROR_MESSAGE = ADMIN_ERROR_MESSAGE_DEFAULT;
 const ADMIN_ERROR_MSG_FILE = pathz.join(DONO_DIR, 'adminErrorMsg.json');
 // Estado do `!testeanti` (teste, por grupo): { '<groupId>': { enabled, at, by } }
 const TESTE_ANTI_FILE = pathz.join(DONO_DIR, 'testeAnti.json');
+// Rajada do `!testeanti` por grupo|autor — exige >= 2 sinais em 5s (nao
+// bane em um sinal unico, que e' o que causava falso positivo).
+const TESTEANTI_BURST_MAP = new Map();
+const TESTEANTI_BURST_LIMITE = 2;
+const TESTEANTI_JANELA_MS = 5000;
 // Rajada do "raja" (transporte pairwiseOnly) por grupo|autor — 2 mensagens da
 // MESMA pessoa ja' caracterizam o ataque. Em memoria, podado por tempo.
 const RAJA_BURST_MAP = new Map();
@@ -4342,13 +4347,20 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
           const __res = detectarAnomalia(info);
           if (__res.anomalia) {
             const __motivos = (__res.motivos || []).slice(0, 12).join(',');
+            // Exige RAJADA: >= 2 sinais da MESMA pessoa em 5s. Um sinal unico
+            // (texto grande, estrutura estranha) NAO basta — e' o que causava
+            // falso positivo e remocao de usuário normal.
+            const __chaveTA = from + '|' + String((info.key && (info.key.participant || info.key.participantAlt)) || sender || '');
+            const __regTA = registrarRajada(TESTEANTI_BURST_MAP, __chaveTA, info.key?.id, Date.now(), TESTEANTI_JANELA_MS);
             console.log(
               '[TESTEANTI] grupo=' + String(from).split('@')[0]
               + ' | severidade=' + __res.severidade
               + ' | motivos=' + __motivos
+              + ' | ocorrencias=' + __regTA.count + '/' + TESTEANTI_BURST_LIMITE
               + ' | autor=' + ((info.key && (info.key.participantAlt || info.key.participant)) || sender || '').split('@')[0]
             );
-            if (isBotAdmin && !isGroupAdmin && !isOwner) {
+            if (__regTA.count >= TESTEANTI_BURST_LIMITE && isBotAdmin && !isGroupAdmin && !isOwner) {
+              TESTEANTI_BURST_MAP.delete(__chaveTA);
               const __alvo = sender;
               await nazu.groupParticipantsUpdate(from, [__alvo], 'remove')
                 .catch((e) => console.error('[TESTEANTI] falha ao banir:', e && e.message));

@@ -183,10 +183,9 @@ export function detectarAnomalia(info, options = {}) {
   const sobe = (sev) => { if ((SEVERITY_RANK[sev] ?? 0) > (SEVERITY_RANK[severidade] ?? 0)) severidade = sev; };
 
   if (info && typeof info === 'object') {
-    if (info.messageStubType !== undefined && info.messageStubType !== null) {
-      motivos.push('STUB_UNDECRYPTABLE');
-      severidade = 'ALTA';
-    }
+    // `messageStubType` (mensagem que nao decifrou) NAO e' anomalia: e' o estado
+    // NORMAL de quem entrou tarde ou perdeu a Sender Key. Tratar como ataque
+    // removia gente inocente.
     const sel = info.selectiveDistribution;
     if (sel !== undefined && sel !== null && sel !== false) {
       motivos.push('SELECTIVE_DISTRIBUTION');
