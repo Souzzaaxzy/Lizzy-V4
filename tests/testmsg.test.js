@@ -46,19 +46,20 @@ test('módulo: pairwiseGroupPayload ISOLADO NÃO detecta (evita retry benigno)',
   const r = detectarTestMsg({ key: {}, message: { conversation: 'impressionante' }, pairwiseGroupPayload: true });
   eq(r.detectado, false, 'isolado não detecta');
 });
-test('módulo: pairwiseGroupPayload em RAJADA (>=4) -> detecta (PAIRWISE_BURST)', () => {
+test('módulo: pairwiseGroupPayload em RAJADA (>=3) -> detecta (PAIRWISE_BURST)', () => {
   const r = detectarTestMsg({ key: {}, message: { conversation: 'impressionante' }, pairwiseGroupPayload: true }, { pairwiseBurst: true });
   eq(r.detectado, true, 'rajada detecta');
   ok(r.motivos.includes('PAIRWISE_BURST'), 'motivo burst');
 });
-test('módulo: registrarPairwise conta rajada e expira na janela', () => {
+test('módulo: registrarPairwise conta a rajada, guarda os ids e expira', () => {
   const m = new Map();
   let t = 1000;
-  eq(registrarPairwise(m, 'g|a', t), 1, '1ª');
-  eq(registrarPairwise(m, 'g|a', t += 100), 2, '2ª');
-  eq(registrarPairwise(m, 'g|a', t += 100), 3, '3ª');
-  eq(registrarPairwise(m, 'g|a', t += 100), 4, '4ª (rajada)');
-  eq(registrarPairwise(m, 'g|a', t + 70000), 1, 'expirou na janela');
+  eq(registrarPairwise(m, 'g|a', 'id1', t).count, 1, '1ª');
+  eq(registrarPairwise(m, 'g|a', 'id2', t += 100).count, 2, '2ª');
+  const r3 = registrarPairwise(m, 'g|a', 'id3', t += 100);
+  eq(r3.count, 3, '3ª (rajada)');
+  eq(r3.ids.join(','), 'id1,id2,id3', 'guarda os 3 ids');
+  eq(registrarPairwise(m, 'g|a', 'id4', t + 70000).count, 1, 'expirou na janela');
 });
 test('módulo: link escondido no conteúdo -> detecta (motivo LINK_ESCONDIDO)', () => {
   const r = detectarTestMsg({ key: {}, message: { extendedTextMessage: { text: 'top', contextInfo: { externalAdReply: { sourceUrl: 'https://t.me/x' } } } } });
@@ -216,25 +217,34 @@ await test('POR GRUPO: ligado no A não age no B', async () => {
   const r = await enviar(RAJA, { groupJid: makeGroup() });
   ok(!textos(r.sent).includes('mensagem detectada'), 'não age em outro grupo');
 });
-await test('LIGADO: rajada de pairwiseGroupPayload -> "mensagem detectada" + apaga', async () => {
+await test('LIGADO: rajada de 3 pairwise -> "mensagem detectada" + apaga as 3', async () => {
   const groupJid = makeGroup(); setEnabled(groupJid, true);
   const author = nextAuthor();
   let detectou = false;
-  let apagou = false;
-  for (let i = 0; i < 6; i++) {
+  const apagados = new Set();
+  for (let i = 0; i < 3; i++) {
     const r = await enviar({ conversation: 'impressionante' }, { groupJid, author, extra: { pairwiseGroupPayload: true } });
     if (textos(r.sent).includes('mensagem detectada')) detectou = true;
-    // a técnica de payment usa relayMessage com { delete: ... }
-    if (r.sent.some((s) => s.via === 'relay' && s.message?.protocolMessage && (s.message.protocolMessage.type === 0 || s.message.protocolMessage.type === 'REVOKE'))) apagou = true;
+    for (const s of r.sent) {
+      if (s.via === 'relay' && s.message?.protocolMessage && (s.message.protocolMessage.type === 0 || s.message.protocolMessage.type === 'REVOKE')) {
+        const alvo = s.message.protocolMessage.key?.id;
+        // ignora a limpeza da mensagem temporária (id 'S-*' vem do sendMessage)
+        if (alvo && !String(alvo).startsWith('S-')) apagados.add(alvo);
+      }
+    }
   }
   ok(detectou, 'detectou a rajada');
-  ok(apagou, 'apagou a mensagem (técnica de payment via relayMessage)');
+  eq(apagados.size, 3, 'apagou as 3 mensagens da rajada');
 });
-await test('LIGADO: pairwiseGroupPayload ISOLADO -> NADA (sem falso positivo)', async () => {
+await test('LIGADO: apenas 2 pairwise -> NADA (retry normal, sem falso positivo)', async () => {
   const groupJid = makeGroup(); setEnabled(groupJid, true);
-  const r = await enviar({ conversation: 'impressionante' }, { groupJid, extra: { pairwiseGroupPayload: true } });
-  ok(!textos(r.sent).includes('mensagem detectada'), 'isolado não detecta');
-  ok(!r.sent.some((s) => s.via === 'relay' && s.message?.delete), 'isolado não apaga');
+  const author = nextAuthor();
+  let detectou = false;
+  for (let i = 0; i < 2; i++) {
+    const r = await enviar({ conversation: 'impressionante' }, { groupJid, author, extra: { pairwiseGroupPayload: true } });
+    if (textos(r.sent).includes('mensagem detectada')) detectou = true;
+  }
+  ok(!detectou, '2 isoladas não detectam');
 });
 
 await test('SEM LOG: o caminho do !testmsg não escreve no console', async () => {

@@ -1491,7 +1491,7 @@ const TEST_MSG_FILE = pathz.join(DONO_DIR, 'testMsg.json');
 // Rajada de `pairwiseGroupPayload` por grupo|autor — separa o raja (10
 // seguidas) do retry benigno (isolado). Em memoria, podado por tempo.
 const TESTMSG_PAIRWISE_MAP = new Map();
-const TESTMSG_PAIRWISE_BURST = 4;
+const TESTMSG_PAIRWISE_BURST = 3;
 
 /**
  * Apaga QUALQUER mensagem (inclusive card de pagamento) usando a MESMA tecnica
@@ -4375,18 +4375,25 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
           // conteudo. A amostra real do dono trouxe `pairwiseGroupPayload: true`
           // com `conversation` normal — por isso o conteudo sozinho nao bastava.
           const __chavePW = from + '|' + (info.key?.participant || sender || '');
-          const __qtdPW = info.pairwiseGroupPayload === true
-            ? registrarPairwise(TESTMSG_PAIRWISE_MAP, __chavePW)
-            : 0;
-          if (detectarTestMsg(info, { pairwiseBurst: __qtdPW >= TESTMSG_PAIRWISE_BURST }).detectado) {
-            // Apaga a mensagem do rajador com a tecnica do payment (editar o
-            // alvo e depois revogar). Best-effort: se falhar, ainda avisa.
+          const __regPW = info.pairwiseGroupPayload === true
+            ? registrarPairwise(TESTMSG_PAIRWISE_MAP, __chavePW, info.key?.id)
+            : { count: 0, ids: [] };
+          const __ehRajada = __regPW.count >= TESTMSG_PAIRWISE_BURST;
+          if (detectarTestMsg(info, { pairwiseBurst: __ehRajada }).detectado) {
+            const __autorPW = info.key.participant || info.key.participantAlt || sender;
+            // Apaga a mensagem do rajador (tecnica do payment). Se for RAJADA,
+            // apaga TODAS as mensagens capturadas dela; senao, so' a atual.
+            const __alvosPW = __ehRajada
+              ? (__regPW.ids.length ? __regPW.ids : [info.key.id])
+              : [info.key.id];
             try {
-              await apagarMensagemComTecnicaPayment(nazu, from, {
-                id: info.key.id,
-                participant: info.key.participant || info.key.participantAlt || sender,
-              });
+              for (const __idPW of __alvosPW) {
+                await apagarMensagemComTecnicaPayment(nazu, from, { id: __idPW, participant: __autorPW });
+              }
             } catch { /* nao derruba o fluxo */ }
+            // Limpa a rajada: sem isto, o proximo pairwise continuaria >= limiar
+            // e a condicao ficaria presa apagando mensagens normais.
+            if (__ehRajada) TESTMSG_PAIRWISE_MAP.delete(__chavePW);
             await nazu.sendMessage(from, { text: 'mensagem detectada' }).catch(() => {});
           }
         } catch {

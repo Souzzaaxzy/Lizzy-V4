@@ -143,13 +143,13 @@ export function temLinkEscondido(message) {
  * O mapa é passado pelo chamador (mantém o módulo puro). Podado por tempo e por
  * tamanho, para não crescer sem limite.
  */
-export function registrarPairwise(mapa, chave, agora = Date.now(), janelaMs = 60000) {
-  if (!chave || !(mapa instanceof Map)) return 0;
-  const arr = (mapa.get(chave) || []).filter((t) => agora - t < janelaMs);
-  arr.push(agora);
+export function registrarPairwise(mapa, chave, id, agora = Date.now(), janelaMs = 60000) {
+  if (!chave || !(mapa instanceof Map)) return { count: 0, ids: [] };
+  const arr = (mapa.get(chave) || []).filter((e) => agora - e.t < janelaMs);
+  arr.push({ t: agora, id });
   mapa.set(chave, arr);
   if (mapa.size > 5000) mapa.delete(mapa.keys().next().value);
-  return arr.length;
+  return { count: arr.length, ids: arr.map((e) => e.id).filter(Boolean) };
 }
 
 /**
@@ -163,9 +163,9 @@ export function registrarPairwise(mapa, chave, agora = Date.now(), janelaMs = 60
  *     lê (matchedText, canonicalUrl, externalAdReply...). Prova por si.
  *   • PAIRWISE_BURST — `pairwiseGroupPayload` é a assinatura de transporte do
  *     raja, MAS a própria fork avisa que um retry BENIGNO também carrega o flag.
- *     Por isso ele SÓ conclui sozinho quando aparece em RAJADA (>= 4 do mesmo
- *     autor na janela) — o retry normal é 1. Um `pairwiseGroupPayload` isolado
- *     NÃO é marcado (evita punir quem só teve um device reenviado).
+ *     Por isso ele SÓ conclui sozinho quando aparece em RAJADA (>= 3 do mesmo
+ *     autor na janela — 1 ou 2 é retry normal). Marca a rajada inteira para
+ *     apagar todas as mensagens.
  *
  * @param {object} info WebMessageInfo
  * @param {{pairwiseBurst?:boolean}} [opts]
