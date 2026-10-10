@@ -106,6 +106,21 @@ await test('DESLIGADO: status -> NADA', async () => {
   const r = await enviar({ groupStatusMessageV2: { message: { conversation: 'oi' } } }, { groupJid: g });
   ok(r.removals.length === 0, 'desligado não remove');
 });
+await test('LIGADO: apaga o status automaticamente (revogação no formato de group status)', async () => {
+  const g = makeGroup({ antistatus: true });
+  const r = await enviar({ groupStatusMessageV2: { message: { conversation: 'oi' } } }, { groupJid: g });
+  // A técnica usa `{ groupStatus: true, delete: {...} }` (a que apaga status de grupo)
+  const apagouStatus = r.sent.some((x) => x.content && x.content.groupStatus === true && x.content.delete);
+  ok(apagouStatus, 'enviou a revogação no formato de group status');
+  ok(r.removals.some((x) => x.action === 'remove'), 'e removeu o autor');
+});
+await test('LIGADO: pairwise no status também é apagado', async () => {
+  const g = makeGroup({ antistatus: true });
+  const r = await enviar({ groupStatusMessageV2: { message: { conversation: 'x' } } }, { groupJid: g, extra: { groupEncInfo: { pairwiseOnly: true } } });
+  const apagouStatus = r.sent.some((x) => x.content && x.content.groupStatus === true && x.content.delete);
+  ok(apagouStatus, 'revogou no formato de group status');
+});
+
 await test('admin isento', async () => {
   const g = makeGroup({ antistatus: true });
   const r = await enviar({ groupStatusMessageV2: { message: { conversation: 'oi' } } }, { groupJid: g, authorIsAdmin: true });

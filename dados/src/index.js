@@ -4112,6 +4112,21 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     if (isGroup && isAntiStts && (isStatusV2 || isNewsletter || isStatusPairwise) && !isOwnerOrSub && !isUserWhitelisted(sender, 'antistts') && !isGroupAdmin) {
       try {
         if (isBotAdmin) {
+          // Apaga o STATUS no formato proprio: a revogacao simples nao apaga um
+          // group status (e uma stanza especial). `buildGroupStatusRevokePayloads`
+          // devolve a variante encapsulada como status + a simples de reserva —
+          // a MESMA tecnica que o `!d` usa para apagar status de grupo.
+          try {
+            const revokes = buildGroupStatusRevokePayloads({
+              remoteJid: from,
+              id: info.key.id,
+              fromMe: !!info.key.fromMe,
+              participant: sender,
+            });
+            for (const rv of revokes) {
+              try { await nazu.sendMessage(from, rv); } catch { /* tenta o proximo */ }
+            }
+          } catch { /* best-effort */ }
           await nazu.sendMessage(from, { delete: info.key }).catch(() => {});
           const newsletterCtxAntiStts = {
             forwardingScore: 999,
