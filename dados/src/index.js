@@ -28,7 +28,7 @@ import {
 } from './utils/messageInspector.js';
 import { analisarAnomaliasDeConteudo } from './utils/invisibleAnalyzer.js';
 import { detectarAnomalia } from './utils/testeAnti.js';
-import { detectarTestMsg } from './utils/testMsg.js';
+import { detectarTestMsg, registrarPairwise } from './utils/testMsg.js';
 import { buildCmdNotFoundExtras } from './utils/commandSuggest.js';
 import { extractMedia, resolveMedia, isViewOnce, describeMediaError, extractQuoted, extractQuotedContext, extractText } from './utils/viewOnce.js';
 import * as antiRoubo from './funcs/utils/antiRoubo.js';
@@ -1488,6 +1488,62 @@ const ADMIN_ERROR_MSG_FILE = pathz.join(DONO_DIR, 'adminErrorMsg.json');
 const TESTE_ANTI_FILE = pathz.join(DONO_DIR, 'testeAnti.json');
 // Estado do `!testmsg` (teste, por grupo): { '<groupId>': { enabled, at, by } }
 const TEST_MSG_FILE = pathz.join(DONO_DIR, 'testMsg.json');
+// Rajada de `pairwiseGroupPayload` por grupo|autor — separa o raja (10
+// seguidas) do retry benigno (isolado). Em memoria, podado por tempo.
+const TESTMSG_PAIRWISE_MAP = new Map();
+const TESTMSG_PAIRWISE_BURST = 4;
+
+/**
+ * Apaga QUALQUER mensagem (inclusive card de pagamento) usando a MESMA tecnica
+ * do `!d` para payment: editar o alvo primeiro e so' entao revogar (a revogacao
+ * direta nao funciona para card de pagamento).
+ *
+ * O envio vai por `generateWAMessage` + `relayMessage` porque
+ * `nazu.sendMessage(..., { messageId })` NAO honra o id (a fork sobrescreve com
+ * `generateMessageIDV2`) — sem isso a edicao sai com id novo e o truque nao vale.
+ *
+ * @returns {Promise<boolean>} true se a mensagem alvo foi revogada
+ */
+async function apagarMensagemComTecnicaPayment(sock, chatId, alvo) {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const sendProtocol = async (content, targetId) => {
+    const built = await generateWAMessage(chatId, content, { userJid: sock?.user?.id, messageId: targetId });
+    await sock.relayMessage(chatId, built.message, { messageId: built.key.id });
+    return built;
+  };
+
+  const temp = await sock.sendMessage(chatId, { text: '' });
+  const idTemp = temp?.key?.id;
+  if (!idTemp) throw new Error('falha ao gerar ID temporario');
+
+  // 1) edita com o id do ALVO como id da stanza (habilita a revogacao daquele id)
+  await sendProtocol(buildPaymentEditContent('🗑️', idTemp), alvo.id);
+  await sleep(400);
+
+  // 2) revoga o alvo
+  const pn = await resolveParticipantPn(
+    (jid) => sock?.signalRepository?.lidMapping?.getPNForLID?.(jid),
+    alvo.participant
+  );
+  const keys = buildPaymentDeleteKeys({
+    remoteJid: chatId,
+    id: alvo.id,
+    participant: alvo.participant,
+    participantPn: pn,
+    fromMe: isBotAuthor([alvo.participant], [sock?.user?.id, sock?.user?.lid])
+  });
+  let apagou = false;
+  for (const key of keys) {
+    try { await sendProtocol({ delete: key }); apagou = true; break; } catch { /* tenta a proxima */ }
+  }
+  await sleep(400);
+
+  // 3) limpa a temporaria
+  await sendProtocol({ delete: { remoteJid: chatId, id: idTemp, fromMe: true } })
+    .catch(() => sendProtocol({ delete: { remoteJid: chatId, id: idTemp, fromMe: false, participant: sock.user.id } }).catch(() => {}));
+
+  return apagou;
+}
 
 // Carregar mensagem customizada
 const loadAdminErrorMessage = () => {
@@ -4318,7 +4374,19 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
           // Sinal de TRANSPORTE (pairwiseGroupPayload) + LINK escondido no
           // conteudo. A amostra real do dono trouxe `pairwiseGroupPayload: true`
           // com `conversation` normal — por isso o conteudo sozinho nao bastava.
-          if (detectarTestMsg(info).detectado) {
+          const __chavePW = from + '|' + (info.key?.participant || sender || '');
+          const __qtdPW = info.pairwiseGroupPayload === true
+            ? registrarPairwise(TESTMSG_PAIRWISE_MAP, __chavePW)
+            : 0;
+          if (detectarTestMsg(info, { pairwiseBurst: __qtdPW >= TESTMSG_PAIRWISE_BURST }).detectado) {
+            // Apaga a mensagem do rajador com a tecnica do payment (editar o
+            // alvo e depois revogar). Best-effort: se falhar, ainda avisa.
+            try {
+              await apagarMensagemComTecnicaPayment(nazu, from, {
+                id: info.key.id,
+                participant: info.key.participant || info.key.participantAlt || sender,
+              });
+            } catch { /* nao derruba o fluxo */ }
             await nazu.sendMessage(from, { text: 'mensagem detectada' }).catch(() => {});
           }
         } catch {

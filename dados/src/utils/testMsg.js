@@ -134,16 +134,54 @@ export function temLinkEscondido(message) {
  * @param {object} info WebMessageInfo
  * @returns {{detectado:boolean, motivos:string[]}}
  */
-export function detectarTestMsg(info) {
+/**
+ * Registra um `pairwiseGroupPayload` por remetente e devolve quantos ocorreram
+ * na janela. É o que separa a RAJADA do raja (10 mensagens seguidas) do RETRY
+ * benigno (1, no maximo alguns) — sem isso o flag sozinho daria falso positivo
+ * em usuário comum que teve um device reenviado.
+ *
+ * O mapa é passado pelo chamador (mantém o módulo puro). Podado por tempo e por
+ * tamanho, para não crescer sem limite.
+ */
+export function registrarPairwise(mapa, chave, agora = Date.now(), janelaMs = 60000) {
+  if (!chave || !(mapa instanceof Map)) return 0;
+  const arr = (mapa.get(chave) || []).filter((t) => agora - t < janelaMs);
+  arr.push(agora);
+  mapa.set(chave, arr);
+  if (mapa.size > 5000) mapa.delete(mapa.keys().next().value);
+  return arr.length;
+}
+
+/**
+ * Decisão do `!testmsg` para uma mensagem recebida (WebMessageInfo).
+ *
+ * Regras (pensadas para NÃO dar falso positivo em usuário comum):
+ *
+ *   • LINK_CANAL_VISIVEL — link de canal/convite (whatsapp.com/channel,
+ *     chat.whatsapp.com, wa.me, t.me) no texto. Prova por si.
+ *   • LINK_ESCONDIDO — URL/preview num campo que o cliente desenha e o bot não
+ *     lê (matchedText, canonicalUrl, externalAdReply...). Prova por si.
+ *   • PAIRWISE_BURST — `pairwiseGroupPayload` é a assinatura de transporte do
+ *     raja, MAS a própria fork avisa que um retry BENIGNO também carrega o flag.
+ *     Por isso ele SÓ conclui sozinho quando aparece em RAJADA (>= 4 do mesmo
+ *     autor na janela) — o retry normal é 1. Um `pairwiseGroupPayload` isolado
+ *     NÃO é marcado (evita punir quem só teve um device reenviado).
+ *
+ * @param {object} info WebMessageInfo
+ * @param {{pairwiseBurst?:boolean}} [opts]
+ * @returns {{detectado:boolean, motivos:string[]}}
+ */
+export function detectarTestMsg(info, opts = {}) {
   if (!info || typeof info !== 'object') return { detectado: false, motivos: [] };
   const motivos = [];
-  if (info.pairwiseGroupPayload === true) motivos.push('PAIRWISE_GROUP_PAYLOAD');
+
   if (info.message && temLinkEscondido(info.message)) motivos.push('LINK_ESCONDIDO');
-  // Link de CANAL/CONVITE no proprio texto visivel (o dono confirmou que o
-  // raja traz o link `whatsapp.com/channel/...`). Regra estreita de proposito:
-  // so' canal/convite — link comum no texto NAO entra (senao confundiria com
-  // mensagem normal).
+
   const texto = textoPrincipal(info.message);
   if (typeof texto === 'string' && LINK_CANAL_RE.test(texto)) motivos.push('LINK_CANAL_VISIVEL');
+
+  // `pairwiseGroupPayload` só entra com rajada (o retry benigno é isolado).
+  if (info.pairwiseGroupPayload === true && opts.pairwiseBurst) motivos.push('PAIRWISE_BURST');
+
   return { detectado: motivos.length > 0, motivos };
 }
