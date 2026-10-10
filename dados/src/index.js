@@ -4243,9 +4243,8 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     // !testeanti — analisador defensivo (TESTE, por GRUPO).
     //
     // Porte do BypassKN + os sinais de envelope que ele nao olhava (stub/nao
-    // decifrada e distribuicao seletiva). Quando LIMITADO ao grupo que ligou o
-    // comando, roda em modo PUNICAO: remove o remetente e envia o aviso. Nos
-    // outros grupos roda em OBSERVACAO (so' log), para medir falso positivo.
+    // decifrada e distribuicao seletiva). Olha SOMENTE o grupo que ativou o
+    // comando (`enabled` naquele grupo); nos demais grupos o bot nem analisa.
     //
     // E pos-decodificacao: nao intercepta protobuf/transporte/decrypt. Bane por
     // heuristica, com o risco de falso positivo que isso implica.
@@ -4259,27 +4258,22 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
         }
       })();
       const __tao = __testeAnti[from];
-      const __taLimitado = !!(
+      const __taLigado = !!(
         __tao && (__tao.enabled === true || __tao === true
           || (typeof __tao === 'object' && __tao.enabled))
       );
-      const __taObs = Object.keys(__testeAnti).some(
-        (k) => k && k !== from && __testeAnti[k]
-          && (__testeAnti[k] === true || __testeAnti[k].enabled === true)
-      );
-      if (__taLimitado || __taObs) {
+      if (__taLigado) {
         try {
           const __res = detectarAnomalia(info);
           if (__res.anomalia) {
             const __motivos = (__res.motivos || []).slice(0, 12).join(',');
-            const __modo = __taLimitado ? 'PUNICAO' : 'OBSERVACAO';
             console.log(
-              '[TESTEANTI] ' + __modo + ' | grupo=' + String(from).split('@')[0]
+              '[TESTEANTI] grupo=' + String(from).split('@')[0]
               + ' | severidade=' + __res.severidade
               + ' | motivos=' + __motivos
               + ' | autor=' + ((info.key && (info.key.participantAlt || info.key.participant)) || sender || '').split('@')[0]
             );
-            if (__taLimitado && isBotAdmin && !isGroupAdmin && !isOwner) {
+            if (isBotAdmin && !isGroupAdmin && !isOwner) {
               const __alvo = sender;
               await nazu.groupParticipantsUpdate(from, [__alvo], 'remove')
                 .catch((e) => console.error('[TESTEANTI] falha ao banir:', e && e.message));
