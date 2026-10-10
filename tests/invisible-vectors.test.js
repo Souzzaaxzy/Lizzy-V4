@@ -30,10 +30,13 @@ function eq(a, b, m) { ok(a === b, `${m} — esperado ${JSON.stringify(b)}, veio
 const V = await import(new URL('../dados/src/utils/invisibleVectors.js', import.meta.url).href);
 
 // ============================ MÓDULO ======================================
-test('#5 add-on SEM secret -> suspeito; com secret -> ok', () => {
+test('#5 edição SEM secret -> suspeito; com secret / reação -> ok (sem falso positivo)', () => {
   eq(V.analisarAddonSemSecret({ message: { protocolMessage: { editedMessage: { extendedTextMessage: { text: 'x' } } } } }).suspeito, true, 'edicao sem secret');
   eq(V.analisarAddonSemSecret({ message: { protocolMessage: { editedMessage: { extendedTextMessage: { text: 'x' } } } }, messageContextInfo: { messageSecret: new Uint8Array([1, 2]) } }).suspeito, false, 'com secret no envelope');
-  eq(V.analisarAddonSemSecret({ message: { reactionMessage: { text: '❤' } } }).suspeito, true, 'reacao sem secret');
+  // MEDIDO na fork: reactionMessage/encReactionMessage/pollUpdateMessage NAO tem
+  // messageSecret POR DESIGN -> NUNCA podem ser marcados (falso positivo).
+  eq(V.analisarAddonSemSecret({ message: { reactionMessage: { text: '❤' } } }).suspeito, false, 'reacao nao marca');
+  eq(V.analisarAddonSemSecret({ message: { pollUpdateMessage: {} } }).suspeito, false, 'voto nao marca');
   eq(V.analisarAddonSemSecret({ message: { conversation: 'oi' } }).suspeito, false, 'nao-addon');
 });
 test('#6 status + selective -> suspeito; status normal -> ok', () => {

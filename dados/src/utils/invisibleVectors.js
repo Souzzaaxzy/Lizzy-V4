@@ -40,29 +40,21 @@ export function analisarAddonSemSecret(info) {
   if (!msg || typeof msg !== 'object') return { suspeito: false };
   const leaf = conteudoFolha(msg) || msg;
 
-  const ehAddon = Boolean(
-    leaf.protocolMessage?.editedMessage
-    || leaf.reactionMessage
-    || leaf.encReactionMessage
-    || leaf.pollUpdateMessage
-    || msg.messageContextInfo?.messageAssociation
-    || msg.associatedChildMessage
-  );
-  if (!ehAddon) return { suspeito: false };
+  // ATENCAO (medido na fork): `shouldIncludeReportingToken` NAO inclui reporting
+  // token (messageSecret) para reactionMessage / encReactionMessage /
+  // pollUpdateMessage. Ou seja, reacao e voto NAO tem secret POR DESIGN — marca-los
+  // daria falso positivo em toda reacao. So a EDICAO (protocolMessage.editedMessage)
+  // carrega o secret esperado. Por isso o #5 olha SOMENTE a edicao.
+  const ehEdicao = Boolean(leaf.protocolMessage?.editedMessage);
+  if (!ehEdicao) return { suspeito: false };
 
-  // O secret pode vir no envelope (messageContextInfo.messageSecret) ou no
-  // associado (associatedChildMessage.message.messageContextInfo.messageSecret).
-  const secTopo = msg.messageContextInfo?.messageSecret || info?.messageContextInfo?.messageSecret || leaf.messageContextInfo?.messageSecret;
-  const secAssoc = msg.associatedChildMessage?.message?.messageContextInfo?.messageSecret;
-  const temSecret = temMaterial(secTopo) || temMaterial(secAssoc);
+  // O secret pode vir no envelope (info.messageContextInfo) ou dentro da message.
+  const secTopo = msg.messageContextInfo?.messageSecret
+    || info?.messageContextInfo?.messageSecret
+    || leaf.messageContextInfo?.messageSecret;
 
-  const tipo = leaf.protocolMessage?.editedMessage ? 'edicao'
-    : (leaf.reactionMessage || leaf.encReactionMessage) ? 'reacao'
-    : leaf.pollUpdateMessage ? 'voto'
-    : 'addon';
-
-  if (!temSecret) {
-    return { suspeito: true, motivo: 'ADDON_SEM_SECRET', detalhe: { tipo } };
+  if (!temMaterial(secTopo)) {
+    return { suspeito: true, motivo: 'ADDON_SEM_SECRET', detalhe: { tipo: 'edicao' } };
   }
   return { suspeito: false };
 }
