@@ -99,8 +99,11 @@ await test('2 mensagens do MESMO autor -> fecha/bani/reabre + apaga as payments'
   await enviarRaja(g, a); // 1a
   const r = await enviarRaja(g, a); // 2a -> dispara
   await new Promise((res) => setTimeout(res, 300)); // enforcement em segundo plano
-  // aviso
-  ok(r.sent.some((s) => typeof s.content?.text === 'string' && /banido/.test(s.content.text)), 'enviou o aviso de banido');
+  // aviso — novo layout (caixa + emoji + menção ao banido)
+  const aviso = r.sent.find((s) => typeof s.content?.text === 'string' && s.content.text.includes('꧁'));
+  ok(aviso, 'enviou o aviso de ban (layout)');
+  ok(aviso && aviso.content.text.includes(`@${a.lid.split('@')[0]}`), 'o aviso menciona o banido');
+  ok(aviso && !/tentou atacar com mensagem fantasma/.test(aviso.content.text), 'não usa mais a frase antiga');
   // apagou as 2 mensagens (técnica do payment via relayMessage)
   ok(revokes(r.sent).length >= 2, `apagou >= 2 (veio ${revokes(r.sent).length})`);
   // ciclo do anti-fantasma: fecha o grupo -> reabre

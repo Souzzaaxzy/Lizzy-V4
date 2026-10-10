@@ -635,6 +635,29 @@ function generateRajaMessageId() {
  * @param {string} [botName] nome do bot para o rodapé
  * @returns {string} nome da enquete
  */
+/**
+ * Aviso de banimento por "mensagem fantasma" (o raja), no layout do bot.
+ *
+ * `jId` é quem foi banido (vira `@numero`; a menção real vai no `mentions` do
+ * envio). `botName` é o nome do bot (config). Usa o `bold` dos menus.
+ */
+function mensagemBanFantasma(jId, botName = 'Bot') {
+  const base = String(jId || '').split('@')[0];
+  const t = boldLayout('MENSAGEM FANTASMA');
+  const b = boldLayout('BANIDO');
+  return [
+    `╭━━━꧁༺ ✦ ${botName} ✦ ༻꧂━━━╮`,
+    `┃`,
+    `┃ 🚫 ${b}`,
+    `┃ 👤 @${base}`,
+    `┃ 🪤 ${t}`,
+    `┃    ↳ ataque detectado`,
+    `┃ ⚖️ Punição: ban + limpeza`,
+    `┃`,
+    `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`,
+  ].join('\n');
+}
+
 function buildPollTitle(titulo, emoji, pergunta, botName = 'Bot') {
   const topo = `╭━━━꧁༺ ${emoji} ${boldLayout(titulo)} ${emoji} ༻꧂━━━╮`;
   const rodape = `╰━━━꧁༺ ✦ ${botName} ✦ ༻꧂━━━╯`;
@@ -4381,7 +4404,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
             }
           } catch { /* best-effort */ }
           await nazu.sendMessage(from, {
-            text: `❌ @${String(sender).split('@')[0]} tentou atacar com mensagem fantasma e foi banido`,
+            text: mensagemBanFantasma(sender, nomebot),
             mentions: [sender],
             contextInfo: newsletterCtxRaja,
             quoted: info
@@ -4438,7 +4461,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
           
           // Enviar aviso
           await nazu.sendMessage(from, {
-            text: `❌ @${sender.split('@')[0]} tentou atacar com mensagem fantasma e foi banido`,
+            text: mensagemBanFantasma(sender, nomebot),
             mentions: [sender]
           , contextInfo: newsletterCtxPayment, quoted: info });
           
@@ -4523,7 +4546,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
         });
 
         await nazu.sendMessage(from, {
-          text: `❌ @${String(sender).split('@')[0]} tentou atacar com mensagem fantasma e foi banido`,
+          text: mensagemBanFantasma(sender, nomebot),
           mentions: [sender],
           contextInfo: newsletterCtxSeletiva,
           quoted: info
