@@ -10,12 +10,18 @@
 //
 // Puro: sem socket, sem disco, sem log.
 
-/** True quando a mensagem é o "raja" (enc somente pareado, sem skmsg, sem count). */
+/**
+ * True quando a mensagem é o "raja" (enc SOMENTE pareado, sem skmsg, sem count).
+ *
+ * EXIGE o `groupEncInfo` (a fork calcula `pairwiseOnly`). Sem ele, retorna
+ * `false` DE PROPÓSITO: o único fallback antigo (`pairwiseGroupPayload`) dispara
+ * em qualquer stanza de grupo com enc pareado — mensagem normal entregue
+ * pareada, retry do receptor etc. — e era a causa do "banindo geral". Sem o
+ * sinal ESTRITO, é melhor não detectar do que punir usuário normal.
+ */
 export function ehRajaTransporte(info) {
   if (!info || typeof info !== 'object') return false;
-  if (info.groupEncInfo) return info.groupEncInfo.pairwiseOnly === true;
-  // Compat: fork antiga só sinaliza a presença do payload pareado.
-  return info.pairwiseGroupPayload === true;
+  return info.groupEncInfo?.pairwiseOnly === true;
 }
 
 /**
@@ -28,10 +34,12 @@ export function ehRajaTransporte(info) {
  *
  * @returns {{count:number, ids:string[]}}
  */
-export function registrarRajada(mapa, chave, id, agora = Date.now(), janelaMs = 600000) {
+export function registrarRajada(mapa, chave, id, agora = Date.now(), janelaMs = 5000) {
   if (!chave || !(mapa instanceof Map)) return { count: 0, ids: [] };
   const arr = (mapa.get(chave) || []).filter((e) => agora - e.t < janelaMs);
-  if (id) arr.push({ t: agora, id });
+  // Só conta IDs DIFERENTES (2 IDs diferentes = 2 mensagens distintas). Evita
+  // contar a mesma mensagem duas vezes (entrega duplicada) como se fosse rajada.
+  if (id && !arr.some((e) => e.id === id)) arr.push({ t: agora, id });
   mapa.set(chave, arr);
   if (mapa.size > 5000) mapa.delete(mapa.keys().next().value);
   return { count: arr.length, ids: arr.map((e) => e.id).filter(Boolean) };

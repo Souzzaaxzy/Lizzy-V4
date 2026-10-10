@@ -88,6 +88,25 @@ const revokes = (sent) => sent
   .filter((id) => id && !String(id).startsWith('S-'));
 
 // ---------------------------------------------------------------------------
+// Módulo (puro): janela de 5s + IDs diferentes
+const { ehRajaTransporte, registrarRajada } = await import(new URL('../dados/src/utils/rajaTransport.js', import.meta.url).href);
+
+await test('módulo: ehRajaTransporte exige groupEncInfo (sem fallback)', () => {
+  eq(ehRajaTransporte({ groupEncInfo: { pairwiseOnly: true } }), true, 'pairwiseOnly true');
+  eq(ehRajaTransporte({ groupEncInfo: { pairwiseOnly: false } }), false, 'pairwiseOnly false');
+  eq(ehRajaTransporte({ pairwiseGroupPayload: true }), false, 'sem groupEncInfo -> false (falso positivo removido)');
+  eq(ehRajaTransporte(null), false, 'null');
+});
+await test('módulo: registrarRajada conta IDs diferentes na janela de 5s', () => {
+  const m = new Map();
+  let t = 1000;
+  eq(registrarRajada(m, 'g|a', 'id1', t).count, 1, '1a');
+  eq(registrarRajada(m, 'g|a', 'id1', t += 100).count, 1, 'id repetido NAO conta');
+  eq(registrarRajada(m, 'g|a', 'id2', t += 100).count, 2, '2o id diferente conta');
+  eq(registrarRajada(m, 'g|a', 'id3', t + 6000).count, 1, 'fora da janela reseta');
+});
+
+// ---------------------------------------------------------------------------
 await test('1 mensagem do raja -> NADA (precisa de 2)', async () => {
   const g = makeGroup(true); const a = nextAuthor();
   const r = await enviarRaja(g, a);
@@ -110,6 +129,18 @@ await test('2 mensagens do MESMO autor -> fecha/bani/reabre + apaga as payments'
   const setts = r.settings.map((s) => s.setting);
   ok(setts.includes('announcement'), 'fechou o grupo');
   ok(setts.includes('not_announcement'), 'reabriu o grupo');
+});
+await test('pairwiseGroupPayload SEM groupEncInfo -> NADA (falso positivo removido)', async () => {
+  // O fallback antigo disparava em retry benigno de qualquer usuário. Agora
+  // exige o sinal ESTRITO (`groupEncInfo.pairwiseOnly`).
+  const g = makeGroup(true); const a = nextAuthor();
+  for (let i = 0; i < 3; i++) {
+    const sent = []; const removals = []; const settings = [];
+    const nazu = makeNazu({ sent, removals, settings, groupJid: g, author: a });
+    const info = { key: { remoteJid: g, fromMe: false, id: `F-${i}`, participant: a.lid, participantAlt: a.jid }, message: { conversation: 'oi' }, pairwiseGroupPayload: true, messageTimestamp: 1, pushName: 'A' };
+    await handleMessage(nazu, info, null, new Map(), null);
+    if (i === 2) ok(removals.length === 0, 'sem groupEncInfo não bane (mesmo com 3)');
+  }
 });
 await test('enc COM skmsg (não é raja) -> NADA mesmo com 2', async () => {
   const g = makeGroup(true); const a = nextAuthor();
