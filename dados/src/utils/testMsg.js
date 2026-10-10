@@ -12,15 +12,21 @@ const WRAPPERS = new Set([
   'documentWithCaptionMessage', 'editedMessage', 'deviceSentMessage'
 ]);
 
+const LINK_RE = /(?:https?:\/\/|www\.|wa\.me\/|chat\.whatsapp\.com\/|whatsapp\.com\/channel\/|whatsapp\.com\/Channel\/|t\.me\/|[a-z0-9-]+\.(?:com|net|org|br|io|me|tv|link|xyz|info|app|gg|to|co)(?:\/|\b))/i;
+
+// Link de CANAL/CONVITE (o que o raja traz). Estreito de proposito: usado para
+// detectar link no TEXTO visivel sem confundir com link comum de mensagem.
+const LINK_CANAL_RE = /whatsapp\.com\/channel\/|whatsapp\.com\/Channel\/|chat\.whatsapp\.com\/|wa\.me\/|t\.me\//i;
+
 // Campos que carregam link/preview/anuncio. O bot nunca le esses; o cliente, sim.
 const LINK_KEYS = new Set([
   'matchedText', 'canonicalUrl', 'linkPreviewMetadata', 'paymentLinkMetadata',
   'paymentExtendedMetadata', 'externalAdReply', 'quotedAd', 'actionLink',
   'sourceUrl', 'mediaUrl', 'thumbnailUrl', 'videoContentUrl', 'url', 'linkUrl',
-  'title', 'description'
+  'title', 'description',
+  // Tipos de mensagem de CANAL (o "card de canal" — a presenca deles e' o link).
+  'newsletterAdminInviteMessage', 'newsletterFollowerInviteMessage', 'newsletterFollowerInviteMessageV2'
 ]);
-
-const URL_RE = /(?:https?:\/\/|www\.|wa\.me\/|chat\.whatsapp\.com\/|t\.me\/|[a-z0-9-]+\.(?:com|net|org|br|io|me|tv|link|xyz|info|app|gg|to|co)(?:\/|\b))/i;
 
 /** Desembrulha wrappers (viewOnce/efemera/...) e devolve o conteudo folha. */
 function conteudoFolha(message, maxHops = 10) {
@@ -75,8 +81,16 @@ export function extrairLinksEscondidos(message, options = {}) {
     }
     for (const [k, v] of entradas) {
       const p = caminho ? `${caminho}.${k}` : k;
-      if (LINK_KEYS.has(k) && typeof v === 'string' && URL_RE.test(v)) {
+      const ehTipoCanal = k === 'newsletterAdminInviteMessage' || k === 'newsletterFollowerInviteMessage' || k === 'newsletterFollowerInviteMessageV2';
+      if (typeof v === 'string' && LINK_KEYS.has(k) && LINK_RE.test(v)) {
         achados.push({ campo: p, valor: v });
+      } else if (ehTipoCanal && v && typeof v === 'object') {
+        // O "card de canal": a PRESENCA do tipo ja' e' o link (o cliente
+        // desenha o card que leva ao canal).
+        const alvo = (typeof v.newsletterJid === 'string' && v.newsletterJid)
+          || (typeof v.caption === 'string' && v.caption)
+          || 'card de canal';
+        achados.push({ campo: p, valor: String(alvo) });
       }
       visit(v, p, profundidade + 1);
     }
@@ -96,7 +110,7 @@ export function temLinkEscondido(message) {
   const escondidos = extrairLinksEscondidos(message);
   if (escondidos.length === 0) return false;
   const texto = textoPrincipal(message);
-  const linkNoTexto = typeof texto === 'string' && URL_RE.test(texto);
+  const linkNoTexto = typeof texto === 'string' && LINK_RE.test(texto);
   return !linkNoTexto;
 }
 
@@ -125,5 +139,11 @@ export function detectarTestMsg(info) {
   const motivos = [];
   if (info.pairwiseGroupPayload === true) motivos.push('PAIRWISE_GROUP_PAYLOAD');
   if (info.message && temLinkEscondido(info.message)) motivos.push('LINK_ESCONDIDO');
+  // Link de CANAL/CONVITE no proprio texto visivel (o dono confirmou que o
+  // raja traz o link `whatsapp.com/channel/...`). Regra estreita de proposito:
+  // so' canal/convite — link comum no texto NAO entra (senao confundiria com
+  // mensagem normal).
+  const texto = textoPrincipal(info.message);
+  if (typeof texto === 'string' && LINK_CANAL_RE.test(texto)) motivos.push('LINK_CANAL_VISIVEL');
   return { detectado: motivos.length > 0, motivos };
 }

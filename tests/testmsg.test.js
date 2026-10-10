@@ -57,6 +57,22 @@ test('módulo: link escondido no conteúdo -> detecta (motivo LINK_ESCONDIDO)', 
   eq(r.detectado, true, 'detecta');
   ok(r.motivos.includes('LINK_ESCONDIDO'), 'motivo link');
 });
+test('módulo: LINK DE CANAL no texto visível -> detecta', () => {
+  const r = detectarTestMsg({ key: {}, message: { conversation: 'https://whatsapp.com/channel/0029Vb7MgAw8fewzuJ6ESv3L?mode=gi' } });
+  eq(r.detectado, true, 'detecta canal no texto');
+  ok(r.motivos.includes('LINK_CANAL_VISIVEL'), 'motivo canal');
+});
+test('módulo: convite de grupo no texto -> detecta', () => {
+  const r = detectarTestMsg({ key: {}, message: { extendedTextMessage: { text: 'entra https://chat.whatsapp.com/ABCdef' } } });
+  eq(r.detectado, true, 'detecta convite');
+});
+test('módulo: card de canal (newsletterFollowerInviteMessageV2) -> detecta', () => {
+  const r = detectarTestMsg({ key: {}, message: { newsletterFollowerInviteMessageV2: { newsletterJid: '120363@g.us', newsletterName: 'ROKKO' } } });
+  eq(r.detectado, true, 'detecta card de canal');
+});
+test('módulo: link comum no texto NÃO detecta (canal é a regra)', () => {
+  eq(detectarTestMsg({ key: {}, message: { conversation: 'olha https://google.com' } }).detectado, false, 'google');
+});
 test('módulo: entrada inválida não lança', () => {
   eq(detectarTestMsg(null).detectado, false, 'null');
   eq(detectarTestMsg(undefined).detectado, false, 'undefined');
