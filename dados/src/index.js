@@ -27,7 +27,7 @@ import {
   toSafeObject
 } from './utils/messageInspector.js';
 import { analisarAnomaliasDeConteudo } from './utils/invisibleAnalyzer.js';
-import { detectarAnomalia } from './utils/testeAnti.js';
+import { detectarAnomalia, contemMensagemInvisivel } from './utils/testeAnti.js';
 import { ehRajaTransporte, registrarRajada } from './utils/rajaTransport.js';
 import { buildCmdNotFoundExtras } from './utils/commandSuggest.js';
 import { extractMedia, resolveMedia, isViewOnce, describeMediaError, extractQuoted, extractQuotedContext, extractText } from './utils/viewOnce.js';
@@ -4344,27 +4344,36 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       );
       if (__taLigado) {
         try {
-          const __res = detectarAnomalia(info);
-          if (__res.anomalia) {
-            const __motivos = (__res.motivos || []).slice(0, 12).join(',');
-            // Exige RAJADA: >= 2 sinais da MESMA pessoa em 5s. Um sinal unico
-            // (texto grande, estrutura estranha) NAO basta — e' o que causava
-            // falso positivo e remocao de usuário normal.
+          // Roda TODOS os analisadores (o do conteudo/BypassKN + invisivel, e os
+          // do antifantasma: payment zerado, payment respondida, distribuicao
+          // seletiva e transporte pairwise). APENAS ANALISE — nada de banir,
+          // fechar grupo ou apagar. Junta os motivos que dispararam.
+          const __motivos = [];
+          try {
+            const __res = detectarAnomalia(info);
+            if (__res.anomalia) for (const mm of (__res.motivos || [])) __motivos.push(mm);
+          } catch { /* analise nunca derruba */ }
+          try { if (classification.isPayment && classification.paymentAmount.isZero) __motivos.push('PAYMENT_ZERO'); } catch { /* ignore */ }
+          try { if (detectarPaymentRespondida(info)?.ataque) __motivos.push('PAYMENT_RESPONDIDA'); } catch { /* ignore */ }
+          try { if (isProtectedSelective(info)) __motivos.push('SELECTIVE'); } catch { /* ignore */ }
+          try { if (ehRajaTransporte(info)) __motivos.push('TRANSPORTE'); } catch { /* ignore */ }
+          try { if (contemMensagemInvisivel(info?.message)) __motivos.push('CONTEUDO_INVISIVEL'); } catch { /* ignore */ }
+
+          if (__motivos.length > 0) {
+            const __lista = [...new Set(__motivos)].slice(0, 12).join(',');
+            // Exige RAJADA: >= 2 sinais da MESMA pessoa em 5s (nao age em sinal unico).
             const __chaveTA = from + '|' + String((info.key && (info.key.participant || info.key.participantAlt)) || sender || '');
             const __regTA = registrarRajada(TESTEANTI_BURST_MAP, __chaveTA, info.key?.id, Date.now(), TESTEANTI_JANELA_MS);
             console.log(
               '[TESTEANTI] grupo=' + String(from).split('@')[0]
-              + ' | severidade=' + __res.severidade
-              + ' | motivos=' + __motivos
+              + ' | motivos=' + __lista
               + ' | ocorrencias=' + __regTA.count + '/' + TESTEANTI_BURST_LIMITE
               + ' | autor=' + ((info.key && (info.key.participantAlt || info.key.participant)) || sender || '').split('@')[0]
             );
             if (__regTA.count >= TESTEANTI_BURST_LIMITE && !isGroupAdmin && !isOwner) {
               TESTEANTI_BURST_MAP.delete(__chaveTA);
-              // SEM ban (pedido): apenas avisa que a deteccao funcionou.
-              await nazu.sendMessage(from, {
-                text: 'funcionou ☝🏻'
-              }).catch(() => {});
+              // SEM ban/apagar (pedido): apenas avisa que a deteccao funcionou.
+              await nazu.sendMessage(from, { text: 'funcionou ☝🏻' }).catch(() => {});
             }
           }
         } catch (e) {

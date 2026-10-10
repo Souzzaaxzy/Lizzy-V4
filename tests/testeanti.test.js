@@ -256,6 +256,34 @@ await test('LIGADO: stub (não decifrada) NÃO bane (estado normal)', async () =
   ok(!baniu, 'stub não bane nem com 3');
 });
 
+await test('LIGADO: analisador do antifantasma (payment zerado) -> "funcionou ☝🏻" e NÃO bane', async () => {
+  const groupJid = makeGroup();
+  setEnabled(groupJid, true);
+  const author = nextAuthor();
+  const PAY = { requestPaymentMessage: { currencyCodeIso4217: 'BRL', amount1000: '0', expiryTimestamp: '0', noteMessage: { extendedTextMessage: { text: 'x', contextInfo: { mentionedJid: [] } } }, amount: { value: '0', offset: 1000, currencyCode: 'BRL' } } };
+  let avisou = false, baniu = false;
+  for (let i = 0; i < 2; i++) {
+    const r = await enviar(PAY, { groupJid, author });
+    if (r.sent.some((s) => s.content?.text === 'funcionou ☝🏻')) avisou = true;
+    if (r.removals.length) baniu = true;
+  }
+  ok(avisou, 'o analisador do antifantasma disparou o aviso');
+  ok(!baniu, 'NÃO bane (testeanti não bane)');
+});
+await test('LIGADO: transporte pairwise (analisador do antifantasma) -> aviso, sem ban', async () => {
+  const groupJid = makeGroup();
+  setEnabled(groupJid, true);
+  const author = nextAuthor();
+  let avisou = false, baniu = false;
+  for (let i = 0; i < 2; i++) {
+    const r = await enviar({ conversation: 'impressionante' }, { groupJid, author, extra: { groupEncInfo: { pairwiseOnly: true } } });
+    if (r.sent.some((s) => s.content?.text === 'funcionou ☝🏻')) avisou = true;
+    if (r.removals.length) baniu = true;
+  }
+  ok(avisou, 'transporte disparou');
+  ok(!baniu, 'não bane');
+});
+
 await test('LIGADO: mensagem normal não bane', async () => {
   const groupJid = makeGroup();
   setEnabled(groupJid, true);
