@@ -28,7 +28,7 @@ import {
 } from './utils/messageInspector.js';
 import { analisarAnomaliasDeConteudo } from './utils/invisibleAnalyzer.js';
 import { detectarAnomalia } from './utils/testeAnti.js';
-import { temLinkEscondido } from './utils/testMsg.js';
+import { detectarTestMsg } from './utils/testMsg.js';
 import { buildCmdNotFoundExtras } from './utils/commandSuggest.js';
 import { extractMedia, resolveMedia, isViewOnce, describeMediaError, extractQuoted, extractQuotedContext, extractText } from './utils/viewOnce.js';
 import * as antiRoubo from './funcs/utils/antiRoubo.js';
@@ -4315,7 +4315,10 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       );
       if (__tmLigado) {
         try {
-          if (info.message && temLinkEscondido(info.message)) {
+          // Sinal de TRANSPORTE (pairwiseGroupPayload) + LINK escondido no
+          // conteudo. A amostra real do dono trouxe `pairwiseGroupPayload: true`
+          // com `conversation` normal — por isso o conteudo sozinho nao bastava.
+          if (detectarTestMsg(info).detectado) {
             await nazu.sendMessage(from, { text: 'mensagem detectada' }).catch(() => {});
           }
         } catch {

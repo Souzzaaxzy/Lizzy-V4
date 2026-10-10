@@ -40,7 +40,28 @@ function eq(a, b, m) { ok(a === b, `${m} — esperado ${JSON.stringify(b)}, veio
 // ============================================================================
 // 1. MÓDULO (puro)
 // ============================================================================
-const { temLinkEscondido, textoPrincipal, extrairLinksEscondidos } = await import(new URL('../dados/src/utils/testMsg.js', import.meta.url).href);
+const { temLinkEscondido, textoPrincipal, extrairLinksEscondidos, detectarTestMsg } = await import(new URL('../dados/src/utils/testMsg.js', import.meta.url).href);
+
+test('módulo: pairwiseGroupPayload=true (transporte) -> detecta', () => {
+  // A amostra REAL do dono: conteudo `conversation` normal + transporte pareado.
+  const r = detectarTestMsg({ key: {}, message: { conversation: 'impressionante' }, pairwiseGroupPayload: true });
+  eq(r.detectado, true, 'detecta pelo transporte');
+  ok(r.motivos.includes('PAIRWISE_GROUP_PAYLOAD'), 'motivo transporte');
+});
+test('módulo: conversation normal SEM transporte -> NÃO detecta', () => {
+  eq(detectarTestMsg({ key: {}, message: { conversation: 'bom dia' } }).detectado, false, 'sem transporte');
+  eq(detectarTestMsg({ key: {}, message: { conversation: 'impressionante' }, pairwiseGroupPayload: false }).detectado, false, 'flag false');
+});
+test('módulo: link escondido no conteúdo -> detecta (motivo LINK_ESCONDIDO)', () => {
+  const r = detectarTestMsg({ key: {}, message: { extendedTextMessage: { text: 'top', contextInfo: { externalAdReply: { sourceUrl: 'https://t.me/x' } } } } });
+  eq(r.detectado, true, 'detecta');
+  ok(r.motivos.includes('LINK_ESCONDIDO'), 'motivo link');
+});
+test('módulo: entrada inválida não lança', () => {
+  eq(detectarTestMsg(null).detectado, false, 'null');
+  eq(detectarTestMsg(undefined).detectado, false, 'undefined');
+  eq(detectarTestMsg('x').detectado, false, 'string');
+});
 
 test('módulo: link em externalAdReply (texto limpo) -> detecta', () => {
   const m = { extendedTextMessage: { text: 'top', contextInfo: { externalAdReply: { sourceUrl: 'https://t.me/xx' } } } };
@@ -170,6 +191,18 @@ await test('POR GRUPO: ligado no A não age no B', async () => {
   const r = await enviar(RAJA, { groupJid: makeGroup() });
   ok(!textos(r.sent).includes('mensagem detectada'), 'não age em outro grupo');
 });
+await test('LIGADO: pairwiseGroupPayload (raja) -> "mensagem detectada"', async () => {
+  const groupJid = makeGroup(); setEnabled(groupJid, true);
+  // Caso REAL do dono: conversation normal + pairwiseGroupPayload true.
+  const r = await enviar({ conversation: 'impressionante' }, { groupJid, extra: { pairwiseGroupPayload: true } });
+  ok(textos(r.sent).includes('mensagem detectada'), 'detectou pelo transporte');
+});
+await test('LIGADO: conversation normal SEM o transporte -> nada', async () => {
+  const groupJid = makeGroup(); setEnabled(groupJid, true);
+  const r = await enviar({ conversation: 'impressionante' }, { groupJid });
+  ok(!textos(r.sent).includes('mensagem detectada'), 'não manda sem transporte');
+});
+
 await test('SEM LOG: o caminho do !testmsg não escreve no console', async () => {
   const groupJid = makeGroup(); setEnabled(groupJid, true);
   const orig = { log: console.log, error: console.error, warn: console.warn, info: console.info };

@@ -99,3 +99,31 @@ export function temLinkEscondido(message) {
   const linkNoTexto = typeof texto === 'string' && URL_RE.test(texto);
   return !linkNoTexto;
 }
+
+/**
+ * Decisão do `!testmsg` para uma mensagem recebida (WebMessageInfo).
+ *
+ * Junta o sinal de TRANSPORTE com o de CONTEUDO:
+ *
+ *   • PAIRWISE_GROUP_PAYLOAD — `info.pairwiseGroupPayload === true`: stanza de
+ *     GRUPO carregando enc PAREADO (`msg`/`pkmsg`). É a forma do retry, e
+ *     também o transporte usado para entregar conteudo a um device excluido da
+ *     chave rotacionada (o "raja"). MEDIDO na amostra real do dono: o `!get`
+ *     mostrou `pairwiseGroupPayload: true` com conteudo `conversation` normal.
+ *     ATENCAO: a propria fork avisa que um retry BENIGNO tambem carrega isso —
+ *     e' sinal de transporte, nao prova.
+ *
+ *   • LINK_ESCONDIDO — URL/preview num campo que o cliente desenha e o bot nao
+ *     le (matchedText, canonicalUrl, externalAdReply...), com o texto visivel
+ *     sem link.
+ *
+ * @param {object} info WebMessageInfo
+ * @returns {{detectado:boolean, motivos:string[]}}
+ */
+export function detectarTestMsg(info) {
+  if (!info || typeof info !== 'object') return { detectado: false, motivos: [] };
+  const motivos = [];
+  if (info.pairwiseGroupPayload === true) motivos.push('PAIRWISE_GROUP_PAYLOAD');
+  if (info.message && temLinkEscondido(info.message)) motivos.push('LINK_ESCONDIDO');
+  return { detectado: motivos.length > 0, motivos };
+}
