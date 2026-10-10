@@ -61,6 +61,21 @@ test('módulo: registrarPairwise conta a rajada, guarda os ids e expira', () => 
   eq(r3.ids.join(','), 'id1,id2,id3', 'guarda os 3 ids');
   eq(registrarPairwise(m, 'g|a', 'id4', t + 70000).count, 1, 'expirou na janela');
 });
+test('módulo: janela CURTA (8s) — o raja de ~5s conta, espalhado não', () => {
+  const m = new Map();
+  let t = 0;
+  // 3 em ~5s (o raja) contam
+  eq(registrarPairwise(m, 'g|b', 'a', t = 0, 8000).count, 1, '0s');
+  eq(registrarPairwise(m, 'g|b', 'b', t = 2000, 8000).count, 2, '2s');
+  eq(registrarPairwise(m, 'g|b', 'c', t = 5000, 8000).count, 3, '5s (rajada)');
+  // espalhado (>8s) reseta
+  eq(registrarPairwise(m, 'g|b', 'd', t = 14000, 8000).count, 1, '14s resetou');
+});
+test('estrutural: handler usa limiar 3 e janela de 8s', () => {
+  const src = fs.readFileSync(new URL('../dados/src/index.js', import.meta.url), 'utf-8');
+  ok(/TESTMSG_PAIRWISE_BURST\s*=\s*3\b/.test(src), 'limiar = 3');
+  ok(/TESTMSG_PAIRWISE_JANELA_MS\s*=\s*8000\b/.test(src), 'janela = 8000');
+});
 test('módulo: link escondido no conteúdo -> detecta (motivo LINK_ESCONDIDO)', () => {
   const r = detectarTestMsg({ key: {}, message: { extendedTextMessage: { text: 'top', contextInfo: { externalAdReply: { sourceUrl: 'https://t.me/x' } } } } });
   eq(r.detectado, true, 'detecta');

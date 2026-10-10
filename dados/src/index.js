@@ -1492,6 +1492,9 @@ const TEST_MSG_FILE = pathz.join(DONO_DIR, 'testMsg.json');
 // seguidas) do retry benigno (isolado). Em memoria, podado por tempo.
 const TESTMSG_PAIRWISE_MAP = new Map();
 const TESTMSG_PAIRWISE_BURST = 3;
+// Janela da rajada: o raja dura ~5s, entao 8s cobre com folga e nao acumula
+// mensagens espalhadas de um usuario normal.
+const TESTMSG_PAIRWISE_JANELA_MS = 8000;
 
 /**
  * Apaga QUALQUER mensagem (inclusive card de pagamento) usando a MESMA tecnica
@@ -4376,7 +4379,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
           // com `conversation` normal — por isso o conteudo sozinho nao bastava.
           const __chavePW = from + '|' + (info.key?.participant || sender || '');
           const __regPW = info.pairwiseGroupPayload === true
-            ? registrarPairwise(TESTMSG_PAIRWISE_MAP, __chavePW, info.key?.id)
+            ? registrarPairwise(TESTMSG_PAIRWISE_MAP, __chavePW, info.key?.id, Date.now(), TESTMSG_PAIRWISE_JANELA_MS)
             : { count: 0, ids: [] };
           const __ehRajada = __regPW.count >= TESTMSG_PAIRWISE_BURST;
           if (detectarTestMsg(info, { pairwiseBurst: __ehRajada }).detectado) {
