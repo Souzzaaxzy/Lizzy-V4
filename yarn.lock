@@ -347,9 +347,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@itsliaaa/baileys@git+https://github.com/Souzzaaxzy/baileys.git#3fe6dfbbbfd6940033483268ac1497599a9ab3ba":
+"@itsliaaa/baileys@git+https://github.com/Souzzaaxzy/baileys.git#a5b94954616733768e88fb86434f9dc33d6f20e6":
   version: 0.3.18-final
-  resolution: "@itsliaaa/baileys@https://github.com/Souzzaaxzy/baileys.git#commit=3fe6dfbbbfd6940033483268ac1497599a9ab3ba"
+  resolution: "@itsliaaa/baileys@https://github.com/Souzzaaxzy/baileys.git#commit=a5b94954616733768e88fb86434f9dc33d6f20e6"
   dependencies:
     "@adiwajshing/keyed-db": "npm:^0.2.4"
     "@cacheable/node-cache": "npm:^1.4.0"
@@ -923,7 +923,7 @@ __metadata:
   resolution: "AbyssBot@workspace:."
   dependencies:
     "@hapi/boom": "npm:^10.0.1"
-    "@itsliaaa/baileys": "git+https://github.com/Souzzaaxzy/baileys.git#3fe6dfbbbfd6940033483268ac1497599a9ab3ba"
+    "@itsliaaa/baileys": "git+https://github.com/Souzzaaxzy/baileys.git#a5b94954616733768e88fb86434f9dc33d6f20e6"
     axios: "npm:^1.13.2"
     cheerio: "npm:^1.2.0"
     dotenv: "npm:^16.4.5"

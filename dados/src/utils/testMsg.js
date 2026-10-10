@@ -163,18 +163,20 @@ export function registrarPairwise(mapa, chave, id, agora = Date.now(), janelaMs 
 
 /**
  * Sinais do `!testmsg` para UMA mensagem (raw — quem decide a rajada é o
- * chamador). Devolve quais sinais a mensagem carrega:
+ * chamador).
  *
- *   • LINK_ESCONDIDO — link/preview num campo que o cliente desenha e o bot não
- *     lê (matchedText, canonicalUrl, externalAdReply...). NUNCA inclui a URL
- *     interna de mídia (o extrator já filtra o host do CDN).
- *   • LINK_CANAL_VISIVEL — link de canal/convite (whatsapp.com/channel,
- *     chat.whatsapp.com, wa.me, t.me) no texto visível.
- *   • PAIRWISE_GROUP_PAYLOAD — `info.pairwiseGroupPayload === true` (transporte).
+ * A condição (a mesma que evita falso positivo) é EXATAMENTE a do transporte:
  *
- * ATENÇÃO: nenhum destes sinais, sozinho, dispara a ação. O comando só age
- * quando a MESMA pessoa acumula >= 3 em 8s (a rajada) — é o que garante que é
- * rajador e nunca um usuário normal (1 mensagem com link/mídia não conta).
+ *   GRUPO + incoming + `enc` SOMENTE pareado (`msg`/`pkmsg`) + SEM `skmsg` +
+ *   SEM `count`.
+ *
+ * Quem calcula isso é a fork (`info.groupEncInfo.pairwiseOnly`). O
+ * `pairwiseGroupPayload` é mantido só como compatibilidade com a fork antiga
+ * (sem o `groupEncInfo`).
+ *
+ * ATENÇÃO: 1 mensagem NÃO dispara nada. A ação só acontece quando a MESMA
+ * pessoa acumula >= 3 em 5s (a rajada) — é o que dá a certeza de rajador e
+ * nunca de usuário normal.
  *
  * @param {object} info WebMessageInfo
  * @returns {{detectado:boolean, motivos:string[]}}
@@ -183,12 +185,10 @@ export function detectarTestMsg(info) {
   if (!info || typeof info !== 'object') return { detectado: false, motivos: [] };
   const motivos = [];
 
-  if (info.message && temLinkEscondido(info.message)) motivos.push('LINK_ESCONDIDO');
-
-  const texto = textoPrincipal(info.message);
-  if (typeof texto === 'string' && LINK_CANAL_RE.test(texto)) motivos.push('LINK_CANAL_VISIVEL');
-
-  if (info.pairwiseGroupPayload === true) motivos.push('PAIRWISE_GROUP_PAYLOAD');
+  const pairwiseOnly = info.groupEncInfo
+    ? info.groupEncInfo.pairwiseOnly === true
+    : info.pairwiseGroupPayload === true;
+  if (pairwiseOnly) motivos.push('ENC_PAIRWISE_ONLY');
 
   return { detectado: motivos.length > 0, motivos };
 }

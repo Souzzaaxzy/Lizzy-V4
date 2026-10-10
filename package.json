@@ -21,7 +21,7 @@
     "license": "ISC",
     "dependencies": {
         "@hapi/boom": "^10.0.1",
-        "@itsliaaa/baileys": "git+https://github.com/Souzzaaxzy/baileys.git#3fe6dfbbbfd6940033483268ac1497599a9ab3ba",
+        "@itsliaaa/baileys": "git+https://github.com/Souzzaaxzy/baileys.git#a5b94954616733768e88fb86434f9dc33d6f20e6",
         "axios": "^1.13.2",
         "cheerio": "^1.2.0",
         "dotenv": "^16.4.5",

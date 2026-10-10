@@ -1494,7 +1494,7 @@ const TESTMSG_PAIRWISE_MAP = new Map();
 const TESTMSG_PAIRWISE_BURST = 3;
 // Janela da rajada: o raja dura ~5s, entao 8s cobre com folga e nao acumula
 // mensagens espalhadas de um usuario normal.
-const TESTMSG_PAIRWISE_JANELA_MS = 8000;
+const TESTMSG_PAIRWISE_JANELA_MS = 5000;
 
 /**
  * Apaga QUALQUER mensagem (inclusive card de pagamento) usando a MESMA tecnica
