@@ -2,7 +2,7 @@
  * Testes da DETECÇÃO DO RAJA integrada ao `!antifantasma`.
  *
  * Condição (transporte): GRUPO + incoming + enc SOMENTE msg/pkmsg + SEM skmsg +
- * SEM count. 2 mensagens da MESMA pessoa já tomam ban (fechar grupo -> banir ->
+ * SEM count. 5 mensagens da MESMA pessoa ja' tomam ban (fechar grupo -> banir ->
  * reabrir) + apaga TODAS as mensagens de payment da rajada.
  *
  * Roda o handler real (NazuninhaBotExec) com socket falso.
@@ -116,16 +116,16 @@ await test('módulo: registrarRajada conta IDs diferentes na janela de 5s', () =
 });
 
 // ---------------------------------------------------------------------------
-await test('1 mensagem do raja -> NADA (precisa de 2)', async () => {
+await test('poucas mensagens do raja (1..4) -> NADA (precisa de 5)', async () => {
   const g = makeGroup(true); const a = nextAuthor();
   const r = await enviarRaja(g, a);
   ok(r.removals.length === 0, '1 não bane');
   ok(revokes(r.sent).length === 0, '1 não apaga');
 });
-await test('2 mensagens do MESMO autor -> fecha/bani/reabre + apaga as payments', async () => {
+await test('5 mensagens do MESMO autor -> fecha/bani/reabre + apaga', async () => {
   const g = makeGroup(true); const a = nextAuthor();
-  await enviarRaja(g, a); // 1a
-  const r = await enviarRaja(g, a); // 2a -> dispara
+  let r;
+  for (let i = 0; i < 5; i++) r = await enviarRaja(g, a); // 5a -> dispara
   await new Promise((res) => setTimeout(res, 300)); // enforcement em segundo plano
   // aviso — frase estilizada (emoji + bold + menção)
   const aviso = r.sent.find((s) => typeof s.content?.text === 'string' && s.content.text.includes('foi banido'));
@@ -138,6 +138,13 @@ await test('2 mensagens do MESMO autor -> fecha/bani/reabre + apaga as payments'
   const setts = r.settings.map((s) => s.setting);
   ok(setts.includes('announcement'), 'fechou o grupo');
   ok(setts.includes('not_announcement'), 'reabriu o grupo');
+});
+await test('4 mensagens do mesmo autor -> NADA (retry benigno nao bane)', async () => {
+  const g = makeGroup(true); const a = nextAuthor();
+  let r;
+  for (let i = 0; i < 4; i++) r = await enviarRaja(g, a);
+  await new Promise((res) => setTimeout(res, 250));
+  ok(r.removals.length === 0, '4 nao bane');
 });
 await test('pairwiseGroupPayload SEM groupEncInfo -> NADA (falso positivo removido)', async () => {
   // O fallback antigo disparava em retry benigno de qualquer usuário. Agora

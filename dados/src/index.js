@@ -1509,7 +1509,8 @@ const TESTEANTI_CHAIN = new Map();         // autor -> ultimo contador
 // Rajada do "raja" (transporte pairwiseOnly) por grupo|autor — 2 mensagens da
 // MESMA pessoa ja' caracterizam o ataque. Em memoria, podado por tempo.
 const RAJA_BURST_MAP = new Map();
-const RAJA_BURST_LIMITE = 2;
+// 5 (era 2): o raja real manda ~10 mensagens; 2 disparava em retry benigno.
+const RAJA_BURST_LIMITE = 5;
 // Janela: o raja real manda as mensagens em rajada (poucos segundos). Sem
 // janela, retries benignos espalhados no tempo somavam e davam falso positivo.
 const RAJA_BURST_JANELA_MS = 5000;
@@ -4570,7 +4571,11 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       // vezes" relatado). A marca é por grupo+autor e dura alguns minutos.
       const jaPunido = wasGhostPunished(from, autorDet);
 
-      if (podeAgir && !jaPunido) {
+      // ANTI-FALSO-POSITIVO: `selectiveDistribution` sozinho NAO basta (o
+      // `decrypt-fail="hide"` aparece em fluxo benigno — ex.: rereg_recovery).
+      // So' age quando a pontuacao corrobora (`decidir` = 'punir', exige
+      // evidencia ESTRUTURAL: phash ausente / densidade baixa / SKDM fresco).
+      if (podeAgir && !jaPunido && avalia.acao === 'punir') {
         markGhostPunished(from, autorDet);
         const newsletterCtxSeletiva = {
           forwardingScore: 999,
@@ -4597,6 +4602,8 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
         await nazu.sendMessage(from, {
           delete: { remoteJid: from, fromMe: false, id: info.key.id, participant: sender }
         }).catch(() => {});
+      } else if (podeAgir && !jaPunido && avalia.acao !== 'punir') {
+        console.log('[GHOST] selective SEM corroboracao -> observando (nao bane): ' + avalia.motivo);
       }
 
       // A mensagem nao tem conteudo decifravel: e um stub (CIPHERTEXT). Seguir
