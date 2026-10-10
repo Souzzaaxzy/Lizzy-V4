@@ -195,16 +195,19 @@ await test('LIGADO: travazap 1x -> NADA (exige rajada de 2)', async () => {
   const r = await enviar({ conversation: 'travazap '.repeat(20000) }, { groupJid });
   ok(r.removals.length === 0, '1 sinal não bane');
 });
-await test('LIGADO: travazap 2x em 5s -> bane + aviso', async () => {
+await test('LIGADO: travazap 2x em 5s -> envia "funcionou ☝🏻" e NÃO bane', async () => {
   const groupJid = makeGroup();
   setEnabled(groupJid, true);
   const author = nextAuthor();
+  let avisou = false;
   let baniu = false;
   for (let i = 0; i < 2; i++) {
     const r = await enviar({ conversation: 'travazap '.repeat(20000) }, { groupJid, author });
-    if (r.removals.some((x) => x.action === 'remove')) baniu = true;
+    if (r.sent.some((s) => s.content?.text === 'funcionou ☝🏻')) avisou = true;
+    if (r.removals.length) baniu = true;
   }
-  ok(baniu, '2 sinais em 5s bane');
+  ok(avisou, 'envia "funcionou ☝🏻"');
+  ok(!baniu, 'NÃO bane (ban removido)');
 });
 
 await test('DESLIGADO: travazap não bane nem avisa', async () => {

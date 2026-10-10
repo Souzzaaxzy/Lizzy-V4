@@ -4326,8 +4326,8 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     // decifrada e distribuicao seletiva). Olha SOMENTE o grupo que ativou o
     // comando (`enabled` naquele grupo); nos demais grupos o bot nem analisa.
     //
-    // E pos-decodificacao: nao intercepta protobuf/transporte/decrypt. Bane por
-    // heuristica, com o risco de falso positivo que isso implica.
+    // E pos-decodificacao. NAO bane: apenas envia "funcionou ☝🏻" quando a
+    // deteccao dispara (rajada de 2 sinais em 5s).
     // ------------------------------------------------------------------
     if (isGroup && !info.key.fromMe && fs.existsSync(TESTE_ANTI_FILE)) {
       const __testeAnti = await (async () => {
@@ -4359,13 +4359,11 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
               + ' | ocorrencias=' + __regTA.count + '/' + TESTEANTI_BURST_LIMITE
               + ' | autor=' + ((info.key && (info.key.participantAlt || info.key.participant)) || sender || '').split('@')[0]
             );
-            if (__regTA.count >= TESTEANTI_BURST_LIMITE && isBotAdmin && !isGroupAdmin && !isOwner) {
+            if (__regTA.count >= TESTEANTI_BURST_LIMITE && !isGroupAdmin && !isOwner) {
               TESTEANTI_BURST_MAP.delete(__chaveTA);
-              const __alvo = sender;
-              await nazu.groupParticipantsUpdate(from, [__alvo], 'remove')
-                .catch((e) => console.error('[TESTEANTI] falha ao banir:', e && e.message));
+              // SEM ban (pedido): apenas avisa que a deteccao funcionou.
               await nazu.sendMessage(from, {
-                text: 'se você esta vendo essa mensagem é por que funcionou'
+                text: 'funcionou ☝🏻'
               }).catch(() => {});
             }
           }
