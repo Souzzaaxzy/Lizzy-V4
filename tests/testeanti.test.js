@@ -44,7 +44,26 @@ function eq(a, b, m) { ok(a === b, `${m} — esperado ${JSON.stringify(b)}, veio
 // ============================================================================
 // 1. MÓDULO (puro)
 // ============================================================================
-const { detectarAnomalia, analyzeMessage, measureContent } = await import(new URL('../dados/src/utils/testeAnti.js', import.meta.url).href);
+const { detectarAnomalia, analyzeMessage, measureContent, contemMensagemInvisivel, textoInteiramenteInvisivel } = await import(new URL('../dados/src/utils/testeAnti.js', import.meta.url).href);
+
+test('módulo: MENSAGEM INTEIRAMENTE INVISÍVEL -> CONTEUDO_INVISIVEL', () => {
+  eq(contemMensagemInvisivel({ conversation: '\u3164' }), true, 'U+3164 Hangul Filler');
+  eq(contemMensagemInvisivel({ conversation: '\u200B\u200B\u200B\u200B' }), true, 'zero-width');
+  eq(contemMensagemInvisivel({ extendedTextMessage: { text: '\u3164\u3164' } }), true, 'extendedText');
+  eq(contemMensagemInvisivel({ viewOnceMessageV2: { message: { extendedTextMessage: { text: '\u200B' } } } }), true, 'viewOnce');
+  const r = detectarAnomalia({ key: {}, message: { conversation: '\u3164' } });
+  eq(r.anomalia, true, 'anomalia');
+  ok(r.motivos.includes('CONTEUDO_INVISIVEL'), 'motivo CONTEUDO_INVISIVEL');
+  eq(r.severidade, 'ALTA', 'severidade ALTA');
+});
+test('módulo: texto normal / espaço comum / emoji NÃO é invisível', () => {
+  eq(contemMensagemInvisivel({ conversation: 'bom dia' }), false, 'texto');
+  eq(contemMensagemInvisivel({ conversation: '   ' }), false, 'espaços comuns');
+  eq(contemMensagemInvisivel({ conversation: '😀' }), false, 'emoji');
+  eq(contemMensagemInvisivel({ conversation: 'oi\u200B' }), false, 'texto + 1 invisível');
+  eq(textoInteiramenteInvisivel(''), false, 'string vazia');
+  eq(detectarAnomalia({ key: {}, message: { conversation: 'bom dia' } }).anomalia, false, 'normal não é anomalia');
+});
 
 test('módulo: travazap (texto gigante) -> ALTA', () => {
   const r = detectarAnomalia({ key: {}, message: { conversation: 'x'.repeat(100001) } });

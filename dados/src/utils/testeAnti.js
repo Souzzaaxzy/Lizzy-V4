@@ -41,6 +41,18 @@ export const KNOWN_TYPES = new Set(Object.keys(TEXT_FIELDS_BY_TYPE).concat([
 
 const ASCII_TEXT_KEYS = ['text', 'caption', 'name', 'description', 'title', 'address', 'contentText', 'footerText', 'buttonText', 'displayName', 'conversation'];
 
+// Caracteres que NÃO desenham nada (zero-width, bidi, fillers). É o que faz a
+// "mensagem inteira invisível": o conteúdo todo é feito desses, então a bolha
+// aparece vazia para quem recebe.
+const INVISIVEL_RE = /[\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\u3164\ufeff\ufe00-\ufe0f\uffa0]/;
+// Casa uma string FEITA SÓ de invisíveis (>= 1). Espaço comum (U+0020) NÃO entra.
+const INVISIVEL_TOTAL_RE = /^[\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\u3164\ufeff\ufe00-\ufe0f\uffa0]+$/;
+
+/** A string é composta SÓ de caracteres invisíveis (mensagem "vazia")? */
+export function textoInteiramenteInvisivel(valor) {
+  return typeof valor === 'string' && valor.length > 0 && INVISIVEL_TOTAL_RE.test(valor);
+}
+
 export const DEFAULT_TESTEANTI_CONFIG = Object.freeze({
   maxDepth: 10,
   maxNodes: 2500,
@@ -221,6 +233,42 @@ export function detectarAnomalia(info, options = {}) {
     }
   }
 
+  // MENSAGEM INTEIRAMENTE INVISÍVEL: o conteúdo todo é feito de caracteres que
+  // não desenham nada (zero-width/bidi/fillers), então a bolha aparece vazia.
+  // Prova por si (um texto normal nunca é 100% invisível), então é ALTA.
+  if (contemMensagemInvisivel(info?.message)) {
+    if (!motivos.includes('CONTEUDO_INVISIVEL')) motivos.push('CONTEUDO_INVISIVEL');
+    severidade = 'ALTA';
+  }
+
   if (motivos.length === 0) return { anomalia: false, severidade: 'NORMAL', motivos: [] };
   return { anomalia: true, severidade, motivos };
+}
+
+/**
+ * Varre a mensagem (descendo wrappers) procurando um campo de TEXTO cujo valor
+ * seja 100% invisível — a "mensagem invisível" (bolha vazia para o destinatário).
+ */
+export function contemMensagemInvisivel(message, maxDepth = 12) {
+  const seen = new WeakSet();
+  let nodes = 0;
+  function visit(val, profundidade) {
+    if (nodes++ > 8000 || profundidade > maxDepth) return false;
+    if (val === null || typeof val !== 'object') return false;
+    if (Buffer.isBuffer(val) || val instanceof Uint8Array) return false;
+    if (seen.has(val)) return false;
+    seen.add(val);
+    if (Array.isArray(val)) {
+      for (const item of val) if (visit(item, profundidade + 1)) return true;
+      return false;
+    }
+    let entradas;
+    try { entradas = Object.entries(val); } catch { return false; }
+    for (const [k, v] of entradas) {
+      if (typeof v === 'string' && ASCII_TEXT_KEYS.includes(k) && textoInteiramenteInvisivel(v)) return true;
+      if (visit(v, profundidade + 1)) return true;
+    }
+    return false;
+  }
+  return visit(message, 0);
 }
