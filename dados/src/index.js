@@ -4014,8 +4014,9 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     // tem prioridade quando existir.
     const isAntiMidia = groupData.antimidia ?? groupData.antifoton;
     const isAntiAudio = groupData.antiaudio;
-    const isAntiStatus = groupData.antistatus;
-    const isAntiStts = isGroup && groupData && groupData.antiStts !== false;
+    // `antistatus` e `antistts` sao o MESMO sistema (toggle unico).
+    const isAntiStatus = Boolean(groupData.antistatus || groupData.antiStts === true);
+    const isAntiStts = isGroup && isAntiStatus;
     const isAntirequestPaymentMessage = groupData.antirequest;
     const isAutoRepo = groupData.autorepo;
     const isAssistente = groupData.assistente;
@@ -4105,7 +4106,10 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       info.message?.extendedTextMessage?.contextInfo?.isGroupStatus
     );
     const isNewsletter = !!(info.message?.newsletterAnnouncementMessage || info.message?.newsletterAdminInviteMessage || type === 'newsletterAnnouncementMessage');
-    if (isGroup && isAntiStts && (isStatusV2 || isNewsletter) && !isOwnerOrSub && !isUserWhitelisted(sender, 'antistts') && !isGroupAdmin) {
+    // Mensagem invisivel (pairwise) postada como STATUS: a assinatura e' o
+    // transporte (`groupEncInfo.pairwiseOnly`), nao o conteudo.
+    const isStatusPairwise = ehRajaTransporte(info) && (isStatusV2 || isStatusMention || !!info.message?.groupStatusMessageV2);
+    if (isGroup && isAntiStts && (isStatusV2 || isNewsletter || isStatusPairwise) && !isOwnerOrSub && !isUserWhitelisted(sender, 'antistts') && !isGroupAdmin) {
       try {
         if (isBotAdmin) {
           await nazu.sendMessage(from, { delete: info.key }).catch(() => {});
@@ -4118,7 +4122,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
             }
           };
           await nazu.sendMessage(from, {
-            text: `🚨 *SISTEMA ANTI-ATAQUE*\n\nO membro @${sender.split('@')[0]} tentou postar um status/canal no grupo e foi removido para proteger o grupo.`,
+            text: `🚨 *SISTEMA ANTI-ATAQUE*\n\nO membro @${sender.split('@')[0]} tentou postar um status/canal (ou uma mensagem fantasma/invisível) no grupo e foi removido para proteger o grupo.`,
             mentions: [sender]
           , contextInfo: newsletterCtxAntiStts });
           const senderJidAntiStts = sender;
@@ -34976,13 +34980,16 @@ break;
           await reply("Ocorreu um erro 💔");
         }
         break;
+      case 'antistts':
       case 'antistatus':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
           if (!isGroupAdmin) return reply("Você precisa ser adm 💔");
           if (!isBotAdmin) return reply("Eu preciso ser adm para isso 💔");
-          groupData.antistatus = !groupData.antistatus;
-          fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
+          // UNIFICADO: `antistatus` e `antistts` sao o MESMO sistema e saem no
+          // mesmo toggle (`antistatus` + `antiStts` ligados/desligados juntos).
+          // A deteccao cuida de status do grupo, canal/encaminhamento E das
+          // mensagens invisiveis (pairwise) postadas como status.
           const newsletterStts = {
             forwardingScore: 999,
             isForwarded: true,
@@ -34991,7 +34998,27 @@ break;
               newsletterName: "Lizzy"
             }
           };
-          await nazu.sendMessage(from, { text: `✅ Anti Status ${groupData.antistatus ? 'ativado' : 'desativado'}!` , contextInfo: newsletterStts, quoted: info });
+          const acaoAntiStatus = String(args[0] || '').toLowerCase();
+          const ligadoAntiStatus = Boolean(groupData.antistatus || groupData.antiStts === true);
+          if (acaoAntiStatus === 'on' || acaoAntiStatus === 'off') {
+            const ligar = acaoAntiStatus === 'on';
+            groupData.antistatus = ligar;
+            groupData.antiStts = ligar;
+          } else {
+            // Sem argumento = alterna (mesmo UX do `!antistatus`).
+            const novo = !ligadoAntiStatus;
+            groupData.antistatus = novo;
+            groupData.antiStts = novo;
+          }
+          fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
+          const agoraLigado = Boolean(groupData.antistatus || groupData.antiStts === true);
+          await nazu.sendMessage(from, {
+            text: agoraLigado
+              ? `✅ *Anti Status ativado!*\n\nAgora o bot remove quem postar status no grupo, encaminhar conteúdo de canais ou tentar mensagem fantasma/invisível (pairwise) no status.`
+              : `🚫 *Anti Status desativado.*`,
+            contextInfo: newsletterStts,
+            quoted: info
+          });
         } catch (e) {
           console.error(e);
           await reply("Ocorreu um erro 💔");
@@ -35819,32 +35846,7 @@ agora todo ataque fantasma sera detectado e banido automaticamente`
           await reply("Ocorreu um erro 💔");
         }
         break;
-      case 'antistts': {
-        if (!isGroup) return reply("❌ ◈ Este comando só funciona em grupos.");
-        if (!isGroupAdmin) return reply("❌ Apenas administradores podem usar este comando.");
-        const newsletterCtxStts = {
-            forwardingScore: 999,
-            isForwarded: true,
-            forwardedNewsletterMessageInfo: {
-              newsletterJid: "120363410980452460@newsletter",
-              newsletterName: "Lizzy"
-            }
-          };
-          if (args[0] === 'on') {
-          if (groupData.antiStts === true) return reply("⚠️ O Anti-Status já está ativado.");
-          groupData.antiStts = true;
-          fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
-          await nazu.sendMessage(from, { text: "✅ *Anti-Status Ativado!* Agora o bot removerá quem postar status no grupo." , contextInfo: newsletterCtxStts, quoted: info });
-        } else if (args[0] === 'off') {
-          if (groupData.antiStts === false) return reply("⚠️ O Anti-Status já está desativado.");
-          groupData.antiStts = false;
-          fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
-          await nazu.sendMessage(from, { text: "✅ *Anti-Status Desativado!* O bot não removerá mais quem postar status no grupo." , contextInfo: newsletterCtxStts, quoted: info });
-        } else {
-          await nazu.sendMessage(from, { text: `❓ *Como usar:* \n\n${groupPrefix}antistts on (para ativar)\n${groupPrefix}antistts off (para desativar)\n\n*Status atual:* ${groupData.antiStts !== false ? 'Ativado' : 'Desativado'}` , contextInfo: newsletterCtxStts, quoted: info });
-        }
-        break;
-      }
+
       case 'antirequest':
       case 'antipagamento':
       case 'antipayment':
