@@ -28,6 +28,7 @@ import {
 } from './utils/messageInspector.js';
 import { analisarAnomaliasDeConteudo } from './utils/invisibleAnalyzer.js';
 import { detectarAnomalia, contemMensagemInvisivel } from './utils/testeAnti.js';
+import { analisarAddonSemSecret, analisarSenderKeyStatus, analisarSaltoChain, analisarForja } from './utils/invisibleVectors.js';
 import { ehRajaTransporte, registrarRajada } from './utils/rajaTransport.js';
 import { buildCmdNotFoundExtras } from './utils/commandSuggest.js';
 import { extractMedia, resolveMedia, isViewOnce, describeMediaError, extractQuoted, extractQuotedContext, extractText } from './utils/viewOnce.js';
@@ -1502,6 +1503,9 @@ const TESTE_ANTI_FILE = pathz.join(DONO_DIR, 'testeAnti.json');
 const TESTEANTI_BURST_MAP = new Map();
 const TESTEANTI_BURST_LIMITE = 2;
 const TESTEANTI_JANELA_MS = 5000;
+// Estado das deteccoes #3 (forja por ID) e #4 (salto de chain/retry). Em memoria.
+const TESTEANTI_MSGS_VISTAS = new Map();   // id -> hash do conteudo
+const TESTEANTI_CHAIN = new Map();         // autor -> ultimo contador
 // Rajada do "raja" (transporte pairwiseOnly) por grupo|autor — 2 mensagens da
 // MESMA pessoa ja' caracterizam o ataque. Em memoria, podado por tempo.
 const RAJA_BURST_MAP = new Map();
@@ -4358,12 +4362,22 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
           try { if (isProtectedSelective(info)) __motivos.push('SELECTIVE'); } catch { /* ignore */ }
           try { if (ehRajaTransporte(info)) __motivos.push('TRANSPORTE'); } catch { /* ignore */ }
           try { if (contemMensagemInvisivel(info?.message)) __motivos.push('CONTEUDO_INVISIVEL'); } catch { /* ignore */ }
+          // Vetores 3, 4, 5 e 6 (docs/mensagens-nao-decifraveis.md).
+          try { if (analisarAddonSemSecret(info).suspeito) __motivos.push('ADDON_SEM_SECRET'); } catch { /* ignore */ }
+          try { if (analisarSenderKeyStatus(info).suspeito) __motivos.push('STATUS_SELECTIVE'); } catch { /* ignore */ }
+          try { if (analisarSaltoChain(info, TESTEANTI_CHAIN, String(info.key?.participant || sender)).suspeito) __motivos.push('RETRY_CHAIN'); } catch { /* ignore */ }
+          try { if (analisarForja(TESTEANTI_MSGS_VISTAS, info).suspeito) __motivos.push('FORJA_ID'); } catch { /* ignore */ }
 
           if (__motivos.length > 0) {
             const __lista = [...new Set(__motivos)].slice(0, 12).join(',');
             // Exige RAJADA: >= 2 sinais da MESMA pessoa em 5s (nao age em sinal unico).
             const __chaveTA = from + '|' + String((info.key && (info.key.participant || info.key.participantAlt)) || sender || '');
-            const __regTA = registrarRajada(TESTEANTI_BURST_MAP, __chaveTA, info.key?.id, Date.now(), TESTEANTI_JANELA_MS);
+            // A forja (#3) acontece SOB O MESMO ID — usar o id como token do
+            // burst zeraria a contagem (dedup por id). Nesse caso, token unico.
+            const __tokenTA = __motivos.includes('FORJA_ID')
+              ? `${info.key?.id}#${Date.now()}#${Math.random()}`
+              : info.key?.id;
+            const __regTA = registrarRajada(TESTEANTI_BURST_MAP, __chaveTA, __tokenTA, Date.now(), TESTEANTI_JANELA_MS);
             console.log(
               '[TESTEANTI] grupo=' + String(from).split('@')[0]
               + ' | motivos=' + __lista
