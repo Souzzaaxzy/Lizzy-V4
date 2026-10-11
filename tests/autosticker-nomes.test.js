@@ -101,8 +101,12 @@ eq(!!r1?.media, true, 'retorno tem .media (não .node)');
 eq(r1?.node, undefined, 'não existe .node');
 eq(resolveMedia([{ viewOnceMessageV2: { message: { imageMessage: { mimetype: 'image/jpeg' } } } }])?.type, 'image', 'view once foto');
 eq(resolveMedia([{ viewOnceMessageV2: { message: { videoMessage: { seconds: 4 } } } }])?.type, 'video', 'view once vídeo');
+eq(resolveMedia([{ viewOnceMessageV2Extension: { message: { videoMessage: { seconds: 4 } } } }])?.type, 'video', 'view once V2Extension vídeo');
 eq(resolveMedia([{ viewOnceMessage: { message: { imageMessage: {} } } }])?.type, 'image', 'view once V1');
 eq(resolveMedia([{ ephemeralMessage: { message: { viewOnceMessageV2: { message: { videoMessage: { seconds: 2 } } } } } }])?.type, 'video', 'efêmera + view once');
+eq(resolveMedia([{ ptvMessage: { seconds: 3 } }])?.type, 'video', 'ptv (video note)');
+// A ESCOPO do ehVideo/limite: 9.9s vale para TODO video (inclusive VO).
+ok(/if \(ehVideo && \(midia\.media\.seconds \|\| 0\) > 9\.9\) return;/.test(bloco), 'limite 9.9s sem excecao');
 
 server.close();
 console.log(`\n${pass} asserções ok, ${fail} falhas`);
