@@ -6253,12 +6253,15 @@ Código: *${roleCode}*`,
       }
     }
     const autoConvertMediaToSticker = async () => {
-      const mediaImage = info.message?.imageMessage || info.message?.viewOnceMessageV2?.message?.imageMessage || info.message?.viewOnceMessage?.message?.imageMessage;
-      const mediaVideo = info.message?.videoMessage || info.message?.viewOnceMessageV2?.message?.videoMessage || info.message?.viewOnceMessage?.message?.videoMessage;
-      if (!mediaImage && !mediaVideo) return;
-      const isVideo = !!mediaVideo;
-      if (isVideo && mediaVideo.seconds > 9.9) return;
-      const buffer = await getFileBuffer(isVideo ? mediaVideo : mediaImage, isVideo ? 'video' : 'image');
+      // resolveMedia desembrulha view once (V1/V2/V2Extension), efêmera e
+      // documentWithCaption — então a figurinha automática também cobre
+      // "ver uma vez" (foto E vídeo), não só a mídia direta.
+      const midia = resolveMedia([info.message]);
+      if (!midia || !midia.node) return;
+      const ehVideo = midia.type === 'video';
+      if (!ehVideo && midia.type !== 'image') return;
+      if (ehVideo && (midia.node.seconds || 0) > 9.9) return;
+      const buffer = await getFileBuffer(midia.node, ehVideo ? 'video' : 'image');
       const shouldForceSquare = global.autoStickerMode === 'square';
       // Autor e pacote da figurinha: MESMO sistema do `!s` — respeita o
       // `!rgtake` (take.json: author/pack) e cai para o nick do contato.
@@ -6277,7 +6280,7 @@ Código: *${roleCode}*`,
         sticker: buffer,
         author: nomesAuto.author,
         packname: nomesAuto.pack,
-        type: isVideo ? 'video' : 'image',
+        type: ehVideo ? 'video' : 'image',
         forceSquare: shouldForceSquare
       }, {
         quoted: info

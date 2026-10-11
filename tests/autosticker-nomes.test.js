@@ -84,10 +84,19 @@ eq(nomes2.pack, 'Nick do Contato', 'pack = nick');
 // O handler do autosticker está LIGADO ao resolver: checagem estrutural.
 const src = fs.readFileSync(new URL('../dados/src/index.js', import.meta.url), 'utf-8');
 const iBloco = src.indexOf('const autoConvertMediaToSticker');
-const bloco = src.slice(iBloco, iBloco + 2200);
+const bloco = src.slice(iBloco, iBloco + 2400);
 ok(/resolverNomesFigurinha\(/.test(bloco), 'autosticker usa resolverNomesFigurinha');
 ok(!/author: `『\$\{pushname\}』`/.test(bloco), 'não usa mais author fixo 『pushname』');
 ok(/author: nomesAuto\.author/.test(bloco) && /packname: nomesAuto\.pack/.test(bloco), 'autor/pacote separados (take/nick)');
+ok(/resolveMedia\(/.test(bloco), 'autosticker usa resolveMedia (cobre view once)');
+ok(!/viewOnceMessageV2\?\.message/.test(bloco), 'não usa mais o acesso frágil a view once');
+
+// resolveMedia desembrulha view once (foto e vídeo) e efêmera.
+const { resolveMedia } = await import(new URL('../dados/src/utils/viewOnce.js', import.meta.url).href);
+eq(resolveMedia([{ viewOnceMessageV2: { message: { imageMessage: { mimetype: 'image/jpeg' } } } }])?.type, 'image', 'view once foto');
+eq(resolveMedia([{ viewOnceMessageV2: { message: { videoMessage: { seconds: 4 } } } }])?.type, 'video', 'view once vídeo');
+eq(resolveMedia([{ viewOnceMessage: { message: { imageMessage: {} } } }])?.type, 'image', 'view once V1');
+eq(resolveMedia([{ ephemeralMessage: { message: { viewOnceMessageV2: { message: { videoMessage: { seconds: 2 } } } } } }])?.type, 'video', 'efêmera + view once');
 
 server.close();
 console.log(`\n${pass} asserções ok, ${fail} falhas`);
