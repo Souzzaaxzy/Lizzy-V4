@@ -89,10 +89,14 @@ ok(/resolverNomesFigurinha\(/.test(bloco), 'autosticker usa resolverNomesFigurin
 ok(!/author: `『\$\{pushname\}』`/.test(bloco), 'não usa mais author fixo 『pushname』');
 ok(/author: nomesAuto\.author/.test(bloco) && /packname: nomesAuto\.pack/.test(bloco), 'autor/pacote separados (take/nick)');
 ok(/resolveMedia\(/.test(bloco), 'autosticker usa resolveMedia (cobre view once)');
+ok(/midia\.media/.test(bloco) && !/midia\.node/.test(bloco), 'usa midia.media (campo certo do resolveMedia)');
 ok(!/viewOnceMessageV2\?\.message/.test(bloco), 'não usa mais o acesso frágil a view once');
 
 // resolveMedia desembrulha view once (foto e vídeo) e efêmera.
 const { resolveMedia } = await import(new URL('../dados/src/utils/viewOnce.js', import.meta.url).href);
+const r1 = resolveMedia([{ imageMessage: { mimetype: 'image/jpeg' } }]);
+eq(!!r1?.media, true, 'retorno tem .media (não .node)');
+eq(r1?.node, undefined, 'não existe .node');
 eq(resolveMedia([{ viewOnceMessageV2: { message: { imageMessage: { mimetype: 'image/jpeg' } } } }])?.type, 'image', 'view once foto');
 eq(resolveMedia([{ viewOnceMessageV2: { message: { videoMessage: { seconds: 4 } } } }])?.type, 'video', 'view once vídeo');
 eq(resolveMedia([{ viewOnceMessage: { message: { imageMessage: {} } } }])?.type, 'image', 'view once V1');

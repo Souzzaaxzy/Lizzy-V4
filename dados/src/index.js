@@ -6257,11 +6257,11 @@ Código: *${roleCode}*`,
       // documentWithCaption — então a figurinha automática também cobre
       // "ver uma vez" (foto E vídeo), não só a mídia direta.
       const midia = resolveMedia([info.message]);
-      if (!midia || !midia.node) return;
+      if (!midia || !midia.media) return;
       const ehVideo = midia.type === 'video';
       if (!ehVideo && midia.type !== 'image') return;
-      if (ehVideo && (midia.node.seconds || 0) > 9.9) return;
-      const buffer = await getFileBuffer(midia.node, ehVideo ? 'video' : 'image');
+      if (ehVideo && (midia.media.seconds || 0) > 9.9) return;
+      const buffer = await getFileBuffer(midia.media, ehVideo ? 'video' : 'image');
       const shouldForceSquare = global.autoStickerMode === 'square';
       // Autor e pacote da figurinha: MESMO sistema do `!s` — respeita o
       // `!rgtake` (take.json: author/pack) e cai para o nick do contato.
