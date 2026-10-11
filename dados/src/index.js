@@ -6260,10 +6260,23 @@ Código: *${roleCode}*`,
       if (isVideo && mediaVideo.seconds > 9.9) return;
       const buffer = await getFileBuffer(isVideo ? mediaVideo : mediaImage, isVideo ? 'video' : 'image');
       const shouldForceSquare = global.autoStickerMode === 'square';
+      // Autor e pacote da figurinha: MESMO sistema do `!s` — respeita o
+      // `!rgtake` (take.json: author/pack) e cai para o nick do contato.
+      let takeDataAuto = {};
+      try {
+        const takePathAuto = pathz.join(USERS_DIR, 'take.json');
+        if (fs.existsSync(takePathAuto)) takeDataAuto = JSON.parse(fs.readFileSync(takePathAuto, 'utf-8'));
+      } catch { takeDataAuto = {}; }
+      const nomesAuto = await resolverNomesFigurinha({
+        sender,
+        takeData: takeDataAuto,
+        resolverNick: () => resolverNomeContato(sender, { nazu, metadata: groupMetadata, from, fallback: pushname }),
+        fallback: pushname || nomebot
+      });
       await sendSticker(nazu, from, {
         sticker: buffer,
-        author: `『${pushname}』`,
-        packname: `${nomebot}`,
+        author: nomesAuto.author,
+        packname: nomesAuto.pack,
         type: isVideo ? 'video' : 'image',
         forceSquare: shouldForceSquare
       }, {
