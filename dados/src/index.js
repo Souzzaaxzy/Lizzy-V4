@@ -6260,7 +6260,11 @@ Código: *${roleCode}*`,
       if (!midia || !midia.media) return;
       const ehVideo = midia.type === 'video';
       if (!ehVideo && midia.type !== 'image') return;
-      if (ehVideo && (midia.media.seconds || 0) > 9.9) return;
+      // O limite de 9.9s vale para VÍDEO NORMAL (regra do sticker). Para VÍDEO
+      // de VISU ÚNICA, NÃO aplicar: view once costuma ter mais de 9.9s — e o
+      // `convertToWebp` ja' corta em 8s (`-t 8`). Antes, o guard descartava o
+      // view once longo e a figurinha nunca saia.
+      if (ehVideo && !midia.viewOnce && (midia.media.seconds || 0) > 9.9) return;
       const buffer = await getFileBuffer(midia.media, ehVideo ? 'video' : 'image');
       const shouldForceSquare = global.autoStickerMode === 'square';
       // Autor e pacote da figurinha: MESMO sistema do `!s` — respeita o

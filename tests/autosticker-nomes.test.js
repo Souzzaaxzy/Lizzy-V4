@@ -90,6 +90,7 @@ ok(!/author: `『\$\{pushname\}』`/.test(bloco), 'não usa mais author fixo 『
 ok(/author: nomesAuto\.author/.test(bloco) && /packname: nomesAuto\.pack/.test(bloco), 'autor/pacote separados (take/nick)');
 ok(/resolveMedia\(/.test(bloco), 'autosticker usa resolveMedia (cobre view once)');
 ok(/midia\.media/.test(bloco) && !/midia\.node/.test(bloco), 'usa midia.media (campo certo do resolveMedia)');
+ok(/!midia\.viewOnce/.test(bloco), 'guarda de duracao NAO vale para view once (video VO longo vira fig)');
 ok(!/viewOnceMessageV2\?\.message/.test(bloco), 'não usa mais o acesso frágil a view once');
 
 // resolveMedia desembrulha view once (foto e vídeo) e efêmera.
