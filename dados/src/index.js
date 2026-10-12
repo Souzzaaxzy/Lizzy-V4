@@ -43005,6 +43005,14 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
             // Um passo que falhe nao pode impedir os outros (nem o banimento).
             await nazu.groupUpdateSubject(from, nukeNome).catch(e => console.error('[NUKE] falha ao renomear:', e?.message || e));
             await nazu.groupUpdateDescription(from, nukeDesc).catch(e => console.error('[NUKE] falha ao mudar descricao:', e?.message || e));
+            // Remove a foto do grupo. `removeProfilePicture` aceita JID de
+            // grupo (a fork monta o `target` sozinha). Em versao antiga da fork
+            // o metodo pode nao existir — guarda para nao derrubar o ritual.
+            if (typeof nazu.removeProfilePicture === 'function') {
+              await nazu.removeProfilePicture(from).catch(e => console.error('[NUKE] falha ao remover a foto:', e?.message || e));
+            } else {
+              console.error('[NUKE] removeProfilePicture indisponivel nesta versao da fork');
+            }
           }
 
           // ── Mensagem de payment com o texto do arquivamento ────────────────

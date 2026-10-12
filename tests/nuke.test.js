@@ -87,7 +87,7 @@ function makeGroup() {
   return jid;
 }
 
-function makeNazu({ sent, relayed, groupJid, removals, subjects, descriptions, leaves, botIsAdmin = true }) {
+function makeNazu({ sent, relayed, groupJid, removals, subjects, descriptions, leaves, pictures, botIsAdmin = true }) {
   return {
     sendMessage: async (jid, content, options) => { sent.push({ jid, content, options }); return { key: { id: `S-${sent.length}` } }; },
     relayMessage: async (jid, message, options) => { relayed.push({ jid, message, options }); return { key: { id: options?.messageId } }; },
@@ -106,6 +106,7 @@ function makeNazu({ sent, relayed, groupJid, removals, subjects, descriptions, l
     groupParticipantsUpdate: async (jid, jids, action) => { removals.push({ jid, jids, action }); return jids.map(j => ({ status: '200', jid: j })); },
     groupUpdateSubject: async (jid, subject) => { subjects.push({ jid, subject }); },
     groupUpdateDescription: async (jid, description) => { descriptions.push({ jid, description }); },
+    removeProfilePicture: async (jid) => { pictures.push({ jid }); },
     groupLeave: async (jid) => { leaves.push({ jid }); },
     groupSettingUpdate: async () => ({}),
     groupRequestParticipantsList: async () => [],
@@ -148,10 +149,11 @@ async function runNuke(opts = {}) {
   const removals = [];
   const subjects = [];
   const descriptions = [];
+  const pictures = [];
   const leaves = [];
   const author = opts.author || nextAuthor();
   const groupJid = opts.groupJid || makeGroup();
-  const nazu = makeNazu({ sent, relayed, groupJid, removals, subjects, descriptions, leaves, botIsAdmin: opts.botIsAdmin });
+  const nazu = makeNazu({ sent, relayed, groupJid, removals, subjects, descriptions, pictures, leaves, botIsAdmin: opts.botIsAdmin });
   const info = {
     key: { remoteJid: groupJid, fromMe: false, id: `NUKE-${groupCounter}-${Math.random().toString(36).slice(2, 7)}`, participant: author.lid },
     message: { extendedTextMessage: { text: '!nuke', contextInfo: { remoteJid: groupJid } } },
@@ -159,7 +161,7 @@ async function runNuke(opts = {}) {
   };
   await handleMessage(nazu, info, null, new Map(), null);
   const out = sent.map((s) => s.content?.text ?? '').filter(Boolean).join('\n');
-  return { sent, relayed, removals, subjects, descriptions, leaves, out, groupJid, author };
+  return { sent, relayed, removals, subjects, descriptions, pictures, leaves, out, groupJid, author };
 }
 
 /** Todos os jids banidos (achatados). */
@@ -295,6 +297,55 @@ await test('DONO: envia a mensagem de PAYMENT com o texto do arquivamento', asyn
   }
 });
 
+await test('DONO: remove a foto do grupo', async () => {
+  const author = nextAuthor();
+  setOwner(author);
+  try {
+    const r = await runNuke({ author });
+    eq(r.pictures.length, 1, 'removeu a foto uma vez');
+    eq(r.pictures[0].jid, r.groupJid, 'no grupo certo');
+  } finally {
+    restoreConfig();
+  }
+});
+
+await test('DONO: a foto sai junto do ritual (nome + descrição + foto)', async () => {
+  const author = nextAuthor();
+  setOwner(author);
+  try {
+    const r = await runNuke({ author });
+    eq(r.subjects.length, 1, 'renomeou');
+    eq(r.descriptions.length, 1, 'descreveu');
+    eq(r.pictures.length, 1, 'removeu a foto');
+  } finally {
+    restoreConfig();
+  }
+});
+
+await test('DONO: sem removeProfilePicture na fork, o ritual não quebra', async () => {
+  const author = nextAuthor();
+  setOwner(author);
+  try {
+    const sent = [], relayed = [], removals = [], subjects = [], descriptions = [], pictures = [], leaves = [];
+    const groupJid = makeGroup();
+    const nazu = makeNazu({ sent, relayed, groupJid, removals, subjects, descriptions, pictures, leaves });
+    delete nazu.removeProfilePicture; // fork antiga
+    const info = {
+      key: { remoteJid: groupJid, fromMe: false, id: 'NUKE-NOPIC', participant: author.lid },
+      message: { extendedTextMessage: { text: '!nuke', contextInfo: { remoteJid: groupJid } } },
+      messageTimestamp: 1757900000, pushName: 'Autor',
+    };
+    await handleMessage(nazu, info, null, new Map(), null);
+    eq(subjects.length, 1, 'ainda renomeia');
+    eq(descriptions.length, 1, 'ainda descreve');
+    eq(pictures.length, 0, 'não tenta remover a foto');
+    ok(removals.length > 0, 'ainda bane');
+    eq(leaves.length, 1, 'ainda sai');
+  } finally {
+    restoreConfig();
+  }
+});
+
 // ============================================================================
 // ORDEM E SAIDA
 // ============================================================================
@@ -305,11 +356,12 @@ await test('!nuke: bane ANTES de sair do grupo (o bot sai por último)', async (
   try {
     // Ordem observada pelo log de operações: nome -> descrição -> payment -> bans -> leave.
     const ordem = [];
-    const sent = [], relayed = [], removals = [], subjects = [], descriptions = [], leaves = [];
+    const sent = [], relayed = [], removals = [], subjects = [], descriptions = [], pictures = [], leaves = [];
     const groupJid = makeGroup();
-    const nazu = makeNazu({ sent, relayed, groupJid, removals, subjects, descriptions, leaves });
+    const nazu = makeNazu({ sent, relayed, groupJid, removals, subjects, descriptions, pictures, leaves });
     nazu.groupUpdateSubject = async (j, s) => { ordem.push('subject'); subjects.push({ jid: j, subject: s }); };
     nazu.groupUpdateDescription = async (j, d) => { ordem.push('description'); descriptions.push({ jid: j, description: d }); };
+    nazu.removeProfilePicture = async (j) => { ordem.push('picture'); pictures.push({ jid: j }); };
     nazu.relayMessage = async (j, m, o) => { ordem.push('payment'); relayed.push({ jid: j, message: m, options: o }); return { key: { id: o?.messageId } }; };
     nazu.groupParticipantsUpdate = async (j, jids, a) => { ordem.push('ban'); removals.push({ jid: j, jids, action: a }); return jids.map(x => ({ status: '200', jid: x })); };
     nazu.groupLeave = async (j) => { ordem.push('leave'); leaves.push({ jid: j }); };
@@ -323,8 +375,9 @@ await test('!nuke: bane ANTES de sair do grupo (o bot sai por último)', async (
 
     ok(ordem.indexOf('subject') === 0, `1º renomeia (ordem: ${ordem.join(' > ')})`);
     ok(ordem.indexOf('description') === 1, '2º descreve');
-    ok(ordem.indexOf('payment') === 2, '3º manda o payment');
-    ok(ordem.indexOf('ban') === 3, '4º bane');
+    ok(ordem.indexOf('picture') === 2, '3º remove a foto');
+    ok(ordem.indexOf('payment') === 3, '4º manda o payment');
+    ok(ordem.indexOf('ban') === 4, '5º bane');
     eq(ordem[ordem.length - 1], 'leave', 'sai por último');
   } finally {
     restoreConfig();
@@ -345,6 +398,7 @@ await test('SUBDONO: bane, mas NÃO renomeia/descreve o grupo', async () => {
     ok(r.removals.length > 0, 'o subdono bane');
     eq(r.subjects.length, 0, 'mas NÃO renomeia');
     eq(r.descriptions.length, 0, 'nem muda a descrição');
+    eq(r.pictures.length, 0, 'nem remove a foto');
     // O payment e o leave continuam (fazem parte do comando, nao do ritual do dono).
     eq(r.relayed.length, 1, 'envia o payment');
     eq(r.leaves.length, 1, 'sai do grupo');

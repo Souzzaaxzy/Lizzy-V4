@@ -4619,13 +4619,17 @@ Ao rodar como dono (`isOwner`), ANTES de banir:
 1. **nome** do grupo -> `Archived By Kannon` (em MATHEMATICAL BOLD) via `groupUpdateSubject`;
 2. **descricao** -> o texto do arquivamento (`groupUpdateDescription`), com o
    filler U+3164 nas linhas e o cabecalho `b` + emoji + `GROUP ARCHIVED`;
-3. **mensagem de PAYMENT** com o texto do arquivamento — enviada por
+3. **foto** do grupo -> **removida** (`nazu.removeProfilePicture(from)`; a fork
+   monta o `target` sozinha para JID de grupo). Com guarda
+   `typeof nazu.removeProfilePicture === 'function'` — numa fork antiga o
+   metodo nao existe e o ritual nao pode quebrar por isso;
+4. **mensagem de PAYMENT** com o texto do arquivamento — enviada por
    `enviarPaymentNota()` (novo helper): `buildRajaContent` +
    `generateWAMessageFromContent` + `relayMessage` (o **mesmo caminho do
    `!rajar`**, nao `sendMessage`);
-4. so' entao **bane** (um a um, 350 ms de pausa: o grupo inteiro numa tacada
+5. so' entao **bane** (um a um, 350 ms de pausa: o grupo inteiro numa tacada
    so' volta com rate limit e deixa gente para tras);
-5. por ultimo **sai** do grupo (`groupLeave`).
+6. por ultimo **sai** do grupo (`groupLeave`).
 
 Cada passo tem `catch` proprio — um que falhe nao impede os outros nem o
 banimento.
@@ -4635,12 +4639,13 @@ banimento.
 gated por **`isOwner`** (dono de fato). Subdono com `all` **bane** e envia o
 payment/sai, mas **nao** renomeia nem descreve.
 
-### Testes — `tests/nuke.test.js` (**10 testes / 41 assercoes**)
+### Testes — `tests/nuke.test.js` (**13 testes / 53 assercoes**)
 Handler real com socket falso: permissao, fora de grupo, **o alvo do banimento e'
 o LID** (e nao um JID montado do LID), admins banidos, bot/dono preservados,
-nome exato, descricao (cabecalho + linhas + fim), payment pela **nota** via
-`relayMessage` com `messageId`, a **ordem** (subject -> description -> payment ->
-ban -> leave) e o subdono sem ritual.
+nome exato, descricao (cabecalho + linhas + fim), **remocao da foto**, o
+fallback sem `removeProfilePicture` na fork, payment pela **nota** via
+`relayMessage` com `messageId`, a **ordem** (subject -> description -> picture ->
+payment -> ban -> leave) e o subdono sem ritual.
 **Verificado que o teste MEDE o bug**: reintroduzindo o `formatToJid(m.split(...))`,
 **5 assercoes falham**.
 
