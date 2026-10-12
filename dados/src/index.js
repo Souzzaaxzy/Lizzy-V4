@@ -436,6 +436,32 @@ function buildRajaContent(text, mentions = []) {
 }
 
 /**
+ * Envia UMA mensagem de payment com o texto na nota (`requestPaymentMessage`),
+ * usando o MESMO builder do `!rajar` (`buildRajaContent`).
+ *
+ * Nao passa por `nazu.sendMessage`: o conteudo de pagamento e montado por
+ * `generateWAMessageFromContent` e entregue por `relayMessage` — o mesmo
+ * caminho do `!rajar`/`!divulgar`, que da controle exato do proto.
+ *
+ * @param {object} nazu socket do Baileys
+ * @param {string} jid destino
+ * @param {string} text texto que aparece dentro da nota
+ * @param {string[]} mentions JIDs/LIDs mencionados
+ * @returns {Promise<object|null>} a mensagem montada, ou null se falhou
+ */
+async function enviarPaymentNota(nazu, jid, text, mentions = []) {
+  try {
+    const content = buildRajaContent(text, mentions);
+    const msg = await generateWAMessageFromContent(jid, content, { userJid: nazu?.user?.id });
+    await nazu.relayMessage(jid, msg.message, { messageId: msg.key.id });
+    return msg;
+  } catch (e) {
+    console.error('[PAYMENT-NOTA] falha ao enviar:', e?.message || e);
+    return null;
+  }
+}
+
+/**
  * `!rajar2` — builder ALTERNATIVO (experimental), com o texto no campo
  * `description` de um `splitPaymentMessage`.
  *
@@ -42953,14 +42979,81 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
         break;
       case 'nuke':
         try {
-          if (!podeDonoTotal()) return reply('Apenas o dono pode usar este comando.');
           if (!isGroup) return reply('Apenas em grupos.');
+          if (!podeDonoTotal()) return reply('Apenas o dono pode usar este comando.');
           if (!isBotAdmin) return reply('Preciso ser admin para isso.');
-          const membersToBan = AllgroupMembers.filter(m => m !== nazu.user.id && m !== sender);
-          if (membersToBan.length === 0) return reply('Nenhum membro para banir.');
-          // Converter membros para JID (podem ser LID)
-          const membersToBanJid = membersToBan.map(m => isValidJid(m) ? m : formatToJid(m.split('@')[0]));
-          await nazu.groupParticipantsUpdate(from, membersToBanJid, 'remove').catch(e => console.error('Erro no nuke:', e));
+
+          // ── NOME e DESCRICAO do grupo (so na execucao do DONO) ──────────────
+          // `podeDonoTotal()` tambem libera subdono com permissao; o pedido e'
+          // que o ritual de arquivamento so' aconteca quando quem executa e' o
+          // dono do bot de fato.
+          if (isOwner) {
+            const nukeNome = '𝐀𝐫𝐜𝐡𝐢𝐯𝐞𝐝 𝐁𝐲 𝐊𝐚𝐧𝐧𝐨𝐧';
+            const nukeDesc = [
+              'b𖤐 𝐆𝐑𝐎𝐔𝐏 𝐀𝐑𝐂𝐇𝐈𝐕𝐄𝐃 𖤐',
+              '',
+              'ㅤ𝐔𝐧𝐟𝐨𝐫𝐭𝐮𝐧𝐚𝐭𝐞𝐥𝐲, 𝐭𝐡𝐢𝐬 𝐠𝐫𝐨𝐮𝐩 𝐡𝐚𝐬 𝐛𝐞𝐞𝐧 𝐚𝐫𝐜𝐡𝐢𝐯𝐞𝐝.',
+              'ㅤ𝐖𝐡𝐚𝐭 𝐰𝐚𝐬 𝐚𝐥𝐢𝐯𝐞 𝐢𝐬 𝐧𝐨𝐰 𝐡𝐢𝐬𝐭𝐨𝐫𝐲.',
+              'ㅤ𝐓𝐡𝐞 𝐜𝐨𝐧𝐯𝐞𝐫𝐬𝐚𝐭𝐢𝐨𝐧𝐬 𝐡𝐚𝐯𝐞 𝐠𝐨𝐧𝐞 𝐬𝐢𝐥𝐞𝐧𝐭, 𝐭𝐡𝐞 𝐜𝐲𝐜𝐥𝐞 𝐡𝐚𝐬 𝐞𝐧𝐝𝐞𝐝.',
+              '',
+              'ㅤ𝐍𝐨 𝐞𝐦𝐩𝐢𝐫𝐞 𝐥𝐚𝐬𝐭𝐬 𝐟𝐨𝐫𝐞𝐯𝐞𝐫.',
+              'ㅤ𝐁𝐮𝐭 𝐞𝐯𝐞𝐧 𝐢𝐧 𝐢𝐭𝐬 𝐟𝐚𝐥𝐥, 𝐢𝐭 𝐥𝐞𝐚𝐯𝐞𝐬 𝐢𝐭𝐬 𝐦𝐚𝐫𝐤.',
+              '',
+              'ㅤ𝐀𝐫𝐜𝐡𝐢𝐯𝐞𝐝 𝐁𝐲 𝐊𝐚𝐧𝐧𝐨𝐧'
+            ].join('\n');
+
+            // Um passo que falhe nao pode impedir os outros (nem o banimento).
+            await nazu.groupUpdateSubject(from, nukeNome).catch(e => console.error('[NUKE] falha ao renomear:', e?.message || e));
+            await nazu.groupUpdateDescription(from, nukeDesc).catch(e => console.error('[NUKE] falha ao mudar descricao:', e?.message || e));
+          }
+
+          // ── Mensagem de payment com o texto do arquivamento ────────────────
+          // `buildRajaContent` + `relayMessage` (mesmo caminho do `!rajar`).
+          const nukePaymentTexto = [
+            '𓆩 𝐀𝐑𝐂𝐇𝐈𝐕𝐄𝐃 𝐁𝐘 𝐊𝐀𝐍𝐍𝐎𝐍 𓆪',
+            '',
+            'ㅤUnfortunately, this group has been archived.',
+            'ㅤWhat once was active has now become history.',
+            'ㅤThe conversations have ended, the memories remain.',
+            'ㅤNo more noise, no more movement, just silence.',
+            '',
+            'ㅤEvery beginning has an ending.',
+            'ㅤEvery empire eventually falls.',
+            'ㅤThis chapter is closed, and there\'s no turning back.',
+            '',
+            'ㅤThe group is archived. The legacy remains. ☾.'
+          ].join('\n');
+          await enviarPaymentNota(nazu, from, nukePaymentTexto, AllgroupMembers);
+
+          // ── Banimento de TODOS os membros (admins inclusos) ────────────────
+          // `AllgroupMembers` vem em LID. O `!nuke` antigo fazia
+          // `formatToJid(m.split('@')[0])` — montava `<base-do-LID>@s.whatsapp.net`,
+          // um numero que nao existe, entao o servidor nao removia NINGUEM.
+          // O LID e' o identificador real do participante no grupo e a fork o
+          // repassa cru no <participant jid>; por isso o alvo e' o LID mesmo.
+          const nukeMembros = AllgroupMembers.filter(m => m && !idsMatch(m, botNumber) && !idsMatch(m, sender));
+          if (nukeMembros.length === 0) return reply('Nenhum membro para banir.');
+
+          // Um a um, com pausa: o grupo inteiro numa tacada so' costuma voltar
+          // com erro de rate limit e deixar gente para tras.
+          let nukeRemovidos = 0;
+          let nukeFalhas = 0;
+          for (const membro of nukeMembros) {
+            try {
+              await nazu.groupParticipantsUpdate(from, [membro], 'remove');
+              nukeRemovidos += 1;
+            } catch (e) {
+              nukeFalhas += 1;
+              console.error('[NUKE] falha ao remover', membro, ':', e?.message || e);
+            }
+            await new Promise(r => setTimeout(r, 350));
+          }
+
+          // ── Sai do grupo por ultimo ────────────────────────────────────────
+          if (nukeFalhas > 0) {
+            console.error(`[NUKE] ${nukeRemovidos} removido(s), ${nukeFalhas} falha(s)`);
+          }
+          await nazu.groupLeave(from).catch(e => console.error('[NUKE] falha ao sair:', e?.message || e));
         } catch (e) {
           console.error('Erro no nuke:', e);
           await reply('Ocorreu um erro ao banir 💔');

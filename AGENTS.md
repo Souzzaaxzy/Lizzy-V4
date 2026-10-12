@@ -4601,6 +4601,63 @@ bloco neutralizado, 4 asserções falham (o teste mede a mudança).
 **Pré-existente** (não é regressão): `defensive-protection` mantém **28**
 falhas — idêntico no baseline (confirmado com `git stash`).
 
+## COMANDO `!nuke` — CORRIGIDO + ritual de arquivamento (out/2026) ✅
+Relato do dono: o `!nuke` nao bania ninguem. **Causa raiz medida**: `AllgroupMembers`
+vem em **LID** (ex.: `111000000000012@lid`) e o comando fazia
+`formatToJid(m.split('@')[0])` -> montava `111000000000012@s.whatsapp.net`, um
+numero que **nao existe** (o LID e um namespace proprio). O servidor nao
+reconhecia o participante e **ninguem era removido**. Reproducao isolada:
+`isValidJid('111000000000012@lid')` = false -> cai no `formatToJid` -> JID falso.
+
+**Correcao**: o alvo do banimento e' o **proprio LID** (a fork o repassa cru no
+`<participant jid>`; e' o identificador real do participante no grupo).
+`idsMatch` (ja existente) compara LID x PN sem confundir. O bot e o dono saem da
+lista; **admins entram** (o pedido e' banir todos).
+
+### Ritual de arquivamento (so quando quem executa e' o DONO)
+Ao rodar como dono (`isOwner`), ANTES de banir:
+1. **nome** do grupo -> `Archived By Kannon` (em MATHEMATICAL BOLD) via `groupUpdateSubject`;
+2. **descricao** -> o texto do arquivamento (`groupUpdateDescription`), com o
+   filler U+3164 nas linhas e o cabecalho `b` + emoji + `GROUP ARCHIVED`;
+3. **mensagem de PAYMENT** com o texto do arquivamento — enviada por
+   `enviarPaymentNota()` (novo helper): `buildRajaContent` +
+   `generateWAMessageFromContent` + `relayMessage` (o **mesmo caminho do
+   `!rajar`**, nao `sendMessage`);
+4. so' entao **bane** (um a um, 350 ms de pausa: o grupo inteiro numa tacada
+   so' volta com rate limit e deixa gente para tras);
+5. por ultimo **sai** do grupo (`groupLeave`).
+
+Cada passo tem `catch` proprio — um que falhe nao impede os outros nem o
+banimento.
+
+### Subdono
+`podeDonoTotal()` libera subdono com permissao, mas o ritual de nome/descricao e'
+gated por **`isOwner`** (dono de fato). Subdono com `all` **bane** e envia o
+payment/sai, mas **nao** renomeia nem descreve.
+
+### Testes — `tests/nuke.test.js` (**10 testes / 41 assercoes**)
+Handler real com socket falso: permissao, fora de grupo, **o alvo do banimento e'
+o LID** (e nao um JID montado do LID), admins banidos, bot/dono preservados,
+nome exato, descricao (cabecalho + linhas + fim), payment pela **nota** via
+`relayMessage` com `messageId`, a **ordem** (subject -> description -> payment ->
+ban -> leave) e o subdono sem ritual.
+**Verificado que o teste MEDE o bug**: reintroduzindo o `formatToJid(m.split(...))`,
+**5 assercoes falham**.
+
+**Armadilhas do teste**: `CONFIG_PATH` e `DATABASE_PATH` precisam ser setados
+**antes** do import (o `paths.js` resolve no load) — senao o handler le o
+`config.json` do repositorio e o teste **suja a arvore** (perdia o newline final).
+E o `npm install` **rebaixa o `yarn.lock` para v1** (armadilha ja documentada):
+sempre `git checkout -- yarn.lock` depois.
+
+### Pre-existentes (nao sao regressao)
+Comparado com a baseline (`git stash`) teste a teste: identicos. `anti-seletiva`
+(22 falhas, `ReferenceError: avalia is not defined` — o `const avalia` vive dentro
+de um `try` e e' usado fora), `defensive-protection` 21, `eununca18` 5,
+`layout-conversion` 1, `menu-layout` 1, `pg-commands` 4, `poll-layout` 17,
+`rajar*` 6/9/12/20, `statusgrupo`/`statusgrupo-figurinha`/`togif` (falta de ffmpeg
+no sandbox). `testcall` e' **flaky** (5/6 passam; corrida ja documentada).
+
 ## `!get` — ANÁLISE FORENSE DE MENSAGEM INVISÍVEL (set/2026) ✅
 Nova categoria do `!get`: **"🕵️ ANÁLISE DE MENSAGEM INVISÍVEL"**. Ela **não**
 procura um campo chamado "invisible" — ela monta, a partir do que é realmente
