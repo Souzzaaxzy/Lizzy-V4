@@ -35417,23 +35417,14 @@ ${listaPerm}
           const content = buildRajaContent(texto, mentions);
           const baseMsg = await generateWAMessageFromContent(from, content, { userJid: nazu?.user?.id });
 
-          // Membros comuns: o fan-out NÃO inclui admins nem o próprio bot.
-          const membrosComuns = AllgroupMembers.filter(
-            (id) => !idInArray(id, groupAdmins) && !idsMatch(id, botNumber)
-          );
+          const membrosComuns = AllgroupMembers.filter((id) => !idInArray(id, groupAdmins));
+          const usaRotacao = typeof nazu.relayGroupMessageWithSenderKeyRotation === 'function' && membrosComuns.length > 0;
 
-          // Entrega PAIRWISE-ONLY (a implementação da fork): a mensagem é
-          // cifrada por dispositivo, SEM `skmsg` e SEM distribuir Sender Key.
-          // Consequência medida: o frame só é endereçado (`<to>`) ao membro
-          // autorizado — quem está fora não recebe a stanza, em vez de receber
-          // e não decifrar. A ausência do `skmsg` é o que caracteriza o método.
-          const usaPairwise = typeof nazu.relayGroupMessagePairwiseOnly === 'function' && membrosComuns.length > 0;
-
-          if (!usaPairwise) {
+          if (!usaRotacao) {
             return reply(
               `❌ Não foi possível enviar com visibilidade só para membros.\n\n` +
               `• membros comuns encontrados: ${membrosComuns.length}\n` +
-              `• fork com a API pairwise: ${typeof nazu.relayGroupMessagePairwiseOnly === 'function' ? 'sim' : 'NÃO'}\n\n` +
+              `• fork com a API de rotação: ${typeof nazu.relayGroupMessageWithSenderKeyRotation === 'function' ? 'sim' : 'NÃO'}\n\n` +
               `Nada foi enviado — em vez de cair para o grupo inteiro (o que mostraria a mensagem aos admins).`
             );
           }
@@ -35449,7 +35440,7 @@ ${listaPerm}
               // messageId novo por envio (o WhatsApp descarta IDs repetidos),
               // no formato do raja real (22 chars).
               const msgId = generateRajaMessageId();
-              await nazu.relayGroupMessagePairwiseOnly(from, baseMsg.message, {
+              await nazu.relayGroupMessageWithSenderKeyRotation(from, baseMsg.message, {
                 allowedParticipants: membrosComuns,
                 messageId: msgId
               });
@@ -35461,39 +35452,10 @@ ${listaPerm}
             if (i < total - 1) await sleep(DELAY_MS);
           }
 
-          // O envio NÃO pode falhar em silêncio.
-          //
-          // O caminho pairwise cifra a mensagem POR DISPOSITIVO (`encryptMessage`),
-          // então exige a sessão Signal 1:1 de cada device do alvo. Quando essa
-          // sessão não está estabelecida, a fork lança `All encryptions failed` —
-          // e o comando, ao engolir o erro, deixava o dono sem saber por quê
-          // ("o bot não está enviando nada"). Agora o erro REAL aparece.
-          if (enviados === 0) {
-            const motivo = falhas[0] || 'motivo desconhecido';
-            console.error(`[RAJAR] 0/${total} enviado(s). Motivo: ${motivo}`);
-            return reply(
-              `❌ Nenhuma mensagem foi entregue (0/${total}).\n\n` +
-              `• Motivo: ${motivo}\n` +
-              `• Membros autorizados: ${membrosComuns.length}\n\n` +
-              `_O envio pairwise cifra por dispositivo e exige a sessão Signal de cada aparelho do alvo._`
-            );
-          }
-
-          if (falhas.length > 0) {
-            console.error(`[RAJAR] ${enviados}/${total} enviado(s). Falhas: ${falhas.slice(0, 3).join(' | ')}`);
-            return reply(
-              `⚠️ Enviadas ${enviados}/${total}.\n\n` +
-              `• Falhas: ${falhas.length}\n` +
-              `• Primeira: ${falhas[0]}`
-            );
-          }
-
-          // Tudo entregue: SEM resumo no WhatsApp — o `!rajar` entrega SÓ as
-          // mensagens invisíveis (o pedido do dono é não poluir o grupo).
-          console.log(`[RAJAR] ${enviados}/${total} enviadas com sucesso.`);
+          // SEM resumo no WhatsApp: o `!rajar` entrega SÓ as mensagens
+          // invisíveis.
         } catch (e) {
-          console.error('[RAJAR] erro inesperado:', e?.message || e);
-          await reply(`❌ Não foi possível disparar o raja.\n\n• ${e?.message || e}`);
+          await reply('❌ Não foi possível disparar o raja.');
         }
         break;
       }
