@@ -92,7 +92,7 @@ const GROUP_PARTICIPANTS = [
   { id: MEM_2, lid: MEM_2, phoneNumber: MEM_2_PN, admin: null },
 ];
 
-function makeNazu({ sent, groupJid, senderLid, hasRotationApi = true, hasPairwiseApi = true }) {
+function makeNazu({ sent, groupJid, senderLid, hasRotationApi = true, hasPairwiseApi = true, falhaEnvio = null, falhaApartirDe = 0 }) {
   const nazu = {
     sendMessage: async (jid, content, options) => {
       sent.push({ jid, content, options });
@@ -134,6 +134,11 @@ function makeNazu({ sent, groupJid, senderLid, hasRotationApi = true, hasPairwis
     // O !rajar agora usa a implementacao PAIRWISE da fork.
     nazu.relayGroupMessagePairwiseOnly = async (g, m, o) => {
       nazu._pairwiseCalls.push({ g, m, o });
+      // Simula a falha REAL do caminho pairwise: a fork lanca quando a sessao
+      // Signal do device do alvo nao esta estabelecida.
+      if (falhaEnvio && nazu._pairwiseCalls.length - 1 >= falhaApartirDe) {
+        throw new Error(falhaEnvio);
+      }
       return { groupJid: g, messageId: o?.messageId, allowedParticipants: o?.allowedParticipants, decryptFail: o?.decryptFail };
     };
   }
@@ -168,10 +173,10 @@ const limparRajaGlobal = () => {
 
 let cenario = 0;
 
-async function rodar({ groupJid, text = '!rajar', hasRotationApi = true, hasPairwiseApi = true }) {
+async function rodar({ groupJid, text = '!rajar', hasRotationApi = true, hasPairwiseApi = true, falhaEnvio = null, falhaApartirDe = 0 }) {
   cenario += 1;
   const sent = [];
-  const nazu = makeNazu({ sent, groupJid, senderLid: BOT_LID, hasRotationApi, hasPairwiseApi });
+  const nazu = makeNazu({ sent, groupJid, senderLid: BOT_LID, hasRotationApi, hasPairwiseApi, falhaEnvio, falhaApartirDe });
   await handleMessage(
     nazu,
     {
@@ -339,12 +344,46 @@ await test('!rajar entrega SÓ as mensagens — sem resumo de conclusão no grup
   const groupJid = makeGroup();
   await rodar({ groupJid, text: '!setmsgraja 2 texto' });
   const r = await rodar({ groupJid, text: '!rajar' });
-  // Nada de resposta no chat: nem "RAJA CONCLUÍDO", nem contagem, nem falhas.
+  // Tudo entregue -> NADA de resposta no chat: nem "RAJA CONCLUÍDO", nem
+  // contagem. (Se ALGUMA falhar, o comando agora AVISA — ver os testes abaixo.)
   assert.equal(r.sent.length, 0, `nenhuma mensagem de texto foi enviada (${r.sent.length})`);
   assert.equal(r.textos, '', 'nenhum texto de resposta (nem resumo)');
   ok(!r.textos.includes('CONCLUÍDO'), 'não mandou o resumo de conclusão');
-  // E o que saiu foi só a rajada, pela rotação.
+  // E o que saiu foi só a rajada, pela API pairwise.
   assert.equal(r.pairwiseCalls.length, 2, 'as 2 mensagens invisíveis saíram');
+});
+
+// O caminho pairwise cifra POR DISPOSITIVO (encryptMessage) e exige a sessao
+// Signal 1:1 de cada aparelho do alvo. Sem ela a fork lanca
+// `All encryptions failed` — e o comando precisa DIZER isso, nao engolir
+// (era o sintoma "o bot nao esta enviando nada").
+
+await test('!rajar: se NADA foi entregue, reporta o MOTIVO (não engole a falha)', async () => {
+  const groupJid = makeGroup();
+  await rodar({ groupJid, text: '!setmsgraja 3 texto' });
+  const r = await rodar({ groupJid, text: '!rajar', falhaEnvio: 'All encryptions failed' });
+  assert.equal(r.pairwiseCalls.length, 3, 'tentou os 3 envios');
+  ok(r.textos.includes('Nenhuma mensagem foi entregue'), 'reportou 0/N');
+  ok(r.textos.includes('0/3'), 'mostrou a contagem 0/3');
+  ok(r.textos.includes('All encryptions failed'), 'mostrou o MOTIVO real da fork');
+});
+
+await test('!rajar: falha PARCIAL reporta a contagem e o primeiro motivo', async () => {
+  const groupJid = makeGroup();
+  await rodar({ groupJid, text: '!setmsgraja 3 texto' });
+  // 1o envio ok, os outros 2 falham
+  const r = await rodar({ groupJid, text: '!rajar', falhaEnvio: 'All encryptions failed', falhaApartirDe: 1 });
+  assert.equal(r.pairwiseCalls.length, 3, 'tentou os 3');
+  ok(r.textos.includes('1/3'), 'mostrou 1/3 entregue');
+  ok(r.textos.includes('All encryptions failed'), 'mostrou o motivo');
+});
+
+await test('!rajar: sucesso TOTAL continua em SILÊNCIO (não polui o grupo)', async () => {
+  const groupJid = makeGroup();
+  await rodar({ groupJid, text: '!setmsgraja 2 texto' });
+  const r = await rodar({ groupJid, text: '!rajar' });
+  assert.equal(r.textos, '', 'nenhum texto de resposta quando tudo passa');
+  assert.equal(r.pairwiseCalls.length, 2, 'os 2 envios sairam');
 });
 
 await test('!rajar falha fechado se a fork não expõe a API pairwise (não vaza)', async () => {

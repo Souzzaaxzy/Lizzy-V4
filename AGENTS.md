@@ -4725,6 +4725,40 @@ identica): ele mede o modelo antigo (`recipientMode: 'members-only'` via
 `sendMessage`), que o `!rajar` deixou de usar quando migrou para a selecao por
 Sender Key. `tests/nuke.test.js` 13/13.
 
+## `!rajar` deixou de ENGOLIR a falha (out/2026) ✅
+Sintoma do dono depois da migracao para pairwise: *"o bot nao esta enviando nada
+nem pra adm e nem pra membro"*.
+
+**Causa raiz (medida).** O caminho pairwise cifra a mensagem **POR DISPOSITIVO**
+(`signalRepository.encryptMessage`) — exige a sessao Signal **1:1** de cada
+aparelho do alvo. Quando ela nao esta estabelecida, a fork lanca
+`All encryptions failed`. O `!rajar` **engolia** isso (o `catch` do laco so
+empilhava em `falhas` e nunca reportava) — por isso "nao envia nada", sem aviso.
+
+Medido lado a lado (mesmo socket, mesmo alvo):
+
+| | sem sessao E2E | com sessao E2E |
+|---|---|---|
+| rotacao | `All encryptions failed` | `enc:skmsg` + `to:A` + `enc:pkmsg` |
+| pairwise | `All encryptions failed` | `to:A` + `enc:pkmsg` |
+
+Ou seja: **os dois** exigem sessao E2E por device (o pairwise um pouco mais, por
+cifrar a mensagem inteira em vez de so' o SKDM). O harness sem sessao reproduz o
+erro nos **dois** — o que nao permite afirmar que o pairwise seja a unica causa
+em producao. O que e' certo: o comando escondia a falha.
+
+**Correcao (reporte honesto):**
+- `enviados === 0` -> responde **0/N** + o **motivo real** (`falhas[0]`), com a
+  nota de que o pairwise exige a sessao Signal de cada aparelho do alvo;
+- falha **parcial** -> responde `enviadas X/N` + a contagem e o primeiro motivo;
+- **sucesso total** -> continua **em silencio** (o pedido do dono: nao poluir o
+  grupo). Antes o silencio valia para os tres casos, inclusive a falha total.
+
+**Testes** `tests/raja-selective.test.js` — **28 assercoes / 17 testes** (3
+novos: reporta 0/N com motivo; falha parcial com contagem; sucesso total segue em
+silencio). **Verificado que medem**: removendo o bloco de reporte, **5 assercoes
+falham**.
+
 ## `!get` — ANÁLISE FORENSE DE MENSAGEM INVISÍVEL (set/2026) ✅
 Nova categoria do `!get`: **"🕵️ ANÁLISE DE MENSAGEM INVISÍVEL"**. Ela **não**
 procura um campo chamado "invisible" — ela monta, a partir do que é realmente
