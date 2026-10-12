@@ -35417,14 +35417,23 @@ ${listaPerm}
           const content = buildRajaContent(texto, mentions);
           const baseMsg = await generateWAMessageFromContent(from, content, { userJid: nazu?.user?.id });
 
-          const membrosComuns = AllgroupMembers.filter((id) => !idInArray(id, groupAdmins));
-          const usaRotacao = typeof nazu.relayGroupMessageWithSenderKeyRotation === 'function' && membrosComuns.length > 0;
+          // Membros comuns: o fan-out NÃO inclui admins nem o próprio bot.
+          const membrosComuns = AllgroupMembers.filter(
+            (id) => !idInArray(id, groupAdmins) && !idsMatch(id, botNumber)
+          );
 
-          if (!usaRotacao) {
+          // Entrega PAIRWISE-ONLY (a implementação da fork): a mensagem é
+          // cifrada por dispositivo, SEM `skmsg` e SEM distribuir Sender Key.
+          // Consequência medida: o frame só é endereçado (`<to>`) ao membro
+          // autorizado — quem está fora não recebe a stanza, em vez de receber
+          // e não decifrar. A ausência do `skmsg` é o que caracteriza o método.
+          const usaPairwise = typeof nazu.relayGroupMessagePairwiseOnly === 'function' && membrosComuns.length > 0;
+
+          if (!usaPairwise) {
             return reply(
               `❌ Não foi possível enviar com visibilidade só para membros.\n\n` +
               `• membros comuns encontrados: ${membrosComuns.length}\n` +
-              `• fork com a API de rotação: ${typeof nazu.relayGroupMessageWithSenderKeyRotation === 'function' ? 'sim' : 'NÃO'}\n\n` +
+              `• fork com a API pairwise: ${typeof nazu.relayGroupMessagePairwiseOnly === 'function' ? 'sim' : 'NÃO'}\n\n` +
               `Nada foi enviado — em vez de cair para o grupo inteiro (o que mostraria a mensagem aos admins).`
             );
           }
@@ -35440,7 +35449,7 @@ ${listaPerm}
               // messageId novo por envio (o WhatsApp descarta IDs repetidos),
               // no formato do raja real (22 chars).
               const msgId = generateRajaMessageId();
-              await nazu.relayGroupMessageWithSenderKeyRotation(from, baseMsg.message, {
+              await nazu.relayGroupMessagePairwiseOnly(from, baseMsg.message, {
                 allowedParticipants: membrosComuns,
                 messageId: msgId
               });

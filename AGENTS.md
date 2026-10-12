@@ -4663,6 +4663,68 @@ de um `try` e e' usado fora), `defensive-protection` 21, `eununca18` 5,
 `rajar*` 6/9/12/20, `statusgrupo`/`statusgrupo-figurinha`/`togif` (falta de ffmpeg
 no sandbox). `testcall` e' **flaky** (5/6 passam; corrida ja documentada).
 
+## `!rajar` MIGROU para a API PAIRWISE + fork bumpada (out/2026) ✅
+
+### O lock estava num commit ANTIGO (causa raiz)
+O bot fixava o fork em `a5b9495` — **anterior** ao teto de estados
+(`MAX_SENDER_KEY_STATES`), a poda (`stateHasChain`) e a API pairwise. Ou seja: as
+correções empurradas ao fork **não estavam rodando**. Medido no commit antigo:
+`MAX_SENDER_KEY_STATES` 0, `stateHasChain` 0, `relayGroupMessagePairwiseOnly` 0;
+`removeProfilePicture` 2 (esse já existia).
+
+**O que já estava intacto** no commit antigo (por isso o raja funcionava):
+`relayGroupMessageWithSenderKeyRotation`, `isRetryResend` (11 usos),
+`rotationMutex` + `rollbackSenderKeyRotation` + `finally`, e `isSuppressed` no
+`messages-recv`.
+
+**Correcao**: `package.json` + `package-lock.json` + `yarn.lock` para o commit
+`18323d48c62ed32fc1670ee05964b1746d999e4a` (hash **completo**). Depois:
+`npm install --legacy-peer-deps --allow-git=all`. Verificado no instalado:
+`MAX_SENDER_KEY_STATES` 2, `stateHasChain` 2, `relayGroupMessagePairwiseOnly` 3,
+`removeProfilePicture` 2.
+
+**Armadilha do `yarn.lock`** (a mesma do build do Cloudflare): o checksum do git
+dep fica **stale** ao trocar o commit. `corepack yarn install` falha com
+`YN0018 ... doesn't match the expected checksum`. Removida **só** a linha de
+checksum da entrada do fork e rodado `yarn install` (com o cache do fork
+limpo) — o yarn gravou o correto. Validado com
+`corepack yarn install --check-cache` → `Done`. O `yarn.lock` continua **Berry
+(v8)** — conferir `head -6`. O `yarn install` gera `.pnp.cjs`/`.yarn/` (PnP) e
+**apaga o `node_modules`**: após ele, rodar `npm install` de novo e apagar os
+artefatos PnP (não estão no `.gitignore`).
+
+### A troca: rotacao -> pairwise-only
+O `case 'rajar'` passou a chamar `nazu.relayGroupMessagePairwiseOnly` (a
+implementacao da fork) em vez de `relayGroupMessageWithSenderKeyRotation`.
+
+**Diferenca medida no fio** (probe com sessões Signal reais):
+
+| metodo | endereco da stanza |
+|---|---|
+| rotacao | `<to>` do **grupo inteiro** + `<enc type="skmsg">` |
+| **pairwise-only** | `<to>` **só do membro autorizado** + `<enc type="pkmsg">`, **sem skmsg** |
+
+Consequencia: no pairwise o excluido **nao recebe a stanza** (nao ha `<to>` para
+ele); na rotacao ele **recebe** mas nao decifra. A ausencia do `skmsg` e o que
+caracteriza o metodo.
+
+Sem `decryptFail` explicito o bot usa o padrao da fork (`HIDE`). Nao foi passado
+modo de camuflagem.
+
+`membrosComuns` agora exclui **admin E o bot** (`!idInArray(id, groupAdmins) &&
+!idsMatch(id, botNumber)`); antes o bot ficava na lista se nao fosse admin.
+
+### Testes
+`tests/raja-selective.test.js` — **23 assercoes / 14 testes**, atualizado para o
+contrato pairwise (o mock expoe `relayGroupMessagePairwiseOnly` e a falha fechado
+testa a ausencia **dessa** API). **Verificado que mede a troca**: revertendo para
+`relayGroupMessageWithSenderKeyRotation`, **10 assercoes falham**.
+
+`tests/rajar.test.js` segue com **6 falhas PRE-EXISTENTES** (baseline `git stash`
+identica): ele mede o modelo antigo (`recipientMode: 'members-only'` via
+`sendMessage`), que o `!rajar` deixou de usar quando migrou para a selecao por
+Sender Key. `tests/nuke.test.js` 13/13.
+
 ## `!get` — ANÁLISE FORENSE DE MENSAGEM INVISÍVEL (set/2026) ✅
 Nova categoria do `!get`: **"🕵️ ANÁLISE DE MENSAGEM INVISÍVEL"**. Ela **não**
 procura um campo chamado "invisible" — ela monta, a partir do que é realmente

@@ -92,7 +92,7 @@ const GROUP_PARTICIPANTS = [
   { id: MEM_2, lid: MEM_2, phoneNumber: MEM_2_PN, admin: null },
 ];
 
-function makeNazu({ sent, groupJid, senderLid, hasRotationApi = true }) {
+function makeNazu({ sent, groupJid, senderLid, hasRotationApi = true, hasPairwiseApi = true }) {
   const nazu = {
     sendMessage: async (jid, content, options) => {
       sent.push({ jid, content, options });
@@ -122,11 +122,19 @@ function makeNazu({ sent, groupJid, senderLid, hasRotationApi = true }) {
     profilePictureUrl: async () => 'x',
     react: async () => ({}),
     _rotationCalls: [],
+    _pairwiseCalls: [],
   };
   if (hasRotationApi) {
     nazu.relayGroupMessageWithSenderKeyRotation = async (g, m, o) => {
       nazu._rotationCalls.push({ g, m, o });
       return { groupJid: g, messageId: o?.messageId, allowedParticipants: o?.allowedParticipants };
+    };
+  }
+  if (hasPairwiseApi !== false) {
+    // O !rajar agora usa a implementacao PAIRWISE da fork.
+    nazu.relayGroupMessagePairwiseOnly = async (g, m, o) => {
+      nazu._pairwiseCalls.push({ g, m, o });
+      return { groupJid: g, messageId: o?.messageId, allowedParticipants: o?.allowedParticipants, decryptFail: o?.decryptFail };
     };
   }
   return nazu;
@@ -160,10 +168,10 @@ const limparRajaGlobal = () => {
 
 let cenario = 0;
 
-async function rodar({ groupJid, text = '!rajar', hasRotationApi = true }) {
+async function rodar({ groupJid, text = '!rajar', hasRotationApi = true, hasPairwiseApi = true }) {
   cenario += 1;
   const sent = [];
-  const nazu = makeNazu({ sent, groupJid, senderLid: BOT_LID, hasRotationApi });
+  const nazu = makeNazu({ sent, groupJid, senderLid: BOT_LID, hasRotationApi, hasPairwiseApi });
   await handleMessage(
     nazu,
     {
@@ -181,7 +189,7 @@ async function rodar({ groupJid, text = '!rajar', hasRotationApi = true }) {
   // `!setmsgraja` salvava mas o `!raja` ainda via "nada salvo").
   await esperarDisco();
   const textos = sent.map((s) => s.content?.text ?? '').filter(Boolean).join('\n');
-  return { sent, textos, nazu, rotationCalls: nazu._rotationCalls };
+  return { sent, textos, nazu, rotationCalls: nazu._rotationCalls, pairwiseCalls: nazu._pairwiseCalls };
 }
 
 // ============================================================================
@@ -206,7 +214,7 @@ await test('!raja mostra o que está salvo (não dispara nada)', async () => {
   ok(r.textos.includes('MENSAGEM DO RAJA'), 'mostrou o painel');
   ok(r.textos.includes('3'), 'mostrou a quantidade');
   ok(r.textos.includes('texto salvo'), 'mostrou o texto');
-  assert.equal(r.rotationCalls.length, 0, 'NÃO disparou nada');
+  assert.equal(r.pairwiseCalls.length, 0, 'NÃO disparou nada');
 });
 
 await test('!raja sem nada salvo avisa e ensina o comando', async () => {
@@ -221,8 +229,8 @@ await test('!rajar usa a quantidade e o texto salvos', async () => {
   const groupJid = makeGroup();
   await rodar({ groupJid, text: '!setmsgraja 3 repete' });
   const r = await rodar({ groupJid, text: '!rajar' });
-  assert.equal(r.rotationCalls.length, 3, 'enviou exatamente a quantidade salva');
-  const msg = r.rotationCalls[0]?.m;
+  assert.equal(r.pairwiseCalls.length, 3, 'enviou exatamente a quantidade salva');
+  const msg = r.pairwiseCalls[0]?.m;
   assert.equal(
     msg?.requestPaymentMessage?.noteMessage?.extendedTextMessage?.text,
     'repete',
@@ -234,7 +242,7 @@ await test('!rajar sem nada salvo não envia e aponta o !setmsgraja', async () =
   limparRajaGlobal();
   const groupJid = makeGroup();
   const r = await rodar({ groupJid, text: '!rajar' });
-  assert.equal(r.rotationCalls.length, 0, 'não enviou');
+  assert.equal(r.pairwiseCalls.length, 0, 'não enviou');
   ok(r.textos.includes('Nada salvo'), 'avisou que não há nada salvo');
 });
 
@@ -243,8 +251,8 @@ await test('o estado é GLOBAL: salvar no A vale no B', async () => {
   const grupoB = makeGroup();
   await rodar({ groupJid: grupoA, text: '!setmsgraja 2 do A' });
   const rB = await rodar({ groupJid: grupoB, text: '!rajar' });
-  assert.equal(rB.rotationCalls.length, 2, 'o grupo B herdou o que foi salvo no A');
-  const msg = rB.rotationCalls[0]?.m;
+  assert.equal(rB.pairwiseCalls.length, 2, 'o grupo B herdou o que foi salvo no A');
+  const msg = rB.pairwiseCalls[0]?.m;
   assert.equal(
     msg?.requestPaymentMessage?.noteMessage?.extendedTextMessage?.text,
     'do A',
@@ -273,8 +281,8 @@ await test('!rajar autoriza TODOS os membros comuns e NENHUM admin', async () =>
   const groupJid = makeGroup();
   await rodar({ groupJid, text: '!setmsgraja 1 oi' });
   const r = await rodar({ groupJid, text: '!rajar' });
-  ok(r.rotationCalls.length === 1, `usou a rotação (${r.rotationCalls.length} chamadas)`);
-  const autorizados = r.rotationCalls[0]?.o?.allowedParticipants ?? [];
+  ok(r.pairwiseCalls.length === 1, `usou a API pairwise (${r.pairwiseCalls.length} chamadas)`);
+  const autorizados = r.pairwiseCalls[0]?.o?.allowedParticipants ?? [];
   assert.deepEqual(
     autorizados.slice().sort(),
     [MEM_1, MEM_2].sort(),
@@ -292,14 +300,14 @@ await test('!rajar NÃO usa relayMessage nem sendMessage para o conteúdo', asyn
   ok(viaRelay.length === 0, `não caiu no relayMessage (${viaRelay.length}) — ele mostraria a todos`);
   const enviosComTexto = r.sent.filter((s) => s.content?.text === 'conteudo');
   ok(enviosComTexto.length === 0, 'o conteúdo não saiu por sendMessage');
-  ok(r.rotationCalls.length === 1, 'o conteúdo saiu só pela rotação');
+  ok(r.pairwiseCalls.length === 1, 'o conteúdo saiu só pela API pairwise');
 });
 
 await test('!rajar mantém o conteúdo do raja intacto (requestPaymentMessage)', async () => {
   const groupJid = makeGroup();
   await rodar({ groupJid, text: '!setmsgraja 1 nota' });
   const r = await rodar({ groupJid, text: '!rajar' });
-  const msg = r.rotationCalls[0]?.m;
+  const msg = r.pairwiseCalls[0]?.m;
   ok(!!msg, 'passou a mensagem do raja');
   ok(!!msg?.requestPaymentMessage, 'o conteúdo continua sendo requestPaymentMessage');
   assert.equal(
@@ -317,12 +325,12 @@ await test('!rajar envia N vezes, cada uma com messageId próprio', async () => 
   const groupJid = makeGroup();
   await rodar({ groupJid, text: '!setmsgraja 3 repete' });
   const r = await rodar({ groupJid, text: '!rajar' });
-  assert.equal(r.rotationCalls.length, 3, 'enviou 3 mensagens');
-  const ids = r.rotationCalls.map((c) => c.o?.messageId);
+  assert.equal(r.pairwiseCalls.length, 3, 'enviou 3 mensagens');
+  const ids = r.pairwiseCalls.map((c) => c.o?.messageId);
   assert.equal(new Set(ids).size, 3, 'cada envio tem um messageId distinto');
   ok(ids.every((id) => typeof id === 'string' && id.length > 0), 'todos os ids são strings válidas');
   ok(
-    r.rotationCalls.every((c) => Array.isArray(c.o.allowedParticipants) && c.o.allowedParticipants.length === 2),
+    r.pairwiseCalls.every((c) => Array.isArray(c.o.allowedParticipants) && c.o.allowedParticipants.length === 2),
     'cada envio autoriza os mesmos dois membros'
   );
 });
@@ -336,14 +344,14 @@ await test('!rajar entrega SÓ as mensagens — sem resumo de conclusão no grup
   assert.equal(r.textos, '', 'nenhum texto de resposta (nem resumo)');
   ok(!r.textos.includes('CONCLUÍDO'), 'não mandou o resumo de conclusão');
   // E o que saiu foi só a rajada, pela rotação.
-  assert.equal(r.rotationCalls.length, 2, 'as 2 mensagens invisíveis saíram');
+  assert.equal(r.pairwiseCalls.length, 2, 'as 2 mensagens invisíveis saíram');
 });
 
-await test('!rajar falha fechado se a fork não expõe a rotação (não vaza)', async () => {
+await test('!rajar falha fechado se a fork não expõe a API pairwise (não vaza)', async () => {
   const groupJid = makeGroup();
   await rodar({ groupJid, text: '!setmsgraja 1 x' });
-  const r = await rodar({ groupJid, text: '!rajar', hasRotationApi: false });
-  assert.equal(r.rotationCalls.length, 0, 'não chamou a rotação (inexistente)');
+  const r = await rodar({ groupJid, text: '!rajar', hasPairwiseApi: false });
+  assert.equal(r.pairwiseCalls.length, 0, 'não chamou a API pairwise (inexistente)');
   const viaRelay = r.sent.filter((s) => s.via === 'relayMessage');
   assert.equal(viaRelay.length, 0, 'NÃO caiu para o relayMessage — nada foi enviado ao grupo');
   ok(r.textos.includes('Nada foi enviado'), 'avisou que nada foi enviado');
