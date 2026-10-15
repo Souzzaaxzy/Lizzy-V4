@@ -129,6 +129,20 @@ export function motivoZapo() {
 }
 
 /**
+ * Quantas chamadas simultaneas o motor aceita.
+ *
+ * A doc: *"Maximum simultaneous non-ended calls (ringing, connecting, or
+ * active). Default is 1. Increase to enable parallel multi-call."*
+ *
+ * Padrao 3 (pedido do dono); `ZAPO_MAX_CALLS` ajusta. Nunca abaixo de 1 --
+ * zero travaria toda call.
+ */
+function maxCalls() {
+  const n = Number.parseInt(process.env.ZAPO_MAX_CALLS || '3', 10);
+  return Number.isFinite(n) && n > 0 ? n : 3;
+}
+
+/**
  * O RED do MLow esta ligado?
  *
  * "each packet carries the low-rate copy of the previous frame... and DTX is
@@ -287,6 +301,11 @@ export async function obterCliente() {
               // Com o padrao ('required') o pacote usa UDP cru SO onde o relay
               // exige (sem credencial ICE) e WebRTC no resto.
               logLevel: process.env.ZAPO_LOG_LEVEL || 'warn',
+
+              // Chamadas simultaneas (ringing/connecting/active). O padrao do
+              // pacote e' 1 -- era o que dava
+              // "max concurrent calls reached (1)".
+              maxConcurrentCalls: maxCalls(),
 
               // ---- Qualidade de audio -------------------------------------
               // RED: cada pacote leva a copia de baixa taxa do frame anterior,

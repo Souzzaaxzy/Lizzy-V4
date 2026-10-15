@@ -129,10 +129,10 @@ function makeNazu({ sent, groupJid, participants }) {
   };
 }
 
-async function run({ groupJid, sender, text, participants, sent = [] }) {
+async function run({ groupJid, sender, text, participants, sent = [], fromMe = true }) {
   const nazu = makeNazu({ sent, groupJid, participants });
   const info = {
-    key: { remoteJid: groupJid, fromMe: false, id: `M-${Math.random().toString(36).slice(2, 10)}`, participant: sender.lid },
+    key: { remoteJid: groupJid, fromMe, id: `M-${Math.random().toString(36).slice(2, 10)}`, participant: sender.lid },
     message: { extendedTextMessage: { text, contextInfo: { remoteJid: groupJid, mentionedJid: [] } } },
     messageTimestamp: Math.floor(Date.now() / 1000),
     pushName: sender.name
@@ -200,14 +200,24 @@ await test('!vozp só em grupo', async () => {
   includes(out.text, 'grupo', 'avisa que é só em grupo');
 });
 
-await test('!vozp só para admins', async () => {
+await test('!vozp é EXCLUSIVO DO DONO (admin comum é recusado)', async () => {
   const { groupJid, participants } = setup(2);
   const membro = makePerson();
   participants.push({ lid: membro.lid, jid: membro.jid, isAdmin: false });
   const chamadas = instalarDubleMidia();
-  const out = await run({ groupJid, sender: membro, text: '!vozp', participants });
-  includes(out.text, 'adm', 'avisa que precisa ser adm');
-  ok(chamadas.length === 0, 'membro comum não inicia');
+  const out = await run({ groupJid, sender: membro, text: '!vozp', participants, fromMe: false });
+  includes(out.text, 'Apenas o Dono', 'recusa quem não é dono');
+  ok(chamadas.length === 0, 'não inicia');
+});
+
+await test('!vozp recusa ADMIN do grupo também', async () => {
+  const { groupJid, participants } = setup(2);
+  const adm = makePerson();
+  participants.push({ lid: adm.lid, jid: adm.jid, isAdmin: true });
+  const chamadas = instalarDubleMidia();
+  const out = await run({ groupJid, sender: adm, text: '!vozp', participants, fromMe: false });
+  includes(out.text, 'Apenas o Dono', 'admin do grupo também é recusado');
+  ok(chamadas.length === 0, 'não inicia');
 });
 
 await test('!vozp em grupo pequeno: recusa com a regra', async () => {
@@ -324,16 +334,22 @@ await test('falha do motor não derruba o handler', async () => {
 // 6) MENU
 // ============================================================================
 
-await test('!vozp está no menuadm, junto do !callp', async () => {
-  const menu = await import(new URL('../dados/src/menus/menuadm.js', import.meta.url).href);
-  const t = await menu.default('!', 'Lizzy', 'Teste');
-  ok(t.includes('!vozp'), 'menuadm mostra !vozp');
-  const i = t.indexOf('!callp');
-  const j = t.indexOf('!vozp');
-  ok(i > -1 && j === i + '!callp\n│ 🎙️ '.length, 'vem logo depois do !callp');
+await test('!vozp está no MENU DO DONO (virou dono-only)', async () => {
+  // Os 3 comandos de call saíram do menuadm e foram para o menudono: o menuadm
+  // não pode anunciar um comando que um admin não consegue usar.
+  const menuD = await import(new URL('../dados/src/menus/menudono.js', import.meta.url).href);
+  const td = await menuD.default('!', 'Lizzy', 'Teste');
+  ok(td.includes('!vozp'), 'menudono mostra !vozp');
+  ok(td.includes('!callp'), 'menudono mostra !callp');
+  ok(td.includes('!musicap'), 'menudono mostra !musicap');
+
+  const menuA = await import(new URL('../dados/src/menus/menuadm.js', import.meta.url).href);
+  const ta = await menuA.default('!', 'Lizzy', 'Teste');
+  ok(!ta.includes('!vozp'), 'menuadm NÃO mostra mais !vozp');
+  ok(!ta.includes('!callp'), 'menuadm NÃO mostra mais !callp');
 });
 
-await test('menuCommandsMap registra callp e vozp no menu Admin', () => {
+await test('menuCommandsMap registra os 3 no menu do Dono', () => {
   const bp = fs.readFileSync(path.join(HERE, '..', 'dados/src/utils/blockPv.js'), 'utf-8');
   ok(bp.includes("'vozp'"), 'blockPv registra vozp');
   ok(bp.includes("'callp'"), 'blockPv registra callp');

@@ -131,10 +131,10 @@ function makeNazu({ sent, groupJid, participants }) {
   };
 }
 
-async function run({ groupJid, sender, text, participants, sent = [] }) {
+async function run({ groupJid, sender, text, participants, sent = [], fromMe = true }) {
   const nazu = makeNazu({ sent, groupJid, participants });
   const info = {
-    key: { remoteJid: groupJid, fromMe: false, id: `M-${Math.random().toString(36).slice(2, 10)}`, participant: sender.lid },
+    key: { remoteJid: groupJid, fromMe, id: `M-${Math.random().toString(36).slice(2, 10)}`, participant: sender.lid },
     message: { extendedTextMessage: { text, contextInfo: { remoteJid: groupJid, mentionedJid: [] } } },
     messageTimestamp: Math.floor(Date.now() / 1000),
     pushName: sender.name
@@ -185,14 +185,25 @@ await test('!callp só em grupo', async () => {
   void out;
 });
 
-await test('!callp só para admins', async () => {
+await test('!callp é EXCLUSIVO DO DONO (admin comum é recusado)', async () => {
   const { groupJid, participants } = setup(2);
   const membro = makePerson();
   participants.push({ lid: membro.lid, jid: membro.jid, isAdmin: false });
   const chamadas = instalarDubleMidia();
-  const out = await run({ groupJid, sender: membro, text: '!callp', participants });
-  includes(out.text, 'adm', 'avisa que precisa ser adm');
-  ok(chamadas.length === 0, 'membro comum não sobe chamada');
+  const out = await run({ groupJid, sender: membro, text: '!callp', participants, fromMe: false });
+  includes(out.text, 'Apenas o Dono', 'recusa quem não é dono');
+  ok(chamadas.length === 0, 'não sobe chamada');
+});
+
+await test('!callp recusa ADMIN do grupo também (não é só admin-only)', async () => {
+  const { groupJid, participants } = setup(2);
+  const adm = makePerson();
+  // Admin do grupo, mas NÃO é o dono do bot.
+  participants.push({ lid: adm.lid, jid: adm.jid, isAdmin: true });
+  const chamadas = instalarDubleMidia();
+  const out = await run({ groupJid, sender: adm, text: '!callp', participants, fromMe: false });
+  includes(out.text, 'Apenas o Dono', 'admin do grupo também é recusado');
+  ok(chamadas.length === 0, 'não sobe chamada');
 });
 
 await test('grupo pequeno (só o bot + quem pediu): recusa', async () => {

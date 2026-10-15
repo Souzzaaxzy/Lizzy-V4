@@ -286,7 +286,10 @@ const COMANDOS_POR_MENU = {
   // -> 181 (`syncaction`) -> 180 (syncaction REMOVIDO, set/2026).
   // menudono: 165 -> 171 (`divcanal` add/rem/list/msg/send/status)
   // -> 173 (`divcanal name`, `divcanal foto`) -> 174 (`divcanal time`).
-  menuadm: 180, menudono: 174,
+  // menuadm -2 (callp/vozp sairam: viraram dono-only)
+  // menudono +6 (categoria CHAMADAS: callp, callp encerrar, callp parear, vozp,
+  //               musicap, musicap parar)
+  menuadm: 178, menudono: 180,
   // menubn: 349 -> 350 (`!ppp` entrou na 1a categoria)
   // -> 358 (`!hetero`, `!hetera`, `!aura`, `!sigma`, `!ceu`, `!inferno`,
   // `!frio`, `!fria` entraram na categoria BRINCADEIRAS)

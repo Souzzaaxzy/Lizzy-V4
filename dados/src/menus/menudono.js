@@ -25,6 +25,16 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
+╭━━━꧁༺ ㅤ📞 ${boldItalic('CHAMADAS')} 📞ㅤ ༻꧂━━━╯
+│ 📞 ${prefix}callp
+│ 📞 ${prefix}callp encerrar
+│ 🔑 ${prefix}callp parear <numero>
+│ 🎙️ ${prefix}vozp
+│ 🎵 ${prefix}musicap
+│ ⏹️ ${prefix}musicap parar
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
+
+
 ╭━━━꧁༺ ㅤ🌌 ${boldItalic('REAÇÕES POR NOME')} 🌌ㅤ ༻꧂━━━╮
 │ 😀 ${prefix}reacao
 │ ➕ ${prefix}reacao add

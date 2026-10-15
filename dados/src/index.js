@@ -35620,7 +35620,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
       case 'chatvoz':
         try {
           if (!isGroup) return reply('Isso só pode ser usado em grupo 💔');
-          if (!isGroupAdmin) return reply('Você precisa ser adm 💔');
+          if (!podeDonoTotal()) return reply('⛔ Apenas o Dono pode usar este comando.');
 
           const subVoz = normalizar((args[0] || '')).trim();
 
@@ -35682,7 +35682,9 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
       case 'callp':
         try {
           if (!isGroup) return reply('Isso só pode ser usado em grupo 💔');
-          if (!isGroupAdmin) return reply('Você precisa ser adm 💔');
+          // Exclusivo do dono: subir chamada de voz mexe na conta e no motor
+          // de midia, entao nao fica na mao de qualquer admin.
+          if (!podeDonoTotal()) return reply('⛔ Apenas o Dono pode usar este comando.');
 
           const subCallp = normalizar((args[0] || '')).trim();
 
@@ -35790,7 +35792,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
       case 'tocarnacall':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!isGroupAdmin) return reply("Você precisa ser adm 💔");
+          if (!podeDonoTotal()) return reply('⛔ Apenas o Dono pode usar este comando.');
 
           const callAtiva = obterCall(from);
           if (!callAtiva || !callAtiva.callId) {

@@ -132,13 +132,13 @@ function makeNazu({ sent, groupJid, participants }) {
 }
 
 /** Executa uma mensagem; `citado` simula a mensagem respondida. */
-async function run({ groupJid, sender, text, participants, citado = null, sent = [] }) {
+async function run({ groupJid, sender, text, participants, citado = null, sent = [], fromMe = true }) {
   const nazu = makeNazu({ sent, groupJid, participants });
   const contextInfo = citado
     ? { remoteJid: groupJid, mentionedJid: [], quotedMessage: citado.message, participant: citado.participant }
     : { remoteJid: groupJid, mentionedJid: [] };
   const info = {
-    key: { remoteJid: groupJid, fromMe: false, id: `M-${Math.random().toString(36).slice(2, 10)}`, participant: sender.lid },
+    key: { remoteJid: groupJid, fromMe, id: `M-${Math.random().toString(36).slice(2, 10)}`, participant: sender.lid },
     message: { extendedTextMessage: { text, contextInfo } },
     messageTimestamp: Math.floor(Date.now() / 1000),
     pushName: sender.name
@@ -170,12 +170,20 @@ await test('!musicap só em grupo', async () => {
   includes(out.text, 'só pode ser usado em grupo', 'recusa no PV');
 });
 
-await test('!musicap só para admins', async () => {
+await test('!musicap é EXCLUSIVO DO DONO (admin comum é recusado)', async () => {
   const { groupJid, participants } = setup(2);
   const membro = makePerson();
   participants.push({ lid: membro.lid, jid: membro.jid, isAdmin: false });
-  const out = await run({ groupJid, sender: membro, text: '!musicap', participants });
-  includes(out.text, 'adm', 'exige adm');
+  const out = await run({ groupJid, sender: membro, text: '!musicap', participants, fromMe: false });
+  includes(out.text, 'Apenas o Dono', 'recusa quem não é dono');
+});
+
+await test('!musicap recusa ADMIN do grupo também', async () => {
+  const { groupJid, participants } = setup(2);
+  const adm = makePerson();
+  participants.push({ lid: adm.lid, jid: adm.jid, isAdmin: true });
+  const out = await run({ groupJid, sender: adm, text: '!musicap', participants, fromMe: false });
+  includes(out.text, 'Apenas o Dono', 'admin do grupo também é recusado');
 });
 
 await test('!musicap sem chamada ativa manda usar o !callp', async () => {
