@@ -203,6 +203,30 @@ await test('o fim da call libera o registro do grupo', () => {
   includes(bloco, "estagios.set(grupo, 'parado')", 'marca o estagio como parado');
 });
 
+console.log('\n=== 5) AUDIO (o abafado) ===\n');
+
+await test('o RED esta ligado (reduz corte)', () => {
+  // Doc: "each packet carries the low-rate copy of the previous frame... and
+  // DTX is off". Medido contra o WA Web: 3,1% de concealment sob ~18% de perda.
+  includes(SRC, 'mlowRed: usarMlowRed()', 'o RED e aplicado');
+  includes(SRC, 'function usarMlowRed', 'com controle por env');
+  includes(SRC, "process.env.ZAPO_MLOW_RED !== '0'", 'ZAPO_MLOW_RED=0 desliga');
+});
+
+await test('o pos-filtro neural so vai se o arquivo EXISTIR', () => {
+  // A doc: "no package ships them" -- o blob e' da WhatsApp. Passar o caminho
+  // de um arquivo inexistente faria o codec tentar carregar e falhar.
+  includes(SRC, 'function caminhoCompanion', 'existe o helper');
+  includes(SRC, 'fs.existsSync(caminho)', 'checa se o arquivo existe');
+  includes(SRC, '...(caminhoCompanion() ? { mlowCompanionModel', 'so passa quando existe');
+});
+
+await test('o log diz o que ficou ligado (nao deixa na suposicao)', () => {
+  includes(SRC, 'audio: RED', 'loga o estado do RED');
+  includes(SRC, 'pos-filtro neural', 'loga o estado do pos-filtro');
+  includes(SRC, 'INDISPONIVEL', 'e admite quando falta o arquivo');
+});
+
 const totalOk = RESULTS.reduce((a, r) => a + r.passed, 0);
 const totalFail = RESULTS.reduce((a, r) => a + r.failed, 0);
 console.log('\n' + '='.repeat(40));

@@ -129,6 +129,36 @@ export function motivoZapo() {
 }
 
 /**
+ * O RED do MLow esta ligado?
+ *
+ * "each packet carries the low-rate copy of the previous frame... and DTX is
+ * off". Reduz o CORTE (concealment 3,1% sob ~18% de perda, medido contra o
+ * WA Web). Nao melhora o timbre. Ligado por padrao; `ZAPO_MLOW_RED=0` desliga.
+ */
+function usarMlowRed() {
+  return process.env.ZAPO_MLOW_RED !== '0';
+}
+
+/**
+ * Caminho do modelo do MLow Companion (o pos-filtro neural do decoder).
+ *
+ * E' o que melhora o TIMBRE -- o "abafado". A doc avisa que nenhum pacote traz
+ * o blob (`mlow_companion_v1.pte`), entao so passamos a opcao se o arquivo
+ * existir. Sem ele a call decodifica sem o filtro, sem quebrar.
+ *
+ * @returns {string|null}
+ */
+function caminhoCompanion() {
+  const caminho = process.env.ZAPO_MLOW_COMPANION
+    || path.join(DATABASE_DIR, 'zapo-models', 'mlow_companion_v1.pte');
+  try {
+    return fs.existsSync(caminho) ? caminho : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Espera a conexao ABRIR.
  *
  * O `connect()` resolve quando o client esta pronto, mas o evento
@@ -256,7 +286,17 @@ export async function obterCliente() {
               //
               // Com o padrao ('required') o pacote usa UDP cru SO onde o relay
               // exige (sem credencial ICE) e WebRTC no resto.
-              logLevel: process.env.ZAPO_LOG_LEVEL || 'warn'
+              logLevel: process.env.ZAPO_LOG_LEVEL || 'warn',
+
+              // ---- Qualidade de audio -------------------------------------
+              // RED: cada pacote leva a copia de baixa taxa do frame anterior,
+              // entao um pacote perdido nao vira silencio. Reduz o CORTE.
+              // Custo: desliga o DTX (o RED exige).
+              mlowRed: usarMlowRed(),
+
+              // Pos-filtro neural do decoder (melhora o TIMBRE). So vai se o
+              // arquivo de pesos existir -- nenhum pacote traz esse blob.
+              ...(caminhoCompanion() ? { mlowCompanionModel: caminhoCompanion() } : {})
             })
           ]
         },
@@ -273,6 +313,15 @@ export async function obterCliente() {
       client.on('auth_paired', ({ credentials }) => {
         console.log('[ZAPOCALL] PAREADO como', credentials?.meJid || credentials?.meLid);
       });
+      // Uma linha dizendo o que ficou LIGADO (para nao depender de suposicao).
+      {
+        const companion = caminhoCompanion();
+        console.log(
+          `[ZAPOCALL] audio: RED ${usarMlowRed() ? 'ligado' : 'desligado'}` +
+          ` | pos-filtro neural ${companion ? `ligado (${companion})` : 'INDISPONIVEL (sem o arquivo de pesos)'}`
+        );
+      }
+
       // ---- Diagnostico da call -------------------------------------------
       // Os eventos abaixo sao os que dizem ONDE a midia esta. Sem eles, um
       // problema de relay aparece so como "a call morreu".
