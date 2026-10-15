@@ -35656,6 +35656,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               grupo_pequeno: 'O chat de voz precisa de pelo menos 2 outros membros.',
               pacote_de_midia_ausente: 'A mídia não está instalada neste servidor (falta o pacote `lizzy-call`).',
               nao_pareado: 'O motor de mídia ainda não foi pareado. Use `!callp parear <numero>`.',
+              sem_conexao: 'A conexão do motor de mídia não abriu. Tente de novo em alguns segundos.',
               ja_na_call: 'Já existe uma chamada de mídia neste grupo.',
               falha_ao_entrar: 'O motor de mídia não subiu.'
             };
@@ -35755,6 +35756,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               grupo_pequeno: 'A chamada de grupo precisa de pelo menos 2 outros membros.',
               pacote_de_midia_ausente: 'A mídia não está instalada neste servidor (falta o pacote `lizzy-call`).',
               nao_pareado: 'O motor de mídia ainda não foi pareado. Use `!callp parear <numero>`.',
+              sem_conexao: 'A conexão do motor de mídia não abriu. Tente de novo em alguns segundos.',
               ja_na_call: 'Já existe uma chamada de mídia neste grupo.',
               falha_ao_entrar: 'O motor de mídia não subiu.'
             };

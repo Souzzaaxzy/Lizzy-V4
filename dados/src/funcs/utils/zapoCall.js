@@ -53,6 +53,12 @@ let store = null;
 let conectando = null;
 /** Codigo de pareamento pedido nesta sessao (para o comando mostrar). */
 let codigoPendente = null;
+/** A conexao esta ABERTA agora? (`connection: {status:'open'}`) */
+let conectado = false;
+/** Promessa que resolve quando a conexao abre (evita esperar em vao). */
+let esperandoAbertura = null;
+/** Timer de reconexao (o zapo nao reconecta sozinho). */
+let timerReconexao = null;
 
 /** Diretorio onde as credenciais do zapo sao gravadas. */
 const AUTH_DIR = path.join(DATABASE_DIR, 'zapo-auth');
@@ -123,10 +129,75 @@ export function motivoZapo() {
 }
 
 /**
+ * Espera a conexao ABRIR.
+ *
+ * O `connect()` resolve quando o client esta pronto, mas o evento
+ * `connection: {status:'open'}` e' o sinal de que da' para enviar stanza --
+ * e o zapo pode cair DEPOIS do connect. Por isso esperamos o evento.
+ *
+ * @param {number} [timeoutMs]
+ * @returns {Promise<boolean>} true se abriu
+ */
+function aguardarConexao(timeoutMs = 30000) {
+  if (conectado) return Promise.resolve(true);
+  if (!client) return Promise.resolve(false);
+  if (esperandoAbertura) return esperandoAbertura;
+
+  esperandoAbertura = new Promise((resolve) => {
+    let resolvido = false;
+    const terminar = (ok) => {
+      if (resolvido) return;
+      resolvido = true;
+      clearTimeout(timer);
+      esperandoAbertura = null;
+      resolve(ok);
+    };
+    const timer = setTimeout(() => terminar(conectado), timeoutMs);
+    client.once('connection', (ev) => {
+      if (ev?.status === 'open') terminar(true);
+      else if (ev?.status === 'close') terminar(false);
+    });
+  });
+
+  return esperandoAbertura;
+}
+
+/**
+ * Agenda uma reconexao com backoff.
+ *
+ * O zapo NAO reconecta sozinho (a doc e' explicita). Sem isto, uma queda de
+ * rede deixaria a call muda ate' o bot reiniciar.
+ */
+function agendarReconexao() {
+  if (timerReconexao) return;
+  timerReconexao = setTimeout(async () => {
+    timerReconexao = null;
+    if (conectado || !client) return;
+    console.log('[ZAPOCALL] reconectando...');
+    try {
+      await client.connect();
+      await aguardarConexao(30000);
+    } catch (e) {
+      console.warn('[ZAPOCALL] reconexao falhou:', e?.message || e);
+      agendarReconexao();
+    }
+  }, 5000);
+  // Nao segura o processo do bot por causa deste timer.
+  if (typeof timerReconexao.unref === 'function') timerReconexao.unref();
+}
+
+/**
  * O `WaClient` conectado, criado na primeira necessidade.
  *
  * O store e' de ARQUIVO: as credenciais vao para `dados/database/zapo-auth/` e
  * sobrevivem ao reinicio. Foi essa a correcao do "pareia e perde".
+ *
+ * QUANDO JA ESTA PAREADO, espera a conexao ABRIR antes de devolver. Sem isso o
+ * `startCall` saia numa conexao fechada e a call ficava em "conectando" para
+ * sempre (era o bug: `void client.connect()` seguido de `return client`).
+ *
+ * SEM pareamento nao espera: o `connect()` fica pendente de proposito enquanto
+ * o usuario digita o codigo, e o comando precisa responder na hora.
  */
 export async function obterCliente() {
   const m = await carregarZapo();
@@ -198,11 +269,40 @@ export async function obterCliente() {
         console.warn('[ZAPOCALL] erro na call:', err?.message || err);
       });
 
-      // `connect()` so resolve DEPOIS do pareamento; nao se espera por ele aqui
-      // (senao o comando penduraria). Quem espera e' o `parear()`.
-      void client.connect().catch((e) => {
-        console.warn('[ZAPOCALL] connect:', e?.message || e);
+      // Estado da conexao: e' o sinal que o `startCall` precisa.
+      client.on('connection', (ev) => {
+        if (ev?.status === 'open') {
+          conectado = true;
+          console.log('[ZAPOCALL] conexao ABERTA');
+        } else if (ev?.status === 'close') {
+          conectado = false;
+          console.warn(`[ZAPOCALL] conexao FECHOU (${ev?.reason || 'motivo desconhecido'})`);
+          // Deslogado (aparelho removido) nao se reconecta: precisa parear.
+          if (ev?.isLogout) {
+            console.warn('[ZAPOCALL] dispositivo desvinculado -- pareie de novo com !callp parear');
+            return;
+          }
+          agendarReconexao();
+        }
       });
+
+      // O `connect()` resolve quando o client esta pronto. Com pareamento ja
+      // feito, ESPERAMOS -- e' o que impede o offer de sair numa conexao
+      // fechada. Sem pareamento, nao esperamos (o promise fica pendente).
+      const jaPareado = estaPareado();
+      if (jaPareado) {
+        await client.connect().catch((e) => {
+          console.warn('[ZAPOCALL] connect:', e?.message || e);
+        });
+        const abriu = await aguardarConexao(30000);
+        if (!abriu) {
+          console.warn('[ZAPOCALL] conexao nao abriu em 30s');
+        }
+      } else {
+        void client.connect().catch((e) => {
+          console.warn('[ZAPOCALL] connect:', e?.message || e);
+        });
+      }
 
       return client;
     } catch (e) {
@@ -240,6 +340,8 @@ export async function parear(numero) {
   }
 
   try {
+    // O codigo so pode ser pedido quando o client esta pronto para parear.
+    await cli.connect?.().catch(() => {});
     const codigo = await cli.auth.requestPairingCode(limpo);
     codigoPendente = codigo;
     return { ok: true, codigo };
@@ -283,6 +385,15 @@ export async function entrarNaCallComMidia({ grupo, callId, callCreator, partici
   const cli = await obterCliente();
   if (!cli?.voip) {
     return { ok: false, motivo: 'pacote_de_midia_ausente', detalhe: loadError };
+  }
+
+  // CONFIRMA a conexao aberta antes de mandar o offer. Sem isto o startCall
+  // saia numa conexao fechada e a call ficava em "conectando" para sempre.
+  if (!conectado) {
+    const abriu = await aguardarConexao(20000);
+    if (!abriu) {
+      return { ok: false, motivo: 'sem_conexao' };
+    }
   }
 
   try {
@@ -411,6 +522,12 @@ export function resetarMidia() {
   } catch { /* nada a fazer */ }
   callsPorGrupo.clear();
   estagios.clear();
+  conectado = false;
+  esperandoAbertura = null;
+  if (timerReconexao) {
+    clearTimeout(timerReconexao);
+    timerReconexao = null;
+  }
   client = null;
   store = null;
   mod = null;
@@ -427,4 +544,9 @@ export function callIdDoGrupo(grupo) {
 /** Diretorio das credenciais (para log/diagnostico). */
 export function diretorioAuth() {
   return AUTH_DIR;
+}
+
+/** A conexao esta aberta agora? (diagnostico) */
+export function conexaoAberta() {
+  return conectado;
 }
