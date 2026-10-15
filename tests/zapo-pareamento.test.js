@@ -341,6 +341,28 @@ await test('os stores reais voltam com Map/Set funcionais apos reinicio', async 
     'os tres preservaram conteudo');
 });
 
+await test('CONSERTA estado ja corrompido (Map virou {} na versao antiga)', async () => {
+  // Reproduz o que a versao anterior gravou: Map -> {} no JSON.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'corromp-'));
+  fs.writeFileSync(path.join(dir, 'senderKey.json'), JSON.stringify({ senderKeys: {}, senderDistributions: {} }));
+  fs.writeFileSync(path.join(dir, 'session.json'), JSON.stringify({ signalSessions: {} }));
+  fs.writeFileSync(path.join(dir, 'preKey.json'), JSON.stringify({ preKeys: {}, uploadedPreKeys: {} }));
+
+  const b = await zapoStore.criarStoreArquivoDoPacote(dir);
+  const sk = b.stores.senderKey('s');
+  const sess = b.stores.session('s');
+  const pk = b.stores.preKey('s');
+
+  // O construtor declara o tipo esperado; a restauracao coage por ele.
+  ok(sk.senderKeys instanceof Map && typeof sk.senderKeys.get === 'function',
+    'senderKeys consertado (era o erro do log)');
+  ok(sess.signalSessions instanceof Map && typeof sess.signalSessions.get === 'function',
+    'signalSessions consertado');
+  ok(pk.preKeys instanceof Map && typeof pk.preKeys.keys === 'function',
+    'preKeys consertado');
+  ok(pk.uploadedPreKeys instanceof Set, 'uploadedPreKeys consertado como Set');
+});
+
 const totalOk = RESULTS.reduce((a, r) => a + r.passed, 0);
 const totalFail = RESULTS.reduce((a, r) => a + r.failed, 0);
 console.log('\n' + '='.repeat(40));

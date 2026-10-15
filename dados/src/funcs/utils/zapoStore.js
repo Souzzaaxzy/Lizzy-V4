@@ -9,32 +9,28 @@
  *
  * ## Por que NAO reimplementamos os contratos
  *
- * Cada dominio tem um contrato especifico -- `signal` tem
- * `getRegistrationInfo`/`setSignedPreKey`, `pre-key` tem
- * `getOrGenPreKeys`/`consumePreKeyById`, e assim por diante. Reimplementar a
- * mao quebrou o motor em `store.setRegistrationInfo is not a function`.
+ * Cada dominio tem um contrato especifico (`signal` tem
+ * `getRegistrationInfo`/`setSignedPreKey`; `pre-key` tem
+ * `getOrGenPreKeys`/`consumePreKeyById`...). Reimplementar a mao quebrou o
+ * motor em `store.setRegistrationInfo is not a function`.
  *
  * Aqui as implementacoes do PROPRIO pacote fazem o trabalho, e nos apenas
  * persistimos o estado delas.
  *
- * ## Os tipos que o JSON NAO preserva (a parte que custou duas rodadas)
+ * ## O tipo do campo vem do CONSTRUTOR (e isso conserta estado corrompido)
  *
- * As classes guardam o estado em `Map`/`Set`:
+ * As classes guardam o estado em `Map`/`Set`, e `JSON.stringify(new Map())`
+ * produz `{}`. Um `{}` restaurado vira objeto comum e o motor morre em
+ * `this.senderKeys.get is not a function`.
  *
- *     senderKeys / senderDistributions / signalSessions / preKeys /
- *     remoteIdentities / collections / keys / records  -> Map
- *     uploadedPreKeys                                  -> Set
+ * Marcar o tipo no JSON (`{__map: [...]}`) resolve o que NOS gravamos -- mas
+ * NAO conserta o que uma versao anterior ja gravou como `{}`. Por isso a
+ * restauracao compara com o valor que o CONSTRUTOR criou:
  *
- * `JSON.stringify(new Map())` produz `{}` -- o campo volta como objeto comum e
- * o motor morre em `this.senderKeys.get is not a function`. Por isso os tres
- * tipos que o JSON nao representa sao MARCADOS e reconstruidos:
+ *     new SenderKeyMemoryStore() -> { senderKeys: Map, ... }
  *
- *     Uint8Array -> { __b64: "..." }
- *     Map        -> { __map: [[chave, valor], ...] }
- *     Set        -> { __set: [valor, ...] }
- *
- * Uma chave de Map pode ser `Uint8Array` (o zapo usa isso em `keys`), entao a
- * chave tambem passa pelo conversor.
+ * e coage o valor lido para o tipo esperado. Assim o estado ja corrompido se
+ * conserta sozinho, sem apagar arquivos.
  */
 
 import fs from 'fs';
@@ -62,26 +58,63 @@ function paraJson(valor) {
   return valor;
 }
 
-/** Converte de JSON: base64 -> Uint8Array, lista -> Map, lista -> Set. */
-function paraBinario(valor) {
+/**
+ * Converte de JSON, COAGINDO para o tipo que o campo deve ter.
+ *
+ * @param {*} valor o que veio do disco
+ * @param {*} esperado o que o construtor criou (Map/Set/Uint8Array/...)
+ */
+function paraBinario(valor, esperado) {
   if (valor === null || valor === undefined) return valor;
 
-  if (typeof valor === 'object' && !Array.isArray(valor)) {
-    if (typeof valor.__b64 === 'string') {
+  // O tipo esperado manda: e' o que conserta o estado ja corrompido.
+  if (esperado instanceof Map) {
+    // Formato novo: { __map: [[k, v], ...] }. Formato antigo (corrompido):
+    // objeto comum -- a chave vira string e o valor e' o proprio valor.
+    if (valor && typeof valor === 'object' && Array.isArray(valor.__map)) {
+      return new Map(valor.__map.map(([k, v]) => [paraBinario(k, undefined), paraBinario(v, undefined)]));
+    }
+    if (valor && typeof valor === 'object' && !Array.isArray(valor)) {
+      const saida = new Map();
+      for (const [k, v] of Object.entries(valor)) saida.set(k, paraBinario(v, undefined));
+      return saida;
+    }
+    return new Map();
+  }
+
+  if (esperado instanceof Set) {
+    if (valor && typeof valor === 'object' && Array.isArray(valor.__set)) {
+      return new Set(valor.__set.map((x) => paraBinario(x, undefined)));
+    }
+    if (Array.isArray(valor)) return new Set(valor.map((x) => paraBinario(x, undefined)));
+    if (valor && typeof valor === 'object') {
+      return new Set(Object.values(valor).map((x) => paraBinario(x, undefined)));
+    }
+    return new Set();
+  }
+
+  if (esperado instanceof Uint8Array) {
+    if (valor && typeof valor === 'object' && typeof valor.__b64 === 'string') {
       return new Uint8Array(Buffer.from(valor.__b64, 'base64'));
     }
+    if (valor instanceof Uint8Array) return valor;
+    if (Array.isArray(valor)) return new Uint8Array(valor);
+    return valor;
+  }
+
+  // Sem tipo esperado: usa os marcadores, se houver.
+  if (typeof valor === 'object' && !Array.isArray(valor)) {
+    if (typeof valor.__b64 === 'string') return new Uint8Array(Buffer.from(valor.__b64, 'base64'));
     if (Array.isArray(valor.__map)) {
-      return new Map(valor.__map.map(([k, v]) => [paraBinario(k), paraBinario(v)]));
+      return new Map(valor.__map.map(([k, v]) => [paraBinario(k, undefined), paraBinario(v, undefined)]));
     }
-    if (Array.isArray(valor.__set)) {
-      return new Set(valor.__set.map(paraBinario));
-    }
+    if (Array.isArray(valor.__set)) return new Set(valor.__set.map((x) => paraBinario(x, undefined)));
     const saida = {};
-    for (const [k, v] of Object.entries(valor)) saida[k] = paraBinario(v);
+    for (const [k, v] of Object.entries(valor)) saida[k] = paraBinario(v, undefined);
     return saida;
   }
 
-  if (Array.isArray(valor)) return valor.map(paraBinario);
+  if (Array.isArray(valor)) return valor.map((x) => paraBinario(x, undefined));
   return valor;
 }
 
@@ -103,9 +136,7 @@ function escreverJson(caminho, dados) {
   fs.renameSync(tmp, caminho);
 }
 
-/**
- * Campos internos que NAO sao estado (callbacks e limites de configuracao).
- */
+/** Campos internos que NAO sao estado (callbacks e limites). */
 const NAO_PERSISTIR = new Set([
   'onEvict', 'onDistributionEvict', 'onSenderKeyEvict',
   'maxSessions', 'maxPreKeys', 'maxRemoteIdentities',
@@ -113,7 +144,7 @@ const NAO_PERSISTIR = new Set([
   'maxCollectionEntries', 'maxSyncKeys', 'maxEntries'
 ]);
 
-/** Extrai so o estado serializavel da instancia. */
+/** Extrai so o estado serializavel. */
 function estadoDe(instancia) {
   const saida = {};
   for (const [k, v] of Object.entries(instancia)) {
@@ -124,16 +155,21 @@ function estadoDe(instancia) {
   return saida;
 }
 
-/** Devolve o estado do disco para dentro da instancia. */
+/**
+ * Devolve o estado do disco para dentro da instancia, COAGINDO pelo tipo que
+ * o construtor criou para cada campo.
+ *
+ * E' isto que conserta um `senderKeys: {}` gravado por uma versao anterior.
+ */
 function restaurarEm(instancia, dados) {
   if (!dados || typeof dados !== 'object') return;
   for (const [k, v] of Object.entries(dados)) {
     if (NAO_PERSISTIR.has(k)) continue;
-    instancia[k] = paraBinario(v);
+    const esperado = instancia[k];
+    instancia[k] = paraBinario(v, esperado);
   }
 }
 
-/** Nome do arquivo por dominio. */
 const ARQUIVO = {
   auth: 'auth.json',
   signal: 'signal.json',
@@ -147,10 +183,6 @@ const ARQUIVO = {
 
 /**
  * Cria um backend de ARQUIVO no formato que o `createStore` do zapo espera.
- *
- * @param {object} classes as classes de memory store do pacote
- * @param {string} baseDir diretorio onde gravar
- * @param {Function} [log]
  */
 export function criarStoreArquivo(classes, baseDir, log = () => {}) {
   const {
@@ -166,14 +198,6 @@ export function criarStoreArquivo(classes, baseDir, log = () => {}) {
 
   const caminhoDe = (dominio) => path.join(baseDir, ARQUIVO[dominio] || `${dominio}.json`);
 
-  /**
-   * Instancia a classe do dominio, restaura o estado do disco e embrulha os
-   * metodos que MUTAM para salvar.
-   *
-   * A lista de metodos que mutam vem do PROPRIO contrato (prefixos
-   * set/put/upsert/delete/mark/consume/clear/save/getOrGen), sem lista paralela
-   * para envelhecer.
-   */
   const criar = (dominio, Classe) => (sessionId) => {
     const inst = new Classe();
     restaurarEm(inst, lerJson(caminhoDe(dominio), null));
@@ -221,5 +245,5 @@ export async function criarStoreArquivoDoPacote(baseDir, log = () => {}) {
   return criarStoreArquivo(mod, baseDir, log);
 }
 
-/** Exportados para teste (o round-trip dos tipos e' o ponto critico). */
-export const __teste = { paraJson, paraBinario };
+/** Exportados para teste. */
+export const __teste = { paraJson, paraBinario, estadoDe, restaurarEm };
