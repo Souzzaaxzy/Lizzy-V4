@@ -918,18 +918,54 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@zapo-js/voip-media@npm:^0.3.0":
+  version: 0.3.0
+  resolution: "@zapo-js/voip-media@npm:0.3.0"
+  peerDependencies:
+    "@roamhq/wrtc": ">=0.10.0"
+    libmlow-wasm-fork: ^0.2.0
+  peerDependenciesMeta:
+    "@roamhq/wrtc":
+      optional: true
+    libmlow-wasm-fork:
+      optional: true
+  checksum: 10c0/3c02d06d7ffbefaf6ff809642fef57a418f6acdf1e22e3278e9462d6e0bc10162a438a5708285ad8496ca4d57fc45733139712cce8d9039c992f2d29bc7bf125
+  languageName: node
+  linkType: hard
+
+"@zapo-js/voip@npm:^1.4.0":
+  version: 1.4.0
+  resolution: "@zapo-js/voip@npm:1.4.0"
+  dependencies:
+    "@zapo-js/voip-media": "npm:^0.3.0"
+  peerDependencies:
+    "@roamhq/wrtc": ">=0.10.0"
+    libmlow-wasm-fork: ^0.2.0
+    zapo-js: ^1.0.0
+  peerDependenciesMeta:
+    "@roamhq/wrtc":
+      optional: true
+    libmlow-wasm-fork:
+      optional: true
+  checksum: 10c0/4d9f4b341b29c7371d3237b7d031846b8a0c8d94f07d71ba018b35d59b80942469ff5ab764992eafbc45af683fed11c238a954652c2c831071393df254474f16
+  languageName: node
+  linkType: hard
+
 "AbyssBot@workspace:.":
   version: 0.0.0-use.local
   resolution: "AbyssBot@workspace:."
   dependencies:
     "@hapi/boom": "npm:^10.0.1"
     "@itsliaaa/baileys": "git+https://github.com/Souzzaaxzy/baileys.git#a5b94954616733768e88fb86434f9dc33d6f20e6"
+    "@zapo-js/voip": "npm:^1.4.0"
+    "@zapo-js/voip-media": "npm:^0.3.0"
     axios: "npm:^1.13.2"
     cheerio: "npm:^1.2.0"
     dotenv: "npm:^16.4.5"
     fluent-ffmpeg: "npm:^2.1.3"
     form-data: "npm:^4.0.5"
     jimp: "npm:^1.6.1"
+    libmlow-wasm-fork: "npm:^0.2.0"
     libphonenumber-js: "npm:^1.13.9"
     linkedom: "npm:^0.18.12"
     lizzy-call: "git+https://github.com/Souzzaaxzy/lizzy-call.git"
@@ -942,6 +978,7 @@ __metadata:
     qrcode-terminal: "npm:^0.12.0"
     sharp: "npm:^0.35.4"
     yt-search: "npm:^2.13.1"
+    zapo-js: "npm:^1.10.0"
   languageName: unknown
   linkType: soft
 
@@ -1948,6 +1985,13 @@ __metadata:
   dependencies:
     "@keyv/serialize": "npm:^1.1.1"
   checksum: 10c0/c3ea795b6e03593ca57c8f70928a69bad14c13389a7fb75649a115ff55615244b04d8902798d841c17f0bb4a8a8866c97133b543b93f151b440170bba09176db
+  languageName: node
+  linkType: hard
+
+"libmlow-wasm-fork@npm:^0.2.0":
+  version: 0.2.0
+  resolution: "libmlow-wasm-fork@npm:0.2.0"
+  checksum: 10c0/20aa42a0299aa32018dba2a23a22660d1f0e25b3671f0a0b9b04d3e61bda26cd4c5827f652154ae16086d3105f221b2db769f11ddd3f648d5012188a0bcfde35
   languageName: node
   linkType: hard
 
@@ -3011,6 +3055,27 @@ __metadata:
     yt-search-audio: bin/mpv_audio.sh
     yt-search-video: bin/mpv_video.sh
   checksum: 10c0/fb3949ab38e6d627c00482c8022c59a2aa76d230e4e37c7e7e9f5f2b7ac9e15496e648f050394e0c8420e666acf05a397ce2a1606593be2882e3d2ee9e86fbfc
+  languageName: node
+  linkType: hard
+
+"zapo-js@npm:^1.10.0":
+  version: 1.10.0
+  resolution: "zapo-js@npm:1.10.0"
+  peerDependencies:
+    argo-codec: ^0.2.1
+    pino: ^9.0.0
+    pino-pretty: ^13.0.0
+    ws: ^8.20.1
+  peerDependenciesMeta:
+    argo-codec:
+      optional: true
+    pino:
+      optional: true
+    pino-pretty:
+      optional: true
+    ws:
+      optional: true
+  checksum: 10c0/8fd2d04eb31a2014e3e50ebd982926e4c610a1cf3c6e12a47db8744f6f412995fefda5f142d5b40f7af0a07af0dacdc88b1bb0c47ee99dd1757cdee9a3d864c5
   languageName: node
   linkType: hard
 

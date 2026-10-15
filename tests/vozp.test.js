@@ -24,6 +24,9 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 const TMP_DB = fs.mkdtempSync(path.join(os.tmpdir(), 'lizzy-vozp-'));
 process.env.DATABASE_PATH = TMP_DB;
+// Nao abre conexao de verdade do backend de midia (zapo): em teste isso
+// emitiria QR e parearia um dispositivo. O contrato e medido pelos dubles.
+process.env.ZAPO_DISABLE_CONNECT = "1";
 const GRUPOS_DIR = path.join(TMP_DB, 'grupos');
 fs.mkdirSync(GRUPOS_DIR, { recursive: true });
 

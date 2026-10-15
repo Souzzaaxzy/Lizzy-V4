@@ -1,24 +1,28 @@
 /**
- * Ponte para a pilha de MÍDIA da call de grupo (`lizzy-call`).
+ * Ponte para a pilha de MÍDIA da call de grupo.
  *
- * ## Por que existe
+ * ## Dois backends, um contrato
  *
- * O `!callp` sobe a chamada por **sinalização** (a stanza `<call><offer>`): ela
- * passa a existir e aparece no grupo. Isso não carrega som — a mídia de uma call
- * vai por RTP/SRTP sobre UDP até um relay, cifrada com uma chave negociada à
- * parte. Quem implementa essa parte é o motor WASM do próprio WhatsApp Web, e é
- * ele que este módulo carrega.
+ * Este módulo é a fachada que os comandos (`!callp` / `!musicap` / `!vozp`) e os
+ * testes consomem. Atrás dele há DOIS backends de mídia, escolhidos nesta ordem:
  *
- * O carregamento é **preguiçoso e tolerante**: se o pacote não estiver instalado
- * (ou o motor não subir neste servidor), o `!callp` continua funcionando como
- * sinalização e o `!musicap` avisa que a mídia não está disponível. Nada quebra.
+ * 1. **`zapoCall.js`** (`zapo-js` + `@zapo-js/voip`) — **preferido**. É o único
+ *    que ataca o ponto onde a call de GRUPO travava: ele disca o relay por
+ *    **UDP cru na porta anunciada quando não há credencial ICE**, e só usa
+ *    WebRTC quando há. Também implementa SFrame/keying por época, roster
+ *    transacional, heartbeat e `peer_state`.
+ * 2. **`lizzy-call`** (motor WASM do WhatsApp Web) — **reserva**, para o caso de
+ *    os pacotes do zapo não estarem instalados. Continua funcionando como antes.
  *
- * ## Uma sessão por grupo
+ * O contrato é idêntico nos dois, então trocar de backend não muda nenhum
+ * comando nem nenhum teste.
  *
- * A pilha de mídia tem estado por chamada, então há um `GroupCallMedia` por
- * grupo. Ele roda em cima do socket que o bot JÁ tem — nenhum dispositivo extra
- * é vinculado à conta.
+ * O carregamento é **preguiçoso e tolerante**: sem os pacotes, o `!callp` segue
+ * reportando a chamada (só sem áudio) e o `!musicap` avisa que a mídia não está
+ * disponível. Nada quebra.
  */
+
+import * as zapoCall from './zapoCall.js';
 
 let mod = null;
 let loadError = null;
@@ -43,17 +47,36 @@ export function __setDubleEntrar(novo) {
 }
 
 /**
- * Carrega o pacote de mídia uma vez.
+ * Carrega o backend de mídia uma vez.
  *
- * @returns o módulo, ou null quando indisponível (com o motivo em `motivoMidia()`).
+ * O zapo tem prioridade; o `lizzy-call` é a reserva. `mod` recebe um objeto com
+ * a interface usada abaixo, então o resto do arquivo não sabe qual está ativo.
+ *
+ * @returns o backend, ou null quando nenhum está disponível.
  */
 export async function carregarMidia() {
   if (carregado) return mod;
   carregado = true;
+
+  // 1) zapo (preferido) — UDP cru no relay sem ICE é o que destrava o grupo.
   try {
-    mod = await import('lizzy-call/group-media');
+    const zapo = await zapoCall.carregarZapo();
+    if (zapo) {
+      mod = zapoCall;
+      console.log('[CALLP] backend de mídia: zapo (@zapo-js/voip)');
+      return mod;
+    }
   } catch (e) {
     loadError = e?.message || String(e);
+  }
+
+  // 2) lizzy-call (reserva) — motor WASM do WhatsApp Web.
+  try {
+    mod = await import('lizzy-call/group-media');
+    console.log('[CALLP] backend de mídia: lizzy-call (WASM)');
+    return mod;
+  } catch (e) {
+    loadError = loadError || e?.message || String(e);
     console.warn('[CALLP] mídia indisponível:', loadError);
     mod = null;
   }
@@ -67,17 +90,29 @@ export function motivoMidia() {
 
 /**
  * Sessões de mídia por grupo (uma instância compartilhada de `GroupCallMedia`).
+ *
+ * Só o backend `lizzy-call` usa isto: o `zapoCall` tem estado próprio (o
+ * `WaClient` guarda as calls) e expõe as funções direto.
  */
 let mediaInstance = null;
+
+/** O backend ativo é o zapo? (ele expõe `carregarZapo`, o lizzy-call não.) */
+function usandoZapo(m) {
+  return typeof m?.carregarZapo === 'function';
+}
 
 /**
  * A instância de mídia, criada na primeira necessidade.
  *
- * @returns a instância, ou null quando o pacote não está disponível.
+ * Com o zapo devolve o próprio módulo (a fachada dele já tem as funções);
+ * com o `lizzy-call` devolve o `GroupCallMedia`.
+ *
+ * @returns a instância, ou null quando nenhum backend está disponível.
  */
 export async function obterMedia() {
   const m = await carregarMidia();
   if (!m) return null;
+  if (usandoZapo(m)) return m;
   if (!mediaInstance) {
     mediaInstance = new m.GroupCallMedia({
       log: (msg) => console.log(msg)
@@ -103,6 +138,9 @@ export async function entrarNaCallComMidia({ grupo, callId, callCreator, partici
     return { ok: false, motivo: 'pacote_de_midia_ausente', detalhe: loadError };
   }
   try {
+    if (usandoZapo(media)) {
+      return await media.entrarNaCallComMidia({ grupo, callId, callCreator, participantes, sock, voiceChat });
+    }
     const r = await media.entrarNaCall({ grupo, callId, participantes, sock, groupInfo: null, isLightWeight: !!voiceChat });
     return r;
   } catch (e) {
@@ -115,7 +153,7 @@ export async function estagioMidia(grupo) {
   if (duble) return duble.estagio(grupo);
   const media = await obterMedia();
   if (!media) return 'indisponivel';
-  return media.estagio(grupo);
+  return media.estagioMidia(grupo);
 }
 
 /** Toca um arquivo de áudio na call do grupo. */
@@ -124,6 +162,7 @@ export async function tocarAudioNaCall(grupo, arquivo) {
   const media = await obterMedia();
   if (!media) return { ok: false, motivo: 'pacote_de_midia_ausente' };
   try {
+    if (usandoZapo(media)) return await media.tocarAudioNaCall(grupo, arquivo);
     return await media.tocarAudio(grupo, arquivo);
   } catch (e) {
     return { ok: false, motivo: 'falha_ao_tocar', detalhe: e?.message || String(e) };
@@ -135,7 +174,7 @@ export async function pararAudioDaCall(grupo) {
   if (duble) return duble.parar(grupo);
   const media = await obterMedia();
   if (!media) return { ok: false, motivo: 'pacote_de_midia_ausente' };
-  return media.pararAudio(grupo);
+  return media.pararAudioDaCall(grupo);
 }
 
 /**
@@ -152,6 +191,7 @@ export async function pararAudioDaCall(grupo) {
 export function resetarMidia() {
   try {
     mediaInstance = null;
+    zapoCall.resetarMidia();
     mod = null;
     carregado = false;
     loadError = null;
@@ -164,6 +204,7 @@ export async function sairDaCallComMidia(grupo) {
   const media = await obterMedia();
   if (!media) return { ok: false, motivo: 'pacote_de_midia_ausente' };
   try {
+    if (usandoZapo(media)) return await media.sairDaCallComMidia(grupo);
     return await media.sairDaCall(grupo);
   } catch (e) {
     return { ok: false, motivo: e?.message || String(e) };

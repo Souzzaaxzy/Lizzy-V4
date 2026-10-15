@@ -57,3 +57,6 @@ data/apk-tmp/
 dados/database/apk-cache/
 dados/database/tmp/
 
+
+# Artefatos do yarn (install-state): nao versionar
+.yarn/
