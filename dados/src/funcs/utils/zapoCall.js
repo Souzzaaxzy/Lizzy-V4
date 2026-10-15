@@ -242,9 +242,20 @@ export async function obterCliente() {
           sessionId: process.env.ZAPO_SESSION_ID || 'lizzy-call',
           plugins: [
             voipPlugin({
-              // O ponto da migracao: UDP cru quando o relay de grupo nao traz
-              // credencial ICE. Sem isto, o sintoma e' o "conectando" infinito.
-              useRawUdpTransport: true,
+              // NAO use `useRawUdpTransport: true`.
+              //
+              // A doc do pacote marca o flag como EXPERIMENTAL e o deixa
+              // `false` por padrao, e o codigo dele ja decide a escolha certa:
+              //
+              //   rawUdpLegs: useRawUdpTransport ? 'all' : 'required'
+              //
+              // Com 'all' TODO relay vira UDP cru -- inclusive os que so
+              // respondem por WebRTC -- e a leg se fecha sozinha:
+              //   "raw udp leg rolled back, no media on the return path"
+              //   reason: 'raw_udp_no_return_path'
+              //
+              // Com o padrao ('required') o pacote usa UDP cru SO onde o relay
+              // exige (sem credencial ICE) e WebRTC no resto.
               logLevel: process.env.ZAPO_LOG_LEVEL || 'warn'
             })
           ]
@@ -262,9 +273,41 @@ export async function obterCliente() {
       client.on('auth_paired', ({ credentials }) => {
         console.log('[ZAPOCALL] PAREADO como', credentials?.meJid || credentials?.meLid);
       });
+      // ---- Diagnostico da call -------------------------------------------
+      // Os eventos abaixo sao os que dizem ONDE a midia esta. Sem eles, um
+      // problema de relay aparece so como "a call morreu".
       client.on('voip_call_state', (call) => {
         console.log(`[ZAPOCALL] call ${call.callId} -> ${call.stateData?.state}`);
       });
+
+      // O roster: quem o servidor diz que esta na call. Uma call de grupo so
+      // fica 'active' quando OUTRA pessoa aparece conectada.
+      client.on('voip_call_participants_changed', ({ call, diff }) => {
+        const entrou = (diff?.added || []).map((p) => p.jid).join(', ') || '-';
+        const saiu = (diff?.removed || []).map((r) => r.jid).join(', ') || '-';
+        console.log(`[ZAPOCALL] roster ${call.callId} | entrou: ${entrou} | saiu: ${saiu}`);
+      });
+
+      // A PROVA de que a midia flui: a midia de alguem chegou ate nos.
+      client.on('voip_call_participant_media', ({ call, participantJid, receiving }) => {
+        console.log(`[ZAPOCALL] midia de ${participantJid} -> ${receiving ? 'CHEGANDO' : 'parou'} (${call.callId})`);
+      });
+
+      // O motivo do fim. `relay_lost` = a call tinha caminho de midia e perdeu
+      // (o caso do "conectando"); `invisible` = o servidor nos tirou porque os
+      // outros pararam de nos receber.
+      client.on('voip_call_ended', (call) => {
+        const motivo = call.stateData?.endReason || 'sem motivo informado';
+        console.warn(`[ZAPOCALL] call ${call.callId} ENCERROU | motivo: ${motivo}`);
+        // Libera o registro: senao o proximo `!callp` acharia que ainda ha call.
+        for (const [grupo, id] of callsPorGrupo.entries()) {
+          if (id === call.callId) {
+            callsPorGrupo.delete(grupo);
+            estagios.set(grupo, 'parado');
+          }
+        }
+      });
+
       client.on('voip_call_error', (err) => {
         console.warn('[ZAPOCALL] erro na call:', err?.message || err);
       });

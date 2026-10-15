@@ -179,6 +179,30 @@ await test('o codigo nao afirma mais que "nao se espera" o connect', () => {
   ok(!SRC.includes('nao se espera por ele aqui'), 'o comentario do bug foi removido');
 });
 
+console.log('\n=== 4) O FLAG EXPERIMENTAL (o bug do raw udp) ===\n');
+
+await test('o flag experimental NAO esta ativo', () => {
+  // A doc: "Experimental: ... Defaults to false." E o codigo do pacote:
+  //   rawUdpLegs: useRawUdpTransport ? 'all' : 'required'
+  // Com 'all' TODO relay vira UDP cru -> 'raw_udp_no_return_path'.
+  const ativo = /^\s*useRawUdpTransport\s*:/m.test(SRC);
+  ok(!ativo, 'useRawUdpTransport nao esta ligado');
+  includes(SRC, 'rawUdpLegs: useRawUdpTransport', 'o comentario explica a decisao do pacote');
+});
+
+await test('os listeners de diagnostico de midia existem', () => {
+  includes(SRC, 'voip_call_participants_changed', 'escuta o roster');
+  includes(SRC, 'voip_call_participant_media', 'escuta a midia que chega (a prova)');
+  includes(SRC, 'voip_call_ended', 'escuta o fim (com endReason)');
+  includes(SRC, 'endReason', 'registra o motivo do fim');
+});
+
+await test('o fim da call libera o registro do grupo', () => {
+  const bloco = SRC.slice(SRC.indexOf("client.on('voip_call_ended'"));
+  includes(bloco, 'callsPorGrupo.delete', 'remove o registro (senao o proximo !callp acha que ha call)');
+  includes(bloco, "estagios.set(grupo, 'parado')", 'marca o estagio como parado');
+});
+
 const totalOk = RESULTS.reduce((a, r) => a + r.passed, 0);
 const totalFail = RESULTS.reduce((a, r) => a + r.failed, 0);
 console.log('\n' + '='.repeat(40));
