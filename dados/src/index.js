@@ -1226,7 +1226,9 @@ import {
   tocarAudioNaCall,
   pararAudioDaCall,
   sairDaCallComMidia,
-  estagioMidia
+  estagioMidia,
+  precisaPareamento,
+  parearMidia
 } from './funcs/utils/callMedia.js';
 import {
   sendRestrictedMedia,
@@ -35638,6 +35640,14 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             return reply(`📞 Já existe um(a) ${tipoAtual} subido(a) por mim neste grupo.\n\nUse \`!vozp encerrar\` para derrubar.`);
           }
 
+          if (await precisaPareamento()) {
+            return reply(
+              '🔑 *O motor de midia precisa ser pareado uma vez.*\n\n' +
+              'Mande:\n`!callp parear 5511999999999`\n\n' +
+              '_Use o numero da conta do bot (com DDI)._'
+            );
+          }
+
           const r = await subirCallDoGrupo({ voiceChat: true });
           if (!r.ok) {
             const motivos = {
@@ -35645,6 +35655,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               sem_metadata: 'Não consegui ler os membros do grupo agora. Tente de novo.',
               grupo_pequeno: 'O chat de voz precisa de pelo menos 2 outros membros.',
               pacote_de_midia_ausente: 'A mídia não está instalada neste servidor (falta o pacote `lizzy-call`).',
+              nao_pareado: 'O motor de mídia ainda não foi pareado. Use `!callp parear <numero>`.',
               ja_na_call: 'Já existe uma chamada de mídia neste grupo.',
               falha_ao_entrar: 'O motor de mídia não subiu.'
             };
@@ -35674,6 +35685,38 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
 
           const subCallp = normalizar((args[0] || '')).trim();
 
+          // PAREAMENTO do backend de midia.
+          //
+          // O backend `zapo` e' um client PROPRIO: nao usa a sessao do Baileys.
+          // Sem parear, o offer da call de grupo morre em
+          // "a group call offer has no jid of ours to name as its call-creator".
+          // O codigo e' digitado no WhatsApp, em
+          // Aparelhos conectados -> Conectar com numero de telefone.
+          if (subCallp === 'parear' || subCallp === 'pair') {
+            const numero = String(args[1] || '').replace(/\D/g, '');
+            if (!numero || numero.length < 10) {
+              return reply('❌ Informe o numero com DDI.\n\nEx.: `!callp parear 5511999999999`');
+            }
+            const r = await parearMidia(numero);
+            if (!r.ok) {
+              const motivos = {
+                numero_invalido: 'Numero invalido. Use DDI + DDD + numero, so digitos.',
+                pacote_de_midia_ausente: 'A midia nao esta instalada neste servidor (falta o pacote `zapo-js`).',
+                backend_nao_exige_pareamento: 'O backend de midia atual nao precisa de pareamento.',
+                falha_ao_parear: 'Nao consegui gerar o codigo.'
+              };
+              return reply(`❌ ${motivos[r.motivo] || r.motivo || 'erro desconhecido'}${r.detalhe ? `\n\n\`${r.detalhe}\`` : ''}`);
+            }
+            const bonito = String(r.codigo).match(/.{1,4}/g)?.join('-') || r.codigo;
+            return reply(
+              `🔑 *Codigo de pareamento:* \`${bonito}\`\n\n` +
+              `1. Abra o WhatsApp no celular\n` +
+              `2. Aparelhos conectados → Conectar com numero de telefone\n` +
+              `3. Digite o codigo acima\n\n` +
+              `_Depois de parear, use \`!callp\` normalmente. A sessao fica salva._`
+            );
+          }
+
           // Encerra a call que ESTE comando subiu (se houver).
           if (subCallp === 'encerrar' || subCallp === 'parar' || subCallp === 'desligar') {
             const ativa = obterCall(from);
@@ -35693,6 +35736,17 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             return reply(`📞 Já existe um(a) ${tipoAtual} subido(a) por mim neste grupo.\n\nUse \`!callp encerrar\` para derrubar.`);
           }
 
+          // Checa o pareamento ANTES de tentar subir: o erro do motor seria
+          // criptico ("call-creator"), entao aqui a orientacao e' explicita.
+          if (await precisaPareamento()) {
+            return reply(
+              '🔑 *O motor de midia precisa ser pareado uma vez.*\n\n' +
+              'O backend da call e um client separado do bot, entao ele tem a propria sessao.\n\n' +
+              'Mande:\n`!callp parear 5511999999999`\n\n' +
+              '_Use o numero da conta do bot (com DDI)._'
+            );
+          }
+
           const r = await subirCallDoGrupo({ voiceChat: false });
           if (!r.ok) {
             const motivos = {
@@ -35700,6 +35754,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               sem_metadata: 'Não consegui ler os membros do grupo agora. Tente de novo.',
               grupo_pequeno: 'A chamada de grupo precisa de pelo menos 2 outros membros.',
               pacote_de_midia_ausente: 'A mídia não está instalada neste servidor (falta o pacote `lizzy-call`).',
+              nao_pareado: 'O motor de mídia ainda não foi pareado. Use `!callp parear <numero>`.',
               ja_na_call: 'Já existe uma chamada de mídia neste grupo.',
               falha_ao_entrar: 'O motor de mídia não subiu.'
             };

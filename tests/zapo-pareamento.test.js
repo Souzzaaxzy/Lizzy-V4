@@ -1,0 +1,262 @@
+/**
+ * Pareamento do motor de MIDIA (backend `zapo`) + store persistente.
+ *
+ * ## O que este teste protege
+ *
+ * O backend `zapo` e' um client PROPRIO: nao usa a sessao do Baileys. Sem
+ * parear, o offer da call de grupo morre em:
+ *
+ *     a group call offer has no jid of ours to name as its call-creator
+ *
+ * E o store do pacote (`WaAuthMemoryStore`) guarda as credenciais numa variavel
+ * de instancia -- o pareamento se perderia a cada reinicio. Este teste cobre:
+ *
+ *   - o store de ARQUIVO (round-trip com Uint8Array, persistencia real);
+ *   - `estaPareado()` lendo o disco;
+ *   - o `!callp` pedindo o pareamento em vez de mostrar o erro criptico;
+ *   - o subcomando `!callp parear <numero>` (validacao + codigo);
+ *   - que o DUBLE desliga a exigencia (os testes de contrato seguem valendo).
+ *
+ * Uso: node tests/zapo-pareamento.test.js
+ */
+
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+const TMP_DB = fs.mkdtempSync(path.join(os.tmpdir(), 'lizzy-zapo-'));
+process.env.DATABASE_PATH = TMP_DB;
+process.env.ZAPO_DISABLE_CONNECT = '1';
+
+const RESULTS = [];
+let CURRENT = null;
+
+function test(name, fn) {
+  CURRENT = { name, passed: 0, failed: 0, errors: [] };
+  RESULTS.push(CURRENT);
+  try {
+    const r = fn();
+    if (r && typeof r.then === 'function') {
+      return r.then(() => finish(name)).catch((e) => {
+        CURRENT.failed += 1; CURRENT.errors.push(`EXCEÇÃO: ${e?.stack || e}`); finish(name);
+      });
+    }
+    finish(name);
+  } catch (e) {
+    CURRENT.failed += 1; CURRENT.errors.push(`EXCEÇÃO: ${e?.stack || e}`); finish(name);
+  }
+  return Promise.resolve();
+}
+function finish(name) {
+  console.log(`${CURRENT.failed === 0 ? '✅' : '❌'} ${name} (${CURRENT.passed} ok, ${CURRENT.failed} falhas)`);
+  for (const err of CURRENT.errors) console.log(`     ${err.split('\n')[0]}`);
+}
+function ok(cond, msg) {
+  if (cond) CURRENT.passed += 1;
+  else { CURRENT.failed += 1; CURRENT.errors.push(`ASSERT FALHOU: ${msg}`); }
+}
+function includes(hay, needle, label) {
+  ok(typeof hay === 'string' && hay.includes(needle),
+    `${label ?? needle} — esperado conter "${needle}"`);
+}
+
+const zapoStore = await import(new URL('../dados/src/funcs/utils/zapoStore.js', import.meta.url).href);
+const zapoCall = await import(new URL('../dados/src/funcs/utils/zapoCall.js', import.meta.url).href);
+const callMedia = await import(new URL('../dados/src/funcs/utils/callMedia.js', import.meta.url).href);
+
+console.log('\n=== 1) STORE DE ARQUIVO (o que faz o pareamento sobreviver) ===\n');
+
+await test('grava e le as credenciais (round-trip)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'store-'));
+  const b = zapoStore.criarStoreArquivo(dir);
+  const auth = b.stores.auth();
+
+  ok(await auth.load() === null, 'começa vazio');
+
+  await auth.save({ meJid: '5511@s.whatsapp.net', meLid: '123@lid' });
+  const lido = await auth.load();
+  ok(lido?.meJid === '5511@s.whatsapp.net', 'meJid preservado');
+  ok(lido?.meLid === '123@lid', 'meLid preservado');
+});
+
+await test('Uint8Array sobrevive ao JSON (sem virar objeto de bytes)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'store-'));
+  const b = zapoStore.criarStoreArquivo(dir);
+  const auth = b.stores.auth();
+
+  const chave = new Uint8Array([0, 1, 127, 128, 255]);
+  await auth.save({ meJid: 'x@s.whatsapp.net', noiseKeyPair: { public: chave } });
+  const lido = await auth.load();
+
+  ok(lido.noiseKeyPair.public instanceof Uint8Array,
+    'volta como Uint8Array (não objeto {0:..,1:..})');
+  ok(Array.from(lido.noiseKeyPair.public).join(',') === '0,1,127,128,255',
+    'bytes idênticos aos gravados');
+});
+
+await test('PERSISTE em disco (nova instância lê o que a anterior gravou)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'store-'));
+  const b1 = zapoStore.criarStoreArquivo(dir);
+  await b1.stores.auth().save({ meJid: 'persistido@s.whatsapp.net' });
+
+  // Instância NOVA, como se o bot tivesse reiniciado.
+  const b2 = zapoStore.criarStoreArquivo(dir);
+  const lido = await b2.stores.auth().load();
+  ok(lido?.meJid === 'persistido@s.whatsapp.net', 'sobreviveu ao "reinício"');
+});
+
+await test('contrato de mapa: set/get/delete/list', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'store-'));
+  const b = zapoStore.criarStoreArquivo(dir);
+  const mapa = b.stores.preKey();
+
+  ok(await mapa.get('k1') === null, 'chave ausente -> null');
+  await mapa.set('k1', { valor: new Uint8Array([7]) });
+  ok(Array.from((await mapa.get('k1')).valor)[0] === 7, 'set/get');
+  ok((await mapa.list()).includes('k1'), 'list');
+  await mapa.delete('k1');
+  ok(await mapa.get('k1') === null, 'delete');
+});
+
+await test('clear remove tudo', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'store-'));
+  const b = zapoStore.criarStoreArquivo(dir);
+  await b.stores.auth().save({ meJid: 'a@b' });
+  await b.stores.auth().clear();
+  ok(await b.stores.auth().load() === null, 'auth limpo');
+});
+
+console.log('\n=== 2) estaPareado / meuJid (leitura do disco) ===\n');
+
+await test('sem credencial, estaPareado() é false', () => {
+  // O diretório do teste (DATABASE_PATH) não tem zapo-auth/.
+  ok(zapoCall.estaPareado() === false, 'não pareado');
+  ok(zapoCall.meuJid() === null, 'sem jid');
+});
+
+await test('com credencial no disco, estaPareado() é true', async () => {
+  const dir = zapoCall.diretorioAuth();
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'auth.json'), JSON.stringify({
+    credentials: { meJid: '5511999999999@s.whatsapp.net', meLid: '999@lid' }
+  }));
+
+  ok(zapoCall.estaPareado() === true, 'reconhece o pareamento');
+  ok(zapoCall.meuJid() === '999@lid', 'prefere o LID (o que o offer usa)');
+
+  fs.rmSync(path.join(dir, 'auth.json'), { force: true });
+});
+
+await test('arquivo corrompido não derruba (devolve false)', () => {
+  const dir = zapoCall.diretorioAuth();
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'auth.json'), '{ isso nao e json');
+
+  ok(zapoCall.estaPareado() === false, 'não quebra com JSON inválido');
+
+  fs.rmSync(path.join(dir, 'auth.json'), { force: true });
+});
+
+console.log('\n=== 3) A FACHADA (callMedia) respeita o DUBLÊ ===\n');
+
+await test('com dublê, precisaPareamento() é false', async () => {
+  callMedia.__setDuble({ estagio: () => 'pronta', tocar: () => ({ ok: true }), parar: () => ({ ok: true }) });
+  ok(await callMedia.precisaPareamento() === false,
+    'o teste de contrato não pode ser bloqueado pelo pareamento');
+  ok(await callMedia.estaPareado() === true, 'considerado pareado');
+  callMedia.__setDuble(null);
+});
+
+await test('parearMidia com dublê devolve motivo próprio', async () => {
+  callMedia.__setDuble({ estagio: () => 'pronta', tocar: () => ({ ok: true }), parar: () => ({ ok: true }) });
+  const r = await callMedia.parearMidia('5511999999999');
+  ok(r.ok === false && r.motivo === 'backend_nao_exige_pareamento',
+    'não tenta parear o backend real em teste');
+  callMedia.__setDuble(null);
+});
+
+await test('sem dublê e sem pareamento, precisaPareamento() é true', async () => {
+  // ZAPO_DISABLE_CONNECT impede a conexão; o backend carrega e reporta
+  // que não está pareado.
+  const precisa = await callMedia.precisaPareamento();
+  ok(precisa === true, 'pede pareamento quando o backend é o zapo e não há credencial');
+});
+
+console.log('\n=== 4) O COMANDO `!callp parear` ===\n');
+
+const INDEX = fs.readFileSync(new URL('../dados/src/index.js', import.meta.url), 'utf8');
+
+await test('o subcomando existe e valida o número', () => {
+  ok(INDEX.includes("subCallp === 'parear'"), 'tem o subcomando parear');
+  includes(INDEX, 'DDI', 'explica o formato do número');
+  includes(INDEX, '5511999999999', 'dá exemplo');
+});
+
+await test('o fluxo de pareamento usa o backend e formata o código', () => {
+  includes(INDEX, 'parearMidia(numero)', 'chama a fachada');
+  includes(INDEX, "match(/.{1,4}/g)", 'formata o código em grupos de 4');
+  includes(INDEX, 'Aparelhos conectados', 'ensina onde digitar');
+});
+
+await test('o `!callp` checa o pareamento ANTES de subir a call', () => {
+  includes(INDEX, 'await precisaPareamento()', 'checa antes');
+  includes(INDEX, 'precisa ser pareado uma vez', 'explica em vez do erro criptico');
+});
+
+await test('o motivo `nao_pareado` tem mensagem própria', () => {
+  includes(INDEX, 'nao_pareado', 'motivo tratado');
+});
+
+await test('o erro criptico do motor NÃO é o que o usuário vê', () => {
+  // O termo aparece em COMENTÁRIO (documentando a causa). O que importa é que
+  // ele não esteja numa mensagem ENVIADA ao usuário. Comparar com o trecho do
+  // `reply(` é o critério certo: é por ali que o texto sai.
+  const trechoPareamento = INDEX.slice(
+    INDEX.indexOf("subCallp === 'parear'"),
+    INDEX.indexOf('// Encerra a call que ESTE comando subiu')
+  );
+  ok(trechoPareamento.length > 0, 'achou o bloco do subcomando');
+  ok(!trechoPareamento.includes('call-creator'),
+    'o bloco do pareamento não menciona o erro do motor');
+  // E a orientação que o usuário recebe é a ação correta:
+  includes(trechoPareamento, 'Codigo de pareamento', 'entrega o código');
+  includes(trechoPareamento, 'Aparelhos conectados', 'diz onde digitar');
+});
+
+console.log('\n=== 5) O store em memória NÃO é mais usado ===\n');
+
+await test('zapoCall usa store de ARQUIVO', () => {
+  const src = fs.readFileSync(new URL('../dados/src/funcs/utils/zapoCall.js', import.meta.url), 'utf8');
+  includes(src, 'criarStoreArquivo', 'usa o backend de arquivo');
+  ok(!src.includes('WaAuthMemoryStore'),
+    'não usa mais o store em memória (que perdia o pareamento)');
+  includes(src, 'zapo-auth', 'grava em dados/database/zapo-auth');
+});
+
+console.log('\n=== 6) Teste de INTEGRAÇÃO do store com o zapo ===\n');
+
+await test('o createStore do zapo aceita o nosso backend', async () => {
+  const { createStore } = await import('zapo-js');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'int-'));
+  const store = createStore({
+    backends: { arquivo: zapoStore.criarStoreArquivo(dir) },
+    providers: {
+      auth: 'arquivo', signal: 'arquivo', preKey: 'arquivo', session: 'arquivo',
+      identity: 'arquivo', senderKey: 'arquivo', appState: 'arquivo',
+      privacyToken: 'arquivo', messages: 'none', threads: 'none', contacts: 'none'
+    }
+  });
+  ok(store && typeof store.session === 'function', 'store criado sem erro');
+});
+
+// ============================================================================
+
+const totalOk = RESULTS.reduce((a, r) => a + r.passed, 0);
+const totalFail = RESULTS.reduce((a, r) => a + r.failed, 0);
+console.log('\n' + '='.repeat(40));
+console.log(`RESULTADO: ${RESULTS.length} testes | ${totalOk} asserções ok | ${totalFail} falhas`);
+console.log('='.repeat(40));
+if (totalFail > 0) process.exit(1);

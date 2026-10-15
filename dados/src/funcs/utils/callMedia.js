@@ -210,3 +210,40 @@ export async function sairDaCallComMidia(grupo) {
     return { ok: false, motivo: e?.message || String(e) };
   }
 }
+
+/**
+ * O backend de mídia exige pareamento PRÓPRIO?
+ *
+ * Só o zapo: ele é um client separado, com credenciais no formato dele. O
+ * `lizzy-call` usa o socket do Baileys (que já está pareado), então devolve
+ * `false` e o `!callp` não pede nada.
+ *
+ * Com DUBLÊ instalado devolve `false`: o teste mede o CONTRATO do bot, não o
+ * estado de pareamento do backend real.
+ */
+export async function precisaPareamento() {
+  if (duble || dubleEntrar) return false;
+  const m = await carregarMidia();
+  if (!m || !usandoZapo(m)) return false;
+  return !m.estaPareado();
+}
+
+/** Está pareado? (sempre `true` para o backend que não exige pareamento) */
+export async function estaPareado() {
+  if (duble || dubleEntrar) return true;
+  const m = await carregarMidia();
+  if (!m) return false;
+  if (!usandoZapo(m)) return true;
+  return m.estaPareado();
+}
+
+/** Pede o código de pareamento (só o backend zapo implementa). */
+export async function parearMidia(numero) {
+  if (duble) return { ok: false, motivo: 'backend_nao_exige_pareamento' };
+  const m = await carregarMidia();
+  if (!m) return { ok: false, motivo: 'pacote_de_midia_ausente' };
+  if (!usandoZapo(m) || typeof m.parear !== 'function') {
+    return { ok: false, motivo: 'backend_nao_exige_pareamento' };
+  }
+  return m.parear(numero);
+}
