@@ -291,6 +291,56 @@ await test('o createStore do zapo aceita o nosso backend', async () => {
 
 // ============================================================================
 
+await test('Map sobrevive ao JSON (era "senderKeys.get is not a function")', async () => {
+  const { paraJson, paraBinario } = zapoStore.__teste;
+  const original = {
+    senderKeys: new Map([['a', new Uint8Array([1, 2])]]),
+    uploadedPreKeys: new Set([1, 2, 3])
+  };
+  const volta = paraBinario(JSON.parse(JSON.stringify(paraJson(original))));
+
+  ok(volta.senderKeys instanceof Map, 'senderKeys volta como Map');
+  ok(typeof volta.senderKeys.get === 'function', '.get EXISTE (era o erro do log)');
+  ok(Array.from(volta.senderKeys.get('a')).join(',') === '1,2', 'valor preservado');
+  ok(volta.uploadedPreKeys instanceof Set, 'uploadedPreKeys volta como Set');
+  ok([...volta.uploadedPreKeys].join(',') === '1,2,3', 'valores do Set preservados');
+});
+
+await test('chave de Map em Uint8Array e preservada', async () => {
+  const { paraJson, paraBinario } = zapoStore.__teste;
+  const original = { keys: new Map([[new Uint8Array([9]), { v: new Uint8Array([7]) }]]) };
+  const volta = paraBinario(JSON.parse(JSON.stringify(paraJson(original))));
+
+  const chave = [...volta.keys.keys()][0];
+  ok(chave instanceof Uint8Array, 'a chave voltou como Uint8Array');
+  ok(Array.from(chave)[0] === 9, 'byte da chave preservado');
+});
+
+await test('os stores reais voltam com Map/Set funcionais apos reinicio', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'store-'));
+
+  const b1 = await zapoStore.criarStoreArquivoDoPacote(dir);
+  await b1.stores.senderKey('s').upsertSenderKey({ groupId: 'g', sender: { user: 'u', device: 1 }, key: new Uint8Array([1]) });
+  await b1.stores.session('s').setSession({ user: 'u', device: 0 }, { record: new Uint8Array([2]) });
+  await b1.stores.preKey('s').putPreKey({ keyId: 7, keyPair: { pub: new Uint8Array([3]) } });
+
+  // Nova instancia = bot reiniciado.
+  const b2 = await zapoStore.criarStoreArquivoDoPacote(dir);
+  const sk = b2.stores.senderKey('s');
+  const sess = b2.stores.session('s');
+  const pk = b2.stores.preKey('s');
+
+  ok(sk.senderKeys instanceof Map && typeof sk.senderKeys.get === 'function',
+    'senderKey.senderKeys e Map com .get');
+  ok(sess.signalSessions instanceof Map && typeof sess.signalSessions.get === 'function',
+    'session.signalSessions e Map com .get');
+  ok(pk.preKeys instanceof Map && typeof pk.preKeys.keys === 'function',
+    'preKey.preKeys e Map com .keys');
+  ok(pk.uploadedPreKeys instanceof Set, 'preKey.uploadedPreKeys e Set');
+  ok(sk.senderKeys.size === 1 && sess.signalSessions.size === 1 && pk.preKeys.size === 1,
+    'os tres preservaram conteudo');
+});
+
 const totalOk = RESULTS.reduce((a, r) => a + r.passed, 0);
 const totalFail = RESULTS.reduce((a, r) => a + r.failed, 0);
 console.log('\n' + '='.repeat(40));

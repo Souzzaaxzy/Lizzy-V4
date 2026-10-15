@@ -10,32 +10,48 @@
  * ## Por que NAO reimplementamos os contratos
  *
  * Cada dominio tem um contrato especifico -- `signal` tem
- * `getRegistrationInfo`/`setSignedPreKey`/`getSignedPreKeyRotationTs`,
- * `pre-key` tem `getOrGenPreKeys`/`consumePreKeyById`/`markKeyAsUploaded`, e
- * assim por diante. Reimplementar a mao (primeira versao) quebrou o motor em
- * `store.setRegistrationInfo is not a function`.
+ * `getRegistrationInfo`/`setSignedPreKey`, `pre-key` tem
+ * `getOrGenPreKeys`/`consumePreKeyById`, e assim por diante. Reimplementar a
+ * mao quebrou o motor em `store.setRegistrationInfo is not a function`.
  *
- * Aqui as implementacoes do PROPRIO pacote fazem o trabalho, e nos so
- * persistimos o estado delas: as classes guardam tudo em propriedades PLANAS
- * (`this.registrationInfo`, `this.preKeys`, ...), entao serializar o objeto e'
- * suficiente.
+ * Aqui as implementacoes do PROPRIO pacote fazem o trabalho, e nos apenas
+ * persistimos o estado delas.
  *
- * ## O que e' gravado
+ * ## Os tipos que o JSON NAO preserva (a parte que custou duas rodadas)
  *
- * `dados/database/zapo-auth/<dominio>.json`, com escrita ATOMICA (tmp unico +
- * rename). `Uint8Array` vira `{ __b64: "..." }` e volta a `Uint8Array` na
- * leitura -- sem isso o `JSON.stringify` o transformaria em
- * `{0: 12, 1: 34, ...}` e o buffer nao seria reconstruido.
+ * As classes guardam o estado em `Map`/`Set`:
+ *
+ *     senderKeys / senderDistributions / signalSessions / preKeys /
+ *     remoteIdentities / collections / keys / records  -> Map
+ *     uploadedPreKeys                                  -> Set
+ *
+ * `JSON.stringify(new Map())` produz `{}` -- o campo volta como objeto comum e
+ * o motor morre em `this.senderKeys.get is not a function`. Por isso os tres
+ * tipos que o JSON nao representa sao MARCADOS e reconstruidos:
+ *
+ *     Uint8Array -> { __b64: "..." }
+ *     Map        -> { __map: [[chave, valor], ...] }
+ *     Set        -> { __set: [valor, ...] }
+ *
+ * Uma chave de Map pode ser `Uint8Array` (o zapo usa isso em `keys`), entao a
+ * chave tambem passa pelo conversor.
  */
 
 import fs from 'fs';
 import path from 'path';
 
-/** Converte para JSON (Uint8Array -> base64). */
+/** Converte para JSON: Uint8Array -> base64, Map -> lista, Set -> lista. */
 function paraJson(valor) {
   if (valor === null || valor === undefined) return valor;
+
   if (valor instanceof Uint8Array || Buffer.isBuffer(valor)) {
     return { __b64: Buffer.from(valor).toString('base64') };
+  }
+  if (valor instanceof Map) {
+    return { __map: [...valor.entries()].map(([k, v]) => [paraJson(k), paraJson(v)]) };
+  }
+  if (valor instanceof Set) {
+    return { __set: [...valor.values()].map(paraJson) };
   }
   if (Array.isArray(valor)) return valor.map(paraJson);
   if (typeof valor === 'object') {
@@ -46,18 +62,26 @@ function paraJson(valor) {
   return valor;
 }
 
-/** Converte de JSON (base64 -> Uint8Array). */
+/** Converte de JSON: base64 -> Uint8Array, lista -> Map, lista -> Set. */
 function paraBinario(valor) {
   if (valor === null || valor === undefined) return valor;
-  if (typeof valor === 'object' && typeof valor.__b64 === 'string') {
-    return new Uint8Array(Buffer.from(valor.__b64, 'base64'));
-  }
-  if (Array.isArray(valor)) return valor.map(paraBinario);
-  if (typeof valor === 'object') {
+
+  if (typeof valor === 'object' && !Array.isArray(valor)) {
+    if (typeof valor.__b64 === 'string') {
+      return new Uint8Array(Buffer.from(valor.__b64, 'base64'));
+    }
+    if (Array.isArray(valor.__map)) {
+      return new Map(valor.__map.map(([k, v]) => [paraBinario(k), paraBinario(v)]));
+    }
+    if (Array.isArray(valor.__set)) {
+      return new Set(valor.__set.map(paraBinario));
+    }
     const saida = {};
     for (const [k, v] of Object.entries(valor)) saida[k] = paraBinario(v);
     return saida;
   }
+
+  if (Array.isArray(valor)) return valor.map(paraBinario);
   return valor;
 }
 
@@ -80,8 +104,7 @@ function escreverJson(caminho, dados) {
 }
 
 /**
- * Campos internos das classes do pacote que NAO devem ir para o disco
- * (callbacks e limites de configuracao -- nao sao estado).
+ * Campos internos que NAO sao estado (callbacks e limites de configuracao).
  */
 const NAO_PERSISTIR = new Set([
   'onEvict', 'onDistributionEvict', 'onSenderKeyEvict',
@@ -126,7 +149,6 @@ const ARQUIVO = {
  * Cria um backend de ARQUIVO no formato que o `createStore` do zapo espera.
  *
  * @param {object} classes as classes de memory store do pacote
- *        (`{ WaAuthMemoryStore, WaSignalMemoryStore, ... }`)
  * @param {string} baseDir diretorio onde gravar
  * @param {Function} [log]
  */
@@ -145,12 +167,12 @@ export function criarStoreArquivo(classes, baseDir, log = () => {}) {
   const caminhoDe = (dominio) => path.join(baseDir, ARQUIVO[dominio] || `${dominio}.json`);
 
   /**
-   * Instancia a classe do dominio e restaura o estado do disco.
+   * Instancia a classe do dominio, restaura o estado do disco e embrulha os
+   * metodos que MUTAM para salvar.
    *
-   * Depois embrulha cada metodo que MUTA para salvar o estado. A lista de
-   * metodos que mutam e' obtida dos PROPRIOS contratos (quem comeca com `set`,
-   * `put`, `upsert`, `delete`, `mark`, `consume`, `clear`, `save` ou
-   * `getOrGen`), entao nao ha lista paralela para envelhecer.
+   * A lista de metodos que mutam vem do PROPRIO contrato (prefixos
+   * set/put/upsert/delete/mark/consume/clear/save/getOrGen), sem lista paralela
+   * para envelhecer.
    */
   const criar = (dominio, Classe) => (sessionId) => {
     const inst = new Classe();
@@ -164,7 +186,6 @@ export function criarStoreArquivo(classes, baseDir, log = () => {}) {
       }
     };
 
-    // Embrulha os metodos que mutam. `save` (auth) e `clear` sempre salvam.
     const MUTA = /^(set|put|upsert|delete|mark|consume|clear|save|getOrGen|remove|reset)/;
     for (const nome of Object.getOwnPropertyNames(Object.getPrototypeOf(inst))) {
       if (nome === 'constructor' || typeof inst[nome] !== 'function') continue;
@@ -194,13 +215,11 @@ export function criarStoreArquivo(classes, baseDir, log = () => {}) {
   };
 }
 
-/**
- * Atalho: carrega as classes do pacote e cria o backend.
- *
- * @param {string} baseDir
- * @param {Function} [log]
- */
+/** Atalho: carrega as classes do pacote e cria o backend. */
 export async function criarStoreArquivoDoPacote(baseDir, log = () => {}) {
   const mod = await import('zapo-js/store');
   return criarStoreArquivo(mod, baseDir, log);
 }
+
+/** Exportados para teste (o round-trip dos tipos e' o ponto critico). */
+export const __teste = { paraJson, paraBinario };
