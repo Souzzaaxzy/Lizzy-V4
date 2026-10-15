@@ -38,7 +38,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { criarStoreArquivo } from './zapoStore.js';
+import { criarStoreArquivoDoPacote } from './zapoStore.js';
 import { DATABASE_DIR } from '../../utils/paths.js';
 
 let mod = null;
@@ -146,7 +146,7 @@ export async function obterCliente() {
 
       // Backend de ARQUIVO cobrindo os dominios de persistencia. As caixas de
       // mensagens ficam de fora ('none'): o zapo aqui so carrega a MIDIA.
-      const backend = criarStoreArquivo(AUTH_DIR);
+      const backend = await criarStoreArquivoDoPacote(AUTH_DIR, (m) => console.warn(m));
 
       store = createStore({
         backends: { arquivo: backend },

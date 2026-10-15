@@ -1,68 +1,66 @@
 /**
- * Store PERSISTENTE em arquivo para o client de call do zapo.
+ * Persistencia em ARQUIVO para o client de call do zapo.
  *
  * ## Por que existe
  *
- * O zapo e' um client PROPRIO (tem credenciais no formato dele), separado do
- * Baileys. Sem persistir, o pareamento se perde a cada reinicio do bot -- o
- * `WaAuthMemoryStore` do proprio pacote guarda as credenciais numa variavel de
- * instancia:
+ * O zapo e' um client PROPRIO (credenciais no formato dele), separado do
+ * Baileys. Sem persistir, o pareamento se perde a cada reinicio: o
+ * `WaAuthMemoryStore` do pacote guarda tudo numa propriedade de instancia.
  *
- *     class WaAuthMemoryStore {
- *       constructor() { this.credentials = null; }   // zera a cada boot
+ * ## Por que NAO reimplementamos os contratos
  *
- * Ou seja: parear com store em memoria significa parear de novo toda vez.
+ * Cada dominio tem um contrato especifico -- `signal` tem
+ * `getRegistrationInfo`/`setSignedPreKey`/`getSignedPreKeyRotationTs`,
+ * `pre-key` tem `getOrGenPreKeys`/`consumePreKeyById`/`markKeyAsUploaded`, e
+ * assim por diante. Reimplementar a mao (primeira versao) quebrou o motor em
+ * `store.setRegistrationInfo is not a function`.
  *
- * ## O que ele guarda
+ * Aqui as implementacoes do PROPRIO pacote fazem o trabalho, e nos so
+ * persistimos o estado delas: as classes guardam tudo em propriedades PLANAS
+ * (`this.registrationInfo`, `this.preKeys`, ...), entao serializar o objeto e'
+ * suficiente.
  *
- * Os dominios de PERSISTENCIA do zapo. O mais critico e' `auth` (as
- * credenciais: chaves, `meJid`/`meLid`, identidade) -- e' o que o offer da
- * call de grupo precisa para assinar o `call-creator`.
+ * ## O que e' gravado
  *
- * Grava em `dados/database/zapo-auth/<dominio>.json`, com escrita ATOMICA
- * (tmp unico + rename), como o resto do projeto.
- *
- * ## Formato
- *
- * Cada dominio e' um mapa `chave -> valor`. Os valores tem `Uint8Array` (as
- * chaves), entao a serializacao converte para base64 e volta. Sem isso o
- * `JSON.stringify` transformaria os bytes num objeto `{0: 12, 1: 34, ...}` e o
- * `Buffer.from` nao os reconstruiria.
+ * `dados/database/zapo-auth/<dominio>.json`, com escrita ATOMICA (tmp unico +
+ * rename). `Uint8Array` vira `{ __b64: "..." }` e volta a `Uint8Array` na
+ * leitura -- sem isso o `JSON.stringify` o transformaria em
+ * `{0: 12, 1: 34, ...}` e o buffer nao seria reconstruido.
  */
 
 import fs from 'fs';
 import path from 'path';
 
-const B64 = {
-  paraJson(valor) {
-    if (valor === null || valor === undefined) return valor;
-    if (valor instanceof Uint8Array || Buffer.isBuffer(valor)) {
-      return { __b64: Buffer.from(valor).toString('base64') };
-    }
-    if (Array.isArray(valor)) return valor.map(B64.paraJson);
-    if (typeof valor === 'object') {
-      const saida = {};
-      for (const [k, v] of Object.entries(valor)) saida[k] = B64.paraJson(v);
-      return saida;
-    }
-    return valor;
-  },
-  paraBinario(valor) {
-    if (valor === null || valor === undefined) return valor;
-    if (typeof valor === 'object' && typeof valor.__b64 === 'string') {
-      return new Uint8Array(Buffer.from(valor.__b64, 'base64'));
-    }
-    if (Array.isArray(valor)) return valor.map(B64.paraBinario);
-    if (typeof valor === 'object') {
-      const saida = {};
-      for (const [k, v] of Object.entries(valor)) saida[k] = B64.paraBinario(v);
-      return saida;
-    }
-    return valor;
+/** Converte para JSON (Uint8Array -> base64). */
+function paraJson(valor) {
+  if (valor === null || valor === undefined) return valor;
+  if (valor instanceof Uint8Array || Buffer.isBuffer(valor)) {
+    return { __b64: Buffer.from(valor).toString('base64') };
   }
-};
+  if (Array.isArray(valor)) return valor.map(paraJson);
+  if (typeof valor === 'object') {
+    const saida = {};
+    for (const [k, v] of Object.entries(valor)) saida[k] = paraJson(v);
+    return saida;
+  }
+  return valor;
+}
 
-/** Le um JSON com seguranca (arquivo ausente/corrompido -> padrao). */
+/** Converte de JSON (base64 -> Uint8Array). */
+function paraBinario(valor) {
+  if (valor === null || valor === undefined) return valor;
+  if (typeof valor === 'object' && typeof valor.__b64 === 'string') {
+    return new Uint8Array(Buffer.from(valor.__b64, 'base64'));
+  }
+  if (Array.isArray(valor)) return valor.map(paraBinario);
+  if (typeof valor === 'object') {
+    const saida = {};
+    for (const [k, v] of Object.entries(valor)) saida[k] = paraBinario(v);
+    return saida;
+  }
+  return valor;
+}
+
 function lerJson(caminho, padrao) {
   try {
     if (!fs.existsSync(caminho)) return padrao;
@@ -82,121 +80,127 @@ function escreverJson(caminho, dados) {
 }
 
 /**
- * Cria um store de ARQUIVO no formato que o `createStore` do zapo espera.
- *
- * Devolve `{ stores: { <dominio>: (sessionId) => contrato } }`, com cada
- * contrato implementando os metodos que o zapo chama. Todos os metodos sao
- * tolerantes: falha de disco nunca derruba o bot (devolve vazio/ignora).
- *
- * @param {string} baseDir diretorio raiz (ex.: dados/database/zapo-auth)
+ * Campos internos das classes do pacote que NAO devem ir para o disco
+ * (callbacks e limites de configuracao -- nao sao estado).
  */
-export function criarStoreArquivo(baseDir) {
-  /** Mapa de dominio -> { chave: valor } em memoria, sincronizado com o disco. */
-  const cache = new Map();
+const NAO_PERSISTIR = new Set([
+  'onEvict', 'onDistributionEvict', 'onSenderKeyEvict',
+  'maxSessions', 'maxPreKeys', 'maxRemoteIdentities',
+  'maxSenderKeys', 'maxSenderDistributions',
+  'maxCollectionEntries', 'maxSyncKeys', 'maxEntries'
+]);
 
-  const caminhoDe = (dominio) => path.join(baseDir, `${dominio}.json`);
+/** Extrai so o estado serializavel da instancia. */
+function estadoDe(instancia) {
+  const saida = {};
+  for (const [k, v] of Object.entries(instancia)) {
+    if (NAO_PERSISTIR.has(k)) continue;
+    if (typeof v === 'function') continue;
+    saida[k] = paraJson(v);
+  }
+  return saida;
+}
 
-  const carregar = (dominio) => {
-    if (!cache.has(dominio)) {
-      cache.set(dominio, lerJson(caminhoDe(dominio), {}));
-    }
-    return cache.get(dominio);
-  };
+/** Devolve o estado do disco para dentro da instancia. */
+function restaurarEm(instancia, dados) {
+  if (!dados || typeof dados !== 'object') return;
+  for (const [k, v] of Object.entries(dados)) {
+    if (NAO_PERSISTIR.has(k)) continue;
+    instancia[k] = paraBinario(v);
+  }
+}
 
-  const gravar = (dominio) => {
-    try {
-      escreverJson(caminhoDe(dominio), cache.get(dominio) || {});
-    } catch (e) {
-      console.warn(`[ZAPO-STORE] falha ao gravar ${dominio}:`, e?.message || e);
-    }
-  };
+/** Nome do arquivo por dominio. */
+const ARQUIVO = {
+  auth: 'auth.json',
+  signal: 'signal.json',
+  preKey: 'preKey.json',
+  session: 'session.json',
+  identity: 'identity.json',
+  senderKey: 'senderKey.json',
+  appState: 'appState.json',
+  privacyToken: 'privacyToken.json'
+};
 
-  /**
-   * Contrato generico de mapa chave->valor.
-   *
-   * Cobre a maioria dos dominios do zapo (preKey, session, identity,
-   * senderKey, privacyToken, retry, groupMetadata, deviceList, messageSecret),
-   * cujo formato e' sempre `get/set/delete/list`.
-   */
-  const contratoMapa = (dominio) => ({
-    async get(chave) {
-      const dados = carregar(dominio);
-      const v = dados[chave];
-      return v === undefined ? null : B64.paraBinario(v);
-    },
-    async set(chave, valor) {
-      const dados = carregar(dominio);
-      dados[chave] = B64.paraJson(valor);
-      gravar(dominio);
-    },
-    async delete(chave) {
-      const dados = carregar(dominio);
-      delete dados[chave];
-      gravar(dominio);
-    },
-    async list() {
-      return Object.keys(carregar(dominio));
-    },
-    async clear() {
-      cache.set(dominio, {});
-      gravar(dominio);
-    }
-  });
+/**
+ * Cria um backend de ARQUIVO no formato que o `createStore` do zapo espera.
+ *
+ * @param {object} classes as classes de memory store do pacote
+ *        (`{ WaAuthMemoryStore, WaSignalMemoryStore, ... }`)
+ * @param {string} baseDir diretorio onde gravar
+ * @param {Function} [log]
+ */
+export function criarStoreArquivo(classes, baseDir, log = () => {}) {
+  const {
+    WaAuthMemoryStore,
+    WaSignalMemoryStore,
+    WaPreKeyMemoryStore,
+    WaSessionMemoryStore,
+    WaIdentityMemoryStore,
+    SenderKeyMemoryStore,
+    WaAppStateMemoryStore,
+    WaPrivacyTokenMemoryStore
+  } = classes;
 
-  /** Contrato de `auth`: um unico registro (`credentials`). */
-  const contratoAuth = () => ({
-    async load() {
-      const dados = lerJson(caminhoDe('auth'), null);
-      if (!dados || !dados.credentials) return null;
-      return B64.paraBinario(dados.credentials);
-    },
-    async save(credentials) {
-      escreverJson(caminhoDe('auth'), { credentials: B64.paraJson(credentials) });
-    },
-    async clear() {
-      try { fs.rmSync(caminhoDe('auth'), { force: true }); } catch { /* ok */ }
-    }
-  });
+  const caminhoDe = (dominio) => path.join(baseDir, ARQUIVO[dominio] || `${dominio}.json`);
 
   /**
-   * Contrato de `appState`: guarda um estado por colecao.
+   * Instancia a classe do dominio e restaura o estado do disco.
    *
-   * O zapo chama com o nome da colecao e espera um `{ state, version }`.
+   * Depois embrulha cada metodo que MUTA para salvar o estado. A lista de
+   * metodos que mutam e' obtida dos PROPRIOS contratos (quem comeca com `set`,
+   * `put`, `upsert`, `delete`, `mark`, `consume`, `clear`, `save` ou
+   * `getOrGen`), entao nao ha lista paralela para envelhecer.
    */
-  const contratoAppState = () => ({
-    async get(colecao) {
-      const dados = lerJson(caminhoDe('appState'), {});
-      const v = dados[colecao];
-      return v === undefined ? null : B64.paraBinario(v);
-    },
-    async set(colecao, valor) {
-      const dados = lerJson(caminhoDe('appState'), {});
-      dados[colecao] = B64.paraJson(valor);
-      escreverJson(caminhoDe('appState'), dados);
-    },
-    async delete(colecao) {
-      const dados = lerJson(caminhoDe('appState'), {});
-      delete dados[colecao];
-      escreverJson(caminhoDe('appState'), dados);
-    },
-    async list() {
-      return Object.keys(lerJson(caminhoDe('appState'), {}));
-    },
-    async clear() {
-      try { fs.rmSync(caminhoDe('appState'), { force: true }); } catch { /* ok */ }
+  const criar = (dominio, Classe) => (sessionId) => {
+    const inst = new Classe();
+    restaurarEm(inst, lerJson(caminhoDe(dominio), null));
+
+    const salvar = () => {
+      try {
+        escreverJson(caminhoDe(dominio), estadoDe(inst));
+      } catch (e) {
+        log(`[ZAPO-STORE] falha ao gravar ${dominio}: ${e?.message || e}`);
+      }
+    };
+
+    // Embrulha os metodos que mutam. `save` (auth) e `clear` sempre salvam.
+    const MUTA = /^(set|put|upsert|delete|mark|consume|clear|save|getOrGen|remove|reset)/;
+    for (const nome of Object.getOwnPropertyNames(Object.getPrototypeOf(inst))) {
+      if (nome === 'constructor' || typeof inst[nome] !== 'function') continue;
+      if (!MUTA.test(nome)) continue;
+      const original = inst[nome].bind(inst);
+      inst[nome] = async (...args) => {
+        const r = await original(...args);
+        salvar();
+        return r;
+      };
     }
-  });
+
+    return inst;
+  };
 
   return {
     stores: {
-      auth: () => contratoAuth(),
-      signal: () => contratoMapa('signal'),
-      preKey: () => contratoMapa('preKey'),
-      session: () => contratoMapa('session'),
-      identity: () => contratoMapa('identity'),
-      senderKey: () => contratoMapa('senderKey'),
-      appState: () => contratoAppState(),
-      privacyToken: () => contratoMapa('privacyToken')
+      auth: criar('auth', WaAuthMemoryStore),
+      signal: criar('signal', WaSignalMemoryStore),
+      preKey: criar('preKey', WaPreKeyMemoryStore),
+      session: criar('session', WaSessionMemoryStore),
+      identity: criar('identity', WaIdentityMemoryStore),
+      senderKey: criar('senderKey', SenderKeyMemoryStore),
+      appState: criar('appState', WaAppStateMemoryStore),
+      privacyToken: criar('privacyToken', WaPrivacyTokenMemoryStore)
     }
   };
+}
+
+/**
+ * Atalho: carrega as classes do pacote e cria o backend.
+ *
+ * @param {string} baseDir
+ * @param {Function} [log]
+ */
+export async function criarStoreArquivoDoPacote(baseDir, log = () => {}) {
+  const mod = await import('zapo-js/store');
+  return criarStoreArquivo(mod, baseDir, log);
 }

@@ -71,8 +71,8 @@ console.log('\n=== 1) STORE DE ARQUIVO (o que faz o pareamento sobreviver) ===\n
 
 await test('grava e le as credenciais (round-trip)', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'store-'));
-  const b = zapoStore.criarStoreArquivo(dir);
-  const auth = b.stores.auth();
+  const b = await zapoStore.criarStoreArquivoDoPacote(dir);
+  const auth = b.stores.auth('s');
 
   ok(await auth.load() === null, 'começa vazio');
 
@@ -84,8 +84,8 @@ await test('grava e le as credenciais (round-trip)', async () => {
 
 await test('Uint8Array sobrevive ao JSON (sem virar objeto de bytes)', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'store-'));
-  const b = zapoStore.criarStoreArquivo(dir);
-  const auth = b.stores.auth();
+  const b = await zapoStore.criarStoreArquivoDoPacote(dir);
+  const auth = b.stores.auth('s');
 
   const chave = new Uint8Array([0, 1, 127, 128, 255]);
   await auth.save({ meJid: 'x@s.whatsapp.net', noiseKeyPair: { public: chave } });
@@ -99,34 +99,71 @@ await test('Uint8Array sobrevive ao JSON (sem virar objeto de bytes)', async () 
 
 await test('PERSISTE em disco (nova instância lê o que a anterior gravou)', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'store-'));
-  const b1 = zapoStore.criarStoreArquivo(dir);
-  await b1.stores.auth().save({ meJid: 'persistido@s.whatsapp.net' });
+  const b1 = await zapoStore.criarStoreArquivoDoPacote(dir);
+  await b1.stores.auth('s').save({ meJid: 'persistido@s.whatsapp.net' });
 
   // Instância NOVA, como se o bot tivesse reiniciado.
-  const b2 = zapoStore.criarStoreArquivo(dir);
-  const lido = await b2.stores.auth().load();
+  const b2 = await zapoStore.criarStoreArquivoDoPacote(dir);
+  const lido = await b2.stores.auth('s').load();
   ok(lido?.meJid === 'persistido@s.whatsapp.net', 'sobreviveu ao "reinício"');
 });
 
-await test('contrato de mapa: set/get/delete/list', async () => {
+await test('contrato REAL do preKey (os métodos que o motor chama)', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'store-'));
-  const b = zapoStore.criarStoreArquivo(dir);
-  const mapa = b.stores.preKey();
+  const b = await zapoStore.criarStoreArquivoDoPacote(dir);
+  const pk = b.stores.preKey('s');
 
-  ok(await mapa.get('k1') === null, 'chave ausente -> null');
-  await mapa.set('k1', { valor: new Uint8Array([7]) });
-  ok(Array.from((await mapa.get('k1')).valor)[0] === 7, 'set/get');
-  ok((await mapa.list()).includes('k1'), 'list');
-  await mapa.delete('k1');
-  ok(await mapa.get('k1') === null, 'delete');
+  // Os nomes vêm do CONTRATO do pacote (é o que o motor chama), não de um
+  // `get/set` genérico — foi a reimplementação "por adivinhação" que quebrou
+  // antes com `store.setRegistrationInfo is not a function`.
+  ok(typeof pk.putPreKey === 'function', 'putPreKey existe');
+  ok(typeof pk.getPreKeyById === 'function', 'getPreKeyById existe');
+  ok(typeof pk.getOrGenPreKeys === 'function', 'getOrGenPreKeys existe');
+  ok(typeof pk.consumePreKeyById === 'function', 'consumePreKeyById existe');
+  ok(typeof pk.markKeyAsUploaded === 'function', 'markKeyAsUploaded existe');
+  ok(typeof pk.getServerHasPreKeys === 'function', 'getServerHasPreKeys existe');
+});
+
+await test('contrato REAL do signal (o que quebrou antes)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'store-'));
+  const b = await zapoStore.criarStoreArquivoDoPacote(dir);
+  const sig = b.stores.signal('s');
+
+  ok(typeof sig.setRegistrationInfo === 'function',
+    'setRegistrationInfo EXISTE (era o erro "is not a function")');
+  ok(typeof sig.getRegistrationInfo === 'function', 'getRegistrationInfo existe');
+  ok(typeof sig.setSignedPreKey === 'function', 'setSignedPreKey existe');
+  ok(typeof sig.getSignedPreKeyRotationTs === 'function', 'getSignedPreKeyRotationTs existe');
+});
+
+await test('o estado do signal PERSISTE (grava, reinstancia, lê)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'store-'));
+
+  const b1 = await zapoStore.criarStoreArquivoDoPacote(dir);
+  const sig1 = b1.stores.signal('s');
+  await sig1.setRegistrationInfo({
+    registrationId: 4242,
+    identityKeyPair: { pub: new Uint8Array([1, 2, 3]) }
+  });
+  await sig1.setSignedPreKeyRotationTs(999);
+
+  // Instância NOVA: como se o bot tivesse reiniciado.
+  const b2 = await zapoStore.criarStoreArquivoDoPacote(dir);
+  const sig2 = b2.stores.signal('s');
+
+  const info = await sig2.getRegistrationInfo();
+  ok(info?.registrationId === 4242, 'registrationId sobreviveu');
+  ok(info?.identityKeyPair?.pub instanceof Uint8Array, 'bytes voltam como Uint8Array');
+  ok(Array.from(info?.identityKeyPair?.pub || []).join(',') === '1,2,3', 'bytes idênticos');
+  ok(await sig2.getSignedPreKeyRotationTs() === 999, 'rotationTs sobreviveu');
 });
 
 await test('clear remove tudo', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'store-'));
-  const b = zapoStore.criarStoreArquivo(dir);
-  await b.stores.auth().save({ meJid: 'a@b' });
-  await b.stores.auth().clear();
-  ok(await b.stores.auth().load() === null, 'auth limpo');
+  const b = await zapoStore.criarStoreArquivoDoPacote(dir);
+  await b.stores.auth('s').save({ meJid: 'a@b' });
+  await b.stores.auth('s').clear();
+  ok(await b.stores.auth('s').load() === null, 'auth limpo');
 });
 
 console.log('\n=== 2) estaPareado / meuJid (leitura do disco) ===\n');
