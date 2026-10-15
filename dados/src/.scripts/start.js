@@ -3,7 +3,16 @@
 import fs from 'fs/promises';
 import fsSync from 'fs';
 import path from 'path';
-import { spawn, execSync } from 'child_process';
+import { spawn, execSync, execFile } from 'child_process';
+import dotenv from 'dotenv';
+import { sincronizarCodigo } from './git-sync.js';
+import {
+    criarBackupDatabase,
+    restaurarBackupDatabase,
+    validarRestauracaoDatabase,
+    descartarBackupDatabase,
+    DB_DIR
+} from './database-backup.js';
 import readline from 'readline/promises';
 import os from 'os';
 
@@ -15,6 +24,15 @@ const CONNECT_FILE = path.join(PROJECT_ROOT, 'dados', 'src', 'connect.js');
 const PACKAGE_JSON = path.join(PROJECT_ROOT, 'package.json');
 const isWindows = os.platform() === 'win32';
 const isTermux = fsSync.existsSync('/data/data/com.termux');
+
+// Credenciais e config do sync vem do .env/ambiente (NUNCA do codigo).
+dotenv.config({ path: path.join(PROJECT_ROOT, '.env'), quiet: true });
+
+// Mesma origem/branch que o `!atualizar` usa.
+const REPO_SYNC = process.env.LIZZY_UPDATE_REMOTE || 'Souzzaaxzy/Lizzy-V4';
+const BRANCH_SYNC = process.env.LIZZY_UPDATE_BRANCH || 'main';
+// Liga por padrao; `LIZZY_SYNC_ON_BOOT=0` desliga.
+const SYNC_NO_BOOT = process.env.LIZZY_SYNC_ON_BOOT !== '0';
 
 const colors = {
   reset: '\x1b[0m',
@@ -443,6 +461,137 @@ async function promptConnectionMethod() {
   }
 }
 
+
+/**
+ * Executa um comando e devolve `{stdout, stderr}` (promise).
+ * Mesmo contrato do `execAsync` do update.js — e o que faz o `git-sync.js`
+ * funcionar aqui sem duplicar nada.
+ */
+const execAsync = (cmd, args = [], opts = {}) => new Promise((resolve, reject) => {
+  execFile(cmd, args, { maxBuffer: 10 * 1024 * 1024, ...opts }, (error, stdout, stderr) => {
+    if (error) {
+      error.stdout = stdout;
+      error.stderr = stderr;
+      return reject(error);
+    }
+    resolve({ stdout: String(stdout ?? ''), stderr: String(stderr ?? '') });
+  });
+});
+
+/** Adaptador do git no formato que o `git-sync.js` espera.
+ *
+ * O `cwd` e EXPLICITO: sem ele o git roda no diretorio do processo, o que
+ * funcionaria por acaso (o start roda na raiz) mas quebraria em qualquer
+ * execucao de outro diretorio.
+ */
+const spawnGit = (cmd, args, opts) => execAsync(cmd, args, { cwd: PROJECT_ROOT, ...opts });
+
+/** O token nunca aparece inteiro no log. */
+const mascararToken = (t) => (t && t.length > 10 ? `${t.slice(0, 4)}...${t.slice(-4)}` : '(não definido)');
+
+/**
+ * Sincroniza o CÓDIGO com a `main` remota antes de subir o bot.
+ *
+ * Reaproveita o MESMO caminho do `!atualizar`: `git-sync.js` (fetch + reset
+ * --hard + validação de SHA) e `database-backup.js` (backup/restore do banco).
+ * Não usa `git pull` ingênuo — ele faz MERGE e, com o estado local sujo
+ * (o bot grava em `dados/database` e o `npm install` reescreve o lockfile), o
+ * merge conclui "sem erro" deixando a árvore num estado que NÃO é o
+ * `origin/main`. Era a origem do "fica sempre um commit atrasado".
+ *
+ * A CREDENCIAL vem do `.env`/ambiente (`GITHUB_SYNC_TOKEN`), nunca do código.
+ * Ela só é usada para montar a URL do remote DURANTE o sync, e o remote
+ * original é restaurado no `finally` — o token NÃO fica gravado no
+ * `.git/config` (que iria para backup de quem clonar a pasta).
+ *
+ * NÃO-FATAL de propósito: falha vira aviso e o boot continua. Um bot que não
+ * sobe porque o GitHub está fora do ar é pior que um bot um commit atrasado.
+ */
+async function sincronizarNoBoot({ quiet = false } = {}) {
+  if (!SYNC_NO_BOOT) {
+    if (!quiet) info('🔄 Sync no boot desativado (LIZZY_SYNC_ON_BOOT=0).');
+    return;
+  }
+  // Instalação por zip não tem .git: não há o que sincronizar.
+  if (!fsSync.existsSync(path.join(PROJECT_ROOT, '.git'))) {
+    if (!quiet) info('📦 Sem repositório git aqui — pulando o sync do código.');
+    return;
+  }
+
+  const token = process.env.GITHUB_SYNC_TOKEN || process.env.GITHUB_TOKEN || process.env.GITHUB_UPLOAD_TOKEN || '';
+  if (!quiet) {
+    info('🔄 Sincronizando o código com a main remota...');
+    info(`🔑 Credencial: ${mascararToken(token)}`);
+  }
+
+  let remoteOriginal = null;
+  let backup = null;
+  try {
+    const { stdout } = await execAsync('git', ['remote', 'get-url', 'origin'], { cwd: PROJECT_ROOT });
+    remoteOriginal = String(stdout || '').trim();
+
+    // URL autenticada SÓ durante o sync. Restaurada no finally.
+    if (token && remoteOriginal) {
+      const autenticada = `https://${token}@github.com/${REPO_SYNC}.git`;
+      await execAsync('git', ['remote', 'set-url', 'origin', autenticada], { cwd: PROJECT_ROOT });
+    }
+
+    // 1) BACKUP do banco — antes de qualquer operação destrutiva.
+    backup = criarBackupDatabase({ cwd: PROJECT_ROOT, dir: DB_DIR });
+    if (!backup.ok) {
+      aviso(`⚠️ Backup do database falhou (${backup.reason}). Sync abortado; o boot continua.`);
+      backup = null;
+      return;
+    }
+
+    // 2) SYNC do código (fetch + reset --hard + validação de SHA).
+    const sync = await sincronizarCodigo({
+      spawn: spawnGit,
+      branch: BRANCH_SYNC,
+      remoteEsperado: REPO_SYNC,
+      // O log do git-sync imprime a URL do remote — que durante o sync carrega
+      // a credencial. Filtra a URL (o resto do diagnóstico continua).
+      log: (linha) => {
+        if (quiet) return;
+        const limpa = String(linha).replace(/https:\/\/[^@\s]+@/g, 'https://***@');
+        console.log(limpa);
+      }
+    });
+
+    // 3) RESTORE SEMPRE — garante que o banco é o estado de antes do sync,
+    //    inclusive quando o sync falha no meio (a árvore pode ter mudado).
+    const restore = restaurarBackupDatabase(backup, { cwd: PROJECT_ROOT, dir: DB_DIR });
+    const confere = restore.ok
+      && validarRestauracaoDatabase(backup, { cwd: PROJECT_ROOT, dir: DB_DIR }).ok;
+
+    if (!confere) {
+      aviso(`⚠️ Restore do database não conferiu. Backup preservado em: ${backup.backupDir}`);
+      backup = null;
+    }
+
+    if (!sync.ok) {
+      aviso(`⚠️ Sync falhou na etapa ${sync.etapa}. O database foi preservado.`);
+      return;
+    }
+
+    if (sync.jaAtualizado) {
+      mensagem('✅ Código já estava atualizado.');
+    } else {
+      mensagem('✅ Código sincronizado com a main.');
+    }
+  } catch (e) {
+    aviso(`⚠️ Sync no boot falhou: ${e.message}. Continuando o boot.`);
+  } finally {
+    // Devolve o remote original: o token não fica no .git/config.
+    if (remoteOriginal) {
+      try {
+        await execAsync('git', ['remote', 'set-url', 'origin', remoteOriginal], { cwd: PROJECT_ROOT });
+      } catch { /* best-effort */ }
+    }
+    if (backup) descartarBackupDatabase(backup);
+  }
+}
+
 async function main() {
   try {
     setupGracefulShutdown();
@@ -451,6 +600,11 @@ async function main() {
     //   FLUXO 1 — sessão existente válida  -> boot visual novo.
     //   FLUXO 2 — primeiro login (QR/código) -> apresentação ORIGINAL, intacta.
     const sessaoExistente = temSessaoRegistrada() || await checkAutoConnect();
+
+    // Sincroniza o CÓDIGO com a main remota antes de subir o bot (o mesmo
+    // caminho do `!atualizar`). O database é preservado pelo backup. É
+    // não-fatal: sem rede/git o boot segue normalmente.
+    await sincronizarNoBoot({ quiet: sessaoExistente });
 
     if (sessaoExistente) {
       await displayHeader();            // continua mostrando a versão/fork da lib
