@@ -202,7 +202,7 @@ await test('PERMISSAO: SUBIR exige admin (membro comum recusado)', async () => {
   participants.push({ lid: membro.lid, jid: membro.jid, isAdmin: false });
   const chamadas = instalarDubleMidia();
   const out = await run({ groupJid, sender: membro, text: '!callp', participants, fromMe: false });
-  includes(out.text, 'administradores do grupo', 'recusa');
+  includes(out.text, 'administradores', 'recusa');
   ok(chamadas.length === 0, 'não subiu nada');
 });
 
@@ -224,7 +224,7 @@ await test('PERMISSAO: ENCERRAR exige admin (membro comum recusado)', async () =
   instalarDubleMidia({ callId: 'CALL-X' });
   await run({ groupJid, sender: admin, text: '!callp', participants });
   const out = await run({ groupJid, sender: membro, text: '!callp encerrar', participants, fromMe: false });
-  includes(out.text, 'administradores do grupo', 'recusa');
+  includes(out.text, 'administradores', 'recusa');
   ok(callState.obterCall(groupJid)?.callId === 'CALL-X', 'a call segue de pé');
   callState.limparCall(groupJid);
 });
@@ -395,7 +395,7 @@ await test('FIX 5: encerrar remove o callback de fim de áudio', async () => {
   sent.length = 0;
 
   const src = fs.readFileSync(path.join(HERE, '..', 'dados/src/index.js'), 'utf-8');
-  const blocoEncerrar = src.slice(src.indexOf("subCallp === 'encerrar'"), src.indexOf("subCallp === 'encerrar'") + 1800);
+  const blocoEncerrar = src.slice(src.indexOf("subCallp === 'encerrar'"), src.indexOf("subCallp === 'encerrar'") + 6000);
   ok(blocoEncerrar.includes('aoTerminarAudio(from, null)'), 'desregistra o callback de áudio');
   ok(blocoEncerrar.includes('aoEncerrarAudio(from, null)'), 'desregistra o callback de fim de call');
 });

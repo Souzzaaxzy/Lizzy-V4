@@ -292,10 +292,13 @@ const COMANDOS_POR_MENU = {
   // menudono +6 (categoria CHAMADAS ganhou: callp status, musicap adicionar/
   //               pular/atual/limpar e !fila) -> 185
   // menumemb +8 (categoria MUSICA NA CALL: musicap + 6 subcomandos + !fila) -> 62
-  // CHAMADAS mudou de mao (out/2026): subir/encerrar/status passaram para os
-  // ADMINS e o menudono ficou so' com o `callp parear` (credencial).
-  // menuadm +3 -> 181 | menudono -3 -> 182.
-  menuadm: 181, menudono: 182,
+  // PERMISSOES DE CALL (out/2026): subir/encerrar virou ADMIN, parear ficou
+  // so' do dono. Os comandos de call SAIRAM do menudono e entraram no menuadm:
+  //   menuadm 178 -> 188 (+10: callp, callp encerrar, callp status, musicap e
+  //                         seus 5 subcomandos + !fila);
+  //   menudono 185 -> 175 (-10: so' ficou `callp parear`).
+  menuadm: 188, menudono: 175,
+
   // menubn: 349 -> 350 (`!ppp` entrou na 1a categoria)
   // -> 358 (`!hetero`, `!hetera`, `!aura`, `!sigma`, `!ceu`, `!inferno`,
   // `!frio`, `!fria` entraram na categoria BRINCADEIRAS)

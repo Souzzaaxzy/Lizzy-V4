@@ -65,13 +65,6 @@ export default async function menuadm(prefix, botName = "MeuBot", userName = "Us
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭━━━꧁༺ ㅤ📞 ${boldItalic('CHAMADAS')} 📞ㅤ ༻꧂━━━╮
-│ 📞 ${prefix}callp
-│ 📴 ${prefix}callp encerrar
-│ 📊 ${prefix}callp status
-╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
-
-
 ╭━━━꧁༺ ㅤ🛡️ ${boldItalic('CONTROLE LEGADO')} 🛡️ㅤ ༻꧂━━━╮
 │ 📋 ${prefix}listblocksgp
 │ ➕ ${prefix}addblacklist
@@ -101,6 +94,20 @@ export default async function menuadm(prefix, botName = "MeuBot", userName = "Us
 │ 🎭 ${prefix}role.criar
 │ ✏ ${prefix}role.alterar
 │ ❌ ${prefix}role.excluir
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
+
+
+╭━━━꧁༺ ㅤ📞 ${boldItalic('CHAMADAS')} 📞ㅤ ༻꧂━━━╮
+│ 📞 ${prefix}callp
+│ 📴 ${prefix}callp encerrar
+│ 📊 ${prefix}callp status
+│ 🎵 ${prefix}musicap <nome/link>
+│ ➕ ${prefix}musicap adicionar
+│ ⏭️ ${prefix}musicap pular
+│ ⏹️ ${prefix}musicap parar
+│ 🎶 ${prefix}musicap atual
+│ 🗑️ ${prefix}musicap limpar
+│ 📋 ${prefix}fila
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 

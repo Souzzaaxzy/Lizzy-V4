@@ -35743,10 +35743,29 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
 
           const subCallp = normalizar((args[0] || '')).trim();
 
-          // STATUS — LIVRE para qualquer membro do grupo. A checagem de dono
-          // vem DEPOIS deste bloco de proposito: o `menumemb` anuncia
-          // `!callp status`, entao barrá-lo aqui deixava o comando visível num
-          // menu que não conseguia usá-lo.
+          // PERMISSOES (pedido do dono):
+          //   !callp parear <numero>   -> SO' o dono (o codigo pareia um
+          //                               aparelho na conta; e' credencial);
+          //   !callp / !callp encerrar -> ADMIN do grupo (quem sobe e derruba);
+          //   !callp status            -> qualquer membro.
+          //
+          // A classificacao vem ANTES de qualquer I/O: um membro comum nao
+          // dispara leitura de metadata nem toca no motor de midia.
+          const ehPareamento = subCallp === 'parear' || subCallp === 'pair';
+          const ehEncerrar = subCallp === 'encerrar' || subCallp === 'parar' || subCallp === 'desligar';
+          const ehStatus = subCallp === 'status' || subCallp === 'info';
+
+          if (ehPareamento && !podeDonoTotal()) {
+            return reply('⛔ Apenas o Dono pode parear o motor de mídia.');
+          }
+          // Subir a chamada: admin do grupo (o `isGroupAdmin` ja' agrega dono,
+          // subdono, moderador e alphas autorizados). `status` fica livre.
+          if (!ehPareamento && !ehEncerrar && !ehStatus && !isGroupAdmin) {
+            return reply('⛔ Apenas administradores podem subir a chamada.');
+          }
+          if (ehEncerrar && !isGroupAdmin) {
+            return reply('⛔ Apenas administradores podem encerrar a chamada.');
+          }
           if (subCallp === 'status' || subCallp === 'info') {
             const ativa = obterCall(from);
             const resumo = musicQueue.resumo(from);
@@ -35779,7 +35798,6 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
           // Fica com o DONO (e nao com os admins) porque pareia um DISPOSITIVO
           // na conta do bot — e' credencial, nao operacao de grupo.
           if (subCallp === 'parear' || subCallp === 'pair') {
-            if (!podeDonoTotal()) return reply('⛔ Apenas o Dono pode parear o motor de mídia.');
             const numero = String(args[1] || '').replace(/\D/g, '');
             if (!numero || numero.length < 10) {
               return reply('❌ Informe o numero com DDI.\n\nEx.: `!callp parear 5511999999999`');
@@ -35804,12 +35822,6 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             );
           }
 
-          // SUBIR e ENCERRAR ficam com os ADMINISTRADORES do grupo (pedido do
-          // dono). O `isGroupAdmin` ja' cobre admin do grupo, dono, subdono e os
-          // moderadores/alpha autorizados — nenhum sistema de permissao novo.
-          if (!isGroupAdmin) {
-            return reply('⛔ Apenas administradores do grupo podem subir ou encerrar a chamada.');
-          }
 
           // Encerra a call que ESTE comando subiu (se houver).
           if (subCallp === 'encerrar' || subCallp === 'parar' || subCallp === 'desligar') {

@@ -92,6 +92,66 @@ await test('a fila é POR GRUPO (não vaza entre grupos)', () => {
   ok(fila.atual(G2) === null, 'sem atual no outro grupo');
 });
 
+await test('ISOLAMENTO REAL: duas calls, duas filas, uma não mexe na outra', () => {
+  // O cenario que o dono descreveu: musica na call de UM grupo fica so' naquele
+  // grupo. Mede a fila E o cache em disco (os dois tem de ser por grupo).
+  fila.limparTudo();
+
+  // Fila do grupo A (2 faixas) e do grupo B (1 faixa), donos diferentes.
+  fila.enfileirar(G1, { caminho: '/a1.wav', titulo: 'A1', donoId: EU });
+  fila.enfileirar(G1, { caminho: '/a2.wav', titulo: 'A2', donoId: EU });
+  fila.enfileirar(G2, { caminho: '/b1.wav', titulo: 'B1', donoId: OUTRO });
+
+  ok(fila.tamanho(G1) === 2, 'A tem 2');
+  ok(fila.tamanho(G2) === 1, 'B tem 1');
+  ok(fila.atual(G1).titulo === 'A1', 'A toca A1');
+  ok(fila.atual(G2).titulo === 'B1', 'B toca B1');
+
+  // Avancar em A NAO pode tocar em B.
+  const r = fila.avancar(G1);
+  ok(r.saiu?.titulo === 'A1', 'saiu a A1 do A');
+  ok(r.faixa?.titulo === 'A2', 'a nova atual do A e a A2');
+  ok(fila.tamanho(G2) === 1, 'B continua com 1');
+  ok(fila.atual(G2).titulo === 'B1', 'B continua na B1');
+
+  // Limpar A NAO pode esvaziar B.
+  const limpo = fila.limpar(G1);
+  ok(limpo.removidas === 1, 'limpou 1 faixa do A');
+  ok(fila.tamanho(G1) === 0, 'A esvaziou');
+  ok(fila.tamanho(G2) === 1, 'B intacto apos limpar o A');
+  ok(fila.atual(G2).titulo === 'B1', 'B segue tocando');
+
+  // O dono de B continua podendo controlar o que e' dele (e so' dele).
+  const podeB = fila.podeControlar(G2, OUTRO, { mesmoId: (a, b) => a === b });
+  ok(podeB.ok === true, 'o dono da faixa de B controla B');
+  const naoPode = fila.podeControlar(G2, EU, { mesmoId: (a, b) => a === b });
+  ok(naoPode.ok === false && naoPode.motivo === 'nao_e_dono', 'quem nao pediu nao controla B');
+
+  fila.limparTudo();
+});
+
+await test('ISOLAMENTO DO CACHE: os arquivos ficam em pastas por grupo', () => {
+  // O audio preparado vive em `call-cache/<grupo>/`. Limpar o cache de um grupo
+  // NAO pode apagar o do outro (senao a call vizinha fica muda).
+  const pa = cache.caminhoNovo(G1);
+  const pb = cache.caminhoNovo(G2);
+  fs.writeFileSync(pa, Buffer.alloc(512));
+  fs.writeFileSync(pb, Buffer.alloc(768));
+
+  ok(fs.existsSync(pa) && fs.existsSync(pb), 'os dois arquivos existem');
+  ok(pa !== pb, 'caminhos diferentes (ids unicos)');
+  ok(pa.includes('111_g.us'), 'o arquivo de A esta na pasta do grupo A');
+  ok(pb.includes('222_g.us'), 'o arquivo de B esta na pasta do grupo B');
+
+  const removidos = cache.limparGrupo(G1);
+  ok(removidos >= 1, 'limpou o cache do grupo A');
+  ok(!fs.existsSync(pa), 'o arquivo de A saiu');
+  ok(fs.existsSync(pb), 'o arquivo de B CONTINUA (isolado)');
+
+  cache.limparGrupo(G2);
+  ok(!fs.existsSync(pb), 'limpeza do B tambem funciona');
+});
+
 await test('avancar ANDA, TIRA a que acabou e esvazia no fim', () => {
   fila.limparTudo();
   fila.enfileirar(G1, { caminho: '/a.wav', titulo: 'A', donoId: EU });
@@ -237,22 +297,20 @@ await test('!callp status existe', () => {
   includes(desbold(SRC), 'STATUS DA CHAMADA', 'o layout');
 });
 
-await test('!callp: SUBIR/ENCERRAR sao de ADMIN e o PAREAR e\' do DONO', () => {
-  // Mudou em out/2026 (pedido do dono): subir/encerrar passaram para os
-  // administradores do grupo; o pareamento — que mexe na CONTA — ficou so'
-  // com o dono. O `status` e' livre.
+await test('!callp subir/encerrar são de ADMIN; parear é só do dono', () => {
+  // Contrato atual (pedido do dono): subir e encerrar a chamada sao de ADMIN;
+  // o PARECIMENTO (que mexe na conta) segue exclusivo do dono; `status` e' de
+  // qualquer membro.
   const i = SRC.indexOf("case 'callp':");
-  const j = SRC.indexOf("case 'musicap':");
-  const bloco = SRC.slice(i, j);
-  includes(bloco, "if (!isGroupAdmin)", 'subir/encerrar exigem admin');
-  includes(bloco, 'administradores do grupo', 'mensagem clara');
-  // O gate de dono existe, mas SO' dentro do bloco de pareamento.
-  const iParear = bloco.indexOf("subCallp === 'parear'");
-  const iAdmin = bloco.indexOf("if (!isGroupAdmin)");
-  ok(iParear >= 0, 'achou o bloco de pareamento');
-  ok(iAdmin > iParear, 'o gate de admin vem DEPOIS do pareamento (que e do dono)');
-  const blocoParear = bloco.slice(iParear, iAdmin);
-  includes(blocoParear, 'podeDonoTotal()', 'parear exige dono');
+  const bloco = SRC.slice(i, i + 1600);
+  includes(bloco, 'isGroupAdmin', 'o gate de admin esta no callp');
+  includes(bloco, 'ehPareamento', 'o pareamento tem tratamento proprio');
+  includes(bloco, 'podeDonoTotal()', 'o pareamento segue exigindo o dono');
+  // O gate de dono NAO pode cobrir o bloco inteiro (senao admin nao sobe).
+  const cabeca = bloco.slice(0, bloco.indexOf('ehPareamento'));
+  ok(!/if \(!podeDonoTotal\(\)\) return reply\('⛔ Apenas o Dono/.test(cabeca),
+     'nao ha gate de dono cobrindo o callp inteiro');
+
 });
 
 await test('!musicap NÃO tem gate de dono (membro pode usar)', () => {

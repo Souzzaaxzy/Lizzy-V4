@@ -251,8 +251,11 @@ await test('o erro criptico do motor NÃO é o que o usuário vê', () => {
   // O termo aparece em COMENTÁRIO (documentando a causa). O que importa é que
   // ele não esteja numa mensagem ENVIADA ao usuário. Comparar com o trecho do
   // `reply(` é o critério certo: é por ali que o texto sai.
+  // A ancora e' o IF do bloco de envio do pareamento (nao a primeira mencao
+  // textual a 'parear', que agora aparece antes, na classificacao de
+  // permissoes). O que o teste mede e' o texto que SAI ao usuario.
   const trechoPareamento = INDEX.slice(
-    INDEX.indexOf("subCallp === 'parear'"),
+    INDEX.indexOf("if (subCallp === 'parear' || subCallp === 'pair')"),
     INDEX.indexOf('// Encerra a call que ESTE comando subiu')
   );
   ok(trechoPareamento.length > 0, 'achou o bloco do subcomando');
