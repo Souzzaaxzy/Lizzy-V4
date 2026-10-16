@@ -235,6 +235,23 @@ export async function estaPareado() {
   return m.estaPareado();
 }
 
+/**
+ * O cliente do backend de midia (para o video / transmissao de tela).
+ *
+ * O `!midiap` precisa falar direto com o `voip` (upgrade de video, screen
+ * share, feedLiveVideo). So' o backend zapo expoe isso; sem ele devolve
+ * `null` e o comando avisa que a midia nao esta disponivel.
+ *
+ * @returns {Promise<object|null>}
+ */
+export async function obterVoip() {
+  if (duble || dubleEntrar) return null;
+  const m = await carregarMidia();
+  if (!m || !usandoZapo(m)) return null;
+  const cli = await m.obterCliente?.();
+  return cli?.voip || null;
+}
+
 /** Pede o código de pareamento (só o backend zapo implementa). */
 export async function parearMidia(numero) {
   if (duble) return { ok: false, motivo: 'backend_nao_exige_pareamento' };

@@ -1241,6 +1241,7 @@ import * as callPlayer from './funcs/utils/callPlayer.js';
 import * as callCache from './utils/callCache.js';
 import { prepararAudioCall } from './utils/callAudioPrep.js';
 import { baixarThumb } from './utils/callThumb.js';
+import * as midiap from './funcs/utils/midiap.js';
 import { aoTerminarAudio, aoEncerrarAudio } from './funcs/utils/zapoCall.js';
 import { search, searchNews } from './funcs/utils/search.js';
 import { removeBg, upscale } from './funcs/utils/imagetools.js';
@@ -36242,6 +36243,121 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
           return;
         } catch (e) {
           console.error('[MUSICAP] erro externo:', e?.message);
+          await reply('Ocorreu um erro 💔');
+        }
+        break;
+
+      // !midiap — transmite um VIDEO na call (transmissao de tela).
+      //
+      // Responde um video com o comando: o bot poe a call em modo video,
+      // troca a camera pela tela (`setScreenShare`) e alimenta os frames.
+      // Roda UMA vez e para sozinho. `!midiap parar` interrompe antes.
+      //
+      // O H.264 vem do ffmpeg (o pacote de midia nao codifica no Node); o
+      // `midiap.js` cuida do upgrade, do screen share e do pacing.
+      case 'midiap':
+      case 'telacall':
+      case 'transmitirtela':
+        try {
+          if (!isGroup) return reply('Isso só pode ser usado em grupo 💔');
+          if (!obterCall(from)?.callId) {
+            return reply('❌ Não há chamada ativa neste grupo.\n\nUse `' + prefix + 'callp` primeiro.');
+          }
+
+          const subMidiap = normalizar((args[0] || '')).trim();
+
+          if (subMidiap === 'parar' || subMidiap === 'stop') {
+            const r = midiap.parar(from);
+            if (!r.ok) return reply('📴 Não estou transmitindo nada neste grupo.');
+            return reply('⏹️ Transmissão encerrada.');
+          }
+
+          if (midiap.transmitindo(from)) {
+            return reply('📺 Já estou transmitindo neste grupo.\n\nUse `' + prefix + 'midiap parar` para encerrar.');
+          }
+
+          // A midia precisa estar no ar (o `!callp` sobe a pilha).
+          const citado = extractQuoted(info.message);
+          const tipoCitado = citado ? getContentType(citado) : null;
+          if (!citado || tipoCitado !== 'videoMessage' || !citado.videoMessage) {
+            return reply(
+              '📺 *MIDIAP*\n\n' +
+              'Responda um *vídeo* com `' + prefix + 'midiap` para transmiti-lo na call.\n\n' +
+              '• `' + prefix + 'midiap parar` — encerra a transmissão'
+            );
+          }
+
+          const video = citado.videoMessage;
+          const aviso = await nazu.sendMessage(from, {
+            text: '📺 Preparando a transmissão...',
+            contextInfo: gerarContextNewsletter()
+          }).catch(() => null);
+          const apagarAviso = async () => {
+            if (!aviso) return;
+            await nazu.sendMessage(from, { delete: aviso.key }).catch(() => {});
+          };
+
+          // Baixa o video (mesmo caminho da midia marcada do `!musicap`).
+          let arquivo;
+          try {
+            const stream = await downloadContentFromMessage(video, 'video');
+            const pedacos = [];
+            for await (const c of stream) pedacos.push(c);
+            const buf = Buffer.concat(pedacos);
+            if (!buf.length) throw new Error('video vazio');
+            arquivo = midiap.caminhoDoVideo(from, '.mp4');
+            fs.writeFileSync(arquivo, buf);
+          } catch (e) {
+            await apagarAviso();
+            console.error('[MIDIAP] download:', e?.message);
+            return reply('❌ Não consegui baixar o vídeo marcado.');
+          }
+
+          // Roda em BACKGROUND: a transmissao dura o video inteiro.
+          void (async () => {
+            try {
+              await apagarAviso();
+              const ativa = obterCall(from);
+              const r = await midiap.transmitir({
+                grupo: from,
+                callId: ativa.callId,
+                arquivo,
+                log: (m) => console.log('[MIDIAP]', m)
+              });
+              if (!r.ok) {
+                const motivos = {
+                  sem_call: 'A chamada caiu antes de eu começar.',
+                  arquivo_ausente: 'O arquivo do vídeo sumiu.',
+                  ja_transmitindo: 'Já estou transmitindo neste grupo.',
+                  pacote_de_midia_ausente: 'A mídia não está instalada neste servidor.',
+                  upgrade_timeout: 'O servidor não confirmou o modo vídeo a tempo.',
+                  upgrade_rejected: 'O servidor recusou o modo vídeo.',
+                  upgrade_error: 'O outro lado não conseguiu ligar o vídeo.',
+                  upgrade_falhou: 'Não consegui ligar o modo vídeo.',
+                  screenshare_falhou: 'Não consegui iniciar a transmissão de tela.',
+                  falha_na_transmissao: 'A transmissão falhou no meio.'
+                };
+                await nazu.sendMessage(from, {
+                  text: `❌ Transmissão não iniciada.\n\n_${motivos[r.motivo] || r.motivo || 'erro desconhecido'}_` +
+                    (r.detalhe ? `\n\n\`${r.detalhe}\`` : ''),
+                  contextInfo: gerarContextNewsletter()
+                }).catch(() => {});
+                return;
+              }
+              await nazu.sendMessage(from, {
+                text: `📺 Transmissão encerrada (${r.frames || 0} quadros enviados).`,
+                contextInfo: gerarContextNewsletter()
+              }).catch(() => {});
+            } catch (e) {
+              console.error('[MIDIAP] erro:', e?.message);
+            } finally {
+              try { fs.unlinkSync(arquivo); } catch { /* ok */ }
+            }
+          })();
+
+          return; // handler liberado: a transmissao segue em background
+        } catch (e) {
+          console.error('[MIDIAP] erro externo:', e?.message);
           await reply('Ocorreu um erro 💔');
         }
         break;
