@@ -39,6 +39,7 @@
 import fs from 'fs';
 import path from 'path';
 import { criarStoreArquivoDoPacote } from './zapoStore.js';
+import { instalarBitrate, bitrateEmUso } from '../../utils/mlowBitrate.js';
 import { DATABASE_DIR } from '../../utils/paths.js';
 
 let mod = null;
@@ -259,6 +260,11 @@ export async function obterCliente() {
     try {
       const { createStore, WaClient, ConsoleLogger, voipPlugin } = m;
 
+      // Eleva o bitrate do encoder MLow (padrao do pacote: 15 kbps).
+      // Instalado ANTES de criar o client: o media plane carrega o codec na
+      // primeira call, entao o gancho precisa estar no lugar antes disso.
+      await instalarBitrate().catch(() => false);
+
       // Backend de ARQUIVO cobrindo os dominios de persistencia. As caixas de
       // mensagens ficam de fora ('none'): o zapo aqui so carrega a MIDIA.
       const backend = await criarStoreArquivoDoPacote(AUTH_DIR, (m) => console.warn(m));
@@ -335,8 +341,10 @@ export async function obterCliente() {
       // Uma linha dizendo o que ficou LIGADO (para nao depender de suposicao).
       {
         const companion = caminhoCompanion();
+        const kbps = bitrateEmUso();
         console.log(
           `[ZAPOCALL] audio: RED ${usarMlowRed() ? 'ligado' : 'desligado'}` +
+          ` | bitrate ${kbps ? `${Math.round(kbps / 1000)} kbps` : 'padrao (15 kbps)'}` +
           ` | pos-filtro neural ${companion ? `ligado (${companion})` : 'INDISPONIVEL (sem o arquivo de pesos)'}`
         );
       }
