@@ -23,11 +23,19 @@
  * 7.4/7.6 kHz foi testado e medido como PIOR (corta agudo sem baixar o piso) --
  * por isso nao esta aqui.
  *
- * ## O gate e' conservador de proposito
+ * ## O limiar do gate foi MEDIDO (e corrigido)
  *
- * `agate` corta o que esta' abaixo do limiar, entao um trecho MUITO suave
- * poderia sumir. O limiar padrao (0.008 ~ -42 dBFS) fica abaixo de qualquer
- * passagem musical audivel; um trecho de musica baixinha (-30 dBFS) atravessa.
+ * O limiar antigo (0.008) parecia conservador, mas **nao era**: medido com
+ * musica + ruido de fundo, ele cortava 24 dB das passagens SUAVES:
+
+ * | limiar | musica | trecho suave | pausa (chiado) |
+ * |---|---|---|---|
+ * | 0.008 (antes) | -29.8 dB | **-78.3 dB** (sumia) | -90.3 dB |
+ * | **0.001 (agora)** | -29.8 dB | **-54.1 dB** (preserva) | **-90.3 dB** |
+ * | 0 (sem gate) | -29.8 dB | -54.1 dB | **-68.1 dB** (chiado volta) |
+
+ * Ou seja: `0.001` e' o ponto onde a musica suave passa E o chiado continua
+ * cortado. Era a causa do "audio esta baixo".
  *
  * ## Sem ffmpeg nao piora
  *
@@ -43,7 +51,7 @@ const TAXA = 16000;
 /** Filtro de cadeia (ver a tabela no topo do arquivo). */
 const FILTROS = [
   'highpass=f=70',                                   // tira o rumble (< 70 Hz)
-  'agate=threshold=0.008:ratio=6:attack=8:release=200', // corta o ruido de fundo
+  'agate=threshold=0.001:ratio=6:attack=8:release=200', // corta o ruido SEM comer a musica
   'alimiter=limit=0.95',                             // impede clipping
   `aresample=resampler=soxr:precision=28`            // downsample com anti-alias
 ].join(',');

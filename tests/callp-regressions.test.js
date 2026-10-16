@@ -549,6 +549,87 @@ await test('THUMB: baixarThumb BAIXA de verdade e grava no cache do grupo', asyn
 });
 
 // ============================================================================
+// PARAR: o bug do MUTE que deixava a call MUDA para sempre
+// ============================================================================
+
+await test('PARAR: nao usa setMute(true) (que deixava a call muda)', () => {
+  // O bug do dono: "parei a musica, coloquei outra, o bot disse que estava
+  // tocando mas nao saia som". Causa: o `parar` fazia `setMute(callId, true)`
+  // e NADA revertia — o setMute silencia a CAPTURA da call inteira.
+  const z = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/zapoCall.js'), 'utf-8');
+  const i = z.indexOf('export async function pararAudioDaCall');
+  const bloco = z.slice(i, i + 2200);
+  ok(!/setMute\(callId, true\)/.test(bloco), 'NAO muta a call para "parar"');
+  ok(/setMute\(callId, false\)/.test(bloco), 'DESMUTA (conserta uma call que ficou muda)');
+  includes(bloco, 'loadAudio', 'para carregando um arquivo (o motor substitui)');
+});
+
+await test('PARAR: carrega um WAV de SILENCIO (nao ha stop no motor)', () => {
+  const z = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/zapoCall.js'), 'utf-8');
+  includes(z, 'async function silencioWav()', 'existe o gerador do silencio');
+  includes(z, "anullsrc=r=16000:cl=mono", 'gera silencio em 16 kHz mono (o formato do motor)');
+  includes(z, "'silencio-16k.wav'", 'cacheia o arquivo (gera uma vez)');
+});
+
+await test('PARAR: a fila vazia silencia; com proxima, toca ela', async () => {
+  const { groupJid, admin, participants } = setup(3);
+  instalarDubleMidia({ callId: 'CALL-PARAR' });
+  await run({ groupJid, sender: admin, text: '!callp', participants });
+
+  const cm = await import(new URL('../dados/src/funcs/utils/callMedia.js', import.meta.url).href);
+  const chamadas = [];
+  cm.__setDuble({
+    estagio: () => 'pronta',
+    tocar: async (g, f) => { chamadas.push({ tipo: 'tocar', f }); return { ok: true }; },
+    parar: async () => { chamadas.push({ tipo: 'parar' }); return { ok: true }; }
+  });
+
+  const cache = await import(new URL('../dados/src/utils/callCache.js', import.meta.url).href);
+  const a = cache.caminhoNovo(groupJid, '.wav'); fs.writeFileSync(a, 'a');
+  const b = cache.caminhoNovo(groupJid, '.wav'); fs.writeFileSync(b, 'b');
+
+  musicQueue.limparTudo();
+  musicQueue.enfileirar(groupJid, { caminho: a, titulo: 'A', donoId: admin.lid });
+  musicQueue.enfileirar(groupJid, { caminho: b, titulo: 'B', donoId: admin.lid });
+
+  // Com proxima: para A e toca B.
+  await run({ groupJid, sender: admin, text: '!musicap parar', participants });
+  ok(chamadas.some((c) => c.tipo === 'tocar' && c.f === b), 'tocou a proxima (B)');
+  ok(musicQueue.atual(groupJid)?.titulo === 'B', 'B virou a atual');
+
+  // Fila com uma so: para e SILENCIA (nao muta).
+  const r = await run({ groupJid, sender: admin, text: '!musicap parar', participants });
+  includes(r.text, 'terminou', 'avisa que a fila terminou');
+  ok(chamadas.filter((c) => c.tipo === 'parar').length >= 1, 'chamou o silenciar');
+
+  cm.__setDuble(null);
+  musicQueue.limparTudo();
+  callState.limparCall(groupJid);
+});
+
+// ============================================================================
+// CAPA: nao pode atrasar o inicio da musica
+// ============================================================================
+
+await test('CAPA: o download roda em PARALELO com o audio (nao bloqueia)', () => {
+  // Medido: `await baixarThumb` somava ~315 ms ao inicio da musica. Agora o
+  // disparo acontece ANTES do `youtube.mp3` e a espera vem DEPOIS dele.
+  const src = fs.readFileSync(path.join(HERE, '..', 'dados/src/index.js'), 'utf-8');
+  const iDispara = src.indexOf('promessaThumb = baixarThumb');
+  const iAudio = src.indexOf('await youtube.mp3(videoUrl, 128)');
+  const iEspera = src.indexOf('const thumb = promessaThumb ?');
+  ok(iDispara > 0 && iAudio > 0 && iEspera > 0, 'achou os 3 pontos');
+  ok(iDispara < iAudio, 'a capa COMECA antes do download do audio');
+  ok(iAudio < iEspera, 'a espera pela capa vem DEPOIS do audio (paralelo)');
+});
+
+await test('CAPA: a primeira mensagem ainda sai com a imagem', () => {
+  const src = fs.readFileSync(path.join(HERE, '..', 'dados/src/index.js'), 'utf-8');
+  // A `thumb` vai na faixa enfileirada (nao mais `null`).
+  includes(src, 'donoId: sender,\n              thumb\n', 'a faixa enfileirada leva a thumb');
+});
+
+// ============================================================================
 // PULAR: SO' QUEM ESCOLHEU A MUSICA (comportamento, nao estrutura)
 // ============================================================================
 

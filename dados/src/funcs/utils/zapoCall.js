@@ -38,6 +38,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { spawn } from 'child_process';
 import { criarStoreArquivoDoPacote } from './zapoStore.js';
 import { instalarBitrate, configuracaoEmUso, caminhoCompanionEsperado } from '../../utils/mlowBitrate.js';
 import { DATABASE_DIR } from '../../utils/paths.js';
@@ -610,7 +611,26 @@ export async function tocarAudioNaCall(grupo, arquivo) {
   }
 }
 
-/** Para o audio em reproducao, mantendo a call de pe. */
+/**
+ * Para o audio em reproducao, mantendo a call de pe.
+ *
+ * ## O BUG que isto corrige
+ *
+ * Antes daqui saia um `setMute(callId, true)` e NADA revertia o mute. O
+ * `setMute` silencia a CAPTURA da call inteira (a doc: *"mutes our capture
+ * and announces it; the media keeps sending silence"*), entao depois de um
+ * `!musicap parar` com a fila vazia a call ficava MUDA para sempre: o bot
+ * dizia "tocando agora" mas nao saia som nenhum. Era exatamente o relato.
+ *
+ * ## Como parar de verdade
+ *
+ * O motor nao tem "stop": carregar um arquivo SUBSTITUI o que estava
+ * tocando (`WaAudioEngine.loadAudioFile` zera o `audioPosition`). Entao
+ * carregamos um WAV de SILENCIO -- a saida para sem mexer no mute da call.
+ *
+ * Best-effort: sem ffmpeg (ou se o silencio falhar) ainda desmutamos, para
+ * nunca deixar a call muda.
+ */
 export async function pararAudioDaCall(grupo) {
   if (duble) return duble.parar(grupo);
 
@@ -620,10 +640,13 @@ export async function pararAudioDaCall(grupo) {
   const callId = callsPorGrupo.get(grupo);
   if (!callId) return { ok: false, motivo: 'sem_call' };
 
+  // Desmuta SEMPRE: se uma versao anterior deixou a call muda, isto a
+  // devolve. E' barato e idempotente.
+  try { cli.voip.setMute(callId, false); } catch { /* segue */ }
+
   try {
-    // Nao ha "parar audio" dedicado: silenciar o mic local interrompe a saida
-    // sem derrubar a call.
-    cli.voip.setMute(callId, true);
+    const silencio = await silencioWav();
+    if (silencio) await cli.voip.loadAudio(callId, silencio);
     return { ok: true, callId };
   } catch (e) {
     return { ok: false, motivo: 'falha_ao_parar', detalhe: e?.message || String(e) };
@@ -724,6 +747,40 @@ export function aoTerminarAudio(grupo, cb) {
 export function aoEncerrarAudio(grupo, cb) {
   if (cb === null) aoEncerrarPorGrupo.delete(grupo);
   else aoEncerrarPorGrupo.set(grupo, cb);
+}
+
+/**
+ * Caminho de um WAV de SILENCIO (1 s, 16 kHz mono), gerado uma vez.
+ *
+ * Serve para "parar" a reproducao: o motor troca o arquivo em curso por
+ * este. Sem ffmpeg devolve `null` e o chamador so' desmuta.
+ *
+ * @returns {Promise<string|null>}
+ */
+let _silencio = null;
+async function silencioWav() {
+  if (_silencio) return _silencio;
+  try {
+    const dir = path.join(DATABASE_DIR, 'zapo-models');
+    fs.mkdirSync(dir, { recursive: true });
+    const destino = path.join(dir, 'silencio-16k.wav');
+    if (fs.existsSync(destino)) { _silencio = destino; return destino; }
+    const ffmpeg = process.env.FFMPEG_PATH || 'ffmpeg';
+    await new Promise((resolve, reject) => {
+      const p = spawn(ffmpeg, [
+        '-hide_banner', '-loglevel', 'error', '-y',
+        '-f', 'lavfi', '-i', 'anullsrc=r=16000:cl=mono',
+        '-t', '1', '-c:a', 'pcm_s16le', destino
+      ], { stdio: ['ignore', 'ignore', 'ignore'] });
+      p.on('error', reject);
+      p.on('close', (code) => (code === 0 ? resolve() : reject(new Error('ffmpeg ' + code))));
+    });
+    if (!fs.existsSync(destino)) return null;
+    _silencio = destino;
+    return destino;
+  } catch {
+    return null;
+  }
 }
 
 /** A conexao esta aberta agora? (diagnostico) */

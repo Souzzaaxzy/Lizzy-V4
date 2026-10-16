@@ -71,11 +71,19 @@ await test('a cadeia tem os 4 filtros medidos', () => {
   includes(PREP, 'resampler=soxr', 'soxr: resample com anti-alias de verdade');
 });
 
-await test('o gate tem limiar BAIXO (nao corta musica suave)', () => {
+await test('o gate tem limiar MEDIDO (nao corta musica suave)', () => {
   const m = PREP.match(/agate=threshold=([0-9.]+)/);
   ok(m, 'o limiar esta declarado');
   const limiar = Number(m[1]);
-  ok(limiar > 0 && limiar <= 0.02, `limiar conservador (${limiar}) — abaixo de qualquer passagem audivel`);
+  // Medido (musica + ruido de fundo):
+  //   0.008 -> cortava 24 dB das passagens SUAVES (-78 dB contra -54 dB)
+  //   0.001 -> preserva a musica E mantem o chiado cortado
+  //   0     -> o chiado volta (-68 dB na pausa)
+  // A faixa abaixo trava o valor no ponto medido: um teste que aceitasse
+  // 'qualquer coisa <= 0.02' deixou passar o 0.008, que era o BUG.
+  ok(limiar > 0, 'o gate esta ligado (0 = chiado volta)');
+  ok(limiar <= 0.002, `limiar no ponto medido (${limiar}) — acima disso come a musica suave`);
+  ok(limiar >= 0.0005, `limiar nao tao baixo a ponto de virar 'sem gate' (${limiar})`);
 });
 
 await test('o formato de saida e o que o motor quer (16 kHz mono PCM)', () => {

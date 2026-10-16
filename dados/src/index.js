@@ -36098,6 +36098,8 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             let titulo = termo;
             // URL da capa. So' a busca por nome tem (midia marcada nao traz).
             let thumbUrl = null;
+            // Download da capa em andamento (paralelo ao do audio).
+            let promessaThumb = null;
 
             const citado = extractQuoted(info.message);
             if (citado) {
@@ -36147,6 +36149,14 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               titulo = busca.data.title || termo;
               thumbUrl = busca.data.thumbnail || null;
 
+              // A capa comeca a baixar AGORA, em paralelo com o audio. Antes
+              // ela era buscada depois do audio e o `await` somava ~315 ms ao
+              // inicio da musica (medido) — era a "busca mais lenta". Em
+              // paralelo, o download do audio (segundos) esconde a capa.
+              if (thumbUrl) {
+                promessaThumb = baixarThumb(from, thumbUrl).catch(() => null);
+              }
+
               const dl = await youtube.mp3(videoUrl, 128);
               if (!dl?.ok || !dl.buffer?.length) {
                 await apagarAviso();
@@ -36172,12 +36182,8 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             callCache.registrar(from, caminhoFinal);
             if (preparado) { try { fs.unlinkSync(bruto); } catch { /* ok */ } }
 
-            // 3.5) baixa a CAPA para o cache do grupo (mesmo ciclo de vida do
-            // audio: sai do disco quando a musica acaba/e' pulada). Best-effort:
-            // sem capa o aviso sai so' com texto.
-            const thumb = thumbUrl ? await baixarThumb(from, thumbUrl).catch(() => null) : null;
-
-            // 4) entra na fila
+            // 4) entra na fila com a capa (que ja' chegou, baixada em paralelo)
+            const thumb = promessaThumb ? await promessaThumb : null;
             const enfileirado = musicQueue.enfileirar(from, {
               caminho: caminhoFinal,
               titulo,
@@ -36190,6 +36196,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               if (thumb) callCache.apagar(thumb);
               return reply('❌ Não consegui enfileirar essa música.');
             }
+            const faixaDaVez = musicQueue.atual(from);
 
             // 5) se a call esta' livre, toca agora; senao, avisa a posicao
             const tocando = musicQueue.atual(from);
@@ -36204,10 +36211,12 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               if (!r.ok) {
                 musicQueue.removerAtual(from);
                 callCache.apagar(caminhoFinal);
-                if (thumb) callCache.apagar(thumb);
+                if (faixaDaVez?.thumb) callCache.apagar(faixaDaVez.thumb);
                 return reply(`❌ Não consegui tocar.${r.detalhe ? `\n\n_${r.detalhe}_` : ''}`);
               }
-              return enviarTocando(nazu, from, { titulo, thumb });
+              // A capa pode ainda nao ter chegado (baixa em paralelo): o
+              // `enviarTocando` le a `thumb` da faixa na hora de enviar.
+              return enviarTocando(nazu, from, faixaDaVez || { titulo, thumb: null });
             }
 
             // Ja' tem musica: entrou na fila.
