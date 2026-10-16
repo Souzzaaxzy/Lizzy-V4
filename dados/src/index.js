@@ -1236,6 +1236,10 @@ import {
   resolveSenderJid
 } from './utils/restrictedMedia.js';
 import { getInfo as twitterGetInfo } from './funcs/utils/twitter.js';
+import * as musicQueue from './funcs/utils/musicQueue.js';
+import * as callPlayer from './funcs/utils/callPlayer.js';
+import * as callCache from './utils/callCache.js';
+import { aoTerminarAudio } from './funcs/utils/zapoCall.js';
 import { search, searchNews } from './funcs/utils/search.js';
 import { removeBg, upscale } from './funcs/utils/imagetools.js';
 import spotifyModule from './funcs/downloads/spotify.js';
@@ -35613,6 +35617,29 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
 
           const subCallp = normalizar((args[0] || '')).trim();
 
+          // STATUS — TODOS podem ver (pedido do dono: so' subir/encerrar e'
+          // que fica na mao do admin).
+          if (subCallp === 'status' || subCallp === 'info') {
+            const ativa = obterCall(from);
+            const resumo = musicQueue.resumo(from);
+            if (!ativa?.callId) {
+              return reply('📴 Nenhuma chamada ativa neste grupo.');
+            }
+            const estagio = await estagioMidia(from).catch(() => 'desconhecido');
+            const minutos = Math.floor((Date.now() - (ativa.startedAt || Date.now())) / 60000);
+            return nazu.sendMessage(from, {
+              text:
+                `╭━━━꧁༺ 📞 𝐒𝐓𝐀𝐓𝐔𝐒 𝐃𝐀 𝐂𝐇𝐀𝐌𝐀𝐃𝐀 📞 ༻꧂━━━╮\n` +
+                `┃ 🆔 \`${String(ativa.callId).slice(0, 12)}...\`\n` +
+                `┃ 📡 Áudio: ${estagio}\n` +
+                `┃ ⏱️ No ar há ${minutos} min\n` +
+                `┃ 🎵 Tocando: ${resumo.vazia ? '—' : resumo.atual.titulo}\n` +
+                `┃ 📊 Na fila: ${resumo.total}\n` +
+                `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`,
+              contextInfo: gerarContextNewsletter()
+            });
+          }
+
           // PAREAMENTO do backend de midia.
           //
           // O backend `zapo` e' um client PROPRIO: nao usa a sessao do Baileys.
@@ -35655,7 +35682,15 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             // Derruba a pilha de mídia junto: senão o motor fica vivo segurando
             // o relay depois que a chamada acabou.
             await sairDaCallComMidia(from).catch(() => {});
-            return reply('📴 Chamada encerrada.');
+            // A call acabou: a fila e o cache do grupo saem junto (pedido do
+            // dono: "fechou a fila, todas as músicas salvas saem").
+            const resumoFila = musicQueue.limpar(from);
+            callCache.limparGrupo(from);
+            callPlayer.pararDeSeguir(from);
+            return reply(
+              `📴 Chamada encerrada.` +
+              (resumoFila.removidas ? `\n\n🗑️ ${resumoFila.removidas} música(s) da fila foram apagadas.` : '')
+            );
           }
 
           if (obterCall(from)) {
@@ -35713,122 +35748,282 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
       // dentro da chamada. Também aceita um link/URL.
       //
       // `!musicap parar` interrompe sem derrubar a chamada.
-      case 'musicap':
-      case 'tocarnacall':
+      // !musicap — PLAYER de musica na call (fila + controles).
+      //
+      // Sistema inspirado no Discord: tocar, enfileirar, pular, parar, ver a
+      // fila. A musica vem por NOME (busca igual ao !play) ou LINK.
+      //
+      // O que e' de quem:
+      //   - o DONO da faixa controla a propria faixa (pular/parar);
+      //   - MEMBROS podem pedir musica (o gate de dono e' so' do !callp);
+      //   - o dono do bot sempre pode (para nao travar se quem pediu sair).
+      //
+      // O audio e' preparado em 16 kHz mono e guardado no cache do GRUPO.
+      // Quando a faixa sai da fila (tocou, pulou) ou a fila limpa, o arquivo
+      // sai junto.
+      // !fila — mostra a FILA de musicas do grupo (todos podem ver).
+      // Handler do "audio terminou": avanca a fila e avisa o grupo.
+      // O `aoTerminarAudio` guarda UM callback por grupo, entao re-registrar
+      // so' substitui (nao empilha).
+      if (isGroup && obterCall(from)?.callId) {
+        aoTerminarAudio(from, async (g) => {
+          callPlayer.seguir(g);
+          const r = await callPlayer.tocarProxima(g);
+          if (r.acabou) {
+            await nazu.sendMessage(g, {
+              text: '🎵 A fila terminou.',
+              contextInfo: gerarContextNewsletter()
+            }).catch(() => {});
+          } else if (r.ok) {
+            await nazu.sendMessage(g, {
+              text: `🎵 Tocando agora: *${r.faixa.titulo}*`,
+              contextInfo: gerarContextNewsletter()
+            }).catch(() => {});
+          }
+        });
+      }
+
+      case 'fila':
+      case 'playlist':
         try {
-          if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
-          if (!podeDonoTotal()) return reply('⛔ Apenas o Dono pode usar este comando.');
-
-          const callAtiva = obterCall(from);
-          if (!callAtiva || !callAtiva.callId) {
-            // Se a pilha de midia ainda tem sessao para este grupo, a chamada
-            // EXISTE mas o registro se perdeu (tipicamente porque o processo do
-            // bot reiniciou). Dizer so 'nao existe call' esconderia isso.
-            const estagioAtual = await estagioMidia(from);
-            if (estagioAtual !== 'indisponivel' && estagioAtual !== 'parado') {
-              return reply(`⚠️ A chamada existe (midia: _${estagioAtual}_) mas perdi o registro dela.\n\nUse \`!callp encerrar\` e suba de novo.`);
-            }
-            return reply('❌ Não há chamada ativa neste grupo.\n\nUse `!callp` primeiro.');
+          if (!isGroup) return reply('Isso só pode ser usado em grupo 💔');
+          const itens = musicQueue.listar(from);
+          if (itens.length === 0) {
+            return reply('🎵 A fila está vazia.\n\nUse `' + prefix + 'musicap <nome>` para tocar algo.');
           }
-
-          const subMusicap = normalizar((args[0] || '')).trim();
-          if (subMusicap === 'parar' || subMusicap === 'stop') {
-            const r = await pararAudioDaCall(from);
-            return reply(r.ok ? '⏹️ Áudio parado (a chamada continua).' : '⚠️ Não havia áudio tocando.');
-          }
-
-          const estagio = await estagioMidia(from);
-          if (estagio === 'indisponivel') {
-            return reply('❌ A mídia da chamada não está disponível neste servidor.\n\n_A chamada em si continua aberta._');
-          }
-          if (estagio !== 'pronta') {
-            return reply(`⏳ A chamada ainda não está pronta para áudio (_${estagio}_).\n\nAlguém precisa entrar na chamada; depois tente de novo.`);
-          }
-
-          // O áudio vem da mensagem respondida (nota de voz, audio, video) ou
-          // de uma URL passada direto.
-          const urlDireta = /^https?:\/\//i.test(q || '') ? q.trim() : null;
-
-          let arquivo = urlDireta;
-          let arquivoTemporario = null;
-          if (!arquivo) {
-            const citado = extractQuoted(info.message);
-            if (!citado) {
-              return reply('❌ Responda um *áudio* (ou mande `!musicap <link>`) para eu tocar na chamada.');
-            }
-            const tipoCitado = getContentType(citado);
-            // Só tipos de MÍDIA servem. Checar apenas "existe um campo com esse
-            // nome" aceitaria `conversation` (texto), cujo valor é uma string e
-            // não um descritor de mídia — e o download falharia depois.
-            const TIPOS_DE_MIDIA = [
-              'audioMessage', 'videoMessage', 'imageMessage', 'documentMessage', 'ptvMessage'
-            ];
-            if (!tipoCitado || !TIPOS_DE_MIDIA.includes(tipoCitado) || !citado[tipoCitado]) {
-              return reply('❌ A mensagem respondida não tem mídia.\n\nResponda um *áudio* ou mande `!musicap <link>`.');
-            }
-            const mediaKey = citado[tipoCitado];
-            // `downloadContentFromMessage` faz fetch sem signal: sem timeout, um
-            // servidor de mídia que aceita e não responde pendura o handler.
-            const mediaType = tipoCitado.replace(/Message$/, '');
-            const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), 30000);
-            try {
-              const stream = await downloadContentFromMessage(mediaKey, mediaType, {
-                options: { signal: controller.signal }
-              });
-              let buffer = Buffer.from([]);
-              for await (const chunk of stream) buffer = Buffer.concat([buffer, chunk]);
-              if (!buffer.length) throw new Error('buffer vazio');
-              arquivoTemporario = pathz.join(
-                os.tmpdir(),
-                `callp-audio-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.ogg`
-              );
-              fs.writeFileSync(arquivoTemporario, buffer);
-              arquivo = arquivoTemporario;
-            } catch (e) {
-              console.warn('[MUSICAP] download falhou:', e?.message);
-              return reply('❌ Não consegui baixar esse áudio.');
-            } finally {
-              clearTimeout(timer);
-            }
-          }
-
-          const r = await tocarAudioNaCall(from, arquivo);
-          // O arquivo temporário pode sair: o ffmpeg já o leu inteiro para a
-          // fila de PCM quando `tocarAudio` resolve.
-          if (arquivoTemporario) {
-            setTimeout(() => { try { fs.unlinkSync(arquivoTemporario); } catch {} }, 5000);
-          }
-          if (!r.ok) {
-            const motivos = {
-              sem_call: 'Não há chamada ativa.',
-              midia_nao_pronta: 'A chamada ainda não está pronta para áudio.',
-              ja_tocando: 'Já tem um áudio tocando. Use `!musicap parar` antes.',
-              captura_ainda_nao_iniciada: 'A chamada ainda não liberou o canal de áudio. Tente em alguns segundos.',
-              pacote_de_midia_ausente: 'A mídia não está instalada neste servidor.'
-            };
-            return reply(`❌ Não consegui tocar.\n\n_${motivos[r.motivo] || r.motivo}_`);
-          }
-
-          const newsletterCtxMusica = {
-            forwardingScore: 999,
-            isForwarded: true,
-            forwardedNewsletterMessageInfo: {
-              newsletterJid: "120363410980452460@newsletter",
-              newsletterName: "Lizzy"
-            }
-          };
-          await nazu.sendMessage(from, {
-            text: `🎵 *Tocando na chamada!*\n\n_Use \`!musicap parar\` para interromper._`,
-            contextInfo: newsletterCtxMusica,
-            quoted: info
+          const linhas = itens.map((f, i) => {
+            const marca = i === 0 ? '▶️' : `${i + 1}º`;
+            const quem = String(f.donoId || '').split('@')[0];
+            return `┃ ${marca} ${f.titulo}\n┃    👤 @${quem}`;
           });
-
+          return nazu.sendMessage(from, {
+            text:
+              `╭━━━꧁༺ 🎵 𝐅𝐈𝐋𝐀 𝐃𝐄 𝐌𝐔𝐒𝐈𝐂𝐀𝐒 🎵 ༻꧂━━━╮\n` +
+              linhas.join('\n') + '\n' +
+              `╰━━━꧁༺ ✦ ${itens.length} na fila ✦ ༻꧂━━━━━━╯`,
+            mentions: itens.map((f) => f.donoId).filter(Boolean),
+            contextInfo: gerarContextNewsletter()
+          });
         } catch (e) {
-          console.error('[MUSICAP] Erro:', e);
-          await reply("Ocorreu um erro 💔");
+          console.error('[FILA] erro:', e?.message);
+          await reply('Ocorreu um erro 💔');
         }
         break;
+
+      case 'musicap':
+      case 'tocarnacall':
+      case 'musica':
+        try {
+          if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");
+
+          const sub = normalizar((args[0] || '')).trim();
+          const resto = args.slice(1).join(' ').trim();
+
+          // Quem controla: o dono da faixa. O dono do bot sempre pode.
+          const opcoesDono = {
+            ehDonoDoBot: isOwner,
+            mesmoId: (a, b) => idsMatch(a, b)
+          };
+
+          // ---------------------------------------------------- pular / skip
+          if (sub === 'pular' || sub === 'skip' || sub === 'next') {
+            const r = await callPlayer.pular(from, sender, opcoesDono);
+            if (!r.ok) {
+              if (r.motivo === 'sem_musica') return reply('❌ Não há música tocando.');
+              if (r.motivo === 'nao_e_dono') {
+                return reply(`❌ Só quem pediu *${r.titulo}* pode pular.\n\n_Peça a quem pediu, ou espere terminar._`);
+              }
+              return reply(`❌ Não consegui pular.${r.detalhe ? `\n\n_${r.detalhe}_` : ''}`);
+            }
+            if (r.acabou) {
+              await nazu.sendMessage(from, {
+                text: `⏭️ *${r.pulada || 'Música'}* pulada.\n\n🎵 A fila terminou.`,
+                contextInfo: gerarContextNewsletter()
+              });
+              return;
+            }
+            await nazu.sendMessage(from, {
+              text: `⏭️ *${r.pulada || 'Música'}* pulada.\n\n🎵 Tocando agora: *${r.faixa.titulo}*`,
+              contextInfo: gerarContextNewsletter()
+            });
+            return;
+          }
+
+          // --------------------------------------------------------- parar
+          if (sub === 'parar' || sub === 'stop') {
+            const r = await callPlayer.parar(from, sender, opcoesDono);
+            if (!r.ok) {
+              if (r.motivo === 'sem_musica') return reply('❌ Não há música tocando.');
+              if (r.motivo === 'nao_e_dono') {
+                return reply(`❌ Só quem pediu *${r.titulo}* pode parar.\n\n_Peça a quem pediu._`);
+              }
+              return reply(`❌ Não consegui parar.${r.detalhe ? `\n\n_${r.detalhe}_` : ''}`);
+            }
+            if (r.acabou) {
+              await nazu.sendMessage(from, {
+                text: `⏹️ *${r.parada || 'Música'}* parada.\n\n🎵 A fila terminou.`,
+                contextInfo: gerarContextNewsletter()
+              });
+              return;
+            }
+            await nazu.sendMessage(from, {
+              text: `⏹️ *${r.parada || 'Música'}* parada.\n\n🎵 Tocando agora: *${r.faixa.titulo}*`,
+              contextInfo: gerarContextNewsletter()
+            });
+            return;
+          }
+
+          // --------------------------------------------------------- atual
+          if (sub === 'atual' || sub === 'tocando') {
+            const f = musicQueue.atual(from);
+            if (!f) return reply('🎵 Nenhuma música tocando agora.');
+            const total = musicQueue.tamanho(from);
+            return nazu.sendMessage(from, {
+              text:
+                `╭━━━꧁༺ 🎵 𝐓𝐎𝐂𝐀𝐍𝐃𝐎 𝐀𝐆𝐎𝐑𝐀 🎵 ༻꧂━━━╮\n` +
+                `┃ 🎶 ${f.titulo}\n` +
+                `┃ 👤 Pedido por: @${String(f.donoId || '').split('@')[0]}\n` +
+                `┃ 📊 Na fila: ${total}\n` +
+                `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`,
+              mentions: f.donoId ? [f.donoId] : [],
+              contextInfo: gerarContextNewsletter()
+            });
+          }
+
+          // --------------------------------------------------------- limpar
+          if (sub === 'limpar' || sub === 'clear') {
+            const resumo = musicQueue.resumo(from);
+            if (resumo.vazia) return reply('🎵 A fila já está vazia.');
+            // Só o dono do bot ou quem pediu a ATUAL pode limpar tudo.
+            const pode = musicQueue.podeControlar(from, sender, opcoesDono);
+            if (!pode.ok) {
+              return reply(`❌ Só quem pediu *${pode.titulo}* (ou o dono) pode limpar a fila.`);
+            }
+            const r = musicQueue.limpar(from);
+            callCache.apagarVarios(r.caminhos);
+            callPlayer.pararDeSeguir(from);
+            return nazu.sendMessage(from, {
+              text: `🗑️ Fila limpa — ${r.removidas} música(s) removida(s).`,
+              contextInfo: gerarContextNewsletter()
+            });
+          }
+
+          // ----------------------------------------- adicionar (só enfileira)
+          const soEnfileirar = sub === 'adicionar' || sub === 'add' || sub === 'fila';
+
+          // O termo: em `adicionar`, o resto; senão, tudo.
+          const termo = soEnfileirar ? resto : [args[0], ...args.slice(1)].filter(Boolean).join(' ').trim();
+
+          if (!termo) {
+            return reply(
+              `🎵 *MUSICAP*\n\n` +
+              `• \`${prefix}musicap <nome ou link>\` — toca\n` +
+              `• \`${prefix}musicap adicionar <nome ou link>\` — põe na fila\n` +
+              `• \`${prefix}musicap atual\` — o que está tocando\n` +
+              `• \`${prefix}musicap pular\` — próxima\n` +
+              `• \`${prefix}musicap parar\` — interrompe\n` +
+              `• \`${prefix}musicap limpar\` — esvazia a fila\n` +
+              `• \`${prefix}fila\` — mostra a fila`
+            );
+          }
+
+          // Sem call ativa nao da' para tocar.
+          if (!obterCall(from)?.callId) {
+            return reply('❌ Não há chamada ativa neste grupo.\n\nUse `' + prefix + 'callp` primeiro.');
+          }
+
+          // Mensagem de espera (apagada quando o audio fica pronto).
+          const avisoBusca = await nazu.sendMessage(from, {
+            text: `🔎 ${soEnfileirar ? 'Adicionando' : 'Buscando'}: _${termo}_...`,
+            contextInfo: gerarContextNewsletter()
+          }).catch(() => null);
+
+          const apagarAviso = async () => {
+            if (!avisoBusca) return;
+            await nazu.sendMessage(from, { delete: avisoBusca.key }).catch(() => {});
+          };
+
+          try {
+            // 1) resolve o video (MESMO caminho do !play)
+            const isLink = /^https?:\/\//i.test(termo);
+            const busca = isLink ? { ok: true, data: { url: termo, title: termo } } : await youtube.search(termo);
+            if (!busca?.ok || !busca.data?.url) {
+              await apagarAviso();
+              return reply('❌ Não encontrei essa música.');
+            }
+            const videoUrl = busca.data.url;
+            const titulo = busca.data.title || termo;
+
+            // 2) baixa o audio (MESMO caminho do !play)
+            const dl = await youtube.mp3(videoUrl, 128);
+            if (!dl?.ok || !dl.buffer?.length) {
+              await apagarAviso();
+              return reply(`❌ Não consegui baixar o áudio.${dl?.msg ? `\n\n_${dl.msg}_` : ''}`);
+            }
+
+            // 3) grava no cache do GRUPO (16 kHz mono, o que o motor quer)
+            const bruto = callCache.caminhoNovo(from, '.mp3');
+            fs.writeFileSync(bruto, dl.buffer);
+            const preparado = await prepararAudioParaCall(bruto).catch(() => null);
+            const caminhoFinal = preparado || bruto;
+            callCache.registrar(from, caminhoFinal);
+            if (preparado) { try { fs.unlinkSync(bruto); } catch { /* ok */ } }
+
+            // 4) entra na fila
+            const enfileirado = musicQueue.enfileirar(from, {
+              caminho: caminhoFinal,
+              titulo,
+              donoId: sender
+            });
+            if (!enfileirado.ok) {
+              await apagarAviso();
+              callCache.apagar(caminhoFinal);
+              return reply('❌ Não consegui enfileirar essa música.');
+            }
+
+            // 5) se a call esta' livre, toca agora; senao, avisa a posicao
+            const tocando = musicQueue.atual(from);
+            const jaTocando = Boolean(tocando && tocando.caminho !== caminhoFinal);
+
+            if (!jaTocando && !soEnfileirar) {
+              // Primeira da fila: o player assume (e segue o grupo).
+              callPlayer.seguir(from);
+              const r = await callPlayer.tocarAtual(from);
+              await apagarAviso();
+              if (!r.ok) {
+                musicQueue.removerAtual(from);
+                callCache.apagar(caminhoFinal);
+                return reply(`❌ Não consegui tocar.${r.detalhe ? `\n\n_${r.detalhe}_` : ''}`);
+              }
+              return nazu.sendMessage(from, {
+                text: `🎵 Tocando agora: *${titulo}*`,
+                contextInfo: gerarContextNewsletter()
+              });
+            }
+
+            // Ja' tem musica: entrou na fila.
+            callPlayer.seguir(from);
+            await apagarAviso();
+            const total = musicQueue.tamanho(from);
+            const pos = total - 1;
+            return nazu.sendMessage(from, {
+              text:
+                `➕ *${titulo}* adicionada à fila.\n` +
+                `┃ 📊 Posição: ${pos > 0 ? pos : total}º\n` +
+                `┃ 🎶 Tocando: ${tocando?.titulo || '—'}`,
+              contextInfo: gerarContextNewsletter()
+            });
+          } catch (e) {
+            await apagarAviso();
+            console.error('[MUSICAP] erro:', e?.message);
+            return reply('❌ Deu erro ao preparar essa música.');
+          }
+        } catch (e) {
+          console.error('[MUSICAP] erro externo:', e?.message);
+          await reply('Ocorreu um erro 💔');
+        }
+        break;
+
       case 'antifantasma':
         try {
           if (!isGroup) return reply("Isso só pode ser usado em grupo 💔");

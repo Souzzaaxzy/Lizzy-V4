@@ -42,7 +42,13 @@ export const DB_DIR = 'dados/database';
  * Cache se regenera; estado do bot não. Então cache fora do backup — e, como
  * reforço, o `!apk` grava fora do banco hoje (ver `funcs/apk/apkCache.js`).
  */
-export const DIRS_PULADOS = Object.freeze(['apk-cache']);
+export const DIRS_PULADOS = Object.freeze([
+    'apk-cache',
+    // Cache de audio da call: e' DESCARTIVEL e pode passar de 300 MB por
+    // grupo. Sem pular, o backup (recursivo) estouraria o disco -- foi
+    // exatamente o bug do ENOSPC que o apk-cache causou.
+    'call-cache'
+]);
 
 /** Lista recursiva de arquivos (relativos), pulando os diretórios descartáveis. */
 const listarArquivos = (raiz) => {

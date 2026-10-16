@@ -274,7 +274,7 @@ await test('13. o index compõe visible + lerMais + rest (não só concatena tud
 const COMANDOS_POR_MENU = {
   // ferramentas: 26 -> 27 (`!apk`, categoria APPS (F-DROID)).
   menuia: 17, menudown: 20, ferramentas: 27, menufig: 17, menulogo: 44,
-  menuedits: 5, alteradores: 58, menumemb: 54,
+  menuedits: 5, alteradores: 58, menumemb: 62,
   // menuadm: 172 -> 170 (removidos `fotomenug` e `videomenug`).
   // 170 -> 171 (`!modo18`) -> 172 (`!callp`) -> 174 (`!fixar`, `!desfixar`)
   // -> 176 (`!antictt`, `!antifantasma`) -> 177 (`!vozp`).
@@ -289,7 +289,10 @@ const COMANDOS_POR_MENU = {
   // menuadm -2 (callp/vozp sairam: viraram dono-only; o vozp depois foi REMOVIDO)
   // menudono +6 (categoria CHAMADAS: callp, callp encerrar, callp parear, vozp,
   //               musicap, musicap parar; o vozp saiu depois -> 179)
-  menuadm: 178, menudono: 179,
+  // menudono +6 (categoria CHAMADAS ganhou: callp status, musicap adicionar/
+  //               pular/atual/limpar e !fila) -> 185
+  // menumemb +8 (categoria MUSICA NA CALL: musicap + 6 subcomandos + !fila) -> 62
+  menuadm: 178, menudono: 185,
   // menubn: 349 -> 350 (`!ppp` entrou na 1a categoria)
   // -> 358 (`!hetero`, `!hetera`, `!aura`, `!sigma`, `!ceu`, `!inferno`,
   // `!frio`, `!fria` entraram na categoria BRINCADEIRAS)

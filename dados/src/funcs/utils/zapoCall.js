@@ -60,6 +60,8 @@ let conectado = false;
 let esperandoAbertura = null;
 /** Timer de reconexao (o zapo nao reconecta sozinho). */
 let timerReconexao = null;
+/** Callbacks de "o audio terminou", por grupo (a fila avanca com isso). */
+const aoTerminarPorGrupo = new Map();
 
 /** Diretorio onde as credenciais do zapo sao gravadas. */
 const AUTH_DIR = path.join(DATABASE_DIR, 'zapo-auth');
@@ -388,6 +390,23 @@ export async function obterCliente() {
         console.warn('[ZAPOCALL] erro na call:', err?.message || err);
       });
 
+      // O AUDIO TERMINOU: e' o que faz a FILA andar sozinha. O motor emite
+      // 'voip_call_outbound_audio_finished' quando o arquivo carregado acaba;
+      // sem isto a fila ficaria parada na primeira musica.
+      client.on('voip_call_outbound_audio_finished', (call) => {
+        const callId = call?.callId;
+        if (!callId) return;
+        for (const [grupo, id] of callsPorGrupo.entries()) {
+          if (id !== callId) continue;
+          const cb = aoTerminarPorGrupo.get(grupo);
+          if (typeof cb === 'function') {
+            Promise.resolve(cb(grupo)).catch((e) =>
+              console.warn('[ZAPOCALL] aoTerminar:', e?.message || e));
+          }
+          break;
+        }
+      });
+
       // Estado da conexao: e' o sinal que o `startCall` precisa.
       client.on('connection', (ev) => {
         if (ev?.status === 'open') {
@@ -641,6 +660,7 @@ export function resetarMidia() {
   } catch { /* nada a fazer */ }
   callsPorGrupo.clear();
   estagios.clear();
+  aoTerminarPorGrupo.clear();
   conectado = false;
   esperandoAbertura = null;
   if (timerReconexao) {
@@ -663,6 +683,21 @@ export function callIdDoGrupo(grupo) {
 /** Diretorio das credenciais (para log/diagnostico). */
 export function diretorioAuth() {
   return AUTH_DIR;
+}
+
+/**
+ * Registra o que fazer quando o audio de um grupo termina.
+ *
+ * O `index.js` usa isto para avancar a fila. E' callback (e nao import) porque
+ * o `callPlayer` importa o `callMedia`, que importa este modulo -- importar de
+ * volta criaria ciclo.
+ *
+ * @param {string} grupo
+ * @param {Function|null} cb `(grupo) => void` (null remove)
+ */
+export function aoTerminarAudio(grupo, cb) {
+  if (cb === null) aoTerminarPorGrupo.delete(grupo);
+  else aoTerminarPorGrupo.set(grupo, cb);
 }
 
 /** A conexao esta aberta agora? (diagnostico) */

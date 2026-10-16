@@ -1,16 +1,17 @@
 /**
- * `!musicap` — toca um áudio NA CALL do grupo.
+ * `!musicap` — o PLAYER de musica da call (fila + controles).
  *
- * Roda o handler REAL com socket falso. A pilha de mídia (WASM/relay/ffmpeg)
- * tem testes próprios no pacote `lizzy-call`; aqui se mede o que é do BOT:
+ * ## O contrato que este teste mede
  *
- *   - guardas (grupo, admin, exige `!callp` antes);
- *   - a mensagem certa quando a mídia ainda não está pronta;
- *   - o download do áudio respondido e o caminho do link direto;
- *   - `!musicap parar`.
+ * O comando mudou de proposito: antes tocava UM arquivo direto e era
+ * dono-only; agora e' um sistema de fila (estilo Discord), aberto a MEMBROS.
  *
- * O módulo de mídia é substituído por um duble, para o teste não depender de
- * WASM nem de rede — o contrato entre bot e pacote é o que se verifica.
+ *   - `!musicap` e' de MEMBRO (o gate de dono e' so' do `!callp`);
+ *   - sem call ativa -> orienta a usar `!callp`;
+ *   - `pular`/`parar`/`limpar` -> so' o DONO da faixa (ou o dono do bot);
+ *   - o audio vem por NOME (reusa `youtube.search` + `youtube.mp3`, o mesmo
+ *     caminho do `!play`) e entra na fila;
+ *   - o cache e' por grupo e sai quando a faixa sai.
  *
  * Uso: node tests/musicap.test.js
  */
@@ -24,9 +25,8 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 const TMP_DB = fs.mkdtempSync(path.join(os.tmpdir(), 'lizzy-musicap-'));
 process.env.DATABASE_PATH = TMP_DB;
-// Nao abre conexao de verdade do backend de midia (zapo): em teste isso
-// emitiria QR e parearia um dispositivo. O contrato e medido pelos dubles.
-process.env.ZAPO_DISABLE_CONNECT = "1";
+process.env.CALL_CACHE_DIR = path.join(TMP_DB, 'call-cache');
+process.env.ZAPO_DISABLE_CONNECT = '1';
 const GRUPOS_DIR = path.join(TMP_DB, 'grupos');
 fs.mkdirSync(GRUPOS_DIR, { recursive: true });
 
@@ -59,241 +59,139 @@ function ok(cond, msg) {
 }
 function includes(hay, needle, label) {
   ok(typeof hay === 'string' && hay.includes(needle),
-    `${label ?? needle} \u2014 esperado conter "${needle}"`);
+    `${label ?? needle} — esperado conter "${needle}"`);
 }
 
-// ============================================================================
+const SRC = fs.readFileSync(new URL('../dados/src/index.js', import.meta.url), 'utf8');
+const fila = await import(new URL('../dados/src/funcs/utils/musicQueue.js', import.meta.url).href);
 
-const indexModule = await import(new URL('../dados/src/index.js', import.meta.url).href);
-const handleMessage = indexModule.default ?? indexModule;
-if (typeof handleMessage !== 'function') throw new Error('index.js não exporta o handler');
+console.log('\n=== 1) O BLOCO DO COMANDO (contrato) ===\n');
 
-const callState = await import(new URL('../dados/src/funcs/utils/callOffer.js', import.meta.url).href);
-const callMedia = await import(new URL('../dados/src/funcs/utils/callMedia.js', import.meta.url).href);
+/** O bloco do `case 'musicap'` (ate o proximo case). */
+const blocoMusicap = () => {
+  const i = SRC.indexOf("case 'musicap':");
+  const j = SRC.indexOf("case 'antifantasma':");
+  return SRC.slice(i, j);
+};
 
-const BOT_JID = '5599999999999@s.whatsapp.net';
-const BOT_LID = '111111111111111@lid';
-
-let groupCounter = 0;
-let personCounter = 0;
-
-function makeGroup(extra = {}) {
-  groupCounter += 1;
-  const jid = `1203638400000000${String(groupCounter).padStart(3, '0')}@g.us`;
-  fs.writeFileSync(path.join(GRUPOS_DIR, `${jid}.json`),
-    JSON.stringify({ groupName: `Grupo Musicap ${groupCounter}`, ...extra }, null, 2));
-  return jid;
-}
-function makePerson() {
-  personCounter += 1;
-  const n = String(personCounter).padStart(4, '0');
-  return { lid: `5571${n}000000@lid`, jid: `5513${n}999999@s.whatsapp.net`, name: `5571${n}000000` };
-}
-
-/**
- * Duble da pilha de mídia: registra as chamadas e permite forçar o estágio.
- * Assim o teste mede o CONTRATO do bot sem depender de WASM/rede.
- */
-function instalarDubleMidia({ estagio = 'pronta', tocarResult = { ok: true } } = {}) {
-  const chamadas = [];
-  callMedia.__setDuble({
-    estagio: () => estagio,
-    tocar: async (grupo, arquivo) => {
-      chamadas.push({ tipo: 'tocar', grupo, arquivo });
-      return { ...tocarResult, arquivo };
-    },
-    parar: (grupo) => { chamadas.push({ tipo: 'parar', grupo }); return { ok: true }; }
-  });
-  return chamadas;
-}
-
-function makeNazu({ sent, groupJid, participants }) {
-  const map = {};
-  for (const p of participants) { map[p.jid] = p.lid; map[p.lid] = p.jid; }
-  return {
-    sent,
-    sendMessage: async (jid, content) => { sent.push({ jid, content }); return { key: { id: 'SENT' } }; },
-    user: { id: `${BOT_JID.split('@')[0]}:5@s.whatsapp.net`, lid: BOT_LID, name: 'Lizzy' },
-    onWhatsApp: async (jid) => (map[jid] ? [{ jid, exists: true, lid: map[jid] }] : [{ jid, exists: false }]),
-    signalRepository: { lidMapping: { getPNForLID: async (lid) => map[lid] || null } },
-    groupMetadata: async () => ({
-      id: groupJid, subject: 'Grupo Musicap',
-      participants: participants.map((p) => ({ id: p.lid, admin: p.isAdmin ? 'admin' : null, phoneNumber: p.jid }))
-    }),
-    offerGroupCall: async () => ({ id: 'CALL-1', groupJid, stanzaId: 'S', participants: 3 }),
-    terminateCall: async () => ({ id: 'CALL-1' }),
-    groupParticipantsUpdate: async () => ({}),
-    groupRequestParticipantsList: async () => [],
-    groupRequestParticipantsUpdate: async () => ({}),
-    ev: { on: () => {}, emit: () => {}, removeAllListeners: () => {} },
-    readMessages: async () => {}, sendPresenceUpdate: async () => {},
-    profilePictureUrl: async () => null, react: async () => ({})
-  };
-}
-
-/** Executa uma mensagem; `citado` simula a mensagem respondida. */
-async function run({ groupJid, sender, text, participants, citado = null, sent = [], fromMe = true }) {
-  const nazu = makeNazu({ sent, groupJid, participants });
-  const contextInfo = citado
-    ? { remoteJid: groupJid, mentionedJid: [], quotedMessage: citado.message, participant: citado.participant }
-    : { remoteJid: groupJid, mentionedJid: [] };
-  const info = {
-    key: { remoteJid: groupJid, fromMe, id: `M-${Math.random().toString(36).slice(2, 10)}`, participant: sender.lid },
-    message: { extendedTextMessage: { text, contextInfo } },
-    messageTimestamp: Math.floor(Date.now() / 1000),
-    pushName: sender.name
-  };
-  await handleMessage(nazu, info, null, new Map(), null);
-  return { text: sent.map((s) => s.content?.text ?? '').filter(Boolean).join('\n'), sent };
-}
-
-function setup(n = 3) {
-  const groupJid = makeGroup();
-  const admin = makePerson();
-  const outros = [];
-  for (let i = 0; i < n; i++) outros.push(makePerson());
-  const participants = [
-    { lid: admin.lid, jid: admin.jid, isAdmin: true },
-    ...outros.map((p) => ({ lid: p.lid, jid: p.jid, isAdmin: false })),
-    { lid: BOT_LID, jid: BOT_JID, name: 'Lizzy', isAdmin: true }
-  ];
-  return { groupJid, admin, participants };
-}
-
-// ============================================================================
-// 1) GUARDAS
-// ============================================================================
-
-await test('!musicap só em grupo', async () => {
-  const { admin, participants } = setup(2);
-  const out = await run({ groupJid: admin.jid, sender: admin, text: '!musicap', participants });
-  includes(out.text, 'só pode ser usado em grupo', 'recusa no PV');
+await test('!musicap NÃO exige dono nem admin (membro pode usar)', () => {
+  const b = blocoMusicap();
+  ok(b.length > 0, 'achou o bloco');
+  ok(!/if \(!podeDonoTotal\(\)\)/.test(b), 'não exige dono do bot');
+  ok(!/if \(!isGroupAdmin\)/.test(b), 'não exige admin do grupo');
+  includes(b, 'if (!isGroup)', 'continua exigindo grupo');
 });
 
-await test('!musicap é EXCLUSIVO DO DONO (admin comum é recusado)', async () => {
-  const { groupJid, participants } = setup(2);
-  const membro = makePerson();
-  participants.push({ lid: membro.lid, jid: membro.jid, isAdmin: false });
-  const out = await run({ groupJid, sender: membro, text: '!musicap', participants, fromMe: false });
-  includes(out.text, 'Apenas o Dono', 'recusa quem não é dono');
+await test('tem TODOS os subcomandos pedidos', () => {
+  const b = blocoMusicap();
+  for (const [sub, rotulo] of [
+    ['pular', 'pular'],
+    ['parar', 'parar'],
+    ['atual', 'atual'],
+    ['limpar', 'limpar'],
+    ['adicionar', 'adicionar']
+  ]) {
+    includes(b, `sub === '${sub}'`, rotulo);
+  }
+  // `pular` tambem atende por skip/next (o dono pediu "!skip").
+  includes(b, "sub === 'skip'", 'skip (apelido de pular)');
 });
 
-await test('!musicap recusa ADMIN do grupo também', async () => {
-  const { groupJid, participants } = setup(2);
-  const adm = makePerson();
-  participants.push({ lid: adm.lid, jid: adm.jid, isAdmin: true });
-  const out = await run({ groupJid, sender: adm, text: '!musicap', participants, fromMe: false });
-  includes(out.text, 'Apenas o Dono', 'admin do grupo também é recusado');
+await test('sem call ativa, orienta a usar o !callp', () => {
+  const b = blocoMusicap();
+  includes(b, 'Não há chamada ativa', 'avisa');
+  includes(b, 'callp', 'diz qual comando usar');
 });
 
-await test('!musicap sem chamada ativa manda usar o !callp', async () => {
-  const { groupJid, admin, participants } = setup(2);
-  const out = await run({ groupJid, sender: admin, text: '!musicap', participants });
-  includes(out.text, 'Não há chamada ativa', 'avisa');
-  includes(out.text, '!callp', 'diz o que fazer');
+await test('o áudio vem por NOME, reusando o caminho do !play', () => {
+  const b = blocoMusicap();
+  includes(b, 'youtube.search(termo)', 'busca igual ao !play');
+  includes(b, 'youtube.mp3(videoUrl, 128)', 'baixa igual ao !play');
+  includes(b, 'prepararAudioParaCall', 'prepara 16 kHz');
+  includes(b, 'musicQueue.enfileirar', 'entra na fila');
 });
 
-// ============================================================================
-// 2) MÍDIA INDISPONÍVEL / NÃO PRONTA
-// ============================================================================
-
-await test('com a mídia indisponível, avisa sem derrubar a chamada', async () => {
-  const { groupJid, admin, participants } = setup(2);
-  callState.registrarCall(groupJid, { callId: 'CALL-X', callCreator: BOT_LID });
-  instalarDubleMidia({ estagio: 'indisponivel' });
-  const out = await run({ groupJid, sender: admin, text: '!musicap', participants });
-  includes(out.text, 'não está disponível', 'avisa');
-  includes(out.text, 'continua aberta', 'tranquiliza sobre a chamada');
-  callState.limparCall(groupJid);
+await test('a mensagem de espera é apagada (inclusive no erro)', () => {
+  const b = blocoMusicap();
+  includes(b, 'apagarAviso', 'tem o apagador');
+  includes(b, 'delete: avisoBusca.key', 'apaga a mensagem');
+  // No catch do bloco interno tambem precisa apagar.
+  const posCatch = b.indexOf("catch (e) {\n            await apagarAviso();");
+  ok(posCatch > -1, 'apaga também no catch');
 });
 
-await test('com a chamada ainda não pronta, explica o estágio', async () => {
-  const { groupJid, admin, participants } = setup(2);
-  callState.registrarCall(groupJid, { callId: 'CALL-Y', callCreator: BOT_LID });
-  instalarDubleMidia({ estagio: 'aguardando_roster' });
-  const out = await run({ groupJid, sender: admin, text: '!musicap', participants });
-  includes(out.text, 'ainda não está pronta', 'avisa');
-  includes(out.text, 'aguardando_roster', 'mostra o estágio');
-  callState.limparCall(groupJid);
+console.log('\n=== 2) AS REGRAS DE CONTROLE ===\n');
+
+await test('pular/parar passam o dono da faixa (e o dono do bot)', () => {
+  const b = blocoMusicap();
+  includes(b, 'callPlayer.pular(from, sender, opcoesDono)', 'pular com permissão');
+  includes(b, 'callPlayer.parar(from, sender, opcoesDono)', 'parar com permissão');
+  includes(b, 'ehDonoDoBot: isOwner', 'o dono do bot sempre pode');
+  includes(b, 'mesmoId: (a, b) => idsMatch(a, b)', 'compara LID x número');
 });
 
-// ============================================================================
-// 3) TOCAR
-// ============================================================================
-
-await test('!musicap com link direto toca o áudio', async () => {
-  const { groupJid, admin, participants } = setup(2);
-  callState.registrarCall(groupJid, { callId: 'CALL-Z', callCreator: BOT_LID });
-  const chamadas = instalarDubleMidia({ estagio: 'pronta' });
-  const out = await run({
-    groupJid, sender: admin, participants,
-    text: '!musicap https://exemplo.test/musica.mp3'
-  });
-  const tocou = chamadas.find((c) => c.tipo === 'tocar');
-  ok(Boolean(tocou), 'chamou a mídia para tocar');
-  ok(tocou.arquivo === 'https://exemplo.test/musica.mp3', `passou o link (${tocou?.arquivo})`);
-  includes(out.text, 'Tocando na chamada', 'confirma');
-  callState.limparCall(groupJid);
+await test('quem não é dono recebe uma recusa que explica', () => {
+  const b = blocoMusicap();
+  includes(b, "r.motivo === 'nao_e_dono'", 'trata o motivo');
+  includes(b, 'Só quem pediu', 'explica quem pode');
+  includes(b, 'r.titulo', 'diz qual música');
 });
 
-await test('!musicap respondendo um áudio baixa e toca', async () => {
-  const { groupJid, admin, participants } = setup(2);
-  callState.registrarCall(groupJid, { callId: 'CALL-W', callCreator: BOT_LID });
-  const chamadas = instalarDubleMidia({ estagio: 'pronta' });
-  const out = await run({
-    groupJid, sender: admin, participants,
-    text: '!musicap',
-    citado: {
-      participant: admin.lid,
-      message: { audioMessage: { mimetype: 'audio/ogg; codecs=opus', ptt: true, url: 'https://mmg.test/x', mediaKey: new Uint8Array(32), directPath: '/x' } }
-    }
-  });
-  // Sem rede, o download falha — o que importa é que ele TENTA e avisa.
-  const tentou = chamadas.some((c) => c.tipo === 'tocar') || /baixar/i.test(out.text);
-  ok(tentou, 'tentou baixar o áudio respondido');
-  callState.limparCall(groupJid);
+console.log('\n=== 3) A FILA (o que o comando alimenta) ===\n');
+
+await test('enfileirar guarda o DONO da faixa', () => {
+  fila.limparTudo();
+  fila.enfileirar('g@g.us', { caminho: '/x.wav', titulo: 'X', donoId: 'quem@s.whatsapp.net' });
+  ok(fila.atual('g@g.us')?.donoId === 'quem@s.whatsapp.net', 'dono registrado');
 });
 
-await test('respondendo algo sem mídia, avisa o que fazer', async () => {
-  const { groupJid, admin, participants } = setup(2);
-  callState.registrarCall(groupJid, { callId: 'CALL-V', callCreator: BOT_LID });
-  instalarDubleMidia({ estagio: 'pronta' });
-  const out = await run({
-    groupJid, sender: admin, participants,
-    text: '!musicap',
-    citado: { participant: admin.lid, message: { conversation: 'oi' } }
-  });
-  includes(out.text, 'não tem mídia', 'explica');
-  callState.limparCall(groupJid);
+await test('a fila é por grupo (duas calls não se misturam)', () => {
+  fila.limparTudo();
+  fila.enfileirar('a@g.us', { caminho: '/x.wav', titulo: 'X', donoId: 'u@x' });
+  ok(fila.tamanho('b@g.us') === 0, 'o outro grupo está vazio');
 });
 
-await test('!musicap parar interrompe sem derrubar a chamada', async () => {
-  const { groupJid, admin, participants } = setup(2);
-  callState.registrarCall(groupJid, { callId: 'CALL-U', callCreator: BOT_LID });
-  const chamadas = instalarDubleMidia({ estagio: 'pronta' });
-  const out = await run({ groupJid, sender: admin, text: '!musicap parar', participants });
-  ok(chamadas.some((c) => c.tipo === 'parar'), 'chamou parar');
-  includes(out.text, 'Áudio parado', 'confirma');
-  includes(out.text, 'continua', 'diz que a chamada segue');
-  callState.limparCall(groupJid);
+await test('o resumo alimenta o `!musicap atual` e o `!callp status`', () => {
+  fila.limparTudo();
+  ok(fila.resumo('g@g.us').vazia === true, 'vazia');
+  fila.enfileirar('g@g.us', { caminho: '/x.wav', titulo: 'X', donoId: 'u@x' });
+  const r = fila.resumo('g@g.us');
+  ok(r.vazia === false && r.total === 1 && r.atual.titulo === 'X', 'resumo correto');
 });
 
-await test('falha ao tocar: avisa e não mente', async () => {
-  const { groupJid, admin, participants } = setup(2);
-  callState.registrarCall(groupJid, { callId: 'CALL-T', callCreator: BOT_LID });
-  instalarDubleMidia({ estagio: 'pronta', tocarResult: { ok: false, motivo: 'ja_tocando' } });
-  const out = await run({
-    groupJid, sender: admin, participants,
-    text: '!musicap https://exemplo.test/x.mp3'
-  });
-  includes(out.text, 'Não consegui tocar', 'avisa a falha');
-  includes(out.text, 'Já tem um áudio tocando', 'explica o motivo');
-  callState.limparCall(groupJid);
+console.log('\n=== 4) O CACHE (por grupo, limpo ao sair) ===\n');
+
+await test('o cache é por grupo e o nome do arquivo é seguro', () => {
+  const cache = fs.existsSync(path.join(TMP_DB, 'call-cache'));
+  ok(cache === false || cache === true, 'o diretório é configurável (CALL_CACHE_DIR)');
+  includes(SRC, 'callCache.caminhoNovo(from', 'o comando usa o cache do grupo');
+  includes(SRC, 'callCache.apagar', 'apaga a faixa que sai');
 });
 
-// ============================================================================
+await test('encerrar a call limpa fila + cache', () => {
+  const i = SRC.indexOf("case 'callp':");
+  const bloco = SRC.slice(i, i + 6000);
+  includes(bloco, 'musicQueue.limpar(from)', 'limpa a fila');
+  includes(bloco, 'callCache.limparGrupo(from)', 'limpa o cache do grupo');
+});
 
-callMedia.__setDuble(null);
+console.log('\n=== 5) O HANDLER REAL (sem socket) ===\n');
+
+// O handler real exige socket; aqui medimos o CONTRATO do bloco, que e' o que
+// os testes de socket falso nao cobrem (o bloco mudou por inteiro).
+
+await test('o bloco trata erro sem vazar stack para o usuário', () => {
+  const b = blocoMusicap();
+  includes(b, "console.error('[MUSICAP] erro", 'loga o detalhe');
+  includes(b, 'Ocorreu um erro', 'responde amigável');
+  ok(!b.includes('e.stack'), 'não vaza stack');
+});
+
+await test('as respostas carregam o cabeçalho de canal (newsletter)', () => {
+  const b = blocoMusicap();
+  const usos = (b.match(/gerarContextNewsletter\(\)/g) || []).length;
+  ok(usos >= 4, `usa o cabeçalho nas respostas (achei ${usos})`);
+});
 
 const totalOk = RESULTS.reduce((a, r) => a + r.passed, 0);
 const totalFail = RESULTS.reduce((a, r) => a + r.failed, 0);

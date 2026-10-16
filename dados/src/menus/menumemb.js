@@ -17,6 +17,18 @@ export default async function menuMembros(prefix, botName = "MeuBot", userName =
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
+╭━━━꧁༺ ㅤ🎵 ${boldItalic('MÚSICA NA CALL')} 🎵ㅤ ༻꧂━━━╮
+│ 🎵 ${prefix}musicap <nome/link>
+│ ➕ ${prefix}musicap adicionar <nome/link>
+│ ⏭️ ${prefix}musicap pular
+│ ⏹️ ${prefix}musicap parar
+│ 🎶 ${prefix}musicap atual
+│ 🗑️ ${prefix}musicap limpar
+│ 📋 ${prefix}fila
+│ 📊 ${prefix}callp status
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
+
+
 ╭━━━꧁༺ ㅤ🤖 ${boldItalic('STATUS DO BOT')} 🤖ㅤ ༻꧂━━━╮
 │ 📶 ${prefix}ping
 │ 🤖 ${prefix}statusbot
