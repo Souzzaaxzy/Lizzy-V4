@@ -39,7 +39,7 @@
 import fs from 'fs';
 import path from 'path';
 import { criarStoreArquivoDoPacote } from './zapoStore.js';
-import { instalarBitrate, bitrateEmUso } from '../../utils/mlowBitrate.js';
+import { instalarBitrate, configuracaoEmUso, caminhoCompanionEsperado } from '../../utils/mlowBitrate.js';
 import { DATABASE_DIR } from '../../utils/paths.js';
 
 let mod = null;
@@ -262,7 +262,7 @@ export async function obterCliente() {
     try {
       const { createStore, WaClient, ConsoleLogger, voipPlugin } = m;
 
-      // Eleva o bitrate do encoder MLow (padrao do pacote: 15 kbps).
+      // Ajusta o encoder MLow (bitrate 30 kbps + complexidade 10 + FEC).
       // Instalado ANTES de criar o client: o media plane carrega o codec na
       // primeira call, entao o gancho precisa estar no lugar antes disso.
       await instalarBitrate().catch(() => false);
@@ -343,11 +343,16 @@ export async function obterCliente() {
       // Uma linha dizendo o que ficou LIGADO (para nao depender de suposicao).
       {
         const companion = caminhoCompanion();
-        const kbps = bitrateEmUso();
+        const cfg = configuracaoEmUso() || {};
+        const kbps = cfg.bitrate ? `${Math.round(cfg.bitrate / 1000)} kbps` : 'padrao (15 kbps)';
+        const cx = cfg.complexity !== null && cfg.complexity !== undefined ? cfg.complexity : 'padrao (5)';
+        const perda = cfg.packetLossPercent !== null && cfg.packetLossPercent !== undefined
+          ? `${cfg.packetLossPercent}%` : '0%';
         console.log(
           `[ZAPOCALL] audio: RED ${usarMlowRed() ? 'ligado' : 'desligado'}` +
-          ` | bitrate ${kbps ? `${Math.round(kbps / 1000)} kbps` : 'padrao (15 kbps)'}` +
-          ` | pos-filtro neural ${companion ? `ligado (${companion})` : 'INDISPONIVEL (sem o arquivo de pesos)'}`
+          ` | bitrate ${kbps} | complexidade ${cx} | perda esperada ${perda}` +
+          ` | pos-filtro neural ${companion ? `ligado (${companion})` : 'INDISPONIVEL'}` +
+          (companion ? '' : ` (o pacote nao traz o blob; coloque o peso em ${caminhoCompanionEsperado()})`)
         );
       }
 

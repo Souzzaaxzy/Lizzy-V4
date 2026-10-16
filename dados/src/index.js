@@ -1239,6 +1239,7 @@ import { getInfo as twitterGetInfo } from './funcs/utils/twitter.js';
 import * as musicQueue from './funcs/utils/musicQueue.js';
 import * as callPlayer from './funcs/utils/callPlayer.js';
 import * as callCache from './utils/callCache.js';
+import { prepararAudioCall } from './utils/callAudioPrep.js';
 import { aoTerminarAudio } from './funcs/utils/zapoCall.js';
 import { search, searchNews } from './funcs/utils/search.js';
 import { removeBg, upscale } from './funcs/utils/imagetools.js';
@@ -2195,17 +2196,6 @@ const fileExistsAsync = async (filePath) => {
   }
 };
 /**
- * Converte um audio para 16 kHz mono WAV (o formato que o motor da call quer).
- *
- * Por que existe: o motor decodifica o arquivo com ffmpeg a cada `loadAudio`.
- * Entregando ja' no formato final, esse trabalho desaparece. Se o ffmpeg nao
- * estiver disponivel, devolve `null` e o chamador usa o original -- nunca
- * pior que antes.
- *
- * @param {string} entrada caminho do audio
- * @returns {Promise<string|null>} caminho do WAV, ou null
- */
-/**
  * Registra o avanco automatico da fila para um grupo.
  *
  * Por que e' uma funcao: o registro tem de acontecer quando a musica COMECA a
@@ -2236,36 +2226,19 @@ function registrarAvancador(grupo, nazu) {
   });
 }
 
+/**
+ * Converte um audio para 16 kHz mono WAV, pronta para o motor da call.
+ *
+ * Por que existe: o motor decodifica o arquivo com ffmpeg a cada `loadAudio`.
+ * Entregando ja' no formato final (e tratado), esse trabalho desaparece. Se o
+ * ffmpeg nao estiver disponivel, devolve `null` e o chamador usa o original --
+ * nunca pior que antes. A cadeia de tratamento vive em `utils/callAudioPrep.js`.
+ *
+ * @param {string} entrada caminho do audio
+ * @returns {Promise<string|null>} caminho do WAV, ou null
+ */
 async function prepararWav16k(entrada) {
-  const { spawn } = await import('child_process');
-  const ffmpeg = process.env.FFMPEG_PATH || 'ffmpeg';
-  const saida = `${entrada}.16k.wav`;
-
-  return new Promise((resolve) => {
-    let proc;
-    try {
-      proc = spawn(ffmpeg, [
-        '-hide_banner', '-loglevel', 'error', '-y',
-        '-i', entrada,
-        '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le',
-        saida
-      ], { stdio: ['ignore', 'ignore', 'ignore'] });
-    } catch {
-      resolve(null);
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      try { proc.kill('SIGKILL'); } catch { /* ok */ }
-      resolve(null);
-    }, 60000);
-
-    proc.on('error', () => { clearTimeout(timer); resolve(null); });
-    proc.on('close', (code) => {
-      clearTimeout(timer);
-      resolve(code === 0 ? saida : null);
-    });
-  });
+  return prepararAudioCall(entrada);
 }
 
 const modules = await import('./funcs/exports.js');

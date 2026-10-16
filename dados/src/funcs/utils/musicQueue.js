@@ -87,20 +87,28 @@ export function tamanho(grupo) {
 /**
  * Avanca para a proxima e devolve ela.
  *
- * @returns {{ caminho: string, titulo: string, donoId: string|null }|null}
- *          a nova faixa atual, ou null quando a fila acabou
+ * A faixa que ACABOU sai da lista (e o `caminho` dela vai no retorno, para o
+ * chamador apagar do cache). Sem isso ela ficava listada para sempre no
+ * `!fila`/`!musicap atual`, como se ainda fosse tocar.
+ *
+ * @param {string} grupo
+ * @returns {{ faixa: object|null, saiu: object|null }} `faixa` e a nova atual
+ *          (ou null quando a fila acabou); `saiu` e a que concluiu (ou null).
  */
 export function avancar(grupo) {
   const f = filas.get(chave(grupo));
-  if (!f) return null;
-  f.indice += 1;
+  if (!f) return { faixa: null, saiu: null };
+
+  const saiu = f.faixas[f.indice] || null;
+  if (saiu) f.faixas.splice(f.indice, 1);
+
   const faixa = f.faixas[f.indice] || null;
   // Fila terminou: limpa tudo (nao guarda estado morto).
   if (!faixa) {
     filas.delete(chave(grupo));
-    return null;
+    return { faixa: null, saiu };
   }
-  return faixa;
+  return { faixa, saiu };
 }
 
 /**

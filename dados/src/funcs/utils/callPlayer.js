@@ -60,10 +60,13 @@ export async function tocarProxima(grupo) {
   ocupado.add(grupo);
   try {
     const anterior = fila.atual(grupo);
-    const nova = fila.avancar(grupo);
+    // `avancar` ja' TIRA a que acabou da lista (e devolve ela).
+    const { faixa: nova, saiu } = fila.avancar(grupo);
 
-    // A que saiu ja' foi tocada: o arquivo dela pode ir.
-    if (anterior?.caminho) apagar(anterior.caminho);
+    // A que saiu ja' foi tocada: o arquivo dela sai do cache. Usa o caminho
+    // que o `avancar` devolveu (a lista ja' nao a tem mais).
+    const terminada = saiu || anterior;
+    if (terminada?.caminho) apagar(terminada.caminho);
 
     if (!nova) return { ok: false, acabou: true, motivo: 'fila_vazia' };
 
@@ -91,6 +94,7 @@ export async function pular(grupo, quem, opts = {}) {
   if (!permissao.ok) return { ok: false, ...permissao };
 
   const atual = fila.atual(grupo);
+  // `tocarProxima` ja' tira a pulada da lista e apaga o arquivo dela.
   const r = await tocarProxima(grupo);
   if (r.acabou) return { ok: true, acabou: true, pulada: atual?.titulo || null };
   if (!r.ok) return r;

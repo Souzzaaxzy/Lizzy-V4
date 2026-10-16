@@ -10444,3 +10444,102 @@ sem quebrar nada (emulador/ROM/controles/rotas intactos).
 `tests/topgear.test.js` — **26 testes / 414 asserções, 0 falhas** (suite nova
 "catalogo: busca em tempo real + recentes + cards", 28 asserções) + assert de TV
 ajustado (`minmax(230px)`). Site: commit `7ba1ff9`; bot: `43aaae0`.
+
+## 🎵 CALL (`!musicap`) — FIM DA MUSICA SAI DA FILA E DO CACHE + CHIADO (out/2026) ✅
+Pedido do dono: *"quando uma música acabe, a anterior seja tirada da fila e apagada
+do cache, isso também inclui se a música for pulada"* e *"o áudio está com chiado,
+retira o máximo do chiado que você conseguir e melhora ao máximo o transporte e
+qualidade do áudio"*.
+
+### 1. A faixa concluída/pulada SAI da fila (BUG MEDIDO)
+`musicQueue.avancar()` só somava `indice += 1`: a faixa que já tocou **ficava na
+lista para sempre**, e o `!fila`/`!musicap atual` a mostravam como se ainda fosse
+tocar. Reproduzido com a fila real:
+
+| cenário | antes | depois |
+|---|---|---|
+| A acabou | `fila=[A,B,C]` tamanho 3 | **`fila=[B,C]` tamanho 2** |
+| B acabou | `fila=[A,B,C]` tamanho 3 | **`fila=[C]` tamanho 1** |
+| pulou A | `fila=[A,B]` tamanho 2 | **`fila=[B]` tamanho 1** |
+
+O arquivo **já** era apagado do cache (o `callPlayer` fazia `apagar(anterior)`),
+mas a LISTA não. Correção: `avancar()` agora faz `splice(indice, 1)` e devolve
+`{ faixa, saiu }` — o `saiu` é a que concluiu, com o caminho dela, para o
+chamador apagar do cache. `tocarProxima` (usado por `!musicap pular` e pelo
+avanço automático) consome esse retorno. O `parar` já removia a atual e apagava.
+
+**Contrato do módulo mudou de propósito**: `avancar` devolvia a faixa nova (ou
+`null`); agora devolve `{ faixa, saiu }`. Os testes que usavam o contrato antigo
+foram atualizados.
+
+### 2. O CHIADO — medido no caminho COMPLETO, reduzido em ~10-16 dB
+Medição (preparo ffmpeg → codec MLow → decode, medindo a energia SONORA nas
+PAUSAS do sinal, que é o chiado):
+
+| cadeia | piso (chiado) | música |
+|---|---|---|
+| antes (resample simples) | -41.5 dB | -9.0 dB |
+| **agora** (soxr + hp70 + gate + limiter) | **-58.0 dB** | -8.6 dB |
+
+Verificado no módulo REAL com mp3 de verdade (chiado -44 dB): **piso -49.5 →
+-59.5 dB = 10 dB menos**, saída `pcm_s16le, 16000, 1` (ffprobe).
+
+Novo módulo **`dados/src/utils/callAudioPrep.js`** — a cadeia
+`highpass=f=70, agate=threshold=0.008:ratio=6:attack=8:release=200,
+alimiter=limit=0.95, aresample=resampler=soxr:precision=28` em 16 kHz mono.
+O `prepararWav16k` do `index.js` agora **delega** a ele (o helper continua
+existindo: é o contrato que os testes do `!musicap` travam).
+
+**O que foi DESCARTADO com medição** (para não repetir a busca): `lowpass` em
+7.4/7.6 kHz — medido como **PIOR** (corta agudo sem baixar o piso). `afftdn` e
+`anlmdn` também mediram pior/instável. O gate sozinho já responde por quase tudo.
+Limiar do gate **baixo de propósito** (0.008 ≈ -42 dBFS): passagem musical suave
+(-30 dBFS) atravessa; só o ruído de fundo cai.
+
+### 3. O TRANSPORTE / encoder MLow — medido no codec real
+O encoder abria com `complexity = 5` e `packetLossPercent = 0` (padrão do
+pacote). Medição (codec real, sinal musical, 40 frames):
+
+| configuração | bytes | SNR |
+|---|---|---|
+| 15 kbps cx5 (padrão) | 3166 | 2.55 dB |
+| 30 kbps cx5 (antes) | 5890 | 2.54 dB |
+| **30 kbps cx10 (agora)** | 5874 | 2.56 dB |
+| **30 kbps cx10 plc10 (agora)** | 5997 | 2.59 dB |
+
+`complexity` 10 **não custa banda** (os bytes até caem). O `packetLossPercent`
+10% liga a cópia de **FEC** (protege contra CORTE). O gancho
+(`utils/mlowBitrate.js`) passou a injetar os **três** campos
+(`bitrate`/`complexity`/`packetLossPercent`), cada um só quando o chamador não
+pediu o seu. Env novas: `ZAPO_MLOW_COMPLEXITY` (padrão 10), `ZAPO_MLOW_LOSS`
+(padrão 10); desligáveis com `off`/`0`.
+
+**LIMITE HONESTO**: a banda de áudio do REMB vai de 16 a 30 kbps (medido em
+`rtcp-policy.js` do pacote) — 30 kbps **já é o teto útil**. O único lever que
+melhora o TIMBRE (o "abafado") é o **pós-filtro neural** (`mlowCompanion`), e
+**nenhum pacote traz o blob** `mlow_companion_v1.pte`. O código já tenta ligá-lo
+se o arquivo existir; o log do boot agora diz **onde colocá-lo**
+(`caminhoCompanionEsperado()`). Sem o blob, a call decodifica sem o filtro, sem
+quebrar. Chamar de "resolvido" o timbre sem esse arquivo seria mentira.
+
+### Testes
+- `tests/call-audio-prep.test.js` (**novo**, **14 testes / 39 asserções**): a
+  cadeia (os 4 filtros + limiar do gate conservador), o formato de saída, o
+  fallback sem ffmpeg, o timeout/SIGKILL, os exports; e o encoder
+  (complexidade 10, perda 10%, desligar pelo ambiente, clamp, os três campos no
+  gancho, o log do boot, o caminho do pós-filtro).
+- `tests/music-queue.test.js` **29 → 31 testes / 85 asserções**: contrato novo do
+  `avancar` + **duas regressões** — a música que ACABOU sai da lista E do cache
+  (arquivos reais), e a PULADA idem. **Verificado: removendo o `splice`, 19
+  asserções falham.**
+- `tests/musicap.test.js` **24 testes / 72 asserções**: o helper agora delega ao
+  módulo de preparo (as asserções do ffmpeg foram para o teste do módulo).
+- Regressões verdes: `mlow-bitrate` 11/22, `callp` 14/33, `get-message-inspector`
+  54/269, `cmd-suggest` 21/68, `testcall` 35/127, `antimidia` 14/29,
+  `gifsbn-media` 16/61, `statusgrupo` 49/143, `invisible-analyzer` 58/467,
+  `relationships-multi` 19/86, `amigos` 27/56, `hotseat` 39/401,
+  `raja-selective` 23/0, `modo18` 14/60, `antifantasma-classificacao` 18/0.
+- **PRÉ-EXISTENTES** (confirmados com `git stash` na baseline, sem relação):
+  `menu-layout` (1: `menufig` 18 vs 17) e `anti-seletiva` (10 ok / 22 falhas).
+  `callp` às vezes sai com timeout do harness, mas as 14/33 asserções passam.
+

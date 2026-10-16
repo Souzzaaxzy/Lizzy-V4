@@ -247,12 +247,22 @@ await test('o preparo do audio USA uma funcao que existe', () => {
   includes(SRC, 'async function prepararWav16k', 'o helper está definido');
 });
 
-await test('o helper de audio usa o ffmpeg do bot e tem fallback', () => {
-  includes(SRC, "process.env.FFMPEG_PATH || 'ffmpeg'", 'usa FFMPEG_PATH (como o resto do bot)');
-  includes(SRC, "'-ar', '16000'", 'converte para 16 kHz');
-  includes(SRC, "'-ac', '1'", 'mono');
-  includes(SRC, 'pcm_s16le', 'PCM (o que o motor lê)');
+await test('o helper de audio delega ao modulo de preparo (com fallback)', () => {
+  // O helper do index so' delega; a cadeia (resample com anti-alias, highpass,
+  // gate e limiter) mora em `utils/callAudioPrep.js`, onde esta' medido o
+  // quanto ela baixa o chiado.
+  includes(SRC, 'prepararAudioCall', 'delega ao modulo de preparo');
   includes(SRC, 'preparado || bruto', 'se o ffmpeg falhar, usa o original');
+
+  const PREP = fs.readFileSync(path.join(HERE, '..', 'dados/src/utils/callAudioPrep.js'), 'utf8');
+  includes(PREP, "process.env.FFMPEG_PATH || 'ffmpeg'", 'usa FFMPEG_PATH (como o resto do bot)');
+  includes(PREP, "const TAXA = 16000", 'converte para 16 kHz');
+  includes(PREP, "'-ac', '1'", 'mono');
+  includes(PREP, 'pcm_s16le', 'PCM (o que o motor lê)');
+  includes(PREP, 'highpass=f=70', 'highpass (tira o rumble)');
+  includes(PREP, 'agate=threshold=', 'gate (corta o chiado de fundo)');
+  includes(PREP, 'resampler=soxr', 'resample com anti-alias');
+  includes(PREP, 'alimiter', 'limiter (sem clipping)');
 });
 
 await test('o download roda em BACKGROUND (nao trava o bot)', () => {

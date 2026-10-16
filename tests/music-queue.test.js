@@ -92,13 +92,21 @@ await test('a fila é POR GRUPO (não vaza entre grupos)', () => {
   ok(fila.atual(G2) === null, 'sem atual no outro grupo');
 });
 
-await test('avancar anda e esvazia no fim', () => {
+await test('avancar ANDA, TIRA a que acabou e esvazia no fim', () => {
   fila.limparTudo();
   fila.enfileirar(G1, { caminho: '/a.wav', titulo: 'A', donoId: EU });
   fila.enfileirar(G1, { caminho: '/b.wav', titulo: 'B', donoId: EU });
 
-  ok(fila.avancar(G1)?.titulo === 'B', 'avançou para B');
-  ok(fila.avancar(G1) === null, 'depois de B, acabou');
+  const r1 = fila.avancar(G1);
+  ok(r1.faixa?.titulo === 'B', 'avançou para B');
+  ok(r1.saiu?.titulo === 'A', 'devolveu a que saiu (A)');
+  ok(r1.saiu?.caminho === '/a.wav', 'com o caminho dela (para apagar do cache)');
+  ok(fila.tamanho(G1) === 1, 'a lista encolheu (A saiu)');
+  ok(fila.listar(G1).map((f) => f.titulo).join(',') === 'B', 'A nao aparece mais na lista');
+
+  const r2 = fila.avancar(G1);
+  ok(r2.faixa === null, 'depois de B, acabou');
+  ok(r2.saiu?.titulo === 'B', 'B saiu no ultimo avanco');
   ok(fila.tamanho(G1) === 0, 'a fila foi limpa ao terminar');
 });
 
@@ -287,6 +295,79 @@ await test('o cache NÃO entra no backup do !atualizar', () => {
 });
 
 console.log('\n=== 7) AVANCO AUTOMATICO (o bug do codigo orfao) ===\n');
+
+await test('a musica que ACABOU sai da FILA e do CACHE (o pedido do dono)', async () => {
+  const filaM = await import(new URL('../dados/src/funcs/utils/musicQueue.js', import.meta.url).href);
+  const playerM = await import(new URL('../dados/src/funcs/utils/callPlayer.js', import.meta.url).href);
+  const cm = await import(new URL('../dados/src/funcs/utils/callMedia.js', import.meta.url).href);
+
+  filaM.limparTudo(); playerM.limparTudo();
+  cm.__setDuble({
+    estagio: () => 'pronta',
+    tocar: async () => ({ ok: true }),
+    parar: async () => ({ ok: true })
+  });
+
+  const G = 'free@g.us';
+  // Arquivos REAIS no cache, para medir a remocao.
+  const a = cache.caminhoNovo(G, '.wav'); fs.writeFileSync(a, 'a');
+  const b = cache.caminhoNovo(G, '.wav'); fs.writeFileSync(b, 'b');
+  const c = cache.caminhoNovo(G, '.wav'); fs.writeFileSync(c, 'c');
+  filaM.enfileirar(G, { caminho: a, titulo: 'A', donoId: 'u@x' });
+  filaM.enfileirar(G, { caminho: b, titulo: 'B', donoId: 'u@x' });
+  filaM.enfileirar(G, { caminho: c, titulo: 'C', donoId: 'u@x' });
+
+  await playerM.tocarAtual(G);
+
+  // A acabou.
+  await playerM.tocarProxima(G);
+  ok(filaM.listar(G).map((f) => f.titulo).join(',') === 'B,C', 'A saiu da LISTA (nao fica na fila)');
+  ok(filaM.tamanho(G) === 2, 'a contagem caiu para 2');
+  ok(filaM.resumo(G).atual?.titulo === 'B', 'a atual e B');
+  ok(!fs.existsSync(a), 'o arquivo de A saiu do cache');
+
+  // B acabou.
+  await playerM.tocarProxima(G);
+  ok(filaM.listar(G).map((f) => f.titulo).join(',') === 'C', 'B saiu da LISTA');
+  ok(!fs.existsSync(b), 'o arquivo de B saiu do cache');
+
+  // C acabou: fila vazia.
+  const fim = await playerM.tocarProxima(G);
+  ok(fim.acabou === true, 'acabou');
+  ok(filaM.tamanho(G) === 0, 'fila vazia');
+  ok(!fs.existsSync(c), 'o arquivo de C saiu do cache');
+
+  cm.__setDuble(null);
+});
+
+await test('a musica PULADA sai da FILA e do CACHE', async () => {
+  const filaM = await import(new URL('../dados/src/funcs/utils/musicQueue.js', import.meta.url).href);
+  const playerM = await import(new URL('../dados/src/funcs/utils/callPlayer.js', import.meta.url).href);
+  const cm = await import(new URL('../dados/src/funcs/utils/callMedia.js', import.meta.url).href);
+
+  filaM.limparTudo(); playerM.limparTudo();
+  cm.__setDuble({
+    estagio: () => 'pronta',
+    tocar: async () => ({ ok: true }),
+    parar: async () => ({ ok: true })
+  });
+
+  const G = 'skipfree@g.us';
+  const a = cache.caminhoNovo(G, '.wav'); fs.writeFileSync(a, 'a');
+  const b = cache.caminhoNovo(G, '.wav'); fs.writeFileSync(b, 'b');
+  filaM.enfileirar(G, { caminho: a, titulo: 'A', donoId: 'u@x' });
+  filaM.enfileirar(G, { caminho: b, titulo: 'B', donoId: 'u@x' });
+  await playerM.tocarAtual(G);
+
+  const r = await playerM.pular(G, 'u@x');
+  ok(r.ok === true && r.pulada === 'A', 'pulou A');
+  ok(filaM.listar(G).map((f) => f.titulo).join(',') === 'B', 'A saiu da LISTA ao pular');
+  ok(filaM.tamanho(G) === 1, 'a contagem caiu para 1');
+  ok(!fs.existsSync(a), 'o arquivo de A saiu do cache ao pular');
+
+  cm.__setDuble(null);
+});
+
 
 await test('o registro do avanco NAO e codigo orfao (entre cases)', () => {
   // O bug: `aoTerminarAudio(from, async ...)` estava ENTRE `case`s do switch
