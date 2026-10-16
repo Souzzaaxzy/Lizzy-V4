@@ -549,6 +549,98 @@ await test('THUMB: baixarThumb BAIXA de verdade e grava no cache do grupo', asyn
 });
 
 // ============================================================================
+// PULAR: SO' QUEM ESCOLHEU A MUSICA (comportamento, nao estrutura)
+// ============================================================================
+
+await test('PULAR: quem pediu pula; quem NAO pediu e recusado', async () => {
+  // Roda o HANDLER REAL com duas pessoas. O `donoId` da faixa e' o LID de quem
+  // pediu (o `sender` normalizado), entao a comparacao tem de casar.
+  const { groupJid, admin, participants } = setup(3);
+  const quemPediu = makePerson();
+  const outro = makePerson();
+  participants.push({ lid: quemPediu.lid, jid: quemPediu.jid, isAdmin: false });
+  participants.push({ lid: outro.lid, jid: outro.jid, isAdmin: false });
+
+  // Sobe a call e prepara a midia (dublê: nao carrega WASM).
+  instalarDubleMidia({ callId: 'CALL-PULAR' });
+  await run({ groupJid, sender: admin, text: '!callp', participants });
+
+  const cm = await import(new URL('../dados/src/funcs/utils/callMedia.js', import.meta.url).href);
+  cm.__setDuble({ estagio: () => 'pronta', tocar: async () => ({ ok: true }), parar: async () => ({ ok: true }) });
+
+  const cache = await import(new URL('../dados/src/utils/callCache.js', import.meta.url).href);
+  const a = cache.caminhoNovo(groupJid, '.wav'); fs.writeFileSync(a, 'a');
+  const b = cache.caminhoNovo(groupJid, '.wav'); fs.writeFileSync(b, 'b');
+
+  // Duas faixas: a 1a pedida por `quemPediu`, a 2a por `outro`.
+  musicQueue.limparTudo();
+  musicQueue.enfileirar(groupJid, { caminho: a, titulo: 'Musica do A', donoId: quemPediu.lid });
+  musicQueue.enfileirar(groupJid, { caminho: b, titulo: 'Musica do B', donoId: outro.lid });
+
+  // 1) QUEM NAO PEDIU tenta pular -> recusa, e a musica NAO muda.
+  const r1 = await run({ groupJid, sender: outro, text: '!musicap pular', participants, fromMe: false });
+  includes(r1.text, 'Só quem pediu', 'recusa quem nao pediu');
+  ok(musicQueue.atual(groupJid)?.titulo === 'Musica do A', 'a musica atual NAO mudou');
+  ok(fs.existsSync(a), 'o arquivo NAO foi apagado');
+
+  // 2) QUEM PEDIU pula -> funciona e a proxima entra.
+  const r2 = await run({ groupJid, sender: quemPediu, text: '!musicap pular', participants, fromMe: false });
+  includes(r2.text, 'pulada', 'avisa que pulou');
+  ok(musicQueue.atual(groupJid)?.titulo === 'Musica do B', 'a proxima virou a atual');
+  ok(!fs.existsSync(a), 'o arquivo da pulada saiu do cache');
+
+  cm.__setDuble(null);
+  musicQueue.limparTudo();
+  callState.limparCall(groupJid);
+});
+
+await test('PULAR: o dono do bot sempre pode (nao trava se quem pediu sair)', async () => {
+  const { groupJid, admin, participants } = setup(3);
+  instalarDubleMidia({ callId: 'CALL-DONO' });
+  await run({ groupJid, sender: admin, text: '!callp', participants });
+
+  const cm = await import(new URL('../dados/src/funcs/utils/callMedia.js', import.meta.url).href);
+  cm.__setDuble({ estagio: () => 'pronta', tocar: async () => ({ ok: true }), parar: async () => ({ ok: true }) });
+
+  const cache = await import(new URL('../dados/src/utils/callCache.js', import.meta.url).href);
+  const a = cache.caminhoNovo(groupJid, '.wav'); fs.writeFileSync(a, 'a');
+  const b = cache.caminhoNovo(groupJid, '.wav'); fs.writeFileSync(b, 'b');
+
+  musicQueue.limparTudo();
+  // A faixa e' de OUTRA pessoa (nao do dono do bot).
+  musicQueue.enfileirar(groupJid, { caminho: a, titulo: 'De outro', donoId: '999999999999999@lid' });
+  musicQueue.enfileirar(groupJid, { caminho: b, titulo: 'Proxima', donoId: '999999999999999@lid' });
+
+  // O comando roda como o proprio bot (fromMe), que e' `isOwner`.
+  const r = await run({ groupJid, sender: admin, text: '!musicap pular', participants });
+  includes(r.text, 'pulada', 'o dono do bot pula a faixa de outro');
+
+  cm.__setDuble(null);
+  musicQueue.limparTudo();
+  callState.limparCall(groupJid);
+});
+
+await test('PULAR: sem musica tocando avisa (nao inventa)', async () => {
+  const { groupJid, admin, participants } = setup(3);
+  const membro = makePerson();
+  participants.push({ lid: membro.lid, jid: membro.jid, isAdmin: false });
+  instalarDubleMidia({ callId: 'CALL-VAZIA' });
+  await run({ groupJid, sender: admin, text: '!callp', participants });
+  musicQueue.limparTudo();
+
+  const cm = await import(new URL('../dados/src/funcs/utils/callMedia.js', import.meta.url).href);
+  cm.__setDuble({ estagio: () => 'pronta', tocar: async () => ({ ok: true }), parar: async () => ({ ok: true }) });
+
+  // Como MEMBRO (nao como o dono do bot): o `ehDonoDoBot` curto-circuita a
+  // checagem de `sem_musica`, entao medir isso pelo dono mediria outra coisa.
+  const r = await run({ groupJid, sender: membro, text: '!musicap pular', participants, fromMe: false });
+  includes(r.text, 'Não há música tocando', 'avisa que nao ha musica');
+
+  cm.__setDuble(null);
+  callState.limparCall(groupJid);
+});
+
+// ============================================================================
 // MENUS: cada comando no menu CERTO (a correcao do dono)
 // ============================================================================
 
