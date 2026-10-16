@@ -30,7 +30,7 @@ import { createRequire } from 'module';
 const MAX_BPS = 30000;
 /** Piso: a doc diz "never under 16 kbps"; 8 kbps da' margem sem ser absurdo. */
 const MIN_BPS = 8000;
-const PADRAO_BPS = 24000;
+const PADRAO_BPS = 30000;  // teto do REMB (pedido do dono)
 
 let instalado = false;
 let bitrateAtivo = null;

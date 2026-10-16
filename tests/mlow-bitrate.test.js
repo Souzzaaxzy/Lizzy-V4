@@ -1,5 +1,5 @@
 /**
- * Bitrate do encoder MLow (15 -> 24 kbps).
+ * Bitrate do encoder MLow (15 -> 30 kbps).
  *
  * ## O que este teste protege
  *
@@ -76,11 +76,11 @@ const acharCodec = () => {
 
 console.log('\n=== 1) A CONFIGURAÇÃO (faixa e limites) ===\n');
 
-await test('padrão é 24 kbps', async () => {
+await test('padrão é 30 kbps', async () => {
   const m = await import(new URL('../dados/src/utils/mlowBitrate.js?p=1', import.meta.url).href);
   const antes = process.env.ZAPO_MLOW_BITRATE;
   delete process.env.ZAPO_MLOW_BITRATE;
-  ok(m.bitrateConfigurado() === 24000, 'padrão 24000');
+  ok(m.bitrateConfigurado() === 30000, 'padrão 30000');
   if (antes !== undefined) process.env.ZAPO_MLOW_BITRATE = antes;
 });
 
@@ -100,7 +100,7 @@ await test('o TETO do REMB é respeitado (não adianta pedir 64 kbps)', async ()
   process.env.ZAPO_MLOW_BITRATE = '999999';
   ok(m.bitrateConfigurado() === 30000, 'clampa em 30000 (a doc: teto ~24 kbps managed)');
   process.env.ZAPO_MLOW_BITRATE = 'abc';
-  ok(m.bitrateConfigurado() === 24000, 'valor inválido volta ao padrão');
+  ok(m.bitrateConfigurado() === 30000, 'valor inválido volta ao padrão');
   if (antes !== undefined) process.env.ZAPO_MLOW_BITRATE = antes; else delete process.env.ZAPO_MLOW_BITRATE;
 });
 
@@ -125,9 +125,9 @@ await test('o require devolve o MESMO objeto (senão a troca não teria efeito)'
 
 await test('o gancho INSTALA', async () => {
   const m = await import(new URL('../dados/src/utils/mlowBitrate.js?p=4', import.meta.url).href);
-  const ok1 = await m.instalarBitrate(24000);
+  const ok1 = await m.instalarBitrate(30000);
   ok(ok1 === true, 'instalou');
-  ok(m.bitrateEmUso() === 24000, 'bitrate em uso é 24000');
+  ok(m.bitrateEmUso() === 30000, 'bitrate em uso é 30000');
 });
 
 await test('o bitrate CHEGA ao create (não é só "instalar sem erro")', async () => {
@@ -138,9 +138,9 @@ await test('o bitrate CHEGA ao create (não é só "instalar sem erro")', async 
   let recebido = null;
   mod.MLowCodec.create = async (opts) => { recebido = opts; throw new Error('parou aqui de propósito'); };
 
-  await m.instalarBitrate(24000);
+  await m.instalarBitrate(30000);
   try { await mod.MLowCodec.create({ companionModel: undefined, red: null }); } catch { /* esperado */ }
-  ok(recebido?.bitrate === 24000, 'o create recebeu bitrate: 24000');
+  ok(recebido?.bitrate === 30000, 'o create recebeu bitrate: 30000');
 
   mod.MLowCodec.create = original;
 });
@@ -153,7 +153,7 @@ await test('NÃO sobrescreve quem pediu o próprio bitrate', async () => {
   let recebido = null;
   mod.MLowCodec.create = async (opts) => { recebido = opts; throw new Error('parou'); };
 
-  await m.instalarBitrate(24000);
+  await m.instalarBitrate(30000);
   try { await mod.MLowCodec.create({ bitrate: 9000 }); } catch { /* esperado */ }
   ok(recebido?.bitrate === 9000, 'respeitou o 9000 de quem pediu');
 

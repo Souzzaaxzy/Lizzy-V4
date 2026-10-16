@@ -2205,6 +2205,37 @@ const fileExistsAsync = async (filePath) => {
  * @param {string} entrada caminho do audio
  * @returns {Promise<string|null>} caminho do WAV, ou null
  */
+/**
+ * Registra o avanco automatico da fila para um grupo.
+ *
+ * Por que e' uma funcao: o registro tem de acontecer quando a musica COMECA a
+ * tocar (nao no inicio de qualquer mensagem). Antes ele estava entre `case`s
+ * do switch -- codigo orfao, que nunca executava, e a fila ficava parada.
+ *
+ * Idempotente: o `aoTerminarAudio` guarda UM callback por grupo (re-registrar
+ * so' substitui).
+ *
+ * @param {string} grupo
+ * @param {object} nazu socket (para avisar no grupo)
+ */
+function registrarAvancador(grupo, nazu) {
+  aoTerminarAudio(grupo, async (g) => {
+    callPlayer.seguir(g);
+    const r = await callPlayer.tocarProxima(g);
+    if (r.acabou) {
+      await nazu.sendMessage(g, {
+        text: '🎵 A fila terminou.',
+        contextInfo: gerarContextNewsletter()
+      }).catch(() => {});
+    } else if (r.ok) {
+      await nazu.sendMessage(g, {
+        text: `🎵 Tocando agora: *${r.faixa.titulo}*`,
+        contextInfo: gerarContextNewsletter()
+      }).catch(() => {});
+    }
+  });
+}
+
 async function prepararWav16k(entrada) {
   const { spawn } = await import('child_process');
   const ffmpeg = process.env.FFMPEG_PATH || 'ffmpeg';
@@ -35805,27 +35836,6 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
       // Quando a faixa sai da fila (tocou, pulou) ou a fila limpa, o arquivo
       // sai junto.
       // !fila — mostra a FILA de musicas do grupo (todos podem ver).
-      // Handler do "audio terminou": avanca a fila e avisa o grupo.
-      // O `aoTerminarAudio` guarda UM callback por grupo, entao re-registrar
-      // so' substitui (nao empilha).
-      if (isGroup && obterCall(from)?.callId) {
-        aoTerminarAudio(from, async (g) => {
-          callPlayer.seguir(g);
-          const r = await callPlayer.tocarProxima(g);
-          if (r.acabou) {
-            await nazu.sendMessage(g, {
-              text: '🎵 A fila terminou.',
-              contextInfo: gerarContextNewsletter()
-            }).catch(() => {});
-          } else if (r.ok) {
-            await nazu.sendMessage(g, {
-              text: `🎵 Tocando agora: *${r.faixa.titulo}*`,
-              contextInfo: gerarContextNewsletter()
-            }).catch(() => {});
-          }
-        });
-      }
-
       case 'fila':
       case 'playlist':
         try {
@@ -36093,6 +36103,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             if (!jaTocando && !soEnfileirar) {
               // Primeira da fila: o player assume (e segue o grupo).
               callPlayer.seguir(from);
+              registrarAvancador(from, nazu);
               const r = await callPlayer.tocarAtual(from);
               await apagarAviso();
               if (!r.ok) {
@@ -36108,6 +36119,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
 
             // Ja' tem musica: entrou na fila.
             callPlayer.seguir(from);
+            registrarAvancador(from, nazu);
             await apagarAviso();
             const total = musicQueue.tamanho(from);
             const pos = total - 1;

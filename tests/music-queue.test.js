@@ -260,7 +260,7 @@ await test('o zapoCall escuta "audio terminou"', () => {
 });
 
 await test('o index registra o callback que avança', () => {
-  includes(SRC, 'aoTerminarAudio(from', 'registra por grupo');
+  includes(SRC, 'registrarAvancador(from, nazu)', 'registra por grupo (via helper)');
   includes(SRC, 'callPlayer.tocarProxima(g)', 'avança a fila');
 });
 
@@ -284,6 +284,69 @@ await test('o cache NÃO entra no backup do !atualizar', () => {
   // (foi o bug do ENOSPC com o apk-cache).
   const B = fs.readFileSync(new URL('../dados/src/.scripts/database-backup.js', import.meta.url), 'utf8');
   includes(B, 'call-cache', 'call-cache está em DIRS_PULADOS');
+});
+
+console.log('\n=== 7) AVANCO AUTOMATICO (o bug do codigo orfao) ===\n');
+
+await test('o registro do avanco NAO e codigo orfao (entre cases)', () => {
+  // O bug: `aoTerminarAudio(from, async ...)` estava ENTRE `case`s do switch
+  // -- nunca executava. A fila ficava parada na primeira musica.
+  ok(!SRC.includes('aoTerminarAudio(from, async'),
+    'não há mais registro solto entre cases');
+  includes(SRC, 'function registrarAvancador', 'o helper existe (nível de módulo)');
+});
+
+await test('o avanco é registrado quando a musica COMEÇA a tocar', () => {
+  // Só faz sentido registrar quando há musica tocando -- e não a cada mensagem.
+  const i = SRC.indexOf("case 'musicap':");
+  const j = SRC.indexOf("case 'antifantasma':");
+  const b = SRC.slice(i, j);
+  includes(b, 'registrarAvancador(from, nazu)', 'registra dentro do !musicap');
+  const usos = (b.match(/registrarAvancador\(from, nazu\)/g) || []).length;
+  ok(usos >= 2, `registra ao tocar E ao enfileirar (achei ${usos})`);
+});
+
+await test('a FILA AVANCA sozinha (motor simulado)', async () => {
+  const filaM = await import(new URL('../dados/src/funcs/utils/musicQueue.js', import.meta.url).href);
+  const playerM = await import(new URL('../dados/src/funcs/utils/callPlayer.js', import.meta.url).href);
+  const cm = await import(new URL('../dados/src/funcs/utils/callMedia.js', import.meta.url).href);
+
+  filaM.limparTudo();
+  playerM.limparTudo();
+
+  const tocados = [];
+  cm.__setDuble({
+    estagio: () => 'pronta',
+    tocar: async (g, a) => { tocados.push(a); return { ok: true }; },
+    parar: async () => ({ ok: true })
+  });
+
+  const G = 'adv@g.us';
+  filaM.enfileirar(G, { caminho: '/a.wav', titulo: 'A', donoId: 'u@x' });
+  filaM.enfileirar(G, { caminho: '/b.wav', titulo: 'B', donoId: 'u@x' });
+  filaM.enfileirar(G, { caminho: '/c.wav', titulo: 'C', donoId: 'u@x' });
+
+  await playerM.tocarAtual(G);
+  ok(tocados.join(',') === '/a.wav', 'tocou a primeira');
+
+  // Cada acabou avança uma.
+  await playerM.tocarProxima(G);
+  await playerM.tocarProxima(G);
+  ok(tocados.join(',') === '/a.wav,/b.wav,/c.wav', 'avançou na ordem 1->2->3');
+
+  const fim = await playerM.tocarProxima(G);
+  ok(fim.acabou === true, 'depois da última, acabou');
+  ok(filaM.tamanho(G) === 0, 'a fila esvaziou');
+
+  cm.__setDuble(null);
+});
+
+await test('o bitrate padrao e 30000 (teto do REMB)', async () => {
+  const bt = await import(new URL('../dados/src/utils/mlowBitrate.js?bt=1', import.meta.url).href);
+  const antes = process.env.ZAPO_MLOW_BITRATE;
+  delete process.env.ZAPO_MLOW_BITRATE;
+  ok(bt.bitrateConfigurado() === 30000, 'padrão 30000');
+  if (antes !== undefined) process.env.ZAPO_MLOW_BITRATE = antes;
 });
 
 const totalOk = RESULTS.reduce((a, r) => a + r.passed, 0);
