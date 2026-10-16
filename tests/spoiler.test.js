@@ -127,7 +127,7 @@ await test('!spoiler <texto> envia com spoiler: true', async () => {
   const r = await runCmd('!spoiler cuidado com o final');
   const msg = r.sent.find((s) => s.content?.text);
   ok(msg, 'enviou a mensagem');
-  ok(msg.content.spoiler === true, 'com spoiler: true');
+  ok(msg.content.contextInfo?.isSpoiler === true, 'com contextInfo.isSpoiler: true');
   includes(msg.content.text, 'cuidado com o final', 'com o texto');
 });
 
@@ -148,29 +148,30 @@ await test('o texto do spoiler aceita acento e emoji', async () => {
 
 console.log('\n=== 2) O PROTO REAL (o que o WhatsApp recebe) ===\n');
 
-await test('vira spoilerMessage com contextInfo.isSpoiler', async () => {
+await test('NAO inventa tipo novo: sai extendedTextMessage com isSpoiler', async () => {
   const r = await runCmd('!spoiler segredo');
   const msg = r.sent.find((s) => s.content?.text);
   const { generateWAMessageContent } = await import('@itsliaaa/baileys');
   const up = async () => ({ url: 'https://x/f', directPath: '/v/f' });
   const c = await generateWAMessageContent(
-    { text: msg.content.text, spoiler: true },
+    { text: msg.content.text, contextInfo: msg.content.contextInfo },
     { upload: up }
   );
-  ok(c.spoilerMessage, 'vem como spoilerMessage');
-  ok(c.spoilerMessage.message.extendedTextMessage.text === 'segredo', 'com o texto dentro');
-  ok(c.spoilerMessage.message.extendedTextMessage.contextInfo.isSpoiler === true, 'com isSpoiler: true');
-  ok(!c.extendedTextMessage, 'NAO e texto normal');
+  // A forma certa NAO usa o wrapper  (tipo novo = gateado).
+  ok(!c.spoilerMessage, 'NAO usa spoilerMessage (tipo novo)');
+  ok(c.extendedTextMessage, 'continua extendedTextMessage (tipo normal)');
+  ok(c.extendedTextMessage.text === 'segredo', 'com o texto');
+  ok(c.extendedTextMessage.contextInfo.isSpoiler === true, 'com isSpoiler: true');
 });
 
 await test('sobrevive ao encode/decode do proto', async () => {
   const { generateWAMessageContent } = await import('@itsliaaa/baileys');
   const up = async () => ({ url: 'https://x/f', directPath: '/v/f' });
-  const c = await generateWAMessageContent({ text: 'x', spoiler: true }, { upload: up });
+  const c = await generateWAMessageContent({ text: 'x', contextInfo: { isSpoiler: true } }, { upload: up });
   const bytes = proto.Message.encode(proto.Message.fromObject(c)).finish();
   const volta = proto.Message.decode(bytes);
-  ok(volta.spoilerMessage, 'spoilerMessage sobreviveu');
-  ok(volta.spoilerMessage.message.extendedTextMessage.contextInfo.isSpoiler === true, 'isSpoiler sobreviveu');
+  ok(volta.extendedTextMessage, 'extendedTextMessage sobreviveu');
+  ok(volta.extendedTextMessage.contextInfo.isSpoiler === true, 'isSpoiler sobreviveu');
 });
 
 await test('mensagem normal NAO ganha spoiler', async () => {
@@ -190,7 +191,7 @@ await test('o bloco trata imagem/video marcado (le o codigo)', () => {
   includes(b, 'isQuotedImage', 'checa imagem marcada');
   includes(b, 'isQuotedVideo', 'checa video marcado');
   includes(b, 'getFileBuffer', 'baixa a midia de verdade');
-  includes(b, 'spoiler: true', 'manda como spoiler');
+  includes(b, 'isSpoiler: true', 'manda com isSpoiler');
 });
 
 await test('!spoiler NAO esta em menu nenhum (experimental)', () => {

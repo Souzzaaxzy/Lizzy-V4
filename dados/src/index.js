@@ -30273,10 +30273,14 @@ ${nomebot}  By  👑 ${nomedono}`;
         break;
       // !spoiler — mensagem que fica BORRADA até tocar.
       //
-      // A fork ja' suporta: `{ text, spoiler: true }` vira `spoilerMessage`
-      // (com `contextInfo.isSpoiler: true`) — o mesmo recurso do proprio
-      // WhatsApp. Medido: 59 B (texto) e 184 B (imagem), com round-trip do
-      // proto OK. Nenhum outro comando do bot usa isso.
+      // O filtro vai no `contextInfo.isSpoiler` do tipo NORMAL (extendedTextMessage
+      // / imageMessage), NAO num `spoilerMessage`.
+      //
+      // MEDIDO: a fork sabe montar `{ spoiler: true }` -> `spoilerMessage`
+      // (campo 118 do proto), mas o cliente responde "mensagem incompativel" —
+      // e' um TIPO NOVO, e tipo novo de lib nao-oficial e' gateado pelo servidor
+      // (mesmo sintoma do botao `flow`). A forma que o app usa e' so' o
+      // `contextInfo.isSpoiler` no tipo normal; essa nao inventa tipo nenhum.
       //
       //   `!spoiler <texto>`   -> texto borrado
       //   `!spoiler` + imagem/vídeo marcado -> mídia borrada (com legenda)
@@ -30306,8 +30310,7 @@ ${nomebot}  By  👑 ${nomedono}`;
             await nazu.sendMessage(from, {
               [tipoMidiaSpoiler]: buffer,
               ...(legenda ? { caption: legenda } : {}),
-              spoiler: true,
-              contextInfo: gerarContextNewsletter()
+              contextInfo: { ...gerarContextNewsletter(), isSpoiler: true }
             }, { quoted: info });
             return;
           }
@@ -30326,10 +30329,13 @@ ${nomebot}  By  👑 ${nomedono}`;
             );
           }
 
+          // Forma SEM wrapper: o filtro vai no `contextInfo.isSpoiler` do
+          // proprio extendedTextMessage. Medido: sai `extendedTextMessage` com
+          // `contextInfo.isSpoiler: true` — NAO um `spoilerMessage` (tipo novo,
+          // que o cliente rejeita como "incompativel").
           await nazu.sendMessage(from, {
             text: textoSpoiler,
-            spoiler: true,
-            contextInfo: gerarContextNewsletter()
+            contextInfo: { ...gerarContextNewsletter(), isSpoiler: true }
           }, { quoted: info });
         } catch (e) {
           console.error('[SPOILER] erro:', e?.message || e);
