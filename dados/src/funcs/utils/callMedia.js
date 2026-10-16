@@ -3,7 +3,7 @@
  *
  * ## Dois backends, um contrato
  *
- * Este módulo é a fachada que os comandos (`!callp` / `!musicap` / `!vozp`) e os
+ * Este módulo é a fachada que os comandos (`!callp` / `!musicap`) e os
  * testes consomem. Atrás dele há DOIS backends de mídia, escolhidos nesta ordem:
  *
  * 1. **`zapoCall.js`** (`zapo-js` + `@zapo-js/voip`) — **preferido**. É o único

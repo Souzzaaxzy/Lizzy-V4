@@ -33,7 +33,7 @@
  * ## Contrato
  *
  * Mesma interface do `callMedia.js`, entao os comandos `!callp` / `!musicap` /
- * `!vozp` e seus testes nao sabem qual backend esta ativo.
+ * seus testes nao sabem qual backend esta ativo.
  */
 
 import fs from 'fs';

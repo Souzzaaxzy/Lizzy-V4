@@ -3958,7 +3958,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     /**
      * Sobe uma chamada/chamada de voz neste grupo e registra para o `encerrar`.
      *
-     * Ponto ÚNICO usado pelo `!callp` (chamada) e pelo `!vozp` (chat de voz): os
+     * Ponto ÚNICO usado pelo `!callp` (chamada) e pelo `!musicap`: os
      * dois só mudam `voiceChat`, então duplicar o fluxo deixaria as duas versões
      * divergindo na primeira correção. Nada de sinalização aqui: quem CRIA a
      * call é o motor de mídia (medido no pacote `lizzy-call`).
@@ -35604,81 +35604,6 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
       // Agora o motor cria, e a sinalização dele sai pelo socket.
       //
       // `!callp encerrar` derruba a chamada e a pilha de mídia.
-      // !vozp — CHAT DE VOZ no grupo (o "voice chat" do WhatsApp).
-      //
-      // Mesmo fluxo do `!callp`, com uma diferença que é o ponto todo: o motor
-      // sobe a call com o marcador de VOICE CHAT (offer "lightweight"), então a
-      // chamada NÃO toca para o grupo — os membros veem o chat de voz e entram
-      // se quiserem. No `!callp` a chamada toca.
-      //
-      // Evidência no WASM (`lizzy-call`): `voice_chat.cc` com `is_voice_chat` /
-      // `is_lightweight` / `lightweight-key`, e o parâmetro `isLightWeight` do
-      // `startVoipGroupCall`, que `entrarNaCallComMidia` repassa como
-      // `isLightWeight` (ver `dados/src/funcs/utils/callMedia.js`).
-      case 'vozp':
-      case 'voicechat':
-      case 'chatvoz':
-        try {
-          if (!isGroup) return reply('Isso só pode ser usado em grupo 💔');
-          if (!podeDonoTotal()) return reply('⛔ Apenas o Dono pode usar este comando.');
-
-          const subVoz = normalizar((args[0] || '')).trim();
-
-          if (subVoz === 'encerrar' || subVoz === 'parar' || subVoz === 'desligar') {
-            const ativa = obterCall(from);
-            if (!ativa || !ativa.callId) {
-              return reply('📴 Não há chat de voz ativo subido por mim neste grupo.');
-            }
-            limparCall(from);
-            await sairDaCallComMidia(from).catch(() => {});
-            return reply('📴 Chat de voz encerrado.');
-          }
-
-          const jaAtiva = obterCall(from);
-          if (jaAtiva) {
-            const tipoAtual = jaAtiva.voiceChat ? 'chat de voz' : 'chamada';
-            return reply(`📞 Já existe um(a) ${tipoAtual} subido(a) por mim neste grupo.\n\nUse \`!vozp encerrar\` para derrubar.`);
-          }
-
-          if (await precisaPareamento()) {
-            return reply(
-              '🔑 *O motor de midia precisa ser pareado uma vez.*\n\n' +
-              'Mande:\n`!callp parear 5511999999999`\n\n' +
-              '_Use o numero da conta do bot (com DDI)._'
-            );
-          }
-
-          const r = await subirCallDoGrupo({ voiceChat: true });
-          if (!r.ok) {
-            const motivos = {
-              sem_identidade: 'Não consegui identificar meu próprio número para iniciar o chat de voz.',
-              sem_metadata: 'Não consegui ler os membros do grupo agora. Tente de novo.',
-              grupo_pequeno: 'O chat de voz precisa de pelo menos 2 outros membros.',
-              pacote_de_midia_ausente: 'A mídia não está instalada neste servidor (falta o pacote `lizzy-call`).',
-              nao_pareado: 'O motor de mídia ainda não foi pareado. Use `!callp parear <numero>`.',
-              sem_conexao: 'A conexão do motor de mídia não abriu. Tente de novo em alguns segundos.',
-              ja_na_call: 'Já existe uma chamada de mídia neste grupo.',
-              falha_ao_entrar: 'O motor de mídia não subiu.'
-            };
-            const detalhe = motivos[r.motivo] || r.motivo || 'erro desconhecido';
-            return reply(`❌ Não consegui iniciar o chat de voz.\n\n_${detalhe}_${r.detalhe ? `\n\n\`${r.detalhe}\`` : ''}`);
-          }
-
-          const linhaMidia = r.stage === 'pronta'
-            ? '🎵 Áudio: pronto — use `!musicap` respondendo um áudio para tocar.'
-            : `🎵 Áudio: conectando (${r.stage}). Assim que alguém entrar, use \`!musicap\`.`;
-
-          await nazu.sendMessage(from, {
-            text: `🎙️ *Chat de voz iniciado neste grupo.*\n\n• ID: \`${r.callId}\`\n• Sem tocar: quem quiser entra pelo cartão do chat de voz.\n${linhaMidia}\n\n_Use \`!vozp encerrar\` para terminar._`,
-            contextInfo: gerarContextNewsletter(),
-            quoted: info
-          });
-        } catch (e) {
-          console.error('[VOZP] Erro:', e);
-          await reply('Ocorreu um erro 💔');
-        }
-        break;
-
       case 'callp':
         try {
           if (!isGroup) return reply('Isso só pode ser usado em grupo 💔');

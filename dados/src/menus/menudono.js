@@ -29,7 +29,6 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 │ 📞 ${prefix}callp
 │ 📞 ${prefix}callp encerrar
 │ 🔑 ${prefix}callp parear <numero>
-│ 🎙️ ${prefix}vozp
 │ 🎵 ${prefix}musicap
 │ ⏹️ ${prefix}musicap parar
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
