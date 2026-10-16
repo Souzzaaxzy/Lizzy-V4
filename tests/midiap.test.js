@@ -175,6 +175,114 @@ await test('o splitter aguenta start code de 3 E de 4 bytes', () => {
   ok(aus.length === 2, `2 access units (veio ${aus.length})`);
 });
 
+// A CAUSA RAIZ do travamento relatado: o `-tune zerolatency` liga o
+// sliced-threads do x264, que fatia CADA FRAME em varios slices. Como um access
+// unit = um frame, o splitter via 4x mais frames e o motor recebia timestamps
+// colapsados (medido: 120 AUs para 30 frames, 179 timestamps repetidos em 4 s).
+//
+// O teste do splitter acima NAO pega isso: ele gera H.264 SEM `zerolatency`.
+// Os testes abaixo usam os argumentos REAIS do modulo.
+
+if (TEM_FFMPEG) {
+  await test('os argumentos do encoder desligam o sliced-threads (a causa do travamento)', () => {
+    // Chama a FUNCAO do modulo: mede o que o ffmpeg realmente recebe. Ler o
+    // arquivo passaria por causa do comentario que cita o parametro.
+    const args = midiap.argumentosDoEncoder('/tmp/x.mp4');
+    const params = args[args.indexOf('-x264-params') + 1];
+    includes(params, 'sliced-threads=0', 'o x264 nao fatia o frame em varios slices');
+    includes(params, 'annexb=1', 'Annex-B preservado');
+    includes(args.join(' '), '-tune zerolatency', 'o tune que ligava o fatiamento segue aplicado');
+  });
+
+  await test('o encoder REAL do modulo da UM slice por frame (30 frames -> 30 AUs)', async () => {
+    // Replica os argumentos do `alimentar` (incluindo `zerolatency`).
+    const video = path.join(TMP_DB, 'slices.mp4');
+    await new Promise((resolve, reject) => {
+      const p = spawn(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-y',
+        '-f', 'lavfi', '-i', 'testsrc=size=640x360:rate=15:duration=2',
+        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', video], { stdio: ['ignore', 'ignore', 'inherit'] });
+      p.on('error', reject);
+      p.on('close', (c) => (c === 0 ? resolve() : reject(new Error('ffmpeg ' + c))));
+    });
+
+    // Usa os argumentos DO MODULO (fonte unica): se alguem tirar o
+    // `sliced-threads=0`, este teste fragmenta e falha.
+    const fluxo = await new Promise((resolve, reject) => {
+      const pedacos = [];
+      const p = spawn(FFMPEG, midiap.argumentosDoEncoder(video), { stdio: ['ignore', 'pipe', 'ignore'] });
+      p.stdout.on('data', (c) => pedacos.push(c));
+      p.on('error', reject);
+      p.on('close', () => resolve(Buffer.concat(pedacos)));
+    });
+
+    const aus = splitter.dividirAccessUnits(fluxo);
+    ok(aus.length === 30, `30 access units para 30 frames (veio ${aus.length})`);
+    fs.unlinkSync(video);
+  });
+
+  await test('SEM sliced-threads=0 o splitter fragmenta (documenta o bug)', async () => {
+    // Prova que o parametro e' o que resolve: sem ele o splitter ve' 4x mais
+    // "frames". Se este teste deixar de fragmentar, o x264 mudou de padrao.
+    const video = path.join(TMP_DB, 'slices2.mp4');
+    await new Promise((resolve, reject) => {
+      const p = spawn(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-y',
+        '-f', 'lavfi', '-i', 'testsrc=size=640x360:rate=15:duration=2',
+        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', video], { stdio: ['ignore', 'ignore', 'inherit'] });
+      p.on('error', reject);
+      p.on('close', (c) => (c === 0 ? resolve() : reject(new Error('ffmpeg ' + c))));
+    });
+    const fluxo = await new Promise((resolve, reject) => {
+      const pedacos = [];
+      const p = spawn(FFMPEG, [
+        '-hide_banner', '-loglevel', 'error', '-re', '-i', video, '-an',
+        '-c:v', 'libx264', '-profile:v', 'baseline', '-level', '3.1',
+        '-pix_fmt', 'yuv420p', '-x264-params', 'annexb=1',
+        '-preset', 'veryfast', '-tune', 'zerolatency', '-g', '30',
+        '-f', 'h264', 'pipe:1'
+      ], { stdio: ['ignore', 'pipe', 'ignore'] });
+      p.stdout.on('data', (c) => pedacos.push(c));
+      p.on('error', reject);
+      p.on('close', () => resolve(Buffer.concat(pedacos)));
+    });
+    const aus = splitter.dividirAccessUnits(fluxo);
+    ok(aus.length > 30, `sem o parametro fragmenta (${aus.length} > 30) — e' o bug documentado`);
+    fs.unlinkSync(video);
+  });
+
+  await test('o timestamp AVANCA sempre (nunca repete, nunca volta)', async () => {
+    // O `Date.now()` cru tem resolucao de 1 ms e repetia (medido: 7 em 30
+    // frames), o que faz o motor atrasar/descartar. O modulo usa um carimbo
+    // monotonico; aqui se mede o resultado pela sequencia enviada ao motor.
+    const video = path.join(TMP_DB, 'ts.mp4');
+    await new Promise((resolve, reject) => {
+      const p = spawn(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-y',
+        '-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=15:duration=2',
+        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', video], { stdio: ['ignore', 'ignore', 'inherit'] });
+      p.on('error', reject);
+      p.on('close', (c) => (c === 0 ? resolve() : reject(new Error('ffmpeg ' + c))));
+    });
+
+    const carimbos = [];
+    midiap.__setVoip({
+      requestVideoUpgrade: async () => 'accepted',
+      setScreenShare: async () => {},
+      setVideoEnabled: async () => {},
+      feedLiveVideo: (_id, _au, t) => { carimbos.push(t); return 1; }
+    });
+    const r = await midiap.transmitir({ grupo: 'gts@g.us', callId: 'CTS', arquivo: video });
+    midiap.__setVoip(null);
+
+    ok(r.ok, 'transmitiu');
+    ok(carimbos.length === 30, `30 frames (veio ${carimbos.length})`);
+    ok(carimbos.every((v, i) => i === 0 || v > carimbos[i - 1]),
+      'todo timestamp AVANCA (nunca repete nem volta)');
+    const gaps = carimbos.slice(1).map((v, i) => (v - carimbos[i]) / 1000);
+    const p50 = [...gaps].sort((a, b) => a - b)[Math.floor(gaps.length * 0.5)];
+    ok(Math.abs(p50 - 66.7) < 3, `intervalo ~66.7 ms (medido p50 ${p50.toFixed(1)})`);
+    fs.unlinkSync(video);
+  });
+}
+
 // ============================================================================
 // 2) O COMANDO
 // ============================================================================

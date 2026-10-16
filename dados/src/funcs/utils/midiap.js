@@ -73,6 +73,38 @@ function binario() {
   return process.env.FFMPEG_PATH || 'ffmpeg';
 }
 
+/**
+ * Os argumentos do ffmpeg que produzem o H.264 da transmissao.
+ *
+ * Exportado para o TESTE usar exatamente a mesma lista: antes o teste tinha
+ * os argumentos copiados, entao media a copia em vez do modulo (e um deles
+ * passava so' porque o comentario citava o parametro).
+ *
+ * `sliced-threads=0` e' ESSENCIAL: o `zerolatency` liga o sliced-threads do
+ * x264, que fatia CADA FRAME em varios slices. Como um access unit = um
+ * frame, o splitter passaria a ver 4x mais frames (medido: 120 AUs para 30)
+ * e o motor receberia timestamps colapsados -- era a causa do travamento.
+ *
+ * @param {string} arquivo
+ * @returns {string[]}
+ */
+export function argumentosDoEncoder(arquivo) {
+  return [
+    '-hide_banner', '-loglevel', 'error',
+    '-re',                                  // le na taxa nativa (pacing)
+    '-i', arquivo,
+    '-an',                                  // sem audio (a call ja' toca musica)
+    '-c:v', 'libx264',
+    '-profile:v', PERFIL, '-level', NIVEL,  // avc1.42E01F
+    '-pix_fmt', 'yuv420p',
+    '-x264-params', 'annexb=1:sliced-threads=0',
+    '-preset', 'veryfast', '-tune', 'zerolatency',
+    '-g', String(FPS * 2),                  // keyframe a cada 2 s
+    '-vf', `scale='min(${MAX_LARGURA},iw)':'min(${MAX_ALTURA},ih)':force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2`,
+    '-f', 'h264', 'pipe:1'
+  ];
+}
+
 /** O backend de midia (o mesmo que o `!callp` usa). */
 async function backend() {
   const m = await import('./callMedia.js');
@@ -149,24 +181,27 @@ export async function transmitir({ grupo, callId, arquivo, log = () => {} }) {
  * relogio real, que e' o que o motor espera (microssegundos).
  */
 async function alimentar({ cli, callId, arquivo, estado, log }) {
-  const inicio = Date.now();
   const splitter = criarSplitter();
+  // O timestamp NAO pode vir do `Date.now()` cru: ele tem resolucao de 1 ms
+  // e o ffmpeg entrega varios frames no mesmo milissegundo (medido: 7
+  // repetidos em 30 frames). O motor mapeia o tempo e exige um tick novo por
+  // frame -- timestamp repetido vira atraso/descarte.
+  //
+  // Entao o tempo vem de um contador que AVANCA pelo intervalo nominal do
+  // fps, ancorado no relogio real (para nao derivar se a maquina engasgar).
+  const passoUs = Math.round(1_000_000 / FPS);
+  let proximoUs = 0;
+  const inicioNs = process.hrtime.bigint();
+  const carimbo = () => {
+    const realUs = Number((process.hrtime.bigint() - inicioNs) / 1000n);
+    // O MAIOR entre o relogio real e o passo nominal: o tempo nunca anda
+    // para tras e nunca repete.
+    proximoUs = Math.max(proximoUs + passoUs, realUs);
+    return proximoUs;
+  };
 
   await new Promise((resolve, reject) => {
-    const args = [
-      '-hide_banner', '-loglevel', 'error',
-      '-re',                                  // le na taxa nativa (pacing)
-      '-i', arquivo,
-      '-an',                                  // sem audio (a call ja' toca musica)
-      '-c:v', 'libx264',
-      '-profile:v', PERFIL, '-level', NIVEL,  // avc1.42E01F
-      '-pix_fmt', 'yuv420p',
-      '-x264-params', 'annexb=1',             // Annex-B (start codes)
-      '-preset', 'veryfast', '-tune', 'zerolatency',
-      '-g', String(FPS * 2),                  // keyframe a cada 2 s
-      '-vf', `scale='min(${MAX_LARGURA},iw)':'min(${MAX_ALTURA},ih)':force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2`,
-      '-f', 'h264', 'pipe:1'
-    ];
+    const args = argumentosDoEncoder(arquivo);
 
     let proc;
     try {
@@ -181,14 +216,14 @@ async function alimentar({ cli, callId, arquivo, estado, log }) {
       if (estado.parado) return;
       let aus;
       try { aus = splitter.push(chunk); } catch { return; }
-      for (const au of aus) enviarFrame(cli, callId, au, inicio, estado, log);
+      for (const au of aus) enviarFrame(cli, callId, au, carimbo, estado, log);
     });
     proc.on('error', reject);
     proc.on('close', (code) => {
       // Fecha o ultimo access unit retido.
       try {
         for (const au of splitter.flush()) {
-          enviarFrame(cli, callId, au, inicio, estado, log);
+          enviarFrame(cli, callId, au, carimbo, estado, log);
         }
       } catch { /* ok */ }
       if (code === 0 || estado.parado) resolve();
@@ -197,20 +232,21 @@ async function alimentar({ cli, callId, arquivo, estado, log }) {
   });
 }
 
-/** Envia um access unit, respeitando o backpressure do motor. */
-function enviarFrame(cli, callId, au, inicio, estado, log) {
+/**
+ * Envia um access unit (o timestamp vem do carimbo monotonico).
+ *
+ * NAO usa `getLiveBufferMs` como backpressure: aquele numero e' do buffer de
+ * AUDIO (a doc: *"milliseconds of live audio currently buffered"*, `0`
+ * quando o modo externo esta' desligado) -- nao diz nada sobre o video.
+ * Quem segura o video e' o proprio motor: `feedLiveVideo` devolve `0`
+ * enquanto o stream nao abriu (espera o keyframe) ou esta' em hold.
+ */
+function enviarFrame(cli, callId, au, carimbo, estado, log) {
   try {
-    // Backpressure: se o buffer do motor encheu, descarta o quadro. Melhor
-    // perder um quadro que estourar (o motor reinicia o stream no keyframe).
-    const bufferizado = cli.getLiveBufferMs?.(callId);
-    const { pauseMs } = cli.getFeedWatermarksMs?.() || {};
-    if (typeof bufferizado === 'number' && typeof pauseMs === 'number'
-        && bufferizado >= pauseMs) {
-      return;
-    }
-    const ts = Math.round((Date.now() - inicio) * 1000); // microssegundos
+    const ts = carimbo();
     const pacotes = cli.feedLiveVideo(callId, au, ts);
     if (pacotes > 0) estado.frames++;
+    else estado.recusados = (estado.recusados || 0) + 1;
   } catch (e) {
     log('feedLiveVideo: ' + (e?.message || e));
   }
