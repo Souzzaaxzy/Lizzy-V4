@@ -248,7 +248,7 @@ await test('!musicap NÃO tem gate de dono (membro pode usar)', () => {
 await test('a música vem por NOME igual ao !play (reusa youtube)', () => {
   includes(SRC, 'youtube.search(termo)', 'busca igual ao !play');
   includes(SRC, 'youtube.mp3(videoUrl, 128)', 'baixa igual ao !play');
-  includes(SRC, 'prepararAudioParaCall', 'prepara 16 kHz (o que o motor quer)');
+  includes(SRC, 'prepararWav16k', 'prepara 16 kHz (helper local que existe)');
 });
 
 console.log('\n=== 5) A FILA ANDA SOZINHA (o evento do motor) ===\n');

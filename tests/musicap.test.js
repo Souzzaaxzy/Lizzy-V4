@@ -107,7 +107,7 @@ await test('o áudio vem por NOME, reusando o caminho do !play', () => {
   const b = blocoMusicap();
   includes(b, 'youtube.search(termo)', 'busca igual ao !play');
   includes(b, 'youtube.mp3(videoUrl, 128)', 'baixa igual ao !play');
-  includes(b, 'prepararAudioParaCall', 'prepara 16 kHz');
+  includes(b, 'prepararWav16k', 'prepara 16 kHz (helper local que existe)');
   includes(b, 'musicQueue.enfileirar', 'entra na fila');
 });
 
@@ -233,6 +233,52 @@ await test('erro no download da mídia marcada é controlado', () => {
   const b = blocoMusicap();
   includes(b, 'Não consegui baixar o áudio marcado', 'mensagem clara');
   includes(b, 'download da mídia marcada falhou', 'loga o detalhe');
+});
+
+console.log('\n=== 7) MUSICA POR NOME: nao quebra e nao trava ===\n');
+
+await test('o preparo do audio USA uma funcao que existe', () => {
+  const b = blocoMusicap();
+  // O bug: chamava `prepararAudioParaCall`, um modulo que foi removido numa
+  // rodada anterior -- o boot passava (chamada em runtime) e o comando
+  // quebrava ao ser usado.
+  includes(b, 'prepararWav16k', 'usa o helper');
+  ok(!b.includes('prepararAudioParaCall'), 'NÃO chama mais a função inexistente');
+  includes(SRC, 'async function prepararWav16k', 'o helper está definido');
+});
+
+await test('o helper de audio usa o ffmpeg do bot e tem fallback', () => {
+  includes(SRC, "process.env.FFMPEG_PATH || 'ffmpeg'", 'usa FFMPEG_PATH (como o resto do bot)');
+  includes(SRC, "'-ar', '16000'", 'converte para 16 kHz');
+  includes(SRC, "'-ac', '1'", 'mono');
+  includes(SRC, 'pcm_s16le', 'PCM (o que o motor lê)');
+  includes(SRC, 'preparado || bruto', 'se o ffmpeg falhar, usa o original');
+});
+
+await test('o download roda em BACKGROUND (nao trava o bot)', () => {
+  const b = blocoMusicap();
+  // O `!play` dispara .then() e retorna na hora; o `await` no caminho inteiro
+  // prendia o handler durante todo o download.
+  includes(b, 'void (async () => {', 'dispara sem await');
+  includes(b, 'Handler LIBERADO', 'o handler volta na hora');
+  const posIife = b.indexOf('void (async () => {');
+  const posReturn = b.indexOf('return;', posIife);
+  ok(posReturn > posIife, 'o return vem depois do dispatch');
+});
+
+await test('o aviso é criado ANTES do dispatch (senão não apareceria)', () => {
+  const b = blocoMusicap();
+  const posAviso = b.indexOf('const avisoBusca');
+  const posIife = b.indexOf('void (async () => {');
+  ok(posAviso !== -1 && posIife !== -1 && posAviso < posIife,
+    'aviso antes do trabalho pesado');
+});
+
+await test('a busca por nome é a MESMA do !play', () => {
+  const b = blocoMusicap();
+  includes(b, 'youtube.search(termo)', 'mesma busca');
+  includes(b, 'youtube.mp3(videoUrl, 128)', 'mesmo download (128 kbps)');
+  includes(b, 'Buffer.isBuffer', 'mesma validação de buffer');
 });
 
 const totalOk = RESULTS.reduce((a, r) => a + r.passed, 0);

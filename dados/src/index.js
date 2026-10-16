@@ -2194,6 +2194,49 @@ const fileExistsAsync = async (filePath) => {
     return false;
   }
 };
+/**
+ * Converte um audio para 16 kHz mono WAV (o formato que o motor da call quer).
+ *
+ * Por que existe: o motor decodifica o arquivo com ffmpeg a cada `loadAudio`.
+ * Entregando ja' no formato final, esse trabalho desaparece. Se o ffmpeg nao
+ * estiver disponivel, devolve `null` e o chamador usa o original -- nunca
+ * pior que antes.
+ *
+ * @param {string} entrada caminho do audio
+ * @returns {Promise<string|null>} caminho do WAV, ou null
+ */
+async function prepararWav16k(entrada) {
+  const { spawn } = await import('child_process');
+  const ffmpeg = process.env.FFMPEG_PATH || 'ffmpeg';
+  const saida = `${entrada}.16k.wav`;
+
+  return new Promise((resolve) => {
+    let proc;
+    try {
+      proc = spawn(ffmpeg, [
+        '-hide_banner', '-loglevel', 'error', '-y',
+        '-i', entrada,
+        '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le',
+        saida
+      ], { stdio: ['ignore', 'ignore', 'ignore'] });
+    } catch {
+      resolve(null);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      try { proc.kill('SIGKILL'); } catch { /* ok */ }
+      resolve(null);
+    }, 60000);
+
+    proc.on('error', () => { clearTimeout(timer); resolve(null); });
+    proc.on('close', (code) => {
+      clearTimeout(timer);
+      resolve(code === 0 ? saida : null);
+    });
+  });
+}
+
 const modules = await import('./funcs/exports.js');
 const {
   youtube,
@@ -35948,6 +35991,10 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             await nazu.sendMessage(from, { delete: avisoBusca.key }).catch(() => {});
           };
 
+          // O trabalho pesado roda SEM await: o handler volta na hora e o bot
+          // continua respondendo (mesmo modelo do `!play`). Antes, o `await` no
+          // caminho inteiro prendia o handler durante todo o download.
+          void (async () => {
           try {
             // 0) MIDIA MARCADA: se o usuário RESPONDEU um áudio/vídeo, é ele
             //    que toca. Mesma lógica de antes (extractQuoted + getFileBuffer),
@@ -36007,13 +36054,22 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
                 await apagarAviso();
                 return reply(`❌ Não consegui baixar o áudio.${dl?.msg ? `\n\n_${dl.msg}_` : ''}`);
               }
+              // Mesma validação do !play: além de vir, tem de ser Buffer com
+              // conteúdo (um retorno estranho passaria no teste de truthy).
+              if (!Buffer.isBuffer(dl.buffer) || dl.buffer.length === 0) {
+                await apagarAviso();
+                return reply('❌ O áudio baixado veio vazio ou inválido.');
+              }
               bufferBaixado = dl.buffer;
             }
 
             // 3) grava no cache do GRUPO (16 kHz mono, o que o motor quer)
             const bruto = callCache.caminhoNovo(from, '.mp3');
             fs.writeFileSync(bruto, bufferBaixado);
-            const preparado = await prepararAudioParaCall(bruto).catch(() => null);
+            // O motor decodifica com ffmpeg a cada `loadAudio`; entregando ja'
+            // em 16 kHz mono o trabalho e' so' ler. Se o ffmpeg faltar, usa o
+            // arquivo original (nunca pior que antes).
+            const preparado = await prepararWav16k(bruto).catch(() => null);
             const caminhoFinal = preparado || bruto;
             callCache.registrar(from, caminhoFinal);
             if (preparado) { try { fs.unlinkSync(bruto); } catch { /* ok */ } }
@@ -36065,8 +36121,11 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
           } catch (e) {
             await apagarAviso();
             console.error('[MUSICAP] erro:', e?.message);
-            return reply('❌ Deu erro ao preparar essa música.');
+            await reply('❌ Deu erro ao preparar essa música.').catch(() => {});
           }
+          })();
+          // Handler LIBERADO: o download segue em background.
+          return;
         } catch (e) {
           console.error('[MUSICAP] erro externo:', e?.message);
           await reply('Ocorreu um erro 💔');
