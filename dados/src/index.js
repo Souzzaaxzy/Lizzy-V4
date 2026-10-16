@@ -30271,6 +30271,72 @@ ${nomebot}  By  👑 ${nomedono}`;
           await reply("❌ Ocorreu um erro interno. Tente novamente em alguns minutos.");
         }
         break;
+      // !spoiler — mensagem que fica BORRADA até tocar.
+      //
+      // A fork ja' suporta: `{ text, spoiler: true }` vira `spoilerMessage`
+      // (com `contextInfo.isSpoiler: true`) — o mesmo recurso do proprio
+      // WhatsApp. Medido: 59 B (texto) e 184 B (imagem), com round-trip do
+      // proto OK. Nenhum outro comando do bot usa isso.
+      //
+      //   `!spoiler <texto>`   -> texto borrado
+      //   `!spoiler` + imagem/vídeo marcado -> mídia borrada (com legenda)
+      case 'spoiler':
+        try {
+          // Legenda do comando = texto depois de "!spoiler".
+          const textoSpoiler = (q || '').trim();
+
+          // 1) MIDIA MARCADA: imagem ou video respondido vira spoiler.
+          const tipoMidiaSpoiler = isQuotedImage ? 'image' : (isQuotedVideo ? 'video' : null);
+
+          if (tipoMidiaSpoiler) {
+            const campo = tipoMidiaSpoiler === 'image' ? 'imageMessage' : 'videoMessage';
+            const midia = quotedMessageContent?.[campo];
+            const legenda = textoSpoiler || midia?.caption || '';
+
+            // Sem mediaKey nao da' para baixar (mesma regra dos outros comandos).
+            if (!midia?.mediaKey) {
+              return reply('❌ Não consegui ler essa mídia. Tente reenviar.');
+            }
+
+            const buffer = await getFileBuffer(midia, tipoMidiaSpoiler);
+            if (!buffer?.length) {
+              return reply('❌ Não consegui baixar essa mídia.');
+            }
+
+            await nazu.sendMessage(from, {
+              [tipoMidiaSpoiler]: buffer,
+              ...(legenda ? { caption: legenda } : {}),
+              spoiler: true,
+              contextInfo: gerarContextNewsletter()
+            }, { quoted: info });
+            return;
+          }
+
+          // 2) TEXTO: sem mídia, precisa do texto.
+          if (!textoSpoiler) {
+            return reply(
+              '╭━━━꧁༺ 🙈 𝐒𝐏𝐎𝐈𝐋𝐄𝐑 🙈 ༻꧂━━━╮\n' +
+              '┃\n' +
+              '┃ 🔒 Manda uma mensagem BORRADA\n' +
+              '┃    (revela só quando tocar).\n' +
+              '┃\n' +
+              `┃ 📝 \`${prefix}spoiler <texto>\`\n` +
+              `┃ 🖼️ \`${prefix}spoiler\` + foto/vídeo\n` +
+              '╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯'
+            );
+          }
+
+          await nazu.sendMessage(from, {
+            text: textoSpoiler,
+            spoiler: true,
+            contextInfo: gerarContextNewsletter()
+          }, { quoted: info });
+        } catch (e) {
+          console.error('[SPOILER] erro:', e?.message || e);
+          await reply('❌ Não consegui enviar o spoiler.');
+        }
+        break;
+
       case 'togif': {
         // Figurinha (webp animado) → GIF animado do WhatsApp (um MP4 com
         // `gifPlayback`). O decoder de WebP do FFmpeg ignora os chunks
