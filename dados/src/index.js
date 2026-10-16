@@ -35914,7 +35914,10 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
           // O termo: em `adicionar`, o resto; senão, tudo.
           const termo = soEnfileirar ? resto : [args[0], ...args.slice(1)].filter(Boolean).join(' ').trim();
 
-          if (!termo) {
+          // Com MIDIA MARCADA nao precisa de termo: o audio respondido e' a fonte.
+          const temMidiaMarcada = Boolean(extractQuoted(info.message));
+
+          if (!termo && !temMidiaMarcada) {
             return reply(
               `🎵 *MUSICAP*\n\n` +
               `• \`${prefix}musicap <nome ou link>\` — toca\n` +
@@ -35934,7 +35937,9 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
 
           // Mensagem de espera (apagada quando o audio fica pronto).
           const avisoBusca = await nazu.sendMessage(from, {
-            text: `🔎 ${soEnfileirar ? 'Adicionando' : 'Buscando'}: _${termo}_...`,
+            text: temMidiaMarcada
+              ? `🔎 ${soEnfileirar ? 'Adicionando' : 'Preparando'} o áudio marcado...`
+              : `🔎 ${soEnfileirar ? 'Adicionando' : 'Buscando'}: _${termo}_...`,
             contextInfo: gerarContextNewsletter()
           }).catch(() => null);
 
@@ -35944,26 +35949,70 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
           };
 
           try {
-            // 1) resolve o video (MESMO caminho do !play)
-            const isLink = /^https?:\/\//i.test(termo);
-            const busca = isLink ? { ok: true, data: { url: termo, title: termo } } : await youtube.search(termo);
-            if (!busca?.ok || !busca.data?.url) {
-              await apagarAviso();
-              return reply('❌ Não encontrei essa música.');
-            }
-            const videoUrl = busca.data.url;
-            const titulo = busca.data.title || termo;
+            // 0) MIDIA MARCADA: se o usuário RESPONDEU um áudio/vídeo, é ele
+            //    que toca. Mesma lógica de antes (extractQuoted + getFileBuffer),
+            //    agora entrando na FILA como qualquer outra fonte.
+            let bufferBaixado = null;
+            let titulo = termo;
 
-            // 2) baixa o audio (MESMO caminho do !play)
-            const dl = await youtube.mp3(videoUrl, 128);
-            if (!dl?.ok || !dl.buffer?.length) {
-              await apagarAviso();
-              return reply(`❌ Não consegui baixar o áudio.${dl?.msg ? `\n\n_${dl.msg}_` : ''}`);
+            const citado = extractQuoted(info.message);
+            if (citado) {
+              const tipoCitado = getContentType(citado);
+              const TIPOS_DE_MIDIA = [
+                'audioMessage', 'videoMessage', 'imageMessage', 'documentMessage', 'ptvMessage'
+              ];
+              if (tipoCitado && TIPOS_DE_MIDIA.includes(tipoCitado) && citado[tipoCitado]) {
+                const mediaKey = citado[tipoCitado];
+                const mediaType = tipoCitado.replace(/Message$/, '');
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), 30000);
+                try {
+                  const stream = await downloadContentFromMessage(mediaKey, mediaType, {
+                    options: { signal: controller.signal }
+                  });
+                  let buf = Buffer.from([]);
+                  for await (const chunk of stream) buf = Buffer.concat([buf, chunk]);
+                  if (buf.length) {
+                    bufferBaixado = buf;
+                    // Nome amigável: o do arquivo, quando houver.
+                    titulo = citado[tipoCitado]?.fileName
+                      || (citado[tipoCitado]?.caption ? String(citado[tipoCitado].caption).slice(0, 60) : null)
+                      || 'Áudio marcado';
+                  }
+                } catch (e) {
+                  console.warn('[MUSICAP] download da mídia marcada falhou:', e?.message);
+                } finally {
+                  clearTimeout(timer);
+                }
+                if (!bufferBaixado) {
+                  await apagarAviso();
+                  return reply('❌ Não consegui baixar o áudio marcado.');
+                }
+              }
+            }
+
+            // Sem mídia marcada: resolve o vídeo (MESMO caminho do !play).
+            if (!bufferBaixado) {
+              const isLink = /^https?:\/\//i.test(termo);
+              const busca = isLink ? { ok: true, data: { url: termo, title: termo } } : await youtube.search(termo);
+              if (!busca?.ok || !busca.data?.url) {
+                await apagarAviso();
+                return reply('❌ Não encontrei essa música.');
+              }
+              const videoUrl = busca.data.url;
+              titulo = busca.data.title || termo;
+
+              const dl = await youtube.mp3(videoUrl, 128);
+              if (!dl?.ok || !dl.buffer?.length) {
+                await apagarAviso();
+                return reply(`❌ Não consegui baixar o áudio.${dl?.msg ? `\n\n_${dl.msg}_` : ''}`);
+              }
+              bufferBaixado = dl.buffer;
             }
 
             // 3) grava no cache do GRUPO (16 kHz mono, o que o motor quer)
             const bruto = callCache.caminhoNovo(from, '.mp3');
-            fs.writeFileSync(bruto, dl.buffer);
+            fs.writeFileSync(bruto, bufferBaixado);
             const preparado = await prepararAudioParaCall(bruto).catch(() => null);
             const caminhoFinal = preparado || bruto;
             callCache.registrar(from, caminhoFinal);

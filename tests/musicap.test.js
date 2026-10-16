@@ -193,6 +193,48 @@ await test('as respostas carregam o cabeçalho de canal (newsletter)', () => {
   ok(usos >= 4, `usa o cabeçalho nas respostas (achei ${usos})`);
 });
 
+console.log('\n=== 6) AUDIO MARCADO (o pedido do dono) ===\n');
+
+await test('!musicap aceita AUDIO/VÍDEO marcado (mesma lógica de antes)', () => {
+  const b = blocoMusicap();
+  includes(b, 'extractQuoted(info.message)', 'extrai o citado (qualquer tipo)');
+  includes(b, 'getContentType(citado)', 'checa o tipo');
+  includes(b, 'TIPOS_DE_MIDIA', 'só tipos de mídia valem');
+  includes(b, 'downloadContentFromMessage', 'baixa com a mediaKey');
+  includes(b, 'AbortController', 'com timeout (não pendura o handler)');
+});
+
+await test('a mídia marcada vem ANTES da busca por nome', () => {
+  const b = blocoMusicap();
+  const posMidia = b.indexOf('MIDIA MARCADA');
+  const posBusca = b.indexOf('youtube.search(termo)');
+  ok(posMidia !== -1 && posBusca !== -1 && posMidia < posBusca,
+    'a mídia marcada tem precedência');
+});
+
+await test('o termo é OPCIONAL quando há mídia marcada', () => {
+  const b = blocoMusicap();
+  includes(b, 'const temMidiaMarcada', 'detecta a mídia marcada');
+  includes(b, 'if (!termo && !temMidiaMarcada)', 'só exige termo sem mídia');
+});
+
+await test('!musicap adicionar também aceita mídia marcada', () => {
+  // O bloco é o MESMO para tocar e adicionar: a diferença é .
+  const b = blocoMusicap();
+  includes(b, "sub === 'adicionar'", 'tem o subcomando');
+  includes(b, 'soEnfileirar', 'a flag distingue tocar de enfileirar');
+  // A mídia marcada é resolvida ANTES de olhar a flag -> vale para os dois.
+  const posMidia = b.indexOf('MIDIA MARCADA');
+  const posFlag = b.indexOf('const soEnfileirar');
+  ok(posMidia > posFlag, 'a mídia é resolvida depois da flag (vale para os dois)');
+});
+
+await test('erro no download da mídia marcada é controlado', () => {
+  const b = blocoMusicap();
+  includes(b, 'Não consegui baixar o áudio marcado', 'mensagem clara');
+  includes(b, 'download da mídia marcada falhou', 'loga o detalhe');
+});
+
 const totalOk = RESULTS.reduce((a, r) => a + r.passed, 0);
 const totalFail = RESULTS.reduce((a, r) => a + r.failed, 0);
 console.log('\n' + '='.repeat(40));
