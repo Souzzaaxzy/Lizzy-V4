@@ -277,7 +277,7 @@ const COMANDOS_POR_MENU = {
   menuedits: 5, alteradores: 58, menumemb: 62,
   // menuadm: 172 -> 170 (removidos `fotomenug` e `videomenug`).
   // 170 -> 171 (`!modo18`) -> 172 (`!callp`) -> 174 (`!fixar`, `!desfixar`)
-  // -> 176 (`!antictt`, `!antifantasma`) -> 177 (`!vozp`).
+  // -> 176 (`!antictt`, `!antifantasma`).
   // menudono: 166 -> 165 (`fotomenu` + `videomenu` -> `midiamenu`).
   // Subdonos ficam SÓ no menudono (removidos do menuadm).
   // menudono: 165 -> 168 (sub.permitir/revogar/perms) -> 165
@@ -287,12 +287,15 @@ const COMANDOS_POR_MENU = {
   // menudono: 165 -> 171 (`divcanal` add/rem/list/msg/send/status)
   // -> 173 (`divcanal name`, `divcanal foto`) -> 174 (`divcanal time`).
   // menuadm -2 (callp/vozp sairam: viraram dono-only; o vozp depois foi REMOVIDO)
-  // menudono +6 (categoria CHAMADAS: callp, callp encerrar, callp parear, vozp,
-  //               musicap, musicap parar; o vozp saiu depois -> 179)
+  // menudono +6 (categoria CHAMADAS: callp, callp encerrar, callp parear,
+  //               musicap, musicap parar -> 179)
   // menudono +6 (categoria CHAMADAS ganhou: callp status, musicap adicionar/
   //               pular/atual/limpar e !fila) -> 185
   // menumemb +8 (categoria MUSICA NA CALL: musicap + 6 subcomandos + !fila) -> 62
-  menuadm: 178, menudono: 185,
+  // CHAMADAS mudou de mao (out/2026): subir/encerrar/status passaram para os
+  // ADMINS e o menudono ficou so' com o `callp parear` (credencial).
+  // menuadm +3 -> 181 | menudono -3 -> 182.
+  menuadm: 181, menudono: 182,
   // menubn: 349 -> 350 (`!ppp` entrou na 1a categoria)
   // -> 358 (`!hetero`, `!hetera`, `!aura`, `!sigma`, `!ceu`, `!inferno`,
   // `!frio`, `!fria` entraram na categoria BRINCADEIRAS)

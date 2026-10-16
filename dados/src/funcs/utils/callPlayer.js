@@ -23,6 +23,21 @@ import * as fila from './musicQueue.js';
 import { tocarAudioNaCall, pararAudioDaCall } from './callMedia.js';
 import { apagar } from '../../utils/callCache.js';
 
+/**
+ * Apaga os arquivos de uma faixa do cache: o audio E a capa.
+ *
+ * Existe porque a faixa tem DOIS arquivos (o `.wav`/`.mp3` e a thumb). Apagar
+ * so o audio deixaria a capa no disco para sempre -- o pedido do dono e' que
+ * a foto saia do cache junto quando a musica acaba ou e' pulada.
+ *
+ * @param {{ caminho?: string, thumb?: string }|null} faixa
+ */
+function apagarFaixa(faixa) {
+  if (!faixa) return;
+  if (faixa.caminho) apagar(faixa.caminho);
+  if (faixa.thumb) apagar(faixa.thumb);
+}
+
 /** Grupos que o player ja' esta' seguindo (nao registra listener duas vezes). */
 const seguindo = new Set();
 
@@ -42,7 +57,7 @@ export async function tocarAtual(grupo) {
   const r = await tocarAudioNaCall(grupo, faixa.caminho);
   if (!r?.ok) {
     // A faixa falhou (arquivo sumiu, motor fora): sai da fila e tenta a proxima.
-    apagar(faixa.caminho);
+    apagarFaixa(faixa);
     const proxima = fila.removerAtual(grupo);
     return { ok: false, motivo: r?.motivo || 'falha_ao_tocar', detalhe: r?.detalhe, proxima };
   }
@@ -66,13 +81,13 @@ export async function tocarProxima(grupo) {
     // A que saiu ja' foi tocada: o arquivo dela sai do cache. Usa o caminho
     // que o `avancar` devolveu (a lista ja' nao a tem mais).
     const terminada = saiu || anterior;
-    if (terminada?.caminho) apagar(terminada.caminho);
+    apagarFaixa(terminada);
 
     if (!nova) return { ok: false, acabou: true, motivo: 'fila_vazia' };
 
     const r = await tocarAudioNaCall(grupo, nova.caminho);
     if (!r?.ok) {
-      apagar(nova.caminho);
+      apagarFaixa(nova);
       fila.removerAtual(grupo);
       return { ok: false, motivo: r?.motivo || 'falha_ao_tocar' };
     }
@@ -116,7 +131,7 @@ export async function parar(grupo, quem, opts = {}) {
   if (!permissao.ok) return { ok: false, ...permissao };
 
   const atual = fila.atual(grupo);
-  if (atual?.caminho) apagar(atual.caminho);
+  apagarFaixa(atual);
 
   // Sai a atual e a que ficou no lugar passa a ser a atual.
   const nova = fila.removerAtual(grupo);
@@ -128,7 +143,7 @@ export async function parar(grupo, quem, opts = {}) {
 
   const r = await tocarAudioNaCall(grupo, nova.caminho);
   if (!r?.ok) {
-    apagar(nova.caminho);
+    apagarFaixa(nova);
     fila.removerAtual(grupo);
     return { ok: false, motivo: r?.motivo || 'falha_ao_tocar' };
   }

@@ -1240,7 +1240,8 @@ import * as musicQueue from './funcs/utils/musicQueue.js';
 import * as callPlayer from './funcs/utils/callPlayer.js';
 import * as callCache from './utils/callCache.js';
 import { prepararAudioCall } from './utils/callAudioPrep.js';
-import { aoTerminarAudio } from './funcs/utils/zapoCall.js';
+import { baixarThumb } from './utils/callThumb.js';
+import { aoTerminarAudio, aoEncerrarAudio } from './funcs/utils/zapoCall.js';
 import { search, searchNews } from './funcs/utils/search.js';
 import { removeBg, upscale } from './funcs/utils/imagetools.js';
 import spotifyModule from './funcs/downloads/spotify.js';
@@ -2196,6 +2197,48 @@ const fileExistsAsync = async (filePath) => {
   }
 };
 /**
+ * Envia o aviso *"Tocando agora"*, com a CAPA quando houver.
+
+ * Ponto UNICO dos quatro avisos (tocar, pular, parar e o avanco automatico).
+ * Antes cada um montava o proprio `text:` e a capa nao aparecia em nenhum.
+
+ * A imagem vem do cache do GRUPO (o caminho esta na propria faixa), entao o
+ * envio e' local e ela sai do disco junto com o audio. Se a faixa nao tiver
+ * capa, ou o arquivo sumiu, sai so' o texto -- a musica nunca quebra por isso.
+
+ * @param {object} nazu socket
+ * @param {string} grupo
+ * @param {object} faixa faixa da fila (usa `titulo` e `thumb`)
+ * @param {string} [prefacio] linha extra (ex.: "⏭️ *X* pulada.")
+ * @param {string} [titulo] sobrepoe o titulo da faixa (o `!musicap` recem-tocado)
+ */
+function enviarTocando(nazu, grupo, faixa, prefacio = null, titulo = null) {
+  const nome = titulo || faixa?.titulo || 'Música';
+  const corpo = `🎵 Tocando agora: *${nome}*`;
+  const texto = prefacio ? `${prefacio}\n\n${corpo}` : corpo;
+
+  // A capa so' vai se o arquivo ainda existir (a fila pode ter sido limpa
+  // entre o tocar e o avisar).
+  const thumb = faixa?.thumb;
+  if (thumb) {
+    try {
+      if (fs.existsSync(thumb)) {
+        return nazu.sendMessage(grupo, {
+          image: fs.readFileSync(thumb),
+          caption: texto,
+          contextInfo: gerarContextNewsletter()
+        }).catch(() => {});
+      }
+    } catch { /* cai no texto */ }
+  }
+
+  return nazu.sendMessage(grupo, {
+    text: texto,
+    contextInfo: gerarContextNewsletter()
+  }).catch(() => {});
+}
+
+/**
  * Registra o avanco automatico da fila para um grupo.
  *
  * Por que e' uma funcao: o registro tem de acontecer quando a musica COMECA a
@@ -2218,10 +2261,7 @@ function registrarAvancador(grupo, nazu) {
         contextInfo: gerarContextNewsletter()
       }).catch(() => {});
     } else if (r.ok) {
-      await nazu.sendMessage(g, {
-        text: `🎵 Tocando agora: *${r.faixa.titulo}*`,
-        contextInfo: gerarContextNewsletter()
-      }).catch(() => {});
+      await enviarTocando(nazu, g, r.faixa);
     }
   });
 }
@@ -4007,16 +4047,14 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     }
 
     /**
-     * Sobe uma chamada/chamada de voz neste grupo e registra para o `encerrar`.
+     * Sobe uma chamada de VOZ neste grupo e registra para o `encerrar`.
      *
-     * Ponto ÚNICO usado pelo `!callp` (chamada) e pelo `!musicap`: os
-     * dois só mudam `voiceChat`, então duplicar o fluxo deixaria as duas versões
-     * divergindo na primeira correção. Nada de sinalização aqui: quem CRIA a
-     * call é o motor de mídia (medido no pacote `lizzy-call`).
+     * Ponto ÚNICO de subir call. Nada de sinalização aqui: quem CRIA a call é
+     * o motor de mídia (medido no pacote `lizzy-call`).
      *
      * @returns {Promise<{ok: boolean, callId?: string, stage?: string, motivo?: string, detalhe?: string}>}
      */
-    const subirCallDoGrupo = async ({ voiceChat = false } = {}) => {
+    const subirCallDoGrupo = async () => {
       const botCallId = getBotNumber(nazu);
       if (!botCallId) {
         return { ok: false, motivo: 'sem_identidade' };
@@ -4056,8 +4094,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       const midia = await entrarNaCallComMidia({
         grupo: from,
         participantes: convidados,
-        sock: nazu,
-        voiceChat
+        sock: nazu
       });
       if (!midia?.ok) return midia || { ok: false, motivo: 'falha_ao_entrar' };
 
@@ -4066,11 +4103,56 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       registrarCall(from, {
         callId: midia.callId,
         callCreator: botCallId,
-        startedAt: Date.now(),
-        voiceChat: !!voiceChat
+        startedAt: Date.now()
       });
 
+      // Se o MOTOR derrubar a call sozinho (relay perdido, todos saíram), o
+      // registro do bot precisa ser limpo junto — senão o `!callp` recusaria
+      // para sempre por achar que a chamada ainda existe.
+      aoEncerrarAudio(from, (grupo, motivo) => reconciliarCallEncerrada(grupo, motivo));
+
       return { ok: true, callId: midia.callId, stage: midia.stage };
+    };
+
+    /**
+     * Reconciliação: a call CAIU sozinha.
+     *
+     * O motor derruba a call por conta própria (relay perdido, todos saíram, o
+     * servidor nos tirou) e isso NÃO passa por nenhum comando. Sem esta função
+     * o registro do bot (`callOffer.callsAtivas`) ficava com uma entrada MORTA:
+     * o `!callp` respondia "já existe chamada" para sempre, e o cache de áudio
+     * do grupo (até 300 MB) nunca era limpo. Só o `!callp encerrar` manual
+     * tirava desse estado.
+     *
+     * Limpa o MESMO conjunto que o `encerrar`: registro, fila, cache, o
+     * seguimento da fila e os callbacks. Avisa no grupo para não parecer que o
+     * bot morreu mudo.
+     *
+     * Idempotente: sem call registrada, não faz nada.
+     *
+     * @param {string} grupo
+     * @param {string} [motivo] motivo informado pelo motor
+     */
+    const reconciliarCallEncerrada = async (grupo, motivo = null) => {
+      if (!obterCall(grupo)) return false;
+      limparCall(grupo);
+      const resumoFila = musicQueue.limpar(grupo);
+      callCache.limparGrupo(grupo);
+      callPlayer.pararDeSeguir(grupo);
+      aoTerminarAudio(grupo, null);
+      aoEncerrarAudio(grupo, null);
+      console.log(`[CALLP] call de ${grupo} caiu sozinha (${motivo || 'sem motivo'}) — estado reconciliado`);
+      try {
+        await nazu.sendMessage(grupo, {
+          text:
+            `📴 A chamada foi encerrada.\n\n` +
+            (resumoFila.removidas
+              ? `🗑️ ${resumoFila.removidas} música(s) da fila foram apagadas.`
+              : '_Use `!callp` para subir outra._'),
+          contextInfo: gerarContextNewsletter()
+        });
+      } catch { /* aviso best-effort */ }
+      return true;
     };
 
     const isModoBn = groupData.modobrincadeira;
@@ -35658,14 +35740,13 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
       case 'callp':
         try {
           if (!isGroup) return reply('Isso só pode ser usado em grupo 💔');
-          // Exclusivo do dono: subir chamada de voz mexe na conta e no motor
-          // de midia, entao nao fica na mao de qualquer admin.
-          if (!podeDonoTotal()) return reply('⛔ Apenas o Dono pode usar este comando.');
 
           const subCallp = normalizar((args[0] || '')).trim();
 
-          // STATUS — TODOS podem ver (pedido do dono: so' subir/encerrar e'
-          // que fica na mao do admin).
+          // STATUS — LIVRE para qualquer membro do grupo. A checagem de dono
+          // vem DEPOIS deste bloco de proposito: o `menumemb` anuncia
+          // `!callp status`, entao barrá-lo aqui deixava o comando visível num
+          // menu que não conseguia usá-lo.
           if (subCallp === 'status' || subCallp === 'info') {
             const ativa = obterCall(from);
             const resumo = musicQueue.resumo(from);
@@ -35687,14 +35768,18 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             });
           }
 
-          // PAREAMENTO do backend de midia.
+          // PAREAMENTO do backend de midia — SO' O DONO.
           //
           // O backend `zapo` e' um client PROPRIO: nao usa a sessao do Baileys.
           // Sem parear, o offer da call de grupo morre em
           // "a group call offer has no jid of ours to name as its call-creator".
           // O codigo e' digitado no WhatsApp, em
           // Aparelhos conectados -> Conectar com numero de telefone.
+          //
+          // Fica com o DONO (e nao com os admins) porque pareia um DISPOSITIVO
+          // na conta do bot — e' credencial, nao operacao de grupo.
           if (subCallp === 'parear' || subCallp === 'pair') {
+            if (!podeDonoTotal()) return reply('⛔ Apenas o Dono pode parear o motor de mídia.');
             const numero = String(args[1] || '').replace(/\D/g, '');
             if (!numero || numero.length < 10) {
               return reply('❌ Informe o numero com DDI.\n\nEx.: `!callp parear 5511999999999`');
@@ -35719,21 +35804,43 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             );
           }
 
+          // SUBIR e ENCERRAR ficam com os ADMINISTRADORES do grupo (pedido do
+          // dono). O `isGroupAdmin` ja' cobre admin do grupo, dono, subdono e os
+          // moderadores/alpha autorizados — nenhum sistema de permissao novo.
+          if (!isGroupAdmin) {
+            return reply('⛔ Apenas administradores do grupo podem subir ou encerrar a chamada.');
+          }
+
           // Encerra a call que ESTE comando subiu (se houver).
           if (subCallp === 'encerrar' || subCallp === 'parar' || subCallp === 'desligar') {
             const ativa = obterCall(from);
             if (!ativa || !ativa.callId) {
               return reply('📴 Não há chamada ativa subida por mim neste grupo.');
             }
+            // Derruba a pilha de mídia PRIMEIRO e CONFERE o resultado. Se isto
+            // falhar, o registro fica de pé e o próximo `!callp` recusa — que é o
+            // correto, porque a call ainda existe. Limpar antes (e engolir o
+            // erro) deixava a pilha viva e o bot achando que estava livre,
+            // permitindo subir uma SEGUNDA call em cima.
+            const saida = await sairDaCallComMidia(from)
+              .catch((e) => ({ ok: false, detalhe: e?.message || String(e) }));
+            if (saida && saida.ok === false) {
+              return reply(
+                `❌ Não consegui encerrar a chamada no motor de mídia.` +
+                (saida.detalhe ? `\n\n_${saida.detalhe}_` : '') +
+                `\n\n_A chamada segue registrada como ativa. Tente de novo._`
+              );
+            }
             limparCall(from);
-            // Derruba a pilha de mídia junto: senão o motor fica vivo segurando
-            // o relay depois que a chamada acabou.
-            await sairDaCallComMidia(from).catch(() => {});
             // A call acabou: a fila e o cache do grupo saem junto (pedido do
             // dono: "fechou a fila, todas as músicas salvas saem").
             const resumoFila = musicQueue.limpar(from);
             callCache.limparGrupo(from);
             callPlayer.pararDeSeguir(from);
+            // Desregistra os callbacks: sem isto sobra uma closure por grupo,
+            // sobrevivendo ao comando que deveria limpá-la.
+            aoTerminarAudio(from, null);
+            aoEncerrarAudio(from, null);
             return reply(
               `📴 Chamada encerrada.` +
               (resumoFila.removidas ? `\n\n🗑️ ${resumoFila.removidas} música(s) da fila foram apagadas.` : '')
@@ -35741,9 +35848,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
           }
 
           if (obterCall(from)) {
-            const atual = obterCall(from);
-            const tipoAtual = atual.voiceChat ? 'chat de voz' : 'chamada';
-            return reply(`📞 Já existe um(a) ${tipoAtual} subido(a) por mim neste grupo.\n\nUse \`!callp encerrar\` para derrubar.`);
+            return reply('📞 Já existe uma chamada subida por mim neste grupo.\n\nUse `!callp encerrar` para derrubar.');
           }
 
           // Checa o pareamento ANTES de tentar subir: o erro do motor seria
@@ -35757,7 +35862,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             );
           }
 
-          const r = await subirCallDoGrupo({ voiceChat: false });
+          const r = await subirCallDoGrupo();
           if (!r.ok) {
             const motivos = {
               sem_identidade: 'Não consegui identificar meu próprio número para subir a chamada.',
@@ -35868,10 +35973,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               });
               return;
             }
-            await nazu.sendMessage(from, {
-              text: `⏭️ *${r.pulada || 'Música'}* pulada.\n\n🎵 Tocando agora: *${r.faixa.titulo}*`,
-              contextInfo: gerarContextNewsletter()
-            });
+            await enviarTocando(nazu, from, r.faixa, `⏭️ *${r.pulada || 'Música'}* pulada.`);
             return;
           }
 
@@ -35892,10 +35994,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               });
               return;
             }
-            await nazu.sendMessage(from, {
-              text: `⏹️ *${r.parada || 'Música'}* parada.\n\n🎵 Tocando agora: *${r.faixa.titulo}*`,
-              contextInfo: gerarContextNewsletter()
-            });
+            await enviarTocando(nazu, from, r.faixa, `⏹️ *${r.parada || 'Música'}* parada.`);
             return;
           }
 
@@ -35927,6 +36026,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             }
             const r = musicQueue.limpar(from);
             callCache.apagarVarios(r.caminhos);
+            callCache.apagarVarios(r.thumbs || []);
             callPlayer.pararDeSeguir(from);
             return nazu.sendMessage(from, {
               text: `🗑️ Fila limpa — ${r.removidas} música(s) removida(s).`,
@@ -35984,6 +36084,8 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             //    agora entrando na FILA como qualquer outra fonte.
             let bufferBaixado = null;
             let titulo = termo;
+            // URL da capa. So' a busca por nome tem (midia marcada nao traz).
+            let thumbUrl = null;
 
             const citado = extractQuoted(info.message);
             if (citado) {
@@ -36031,6 +36133,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               }
               const videoUrl = busca.data.url;
               titulo = busca.data.title || termo;
+              thumbUrl = busca.data.thumbnail || null;
 
               const dl = await youtube.mp3(videoUrl, 128);
               if (!dl?.ok || !dl.buffer?.length) {
@@ -36057,15 +36160,22 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             callCache.registrar(from, caminhoFinal);
             if (preparado) { try { fs.unlinkSync(bruto); } catch { /* ok */ } }
 
+            // 3.5) baixa a CAPA para o cache do grupo (mesmo ciclo de vida do
+            // audio: sai do disco quando a musica acaba/e' pulada). Best-effort:
+            // sem capa o aviso sai so' com texto.
+            const thumb = thumbUrl ? await baixarThumb(from, thumbUrl).catch(() => null) : null;
+
             // 4) entra na fila
             const enfileirado = musicQueue.enfileirar(from, {
               caminho: caminhoFinal,
               titulo,
-              donoId: sender
+              donoId: sender,
+              thumb
             });
             if (!enfileirado.ok) {
               await apagarAviso();
               callCache.apagar(caminhoFinal);
+              if (thumb) callCache.apagar(thumb);
               return reply('❌ Não consegui enfileirar essa música.');
             }
 
@@ -36082,12 +36192,10 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               if (!r.ok) {
                 musicQueue.removerAtual(from);
                 callCache.apagar(caminhoFinal);
+                if (thumb) callCache.apagar(thumb);
                 return reply(`❌ Não consegui tocar.${r.detalhe ? `\n\n_${r.detalhe}_` : ''}`);
               }
-              return nazu.sendMessage(from, {
-                text: `🎵 Tocando agora: *${titulo}*`,
-                contextInfo: gerarContextNewsletter()
-              });
+              return enviarTocando(nazu, from, { titulo, thumb });
             }
 
             // Ja' tem musica: entrou na fila.

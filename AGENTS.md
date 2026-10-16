@@ -7194,6 +7194,156 @@ Quando a lista de participantes é reconstruída, **o próprio cliente fica fora
 dela**. E o modo de falha do WASM aqui é *silêncio*, não erro — então a única
 forma de não repetir é um teste que observe o motor emitindo (ou não) a stanza.
 
+## `!callp` — PERMISSOES: subir/encerrar para ADMINS, parear so' do DONO (out/2026) ✅
+Pedido do dono: *"subir e encerrar muda para adms do grupo, so' deixa o parear
+para dono"*.
+
+### Como ficou
+| subcomando | quem pode |
+|---|---|
+| `!callp status` | qualquer membro (ja' era assim) |
+| `!callp` (subir) | **admin do grupo** |
+| `!callp encerrar` | **admin do grupo** |
+| `!callp parear` | **so' o dono** |
+
+O `parear` ficou com o dono porque **pareia um DISPOSITIVO na conta do bot** —
+e' credencial, nao operacao de grupo. Por isso o gate dele **subiu** para antes
+do gate de admin (a ordem importa: se ficasse depois, um admin chegaria no
+pareamento).
+
+O gate usa o **`isGroupAdmin` que ja' existia** (cobre admin do grupo, dono,
+subdono e moderadores/alpha autorizados) — nenhum sistema de permissao novo.
+
+### Menus
+`menuadm` ganhou a categoria **📞 CHAMADAS** (`callp`, `callp encerrar`,
+`callp status`); o `menudono` ficou **so' com o `callp parear`** (categoria
+CHAMADAS, 4 -> 1 linha). `blockPv`: `callp`/`musicap` entraram tambem na lista do
+`menuadm` (o bloqueio de PV e' por menu — a mesma chave em duas listas e' normal).
+Baseline do `menu-layout`: **menuadm 178 -> 181**, **menudono 185 -> 182**.
+
+## `!musicap` — CAPA (thumb) no aviso "Tocando agora" (out/2026) ✅
+Pedido do dono: *"quero que nisso tenha a foto da musica, a thumb, vai seguir a
+mesma logica do audio no cache, salva a foto, musica foi pulada ou acabou a foto
+e' apagada do cache"*.
+
+### O que mudou
+1. **Modulo novo `dados/src/utils/callThumb.js`** — `baixarThumb(grupo, url)`
+   baixa a imagem e grava no **cache do grupo** (`callCache.caminhoNovo`, a mesma
+   pasta do audio). Best-effort: qualquer falha devolve `null` e o aviso sai so'
+   com texto — **a musica nunca deixa de tocar por causa da capa**.
+   `ehImagem` valida **magic bytes** (JPEG/PNG/GIF/WebP): varios CDNs respondem
+   `application/octet-stream` e alguns devolvem **HTML de bloqueio com status
+   200** — sem essa checagem um "403" viraria a capa.
+2. **A thumb viaja DENTRO da faixa da fila** (`musicQueue.enfileirar` aceita
+   `thumb`). Nao ha segundo sistema de limpeza: ela sai do disco pelo mesmo
+   caminho do audio. `limpar` passou a devolver tambem `thumbs[]`.
+3. **`callPlayer.apagarFaixa(faixa)`** — helper unico que apaga o **audio E a
+   capa**. Substituiu os 5 `apagar(x.caminho)` espalhados (tocarAtual, duas em
+   tocarProxima, duas em parar). Sem isso a capa ficaria no disco para sempre.
+4. **`enviarTocando()` no `index.js`** — helper **UNICO** dos quatro avisos
+   ("Tocando agora" no `!musicap`, no `!pular`, no `!parar` e no avanco
+   automatico). Antes cada um montava o proprio `text:`. Agora envia
+   `image: fs.readFileSync(thumb)` + `caption` quando a capa existe (e confere
+   `fs.existsSync`, porque a fila pode ter sido limpa entre o tocar e o avisar).
+5. O `!musicap` guarda `busca.data.thumbnail` e baixa **antes** de enfileirar;
+   se o enfileiramento ou o tocar falhar, a capa e' apagada junto com o audio.
+
+### De onde vem a capa
+So' a busca por **nome** tem thumb (o `youtube.search` devolve `data.thumbnail`;
+o `youtube.mp3` tambem traz, mas o caminho usa a da busca). **Midia marcada**
+(audio que o usuario responde) **nao tem** capa — o aviso sai com texto, como
+antes. Nao ha o que inventar ali.
+
+### Testes — `tests/callp-regressions.test.js` (26 testes / 78 assercoes)
+Novos blocos de THUMB: `ehImagem` (formatos reais + HTML recusado),
+`baixarThumb` com URL invalida (sem rede), a fila guardando/devolvendo a capa,
+`apagarFaixa` removendo os DOIS arquivos, o helper unico, o `!musicap` baixando,
+o caminho sem capa, e um **teste de download REAL** (servidor HTTP local servindo
+PNG de verdade: grava os bytes exatos, recusa HTML de bloqueio, e a capa sai no
+`limparGrupo`).
+**Verificado**: removendo o `apagar(thumb)` do `apagarFaixa`, **1 assercao
+falha** (a capa fica para tras).
+
+### ARMADILHA: ESM nao deixa mockar export
+A primeira versao do teste ponta a ponta tentava `yt.search = ...` para simular
+o YouTube — e o ESM **proibe** (`Cannot assign to read only property 'search' of
+object '[module]'`). O caminho certo (que o proprio repo ja' usa no
+`setGeminiHttpForTest`) e' injetar a dependencia por **parametro/seam**, ou
+exercitar o modulo com um servidor local de verdade — foi o que ficou.
+
+## `!callp` — 5 DEFEITOS CORRIGIDOS + `!vozp` REMOVIDO (out/2026) ✅
+Auditoria pedida pelo dono (*"olha o sistema do callp"*). Cinco defeitos, cada um
+com teste que REPROVA o codigo antigo.
+
+### 1. `!callp status` era dono-only (o menu mentia)
+O gate `podeDonoTotal()` rodava **antes** do ramo do `status`, entao o
+`menumemb` anunciava `!callp status` para membros que **nunca** conseguiam usa-lo
+(recebiam *"Apenas o Dono"*). Correcao: o `status` e' resolvido **antes** do
+gate; subir/encerrar/parear seguem exclusivos do dono. Verificado: revertendo o
+gate, **4 assercoes falham**.
+
+### 2. Call que cai sozinha deixava o registro MORTO (a pior)
+O motor avisa quando a call cai (`voip_call_ended`) e limpava **so** o registro
+dele (`callsPorGrupo`). O registro do BOT (`callOffer.callsAtivas`) ficava com
+entrada morta: o `!callp` respondia *"ja existe chamada"* **para sempre** e o
+cache de audio do grupo (ate 300 MB) nunca era limpo. So o `!callp encerrar`
+manual saia desse estado.
+
+Correcao: o `zapoCall` ganhou **`aoEncerrarAudio(grupo, cb)`** (mesmo formato do
+`aoTerminarAudio`) e o `index.js` registra `reconciliarCallEncerrada`, que limpa
+**o mesmo conjunto** do `encerrar` (registro, fila, cache, seguimento e
+callbacks) e avisa no grupo. A logica vive em `processarCallEncerrada`, chamada
+tanto pelo evento real quanto pelo gancho `__simularCallEncerrada` — o teste
+exercita o **caminho real**, nao uma copia. Verificado: removendo o aviso, **6
+assercoes falham**.
+
+### 3. `encerrar` limpava o registro ANTES de desmontar
+`limparCall()` vinha antes do `sairDaCallComMidia().catch(() => {})`. Se a saida
+falhasse, o erro era **engolido**, o bot esquecia a call e a pilha ficava viva —
+o proximo `!callp` subia **outra** call em cima (o zapo permite 3 simultaneas).
+Agora desmonta primeiro e **confere o resultado**: se o motor recusa, o registro
+fica de pe e o comando diz *"Nao consegui encerrar"* em vez de mentir sucesso.
+Verificado: voltando a ordem antiga, **2 assercoes falham**.
+
+### 4. `voiceChat` era encadeado ate um backend que NAO o implementa
+`callMedia` repassava `isLightWeight` ao `lizzy-call`, mas o backend
+**preferido** (`zapo`) recebia o parametro e **nunca o usava**. Medido no tarball
+`@zapo-js/voip@1.4.0`: o `CallOfferOptions` so aceita `isVideo`/`audioFile`, e o
+`lightweight_key` e' apenas **LIDO** de um `<group_info>` recebido (`group-info.js`
+valida que `group_phash` e `lightweight_key` sao mutuamente exclusivos) — nunca
+escrito. Ou seja: nao havia o que repassar. O parametro morto saiu dos 3 arquivos.
+
+### 5. Callbacks nunca eram desregistrados
+`aoTerminarAudio` so' era **setado**; o `encerrar` fazia `pararDeSeguir` mas nao
+removia o callback. Ficava uma closure por grupo, sobrevivendo ao comando. Agora
+`encerrar` e a reconciliacao chamam `aoTerminarAudio(x, null)` e
+`aoEncerrarAudio(x, null)`.
+
+### `!vozp` REMOVIDO (pedido do dono)
+*"o comando !vozp voce pode remover, ele nao esta sendo util"*. Ele **ja nao
+existia** no codigo (o `case` fora removido numa rodada anterior); sobraram
+apenas comentarios no `tests/menu-layout.test.js`, que foram limpos. Com ele
+fora, o encadeamento do `voiceChat` (defeito 4) perdeu a razao de existir — dai
+a remocao em vez de "implementar" o modo voz num backend que nao o suporta.
+
+### Testes — `tests/callp-regressions.test.js` (**16 testes / 34 assercoes**)
+Cada bloco tem o comentario do defeito e a prova de que o teste o mede:
+revertendo cada fix, as assercoes correspondentes falham (4 / 6 / 2 / n.a. / 4).
+Regressoes verdes: `callp` 14/33, `musicap` 24/72, `mlow-bitrate` 11/22,
+`call-audio-prep` 14/39. `menu-layout` mantem **1 falha PRE-EXISTENTE**
+(`menufig: 18 vs 17`), confirmada com `git stash` na baseline.
+
+### ARMADILHA de metodo (custou uma rodada)
+`file_editor` **corrompe a codificacao** do `index.js`: o arquivo voltou com
+**11.911** ocorrencias de mojibake (`в”`, `Г`, ...) onde o HEAD tinha
+**zero**. O `node --check` **passa** — o estrago so' aparece nos testes de texto.
+Deteccao: comparar contra `git show HEAD:<arquivo>` e contar as sequencias.
+**Regra**: `index.js` (e qualquer arquivo com glifos) so' se edita por
+`open(rb) → decode('utf-8') → replace → encode('utf-8')`, conferindo
+`count` de cada troca == 1 antes de gravar. O `zapoCall.js` e o `callMedia.js`
+**nao** sofreram (o `file_editor` funcionou neles) — a corrupcao depende do
+conteudo do arquivo, nao da ferramenta sozinha.
+
 ## CALL — A CALL SOBE (set/2026) ✅ — MARCO
 A chamada **passa a subir no grupo**. Confirmado pelo dono e medido nos testes:
 o offer de grupo sai (1 stanza, para `<call-id>@call`), com PN resolvido e

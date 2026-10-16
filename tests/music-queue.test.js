@@ -237,11 +237,22 @@ await test('!callp status existe', () => {
   includes(desbold(SRC), 'STATUS DA CHAMADA', 'o layout');
 });
 
-await test('!callp/!callp encerrar são de ADMIN (gate de dono)', () => {
-  // O callp usa podeDonoTotal() desde a rodada das permissoes.
+await test('!callp: SUBIR/ENCERRAR sao de ADMIN e o PAREAR e\' do DONO', () => {
+  // Mudou em out/2026 (pedido do dono): subir/encerrar passaram para os
+  // administradores do grupo; o pareamento — que mexe na CONTA — ficou so'
+  // com o dono. O `status` e' livre.
   const i = SRC.indexOf("case 'callp':");
-  const bloco = SRC.slice(i, i + 400);
-  includes(bloco, 'podeDonoTotal()', 'o gate de dono está no callp');
+  const j = SRC.indexOf("case 'musicap':");
+  const bloco = SRC.slice(i, j);
+  includes(bloco, "if (!isGroupAdmin)", 'subir/encerrar exigem admin');
+  includes(bloco, 'administradores do grupo', 'mensagem clara');
+  // O gate de dono existe, mas SO' dentro do bloco de pareamento.
+  const iParear = bloco.indexOf("subCallp === 'parear'");
+  const iAdmin = bloco.indexOf("if (!isGroupAdmin)");
+  ok(iParear >= 0, 'achou o bloco de pareamento');
+  ok(iAdmin > iParear, 'o gate de admin vem DEPOIS do pareamento (que e do dono)');
+  const blocoParear = bloco.slice(iParear, iAdmin);
+  includes(blocoParear, 'podeDonoTotal()', 'parear exige dono');
 });
 
 await test('!musicap NÃO tem gate de dono (membro pode usar)', () => {

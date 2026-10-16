@@ -124,24 +124,22 @@ export async function obterMedia() {
 /**
  * Entra na call de grupo como participante de MÍDIA.
  *
- * `voiceChat: true` pede ao motor o CHAT DE VOZ (offer "lightweight": entra sem
- * tocar para todos), em vez da chamada que toca. O bot que decide é o comando;
- * aqui só repassamos.
+ * Não há flag de chat de voz: o backend zapo (preferido) não a implementa.
  *
  * Best-effort de propósito: se falhar, devolve o motivo e o `!callp` segue
  * reportando a chamada como aberta (só sem áudio), em vez de dizer que não subiu.
  */
-export async function entrarNaCallComMidia({ grupo, callId, callCreator, participantes, sock, voiceChat = false }) {
-  if (dubleEntrar) return dubleEntrar.entrar({ grupo, callId, callCreator, participantes, sock, voiceChat });
+export async function entrarNaCallComMidia({ grupo, callId, callCreator, participantes, sock }) {
+  if (dubleEntrar) return dubleEntrar.entrar({ grupo, callId, callCreator, participantes, sock });
   const media = await obterMedia();
   if (!media) {
     return { ok: false, motivo: 'pacote_de_midia_ausente', detalhe: loadError };
   }
   try {
     if (usandoZapo(media)) {
-      return await media.entrarNaCallComMidia({ grupo, callId, callCreator, participantes, sock, voiceChat });
+      return await media.entrarNaCallComMidia({ grupo, callId, callCreator, participantes, sock });
     }
-    const r = await media.entrarNaCall({ grupo, callId, participantes, sock, groupInfo: null, isLightWeight: !!voiceChat });
+    const r = await media.entrarNaCall({ grupo, callId, participantes, sock, groupInfo: null });
     return r;
   } catch (e) {
     return { ok: false, motivo: 'falha_ao_entrar', detalhe: e?.message || String(e) };

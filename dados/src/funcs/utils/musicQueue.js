@@ -8,6 +8,13 @@
  * isso e' o `callCache.js` (arquivos) e o `index.js` (comandos). Assim a regra
  * pode ser testada sem socket.
  *
+ * ## A thumb acompanha a faixa
+ *
+ * Cada faixa guarda `thumb` (o caminho da capa no cache, ou null). Ela sai
+ * junto com o audio em TODAS as saidas (`avancar`, `removerAtual`, `limpar`),
+ * para o chamador apagar as duas do disco. E' o pedido do dono: *"musica foi
+ * pulada ou acabou a foto e' apagada do cache"*.
+ *
  * ## Por grupo
  *
  * A call e' por grupo, entao a fila tambem. Duas calls em grupos diferentes
@@ -41,7 +48,7 @@ function filaDe(grupo) {
  * Enfileira uma faixa.
  *
  * @param {string} grupo
- * @param {{ caminho: string, titulo: string, donoId: string, pedidoEm?: number }} faixa
+ * @param {{ caminho: string, titulo: string, donoId: string, thumb?: string, pedidoEm?: number }} faixa
  * @returns {{ ok: boolean, posicao?: number, motivo?: string }}
  */
 export function enfileirar(grupo, faixa) {
@@ -53,6 +60,7 @@ export function enfileirar(grupo, faixa) {
     caminho: faixa.caminho,
     titulo: faixa.titulo || 'Sem titulo',
     donoId: faixa.donoId || null,
+    thumb: faixa.thumb || null,
     pedidoEm: faixa.pedidoEm || Date.now()
   });
   return { ok: true, posicao: f.faixas.length };
@@ -153,16 +161,17 @@ export function removerAtual(grupo) {
 /**
  * Esvazia a fila do grupo.
  *
- * @returns {{ removidas: number, caminhos: string[] }} os arquivos que o
- *          chamador deve apagar do cache
+ * @returns {{ removidas: number, caminhos: string[], thumbs: string[] }} os
+ *          arquivos que o chamador deve apagar do cache (audio E capa)
  */
 export function limpar(grupo) {
   const k = chave(grupo);
   const f = filas.get(k);
-  if (!f) return { removidas: 0, caminhos: [] };
+  if (!f) return { removidas: 0, caminhos: [], thumbs: [] };
   const caminhos = f.faixas.map((x) => x.caminho).filter(Boolean);
+  const thumbs = f.faixas.map((x) => x.thumb).filter(Boolean);
   filas.delete(k);
-  return { removidas: caminhos.length, caminhos };
+  return { removidas: caminhos.length, caminhos, thumbs };
 }
 
 /** Remove a fila do grupo sem devolver caminhos (uso interno/limpeza). */

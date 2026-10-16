@@ -62,6 +62,8 @@ let esperandoAbertura = null;
 let timerReconexao = null;
 /** Callbacks de "o audio terminou", por grupo (a fila avanca com isso). */
 const aoTerminarPorGrupo = new Map();
+/** Callbacks de "a call CAIU sozinha", por grupo (o bot limpa o estado). */
+const aoEncerrarPorGrupo = new Map();
 
 /** Diretorio onde as credenciais do zapo sao gravadas. */
 const AUTH_DIR = path.join(DATABASE_DIR, 'zapo-auth');
@@ -382,13 +384,7 @@ export async function obterCliente() {
       client.on('voip_call_ended', (call) => {
         const motivo = call.stateData?.endReason || 'sem motivo informado';
         console.warn(`[ZAPOCALL] call ${call.callId} ENCERROU | motivo: ${motivo}`);
-        // Libera o registro: senao o proximo `!callp` acharia que ainda ha call.
-        for (const [grupo, id] of callsPorGrupo.entries()) {
-          if (id === call.callId) {
-            callsPorGrupo.delete(grupo);
-            estagios.set(grupo, 'parado');
-          }
-        }
+        processarCallEncerrada(call.callId, motivo);
       });
 
       client.on('voip_call_error', (err) => {
@@ -514,11 +510,16 @@ function estagioDoCall(call) {
 /**
  * Entra na call de grupo como participante de MIDIA.
  *
+ * O backend zapo (preferido) nao expoe o flag de chat de voz (`lightweight`):
+ * o `CallOfferOptions` dele so aceita `isVideo`/`audioFile`, e o
+ * `lightweight_key` e' apenas LIDO de um `<group_info>` recebido, nunca
+ * escrito. Entao nao ha o que repassar -- subir sempre como chamada normal.
+ *
  * Falha FECHADO quando nao ha pareamento: subir a call sem credencial daria o
  * erro criptico do `call-creator` e o usuario nao saberia o que fazer.
  */
-export async function entrarNaCallComMidia({ grupo, callId, callCreator, participantes, sock, voiceChat = false }) {
-  if (dubleEntrar) return dubleEntrar.entrar({ grupo, callId, callCreator, participantes, sock, voiceChat });
+export async function entrarNaCallComMidia({ grupo, callId, callCreator, participantes, sock }) {
+  if (dubleEntrar) return dubleEntrar.entrar({ grupo, callId, callCreator, participantes, sock });
 
   // Checa o pareamento ANTES de tocar no motor (e' o que faltava).
   if (!estaPareado()) {
@@ -567,8 +568,7 @@ export async function entrarNaCallComMidia({ grupo, callId, callCreator, partici
     return {
       ok: true,
       callId: novoCallId,
-      stage: estagios.get(grupo) || 'aguardando_roster',
-      voiceChat: !!voiceChat
+      stage: estagios.get(grupo) || 'aguardando_roster'
     };
   } catch (e) {
     return { ok: false, motivo: 'falha_ao_entrar', detalhe: e?.message || String(e) };
@@ -666,6 +666,7 @@ export function resetarMidia() {
   callsPorGrupo.clear();
   estagios.clear();
   aoTerminarPorGrupo.clear();
+  aoEncerrarPorGrupo.clear();
   conectado = false;
   esperandoAbertura = null;
   if (timerReconexao) {
@@ -705,7 +706,83 @@ export function aoTerminarAudio(grupo, cb) {
   else aoTerminarPorGrupo.set(grupo, cb);
 }
 
+/**
+ * Registra o que fazer quando a call de um grupo CAI sozinha.
+ *
+ * O motor derruba a call por conta propria (relay perdido, todos sairam, o
+ * servidor nos tirou) e isso NAO passa por nenhum comando. Sem este aviso o
+ * registro do bot (`callOffer.callsAtivas`) ficava com uma entrada morta: o
+ * `!callp` respondia "ja existe chamada" para sempre e o cache de audio do
+ * grupo nunca era limpo. O `index.js` usa isto para reconciliar.
+ *
+ * Mesmo formato do `aoTerminarAudio`: callback (e nao import) porque o
+ * `index.js` importa este modulo -- importar de volta criaria ciclo.
+ *
+ * @param {string} grupo
+ * @param {Function|null} cb `(grupo, motivo) => void` (null remove)
+ */
+export function aoEncerrarAudio(grupo, cb) {
+  if (cb === null) aoEncerrarPorGrupo.delete(grupo);
+  else aoEncerrarPorGrupo.set(grupo, cb);
+}
+
 /** A conexao esta aberta agora? (diagnostico) */
 export function conexaoAberta() {
   return conectado;
+}
+
+/**
+ * Processa o fim de uma call: limpa o registro do motor e avisa o bot.
+ *
+ * Vive numa funcao (e nao dentro do listener) porque o listener real so existe
+ * com um `WaClient` de verdade -- e o teste precisa exercitar ESTE caminho, nao
+ * uma copia dele. O `__simularCallEncerrada` chama esta mesma funcao.
+ *
+ * O BOT tambem tem o proprio registro (`callOffer.callsAtivas`), e ele nao e'
+ * sincronizado sozinho. Sem este aviso, uma call que cai sozinha deixava o
+ * `!callp` respondendo "ja existe chamada" para sempre, e o cache de audio do
+ * grupo (ate 300 MB) no disco.
+ *
+ * @param {string} callId
+ * @param {string} motivo
+ */
+function processarCallEncerrada(callId, motivo) {
+  for (const [grupo, id] of callsPorGrupo.entries()) {
+    if (id !== callId) continue;
+    callsPorGrupo.delete(grupo);
+    estagios.set(grupo, 'parado');
+    const cb = aoEncerrarPorGrupo.get(grupo);
+    if (typeof cb === 'function') {
+      Promise.resolve(cb(grupo, motivo)).catch((e) =>
+        console.warn('[ZAPOCALL] aoEncerrar:', e?.message || e));
+    }
+  }
+}
+
+/**
+ * Gancho de TESTE: simula o motor encerrando uma call.
+ *
+ * Chama exatamente o caminho que o evento `voip_call_ended` chama, para o teste
+ * medir o comportamento real sem precisar de um `WaClient` conectado.
+ *
+ * @param {string} callId
+ * @param {string} [motivo]
+ */
+export function __simularCallEncerrada(callId, motivo = 'teste') {
+  processarCallEncerrada(callId, motivo);
+}
+
+/**
+ * Gancho de TESTE: registra grupo -> callId no mapa do motor.
+ *
+ * Faz o mesmo que o `entrarNaCallComMidia` real faz. Existe porque o dublê de
+ * mídia dos testes substitui o `entrarNaCallComMidia` inteiro, entao o mapa
+ * ficaria vazio e o `__simularCallEncerrada` nao acharia o grupo.
+ *
+ * @param {string} grupo
+ * @param {string} callId
+ */
+export function __registrarCallDeTeste(grupo, callId) {
+  callsPorGrupo.set(grupo, callId);
+  estagios.set(grupo, 'aguardando_roster');
 }
