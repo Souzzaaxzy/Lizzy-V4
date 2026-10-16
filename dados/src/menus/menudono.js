@@ -25,18 +25,8 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
-╭━━━꧁༺ ㅤ📞 ${boldItalic('CHAMADAS')} 📞ㅤ ༻꧂━━━╯
-│ 📞 ${prefix}callp
-│ 📴 ${prefix}callp encerrar
-│ 📊 ${prefix}callp status
+╭━━━꧁༺ ㅤ🔑 ${boldItalic('PAREAR O MOTOR DE MÍDIA')} 🔑ㅤ ༻꧂━━━╯
 │ 🔑 ${prefix}callp parear <numero>
-│ 🎵 ${prefix}musicap <nome/link>
-│ ➕ ${prefix}musicap adicionar
-│ ⏭️ ${prefix}musicap pular
-│ ⏹️ ${prefix}musicap parar
-│ 🎶 ${prefix}musicap atual
-│ 🗑️ ${prefix}musicap limpar
-│ 📋 ${prefix}fila
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 

@@ -185,25 +185,56 @@ await test('!callp só em grupo', async () => {
   void out;
 });
 
-await test('!callp é EXCLUSIVO DO DONO (admin comum é recusado)', async () => {
+await test('!callp: MEMBRO comum é recusado (subir call é de admin)', async () => {
   const { groupJid, participants } = setup(2);
   const membro = makePerson();
   participants.push({ lid: membro.lid, jid: membro.jid, isAdmin: false });
   const chamadas = instalarDubleMidia();
   const out = await run({ groupJid, sender: membro, text: '!callp', participants, fromMe: false });
-  includes(out.text, 'Apenas o Dono', 'recusa quem não é dono');
+  includes(out.text, 'administradores', 'recusa quem não é admin');
   ok(chamadas.length === 0, 'não sobe chamada');
 });
 
-await test('!callp recusa ADMIN do grupo também (não é só admin-only)', async () => {
+await test('!callp: ADMIN do grupo sobe a chamada', async () => {
   const { groupJid, participants } = setup(2);
   const adm = makePerson();
-  // Admin do grupo, mas NÃO é o dono do bot.
+  // Admin do grupo, mas NÃO é o dono do bot: e' exatamente o caso que passou a
+  // ser permitido (antes o comando era dono-only).
   participants.push({ lid: adm.lid, jid: adm.jid, isAdmin: true });
   const chamadas = instalarDubleMidia();
   const out = await run({ groupJid, sender: adm, text: '!callp', participants, fromMe: false });
-  includes(out.text, 'Apenas o Dono', 'admin do grupo também é recusado');
-  ok(chamadas.length === 0, 'não sobe chamada');
+  ok(chamadas.some((c) => c.tipo === 'entrar'), 'o admin subiu a chamada');
+  ok(!out.text.includes('Apenas o Dono'), 'nao recusa o admin');
+});
+
+await test('!callp encerrar: MEMBRO comum é recusado', async () => {
+  const { groupJid, participants } = setup(2);
+  const membro = makePerson();
+  participants.push({ lid: membro.lid, jid: membro.jid, isAdmin: false });
+  const chamadas = instalarDubleMidia();
+  const out = await run({ groupJid, sender: membro, text: '!callp encerrar', participants, fromMe: false });
+  includes(out.text, 'administradores', 'recusa quem não é admin');
+  ok(!chamadas.some((c) => c.tipo === 'sair'), 'não derruba a chamada');
+});
+
+await test('!callp parear: SEGUE exclusivo do dono (admin é recusado)', async () => {
+  const { groupJid, participants } = setup(2);
+  const adm = makePerson();
+  participants.push({ lid: adm.lid, jid: adm.jid, isAdmin: true });
+  instalarDubleMidia();
+  const out = await run({ groupJid, sender: adm, text: '!callp parear 5511999999999', participants, fromMe: false });
+  includes(out.text, 'Apenas o Dono', 'o pareamento nao vai para admin');
+});
+
+await test('!callp status: qualquer MEMBRO pode ver', async () => {
+  const { groupJid, participants } = setup(2);
+  const membro = makePerson();
+  participants.push({ lid: membro.lid, jid: membro.jid, isAdmin: false });
+  instalarDubleMidia();
+  const out = await run({ groupJid, sender: membro, text: '!callp status', participants, fromMe: false });
+  ok(out.text.includes('Nenhuma chamada ativa') || out.text.includes('Nenhuma chamada'),
+     'o membro comum ve o status');
+  ok(!out.text.includes('Apenas'), 'nao recusa o membro no status');
 });
 
 await test('grupo pequeno (só o bot + quem pediu): recusa', async () => {

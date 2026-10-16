@@ -35658,11 +35658,30 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
       case 'callp':
         try {
           if (!isGroup) return reply('Isso só pode ser usado em grupo 💔');
-          // Exclusivo do dono: subir chamada de voz mexe na conta e no motor
-          // de midia, entao nao fica na mao de qualquer admin.
-          if (!podeDonoTotal()) return reply('⛔ Apenas o Dono pode usar este comando.');
 
           const subCallp = normalizar((args[0] || '')).trim();
+
+          // PERMISSOES (pedido do dono):
+          //   !callp parear <numero>   -> SO' o dono (o codigo pareia um
+          //                               aparelho na conta; nao fica na mao
+          //                               de admin);
+          //   !callp / !callp encerrar -> ADMIN do grupo (quem sobe e derruba);
+          //   !callp status            -> qualquer membro.
+          const ehPareamento = subCallp === 'parear' || subCallp === 'pair';
+          const ehEncerrar = subCallp === 'encerrar' || subCallp === 'parar' || subCallp === 'desligar';
+          const ehStatus = subCallp === 'status' || subCallp === 'info';
+
+          if (ehPareamento && !podeDonoTotal()) {
+            return reply('⛔ Apenas o Dono pode parear o motor de mídia.');
+          }
+          // Subir a chamada: admin do grupo (o `isGroupAdmin` ja' agrega dono,
+          // subdono, moderador e alphas autorizados). `status` fica livre.
+          if (!ehPareamento && !ehEncerrar && !ehStatus && !isGroupAdmin) {
+            return reply('⛔ Apenas administradores podem subir a chamada.');
+          }
+          if (ehEncerrar && !isGroupAdmin) {
+            return reply('⛔ Apenas administradores podem encerrar a chamada.');
+          }
 
           // STATUS — TODOS podem ver (pedido do dono: so' subir/encerrar e'
           // que fica na mao do admin).
