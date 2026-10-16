@@ -284,6 +284,94 @@ if (TEM_FFMPEG) {
 }
 
 // ============================================================================
+// 1a) O FPS: o timestamp tem de bater com o video (a causa do travamento)
+// ============================================================================
+
+await test('o fps e detectado do VIDEO, nao fixo', () => {
+  // O `FPS` era fixo em 15: num video de 30 fps o passo do timestamp (66,7 ms)
+  // nao batia com o intervalo real (33,3 ms) -- medido: 39,8 ms de descompasso
+  // por frame e 3,5 s de erro acumulado em 3 s. O motor remapeia o tempo e
+  // descarta/atrasa.
+  const args = midiap.argumentosDoEncoder('/tmp/x.mp4', 30);
+  const i = args.indexOf('-r');
+  ok(i >= 0, 'os argumentos declaram o fps');
+  ok(args[i + 1] === '30', `o fps pedido e' respeitado (veio ${args[i + 1]})`);
+  // O GOP acompanha o fps (keyframe a cada 2 s).
+  const g = args.indexOf('-g');
+  ok(args[g + 1] === '60', `GOP = fps*2 (veio ${args[g + 1]})`);
+});
+
+if (TEM_FFMPEG) {
+  await test('fpsDoVideo le o fps REAL do arquivo', async () => {
+    for (const fps of [15, 30]) {
+      const video = path.join(TMP_DB, `fps${fps}.mp4`);
+      await new Promise((resolve, reject) => {
+        const p = spawn(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-y',
+          '-f', 'lavfi', '-i', `testsrc=size=320x180:rate=${fps}:duration=1`,
+          '-c:v', 'libx264', '-pix_fmt', 'yuv420p', video],
+          { stdio: ['ignore', 'ignore', 'inherit'] });
+        p.on('error', reject);
+        p.on('close', (c) => (c === 0 ? resolve() : reject(new Error('ffmpeg ' + c))));
+      });
+      const lido = await midiap.fpsDoVideo(video);
+      ok(lido === fps, `video de ${fps} fps -> detectado ${lido}`);
+      fs.unlinkSync(video);
+    }
+  });
+
+  await test('fpsDoVideo tem teto e nao explode com arquivo ruim', async () => {
+    const ruim = path.join(TMP_DB, 'nao-e-video.txt');
+    fs.writeFileSync(ruim, 'isto nao e um video');
+    const r = await midiap.fpsDoVideo(ruim);
+    ok(r > 0 && r <= 30, `devolveu um fps valido (${r}) em vez de quebrar`);
+    fs.unlinkSync(ruim);
+  });
+
+  await test('o timestamp BATE com o video (fim do descompasso)', async () => {
+    // Mede o passo dos timestamps enviados ao motor num video de 30 fps.
+    // Antes (fps fixo em 15) o passo era 66,7 ms; agora tem de ser ~33,3.
+    const video = path.join(TMP_DB, 'bate.mp4');
+    await new Promise((resolve, reject) => {
+      const p = spawn(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-y',
+        '-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=30:duration=2',
+        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', video],
+        { stdio: ['ignore', 'ignore', 'inherit'] });
+      p.on('error', reject);
+      p.on('close', (c) => (c === 0 ? resolve() : reject(new Error('ffmpeg ' + c))));
+    });
+
+    const carimbos = [];
+    midiap.__setVoip({
+      requestVideoUpgrade: async () => 'accepted',
+      setScreenShare: async () => {},
+      setVideoEnabled: async () => {},
+      setExternalAudioMode: () => {},
+      feedLiveVideo: (_id, _au, t) => { carimbos.push(t); return 1; },
+      feedLiveAudio: () => 0
+    });
+    const r = await midiap.transmitir({ grupo: 'gfp@g.us', callId: 'CF', arquivo: video });
+    midiap.__setVoip(null);
+
+    ok(r.ok, 'transmitiu');
+    ok(carimbos.length === 60, `60 frames de um video de 30 fps por 2 s (veio ${carimbos.length})`);
+    const passo = (carimbos[carimbos.length - 1] - carimbos[0]) / (carimbos.length - 1) / 1000;
+    ok(Math.abs(passo - 33.3) < 2, `passo de ~33,3 ms (medido ${passo.toFixed(1)}) — era 66,7 com o fps fixo`);
+    fs.unlinkSync(video);
+  });
+
+  await test('o bitrate tem TETO (conteudo complexo nao estoura a banda)', () => {
+    // Medido: conteudo complexo em 720p sem teto chega a 5,4 Mbps -- a banda da
+    // call nao acompanha e os frames se perdem. Com teto, 2,2 Mbps.
+    const args = midiap.argumentosDoEncoder('/tmp/x.mp4', 30);
+    const i = args.indexOf('-maxrate');
+    ok(i >= 0, 'declara o teto de bitrate');
+    const valor = Number(args[i + 1].replace('k', ''));
+    ok(valor > 0 && valor <= 4000, `teto dentro da banda da call (${valor} kbps)`);
+    ok(args.includes('-bufsize'), 'declara o bufsize (exigido junto do maxrate)');
+  });
+}
+
+// ============================================================================
 // 1b) O AUDIO da transmissao (o pedido: "esta sem audio do video")
 // ============================================================================
 

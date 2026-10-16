@@ -56,8 +56,21 @@ const NIVEL = '3.1';
 const MAX_LARGURA = 1280;
 const MAX_ALTURA = 720;
 
-/** Alvo de quadros por segundo (o mesmo padrao do sender do pacote). */
-const FPS = Number.parseInt(process.env.MIDIAP_FPS || '15', 10);
+/**
+ * Teto de quadros por segundo.
+ *
+ * NAO e' o fps usado: o fps vem do PROPRIO VIDEO (ver `fpsDoVideo`). Fixar
+ * 15 num video de 30 fazia o passo do timestamp (66,7 ms) nao bater com o
+ * intervalo real dos frames (33,3 ms) -- medido: 39,8 ms de descompasso por
+ * frame e 3,5 s de erro acumulado em 3 s. O motor remapeia o tempo e
+ * descarta/atrasa, que e' o que se sente como travamento.
+ *
+ * O teto existe porque acima disso a banda da call nao acompanha.
+ */
+const FPS_MAX = Number.parseInt(process.env.MIDIAP_FPS_MAX || '30', 10);
+
+///** fps de reserva quando o video nao informa (arquivo exotico). */
+const FPS_PADRAO = 15;
 
 /** Taxa do motor de audio (a mesma constante do pacote). */
 const TAXA_AUDIO = 16000;
@@ -71,6 +84,20 @@ const FILTROS_AUDIO = 'highpass=f=70,agate=threshold=0.001:ratio=6:attack=8:rele
 
 /** Quantos bytes por amostra (`f32le`). */
 const BYTES_POR_AMOSTRA = 4;
+
+/**
+ * Teto de bitrate do video, em kbps.
+ *
+ * Medido: conteudo complexo (720p) sem teto chega a **5,4 Mbps** -- muito
+ * acima do que a banda de uma call de grupo entrega. O motor responde
+ * derrubando o bitrate pelo REMB e os frames se perdem no caminho (o
+ * travamento). Com teto, o encoder gasta a banda que existe e nao sobra
+ * frame para descartar.
+ *
+ * 1200 kbps em 720p30 e' folgado para tela/video e cabe na banda medida da
+ * call. `MIDIAP_KBPS` ajusta.
+ */
+const KBPS = Number.parseInt(process.env.MIDIAP_KBPS || '1200', 10);
 
 /** Quanto esperar o `requestVideoUpgrade` (o guard timer do pacote e' 5 s). */
 const TIMEOUT_UPGRADE_MS = 8000;
@@ -112,21 +139,80 @@ function binario() {
  * @param {string} arquivo
  * @returns {string[]}
  */
-export function argumentosDoEncoder(arquivo) {
+export function argumentosDoEncoder(arquivo, fps = FPS_PADRAO) {
   return [
     '-hide_banner', '-loglevel', 'error',
     '-re',                                  // le na taxa nativa (pacing)
     '-i', arquivo,
-    '-an',                                  // sem audio (a call ja' toca musica)
+    '-an',                                  // o audio vai no outro processo
     '-c:v', 'libx264',
     '-profile:v', PERFIL, '-level', NIVEL,  // avc1.42E01F
     '-pix_fmt', 'yuv420p',
     '-x264-params', 'annexb=1:sliced-threads=0',
     '-preset', 'veryfast', '-tune', 'zerolatency',
-    '-g', String(FPS * 2),                  // keyframe a cada 2 s
+    // Teto de banda: sem isto o encoder gasta o que o conteudo pedir
+    // (medido: 5,4 Mbps em conteudo complexo) e a call derruba frames.
+    '-maxrate', `${KBPS}k`, '-bufsize', `${KBPS * 2}k`,
+    // O fps do VIDEO (nao um fixo): o timestamp tem de bater com o
+    // intervalo real dos frames.
+    '-r', String(fps),
+    '-g', String(fps * 2),                  // keyframe a cada 2 s
     '-vf', `scale='min(${MAX_LARGURA},iw)':'min(${MAX_ALTURA},ih)':force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2`,
     '-f', 'h264', 'pipe:1'
   ];
+}
+
+/**
+ * O fps REAL do video, limitado ao teto.
+
+ * Usa o `ffprobe` (que vem com o ffmpeg). Le o `avg_frame_rate` (uma fracao
+ * tipo `30000/1001`). Sem resposta confiavel devolve o padrao -- melhor um
+ * fps aproximado que travar a transmissao.
+
+ * @param {string} arquivo
+ * @returns {Promise<number>}
+ */
+export async function fpsDoVideo(arquivo) {
+  try {
+    const saida = await new Promise((resolve, reject) => {
+      const p = spawn(binarioProbe(), [
+        '-v', 'error', '-select_streams', 'v:0',
+        '-show_entries', 'stream=avg_frame_rate',
+        '-of', 'default=nw=1:nk=1', arquivo
+      ], { stdio: ['ignore', 'pipe', 'ignore'] });
+      let out = '';
+      p.stdout.on('data', (c) => { out += c; });
+      p.on('error', reject);
+      p.on('close', (c) => (c === 0 ? resolve(out.trim()) : reject(new Error('probe ' + c))));
+    });
+    const [num, den] = saida.split('/').map(Number);
+    const fps = den ? num / den : Number(saida);
+    if (!Number.isFinite(fps) || fps <= 0) return FPS_PADRAO;
+    // Arredonda (23,976 -> 24) e respeita o teto.
+    return Math.min(Math.max(Math.round(fps), 1), FPS_MAX);
+  } catch {
+    return FPS_PADRAO;
+  }
+}
+
+/**
+ * O `ffprobe` (vem junto do ffmpeg).
+ *
+ * Quando o ffmpeg foi apontado por caminho (`FFMPEG_PATH`), o ffprobe e'
+ * buscado AO LADO dele -- em instalacao estatica os dois ficam na mesma
+ * pasta, e o `ffprobe` pode nao estar no PATH (medido no sandbox: sem isto
+ * a deteccao caia no fps padrao em silencio).
+ *
+ * @returns {string}
+ */
+function binarioProbe() {
+  if (process.env.FFPROBE_PATH) return process.env.FFPROBE_PATH;
+  const ffmpeg = process.env.FFMPEG_PATH;
+  if (ffmpeg) {
+    const vizinho = path.join(path.dirname(ffmpeg), 'ffprobe');
+    if (fs.existsSync(vizinho)) return vizinho;
+  }
+  return 'ffprobe';
 }
 
 /**
@@ -220,8 +306,14 @@ export async function transmitir({ grupo, callId, arquivo, log = () => {} }) {
       log('modo externo de audio falhou: ' + (e?.message || e));
     }
 
-    // 3) ffmpeg -> access units -> feedLiveVideo, e em PARALELO o audio.
-    await alimentar({ cli, callId, arquivo, estado, log });
+    // 3) O fps vem do PROPRIO video: com um fps fixo o passo do timestamp
+    // nao bate com o intervalo real dos frames (medido: 39,8 ms de
+    // descompasso por frame num video de 30 fps).
+    const fps = await fpsDoVideo(arquivo);
+    log(`fps do video: ${fps}`);
+
+    // 4) ffmpeg -> access units -> feedLiveVideo, e em PARALELO o audio.
+    await alimentar({ cli, callId, arquivo, estado, log, fps });
     return { ok: true, frames: estado.frames, amostras: estado.amostras || 0 };
   } catch (e) {
     return { ok: false, motivo: 'falha_na_transmissao', detalhe: e?.message || String(e) };
@@ -240,7 +332,7 @@ export async function transmitir({ grupo, callId, arquivo, log = () => {} }) {
  * O `-re` faz o ffmpeg entregar no tempo da reproducao; o timestamp vem do
  * relogio real, que e' o que o motor espera (microssegundos).
  */
-async function alimentar({ cli, callId, arquivo, estado, log }) {
+async function alimentar({ cli, callId, arquivo, estado, log, fps }) {
   const splitter = criarSplitter();
   // O audio roda em PARALELO, num segundo ffmpeg: um pipe entrega H.264 e o
   // outro PCM. Os dois tem o proprio `-re`, entao andam no mesmo tempo.
@@ -252,7 +344,7 @@ async function alimentar({ cli, callId, arquivo, estado, log }) {
   //
   // Entao o tempo vem de um contador que AVANCA pelo intervalo nominal do
   // fps, ancorado no relogio real (para nao derivar se a maquina engasgar).
-  const passoUs = Math.round(1_000_000 / FPS);
+  const passoUs = Math.round(1_000_000 / fps);
   let proximoUs = 0;
   const inicioNs = process.hrtime.bigint();
   const carimbo = () => {
@@ -264,7 +356,7 @@ async function alimentar({ cli, callId, arquivo, estado, log }) {
   };
 
   await new Promise((resolve, reject) => {
-    const args = argumentosDoEncoder(arquivo);
+    const args = argumentosDoEncoder(arquivo, fps);
 
     let proc;
     try {
