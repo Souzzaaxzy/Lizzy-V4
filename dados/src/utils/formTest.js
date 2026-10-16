@@ -113,32 +113,104 @@ export const montarFormularioFlow = (opts = {}) => ({
 
 /** O texto do painel (o que da' para fazer e o que falta). */
 export const textoPainel = (prefix = '!') => [
-	'╭━━━꧁༺ 🧾 𝐅𝐎𝐑𝐌𝐔𝐋𝐀𝐑𝐈𝐎𝐒 🧾 ༻꧂━━━╮',
-	'┃ 🔎 O que foi verificado no protocolo:',
-	'┃',
-	'┃ ✅ *Native Flow* — botoes no envelope',
-	'┃    `interactiveMessage.nativeFlowMessage`',
-	'┃    Renderiza hoje. Nao precisa de nada externo.',
-	'┃',
-	'┃ ✅ *single_select* — a bottom-sheet nativa',
-	'┃    (e\' o mais proximo de um "campo de formulario")',
-	'┃',
-	'┃ ⚠️ *WhatsApp Flows (Meta)* — formulario oficial',
-	'┃    O envelope e\' montado e validado, MAS:',
-	'┃    • precisa de um `flow_id` da WABA (API de Flows)',
-	'┃    • o cliente so\' desenha com esse id publicado',
-	'┃    • sem ele o servidor marca "incompatível"',
-	'┃',
-	'┃ ❌ `flowMessage` / `flowResponseMessage`',
-	'┃    NAO EXISTEM no proto (conferido).',
-	'┃    O Flow e\' um botao `name:"flow"` + JSON.',
-	'┃',
-	'┃ ▶️ *Testar:*',
-	`┃    \`${prefix}testefm nativo\` — o que renderiza`,
-	`┃    \`${prefix}testefm flow\` — o oficial (precisa do id)`,
-	`┃    \`${prefix}testefm <flow_id>\` — com o seu id`,
-	'╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯'
+        '╭━━━꧁༺ 🧾 𝐅𝐎𝐑𝐌𝐔𝐋𝐀𝐑𝐈𝐎𝐒 🧾 ༻꧂━━━╮',
+        '┃ 🔎 O que foi verificado no protocolo:',
+        '┃',
+        '┃ ✅ *Rich Response* — card RENDERIZADO',
+        '┃    `richResponseMessage` (o formato do Meta AI)',
+        '┃    Tem TABELA, texto, código e imagem.',
+        "┃    E' a ficha visual que funciona hoje.",
+        '┃',
+        '┃ ✅ *Native Flow* — botoes no envelope',
+        '┃    `interactiveMessage.nativeFlowMessage`',
+        '┃    Renderiza hoje. Nao precisa de nada externo.',
+        '┃',
+        '┃ ✅ *single_select* — a bottom-sheet nativa',
+        "┃    (e' o mais proximo de um campo de formulario)",
+        '┃',
+        '┃ ⚠️ *WhatsApp Flows (Meta)* — formulario oficial',
+        "┃    O envelope e' montado e validado, MAS:",
+        '┃    • precisa de um `flow_id` da WABA (API de Flows)',
+        "┃    • o cliente so' desenha com esse id publicado",
+        '┃    • sem ele o servidor marca "incompatível"',
+        '┃',
+        '┃ ❌ `flowMessage` / `flowResponseMessage`',
+        '┃    NAO EXISTEM no proto (conferido).',
+        '┃    O Flow e um botao `name:"flow"` + JSON.',
+        '┃',
+        '┃ ▶️ *Testar:*',
+        `┃    \`${prefix}testefm rich\` — a ficha RENDERIZADA`,
+        `┃    \`${prefix}testefm nativo\` — os botoes`,
+        `┃    \`${prefix}testefm flow\` — o oficial (precisa do id)`,
+        '╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯'
 ].join('\n')
+
+/**
+ * Monta a FICHA como card rico (`richResponseMessage`) — a alternativa que
+ * RENDERIZA sem depender da Meta.
+ *
+ * E' o MESMO formato que o Meta AI usa para responder com tabela/codigo: a
+ * mensagem vai como "bot message" encaminhada (`botForwardedMessage` ->
+ * `richResponseMessage`) e o cliente desenha a tabela, o texto e os blocos de
+ * codigo. Medido no caminho real da fork: o payload vira `submessages`
+ * (TEXT/TABLE/CODE) + `unifiedResponse` e sobrevive ao encode/decode.
+ * Reproduzido em terceiros (a lib Zaileys usa o mesmo formato).
+ *
+ * O que da' para colocar: `{ text }`, `{ title, table: [[...]] }`,
+ * `{ language, code }`, `{ latex: [...] }`, `{ inlineImage, imageText }`.
+ * A `disclaimerText` e' o rotulo do card (aparece no topo do balao).
+ *
+ * @returns {object} o conteudo pronto para `sendMessage`
+ */
+export const montarFormularioRico = () => ({
+        disclaimerText: 'FICHA DE ALUGUEL · formulário',
+        richResponse: [
+                { text: '📋 *FICHA DE ALUGUEL*' },
+                { text: 'Confira os campos. Para escolher, use `!testefm nativo` (os botões).' },
+                {
+                        title: 'Campos do pedido',
+                        table: [
+                                { isHeading: true, items: ['Campo', 'Valor'] },
+                                { isHeading: false, items: ['Nome de exibição', '—'] },
+                                { isHeading: false, items: ['Plano desejado', 'Básico · Pro · Premium'] },
+                                { isHeading: false, items: ['Período de aluguel', 'Diário · Semanal · Mensal'] },
+                                { isHeading: false, items: ['Observações', '(opcional)'] },
+                                { isHeading: false, items: ['Confirmação', 'pendente'] }
+                        ]
+                },
+                { text: 'O card acima é um *Rich Response* — desenhado pelo próprio WhatsApp.' }
+        ]
+})
+
+/**
+ * Monta a ficha rica JA COM OS VALORES escolhidos (o resultado preenchido).
+ *
+ * E' o que o bot responde depois que a pessoa escolhe: uma ficha montada em vez
+ * de um texto solto.
+ *
+ * @param {{ plano?: string, periodo?: string, nome?: string, observacoes?: string }} dados
+ * @returns {object} o conteudo pronto para `sendMessage`
+ */
+export const montarFichaPreenchida = (dados = {}) => {
+        const p = (v) => (v && String(v).trim()) || '—'
+        return {
+                disclaimerText: 'FICHA DE ALUGUEL · preenchida',
+                richResponse: [
+                        { text: '🧾 *FICHA DE ALUGUEL PREENCHIDA*' },
+                        {
+                                title: 'Pedido',
+                                table: [
+                                        { isHeading: true, items: ['Campo', 'Valor'] },
+                                        { isHeading: false, items: ['Nome de exibição', p(dados.nome)] },
+                                        { isHeading: false, items: ['Plano desejado', p(dados.plano)] },
+                                        { isHeading: false, items: ['Período de aluguel', p(dados.periodo)] },
+                                        { isHeading: false, items: ['Observações', p(dados.observacoes)] },
+                                        { isHeading: false, items: ['Confirmação', '✅ registrada'] }
+                                ]
+                        }
+                ]
+        }
+}
 
 /** A resposta do formulario chegou: formata para o grupo. */
 export const formatarResposta = (resposta) => {

@@ -205,6 +205,99 @@ await test('o payload nativo vira interactiveMessage.nativeFlowMessage no proto 
   const volta = proto.Message.decode(proto.Message.encode(proto.Message.fromObject(m)).finish());
   ok(volta.interactiveMessage.nativeFlowMessage.buttons.length === 4, 'sobrevive ao encode/decode');
 });
+console.log('\n=== 2b) O CARD RICO (richResponseMessage — o que RENDERIZA) ===\n');
+
+await test('!testefm rich envia a ficha como richResponse', async () => {
+  const r = await runCmd('!testefm rich');
+  ok(r.sent.length === 1, `uma mensagem (veio ${r.sent.length})`);
+  const c = r.sent[0].content;
+  ok(Array.isArray(c.richResponse) && c.richResponse.length >= 3, 'tem os sub-blocos ricos');
+  includes(c.disclaimerText, 'FICHA', 'tem o rotulo do card');
+});
+
+await test('o card rico vira richResponseMessage no proto REAL (tabela + texto)', async () => {
+  const c = formTest.montarFormularioRico();
+  const m = await generateWAMessageContent(
+    { disclaimerText: c.disclaimerText, richResponse: c.richResponse },
+    { upload: fakeUpload }
+  );
+  // O envelope: botForwardedMessage -> richResponseMessage
+  ok(m.botForwardedMessage, 'vem como botForwardedMessage');
+  const rich = m.botForwardedMessage.message.richResponseMessage;
+  ok(rich, 'com richResponseMessage dentro');
+  ok(rich.messageType === 1, 'tipo STANDARD (1)');
+  ok(rich.submessages.length >= 3, `submessages (veio ${rich.submessages.length})`);
+  const tipos = rich.submessages.map((s) => s.messageType);
+  ok(tipos.includes(2), 'tem TEXT (2)');
+  ok(tipos.includes(4), 'tem TABLE (4)');
+  ok(rich.unifiedResponse, 'tem unifiedResponse (o que o cliente desenha)');
+});
+
+await test('a tabela do card rico sobrevive ao encode/decode', async () => {
+  const c = formTest.montarFormularioRico();
+  const m = await generateWAMessageContent(
+    { disclaimerText: c.disclaimerText, richResponse: c.richResponse },
+    { upload: fakeUpload }
+  );
+  const { proto } = await import('@itsliaaa/baileys');
+  const volta = proto.Message.decode(proto.Message.encode(proto.Message.fromObject(m)).finish());
+  const rich = volta.botForwardedMessage.message.richResponseMessage;
+  const tab = rich.submessages.find((s) => s.tableMetadata);
+  ok(tab, 'a tabela sobreviveu');
+  ok(tab.tableMetadata.rows.length === 6, `6 linhas (veio ${tab.tableMetadata.rows?.length})`);
+  ok(tab.tableMetadata.rows[0].items.includes('Campo'), 'cabecalho Campo/Valor');
+});
+
+await test('o card rico NAO e confundido com mensagem normal', async () => {
+  const c = formTest.montarFormularioRico();
+  const m = await generateWAMessageContent({ disclaimerText: c.disclaimerText, richResponse: c.richResponse }, { upload: fakeUpload });
+  ok(!m.extendedTextMessage, 'nao e extendedTextMessage');
+  ok(!m.conversation, 'nao e conversation');
+});
+
+await test('a ficha PREENCHIDA traz os valores escolhidos', async () => {
+  const c = formTest.montarFichaPreenchida({ nome: 'Fulano', plano: 'Pro', periodo: 'Mensal' });
+  const m = await generateWAMessageContent({ disclaimerText: c.disclaimerText, richResponse: c.richResponse }, { upload: fakeUpload });
+  const rich = m.botForwardedMessage.message.richResponseMessage;
+  const tab = rich.submessages.find((s) => s.tableMetadata);
+  const linhas = tab.tableMetadata.rows.map((r) => r.items.join('|')).join(' ; ');
+  includes(linhas, 'Pro', 'o plano escolhido');
+  includes(linhas, 'Mensal', 'o periodo escolhido');
+  includes(linhas, 'Fulano', 'o nome');
+  ok(!linhas.includes('undefined'), 'sem undefined');
+});
+
+await test('a ficha preenchida tolera campo ausente (nao mostra undefined)', () => {
+  const c = formTest.montarFichaPreenchida({});
+  const linhas = c.richResponse[1].table.map((r) => (r.items || r).join('|')).join(' ; ');
+  ok(!linhas.includes('undefined'), 'sem undefined');
+  ok(!linhas.includes('null'), 'sem null');
+  includes(linhas, '—', 'usa o traco para vazio');
+});
+
+await test('a resposta de plano/periodo monta a ficha e NAO vira conversa', async () => {
+  const sent = [];
+  const author = nextAuthor();
+  const groupJid = makeGroup();
+  const nazu = makeNazu({ sent, groupJid, author });
+  const { buildFlowReply } = await import('@itsliaaa/baileys');
+  // Duas escolhas: plano e periodo -> fecha a ficha.
+  for (const id of ['plano:pro', 'periodo:mensal']) {
+    await handleMessage(nazu, {
+      key: { remoteJid: groupJid, fromMe: false, id: `F-${Math.random().toString(36).slice(2, 7)}`, participant: author.lid },
+      message: buildFlowReply({ name: id.split(':')[0], paramsJson: JSON.stringify({ id }) }),
+      messageTimestamp: 1757900000, pushName: 'Autor',
+    }, null, new Map(), null);
+  }
+  const rico = sent.filter((s) => s.content?.richResponse);
+  ok(rico.length === 1, `uma ficha rica (veio ${rico.length})`);
+  const linhas = rico[0].content.richResponse[1].table.map((r) => (r.items || r).join('|')).join(' ; ');
+  includes(linhas, 'pro', 'o plano escolhido');
+  includes(linhas, 'mensal', 'o periodo escolhido');
+  ok(sent.every((s) => !s.content?.delete), 'nao foi apagada');
+});
+
+
 
 console.log('\n=== 3) O FLOW OFICIAL (o limite, dito na cara) ===\n');
 
@@ -274,11 +367,11 @@ await test('a resposta NAO vira mensagem normal (nao passa pelos contadores)', (
   // O bloco roda antes dos contadores e da `return`.
   const i = SRC.indexOf('const respostaForm = parseFlowResponse(info.message);');
   ok(i > -1, 'o handler chama o parser');
-  const bloco = SRC.slice(i, i + 900);
+  const bloco = SRC.slice(i, i + 2200);
   includes(bloco, 'return;', 'sai do fluxo (nao vira conversa)');
   const posReturn = bloco.indexOf('return;');
   const posContador = SRC.indexOf('userActivity', i);
-  ok(posContador === -1 || posContador > i + 900, 'o retorno vem antes dos contadores');
+  ok(posContador === -1 || posContador > i + 2200, 'o retorno vem antes dos contadores');
 });
 
 console.log('\n=== 5) O COMANDO ESTA LIGADO (menu/blockPv) ===\n');

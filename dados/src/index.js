@@ -1244,6 +1244,8 @@ import { prepararAudioCall } from './utils/callAudioPrep.js';
 import {
   montarFormularioNativo,
   montarFormularioFlow,
+  montarFormularioRico,
+  montarFichaPreenchida,
   textoPainel as textoPainelForm,
   formatarResposta as formatarRespostaForm
 } from './utils/formTest.js';
@@ -4157,14 +4159,44 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     {
       const respostaForm = parseFlowResponse(info.message);
       if (respostaForm) {
-        const texto = formatarRespostaForm(respostaForm);
-        if (texto) {
+        const id = String(respostaForm.params?.id || '');
+        const m = id.match(/^(plano|periodo):(.+)$/i);
+        const escolha = m ? m[2] : id;
+
+        // Escolha de plano/período -> devolve a FICHA PREENCHIDA (card rico).
+        const ctx = groupData.fichaTeste || {};
+        if (m) {
+          if (m[1].toLowerCase() === 'plano') ctx.plano = escolha;
+          else ctx.periodo = escolha;
+          groupData.fichaTeste = ctx;
+          try { fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2)); } catch { /* ok */ }
+        }
+
+        if (m && ctx.plano && ctx.periodo) {
           await nazu.sendMessage(from, {
-            text: texto,
+            ...montarFichaPreenchida({
+              nome: info.pushName || null,
+              plano: ctx.plano,
+              periodo: ctx.periodo,
+              observacoes: null
+            }),
             mentions: [sender],
             contextInfo: gerarContextNewsletter()
-          }).catch((e) => console.error('[TESTEFM] falha ao responder:', e?.message));
+          }).catch((e) => console.error('[TESTEFM] falha na ficha:', e?.message));
+          // A ficha foi montada: o acumulador do grupo pode recomeçar.
+          delete groupData.fichaTeste;
+          try { fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2)); } catch { /* ok */ }
+        } else {
+          const texto = formatarRespostaForm(respostaForm);
+          if (texto) {
+            await nazu.sendMessage(from, {
+              text: texto,
+              mentions: [sender],
+              contextInfo: gerarContextNewsletter()
+            }).catch((e) => console.error('[TESTEFM] falha ao responder:', e?.message));
+          }
         }
+
         console.log(`[TESTEFM] resposta recebida | botao=${respostaForm.name} | params=${respostaForm.paramsJson?.slice(0, 120)}`);
         return;
       }
@@ -36162,7 +36194,16 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             return reply(textoPainelForm(prefix));
           }
 
-          // NATIVO — o formulario que o cliente desenha hoje (single_select).
+          // RICH — a ficha RENDERIZADA (richResponseMessage, o formato do Meta AI).
+          if (modo === 'rich' || modo === 'rico' || modo === 'ficha') {
+            await nazu.sendMessage(from, {
+              ...montarFormularioRico(),
+              contextInfo: gerarContextNewsletter()
+            });
+            return;
+          }
+
+          // NATIVO — os botoes (single_select + quick_reply).
           if (modo === 'nativo' || modo === 'native' || modo === 'form') {
             await nazu.sendMessage(from, {
               ...montarFormularioNativo(),

@@ -10643,6 +10643,41 @@ asserções falham.**
 (nao `prefix` — o `prefixo` `undefined` derrubava o handler); e importar o
 `index.js` deixa timers abertos, entao a suite termina com `process.exit(0)`.
 
+### CARD RICO — a alternativa que RENDERIZA (pedido do dono: "coloca isso num rich?")
+O dono perguntou se dava para pôr isso num rich renderizado. **Dá** — e a fork
+já suportava; só não estava sendo usada.
+
+**Mecanismo (medido no caminho real da fork)**: `richResponse` vira
+`botForwardedMessage.message.richResponseMessage` — o mesmo formato que o
+**Meta AI** usa para responder com tabela/código —, com `submessages`
+(TEXT/TABLE/CODE/LATEX) + `unifiedResponse`, e **sobrevive ao encode/decode**.
+Reproduzido em terceiros (a lib **Zaileys** usa o mesmo formato e RENDERIZA).
+É o caminho visual que não depende da Meta.
+
+**Armadilha MEDIDA (custou uma rodada)**: na forma `richResponse` (array), a
+tabela **não** é `[['Campo','Valor'], ...]` — é um objeto por linha:
+`[{ isHeading: true, items: ['Campo','Valor'] }, ...]`. Com array de arrays o
+`generateWAMessageContent` lança `Cannot read properties of undefined (reading
+'map')`. (A forma de nível de mensagem — sem `richResponse` — usa `noHeading`;
+a de nível de sub-bloco usa `table` com `isHeading`.)
+
+**Novo no `formTest.js`**: `montarFormularioRico()` (a ficha visual com a tabela
+de campos) e `montarFichaPreenchida(dados)` (a ficha **já com os valores**
+escolhidos). Comando: `!testefm rich` (aliases `rico`/`ficha`).
+
+**Fluxo completo (testado)**: `!testefm nativo` manda os botões; ao escolher
+plano e período, o handler acumula no `groupData.fichaTeste` e, quando os dois
+estão setados, responde com a **ficha preenchida** (card rico) e limpa o
+acumulador. A resposta continua **não virando conversa** (dá `return`).
+
+**Testes**: `tests/form-test.test.js` **14 → 21 testes / 80 asserções**. Os 7
+novos cobrem: o envio do `rich`; o proto (`botForwardedMessage` →
+`richResponseMessage`, tipo STANDARD, TEXT+TABLE, `unifiedResponse`); o
+`encode`/`decode` com a tabela; a ficha preenchida; o vazio virando `—` (sem
+`undefined`/`null`); e o fluxo das duas escolhas fechando a ficha.
+**Verificado: voltando a tabela para array-de-arrays, 4 asserções falham** — é o
+bug real que eu corrigi.
+
 ### LIMITACOES (o que NAO foi provado)
 - **Nao foi validado em aparelho real** (sem sessao pareada neste ambiente). O
   que esta provado: o payload/proto, o `encode`/`decode`, o parser da resposta e
