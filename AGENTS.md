@@ -10543,3 +10543,117 @@ quebrar. Chamar de "resolvido" o timbre sem esse arquivo seria mentira.
   `menu-layout` (1: `menufig` 18 vs 17) e `anti-seletiva` (10 ok / 22 falhas).
   `callp` às vezes sai com timeout do harness, mas as 14/33 asserções passam.
 
+## 🧾 FORMULÁRIOS / WHATSAPP FLOWS — `!testefm` (out/2026) ✅
+Pesquisa e implementação de formulários interativos. **A conclusão principal e'
+que os dois "flows" sao coisas diferentes, e um deles nao depende do Baileys.**
+
+### O que EXISTE no proto (verificado em `WAProto/index.d.ts`, nao suposto)
+| termo pesquisado | existe? |
+|---|---|
+| `InteractiveMessage.nativeFlowMessage` | **SIM** |
+| `NativeFlowMessage.buttons[].{name,buttonParamsJson}` | **SIM** |
+| `NativeFlowMessage.{messageParamsJson,messageVersion}` | **SIM** |
+| `InteractiveResponseMessage.nativeFlowResponseMessage` | **SIM** |
+| `ButtonsMessage.Button.nativeFlowInfo` | **SIM** |
+| **`flowMessage`** | **NAO EXISTE** |
+| **`flowResponseMessage`** | **NAO EXISTE** (o certo e' `nativeFlowResponseMessage`) |
+| **`flowId`** em mensagem de usuario | **NAO EXISTE** — so' em `GalaxyFlowAction` (PeerDataOperation de ads/business) |
+
+Ou seja: **o formulário de Flow nao tem campo protobuf proprio.** Ele e' um botao
+de Native Flow com `name: 'flow'` + um JSON de parametros — a mesma estrutura de
+qualquer botao nativo. **Nada foi adicionado ao proto.**
+
+### Os TRES formatos (nao confundir)
+| | o que e' | precisa de |
+|---|---|---|
+| **WhatsApp Flows (Meta)** | formulario oficial, desenhado pelo cliente a partir do Flow JSON publicado na WABA | `flow_id` da API de Flows + conta business |
+| **Native Flow** | o envelope `interactiveMessage.nativeFlowMessage` | nada alem do socket |
+| **interativas** | botoes/listas/respostas no mesmo envelope | nada alem do socket |
+
+### O LIMITE (medido em terceiros, documentado, nao escondido)
+Enviar `name: 'flow'` por lib **nao-oficial** e' **gateado pelo servidor**: o
+destinatario ve *"mensagem incompativel com sua versao do WhatsApp"* mesmo em
+iOS/Android atualizados, enquanto o **MESMO codigo** com `quick_reply`/`cta_url`
+renderiza. Reproduzido no `whatsmeow` **#1144** (9 variacoes testadas:
+`flow_message_version` 3 e 4, `mode` draft/published, com e sem
+`flow_action_payload.data`, varios formatos de `flow_token`, com view-once —
+todas falham). **O envelope e' nosso; a renderizacao e' da Meta.**
+
+### FORK (`Souzzaaxzy/baileys`, branch `feat/group-enc-info`, commit `0bd4ce1`)
+Novo **`lib/Utils/flow-message.js`**:
+- `buildFlowParams`/`buildFlowButton` — montam o botao com os **NOMES de campo da
+  Meta** (`flow_id`, `flow_token`, `flow_cta`, `flow_action`,
+  `flow_action_payload`, `flow_message_version`, `mode`) e validam
+  `action`/`mode`/`flowId`. Sem `flowId` -> `FlowValidationError`
+  **`FLOW_ID_MISSING`** (falha claro em vez de mandar botao que o cliente nao
+  desenha). Defaults: `flow_action: 'navigate'`, `mode: 'published'`,
+  `flow_message_version: '3'`, `flow_token: 'unused'` (os da doc da Meta).
+- `parseFlowButtonParams`, `isFlowButton`, `describeFlowButton` — o diagnostico
+  reporta **so' o TAMANHO do `flow_token`**, nunca o valor.
+- `buildFlowReply`/`parseFlowResponse` — o `interactiveResponseMessage` ida e
+  volta, desembrulhando view-once/efemera/editada.
+- `prepareNativeFlowButtons` aceita `{ flowId, cta, token, action, mode, screen,
+  data }` (ou `{ flow: {...} }`) e emite o botao `flow`. Os botoes existentes
+  (`quick_reply`/`cta_url`/`cta_copy`/`cta_call`/`single_select`) ficam intactos.
+
+**Testes da fork**: `tests/flow-message.test.js` — **25 testes**: o proto (o que
+existe E o que NAO existe — trava contra campo inventado), parametros da Meta,
+validacao, o caminho REAL do `generateWAMessageContent`, `encode`/`decode`,
+resposta, ausencia de vazamento do token e regressao dos botoes existentes.
+**Verificado: removendo o branch do `flow`, 4 asserções falham.** Suite completa
+da fork: **359/359** (era 334).
+
+**Publicacao nao-destrutiva**: o bot pinava `a5b9495` = topo de
+`feat/group-enc-info`, e o commit novo e' **filho** dele. Entao
+`feat/group-enc-info` avancou de `a5b9495` -> `0bd4ce1` por **fast-forward**
+(sem rewrite). Tambem foi criada a branch descritiva `feat/whatsapp-flows`.
+
+### BOT (`Souzzaaxzy/Lizzy-V4`)
+- Dependencia: `package.json` + `package-lock.json` + `yarn.lock` pinados em
+  **`0bd4ce1b81ec43461ff7bd95ea3c55c31f2d013a`** (hash completo — hash curto
+  gera falso drift no `gitDependencyDrift`). O `yarn.lock` ficou **Berry v8**
+  (conferido `head -2`).
+- **`dados/src/utils/formTest.js`** (puro): `montarFormularioNativo` (o que
+  RENDERIZA hoje — `single_select` para plano/periodo + `quick_reply` para
+  confirmar/cancelar), `montarFormularioFlow` (o oficial, que precisa do id),
+  `textoPainel`, `formatarResposta`, `CAMPOS_EXEMPLO` (os 5 campos pedidos:
+  nome, plano, período, observações, confirmação).
+- **`case 'testefm'`** no `index.js`, logo apos o bloco do `!musicap`, reusando
+  o sistema de comandos/permissao (sem sistema paralelo):
+  - `!testefm` -> painel com os tres formatos e o limite;
+  - `!testefm nativo` -> o formulario que renderiza;
+  - `!testefm flow` -> **orienta** (nao finge que enviou: explica que precisa do
+    `flow_id` e aponta o modo nativo);
+  - `!testefm <flow_id>` -> envia o botao de Flow oficial com o id informado.
+- **Handler da resposta**: no inicio do handler de mensagens (mesma familia do
+  pin/reacao), `parseFlowResponse(info.message)` reconhece o
+  `interactiveResponseMessage`, responde no grupo com a escolha e **da' return**
+  — assim a resposta **nao vira mensagem normal** nem entra nos contadores.
+- `blockPv.js` (`menudono`): `'testefm'`.
+
+### Testes — `tests/form-test.test.js` (**14 testes / 54 asserções**)
+Roda o **handler real** com socket falso e passa o que o comando montou pelo
+caminho **REAL da fork** (`generateWAMessageContent`), conferindo o proto que
+sai: painel, formulario nativo (4 botoes, `single_select` + `quick_reply`,
+`encode`/`decode`), o Flow oficial (nome `flow` + campos da Meta), a orientacao
+sem id, o envio com id, a resposta formatada e — a assercao que importa — que a
+resposta **nao** vira conversa. **Verificado: removendo o handler da resposta, 4
+asserções falham.**
+**Armadilhas do teste**: o `config.json` de teste precisa da chave **`prefixo`**
+(nao `prefix` — o `prefixo` `undefined` derrubava o handler); e importar o
+`index.js` deixa timers abertos, entao a suite termina com `process.exit(0)`.
+
+### LIMITACOES (o que NAO foi provado)
+- **Nao foi validado em aparelho real** (sem sessao pareada neste ambiente). O
+  que esta provado: o payload/proto, o `encode`/`decode`, o parser da resposta e
+  o handler. O **modo nativo** (`single_select`) e' o caminho com maior
+  probabilidade de renderizar; o **botao `flow`** depende do `flow_id` publicado
+  na WABA — sem ele o proprio cliente responde "incompativel" (evidencia de
+  terceiros, `whatsmeow` #1144).
+- **Nao existe** suporte a `flowMessage`/`flowResponseMessage` porque esses
+  campos **nao existem no proto** — nao e' falta de implementacao.
+- O Flow oficial no seu **numero de bot (nao-business)** provavelmente nao
+  renderiza nem com id: a plataforma exige conta business. O modo nativo segue
+  funcionando.
+
+

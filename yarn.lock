@@ -356,9 +356,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@itsliaaa/baileys@git+https://github.com/Souzzaaxzy/baileys.git#a5b94954616733768e88fb86434f9dc33d6f20e6":
+"@itsliaaa/baileys@git+https://github.com/Souzzaaxzy/baileys.git#0bd4ce1b81ec43461ff7bd95ea3c55c31f2d013a":
   version: 0.3.18-final
-  resolution: "@itsliaaa/baileys@https://github.com/Souzzaaxzy/baileys.git#commit=a5b94954616733768e88fb86434f9dc33d6f20e6"
+  resolution: "@itsliaaa/baileys@https://github.com/Souzzaaxzy/baileys.git#commit=0bd4ce1b81ec43461ff7bd95ea3c55c31f2d013a"
   dependencies:
     "@adiwajshing/keyed-db": "npm:^0.2.4"
     "@cacheable/node-cache": "npm:^1.4.0"
@@ -1017,7 +1017,7 @@ __metadata:
   resolution: "AbyssBot@workspace:."
   dependencies:
     "@hapi/boom": "npm:^10.0.1"
-    "@itsliaaa/baileys": "git+https://github.com/Souzzaaxzy/baileys.git#a5b94954616733768e88fb86434f9dc33d6f20e6"
+    "@itsliaaa/baileys": "git+https://github.com/Souzzaaxzy/baileys.git#0bd4ce1b81ec43461ff7bd95ea3c55c31f2d013a"
     "@zapo-js/voip": "npm:^1.4.0"
     "@zapo-js/voip-media": "npm:^0.3.0"
     axios: "npm:^1.13.2"
