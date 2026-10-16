@@ -15,6 +15,17 @@
  *    video da call (a doc: *"the screen replaces the camera"*). Nao e' um
  *    segundo stream.
  * 3. `feedLiveVideo(callId, accessUnit, timestampUs)` — alimenta cada frame.
+ * 4. `setExternalAudioMode(callId, true)` + `feedLiveAudio(callId, pcm)` —
+ *    o AUDIO do video, em PCM mono de 16 kHz (a taxa do motor).
+
+ * ## O audio vem de um SEGUNDO ffmpeg
+
+ * O video sai por `pipe:1` em H.264; o audio precisa sair por outro pipe em
+ * PCM cru. Sao dois processos do mesmo arquivo (cada um com o seu `-re`),
+ * rodando juntos -- um alimenta `feedLiveVideo`, o outro `feedLiveAudio`.
+ * O modo externo de audio (`setExternalAudioMode`) precisa estar LIGADO, ou
+ * o motor ignora o que chega por `feedLiveAudio` (ele voltaria a tocar o
+ * arquivo pre-carregado).
  *
  * ## De onde vem o H.264
  *
@@ -47,6 +58,19 @@ const MAX_ALTURA = 720;
 
 /** Alvo de quadros por segundo (o mesmo padrao do sender do pacote). */
 const FPS = Number.parseInt(process.env.MIDIAP_FPS || '15', 10);
+
+/** Taxa do motor de audio (a mesma constante do pacote). */
+const TAXA_AUDIO = 16000;
+
+/**
+ * A cadeia de tratamento do audio -- a MESMA do `utils/callAudioPrep.js`.
+ * O gate com limiar baixo (0.001) foi medido la': um limiar alto comia as
+ * passagens musicais suaves.
+ */
+const FILTROS_AUDIO = 'highpass=f=70,agate=threshold=0.001:ratio=6:attack=8:release=200,alimiter=limit=0.95';
+
+/** Quantos bytes por amostra (`f32le`). */
+const BYTES_POR_AMOSTRA = 4;
 
 /** Quanto esperar o `requestVideoUpgrade` (o guard timer do pacote e' 5 s). */
 const TIMEOUT_UPGRADE_MS = 8000;
@@ -102,6 +126,31 @@ export function argumentosDoEncoder(arquivo) {
     '-g', String(FPS * 2),                  // keyframe a cada 2 s
     '-vf', `scale='min(${MAX_LARGURA},iw)':'min(${MAX_ALTURA},ih)':force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2`,
     '-f', 'h264', 'pipe:1'
+  ];
+}
+
+/**
+ * Os argumentos do ffmpeg que produzem o AUDIO da transmissao.
+ *
+ * O motor quer `Float32Array` mono a 16 kHz (a taxa dele: `AUDIO_SAMPLE_RATE
+ * = 16000`). Entao o ffmpeg decodifica o audio do video e entrega PCM
+ * `f32le` cru por pipe.
+ *
+ * O `highpass`+`agate`+`alimiter` sao a MESMA cadeia do `callAudioPrep` (a
+ * que reduz o chiado) -- aqui ela tambem limpa o audio ripado de video.
+ *
+ * @param {string} arquivo
+ * @returns {string[]}
+ */
+export function argumentosDoAudio(arquivo) {
+  return [
+    '-hide_banner', '-loglevel', 'error',
+    '-re',                                  // mesmo pacing do video
+    '-i', arquivo,
+    '-vn',                                  // sem video (o outro ffmpeg cuida)
+    '-af', FILTROS_AUDIO,                   // a cadeia que tira o chiado
+    '-ac', '1', '-ar', String(TAXA_AUDIO),  // mono 16 kHz (o que o motor quer)
+    '-f', 'f32le', 'pipe:1'                 // Float32 cru (o formato do feed)
   ];
 }
 
@@ -162,15 +211,26 @@ export async function transmitir({ grupo, callId, arquivo, log = () => {} }) {
       return { ok: false, motivo: 'screenshare_falhou', detalhe: e?.message || String(e) };
     }
 
-    // 3) ffmpeg -> access units -> feedLiveVideo
+    // 2.5) liga o modo EXTERNO de audio. Sem isto o motor ignora o que chega
+    // por `feedLiveAudio` e continua tocando o arquivo pre-carregado (o
+    // `!musicap`), entao o video sairia mudo.
+    try {
+      cli.setExternalAudioMode(callId, true);
+    } catch (e) {
+      log('modo externo de audio falhou: ' + (e?.message || e));
+    }
+
+    // 3) ffmpeg -> access units -> feedLiveVideo, e em PARALELO o audio.
     await alimentar({ cli, callId, arquivo, estado, log });
-    return { ok: true, frames: estado.frames };
+    return { ok: true, frames: estado.frames, amostras: estado.amostras || 0 };
   } catch (e) {
     return { ok: false, motivo: 'falha_na_transmissao', detalhe: e?.message || String(e) };
   } finally {
     ativos.delete(grupo);
     try { await cli.setScreenShare(callId, false); } catch { /* best-effort */ }
     try { await cli.setVideoEnabled(callId, false); } catch { /* best-effort */ }
+    // Volta o audio ao modo pre-carregado (senao a call fica esperando o feed).
+    try { cli.setExternalAudioMode(callId, false); } catch { /* best-effort */ }
   }
 }
 
@@ -182,6 +242,9 @@ export async function transmitir({ grupo, callId, arquivo, log = () => {} }) {
  */
 async function alimentar({ cli, callId, arquivo, estado, log }) {
   const splitter = criarSplitter();
+  // O audio roda em PARALELO, num segundo ffmpeg: um pipe entrega H.264 e o
+  // outro PCM. Os dois tem o proprio `-re`, entao andam no mesmo tempo.
+  const audio = iniciarAudio({ cli, callId, arquivo, estado, log });
   // O timestamp NAO pode vir do `Date.now()` cru: ele tem resolucao de 1 ms
   // e o ffmpeg entrega varios frames no mesmo milissegundo (medido: 7
   // repetidos em 30 frames). O motor mapeia o tempo e exige um tick novo por
@@ -230,6 +293,70 @@ async function alimentar({ cli, callId, arquivo, estado, log }) {
       else reject(new Error('ffmpeg saiu com ' + code));
     });
   });
+
+  // O video acabou: encerra o audio junto (nao deixa processo orfao).
+  await audio;
+}
+
+/**
+ * Sobe o ffmpeg de AUDIO e alimenta o motor com PCM mono de 16 kHz.
+
+ * ## Por que um segundo ffmpeg
+
+ * O processo do video sai por `pipe:1` em H.264; o audio precisa sair por
+ * outro pipe, em PCM cru. Nao da' para os dois no mesmo pipe (formatos
+ * diferentes), entao sao dois processos do mesmo arquivo, cada um com o seu
+ * `-re` -- assim os dois andam no mesmo tempo.
+
+ * ## O formato
+
+ * O motor quer `Float32Array` mono a 16 kHz (`AUDIO_SAMPLE_RATE`). O ffmpeg
+ * entrega `f32le` cru; aqui os bytes viram `Float32Array` e vao para
+ * `feedLiveAudio`. O tamanho do bloco nao importa (a doc: *"any length,
+ * sent as whole codec frames"*).
+
+ * ## Best-effort
+
+ * Se o video nao tiver faixa de audio (ou o ffmpeg falhar), isto devolve sem
+ * erro: a transmissao segue so' com imagem. Nunca derruba o video.
+
+ * @returns {Promise<void>}
+ */
+function iniciarAudio({ cli, callId, arquivo, estado, log }) {
+  return new Promise((resolve) => {
+    let proc;
+    try {
+      proc = spawn(binario(), argumentosDoAudio(arquivo), { stdio: ['ignore', 'pipe', 'ignore'] });
+    } catch {
+      resolve();
+      return;
+    }
+    estado.procAudio = proc;
+
+    // Sobra de bytes entre chunks: um float tem 4 bytes e o pipe pode cortar
+    // no meio de um. Guardar a sobra evita amostra corrompida.
+    let sobra = Buffer.alloc(0);
+
+    proc.stdout.on('data', (chunk) => {
+      if (estado.parado) return;
+      try {
+        const buf = sobra.length ? Buffer.concat([sobra, chunk]) : chunk;
+        const inteiros = Math.floor(buf.length / BYTES_POR_AMOSTRA);
+        sobra = buf.subarray(inteiros * BYTES_POR_AMOSTRA);
+        if (inteiros === 0) return;
+        // Copia para um ArrayBuffer alinhado (o Buffer pode ter offset).
+        const alinhado = new Uint8Array(inteiros * BYTES_POR_AMOSTRA);
+        alinhado.set(buf.subarray(0, inteiros * BYTES_POR_AMOSTRA));
+        const pcm = new Float32Array(alinhado.buffer);
+        cli.feedLiveAudio(callId, pcm);
+        estado.amostras = (estado.amostras || 0) + pcm.length;
+      } catch (e) {
+        log('feedLiveAudio: ' + (e?.message || e));
+      }
+    });
+    proc.on('error', () => resolve());          // sem audio: so' imagem
+    proc.on('close', () => resolve());
+  });
 }
 
 /**
@@ -258,7 +385,9 @@ export function parar(grupo) {
   const estado = ativos.get(grupo);
   if (!estado) return { ok: false, motivo: 'nao_esta_transmitindo' };
   estado.parado = true;
+  // Os DOIS processos: sem matar o do audio ele fica orfao alimentando a call.
   try { estado.proc?.kill('SIGKILL'); } catch { /* ok */ }
+  try { estado.procAudio?.kill('SIGKILL'); } catch { /* ok */ }
   ativos.delete(grupo);
   return { ok: true };
 }

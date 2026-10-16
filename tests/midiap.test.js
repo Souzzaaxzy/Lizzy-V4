@@ -284,6 +284,134 @@ if (TEM_FFMPEG) {
 }
 
 // ============================================================================
+// 1b) O AUDIO da transmissao (o pedido: "esta sem audio do video")
+// ============================================================================
+
+if (TEM_FFMPEG) {
+  await test('os argumentos do audio pedem PCM mono 16 kHz (o formato do motor)', () => {
+    const args = midiap.argumentosDoAudio('/tmp/x.mp4');
+    const j = args.join(' ');
+    includes(j, '-vn', 'sem video (o outro ffmpeg cuida)');
+    includes(j, '-ac 1', 'mono (a doc do motor: "live mono PCM")');
+    includes(j, '-ar 16000', '16 kHz (a AUDIO_SAMPLE_RATE do motor)');
+    includes(j, '-f f32le', 'Float32 cru (o formato do feedLiveAudio)');
+    includes(j, '-re', 'mesmo pacing do video (os dois andam juntos)');
+    includes(j, 'agate=threshold=0.001', 'a cadeia que tira o chiado (limiar medido)');
+  });
+
+  await test('o motor recebe AMOSTRAS de verdade (nao silencio)', async () => {
+    // Video COM audio: um tom de 440 Hz, estereo 44.1 kHz -- o ffmpeg tem de
+    // converter para mono 16 kHz.
+    const video = path.join(TMP_DB, 'com-audio.mp4');
+    await new Promise((resolve, reject) => {
+      const p = spawn(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-y',
+        '-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=15:duration=2',
+        '-f', 'lavfi', '-i', 'sine=frequency=440:duration=2',
+        '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac', '-ar', '44100', '-ac', '2', '-shortest', video],
+        { stdio: ['ignore', 'ignore', 'inherit'] });
+      p.on('error', reject);
+      p.on('close', (c) => (c === 0 ? resolve() : reject(new Error('ffmpeg ' + c))));
+    });
+
+    let amostras = 0;
+    let pico = 0;
+    const externo = [];
+    midiap.__setVoip({
+      requestVideoUpgrade: async () => 'accepted',
+      setScreenShare: async () => {},
+      setVideoEnabled: async () => {},
+      setExternalAudioMode: (_id, on) => { externo.push(on); },
+      feedLiveVideo: () => 1,
+      feedLiveAudio: (_id, pcm) => {
+        amostras += pcm.length;
+        for (let i = 0; i < pcm.length; i += 29) {
+          const a = Math.abs(pcm[i]);
+          if (a > pico) pico = a;
+        }
+        return 0;
+      }
+    });
+
+    const r = await midiap.transmitir({ grupo: 'ga@g.us', callId: 'CA', arquivo: video });
+    midiap.__setVoip(null);
+
+    ok(r.ok, 'transmitiu');
+    // 2 s a 16 kHz = 32000 amostras.
+    ok(amostras >= 31000 && amostras <= 33000, `~32000 amostras (veio ${amostras})`);
+    ok(pico > 0.05, `o sinal NAO e silencio (pico ${pico.toFixed(3)})`);
+    ok(r.amostras === amostras, 'o total de amostras volta no resultado');
+    fs.unlinkSync(video);
+  });
+
+  await test('o MODO EXTERNO de audio liga e desliga (senao o video sai mudo)', async () => {
+    const video = path.join(TMP_DB, 'ext.mp4');
+    await new Promise((resolve, reject) => {
+      const p = spawn(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-y',
+        '-f', 'lavfi', '-i', 'testsrc=size=160x90:rate=15:duration=1',
+        '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1',
+        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', video],
+        { stdio: ['ignore', 'ignore', 'inherit'] });
+      p.on('error', reject);
+      p.on('close', (c) => (c === 0 ? resolve() : reject(new Error('ffmpeg ' + c))));
+    });
+
+    const externo = [];
+    midiap.__setVoip({
+      requestVideoUpgrade: async () => 'accepted',
+      setScreenShare: async () => {},
+      setVideoEnabled: async () => {},
+      setExternalAudioMode: (_id, on) => { externo.push(on); },
+      feedLiveVideo: () => 1,
+      feedLiveAudio: () => 0
+    });
+    await midiap.transmitir({ grupo: 'ge@g.us', callId: 'CE', arquivo: video });
+    midiap.__setVoip(null);
+
+    ok(externo[0] === true, 'LIGA o modo externo ao comecar (sem isto o motor ignora o feed)');
+    ok(externo[externo.length - 1] === false, 'DESLIGA ao terminar (volta ao pre-carregado)');
+    fs.unlinkSync(video);
+  });
+
+  await test('video SEM faixa de audio nao quebra a transmissao', async () => {
+    // Best-effort: o ffmpeg de audio sai com erro, mas o video segue.
+    const video = path.join(TMP_DB, 'sem-audio.mp4');
+    await new Promise((resolve, reject) => {
+      const p = spawn(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-y',
+        '-f', 'lavfi', '-i', 'testsrc=size=160x90:rate=15:duration=1',
+        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-an', video],
+        { stdio: ['ignore', 'ignore', 'inherit'] });
+      p.on('error', reject);
+      p.on('close', (c) => (c === 0 ? resolve() : reject(new Error('ffmpeg ' + c))));
+    });
+
+    let frames = 0;
+    midiap.__setVoip({
+      requestVideoUpgrade: async () => 'accepted',
+      setScreenShare: async () => {},
+      setVideoEnabled: async () => {},
+      setExternalAudioMode: () => {},
+      feedLiveVideo: () => { frames++; return 1; },
+      feedLiveAudio: () => 0
+    });
+    const r = await midiap.transmitir({ grupo: 'gs@g.us', callId: 'CS', arquivo: video });
+    midiap.__setVoip(null);
+
+    ok(r.ok, 'a transmissao segue');
+    ok(frames > 0, `o video saiu mesmo sem audio (${frames} frames)`);
+    fs.unlinkSync(video);
+  });
+
+  await test('o `parar` mata os DOIS processos (audio nao fica orfao)', async () => {
+    const md = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/midiap.js'), 'utf-8');
+    const i = md.indexOf('export function parar');
+    const bloco = md.slice(i, i + 700);
+    includes(bloco, 'estado.proc?.kill', 'mata o processo do video');
+    includes(bloco, 'estado.procAudio?.kill', 'mata o processo do audio');
+  });
+}
+
+// ============================================================================
 // 2) O COMANDO
 // ============================================================================
 
