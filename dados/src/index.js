@@ -1249,6 +1249,7 @@ import {
   textoPainel as textoPainelForm,
   formatarResposta as formatarRespostaForm
 } from './utils/formTest.js';
+import { gerarFichaPdf } from './utils/fichaPdf.js';
 import { aoTerminarAudio } from './funcs/utils/zapoCall.js';
 import { search, searchNews } from './funcs/utils/search.js';
 import { removeBg, upscale } from './funcs/utils/imagetools.js';
@@ -4163,13 +4164,51 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
         const m = id.match(/^(plano|periodo):(.+)$/i);
         const escolha = m ? m[2] : id;
 
-        // Escolha de plano/período -> devolve a FICHA PREENCHIDA (card rico).
+        // Acumula a escolha do usuario (plano/periodo) para montar a ficha.
         const ctx = groupData.fichaTeste || {};
         if (m) {
           if (m[1].toLowerCase() === 'plano') ctx.plano = escolha;
           else ctx.periodo = escolha;
           groupData.fichaTeste = ctx;
           try { fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2)); } catch { /* ok */ }
+        }
+
+        // BOTAO "PRONTO" -> gera a FICHA em PDF e manda como documento.
+        //
+        // O card rico NAO tem botao (o proto de richResponse nao tem campo de
+        // acao), entao o clique acontece nos botoes do Native Flow e o
+        // resultado visual vai como documento — que e' o pedido do dono.
+        if (id === 'pronto') {
+          if (!ctx.plano || !ctx.periodo) {
+            await reply('⚠️ Escolha o *plano* e o *período* antes de gerar a ficha.').catch(() => {});
+            return;
+          }
+          const dadosFicha = {
+            nome: info.pushName || null,
+            plano: ctx.plano,
+            periodo: ctx.periodo,
+            observacoes: null,
+            grupo: groupData.groupName || null,
+            pedidoPor: sender ? String(sender).split('@')[0] : null
+          };
+          try {
+            const pdf = await gerarFichaPdf(dadosFicha);
+            await nazu.sendMessage(from, {
+              document: pdf,
+              mimetype: 'application/pdf',
+              fileName: `ficha-aluguel-${Date.now()}.pdf`,
+              caption: '🧾 *Ficha de aluguel* gerada a partir do formulário.',
+              mentions: [sender],
+              contextInfo: gerarContextNewsletter()
+            });
+            console.log(`[TESTEFM] PDF gerado e enviado | bytes=${pdf.length} | plano=${ctx.plano} | periodo=${ctx.periodo}`);
+          } catch (e) {
+            console.error('[TESTEFM] falha ao gerar o PDF:', e?.message);
+            await reply('❌ Não consegui gerar o PDF agora.').catch(() => {});
+          }
+          delete groupData.fichaTeste;
+          try { fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2)); } catch { /* ok */ }
+          return;
         }
 
         if (m && ctx.plano && ctx.periodo) {
@@ -4183,9 +4222,18 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
             mentions: [sender],
             contextInfo: gerarContextNewsletter()
           }).catch((e) => console.error('[TESTEFM] falha na ficha:', e?.message));
-          // A ficha foi montada: o acumulador do grupo pode recomeçar.
-          delete groupData.fichaTeste;
-          try { fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2)); } catch { /* ok */ }
+          // O acumulador NAO e' limpo aqui de proposito: ele e' o que o botao
+          // "Pronto" usa para gerar o PDF. Limpar agora deixaria o "Pronto" sem
+          // dados (era o bug: respondia "escolha o plano e o período").
+        } else if (m) {
+          // Escolha parcial: confirma o que ja' foi escolhido.
+          const resumo = [ctx.plano && `Plano: *${ctx.plano}*`, ctx.periodo && `Período: *${ctx.periodo}*`]
+            .filter(Boolean).join(' · ');
+          await nazu.sendMessage(from, {
+            text: `✅ ${resumo}\n\n_${ctx.plano && ctx.periodo ? '' : 'Falta escolher o outro campo. '}Toque em *Pronto — gerar PDF* quando terminar._`,
+            mentions: [sender],
+            contextInfo: gerarContextNewsletter()
+          }).catch(() => {});
         } else {
           const texto = formatarRespostaForm(respostaForm);
           if (texto) {

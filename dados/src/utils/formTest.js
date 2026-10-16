@@ -78,7 +78,7 @@ export const montarFormularioNativo = () => ({
 				}
 			]
 		},
-		{ text: '✅ Confirmar', id: 'confirmar' },
+		{ text: '✅ Pronto — gerar PDF', id: 'pronto' },
 		{ text: '❌ Cancelar', id: 'cancelar' }
 	]
 })

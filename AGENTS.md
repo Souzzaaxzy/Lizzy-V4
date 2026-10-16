@@ -10678,6 +10678,56 @@ novos cobrem: o envio do `rich`; o proto (`botForwardedMessage` →
 **Verificado: voltando a tabela para array-de-arrays, 4 asserções falham** — é o
 bug real que eu corrigi.
 
+### BOTAO "PRONTO" -> PDF NO CHAT (pedido do dono: "escolher direto no rich + botao pronto que envia PDF")
+**Duas perguntas, duas respostas diferentes — e uma delas e' um NAO.**
+
+#### 1. Botao DENTRO do card rico: **IMPOSSIVEL** (medido, nao suposto)
+A lista COMPLETA dos campos de `AIRichResponseSubMessage`:
+`messageType`, `gridImageMetadata`, `messageText`, `imageMetadata`,
+`codeMetadata`, `tableMetadata`, `dynamicMetadata`, `latexMetadata`,
+`mapMetadata`, `contentItemsMetadata`.
+
+**Nao existe** `action`/`button`/`cta`/`onClick` em nenhum deles. O card rico e'
+**100% apresentacao** (tabela/texto/codigo/imagem) — nao recebe clique. O unico
+"interativo" e' o `contentItemsMetadata`, e o item dele (`reelItem`) e' video,
+nao botao. **Entao "escolher dentro do rich" nao da'.**
+
+#### 2. Escolher + botao "Pronto" + PDF: **FEITO**
+O clique acontece onde da': nos **botoes do Native Flow**. O formulario nativo
+agora tem `single_select` (Plano / Periodo) + **`✅ Pronto — gerar PDF`**.
+Ao tocar em "Pronto", o bot **gera a ficha em PDF e envia como DOCUMENTO no
+chat** — exatamente o pedido.
+
+**Gerador**: novo `dados/src/utils/fichaPdf.js` com **`pdfkit`** (JavaScript
+puro, **sem binario nativo** — nada de Puppeteer/Chromium, que custaria
+centenas de MB numa VPS apertada). Devolve `Buffer` (`%PDF-` ... `%%EOF`),
+com cabecalho, tabela zebrada e rodape.
+
+**Armadilha MEDIDA (custou uma rodada)**: o `pdfkit` e' CommonJS e o bot e'
+ESM — `require` **nao existe** ali. O caminho e' `await import('pdfkit')` +
+`mod.default`. (Tentei `require` primeiro; o modulo nao carregava.)
+
+**Segunda armadilha (bug real, pego pelo teste)**: o acumulador
+(`groupData.fichaTeste`) era **limpo depois do card rico**, entao o "Pronto"
+nao achava o plano/periodo e respondia *"escolha o plano e o período"*. Agora o
+acumulador **so' e' limpo depois do PDF**.
+
+**Fluxo final (testado)**: `!testefm nativo` -> escolhe **Plano** -> o bot
+confirma o que foi escolhido -> escolhe **Período** -> sai o **card rico com a
+ficha preenchida** -> toca em **Pronto** -> chega o **PDF** como documento.
+Sem escolher, o "Pronto" **avisa** em vez de gerar PDF vazio.
+
+**Dependencia**: `pdfkit@^0.20.2` em `package.json`, `package-lock.json` e
+`yarn.lock` (Berry v8 — conferido `head -2`; atualizado com
+`corepack yarn install --mode=update-lockfile`, que preserva o formato).
+
+**Testes**: `tests/form-test.test.js` **21 -> 27 testes / 101 asserções**. Os 6
+novos: o botao "Pronto" existe; o PDF e' um PDF de verdade (`%PDF-`/`%%EOF`); o
+PDF nao quebra com campo ausente (sem `undefined`/`null`); tocar em "Pronto"
+manda **documento** com `application/pdf` e nome `.pdf`; "Pronto" sem escolha
+avisa; e o handler usa o gerador (nao um stub).
+**Verificado: removendo o bloco do "Pronto", 6 asserções falham.**
+
 ### LIMITACOES (o que NAO foi provado)
 - **Nao foi validado em aparelho real** (sem sessao pareada neste ambiente). O
   que esta provado: o payload/proto, o `encode`/`decode`, o parser da resposta e

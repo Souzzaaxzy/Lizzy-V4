@@ -172,7 +172,7 @@ await test('o formulario nativo traz os campos do exemplo (plano/periodo/confirm
   const textos = c.nativeFlow.map((b) => b.text).join(' | ');
   includes(textos, 'Plano', 'plano');
   includes(textos, 'Período', 'periodo');
-  includes(textos, 'Confirmar', 'confirmacao');
+  includes(textos, 'Pronto', 'confirmacao (botao que gera o PDF)');
   includes(textos, 'Cancelar', 'cancelar');
   // Os planos e periodos estao nas rows.
   const rows = c.nativeFlow[0].sections[0].rows.map((x) => x.title).join(',');
@@ -298,6 +298,87 @@ await test('a resposta de plano/periodo monta a ficha e NAO vira conversa', asyn
 });
 
 
+console.log('\n=== 2c) O BOTAO "PRONTO" -> PDF NO CHAT ===\n');
+
+await test('o formulario nativo tem o botao "Pronto"', () => {
+  const c = formTest.montarFormularioNativo();
+  const textos = c.nativeFlow.map((b) => b.text).join(' | ');
+  includes(textos, 'Pronto', 'o botao Pronto');
+  const pronto = c.nativeFlow.find((b) => b.id === 'pronto');
+  ok(pronto, 'com o id "pronto" (e o que o handler escuta)');
+});
+
+await test('o gerador de PDF produz um PDF de verdade', async () => {
+  const { gerarFichaPdf } = await import(new URL('../dados/src/utils/fichaPdf.js', import.meta.url).href);
+  const pdf = await gerarFichaPdf({ nome: 'Fulano', plano: 'Pro', periodo: 'Mensal', grupo: 'G', pedidoPor: '5511' });
+  ok(Buffer.isBuffer(pdf), 'devolve Buffer');
+  ok(pdf.length > 800, `tem conteudo (veio ${pdf.length} bytes)`);
+  ok(pdf.subarray(0, 5).toString() === '%PDF-', 'magic %PDF-');
+  ok(pdf.subarray(-6).toString().includes('%%EOF'), 'termina com %%EOF');
+});
+
+await test('o PDF nao quebra com campo ausente (nao vira undefined)', async () => {
+  const { gerarFichaPdf } = await import(new URL('../dados/src/utils/fichaPdf.js', import.meta.url).href);
+  const pdf = await gerarFichaPdf({});
+  ok(pdf.subarray(0, 5).toString() === '%PDF-', 'PDF valido mesmo vazio');
+  const txt = pdf.toString('latin1');
+  ok(!txt.includes('undefined'), 'sem undefined no conteudo');
+  ok(!txt.includes('null'), 'sem null no conteudo');
+});
+
+await test('tocar em "Pronto" envia o PDF como DOCUMENTO no chat', async () => {
+  const sent = [];
+  const author = nextAuthor();
+  const groupJid = makeGroup();
+  const nazu = makeNazu({ sent, groupJid, author });
+  const { buildFlowReply } = await import('@itsliaaa/baileys');
+
+  const envia = (id) => handleMessage(nazu, {
+    key: { remoteJid: groupJid, fromMe: false, id: `P-${Math.random().toString(36).slice(2, 7)}`, participant: author.lid },
+    message: buildFlowReply({ name: id.split(':')[0], paramsJson: JSON.stringify({ id }) }),
+    messageTimestamp: 1757900000, pushName: 'Autor',
+  }, null, new Map(), null);
+
+  // Escolhe plano e periodo, depois aperta Pronto.
+  await envia('plano:pro');
+  await envia('periodo:mensal');
+  await envia('pronto');
+
+  const doc = sent.find((s) => s.content?.document);
+  ok(doc, 'enviou um documento');
+  ok(doc.content.mimetype === 'application/pdf', `mimetype pdf (veio ${doc.content.mimetype})`);
+  ok(Buffer.isBuffer(doc.content.document), 'o documento e um Buffer');
+  ok(doc.content.document.subarray(0, 5).toString() === '%PDF-', 'o Buffer e um PDF');
+  includes(String(doc.content.fileName), '.pdf', 'nome com .pdf');
+  // O card rico vem ANTES (a ficha na tela) e o PDF depois (o botao Pronto).
+  const iCard = sent.findIndex((s) => s.content?.richResponse);
+  const iDoc = sent.findIndex((s) => s.content?.document);
+  ok(iCard > -1 && iDoc > iCard, 'o card rico vem antes do PDF (ordem do fluxo)');
+});
+
+await test('"Pronto" SEM escolher avisa em vez de mandar PDF vazio', async () => {
+  const sent = [];
+  const author = nextAuthor();
+  const groupJid = makeGroup();
+  const nazu = makeNazu({ sent, groupJid, author });
+  const { buildFlowReply } = await import('@itsliaaa/baileys');
+  await handleMessage(nazu, {
+    key: { remoteJid: groupJid, fromMe: false, id: `Q-${Math.random().toString(36).slice(2, 7)}`, participant: author.lid },
+    message: buildFlowReply({ name: 'pronto', paramsJson: JSON.stringify({ id: 'pronto' }) }),
+    messageTimestamp: 1757900000, pushName: 'Autor',
+  }, null, new Map(), null);
+  const out = sent.map((s) => s.content?.text ?? '').filter(Boolean).join('\n');
+  ok(!sent.some((s) => s.content?.document), 'nao mandou PDF');
+  ok(/plano/i.test(out) && /per[íi]odo/i.test(out), 'pede para escolher plano e periodo');
+});
+
+await test('o handler usa o gerador de PDF (nao um stub)', () => {
+  includes(SRC, 'gerarFichaPdf', 'importa e chama o gerador');
+  includes(SRC, "id === 'pronto'", 'escuta o botao pronto');
+  includes(SRC, "mimetype: 'application/pdf'", 'manda como application/pdf');
+});
+
+
 
 console.log('\n=== 3) O FLOW OFICIAL (o limite, dito na cara) ===\n');
 
@@ -358,8 +439,10 @@ await test('o handler real processa a resposta e avisa no grupo', async () => {
   };
   await handleMessage(nazu, info, null, new Map(), null);
   const out = sent.map((s) => s.content?.text ?? '').filter(Boolean).join('\n');
-  includes(out, 'RESPOSTA DO FORMULÁRIO', 'avisou o grupo');
-  includes(out, 'plano:premium', 'com a escolha');
+  // Escolha de plano (sem periodo ainda) -> confirma o que foi escolhido.
+  includes(out, 'Plano:', 'confirma o plano escolhido');
+  includes(out, 'premium', 'com a escolha');
+  includes(out, 'Pronto', 'aponta o botao que gera o PDF');
   ok(sent.every((s) => !s.content?.delete), 'nao foi tratada como spam/apagada');
 });
 
