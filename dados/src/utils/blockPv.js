@@ -279,7 +279,7 @@ export const menuCommandsMap = {
     },
     menuadm: {
         menuName: 'Admin',
-        commands: ['ban', 'kick', 'add', 'promover', 'rebaixar', 'setfoto', 'setnome', 'desc', 'link', 'tagall', 'hidetag', 'mt', 'marcar', 'rall', 'banlist', 'adminlist', 'infogp', 'voteban', 'approve', 'blockconversa', 'desbloquear', 'trancar', 'destrancar', 'callp', 'musicap', 'abrir', 'ativarevento', 'desativarevento', 'fixar', 'desfixar', 'antis', 'antictt', 'antifantasma', 'antiroubo', 'perm', 'delp', 'listperm', 'limparperm']
+        commands: ['ban', 'kick', 'add', 'promover', 'rebaixar', 'setfoto', 'setnome', 'desc', 'link', 'tagall', 'hidetag', 'mt', 'marcar', 'rall', 'banlist', 'adminlist', 'infogp', 'voteban', 'approve', 'blockconversa', 'desbloquear', 'trancar', 'destrancar', 'callp', 'abrir', 'ativarevento', 'desativarevento', 'fixar', 'desfixar', 'antis', 'antictt', 'antifantasma', 'antiroubo', 'perm', 'delp', 'listperm', 'limparperm']
     },
     menubn: {
         menuName: 'Diversão',
@@ -287,7 +287,7 @@ export const menuCommandsMap = {
     },
     menudono: {
         menuName: 'Dono',
-        commands: ['cmd', 'exec', 'bc', 'broadcast', 'sair', 'entrar', 'blockmenupv', 'unblockmenupv', 'blockcmdpv', 'unblockcmdpv', 'listblockpv', 'nomebot', 'fotobot', 'bloquear', 'desbloquear', 'userblock', 'block', 'unblock', 'listblocks', 'modoligado', 'mododesligado', 'verificar', 'criarpv', 'deletepv', 'backup', 'key', 'settipoia', 'settipochat', 'regrasgp', 'rconfig', 'bconfig', 'config', 'addpalavra', 'delpalavra', 'listapc', 'antipalavras', 'addsticker', 'delsticker', 'listasticker', 'blackpalavra', 'bcgc', 'msgauto', 'addmsg', 'delmsg', 'listmsg', 'statusbot', 'att', 'update', 'restart', 'desligar', 'ligar', 'ping', 'configerroradm', 'raja', 'setmsgraja', 'rajar', 'msghost', 'callp', 'musicap']
+        commands: ['cmd', 'exec', 'bc', 'broadcast', 'sair', 'entrar', 'blockmenupv', 'unblockmenupv', 'blockcmdpv', 'unblockcmdpv', 'listblockpv', 'nomebot', 'fotobot', 'bloquear', 'desbloquear', 'userblock', 'block', 'unblock', 'listblocks', 'modoligado', 'mododesligado', 'verificar', 'criarpv', 'deletepv', 'backup', 'key', 'settipoia', 'settipochat', 'regrasgp', 'rconfig', 'bconfig', 'config', 'addpalavra', 'delpalavra', 'listapc', 'antipalavras', 'addsticker', 'delsticker', 'listasticker', 'blackpalavra', 'bcgc', 'msgauto', 'addmsg', 'delmsg', 'listmsg', 'statusbot', 'att', 'update', 'restart', 'desligar', 'ligar', 'ping', 'configerroradm', 'raja', 'setmsgraja', 'rajar', 'msghost', 'callp']
     },
     menumemb: {
         menuName: 'Membros',

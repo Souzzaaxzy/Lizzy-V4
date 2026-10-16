@@ -549,6 +549,50 @@ await test('THUMB: baixarThumb BAIXA de verdade e grava no cache do grupo', asyn
 });
 
 // ============================================================================
+// MENUS: cada comando no menu CERTO (a correcao do dono)
+// ============================================================================
+
+await test('MENUS: menuadm lista SO callp e callp encerrar', async () => {
+  // O dono corrigiu: os unicos comandos de ADMIN sao `callp` e
+  // `callp encerrar`. `callp parear` e' do dono; o resto (callp status,
+  // musicap e seus subcomandos, !fila) e' de MEMBRO.
+  const mod = await import(new URL('../dados/src/menus/menuadm.js', import.meta.url).href);
+  const texto = await mod.default('!', 'Abyss', 'Kannon');
+
+  ok(texto.includes('!callp\n'), 'lista o callp (subir)');
+  ok(texto.includes('!callp encerrar'), 'lista o callp encerrar');
+  ok(!texto.includes('!musicap'), 'NAO lista o musicap (e de membro)');
+  ok(!texto.includes('!fila'), 'NAO lista o !fila (e de membro)');
+  ok(!texto.includes('!callp status'), 'NAO lista o callp status (e de membro)');
+});
+
+await test('MENUS: menudono so tem o callp parear', async () => {
+  const mod = await import(new URL('../dados/src/menus/menudono.js', import.meta.url).href);
+  const texto = await mod.default('!', 'Abyss', 'Kannon');
+  ok(texto.includes('!callp parear'), 'lista o parear');
+  ok(!texto.includes('!musicap'), 'sem musicap');
+  ok(!texto.includes('!callp\n'), 'sem o callp de subir');
+});
+
+await test('MENUS: menumemb tem o musicap, o !fila e o callp status', async () => {
+  const mod = await import(new URL('../dados/src/menus/menumemb.js', import.meta.url).href);
+  const texto = await mod.default('!', 'Abyss', 'Kannon');
+  ok(texto.includes('!musicap'), 'lista o musicap');
+  ok(texto.includes('!fila'), 'lista o !fila');
+  ok(texto.includes('!callp status'), 'lista o callp status');
+});
+
+await test('MENUS: o blockPv resolve cada comando para o menu certo', async () => {
+  const b = await import(new URL('../dados/src/utils/blockPv.js', import.meta.url).href);
+  // `musicap`/`fila` sao de MEMBRO — nao podem resolver para o menu do dono
+  // nem para o de admin, senao bloquear o PV desses menus derrubaria um
+  // comando que o membro pode usar.
+  ok(b.getCommandMenu('musicap')?.menuKey === 'menumemb', 'musicap -> menumemb');
+  ok(b.getCommandMenu('fila')?.menuKey === 'menumemb', 'fila -> menumemb');
+  ok(b.getCommandMenu('callp')?.menuKey === 'menuadm', 'callp -> menuadm');
+});
+
+// ============================================================================
 // !vozp — removido de vez
 // ============================================================================
 
