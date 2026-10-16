@@ -30273,17 +30273,21 @@ ${nomebot}  By  👑 ${nomedono}`;
         break;
       // !spoiler — mensagem que fica BORRADA até tocar.
       //
-      // O filtro vai no `contextInfo.isSpoiler` do tipo NORMAL (extendedTextMessage
-      // / imageMessage), NAO num `spoilerMessage`.
+      // O spoiler de WhatsApp e' uma FORMATACAO DE TEXTO (`||assim||`), igual ao
+      // negrito (`*x*`) e ao riscado (`~x~`) — quem interpreta e' o CLIENTE, a
+      // partir do texto cru. NAO e' tipo de mensagem nem campo de contextInfo.
       //
-      // MEDIDO: a fork sabe montar `{ spoiler: true }` -> `spoilerMessage`
-      // (campo 118 do proto), mas o cliente responde "mensagem incompativel" —
-      // e' um TIPO NOVO, e tipo novo de lib nao-oficial e' gateado pelo servidor
-      // (mesmo sintoma do botao `flow`). A forma que o app usa e' so' o
-      // `contextInfo.isSpoiler` no tipo normal; essa nao inventa tipo nenhum.
+      // MEDIDO (3 tentativas): `{ spoiler: true }` embrulha em `spoilerMessage`
+      // (tipo novo) -> "mensagem incompativel"; `contextInfo.isSpoiler` chega
+      // como texto normal (o cliente ignora para texto). A forma do app e' o
+      // `||texto||`. Fonte: WABetaInfo/9to5Mac (a opcao "Spoiler" fica ao lado
+      // de Bold/Italic e "adiciona dois pipes").
+      //
+      // LIMITE: o recurso esta' em BETA e e' SO' TEXTO. Midia borrada ainda nao
+      // existe — para imagem usamos view once (some depois de abrir).
       //
       //   `!spoiler <texto>`   -> texto borrado
-      //   `!spoiler` + imagem/vídeo marcado -> mídia borrada (com legenda)
+      //   `!spoiler` + imagem/vídeo marcado -> view once (borrado não existe p/ mídia)
       case 'spoiler':
         try {
           // Legenda do comando = texto depois de "!spoiler".
@@ -30307,10 +30311,14 @@ ${nomebot}  By  👑 ${nomedono}`;
               return reply('❌ Não consegui baixar essa mídia.');
             }
 
+            // Midia: o recurso ainda e' SO' TEXTO (beta). Mandar a imagem
+            // borrada nao existe hoje — o jeito que o WhatsApp da' e' view once
+            // (some depois de abrir). Avisamos em vez de fingir.
             await nazu.sendMessage(from, {
               [tipoMidiaSpoiler]: buffer,
               ...(legenda ? { caption: legenda } : {}),
-              contextInfo: { ...gerarContextNewsletter(), isSpoiler: true }
+              viewOnce: true,
+              contextInfo: gerarContextNewsletter()
             }, { quoted: info });
             return;
           }
@@ -30325,17 +30333,20 @@ ${nomebot}  By  👑 ${nomedono}`;
               '┃\n' +
               `┃ 📝 \`${prefix}spoiler <texto>\`\n` +
               `┃ 🖼️ \`${prefix}spoiler\` + foto/vídeo\n` +
+              '┃    (vai como "ver uma vez" — o\n' +
+              '┃     borrado de mídia ainda não\n' +
+              '┃     existe no WhatsApp)\n' +
               '╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯'
             );
           }
 
-          // Forma SEM wrapper: o filtro vai no `contextInfo.isSpoiler` do
-          // proprio extendedTextMessage. Medido: sai `extendedTextMessage` com
-          // `contextInfo.isSpoiler: true` — NAO um `spoilerMessage` (tipo novo,
-          // que o cliente rejeita como "incompativel").
+          // O spoiler de TEXTO e' FORMATACAO, nao tipo/campo: o cliente
+          // interpreta `||texto||` no proprio texto (igual `*negrito*` e
+          // `~riscado~`). Medido: a fork nao transforma o texto — o cru chega
+          // ao cliente, que desenha a barra cinza.
           await nazu.sendMessage(from, {
-            text: textoSpoiler,
-            contextInfo: { ...gerarContextNewsletter(), isSpoiler: true }
+            text: `||${textoSpoiler}||`,
+            contextInfo: gerarContextNewsletter()
           }, { quoted: info });
         } catch (e) {
           console.error('[SPOILER] erro:', e?.message || e);
