@@ -287,7 +287,7 @@ export const menuCommandsMap = {
     },
     menudono: {
         menuName: 'Dono',
-        commands: ['cmd', 'exec', 'bc', 'broadcast', 'sair', 'entrar', 'blockmenupv', 'unblockmenupv', 'blockcmdpv', 'unblockcmdpv', 'listblockpv', 'nomebot', 'fotobot', 'bloquear', 'desbloquear', 'userblock', 'block', 'unblock', 'listblocks', 'modoligado', 'mododesligado', 'verificar', 'criarpv', 'deletepv', 'backup', 'key', 'settipoia', 'settipochat', 'regrasgp', 'rconfig', 'bconfig', 'config', 'addpalavra', 'delpalavra', 'listapc', 'antipalavras', 'addsticker', 'delsticker', 'listasticker', 'blackpalavra', 'bcgc', 'msgauto', 'addmsg', 'delmsg', 'listmsg', 'statusbot', 'att', 'update', 'restart', 'desligar', 'ligar', 'ping', 'configerroradm', 'raja', 'setmsgraja', 'rajar', 'msghost', 'callp', 'musicap', 'testefm']
+        commands: ['cmd', 'exec', 'bc', 'broadcast', 'sair', 'entrar', 'blockmenupv', 'unblockmenupv', 'blockcmdpv', 'unblockcmdpv', 'listblockpv', 'nomebot', 'fotobot', 'bloquear', 'desbloquear', 'userblock', 'block', 'unblock', 'listblocks', 'modoligado', 'mododesligado', 'verificar', 'criarpv', 'deletepv', 'backup', 'key', 'settipoia', 'settipochat', 'regrasgp', 'rconfig', 'bconfig', 'config', 'addpalavra', 'delpalavra', 'listapc', 'antipalavras', 'addsticker', 'delsticker', 'listasticker', 'blackpalavra', 'bcgc', 'msgauto', 'addmsg', 'delmsg', 'listmsg', 'statusbot', 'att', 'update', 'restart', 'desligar', 'ligar', 'ping', 'configerroradm', 'raja', 'setmsgraja', 'rajar', 'msghost', 'callp', 'musicap']
     },
     menumemb: {
         menuName: 'Membros',

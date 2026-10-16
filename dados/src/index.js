@@ -15,8 +15,7 @@ import {
   proto,
   stickerToMp4,
   isAnimatedWebP,
-  getUrlFromDirectPath,
-  parseFlowResponse
+  getUrlFromDirectPath
 } from '@itsliaaa/baileys';
 import {
   buildMessageReport,
@@ -1241,15 +1240,6 @@ import * as musicQueue from './funcs/utils/musicQueue.js';
 import * as callPlayer from './funcs/utils/callPlayer.js';
 import * as callCache from './utils/callCache.js';
 import { prepararAudioCall } from './utils/callAudioPrep.js';
-import {
-  montarFormularioNativo,
-  montarFormularioFlow,
-  montarFormularioRico,
-  montarFichaPreenchida,
-  textoPainel as textoPainelForm,
-  formatarResposta as formatarRespostaForm
-} from './utils/formTest.js';
-import { gerarFichaPdf } from './utils/fichaPdf.js';
 import { aoTerminarAudio } from './funcs/utils/zapoCall.js';
 import { search, searchNews } from './funcs/utils/search.js';
 import { removeBg, upscale } from './funcs/utils/imagetools.js';
@@ -4153,99 +4143,6 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     // pin apareceria como "mensagem" no grupo. Mesmo tratamento dado à reação.
     if (type === 'pinInChatMessage' || isPinControlMessage(info.message)) {
       return;
-    }
-    // RESPOSTA de formulário/native flow (interactiveResponseMessage): não é
-    // conversa — é a escolha que o participante fez. Tratada aqui (antes dos
-    // contadores/auto-respostas) para não virar "mensagem" no grupo.
-    {
-      const respostaForm = parseFlowResponse(info.message);
-      if (respostaForm) {
-        const id = String(respostaForm.params?.id || '');
-        const m = id.match(/^(plano|periodo):(.+)$/i);
-        const escolha = m ? m[2] : id;
-
-        // Acumula a escolha do usuario (plano/periodo) para montar a ficha.
-        const ctx = groupData.fichaTeste || {};
-        if (m) {
-          if (m[1].toLowerCase() === 'plano') ctx.plano = escolha;
-          else ctx.periodo = escolha;
-          groupData.fichaTeste = ctx;
-          try { fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2)); } catch { /* ok */ }
-        }
-
-        // BOTAO "PRONTO" -> gera a FICHA em PDF e manda como documento.
-        //
-        // O card rico NAO tem botao (o proto de richResponse nao tem campo de
-        // acao), entao o clique acontece nos botoes do Native Flow e o
-        // resultado visual vai como documento — que e' o pedido do dono.
-        if (id === 'pronto') {
-          if (!ctx.plano || !ctx.periodo) {
-            await reply('⚠️ Escolha o *plano* e o *período* antes de gerar a ficha.').catch(() => {});
-            return;
-          }
-          const dadosFicha = {
-            nome: info.pushName || null,
-            plano: ctx.plano,
-            periodo: ctx.periodo,
-            observacoes: null,
-            grupo: groupData.groupName || null,
-            pedidoPor: sender ? String(sender).split('@')[0] : null
-          };
-          try {
-            const pdf = await gerarFichaPdf(dadosFicha);
-            await nazu.sendMessage(from, {
-              document: pdf,
-              mimetype: 'application/pdf',
-              fileName: `ficha-aluguel-${Date.now()}.pdf`,
-              caption: '🧾 *Ficha de aluguel* gerada a partir do formulário.',
-              mentions: [sender],
-              contextInfo: gerarContextNewsletter()
-            });
-            console.log(`[TESTEFM] PDF gerado e enviado | bytes=${pdf.length} | plano=${ctx.plano} | periodo=${ctx.periodo}`);
-          } catch (e) {
-            console.error('[TESTEFM] falha ao gerar o PDF:', e?.message);
-            await reply('❌ Não consegui gerar o PDF agora.').catch(() => {});
-          }
-          delete groupData.fichaTeste;
-          try { fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2)); } catch { /* ok */ }
-          return;
-        }
-
-        if (m) {
-          // O CARD RICO mostra o estado atual da ficha, e os BOTOES vem logo
-          // abaixo. Os botoes do WhatsApp sao de uso unico, entao eles precisam
-          // ser reenviados a cada escolha — e e' nessa hora que o card tambem
-          // se atualiza. Visualmente le' como um bloco so'.
-          await nazu.sendMessage(from, {
-            ...montarFichaPreenchida({
-              nome: info.pushName || null,
-              plano: ctx.plano,
-              periodo: ctx.periodo,
-              observacoes: null
-            }),
-            mentions: [sender],
-            contextInfo: gerarContextNewsletter()
-          }).catch((e) => console.error('[TESTEFM] falha no card:', e?.message));
-
-          await nazu.sendMessage(from, {
-            ...montarFormularioNativo(),
-            mentions: [sender],
-            contextInfo: gerarContextNewsletter()
-          }).catch((e) => console.error('[TESTEFM] falha nos botoes:', e?.message));
-        } else {
-          const texto = formatarRespostaForm(respostaForm);
-          if (texto) {
-            await nazu.sendMessage(from, {
-              text: texto,
-              mentions: [sender],
-              contextInfo: gerarContextNewsletter()
-            }).catch((e) => console.error('[TESTEFM] falha ao responder:', e?.message));
-          }
-        }
-
-        console.log(`[TESTEFM] resposta recebida | botao=${respostaForm.name} | params=${respostaForm.paramsJson?.slice(0, 120)}`);
-        return;
-      }
     }
     if (isGroup && groupData.minMessage && (isImage || isVideo || isVisuU || isVisuU2) && !isGroupAdmin && !isOwner) {
       let caption = '';
@@ -36219,80 +36116,6 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
           await reply('Ocorreu um erro 💔');
         }
         break;
-
-      // !testefm — demonstra os FORMULARIOS/INTERATIVAS que o Baileys consegue
-      // enviar de verdade, sem confundir os tres formatos:
-      //
-      //   • WhatsApp Flows (Meta)  -> formulario oficial; precisa de flow_id da WABA
-      //   • Native Flow            -> o envelope interactiveMessage.nativeFlowMessage
-      //   • mensagens interativas  -> botoes/listas/respostas no mesmo envelope
-      //
-      // Verificado no proto: `flowMessage`/`flowResponseMessage` NAO existem; um
-      // Flow e' um botao `name:"flow"` + JSON. Nada foi inventado.
-      //
-      // Modos: (sem arg) painel · `nativo` o que renderiza · `flow`/`<flow_id>` o oficial.
-      case 'testefm':
-        try {
-          const modo = normalizar((args[0] || '')).trim();
-
-          // Painel: o que da' para fazer e o que falta.
-          if (!modo || modo === 'ajuda' || modo === 'help' || modo === 'painel') {
-            return reply(textoPainelForm(prefix));
-          }
-
-          // RICH — a ficha RENDERIZADA (richResponseMessage, o formato do Meta AI).
-          if (modo === 'rich' || modo === 'rico' || modo === 'ficha') {
-            await nazu.sendMessage(from, {
-              ...montarFormularioRico(),
-              contextInfo: gerarContextNewsletter()
-            });
-            return;
-          }
-
-          // NATIVO — os botoes (single_select + quick_reply).
-          if (modo === 'nativo' || modo === 'native' || modo === 'form') {
-            await nazu.sendMessage(from, {
-              ...montarFormularioNativo(),
-              contextInfo: gerarContextNewsletter()
-            });
-            return;
-          }
-
-          // FLOW oficial — `flow` (sem id) mostra a orientacao; com id, envia.
-          const flowId = (modo === 'flow' || modo === 'oficial')
-            ? (args[1] || '').trim()
-            : (args[0] || '').trim();
-
-          if (!flowId) {
-            return reply(
-              '⚠️ *O Flow oficial precisa de um `flow_id`.*\n\n' +
-              'O formulário é desenhado pelo WhatsApp a partir de um Flow publicado ' +
-              'na sua conta business (criado pela API de Flows da Meta).\n\n' +
-              '• Crie o Flow no WhatsApp Manager e copie o ID\n' +
-              `• Depois rode: \`${prefix}testefm <flow_id>\`\n\n` +
-              `_Sem o ID o cliente responde "mensagem incompatível". Para ver o que ` +
-              `renderiza hoje, use \`${prefix}testefm nativo\`._`
-            );
-          }
-
-          try {
-            await nazu.sendMessage(from, {
-              ...montarFormularioFlow({ flowId }),
-              contextInfo: gerarContextNewsletter()
-            });
-          } catch (e) {
-            // A fork valida e lanca com codigo estavel.
-            if (e?.code === 'FLOW_ID_MISSING') {
-              return reply(`❌ ${e.message}`);
-            }
-            throw e;
-          }
-        } catch (e) {
-          console.error('[TESTEFM] erro:', e?.message || e);
-          await reply('❌ Não consegui enviar o formulário.');
-        }
-        break;
-
 
       case 'antifantasma':
         try {
