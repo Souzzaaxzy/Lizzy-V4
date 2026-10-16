@@ -193,6 +193,9 @@ export const montarFormularioRico = () => ({
  */
 export const montarFichaPreenchida = (dados = {}) => {
         const p = (v) => (v && String(v).trim()) || '—'
+        // Mostra a ficha VAZIA como "pendente" (e' ela que o usuario ve antes de
+        // escolher) e marca cada campo conforme vai sendo escolhido.
+        const falta = (v) => (v && String(v).trim()) ? p(v) : '⬜ pendente'
         return {
                 disclaimerText: 'FICHA DE ALUGUEL · preenchida',
                 richResponse: [
@@ -202,8 +205,8 @@ export const montarFichaPreenchida = (dados = {}) => {
                                 table: [
                                         { isHeading: true, items: ['Campo', 'Valor'] },
                                         { isHeading: false, items: ['Nome de exibição', p(dados.nome)] },
-                                        { isHeading: false, items: ['Plano desejado', p(dados.plano)] },
-                                        { isHeading: false, items: ['Período de aluguel', p(dados.periodo)] },
+                                        { isHeading: false, items: ['Plano desejado', falta(dados.plano)] },
+                                        { isHeading: false, items: ['Período de aluguel', falta(dados.periodo)] },
                                         { isHeading: false, items: ['Observações', p(dados.observacoes)] },
                                         { isHeading: false, items: ['Confirmação', '✅ registrada'] }
                                 ]

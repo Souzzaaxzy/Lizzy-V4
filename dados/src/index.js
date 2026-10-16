@@ -4211,7 +4211,11 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
           return;
         }
 
-        if (m && ctx.plano && ctx.periodo) {
+        if (m) {
+          // O CARD RICO mostra o estado atual da ficha, e os BOTOES vem logo
+          // abaixo. Os botoes do WhatsApp sao de uso unico, entao eles precisam
+          // ser reenviados a cada escolha — e e' nessa hora que o card tambem
+          // se atualiza. Visualmente le' como um bloco so'.
           await nazu.sendMessage(from, {
             ...montarFichaPreenchida({
               nome: info.pushName || null,
@@ -4221,19 +4225,13 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
             }),
             mentions: [sender],
             contextInfo: gerarContextNewsletter()
-          }).catch((e) => console.error('[TESTEFM] falha na ficha:', e?.message));
-          // O acumulador NAO e' limpo aqui de proposito: ele e' o que o botao
-          // "Pronto" usa para gerar o PDF. Limpar agora deixaria o "Pronto" sem
-          // dados (era o bug: respondia "escolha o plano e o período").
-        } else if (m) {
-          // Escolha parcial: confirma o que ja' foi escolhido.
-          const resumo = [ctx.plano && `Plano: *${ctx.plano}*`, ctx.periodo && `Período: *${ctx.periodo}*`]
-            .filter(Boolean).join(' · ');
+          }).catch((e) => console.error('[TESTEFM] falha no card:', e?.message));
+
           await nazu.sendMessage(from, {
-            text: `✅ ${resumo}\n\n_${ctx.plano && ctx.periodo ? '' : 'Falta escolher o outro campo. '}Toque em *Pronto — gerar PDF* quando terminar._`,
+            ...montarFormularioNativo(),
             mentions: [sender],
             contextInfo: gerarContextNewsletter()
-          }).catch(() => {});
+          }).catch((e) => console.error('[TESTEFM] falha nos botoes:', e?.message));
         } else {
           const texto = formatarRespostaForm(respostaForm);
           if (texto) {

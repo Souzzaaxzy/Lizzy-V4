@@ -289,11 +289,14 @@ await test('a resposta de plano/periodo monta a ficha e NAO vira conversa', asyn
       messageTimestamp: 1757900000, pushName: 'Autor',
     }, null, new Map(), null);
   }
+  // Um card por escolha: o primeiro mostra so o plano, o segundo ja com os dois.
   const rico = sent.filter((s) => s.content?.richResponse);
-  ok(rico.length === 1, `uma ficha rica (veio ${rico.length})`);
-  const linhas = rico[0].content.richResponse[1].table.map((r) => (r.items || r).join('|')).join(' ; ');
-  includes(linhas, 'pro', 'o plano escolhido');
-  includes(linhas, 'mensal', 'o periodo escolhido');
+  ok(rico.length === 2, `um card por escolha (veio ${rico.length})`);
+  const linhas = (r) => r.content.richResponse[1].table.map((x) => (x.items || x).join('|')).join(' ; ');
+  includes(linhas(rico[0]), 'pro', 'o plano no 1o card');
+  includes(linhas(rico[0]), 'pendente', 'e o periodo ainda pendente');
+  includes(linhas(rico[1]), 'pro', 'o plano no 2o card');
+  includes(linhas(rico[1]), 'mensal', 'e o periodo escolhido');
   ok(sent.every((s) => !s.content?.delete), 'nao foi apagada');
 });
 
@@ -439,10 +442,13 @@ await test('o handler real processa a resposta e avisa no grupo', async () => {
   };
   await handleMessage(nazu, info, null, new Map(), null);
   const out = sent.map((s) => s.content?.text ?? '').filter(Boolean).join('\n');
-  // Escolha de plano (sem periodo ainda) -> confirma o que foi escolhido.
-  includes(out, 'Plano:', 'confirma o plano escolhido');
-  includes(out, 'premium', 'com a escolha');
-  includes(out, 'Pronto', 'aponta o botao que gera o PDF');
+  // Escolha de plano -> o card rico se ATUALIZA e os botoes voltam abaixo.
+  const card = sent.find((s) => s.content?.richResponse);
+  ok(card, 'reenviou o card rico atualizado');
+  const linhas = card.content.richResponse[1].table.map((r) => (r.items || r).join('|')).join(' ; ');
+  includes(linhas, 'premium', 'com a escolha no card');
+  const btns = sent.find((s) => s.content?.nativeFlow);
+  ok(btns, 'reenviou os botoes (uso unico: precisam voltar)');
   ok(sent.every((s) => !s.content?.delete), 'nao foi tratada como spam/apagada');
 });
 

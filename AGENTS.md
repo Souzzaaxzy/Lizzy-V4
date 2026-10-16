@@ -10728,6 +10728,53 @@ manda **documento** com `application/pdf` e nome `.pdf`; "Pronto" sem escolha
 avisa; e o handler usa o gerador (nao um stub).
 **Verificado: removendo o bloco do "Pronto", 6 asserções falham.**
 
+### PROVA DEFINITIVA: o card rico NAO tem botao (dono insistiu: "NAO, eu quero no rich")
+O dono insistiu, entao fui a fonte **autoritativa**: o parser do `whatsmeow`
+(`types/richresponse/primitive.go`), que le' exatamente o que o WhatsApp envia.
+**Os 18 primitives — a lista COMPLETA:**
+`GenAICodeUXPrimitive` · `GenAIMarkdownTextUXPrimitive` · `GenATableUXPrimitive` ·
+`GenAIBotProgressStatusPrimitive` · `GenAILatexUXPrimitive` · `FOATextPrimitive` ·
+`GenAIMetadataTextPrimitive` · `GenAIBotThinkingStatusPrimitive` ·
+`GenAIProductItemCardPrimitive` · `GenAIImagePrimitive` · `GenAITaskPrimitive` ·
+`GenAIReelPrimitive` · `GenAIPostPrimitive` · `GenAIImaginePrimitive` ·
+`GenAISearchResultPrimitive` · `FOABloksPrimitive` · `GenAIDividerPrimitive` ·
+`GenAISpacerPrimitive`
+
+`grep -icE "button|click|cta|action|onclick|tap"` -> **0 ocorrencias**.
+ViewModels: `GenAISingleLayoutViewModel`, `GenAIGridLayoutViewModel`,
+`GenAIHScrollLayoutViewModel`, `GenAIVStackLayoutViewModel`.
+
+**Conclusao**: o card rico e' um **renderizador de conteudo**. Nao existe elemento
+de ENTRADA (botao/campo/checkbox) em nenhum dos 18. **Nao da' para escolher
+dentro dele** — e' limite do protocolo, nao falta de implementacao.
+
+**Alem disso**: rich + botoes na MESMA mensagem **falha** — `message` e' um
+**oneof** (um tipo por mensagem). Medido: `Cannot convert undefined or null to
+object`.
+
+### O MAIS PERTO POSSIVEL (implementado): card que se ATUALIZA + botoes abaixo
+Como os botoes do WhatsApp sao de **uso unico**, eles precisam ser reenviados a
+cada escolha. Aproveitei isso: **a cada toque, o bot reenvia o CARD RICO
+atualizado e os BOTOES logo abaixo** — visualmente le' como um bloco so'.
+
+```
+!testefm nativo
+  -> [card rico: Plano ⬜ pendente · Período ⬜ pendente] + [Plano | Período | Pronto]
+toca Plano
+  -> [card rico: Plano pro · Período ⬜ pendente] + [botoes de novo]
+toca Período
+  -> [card rico: Plano pro · Período mensal] + [botoes de novo]
+toca Pronto
+  -> PDF no chat
+```
+Os campos ainda nao escolhidos aparecem como **`⬜ pendente`** — a ficha "se
+preenche" na tela conforme o usuario toca.
+
+**Testes**: `tests/form-test.test.js` **27 testes / 103 asserções**. As
+asserções novas: o card reenviado carrega a escolha; o campo nao escolhido sai
+como `pendente`; e os botoes **voltam** a cada escolha (uso unico).
+**Verificado: removendo o reenvio dos botoes, 1 asserção falha.**
+
 ### LIMITACOES (o que NAO foi provado)
 - **Nao foi validado em aparelho real** (sem sessao pareada neste ambiente). O
   que esta provado: o payload/proto, o `encode`/`decode`, o parser da resposta e
