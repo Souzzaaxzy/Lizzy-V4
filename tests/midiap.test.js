@@ -603,14 +603,18 @@ await test('o audio sai em RITMO CONSTANTE (fila + relogio proprio)', () => {
   // MESMO instante zero do video (o `tZero`) — era o que fazia os dois
   // sairem no mesmo milissegundo.
   const i = md.indexOf('const timerAudio = setInterval');
-  const bloco = md.slice(i, i + 1400);
-  includes(bloco, 'Math.floor', 'o ritmo e contado pelo relogio');
-  includes(bloco, 'framesNoRelogio', 'conta os frames ja entregues no relogio');
-  includes(bloco, 'estado.tZero', 'ancora no instante zero do VIDEO');
+  const bloco = md.slice(i, i + 3000);
+  // O ritmo e' ancorado no ULTIMO frame entregue (`proximoDevidoMs`), nao no
+  // relogio absoluto: comparar com o tempo total acumulava divida e o audio
+  // atrasava 3 s (o relato do dono).
+  includes(bloco, 'proximoDevidoMs', 'o ritmo ancora no ultimo entregue');
+  includes(bloco, 'MS_POR_FRAME', 'um frame por intervalo do motor');
   // E o alvo da entrega e' o NIVEL REAL do motor (o contrato dele), nao um
   // contador nosso: era isso que enchia o buffer e atrasava o audio.
   includes(bloco, 'getLiveBufferMs', 'le o nivel real do motor');
   includes(bloco, 'AUDIO_ALVO_MS', 'so entrega abaixo do alvo do motor');
+  // E o atraso acumulado e' DESCARTADO (volta ao tempo real).
+  includes(bloco, 'FILA_MAX_FRAMES', 'descarta quando a fila passa do teto');
 });
 
 await test('o VIDEO e liberado pelo MESMO relogio (sincronia no ms)', () => {

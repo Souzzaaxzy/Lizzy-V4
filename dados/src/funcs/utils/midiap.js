@@ -150,11 +150,15 @@ const FILA_MAX_FRAMES = 12;
  * latencia pura (MEDIDO: com o relogio adiantado o buffer ficava em 500 ms e
  * o audio saia atrasado).
  *
- * NAO usar um valor menor: o motor tem o jitter buffer DELE e nao drena
- * abaixo de um piso (MEDIDO: ~100 ms). Com um alvo de 60 ms o gate nunca
- * liberava — o audio ficava preso e o descompasso crescia sem parar.
+ * MEDIDO com o motor real, mantendo o alvo constante:
+ *   - alvo 0  (entrega sempre que a fila tem): INSTAVEL — o descompasso vai a
+ *     -19000 ms (o buffer nunca se forma e o video dispara na frente);
+ *   - alvo 30: descompasso estavel em 20-60 ms;
+ *   - alvo 60: descompasso estavel em 60 ms.
+ * 30 e' o menor valor que se mantem estavel — abaixo dele o buffer nao
+ * sustenta o ritmo. Configuravel por `MIDIAP_AUDIO_ALVO_MS`.
  */
-const AUDIO_ALVO_MS = 120;
+const AUDIO_ALVO_MS = Number.parseInt(process.env.MIDIAP_AUDIO_ALVO_MS || '30', 10);
 
 /**
  * Watermarks do buffer de audio do MOTOR (pausa/retoma), em ms.
@@ -775,7 +779,10 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
     // (`estado.tZero`), nao no momento em que este codigo roda. Se o video
     // ainda nao entrou no ar, esperamos por ele — o audio nao pode comecar
     // antes (sairia adiantado) nem depois (atrasado).
-    let framesNoRelogio = 0;
+    // O instante em que o PROXIMO frame e' devido. Ancorado no tZero (o frame
+    // 0 sai no instante 0) e avancado de MS_POR_FRAME a cada frame entregue —
+    // nunca pelo relogio absoluto (isso acumulava divida).
+    let proximoDevidoMs = estado.tZero ?? Date.now();
     const timerAudio = setInterval(() => {
       if (estado.parado) return;
       // O VIDEO e' liberado pelo MESMO relogio (o tZero e' dele).
@@ -783,14 +790,16 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
       if (!estado.videoComecou) return;          // espera o marco zero do video
       if (!estado.fila || estado.fila.length === 0) return;
 
-      // Quantos frames o relogio ja' permite ter entregue — contados desde o
-      // MESMO tZero do video.
+      // ## O RITMO: o proximo frame e' devido 60 ms depois do ULTIMO entregue
       //
-      // O `+1` e' do INSTANTE ZERO: o frame 0 vale no ms 0, nao no ms 60. Sem
-      // ele o 1o frame de audio esperava 60 ms e o audio nascia atrasado (o
-      // residuo medido de 64 ms) — o video ja' tinha saido no instante 0.
-      const permitido = Math.floor((Date.now() - estado.tZero) / MS_POR_FRAME) + 1;
-      if (framesNoRelogio >= permitido) return;   // ainda e' cedo: nao entrega
+      // NAO comparar com o tempo total (`Date.now() - tZero`): quando o motor
+      // segura, o relogio continua correndo e a "divida" de frames cresce sem
+      // limite — o audio acumula 3 s de atraso (o relato do dono).
+      //
+      // Ancorando no ULTIMO entregue, o relogio ESPERA junto com o motor: se
+      // ele segura 200 ms, o proximo frame sai 60 ms depois do anterior, sem
+      // divida acumulada. O atraso nao cresce.
+      if (Date.now() < proximoDevidoMs) return;   // ainda e' cedo: nao entrega
 
       // Le o nivel REAL do motor (a fonte da verdade — nao um contador nosso).
       let nivel = estado.nivelMs;
@@ -799,12 +808,35 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
         if (typeof atual === 'number') { nivel = atual; estado.nivelMs = atual; }
       } catch { /* segue com o ultimo valor */ }
 
+      // ## Se a fila passou do teto, o audio esta' ATRASADO: descarta o antigo
+      //
+      // O motor nao drena abaixo de um piso, entao o gate do nivel pode
+      // segurar por um tempo. Enquanto isso a fila cresce — e o audio que sai
+      // depois e' de N segundos atras. Descartar o MAIS ANTIGO faz o som
+      // pular para frente e voltar ao tempo real (o mesmo que o motor faz no
+      // buffer dele: *"drops the oldest samples on overflow"*).
+      //
+      // O teto e' o mesmo `FILA_MAX_FRAMES` do `bombearAudio`; aqui ele e'
+      // aplicado ANTES do gate do nivel, para o atraso nunca se acumular.
+      while (estado.fila.length > FILA_MAX_FRAMES) {
+        estado.fila.shift();
+        estado.audioDescartado = (estado.audioDescartado || 0) + 1;
+        // O frame descartado tambem "passou" no relogio: sem isto o relogio
+        // ficaria devendo e o ritmo travaria.
+        proximoDevidoMs = Math.min(proximoDevidoMs, Date.now());
+      }
+
       // Acima do alvo: o motor tem fila suficiente. Espera drenar (nao soma
       // atraso). O alvo e' o `resumeMs` do contrato dele.
       if (nivel >= AUDIO_ALVO_MS) return;
 
+      const antes = estado.amostras || 0;
       bombearAudio();
-      framesNoRelogio += 1;
+      // So' avanca o relogio se o frame REALMENTE saiu (o `bombearAudio` pode
+      // ter barrado por fila vazia). Assim o ritmo segue o que foi entregue.
+      if ((estado.amostras || 0) > antes) {
+        proximoDevidoMs += MS_POR_FRAME;
+      }
     }, 5);
     estado.timerAudio = timerAudio;
 
