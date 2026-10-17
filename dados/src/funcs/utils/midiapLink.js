@@ -44,6 +44,11 @@
 
 import { spawn } from 'child_process';
 import os from 'os';
+import {
+  argumentosAntiBloqueio, clientesDoYoutube, clientesSemCookies,
+  extractorArgsDoClient, ehBloqueio, ehFalhaDeAuth, resolveCookiesFile,
+  semCookies,
+} from './ytdlpAntiBloqueio.js';
 
 /** fps de reserva quando o yt-dlp nao informa. */
 const FPS_PADRAO = 15;
@@ -91,32 +96,53 @@ export async function acharYtDlp() {
 
 /** Os argumentos comuns (mesmos nos dois processos). */
 function baseDoLink() {
-  return ['--no-progress', '--no-warnings', '--no-playlist', '-o', '-'];
+  return [
+    '--no-progress', '--no-warnings', '--no-playlist',
+    // A MESMA receita anti-bloqueio do `!play`: runtime JS + solver EJS +
+    // cookies. Sem isto o YouTube responde "Sign in to confirm you're not a
+    // bot" e nenhum formato e' liberado (era o erro relatado no !midiap).
+    ...argumentosAntiBloqueio(),
+    '-o', '-',
+  ];
 }
 
 /**
  * O seletor do VIDEO.
  *
- * Prefere MP4/H.264 (o que o encoder do bot espera) dentro do teto de altura;
- * se nao houver, aceita qualquer video dentro do teto. NAO pede merge -- o
- * audio vem de outro processo (ver o cabecalho do modulo).
+ * ## O `protocol^=https` e' OBRIGATORIO (senao o yt-dlp grava em disco)
+ *
+ * MEDIDO: com `player_client=web_safari` o YouTube oferece 720p+ **so' por
+ * HLS** (`m3u8_native`). O downloader de HLS do yt-dlp **grava cada fragmento
+ * em arquivo** no CWD (`--Frag16.part`) antes de remontar -- ou seja, o video
+ * INTEIRO passava pelo disco. Medido: 13,4 MB escritos pelo yt-dlp.
+ *
+ * Exigindo `protocol^=https` o yt-dlp usa o downloader nativo (HTTP), que
+ * escreve **direto no stdout**, sem arquivo. O cliente DEFAULT oferece 22
+ * formatos video-only em HTTPS (ate' 3840p) + audio-only -- e' o unico que da'
+ * o par video/audio separado em HTTPS; os clientes nomeados entregam 1 muxado
+ * de 360p ou HLS.
+ *
+ * Prefere MP4/H.264 (o que o encoder do bot espera), depois qualquer video
+ * HTTPS dentro do teto. NAO pede merge -- o audio vem de outro processo.
  *
  * @returns {string}
  */
 export function formatoDoVideo() {
-  return `bv*[height<=${ALTURA_MAX}][ext=mp4][vcodec^=avc1]`
-    + `/bv*[height<=${ALTURA_MAX}][ext=mp4]`
-    + `/bv*[height<=${ALTURA_MAX}]`
-    + `/b[height<=${ALTURA_MAX}]`;
+  return `bv*[height<=${ALTURA_MAX}][protocol^=https][ext=mp4][vcodec^=avc1]`
+    + `/bv*[height<=${ALTURA_MAX}][protocol^=https][ext=mp4]`
+    + `/bv*[height<=${ALTURA_MAX}][protocol^=https]`
+    + `/bv*[height<=${ALTURA_MAX}]`;
 }
 
 /**
  * O seletor do AUDIO (so' a faixa, sem video).
  *
+ * Tambem exige HTTPS (mesma razao do video: HLS grava em disco).
+ *
  * @returns {string}
  */
 export function formatoDoAudio() {
-  return 'ba[ext=m4a]/ba';
+  return 'ba[protocol^=https][ext=m4a]/ba[protocol^=https]/ba';
 }
 
 /**
@@ -180,36 +206,109 @@ export async function fpsDoLink(url) {
 }
 
 /**
+ * Roda uma resolucao curta do yt-dlp para descobrir se o cliente e' aceito.
+ *
+ * Usa `--simulate` (nao baixa nada) so' para validar a extracao. Serve para
+ * escolher o `player_client` ANTES de subir os dois processos de download --
+ * assim um bloqueio e' detectado sem gastar banda.
+ *
+ * @param {{cmd: string, base: string[]}} yt
+ * @param {string} url
+ * @param {string[]} extraArgs
+ * @param {number} timeoutMs
+ * @returns {Promise<{ok: boolean, stderr: string}>}
+ */
+function validarExtracao(yt, url, extraArgs, timeoutMs = 45000) {
+  return new Promise((resolve) => {
+    const p = spawn(yt.cmd, [...yt.base, '--no-warnings', '--no-playlist', '--simulate', ...extraArgs, url], {
+      stdio: ['ignore', 'ignore', 'pipe']
+    });
+    let err = '';
+    p.stderr?.on('data', (c) => { err = (err + c.toString()).slice(-1200); });
+    const t = setTimeout(() => { try { p.kill('SIGKILL'); } catch { /* ok */ } }, timeoutMs);
+    p.on('error', () => { clearTimeout(t); resolve({ ok: false, stderr: String(err) }); });
+    p.on('close', (code) => { clearTimeout(t); resolve({ ok: code === 0, stderr: err }); });
+  });
+}
+
+/**
  * Sobe os DOIS yt-dlp (video e audio) entregando cada stream no stdout.
  *
  * Sao dois processos porque o merge do yt-dlp quebra (SIGSEGV); quem muxa e'
  * o ffmpeg do bot, lendo os dois pipes. Nada vai para o disco.
  *
+ * ## Anti-bloqueio (a receita do `!play`)
+ *
+ * O YouTube responde *"Sign in to confirm you're not a bot"* em IP de
+ * datacenter. O `!play` ja' contornava isso com runtime JS + EJS + cookies +
+ * `player_client`; aqui usamos a MESMA receita (modulo `ytdlpAntiBloqueio`),
+ * com a mesma escada de clientes e a mesma 2a passada sem cookies.
+ *
  * @param {string} url
- * @returns {{proc: object|null, procAudio: object|null, motivo?: string, detalhe?: string}}
+ * @param {(msg: string) => void} [log]
+ * @returns {Promise<{proc: object|null, procAudio: object|null, motivo?: string, detalhe?: string, client?: string}>}
  */
-export async function abrirLink(url) {
+export async function abrirLink(url, log = () => {}) {
   const yt = await acharYtDlp();
   if (!yt) {
     return { proc: null, procAudio: null, motivo: 'ytdlp_ausente', detalhe: 'yt-dlp nao encontrado no servidor' };
   }
-  try {
-    const subir = (args) => {
-      const p = spawn(yt.cmd, [...yt.base, ...args], {
-        stdio: ['ignore', 'pipe', 'pipe']
-      });
-      p.on('error', () => { /* o `close` do ffmpeg trata */ });
-      // Guarda o stderr: e' dele que sai o motivo real quando o yt-dlp falha.
-      p._stderr = '';
-      p.stderr?.on('data', (c) => { p._stderr = (p._stderr + c.toString()).slice(-800); });
-      return p;
-    };
-    const proc = subir(argumentosDoLink(url));
-    const procAudio = subir(argumentosDoAudio(url));
-    return { proc, procAudio };
-  } catch (e) {
-    return { proc: null, procAudio: null, motivo: 'falha_ao_abrir_link', detalhe: e?.message || String(e) };
+  const subir = (args) => {
+    const p = spawn(yt.cmd, [...yt.base, ...args], {
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+    p.on('error', () => { /* o `close` do ffmpeg trata */ });
+    // Guarda o stderr: e' dele que sai o motivo real quando o yt-dlp falha.
+    p._stderr = '';
+    p.stderr?.on('data', (c) => { p._stderr = (p._stderr + c.toString()).slice(-1200); });
+    return p;
+  };
+
+  const temCk = Boolean(resolveCookiesFile());
+  log(`cookies: ${temCk ? 'sim' : 'nao'}`);
+  const passadas = temCk ? [{ cookies: true }, { cookies: false }] : [{ cookies: true }];
+  // O DEFAULT vem PRIMEIRO: medido, e' o unico que entrega video-only E
+  // audio-only por HTTPS (os nomeados dao 1 muxado de 360p ou HLS -- e o HLS
+  // grava `.part` no disco). Os nomeados ficam como fallback.
+  const clientes = clientesDoYoutube();
+  let ultimoErro = '';
+
+  for (let i = 0; i < passadas.length; i++) {
+    const p = passadas[i];
+    const lista = i === 0 ? clientes : clientesSemCookies();
+    if (i === 1) log('cookies recusados — tentando sem eles');
+    for (const client of lista) {
+      // `baseDoLink` ja' traz os cookies; na 2a passada o par e' removido.
+      // O cliente `default` NAO leva `--extractor-args` (e' o comportamento
+      // padrao do yt-dlp; forcá-lo por nome muda o que o YouTube devolve).
+      const extra = client === 'default' ? [] : ['--extractor-args', extractorArgsDoClient(client)];
+      const argsBase = [...baseDoLink(), ...extra];
+      const argsSemCk = p.cookies ? argsBase : semCookies(argsBase);
+      const teste = await validarExtracao(yt, url, argsSemCk);
+      if (teste.ok) {
+        log(`player_client=${client}${p.cookies ? '' : ' (sem cookies)'}`);
+        try {
+          const comFmt = (a, formato) => [...a, '-f', formato, url];
+          const proc = subir(comFmt(argsSemCk, formatoDoVideo()));
+          const procAudio = subir(comFmt(argsSemCk, formatoDoAudio()));
+          return { proc, procAudio, client };
+        } catch (e) {
+          return { proc: null, procAudio: null, motivo: 'falha_ao_abrir_link', detalhe: e?.message || String(e) };
+        }
+      }
+      ultimoErro = teste.stderr || ultimoErro;
+      log(`player_client=${client} recusado${ehBloqueio(teste.stderr) ? ' (bloqueio)' : ''}`);
+      if (ehFalhaDeAuth(teste.stderr) && p.cookies && i === 0) break; // pula p/ 2a passada
+    }
+    // So' tenta sem cookies se houve sinal de bloqueio/autenticacao.
+    if (!(ehBloqueio(ultimoErro) || ehFalhaDeAuth(ultimoErro))) break;
   }
+
+  return {
+    proc: null, procAudio: null,
+    motivo: 'extracao_recusada',
+    detalhe: ultimoErro.trim().split('\n').filter(Boolean).slice(-1)[0] || 'nenhum cliente do YouTube aceitou a extracao',
+  };
 }
 
 /**
@@ -226,8 +325,14 @@ export function motivoDoYtdlp(stderr = '') {
   if (/Requested format is not available/i.test(e)) {
     return 'O vídeo não tem um formato compatível. Tente outro link.';
   }
-  if (/Sign in to confirm|not a bot|cookies/i.test(e)) {
-    return 'O YouTube pediu verificação. Tente outro vídeo.';
+  if (/Sign in to confirm|not a bot/i.test(e)) {
+    return 'O YouTube pediu verificação (bloqueio de IP). Configure os cookies do YouTube ou tente mais tarde.';
+  }
+  if (/cookies|Invalid cookies|Failed to parse cookies/i.test(e)) {
+    return 'Os cookies do YouTube não foram aceitos. Verifique o arquivo de cookies.';
+  }
+  if (/No supported JavaScript runtime|js-runtime|EJS|remote-components/i.test(e)) {
+    return 'Falta o runtime JS/solver do yt-dlp no servidor (atualize o yt-dlp).';
   }
   if (/Private video|unavailable|removed|does not exist/i.test(e)) {
     return 'O vídeo não está disponível (privado, removido ou restrito).';

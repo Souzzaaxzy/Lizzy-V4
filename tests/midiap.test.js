@@ -604,10 +604,16 @@ await test('o link usa DOIS yt-dlp (video e audio), SEM merge', async () => {
   // SIGSEGV (-11), devolvendo ZERO byte -> o nosso ffmpeg morre com 183.
   // Por isso sao dois processos e quem muxa e' o ffmpeg do bot.
   ok(!jv.includes('+ba') && !ja.includes('+ba'), 'NAO usa merge (+ba) — era o SIGSEGV/183');
-  includes(jv, 'b[height<=', 'o video respeita o teto de altura');
+  includes(jv, 'height<=', 'o video respeita o teto de altura');
   includes(jv, 'ext=mp4', 'prefere mp4 (o que o encoder do bot espera)');
   includes(ja, 'ba', 'o segundo processo pede SO a faixa de audio');
   ok(!ja.includes('bv*'), 'o processo de audio nao pede video');
+  // `protocol^=https` e' OBRIGATORIO: o YouTube entrega 720p+ so' por HLS, e o
+  // downloader de HLS do yt-dlp GRAVA cada fragmento no disco (`--Frag16.part`).
+  // Medido: 13,4 MB escritos em disco. Com o filtro, o download nativo escreve
+  // direto no stdout -- e' o que mantem o "nada vai para o disco".
+  includes(jv, 'protocol^=https', 'video: so protocolo HTTPS (HLS grava em disco)');
+  includes(ja, 'protocol^=https', 'audio: so protocolo HTTPS (mesma razao)');
   // Os dois mandam para o stdout, sem arquivo.
   for (const [args, nome] of [[v, 'video'], [a, 'audio']]) {
     ok(args.includes('-o') && args.includes('-'), `${nome}: stdout (-o -), sem arquivo`);
@@ -617,6 +623,52 @@ await test('o link usa DOIS yt-dlp (video e audio), SEM merge', async () => {
   ok(!jv.includes('--remux-video'), 'nao usa --remux-video (post-processador de arquivo)');
   // O formato pedido nao pode exigir ffmpeg: e' o downloader NATIVO.
   ok(!jv.includes('--ffmpeg-location'), 'o video nao delega ao ffmpeg (downloader nativo)');
+});
+
+await test('a receita anti-bloqueio e a do !play (runtime JS + EJS + cookies)', async () => {
+  const ab = await import(new URL('../dados/src/funcs/utils/ytdlpAntiBloqueio.js', import.meta.url).href);
+  const args = ab.argumentosAntiBloqueio();
+  const j = args.join(' ');
+  // Sem o runtime JS o YouTube moderno responde "Sign in to confirm you're not
+  // a bot" e nao libera formatos -- era o erro relatado no !midiap.
+  includes(j, '--js-runtimes', 'habilita o runtime JS do extractor');
+  includes(j, '--remote-components', 'autoriza o solver de desafios (EJS)');
+  includes(j, 'ejs', 'o solver e o EJS oficial');
+  // O runtime padrao e' o PROPRIO Node do bot (zero dependencia nova).
+  includes(j, process.execPath, 'usa o Node do bot como runtime');
+  // O cliente DEFAULT vem primeiro: medido, e' o unico que entrega o par
+  // video-only + audio-only por HTTPS (os nomeados dao 1 muxado de 360p ou HLS).
+  const clientes = ab.clientesDoYoutube();
+  ok(clientes[0] === 'default', 'o cliente default e o primeiro');
+  ok(clientes.length > 1, 'ha clientes de fallback');
+  // O sufixo do extractor-args leva o client.
+  includes(ab.extractorArgsDoClient('web_safari'), 'player_client=web_safari', 'monta o extractor-args');
+  // As deteccoes que o !play usava.
+  ok(ab.ehBloqueio('Sign in to confirm you are not a bot'), 'detecta bloqueio');
+  ok(!ab.ehBloqueio('video unavailable'), 'nao confunde indisponivel com bloqueio');
+  ok(ab.ehFalhaDeAuth('Invalid cookies'), 'detecta falha de cookies');
+  // `semCookies` tira o PAR (flag + valor).
+  const comCk = ['-a', '--cookies', 'x.txt', '-b'];
+  const sem = ab.semCookies(comCk);
+  ok(!sem.includes('--cookies') && !sem.includes('x.txt'), 'remove o par --cookies <arquivo>');
+  ok(sem.includes('-a') && sem.includes('-b'), 'preserva o resto');
+});
+
+await test('o !play e o !midiap compartilham a MESMA receita (fonte unica)', () => {
+  // Antes cada modulo montava os proprios argumentos -- e o !midiap nao mandava
+  // nada disso, por isso caia no bloqueio que o !play ja sabia contornar.
+  const yt = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/downloads/youtube.js'), 'utf-8');
+  const lk = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/midiapLink.js'), 'utf-8');
+  for (const [nome, src] of [['youtube.js', yt], ['midiapLink.js', lk]]) {
+    includes(src, 'ytdlpAntiBloqueio', `${nome}: importa o modulo compartilhado`);
+    includes(src, 'clientesDoYoutube', `${nome}: usa a lista de clientes unica`);
+  }
+  // Nenhum dos dois pode voltar a ter a lista/valores hardcoded.
+  ok(!/const clients = \['web_safari'/.test(yt), 'youtube.js nao tem a lista hardcoded');
+  ok(!/return \['web_safari'/.test(lk), 'midiapLink.js nao tem a lista hardcoded');
+  // A deteccao de bloqueio/auth tambem vem do modulo unico.
+  includes(yt, 'ehBloqueioCmp', 'youtube.js delega a deteccao de bloqueio');
+  includes(yt, 'ehFalhaDeAuth', 'youtube.js delega a deteccao de cookies');
 });
 
 await test('motivoDoYtdlp traduz a falha do yt-dlp (nao diz "corrompido")', async () => {

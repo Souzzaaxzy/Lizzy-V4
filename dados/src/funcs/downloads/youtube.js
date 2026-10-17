@@ -60,6 +60,14 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+// A receita anti-bloqueio vive num modulo so', compartilhado com o
+// `!midiap` (que fala com o MESMO yt-dlp e sofre o MESMO bloqueio).
+import {
+  argumentosDoRuntime, clientesDoYoutube, clientesSemCookies,
+  extractorArgsDoClient, ehBloqueio as ehBloqueioCmp, ehFalhaDeAuth,
+  resolveCookiesFile as resolveCookiesCompartilhado, semCookies,
+  temCookies,
+} from '../utils/ytdlpAntiBloqueio.js';
 
 const MAX_BYTES = 256 * 1024 * 1024;
 const FFMPEG = process.env.FFMPEG_PATH || 'ffmpeg';
@@ -137,24 +145,9 @@ function searchCacheSet(key, data) {
 //
 // O caminho é relativo ao CWD do processo (raiz do bot) ou absoluto.
 
-let resolvedCookiesPath = null;
+// Fonte unica: o modulo compartilhado (mesma prioridade de arquivo).
 function resolveCookiesFile() {
-  const candidates = [];
-  if (resolvedCookiesPath) return resolvedCookiesPath;
-  if (YOUTUBE_COOKIES_FILE) candidates.push(YOUTUBE_COOKIES_FILE);
-  if (YTDLP_COOKIES_FILE) candidates.push(YTDLP_COOKIES_FILE);
-  candidates.push(path.join('data', 'youtube', 'cookies.txt'));
-  try {
-    for (const c of candidates) {
-      if (fs.existsSync(c) && fs.statSync(c).isFile()) {
-        resolvedCookiesPath = c;
-        return resolvedCookiesPath;
-      }
-    }
-  } catch {
-    /* se algo der errado, segue sem cookies */
-  }
-  return null; // não cacheia falha? se o arquivo surgir depois, será detectado
+  return resolveCookiesCompartilhado();
 }
 
 // ---------- processo filho com timeout real (spawn, args separados) ----------
@@ -258,11 +251,9 @@ async function ffmpegLocationArgs() {
 }
 
 // Argumentos do runtime JS + solver de desafios (EJS) do extractor do YouTube.
+// Fonte unica: o modulo compartilhado (o `!midiap` usa a MESMA receita).
 function jsRuntimeArgs() {
-  // --js-runtimes habilita o runtime JS (node do bot por padrão).
-  const runtimes = [YTDLP_JS_RUNTIME || `node:${process.execPath}`];
-  // --remote-components ejs:github autoriza o yt-dlp a baixar os solvers oficiais
-  return ['--js-runtimes', runtimes.join(','), '--remote-components', YTDLP_REMOTE_COMPONENTS || 'ejs:github'];
+  return argumentosDoRuntime();
 }
 
 // ---------- IP público do servidor (diagnóstico de bloqueio) ----------
@@ -323,13 +314,11 @@ function mapYtDlpError(stderr) {
 
 // Flag transitório de anti-bot/rate-limit (pode ceder com espera maior)
 function isBlockedError(err) {
-  const s = String(err?.message || '') + '\n' + String(err?.stderr || '');
-  return /not a bot|Sign in to confirm you.re not a bot|HTTP Error 429|Too Many Requests|HTTP Error 403|quota|rate-?limit/i.test(s);
+  return ehBloqueioCmp(String(err?.message || '') + '\n' + String(err?.stderr || ''));
 }
 // Falha de autenticação/cookies (ex.: cookies expirados, inválidos, corrompidos)
 function isAuthFailure(err) {
-  const s = String(err?.message || '') + '\\n' + String(err?.stderr || '');
-  return /Invalid cookies|Failed to parse cookies|cookies are not valid|cookie.*expired|cookie.*invalid|Netscape.*cookies|could not load cookies|Unable to parse|cookie-audit|invalid or expired cookies/i.test(s);
+  return ehFalhaDeAuth(String(err?.message || '') + '\n' + String(err?.stderr || ''));
 }
 
 
@@ -467,7 +456,7 @@ async function ytdlpDownload(videoId, extraArgs, outTemplate) {
     // não exige PO (mas não baixa "made for kids"); android exige GVS/player PO agora e
     // fica como último fallback (com PO opcional). CLIENTES 'tv'/'tv_embedded'/'ios' foram
     // removidos: exigem cookies de conta ou PO GVS e falham com "page needs to be reloaded".
-    const clients = ['web_safari', 'mweb', 'web', 'android_vr', 'android'];
+    const clients = clientesDoYoutube();
     let stdout = null;
     let lastErr = null;
     let sawBlocked = false;
@@ -478,11 +467,11 @@ async function ytdlpDownload(videoId, extraArgs, outTemplate) {
     const maxPasses = cookiesFile ? 2 : 1;
     for (let pass = 0; pass < maxPasses; pass++) {
       // 2ª passada: remove o par `--cookies <arquivo>` dos argumentos (fallback).
-      const passArgs = pass === 1 ? args.filter((a, i) => a !== '--cookies' && !(args[i - 1] === '--cookies')) : args;
+      const passArgs = pass === 1 ? semCookies(args) : args;
       if (pass === 1) {
         console.log('[YT-DLP] Cookies configurados, mas a autenticação não foi aceita — tentativa controlada sem cookies.');
       }
-      const clientList = pass === 1 ? ['web_safari', 'mweb', 'web'] : clients;
+      const clientList = pass === 1 ? clientesSemCookies() : clients;
       for (const client of clientList) {
         const remaining = YTDLP_DEADLINE - (Date.now() - deadlineStart);
         if (remaining <= 1000) {
@@ -496,8 +485,7 @@ async function ytdlpDownload(videoId, extraArgs, outTemplate) {
 
 
 
-        const poSuffix = YTDLP_PO_TOKEN ? `,po_token=${YTDLP_PO_TOKEN}` : '';
-        const argsWithClient = [...passArgs, '--extractor-args', `youtube:player_client=${client}${poSuffix}`];
+        const argsWithClient = [...passArgs, '--extractor-args', extractorArgsDoClient(client)];
         try {
           const result = await runProcess(ytdlp.cmd, argsWithClient, attemptTimeout);
           stdout = result.stdout;
