@@ -10856,6 +10856,57 @@ causa estava **uma camada antes** — no *canal* por onde o dado chegava. O que
 fechou o caso foi imprimir **stdout e stderr separadamente** em vez de assumir
 qual deles trazia o valor.
 
+
+#### 🔊 ÁUDIO: cortes e atraso — backpressure no motor + o gate que atrasava (out/2026) ✅
+Dois problemas relatados (*"áudio muito atrasado"* e *"cortando, com quedas"*),
+ambos no **alimentador de áudio** do `!midiap`.
+
+##### 1. O CORTE — faltava backpressure no motor
+O pacote (`@zapo-js/voip`) **DESCARTA as amostras mais antigas** quando o
+buffer passa de `extMaxBuffer` (**750 ms**), e publica o contrato
+**pause/resume** (`feedWatermarksMs` → **120 ms / 60 ms**). O código alimentava
+**sem olhar** isso. Medido com a física real do motor (SR 16000):
+
+| política | resultado em 6 s de áudio |
+|---|---|
+| sem backpressure | buffer bate em **750 ms** e o motor **descarta 53 vezes** ← o corte |
+| com backpressure | **zero descarte** |
+
+**Correção**: `entregarAudio` respeita **`AUDIO_MAX_MS` (240 ms** — bem abaixo
+dos 750 ms do motor) e **guarda o bloco numa fila** em vez de entregar;
+`drenarFila` repõe quando o motor drena, lendo o nível **real** por
+`getLiveBufferMs` (não um contador nosso).
+
+##### 2. O ATRASO — o gate de sincronia atrasava o que JÁ estava alinhado
+Medido nos **4 instantes** do pipeline:
+
+```
+1) áudio CHEGA no ffmpeg:  3194 ms
+2) vídeo CHEGA no ffmpeg:  2608 ms   (o áudio chega 586 ms DEPOIS)
+3) vídeo SAI do encoder:   3218 ms
+4) áudio SAI do encoder:   3200 ms   (saem com ~18 ms de diferença!)
+```
+
+Ou seja: **o ffmpeg já alinha os dois** — o `-re` de cada entrada cuida disso.
+O gate que eu havia posto (segurar o áudio até o 1º frame) **atrasava o que já
+estava sincronizado**: o descompasso ia a **-300/-534 ms**. **Removido.**
+
+| | antes | depois |
+|---|---|---|
+| descompasso de conteúdo | -300 a -534 ms | **-96 ms** |
+| descartes do motor | 53 | **0** |
+| buffer final | 750 ms (no teto) | **184 ms** |
+
+##### 🚨 BUG GRAVE corrigido no caminho (travava a EVENT LOOP)
+`drenarFila` fazia `shift()` e o `entregarAudio` **devolvia o bloco para a
+fila** (quando o gate barrava) → o `while` **nunca terminava** e travava a
+**event loop**: o bot **parava de responder** (nem os timers rodavam). Agora
+`entregarAudio` devolve se **entregou** e a drenagem **para** quando não
+entregou. Há teste para isso.
+
+**Testes**: `tests/midiap.test.js` — **50 testes / 176 asserções, 0 falhas**
+(+3: o backpressure, o loop infinito e a ausência do gate).
+
 #### Como configurar os cookies
 `YOUTUBE_COOKIES_FILE` (ou o padrão implícito `data/youtube/cookies.txt`) — o
 **mesmo** arquivo do `!play`, formato **Netscape**. É opcional: sem ele o fluxo
