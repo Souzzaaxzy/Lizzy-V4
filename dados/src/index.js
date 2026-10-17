@@ -4052,7 +4052,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
      * Sobe uma chamada de VOZ neste grupo e registra para o `encerrar`.
      *
      * Ponto ÚNICO de subir call. Nada de sinalização aqui: quem CRIA a call é
-     * o motor de mídia (medido no pacote do zapo).
+     * o motor de mídia (medido no pacote `lizzy-call`).
      *
      * @returns {Promise<{ok: boolean, callId?: string, stage?: string, motivo?: string, detalhe?: string}>}
      */
@@ -4068,16 +4068,6 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       }
 
       // Convidados: todos os membros, menos o bot (ele entra como criador).
-      //
-      // ## NAO "normalizar" este jid (regressao real)
-      //
-      // O jid vai **como veio**. Aqui ja' se tentou forcar `@s.whatsapp.net`
-      // (para "resolver" o LID depois) e isso QUEBROU a call: num grupo LID o
-      // `part.id` **e' o LID**, e trocar o sufixo destruia a identidade.
-      //
-      // Este bloco e' o que funcionava (commit 3bcf911). O motor resolve os
-      // devices pelo `groupParticipantAccountKey`, que ja' lida com as duas
-      // formas — nao ha o que normalizar aqui.
       const botUser = String(botCallId).split('@')[0].split(':')[0];
       const convidados = [];
       const vistos = new Set();
@@ -18723,7 +18713,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
             '[UPDATE] Database restaurado': '✅ Dados do bot restaurados!',
             '[UPDATE] Database validado': '✅ Dados do bot validados!',
             'Dependências já atualizadas': '✅ Dependências Node já estão atualizadas!',
-            // O script reporta as dependencias de git (a fork do Baileys),
+            // O script agora reporta TODAS as dependências git (Baileys E lizzy-call),
             // então o gatilho é o prefixo comum, não a frase inteira antiga.
             'Dependência(s) de git em commit desatualizado': ' Atualizando as dependências git para o commit correto...',
             'Instalando dependências': '📦 Instalando/verificando dependências...\n⏳ Isso pode levar alguns minutos...',
@@ -35743,7 +35733,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
       // !callp — sobe uma chamada de VOZ no grupo.
       //
       // QUEM CRIA A CHAMADA É O MOTOR DE MÍDIA, não a sinalização. Isso foi
-      // medido no motor de midia: `startGroupCall`
+      // medido (`wasm-call-ownership` no pacote `lizzy-call`): `startGroupCall`
       // faz o motor EMITIR o `<call><offer>`; `joinVoipOngoingCall` fica em
       // silêncio a menos que o motor já conheça a call.
       //
@@ -35895,7 +35885,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               sem_identidade: 'Não consegui identificar meu próprio número para subir a chamada.',
               sem_metadata: 'Não consegui ler os membros do grupo agora. Tente de novo.',
               grupo_pequeno: 'A chamada de grupo precisa de pelo menos 2 outros membros.',
-              pacote_de_midia_ausente: 'A mídia não está instalada neste servidor (faltam os pacotes do zapo).',
+              pacote_de_midia_ausente: 'A mídia não está instalada neste servidor (falta o pacote `lizzy-call`).',
               nao_pareado: 'O motor de mídia ainda não foi pareado. Use `!callp parear <numero>`.',
               sem_conexao: 'A conexão do motor de mídia não abriu. Tente de novo em alguns segundos.',
               ja_na_call: 'Já existe uma chamada de mídia neste grupo.',

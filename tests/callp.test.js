@@ -109,7 +109,7 @@ function instalarDubleMidia({ ok = true, motivo = null, stage = 'pronta', callId
   return chamadas;
 }
 
-function makeNazu({ sent, groupJid, participants, idEhPn = false }) {
+function makeNazu({ sent, groupJid, participants }) {
   const map = {};
   for (const p of participants) { map[p.jid] = p.lid; map[p.lid] = p.jid; }
   return {
@@ -120,11 +120,7 @@ function makeNazu({ sent, groupJid, participants, idEhPn = false }) {
     signalRepository: { lidMapping: { getPNForLID: async (lid) => map[lid] || null } },
     groupMetadata: async () => ({
       id: groupJid, subject: 'Grupo Callp',
-      // `idEhPn`: grupo NAO-LID, onde o `id` do participante e' o PN e o LID
-      // vem no campo `lid` (a forma real que o bug nao tratava).
-      participants: participants.map((p) => (idEhPn
-        ? { id: p.jid, lid: p.lid, admin: p.isAdmin ? 'admin' : null, phoneNumber: p.jid }
-        : { id: p.lid, admin: p.isAdmin ? 'admin' : null, phoneNumber: p.jid }))
+      participants: participants.map((p) => ({ id: p.lid, admin: p.isAdmin ? 'admin' : null, phoneNumber: p.jid }))
     }),
     groupParticipantsUpdate: async () => ({}),
     groupRequestParticipantsList: async () => [],
@@ -135,8 +131,8 @@ function makeNazu({ sent, groupJid, participants, idEhPn = false }) {
   };
 }
 
-async function run({ groupJid, sender, text, participants, sent = [], fromMe = true, idEhPn = false }) {
-  const nazu = makeNazu({ sent, groupJid, participants, idEhPn });
+async function run({ groupJid, sender, text, participants, sent = [], fromMe = true }) {
+  const nazu = makeNazu({ sent, groupJid, participants });
   const info = {
     key: { remoteJid: groupJid, fromMe, id: `M-${Math.random().toString(36).slice(2, 10)}`, participant: sender.lid },
     message: { extendedTextMessage: { text, contextInfo: { remoteJid: groupJid, mentionedJid: [] } } },
@@ -328,7 +324,7 @@ await test('mídia ausente: avisa e NÃO registra call', async () => {
   instalarDubleMidia({ ok: false, motivo: 'pacote_de_midia_ausente' });
   const out = await run({ groupJid, sender: admin, text: '!callp', participants });
   includes(out.text, 'Não consegui subir', 'avisa');
-  includes(out.text, 'zapo', 'diz o que falta');
+  includes(out.text, 'lizzy-call', 'diz o que falta');
   ok(callState.obterCall(groupJid) === null, 'não deixou call pendurada');
 });
 

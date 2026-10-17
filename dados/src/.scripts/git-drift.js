@@ -15,9 +15,9 @@
  * ## Todas as dependências git, não só a fork do Baileys
  *
  * A checagem nasceu focada na fork, mas o projeto tem OUTRA dependência git:
- * as dependencias de git (hoje so a fork do Baileys). Elas tem o mesmo
+ * o `lizzy-call` (a pilha de mídia da call). Ele tem exatamente o mesmo
  * problema — a versão `0.2.0` não muda entre commits — e ficava sem checagem.
- * Resultado real: `!atualizar` dizia "100% sincronizado" e a dependencia
+ * Resultado real: `!atualizar` dizia "100% sincronizado" e o `lizzy-call`
  * continuava no commit antigo, sem a correção. Por isso a varredura agora é
  * sobre todas as entradas `resolved` do tipo `git+...`, não uma lista fixa.
  *
