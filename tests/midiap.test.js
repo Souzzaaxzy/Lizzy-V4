@@ -629,15 +629,44 @@ await test('o VIDEO e liberado pelo MESMO relogio (sincronia no ms)', () => {
   includes(md, 'filaVideo', 'o video entra numa fila');
   includes(md, 'bombearVideo', 'um bombeador libera o video pelo relogio');
   const i = md.indexOf('estado.bombearVideo');
-  const bloco = md.slice(i, i + 800);
-  includes(bloco, 'estado.tZero', 'usa o MESMO instante zero do audio');
+  const bloco = md.slice(i, i + 2200);
+  // O video NAO pode ser liberado pelo relogio absoluto (`Date.now() - tZero`):
+  // quando o motor SEGURA o audio, o relogio continua e o video fica na frente
+  // (MEDIDO: 2960 ms, e nunca voltava). Ele segue o TEMPO DE MIDIA ja'
+  // entregue do audio — se o audio para, o video para junto.
+  includes(bloco, 'estado.tempoAudioMs', 'o video segue o tempo de midia do audio');
   includes(bloco, 'indice / fps', 'cada frame vale o seu instante nominal');
+  ok(!/Date\.now\(\) - estado\.tZero/.test(bloco), 'o video NAO usa o relogio absoluto (a causa do atraso)');
   // O timer do audio bombeia o video tambem (um relogio so).
   const t = md.indexOf('const timerAudio = setInterval');
   includes(md.slice(t, t + 300), 'bombearVideo', 'o timer do audio tambem bombeia o video');
   // E a fila do video e' esvaziada no fim (senao o video termina antes).
   const c = md.indexOf("proc.on('close'");
   includes(md.slice(c, c + 2500), 'filaVideo', 'esvazia a fila do video no fim');
+});
+
+await test('PREROLL: so comeca quando os DOIS fluxos estao prontos', () => {
+  // Pedido do dono: *"nao tem como gravar de comeco e so comecar a transmissao
+  // quando os dois estiverem prontos e sincronizados?"*.
+  //
+  // Antes, o 1o frame de video marcava o tZero e ia direto para o ar, com o
+  // audio ainda chegando. Agora nada sai ate' haver material dos DOIS.
+  const md = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/midiap.js'), 'utf-8');
+  includes(md, 'PREROLL_FRAMES', 'espera um minimo de frames de cada fluxo');
+  includes(md, 'PREROLL_MAX_MS', 'tem teto de espera (video sem audio nao trava)');
+  includes(md, 'tentarPreroll', 'existe o gatilho do preroll');
+  const i = md.indexOf('tentarPreroll = () => {\n      if (estado.parado');
+  const bloco = md.slice(i, i + 1800);
+  includes(bloco, 'prerollFeito = true', 'libera a transmissao');
+  includes(bloco, 'estado.tZero = Date.now()', 'marca o instante zero no preroll');
+  // O relogio dos DOIS nasce no mesmo instante (frame 0 = ms 0 de cada um).
+  includes(bloco, 'estado.proximoDevidoMs = estado.tZero', 'o relogio do audio nasce junto');
+  // Chamado pelos DOIS produtores: sem o do audio, o preroll nunca liberaria.
+  includes(md, 'tentarPreroll();\n    });', 'o video chama o preroll');
+  includes(md, 'tentarPreroll();\n      } catch (e) {', 'o audio chama o preroll');
+  // E o `enviarFrame` NAO pode mais sobrescrever o tZero (moveria o relogio).
+  const e = md.indexOf('function enviarFrame');
+  ok(!/estado\.tZero = Date\.now\(\)/.test(md.slice(e, e + 900)), 'enviarFrame nao sobrescreve o tZero do preroll');
 });
 
 await test('o audio reagrupa em frames de 960 amostras (o que o motor espera)', () => {
@@ -663,10 +692,17 @@ await test('a fila tem TETO e descarta o MAIS ANTIGO (volta ao tempo real)', () 
   // motor faz no buffer dele ("drops the oldest samples on overflow").
   const md = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/midiap.js'), 'utf-8');
   includes(md, 'FILA_MAX_FRAMES', 'a fila tem teto');
-  const i = md.indexOf('const bombearAudio');
-  const bloco = md.slice(i, i + 900);
-  includes(bloco, 'shift', 'descarta do INICIO da fila (o mais antigo)');
+  // O descarte vive no TIMER do audio (nao no `bombearAudio`): ele so' vale
+  // com o motor SEGURANDO (nivel no alvo). No arranque a fila esta' funda
+  // porque o ffmpeg produz em rajada — descartar ali perderia audio bom.
+  const t = md.indexOf('const timerAudio = setInterval');
+  const bloco = md.slice(t, t + 3200);
+  includes(bloco, 'estado.fila.shift()', 'descarta do INICIO da fila (o mais antigo)');
   includes(bloco, 'fila.length > FILA_MAX_FRAMES', 'so descarta acima do teto');
+  includes(bloco, 'nivel >= AUDIO_ALVO_MS', 'so descarta com o motor segurando');
+  // E o `bombearAudio` NAO pode descartar (era o furo: perdia 120 ms no arranque).
+  const b = md.indexOf('const bombearAudio');
+  ok(!/fila\.length > FILA_MAX_FRAMES/.test(md.slice(b, b + 900)), 'o bombearAudio nao descarta (so entrega)');
 });
 
 // ============================================================================
