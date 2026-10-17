@@ -11081,3 +11081,48 @@ põe PN), então o teste passava com o código quebrado. É o mesmo erro de mét
 já registrado no `require` em ESM e no `sendMessage` da edição de pagamento:
 **um dublê mais generoso que a produção esconde o defeito**. O certo é a
 fixture refletir a forma REAL do dado — inclusive nos casos incômodos.
+
+### 🔑 A CORREÇÃO CERTA (lendo a doc do zapo): o LID é resolvido pelo PRÓPRIO zapo ✅
+O dono apontou: *"olha as docs do zapo para fazer corretamente"*. Lendo
+**`zapo.to/en/concepts/identities.md`** (a doc oficial, indexada em
+`zapo.to/llms.txt`), a causa ficou clara — e a correção anterior estava **pela
+metade**.
+
+#### O que a doc diz
+1. **O motor exige LID** em `participants[].jid` (a doc do pacote: *"The
+   account to ring, a LID"*, exemplo `112984198234339@lid`).
+2. **Mas o LID tem de ser o do PRÓPRIO zapo.** O Baileys e o zapo são
+   **sessões DIFERENTES** — o Baileys é o bot do WhatsApp, o zapo é o motor da
+   call, pareado à parte. O `lid` do metadata do **Baileys não vale** para a
+   call. **Era exatamente isso que o fix anterior não resolvia**: ele trocou PN
+   por `part.lid`, que é de **outra sessão**.
+3. A doc manda resolver pelo **profile coordinator**:
+   `client.profile.getLidsByPhoneNumbers([...])` → `SignalLidSyncResult[]`
+   (`queriedJid`, `phoneJid`, `lidJid`, `exists`, `invalid`). O **`queriedJid`
+   correlaciona por VALOR** — o servidor pode corrigir o número (9º dígito
+   BR), então **não** se usa o índice do array.
+
+#### A correção
+| onde | o que mudou |
+|---|---|
+| `zapoCall.js` | novo **`resolverLids(cli, jids)`** — resolve PN → LID **pelo próprio zapo** (`profile.getLidsByPhoneNumbers`). LID passa direto (não chama a API); o que não resolver fica como veio (**best-effort**); falha da API **não derruba** a chamada. Chamado antes do `startCall`, com log da contagem em LID. |
+| `index.js` | a lista de convidados passou a levar o **NÚMERO (PN)** — a forma estável entre as duas sessões — em vez do `lid` do Baileys. Um campo `@lid` no metadata é **explicitamente ignorado** (não serve). |
+| `index.js` | a exclusão do bot comparava o **LID** (`getBotNumber` devolve o `lid`) com um **número** — nunca casava, e o bot entrava na **própria lista** (5 convidados em vez de 4). Agora compara `id`, `lid` e o `botCallId`. |
+
+#### Testes — `tests/callp.test.js` (19 testes / 49 asserções, 0 falhas)
+- *"manda o PN do convidado (quem resolve o LID é o zapo)"*;
+- *"resolverLids: converte PN → LID pela API do PRÓPRIO zapo"* — 7 casos: o
+  caminho feliz; LID que passa direto **sem chamar a API**; número sem LID
+  (mantém o PN); número **corrigido pelo servidor** (casa por `queriedJid`);
+  API que lança (não derruba); versão sem o coordinator; dedup/lixo.
+
+Regressões: `callp-regressions` 38/114, `zapo-conexao` 17/42,
+`zapo-pareamento` 24/63, `musicap` 24/72 — **todas 0 falhas**.
+
+#### Lição de método (a terceira vez nesta série)
+**Ler a doc oficial antes de inferir do código.** Eu tinha deduzido "o motor
+exige LID" lendo o `types.d.ts` — certo — mas **errei a origem do dado**:
+assumi que o LID do Baileys servia. A doc (e a arquitetura de duas sessões)
+dizem o contrário. As três rodadas deste bug foram: (1) inferir do código,
+(2) corrigir a forma sem checar a origem, (3) **ler a doc**. Só a terceira
+fechou.
