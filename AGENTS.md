@@ -10810,6 +10810,52 @@ disco: yt-dlp video 0,00 MB | yt-dlp audio 0,00 MB | ffmpeg 0,00 MB
 ```
 `!play` (mp3) verificado em paralelo: **3,25 MB** baixados, inalterado.
 
+
+#### 🐢 QUEDA DE FPS / PULO DE QUADROS — o `--print` ia para o stderr (out/2026) ✅
+Sintoma: **muita queda de fps e pulo de frames** na transmissão por link.
+
+**Causa raiz, em DUAS camadas (ambas medidas):**
+
+1. **O `fpsDoLink` lia o stdout de um comando que imprimia no stderr.** O
+   `baseDoLink()` traz o `-o -` (destino stdout), e com ele o yt-dlp manda o
+   `--print` para o **stderr**:
+   ```
+   STDOUT = ""      <- era daqui que o código lia
+   STDERR = "25"    <- o fps estava aqui
+   ```
+   Resultado: o fps vinha **sempre vazio** → caía no de reserva.
+
+2. **O reserva era 15 e o encoder forçava `-r <fps>`.** Num vídeo de 25 fps
+   isso é `-r 15`, que **DESCARTA 40% dos quadros**:
+
+   | encoder | fps efetivo | gap p50 | jitter |
+   |---|---|---|---|
+   | `-r 25` (certo) | 25,4 | 40ms | **4,3ms** |
+   | **`-r 15` (errado)** | **15,1** | **80ms** | **33,4ms** ← o pulo |
+   | sem `-r` (nativo) | 25,3 | 40ms | **4,3ms** |
+
+**Correções:**
+- **`fpsDoLink`**: não usa mais o `baseDoLink` (o `-o -` desvia o `--print`),
+  lê **stdout e stderr**, usa a **receita anti-bloqueio** (sem ela o `--print`
+  falha em IP bloqueado — era o caso do servidor do dono) e o **mesmo
+  `formatoDoVideo()`** do download (senão o fps seria de outro formato).
+- **Encoder**: o `-r` **saiu**. O ffmpeg **já lê o fps do próprio stream**
+  (medido: reporta *"25 fps"* lendo o pipe); forçar o número era a origem do
+  defeito. No lugar entrou **`-fps_mode passthrough`** (copia os frames como
+  chegam, sem duplicar nem descartar).
+- **`FPS_PADRAO`: 15 → 25** (um valor **menor** que o real descarta quadros).
+- **GOP: `fps*2` → `fps`** (keyframe a cada ~1 s). O motor só **ABRE** o stream
+  quando vê um keyframe (`feedLiveVideo` devolve `0` até então, por contrato).
+
+**Medido com o módulo REAL depois do fix**: `fpsDoLink = 25` (era 15) |
+**218 frames em 8,5 s = 25,6 fps** | **jitter 6,2 ms (SUAVE)** | disco
+**0,00 MB** nos três processos.
+
+**Lição de método**: o sintoma ("pulo de frames") apontava para o encoder, mas a
+causa estava **uma camada antes** — no *canal* por onde o dado chegava. O que
+fechou o caso foi imprimir **stdout e stderr separadamente** em vez de assumir
+qual deles trazia o valor.
+
 #### Como configurar os cookies
 `YOUTUBE_COOKIES_FILE` (ou o padrão implícito `data/youtube/cookies.txt`) — o
 **mesmo** arquivo do `!play`, formato **Netscape**. É opcional: sem ele o fluxo
