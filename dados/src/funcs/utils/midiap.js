@@ -425,6 +425,9 @@ export async function transmitir({ grupo, callId, arquivo = null, fluxo = null, 
     nivelMs: 0,
     // Sobra entre chunks: reagrupa em frames de FRAME_MOTOR amostras.
     resto: null,
+    // Instante zero da transmissao: marcado pelo 1o frame de VIDEO que entra
+    // no ar. O relogio do audio ancora aqui (sincronia no milissegundo).
+    tZero: null,
   });
 
   const cli = voipDeTeste || await (async () => {
@@ -622,12 +625,37 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
     }
 
     // --- SAIDA 1: H.264 -> access units -> feedLiveVideo ---
+    //
+    // ## O VIDEO TAMBEM E' LIBERADO PELO RELOGIO (a causa do delay)
+    //
+    // MEDIDO: em 2000 ms de relogio o video ja' tinha entregue **2120 ms** de
+    // conteudo — o `-re` do ffmpeg nao segura, ele entrega por chegada. O
+    // audio, limitado a 1 frame por 60 ms, entrega NO tempo. Resultado: o
+    // video andava 140-180 ms NA FRENTE e o audio parecia atrasado (quando o
+    // adiantado era o video).
+    //
+    // Aqui cada access unit entra numa fila com o instante nominal
+    // (`indice / fps`) e so' vai ao motor quando esse instante CHEGA. Os dois
+    // fluxos passam a ser liberados pelo mesmo relogio — no mesmo ms.
+    const filaVideo = [];
     proc.stdout.on('data', (chunk) => {
       if (estado.parado) return;
       let aus;
       try { aus = splitter.push(chunk); } catch { return; }
-      for (const au of aus) enviarFrame(cli, callId, au, carimbo, estado, log);
+      for (const au of aus) filaVideo.push(au);
     });
+    estado.bombearVideo = () => {
+      if (estado.parado) return;
+      while (filaVideo.length) {
+        // O 1o frame sai NA HORA: e' ele que marca o instante zero (o tZero
+        // de onde o relogio dos dois fluxos conta).
+        if (estado.tZero !== null) {
+          const alvoMs = (indice / fps) * 1000;
+          if (Date.now() - estado.tZero < alvoMs) break;   // ainda e' cedo
+        }
+        enviarFrame(cli, callId, filaVideo.shift(), carimbo, estado, log);
+      }
+    };
 
     // --- SAIDA 2: PCM cru -> feedLiveAudio ---
     //
@@ -743,14 +771,25 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
     // a contagem por relogio. Sem esse limite o timer entregava 6x mais rapido
     // que o consumo, o buffer enchia, o alvo barrava e o audio PARAVA
     // (medido: descompasso de -12120 ms).
-    const tAudio0 = Date.now();
+    // O relogio do audio e' ancorado no MESMO instante zero do video
+    // (`estado.tZero`), nao no momento em que este codigo roda. Se o video
+    // ainda nao entrou no ar, esperamos por ele — o audio nao pode comecar
+    // antes (sairia adiantado) nem depois (atrasado).
     let framesNoRelogio = 0;
     const timerAudio = setInterval(() => {
       if (estado.parado) return;
+      // O VIDEO e' liberado pelo MESMO relogio (o tZero e' dele).
+      estado.bombearVideo?.();
+      if (!estado.videoComecou) return;          // espera o marco zero do video
       if (!estado.fila || estado.fila.length === 0) return;
 
-      // Quantos frames o relogio ja' permite ter entregue.
-      const permitido = Math.floor((Date.now() - tAudio0) / MS_POR_FRAME);
+      // Quantos frames o relogio ja' permite ter entregue — contados desde o
+      // MESMO tZero do video.
+      //
+      // O `+1` e' do INSTANTE ZERO: o frame 0 vale no ms 0, nao no ms 60. Sem
+      // ele o 1o frame de audio esperava 60 ms e o audio nascia atrasado (o
+      // residuo medido de 64 ms) — o video ja' tinha saido no instante 0.
+      const permitido = Math.floor((Date.now() - estado.tZero) / MS_POR_FRAME) + 1;
       if (framesNoRelogio >= permitido) return;   // ainda e' cedo: nao entrega
 
       // Le o nivel REAL do motor (a fonte da verdade — nao um contador nosso).
@@ -766,7 +805,7 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
 
       bombearAudio();
       framesNoRelogio += 1;
-    }, 10);
+    }, 5);
     estado.timerAudio = timerAudio;
 
     // Sem faixa de audio o ffmpeg nao abre o pipe: um `error` aqui e' normal
@@ -785,6 +824,17 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
       try {
         for (const au of splitter.flush()) {
           enviarFrame(cli, callId, au, carimbo, estado, log);
+        }
+      } catch { /* ok */ }
+      // ## Esvazia o VIDEO que sobrou na fila do relogio
+      //
+      // O video agora e' liberado pelo relogio (como o audio), entao quando o
+      // ffmpeg termina ainda pode haver frames esperando o instante nominal.
+      // Sem isto o video terminaria ANTES (medido: 19 de 30 frames num video
+      // de 2 s a 15 fps).
+      try {
+        while (filaVideo.length) {
+          enviarFrame(cli, callId, filaVideo.shift(), carimbo, estado, log);
         }
       } catch { /* ok */ }
       // ## Esvazia o audio que JA' esta' na fila antes de parar o timer
@@ -872,10 +922,19 @@ function enviarFrame(cli, callId, au, carimbo, estado, log) {
     const pacotes = cli.feedLiveVideo(callId, au, ts);
     if (pacotes > 0) {
       estado.frames++;
-      // O video REALMENTE entrou no ar: e' o marco zero do audio (ver o gate
-      // de sincronia no timer de audio).
-      // O video entrou no ar (o contador e' so' informativo agora).
-      estado.videoComecou = true;
+      // ## O MARCO ZERO e' do VIDEO
+      //
+      // O primeiro frame de video que ENTRA NO AR define o instante zero. O
+      // relogio do audio e' ancorado nele (nao em `Date.now()` de quando o
+      // codigo passou por ali): e' o que faz os dois saírem no mesmo
+      // milissegundo.
+      //
+      // MEDIDO antes: o relogio do audio comecava quando o 1o frame de PCM
+      // chegava, ~80 ms DEPOIS do video — e esse era o atraso fixo.
+      if (!estado.videoComecou) {
+        estado.videoComecou = true;
+        estado.tZero = Date.now();
+      }
     } else {
       estado.recusados = (estado.recusados || 0) + 1;
     }

@@ -599,15 +599,41 @@ await test('o audio sai em RITMO CONSTANTE (fila + relogio proprio)', () => {
   includes(md, 'enfileirarAudio', 'o PCM entra numa fila');
   includes(md, 'bombearAudio', 'um bombeador entrega ao motor');
   includes(md, 'MS_POR_FRAME', 'o ritmo e por frame do motor');
-  // O relogio e' por CONTAGEM de frames (nao acumula deriva).
-  const i = md.indexOf('const tAudio0');
-  const bloco = md.slice(i, i + 900);
+  // O relogio e' por CONTAGEM de frames (nao acumula deriva) e ancora no
+  // MESMO instante zero do video (o `tZero`) — era o que fazia os dois
+  // sairem no mesmo milissegundo.
+  const i = md.indexOf('const timerAudio = setInterval');
+  const bloco = md.slice(i, i + 1400);
   includes(bloco, 'Math.floor', 'o ritmo e contado pelo relogio');
   includes(bloco, 'framesNoRelogio', 'conta os frames ja entregues no relogio');
+  includes(bloco, 'estado.tZero', 'ancora no instante zero do VIDEO');
   // E o alvo da entrega e' o NIVEL REAL do motor (o contrato dele), nao um
   // contador nosso: era isso que enchia o buffer e atrasava o audio.
   includes(bloco, 'getLiveBufferMs', 'le o nivel real do motor');
   includes(bloco, 'AUDIO_ALVO_MS', 'so entrega abaixo do alvo do motor');
+});
+
+await test('o VIDEO e liberado pelo MESMO relogio (sincronia no ms)', () => {
+  // MEDIDO: o video corria NA FRENTE (2120 ms de conteudo em 2000 ms de
+  // relogio) porque o `-re` do ffmpeg nao segura — ele entrega por chegada.
+  // O audio, limitado por frame, entregava no tempo. O resultado era o video
+  // adiantado e o audio "atrasado" (-140 a -180 ms).
+  //
+  // Agora o video tambem passa por uma fila com instante nominal: os dois saem
+  // no mesmo milissegundo (medido: 0 ms de diferenca no 1o frame).
+  const md = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/midiap.js'), 'utf-8');
+  includes(md, 'filaVideo', 'o video entra numa fila');
+  includes(md, 'bombearVideo', 'um bombeador libera o video pelo relogio');
+  const i = md.indexOf('estado.bombearVideo');
+  const bloco = md.slice(i, i + 800);
+  includes(bloco, 'estado.tZero', 'usa o MESMO instante zero do audio');
+  includes(bloco, 'indice / fps', 'cada frame vale o seu instante nominal');
+  // O timer do audio bombeia o video tambem (um relogio so).
+  const t = md.indexOf('const timerAudio = setInterval');
+  includes(md.slice(t, t + 300), 'bombearVideo', 'o timer do audio tambem bombeia o video');
+  // E a fila do video e' esvaziada no fim (senao o video termina antes).
+  const c = md.indexOf("proc.on('close'");
+  includes(md.slice(c, c + 2500), 'filaVideo', 'esvazia a fila do video no fim');
 });
 
 await test('o audio reagrupa em frames de 960 amostras (o que o motor espera)', () => {
