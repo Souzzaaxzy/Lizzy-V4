@@ -324,7 +324,7 @@ await test('mídia ausente: avisa e NÃO registra call', async () => {
   instalarDubleMidia({ ok: false, motivo: 'pacote_de_midia_ausente' });
   const out = await run({ groupJid, sender: admin, text: '!callp', participants });
   includes(out.text, 'Não consegui subir', 'avisa');
-  includes(out.text, 'lizzy-call', 'diz o que falta');
+  includes(out.text, 'zapo', 'diz o que falta');
   ok(callState.obterCall(groupJid) === null, 'não deixou call pendurada');
 });
 

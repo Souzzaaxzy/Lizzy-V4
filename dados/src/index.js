@@ -4052,7 +4052,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
      * Sobe uma chamada de VOZ neste grupo e registra para o `encerrar`.
      *
      * Ponto ÚNICO de subir call. Nada de sinalização aqui: quem CRIA a call é
-     * o motor de mídia (medido no pacote `lizzy-call`).
+     * o motor de mídia (medido no pacote do zapo).
      *
      * @returns {Promise<{ok: boolean, callId?: string, stage?: string, motivo?: string, detalhe?: string}>}
      */
@@ -18713,7 +18713,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
             '[UPDATE] Database restaurado': '✅ Dados do bot restaurados!',
             '[UPDATE] Database validado': '✅ Dados do bot validados!',
             'Dependências já atualizadas': '✅ Dependências Node já estão atualizadas!',
-            // O script agora reporta TODAS as dependências git (Baileys E lizzy-call),
+            // O script reporta as dependencias de git (a fork do Baileys),
             // então o gatilho é o prefixo comum, não a frase inteira antiga.
             'Dependência(s) de git em commit desatualizado': ' Atualizando as dependências git para o commit correto...',
             'Instalando dependências': '📦 Instalando/verificando dependências...\n⏳ Isso pode levar alguns minutos...',
@@ -35733,7 +35733,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
       // !callp — sobe uma chamada de VOZ no grupo.
       //
       // QUEM CRIA A CHAMADA É O MOTOR DE MÍDIA, não a sinalização. Isso foi
-      // medido (`wasm-call-ownership` no pacote `lizzy-call`): `startGroupCall`
+      // medido no motor de midia: `startGroupCall`
       // faz o motor EMITIR o `<call><offer>`; `joinVoipOngoingCall` fica em
       // silêncio a menos que o motor já conheça a call.
       //
@@ -35885,7 +35885,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               sem_identidade: 'Não consegui identificar meu próprio número para subir a chamada.',
               sem_metadata: 'Não consegui ler os membros do grupo agora. Tente de novo.',
               grupo_pequeno: 'A chamada de grupo precisa de pelo menos 2 outros membros.',
-              pacote_de_midia_ausente: 'A mídia não está instalada neste servidor (falta o pacote `lizzy-call`).',
+              pacote_de_midia_ausente: 'A mídia não está instalada neste servidor (faltam os pacotes do zapo).',
               nao_pareado: 'O motor de mídia ainda não foi pareado. Use `!callp parear <numero>`.',
               sem_conexao: 'A conexão do motor de mídia não abriu. Tente de novo em alguns segundos.',
               ja_na_call: 'Já existe uma chamada de mídia neste grupo.',

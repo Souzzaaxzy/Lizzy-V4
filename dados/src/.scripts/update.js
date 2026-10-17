@@ -135,7 +135,7 @@ function temDependencias(cwd = process.cwd()) {
  * Valida que TODAS as dependências git INSTALADAS estão no commit pedido pelo
  * `package-lock.json`.
  * `npm ls` compara versão, não commit — a fork do Baileys mantém `0.3.18-final`
- * e o `lizzy-call` mantém `0.2.0` entre commits, então esta é a única checagem
+ * e a fork mantem a mesma versao entre commits, entao esta e a unica checagem
  * que pega uma dependência no commit errado.
  */
 function validarForkInstalada() {
@@ -160,7 +160,7 @@ function validarForkInstalada() {
 async function nomeCommitFork() {
     // Commit da FORK especificamente: `gitDependencyDrift` agora varre TODAS as
     // dependências git, então pegar o `esperado` genérico poderia devolver o
-    // commit do `lizzy-call` — e a API seria consultada no repositório errado.
+    // commit da dependencia — e a API seria consultada no repositorio errado.
     const esperado = (() => {
         try {
             const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf-8'));

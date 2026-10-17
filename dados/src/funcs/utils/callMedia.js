@@ -1,25 +1,23 @@
 /**
  * Ponte para a pilha de MÍDIA da call de grupo.
  *
- * ## Dois backends, um contrato
+ * ## UM backend: `zapoCall.js` (`zapo-js` + `@zapo-js/voip`)
  *
- * Este módulo é a fachada que os comandos (`!callp` / `!musicap`) e os
- * testes consomem. Atrás dele há DOIS backends de mídia, escolhidos nesta ordem:
+ * Este módulo é a fachada que os comandos (`!callp` / `!musicap` / `!midiap`)
+ * e os testes consomem. O backend é o **zapo**: é o único que ataca o ponto
+ * onde a call de GRUPO travava — disca o relay por **UDP cru na porta
+ * anunciada quando não há credencial ICE**, e só usa WebRTC quando há.
+ * Também implementa SFrame/keying por época, roster transacional, heartbeat
+ * e `peer_state`.
  *
- * 1. **`zapoCall.js`** (`zapo-js` + `@zapo-js/voip`) — **preferido**. É o único
- *    que ataca o ponto onde a call de GRUPO travava: ele disca o relay por
- *    **UDP cru na porta anunciada quando não há credencial ICE**, e só usa
- *    WebRTC quando há. Também implementa SFrame/keying por época, roster
- *    transacional, heartbeat e `peer_state`.
- * 2. **`lizzy-call`** (motor WASM do WhatsApp Web) — **reserva**, para o caso de
- *    os pacotes do zapo não estarem instalados. Continua funcionando como antes.
+ * O `lizzy-call` (motor WASM do WhatsApp Web) foi **removido**: ele era a
+ * reserva, e a reserva criava dois caminhos de mídia com o mesmo sintoma
+ * ("conectando...") sem ninguém saber qual estava ativo. Com um backend só,
+ * o comportamento é previsível e o diagnóstico tem um lugar.
  *
- * O contrato é idêntico nos dois, então trocar de backend não muda nenhum
- * comando nem nenhum teste.
- *
- * O carregamento é **preguiçoso e tolerante**: sem os pacotes, o `!callp` segue
- * reportando a chamada (só sem áudio) e o `!musicap` avisa que a mídia não está
- * disponível. Nada quebra.
+ * O carregamento é **preguiçoso e tolerante**: sem os pacotes do zapo, o
+ * `!callp` segue reportando a chamada (só sem áudio) e o `!musicap` avisa que
+ * a mídia não está disponível. Nada quebra.
  */
 
 import * as zapoCall from './zapoCall.js';
@@ -47,18 +45,15 @@ export function __setDubleEntrar(novo) {
 }
 
 /**
- * Carrega o backend de mídia uma vez.
+ * Carrega o backend de mídia uma vez (o zapo).
  *
- * O zapo tem prioridade; o `lizzy-call` é a reserva. `mod` recebe um objeto com
- * a interface usada abaixo, então o resto do arquivo não sabe qual está ativo.
- *
- * @returns o backend, ou null quando nenhum está disponível.
+ * @returns o backend, ou null quando os pacotes não estão disponíveis.
  */
 export async function carregarMidia() {
   if (carregado) return mod;
   carregado = true;
 
-  // 1) zapo (preferido) — UDP cru no relay sem ICE é o que destrava o grupo.
+  // O unico backend. UDP cru no relay sem ICE e' o que destrava o grupo.
   try {
     const zapo = await zapoCall.carregarZapo();
     if (zapo) {
@@ -69,17 +64,8 @@ export async function carregarMidia() {
   } catch (e) {
     loadError = e?.message || String(e);
   }
-
-  // 2) lizzy-call (reserva) — motor WASM do WhatsApp Web.
-  try {
-    mod = await import('lizzy-call/group-media');
-    console.log('[CALLP] backend de mídia: lizzy-call (WASM)');
-    return mod;
-  } catch (e) {
-    loadError = loadError || e?.message || String(e);
-    console.warn('[CALLP] mídia indisponível:', loadError);
-    mod = null;
-  }
+  console.warn('[CALLP] mídia indisponível:', loadError || 'pacotes do zapo ausentes');
+  mod = null;
   return mod;
 }
 
@@ -89,36 +75,17 @@ export function motivoMidia() {
 }
 
 /**
- * Sessões de mídia por grupo (uma instância compartilhada de `GroupCallMedia`).
+ * A instância de mídia (o próprio `zapoCall`).
  *
- * Só o backend `lizzy-call` usa isto: o `zapoCall` tem estado próprio (o
- * `WaClient` guarda as calls) e expõe as funções direto.
- */
-let mediaInstance = null;
-
-/** O backend ativo é o zapo? (ele expõe `carregarZapo`, o lizzy-call não.) */
-function usandoZapo(m) {
-  return typeof m?.carregarZapo === 'function';
-}
-
-/**
- * A instância de mídia, criada na primeira necessidade.
+ * O `zapoCall` tem estado próprio (o `WaClient` guarda as calls) e expõe as
+ * funções direto — não há instância de classe a criar.
  *
- * Com o zapo devolve o próprio módulo (a fachada dele já tem as funções);
- * com o `lizzy-call` devolve o `GroupCallMedia`.
- *
- * @returns a instância, ou null quando nenhum backend está disponível.
+ * @returns a instância, ou null quando os pacotes não estão disponíveis.
  */
 export async function obterMedia() {
   const m = await carregarMidia();
   if (!m) return null;
-  if (usandoZapo(m)) return m;
-  if (!mediaInstance) {
-    mediaInstance = new m.GroupCallMedia({
-      log: (msg) => console.log(msg)
-    });
-  }
-  return mediaInstance;
+  return m;
 }
 
 /**
@@ -136,11 +103,7 @@ export async function entrarNaCallComMidia({ grupo, callId, callCreator, partici
     return { ok: false, motivo: 'pacote_de_midia_ausente', detalhe: loadError };
   }
   try {
-    if (usandoZapo(media)) {
-      return await media.entrarNaCallComMidia({ grupo, callId, callCreator, participantes, sock });
-    }
-    const r = await media.entrarNaCall({ grupo, callId, participantes, sock, groupInfo: null });
-    return r;
+    return await media.entrarNaCallComMidia({ grupo, callId, callCreator, participantes, sock });
   } catch (e) {
     return { ok: false, motivo: 'falha_ao_entrar', detalhe: e?.message || String(e) };
   }
@@ -160,8 +123,7 @@ export async function tocarAudioNaCall(grupo, arquivo) {
   const media = await obterMedia();
   if (!media) return { ok: false, motivo: 'pacote_de_midia_ausente' };
   try {
-    if (usandoZapo(media)) return await media.tocarAudioNaCall(grupo, arquivo);
-    return await media.tocarAudio(grupo, arquivo);
+    return await media.tocarAudioNaCall(grupo, arquivo);
   } catch (e) {
     return { ok: false, motivo: 'falha_ao_tocar', detalhe: e?.message || String(e) };
   }
@@ -188,7 +150,6 @@ export async function pararAudioDaCall(grupo) {
  */
 export function resetarMidia() {
   try {
-    mediaInstance = null;
     zapoCall.resetarMidia();
     mod = null;
     carregado = false;
@@ -202,8 +163,7 @@ export async function sairDaCallComMidia(grupo) {
   const media = await obterMedia();
   if (!media) return { ok: false, motivo: 'pacote_de_midia_ausente' };
   try {
-    if (usandoZapo(media)) return await media.sairDaCallComMidia(grupo);
-    return await media.sairDaCall(grupo);
+    return await media.sairDaCallComMidia(grupo);
   } catch (e) {
     return { ok: false, motivo: e?.message || String(e) };
   }
@@ -212,9 +172,7 @@ export async function sairDaCallComMidia(grupo) {
 /**
  * O backend de mídia exige pareamento PRÓPRIO?
  *
- * Só o zapo: ele é um client separado, com credenciais no formato dele. O
- * `lizzy-call` usa o socket do Baileys (que já está pareado), então devolve
- * `false` e o `!callp` não pede nada.
+ * Sim: o zapo é um client separado, com credenciais no formato dele.
  *
  * Com DUBLÊ instalado devolve `false`: o teste mede o CONTRATO do bot, não o
  * estado de pareamento do backend real.
@@ -222,16 +180,15 @@ export async function sairDaCallComMidia(grupo) {
 export async function precisaPareamento() {
   if (duble || dubleEntrar) return false;
   const m = await carregarMidia();
-  if (!m || !usandoZapo(m)) return false;
+  if (!m) return false;
   return !m.estaPareado();
 }
 
-/** Está pareado? (sempre `true` para o backend que não exige pareamento) */
+/** Está pareado? */
 export async function estaPareado() {
   if (duble || dubleEntrar) return true;
   const m = await carregarMidia();
   if (!m) return false;
-  if (!usandoZapo(m)) return true;
   return m.estaPareado();
 }
 
@@ -239,15 +196,15 @@ export async function estaPareado() {
  * O cliente do backend de midia (para o video / transmissao de tela).
  *
  * O `!midiap` precisa falar direto com o `voip` (upgrade de video, screen
- * share, feedLiveVideo). So' o backend zapo expoe isso; sem ele devolve
- * `null` e o comando avisa que a midia nao esta disponivel.
+ * share, feedLiveVideo). Sem os pacotes do zapo devolve `null` e o comando
+ * avisa que a midia nao esta disponivel.
  *
  * @returns {Promise<object|null>}
  */
 export async function obterVoip() {
   if (duble || dubleEntrar) return null;
   const m = await carregarMidia();
-  if (!m || !usandoZapo(m)) return null;
+  if (!m) return null;
   const cli = await m.obterCliente?.();
   return cli?.voip || null;
 }
@@ -257,7 +214,7 @@ export async function parearMidia(numero) {
   if (duble) return { ok: false, motivo: 'backend_nao_exige_pareamento' };
   const m = await carregarMidia();
   if (!m) return { ok: false, motivo: 'pacote_de_midia_ausente' };
-  if (!usandoZapo(m) || typeof m.parear !== 'function') {
+  if (typeof m.parear !== 'function') {
     return { ok: false, motivo: 'backend_nao_exige_pareamento' };
   }
   return m.parear(numero);
