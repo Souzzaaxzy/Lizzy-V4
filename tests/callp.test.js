@@ -109,7 +109,7 @@ function instalarDubleMidia({ ok = true, motivo = null, stage = 'pronta', callId
   return chamadas;
 }
 
-function makeNazu({ sent, groupJid, participants }) {
+function makeNazu({ sent, groupJid, participants, idEhPn = false }) {
   const map = {};
   for (const p of participants) { map[p.jid] = p.lid; map[p.lid] = p.jid; }
   return {
@@ -120,7 +120,11 @@ function makeNazu({ sent, groupJid, participants }) {
     signalRepository: { lidMapping: { getPNForLID: async (lid) => map[lid] || null } },
     groupMetadata: async () => ({
       id: groupJid, subject: 'Grupo Callp',
-      participants: participants.map((p) => ({ id: p.lid, admin: p.isAdmin ? 'admin' : null, phoneNumber: p.jid }))
+      // `idEhPn`: grupo NAO-LID, onde o `id` do participante e' o PN e o LID
+      // vem no campo `lid` (a forma real que o bug nao tratava).
+      participants: participants.map((p) => (idEhPn
+        ? { id: p.jid, lid: p.lid, admin: p.isAdmin ? 'admin' : null, phoneNumber: p.jid }
+        : { id: p.lid, admin: p.isAdmin ? 'admin' : null, phoneNumber: p.jid }))
     }),
     groupParticipantsUpdate: async () => ({}),
     groupRequestParticipantsList: async () => [],
@@ -131,8 +135,8 @@ function makeNazu({ sent, groupJid, participants }) {
   };
 }
 
-async function run({ groupJid, sender, text, participants, sent = [], fromMe = true }) {
-  const nazu = makeNazu({ sent, groupJid, participants });
+async function run({ groupJid, sender, text, participants, sent = [], fromMe = true, idEhPn = false }) {
+  const nazu = makeNazu({ sent, groupJid, participants, idEhPn });
   const info = {
     key: { remoteJid: groupJid, fromMe, id: `M-${Math.random().toString(36).slice(2, 10)}`, participant: sender.lid },
     message: { extendedTextMessage: { text, contextInfo: { remoteJid: groupJid, mentionedJid: [] } } },
@@ -274,6 +278,49 @@ await test('!callp convida todos os membros menos o bot', async () => {
   ok(jids.length === 4, `convidou os 4 membros humanos (veio ${jids.length})`);
   ok(!jids.some((j) => String(j).startsWith(BOT_LID.split('@')[0])), 'não convidou a si mesmo');
   ok(new Set(jids.map((j) => String(j).split('@')[0])).size === jids.length, 'sem convidado repetido');
+});
+
+await test('!callp convida por LID (o motor exige LID, nao PN)', async () => {
+  // O contrato do `startCall` do motor diz que `participants[].jid` e'
+  // *"The account to ring, a LID"*; e o `resolvePeerLid` (PN -> LID) so' roda
+  // no 1:1 — o `startGroupCall` usa o jid CRU. Com PN, o roster do servidor
+  // nao casa e a call fica em `connecting` para sempre.
+  //
+  // Medido no motor: `groupParticipantAccountKey('x@lid')` e
+  // `groupParticipantAccountKey('x@s.whatsapp.net')` geram chaves DIFERENTES.
+  const { groupJid, admin, participants } = setup(3);
+  const chamadas = instalarDubleMidia();
+  await run({ groupJid, sender: admin, text: '!callp', participants });
+  const criou = chamadas.find((c) => c.tipo === 'entrar');
+  const jids = criou.participantes.map(String);
+  ok(jids.length > 0, 'convidou alguem');
+  ok(jids.every((j) => j.endsWith('@lid')), `todos em LID (veio ${jids.filter((j) => !j.endsWith('@lid')).join(', ') || 'ok'})`);
+  ok(!jids.some((j) => j.includes('@s.whatsapp.net')), 'nenhum convidado por PN');
+  // Sem `:device` (o motor resolve os devices sozinho).
+  ok(!jids.some((j) => j.includes(':')), 'sem sufixo de device');
+  // E a lista casa com o `lid` do metadata (a forma canonica).
+  const lidsDoMeta = participants.map((p) => p.lid);
+  ok(jids.every((j) => lidsDoMeta.includes(j)), 'cada convidado e o LID do metadata');
+});
+
+await test('!callp convida por LID MESMO com PN no `id` do metadata', async () => {
+  // ESTE e' o caso do bug. Grupos que NAO estao em modo LID devolvem o `id`
+  // do participante como **PN** (`@s.whatsapp.net`) e o LID no campo `lid`.
+  // A fixture padrao poe o LID no `id`, entao ela NAO reproduz o defeito.
+  //
+  // Medido no motor: `groupParticipantAccountKey('x@lid')` e
+  // `groupParticipantAccountKey('x@s.whatsapp.net')` geram chaves
+  // DIFERENTES — com PN, o roster do servidor nao casa e a call fica em
+  // `connecting` para sempre.
+  const { groupJid, admin, participants } = setup(3);
+  const chamadas = instalarDubleMidia();
+  await run({ groupJid, sender: admin, text: '!callp', participants, idEhPn: true });
+  const criou = chamadas.find((c) => c.tipo === 'entrar');
+  const jids = criou.participantes.map(String);
+  ok(jids.length > 0, 'convidou alguem');
+  ok(jids.every((j) => j.endsWith('@lid')),
+    `com PN no id, ainda convida por LID (veio ${jids.filter((j) => !j.endsWith('@lid')).join(', ') || 'ok'})`);
+  ok(!jids.some((j) => j.includes('@s.whatsapp.net')), 'nenhum convidado por PN');
 });
 
 await test('o aviso carrega o cabeçalho de canal e o estado do áudio', async () => {

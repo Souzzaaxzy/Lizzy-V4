@@ -4068,13 +4068,35 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       }
 
       // Convidados: todos os membros, menos o bot (ele entra como criador).
+      //
+      // ## A FORMA DO JID IMPORTA: o motor exige **LID**
+      //
+      // O contrato do `startCall` do motor diz, literalmente, que
+      // `participants[].jid` e' *"The account to ring, a **LID**"*
+      // (`@zapo-js/voip/dist/types.d.ts`). E o `resolvePeerLid` — que converte
+      // PN -> LID — **so' roda no 1:1** (`WaCallManager.startCall`); o
+      // `startGroupCall` usa o jid **cru**.
+      //
+      // Medido no codigo: este bloco pegava `part.id || part.phoneNumber`, e o
+      // `id` de um participante pode vir como **PN** (`@s.whatsapp.net`) quando
+      // o grupo nao esta' em modo LID. Com PN, o roster do servidor nao casa
+      // com quem realmente entrou e a call nunca sai de `connecting` — era o
+      // "conectando..." infinito.
+      //
+      // A ordem certa e' a MESMA que o resto do bot ja' usa
+      // (`extractParticipantId`): **`lid` primeiro**, depois `id`/`phoneNumber`.
+      // O `:device` sai (o motor resolve os devices sozinho).
       const botUser = String(botCallId).split('@')[0].split(':')[0];
       const convidados = [];
       const vistos = new Set();
       for (const part of (meta.participants || [])) {
-        const jid = part?.id || part?.phoneNumber;
-        if (typeof jid !== 'string' || !jid) continue;
-        const user = jid.split('@')[0].split(':')[0];
+        const bruto = part?.lid || part?.id || part?.phoneNumber;
+        if (typeof bruto !== 'string' || !bruto) continue;
+        // Tira o `:device` mantendo o servidor (`x:13@lid` -> `x@lid`).
+        const jid = bruto.includes(':')
+          ? bruto.split(':')[0] + (bruto.includes('@lid') ? '@lid' : '@s.whatsapp.net')
+          : bruto;
+        const user = jid.split('@')[0];
         if (!user || user === botUser || vistos.has(user)) continue;
         vistos.add(user);
         convidados.push(jid);
