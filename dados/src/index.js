@@ -36297,16 +36297,13 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             await nazu.sendMessage(from, { delete: aviso.key }).catch(() => {});
           };
 
-          // Baixa o video (mesmo caminho da midia marcada do `!musicap`).
-          let arquivo;
+          // SEM DISCO: o fluxo decifrado do WhatsApp vai DIRETO para o ffmpeg
+          // (pipe:0). O video nao e' baixado inteiro nem gravado -- importa
+          // em servidor pequeno, onde um filme encheria o armazenamento.
+          let fluxo;
           try {
-            const stream = await downloadContentFromMessage(video, 'video');
-            const pedacos = [];
-            for await (const c of stream) pedacos.push(c);
-            const buf = Buffer.concat(pedacos);
-            if (!buf.length) throw new Error('video vazio');
-            arquivo = midiap.caminhoDoVideo(from, '.mp4');
-            fs.writeFileSync(arquivo, buf);
+            fluxo = await downloadContentFromMessage(video, 'video');
+            if (!fluxo) throw new Error('fluxo vazio');
           } catch (e) {
             await apagarAviso();
             console.error('[MIDIAP] download:', e?.message);
@@ -36321,13 +36318,16 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               const r = await midiap.transmitir({
                 grupo: from,
                 callId: ativa.callId,
-                arquivo,
+                fluxo,   // sem disco: o ffmpeg le do pipe
+                // O proto do WhatsApp nao traz o fps do video, e nao da' para
+                // sondar um stream sem consumi-lo. O valor de reserva serve de
+                // alvo: o encoder respeita o fps do arquivo.
+                fps: midiap.FPS_DE_RESERVA,
                 log: (m) => console.log('[MIDIAP]', m)
               });
               if (!r.ok) {
                 const motivos = {
                   sem_call: 'A chamada caiu antes de eu começar.',
-                  arquivo_ausente: 'O arquivo do vídeo sumiu.',
                   ja_transmitindo: 'Já estou transmitindo neste grupo.',
                   pacote_de_midia_ausente: 'A mídia não está instalada neste servidor.',
                   upgrade_timeout: 'O servidor não confirmou o modo vídeo a tempo.',
@@ -36351,7 +36351,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             } catch (e) {
               console.error('[MIDIAP] erro:', e?.message);
             } finally {
-              try { fs.unlinkSync(arquivo); } catch { /* ok */ }
+              // Nada a apagar: o video nunca foi gravado em disco.
             }
           })();
 

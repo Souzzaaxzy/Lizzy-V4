@@ -18,11 +18,12 @@
  * 4. `setExternalAudioMode(callId, true)` + `feedLiveAudio(callId, pcm)` —
  *    o AUDIO do video, em PCM mono de 16 kHz (a taxa do motor).
 
- * ## O audio vem de um SEGUNDO ffmpeg
+ * ## UM ffmpeg, DUAS saidas
 
- * O video sai por `pipe:1` em H.264; o audio precisa sair por outro pipe em
- * PCM cru. Sao dois processos do mesmo arquivo (cada um com o seu `-re`),
- * rodando juntos -- um alimenta `feedLiveVideo`, o outro `feedLiveAudio`.
+ * O video sai por `pipe:1` em H.264 e o audio por `pipe:3` em PCM cru --
+ * duas saidas do MESMO processo, lendo uma entrada so'. Isso importa porque
+ * a entrada pode ser um ARQUIVO (video local) ou o proprio fluxo baixado do
+ * WhatsApp (`pipe:0`), sem gravar nada em disco.
  * O modo externo de audio (`setExternalAudioMode`) precisa estar LIGADO, ou
  * o motor ignora o que chega por `feedLiveAudio` (ele voltaria a tocar o
  * arquivo pre-carregado).
@@ -71,6 +72,9 @@ const FPS_MAX = Number.parseInt(process.env.MIDIAP_FPS_MAX || '30', 10);
 
 ///** fps de reserva quando o video nao informa (arquivo exotico). */
 const FPS_PADRAO = 15;
+
+/** fps de reserva, exportado para quem transmite um fluxo. */
+export const FPS_DE_RESERVA = FPS_PADRAO;
 
 /** Taxa do motor de audio (a mesma constante do pacote). */
 const TAXA_AUDIO = 16000;
@@ -139,12 +143,14 @@ function binario() {
  * @param {string} arquivo
  * @returns {string[]}
  */
-export function argumentosDoEncoder(arquivo, fps = FPS_PADRAO) {
-  return [
+export function argumentosDoEncoder(entrada, fps = FPS_PADRAO, temAudio = true) {
+  const args = [
     '-hide_banner', '-loglevel', 'error',
     '-re',                                  // le na taxa nativa (pacing)
-    '-i', arquivo,
-    '-an',                                  // o audio vai no outro processo
+    '-i', entrada,
+    '-map', '0:v',
+    // --- SAIDA 1: video H.264 no pipe:1 ---
+    '-an',
     '-c:v', 'libx264',
     '-profile:v', PERFIL, '-level', NIVEL,  // avc1.42E01F
     '-pix_fmt', 'yuv420p',
@@ -157,9 +163,34 @@ export function argumentosDoEncoder(arquivo, fps = FPS_PADRAO) {
     // intervalo real dos frames.
     '-r', String(fps),
     '-g', String(fps * 2),                  // keyframe a cada 2 s
-    '-vf', `scale='min(${MAX_LARGURA},iw)':'min(${MAX_ALTURA},ih)':force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2`,
+    // O `-vf` e' passado ao ffmpeg SEM shell (`spawn` com argumentos
+    // separados), entao:
+    //   - nada de aspas dentro do valor (iriam literais);
+    //   - a VIRGULA de dentro de `min(a,b)` tem de vir escapada, senao o
+    //     ffmpeg a le como separador de filtros e o grafo falha (medido:
+    //     "Error initializing a simple filtergraph", exit 234).
+    // O `force_original_aspect_ratio` saiu: o `min()` por eixo ja' preserva
+    // a proporcao, e o `trunc` garante dimensao par (exigencia do yuv420p).
+    '-vf', `scale=min(${MAX_LARGURA}\\,iw):min(${MAX_ALTURA}\\,ih),scale=trunc(iw/2)*2:trunc(ih/2)*2`,
     '-f', 'h264', 'pipe:1'
   ];
+
+  // A saida de audio so' entra quando o video TEM audio. Com `spawn` (sem
+  // shell) o `-map 0:a?` NAO e' honrado como opcional: num video sem faixa
+  // de audio o ffmpeg aborta o processo inteiro ("Output file does not
+  // contain any stream", exit 234) e a transmissao morre. Medido.
+  if (temAudio) {
+    args.push(
+      // --- SAIDA 2: audio PCM cru no pipe:3 ---
+      '-map', '0:a',
+      '-vn',
+      '-af', FILTROS_AUDIO,
+      '-ac', '1', '-ar', String(TAXA_AUDIO),
+      '-f', 'f32le', 'pipe:3'
+    );
+  }
+
+  return args;
 }
 
 /**
@@ -205,6 +236,33 @@ export async function fpsDoVideo(arquivo) {
  *
  * @returns {string}
  */
+/**
+ * O video TEM faixa de audio?
+ *
+ * Um `-map 0:a` num video SEM audio aborta o ffmpeg inteiro (medido: exit
+ * 234), entao a saida de audio so' e' montada quando existe faixa.
+ *
+ * @param {string} entrada caminho de arquivo
+ * @returns {Promise<boolean>}
+ */
+export async function temFaixaDeAudio(entrada) {
+  try {
+    const saida = await new Promise((resolve, reject) => {
+      const p = spawn(binarioProbe(), [
+        '-v', 'error', '-select_streams', 'a',
+        '-show_entries', 'stream=index', '-of', 'csv=p=0', entrada
+      ], { stdio: ['ignore', 'pipe', 'ignore'] });
+      let out = '';
+      p.stdout.on('data', (c) => { out += c; });
+      p.on('error', reject);
+      p.on('close', () => resolve(out.trim()));
+    });
+    return saida.length > 0;
+  } catch {
+    return true;   // na duvida, tenta com audio (o pior caso e' so' imagem)
+  }
+}
+
 function binarioProbe() {
   if (process.env.FFPROBE_PATH) return process.env.FFPROBE_PATH;
   const ffmpeg = process.env.FFMPEG_PATH;
@@ -213,31 +271,6 @@ function binarioProbe() {
     if (fs.existsSync(vizinho)) return vizinho;
   }
   return 'ffprobe';
-}
-
-/**
- * Os argumentos do ffmpeg que produzem o AUDIO da transmissao.
- *
- * O motor quer `Float32Array` mono a 16 kHz (a taxa dele: `AUDIO_SAMPLE_RATE
- * = 16000`). Entao o ffmpeg decodifica o audio do video e entrega PCM
- * `f32le` cru por pipe.
- *
- * O `highpass`+`agate`+`alimiter` sao a MESMA cadeia do `callAudioPrep` (a
- * que reduz o chiado) -- aqui ela tambem limpa o audio ripado de video.
- *
- * @param {string} arquivo
- * @returns {string[]}
- */
-export function argumentosDoAudio(arquivo) {
-  return [
-    '-hide_banner', '-loglevel', 'error',
-    '-re',                                  // mesmo pacing do video
-    '-i', arquivo,
-    '-vn',                                  // sem video (o outro ffmpeg cuida)
-    '-af', FILTROS_AUDIO,                   // a cadeia que tira o chiado
-    '-ac', '1', '-ar', String(TAXA_AUDIO),  // mono 16 kHz (o que o motor quer)
-    '-f', 'f32le', 'pipe:1'                 // Float32 cru (o formato do feed)
-  ];
 }
 
 /** O backend de midia (o mesmo que o `!callp` usa). */
@@ -252,15 +285,22 @@ async function backend() {
  * @param {object} p
  * @param {string} p.grupo
  * @param {string} p.callId
- * @param {string} p.arquivo caminho do video
+ * @param {string} [p.arquivo] caminho de um video LOCAL
+ * @param {object} [p.fluxo] stream do video baixado do WhatsApp (sem disco)
+ * @param {number} [p.fps] fps do video (obrigatorio quando a fonte e' `fluxo`)
  * @param {(msg: string) => void} [p.log]
  * @returns {Promise<{ok: boolean, motivo?: string, detalhe?: string, frames?: number}>}
  */
-export async function transmitir({ grupo, callId, arquivo, log = () => {} }) {
-  if (duble) return duble.transmitir({ grupo, callId, arquivo, log });
+export async function transmitir({ grupo, callId, arquivo = null, fluxo = null, fps = null, log = () => {} }) {
+  if (duble) return duble.transmitir({ grupo, callId, arquivo, fluxo, fps, log });
 
   if (!grupo || !callId) return { ok: false, motivo: 'sem_call' };
-  if (!arquivo || !fs.existsSync(arquivo)) return { ok: false, motivo: 'arquivo_ausente' };
+  // A fonte e' um ARQUIVO ou um FLUXO (o video baixado do WhatsApp).
+  // O fluxo nao passa por disco -- e' o caminho para quem tem pouco espaco.
+  const fonte = fluxo ? 'fluxo' : 'arquivo';
+  if (fonte === 'arquivo' && (!arquivo || !fs.existsSync(arquivo))) {
+    return { ok: false, motivo: 'arquivo_ausente' };
+  }
   if (ativos.has(grupo)) return { ok: false, motivo: 'ja_transmitindo' };
   // RESERVA o grupo ANTES de qualquer I/O: o upgrade e' assincrono e leva
   // segundos, entao duas chamadas simultaneas passariam pelo guarda e as
@@ -309,11 +349,21 @@ export async function transmitir({ grupo, callId, arquivo, log = () => {} }) {
     // 3) O fps vem do PROPRIO video: com um fps fixo o passo do timestamp
     // nao bate com o intervalo real dos frames (medido: 39,8 ms de
     // descompasso por frame num video de 30 fps).
-    const fps = await fpsDoVideo(arquivo);
-    log(`fps do video: ${fps}`);
+    // Com ARQUIVO o fps vem do proprio video; com FLUXO ele vem do chamador
+    // (um stream nao pode ser sondado sem consumi-lo).
+    const fpsUsado = fonte === 'arquivo'
+      ? await fpsDoVideo(arquivo)
+      : (fps || FPS_PADRAO);
+    log(`fps do video: ${fpsUsado}`);
 
-    // 4) ffmpeg -> access units -> feedLiveVideo, e em PARALELO o audio.
-    await alimentar({ cli, callId, arquivo, estado, log, fps });
+    // 4) UM ffmpeg: H.264 no pipe:1 e, se houver, PCM no pipe:3.
+    // Com ARQUIVO da' para sondar a faixa; com FLUXO nao (consumiria o
+    // stream), entao assume-se que tem audio.
+    const temAudio = fonte === 'arquivo' ? await temFaixaDeAudio(arquivo) : true;
+    log(`audio: ${temAudio ? 'sim' : 'nao'}`);
+    await alimentar({
+      cli, callId, entrada: fluxo || arquivo, fonte, estado, log, fps: fpsUsado, temAudio
+    });
     return { ok: true, frames: estado.frames, amostras: estado.amostras || 0 };
   } catch (e) {
     return { ok: false, motivo: 'falha_na_transmissao', detalhe: e?.message || String(e) };
@@ -332,11 +382,8 @@ export async function transmitir({ grupo, callId, arquivo, log = () => {} }) {
  * O `-re` faz o ffmpeg entregar no tempo da reproducao; o timestamp vem do
  * relogio real, que e' o que o motor espera (microssegundos).
  */
-async function alimentar({ cli, callId, arquivo, estado, log, fps }) {
+async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAudio = true }) {
   const splitter = criarSplitter();
-  // O audio roda em PARALELO, num segundo ffmpeg: um pipe entrega H.264 e o
-  // outro PCM. Os dois tem o proprio `-re`, entao andam no mesmo tempo.
-  const audio = iniciarAudio({ cli, callId, arquivo, estado, log });
   // O timestamp NAO pode vir do `Date.now()` cru: ele tem resolucao de 1 ms
   // e o ffmpeg entrega varios frames no mesmo milissegundo (medido: 7
   // repetidos em 30 frames). O motor mapeia o tempo e exige um tick novo por
@@ -356,23 +403,73 @@ async function alimentar({ cli, callId, arquivo, estado, log, fps }) {
   };
 
   await new Promise((resolve, reject) => {
-    const args = argumentosDoEncoder(arquivo, fps);
+    // O ffmpeg recebe um CAMINHO ou `pipe:0` -- nunca o objeto do stream
+    // (medido: sem isto ele recebia `[object Object]` e saia com 254).
+    const args = argumentosDoEncoder(fonte === 'fluxo' ? 'pipe:0' : entrada, fps, temAudio);
 
     let proc;
     try {
-      proc = spawn(binario(), args, { stdio: ['ignore', 'pipe', 'ignore'] });
+      // stdio: [entrada, video(pipe:1), erros, audio(pipe:3)]
+      // A entrada e' `pipe` quando a fonte e' um FLUXO (o video baixado do
+      // WhatsApp, sem passar por disco) ou `ignore` quando e' um arquivo.
+      proc = spawn(binario(), args, {
+        // O 4o descritor (audio) so' existe quando ha saida de audio.
+        stdio: [fonte === 'fluxo' ? 'pipe' : 'ignore', 'pipe', 'ignore',
+          temAudio ? 'pipe' : 'ignore']
+      });
     } catch (e) {
       reject(e);
       return;
     }
     estado.proc = proc;
 
+    // O video chegou do WhatsApp: joga o fluxo decifrado na entrada do ffmpeg.
+    // Sem isto o processo ficaria esperando a entrada para sempre.
+    if (fonte === 'fluxo') {
+      // O stdin do ffmpeg FECHA quando o arquivo acaba. Escrever depois disso
+      // da' EPIPE -- e ele vem como EVENTO assincrono, entao o `try/catch` do
+      // `write` nao pega: sem listener, derruba o processo (medido).
+      proc.stdin.on('error', () => { /* o ffmpeg ja' saiu */ });
+      entrada.on('data', (c) => {
+        if (estado.parado || proc.stdin.destroyed) return;
+        try { proc.stdin.write(c); } catch { /* corrida: o ffmpeg saiu */ }
+      });
+      entrada.on('end', () => { try { proc.stdin.end(); } catch { /* ok */ } });
+      entrada.on('error', () => { try { proc.stdin.end(); } catch { /* ok */ } });
+    }
+
+    // --- SAIDA 1: H.264 -> access units -> feedLiveVideo ---
     proc.stdout.on('data', (chunk) => {
       if (estado.parado) return;
       let aus;
       try { aus = splitter.push(chunk); } catch { return; }
       for (const au of aus) enviarFrame(cli, callId, au, carimbo, estado, log);
     });
+
+    // --- SAIDA 2: PCM cru -> feedLiveAudio ---
+    // Sobra de bytes entre chunks: um float tem 4 bytes e o pipe pode cortar
+    // no meio de um. Guardar a sobra evita amostra corrompida.
+    let sobra = Buffer.alloc(0);
+    proc.stdio[3]?.on('data', (chunk) => {
+      if (estado.parado) return;
+      try {
+        const buf = sobra.length ? Buffer.concat([sobra, chunk]) : chunk;
+        const inteiros = Math.floor(buf.length / BYTES_POR_AMOSTRA);
+        sobra = buf.subarray(inteiros * BYTES_POR_AMOSTRA);
+        if (inteiros === 0) return;
+        // Copia para um ArrayBuffer alinhado (o Buffer pode ter offset).
+        const alinhado = new Uint8Array(inteiros * BYTES_POR_AMOSTRA);
+        alinhado.set(buf.subarray(0, inteiros * BYTES_POR_AMOSTRA));
+        cli.feedLiveAudio(callId, new Float32Array(alinhado.buffer));
+        estado.amostras = (estado.amostras || 0) + inteiros;
+      } catch (e) {
+        log('feedLiveAudio: ' + (e?.message || e));
+      }
+    });
+    // Sem faixa de audio o ffmpeg nao abre o pipe: um `error` aqui e' normal
+    // (transmissao so' com imagem). Nunca derruba o video.
+    proc.stdio[3]?.on('error', () => { /* sem audio: so' imagem */ });
+
     proc.on('error', reject);
     proc.on('close', (code) => {
       // Fecha o ultimo access unit retido.
@@ -384,70 +481,6 @@ async function alimentar({ cli, callId, arquivo, estado, log, fps }) {
       if (code === 0 || estado.parado) resolve();
       else reject(new Error('ffmpeg saiu com ' + code));
     });
-  });
-
-  // O video acabou: encerra o audio junto (nao deixa processo orfao).
-  await audio;
-}
-
-/**
- * Sobe o ffmpeg de AUDIO e alimenta o motor com PCM mono de 16 kHz.
-
- * ## Por que um segundo ffmpeg
-
- * O processo do video sai por `pipe:1` em H.264; o audio precisa sair por
- * outro pipe, em PCM cru. Nao da' para os dois no mesmo pipe (formatos
- * diferentes), entao sao dois processos do mesmo arquivo, cada um com o seu
- * `-re` -- assim os dois andam no mesmo tempo.
-
- * ## O formato
-
- * O motor quer `Float32Array` mono a 16 kHz (`AUDIO_SAMPLE_RATE`). O ffmpeg
- * entrega `f32le` cru; aqui os bytes viram `Float32Array` e vao para
- * `feedLiveAudio`. O tamanho do bloco nao importa (a doc: *"any length,
- * sent as whole codec frames"*).
-
- * ## Best-effort
-
- * Se o video nao tiver faixa de audio (ou o ffmpeg falhar), isto devolve sem
- * erro: a transmissao segue so' com imagem. Nunca derruba o video.
-
- * @returns {Promise<void>}
- */
-function iniciarAudio({ cli, callId, arquivo, estado, log }) {
-  return new Promise((resolve) => {
-    let proc;
-    try {
-      proc = spawn(binario(), argumentosDoAudio(arquivo), { stdio: ['ignore', 'pipe', 'ignore'] });
-    } catch {
-      resolve();
-      return;
-    }
-    estado.procAudio = proc;
-
-    // Sobra de bytes entre chunks: um float tem 4 bytes e o pipe pode cortar
-    // no meio de um. Guardar a sobra evita amostra corrompida.
-    let sobra = Buffer.alloc(0);
-
-    proc.stdout.on('data', (chunk) => {
-      if (estado.parado) return;
-      try {
-        const buf = sobra.length ? Buffer.concat([sobra, chunk]) : chunk;
-        const inteiros = Math.floor(buf.length / BYTES_POR_AMOSTRA);
-        sobra = buf.subarray(inteiros * BYTES_POR_AMOSTRA);
-        if (inteiros === 0) return;
-        // Copia para um ArrayBuffer alinhado (o Buffer pode ter offset).
-        const alinhado = new Uint8Array(inteiros * BYTES_POR_AMOSTRA);
-        alinhado.set(buf.subarray(0, inteiros * BYTES_POR_AMOSTRA));
-        const pcm = new Float32Array(alinhado.buffer);
-        cli.feedLiveAudio(callId, pcm);
-        estado.amostras = (estado.amostras || 0) + pcm.length;
-      } catch (e) {
-        log('feedLiveAudio: ' + (e?.message || e));
-      }
-    });
-    proc.on('error', () => resolve());          // sem audio: so' imagem
-    proc.on('close', () => resolve());
   });
 }
 
@@ -477,9 +510,8 @@ export function parar(grupo) {
   const estado = ativos.get(grupo);
   if (!estado) return { ok: false, motivo: 'nao_esta_transmitindo' };
   estado.parado = true;
-  // Os DOIS processos: sem matar o do audio ele fica orfao alimentando a call.
+  // E' UM processo so' (video e audio sao duas saidas dele).
   try { estado.proc?.kill('SIGKILL'); } catch { /* ok */ }
-  try { estado.procAudio?.kill('SIGKILL'); } catch { /* ok */ }
   ativos.delete(grupo);
   return { ok: true };
 }

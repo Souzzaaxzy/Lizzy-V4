@@ -209,7 +209,11 @@ if (TEM_FFMPEG) {
     // `sliced-threads=0`, este teste fragmenta e falha.
     const fluxo = await new Promise((resolve, reject) => {
       const pedacos = [];
-      const p = spawn(FFMPEG, midiap.argumentosDoEncoder(video), { stdio: ['ignore', 'pipe', 'ignore'] });
+      // stdio: [entrada, video, erros, audio] -- o audio sai no pipe:3.
+      // O video deste teste e' gerado SEM audio (sem ),
+      // entao a saida de audio nao entra -- senao o ffmpeg aborta.
+      const p = spawn(FFMPEG, midiap.argumentosDoEncoder(video, 15, false),
+        { stdio: ['ignore', 'pipe', 'ignore', 'ignore'] });
       p.stdout.on('data', (c) => pedacos.push(c));
       p.on('error', reject);
       p.on('close', () => resolve(Buffer.concat(pedacos)));
@@ -376,14 +380,15 @@ if (TEM_FFMPEG) {
 // ============================================================================
 
 if (TEM_FFMPEG) {
-  await test('os argumentos do audio pedem PCM mono 16 kHz (o formato do motor)', () => {
-    const args = midiap.argumentosDoAudio('/tmp/x.mp4');
+  await test('os argumentos pedem PCM mono 16 kHz como 2a SAIDA (o formato do motor)', () => {
+    // O audio e' a segunda saida do MESMO ffmpeg (pipe:3), nao outro processo.
+    const args = midiap.argumentosDoEncoder('/tmp/x.mp4', 30);
     const j = args.join(' ');
-    includes(j, '-vn', 'sem video (o outro ffmpeg cuida)');
+    includes(j, 'pipe:3', 'o audio sai no pipe:3');
     includes(j, '-ac 1', 'mono (a doc do motor: "live mono PCM")');
     includes(j, '-ar 16000', '16 kHz (a AUDIO_SAMPLE_RATE do motor)');
     includes(j, '-f f32le', 'Float32 cru (o formato do feedLiveAudio)');
-    includes(j, '-re', 'mesmo pacing do video (os dois andam juntos)');
+    includes(j, '-re', 'pacing: le na taxa nativa');
     includes(j, 'agate=threshold=0.001', 'a cadeia que tira o chiado (limiar medido)');
   });
 
@@ -490,12 +495,13 @@ if (TEM_FFMPEG) {
     fs.unlinkSync(video);
   });
 
-  await test('o `parar` mata os DOIS processos (audio nao fica orfao)', async () => {
+  await test('o `parar` mata o processo (video e audio saem juntos)', async () => {
+    // UM ffmpeg com duas saidas: matar o processo derruba os dois.
     const md = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/midiap.js'), 'utf-8');
     const i = md.indexOf('export function parar');
     const bloco = md.slice(i, i + 700);
-    includes(bloco, 'estado.proc?.kill', 'mata o processo do video');
-    includes(bloco, 'estado.procAudio?.kill', 'mata o processo do audio');
+    includes(bloco, 'estado.proc?.kill', 'mata o processo');
+    ok(!md.includes('procAudio'), 'nao existe mais um 2o processo para orfanar');
   });
 }
 
@@ -515,15 +521,15 @@ await test('o video NAO fica no disco depois da transmissao', async () => {
   ok(!fs.existsSync(p), 'sai do disco no fim');
 });
 
-await test('o comando apaga o video no `finally` (sucesso, erro e parar)', () => {
+await test('o comando NAO grava o video em disco (nao ha o que apagar)', () => {
   const src = fs.readFileSync(path.join(HERE, '..', 'dados/src/index.js'), 'utf-8');
   const i = src.indexOf("case 'midiap':");
   const bloco = src.slice(i, src.indexOf("case 'antifantasma':", i));
-  includes(bloco, 'fs.unlinkSync(arquivo)', 'apaga o arquivo no finally');
-  // E o `finally` cobre os tres desfechos (o `catch` nao retorna antes dele).
-  const iFinally = bloco.indexOf('} finally {');
-  ok(iFinally > 0, 'o `finally` existe');
-  ok(bloco.indexOf('fs.unlinkSync(arquivo)') > iFinally, 'a limpeza esta DENTRO do finally');
+  // O caminho novo manda o FLUXO direto ao ffmpeg (pipe:0).
+  ok(!bloco.includes('fs.writeFileSync'), 'nao escreve arquivo');
+  includes(bloco, 'downloadContentFromMessage', 'pega o fluxo decifrado');
+  includes(bloco, 'fluxo,', 'passa o fluxo para o modulo');
+  ok(!bloco.includes('caminhoDoVideo'), 'nao reserva caminho de arquivo');
 });
 
 await test('limparCacheMidiap apaga os orfaos e NAO toca o resto do cache', () => {
