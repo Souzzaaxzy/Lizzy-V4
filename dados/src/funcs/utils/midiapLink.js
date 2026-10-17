@@ -174,8 +174,20 @@ export function argumentosDoAudio(url) {
 /**
  * O fps do link, sem baixar o video.
  *
- * O `--print` junto do `-g` faz o yt-dlp imprimir o dado pedido E a URL, numa
- * resolucao so'. Aqui so' o fps interessa.
+ * O `--print` faz o yt-dlp imprimir o dado pedido; o `--simulate` evita
+ * baixar qualquer byte.
+ *
+ * ## Por que usa a MESMA receita e o MESMO seletor do download
+ *
+ * Medido: um `--print` "pelado" (sem runtime JS/EJS) **falha em IP
+ * bloqueado** -- era o caso do servidor do dono. Sem o dado, o chamador caia
+ * no fps de reserva, e o `-r` do encoder **descartava 40% dos frames** (um
+ * video de 25 fps tocando a 15). O sintoma e' exatamente o "pulo de frames".
+ *
+ * Por isso aqui vao: a receita anti-bloqueio (runtime JS + EJS + cookies) e o
+ * **mesmo `formatoDoVideo()`** que o download usa -- se o seletor divergisse,
+ * o fps poderia ser de OUTRO formato (ex.: o HLS de 60 fps) e o encoder
+ * duplicaria/descartaria de novo.
  *
  * @param {string} url
  * @returns {Promise<number>} o fps, ou o padrao se nao der para saber
@@ -185,21 +197,38 @@ export async function fpsDoLink(url) {
   if (!yt) return FPS_PADRAO;
   try {
     const saida = await new Promise((resolve, reject) => {
+      // NAO usa o `baseDoLink()` aqui: ele traz o `-o -` (destino stdout), e
+      // com ele o yt-dlp manda o `--print` para o **stderr**, deixando o
+      // stdout VAZIO. Medido:
+      //     STDOUT = ""      <- era daqui que o codigo lia
+      //     STDERR = "25"    <- o fps estava aqui
+      // Resultado: o fps caia sempre no de reserva, o encoder forcava `-r`
+      // com o valor errado e o video PULAVA quadros.
+      // Aqui so' queremos o valor impresso: nada de `-o`, e lemos os DOIS
+      // fluxos por seguranca (o yt-dlp muda o destino conforme a versao).
       const p = spawn(yt.cmd, [
-        ...yt.base, '--no-progress', '--no-warnings', '--no-playlist',
-        '-f', `bv*[height<=${ALTURA_MAX}]/b`,
+        ...yt.base,
+        '--no-progress', '--no-warnings', '--no-playlist',
+        ...argumentosAntiBloqueio(),
+        '--simulate',
+        '-f', formatoDoVideo(),
         '--print', '%(fps)s',
-        '-g', url
-      ], { stdio: ['ignore', 'pipe', 'ignore'] });
+        url
+      ], { stdio: ['ignore', 'pipe', 'pipe'] });
       let out = '';
+      let err = '';
       p.stdout.on('data', (c) => { out += c; });
+      p.stderr.on('data', (c) => { err += c; });
       p.on('error', reject);
-      p.on('close', () => resolve(out));
+      p.on('close', () => resolve(out.trim() ? out : err));
     });
-    // A 1a linha e' o fps; as seguintes sao as URLs.
-    const fps = Number.parseInt(String(saida).split('\n')[0], 10);
-    if (!Number.isFinite(fps) || fps <= 0) return FPS_PADRAO;
-    return Math.min(fps, 60);
+    // O `--print` imprime so' o valor; procuramos o primeiro inteiro util
+    // (o stderr pode trazer avisos antes da linha do fps).
+    for (const linha of String(saida).split('\n')) {
+      const n = Number.parseInt(linha.trim(), 10);
+      if (Number.isFinite(n) && n > 0) return Math.min(n, 60);
+    }
+    return FPS_PADRAO;
   } catch {
     return FPS_PADRAO;
   }

@@ -81,7 +81,15 @@ const MAX_ALTURA = 720;
 const FPS_MAX = Number.parseInt(process.env.MIDIAP_FPS_MAX || '30', 10);
 
 ///** fps de reserva quando o video nao informa (arquivo exotico). */
-const FPS_PADRAO = 15;
+/**
+ * fps de reserva quando nao da' para saber o do video.
+ *
+ * E' 25 (nao 15) de proposito: o YouTube publica a maioria em 24/25/30, e um
+ * valor MENOR que o real faz o `-r` do encoder DESCARTAR frames -- medido:
+ * `-r 15` num video de 25 fps derruba o jitter de 4,3 ms para 33,4 ms e o
+ * efetivo cai para 15 fps (40% dos quadros perdidos, que e' o "pulo" visivel).
+ */
+const FPS_PADRAO = 25;
 
 /** fps de reserva, exportado para quem transmite um fluxo. */
 export const FPS_DE_RESERVA = FPS_PADRAO;
@@ -174,10 +182,18 @@ export function argumentosDoEncoder(entrada, fps = FPS_PADRAO, temAudio = true, 
     // Teto de banda: sem isto o encoder gasta o que o conteudo pedir
     // (medido: 5,4 Mbps em conteudo complexo) e a call derruba frames.
     '-maxrate', `${KBPS}k`, '-bufsize', `${KBPS * 2}k`,
-    // O fps do VIDEO (nao um fixo): o timestamp tem de bater com o
-    // intervalo real dos frames.
-    '-r', String(fps),
-    '-g', String(fps * 2),                  // keyframe a cada 2 s
+    // NAO usar `-r <fps>`: medido, o ffmpeg JA' le o fps do proprio stream
+    // (ele reporta "25 fps" lendo o pipe). Forcar o numero e' o que introduz
+    // DUPLICACAO (se for maior) ou DESCARTE (se for menor) quando ele diverge
+    // do real -- e o `fpsDoLink` pode divergir (o seletor dele e outro, e num
+    // IP bloqueado ele falha e cai no de reserva). Medido com `-r 15` num
+    // video de 25 fps: jitter 4,3 ms -> 33,4 ms e 40% dos quadros perdidos.
+    // `passthrough` copia os frames como chegam: sem duplicar nem descartar.
+    '-fps_mode', 'passthrough',
+    // Keyframe a cada ~1 s (era 2 s): o motor so' ABRE o stream quando ve um
+    // keyframe (`feedLiveVideo` devolve 0 ate' entao, por contrato), e um
+    // keyframe mais frequente tambem ajuda quem entra no meio da transmissao.
+    '-g', String(fps),
     // O `-vf` e' passado ao ffmpeg SEM shell (`spawn` com argumentos
     // separados), entao:
     //   - nada de aspas dentro do valor (iriam literais);

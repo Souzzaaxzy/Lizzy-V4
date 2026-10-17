@@ -291,18 +291,49 @@ if (TEM_FFMPEG) {
 // 1a) O FPS: o timestamp tem de bater com o video (a causa do travamento)
 // ============================================================================
 
-await test('o fps e detectado do VIDEO, nao fixo', () => {
-  // O `FPS` era fixo em 15: num video de 30 fps o passo do timestamp (66,7 ms)
-  // nao batia com o intervalo real (33,3 ms) -- medido: 39,8 ms de descompasso
-  // por frame e 3,5 s de erro acumulado em 3 s. O motor remapeia o tempo e
-  // descarta/atrasa.
+await test('o encoder NAO forca o fps: usa o nativo com `fps_mode passthrough`', () => {
+  // ## Por que o `-r` SAIU (causa MEDIDA do "pulo de frames")
+  //
+  // O ffmpeg JA' le o fps do proprio stream (medido: reporta "25 fps" lendo o
+  // pipe). Forcar `-r <fps>` e' o que introduz o defeito quando o numero
+  // diverge do real:
+  //   - `-r` MAIOR que o real -> DUPLICA frames;
+  //   - `-r` MENOR que o real -> DESCARTA frames (o "pulo").
+  //
+  // E o numero divergia mesmo: o `fpsDoLink` lia o stdout de um comando que
+  // mandava o `--print` para o **stderr** (por causa do `-o -`), entao vinha
+  // vazio e caia no reserva (15). Num video de 25 fps isso dava `-r 15`:
+  // medido, 40% dos quadros perdidos e o jitter subia de 4,3 ms para 33,4 ms.
+  //
+  // `passthrough` copia os frames como chegam -- sem duplicar nem descartar,
+  // qualquer que seja o fps real.
   const args = midiap.argumentosDoEncoder('/tmp/x.mp4', 30);
-  const i = args.indexOf('-r');
-  ok(i >= 0, 'os argumentos declaram o fps');
-  ok(args[i + 1] === '30', `o fps pedido e' respeitado (veio ${args[i + 1]})`);
-  // O GOP acompanha o fps (keyframe a cada 2 s).
+  ok(!args.includes('-r'), 'nao forca o fps (o defeito do pulo)');
+  const i = args.indexOf('-fps_mode');
+  ok(i >= 0 && args[i + 1] === 'passthrough', 'usa fps_mode passthrough');
+  // O GOP acompanha o fps pedido (keyframe a cada ~1 s): o motor so' ABRE o
+  // stream quando ve um keyframe, entao ele mais frequente abre mais rapido.
   const g = args.indexOf('-g');
-  ok(args[g + 1] === '60', `GOP = fps*2 (veio ${args[g + 1]})`);
+  ok(args[g + 1] === '30', `GOP = fps (veio ${args[g + 1]})`);
+});
+
+await test('o fpsDoLink le o valor certo (o --print nao vai para o stdout com -o -)', () => {
+  // BUG MEDIDO: com o `-o -` do `baseDoLink`, o yt-dlp manda o `--print` para o
+  // STDERR e deixa o STDOUT vazio. O codigo lia so' o stdout -> sempre vazio ->
+  // sempre o fps de reserva.
+  const src = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/midiapLink.js'), 'utf-8');
+  const i = src.indexOf('export async function fpsDoLink');
+  const bloco = src.slice(i, src.indexOf('\n}', i));
+  // O comentario do bloco CITA o baseDoLink (para explicar por que nao usa);
+  // a prova e' nao haver CHAMADA a ele.
+  ok(!/\.\.\.baseDoLink\(/.test(bloco), 'nao chama o baseDoLink (o `-o -` desvia o --print)');
+  includes(bloco, 'stderr', 'le o stderr tambem (o yt-dlp imprime o valor nele)');
+  includes(bloco, 'argumentosAntiBloqueio', 'usa a receita (sem ela o --print falha em IP bloqueado)');
+  includes(bloco, 'formatoDoVideo', 'usa o MESMO seletor do download (senao o fps e de outro formato)');
+  // E o reserva deixou de ser 15 (um valor MENOR que o real descarta frames).
+  // O reserva vive no midiap.js (e' o modulo do encoder).
+  const md = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/midiap.js'), 'utf-8');
+  includes(md, 'const FPS_PADRAO = 25', 'o reserva e 25 (15 descartaria quadros)');
 });
 
 if (TEM_FFMPEG) {
