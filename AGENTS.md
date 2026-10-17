@@ -10762,3 +10762,61 @@ cada ponta (yt-dlp sozinho → 8,4 MB; yt-dlp+merge → 0 byte; ffmpeg com pipe
 vazio → 183). Em arquivo com glifos, editar por
 `open(rb) → decode('utf-8') → replace → encode('utf-8')` e conferir
 `mojibake == 0` — o `file_editor` corrompe a codificação.
+
+
+### 🔓 Anti-bloqueio do YouTube no LINK — a receita do `!play` (out/2026) ✅
+Sintoma: **todo** link respondia *"O YouTube pediu verificação"*. O `!midiap`
+não mandava **nada** da receita que o `!play` já usa contra o bloqueio de IP.
+
+**O que o `!play` faz (e o `!midiap` não fazia)**: (1) **runtime JS**
+(`--js-runtimes`, o próprio Node do bot — sem ele o YouTube moderno não resolve
+o desafio `n` e responde *"Sign in to confirm you're not a bot"*); (2) **solver
+de desafios EJS** (`--remote-components ejs:github`); (3) **cookies Netscape**
+(`--cookies`, exportado do navegador); (4) **escada de `player_client`** com
+**2ª passada sem cookies**. O `midiapLink` montava só `-f <formato> -o - <url>`.
+
+**Correção — fonte única, sem duplicar a receita**: novo módulo
+**`dados/src/funcs/utils/ytdlpAntiBloqueio.js`**
+(`argumentosAntiBloqueio`, `argumentosDoRuntime`, `clientesDoYoutube`,
+`extractorArgsDoClient`, `resolveCookiesFile`, `ehBloqueio`, `ehFalhaDeAuth`,
+`semCookies`). O `midiapLink` passou a usar a receita **completa** e o
+`youtube.js` passou a **importar** o módulo (antes tinha tudo duplicado) — mesma
+lista de clientes, mesmas detecções, mesmo arquivo de cookies.
+
+#### 🚨 O bug que isso revelou: HLS GRAVA EM DISCO
+Ao ligar a receita, o `player_client=web_safari` passou a ser usado — e ele
+oferece 720p+ **só por HLS** (`m3u8_native`). O downloader de HLS do yt-dlp
+**grava cada fragmento em arquivo** no CWD (`--Frag16.part`) antes de remontar.
+Medido: **13,4 MB escritos em disco** — quebrava a regra "nada no disco".
+
+**Correção**: os seletores passaram a exigir **`protocol^=https`** (download
+**nativo**, que escreve direto no stdout) e o cliente **`default` vai primeiro**
+— medido, é o **único** que entrega o par *video-only* (**itag 136**, avc1
+720p) + *audio-only* (**itag 140**, m4a) por HTTPS. Os clientes nomeados dão
+1 muxado de 360p ou HLS.
+
+| cliente | https video-only | https muxado | HLS |
+|---|---|---|---|
+| **`default`** | **22 (até 3840p)** | 1 | 17 |
+| `web_safari` | 0 | 1 (360p) | 6 |
+| `mweb`/`web`/`android_vr`/`android` | 0 | 1 (360p) | 0 |
+
+#### Medido com o módulo REAL (cookies presentes)
+```
+cookies: sim | player_client=default
+video 25,23 MB + audio 3,29 MB  ->  H.264 1,16 MB + PCM 0,44 MB
+disco: yt-dlp video 0,00 MB | yt-dlp audio 0,00 MB | ffmpeg 0,00 MB
+.part no repo: nenhum          ->  ✅ FLUI e ZERO disco
+```
+`!play` (mp3) verificado em paralelo: **3,25 MB** baixados, inalterado.
+
+#### Como configurar os cookies
+`YOUTUBE_COOKIES_FILE` (ou o padrão implícito `data/youtube/cookies.txt`) — o
+**mesmo** arquivo do `!play`, formato **Netscape**. É opcional: sem ele o fluxo
+segue (e a 2ª passada sem cookies existe), mas em IP de datacenter ele é o que
+resolve de forma definitiva. `data/youtube/cookies.txt` está no `.gitignore` —
+**nunca** commitar.
+
+**Testes**: `tests/midiap.test.js` — **46 testes / 161 asserções, 0 falhas**
+(inclui a receita anti-bloqueio, a paridade `!play`↔`!midiap` e a trava do
+`protocol^=https`).
