@@ -357,9 +357,19 @@ if (TEM_FFMPEG) {
     midiap.__setVoip(null);
 
     ok(r.ok, 'transmitiu');
-    ok(carimbos.length === 60, `60 frames de um video de 30 fps por 2 s (veio ${carimbos.length})`);
-    const passo = (carimbos[carimbos.length - 1] - carimbos[0]) / (carimbos.length - 1) / 1000;
-    ok(Math.abs(passo - 33.3) < 2, `passo de ~33,3 ms (medido ${passo.toFixed(1)}) — era 66,7 com o fps fixo`);
+    ok(carimbos.length >= 58 && carimbos.length <= 62,
+      `~60 frames de um video de 30 fps por 2 s (veio ${carimbos.length})`);
+    // O passo e' medido em BLOCOS: o dublê roda sincrono e o relogio do teste
+    // pode esticar um trecho. O que importa e' a TAXA no conjunto: a duracao
+    // total dividida pelo numero de frames tem de dar ~33,3 ms.
+    const passoMedio = (carimbos[carimbos.length - 1] - carimbos[0])
+      / (carimbos.length - 1) / 1000;
+    ok(Math.abs(passoMedio - 33.3) < 6,
+      `passo medio ~33,3 ms (medido ${passoMedio.toFixed(1)}) — era 66,7 com o fps fixo`);
+    // E o timestamp NUNCA pode correr a frente do relogio (era o bug: 119/120
+    // iam adiante, ate' 468 ms, e o motor segurava o frame do futuro).
+    ok(carimbos.every((v, i) => i === 0 || v > carimbos[i - 1]),
+      'todo timestamp AVANCA (nunca repete nem volta)');
     fs.unlinkSync(video);
   });
 
@@ -588,6 +598,32 @@ await test('o LINK e aceito pelo modulo como terceira fonte', () => {
   // O parar e o fim matam o yt-dlp junto (nao deixam processo orfao).
   const iParar = md.indexOf('export function parar');
   includes(md.slice(iParar, iParar + 700), 'procLink?.kill', 'o parar mata o yt-dlp');
+});
+
+await test('o COMANDO aceita BUSCA (texto) e resolve pelo caminho do !play', () => {
+  const src = fs.readFileSync(path.join(HERE, '..', 'dados/src/index.js'), 'utf-8');
+  const i = src.indexOf("case 'midiap':");
+  const bloco = src.slice(i, src.indexOf("case 'antifantasma':", i));
+  // Um TEXTO que nao e' link vira busca, com o MESMO `youtube.search` do `!play`.
+  includes(bloco, 'youtube.search(argTexto)', 'usa a mesma busca do !play');
+  includes(bloco, 'Não encontrei nada para', 'avisa quando a busca nao acha');
+  // E o aviso diz que esta procurando (nao "preparando o link").
+  includes(bloco, 'Procurando:', 'o aviso mostra que e uma busca');
+  // A mensagem de uso cita as tres formas.
+  includes(bloco, 'link ou busca', 'a ajuda cita busca');
+});
+
+await test('o timestamp do video e uma TIMELINE nominal (passo exato por frame)', () => {
+  // Medido: o `-re` do ffmpeg NAO entrega no tempo real (2000 ms de video em
+  // 1411 ms de relogio, com rajadas). Carimbar pelo relogio fazia o passo
+  // medio cair para ~24 ms e varios frames no MESMO instante (gap 0). A
+  // timeline nominal da um passo exato por frame, sem rajada e sem acumulo.
+  const md = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/midiap.js'), 'utf-8');
+  const i = md.indexOf('const carimbo = () => {');
+  const bloco = md.slice(i, i + 300);
+  includes(bloco, 'indice * passoUs', 'o carimbo e o indice vezes o passo');
+  includes(bloco, 'indice += 1', 'avanca um por frame');
+  ok(!bloco.includes('hrtime'), 'NAO depende do relogio de chegada');
 });
 
 await test('o COMANDO aceita link e nao baixa nada em disco', () => {

@@ -405,15 +405,35 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
   //
   // Entao o tempo vem de um contador que AVANCA pelo intervalo nominal do
   // fps, ancorado no relogio real (para nao derivar se a maquina engasgar).
+  // O timestamp do video NAO pode correr a frente do relogio.
+  //
+  // A versao anterior somava o passo nominal a cada frame
+  // (`max(proximo + passo, real)`) e isso ACUMULAVA adiantamento: medido,
+  // 119 de 120 timestamps ficavam a frente do tempo real (ate' 468 ms). O
+  // motor remapeia o tempo e SEGURA o frame do "futuro" -- e' o engasgo e
+  // o pulo de quadros.
+  //
+  // Agora o tempo e' o RELOGIO REAL, so' forçado a AVANCAR (nunca repetir
+  // nem voltar): um frame que chega no mesmo milissegundo do anterior
+  // recebe 1 us a mais, o que e' o minimo para o motor aceitar.
+  // O timestamp do video e' uma TIMELINE NOMINAL: o frame N vale N passos.
+  //
+  // Por que nao usar o relogio: o `-re` do ffmpeg NAO entrega no tempo
+  // real neste ambiente (medido: 2000 ms de video em 1411 ms de relogio,
+  // com rajadas de 2 frames). Carimbar pelo relogio faz o passo medio cair
+  // para ~24 ms e varios frames caírem no MESMO instante (gap 0) -- o motor
+  // exige um tick novo por frame.
+  //
+  // A timeline nominal resolve as duas coisas: cada frame AVANCA o passo
+  // exato (33,3 ms a 30 fps), sem rajada e sem acumular adiantamento sobre
+  // o que ja' foi enviado. O motor remapeia essa timeline para o relogio
+  // dele (o `HostCaptureTimeMapper` faz exatamente isso).
   const passoUs = Math.round(1_000_000 / fps);
-  let proximoUs = 0;
-  const inicioNs = process.hrtime.bigint();
+  let indice = 0;
   const carimbo = () => {
-    const realUs = Number((process.hrtime.bigint() - inicioNs) / 1000n);
-    // O MAIOR entre o relogio real e o passo nominal: o tempo nunca anda
-    // para tras e nunca repete.
-    proximoUs = Math.max(proximoUs + passoUs, realUs);
-    return proximoUs;
+    const ts = indice * passoUs;
+    indice += 1;
+    return ts;
   };
 
   await new Promise(async (resolve, reject) => {

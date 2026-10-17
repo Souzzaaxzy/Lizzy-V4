@@ -36277,20 +36277,21 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             return reply('📺 Já estou transmitindo neste grupo.\n\nUse `' + prefix + 'midiap parar` para encerrar.');
           }
 
-          // Duas formas de escolher o que transmitir:
+          // TRES formas de escolher o que transmitir:
           //   1. um LINK (`!midiap <url>`) -- o yt-dlp puxa, sem disco;
-          //   2. um VIDEO MARCADO (responder o video).
-          const argLink = [args[0], ...args.slice(1)].filter(Boolean).join(' ').trim();
-          const ehLink = /^https?:\/\//i.test(argLink);
+          //   2. uma BUSCA (`!midiap <texto>`) -- o mesmo caminho do `!play`;
+          //   3. um VIDEO MARCADO (responder o video).
+          const argTexto = [args[0], ...args.slice(1)].filter(Boolean).join(' ').trim();
+          const ehLink = /^https?:\/\//i.test(argTexto);
 
           const citado = extractQuoted(info.message);
           const tipoCitado = citado ? getContentType(citado) : null;
           const temVideoMarcado = Boolean(citado && tipoCitado === 'videoMessage' && citado.videoMessage);
 
-          if (!ehLink && !temVideoMarcado) {
+          if (!argTexto && !temVideoMarcado) {
             return reply(
               '📺 *MIDIAP*\n\n' +
-              '• `' + prefix + 'midiap <link>` — transmite o vídeo do link\n' +
+              '• `' + prefix + 'midiap <link ou busca>` — transmite o vídeo\n' +
               '• Responda um *vídeo* com `' + prefix + 'midiap` — transmite o vídeo\n' +
               '• `' + prefix + 'midiap parar` — encerra a transmissão'
             );
@@ -36298,7 +36299,8 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
 
           const video = temVideoMarcado ? citado.videoMessage : null;
           const aviso = await nazu.sendMessage(from, {
-            text: ehLink ? '📺 Preparando o link...' : '📺 Preparando a transmissão...',
+            text: ehLink ? '📺 Preparando o link...'
+              : (argTexto ? `🔎 Procurando: _${argTexto}_...` : '📺 Preparando a transmissão...'),
             contextInfo: gerarContextNewsletter()
           }).catch(() => null);
           const apagarAviso = async () => {
@@ -36312,8 +36314,18 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
           let fluxo = null;
           let link = null;
           let fpsDoLink = null;
-          if (ehLink) {
-            link = argLink;
+          if (ehLink || argTexto) {
+            link = argTexto;
+            // Um TEXTO (que nao e' link) e' uma BUSCA: resolve pelo mesmo
+            // caminho do `!play` (o `yt-search`, que ja' e' dependencia).
+            if (!ehLink) {
+              const busca = await youtube.search(argTexto).catch(() => null);
+              if (!busca?.ok || !busca.data?.url) {
+                await apagarAviso();
+                return reply(`❌ Não encontrei nada para _${argTexto}_.`);
+              }
+              link = busca.data.url;
+            }
             // O fps vem do yt-dlp sem baixar o video (um pipe nao pode ser
             // sondado sem ser consumido).
             fpsDoLink = await midiapLink.fpsDoLink(link).catch(() => null);
