@@ -563,6 +563,88 @@ await test('o BOOT limpa o cache do midiap (senao acumula em silencio)', () => {
 });
 
 // ============================================================================
+// 1d) O LINK (YouTube e afins) — tambem sem disco
+// ============================================================================
+
+await test('os argumentos do link pedem o video MUXADO no stdout', async () => {
+  const lk = await import(new URL('../dados/src/funcs/utils/midiapLink.js', import.meta.url).href);
+  const args = lk.argumentosDoLink('https://youtu.be/abc');
+  const j = args.join(' ');
+  // O YouTube NAO tem formato muxado: precisa preferir o que ja' tem os dois e
+  // cair no merge (`bv*+ba`) quando nao houver.
+  includes(j, 'b[height<=', 'prefere um formato que ja tenha video+audio');
+  includes(j, '+ba', 'cai no merge video+audio quando nao houver muxado');
+  includes(j, '--remux-video mp4', 'container que o ffmpeg le de um pipe');
+  includes(j, '--no-playlist', 'nao pega a playlist inteira');
+  ok(args.includes('-o') && args.includes('-'), 'manda para o stdout (-o -), sem arquivo');
+  ok(!j.includes('/tmp'), 'nao aponta para nenhum arquivo');
+});
+
+await test('o LINK e aceito pelo modulo como terceira fonte', () => {
+  const md = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/midiap.js'), 'utf-8');
+  includes(md, "link ? 'link'", 'o link vira uma fonte');
+  includes(md, "fonte === 'link'", 'a fonte link tem tratamento proprio');
+  includes(md, 'abrirLink', 'usa o resolvedor de link');
+  // O parar e o fim matam o yt-dlp junto (nao deixam processo orfao).
+  const iParar = md.indexOf('export function parar');
+  includes(md.slice(iParar, iParar + 700), 'procLink?.kill', 'o parar mata o yt-dlp');
+});
+
+await test('o COMANDO aceita link e nao baixa nada em disco', () => {
+  const src = fs.readFileSync(path.join(HERE, '..', 'dados/src/index.js'), 'utf-8');
+  const i = src.indexOf("case 'midiap':");
+  const bloco = src.slice(i, src.indexOf("case 'antifantasma':", i));
+  includes(bloco, 'ehLink', 'detecta o link no argumento');
+  includes(bloco, 'midiapLink.fpsDoLink', 'pega o fps sem baixar o video');
+  includes(bloco, 'link,', 'passa o link para o modulo');
+  ok(!bloco.includes('fs.writeFileSync'), 'NAO grava nada em disco');
+});
+
+if (TEM_FFMPEG) {
+  await test('LINK: o pipe do yt-dlp alimenta o ffmpeg (video + audio)', async () => {
+    // Um "yt-dlp" de verdade: um script que cospe um video local no stdout.
+    const fonte = path.join(TMP_DB, 'lk.mp4');
+    await new Promise((resolve, reject) => {
+      const p = spawn(FFMPEG, ['-hide_banner', '-loglevel', 'error', '-y',
+        '-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=30:duration=2',
+        '-f', 'lavfi', '-i', 'sine=frequency=440:duration=2',
+        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest',
+        '-movflags', 'frag_keyframe+empty_moov', fonte],
+        { stdio: ['ignore', 'ignore', 'inherit'] });
+      p.on('error', reject);
+      p.on('close', (c) => (c === 0 ? resolve() : reject(new Error('ffmpeg ' + c))));
+    });
+
+    const falso = path.join(TMP_DB, 'ytdlp-falso.sh');
+    fs.writeFileSync(falso, `#!/bin/sh\ncat ${fonte}\n`, { mode: 0o755 });
+    const anterior = process.env.YTDLP_PATH;
+    process.env.YTDLP_PATH = falso;
+
+    let frames = 0; let amostras = 0;
+    midiap.__setVoip({
+      requestVideoUpgrade: async () => 'accepted',
+      setScreenShare: async () => {},
+      setVideoEnabled: async () => {},
+      setExternalAudioMode: () => {},
+      feedLiveVideo: () => { frames++; return 1; },
+      feedLiveAudio: (_id, pcm) => { amostras += pcm.length; return 0; }
+    });
+    const r = await midiap.transmitir({
+      grupo: 'glk@g.us', callId: 'CL', link: 'https://youtu.be/abc', fps: 30
+    });
+    midiap.__setVoip(null);
+    if (anterior === undefined) delete process.env.YTDLP_PATH;
+    else process.env.YTDLP_PATH = anterior;
+
+    ok(r.ok, `transmitiu pelo link (${r.motivo || ''} ${r.detalhe || ''})`);
+    ok(frames >= 58 && frames <= 64, `~60 frames de 30 fps por 2 s (veio ${frames})`);
+    ok(amostras >= 31000, `o audio do link chegou (${amostras} amostras)`);
+    fs.unlinkSync(fonte);
+    fs.unlinkSync(falso);
+  });
+}
+
+// ============================================================================
 // 2) O COMANDO
 // ============================================================================
 

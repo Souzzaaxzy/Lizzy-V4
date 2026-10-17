@@ -1242,6 +1242,7 @@ import * as callCache from './utils/callCache.js';
 import { prepararAudioCall } from './utils/callAudioPrep.js';
 import { baixarThumb } from './utils/callThumb.js';
 import * as midiap from './funcs/utils/midiap.js';
+import * as midiapLink from './funcs/utils/midiapLink.js';
 import { aoTerminarAudio, aoEncerrarAudio } from './funcs/utils/zapoCall.js';
 import { search, searchNews } from './funcs/utils/search.js';
 import { removeBg, upscale } from './funcs/utils/imagetools.js';
@@ -36276,20 +36277,28 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             return reply('📺 Já estou transmitindo neste grupo.\n\nUse `' + prefix + 'midiap parar` para encerrar.');
           }
 
-          // A midia precisa estar no ar (o `!callp` sobe a pilha).
+          // Duas formas de escolher o que transmitir:
+          //   1. um LINK (`!midiap <url>`) -- o yt-dlp puxa, sem disco;
+          //   2. um VIDEO MARCADO (responder o video).
+          const argLink = [args[0], ...args.slice(1)].filter(Boolean).join(' ').trim();
+          const ehLink = /^https?:\/\//i.test(argLink);
+
           const citado = extractQuoted(info.message);
           const tipoCitado = citado ? getContentType(citado) : null;
-          if (!citado || tipoCitado !== 'videoMessage' || !citado.videoMessage) {
+          const temVideoMarcado = Boolean(citado && tipoCitado === 'videoMessage' && citado.videoMessage);
+
+          if (!ehLink && !temVideoMarcado) {
             return reply(
               '📺 *MIDIAP*\n\n' +
-              'Responda um *vídeo* com `' + prefix + 'midiap` para transmiti-lo na call.\n\n' +
+              '• `' + prefix + 'midiap <link>` — transmite o vídeo do link\n' +
+              '• Responda um *vídeo* com `' + prefix + 'midiap` — transmite o vídeo\n' +
               '• `' + prefix + 'midiap parar` — encerra a transmissão'
             );
           }
 
-          const video = citado.videoMessage;
+          const video = temVideoMarcado ? citado.videoMessage : null;
           const aviso = await nazu.sendMessage(from, {
-            text: '📺 Preparando a transmissão...',
+            text: ehLink ? '📺 Preparando o link...' : '📺 Preparando a transmissão...',
             contextInfo: gerarContextNewsletter()
           }).catch(() => null);
           const apagarAviso = async () => {
@@ -36297,17 +36306,26 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             await nazu.sendMessage(from, { delete: aviso.key }).catch(() => {});
           };
 
-          // SEM DISCO: o fluxo decifrado do WhatsApp vai DIRETO para o ffmpeg
-          // (pipe:0). O video nao e' baixado inteiro nem gravado -- importa
-          // em servidor pequeno, onde um filme encheria o armazenamento.
-          let fluxo;
-          try {
-            fluxo = await downloadContentFromMessage(video, 'video');
-            if (!fluxo) throw new Error('fluxo vazio');
-          } catch (e) {
-            await apagarAviso();
-            console.error('[MIDIAP] download:', e?.message);
-            return reply('❌ Não consegui baixar o vídeo marcado.');
+          // NADA vai para o disco nos dois casos:
+          //   LINK  -- o yt-dlp muxa e manda no pipe:0 (o modulo cuida);
+          //   VIDEO -- o fluxo decifrado do WhatsApp vai direto no pipe:0.
+          let fluxo = null;
+          let link = null;
+          let fpsDoLink = null;
+          if (ehLink) {
+            link = argLink;
+            // O fps vem do yt-dlp sem baixar o video (um pipe nao pode ser
+            // sondado sem ser consumido).
+            fpsDoLink = await midiapLink.fpsDoLink(link).catch(() => null);
+          } else {
+            try {
+              fluxo = await downloadContentFromMessage(video, 'video');
+              if (!fluxo) throw new Error('fluxo vazio');
+            } catch (e) {
+              await apagarAviso();
+              console.error('[MIDIAP] download:', e?.message);
+              return reply('❌ Não consegui baixar o vídeo marcado.');
+            }
           }
 
           // Roda em BACKGROUND: a transmissao dura o video inteiro.
@@ -36318,11 +36336,12 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               const r = await midiap.transmitir({
                 grupo: from,
                 callId: ativa.callId,
-                fluxo,   // sem disco: o ffmpeg le do pipe
-                // O proto do WhatsApp nao traz o fps do video, e nao da' para
-                // sondar um stream sem consumi-lo. O valor de reserva serve de
-                // alvo: o encoder respeita o fps do arquivo.
-                fps: midiap.FPS_DE_RESERVA,
+                // Uma das duas fontes, nenhuma em disco.
+                fluxo,
+                link,
+                // LINK: o fps veio do yt-dlp. VIDEO: o proto nao o traz e um
+                // pipe nao pode ser sondado -- usa o valor de reserva.
+                fps: fpsDoLink || midiap.FPS_DE_RESERVA,
                 log: (m) => console.log('[MIDIAP]', m)
               });
               if (!r.ok) {

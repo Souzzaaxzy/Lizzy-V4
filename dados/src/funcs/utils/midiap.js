@@ -18,6 +18,15 @@
  * 4. `setExternalAudioMode(callId, true)` + `feedLiveAudio(callId, pcm)` —
  *    o AUDIO do video, em PCM mono de 16 kHz (a taxa do motor).
 
+ * ## As tres fontes (nenhuma usa disco)
+
+ * 1. **ARQUIVO** local (video que ja' esta' no servidor);
+ * 2. **FLUXO** (o video baixado do WhatsApp, via `pipe:0`);
+ * 3. **LINK** (URL do YouTube e afins): o `yt-dlp` entrega o video
+ *    MUXADO no `pipe:0`, sem gravar nada. O `yt-dlp` tambem informa o fps
+ *    (o `ffprobe` nao serve aqui: um pipe nao pode ser sondado sem ser
+ *    consumido).
+
  * ## UM ffmpeg, DUAS saidas
 
  * O video sai por `pipe:1` em H.264 e o audio por `pipe:3` em PCM cru --
@@ -48,6 +57,7 @@ import fs from 'fs';
 import path from 'path';
 import { criarSplitter } from '../../utils/screenShare.js';
 import { DATABASE_DIR } from '../../utils/paths.js';
+import { abrirLink } from './midiapLink.js';
 
 /** Perfil/level que o pacote anuncia (H264_CONSTRAINED_BASELINE_CODEC). */
 const PERFIL = 'baseline';
@@ -291,13 +301,15 @@ async function backend() {
  * @param {(msg: string) => void} [p.log]
  * @returns {Promise<{ok: boolean, motivo?: string, detalhe?: string, frames?: number}>}
  */
-export async function transmitir({ grupo, callId, arquivo = null, fluxo = null, fps = null, log = () => {} }) {
-  if (duble) return duble.transmitir({ grupo, callId, arquivo, fluxo, fps, log });
+export async function transmitir({ grupo, callId, arquivo = null, fluxo = null, link = null, fps = null, log = () => {} }) {
+  if (duble) return duble.transmitir({ grupo, callId, arquivo, fluxo, link, fps, log });
 
   if (!grupo || !callId) return { ok: false, motivo: 'sem_call' };
-  // A fonte e' um ARQUIVO ou um FLUXO (o video baixado do WhatsApp).
-  // O fluxo nao passa por disco -- e' o caminho para quem tem pouco espaco.
-  const fonte = fluxo ? 'fluxo' : 'arquivo';
+  // Tres fontes, nenhuma usa disco:
+  //   ARQUIVO -- um video local;
+  //   FLUXO   -- o video baixado do WhatsApp (pipe:0);
+  //   LINK    -- uma URL (o yt-dlp manda o video muxado no pipe:0).
+  const fonte = fluxo ? 'fluxo' : (link ? 'link' : 'arquivo');
   if (fonte === 'arquivo' && (!arquivo || !fs.existsSync(arquivo))) {
     return { ok: false, motivo: 'arquivo_ausente' };
   }
@@ -349,8 +361,8 @@ export async function transmitir({ grupo, callId, arquivo = null, fluxo = null, 
     // 3) O fps vem do PROPRIO video: com um fps fixo o passo do timestamp
     // nao bate com o intervalo real dos frames (medido: 39,8 ms de
     // descompasso por frame num video de 30 fps).
-    // Com ARQUIVO o fps vem do proprio video; com FLUXO ele vem do chamador
-    // (um stream nao pode ser sondado sem consumi-lo).
+    // Com ARQUIVO o fps vem do proprio video; com FLUXO/LINK ele vem do
+    // chamador (um pipe nao pode ser sondado sem ser consumido).
     const fpsUsado = fonte === 'arquivo'
       ? await fpsDoVideo(arquivo)
       : (fps || FPS_PADRAO);
@@ -359,10 +371,12 @@ export async function transmitir({ grupo, callId, arquivo = null, fluxo = null, 
     // 4) UM ffmpeg: H.264 no pipe:1 e, se houver, PCM no pipe:3.
     // Com ARQUIVO da' para sondar a faixa; com FLUXO nao (consumiria o
     // stream), entao assume-se que tem audio.
+    // No LINK o yt-dlp muxa audio e video num arquivo so', entao sempre tem.
     const temAudio = fonte === 'arquivo' ? await temFaixaDeAudio(arquivo) : true;
     log(`audio: ${temAudio ? 'sim' : 'nao'}`);
     await alimentar({
-      cli, callId, entrada: fluxo || arquivo, fonte, estado, log, fps: fpsUsado, temAudio
+      cli, callId, entrada: fluxo || link || arquivo, fonte, estado, log,
+      fps: fpsUsado, temAudio
     });
     return { ok: true, frames: estado.frames, amostras: estado.amostras || 0 };
   } catch (e) {
@@ -402,10 +416,12 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
     return proximoUs;
   };
 
-  await new Promise((resolve, reject) => {
+  await new Promise(async (resolve, reject) => {
     // O ffmpeg recebe um CAMINHO ou `pipe:0` -- nunca o objeto do stream
     // (medido: sem isto ele recebia `[object Object]` e saia com 254).
-    const args = argumentosDoEncoder(fonte === 'fluxo' ? 'pipe:0' : entrada, fps, temAudio);
+    // No LINK a entrada tambem e' pipe: quem alimenta e' o yt-dlp.
+    const porPipe = fonte === 'fluxo' || fonte === 'link';
+    const args = argumentosDoEncoder(porPipe ? 'pipe:0' : entrada, fps, temAudio);
 
     let proc;
     try {
@@ -414,7 +430,7 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
       // WhatsApp, sem passar por disco) ou `ignore` quando e' um arquivo.
       proc = spawn(binario(), args, {
         // O 4o descritor (audio) so' existe quando ha saida de audio.
-        stdio: [fonte === 'fluxo' ? 'pipe' : 'ignore', 'pipe', 'ignore',
+        stdio: [porPipe ? 'pipe' : 'ignore', 'pipe', 'ignore',
           temAudio ? 'pipe' : 'ignore']
       });
     } catch (e) {
@@ -425,6 +441,23 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
 
     // O video chegou do WhatsApp: joga o fluxo decifrado na entrada do ffmpeg.
     // Sem isto o processo ficaria esperando a entrada para sempre.
+    if (fonte === 'link') {
+      // O yt-dlp manda o video muxado no stdout: e' o que alimenta o ffmpeg.
+      const r = await abrirLink(entrada);
+      if (!r.proc) {
+        reject(new Error(r.detalhe || r.motivo || 'falha ao abrir o link'));
+        return;
+      }
+      estado.procLink = r.proc;
+      proc.stdin.on('error', () => { /* o yt-dlp pode ter saido */ });
+      r.proc.stdout.on('data', (c) => {
+        if (estado.parado || proc.stdin.destroyed) return;
+        try { proc.stdin.write(c); } catch { /* corrida */ }
+      });
+      r.proc.stdout.on('end', () => { try { proc.stdin.end(); } catch { /* ok */ } });
+      r.proc.on('close', () => { try { proc.stdin.end(); } catch { /* ok */ } });
+    }
+
     if (fonte === 'fluxo') {
       // O stdin do ffmpeg FECHA quando o arquivo acaba. Escrever depois disso
       // da' EPIPE -- e ele vem como EVENTO assincrono, entao o `try/catch` do
@@ -478,6 +511,8 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
           enviarFrame(cli, callId, au, carimbo, estado, log);
         }
       } catch { /* ok */ }
+      // Encerra o yt-dlp junto: sem isto ele seguiria baixando sozinho.
+      try { estado.procLink?.kill('SIGKILL'); } catch { /* ok */ }
       if (code === 0 || estado.parado) resolve();
       else reject(new Error('ffmpeg saiu com ' + code));
     });
@@ -510,8 +545,9 @@ export function parar(grupo) {
   const estado = ativos.get(grupo);
   if (!estado) return { ok: false, motivo: 'nao_esta_transmitindo' };
   estado.parado = true;
-  // E' UM processo so' (video e audio sao duas saidas dele).
+  // O ffmpeg (video e audio sao duas saidas dele) e, num LINK, o yt-dlp.
   try { estado.proc?.kill('SIGKILL'); } catch { /* ok */ }
+  try { estado.procLink?.kill('SIGKILL'); } catch { /* ok */ }
   ativos.delete(grupo);
   return { ok: true };
 }
