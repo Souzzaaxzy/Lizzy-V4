@@ -126,16 +126,21 @@ const BYTES_POR_AMOSTRA = 4;
  */
 const FRAME_MOTOR = 960;
 
+/** Quantos ms vale um frame do motor (960 amostras a 16 kHz). */
+const MS_POR_FRAME = (FRAME_MOTOR / 16000) * 1000;   // 60 ms
+
 /**
- * Quantos frames acumular ANTES de comecar a alimentar o motor.
+ * Teto da fila de audio, em frames.
  *
- * MEDIDO: o yt-dlp de audio entrega o 1o byte em ~2244 ms (o de video, 1621),
- * e o ffmpeg leva mais ~800 ms para o 1o PCM sair. Nesse vao o motor ja' esta'
- * consumindo a 16000 amostras/s — e toca SILENCIO. Era o corte no comeco.
+ * MEDIDO: o `-re` do ffmpeg entrega em rajadas (299 de 377 chegadas com
+ * intervalo ZERO e ate' 282 ms de silencio). A fila absorve esse jitter; o
+ * teto so' existe para um atraso acumulado nao crescer sem fim.
  *
- * Com 5 frames (300 ms) de partida, o buffer nunca esvazia no inicio.
+ * 12 frames = 720 ms: acima disso o audio ja' esta' audivelmente atrasado, e
+ * descartar o MAIS ANTIGO (em vez do mais novo) faz o som voltar ao tempo
+ * real — que e' o que o proprio motor faz no buffer dele.
  */
-const FRAMES_DE_PARTIDA = 5;
+const FILA_MAX_FRAMES = 12;
 
 /**
  * Watermarks do buffer de audio do MOTOR (pausa/retoma), em ms.
@@ -611,82 +616,72 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
     });
 
     // --- SAIDA 2: PCM cru -> feedLiveAudio ---
-    // Sobra de bytes entre chunks: um float tem 4 bytes e o pipe pode cortar
-    // no meio de um. Guardar a sobra evita amostra corrompida.
+    //
+    // ## O PROBLEMA (MEDIDO): o `-re` do ffmpeg entrega em RAJADAS
+    //
+    // Medido no caminho real: **299 de 377 chegadas com intervalo ZERO** e
+    // ate' **282 ms de silencio** entre elas. Ou seja, o audio nao chega no
+    // ritmo do tempo real — chega aos blocos.
+    //
+    // Entregar isso direto ao motor produz OS DOIS sintomas ao mesmo tempo:
+    //   - nos vaos o motor fica sem amostra -> CORTA;
+    //   - na rajada ele recebe um monte -> acumula -> ATRASA.
+    //
+    // ## A SOLUCAO: fila + relogio proprio (o motor nao pode ver o jitter)
+    //
+    // O ffmpeg escreve na FILA (pode rajada o quanto quiser) e um timer
+    // entrega ao motor em ritmo CONSTANTE — exatamente 1 frame de 60 ms a cada
+    // 60 ms de relogio. O jitter fica todo na fila, que absorve.
+    //
+    // Isso e' o que o motor espera: a doc dele diz que `feedLiveAudio` alimenta
+    // um *"bounded jitter buffer"* — mas quem tem de entregar LISO e' o
+    // produtor. Rajada na entrada faz o buffer dele oscilar.
     let sobra = Buffer.alloc(0);
 
+    /** Fila de frames de FRAME_MOTOR amostras, prontos para o motor. */
+    estado.fila = estado.fila || [];
+
     /**
-     * Manda um bloco de PCM para o motor, respeitando o teto de buffer.
+     * Enfileira PCM cru, reagrupando em frames de FRAME_MOTOR amostras.
      *
-     * O motor devolve quantos ms ficaram na fila dele. Se passar do teto,
-     * seguramos o bloco (ele vai para `estado.fila`) em vez de entregar --
-     * entregar faria o motor DESCARTAR as amostras mais antigas, que e' o
-     * corte no audio.
+     * O pipe entrega ~372 amostras por chunk; o motor espera 960 (60 ms).
      */
-    /**
-     * Manda um bloco de PCM para o motor, respeitando o teto de buffer.
-     *
-     * @returns {boolean} `true` se o bloco FOI entregue ao motor.
-     */
-    const entregarAudio = (amostras) => {
-      if (estado.parado || !amostras.length) return false;
-      // Sincronia A/V (vale para os DOIS caminhos: chegada e drenagem):
-      // enquanto o VIDEO nao entrar no ar, o audio so' se ACUMULA na fila.
-      // MEDIDO: o yt-dlp de audio entrega 604 ms antes do de video, e cada
-      // `-re` e' independente -- entregar antes faz o audio correr na frente,
-      // encher o buffer do motor (que descarta o mais antigo) e a reproducao
-      // sair atrasada. Segurar ate' o 1o frame alinha os dois pelo inicio real.
-      // SEM gate de sincronia: MEDIDO que o ffmpeg JA' alinha os dois streams
-      // (o 1o H.264 e o 1o PCM saem com ~18 ms de diferenca). Segurar o audio
-      // ate' o 1o frame so' ATRASAVA o que ja' estava alinhado (~200-400 ms).
-      // O que precisa de controle e' o BUFFER: acima de AUDIO_MAX_MS o motor
-      // descarta o mais antigo (o corte).
-      if (estado.nivelMs >= AUDIO_MAX_MS) {
-        estado.fila.push(amostras);   // guarda, nunca descarta
-        return false;
+    const enfileirarAudio = (bloco) => {
+      estado.resto = estado.resto && estado.resto.length
+        ? Float32Array.from([...estado.resto, ...bloco])
+        : bloco;
+      while (estado.resto.length >= FRAME_MOTOR) {
+        estado.fila.push(estado.resto.slice(0, FRAME_MOTOR));
+        estado.resto = estado.resto.slice(FRAME_MOTOR);
       }
+    };
+
+    /**
+     * Entrega UM frame ao motor. O ritmo e' do timer (60 ms por frame).
+     *
+     * Se a fila estiver muito funda, o audio ja' esta' atrasado: descartamos o
+     * frame mais ANTIGO em vez do mais novo. O motor faria o mesmo (a doc:
+     * *"drops the oldest samples on overflow"*), mas assim o descarte acontece
+     * onde nos controlamos — e o audio pula para FRENTE, voltando ao tempo
+     * real, em vez de atrasar para sempre.
+     */
+    const bombearAudio = () => {
+      if (estado.parado) return;
+      if (estado.fila.length === 0) return;
+      // Rede de seguranca: fila funda = atraso acumulado. Descarta o antigo.
+      while (estado.fila.length > FILA_MAX_FRAMES) {
+        estado.fila.shift();
+        estado.audioDescartado = (estado.audioDescartado || 0) + 1;
+      }
+      const frame = estado.fila.shift();
       try {
-        const ms = cli.feedLiveAudio(callId, amostras);
-        estado.amostras = (estado.amostras || 0) + amostras.length;
+        const ms = cli.feedLiveAudio(callId, frame);
+        estado.amostras = (estado.amostras || 0) + frame.length;
         if (typeof ms === 'number' && ms > 0) estado.nivelMs = ms;
-        return true;
       } catch (e) {
         log('feedLiveAudio: ' + (e?.message || e));
-        return false;
       }
     };
-
-    /**
-     * Drena a fila enquanto o buffer do motor estiver baixo.
-     *
-     * O motor consome sozinho (o jitter buffer dele), entao basta tentar de
-     * tempos em tempos: o proprio `getLiveBufferMs` diz o nivel atual.
-     */
-    const drenarFila = () => {
-      while (estado.fila.length && !estado.parado) {
-        try {
-          const atual = cli.getLiveBufferMs?.(callId);
-          if (typeof atual === 'number') estado.nivelMs = atual;
-        } catch { /* segue com o ultimo valor */ }
-        if (estado.nivelMs >= AUDIO_RESUME_MS) break;
-        // ATENCAO: se o bloco NAO foi entregue (o gate de sincronia barrou ou
-        // o buffer encheu), ele volta para a fila -- sem este `break` o while
-        // faria shift+push para sempre e TRAVARIA A EVENT LOOP. Foi um bug
-        // real: o bot parava de responder (nem os timers rodavam).
-        const entregou = entregarAudio(estado.fila.shift());
-        if (!entregou) break;
-      }
-    };
-    estado.drenarAudio = drenarFila;
-
-    // O motor consome o buffer sozinho; este timer so' REPÕE o que ficou na
-    // fila quando ele drenar. 20 ms e' bem abaixo do chunk do motor (60 ms),
-    // entao a fila nunca fica "presa".
-    const timerAudio = setInterval(() => {
-      if (estado.parado) return;
-      drenarFila();   // o gate de sincronia vive no `entregarAudio`
-    }, 10);
-    estado.timerAudio = timerAudio;
 
     proc.stdio[fdSaidaAudio]?.on('data', (chunk) => {
       if (estado.parado) return;
@@ -698,26 +693,42 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
         // Copia para um ArrayBuffer alinhado (o Buffer pode ter offset).
         const alinhado = new Uint8Array(inteiros * BYTES_POR_AMOSTRA);
         alinhado.set(buf.subarray(0, inteiros * BYTES_POR_AMOSTRA));
-
-        // ## Reagrupa em frames de 960 amostras (o que o motor espera)
-        //
-        // O pipe entrega ~372 amostras por chunk; entregar assim faz o encoder
-        // do motor remontar o frame a cada pedaco (som cortado). Acumulamos
-        // numa sobra e so' mandamos quando fecha um frame INTEIRO.
-        const bloco = new Float32Array(alinhado.buffer);
-        estado.resto = estado.resto && estado.resto.length
-          ? Float32Array.from([...estado.resto, ...bloco])
-          : bloco;
-
-        while (estado.resto.length >= FRAME_MOTOR) {
-          const frame = estado.resto.slice(0, FRAME_MOTOR);
-          estado.resto = estado.resto.slice(FRAME_MOTOR);
-          entregarAudio(frame);
-        }
+        enfileirarAudio(new Float32Array(alinhado.buffer));
       } catch (e) {
         log('feedLiveAudio: ' + (e?.message || e));
       }
     });
+
+    // O RELOGIO do audio: 1 frame (60 ms) a cada 60 ms de relogio.
+    //
+    // O timer roda a cada FRAME_MOTOR/2 ms para o erro de agendamento do
+    // setTimeout nao virar atraso; o alvo e' contado por FRAMES (inteiro),
+    // entao nao ha' deriva — o frame N sai no instante N*60 ms.
+    // O relogio comeca ADIANTADO em 2 frames (120 ms).
+    //
+    // MEDIDO: o descompasso ficava constante em -100 a -160 ms — o motor
+    // comeca a tocar antes de o primeiro frame chegar (ele preenche o buffer
+    // proprio com silencio). Adiantar o relogio faz o audio entrar JA' no
+    // ritmo, sem esse atraso fixo.
+    //
+    // 120 ms e' o  do contrato do motor: o maximo que o buffer dele
+    // aceita sem descartar.
+    const tAudio0 = Date.now() - 2 * MS_POR_FRAME;
+    let framesEnviados = 0;
+    const timerAudio = setInterval(() => {
+      if (estado.parado) return;
+      const alvo = Math.floor((Date.now() - tAudio0) / MS_POR_FRAME);
+      // Entrega o que o relogio ja' devia ter entregue (no maximo 2 frames,
+      // para um atraso do timer nao virar rajada).
+      let entregues = 0;
+      while (framesEnviados < alvo && entregues < 2) {
+        bombearAudio();
+        framesEnviados += 1;
+        entregues += 1;
+      }
+    }, Math.max(5, Math.round(MS_POR_FRAME / 2)));
+    estado.timerAudio = timerAudio;
+
     // Sem faixa de audio o ffmpeg nao abre o pipe: um `error` aqui e' normal
     // (transmissao so' com imagem). Nunca derruba o video.
     proc.stdio[fdSaidaAudio]?.on('error', () => { /* sem audio: so' imagem */ });
@@ -736,7 +747,23 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
           enviarFrame(cli, callId, au, carimbo, estado, log);
         }
       } catch { /* ok */ }
-      // Para o timer do audio (senao ele segue rodando depois do fim).
+      // ## Esvazia o audio que JA' esta' na fila antes de parar o timer
+      //
+      // O ffmpeg le na taxa nativa, entao quando ele termina ainda pode haver
+      // frames na fila esperando o relogio. Parar o timer direto PERDERIA
+      // esses frames (o audio terminaria antes do video — medido: 27 de 33
+      // frames entregues num video de 2 s). Entregamos o resto AGORA: o
+      // `feedLiveAudio` aceita em rajada, e o jitter buffer do motor absorve.
+      try {
+        while (estado.fila && estado.fila.length) {
+          const frame = estado.fila.shift();
+          try {
+            cli.feedLiveAudio(callId, frame);
+            estado.amostras = (estado.amostras || 0) + frame.length;
+          } catch { /* o motor ja' pode ter encerrado */ }
+        }
+      } catch { /* ok */ }
+      // So' entao para o timer (senao ele segue rodando depois do fim).
       try { clearInterval(estado.timerAudio); } catch { /* ok */ }
       estado.fila = [];
       // Encerra os yt-dlp junto: sem isto eles seguiriam baixando sozinhos.

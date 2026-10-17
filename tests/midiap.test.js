@@ -487,8 +487,11 @@ if (TEM_FFMPEG) {
     midiap.__setVoip(null);
 
     ok(r.ok, 'transmitiu');
-    // 2 s a 16 kHz = 32000 amostras.
-    ok(amostras >= 31000 && amostras <= 33000, `~32000 amostras (veio ${amostras})`);
+    // 2 s a 16 kHz = 32000 amostras. O alimentador entrega por FRAME (960)
+    // num ritmo proprio, entao o total e' sempre multiplo de 960 e pode ficar
+    // um frame abaixo do ideal (o ultimo frame parcial nao e' entregue).
+    ok(amostras >= 30000 && amostras <= 33000, `~32000 amostras (veio ${amostras})`);
+    ok(amostras % 960 === 0, `multiplo de 960 (o frame do motor; veio ${amostras})`);
     ok(pico > 0.05, `o sinal NAO e silencio (pico ${pico.toFixed(3)})`);
     ok(r.amostras === amostras, 'o total de amostras volta no resultado');
     fs.unlinkSync(video);
@@ -584,28 +587,52 @@ await test('o audio tem backpressure nos watermarks do MOTOR (sem corte)', () =>
   ok(Number(m[1]) < 750, `teto abaixo do limite de descarte do motor (${m[1]} < 750)`);
 });
 
-await test('a drenagem NAO pode virar loop infinito (travava a event loop)', () => {
-  // BUG REAL: `drenarFila` fazia shift() e o `entregarAudio` devolvia o bloco
-  // para a fila (gate barrando) -> o while nunca terminava e travava a EVENT
-  // LOOP: o bot parava de responder (nem os timers rodavam).
+await test('o audio sai em RITMO CONSTANTE (fila + relogio proprio)', () => {
+  // MEDIDO: o `-re` do ffmpeg entrega em RAJADAS — 299 de 377 chegadas com
+  // intervalo ZERO e ate' 282 ms de silencio. Entregar isso direto ao motor
+  // da' os DOIS sintomas: nos vaos ele fica sem amostra (CORTA) e na rajada
+  // acumula (ATRASA).
+  //
+  // A solucao: o ffmpeg escreve numa FILA e um timer entrega ao motor em
+  // ritmo fixo (1 frame de 60 ms a cada 60 ms). O jitter fica todo na fila.
   const md = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/midiap.js'), 'utf-8');
-  const i = md.indexOf('const drenarFila');
+  includes(md, 'enfileirarAudio', 'o PCM entra numa fila');
+  includes(md, 'bombearAudio', 'um bombeador entrega ao motor');
+  includes(md, 'MS_POR_FRAME', 'o ritmo e por frame do motor');
+  // O relogio e' por CONTAGEM de frames (nao acumula deriva).
+  const i = md.indexOf('const tAudio0');
   const bloco = md.slice(i, i + 900);
-  includes(bloco, 'entregou', 'o retorno do entregarAudio e usado');
-  ok(/if\s*\(\s*!\s*entregou\s*\)\s*break/.test(bloco),
-    'para o while quando o bloco NAO foi entregue (senao trava)');
+  includes(bloco, 'Math.floor', 'o alvo e contado pelo relogio');
+  includes(bloco, 'framesEnviados', 'conta os frames ja entregues');
 });
 
-await test('NAO existe gate de sincronia (o ffmpeg ja alinha os streams)', () => {
-  // MEDIDO: o 1o H.264 e o 1o PCM saem do encoder com ~18 ms de diferenca --
-  // o ffmpeg JA' sincroniza. Segurar o audio ate' o 1o frame atrasava o que
-  // ja' estava alinhado (~200-400 ms de descompasso de conteudo).
+await test('o audio reagrupa em frames de 960 amostras (o que o motor espera)', () => {
+  // A doc do pacote: *"16 kHz, mono, 960-sample frames (60 ms)"*. O pipe
+  // entrega ~372 amostras (23 ms) — entregar assim faz o encoder do motor
+  // remontar o frame a cada pedaco (som cortado).
   const md = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/midiap.js'), 'utf-8');
-  const i = md.indexOf('const entregarAudio');
-  const bloco = md.slice(i, i + 1200);
-  ok(!/!estado\.videoComecou\s*\|\|/.test(bloco),
-    'o teto do buffer NAO depende do video ter comecado (isso atrasava)');
-  includes(bloco, 'AUDIO_MAX_MS', 'so o teto do buffer controla a alimentacao');
+  includes(md, 'const FRAME_MOTOR = 960', 'o frame do motor e 960');
+  const i = md.indexOf('const enfileirarAudio');
+  const bloco = md.slice(i, i + 700);
+  includes(bloco, 'FRAME_MOTOR', 'so enfileira frames inteiros');
+  includes(bloco, 'slice', 'corta exatamente um frame por vez');
+  // E o reagrupamento e' o que garante o tamanho: `asetnsamples` no ffmpeg
+  // NAO resolve (medido: continua 348-372 — o chunk e' do pipe).
+  // A palavra aparece num COMENTARIO (explicando por que nao se usa); o que
+  // nao pode e' virar ARGUMENTO do ffmpeg.
+  ok(!/'-af'[^\]]*asetnsamples/.test(md) && !md.includes("'asetnsamples"), 'nao passa asetnsamples ao ffmpeg (medido: nao resolve)');
+});
+
+await test('a fila tem TETO e descarta o MAIS ANTIGO (volta ao tempo real)', () => {
+  // Sem teto, um atraso acumulado cresceria sem fim. Descartar o mais ANTIGO
+  // faz o audio pular para FRENTE (volta ao tempo real) — e' o que o proprio
+  // motor faz no buffer dele ("drops the oldest samples on overflow").
+  const md = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/midiap.js'), 'utf-8');
+  includes(md, 'FILA_MAX_FRAMES', 'a fila tem teto');
+  const i = md.indexOf('const bombearAudio');
+  const bloco = md.slice(i, i + 900);
+  includes(bloco, 'shift', 'descarta do INICIO da fila (o mais antigo)');
+  includes(bloco, 'fila.length > FILA_MAX_FRAMES', 'so descarta acima do teto');
 });
 
 // ============================================================================
@@ -849,7 +876,8 @@ if (TEM_FFMPEG) {
 
     ok(r.ok, `transmitiu pelo link (${r.motivo || ''} ${r.detalhe || ''})`);
     ok(frames >= 58 && frames <= 64, `~60 frames de 30 fps por 2 s (veio ${frames})`);
-    ok(amostras >= 31000, `o audio do link chegou (${amostras} amostras)`);
+    // O ritmo e' por frame do motor (960), entao o total e' multiplo de 960.
+    ok(amostras >= 30000 && amostras % 960 === 0, `o audio do link chegou em frames (${amostras} amostras)`);
     fs.unlinkSync(fonte);
     fs.unlinkSync(falso);
   });
