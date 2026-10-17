@@ -14,11 +14,25 @@
  * montar (senao 403). Entao quem fala com o YouTube e' o **yt-dlp**, que ja'
  * e' requisito do bot (`!play`) e sabe muxar sozinho.
  *
- * ## O que o yt-dlp entrega
+ * ## O que o yt-dlp entrega (DOIS streams, nao um muxado)
  *
- * `-o -` manda o video MUXADO no stdout, que vira o `pipe:0` do ffmpeg -- o
- * arquivo nunca existe. O `--print` junto do `-g` informa o **fps** numa
+ * O `-o -` manda o formato pedido no stdout, que vira o `pipe:0` do ffmpeg --
+ * o arquivo nunca existe. O `--print` junto do `-g` informa o **fps** numa
  * chamada so', sem baixar nada.
+ *
+ * ## Por que DOIS yt-dlp (video e audio separados)
+ *
+ * O jeito "obvio" seria pedir `bv*+ba` e deixar o yt-dlp muxar. **Medido:
+ * isso nao funciona** -- o merge do yt-dlp chama o ffmpeg com as duas URLs do
+ * `googlevideo` e o processo morre com `SIGSEGV` (exit -11), devolvendo
+ * **zero byte** no stdout. O nosso ffmpeg entao recebe um pipe vazio e sai com
+ * `183` (*Invalid data found when processing input*) -- era exatamente o erro
+ * que o usuario via.
+ *
+ * O downloader **nativo** do yt-dlp (sem ffmpeg) e' estavel: ele escreve o
+ * MP4/M4A no stdout sem problema. Entao rodamos **dois** yt-dlp -- um para o
+ * video, outro para o audio -- e quem muxa e' o **nosso** ffmpeg, lendo os
+ * dois pipes. Nada toca o disco.
  *
  * ## Sem disco, mas com uma espera
  *
@@ -75,46 +89,60 @@ export async function acharYtDlp() {
   return null;
 }
 
+/** Os argumentos comuns (mesmos nos dois processos). */
+function baseDoLink() {
+  return ['--no-progress', '--no-warnings', '--no-playlist', '-o', '-'];
+}
+
 /**
- * Os argumentos do yt-dlp para mandar o video muxado no stdout.
+ * O seletor do VIDEO.
  *
- * `-f` prefere um formato que JA' tenha video e audio juntos; o YouTube nao
- * tem, entao cai no merge (`bv*+ba`) -- que o yt-dlp faz com o ffmpeg,
- * STREAMANDO para o stdout (o `FFmpegFD`), sem arquivo temporario.
+ * Prefere MP4/H.264 (o que o encoder do bot espera) dentro do teto de altura;
+ * se nao houver, aceita qualquer video dentro do teto. NAO pede merge -- o
+ * audio vem de outro processo (ver o cabecalho do modulo).
  *
- * NAO usar `--remux-video`: ele e' um POST-PROCESSADOR, e esses trabalham
- * em ARQUIVO (gravam `<nome>.temp.mp4` e renomeiam). Como o alvo e' um pipe,
- * o remux nao se aplica -- e era ele que podia gravar em disco num servidor
- * apertado. O container ja' vem mp4 pelo proprio `-f`.
+ * @returns {string}
+ */
+export function formatoDoVideo() {
+  return `bv*[height<=${ALTURA_MAX}][ext=mp4][vcodec^=avc1]`
+    + `/bv*[height<=${ALTURA_MAX}][ext=mp4]`
+    + `/bv*[height<=${ALTURA_MAX}]`
+    + `/b[height<=${ALTURA_MAX}]`;
+}
+
+/**
+ * O seletor do AUDIO (so' a faixa, sem video).
  *
- * ## O `--ffmpeg-location` e' OBRIGATORIO (era o bug do exit 183)
+ * @returns {string}
+ */
+export function formatoDoAudio() {
+  return 'ba[ext=m4a]/ba';
+}
+
+/**
+ * Os argumentos do yt-dlp que mandam o VIDEO no stdout (sem audio).
  *
- * Medido: sem ele o yt-dlp NAO acha o ffmpeg, entao nao consegue muxar os
- * formatos separados do YouTube. Nesse caso ele avisa *"the formats will be
- * streamed one after the other"* e manda video e audio **um atras do outro**
- * no stdout -- dado invalido para o ffmpeg, que morre com
- * `Invalid data found when processing input` (exit **183**).
+ * E' o downloader **nativo** do yt-dlp: nao passa pelo ffmpeg, entao nao sofre
+ * o `SIGSEGV` do merge (ver o cabecalho do modulo). Nada de `--remux-video`
+ * (post-processador trabalha em arquivo, nao em pipe).
  *
- * Passar o caminho do ffmpeg faz o yt-dlp usar o `FFmpegFD`, que muxa
- * STREAMANDO direto para o stdout -- um arquivo valido, e sem disco.
+ * Mantido como `argumentosDoLink` para nao quebrar quem ja' chama (e o teste).
  *
  * @param {string} url
  * @returns {string[]}
  */
 export function argumentosDoLink(url) {
-  const args = ['--no-progress', '--no-warnings', '--no-playlist'];
-  // O yt-dlp precisa do ffmpeg para MUXAR (ver a doc acima). Passamos SEMPRE,
-  // com o mesmo fallback do resto do bot (FFMPEG_PATH ou 'ffmpeg' no PATH):
-  // sem a flag o yt-dlp manda os formatos em sequencia e o ffmpeg morre com 183.
-  args.push('--ffmpeg-location', process.env.FFMPEG_PATH || 'ffmpeg');
-  args.push(
-    // Prefere muxado; senao o melhor video + melhor audio (o yt-dlp muxa).
-    '-f', `b[height<=${ALTURA_MAX}]/bv*[height<=${ALTURA_MAX}]+ba/b`,
-    // Um arquivo so' no stdout: o ffmpeg le como pipe:0.
-    '-o', '-',
-    url
-  );
-  return args;
+  return [...baseDoLink(), '-f', formatoDoVideo(), url];
+}
+
+/**
+ * Os argumentos do yt-dlp que mandam o AUDIO no stdout.
+ *
+ * @param {string} url
+ * @returns {string[]}
+ */
+export function argumentosDoAudio(url) {
+  return [...baseDoLink(), '-f', formatoDoAudio(), url];
 }
 
 /**
@@ -152,23 +180,60 @@ export async function fpsDoLink(url) {
 }
 
 /**
- * Sobe o yt-dlp entregando o video no stdout (o `pipe:0` do ffmpeg).
+ * Sobe os DOIS yt-dlp (video e audio) entregando cada stream no stdout.
+ *
+ * Sao dois processos porque o merge do yt-dlp quebra (SIGSEGV); quem muxa e'
+ * o ffmpeg do bot, lendo os dois pipes. Nada vai para o disco.
  *
  * @param {string} url
- * @returns {{proc: object|null, motivo?: string, detalhe?: string}}
+ * @returns {{proc: object|null, procAudio: object|null, motivo?: string, detalhe?: string}}
  */
 export async function abrirLink(url) {
   const yt = await acharYtDlp();
   if (!yt) {
-    return { proc: null, motivo: 'ytdlp_ausente', detalhe: 'yt-dlp nao encontrado no servidor' };
+    return { proc: null, procAudio: null, motivo: 'ytdlp_ausente', detalhe: 'yt-dlp nao encontrado no servidor' };
   }
   try {
-    const proc = spawn(yt.cmd, [...yt.base, ...argumentosDoLink(url)], {
-      stdio: ['ignore', 'pipe', 'ignore']
-    });
-    proc.on('error', () => { /* o `close` do ffmpeg trata */ });
-    return { proc };
+    const subir = (args) => {
+      const p = spawn(yt.cmd, [...yt.base, ...args], {
+        stdio: ['ignore', 'pipe', 'pipe']
+      });
+      p.on('error', () => { /* o `close` do ffmpeg trata */ });
+      // Guarda o stderr: e' dele que sai o motivo real quando o yt-dlp falha.
+      p._stderr = '';
+      p.stderr?.on('data', (c) => { p._stderr = (p._stderr + c.toString()).slice(-800); });
+      return p;
+    };
+    const proc = subir(argumentosDoLink(url));
+    const procAudio = subir(argumentosDoAudio(url));
+    return { proc, procAudio };
   } catch (e) {
-    return { proc: null, motivo: 'falha_ao_abrir_link', detalhe: e?.message || String(e) };
+    return { proc: null, procAudio: null, motivo: 'falha_ao_abrir_link', detalhe: e?.message || String(e) };
   }
+}
+
+/**
+ * O motivo legivel de uma falha do yt-dlp.
+ *
+ * O yt-dlp morre por VARIOS motivos (formato indisponivel, bloqueio, rede) e
+ * o stderr diz qual. Sem isto o ffmpeg so' reporta o sintoma (pipe vazio).
+ *
+ * @param {string} stderr
+ * @returns {string}
+ */
+export function motivoDoYtdlp(stderr = '') {
+  const e = String(stderr);
+  if (/Requested format is not available/i.test(e)) {
+    return 'O vídeo não tem um formato compatível. Tente outro link.';
+  }
+  if (/Sign in to confirm|not a bot|cookies/i.test(e)) {
+    return 'O YouTube pediu verificação. Tente outro vídeo.';
+  }
+  if (/Private video|unavailable|removed|does not exist/i.test(e)) {
+    return 'O vídeo não está disponível (privado, removido ou restrito).';
+  }
+  if (/Unable to download|HTTP Error|timed out|Connection/i.test(e)) {
+    return 'Falha de rede ao abrir o vídeo. Tente de novo.';
+  }
+  return '';
 }

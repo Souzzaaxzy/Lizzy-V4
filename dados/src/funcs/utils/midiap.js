@@ -57,7 +57,7 @@ import fs from 'fs';
 import path from 'path';
 import { criarSplitter } from '../../utils/screenShare.js';
 import { DATABASE_DIR } from '../../utils/paths.js';
-import { abrirLink } from './midiapLink.js';
+import { abrirLink, motivoDoYtdlp } from './midiapLink.js';
 
 /** Perfil/level que o pacote anuncia (H264_CONSTRAINED_BASELINE_CODEC). */
 const PERFIL = 'baseline';
@@ -153,11 +153,16 @@ function binario() {
  * @param {string} arquivo
  * @returns {string[]}
  */
-export function argumentosDoEncoder(entrada, fps = FPS_PADRAO, temAudio = true) {
+export function argumentosDoEncoder(entrada, fps = FPS_PADRAO, temAudio = true, entradaAudio = null) {
+  // Duas entradas (VIDEO + AUDIO) acontecem so' no LINK: o merge do yt-dlp
+  // quebra (SIGSEGV) e quem muxa e' este ffmpeg, lendo os dois pipes. Nos
+  // outros casos ha' UMA entrada e a saida de audio fica no pipe:3.
+  const duas = Boolean(entradaAudio);
   const args = [
     '-hide_banner', '-loglevel', 'error',
     '-re',                                  // le na taxa nativa (pacing)
     '-i', entrada,
+    ...(duas ? ['-re', '-i', entradaAudio] : []),
     '-map', '0:v',
     // --- SAIDA 1: video H.264 no pipe:1 ---
     '-an',
@@ -191,12 +196,13 @@ export function argumentosDoEncoder(entrada, fps = FPS_PADRAO, temAudio = true) 
   // contain any stream", exit 234) e a transmissao morre. Medido.
   if (temAudio) {
     args.push(
-      // --- SAIDA 2: audio PCM cru no pipe:3 ---
-      '-map', '0:a',
+      // --- SAIDA 2: audio PCM cru (pipe:3, ou pipe:4 com duas entradas) ---
+      // Com duas entradas o audio vem do 2o `-i`; com uma, do proprio.
+      '-map', duas ? '1:a' : '0:a',
       '-vn',
       '-af', FILTROS_AUDIO,
       '-ac', '1', '-ar', String(TAXA_AUDIO),
-      '-f', 'f32le', 'pipe:3'
+      '-f', 'f32le', duas ? 'pipe:4' : 'pipe:3'
     );
   }
 
@@ -440,21 +446,31 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
     // O ffmpeg recebe um CAMINHO ou `pipe:0` -- nunca o objeto do stream
     // (medido: sem isto ele recebia `[object Object]` e saia com 254).
     // No LINK a entrada tambem e' pipe: quem alimenta e' o yt-dlp.
-    const porPipe = fonte === 'fluxo' || fonte === 'link';
-    const args = argumentosDoEncoder(porPipe ? 'pipe:0' : entrada, fps, temAudio);
+    // No LINK sao DUAS entradas (video no fd0, audio no fd3) e a saida de
+    // audio vai para o fd4 -- o fd3 esta' ocupado com a entrada. Ver o
+    // cabecalho do midiapLink.js (o merge do yt-dlp quebra).
+    const porLink = fonte === 'link';
+    const porPipe = fonte === 'fluxo' || porLink;
+    const args = argumentosDoEncoder(
+      porPipe ? 'pipe:0' : entrada, fps, temAudio, porLink ? 'pipe:3' : null
+    );
+    // O descritor de saida do audio (o mesmo que vai nos `-f f32le`).
+    const fdSaidaAudio = porLink ? 4 : 3;
 
     let proc;
     try {
-      // stdio: [entrada, video(pipe:1), erros, audio(pipe:3)]
-      // A entrada e' `pipe` quando a fonte e' um FLUXO (o video baixado do
-      // WhatsApp, sem passar por disco) ou `ignore` quando e' um arquivo.
-      proc = spawn(binario(), args, {
-        // O 4o descritor (audio) so' existe quando ha saida de audio.
-        // O stderr vai para PIPE (nao `ignore`): e' dele que sai o motivo
-        // real da falha do ffmpeg.
-        stdio: [porPipe ? 'pipe' : 'ignore', 'pipe', 'pipe',
-          temAudio ? 'pipe' : 'ignore']
-      });
+      // stdio: [entrada, video(pipe:1), erros, audio]
+      //   - ARQUIVO: entrada `ignore` (o caminho vai no `-i`);
+      //   - FLUXO:   entrada `pipe` (o video baixado do WhatsApp);
+      //   - LINK:    entrada `pipe` (video) + fd3 `pipe` (audio).
+      // O stderr vai para PIPE (nao `ignore`): e' dele que sai o motivo real
+      // da falha do ffmpeg.
+      const stdio = porLink
+        ? ['pipe', 'pipe', 'pipe', temAudio ? 'pipe' : 'ignore',
+           temAudio ? 'pipe' : 'ignore']
+        : [porPipe ? 'pipe' : 'ignore', 'pipe', 'pipe',
+           temAudio ? 'pipe' : 'ignore'];
+      proc = spawn(binario(), args, { stdio });
     } catch (e) {
       reject(e);
       return;
@@ -464,20 +480,30 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
     // O video chegou do WhatsApp: joga o fluxo decifrado na entrada do ffmpeg.
     // Sem isto o processo ficaria esperando a entrada para sempre.
     if (fonte === 'link') {
-      // O yt-dlp manda o video muxado no stdout: e' o que alimenta o ffmpeg.
+      // DOIS yt-dlp (video e audio), cada um no seu pipe: o merge do yt-dlp
+      // quebra (SIGSEGV) e devolveria zero byte -> o ffmpeg morria com 183.
       const r = await abrirLink(entrada);
       if (!r.proc) {
         reject(new Error(r.detalhe || r.motivo || 'falha ao abrir o link'));
         return;
       }
       estado.procLink = r.proc;
+      estado.procLinkAudio = r.procAudio || null;
+      // Erro nos dois lados: o yt-dlp pode sair antes do ffmpeg.
       proc.stdin.on('error', () => { /* o yt-dlp pode ter saido */ });
-      r.proc.stdout.on('data', (c) => {
-        if (estado.parado || proc.stdin.destroyed) return;
-        try { proc.stdin.write(c); } catch { /* corrida */ }
-      });
-      r.proc.stdout.on('end', () => { try { proc.stdin.end(); } catch { /* ok */ } });
+      proc.stdio[3]?.on('error', () => { /* idem, no lado do audio */ });
+      const bombear = (origem, destino) => {
+        if (!origem || !destino) return;
+        origem.on('data', (c) => {
+          if (estado.parado || destino.destroyed) return;
+          try { destino.write(c); } catch { /* corrida */ }
+        });
+        origem.on('end', () => { try { destino.end(); } catch { /* ok */ } });
+      };
+      bombear(r.proc.stdout, proc.stdin);           // video -> fd0
+      bombear(r.procAudio?.stdout, proc.stdio[3]);  // audio -> fd3
       r.proc.on('close', () => { try { proc.stdin.end(); } catch { /* ok */ } });
+      r.procAudio?.on('close', () => { try { proc.stdio[3]?.end(); } catch { /* ok */ } });
     }
 
     if (fonte === 'fluxo') {
@@ -505,7 +531,7 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
     // Sobra de bytes entre chunks: um float tem 4 bytes e o pipe pode cortar
     // no meio de um. Guardar a sobra evita amostra corrompida.
     let sobra = Buffer.alloc(0);
-    proc.stdio[3]?.on('data', (chunk) => {
+    proc.stdio[fdSaidaAudio]?.on('data', (chunk) => {
       if (estado.parado) return;
       try {
         const buf = sobra.length ? Buffer.concat([sobra, chunk]) : chunk;
@@ -523,7 +549,7 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
     });
     // Sem faixa de audio o ffmpeg nao abre o pipe: um `error` aqui e' normal
     // (transmissao so' com imagem). Nunca derruba o video.
-    proc.stdio[3]?.on('error', () => { /* sem audio: so' imagem */ });
+    proc.stdio[fdSaidaAudio]?.on('error', () => { /* sem audio: so' imagem */ });
 
     // Guarda o stderr para poder dizer POR QUE o ffmpeg falhou (sem isto o
     // erro vira so' um numero: "ffmpeg saiu com 183").
@@ -539,10 +565,20 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
           enviarFrame(cli, callId, au, carimbo, estado, log);
         }
       } catch { /* ok */ }
-      // Encerra o yt-dlp junto: sem isto ele seguiria baixando sozinho.
+      // Encerra os yt-dlp junto: sem isto eles seguiriam baixando sozinhos.
       try { estado.procLink?.kill('SIGKILL'); } catch { /* ok */ }
+      try { estado.procLinkAudio?.kill('SIGKILL'); } catch { /* ok */ }
       if (code === 0 || estado.parado) resolve();
       else {
+        // Se o yt-dlp falhou, o motivo REAL esta' no stderr dele -- e' mais
+        // util que o sintoma que o ffmpeg viu (pipe vazio).
+        const stderrYt = (estado.procLink?._stderr || '') + (estado.procLinkAudio?._stderr || '');
+        const motivoYt = motivoDoYtdlp(stderrYt);
+        if (motivoYt) {
+          log(`yt-dlp falhou: ${stderrYt.trim().slice(-200)}`);
+          reject(new Error(motivoYt));
+          return;
+        }
         // Traduz o codigo para algo que o dono entenda, sem perder o
         // detalhe tecnico (que vai para o log).
         const motivo = motivosDoFfmpeg(code, erroFfmpeg);
@@ -609,6 +645,7 @@ export function parar(grupo) {
   // O ffmpeg (video e audio sao duas saidas dele) e, num LINK, o yt-dlp.
   try { estado.proc?.kill('SIGKILL'); } catch { /* ok */ }
   try { estado.procLink?.kill('SIGKILL'); } catch { /* ok */ }
+  try { estado.procLinkAudio?.kill('SIGKILL'); } catch { /* ok */ }
   ativos.delete(grupo);
   return { ok: true };
 }

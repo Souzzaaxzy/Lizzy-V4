@@ -385,6 +385,22 @@ if (TEM_FFMPEG) {
   });
 }
 
+await test('com LINK o encoder le DUAS entradas e a saida de audio vai ao pipe:4', () => {
+  // No link o video e o audio chegam em pipes SEPARADOS (dois yt-dlp) e o fd3
+  // esta' ocupado com a ENTRADA de audio -> a saida PCM tem de ir ao fd4.
+  const args = midiap.argumentosDoEncoder('pipe:0', 15, true, 'pipe:3');
+  const j = args.join(' ');
+  ok(args.filter((a) => a === '-i').length === 2, 'declara DUAS entradas (-i)');
+  includes(j, 'pipe:3', 'o audio entra pelo pipe:3');
+  includes(j, 'pipe:4', "a saida de audio vai ao pipe:4 (o fd3 esta ocupado)");
+  includes(j, '-map 1:a', 'o audio vem da SEGUNDA entrada');
+  ok(!j.includes('pipe:3 -f') && !j.includes('f32le pipe:3'), 'nao escreve PCM no fd de entrada');
+  // Sem a 2a entrada nada muda: continua uma entrada e PCM no pipe:3.
+  const um = midiap.argumentosDoEncoder('pipe:0', 15, true).join(' ');
+  ok(!um.includes('pipe:4'), 'com uma entrada nao usa o pipe:4');
+  includes(um, 'f32le pipe:3', 'com uma entrada o PCM fica no pipe:3');
+});
+
 // ============================================================================
 // 1b) O AUDIO da transmissao (o pedido: "esta sem audio do video")
 // ============================================================================
@@ -505,13 +521,15 @@ if (TEM_FFMPEG) {
     fs.unlinkSync(video);
   });
 
-  await test('o `parar` mata o processo (video e audio saem juntos)', async () => {
-    // UM ffmpeg com duas saidas: matar o processo derruba os dois.
+  await test('o `parar` mata o ffmpeg E os dois yt-dlp (nao deixa orfao)', async () => {
+    // UM ffmpeg (video+audio muxados por ele) e, no LINK, DOIS yt-dlp -- um
+    // do video, outro do audio. Nenhum pode ficar baixando depois do parar.
     const md = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/midiap.js'), 'utf-8');
     const i = md.indexOf('export function parar');
-    const bloco = md.slice(i, i + 700);
-    includes(bloco, 'estado.proc?.kill', 'mata o processo');
-    ok(!md.includes('procAudio'), 'nao existe mais um 2o processo para orfanar');
+    const bloco = md.slice(i, i + 800);
+    includes(bloco, 'estado.proc?.kill', 'mata o ffmpeg');
+    includes(bloco, 'estado.procLink?.kill', 'mata o yt-dlp do video');
+    includes(bloco, 'estado.procLinkAudio?.kill', 'mata o yt-dlp do audio');
   });
 }
 
@@ -576,27 +594,44 @@ await test('o BOOT limpa o cache do midiap (senao acumula em silencio)', () => {
 // 1d) O LINK (YouTube e afins) — tambem sem disco
 // ============================================================================
 
-await test('os argumentos do link pedem o video MUXADO no stdout', async () => {
+await test('o link usa DOIS yt-dlp (video e audio), SEM merge', async () => {
   const lk = await import(new URL('../dados/src/funcs/utils/midiapLink.js', import.meta.url).href);
-  const args = lk.argumentosDoLink('https://youtu.be/abc');
-  const j = args.join(' ');
-  // O YouTube NAO tem formato muxado: precisa preferir o que ja' tem os dois e
-  // cair no merge (`bv*+ba`) quando nao houver.
-  includes(j, 'b[height<=', 'prefere um formato que ja tenha video+audio');
-  includes(j, '+ba', 'cai no merge video+audio quando nao houver muxado');
-  // O `--ffmpeg-location` e' OBRIGATORIO: sem ele o yt-dlp nao muxa e manda
-  // video e audio um atras do outro no stdout -> o ffmpeg morre com 183.
-  // O `--remux-video` saiu: e' POST-PROCESSADOR (trabalha em arquivo), nao
-  // se aplica a um pipe e podia gravar em disco.
-  includes(j, '--no-playlist', 'nao pega a playlist inteira');
-  ok(args.includes('-o') && args.includes('-'), 'manda para o stdout (-o -), sem arquivo');
-  ok(!j.includes('/tmp'), 'nao aponta para nenhum arquivo');
-  // Sem `--ffmpeg-location` o yt-dlp NAO muxa (era o exit 183). E' passado
-  // SEMPRE, com o mesmo fallback do resto do bot (FFMPEG_PATH ou 'ffmpeg').
-  const i = args.indexOf('--ffmpeg-location');
-  ok(i >= 0 && args[i + 1] === (process.env.FFMPEG_PATH || 'ffmpeg'),
-    'passa o caminho do ffmpeg (sem ele o yt-dlp nao muxa: exit 183)');
-  ok(!j.includes('--remux-video'), 'nao usa --remux-video (post-processador de arquivo)');
+  const v = lk.argumentosDoLink('https://youtu.be/abc');
+  const a = lk.argumentosDoAudio('https://youtu.be/abc');
+  const jv = v.join(' ');
+  const ja = a.join(' ');
+  // O merge (`+ba`) do yt-dlp chama o ffmpeg com as DUAS URLs e morre com
+  // SIGSEGV (-11), devolvendo ZERO byte -> o nosso ffmpeg morre com 183.
+  // Por isso sao dois processos e quem muxa e' o ffmpeg do bot.
+  ok(!jv.includes('+ba') && !ja.includes('+ba'), 'NAO usa merge (+ba) — era o SIGSEGV/183');
+  includes(jv, 'b[height<=', 'o video respeita o teto de altura');
+  includes(jv, 'ext=mp4', 'prefere mp4 (o que o encoder do bot espera)');
+  includes(ja, 'ba', 'o segundo processo pede SO a faixa de audio');
+  ok(!ja.includes('bv*'), 'o processo de audio nao pede video');
+  // Os dois mandam para o stdout, sem arquivo.
+  for (const [args, nome] of [[v, 'video'], [a, 'audio']]) {
+    ok(args.includes('-o') && args.includes('-'), `${nome}: stdout (-o -), sem arquivo`);
+    ok(!args.join(' ').includes('/tmp'), `${nome}: nao aponta para arquivo`);
+    includes(args.join(' '), '--no-playlist', `${nome}: nao pega a playlist inteira`);
+  }
+  ok(!jv.includes('--remux-video'), 'nao usa --remux-video (post-processador de arquivo)');
+  // O formato pedido nao pode exigir ffmpeg: e' o downloader NATIVO.
+  ok(!jv.includes('--ffmpeg-location'), 'o video nao delega ao ffmpeg (downloader nativo)');
+});
+
+await test('motivoDoYtdlp traduz a falha do yt-dlp (nao diz "corrompido")', async () => {
+  const lk = await import(new URL('../dados/src/funcs/utils/midiapLink.js', import.meta.url).href);
+  // O ffmpeg so' ve' um pipe VAZIO e reporta 183 ("corrompido"); o motivo real
+  // esta' no stderr do yt-dlp -- e' ele que tem de chegar ao usuario.
+  includes(lk.motivoDoYtdlp('ERROR: [youtube] x: This video is unavailable'),
+    'não está disponível', 'video indisponivel');
+  includes(lk.motivoDoYtdlp('ERROR: Requested format is not available'),
+    'formato compatível', 'formato indisponivel');
+  includes(lk.motivoDoYtdlp('ERROR: Sign in to confirm you are not a bot'),
+    'verificação', 'bloqueio/verificacao');
+  includes(lk.motivoDoYtdlp('ERROR: Unable to download webpage: HTTP Error 403'),
+    'rede', 'falha de rede');
+  ok(lk.motivoDoYtdlp('') === '', 'stderr vazio -> sem motivo inventado');
 });
 
 await test('o LINK e aceito pelo modulo como terceira fonte', () => {
@@ -604,9 +639,13 @@ await test('o LINK e aceito pelo modulo como terceira fonte', () => {
   includes(md, "link ? 'link'", 'o link vira uma fonte');
   includes(md, "fonte === 'link'", 'a fonte link tem tratamento proprio');
   includes(md, 'abrirLink', 'usa o resolvedor de link');
+  // O audio do link vem de um SEGUNDO yt-dlp (o merge do yt-dlp quebra).
+  includes(md, 'procLinkAudio', 'guarda o 2o processo (audio)');
+  includes(md, 'motivoDoYtdlp', 'reporta o motivo real do yt-dlp');
   // O parar e o fim matam o yt-dlp junto (nao deixam processo orfao).
   const iParar = md.indexOf('export function parar');
-  includes(md.slice(iParar, iParar + 700), 'procLink?.kill', 'o parar mata o yt-dlp');
+  includes(md.slice(iParar, iParar + 800), 'procLink?.kill', 'o parar mata o yt-dlp (video)');
+  includes(md.slice(iParar, iParar + 800), 'procLinkAudio?.kill', 'o parar mata o yt-dlp (audio)');
 });
 
 await test('o COMANDO aceita BUSCA (texto) e resolve pelo caminho do !play', () => {
