@@ -108,6 +108,30 @@ const FILTROS_AUDIO = 'highpass=f=70,agate=threshold=0.001:ratio=6:attack=8:rele
 const BYTES_POR_AMOSTRA = 4;
 
 /**
+ * Watermarks do buffer de audio do MOTOR (pausa/retoma), em ms.
+ *
+ * Lidos do proprio pacote (`WaAudioEngine.feedWatermarksMs()`): o motor
+ * **descarta as amostras mais antigas** quando o buffer passa de
+ * `extMaxBuffer` (750 ms). O contrato dele e': pare de alimentar ao chegar em
+ * `pauseMs` (120 ms) e volte quando drenar para `resumeMs` (60 ms).
+ *
+ * MEDIDO: alimentando sem olhar o buffer, 6 s de audio enchem os 750 ms e o
+ * motor descarta **53 vezes** -- era o "cortando/travando" que se ouvia.
+ * Com o backpressure: **zero descarte**.
+ */
+const AUDIO_PAUSE_MS = 120;
+const AUDIO_RESUME_MS = 60;
+
+/**
+ * Teto do buffer de audio, em ms.
+ *
+ * O motor descarta acima de 750 ms. Mantemos um teto mais baixo (o dobro do
+ * alvo) para o descarte nunca acontecer -- e' uma rede de seguranca, nao o
+ * mecanismo normal (esse e' o pause/resume).
+ */
+const AUDIO_MAX_MS = 240;
+
+/**
  * Teto de bitrate do video, em kbps.
  *
  * Medido: conteudo complexo (720p) sem teto chega a **5,4 Mbps** -- muito
@@ -339,7 +363,16 @@ export async function transmitir({ grupo, callId, arquivo = null, fluxo = null, 
   // RESERVA o grupo ANTES de qualquer I/O: o upgrade e' assincrono e leva
   // segundos, entao duas chamadas simultaneas passariam pelo guarda e as
   // duas ligariam o screen share (foi o que o teste de concorrencia pegou).
-  ativos.set(grupo, { proc: null, parado: false, frames: 0 });
+  ativos.set(grupo, {
+    proc: null, parado: false, frames: 0,
+    // Controle do audio (ver AUDIO_PAUSE_MS): o ffmpeg e' PAUSADO quando o
+    // buffer do motor enche, para nao descartar amostra.
+    pausado: false,
+    // Fila do que chegou enquanto pausado (nunca se joga audio fora).
+    fila: [],
+    // Nivel do buffer do motor (ms): alimenta so' abaixo de AUDIO_MAX_MS.
+    nivelMs: 0,
+  });
 
   const cli = voipDeTeste || await (async () => {
     const midia = await backend();
@@ -547,6 +580,80 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
     // Sobra de bytes entre chunks: um float tem 4 bytes e o pipe pode cortar
     // no meio de um. Guardar a sobra evita amostra corrompida.
     let sobra = Buffer.alloc(0);
+
+    /**
+     * Manda um bloco de PCM para o motor, respeitando o teto de buffer.
+     *
+     * O motor devolve quantos ms ficaram na fila dele. Se passar do teto,
+     * seguramos o bloco (ele vai para `estado.fila`) em vez de entregar --
+     * entregar faria o motor DESCARTAR as amostras mais antigas, que e' o
+     * corte no audio.
+     */
+    /**
+     * Manda um bloco de PCM para o motor, respeitando o teto de buffer.
+     *
+     * @returns {boolean} `true` se o bloco FOI entregue ao motor.
+     */
+    const entregarAudio = (amostras) => {
+      if (estado.parado || !amostras.length) return false;
+      // Sincronia A/V (vale para os DOIS caminhos: chegada e drenagem):
+      // enquanto o VIDEO nao entrar no ar, o audio so' se ACUMULA na fila.
+      // MEDIDO: o yt-dlp de audio entrega 604 ms antes do de video, e cada
+      // `-re` e' independente -- entregar antes faz o audio correr na frente,
+      // encher o buffer do motor (que descarta o mais antigo) e a reproducao
+      // sair atrasada. Segurar ate' o 1o frame alinha os dois pelo inicio real.
+      // SEM gate de sincronia: MEDIDO que o ffmpeg JA' alinha os dois streams
+      // (o 1o H.264 e o 1o PCM saem com ~18 ms de diferenca). Segurar o audio
+      // ate' o 1o frame so' ATRASAVA o que ja' estava alinhado (~200-400 ms).
+      // O que precisa de controle e' o BUFFER: acima de AUDIO_MAX_MS o motor
+      // descarta o mais antigo (o corte).
+      if (estado.nivelMs >= AUDIO_MAX_MS) {
+        estado.fila.push(amostras);   // guarda, nunca descarta
+        return false;
+      }
+      try {
+        const ms = cli.feedLiveAudio(callId, amostras);
+        estado.amostras = (estado.amostras || 0) + amostras.length;
+        if (typeof ms === 'number' && ms > 0) estado.nivelMs = ms;
+        return true;
+      } catch (e) {
+        log('feedLiveAudio: ' + (e?.message || e));
+        return false;
+      }
+    };
+
+    /**
+     * Drena a fila enquanto o buffer do motor estiver baixo.
+     *
+     * O motor consome sozinho (o jitter buffer dele), entao basta tentar de
+     * tempos em tempos: o proprio `getLiveBufferMs` diz o nivel atual.
+     */
+    const drenarFila = () => {
+      while (estado.fila.length && !estado.parado) {
+        try {
+          const atual = cli.getLiveBufferMs?.(callId);
+          if (typeof atual === 'number') estado.nivelMs = atual;
+        } catch { /* segue com o ultimo valor */ }
+        if (estado.nivelMs >= AUDIO_RESUME_MS) break;
+        // ATENCAO: se o bloco NAO foi entregue (o gate de sincronia barrou ou
+        // o buffer encheu), ele volta para a fila -- sem este `break` o while
+        // faria shift+push para sempre e TRAVARIA A EVENT LOOP. Foi um bug
+        // real: o bot parava de responder (nem os timers rodavam).
+        const entregou = entregarAudio(estado.fila.shift());
+        if (!entregou) break;
+      }
+    };
+    estado.drenarAudio = drenarFila;
+
+    // O motor consome o buffer sozinho; este timer so' REPÕE o que ficou na
+    // fila quando ele drenar. 20 ms e' bem abaixo do chunk do motor (60 ms),
+    // entao a fila nunca fica "presa".
+    const timerAudio = setInterval(() => {
+      if (estado.parado) return;
+      drenarFila();   // o gate de sincronia vive no `entregarAudio`
+    }, 20);
+    estado.timerAudio = timerAudio;
+
     proc.stdio[fdSaidaAudio]?.on('data', (chunk) => {
       if (estado.parado) return;
       try {
@@ -557,8 +664,7 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
         // Copia para um ArrayBuffer alinhado (o Buffer pode ter offset).
         const alinhado = new Uint8Array(inteiros * BYTES_POR_AMOSTRA);
         alinhado.set(buf.subarray(0, inteiros * BYTES_POR_AMOSTRA));
-        cli.feedLiveAudio(callId, new Float32Array(alinhado.buffer));
-        estado.amostras = (estado.amostras || 0) + inteiros;
+        entregarAudio(new Float32Array(alinhado.buffer));
       } catch (e) {
         log('feedLiveAudio: ' + (e?.message || e));
       }
@@ -581,6 +687,9 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
           enviarFrame(cli, callId, au, carimbo, estado, log);
         }
       } catch { /* ok */ }
+      // Para o timer do audio (senao ele segue rodando depois do fim).
+      try { clearInterval(estado.timerAudio); } catch { /* ok */ }
+      estado.fila = [];
       // Encerra os yt-dlp junto: sem isto eles seguiriam baixando sozinhos.
       try { estado.procLink?.kill('SIGKILL'); } catch { /* ok */ }
       try { estado.procLinkAudio?.kill('SIGKILL'); } catch { /* ok */ }
@@ -645,8 +754,15 @@ function enviarFrame(cli, callId, au, carimbo, estado, log) {
   try {
     const ts = carimbo();
     const pacotes = cli.feedLiveVideo(callId, au, ts);
-    if (pacotes > 0) estado.frames++;
-    else estado.recusados = (estado.recusados || 0) + 1;
+    if (pacotes > 0) {
+      estado.frames++;
+      // O video REALMENTE entrou no ar: e' o marco zero do audio (ver o gate
+      // de sincronia no timer de audio).
+      // O video entrou no ar (o contador e' so' informativo agora).
+      estado.videoComecou = true;
+    } else {
+      estado.recusados = (estado.recusados || 0) + 1;
+    }
   } catch (e) {
     log('feedLiveVideo: ' + (e?.message || e));
   }
@@ -658,6 +774,8 @@ export function parar(grupo) {
   const estado = ativos.get(grupo);
   if (!estado) return { ok: false, motivo: 'nao_esta_transmitindo' };
   estado.parado = true;
+  try { clearInterval(estado.timerAudio); } catch { /* ok */ }
+  estado.fila = [];
   // O ffmpeg (video e audio sao duas saidas dele) e, num LINK, o yt-dlp.
   try { estado.proc?.kill('SIGKILL'); } catch { /* ok */ }
   try { estado.procLink?.kill('SIGKILL'); } catch { /* ok */ }

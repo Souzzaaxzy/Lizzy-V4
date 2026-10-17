@@ -565,6 +565,50 @@ if (TEM_FFMPEG) {
 }
 
 // ============================================================================
+// 1b-bis) O AUDIO: backpressure (sem corte) e sem gate que atrase
+// ============================================================================
+
+await test('o audio tem backpressure nos watermarks do MOTOR (sem corte)', () => {
+  // MEDIDO no pacote (@zapo-js/voip): o motor DESCARTA as amostras mais antigas
+  // quando o buffer passa de `extMaxBuffer` (750 ms) e publica o contrato
+  // pause/resume (120 ms / 60 ms). Alimentar sem olhar isso enchia os 750 ms:
+  // em 6 s de audio o motor descartou 53 vezes -- era o "cortando/travando".
+  const md = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/midiap.js'), 'utf-8');
+  includes(md, 'AUDIO_MAX_MS', 'tem teto de buffer');
+  includes(md, 'AUDIO_RESUME_MS', 'tem o nivel de retomada');
+  includes(md, 'getLiveBufferMs', 'le o nivel REAL do motor (nao um contador nosso)');
+  includes(md, 'feedLiveAudio', 'alimenta o motor');
+  // O teto tem de ser MENOR que o limite de descarte do motor (750 ms).
+  const m = md.match(/const AUDIO_MAX_MS = (\d+);/);
+  ok(m, 'AUDIO_MAX_MS declarado');
+  ok(Number(m[1]) < 750, `teto abaixo do limite de descarte do motor (${m[1]} < 750)`);
+});
+
+await test('a drenagem NAO pode virar loop infinito (travava a event loop)', () => {
+  // BUG REAL: `drenarFila` fazia shift() e o `entregarAudio` devolvia o bloco
+  // para a fila (gate barrando) -> o while nunca terminava e travava a EVENT
+  // LOOP: o bot parava de responder (nem os timers rodavam).
+  const md = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/midiap.js'), 'utf-8');
+  const i = md.indexOf('const drenarFila');
+  const bloco = md.slice(i, i + 900);
+  includes(bloco, 'entregou', 'o retorno do entregarAudio e usado');
+  ok(/if\s*\(\s*!\s*entregou\s*\)\s*break/.test(bloco),
+    'para o while quando o bloco NAO foi entregue (senao trava)');
+});
+
+await test('NAO existe gate de sincronia (o ffmpeg ja alinha os streams)', () => {
+  // MEDIDO: o 1o H.264 e o 1o PCM saem do encoder com ~18 ms de diferenca --
+  // o ffmpeg JA' sincroniza. Segurar o audio ate' o 1o frame atrasava o que
+  // ja' estava alinhado (~200-400 ms de descompasso de conteudo).
+  const md = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/midiap.js'), 'utf-8');
+  const i = md.indexOf('const entregarAudio');
+  const bloco = md.slice(i, i + 1200);
+  ok(!/!estado\.videoComecou\s*\|\|/.test(bloco),
+    'o teto do buffer NAO depende do video ter comecado (isso atrasava)');
+  includes(bloco, 'AUDIO_MAX_MS', 'so o teto do buffer controla a alimentacao');
+});
+
+// ============================================================================
 // 1c) O DISCO: nada de filme acumulado
 // ============================================================================
 
