@@ -10693,53 +10693,72 @@ quebrar. Chamar de "resolvido" o timbre sem esse arquivo seria mentira.
   `menu-layout` (1: `menufig` 18 vs 17) e `anti-seletiva` (10 ok / 22 falhas).
   `callp` às vezes sai com timeout do harness, mas as 14/33 asserções passam.
 
-## `!midiap` — transmite um VIDEO na call (set/out 2026) ✅
+## `!midiap` — transmite um VIDEO na call ✅
 Comando que transmite **vídeo** dentro da chamada de grupo (o `!callp` sobe a
 call; o `!musicap` toca áudio; o `!midiap` manda imagem+áudio do vídeo). Aceita
 **arquivo** (marcado), **fluxo** (vídeo baixado do WhatsApp) e **LINK**
-(YouTube e afins, via yt-dlp). Nada usa disco: o vídeo vai em pipe até o ffmpeg,
-que produz H.264 (access units) + PCM cru, alimentados em `feedLiveVideo` /
-`feedLiveAudio`.
+(YouTube e afins). **REGRA INVIOLÁVEL: nada vai para o disco** — o vídeo viaja
+em pipe até o ffmpeg, que produz H.264 (access units) + PCM cru, alimentados em
+`feedLiveVideo` / `feedLiveAudio`.
 
-### O BUG DO `exit 183` — `--ffmpeg-location` (out/2026) ✅
-Sintoma: no caminho por **LINK**, o ffmpeg morria com **`exit 183`**
-(`Invalid data found when processing input`) e o usuário só via
-*"ffmpeg saiu com 183"*.
+### 🚨 O LINK QUEBRAVA (183 "corrompido") — o merge do yt-dlp morre com SIGSEGV ✅
+Sintoma: **qualquer** link respondia *"O vídeo chegou corrompido ou incompleto"*.
 
-**Causa medida**: sem `--ffmpeg-location` o **yt-dlp não acha o ffmpeg**, então
-não consegue muxar os formatos separados do YouTube (DASH: vídeo e áudio vêm em
-arquivos distintos). Nesse caso ele avisa *"the formats will be streamed one
-after the other"* e manda **vídeo e áudio um atrás do outro no stdout** — dado
-inválido para o ffmpeg que lê o `pipe:0`, que morre com 183.
+**Causa raiz (MEDIDA, não hipótese)**: o comando chamava o yt-dlp com
+`-f bv*+ba` para ele **MUXAR**. O merge do yt-dlp invoca o ffmpeg passando as
+**duas URLs** do `googlevideo` e o processo morre com **`SIGSEGV` (exit -11)**,
+devolvendo **ZERO byte** no stdout. O nosso ffmpeg então recebia um pipe vazio e
+saía com **183** (`Invalid data found when processing input`) — e o
+`motivosDoFfmpeg` traduzia isso como "corrompido". O "corrompido" era só o
+**sintoma**: nunca houve dado corrompido, houve dado **nenhum**.
 
-**Correção** (`dados/src/funcs/utils/midiapLink.js`):
-- `argumentosDoLink` passa **sempre** `--ffmpeg-location`,
-  `process.env.FFMPEG_PATH || 'ffmpeg'` (o mesmo fallback do resto do bot);
-  sem a flag o yt-dlp usa o `FFmpegFD` só quando encontra o ffmpeg sozinho.
-- **`--remux-video mp4` foi REMOVIDO**: é um **POST-PROCESSADOR**, e esses
-  trabalham em **ARQUIVO** (gravam `<nome>.temp.mp4` e renomeiam) — não se
-  aplicam a um pipe, e podiam gravar em disco num servidor apertado. O container
-  já vem mp4 pelo próprio `-f`.
+O downloader **NATIVO** do yt-dlp (sem ffmpeg) é estável: medido, `-f 134`
+devolve **8,4 MB** de MP4 válido no stdout.
 
-### O erro agora é legível (`midiap.js`)
-- O **stderr** do ffmpeg passou de `ignore` para **`pipe`** (sem ele o motivo da
-  falha ia para o vazio e sobrava só o número).
-- Novo **`motivosDoFfmpeg(code, stderr)`** traduz: `Invalid data found` / 183 →
-  *"O vídeo chegou corrompido ou incompleto"*; `No space left` → *"Sem espaço no
-  servidor"*; `403/404/HTTP error` → *"A fonte recusou o download"*; resto →
-  `Falha ao processar o vídeo (código N)`. O **detalhe técnico** (stderr cru)
-  vai para o **log**, não para o usuário.
+**Correção** (mantendo "nada no disco"):
+1. **DOIS yt-dlp** — um por faixa (`argumentosDoLink` = vídeo,
+   `argumentosDoAudio` = áudio), cada um escrevendo no **stdout**. Sem `+ba`,
+   sem `--remux-video` (post-processador trabalha em arquivo, não em pipe).
+2. **Quem muxa é o ffmpeg do bot**: `-i pipe:0` (vídeo) + `-i pipe:3` (áudio),
+   e a saída PCM vai ao **`pipe:4`** — o fd3 está ocupado com a **entrada** de
+   áudio. Com uma entrada só (arquivo/fluxo) nada muda: continua `pipe:3`.
+3. **O motivo REAL chega ao usuário**: o stderr dos dois yt-dlp é guardado e
+   `motivoDoYtdlp()` traduz (vídeo indisponível / formato / verificação /
+   rede). Antes o ffmpeg reportava o sintoma e o usuário nunca sabia a causa.
+4. `parar()` mata o ffmpeg **e os dois** yt-dlp (nenhum órfão baixando).
+
+**Medido com o módulo REAL** (ffmpeg + yt-dlp de verdade):
+| caso | resultado |
+|---|---|
+| link válido | 26,4 MB de vídeo + 3,4 MB de áudio entram; **H.264 e PCM saem** (3,0 MB / 1,2 MB em 20 s) — a mídia **flui** |
+| link inválido | *"O vídeo não está disponível (privado, removido ou restrito)"* |
+
+### O que foi DESCARTADO com medição (para não repetir a busca)
+- **`--ffmpeg-location`** (a rodada anterior apontou isso como a causa — estava
+  **errado**): sem ele o yt-dlp apenas avisa que não vai muxar; o defeito real
+  é o **merge** em si. O flag não resolve nada aqui.
+- **ffmpeg lendo a URL do googlevideo direto**: o build testado dá **segfault**
+  (`-11`) até num HTTPS simples — não é caminho confiável.
+- **itag 18 (progressivo, já muxado)**: **nenhum** cliente o oferece hoje
+  (testado: web_safari, mweb, web, android_vr, android, ios, tv).
+- **FIFO/process substitution**: funciona no shell, mas em Node o caminho
+  correto é o par de pipes (fd3/fd4), que é o que ficou.
 
 ### Testes
-`tests/midiap.test.js` — os argumentos do link exigem `--ffmpeg-location`
-(o valor bate com `FFMPEG_PATH || 'ffmpeg'`) e **proíbem** o `--remux-video`.
-**Requisitos**: ffmpeg no PATH (ou `FFMPEG_PATH`) e yt-dlp para o caminho por
-link. No sandbox sem eles, a validação é a dos argumentos (pura).
+`tests/midiap.test.js` — **44 testes / 139 asserções, 0 falhas**. Cobrem: os
+dois processos (sem `+ba`), o encoder com duas entradas e PCM no `pipe:4`, o
+`parar` matando os três processos, e o `motivoDoYtdlp`.
+**Requisitos**: ffmpeg no PATH (ou `FFMPEG_PATH`) e yt-dlp para o link.
+`npm install` **rebaixa o `yarn.lock` para v1** — sempre
+`git checkout -- yarn.lock` depois (armadilha já documentada).
 
 ### Nota de processo
 O trabalho do `!midiap` nasceu na conversa *"👔 Investigar Callp e Callp
-Encerrar"*, que **morreu por estouro de contexto** (917k tokens > limite de 1M)
-deixando 3 arquivos **sem commit**. Recuperado e commitado em `e19e441`.
-Lição: em arquivo de ~2 MB com glifos, editar por
+Encerrar"*, que **morreu por estouro de contexto** (917k tokens > limite de 1M).
+Lição de método que se repetiu aqui: **duas** hipóteses plausíveis (o
+`--ffmpeg-location`, o "dado corrompido") foram **refutadas por medição** — o
+que fechou o caso foi isolar cada elo do pipeline e medir **bytes reais** em
+cada ponta (yt-dlp sozinho → 8,4 MB; yt-dlp+merge → 0 byte; ffmpeg com pipe
+vazio → 183). Em arquivo com glifos, editar por
 `open(rb) → decode('utf-8') → replace → encode('utf-8')` e conferir
 `mojibake == 0` — o `file_editor` corrompe a codificação.
