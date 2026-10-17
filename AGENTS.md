@@ -10978,3 +10978,50 @@ O `engines` permite Node ≥ 20 — nessa versão, importar `.ts` **quebra**.
 **Testes**: `tests/installer-git-drift.test.js` ganhou 2 testes que travam o
 `process.execPath` nos dois pontos (com o comentário filtrado, senão o próprio
 texto explicativo casaria a regex).
+
+## 🎧 BACKEND DE MÍDIA DA CALL — agora é SÓ o `zapo` (lizzy-call REMOVIDO) (out/2026) ✅
+Pedido do dono: *"tira o (lizzy-call) deixando só o zapo e corrige de uma vez"*.
+
+### Por que havia dois (e por que isso atrapalhava)
+O `callMedia.js` escolhia o backend em **cascata**: tentava o **zapo**
+(`zapo-js` + `@zapo-js/voip`) e, se não carregasse, caía no **`lizzy-call`**
+(motor WASM do WhatsApp Web). O contrato era o mesmo, então *parecia* inofensivo
+— mas os dois produziam o **mesmo sintoma** ("conectando...") por caminhos
+diferentes, e **não dava para saber qual estava ativo** só pelo comportamento.
+Diagnóstico sem um lugar único é diagnóstico que se perde.
+
+### O que saiu
+| onde | o que |
+|---|---|
+| `callMedia.js` | o carregamento em cascata, o `usandoZapo()` e **todos** os ramos `if (usandoZapo(...))`; o `obterMedia()` virou o próprio `zapoCall` (não há mais instância de `GroupCallMedia`) |
+| `package.json` | a dependência `lizzy-call` |
+| `package-lock.json` | o pacote + a linha na lista do root (**16 linhas**, cirúrgico) |
+| `yarn.lock` | a linha de dependência + o **bloco inteiro** (Berry) |
+| `index.js` | a mensagem de mídia ausente: *"faltam os pacotes do zapo"* |
+| `git-drift.js` / `update.js` | comentários que a citavam como dependência git ativa |
+
+### O que NÃO mudou (de propósito)
+- **O contrato da fachada**: `entrarNaCallComMidia`, `tocarAudioNaCall`,
+  `pararAudioDaCall`, `sairDaCallComMidia`, `obterVoip`, `estagioMidia`,
+  `precisaPareamento`, `estaPareado`, `parearMidia`, `resetarMidia`. Os comandos
+  (`!callp` / `!musicap` / `!midiap`) e os testes seguem **iguais**.
+- **O backend zapo em si**: nada de UDP, relay, porta (`CALL_RELAY_PORT_MODE`)
+  ou rota de sinalização foi tocado.
+
+### Verificado depois da remoção
+```
+carregarMidia() -> [CALLP] backend de mídia: zapo (@zapo-js/voip)
+obterMedia()    -> objeto (sem instância de classe)
+index.js        -> carrega em 608 ms (sem o pacote instalado)
+```
+
+**Testes** (todos 0 falhas): `callp` 17/38, `musicap` 24/72,
+`callp-regressions` 38/114, `zapo-conexao` 17/42, `zapo-pareamento` 24/63,
+`mlow-bitrate` 11/22, `call-audio-prep` 14/41, `midiap` 50/176,
+`installer-git-drift` 10/21.
+
+**Armadilha de método**: editar o `package-lock.json` com `json.dump` **reformata
+o arquivo inteiro** (o original usa `indent=4`; o padrão do `json.dump` é 2) —
+o diff virava ~7900 linhas em vez de 16. O certo é **partir do conteúdo do
+commit** (`git show HEAD~1:package-lock.json`), remover a chave e gravar com
+`indent=4`. Confira sempre o `--stat` antes de commitar.
