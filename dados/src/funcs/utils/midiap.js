@@ -143,6 +143,20 @@ const MS_POR_FRAME = (FRAME_MOTOR / 16000) * 1000;   // 60 ms
 const FILA_MAX_FRAMES = 12;
 
 /**
+ * Nivel alvo do buffer do MOTOR, em ms.
+ *
+ * E' o `resumeMs` do contrato dele (`getFeedWatermarksMs()`): *"resume once it
+ * drains to `resumeMs`"*. Mantemos o buffer NESSE ponto — acima disso e'
+ * latencia pura (MEDIDO: com o relogio adiantado o buffer ficava em 500 ms e
+ * o audio saia atrasado).
+ *
+ * NAO usar um valor menor: o motor tem o jitter buffer DELE e nao drena
+ * abaixo de um piso (MEDIDO: ~100 ms). Com um alvo de 60 ms o gate nunca
+ * liberava — o audio ficava preso e o descompasso crescia sem parar.
+ */
+const AUDIO_ALVO_MS = 120;
+
+/**
  * Watermarks do buffer de audio do MOTOR (pausa/retoma), em ms.
  *
  * Lidos do proprio pacote (`WaAudioEngine.feedWatermarksMs()`): o motor
@@ -699,34 +713,60 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
       }
     });
 
-    // O RELOGIO do audio: 1 frame (60 ms) a cada 60 ms de relogio.
+    // ## O RELOGIO do audio: guiado pelo BUFFER REAL do motor
     //
-    // O timer roda a cada FRAME_MOTOR/2 ms para o erro de agendamento do
-    // setTimeout nao virar atraso; o alvo e' contado por FRAMES (inteiro),
-    // entao nao ha' deriva — o frame N sai no instante N*60 ms.
-    // O relogio comeca ADIANTADO em 2 frames (120 ms).
+    // O motor publica o contrato dele: `getFeedWatermarksMs()` =
+    // `{ pauseMs: 120, resumeMs: 60 }` e a doc diz *"pause feeding once
+    // `getLiveBufferMs` reaches `pauseMs`, resume once it drains to
+    // `resumeMs`"*. O proprio pacote manda usar isso:
     //
-    // MEDIDO: o descompasso ficava constante em -100 a -160 ms — o motor
-    // comeca a tocar antes de o primeiro frame chegar (ele preenche o buffer
-    // proprio com silencio). Adiantar o relogio faz o audio entrar JA' no
-    // ritmo, sem esse atraso fixo.
+    //     const { pauseMs, resumeMs } = client.voip.getFeedWatermarksMs()
     //
-    // 120 ms e' o  do contrato do motor: o maximo que o buffer dele
-    // aceita sem descartar.
-    const tAudio0 = Date.now() - 2 * MS_POR_FRAME;
-    let framesEnviados = 0;
+    // ## O erro que causava o DELAY (medido)
+    //
+    // Antes o relogio era um contador adiantado em 2 frames (120 ms) e o
+    // buffer do motor ficava em **500 ms de media** (pico 650) — essa e' a
+    // latencia REAL que se ouve. Adiantar o relogio nao "alinha": ele ENCHE o
+    // buffer, e buffer cheio e' atraso puro.
+    //
+    // Agora o alvo e' o proprio nivel reportado pelo motor:
+    //   - acima de AUDIO_ALVO_MS: nao entrega (deixa drenar);
+    //   - abaixo de AUDIO_RESUME_MS: entrega para manter o fio.
+    //
+    // O alvo e' **60 ms** (um frame) — o minimo que mantem o buffer com
+    // conteudo. E' o que a doc chama de `resumeMs`, e e' o ponto onde o audio
+    // esta' colado no video.
+    // O RITMO: no maximo 1 frame a cada MS_POR_FRAME (60 ms) de relogio.
+    //
+    // E' o que o motor consome (16,7 frames/s). O timer roda a cada 10 ms so'
+    // para reagir rapido quando o buffer drenar — mas quem LIMITA a entrega e'
+    // a contagem por relogio. Sem esse limite o timer entregava 6x mais rapido
+    // que o consumo, o buffer enchia, o alvo barrava e o audio PARAVA
+    // (medido: descompasso de -12120 ms).
+    const tAudio0 = Date.now();
+    let framesNoRelogio = 0;
     const timerAudio = setInterval(() => {
       if (estado.parado) return;
-      const alvo = Math.floor((Date.now() - tAudio0) / MS_POR_FRAME);
-      // Entrega o que o relogio ja' devia ter entregue (no maximo 2 frames,
-      // para um atraso do timer nao virar rajada).
-      let entregues = 0;
-      while (framesEnviados < alvo && entregues < 2) {
-        bombearAudio();
-        framesEnviados += 1;
-        entregues += 1;
-      }
-    }, Math.max(5, Math.round(MS_POR_FRAME / 2)));
+      if (!estado.fila || estado.fila.length === 0) return;
+
+      // Quantos frames o relogio ja' permite ter entregue.
+      const permitido = Math.floor((Date.now() - tAudio0) / MS_POR_FRAME);
+      if (framesNoRelogio >= permitido) return;   // ainda e' cedo: nao entrega
+
+      // Le o nivel REAL do motor (a fonte da verdade — nao um contador nosso).
+      let nivel = estado.nivelMs;
+      try {
+        const atual = cli.getLiveBufferMs?.(callId);
+        if (typeof atual === 'number') { nivel = atual; estado.nivelMs = atual; }
+      } catch { /* segue com o ultimo valor */ }
+
+      // Acima do alvo: o motor tem fila suficiente. Espera drenar (nao soma
+      // atraso). O alvo e' o `resumeMs` do contrato dele.
+      if (nivel >= AUDIO_ALVO_MS) return;
+
+      bombearAudio();
+      framesNoRelogio += 1;
+    }, 10);
     estado.timerAudio = timerAudio;
 
     // Sem faixa de audio o ffmpeg nao abre o pipe: um `error` aqui e' normal

@@ -602,8 +602,12 @@ await test('o audio sai em RITMO CONSTANTE (fila + relogio proprio)', () => {
   // O relogio e' por CONTAGEM de frames (nao acumula deriva).
   const i = md.indexOf('const tAudio0');
   const bloco = md.slice(i, i + 900);
-  includes(bloco, 'Math.floor', 'o alvo e contado pelo relogio');
-  includes(bloco, 'framesEnviados', 'conta os frames ja entregues');
+  includes(bloco, 'Math.floor', 'o ritmo e contado pelo relogio');
+  includes(bloco, 'framesNoRelogio', 'conta os frames ja entregues no relogio');
+  // E o alvo da entrega e' o NIVEL REAL do motor (o contrato dele), nao um
+  // contador nosso: era isso que enchia o buffer e atrasava o audio.
+  includes(bloco, 'getLiveBufferMs', 'le o nivel real do motor');
+  includes(bloco, 'AUDIO_ALVO_MS', 'so entrega abaixo do alvo do motor');
 });
 
 await test('o audio reagrupa em frames de 960 amostras (o que o motor espera)', () => {
