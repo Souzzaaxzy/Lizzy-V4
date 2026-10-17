@@ -36309,7 +36309,8 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
           };
 
           // NADA vai para o disco nos dois casos:
-          //   LINK  -- o yt-dlp muxa e manda no pipe:0 (o modulo cuida);
+          //   LINK  -- DOIS yt-dlp (video e audio) escrevem em pipes; quem muxa
+          //            e' o ffmpeg do bot (o merge do yt-dlp quebra: SIGSEGV);
           //   VIDEO -- o fluxo decifrado do WhatsApp vai direto no pipe:0.
           let fluxo = null;
           let link = null;
