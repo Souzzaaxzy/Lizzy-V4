@@ -4069,57 +4069,25 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
 
       // Convidados: todos os membros, menos o bot (ele entra como criador).
       //
-      // ## A FORMA DO JID IMPORTA: o motor exige **LID**
+      // ## NAO "normalizar" este jid (regressao real)
       //
-      // O contrato do `startCall` do motor diz, literalmente, que
-      // `participants[].jid` e' *"The account to ring, a **LID**"*
-      // (`@zapo-js/voip/dist/types.d.ts`). E o `resolvePeerLid` — que converte
-      // PN -> LID — **so' roda no 1:1** (`WaCallManager.startCall`); o
-      // `startGroupCall` usa o jid **cru**.
+      // O jid vai **como veio**. Aqui ja' se tentou forcar `@s.whatsapp.net`
+      // (para "resolver" o LID depois) e isso QUEBROU a call: num grupo LID o
+      // `part.id` **e' o LID**, e trocar o sufixo destruia a identidade.
       //
-      // Medido no codigo: este bloco pegava `part.id || part.phoneNumber`, e o
-      // `id` de um participante pode vir como **PN** (`@s.whatsapp.net`) quando
-      // o grupo nao esta' em modo LID. Com PN, o roster do servidor nao casa
-      // com quem realmente entrou e a call nunca sai de `connecting` — era o
-      // "conectando..." infinito.
-      //
-      // ## A forma do jid: mandamos o **PN** e o ZAPO resolve o LID
-      //
-      // O `startCall` de grupo exige `participants[].jid` em **LID** — a doc do
-      // pacote diz *"The account to ring, a LID"* e o exemplo dela usa
-      // `112984198234339@lid`. Mas o `lid` do metadata do **Baileys** nao vale
-      // aqui: o Baileys e o zapo sao **sessoes DIFERENTES** (o Baileys e' o bot
-      // do WhatsApp; o zapo e' o motor da call, pareado a parte).
-      //
-      // Quem sabe o LID certo e' o PROPRIO zapo, pela API documentada
-      // (`client.profile.getLidsByPhoneNumbers`, ver `zapo.to/en/concepts/
-      // identities.md`). Entao aqui montamos a lista com o **numero (PN)** —
-      // que e' a forma estavel entre as duas sessoes — e o `zapoCall` converte
-      // para LID antes de subir a call (`resolverLids`).
-      //
-      // O `:device` sai: o motor resolve os devices sozinho.
-      // O bot pode ser identificado por LID (`getBotNumber` devolve o `lid`),
-      // mas os convidados vao por NUMERO. Comparamos pelos DOIS: senao o LID
-      // nunca casa com um numero e o bot entra na propria lista de convidados.
-      const idsDoBot = new Set(
-        [botCallId, nazu?.user?.id, nazu?.user?.lid]
-          .filter((x) => typeof x === 'string' && x)
-          .map((x) => x.split('@')[0].split(':')[0])
-      );
+      // Este bloco e' o que funcionava (commit 3bcf911). O motor resolve os
+      // devices pelo `groupParticipantAccountKey`, que ja' lida com as duas
+      // formas — nao ha o que normalizar aqui.
+      const botUser = String(botCallId).split('@')[0].split(':')[0];
       const convidados = [];
       const vistos = new Set();
       for (const part of (meta.participants || [])) {
-        // Queremos o NUMERO. Um LID NAO serve: e' de outra sessao (a do
-        // Baileys, nao a do zapo). Entao so' aceitamos campo que seja PN.
-        const candidatos = [part?.phoneNumber, part?.pn, part?.id];
-        const bruto = candidatos.find(
-          (c) => typeof c === 'string' && c && !c.includes('@lid')
-        );
-        if (!bruto) continue;
-        const numero = bruto.split('@')[0].split(':')[0];
-        if (!numero || idsDoBot.has(numero) || vistos.has(numero)) continue;
-        vistos.add(numero);
-        convidados.push(`${numero}@s.whatsapp.net`);
+        const jid = part?.id || part?.phoneNumber;
+        if (typeof jid !== 'string' || !jid) continue;
+        const user = jid.split('@')[0].split(':')[0];
+        if (!user || user === botUser || vistos.has(user)) continue;
+        vistos.add(user);
+        convidados.push(jid);
       }
       if (convidados.length < 2) {
         return { ok: false, motivo: 'grupo_pequeno' };

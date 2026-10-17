@@ -22,6 +22,7 @@
     "dependencies": {
         "@hapi/boom": "^10.0.1",
         "@itsliaaa/baileys": "git+https://github.com/Souzzaaxzy/baileys.git#0bd4ce1b81ec43461ff7bd95ea3c55c31f2d013a",
+        "@roamhq/wrtc": "^0.10.0",
         "@zapo-js/voip": "^1.4.0",
         "@zapo-js/voip-media": "^0.3.0",
         "axios": "^1.13.2",
@@ -33,6 +34,7 @@
         "libmlow-wasm-fork": "^0.2.0",
         "libphonenumber-js": "^1.13.9",
         "linkedom": "^0.18.12",
+        "lizzy-call": "git+https://github.com/Souzzaaxzy/lizzy-call.git",
         "node-cache": "^5.1.2",
         "node-cron": "^4.2.1",
         "node-webpmux": "^3.2.1",

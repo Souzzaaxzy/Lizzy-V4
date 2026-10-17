@@ -280,27 +280,6 @@ await test('!callp convida todos os membros menos o bot', async () => {
   ok(new Set(jids.map((j) => String(j).split('@')[0])).size === jids.length, 'sem convidado repetido');
 });
 
-await test('!callp manda o PN do convidado (quem resolve o LID e o zapo)', async () => {
-  // A doc do motor exige LID em `participants[].jid`, MAS o LID tem de ser o
-  // do PROPRIO zapo: o Baileys e o zapo sao **sessoes diferentes** e o LID de
-  // uma nao vale para a outra (`zapo.to/en/concepts/identities.md`).
-  //
-  // Entao o bot manda o **numero (PN)** — a forma estavel entre as sessoes — e
-  // o `zapoCall` resolve o LID pela API oficial
-  // (`client.profile.getLidsByPhoneNumbers`) antes de subir a call.
-  const { groupJid, admin, participants } = setup(3);
-  const chamadas = instalarDubleMidia();
-  await run({ groupJid, sender: admin, text: '!callp', participants });
-  const criou = chamadas.find((c) => c.tipo === 'entrar');
-  const jids = criou.participantes.map(String);
-  ok(jids.length > 0, 'convidou alguem');
-  ok(jids.every((j) => j.endsWith('@s.whatsapp.net')),
-    `manda o PN (veio ${jids.filter((j) => !j.endsWith('@s.whatsapp.net')).join(', ') || 'ok'})`);
-  ok(!jids.some((j) => j.includes(':')), 'sem sufixo de device');
-  const numeros = participants.map((p) => p.jid.split('@')[0]);
-  ok(jids.every((j) => numeros.includes(j.split('@')[0])), 'cada convidado e um membro do grupo');
-});
-
 await test('o aviso carrega o cabeçalho de canal e o estado do áudio', async () => {
   const { groupJid, admin, participants } = setup(3);
   instalarDubleMidia({ stage: 'pronta' });
@@ -372,51 +351,6 @@ await test('!callp encerrar sem call ativa não inventa', async () => {
 });
 
 // ============================================================================
-
-await test('resolverLids: converte PN -> LID pela API do PROPRIO zapo', async () => {
-  // A doc oficial (zapo.to/en/concepts/identities.md) manda resolver o LID
-  // pelo profile coordinator do proprio zapo: o LID do Baileys e' de OUTRA
-  // sessao e nao vale para o motor da call.
-  const zapo = await import(new URL('../dados/src/funcs/utils/zapoCall.js', import.meta.url).href);
-  const resolver = zapo.__resolverLids;
-
-  // 1) o caminho feliz
-  const cli = {
-    profile: {
-      getLidsByPhoneNumbers: async (ns) => ns.map((n) => ({
-        queriedJid: `${n}@s.whatsapp.net`, phoneJid: `${n}@s.whatsapp.net`,
-        lidJid: `${n.slice(-6).padStart(15, '1')}@lid`, exists: true, invalid: false
-      }))
-    }
-  };
-  const r = await resolver(cli, ['5511999999999@s.whatsapp.net', '5511888888888@s.whatsapp.net']);
-  ok(r.length === 2 && r.every((j) => j.endsWith('@lid')), 'converteu os dois para LID');
-
-  // 2) LID ja' pronto nao chama a API
-  let chamou = false;
-  const r2 = await resolver({ profile: { getLidsByPhoneNumbers: async () => { chamou = true; return []; } } }, ['111000000000001@lid']);
-  ok(r2[0] === '111000000000001@lid' && !chamou, 'LID passa direto, sem chamar a API');
-
-  // 3) sem LID para o numero, mantem o PN (best-effort)
-  const r3 = await resolver({ profile: { getLidsByPhoneNumbers: async (ns) => ns.map((x) => ({ queriedJid: `${x}@s.whatsapp.net`, lidJid: null })) } }, ['5511999999999@s.whatsapp.net']);
-  ok(r3[0] === '5511999999999@s.whatsapp.net', 'sem LID mantem o PN');
-
-  // 4) o servidor corrige o numero (9o digito BR): correlaciona por queriedJid
-  const r4 = await resolver({ profile: { getLidsByPhoneNumbers: async () => ([{ queriedJid: '551188888888@s.whatsapp.net', phoneJid: '5511988888888@s.whatsapp.net', lidJid: '999@lid' }]) } }, ['551188888888@s.whatsapp.net']);
-  ok(r4[0] === '999@lid', 'acha pelo numero CORRIGIDO (queriedJid)');
-
-  // 5) a API que lanca nao derruba
-  const r5 = await resolver({ profile: { getLidsByPhoneNumbers: async () => { throw new Error('rede'); } } }, ['5511999999999@s.whatsapp.net']);
-  ok(r5[0] === '5511999999999@s.whatsapp.net', 'falha da API nao derruba');
-
-  // 6) versao sem o coordinator
-  const r6 = await resolver({}, ['5511999999999@s.whatsapp.net']);
-  ok(r6[0] === '5511999999999@s.whatsapp.net', 'sem profile nao quebra');
-
-  // 7) dedup e lixo
-  const r7 = await resolver({ profile: { getLidsByPhoneNumbers: async () => [] } }, ['a@s.whatsapp.net', 'a@s.whatsapp.net', null, '', 42]);
-  ok(r7.length === 1, 'deduplica e ignora lixo');
-});
 
 callMedia.__setDubleEntrar(null);
 callMedia.__setDuble(null);
