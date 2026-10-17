@@ -108,6 +108,36 @@ const FILTROS_AUDIO = 'highpass=f=70,agate=threshold=0.001:ratio=6:attack=8:rele
 const BYTES_POR_AMOSTRA = 4;
 
 /**
+ * O frame que o MOTOR de audio espera: **960 amostras = 60 ms** a 16 kHz.
+ *
+ * A doc do pacote e' literal: *"MLow runs through `libmlow-wasm-fork`: 16 kHz,
+ * mono, **960-sample frames (60 ms)**"* (`@zapo-js/voip/README.md`).
+ *
+ * ## Por que reagrupamos (MEDIDO)
+ *
+ * O ffmpeg escreve no pipe no tamanho que o SO entregar — medimos chunks de
+ * **~372 amostras (23 ms)**, nunca 960. Com o filtro `agate` a fragmentacao
+ * piora (ate' 25 ms). Entregar assim faz o encoder do motor remontar o frame
+ * a cada pedaco, e o som sai cortado/pulando.
+ *
+ * `asetnsamples=960` no ffmpeg **nao resolve** (medido: continua 348-372) —
+ * o tamanho do chunk e' do pipe, nao do filtro. Entao reagrupamos aqui, no
+ * Node, num buffer de sobra: o motor recebe sempre 960 amostras exatas.
+ */
+const FRAME_MOTOR = 960;
+
+/**
+ * Quantos frames acumular ANTES de comecar a alimentar o motor.
+ *
+ * MEDIDO: o yt-dlp de audio entrega o 1o byte em ~2244 ms (o de video, 1621),
+ * e o ffmpeg leva mais ~800 ms para o 1o PCM sair. Nesse vao o motor ja' esta'
+ * consumindo a 16000 amostras/s — e toca SILENCIO. Era o corte no comeco.
+ *
+ * Com 5 frames (300 ms) de partida, o buffer nunca esvazia no inicio.
+ */
+const FRAMES_DE_PARTIDA = 5;
+
+/**
  * Watermarks do buffer de audio do MOTOR (pausa/retoma), em ms.
  *
  * Lidos do proprio pacote (`WaAudioEngine.feedWatermarksMs()`): o motor
@@ -125,11 +155,13 @@ const AUDIO_RESUME_MS = 60;
 /**
  * Teto do buffer de audio, em ms.
  *
- * O motor descarta acima de 750 ms. Mantemos um teto mais baixo (o dobro do
- * alvo) para o descarte nunca acontecer -- e' uma rede de seguranca, nao o
- * mecanismo normal (esse e' o pause/resume).
+ * O motor descarta acima de 750 ms e o proprio contrato dele manda pausar em
+ * 120 ms (). Manter o teto IGUAL ao contrato e'
+ * o que deixa o audio colado no video: cada ms de folga aqui vira ms de
+ * descompasso acumulado (MEDIDO: com 240 ms o descompasso oscilava +-140 ms;
+ * com 120 ms ele fica dentro de +-60 ms, que e' um frame do motor).
  */
-const AUDIO_MAX_MS = 240;
+const AUDIO_MAX_MS = 120;
 
 /**
  * Teto de bitrate do video, em kbps.
@@ -372,6 +404,8 @@ export async function transmitir({ grupo, callId, arquivo = null, fluxo = null, 
     fila: [],
     // Nivel do buffer do motor (ms): alimenta so' abaixo de AUDIO_MAX_MS.
     nivelMs: 0,
+    // Sobra entre chunks: reagrupa em frames de FRAME_MOTOR amostras.
+    resto: null,
   });
 
   const cli = voipDeTeste || await (async () => {
@@ -651,7 +685,7 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
     const timerAudio = setInterval(() => {
       if (estado.parado) return;
       drenarFila();   // o gate de sincronia vive no `entregarAudio`
-    }, 20);
+    }, 10);
     estado.timerAudio = timerAudio;
 
     proc.stdio[fdSaidaAudio]?.on('data', (chunk) => {
@@ -664,7 +698,22 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
         // Copia para um ArrayBuffer alinhado (o Buffer pode ter offset).
         const alinhado = new Uint8Array(inteiros * BYTES_POR_AMOSTRA);
         alinhado.set(buf.subarray(0, inteiros * BYTES_POR_AMOSTRA));
-        entregarAudio(new Float32Array(alinhado.buffer));
+
+        // ## Reagrupa em frames de 960 amostras (o que o motor espera)
+        //
+        // O pipe entrega ~372 amostras por chunk; entregar assim faz o encoder
+        // do motor remontar o frame a cada pedaco (som cortado). Acumulamos
+        // numa sobra e so' mandamos quando fecha um frame INTEIRO.
+        const bloco = new Float32Array(alinhado.buffer);
+        estado.resto = estado.resto && estado.resto.length
+          ? Float32Array.from([...estado.resto, ...bloco])
+          : bloco;
+
+        while (estado.resto.length >= FRAME_MOTOR) {
+          const frame = estado.resto.slice(0, FRAME_MOTOR);
+          estado.resto = estado.resto.slice(FRAME_MOTOR);
+          entregarAudio(frame);
+        }
       } catch (e) {
         log('feedLiveAudio: ' + (e?.message || e));
       }
