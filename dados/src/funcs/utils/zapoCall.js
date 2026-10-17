@@ -496,6 +496,61 @@ export function codigoDePareamento() {
 }
 
 /**
+ * Converte uma lista de jids para **LID**, usando a API do PROPRIO zapo.
+ *
+ * ## Por que isto existe (a causa do "conectando" infinito)
+ *
+ * O `startCall` de grupo exige `participants[].jid` em **LID** — a doc do
+ * pacote diz, literalmente, *"The account to ring, a LID"*, e o exemplo dela
+ * usa `112984198234339@lid`. O `resolvePeerLid` (PN -> LID) **so' roda no
+ * 1:1**: o `startGroupCall` usa o jid **cru**.
+ *
+ * O bot montava a lista com o `part.lid` do metadata do **Baileys**. So' que o
+ * Baileys e o zapo sao **sessoes DIFERENTES** (o Baileys e' o bot do WhatsApp;
+ * o zapo e' o motor da call, pareado a parte). O LID de uma sessao nao vale
+ * para a outra — e quando o metadata nao traz `lid` (grupo PN), a lista ia por
+ * **PN** e a call nunca saia de `connecting`.
+ *
+ * A doc oficial (zapo.to/en/concepts/identities.md) manda resolver pelo
+ * **profile coordinator**: `client.profile.getLidsByPhoneNumbers([...])`, que
+ * devolve `{ queriedJid, phoneJid, lidJid, exists, invalid }` por entrada.
+ *
+ * Best-effort: o que nao resolver fica como veio (melhor tentar do que
+ * derrubar a chamada). O `queriedJid` e' o que correlaciona o resultado com a
+ * entrada — NAO o indice (o servidor pode corrigir o numero).
+ *
+ * @param {object} cli o cliente do zapo
+ * @param {string[]} jids
+ * @returns {Promise<string[]>} os jids, com LID onde deu para resolver
+ */
+async function resolverLids(cli, jids) {
+  const lista = [...new Set((jids || []).filter((j) => typeof j === 'string' && j))];
+  if (lista.length === 0) return [];
+  // So' o que e' PN precisa de conversao; LID ja' esta' pronto.
+  const pns = lista.filter((j) => !j.endsWith('@lid'));
+  if (pns.length === 0) return lista;
+
+  const porPn = new Map();
+  try {
+    const numeros = pns.map((j) => j.split('@')[0].split(':')[0]);
+    const res = await cli?.profile?.getLidsByPhoneNumbers?.(numeros);
+    for (const r of res || []) {
+      // `queriedJid` correlaciona por VALOR (o servidor corrige o numero).
+      const chave = String(r?.queriedJid || r?.phoneJid || '').split('@')[0].split(':')[0];
+      if (chave && r?.lidJid) porPn.set(chave, r.lidJid);
+    }
+  } catch (e) {
+    console.warn('[ZAPOCALL] nao consegui resolver os LIDs:', e?.message || e);
+  }
+
+  return lista.map((j) => {
+    if (j.endsWith('@lid')) return j;
+    const numero = j.split('@')[0].split(':')[0];
+    return porPn.get(numero) || j;
+  });
+}
+
+/**
  * Traduz o estado do zapo para os estagios que o bot ja conhece.
  */
 function estagioDoCall(call) {
@@ -542,7 +597,12 @@ export async function entrarNaCallComMidia({ grupo, callId, callCreator, partici
   }
 
   try {
-    const alvos = (participantes || []).map((jid) => ({ jid }));
+    // O motor exige LID em `participants[].jid` (a doc: *"The account to
+    // ring, a LID"*). Resolvemos pelo PROPRIO zapo — o LID do Baileys e' de
+    // outra sessao e nao vale aqui.
+    const emLid = await resolverLids(cli, participantes);
+    const alvos = emLid.map((jid) => ({ jid }));
+    console.log(`[ZAPOCALL] convidados: ${alvos.length} | em LID: ${alvos.filter((a) => a.jid.endsWith('@lid')).length}`);
 
     const novoCallId = await cli.voip.startCall({
       groupJid: grupo,
@@ -575,6 +635,9 @@ export async function entrarNaCallComMidia({ grupo, callId, callCreator, partici
     return { ok: false, motivo: 'falha_ao_entrar', detalhe: e?.message || String(e) };
   }
 }
+
+/** Exportado para o TESTE medir a conversao PN -> LID (a causa do "conectando"). */
+export const __resolverLids = resolverLids;
 
 /** Estagio da pilha de midia para um grupo. */
 export async function estagioMidia(grupo) {
