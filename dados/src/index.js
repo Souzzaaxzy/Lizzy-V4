@@ -18684,7 +18684,10 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
             await reply("✅ Processamento pausado com sucesso!\n\n🔄 Iniciando script de atualização...");
           }
           // Cria o processo de atualização
-          const updateProcess = spawn('node', [updateScriptPath], {
+          // `process.execPath` (e nao `'node'`): em paineis que iniciam o bot
+          // por `ts-node`, o `node` pode nao estar no PATH e o spawn falharia
+          // com ENOENT -- era um dos motivos do `!atualizar` nao funcionar la'.
+          const updateProcess = spawn(process.execPath, [updateScriptPath], {
             cwd: pathz.join(__dirname, '..', '..'),
             stdio: ['ignore', 'pipe', 'pipe'],
             detached: false

@@ -247,3 +247,28 @@ else {
   for (const r of RESULTS) for (const e of r.errors) console.log(`- [${r.name}] ${e}`);
   process.exitCode = 1;
 }
+
+// ============================================================================
+// O PAINEL INICIA POR TS-NODE (HostSquare/Pterodactyl) — nao pode usar 'node'
+// ============================================================================
+// Medido: em painel cujo startup e' `ts-node --esm app.js`, o binario `node`
+// pode NAO estar no PATH. `spawn('node', ...)` nesse cenario falha com ENOENT
+// e o bot simplesmente nao sobe (o erro so' aparece para quem escuta o evento
+// `error`). O `process.execPath` e' sempre o Node que esta' rodando.
+
+await test('o start.js usa process.execPath (nao o "node" do PATH)', () => {
+  const bruto = fs.readFileSync(path.join(PROJECT, 'dados/src/.scripts/start.js'), 'utf-8');
+  // Tira os comentarios de linha: eles CITAM o `spawn('node')` para explicar.
+  const src = bruto.split('\n').map((l) => l.replace(/^\s*\/\/.*$/, '')).join('\n');
+  ok(!/spawn\(\s*'node'/.test(src), 'nao spawna pelo nome "node" (ENOENT sem PATH)');
+  includes(src, 'spawn(process.execPath', 'usa o Node que esta rodando o processo');
+});
+
+await test('o !atualizar usa process.execPath (nao o "node" do PATH)', () => {
+  const bruto = fs.readFileSync(path.join(PROJECT, 'dados/src/index.js'), 'utf-8');
+  const src = bruto.split('\n').map((l) => l.replace(/^\s*\/\/.*$/, '')).join('\n');
+  const i = src.indexOf("case 'atualizar':");
+  const bloco = src.slice(i, i + 3000);
+  ok(!/spawn\(\s*'node'/.test(bloco), 'nao spawna o update pelo nome "node"');
+  includes(bloco, 'spawn(process.execPath', 'usa o Node que esta rodando o processo');
+});

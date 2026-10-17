@@ -339,7 +339,12 @@ async function startBot(codeMode = false, sessionMode = false) {
     info(`📷 Iniciando com ${codeMode ? 'código de pareamento' : 'QR Code'}`);
   }
 
-  botProcess = spawn('node', args, {
+  // `process.execPath` (e nao `'node'`): em paineis que iniciam o bot por
+  // `ts-node` (HostSquare/Pterodactyl), o binario `node` pode NAO estar no
+  // PATH. Medido: `spawn('node')` nesse cenario falha com **ENOENT** e o bot
+  // simplesmente nao sobe (o `error` so' aparece se alguem escutar). O
+  // `process.execPath` e' sempre o Node que esta' rodando este processo.
+  botProcess = spawn(process.execPath, args, {
     stdio: 'inherit',
     env: {
       ...process.env,

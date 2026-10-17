@@ -10866,3 +10866,64 @@ resolve de forma definitiva. `data/youtube/cookies.txt` está no `.gitignore` �
 **Testes**: `tests/midiap.test.js` — **46 testes / 161 asserções, 0 falhas**
 (inclui a receita anti-bloqueio, a paridade `!play`↔`!midiap` e a trava do
 `protocol^=https`).
+
+## 🖥️ RODAR NO HOSTSQUARE / PTERODACTYL (startup por `ts-node`) ✅
+O painel inicia o bot por **`ts-node --esm app.js`** (ver o comentário no
+próprio `app.js`: a comparação `[[ "${MAIN_FILE}" == "*.js" ]]` tem **aspas**,
+então é literal e o ramo do `node` nunca é escolhido). Isso é **suportado** — o
+bot **roda** sob ts-node (verificado: `connect.js` sobe e gera o QR).
+
+### 🚨 O que QUEBRAVA: `spawn('node')` — ENOENT (e derrubava o `!atualizar`) ✅
+**Causa medida**: o código spawnava o filho pelo **nome** `'node'`:
+
+```js
+spawn('node', args, ...)   // <- exige `node` no PATH
+```
+
+Num painel cujo startup é `ts-node`, o binário `node` **pode não estar no
+PATH**. Medido com o PATH sem `node`:
+
+| chamada | resultado |
+|---|---|
+| `spawn('node', …)` | **`ENOENT`** — e o bot **não sobe** (o erro só aparece para quem escuta o evento `error`) |
+| `spawn(process.execPath, …)` | ✅ o filho roda |
+
+Eram **dois** pontos:
+1. `dados/src/.scripts/start.js` — o `startBot()` que sobe o bot;
+2. `dados/src/index.js` (`case 'atualizar'`) — o `update.js` do `!atualizar`.
+   Este é um dos motivos de o **`!atualizar` não funcionar** nesses painéis.
+
+**Correção**: os dois passaram a usar **`process.execPath`** — sempre o Node que
+está rodando o processo, independente do PATH. Medido depois: o filho inicia
+("filho OK") com o PATH sem `node`.
+
+### Cadeia de reinício (para entender o `!atualizar`)
+`!atualizar` → `update.js` → `process.exit(0)` → **o bot morre** → quem reinicia
+é o **pai** (`start.js`, que escuta `botProcess.on('close')` e chama
+`restartBot()`). Se o painel reinicia sozinho com exit 0, também funciona. O que
+**não** funcionava era o spawn do `update.js` nem o do bot.
+
+### Suporte a TypeScript (medido no Node 24)
+O projeto **já tem** `typescript@5.6.3` + `ts-node@10.9.2` e a seção `ts-node`
+no `tsconfig.json`. O que funciona:
+
+| cenário | resultado |
+|---|---|
+| `.js` do bot importando `./mod.ts` (**extensão explícita**) | ✅ |
+| cadeia `.mjs` → `.js` → `.ts` | ✅ |
+| `.ts` importando os `.js` do bot (`./paths.js`) | ✅ |
+| `enum` / `namespace` | ❌ (só com `--experimental-transform-types`) |
+| `import './mod.js'` apontando para `mod.ts` | ❌ `ERR_MODULE_NOT_FOUND` |
+
+**As duas regras para escrever `.ts` no bot**:
+1. o import traz a **extensão `.ts` explícita** (nem o Node nem o ts-node
+   resolvem `.js` → `.ts`);
+2. **sem `enum`/`namespace`/parameter properties** — o Node usa *strip-only*.
+   Para liberar: `NODE_OPTIONS=--experimental-transform-types` (Node ≥ 22.7).
+
+**Ressalva**: o type stripping nativo só existe a partir do **22.18 / 23.6**.
+O `engines` permite Node ≥ 20 — nessa versão, importar `.ts` **quebra**.
+
+**Testes**: `tests/installer-git-drift.test.js` ganhou 2 testes que travam o
+`process.execPath` nos dois pontos (com o comentário filtrado, senão o próprio
+texto explicativo casaria a regex).
