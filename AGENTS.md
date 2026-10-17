@@ -10693,3 +10693,53 @@ quebrar. Chamar de "resolvido" o timbre sem esse arquivo seria mentira.
   `menu-layout` (1: `menufig` 18 vs 17) e `anti-seletiva` (10 ok / 22 falhas).
   `callp` às vezes sai com timeout do harness, mas as 14/33 asserções passam.
 
+## `!midiap` — transmite um VIDEO na call (set/out 2026) ✅
+Comando que transmite **vídeo** dentro da chamada de grupo (o `!callp` sobe a
+call; o `!musicap` toca áudio; o `!midiap` manda imagem+áudio do vídeo). Aceita
+**arquivo** (marcado), **fluxo** (vídeo baixado do WhatsApp) e **LINK**
+(YouTube e afins, via yt-dlp). Nada usa disco: o vídeo vai em pipe até o ffmpeg,
+que produz H.264 (access units) + PCM cru, alimentados em `feedLiveVideo` /
+`feedLiveAudio`.
+
+### O BUG DO `exit 183` — `--ffmpeg-location` (out/2026) ✅
+Sintoma: no caminho por **LINK**, o ffmpeg morria com **`exit 183`**
+(`Invalid data found when processing input`) e o usuário só via
+*"ffmpeg saiu com 183"*.
+
+**Causa medida**: sem `--ffmpeg-location` o **yt-dlp não acha o ffmpeg**, então
+não consegue muxar os formatos separados do YouTube (DASH: vídeo e áudio vêm em
+arquivos distintos). Nesse caso ele avisa *"the formats will be streamed one
+after the other"* e manda **vídeo e áudio um atrás do outro no stdout** — dado
+inválido para o ffmpeg que lê o `pipe:0`, que morre com 183.
+
+**Correção** (`dados/src/funcs/utils/midiapLink.js`):
+- `argumentosDoLink` passa **sempre** `--ffmpeg-location`,
+  `process.env.FFMPEG_PATH || 'ffmpeg'` (o mesmo fallback do resto do bot);
+  sem a flag o yt-dlp usa o `FFmpegFD` só quando encontra o ffmpeg sozinho.
+- **`--remux-video mp4` foi REMOVIDO**: é um **POST-PROCESSADOR**, e esses
+  trabalham em **ARQUIVO** (gravam `<nome>.temp.mp4` e renomeiam) — não se
+  aplicam a um pipe, e podiam gravar em disco num servidor apertado. O container
+  já vem mp4 pelo próprio `-f`.
+
+### O erro agora é legível (`midiap.js`)
+- O **stderr** do ffmpeg passou de `ignore` para **`pipe`** (sem ele o motivo da
+  falha ia para o vazio e sobrava só o número).
+- Novo **`motivosDoFfmpeg(code, stderr)`** traduz: `Invalid data found` / 183 →
+  *"O vídeo chegou corrompido ou incompleto"*; `No space left` → *"Sem espaço no
+  servidor"*; `403/404/HTTP error` → *"A fonte recusou o download"*; resto →
+  `Falha ao processar o vídeo (código N)`. O **detalhe técnico** (stderr cru)
+  vai para o **log**, não para o usuário.
+
+### Testes
+`tests/midiap.test.js` — os argumentos do link exigem `--ffmpeg-location`
+(o valor bate com `FFMPEG_PATH || 'ffmpeg'`) e **proíbem** o `--remux-video`.
+**Requisitos**: ffmpeg no PATH (ou `FFMPEG_PATH`) e yt-dlp para o caminho por
+link. No sandbox sem eles, a validação é a dos argumentos (pura).
+
+### Nota de processo
+O trabalho do `!midiap` nasceu na conversa *"👔 Investigar Callp e Callp
+Encerrar"*, que **morreu por estouro de contexto** (917k tokens > limite de 1M)
+deixando 3 arquivos **sem commit**. Recuperado e commitado em `e19e441`.
+Lição: em arquivo de ~2 MB com glifos, editar por
+`open(rb) → decode('utf-8') → replace → encode('utf-8')` e conferir
+`mojibake == 0` — o `file_editor` corrompe a codificação.
