@@ -584,10 +584,19 @@ await test('os argumentos do link pedem o video MUXADO no stdout', async () => {
   // cair no merge (`bv*+ba`) quando nao houver.
   includes(j, 'b[height<=', 'prefere um formato que ja tenha video+audio');
   includes(j, '+ba', 'cai no merge video+audio quando nao houver muxado');
-  includes(j, '--remux-video mp4', 'container que o ffmpeg le de um pipe');
+  // O `--ffmpeg-location` e' OBRIGATORIO: sem ele o yt-dlp nao muxa e manda
+  // video e audio um atras do outro no stdout -> o ffmpeg morre com 183.
+  // O `--remux-video` saiu: e' POST-PROCESSADOR (trabalha em arquivo), nao
+  // se aplica a um pipe e podia gravar em disco.
   includes(j, '--no-playlist', 'nao pega a playlist inteira');
   ok(args.includes('-o') && args.includes('-'), 'manda para o stdout (-o -), sem arquivo');
   ok(!j.includes('/tmp'), 'nao aponta para nenhum arquivo');
+  // Sem `--ffmpeg-location` o yt-dlp NAO muxa (era o exit 183). E' passado
+  // SEMPRE, com o mesmo fallback do resto do bot (FFMPEG_PATH ou 'ffmpeg').
+  const i = args.indexOf('--ffmpeg-location');
+  ok(i >= 0 && args[i + 1] === (process.env.FFMPEG_PATH || 'ffmpeg'),
+    'passa o caminho do ffmpeg (sem ele o yt-dlp nao muxa: exit 183)');
+  ok(!j.includes('--remux-video'), 'nao usa --remux-video (post-processador de arquivo)');
 });
 
 await test('o LINK e aceito pelo modulo como terceira fonte', () => {

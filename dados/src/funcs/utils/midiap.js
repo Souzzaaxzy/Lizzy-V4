@@ -450,7 +450,9 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
       // WhatsApp, sem passar por disco) ou `ignore` quando e' um arquivo.
       proc = spawn(binario(), args, {
         // O 4o descritor (audio) so' existe quando ha saida de audio.
-        stdio: [porPipe ? 'pipe' : 'ignore', 'pipe', 'ignore',
+        // O stderr vai para PIPE (nao `ignore`): e' dele que sai o motivo
+        // real da falha do ffmpeg.
+        stdio: [porPipe ? 'pipe' : 'ignore', 'pipe', 'pipe',
           temAudio ? 'pipe' : 'ignore']
       });
     } catch (e) {
@@ -523,6 +525,12 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
     // (transmissao so' com imagem). Nunca derruba o video.
     proc.stdio[3]?.on('error', () => { /* sem audio: so' imagem */ });
 
+    // Guarda o stderr para poder dizer POR QUE o ffmpeg falhou (sem isto o
+    // erro vira so' um numero: "ffmpeg saiu com 183").
+    let erroFfmpeg = '';
+    proc.stderr?.on('data', (c) => {
+      erroFfmpeg = (erroFfmpeg + c.toString()).slice(-800);
+    });
     proc.on('error', reject);
     proc.on('close', (code) => {
       // Fecha o ultimo access unit retido.
@@ -534,9 +542,42 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
       // Encerra o yt-dlp junto: sem isto ele seguiria baixando sozinho.
       try { estado.procLink?.kill('SIGKILL'); } catch { /* ok */ }
       if (code === 0 || estado.parado) resolve();
-      else reject(new Error('ffmpeg saiu com ' + code));
+      else {
+        // Traduz o codigo para algo que o dono entenda, sem perder o
+        // detalhe tecnico (que vai para o log).
+        const motivo = motivosDoFfmpeg(code, erroFfmpeg);
+        log(`ffmpeg saiu com ${code}: ${erroFfmpeg.trim().slice(-200)}`);
+        reject(new Error(motivo));
+      }
     });
   });
+}
+
+/**
+ * Traduz a saida do ffmpeg para uma frase util.
+ *
+ * Medido: o codigo **183** e' `Invalid data found when processing input` --
+ * o ffmpeg recebeu dado que nao entende (era o caso do yt-dlp mandando os
+ * formatos soltos, sem o `--ffmpeg-location`). O usuario nao deve ver
+ * "ffmpeg saiu com 183".
+ *
+ * @param {number} code
+ * @param {string} stderr
+ * @returns {string}
+ */
+function motivosDoFfmpeg(code, stderr = '') {
+  const erro = String(stderr);
+  if (/Invalid data found/i.test(erro)) {
+    return 'O vídeo chegou corrompido ou incompleto. Tente de novo.';
+  }
+  if (/No space left|Disk quota|quota exceeded/i.test(erro)) {
+    return 'Sem espaço no servidor.';
+  }
+  if (/Server returned 4|HTTP error|403|404/i.test(erro)) {
+    return 'A fonte recusou o download (link expirado ou bloqueado).';
+  }
+  if (code === 183) return 'O vídeo chegou corrompido ou incompleto. Tente de novo.';
+  return `Falha ao processar o vídeo (código ${code}).`;
 }
 
 /**

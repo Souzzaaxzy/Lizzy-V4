@@ -79,22 +79,42 @@ export async function acharYtDlp() {
  * Os argumentos do yt-dlp para mandar o video muxado no stdout.
  *
  * `-f` prefere um formato que JA' tenha video e audio juntos; o YouTube nao
- * tem, entao cai no merge (`bv*+ba`), que o yt-dlp faz com o ffmpeg.
- * `--remux-video mp4` garante o container que o ffmpeg le de um pipe.
+ * tem, entao cai no merge (`bv*+ba`) -- que o yt-dlp faz com o ffmpeg,
+ * STREAMANDO para o stdout (o `FFmpegFD`), sem arquivo temporario.
+ *
+ * NAO usar `--remux-video`: ele e' um POST-PROCESSADOR, e esses trabalham
+ * em ARQUIVO (gravam `<nome>.temp.mp4` e renomeiam). Como o alvo e' um pipe,
+ * o remux nao se aplica -- e era ele que podia gravar em disco num servidor
+ * apertado. O container ja' vem mp4 pelo proprio `-f`.
+ *
+ * ## O `--ffmpeg-location` e' OBRIGATORIO (era o bug do exit 183)
+ *
+ * Medido: sem ele o yt-dlp NAO acha o ffmpeg, entao nao consegue muxar os
+ * formatos separados do YouTube. Nesse caso ele avisa *"the formats will be
+ * streamed one after the other"* e manda video e audio **um atras do outro**
+ * no stdout -- dado invalido para o ffmpeg, que morre com
+ * `Invalid data found when processing input` (exit **183**).
+ *
+ * Passar o caminho do ffmpeg faz o yt-dlp usar o `FFmpegFD`, que muxa
+ * STREAMANDO direto para o stdout -- um arquivo valido, e sem disco.
  *
  * @param {string} url
  * @returns {string[]}
  */
 export function argumentosDoLink(url) {
-  return [
-    '--no-progress', '--no-warnings', '--no-playlist',
+  const args = ['--no-progress', '--no-warnings', '--no-playlist'];
+  // O yt-dlp precisa do ffmpeg para MUXAR (ver a doc acima). Passamos SEMPRE,
+  // com o mesmo fallback do resto do bot (FFMPEG_PATH ou 'ffmpeg' no PATH):
+  // sem a flag o yt-dlp manda os formatos em sequencia e o ffmpeg morre com 183.
+  args.push('--ffmpeg-location', process.env.FFMPEG_PATH || 'ffmpeg');
+  args.push(
     // Prefere muxado; senao o melhor video + melhor audio (o yt-dlp muxa).
     '-f', `b[height<=${ALTURA_MAX}]/bv*[height<=${ALTURA_MAX}]+ba/b`,
-    '--remux-video', 'mp4',
     // Um arquivo so' no stdout: o ffmpeg le como pipe:0.
     '-o', '-',
     url
-  ];
+  );
+  return args;
 }
 
 /**
