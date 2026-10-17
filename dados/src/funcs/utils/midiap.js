@@ -143,24 +143,6 @@ const MS_POR_FRAME = (FRAME_MOTOR / 16000) * 1000;   // 60 ms
 const FILA_MAX_FRAMES = 12;
 
 /**
- * Nivel alvo do buffer do MOTOR, em ms.
- *
- * E' o `resumeMs` do contrato dele (`getFeedWatermarksMs()`): *"resume once it
- * drains to `resumeMs`"*. Mantemos o buffer NESSE ponto — acima disso e'
- * latencia pura (MEDIDO: com o relogio adiantado o buffer ficava em 500 ms e
- * o audio saia atrasado).
- *
- * MEDIDO com o motor real, mantendo o alvo constante:
- *   - alvo 0  (entrega sempre que a fila tem): INSTAVEL — o descompasso vai a
- *     -19000 ms (o buffer nunca se forma e o video dispara na frente);
- *   - alvo 30: descompasso estavel em 20-60 ms;
- *   - alvo 60: descompasso estavel em 60 ms.
- * 30 e' o menor valor que se mantem estavel — abaixo dele o buffer nao
- * sustenta o ritmo. Configuravel por `MIDIAP_AUDIO_ALVO_MS`.
- */
-const AUDIO_ALVO_MS = Number.parseInt(process.env.MIDIAP_AUDIO_ALVO_MS || '30', 10);
-
-/**
  * Teto de espera do PREROLL, em ms.
  *
  * O preroll espera os DOIS fluxos ficarem prontos antes de comecar. Sem um
@@ -189,8 +171,12 @@ const PREROLL_FRAMES = Number.parseInt(process.env.MIDIAP_PREROLL_FRAMES || '3',
  * MEDIDO: alimentando sem olhar o buffer, 6 s de audio enchem os 750 ms e o
  * motor descarta **53 vezes** -- era o "cortando/travando" que se ouvia.
  * Com o backpressure: **zero descarte**.
+ *
+ * O `pauseMs` e' configuravel (`MIDIAP_AUDIO_ALVO_MS`) mas NAO pode descer
+ * abaixo do piso de dreno do motor (~100 ms): com um limiar menor o gate
+ * nunca reabre e a transmissao trava (MEDIDO).
  */
-const AUDIO_PAUSE_MS = 120;
+const AUDIO_PAUSE_MS = Number.parseInt(process.env.MIDIAP_AUDIO_ALVO_MS || '120', 10);
 const AUDIO_RESUME_MS = 60;
 
 /**
@@ -453,6 +439,12 @@ export async function transmitir({ grupo, callId, arquivo = null, fluxo = null, 
     // Tempo de MIDIA de audio ja' entregue ao motor (ms). E' o relogio que
     // libera o VIDEO — se o motor segura o audio, o video para junto.
     tempoAudioMs: 0,
+    // O que o OUVINTE ja' ouviu (entregue menos o buffer do motor). E' ESTE o
+    // relogio do video: se o buffer do motor enche, o som chega atrasado e o
+    // video espera junto (sincronia na percepcao, nao no envio).
+    ouvidoMs: null,
+    // Ultimo nivel lido do motor (para o discriminador do backpressure).
+    nivelAnterior: null,
     // Quando o proximo frame de audio e' devido (ms). Nasce no preroll.
     proximoDevidoMs: null,
     // Se o preroll ja' liberou a transmissao.
@@ -704,7 +696,12 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
         // diferenca e' entre "o video segue o relogio da parede" e "o video
         // segue o que o ouvinte ja' ouviu".
         const alvoMs = (indice / fps) * 1000;
-        if (estado.tempoAudioMs < alvoMs) break;   // o audio ainda nao chegou la'
+        // O que o OUVINTE ja' ouviu (nao o que foi entregue ao motor): se o
+        // jitter buffer dele estiver cheio, o som chega atrasado e o video
+        // tem de esperar junto, senao os dois desalinham na percepcao.
+        // Fallback para o entregue quando o motor nao reporta o buffer.
+        const ouvido = estado.ouvidoMs ?? estado.tempoAudioMs;
+        if (ouvido < alvoMs) break;   // o audio ainda nao chegou la'
         enviarFrame(cli, callId, filaVideo.shift(), carimbo, estado, log);
       }
     };
@@ -813,6 +810,10 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
         // conteudo que o ouvinte ja' tem.
         estado.tempoAudioMs = (estado.tempoAudioMs || 0) + (frame.length / TAXA_AUDIO) * 1000;
         if (typeof ms === 'number' && ms > 0) estado.nivelMs = ms;
+        // O que o OUVINTE ja' ouviu: o entregue menos o que ainda esta' no
+        // buffer do motor. E' neste ponto que o video tem de ser liberado —
+        // o ouvinte ve o frame junto com o som, nao com o que foi enviado.
+        estado.ouvidoMs = Math.max(0, estado.tempoAudioMs - (estado.nivelMs || 0));
       } catch (e) {
         log('feedLiveAudio: ' + (e?.message || e));
       }
@@ -851,13 +852,14 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
     // latencia REAL que se ouve. Adiantar o relogio nao "alinha": ele ENCHE o
     // buffer, e buffer cheio e' atraso puro.
     //
-    // Agora o alvo e' o proprio nivel reportado pelo motor:
-    //   - acima de AUDIO_ALVO_MS: nao entrega (deixa drenar);
-    //   - abaixo de AUDIO_RESUME_MS: entrega para manter o fio.
+    // Agora o alvo e' o proprio nivel reportado pelo motor, com a HISTERESE
+    // do contrato dele:
+    //   - em `AUDIO_PAUSE_MS` (120 ms): para de entregar (deixa drenar);
+    //   - em `AUDIO_RESUME_MS` (60 ms): volta a entregar.
     //
-    // O alvo e' **60 ms** (um frame) — o minimo que mantem o buffer com
-    // conteudo. E' o que a doc chama de `resumeMs`, e e' o ponto onde o audio
-    // esta' colado no video.
+    // O limiar de pausa NAO pode descer abaixo do piso de dreno do motor
+    // (~100 ms): abaixo dele o gate nunca reabre e a transmissao trava
+    // (MEDIDO: alvo 30 -> 0 ms entregues e o atraso crescendo sem parar).
     // O RITMO: no maximo 1 frame a cada MS_POR_FRAME (60 ms) de relogio.
     //
     // E' o que o motor consome (16,7 frames/s). O timer roda a cada 10 ms so'
@@ -898,17 +900,43 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
         if (typeof atual === 'number') { nivel = atual; estado.nivelMs = atual; }
       } catch { /* segue com o ultimo valor */ }
 
-      // ## Se a fila passou do teto, o audio esta' ATRASADO: descarta o antigo
+      // ## O BACKPRESSURE: o motor so' esta' segurando se o nivel esta' MUDANDO
       //
-      // Isto SO' vale quando o motor esta' SEGURANDO a entrega (o nivel no
-      // alvo): e' quando a fila cresce por atraso real. No INICIO (motor
-      // ocioso) a fila pode estar funda porque o ffmpeg produziu em rajada —
-      // descartar ali jogaria fora audio BOM e deixaria o audio ADIANTADO,
-      // que e' o oposto do que se quer (MEDIDO: 2 frames = 120 ms perdidos no
-      // arranque, e o video nascia 40 ms na frente).
+      // O contrato do motor e' `getFeedWatermarksMs()`: *"pause a producer at
+      // pauseMs (120 ms), resume at resumeMs (60 ms)"*. A ideia e' pausar a
+      // entrega quando o buffer dele enche.
       //
-      // O teto e' o mesmo `FILA_MAX_FRAMES`; o gate do nivel vem primeiro.
-      if (nivel >= AUDIO_ALVO_MS) {
+      // ## Por que um LIMIAR no nivel NAO funciona (MEDIDO)
+      //
+      // O `getLiveBufferMs` do motor tem um PISO: ele reporta o que esta' A
+      // FRENTE do consumidor e nao desce abaixo de ~100 ms. Qualquer limiar
+      // abaixo do piso trava a entrega PARA SEMPRE: o audio para de sair, o
+      // `tempoAudioMs` congela, o video congela junto e o delay CRESCE sem
+      // limite (o relato do dono). MEDIDO com um motor de piso:
+      //
+      //   piso  limiar  entregue em 15 s   resultado
+      //   100   30      0 ms               atraso crescendo 18 s
+      //   150   120     840 ms (0.06x)     atraso crescendo 8 s
+      //   100   120     15240 ms (1.006x)  estavel
+      //
+      // ## O discriminador: o nivel esta' MUDANDO?
+      //
+      // Um nivel CONSTANTE no watermark e' o piso do motor — nao e' backpressure,
+      // e pausar ali e' o que trava. O motor esta' segurando DE VERDADE quando
+      // o nivel CRESCE (ele esta' enchendo porque nao consome no ritmo).
+      //
+      // Isso vale para qualquer piso: constante -> entrega em 1x (correto);
+      // crescendo -> pausa (backpressure real).
+      const nivelAnterior = estado.nivelAnterior ?? nivel;
+      const nivelMudou = Math.abs(nivel - nivelAnterior) > 2;
+      estado.nivelAnterior = nivel;
+      const segurando = nivel >= AUDIO_PAUSE_MS && nivelMudou;
+      if (segurando) {
+        // ## Se a fila passou do teto, o audio esta' ATRASADO: descarta o antigo
+        //
+        // Isto SO' vale com o motor segurando (a fila cresce por atraso real).
+        // No INICIO (motor ocioso) a fila pode estar funda porque o ffmpeg
+        // produziu em rajada — descartar ali jogaria fora audio BOM.
         while (estado.fila.length > FILA_MAX_FRAMES) {
           estado.fila.shift();
           estado.audioDescartado = (estado.audioDescartado || 0) + 1;
@@ -916,7 +944,7 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
           // ficaria devendo e o ritmo travaria.
           estado.proximoDevidoMs = Math.min(estado.proximoDevidoMs, Date.now());
         }
-        return;   // motor segurando: nao entrega (deixa drenar)
+        return;   // motor segurando de verdade: nao entrega (deixa drenar)
       }
 
       const antes = estado.amostras || 0;
