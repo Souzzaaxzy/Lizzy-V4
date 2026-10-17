@@ -11025,3 +11025,59 @@ o arquivo inteiro** (o original usa `indent=4`; o padrão do `json.dump` é 2) �
 o diff virava ~7900 linhas em vez de 16. O certo é **partir do conteúdo do
 commit** (`git show HEAD~1:package-lock.json`), remover a chave e gravar com
 `indent=4`. Confira sempre o `--stat` antes de commitar.
+
+## 🚨 CALL: "CONECTANDO INFINITO" — os convidados iam como **PN**, o motor exige **LID** (out/2026) ✅
+O dono apontou o rumo certo: *"não é problema no midiap, e sim no motor da
+call"*. Era mesmo — e a causa é a **forma do jid** na lista de convidados.
+
+### O que o motor exige (lido no pacote, não suposto)
+O contrato do `startCall` diz, literalmente, que `participants[].jid` é
+*"The account to ring, a **LID**"* (`@zapo-js/voip/dist/types.d.ts:151`).
+E o `resolvePeerLid` — que converte **PN → LID** — **só roda no 1:1**
+(`WaCallManager.startCall`); o **`startGroupCall` usa o jid cru**.
+
+Medido no próprio motor:
+```
+groupParticipantAccountKey('111…@lid')            -> '111…@lid'
+groupParticipantAccountKey('111…@s.whatsapp.net') -> '111…@s.whatsapp.net'
+```
+São **chaves diferentes**. Com PN, o roster que o servidor manda (por LID)
+**nunca casa** com quem entrou.
+
+### Por que isso prende a call em `connecting`
+A cadeia (lida no `WaCallMediaSession`/`WaGroupRoster`):
+
+```
+offer → Ringing → [roster com OUTRO Connected] → Connecting → mídia → Active
+```
+
+O comentário do próprio pacote explica: *"The creator hears no `<accept>`: a
+roster listing somebody else connected is the join."* Ou seja: **quem CRIA a
+call só sai de `connecting` quando OUTRA pessoa aparece `Connected` no
+roster** — e o roster é casado por **chave de conta** (LID). Mandando PN, esse
+casamento nunca acontece.
+
+### O defeito
+O `subirCallDoGrupo` montava os convidados com `part.id || part.phoneNumber`.
+Em grupo que **não** está em modo LID o `id` do participante vem como **PN** —
+então a lista ia por PN e a call nunca saía de "conectando".
+
+### A correção
+A ordem passou a ser a **mesma que o resto do bot já usa**
+(`extractParticipantId`): **`lid` primeiro**, depois `id`/`phoneNumber`. O
+`:device` sai (o motor resolve os devices sozinho).
+
+### Testes — `tests/callp.test.js` (19 testes / 46 asserções, 0 falhas)
++2: *"convida por LID"* (forma padrão) e *"convida por LID **mesmo com PN no
+`id`** do metadata"* — este reproduz o bug. A fixture ganhou **`idEhPn`** para
+montar o metadata na forma real (`id` = PN, `lid` no campo próprio); a fixture
+padrão punha o LID no `id` e **mascarava** o defeito.
+**Verificado**: revertendo a ordem, o teste **reprova** — manda 5 convidados
+por PN e falha 2 asserções.
+
+### Lição de método
+A fixture era **mais permissiva que a realidade** (punha LID onde o WhatsApp
+põe PN), então o teste passava com o código quebrado. É o mesmo erro de método
+já registrado no `require` em ESM e no `sendMessage` da edição de pagamento:
+**um dublê mais generoso que a produção esconde o defeito**. O certo é a
+fixture refletir a forma REAL do dado — inclusive nos casos incômodos.
