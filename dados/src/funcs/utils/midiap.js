@@ -497,6 +497,12 @@ function comTimeout(promessa, ms) {
   ]);
 }
 
+/** A pasta do cache do `!midiap` (dentro do cache da call). */
+function pastaDoMidiap() {
+  const raiz = process.env.CALL_CACHE_DIR || path.join(DATABASE_DIR, 'call-cache');
+  return path.join(raiz, 'midiap');
+}
+
 /**
  * Caminho do cache para o video baixado.
  *
@@ -508,8 +514,40 @@ function comTimeout(promessa, ms) {
  * @returns {string}
  */
 export function caminhoDoVideo(grupo, ext = '.mp4') {
-  const raiz = process.env.CALL_CACHE_DIR || path.join(DATABASE_DIR, 'call-cache');
-  const dir = path.join(raiz, 'midiap');
+  const dir = pastaDoMidiap();
   fs.mkdirSync(dir, { recursive: true });
   return path.join(dir, `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}${ext}`);
+}
+
+/**
+ * Apaga os videos deixados no cache.
+
+ * ## Por que existe
+
+ * O arquivo do video sai no `finally` do comando -- mas so' enquanto o
+ * processo vive. Se o bot CAIR no meio de uma transmissao (queda de energia,
+ * `SIGKILL`, reinicio), o arquivo fica no disco PARA SEMPRE: ninguem mais
+ * conhece aquele caminho. Como o `call-cache` nao entra no backup nem no
+ * git, ele acumularia em silencio -- e um filme sao centenas de MB.
+
+ * Chamada no boot (`connect.js`): nada do midiap sobrevive a um reinicio,
+ * porque o estado das transmissões tambem e' em memoria.
+
+ * @returns {number} quantos bytes foram liberados
+ */
+export function limparCacheMidiap() {
+  let liberado = 0;
+  try {
+    const dir = pastaDoMidiap();
+    if (!fs.existsSync(dir)) return 0;
+    for (const nome of fs.readdirSync(dir)) {
+      const p = path.join(dir, nome);
+      try {
+        const st = fs.statSync(p);
+        if (st.isFile()) liberado += st.size;
+        fs.rmSync(p, { recursive: true, force: true });
+      } catch { /* segue */ }
+    }
+  } catch { /* nada a fazer */ }
+  return liberado;
 }

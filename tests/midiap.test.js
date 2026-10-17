@@ -500,6 +500,63 @@ if (TEM_FFMPEG) {
 }
 
 // ============================================================================
+// 1c) O DISCO: nada de filme acumulado
+// ============================================================================
+
+await test('o video NAO fica no disco depois da transmissao', async () => {
+  // O arquivo e' baixado, usado e apagado -- nao ha acumulo de filme.
+  const g = 'disco@g.us';
+  const p = midiap.caminhoDoVideo(g, '.mp4');
+  fs.writeFileSync(p, Buffer.alloc(2048));
+  ok(fs.existsSync(p), 'o arquivo existe enquanto a transmissao roda');
+
+  // O `finally` do comando apaga; aqui se mede o caminho do modulo.
+  fs.unlinkSync(p);
+  ok(!fs.existsSync(p), 'sai do disco no fim');
+});
+
+await test('o comando apaga o video no `finally` (sucesso, erro e parar)', () => {
+  const src = fs.readFileSync(path.join(HERE, '..', 'dados/src/index.js'), 'utf-8');
+  const i = src.indexOf("case 'midiap':");
+  const bloco = src.slice(i, src.indexOf("case 'antifantasma':", i));
+  includes(bloco, 'fs.unlinkSync(arquivo)', 'apaga o arquivo no finally');
+  // E o `finally` cobre os tres desfechos (o `catch` nao retorna antes dele).
+  const iFinally = bloco.indexOf('} finally {');
+  ok(iFinally > 0, 'o `finally` existe');
+  ok(bloco.indexOf('fs.unlinkSync(arquivo)') > iFinally, 'a limpeza esta DENTRO do finally');
+});
+
+await test('limparCacheMidiap apaga os orfaos e NAO toca o resto do cache', () => {
+  // Simula o bot caindo no meio: arquivos que ninguem mais conhece.
+  const g = 'orfaos@g.us';
+  const a = midiap.caminhoDoVideo(g, '.mp4');
+  const b = midiap.caminhoDoVideo(g, '.mp4');
+  fs.writeFileSync(a, Buffer.alloc(4096));
+  fs.writeFileSync(b, Buffer.alloc(4096));
+
+  // Um arquivo em OUTRA pasta do cache (o audio da call): nao pode sair.
+  const raiz = process.env.CALL_CACHE_DIR;
+  const outro = path.join(raiz, 'audio-do-grupo.wav');
+  fs.writeFileSync(outro, Buffer.alloc(64));
+
+  const liberado = midiap.limparCacheMidiap();
+  ok(liberado >= 8192, `liberou os orfaos (${liberado} bytes)`);
+  ok(!fs.existsSync(a) && !fs.existsSync(b), 'os dois orfaos sairam');
+  ok(fs.existsSync(outro), 'o audio de outra pasta SOBREVIVEU');
+  ok(midiap.limparCacheMidiap() === 0, 'chamar de novo e seguro (idempotente)');
+  fs.unlinkSync(outro);
+});
+
+await test('o BOOT limpa o cache do midiap (senao acumula em silencio)', () => {
+  // O `call-cache` nao entra no backup nem no git: um orfao ficaria para
+  // sempre. Como o estado das transmissoes e' em memoria, nada dali
+  // sobrevive a um reinicio.
+  const c = fs.readFileSync(path.join(HERE, '..', 'dados/src/connect.js'), 'utf-8');
+  includes(c, 'limparCacheMidiap', 'chama a limpeza no boot');
+  includes(c, 'Cache do !midiap limpo no boot', 'avisa no log o quanto liberou');
+});
+
+// ============================================================================
 // 2) O COMANDO
 // ============================================================================
 

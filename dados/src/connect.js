@@ -518,6 +518,20 @@ async function initializeOptimizedCaches(AbyssSock) {
     try {
         await performanceOptimizer.initialize();
 
+        // O cache do `!midiap` guarda o VIDEO baixado (um filme sao centenas
+        // de MB). Ele sai no `finally` do comando, mas se o bot CAIR no meio
+        // de uma transmissao o arquivo fica orfao PARA SEMPRE -- ninguem mais
+        // conhece aquele caminho. Como o `call-cache` nao entra no backup nem
+        // no git, ele acumularia em silencio. O estado das transmissoes e' em
+        // memoria, entao nada dali sobrevive a um reinicio.
+        try {
+            const { limparCacheMidiap } = await import('./funcs/utils/midiap.js');
+            const liberado = limparCacheMidiap?.() || 0;
+            if (liberado > 0) {
+                console.log(`🧹 Cache do !midiap limpo no boot: ${(liberado / 1048576).toFixed(1)} MB liberados`);
+            }
+        } catch { /* melhor seguir sem limpar do que nao subir */ }
+
         // Inicializa índice de captcha para busca rápida
         const requestCaptchaMsg = async (dataCaptcha) => {
             /*
