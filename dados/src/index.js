@@ -41019,33 +41019,67 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
           if (!isGroup) return reply('🛎️ Este comando só funciona em grupos!');
 
           const hoje = resumoDeHoje(from, sender);
-          const lista = mencoesDeHoje(from, sender);
           const sub = (args[0] || '').toLowerCase();
           const alvoArg = args.slice(1).join(' ').trim();
+
+          // ─── helpers do layout (as MESMAS primitivas dos menus) ───
+          const botNome = nomebot || 'Bot';
+          const cabeca = (titulo, emoji = '🛎️') =>
+            `╭━━━꧁༺ ✦ ${botNome} ✦ ༻꧂━━━╮\n` +
+            `┃ ${emoji} ${boldLayout(titulo)}\n` +
+            `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n`;
+          const horaDe = (ms) => new Date(ms).toLocaleTimeString('pt-BR', {
+            timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit',
+          });
+          // O `de` costuma ser um LID, e o LID NAO contem o numero de telefone
+          // (namespaces diferentes). O resolvedor unico do bot acha o NOME do
+          // contato (agenda > notify > metadata), com o numero como fallback.
+          const nomeDe = async (id) => {
+            try {
+              const n = await resolverNomeContato(id, {
+                nazu, metadata: groupMetadata, from,
+              });
+              return n || `@${String(id).split('@')[0]}`;
+            } catch {
+              return `@${String(id).split('@')[0]}`;
+            }
+          };
 
           // ─── !mencoes marcar <n> ───
           if (sub === 'marcar' || sub === 'responder') {
             const n = Number.parseInt(args[1], 10);
             if (!Number.isInteger(n) || n < 1) {
-              return reply(`ℹ️ Use: *${groupPrefix}mencoes marcar <número>*\n\nEx.: ${groupPrefix}mencoes marcar 1`);
+              return reply(
+                cabeca('MENÇÕES') + '\n' +
+                `│ ℹ️ Use: *${groupPrefix}mencoes marcar <número>*\n` +
+                `│ 📌 Ex.: ${groupPrefix}mencoes marcar 1\n` +
+                fecharCategoria()
+              );
             }
             const reg = registroPorIndice(from, sender, n);
             if (!reg) {
-              return reply(`❌ Não achei a menção *#${n}* de hoje.\n\nUse *${groupPrefix}mencoes* para ver a lista.`);
+              return reply(
+                cabeca('MENÇÕES') + '\n' +
+                `│ ❌ Não achei a menção *#${n}* de hoje.\n` +
+                `│ 💡 Use *${groupPrefix}mencoes* para ver a lista.\n` +
+                fecharCategoria()
+              );
             }
             // Cita a mensagem ORIGINAL (a que te marcou). O objeto vem do
-            // `messagesCache` do bot — e' a mensagem completa, que e' o que o
+            // `messagesCache` do bot  —  e' a mensagem completa, que e' o que o
             // `quoted` da fork exige.
             const cacheKey = `${from}_${reg.id}`;
             const original = messagesCache?.get?.(cacheKey);
             if (!original?.message) {
               return reply(
-                `❌ Não consegui recuperar a mensagem *#${n}*.\n\n` +
-                `_Ela pode ter saído do cache do bot (mensagens muito antigas)._`,
+                cabeca('MENÇÕES') + '\n' +
+                `│ ❌ Não consegui recuperar a mensagem *#${n}*.\n` +
+                `│ _Ela pode ter saído do cache do bot._\n` +
+                fecharCategoria(),
                 { noQuote: true }
               );
             }
-            await nazu.sendMessage(from, { text: '.' }, { quoted: original });
+            await nazu.sendMessage(from, { text: 'Aqui está.' }, { quoted: original });
             return;
           }
 
@@ -41053,22 +41087,28 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
           if (!sub) {
             if (!hoje.length) {
               return reply(
-                `🛎️ *MENÇÕES DE HOJE*\n\n` +
-                `_Ninguém te marcou hoje ainda._\n\n` +
-                `💡 Quando alguém te marcar, aparece aqui automaticamente.`
+                cabeca('MENÇÕES DE HOJE') + '\n' +
+                `│ 💤 Ninguém te marcou hoje ainda.\n` +
+                `│ 💡 Quando alguém te marcar, aparece aqui.\n` +
+                fecharCategoria()
               );
             }
             const total = hoje.reduce((a, r) => a + r.total, 0);
+            const nomes = await Promise.all(hoje.map((r) => nomeDe(r.de)));
             const linhas = hoje.map((r, i) => {
-              const quem = r.deNome || `@${r.de.split('@')[0]}`;
-              return `${i + 1}. ${quem} — *${r.total}x*`;
+              const medalha = i === 0 ? '🥇' : (i === 1 ? '🥈' : (i === 2 ? '🥉' : '👤'));
+              return `│ ${medalha} *${i + 1}º* ${nomes[i]}\n│     🛎️ marcou *${r.total}x*`;
             });
             const texto =
-              `🛎️ *MENÇÕES DE HOJE*\n\n` +
-              `👤 Você foi marcado *${total}x* por *${hoje.length}* pessoa(s):\n\n` +
-              linhas.join('\n') +
-              `\n\n🔎 *${groupPrefix}mencoes <nome/número>* — ver as mensagens\n` +
-              `ℹ️ *${groupPrefix}mencoes marcar <n>* — voltar na mensagem`;
+              cabeca('MENÇÕES DE HOJE') + '\n' +
+              `┃ 👤 Você foi marcado *${total}x*\n` +
+              `┃ 👥 Por *${hoje.length}* pessoa(s)\n` +
+              `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n\n` +
+              abrirCategoria('QUEM TE MARCOU', '🛎️') + '\n' +
+              linhas.join('\n') + '\n' +
+              fecharCategoria() + '\n\n' +
+              `│ 🔎 *${groupPrefix}mencoes <nome/número>*\n` +
+              `│ ℹ️ *${groupPrefix}mencoes marcar <n>*`;
             return reply(texto, { mentions: hoje.map((r) => r.de) });
           }
 
@@ -41079,17 +41119,20 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
           if (/^\d+$/.test(sub) && sub.length <= 3) {
             const reg = registroPorIndice(from, sender, sub);
             if (!reg) {
-              return reply(`❌ Não achei a menção *#${sub}* de hoje.`);
+              return reply(
+                cabeca('MENÇÕES') + '\n' +
+                `│ ❌ Não achei a menção *#${sub}* de hoje.\n` +
+                fecharCategoria()
+              );
             }
-            const hora = new Date(reg.em).toLocaleTimeString('pt-BR', {
-              timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit',
-            });
+            const nome = await nomeDe(reg.de);
             const texto =
-              `🛎️ *MENÇÃO #${sub}*\n\n` +
-              `👤 De: ${reg.deNome || `@${reg.de.split('@')[0]}`}\n` +
-              `🕒 Às: ${hora}\n` +
-              (reg.texto ? `💬 Mensagem: ${reg.texto}\n` : '') +
-              `\nℹ️ *${groupPrefix}mencoes marcar ${sub}* — voltar nela`;
+              cabeca(`MENÇÃO #${sub}`) + '\n' +
+              `┃ 👤 De: ${nome}\n` +
+              `┃ 🕒 Às: ${horaDe(reg.em)}\n` +
+              (reg.texto ? `┃ 💬 ${reg.texto}\n` : '') +
+              `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n\n` +
+              `│ ℹ️ *${groupPrefix}mencoes marcar ${sub}*` + '—' + ` voltar nela`;
             return reply(texto, { mentions: [reg.de] });
           }
 
@@ -41103,22 +41146,26 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
           const pessoa = acharNoResumo(hoje, termo, telefonesDe);
           if (!pessoa) {
             return reply(
-              `❌ Ninguém com *${termo}* te marcou hoje.\n\n` +
-              `Use *${groupPrefix}mencoes* para ver quem te marcou.`
+              cabeca('MENÇÕES') + '\n' +
+              `│ ❌ Ninguém com *${termo}* te marcou hoje.\n` +
+              `│ 💡 Use *${groupPrefix}mencoes* para ver quem te marcou.\n` +
+              fecharCategoria()
             );
           }
-          const horaDe = (ms) => new Date(ms).toLocaleTimeString('pt-BR', {
-            timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit',
-          });
+          const nomePessoa = await nomeDe(pessoa.de);
           const msgs = pessoa.registros.map((r) => {
-            const trecho = r.texto ? ` — ${r.texto}` : '';
-            return `• ${horaDe(r.em)}${trecho}`;
+            const trecho = r.texto ? `\n│     💬 ${r.texto}` : '';
+            return `│ 🕒 ${horaDe(r.em)}${trecho}`;
           });
           const texto =
-            `🔎 *MENÇÕES DE ${(pessoa.deNome || `@${pessoa.de.split('@')[0]}`).toUpperCase()}*\n\n` +
-            `📊 Total hoje: *${pessoa.total}x*\n\n` +
-            msgs.join('\n') +
-            `\n\nℹ️ *${groupPrefix}mencoes marcar <n>* — voltar numa delas`;
+            cabeca('MENÇÕES DE') + '\n' +
+            `┃ 👤 ${nomePessoa}\n` +
+            `┃ 🛎️ Marcou você *${pessoa.total}x* hoje\n` +
+            `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n\n` +
+            abrirCategoria('AS MENSAGENS', '💬') + '\n' +
+            msgs.join('\n') + '\n' +
+            fecharCategoria() + '\n\n' +
+            `│ ℹ️ *${groupPrefix}mencoes marcar <n>*` + '—' + ` voltar numa delas`;
           return reply(texto, { mentions: [pessoa.de] });
         } catch (e) {
           console.error('[MENCOES] erro:', e?.message || e);

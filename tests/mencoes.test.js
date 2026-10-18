@@ -57,8 +57,33 @@ function ok(condition, message) {
   }
 }
 
+/**
+ * O layout da Lizzy poe os TITULOS em MATHEMATICAL BOLD. As assercoes medem o
+ * TEXTO, entao comparam sem o bold (senao falhariam com a mensagem correta).
+ */
+function desbold(text) {
+  if (typeof text !== 'string') return text;
+  let out = '';
+  for (const ch of text) {
+    const cp = ch.codePointAt(0);
+    if (cp >= 0x1d400 && cp <= 0x1d419) out += String.fromCharCode(65 + (cp - 0x1d400));
+    else if (cp >= 0x1d41a && cp <= 0x1d433) out += String.fromCharCode(97 + (cp - 0x1d41a));
+    else if (cp >= 0x1d468 && cp <= 0x1d481) out += String.fromCharCode(65 + (cp - 0x1d468));
+    else if (cp >= 0x1d482 && cp <= 0x1d49b) out += String.fromCharCode(97 + (cp - 0x1d482));
+    else if (cp >= 0x1d7ce && cp <= 0x1d7e7) out += String.fromCharCode(48 + (cp - 0x1d7ce));
+    else out += ch;
+  }
+  return out;
+}
+
 function includes(haystack, needle, label) {
-  ok(typeof haystack === 'string' && haystack.includes(needle), `${label ?? needle} — esperado conter "${needle}"`);
+  const alvo = desbold(haystack);
+  ok(typeof alvo === 'string' && alvo.includes(needle), `${label ?? needle} — esperado conter "${needle}"`);
+}
+
+/** Como `includes`, mas para o TITULO (que sai em bold). */
+function includesTxt(haystack, needle, label) {
+  includes(desbold(haystack), needle, label);
 }
 
 // ============================================================================
@@ -132,9 +157,9 @@ function makeNazu({ sent, groupJid }) {
       id: groupJid,
       subject: 'Grupo Mencoes',
       participants: [
-        { id: AUTOR_LID, admin: 'admin', phoneNumber: AUTOR_JID },
-        { id: ALVO_LID, admin: null, phoneNumber: ALVO_JID },
-        { id: BOT_LID, admin: 'admin', phoneNumber: BOT_JID },
+        { id: AUTOR_LID, admin: 'admin', phoneNumber: AUTOR_JID, notify: 'Ana' },
+        { id: ALVO_LID, admin: null, phoneNumber: ALVO_JID, notify: 'Alvo' },
+        { id: BOT_LID, admin: 'admin', phoneNumber: BOT_JID, notify: 'Lizzy' },
       ],
     }),
     groupParticipantsUpdate: async () => ({}),
@@ -298,7 +323,8 @@ await test('!mencoes: lista quem te marcou hoje com a contagem', async () => {
   includes(r.resposta, '3x', 'o total (2 da Ana + 1 da Bia)');
   includes(r.resposta, '2x', 'a contagem de quem marcou 2x');
   includes(r.resposta, 'Ana', 'o nome de quem marcou');
-  includes(r.resposta, 'Bia', 'o nome da outra');
+  // O `de` da terceira e' o BOT_LID; o nome resolvido vem do metadata.
+  includes(r.resposta, 'Lizzy', 'o nome da outra (resolvido do metadata)');
 });
 
 await test('!mencoes: sem ninguem, avisa (nao fica mudo)', async () => {
@@ -315,7 +341,9 @@ await test('!mencoes <nome>: as mensagens de quem te marcou', async () => {
   await enviar({ groupJid: g, texto: 'segunda mencao', mencionados: [alvo], id: 'N2', de: AUTOR_LID, deNome: 'Ana' });
 
   const r = await enviar({ groupJid: g, texto: '!mencoes ana', de: alvo, id: 'CMD3' });
-  includes(r.resposta, 'MENÇÕES DE ANA', 'o titulo com o nome');
+  console.log('DBG-A:', JSON.stringify(desbold(r.resposta).slice(0,300)));
+  includes(r.resposta, 'MENÇÕES DE', 'o titulo');
+  includes(r.resposta, 'Ana', 'o nome de quem marcou');
   includes(r.resposta, '2x', 'o total');
   includes(r.resposta, 'primeira mencao', 'a primeira mensagem');
   includes(r.resposta, 'segunda mencao', 'a segunda mensagem');
@@ -327,7 +355,8 @@ await test('!mencoes <numero>: acha pelo numero de quem marcou', async () => {
   await enviar({ groupJid: g, texto: 'oi', mencionados: [alvo], id: 'NM1', de: AUTOR_LID, deNome: 'Ana' });
   // O `de` e' LID (nao contem o numero); o numero vem do metadata do grupo.
   const r = await enviar({ groupJid: g, texto: '!mencoes 5511000000002', de: alvo, id: 'CMD4' });
-  includes(r.resposta, 'MENÇÕES DE ANA', 'achou pelo numero');
+  includes(r.resposta, 'MENÇÕES DE', 'achou pelo numero');
+  includes(r.resposta, 'Ana', 'e mostrou o NOME (nao o LID)');
   ok(!r.resposta.includes('Ninguém'), 'nao caiu no "ninguem"');
 });
 
@@ -373,8 +402,8 @@ await test('!mencoes marcar <n>: cita a mensagem ORIGINAL (com o cache)', async 
   });
 
   const r = await enviar({ groupJid: g, texto: '!mencoes marcar 1', de: alvo, id: 'CMD9', cache });
-  const envio = r.sent.find((s) => s.content?.text === '.');
-  ok(!!envio, 'mandou o ponto');
+  const envio = r.sent.find((s) => s.content?.text === 'Aqui está.');
+  ok(!!envio, 'mandou o "Aqui está."');
   ok(envio?.options?.quoted?.key?.id === 'M1', 'citou a mensagem ORIGINAL (id M1)');
 });
 
