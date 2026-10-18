@@ -674,7 +674,9 @@ await test('o gate do nivel NAO trava com o PISO do motor (a regressao do delay)
   const v = md.indexOf('estado.bombearVideo');
   // O video segue a POSICAO DE CONTEUDO do audio (avanca na entrega E no
   // descarte): quando o audio pula para frente, o video pula junto.
-  includes(md.slice(v, v + 2600), 'estado.posicaoAudioMs', 'o video segue a posicao de conteudo');
+  // O video segue o que o OUVINTE JA' OUVIU (posicao de conteudo menos o
+  // buffer do motor) e' o que centraliza os dois sem atraso.
+  includes(md.slice(v, v + 3600), 'posicaoOuvidaMs', 'o video segue o que o ouvinte ja ouviu');
 });
 
 await test('o TETO da fila vale SEMPRE (o backlog do engasgo nao fica preso)', () => {

@@ -154,6 +154,33 @@ const MS_POR_FRAME = (FRAME_MOTOR / 16000) * 1000;   // 60 ms
 const FILA_MAX_FRAMES = 14;
 
 /**
+ * Teto da fila de VIDEO, em frames.
+ *
+ * A fila do video NAO tinha teto: se o motor segura o video (ele so' abre o
+ * stream num keyframe e devolve `0` ate' la'), os access units continuavam
+ * chegando do ffmpeg e a fila crescia sem limite " e o video atrasava cada vez
+ * mais, sem nunca voltar.
+ *
+ * 30 frames = ~1,2 s a 25 fps: espaco para o motor abrir o stream (o keyframe
+ * vem a cada 1 s, o `-g fps`) e absorver o jitter, sem virar atraso puro.
+ * Acima disso descartamos o MAIS ANTIGO (o video pula para frente, como o
+ * audio no catch-up).
+ */
+const FILA_MAX_FRAMES_VIDEO = Number.parseInt(process.env.MIDIAP_FILA_VIDEO || '30', 10);
+
+/**
+ * Atraso maximo do video em relacao ao audio ouvido, em ms.
+ *
+ * Quando o audio PULA para frente (catch-up do atraso acumulado), o video
+ * tambem precisa pular. Sem isto ele "alcanca" enviando todos os frames da
+ * fila de uma vez " e dispara na frente (MEDIDO: 3755 ms).
+ *
+ * 200 ms = ~5 frames a 25 fps: o suficiente para absorver a variacao normal,
+ * pequeno o bastante para nao virar atraso percebido.
+ */
+const VIDEO_ATRASO_MAX_MS = Number.parseInt(process.env.MIDIAP_VIDEO_ATRASO || '200', 10);
+
+/**
  * Teto de espera do PREROLL, em ms.
  *
  * O preroll espera os DOIS fluxos ficarem prontos antes de comecar. Sem um
@@ -471,9 +498,11 @@ export async function transmitir({ grupo, callId, arquivo = null, fluxo = null, 
     // Tempo de MIDIA de audio ja' entregue ao motor (ms). E' o relogio que
     // libera o VIDEO — se o motor segura o audio, o video para junto.
     tempoAudioMs: 0,
-    // POSICAO DE CONTEUDO do audio: avanca na entrega E no descarte. E' o
-    // relogio do video (os dois pulam juntos quando o atraso e' cortado).
+    // POSICAO DE CONTEUDO do audio: avanca na entrega E no descarte.
     posicaoAudioMs: 0,
+    // O que o OUVINTE ja' tem no ouvido (conteudo menos o buffer do motor).
+    // E' o RELOGIO DO VIDEO: centraliza os dois sem atraso.
+    posicaoOuvidaMs: 0,
     // Quando o proximo frame de audio e' devido (ms). Nasce no preroll.
     proximoDevidoMs: null,
     // Se o preroll ja' liberou a transmissao.
@@ -708,28 +737,48 @@ async function alimentar({ cli, callId, entrada, fonte, estado, fps, temAudio = 
       if (estado.parado) return;
       // Antes do PREROLL nada sai: esperamos os DOIS fluxos ficarem prontos.
       if (!estado.prerollFeito) return;
+      // Teto: se a fila passou do limite, o video esta' atrasado " descarta o
+      // MAIS ANTIGO para ele voltar ao tempo real (mesmo criterio do audio).
+      while (filaVideo.length > FILA_MAX_FRAMES_VIDEO) {
+        filaVideo.shift();
+        estado.videoDescartado = (estado.videoDescartado || 0) + 1;
+      }
       while (filaVideo.length) {
+        // ## O relogio do video: o som (quando ha') ou a parede (quando nao ha')
+        //
+        // COM audio: o video segue `posicaoOuvidaMs` (o que o ouvinte ja' tem
+        // no ouvido) � e' o que centraliza os dois sem atraso.
+        //
+        // SEM audio (video mudo): nao ha' relogio de som para seguir, entao o
+        // video corre pelo relogio da parede desde o `tZero`. Sem isto ele
+        // ficaria parado (o `posicaoOuvidaMs` nunca avanca).
+        const posAudio = temAudio
+          ? (estado.posicaoOuvidaMs ?? estado.tempoAudioMs)
+          : (Date.now() - (estado.tZero || Date.now()));
+        const alvoAtual = (indice / fps) * 1000;
+        // ## O video PULA a timeline junto com o audio (um salto so')
+        //
+        // Quando o audio faz catch-up (descarta o atraso acumulado), a
+        // timeline dele avanca de uma vez. O video tem de pular junto: basta
+        // reposicionar o `indice` no instante do audio — o proximo frame da
+        // fila passa a valer esse instante.
+        //
+        // Descartar frame a frame NAO resolve: a fila nao tem os 3 s de
+        // frames que o audio pulou (os antigos ja' sairam), entao o video
+        // ficava parado esperando o instante que o `indice` pedia.
+        if (posAudio - alvoAtual > VIDEO_ATRASO_MAX_MS) {
+          indice = Math.ceil((posAudio / 1000) * fps);
+          estado.videoDescartado = (estado.videoDescartado || 0) + 1;
+          continue;
+        }
         // ## O VIDEO e' liberado pelo TEMPO DE MIDIA DO AUDIO
         //
-        // Antes ele usava o relogio ABSOLUTO (`Date.now() - tZero`), que
-        // continua correndo quando o motor SEGURA o audio (o gate do nivel
-        // barra a entrega). MEDIDO: nesse caso o video ficava 2960 ms na
-        // frente e NUNCA voltava — o "video 3 s adiantado" do dono.
-        //
-        // Amarrando o video ao tempo de audio JA' ENTREGUE, se o motor segura
-        // o audio o video para junto, e os dois retomam alinhados. A
-        // diferenca e' entre "o video segue o relogio da parede" e "o video
-        // segue o que o ouvinte ja' ouviu".
-        const alvoMs = (indice / fps) * 1000;
-        // O que o OUVINTE ja' ouviu (nao o que foi entregue ao motor): se o
-        // jitter buffer dele estiver cheio, o som chega atrasado e o video
-        // tem de esperar junto, senao os dois desalinham na percepcao.
-        // Fallback para o entregue quando o motor nao reporta o buffer.
-        // O video segue a POSICAO DE CONTEUDO do audio: ela avanca tanto na
-        // entrega quanto no descarte, entao quando o audio pula para frente
-        // (cortando o atraso) o video pula junto e a sincronia se mantem.
-        const posAudio = estado.posicaoAudioMs ?? estado.tempoAudioMs;
-        if (posAudio < alvoMs) break;   // o audio ainda nao chegou la'
+        // O video segue o que o OUVINTE JA' OUVIU (`posicaoOuvidaMs` = posicao
+        // de conteudo menos o buffer do motor), nao o que foi entregue. O
+        // motor guarda um jitter buffer proprio (ate' ~750 ms): o audio que
+        // ENTREGAMOS ainda vai tocar. Se o video seguisse o entregue, ele
+        // apareceria ANTES do som " esse e' o atraso percebido.
+        if (posAudio < alvoAtual) break;   // o som ainda nao chegou la'
         enviarFrame(cli, callId, filaVideo.shift(), carimbo, estado);
       }
     };
@@ -841,6 +890,10 @@ async function alimentar({ cli, callId, entrada, fonte, estado, fps, temAudio = 
         // buffer do motor. E' neste ponto que o video tem de ser liberado —
         // o ouvinte ve o frame junto com o som, nao com o que foi enviado.
         estado.ouvidoMs = Math.max(0, estado.tempoAudioMs - (estado.nivelMs || 0));
+        // O RELOGIO DO VIDEO: posicao de conteudo menos o buffer do motor " o
+        // que o ouvinte ja' tem no ouvido. E' o ponto onde o frame aparece
+        // junto com o som.
+        estado.posicaoOuvidaMs = Math.max(0, estado.posicaoAudioMs - (estado.nivelMs || 0));
       } catch (e) {
       }
     };
