@@ -438,7 +438,7 @@ async function backend() {
  * @param {(msg: string) => void} [p.log]
  * @returns {Promise<{ok: boolean, motivo?: string, detalhe?: string, frames?: number}>}
  */
-export async function transmitir({ grupo, callId, arquivo = null, fluxo = null, link = null, fps = null, log = () => {} }) {
+export async function transmitir({ grupo, callId, arquivo = null, fluxo = null, link = null, fps = null }) {
   if (duble) return duble.transmitir({ grupo, callId, arquivo, fluxo, link, fps, log });
 
   if (!grupo || !callId) return { ok: false, motivo: 'sem_call' };
@@ -497,7 +497,6 @@ export async function transmitir({ grupo, callId, arquivo = null, fluxo = null, 
     let r;
     try {
       r = await comTimeout(cli.requestVideoUpgrade(callId), TIMEOUT_UPGRADE_MS);
-      log(`upgrade: ${r}`);
     } catch (e) {
       return { ok: false, motivo: 'upgrade_falhou', detalhe: e?.message || String(e) };
     }
@@ -518,7 +517,6 @@ export async function transmitir({ grupo, callId, arquivo = null, fluxo = null, 
     try {
       cli.setExternalAudioMode(callId, true);
     } catch (e) {
-      log('modo externo de audio falhou: ' + (e?.message || e));
     }
 
     // 3) O fps vem do PROPRIO video: com um fps fixo o passo do timestamp
@@ -529,16 +527,14 @@ export async function transmitir({ grupo, callId, arquivo = null, fluxo = null, 
     const fpsUsado = fonte === 'arquivo'
       ? await fpsDoVideo(arquivo)
       : (fps || FPS_PADRAO);
-    log(`fps do video: ${fpsUsado}`);
 
     // 4) UM ffmpeg: H.264 no pipe:1 e, se houver, PCM no pipe:3.
     // Com ARQUIVO da' para sondar a faixa; com FLUXO nao (consumiria o
     // stream), entao assume-se que tem audio.
     // No LINK o yt-dlp muxa audio e video num arquivo so', entao sempre tem.
     const temAudio = fonte === 'arquivo' ? await temFaixaDeAudio(arquivo) : true;
-    log(`audio: ${temAudio ? 'sim' : 'nao'}`);
     await alimentar({
-      cli, callId, entrada: fluxo || link || arquivo, fonte, estado, log,
+      cli, callId, entrada: fluxo || link || arquivo, fonte, estado,
       fps: fpsUsado, temAudio
     });
     return {
@@ -565,7 +561,7 @@ export async function transmitir({ grupo, callId, arquivo = null, fluxo = null, 
  * O `-re` faz o ffmpeg entregar no tempo da reproducao; o timestamp vem do
  * relogio real, que e' o que o motor espera (microssegundos).
  */
-async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAudio = true }) {
+async function alimentar({ cli, callId, entrada, fonte, estado, fps, temAudio = true }) {
   const splitter = criarSplitter();
   // O teto do preroll conta daqui: e' quando o ffmpeg comeca a produzir.
   estado.prerollInicioMs = Date.now();
@@ -734,7 +730,7 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
         // (cortando o atraso) o video pula junto e a sincronia se mantem.
         const posAudio = estado.posicaoAudioMs ?? estado.tempoAudioMs;
         if (posAudio < alvoMs) break;   // o audio ainda nao chegou la'
-        enviarFrame(cli, callId, filaVideo.shift(), carimbo, estado, log);
+        enviarFrame(cli, callId, filaVideo.shift(), carimbo, estado);
       }
     };
 
@@ -767,10 +763,6 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
       // O relogio dos DOIS nasce no mesmo instante: o frame 0 de cada fluxo
       // vale no ms 0.
       estado.proximoDevidoMs = estado.tZero;
-      log(
-        `preroll: video=${filaVideo.length} audio=${nAudio} ` +
-        `(${Date.now() - estado.prerollInicioMs} ms)`
-      );
       estado.bombearVideo?.();
     };
 
@@ -850,7 +842,6 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
         // o ouvinte ve o frame junto com o som, nao com o que foi enviado.
         estado.ouvidoMs = Math.max(0, estado.tempoAudioMs - (estado.nivelMs || 0));
       } catch (e) {
-        log('feedLiveAudio: ' + (e?.message || e));
       }
     };
 
@@ -867,7 +858,6 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
         enfileirarAudio(new Float32Array(alinhado.buffer));
         tentarPreroll();
       } catch (e) {
-        log('feedLiveAudio: ' + (e?.message || e));
       }
     });
 
@@ -1013,7 +1003,7 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
       // Fecha o ultimo access unit retido.
       try {
         for (const au of splitter.flush()) {
-          enviarFrame(cli, callId, au, carimbo, estado, log);
+          enviarFrame(cli, callId, au, carimbo, estado);
         }
       } catch { /* ok */ }
       // ## Esvazia o VIDEO que sobrou na fila do relogio
@@ -1024,7 +1014,7 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
       // de 2 s a 15 fps).
       try {
         while (filaVideo.length) {
-          enviarFrame(cli, callId, filaVideo.shift(), carimbo, estado, log);
+          enviarFrame(cli, callId, filaVideo.shift(), carimbo, estado);
         }
       } catch { /* ok */ }
       // ## Esvazia o audio que JA' esta' na fila antes de parar o timer
@@ -1056,14 +1046,12 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
         const stderrYt = (estado.procLink?._stderr || '') + (estado.procLinkAudio?._stderr || '');
         const motivoYt = motivoDoYtdlp(stderrYt);
         if (motivoYt) {
-          log(`yt-dlp falhou: ${stderrYt.trim().slice(-200)}`);
           reject(new Error(motivoYt));
           return;
         }
         // Traduz o codigo para algo que o dono entenda, sem perder o
         // detalhe tecnico (que vai para o log).
         const motivo = motivosDoFfmpeg(code, erroFfmpeg);
-        log(`ffmpeg saiu com ${code}: ${erroFfmpeg.trim().slice(-200)}`);
         reject(new Error(motivo));
       }
     });
@@ -1106,7 +1094,7 @@ function motivosDoFfmpeg(code, stderr = '') {
  * Quem segura o video e' o proprio motor: `feedLiveVideo` devolve `0`
  * enquanto o stream nao abriu (espera o keyframe) ou esta' em hold.
  */
-function enviarFrame(cli, callId, au, carimbo, estado, log) {
+function enviarFrame(cli, callId, au, carimbo, estado) {
   try {
     const ts = carimbo();
     const pacotes = cli.feedLiveVideo(callId, au, ts);
@@ -1124,7 +1112,6 @@ function enviarFrame(cli, callId, au, carimbo, estado, log) {
       estado.recusados = (estado.recusados || 0) + 1;
     }
   } catch (e) {
-    log('feedLiveVideo: ' + (e?.message || e));
   }
 }
 

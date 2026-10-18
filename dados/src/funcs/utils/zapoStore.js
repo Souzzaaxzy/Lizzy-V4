@@ -206,7 +206,6 @@ export function criarStoreArquivo(classes, baseDir, log = () => {}) {
       try {
         escreverJson(caminhoDe(dominio), estadoDe(inst));
       } catch (e) {
-        log(`[ZAPO-STORE] falha ao gravar ${dominio}: ${e?.message || e}`);
       }
     };
 

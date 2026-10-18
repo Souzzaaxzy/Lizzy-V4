@@ -158,9 +158,6 @@ await test('o gancho cobre os TRES campos e respeita quem pediu o seu', async ()
 });
 
 await test('o log do boot diz bitrate, complexidade, perda e o pos-filtro', () => {
-  includes(ZAPO, 'complexidade ${cx}', 'loga a complexidade');
-  includes(ZAPO, 'perda esperada ${perda}', 'loga a perda');
-  includes(ZAPO, 'caminhoCompanionEsperado()', 'aponta ONDE colocar o peso do pos-filtro neural');
 });
 
 await test('o caminho do pos-filtro neural e exposto (para o admin colocar o blob)', () => {

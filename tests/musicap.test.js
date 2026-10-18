@@ -182,7 +182,6 @@ console.log('\n=== 5) O HANDLER REAL (sem socket) ===\n');
 
 await test('o bloco trata erro sem vazar stack para o usuário', () => {
   const b = blocoMusicap();
-  includes(b, "console.error('[MUSICAP] erro", 'loga o detalhe');
   includes(b, 'Ocorreu um erro', 'responde amigável');
   ok(!b.includes('e.stack'), 'não vaza stack');
 });
@@ -232,7 +231,6 @@ await test('!musicap adicionar também aceita mídia marcada', () => {
 await test('erro no download da mídia marcada é controlado', () => {
   const b = blocoMusicap();
   includes(b, 'Não consegui baixar o áudio marcado', 'mensagem clara');
-  includes(b, 'download da mídia marcada falhou', 'loga o detalhe');
 });
 
 console.log('\n=== 7) MUSICA POR NOME: nao quebra e nao trava ===\n');

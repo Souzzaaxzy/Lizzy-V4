@@ -63,7 +63,6 @@ export async function carregarMidia() {
     const zapo = await zapoCall.carregarZapo();
     if (zapo) {
       mod = zapoCall;
-      console.log('[CALLP] backend de mídia: zapo (@zapo-js/voip)');
       return mod;
     }
   } catch (e) {
@@ -73,11 +72,9 @@ export async function carregarMidia() {
   // 2) lizzy-call (reserva) — motor WASM do WhatsApp Web.
   try {
     mod = await import('lizzy-call/group-media');
-    console.log('[CALLP] backend de mídia: lizzy-call (WASM)');
     return mod;
   } catch (e) {
     loadError = loadError || e?.message || String(e);
-    console.warn('[CALLP] mídia indisponível:', loadError);
     mod = null;
   }
   return mod;
@@ -114,9 +111,7 @@ export async function obterMedia() {
   if (!m) return null;
   if (usandoZapo(m)) return m;
   if (!mediaInstance) {
-    mediaInstance = new m.GroupCallMedia({
-      log: (msg) => console.log(msg)
-    });
+    mediaInstance = new m.GroupCallMedia({});
   }
   return mediaInstance;
 }

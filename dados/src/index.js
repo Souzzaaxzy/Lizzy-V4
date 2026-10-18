@@ -4086,13 +4086,6 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       // Aviso de memória: a pilha de mídia aloca centenas de MB. Se a máquina
       // estiver apertada, o OOM killer mata o processo (SIGKILL) no meio da call
       // e o sintoma vira "o bot reiniciou sozinho", sem log.
-      try {
-        const livreMb = Math.round(os.freemem() / 1048576);
-        if (livreMb < 700) {
-          console.warn(`[CALLP] memória livre baixa: ${livreMb} MB — a pilha de mídia precisa de ~600 MB`);
-        }
-      } catch { /* aviso é best-effort */ }
-
       const midia = await entrarNaCallComMidia({
         grupo: from,
         participantes: convidados,
@@ -4143,7 +4136,6 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       callPlayer.pararDeSeguir(grupo);
       aoTerminarAudio(grupo, null);
       aoEncerrarAudio(grupo, null);
-      console.log(`[CALLP] call de ${grupo} caiu sozinha (${motivo || 'sem motivo'}) — estado reconciliado`);
       try {
         await nazu.sendMessage(grupo, {
           text:
@@ -35905,7 +35897,6 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             quoted: info
           });
         } catch (e) {
-          console.error('[CALLP] Erro:', e);
           await reply('Ocorreu um erro 💔');
         }
         break;
@@ -36131,7 +36122,6 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
                       || 'Áudio marcado';
                   }
                 } catch (e) {
-                  console.warn('[MUSICAP] download da mídia marcada falhou:', e?.message);
                 } finally {
                   clearTimeout(timer);
                 }
@@ -36239,14 +36229,12 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             });
           } catch (e) {
             await apagarAviso();
-            console.error('[MUSICAP] erro:', e?.message);
             await reply('❌ Deu erro ao preparar essa música.').catch(() => {});
           }
           })();
           // Handler LIBERADO: o download segue em background.
           return;
         } catch (e) {
-          console.error('[MUSICAP] erro externo:', e?.message);
           await reply('Ocorreu um erro 💔');
         }
         break;
@@ -36339,7 +36327,6 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               if (!fluxo) throw new Error('fluxo vazio');
             } catch (e) {
               await apagarAviso();
-              console.error('[MIDIAP] download:', e?.message);
               return reply('❌ Não consegui baixar o vídeo marcado.');
             }
           }
@@ -36357,8 +36344,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
                 link,
                 // LINK: o fps veio do yt-dlp. VIDEO: o proto nao o traz e um
                 // pipe nao pode ser sondado -- usa o valor de reserva.
-                fps: fpsDoLink || midiap.FPS_DE_RESERVA,
-                log: (m) => console.log('[MIDIAP]', m)
+                fps: fpsDoLink || midiap.FPS_DE_RESERVA
               });
               if (!r.ok) {
                 const motivos = {
@@ -36384,7 +36370,6 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
                 contextInfo: gerarContextNewsletter()
               }).catch(() => {});
             } catch (e) {
-              console.error('[MIDIAP] erro:', e?.message);
             } finally {
               // Nada a apagar: o video nunca foi gravado em disco.
             }
@@ -36392,7 +36377,6 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
 
           return; // handler liberado: a transmissao segue em background
         } catch (e) {
-          console.error('[MIDIAP] erro externo:', e?.message);
           await reply('Ocorreu um erro 💔');
         }
         break;

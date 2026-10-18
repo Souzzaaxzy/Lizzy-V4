@@ -40,7 +40,7 @@ import fs from 'fs';
 import path from 'path';
 import { spawn } from 'child_process';
 import { criarStoreArquivoDoPacote } from './zapoStore.js';
-import { instalarBitrate, configuracaoEmUso, caminhoCompanionEsperado } from '../../utils/mlowBitrate.js';
+import { instalarBitrate } from '../../utils/mlowBitrate.js';
 import { DATABASE_DIR } from '../../utils/paths.js';
 
 let mod = null;
@@ -123,7 +123,6 @@ export async function carregarZapo() {
     mod = { ...zapo, ...voip };
   } catch (e) {
     loadError = e?.message || String(e);
-    console.warn('[ZAPOCALL] pacotes indisponiveis:', loadError);
     mod = null;
   }
   return mod;
@@ -223,12 +222,10 @@ function agendarReconexao() {
   timerReconexao = setTimeout(async () => {
     timerReconexao = null;
     if (conectado || !client) return;
-    console.log('[ZAPOCALL] reconectando...');
     try {
       await client.connect();
       await aguardarConexao(30000);
     } catch (e) {
-      console.warn('[ZAPOCALL] reconexao falhou:', e?.message || e);
       agendarReconexao();
     }
   }, 5000);
@@ -272,7 +269,7 @@ export async function obterCliente() {
 
       // Backend de ARQUIVO cobrindo os dominios de persistencia. As caixas de
       // mensagens ficam de fora ('none'): o zapo aqui so carrega a MIDIA.
-      const backend = await criarStoreArquivoDoPacote(AUTH_DIR, (m) => console.warn(m));
+      const backend = await criarStoreArquivoDoPacote(AUTH_DIR, () => {});
 
       store = createStore({
         backends: { arquivo: backend },
@@ -333,63 +330,14 @@ export async function obterCliente() {
         new ConsoleLogger(process.env.ZAPO_LOG_LEVEL || 'warn')
       );
 
-      client.on('auth_qr', ({ qr }) => {
-        console.log('[ZAPOCALL] QR disponivel. Prefira o codigo: !callp parear <numero>');
-        console.log(qr);
-      });
-      client.on('auth_pairing_required', () => {
-        console.log('[ZAPOCALL] pronto para receber o codigo de pareamento');
-      });
-      client.on('auth_paired', ({ credentials }) => {
-        console.log('[ZAPOCALL] PAREADO como', credentials?.meJid || credentials?.meLid);
-      });
-      // Uma linha dizendo o que ficou LIGADO (para nao depender de suposicao).
-      {
-        const companion = caminhoCompanion();
-        const cfg = configuracaoEmUso() || {};
-        const kbps = cfg.bitrate ? `${Math.round(cfg.bitrate / 1000)} kbps` : 'padrao (15 kbps)';
-        const cx = cfg.complexity !== null && cfg.complexity !== undefined ? cfg.complexity : 'padrao (5)';
-        const perda = cfg.packetLossPercent !== null && cfg.packetLossPercent !== undefined
-          ? `${cfg.packetLossPercent}%` : '0%';
-        console.log(
-          `[ZAPOCALL] audio: RED ${usarMlowRed() ? 'ligado' : 'desligado'}` +
-          ` | bitrate ${kbps} | complexidade ${cx} | perda esperada ${perda}` +
-          ` | pos-filtro neural ${companion ? `ligado (${companion})` : 'INDISPONIVEL'}` +
-          (companion ? '' : ` (o pacote nao traz o blob; coloque o peso em ${caminhoCompanionEsperado()})`)
-        );
-      }
-
       // ---- Diagnostico da call -------------------------------------------
-      // Os eventos abaixo sao os que dizem ONDE a midia esta. Sem eles, um
-      // problema de relay aparece so como "a call morreu".
-      client.on('voip_call_state', (call) => {
-        console.log(`[ZAPOCALL] call ${call.callId} -> ${call.stateData?.state}`);
-      });
-
-      // O roster: quem o servidor diz que esta na call. Uma call de grupo so
-      // fica 'active' quando OUTRA pessoa aparece conectada.
-      client.on('voip_call_participants_changed', ({ call, diff }) => {
-        const entrou = (diff?.added || []).map((p) => p.jid).join(', ') || '-';
-        const saiu = (diff?.removed || []).map((r) => r.jid).join(', ') || '-';
-        console.log(`[ZAPOCALL] roster ${call.callId} | entrou: ${entrou} | saiu: ${saiu}`);
-      });
-
-      // A PROVA de que a midia flui: a midia de alguem chegou ate nos.
-      client.on('voip_call_participant_media', ({ call, participantJid, receiving }) => {
-        console.log(`[ZAPOCALL] midia de ${participantJid} -> ${receiving ? 'CHEGANDO' : 'parou'} (${call.callId})`);
-      });
 
       // O motivo do fim. `relay_lost` = a call tinha caminho de midia e perdeu
       // (o caso do "conectando"); `invisible` = o servidor nos tirou porque os
       // outros pararam de nos receber.
       client.on('voip_call_ended', (call) => {
         const motivo = call.stateData?.endReason || 'sem motivo informado';
-        console.warn(`[ZAPOCALL] call ${call.callId} ENCERROU | motivo: ${motivo}`);
         processarCallEncerrada(call.callId, motivo);
-      });
-
-      client.on('voip_call_error', (err) => {
-        console.warn('[ZAPOCALL] erro na call:', err?.message || err);
       });
 
       // O AUDIO TERMINOU: e' o que faz a FILA andar sozinha. O motor emite
@@ -402,8 +350,10 @@ export async function obterCliente() {
           if (id !== callId) continue;
           const cb = aoTerminarPorGrupo.get(grupo);
           if (typeof cb === 'function') {
-            Promise.resolve(cb(grupo)).catch((e) =>
-              console.warn('[ZAPOCALL] aoTerminar:', e?.message || e));
+            // A chamada e' a FUNCIONALIDADE (faz a fila andar); o log dela e'
+            // que foi removido. Sem o `catch` vazio o erro sobe como rejeicao
+            // nao tratada, entao ele fica.
+            Promise.resolve(cb(grupo)).catch(() => {});
           }
           break;
         }
@@ -413,13 +363,10 @@ export async function obterCliente() {
       client.on('connection', (ev) => {
         if (ev?.status === 'open') {
           conectado = true;
-          console.log('[ZAPOCALL] conexao ABERTA');
         } else if (ev?.status === 'close') {
           conectado = false;
-          console.warn(`[ZAPOCALL] conexao FECHOU (${ev?.reason || 'motivo desconhecido'})`);
           // Deslogado (aparelho removido) nao se reconecta: precisa parear.
           if (ev?.isLogout) {
-            console.warn('[ZAPOCALL] dispositivo desvinculado -- pareie de novo com !callp parear');
             return;
           }
           agendarReconexao();
@@ -431,23 +378,15 @@ export async function obterCliente() {
       // fechada. Sem pareamento, nao esperamos (o promise fica pendente).
       const jaPareado = estaPareado();
       if (jaPareado) {
-        await client.connect().catch((e) => {
-          console.warn('[ZAPOCALL] connect:', e?.message || e);
-        });
-        const abriu = await aguardarConexao(30000);
-        if (!abriu) {
-          console.warn('[ZAPOCALL] conexao nao abriu em 30s');
-        }
+        await client.connect().catch(() => {});
+        await aguardarConexao(30000);
       } else {
-        void client.connect().catch((e) => {
-          console.warn('[ZAPOCALL] connect:', e?.message || e);
-        });
+        void client.connect().catch(() => {});
       }
 
       return client;
     } catch (e) {
       loadError = e?.message || String(e);
-      console.warn('[ZAPOCALL] falha ao criar o client:', loadError);
       client = null;
       return null;
     } finally {
@@ -810,8 +749,9 @@ function processarCallEncerrada(callId, motivo) {
     estagios.set(grupo, 'parado');
     const cb = aoEncerrarPorGrupo.get(grupo);
     if (typeof cb === 'function') {
-      Promise.resolve(cb(grupo, motivo)).catch((e) =>
-        console.warn('[ZAPOCALL] aoEncerrar:', e?.message || e));
+      // A chamada e' a FUNCIONALIDADE (dispara a reconciliacao do bot); so' o
+      // log dela foi removido. O `catch` vazio evita rejeicao nao tratada.
+      Promise.resolve(cb(grupo, motivo)).catch(() => {});
     }
   }
 }

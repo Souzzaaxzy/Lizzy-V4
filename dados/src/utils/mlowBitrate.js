@@ -71,11 +71,9 @@ function inteiroDoAmbiente(nome, padrao, { min, max, aviso }) {
   if (!Number.isFinite(n) || n < 0) return padrao;
 
   if (n > max) {
-    console.warn(`[MLOW] ${nome}=${n} acima do teto (${max}); usando ${max}${aviso ? ` (${aviso})` : ''}`);
     return max;
   }
   if (n < min) {
-    console.warn(`[MLOW] ${nome}=${n} abaixo do piso; usando ${min}`);
     return min;
   }
   return n;
@@ -96,11 +94,9 @@ export function bitrateConfigurado() {
   if (!Number.isFinite(n) || n <= 0) return PADRAO_BPS;
 
   if (n > MAX_BPS) {
-    console.warn(`[MLOW-BITRATE] ${n} bps acima do teto do REMB (~${MAX_BPS}); usando ${MAX_BPS}`);
     return MAX_BPS;
   }
   if (n < MIN_BPS) {
-    console.warn(`[MLOW-BITRATE] ${n} bps abaixo do piso; usando ${MIN_BPS}`);
     return MIN_BPS;
   }
   return n;
@@ -214,7 +210,6 @@ export async function instalarBitrate(cfg = null) {
 
   const alvo = caminhoDoCodec();
   if (!alvo) {
-    console.warn('[MLOW-BITRATE] nao achei o mlow-codec.js no pacote');
     return false;
   }
 
@@ -225,7 +220,6 @@ export async function instalarBitrate(cfg = null) {
     const mod = exigir(alvo);
     const Classe = mod?.MLowCodec;
     if (!Classe || typeof Classe.create !== 'function') {
-      console.warn('[MLOW-BITRATE] MLowCodec.create nao encontrado');
       return false;
     }
 
@@ -245,7 +239,6 @@ export async function instalarBitrate(cfg = null) {
     configAtiva = querida;
     return true;
   } catch (e) {
-    console.warn('[MLOW-BITRATE] nao consegui instalar:', e?.message || e);
     return false;
   }
 }

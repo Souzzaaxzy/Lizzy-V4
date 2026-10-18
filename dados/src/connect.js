@@ -526,10 +526,7 @@ async function initializeOptimizedCaches(AbyssSock) {
         // memoria, entao nada dali sobrevive a um reinicio.
         try {
             const { limparCacheMidiap } = await import('./funcs/utils/midiap.js');
-            const liberado = limparCacheMidiap?.() || 0;
-            if (liberado > 0) {
-                console.log(`🧹 Cache do !midiap limpo no boot: ${(liberado / 1048576).toFixed(1)} MB liberados`);
-            }
+            limparCacheMidiap?.();
         } catch { /* melhor seguir sem limpar do que nao subir */ }
 
         // Inicializa índice de captcha para busca rápida
@@ -1284,10 +1281,7 @@ async function createBotSocket(authDir) {
         // version de 3 partes o cliente anunciado e' outro, e a call sobe sem
         // audio ("carregando" para sempre). Ver o requisito no AGENTS.md.
         const voiceIdentity = { browser: ['Windows', 'UWP', '10.0.22631'], version };
-        const vozOk = isVoiceCapableConfig(voiceIdentity);
-        if (!vozOk.ok) {
-            console.warn(`⚠️ Cliente SEM voz nas calls: ${vozOk.reason}`);
-        }
+        isVoiceCapableConfig(voiceIdentity);
 
         const AbyssSock = makeWASocket({
             version: version,
@@ -1924,8 +1918,7 @@ async function createBotSocket(authDir) {
                 getGroupData,
                 getCallerName: (jid) => AbyssSock.getName(jid),
                 getGroupName: getCallGroupName,
-                send: (chatId, text) => AbyssSock.sendMessage(chatId, { text }),
-                log: (delivery) => console.log(`[TESTCALL] ${delivery.kind} notificado em ${delivery.chatId}`)
+                send: (chatId, text) => AbyssSock.sendMessage(chatId, { text })
             });
         };
 
@@ -2342,7 +2335,6 @@ process.on('uncaughtException', async (error) => {
         String(error?.stack || '') + ' ' + String(error?.message || '') + ' ' + String(error?.code || '')
     );
     if (daMidia) {
-        console.error('🎧 Erro na pilha de MÍDIA — o bot NÃO será reiniciado (o estado das calls é em memória).');
         try {
             const { resetarMidia } = await import('./funcs/utils/callMedia.js');
             resetarMidia?.();

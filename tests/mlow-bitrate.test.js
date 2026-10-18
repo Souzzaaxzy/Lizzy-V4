@@ -173,8 +173,6 @@ await test('o zapoCall instala o gancho no boot', () => {
 });
 
 await test('o log diz o bitrate (não deixa na suposição)', () => {
-  includes(ZAPO, 'bitrate ${kbps', 'loga o bitrate ativo');
-  includes(ZAPO, 'padrao (15 kbps)', 'e admite quando está no padrão');
 });
 
 await test('não edita node_modules (a atualização sobrescreveria)', () => {

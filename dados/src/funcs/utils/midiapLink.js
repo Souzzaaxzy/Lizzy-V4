@@ -277,7 +277,7 @@ function validarExtracao(yt, url, extraArgs, timeoutMs = 45000) {
  * @param {(msg: string) => void} [log]
  * @returns {Promise<{proc: object|null, procAudio: object|null, motivo?: string, detalhe?: string, client?: string}>}
  */
-export async function abrirLink(url, log = () => {}) {
+export async function abrirLink(url) {
   const yt = await acharYtDlp();
   if (!yt) {
     return { proc: null, procAudio: null, motivo: 'ytdlp_ausente', detalhe: 'yt-dlp nao encontrado no servidor' };
@@ -294,7 +294,6 @@ export async function abrirLink(url, log = () => {}) {
   };
 
   const temCk = Boolean(resolveCookiesFile());
-  log(`cookies: ${temCk ? 'sim' : 'nao'}`);
   const passadas = temCk ? [{ cookies: true }, { cookies: false }] : [{ cookies: true }];
   // O DEFAULT vem PRIMEIRO: medido, e' o unico que entrega video-only E
   // audio-only por HTTPS (os nomeados dao 1 muxado de 360p ou HLS -- e o HLS
@@ -305,7 +304,6 @@ export async function abrirLink(url, log = () => {}) {
   for (let i = 0; i < passadas.length; i++) {
     const p = passadas[i];
     const lista = i === 0 ? clientes : clientesSemCookies();
-    if (i === 1) log('cookies recusados — tentando sem eles');
     for (const client of lista) {
       // `baseDoLink` ja' traz os cookies; na 2a passada o par e' removido.
       // O cliente `default` NAO leva `--extractor-args` (e' o comportamento
@@ -315,7 +313,6 @@ export async function abrirLink(url, log = () => {}) {
       const argsSemCk = p.cookies ? argsBase : semCookies(argsBase);
       const teste = await validarExtracao(yt, url, argsSemCk);
       if (teste.ok) {
-        log(`player_client=${client}${p.cookies ? '' : ' (sem cookies)'}`);
         try {
           const comFmt = (a, formato) => [...a, '-f', formato, url];
           const proc = subir(comFmt(argsSemCk, formatoDoVideo()));
@@ -326,7 +323,6 @@ export async function abrirLink(url, log = () => {}) {
         }
       }
       ultimoErro = teste.stderr || ultimoErro;
-      log(`player_client=${client} recusado${ehBloqueio(teste.stderr) ? ' (bloqueio)' : ''}`);
       if (ehFalhaDeAuth(teste.stderr) && p.cookies && i === 0) break; // pula p/ 2a passada
     }
     // So' tenta sem cookies se houve sinal de bloqueio/autenticacao.

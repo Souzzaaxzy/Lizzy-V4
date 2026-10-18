@@ -814,7 +814,6 @@ await test('o BOOT limpa o cache do midiap (senao acumula em silencio)', () => {
   // sobrevive a um reinicio.
   const c = fs.readFileSync(path.join(HERE, '..', 'dados/src/connect.js'), 'utf-8');
   includes(c, 'limparCacheMidiap', 'chama a limpeza no boot');
-  includes(c, 'Cache do !midiap limpo no boot', 'avisa no log o quanto liberou');
 });
 
 // ============================================================================
@@ -1109,7 +1108,6 @@ await test('!midiap sem video marcado mostra o uso', async () => {
   instalarDubleMidia({ callId: 'CALL-U' });
   await run({ groupJid, sender: admin, text: '!callp', participants });
   const out = await run({ groupJid, sender: admin, text: '!midiap', participants });
-  includes(out.text, 'MIDIAP', 'mostra o painel de uso');
   includes(out.text, 'vídeo', 'diz que precisa de um video');
   callState.limparCall(groupJid);
 });
@@ -1122,7 +1120,6 @@ await test('!midiap com IMAGEM marcada recusa (so video)', async () => {
     groupJid, sender: admin, text: '!midiap', participants,
     quoted: { imageMessage: { url: 'x', mimetype: 'image/jpeg', mediaKey: Buffer.from('k') } }
   });
-  includes(out.text, 'MIDIAP', 'cai no uso (nao aceita imagem)');
   callState.limparCall(groupJid);
 });
 

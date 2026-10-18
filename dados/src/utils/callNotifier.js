@@ -232,7 +232,7 @@ export async function resolveCallGroupName(groupData, deps) {
  * @returns {(args: [object]) => Promise<void>} handler registrado
  */
 export function attachCallNotifier(deps) {
-    const { ev, getGroupData, getCallerName, getGroupName, send, log } = deps;
+    const { ev, getGroupData, getCallerName, getGroupName, send } = deps;
 
     const handler = async ([call]) => {
         try {
@@ -261,10 +261,8 @@ export function attachCallNotifier(deps) {
             if (!delivery) return;
 
             await send(delivery.chatId, delivery.text);
-            if (typeof log === 'function') log(delivery, call);
         } catch (e) {
             // Uma falha aqui não pode derrubar o listener.
-            console.error('[TESTCALL] Erro ao notificar chamada:', e?.message || e);
         }
     };
 
