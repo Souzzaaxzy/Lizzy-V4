@@ -269,6 +269,51 @@ await test('modulo: acha por nome, numero e indice', async () => {
 });
 
 // ============================================================================
+// 1b) A JANELA e' o DIA CIVIL (00:00 -> 23:59)
+//
+// Pedido do dono: *"as mencoes tambem sao apenas por 24 horas. comeca 00:00,
+// termina 23:59"*. A chave do registro e' o dia, entao o corte e' exato: os
+// dois extremos do dia caem no MESMO balde, e o instante seguinte ja' e' outro.
+// ============================================================================
+
+await test('janela: 00:00 e 23:59 sao o MESMO dia (fuso de Sao Paulo)', async () => {
+  // 00:00:00 de Sao Paulo (UTC-3) = 03:00Z
+  ok(mencoes.diaDeHoje(new Date('2026-10-18T03:00:00.000Z')) === '2026-10-18',
+    'o primeiro instante do dia');
+  // 23:59:59.999 de Sao Paulo = 02:59:59.999Z do dia seguinte
+  ok(mencoes.diaDeHoje(new Date('2026-10-19T02:59:59.999Z')) === '2026-10-18',
+    'o ultimo instante do dia');
+  // 00:00:00 do dia seguinte = 03:00Z
+  ok(mencoes.diaDeHoje(new Date('2026-10-19T03:00:00.000Z')) === '2026-10-19',
+    'o dia seguinte ja e outro balde');
+  // 23:59:59 do dia 17 = 02:59:59Z do dia 18 (Sao Paulo e UTC-3)
+  ok(mencoes.diaDeHoje(new Date('2026-10-18T02:59:59.000Z')) === '2026-10-17',
+    'o dia anterior e outro balde');
+});
+
+await test('janela: o registro de ontem NAO aparece hoje', async () => {
+  const g = '1203639111111100888@g.us';
+  // Registra com um timestamp de ONTEM.
+  const ontem = new Date('2026-10-17T15:00:00.000Z');   // 12:00 em Sao Paulo
+  mencoes.registrarMencao({
+    grupo: g, alvo: ALVO_LID, de: AUTOR_LID, deNome: 'Ana', id: 'ONTEM1', em: ontem.getTime(),
+  });
+  ok(mencoes.mencoesDeHoje(g, ALVO_LID, '2026-10-17').length === 1, 'ontem tem 1');
+  ok(mencoes.mencoesDeHoje(g, ALVO_LID, '2026-10-18').length === 0, 'hoje tem 0');
+});
+
+await test('janela: a mencao de 23:59 entra no dia dela (nao no seguinte)', async () => {
+  const g = '1203639111111100887@g.us';
+  // 23:59:59.999 de Sao Paulo do dia 18 = 02:59:59.999Z do dia 19
+  const quaseMeiaNoite = new Date('2026-10-19T02:59:59.999Z');
+  mencoes.registrarMencao({
+    grupo: g, alvo: ALVO_LID, de: AUTOR_LID, deNome: 'Ana', id: 'FIM1', em: quaseMeiaNoite.getTime(),
+  });
+  ok(mencoes.mencoesDeHoje(g, ALVO_LID, '2026-10-18').length === 1, 'entrou no dia 18');
+  ok(mencoes.mencoesDeHoje(g, ALVO_LID, '2026-10-19').length === 0, 'nao vazou para o 19');
+});
+
+// ============================================================================
 // 2) O REGISTRO PELO HANDLER (toda mensagem de grupo)
 // ============================================================================
 

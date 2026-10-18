@@ -24,16 +24,34 @@ import { DATABASE_DIR } from './paths.js';
  *
  * O `id` e' o que permite o `marcar` citar a mensagem ORIGINAL.
  *
+ * ## A JANELA e' o DIA CIVIL (00:00 -> 23:59)
+ *
+ * Pedido do dono: *"as mencoes tambem sao apenas por 24 horas. comeca 00:00,
+ * termina 23:59"*.
+ *
+ * A chave do registro E' o dia (`YYYY-MM-DD`), entao o corte e' exato por
+ * construcao: 00:00:00.000 e 23:59:59.999 caem no mesmo dia, e o instante
+ * seguinte (00:00 do dia seguinte) ja' e' o dia novo. NAO e' "24h a partir da
+ * mencao": e' o dia do calendario (fuso de Sao Paulo, o mesmo dos agendamentos
+ * do bot).
+ *
  * Limites deliberados: por grupo, guardamos no maximo `MAX_POR_ALVO` registros
- * por alvo/dia (o suficiente para a lista) e `MAX_DIAS` dias. O arquivo nao
- * pode crescer sem fim num grupo movimentado.
+ * por alvo/dia (o suficiente para a lista) e `MAX_DIAS` dias. Como o comando
+ * so' olha o dia de HOJE, os dias anteriores sao apenas margem de seguranca.
  */
 
 const MENCOES_FILE = path.join(DATABASE_DIR, 'mencoes.json');
 
 /** Registros guardados por alvo, por dia. */
 const MAX_POR_ALVO = 100;
-/** Dias mantidos por grupo (o comando olha "hoje", mas guardar a semana ajuda). */
+/**
+ * Dias mantidos por grupo.
+ *
+ * O comando so' olha o dia de HOJE (a janela e' o dia civil). Guardar os
+ * anteriores e' so' margem: se o bot ficar offline na virada e voltar depois, o
+ * dia de ontem ainda esta' la' para consulta manual. O registro nunca e'
+ * mostrado como "de hoje".
+ */
 const MAX_DIAS = 7;
 
 /** O dia no fuso de Sao Paulo (o mesmo dos agendamentos do bot). */
