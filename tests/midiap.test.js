@@ -672,7 +672,32 @@ await test('o gate do nivel NAO trava com o PISO do motor (a regressao do delay)
   // O video segue o que o OUVINTE ja' ouviu (entregue menos o buffer), nao o
   // que foi entregue: com o buffer cheio o som atrasa e o video espera junto.
   const v = md.indexOf('estado.bombearVideo');
-  includes(md.slice(v, v + 2600), 'estado.ouvidoMs', 'o video segue o que o ouvinte ja ouviu');
+  // O video segue a POSICAO DE CONTEUDO do audio (avanca na entrega E no
+  // descarte): quando o audio pula para frente, o video pula junto.
+  includes(md.slice(v, v + 2600), 'estado.posicaoAudioMs', 'o video segue a posicao de conteudo');
+});
+
+await test('o TETO da fila vale SEMPRE (o backlog do engasgo nao fica preso)', () => {
+  // Durante um engasgo a fila cresce (o ffmpeg continua produzindo e o motor
+  // nao consome). Se o teto so' valesse ENQUANTO o motor segura, ao retomar
+  // entregariamos todo o backlog a 1x e o conteudo ficaria atras para sempre
+  // (MEDIDO: 6 s apos dois engasgos de 3 s).
+  //
+  // Com o teto valendo sempre, o atraso fica LIMITADO ao tamanho da fila,
+  // independente de quanto durou o engasgo.
+  const md = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/midiap.js'), 'utf-8');
+  const t = md.indexOf('const timerAudio = setInterval');
+  const bloco = md.slice(t, t + 5200);
+  // O `while` do teto tem de vir ANTES do `if (segurando)` — senao so' roda
+  // enquanto o motor segura (era o bug).
+  const posTeto = bloco.indexOf('fila.length > FILA_MAX_FRAMES');
+  const posSegurando = bloco.indexOf('if (segurando)');
+  ok(posTeto > -1, 'o teto da fila existe');
+  ok(posSegurando > -1, 'o gate de pausa existe');
+  ok(posTeto < posSegurando, 'o teto roda ANTES do gate (vale sempre, nao so segurando)');
+  // E o descarte avanca a posicao de conteudo (o video pula junto).
+  const b2 = bloco.slice(posTeto, posTeto + 700);
+  includes(b2, 'posicaoAudioMs', 'o descarte avanca a posicao de conteudo (o video pula junto)');
 });
 
 await test('PREROLL: so comeca quando os DOIS fluxos estao prontos', () => {

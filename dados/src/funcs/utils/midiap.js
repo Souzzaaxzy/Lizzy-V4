@@ -134,13 +134,24 @@ const MS_POR_FRAME = (FRAME_MOTOR / 16000) * 1000;   // 60 ms
  *
  * MEDIDO: o `-re` do ffmpeg entrega em rajadas (299 de 377 chegadas com
  * intervalo ZERO e ate' 282 ms de silencio). A fila absorve esse jitter; o
- * teto so' existe para um atraso acumulado nao crescer sem fim.
+ * teto existe para um atraso acumulado nao crescer sem fim (ele vale SEMPRE,
+ * nao so' enquanto o motor segura — senao o backlog do engasgo seria entregue
+ * a 1x ao retomar e o conteudo ficaria atras para sempre).
  *
- * 12 frames = 720 ms: acima disso o audio ja' esta' audivelmente atrasado, e
- * descartar o MAIS ANTIGO (em vez do mais novo) faz o som voltar ao tempo
- * real — que e' o que o proprio motor faz no buffer dele.
+ * 14 frames = 840 ms e' o MENOR valor que nao perde nada no arranque: o
+ * ffmpeg produz ate' 14 frames durante o preroll (MEDIDO). Com 12 o teto
+ * cortava 2 frames (120 ms) de audio bom. Trade-off medido com engasgos:
+ *
+ *   teto  arranque (amostras)   residuo do engasgo
+ *   12    29760 (perde 120 ms)  243 ms
+ *   14    31680 (0 perda)       382 ms   <- escolhido
+ *   16    31680                 488 ms
+ *   20    31680                 730 ms
+ *
+ * Descartar o MAIS ANTIGO faz o som voltar ao tempo real — e' o que o proprio
+ * motor faz no buffer dele ("drops the oldest samples on overflow").
  */
-const FILA_MAX_FRAMES = 12;
+const FILA_MAX_FRAMES = 14;
 
 /**
  * Teto de espera do PREROLL, em ms.
@@ -223,6 +234,27 @@ export function __setDuble(novo) { duble = novo; }
  */
 let voipDeTeste = null;
 export function __setVoip(novo) { voipDeTeste = novo; }
+
+/**
+ * Estado interno de uma transmissao (diagnostico/teste).
+ *
+ * `posicaoAudioMs` e' a POSICAO DE CONTEUDO do audio: avanca tanto na
+ * entrega quanto no descarte. O atraso REAL e' `agora - (posicaoAudioMs -
+ * bufferMs)` — contar so' as amostras entregues mede o conteudo DESCARTADO como
+ * se fosse atraso, o que engana.
+ */
+export function __estado(grupo) {
+  const e = ativos.get(grupo);
+  if (!e) return null;
+  return {
+    posicaoAudioMs: e.posicaoAudioMs || 0,
+    tempoAudioMs: e.tempoAudioMs || 0,
+    nivelMs: e.nivelMs || 0,
+    descartados: e.audioDescartado || 0,
+    frames: e.frames || 0,
+    fila: e.fila ? e.fila.length : 0,
+  };
+}
 
 /** ffmpeg do sistema. */
 function binario() {
@@ -439,10 +471,9 @@ export async function transmitir({ grupo, callId, arquivo = null, fluxo = null, 
     // Tempo de MIDIA de audio ja' entregue ao motor (ms). E' o relogio que
     // libera o VIDEO — se o motor segura o audio, o video para junto.
     tempoAudioMs: 0,
-    // O que o OUVINTE ja' ouviu (entregue menos o buffer do motor). E' ESTE o
-    // relogio do video: se o buffer do motor enche, o som chega atrasado e o
-    // video espera junto (sincronia na percepcao, nao no envio).
-    ouvidoMs: null,
+    // POSICAO DE CONTEUDO do audio: avanca na entrega E no descarte. E' o
+    // relogio do video (os dois pulam juntos quando o atraso e' cortado).
+    posicaoAudioMs: 0,
     // Quando o proximo frame de audio e' devido (ms). Nasce no preroll.
     proximoDevidoMs: null,
     // Se o preroll ja' liberou a transmissao.
@@ -698,8 +729,11 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
         // jitter buffer dele estiver cheio, o som chega atrasado e o video
         // tem de esperar junto, senao os dois desalinham na percepcao.
         // Fallback para o entregue quando o motor nao reporta o buffer.
-        const ouvido = estado.ouvidoMs ?? estado.tempoAudioMs;
-        if (ouvido < alvoMs) break;   // o audio ainda nao chegou la'
+        // O video segue a POSICAO DE CONTEUDO do audio: ela avanca tanto na
+        // entrega quanto no descarte, entao quando o audio pula para frente
+        // (cortando o atraso) o video pula junto e a sincronia se mantem.
+        const posAudio = estado.posicaoAudioMs ?? estado.tempoAudioMs;
+        if (posAudio < alvoMs) break;   // o audio ainda nao chegou la'
         enviarFrame(cli, callId, filaVideo.shift(), carimbo, estado, log);
       }
     };
@@ -807,6 +841,9 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
         // que ja' foi consumido. Somar as amostras entregues e' a medida do
         // conteudo que o ouvinte ja' tem.
         estado.tempoAudioMs = (estado.tempoAudioMs || 0) + (frame.length / TAXA_AUDIO) * 1000;
+        // A POSICAO DE CONTEUDO: avanca na entrega E no descarte. O video
+        // segue ela, entao os dois pulam juntos quando o atraso e' cortado.
+        estado.posicaoAudioMs = (estado.posicaoAudioMs || 0) + (frame.length / TAXA_AUDIO) * 1000;
         if (typeof ms === 'number' && ms > 0) estado.nivelMs = ms;
         // O que o OUVINTE ja' ouviu: o entregue menos o que ainda esta' no
         // buffer do motor. E' neste ponto que o video tem de ser liberado —
@@ -923,15 +960,30 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
       const segurando = estado.audioSegurando
         ? nivel > AUDIO_RESUME_MS
         : nivel >= AUDIO_PAUSE_MS;
+      // ## O TETO da fila vale SEMPRE (nao so' enquanto segura)
+      //
+      // Durante o engasgo a fila cresce (o ffmpeg continua produzindo e nos
+      // paramos de entregar). Se o teto so' valesse com o motor segurando, ao
+      // RETOMAR entregariamos todo o backlog a 1x e o conteudo ficaria atras
+      // para sempre (MEDIDO: 6 s apos dois engasgos de 3 s).
+      //
+      // Com o teto valendo sempre, o maximo que a fila acumula e' este valor:
+      // o atraso fica LIMITADO a ele, independente de quanto durou o engasgo.
+      // No arranque a fila fica em 0-2 frames (o ffmpeg entrega no ritmo),
+      // entao o teto nao corta audio bom.
+      while (estado.fila.length > FILA_MAX_FRAMES) {
+        estado.fila.shift();
+        estado.audioDescartado = (estado.audioDescartado || 0) + 1;
+        // O frame descartado AVANCA a posicao de conteudo: o ouvinte pula
+        // esse trecho (e' a unica forma de o atraso nao ficar acumulado).
+        estado.posicaoAudioMs = (estado.posicaoAudioMs || 0) + MS_POR_FRAME;
+        // O frame descartado tambem "passou" no relogio: sem isto o relogio
+        // ficaria devendo e o ritmo travaria.
+        estado.proximoDevidoMs = Math.min(estado.proximoDevidoMs, Date.now());
+      }
+
       if (segurando) {
         estado.audioSegurando = true;
-        // Descarta o atraso acumulado da NOSSA fila, para nao re-enche-lo ao
-        // retomar (era o que mantinha o residuo de 690 ms).
-        while (estado.fila.length > FILA_MAX_FRAMES) {
-          estado.fila.shift();
-          estado.audioDescartado = (estado.audioDescartado || 0) + 1;
-          estado.proximoDevidoMs = Math.min(estado.proximoDevidoMs, Date.now());
-        }
         return;   // motor enchendo: nao entrega (deixa drenar o backlog)
       }
       estado.audioSegurando = false;
