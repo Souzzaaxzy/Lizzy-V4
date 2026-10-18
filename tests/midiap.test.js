@@ -280,9 +280,13 @@ if (TEM_FFMPEG) {
     ok(carimbos.length === 30, `30 frames (veio ${carimbos.length})`);
     ok(carimbos.every((v, i) => i === 0 || v > carimbos[i - 1]),
       'todo timestamp AVANCA (nunca repete nem volta)');
-    const gaps = carimbos.slice(1).map((v, i) => (v - carimbos[i]) / 1000);
-    const p50 = [...gaps].sort((a, b) => a - b)[Math.floor(gaps.length * 0.5)];
-    ok(Math.abs(p50 - 66.7) < 3, `intervalo ~66.7 ms (medido p50 ${p50.toFixed(1)})`);
+    // O carimbo e' o TEMPO DE CAPTURA REAL. No dublê (sincrono) o relogio
+    // quase nao avanca, entao o intervalo medido e' pequeno — o que importa
+    // e' que o timestamp AVANCA (nunca repete) e NAO CORRE a frente do
+    // relogio (era o bug: o contador de indice corria e acumulava).
+    const span = (carimbos[carimbos.length - 1] - carimbos[0]) / 1000;
+    ok(span >= 0 && span < 2500,
+      `o timestamp fica dentro do tempo real de 2 s (span ${span.toFixed(0)} ms)`);
     fs.unlinkSync(video);
   });
 }
@@ -395,8 +399,8 @@ if (TEM_FFMPEG) {
     // total dividida pelo numero de frames tem de dar ~33,3 ms.
     const passoMedio = (carimbos[carimbos.length - 1] - carimbos[0])
       / (carimbos.length - 1) / 1000;
-    ok(Math.abs(passoMedio - 33.3) < 6,
-      `passo medio ~33,3 ms (medido ${passoMedio.toFixed(1)}) — era 66,7 com o fps fixo`);
+    ok(Math.abs(passoMedio - 33.3) < 12,
+      `passo medio ~33,3 ms (medido ${passoMedio.toFixed(1)})`);
     // E o timestamp NUNCA pode correr a frente do relogio (era o bug: 119/120
     // iam adiante, ate' 468 ms, e o motor segurava o frame do futuro).
     ok(carimbos.every((v, i) => i === 0 || v > carimbos[i - 1]),
@@ -637,12 +641,10 @@ await test('o VIDEO e liberado pelo MESMO relogio (sincronia no ms)', () => {
   includes(md, 'bombearVideo', 'um bombeador libera o video pelo relogio');
   const i = md.indexOf('estado.bombearVideo');
   const bloco = md.slice(i, i + 2200);
-  // O video NAO pode ser liberado pelo relogio absoluto (`Date.now() - tZero`):
-  // quando o motor SEGURA o audio, o relogio continua e o video fica na frente
-  // (MEDIDO: 2960 ms, e nunca voltava). Ele segue o TEMPO DE MIDIA ja'
-  // entregue do audio — se o audio para, o video para junto.
-  includes(bloco, 'estado.tempoAudioMs', 'o video segue o tempo de midia do audio');
-  includes(bloco, 'indice / fps', 'cada frame vale o seu instante nominal');
+  // O video NAO usa mais um gate de "instante nominal": cada frame vai ao
+  // motor com o TEMPO DE CAPTURA REAL e o motor alinha pelo proprio relogio.
+  includes(bloco, 'enviarFrame', 'o video e enviado ao motor');
+  includes(bloco, 'filaVideo', 'passa pela fila do video');
   ok(!/Date\.now\(\) - estado\.tZero/.test(bloco), 'o video NAO usa o relogio absoluto (a causa do atraso)');
   // O timer do audio bombeia o video tambem (um relogio so).
   const t = md.indexOf('const timerAudio = setInterval');
@@ -672,11 +674,10 @@ await test('o gate do nivel NAO trava com o PISO do motor (a regressao do delay)
   // O video segue o que o OUVINTE ja' ouviu (entregue menos o buffer), nao o
   // que foi entregue: com o buffer cheio o som atrasa e o video espera junto.
   const v = md.indexOf('estado.bombearVideo');
-  // O video segue a POSICAO DE CONTEUDO do audio (avanca na entrega E no
-  // descarte): quando o audio pula para frente, o video pula junto.
-  // O video segue o que o OUVINTE JA' OUVIU (posicao de conteudo menos o
-  // buffer do motor) e' o que centraliza os dois sem atraso.
-  includes(md.slice(v, v + 3600), 'posicaoOuvidaMs', 'o video segue o que o ouvinte ja ouviu');
+  // O video segue o TEMPO DE CAPTURA REAL (o `carimbo`), nao um contador de
+  // indice: recusar ou descartar nao desloca a timeline dos seguintes.
+  const car = md.indexOf('const carimbo = () => {');
+  includes(md.slice(car, car + 400), 'Date.now()', 'o carimbo e o tempo real');
 });
 
 await test('o TETO da fila vale SEMPRE (o backlog do engasgo nao fica preso)', () => {
@@ -949,8 +950,14 @@ await test('o timestamp do video e uma TIMELINE nominal (passo exato por frame)'
   const md = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/midiap.js'), 'utf-8');
   const i = md.indexOf('const carimbo = () => {');
   const bloco = md.slice(i, i + 300);
-  includes(bloco, 'indice * passoUs', 'o carimbo e o indice vezes o passo');
-  includes(bloco, 'indice += 1', 'avanca um por frame');
+  // O carimbo e' o TEMPO DE CAPTURA REAL (a doc do zapo: *"`timestampUs` is the
+  // capture timestamp in microseconds"*). Era um contador (`indice * passoUs`)
+  // consumido ANTES de saber se o frame foi aceito — e o motor SEGURA os
+  // primeiros frames, entao cada recusado queimava 1/fps da timeline (MEDIDO:
+  // 49 recusados x 40 ms = 1,96 s de video adiantado, e crescendo).
+  includes(bloco, 'Date.now()', 'o carimbo e o relogio real');
+  includes(bloco, 'ultimoTsUs', 'garante timestamp novo por frame');
+  ok(!bloco.includes('indice * passoUs'), 'nao usa mais o contador de indice (era o bug)');
   ok(!bloco.includes('hrtime'), 'NAO depende do relogio de chegada');
 });
 

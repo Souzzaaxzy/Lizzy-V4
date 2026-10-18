@@ -615,23 +615,38 @@ async function alimentar({ cli, callId, entrada, fonte, estado, fps, temAudio = 
   // Agora o tempo e' o RELOGIO REAL, so' forçado a AVANCAR (nunca repetir
   // nem voltar): um frame que chega no mesmo milissegundo do anterior
   // recebe 1 us a mais, o que e' o minimo para o motor aceitar.
-  // O timestamp do video e' uma TIMELINE NOMINAL: o frame N vale N passos.
+  // ## O timestamp e' o TEMPO DE CAPTURA REAL (a doc do zapo)
   //
-  // Por que nao usar o relogio: o `-re` do ffmpeg NAO entrega no tempo
-  // real neste ambiente (medido: 2000 ms de video em 1411 ms de relogio,
-  // com rajadas de 2 frames). Carimbar pelo relogio faz o passo medio cair
-  // para ~24 ms e varios frames caírem no MESMO instante (gap 0) -- o motor
-  // exige um tick novo por frame.
+  // A doc do pacote e': *"`timestampUs` is the capture timestamp in
+  // microseconds; the plugin converts it to the 90 kHz RTP clock"*.
   //
-  // A timeline nominal resolve as duas coisas: cada frame AVANCA o passo
-  // exato (33,3 ms a 30 fps), sem rajada e sem acumular adiantamento sobre
-  // o que ja' foi enviado. O motor remapeia essa timeline para o relogio
-  // dele (o `HostCaptureTimeMapper` faz exatamente isso).
-  const passoUs = Math.round(1_000_000 / fps);
-  let indice = 0;
+  // ## O bug que isto corrige (MEDIDO)
+  //
+  // Antes o carimbo era um CONTADOR (`indice * passoUs`) consumido em
+  // `enviarFrame` ANTES de saber se o frame foi aceito:
+  //
+  //     const ts = carimbo();                          // consome um slot SEMPRE
+  //     const pacotes = cli.feedLiveVideo(callId, au, ts);
+  //     if (pacotes > 0) { ... } else { recusados++ }  // slot ja' queimado
+  //
+  // E o motor SEGURA os primeiros frames (*"Your first frames are held"*,
+  // com cap de 2 s na doc) devolvendo `0`. Cada recusado queimava 1/fps da
+  // timeline: MEDIDO, 49 recusados x 40 ms = **1,96 s** — o video nascia ~2 s
+  // ADIANTADO. E como e' um contador, TODO descarte (o teto da fila, o
+  // catch-up) deslocava a timeline para sempre — o "vai subindo".
+  //
+  // Com o relogio real, recusar ou descartar nao desloca nada: o proximo
+  // frame vale o instante em que ele realmente esta' sendo capturado.
+  //
+  // O `Math.max(real, ultimo + 1)` mantem a invariante que o motor exige
+  // (timestamp novo por frame, nunca repetido nem para tras) sem NUNCA correr
+  // a frente do relogio.
+  let ultimoTsUs = 0;
+  let ultimoEnvioVideoMs = 0;
   const carimbo = () => {
-    const ts = indice * passoUs;
-    indice += 1;
+    const realUs = Math.max(0, (Date.now() - (estado.tZero ?? Date.now())) * 1000);
+    const ts = Math.max(realUs, ultimoTsUs + 1);
+    ultimoTsUs = ts;
     return ts;
   };
 
@@ -722,9 +737,10 @@ async function alimentar({ cli, callId, entrada, fonte, estado, fps, temAudio = 
     // video andava 140-180 ms NA FRENTE e o audio parecia atrasado (quando o
     // adiantado era o video).
     //
-    // Aqui cada access unit entra numa fila com o instante nominal
-    // (`indice / fps`) e so' vai ao motor quando esse instante CHEGA. Os dois
-    // fluxos passam a ser liberados pelo mesmo relogio — no mesmo ms.
+    // Cada access unit entra numa fila e sai para o motor em ordem. O
+    // timestamp de cada um e' o TEMPO DE CAPTURA REAL (ver o `carimbo`), entao
+    // o motor alinha o video ao audio pelo proprio relogio — nao precisamos
+    // mais de um gate de "instante nominal" aqui.
     const filaVideo = [];
     proc.stdout.on('data', (chunk) => {
       if (estado.parado) return;
@@ -737,50 +753,26 @@ async function alimentar({ cli, callId, entrada, fonte, estado, fps, temAudio = 
       if (estado.parado) return;
       // Antes do PREROLL nada sai: esperamos os DOIS fluxos ficarem prontos.
       if (!estado.prerollFeito) return;
-      // Teto: se a fila passou do limite, o video esta' atrasado " descarta o
+      // Teto: se a fila passou do limite, o video esta' atrasado — descarta o
       // MAIS ANTIGO para ele voltar ao tempo real (mesmo criterio do audio).
       while (filaVideo.length > FILA_MAX_FRAMES_VIDEO) {
         filaVideo.shift();
         estado.videoDescartado = (estado.videoDescartado || 0) + 1;
       }
-      while (filaVideo.length) {
-        // ## O relogio do video: o som (quando ha') ou a parede (quando nao ha')
-        //
-        // COM audio: o video segue `posicaoOuvidaMs` (o que o ouvinte ja' tem
-        // no ouvido) � e' o que centraliza os dois sem atraso.
-        //
-        // SEM audio (video mudo): nao ha' relogio de som para seguir, entao o
-        // video corre pelo relogio da parede desde o `tZero`. Sem isto ele
-        // ficaria parado (o `posicaoOuvidaMs` nunca avanca).
-        const posAudio = temAudio
-          ? (estado.posicaoOuvidaMs ?? estado.tempoAudioMs)
-          : (Date.now() - (estado.tZero || Date.now()));
-        const alvoAtual = (indice / fps) * 1000;
-        // ## O video PULA a timeline junto com o audio (um salto so')
-        //
-        // Quando o audio faz catch-up (descarta o atraso acumulado), a
-        // timeline dele avanca de uma vez. O video tem de pular junto: basta
-        // reposicionar o `indice` no instante do audio — o proximo frame da
-        // fila passa a valer esse instante.
-        //
-        // Descartar frame a frame NAO resolve: a fila nao tem os 3 s de
-        // frames que o audio pulou (os antigos ja' sairam), entao o video
-        // ficava parado esperando o instante que o `indice` pedia.
-        if (posAudio - alvoAtual > VIDEO_ATRASO_MAX_MS) {
-          indice = Math.ceil((posAudio / 1000) * fps);
-          estado.videoDescartado = (estado.videoDescartado || 0) + 1;
-          continue;
-        }
-        // ## O VIDEO e' liberado pelo TEMPO DE MIDIA DO AUDIO
-        //
-        // O video segue o que o OUVINTE JA' OUVIU (`posicaoOuvidaMs` = posicao
-        // de conteudo menos o buffer do motor), nao o que foi entregue. O
-        // motor guarda um jitter buffer proprio (ate' ~750 ms): o audio que
-        // ENTREGAMOS ainda vai tocar. Se o video seguisse o entregue, ele
-        // apareceria ANTES do som " esse e' o atraso percebido.
-        if (posAudio < alvoAtual) break;   // o som ainda nao chegou la'
-        enviarFrame(cli, callId, filaVideo.shift(), carimbo, estado);
-      }
+      // ## O PACING: no maximo um frame por intervalo (o `-re` nao segura)
+      //
+      // O `-re` do ffmpeg entrega o video por CHEGADA, em rajada (medido:
+      // 2000 ms de conteudo em 1411 ms de relogio). Sem limitar a saida, o
+      // motor recebe tudo de uma vez e o video dispara na frente.
+      //
+      // O limite e' o intervalo real do fps (1/25 s = 40 ms): e' o mesmo
+      // criterio do audio (1 frame a cada 60 ms). O TIMESTAMP de cada frame
+      // continua sendo o tempo de captura real (ver o `carimbo`).
+      const intervaloMs = 1000 / fps;
+      if (ultimoEnvioVideoMs && Date.now() - ultimoEnvioVideoMs < intervaloMs) return;
+      if (!filaVideo.length) return;
+      ultimoEnvioVideoMs = Date.now();
+      enviarFrame(cli, callId, filaVideo.shift(), carimbo, estado);
     };
 
     // ## O PREROLL: so' comeca quando os DOIS fluxos estao prontos
