@@ -1255,6 +1255,7 @@ import npcManager from './utils/npcManager.js';
 import nameReactions from './utils/nameReactions.js';
 import msgCounter from './utils/msgCounter.js';
 import { registrarMencao, resumoDeHoje, mencoesDeHoje, acharNoResumo, registroPorIndice } from './utils/mencoes.js';
+import { gerarCarteirinha, dataBR } from './utils/carteirinha.js';
 // X9 System - Integração com comandos de aprovação
 import { processNewJoinRequest, updateCardOnApprove, updateCardOnReject, notifyWhatsAppApproval, findRequestByNumber, x9Store } from './utils/x9System.js';
 import { saveWelcomeImage, loadWelcomeImage, deleteWelcomeImage, isLocalImagePath } from './utils/welcomeImages.js';
@@ -41180,6 +41181,95 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
         } catch (e) {
           console.error('[MENCOES] erro:', e?.message || e);
           return reply('❌ Deu erro ao consultar as menções 💔');
+        }
+      }
+
+      // ═══════════════════════════════════════════════════════════════
+      // 🪪 !carteirinha — a carteirinha do membro (PNG)
+      //
+      // Gera um documento visual com a FOTO do perfil, o nome, o cargo no
+      // grupo, a data de entrada e um numero de serie. Sem argumento usa quem
+      // mandou o comando; com @mencao (ou numero) faz a do alvo.
+      // ═══════════════════════════════════════════════════════════════
+      case 'carteirinha':
+      case 'carteira':
+      case 'doc': {
+        try {
+          if (!isGroup) return reply('🪪 Este comando só funciona em grupos!');
+
+          // Alvo: mencao/citacao > numero digitado > quem mandou.
+          let alvo = sender;
+          const termo = (q || '').trim();
+          if (menc_os2) {
+            alvo = menc_os2;
+          } else if (/^\d{10,15}$/.test(termo.replace(/\D/g, '')) && termo.replace(/\D/g, '').length >= 10) {
+            alvo = `${termo.replace(/\D/g, '')}@s.whatsapp.net`;
+          }
+
+          // Nome: o resolvedor unico (agenda > notify > metadata).
+          let nome = '';
+          try {
+            nome = await resolverNomeContato(alvo, { nazu, metadata: groupMetadata, from });
+          } catch { /* usa o fallback */ }
+          if (!nome || baseId(nome) === baseId(alvo)) {
+            // Sem nome resolvido: usa o numero (nunca o LID).
+            const part = acharParticipantePorId(groupMetadata, alvo);
+            const tel = numerosDoParticipante(groupMetadata, alvo)[0]
+              || String(alvo).split('@')[0].replace(/\D/g, '');
+            nome = tel || part?.notify || 'Membro';
+          }
+
+          // Cargo: a MESMA hierarquia do resto do bot.
+          let cargo = 'Membro';
+          if (idsMatch(alvo, sender) && isOwner) cargo = 'Dono';
+          else if (idsMatch(alvo, sender) && isSubOwner) cargo = 'Subdono';
+          else if (idInArray(alvo, groupAdmins)) cargo = 'Administrador';
+          else if (isBotAdmin && idsMatch(alvo, botNumberLid)) cargo = 'Bot';
+
+          // Entrada: o metadata pode trazer (varia por versao do Baileys).
+          const part = acharParticipantePorId(groupMetadata, alvo);
+          const entrouEm = Number(part?.joinedAt || part?.joinTimestamp || 0) * (Number(part?.joinedAt || part?.joinTimestamp) > 1e12 ? 1 : 1000) || null;
+
+          // Foto de perfil: baixa UMA vez (o modulo so' desenha).
+          let foto = null;
+          try {
+            const url = await nazu.profilePictureUrl(alvo, 'image');
+            if (url) {
+              const ctrl = new AbortController();
+              const timer = setTimeout(() => ctrl.abort(), 15000);
+              try {
+                const res = await fetch(url, { signal: ctrl.signal });
+                if (res.ok) foto = Buffer.from(await res.arrayBuffer());
+              } finally { clearTimeout(timer); }
+            }
+          } catch { /* sem foto: o modulo usa o placeholder */ }
+
+          const card = await gerarCarteirinha({
+            foto,
+            nome,
+            cargo,
+            entrouEm,
+            id: alvo,
+            grupo: groupMetadata?.subject || null,
+          });
+          if (!card.ok) {
+            console.error('[CARTEIRINHA] falhou:', card.msg);
+            return reply('❌ Não consegui gerar a carteirinha 💔');
+          }
+
+          await nazu.sendMessage(from, {
+            image: card.buffer,
+            caption:
+              `🪪 *CARTEIRINHA*\n\n` +
+              `👤 ${nome}\n` +
+              `🏅 ${cargo}\n` +
+              (entrouEm ? `📅 No grupo desde ${dataBR(entrouEm)}\n` : '') +
+              `🔢 Nº ${card.serie}`,
+            contextInfo: gerarContextNewsletter(),
+          });
+        } catch (e) {
+          console.error('[CARTEIRINHA] erro:', e?.message || e);
+          return reply('❌ Deu erro ao gerar a carteirinha 💔');
         }
       }
 

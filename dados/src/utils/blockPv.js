@@ -291,7 +291,7 @@ export const menuCommandsMap = {
     },
     menumemb: {
         menuName: 'Membros',
-        commands: ['perfil', 'hist', 'historico', 'rank', 'transações', 'inventário', 'inv', 'status', 'rep', 'reputação', 'daily', 'semana', 'mensal', 'saldo', 'depositar', 'sacar', 'transferir', 'enviar', 'roubar', 'bet', 'apostar', 'minerar', 'trabalho', 'trab', 'daily', 'emprego', 'procurar', 'mineraca', 'encontrar', 'musicap', 'fila', 'callp', 'mencoes']
+        commands: ['perfil', 'hist', 'historico', 'rank', 'transações', 'inventário', 'inv', 'status', 'rep', 'reputação', 'daily', 'semana', 'mensal', 'saldo', 'depositar', 'sacar', 'transferir', 'enviar', 'roubar', 'bet', 'apostar', 'minerar', 'trabalho', 'trab', 'daily', 'emprego', 'procurar', 'mineraca', 'encontrar', 'musicap', 'fila', 'callp', 'mencoes', 'carteirinha']
     },
     ferramentas: {
         menuName: 'Ferramentas',
