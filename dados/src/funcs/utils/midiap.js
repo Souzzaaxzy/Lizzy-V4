@@ -369,6 +369,13 @@ export function argumentosDoEncoder(entrada, fps = FPS_PADRAO, temAudio = true, 
       '-vn',
       '-af', FILTROS_AUDIO,
       '-ac', '1', '-ar', String(TAXA_AUDIO),
+      // ## Blocos menores no pipe (o pico cai de 255 ms para ~90)
+      //
+      // MEDIDO: sem isto o ffmpeg entrega blocos de ate' 255 ms (media 25).
+      // O bloco GRANDE e' o que faz a nossa fila ter de segurar: para nao
+      // perder audio, ela guarda o bloco inteiro. Com o flush por pacote o
+      // pico cai para ~90 ms e a fila trabalha em blocos menores.
+      '-flush_packets', '1',
       '-f', 'f32le', duas ? 'pipe:4' : 'pipe:3'
     );
   }
@@ -720,16 +727,25 @@ async function alimentar({ cli, callId, entrada, fonte, estado, fps, temAudio = 
       // Erro nos dois lados: o yt-dlp pode sair antes do ffmpeg.
       proc.stdin.on('error', () => { /* o yt-dlp pode ter saido */ });
       proc.stdio[3]?.on('error', () => { /* idem, no lado do audio */ });
-      const bombear = (origem, destino) => {
+      const bombear = (origem, destino, ehAudio) => {
         if (!origem || !destino) return;
+        // Guarda SO' o produtor de AUDIO: pausar o `destino` (onde escrevemos)
+        // nao para o yt-dlp, que continuaria baixando e enchendo a nossa fila
+        // (era o caso do LINK, onde a fila ficava em 12 frames mesmo com o
+        // backpressure ligado). O produtor de VIDEO nao se pausa aqui — parar
+        // a leitura dele travaria a imagem junto.
+        if (ehAudio) {
+          if (!estado.origensLink) estado.origensLink = [];
+          estado.origensLink.push(origem);
+        }
         origem.on('data', (c) => {
           if (estado.parado || destino.destroyed) return;
           try { destino.write(c); } catch { /* corrida */ }
         });
         origem.on('end', () => { try { destino.end(); } catch { /* ok */ } });
       };
-      bombear(r.proc.stdout, proc.stdin);           // video -> fd0
-      bombear(r.procAudio?.stdout, proc.stdio[3]);  // audio -> fd3
+      bombear(r.proc.stdout, proc.stdin, false);           // video -> fd0
+      bombear(r.procAudio?.stdout, proc.stdio[3], true);   // audio -> fd3
       r.proc.on('close', () => { try { proc.stdin.end(); } catch { /* ok */ } });
       r.procAudio?.on('close', () => { try { proc.stdio[3]?.end(); } catch { /* ok */ } });
     }
@@ -1078,13 +1094,23 @@ async function alimentar({ cli, callId, entrada, fonte, estado, fps, temAudio = 
       // motor com amostra disponivel sem virar latencia. MEDIDO: com o alvo em
       // 14 frames a fila ficava em 12 (720 ms de delay); com 2, fica em 0-3.
       const filaAtual = estado.fila ? estado.fila.length : 0;
-      if (estado.streamAudio) {
+      // ## Quem se pausa e' o PRODUTOR, nao o cano
+      //
+      // No ARQUIVO/FLUXO o produtor e' o proprio ffmpeg, e pausar o
+      // `streamAudio` o bloqueia. No LINK o audio vem de um yt-dlp: pausar o
+      // `proc.stdio[3]` (o lado onde ESCREVEMOS) nao para nada " o yt-dlp
+      // continua baixando e a fila enche do mesmo jeito (MEDIDO: `filaA=12`).
+      // Por isso as origens do link sao guardadas e pausadas aqui.
+      const alvos = estado.origensLink?.length
+        ? estado.origensLink
+        : (estado.streamAudio ? [estado.streamAudio] : []);
+      if (alvos.length) {
         if (filaAtual >= FILA_ALVO_LEITURA && !estado.leituraPausada) {
           estado.leituraPausada = true;
-          try { estado.streamAudio.pause(); } catch { /* ok */ }
+          for (const a of alvos) { try { a.pause(); } catch { /* ok */ } }
         } else if (filaAtual <= 1 && estado.leituraPausada) {
           estado.leituraPausada = false;
-          try { estado.streamAudio.resume(); } catch { /* ok */ }
+          for (const a of alvos) { try { a.resume(); } catch { /* ok */ } }
         }
       }
       // ## O TETO da fila vale SEMPRE (nao so' enquanto segura)
@@ -1289,6 +1315,7 @@ export function parar(grupo) {
   try { clearInterval(estado.timerAudio); } catch { /* ok */ }
   try { clearInterval(estado.logDiag); } catch { /* ok */ }
   try { estado.streamAudio?.resume(); } catch { /* ok */ }
+  for (const a of estado.origensLink || []) { try { a.resume(); } catch { /* ok */ } }
   estado.fila = [];
   // O ffmpeg (video e audio sao duas saidas dele) e, num LINK, o yt-dlp.
   try { estado.proc?.kill('SIGKILL'); } catch { /* ok */ }

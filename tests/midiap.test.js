@@ -604,11 +604,12 @@ await test('o audio sai em RITMO CONSTANTE (fila + relogio proprio)', () => {
   // sairem no mesmo milissegundo.
   const i = md.indexOf('const timerAudio = setInterval');
   const bloco = md.slice(i, i + 5200);
-  // O ritmo e' ancorado no ULTIMO frame entregue (`proximoDevidoMs`), nao no
-  // relogio absoluto: comparar com o tempo total acumulava divida e o audio
-  // atrasava 3 s (o relato do dono).
-  includes(bloco, 'proximoDevidoMs', 'o ritmo ancora no ultimo entregue');
-  includes(bloco, 'MS_POR_FRAME', 'um frame por intervalo do motor');
+  // NAO ha' gate de ritmo nosso: quem anda o audio e' o MOTOR
+  // (`WaAudioEngine.startCaptureClock`). MEDIDO: o gate ("1 frame a cada
+  // 60 ms") entregava EXATAMENTE o que o motor consome, entao a fila enchia
+  // no arranque e ficava cheia para sempre (`filaA=12` = 720 ms de delay).
+  includes(bloco, 'streamAudio', 'pausa a FONTE quando a fila enche');
+  includes(bloco, 'leituraPausada', 'retoma a leitura quando a fila drena');
   // O backpressure le o nivel REAL do motor (o contrato dele), nao um contador
   // nosso: era isso que enchia o buffer e atrasava o audio.
   includes(bloco, 'getLiveBufferMs', 'le o nivel real do motor');
@@ -665,7 +666,7 @@ await test('o gate do nivel NAO trava com o PISO do motor (a regressao do delay)
   // atraso crescendo 18 s. O gate tem de exigir o nivel MUDANDO.
   const md = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/midiap.js'), 'utf-8');
   const t = md.indexOf('const timerAudio = setInterval');
-  const bloco = md.slice(t, t + 5200);
+  const bloco = md.slice(t, t + 6600);
   includes(bloco, 'estado.audioSegurando', 'o gate tem memoria (histerese)');
   includes(bloco, 'AUDIO_RESUME_MS', 'volta a entregar no resumeMs do motor');
   // NAO pode voltar ao discriminador "nivel mudando" (era o bug: no engasgo o
@@ -691,16 +692,16 @@ await test('o TETO da fila vale SEMPRE (o backlog do engasgo nao fica preso)', (
   // independente de quanto durou o engasgo.
   const md = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/midiap.js'), 'utf-8');
   const t = md.indexOf('const timerAudio = setInterval');
-  const bloco = md.slice(t, t + 5200);
+  const bloco = md.slice(t, t + 6600);
   // O `while` do teto tem de vir ANTES do `if (segurando)` — senao so' roda
   // enquanto o motor segura (era o bug).
   const posTeto = bloco.indexOf('fila.length > FILA_MAX_FRAMES');
   const posSegurando = bloco.indexOf('if (segurando)');
   ok(posTeto > -1, 'o teto da fila existe');
   ok(posSegurando > -1, 'o gate de pausa existe');
-  ok(posTeto < posSegurando, 'o teto roda ANTES do gate (vale sempre, nao so segurando)');
+  ok(posTeto < posSegurando, 'o teto roda ANTES do gate (vale sempre)');
   // E o descarte avanca a posicao de conteudo (o video pula junto).
-  const b2 = bloco.slice(posTeto, posTeto + 700);
+  const b2 = bloco.slice(posTeto, posTeto + 900);
   includes(b2, 'posicaoAudioMs', 'o descarte avanca a posicao de conteudo (o video pula junto)');
 });
 
@@ -755,13 +756,13 @@ await test('a fila tem TETO e descarta o MAIS ANTIGO (volta ao tempo real)', () 
   // com o motor SEGURANDO (nivel no alvo). No arranque a fila esta' funda
   // porque o ffmpeg produz em rajada — descartar ali perderia audio bom.
   const t = md.indexOf('const timerAudio = setInterval');
-  const bloco = md.slice(t, t + 3600);
+  const bloco = md.slice(t, t + 6600);
   // O caminho PRINCIPAL agora e' o BACKPRESSURE NA FONTE: pausar o pipe do
   // ffmpeg quando a fila passa do alvo (nada se acumula e nada se perde).
   // O descarte do mais antigo continua como REDE DE SEGURANCA acima do teto.
   includes(bloco, 'streamAudio', 'pausa a FONTE (o ffmpeg) quando a fila enche');
   includes(bloco, 'leituraPausada', 'retoma a leitura quando a fila drena');
-  includes(md.slice(t, t + 5000), 'estado.fila.shift()', 'o descarte do mais antigo segue como rede');
+  includes(md.slice(t, t + 6600), 'estado.fila.shift()', 'o descarte do mais antigo segue como rede');
   // E o `bombearAudio` NAO pode descartar (era o furo: perdia 120 ms no arranque).
   const b = md.indexOf('const bombearAudio');
   ok(!/fila\.length > FILA_MAX_FRAMES/.test(md.slice(b, b + 900)), 'o bombearAudio nao descarta (so entrega)');
