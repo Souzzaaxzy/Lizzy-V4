@@ -443,8 +443,6 @@ export async function transmitir({ grupo, callId, arquivo = null, fluxo = null, 
     // relogio do video: se o buffer do motor enche, o som chega atrasado e o
     // video espera junto (sincronia na percepcao, nao no envio).
     ouvidoMs: null,
-    // Ultimo nivel lido do motor (para o discriminador do backpressure).
-    nivelAnterior: null,
     // Quando o proximo frame de audio e' devido (ms). Nasce no preroll.
     proximoDevidoMs: null,
     // Se o preroll ja' liberou a transmissao.
@@ -900,52 +898,43 @@ async function alimentar({ cli, callId, entrada, fonte, estado, log, fps, temAud
         if (typeof atual === 'number') { nivel = atual; estado.nivelMs = atual; }
       } catch { /* segue com o ultimo valor */ }
 
-      // ## O BACKPRESSURE: o motor so' esta' segurando se o nivel esta' MUDANDO
+      // ## O BACKPRESSURE do motor: HISterese simples (o contrato dele)
       //
-      // O contrato do motor e' `getFeedWatermarksMs()`: *"pause a producer at
-      // pauseMs (120 ms), resume at resumeMs (60 ms)"*. A ideia e' pausar a
-      // entrega quando o buffer dele enche.
+      // O contrato e' `getFeedWatermarksMs()`: *"pause a producer at pauseMs
+      // (120 ms), resume at resumeMs (60 ms)"*. E' uma HISTERESE — para ao encher,
+      // volta so' quando drena de verdade.
       //
-      // ## Por que um LIMIAR no nivel NAO funciona (MEDIDO)
+      // ## O ERRO que isto corrige (MEDIDO no motor fiel)
       //
-      // O `getLiveBufferMs` do motor tem um PISO: ele reporta o que esta' A
-      // FRENTE do consumidor e nao desce abaixo de ~100 ms. Qualquer limiar
-      // abaixo do piso trava a entrega PARA SEMPRE: o audio para de sair, o
-      // `tempoAudioMs` congela, o video congela junto e o delay CRESCE sem
-      // limite (o relato do dono). MEDIDO com um motor de piso:
+      // Eu tinha trocado a histerese por um discriminador ("so' segura se o
+      // nivel estiver MUDANDO"), supondo que o motor tivesse um PISO de dreno
+      // e que um nivel constante fosse esse piso. As duas suposicoes estavam
+      // ERRADAS:
       //
-      //   piso  limiar  entregue em 15 s   resultado
-      //   100   30      0 ms               atraso crescendo 18 s
-      //   150   120     840 ms (0.06x)     atraso crescendo 8 s
-      //   100   120     15240 ms (1.006x)  estavel
+      //   1. o motor NAO tem piso: o nivel cai ate' ~12 ms normalmente
+      //      (o "piso de 100 ms" veio de um harness meu, nao do motor);
+      //   2. durante um engasgo, entre uma entrega e outra o nivel fica
+      //      CONSTANTE (o dreno parou) — e o discriminador lia isso como "nao
+      //      e' backpressure" e CONTINUAVA entregando. O buffer ia a 750 ms
+      //      (o teto) e o audio ficava 690 ms atrasado para sempre.
       //
-      // ## O discriminador: o nivel esta' MUDANDO?
-      //
-      // Um nivel CONSTANTE no watermark e' o piso do motor — nao e' backpressure,
-      // e pausar ali e' o que trava. O motor esta' segurando DE VERDADE quando
-      // o nivel CRESCE (ele esta' enchendo porque nao consome no ritmo).
-      //
-      // Isso vale para qualquer piso: constante -> entrega em 1x (correto);
-      // crescendo -> pausa (backpressure real).
-      const nivelAnterior = estado.nivelAnterior ?? nivel;
-      const nivelMudou = Math.abs(nivel - nivelAnterior) > 2;
-      estado.nivelAnterior = nivel;
-      const segurando = nivel >= AUDIO_PAUSE_MS && nivelMudou;
+      // Com a histerese simples o motor DRENA o backlog dele durante a pausa
+      // (toca o que ja' tem, sem gap) e a entrega volta no `resumeMs`.
+      const segurando = estado.audioSegurando
+        ? nivel > AUDIO_RESUME_MS
+        : nivel >= AUDIO_PAUSE_MS;
       if (segurando) {
-        // ## Se a fila passou do teto, o audio esta' ATRASADO: descarta o antigo
-        //
-        // Isto SO' vale com o motor segurando (a fila cresce por atraso real).
-        // No INICIO (motor ocioso) a fila pode estar funda porque o ffmpeg
-        // produziu em rajada — descartar ali jogaria fora audio BOM.
+        estado.audioSegurando = true;
+        // Descarta o atraso acumulado da NOSSA fila, para nao re-enche-lo ao
+        // retomar (era o que mantinha o residuo de 690 ms).
         while (estado.fila.length > FILA_MAX_FRAMES) {
           estado.fila.shift();
           estado.audioDescartado = (estado.audioDescartado || 0) + 1;
-          // O frame descartado tambem "passou" no relogio: sem isto o relogio
-          // ficaria devendo e o ritmo travaria.
           estado.proximoDevidoMs = Math.min(estado.proximoDevidoMs, Date.now());
         }
-        return;   // motor segurando de verdade: nao entrega (deixa drenar)
+        return;   // motor enchendo: nao entrega (deixa drenar o backlog)
       }
+      estado.audioSegurando = false;
 
       const antes = estado.amostras || 0;
       bombearAudio();

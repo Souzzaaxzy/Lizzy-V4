@@ -612,11 +612,14 @@ await test('o audio sai em RITMO CONSTANTE (fila + relogio proprio)', () => {
   // O backpressure le o nivel REAL do motor (o contrato dele), nao um contador
   // nosso: era isso que enchia o buffer e atrasava o audio.
   includes(bloco, 'getLiveBufferMs', 'le o nivel real do motor');
-  // O gate NAO pode ser um limiar no nivel: o motor reporta um PISO e o limiar
-  // nunca reabriria (MEDIDO: alvo 30 -> 0 ms entregues, atraso crescendo 18 s).
-  // Ele exige o nivel estar MUDANDO (backpressure de verdade).
-  includes(bloco, 'nivelMudou', 'o gate exige o nivel mudando (piso nao trava)');
+  // O gate e' a HISTERESE do contrato do motor (`pauseMs`/`resumeMs`): para ao
+  // encher, volta so' quando drena. Um discriminador ("nivel mudando") foi
+  // MEDIDO como ERRADO: durante o engasgo o nivel fica constante entre as
+  // entregas e ele lia isso como "nao e' backpressure", enchendo o buffer ate'
+  // 750 ms (o audio ficava 690 ms atrasado para sempre).
   includes(bloco, 'AUDIO_PAUSE_MS', 'usa o pauseMs do contrato do motor');
+  includes(bloco, 'AUDIO_RESUME_MS', 'usa o resumeMs (histerese, nao limiar unico)');
+  includes(bloco, 'estado.audioSegurando', 'a histerese tem memoria do estado');
   // E o atraso acumulado e' DESCARTADO (volta ao tempo real).
   includes(bloco, 'FILA_MAX_FRAMES', 'descarta quando a fila passa do teto');
 });
@@ -661,10 +664,11 @@ await test('o gate do nivel NAO trava com o PISO do motor (a regressao do delay)
   const md = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/midiap.js'), 'utf-8');
   const t = md.indexOf('const timerAudio = setInterval');
   const bloco = md.slice(t, t + 5200);
-  includes(bloco, 'nivelMudou', 'o gate exige o nivel MUDANDO (o piso nao trava)');
-  includes(bloco, 'estado.nivelAnterior', 'compara com o nivel anterior');
-  // E NAO pode voltar a ser um limiar simples (era o bug).
-  ok(!/nivel >= AUDIO_ALVO_MS/.test(bloco), 'nao usa limiar simples no nivel (travava com o piso)');
+  includes(bloco, 'estado.audioSegurando', 'o gate tem memoria (histerese)');
+  includes(bloco, 'AUDIO_RESUME_MS', 'volta a entregar no resumeMs do motor');
+  // NAO pode voltar ao discriminador "nivel mudando" (era o bug: no engasgo o
+  // nivel fica constante e ele continuava entregando ate' 750 ms).
+  ok(!/nivelMudou/.test(bloco), 'nao usa o discriminador de nivel mudando (era o bug)');
   // O video segue o que o OUVINTE ja' ouviu (entregue menos o buffer), nao o
   // que foi entregue: com o buffer cheio o som atrasa e o video espera junto.
   const v = md.indexOf('estado.bombearVideo');
