@@ -407,13 +407,17 @@ await test('!mencoes <numero>: acha pelo numero de quem marcou', async () => {
 
 await test('!mencoes <n>: mostra a mencao de indice n', async () => {
   const g = makeGroup();
-  const alvo = novoAlvo();
-  await enviar({ groupJid: g, texto: 'a primeira', mencionados: [alvo], id: 'I1', de: AUTOR_LID, deNome: 'Ana' });
+  // Usa um alvo CONHECIDO no metadata: e' o caso em que o nome e' resolvivel.
+  const alvo = ALVO_LID;
+  await enviar({ groupJid: g, texto: 'a primeira @' + alvo.split('@')[0], mencionados: [alvo], id: 'I1', de: AUTOR_LID, deNome: 'Ana' });
   await enviar({ groupJid: g, texto: 'a segunda', mencionados: [alvo], id: 'I2', de: AUTOR_LID, deNome: 'Ana' });
 
   const r1 = await enviar({ groupJid: g, texto: '!mencoes 1', de: alvo, id: 'CMD5' });
   includes(r1.resposta, 'MENÇÃO #1', 'o titulo com o indice');
   includes(r1.resposta, 'a primeira', 'o texto da 1a');
+  // O texto guardado traz o @LID cru; o comando mostra o NOME (nao o LID).
+  ok(!r1.resposta.includes(alvo.split('@')[0]), 'nao mostra o LID no texto');
+  includes(r1.resposta, 'Alvo', 'mostra o NOME de quem foi marcado no texto');
 
   const r2 = await enviar({ groupJid: g, texto: '!mencoes 2', de: alvo, id: 'CMD6' });
   includes(r2.resposta, 'a segunda', 'o texto da 2a');

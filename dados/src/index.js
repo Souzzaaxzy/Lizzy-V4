@@ -41126,11 +41126,16 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
               );
             }
             const nome = await nomeDe(reg.de);
+            // O texto guardado pode conter `@<lid>` (a mencao como o WhatsApp
+            // escreve). Troca pelo NOME com o MESMO resolvedor do `!statusgrupo`.
+            const textoMencao = reg.texto
+              ? await trocarMencoesPorNome(reg.texto, [reg.de, sender], { nazu, metadata: groupMetadata, from })
+              : '';
             const texto =
               cabeca(`MENÇÃO #${sub}`) + '\n' +
               `┃ 👤 De: ${nome}\n` +
               `┃ 🕒 Às: ${horaDe(reg.em)}\n` +
-              (reg.texto ? `┃ 💬 ${reg.texto}\n` : '') +
+              (textoMencao ? `┃ 💬 ${textoMencao}\n` : '') +
               `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯\n\n` +
               `│ ℹ️ *${groupPrefix}mencoes marcar ${sub}*` + '—' + ` voltar nela`;
             return reply(texto, { mentions: [reg.de] });
@@ -41153,10 +41158,15 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
             );
           }
           const nomePessoa = await nomeDe(pessoa.de);
-          const msgs = pessoa.registros.map((r) => {
-            const trecho = r.texto ? `\n│     💬 ${r.texto}` : '';
-            return `│ 🕒 ${horaDe(r.em)}${trecho}`;
-          });
+          // Cada registro mostra o texto da mensagem; ele pode trazer `@<lid>`,
+          // entao passa pelo mesmo resolvedor.
+          const msgs = [];
+          for (const r of pessoa.registros) {
+            const txt = r.texto
+              ? await trocarMencoesPorNome(r.texto, [pessoa.de, sender], { nazu, metadata: groupMetadata, from })
+              : '';
+            msgs.push(`│ 🕒 ${horaDe(r.em)}${txt ? `\n│     💬 ${txt}` : ''}`);
+          }
           const texto =
             cabeca('MENÇÕES DE') + '\n' +
             `┃ 👤 ${nomePessoa}\n` +
