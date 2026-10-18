@@ -95,6 +95,35 @@ function circleCrop(img, diameter) {
   return out;
 }
 
+/**
+ * Deixa o texto no que a FONTE cobre.
+ *
+ * ## Os dois bugs que isto resolve (MEDIDOS)
+ *
+ * 1. **`?????` no lugar do nome.** A fonte bitmap (`dejavu-bold-96`) tem 191
+ *    glifos: ASCII + Latin-1. Char fora disso (emoji, japones, e o "nome
+ *    estilizado" 𝕶𝖆𝖓𝖓𝖔𝖓) e' desenhado como `?` pelo `print` do jimp.
+ * 2. **Nome estilizado perdido.** Os "nomes bonitos" do WhatsApp sao
+ *    MATHEMATICAL BOLD (`𝐊𝐚𝐧𝐧𝐨𝐧`), que a fonte nao tem " mas o NFKC os
+ *    converte de volta para `Kannon`, que ela TEM.
+ *
+ * Ordem: NFKC (desfaz o estilo) -> tira marcas combinantes -> mantem so' o que
+ * a fonte cobre. Emoji e ideogramas saem (nao ha glifo); o resto do nome fica.
+ */
+export function paraFonte(texto) {
+  let out = String(texto ?? '');
+  try { out = out.normalize('NFKC'); } catch { /* segue sem normalizar */ }
+  let limpo = '';
+  for (const ch of out) {
+    const cp = ch.codePointAt(0);
+    // ASCII visivel (32..126) + Latin-1 suplementar (160..255) = o que a fonte tem.
+    if ((cp >= 32 && cp <= 126) || (cp >= 160 && cp <= 255)) limpo += ch;
+    else if (cp === 9 || cp === 10 || cp === 13) limpo += ' ';
+  }
+  // Espacos repetidos e das pontas (o emoji removido deixava buracos).
+  return limpo.replace(/\s{2,}/g, ' ').trim();
+}
+
 /** Bounding box do que tem alpha > 0. */
 function alphaBBox(layer) {
   let minX = layer.width;
@@ -114,23 +143,30 @@ function alphaBBox(layer) {
 }
 
 /**
- * Renderiza UM texto e devolve a imagem ja' ajustada a uma caixa.
+ * Renderiza UM texto NUMA LINHA e devolve a imagem ajustada a uma caixa.
  *
- * O `print` do jimp desenha numa camada; recortamos pelo bbox alfa (senao a
- * caixa inteira vira area) e reduzimos se passar da largura/altura pedidas.
+ * ## O corte ("CARTEIRI") que isto corrige (MEDIDO)
+ *
+ * O `print` do jimp **quebra em linha** quando o texto passa do `maxWidth` "
+ * e a segunda linha nao caber na altura da camada, ela e' descartada. Era o
+ * que cortava "CARTEIRINHA" em "CARTEIRI" e o nome do grupo em "Grupo: X".
+ *
+ * Por isso a camada e' LARGA (o texto cresce numa linha so') e o ajuste e' por
+ * ESCALA depois: medimos o bbox e reduzimos ate' caber na largura/altura
+ * pedidas. Nunca quebra, nunca corta.
  */
 async function renderText(texto, colorHex, maxW, maxH, align = HorizontalAlign.LEFT) {
-  const str = String(texto ?? '').trim();
+  const str = paraFonte(texto);
   if (!str) return null;
   const font = await getFont();
-  const layer = new Jimp({ width: maxW + 80, height: maxH + 160, color: 0x00000000 });
+  // Larga o bastante para o texto crescer numa linha (a fonte e' 96px; 4096
+  // cabe ~60 caracteres " muito mais do que qualquer campo da carteirinha).
+  const layer = new Jimp({ width: 4096, height: 320, color: 0x00000000 });
   layer.print({
     font,
-    x: 40,
-    y: 40,
+    x: 20,
+    y: 20,
     text: str,
-    maxWidth: maxW,
-    maxHeight: maxH + 80,
     alignmentX: align,
     alignmentY: VerticalAlign.MIDDLE,
   });
@@ -180,6 +216,7 @@ export function dataBR(ms) {
  * @param {object} p
  * @param {Buffer|null} p.foto      foto de perfil (PNG/JPG). Sem ela, um placeholder.
  * @param {string} p.nome           nome do membro
+ * @param {string} [p.nomeFallback] nome de reserva quando a fonte nao cobre o nome (ex.: so' ideograma)
  * @param {string} [p.cargo]        cargo no grupo (Dono/Admin/Membro...)
  * @param {number} [p.entrouEm]     ms de quando entrou no grupo
  * @param {string} [p.serie]        numero de serie (default: derivado do id)
@@ -188,12 +225,17 @@ export function dataBR(ms) {
  * @returns {Promise<{ok:boolean, buffer?:Buffer, mime?:string, msg?:string}>}
  */
 export async function gerarCarteirinha({
-  foto = null, nome, cargo = 'Membro', entrouEm = null,
+  foto = null, nome, nomeFallback = null, cargo = 'Membro', entrouEm = null,
   serie = null, id = null, grupo = null,
 } = {}) {
   try {
     const nomeLimpo = String(nome ?? '').trim();
     if (!nomeLimpo) return { ok: false, msg: 'Nome é obrigatório para a carteirinha' };
+
+    // A fonte so' tem ASCII + Latin-1: um nome que so' tenha ideograma/emoji
+    // viraria uma linha VAZIA no PNG. Nesse caso cai para o numero (o
+    // `nomeFallback`), e so' em ultimo recurso para "Membro".
+    const nomeFonte = paraFonte(nomeLimpo) || paraFonte(nomeFallback) || 'Membro';
 
     const W = 900;
     const H = 560;
@@ -232,7 +274,7 @@ export async function gerarCarteirinha({
     const titulo = await renderText('CARTEIRINHA', COR_ACENTO, larguraTexto, 34);
     if (titulo) card.composite(titulo, xTexto, 62);
 
-    const nomeImg = await renderText(nomeLimpo, COR_TEXTO, larguraTexto, 62);
+    const nomeImg = await renderText(nomeFonte, COR_TEXTO, larguraTexto, 62);
     if (nomeImg) card.composite(nomeImg, xTexto, 118);
 
     const cargoImg = await renderText(String(cargo).toUpperCase(), COR_ACENTO, larguraTexto, 34);
@@ -251,7 +293,8 @@ export async function gerarCarteirinha({
     const info2 = await renderText(`Nº ${numSerie}`, COR_TEXTO_FRACO, larguraTexto, 34);
     if (info2) card.composite(info2, xTexto, 330);
 
-    const rodape = await renderText(grupo ? `Grupo: ${grupo}` : 'Documento do grupo', COR_TEXTO_FRACO, larguraTexto, 30);
+    const rodapeTxt = grupo && paraFonte(grupo) ? `Grupo: ${grupo}` : 'Documento do grupo';
+    const rodape = await renderText(rodapeTxt, COR_TEXTO_FRACO, larguraTexto, 30);
     if (rodape) card.composite(rodape, xTexto, 400);
 
     // ── selo (canto inferior direito) ──

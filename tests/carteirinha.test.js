@@ -245,6 +245,55 @@ await test('modulo: dataBR formata em pt-BR', async () => {
   ok(/15\/01\/2026/.test(d), `15/01/2026 (veio ${d})`);
 });
 
+await test('modulo: o nome ESTILIZADO vira texto normal (o bug do ?????)', async () => {
+  // Os "nomes bonitos" do WhatsApp sao MATHEMATICAL BOLD; a fonte nao tem
+  // esses glifos e o jimp desenhava "?????". O NFKC os desfaz.
+  // Code points REAIS (conferidos no navegador/node): o double-struck e' o
+  // bloco U+1D538+ e o sans-serif bold, o U+1D5D4+.
+  const doubleStruck = '\u{1D576}\u{1D586}\u{1D593}\u{1D593}\u{1D594}\u{1D593}';
+  ok(cart.paraFonte(doubleStruck) === 'Kannon',
+    'o nome em mathematical bold volta para Kannon');
+  const sansBold = '\u{1D40A}\u{1D41A}\u{1D427}\u{1D427}\u{1D428}\u{1D427}';
+  ok(cart.paraFonte(sansBold + ' \u{16E20}') === 'Kannon',
+    'sans-serif bold + simbolo -> Kannon');
+  ok(cart.paraFonte('Kannon \u{1F3AE}') === 'Kannon', 'emoji sai, o nome fica');
+  ok(cart.paraFonte('Ana \u{2728} Lima') === 'Ana Lima', 'emoji no meio sai sem deixar buraco');
+  ok(cart.paraFonte('Jos\u00e9 da Silva') === 'Jos\u00e9 da Silva', 'acento PT-BR e preservado');
+});
+
+await test('modulo: so ideograma = vazio (nao desenha "?")', async () => {
+  ok(cart.paraFonte('\u30AB\u30CE\u30F3') === '', 'japones sai (a fonte nao tem)');
+});
+
+await test('modulo: nome que a fonte nao cobre cai para o numero (nao fica em branco)', async () => {
+  // A fonte tem so' ASCII + Latin-1. Um nome so' de ideograma/emoji sanitiza
+  // para vazio " sem o fallback, a linha do nome sairia em BRANCO no PNG.
+  ok(cart.paraFonte('\u30AB\u30CE\u30F3') === '', 'japones sanitiza para vazio');
+  const r = await cart.gerarCarteirinha({
+    nome: '\u30AB\u30CE\u30F3',
+    nomeFallback: '5511999999999',
+    cargo: 'Membro',
+    id: 'x',
+  });
+  ok(r.ok, 'gerou mesmo com nome fora da fonte');
+  // Sem o fallback, o modulo usa "Membro" (nunca deixa a linha vazia).
+  const r2 = await cart.gerarCarteirinha({ nome: '\u30AB\u30CE\u30F3', cargo: 'Membro', id: 'x' });
+  ok(r2.ok, 'gerou sem fallback tambem');
+});
+
+await test('modulo: o texto NAO quebra nem corta (o bug do CARTEIRI)', async () => {
+  // O `print` do jimp quebrava em linha e a 2a linha era descartada, cortando
+  // "CARTEIRINHA" em "CARTEIRI" e o nome do grupo. Agora e uma linha + escala.
+  const r = await cart.gerarCarteirinha({
+    nome: 'Um Nome Bem Longo Que Passa Da Largura Da Caixa Toda',
+    cargo: 'Administrador',
+    grupo: 'Um Grupo Com Nome Bem Comprido Tambem Para Testar',
+  });
+  ok(r.ok, 'gerou com textos longos');
+  const info = pngInfo(r.buffer);
+  ok(info?.w === 900 && info?.h === 560, 'as dimensoes continuam 900x560');
+});
+
 // ============================================================================
 // 2) O COMANDO (handler real)
 // ============================================================================
@@ -293,6 +342,30 @@ await test('!carteirinha: so em grupo', async () => {
 // ============================================================================
 // 3) MENU
 // ============================================================================
+
+await test('!carteirinha NAO cai no !perfil (o break que faltava)', async () => {
+  // O bloco do `!carteirinha` fechava com `}` e emendava direto no `case
+  // 'perfil':` " sem `break;`, o switch fazia FALL-THROUGH e quem usava o
+  // comando recebia a carteirinha E o perfil (dois envios). Aqui roda o
+  // handler real e exige que o `!carteirinha` envie SO a carteirinha.
+  const g = makeGroup();
+  const r = await rodar({ groupJid: g, foto: fotoPng(), de: AUTOR_LID });
+  ok(r.sent.length === 1, `o !carteirinha manda UMA mensagem (mandou ${r.sent.length})`);
+  ok(!!r.imgMsg, 'a mensagem e a imagem da carteirinha');
+  ok(!r.sent.some((s) => (s.content?.text ?? '').includes('PERFIL')),
+    'nao veio o card de PERFIL junto');
+});
+
+await test('!carteira continua sendo o comando de ECONOMIA (o alias nao rouba)', async () => {
+  const src = fs.readFileSync(path.join(HERE, '..', 'dados/src/index.js'), 'utf-8');
+  // O bloco do `!carteirinha` nao pode ter o `case 'carteira'` colado nele:
+  // `!carteira` e' o comando de banco/saldo, que ja' existia.
+  const i = src.indexOf("case 'carteirinha':");
+  const bloco = src.slice(i, i + 120);
+  ok(!bloco.includes("case 'carteira':"), "o alias 'carteira' nao esta no bloco do carteirinha");
+  // E o comando de economia segue la.
+  ok(src.includes("case 'carteira':"), 'o case carteira (economia) continua existindo');
+});
 
 await test('menu: !carteirinha no menumemb e no blockPv', async () => {
   const menu = fs.readFileSync(path.join(HERE, '..', 'dados/src/menus/menumemb.js'), 'utf-8');

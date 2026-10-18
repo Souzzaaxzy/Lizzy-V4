@@ -41192,7 +41192,6 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
       // mandou o comando; com @mencao (ou numero) faz a do alvo.
       // ═══════════════════════════════════════════════════════════════
       case 'carteirinha':
-      case 'carteira':
       case 'doc': {
         try {
           if (!isGroup) return reply('🪪 Este comando só funciona em grupos!');
@@ -41211,12 +41210,18 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
           try {
             nome = await resolverNomeContato(alvo, { nazu, metadata: groupMetadata, from });
           } catch { /* usa o fallback */ }
+          let nomeTelefone = '';
           if (!nome || baseId(nome) === baseId(alvo)) {
             // Sem nome resolvido: usa o numero (nunca o LID).
             const part = acharParticipantePorId(groupMetadata, alvo);
             const tel = numerosDoParticipante(groupMetadata, alvo)[0]
               || String(alvo).split('@')[0].replace(/\D/g, '');
-            nome = tel || part?.notify || 'Membro';
+            nomeTelefone = tel || part?.notify || '';
+            nome = nomeTelefone || 'Membro';
+          }
+          if (!nomeTelefone) {
+            nomeTelefone = numerosDoParticipante(groupMetadata, alvo)[0]
+              || String(alvo).split('@')[0].replace(/\D/g, '');
           }
 
           // Cargo: a MESMA hierarquia do resto do bot.
@@ -41247,6 +41252,7 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
           const card = await gerarCarteirinha({
             foto,
             nome,
+            nomeFallback: nomeTelefone,
             cargo,
             entrouEm,
             id: alvo,
@@ -41271,6 +41277,7 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
           console.error('[CARTEIRINHA] erro:', e?.message || e);
           return reply('❌ Deu erro ao gerar a carteirinha 💔');
         }
+        break;
       }
 
       case 'perfil':

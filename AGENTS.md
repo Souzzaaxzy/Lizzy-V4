@@ -11126,3 +11126,99 @@ assumi que o LID do Baileys servia. A doc (e a arquitetura de duas sessões)
 dizem o contrário. As três rodadas deste bug foram: (1) inferir do código,
 (2) corrigir a forma sem checar a origem, (3) **ler a doc**. Só a terceira
 fechou.
+
+## COMANDO `!carteirinha` — o documento visual do membro (PNG) (out/2026) ✅
+Pedido do dono: um comando que gera um **documento de verdade** com a foto do
+perfil — nao um texto com emoji.
+
+### Como ficou
+`dados/src/utils/carteirinha.js` (novo, puro) desenha um **PNG 900x560** com o
+**jimp** (o mesmo dos outros cards) + a fonte bitmap
+`funcs/logos/fonts/dejavu-bold-96.fnt`:
+
+```
+barra dourada no topo
+foto CIRCULAR com anel dourado (ou placeholder cinza sem foto)
+CARTEIRINHA / <nome> / <CARGO> / "No grupo desde <data>" / "No LZ-XXXXXX"
+rodape com o nome do GRUPO + selo redondo no canto
+```
+
+- **Foto**: chega como **Buffer** (quem baixa e' o chamador) — o modulo nao fala
+  com a rede, entao e testavel sem socket e sem internet.
+- **Serie estavel** (`serieDe`): hash FNV do id — o MESMO id da' sempre a mesma
+  serie (nao e sorteio, serve como identificador).
+- **Cargo**: a MESMA hierarquia do bot (Dono > Subdono > Admin > Membro).
+- **Nome**: o resolvedor unico (`utils/contactName.js`). Sem nome, usa o
+  **numero** — nunca o LID.
+
+### Uso
+- `!carteirinha` -> a sua
+- `!carteirinha @fulano` -> a do alvo
+- `!carteirinha <numero>` -> a do numero
+
+No **menumemb** (categoria PERFIL) e no `blockPv`, para qualquer membro.
+
+### 🚨 4 BUGS CORRIGIDOS (out/2026) — relato do dono
+O dono mandou quatro correcoes na mesma rodada. Todas MEDIDAS.
+
+#### 1. `?????` no lugar do nome (unicode)
+A fonte bitmap tem **191 glifos** (ASCII + Latin-1). Qualquer char fora disso
+(emoji, japones, e o "nome estilizado" `𝕶𝖆𝖓𝖓𝖔𝖓`) e desenhado como `?` pelo
+`print` do jimp. Novo **`paraFonte(texto)`**:
+1. **NFKC** — desfaz o estilo MATHEMATICAL BOLD (`𝐊𝐚𝐧𝐧𝐨𝐧` -> `Kannon`), que e'
+   justamente como o WhatsApp escreve os "nomes bonitos";
+2. mantem **so** o que a fonte cobre (ASCII 32..126 + Latin-1 160..255);
+3. colapsa espacos (o emoji removido deixava buracos).
+
+#### 2. `CARTEIRI` (o titulo cortado)
+O `print` do jimp **quebra em linha** quando o texto passa do `maxWidth`, e a
+**segunda linha e descartada** se nao couber na altura da camada. Era o que
+cortava "CARTEIRINHA" em "CARTEIRI". Agora a camada e **LARGA (4096x320)** — o
+texto cresce numa linha so — e o ajuste e pelo **bbox alfa + `scale()`**, nunca
+por quebra.
+
+#### 3. O nome do grupo nao aparecia
+Mesma causa do item 2 (o rodape tambem quebrava). Com o render de uma linha, o
+`Grupo: <nome>` sai inteiro — inclusive nomes longos.
+
+#### 4. O ALIAS `!carteira` (o "alias de carteirinha no !perfil")
+**Era o mais grave e o agente anterior nao tinha achado.** O bloco do
+`!carteirinha` **nao tinha `break;`** — fechava com `}` e emendava direto no
+`case 'perfil':`. O switch fazia **FALL-THROUGH**: quem usava `!carteirinha`
+recebia a carteirinha **E o card de perfil** (dois envios). Reproduzido com o
+handler real: 2 mensagens em vez de 1.
+
+Correcao: `break;` no fim do bloco. E o **`case 'carteira':` foi removido** do
+bloco — `!carteira` e o comando de **ECONOMIA** (banco/saldo, no `menurpg`), e
+o alias o estava roubando. `!doc` continua como alias legitimo (nao colide).
+
+**O que o dono via** ("tira o alias de carteirinha do comando !perfil") era
+exatamente esse fall-through: o perfil vinha junto, sem ele ter pedido.
+
+### Testes — `tests/carteirinha.test.js` (**17 testes / 42 asserções, 0 falhas**)
+Roda o **handler real** com socket falso e confere o **PNG de verdade** (magic
+bytes + dimensoes 900x560), o modulo puro e as 4 correcoes:
+- o nome ESTILIZADO vira texto normal (o bug do `?????`) — com os **code points
+  reais** do mathematical bold (`U+1D576...` e `U+1D5D4...`);
+- nome que a fonte **nao cobre** cai para o **numero** (nao fica linha em
+  branco);
+- o texto **nao quebra nem corta** (o bug do `CARTEIRI`) — com nomes longos;
+- **`!carteirinha` NAO cai no `!perfil`** (o `break` que faltava): exige **UMA**
+  mensagem e nenhum card de PERFIL;
+- `!carteira` continua sendo o comando de **ECONOMIA** (o alias nao rouba).
+
+**Verificado que os testes MEDEM as correcoes**: removendo o `break`, o teste do
+fall-through **falha** (1 asserção). O teste do `?????` usa os code points reais,
+nao literais — nenhuma ferramenta de edicao corrompe o arquivo.
+
+Regressoes verdes: `menu-layout` 25/273 (a 1 falha de `menufig` e
+**pre-existente**, ja documentada), `cmd-suggest` 21/68, `mencoes` 20/59,
+`get-message-inspector` 54/269, `dono-perfil` 47/0, `me-profile` 44/0,
+`viewonce-v2` 18/77, `antictt` 15/38, `antimidia` 14/29, `gifsbn-media` 16/61,
+`blacklist-number` 12/38, `relationships-multi` 19/86, `pin-message` 23/118.
+
+### BUG LATENTE (nao corrigido aqui — fora do escopo)
+O `gerarwelcomecard` (`funcs/downloads/canvas.js`) chama **`renderTextLayer`**,
+que **nao existe no arquivo** — quebra com `ReferenceError` e o `catch` engole,
+entao o welcome card falha **em silencio** (cai para texto sem dizer por que).
+Fica registrado para uma rodada propria.
