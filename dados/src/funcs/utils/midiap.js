@@ -503,6 +503,10 @@ export async function transmitir({ grupo, callId, arquivo = null, fluxo = null, 
     // O que o OUVINTE ja' tem no ouvido (conteudo menos o buffer do motor).
     // E' o RELOGIO DO VIDEO: centraliza os dois sem atraso.
     posicaoOuvidaMs: 0,
+    // Ultimo timestamp de video enviado (us) e o relogio real no envio.
+    // Existem SO' para o log de diagnostico.
+    ultimoTsVideoUs: 0,
+    ultimoEnvioVideoMs: 0,
     // Quando o proximo frame de audio e' devido (ms). Nasce no preroll.
     proximoDevidoMs: null,
     // Se o preroll ja' liberou a transmissao.
@@ -747,7 +751,7 @@ async function alimentar({ cli, callId, entrada, fonte, estado, fps, temAudio = 
         // ## O relogio do video: o som (quando ha') ou a parede (quando nao ha')
         //
         // COM audio: o video segue `posicaoOuvidaMs` (o que o ouvinte ja' tem
-        // no ouvido) — e' o que centraliza os dois sem atraso.
+        // no ouvido) â€” e' o que centraliza os dois sem atraso.
         //
         // SEM audio (video mudo): nao ha' relogio de som para seguir, entao o
         // video corre pelo relogio da parede desde o `tZero`. Sem isto ele
@@ -1041,6 +1045,31 @@ async function alimentar({ cli, callId, entrada, fonte, estado, fps, temAudio = 
     }, 5);
     estado.timerAudio = timerAudio;
 
+    // ## LOG DE DIAGNOSTICO (temporario)
+    //
+    // Imprime, a cada 5 s, os dois numeros que dizem ONDE o alinhamento esta'
+    // errando. Sem isto, qualquer ajuste e' chute: o modelo de teste nao
+    // reproduz o motor real.
+    //
+    //   audio(ms) = a POSICAO DE CONTEUDO que o motor ja' consumiu
+    //   video(ms) = o timestamp do ultimo frame de video ENVIADO
+    //   dif       = video - audio (positivo = video adiantado)
+    //   buf       = o que ainda esta' no buffer do motor (ms)
+    const logDiag = setInterval(() => {
+      if (estado.parado || !estado.prerollFeito) return;
+      const audio = estado.posicaoOuvidaMs || 0;
+      const video = (estado.ultimoTsVideoUs || 0) / 1000;
+      const buf = estado.nivelMs || 0;
+      console.log(
+        `[MIDIAP-DIAG] audio=${audio.toFixed(0)}ms video=${video.toFixed(0)}ms ` +
+        `dif=${(video - audio).toFixed(0)}ms buf=${buf.toFixed(0)}ms ` +
+        `filaA=${estado.fila ? estado.fila.length : 0} ` +
+        `descA=${estado.audioDescartado || 0} descV=${estado.videoDescartado || 0} ` +
+        `recV=${estado.recusados || 0}`
+      );
+    }, 5000);
+    estado.logDiag = logDiag;
+
     // Sem faixa de audio o ffmpeg nao abre o pipe: um `error` aqui e' normal
     // (transmissao so' com imagem). Nunca derruba o video.
     proc.stdio[fdSaidaAudio]?.on('error', () => { /* sem audio: so' imagem */ });
@@ -1150,6 +1179,9 @@ function motivosDoFfmpeg(code, stderr = '') {
 function enviarFrame(cli, callId, au, carimbo, estado) {
   try {
     const ts = carimbo();
+    // Guarda para o log de diagnostico (nao muda nada no envio).
+    estado.ultimoTsVideoUs = ts;
+    estado.ultimoEnvioVideoMs = Date.now();
     const pacotes = cli.feedLiveVideo(callId, au, ts);
     if (pacotes > 0) {
       estado.frames++;
@@ -1175,6 +1207,7 @@ export function parar(grupo) {
   if (!estado) return { ok: false, motivo: 'nao_esta_transmitindo' };
   estado.parado = true;
   try { clearInterval(estado.timerAudio); } catch { /* ok */ }
+  try { clearInterval(estado.logDiag); } catch { /* ok */ }
   estado.fila = [];
   // O ffmpeg (video e audio sao duas saidas dele) e, num LINK, o yt-dlp.
   try { estado.proc?.kill('SIGKILL'); } catch { /* ok */ }
