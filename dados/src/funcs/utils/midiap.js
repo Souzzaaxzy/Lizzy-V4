@@ -639,6 +639,20 @@ async function alimentar({ cli, callId, entrada, fonte, estado, fps, temAudio = 
     return ts;
   };
 
+  // ## O fps do video e' MEDIDO, nao presumido
+  //
+  // MEDIDO com o log (`descV` crescendo ~5 por segundo): o video real era
+  // 30 fps e o `fps` usado, 25. Chegavam 30 frames/s e o gate liberava 25 —
+  // os outros 5 eram DESCARTADOS (20% do video), o que fazia a imagem estalar
+  // e depois disparar em rajada para alcancar a timeline.
+  //
+  // O fps real sai da propria contagem: video e audio vem do MESMO arquivo,
+  // entao os frames de video por segundo de audio SAO o fps do arquivo. A
+  // medida estabiliza logo e so' e' usada quando ha' base para ela.
+  let passoVideoMs = 1000 / fps;
+  let framesVideoVistos = 0;
+  let marcoContagemMs = null;
+
   await new Promise(async (resolve, reject) => {
     // O ffmpeg recebe um CAMINHO ou `pipe:0` -- nunca o objeto do stream
     // (medido: sem isto ele recebia `[object Object]` e saia com 254).
@@ -735,6 +749,18 @@ async function alimentar({ cli, callId, entrada, fonte, estado, fps, temAudio = 
       let aus;
       try { aus = splitter.push(chunk); } catch { return; }
       for (const au of aus) filaVideo.push(au);
+      // Conta os frames que CHEGAM e recalibra o passo do video pelo relogio
+      // do audio (os dois sao o mesmo arquivo, entao a razao E' o fps real).
+      framesVideoVistos += aus.length;
+      const audioAgora = estado.posicaoOuvidaMs || 0;
+      if (marcoContagemMs === null) {
+        marcoContagemMs = audioAgora;
+      } else if (audioAgora - marcoContagemMs >= 3000) {
+        const fpsMedido = (framesVideoVistos * 1000) / (audioAgora - marcoContagemMs);
+        if (fpsMedido >= 5 && fpsMedido <= 120) passoVideoMs = 1000 / fpsMedido;
+        framesVideoVistos = 0;
+        marcoContagemMs = audioAgora;
+      }
       tentarPreroll();
     });
     estado.bombearVideo = () => {
@@ -759,7 +785,7 @@ async function alimentar({ cli, callId, entrada, fonte, estado, fps, temAudio = 
         const posAudio = temAudio
           ? (estado.posicaoOuvidaMs ?? estado.tempoAudioMs)
           : (Date.now() - (estado.tZero || Date.now()));
-        const alvoAtual = (indice / fps) * 1000;
+        const alvoAtual = indice * passoVideoMs;
         // ## O video PULA a timeline junto com o audio (um salto so')
         //
         // Quando o audio faz catch-up (descarta o atraso acumulado), a
@@ -771,7 +797,7 @@ async function alimentar({ cli, callId, entrada, fonte, estado, fps, temAudio = 
         // frames que o audio pulou (os antigos ja' sairam), entao o video
         // ficava parado esperando o instante que o `indice` pedia.
         if (posAudio - alvoAtual > VIDEO_ATRASO_MAX_MS) {
-          indice = Math.ceil((posAudio / 1000) * fps);
+          indice = Math.ceil(posAudio / passoVideoMs);
           estado.videoDescartado = (estado.videoDescartado || 0) + 1;
           continue;
         }
@@ -964,17 +990,18 @@ async function alimentar({ cli, callId, entrada, fonte, estado, fps, temAudio = 
       if (!estado.prerollFeito) return;
       if (!estado.fila || estado.fila.length === 0) return;
 
-      // ## O RITMO: o proximo frame e' devido 60 ms depois do ULTIMO entregue
+      // ## NAO ha' gate de ritmo nosso: quem anda o audio e' o MOTOR
       //
-      // NAO comparar com o tempo total (`Date.now() - tZero`): quando o motor
-      // segura, o relogio continua correndo e a "divida" de frames cresce sem
-      // limite — o audio acumula 3 s de atraso (o relato do dono).
+      // MEDIDO com o log (`filaA=13` constante): o gate de ritmo ("1 frame a
+      // cada 60 ms") entregava EXATAMENTE o que o motor consome. A fila
+      // enchia no arranque (o ffmpeg produz em rajada) e ficava CHEIA para
+      // sempre — 13 frames = **780 ms de latencia** parada na nossa fila, sem
+      // nunca drenar.
       //
-      // Ancorando no ULTIMO entregue, o relogio ESPERA junto com o motor: se
-      // ele segura 200 ms, o proximo frame sai 60 ms depois do anterior, sem
-      // divida acumulada. O atraso nao cresce.
-      if (Date.now() < estado.proximoDevidoMs) return;   // ainda e' cedo
-
+      // O motor ja' tem o relogio dele (`WaAudioEngine.startCaptureClock`). O
+      // unico limite que faz sentido e' o backpressure DELE: entregar enquanto
+      // o buffer estiver abaixo do `pauseMs`. Assim a fila DRENA (entregamos
+      // mais rapido que o consumo ate' o buffer encher) e o motor consome a 1x.
       // Le o nivel REAL do motor (a fonte da verdade — nao um contador nosso).
       let nivel = estado.nivelMs;
       try {
@@ -1065,7 +1092,7 @@ async function alimentar({ cli, callId, entrada, fonte, estado, fps, temAudio = 
         `dif=${(video - audio).toFixed(0)}ms buf=${buf.toFixed(0)}ms ` +
         `filaA=${estado.fila ? estado.fila.length : 0} ` +
         `descA=${estado.audioDescartado || 0} descV=${estado.videoDescartado || 0} ` +
-        `recV=${estado.recusados || 0}`
+        `recV=${estado.recusados || 0} fpsV=${(1000 / passoVideoMs).toFixed(1)}`
       );
     }, 5000);
     estado.logDiag = logDiag;

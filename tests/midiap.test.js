@@ -642,7 +642,9 @@ await test('o VIDEO e liberado pelo MESMO relogio (sincronia no ms)', () => {
   // (MEDIDO: 2960 ms, e nunca voltava). Ele segue o TEMPO DE MIDIA ja'
   // entregue do audio — se o audio para, o video para junto.
   includes(bloco, 'estado.tempoAudioMs', 'o video segue o tempo de midia do audio');
-  includes(bloco, 'indice / fps', 'cada frame vale o seu instante nominal');
+  // O passo do video e' MEDIDO (o fps declarado pode estar errado: MEDIDO no
+  // log, o video era 30 fps com , e 20% dos frames eram descartados).
+  includes(bloco, 'passoVideoMs', 'o passo do video e o medido, nao o declarado');
   ok(!/Date\.now\(\) - estado\.tZero/.test(bloco), 'o video NAO usa o relogio absoluto (a causa do atraso)');
   // O timer do audio bombeia o video tambem (um relogio so).
   const t = md.indexOf('const timerAudio = setInterval');
