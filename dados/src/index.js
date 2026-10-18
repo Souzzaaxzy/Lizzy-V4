@@ -38,7 +38,7 @@ import { parsePinDuration, buildPinKeyFromContext, isPinControlMessage } from '.
 import { antiCtt, isContactPayload } from './utils/antiCtt.js';
 import { parseImagePollArgs, collectPollImages, resolveAttachments, buildOptionName } from './utils/pollImages.js';
 import { toOggOpus } from './utils/oggOpus.js';
-import { resolverNomeContato, resolverNomesContatos, acharParticipantePorId, nomeInutil, baseId } from './utils/contactName.js';
+import { resolverNomeContato, resolverNomesContatos, acharParticipantePorId, nomeInutil, baseId, numerosDoParticipante } from './utils/contactName.js';
 import { converterGifParaMp4 } from './utils/gifMedia.js';
 import { figurinhaParaStatus } from './utils/stickerStatus.js';
 import { normalizarIdGrupo, ehJidCanal, buildFollowChannelContent, fotoDoMetadataNewsletter, normalizarGrupos, adicionarGrupo, removerGrupo } from './utils/canalDivulgacao.js';
@@ -1254,6 +1254,7 @@ import CaptchaIndex from './utils/captchaIndex.js';
 import npcManager from './utils/npcManager.js';
 import nameReactions from './utils/nameReactions.js';
 import msgCounter from './utils/msgCounter.js';
+import { registrarMencao, resumoDeHoje, mencoesDeHoje, acharNoResumo, registroPorIndice } from './utils/mencoes.js';
 // X9 System - Integração com comandos de aprovação
 import { processNewJoinRequest, updateCardOnApprove, updateCardOnReject, notifyWhatsAppApproval, findRequestByNumber, x9Store } from './utils/x9System.js';
 import { saveWelcomeImage, loadWelcomeImage, deleteWelcomeImage, isLocalImagePath } from './utils/welcomeImages.js';
@@ -5154,6 +5155,47 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
         }
       } catch (error) {
         console.error("Erro no sistema de contagem de mensagens:", error);
+      }
+    }
+
+    // ─── REGISTRO DE MENCOES (fonte única: utils/mencoes.js) ───
+    // Guarda quem FOI marcado nesta mensagem, com o `id` dela " e' o que
+    // permite o `!mencoes marcar <n>` citar a mensagem original depois.
+    //
+    // Roda em TODA mensagem de grupo (nao so' nos comandos): quem marca nao
+    // precisa usar nenhum comando para entrar na lista de quem foi marcado.
+    if (isGroup && !isCmd) {
+      try {
+        const marcados = info.message?.extendedTextMessage?.contextInfo?.mentionedJid
+          || info.message?.imageMessage?.contextInfo?.mentionedJid
+          || info.message?.videoMessage?.contextInfo?.mentionedJid
+          || info.message?.audioMessage?.contextInfo?.mentionedJid
+          || info.message?.documentMessage?.contextInfo?.mentionedJid
+          || info.message?.stickerMessage?.contextInfo?.mentionedJid
+          || [];
+        if (marcados.length > 0) {
+          const texto = info.message?.extendedTextMessage?.text
+            || info.message?.imageMessage?.caption
+            || info.message?.videoMessage?.caption
+            || null;
+          const deNome = pushname || null;
+          const em = (info.messageTimestamp ? Number(info.messageTimestamp) * 1000 : Date.now());
+          for (const alvo of marcados) {
+            // O bot nao conta: ele nao "marca" ninguem.
+            if (botNumberLid && idsMatch(alvo, botNumberLid)) continue;
+            registrarMencao({
+              grupo: from,
+              alvo,
+              de: sender,
+              deNome,
+              id: info.key.id,
+              texto,
+              em,
+            });
+          }
+        }
+      } catch (mencoesErr) {
+        console.error('[MENCOES] erro ao registrar:', mencoesErr?.message || mencoesErr);
       }
     }
     if (isGroup && groupData.levelingEnabled) {
@@ -40958,6 +41000,132 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
           reply("ocorreu um erro 💔");
         }
         break;
+      // ═══════════════════════════════════════════════════════════════
+      // 🛎️ !mencoes — quem te marcou hoje
+      //
+      // O registro e' feito no gancho acima (em TODA mensagem de grupo), entao
+      // quem marca nao precisa usar comando nenhum. Aqui so' consultamos.
+      //
+      //   !mencoes              -> lista quem te marcou hoje (com a contagem)
+      //   !mencoes <nome|numero> -> as mensagens que ESSA pessoa te marcou
+      //   !mencoes <n>          -> a mensagem de indice n da lista de hoje
+      //   !mencoes marcar <n>   -> responde a mensagem n com um ponto, para
+      //                            voce voltar na conversa
+      // ═══════════════════════════════════════════════════════════════
+      case 'mencoes':
+      case 'menções':
+      case 'mencoesgp': {
+        try {
+          if (!isGroup) return reply('🛎️ Este comando só funciona em grupos!');
+
+          const hoje = resumoDeHoje(from, sender);
+          const lista = mencoesDeHoje(from, sender);
+          const sub = (args[0] || '').toLowerCase();
+          const alvoArg = args.slice(1).join(' ').trim();
+
+          // ─── !mencoes marcar <n> ───
+          if (sub === 'marcar' || sub === 'responder') {
+            const n = Number.parseInt(args[1], 10);
+            if (!Number.isInteger(n) || n < 1) {
+              return reply(`ℹ️ Use: *${groupPrefix}mencoes marcar <número>*\n\nEx.: ${groupPrefix}mencoes marcar 1`);
+            }
+            const reg = registroPorIndice(from, sender, n);
+            if (!reg) {
+              return reply(`❌ Não achei a menção *#${n}* de hoje.\n\nUse *${groupPrefix}mencoes* para ver a lista.`);
+            }
+            // Cita a mensagem ORIGINAL (a que te marcou). O objeto vem do
+            // `messagesCache` do bot — e' a mensagem completa, que e' o que o
+            // `quoted` da fork exige.
+            const cacheKey = `${from}_${reg.id}`;
+            const original = messagesCache?.get?.(cacheKey);
+            if (!original?.message) {
+              return reply(
+                `❌ Não consegui recuperar a mensagem *#${n}*.\n\n` +
+                `_Ela pode ter saído do cache do bot (mensagens muito antigas)._`,
+                { noQuote: true }
+              );
+            }
+            await nazu.sendMessage(from, { text: '.' }, { quoted: original });
+            return;
+          }
+
+          // ─── sem nada: a lista de quem te marcou hoje ───
+          if (!sub) {
+            if (!hoje.length) {
+              return reply(
+                `🛎️ *MENÇÕES DE HOJE*\n\n` +
+                `_Ninguém te marcou hoje ainda._\n\n` +
+                `💡 Quando alguém te marcar, aparece aqui automaticamente.`
+              );
+            }
+            const total = hoje.reduce((a, r) => a + r.total, 0);
+            const linhas = hoje.map((r, i) => {
+              const quem = r.deNome || `@${r.de.split('@')[0]}`;
+              return `${i + 1}. ${quem} — *${r.total}x*`;
+            });
+            const texto =
+              `🛎️ *MENÇÕES DE HOJE*\n\n` +
+              `👤 Você foi marcado *${total}x* por *${hoje.length}* pessoa(s):\n\n` +
+              linhas.join('\n') +
+              `\n\n🔎 *${groupPrefix}mencoes <nome/número>* — ver as mensagens\n` +
+              `ℹ️ *${groupPrefix}mencoes marcar <n>* — voltar na mensagem`;
+            return reply(texto, { mentions: hoje.map((r) => r.de) });
+          }
+
+          // ─── !mencoes <n> (indice) ───
+          // So' e' INDICE o numero curto (a lista de hoje nao passa de ~100).
+          // Um telefone tem 12-13 digitos: se tratado como indice, a busca por
+          // numero nunca seria alcancada.
+          if (/^\d+$/.test(sub) && sub.length <= 3) {
+            const reg = registroPorIndice(from, sender, sub);
+            if (!reg) {
+              return reply(`❌ Não achei a menção *#${sub}* de hoje.`);
+            }
+            const hora = new Date(reg.em).toLocaleTimeString('pt-BR', {
+              timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit',
+            });
+            const texto =
+              `🛎️ *MENÇÃO #${sub}*\n\n` +
+              `👤 De: ${reg.deNome || `@${reg.de.split('@')[0]}`}\n` +
+              `🕒 Às: ${hora}\n` +
+              (reg.texto ? `💬 Mensagem: ${reg.texto}\n` : '') +
+              `\nℹ️ *${groupPrefix}mencoes marcar ${sub}* — voltar nela`;
+            return reply(texto, { mentions: [reg.de] });
+          }
+
+          // ─── !mencoes <nome|numero> (de quem) ───
+          const termo = [sub, alvoArg].filter(Boolean).join(' ');
+          // O `de` costuma ser um LID, que NAO contem o numero de telefone
+          // (namespaces diferentes). O metadata do grupo e' quem sabe o PN.
+          const telefonesDe = (id) => {
+            try { return numerosDoParticipante(groupMetadata, id); } catch { return []; }
+          };
+          const pessoa = acharNoResumo(hoje, termo, telefonesDe);
+          if (!pessoa) {
+            return reply(
+              `❌ Ninguém com *${termo}* te marcou hoje.\n\n` +
+              `Use *${groupPrefix}mencoes* para ver quem te marcou.`
+            );
+          }
+          const horaDe = (ms) => new Date(ms).toLocaleTimeString('pt-BR', {
+            timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit',
+          });
+          const msgs = pessoa.registros.map((r) => {
+            const trecho = r.texto ? ` — ${r.texto}` : '';
+            return `• ${horaDe(r.em)}${trecho}`;
+          });
+          const texto =
+            `🔎 *MENÇÕES DE ${(pessoa.deNome || `@${pessoa.de.split('@')[0]}`).toUpperCase()}*\n\n` +
+            `📊 Total hoje: *${pessoa.total}x*\n\n` +
+            msgs.join('\n') +
+            `\n\nℹ️ *${groupPrefix}mencoes marcar <n>* — voltar numa delas`;
+          return reply(texto, { mentions: [pessoa.de] });
+        } catch (e) {
+          console.error('[MENCOES] erro:', e?.message || e);
+          return reply('❌ Deu erro ao consultar as menções 💔');
+        }
+      }
+
       case 'perfil':
         try {
           const target = sender;

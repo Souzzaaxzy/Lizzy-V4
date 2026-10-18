@@ -101,6 +101,14 @@ export default async function menuMembros(prefix, botName = "MeuBot", userName =
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
+╭━━━꧁༺ ㅤ🛎️ ${boldItalic('MENÇÕES')} 🛎️ㅤ ༻꧂━━━╮
+│ 🛎️ ${prefix}mencoes
+│ 🔎 ${prefix}mencoes <nome/número>
+│ 🔢 ${prefix}mencoes <n>
+│ ℹ️ ${prefix}mencoes marcar <n>
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
+
+
 ╭━━━꧁༺ ㅤ📸 ${boldItalic('MOMENTOS')} 📸ㅤ ༻꧂━━━╮
 │ 💾 ${prefix}salvarm
 │ 🖼 ${prefix}moment
