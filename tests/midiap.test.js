@@ -951,7 +951,10 @@ await test('o timestamp do video e uma TIMELINE nominal (passo exato por frame)'
   const md = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/midiap.js'), 'utf-8');
   const i = md.indexOf('const carimbo = () => {');
   const bloco = md.slice(i, i + 300);
-  includes(bloco, 'indice * passoUs', 'o carimbo e o indice vezes o passo');
+  // O carimbo usa o MESMO passo que o gate (, medido). Usar o
+  // passo DECLARADO aqui enquanto o gate usava o medido fazia o timestamp
+  // correr 1,2x (MEDIDO: o  subia ~200 ms por segundo).
+  includes(bloco, 'passoVideoMs', 'o carimbo usa o mesmo passo medido do gate');
   includes(bloco, 'indice += 1', 'avanca um por frame');
   ok(!bloco.includes('hrtime'), 'NAO depende do relogio de chegada');
 });

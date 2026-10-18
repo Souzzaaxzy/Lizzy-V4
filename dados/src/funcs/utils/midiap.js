@@ -631,14 +631,6 @@ async function alimentar({ cli, callId, entrada, fonte, estado, fps, temAudio = 
   // exato (33,3 ms a 30 fps), sem rajada e sem acumular adiantamento sobre
   // o que ja' foi enviado. O motor remapeia essa timeline para o relogio
   // dele (o `HostCaptureTimeMapper` faz exatamente isso).
-  const passoUs = Math.round(1_000_000 / fps);
-  let indice = 0;
-  const carimbo = () => {
-    const ts = indice * passoUs;
-    indice += 1;
-    return ts;
-  };
-
   // ## O fps do video e' MEDIDO, nao presumido
   //
   // MEDIDO com o log (`descV` crescendo ~5 por segundo): o video real era
@@ -649,9 +641,25 @@ async function alimentar({ cli, callId, entrada, fonte, estado, fps, temAudio = 
   // O fps real sai da propria contagem: video e audio vem do MESMO arquivo,
   // entao os frames de video por segundo de audio SAO o fps do arquivo. A
   // medida estabiliza logo e so' e' usada quando ha' base para ela.
+  //
+  // ## UM passo so' (o bug do `dif` crescendo ~200 ms/s)
+  //
+  // O gate usava o passo MEDIDO (33,3 ms) e o `carimbo` usava o DECLARADO
+  // (40 ms a 25 fps). Duas taxas no mesmo fluxo: o timestamp corria
+  // **1,2x** e o `dif` subia ~200 ms por segundo (MEDIDO no log: 200 ->
+  // 1860 -> 4360 -> 9200 ms). Agora os DOIS leem este mesmo valor.
   let passoVideoMs = 1000 / fps;
   let framesVideoVistos = 0;
   let marcoContagemMs = null;
+
+  // O timestamp de cada frame: a posicao dele na timeline do video, com o
+  // MESMO passo que o gate usa.
+  let indice = 0;
+  const carimbo = () => {
+    const ts = Math.round(indice * passoVideoMs * 1000);
+    indice += 1;
+    return ts;
+  };
 
   await new Promise(async (resolve, reject) => {
     // O ffmpeg recebe um CAMINHO ou `pipe:0` -- nunca o objeto do stream
