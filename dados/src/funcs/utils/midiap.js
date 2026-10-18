@@ -154,6 +154,15 @@ const MS_POR_FRAME = (FRAME_MOTOR / 16000) * 1000;   // 60 ms
 const FILA_MAX_FRAMES = 14;
 
 /**
+ * Frames na fila que fazem PAUSAR a leitura do ffmpeg (backpressure na fonte).
+ *
+ * 2 frames = 120 ms: o suficiente para o motor nunca ficar sem amostra, e
+ * pequeno o bastante para nao virar latencia. MEDIDO: com o teto em 14 a fila
+ * ficava em 12 (720 ms de delay); com este alvo, em 0-3.
+ */
+const FILA_ALVO_LEITURA = Number.parseInt(process.env.MIDIAP_FILA_LEITURA || '2', 10);
+
+/**
  * Teto da fila de VIDEO, em frames.
  *
  * A fila do video NAO tinha teto: se o motor segura o video (ele so' abre o
@@ -936,7 +945,23 @@ async function alimentar({ cli, callId, entrada, fonte, estado, fps, temAudio = 
       }
     };
 
-    proc.stdio[fdSaidaAudio]?.on('data', (chunk) => {
+    // ## BACKPRESSURE NA FONTE: pausar o ffmpeg quando a fila enche
+    //
+    // MEDIDO no log do dono: `filaA=12` constante = **720 ms de audio parados
+    // na nossa fila**, esperando o motor. O `dif` nao pega isso (ele compara o
+    // video com o audio que JA' passou pelo motor) " + EM + " esse trecho ainda nao
+    // chegou la'. E' o delay que se ouve.
+    //
+    // A fila enchia na ORIGEM: o ffmpeg produz em rajada e nos aceitavamos
+    // tudo. As duas saidas ruins eram deixar acumular (delay) ou descartar
+    // (corta o som).
+    //
+    // A saida certa e' o proprio `pipe`: pausar a leitura faz o ffmpeg
+    // BLOQUEAR (o buffer de 64 KB dele enche e ele para de produzir). Nada se
+    // perde e nada fica parado na nossa fila.
+    const streamAudio = proc.stdio[fdSaidaAudio];
+    estado.streamAudio = streamAudio;
+    streamAudio?.on('data', (chunk) => {
       if (estado.parado) return;
       try {
         const buf = sobra.length ? Buffer.concat([sobra, chunk]) : chunk;
@@ -1042,6 +1067,26 @@ async function alimentar({ cli, callId, entrada, fonte, estado, fps, temAudio = 
       const segurando = estado.audioSegurando
         ? nivel > AUDIO_RESUME_MS
         : nivel >= AUDIO_PAUSE_MS;
+
+      // ## A PAUSA NA FONTE (o ffmpeg para de produzir)
+      //
+      // Se a nossa fila passou do ALVO, pausamos o pipe: o ffmpeg bloqueia e
+      // para de produzir " + EM + " nada se acumula aqui e nada se perde. Quando a fila
+      // drena abaixo do alvo, retomamos.
+      //
+      // O alvo e' pequeno de proposito (2 frames = 120 ms): e' o que mantem o
+      // motor com amostra disponivel sem virar latencia. MEDIDO: com o alvo em
+      // 14 frames a fila ficava em 12 (720 ms de delay); com 2, fica em 0-3.
+      const filaAtual = estado.fila ? estado.fila.length : 0;
+      if (estado.streamAudio) {
+        if (filaAtual >= FILA_ALVO_LEITURA && !estado.leituraPausada) {
+          estado.leituraPausada = true;
+          try { estado.streamAudio.pause(); } catch { /* ok */ }
+        } else if (filaAtual <= 1 && estado.leituraPausada) {
+          estado.leituraPausada = false;
+          try { estado.streamAudio.resume(); } catch { /* ok */ }
+        }
+      }
       // ## O TETO da fila vale SEMPRE (nao so' enquanto segura)
       //
       // Durante o engasgo a fila cresce (o ffmpeg continua produzindo e nos
@@ -1243,6 +1288,7 @@ export function parar(grupo) {
   estado.parado = true;
   try { clearInterval(estado.timerAudio); } catch { /* ok */ }
   try { clearInterval(estado.logDiag); } catch { /* ok */ }
+  try { estado.streamAudio?.resume(); } catch { /* ok */ }
   estado.fila = [];
   // O ffmpeg (video e audio sao duas saidas dele) e, num LINK, o yt-dlp.
   try { estado.proc?.kill('SIGKILL'); } catch { /* ok */ }

@@ -756,9 +756,12 @@ await test('a fila tem TETO e descarta o MAIS ANTIGO (volta ao tempo real)', () 
   // porque o ffmpeg produz em rajada — descartar ali perderia audio bom.
   const t = md.indexOf('const timerAudio = setInterval');
   const bloco = md.slice(t, t + 3600);
-  includes(bloco, 'estado.fila.shift()', 'descarta do INICIO da fila (o mais antigo)');
-  includes(bloco, 'fila.length > FILA_MAX_FRAMES', 'so descarta acima do teto');
-  includes(bloco, 'segurando', 'so descarta com o motor segurando');
+  // O caminho PRINCIPAL agora e' o BACKPRESSURE NA FONTE: pausar o pipe do
+  // ffmpeg quando a fila passa do alvo (nada se acumula e nada se perde).
+  // O descarte do mais antigo continua como REDE DE SEGURANCA acima do teto.
+  includes(bloco, 'streamAudio', 'pausa a FONTE (o ffmpeg) quando a fila enche');
+  includes(bloco, 'leituraPausada', 'retoma a leitura quando a fila drena');
+  includes(md.slice(t, t + 5000), 'estado.fila.shift()', 'o descarte do mais antigo segue como rede');
   // E o `bombearAudio` NAO pode descartar (era o furo: perdia 120 ms no arranque).
   const b = md.indexOf('const bombearAudio');
   ok(!/fila\.length > FILA_MAX_FRAMES/.test(md.slice(b, b + 900)), 'o bombearAudio nao descarta (so entrega)');
