@@ -1,4 +1,5 @@
-import a, { useMultiFileAuthState, DisconnectReason, makeCacheableSignalKeyStore, VOICE_CAPABLE_VERSION } from '@itsliaaa/baileys';
+import a, { useMultiFileAuthState, DisconnectReason, makeCacheableSignalKeyStore, VOICE_CAPABLE_VERSION, fetchLatestWaWebVersion } from '@itsliaaa/baileys';
+import { resolverVersaoWhatsApp } from './waVersion.js';
 const makeWASocket = a.default;
 import { Boom } from '@hapi/boom';
 import NodeCache from 'node-cache';
@@ -130,10 +131,14 @@ async function initializeSubBot(botId, phoneNumber, ownerNumber, generatePairing
         const { config, dirs } = createSubBotConfig(botId, phoneNumber, ownerNumber);
         
         const { state, saveCreds } = await useMultiFileAuthState(dirs.authDir, makeCacheableSignalKeyStore);
-        // Versao FIXA com o build id de 5 partes: e' o que faz o servidor
-        // habilitar a VOZ nas calls (cliente desktop/UWP). Uma versao de 3 partes
-        // faz a call subir sem audio.
-        const version = VOICE_CAPABLE_VERSION;
+        // Mesma fonte do bot principal: a versao REAL do WhatsApp Web (`sw.js`)
+        // com a cauda de voz preservada. A versao fixa ficava desatualizada e o
+        // servidor recusava o pareamento de aparelho novo com `405`.
+        const { version } = await resolverVersaoWhatsApp({
+            buscarWeb: fetchLatestWaWebVersion,
+            pin: VOICE_CAPABLE_VERSION,
+            log: (m) => console.warn(`[SUBBOT] ${m}`)
+        });
 
         const msgRetryCounterCache = new NodeCache();
 

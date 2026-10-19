@@ -11465,3 +11465,72 @@ ponta a ponta contra o servidor. O que está provado: (a) o código antigo fica
 pendurado no cenário medido, (b) o novo falha com motivo dentro do prazo, e
 (c) o `connect.js` usa o caminho novo. Se o pareamento ainda não gerar código, a
 mensagem de erro agora diz **por quê** (servidor não respondeu / conexão fechou).
+
+
+## 🚨 405 INFINITO + PARECIMENTO MUDO — CAUSA RAIZ: versão do WhatsApp Web (out/2026) ✅
+Relato do dono: *"não funcionou, o bot não esta nem respondendo quando mando a
+opção de parear com código, e quando mando para parear com qr code ele fica
+mandando [Conexão fechada. Código: 405] infinitamente"*.
+
+### A causa (MEDIDA com conexões REAIS contra o WhatsApp)
+O bot usava `fetchLatestBaileysVersion()`, que descobre a versão lendo o
+**código-fonte do GitHub** (`raw.githubusercontent.com/Souzzaaxzy/baileys/main/
+lib/Defaults/index.js`). Essa fonte fica **atrás** do WhatsApp. Medido no mesmo
+instante, com a lib instalada:
+
+```
+fetchLatestBaileysVersion : [2, 3000, 1041589577, 261700, 0] | isLatest: FALSE
+fetchLatestWaWebVersion   : [2, 3000, 1050889999]           | isLatest: TRUE
+```
+
+E a prova por experimento — duas conexões **reais**, mesma máquina, só a versão
+mudando:
+
+| versão anunciada | resultado do servidor |
+|---|---|
+| ANTIGA `[2,3000,1041589577,261700,0]` | **fechou 405** |
+| NOVA `[2,3000,1050889999,261700,0]` | **QR recebido** ✅ |
+
+Versão velha ⇒ o servidor **recusa o pareamento de aparelho novo** com
+`405 Connection Failure`, **no QR e no código**. Sessões já pareadas continuam
+funcionando — o que explica o "antes funcionava" e por que o dono via o loop só
+ao tentar parear de novo.
+
+E o "não responde quando mando parear com código" é o MESMO defeito: o
+`pair-device` (que destrava o `requestPairingCode`) nunca chegava porque a conexão
+morria em 405 — o teto de 30 s da rodada anterior só fez o boot **falhar com
+motivo** em vez de ficar mudo. A correção do teto estava certa; faltava a causa.
+
+### Correção
+| onde | o que mudou |
+|---|---|
+| `dados/src/utils/waVersion.js` (novo) | **`resolverVersaoWhatsApp()`** — usa o `fetchLatestWaWebVersion` (lê o **`sw.js` do próprio WhatsApp Web**), com **fallback no pin** e **cache** por processo. Puro (fetcher/cache entram por parâmetro), então é testável sem rede. |
+| `montarVersaoDeVoz()` | **o detalhe que não podia ser perdido**: o `sw.js` devolve **3 partes**, e a voz exige **5** (desktop/UWP + build id; `validate-connection` dobra a 4ª em `quaternary`). A montagem pega o **build do WhatsApp Web** (os 2 primeiros campos + o 3º, que é o que o servidor confere) e **preserva a cauda do pin** (4º e 5º). Sem isso, o pareamento volta e a call fica muda. |
+| `dados/src/connect.js` | `getWAVersion()` passou a usar o resolver; o **log de boot** agora diz **de onde** veio a versão (`whatsapp-web (sw.js)` / `pin do pacote (fallback)`), em vez de a gente supor. |
+| `dados/src/utils/subBotManager.js` | usava a versão **fixa** (`VOICE_CAPABLE_VERSION`) — o sub-bot teria o mesmo 405. Passou a usar a mesma fonte. |
+
+### Testes — `tests/wa-version.test.js` (12 testes / 30 asserções, 0 falhas)
+Montagem das 5 partes (build do Web + cauda de voz do pin, sem mutar o pin); null
+quando a fonte não serve; resolve pelo Web; **fallback no pin** quando a busca
+falha ou devolve lixo (não derruba o boot); avisa no log; **cache** (a 2ª chamada
+não bate na rede); degradação sem fetcher; e integração: o `connect.js` e o
+`subBotManager` usam a fonte correta e **não** o fetcher do GitHub (checagem sobre
+o CÓDIGO, sem comentários — o comentário do arquivo cita o antigo para explicar a
+troca).
+
+### Verificação ponta a ponta (conexão REAL, não suposição)
+```
+versao: [2,3000,1050889999,261700,0] | origem: whatsapp-web (sw.js)
+CODIGO DE PAREAMENTO: EDCZ7AFH
+```
+O código **foi emitido** — o cenário exato do dono, que antes ficava mudo.
+
+### Regressões verdes
+`pairing-code` 9/20, `callp` 31/63, `callp-regressions` 38/114,
+`baileys-boot-info` 26/0, `installer-git-drift` 10/21.
+
+### Lição de método
+Três rodadas foram gastas em hipóteses (jid, relay, teto do pareamento) antes de
+**abrir uma conexão de verdade e comparar as variáveis**. O que fechou o caso
+levou minutos: duas conexões reais, mudando **só a versão**. Quando o sintoma é
+"o servidor recusa", o caminho é falar com o servidor — não ler código.

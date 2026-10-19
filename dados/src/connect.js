@@ -1,4 +1,5 @@
-import { useMultiFileAuthState, DisconnectReason, makeCacheableSignalKeyStore, makeWASocket, fetchLatestBaileysVersion, isJidBroadcast, isJidNewsletter, isJidStatusBroadcast, VOICE_CAPABLE_VERSION, isVoiceCapableConfig } from '@itsliaaa/baileys';
+import { useMultiFileAuthState, DisconnectReason, makeCacheableSignalKeyStore, makeWASocket, fetchLatestWaWebVersion, isJidBroadcast, isJidNewsletter, isJidStatusBroadcast, VOICE_CAPABLE_VERSION, isVoiceCapableConfig } from '@itsliaaa/baileys';
+import { resolverVersaoWhatsApp } from './utils/waVersion.js';
 import { Boom } from '@hapi/boom';
 import NodeCache from 'node-cache';
 import readline from 'readline';
@@ -1214,30 +1215,30 @@ const RECONNECT_DELAY_BASE = 5000; // 5 segundos base
 // caso o bot desconecte antes deles dispararem, evitando timers órfãos usando socket antigo.
 let ownerMsgTimer = null;
 let subBotInitTimer = null;
-// fetchLatestBaileysVersion() faz uma requisição HTTP — se a rede estava instável
-// (causa da desconexão), essa chamada podia falhar e impedir a reconexão.
+// A versão anunciada ao servidor. O `fetchLatestBaileysVersion` da lib lê o
+// código-fonte do GitHub e fica DESATUALIZADO — e versão velha faz o servidor
+// recusar o pareamento de aparelho novo com `405 Connection Failure` (no QR e no
+// código). O `fetchLatestWaWebVersion` lê o `sw.js` do próprio WhatsApp Web, que
+// é a fonte correta. O detalhe e o porquê do build id de 5 partes (voz nas calls)
+// estão em `utils/waVersion.js`.
 let _cachedWAVersion = null;
 
 async function getWAVersion() {
-    if (_cachedWAVersion) return _cachedWAVersion;
-    // A versao precisa manter o BUILD ID de 5 partes: e' ele que faz o servidor
-    // habilitar a VOZ nas calls (cliente desktop/UWP). Se o fetch devolver menos
-    // de 5 partes (rede antiga, fonte mudou), completamos com o build id fixado
-    // em vez de anunciar um cliente de 3 partes — que sinaliza a call mas fica
-    // sem audio.
-    let version;
-    try {
-        ({ version } = await fetchLatestBaileysVersion());
-    } catch {
-        version = null;
-    }
-    if (!Array.isArray(version) || version.length < 3) {
-        version = VOICE_CAPABLE_VERSION;
-    } else if (version.length < 5) {
-        version = [...version, ...VOICE_CAPABLE_VERSION.slice(version.length)];
-    }
+    const { version, origem } = await resolverVersaoWhatsApp({
+        buscarWeb: fetchLatestWaWebVersion,
+        pin: VOICE_CAPABLE_VERSION,
+        cache: { valor: _cachedWAVersion },
+        log: (m) => console.warn(m)
+    });
     _cachedWAVersion = version;
+    _origemDaVersao = origem;
     return version;
+}
+
+// De onde veio a versão (para o log de boot dizer, em vez de a gente supor).
+let _origemDaVersao = null;
+export function origemDaVersaoWhatsApp() {
+    return _origemDaVersao;
 }
 
 async function createBotSocket(authDir) {
@@ -1275,7 +1276,7 @@ async function createBotSocket(authDir) {
         // CORREÇÃO: Usa versão cacheada em vez de buscar na rede a cada reconexão.
         const version = await getWAVersion();
         if (boot) boot.setEnv({ waVersion: version.join('.') });
-        else console.log(`📱 Usando versão do WhatsApp: ${version.join('.')}`);
+        else console.log(`📱 Usando versão do WhatsApp: ${version.join('.')} (${_origemDaVersao || 'origem não informada'})`);
 
         // CLIENTE DESKTOP/UWP + build id de 5 partes: os DOIS sao requisito para o
         // servidor habilitar a stack de VOZ. So' o browser UWP nao basta — com um
