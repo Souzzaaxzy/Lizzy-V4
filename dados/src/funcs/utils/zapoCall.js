@@ -136,6 +136,9 @@ export function motivoZapo() {
   return loadError;
 }
 
+/** Exportado para o teste medir a escolha da porta do relay. */
+export const __usarPortaOriginalDoRelay = usarPortaOriginalDoRelay;
+
 /**
  * Quantas chamadas simultaneas o motor aceita.
  *
@@ -148,6 +151,36 @@ export function motivoZapo() {
 function maxCalls() {
   const n = Number.parseInt(process.env.ZAPO_MAX_CALLS || '3', 10);
   return Number.isFinite(n) && n > 0 ? n : 3;
+}
+
+/**
+ * O motor deve discar o relay na porta ANUNCIADA (`original`) em vez da porta do
+ * cliente web (3480)?
+ *
+ * O padrao do motor NAO e' seguro: `WaCallManager.createMediaLink` usa
+ * `useOriginalRelayPort ?? !isMobilePrimary()`, entao **nao** passar a opcao
+ * deixa o valor depender da identidade com que a sessao subiu. Quando cai no modo
+ * `original`, o relay e' discado na porta anunciada (tipicamente 3478) e a leg
+ * NAO fecha: o motor entao encerra a call sozinho —
+ *
+ *   WaCallMediaSession.onRelayLost -> endCall(EndCallReason.RelayLost)
+ *
+ * que chega ao bot como `voip_call_ended` e vira a mensagem de "A chamada foi
+ * encerrada" logo depois de a call subir.
+ *
+ * A doc do proprio pacote (`WaVoipCoordinatorOptions.useOriginalRelayPort`) diz
+ * que `false` (3480) e' o que o WhatsApp Web faz e que o outro modo "e' a escolha
+ * ERRADA" contra os relays da WhatsApp. Por isso aqui o padrao e' **web (3480)**
+ * e a opcao e' SEMPRE passada — deixar o motor decidir e' o defeito.
+ *
+ * `CALL_RELAY_PORT_MODE=original` volta ao modo antigo (documentado no
+ * `.env.example` como o que NAO funciona).
+ *
+ * @returns {boolean} true = disca a porta anunciada (modo antigo)
+ */
+function usarPortaOriginalDoRelay() {
+  const modo = String(process.env.CALL_RELAY_PORT_MODE || 'web').trim().toLowerCase();
+  return modo === 'original' || modo === 'anunciada' || modo === 'advertised';
 }
 
 /**
@@ -317,6 +350,17 @@ export async function obterCliente() {
               // pacote e' 1 -- era o que dava
               // "max concurrent calls reached (1)".
               maxConcurrentCalls: maxCalls(),
+
+              // PORTA DO RELAY -- sempre explicita.
+              //
+              // Sem esta opcao o motor decide por conta propria
+              // (`useOriginalRelayPort ?? !isMobilePrimary()`) e pode cair no
+              // modo `original` (porta anunciada, 3478), no qual a leg NAO
+              // fecha: o motor encerra a call sozinho (onRelayLost ->
+              // endCall(RelayLost)) e o grupo ve "a chamada foi encerrada"
+              // logo depois de ela subir. `false` = 3480, o que o WhatsApp Web
+              // usa e a doc do pacote chama de escolha CERTA.
+              useOriginalRelayPort: usarPortaOriginalDoRelay(),
 
               // ---- Qualidade de audio -------------------------------------
               // RED: cada pacote leva a copia de baixa taxa do frame anterior,

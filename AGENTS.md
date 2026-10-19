@@ -11293,3 +11293,99 @@ existe para o caso de o metadata **nao** trazer LID nenhum.
 **PRE-EXISTENTES** (confirmados, sem relacao): `menu-layout` 1 falha
 (`menufig` 18 vs 17, ja documentada) e `statusgrupo` por **ffmpeg ausente no
 sandbox** (ja documentada).
+
+
+## CALL — A CAUSA RAIZ do "sobe a call e cai na hora": `useOriginalRelayPort` (out/2026) ✅
+Relato do dono (depois da 1ª correção): *"ainda assim não foi, ta com o mesmo
+sintoma, o bot mostra que a call foi iniciada e logo em seguida já manda a
+mensagem dizendo que a call foi derrubada"*.
+
+### O erro da rodada anterior (registrado para não repetir)
+A rodada anterior corrigiu a FORMA do jid do convidado (LID) e ficou por isso.
+**A forma do jid era um defeito real, mas não era ESTE sintoma.** O `startCall`
+não falha no `syncDeviceList` (medido: o usync funciona), então o ack não vem com
+erro e o `SetupFailed` do `handleCallAck` **não** é o caminho. Eu tinha um caminho
+plausível e parei de investigar antes de achar o que de fato ocorre — o certo era
+ter ligado o diagnóstico PRIMEIRO.
+
+### A causa (MEDIDA no pacote)
+`@zapo-js/voip` (`WaCallManager.createMediaLink`):
+
+```js
+useOriginalRelayPort: this.useOriginalRelayPort ?? !this.deps.isMobilePrimary(),
+```
+
+**O bot nunca passava a opção**, então o motor decidia sozinho — e o valor depende
+da identidade com que a sessão subiu. No modo `original` o relay é discado na
+**porta anunciada** (tipicamente **3478**) e a leg **não fecha**. Aí:
+
+```
+WaCallMediaSession.onRelayLost(reason)
+  -> this.delegate.endCall(this.info, EndCallReason.RelayLost)
+```
+
+e o bot recebe `voip_call_ended` → `reconciliarCallEncerrada` → **a mensagem de "A
+chamada foi encerrada" logo depois de a call subir**. É exatamente o sintoma.
+
+Medido com o caminho REAL do pacote de mídia (`toRelayConfigs`), com um endpoint
+como o servidor anuncia (porta 3478):
+
+| `useOriginalRelayPort` | porta discada |
+|---|---|
+| `false` (**web**) | **3480** |
+| `true` (original) | **3478** |
+
+O `0.3.0` do `@zapo-js/voip-media` já traz `true`, mas o **voip** (que é quem monta
+a opção) sobrescreve com o default dele — e é por isso que **não basta** o
+`voip-media` ter corrigido.
+
+### O agravante: a configuração existia, mas NINGUÉM lia
+O `.env.example` **já documentava** a variável, com o aviso mais explícito
+possível:
+
+```
+# Porta com que se disca o relay. O padrão 'web' (3480) é o que o WhatsApp Web
+# usa e o ÚNICO que funciona: o modo 'original' (porta anunciada, 3478) faz a
+# call "conectar" e nunca voltar áudio. NÃO mude para 'original'.
+CALL_RELAY_PORT_MODE=web
+```
+
+Mas o `grep` por `CALL_RELAY_PORT_MODE` no código dava **zero** — a variável era
+documentada e **ignorada**. O mesmo valia para `CALL_DISABLE_IPV6`. Quem definia a
+env achava que estava configurado; não estava.
+
+### Correção
+`dados/src/funcs/utils/zapoCall.js`:
+- novo **`usarPortaOriginalDoRelay()`** — lê `CALL_RELAY_PORT_MODE`; padrão
+  **web (3480)**; aceita `original`/`anunciada`/`advertised` como opt-in explícito;
+  valor desconhecido cai no padrão **seguro**.
+- a config do `voipPlugin` passou a passar
+  **`useOriginalRelayPort: usarPortaOriginalDoRelay()`** — **sempre explícita**,
+  para o motor nunca mais decidir isso por conta própria.
+
+### Testes — `tests/callp.test.js` (31 testes / 63 asserções, 0 falhas)
+- a opção vai **explícita** na config (guarda estrutural contra voltar a omitir);
+- o padrão é 3480 e o `CALL_RELAY_PORT_MODE` é respeitado (incluindo caixa alta e
+  valor inválido);
+- **a opção muda a porta de verdade**: o teste chama o `toRelayConfigs` REAL do
+  pacote de mídia e exige **3480** com `false` e **3478** com `true`.
+
+**Verificado que o teste MEDE a correção**: removendo a linha
+`useOriginalRelayPort: ...` da config, **1 asserção falha**.
+
+### Regressões verdes
+`callp` 31/63, `callp-regressions` 38/114, `musicap` 24/70,
+`zapo-conexao` 17/37, `zapo-pareamento` 24/63.
+
+### PENDÊNCIA ABERTA (diagnóstico, não corrigido)
+`CALL_DISABLE_IPV6` também é **documentada e ignorada** — nenhuma opção do motor
+corresponde a ela (procurei em `@zapo-js/voip` e `@zapo-js/voip-media`: não há
+`ipv6`/`disableIpv6` nas opções). Fica registrado: ou a variável é morta (e deve
+sair do `.env.example`), ou o pacote tem outro caminho para isso.
+
+### Lição de método
+Duas rodadas foram perdidas por **teorizar antes de medir**. O que fechou o caso
+foi (1) ler a doc do pacote até o fim — o README diz literalmente *"a call that
+loses its media path leaves"* — e (2) comparar o que o `.env.example` prometia com
+o que o código realmente lia. Um `grep` da variável no código teria mostrado o furo
+na primeira rodada.

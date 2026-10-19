@@ -414,6 +414,51 @@ await test('resolverLids: sem o coordinator devolve a lista sem quebrar', async 
   ok(Array.isArray(res) && res.length === 1, 'nao quebra sem a API');
 });
 
+// ============================================================================
+// 3c) PORTA DO RELAY — a causa do "sobe e cai na hora"
+// ============================================================================
+
+await test('PORTA DO RELAY: a opcao e SEMPRE passada ao motor (nao deixamos o motor decidir)', () => {
+  // Sem a opcao, `WaCallManager.createMediaLink` faz
+  // `useOriginalRelayPort ?? !isMobilePrimary()` — o valor passa a depender da
+  // identidade da sessao. No modo `original` (3478) a leg nao fecha, o motor
+  // chama `onRelayLost -> endCall(RelayLost)` e a call cai logo depois de subir.
+  const src = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/zapoCall.js'), 'utf-8');
+  ok(src.includes('useOriginalRelayPort: usarPortaOriginalDoRelay()'),
+    'a opcao vai EXPLICITA na config do plugin');
+});
+
+await test('PORTA DO RELAY: o padrao e a porta do WhatsApp Web (3480)', () => {
+  const salvo = process.env.CALL_RELAY_PORT_MODE;
+  try {
+    delete process.env.CALL_RELAY_PORT_MODE;
+    ok(zapo.__usarPortaOriginalDoRelay() === false, 'sem env -> modo web (3480)');
+    process.env.CALL_RELAY_PORT_MODE = 'web';
+    ok(zapo.__usarPortaOriginalDoRelay() === false, "'web' -> modo web");
+    process.env.CALL_RELAY_PORT_MODE = 'WEB';
+    ok(zapo.__usarPortaOriginalDoRelay() === false, 'aceita caixa alta');
+    process.env.CALL_RELAY_PORT_MODE = 'lixo';
+    ok(zapo.__usarPortaOriginalDoRelay() === false, 'valor desconhecido cai no padrao seguro');
+    process.env.CALL_RELAY_PORT_MODE = 'original';
+    ok(zapo.__usarPortaOriginalDoRelay() === true, "'original' -> modo antigo (opt-in)");
+  } finally {
+    if (salvo === undefined) delete process.env.CALL_RELAY_PORT_MODE;
+    else process.env.CALL_RELAY_PORT_MODE = salvo;
+  }
+});
+
+await test('PORTA DO RELAY: a opcao MUDA a porta discada (3480 x 3478)', async () => {
+  // Mede o caminho REAL do pacote de midia: `toRelayConfigs`.
+  const { toRelayConfigs } = await import(
+    new URL('../node_modules/@zapo-js/voip-media/dist/esm/call/relay-plan.js', import.meta.url).href
+  );
+  const endpoints = [{ ip: '157.240.1.1', port: 3478, token: 't', authToken: 'a', key: 'k', rawToken: 'rt', protocol: 0 }];
+  const web = toRelayConfigs(endpoints, false);
+  const original = toRelayConfigs(endpoints, true);
+  ok(web[0].port === 3480, `modo web disca 3480 (veio ${web[0].port})`);
+  ok(original[0].port === 3478, `modo original disca a anunciada (veio ${original[0].port})`);
+});
+
 await test('o motivo do fim da call e registrado (diagnostico)', () => {
   const src = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/zapoCall.js'), 'utf-8');
   const bloco = src.slice(src.indexOf("client.on('voip_call_ended'"), src.indexOf("client.on('voip_call_ended'") + 700);
