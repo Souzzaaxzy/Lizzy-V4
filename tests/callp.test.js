@@ -71,6 +71,7 @@ if (typeof handleMessage !== 'function') throw new Error('index.js não exporta 
 
 const callState = await import(new URL('../dados/src/funcs/utils/callOffer.js', import.meta.url).href);
 const callMedia = await import(new URL('../dados/src/funcs/utils/callMedia.js', import.meta.url).href);
+const zapo = await import(new URL('../dados/src/funcs/utils/zapoCall.js', import.meta.url).href);
 
 const BOT_JID = '5599999999999@s.whatsapp.net';
 const BOT_LID = '111111111111111@lid';
@@ -120,7 +121,15 @@ function makeNazu({ sent, groupJid, participants }) {
     signalRepository: { lidMapping: { getPNForLID: async (lid) => map[lid] || null } },
     groupMetadata: async () => ({
       id: groupJid, subject: 'Grupo Callp',
-      participants: participants.map((p) => ({ id: p.lid, admin: p.isAdmin ? 'admin' : null, phoneNumber: p.jid }))
+      // `idEhPn`: monta o participante na forma REAL de um grupo que NAO esta'
+      // em modo LID — o `id` e' o NUMERO e o LID vive no campo `lid`. A fixture
+      // padrao punha o LID no `id` e mascarava o defeito.
+      participants: participants.map((p) => ({
+        id: p.idEhPn ? p.jid : p.lid,
+        lid: p.idEhPn ? p.lid : undefined,
+        admin: p.isAdmin ? 'admin' : null,
+        phoneNumber: p.jid
+      }))
     }),
     groupParticipantsUpdate: async () => ({}),
     groupRequestParticipantsList: async () => [],
@@ -274,6 +283,142 @@ await test('!callp convida todos os membros menos o bot', async () => {
   ok(jids.length === 4, `convidou os 4 membros humanos (veio ${jids.length})`);
   ok(!jids.some((j) => String(j).startsWith(BOT_LID.split('@')[0])), 'não convidou a si mesmo');
   ok(new Set(jids.map((j) => String(j).split('@')[0])).size === jids.length, 'sem convidado repetido');
+});
+
+await test('convida por LID (a forma que o motor exige)', async () => {
+  const { groupJid, admin, participants } = setup(3);
+  const chamadas = instalarDubleMidia();
+  await run({ groupJid, sender: admin, text: '!callp', participants });
+  const criou = chamadas.find((c) => c.tipo === 'entrar');
+  ok(criou.participantes.every((j) => String(j).endsWith('@lid')),
+    `todos os convidados vao em LID (vieram ${JSON.stringify(criou.participantes)})`);
+  callState.limparCall(groupJid);
+});
+
+await test('convida por LID MESMO com o id do metadata sendo NUMERO', async () => {
+  // O grupo que NAO esta' em modo LID: o `id` do participante e' o numero.
+  // Mandar o numero faz o servidor recusar o offer e o motor encerrar a call
+  // na hora ("sobe e logo em seguida e' encerrada"). Era a diferenca entre os
+  // grupos que funcionavam e os que nao.
+  const groupJid = makeGroup();
+  const admin = makePerson();
+  const outros = [makePerson(), makePerson(), makePerson()];
+  const participants = [
+    { lid: admin.lid, jid: admin.jid, isAdmin: true, idEhPn: true },
+    ...outros.map((p) => ({ lid: p.lid, jid: p.jid, isAdmin: false, idEhPn: true })),
+    { lid: BOT_LID, jid: BOT_JID, name: 'Lizzy', isAdmin: true, idEhPn: true }
+  ];
+  const chamadas = instalarDubleMidia();
+  await run({ groupJid, sender: admin, text: '!callp', participants });
+  const criou = chamadas.find((c) => c.tipo === 'entrar');
+  ok(Boolean(criou), 'subiu a chamada');
+  ok(criou.participantes.every((j) => String(j).endsWith('@lid')),
+    `os convidados vao em LID, nao no numero (vieram ${JSON.stringify(criou.participantes)})`);
+  callState.limparCall(groupJid);
+});
+
+await test('nao convida o BOT quando os convidados vao por numero', async () => {
+  // `getBotNumber` devolve o LID, mas com o metadata em PN a comparacao por uma
+  // forma so' nao casava e o bot entrava na propria lista de convidados.
+  const groupJid = makeGroup();
+  const admin = makePerson();
+  const outros = [makePerson(), makePerson(), makePerson()];
+  const participants = [
+    { lid: admin.lid, jid: admin.jid, isAdmin: true, idEhPn: true },
+    ...outros.map((p) => ({ lid: p.lid, jid: p.jid, isAdmin: false, idEhPn: true })),
+    { lid: BOT_LID, jid: BOT_JID, name: 'Lizzy', isAdmin: true, idEhPn: true }
+  ];
+  const chamadas = instalarDubleMidia();
+  await run({ groupJid, sender: admin, text: '!callp', participants });
+  const criou = chamadas.find((c) => c.tipo === 'entrar');
+  const baseBot = BOT_JID.split('@')[0];
+  ok(!criou.participantes.some((j) => String(j).split('@')[0].split(':')[0] === baseBot),
+    'o bot nao entra na propria lista de convidados');
+  ok(criou.participantes.length === 4, `convidou os 4 humanos (veio ${criou.participantes.length})`);
+  callState.limparCall(groupJid);
+});
+
+// ============================================================================
+// 3b) CONVERSAO PN -> LID pelo PROPRIO zapo
+// ============================================================================
+
+await test('resolverLids: converte numero em LID pela API do proprio zapo', async () => {
+  const visto = [];
+  const cli = {
+    profile: {
+      getLidsByPhoneNumbers: async (numeros) => {
+        visto.push(numeros);
+        return numeros.map((n) => ({
+          queriedJid: `${n}@s.whatsapp.net`,
+          phoneJid: `${n}@s.whatsapp.net`,
+          lidJid: `${n}@lid`,
+          exists: true,
+          invalid: false
+        }));
+      }
+    }
+  };
+  const res = await zapo.__resolverLids(cli, ['5511999999999@s.whatsapp.net', '5511888888888@s.whatsapp.net']);
+  ok(res.every((j) => j.endsWith('@lid')), `todos viram LID (${JSON.stringify(res)})`);
+  ok(visto[0].length === 2, 'consultou os dois numeros de uma vez');
+});
+
+await test('resolverLids: quem ja e LID passa direto (sem chamar a API)', async () => {
+  let chamou = 0;
+  const cli = { profile: { getLidsByPhoneNumbers: async () => { chamou += 1; return []; } } };
+  const res = await zapo.__resolverLids(cli, ['111111111111111@lid', '222222222222222@lid']);
+  ok(chamou === 0, 'nao consulta quando todos ja sao LID');
+  ok(res.length === 2 && res.every((j) => j.endsWith('@lid')), 'mantem os LIDs');
+});
+
+await test('resolverLids: o servidor corrige o numero (casa por queriedJid)', async () => {
+  // O nono digito: pedimos 551199999999 e o servidor responde 5511999999999.
+  const cli = {
+    profile: {
+      getLidsByPhoneNumbers: async () => ([{
+        queriedJid: '551199999999@s.whatsapp.net',
+        phoneJid: '5511999999999@s.whatsapp.net',
+        lidJid: '999999999999999@lid',
+        exists: true,
+        invalid: false
+      }])
+    }
+  };
+  const res = await zapo.__resolverLids(cli, ['551199999999@s.whatsapp.net']);
+  ok(res[0] === '999999999999999@lid', `casa por queriedJid (veio ${res[0]})`);
+});
+
+await test('resolverLids: o que nao resolver fica como veio (best-effort)', async () => {
+  const cli = { profile: { getLidsByPhoneNumbers: async () => ([]) } };
+  const res = await zapo.__resolverLids(cli, ['5511999999999@s.whatsapp.net']);
+  ok(res[0] === '5511999999999@s.whatsapp.net', 'mantem o numero quando nao ha LID');
+});
+
+await test('resolverLids: falha da API NAO derruba a chamada', async () => {
+  const cli = { profile: { getLidsByPhoneNumbers: async () => { throw new Error('usync fora'); } } };
+  const res = await zapo.__resolverLids(cli, ['5511999999999@s.whatsapp.net']);
+  ok(res[0] === '5511999999999@s.whatsapp.net', 'devolve o jid original');
+});
+
+await test('resolverLids: consulta lenta nao prende (tem teto de tempo)', async () => {
+  const cli = { profile: { getLidsByPhoneNumbers: () => new Promise(() => {}) } };
+  const t0 = Date.now();
+  const res = await zapo.__resolverLids(cli, ['5511999999999@s.whatsapp.net'], 120);
+  const dt = Date.now() - t0;
+  ok(dt < 2000, `respeitou o teto (levou ${dt} ms)`);
+  ok(res[0] === '5511999999999@s.whatsapp.net', 'segue com o numero');
+});
+
+await test('resolverLids: sem o coordinator devolve a lista sem quebrar', async () => {
+  const res = await zapo.__resolverLids({}, ['5511999999999@s.whatsapp.net']);
+  ok(Array.isArray(res) && res.length === 1, 'nao quebra sem a API');
+});
+
+await test('o motivo do fim da call e registrado (diagnostico)', () => {
+  const src = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/zapoCall.js'), 'utf-8');
+  const bloco = src.slice(src.indexOf("client.on('voip_call_ended'"), src.indexOf("client.on('voip_call_ended'") + 700);
+  ok(bloco.includes('endReason'), 'le o motivo do motor');
+  ok(bloco.includes('[CALLP]'), 'registra uma linha com o motivo (sem isso a causa se perde)');
 });
 
 await test('o aviso carrega o cabeçalho de canal e o estado do áudio', async () => {

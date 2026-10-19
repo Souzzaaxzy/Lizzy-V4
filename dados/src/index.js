@@ -4070,14 +4070,38 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       }
 
       // Convidados: todos os membros, menos o bot (ele entra como criador).
-      const botUser = String(botCallId).split('@')[0].split(':')[0];
+      //
+      // ## A FORMA DO JID DECIDE SE A CALL SOBE OU CAI NA HORA
+      //
+      // O motor casa o roster pela CONTA (`groupParticipantAccountKey`) e o
+      // contrato do `startCall` de grupo pede **LID** em `participants[].jid`
+      // ("The account to ring, a LID"). Quando o `id` do participante vem como
+      // **numero** (`@s.whatsapp.net`), o offer vai com o numero, o servidor
+      // RECUSA e o motor encerra a call na hora (`handleCallAck` ve o ack com
+      // `error` -> `terminate(SetupFailed)`) — e' o "sobe a call e logo em
+      // seguida ela e' encerrada". Nos grupos cujo `id` ja' e' LID o mesmo
+      // comando funciona: era essa a diferenca entre os grupos.
+      //
+      // `extractParticipantId` ja' faz a escolha certa (LID primeiro, depois o
+      // id/phoneNumber) e tira o `:device`. O numero so' fica como ultimo
+      // recurso — e o `zapoCall` ainda tenta converte-lo para LID antes de
+      // subir a call.
+      //
+      // A EXCLUSAO DO BOT compara TODAS as formas conhecidas (LID e numero):
+      // `getBotNumber` devolve o LID, mas os convidados podem vir como numero —
+      // comparando so' uma forma o bot entrava na propria lista de convidados.
+      const idsDoBot = new Set(
+        [botCallId, nazu?.user?.id, nazu?.user?.lid]
+          .filter((x) => typeof x === 'string' && x)
+          .map((x) => x.split('@')[0].split(':')[0])
+      );
       const convidados = [];
       const vistos = new Set();
       for (const part of (meta.participants || [])) {
-        const jid = part?.id || part?.phoneNumber;
+        const jid = extractParticipantId(part) || part?.phoneNumber;
         if (typeof jid !== 'string' || !jid) continue;
         const user = jid.split('@')[0].split(':')[0];
-        if (!user || user === botUser || vistos.has(user)) continue;
+        if (!user || idsDoBot.has(user) || vistos.has(user)) continue;
         vistos.add(user);
         convidados.push(jid);
       }

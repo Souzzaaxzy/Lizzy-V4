@@ -11222,3 +11222,74 @@ O `gerarwelcomecard` (`funcs/downloads/canvas.js`) chama **`renderTextLayer`**,
 que **nao existe no arquivo** — quebra com `ReferenceError` e o `catch` engole,
 entao o welcome card falha **em silencio** (cai para texto sem dizer por que).
 Fica registrado para uma rodada propria.
+
+
+## CALL — `!callp`: a call subia e CAIA na hora em ALGUNS grupos (out/2026) ✅
+Relato do dono: *"tem grupos que sobem call, mas também tem grupos que ele manda
+a msg que diz subir a call e logo em seguida manda a mensagem de call
+encerrada"*.
+
+### Causa raiz (MEDIDA no pacote `@zapo-js/voip@1.4.0`, nao suposta)
+O motor casa o roster pela **CONTA** (`groupParticipantAccountKey`, em
+`dist/jid.js`), e o contrato do `startCall` de grupo pede **LID** em
+`participants[].jid` — a doc do pacote diz, literalmente, *"The account to ring,
+a LID"*.
+
+O `subirCallDoGrupo` montava os convidados com `part?.id || part?.phoneNumber`.
+O `id` do participante **varia por grupo**: em grupo que **nao** esta em modo
+LID ele vem como **numero** (`@s.whatsapp.net`). Nesse caso o offer sai com o
+numero, o servidor **recusa**, e o motor encerra a call na hora:
+
+```
+dist/call/WaCallMediaSession.js  handleCallAck()
+  const error = node.attrs?.error;
+  if (error) {
+    this.logger.warn('offer refused by the server, call ended', ...);
+    await this.terminate(EndCallReason.SetupFailed, SETUP_FAILED_REASON);   // <-- "encerrada"
+  }
+```
+
+Era **exatamente** o sintoma: a call sobe, e no mesmo instante vem o
+`voip_call_ended` -> `reconciliarCallEncerrada` -> a mensagem de "A chamada foi
+encerrada". Nos grupos cujo `id` ja e LID, o mesmo comando funcionava — e e isso
+que explicava "alguns grupos sim, outros nao".
+
+### Correcao
+| onde | o que mudou |
+|---|---|
+| `index.js` (`subirCallDoGrupo`) | a lista de convidados passou a usar **`extractParticipantId`** — a MESMA escolha que o resto do bot ja faz (**LID primeiro**, depois `id`/`phoneNumber`, com o `:device` fora). O numero so fica como ultimo recurso. |
+| `index.js` | a exclusao do BOT passou a comparar **todas as formas conhecidas** (`botCallId`, `nuzu.user.id`, `nuzu.user.lid`). Antes comparava so o LID do `getBotNumber`; com os convidados vindo por numero, o bot **entrava na propria lista**. |
+| `zapoCall.js` | novo **`resolverLids(cli, jids)`** — converte numero -> LID pela API do PROPRIO zapo (`profile.getLidsByPhoneNumbers`), que e a unica que sabe o LID da sessao da call (o LID do Baileys e de outra sessao). **Best-effort com TETO de tempo** (8 s, `unref`): quem ja e LID passa direto sem consultar, o que nao resolver vai como veio, e a consulta **nao prende o comando**. |
+| `zapoCall.js` | **uma** linha de diagnostico por fim de call: `[CALLP] a call <id> encerrou \| motivo: <endReason>`. O motivo (`setup_failed`, `relay_lost`, ...) era lido e **descartado** — sem ele, "a call caiu logo depois de subir" fica sem causa. |
+
+### Testes — `tests/callp.test.js` (28 testes / 55 assercoes, 0 falhas)
+A fixture ganhou `idEhPn`, que monta o participante na **forma REAL** de um grupo
+que nao esta em modo LID (`id` = numero, `lid` no campo proprio). A fixture
+padrao punha o LID no `id` e **mascarava** o defeito — o mesmo erro de metodo ja
+registrado no `require` em ESM e no `sendMessage` da edicao de pagamento: **um
+duble mais permissivo que a producao esconde o defeito**.
+
+Novos: convida por LID (a forma padrao); convida por LID **mesmo com o `id` sendo
+numero**; **nao convida o bot** quando os convidados vao por numero; e os 6 do
+`resolverLids` (converte pela API do zapo, LID passa direto sem chamar a API,
+numero corrigido pelo servidor casa por `queriedJid`, o que nao resolve fica como
+veio, falha da API nao derruba, consulta lenta respeita o teto, sem o coordinator
+nao quebra).
+
+**Verificado que os testes MEDEM a correcao**: revertendo a lista de convidados
+para `part?.id || part?.phoneNumber`, **3 assercoes falham** (os dois testes da
+forma do jid + o do bot).
+
+**LIMITE HONESTO**: o `resolverLids` e rede de seguranca — com a lista ja em LID
+ele **nem chama a API** (`pns.length === 0`), entao nao tem como ser exercitado
+ponta a ponta pelos testes do comando (so o teste direto da funcao o cobre). Ele
+existe para o caso de o metadata **nao** trazer LID nenhum.
+
+### Regressoes verdes
+`callp` 28/55, `callp-regressions` 38/114, `musicap` 24/70,
+`zapo-conexao` 17/37, `zapo-pareamento` 24/63, `call-audio-prep` 14/38,
+`mlow-bitrate` 11/20, `installer-git-drift` 10/21, `cmd-suggest` 21/68,
+`me-profile` 44/0, `get-message-inspector` 54/269.
+**PRE-EXISTENTES** (confirmados, sem relacao): `menu-layout` 1 falha
+(`menufig` 18 vs 17, ja documentada) e `statusgrupo` por **ffmpeg ausente no
+sandbox** (ja documentada).

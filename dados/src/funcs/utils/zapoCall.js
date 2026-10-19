@@ -69,6 +69,9 @@ const aoEncerrarPorGrupo = new Map();
 /** Diretorio onde as credenciais do zapo sao gravadas. */
 const AUTH_DIR = path.join(DATABASE_DIR, 'zapo-auth');
 
+/** Teto da consulta de LID (best-effort; estourou, seguimos com o numero). */
+const LID_LOOKUP_TIMEOUT_MS = 8000;
+
 /** Mapa grupo -> callId do zapo. */
 const callsPorGrupo = new Map();
 /** Mapa grupo -> estagio da midia. */
@@ -337,6 +340,11 @@ export async function obterCliente() {
       // outros pararam de nos receber.
       client.on('voip_call_ended', (call) => {
         const motivo = call.stateData?.endReason || 'sem motivo informado';
+        // UMA linha por fim de call (e' raro): sem ela o motivo morre aqui e
+        // "a call caiu logo depois de subir" fica sem causa. `setup_failed`
+        // e' o servidor recusando o offer (tipicamente jid de convidado em
+        // forma errada); `relay_lost` e' o caminho de midia que caiu.
+        console.warn(`[CALLP] a call ${call.callId} encerrou | motivo: ${motivo}`);
         processarCallEncerrada(call.callId, motivo);
       });
 
@@ -435,6 +443,62 @@ export function codigoDePareamento() {
 }
 
 /**
+ * Converte NUMERO -> LID usando a API do PROPRIO zapo.
+ *
+ * O `startCall` de grupo casa o roster pela CONTA e o contrato dele pede LID em
+ * `participants[].jid`. O LID do metadata do **Baileys** nao vale aqui: o Baileys
+ * e o zapo sao sessoes DIFERENTES (o zapo e o motor da call, pareado a parte).
+ * Quem sabe o LID certo e o proprio zapo, por
+ * `client.profile.getLidsByPhoneNumbers` (a API documentada).
+ *
+ * **Best-effort de proposito**: quem ja' vem em LID passa direto; o que nao
+ * resolver fica como veio (melhor subir a call com o numero do que nao subir); a
+ * consulta tem TETO de tempo, entao uma resposta lenta nao prende o comando.
+ *
+ * @param {object} cli o cliente do zapo
+ * @param {string[]} jids
+ * @param {number} [timeoutMs]
+ * @returns {Promise<string[]>} os jids, com LID onde deu para resolver
+ */
+async function resolverLids(cli, jids, timeoutMs = LID_LOOKUP_TIMEOUT_MS) {
+  const lista = [...new Set((jids || []).filter((j) => typeof j === 'string' && j))];
+  if (lista.length === 0) return [];
+  const pns = lista.filter((j) => !j.endsWith('@lid'));
+  if (pns.length === 0) return lista;
+
+  const porPn = new Map();
+  let timer = null;
+  try {
+    const numeros = pns.map((j) => j.split('@')[0].split(':')[0]);
+    const consulta = Promise.resolve(cli?.profile?.getLidsByPhoneNumbers?.(numeros));
+    const teto = new Promise((resolve) => {
+      timer = setTimeout(() => resolve(null), timeoutMs);
+      // Nao segura o processo do bot por causa desta consulta.
+      if (typeof timer.unref === 'function') timer.unref();
+    });
+    const res = await Promise.race([consulta, teto]);
+    for (const r of res || []) {
+      // `queriedJid` correlaciona por VALOR (o servidor pode corrigir o numero).
+      const chave = String(r?.queriedJid || r?.phoneJid || '').split('@')[0].split(':')[0];
+      if (chave && r?.lidJid) porPn.set(chave, r.lidJid);
+    }
+  } catch {
+    // Best-effort: sem o LID a call ainda sobe com o numero.
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+
+  return lista.map((j) => {
+    if (j.endsWith('@lid')) return j;
+    const numero = j.split('@')[0].split(':')[0];
+    return porPn.get(numero) || j;
+  });
+}
+
+/** Exportado para o teste medir a conversao PN -> LID. */
+export const __resolverLids = resolverLids;
+
+/**
  * Traduz o estado do zapo para os estagios que o bot ja conhece.
  */
 function estagioDoCall(call) {
@@ -481,7 +545,16 @@ export async function entrarNaCallComMidia({ grupo, callId, callCreator, partici
   }
 
   try {
-    const alvos = (participantes || []).map((jid) => ({ jid }));
+    // O motor exige LID em `participants[].jid` (a doc: *"The account to
+    // ring, a LID"*). Quem resolve e' o PROPRIO zapo — o LID do Baileys e' de
+    // outra sessao e nao vale aqui. Best-effort: o que nao resolver vai como
+    // veio.
+    const emLid = await resolverLids(cli, participantes);
+    const alvos = emLid.map((jid) => ({ jid }));
+    const quantosLid = alvos.filter((a) => String(a.jid).endsWith('@lid')).length;
+    if (quantosLid < alvos.length) {
+      console.warn(`[CALLP] convidados: ${alvos.length} | em LID: ${quantosLid} (o resto vai pelo numero)`);
+    }
 
     const novoCallId = await cli.voip.startCall({
       groupJid: grupo,
