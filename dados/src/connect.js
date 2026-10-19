@@ -2,6 +2,7 @@ import { useMultiFileAuthState, DisconnectReason, makeCacheableSignalKeyStore, m
 import { Boom } from '@hapi/boom';
 import NodeCache from 'node-cache';
 import readline from 'readline';
+import { pedirCodigoDePareamento } from './utils/pairingCode.js';
 import pino from 'pino';
 import fs from 'fs/promises';
 import path, { dirname, join } from 'path';
@@ -1319,10 +1320,20 @@ async function createBotSocket(authDir) {
                 console.log('⚠️ Número inválido! Use um número válido com código de país (ex: 551199999999).');
                 process.exit(1);
             }
-            const rawCode = await AbyssSock.requestPairingCode(phoneNumber);
-            const formattedCode = rawCode?.match(/.{1,4}/g)?.join('-') || rawCode;
-            console.log(`🔑 Código de pareamento: ${formattedCode}`);
-            console.log('📲 Envie este código no WhatsApp para autenticar o bot.');
+            try {
+                const rawCode = await pedirCodigoDePareamento(AbyssSock, phoneNumber);
+                const formattedCode = rawCode?.match(/.{1,4}/g)?.join('-') || rawCode;
+                console.log(`🔑 Código de pareamento: ${formattedCode}`);
+                console.log('📲 Envie este código no WhatsApp para autenticar o bot.');
+            } catch (e) {
+                // Antes daqui o boot ficava MUDO: a promessa pendurada não gerava
+                // código, nem erro, nem reinício. Agora o motivo aparece e o
+                // processo reinicia para o usuário tentar de novo.
+                console.error(`⚠️ Não consegui gerar o código de pareamento: ${e?.message || e}`);
+                console.error('   Confira a conexão com a internet e rode de novo (o bot vai reiniciar).');
+                console.error('   Se persistir, use o QR Code (modo sem `--code`).');
+                process.exit(1);
+            }
         }
 
         AbyssSock.ev.on('creds.update', saveCreds);

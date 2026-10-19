@@ -11389,3 +11389,79 @@ foi (1) ler a doc do pacote até o fim — o README diz literalmente *"a call th
 loses its media path leaves"* — e (2) comparar o que o `.env.example` prometia com
 o que o código realmente lia. Um `grep` da variável no código teria mostrado o furo
 na primeira rodada.
+
+
+## PAREAMENTO — "eu coloco o número e nada acontece" (out/2026) ✅
+Relato do dono: *"agora a bot não esta enviando o código de conexão da própria
+Bailey, eu coloco o número e nada acontece"*.
+
+### Causa (MEDIDA na lib, não suposta)
+O `requestPairingCode` da fork (`lib/Socket/socket.js`) faz o certo: **espera o
+`pair-device`** antes de mandar o `link_code_companion_reg` (a ordem é
+obrigatória — pedir antes devolve código rejeitado). Mas a espera é:
+
+```js
+if (!pairingReady) {
+    await new Promise((resolve, reject) => {
+        pendingPairingResolve = () => { ... resolve(); };
+        pendingPairingReject  = (err) => { ... reject(err); };
+    });
+}
+```
+
+`pairingReady` só vira `true` quando o `pair-device` chega (ou rejeita quando a
+conexão **fecha**). Se a stanza não chega e a conexão fica de pé, a promessa
+**nunca resolve nem rejeita** — fica pendurada.
+
+E o `connect.js` fazia `await AbyssSock.requestPairingCode(n)` **sem teto e sem
+`catch`**. Como a linha seguinte só executa quando a promessa resolve, o boot
+ficava **mudo**: sem código, sem erro, sem reinício. Era exatamente o sintoma.
+
+Reproduzido isoladamente (o `await` direto, com uma promessa que nunca resolve):
+
+```
+CODIGO ANTIGO -> resolveu em 3s? false | decorrido 3003 ms
+>>> PENDURADO: o boot fica mudo para sempre <<<
+```
+
+> Nota: o `logger` do bot é `pino({ level: 'silent' })`, então o
+> `logger.debug('pairing not ready yet, queuing request…')` da lib **não
+> aparecia** — nada indicava onde o boot tinha parado.
+
+### Correção
+| onde | o que mudou |
+|---|---|
+| `dados/src/utils/pairingCode.js` (novo) | **`pedirCodigoDePareamento(sock, numero, { timeoutMs })`** — corre a promessa da lib contra dois desfechos: **teto de tempo** (30 s) e **conexão fechada** (evento `connection.update` com `connection: 'close'` rejeita na hora, sem esperar o teto). O listener é removido no `finally` (não segura o socket nem vaza em tentativas repetidas). |
+| `dados/src/connect.js` | o bloco do `--code` passou a usar o helper, com `try/catch`: em falha, imprime **o motivo** e `process.exit(1)` — o `start.js` reinicia, em vez de ficar mudo. |
+
+**Módulo puro de propósito**: recebe o socket por parâmetro e não abre nada. É o
+que permite testá-lo sem importar o `connect.js` — importar aquele arquivo **abre
+conexão de verdade** (gera QR e conecta) e travaria a suíte. Mesmo padrão do
+`callNotifier.js`.
+
+### Bug pego pelo próprio teste (registrado)
+A primeira versão chamava `timer.unref()` no teto "para não segurar o processo".
+**Isso anulava a correção**: com `unref`, o timer pode ser pulado quando nada mais
+segura o event loop, e a espera volta a ficar pendurada. O teste falhou com
+*"Detected unsettled top-level await"* e mostrou o defeito. **Regra**: o timer que
+destrava o chamador **não pode** ser `unref`.
+
+### Testes — `tests/pairing-code.test.js` (9 testes / 20 asserções, 0 falhas)
+Caminho feliz (resolve e devolve o código, repassa o número, não deixa listener);
+**o bug do dono** (promessa pendurada -> falha com *"o servidor não respondeu"*, em
+vez de pendurar); teto padrão de 30 s; **falha cedo** quando a conexão fecha
+(inclui o motivo do socket e não espera o teto); evento que não é `close` não
+derruba o pedido; erro da lib (pedido concorrente) chega inteiro; socket sem `ev`
+degrada sem quebrar; e **integração**: o `connect.js` usa o helper, **não** chama a
+lib direto, tem `catch` e mostra o motivo.
+
+### Regressões verdes
+`callp` 31/63, `callp-regressions` 38/114, `musicap` 24/70,
+`installer-git-drift` 10/21, `baileys-boot-info` 26/0.
+
+### LIMITE HONESTO
+Não há sessão de WhatsApp neste ambiente, então **não** validei o pareamento
+ponta a ponta contra o servidor. O que está provado: (a) o código antigo fica
+pendurado no cenário medido, (b) o novo falha com motivo dentro do prazo, e
+(c) o `connect.js` usa o caminho novo. Se o pareamento ainda não gerar código, a
+mensagem de erro agora diz **por quê** (servidor não respondeu / conexão fechou).
