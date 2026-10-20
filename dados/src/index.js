@@ -36200,16 +36200,17 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             return reply('🎙️ Já existe um chat de voz subido por mim neste grupo.\n\nUse `!vozp encerrar` para terminar.');
           }
 
-          // Preparação de convidados SEM o teto (`semTeto`).
+          // Preparação SEM corte: um CHAT DE VOZ não nomeia ninguém.
           //
-          // Preparação SEM o corte de 32, mas o MOTOR ainda limita o roster.
+          // MEDIDO (e confirmado no cliente oficial): um chat de voz NAO TOCA
+          // ninguém, então o offer dele **não leva roster** — vai so' com o
+          // `group-jid` e o marcador, e o servidor preenche a composição na
+          // resposta. Era o ROSTER que barrava o grupo grande: o servidor recusava
+          // com `427` acima do teto de 127 contas e com `404` quando a lista era
+          // curta. Sem lista, o chat de voz sobe em grupo de qualquer tamanho.
           //
-          // MEDIDO: o teto de 32 e' de uma call CONECTADA. O offer de grupo pode
-          // nomear até **127 contas** — o limite do roster oficial. Acima disso o
-          // servidor recusa com `error: '427'` (era o grupo de 128: o criador
-          // conta, então 128 entradas estouravam por UMA). Quem aplica esse limite
-          // e' o motor (`WA_GROUP_OFFER_MAX_ACCOUNTS`), então aqui não se corta:
-          // `semTeto` deixa o motor nomear o grupo todo até o teto dele.
+          // A preparação aqui serve para as GUARDAS (identidade, metadata,
+          // mínimo de membros); o corte fica por conta do motor.
           const prep = await prepararConvidadosDoGrupo({ semTeto: true });
           if (!prep.ok) {
             const motivos = {
@@ -36249,7 +36250,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               `🎙️ *Chat de voz iniciado neste grupo.*\n\n` +
               `• ID: \`${r.callId}\`\n` +
               `• Não toca ninguém: quem quiser entra pelo cartão do chat de voz.\n` +
-              `• Todo o grupo foi convidado (${prep.convidados.length + 1} contas).\n\n` +
+              `• Sobe em grupo de qualquer tamanho \u2014 sem lista de participantes.\n\n` +
               `_Use \`!vozp encerrar\` para terminar._`,
             contextInfo: gerarContextNewsletter(),
             quoted: info

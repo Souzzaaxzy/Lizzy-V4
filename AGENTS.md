@@ -46,6 +46,54 @@ membros ficam quietos de propósito até falarem. Correção na fork
 `lightweight='1'` e um `<silence reason="lightweight">` no lugar da mídia (medido
 contra o WhatsApp Web: é só o atributo + o nó). O grupo **não toca**.
 
+### ✅ RESOLVIDO: o chat de voz NAO leva ROSTER — sobe em grupo de QUALQUER tamanho (out/2026)
+O dono insistiu (com razao): *"eu nao estou tentando fazer o bot notificar o chat de
+voz para mais pessoas, eu so' quero conseguir SUBIR o chat de voz com o bot em um
+grupo com +300 membros, porque normalmente tem como fazer isso"*. Eu estava
+enquadrando errado: o problema nunca foi "notificar 400" — era o offer ser RECUSADO.
+
+### O que a pesquisa achou (a peca que faltava)
+No **`Auties00/Cobalt`** (RE do cliente oficial, com fixtures de captura), o
+`CallStanza.offer(...)`:
+- o `<group_info>` e' **OPCIONAL**: `if (groupInfo != null) { offerChildren.add(groupInfo) }`;
+- o parametro `groupParticipants` esta' marcado ***"currently unused; retained for
+  parity"*** — o cliente real **nao enumera os membros**;
+- o javadoc diz: *"A group offer carries **only group jid at offer level**"*.
+- o marcador do offer e' **`is_lightweight`** (+ `lightweight-key`), nao `lightweight`.
+
+### A regra certa (fecha com TODOS os logs)
+| offer do chat de voz | resposta do servidor |
+|---|---|
+| `<group_info>` com 128 contas | `427` (passou do teto de 127) |
+| `<group_info>` com 1 conta | `404` (lista incompleta) |
+| **SEM `<group_info>`** | **aceito** |
+
+Um chat de voz **nao toca ninguem**, entao **nao ha quem nomear**: o offer sai so'
+com `group-jid` + o marcador, e o servidor preenche a composicao na resposta. Era o
+**ROSTER** que barrava — nao o tamanho do grupo.
+
+### Correcao
+- **Fork `zapo`** (`master` `c1b91e7`, branch `voip` `b8bc4dd`):
+  - o offer de voice chat **nao leva `<group_info>`** e **nao resolve device**;
+  - o marcador sai nos DOIS nomes (`is_lightweight` e `lightweight`);
+  - o manager nao exige mais um `firstPeer` quando e' voice chat (nao ha quem tocar);
+  - a chamada que TOCA continua nomeando quem ela toca (e o teto de 127 segue).
+- **Bot**: o `!vozp` mantem `semTeto` e a mensagem virou *"Sobe em grupo de qualquer
+  tamanho — sem lista de participantes."*
+
+### Testes
+- Fork: `a voice chat flags itself, announces silence, and ships NO roster`,
+  `a voice chat starts in a group of any size (no roster, no device lookups)` (400
+  convidados → **0** lookups de device) e o pin de bytes atualizado.
+  **556 testes, 0 falhas.**
+- Bot: `CHAT DE VOZ em grupo GRANDE: sobe` (400 membros) e `CHAMADA (!callp):
+  mantem o corte em 32`. `callp` **50/118**, `callp-regressions` **38/115**, 0 falhas.
+
+### LIMITE HONESTO
+Ainda falta a prova **ao vivo** no grupo de 300+: o formato veio do cliente oficial
+(Cobalt), nao de uma medicao nossa contra o servidor. Se ainda vier recusa, o log
+mostra o codigo e eu ajusto — mas agora o offer tem a forma que o cliente real emite.
+
 ### ❓ "Tem como colocar um teto de 400 membros?" — NAO (e o que da' para fazer) (out/2026)
 Pergunta do dono depois do fix do 127. Resposta honesta, com o que esta' medido.
 

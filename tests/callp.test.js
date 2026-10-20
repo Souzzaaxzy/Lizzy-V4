@@ -628,20 +628,17 @@ await test('o teto e configuravel por CALL_MAX_PARTICIPANTS', async () => {
   }
 });
 
-await test('CHAT DE VOZ em grupo GRANDE: nao corta em 32 (o teto de 127 e do motor)', async () => {
-  // MEDIDO: o teto de 32 e' de uma call CONECTADA. O offer de grupo nomeia ate'
-  // 127 contas -- o limite do roster oficial. Acima disso o servidor recusa com
-  // `error: '427'` (o grupo de 128 estourava por UMA: o criador conta). Quem
-  // aplica o 127 e' o MOTOR; o bot so' nao corta em 32.
-  const { groupJid, admin, participants } = setupGrande(120);
+await test('CHAT DE VOZ em grupo GRANDE: sobe (nao toca, entao nao nomeia ninguem)', async () => {
+  // Um chat de voz NAO TOCA ninguem: o offer dele nao leva roster, entao sobe em
+  // grupo de qualquer tamanho. Era o ROSTER que barrava: o servidor recusava com
+  // `427` acima do teto de 127 contas e com `404` quando a lista era curta.
+  const { groupJid, admin, participants } = setupGrande(400);
   const doVoz = instalarDubleVozp();
   const out = await run({ groupJid, sender: admin, text: '!vozp', participants });
   const subiu = doVoz.find((c) => c.tipo === 'subir');
-  ok(Boolean(subiu), 'subiu o chat de voz');
-  ok(subiu.participantes.length === 121,
-    `nomeou o grupo todo, sem o corte de 32 (veio ${subiu.participantes.length})`);
-  ok(subiu.participantes.length > 32, 'passou do teto de call CONECTADA (nao e o do offer)');
-  ok(!out.text.includes('Toquei em'), 'sem aviso de corte de 32');
+  ok(Boolean(subiu), 'subiu o chat de voz num grupo de 400');
+  ok(!out.text.includes('Toquei em'), 'sem aviso de alcance (nao ha convite por conta)');
+  includes(out.text, 'qualquer tamanho', 'diz que vale em grupo de qualquer tamanho');
   includes(out.text, 'Chat de voz iniciado', 'confirma que subiu');
   callState.limparCall(groupJid);
   desinstalarDubleVozp();
