@@ -4158,12 +4158,9 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       // O total do grupo INCLUI o bot (ele e' membro): membros = humanos + 1.
       const totalMembros = convidados.length + 1;
       //
-      // `semTeto` é para o CHAT DE VOZ (`!vozp`). O teto de 32 existe porque o
-      // servidor recusa um offer que MANDA TOCAR mais gente que isso. Um chat de
-      // voz **não toca ninguém** — quem quiser entra pelo cartão —, então ele
-      // funciona num grupo de qualquer tamanho (o WhatsApp criou o recurso
-      // justamente para grupos de 33 a 128+ membros). A CHAMADA (`!callp`) mantém
-      // o teto: essa sim toca todo mundo.
+      // O TETO VALE PARA OS DOIS comandos (medido): o servidor recusa o offer
+      // acima de 32 contas até num chat de voz — o offer de grupo PRECISA
+      // nomear quem ele toca. `semTeto` fica como escapatória (off por env).
       if (!semTeto && convidados.length > tetoConvidados) {
         convidados.length = tetoConvidados;
       }
@@ -36203,11 +36200,14 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             return reply('🎙️ Já existe um chat de voz subido por mim neste grupo.\n\nUse `!vozp encerrar` para terminar.');
           }
 
-          // Reaproveita a MESMA preparação de convidados do `!callp`, mas SEM o
-          // teto (`semTeto`): o chat de voz não toca ninguém, então o limite de 32
-          // do offer que TOCA não se aplica — ele sobe num grupo de qualquer
-          // tamanho. O `!callp` continua com o teto.
-          const prep = await prepararConvidadosDoGrupo({ semTeto: true });
+          // Mesma preparação de convidados do `!callp`, COM o teto.
+          //
+          // MEDIDO (log do dono): o servidor recusa o offer acima de 32 contas
+          // MESMO num chat de voz — `offer refused by the server … error: '404'`
+          // quando o offer deixou de nomear o grupo. O offer de grupo PRECISA
+          // nomear quem ele toca; não há "lista vazia" possível. Então o teto vale
+          // para os dois comandos.
+          const prep = await prepararConvidadosDoGrupo();
           if (!prep.ok) {
             const motivos = {
               sem_identidade: 'Não consegui identificar meu próprio número para subir o chat de voz.',
@@ -36241,12 +36241,21 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
           // — senão o `!vozp` recusaria para sempre por achar que ele ainda existe.
           aoEncerrarAudio(from, (grupo, motivo) => reconciliarVozpEncerrado(grupo, motivo));
 
+          // Aviso de ALCANCE: o chat de voz tem o MESMO teto de 32 da chamada de
+          // grupo (limite da plataforma, medido: o servidor recusa o offer acima
+          // disso). Num grupo grande, quem ficou de fora entra pelo app.
+          const cortados = prep.totalMembros - (prep.convidados.length + 1);
+          const linhaAlcance = cortados > 0
+            ? `\n\n⚠️ *Toquei em ${prep.convidados.length + 1} de ${prep.totalMembros} membros.*\n` +
+              `_O chat de voz tem o mesmo limite de 32 participantes do WhatsApp — ` +
+              `limite da plataforma, não do bot. Quem ficou de fora entra pelo app._`
+            : '';
+
           await nazu.sendMessage(from, {
             text:
               `🎙️ *Chat de voz iniciado neste grupo.*\n\n` +
               `• ID: \`${r.callId}\`\n` +
-              `• Não toca ninguém: qualquer membro entra pelo cartão do chat de voz.\n` +
-              `• Sem limite de 32: o chat de voz funciona em grupo de qualquer tamanho.\n\n` +
+              `• Não toca: quem quiser entra pelo cartão do chat de voz.${linhaAlcance}\n\n` +
               `_Use \`!vozp encerrar\` para terminar._`,
             contextInfo: gerarContextNewsletter(),
             quoted: info

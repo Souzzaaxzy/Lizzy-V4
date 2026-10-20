@@ -46,6 +46,42 @@ membros ficam quietos de propósito até falarem. Correção na fork
 `lightweight='1'` e um `<silence reason="lightweight">` no lugar da mídia (medido
 contra o WhatsApp Web: é só o atributo + o nó). O grupo **não toca**.
 
+### ❌ ERRATA: o teto de 32 VALE TAMBEM PARA O CHAT DE VOZ (out/2026)
+**A hipotese da rodada anterior estava ERRADA** e o log do dono derrubou:
+```
+[CALLP] grupo 120363407202507664@g.us: 128 membro(s) -> 127 convidado(s) (chat de voz: sem teto)
+offer refused by the server, call ended { callId: '62D0…', error: '404' }
+[CALLP] a call 62D0… encerrou | motivo: setup_failed
+```
+### O que o `404` PROVA
+Tirei o teto E fiz o offer de voice chat listar so' o criador (achando que um chat
+de voz, que nao toca ninguem, nao precisaria nomear o grupo). O servidor recusou
+com **`404`** — e passou a falhar em **TODOS** os grupos, inclusive nos pequenos
+que antes funcionavam.
+Ou seja: **o offer de grupo PRECISA nomear quem ele toca**; nao existe "offer sem
+lista". E, medido agora, o teto de 32 contas vale **igual** para a chamada e para o
+chat de voz: nomear 127 contas faz o servidor recusar (`404`), mesmo sem tocar
+ninguem.
+### Correcao
+1. **Fork `zapo`**: revertido — o offer de voice chat volta a **nomear o grupo**
+   (`master` `89f55cb`, branch `voip` `10d46e0`).
+2. **Bot**: o `!vozp` volta a usar o teto (31 convidados + o bot = 32) e o aviso de
+   **alcance** voltou, com a verdade: *"O chat de voz tem o mesmo limite de 32
+   participantes do WhatsApp — limite da plataforma, nao do bot. Quem ficou de fora
+   entra pelo app."* Saiu a promessa errada ("Sem limite de 32").
+### LIMITE HONESTO (o que continua aberto)
+O dono pediu *"o grupo pode ter 500 membros, mas o comando funciona normalmente"*.
+Pelo que foi **medido**, o servidor recusa o offer acima de 32 contas nomeadas, entao
+**nao da' para tocar 500** — nem em chat de voz. O que da' para fazer (e ja' esta'):
+o bot sobe o chat de voz com 32 e os demais **entram pelo app** (a lista e' so' o
+toque inicial; o app nao exige estar nela para entrar). O que **nao** esta provado e'
+se o servidor aceitaria um `group_info` **sem lista** com `lightweight_key` (o
+marcador real do voice chat) — isso exigiria montar o `phash` do grupo, que nao
+esta' implementado no pacote.
+### Testes
+`callp` **50/121**, `callp-regressions` **38/115**, `musicap` 24/70, `vozp-log`
+12/20, `zapo-conexao` 17/37, `zapo-pareamento` 24/63 — **0 falhas**. A fork:
+**552 testes, 0 falhas**.
 ### O TETO DE 32 NAO SE APLICA AO CHAT DE VOZ (out/2026) ✅
 Relato do dono, com o `!vozp` **funcionando**: *"…mas esta com aquele mesmo problema
 de nao permitir a call em grupo grande +100 membros"* — a mensagem dizia *"Toquei
