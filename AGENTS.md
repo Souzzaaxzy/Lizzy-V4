@@ -11847,3 +11847,60 @@ real), a leg se fecha quando o caminho de volta não responde, e o caminho WebRT
 não mudou. Se ainda ficar "conectando", o log de etapas
 (`[RELAY] endpoint_selecionado → transporte_iniciando → conexao_aberta |
 conexao_falhou`) diz exatamente onde parou.
+
+
+## 🎙️ VOICE CHAT: a QUEDA CÍCLICA (~3 s, com bipes) + `encerrar` de verdade ✅
+Depois de a call subir e o UDP cru destravar o transporte, o dono relatou:
+*"depois de uns 3 seg a bot buga e fica caindo da call, mostra aqueles bip"* — e
+pediu que o `!vozp encerrar` encerrasse de vez.
+
+### A CAUSA RAIZ (medida no binário do motor)
+A cadeia do **falso positivo** — cada elo está no código:
+
+1. o motor passa por **`state=0 result=4`** no **ESTADO INICIAL** ("ainda não
+   conectada"). Isso **não é erro** — já estava documentado no próprio arquivo;
+2. mas o gate lia `state === 0 && result !== 0` como falha e marcava
+   **`callFalhou = true`**;
+3. `podeAlimentarCaptura` então **recusava a captura**;
+4. sem alimentar, o bot **não transmitia mídia nenhuma**;
+5. o motor **encerra a call sozinho por falta de mídia** — está escrito no
+   binário:
+   ```
+   ERROR: No media being transmitted
+   mvp->enable_media_timeout_terminate_reason
+   ```
+6. o bot reabria e o ciclo repetia → **a queda periódica + o bipe de
+   entrada/saída**.
+
+### Correções (pacote `lizzy-call`, commit `3c54a61`)
+| # | o que mudou |
+|---|---|
+| 1 | **O gate de falha é SÓ o `call_ending`.** `state=0 result=4` é o estado inicial; `result != 0` aparece em transições normais. Nenhum dos dois derruba a call. |
+| 2 | **O motor PEDINDO captura é prova de que a call está viva.** `startCaptureJS` só chega quando o motor quer mídia deste lado → alimentar sempre. Só `ja_tocando` (feeder já ativo) e `sem_sessao` barram. |
+| 3 | **A leg UDP cru RE-DIALA em vez de morrer.** Se a mídia sai e nada volta, re-diala com backoff até `CALL_RAW_UDP_MAX_REDIALS` (padrão 4) e só então falha — a referência (`redialStalledLegs` do `@zapo-js/voip-media`) faz igual. Antes ela fechava na primeira janela silenciosa e derrubava a call. |
+| 4 | **`sairDaCall` manda o `<terminate>` ANTES de derrubar o motor.** Matar os workers primeiro deixava o stanza na fila — e a call ficava de pé no servidor (o "encerrar" que não encerrava). |
+
+### Testes
+- `lizzy-call/tests/media-gate.test.mjs` (**5 testes**): `state=0 result=4` **não**
+  é falha; `call_ending=true` **é**; `result` de erro sem `call_ending` **não** é
+  terminal; e a regra do chamador (só `ja_tocando`/`sem_sessao` barram).
+  **Verificado: com o gate antigo, 2 testes falham.**
+- `lizzy-call/tests/raw-udp-redial.test.mjs` (**2 testes**): com um relay que
+  **nunca responde**, a leg segue enviando depois da janela (re-dial), contra o
+  modo `CALL_RAW_UDP_MAX_REDIALS=0` em que o envio para.
+- Pré-existentes no clone (falta o peer `@itsliaaa/baileys`): `media-nao-derruba`,
+  `signaling-route` e `ack-group-info` — **idênticas no baseline** (conferido com
+  `git stash`).
+
+### Integração no bot
+`package.json` + `package-lock.json` + `yarn.lock` (Berry v8) pinados no commit
+**`3c54a61`**. Regressões verdes: `callp` 46/100, `callp-regressions` 38/112,
+`musicap` 24/70, `wa-version` 12/30, `pairing-code` 9/20.
+
+### LIÇÃO DE MÉTODO
+A causa estava **dois elos acima** do sintoma: a queda não era da rede nem do
+relay, era o bot **parando de mandar áudio** por causa de um estado transitório
+lido como falha. E a prova veio do **próprio binário** (`strings` no `.wasm`):
+`"No media being transmitted"` é a assinatura do encerramento. Quando o sintoma é
+"a call cai sozinha", procurar no binário o que faz o motor encerrar responde mais
+rápido que teorizar sobre a rede.
