@@ -46,6 +46,42 @@ membros ficam quietos de propósito até falarem. Correção na fork
 `lightweight='1'` e um `<silence reason="lightweight">` no lugar da mídia (medido
 contra o WhatsApp Web: é só o atributo + o nó). O grupo **não toca**.
 
+### O TETO DE 32 NAO SE APLICA AO CHAT DE VOZ (out/2026) ✅
+Relato do dono, com o `!vozp` **funcionando**: *"…mas esta com aquele mesmo problema
+de nao permitir a call em grupo grande +100 membros"* — a mensagem dizia *"Toquei
+em 32 de 234 membros"*.
+
+### Por que o teto existia (e por que ele nao vale aqui)
+O teto de 32 e' do **offer que MANDA TOCAR**: o servidor recusa um `group_info` que
+nomeia mais contas que isso (`error: 207` -> `setup_failed`). Isso e' da **chamada**
+(`!callp`), que toca o grupo.
+
+Um **chat de voz NAO toca ninguem**: quem quiser entra pelo cartao. E o WhatsApp
+criou o recurso **justamente para grupos grandes** (o lancamento foi para grupos de
+33 a 128+ membros; ate 32 pessoas entram na conversa). Ou seja: nomear o grupo
+inteiro era inutil *e* estourava o limite do toque — era isso que impedia o `!vozp`
+num grupo de centenas.
+
+### Correcao (duas partes)
+1. **Fork `zapo` (`master` `73a4a41`, branch `voip` `5b2fff3`)**: num voice chat o
+   offer lista **so o criador** (`lightweight`), e o servidor preenche o roster na
+   resposta. A chamada que toca continua nomeando todos. O manager nao exige mais um
+   `firstPeer` quando e' voice chat (nao ha ninguem para tocar).
+2. **Bot**: `prepararConvidadosDoGrupo({ semTeto: true })` no `!vozp`. O `!callp`
+   segue com o teto. O aviso de alcance ("Toquei em X de Y") saiu do `!vozp` — nao
+   ha corte. A mensagem agora diz *"Sem limite de 32: o chat de voz funciona em grupo
+   de qualquer tamanho."*
+
+### Testes
+- Fork: `a voice chat names only ourselves, whatever the group size` (200 membros ->
+  1 conta no `group_info`), `a voice chat with nobody to ring is still placed`, e o
+  pin de bytes do offer de voice chat atualizado. **554 testes, 0 falhas.**
+  Verificado: com o offer voltando a nomear todos, o teste **falha**.
+- Bot: `CHAT DE VOZ em grupo GRANDE: NAO corta ninguem` (234 membros -> 235
+  convidados, sem aviso de corte) e `!vozp sem pareamento`. `callp` **49/118**,
+  `callp-regressions` **38/115**, 0 falhas. Verificado: com o `!vozp` voltando a
+  usar o teto, **2 assercoes falham**.
+
 ### O registro do `!vozp` tambem reconcilia (o defeito que faltava)
 O `!callp` já limpava o registro quando a call caía sozinha
 (`reconciliarCallEncerrada`). O `!vozp` **não** tinha o equivalente: se o motor

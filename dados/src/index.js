@@ -4092,7 +4092,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
      *
      * @returns {Promise<{ok:boolean, motivo?:string, convidados?:string[], totalMembros?:number, botCallId?:string, meta?:object}>}
      */
-    const prepararConvidadosDoGrupo = async () => {
+    const prepararConvidadosDoGrupo = async ({ semTeto = false } = {}) => {
       const botCallId = getBotNumber(nazu);
       if (!botCallId) return { ok: false, motivo: 'sem_identidade' };
 
@@ -4157,13 +4157,20 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       const tetoConvidados = Math.max(2, Math.min(31, Number(process.env.CALL_MAX_PARTICIPANTS) || 31));
       // O total do grupo INCLUI o bot (ele e' membro): membros = humanos + 1.
       const totalMembros = convidados.length + 1;
-      if (convidados.length > tetoConvidados) {
+      //
+      // `semTeto` é para o CHAT DE VOZ (`!vozp`). O teto de 32 existe porque o
+      // servidor recusa um offer que MANDA TOCAR mais gente que isso. Um chat de
+      // voz **não toca ninguém** — quem quiser entra pelo cartão —, então ele
+      // funciona num grupo de qualquer tamanho (o WhatsApp criou o recurso
+      // justamente para grupos de 33 a 128+ membros). A CHAMADA (`!callp`) mantém
+      // o teto: essa sim toca todo mundo.
+      if (!semTeto && convidados.length > tetoConvidados) {
         convidados.length = tetoConvidados;
       }
       // Log com os números: sem ele, "a call caiu" não diz se foi tamanho.
       console.log(
         `[CALLP] grupo ${from}: ${totalMembros} membro(s) -> ${convidados.length} convidado(s)` +
-        ` (teto ${tetoConvidados})`
+        (semTeto ? ' (chat de voz: sem teto)' : ` (teto ${tetoConvidados})`)
       );
 
       return { ok: true, convidados, totalMembros, botCallId, meta };
@@ -36196,10 +36203,11 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             return reply('🎙️ Já existe um chat de voz subido por mim neste grupo.\n\nUse `!vozp encerrar` para terminar.');
           }
 
-          // Reaproveita a MESMA preparação de convidados do `!callp` (membros, o
-          // teto de 32 e o log de alcance): é só `prepararConvidadosDoGrupo`, sem
-          // tocar no registro nem no backend da chamada.
-          const prep = await prepararConvidadosDoGrupo();
+          // Reaproveita a MESMA preparação de convidados do `!callp`, mas SEM o
+          // teto (`semTeto`): o chat de voz não toca ninguém, então o limite de 32
+          // do offer que TOCA não se aplica — ele sobe num grupo de qualquer
+          // tamanho. O `!callp` continua com o teto.
+          const prep = await prepararConvidadosDoGrupo({ semTeto: true });
           if (!prep.ok) {
             const motivos = {
               sem_identidade: 'Não consegui identificar meu próprio número para subir o chat de voz.',
@@ -36233,17 +36241,12 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
           // — senão o `!vozp` recusaria para sempre por achar que ele ainda existe.
           aoEncerrarAudio(from, (grupo, motivo) => reconciliarVozpEncerrado(grupo, motivo));
 
-          const cortados = prep.totalMembros - (prep.convidados.length + 1);
-          const linhaAlcance = cortados > 0
-            ? `\n\n⚠️ *Toquei em ${prep.convidados.length + 1} de ${prep.totalMembros} membros.*\n` +
-              `_O chat de voz tem o mesmo limite de 32 participantes do WhatsApp._`
-            : '';
-
           await nazu.sendMessage(from, {
             text:
               `🎙️ *Chat de voz iniciado neste grupo.*\n\n` +
               `• ID: \`${r.callId}\`\n` +
-              `• Não toca: quem quiser entra pelo cartão do chat de voz.${linhaAlcance}\n\n` +
+              `• Não toca ninguém: qualquer membro entra pelo cartão do chat de voz.\n` +
+              `• Sem limite de 32: o chat de voz funciona em grupo de qualquer tamanho.\n\n` +
               `_Use \`!vozp encerrar\` para terminar._`,
             contextInfo: gerarContextNewsletter(),
             quoted: info

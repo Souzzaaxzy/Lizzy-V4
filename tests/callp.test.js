@@ -628,6 +628,25 @@ await test('o teto e configuravel por CALL_MAX_PARTICIPANTS', async () => {
   }
 });
 
+await test('CHAT DE VOZ em grupo GRANDE: NAO corta ninguem (nao toca, entao nao tem teto)', async () => {
+  // O teto de 32 existe porque o servidor recusa um offer que MANDA TOCAR mais
+  // gente. Um chat de voz NAO toca ninguem -- quem quiser entra pelo cartao --,
+  // entao ele funciona num grupo de qualquer tamanho. Era o defeito: o `!vozp`
+  // num grupo de 234 membros tocava so' em 32.
+  const { groupJid, admin, participants } = setupGrande(234);
+  const doVoz = instalarDubleVozp();
+  const out = await run({ groupJid, sender: admin, text: '!vozp', participants });
+  const subiu = doVoz.find((c) => c.tipo === 'subir');
+  ok(Boolean(subiu), 'subiu o chat de voz');
+  ok(subiu.participantes.length === 235,
+    `levou o grupo INTEIRO, sem teto (veio ${subiu.participantes.length})`);
+  ok(subiu.participantes.length > 32, 'passou MUITO do teto da chamada (era o defeito)');
+  ok(!out.text.includes('Toquei em'), 'sem aviso de corte (nao ha corte)');
+  includes(out.text, 'Chat de voz iniciado', 'confirma que subiu');
+  callState.limparCall(groupJid);
+  desinstalarDubleVozp();
+});
+
 await test('o log diz quantos membros e quantos convidados (diagnostico)', () => {
   const src = fs.readFileSync(path.join(HERE, '..', 'dados/src/index.js'), 'utf-8');
   const bloco = src.slice(src.indexOf('const tetoConvidados'), src.indexOf('const tetoConvidados') + 1400);
