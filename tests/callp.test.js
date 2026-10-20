@@ -99,8 +99,8 @@ function makePerson() {
 function instalarDubleMidia({ ok = true, motivo = null, stage = 'pronta', callId = 'CALL-1' } = {}) {
   const chamadas = [];
   callMedia.__setDubleEntrar({
-    entrar: async ({ grupo, participantes }) => {
-      chamadas.push({ tipo: 'entrar', grupo, participantes });
+    entrar: async ({ grupo, participantes, voiceChat }) => {
+      chamadas.push({ tipo: 'entrar', grupo, participantes, voiceChat: !!voiceChat });
       if (!ok) return { ok: false, motivo, stage: 'falhou' };
       return { ok: true, callId, stage };
     },
@@ -426,6 +426,89 @@ await test('resolverLids: consulta lenta nao prende (tem teto de tempo)', async 
 await test('resolverLids: sem o coordinator devolve a lista sem quebrar', async () => {
   const res = await zapo.__resolverLids({}, ['5511999999999@s.whatsapp.net']);
   ok(Array.isArray(res) && res.length === 1, 'nao quebra sem a API');
+});
+
+// ============================================================================
+// 3a-ter) CHAT DE VOZ (!vozp) — o cartao que se arrasta para cima
+// ============================================================================
+
+await test('!vozp sobe o chat de voz (voiceChat: true chega na midia)', async () => {
+  const { groupJid, admin, participants } = setup(3);
+  const chamadas = instalarDubleMidia();
+  const out = await run({ groupJid, sender: admin, text: '!vozp', participants });
+  const criou = chamadas.find((c) => c.tipo === 'entrar');
+  ok(Boolean(criou), 'chamou a midia');
+  ok(criou.voiceChat === true, 'com o flag de VOICE CHAT (nao chamada comum)');
+  includes(out.text, 'Chat de voz iniciado', 'avisa que e chat de voz');
+  includes(out.text, 'Não toca', 'deixa claro que nao toca');
+  ok(callState.obterCall(groupJid)?.voiceChat === true, 'o registro marca o tipo');
+  callState.limparCall(groupJid);
+});
+
+await test('!callp continua sendo CHAMADA (voiceChat false)', async () => {
+  const { groupJid, admin, participants } = setup(3);
+  const chamadas = instalarDubleMidia();
+  await run({ groupJid, sender: admin, text: '!callp', participants });
+  const criou = chamadas.find((c) => c.tipo === 'entrar');
+  ok(criou.voiceChat === false, 'o !callp NAO vira voice chat');
+  callState.limparCall(groupJid);
+});
+
+await test('!vozp: MEMBRO comum e recusado', async () => {
+  const { groupJid, participants } = setup(2);
+  const membro = makePerson();
+  participants.push({ lid: membro.lid, jid: membro.jid, isAdmin: false });
+  const chamadas = instalarDubleMidia();
+  const out = await run({ groupJid, sender: membro, text: '!vozp', participants, fromMe: false });
+  includes(out.text, 'administradores', 'recusa quem nao e admin');
+  ok(chamadas.length === 0, 'nao sobe');
+});
+
+await test('!vozp so em grupo', async () => {
+  const { admin, participants } = setup(2);
+  const chamadas = instalarDubleMidia();
+  const out = await run({ groupJid: admin.jid, sender: admin, text: '!vozp', participants });
+  includes(out.text, 'só pode ser usado em grupo', 'recusa no PV');
+  ok(chamadas.length === 0, 'nao sobe no PV');
+});
+
+await test('!vozp encerrar derruba e limpa', async () => {
+  const { groupJid, admin, participants } = setup(3);
+  instalarDubleMidia({ callId: 'VC-1' });
+  await run({ groupJid, sender: admin, text: '!vozp', participants });
+  const chamadas = instalarDubleMidia();
+  const out = await run({ groupJid, sender: admin, text: '!vozp encerrar', participants });
+  ok(chamadas.some((c) => c.tipo === 'sair'), 'desmontou a midia');
+  includes(out.text, 'Chat de voz encerrado', 'avisa');
+  ok(callState.obterCall(groupJid) === null, 'registro limpo');
+});
+
+await test('!vozp status diz o tipo ativo', async () => {
+  const { groupJid, admin, participants } = setup(3);
+  instalarDubleMidia({ callId: 'VC-STATUS' });
+  await run({ groupJid, sender: admin, text: '!vozp', participants });
+  const out = await run({ groupJid, sender: admin, text: '!vozp status', participants });
+  includes(out.text, 'Chat de voz ativo', 'mostra o status');
+  includes(out.text, 'chat de voz', 'diz o tipo');
+  callState.limparCall(groupJid);
+});
+
+await test('nao sobe chat de voz em cima de uma chamada', async () => {
+  const { groupJid, admin, participants } = setup(3);
+  instalarDubleMidia({ callId: 'CALL-1' });
+  await run({ groupJid, sender: admin, text: '!callp', participants });
+  const chamadas = instalarDubleMidia();
+  const out = await run({ groupJid, sender: admin, text: '!vozp', participants });
+  includes(out.text, 'Já existe', 'recusa');
+  ok(chamadas.length === 0, 'nao sobe outra');
+  callState.limparCall(groupJid);
+});
+
+await test('o callMedia manda o voice chat pelo lizzy-call (isLightWeight)', () => {
+  const midia = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/callMedia.js'), 'utf-8');
+  ok(midia.includes('isLightWeight: true'), 'usa a opcao REAL do motor WASM');
+  ok(midia.includes('voice_chat_indisponivel'), 'tem motivo proprio sem o motor');
+  ok(midia.includes('backendPorGrupo'), 'roteia sair/tocar pelo backend que atendeu');
 });
 
 // ============================================================================

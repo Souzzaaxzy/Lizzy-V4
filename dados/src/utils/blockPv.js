@@ -279,7 +279,7 @@ export const menuCommandsMap = {
     },
     menuadm: {
         menuName: 'Admin',
-        commands: ['ban', 'kick', 'add', 'promover', 'rebaixar', 'setfoto', 'setnome', 'desc', 'link', 'tagall', 'hidetag', 'mt', 'marcar', 'rall', 'banlist', 'adminlist', 'infogp', 'voteban', 'approve', 'blockconversa', 'desbloquear', 'trancar', 'destrancar', 'callp', 'abrir', 'ativarevento', 'desativarevento', 'fixar', 'desfixar', 'antis', 'antictt', 'antifantasma', 'antiroubo', 'perm', 'delp', 'listperm', 'limparperm']
+        commands: ['ban', 'kick', 'add', 'promover', 'rebaixar', 'setfoto', 'setnome', 'desc', 'link', 'tagall', 'hidetag', 'mt', 'marcar', 'rall', 'banlist', 'adminlist', 'infogp', 'voteban', 'approve', 'blockconversa', 'desbloquear', 'trancar', 'destrancar', 'callp', 'vozp', 'abrir', 'ativarevento', 'desativarevento', 'fixar', 'desfixar', 'antis', 'antictt', 'antifantasma', 'antiroubo', 'perm', 'delp', 'listperm', 'limparperm']
     },
     menubn: {
         menuName: 'Diversão',

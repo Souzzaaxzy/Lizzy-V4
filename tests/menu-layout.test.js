@@ -298,7 +298,8 @@ const COMANDOS_POR_MENU = {
   //   menuadm 178 -> 188 (+10, correcao: ficou com 2) -> 180;
   //   menudono 185 -> 175 (so' ficou `callp parear`);
   //   menumemb 62 (inalterado: ja' listava a musica na call).
-  menuadm: 180, menudono: 175,
+  // menuadm: 180 -> 181 (o !vozp voltou: o lizzy-call passou a implementar voice chat).
+  menuadm: 181, menudono: 175,
 
   // menubn: 349 -> 350 (`!ppp` entrou na 1a categoria)
   // -> 358 (`!hetero`, `!hetera`, `!aura`, `!sigma`, `!ceu`, `!inferno`,

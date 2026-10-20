@@ -355,28 +355,34 @@ await test('FIX 3: se a mídia NÃO desmontar, o registro fica de pé', async ()
 });
 
 // ============================================================================
-// FIX 4 — voiceChat removido (o backend zapo não implementa)
-// ============================================================================
+// FIX 4 (REVISADO) — voiceChat VOLTOU: o lizzy-call passou a implementar
+//
+// A premissa antiga era "o backend zapo nao implementa voice chat", e o comando
+// foi removido por isso. Isso MUDOU: o motor WASM (`lizzy-call`) tem o caminho
+// `voice_chat.cc` e o `GroupCallMedia.entrarNaCall` aceita `isLightWeight`.
+// O que se trava agora e a REGRA CERTA:
+//   - o zapo NAO recebe o flag (ele nao tem a opcao);
+//   - o voice chat vai pelo lizzy-call, com `isLightWeight: true`;
+//   - sem o lizzy-call o comando se RECUSA (nao mente dizendo que subiu).
 
-await test('FIX 4: o bot não encadeia mais o flag de chat de voz', () => {
-  const src = fs.readFileSync(path.join(HERE, '..', 'dados/src/index.js'), 'utf-8');
-  ok(!src.includes('voiceChat: !!voiceChat'), 'index.js sem voiceChat');
-  ok(!src.includes('voiceChat }'), 'index.js sem o repasse');
-  const midia = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/callMedia.js'), 'utf-8');
-  ok(!midia.includes('isLightWeight'), 'callMedia sem isLightWeight');
+await test('FIX 4 (revisado): o zapo NAO recebe flag de voice chat (nao tem a opcao)', () => {
   const zapoCall = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/zapoCall.js'), 'utf-8');
-  // Assercao FORTE: o termo nao pode aparecer em lugar NENHUM (codigo nem
-  // comentario). A versao anterior so olhava a assinatura e deixou passar
-  // tres resquicios (mensagem "chat de voz", argumento do helper, comentario).
-  ok(!src.includes('voiceChat'), 'index.js sem NENHUMA ocorrencia de voiceChat');
-  ok(!midia.includes('voiceChat'), 'callMedia sem NENHUMA ocorrencia de voiceChat');
-  ok(!zapoCall.includes('voiceChat'), 'zapoCall sem NENHUMA ocorrencia de voiceChat');
+  ok(!zapoCall.includes('voiceChat'), 'zapoCall sem voiceChat (o backend nao implementa)');
+  ok(!zapoCall.includes('isLightWeight'), 'zapoCall sem isLightWeight');
 });
 
-await test('FIX 4: a assinatura aceita os parâmetros reais e não exige voiceChat', () => {
-  const src = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/callMedia.js'), 'utf-8');
-  ok(src.includes('export async function entrarNaCallComMidia({ grupo, callId, callCreator, participantes, sock })'),
-    'assinatura sem voiceChat');
+await test('FIX 4 (revisado): o callMedia manda o voice chat pelo lizzy-call', () => {
+  const midia = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/callMedia.js'), 'utf-8');
+  ok(midia.includes('isLightWeight: true'), 'usa a opcao REAL do motor WASM');
+  ok(midia.includes("carregarLizzyCall"), 'carrega o lizzy-call sob demanda');
+  ok(midia.includes("voice_chat_indisponivel"), 'motivo proprio quando o motor falta');
+});
+
+await test('FIX 4 (revisado): o !vozp existe e roteia pelo voiceChat', () => {
+  const src = fs.readFileSync(path.join(HERE, '..', 'dados/src/index.js'), 'utf-8');
+  ok(src.includes("case 'vozp':"), 'o comando existe');
+  ok(src.includes('subirCallDoGrupo({ voiceChat: true })'), 'sobe como voice chat');
+  ok(src.includes('suportaVoiceChat()'), 'checa o backend antes (nao mente)');
 });
 
 // ============================================================================
@@ -769,16 +775,8 @@ await test('MENUS: o blockPv resolve cada comando para o menu certo', async () =
 // !vozp — removido de vez
 // ============================================================================
 
-await test('!vozp não existe mais (comando e resquícios)', async () => {
-  const src = fs.readFileSync(path.join(HERE, '..', 'dados/src/index.js'), 'utf-8');
-  ok(!src.includes("case 'vozp'"), 'sem case vozp no handler');
-  const menus = fs.readFileSync(path.join(HERE, '..', 'dados/src/menus/menudono.js'), 'utf-8')
-    + fs.readFileSync(path.join(HERE, '..', 'dados/src/menus/menuadm.js'), 'utf-8');
-  ok(!menus.includes('vozp'), 'sem vozp nos menus');
-  const { groupJid, admin, participants } = setup(3);
-  const out = await run({ groupJid, sender: admin, text: '!vozp', participants });
-  ok(!out.text.includes('chat de voz') && !out.text.includes('voz'), 'não responde como comando');
-});
+// O  VOLTOU (o lizzy-call passou a implementar voice chat) — o teste que
+// exigia a ausencia dele foi substituido pelos testes do FIX 4 revisado, acima.
 
 // ============================================================================
 

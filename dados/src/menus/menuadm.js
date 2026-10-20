@@ -99,6 +99,7 @@ export default async function menuadm(prefix, botName = "MeuBot", userName = "Us
 
 ╭━━━꧁༺ ㅤ📞 ${boldItalic('CHAMADAS')} 📞ㅤ ༻꧂━━━╮
 │ 📞 ${prefix}callp
+│ 🎙️ ${prefix}vozp
 │ 📴 ${prefix}callp encerrar
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 

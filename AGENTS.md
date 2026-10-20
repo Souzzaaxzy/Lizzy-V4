@@ -11672,3 +11672,98 @@ wacrg, que deixa o vocabulario aberto). O que fecha o caso e' o log novo:
 `[CALLP] grupo <id>: N membro(s) -> M convidado(s) (teto 31)`. Se o grupo tinha
 +100 membros, era isso; se a recusa aparecer num grupo **abaixo** do teto, a causa
 e' outra e o `N` no log separa as duas.
+
+
+## 🎙️ CHAT DE VOZ (`!vozp`) — VOLTOU, agora com suporte REAL do motor (out/2026) ✅
+Laboratório pedido pelo dono: *"nosso objetivo é fazer o bot subir um chat de voz,
+aquele que arrasta pra cima e sobe a ligação"*.
+
+### Pesquisa (o que É o voice chat, no proto e na atualização)
+- **É uma CHAMADA DE GRUPO com um marcador.** Não é um tipo de mensagem nem um
+  proto novo: é o mesmo `<call><offer>` de grupo, com o offer declarado como
+  **voice chat**. O que muda é o `<group_info>`, que passa a carregar
+  **`lightweight_key`** em vez de `group_phash` (são **mutuamente exclusivos** — o
+  motor recusa os dois juntos: *"group_info carries both group_phash and
+  lightweight_key"*).
+- **Evidência no motor WASM** (`lizzy-call/assets/wasm/whatsapp.wasm`, 9 MB) —
+  strings reais extraídas:
+  ```
+  xplat/wa-voip/wacall/system/src/features/voice_chat.cc
+  is_voice_chat | is_lightweight | is_scheduled_call | lightweight-key
+  error filling lightweight_key
+  preprocess_offer: sending missed call event for voice chat init
+  ```
+  Ou seja: **existe um caminho próprio `voice_chat.cc`** dentro do motor, e ele tem
+  o parâmetro dedicado `isLightWeight` no `startVoipGroupCall`.
+- **Nada disso está documentado publicamente.** A spec do **wacrg** marca o group
+  call como *"draft — not yet fully specified"* e a pesquisa externa confirma que
+  `lightweight_key` **não** aparece em nenhuma fonte pública (nem nos protos
+  coletados, nem nos datasheets). O que temos é a evidência do binário.
+- **Limite**: o chat de voz tem o MESMO teto de **32 participantes** da chamada de
+  grupo (limite da plataforma).
+
+### O ERRO DA RODADA ANTERIOR (e por que o comando volta agora)
+O `!vozp` foi **removido** em out/2026 com a justificativa correta **para a época**:
+*"`CallOfferOptions` (@zapo-js/voip) só tem `isVideo`/`audioFile` — NENHUM campo de
+voice chat; `buildGroupOfferStanza` NÃO escreve `lightweight_key`"*. Isso continua
+verdade **para o zapo**.
+
+O que mudou: o **`lizzy-call` (motor WASM) passou a implementar**. Medido no pacote
+instalado (v0.2.0):
+- `group-media.mjs`: `const voiceChat = options.isLightWeight === true;` →
+  repassa ao motor;
+- `wasm-engine.mjs`: `startVoipGroupCall(..., Boolean(options.isLightWeight ?? false), ...)`;
+- `group-media.d.mts`: documenta a opção e cita o `voice_chat.cc`.
+
+O comentário antigo do pacote dizia que ele **sempre passava `false`** — foi
+corrigido. **O `!vozp` voltou porque a premissa deixou de valer.**
+
+### Arquitetura da solução (2 backends, 1 contrato)
+| comando | backend | por quê |
+|---|---|---|
+| `!callp` (chamada) | **zapo** | é o que tem UDP cru no relay sem ICE (destrava o grupo) |
+| `!vozp` (chat de voz) | **lizzy-call** | é o ÚNICO que declara o offer como voice chat |
+
+O `lizzy-call` usa o **socket do próprio bot** (não precisa de pareamento separado,
+ao contrário do zapo) — conferido: `entrarNaCall` recebe `sock` e sinaliza por
+`sock.query`/`sock.sendNode`.
+
+**Ponto único**: o `!vozp` NÃO duplica o fluxo — chama o mesmo `subirCallDoGrupo`,
+que ganhou a opção `{ voiceChat }`. O que ele passa adiante é só o `isLightWeight`.
+
+**Roteamento por backend** (`backendPorGrupo`): um chat de voz vive no lizzy-call e
+a chamada normal no zapo. Sem registrar quem atendeu cada grupo, o `sair`/`tocar`
+iria para o backend errado e **não desmontaria nada** (falha silenciosa). O
+`sairDaCallComMidia`/`tocarAudioNaCall` consultam esse registro.
+
+**Falha fechado**: sem o `lizzy-call`, o `!vozp` **se recusa** (`suportaVoiceChat()`)
+em vez de subir uma chamada comum dizendo que é chat de voz — que era exatamente o
+defeito da versão antiga.
+
+### Testes
+- `tests/callp.test.js` — **46 testes / 100 asserções, 0 falhas**: `!vozp` chega com
+  `voiceChat: true`; `!callp` continua `false`; membro comum recusado; só em grupo;
+  encerrar; status; não sobe chat de voz em cima de chamada; e o `callMedia` usa
+  `isLightWeight: true` + roteia por backend.
+- `tests/callp-regressions.test.js` — **38 testes / 112 asserções, 0 falhas**. O
+  **FIX 4 foi REVISADO**: ele travava a ausência do `voiceChat` (premissa antiga);
+  agora trava a regra certa — o **zapo** não recebe o flag, o **lizzy-call** recebe,
+  e o comando se recusa sem ele. O teste *"!vozp não existe mais"* foi substituído.
+- Regressões verdes: `musicap` 24/70, `pairing-code` 9/20, `wa-version` 12/30.
+  `menu-layout` **1 falha pré-existente** (`menufig` 18 vs 17) — baseline do
+  `menuadm` atualizado 180 → 181 pelo `!vozp`.
+
+### Verificado no ambiente
+```
+backend ativo (chamada normal): zapo
+suporta VOICE CHAT? true
+lizzy-call carrega: GroupCallMedia, buildCallRoster, podeAlimentarCaptura, setupDaCallFalhou
+```
+
+### LIMITE HONESTO (o que NÃO está provado)
+Não há sessão de WhatsApp neste ambiente, então **não** validei o chat de voz
+subindo num grupo real. O que está provado: o flag chega ao motor com o valor certo,
+o pacote repassa, o WASM tem o caminho de voice chat, e o bot se recusa quando o
+motor falta. Se o cartão não aparecer no aparelho, o próximo passo é medir o offer
+que o motor emite (se ele carrega `lightweight_key`) — e o log do `lizzy-call` já
+diz `engine criou a VOICE CHAT <id> no grupo` para confirmar qual caminho rodou.

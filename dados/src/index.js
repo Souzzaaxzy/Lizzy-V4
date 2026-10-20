@@ -1228,7 +1228,9 @@ import {
   sairDaCallComMidia,
   estagioMidia,
   precisaPareamento,
-  parearMidia
+  parearMidia,
+  backendAtivo,
+  suportaVoiceChat
 } from './funcs/utils/callMedia.js';
 import {
   sendRestrictedMedia,
@@ -4058,7 +4060,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
      *
      * @returns {Promise<{ok: boolean, callId?: string, stage?: string, motivo?: string, detalhe?: string}>}
      */
-    const subirCallDoGrupo = async () => {
+    const subirCallDoGrupo = async ({ voiceChat = false } = {}) => {
       const botCallId = getBotNumber(nazu);
       if (!botCallId) {
         return { ok: false, motivo: 'sem_identidade' };
@@ -4142,7 +4144,8 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       const midia = await entrarNaCallComMidia({
         grupo: from,
         participantes: convidados,
-        sock: nazu
+        sock: nazu,
+        voiceChat
       });
       if (!midia?.ok) return midia || { ok: false, motivo: 'falha_ao_entrar' };
 
@@ -4151,7 +4154,8 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       registrarCall(from, {
         callId: midia.callId,
         callCreator: botCallId,
-        startedAt: Date.now()
+        startedAt: Date.now(),
+        voiceChat: !!voiceChat
       });
 
       // Se o MOTOR derrubar a call sozinho (relay perdido, todos saíram), o
@@ -4164,7 +4168,8 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
         callId: midia.callId,
         stage: midia.stage,
         tocados: convidados.length,
-        totalMembros
+        totalMembros,
+        voiceChat: !!voiceChat
       };
     };
 
@@ -35967,7 +35972,9 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
           }
 
           if (obterCall(from)) {
-            return reply('📞 Já existe uma chamada subida por mim neste grupo.\n\nUse `!callp encerrar` para derrubar.');
+            const ativa = obterCall(from);
+            const tipo = ativa.voiceChat ? 'chat de voz' : 'chamada';
+            return reply(`📞 Já existe um(a) ${tipo} subido(a) por mim neste grupo.\n\nUse \`!callp encerrar\` para derrubar.`);
           }
 
           // Checa o pareamento ANTES de tentar subir: o erro do motor seria
@@ -36017,6 +36024,116 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
 
           await nazu.sendMessage(from, {
             text: `📞 *Chamada de voz iniciada neste grupo.*\n\n• ID: \`${r.callId}\`\n${linhaMidia}${linhaAlcance}\n\n_Entre pelo WhatsApp para participar. Use \`!callp encerrar\` para derrubar._`,
+            contextInfo: gerarContextNewsletter(),
+            quoted: info
+          });
+        } catch (e) {
+          await reply('Ocorreu um erro 💔');
+        }
+        break;
+
+      // !vozp — CHAT DE VOZ do grupo (o cartão que se arrasta para cima).
+      //
+      // É o MESMO fluxo do `!callp` — o ponto único `subirCallDoGrupo` só muda o
+      // `voiceChat`. O que muda é o BACKEND: quem sabe declarar o offer como
+      // voice chat é o motor WASM do WhatsApp Web (`lizzy-call`), que tem o
+      // caminho `voice_chat.cc` (`is_voice_chat`, `is_lightweight`,
+      // `lightweight-key`). O `zapo` — backend do `!callp` — NÃO tem essa opção.
+      //
+      // O comando se RECUSA a subir quando o backend não está disponível, em vez
+      // de entregar uma chamada comum dizendo que é chat de voz (era o defeito da
+      // versão antiga, removida em out/2026).
+      case 'vozp':
+      case 'voicechat':
+      case 'chatvoz':
+        try {
+          if (!isGroup) return reply('Isso só pode ser usado em grupo 💔');
+
+          const subVozp = normalizar((args[0] || '')).trim();
+          const ehEncerrar = subVozp === 'encerrar' || subVozp === 'parar' || subVozp === 'desligar';
+          const ehStatus = subVozp === 'status' || subVozp === 'info';
+
+          if (ehEncerrar) {
+            if (!isGroupAdmin) return reply('⛔ Apenas administradores podem encerrar o chat de voz.');
+            const ativa = obterCall(from);
+            if (!ativa?.callId) return reply('📴 Não há chat de voz nem chamada subida por mim neste grupo.');
+            const saida = await sairDaCallComMidia(from)
+              .catch((e) => ({ ok: false, detalhe: e?.message || String(e) }));
+            if (saida && saida.ok === false) {
+              return reply(
+                `❌ Não consegui encerrar no motor de mídia.` +
+                (saida.detalhe ? `\n\n_${saida.detalhe}_` : '') +
+                `\n\n_O registro segue ativo. Tente de novo._`
+              );
+            }
+            limparCall(from);
+            const resumoFila = musicQueue.limpar(from);
+            callCache.limparGrupo(from);
+            callPlayer.pararDeSeguir(from);
+            aoTerminarAudio(from, null);
+            aoEncerrarAudio(from, null);
+            return reply(
+              `🎙️ Chat de voz encerrado.` +
+              (resumoFila.removidas ? `\n\n🗑️ ${resumoFila.removidas} música(s) da fila foram apagadas.` : '')
+            );
+          }
+
+          if (ehStatus) {
+            const ativa = obterCall(from);
+            if (!ativa?.callId) return reply('📴 Nenhum chat de voz ativo neste grupo.');
+            const estagio = await estagioMidia(from).catch(() => 'desconhecido');
+            return reply(
+              `🎙️ *Chat de voz ativo*\n\n` +
+              `• ID: \`${String(ativa.callId).slice(0, 12)}...\`\n` +
+              `• Tipo: ${ativa.voiceChat ? 'chat de voz' : 'chamada'}\n` +
+              `• Áudio: ${estagio}`
+            );
+          }
+
+          if (!isGroupAdmin) {
+            return reply('⛔ Apenas administradores podem subir o chat de voz.');
+          }
+
+          // O BACKEND decide: sem o lizzy-call não existe voice chat.
+          if (!(await suportaVoiceChat())) {
+            return reply(
+              '❌ O *chat de voz* precisa do motor WASM (`lizzy-call`), que não está disponível aqui.\n\n' +
+              '_A chamada normal (`!callp`) funciona pelo outro backend._'
+            );
+          }
+
+          if (obterCall(from)) {
+            const ativa = obterCall(from);
+            const tipo = ativa.voiceChat ? 'chat de voz' : 'chamada';
+            return reply(`📞 Já existe um(a) ${tipo} subido(a) por mim neste grupo.\n\nUse \`!callp encerrar\` para derrubar.`);
+          }
+
+          const r = await subirCallDoGrupo({ voiceChat: true });
+          if (!r.ok) {
+            const motivos = {
+              sem_identidade: 'Não consegui identificar meu próprio número para subir o chat de voz.',
+              sem_metadata: 'Não consegui ler os membros do grupo agora. Tente de novo.',
+              grupo_pequeno: 'O chat de voz precisa de pelo menos 2 outros membros.',
+              voice_chat_indisponivel: 'O motor WASM (lizzy-call) não está disponível neste servidor.',
+              pacote_de_midia_ausente: 'A mídia não está instalada neste servidor.',
+              falha_ao_entrar: 'O motor de mídia não subiu.'
+            };
+            const detalhe = motivos[r.motivo] || r.motivo || 'erro desconhecido';
+            return reply(`❌ Não consegui subir o chat de voz.\n\n_${detalhe}_${r.detalhe ? `\n\n\`${r.detalhe}\`` : ''}`);
+          }
+
+          const cortados = (r.totalMembros || 0) - ((r.tocados || 0) + 1);
+          const linhaAlcance = cortados > 0
+            ? `\n\n⚠️ *Toquei em ${(r.tocados || 0) + 1} de ${r.totalMembros} membros.*\n` +
+              `_O chat de voz tem o mesmo limite de 32 participantes do WhatsApp._`
+            : '';
+
+          await nazu.sendMessage(from, {
+            text:
+              `🎙️ *Chat de voz iniciado neste grupo.*\n\n` +
+              `• ID: \`${r.callId}\`\n` +
+              `• Não toca: quem quiser entra pelo cartão do chat de voz.${linhaAlcance}\n\n` +
+              `_Use \`!vozp encerrar\` para terminar._`,
             contextInfo: gerarContextNewsletter(),
             quoted: info
           });

@@ -93,6 +93,67 @@ export function motivoMidia() {
  */
 let mediaInstance = null;
 
+/**
+ * O módulo do `lizzy-call`, carregado sob demanda.
+ *
+ * Existe separado do `carregarMidia` porque ele é o **ÚNICO** backend que sabe
+ * declarar um CHAT DE VOZ: o motor WASM do WhatsApp Web tem o caminho
+ * `voice_chat.cc` (`is_voice_chat`, `is_lightweight`, `lightweight-key`) e o
+ * `GroupCallMedia.entrarNaCall` aceita `isLightWeight`. O `zapo` **não** tem essa
+ * opção (`CallOfferOptions` só tem `isVideo`/`audioFile`), então para voice chat
+ * não há escolha.
+ */
+let modLizzy = null;
+
+async function carregarLizzyCall() {
+  if (modLizzy) return modLizzy;
+  try {
+    modLizzy = await import('lizzy-call/group-media');
+  } catch (e) {
+    loadError = loadError || e?.message || String(e);
+    modLizzy = null;
+  }
+  return modLizzy;
+}
+
+/**
+ * Qual backend está ativo por padrão ('zapo' | 'lizzy-call' | 'nenhum').
+ *
+ * Serve para o comando dizer a verdade: o `!callp` roda no zapo, o chat de voz
+ * precisa do lizzy-call.
+ */
+export async function backendAtivo() {
+  const m = await carregarMidia();
+  if (!m) return 'nenhum';
+  return usandoZapo(m) ? 'zapo' : 'lizzy-call';
+}
+
+/** O backend ativo suporta CHAT DE VOZ? (só o lizzy-call) */
+export async function suportaVoiceChat() {
+  return (await carregarLizzyCall()) !== null;
+}
+
+/**
+ * Backend que está segurando a mídia de cada grupo.
+ *
+ * O chat de voz vive no `lizzy-call` e a chamada normal no `zapo`; sem registrar
+ * quem atendeu cada grupo, um `sair`/`tocar` iria para o backend errado e não
+ * faria nada (falha silenciosa).
+ */
+const backendPorGrupo = new Map();
+
+/** Registra (ou limpa, com null) o backend de um grupo. */
+function marcarBackend(grupo, qual) {
+  if (qual) backendPorGrupo.set(grupo, qual);
+  else backendPorGrupo.delete(grupo);
+}
+
+/** A instância do lizzy-call (uma por processo). */
+function instanciaLizzy(mod) {
+  if (!mediaInstance) mediaInstance = new mod.GroupCallMedia({});
+  return mediaInstance;
+}
+
 /** O backend ativo é o zapo? (ele expõe `carregarZapo`, o lizzy-call não.) */
 function usandoZapo(m) {
   return typeof m?.carregarZapo === 'function';
@@ -124,17 +185,40 @@ export async function obterMedia() {
  * Best-effort de propósito: se falhar, devolve o motivo e o `!callp` segue
  * reportando a chamada como aberta (só sem áudio), em vez de dizer que não subiu.
  */
-export async function entrarNaCallComMidia({ grupo, callId, callCreator, participantes, sock }) {
-  if (dubleEntrar) return dubleEntrar.entrar({ grupo, callId, callCreator, participantes, sock });
+export async function entrarNaCallComMidia({ grupo, callId, callCreator, participantes, sock, voiceChat = false }) {
+  if (dubleEntrar) return dubleEntrar.entrar({ grupo, callId, callCreator, participantes, sock, voiceChat });
+
+  // CHAT DE VOZ: só o lizzy-call declara o offer como voice chat. O zapo não tem
+  // a opção, então aqui não há escolha de backend.
+  if (voiceChat) {
+    const lizzy = await carregarLizzyCall();
+    if (!lizzy) {
+      return { ok: false, motivo: 'voice_chat_indisponivel', detalhe: loadError };
+    }
+    try {
+      const r = await instanciaLizzy(lizzy).entrarNaCall({
+        grupo, callId, participantes, sock, groupInfo: null,
+        isLightWeight: true // <- é isto que faz o motor declarar o VOICE CHAT
+      });
+      if (r?.ok) marcarBackend(grupo, 'lizzy-call');
+      return r;
+    } catch (e) {
+      return { ok: false, motivo: 'falha_ao_entrar', detalhe: e?.message || String(e) };
+    }
+  }
+
   const media = await obterMedia();
   if (!media) {
     return { ok: false, motivo: 'pacote_de_midia_ausente', detalhe: loadError };
   }
   try {
     if (usandoZapo(media)) {
-      return await media.entrarNaCallComMidia({ grupo, callId, callCreator, participantes, sock });
+      const r = await media.entrarNaCallComMidia({ grupo, callId, callCreator, participantes, sock });
+      if (r?.ok) marcarBackend(grupo, 'zapo');
+      return r;
     }
     const r = await media.entrarNaCall({ grupo, callId, participantes, sock, groupInfo: null });
+    if (r?.ok) marcarBackend(grupo, 'lizzy-call');
     return r;
   } catch (e) {
     return { ok: false, motivo: 'falha_ao_entrar', detalhe: e?.message || String(e) };
@@ -155,6 +239,11 @@ export async function tocarAudioNaCall(grupo, arquivo) {
   const media = await obterMedia();
   if (!media) return { ok: false, motivo: 'pacote_de_midia_ausente' };
   try {
+    // Mesmo roteamento do `sair`: quem atendeu o grupo é quem recebe o áudio.
+    if (backendPorGrupo.get(grupo) === 'lizzy-call') {
+      const lizzy = await carregarLizzyCall();
+      if (lizzy) return await instanciaLizzy(lizzy).tocarAudio(grupo, arquivo);
+    }
     if (usandoZapo(media)) return await media.tocarAudioNaCall(grupo, arquivo);
     return await media.tocarAudio(grupo, arquivo);
   } catch (e) {
@@ -184,6 +273,8 @@ export async function pararAudioDaCall(grupo) {
 export function resetarMidia() {
   try {
     mediaInstance = null;
+    modLizzy = null;
+    backendPorGrupo.clear();
     zapoCall.resetarMidia();
     mod = null;
     carregado = false;
@@ -194,11 +285,25 @@ export function resetarMidia() {
 /** Sai da call e libera a pilha de mídia. */
 export async function sairDaCallComMidia(grupo) {
   if (dubleEntrar) return dubleEntrar.sair(grupo);
-  const media = await obterMedia();
-  if (!media) return { ok: false, motivo: 'pacote_de_midia_ausente' };
+
+  // Roteia pelo backend que ATENDEU o grupo: um chat de voz vive no lizzy-call,
+  // a chamada normal no zapo. Mandar o `sair` para o backend errado não
+  // desmontaria nada (falha silenciosa) e o `!callp` diria "encerrado" mentindo.
+  const qual = backendPorGrupo.get(grupo);
   try {
-    if (usandoZapo(media)) return await media.sairDaCallComMidia(grupo);
-    return await media.sairDaCall(grupo);
+    if (qual === 'lizzy-call') {
+      const lizzy = await carregarLizzyCall();
+      if (lizzy) {
+        const r = await instanciaLizzy(lizzy).sairDaCall(grupo);
+        marcarBackend(grupo, null);
+        return r;
+      }
+    }
+    const media = await obterMedia();
+    if (!media) return { ok: false, motivo: 'pacote_de_midia_ausente' };
+    const r = usandoZapo(media) ? await media.sairDaCallComMidia(grupo) : await media.sairDaCall(grupo);
+    marcarBackend(grupo, null);
+    return r;
   } catch (e) {
     return { ok: false, motivo: e?.message || String(e) };
   }
