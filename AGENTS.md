@@ -46,6 +46,44 @@ membros ficam quietos de propósito até falarem. Correção na fork
 `lightweight='1'` e um `<silence reason="lightweight">` no lugar da mídia (medido
 contra o WhatsApp Web: é só o atributo + o nó). O grupo **não toca**.
 
+### 🎯 FOCO: fazer o grupo GRANDE funcionar (o pequeno ja' funciona) (out/2026)
+O dono corrigiu o rumo: *"voce esta errado. so' nao funciona em grupos grandes, mas
+nao da' nenhum erro. e em grupos pequenos funciona normalmente, entao vamos continuar
+nesse caminho ate' conseguir fazer funcionar em grupos grandes."*
+
+**O caminho atual esta' certo** (offer sem roster quando o grupo nao cabe). Nao se
+reverte — se AVANCA nele.
+
+### O ponto cego que foi fechado
+Um ack que chega e **nao casa** com nenhuma call era **invisivel**:
+`resolveSessionForOfferAck` retornava `null` em silencio. Isso se parece **exatamente**
+com "o ack nao chegou" — e era o que impedia de saber onde o grupo grande para.
+
+Agora esse caso sai em `warn`:
+```
+offer ack arrived for no known call { callId, from, type, error, liveCalls }
+```
+
+### Como ler o proximo log do grupo grande
+| o que aparece | o que significa | proximo passo |
+|---|---|---|
+| **nada** depois de `group offer sent` | o servidor nao respondeu ao offer | investigar o envio (o offer saiu?) |
+| `offer ack received { error: null }` | aceitou | seguir a composicao/midia |
+| `offer ack received { error: '427'/'412' }` | recusou | o re-offer/limite |
+| `offer ack arrived for no known call` | chegou e nao casou | corrigir o roteamento |
+
+### Instrumentacao ja' no ar (as duas linhas)
+```
+group offer sent      { callId, groupJid, voiceChat, rosterShipped, rosterAccounts }
+offer ack received    { callId, error, hasRoster, hasRelay }
+offer ack arrived for no known call { callId, from, type, error, liveCalls }
+```
+Juntas, elas dizem **exatamente** onde o grupo grande para.
+
+### LIMITE HONESTO
+Nao sei ainda onde para. **Nao vou chutar** — a proxima rodada do grupo grande com
+essas tres linhas decide o passo seguinte.
+
 ### 📊 ESTADO ATUAL: grupo PEQUENO funciona; grande sobe sem erro e nao aparece (out/2026)
 Relato do dono:
 - **grupo pequeno**: o chat de voz **apareceu** e deu para **entrar** ✅
