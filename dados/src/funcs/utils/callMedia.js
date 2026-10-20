@@ -1,21 +1,16 @@
 /**
  * Ponte para a pilha de MÍDIA da call de grupo.
  *
- * ## Dois backends, um contrato
+ * ## Um backend: o `zapo`
  *
  * Este módulo é a fachada que os comandos (`!callp` / `!musicap`) e os
- * testes consomem. Atrás dele há DOIS backends de mídia, escolhidos nesta ordem:
+ * testes consomem. Atrás dele está o **`zapoCall.js`** (`zapo-js` +
+ * `@zapo-js/voip`): ele disca o relay por **UDP cru na porta anunciada quando
+ * não há credencial ICE**, e só usa WebRTC quando há. Também implementa
+ * SFrame/keying por época, roster transacional, heartbeat e `peer_state`.
  *
- * 1. **`zapoCall.js`** (`zapo-js` + `@zapo-js/voip`) — **preferido**. É o único
- *    que ataca o ponto onde a call de GRUPO travava: ele disca o relay por
- *    **UDP cru na porta anunciada quando não há credencial ICE**, e só usa
- *    WebRTC quando há. Também implementa SFrame/keying por época, roster
- *    transacional, heartbeat e `peer_state`.
- * 2. **`lizzy-call`** (motor WASM do WhatsApp Web) — **reserva**, para o caso de
- *    os pacotes do zapo não estarem instalados. Continua funcionando como antes.
- *
- * O contrato é idêntico nos dois, então trocar de backend não muda nenhum
- * comando nem nenhum teste.
+ * O **chat de voz** (`!vozp`) usa o MESMO motor, por uma ponte própria
+ * (`vozpMedia.js`): o que muda é o `isLightweight`.
  *
  * O carregamento é **preguiçoso e tolerante**: sem os pacotes, o `!callp` segue
  * reportando a chamada (só sem áudio) e o `!musicap` avisa que a mídia não está
@@ -49,12 +44,11 @@ export function __setDubleEntrar(novo) {
 /**
  * Carrega o backend de mídia da CHAMADA (o zapo) uma vez.
  *
- * ## Só o zapo — o lizzy-call saiu daqui
+ * ## Um motor só
  *
- * O `lizzy-call` era a "reserva" deste módulo, mas ele é o motor do **chat de
- * voz** (`vozpMedia.js`). Manter os dois no mesmo processo não é só acoplamento:
- * a doc do próprio pacote diz que um segundo motor na mesma instância *"briga"*
- * pelo estado da call. Cada comando carrega o seu.
+ * Este módulo é a ponte da **chamada** (`!callp`). O **chat de voz** (`!vozp`)
+ * tem a ponte própria (`vozpMedia.js`) sobre o MESMO motor — cada comando com a
+ * sua ponte e o seu registro; o que se compartilha é o código do motor.
  *
  * @returns o backend, ou null quando o zapo não está disponível.
  */
@@ -78,8 +72,8 @@ export function motivoMidia() {
 /**
  * O backend da chamada, ou null.
  *
- * Só o zapo: o `lizzy-call` é o motor do **chat de voz** (`vozpMedia.js`) e não
- * vive neste processo junto com ele.
+ * O backend da chamada: o `zapo`. O chat de voz usa o mesmo motor, pela ponte
+ * própria dele (`vozpMedia.js`).
  */
 export async function obterMedia() {
   return carregarMidia();

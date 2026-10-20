@@ -1,5 +1,80 @@
 # AGENTS.md — Lizzy-V4 / Abyss Bot
 
+## 🎙️ `!vozp` — o chat de voz foi para o motor do `zapo` (mesmo do `!callp`) (out/2026) ✅
+Pedido do dono: *"o novo alvo agora é fazer o `!vozp` conectar e ficar constante na
+call, sem cair e nem expulsar membro"* — e, na mesma rodada, *"o vozp usa o mesmo
+sistema de pareamento do callp"*.
+
+### O que estava errado (dois motores, dois problemas)
+O `!vozp` ia pelo motor WASM do WhatsApp Web (`lizzy-call`), que **não se mantém**
+na call: ficava em "conectando", caía em ciclo (~3 s, ~5 s) e o servidor **expulsava**
+os membros. O `!callp` já usava o motor do `zapo` — o que tem transporte por UDP
+cru, roster transacional, `heartbeat` e `peer_state`.
+
+### A migração (o `!vozp` passa a usar o MESMO motor)
+| | comando | ponte | motor |
+|---|---|---|---|
+| chamada | `!callp` / `!musicap` | `callMedia.js` | `zapoCall.js` |
+| chat de voz | `!vozp` | `vozpMedia.js` | `zapoCall.js` (**o mesmo**) |
+
+- **`vozpMedia.js`** virou uma ponte FINA sobre o `zapoCall.js`: sobe/sai/estágio com
+  `isLightweight: true`. O motor, o store e a sessão são os mesmos do `!callp`.
+- **`zapoCall.js`**: `entrarNaCallComMidia` aceita `isLightweight` e o repassa ao
+  `startCall`. Quem escolhe o flag é o COMANDO, nunca o backend.
+- Os dois comandos seguem **independentes**: pontes e registros separados
+  (`registroVozp` × `callOffer`), compartilhando só o código do motor.
+
+### UM pareamento só (o do `!callp`) vale para o `!vozp`
+O motor do zapo é um client PRÓPRIO do bot, com credenciais em
+`dados/database/zapo-auth/`. **Não existe "pareamento do chat de voz"**: quem pareia
+é o `!callp parear <numero>`, e a MESMA sessão/banco atende os dois comandos. O
+`!vozp` pergunta ao próprio motor (`precisaPareamentoVozp` → `zapoCall.estaPareado`) e,
+sem pareamento, orienta a usar `!callp parear` — sem estado separado para manter.
+
+### O que faz a call SE MANTER (a correção no pacote)
+O motor do zapo tem um **sweep de invisibilidade**: todo membro conectado de quem
+não se ouve mídia por 20 s é reportado ao servidor como `invisible`, e o servidor
+**expulsa**. Num **chat de voz** isso é errado: o offer anuncia `<silence>` e os
+membros ficam quietos de propósito até falarem. Correção na fork
+(`Souzzaaxzy/zapo`, `master` `0677703`):
+- `CallInfo.isLightweight` guarda o flag (setado no `startCall` de grupo);
+- `WaGroupLiveness.sweepInvisibleSenders` **pula** um voice chat — ninguém é
+  acusado de invisível por estar em silêncio.
+
+### Voice chat no motor (a opção que faltava)
+`startCall({ groupJid, participants, isLightweight: true })` faz o offer sair com
+`lightweight='1'` e um `<silence reason="lightweight">` no lugar da mídia (medido
+contra o WhatsApp Web: é só o atributo + o nó). O grupo **não toca**.
+
+### Como o bot consome o pacote da fork
+`npm install` **não** aceita pacote em subdiretório de monorepo, e o bot instala
+com npm primeiro. A fork ganhou a branch **`voip`** (`d9fa24f`): o MESMO
+`@zapo-js/voip` na RAIZ do repo, com `dist/` commitado (um git dep não tem build
+step) — o mesmo padrão do `lizzy-call`. O `package.json` pina o SHA, e os dois
+lockfiles foram atualizados **cirurgicamente** (o `yarn.lock` do Yarn 4 não pode ser
+reescrito pelo npm: comparar `--stat` antes de commitar).
+
+### Testes
+- `tests/callp.test.js` — **47 testes / 107 asserções, 0 falhas**. Novos: o `!vozp`
+  sem pareamento orienta a usar `!callp parear` e **não sobe**; e o pareamento é
+  COMPARTILHADO (o vozp não tem store/banco próprio). **Verificado: com o código
+  antigo (HEAD~1), 7 asserções falham.**
+- `tests/callp-regressions.test.js` — **38 / 115, 0 falhas**. O FIX 4 passou a travar
+  a regra nova: o flag é do COMANDO; o `callMedia` não conhece voice chat.
+  **Verificado: no código antigo, 2 falham.**
+- Verdes: `musicap` 24/70, `vozp-log` 12/20, `zapo-conexao` 17/37,
+  `zapo-pareamento` 24/63, `roster-states` 6/0, `roster-participant-tag` 4/0.
+- **Falhas PRÉ-EXISTENTES** (idênticas em `HEAD~1`, sem relação): `midiap` 3
+  (`spawn ffmpeg ENOENT`, ffmpeg ausente), `menu-layout` 1 (`menufig: 18 vs 17`),
+  `testcall` 2, `defensive-protection` 21, `eununca18` 5, `pg-commands` 4,
+  `poll-layout` 17, `layout-conversion` 1.
+
+### Limite honesto
+Não há sessão de WhatsApp no ambiente, então a call **não foi validada ao vivo**. O
+que os testes provam é o caminho até o motor: o flag chega, o pareamento é o mesmo,
+e o sweep não acusa membro quieto num voice chat. A validação visual (ficar de pé,
+sem expulsar) exige uma sessão pareada.
+
 ## 🎮 EmuGames — ORDEM DOS BOTOES (diamante A/B/X/Y) corrigida (out/2026) ✅
 O EmulatorJS posiciona cada botao do gamepad virtual por `left`/`top` **inline**
 (px), e o layout **muda conforme o `controlScheme`**. Medido no navegador:
