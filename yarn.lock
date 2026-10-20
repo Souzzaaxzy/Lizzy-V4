@@ -994,9 +994,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@zapo-js/voip@git+https://github.com/Souzzaaxzy/zapo.git#969c90e9d6672fb27f58a358df700fc4a62c3bf7":
+"@zapo-js/voip@git+https://github.com/Souzzaaxzy/zapo.git#84c03c19baa632e165bfbe15dab9a724bf538c9b":
   version: 1.4.0
-  resolution: "@zapo-js/voip@https://github.com/Souzzaaxzy/zapo.git#commit=969c90e9d6672fb27f58a358df700fc4a62c3bf7"
+  resolution: "@zapo-js/voip@https://github.com/Souzzaaxzy/zapo.git#commit=84c03c19baa632e165bfbe15dab9a724bf538c9b"
   dependencies:
     "@zapo-js/voip-media": "npm:^0.3.0"
   peerDependencies:
@@ -1008,7 +1008,7 @@ __metadata:
       optional: true
     libmlow-wasm-fork:
       optional: true
-  checksum: 10c0/36433208efdfa17bef7a87750e477092f2e86baffb482d54063567f107501366cf854636aa51ba97b0bfd03585742268450254897625ec6a7ea1ceec983021f7
+  checksum: 10c0/25c94fbb7f40c6a167faa9ab3a9e67a3fb39b4ebdac16f4102725bf629b9f56ba9e7ce9af4a29bf78bd0886368283e737a60ea184244bea73c6bd3eff6f1765d
   languageName: node
   linkType: hard
 
@@ -1018,7 +1018,7 @@ __metadata:
   dependencies:
     "@hapi/boom": "npm:^10.0.1"
     "@itsliaaa/baileys": "git+https://github.com/Souzzaaxzy/baileys.git#0bd4ce1b81ec43461ff7bd95ea3c55c31f2d013a"
-    "@zapo-js/voip": "git+https://github.com/Souzzaaxzy/zapo.git#969c90e9d6672fb27f58a358df700fc4a62c3bf7"
+    "@zapo-js/voip": "git+https://github.com/Souzzaaxzy/zapo.git#84c03c19baa632e165bfbe15dab9a724bf538c9b"
     "@zapo-js/voip-media": "npm:^0.3.0"
     axios: "npm:^1.13.2"
     cheerio: "npm:^1.2.0"

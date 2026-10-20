@@ -46,6 +46,48 @@ membros ficam quietos de propósito até falarem. Correção na fork
 `lightweight='1'` e um `<silence reason="lightweight">` no lugar da mídia (medido
 contra o WhatsApp Web: é só o atributo + o nó). O grupo **não toca**.
 
+### 🚨 O TETO DO OFFER E' 32 (o teto da CALL), NAO 127 (o do wire) — out/2026
+Teste no grupo de 234: o erro **mudou** de `427` para **`412`**. Erro diferente —
+progresso (o `427` era o roster velho, resolvido pelo re-offer), mas ainda recusa.
+
+### A confusao (dois numeros, dois significados)
+O Cobalt (RE do cliente oficial) tem **dois** limites diferentes, e eu usei o errado:
+| numero | o que e' | onde |
+|---|---|---|
+| **127** (`0x7f`) | limite de **SERIALIZACAO** do elemento `<group_info>` | `GroupInfoStanza.MAX_PARTICIPANTS` |
+| **32** | teto de **PARTICIPANTES DA CALL** | AB prop `group_call_max_participants` (padrao 32) |
+
+E o Cobalt **recusa localmente** acima do segundo, antes de mandar:
+```java
+var requested = participants.size() + 1;
+var max = gate.groupCallMaxParticipants();          // 32
+if (requested > max) throw new IllegalArgumentException(
+        "Cannot start a group call with " + requested + " participants: the server ceiling is " + max);
+```
+
+### O que fecha com TODOS os logs
+| roster no offer | resultado |
+|---|---|
+| 32 contas | **funciona** |
+| 127 contas | `427` (grupo de 128) / `412` (grupo de 234) |
+| sem roster | aceito e nao cria |
+
+O `127` era o limite de *serializacao*, nao o teto da call. O teto do **offer** e' **32**.
+
+### Correcao
+`WA_GROUP_OFFER_MAX_ACCOUNTS = 32` (era `0x7f`). O corte continua aplicado ANTES de
+resolver devices. Num grupo maior, o bot nomeia 32 e **o resto entra pelo app** — a
+mesma regra da chamada.
+
+### Testes
+Fork: **558 testes, 0 falhas**, com os limites agora em 32 (o de 127 contas virou
+"o teto da call e' 32"). Bot: `callp` **50/118**, `callp-regressions` **38/115**, 0 falhas.
+
+### LICAO DE METODO
+Dois numeros parecidos com significados diferentes: **127 e' do wire, 32 e' da call**.
+Eu peguei o primeiro que achei numa constante com nome parecido ("MAX_PARTICIPANTS") e
+nao conferi **para que** ele valia. A referencia usava os dois, com nomes distintos.
+
 ### 🔁 GRUPO GRANDE: o `427` e' "roster VELHO" — o cliente deve RE-OFERTAR (out/2026)
 O grupo pequeno voltou a funcionar. Faltava o grupo grande.
 
