@@ -12232,3 +12232,63 @@ explicar que não o usa — a asserção ignora comentários, como no `installer
 Reusar a fachada "porque o contrato é parecido" é o caminho mais curto para acoplar
 dois sistemas. **Comandos independentes merecem pontes independentes** — o que se
 compartilha é código (a lista de convidados), nunca estado.
+
+
+## 🎙️ VOICE CHAT: o roster vinha VAZIO — só `<user>`, faltava `<participant>` (out/2026) ✅
+O log do dono (antes × depois da correção da presença):
+
+```
+[CALLP] roster tx=7  participantes=3 conectados=3 midia=false   <- era conectados=1
+[CALLP] estado da call: state=11 result=9 noServidor=TRUE encerrando=false
+[CALLP] mídia não ficou pronta em 30s (sem_remoto_conectado_com_pid)
+```
+
+**A correção da presença funcionou** (`conectados=3`, era 1) e a **call existe no
+servidor** (`noServidor=true`, `encerrando=false`). Mas a mídia ainda recusava, com
+`sem_remoto_conectado_com_pid` — ou seja: a presença estava certa e o que faltava
+era o **`pid`**.
+
+### A causa: o parser lia só `<user>`
+```js
+childrenByTag(groupInfoNode, 'user').map(...)
+```
+
+A especificação do `<group_info>` usa **`<user>`** no roster **inicial** e
+**`<participant>`** nos `group_update` **seguintes** — e o servidor **recusa os dois
+juntos**. Ler só `<user>` fazia um `group_update` em `<participant>` virar roster
+**VAZIO**: sem participante, sem device e **sem `pid`**. Daí o
+`sem_remoto_conectado_com_pid` para sempre.
+
+A referência (`@zapo-js/voip-media`, `parseGroupInfoNode`) aceita as **duas**:
+```js
+const listed = userNodes.length > 0 ? userNodes : participantNodes;
+```
+
+### Correção (`lizzy-call` `4da59fb`)
+`parseGroupInfo` usa `<user>` quando houver, senão `<participant>` — como a
+referência. Todos os consumidores (`mediaReady`, `buildParticipantLists`, a
+contagem do log) leem `groupInfo.users`, então normalizar na **entrada** cobre tudo.
+
+### Diagnóstico que fechou o caso (commit `2997907`)
+Antes desta rodada, **dois motivos diferentes davam o MESMO motivo** no log. A
+linha do roster passou a trazer os dois números:
+```
+[CALLP] roster tx=.. participantes=.. conectados=.. remotos=.. devicesComPid=.. midia=..
+```
+- `remotos=0` → ninguém além do bot está presente (roster);
+- `devicesComPid=0` → o roster **não trouxe `pid`** (o servidor só o manda quando a
+  mídia daquele lado sobe).
+
+### Testes — `tests/roster-participant-tag.test.js` (4 testes)
+`<user>` é lido; **`<participant>` também**; com `<participant>` o `pid` do remoto
+chega e a **mídia fica pronta**; um roster vazio continua vazio (não inventa).
+**Verificado: voltando a ler só `<user>`, 2 testes falham.**
+
+### Regressões verdes
+`callp` 45/98, `callp-regressions` 38/115, `musicap` 24/70,
+`vozp-terminate-target` 5/7, `roster-states` 6/0, `vozp-log` 12/20.
+
+### LIÇÃO DE MÉTODO
+Duas causas com o **mesmo sintoma** exigem **números diferentes** no log — foi o
+`devicesComPid` que separou "ninguém presente" de "presente sem pid". E, de novo,
+a resposta estava numa linha da referência: **a tag do roster não é uma só**.
