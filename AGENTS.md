@@ -46,6 +46,49 @@ membros ficam quietos de propósito até falarem. Correção na fork
 `lightweight='1'` e um `<silence reason="lightweight">` no lugar da mídia (medido
 contra o WhatsApp Web: é só o atributo + o nó). O grupo **não toca**.
 
+### 🛑 REGRA DE OURO: o offer de voice chat leva DUAS coisas, e nada mais (out/2026)
+O dono testou num grupo **PEQUENO** e o chat de voz **nao subiu** — so' a mensagem.
+Eu tinha quebrado o que funcionava.
+
+### A causa (eu mesmo)
+Na rodada anterior eu acrescentei o atributo **`is_lightweight`** ao offer, ao lado do
+`lightweight` que sempre funcionou. O servidor **nao conhece** esse atributo — e um
+atributo desconhecido faz ele **DESCARTAR o offer**: aceita e nao cria nada. Por isso
+quebrou ate' em grupo pequeno (antes so' o grupo de 128 falhava).
+
+### A regra (o que o offer de voice chat DEVE ter)
+| item | obrigatorio? |
+|---|---|
+| `group-jid` | sim |
+| **`lightweight='1'`** | **sim** — o marcador |
+| **`<silence reason="lightweight">`** | **sim** — o no' que `buildOfferMediaNodes` poe |
+| `<group_info>` (roster) | **sim** — e' o que o servidor usa para DISTRIBUIR |
+| `is_lightweight` | **NAO** — atributo desconhecido, **descarta o offer** |
+
+**Nada alem disso.** Cada atributo a mais e' um risco de o servidor descartar.
+
+### Como verifiquei (byte-a-byte)
+Comparei o pin de bytes do offer de voice chat com o do commit que **funcionou**
+(`0677703`): **IDENTICOS**. O unico acrescimo que ficou e' o teto de **127 contas**
+no roster (`WA_GROUP_OFFER_MAX_ACCOUNTS`), que e' o limite medido do servidor.
+
+### Estado
+- **Fork `zapo`** (`master` `8310f9c`, branch `voip` `9505f20`): offer de voice chat
+  **exatamente** como funcionava + teto de 127 no roster.
+- **Bot**: o `!vozp` mantem `semTeto` e a mensagem diz quantas contas foram convidadas.
+
+### LICAO DE METODO (a que custou duas rodadas)
+**Nao acrescente ao que funciona.** Eu tinha um offer comprovadamente funcional
+("FUNCIONOU!!!!!" do dono) e adicionei um atributo "melhor" de uma fonte externa, sem
+testar. O protocolo do WhatsApp **descarta em silencio** o que ele nao conhece — o
+sintoma nao aponta para o atributo novo. Regra: mudanca no offer, **uma** por vez, e
+sempre comparando os BYTES com a versao que funcionava.
+
+### Testes
+- Fork: **556 testes, 0 falhas**; o teste do marcador agora exige
+  `is_lightweight === undefined`.
+- Bot: `callp` **50/118**, `callp-regressions` **38/115**, 0 falhas.
+
 ### ⚠️ ERRATA da errata: o ROSTER E' OBRIGATORIO — sem ele o servidor aceita e NAO CRIA (out/2026)
 Teste do dono no grupo de 128: **o offer foi ACEITO** (sem `427`, sem `404` — a
 hipotese do "roster opcional" estava ERRADA) **mas o cartao nao apareceu**.
