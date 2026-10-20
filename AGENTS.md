@@ -11904,3 +11904,80 @@ lido como falha. E a prova veio do **próprio binário** (`strings` no `.wasm`):
 `"No media being transmitted"` é a assinatura do encerramento. Quando o sintoma é
 "a call cai sozinha", procurar no binário o que faz o motor encerrar responde mais
 rápido que teorizar sobre a rede.
+
+
+## 🎙️ VOICE CHAT: a queda em ~5 s + o `encerrar` que não saía (out/2026) ✅
+Dois relatos do dono: *"agora de 3 segundos foi para 5, ai depois fica caindo"* e
+*"o `!vozp encerrar` nao derruba direto, só tira o usuário do chat de voz e a bot
+fica la, só sai beeem depois"*.
+
+### 1. Os ~5 s são a janela da PRÓPRIA leg (a correção anterior funcionou)
+Os 3 s eram o **gate falso** (`state=0 result=4` lido como falha) — isso ficou
+resolvido. O que sobrou é **`RAW_UDP_RETURN_PATH_TIMEOUT_MS = 5000`**: a minha leg
+UDP cru desistia depois de 5 s sem mídia de volta.
+
+**O erro**: o bot costuma ficar **sozinho no chat de voz**, e nesse caso "sem
+mídia de volta" é o **estado normal** — não é falha. Fechar a leg ali tira o
+caminho de mídia e o motor encerra a call (`media_timeout_terminate`).
+
+**O que a referência faz** (`@zapo-js/voip-media`): re-diala com backoff e, ao
+esgotar o teto, **apenas para de re-dialar** — a call segue de pé:
+
+```js
+if (this.redials >= DOWNLINK_MAX_REDIALS) return;   // <- so' retorna
+```
+
+**Correção** (`lizzy-call` `11bfabe`): a leg **nunca desiste** por falta de mídia
+de volta. Depois das re-dials rápidas, segue re-dialando em intervalo **longo**
+(30 s, `RAW_UDP_REDIAL_LONGO_MS`). Ela só morre por **erro real de socket**.
+
+### 2. O `encerrar` que não saía — o terminate ia para o lugar errado
+O roteamento final mandava o `<terminate>` para o **device do participante**:
+
+```js
+const routeTo = signalingTag !== "offer" && signalingTag !== "enc_rekey"
+  ? this.#toBareJid(effectivePeerJid)      // <- terminate ia para um device
+  : this.#toCallDeviceJid(effectivePeerJid);
+```
+
+Numa call de **GRUPO** isso está errado. A referência diz numa linha
+(`zapo`, `call-stanza.js`):
+
+```js
+return isGroupCall ? toCallServerJid(callId) : peerJid;
+```
+
+Ou seja: **tudo** vai para `<call-id>@call`. Com o terminate no device errado, o
+servidor **não tirava este lado da call**: o usuário saía, o bot **continuava no
+chat de voz**, e só saía quando o servidor o derrubava por tempo — exatamente o
+"só sai beeem depois".
+
+**Correção**: `sendSignaling`/`sendSignalingChecked`/`#doSendSignaling` ganharam
+`isGroupCall` (default `false`, para não mexer no 1:1); o `group-media` passa
+`true` (toda sessão dele é de grupo). O roteamento final virou
+`isGroupCall ? '<callId>@call' : (1:1 inalterado)`.
+
+### Testes — `tests/vozp-terminate-target.test.js` (5 testes / 6 asserções, 0 falhas)
+Roda o caminho **real** (`SignalingBridge.sendSignalingChecked`) com socket falso,
+no bot (onde o peer `@itsliaaa/baileys` existe):
+- grupo → o `to` do wrapper é **`CALL1@call`** (o objeto da call);
+- grupo → **não** endereça `@lid` (o device do peer);
+- 1:1 → continua indo para o peer;
+- o `group-media` marca a sessão como grupo;
+- a leg **não** falha pelo caminho de retorno (não existe mais o
+  `#fail("raw_udp_no_return_path")`).
+
+**Verificado que o teste MEDE a correção**: com o roteamento antigo, **2 testes
+falham**.
+
+### Integração
+`package.json` + `package-lock.json` + `yarn.lock` (Berry v8) pinados em
+`11bfabe`. Regressões verdes: `callp` 46/100, `callp-regressions` 38/112,
+`musicap` 24/70, `wa-version` 12/30, `pairing-code` 9/20.
+
+### LIÇÃO DE MÉTODO
+Nas duas correções a resposta estava **numa linha da referência que funciona**:
+`if (this.redials >= DOWNLINK_MAX_REDIALS) return;` (não desistir) e
+`return isGroupCall ? toCallServerJid(callId) : peerJid;` (para onde endereçar).
+Ler o pacote que **funciona** lado a lado com o que **não funciona** resolveu mais
+rápido do que qualquer hipótese sobre rede ou servidor.

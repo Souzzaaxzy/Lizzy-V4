@@ -1029,7 +1029,7 @@ __metadata:
     libmlow-wasm-fork: "npm:^0.2.0"
     libphonenumber-js: "npm:^1.13.9"
     linkedom: "npm:^0.18.12"
-    lizzy-call: "git+https://github.com/Souzzaaxzy/lizzy-call.git#3c54a6112628cfa652753b7aff9977c82c3b564f"
+    lizzy-call: "git+https://github.com/Souzzaaxzy/lizzy-call.git#11bfabe489422c4760bc45d7e6595cd3eea9dfb9"
     node-cache: "npm:^5.1.2"
     node-cron: "npm:^4.2.1"
     node-webpmux: "npm:^3.2.1"
@@ -2132,15 +2132,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"lizzy-call@git+https://github.com/Souzzaaxzy/lizzy-call.git#3c54a6112628cfa652753b7aff9977c82c3b564f":
+"lizzy-call@git+https://github.com/Souzzaaxzy/lizzy-call.git#11bfabe489422c4760bc45d7e6595cd3eea9dfb9":
   version: 0.2.0
-  resolution: "lizzy-call@https://github.com/Souzzaaxzy/lizzy-call.git#commit=3c54a6112628cfa652753b7aff9977c82c3b564f"
+  resolution: "lizzy-call@https://github.com/Souzzaaxzy/lizzy-call.git#commit=11bfabe489422c4760bc45d7e6595cd3eea9dfb9"
   dependencies:
     "@roamhq/wrtc": "npm:^0.10.0"
     qrcode-terminal: "npm:^0.12.0"
   peerDependencies:
     "@whiskeysockets/baileys": ^7.0.0-rc11
-  checksum: 10c0/7478146bfb04de8cdc3db7efc10f594abc71b792d87e1779c6a6ac9b42d13250533a39ed9f44e9a9c5ee6a42dbbfd66b9f1e88454182a52acdafb859f0d653d3
+  checksum: 10c0/fd326c19ee4cc7f68529a6418c556feac342d6fda600bc5995e5df2c8b64540fe6a533cac886c39fe2315a570eba2dc9ebe5512f1dcc1c508b8cb5335cc017ba
   languageName: node
   linkType: hard
 
