@@ -46,6 +46,41 @@ membros ficam quietos de propósito até falarem. Correção na fork
 `lightweight='1'` e um `<silence reason="lightweight">` no lugar da mídia (medido
 contra o WhatsApp Web: é só o atributo + o nó). O grupo **não toca**.
 
+### 📊 ESTADO ATUAL: grupo PEQUENO funciona; grande sobe sem erro e nao aparece (out/2026)
+Relato do dono:
+- **grupo pequeno**: o chat de voz **apareceu** e deu para **entrar** ✅
+- **grupo grande (234)**: **nao** apareceu, **mas tambem nao deu erro**. Log:
+```
+[CALLP] grupo 120363425940427186@g.us: 234 membro(s) -> 233 convidado(s)
+group offer sent { callId: 'A59E…', voiceChat: true,
+                   rosterShipped: false, rosterAccounts: 0 }
+```
+👉 **Nada depois do `group offer sent`.** Nem `offer refused`, nem `offer ack received`.
+
+### O que isso significa (e o que NAO da' para concluir)
+O offer saiu **sem roster** e o servidor **nao recusou** (era `427`/`412` antes). Mas o log
+nao dizia se o servidor **respondeu** — o log do ack era `debug` e nao aparecia. Ou seja:
+"nao respondeu" e "respondeu e ignoramos" davam o MESMO log.
+
+### O que foi feito: instrumentar (medir, nao supor)
+O ack do offer agora sai em **`warn`**, com o que separa os dois casos:
+```
+offer ack received { callId, error: null|'427'|..., hasRoster: bool, hasRelay: bool }
+```
+- **nao aparece** -> o servidor nao respondeu ao offer sem roster (caminho fechado);
+- **`error: '427'`** -> o re-offer deveria ter rodado (e o roster do ack alimenta o retry);
+- **veio com `hasRoster: true`** -> a composicao e' semeada e o problema e' adiante (midia/relay);
+- **veio com `hasRelay: false`** -> o servidor aceitou mas nao deu relay (midia nao sobe).
+
+### Correcao que ja' esta' no ar (da rodada anterior)
+O ack de grupo **semeia a composicao** (`seedGroupComposition(node)`) — e' o unico roster
+que um chat de voz sem roster tem. Isso e' o que fez o **grupo pequeno funcionar**.
+
+### LIMITE HONESTO
+Ainda nao sei, com o log atual, se o servidor responde ao offer sem roster num grupo de
+234. A proxima rodada traz `offer ack received` (ou a ausencia dele) e isso decide o
+caminho. **Nao vou chutar de novo** — o dado vem do log.
+
 ### ✅ O OFFER FOI ACEITO! Faltava semear a composicao pelo ACK (out/2026)
 Log do dono no grupo grande — **sem `offer refused`**, e com o caminho novo visivel:
 ```
