@@ -636,6 +636,24 @@ await test('o log diz quantos membros e quantos convidados (diagnostico)', () =>
   ok(bloco.includes('teto'), 'mostra o teto aplicado');
 });
 
+await test('CHAT DE VOZ que cai sozinho: o registro NAO fica morto (reconciliacao)', () => {
+  const src = fs.readFileSync(path.join(HERE, '..', 'dados/src/index.js'), 'utf-8');
+  // O motor derruba a call por conta propria e isso NAO passa por comando: sem
+  // a reconciliacao, o `registroVozp` ficava com entrada MORTA e o `!vozp`
+  // respondia "ja existe um chat de voz" para sempre.
+  const bloco = src.slice(src.indexOf('const reconciliarVozpEncerrado'), src.indexOf('const reconciliarVozpEncerrado') + 1800);
+  ok(bloco.includes('registroVozp.obter(grupo)'), 'so age se ha chat de voz registrado (idempotente)');
+  ok(bloco.includes('registroVozp.limpar(grupo)'), 'LIMPA o registro do vozp');
+  ok(bloco.includes('aoEncerrarAudio(grupo, null)'), 'desregistra o callback (nao deixa closure)');
+  // E o handler LIGA o callback ao subir (senao a funcao nunca roda).
+  const handler = src.slice(src.indexOf("case 'vozp':"), src.indexOf("case 'vozp':") + 9000);
+  ok(handler.includes('aoEncerrarAudio(from, (grupo, motivo) => reconciliarVozpEncerrado(grupo, motivo))'),
+    'o !vozp registra a reconciliacao ao subir');
+  // Independencia: a reconciliacao do vozp NAO toca a fila/cache do callp.
+  ok(!bloco.includes('musicQueue.limpar'), 'nao mexe na fila (isso e do !musicap)');
+  ok(!bloco.includes('callCache.limparGrupo'), 'nao mexe no cache de audio (isso e do !callp)');
+});
+
 await test('quando o servidor RECUSA (setup_failed), o aviso explica', () => {
   const src = fs.readFileSync(path.join(HERE, '..', 'dados/src/index.js'), 'utf-8');
   const bloco = src.slice(src.indexOf('const reconciliarCallEncerrada'), src.indexOf('const reconciliarCallEncerrada') + 2600);

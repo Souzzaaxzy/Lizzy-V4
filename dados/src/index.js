@@ -4257,6 +4257,40 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       return true;
     };
 
+    /**
+     * Reconciliação do CHAT DE VOZ: ele caiu sozinho.
+     *
+     * Mesma ideia do `reconciliarCallEncerrada`, mas no registro do `!vozp`
+     * (`registroVozp`): o motor derruba a call por conta própria (relay perdido,
+     * todos saíram, o servidor nos tirou) e isso NÃO passa por nenhum comando.
+     * Sem esta função o `registroVozp` ficava com entrada MORTA e o `!vozp`
+     * respondia "já existe um chat de voz" para sempre — só o `encerrar`
+     * manual saía desse estado.
+     *
+     * O `!vozp` não tem fila nem cache de áudio (isso é do `!musicap`), então
+     * aqui só o registro e o callback saem.
+     *
+     * Idempotente: sem chat de voz registrado, não faz nada.
+     *
+     * @param {string} grupo
+     * @param {string} [motivo] motivo informado pelo motor
+     */
+    const reconciliarVozpEncerrado = async (grupo, motivo = null) => {
+      if (!registroVozp.obter(grupo)) return false;
+      registroVozp.limpar(grupo);
+      aoEncerrarAudio(grupo, null);
+      try {
+        await nazu.sendMessage(grupo, {
+          text:
+            `🎙️ O chat de voz foi encerrado.` +
+            (motivo === 'setup_failed' ? '\n\n_⚠️ O servidor recusou a chamada._' : '') +
+            `\n\n_Use \`!vozp\` para subir outro._`,
+          contextInfo: gerarContextNewsletter()
+        });
+      } catch { /* aviso best-effort */ }
+      return true;
+    };
+
     const isModoBn = groupData.modobrincadeira;
     // Gerenciador do !hotseat (+18). UMA instancia por processo, criada na
     // primeira mensagem (aqui o destructuring dos modulos ja rodou). O
@@ -36193,6 +36227,11 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
           }
 
           registroVozp.registrar(from, { callId: r.callId, startedAt: Date.now() });
+
+          // Se o MOTOR derrubar o chat de voz sozinho (relay perdido, todos
+          // saíram, o servidor nos tirou), o registro do bot precisa sair junto
+          // — senão o `!vozp` recusaria para sempre por achar que ele ainda existe.
+          aoEncerrarAudio(from, (grupo, motivo) => reconciliarVozpEncerrado(grupo, motivo));
 
           const cortados = prep.totalMembros - (prep.convidados.length + 1);
           const linhaAlcance = cortados > 0

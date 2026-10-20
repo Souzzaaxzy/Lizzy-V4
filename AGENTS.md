@@ -46,6 +46,16 @@ membros ficam quietos de propósito até falarem. Correção na fork
 `lightweight='1'` e um `<silence reason="lightweight">` no lugar da mídia (medido
 contra o WhatsApp Web: é só o atributo + o nó). O grupo **não toca**.
 
+### O registro do `!vozp` tambem reconcilia (o defeito que faltava)
+O `!callp` já limpava o registro quando a call caía sozinha
+(`reconciliarCallEncerrada`). O `!vozp` **não** tinha o equivalente: se o motor
+derrubasse o chat de voz (relay perdido, todos saíram, o servidor nos tirou), o
+`registroVozp` ficava com entrada MORTA e o `!vozp` respondia *"já existe um chat de
+voz"* **para sempre** — só o `encerrar` manual saía desse estado. Agora existe
+`reconciliarVozpEncerrado`, ligada pelo `aoEncerrarAudio` no handler. Ela limpa só o
+que é do chat de voz (registro + callback): fila e cache de áudio são do
+`!musicap`/`!callp` e não são tocados.
+
 ### Como o bot consome o pacote da fork
 `npm install` **não** aceita pacote em subdiretório de monorepo, e o bot instala
 com npm primeiro. A fork ganhou a branch **`voip`** (`d9fa24f`): o MESMO
