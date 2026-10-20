@@ -36200,14 +36200,17 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             return reply('🎙️ Já existe um chat de voz subido por mim neste grupo.\n\nUse `!vozp encerrar` para terminar.');
           }
 
-          // Mesma preparação de convidados do `!callp`, COM o teto.
+          // Preparação de convidados SEM o teto (`semTeto`).
           //
-          // MEDIDO (log do dono): o servidor recusa o offer acima de 32 contas
-          // MESMO num chat de voz — `offer refused by the server … error: '404'`
-          // quando o offer deixou de nomear o grupo. O offer de grupo PRECISA
-          // nomear quem ele toca; não há "lista vazia" possível. Então o teto vale
-          // para os dois comandos.
-          const prep = await prepararConvidadosDoGrupo();
+          // O teto de 32 e' do TOQUE: o servidor recusa um offer que MANDA TOCAR
+          // mais gente. Um chat de voz **não toca** (`lightweight='1'`): ele só
+          // NOTIFICA, quem quiser entra pelo cartão. E o WhatsApp lançou o recurso
+          // justamente para grupos de 33 a 128+ — se o teto valesse, o recurso não
+          // existiria nesses grupos.
+          //
+          // O offer CONTINUA nomeando o grupo inteiro (medido: um offer sem lista
+          // e' recusado com `error: '404'`). O que sai e' só o CORTE.
+          const prep = await prepararConvidadosDoGrupo({ semTeto: true });
           if (!prep.ok) {
             const motivos = {
               sem_identidade: 'Não consegui identificar meu próprio número para subir o chat de voz.',
@@ -36241,21 +36244,12 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
           // — senão o `!vozp` recusaria para sempre por achar que ele ainda existe.
           aoEncerrarAudio(from, (grupo, motivo) => reconciliarVozpEncerrado(grupo, motivo));
 
-          // Aviso de ALCANCE: o chat de voz tem o MESMO teto de 32 da chamada de
-          // grupo (limite da plataforma, medido: o servidor recusa o offer acima
-          // disso). Num grupo grande, quem ficou de fora entra pelo app.
-          const cortados = prep.totalMembros - (prep.convidados.length + 1);
-          const linhaAlcance = cortados > 0
-            ? `\n\n⚠️ *Toquei em ${prep.convidados.length + 1} de ${prep.totalMembros} membros.*\n` +
-              `_O chat de voz tem o mesmo limite de 32 participantes do WhatsApp — ` +
-              `limite da plataforma, não do bot. Quem ficou de fora entra pelo app._`
-            : '';
-
           await nazu.sendMessage(from, {
             text:
               `🎙️ *Chat de voz iniciado neste grupo.*\n\n` +
               `• ID: \`${r.callId}\`\n` +
-              `• Não toca: quem quiser entra pelo cartão do chat de voz.${linhaAlcance}\n\n` +
+              `• Não toca ninguém: quem quiser entra pelo cartão do chat de voz.\n` +
+              `• Todo o grupo foi convidado (${prep.convidados.length + 1} contas).\n\n` +
               `_Use \`!vozp encerrar\` para terminar._`,
             contextInfo: gerarContextNewsletter(),
             quoted: info

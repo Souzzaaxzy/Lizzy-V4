@@ -46,6 +46,55 @@ membros ficam quietos de propósito até falarem. Correção na fork
 `lightweight='1'` e um `<silence reason="lightweight">` no lugar da mídia (medido
 contra o WhatsApp Web: é só o atributo + o nó). O grupo **não toca**.
 
+### ✅ 3a RODADA: o teto NAO vale para o chat de voz — ele nao TOCA (out/2026)
+**A "errata" anterior estava errada tambem.** O dono levantou a duvida certa: *"se ele
+nao consegue tocar para todos, por que ele simplesmente nao deixa de tocar?"* — e
+apontou o metodo: eu tinha mudado DUAS coisas de uma vez.
+
+### O erro de metodo (o que confundiu tudo)
+Na rodada que deu `404` eu mudei **duas** coisas juntas:
+1. tirei o **teto** (corte da lista);
+2. fiz o offer **nao nomear ninguem** (so' o criador).
+
+O `404` veio da **(2)** — um offer de grupo **sem lista** e' recusado. A (1) nunca foi
+testada isolada. Eu atribui o `404` ao tamanho, e estava errado.
+
+### A regra certa (medida + a propria existencia do recurso)
+| | o offer NOMEIA? | teto de 32? |
+|---|---|---|
+| **chamada** (`!callp`) | sim | **sim** — ela TOCA |
+| **chat de voz** (`!vozp`) | **sim** (obrigatorio) | **nao** — ele NAO toca |
+
+- O offer de grupo **sempre** nomeia quem ele endereça: sem lista o servidor recusa
+  (`error: '404'`).
+- O teto de 32 e' do **TOQUE**. Um chat de voz nao toca (`lightweight='1'`): ele so'
+  NOTIFICA, e quem quiser entra pelo cartao. **E o WhatsApp lancou o recurso
+  justamente para grupos de 33 a 128+** — se o teto valesse, o recurso nao existiria
+  nesses grupos. Esse e' o argumento que fecha a questao.
+
+### Correcao
+- **Fork `zapo`**: **nenhuma** mudanca nova. O estado bom (`master` `89f55cb`, branch
+  `voip` `10d46e0`) ja' nomeia o grupo — que e' o correto.
+- **Bot**: o `!vozp` prepara os convidados com `semTeto: true` (nomeia o grupo
+  INTEIRO, sem corte). O `!callp` mantem o teto. A mensagem voltou a dizer que nao
+  toca e informa quantas contas foram convidadas.
+
+### Testes
+`callp` **50/120**, `callp-regressions` **38/115**, `musicap` 24/70, `vozp-log` 12/20,
+`zapo-conexao` 17/37, `zapo-pareamento` 24/63 — **0 falhas**. Dois testes travam o
+contraste: `CHAT DE VOZ em grupo GRANDE` exige **235** convidados (sem corte) e
+`CHAMADA (!callp) em grupo GRANDE` exige **31** (com teto).
+
+### LIMITE HONESTO
+Falta a prova **ao vivo** num grupo de +100. Se ainda vier `404` com a lista completa,
+a causa e' outra (nao o tamanho) — e o log `[CALLP] grupo …: N membro(s) -> M
+convidado(s) (chat de voz: sem teto)` mostra o M exato para separar as duas.
+
+### LICAO DE METODO (a que custou duas rodadas)
+**Uma variavel por vez.** Mudar duas coisas e medir o resultado junto nao diz qual
+delas causou o efeito — foi exatamente o que me fez culpar o tamanho por um `404` que
+era falta de lista.
+
 ### ❌ ERRATA: o teto de 32 VALE TAMBEM PARA O CHAT DE VOZ (out/2026)
 **A hipotese da rodada anterior estava ERRADA** e o log do dono derrubou:
 ```
