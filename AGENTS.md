@@ -46,6 +46,46 @@ membros ficam quietos de propósito até falarem. Correção na fork
 `lightweight='1'` e um `<silence reason="lightweight">` no lugar da mídia (medido
 contra o WhatsApp Web: é só o atributo + o nó). O grupo **não toca**.
 
+### 🧪 MEDIDO: com 32 contas o servidor AINDA recusa — entao o roster sai (out/2026)
+Log novo: grupo de 128, `412` de novo. Mas o log do BOT diz "127 convidados" — e
+isso e' o **tamanho do grupo**, nao o do offer: o corte do motor roda depois.
+
+### A medicao que faltava (feita agora)
+Instrumentei o motor e medi o offer real:
+```
+CONVIDADOS_PEDIDOS=127
+CONTAS_NO_OFFER=32          <- o corte FUNCIONA
+ATTRS={"call-id":...,"group-jid":...,"lightweight":"1"}
+FILHOS=audio,audio,silence,net,group_info
+```
+Ou seja: o offer saiu **com 32 contas** e o servidor recusou com `412` de qualquer
+forma. **Nomear 32 tambem nao passa** num grupo de 128.
+
+### A conclusao
+Um grupo maior que o teto da call **nao pode ser nomeado**, em pedaco nenhum. Mas um
+chat de voz **nao toca ninguem** — entao **nao ha quem nomear**: ele vai **SEM
+`<group_info>`** e o servidor preenche a composicao na resposta.
+
+### A descoberta que corrigiu o diagnostico
+O teste "sem roster" que eu tinha feito antes (`b8bc4dd`) estava **CONTAMINADO**: ele
+rodou junto com o `is_lightweight` — o atributo que faz o servidor **descartar** o
+offer. Ou seja, aquele teste mediu "atributo desconhecido", **nao** "sem roster". Por
+isso eu conclui que "sem roster nao cria" — e a conclusao estava errada.
+
+**Regra de metodo**: quando duas mudancas rodam juntas, o resultado nao diz qual
+delas causou o efeito. Foi o mesmo erro do `404`.
+
+### Correcao
+- **chat de voz que NAO CABE** (> 31 convidados): **sem roster**, sem resolver device;
+- **chat de voz que CABE**: nomeia quem endereca, como sempre (o grupo pequeno segue);
+- **chamada que TOCA**: inalterada (corta em 32).
+- o log do offer agora diz quantas contas ele **REALMENTE** nomeou (`accountsNamed`),
+  em `warn` — para separar "tamanho do grupo" de "tamanho do roster".
+
+### Testes
+Fork: **559 testes, 0 falhas**, com os dois casos cobertos (cabe -> nomeia; nao cabe ->
+sem roster). Bot: `callp` **50/118**, `callp-regressions` **38/115**, 0 falhas.
+
 ### 🚨 O TETO DO OFFER E' 32 (o teto da CALL), NAO 127 (o do wire) — out/2026
 Teste no grupo de 234: o erro **mudou** de `427` para **`412`**. Erro diferente —
 progresso (o `427` era o roster velho, resolvido pelo re-offer), mas ainda recusa.
