@@ -12171,3 +12171,64 @@ entradas vazias/lixo não imprimem; e o `ehRuido` é previsível.
 ### Regressões verdes
 `callp` 46/100, `callp-regressions` 38/112, `vozp-terminate-target` 5/7,
 `roster-states` 6/0.
+
+
+## 🎙️ `!callp` e `!vozp` são INDEPENDENTES — acoplamento desfeito (out/2026) ✅
+Correção pedida pelo dono: *"a callp é um comando e o vozp é outro, são totalmente
+independentes, você esta juntando o sistema dos dois, não quero isso"*.
+
+### O que eu tinha acoplado (e era erro)
+Ao fazer o `!vozp` voltar, eu reusei a fachada do `!callp`:
+
+| acoplamento | consequência |
+|---|---|
+| `entrarNaCallComMidia(...)` ganhou um parâmetro **`voiceChat`** | o `!callp` passou a **conhecer** o chat de voz |
+| um **`Map` de backend compartilhado** (`backendPorGrupo`) | estado de um podia interferir no outro |
+| o **`lizzy-call` como "reserva"** dentro do `callMedia` | os **dois motores no mesmo processo** — a doc do pacote diz que um segundo motor *"briga"* pelo estado da call |
+| `resumirSessaoDeCall` | misturava campos dos dois |
+
+Resultado medido: `callMedia.js` foi de **259 → 392 linhas**, com **0** referências
+cruzadas de propósito no fim, mas o meio do arquivo conhecia o chat de voz.
+
+### Como ficou (dois sistemas, duas pontes)
+| comando | ponte | motor | registro |
+|---|---|---|---|
+| `!callp` / `!musicap` | `callMedia.js` | `zapoCall.js` | `callOffer.registrarCall` |
+| `!vozp` | **`vozpMedia.js`** (novo) | `lizzy-call` | **`registroVozp`** (novo, no index) |
+
+- **`vozpMedia.js`**: ponte própria do chat de voz — carrega o motor, sobe/sai/toca e
+  expõe `suportaVozp()`, `estagioDoVozp()`. O `isLightWeight: true` vive **só aqui**.
+- **`callMedia.js` voltou a ser só a chamada** (219 linhas, era 392): saiu o
+  parâmetro `voiceChat`, o `Map` de backend, o fallback do `lizzy-call` e o código
+  morto (`mediaInstance`, `usandoZapo`).
+- **`prepararConvidadosDoGrupo()`**: extraído no `index.js` — o que os dois
+  realmente compartilham é a **lista de convidados** (membros, o teto de 32 e o log
+  de alcance). É só isso: a função não toca em backend nem em registro.
+- **`registroVozp`**: registro **próprio** do chat de voz. Um `!callp` ativo não
+  impede o `!vozp` e vice-versa.
+- **Log**: `callLog.js` virou **`vozpLog.js`** (prefixo `🎙️`), e é do chat de voz.
+  O `!callp` mantém o log dele como estava.
+
+### Independência verificada (grep)
+```
+callMedia menciona vozp/voiceChat/isLightWeight?  0   (só comentário explicando)
+zapoCall  menciona vozp/voiceChat?                0
+index.js  tem parâmetro voiceChat?                0
+```
+E o teste confere isso **sem os comentários** (o `callMedia` cita o vozp para
+explicar que não o usa — a asserção ignora comentários, como no `installer-git-drift`).
+
+### Testes
+- `tests/callp.test.js` — **45 testes / 98 asserções, 0 falhas**. Os testes do
+  `!vozp` foram reescritos para a ponte própria, com um dublê **separado**
+  (`__setDubleVozp`) — e um deles prova que subir o `!vozp` **não** usa a ponte do
+  `!callp`, e que um não vê o registro do outro.
+- `tests/callp-regressions.test.js` — **38 testes / 115 asserções, 0 falhas**. O
+  **FIX 4** passou a travar a regra certa: o `callMedia` **não** conhece voice chat.
+- `tests/vozp-log.test.js` (era `call-log.test.js`) — **12 testes / 20 asserções**.
+- Verdes: `musicap` 24/70, `vozp-terminate-target` 5/7, `roster-states` 6/0.
+
+### LIÇÃO DE MÉTODO
+Reusar a fachada "porque o contrato é parecido" é o caminho mais curto para acoplar
+dois sistemas. **Comandos independentes merecem pontes independentes** — o que se
+compartilha é código (a lista de convidados), nunca estado.

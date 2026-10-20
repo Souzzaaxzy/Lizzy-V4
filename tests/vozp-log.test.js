@@ -11,7 +11,7 @@
  * Uso: node tests/call-log.test.js
  */
 
-import { criarLogDaCall, ehRuido, PREFIXO } from '../dados/src/utils/callLog.js';
+import { criarLogDoVozp, ehRuido, PREFIXO } from '../dados/src/utils/vozpLog.js';
 
 const RESULTS = [];
 let CURRENT = null;
@@ -34,7 +34,7 @@ function ok(cond, msg) {
 /** Coleta o que o filtro deixou passar. */
 function coletar(linhas, opts) {
   const saida = [];
-  const log = criarLogDaCall({ escrever: (l) => saida.push(l), ...opts });
+  const log = criarLogDoVozp({ escrever: (l) => saida.push(l), ...opts });
   for (const l of linhas) log(l);
   log.flush?.(); // fecha a sequencia, como o bot faz no fim do ciclo
   return saida;

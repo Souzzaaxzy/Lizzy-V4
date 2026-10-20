@@ -371,18 +371,27 @@ await test('FIX 4 (revisado): o zapo NAO recebe flag de voice chat (nao tem a op
   ok(!zapoCall.includes('isLightWeight'), 'zapoCall sem isLightWeight');
 });
 
-await test('FIX 4 (revisado): o callMedia manda o voice chat pelo lizzy-call', () => {
-  const midia = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/callMedia.js'), 'utf-8');
-  ok(midia.includes('isLightWeight: true'), 'usa a opcao REAL do motor WASM');
-  ok(midia.includes("carregarLizzyCall"), 'carrega o lizzy-call sob demanda');
-  ok(midia.includes("voice_chat_indisponivel"), 'motivo proprio quando o motor falta');
+await test('FIX 4 (revisado): o voice chat vive num modulo PROPRIO (vozpMedia)', () => {
+  const voz = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/vozpMedia.js'), 'utf-8');
+  ok(voz.includes('isLightWeight: true'), 'usa a opcao REAL do motor WASM');
+  ok(voz.includes('voice_chat_indisponivel'), 'motivo proprio quando o motor falta');
+  // O `callMedia` (do !callp) NAO pode conhecer o chat de voz: sao comandos
+  // independentes, com backends, motores e registros separados.
+  // Sem os comentarios: o callMedia CITA o vozp para explicar que nao o usa.
+  const midia = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/callMedia.js'), 'utf-8')
+    .replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  ok(!midia.includes('isLightWeight'), 'o callMedia NAO conhece voice chat');
+  ok(!midia.includes('vozp'), 'o callMedia NAO referencia o vozp');
 });
 
-await test('FIX 4 (revisado): o !vozp existe e roteia pelo voiceChat', () => {
+await test('FIX 4 (revisado): o !vozp usa a ponte PROPRIA (nao a do !callp)', () => {
   const src = fs.readFileSync(path.join(HERE, '..', 'dados/src/index.js'), 'utf-8');
   ok(src.includes("case 'vozp':"), 'o comando existe');
-  ok(src.includes('subirCallDoGrupo({ voiceChat: true })'), 'sobe como voice chat');
-  ok(src.includes('suportaVoiceChat()'), 'checa o backend antes (nao mente)');
+  ok(src.includes('subirChatDeVoz('), 'sobe pela ponte do vozp');
+  ok(src.includes('suportaVozp()'), 'checa o motor antes (nao mente)');
+  // Independencia: o `!callp` nao ganhou parametro de voice chat.
+  ok(!src.includes('voiceChat'), 'o index NAO tem parametro de voice chat no !callp');
+  ok(src.includes('registroVozp'), 'o chat de voz tem registro PROPRIO');
 });
 
 // ============================================================================

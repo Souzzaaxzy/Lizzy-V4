@@ -683,6 +683,22 @@ function buildPollTitle(titulo, emoji, pergunta, botName = 'Bot') {
 // FRASES DOS COMANDOS DE PEGAR (!pgpau / !pgpeito / !pgbunda)
 // exatamente 2 frases por comando; "@usuario" e "@alvo" sao substituidos
 // pelos nomes reais e enviados como mencoes de verdade (JID via mentions).
+/**
+ * Registro PRÓPRIO do chat de voz (`!vozp`).
+ *
+ * O `!callp` guarda a chamada dele (`callOffer.registrarCall`); o chat de voz
+ * guarda a dele AQUI. É a separação pedida: os dois comandos são
+ * **independentes**, então um não enxerga nem derruba o outro.
+ *
+ * Em memória, como o do `!callp`: a sessão vive no motor e morre com o processo.
+ */
+const registroVozp = {
+  ativos: new Map(),
+  registrar(grupo, dados) { this.ativos.set(grupo, dados); },
+  obter(grupo) { return this.ativos.get(grupo) || null; },
+  limpar(grupo) { this.ativos.delete(grupo); }
+};
+
 const FRASES_PEGAR = {
   pgpau: [
     '@usuario foi lá e pegou no pau de @alvo 😏',
@@ -1228,10 +1244,16 @@ import {
   sairDaCallComMidia,
   estagioMidia,
   precisaPareamento,
-  parearMidia,
-  backendAtivo,
-  suportaVoiceChat
+  parearMidia
 } from './funcs/utils/callMedia.js';
+// O CHAT DE VOZ (`!vozp`) e' um sistema SEPARADO do `!callp`: ponte de midia,
+// motor e registro proprios. Nada de estado compartilhado entre os dois.
+import {
+  subirChatDeVoz,
+  sairDoChatDeVoz,
+  estagioDoVozp,
+  suportaVozp
+} from './funcs/utils/vozpMedia.js';
 import {
   sendRestrictedMedia,
   normalizeRestrictedTargets,
@@ -4060,16 +4082,21 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
      *
      * @returns {Promise<{ok: boolean, callId?: string, stage?: string, motivo?: string, detalhe?: string}>}
      */
-    const subirCallDoGrupo = async ({ voiceChat = false } = {}) => {
+    /**
+     * Prepara a lista de convidados de um grupo (membros, menos o bot).
+     *
+     * Ponto comum aos DOIS comandos: tanto a chamada (`!callp`) quanto o chat de
+     * voz (`!vozp`) tocam o mesmo conjunto de pessoas, com o mesmo teto. O que
+     * NÃO é comum fica com cada um — o backend e o registro.
+     *
+     * @returns {Promise<{ok:boolean, motivo?:string, convidados?:string[], totalMembros?:number, botCallId?:string, meta?:object}>}
+     */
+    const prepararConvidadosDoGrupo = async () => {
       const botCallId = getBotNumber(nazu);
-      if (!botCallId) {
-        return { ok: false, motivo: 'sem_identidade' };
-      }
+      if (!botCallId) return { ok: false, motivo: 'sem_identidade' };
 
       const meta = await nazu.groupMetadata(from).catch(() => null);
-      if (!meta) {
-        return { ok: false, motivo: 'sem_metadata' };
-      }
+      if (!meta) return { ok: false, motivo: 'sem_metadata' };
 
       // Convidados: todos os membros, menos o bot (ele entra como criador).
       //
@@ -4138,14 +4165,22 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
         ` (teto ${tetoConvidados})`
       );
 
+      return { ok: true, convidados, totalMembros, botCallId, meta };
+    };
+
+    /** Sobe a CHAMADA (`!callp`). Ponto unico: quem CRIA a call e' o motor de midia. */
+    const subirCallDoGrupo = async () => {
+      const prep = await prepararConvidadosDoGrupo();
+      if (!prep.ok) return prep;
+      const { convidados, botCallId } = prep;
+
       // Aviso de memória: a pilha de mídia aloca centenas de MB. Se a máquina
       // estiver apertada, o OOM killer mata o processo (SIGKILL) no meio da call
       // e o sintoma vira "o bot reiniciou sozinho", sem log.
       const midia = await entrarNaCallComMidia({
         grupo: from,
         participantes: convidados,
-        sock: nazu,
-        voiceChat
+        sock: nazu
       });
       if (!midia?.ok) return midia || { ok: false, motivo: 'falha_ao_entrar' };
 
@@ -4154,8 +4189,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       registrarCall(from, {
         callId: midia.callId,
         callCreator: botCallId,
-        startedAt: Date.now(),
-        voiceChat: !!voiceChat
+        startedAt: Date.now()
       });
 
       // Se o MOTOR derrubar a call sozinho (relay perdido, todos saíram), o
@@ -4168,8 +4202,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
         callId: midia.callId,
         stage: midia.stage,
         tocados: convidados.length,
-        totalMembros,
-        voiceChat: !!voiceChat
+        totalMembros: prep.totalMembros
       };
     };
 
@@ -35973,8 +36006,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
 
           if (obterCall(from)) {
             const ativa = obterCall(from);
-            const tipo = ativa.voiceChat ? 'chat de voz' : 'chamada';
-            return reply(`📞 Já existe um(a) ${tipo} subido(a) por mim neste grupo.\n\nUse \`!callp encerrar\` para derrubar.`);
+            return reply('📞 Já existe uma chamada subida por mim neste grupo.\n\nUse `!callp encerrar` para derrubar.');
           }
 
           // Checa o pareamento ANTES de tentar subir: o erro do motor seria
@@ -36034,14 +36066,26 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
 
       // !vozp — CHAT DE VOZ do grupo (o cartão que se arrasta para cima).
       //
-      // É o MESMO fluxo do `!callp` — o ponto único `subirCallDoGrupo` só muda o
-      // `voiceChat`. O que muda é o BACKEND: quem sabe declarar o offer como
-      // voice chat é o motor WASM do WhatsApp Web (`lizzy-call`), que tem o
-      // caminho `voice_chat.cc` (`is_voice_chat`, `is_lightweight`,
-      // `lightweight-key`). O `zapo` — backend do `!callp` — NÃO tem essa opção.
+      // ## Comando INDEPENDENTE do `!callp`
       //
-      // O comando se RECUSA a subir quando o backend não está disponível, em vez
-      // de entregar uma chamada comum dizendo que é chat de voz (era o defeito da
+      // Os dois têm a mesma IDEIA (subir algo na call do grupo), mas são sistemas
+      // separados: backend diferente, motor diferente e — o que importa aqui —
+      // **registro diferente**. O `!callp` guarda a chamada dele
+      // (`callOffer.registrarCall`); o chat de voz tem este registo próprio, então
+      // um não enxerga nem derruba o outro.
+      //
+      // | comando | o que sobe | onde vive |
+      // |---|---|---|
+      // | `!callp` | chamada (toca) | `callMedia.js` → `zapoCall.js` |
+      // | `!vozp`  | chat de voz (não toca) | `vozpMedia.js` → `lizzy-call` |
+      //
+      // Quem sabe declarar o offer como voice chat é o motor WASM do WhatsApp Web
+      // (`lizzy-call`), que tem o caminho `voice_chat.cc` (`is_voice_chat`,
+      // `is_lightweight`, `lightweight-key`). O `zapo` — backend do `!callp` —
+      // **não** tem essa opção.
+      //
+      // O comando se RECUSA a subir quando o motor não está disponível, em vez de
+      // entregar uma chamada comum dizendo que é chat de voz (era o defeito da
       // versão antiga, removida em out/2026).
       case 'vozp':
       case 'voicechat':
@@ -36055,37 +36099,30 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
 
           if (ehEncerrar) {
             if (!isGroupAdmin) return reply('⛔ Apenas administradores podem encerrar o chat de voz.');
-            const ativa = obterCall(from);
-            if (!ativa?.callId) return reply('📴 Não há chat de voz nem chamada subida por mim neste grupo.');
-            const saida = await sairDaCallComMidia(from)
+            const ativo = registroVozp.obter(from);
+            if (!ativo?.callId) return reply('📴 Nenhum chat de voz ativo neste grupo.');
+            // Sai pelo MOTOR do chat de voz (que manda o <terminate> ao objeto da
+            // call). Se falhar, o registro fica de pé — não se mente sucesso.
+            const saida = await sairDoChatDeVoz(from)
               .catch((e) => ({ ok: false, detalhe: e?.message || String(e) }));
             if (saida && saida.ok === false) {
               return reply(
-                `❌ Não consegui encerrar no motor de mídia.` +
+                `❌ Não consegui encerrar o chat de voz no motor.` +
                 (saida.detalhe ? `\n\n_${saida.detalhe}_` : '') +
                 `\n\n_O registro segue ativo. Tente de novo._`
               );
             }
-            limparCall(from);
-            const resumoFila = musicQueue.limpar(from);
-            callCache.limparGrupo(from);
-            callPlayer.pararDeSeguir(from);
-            aoTerminarAudio(from, null);
-            aoEncerrarAudio(from, null);
-            return reply(
-              `🎙️ Chat de voz encerrado.` +
-              (resumoFila.removidas ? `\n\n🗑️ ${resumoFila.removidas} música(s) da fila foram apagadas.` : '')
-            );
+            registroVozp.limpar(from);
+            return reply('🎙️ Chat de voz encerrado.');
           }
 
           if (ehStatus) {
-            const ativa = obterCall(from);
-            if (!ativa?.callId) return reply('📴 Nenhum chat de voz ativo neste grupo.');
-            const estagio = await estagioMidia(from).catch(() => 'desconhecido');
+            const ativo = registroVozp.obter(from);
+            if (!ativo?.callId) return reply('📴 Nenhum chat de voz ativo neste grupo.');
+            const estagio = await estagioDoVozp(from).catch(() => 'desconhecido');
             return reply(
               `🎙️ *Chat de voz ativo*\n\n` +
-              `• ID: \`${String(ativa.callId).slice(0, 12)}...\`\n` +
-              `• Tipo: ${ativa.voiceChat ? 'chat de voz' : 'chamada'}\n` +
+              `• ID: \`${String(ativo.callId).slice(0, 12)}...\`\n` +
               `• Áudio: ${estagio}`
             );
           }
@@ -36094,37 +36131,50 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             return reply('⛔ Apenas administradores podem subir o chat de voz.');
           }
 
-          // O BACKEND decide: sem o lizzy-call não existe voice chat.
-          if (!(await suportaVoiceChat())) {
+          // O MOTOR decide: sem o lizzy-call não existe chat de voz.
+          if (!(await suportaVozp())) {
             return reply(
               '❌ O *chat de voz* precisa do motor WASM (`lizzy-call`), que não está disponível aqui.\n\n' +
-              '_A chamada normal (`!callp`) funciona pelo outro backend._'
+              '_A chamada normal (`!callp`) é outro comando e funciona normalmente._'
             );
           }
 
-          if (obterCall(from)) {
-            const ativa = obterCall(from);
-            const tipo = ativa.voiceChat ? 'chat de voz' : 'chamada';
-            return reply(`📞 Já existe um(a) ${tipo} subido(a) por mim neste grupo.\n\nUse \`!callp encerrar\` para derrubar.`);
+          if (registroVozp.obter(from)) {
+            return reply('🎙️ Já existe um chat de voz subido por mim neste grupo.\n\nUse `!vozp encerrar` para terminar.');
           }
 
-          const r = await subirCallDoGrupo({ voiceChat: true });
-          if (!r.ok) {
+          // Reaproveita a MESMA preparação de convidados do `!callp` (membros, o
+          // teto de 32 e o log de alcance): é só `prepararConvidadosDoGrupo`, sem
+          // tocar no registro nem no backend da chamada.
+          const prep = await prepararConvidadosDoGrupo();
+          if (!prep.ok) {
             const motivos = {
               sem_identidade: 'Não consegui identificar meu próprio número para subir o chat de voz.',
               sem_metadata: 'Não consegui ler os membros do grupo agora. Tente de novo.',
-              grupo_pequeno: 'O chat de voz precisa de pelo menos 2 outros membros.',
+              grupo_pequeno: 'O chat de voz precisa de pelo menos 2 outros membros.'
+            };
+            return reply(`❌ Não consegui subir o chat de voz.\n\n_${motivos[prep.motivo] || prep.motivo}_`);
+          }
+
+          const r = await subirChatDeVoz({
+            grupo: from,
+            participantes: prep.convidados,
+            sock: nazu
+          });
+          if (!r.ok) {
+            const motivos = {
               voice_chat_indisponivel: 'O motor WASM (lizzy-call) não está disponível neste servidor.',
-              pacote_de_midia_ausente: 'A mídia não está instalada neste servidor.',
               falha_ao_entrar: 'O motor de mídia não subiu.'
             };
             const detalhe = motivos[r.motivo] || r.motivo || 'erro desconhecido';
             return reply(`❌ Não consegui subir o chat de voz.\n\n_${detalhe}_${r.detalhe ? `\n\n\`${r.detalhe}\`` : ''}`);
           }
 
-          const cortados = (r.totalMembros || 0) - ((r.tocados || 0) + 1);
+          registroVozp.registrar(from, { callId: r.callId, startedAt: Date.now() });
+
+          const cortados = prep.totalMembros - (prep.convidados.length + 1);
           const linhaAlcance = cortados > 0
-            ? `\n\n⚠️ *Toquei em ${(r.tocados || 0) + 1} de ${r.totalMembros} membros.*\n` +
+            ? `\n\n⚠️ *Toquei em ${prep.convidados.length + 1} de ${prep.totalMembros} membros.*\n` +
               `_O chat de voz tem o mesmo limite de 32 participantes do WhatsApp._`
             : '';
 

@@ -70,6 +70,8 @@ const handleMessage = indexModule.default ?? indexModule;
 if (typeof handleMessage !== 'function') throw new Error('index.js não exporta o handler');
 
 const callState = await import(new URL('../dados/src/funcs/utils/callOffer.js', import.meta.url).href);
+// O CHAT DE VOZ tem a PROPRIA ponte (`vozpMedia.js`), separada da do `!callp`.
+const vozpMedia = await import(new URL('../dados/src/funcs/utils/vozpMedia.js', import.meta.url).href);
 const callMedia = await import(new URL('../dados/src/funcs/utils/callMedia.js', import.meta.url).href);
 const zapo = await import(new URL('../dados/src/funcs/utils/zapoCall.js', import.meta.url).href);
 
@@ -429,86 +431,109 @@ await test('resolverLids: sem o coordinator devolve a lista sem quebrar', async 
 });
 
 // ============================================================================
-// 3a-ter) CHAT DE VOZ (!vozp) — o cartao que se arrasta para cima
+// 3a-ter) CHAT DE VOZ (!vozp) — um sistema SEPARADO do !callp
 // ============================================================================
+//
+// O `!vozp` tem a propria ponte (`vozpMedia.js`), o proprio motor e o proprio
+// registro. Estes testes conferem justamente a INDEPENDENCIA: o `!callp` e o
+// `!vozp` nao compartilham estado, e cada um sobe/derruba o seu.
 
-await test('!vozp sobe o chat de voz (voiceChat: true chega na midia)', async () => {
+/** Dublê da ponte do CHAT DE VOZ (via o seam próprio; nao toca no do !callp). */
+function instalarDubleVozp({ ok = true, motivo = null, callId = 'VC-1', stage = 'aguardando_roster' } = {}) {
+  const chamadas = [];
+  vozpMedia.__setDubleVozp({
+    subir: async ({ grupo, participantes }) => {
+      chamadas.push({ tipo: 'subir', grupo, participantes });
+      if (!ok) return { ok: false, motivo, stage: 'falhou' };
+      return { ok: true, callId, stage };
+    },
+    sair: async (grupo) => { chamadas.push({ tipo: 'sair', grupo }); return { ok: true }; },
+    estagio: () => stage
+  });
+  return chamadas;
+}
+
+/** Remove o duble do chat de voz. */
+function desinstalarDubleVozp() {
+  vozpMedia.__setDubleVozp(null);
+}
+
+await test('!vozp sobe o chat de voz pela ponte PROPRIA (nao pela do !callp)', async () => {
   const { groupJid, admin, participants } = setup(3);
-  const chamadas = instalarDubleMidia();
+  const daChamada = instalarDubleMidia();   // ponte do !callp
+  const doVoz = instalarDubleVozp();        // ponte do !vozp
   const out = await run({ groupJid, sender: admin, text: '!vozp', participants });
-  const criou = chamadas.find((c) => c.tipo === 'entrar');
-  ok(Boolean(criou), 'chamou a midia');
-  ok(criou.voiceChat === true, 'com o flag de VOICE CHAT (nao chamada comum)');
-  includes(out.text, 'Chat de voz iniciado', 'avisa que e chat de voz');
+  ok(doVoz.some((c) => c.tipo === 'subir'), 'o chat de voz subiu pela ponte dele');
+  ok(daChamada.length === 0, 'a ponte do !callp NAO foi usada (sistemas separados)');
+  includes(out.text, 'Chat de voz iniciado', 'avisa');
   includes(out.text, 'Não toca', 'deixa claro que nao toca');
-  ok(callState.obterCall(groupJid)?.voiceChat === true, 'o registro marca o tipo');
-  callState.limparCall(groupJid);
+  desinstalarDubleVozp();
 });
 
-await test('!callp continua sendo CHAMADA (voiceChat false)', async () => {
+await test('!callp e !vozp NAO compartilham registro', async () => {
   const { groupJid, admin, participants } = setup(3);
-  const chamadas = instalarDubleMidia();
+  instalarDubleMidia({ callId: 'CALL-X' });
+  const doVoz = instalarDubleVozp({ callId: 'VC-X' });
+  // sobe a chamada
   await run({ groupJid, sender: admin, text: '!callp', participants });
-  const criou = chamadas.find((c) => c.tipo === 'entrar');
-  ok(criou.voiceChat === false, 'o !callp NAO vira voice chat');
+  // o chat de voz NAO ve a chamada do callp: sobe o dele
+  const out = await run({ groupJid, sender: admin, text: '!vozp', participants });
+  includes(out.text, 'Chat de voz iniciado', 'o vozp subiu mesmo com a chamada do callp de pe');
+  ok(doVoz.some((c) => c.tipo === 'subir'), 'subiu pela ponte dele');
   callState.limparCall(groupJid);
+  desinstalarDubleVozp();
+});
+
+await test('!vozp encerrar derruba pela ponte PROPRIA e limpa o registro dele', async () => {
+  const { groupJid, admin, participants } = setup(3);
+  instalarDubleVozp({ callId: 'VC-2' });
+  await run({ groupJid, sender: admin, text: '!vozp', participants });
+  const doVoz = instalarDubleVozp({ callId: 'VC-2' });
+  const out = await run({ groupJid, sender: admin, text: '!vozp encerrar', participants });
+  ok(doVoz.some((c) => c.tipo === 'sair'), 'saiu pela ponte do vozp');
+  includes(out.text, 'Chat de voz encerrado', 'avisa');
+  desinstalarDubleVozp();
+});
+
+await test('!vozp status usa o estagio do MOTOR do vozp', async () => {
+  const { groupJid, admin, participants } = setup(3);
+  instalarDubleVozp({ callId: 'VC-3', stage: 'pronta' });
+  await run({ groupJid, sender: admin, text: '!vozp', participants });
+  const out = await run({ groupJid, sender: admin, text: '!vozp status', participants });
+  includes(out.text, 'Chat de voz ativo', 'mostra o status');
+  includes(out.text, 'pronta', 'traz o estagio do motor do vozp');
+  desinstalarDubleVozp();
 });
 
 await test('!vozp: MEMBRO comum e recusado', async () => {
   const { groupJid, participants } = setup(2);
   const membro = makePerson();
   participants.push({ lid: membro.lid, jid: membro.jid, isAdmin: false });
-  const chamadas = instalarDubleMidia();
+  const doVoz = instalarDubleVozp();
   const out = await run({ groupJid, sender: membro, text: '!vozp', participants, fromMe: false });
   includes(out.text, 'administradores', 'recusa quem nao e admin');
-  ok(chamadas.length === 0, 'nao sobe');
+  ok(doVoz.length === 0, 'nao sobe');
+  desinstalarDubleVozp();
 });
 
 await test('!vozp so em grupo', async () => {
   const { admin, participants } = setup(2);
-  const chamadas = instalarDubleMidia();
+  const doVoz = instalarDubleVozp();
   const out = await run({ groupJid: admin.jid, sender: admin, text: '!vozp', participants });
   includes(out.text, 'só pode ser usado em grupo', 'recusa no PV');
-  ok(chamadas.length === 0, 'nao sobe no PV');
+  ok(doVoz.length === 0, 'nao sobe no PV');
+  desinstalarDubleVozp();
 });
 
-await test('!vozp encerrar derruba e limpa', async () => {
-  const { groupJid, admin, participants } = setup(3);
-  instalarDubleMidia({ callId: 'VC-1' });
-  await run({ groupJid, sender: admin, text: '!vozp', participants });
-  const chamadas = instalarDubleMidia();
-  const out = await run({ groupJid, sender: admin, text: '!vozp encerrar', participants });
-  ok(chamadas.some((c) => c.tipo === 'sair'), 'desmontou a midia');
-  includes(out.text, 'Chat de voz encerrado', 'avisa');
-  ok(callState.obterCall(groupJid) === null, 'registro limpo');
-});
-
-await test('!vozp status diz o tipo ativo', async () => {
-  const { groupJid, admin, participants } = setup(3);
-  instalarDubleMidia({ callId: 'VC-STATUS' });
-  await run({ groupJid, sender: admin, text: '!vozp', participants });
-  const out = await run({ groupJid, sender: admin, text: '!vozp status', participants });
-  includes(out.text, 'Chat de voz ativo', 'mostra o status');
-  includes(out.text, 'chat de voz', 'diz o tipo');
-  callState.limparCall(groupJid);
-});
-
-await test('nao sobe chat de voz em cima de uma chamada', async () => {
-  const { groupJid, admin, participants } = setup(3);
-  instalarDubleMidia({ callId: 'CALL-1' });
-  await run({ groupJid, sender: admin, text: '!callp', participants });
-  const chamadas = instalarDubleMidia();
-  const out = await run({ groupJid, sender: admin, text: '!vozp', participants });
-  includes(out.text, 'Já existe', 'recusa');
-  ok(chamadas.length === 0, 'nao sobe outra');
-  callState.limparCall(groupJid);
-});
-
-await test('o callMedia manda o voice chat pelo lizzy-call (isLightWeight)', () => {
-  const midia = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/callMedia.js'), 'utf-8');
-  ok(midia.includes('isLightWeight: true'), 'usa a opcao REAL do motor WASM');
-  ok(midia.includes('voice_chat_indisponivel'), 'tem motivo proprio sem o motor');
-  ok(midia.includes('backendPorGrupo'), 'roteia sair/tocar pelo backend que atendeu');
+await test('a ponte do vozp e um modulo SEPARADO (isLightWeight isolado)', () => {
+  const voz = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/vozpMedia.js'), 'utf-8');
+  // Sem os comentarios: o callMedia CITA o vozp para explicar que nao o usa.
+  const midia = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/callMedia.js'), 'utf-8')
+    .replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  ok(voz.includes('isLightWeight: true'), 'o vozp usa a opcao REAL do motor WASM');
+  ok(!midia.includes('isLightWeight'), 'o callMedia NAO conhece voice chat');
+  ok(!midia.includes('voiceChat'), 'o callMedia NAO conhece voice chat');
+  ok(!midia.includes('vozp'), 'o callMedia NAO referencia o vozp');
 });
 
 // ============================================================================

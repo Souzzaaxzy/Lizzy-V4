@@ -1,5 +1,5 @@
 /**
- * O log do sistema de chamada (`!callp` / `!vozp`) — limpo e com o que importa.
+ * O log do CHAT DE VOZ (`!vozp`) — limpo e com o que importa.
  *
  * ## Por que existe
  *
@@ -26,7 +26,7 @@
  */
 
 /** Prefixo único, para o log da chamada ser reconhecível e filtrável. */
-export const PREFIXO = '📞';
+export const PREFIXO = '🎙️';
 
 /** Trechos que marcam ruído. Testados com `includes` — basta um pedaço estável. */
 export const RUIDO = [
@@ -58,14 +58,14 @@ export const ehRuido = (linha) => {
 };
 
 /**
- * Cria o log da chamada. Devolve um `(msg) => void` pronto para o `log` do motor.
+ * Cria o log do CHAT DE VOZ. Devolve um `(msg) => void` pronto para o `log` do motor.
  *
  * @param {object} [opts]
  * @param {(linha: string) => void} [opts.escrever] saída (default: `console.log`)
  * @param {boolean} [opts.colapsarRepeticao] (default: true)
  * @returns {(msg: unknown) => void}
  */
-export function criarLogDaCall(opts = {}) {
+export function criarLogDoVozp(opts = {}) {
   const escrever = typeof opts.escrever === 'function' ? opts.escrever : (l) => console.log(l);
   const colapsar = opts.colapsarRepeticao !== false;
 
