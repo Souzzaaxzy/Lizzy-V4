@@ -46,6 +46,46 @@ membros ficam quietos de propósito até falarem. Correção na fork
 `lightweight='1'` e um `<silence reason="lightweight">` no lugar da mídia (medido
 contra o WhatsApp Web: é só o atributo + o nó). O grupo **não toca**.
 
+### ✅ O OFFER FOI ACEITO! Faltava semear a composicao pelo ACK (out/2026)
+Log do dono no grupo grande — **sem `offer refused`**, e com o caminho novo visivel:
+```
+group offer sent { callId: 'FF6A…', groupJid: '120363407202507664@g.us',
+                   voiceChat: true, rosterShipped: false, rosterAccounts: 0 }
+```
+O servidor **aceitou** o offer sem roster. Mas o chat de voz nao apareceu.
+
+### A causa
+O offer de um chat de voz que nao cabe vai **sem roster** — e o motor **nunca lia o
+`<group_info>` que o servidor devolve no ACK**. A composicao nascia **vazia** e nao havia
+mais de onde vir: a call ficava sem roster e nao subia.
+
+### A prova (Cobalt, RE do cliente oficial)
+O `reconcileFromAck` do Cobalt faz **exatamente** isso:
+```java
+ack.streamChildren().map(GroupInfoStanza::of).findFirst().ifPresent(membership::reconcile);
+```
+Le' o `<group_info>` do **ack** e reconcilia a membership. O nosso motor so' lia o
+`<group_info>` do **offer** (`seedGroupComposition` era chamada apenas ali).
+
+### Correcao
+`handleCallAck` passa a semear a composicao com o roster do ack (`seedGroupComposition(node)`),
+em grupo. E' o **unico** roster que um chat de voz sem roster tem — o mesmo caminho que
+o offer usava.
+
+### Testes
+`the ack of a group offer seeds the composition from the roster it carries` (composicao
+vazia -> 3 depois do ack). Fork: **562 testes, 0 falhas.** Verificado: sem o seed, o teste
+**falha**.
+
+### O QUE ISSO SIGNIFICA
+O `sender key id mismatch` que apareceu no log e' de **outro grupo** (ruido, nao da call).
+O caminho do voice chat no grupo grande agora esta' completo: offer aceito + composicao
+semeada pelo ack.
+
+### LICAO DE METODO
+A referencia tinha o passo e eu nao o vi na primeira leitura. Quando o fluxo "aceita e nao
+faz nada", **procurar na referencia o que vem DEPOIS do ack** — nao so' o que vai antes.
+
 ### 🐛 O CAMINHO "SEM ROSTER" NAO FUNCIONAVA NO MANAGER (out/2026)
 Teste do dono no grupo grande: *"Nao consegui subir o chat de voz / o motor de midia nao
 subiu / `a group call on <jid> needs the participants to ring`"*.
