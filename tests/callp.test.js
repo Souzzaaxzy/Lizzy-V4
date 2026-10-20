@@ -486,7 +486,9 @@ await test('quando o servidor RECUSA (setup_failed), o aviso explica', () => {
   const bloco = src.slice(src.indexOf('const reconciliarCallEncerrada'), src.indexOf('const reconciliarCallEncerrada') + 2600);
   ok(bloco.includes("motivo === 'setup_failed'"), 'trata o motivo setup_failed');
   ok(bloco.includes('recusou a chamada'), 'diz que foi o servidor (nao o bot)');
-  ok(bloco.includes('limite de participantes'), 'aponta o tamanho como a causa provavel');
+  ok(bloco.includes('32 participantes'), 'diz o numero exato do limite do WhatsApp');
+  ok(bloco.includes('não do bot'), 'deixa claro que e limite da plataforma');
+  ok(bloco.includes('não existe ilimitado'), 'nao promete o que a plataforma nao permite');
 });
 
 // ============================================================================

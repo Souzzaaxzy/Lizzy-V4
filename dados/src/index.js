@@ -4192,9 +4192,11 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       // e' o servidor RECUSANDO o offer — sem dizer isso, "a chamada foi
       // encerrada" parece defeito do bot.
       const explicacao = motivo === 'setup_failed'
-        ? '\n\n_⚠️ O servidor recusou a chamada. Costuma ser o tamanho do grupo: ' +
-          'a chamada de grupo tem um limite de participantes, e acima dele o ' +
-          'WhatsApp recusa. Tente em um grupo menor._'
+        ? '\n\n_⚠️ O servidor recusou a chamada._\n' +
+          '_A chamada de grupo do WhatsApp aceita no máximo *32 participantes* — ' +
+          'é limite da plataforma, não do bot (não existe ilimitado). Eu entro ' +
+          'como um deles, então convido até 31. Num grupo maior, quem quiser ' +
+          'entrar depois abre a chamada pelo WhatsApp normalmente._'
         : '';
       try {
         await nazu.sendMessage(grupo, {

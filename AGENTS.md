@@ -11605,3 +11605,24 @@ desativando o corte, **3 asserções falham**.
 ### Regressões verdes
 `callp-regressions` 38/114, `musicap` 24/70, `pairing-code` 9/20,
 `wa-version` 12/30, `baileys-boot-info` 26/0.
+
+### Confirmacao do limite: 32 participantes (pesquisa, out/2026)
+O numero do teto foi **confirmado**: o post oficial do WhatsApp
+(`facebook.com/WhatsApp`) diz, literalmente, *"you can have up to **32 people** in a
+group call"*, e as referencias de limites de 2026 convergem no mesmo valor
+("up to 32 participants, including you" — voice e video compartilham o teto).
+Bate com o comentario do motor (*"32 connected participants"*) e com a prop
+`group_call_max_participants`.
+
+**Nao existe "ilimitado"**: e limite da PLATAFORMA, nao do bot. Nenhuma lib
+contorna. O teto do bot (bot + 31 convidados = **32**) e exatamente o maximo
+permitido — nao ha folga a ganhar.
+
+**O que da' para fazer num grupo maior**: o criador (o bot) mantem a call e os
+demais **entram pela propria UI do WhatsApp** (o app nao exige estar na lista de
+convidados para entrar numa call de grupo — a lista e so o toque inicial). Por
+isso a mensagem de recusa agora explica o limite e orienta a entrar pelo app.
+
+A mensagem de `setup_failed` passou a dizer o numero exato (*"32 participantes"*),
+que e limite da plataforma (*"nao do bot"*) e que **nao existe ilimitado** —
+para o dono nao ficar procurando uma configuracao que nao existe.
