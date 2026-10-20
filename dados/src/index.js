@@ -4125,6 +4125,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       // O CRIADOR conta como participante, então o teto de convidados é o teto
       // menos um.
       const tetoConvidados = Math.max(2, Math.min(31, Number(process.env.CALL_MAX_PARTICIPANTS) || 31));
+      // O total do grupo INCLUI o bot (ele e' membro): membros = humanos + 1.
       const totalMembros = convidados.length + 1;
       if (convidados.length > tetoConvidados) {
         convidados.length = tetoConvidados;
@@ -4158,7 +4159,13 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       // para sempre por achar que a chamada ainda existe.
       aoEncerrarAudio(from, (grupo, motivo) => reconciliarCallEncerrada(grupo, motivo));
 
-      return { ok: true, callId: midia.callId, stage: midia.stage };
+      return {
+        ok: true,
+        callId: midia.callId,
+        stage: midia.stage,
+        tocados: convidados.length,
+        totalMembros
+      };
     };
 
     /**
@@ -35994,8 +36001,22 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             ? '🎵 Áudio: pronto — use `!musicap` respondendo um áudio para tocar.'
             : `🎵 Áudio: conectando (${r.stage}). Assim que alguém entrar, use \`!musicap\`.`;
 
+          // Aviso de ALCANCE: sem ele, o grupo nao sabe que so' uma parte foi
+          // tocada. E' o teto de 32 participantes da chamada de grupo (limite do
+          // WhatsApp, nao do bot) — num grupo grande o bot toca nos primeiros 31.
+          // O bot TAMBEM e' um participante: o alcance e' (convidados + o bot)
+          // sobre o total do grupo. Sem somar o bot, um grupo pequeno apareceria
+          // como cortado.
+          const tocadosTotal = (r.tocados || 0) + 1;
+          const cortados = (r.totalMembros || 0) - tocadosTotal;
+          const linhaAlcance = cortados > 0
+            ? `\n\n⚠️ *Toquei em ${tocadosTotal} de ${r.totalMembros} membros.*\n` +
+              `_A chamada de grupo do WhatsApp aceita no máximo 32 participantes — ` +
+              `eu sou um deles. Quem ficou de fora entra pela própria chamada no app._`
+            : '';
+
           await nazu.sendMessage(from, {
-            text: `📞 *Chamada de voz iniciada neste grupo.*\n\n• ID: \`${r.callId}\`\n${linhaMidia}\n\n_Entre pelo WhatsApp para participar. Use \`!callp encerrar\` para derrubar._`,
+            text: `📞 *Chamada de voz iniciada neste grupo.*\n\n• ID: \`${r.callId}\`\n${linhaMidia}${linhaAlcance}\n\n_Entre pelo WhatsApp para participar. Use \`!callp encerrar\` para derrubar._`,
             contextInfo: gerarContextNewsletter(),
             quoted: info
           });

@@ -11626,3 +11626,49 @@ isso a mensagem de recusa agora explica o limite e orienta a entrar pelo app.
 A mensagem de `setup_failed` passou a dizer o numero exato (*"32 participantes"*),
 que e limite da plataforma (*"nao do bot"*) e que **nao existe ilimitado** —
 para o dono nao ficar procurando uma configuracao que nao existe.
+
+### AVISO DE ALCANCE no grupo (out/2026) ✅
+Pedido implicito do dono ao relatar o caso: *"um grupo pequeno, o bot liga a call
+dboa, mas quando e grande +100 membros ele da esse erro"*.
+
+Duas medicoes fecharam o entendimento:
+1. **NAO e tamanho de pacote.** Medi o `<offer>` real com 2 devices por conta:
+
+| convidados | contas no group_info | devices | offer |
+|---|---|---|---|
+| 5 | 6 | 11 | 1 KB |
+| 31 | 32 | 63 | 6 KB |
+| 100 | 101 | 201 | **18 KB** |
+| 200 | 201 | 401 | 35 KB |
+
+18 KB e' um pacote pequeno — o problema nao e' peso.
+2. **E' a QUANTIDADE de contas que o bot MANDA TOCAR.** O dono separou bem os dois
+conceitos: "o maximo que ele CHAMA" nao e' "quantos ENTRAM". O teto de 32 e' do
+tocador (o que ele anuncia no `group_info`), nao do numero de gente que pode
+entrar depois pelo app.
+
+Entao o teto de convidados continua (31 + o bot = 32 tocados), e o **aviso no
+grupo passou a dizer o alcance**:
+
+```
+⚠️ Toquei em 32 de 122 membros.
+A chamada de grupo do WhatsApp aceita no máximo 32 participantes — eu sou um deles.
+Quem ficou de fora entra pela própria chamada no app.
+```
+
+**Bug pego pelo proprio teste**: a primeira versao calculava
+`cortados = totalMembros - tocados` **sem somar o bot**, entao um grupo pequeno
+(sem corte) aparecia como cortado. O alcance e' `(convidados + o bot)` sobre o
+total.
+
+**Testes** — `tests/callp.test.js` **38 testes / 80 assercoes, 0 falhas**: grupo
+de **120 membros** (o caso do dono) toca em 31 e avisa "Toquei em 32 de 122";
+grupo pequeno **nao** traz o aviso; `CALL_MAX_PARTICIPANTS` respeitado.
+**Verificado**: desativando o corte, **5 assercoes falham**.
+
+**LIMITE HONESTO (nao resolvido)**: o `error: 207` do servidor **nao esta
+documentado** em nenhuma fonte que eu tenha achado (nem nos pacotes, nem na spec do
+wacrg, que deixa o vocabulario aberto). O que fecha o caso e' o log novo:
+`[CALLP] grupo <id>: N membro(s) -> M convidado(s) (teto 31)`. Se o grupo tinha
++100 membros, era isso; se a recusa aparecer num grupo **abaixo** do teto, a causa
+e' outra e o `N` no log separa as duas.

@@ -437,7 +437,8 @@ await test('grupo GRANDE: limita os convidados ao teto do servidor', async () =>
   // a prop `group_call_max_participants`. Criar a call com o grupo inteiro faz o
   // servidor recusar o offer -> handleCallAck ve `error` -> SetupFailed -> a
   // mensagem de "chamada encerrada" logo depois de subir.
-  const { groupJid, admin, participants } = setupGrande(60);
+  // 120 membros: o caso relatado pelo dono ("+100 membros").
+  const { groupJid, admin, participants } = setupGrande(120);
   const chamadas = instalarDubleMidia();
   await run({ groupJid, sender: admin, text: '!callp', participants });
   const criou = chamadas.find((c) => c.tipo === 'entrar');
@@ -454,6 +455,27 @@ await test('grupo pequeno: NAO corta ninguem', async () => {
   await run({ groupJid, sender: admin, text: '!callp', participants });
   const criou = chamadas.find((c) => c.tipo === 'entrar');
   ok(criou.participantes.length === 6, `convidou os 6 (veio ${criou.participantes.length})`);
+  callState.limparCall(groupJid);
+});
+
+await test('grupo grande: o aviso no grupo diz o ALCANCE (tocados de total)', async () => {
+  // O dono precisa saber que o bot tocou so' uma parte — sem isso o silencio
+  // parece defeito.
+  const { groupJid, admin, participants } = setupGrande(120);
+  instalarDubleMidia();
+  const out = await run({ groupJid, sender: admin, text: '!callp', participants });
+  // 31 convidados + o bot = 32 tocados, num grupo de 122 membros.
+  includes(out.text, 'Toquei em 32 de 122 membros', 'diz quantos foram tocados de quantos');
+  includes(out.text, '32 participantes', 'explica o limite do WhatsApp');
+  includes(out.text, 'Chamada de voz iniciada', 'e ainda confirma que subiu');
+  callState.limparCall(groupJid);
+});
+
+await test('grupo pequeno: o aviso NAO fala de alcance (toca em todos)', async () => {
+  const { groupJid, admin, participants } = setup(5);
+  instalarDubleMidia();
+  const out = await run({ groupJid, sender: admin, text: '!callp', participants });
+  ok(!out.text.includes('Toquei em'), 'sem aviso de corte quando nao ha corte');
   callState.limparCall(groupJid);
 });
 
