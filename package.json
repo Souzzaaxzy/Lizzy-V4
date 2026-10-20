@@ -33,7 +33,7 @@
         "libmlow-wasm-fork": "^0.2.0",
         "libphonenumber-js": "^1.13.9",
         "linkedom": "^0.18.12",
-        "lizzy-call": "git+https://github.com/Souzzaaxzy/lizzy-call.git#11bfabe489422c4760bc45d7e6595cd3eea9dfb9",
+        "lizzy-call": "git+https://github.com/Souzzaaxzy/lizzy-call.git#fc4c2222a0216e14901667ed20462d041275c794",
         "node-cache": "^5.1.2",
         "node-cron": "^4.2.1",
         "node-webpmux": "^3.2.1",

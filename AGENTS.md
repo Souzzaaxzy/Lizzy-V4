@@ -11981,3 +11981,75 @@ Nas duas correções a resposta estava **numa linha da referência que funciona*
 `return isGroupCall ? toCallServerJid(callId) : peerJid;` (para onde endereçar).
 Ler o pacote que **funciona** lado a lado com o que **não funciona** resolveu mais
 rápido do que qualquer hipótese sobre rede ou servidor.
+
+
+## 🎙️ VOICE CHAT: o "bip bip" — a re-dial em loop era IDEIA MINHA (out/2026) ✅
+Relato do dono: *"ele inicia o chat de voz, eu entro, da 5 seg ele manda aquele
+bip bip, fica tentando reconectar e dps de 3 seg meio que me expulsa"*.
+
+### O ERRO (meu, não do pacote)
+Eu tinha implementado **re-dial infinito** da leg UDP cru — quando a mídia saía e
+nada voltava, ela fechava e reabria o socket. **Isso não é o que a referência
+faz**, e era a causa dos bipes: o churn de socket a cada ~5 s fazia o motor ver o
+caminho de mídia cair junto → o som de reconexão e, na sequência, a call sendo
+derrubada/expulsando.
+
+### O que a referência faz (medido em `@zapo-js/voip-media`)
+O watchdog de downlink **pula as legs RAW**:
+
+```js
+stalledWebRtcLegs(newestOnly) {
+    for (const conn of this.connections.values()) {
+        if (conn.rawLeg || conn.relayInfo.transport === 'raw-udp') continue;
+        ...
+    }
+}
+```
+
+com o comentário ***"Raw legs police their own return path"***. Ou seja: a
+referência **não re-diala** a leg UDP cru.
+
+A **única** recuperação dela é o `registerOnFallbackPort`: se a leg **nunca
+recebeu pacote**, re-diala na **OUTRA porta** (anunciada ↔ 3480), **uma vez**:
+
+```js
+if (port === undefined || conn.hasReceivedFirstPacket) return null;
+const relayInfo = { ...conn.relayInfo, port, fallbackPort: undefined };
+```
+
+### Correção (`lizzy-call` `fc4c222`)
+A `RawUdpLeg` agora:
+- guarda a **outra porta** (`fallbackPort`) e a porta em uso;
+- marca `#recebeuAlgumPacote` em **qualquer** pacote (o sinal que a referência usa);
+- ao estourar a janela sem caminho de volta:
+  1. **nunca recebeu pacote** e há outra porta → migra para ela **uma vez**
+     (`CALL_RAW_UDP_FALLBACK=0` desliga);
+  2. senão → fica **VIVA e quieta** (não fecha, não re-diala).
+
+Saiu a re-dial em loop (`RAW_UDP_MAX_REDIALS` / `RAW_UDP_REDIAL_LONGO_MS`).
+
+### O log do motor estava DESLIGADO (correção à parte, no BOT)
+`new GroupCallMedia({})` — **sem `log`**. Todas as mensagens do `lizzy-call`
+(estado da call, estágios do relay, captura, re-dial) iam para o vazio. Era por
+isso que eu vinha corrigindo **às cegas**. Agora passa
+`log: (msg) => console.log(msg)` — o pacote já prefixa tudo (`[CALLP]`/`[RELAY]`).
+
+### Testes
+- `lizzy-call/tests/raw-udp-fallback.test.mjs` (**4 testes**): com um relay que
+  nunca responde e o `console.log` capturado — o log traz *"tentando a outra
+  porta"*; **não** traz re-dial em loop; a leg segue viva e enviando;
+  `CALL_RAW_UDP_FALLBACK=0` desliga. **Verificado: desativando o fallback, o teste
+  da migração falha.**
+- `tests/vozp-terminate-target.test.js` (**5 testes / 7 asserções**): o teste da
+  leg foi **atualizado** para a regra nova (fallback, sem churn).
+
+### Regressões verdes
+`callp` 46/100, `callp-regressions` 38/112, `musicap` 24/70, `wa-version` 12/30,
+`pairing-code` 9/20.
+
+### LIÇÃO DE MÉTODO (a mais cara desta série)
+**Não invente mecanismo que a referência não tem.** Eu vi o comentário *"raw legs
+police their own return path"* e ainda assim implementei re-dial em loop — que era
+exatamente o que gerava o sintoma. A regra prática: antes de adicionar um
+mecanismo de recuperação, **procurar como a referência se recupera** e copiar
+aquilo; se ela não se recupera, o silêncio é o comportamento certo.

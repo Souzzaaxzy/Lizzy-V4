@@ -123,12 +123,16 @@ await test('o group-media marca a sessao como grupo (isGroupCall=true)', async (
     'a sinalizacao da sessao de grupo passa isGroupCall=true');
 });
 
-await test('a leg UDP cru NAO desiste (re-dial em intervalo longo)', async () => {
+await test('a leg UDP cru NAO faz churn (recuperacao por PORTA DE FALLBACK)', async () => {
   const fs = await import('fs');
   const src = fs.readFileSync(
     path.join(HERE, '..', 'node_modules/lizzy-call/dist/relay-transport.mjs'), 'utf-8'
   );
-  ok(src.includes('RAW_UDP_REDIAL_LONGO_MS'), 'tem o intervalo longo');
+  // A re-dial em loop (ideia minha, nao da referencia) fechava e reabria o socket
+  // a cada ~5 s: o motor via o caminho de midia cair junto e vinha o bipe de
+  // reconexao + a call derrubada. A recuperacao certa e a PORTA DE FALLBACK.
+  ok(src.includes('tentando a outra porta'), 'migra para a outra porta (uma vez)');
+  ok(!src.includes('RAW_UDP_REDIAL_LONGO_MS'), 'a re-dial em loop SAIU');
   ok(!src.includes('this.#fail("raw_udp_no_return_path")'),
     'o caminho de retorno NAO falha a leg (sem midia de volta e o estado normal)');
 });

@@ -150,7 +150,12 @@ function marcarBackend(grupo, qual) {
 
 /** A instância do lizzy-call (uma por processo). */
 function instanciaLizzy(mod) {
-  if (!mediaInstance) mediaInstance = new mod.GroupCallMedia({});
+  if (!mediaInstance) mediaInstance = new mod.GroupCallMedia({
+    // LOG LIGADO: sem ele todas as mensagens do motor (estado da call, estagios do
+    // relay, re-dial da leg, captura) iam para o vazio -- e diagnosticar virava
+    // adivinhacao. O pacote ja prefixa tudo ([CALLP] / [RELAY]).
+    log: (msg) => console.log(msg)
+  });
   return mediaInstance;
 }
 
@@ -172,7 +177,7 @@ export async function obterMedia() {
   if (!m) return null;
   if (usandoZapo(m)) return m;
   if (!mediaInstance) {
-    mediaInstance = new m.GroupCallMedia({});
+    mediaInstance = new m.GroupCallMedia({ log: (msg) => console.log(msg) });
   }
   return mediaInstance;
 }
