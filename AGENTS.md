@@ -12053,3 +12053,65 @@ police their own return path"* e ainda assim implementei re-dial em loop — que
 exatamente o que gerava o sintoma. A regra prática: antes de adicionar um
 mecanismo de recuperação, **procurar como a referência se recupera** e copiar
 aquilo; se ela não se recupera, o silêncio é o comportamento certo.
+
+
+## 🎙️ VOICE CHAT: "me expulsa" — o roster contava `conectados=1` (out/2026) ✅
+O log do dono entregou tudo:
+
+```
+[RELAY] stun_alloc_visto                <- o relay respondeu
+[RELAY] udp cru: caminho de volta CONFIRMADO (40 bytes)     <- a leg esta de pe
+[CALLP] roster tx=11 participantes=3 conectados=1 midia=false
+[CALLP] mídia não ficou pronta em 30s (sem_remoto_conectado_com_pid)
+[CALLP] ack de peer_state (id=62853.58797-515) error=500
+```
+
+### A leitura (o transporte está certo; o ROSTER não)
+- **O relay responde** (`caminho de volta CONFIRMADO`) — a correção da leg UDP cru
+  funcionou; não é mais transporte.
+- **`participantes=3 conectados=1`** — o bot + quem entrou = 3; mas só **1** era
+  contado como conectado. Esse é o defeito.
+- **`peer_state error=500`** — o motor reporta o peer como **invisível**, o
+  servidor rejeita e **expulsa**. É o "me expulsa" relatado.
+
+### A causa (medida no código)
+O parser do roster aceitava **só** `'connected'`:
+
+```js
+connected: userAttrs.state === 'connected'
+```
+
+O `state` do fio **não é só** `connected`. A referência que funciona
+(`@zapo-js/voip-media`, `WA_CALL_PARTICIPANT_STATE`) lista os estados de
+**presença**: `connected, outgoing, receipt, creating, invisible, visible,
+invited` — e só estes são **saída**: `terminated, invalid, rejected, timedout,
+cancel_offer`.
+
+Quem **entrou** na call pode aparecer como `visible`/`outgoing`/`invited` antes de
+virar `connected`, então **não contava**. Sem remoto "conectado com pid", o
+`mediaReady` nunca satisfazia, a mídia não ficava pronta, o motor marcava o peer
+como invisível → `error=500` → expulsão.
+
+### Correção (`lizzy-call` `f80236c`)
+- novo **`WA_CALL_PRESENT_STATES`** (a lista da referência);
+- o campo `connected` do roster passou a `WA_CALL_PRESENT_STATES.includes(state)`.
+
+Os **dois** consumidores (o `mediaReady` e a contagem do log) leem esse mesmo
+campo, então os dois ficam certos de uma vez.
+
+### Testes — `tests/roster-states.test.js` (6 testes)
+A lista de presença segue a referência (7 presença / 5 saída); `visible` conta
+como presente (o caso exato do log); `outgoing`/`invited` também; `terminated`
+**não** conta (controle); com um remoto `visible` a **mídia fica pronta**; sem
+ninguém presente ela **não** fica. **Verificado: com a checagem antiga, 3 testes
+falham.**
+
+### Regressões verdes
+`callp` 46/100, `callp-regressions` 38/112, `musicap` 24/70, `wa-version` 12/30,
+`pairing-code` 9/20, `vozp-terminate-target` 5/7.
+
+### LIÇÃO DE MÉTODO
+O log **ligado** (a correção anterior) foi o que fechou o caso: em uma linha ele
+mostrou que o transporte estava de pé e que o problema era o **roster**. Sem log,
+eu estaria adivinhando. **Um número no log (`conectados=1`) valeu mais que
+qualquer hipótese.** E, de novo, a resposta estava no enum da referência.
