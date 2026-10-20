@@ -36202,14 +36202,14 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
 
           // Preparação de convidados SEM o teto (`semTeto`).
           //
-          // O teto de 32 e' do TOQUE: o servidor recusa um offer que MANDA TOCAR
-          // mais gente. Um chat de voz **não toca** (`lightweight='1'`): ele só
-          // NOTIFICA, quem quiser entra pelo cartão. E o WhatsApp lançou o recurso
-          // justamente para grupos de 33 a 128+ — se o teto valesse, o recurso não
-          // existiria nesses grupos.
+          // Preparação SEM o corte de 32, mas o MOTOR ainda limita o roster.
           //
-          // O offer CONTINUA nomeando o grupo inteiro (medido: um offer sem lista
-          // e' recusado com `error: '404'`). O que sai e' só o CORTE.
+          // MEDIDO: o teto de 32 e' de uma call CONECTADA. O offer de grupo pode
+          // nomear até **127 contas** — o limite do roster oficial. Acima disso o
+          // servidor recusa com `error: '427'` (era o grupo de 128: o criador
+          // conta, então 128 entradas estouravam por UMA). Quem aplica esse limite
+          // e' o motor (`WA_GROUP_OFFER_MAX_ACCOUNTS`), então aqui não se corta:
+          // `semTeto` deixa o motor nomear o grupo todo até o teto dele.
           const prep = await prepararConvidadosDoGrupo({ semTeto: true });
           if (!prep.ok) {
             const motivos = {

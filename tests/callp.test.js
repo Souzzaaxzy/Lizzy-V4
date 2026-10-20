@@ -628,31 +628,26 @@ await test('o teto e configuravel por CALL_MAX_PARTICIPANTS', async () => {
   }
 });
 
-await test('CHAT DE VOZ em grupo GRANDE: nomeia o grupo INTEIRO (nao toca, entao nao tem teto)', async () => {
-  // O teto de 32 e' do TOQUE. Um chat de voz NAO toca (`lightweight='1'`): ele so'
-  // NOTIFICA. E o WhatsApp lancou o recurso para grupos de 33 a 128+ -- se o teto
-  // valesse, o recurso nao existiria nesses grupos.
-  //
-  // O offer CONTINUA nomeando o grupo (medido: um offer SEM lista e' recusado com
-  // `error: '404'`). O que sai e' so' o CORTE.
-  // 234 membros + quem pediu = 235 convidados (o bot nao entra na lista dele).
-  const { groupJid, admin, participants } = setupGrande(234);
+await test('CHAT DE VOZ em grupo GRANDE: nao corta em 32 (o teto de 127 e do motor)', async () => {
+  // MEDIDO: o teto de 32 e' de uma call CONECTADA. O offer de grupo nomeia ate'
+  // 127 contas -- o limite do roster oficial. Acima disso o servidor recusa com
+  // `error: '427'` (o grupo de 128 estourava por UMA: o criador conta). Quem
+  // aplica o 127 e' o MOTOR; o bot so' nao corta em 32.
+  const { groupJid, admin, participants } = setupGrande(120);
   const doVoz = instalarDubleVozp();
   const out = await run({ groupJid, sender: admin, text: '!vozp', participants });
   const subiu = doVoz.find((c) => c.tipo === 'subir');
   ok(Boolean(subiu), 'subiu o chat de voz');
-  ok(subiu.participantes.length === 235,
-    `nomeou o grupo INTEIRO, sem corte (veio ${subiu.participantes.length})`);
-  ok(subiu.participantes.length > 32, 'passou do teto do TOQUE (nao ha toque aqui)');
-  ok(!out.text.includes('Toquei em'), 'sem aviso de corte (nao ha corte)');
-  includes(out.text, 'Todo o grupo foi convidado', 'diz que convidou todo o grupo');
+  ok(subiu.participantes.length === 121,
+    `nomeou o grupo todo, sem o corte de 32 (veio ${subiu.participantes.length})`);
+  ok(subiu.participantes.length > 32, 'passou do teto de call CONECTADA (nao e o do offer)');
+  ok(!out.text.includes('Toquei em'), 'sem aviso de corte de 32');
   includes(out.text, 'Chat de voz iniciado', 'confirma que subiu');
   callState.limparCall(groupJid);
   desinstalarDubleVozp();
 });
 
-await test('CHAMADA (!callp) em grupo GRANDE: mantem o teto (essa TOCA)', async () => {
-  // O contraste: o `!callp` toca o grupo, entao o teto de 32 contas vale.
+await test('CHAMADA (!callp) em grupo GRANDE: mantem o corte em 32 (essa CONECTA 32)', async () => {
   const { groupJid, admin, participants } = setupGrande(120);
   const chamadas = instalarDubleMidia();
   await run({ groupJid, sender: admin, text: '!callp', participants });

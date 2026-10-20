@@ -46,6 +46,58 @@ membros ficam quietos de propósito até falarem. Correção na fork
 `lightweight='1'` e um `<silence reason="lightweight">` no lugar da mídia (medido
 contra o WhatsApp Web: é só o atributo + o nó). O grupo **não toca**.
 
+### 🔍 PESQUISA GLOBAL: o limite real do offer e' 127 CONTAS (nao 32) — `error: '427'` (out/2026)
+Pedido do dono: *"eu quero uma forma do bot subir esse chat de voz em grupo grande,
+faça uma pesquisa global ai pela internet para descobrir como fazer isso"*.
+
+### O que a pesquisa achou (fontes reais, não suposição)
+- **`Auties00/Cobalt`** (Java, engenharia reversa do VoIP, com fixtures de captura):
+  `GroupInfoStanza` — a lista de participantes de um `<group_info>` tem
+  **`MAX_PARTICIPANTS = 0x7f` = 127**; acima disso ele lança. O javadoc do
+  `startGroupCall` fala do *"server group call participant ceiling"*.
+- **`OfferStanza` (Cobalt)**: os atributos do offer são **`is_lightweight`** e
+  **`lightweight-key`** — não `lightweight` (nosso nome estava errado, mas não era
+  a causa: o `lightweight` liga o "não toca", e o servidor aceitava).
+- **`WhiskeySockets/wacrg`** (spec da comunidade): `<group_info>` = `phash` +
+  `connected-limit` + `<user>`/`<participant>`. O spec ainda é *draft* para o
+  roster de grupo.
+- **`oxidezap/whatsapp-rust`**: `build_group_phash_set` — o `phash` de grupo é
+  **calculado** a partir da lista de devices.
+
+### A CONTA que fechou o caso (o log do dono)
+| offer | resposta |
+|---|---|
+| 32 contas | **funciona** |
+| 1 conta (sem lista) | `404` — o offer de grupo **precisa** nomear |
+| 127 contas | funciona (dentro do limite) |
+| **128 contas** (grupo de 128: o criador conta) | **`427`** — estourou por **UMA** |
+
+O grupo do dono tinha **128 membros** → o bot nomeou **128** contas → **1 acima** do
+limite de 127. Era isso. Não era o teto de 32 (esse é de uma call **conectada**).
+
+### Correção
+- **Fork `zapo`** (`master` `9f3af41`, branch `voip` `47036dd`): o
+  `<group_info>` do offer passa a ter **`WA_GROUP_OFFER_MAX_ACCOUNTS = 0x7f`** —
+  nomeia no máximo 127 contas (o criador incluído). A chamada que conecta 32
+  continua igual; o que muda é o teto do **offer**.
+- **Bot**: o `!vozp` mantém `semTeto` (não corta em 32) — quem limita em 127 é o
+  motor. O `!callp` mantém o corte em 32 (a call conecta 32).
+
+### Testes
+- Fork: `a group offer never names more than the server roster bound (127 accounts)`
+  (300 convidados → 127 no `group_info`) e `below the bound is not trimmed`.
+  **554 testes, 0 falhas.** Verificado: sem o corte, o teste **falha**.
+- Bot: `CHAT DE VOZ em grupo GRANDE: nao corta em 32` (120 membros → 121 contas) e
+  `CHAMADA (!callp): mantem o corte em 32`. `callp` **50/119**,
+  `callp-regressions` **38/115**, 0 falhas.
+
+### LIMITE HONESTO
+O `427` foi reproduzido **com o grupo de 128**; o teto de 127 vem do limite do
+roster do cliente oficial (Cobalt), não de uma medição nossa contra o servidor.
+A prova ao vivo é subir o `!vozp` no grupo de 128 e ver se passa — e, num grupo
+maior que 128, o motor nomeia 127 e **o resto entra pelo app** (o teto de conexão
+segue 32).
+
 ### ✅ 3a RODADA: o teto NAO vale para o chat de voz — ele nao TOCA (out/2026)
 **A "errata" anterior estava errada tambem.** O dono levantou a duvida certa: *"se ele
 nao consegue tocar para todos, por que ele simplesmente nao deixa de tocar?"* — e
