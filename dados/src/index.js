@@ -36200,17 +36200,14 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             return reply('🎙️ Já existe um chat de voz subido por mim neste grupo.\n\nUse `!vozp encerrar` para terminar.');
           }
 
-          // Preparação SEM corte: um CHAT DE VOZ não nomeia ninguém.
+          // Convidados SEM o corte de 32: quem aplica o limite e' o MOTOR.
           //
-          // MEDIDO (e confirmado no cliente oficial): um chat de voz NAO TOCA
-          // ninguém, então o offer dele **não leva roster** — vai so' com o
-          // `group-jid` e o marcador, e o servidor preenche a composição na
-          // resposta. Era o ROSTER que barrava o grupo grande: o servidor recusava
-          // com `427` acima do teto de 127 contas e com `404` quando a lista era
-          // curta. Sem lista, o chat de voz sobe em grupo de qualquer tamanho.
-          //
-          // A preparação aqui serve para as GUARDAS (identidade, metadata,
-          // mínimo de membros); o corte fica por conta do motor.
+          // MEDIDO (e confirmado no cliente oficial): o ROSTER e' OBRIGATORIO — e'
+          // o que o servidor usa para distribuir o offer. Sem ele o servidor ACEITA
+          // e nao cria nada (o cartao nao aparece). O que ele LIMITA e' o TAMANHO:
+          // `427` acima de **127 contas** (o criador ocupa uma) — era o grupo de
+          // 128. O motor corta em 127 (`WA_GROUP_OFFER_MAX_ACCOUNTS`); aqui so' se
+          // evita o corte de 32, que e' o de uma call CONECTADA.
           const prep = await prepararConvidadosDoGrupo({ semTeto: true });
           if (!prep.ok) {
             const motivos = {
@@ -36250,7 +36247,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               `🎙️ *Chat de voz iniciado neste grupo.*\n\n` +
               `• ID: \`${r.callId}\`\n` +
               `• Não toca ninguém: quem quiser entra pelo cartão do chat de voz.\n` +
-              `• Sobe em grupo de qualquer tamanho \u2014 sem lista de participantes.\n\n` +
+              `• Convidei ${prep.convidados.length + 1} contas (o maximo do WhatsApp é 127).\n\n` +
               `_Use \`!vozp encerrar\` para terminar._`,
             contextInfo: gerarContextNewsletter(),
             quoted: info

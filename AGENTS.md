@@ -46,6 +46,52 @@ membros ficam quietos de propósito até falarem. Correção na fork
 `lightweight='1'` e um `<silence reason="lightweight">` no lugar da mídia (medido
 contra o WhatsApp Web: é só o atributo + o nó). O grupo **não toca**.
 
+### ⚠️ ERRATA da errata: o ROSTER E' OBRIGATORIO — sem ele o servidor aceita e NAO CRIA (out/2026)
+Teste do dono no grupo de 128: **o offer foi ACEITO** (sem `427`, sem `404` — a
+hipotese do "roster opcional" estava ERRADA) **mas o cartao nao apareceu**.
+
+### A prova (javadoc do `rosterOf` do Cobalt, RE do cliente oficial)
+> *"providing the caller's **best known device set up front is what lets the server
+> fan the offer to the participants' devices at all**"*
+
+E o `rosterOf` do Cobalt **sempre monta o `<group_info>`** — nunca o omite. Ou seja:
+o roster **nao e' decorativo**: e' o que o servidor usa para **distribuir** o offer.
+Sem ele, o servidor responde OK e nao materializa nada (sem cartao, sem call).
+
+### E o que significa o `427` (a outra frase do mesmo javadoc)
+> *"The server **NACKs a stale device set** with `error="427"` and echoes the corrected
+> roster, which the caller **re-offers against**"*
+
+O `427` e' do **TAMANHO** do roster: acima de **127 contas** (o criador ocupa uma).
+Nunca era "grupo grande demais" — era o roster passando do teto, e o grupo do dono
+tinha exatamente 128 membros (128 contas = 1 acima).
+
+### O estado correto (o que ficou)
+| offer | resultado |
+|---|---|
+| roster com 128+ contas | `427` |
+| roster com 127 contas | **aceito e cria** |
+| **sem roster** | aceito e **NAO CRIA** (sem cartao) |
+
+- **Fork `zapo`** (`master` `a192164`, branch `voip` `d285ec1`): o roster **volta**,
+  cortado em `WA_GROUP_OFFER_MAX_ACCOUNTS = 0x7f` (127, o criador incluido). O corte
+  e' aplicado **antes** de resolver devices (economia). O marcador sai nos dois nomes
+  (`is_lightweight` e `lightweight`).
+- **Bot**: o `!vozp` mantem `semTeto` (o corte de 32 e' de uma call CONECTADA); o
+  motor corta em 127. A mensagem diz quantas contas foram convidadas e que o maximo
+  do WhatsApp e' 127.
+
+### Testes
+- Fork: `a voice chat flags itself, announces silence, and ships the roster`,
+  `a voice chat in a huge group ships the capped roster (nunca mais que 127)` e o pin
+  de bytes atualizado. **556 testes, 0 falhas.**
+- Bot: `callp` **50/118**, `callp-regressions` **38/115**, 0 falhas.
+
+### LIMITE HONESTO
+Falta a prova ao vivo: o roster com 127 contas deve criar o cartao. Se ainda nao
+aparecer, o problema e' outro (midia/relay) — mas agora o offer tem a forma exata
+que o cliente oficial emite (roster presente, ate' 127 contas, marcador duplo).
+
 ### ✅ RESOLVIDO: o chat de voz NAO leva ROSTER — sobe em grupo de QUALQUER tamanho (out/2026)
 O dono insistiu (com razao): *"eu nao estou tentando fazer o bot notificar o chat de
 voz para mais pessoas, eu so' quero conseguir SUBIR o chat de voz com o bot em um

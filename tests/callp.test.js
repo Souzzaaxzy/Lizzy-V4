@@ -638,7 +638,7 @@ await test('CHAT DE VOZ em grupo GRANDE: sobe (nao toca, entao nao nomeia ningue
   const subiu = doVoz.find((c) => c.tipo === 'subir');
   ok(Boolean(subiu), 'subiu o chat de voz num grupo de 400');
   ok(!out.text.includes('Toquei em'), 'sem aviso de alcance (nao ha convite por conta)');
-  includes(out.text, 'qualquer tamanho', 'diz que vale em grupo de qualquer tamanho');
+  includes(out.text, 'maximo do WhatsApp', 'diz o teto de contas do WhatsApp');
   includes(out.text, 'Chat de voz iniciado', 'confirma que subiu');
   callState.limparCall(groupJid);
   desinstalarDubleVozp();
