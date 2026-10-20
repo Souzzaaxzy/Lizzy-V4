@@ -439,7 +439,7 @@ await test('resolverLids: sem o coordinator devolve a lista sem quebrar', async 
 // `!vozp` nao compartilham estado, e cada um sobe/derruba o seu.
 
 /** Dublê da ponte do CHAT DE VOZ (via o seam próprio; nao toca no do !callp). */
-function instalarDubleVozp({ ok = true, motivo = null, callId = 'VC-1', stage = 'aguardando_roster' } = {}) {
+function instalarDubleVozp({ ok = true, motivo = null, callId = 'VC-1', stage = 'aguardando_roster', precisaPareamento = false } = {}) {
   const chamadas = [];
   vozpMedia.__setDubleVozp({
     subir: async ({ grupo, participantes }) => {
@@ -448,7 +448,8 @@ function instalarDubleVozp({ ok = true, motivo = null, callId = 'VC-1', stage = 
       return { ok: true, callId, stage };
     },
     sair: async (grupo) => { chamadas.push({ tipo: 'sair', grupo }); return { ok: true }; },
-    estagio: () => stage
+    estagio: () => stage,
+    precisaPareamento: () => precisaPareamento
   });
   return chamadas;
 }
@@ -467,6 +468,30 @@ await test('!vozp sobe o chat de voz pela ponte PROPRIA (nao pela do !callp)', a
   ok(daChamada.length === 0, 'a ponte do !callp NAO foi usada (sistemas separados)');
   includes(out.text, 'Chat de voz iniciado', 'avisa');
   includes(out.text, 'Não toca', 'deixa claro que nao toca');
+  desinstalarDubleVozp();
+});
+
+await test('PARECIMENTO COMPARTILHADO: o vozp usa o mesmo motor/banco do callp', () => {
+  const semComentarios = (t) => t.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  const voz = semComentarios(fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/vozpMedia.js'), 'utf-8'));
+  const zapo = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/zapoCall.js'), 'utf-8');
+  // O vozp NAO tem store/sessao proprios: ele pergunta ao MESMO motor.
+  ok(voz.includes('zapoCall.estaPareado'), 'o vozp pergunta o pareamento ao motor do callp');
+  ok(!voz.includes('zapo-auth'), 'o vozp NAO aponta um banco proprio');
+  ok(!voz.includes('createStore'), 'o vozp NAO cria store proprio (usa o do motor)');
+  // O motor tem UM so banco de credenciais.
+  ok(zapo.includes('zapo-auth'), 'o motor guarda as credenciais em um so banco');
+});
+
+await test('!vozp sem pareamento: orienta a usar o MESMO pareamento do !callp e NAO sobe', async () => {
+  const { groupJid, admin, participants } = setup(3);
+  const doVoz = instalarDubleVozp({ precisaPareamento: true });
+  const out = await run({ groupJid, sender: admin, text: '!vozp', participants });
+  includes(out.text, 'pareado', 'avisa que falta parear');
+  includes(out.text, '!callp parear', 'aponta o pareamento do !callp (e o MESMO)');
+  includes(out.text, 'os dois comandos', 'deixa claro que um pareamento serve para os dois');
+  ok(doVoz.length === 0, 'NAO tentou subir sem pareamento (nao mente)');
+  ok(callState.obterCall(groupJid) === null, 'nao deixou registro pendurado');
   desinstalarDubleVozp();
 });
 
@@ -525,13 +550,13 @@ await test('!vozp so em grupo', async () => {
   desinstalarDubleVozp();
 });
 
-await test('a ponte do vozp e um modulo SEPARADO (isLightWeight isolado)', () => {
+await test('a ponte do vozp e um modulo SEPARADO (isLightweight isolado)', () => {
   const voz = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/vozpMedia.js'), 'utf-8');
   // Sem os comentarios: o callMedia CITA o vozp para explicar que nao o usa.
   const midia = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/callMedia.js'), 'utf-8')
     .replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
-  ok(voz.includes('isLightWeight: true'), 'o vozp usa a opcao REAL do motor WASM');
-  ok(!midia.includes('isLightWeight'), 'o callMedia NAO conhece voice chat');
+  ok(voz.includes('isLightweight: true'), 'o vozp usa a opcao REAL do motor (zapo)');
+  ok(!midia.includes('isLightweight'), 'o callMedia NAO conhece voice chat');
   ok(!midia.includes('voiceChat'), 'o callMedia NAO conhece voice chat');
   ok(!midia.includes('vozp'), 'o callMedia NAO referencia o vozp');
 });
@@ -721,7 +746,7 @@ await test('mídia ausente: avisa e NÃO registra call', async () => {
   instalarDubleMidia({ ok: false, motivo: 'pacote_de_midia_ausente' });
   const out = await run({ groupJid, sender: admin, text: '!callp', participants });
   includes(out.text, 'Não consegui subir', 'avisa');
-  includes(out.text, 'lizzy-call', 'diz o que falta');
+  includes(out.text, 'zapo', 'diz o que falta');
   ok(callState.obterCall(groupJid) === null, 'não deixou call pendurada');
 });
 

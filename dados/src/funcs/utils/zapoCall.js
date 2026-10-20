@@ -558,16 +558,35 @@ function estagioDoCall(call) {
 /**
  * Entra na call de grupo como participante de MIDIA.
  *
- * O backend zapo (preferido) nao expoe o flag de chat de voz (`lightweight`):
- * o `CallOfferOptions` dele so aceita `isVideo`/`audioFile`, e o
- * `lightweight_key` e' apenas LIDO de um `<group_info>` recebido, nunca
- * escrito. Entao nao ha o que repassar -- subir sempre como chamada normal.
+ * ## CHAMADA vs CHAT DE VOZ (`isLightweight`)
+ *
+ * `isLightweight: true` sobe a call como **chat de voz**: o offer leva
+ * `lightweight='1'` e anuncia `<silence>` em vez de midia, entao o grupo NAO
+ * toca -- os membros entram pelo cartao se quiserem. `false` (padrao) e' a
+ * chamada que toca. Quem passa o flag e' o comando (`!vozp`), nunca este
+ * modulo: o `!callp` sobe sempre como chamada.
+ *
+ * ## Um pareamento so' para os DOIS comandos
+ *
+ * O motor e' o MESMO (`zapoCall.js`), com o MESMO store em
+ * `dados/database/zapo-auth/` e a MESMA sessao (`obterCliente`). Entao parear
+ * uma vez (`!callp parear <numero>`) vale para o `!callp` E para o `!vozp` --
+ * nao existe um "pareamento do chat de voz".
  *
  * Falha FECHADO quando nao ha pareamento: subir a call sem credencial daria o
  * erro criptico do `call-creator` e o usuario nao saberia o que fazer.
  */
-export async function entrarNaCallComMidia({ grupo, callId, callCreator, participantes, sock }) {
-  if (dubleEntrar) return dubleEntrar.entrar({ grupo, callId, callCreator, participantes, sock });
+export async function entrarNaCallComMidia({
+  grupo,
+  callId,
+  callCreator,
+  participantes,
+  sock,
+  isLightweight = false
+}) {
+  if (dubleEntrar) {
+    return dubleEntrar.entrar({ grupo, callId, callCreator, participantes, sock, isLightweight });
+  }
 
   // Checa o pareamento ANTES de tocar no motor (e' o que faltava).
   if (!estaPareado()) {
@@ -602,7 +621,9 @@ export async function entrarNaCallComMidia({ grupo, callId, callCreator, partici
 
     const novoCallId = await cli.voip.startCall({
       groupJid: grupo,
-      participants: alvos
+      participants: alvos,
+      // Chat de voz (nao toca) quando o comando pede; `!callp` manda `false`.
+      isLightweight
     });
 
     callsPorGrupo.set(grupo, novoCallId);

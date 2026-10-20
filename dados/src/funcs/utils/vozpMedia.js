@@ -5,22 +5,36 @@
  *
  * O `!callp` (chamada) e o `!vozp` (chat de voz) são comandos **independentes**:
  *
- * | | comando | backend | por quê |
+ * | | comando | o que sobe | registro |
  * |---|---|---|---|
- * | chamada | `!callp` | `zapoCall.js` | tem UDP cru no relay sem ICE |
- * | chat de voz | `!vozp` | **este módulo** (`lizzy-call`) | é o único que declara o offer como voice chat |
+ * | chamada | `!callp` | chamada (toca) | `callOffer.registrarCall` |
+ * | chat de voz | `!vozp` | chat de voz (não toca) | `registroVozp` (no index) |
  *
- * Antes, os dois passavam pela mesma fachada (`callMedia.js`) com um parâmetro
- * `voiceChat` e um `Map` de backend compartilhado. Isso acoplou os comandos: o
- * `!callp` passou a **conhecer** o chat de voz, e um estado do `!vozp` podia
- * interferir no `!callp`. Aqui cada um tem a sua ponte, e a única coisa que os
- * dois compartilham é o **código** que usa o mesmo motor — nunca o estado.
+ * Cada um tem a sua **ponte** e o seu **registro**; o que os dois compartilham é
+ * o **motor** (o `zapo`, via `zapoCall.js`) — nunca o estado do comando. Como o
+ * WhatsApp só permite UMA call por grupo, o motor ter um mapa por grupo é o
+ * comportamento correto: um `!vozp` não vê o registro do `!callp` (e vice-versa),
+ * mas não existem duas calls no mesmo grupo.
  *
  * ## O que este módulo é
  *
- * Uma sessão de chat de voz no motor WASM do WhatsApp Web (`lizzy-call`), com o
- * `isLightWeight: true` que faz o motor declarar o offer como voice chat. O motor
- * usa o **socket do próprio bot** (já pareado) — não há sessão separada.
+ * Uma sessão de chat de voz no motor **zapo** (`zapo-js` + `@zapo-js/voip`), com o
+ * `isLightweight: true` que declara o offer como voice chat (`lightweight='1'` +
+ * `<silence>`, o grupo **não** toca). É o MESMO motor do `!callp` — então o chat
+ * de voz herda o transporte por **UDP cru** no relay sem ICE, o roster
+ * transacional, o `heartbeat` e o `peer_state` que mantêm a call de pé.
+ *
+ * Antes, o chat de voz ia pelo motor WASM do WhatsApp Web (`lizzy-call`), que
+ * ficava em "conectando" e caía em ciclo. O motor do `zapo` é o que **se mantém**
+ * na call — daí a migração.
+ *
+ * ## UM pareamento só (o do `!callp`) vale para o `!vozp`
+ *
+ * O motor é um client PRÓPRIO do bot, com credenciais no formato dele, gravadas
+ * em `dados/database/zapo-auth/`. Não existe "pareamento do chat de voz": quem
+ * pareia é o `!callp parear <numero>`, e a MESMA sessão/banco atende os dois
+ * comandos. Por isso `precisaPareamentoVozp` pergunta ao próprio motor
+ * (`zapoCall.estaPareado`) — não há estado separado para manter em dia.
  *
  * ## Honestidade
  *
@@ -28,7 +42,7 @@
  * reporta isso; nada é inventado.
  */
 
-import { criarLogDoVozp } from '../../utils/vozpLog.js';
+import * as zapoCall from './zapoCall.js';
 
 /**
  * Dublê para os testes do bot.
@@ -44,52 +58,41 @@ export function __setDubleVozp(novo) {
   duble = novo;
 }
 
-/** O módulo do lizzy-call (carregado sob demanda). */
-let modulo = null;
-let erroDeCarga = null;
-
-/**
- * A instância de mídia do voz p (uma por processo).
- *
- * Separada da instância do `callMedia`: são sistemas distintos, com ciclos de vida
- * distintos. O motor guarda estado por call, então compartilhar a instância
- * também misturaria as sessões.
- */
-let instancia = null;
-
 /** Sessões por grupo, para o `encerrar` e o `status` saberem o que existe. */
 const sessoes = new Map();
 
-/** Carrega o motor uma vez. */
+/** Carrega o motor do zapo uma vez (delegação pura). */
 export async function carregarVozp() {
-  if (modulo) return modulo;
-  try {
-    modulo = await import('lizzy-call/group-media');
-  } catch (e) {
-    erroDeCarga = e?.message || String(e);
-    modulo = null;
-  }
-  return modulo;
+  if (duble) return duble;
+  return zapoCall.carregarZapo();
 }
 
 /** Motivo pelo qual o motor não carregou, ou null. */
 export function motivoVozp() {
-  return erroDeCarga;
+  return zapoCall.motivoZapo();
 }
 
 /** O motor está disponível? (é o requisito do comando) */
 export async function suportaVozp() {
   if (duble) return true;
-  return (await carregarVozp()) !== null;
+  return (await zapoCall.carregarZapo()) !== null;
 }
 
-function obterInstancia(mod) {
-  if (!instancia) {
-    // O log do motor passa pelo filtro do VOZP (vozpLog.js): o ruído sai e o que
-    // decide (subida, mídia pronta, roster, queda, erro) fica.
-    instancia = new mod.GroupCallMedia({ log: criarLogDoVozp() });
+/**
+ * O chat de voz exige pareamento PRÓPRIO?
+ *
+ * NÃO: o motor é o mesmo do `!callp`, com o mesmo store
+ * (`dados/database/zapo-auth/`). Parear uma vez (`!callp parear <numero>`) vale
+ * para os dois comandos.
+ *
+ * Com DUBLÊ instalado, o dublê pode responder por si (o teste mede o CONTRATO
+ * do comando); sem ele, quem responde é o motor de verdade.
+ */
+export async function precisaPareamentoVozp() {
+  if (duble) {
+    return typeof duble.precisaPareamento === 'function' ? duble.precisaPareamento() : false;
   }
-  return instancia;
+  return !zapoCall.estaPareado();
 }
 
 /**
@@ -99,45 +102,37 @@ function obterInstancia(mod) {
  * @param {string} p.grupo
  * @param {string} [p.callId]
  * @param {string[]} p.participantes
- * @param {object} p.sock socket do bot
+ * @param {object} [p.sock]
  * @returns {Promise<{ok:boolean, callId?:string, stage?:string, motivo?:string, detalhe?:string}>}
  */
 export async function subirChatDeVoz({ grupo, callId, participantes, sock }) {
   if (duble) return duble.subir({ grupo, callId, participantes, sock });
-  const mod = await carregarVozp();
-  if (!mod) {
-    return { ok: false, motivo: 'voice_chat_indisponivel', detalhe: erroDeCarga };
+  if (!(await suportaVozp())) {
+    return { ok: false, motivo: 'voice_chat_indisponivel', detalhe: zapoCall.motivoZapo() };
   }
-  try {
-    const r = await obterInstancia(mod).entrarNaCall({
-      grupo,
-      callId,
-      participantes,
-      sock,
-      groupInfo: null,
-      // É ISTO que faz o motor declarar o offer como VOICE CHAT (e não a chamada
-      // que toca). Ver `voice_chat.cc` no WASM do pacote.
-      isLightWeight: true
-    });
-    if (r?.ok) sessoes.set(grupo, { callId: r.callId, stage: r.stage });
-    return r;
-  } catch (e) {
-    return { ok: false, motivo: 'falha_ao_entrar', detalhe: e?.message || String(e) };
-  }
+  // É ISTO que faz o motor declarar o offer como VOICE CHAT (e não a chamada
+  // que toca): `lightweight='1'` + `<silence>` no offer. Ver o doc do pacote.
+  const r = await zapoCall.entrarNaCallComMidia({
+    grupo,
+    callId,
+    participantes,
+    sock,
+    isLightweight: true
+  });
+  if (r?.ok) sessoes.set(grupo, { callId: r.callId, stage: r.stage });
+  return r;
 }
 
 /**
- * Sai do chat de voz (manda o `<terminate>` e derruba a pilha).
+ * Sai do chat de voz (manda o `<terminate>` ao objeto da call e derruba a pilha).
  *
  * @param {string} grupo
  * @returns {Promise<{ok:boolean, motivo?:string, detalhe?:string}>}
  */
 export async function sairDoChatDeVoz(grupo) {
   if (duble) return duble.sair(grupo);
-  const mod = await carregarVozp();
-  if (!mod) return { ok: false, motivo: 'voice_chat_indisponivel', detalhe: erroDeCarga };
   try {
-    const r = await obterInstancia(mod).sairDaCall(grupo);
+    const r = await zapoCall.sairDaCallComMidia(grupo);
     sessoes.delete(grupo);
     return r;
   } catch (e) {
@@ -145,24 +140,11 @@ export async function sairDoChatDeVoz(grupo) {
   }
 }
 
-/** Toca um arquivo no chat de voz (o `!musicap` é do callp; isto é do voz p). */
-export async function tocarNoChatDeVoz(grupo, arquivo) {
-  const mod = await carregarVozp();
-  if (!mod) return { ok: false, motivo: 'voice_chat_indisponivel', detalhe: erroDeCarga };
-  try {
-    return await obterInstancia(mod).tocarAudio(grupo, arquivo);
-  } catch (e) {
-    return { ok: false, motivo: 'falha_ao_tocar', detalhe: e?.message || String(e) };
-  }
-}
-
 /** Estágio da pilha do voz p num grupo. */
 export async function estagioDoVozp(grupo) {
   if (duble) return duble.estagio(grupo);
-  const mod = await carregarVozp();
-  if (!mod) return 'indisponivel';
   try {
-    return obterInstancia(mod).estagio(grupo);
+    return await zapoCall.estagioMidia(grupo);
   } catch {
     return 'desconhecido';
   }
@@ -171,9 +153,7 @@ export async function estagioDoVozp(grupo) {
 /** Descarta a pilha (usado no `uncaughtException` do connect). */
 export function resetarVozp() {
   try {
-    instancia = null;
-    modulo = null;
-    erroDeCarga = null;
     sessoes.clear();
+    zapoCall.resetarMidia();
   } catch { /* nada a fazer */ }
 }

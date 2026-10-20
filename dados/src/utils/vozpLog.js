@@ -3,7 +3,7 @@
  *
  * ## Por que existe
  *
- * O `lizzy-call` fala muito: cada stanza sinalizada, cada `ack` de keepalive
+ * O motor de mídia fala muito: cada stanza sinalizada, cada `ack` de keepalive
  * (`relaylatency`, `peer_state`), cada estágio do relay, o estado da call a cada
  * mudança… Misturado com o resto do bot, o resultado fica ilegível — e o que
  * interessa (a call subiu? a mídia ficou pronta? por que caiu?) se perde.

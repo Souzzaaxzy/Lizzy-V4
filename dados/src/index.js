@@ -1252,7 +1252,8 @@ import {
   subirChatDeVoz,
   sairDoChatDeVoz,
   estagioDoVozp,
-  suportaVozp
+  suportaVozp,
+  precisaPareamentoVozp
 } from './funcs/utils/vozpMedia.js';
 import {
   sendRestrictedMedia,
@@ -4078,7 +4079,7 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
      * Sobe uma chamada de VOZ neste grupo e registra para o `encerrar`.
      *
      * Ponto ÚNICO de subir call. Nada de sinalização aqui: quem CRIA a call é
-     * o motor de mídia (medido no pacote `lizzy-call`).
+     * o motor de mídia (o `zapo`, via `zapoCall.js`).
      *
      * @returns {Promise<{ok: boolean, callId?: string, stage?: string, motivo?: string, detalhe?: string}>}
      */
@@ -18853,7 +18854,7 @@ Exemplo: ${groupPrefix}tradutor espanhol | Olá mundo! ◈`);
             '[UPDATE] Database restaurado': '✅ Dados do bot restaurados!',
             '[UPDATE] Database validado': '✅ Dados do bot validados!',
             'Dependências já atualizadas': '✅ Dependências Node já estão atualizadas!',
-            // O script agora reporta TODAS as dependências git (Baileys E lizzy-call),
+            // O script agora reporta TODAS as dependências git (Baileys, zapo e lizzy-call),
             // então o gatilho é o prefixo comum, não a frase inteira antiga.
             'Dependência(s) de git em commit desatualizado': ' Atualizando as dependências git para o commit correto...',
             'Instalando dependências': '📦 Instalando/verificando dependências...\n⏳ Isso pode levar alguns minutos...',
@@ -35872,10 +35873,8 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
         break;
       // !callp — sobe uma chamada de VOZ no grupo.
       //
-      // QUEM CRIA A CHAMADA É O MOTOR DE MÍDIA, não a sinalização. Isso foi
-      // medido (`wasm-call-ownership` no pacote `lizzy-call`): `startGroupCall`
-      // faz o motor EMITIR o `<call><offer>`; `joinVoipOngoingCall` fica em
-      // silêncio a menos que o motor já conheça a call.
+      // QUEM CRIA A CHAMADA É O MOTOR DE MÍDIA, não a sinalização: o `startCall`
+      // do `zapo` é quem EMITE o `<call><offer>` e mantém o estado da call.
       //
       // Criar a chamada por fora (só sinalização) deixava o motor SEM estado de
       // call, e a negociação nunca terminava — era o "conectando..." infinito.
@@ -36026,7 +36025,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               sem_identidade: 'Não consegui identificar meu próprio número para subir a chamada.',
               sem_metadata: 'Não consegui ler os membros do grupo agora. Tente de novo.',
               grupo_pequeno: 'A chamada de grupo precisa de pelo menos 2 outros membros.',
-              pacote_de_midia_ausente: 'A mídia não está instalada neste servidor (falta o pacote `lizzy-call`).',
+              pacote_de_midia_ausente: 'A mídia não está instalada neste servidor (faltam os pacotes do `zapo`).',
               nao_pareado: 'O motor de mídia ainda não foi pareado. Use `!callp parear <numero>`.',
               sem_conexao: 'A conexão do motor de mídia não abriu. Tente de novo em alguns segundos.',
               ja_na_call: 'Já existe uma chamada de mídia neste grupo.',
@@ -36077,12 +36076,19 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
       // | comando | o que sobe | onde vive |
       // |---|---|---|
       // | `!callp` | chamada (toca) | `callMedia.js` → `zapoCall.js` |
-      // | `!vozp`  | chat de voz (não toca) | `vozpMedia.js` → `lizzy-call` |
+      // | `!vozp`  | chat de voz (não toca) | `vozpMedia.js` → `zapoCall.js` |
       //
-      // Quem sabe declarar o offer como voice chat é o motor WASM do WhatsApp Web
-      // (`lizzy-call`), que tem o caminho `voice_chat.cc` (`is_voice_chat`,
-      // `is_lightweight`, `lightweight-key`). O `zapo` — backend do `!callp` —
-      // **não** tem essa opção.
+      // O MESMO motor (o `zapo`) serve os dois: o que muda é o `isLightweight`.
+      // Com ele, o offer leva `lightweight='1'` e anuncia `<silence>` em vez de
+      // mídia — o grupo NÃO toca, os membros entram pelo cartão se quiserem.
+      // Sem ele, é a chamada que toca. Usar o motor do `zapo` (e não o WASM do
+      // `lizzy-call`) é o que faz o chat de voz **se manter** na call: ele tem o
+      // transporte por UDP cru, o roster transacional, o `heartbeat` e o
+      // `peer_state` — e não reporta membro quieto como invisível.
+      //
+      // O PARECIMENTO é o MESMO do `!callp`: um só motor, um só banco
+      // (`dados/database/zapo-auth/`). Parear com `!callp parear <numero>` já
+      // habilita o `!vozp` — não existe pareamento separado do chat de voz.
       //
       // O comando se RECUSA a subir quando o motor não está disponível, em vez de
       // entregar uma chamada comum dizendo que é chat de voz (era o defeito da
@@ -36131,11 +36137,24 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             return reply('⛔ Apenas administradores podem subir o chat de voz.');
           }
 
-          // O MOTOR decide: sem o lizzy-call não existe chat de voz.
+          // O MOTOR decide: sem o zapo não existe chat de voz.
           if (!(await suportaVozp())) {
             return reply(
-              '❌ O *chat de voz* precisa do motor WASM (`lizzy-call`), que não está disponível aqui.\n\n' +
+              '❌ O *chat de voz* precisa do motor de mídia (`zapo`), que não está disponível aqui.\n\n' +
               '_A chamada normal (`!callp`) é outro comando e funciona normalmente._'
+            );
+          }
+
+          // PARECIMENTO: o MESMO do `!callp`. O motor do zapo é um client PRÓPRIO
+          // do bot (credenciais em `dados/database/zapo-auth/`), então ele precisa
+          // ser pareado UMA vez. Não há pareamento separado do chat de voz: quem
+          // pareia é o `!callp parear <numero>`, e a mesma sessão atende os dois.
+          if (await precisaPareamentoVozp()) {
+            return reply(
+              '🔑 *O motor de mídia precisa ser pareado uma vez.*\n\n' +
+              'O backend do chat de voz é o MESMO da chamada (`!callp`), um client separado do bot.\n\n' +
+              'Mande:\n`!callp parear 5511999999999`\n\n' +
+              '_Use o número da conta do bot (com DDI). Um pareamento só vale para os dois comandos._'
             );
           }
 
@@ -36163,7 +36182,10 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
           });
           if (!r.ok) {
             const motivos = {
-              voice_chat_indisponivel: 'O motor WASM (lizzy-call) não está disponível neste servidor.',
+              voice_chat_indisponivel: 'O motor de mídia (`zapo`) não está disponível neste servidor.',
+              nao_pareado: 'O motor de mídia ainda não foi pareado. Use `!callp parear <numero>`.',
+              sem_conexao: 'A conexão do motor de mídia não abriu. Tente de novo em alguns segundos.',
+              ja_na_call: 'Já existe uma chamada de mídia neste grupo.',
               falha_ao_entrar: 'O motor de mídia não subiu.'
             };
             const detalhe = motivos[r.motivo] || r.motivo || 'erro desconhecido';

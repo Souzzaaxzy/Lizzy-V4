@@ -355,32 +355,36 @@ await test('FIX 3: se a mídia NÃO desmontar, o registro fica de pé', async ()
 });
 
 // ============================================================================
-// FIX 4 (REVISADO) — voiceChat VOLTOU: o lizzy-call passou a implementar
+// FIX 4 (REVISADO DE NOVO) — voiceChat mudou de MOTOR
 //
 // A premissa antiga era "o backend zapo nao implementa voice chat", e o comando
-// foi removido por isso. Isso MUDOU: o motor WASM (`lizzy-call`) tem o caminho
-// `voice_chat.cc` e o `GroupCallMedia.entrarNaCall` aceita `isLightWeight`.
+// foi removido por isso. Depois o chat de voz foi pelo motor WASM (`lizzy-call`),
+// com `isLightWeight`. Agora MUDOU DE NOVO: o motor do `zapo` passou a aceitar o
+// flag (`isLightweight`), e o chat de voz foi para lá — é o motor que SE MANTÉM
+// na call (UDP cru, roster transacional, heartbeat, peer_state).
 // O que se trava agora e a REGRA CERTA:
-//   - o zapo NAO recebe o flag (ele nao tem a opcao);
-//   - o voice chat vai pelo lizzy-call, com `isLightWeight: true`;
-//   - sem o lizzy-call o comando se RECUSA (nao mente dizendo que subiu).
+//   - o `!callp` NAO manda o flag (sobe sempre como chamada que toca);
+//   - o chat de voz vive numa ponte PROPRIA (`vozpMedia`), sobre o MESMO motor,
+//     e manda `isLightweight: true`;
+//   - sem o motor o comando se RECUSA (nao mente dizendo que subiu).
 
-await test('FIX 4 (revisado): o zapo NAO recebe flag de voice chat (nao tem a opcao)', () => {
+await test('FIX 4: o zapo NAO decide sozinho o voice chat (o flag e do comando)', () => {
   const zapoCall = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/zapoCall.js'), 'utf-8');
-  ok(!zapoCall.includes('voiceChat'), 'zapoCall sem voiceChat (o backend nao implementa)');
-  ok(!zapoCall.includes('isLightWeight'), 'zapoCall sem isLightWeight');
+  ok(!zapoCall.includes('voiceChat'), 'zapoCall sem voiceChat (o flag e do comando, nao do backend)');
+  // O `zapoCall` RECEBE o flag e o repassa; quem o escolhe e' o `vozpMedia`.
+  ok(zapoCall.includes('isLightweight'), 'zapoCall repassa o isLightweight ao motor');
 });
 
-await test('FIX 4 (revisado): o voice chat vive num modulo PROPRIO (vozpMedia)', () => {
+await test('FIX 4: o voice chat vive num modulo PROPRIO (vozpMedia)', () => {
   const voz = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/vozpMedia.js'), 'utf-8');
-  ok(voz.includes('isLightWeight: true'), 'usa a opcao REAL do motor WASM');
+  ok(voz.includes('isLightweight: true'), 'usa a opcao REAL do motor (zapo)');
   ok(voz.includes('voice_chat_indisponivel'), 'motivo proprio quando o motor falta');
   // O `callMedia` (do !callp) NAO pode conhecer o chat de voz: sao comandos
-  // independentes, com backends, motores e registros separados.
+  // independentes, com pontes e registros separados.
   // Sem os comentarios: o callMedia CITA o vozp para explicar que nao o usa.
   const midia = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/callMedia.js'), 'utf-8')
     .replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
-  ok(!midia.includes('isLightWeight'), 'o callMedia NAO conhece voice chat');
+  ok(!midia.includes('isLightweight'), 'o callMedia NAO conhece voice chat');
   ok(!midia.includes('vozp'), 'o callMedia NAO referencia o vozp');
 });
 
