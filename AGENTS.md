@@ -46,6 +46,38 @@ membros ficam quietos de propósito até falarem. Correção na fork
 `lightweight='1'` e um `<silence reason="lightweight">` no lugar da mídia (medido
 contra o WhatsApp Web: é só o atributo + o nó). O grupo **não toca**.
 
+### ❓ "Tem como colocar um teto de 400 membros?" — NAO (e o que da' para fazer) (out/2026)
+Pergunta do dono depois do fix do 127. Resposta honesta, com o que esta' medido.
+
+### Nao da' para *tocar* 400 — nem para *nomear* 400
+| o que | limite | de quem |
+|---|---|---|
+| contas nomeadas no `<group_info>` | **127** | servidor (medido: `427` acima) |
+| participantes CONECTADOS na call | **32** | plataforma (WhatsApp) |
+| membros no grupo | 1024 | WhatsApp |
+
+O `CALL_MAX_PARTICIPANTS` (env, padrao 31) e' o corte do **`!callp`** — a call que
+CONECTA 32. Subir esse numero nao aumenta o que o servidor aceita: so' faz o offer
+ser recusado. Nao existe "teto de 400" para configurar.
+
+### O que DA' para fazer (e ja' esta' no ar)
+- **`!vozp`**: nomeia ate' **127 contas** (o maximo do servidor) — o motor aplica o
+  teto. Num grupo de 400, o bot nomeia 127 e **os outros 273 entram pelo app** (a
+  lista e' so' o convite inicial; o app nao exige estar nela).
+- **`!callp`**: nomeia 31 + o bot = 32, porque a call **conecta** 32.
+
+### Correcao de EFICIENCIA (o que a pergunta destravou)
+Ao revisar o caminho para grupos de centenas, achei um desperdicio: o motor
+resolvia o **device de TODAS as contas** e so' depois cortava em 127 — num grupo
+de 400, 400 lookups de fan-out para descartar 273. Agora o teto e' aplicado
+**antes** da resolucao (`master` `e66f028`, branch `voip` `142e221`): so' as 126
+contas que cabem (o criador ocupa a primeira) sao resolvidas.
+
+### Testes
+- Fork: `a huge group only resolves devices for the accounts that fit the offer`
+  (400 convidados → no maximo 126 resolvidas) e o de 127 contas. **555 testes,
+  0 falhas.** Verificado: sem o cap antecipado, o teste **falha**.
+
 ### 🔍 PESQUISA GLOBAL: o limite real do offer e' 127 CONTAS (nao 32) — `error: '427'` (out/2026)
 Pedido do dono: *"eu quero uma forma do bot subir esse chat de voz em grupo grande,
 faça uma pesquisa global ai pela internet para descobrir como fazer isso"*.
