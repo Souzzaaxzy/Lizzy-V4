@@ -23,6 +23,7 @@
  */
 
 import * as zapoCall from './zapoCall.js';
+import { criarLogDaCall } from '../../utils/callLog.js';
 
 let mod = null;
 let loadError = null;
@@ -151,10 +152,9 @@ function marcarBackend(grupo, qual) {
 /** A instância do lizzy-call (uma por processo). */
 function instanciaLizzy(mod) {
   if (!mediaInstance) mediaInstance = new mod.GroupCallMedia({
-    // LOG LIGADO: sem ele todas as mensagens do motor (estado da call, estagios do
-    // relay, re-dial da leg, captura) iam para o vazio -- e diagnosticar virava
-    // adivinhacao. O pacote ja prefixa tudo ([CALLP] / [RELAY]).
-    log: (msg) => console.log(msg)
+    // O log do motor passa pelo FILTRO (callLog.js): o ruido sai e o que decide
+    // (subida, midia pronta, roster, queda, erro) fica, com repeticao colapsada.
+    log: criarLogDaCall()
   });
   return mediaInstance;
 }
@@ -177,7 +177,7 @@ export async function obterMedia() {
   if (!m) return null;
   if (usandoZapo(m)) return m;
   if (!mediaInstance) {
-    mediaInstance = new m.GroupCallMedia({ log: (msg) => console.log(msg) });
+    mediaInstance = new m.GroupCallMedia({ log: criarLogDaCall() });
   }
   return mediaInstance;
 }
@@ -231,6 +231,26 @@ export async function entrarNaCallComMidia({ grupo, callId, callCreator, partici
 }
 
 /** Estágio da pilha de mídia para um grupo. */
+/**
+ * Resumo de UMA linha do que importa de uma sessao de call, para o log.
+ *
+ * O motor fala muito; o que responde "onde parou" e' curto: tipo, estagio e (se
+ * houver) o motivo. Este helper existe para o operador ter o resumo sem ler o
+ * fluxo inteiro.
+ *
+ * @param {object} sessao
+ * @returns {string}
+ */
+export function resumirSessaoDeCall(sessao) {
+  if (!sessao) return 'sem sessao';
+  const tipo = sessao.voiceChat ? 'chat de voz' : 'chamada';
+  const estagio = sessao.stage || 'desconhecido';
+  const motivo = sessao.aviso ? ` | motivo: ${sessao.aviso}` : '';
+  const ligados = Number.isFinite(sessao.tocados) ? ` | tocados: ${sessao.tocados}` : '';
+  return `${tipo} | estagio: ${estagio}${motivo}${ligados}`;
+}
+
+/** Estagio da pilha de midia para um grupo. */
 export async function estagioMidia(grupo) {
   if (duble) return duble.estagio(grupo);
   const media = await obterMedia();

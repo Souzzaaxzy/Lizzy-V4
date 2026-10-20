@@ -12115,3 +12115,59 @@ O log **ligado** (a correção anterior) foi o que fechou o caso: em uma linha e
 mostrou que o transporte estava de pé e que o problema era o **roster**. Sem log,
 eu estaria adivinhando. **Um número no log (`conectados=1`) valeu mais que
 qualquer hipótese.** E, de novo, a resposta estava no enum da referência.
+
+
+## 🎙️ LOG do sistema de chamada — LIMPO e com o que importa (out/2026) ✅
+Pedido do dono: *"tira todas as logs lá, estão muito bagunçadas (apenas do sistema
+do callp/vozp) e coloca log do que precisamos saber"*.
+
+### Por que estava ilegível
+O `lizzy-call` fala **por stanza**: cada `sinalização ->`, cada `ack de
+relaylatency`/`peer_state` do keepalive, cada estágio do relay, o estado da call a
+cada mudança. No log real do dono eram **18 linhas** para uma sequência simples —
+e o que importa (a call subiu? a mídia ficou pronta? **por que caiu?**) se perdia.
+
+### A solução — `dados/src/utils/callLog.js` (novo, puro)
+O **único** caminho do log da chamada para o console. Duas regras:
+
+1. **Ruído sai de vez**: `sinalização ->`, `ack ... error=0` (keepalive, qualquer
+   tag), `stun_alloc_visto`, `transporte_iniciando`, `relay_list_recebida`,
+   `enc_rekey cifrado`, `epoch de chave tx=`, `captura sem ponteiro`,
+   `midia: engine criou`.
+2. **Repetição é colapsada**: a mesma linha seguida sai **uma vez** + um aviso
+   curto `📞 … a anterior repetiu (xN)`. A comparação **ignora o `id`** — o mesmo
+   evento chega com um id por stanza, e sem isso cada um viraria linha nova.
+
+**O que sobra** é exatamente o que responde "onde parou": subida, prontidão da
+mídia, roster, queda, erro e os estágios decisivos do relay. Tudo com o prefixo
+**`📞`** (filtrável).
+
+### Medido (o log real do dono, antes e depois)
+| | linhas |
+|---|---|
+| antes (cru) | **18** |
+| depois (filtrado) | **9** |
+
+E o que importa **continua lá** — inclusive `ack de peer_state error=500` (a
+expulsão) e `roster ... conectados=1`.
+
+### O que ficou de fora (e por quê)
+`ack de <tag> ... error=0` é **rotina** (keepalive); o mesmo ack com **erro**
+(`error=500`) é **notícia** e passa. `SEM ACK` também passa — é o setup que não
+conclui. A regra do ack vem **antes** da lista de ruído, para um erro nunca ser
+escondido por um padrão.
+
+### Integração
+`callMedia.js` cria a mídia com `log: criarLogDaCall()` (era `console.log` cru).
+O pacote **não foi tocado** — o filtro é do bot, então uma atualização do
+`lizzy-call` não o desfaz.
+
+### Testes — `tests/call-log.test.js` (12 testes / 20 asserções, 0 falhas)
+Ruído sai (sinalização, keepalive, estágios); **ACK com erro passa**; `SEM ACK`
+passa; o que responde "onde parou" passa inteiro e com o prefixo; repetição vira
+**2 linhas em vez de 4** (a original + a contagem); alternar linhas **não** colapsa;
+entradas vazias/lixo não imprimem; e o `ehRuido` é previsível.
+
+### Regressões verdes
+`callp` 46/100, `callp-regressions` 38/112, `vozp-terminate-target` 5/7,
+`roster-states` 6/0.
