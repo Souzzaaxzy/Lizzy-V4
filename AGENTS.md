@@ -46,6 +46,40 @@ membros ficam quietos de propósito até falarem. Correção na fork
 `lightweight='1'` e um `<silence reason="lightweight">` no lugar da mídia (medido
 contra o WhatsApp Web: é só o atributo + o nó). O grupo **não toca**.
 
+### 🐛 O CAMINHO "SEM ROSTER" NAO FUNCIONAVA NO MANAGER (out/2026)
+Teste do dono no grupo grande: *"Nao consegui subir o chat de voz / o motor de midia nao
+subiu / `a group call on <jid> needs the participants to ring`"*.
+
+### A causa (bug meu, do caminho novo)
+O offer ia **sem roster** — mas o manager ainda exigia um `firstPeer` e lancava. Como
+sem roster `offer.participants` so' tem o **criador**, o `firstPeer` era `undefined` e a
+call morria **antes de sair**. O caminho novo nao estava coberto **de ponta a ponta**: o
+teste que eu tinha media so' o **builder** (`buildGroupOfferStanza`), nao o **manager**
+(`startCall`), que e' quem os comandos usam.
+
+### Correcao
+Quando nao ha peer, o alvo e' a **propria call** (`<call-id>@call`) — o mesmo endereco
+que um accept de grupo usa. Uma chamada que **TOCA** continua exigindo quem tocar (o
+`throw` ficou para esse caso).
+
+### Testes
+`a voice chat too big for the call ceiling is placed WITHOUT a roster` (no **manager**,
+nao no builder) e `a call that RINGS with nobody to ring is still refused`.
+Fork: **561 testes, 0 falhas.** Verificado: com o `firstPeer` obrigatorio de volta, o
+teste **falha** com a mensagem exata do dono.
+
+### LICAO DE METODO
+Testar o **builder** nao prova que o **comando** funciona. O `startCall` tem regras
+proprias (peer, midia, sessao) que o builder nao ve. **Teste pelo caminho que o usuario
+usa**, nao pela peca isolada.
+
+### ARMADILHA DE AMBIENTE (custou uma rodada)
+Ao instalar `argo-codec` para o build do core, o npm criou
+`node_modules/zapo-js -> ..` (self-link apontando para o proprio repo). O `tsc` entao leu
+o `dist` rastreado como **entrada** e o build do voip quebrou com `TS5055`. Solucao:
+remover o link e reinstalar (`rm -rf node_modules/zapo-js && npm install`), para o
+`zapo-js` voltar a vir do npm.
+
 ### 🧪 MEDIDO: com 32 contas o servidor AINDA recusa — entao o roster sai (out/2026)
 Log novo: grupo de 128, `412` de novo. Mas o log do BOT diz "127 convidados" — e
 isso e' o **tamanho do grupo**, nao o do offer: o corte do motor roda depois.
