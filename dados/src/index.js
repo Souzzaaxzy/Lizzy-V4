@@ -4109,6 +4109,32 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
         return { ok: false, motivo: 'grupo_pequeno' };
       }
 
+      // TETO DE PARTICIPANTES — a call de grupo tem um limite no SERVIDOR.
+      //
+      // Medido no log real do dono: em CERTOS grupos o servidor responde o ack do
+      // offer com erro e o motor encerra a call na hora —
+      //
+      //   WaCallMediaSession.handleCallAck: node.attrs.error -> terminate(SetupFailed)
+      //   `[CALLP] a call <id> encerrou | motivo: setup_failed`
+      //
+      // O motor documenta o limite (`call-state.js`: *"32 connected participants,
+      // five devices each"*) e o WhatsApp expõe a prop `group_call_max_participants`.
+      // O bot criava a call com o grupo INTEIRO de convidados; acima do teto o
+      // servidor recusa — e é por isso que só acontecia em alguns grupos.
+      //
+      // O CRIADOR conta como participante, então o teto de convidados é o teto
+      // menos um.
+      const tetoConvidados = Math.max(2, Math.min(31, Number(process.env.CALL_MAX_PARTICIPANTS) || 31));
+      const totalMembros = convidados.length + 1;
+      if (convidados.length > tetoConvidados) {
+        convidados.length = tetoConvidados;
+      }
+      // Log com os números: sem ele, "a call caiu" não diz se foi tamanho.
+      console.log(
+        `[CALLP] grupo ${from}: ${totalMembros} membro(s) -> ${convidados.length} convidado(s)` +
+        ` (teto ${tetoConvidados})`
+      );
+
       // Aviso de memória: a pilha de mídia aloca centenas de MB. Se a máquina
       // estiver apertada, o OOM killer mata o processo (SIGKILL) no meio da call
       // e o sintoma vira "o bot reiniciou sozinho", sem log.
@@ -4162,10 +4188,18 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       callPlayer.pararDeSeguir(grupo);
       aoTerminarAudio(grupo, null);
       aoEncerrarAudio(grupo, null);
+      // O motivo vai para o AVISO quando ele muda a explicação. `setup_failed`
+      // e' o servidor RECUSANDO o offer — sem dizer isso, "a chamada foi
+      // encerrada" parece defeito do bot.
+      const explicacao = motivo === 'setup_failed'
+        ? '\n\n_⚠️ O servidor recusou a chamada. Costuma ser o tamanho do grupo: ' +
+          'a chamada de grupo tem um limite de participantes, e acima dele o ' +
+          'WhatsApp recusa. Tente em um grupo menor._'
+        : '';
       try {
         await nazu.sendMessage(grupo, {
           text:
-            `📴 A chamada foi encerrada.\n\n` +
+            `📴 A chamada foi encerrada.${explicacao}\n\n` +
             (resumoFila.removidas
               ? `🗑️ ${resumoFila.removidas} música(s) da fila foram apagadas.`
               : '_Use `!callp` para subir outra._'),

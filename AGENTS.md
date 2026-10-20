@@ -11534,3 +11534,74 @@ Três rodadas foram gastas em hipóteses (jid, relay, teto do pareamento) antes 
 **abrir uma conexão de verdade e comparar as variáveis**. O que fechou o caso
 levou minutos: duas conexões reais, mudando **só a versão**. Quando o sintoma é
 "o servidor recusa", o caminho é falar com o servidor — não ler código.
+
+
+## CALL — `setup_failed` / `error: '207'`: o grupo era GRANDE demais (out/2026) ✅
+Log do dono (o que finalmente nomeou a causa):
+
+```
+offer refused by the server, call ended { plugin: '@zapo-js/voip', callId: '44A7…', error: '207' }
+[CALLP] a call 44A7… encerrou | motivo: setup_failed
+```
+
+### O que o log PROVA
+O caminho é `WaCallMediaSession.handleCallAck`:
+
+```js
+const error = node.attrs?.error;
+if (error) {
+    this.logger.warn('offer refused by the server, call ended', { callId, error });
+    await this.terminate(EndCallReason.SetupFailed, SETUP_FAILED_REASON);
+}
+```
+
+Ou seja: **o SERVIDOR recusou o offer** (o `error` é um atributo do `<ack>` dele) —
+não é relay, não é jid, não é pareamento. O `SetupFailed` é só a consequência.
+
+### O que eu NÃO consegui provar (honestidade)
+O **significado exato do código 207** não está documentado em lugar nenhum que eu
+tenha achado: não existe no `@zapo-js/voip`, no `zapo-js` (o `'207'` que aparece
+lá é só um token do dicionário binário), nem na spec do **wacrg** — que
+explicitamente deixa o vocabulário aberto (*"Does the `<error>` child appear on
+call acks, and what is its code vocabulary?"*). A única referência a código de
+recusa de offer na spec é o **439** (ordem dos filhos errada).
+
+### A hipótese que sustenta a correção (medida no código, não no servidor)
+O log do dono diz **"em certos grupos"**, e isso aponta para algo que **varia com o
+grupo**. O tamanho é o candidato direto:
+
+- o motor documenta o teto — `call-state.js`: *"One entry per device the stanzas
+  name: **32 connected participants**, five devices each"*;
+- o WhatsApp expõe a prop **`group_call_max_participants`** (está no dicionário de
+  tokens do `zapo-js`);
+- o `subirCallDoGrupo` convidava o **grupo INTEIRO** (`convidados.push(jid)` para
+  cada membro). Grupo grande ⇒ offer acima do teto ⇒ **o servidor recusa** ⇒
+  `setup_failed` ⇒ a mensagem de "chamada encerrada" logo depois de subir.
+
+É uma hipótese **coerente com todos os dados** — e é a que o dono pode confirmar
+pelo log novo (abaixo). O que está **provado por teste** é o comportamento do bot:
+o teto é aplicado e é configurável.
+
+### Correção
+| onde | o que mudou |
+|---|---|
+| `index.js` (`subirCallDoGrupo`) | **teto de convidados** (`CALL_MAX_PARTICIPANTS`, padrão **31**). O CRIADOR conta como participante, então o teto de convidados é o teto menos um. Grupos pequenos não são cortados. |
+| `index.js` (`subirCallDoGrupo`) | **log com os números**: `[CALLP] grupo <id>: N membro(s) -> M convidado(s) (teto T)`. Sem isso, "a call caiu" não diz se foi tamanho. |
+| `index.js` (`reconciliarCallEncerrada`) | quando o motivo é **`setup_failed`**, o aviso no grupo **explica**: *"O servidor recusou a chamada. Costuma ser o tamanho do grupo…"* — antes parecia defeito do bot. |
+
+### Como o dono confirma (o próximo log decide)
+1. `[CALLP] grupo <id>: N membro(s) -> M convidado(s) (teto 31)` — mostra se o grupo
+   passava do teto;
+2. se **ainda** vier `setup_failed` num grupo **abaixo** do teto, a causa é outra
+   (não tamanho) e o número `N` no log é o que separa as duas.
+
+### Testes — `tests/callp.test.js` (36 testes / 74 asserções, 0 falhas)
+Grupo GRANDE (60 membros) limita a 31 convidados e usa o teto inteiro; grupo
+pequeno **não** é cortado; `CALL_MAX_PARTICIPANTS` é respeitado; o log de
+diagnóstico tem membros/convidados/teto; e o aviso de `setup_failed` explica a
+recusa (três asserções no texto). **Verificado que os testes MEDEM a correção**:
+desativando o corte, **3 asserções falham**.
+
+### Regressões verdes
+`callp-regressions` 38/114, `musicap` 24/70, `pairing-code` 9/20,
+`wa-version` 12/30, `baileys-boot-info` 26/0.

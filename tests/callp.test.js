@@ -156,6 +156,20 @@ async function run({ groupJid, sender, text, participants, sent = [], fromMe = t
   };
 }
 
+// Grupo GRANDE: reproduz o caso em que o servidor recusa o offer (teto de
+// participantes da call de grupo).
+function setupGrande(n) {
+  const groupJid = makeGroup();
+  const admin = makePerson();
+  const participantes = [{ lid: admin.lid, jid: admin.jid, isAdmin: true }];
+  for (let i = 0; i < n; i++) {
+    const p = makePerson();
+    participantes.push({ lid: p.lid, jid: p.jid, isAdmin: false });
+  }
+  participantes.push({ lid: BOT_LID, jid: BOT_JID, name: 'Lizzy', isAdmin: true });
+  return { groupJid, admin, participants: participantes };
+}
+
 function setup(n = 3) {
   const groupJid = makeGroup();
   const admin = makePerson();
@@ -412,6 +426,67 @@ await test('resolverLids: consulta lenta nao prende (tem teto de tempo)', async 
 await test('resolverLids: sem o coordinator devolve a lista sem quebrar', async () => {
   const res = await zapo.__resolverLids({}, ['5511999999999@s.whatsapp.net']);
   ok(Array.isArray(res) && res.length === 1, 'nao quebra sem a API');
+});
+
+// ============================================================================
+// 3b-bis) TETO DE PARTICIPANTES — o servidor recusa o offer (setup_failed)
+// ============================================================================
+
+await test('grupo GRANDE: limita os convidados ao teto do servidor', async () => {
+  // O motor documenta o limite ("32 connected participants") e o WhatsApp expoe
+  // a prop `group_call_max_participants`. Criar a call com o grupo inteiro faz o
+  // servidor recusar o offer -> handleCallAck ve `error` -> SetupFailed -> a
+  // mensagem de "chamada encerrada" logo depois de subir.
+  const { groupJid, admin, participants } = setupGrande(60);
+  const chamadas = instalarDubleMidia();
+  await run({ groupJid, sender: admin, text: '!callp', participants });
+  const criou = chamadas.find((c) => c.tipo === 'entrar');
+  ok(Boolean(criou), 'subiu a chamada');
+  ok(criou.participantes.length <= 31,
+    `no maximo 31 convidados (o criador conta; veio ${criou.participantes.length})`);
+  ok(criou.participantes.length === 31, `usou o teto inteiro (veio ${criou.participantes.length})`);
+  callState.limparCall(groupJid);
+});
+
+await test('grupo pequeno: NAO corta ninguem', async () => {
+  const { groupJid, admin, participants } = setup(5);
+  const chamadas = instalarDubleMidia();
+  await run({ groupJid, sender: admin, text: '!callp', participants });
+  const criou = chamadas.find((c) => c.tipo === 'entrar');
+  ok(criou.participantes.length === 6, `convidou os 6 (veio ${criou.participantes.length})`);
+  callState.limparCall(groupJid);
+});
+
+await test('o teto e configuravel por CALL_MAX_PARTICIPANTS', async () => {
+  const salvo = process.env.CALL_MAX_PARTICIPANTS;
+  try {
+    process.env.CALL_MAX_PARTICIPANTS = '5';
+    const { groupJid, admin, participants } = setupGrande(20);
+    const chamadas = instalarDubleMidia();
+    await run({ groupJid, sender: admin, text: '!callp', participants });
+    const criou = chamadas.find((c) => c.tipo === 'entrar');
+    ok(criou.participantes.length === 5, `respeitou o teto de 5 (veio ${criou.participantes.length})`);
+    callState.limparCall(groupJid);
+  } finally {
+    if (salvo === undefined) delete process.env.CALL_MAX_PARTICIPANTS;
+    else process.env.CALL_MAX_PARTICIPANTS = salvo;
+  }
+});
+
+await test('o log diz quantos membros e quantos convidados (diagnostico)', () => {
+  const src = fs.readFileSync(path.join(HERE, '..', 'dados/src/index.js'), 'utf-8');
+  const bloco = src.slice(src.indexOf('const tetoConvidados'), src.indexOf('const tetoConvidados') + 1400);
+  ok(bloco.includes('[CALLP] grupo'), 'registra a linha de diagnostico');
+  ok(bloco.includes('membro(s)'), 'mostra o tamanho do grupo');
+  ok(bloco.includes('teto'), 'mostra o teto aplicado');
+});
+
+await test('quando o servidor RECUSA (setup_failed), o aviso explica', () => {
+  const src = fs.readFileSync(path.join(HERE, '..', 'dados/src/index.js'), 'utf-8');
+  const bloco = src.slice(src.indexOf('const reconciliarCallEncerrada'), src.indexOf('const reconciliarCallEncerrada') + 2600);
+  ok(bloco.includes("motivo === 'setup_failed'"), 'trata o motivo setup_failed');
+  ok(bloco.includes('recusou a chamada'), 'diz que foi o servidor (nao o bot)');
+  ok(bloco.includes('limite de participantes'), 'aponta o tamanho como a causa provavel');
 });
 
 // ============================================================================
