@@ -46,6 +46,38 @@ membros ficam quietos de propósito até falarem. Correção na fork
 `lightweight='1'` e um `<silence reason="lightweight">` no lugar da mídia (medido
 contra o WhatsApp Web: é só o atributo + o nó). O grupo **não toca**.
 
+### 🔁 GRUPO GRANDE: o `427` e' "roster VELHO" — o cliente deve RE-OFERTAR (out/2026)
+O grupo pequeno voltou a funcionar. Faltava o grupo grande.
+
+### A pista (javadoc do `rosterOf` do Cobalt, RE do cliente oficial)
+> *"The server **NACKs a stale device set** with `error="427"` and echoes the corrected
+> roster, which the caller **re-offers against**"*
+
+O `427` **nao e' recusa definitiva**: o servidor devolve o roster que ele quer e espera
+o caller **re-enviar o offer** contra ele. O motor encerrava a call ali — por isso o
+chat de voz morria em grupo grande.
+
+### Correcao (`WaCallMediaSession.handleCallAck`)
+No primeiro `427` de um **voice chat**, o motor:
+1. le' o `<group_info>` que veio **no proprio ack** (o roster corrigido);
+2. reconstroi o offer com esses participantes, cortado no teto de 127;
+3. re-envia UMA vez.
+
+Um **segundo** `427` (ou qualquer outro erro) encerra como sempre — **sem loop**.
+A regra vale so' para voice chat (`isLightweight`); a chamada que toca nao mudou.
+
+### Testes
+- Fork: `a stale-roster nack (427) on a voice chat is answered with the roster it echoed`
+  (re-oferta com o roster do ack, e a call **nao** e' encerrada) e
+  `a second stale-roster nack ends the call (no retry loop)`. **558 testes, 0 falhas.**
+  Verificado: desligando o re-offer, **2 assercoes falham**.
+- Bot: `callp` **50/118**, `callp-regressions` **38/115**, 0 falhas.
+
+### LIMITE HONESTO
+Falta a prova ao vivo no grupo de 300+. O re-offer e' o comportamento que a
+referencia descreve; se o servidor devolver outro codigo (ou insistir no 427), o log
+mostra e o caminho seguinte e' diferente.
+
 ### 🛑 REGRA DE OURO: o offer de voice chat leva DUAS coisas, e nada mais (out/2026)
 O dono testou num grupo **PEQUENO** e o chat de voz **nao subiu** — so' a mensagem.
 Eu tinha quebrado o que funcionava.
