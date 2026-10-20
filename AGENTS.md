@@ -11767,3 +11767,83 @@ o pacote repassa, o WASM tem o caminho de voice chat, e o bot se recusa quando o
 motor falta. Se o cartão não aparecer no aparelho, o próximo passo é medir o offer
 que o motor emite (se ele carrega `lightweight_key`) — e o log do `lizzy-call` já
 diz `engine criou a VOICE CHAT <id> no grupo` para confirmar qual caminho rodou.
+
+
+## 🎙️ VOICE CHAT: O "CONECTANDO..." — a leg por UDP CRU (out/2026) ✅
+Depois de o cartão de chat de voz SUBIR (o dono confirmou: *"BOA, FUNCIONOU!!!"*),
+ele ficou preso em **"conectando..."**. O dono apontou o rumo: *"olha como o
+`callp` passa dessa fase e implementa também"*.
+
+### A causa (MEDIDA nos dois pacotes)
+O `!callp` passa porque usa o **zapo**, que disca o relay por **UDP cru** quando
+não há credencial ICE. O `lizzy-call` (motor WASM — o único que declara voice
+chat) **só** discava por `RTCPeerConnection`. Medido:
+
+| | transporte |
+|---|---|
+| **zapo** | `WaRawUdpLeg` → `node:dgram` (**UDP cru**) + WebRTC quando há ICE |
+| **lizzy-call** | **só** `RTCPeerConnection` (zero `dgram`) |
+
+E a classificação é explícita na referência que funciona (`group-media-plan.js`):
+
+```js
+endpoint.authToken ? undefined : 'raw-udp'
+```
+
+**Sem `authToken` o relay SÓ funciona por UDP cru.** Discar esse relay por
+`RTCPeerConnection` é o que travava: **não há ICE a negociar**, então o WebRTC
+fica tentando para sempre — o "conectando..." exato do dono.
+
+### A correção (no pacote `lizzy-call`, commit `e7d8822`)
+Nova classe **`RawUdpLeg`** (socket `node:dgram` conectado — o 5-tuple **é** a
+leg, sem ICE/DTLS/SCTP), espelhando o `rawUdpLegs: 'required'` do zapo:
+
+| `CALL_RAW_UDP` | comportamento |
+|---|---|
+| `required` (**padrão**) | UDP cru **só** para o relay **sem `authToken`** |
+| `all` | todos |
+| `0` / `off` | desliga (só WebRTC) |
+
+- **Policia o próprio caminho de volta**: quem "elege" a leg é o ENVIO, então se
+  a mídia sai e nada volta, a leg se **fecha** (`raw_udp_no_return_path`) em vez
+  de fingir que a call está de pé. É a mesma lição do zapo.
+- **Porta anunciada**: uma leg UDP cru mantém a porta do endpoint (só a leg
+  WebRTC vai para 3480) — conferido no `relay-info.js` do zapo.
+- `send`/`flush`/`close` roteiam por ela quando existe; **o caminho WebRTC fica
+  intacto** (nenhuma mudança para relay COM ICE).
+
+### Testes — `lizzy-call/tests/raw-udp.test.mjs` (5 testes, 0 falhas)
+O teste sobe um **socket UDP local** e entrega o `ip:porta` dele como relay: se a
+leg for UDP cru, o pacote **CHEGA**; se tentar WebRTC, **nada chega**.
+
+- relay **sem** `authToken` → o pacote **CHEGA** (antes: nada chegava);
+- `CALL_RAW_UDP=all` → qualquer relay vai por UDP cru;
+- `CALL_RAW_UDP=0` → nada sai por UDP cru;
+- relay **com** `authToken` (modo required) → **não** vira UDP cru;
+- a leg usa a **porta anunciada** (não a 3480).
+
+**Verificado que o teste MEDE a correção**: desativando a leg, **3 testes
+falham**.
+
+### Integração no bot
+`package.json` + `package-lock.json` + `yarn.lock` (Berry v8) pinados no commit
+**`e7d8822`**. O `yarn.lock` precisou do `corepack yarn install
+--mode=update-lockfile` (o checksum do git dep muda junto com o commit).
+
+Regressões verdes: `callp` 46/100, `callp-regressions` 38/112, `musicap` 24/70,
+`wa-version` 12/30, `pairing-code` 9/20.
+
+### LIÇÃO DE MÉTODO (a que fechou o caso)
+O dono tinha razão: **o `!callp` já resolvia isso, mas em OUTRO backend**. A
+pergunta certa não era "como o bot faz", e sim **"o que o backend que funciona tem
+que o outro não tem"** — a resposta era uma linha: `authToken ? undefined :
+'raw-udp'`. Comparar os dois transportes lado a lado levou minutos; antes disso eu
+tinha passado rodadas olhando só o lado do bot.
+
+### LIMITE HONESTO
+Não há sessão de WhatsApp aqui, então **não** validei o áudio fluindo numa call
+real. O que está provado: a mídia **chega** ao relay por UDP cru (teste com socket
+real), a leg se fecha quando o caminho de volta não responde, e o caminho WebRTC
+não mudou. Se ainda ficar "conectando", o log de etapas
+(`[RELAY] endpoint_selecionado → transporte_iniciando → conexao_aberta |
+conexao_falhou`) diz exatamente onde parou.
