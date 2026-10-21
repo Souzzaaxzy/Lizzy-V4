@@ -61,6 +61,34 @@ Se aparecer o commit antigo, **o fix não está instalado** — leitura, não hi
 - `baileys-boot-info`: **39 asserções**, 0 falhas (o teste novo mede a chamada: sem ela, falha).
 - Regressões verdes: `installer-git-drift`, `cmd-suggest` 21/68, `get-message-inspector` 54/269.
 
+### ⚠️ ERRATA (o fix anterior não rodava): a remoção tem de vir ANTES do early-return
+
+O log do dono continuou `rosterShipped: false` **depois** de atualizar. Reproduzi o estado
+exato do servidor dele:
+
+```
+package-lock.json  : dd47c90
+node_modules/.lock : dd47c90   <- os dois CONCORDAM
+conteúdo em disco  : ANTIGO
+```
+
+O drift é medido **LOCK contra LOCK**, então nesse estado ele dá **ZERO** — e o early-return
+`Dependências já atualizadas` saía **antes** da remoção, que eu tinha posto dentro do
+`if (drifts.length)`. A remoção **nunca rodava**. (Mesmo erro de método de sempre: medir o
+**metadado** em vez do **conteúdo**.)
+
+**Correção**: a remoção passou a ser a **PRIMEIRA** coisa do `nodeDeps`, **sem condição**.
+`pastasDeDependenciaGit()` lê o próprio `package-lock.json` (nada de lista fixa) e remove a
+pasta de **cada** dependência de git antes de qualquer checagem. O `npm ls` então acusa o
+pacote faltando e o install roda de verdade.
+
+Medido no projeto que reproduz o estado do dono: após a remoção + install, o
+`dist/signaling/phash.js` (que só existe no commit novo) **APARECE**.
+
+**Teste**: `update-sync` 23/87, 0 falhas. O TESTE 22 agora trava a **ORDEM** (remoção antes
+do early-return e antes do install) — desativando a remoção antecipada, **3 asserções
+falham**.
+
 ### LIÇÃO DE MÉTODO
 
 "O install rodou e o lock está certo" **não** prova que o código está em disco. A checagem de
