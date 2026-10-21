@@ -31,6 +31,7 @@ import { detectarAnomalia, contemMensagemInvisivel } from './utils/testeAnti.js'
 import { analisarAddonSemSecret, analisarSenderKeyStatus, analisarSaltoChain, analisarForja } from './utils/invisibleVectors.js';
 import { ehRajaTransporte, registrarRajada } from './utils/rajaTransport.js';
 import { buildCmdNotFoundExtras } from './utils/commandSuggest.js';
+import { testebn } from './funcs/utils/testebn.js';
 import { extractMedia, resolveMedia, isViewOnce, describeMediaError, extractQuoted, extractQuotedContext, extractText } from './utils/viewOnce.js';
 import * as antiRoubo from './funcs/utils/antiRoubo.js';
 import { parsePinDuration, buildPinKeyFromContext, isPinControlMessage } from './utils/pinMessage.js';
@@ -35644,6 +35645,33 @@ ${listaPerm}
           await reply("Ocorreu um erro 💔");
         }
         break;
+      // !testebn — COMANDO DE TESTE / BRINCADEIRA (PRANK). Nada sério.
+      //
+      // NÃO VAI EM MENU NENHUM (nem /menu, nem help, nem listagem, nem
+      // catálogo, nem resposta a "menu") — é escondido de propósito. Só
+      // funciona quando alguém digita, e SÓ DONOS podem usar.
+      //
+      // O que faz: manda 10 `requestPaymentMessage` (nota "teste, teste, bn")
+      // em 1:1 para cada membro comum do grupo. Admins/superadmins e a própria
+      // conta da bot ficam de fora — a brincadeira é com os MEMBROS.
+      //
+      // A confirmação vai SÓ no 1:1 de quem digitou, NUNCA no grupo: qualquer
+      // resposta no grupo entregaria o comando pros admins e mataria a
+      // brincadeira.
+      case 'testebn': {
+        try {
+          if (!isGroup) return;
+          if (!isOwner) return; // restrito a donos (helper de owner da fork)
+          const r = await testebn(nazu, from);
+          const line = `testebn (teste): ${r.sent} enviados em ${r.targets} membros`
+            + (r.aborted ? ` — abortado: ${r.aborted}${r.last ? ' (' + r.last + ')' : ''}` : '');
+          await nazu.sendMessage(sender, { text: line }); // 1:1 do dono, nunca no grupo
+        } catch (e) {
+          console.error('[TESTEBN] Erro:', e?.message || e);
+        }
+        break;
+      }
+
       // !raja — gerador de mensagem de TESTE no formato do raja real.
       // Exclusivo do dono, só em grupo, e serve para validar o anti-raja.
       // Forma única: `!raja <quantidade> <texto>` (sem opções/variantes).
