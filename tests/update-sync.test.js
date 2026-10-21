@@ -395,6 +395,39 @@ await test('TESTE 21 — pushes sucessivos: cada !atualizar alcança o commit no
 
 // ============================================================================
 // ============================================================================
+// TESTE 22 — dependencia de git com CONTEUDO velho (o install nao troca)
+// ============================================================================
+await test('TESTE 22 — dependencia git desatualizada tem a pasta removida antes do install', async () => {
+    // O BUG medido: com o `package.json` e o `package-lock.json` JA no commit novo
+    // (o caso do `!atualizar`, que faz `git reset --hard`), o `npm install` atualiza
+    // o `resolved` no lock de `node_modules` mas deixa os ARQUIVOS antigos em disco.
+    // Resultado: o drift desaparece (a checagem le o LOCK) e a correcao nao chega --
+    // o bot sobe normal e o comportamento novo simplesmente nao acontece.
+    //
+    // A correcao remove a pasta do pacote desatualizado ANTES do install. Este teste
+    // trava a presenca dessa remocao no `update.js`.
+    const src = fs.readFileSync(new URL('../dados/src/.scripts/update.js', import.meta.url), 'utf8');
+    ok(src.includes('gitDependencyDrifts'), 'update.js detecta o drift de commit');
+    ok(/rmSync\(alvo,\s*\{\s*recursive:\s*true,\s*force:\s*true\s*\}\)/.test(src),
+        'remove a pasta da dependencia git desatualizada (recursive+force)');
+    ok(src.includes("path.join('node_modules', d.pacote)"),
+        'o alvo da remocao e a pasta do pacote no node_modules');
+    // A remocao tem de vir ANTES do install: depois nao adianta.
+    const posRemocao = src.indexOf('rmSync(alvo');
+    const posInstall = src.indexOf("'install', '--legacy-peer-deps'");
+    ok(posRemocao > 0 && posInstall > 0 && posRemocao < posInstall,
+        'a remocao acontece ANTES do npm install');
+    // E a mensagem do !atualizar mostra o MOTOR DE MIDIA, junto do bot e da fork.
+    ok(src.includes('REPO_MIDIA'), 'update.js conhece o repositorio do motor de midia');
+    ok(src.includes('nomeCommitMidia'), 'update.js busca o titulo do commit do motor');
+    ok(src.includes("nomeCommitDoPacote('@zapo-js/voip'"),
+        'o commit do motor vem do pacote @zapo-js/voip');
+    const idx = fs.readFileSync(new URL('../dados/src/index.js', import.meta.url), 'utf8');
+    ok(idx.includes('Commit motor de mídia'), 'o card mostra o commit do motor de midia');
+    ok(idx.includes('ok.repoMidia'), 'o card mostra o repositorio do motor de midia');
+});
+
+// ============================================================================
 const totalOk = RESULTADOS.reduce((a, r) => a + r.passed, 0);
 const totalFail = RESULTADOS.reduce((a, r) => a + r.failed, 0);
 console.log(`\n${'='.repeat(60)}`);

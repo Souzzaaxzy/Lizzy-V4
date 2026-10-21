@@ -35,6 +35,10 @@ import {
 // `LIZZY_UPDATE_REMOTE` permite rodar num fork/host próprio sem a validação
 // recusar a origem legítima daquele deploy.
 const REPO_FORK = 'Souzzaaxzy/baileys';
+// Repositório do MOTOR DE MÍDIA da call (`@zapo-js/voip`). É a outra dependência
+// de git, e a versão (`1.4.0`) não muda entre commits — o nome do commit é o que
+// diz se a correção está de fato instalada.
+const REPO_MIDIA = 'Souzzaaxzy/zapo';
 const REPO_BOT = process.env.LIZZY_UPDATE_REMOTE || 'Souzzaaxzy/Lizzy-V4';
 const BRANCH = process.env.LIZZY_UPDATE_BRANCH || 'main';
 
@@ -55,7 +59,7 @@ const ui = (tipo, dados) => log(`UI:${tipo}:${JSON.stringify(dados)}`);
 
 /** Saída estruturada de erro: a interface mostra a ETAPA que falhou. */
 const falhar = (etapa, extra = {}) => {
-    ui('ERRO', { etapa, repoBot: REPO_BOT, repoFork: REPO_FORK, branch: BRANCH, ...extra });
+    ui('ERRO', { etapa, repoBot: REPO_BOT, repoFork: REPO_FORK, repoMidia: REPO_MIDIA, branch: BRANCH, ...extra });
     process.exit(1);
 };
 
@@ -101,6 +105,23 @@ async function nodeDeps() {
         for (const d of drifts) {
             log(`  ${d.pacote}: instalado ${d.instalado} | esperado ${d.esperado}`);
         }
+        // O `npm install` NÃO troca o CONTEÚDO de um pacote de git já instalado quando
+        // o `package.json` e o `package-lock.json` chegam prontos do `git pull`: ele
+        // atualiza o `resolved` no lock de `node_modules` e deixa os arquivos antigos
+        // em disco. Medido: o lock passa a apontar para o commit novo e o `dist/`
+        // continua o antigo — a correção "não chega", e nada denuncia (o install sai
+        // com sucesso e o drift desaparece, porque a checagem lê o LOCK, não o disco).
+        // Remover a pasta do pacote força o npm a baixar o commit pedido de verdade.
+        for (const d of drifts) {
+            const alvo = path.join('node_modules', d.pacote);
+            if (!fs.existsSync(alvo)) continue;
+            try {
+                fs.rmSync(alvo, { recursive: true, force: true });
+                log(`  ${d.pacote}: pasta removida para forçar a reinstalação`);
+            } catch (e) {
+                log(`  ${d.pacote}: não consegui remover a pasta (${e?.message || e})`);
+            }
+        }
     }
 
     log('Instalando dependências');
@@ -137,6 +158,10 @@ function temDependencias(cwd = process.cwd()) {
  * `npm ls` compara versão, não commit — a fork do Baileys mantém `0.3.18-final`
  * e o `lizzy-call` mantém `0.2.0` entre commits, então esta é a única checagem
  * que pega uma dependência no commit errado.
+ *
+ * Lê o LOCK de `node_modules`. O `nodeDeps` já remove a pasta de uma dependência
+ * git desatualizada antes do install, então um drift aqui é install que não
+ * completou — não o caso do pacote com conteúdo velho.
  */
 function validarForkInstalada() {
     const drifts = fs.existsSync('node_modules') ? gitDependencyDrifts(process.cwd()) : [];
@@ -151,28 +176,32 @@ function validarForkInstalada() {
 }
 
 /**
- * Título do commit da fork pedido pelo `package-lock.json`.
+ * Título do commit de uma dependência de git pedido pelo `package-lock.json`.
  *
- * A fork não está clonada aqui (é dependência, não o repo do bot), então o
+ * A dependência não está clonada aqui (é pacote, não o repo do bot), então o
  * título é buscado na API pública do GitHub. É best-effort: sem rede/token o
  * rótulo fica genérico — e o SHA NUNCA vai para a UI, só o nome.
+ *
+ * @param {string} pacote chave em `node_modules/` (ex.: `@zapo-js/voip`)
+ * @param {string} repoFallback `owner/repo` quando o lock não trouxer o repo
  */
-async function nomeCommitFork() {
-    // Commit da FORK especificamente: `gitDependencyDrift` agora varre TODAS as
-    // dependências git, então pegar o `esperado` genérico poderia devolver o
-    // commit do `lizzy-call` — e a API seria consultada no repositório errado.
-    const esperado = (() => {
+async function nomeCommitDoPacote(pacote, repoFallback) {
+    const { esperado, repo } = (() => {
         try {
             const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf-8'));
-            return lock?.packages?.['node_modules/@itsliaaa/baileys']?.resolved?.split('#')[1] || null;
-        } catch { return null; }
+            const resolved = lock?.packages?.[`node_modules/${pacote}`]?.resolved || '';
+            const sha = resolved.includes('#') ? resolved.split('#').pop() : null;
+            const m = resolved.split('#')[0].match(/[/:]([^/:]+\/[^/]+?)(?:\.git)?$/);
+            return { esperado: sha, repo: m ? m[1] : null };
+        } catch { return { esperado: null, repo: null }; }
     })();
 
-    if (esperado) {
+    const alvo = repo || repoFallback;
+    if (esperado && alvo) {
         try {
             const headers = { Accept: 'application/vnd.github+json' };
             if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
-            const res = await fetch(`https://api.github.com/repos/${REPO_FORK}/commits/${esperado}`, {
+            const res = await fetch(`https://api.github.com/repos/${alvo}/commits/${esperado}`, {
                 headers,
                 signal: AbortSignal.timeout(15000)
             });
@@ -183,7 +212,17 @@ async function nomeCommitFork() {
             }
         } catch { /* sem rede: cai no rótulo genérico */ }
     }
-    return `Fork no commit esperado pelo package-lock`;
+    return `Commit esperado pelo package-lock (${(esperado || 'sem pin').slice(0, 7)})`;
+}
+
+/** Título do commit da FORK do Baileys (o que a mensagem já mostrava). */
+function nomeCommitFork() {
+    return nomeCommitDoPacote('@itsliaaa/baileys', REPO_FORK);
+}
+
+/** Título do commit do MOTOR DE MÍDIA da call (`!callp` / `!vozp` / `!musicap`). */
+function nomeCommitMidia() {
+    return nomeCommitDoPacote('@zapo-js/voip', REPO_MIDIA);
 }
 
 // ---------------------------------------------------------------------------
@@ -316,10 +355,12 @@ async function main() {
     ui('OK', {
         repoBot: REPO_BOT,
         repoFork: REPO_FORK,
+        repoMidia: REPO_MIDIA,
         branch: BRANCH,
         localNome: sync.depois?.localNome || sync.antes?.localNome,
         remoteNome: sync.depois?.remoteNome || sync.antes?.remoteNome,
         forkNome: await nomeCommitFork(),
+        midiaNome: await nomeCommitMidia(),
         jaAtualizado: Boolean(sync.jaAtualizado),
         databaseArquivos: restaOk.count
     });
