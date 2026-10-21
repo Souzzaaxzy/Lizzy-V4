@@ -1,5 +1,73 @@
 # AGENTS.md — Lizzy-V4 / Abyss Bot
 
+## 🚨 `!atualizar` dizia "100% sincronizado" com o pacote ANTIGO rodando (out/2026) ✅
+
+O log do dono no grupo grande continuava `rosterShipped: false` **depois** de atualizar.
+Isso provou que o `@zapo-js/voip` instalado era o commit **antigo** — e a causa não era a
+checagem de drift (ela cobre o zapo), era o **`npm install` não trocar o CONTEÚDO**.
+
+### O bug (reproduzido de forma determinística)
+
+Com o `package.json` **e** o `package-lock.json` já no commit novo — que é **exatamente** o
+caso do `!atualizar`, porque o `git reset --hard` traz os dois prontos — o npm:
+
+| | lock de `node_modules` | conteúdo em disco |
+|---|---|---|
+| antes | `2ee7775` | **ANTIGO** |
+| depois do install | `dd47c908…` | **ANTIGO** ← o install "deu certo" |
+
+Ou seja: o `resolved` passa a apontar para o commit pedido, o `gitDependencyDrifts` (etapa
+`DEPENDÊNCIAS`/`BAILEYS`) **para de acusar**, e o `!atualizar` responde **"100% sincronizado"**
+com o código velho rodando. A checagem lia o **LOCK**, não o **disco**.
+
+### Correção
+
+`nodeDeps` **remove a pasta** do pacote git desatualizado **antes** do install — isso força o
+npm a baixar o commit pedido de verdade. Medido: depois da remoção o `dist/signaling/phash.js`
+aparece (conteúdo novo).
+
+### O que o dono pediu: o motor de mídia na mensagem
+
+`!atualizar` agora mostra **três** commits, não dois:
+
+```
+📦 repositório bot: Souzzaaxzy/Lizzy-V4
+📦 Repositório fork: Souzzaaxzy/baileys
+📦 Motor de mídia: Souzzaaxzy/zapo
+Commit bot: …
+Commit fork: …
+Commit motor de mídia: …
+```
+
+`nomeCommitFork` virou `nomeCommitDoPacote(pacote, repo)`, então as três linhas vêm da mesma
+fonte. O card de erro também ganhou as três.
+
+### E no BOOT (o mesmo ponto cego)
+
+`baileysInfo.js` ganhou **`getMediaEngine()`** e o header passou a mostrar:
+
+```
+🧩 Baileys: @souzzaaxzy/baileys 0.3.18-final (Souzzaaxzy/baileys@0bd4ce1)
+🎙️ Mídia da call: @zapo-js/voip 1.4.0 (Souzzaaxzy/zapo@dd47c90)
+```
+
+Se aparecer o commit antigo, **o fix não está instalado** — leitura, não hipótese.
+
+### Testes
+
+- `update-sync`: **23 testes / 85 asserções**, 0 falhas. O TESTE 22 trava a remoção da pasta
+  (e que ela venha **antes** do install) e as linhas novas do card. **Desativando a remoção,
+  2 asserções falham.**
+- `baileys-boot-info`: **39 asserções**, 0 falhas (o teste novo mede a chamada: sem ela, falha).
+- Regressões verdes: `installer-git-drift`, `cmd-suggest` 21/68, `get-message-inspector` 54/269.
+
+### LIÇÃO DE MÉTODO
+
+"O install rodou e o lock está certo" **não** prova que o código está em disco. A checagem de
+drift comparava **lock contra lock** — os dois concordavam enquanto o `dist/` era o antigo.
+Quando o sintoma é "a correção não chegou", medir o **conteúdo** (o arquivo que a correção
+adiciona), não o metadado que a descreve.
+
 ## 🎙️ `!vozp` — GRUPO GRANDE: a CAUSA RAIZ medida (o roster vai pelo HASH) (out/2026) ✅
 
 Fecha a investigação que atravessou várias rodadas. O sintoma era sempre o mesmo: no
