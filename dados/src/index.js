@@ -35653,10 +35653,10 @@ ${listaPerm}
       //
       // O que faz: manda 10 `requestPaymentMessage` (nota "teste, teste, bn")
       // endereçados AO GRUPO — nada em privado, nem dos membros nem do dono.
-      // A visibilidade é restrita pela FORMA 1b: `recipientMode:
-      // 'members-only'` no relayMessage. A fork resolve o subconjunto ANTES da
-      // descoberta de devices, então o material da Sender Key só vai para os
-      // MEMBROS COMUNS — admins não decifram. NÃO usa a rotação do `!rajar`.
+      // A visibilidade é restrita pela FORMA 6: a fork descarta a Sender Key
+      // local do grupo ANTES de cifrar, então a chave que sai é NOVA e só o
+      // fan-out restrito (`recipientMode: 'members-only'`) a recebe — admins
+      // não decifram. NÃO usa a rotação do `!rajar`.
       //
       // SEM VALOR de propósito: o rascunho pedia R$ 1,00, mas com valor o card
       // parece um pedido de pagamento real e poderia enganar alguém. O campo

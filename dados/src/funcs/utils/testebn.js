@@ -20,13 +20,16 @@
 // AJUSTES PEDIDOS PELO DONO:
 //   3. SEM PRIVADO. A stanza e enderecada AO GRUPO — nada vai para o 1:1 de
 //      ninguem (nem dos membros, nem do dono).
-//   4. SO MEMBROS VEEM — pela FORMA 1b (restringir o fan-out do Sender Key
-//      com `recipientMode: 'members-only'`), NAO pela rotacao do `!rajar`.
-//      A fork resolve o subconjunto ANTES da descoberta de devices, entao o
-//      material da Sender Key (SKDM) so vai para os membros comuns: os admins
-//      recebem a referencia da stanza e NAO decifram. Sem rotacao, sem mutex,
-//      sem snapshot/rollback, sem registro de retry suprimido — o caminho e
-//      so o filtro de destinatarios.
+//   4. SO MEMBROS VEEM — pela FORMA 6 (Sender Key NOVA por envio).
+//      Medido antes de chegar aqui: restringir SO o fan-out (`recipientMode`)
+//      NAO protege, porque `GroupSessionBuilder.create()` REUSA a Sender Key
+//      — quem recebeu o SKDM uma vez decifra todas as mensagens seguintes,
+//      mesmo sem receber nenhuma (o admin via tudo). A Forma 6 DESCARTA o
+//      estado local antes de enviar, entao o `create()` seguinte emite key id
+//      / chain key / signing pair NOVOS que so o fan-out restrito ve.
+//      Diferente da rotacao do `!rajar`: aquela APENDA um estado e mantem o
+//      anterior (quem tem a chave velha continua lendo). Aqui o estado e
+//      SUBSTITUIDO — sem append, sem rollback, sem mutex.
 //   5. SEM VALOR. O rascunho pedia R$ 1,00 (amount1000 1000); com valor o card
 //      PARECE um pedido de pagamento real e poderia enganar algum membro. O
 //      campo `amount1000` saiu de vez — nao ha valor nenhum no payload.
@@ -50,17 +53,18 @@ const isRateLimit = err => {
  * Manda ROUNDS mensagens de payment NO GRUPO, visiveis so para os membros
  * comuns. Nada em privado.
  *
- * A restricao de visibilidade e a FORMA 1b: `recipientMode: 'members-only'` no
- * `relayMessage`. A fork (`Utils/recipient-selector.js`) resolve o subconjunto
- * a partir do metadata do grupo e o usa ANTES da descoberta de devices, entao
- * o Sender Key Distribution Message nunca chega a um admin — e sem o SKDM nao
- * ha como decifrar. Nao usa a rotacao do `!rajar`.
+ * A restricao de visibilidade e a FORMA 6: `sendGroupMessageWithFreshSenderKey`
+ * da fork descarta a Sender Key local do grupo ANTES de cifrar, entao a chave
+ * que sai e NOVA e so o fan-out restrito (`recipientMode: 'members-only'`) a
+ * recebe. Quem ja tinha a chave antiga nao decifra. Nao usa a rotacao.
  *
  * @returns {Promise<{sent:number, recipients:number, aborted?:string, last?:string}>}
  */
 async function testebn(sock, groupJid) {
-  if (typeof sock?.relayMessage !== 'function') {
-    return { sent: 0, recipients: 0, aborted: 'sem-relay' };
+  if (typeof sock?.sendGroupMessageWithFreshSenderKey !== 'function') {
+    // Sem a API da Forma 6 nao da para garantir chave nova: falha FECHADO em
+    // vez de cair para um envio que o admin leria.
+    return { sent: 0, recipients: 0, aborted: 'sem-api-fresh-sender-key' };
   }
 
   // Falha FECHADO: se nao houver membro comum para restringir, nao envia nada.
@@ -89,9 +93,11 @@ async function testebn(sock, groupJid) {
         }
       };
       const msg = await generateWAMessageFromContent(groupJid, content, { userJid: sock?.user?.id });
-      // Destino = O GRUPO. `recipientMode` restringe quem recebe o material da
-      // Sender Key (so membros comuns); a fork ainda marca `decrypt-fail=hide`.
-      await sock.relayMessage(groupJid, msg.message, {
+      // Destino = O GRUPO. A chave e nova e o fan-out e restrito aos membros
+      // comuns; a fork ainda marca `decrypt-fail=hide`.
+      // FORMA 6: chave NOVA por envio + fan-out restrito. A ordem (limpar ->
+      // cifrar -> distribuir) vive dentro do helper da fork.
+      await sock.sendGroupMessageWithFreshSenderKey(groupJid, msg.message, {
         messageId: msg.key.id,
         recipientMode: RECIPIENT_MODE
       });

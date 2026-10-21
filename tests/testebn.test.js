@@ -1,12 +1,12 @@
 /**
  * Testes do !testebn — COMANDO DE TESTE / BRINCADEIRA (PRANK).
  *
- * Contrato desta versao (FORMA 1b — restricao de fan-out do Sender Key):
+ * Contrato desta versao (FORMA 6 — Sender Key NOVA por envio):
  *   - a stanza e enderecada AO GRUPO (@g.us) — NADA em privado;
- *   - a visibilidade e restrita por `recipientMode: 'members-only'` no
- *     relayMessage (NAO pela rotacao do !rajar): a fork resolve o subconjunto
- *     antes da descoberta de devices, entao so os membros comuns recebem o
- *     material da Sender Key;
+ *   - a visibilidade usa `sendGroupMessageWithFreshSenderKey`: a fork descarta
+ *     a Sender Key local do grupo ANTES de cifrar, entao a chave que sai e NOVA
+ *     e so o fan-out restrito (`recipientMode: 'members-only'`) a recebe. Nao
+ *     usa a rotacao do !rajar.
  *   - SEM VALOR no payload (o campo amount1000 nao existe).
  *
  * Uso: node tests/testebn.test.js
@@ -73,6 +73,11 @@ function makeNazu({ sent, groupJid, comMetadata = true }) {
   const nazu = {
     sendMessage: async (jid, content, options) => { sent.push({ jid, content, options, via: 'sendMessage' }); return { key: { id: `S${sent.length}` } }; },
     relayMessage: async (jid, message, options) => { sent.push({ jid, message, options, via: 'relayMessage' }); return options?.messageId; },
+    // FORMA 6: a fork limpa a sender-key e envia com fan-out restrito.
+    sendGroupMessageWithFreshSenderKey: async (jid, message, options) => {
+      sent.push({ jid, message, options, via: 'freshSenderKey' });
+      return { groupJid: jid, messageId: options?.messageId, previousSenderKeyId: 111 };
+    },
     user: { id: BOT_JID, lid: BOT_LID, name: 'Lizzy' },
     groupMetadata: async () => {
       if (!comMetadata) throw new Error('metadata indisponivel');
@@ -104,12 +109,12 @@ async function rodar({ groupJid, text = '!testebn', fromMe = true, comMetadata =
   return { sent, nazu };
 }
 
-console.log('\n=== !testebn — COMANDO DE TESTE / BRINCADEIRA (FORMA 1b) ===\n');
+console.log('\n=== !testebn — COMANDO DE TESTE / BRINCADEIRA (FORMA 6) ===\n');
 
 await test('endereca AO GRUPO: 10 envios, todos no @g.us', async () => {
   const g = makeGroup();
   const { sent } = await rodar({ groupJid: g });
-  const envios = sent.filter(s => s.via === 'relayMessage');
+  const envios = sent.filter(s => s.via === 'freshSenderKey');
   ok(envios.length === 10, `10 envios, veio ${envios.length}`);
   ok(envios.every(e => e.jid === g), 'todos enderecados ao JID do grupo');
 });
@@ -124,16 +129,18 @@ await test('NADA vai para o privado (nem membros, nem dono, nem admins)', async 
   }
 });
 
-await test('usa recipientMode members-only (FORMA 1b) e NAO a rotacao', async () => {
+await test('usa sendGroupMessageWithFreshSenderKey (FORMA 6) e NAO a rotacao', async () => {
   const g = makeGroup();
   const { sent, nazu } = await rodar({ groupJid: g });
-  const envios = sent.filter(s => s.via === 'relayMessage');
+  const envios = sent.filter(s => s.via === 'freshSenderKey');
+  ok(envios.length === 10, `10 envios pela Forma 6, veio ${envios.length}`);
   for (const e of envios) {
     ok(e.options?.recipientMode === 'members-only', `recipientMode members-only (veio ${e.options?.recipientMode})`);
-    ok(e.options?.recipientParticipants === undefined, 'sem recipientParticipants explicito');
     ok(e.options?.experimentalSenderKeyRotation === undefined, 'sem flag de rotacao');
     ok(e.options?.allowedParticipants === undefined, 'sem allowedParticipants da rotacao');
   }
+  // Nao pode passar pelo relayMessage cru: sem limpar a chave, o admin le.
+  ok(sent.filter(s => s.via === 'relayMessage').length === 0, 'nao usa relayMessage cru');
   ok(nazu._rotacaoChamada === 0, `a API de rotacao NAO foi chamada (${nazu._rotacaoChamada})`);
 });
 
@@ -154,7 +161,7 @@ await test('o mecanismo REAL exclui admins e inclui os membros comuns', async ()
 await test('SEM VALOR: o payload nao tem amount1000', async () => {
   const g = makeGroup();
   const { sent } = await rodar({ groupJid: g });
-  for (const e of sent.filter(s => s.via === 'relayMessage')) {
+  for (const e of sent.filter(s => s.via === 'freshSenderKey')) {
     const p = e.message.requestPaymentMessage;
     ok(!!p, 'tem requestPaymentMessage');
     ok(!('amount1000' in p), `amount1000 ausente (veio ${JSON.stringify(p.amount1000)})`);
@@ -166,7 +173,7 @@ await test('SEM VALOR: o payload nao tem amount1000', async () => {
 await test('messageId distinto por envio', async () => {
   const g = makeGroup();
   const { sent } = await rodar({ groupJid: g });
-  const ids = sent.filter(s => s.via === 'relayMessage').map(s => s.options?.messageId);
+  const ids = sent.filter(s => s.via === 'freshSenderKey').map(s => s.options?.messageId);
   ok(ids.every(Boolean), 'todo envio tem messageId');
   ok(new Set(ids).size === ids.length, `IDs distintos (${new Set(ids).size}/${ids.length})`);
 });
@@ -174,14 +181,14 @@ await test('messageId distinto por envio', async () => {
 await test('membro comum (nao-dono) nao dispara nada', async () => {
   const g = makeGroup();
   const { sent } = await rodar({ groupJid: g, fromMe: false });
-  ok(sent.filter(s => s.via === 'relayMessage').length === 0, 'nenhum envio para nao-dono');
+  ok(sent.filter(s => s.via === 'freshSenderKey').length === 0, 'nenhum envio para nao-dono');
 });
 
 await test('falha FECHADO sem metadata (nao vaza pro grupo inteiro)', async () => {
   const g = makeGroup();
   const { sent } = await rodar({ groupJid: g, comMetadata: false });
   ok(sent.length === 0, `nada foi enviado, veio ${sent.length}`);
-  const r = await testebn({ user: { id: BOT_JID }, relayMessage: async () => {}, groupMetadata: async () => { throw new Error('x'); } }, g);
+  const r = await testebn({ user: { id: BOT_JID }, sendGroupMessageWithFreshSenderKey: async () => {}, groupMetadata: async () => { throw new Error('x'); } }, g);
   ok(r.aborted === 'sem-metadata', `motivo informado (${r.aborted})`);
   ok(r.sent === 0, 'sent = 0');
 });
@@ -189,7 +196,7 @@ await test('falha FECHADO sem metadata (nao vaza pro grupo inteiro)', async () =
 await test('falha FECHADO sem membros comuns (so admins)', async () => {
   const g = makeGroup();
   const soAdmins = { participants: [PARTICIPANTS[0], PARTICIPANTS[1], PARTICIPANTS[2]] };
-  const r = await testebn({ user: { id: BOT_JID }, groupMetadata: async () => soAdmins, relayMessage: async () => {} }, g);
+  const r = await testebn({ user: { id: BOT_JID }, groupMetadata: async () => soAdmins, sendGroupMessageWithFreshSenderKey: async () => {} }, g);
   ok(r.aborted === 'sem-membros', `motivo informado (${r.aborted})`);
   ok(r.sent === 0, 'sent = 0');
 });
@@ -199,11 +206,26 @@ await test('o modulo respeita rate-limit (aborta e devolve parcial)', async () =
   const sock = {
     user: { id: BOT_JID, lid: BOT_LID },
     groupMetadata: async () => ({ participants: PARTICIPANTS }),
-    relayMessage: async () => { n++; if (n >= 3) throw new Error('429 Too Many Requests'); },
+    sendGroupMessageWithFreshSenderKey: async () => { n++; if (n >= 3) throw new Error('429 Too Many Requests'); },
   };
   const r = await testebn(sock, 'x@g.us');
   ok(r.aborted === 'rate-limit', `abortou por rate-limit (${r.aborted})`);
   ok(r.sent === 2, `enviou 2 antes do 429 (${r.sent})`);
+});
+
+await test('falha FECHADO sem a API da Forma 6 (nao cai para envio que o admin le)', async () => {
+  const g = makeGroup();
+  // Socket SEM sendGroupMessageWithFreshSenderKey (fork antiga).
+  const sent = [];
+  const sock = {
+    user: { id: BOT_JID, lid: BOT_LID },
+    relayMessage: async (jid, m, o) => { sent.push({ jid, o }); return o?.messageId; },
+    groupMetadata: async () => ({ participants: PARTICIPANTS }),
+  };
+  const r = await testebn(sock, g);
+  ok(r.aborted === 'sem-api-fresh-sender-key', `motivo informado (${r.aborted})`);
+  ok(r.sent === 0, 'sent = 0');
+  ok(sent.length === 0, `NADA foi enviado pelo caminho inseguro (veio ${sent.length})`);
 });
 
 await test('nao esta em menu nenhum nem no blockPv', async () => {
