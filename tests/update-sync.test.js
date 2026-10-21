@@ -400,23 +400,38 @@ await test('TESTE 21 — pushes sucessivos: cada !atualizar alcança o commit no
 await test('TESTE 22 — dependencia git desatualizada tem a pasta removida antes do install', async () => {
     // O BUG medido: com o `package.json` e o `package-lock.json` JA no commit novo
     // (o caso do `!atualizar`, que faz `git reset --hard`), o `npm install` atualiza
-    // o `resolved` no lock de `node_modules` mas deixa os ARQUIVOS antigos em disco.
-    // Resultado: o drift desaparece (a checagem le o LOCK) e a correcao nao chega --
-    // o bot sobe normal e o comportamento novo simplesmente nao acontece.
+    // o `resolved` no lock de `node_modules` mas deixa os ARQUIVOS antigos em disco:
     //
-    // A correcao remove a pasta do pacote desatualizado ANTES do install. Este teste
-    // trava a presenca dessa remocao no `update.js`.
+    //   package-lock.json  : dd47c90
+    //   node_modules/.lock : dd47c90   <- os dois concordam => drift ZERO
+    //   conteudo em disco  : ANTIGO    <- e ninguem percebe
+    //
+    // Como o drift e' medido LOCK contra LOCK, ele da' zero nesse estado -- entao a
+    // remocao NAO pode ficar depois do early-return. Este teste trava isso.
     const src = fs.readFileSync(new URL('../dados/src/.scripts/update.js', import.meta.url), 'utf8');
-    ok(src.includes('gitDependencyDrifts'), 'update.js detecta o drift de commit');
+
+    ok(src.includes('pastasDeDependenciaGit'), 'update.js deriva as deps de git do proprio lock');
     ok(/rmSync\(alvo,\s*\{\s*recursive:\s*true,\s*force:\s*true\s*\}\)/.test(src),
-        'remove a pasta da dependencia git desatualizada (recursive+force)');
-    ok(src.includes("path.join('node_modules', d.pacote)"),
+        'remove a pasta da dependencia git (recursive+force)');
+    ok(src.includes("path.join('node_modules', pasta)"),
         'o alvo da remocao e a pasta do pacote no node_modules');
-    // A remocao tem de vir ANTES do install: depois nao adianta.
+
+    // A remocao tem de vir ANTES do early-return "ja atualizadas": depois dele, o
+    // estado do bug (drift zero) nunca chega a remover nada.
     const posRemocao = src.indexOf('rmSync(alvo');
+    const posEarly = src.indexOf("log('Dependências já atualizadas')");
     const posInstall = src.indexOf("'install', '--legacy-peer-deps'");
+    ok(posRemocao > 0 && posEarly > 0 && posRemocao < posEarly,
+        'a remocao vem ANTES do early-return "já atualizadas"');
     ok(posRemocao > 0 && posInstall > 0 && posRemocao < posInstall,
-        'a remocao acontece ANTES do npm install');
+        'a remocao vem ANTES do npm install');
+
+    // A remocao NAO pode estar condicionada ao drift de lock (que da' zero no bug).
+    const blocoRemocao = src.slice(posRemocao - 400, posRemocao + 200);
+    ok(!/if \(drifts\.length\)[\s\S]{0,200}rmSync/.test(src.slice(0, posRemocao + 400)) ||
+       posRemocao < src.indexOf('if (drifts.length)'),
+        'a remocao NAO depende do drift de lock');
+
     // E a mensagem do !atualizar mostra o MOTOR DE MIDIA, junto do bot e da fork.
     ok(src.includes('REPO_MIDIA'), 'update.js conhece o repositorio do motor de midia');
     ok(src.includes('nomeCommitMidia'), 'update.js busca o titulo do commit do motor');

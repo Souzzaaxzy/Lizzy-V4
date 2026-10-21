@@ -73,9 +73,65 @@ async function isAvailable(cmd, args = ['--version']) {
 }
 
 // ---------------------------------------------------------------------------
-// Dependências Node (mantém a lógica anterior: drift de commit da fork)
+// Dependências Node
 // ---------------------------------------------------------------------------
+
+/**
+ * Os nomes dos pacotes que são dependências de GIT, lidos do `package-lock.json`.
+ *
+ * Vêm do próprio lock (nada de lista fixa): uma dependência de git nova passa a ser
+ * tratada sozinha. Devolve `[]` quando o lock não puder ser lido — nesse caso não se
+ * remove nada, e o `npm ls` decide.
+ *
+ * @param {string} [cwd]
+ * @returns {string[]} nomes de pacote (ex.: `@zapo-js/voip`)
+ */
+function pastasDeDependenciaGit(cwd = process.cwd()) {
+    try {
+        const lock = JSON.parse(fs.readFileSync(path.join(cwd, 'package-lock.json'), 'utf-8'));
+        const nomes = [];
+        for (const [chave, pkg] of Object.entries(lock?.packages || {})) {
+            if (!chave.startsWith('node_modules/')) continue;
+            const resolved = pkg?.resolved;
+            if (typeof resolved !== 'string') continue;
+            if (!/^(git\+|git:\/\/|github:|gitlab:|bitbucket:)/.test(resolved)) continue;
+            if (!/#[0-9a-f]{7,40}$/i.test(resolved)) continue;
+            nomes.push(chave.replace(/^.*node_modules\//, ''));
+        }
+        return nomes;
+    } catch {
+        return [];
+    }
+}
+
 async function nodeDeps() {
+    // ── Dependências de GIT: a pasta é removida ANTES de qualquer checagem.
+    //
+    // Por que ANTES e sem condição: o `npm install` NÃO troca o CONTEÚDO de um
+    // pacote de git já instalado quando o `package.json` e o `package-lock.json`
+    // chegam prontos do `git reset --hard` (o caso do `!atualizar`). Ele atualiza
+    // o `resolved` no lock de `node_modules` e deixa os ARQUIVOS antigos em disco:
+    //
+    //   package-lock.json  : dd47c90
+    //   node_modules/.lock : dd47c90   <- os dois concordam
+    //   conteúdo em disco  : ANTIGO    <- e ninguém percebe
+    //
+    // Como o drift é medido LOCK contra LOCK, ele dá zero nesse estado — a checagem
+    // antiga dizia "já atualizadas" e pulava o install. O único sinal confiável é a
+    // própria PASTA: removê-la força o npm a baixar o commit pedido de verdade.
+    // São poucos pacotes e o npm os busca do cache/HTTPS em segundos.
+    const pastasGit = pastasDeDependenciaGit();
+    for (const pasta of pastasGit) {
+        const alvo = path.join('node_modules', pasta);
+        if (!fs.existsSync(alvo)) continue;
+        try {
+            fs.rmSync(alvo, { recursive: true, force: true });
+            log(`  ${pasta}: pasta removida para forçar a reinstalação do commit pedido`);
+        } catch (e) {
+            log(`  ${pasta}: não consegui remover a pasta (${e?.message || e})`);
+        }
+    }
+
     // `npm ls --depth=0` não detecta dependência TRANSITIVA faltando (devolve
     // exit 0), então usamos a lista `problems` do `npm ls --all`, ignorando o
     // peer opcional `sharp@*` (não é instalado de propósito).
@@ -95,7 +151,9 @@ async function nodeDeps() {
 
     const drifts = fs.existsSync('node_modules') ? gitDependencyDrifts(process.cwd()) : [];
 
-    if (treeOk && fs.existsSync('node_modules') && !drifts.length) {
+    // As pastas removidas acima já derrubam o `treeOk` (o `npm ls` acusa pacote
+    // faltando), então este caminho só é tomado quando não havia nada a remover.
+    if (treeOk && fs.existsSync('node_modules') && !drifts.length && pastasGit.length === 0) {
         log('Dependências já atualizadas');
         return;
     }
@@ -104,23 +162,6 @@ async function nodeDeps() {
         log('Dependência(s) de git em commit desatualizado:');
         for (const d of drifts) {
             log(`  ${d.pacote}: instalado ${d.instalado} | esperado ${d.esperado}`);
-        }
-        // O `npm install` NÃO troca o CONTEÚDO de um pacote de git já instalado quando
-        // o `package.json` e o `package-lock.json` chegam prontos do `git pull`: ele
-        // atualiza o `resolved` no lock de `node_modules` e deixa os arquivos antigos
-        // em disco. Medido: o lock passa a apontar para o commit novo e o `dist/`
-        // continua o antigo — a correção "não chega", e nada denuncia (o install sai
-        // com sucesso e o drift desaparece, porque a checagem lê o LOCK, não o disco).
-        // Remover a pasta do pacote força o npm a baixar o commit pedido de verdade.
-        for (const d of drifts) {
-            const alvo = path.join('node_modules', d.pacote);
-            if (!fs.existsSync(alvo)) continue;
-            try {
-                fs.rmSync(alvo, { recursive: true, force: true });
-                log(`  ${d.pacote}: pasta removida para forçar a reinstalação`);
-            } catch (e) {
-                log(`  ${d.pacote}: não consegui remover a pasta (${e?.message || e})`);
-            }
         }
     }
 
