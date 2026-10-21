@@ -1,5 +1,95 @@
 # AGENTS.md — Lizzy-V4 / Abyss Bot
 
+## 🎙️ `!vozp` — GRUPO GRANDE: a CAUSA RAIZ medida (o roster vai pelo HASH) (out/2026) ✅
+
+Fecha a investigação que atravessou várias rodadas. O sintoma era sempre o mesmo: no
+grupo pequeno o chat de voz **aparece**, no grande ele **sobe sem erro e não aparece**.
+
+### A tabela que decidiu (tudo medido no grupo real, com o offer instrumentado)
+
+| offer do chat de voz | resposta do servidor |
+|---|---|
+| roster **0** (sem `<group_info>`) | **NADA** — o offer é descartado em silêncio |
+| roster **32** | `error: '412'` |
+| roster **127** | `error: '427'` |
+| roster = **o grupo inteiro**, num grupo que CABE | **funciona** |
+
+A leitura fecha com todos os logs: **nomear menos que o grupo é recusado** (o roster não
+descreve o grupo), **nomear o grupo inteiro estoura o teto do wire** (127 contas), e
+**nomear ninguém é descartado sem resposta**. Ou seja: **nenhum valor de corte satisfaz um
+grupo maior que o limite.** Era por isso que subia sem erro e não materializava.
+
+### A peça que faltava (nas DUAS referências, não em suposição)
+
+O cliente oficial **não enumera** um conjunto grande — ele o referencia pelo **HASH**:
+
+- **Cobalt** (RE do cliente oficial): `GroupInfoStanza(String phash, int connectedLimit, …)`,
+  no wire `<group_info phash="…" connected-limit="N">`, com o javadoc *"the participant set
+  hash for a phash based link call"*; o `DevicePhashCalculator` calcula
+  `"2:" + base64(sha256(sorted canonical device jids)[0..6])` (V2/SHA-256).
+- **WhatsApp Web** (dump deobfuscado): o resumo da call carrega
+  `is_phash_based`, `phash` e `can_ring_all`.
+- A **própria fork** já conhecia o vocabulário: `group_phash` e `lightweight_key` são
+  **lidos** pelo parser e declarados **mutuamente exclusivos** — os dois jeitos de
+  referenciar um grupo sem enumerar. Só nunca eram **escritos**.
+
+### A correção
+
+**Fork `zapo`** (branch `voip`, commit `dd47c9085b0732a0b73504059f30ef98b4c38ff3`):
+- novo **`src/signaling/phash.ts`** — `computePhashV2` portado do próprio `zapo-js` (o
+  pacote não expõe `message/crypto/phash` pelo `exports`), **conferido caso a caso** contra
+  a implementação de referência antes de ser usado;
+- `buildGroupOfferStanza`: um chat de voz que **não cabe** agora manda
+  `<group_info phash="2:…">` **sem filhos**, cobrindo o conjunto **INTEIRO** de devices;
+  o grupo que **cabe** continua com a lista enumerada (caminho intacto).
+
+**Bot**: pin da fork atualizado nos três arquivos (`package.json`, `package-lock.json`,
+`yarn.lock` Berry v8 — hash **completo**, senão o `gitDependencyDrift` acusa drift).
+
+### Testes
+
+- Fork: **566 testes, 0 falhas** (era 562). Dois testes **medem** o caminho novo — desligando
+  o `hashOnly`, **2 falham**. Um teste unitário trava o hash contra valores da referência.
+- Bot: `callp` 50/118 · `callp-regressions` 38/115 · `musicap` 24/70 · `vozp-log` 12/20 ·
+  `zapo-conexao` 17/37 · `zapo-pareamento` 24/63 · `mlow-bitrate` 11/20 · `call-audio-prep`
+  14/38 — **0 falhas**. Regressões verdes: `get-message-inspector` 54/269, `invisible-analyzer`
+  58/467, `cmd-suggest` 21/68, `antimidia` 14/29, `gifsbn-media` 16/61, `viewonce-v2` 18/77,
+  `relationships-multi` 19/86, `subdonos` 20/62, `subdonos-perms` 21/58, `pin-message` 23/118,
+  `antictt` 15/38, `dono-perfil` 47/0, `me-profile` 44/0, `raja-selective` 23/0,
+  `antifantasma-classificacao` 18/0.
+- **PRÉ-EXISTENTES** (confirmados na baseline com os pins antigos, sem relação): `menu-layout`
+  1 falha (`menufig`: 17 esperado, 18 veio) e `testcall` 2 falhas (as duas idênticas na
+  baseline, rodadas 3×).
+
+### LIMITE HONESTO (o que NÃO está provado)
+
+Não há sessão de WhatsApp neste ambiente, então **não** validei o cartão aparecendo no grupo
+grande. O que está provado: o hash **bate** com a implementação de referência caso a caso, o
+offer sai com `<group_info phash="2:…">` sem filhos cobrindo o conjunto inteiro, o caminho do
+grupo que cabe ficou **byte-idêntico**, e o pacote instalado no bot tem esse código.
+
+**O que olhar na próxima rodada do grupo grande** — a linha do offer agora distingue os dois
+formatos:
+
+```
+group offer sent { …, rosterShipped: true, rosterAccounts: 0 }   <- HASH (sem filhos)
+group offer sent { …, rosterShipped: true, rosterAccounts: N }   <- lista enumerada
+```
+
+- apareceu o cartão -> fechado;
+- veio `error` de novo -> o código do erro + a linha acima dizem qual caminho rodou;
+- **nada** depois do `group offer sent` -> o servidor não responde nem ao hash, e o próximo
+  suspeito é o `can_ring_all` (o cliente oficial o usa quando o caller pode tocar todos).
+
+### LIÇÃO DE MÉTODO (a que custou mais rodadas)
+
+Três hipóteses caíram por medição antes desta: `is_lightweight` extra (atributo desconhecido
+faz o servidor **descartar** o offer), roster vazio, e o teto de 127. Todas eram plausíveis e
+nenhuma era a causa. O que fechou o caso foi **tabelar todas as respostas do servidor** para
+cada formato de offer e perceber que **nenhum valor de corte pode funcionar** — o problema não
+era o número, era a **forma**. E a forma certa estava em **duas** referências independentes
+que já a documentavam.
+
 ## 🎙️ `!vozp` — o chat de voz foi para o motor do `zapo` (mesmo do `!callp`) (out/2026) ✅
 Pedido do dono: *"o novo alvo agora é fazer o `!vozp` conectar e ficar constante na
 call, sem cair e nem expulsar membro"* — e, na mesma rodada, *"o vozp usa o mesmo
