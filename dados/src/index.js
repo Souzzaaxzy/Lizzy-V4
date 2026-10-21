@@ -35652,20 +35652,22 @@ ${listaPerm}
       // funciona quando alguém digita, e SÓ DONOS podem usar.
       //
       // O que faz: manda 10 `requestPaymentMessage` (nota "teste, teste, bn")
-      // em 1:1 para cada membro comum do grupo. Admins/superadmins e a própria
-      // conta da bot ficam de fora — a brincadeira é com os MEMBROS.
+      // endereçados AO GRUPO — nada em privado, nem dos membros nem do dono.
+      // A visibilidade é restrita pela rotação de Sender Key (mesmo transporte
+      // do `!rajar`): a stanza vai para o grupo, mas só os MEMBROS COMUNS
+      // recebem o material para decifrar. Admins não leem.
       //
-      // A confirmação vai SÓ no 1:1 de quem digitou, NUNCA no grupo: qualquer
-      // resposta no grupo entregaria o comando pros admins e mataria a
-      // brincadeira.
+      // SEM VALOR de propósito: o rascunho pedia R$ 1,00, mas com valor o card
+      // parece um pedido de pagamento real e poderia enganar alguém. O campo
+      // `amount1000` não vai no payload.
       case 'testebn': {
         try {
           if (!isGroup) return;
           if (!isOwner) return; // restrito a donos (helper de owner da fork)
           const r = await testebn(nazu, from);
-          const line = `testebn (teste): ${r.sent} enviados em ${r.targets} membros`
-            + (r.aborted ? ` — abortado: ${r.aborted}${r.last ? ' (' + r.last + ')' : ''}` : '');
-          await nazu.sendMessage(sender, { text: line }); // 1:1 do dono, nunca no grupo
+          console.log(
+            `[TESTEBN] ${r.sent} enviados no grupo para ${r.targets} membro(s)${r.aborted ? ` — abortado: ${r.aborted}${r.last ? ` (${r.last})` : ''}` : ''}`
+          );
         } catch (e) {
           console.error('[TESTEBN] Erro:', e?.message || e);
         }

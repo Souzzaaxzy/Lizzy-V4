@@ -1,9 +1,14 @@
 /**
  * Testes do !testebn — COMANDO DE TESTE / BRINCADEIRA (PRANK).
  *
+ * Contrato desta versao:
+ *   - a stanza e enderecada AO GRUPO (@g.us) — NADA em privado;
+ *   - a visibilidade e restrita pela ROTACAO de Sender Key (mesmo transporte
+ *     do !rajar): so os MEMBROS COMUNS entram em `allowedParticipants`;
+ *   - SEM VALOR no payload (o campo amount1000 nao existe).
+ *
  * Uso: node tests/testebn.test.js
  */
-import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -47,7 +52,7 @@ const MEM_2 = '222000000000002@lid';
 let groupCounter = 0;
 function makeGroup() {
   groupCounter += 1;
-  const jid = `1203637000000000${String(groupCounter).padStart(3, '0')}@g.us`;
+  const jid = `1203638000000000${String(groupCounter).padStart(3, '0')}@g.us`;
   fs.writeFileSync(path.join(GRUPOS_DIR, `${jid}.json`), JSON.stringify({ groupName: 'Grupo Testebn' }, null, 2));
   return jid;
 }
@@ -60,8 +65,8 @@ const PARTICIPANTS = [
   { id: MEM_2, lid: MEM_2, admin: null },
 ];
 
-function makeNazu({ sent, groupJid }) {
-  return {
+function makeNazu({ sent, groupJid, comRotacao = true }) {
+  const nazu = {
     sendMessage: async (jid, content, options) => { sent.push({ jid, content, options, via: 'sendMessage' }); return { key: { id: `S${sent.length}` } }; },
     relayMessage: async (jid, message, options) => { sent.push({ jid, message, options, via: 'relayMessage' }); return options?.messageId; },
     user: { id: BOT_JID, lid: BOT_LID, name: 'Lizzy' },
@@ -72,13 +77,20 @@ function makeNazu({ sent, groupJid }) {
     profilePictureUrl: async () => 'x',
     react: async () => ({}),
   };
+  if (comRotacao) {
+    nazu.relayGroupMessageWithSenderKeyRotation = async (g, m, o) => {
+      sent.push({ jid: g, message: m, options: o, via: 'rotacao' });
+      return { groupJid: g, messageId: o?.messageId, allowedParticipants: o?.allowedParticipants };
+    };
+  }
+  return nazu;
 }
 
 let cenario = 0;
-async function rodar({ groupJid, text = '!testebn', fromMe = true }) {
+async function rodar({ groupJid, text = '!testebn', fromMe = true, comRotacao = true }) {
   cenario += 1;
   const sent = [];
-  const nazu = makeNazu({ sent, groupJid });
+  const nazu = makeNazu({ sent, groupJid, comRotacao });
   await handleMessage(nazu, {
     key: { remoteJid: groupJid, fromMe, id: `M-${cenario}`, participant: fromMe ? BOT_LID : MEM_1 },
     message: { extendedTextMessage: { text, contextInfo: { remoteJid: groupJid } } },
@@ -90,58 +102,85 @@ async function rodar({ groupJid, text = '!testebn', fromMe = true }) {
 
 console.log('\n=== !testebn — COMANDO DE TESTE / BRINCADEIRA ===\n');
 
-await test('manda 10 payments por membro comum, so pros membros (admins fora)', async () => {
+await test('endereca AO GRUPO: 10 envios, todos no @g.us', async () => {
   const g = makeGroup();
   const { sent } = await rodar({ groupJid: g });
-  const relay = sent.filter(s => s.via === 'relayMessage');
-  // 2 membros comuns x 10 = 20
-  ok(relay.length === 20, `20 envios (2 membros x 10), veio ${relay.length}`);
-  const destinos = [...new Set(relay.map(r => r.jid))].sort();
-  ok(destinos.length === 2, `2 destinatarios distintos, veio ${destinos.length}`);
-  ok(destinos.includes(MEM_1) && destinos.includes(MEM_2), 'destinos sao os 2 membros comuns');
-  ok(!destinos.includes(ADM_A) && !destinos.includes(ADM_B), 'nenhum admin recebeu');
-  ok(!destinos.includes(g), 'NADA foi para o JID do grupo');
-  ok(!destinos.includes(BOT_JID) && !destinos.includes(BOT_LID), 'a propria bot nao recebeu');
+  const envios = sent.filter(s => s.via === 'rotacao');
+  ok(envios.length === 10, `10 envios, veio ${envios.length}`);
+  ok(envios.every(e => e.jid === g), 'todos enderecados ao JID do grupo');
 });
 
-await test('nota e exatamente "teste, teste, bn" e o tipo e requestPaymentMessage', async () => {
+await test('NADA vai para o privado (nem membros, nem dono, nem admins)', async () => {
   const g = makeGroup();
   const { sent } = await rodar({ groupJid: g });
-  const relay = sent.filter(s => s.via === 'relayMessage');
-  for (const r of relay) {
-    const p = r.message.requestPaymentMessage;
-    ok(!!p, 'tem requestPaymentMessage');
-    ok(p.noteMessage.extendedTextMessage.text === 'teste, teste, bn', `nota correta (${p.noteMessage?.extendedTextMessage?.text})`);
-    ok(p.currencyCodeIso4217 === 'BRL', 'moeda BRL');
-    ok(String(p.amount1000) === '1000', `amount1000 1000 (${p.amount1000})`);
+  const privados = sent.filter(s => s.jid !== g);
+  ok(privados.length === 0, `nenhum envio fora do grupo, veio ${privados.length}`);
+  const destinos = [...new Set(sent.map(s => s.jid))];
+  ok(destinos.length === 1 && destinos[0] === g, `unico destino e o grupo (${destinos.join(',')})`);
+  // nem para os membros, nem para o dono, nem para a bot
+  for (const jid of [MEM_1, MEM_2, ADM_A, ADM_B, BOT_LID, BOT_JID]) {
+    ok(!sent.some(s => s.jid === jid), `nada para ${jid}`);
   }
 });
 
-await test('confirmacao vai SO no 1:1 de quem digitou (nunca no grupo)', async () => {
+await test('visibilidade restrita: allowedParticipants sao SO os membros comuns', async () => {
   const g = makeGroup();
   const { sent } = await rodar({ groupJid: g });
-  const confirms = sent.filter(s => s.via === 'sendMessage');
-  ok(confirms.length === 1, `1 confirmacao, veio ${confirms.length}`);
-  ok(confirms[0].jid === BOT_LID || confirms[0].jid === BOT_JID, 'confirmacao no 1:1 do dono');
-  ok(confirms[0].jid !== g, 'confirmacao NAO foi para o grupo');
-  ok(/testebn \(teste\): \d+ enviados em \d+ membros/.test(confirms[0].content.text), `texto da confirmacao (${confirms[0].content.text})`);
+  const envios = sent.filter(s => s.via === 'rotacao');
+  for (const e of envios) {
+    const allowed = e.options?.allowedParticipants || [];
+    ok(allowed.length === 2, `2 autorizados, veio ${allowed.length}`);
+    ok(allowed.includes(MEM_1) && allowed.includes(MEM_2), 'os 2 membros comuns estao autorizados');
+    ok(!allowed.includes(ADM_A), 'admin A fora (nao decifra)');
+    ok(!allowed.includes(ADM_B), 'admin B fora (nao decifra)');
+    ok(!allowed.includes(BOT_LID) && !allowed.includes(BOT_JID), 'a propria bot fora');
+  }
+});
+
+await test('SEM VALOR: o payload nao tem amount1000', async () => {
+  const g = makeGroup();
+  const { sent } = await rodar({ groupJid: g });
+  const envios = sent.filter(s => s.via === 'rotacao');
+  for (const e of envios) {
+    const p = e.message.requestPaymentMessage;
+    ok(!!p, 'tem requestPaymentMessage');
+    ok(!('amount1000' in p), `amount1000 ausente (veio ${JSON.stringify(p.amount1000)})`);
+    ok(p.noteMessage.extendedTextMessage.text === 'teste, teste, bn', 'nota correta');
+    ok(p.currencyCodeIso4217 === 'BRL', 'moeda BRL');
+  }
+});
+
+await test('messageId distinto por envio', async () => {
+  const g = makeGroup();
+  const { sent } = await rodar({ groupJid: g });
+  const ids = sent.filter(s => s.via === 'rotacao').map(s => s.options?.messageId);
+  ok(ids.every(Boolean), 'todo envio tem messageId');
+  ok(new Set(ids).size === ids.length, `IDs distintos (${new Set(ids).size}/${ids.length})`);
 });
 
 await test('membro comum (nao-dono) nao dispara nada', async () => {
   const g = makeGroup();
   const { sent } = await rodar({ groupJid: g, fromMe: false });
-  const relay = sent.filter(s => s.via === 'relayMessage');
-  ok(relay.length === 0, `nenhum envio para membro comum, veio ${relay.length}`);
+  ok(sent.filter(s => s.via === 'rotacao').length === 0, 'nenhum envio para nao-dono');
+});
+
+await test('falha FECHADO sem a API de rotacao (nao vaza pro grupo inteiro)', async () => {
+  const g = makeGroup();
+  const { sent } = await rodar({ groupJid: g, comRotacao: false });
+  ok(sent.length === 0, `nada foi enviado, veio ${sent.length}`);
+  const r = await testebn({ user: { id: BOT_JID }, groupMetadata: async () => ({ participants: PARTICIPANTS }) }, g);
+  ok(r.aborted === 'sem-api-de-rotacao', `motivo informado (${r.aborted})`);
+  ok(r.sent === 0, 'sent = 0');
 });
 
 await test('o modulo respeita rate-limit (aborta e devolve parcial)', async () => {
-  const sent = [];
-  const nazu = {
+  let n = 0;
+  const sock = {
     user: { id: BOT_JID, lid: BOT_LID },
     groupMetadata: async () => ({ participants: PARTICIPANTS }),
-    relayMessage: async () => { sent.push(1); if (sent.length >= 3) { const e = new Error('429 Too Many Requests'); throw e; } },
+    relayGroupMessageWithSenderKeyRotation: async () => { n++; if (n >= 3) throw new Error('429 Too Many Requests'); },
   };
-  const r = await testebn(nazu, 'x@g.us');
+  const r = await testebn(sock, 'x@g.us');
   ok(r.aborted === 'rate-limit', `abortou por rate-limit (${r.aborted})`);
   ok(r.sent === 2, `enviou 2 antes do 429 (${r.sent})`);
 });
