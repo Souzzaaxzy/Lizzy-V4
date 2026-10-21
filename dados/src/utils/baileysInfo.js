@@ -60,29 +60,41 @@ const parseResolved = (resolved) => {
 };
 
 /**
- * Lê a fork instalada.
+ * Lê um pacote git instalado e devolve nome, versão, repo e commit.
  *
- * @param {string} [root] raiz do projeto (padrão: deduzida deste arquivo)
+ * Generaliza o que antes era só da fork do Baileys: o motor de mídia da call
+ * (`@zapo-js/voip`) é outra dependência de git, e o mesmo defeito vale para ela —
+ * a versão (`1.4.0`) é a MESMA entre commits, então só o commit identifica a
+ * revisão instalada. Um pacote no commit errado faz o comportamento novo não
+ * existir, e nada no boot dizia isso.
+ *
+ * @param {string} root raiz do projeto
+ * @param {string} pacote nome do pacote
  * @returns {{name: string, version: string, commit: string|null,
  *            commitCurto: string|null, repo: string|null, label: string}}
  */
-export function getWhatsAppLibrary(root = PROJECT_ROOT) {
+function lerPacoteGit(root, pacote) {
+  const desconhecido = {
+    name: pacote,
+    version: 'desconhecida',
+    commit: null,
+    commitCurto: null,
+    repo: null,
+    label: `${pacote} (versão desconhecida)`,
+  };
   try {
-    const pacoteDir = path.join(root, 'node_modules', PACOTE);
-    const pkg = lerJson(path.join(pacoteDir, 'package.json'));
-    if (!pkg) return { ...DESCONHECIDO };
+    const pkg = lerJson(path.join(root, 'node_modules', pacote, 'package.json'));
+    if (!pkg) return desconhecido;
 
-    // Nome real do pacote (a fork se chama `@souzzaaxzy/baileys`).
-    const name = typeof pkg.name === 'string' && pkg.name.trim() ? pkg.name.trim() : PACOTE;
+    const name = typeof pkg.name === 'string' && pkg.name.trim() ? pkg.name.trim() : pacote;
     const version = typeof pkg.version === 'string' && pkg.version.trim() ? pkg.version.trim() : 'desconhecida';
 
     // O commit só existe no lock do próprio node_modules.
     const lock = lerJson(path.join(root, 'node_modules', '.package-lock.json'));
-    const entry = lock?.packages?.[`node_modules/${PACOTE}`];
+    const entry = lock?.packages?.[`node_modules/${pacote}`];
     const { repo, commit } = parseResolved(entry?.resolved);
     const commitCurto = commit ? commit.slice(0, 7) : null;
 
-    // Ex.: "@souzzaaxzy/baileys 0.3.18-final (Souzzaaxzy/baileys@d3692c7)"
     let label = `${name} ${version}`;
     if (repo || commitCurto) {
       label += ` (${repo || 'fork'}${commitCurto ? `@${commitCurto}` : ''})`;
@@ -90,8 +102,37 @@ export function getWhatsAppLibrary(root = PROJECT_ROOT) {
 
     return { name, version, commit, commitCurto, repo, label };
   } catch {
-    return { ...DESCONHECIDO };
+    return desconhecido;
   }
+}
+
+/**
+ * Lê a fork do Baileys instalada.
+ *
+ * @param {string} [root] raiz do projeto (padrão: deduzida deste arquivo)
+ * @returns {{name: string, version: string, commit: string|null,
+ *            commitCurto: string|null, repo: string|null, label: string}}
+ */
+export function getWhatsAppLibrary(root = PROJECT_ROOT) {
+  return lerPacoteGit(root, PACOTE);
+}
+
+/** Pacote do MOTOR DE MÍDIA da chamada (`!callp` / `!vozp` / `!musicap`). */
+const PACOTE_MIDIA = '@zapo-js/voip';
+
+/**
+ * Lê o motor de mídia instalado.
+ *
+ * Existe pelo mesmo motivo da fork do Baileys: a versão é a mesma entre commits,
+ * então uma correção pode estar no `package-lock.json` e NÃO estar rodando — o
+ * bot sobe normalmente e o comportamento novo simplesmente não acontece.
+ *
+ * @param {string} [root] raiz do projeto
+ * @returns {{name: string, version: string, commit: string|null,
+ *            commitCurto: string|null, repo: string|null, label: string}}
+ */
+export function getMediaEngine(root = PROJECT_ROOT) {
+  return lerPacoteGit(root, PACOTE_MIDIA);
 }
 
 export default getWhatsAppLibrary;

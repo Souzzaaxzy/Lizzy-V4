@@ -149,9 +149,15 @@ async function displayHeader() {
   // pacote em node_modules, então trocar o commit no lockfile e reinstalar já
   // muda o que aparece aqui — sem editar código.
   let waLib = null;
+  let midiaLib = null;
   try {
-    const { getWhatsAppLibrary } = await import('../utils/baileysInfo.js');
+    const { getWhatsAppLibrary, getMediaEngine } = await import('../utils/baileysInfo.js');
     waLib = getWhatsAppLibrary();
+    // O motor de mídia da call é outra dependência de GIT, com a MESMA armadilha:
+    // a versão (1.4.0) não muda entre commits, então uma correção pode estar no
+    // lockfile e não estar rodando — o bot sobe normal e o comportamento novo
+    // não acontece. Mostrar o commit no boot é o que separa as duas coisas.
+    midiaLib = getMediaEngine();
   } catch {
     // Informativo: nunca impede o boot.
   }
@@ -162,6 +168,9 @@ async function displayHeader() {
   ];
   if (waLib?.label) {
     header.push(`${colors.bold}🧩 Baileys: ${waLib.label}${colors.reset}`);
+  }
+  if (midiaLib?.label) {
+    header.push(`${colors.bold}🎙️ Mídia da call: ${midiaLib.label}${colors.reset}`);
   }
 
   separador();

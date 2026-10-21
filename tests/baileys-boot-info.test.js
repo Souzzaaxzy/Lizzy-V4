@@ -15,7 +15,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-import { getWhatsAppLibrary } from '../dados/src/utils/baileysInfo.js';
+import { getWhatsAppLibrary, getMediaEngine } from '../dados/src/utils/baileysInfo.js';
 
 let ok = 0, fail = 0;
 const erros = [];
@@ -121,6 +121,73 @@ console.log('\n── 5. o header do boot realmente usa a função ──');
   check(startSrc.includes('getWhatsAppLibrary'), 'start.js chama getWhatsAppLibrary()');
   check(/Baileys:\s*\$\{waLib/.test(startSrc), 'start.js exibe o label no header');
   check(!/Baileys:\s*(WhiskeySockets|adiwajshing|@whiskeysockets)/.test(startSrc), 'start.js NÃO tem biblioteca antiga fixa');
+}
+
+console.log('\n── 6. o MOTOR DE MÍDIA da call também aparece no boot ──');
+{
+  // A mesma armadilha da fork do Baileys vale para o `@zapo-js/voip`: a versão
+  // (1.4.0) NÃO muda entre commits, então uma correção pode estar no lockfile e
+  // não estar rodando — o bot sobe normal e o comportamento novo não acontece.
+  // O commit no boot é o que separa "o fix não foi instalado" de "o fix não funciona".
+  const info = getMediaEngine();
+  check(typeof info?.label === 'string' && info.label.length > 0, 'getMediaEngine devolve um label');
+
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'lizzy-midia-'));
+  const dir = path.join(root, 'node_modules/@zapo-js/voip');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: '@zapo-js/voip', version: '1.4.0' }));
+  fs.writeFileSync(
+    path.join(root, 'node_modules', '.package-lock.json'),
+    JSON.stringify({
+      packages: {
+        'node_modules/@zapo-js/voip': {
+          version: '1.4.0',
+          resolved: 'git+ssh://git@github.com/Souzzaaxzy/zapo.git#dd47c9085b0732a0b73504059f30ef98b4c38ff3',
+        },
+      },
+    })
+  );
+  const lido = getMediaEngine(root);
+  check(lido.name === '@zapo-js/voip', 'lê o nome do pacote do motor');
+  check(lido.version === '1.4.0', 'lê a versão');
+  check(lido.commitCurto === 'dd47c90', 'lê o commit CURTO para o header');
+  check(lido.commit === 'dd47c9085b0732a0b73504059f30ef98b4c38ff3', 'guarda o commit completo');
+  check(lido.repo === 'Souzzaaxzy/zapo', 'identifica o repositório da fork');
+  check(lido.label.includes('Souzzaaxzy/zapo@dd47c90'), 'o label traz repo e commit');
+
+  // Commits diferentes => labels diferentes (é o que denuncia o pacote velho).
+  const outro = getMediaEngine(
+    (() => {
+      const r2 = fs.mkdtempSync(path.join(os.tmpdir(), 'lizzy-midia2-'));
+      const d2 = path.join(r2, 'node_modules/@zapo-js/voip');
+      fs.mkdirSync(d2, { recursive: true });
+      fs.writeFileSync(path.join(d2, 'package.json'), JSON.stringify({ name: '@zapo-js/voip', version: '1.4.0' }));
+      fs.writeFileSync(
+        path.join(r2, 'node_modules', '.package-lock.json'),
+        JSON.stringify({
+          packages: {
+            'node_modules/@zapo-js/voip': {
+              version: '1.4.0',
+              resolved: 'git+ssh://git@github.com/Souzzaaxzy/zapo.git#2ee77754959b2e9798c8ce8a9521bc6a621868c4',
+            },
+          },
+        })
+      );
+      return r2;
+    })()
+  );
+  check(outro.label !== lido.label, 'mesma versão em commits diferentes => labels DIFERENTES');
+  check(outro.label.includes('2ee7775'), 'o label do pacote antigo mostra o commit antigo');
+
+  // Degradação: sem pacote, ainda devolve um label válido (nunca undefined).
+  const vazio = fs.mkdtempSync(path.join(os.tmpdir(), 'lizzy-midia3-'));
+  const sem = getMediaEngine(vazio);
+  check(typeof sem.label === 'string' && sem.label.length > 0, 'sem pacote, devolve label válido');
+  check(sem.commit === null, 'sem pacote, commit é null (não undefined)');
+
+  const startSrc = fs.readFileSync(new URL('../dados/src/.scripts/start.js', import.meta.url), 'utf8');
+  check(startSrc.includes('midiaLib = getMediaEngine()'), 'start.js CHAMA getMediaEngine()');
+  check(/Mídia da call:\s*\$\{midiaLib/.test(startSrc), 'start.js exibe o commit do motor no header');
 }
 
 console.log('\n════════════════════════════════════════');
