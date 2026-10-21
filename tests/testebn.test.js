@@ -1,10 +1,12 @@
 /**
  * Testes do !testebn — COMANDO DE TESTE / BRINCADEIRA (PRANK).
  *
- * Contrato desta versao:
+ * Contrato desta versao (FORMA 1b — restricao de fan-out do Sender Key):
  *   - a stanza e enderecada AO GRUPO (@g.us) — NADA em privado;
- *   - a visibilidade e restrita pela ROTACAO de Sender Key (mesmo transporte
- *     do !rajar): so os MEMBROS COMUNS entram em `allowedParticipants`;
+ *   - a visibilidade e restrita por `recipientMode: 'members-only'` no
+ *     relayMessage (NAO pela rotacao do !rajar): a fork resolve o subconjunto
+ *     antes da descoberta de devices, entao so os membros comuns recebem o
+ *     material da Sender Key;
  *   - SEM VALOR no payload (o campo amount1000 nao existe).
  *
  * Uso: node tests/testebn.test.js
@@ -41,6 +43,8 @@ function ok(c, m) { if (c) CURRENT.passed++; else { CURRENT.failed++; CURRENT.er
 const indexModule = await import(new URL('../dados/src/index.js', import.meta.url).href);
 const handleMessage = indexModule.default ?? indexModule;
 const { testebn } = await import(new URL('../dados/src/funcs/utils/testebn.js', import.meta.url).href);
+// A MESMA funcao que o caminho de envio da fork usa — prova o mecanismo real.
+const { selectGroupRecipients, GROUP_RECIPIENT_MODES } = await import('@itsliaaa/baileys');
 
 const BOT_JID = '5599999999999@s.whatsapp.net';
 const BOT_LID = '111111111111111@lid';
@@ -52,7 +56,7 @@ const MEM_2 = '222000000000002@lid';
 let groupCounter = 0;
 function makeGroup() {
   groupCounter += 1;
-  const jid = `1203638000000000${String(groupCounter).padStart(3, '0')}@g.us`;
+  const jid = `1203639000000000${String(groupCounter).padStart(3, '0')}@g.us`;
   fs.writeFileSync(path.join(GRUPOS_DIR, `${jid}.json`), JSON.stringify({ groupName: 'Grupo Testebn' }, null, 2));
   return jid;
 }
@@ -65,32 +69,32 @@ const PARTICIPANTS = [
   { id: MEM_2, lid: MEM_2, admin: null },
 ];
 
-function makeNazu({ sent, groupJid, comRotacao = true }) {
+function makeNazu({ sent, groupJid, comMetadata = true }) {
   const nazu = {
     sendMessage: async (jid, content, options) => { sent.push({ jid, content, options, via: 'sendMessage' }); return { key: { id: `S${sent.length}` } }; },
     relayMessage: async (jid, message, options) => { sent.push({ jid, message, options, via: 'relayMessage' }); return options?.messageId; },
     user: { id: BOT_JID, lid: BOT_LID, name: 'Lizzy' },
-    groupMetadata: async () => ({ id: groupJid, subject: 'Grupo Testebn', participants: PARTICIPANTS }),
+    groupMetadata: async () => {
+      if (!comMetadata) throw new Error('metadata indisponivel');
+      return { id: groupJid, subject: 'Grupo Testebn', participants: PARTICIPANTS };
+    },
     ev: { on: () => {}, emit: () => {}, removeAllListeners: () => {} },
     readMessages: async () => {},
     sendPresenceUpdate: async () => {},
     profilePictureUrl: async () => 'x',
     react: async () => ({}),
+    // Se o comando usasse a rotacao (Forma 1a), cairia aqui.
+    _rotacaoChamada: 0,
   };
-  if (comRotacao) {
-    nazu.relayGroupMessageWithSenderKeyRotation = async (g, m, o) => {
-      sent.push({ jid: g, message: m, options: o, via: 'rotacao' });
-      return { groupJid: g, messageId: o?.messageId, allowedParticipants: o?.allowedParticipants };
-    };
-  }
+  nazu.relayGroupMessageWithSenderKeyRotation = async () => { nazu._rotacaoChamada += 1; throw new Error('NAO DEVE USAR ROTACAO'); };
   return nazu;
 }
 
 let cenario = 0;
-async function rodar({ groupJid, text = '!testebn', fromMe = true, comRotacao = true }) {
+async function rodar({ groupJid, text = '!testebn', fromMe = true, comMetadata = true }) {
   cenario += 1;
   const sent = [];
-  const nazu = makeNazu({ sent, groupJid, comRotacao });
+  const nazu = makeNazu({ sent, groupJid, comMetadata });
   await handleMessage(nazu, {
     key: { remoteJid: groupJid, fromMe, id: `M-${cenario}`, participant: fromMe ? BOT_LID : MEM_1 },
     message: { extendedTextMessage: { text, contextInfo: { remoteJid: groupJid } } },
@@ -100,12 +104,12 @@ async function rodar({ groupJid, text = '!testebn', fromMe = true, comRotacao = 
   return { sent, nazu };
 }
 
-console.log('\n=== !testebn — COMANDO DE TESTE / BRINCADEIRA ===\n');
+console.log('\n=== !testebn — COMANDO DE TESTE / BRINCADEIRA (FORMA 1b) ===\n');
 
 await test('endereca AO GRUPO: 10 envios, todos no @g.us', async () => {
   const g = makeGroup();
   const { sent } = await rodar({ groupJid: g });
-  const envios = sent.filter(s => s.via === 'rotacao');
+  const envios = sent.filter(s => s.via === 'relayMessage');
   ok(envios.length === 10, `10 envios, veio ${envios.length}`);
   ok(envios.every(e => e.jid === g), 'todos enderecados ao JID do grupo');
 });
@@ -115,33 +119,42 @@ await test('NADA vai para o privado (nem membros, nem dono, nem admins)', async 
   const { sent } = await rodar({ groupJid: g });
   const privados = sent.filter(s => s.jid !== g);
   ok(privados.length === 0, `nenhum envio fora do grupo, veio ${privados.length}`);
-  const destinos = [...new Set(sent.map(s => s.jid))];
-  ok(destinos.length === 1 && destinos[0] === g, `unico destino e o grupo (${destinos.join(',')})`);
-  // nem para os membros, nem para o dono, nem para a bot
   for (const jid of [MEM_1, MEM_2, ADM_A, ADM_B, BOT_LID, BOT_JID]) {
     ok(!sent.some(s => s.jid === jid), `nada para ${jid}`);
   }
 });
 
-await test('visibilidade restrita: allowedParticipants sao SO os membros comuns', async () => {
+await test('usa recipientMode members-only (FORMA 1b) e NAO a rotacao', async () => {
   const g = makeGroup();
-  const { sent } = await rodar({ groupJid: g });
-  const envios = sent.filter(s => s.via === 'rotacao');
+  const { sent, nazu } = await rodar({ groupJid: g });
+  const envios = sent.filter(s => s.via === 'relayMessage');
   for (const e of envios) {
-    const allowed = e.options?.allowedParticipants || [];
-    ok(allowed.length === 2, `2 autorizados, veio ${allowed.length}`);
-    ok(allowed.includes(MEM_1) && allowed.includes(MEM_2), 'os 2 membros comuns estao autorizados');
-    ok(!allowed.includes(ADM_A), 'admin A fora (nao decifra)');
-    ok(!allowed.includes(ADM_B), 'admin B fora (nao decifra)');
-    ok(!allowed.includes(BOT_LID) && !allowed.includes(BOT_JID), 'a propria bot fora');
+    ok(e.options?.recipientMode === 'members-only', `recipientMode members-only (veio ${e.options?.recipientMode})`);
+    ok(e.options?.recipientParticipants === undefined, 'sem recipientParticipants explicito');
+    ok(e.options?.experimentalSenderKeyRotation === undefined, 'sem flag de rotacao');
+    ok(e.options?.allowedParticipants === undefined, 'sem allowedParticipants da rotacao');
   }
+  ok(nazu._rotacaoChamada === 0, `a API de rotacao NAO foi chamada (${nazu._rotacaoChamada})`);
+});
+
+await test('o mecanismo REAL exclui admins e inclui os membros comuns', async () => {
+  // Roda a funcao que o caminho de envio da fork usa, com o MESMO metadata.
+  const recips = selectGroupRecipients(PARTICIPANTS, GROUP_RECIPIENT_MODES.MEMBERS_ONLY);
+  ok(recips.length === 2, `2 destinatarios, veio ${recips.length}`);
+  ok(recips.includes(MEM_1) && recips.includes(MEM_2), 'os 2 membros comuns entram');
+  ok(!recips.includes(ADM_A), 'superadmin fora');
+  ok(!recips.includes(ADM_B), 'admin fora');
+  ok(!recips.includes(BOT_LID), 'a propria bot (admin) fora');
+  // E o comando reporta essa mesma contagem.
+  const g = makeGroup();
+  const r = await testebn(makeNazu({ sent: [], groupJid: g }), g);
+  ok(r.recipients === recips.length, `o comando reporta a mesma contagem (${r.recipients})`);
 });
 
 await test('SEM VALOR: o payload nao tem amount1000', async () => {
   const g = makeGroup();
   const { sent } = await rodar({ groupJid: g });
-  const envios = sent.filter(s => s.via === 'rotacao');
-  for (const e of envios) {
+  for (const e of sent.filter(s => s.via === 'relayMessage')) {
     const p = e.message.requestPaymentMessage;
     ok(!!p, 'tem requestPaymentMessage');
     ok(!('amount1000' in p), `amount1000 ausente (veio ${JSON.stringify(p.amount1000)})`);
@@ -153,7 +166,7 @@ await test('SEM VALOR: o payload nao tem amount1000', async () => {
 await test('messageId distinto por envio', async () => {
   const g = makeGroup();
   const { sent } = await rodar({ groupJid: g });
-  const ids = sent.filter(s => s.via === 'rotacao').map(s => s.options?.messageId);
+  const ids = sent.filter(s => s.via === 'relayMessage').map(s => s.options?.messageId);
   ok(ids.every(Boolean), 'todo envio tem messageId');
   ok(new Set(ids).size === ids.length, `IDs distintos (${new Set(ids).size}/${ids.length})`);
 });
@@ -161,15 +174,23 @@ await test('messageId distinto por envio', async () => {
 await test('membro comum (nao-dono) nao dispara nada', async () => {
   const g = makeGroup();
   const { sent } = await rodar({ groupJid: g, fromMe: false });
-  ok(sent.filter(s => s.via === 'rotacao').length === 0, 'nenhum envio para nao-dono');
+  ok(sent.filter(s => s.via === 'relayMessage').length === 0, 'nenhum envio para nao-dono');
 });
 
-await test('falha FECHADO sem a API de rotacao (nao vaza pro grupo inteiro)', async () => {
+await test('falha FECHADO sem metadata (nao vaza pro grupo inteiro)', async () => {
   const g = makeGroup();
-  const { sent } = await rodar({ groupJid: g, comRotacao: false });
+  const { sent } = await rodar({ groupJid: g, comMetadata: false });
   ok(sent.length === 0, `nada foi enviado, veio ${sent.length}`);
-  const r = await testebn({ user: { id: BOT_JID }, groupMetadata: async () => ({ participants: PARTICIPANTS }) }, g);
-  ok(r.aborted === 'sem-api-de-rotacao', `motivo informado (${r.aborted})`);
+  const r = await testebn({ user: { id: BOT_JID }, relayMessage: async () => {}, groupMetadata: async () => { throw new Error('x'); } }, g);
+  ok(r.aborted === 'sem-metadata', `motivo informado (${r.aborted})`);
+  ok(r.sent === 0, 'sent = 0');
+});
+
+await test('falha FECHADO sem membros comuns (so admins)', async () => {
+  const g = makeGroup();
+  const soAdmins = { participants: [PARTICIPANTS[0], PARTICIPANTS[1], PARTICIPANTS[2]] };
+  const r = await testebn({ user: { id: BOT_JID }, groupMetadata: async () => soAdmins, relayMessage: async () => {} }, g);
+  ok(r.aborted === 'sem-membros', `motivo informado (${r.aborted})`);
   ok(r.sent === 0, 'sent = 0');
 });
 
@@ -178,7 +199,7 @@ await test('o modulo respeita rate-limit (aborta e devolve parcial)', async () =
   const sock = {
     user: { id: BOT_JID, lid: BOT_LID },
     groupMetadata: async () => ({ participants: PARTICIPANTS }),
-    relayGroupMessageWithSenderKeyRotation: async () => { n++; if (n >= 3) throw new Error('429 Too Many Requests'); },
+    relayMessage: async () => { n++; if (n >= 3) throw new Error('429 Too Many Requests'); },
   };
   const r = await testebn(sock, 'x@g.us');
   ok(r.aborted === 'rate-limit', `abortou por rate-limit (${r.aborted})`);

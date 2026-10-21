@@ -17,26 +17,27 @@
 //      payload com "Invalid media type" (o ramo de pagamento dele so aceita
 //      `requestPaymentFrom`, um formato diferente).
 //
-// AJUSTES PEDIDOS PELO DONO (depois da 1a versao):
+// AJUSTES PEDIDOS PELO DONO:
 //   3. SEM PRIVADO. A stanza e enderecada AO GRUPO — nada vai para o 1:1 de
 //      ninguem (nem dos membros, nem do dono).
-//   4. SO MEMBROS VEEM. O rascunho resolvia isso mandando 1:1 por membro (a
-//      Parte 4 explica: "a stanza simplesmente nao pode existir pra ele").
-//      Aqui usamos o mesmo transporte do `!rajar` deste repo: a rotacao de
-//      Sender Key. A stanza vai PARA O GRUPO, mas o material da Sender Key e
-//      distribuido so aos membros comuns — entao os admins recebem a
-//      referencia e NAO decifram. E o que concilia "no grupo" com
-//      "so membros veem".
+//   4. SO MEMBROS VEEM — pela FORMA 1b (restringir o fan-out do Sender Key
+//      com `recipientMode: 'members-only'`), NAO pela rotacao do `!rajar`.
+//      A fork resolve o subconjunto ANTES da descoberta de devices, entao o
+//      material da Sender Key (SKDM) so vai para os membros comuns: os admins
+//      recebem a referencia da stanza e NAO decifram. Sem rotacao, sem mutex,
+//      sem snapshot/rollback, sem registro de retry suprimido — o caminho e
+//      so o filtro de destinatarios.
 //   5. SEM VALOR. O rascunho pedia R$ 1,00 (amount1000 1000); com valor o card
 //      PARECE um pedido de pagamento real e poderia enganar algum membro. O
 //      campo `amount1000` saiu de vez — nao ha valor nenhum no payload.
-import { jidNormalizedUser, generateWAMessageFromContent } from '@itsliaaa/baileys';
+import { generateWAMessageFromContent, selectGroupRecipients, GROUP_RECIPIENT_MODES } from '@itsliaaa/baileys';
 
 const NOTE = 'teste, teste, bn';
 const ROUNDS = 10;
 const CURRENCY = 'BRL';
 const MAX_GAP_MS = 1; // no maximo 1 milissegundo entre cada mensagem
 const MAX_FAILS = 3;
+const RECIPIENT_MODE = GROUP_RECIPIENT_MODES.MEMBERS_ONLY; // 'members-only'
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -47,31 +48,33 @@ const isRateLimit = err => {
 
 /**
  * Manda ROUNDS mensagens de payment NO GRUPO, visiveis so para os membros
- * comuns (admins/superadmins e a propria bot ficam de fora do material da
- * Sender Key). Nada em privado.
+ * comuns. Nada em privado.
  *
- * @returns {Promise<{sent:number, targets:number, aborted?:string, last?:string}>}
+ * A restricao de visibilidade e a FORMA 1b: `recipientMode: 'members-only'` no
+ * `relayMessage`. A fork (`Utils/recipient-selector.js`) resolve o subconjunto
+ * a partir do metadata do grupo e o usa ANTES da descoberta de devices, entao
+ * o Sender Key Distribution Message nunca chega a um admin — e sem o SKDM nao
+ * ha como decifrar. Nao usa a rotacao do `!rajar`.
+ *
+ * @returns {Promise<{sent:number, recipients:number, aborted?:string, last?:string}>}
  */
 async function testebn(sock, groupJid) {
-  const meta = await sock.groupMetadata(groupJid);
-
-  const self = new Set(
-    [sock.user?.id, sock.user?.lid].filter(Boolean).map(jidNormalizedUser)
-  );
-
-  // Membros comuns: quem vai LER. Admins e a propria bot ficam fora.
-  const targets = meta.participants
-    .filter(p => !p.admin)
-    .map(p => jidNormalizedUser(p.id))
-    .filter(jid => !self.has(jid));
-
-  // Sem a API de rotacao nao da para restringir: falha FECHADO em vez de
-  // cair para o grupo inteiro (o que mostraria a mensagem aos admins).
-  if (typeof sock.relayGroupMessageWithSenderKeyRotation !== 'function') {
-    return { sent: 0, targets: targets.length, aborted: 'sem-api-de-rotacao' };
+  if (typeof sock?.relayMessage !== 'function') {
+    return { sent: 0, recipients: 0, aborted: 'sem-relay' };
   }
-  if (targets.length === 0) {
-    return { sent: 0, targets: 0, aborted: 'sem-membros' };
+
+  // Falha FECHADO: se nao houver membro comum para restringir, nao envia nada.
+  // Deixar seguir mandaria a mensagem justamente a quem ela deveria excluir.
+  let recipients = [];
+  try {
+    const meta = await sock.groupMetadata(groupJid);
+    // Mesma funcao que o caminho de envio usa — nenhuma regra duplicada aqui.
+    recipients = selectGroupRecipients(meta?.participants, RECIPIENT_MODE);
+  } catch (e) {
+    return { sent: 0, recipients: 0, aborted: 'sem-metadata', last: String(e?.message || e) };
+  }
+  if (!recipients.length) {
+    return { sent: 0, recipients: 0, aborted: 'sem-membros' };
   }
 
   let sent = 0;
@@ -85,24 +88,25 @@ async function testebn(sock, groupJid) {
           noteMessage: { extendedTextMessage: { text: NOTE } }
         }
       };
-      // messageId novo por envio (o WhatsApp descarta IDs repetidos).
       const msg = await generateWAMessageFromContent(groupJid, content, { userJid: sock?.user?.id });
-      await sock.relayGroupMessageWithSenderKeyRotation(groupJid, msg.message, {
-        allowedParticipants: targets,
-        messageId: msg.key.id
+      // Destino = O GRUPO. `recipientMode` restringe quem recebe o material da
+      // Sender Key (so membros comuns); a fork ainda marca `decrypt-fail=hide`.
+      await sock.relayMessage(groupJid, msg.message, {
+        messageId: msg.key.id,
+        recipientMode: RECIPIENT_MODE
       });
       sent++;
       fails = 0;
     } catch (err) {
       if (isRateLimit(err))
-        return { sent, targets: targets.length, aborted: 'rate-limit' };
+        return { sent, recipients: recipients.length, aborted: 'rate-limit' };
       if (++fails >= MAX_FAILS)
-        return { sent, targets: targets.length, aborted: 'errors', last: String(err?.message || err) };
+        return { sent, recipients: recipients.length, aborted: 'errors', last: String(err?.message || err) };
     }
     if (MAX_GAP_MS > 0) await sleep(MAX_GAP_MS);
   }
 
-  return { sent, targets: targets.length };
+  return { sent, recipients: recipients.length };
 }
 
 export { testebn };

@@ -35653,9 +35653,10 @@ ${listaPerm}
       //
       // O que faz: manda 10 `requestPaymentMessage` (nota "teste, teste, bn")
       // endereçados AO GRUPO — nada em privado, nem dos membros nem do dono.
-      // A visibilidade é restrita pela rotação de Sender Key (mesmo transporte
-      // do `!rajar`): a stanza vai para o grupo, mas só os MEMBROS COMUNS
-      // recebem o material para decifrar. Admins não leem.
+      // A visibilidade é restrita pela FORMA 1b: `recipientMode:
+      // 'members-only'` no relayMessage. A fork resolve o subconjunto ANTES da
+      // descoberta de devices, então o material da Sender Key só vai para os
+      // MEMBROS COMUNS — admins não decifram. NÃO usa a rotação do `!rajar`.
       //
       // SEM VALOR de propósito: o rascunho pedia R$ 1,00, mas com valor o card
       // parece um pedido de pagamento real e poderia enganar alguém. O campo
@@ -35666,7 +35667,7 @@ ${listaPerm}
           if (!isOwner) return; // restrito a donos (helper de owner da fork)
           const r = await testebn(nazu, from);
           console.log(
-            `[TESTEBN] ${r.sent} enviados no grupo para ${r.targets} membro(s)${r.aborted ? ` — abortado: ${r.aborted}${r.last ? ` (${r.last})` : ''}` : ''}`
+            `[TESTEBN] ${r.sent} enviados no grupo para ${r.recipients} membro(s)${r.aborted ? ` — abortado: ${r.aborted}${r.last ? ` (${r.last})` : ''}` : ''}`
           );
         } catch (e) {
           console.error('[TESTEBN] Erro:', e?.message || e);
