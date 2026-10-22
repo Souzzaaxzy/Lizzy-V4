@@ -139,6 +139,66 @@ await test('cacheia: a 2ª chamada não bate na rede de novo', async () => {
   ok(b.version[2] === WEB[2], 'o valor cacheado é o do Web');
 });
 
+// ---------------------------------------------------------------------------
+// REGRESSAO DO LOOP DE 405
+//
+// O `fetchLatestWaWebVersion` NUNCA lanca: quando o `sw.js` falha ele DEVOLVE a
+// versao velha do pacote com `isLatest: false`. O resolver confiava so na
+// presenca de `version`, entao anunciava essa versao velha E dizia que a origem
+// era o WhatsApp Web — e o servidor recusava com `405 Connection Failure`,
+// reanunciada a cada reconexao (loop infinito).
+// ---------------------------------------------------------------------------
+
+const VELHA_DO_PACOTE = [2, 3000, 1041589577, 261700, 0];
+
+await test('NAO anuncia a versao velha quando o sw.js falha (isLatest:false)', async () => {
+  const r = await resolverVersaoWhatsApp({
+    buscarWeb: async () => ({ version: VELHA_DO_PACOTE, isLatest: false, error: new Error('fetch failed') }),
+    pin: PIN
+  });
+  ok(r.version[2] !== 1041589577, `nao anunciou a velha (veio ${r.version.join('.')})`);
+  ok(r.origem === ORIGEM_PIN, `origem honesta: pin (veio ${r.origem})`);
+  ok(JSON.stringify(r.version) === JSON.stringify(PIN), 'usou o pin');
+});
+
+await test('a origem NAO mente: isLatest:false nao e reportado como whatsapp-web', async () => {
+  const r = await resolverVersaoWhatsApp({
+    buscarWeb: async () => ({ version: VELHA_DO_PACOTE, isLatest: false }),
+    pin: PIN
+  });
+  ok(r.origem !== ORIGEM_WEB, `nao pode dizer que veio do Web (veio ${r.origem})`);
+});
+
+await test('o FALLBACK nao e cacheado (senao a reconexao reanuncia a velha para sempre)', async () => {
+  let chamadas = 0;
+  const cache = {};
+  const deps = {
+    buscarWeb: async () => { chamadas += 1; return { version: VELHA_DO_PACOTE, isLatest: false }; },
+    pin: PIN,
+    cache
+  };
+  const a = await resolverVersaoWhatsApp(deps);
+  const b = await resolverVersaoWhatsApp(deps);
+  ok(chamadas === 2, `tentou a rede nas DUAS chamadas (veio ${chamadas}) — nao cacheou o fallback`);
+  ok(a.origem === ORIGEM_PIN && b.origem === ORIGEM_PIN, 'as duas caem no pin');
+  ok(cache.valor === undefined || cache.valor === null, 'o cache nao ficou com o fallback');
+});
+
+await test('o fallback se RECUPERA: falha, depois rede volta e usa a versao do Web', async () => {
+  const cache = {};
+  const deps = {
+    buscarWeb: async () => ({ version: VELHA_DO_PACOTE, isLatest: false }),
+    pin: PIN,
+    cache
+  };
+  await resolverVersaoWhatsApp(deps);
+  // a rede volta
+  deps.buscarWeb = async () => ({ version: [2, 3000, 1051318246], isLatest: true });
+  const r = await resolverVersaoWhatsApp(deps);
+  ok(r.origem === ORIGEM_WEB, `recuperou (veio ${r.origem})`);
+  ok(r.version[2] === 1051318246, 'usa a versao atual do Web');
+});
+
 await test('sem `buscarWeb` também cai no pin (degradação segura)', async () => {
   const r = await resolverVersaoWhatsApp({ pin: PIN });
   ok(r.origem === ORIGEM_PIN, 'sem fetcher -> pin');

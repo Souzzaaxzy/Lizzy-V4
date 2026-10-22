@@ -84,12 +84,25 @@ export async function resolverVersaoWhatsApp({ buscarWeb, pin, cache, log } = {}
 
   try {
     const r = await buscarWeb?.();
-    const doWeb = montarVersaoDeVoz(r?.version, pin);
-    if (doWeb) return guardar(doWeb, ORIGEM_WEB);
-    avisar(`[VERSION] o WhatsApp Web devolveu ${JSON.stringify(r?.version)} — usando o pin`);
+    // `fetchLatestWaWebVersion` NUNCA lanca: quando o `sw.js` falha (rede,
+    // bloqueio, mudanca de formato) ele DEVOLVE a versao velha do pacote
+    // (`Defaults/index.js`) com `isLatest: false`. Confiar so na presenca de
+    // `version` fazia o bot anunciar essa versao velha E reportar a origem
+    // como "whatsapp-web (sw.js)" — um falso positivo que escondia a falha e
+    // produzia o loop de `405 Connection Failure`.
+    if (r?.isLatest === false) {
+      avisar(`[VERSION] o WhatsApp Web devolveu ${JSON.stringify(r?.version)} com isLatest:false (sw.js falhou) — usando o pin`);
+    } else {
+      const doWeb = montarVersaoDeVoz(r?.version, pin);
+      if (doWeb) return guardar(doWeb, ORIGEM_WEB);
+      avisar(`[VERSION] o WhatsApp Web devolveu ${JSON.stringify(r?.version)} — usando o pin`);
+    }
   } catch (e) {
     avisar(`[VERSION] falha ao buscar a versão do WhatsApp Web: ${e?.message || e} — usando o pin`);
   }
 
-  return guardar(Array.isArray(pin) ? pin.slice() : [], ORIGEM_PIN);
+  // FALLBACK NAO E CACHEADO: guardar o pin faria toda reconexao reanunciar a
+  // mesma versao velha sem nunca tentar a rede de novo (loop de 405). O cache
+  // e' so' para um resultado BOM; o pin e' devolvido sem entrar no cache.
+  return { version: Array.isArray(pin) ? pin.slice() : [], origem: ORIGEM_PIN };
 }
