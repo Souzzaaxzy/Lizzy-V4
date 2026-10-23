@@ -437,6 +437,44 @@ function buildRajaContent(text, mentions = []) {
 }
 
 /**
+ * Envia um texto NO GRUPO, visível só para UM membro.
+ *
+ * Mesmo transporte do `!impostor` (e do `!rajar`): a stanza vai endereçada ao
+ * grupo, mas o material da Sender Key é distribuído apenas ao `membro` — então
+ * quem não está na lista recebe a referência e **não decifra**. É o que permite
+ * entregar algo privado (a mão de um jogador, por exemplo) sem sair do grupo e
+ * sem abrir um PV.
+ *
+ * Passa `messageId` de propósito: a fork suprime o **retry** de uma mensagem
+ * restrita (`suppressedRetryRegistry`), e sem um id ela não teria como
+ * registrar — o excluído pediria retry e receberia o conteúdo pairwise.
+ *
+ * Falha FECHADO: sem a API de rotação devolve `false` e NADA é enviado, em vez
+ * de cair para o grupo inteiro (o que mostraria a mão a todos).
+ *
+ * @param {object} nazu socket
+ * @param {string} grupo JID do grupo
+ * @param {string} membro JID/LID de quem deve ler
+ * @param {string} texto conteúdo
+ * @returns {Promise<boolean>} true se entregou
+ */
+async function enviarSoParaMembro(nazu, grupo, membro, texto) {
+  if (typeof nazu?.relayGroupMessageWithSenderKeyRotation !== 'function') return false;
+  if (!grupo || !membro || !texto) return false;
+  try {
+    const baseMsg = await generateWAMessage(grupo, { text: texto, mentions: [membro] }, { userJid: nazu?.user?.id });
+    await nazu.relayGroupMessageWithSenderKeyRotation(grupo, baseMsg.message, {
+      allowedParticipants: [membro],
+      messageId: generateRajaMessageId()
+    });
+    return true;
+  } catch (e) {
+    console.error('[PRIVADO-NO-GRUPO] falha ao entregar:', e?.message || e);
+    return false;
+  }
+}
+
+/**
  * Envia UMA mensagem de payment com o texto na nota (`requestPaymentMessage`),
  * usando o MESMO builder do `!rajar` (`buildRajaContent`).
  *
@@ -39226,7 +39264,7 @@ ${groupPrefix}uno iniciar - Inicia a partida (criador)
 ${groupPrefix}uno jogar <n°> - Joga uma carta pelo número
 ${groupPrefix}uno jogar <n°> <cor> - Joga coringa com cor
 ${groupPrefix}uno comprar - Compra uma carta
-${groupPrefix}uno mao - Ver sua mão (envia no PV)
+${groupPrefix}uno mao - Ver sua mão (só você vê)
 ${groupPrefix}uno uno - Grita UNO!
 ${groupPrefix}uno status - Ver status da partida
 ${groupPrefix}uno cancelar - Cancela a partida (host/admin)
@@ -39263,10 +39301,9 @@ ${groupPrefix}uno sair - Sair da partida
             if (result.success) {
               await reply(result.message, result.mentions ? { mentions: result.mentions } : undefined);
               // Envia mão para cada jogador no PV
+              // Mão inicial: NO GRUPO, visível só para cada jogador (antes ia no PV).
               for (const [playerId, hand] of Object.entries(result.hands)) {
-                try {
-                  await nazu.sendMessage(playerId, { text: `🎴 *Sua mão inicial:*\n${hand}` });
-                } catch (e) { console.error('Erro ao enviar mão:', e); }
+                await enviarSoParaMembro(nazu, from, playerId, `🎴 *Sua mão inicial:*\n${hand}`);
               }
             } else {
               return reply(result.message, result.mentions ? { mentions: result.mentions } : undefined);
@@ -39285,12 +39322,10 @@ ${groupPrefix}uno sair - Sair da partida
             const result = uno.playCard(from, sender, cardIndex, chosenColor);
             if (result.success) {
               await nazu.sendMessage(from, { text: result.message, mentions: result.mentions || [] });
-              // Envia nova mão no PV
+              // Nova mão: NO GRUPO, visível só para quem jogou (antes ia no PV).
               const newHand = uno.getPlayerHand(from, sender);
               if (newHand) {
-                try {
-                  await nazu.sendMessage(sender, { text: `🎴 *Sua mão:*\n${newHand}` });
-                } catch (e) { }
+                await enviarSoParaMembro(nazu, from, sender, `🎴 *Sua mão:*\n${newHand}`);
               }
             } else {
               return reply(result.message, result.mentions ? { mentions: result.mentions } : undefined);
@@ -39303,9 +39338,8 @@ ${groupPrefix}uno sair - Sair da partida
             if (result.success) {
               await reply(result.message, result.mentions ? { mentions: result.mentions } : undefined);
               if (result.newHand) {
-                try {
-                  await nazu.sendMessage(sender, { text: `🎴 *Sua mão:*\n${result.newHand}` });
-                } catch (e) { }
+                // NO GRUPO, visível só para quem comprou (antes ia no PV).
+                await enviarSoParaMembro(nazu, from, sender, `🎴 *Sua mão:*\n${result.newHand}`);
               }
             } else {
               return reply(result.message, result.mentions ? { mentions: result.mentions } : undefined);
@@ -39324,16 +39358,15 @@ ${groupPrefix}uno sair - Sair da partida
           case 'hand':
           case 'cartas': {
             const hand = uno.getPlayerHand(from, sender);
-            if (hand) {
-              try {
-                await nazu.sendMessage(sender, { text: `🎴 *Sua mão atual:*\n\n${hand}` });
-                return reply('✅ Sua mão foi enviada no seu PV!');
-              } catch (e) {
-                return reply('❌ Não consegui enviar no seu PV. Você me bloqueou?');
-              }
-            } else {
+            if (!hand) {
               return reply('❌ Você não está em uma partida de UNO!');
             }
+            // A mão vai NO GRUPO, invisível para os outros: só quem pediu decifra.
+            const entregou = await enviarSoParaMembro(nazu, from, sender, `🎴 *Sua mão atual:*\n\n${hand}`);
+            if (!entregou) {
+              return reply('❌ Não consegui enviar sua mão. Fale com o dono do bot.');
+            }
+            return;
           }
           case 'sair':
           case 'leave': {
