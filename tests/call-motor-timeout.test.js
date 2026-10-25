@@ -175,6 +175,24 @@ await test('o CONNECT pendurado nao deixa o cliente preso (a via do travamento)'
   zapo.__setFabricaDeCliente(null);
 });
 
+await test('(B) a instrumentacao [MOTOR] existe nos estagios do ciclo de vida', async () => {
+  const fs2 = await import('fs');
+  const src = fs2.readFileSync(new URL('../dados/src/funcs/utils/zapoCall.js', import.meta.url), 'utf8');
+  // Cada estagio que precisamos enxergar no proximo incidente.
+  for (const marca of [
+    'client construido',
+    'connect: chamando',
+    'connect:',
+    'startCall: enviando',
+    'startCall: OK',
+    'conexao:',
+  ]) {
+    ok(src.includes(marca), `instrumenta "${marca}"`);
+  }
+  ok(/\[MOTOR\]/.test(src), 'usa o prefixo [MOTOR] (filtrável no log)');
+  ok(/ESTOUROU O TETO/.test(src), 'marca explicitamente o estouro de teto');
+});
+
 console.log('\n=== RESUMO ===');
 const totalOk = RESULTS.reduce((a, r) => a + r.passed, 0);
 const totalFail = RESULTS.reduce((a, r) => a + r.failed, 0);

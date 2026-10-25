@@ -449,6 +449,27 @@ export async function obterCliente() {
       // O motivo do fim. `relay_lost` = a call tinha caminho de midia e perdeu
       // (o caso do "conectando"); `invisible` = o servidor nos tirou porque os
       // outros pararam de nos receber.
+      // ---- (B) INSTRUMENTACAO do ciclo de vida do motor -------------------
+      //
+      // Por que existe: no incidente do travamento, o log que precisavamos se
+      // perdeu no meio do `sender key id mismatch` e nao deu para saber ONDE o
+      // motor parou. Estas linhas marcam os ESTAGIOS, com o tempo de cada um —
+      // na proxima rodada da' para dizer em qual deles travou.
+      //
+      // Prefixo `[MOTOR]` (filtrável) e UMA linha por estagio.
+      const t0Motor = Date.now();
+      const marcarMotor = (etapa, extra) => {
+        const dt = Date.now() - t0Motor;
+        console.log(`[MOTOR] ${etapa} | +${dt}ms${extra ? ` | ${extra}` : ''}`);
+      };
+      marcarMotor('client construido');
+
+      // Eventos de conexao do MOTOR (nao do Baileys): sao a unica fonte de
+      // verdade sobre o estado da sessao do zapo.
+      client.on('connection', (ev) => {
+        marcarMotor(`conexao: ${ev?.status || '?'}`, ev?.isLogout ? 'LOGOUT' : undefined);
+      });
+
       client.on('voip_call_ended', (call) => {
         const motivo = call.stateData?.endReason || 'sem motivo informado';
         // UMA linha por fim de call (e' raro): sem ela o motivo morre aqui e
@@ -504,7 +525,9 @@ export async function obterCliente() {
         // conectando`). O `!vozp` entao nunca retorna, o handler prende o lote
         // do `messageQueue` e o BOT INTEIRO para de responder — so' volta com
         // restart pela host. Foi o incidente.
+        marcarMotor('connect: chamando');
         const abriu = await comTeto(client.connect(), CONNECT_TIMEOUT_MS, 'connect');
+        marcarMotor(`connect: ${abriu.ok ? 'resolvido' : 'FALHOU'}`, abriu.erro);
         if (!abriu.ok) {
           loadError = abriu.estourou
             ? `conexao do motor nao abriu em ${CONNECT_TIMEOUT_MS}ms`
@@ -721,6 +744,7 @@ export async function entrarNaCallComMidia({
     // e um `await` sem teto aqui prende o HANDLER — que prende o lote inteiro do
     // `messageQueue` e trava o bot todo (foi o incidente). O timer do `comTeto`
     // destrava o chamador mesmo que o motor nunca responda.
+    console.log(`[MOTOR] startCall: enviando (${alvos.length} convidado(s), lightweight=${isLightweight})`);
     const r = await comTeto(
       cli.voip.startCall({
         groupJid: grupo,
@@ -732,6 +756,7 @@ export async function entrarNaCallComMidia({
       'startCall'
     );
     if (!r.ok) {
+      console.warn(`[MOTOR] startCall: ${r.estourou ? 'ESTOUROU O TETO' : 'falhou'} | ${r.erro}`);
       return {
         ok: false,
         motivo: r.estourou ? 'motor_sem_resposta' : 'falha_ao_entrar',
@@ -739,6 +764,7 @@ export async function entrarNaCallComMidia({
       };
     }
     const novoCallId = r.valor;
+    console.log(`[MOTOR] startCall: OK | callId=${String(novoCallId).slice(0, 12)}...`);
 
     callsPorGrupo.set(grupo, novoCallId);
     estagios.set(grupo, 'aguardando_roster');
