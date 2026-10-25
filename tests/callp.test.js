@@ -628,16 +628,26 @@ await test('o teto e configuravel por CALL_MAX_PARTICIPANTS', async () => {
   }
 });
 
-await test('CHAT DE VOZ em grupo GRANDE: sobe (nao toca, entao nao nomeia ninguem)', async () => {
-  // Um chat de voz NAO TOCA ninguem: o offer dele nao leva roster, entao sobe em
-  // grupo de qualquer tamanho. Era o ROSTER que barrava: o servidor recusava com
-  // `427` acima do teto de 127 contas e com `404` quando a lista era curta.
+await test('CHAT DE VOZ em grupo GRANDE: sobe COM o corte de 32 (o roster enumerado)', async () => {
+  // CORRECAO (medida): a versao anterior deste teste travava a premissa ERRADA —
+  // que o chat de voz subia "sem nomear ninguem" em grupo de qualquer tamanho.
+  // Medido contra o motor: acima de `WA_GROUP_OFFER_MAX_ACCOUNTS` (32) o motor
+  // NAO corta — ele troca para o caminho `hashOnly` e manda
+  // `<group_info phash="2:...">` SEM roster, que resolve o grupo inteiro num
+  // UNICO usync e, se esse usync falha, calcula o phash sobre os jids CRUS —
+  // divergindo do servidor -> NACK -> `SetupFailed` -> a call CAI logo depois de
+  // subir. Era exatamente o "sobe e cai" do dono.
+  //
+  // O caminho certo e' o MESMO da referencia de producao (Cobalt): enumerar o
+  // roster e validar o teto ANTES de colocar a call. O grupo pode ter 400
+  // membros — a call sobe com 32 nomeados e o resto entra pelo cartao.
   const { groupJid, admin, participants } = setupGrande(400);
   const doVoz = instalarDubleVozp();
   const out = await run({ groupJid, sender: admin, text: '!vozp', participants });
   const subiu = doVoz.find((c) => c.tipo === 'subir');
   ok(Boolean(subiu), 'subiu o chat de voz num grupo de 400');
-  ok(!out.text.includes('Toquei em'), 'sem aviso de alcance (nao ha convite por conta)');
+  ok(subiu.participantes.length === 31,
+    `cortou em 31 convidados (o teto de 32 menos o bot), veio ${subiu.participantes.length}`);
   includes(out.text, 'maximo do WhatsApp', 'diz o teto de contas do WhatsApp');
   includes(out.text, 'Chat de voz iniciado', 'confirma que subiu');
   callState.limparCall(groupJid);

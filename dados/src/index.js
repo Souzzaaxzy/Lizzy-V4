@@ -36275,15 +36275,32 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             return reply('🎙️ Já existe um chat de voz subido por mim neste grupo.\n\nUse `!vozp encerrar` para terminar.');
           }
 
-          // Convidados SEM o corte de 32: quem aplica o limite e' o MOTOR.
+          // CONVIDADOS COM O CORTE — e o corte e' o que FAZ a call subir.
           //
-          // MEDIDO (e confirmado no cliente oficial): o ROSTER e' OBRIGATORIO — e'
-          // o que o servidor usa para distribuir o offer. Sem ele o servidor ACEITA
-          // e nao cria nada (o cartao nao aparece). O que ele LIMITA e' o TAMANHO:
-          // `427` acima de **127 contas** (o criador ocupa uma) — era o grupo de
-          // 128. O motor corta em 127 (`WA_GROUP_OFFER_MAX_ACCOUNTS`); aqui so' se
-          // evita o corte de 32, que e' o de uma call CONECTADA.
-          const prep = await prepararConvidadosDoGrupo({ semTeto: true });
+          // MEDIDO (e confirmado contra o motor e contra a referencia de producao):
+          // o ROSTER enumerado e' o que o servidor usa para distribuir o offer. Sem
+          // ele o servidor ACEITA e nao cria nada (o cartao nao aparece).
+          //
+          // O erro que causava "sobe e cai": mandar o grupo INTEIRO. Acima de
+          // `WA_GROUP_OFFER_MAX_ACCOUNTS` (32) o motor NAO corta — ele troca para o
+          // caminho `hashOnly` e manda `<group_info phash="2:...">` SEM roster.
+          // Esse caminho e' fragil por dois motivos medidos:
+          //   1. resolve os devices do grupo inteiro num UNICO usync (o motor nao
+          //      fatia) — 300 contas num IQ so'; um timeout derruba tudo;
+          //   2. se o usync falha, o phash e' calculado sobre os jids CRUS
+          //      (`user:0@lid`) e nao sobre os devices reais -> DIVERGE do que o
+          //      servidor calcula -> NACK -> `SetupFailed` -> a call e' encerrada
+          //      logo depois de subir.
+          //
+          // A referencia de producao (Cobalt) faz o mesmo que este corte: enumera o
+          // roster e valida o teto ANTES de colocar a call (nunca usa phash no
+          // offer de grupo). O tamanho aceito e' 32 contas (o criador incluido) —
+          // medido: 32 passa, 127 e' recusado com `427`.
+          //
+          // O GRUPO pode ter 300+ membros: a call sobe com 32 nomeados e quem
+          // quiser entra pelo cartao. Nao existe "300 conectados" — o teto e' do
+          // servidor.
+          const prep = await prepararConvidadosDoGrupo();
           if (!prep.ok) {
             const motivos = {
               sem_identidade: 'Não consegui identificar meu próprio número para subir o chat de voz.',
@@ -36322,7 +36339,8 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               `🎙️ *Chat de voz iniciado neste grupo.*\n\n` +
               `• ID: \`${r.callId}\`\n` +
               `• Não toca ninguém: quem quiser entra pelo cartão do chat de voz.\n` +
-              `• Convidei ${prep.convidados.length + 1} contas (o maximo do WhatsApp é 127).\n\n` +
+              `• Toquei em ${prep.convidados.length + 1} contas (o maximo do WhatsApp é 32).\n` +
+              `• O grupo pode ter centenas de membros: quem quiser entra pelo cartao.\n\n` +
               `_Use \`!vozp encerrar\` para terminar._`,
             contextInfo: gerarContextNewsletter(),
             quoted: info
