@@ -248,6 +248,68 @@ function aguardarConexao(timeoutMs = 30000) {
 }
 
 /**
+ * Roda uma promessa do motor com TETO DURO.
+ *
+ * ## Por que existe (o travamento do bot)
+ *
+ * O motor do zapo e' um client PROPRIO, mas roda no MESMO processo do bot. Uma
+ * promessa dele que nunca resolve nao trava so' a call: o handler daquela
+ * mensagem nunca retorna, e o `messageQueue` do bot so' avanca depois que o
+ * LOTE inteiro termina (`await Promise.allSettled(batches...)`). Resultado
+ * medido no incidente: **o bot inteiro parou de responder** e so' voltou com
+ * restart pela host.
+ *
+ * As esperas do motor (`startCall`, o usync de devices, o ack do offer) nao
+ * tem teto garantido do lado de fora, e `await` sem teto e' exatamente o
+ * "esperar por um sinal que nao existe" que ja' derrubou este repo antes
+ * (ver o `!callp` travando 46 s no AGENTS.md).
+ *
+ * Aqui a promessa e' corrida contra um timer. O timer NAO e' `unref`: ele
+ * precisa segurar o event loop para poder destravar o chamador (um `unref`
+ * aqui anularia a propria protecao).
+ *
+ * @param {Promise} promessa operacao do motor
+ * @param {number} ms teto
+ * @param {string} rotulo nome curto para o log
+ * @returns {Promise<{ok: boolean, valor?: any, erro?: string, estourou?: boolean}>}
+ */
+async function comTeto(promessa, ms, rotulo) {
+  let timer = null;
+  try {
+    const teto = new Promise((resolve) => {
+      timer = setTimeout(() => resolve(SIMBOLO_TETO), ms);
+    });
+    const r = await Promise.race([Promise.resolve(promessa), teto]);
+    if (r === SIMBOLO_TETO) {
+      console.warn(`[CALLP] ${rotulo}: estourou o teto de ${ms}ms — o motor nao respondeu`);
+      return { ok: false, estourou: true, erro: `tempo esgotado (${ms}ms)` };
+    }
+    return { ok: true, valor: r };
+  } catch (e) {
+    return { ok: false, erro: e?.message || String(e) };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+/** Marcador interno do estouro de teto (nunca confundido com um valor real). */
+const SIMBOLO_TETO = Symbol('teto');
+
+/**
+ * Teto do `startCall`. Abaixo do teto de 20 s da espera de conexao somado ao
+ * usync, mas alto o bastante para uma rede lenta: o que ele impede e' o
+ * `await` INFINITO, nao a lentidao.
+ */
+const START_CALL_TIMEOUT_MS = Number(process.env.CALL_START_TIMEOUT_MS) || 25000;
+
+/**
+ * Teto do `connect()` do motor. Sem ele o `connect` que nunca resolve deixa a
+ * promessa `conectando` pendente para sempre e trava o bot (ver o comentario no
+ * `obterCliente`).
+ */
+const CONNECT_TIMEOUT_MS = Number(process.env.CALL_CONNECT_TIMEOUT_MS) || 30000;
+
+/**
  * Agenda uma reconexao com backoff.
  *
  * O zapo NAO reconecta sozinho (a doc e' explicita). Sem isto, uma queda de
@@ -288,14 +350,19 @@ export async function obterCliente() {
   if (client) return client;
   if (conectando) return conectando;
 
-  // Em teste nao se abre conexao de verdade (emitiria QR/pareamento).
-  if (process.env.ZAPO_DISABLE_CONNECT === '1' || process.env.NODE_ENV === 'test') {
+  // Em teste nao se abre conexao de verdade (emitiria QR/pareamento) — a menos
+  // que o teste tenha injetado um client FALSO (o seam `__setFabricaDeCliente`),
+  // que e' o unico jeito de exercitar o caminho do `connect` sem tocar a rede.
+  if (!__fabricaDeCliente && (process.env.ZAPO_DISABLE_CONNECT === '1' || process.env.NODE_ENV === 'test')) {
     loadError = 'conexao desabilitada em teste (ZAPO_DISABLE_CONNECT)';
     return null;
   }
 
   conectando = (async () => {
     try {
+      // Seam de teste: injeta SO o client (falso). A LOGICA abaixo — o teto do
+      // `connect`, a espera da conexao, o tratamento de falha — e' a MESMA de
+      // producao, que e' o que o teste precisa medir.
       const { createStore, WaClient, ConsoleLogger, voipPlugin } = m;
 
       // Ajusta o encoder MLow (bitrate 30 kbps + complexidade 10 + FEC).
@@ -324,7 +391,7 @@ export async function obterCliente() {
         }
       });
 
-      client = new WaClient(
+      client = __fabricaDeCliente ? await __fabricaDeCliente(m) : new WaClient(
         {
           store,
           sessionId: process.env.ZAPO_SESSION_ID || 'lizzy-call',
@@ -430,8 +497,26 @@ export async function obterCliente() {
       // fechada. Sem pareamento, nao esperamos (o promise fica pendente).
       const jaPareado = estaPareado();
       if (jaPareado) {
-        await client.connect().catch(() => {});
-        await aguardarConexao(30000);
+        // TETO DURO no `connect()`. Ele NAO tinha teto, e essa era a via do
+        // travamento do bot: se o `connect()` nunca resolve, a promessa
+        // `conectando` fica PENDENTE PARA SEMPRE — e toda chamada seguinte de
+        // `obterCliente()` recebe essa mesma promessa (o `if (conectando) return
+        // conectando`). O `!vozp` entao nunca retorna, o handler prende o lote
+        // do `messageQueue` e o BOT INTEIRO para de responder — so' volta com
+        // restart pela host. Foi o incidente.
+        const abriu = await comTeto(client.connect(), CONNECT_TIMEOUT_MS, 'connect');
+        if (!abriu.ok) {
+          loadError = abriu.estourou
+            ? `conexao do motor nao abriu em ${CONNECT_TIMEOUT_MS}ms`
+            : abriu.erro;
+          // Nao deixa a promessa pendente envenenar as proximas chamadas: sem
+          // isto, `conectando` continuaria resolvido para uma promessa que
+          // nunca termina.
+          conectando = null;
+          client = null;
+          return null;
+        }
+        await aguardarConexao(CONNECT_TIMEOUT_MS);
       } else {
         void client.connect().catch(() => {});
       }
@@ -542,6 +627,19 @@ async function resolverLids(cli, jids, timeoutMs = LID_LOOKUP_TIMEOUT_MS) {
 /** Exportado para o teste medir a conversao PN -> LID. */
 export const __resolverLids = resolverLids;
 
+/** Exportado para o teste medir a BLINDAGEM (o teto duro). */
+export const __comTeto = comTeto;
+/**
+ * Seam de teste: injeta uma fabrica de client (falso) para exercitar o caminho
+ * REAL do `connect` sem abrir conexao. `null` volta ao comportamento normal.
+ */
+let __fabricaDeCliente = null;
+export function __setFabricaDeCliente(fn) { __fabricaDeCliente = fn; }
+/** Teto efetivo do `startCall` (para o teste conferir que existe). */
+export const __tetoDoStartCall = () => START_CALL_TIMEOUT_MS;
+/** Teto efetivo do `connect` (para o teste conferir que existe). */
+export const __tetoDaConexao = () => CONNECT_TIMEOUT_MS;
+
 /**
  * Traduz o estado do zapo para os estagios que o bot ja conhece.
  */
@@ -619,12 +717,28 @@ export async function entrarNaCallComMidia({
       console.warn(`[CALLP] convidados: ${alvos.length} | em LID: ${quantosLid} (o resto vai pelo numero)`);
     }
 
-    const novoCallId = await cli.voip.startCall({
-      groupJid: grupo,
-      participants: alvos,
-      // Chat de voz (nao toca) quando o comando pede; `!callp` manda `false`.
-      isLightweight
-    });
+    // TETO DURO no startCall: ele espera o ack do offer e o usync dos devices,
+    // e um `await` sem teto aqui prende o HANDLER — que prende o lote inteiro do
+    // `messageQueue` e trava o bot todo (foi o incidente). O timer do `comTeto`
+    // destrava o chamador mesmo que o motor nunca responda.
+    const r = await comTeto(
+      cli.voip.startCall({
+        groupJid: grupo,
+        participants: alvos,
+        // Chat de voz (nao toca) quando o comando pede; `!callp` manda `false`.
+        isLightweight
+      }),
+      START_CALL_TIMEOUT_MS,
+      'startCall'
+    );
+    if (!r.ok) {
+      return {
+        ok: false,
+        motivo: r.estourou ? 'motor_sem_resposta' : 'falha_ao_entrar',
+        detalhe: r.erro
+      };
+    }
+    const novoCallId = r.valor;
 
     callsPorGrupo.set(grupo, novoCallId);
     estagios.set(grupo, 'aguardando_roster');

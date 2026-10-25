@@ -36141,6 +36141,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               pacote_de_midia_ausente: 'A mídia não está instalada neste servidor (faltam os pacotes do `zapo`).',
               nao_pareado: 'O motor de mídia ainda não foi pareado. Use `!callp parear <numero>`.',
               sem_conexao: 'A conexão do motor de mídia não abriu. Tente de novo em alguns segundos.',
+              motor_sem_resposta: 'O motor de mídia não respondeu a tempo. O bot segue normal — tente de novo em alguns segundos.',
               ja_na_call: 'Já existe uma chamada de mídia neste grupo.',
               falha_ao_entrar: 'O motor de mídia não subiu.'
             };
@@ -36320,6 +36321,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               voice_chat_indisponivel: 'O motor de mídia (`zapo`) não está disponível neste servidor.',
               nao_pareado: 'O motor de mídia ainda não foi pareado. Use `!callp parear <numero>`.',
               sem_conexao: 'A conexão do motor de mídia não abriu. Tente de novo em alguns segundos.',
+              motor_sem_resposta: 'O motor de mídia não respondeu a tempo. O bot segue normal — tente de novo em alguns segundos.',
               ja_na_call: 'Já existe uma chamada de mídia neste grupo.',
               falha_ao_entrar: 'O motor de mídia não subiu.'
             };
