@@ -4881,9 +4881,20 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       // o dono medir o falso positivo com dados reais antes de a pontuação
       // substituir o gate. `decidir` já está implementado e testado; a virada é
       // de uma linha — deliberadamente adiada até haver medição de campo.
+      // A pontuacao e' calculada DENTRO do try, mas o RESULTADO e' usado fora
+      // dele (no gate logo abaixo). Declarar com `const` aqui dentro deixava o
+      // `avalia` inacessivel fora do bloco: o `[GHOST-SCORE]` era impresso (o
+      // ataque APARECIA no log) e, na linha seguinte, `avalia.acao` lancava
+      // `ReferenceError` — o handler abortava ANTES de punir. Era o relatado
+      // "mostra o ataque no log mas nao bane ninguem".
+      //
+      // O valor inicial e' SEGURO (`observar`): se a pontuacao falhar, NAO se
+      // pune. Falso positivo e' destrutivo (remove membro e fecha o grupo, sem
+      // desfazer), entao na duvida nao ha acao.
+      let avalia = { acao: 'observar', score: 0, motivo: 'nao_avaliado', sinais: {} };
       try {
         const classificacao = classifyMessage(info);
-        const avalia = ghostDetection.decidir({
+        avalia = ghostDetection.decidir({
           ...info,
           selectiveDistribution: info.selectiveDistribution,
           zeroValuePayment: classificacao.paymentAmount.isZero,

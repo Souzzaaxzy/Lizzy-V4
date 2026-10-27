@@ -146,6 +146,11 @@ const selectiveInfo = ({ groupJid, authorLid }) => ({
   key: { remoteJid: groupJid, fromMe: false, id: 'SEL-1', participant: authorLid, participantAlt: MEM_PN },
   messageStubType: 2, // CIPHERTEXT
   messageStubParameters: ['No session found to decrypt message'],
+  // Forma REAL do report: `buildSelectiveDistributionReport` (fork) SEMPRE
+  // inclui os campos de estrutura (`hasPhash`, `groupDeviceCount`, `density`,
+  // `skdmRecentMs`). A fixture antiga omitia todos — e sem eles a pontuacao
+  // (`ghostDetection.decidir`) nao atinge o limiar, entao o teste nunca podia
+  // ver uma punicao: media um cenario que nao existe em producao.
   selectiveDistribution: {
     kind: 'selective-distribution',
     messageId: 'SEL-1',
@@ -154,6 +159,10 @@ const selectiveInfo = ({ groupJid, authorLid }) => ({
     encType: 'skmsg',
     decryptFail: 'hide',
     addressedDeviceCount: 1,
+    hasPhash: false,
+    groupDeviceCount: 50,
+    density: 0.02,
+    skdmRecentMs: 900,
     reason: 'No session found to decrypt message',
   },
   messageTimestamp: 1757900000,
@@ -269,6 +278,7 @@ await test('VÁRIAS mensagens fantasma do mesmo autor: UM ciclo e UM aviso só',
     selectiveDistribution: {
       kind: 'selective-distribution', messageId: id, groupJid, author: MEM,
       encType: 'skmsg', decryptFail: 'hide', addressedDeviceCount: 1,
+      hasPhash: false, groupDeviceCount: 50, density: 0.02, skdmRecentMs: 900,
       reason: 'No session found to decrypt message',
     },
     messageTimestamp: 1757900000, pushName: 'Invasor',
@@ -299,6 +309,7 @@ await test('um autor DIFERENTE ainda é punido normalmente (a marca é por autor
     selectiveDistribution: {
       kind: 'selective-distribution', messageId: id, groupJid, author: authorLid,
       encType: 'skmsg', decryptFail: 'hide', addressedDeviceCount: 1,
+      hasPhash: false, groupDeviceCount: 50, density: 0.02, skdmRecentMs: 900,
       reason: 'No session found to decrypt message',
     },
     messageTimestamp: 1757900000, pushName: 'Invasor',
@@ -346,6 +357,7 @@ await test('bane RÁPIDO: a remoção sai antes dos sleeps (era o "só ban na 7�
     selectiveDistribution: {
       kind: 'selective-distribution', messageId: 'FAST-1', groupJid, author: MEM,
       encType: 'skmsg', decryptFail: 'hide', addressedDeviceCount: 1,
+      hasPhash: false, groupDeviceCount: 50, density: 0.02, skdmRecentMs: 900,
       reason: 'No session found to decrypt message',
     },
     messageTimestamp: 1757900000, pushName: 'Invasor',
@@ -383,6 +395,7 @@ await test('10 mensagens fantasma em rajada (100ms): UMA punição, e rápida', 
     selectiveDistribution: {
       kind: 'selective-distribution', messageId: id, groupJid, author: MEM,
       encType: 'skmsg', decryptFail: 'hide', addressedDeviceCount: 1,
+      hasPhash: false, groupDeviceCount: 50, density: 0.02, skdmRecentMs: 900,
       reason: 'No session found to decrypt message',
     },
     messageTimestamp: 1757900000, pushName: 'Invasor',
@@ -415,6 +428,7 @@ await test('um ataque NOVO depois da janela volta a ser punido (era o "não dete
     selectiveDistribution: {
       kind: 'selective-distribution', messageId: id, groupJid, author: MEM,
       encType: 'skmsg', decryptFail: 'hide', addressedDeviceCount: 1,
+      hasPhash: false, groupDeviceCount: 50, density: 0.02, skdmRecentMs: 900,
       reason: 'No session found to decrypt message',
     },
     messageTimestamp: 1757900000, pushName: 'Invasor',

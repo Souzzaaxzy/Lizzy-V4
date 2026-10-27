@@ -5529,13 +5529,79 @@ payment -> ban -> leave) e o subdono sem ritual.
 E o `npm install` **rebaixa o `yarn.lock` para v1** (armadilha ja documentada):
 sempre `git checkout -- yarn.lock` depois.
 
+### `!antifantasma` NAO BANIA: o `avalia` vivia dentro do `try` (out/2026) ✅
+Relato do dono: *"ele mostra o ataque nas logs mas nao executa nada, ai o atacante
+fica la rajando"*. Era exatamente isso — e a causa era de ESCOPO.
+
+**Causa raiz (MEDIDA).** No bloco de distribuicao seletiva do handler:
+
+```js
+try {
+  const classificacao = classifyMessage(info);
+  const avalia = ghostDetection.decidir({ ... });   // <-- const DENTRO do try
+  console.log(`[GHOST-SCORE] acao=${avalia.acao} ...`);   // o log SAI
+} catch (e) { /* diagnostico */ }
+
+const podeAgir = ...;
+const jaPunido = ...;
+
+if (podeAgir && !jaPunido && avalia.acao === 'punir') {   // ReferenceError!
+```
+
+O `const avalia` e' **block-scoped** ao `try`. O `[GHOST-SCORE]` era impresso (por
+isso "o ataque APARECIA no log"), e na linha seguinte `avalia.acao` lancava
+`ReferenceError: avalia is not defined`. O `catch` externo do handler registrava
+`ERRO NO PROCESSAMENTO DA MENSAGEM` e **abortava o handler ANTES de punir** — o
+ciclo fechar-grupo -> banir -> reabrir, o aviso e o apagar **nunca rodavam**.
+Era o "nao executa nada".
+
+**Correcao.** `avalia` foi **icado** para fora do `try`, com um default **SEGURO**:
+
+```js
+let avalia = { acao: 'observar', score: 0, motivo: 'nao_avaliado', sinais: {} };
+try { ... avalia = ghostDetection.decidir({...}); } catch (e) { ... }
+```
+
+Se a pontuacao falhar, `acao` fica `observar` -> **nao pune**. Falso positivo e'
+destrutivo (remove membro e fecha o grupo, sem desfazer), entao na duvida nao ha
+acao — o gate anti-falso-positivo continua exigindo evidencia ESTRUTURAL
+(`phash` ausente / densidade baixa / SKDM fresco).
+
+**Fixture irreal (o mesmo erro de metodo de sempre).** O
+`tests/anti-seletiva.test.js` montava o report da distribuicao seletiva **sem** os
+campos de estrutura que a fork SEMPRE envia (`hasPhash`, `groupDeviceCount`,
+`density`, `skdmRecentMs` — conferido em
+`buildSelectiveDistributionReport`). Sem eles o score fica 4 (< limiar 6), entao o
+teste **nunca** podia ver uma punicao: media um cenario que nao existe em
+producao. A fixture passou a espelhar o report real (como o
+`tests/helpers/ghost-fixtures.js` ja fazia).
+
+**Testes.** `anti-seletiva` **32 ok / 0 falhas** (era **10 ok / 22 falhas**).
+Verificado que o teste MEDE a correcao: reintroduzindo o `const avalia` dentro do
+`try`, volta a **22 falhas**. Regressoes verdes: `ghost-detection` 24/81 (corpus
+com **0 falso positivo**, precisao/recall 100%), `antifantasma-classificacao`
+18/0, `invisible-analyzer` 58/467, `invisible-vectors` 10/22,
+`invisible-candidates` 10/0, `antifantasma-raja` 13/30, `antistatus-unificado`
+8/14, `testeanti` 23/53, `raja-selective` 23/0, `get-message-inspector` 54/269,
+`cmd-suggest` 21/68, `antimidia`, `antictt`, `relationships-multi`, `pin-message`.
+
+**Nao tocado (de proposito).** O `InvisibleAnalyzer`
+(`utils/invisibleAnalyzer.js`) — ele so' RELATA no `!get`, nao decide punicao. E o
+gate do `ehRajaTransporte` tambem ficou como esta: a fork instalada expoe
+`pairwiseGroupPayload` mas **nao** `groupEncInfo`; afrouxar esse sinal para
+`pairwiseGroupPayload` sozinho foi o que causou o "banindo geral" e a decisao
+deliberada de nao aceita-lo continua valendo (aceitar puniria usuario inocente em
+retry benigno).
+
 ### Pre-existentes (nao sao regressao)
-Comparado com a baseline (`git stash`) teste a teste: identicos. `anti-seletiva`
-(22 falhas, `ReferenceError: avalia is not defined` — o `const avalia` vive dentro
-de um `try` e e' usado fora), `defensive-protection` 21, `eununca18` 5,
+Comparado com a baseline (`git stash`) teste a teste: identicos.
+`defensive-protection` 21, `eununca18` 5,
 `layout-conversion` 1, `menu-layout` 1, `pg-commands` 4, `poll-layout` 17,
 `rajar*` 6/9/12/20, `statusgrupo`/`statusgrupo-figurinha`/`togif` (falta de ffmpeg
 no sandbox). `testcall` e' **flaky** (5/6 passam; corrida ja documentada).
+`modo18` estoura o timeout do harness (exit 124) com as 60 assercoes OK — tambem
+na baseline.
+
 
 ## `!get` — ANÁLISE FORENSE DE MENSAGEM INVISÍVEL (set/2026) ✅
 Nova categoria do `!get`: **"🕵️ ANÁLISE DE MENSAGEM INVISÍVEL"**. Ela **não**
