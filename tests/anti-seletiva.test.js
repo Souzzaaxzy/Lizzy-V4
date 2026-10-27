@@ -471,6 +471,88 @@ await test('o guard do connect.js deixa passar a mensagem sem `message` (causa r
 
 
 // ============================================================================
+// O GATE: `isBotAdmin` por TODAS as formas + rastro quando NAO age
+//
+// Era o "ainda nao funcionou": o log mostrava `acao=punir` e nada acontecia. A
+// causa era o `isBotAdmin` — comparava SO o `botNumberLid` (LID) contra os
+// admins, e nos DOIS casos reais abaixo ele virava `false` EM SILENCIO:
+//   1. a sessao nao expoe `nazu.user.lid` -> `getBotNumber` cai no PN;
+//   2. a resolucao PN->LID falha (onWhatsApp limitado/vazio/lanca) -> devolve o PN.
+// Com `isBotAdmin=false`, `podeAgir=false` e o anti NUNCA age.
+// ============================================================================
+
+/** Igual ao `makeNazu`, mas controla o formato do BOT no metadata e o onWhatsApp. */
+function makeNazuVariando({ sent, groupJid, calls = {}, botPart, onWa }) {
+  const base = makeNazu({ sent, groupJid, senderLid: MEM, calls });
+  base.onWhatsApp = onWa;
+  base.groupMetadata = async () => ({
+    id: groupJid,
+    subject: 'Grupo AntiSeletiva',
+    participants: [botPart, ...PARTICIPANTS.filter((p) => !idsEq(p.id, BOT_LID))],
+  });
+  return base;
+}
+const idsEq = (a, b) => String(a).split('@')[0] === String(b).split('@')[0];
+
+await test('GATE: bot admin identificado SO pelo PN (resolucao LID falha) AINDA age', async () => {
+  // O caso medido: metadata lista o bot como PN, `nazu.user.lid` ausente e o
+  // `onWhatsApp` limitado (devolve vazio). Antes: nada acontecia. Agora age.
+  const groupJid = makeGroup({ antiinvi: true });
+  const sent = []; const calls = {};
+  const nazu = makeNazuVariando({
+    sent, groupJid, calls,
+    botPart: { id: BOT_JID, phoneNumber: BOT_JID, admin: 'admin' },
+    onWa: async () => [],
+  });
+  nazu.user = { id: `${BOT_JID.split('@')[0]}:5@s.whatsapp.net`, name: 'Lizzy' }; // sem `lid`
+  await handleMessage(nazu, selectiveInfo({ groupJid, authorLid: MEM }), null, new Map(), null);
+  await new Promise((r) => setTimeout(r, 4000));
+  ok((calls.groupParticipantsUpdate || 0) >= 1, `removeu mesmo com o LID nao resolvido (${calls.groupParticipantsUpdate || 0})`);
+  ok(sent.some((s) => s.content?.text?.includes('mensagem fantasma')), 'avisou o banimento');
+});
+
+await test('GATE: bot admin LID no metadata e onWhatsApp LANCANDO AINDA age', async () => {
+  const groupJid = makeGroup({ antiinvi: true });
+  const sent = []; const calls = {};
+  const nazu = makeNazuVariando({
+    sent, groupJid, calls,
+    botPart: { id: BOT_LID, lid: BOT_LID, phoneNumber: BOT_JID, admin: 'admin' },
+    onWa: async () => { throw new Error('rate limit'); },
+  });
+  nazu.user = { id: `${BOT_JID.split('@')[0]}:5@s.whatsapp.net`, name: 'Lizzy' };
+  await handleMessage(nazu, selectiveInfo({ groupJid, authorLid: MEM }), null, new Map(), null);
+  await new Promise((r) => setTimeout(r, 4000));
+  ok((calls.groupParticipantsUpdate || 0) >= 1, `removeu com o onWhatsApp lancando (${calls.groupParticipantsUpdate || 0})`);
+});
+
+await test('GATE: quando NAO pode agir, o log diz o MOTIVO (nunca silencio)', async () => {
+  // Sem rastro, "detectou e foi barrado" era indistinguivel de "nao detectou" —
+  // foi por isso que este defeito sobreviveu varias rodadas.
+  const groupJid = makeGroup({ antiinvi: true });
+  const sent = []; const calls = [];
+  const logs = [];
+  const originalLog = console.log;
+  console.log = (...args) => { logs.push(args.join(' ')); };
+  try {
+    // Bot NAO admin: o gate barra, mas TEM de dizer que barrou e por que.
+    const nazu = makeNazuVariando({
+      sent, groupJid, calls: {},
+      botPart: { id: BOT_LID, lid: BOT_LID, phoneNumber: BOT_JID, admin: null },
+      onWa: async (j) => [{ jid: j, exists: true, lid: j.replace('@s.whatsapp.net', '@lid') }],
+    });
+    await handleMessage(nazu, selectiveInfo({ groupJid, authorLid: MEM }), null, new Map(), null);
+    await new Promise((r) => setTimeout(r, 1500));
+  } finally {
+    console.log = originalLog;
+  }
+  const linha = logs.find((l) => l.includes('CONFIRMADO mas NAO punido'));
+  ok(!!linha, 'logou o bloqueio do gate');
+  ok(linha && linha.includes('motivo=bot_nao_e_admin'), `motivo correto (${linha})`);
+  ok(linha && linha.includes('score='), 'inclui o score');
+});
+
+
+// ============================================================================
 
 const totalPassed = RESULTS.reduce((a, r) => a + r.passed, 0);
 const totalFailed = RESULTS.reduce((a, r) => a + r.failed, 0);

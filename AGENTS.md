@@ -5593,6 +5593,64 @@ gate do `ehRajaTransporte` tambem ficou como esta: a fork instalada expoe
 deliberada de nao aceita-lo continua valendo (aceitar puniria usuario inocente em
 retry benigno).
 
+### `!antifantasma` — 2ª rodada: o `isBotAdmin` falhava EM SILÊNCIO (out/2026) ✅
+Depois do fix do `avalia`, o log passou a mostrar `acao=punir score=7` — e mesmo
+assim nada acontecia. **Duas causas**, ambas medidas com o handler real.
+
+**Causa A — `isBotAdmin` frágil (o bloqueio).** O código comparava **só** o
+`botNumberLid` (LID) contra os admins:
+
+```js
+const isBotAdmin = !isGroup || !botNumberLid ? false : idInArray(botNumberLid, groupAdmins);
+```
+
+Isso falha em **dois** casos reais, e falha **em silêncio**:
+1. a sessão **não expõe `nazu.user.lid`** → `getBotNumber` cai no **PN**;
+2. a resolução **PN→LID falha** (`onWhatsApp` limitado/vazio/lança) →
+   `getLidFromJidCached` devolve o **próprio PN**.
+
+Nos dois, um **PN** era comparado a uma lista de **LIDs** → `isBotAdmin = false`
+→ `podeAgir = false` → o anti **nunca** agia. Medido com o handler real:
+
+| cenário | antes | depois |
+|---|---|---|
+| bot admin só **PN** no metadata + `onWhatsApp` **vazio** | **não bane** | bane |
+| bot admin LID + `onWhatsApp` **lançando** | **não bane** | bane |
+| bot admin LID + `onWhatsApp` ok | bane | bane |
+| autor ADMIN / bot não admin | não bane (correto) | não bane (correto) |
+
+**Correção**: `isBotAdmin` passou a considerar **todas as formas** que o socket
+conhece (PN + LID) e a **ligá-las pelo METADATA do grupo** (o participante que
+casa qualquer forma contribui com todas as dele). É correção de **falso
+negativo**: a exclusão do atacante (`!isGroupAdmin && !isOwner && whitelist`)
+segue **intacta**, então não há falso positivo novo.
+
+**Causa B — o gate era 100% silencioso.** Quando a detecção era confirmada e o
+gate barrava, **nada** era logado: "detectou e foi barrado" era
+**indistinguível** de "não detectou". Foi por isso que o defeito sobreviveu
+várias rodadas. Agora sai uma linha dizendo **quem** barrou:
+
+```
+[GHOST] selective CONFIRMADO mas NAO punido -> motivo=bot_nao_e_admin | score=7 | autor=5511...
+```
+
+Motivos: `bot_nao_e_admin`, `autor_e_admin_ou_dono`, `autor_e_dono`,
+`autor_na_lista_branca`.
+
+**Não tocado**: `InvisibleAnalyzer` (só relata no `!get`), os limiares do
+`decidir`, a exigência de evidência estrutural e as isenções de admin/dono/
+whitelist — que são justamente as travas anti-falso-positivo.
+
+**Testes**: `anti-seletiva` **38 ok / 0 falhas** (era 32), com 3 novos: bot admin
+só por PN + resolução falhando **ainda age**; bot admin com `onWhatsApp`
+lançando **ainda age**; e o log do motivo quando não pode agir. **Verificado que
+medem a correção**: revertendo o `isBotAdmin` para a forma antiga, o teste
+"bot admin LID + onWhatsApp lançando" **falha** (0 remoções). Regressões verdes:
+`ghost-detection` 24/81 (0 falso positivo), `antifantasma-classificacao` 18/0,
+`invisible-analyzer` 58/467, `raja-selective` 23/0, `get-message-inspector`
+54/269, `callp` 50/118, `musicap` 24/70. `midiap` 3 falhas e
+`defensive-protection` 21: **pré-existentes** (confirmados na baseline).
+
 ### Pre-existentes (nao sao regressao)
 Comparado com a baseline (`git stash`) teste a teste: identicos.
 `defensive-protection` 21, `eununca18` 5,

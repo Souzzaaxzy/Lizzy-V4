@@ -4050,7 +4050,37 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
     const botNumberLid = botNumber && isValidJid(botNumber)
       ? await getLidFromJidCached(nazu, botNumber)
       : botNumber;
-    const isBotAdmin = !isGroup || !botNumberLid ? false : idInArray(botNumberLid, groupAdmins);
+    // ── O BOT é admin? (por TODAS as formas de identidade) ────────────────────
+    //
+    // Comparar SÓ o `botNumberLid` contra os admins (LIDs) falha em DOIS casos
+    // reais, e falha em SILÊNCIO (isBotAdmin vira false e todo anti que exige
+    // "bot admin" deixa de agir — era o relatado "detecta no log mas nao bane"):
+    //
+    //   1. a sessão não expõe `nazu.user.lid` -> `getBotNumber` cai no PN;
+    //   2. a resolução PN->LID falha (onWhatsApp limitado/vazio/lança) ->
+    //      `getLidFromJidCached` devolve o próprio PN.
+    //
+    // Nos dois, um PN era comparado a uma lista de LIDs. Agora reunimos as
+    // formas que o socket conhece (PN + LID) e ligamos as duas pelo METADATA do
+    // grupo: o participante que casa QUALQUER forma contribui com TODAS as dele.
+    // Isso corrige o FALSO NEGATIVO; a exclusão do atacante
+    // (`!isGroupAdmin && !isOwner`) segue intacta, então não há falso positivo
+    // novo.
+    const botFormas = new Set(
+      [botNumber, botNumberLid, nazu?.user?.id, nazu?.user?.lid].filter(Boolean)
+    );
+    try {
+      const botPart = groupMetadata?.participants?.find((p) => {
+        const cand = [p?.id, p?.lid, p?.phoneNumber, p?.pn].filter(Boolean);
+        return cand.some((c) => [...botFormas].some((b) => idsMatch(b, c)));
+      });
+      for (const v of [botPart?.id, botPart?.lid, botPart?.phoneNumber, botPart?.pn]) {
+        if (v) botFormas.add(v);
+      }
+    } catch { /* metadata opcional */ }
+    const isBotAdmin = !isGroup || botFormas.size === 0
+      ? false
+      : [...botFormas].some((b) => idInArray(b, groupAdmins));
     let isGroupAdmin = false;
     if (isGroup) {
       const isModeratorActionAllowed = groupData.moderators?.includes(sender) && groupData.allowedModCommands?.includes(command);
@@ -4955,6 +4985,19 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
         }).catch(() => {});
       } else if (podeAgir && !jaPunido && avalia.acao !== 'punir') {
         console.log('[GHOST] selective SEM corroboracao -> observando (nao bane): ' + avalia.motivo);
+      } else if (!podeAgir && !jaPunido && avalia.acao === 'punir') {
+        // DETECTOU e NAO agiu. Antes este caso nao deixava rastro NENHUM, entao
+        // era indistinguivel de "nao detectou" — foi por isso que o defeito do
+        // `isBotAdmin` sobreviveu varias rodadas. Diz exatamente QUEM barrou.
+        const __motivoGate = !isBotAdmin ? 'bot_nao_e_admin'
+          : isGroupAdmin ? 'autor_e_admin_ou_dono'
+            : isOwner ? 'autor_e_dono'
+              : isUserWhitelisted(sender, 'antipagamento') ? 'autor_na_lista_branca'
+                : 'desconhecido';
+        console.log(
+          '[GHOST] selective CONFIRMADO mas NAO punido -> motivo=' + __motivoGate +
+          ' | score=' + avalia.score + ' | autor=' + String(autorDet).split('@')[0]
+        );
       }
 
       // A mensagem nao tem conteudo decifravel: e um stub (CIPHERTEXT). Seguir
