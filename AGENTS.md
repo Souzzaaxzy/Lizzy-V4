@@ -5651,6 +5651,62 @@ medem a correção**: revertendo o `isBotAdmin` para a forma antiga, o teste
 54/269, `callp` 50/118, `musicap` 24/70. `midiap` 3 falhas e
 `defensive-protection` 21: **pré-existentes** (confirmados na baseline).
 
+## `!antifantasma` — BAN POR MARCAÇÃO melhorado (rede de segurança do raja) (out/2026) ✅
+O detector do `!antifantasma` age pelo **TRANSPORTE** (`selectiveDistribution`).
+Quando ele **não pega** (ex.: o raja chega por um caminho que a fork não marca),
+sobrava uma rede de segurança: **alguém MARCA a mensagem do raja** e o card
+inteiro chega ao bot pelo `contextInfo.quotedMessage`. Esse caminho existia, mas
+só reconhecia **uma** assinatura.
+
+### O que era (antes)
+`quotedPayment.js` só entendia o **FLOOD por resposta**: `transactionData >= 512`
+**E** (≥ 2 menções **OU** link). Ou seja, marcasse o **raja real** — que é um
+`sendPaymentMessage` com a nota carregando `.` + zero-widths e **sem**
+`transactionData` grande — e **nada acontecia**. O `!rajar` monta exatamente
+esse formato, então marcar o próprio teste não banía.
+
+### O que ficou (agora) — DUAS assinaturas, ambas MEDIDAS
+| variante | assinatura | cobre |
+|---|---|---|
+| **A) FLOOD** | `transactionData >= 512` **E** (≥ 2 menções **OU** link) | resposta a um card antigo com payload grande |
+| **B) RAJA** | **nota com texto INVISÍVEL** *ou* **valor ZERADO** | o raja real (nota invisível) e o raja clássico (`amount1000` "0") |
+
+Os marcadores do raja **não** vêm de um parser novo: vêm do **`analisarPagamento`**
+(o MESMO motor do `!get`), via o novo `marcadoresDoRaja(quoted)`. Nada de duas
+implementações divergindo.
+
+**`semReferencia` NÃO decide** — medido: um `sendPaymentMessage` **legítimo**
+também não traz `requestMessageKey` (o tipo não carrega `amount`). Ele só entra no
+log, como contexto. Esse era o jeito fácil de errar.
+
+### Medido com o handler real
+| card marcado | antes | agora |
+|---|---|---|
+| raja real (`send` + nota invisível) | **não bane** | **bane** (`motivo=nota_invisivel`) |
+| raja clássico (`request` + `amount1000` "0") | não bane | **bane** (`motivo=valor_zero`) |
+| pagamento legítimo (valor 1500, nota visível) | não bane | **não bane** |
+| envio legítimo (nota visível, sem `tx`) | não bane | **não bane** |
+
+### Melhorias no handler
+- **log com o motivo e os marcadores**: `[QUOTED PAYMENT] motivo=… tipo=… autor=…
+  mencoes=… tx=… link=… notaInvisivel=… valorZero=… semReferencia=…`;
+- **mensagem ao grupo específica**: *"…foi removido por enviar uma **mensagem
+  fantasma** (o texto vinha escondido no card)."* quando é raja; *"…um pagamento
+  suspeito."* quando é flood.
+
+### Testes — `quoted-payment` (**16 testes / 51 asserções**, era 10/31)
+Novos: módulo do raja (nota invisível e valor zero, com o `motivo` correto);
+`marcadoresDoRaja` não inflando o legítimo; **FALSO POSITIVO** (payment e send
+legítimos não são ataque — e o send legítimo *tem* `semReferencia` e mesmo assim
+não punge); e, pelo **handler real**, os dois formatos de raja **banem o autor** e
+os dois legítimos **não banem**. **Verificado que medem a mudança**: desligando a
+variante RAJA, **9 asserções falham**.
+
+Regressões verdes: `anti-seletiva` 38/0, `ghost-detection` 24/81 (**0 falso
+positivo**, precisão/recall 100%), `antifantasma-classificacao` 18/0,
+`antifantasma-raja` 13/30, `invisible-analyzer` 58/467, `get-message-inspector`
+54/269.
+
 ### Pre-existentes (nao sao regressao)
 Comparado com a baseline (`git stash`) teste a teste: identicos.
 `defensive-protection` 21, `eununca18` 5,

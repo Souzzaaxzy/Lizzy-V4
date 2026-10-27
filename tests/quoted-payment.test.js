@@ -1,14 +1,18 @@
 /**
  * Payment RESPONDIDA (quoted) — integrado ao `!antifantasma` (antiinvi).
  *
- * Quando alguém responde a um card de pagamento com assinatura suspeita
- * (transactionData >= 512 + várias menções OU link), o AUTOR ORIGINAL do card é
- * removido. Cobre o módulo puro (`quotedPayment.js`) E o handler real com socket
- * falso, provando que:
+ * Quando alguém MARCA (responde) um card de pagamento, o AUTOR ORIGINAL do card
+ * é removido. Duas assinaturas, ambas medidas:
+ *   A) FLOOD — transactionData >= 512 E (várias menções OU link);
+ *   B) RAJA — nota com texto INVISÍVEL ou valor ZERADO (a rede de segurança
+ *      para quando a detecção por TRANSPORTE não pegou e alguém marcou o card).
+ *
+ * Cobre o módulo puro (`quotedPayment.js`) E o handler real com socket falso,
+ * provando que:
  *   - só age com o `!antifantasma` ligado;
  *   - remove o AUTOR do card (não quem respondeu);
  *   - não remove admin;
- *   - não age em pagamento comum (sem a assinatura);
+ *   - não age em pagamento comum/legítimo;
  *   - deduplica respostas ao mesmo card.
  *
  * Uso: node tests/quoted-payment.test.js
@@ -21,6 +25,7 @@ import { fileURLToPath } from 'url';
 import {
   detectarPaymentRespondida, alvoDaRemocao, assinaturaSuspeita,
   tamanhoTransactionData, temLink, tipoPaymentCitado, autorEhAdmin,
+  marcadoresDoRaja,
 } from '../dados/src/utils/quotedPayment.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -58,6 +63,37 @@ const BOT_JID = '5599999999999@s.whatsapp.net';
 
 const TX_GRANDE = 'x'.repeat(600);
 const TX_PEQUENO = 'x'.repeat(40);
+const ZW = '\u200b'.repeat(7);
+
+/** RAJA REAL medido: `sendPaymentMessage` com a nota carregando só invisíveis. */
+function rajaReal({ tx = null, mentionCount = 0 } = {}) {
+  const card = { noteMessage: nota('.' + ZW, mentionCount) };
+  if (tx) card.transactionData = tx;
+  return { sendPaymentMessage: card };
+}
+
+/** RAJA clássico: `requestPaymentMessage` com o valor zerado. */
+function rajaValorZero() {
+  return { requestPaymentMessage: {
+    currencyCodeIso4217: 'BRL', amount1000: '0', expiryTimestamp: '0',
+    amount: { value: '0', offset: 1000, currencyCode: 'BRL' },
+    noteMessage: nota('rajada', 0),
+  } };
+}
+
+/** Pagamento LEGÍTIMO: valor positivo e nota visível. Não pode ser punido. */
+function paymentLegitimo() {
+  return { requestPaymentMessage: {
+    currencyCodeIso4217: 'BRL', amount1000: '1500',
+    amount: { value: '1500', offset: 1000, currencyCode: 'BRL' },
+    noteMessage: nota('Pague o aluguel', 0),
+  } };
+}
+
+/** Envio LEGÍTIMO: nota visível, sem transactionData. Não pode ser punido. */
+function sendLegitimo() {
+  return { sendPaymentMessage: { noteMessage: nota('Pix enviado, obrigado!', 0) } };
+}
 
 function nota(text, mentionCount = 0) {
   const mentionedJid = Array.from({ length: mentionCount }, (_, i) => `5511900000${String(i).padStart(3, '0')}@s.whatsapp.net`);
@@ -131,6 +167,36 @@ await test('módulo: alvoDaRemocao acha o autor e recusa admin', () => {
   ok(alvo && alvo.jid === AUTOR_JID, 'acha pelo LID e devolve o telefone');
   ok(alvoDaRemocao(parts, BOT_LID) === null, 'bot admin não é alvo');
   ok(alvoDaRemocao(parts, '5511999999999@s.whatsapp.net') === null, 'autor fora do grupo = null');
+});
+
+await test('módulo: RAJA por nota invisível e por valor zero', () => {
+  // A rede de segurança: o bot não pegou pelo transporte, mas alguém marcou.
+  const invisivel = detectarPaymentRespondida(infoResposta(rajaReal({ mentionCount: 0 })));
+  ok(invisivel.ataque === true, 'nota invisível = ataque');
+  ok(invisivel.motivo === 'nota_invisivel', `motivo nota_invisivel (${invisivel.motivo})`);
+  ok(invisivel.notaInvisivel === true && invisivel.valorZero === false, 'marcadores corretos');
+
+  const zerado = detectarPaymentRespondida(infoResposta(rajaValorZero()));
+  ok(zerado.ataque === true, 'valor zero = ataque');
+  ok(zerado.motivo === 'valor_zero', `motivo valor_zero (${zerado.motivo})`);
+});
+
+await test('módulo: marcadoresDoRaja não infla pagamento legítimo', () => {
+  ok(marcadoresDoRaja(paymentLegitimo()).notaInvisivel === false, 'legítimo: nota visível');
+  ok(marcadoresDoRaja(paymentLegitimo()).valorZero === false, 'legítimo: valor positivo');
+  ok(marcadoresDoRaja(rajaReal()).notaInvisivel === true, 'raja: nota invisível');
+  ok(marcadoresDoRaja(rajaValorZero()).valorZero === true, 'raja: valor zero');
+  ok(marcadoresDoRaja({ imageMessage: {} }).disponivel === false, 'não-payment: indisponível');
+});
+
+await test('módulo: FALSO POSITIVO — legítimos NÃO são ataque', () => {
+  // O ponto mais importante: nota visível e valor positivo não podem punir.
+  ok(detectarPaymentRespondida(infoResposta(paymentLegitimo())).ataque === false, 'payment legítimo');
+  ok(detectarPaymentRespondida(infoResposta(sendLegitimo())).ataque === false, 'send legítimo');
+  // Um send legítimo também NÃO traz requestMessageKey — por isso esse campo,
+  // sozinho, não pode decidir.
+  ok(marcadoresDoRaja(sendLegitimo()).semReferencia === true, 'send legítimo não tem requestMessageKey');
+  ok(detectarPaymentRespondida(infoResposta(sendLegitimo())).ataque === false, 'e mesmo assim não é ataque');
 });
 
 // ─────────────────────────── handler real ───────────────────────────
@@ -212,6 +278,27 @@ await test('handler: deduplica — duas respostas ao MESMO card = 1 remoção', 
   await handleMessage(nazu, info1, null, new Map(), null);
   await handleMessage(nazu, info2, null, new Map(), null);
   ok(removed.length === 1, `esperado 1 remoção para o mesmo card (obtido ${removed.length})`);
+});
+
+await test('handler: RAJA MARCADO (nota invisível) bane o AUTOR', async () => {
+  // É o cenário do pedido: o bot não pegou pelo transporte, alguém marcou.
+  const rem = await run(rajaReal({ mentionCount: 0 }));
+  ok(rem.length === 1, `esperado 1 remoção (obtido ${rem.length})`);
+  ok(rem[0]?.users?.includes(AUTOR_JID), 'removeu o autor do card');
+});
+
+await test('handler: RAJA MARCADO (valor zero) bane o AUTOR', async () => {
+  const rem = await run(rajaValorZero());
+  ok(rem.length === 1, `esperado 1 remoção (obtido ${rem.length})`);
+  ok(rem[0]?.users?.includes(AUTOR_JID), 'removeu o autor do card');
+});
+
+await test('handler: FALSO POSITIVO — pagamento LEGÍTIMO marcado NÃO bane', async () => {
+  // Marcar um Pix normal não pode remover ninguém.
+  const remPag = await run(paymentLegitimo());
+  ok(remPag.length === 0, `payment legítimo não bane (obtido ${remPag.length})`);
+  const remSend = await run(sendLegitimo());
+  ok(remSend.length === 0, `send legítimo não bane (obtido ${remSend.length})`);
 });
 
 // ─────────────────────────── resumo ───────────────────────────

@@ -1,17 +1,28 @@
 /**
  * Detector de PAYMENT RESPONDIDA (quoted payment) — parte do `!antifantasma`.
  *
- * Quando alguém RESPONDE a um card de pagamento e esse card tem a assinatura
- * suspeita (transactionData grande + várias menções ou link), o AUTOR ORIGINAL
- * do card é removido do grupo. É a técnica do "flood por resposta a payment":
- * o atacante mira um card antigo para empurrar o próprio payload.
+ * Quando alguém RESPONDE (marca) um card de pagamento, o AUTOR ORIGINAL do card
+ * é removido do grupo. É a rede de segurança do `!antifantasma`: o texto do
+ * raja vive na NOTA do card, então basta ALGUÉM MARCAR a mensagem para o card
+ * inteiro chegar ao bot e ser analisado — mesmo quando a detecção pelo
+ * TRANSPORTE não pegou.
+ *
+ * DUAS assinaturas, ambas medidas:
+ *   A) FLOOD por resposta — `transactionData` grande E (várias menções OU link):
+ *      o atacante mira um card antigo para empurrar o próprio payload.
+ *   B) RAJA — o card é um envelope de pagamento sem lastro: a nota carrega só
+ *      texto INVISÍVEL, ou o valor está ZERADO. É o formato do raja real
+ *      (`sendPaymentMessage` + `.` com zero-widths) e do raja clássico
+ *      (`requestPaymentMessage` com `amount1000` "0").
  *
  * Módulo PURO (sem socket, sem arquivo, sem timers): a decisão é testável e o
  * efeito (remover) fica com o handler. Reutiliza o `classifyMessage` central
- * para o TEXTO e as MENÇÕES — nada de um segundo parser de payment.
+ * para o TEXTO/MENÇÕES e o `analisarPagamento` (o MESMO motor do `!get`) para
+ * os marcadores do raja — nada de um segundo parser de payment.
  */
 
 import { classifyMessage } from './messageInspector.js';
+import { analisarPagamento } from './invisibleAnalyzer.js';
 import { findParticipantByNumber } from './helpers.js';
 
 export const SEND = 'sendPaymentMessage';
@@ -60,11 +71,50 @@ export function temLink(text) {
 }
 
 /**
- * A assinatura suspeita: `transactionData` grande E (várias menções OU link).
- * Exige os dois lados de propósito — evita banir por payment comum.
+ * A assinatura suspeita, nas DUAS variantes (ver o topo do arquivo).
+ *
+ * A) FLOOD: `transactionData` grande E (várias menções OU link). Exige os dois
+ *    lados de propósito — evita banir por payment comum.
+ * B) RAJA: nota com texto INVISÍVEL ou valor ZERADO. Pagamento legítimo tem
+ *    nota visível e/ou valor positivo, então NÃO entra aqui — é o que separa o
+ *    ataque do card comum.
  */
-export function assinaturaSuspeita({ transactionLength = 0, mentions = 0, text = '' } = {}) {
-  return transactionLength >= MIN_TRANSACTION_LENGTH && (mentions >= MIN_MENTIONS || temLink(text));
+export function assinaturaSuspeita({
+  transactionLength = 0, mentions = 0, text = '',
+  notaInvisivel = false, valorZero = false,
+} = {}) {
+  const flood = transactionLength >= MIN_TRANSACTION_LENGTH
+    && (mentions >= MIN_MENTIONS || temLink(text));
+  const raja = notaInvisivel || valorZero;
+  return flood || raja;
+}
+
+/**
+ * Marcadores do raja, extraídos com o `analisarPagamento` (o mesmo motor que o
+ * `!get` usa). Centralizado aqui para o handler não precisar conhecer o motor.
+ *
+ * `semReferencia` NÃO entra na decisão: medido, um `sendPaymentMessage`
+ * LEGÍTIMO também não traz `requestMessageKey` (o tipo não carrega `amount`).
+ * Ele é apenas reportado no log, como contexto.
+ */
+export function marcadoresDoRaja(quoted) {
+  try {
+    const pa = analisarPagamento(quoted);
+    if (!pa?.disponivel) return { disponivel: false, notaInvisivel: false, valorZero: false, semReferencia: false };
+    return {
+      disponivel: true,
+      // `semConteudoVisivel` = o texto da nota é só espaço/zero-width (nada é
+      // desenhado). É a assinatura MEDIDA do raja real.
+      notaInvisivel: pa.nota?.semConteudoVisivel === true,
+      // Zero em `amount1000` ou em `amount.value` — o card não tem o que
+      // desenhar (raja clássico).
+      valorZero: pa.anomaliaZero === true,
+      // Contexto apenas (ver o comentário acima).
+      semReferencia: pa.cardZeradoSemReferencia === true,
+    };
+  } catch {
+    return { disponivel: false, notaInvisivel: false, valorZero: false, semReferencia: false };
+  }
 }
 
 /** Nome da chave do payment citado (send/request), ou null. */
@@ -106,8 +156,21 @@ export function detectarPaymentRespondida(info) {
     const payment = quoted[paymentType] || {};
     const transactionLength = tamanhoTransactionData(payment.transactionData);
 
-    const suspicious = assinaturaSuspeita({ transactionLength, mentions, text });
+    // Marcadores do raja (nota invisível / valor zero) — é o que cobre o caso
+    // em que o bot NÃO pegou o raja pelo transporte e alguém MARCOU o card.
+    const marcadores = marcadoresDoRaja(quoted);
+
+    const suspicious = assinaturaSuspeita({
+      transactionLength, mentions, text,
+      notaInvisivel: marcadores.notaInvisivel,
+      valorZero: marcadores.valorZero,
+    });
     if (!suspicious) return { ataque: false };
+
+    // Qual variante disparou (para o log e para a mensagem ao grupo).
+    const motivo = marcadores.notaInvisivel ? 'nota_invisivel'
+      : marcadores.valorZero ? 'valor_zero'
+        : 'flood';
 
     return {
       ataque: true,
@@ -117,6 +180,10 @@ export function detectarPaymentRespondida(info) {
       mentions,
       transactionLength,
       hasLink: temLink(text),
+      notaInvisivel: marcadores.notaInvisivel,
+      valorZero: marcadores.valorZero,
+      semReferencia: marcadores.semReferencia,
+      motivo,
     };
   } catch {
     return { ataque: false };

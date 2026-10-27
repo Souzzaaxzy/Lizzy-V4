@@ -4570,9 +4570,14 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
           if (!alvo) {
             console.log('[QUOTED PAYMENT] Autor não resolvido ou é ADM, ignorado:', String(det.author).split('@')[0]);
           } else {
+            // O motivo distingue as duas variantes: o RAJA (nota invisível /
+            // valor zero — a rede de segurança quando o transporte não pegou)
+            // do FLOOD por resposta a um card antigo.
             console.log(
-              `[QUOTED PAYMENT] tipo=${det.paymentType} autor=${String(det.author).split('@')[0]} ` +
-              `mencoes=${det.mentions} tx=${det.transactionLength} link=${det.hasLink}`
+              `[QUOTED PAYMENT] motivo=${det.motivo} tipo=${det.paymentType} ` +
+              `autor=${String(det.author).split('@')[0]} mencoes=${det.mentions} ` +
+              `tx=${det.transactionLength} link=${det.hasLink} notaInvisivel=${det.notaInvisivel} ` +
+              `valorZero=${det.valorZero} semReferencia=${det.semReferencia}`
             );
             const newsletterCtxQuoted = {
               forwardingScore: 999,
@@ -4584,8 +4589,11 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
             };
             await nazu.groupParticipantsUpdate(from, [alvo.jid], 'remove')
               .catch((e) => console.error('[QUOTED PAYMENT] falha ao remover:', e?.message || e));
+            const __fraseQuoted = det.motivo === 'flood'
+              ? 'um pagamento suspeito'
+              : 'uma mensagem fantasma (o texto vinha escondido no card)';
             await nazu.sendMessage(from, {
-              text: `❌ @${String(det.author).split('@')[0]} foi removido por enviar um pagamento suspeito.`,
+              text: `❌ @${String(det.author).split('@')[0]} foi removido por enviar ${__fraseQuoted}.`,
               mentions: [det.author],
               contextInfo: newsletterCtxQuoted,
             }).catch(() => {});
