@@ -29,6 +29,18 @@ fs.mkdirSync(GRUPOS_DIR, { recursive: true });
 fs.mkdirSync(DONO_DIR, { recursive: true });
 
 const ia = await import(new URL('../dados/src/funcs/private/ia.js', import.meta.url).href);
+const groq = await import(new URL('../dados/src/utils/groqClient.js', import.meta.url).href);
+
+// Dublê do HTTP do GROQ: e' por onde a CONVERSA passa agora (a mesma API da call).
+// A forma devolvida e' a da OpenAI, que o `makeCognimaRequest` repassa intacta.
+const respostaGroq = (texto) => ({
+  data: { choices: [{ index: 0, message: { role: 'assistant', content: texto }, finish_reason: 'stop' }] },
+});
+function erroGroq(status, message = 'erro') {
+  const e = new Error(message);
+  e.response = { status, data: { error: { message } } };
+  return e;
+}
 
 const RESULTS = [];
 let CURRENT = null;
@@ -97,58 +109,67 @@ await test('3. NENHUM call site usa modelo de outra API', () => {
 // 2) REQUISICAO (com HTTP injetado)
 // ============================================================================
 
-await test('4. usa o modelo valido na URL e devolve o texto', async () => {
-  let urlVista = null;
-  ia.setGeminiHttpForTest(async (url) => { urlVista = url; return respostaGemini('Ola do Gemini'); }, async () => ({ data: { models: [] } }));
-  ia.setGeminiApiKey('chave-de-teste');
-  const r = await ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', 'oi', null);
-  contem(urlVista, ia.GEMINI_DEFAULT_MODEL, 'URL com o modelo valido');
-  naoContem(urlVista, 'llama', 'URL nao tem llama');
-  ok(r.data.choices[0].message.content === 'Ola do Gemini', 'texto extraido');
-  ia.setGeminiHttpForTest(null);
+await test('4. a CONVERSA usa o GROQ (a mesma API da call) e devolve o texto', async () => {
+  // O dono pediu a MESMA API da call. Este teste trava isso: a conversa bate no
+  // endpoint do Groq, com o modelo do `groqClient`, e o retorno mantem a forma
+  // da OpenAI que os 32 call sites leem.
+  let urlVista = null, corpoVisto = null;
+  groq.setGroqHttpForTest(async (url, data) => { urlVista = url; corpoVisto = data; return respostaGroq('Ola do Groq'); });
+  process.env.GROQ_API_KEY = 'gsk-teste';
+  const r = await ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, 'oi', null);
+  contem(urlVista, 'api.groq.com', 'bate no endpoint do GROQ');
+  naoContem(urlVista, 'generativelanguage', 'NAO bate no Gemini');
+  contem(urlVista, 'chat/completions', 'rota de conversa do Groq');
+  ok(corpoVisto.model.startsWith('openai/'), `modelo do groqClient (veio ${corpoVisto.model})`);
+  ok(r.data.choices[0].message.content === 'Ola do Groq', 'texto extraido na forma da OpenAI');
+  groq.setGroqHttpForTest(null);
 });
 
-await test('5. 404 no modelo pedido cai para o fallback (nao falha)', async () => {
-  const vistas = [];
-  ia.setGeminiHttpForTest(async (url) => {
-    vistas.push(url);
-    if (url.includes('gemini-9.9-nova')) throw erroHttp(404, 'model not found');
-    return respostaGemini('veio do fallback');
-  }, async () => ({ data: { models: [] } }));
-  ia.setGeminiApiKey('chave-de-teste');
-  const r = await ia.makeCognimaRequest('gemini-9.9-nova', 'oi', null);
-  ok(vistas.length >= 2, 'tentou mais de um modelo');
-  ok(vistas[0].includes('gemini-9.9-nova'), 'tentou o pedido primeiro');
-  ok(vistas[1].includes(ia.GEMINI_FALLBACK_MODELS[0]), 'depois o fallback');
-  ok(r.data.choices[0].message.content === 'veio do fallback', 'respondeu');
-  ia.setGeminiHttpForTest(null);
+await test('5. o modelo e do groqClient: o id pedido pelo call site e ignorado', async () => {
+  // Os 32 call sites ainda passam `GEMINI_DEFAULT_MODEL` (ou um id de outra API).
+  // O `makeCognimaRequest` ignora e usa o modelo do `groqClient` — e' o que
+  // permite a troca sem tocar em nenhum deles.
+  let corpoVisto = null;
+  groq.setGroqHttpForTest(async (url, data) => { corpoVisto = data; return respostaGroq('ok'); });
+  process.env.GROQ_API_KEY = 'gsk-teste';
+  await ia.makeCognimaRequest('meta/llama-3.1-405b-instruct', 'oi', null);
+  naoContem(corpoVisto.model, 'llama', 'o id de outra API NAO vaza para o Groq');
+  naoContem(corpoVisto.model, 'gemini', 'nem o id do Gemini');
+  ok(corpoVisto.model.startsWith('openai/'), 'usa o modelo do groqClient');
+  groq.setGroqHttpForTest(null);
 });
 
-await test('6. sem key lanca erro claro de configuracao', async () => {
+await test('6. sem chave do Groq lanca erro claro de configuracao', async () => {
+  const salva = process.env.GROQ_API_KEY;
+  delete process.env.GROQ_API_KEY;
   ia.setGeminiApiKey('');
   let erro = null;
   try { await ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, 'oi', null); } catch (e) { erro = e; }
-  ok(erro && /não configurada|!key/i.test(erro.message), 'pede para configurar a key');
+  ok(erro !== null, 'lanca erro');
+  contem(String(erro?.message), 'keygroq', 'aponta o comando certo da chave');
+  if (salva !== undefined) process.env.GROQ_API_KEY = salva;
 });
 
-await test('7. 401/403 nao insiste em outro modelo (falha rapido)', async () => {
+await test('7. 401/403 no Groq falha rapido (nao insiste)', async () => {
   let chamadas = 0;
-  ia.setGeminiHttpForTest(async () => { chamadas += 1; throw erroHttp(403, 'API key not valid'); }, async () => ({ data: { models: [] } }));
-  ia.setGeminiApiKey('chave-ruim');
+  groq.setGroqHttpForTest(async () => { chamadas += 1; throw erroGroq(401, 'Invalid API Key'); });
+  process.env.GROQ_API_KEY = 'gsk-ruim';
   let erro = null;
   try { await ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, 'oi', null); } catch (e) { erro = e; }
-  ok(erro && /\[AI_ERROR\]/.test(erro.message), 'erro marcado');
-  ok(chamadas === 1, 'nao tentou outros modelos com key invalida');
-  ia.setGeminiHttpForTest(null);
+  ok(chamadas === 1, `nao insiste: 1 chamada (fez ${chamadas})`);
+  ok(erro !== null, 'lanca erro');
+  contem(String(erro?.message), 'Groq', 'o erro vem do Groq');
+  groq.setGroqHttpForTest(null);
 });
 
-await test('8. 429 esgota as tentativas e lanca erro classificado', async () => {
-  ia.setGeminiHttpForTest(async () => { throw erroHttp(429, 'quota'); }, async () => ({ data: { models: [] } }));
-  ia.setGeminiApiKey('chave-de-teste');
+await test('8. 429 no Groq lanca erro classificado (limite)', async () => {
+  groq.setGroqHttpForTest(async () => { throw erroGroq(429, 'Rate limit reached'); });
+  process.env.GROQ_API_KEY = 'gsk-teste';
   let erro = null;
-  try { await ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, 'oi', null, [], 1); } catch (e) { erro = e; }
-  ok(erro && /Limite de requisições/i.test(erro.message), 'mensagem de limite');
-  ia.setGeminiHttpForTest(null);
+  try { await ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, 'oi', null); } catch (e) { erro = e; }
+  ok(erro !== null, 'lanca erro');
+  contem(String(erro?.message).toLowerCase(), 'groq', 'a mensagem e do Groq');
+  groq.setGroqHttpForTest(null);
 });
 
 // ============================================================================
@@ -206,12 +227,13 @@ async function runIA(text, { waitMs = 250 } = {}) {
 }
 
 await test('9. resposta de IA chega formatada ao usuario', async () => {
-  ia.setGeminiHttpForTest(async () => respostaGemini('**Negrito** e texto normal'), async () => ({ data: { models: [] } }));
-  ia.setGeminiApiKey('chave-de-teste');
+  // O caminho REAL de um comando de IA: `!cog` -> makeCognimaRequest -> Groq.
+  groq.setGroqHttpForTest(async () => respostaGroq('**Negrito** e texto normal'));
+  process.env.GROQ_API_KEY = 'gsk-teste';
   const t = await runIA('!cog quem descobriu o Brasil?');
   contem(t, 'Negrito', 'conteudo da IA');
   naoContem(t, '**', 'markdown removido pelo formatAIResponse');
-  ia.setGeminiHttpForTest(null);
+  groq.setGroqHttpForTest(null);
 });
 
 await test('10. erro de key mostra a orientacao de configurar (!key)', async () => {
@@ -222,13 +244,12 @@ await test('10. erro de key mostra a orientacao de configurar (!key)', async () 
   ia.setGeminiHttpForTest(null);
 });
 
-await test('11. erro de limite avisa para aguardar (nao some)', async () => {
-  ia.setGeminiHttpForTest(async () => { throw erroHttp(429, 'quota'); }, async () => ({ data: { models: [] } }));
-  ia.setGeminiApiKey('chave-de-teste');
-  // o 429 tem backoff exponencial (1s + 2s) antes de desistir
-  const t = await runIA('!resumir um texto qualquer aqui', { waitMs: 6000 });
+await test('11. erro de limite no Groq avisa para aguardar', async () => {
+  groq.setGroqHttpForTest(async () => { throw erroGroq(429, 'Rate limit reached for requests'); });
+  process.env.GROQ_API_KEY = 'gsk-teste';
+  const t = await runIA('!resumir um texto qualquer aqui', { waitMs: 2000 });
   contem(t, 'requisições', 'avisa do limite');
-  ia.setGeminiHttpForTest(null);
+  groq.setGroqHttpForTest(null);
 });
 
 await test('12. TODOS os comandos de IA recebem o mesmo tratamento de erro', () => {
@@ -260,28 +281,20 @@ await test('14. generateImage devolve URL http', async () => {
   ok(typeof url === 'string' && /^https?:\/\//.test(url), 'URL valida');
 });
 
-await test('15. DESCOBERTA: usa a ListModels da conta quando o modelo pedido sumiu', async () => {
-  // O nome `gemini-5.0-flash` NAO esta na lista estatica: so a conta o conhece.
-  // Sem a descoberta o bot morreria no 404; com ela, se adapta sozinho.
-  const NOME_NOVO = 'gemini-5.0-flash';
-  ok(!ia.GEMINI_FALLBACK_MODELS.includes(NOME_NOVO), 'o nome de teste nao esta na lista estatica');
-  const vistas = [];
-  ia.setGeminiHttpForTest(
-    async (url) => {
-      vistas.push(url);
-      if (!url.includes(NOME_NOVO)) throw erroHttp(404, 'models/gemini-2.5-flash is no longer available to new users');
-      return respostaGemini('respondeu com o modelo da conta');
-    },
-    async () => ({ data: { models: [
-      { name: `models/${NOME_NOVO}`, supportedGenerationMethods: ['generateContent'] },
-      { name: 'models/embedding-001', supportedGenerationMethods: ['embedContent'] },
-    ] } }),
-  );
-  ia.setGeminiApiKey('chave-de-teste');
-  const r = await ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, 'oi', null);
-  ok(vistas.some((u) => u.includes(NOME_NOVO)), 'usou o modelo que a conta tem (descoberto)');
-  ok(r.data.choices[0].message.content === 'respondeu com o modelo da conta', 'respondeu');
-  ia.setGeminiHttpForTest(null);
+await test('15. a CONVERSA nao depende da descoberta de modelos (o Groq tem modelo fixo)', async () => {
+  // A descoberta (`descobrirModelos`) existe para o Gemini. A conversa agora vai
+  // pelo Groq, cujo modelo vem do `groqClient` — entao NAO ha cadeia de modelos
+  // no caminho da conversa, e um erro do Groq nao vira 8 tentativas.
+  let chamadas = 0;
+  groq.setGroqHttpForTest(async () => { chamadas += 1; throw erroGroq(404, 'model not found'); });
+  process.env.GROQ_API_KEY = 'gsk-teste';
+  let erro = null;
+  try { await ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, 'oi', null); } catch (e) { erro = e; }
+  ok(erro !== null, 'lanca erro');
+  ok(chamadas === 1, `uma chamada so' (fez ${chamadas})`);
+  // E a descoberta continua disponivel para o Gemini.
+  ok(typeof ia.descobrirModelos === 'function', 'descobrirModelos continua existindo para o Gemini');
+  groq.setGroqHttpForTest(null);
 });
 
 await test('16. DESCOBERTA ignora modelos sem generateContent', async () => {
@@ -344,23 +357,22 @@ await test('19. classificarErroGemini: distingue modelo / limite / payload', () 
   ok(payload.tipo === 'payload', `400 sem chave/modelo vira payload (${payload.tipo})`);
 });
 
-await test('20. chave inválida NAO percorre a cadeia de modelos (1 chamada só)', async () => {
-  // O bug: o 400 de chave era tratado como "modelo indisponivel", entao a
-  // cadeia INTEIRA era tentada (8 chamadas + 8 linhas de log). Agora para na 1a.
+await test('20. chave invalida do Groq para na 1a chamada (sem cadeia)', async () => {
+  // O bug original: o 400 de chave era lido como "modelo indisponivel" e a cadeia
+  // INTEIRA era tentada. No Groq nao ha cadeia: uma chamada e o erro sobe.
   let chamadas = 0;
-  ia.setGeminiHttpForTest(async () => {
+  groq.setGroqHttpForTest(async () => {
     chamadas += 1;
-    const e = new Error('Request failed with status code 400');
-    e.response = { status: 400, data: { error: { code: 400, message: 'API key not valid. Please pass a valid API key.', status: 'INVALID_ARGUMENT', details: [{ reason: 'API_KEY_INVALID' }] } } };
+    const e = new Error('Request failed with status code 401');
+    e.response = { status: 401, data: { error: { message: 'Invalid API Key', code: 'invalid_api_key' } } };
     throw e;
-  }, async () => ({ data: { models: [] } }));
-  ia.setGeminiApiKey('chave-ruim');
+  });
+  process.env.GROQ_API_KEY = 'gsk-ruim';
   let erro = null;
-  try { await ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, 'oi', null); }
-  catch (e) { erro = e; }
-  ok(chamadas === 1, `parou na 1ª tentativa (${chamadas} chamadas)`);
-  ok(erro && /chave|key/i.test(erro.message), `a mensagem fala da chave (${erro?.message?.slice(0, 60)})`);
-  ia.setGeminiHttpForTest(null);
+  try { await ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, 'oi', null); } catch (e) { erro = e; }
+  ok(chamadas === 1, `parou na 1a tentativa (${chamadas} chamadas)`);
+  ok(erro !== null, 'lanca erro');
+  groq.setGroqHttpForTest(null);
 });
 
 // ============================================================================

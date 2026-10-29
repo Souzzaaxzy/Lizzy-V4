@@ -138,7 +138,26 @@ export function regrasDeCanal(canal) {
     '- Pode usar emoji e *negrito* com naturalidade, sem exagerar.',
     '- Respostas curtas por padrao; desenvolva quando pedirem.',
     '- Nada de listas numeradas nem cabecalhos de documento: e uma conversa.',
-    '- Escreva como se estivesse digitando no celular, nao como um relatorio.'
+    '- Escreva como se estivesse digitando no celular, nao como um relatorio.',
+    '',
+    // O FORMATO DE SAIDA e' obrigatorio: quem consome faz `extractJSON` da
+    // resposta. Sem esta secao a Lizzy respondia texto livre, o parser nao
+    // achava JSON e a resposta chegava vazia — a assistente parecia muda.
+    'FORMATO DA SUA RESPOSTA (obrigatorio):',
+    'Responda SEMPRE com um JSON valido, sem texto antes ou depois:',
+    '```json',
+    '{',
+    '  "resp": [',
+    '    { "resp": "sua mensagem aqui", "react": "emoji (opcional)" }',
+    '  ]',
+    '}',
+    '```',
+    'Regras do JSON:',
+    '- `resp` e uma LISTA; cada item e uma mensagem enviada em sequencia.',
+    '- Use 1 item quase sempre. Use 2 ou 3 so quando fizer sentido mandar',
+    '  mensagens separadas.',
+    '- `react` e opcional (um emoji, quando reagir a mensagem da pessoa).',
+    '- Nunca escreva nada fora do JSON.'
   ].join('\n');
 }
 

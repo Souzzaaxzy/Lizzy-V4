@@ -180,6 +180,39 @@ await test('11. o prompt do chat continua pedindo resposta em JSON (o parser dep
 });
 
 // ============================================================================
+// 6) A API: A MESMA DA CALL (GROQ)
+// ============================================================================
+
+await test('12. a conversa do chat usa o GROQ (a mesma API da call)', () => {
+  // O dono pediu a mesma API. `makeCognimaRequest` e' o ponto unico por onde
+  // passam a assistente e mais 31 comandos, entao a troca se mede nele.
+  const i = IA_SRC.indexOf('async function makeCognimaRequest');
+  const bloco = IA_SRC.slice(i, i + 1400);
+  contem(bloco, 'groqChat', 'usa o cliente do Groq');
+  contem(bloco, 'chaveGroq', 'usa a chave do Groq (!keygroq)');
+  naoContem(bloco, 'makeGeminiRequest', 'NAO chama mais o Gemini');
+  naoContem(bloco, 'getGeminiApiKey', 'NAO le mais a chave do Gemini');
+});
+
+await test('13. o retorno mantem a forma da OpenAI (os 32 call sites nao mudam)', () => {
+  const i = IA_SRC.indexOf('async function makeCognimaRequest');
+  const bloco = IA_SRC.slice(i, i + 1400);
+  // Sem esta forma, os 32 consumidores (`response.data.choices[0]...`) quebrariam.
+  contem(bloco, 'choices', 'devolve choices');
+  contem(bloco, 'message', 'devolve message');
+  contem(bloco, 'content', 'devolve content');
+});
+
+await test('14. o teto de tokens do TEXTO e maior que o da VOZ', () => {
+  // 220 tokens e' o teto da fala (3 frases). `!resumir`/`!gerarhistoria` seriam
+  // truncados no meio com esse teto.
+  contem(IA_SRC, 'IA_MAX_TOKENS', 'o texto tem teto proprio, configuravel');
+  const groqSrc = fs.readFileSync(new URL('../dados/src/utils/groqClient.js', import.meta.url), 'utf-8');
+  contem(groqSrc, 'maxTokens', 'o cliente aceita teto por chamada');
+  contem(groqSrc, '220', 'o padrao do cliente continua o de voz');
+});
+
+// ============================================================================
 // RESUMO
 // ============================================================================
 console.log('\n' + '='.repeat(60));

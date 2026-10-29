@@ -120,14 +120,23 @@ export function classificarErroGroq(e) {
 /**
  * Conversa (LLM): texto -> resposta.
  *
+ * ## `maxTokens`: o teto de 220 e' de VOZ
+ *
+ * A conversa de voz quer resposta curta (3 frases faladas). Mas este mesmo
+ * cliente atende os comandos de TEXTO (`!resumir`, `!gerarhistoria`, `!ideia`),
+ * onde 220 tokens truncariam a resposta no meio. Por isso o teto e' por chamada:
+ * quem quer texto longo passa o seu.
+ *
  * @param {object} p
  * @param {string} p.texto
  * @param {string} [p.sistema] prompt do sistema
  * @param {Array<{role:string, content:string}>} [p.historico]
  * @param {string} [p.modelo]
+ * @param {number} [p.maxTokens] teto de tokens da resposta (padrao: 220, de voz)
+ * @param {number} [p.temperatura]
  * @returns {Promise<{ ok: boolean, texto?: string, motivo?: string, detalhe?: string, modelo?: string }>}
  */
-export async function groqChat({ texto, sistema, historico = [], modelo = MODELO_LLM } = {}) {
+export async function groqChat({ texto, sistema, historico = [], modelo = MODELO_LLM, maxTokens, temperatura } = {}) {
   const apiKey = chaveGroq();
   if (!apiKey) return { ok: false, motivo: 'sem_chave_groq' };
   if (!texto) return { ok: false, motivo: 'texto_vazio' };
@@ -146,8 +155,12 @@ export async function groqChat({ texto, sistema, historico = [], modelo = MODELO
       messages: mensagens,
       // Conversa de VOZ: resposta curta e' mais natural E mais rapida de
       // sintetizar. 400 tokens davam paragrafos; 220 cabe 3 frases faladas.
-      temperature: Number.parseFloat(process.env.IAP_LLM_TEMP || '0.8'),
-      max_tokens: Number.parseInt(process.env.IAP_LLM_MAX_TOKENS || '220', 10)
+      temperature: Number.isFinite(temperatura)
+        ? temperatura
+        : Number.parseFloat(process.env.IAP_LLM_TEMP || '0.8'),
+      max_tokens: Number.isFinite(maxTokens) && maxTokens > 0
+        ? maxTokens
+        : Number.parseInt(process.env.IAP_LLM_MAX_TOKENS || '220', 10)
     }, {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       timeout: TIMEOUT_LLM_MS

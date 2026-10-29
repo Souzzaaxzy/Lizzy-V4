@@ -19,6 +19,8 @@ import userContextDB from '../../utils/userContextDB.js';
 // Antes o chat tinha quatro prompts proprios e a call um fixo — dois jeitos da
 // mesma bot falar. Agora ha um so, e cada canal acrescenta o seu FORMATO.
 import { promptDaLizzy, regrasDeCanal, iaIdentidade } from '../../utils/iapGuarda.js';
+// A CONVERSA passou a usar o Groq (a mesma API da call). Ver `makeCognimaRequest`.
+import { groqChat, chaveGroq } from '../../utils/groqClient.js';
 
 // Chave da API Google Gemini (carregada do .env ou definida em runtime via !key)
 let geminiApiKey = process.env.GEMINI_API_KEY || '';
@@ -618,17 +620,54 @@ async function geminiRequestMultimodal({ corpo, modelo, timeoutMs = 60000, apiKe
 }
 
 // ========== FUNÇÃO PRINCIPAL (IA — provider Gemini) ==========
-async function makeCognimaRequest(modelo, texto, systemPrompt = null, historico = [], retries = 3) {
+/**
+ * A chamada de CONVERSA do bot — agora no **Groq** (a mesma API da call).
+ *
+ * ## Por que a troca
+ *
+ * O `!assistente` fala com a mesma Lizzy da call, e o dono pediu a MESMA API
+ * tambem. Esta funcao e' o ponto unico por onde passam a assistente do chat e
+ * mais 31 comandos (`!gemma`, `!resumir`, `!ideia`, `!translator`, `!debate`...),
+ * entao trocar AQUI move todos de uma vez, sem tocar em call site nenhum.
+ *
+ * ## Por que o formato de retorno nao muda
+ *
+ * A API do Groq e' **compativel com a da OpenAI**, e o retorno ja vinha nessa
+ * forma (`{ data: { choices: [{ message: { content } }] } }`). Os 32 consumidores
+ * leem `response.data.choices[0].message.content` — manter a MESMA forma e' o
+ * que permite a troca sem mexer em nenhum deles.
+ *
+ * ## Chave e modelo
+ *
+ * A chave e' a do `!keygroq` (`GROQ_API_KEY`). O `modelo` continua aceito na
+ * assinatura por compatibilidade e e' **ignorado**: o modelo vem do
+ * `groqClient` (`IAP_GROQ_LLM_MODEL`). Assim nenhum call site precisa mudar.
+ *
+ * @param {string} _modelo ignorado (compatibilidade com os call sites)
+ * @param {string} texto
+ * @param {string|null} [systemPrompt]
+ * @param {Array<{role:string,content:string}>} [historico]
+ * @returns {Promise<{data:{choices:Array<{message:{content:string}}>}}>}
+ */
+async function makeCognimaRequest(_modelo, texto, systemPrompt = null, historico = []) {
   if (!texto) {
     throw new Error('Parâmetros obrigatórios ausentes: modelo e texto');
   }
-
-  const apiKey = getGeminiApiKey();
-  if (!apiKey) {
-    throw new Error('Chave da IA não configurada.Use !key para configurar.');
+  if (!chaveGroq()) {
+    throw new Error('Chave da IA não configurada. Use !keygroq para configurar.');
   }
 
-  return await makeGeminiRequest(modelo, texto, systemPrompt, historico, retries);
+  // O teto de 220 tokens do `groqChat` e' de VOZ (3 frases faladas). Aqui e'
+  // TEXTO: `!resumir`, `!gerarhistoria` e `!ideia` precisam de mais espaco, e
+  // truncar no meio da frase seria pior que demorar. Configuravel.
+  const maxTokens = Number.parseInt(process.env.IA_MAX_TOKENS || '900', 10);
+  const r = await groqChat({ texto, sistema: systemPrompt || undefined, historico, maxTokens });
+  if (!r.ok) {
+    // O erro sobe como excecao: os 32 call sites ja' tratam com `.catch` e
+    // `mensagemErroIA(e)`, que classifica pelo texto da mensagem.
+    throw new Error(r.mensagem || r.detalhe || `Falha no Groq (${r.motivo}).`);
+  }
+  return { data: { choices: [{ index: 0, message: { role: 'assistant', content: r.texto }, finish_reason: 'stop' }] } };
 }
 function cleanWhatsAppFormatting(texto) {
   if (!texto || typeof texto !== 'string') return texto;
