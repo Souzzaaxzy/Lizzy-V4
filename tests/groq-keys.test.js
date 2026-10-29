@@ -58,11 +58,37 @@ function limparEnv() {
 }
 
 /** Um erro do axios com status (o que o `classificarErroGroq` le'). */
-function erroHttp(status, msg) {
+function erroHttp(status, msg, retryAfter) {
   const e = new Error(`HTTP ${status}`);
-  e.response = { status, data: { error: { message: msg || (status === 429 ? 'rate limit exceeded' : 'Invalid API Key') } } };
+  e.response = {
+    status,
+    headers: retryAfter != null ? { 'retry-after': String(retryAfter) } : {},
+    data: { error: { message: msg || (status === 429 ? 'rate limit exceeded' : 'Invalid API Key') } }
+  };
   return e;
 }
+
+/**
+ * O 429 da COTA DO DIA (RPD) — a chave morre ate' o reset (00:00).
+ * A mensagem e' a que o Groq manda de verdade.
+ */
+const erroCotaDoDia = (retryAfter) => erroHttp(429,
+  'Rate limit reached for model `openai/gpt-oss-120b` on requests per day (RPD): Limit 1000, Used 1000.',
+  retryAfter);
+
+/**
+ * O 429 do LIMITE POR MINUTO (RPM) — a chave esta' VIVA, volta em segundos.
+ *
+ * ## Era o bug da rotacao
+ *
+ * Os dois casos chegavam como "cota estourada" e a chave era marcada como
+ * esgotada ate' a meia-noite. O dono via a rotacao pular chaves boas e, no fim,
+ * tudo dizendo "cota esgotada" — e o `!keygroq reset` (que so' limpava a
+ * marcacao errada) "consertava".
+ */
+const erroLimiteDoMinuto = (retryAfter = 30) => erroHttp(429,
+  'Rate limit reached for model `openai/gpt-oss-120b` on requests per minute (RPM): Limit 30, Used 30.',
+  retryAfter);
 
 // ---------------------------------------------------------------------------
 // 1) OS NOMES E A LEITURA
@@ -165,7 +191,7 @@ await test('7. cota estourada (429) na 1 -> a 2 assume NA HORA', async () => {
   process.env.GROQ_API_KEY = 'k1';
   process.env.GROQ_API_KEY_2 = 'k2';
   const usadas = dublar((chave) => {
-    if (chave === 'k1') throw erroHttp(429);
+    if (chave === 'k1') throw erroCotaDoDia();
     return { data: { choices: [{ message: { content: 'oi!' } }] } };
   });
 
@@ -196,8 +222,8 @@ await test('9. a chave que FUNCIONOU vira a atual (nao volta pra 1)', async () =
   process.env.GROQ_API_KEY_2 = 'k2';
   process.env.GROQ_API_KEY_3 = 'k3';
   const usadas = dublar((chave) => {
-    if (chave === 'k1') throw erroHttp(429);
-    if (chave === 'k2') throw erroHttp(429);
+    if (chave === 'k1') throw erroCotaDoDia();
+    if (chave === 'k2') throw erroCotaDoDia();
     return { data: { choices: [{ message: { content: 'ok' } }] } };
   });
 
@@ -218,7 +244,7 @@ await test('10. TODAS estouradas -> erro controlado e TODAS ficam marcadas', asy
   limparEnv();
   process.env.GROQ_API_KEY = 'k1';
   process.env.GROQ_API_KEY_2 = 'k2';
-  const usadas = dublar(() => { throw erroHttp(429); });
+  const usadas = dublar(() => { throw erroCotaDoDia(); });
 
   const r = await groq.groqChat({ texto: 'oi', sistema: 's' });
   ok(!r.ok, 'nao deu ok');
@@ -246,7 +272,7 @@ await test('11. erro de REDE nao queima outra chave', async () => {
 await test('12. UMA chave so, cota estourada -> o erro dela (sem loop)', async () => {
   limparEnv();
   process.env.GROQ_API_KEY = 'k1';
-  const usadas = dublar(() => { throw erroHttp(429); });
+  const usadas = dublar(() => { throw erroCotaDoDia(); });
   const r = await groq.groqChat({ texto: 'oi', sistema: 's' });
   ok(r.motivo === 'limite', 'o motivo');
   ok(usadas.length === 1, 'tentou uma vez (nao fica em loop)');
@@ -265,7 +291,7 @@ await test('14. a TRANSCRICAO tambem rotaciona', async () => {
   process.env.GROQ_API_KEY = 'k1';
   process.env.GROQ_API_KEY_2 = 'k2';
   const usadas = dublar((chave) => {
-    if (chave === 'k1') throw erroHttp(429);
+    if (chave === 'k1') throw erroCotaDoDia();
     return { data: 'transcricao ok' };
   });
   const wav = Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(60)]);
@@ -329,7 +355,7 @@ await test('19. a chave esgotada NAO e tentada de novo (o conflito relatado)', a
   process.env.GROQ_API_KEY_2 = 'k2';
   process.env.GROQ_API_KEY_3 = 'k3';
   const usadas = dublar((chave) => {
-    if (chave === 'k1' || chave === 'k2') throw erroHttp(429);
+    if (chave === 'k1' || chave === 'k2') throw erroCotaDoDia();
     return { data: { choices: [{ message: { content: 'ok' } }] } };
   });
 
@@ -472,6 +498,148 @@ await test('30. o `iapSessao` recusa com o motivo CERTO quando todas estao no li
   contem(SES, 'situacaoDasChaves', 'consulta a situacao');
   contem(SES, "motivo: 'sem_chave_groq'", 'sem chave -> sem_chave_groq');
   contem(SES, "motivo: 'chaves_no_limite'", 'no limite -> chaves_no_limite');
+});
+
+// ---------------------------------------------------------------------------
+// 6) OS DOIS 429: COTA DO DIA x LIMITE POR MINUTO (o bug da rotacao)
+// ---------------------------------------------------------------------------
+console.log('\n=== 6) COTA DO DIA x LIMITE POR MINUTO ===\n');
+
+await test('31. o classificador distingue o 429 do DIA do de MINUTO', () => {
+  const dia = groq.classificarErroGroq(erroCotaDoDia());
+  ok(dia.tipo === 'limite' && dia.escopo === 'dia', `RPD -> escopo dia (veio ${dia.tipo}/${dia.escopo})`);
+
+  const min = groq.classificarErroGroq(erroLimiteDoMinuto());
+  ok(min.tipo === 'limite' && min.escopo === 'minuto', `RPM -> escopo minuto (veio ${min.tipo}/${min.escopo})`);
+
+  // A pista do TEXTO basta, mesmo sem o status HTTP (o corpo pode variar).
+  const soTexto = groq.classificarErroGroq({
+    response: { data: { error: { message: 'Rate limit reached for model `x` on requests per minute (RPM): Limit 30, Used 30.' } } }
+  });
+  ok(soTexto.tipo === 'limite' && soTexto.escopo === 'minuto', 'a mensagem "per minute" basta');
+
+  // E o `retry-after` longo, sem pista de texto, inclina para o DIA.
+  const espera = groq.classificarErroGroq(erroHttp(429, 'rate limit exceeded', 3600));
+  ok(espera.escopo === 'dia', 'espera de 1h sem pista -> dia');
+  const curta = groq.classificarErroGroq(erroHttp(429, 'rate limit exceeded', 5));
+  ok(curta.escopo === 'minuto', 'espera de 5s -> minuto');
+});
+
+await test('32. 429 por MINUTO NAO queima a chave (era o bug)', async () => {
+  limparEnv();
+  process.env.GROQ_API_KEY = 'k1';
+  process.env.GROQ_API_KEY_2 = 'k2';
+  const usadas = dublar((chave) => {
+    if (chave === 'k1') throw erroLimiteDoMinuto(30);
+    return { data: { choices: [{ message: { content: 'ok' } }] } };
+  });
+
+  const r = await groq.groqChat({ texto: 'oi', sistema: 's' });
+  ok(r.ok, 'a resposta veio (a k2 assumiu na hora)');
+
+  // O CORACAO DO BUG: a k1 NAO pode estar "esgotada".
+  ok(!keys.estaEsgotada(1), 'a k1 NAO ficou marcada como esgotada');
+  ok(keys.estadoDasChaves().esgotadas.length === 0, 'nenhuma chave morreu');
+  // Mas fica de castigo por um tempo (nao bater nela de novo agora).
+  ok(keys.emCooldown(1), 'a k1 ficou em castigo');
+  ok(keys.segundosDeCooldown(1) > 0, 'com tempo restante');
+  ok(keys.situacaoDasChaves() === 'ok', 'e a situacao continua ok (ela esta viva)');
+  groq.setGroqHttpForTest(null);
+});
+
+await test('33. depois do castigo, a chave VOLTA sozinha (sem reset)', async () => {
+  limparEnv();
+  process.env.GROQ_API_KEY = 'k1';
+  process.env.GROQ_API_KEY_2 = 'k2';
+  dublar((chave) => {
+    if (chave === 'k1') throw erroLimiteDoMinuto(1);
+    return { data: { choices: [{ message: { content: 'ok' } }] } };
+  });
+  await groq.groqChat({ texto: 'a', sistema: 's' });
+  ok(keys.emCooldown(1), 'a k1 esta de castigo agora');
+  ok(groq.chaveGroq() === 'k2', 'a atual e a k2');
+
+  // O castigo vence (1 segundo). Nao ha' reset nenhum — so' o tempo passar.
+  await new Promise((r) => setTimeout(r, 1100));
+  ok(!keys.emCooldown(1), 'o castigo venceu');
+  ok(groq.chaveGroq() === 'k1', `a k1 VOLTOU sozinha (veio ${groq.chaveGroq()}) — sem reset`);
+  groq.setGroqHttpForTest(null);
+});
+
+await test('34. a MESMA chave nao e tentada 2x na mesma chamada (o laco avancava errado)', async () => {
+  limparEnv();
+  process.env.GROQ_API_KEY = 'k1';
+  process.env.GROQ_API_KEY_2 = 'k2';
+  // As duas falham por minuto: sem o fix, a k1 seria tentada duas vezes.
+  const usadas = dublar(() => { throw erroLimiteDoMinuto(30); });
+
+  const r = await groq.groqChat({ texto: 'oi', sistema: 's' });
+  ok(usadas.length === 2, `tentou 2 vezes no total (veio ${usadas.length})`);
+  ok(new Set(usadas).size === usadas.length, `cada chave UMA vez (veio ${JSON.stringify(usadas)})`);
+  ok(usadas[0] === 'k1' && usadas[1] === 'k2', 'e na ordem (k1, k2)');
+  ok(!r.ok && r.motivo === 'limite', `o motivo e limite (veio ${r.motivo})`);
+  ok(keys.estadoDasChaves().esgotadas.length === 0, 'nenhuma chave morreu (as duas voltam)');
+  groq.setGroqHttpForTest(null);
+});
+
+await test('35. castigo de minuto NAO e reportado como "sem chave" (o diagnostico errado)', async () => {
+  limparEnv();
+  process.env.GROQ_API_KEY = 'k1';
+  dublar(() => { throw erroLimiteDoMinuto(30); });
+
+  const r = await groq.groqChat({ texto: 'oi', sistema: 's' });
+  // Antes: `chaveGroq()` devolvia '' e o dono via "chave nao configurada".
+  ok(r.motivo === 'limite', `motivo limite, NAO sem_chave_groq (veio ${r.motivo})`);
+  ok(keys.situacaoDasChaves() === 'ok', 'a chave existe e esta viva');
+  ok(groq.chaveGroq() === '', 'mas nao ha chave usavel AGORA (castigo)');
+  groq.setGroqHttpForTest(null);
+});
+
+await test('36. a cota do DIA continua queimando a chave (nao afrouxou)', async () => {
+  limparEnv();
+  process.env.GROQ_API_KEY = 'k1';
+  process.env.GROQ_API_KEY_2 = 'k2';
+  const usadas = dublar((chave) => {
+    if (chave === 'k1') throw erroCotaDoDia();
+    return { data: { choices: [{ message: { content: 'ok' } }] } };
+  });
+  await groq.groqChat({ texto: 'a', sistema: 's' });
+  ok(keys.estaEsgotada(1), 'a k1 (cota do dia) FICOU esgotada');
+  ok(!keys.emCooldown(1), 'e nao e um castigo');
+  usadas.length = 0;
+  await groq.groqChat({ texto: 'b', sistema: 's' });
+  ok(JSON.stringify(usadas) === JSON.stringify(['k2']), 'a proxima chamada nem tenta a k1');
+  groq.setGroqHttpForTest(null);
+});
+
+await test('37. o painel mostra o castigo separado da cota do dia', () => {
+  limparEnv();
+  process.env.GROQ_API_KEY = 'k1';
+  process.env.GROQ_API_KEY_2 = 'k2';
+  keys.marcarEsgotada(2);
+  keys.marcarCooldown(1, 45);
+  const e = keys.estadoDasChaves();
+  ok(JSON.stringify(e.esgotadas) === JSON.stringify([2]), 'a 2 e a cota do dia');
+  ok(JSON.stringify(e.emCooldown) === JSON.stringify([1]), 'a 1 e castigo de minuto');
+  const c1 = e.chaves.find((c) => c.slot === 1);
+  ok(c1.emCooldown === true && c1.esgotada === false, 'slot 1: castigo, NAO esgotada');
+  ok(c1.cooldownRestante > 0 && c1.cooldownRestante <= 45, `o restante (veio ${c1.cooldownRestante})`);
+  ok(c1.ativa === false, 'e nao esta ativa agora');
+
+  // O handler mostra as duas marcas (a linha da chave e o resumo).
+  contem(INDEX, "c.emCooldown ? '\u23f3'", 'marca de castigo no painel');
+  contem(INDEX, 'limite por minuto', 'texto explicando o castigo');
+  contem(INDEX, 'cota do dia esgotada', 'texto explicando a cota do dia');
+});
+
+await test('38. o reset limpa TAMBEM os castigos (o `!keygroq reset` do dono)', () => {
+  limparEnv();
+  process.env.GROQ_API_KEY = 'k1';
+  keys.marcarCooldown(1, 300);
+  ok(keys.emCooldown(1), 'a chave esta de castigo');
+  keys.resetarEsgotadas();
+  ok(!keys.emCooldown(1), 'o reset limpou o castigo');
+  ok(groq.chaveGroq() === 'k1', 'e a 1a voltou a ser usada');
 });
 
 // ---------------------------------------------------------------------------

@@ -1895,6 +1895,12 @@ const mensagemErroIA = (e) => {
   if (/API key|401|403|inválida|não configurada|permiss/i.test(msg)) {
     return '🤖 *Sistema de IA temporariamente indisponível*\n\n😅 Problema com a chave de IA. O administrador pode configurar com o comando *key*.';
   }
+  // A COTA DO DIA e' diferente de "muitas requisicoes agora": ela so' volta a
+  // meia-noite. Dizer "aguarde alguns instantes" ali mandava o dono esperar a
+  // toa — e foi o que alimentou a confusao com a rotacao das chaves.
+  if (/cota di[aá]ria|cota do dia|limite de hoje/i.test(msg)) {
+    return '⏳ *A cota DIÁRIA da IA acabou* (limite de requisições do dia).\n\nEla volta à meia-noite — ou o dono pode liberar com *keygroq reset*.';
+  }
   if (/Limite de requisições|429/i.test(msg)) {
     return '⏳ *Muitas requisições de IA agora.* Aguarde alguns instantes e tente de novo.';
   }
@@ -26596,27 +26602,40 @@ ${groupPrefix}key sua_chave_gemini
           if (!q) {
             const linhas = chaves.length
               ? estado.chaves.map((c) => {
-                  const marca = c.ativa ? '▶️' : (c.esgotada ? '⛔' : '  ');
-                  const obs = c.esgotada ? ' _limite atingido hoje_' : (c.ativa ? ' _em uso_' : '');
+                  const marca = c.ativa ? '▶️' : (c.esgotada ? '⛔' : (c.emCooldown ? '⏳' : '  '));
+                  // "esgotada" (cota do DIA, volta no reset) e' diferente de
+                  // "em castigo" (limite por MINUTO: a chave esta' viva e volta
+                  // sozinha). Antes os dois viravam "limite atingido hoje".
+                  const obs = c.esgotada
+                    ? ' _cota do dia esgotada (volta à meia-noite)_'
+                    : (c.emCooldown
+                      ? ` _limite por minuto — volta em ${c.cooldownRestante}s_`
+                      : (c.ativa ? ' _em uso_' : ''));
                   return `${marca} *${c.slot}.* \`${mascarar(c.chave)}\` \`${c.var}\`${obs}`;
                 }).join('\n')
               : '   (nenhuma chave configurada)';
 
             const resumo = estado.esgotadas.length
-              ? `⚠️ ${estado.esgotadas.length} chave(s) no limite hoje: *${estado.esgotadas.join(', ')}*`
-              : '✅ Nenhuma chave no limite hoje.';
+              ? `⚠️ ${estado.esgotadas.length} chave(s) com a COTA DO DIA esgotada: *${estado.esgotadas.join(', ')}*`
+              : '✅ Nenhuma chave com a cota do dia esgotada.';
+            // O castigo de MINUTO e' outra coisa: a chave esta' viva, so' esperando.
+            const resumoCastigo = estado.emCooldown.length
+              ? `
+⏳ ${estado.emCooldown.length} chave(s) em limite por minuto (voltam sozinhas): *${estado.emCooldown.join(', ')}*`
+              : '';
             const disponivel = estado.chaves.find((c) => c.ativa);
 
             return reply(`🎙️ *CHAVES DO GROQ* — ${chaves.length}/${MAX_SLOTS} configurada(s)
 
 ${linhas}
 
-${resumo}
-${disponivel ? `🟢 Usando agora: *${disponivel.slot}*` : '🔴 TODAS no limite — só volta no reset (00:00)'}
+${resumo}${resumoCastigo}
+${disponivel ? `🟢 Usando agora: *${disponivel.slot}*` : (estado.emCooldown.length ? '⏳ Todas em limite por minuto — voltam sozinhas em instantes' : '🔴 TODAS com a cota do dia esgotada — só volta no reset (00:00)')}
 🗓️ Reseta todo dia à meia-noite (a cota do Groq é diária).
 
-*Como funciona:* quando a cota de uma acaba, ela fica marcada e a *próxima
-assume sozinha* — sem você fazer nada.
+*Como funciona:* quando a COTA DO DIA de uma acaba, ela fica marcada e a
+*próxima assume sozinha*. Um *limite por minuto* não queima a chave — ela
+espera alguns segundos e volta. Você não precisa fazer nada (nem dar reset).
 
 📝 *Configurar:* \`${groupPrefix}keygroq${slot === 1 ? '' : slot} gsk_...\`
 🗑️ *Remover:* \`${groupPrefix}keygroq off <n>\` _(ou \`${groupPrefix}keygroq<n> off\`)_

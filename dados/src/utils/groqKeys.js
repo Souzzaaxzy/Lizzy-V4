@@ -67,17 +67,6 @@ export function mascarar(chave) {
   return `${s.slice(0, 4)}...${s.slice(-4)}`;
 }
 
-/**
- * O proximo indice, dando a volta no fim.
- *
- * Dar a volta e' proposital: uma chave que estourou o limite agora pode ter
- * voltado (as cotas do Groq sao por minuto/dia).
- */
-export function proximoIndice(indice, total) {
-  if (!total || total < 1) return 0;
-  return (Number(indice) + 1) % total;
-}
-
 /** O nome de comando de um slot (`!keygroq`, `!keygroq2`, ...). */
 export function comandoDoSlot(slot) {
   const n = Number.parseInt(slot, 10);
@@ -202,13 +191,40 @@ function hoje() {
   }
 }
 
-/** O estado em memoria (evita ler o disco a cada chamada). */
+/**
+ * O estado em memoria (evita ler o disco a cada chamada).
+ *
+ * ## Duas marcas DIFERENTES (era o bug da rotacao)
+ *
+ *   - `esgotadas`: a cota do DIA acabou. A chave so' volta no reset (00:00).
+ *   - `cooldowns`: limite por MINUTO/HORA. A chave esta' VIVA e volta sozinha
+ *     em segundos — por isso a marca e' um instante de expiracao, nao "hoje".
+ *
+ * Antes so' existia `esgotadas`, e TODO 429 caia nela: um limite de minuto
+ * queimava a chave ate' a meia-noite (e o dono precisava do `!keygroq reset`).
+ */
 let _estado = null;
+
+/** O agora em ms. */
+function agoraMs() {
+  return Date.now();
+}
+
+/** Tira do estado os cooldowns que ja' venceram. */
+function podarCooldowns(e) {
+  const agora = agoraMs();
+  const saida = {};
+  for (const [slot, fim] of Object.entries(e.cooldowns || {})) {
+    if (Number(fim) > agora) saida[slot] = Number(fim);
+  }
+  e.cooldowns = saida;
+  return e;
+}
 
 /** Le' do disco, resetando se o dia virou. Nunca lanca. */
 function carregarEstado() {
   const dia = hoje();
-  if (_estado && _estado.dia === dia) return _estado;
+  if (_estado && _estado.dia === dia) return podarCooldowns(_estado);
   let lido = null;
   try {
     lido = JSON.parse(fs.readFileSync(arquivoDeEstado(), 'utf8'));
@@ -217,8 +233,11 @@ function carregarEstado() {
   const mesmoDia = lido && lido.dia === dia;
   _estado = {
     dia,
-    esgotadas: mesmoDia && Array.isArray(lido.esgotadas) ? lido.esgotadas.map(Number).filter(Number.isFinite) : []
+    esgotadas: mesmoDia && Array.isArray(lido.esgotadas) ? lido.esgotadas.map(Number).filter(Number.isFinite) : [],
+    // O castigo de minuto vale mesmo entre reinicios: sao SEGUNDOS, nao o dia.
+    cooldowns: mesmoDia && lido.cooldowns && typeof lido.cooldowns === 'object' ? { ...lido.cooldowns } : {}
   };
+  podarCooldowns(_estado);
   if (!mesmoDia && lido) gravarEstado();   // grava o reset
   return _estado;
 }
@@ -248,19 +267,98 @@ export function marcarEsgotada(slot) {
 }
 
 /**
- * A PRIMEIRA chave que ainda nao estourou, a partir de um indice.
+ * A chave esta' so' de CASTIGO (limite por minuto), nao esgotada?
+ * @param {number} slot
+ * @returns {boolean}
+ */
+export function emCooldown(slot) {
+  const e = carregarEstado();
+  const fim = Number(e.cooldowns?.[Number(slot)] || 0);
+  return fim > agoraMs();
+}
+
+/** Quantos segundos faltam do castigo (0 = livre). */
+export function segundosDeCooldown(slot) {
+  const e = carregarEstado();
+  const fim = Number(e.cooldowns?.[Number(slot)] || 0);
+  return Math.max(0, Math.ceil((fim - agoraMs()) / 1000));
+}
+
+/**
+ * Poe a chave de CASTIGO por `segundos` — para o limite por MINUTO/HORA.
  *
- * E' o coracao da rotacao: a "chave atual" e' sempre esta — nao existe ponteiro
+ * NAO e' "esgotada": a cota dela volta sozinha. Serve para nao bater na mesma
+ * chave (e tomar outro 429) enquanto o limite nao passa.
+ *
+ * @param {number} slot
+ * @param {number} [segundos]
+ */
+export function marcarCooldown(slot, segundos = 60) {
+  const n = Number(slot);
+  if (!Number.isFinite(n)) return;
+  const seg = Math.max(1, Math.ceil(Number(segundos) || 0));
+  const e = carregarEstado();
+  e.cooldowns[n] = agoraMs() + (seg * 1000);
+  gravarEstado();
+}
+
+/** Limpa os castigos (o `!keygroq reset` e os testes usam). */
+export function limparCooldowns() {
+  const e = carregarEstado();
+  e.cooldowns = {};
+  gravarEstado();
+}
+
+/**
+ * O INDICE da primeira chave usavel a partir de `de`, ou -1.
+ *
+ * "Usavel" = nao estourou a cota do DIA e nao esta' de castigo de minuto. E' o
+ * coracao da rotacao: a "chave atual" e' sempre esta — nao existe ponteiro
  * separado que possa ficar apontando para uma chave morta.
+ *
+ * Devolver o INDICE (e nao a chave) e' o que permite ao laco do failover
+ * AVANCAR sempre depois de tentar uma — sem repetir a mesma chave.
  *
  * @param {Array<{slot:number, chave:string}>} [lista] padrao: `lerChaves()`
  * @param {number} [de] indice inicial (padrao 0)
+ * @returns {number}
+ */
+export function indiceDisponivel(lista = lerChaves(), de = 0) {
+  const e = carregarEstado();
+  for (let i = Math.max(0, de); i < lista.length; i++) {
+    const slot = Number(lista[i].slot);
+    if (e.esgotadas.includes(slot)) continue;
+    if (emCooldown(slot)) continue;
+    return i;
+  }
+  return -1;
+}
+
+/**
+ * A PRIMEIRA chave usavel (esgotada e castigo respeitados), ou `null`.
+ * @param {Array<{slot:number, chave:string}>} [lista]
+ * @param {number} [de]
  * @returns {{slot:number, chave:string}|null}
  */
 export function primeiraDisponivel(lista = lerChaves(), de = 0) {
+  const i = indiceDisponivel(lista, de);
+  return i < 0 ? null : lista[i];
+}
+
+/**
+ * A primeira chave que ainda NAO estourou a cota do DIA (IGNORA o castigo).
+ *
+ * E' o que responde "ainda tenho chave para hoje?". Um castigo de minuto NAO
+ * significa que a chave morreu — por isso `situacaoDasChaves` usa esta e nao a
+ * `primeiraDisponivel`.
+ *
+ * @param {Array<{slot:number, chave:string}>} [lista]
+ * @returns {{slot:number, chave:string}|null}
+ */
+export function primeiraNaoEsgotada(lista = lerChaves()) {
   const esgotadas = carregarEstado().esgotadas;
-  for (let i = Math.max(0, de); i < lista.length; i++) {
-    if (!esgotadas.includes(Number(lista[i].slot))) return lista[i];
+  for (const c of lista) {
+    if (!esgotadas.includes(Number(c.slot))) return c;
   }
   return null;
 }
@@ -270,7 +368,9 @@ export function primeiraDisponivel(lista = lerChaves(), de = 0) {
  * @param {boolean} [apagarArquivo] `true` remove o arquivo (reset manual)
  */
 export function resetarEsgotadas(apagarArquivo = false) {
-  _estado = { dia: hoje(), esgotadas: [] };
+  // O reset limpa TUDO: a cota do dia E os castigos de minuto. Era o que o dono
+  // fazia na mao com o `!keygroq reset` para destravar a rotacao.
+  _estado = { dia: hoje(), esgotadas: [], cooldowns: {} };
   if (apagarArquivo) {
     try { fs.unlinkSync(arquivoDeEstado()); } catch { /* ja' nao existia */ }
   } else {
@@ -290,10 +390,13 @@ export function estadoDasChaves(lista = lerChaves()) {
   return {
     dia: e.dia,
     esgotadas: [...e.esgotadas].sort((a, b) => a - b),
+    emCooldown: Object.keys(e.cooldowns || {}).map(Number).sort((a, b) => a - b),
     chaves: lista.map((c) => ({
       slot: c.slot,
       chave: c.chave,
       esgotada: e.esgotadas.includes(Number(c.slot)),
+      emCooldown: emCooldown(c.slot),
+      cooldownRestante: segundosDeCooldown(c.slot),
       ativa: Boolean(ativa && ativa.slot === c.slot)
     }))
   };
@@ -311,7 +414,10 @@ export function estadoDasChaves(lista = lerChaves()) {
  */
 export function situacaoDasChaves(lista = lerChaves()) {
   if (!lista.length) return 'sem_chave';
-  return primeiraDisponivel(lista) ? 'ok' : 'todas_esgotadas';
+  // IGNORA o castigo de minuto: uma chave em cooldown nao esta' "esgotada" —
+  // ela volta em segundos. `todas_esgotadas` significa que a cota do DIA
+  // acabou (so' volta no reset).
+  return primeiraNaoEsgotada(lista) ? 'ok' : 'todas_esgotadas';
 }
 
 /** Quando foi o ultimo reset (o dia atual). Diagnostico. */
