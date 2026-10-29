@@ -417,74 +417,153 @@ await test('!iap: o agente é desligado quando a call cai (reconciliação)', as
 // 6) INTEGRAÇÃO LEVE (prompt e sessão)
 // ============================================================================
 
-await test('montarSistemaDoAgente: usa a PERSONALIDADE do grupo (não o genérico)', async () => {
-  // Antes o `!iap` tinha um prompt genérico próprio ("Voce e' X, um assistente
-  // de voz...") e respondia sem graça, ignorando a personalidade configurada.
+await test('montarSistemaDoAgente: o nome é LIZZY (limpo, sem os glifos do config)', async () => {
+  // O `nomebot` do config é `𝐋𝐢𝐳𝐳𝐲 𝐝𝐨 𝐩𝐫𝐢𝐯𝐲` (MATHEMATICAL BOLD) — ruim para
+  // voz (o LLM repete os glifos e o TTS lê errado). O agente usa "Lizzy".
   const sess = await import(new URL('../dados/src/utils/iapSessao.js', import.meta.url).href);
-  const abyss = sess.montarSistemaDoAgente({ personalidade: 'abyss', botName: 'Lizzy' });
-  ok(/Abyss/i.test(abyss), 'personalidade abyss usa o prompt da Abyss');
-  ok(/tsundere/i.test(abyss), 'traz os traços da personalidade');
+  const s = sess.montarSistemaDoAgente({});
+  includes(s, 'Lizzy', 'usa o nome Lizzy');
+  ok(!/𝐋|𝐢|𝐳|𝐲/.test(s), 'NÃO usa os glifos MATHEMATICAL BOLD');
+  ok(/Eu sou a Lizzy/i.test(s), 'sabe se apresentar');
+});
 
-  const humana = sess.montarSistemaDoAgente({ personalidade: 'humana', botName: 'Lizzy' });
-  ok(humana !== abyss, 'personalidade diferente muda o prompt');
-  ok(!/tsundere/i.test(humana), 'a humana não tem o traço da Abyss');
+await test('montarSistemaDoAgente: é PADRÃO (sem personalidade do grupo)', async () => {
+  // O dono pediu "sem isso de personalidade, é tudo padrão". O prompt não
+  // depende mais de `assistentePersonality`.
+  const sess = await import(new URL('../dados/src/utils/iapSessao.js', import.meta.url).href);
+  const a = sess.montarSistemaDoAgente({ nomeDono: 'Kannon' });
+  const b = sess.montarSistemaDoAgente({ nomeDono: 'Kannon' });
+  ok(a === b, 'o prompt é determinístico (um só, padrão)');
+  ok(!/tsundere|vampira|Abyss/i.test(a), 'não tem traço de personalidade');
+  ok(typeof sess.montarSistemaDoAgente({ personalidade: 'humana' }) === 'string',
+    'aceitar o argumento não muda nada (compatibilidade)');
 });
 
 await test('montarSistemaDoAgente: o agente SABE quem é o dono e quem está na call', async () => {
   const sess = await import(new URL('../dados/src/utils/iapSessao.js', import.meta.url).href);
   const s = sess.montarSistemaDoAgente({
-    personalidade: 'abyss', botName: 'Lizzy',
     nomeDono: 'Kannon', participantes: ['Joao', 'Maria']
   });
   includes(s, 'Kannon', 'diz o nome do dono');
   ok(/dono/i.test(s), 'deixa explícito que é o dono');
   includes(s, 'Joao', 'lista quem está na call');
-  // O áudio chega MIXADO: o agente não deve inventar quem falou.
   ok(/misturad/i.test(s), 'avisa que o áudio chega misturado');
 });
 
 await test('montarSistemaDoAgente: tem as regras de FALA (não de texto)', async () => {
   const sess = await import(new URL('../dados/src/utils/iapSessao.js', import.meta.url).href);
-  const s = sess.montarSistemaDoAgente({ personalidade: 'abyss' });
+  const s = sess.montarSistemaDoAgente({});
   ok(/frases CURTAS/i.test(s), 'pede frases curtas');
   ok(/emojis|markdown/i.test(s), 'proíbe emoji/markdown (vai ser falado)');
   ok(/CHAMADA DE VOZ/i.test(s), 'sabe que está numa call');
 });
 
-await test('montarSistemaDoAgente: sem personalidade cai no abyss (o padrão)', async () => {
+// ============================================================================
+// 6b) A GUARDA de permissão — "membro comum pede para banir"
+// ============================================================================
+
+await test('limparNomeDoBot: tira os glifos MATHEMATICAL BOLD do config', async () => {
+  const g = await import(new URL('../dados/src/utils/iapGuarda.js', import.meta.url).href);
+  ok(g.limparNomeDoBot('𝐋𝐢𝐳𝐳𝐲 𝐝𝐨 𝐩𝐫𝐢𝐯𝐲') === 'Lizzy', 'bold vira "Lizzy"');
+  ok(g.limparNomeDoBot('Lizzy') === 'Lizzy', 'nome simples passa');
+  ok(g.limparNomeDoBot('') === 'Lizzy', 'vazio cai no padrão');
+  ok(g.limparNomeDoBot(null) === 'Lizzy', 'null cai no padrão');
+  ok(g.iaIdentidade() === 'Lizzy', `lê do config (${g.iaIdentidade()})`);
+});
+
+await test('ehPedidoDeAcao: reconhece pedido de AÇÃO e ignora conversa', async () => {
+  const g = await import(new URL('../dados/src/utils/iapGuarda.js', import.meta.url).href);
+  // Ações (o caso do dono).
+  ok(g.ehPedidoDeAcao('lizzy, bane alguém') === 'banir', 'bane -> banir');
+  ok(g.ehPedidoDeAcao('muta esse cara') === 'mutar', 'muta -> mutar');
+  ok(g.ehPedidoDeAcao('promove o joao') === 'promover', 'promove -> promover');
+  ok(g.ehPedidoDeAcao('rebaixa ele') === 'rebaixar', 'rebaixa -> rebaixar');
+  ok(g.ehPedidoDeAcao('tranca o grupo') === 'trancar', 'tranca -> trancar');
+  // Conversa normal NÃO é ação.
+  ok(g.ehPedidoDeAcao('oi lizzy, tudo bem?') === null, 'conversa não é ação');
+  ok(g.ehPedidoDeAcao('qual seu nome?') === null, 'pergunta não é ação');
+  ok(g.ehPedidoDeAcao('') === null, 'vazio não é ação');
+  ok(g.ehPedidoDeAcao('toca uma música') === null, 'música não é ação de admin');
+});
+
+await test('GUARDA: MEMBRO COMUM pedindo para banir é RECUSADO', async () => {
+  // O pedido literal do dono: um membro comum fala "lizzy, bane alguém" e ela
+  // reconhece que ele não é adm/dono/mod e NÃO executa nada.
+  const g = await import(new URL('../dados/src/utils/iapGuarda.js', import.meta.url).href);
+  const soAdmin = (jid) => jid === 'admin@lid';
+  const r = g.permitePedidoDeAcao('lizzy, bane o joao', 'membro@lid', { ehAutorizado: soAdmin });
+  ok(r.ok === false, 'recusou');
+  ok(r.acao === 'banir', `identificou a ação (${r.acao})`);
+  ok(r.motivo === 'sem_permissao', `motivo correto (${r.motivo})`);
+  ok(/administrador|dono/i.test(r.recusa), 'a recusa explica que precisa ser admin/dono');
+  ok(/nao posso banir/i.test(r.recusa), `fala especificamente do banir (${r.recusa.slice(0, 40)})`);
+});
+
+await test('GUARDA: ADMIN pode o mesmo pedido', async () => {
+  const g = await import(new URL('../dados/src/utils/iapGuarda.js', import.meta.url).href);
+  const soAdmin = (jid) => jid === 'admin@lid';
+  const r = g.permitePedidoDeAcao('lizzy, bane o joao', 'admin@lid', { ehAutorizado: soAdmin });
+  ok(r.ok === true, 'admin pode');
+  ok(r.acao === 'banir', 'a ação foi identificada');
+});
+
+await test('GUARDA: conversa normal passa (não é ação)', async () => {
+  const g = await import(new URL('../dados/src/utils/iapGuarda.js', import.meta.url).href);
+  const r = g.permitePedidoDeAcao('oi lizzy, tudo bem?', 'membro@lid', { ehAutorizado: () => false });
+  ok(r.ok === true, 'conversa passa mesmo sem permissão');
+  ok(r.acao === null, 'nenhuma ação identificada');
+});
+
+await test('GUARDA: sem saber QUEM falou, recusa (não obedece desconhecido)', async () => {
+  const g = await import(new URL('../dados/src/utils/iapGuarda.js', import.meta.url).href);
+  const r = g.permitePedidoDeAcao('bane o joao', null, { ehAutorizado: () => true });
+  ok(r.ok === false, 'recusou');
+  ok(r.motivo === 'sem_participante', `motivo (${r.motivo})`);
+});
+
+await test('GUARDA: sem a função de permissão, recusa (falha FECHADO)', async () => {
+  const g = await import(new URL('../dados/src/utils/iapGuarda.js', import.meta.url).href);
+  const r = g.permitePedidoDeAcao('bane o joao', 'quem@lid', {});
+  ok(r.ok === false, 'recusou (não dá para afirmar que pode)');
+  ok(r.motivo === 'sem_verificacao', `motivo (${r.motivo})`);
+});
+
+await test('GUARDA: se a checagem de permissão LANÇAR, recusa', async () => {
+  const g = await import(new URL('../dados/src/utils/iapGuarda.js', import.meta.url).href);
+  const r = g.permitePedidoDeAcao('bane o joao', 'x@lid', {
+    ehAutorizado: () => { throw new Error('metadata fora'); }
+  });
+  ok(r.ok === false, 'recusou em vez de derrubar');
+});
+
+await test('GUARDA: cada ação tem a sua recusa específica', async () => {
+  const g = await import(new URL('../dados/src/utils/iapGuarda.js', import.meta.url).href);
+  const semPermissao = () => false;
+  for (const [fala, esperado] of [
+    ['muta o joao', /mutar/i],
+    ['promove o joao', /promover/i],
+    ['rebaixa o joao', /rebaixar/i],
+    ['tranca o grupo', /abrir ou fechar|fechar/i]
+  ]) {
+    const r = g.permitePedidoDeAcao(fala, 'm@lid', { ehAutorizado: semPermissao });
+    ok(r.ok === false && esperado.test(r.recusa), `${fala} -> recusa específica`);
+  }
+});
+
+await test('pensarComIa: RECUSA antes de chamar o LLM (não gasta cota)', async () => {
+  // A guarda roda ANTES do LLM: um pedido sem permissão nem chega ao modelo.
+  const groq = await import(new URL('../dados/src/utils/groqClient.js', import.meta.url).href);
   const sess = await import(new URL('../dados/src/utils/iapSessao.js', import.meta.url).href);
-  const semNada = sess.montarSistemaDoAgente({});
-  const abyss = sess.montarSistemaDoAgente({ personalidade: 'abyss' });
-  ok(semNada === abyss, 'sem personalidade = abyss');
-});
-
-await test('VOZES_PTBR: as femininas são a Francisca e a Thalita', async () => {
-  // O dono pediu voz de MULHER. O padrão anterior (Antonio) era MASCULINO.
-  const tts = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
-  ok(tts.VOZES_PTBR.francisca === 'pt-BR-FranciscaNeural', 'francisca é feminina');
-  ok(tts.VOZES_PTBR.thalita === 'pt-BR-ThalitaMultilingualNeural', 'thalita é feminina');
-  ok(tts.VOZES_PTBR.antonio === 'pt-BR-AntonioNeural', 'antonio é a masculina');
-});
-
-await test('iapTts: a voz PADRÃO é feminina (Francisca)', async () => {
-  const tts = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
-  const anterior = process.env.IAP_TTS_VOICE;
-  delete process.env.IAP_TTS_VOICE;
-  const cfg = tts.configTts();
-  if (anterior !== undefined) process.env.IAP_TTS_VOICE = anterior;
-  ok(cfg.vozEdge === 'pt-BR-FranciscaNeural', `voz feminina por padrão (${cfg.vozEdge})`);
-  ok(/Francisca|Thalita/.test(cfg.vozEdge), 'é uma das femininas');
-});
-
-await test('iapTts: a voz é lida em TEMPO DE USO (troca sem reiniciar)', async () => {
-  const tts = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
-  const anterior = process.env.IAP_TTS_VOICE;
-  process.env.IAP_TTS_VOICE = 'pt-BR-ThalitaMultilingualNeural';
-  const cfg = tts.configTts();
-  if (anterior !== undefined) process.env.IAP_TTS_VOICE = anterior;
-  else delete process.env.IAP_TTS_VOICE;
-  ok(cfg.vozEdge === 'pt-BR-ThalitaMultilingualNeural',
-    `trocou em runtime (${cfg.vozEdge})`);
+  let chamou = false;
+  groq.setGroqHttpForTest(async () => { chamou = true; return { data: { choices: [{ message: { content: 'x' } }] } }; });
+  const antiga = process.env.GROQ_API_KEY;
+  process.env.GROQ_API_KEY = 'gsk_teste';
+  // Sem `ehAutorizado` ligado ao agente, a guarda fecha.
+  const resp = await sess.pensarComIa('bane o joao', [], { quemFalou: 'membro@lid' });
+  if (antiga !== undefined) process.env.GROQ_API_KEY = antiga;
+  groq.setGroqHttpForTest(null);
+  ok(chamou === false, 'NÃO chamou o LLM');
+  ok(/nao posso|nao tem permissao/i.test(resp), `recusou em voz (${resp.slice(0, 45)})`);
 });
 
 await test('iapSessao: pensaComIa e ligar/desligar existem', async () => {

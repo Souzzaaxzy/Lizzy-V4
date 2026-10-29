@@ -14018,3 +14018,70 @@ O dono confirmou que a voz atual funcionou. **Não** medi a naturalidade da voz
 Francisca no aparelho (é percepção) — o `!iap voz` existe justamente para trocar
 sem editar arquivo. E o agente **não** identifica quem falou (limite do motor,
 explicado acima).
+
+
+## 🛡️ `!iap` v3: nome LIZZY, SEM personalidade, e a GUARDA de permissão (out/2026) ✅
+Três pedidos do dono: nome **Lizzy**, **tudo padrão** (sem personalidade/voz
+variável), e *"um membro comum falar 'lizzy, bane alguém' — ela reconhece que não
+é adm nem dono, nem mod e não executa nada"*.
+
+### 1. Nome: LIZZY (limpo para voz)
+O `nomebot` do config é **`𝐋𝐢𝐳𝐳𝐲 𝐝𝐨 𝐩𝐫𝐢𝐯𝐲`** (MATHEMATICAL BOLD). Isso é ruim
+para voz — o LLM pode repetir os glifos e o TTS lê errado. `limparNomeDoBot()`
+normaliza (NFKC) e reduz a **`Lizzy`**. O prompt diz que o nome é Lizzy e que ela
+se apresenta com *"Oi! Eu sou a Lizzy."*
+
+### 2. SEM personalidade — um prompt só, padrão
+O `!iap` **não usa mais** `assistantPersonality` (abyss/humana/ia/pro). Há **um**
+prompt fixo (a Lizzy), então o agente fala igual em todo grupo. O comando
+`!iap voz` foi **removido** junto (a voz é uma só, padrão). O `!assistente` do
+chat **continua existindo** — só o agente de voz não usa mais.
+
+### 3. A GUARDA de permissão (o pedido central)
+**A peça que faltava** era saber **quem falou**. O motor entrega o áudio
+**mixado** (`voip_call_inbound_audio`)… mas com **`participantAudio: true`** ele
+emite `voip_call_participant_audio`, que traz o **`participantJid`**. Ligado no
+`voipPlugin`, e o listener repassa `(grupo, pcm, quemFalou)`.
+
+**`dados/src/utils/iapGuarda.js`** (puro, testável sem call/LLM):
+- `ehPedidoDeAcao(texto)` → reconhece **banir/mutar/promover/rebaixar/trancar/
+  limpar/configurar** por radical (sem acento — o STT erra acento). Conversa
+  normal devolve `null`;
+- `permitePedidoDeAcao(texto, quemFalou, { ehAutorizado })` → decide. **Falha
+  FECHADO**: sem saber quem falou, sem a função de permissão, ou se a checagem
+  lançar, **recusa**;
+- `RECUSAS` — frase específica por ação (*"Nao posso banir ninguem a seu pedido
+  — voce nao e administrador nem dono do grupo"*).
+
+**A permissão é a REAL do bot**: o `index.js` injeta `ehAutorizado(jid)`, que usa
+o **mesmo** sistema do resto (`admin`/`superadmin` do metadata + dono + subdono +
+moderadores). Nada de lista paralela. É consultada **por fala** (o metadata muda
+durante a call: alguém pode ser promovido).
+
+**A guarda roda ANTES do LLM** — um pedido sem permissão **nem chega ao modelo**
+(não gasta cota e não há risco de o modelo "decidir" executar).
+
+### Escopo deliberado: RECUSAR sim, EXECUTAR não
+O agente **não executa** comando nenhum — o dono pediu a **recusa consciente**
+("não executa nada"). Ligar a fala ao handler de comandos é outro passo, mais
+arriscado (o LLM interpretaria e dispararia ações no grupo). A base está pronta
+(o `ehPedidoDeAcao` já identifica a intenção), mas executar fica para quando o
+dono pedir.
+
+### Testes — `tests/iap.test.js` (**58 testes / 169 asserções, 0 falhas**)
++7 da guarda: nome vira **Lizzy** (sem glifos) e lê do config; o prompt é
+**padrão/determinístico** (sem traço de personalidade); reconhece as **ações** e
+ignora conversa; **membro comum é RECUSADO** ao pedir banir (com a frase
+específica); **admin PODE** o mesmo pedido; conversa passa; **sem saber quem
+falou → recusa**; **sem a função de permissão → recusa**; checagem que **lança →
+recusa**; recusa específica por ação; e a guarda roda **antes do LLM** (o dublê
+prova que o modelo não é chamado). Regressões verdes: `ia` 20/50,
+`motor-chat-noise` 14/62, `cmd-suggest` 21/68.
+
+### LIMITE HONESTO
+O dono confirmou que a voz e o laço funcionam. **Não** validei ao vivo a guarda
+numa call (sem sessão de WhatsApp aqui) — o que está provado é a lógica
+(recusa/pode por permissão) e que o `participantJid` chega até o agente. Se o
+motor não emitir `voip_call_participant_audio` em algum cenário, o `quemFalou`
+fica nulo e a guarda **recusa** (falha fechado) — o log mostra
+`pedido de acao RECUSADO (sem permissao)` com `quem: desconhecido`.

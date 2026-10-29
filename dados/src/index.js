@@ -1300,8 +1300,6 @@ import {
 } from './utils/iapSessao.js';
 // A RESERVA de transcricao (Groq Whisper): o `!transcrever` roda SO' nele.
 import { transcreverArquivoGroq, chaveGroq } from './utils/iapStt.js';
-// As vozes pt-BR do agente de voz (`!iap voz`).
-import { VOZES_PTBR } from './utils/iapTts.js';
 // O CHAT DE VOZ (`!vozp`) e' um sistema SEPARADO do `!callp`: ponte de midia,
 // motor e registro proprios. Nada de estado compartilhado entre os dois.
 import {
@@ -36885,18 +36883,30 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             }
 
             await reply('🎙️ Ligando o agente de voz...');
-            // A personalidade e' a MESMA do chat (a do grupo), e o agente recebe
-            // o nome do dono e quem esta' na call — e' o que faz ele saber com
-            // quem fala e tratar o dono como dono.
-            const personalidadeIap = groupData.assistentePersonality || 'abyss';
+            // Sem personalidade (padrão em tudo) e sem `!iap voz`. O agente
+            // recebe o nome do dono, quem esta' na call e a PERMISSAO REAL de
+            // cada um — e' o que permite recusar um pedido de quem nao pode.
             const nomesNaCall = (Array.isArray(groupMetadata?.participants) ? groupMetadata.participants : [])
               .map((p) => p?.notify || p?.name || p?.pushName || null)
               .filter(Boolean);
+            // A permissao e' consultada a cada fala (o metadata muda durante a
+            // call: alguem pode ser promovido). `ehAutorizado` cobre admin do
+            // grupo, dono, subdono e moderadores — o MESMO sistema do resto do
+            // bot (`isGroupAdmin`), nada paralelo.
+            const ehAutorizado = async (jid) => {
+              try {
+                const meta = await getCachedGroupMetadata(from);
+                const part = (meta?.participants || []).find((p) =>
+                  idsMatch(p?.id, jid) || idsMatch(p?.lid, jid) ||
+                  idsMatch(p?.phoneNumber, jid) || idsMatch(p?.pn, jid));
+                const ehAdmin = part?.admin === 'admin' || part?.admin === 'superadmin';
+                return Boolean(ehAdmin || idsMatch(jid, numerodono) || idsMatch(jid, sender) || isGroupAdmin);
+              } catch { return false; }
+            };
             const r = await ligarIap(from, {
-              botName: nomebot,
-              personalidade: personalidadeIap,
               nomeDono: nomedono || null,
-              participantes: nomesNaCall
+              participantes: nomesNaCall,
+              ehAutorizado
             });
             if (!r.ok) {
               const motivos = {
@@ -36905,16 +36915,13 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               };
               return reply(motivos[r.motivo] || '❌ Não consegui ligar o agente de voz.');
             }
-            const rotuloPersonalidade = {
-              abyss: 'Abyss (tsundere)', humana: 'Humana', ia: 'IA direta', pro: 'Pro'
-            }[personalidadeIap] || personalidadeIap;
             return nazu.sendMessage(from, {
               text:
                 `╭━━━꧁༺ 🎙️ 𝐀𝐆𝐄𝐍𝐓𝐄 𝐃𝐄 𝐕𝐎𝐙 🎙️ ༻꧂━━━╮\n` +
                 `┃ 🟢 Ligado e ouvindo a chamada\n` +
                 `┃ 🗣️ Fale na call que eu respondo\n` +
                 `┃ ↩️ Pode me interromper falando\n` +
-                `┃ 🎭 Personalidade: ${rotuloPersonalidade}\n` +
+                `┃ 🛡️ Pedidos de admin só de quem pode\n` +
                 `┃\n` +
                 `┃ 🔇 Desligar: ${prefix}iap off\n` +
                 `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`,
@@ -36922,42 +36929,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             });
           }
 
-          // -------------------------------------------------------------- voz
-          // Troca a VOZ do agente (edge-tts) e grava no .env — fica fixa.
-          if (subIap === 'voz' || subIap === 'voice') {
-            const alvo = normalizar((args[1] || '')).trim();
-            const atual = (process.env.IAP_TTS_VOICE || 'pt-BR-FranciscaNeural');
-            if (!alvo) {
-              return reply(
-                `🎙️ *Voz do agente*\nAtual: \`${atual}\`\n\n` +
-                `*Trocar:* \`${prefix}iap voz <nome>\`\n` +
-                `• \`francisca\` → pt-BR-FranciscaNeural _(feminina)_\n` +
-                `• \`thalita\` → pt-BR-ThalitaMultilingualNeural _(feminina)_\n` +
-                `• \`antonio\` → pt-BR-AntonioNeural _(masculina)_`
-              );
-            }
-            const escolhida = VOZES_PTBR[alvo] || (alvo.startsWith('pt-') ? alvo : null);
-            if (!escolhida) {
-              return reply(`❌ Voz desconhecida: \`${alvo}\`\n\nUse \`${prefix}iap voz\` para ver as opções.`);
-            }
-            // Grava no .env (fica "fixa para sempre") e aplica em runtime.
-            try {
-              const envPathV = pathz.join(__dirname, '../../.env');
-              let conteudo = fs.existsSync(envPathV) ? fs.readFileSync(envPathV, 'utf-8') : '';
-              const linha = `IAP_TTS_VOICE=${escolhida}`;
-              const re = /^IAP_TTS_VOICE=.*$/gm;
-              conteudo = re.test(conteudo)
-                ? conteudo.replace(re, linha)
-                : conteudo + (conteudo.endsWith('\n') ? linha : '\n' + linha);
-              fs.writeFileSync(envPathV, conteudo);
-            } catch (e) {
-              console.warn('[IAP] nao consegui gravar a voz no .env:', e?.message || e);
-            }
-            process.env.IAP_TTS_VOICE = escolhida;
-            return reply(`✅ *Voz trocada!*\n\n🎙️ Agora: \`${escolhida}\`\n_A fala na call já usa a nova voz._`);
-          }
-
-          return reply(`❌ Use: ${prefix}iap on | off | status | voz`);
+          return reply(`❌ Use: ${prefix}iap on | off | status`);
         } catch (e) {
           console.error('[IAP] erro no comando:', e?.message || e);
           return reply('Ocorreu um erro 💔');

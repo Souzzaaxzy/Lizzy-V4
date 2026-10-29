@@ -1,135 +1,128 @@
 /**
  * Ligação do agente de voz (`!iap`) com as peças reais do bot.
  *
- * O `iapVoice.js` tem o MOTOR do agente (VAD, barge-in, fila) e nao conhece
- * ninguem: recebe `falar`/`pensar`/`transcrever`/`sintetizar`. Este modulo faz a
- * unica coisa que falta -- injetar as dependencias REAIS:
+ * O `iapVoice.js` tem o MOTOR do agente (VAD, barge-in, fila) e não conhece
+ * ninguém: recebe `falar`/`pensar`/`transcrever`/`sintetizar`. Este módulo faz a
+ * única coisa que falta — injetar as dependências REAIS:
  *
  *   transcrever -> iapStt  (Groq Whisper, a chave do `!keygroq`)
- *   pensar      -> groqClient (Groq, o MESMO provedor e chave)
+ *   pensar      -> groqClient (Groq) + a GUARDA de permissão
  *   sintetizar  -> iapTts (edge-tts; Gemini TTS como reserva)
  *   falar       -> callMedia.falarNaCallDoGrupo (o motor, `feedLiveAudio`)
  *
  * Fica separado do `index.js` para o fluxo poder ser testado sem importar o
- * arquivo de 36k linhas (que abre conexao de verdade no import).
+ * arquivo de 36k linhas (que abre conexão de verdade no import).
  */
 
-import * as ia from '../funcs/private/ia.js';
 import { groqChat } from './groqClient.js';
 import { transcreverPcm, chaveGroq } from './iapStt.js';
 import { sintetizarFala } from './iapTts.js';
 import { iap } from './iapVoice.js';
+import { iaIdentidade, ehPedidoDeAcao, permitePedidoDeAcao } from './iapGuarda.js';
 import {
   aoOuvirAudioDaCall,
   modoAudioExternoDaCall,
   falarNaCallDoGrupo
 } from '../funcs/utils/callMedia.js';
 
-/** Log do agente, com o prefixo do sistema de call (filtravel). */
+/** Log do agente, com o prefixo do sistema de call (filtrável). */
 function logIap(msg, extra) {
   const detalhe = extra ? ` | ${JSON.stringify(extra)}` : '';
   console.log(`🎙️ [IAP] ${msg}${detalhe}`);
 }
 
-/**
- * A chave do Gemini em uso (a mesma que o `!key` grava).
- *
- * Ainda existe para o TTS de RESERVA (o edge-tts e' o principal). O STT e o LLM
- * do `!iap` NAO a usam mais — os dois vao pelo Groq.
- */
+/** A chave do Gemini em uso (só o TTS de reserva usa). */
 function chaveGemini() {
-  try {
-    if (typeof ia.getGeminiApiKey === 'function') return ia.getGeminiApiKey();
-  } catch { /* cai no env */ }
   return process.env.GEMINI_API_KEY || '';
 }
 
 /**
- * Monta o prompt de sistema do agente de voz.
+ * O prompt de sistema do agente — **um só, padrão**.
  *
- * Junta duas coisas:
- *  1. o **prompt da personalidade** (`ia.promptDaPersonalidade`) — o mesmo do
- *     chat, para o agente falar com o jeito configurado no grupo;
- *  2. o **contexto da call** — quem está na chamada e quem é o dono.
+ * ## Decisão do dono: sem personalidade
  *
- * ## O ajuste para VOZ
+ * Antes o `!iap` usava a personalidade do grupo (`abyss`/`humana`/`ia`/`pro`).
+ * O dono pediu **padrão em tudo**: uma Lizzy só, mesma voz, mesmo jeito. Então
+ * aqui há **um** prompt fixo — não há mais dependência do `assistantPersonality`.
  *
- * O prompt do chat foi escrito para TEXTO (pode ser longo). Na call a fala é
- * lida em voz alta, então acrescentamos as regras de fala: frases curtas, sem
- * emoji/markdown e sem listas.
+ * ## O nome é LIZZY (limpo)
  *
- * ## Sobre reconhecer o dono
- *
- * O áudio chega **mixado** (o motor não diz quem falou), então o agente não sabe
- * QUAL pessoa disse a frase — mas sabe QUEM está na call. O contexto deixa o
- * dono explícito, então "quem é o dono?" e "o que você faz?" têm resposta certa.
+ * O `nomebot` do config é `𝐋𝐢𝐳𝐳𝐲 𝐝𝐨 𝐩𝐫𝐢𝐯𝐲` (MATHEMATICAL BOLD). Isso é um
+ * **pesadelo** para voz: o LLM pode repetir os glifos e o TTS lê errado. O nome
+ * é normalizado (NFKC) e reduzido a **Lizzy** — é assim que ela se apresenta.
  *
  * @param {object} opts
- * @param {string} [opts.personalidade]
- * @param {string} [opts.botName]
  * @param {string} [opts.nomeDono]
  * @param {string[]} [opts.participantes]
  * @returns {string}
  */
-export function montarSistemaDoAgente({ personalidade, botName, nomeDono, participantes = [] } = {}) {
-  const base = (() => {
-    try {
-      const p = ia.promptDaPersonalidade?.(personalidade || 'abyss');
-      if (typeof p === 'string' && p.trim()) return p.trim();
-    } catch { /* cai no generico */ }
-    return `Voce e' ${botName || 'o bot'}, um assistente de voz numa chamada de grupo do WhatsApp.`;
-  })();
+export function montarSistemaDoAgente({ nomeDono, participantes = [] } = {}) {
+  const nome = iaIdentidade(); // "Lizzy"
 
-  const contexto = [];
-  contexto.push('--- CONTEXTO DESTA CONVERSA ---');
-  contexto.push('Voce esta FALANDO numa CHAMADA DE VOZ de um grupo do WhatsApp. Sua resposta sera lida em voz alta.');
-  contexto.push('Responda em portugues do Brasil, em frases CURTAS e naturais de fala (2 a 3 no maximo).');
-  contexto.push('NUNCA use emojis, markdown, asteriscos ou listas — apenas o texto falado.');
-  contexto.push('Se nao entender ou o audio estiver inaudivel, diga apenas que nao entendeu.');
+  const linhas = [
+    `Voce e' ${nome}, uma assistente de voz que participa de uma CHAMADA DE VOZ de um grupo do WhatsApp.`,
+    'Sua resposta sera lida em voz alta: fale como numa conversa.',
+    '',
+    `Seu nome e' ${nome}. E' assim que voce se chama, sempre.`,
+    `Se perguntarem seu nome, responda exatamente: "Oi! Eu sou a ${nome}."`,
+    `Se alguem chamar "${nome}", e' com voce.`,
+    '',
+    'COMO FALAR:',
+    '- Portugues do Brasil, natural, em frases CURTAS (2 a 3 no maximo).',
+    '- NUNCA use emojis, markdown, asteriscos ou listas — apenas o texto falado.',
+    '- Nao invente fatos sobre a conversa; se nao souber, diga que nao sabe.',
+    '- Se o audio estiver inaudivel, diga apenas que nao entendeu.'
+  ];
+
   if (nomeDono) {
-    contexto.push(`O DONO do bot se chama ${nomeDono}. Trate-o com respeito e deferencia — ele e' quem manda.`);
+    linhas.push('', `O DONO do bot se chama ${nomeDono}. Trate-o com respeito e deferencia.`);
   }
   if (Array.isArray(participantes) && participantes.length) {
     const nomes = participantes.filter(Boolean).slice(0, 20).join(', ');
-    if (nomes) contexto.push(`Quem esta na chamada agora: ${nomes}.`);
+    if (nomes) linhas.push(`Quem esta na chamada agora: ${nomes}.`);
   }
-  contexto.push('Como o audio da chamada chega misturado, voce NAO sabe qual pessoa falou cada frase — nao invente de quem foi.');
+  linhas.push('Como o audio chega misturado, voce NAO sabe qual pessoa falou cada frase — nao invente de quem foi.');
 
-  return `${base}\n\n${contexto.join('\n')}`;
+  return linhas.join('\n');
 }
 
 /**
- * O LLM do agente: texto -> resposta.
+ * O LLM do agente: texto -> resposta, COM a guarda de permissão.
  *
- * **Groq** (`openai/gpt-oss-120b`), na mesma chave do `!keygroq`.
+ * ## A guarda (o que o dono pediu)
  *
- * ## A personalidade é a MESMA do chat
+ * "um membro comum falar 'lizzy, bane alguém' — ela reconhece que não é adm nem
+ * dono, nem mod e não executa nada".
  *
- * Usa `ia.promptDaPersonalidade(...)` — o prompt que a assistente do chat já usa
- * (`abyss`/`humana`/`ia`/`pro`). Antes daqui saía um prompt genérico próprio, e o
- * agente respondia sem graça ("Oi! Como posso ajudar?"), ignorando a
- * personalidade configurada no grupo.
- *
- * ## O agente SABE com quem está falando
- *
- * O motor entrega o áudio **mixado** da call, sem dizer quem falou — então o
- * agente não consegue atribuir a fala a uma pessoa. O que ele **sabe** é quem
- * está na chamada: o `contexto` recebe os participantes e o dono, e o prompt
- * deixa isso explícito. É o suficiente para tratar o dono como dono.
+ * O motor entrega o áudio **por participante** (`participantAudio`), então
+ * sabemos **quem falou** (`quemFalou`). Antes de responder, `permitePedidoDeAcao`
+ * checa a permissão REAL daquela pessoa (admin do grupo, dono, subdono,
+ * moderador). Se o pedido é de AÇÃO e a pessoa não pode, a resposta é uma
+ * recusa — o LLM nem é chamado para "decidir" executar.
  *
  * @param {string} texto
  * @param {Array<{role:string, content:string}>} historico
  * @param {object} [opts]
- * @param {string} [opts.personalidade] `abyss` | `humana` | `ia` | `pro`
- * @param {string} [opts.botName]
+ * @param {string} [opts.quemFalou] JID de quem falou
  * @param {string} [opts.nomeDono]
- * @param {string[]} [opts.participantes] nomes de quem está na call
+ * @param {string[]} [opts.participantes]
  * @returns {Promise<string>}
  */
 export async function pensarComIa(texto, historico = [], {
-  personalidade, botName, nomeDono, participantes = []
+  quemFalou, nomeDono, participantes = []
 } = {}) {
-  const sistema = montarSistemaDoAgente({ personalidade, botName, nomeDono, participantes });
+  // ---- GUARDA: o pedido é de AÇÃO? a pessoa PODE? ------------------------
+  const guarda = permitePedidoDeAcao(texto, quemFalou);
+  if (!guarda.ok) {
+    logIap('pedido de acao RECUSADO (sem permissao)', {
+      quem: quemFalou || 'desconhecido',
+      pedido: guarda.acao || undefined,
+      motivo: guarda.motivo
+    });
+    return guarda.recusa;
+  }
+
+  const sistema = montarSistemaDoAgente({ nomeDono, participantes });
   const r = await groqChat({
     texto,
     sistema,
@@ -149,15 +142,15 @@ export async function pensarComIa(texto, historico = [], {
  *
  * @param {string} grupo
  * @param {object} [opts]
- * @param {string} [opts.botName]
- * @param {string} [opts.personalidade] `abyss` | `humana` | `ia` | `pro`
  * @param {string} [opts.nomeDono]
  * @param {string[]} [opts.participantes]
+ * @param {function} [opts.ehAutorizado] `(jid) => boolean` — a permissão REAL
+ *   da pessoa (admin/dono/subdono/mod). Vem do `index.js`, que tem o metadata.
  * @returns {Promise<{ ok: boolean, motivo?: string }>}
  */
-export async function ligarIap(grupo, { botName, personalidade, nomeDono, participantes } = {}) {
+export async function ligarIap(grupo, { nomeDono, participantes, ehAutorizado } = {}) {
   // O `!iap` inteiro roda no Groq (ouvir E pensar): sem a chave dele nao ha' o
-  // que ligar. Antes esta checagem era da chave do Gemini.
+  // que ligar.
   if (!chaveGroq()) return { ok: false, motivo: 'sem_chave_groq' };
 
   // O modo de audio externo precisa estar ligado, senao o motor ignora o que
@@ -165,8 +158,9 @@ export async function ligarIap(grupo, { botName, personalidade, nomeDono, partic
   const ligouExterno = await modoAudioExternoDaCall(grupo, true);
   if (!ligouExterno) return { ok: false, motivo: 'sem_call' };
 
-  // O agente OUVE pelo callback do motor.
-  const registrou = await aoOuvirAudioDaCall(grupo, (g, pcm) => iap.receber(g, pcm));
+  // O agente OUVE pelo callback do motor. O terceiro argumento e' QUEM FALOU
+  // (audio por participante) — e' o que permite a guarda de permissao.
+  const registrou = await aoOuvirAudioDaCall(grupo, (g, pcm, quemFalou) => iap.receber(g, pcm, quemFalou));
   if (!registrou) {
     await modoAudioExternoDaCall(grupo, false);
     return { ok: false, motivo: 'sem_call' };
@@ -174,15 +168,12 @@ export async function ligarIap(grupo, { botName, personalidade, nomeDono, partic
 
   iap.ligar(grupo, {
     log: logIap,
-    pensar: (texto, historico) => pensarComIa(texto, historico, {
-      botName, personalidade, nomeDono, participantes
+    pensar: (texto, historico, opts = {}) => pensarComIa(texto, historico, {
+      quemFalou: opts.quemFalou, nomeDono, participantes
     }),
     transcrever: async (pcm) => {
       const r = await transcreverPcm(pcm, { apiKey: chaveGroq() });
       if (!r.ok) {
-        // O MOTIVO tem de aparecer: antes daqui saia um `null` mudo e o log
-        // dizia so' "sem fala reconhecida" para QUALQUER causa (chave, limite,
-        // formato, audio vazio). Era impossivel diagnosticar.
         logIap(`STT falhou: ${r.motivo}`, {
           grupo,
           detalhe: r.detalhe ? String(r.detalhe).slice(0, 200) : undefined,
@@ -195,14 +186,9 @@ export async function ligarIap(grupo, { botName, personalidade, nomeDono, partic
     sintetizar: async (texto) => {
       const r = await sintetizarFala(texto, { apiKey: chaveGemini() });
       if (!r.ok) {
-        // Sem isto o TTS falho era MUDO: o agente simplesmente nao falava e o
-        // log parava no "respondeu", sem dizer por que.
         logIap(`TTS falhou: ${r.motivo}`, { grupo });
         return null;
       }
-      // A FONTE importa: `edge-tts` (local, principal) ou `gemini-tts`
-      // (reserva). Se caiu no Gemini, o motivo do edge vai junto — e' o que diz
-      // se falta instalar o edge-tts (`pip install edge-tts`) ou o ffmpeg.
       logIap(`TTS ok (${r.fonte})`, {
         grupo,
         segundos: r.pcm ? +(r.pcm.length / 16000).toFixed(1) : 0,
@@ -212,6 +198,13 @@ export async function ligarIap(grupo, { botName, personalidade, nomeDono, partic
     },
     falar: (pcm) => { void falarNaCallDoGrupo(grupo, pcm); }
   });
+
+  // A permissão é CONSULTADA por fala (o metadata pode mudar durante a call:
+  // alguém pode ser promovido). O `index.js` injeta a função real.
+  if (typeof ehAutorizado === 'function') {
+    const agente = iap.agentes.get(grupo);
+    if (agente) agente.ehAutorizado = ehAutorizado;
+  }
 
   logIap('ligado', { grupo });
   return { ok: true };
@@ -235,14 +228,7 @@ export async function desligarIap(grupo) {
 export function estadoIap(grupo) {
   const st = iap.estado(grupo);
   if (!st) return st;
-  // O `!iap` roda INTEIRO no Groq (ouvir e pensar) — o dono precisa ver isso,
-  // e se a chave esta' presente.
-  return {
-    ...st,
-    stt: chaveGroq() ? 'groq' : 'nenhum',
-    llm: chaveGroq() ? 'groq' : 'nenhum',
-    reservaGroq: Boolean(chaveGroq())
-  };
+  return { ...st, nome: iaIdentidade(), stt: chaveGroq() ? 'groq' : 'nenhum' };
 }
 
 /** Desliga todos os agentes (a call caiu: o `index.js` chama isto). */

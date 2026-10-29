@@ -448,6 +448,14 @@ export async function obterCliente() {
 
           plugins: [
             voipPlugin({
+              // AUDIO POR PARTICIPANTE: alem do mix (`voip_call_inbound_audio`),
+              // o motor emite `voip_call_participant_audio` com o `participantJid`
+              // de QUEM FALOU. E' o que permite ao agente saber quem pediu algo —
+              // e recusar quando a pessoa nao tem permissao (membro comum pedindo
+              // para banir alguem). Desligado por padrao no pacote porque cada
+              // frame e' copiado; ligamos porque e' a base da guarda.
+              participantAudio: true,
+
               // NAO use `useRawUdpTransport: true`.
               //
               // A doc do pacote marca o flag como EXPERIMENTAL e o deixa
@@ -583,6 +591,24 @@ export async function obterCliente() {
           if (typeof cb === 'function') {
             try {
               cb(grupo, pcm);
+            } catch { /* o agente nunca derruba a call */ }
+          }
+          break;
+        }
+      });
+
+      // O AUDIO POR PARTICIPANTE: alem do mix, o motor entrega cada voz
+      // SEPARADA, com o `participantJid` de quem falou. E' o que permite ao
+      // agente saber QUEM pediu algo — e recusar quando nao tem permissao.
+      client.on('voip_call_participant_audio', ({ call, pcm, participantJid }) => {
+        const callId = call?.callId;
+        if (!callId || !pcm?.length || !participantJid) return;
+        for (const [grupo, id] of callsPorGrupo.entries()) {
+          if (id !== callId) continue;
+          const cb = aoOuvirPorGrupo.get(grupo);
+          if (typeof cb === 'function') {
+            try {
+              cb(grupo, pcm, participantJid);
             } catch { /* o agente nunca derruba a call */ }
           }
           break;

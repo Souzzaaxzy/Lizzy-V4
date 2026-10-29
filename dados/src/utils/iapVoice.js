@@ -150,9 +150,15 @@ export class AgenteDeVoz {
    * frame tem fala, a resposta em curso e' abortada.
    *
    * @param {Float32Array} pcm
+   * @param {string} [quemFalou] JID de quem falou (audio por participante)
    */
-  receberAudio(pcm) {
+  receberAudio(pcm, quemFalou = null) {
     if (!this.ativo || !pcm || !pcm.length) return;
+
+    // QUEM FALOU: o motor manda o JID no audio por participante. Guardamos o
+    // ultimo visto da frase em andamento — e' o que permite a guarda de
+    // permissao ("membro comum pedindo para banir").
+    if (quemFalou) this.quemFalouAtual = quemFalou;
 
     const evento = this.vad.processar(pcm);
 
@@ -191,8 +197,11 @@ export class AgenteDeVoz {
     if (evento === 'fim') {
       if (this.frase.length) this.frase.push(pcm.slice());
       const bloco = this.juntarFrase();
+      // Quem falou esta' junto com a frase (nao se perde no meio).
+      const falante = this.quemFalouAtual || null;
       this.frase = [];
-      void this.responder(bloco);
+      this.quemFalouAtual = null;
+      void this.responder(bloco, falante);
       return;
     }
     // 'nada': silencio. Se havia frase acumulada sem fechar, nada a fazer.
@@ -214,8 +223,9 @@ export class AgenteDeVoz {
   /**
    * Processa uma frase: STT -> LLM -> TTS -> fala.
    * @param {Float32Array} pcm
+   * @param {string} [quemFalou] JID de quem falou (para a guarda de permissao)
    */
-  async responder(pcm) {
+  async responder(pcm, quemFalou = null) {
     if (!this.ativo || this.processando) return;
     if (!pcm || pcm.length < TAXA_MOTOR * 0.3) return; // < 300 ms: nao e' fala
     this.processando = true;
@@ -227,9 +237,9 @@ export class AgenteDeVoz {
         this.log('sem fala reconhecida', { grupo: this.grupo });
         return;
       }
-      this.log('ouviu', { grupo: this.grupo, texto });
+      this.log('ouviu', { grupo: this.grupo, texto, quem: quemFalou || undefined });
 
-      const resposta = await this.pensar(texto, this.historico);
+      const resposta = await this.pensar(texto, this.historico, { quemFalou });
       if (!this.ativo) return;
       if (!resposta) return;
 
@@ -363,11 +373,18 @@ export class GerenciadorIap {
     return true;
   }
 
-  /** Entrega um frame de audio ao agente do grupo (no-op se nao houver). */
-  receber(grupo, pcm) {
+  /**
+   * Entrega um frame de audio ao agente do grupo (no-op se nao houver).
+   *
+   * @param {string} grupo
+   * @param {Float32Array} pcm
+   * @param {string} [quemFalou] JID de quem falou (o motor manda no audio por
+   *   participante). E' o que permite a guarda de permissao.
+   */
+  receber(grupo, pcm, quemFalou = null) {
     const agente = this.agentes.get(grupo);
     if (!agente) return false;
-    agente.receberAudio(pcm);
+    agente.receberAudio(pcm, quemFalou);
     return true;
   }
 
