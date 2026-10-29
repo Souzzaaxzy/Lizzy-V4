@@ -1219,8 +1219,15 @@ async function processUserMessages(data, nazu = null, ownerNumber = null, person
                 updateHistorico(userId, 'assistant', resposta.resp);
                 
                 // Garantir que tem react
-                if (!resposta.react) {
-                  resposta.react = getAbyssReact(isNightTime);
+                // O EMOJI DE REACAO SAIU (pedido do dono: "deixam ela com muita
+                // cara de IA"). Antes TODA resposta ganhava um emoji aleatorio
+                // do `getAbyssReact` -- no WhatsApp isso vira uma carinha em
+                // cima de cada mensagem, que e' o comportamento mais robotico
+                // possivel. Agora a reacao so' sai se o MODELO pedir (o campo
+                // `react` do JSON), e ele foi instruido a quase nunca usar.
+                if (resposta.react) {
+                  resposta.react = String(resposta.react).replaceAll(' ', '').replaceAll('\n', '');
+                  if (!resposta.react) delete resposta.react;
                 }
                 
                 respostas.push(resposta);
@@ -1229,15 +1236,14 @@ async function processUserMessages(data, nazu = null, ownerNumber = null, person
               else if (resposta.text && typeof resposta.text === 'string' && resposta.text.trim().length > 0) {
                 respostas.push({
                   resp: cleanWhatsAppFormatting(resposta.text),
-                  react: resposta.react || getAbyssReact(isNightTime)
+                  react: resposta.react || undefined
                 });
               }
             }
             // Se a resposta é uma string diretamente
             else if (typeof resposta === 'string' && resposta.trim().length > 0) {
               respostas.push({
-                resp: cleanWhatsAppFormatting(resposta),
-                react: getAbyssReact(isNightTime)
+                resp: cleanWhatsAppFormatting(resposta)
               });
             }
           });
@@ -1249,23 +1255,19 @@ async function processUserMessages(data, nazu = null, ownerNumber = null, person
           // Tentar diferentes formatos de fallback
           if (result && result.resp && typeof result.resp === 'string' && result.resp.trim().length > 0) {
             respostas.push({
-              resp: cleanWhatsAppFormatting(result.resp),
-              react: getAbyssReact(isNightTime)
+              resp: cleanWhatsAppFormatting(result.resp)
             });
           } else if (result && result.message && typeof result.message === 'string' && result.message.trim().length > 0) {
             respostas.push({
-              resp: cleanWhatsAppFormatting(result.message),
-              react: getAbyssReact(isNightTime)
+              resp: cleanWhatsAppFormatting(result.message)
             });
           } else if (result && result.text && typeof result.text === 'string' && result.text.trim().length > 0) {
             respostas.push({
-              resp: cleanWhatsAppFormatting(result.text),
-              react: getAbyssReact(isNightTime)
+              resp: cleanWhatsAppFormatting(result.text)
             });
           } else if (typeof result === 'string' && result.trim().length > 0) {
             respostas.push({
-              resp: cleanWhatsAppFormatting(result),
-              react: getAbyssReact(isNightTime)
+              resp: cleanWhatsAppFormatting(result)
             });
           } else {
             console.error(`❌ [${personality}] Não foi possível extrair resposta válida do resultado`);

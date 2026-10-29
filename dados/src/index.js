@@ -2918,7 +2918,9 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
   const numerodono = config.numerodono;
   const nomedono = config.nomedono;
   const nomebot = config.nomebot;
-  const prefixo = config.prefixo;
+  // Fallback obrigatorio: sem `prefixo` no config, `groupPrefix.length` (mais
+  // abaixo) lancava TypeError em TODA mensagem e o handler morria inteiro.
+  const prefixo = config.prefixo || '!';
   const debug = config.debug;
   const lidowner = config.lidowner;
   // Sistema de degradação automática de pets
@@ -7707,73 +7709,29 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
           } else {
             // Fallback: sempre gerar uma resposta se a IA não retornou nada válido
             const fallbackRespostas = [
-              // Cumprimentos e saudações
-              '🌌 Tudo bem nas sombras?',
-              '🌌 Como você está no void? 🌙',
-              '🌌 Tudo certo no abismo?',
-              'Eii! Que bom te ver! 😊',
-              '🌌 Olá, viajantes!',
-              // Confirmar entendimento
-              'Hm... deixa eu pensar... 🌙',
-              'Ahn... que silêncio... tá me fazendo pensar aqui! 😅',
-              'Tô pensando... dá um tempinho! 😊',
-              'Espera aí... deixa eu processar isso... 🤔',
-              'Hmm... me dá um segundinho pra entender! 😅',
-              // Pedidos de esclarecimento
-              'N-Não sei o que responder agora... pode perguntar de outra forma?',
-              'Ué... não tenho uma resposta pronta pra isso... 🤔',
-              'Pera... pode explicar melhor? 😅',
-              'Ahn... não entendi direito, pode repetir?',
-              'Que isso... nunca ouvi falar... me conta mais! 👀',
-              // Reações neutras
-              'Sério?! 😳',
-              'Pois é... né 😅',
-              'Hmmmmm 🤔',
-              'Entendi... 👀',
-              'Nossa... 😮',
-              // Mostrar interesse
-              'E depois? 👀',
-              'Conta mais! 😊',
-              'Isso é interessante... 🌙',
-              'Tipo assim... 🤔',
-              'Aaah entendi! 😊',
-              // Expressões do dia a dia
-              'Kkkkk que isso 😂',
-              'Affs... 😅',
-              'Mds... 🙄',
-              'Pqp... 😳',
-              'Slk... 😅',
-              // Ações/reação
-              'Tô aí! 👋',
-              'Bora! 🚀',
-              'Pode contar! 😊',
-              'To entendendo! 👀',
-              'Claro! 👍',
-              // Perguntas de retorno
-              'E você? Como tá? 😊',
-              'E aí? Tudo bem? 👀',
-              'Faz o que de bom? 🌙',
-              'O que você achou? 🤔',
-              'Quer falar mais sobre isso? 👀',
-              // Confirmar presença
-              'To aqui! 😊',
-              'Pode mandar! 👍',
-              'Tô ouvindo! 👂',
-              'Pode falar! 😎',
-              'Tô por aqui! 🌙',
-              // Encerramento natural
-              'Flw! 😊',
-              'Até mais! 👋',
-              'Valeu! 👍',
-              'Abs! 🌙',
-              'Tamo junto! 😊'
+              // O fallback e' so' quando a IA nao devolveu NADA valido — ele nao
+              // deve ter "cara de bot". Frases curtas, secas e SEM EMOJI: uma
+              // pessoa responderia assim. (Antes eram ~60 frases com tema de
+              // caverna e emoji em toda linha — o oposto do pedido.)
+              'kkkk',
+              'oxi',
+              'que isso',
+              'serio?',
+              'ih, agora buguei',
+              'pera, nao entendi',
+              'como assim?',
+              'fala mais',
+              'ata',
+              'nossa',
+              'affs',
+              'manda de novo que eu nao peguei'
             ];
             const fallback = fallbackRespostas[Math.floor(Math.random() * fallbackRespostas.length)];
             reply(fallback);
           }
         }).catch((assistentError) => {
           console.error('Erro no assistente virtual:', assistentError.message);
-          reply('Hm... acho que minha conexão tremeu um pouco... me dá mais uma chance? 🌙');
+          reply('ih, deu ruim aqui. tenta de novo');
         });
       }
     }

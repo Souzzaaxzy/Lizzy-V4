@@ -75,8 +75,13 @@ await test('1. a personalidade e uma so e se chama Lizzy (lida do config)', () =
 await test('2. o CHAT e a CALL usam o MESMO carater', () => {
   const chat = ia.promptDaPersonalidade();
   const voz = iapSessao.montarSistemaDoAgente({ nomeDono: 'Kannon' });
-  // O carater e' literalmente o mesmo trecho nos dois.
-  const carater = guarda.promptDaLizzy();
+  // O carater (o TEXTO de quem ela e') e' literalmente o mesmo nos dois.
+  //
+  // Antes este teste comparava o `promptDaLizzy()` INTEIRO — e passou a falhar
+  // quando o prompt ganhou a IDENTIDADE no fim (o config define idade/humor), que
+  // e' dado e nao carater. O que precisa ser igual nos dois canais e' o trecho
+  // do carater; o resto cada canal monta.
+  const carater = guarda.promptDaLizzy().split('QUEM VOCE E (fatos')[0].trim();
   contem(chat, carater, 'o prompt do chat contem o carater');
   contem(voz, carater, 'o prompt da call contem o carater');
   contem(chat, 'SEU JEITO', 'o chat tem o carater');
@@ -88,7 +93,7 @@ await test('3. cada canal tem o SEU formato (texto x voz)', () => {
   const voz = iapSessao.montarSistemaDoAgente({});
   // O chat pode formatar; a voz nao (seria lido em voz alta).
   contem(chat, 'COMO ESCREVER', 'o chat tem as regras de TEXTO');
-  contem(chat, 'emoji', 'o chat pode usar emoji');
+  contem(chat, 'SEM EMOJI', 'o chat tambem NAO usa emoji (o dono pediu)');
   contem(voz, 'COMO FALAR', 'a call tem as regras de VOZ');
   contem(voz, 'VOZ ALTA', 'a call diz que e lido em voz alta');
   naoContem(voz, 'COMO ESCREVER', 'a call NAO leva as regras de texto');
