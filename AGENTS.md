@@ -14382,16 +14382,17 @@ Teste: iap **70/215** (+1). O teste usa um `nomeDono` **diferente** do nome de q
 fala e exige que o dono seja reconhecido mesmo assim. **Verificado que mede**:
 voltando a checagem por nome, **1 asserção falha**.
 
-### 📋 COMANDOS POR VOZ — o que já existe (levantamento, NADA implementado)
+### 📋 COMANDOS POR VOZ — levantamento (IMPLEMENTADO na secao abaixo)
 O dono perguntou quais comandos a Lizzy poderia executar por fala (tipo *"procura
 a música X"* → `!play X`). **Já existe** um interpretador de linguagem natural no
 bot: a personalidade **`pro`** (`!assistente pro`, `ia.js` → `isCommand`/`command`/
 `args`/`falta`), que já mapeia "baixa essa música Blinding Lights" → `play` com
 args, e o `index.js` já **simula o comando** reusando o `info` original.
 
-O que **falta** para o `!iap` usar isso é: (a) o agente chamar esse interpretador
-em vez do LLM de conversa quando o dono pedir um comando, e (b) uma **allowlist**
-de comandos seguros (a voz não deve disparar ban/kick).
+**O que foi feito depois (ver a secao "COMANDOS POR VOZ" mais abaixo)**: em vez de
+usar o interpretador `pro` (LLM), a intencao e' reconhecida por **padroes
+deterministicos** (`utils/iapComandos.js`), com **allowlist** de 4 comandos
+(`play`/`tiktok`/`pin`/`figualeatoria`) e execucao **so' pelo dono**.
 
 Classificação levantada do `index.js`:
 | categoria | comandos | por que |
