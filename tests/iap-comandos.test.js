@@ -39,6 +39,24 @@ await test('identifica: !play por varias frases', (ok) => {
   }
 });
 
+await test('identifica: ACENTO do STT na palavra errada (o bug do dono)', (ok) => {
+  // O log do dono: o STT transcreveu "Tóca evidências." — com acento na palavra
+  // ERRADA. O padrao `toca` nao casava, o comando nao era reconhecido e o LLM
+  // respondia sozinho ("Ja vou tocar Evidencias") SEM executar nada.
+  const casos = [
+    ['Tóca evidências.', 'play', 'evidências'],
+    ['TÓCA EVIDÊNCIAS', 'play', 'EVIDÊNCIAS'],
+    ['Tóca a música Evidências pra mim', 'play', 'Evidências'],
+    ['Báixa a música Blinding Lights', 'play', 'Blinding Lights'],
+    ['Procúra no pinterest decoração', 'pin', 'decoração']
+  ];
+  for (const [fala, cmd, args] of casos) {
+    const r = identificarComando(fala);
+    ok(r && r.comando === cmd, `"${fala}" -> ${cmd} (${r ? r.comando : 'null'})`);
+    ok(r && r.args === args, `args "${r?.args}" (esperado "${args}")`);
+  }
+});
+
 await test('identifica: !tiktok (link e nome)', (ok) => {
   const link = identificarComando('baixa o video do tiktok https://vm.tiktok.com/xyz');
   ok(link && link.comando === 'tiktok', 'reconheceu o tiktok pelo link');

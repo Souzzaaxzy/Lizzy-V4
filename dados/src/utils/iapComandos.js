@@ -119,11 +119,16 @@ const URL_RE = /https?:\/\/[^\s]+|\b(?:www\.)?[a-z0-9-]+\.(?:com|net|org|br|tv|m
  * @returns {string}
  */
 function paraPadroes(texto) {
-  return String(texto || '')
+  let t = String(texto || '')
     .replace(/[,.!?;:]+/g, ' ')
     .replace(/\b(lizzy|abyss)\b/gi, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim();
+  // SEM ACENTO: o STT erra acento o tempo todo — "Tóca evidencias" chega com
+  // acento na palavra errada, e o padrao `toca` nao casaria. O `iapGuarda` ja'
+  // faz o mesmo pelo mesmo motivo. Os padroes abaixo sao todos sem acento.
+  try { t = t.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); } catch { /* ok */ }
+  return t;
 }
 
 /**
@@ -140,10 +145,16 @@ function extrairArgs(texto, comando) {
   // URL: se veio um link, ele E' o argumento (nao se mexe nele).
   const url = String(texto || '').match(URL_RE);
   if (url && /^https?:/i.test(url[0])) return url[0];
+
+  // SEM ACENTO (o STT erra acento): "Toca evidencias" e "Toca evidencias" (com
+  // acento em qualquer letra) tem de dar o MESMO argumento. Por isso os padroes
+  // abaixo sao todos sem acento.
   let t = String(texto || '').trim();
+  try { t = t.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); } catch { /* ok */ }
+
   // A virgula/pontuacao atrapalha os `^` abaixo: normaliza ANTES.
   t = t.replace(/[,.!?;:]+/g, ' ');
-  t = t.replace(/^\s*(oi|ola|olá|ei|hey)\s+/i, ' ');
+  t = t.replace(/^\s*(oi|ola|ei|hey)\s+/i, ' ');
   t = t.replace(/\blizzy\b/gi, ' ');
   t = t.replace(/\b(para|pra|pro)\s+mim\b/gi, ' ');
   t = t.replace(/\b(por\s+favor|pfv|pf)\b/gi, ' ');
@@ -151,22 +162,37 @@ function extrairArgs(texto, comando) {
     t = t.replace(/\btik\s*tok\b/gi, ' ');
     // "baixa esse video do tiktok" -> o termo e' o que descreve o video; sem
     // termo util, devolve '' (o comando real pede link OU nome).
-    t = t.replace(/\b(esse|essa|este|esta|o|a|um|uma)\s+(v[ií]deo|clipe)\b/gi, ' ');
-    t = t.replace(/^\s*(v[ií]deo|clipe|do|da|de)\s+/i, ' ');
+    t = t.replace(/\b(esse|essa|este|esta|o|a|um|uma)\s+(video|clipe)\b/gi, ' ');
+    t = t.replace(/^\s*(video|clipe|do|da|de)\s+/i, ' ');
   }
   if (comando === 'pin') t = t.replace(/\b(no\s+)?pinterest\b/gi, ' ');
   // Tira o verbo/pedido do comeco, REPETIDAMENTE ("procura a musica X" -> "X").
-  const VERBO = /^\s*(toca|tocar|toque|bota|botar|coloca|colocar|poe|poem|po[õe]e|procura|procurar|busca|buscar|acha|achar|baixa|baixar|manda|mandar|me\s+traz|traz|quero\s+ouvir|queria\s+ouvir|play|pesquisa|pesquisar)\b/i;
+  const VERBO = /^\s*(toca|tocar|toque|bota|botar|coloca|colocar|poe|poem|poe|procura|procurar|busca|buscar|acha|achar|baixa|baixar|manda|mandar|me\s+traz|traz|quero\s+ouvir|queria\s+ouvir|play|pesquisa|pesquisar)\b/i;
   for (let i = 0; i < 4; i++) {
     const antes = t;
     t = t.replace(VERBO, ' ');
     // Tira artigo/pronome e as palavras "musica/video" que so' descrevem o tipo.
     t = t.replace(/^\s*(a|o|as|os|uma|um|esse|essa|este|esta|meu|minha|aquela|aquele)\s+/i, ' ');
-    t = t.replace(/^\s*(m[uú]sica|som|faixa|[aá]udio|can[çc][aã]o|v[ií]deo|clipe|do|da|de)\s+/i, ' ');
+    t = t.replace(/^\s*(musica|som|faixa|audio|audio|musica|video|clipe|do|da|de)\s+/i, ' ');
     if (t === antes) break;
   }
   t = t.replace(/\s{2,}/g, ' ').trim();
-  return t.replace(/^[.,;:!?\-\s]+|[.,;:!?\-\s]+$/g, '').trim();
+  t = t.replace(/^[.,;:!?\-\s]+|[.,;:!?\-\s]+$/g, '').trim();
+  if (!t) return '';
+  // PRESERVA O ACENTO do termo buscado: a limpeza acima foi feita SEM acento
+  // (para casar os verbos), mas o argumento vai para a BUSCA — "Evidencias" e
+  // "Evidências" nao sao a mesma consulta. Recuperamos a forma original das
+  // palavras que sobreviveram, comparando sem acento.
+  const originais = String(texto || '')
+    .replace(/[,.!?;:]+/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+  const semAcento = (v) => { try { return v.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); } catch { return v; } };
+  const saida = t.split(' ').map((palavra) => {
+    const achado = originais.find((o) => semAcento(o).toLowerCase() === palavra.toLowerCase());
+    return achado || palavra;
+  }).join(' ');
+  return saida;
 }
 
 /**
