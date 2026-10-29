@@ -19,6 +19,9 @@ import userContextDB from '../../utils/userContextDB.js';
 // Antes o chat tinha quatro prompts proprios e a call um fixo — dois jeitos da
 // mesma bot falar. Agora ha um so, e cada canal acrescenta o seu FORMATO.
 import { promptDaLizzy, regrasDeCanal, iaIdentidade, limparNomeDoBot } from '../../utils/iapGuarda.js';
+// O CONTEXTO da conversa (quem fala, o dono, os dados do grupo) tem UMA
+// fonte: o mesmo modulo que a call usa. Aqui so' se monta o texto.
+import { montarContextoDaConversa } from '../../utils/contextoConversa.js';
 // A CONVERSA passou a usar o Groq (a mesma API da call). Ver `makeCognimaRequest`.
 import { groqChat, chaveGroq } from '../../utils/groqClient.js';
 
@@ -1025,6 +1028,27 @@ function clearConversationData(maxAge = 7 * 24 * 60 * 60 * 1000) {
 }
 
 /**
+ * Monta o bloco de CONTEXTO da conversa para o prompt.
+ *
+ * ## Por que aqui (e nao no handler)
+ *
+ * Quem tem o socket e o metadata e' o `index.js` — ele **coleta** e passa em
+ * `extraContext`. A **montagem do texto** fica aqui, pura, para poder ser
+ * testada sem abrir conexao (o `index.js` tem 36k linhas e abre socket no
+ * import).
+ *
+ * O que entra:
+ *   - quem esta' falando (nome resolvido do JID/agenda pelo handler);
+ *   - quem e' o DONO do bot (e se e' ele falando);
+ *   - os DADOS DO GRUPO: nome, dono, admins, quando foi criado, total.
+ *
+ * Tudo opcional: campo sem dado simplesmente nao aparece — melhor faltar uma
+ * linha do que a Lizzy dizer um nome/numero que nao existe.
+ *
+ * @param {object} [ctx]
+ * @returns {string} o bloco, ou '' quando nao ha nada a dizer
+ */
+/**
  * O prompt de sistema da assistente do chat.
  *
  * **Personalidade única**: `promptDaLizzy()` (o mesmo que a call usa) mais as
@@ -1037,8 +1061,13 @@ function clearConversationData(maxAge = 7 * 24 * 60 * 60 * 1000) {
  *
  * @returns {string}
  */
-function promptDaPersonalidade() {
-  return [promptDaLizzy(), '', regrasDeCanal('chat')].join('\n');
+function promptDaPersonalidade(extraContext = {}) {
+  // Aceita string por compatibilidade (chamadas antigas passavam a
+  // personalidade) — nesse caso nao ha contexto a montar.
+  const contexto = montarContextoDaConversa(
+    extraContext && typeof extraContext === 'object' ? extraContext : {}
+  );
+  return [promptDaLizzy(), '', regrasDeCanal('chat'), contexto ? '\n' + contexto : ''].join('\n');
 }
 
 async function processUserMessages(data, nazu = null, ownerNumber = null, personality = 'abyss') {
@@ -1089,7 +1118,7 @@ async function processUserMessages(data, nazu = null, ownerNumber = null, person
       updateHistorico(userId, 'user', msgValidada.texto, msgValidada.nome_enviou);
       
       // Selecionar o prompt baseado na personalidade
-      let selectedPrompt = promptDaPersonalidade(personality);
+      let selectedPrompt = promptDaPersonalidade(extraContext);
       
       // Substituir variáveis dinâmicas no prompt
       selectedPrompt = replaceDynamicVariables(selectedPrompt, {
@@ -2418,4 +2447,5 @@ export {
   geminiRequestMultimodal,
   classificarErroGemini,
   promptDaPersonalidade,
+  montarContextoDaConversa,
 };

@@ -23,6 +23,8 @@ import {
   promptDaLizzy, regrasDeCanal
 } from './iapGuarda.js';
 import { identificarComando, frasesDeAjuda, ehComandoPermitido } from './iapComandos.js';
+// Os DADOS DO GRUPO tem UMA fonte: o mesmo modulo do chat (`!assistente`).
+import { montarBlocoDoGrupo } from './contextoConversa.js';
 import {
   aoOuvirAudioDaCall as aoOuvirAudioDaCallReal,
   modoAudioExternoDaCall as modoAudioExternoDaCallReal,
@@ -83,7 +85,7 @@ function logIap(msg, extra) {
  * @param {boolean} [opts.falanteEhDono] o falante e' o dono do bot?
  * @returns {string}
  */
-export function montarSistemaDoAgente({ nomeDono, participantes = [], falante, falanteEhDono = false } = {}) {
+export function montarSistemaDoAgente({ nomeDono, participantes = [], falante, falanteEhDono = false, dadosDoGrupo = null } = {}) {
   const nome = iaIdentidade(); // "Lizzy"
 
   // A data/hora REAL: sem ela o modelo chuta ("hoje e' ..."). E' o tipo de
@@ -120,6 +122,12 @@ export function montarSistemaDoAgente({ nomeDono, participantes = [], falante, f
     const nomes = participantes.filter(Boolean).slice(0, 20).join(', ');
     if (nomes) linhas.push(`Quem esta na chamada agora: ${nomes}.`);
   }
+
+  // OS DADOS DO GRUPO (mesma coleta do chat): dono, admins, criacao, membros.
+  // Vao DEPOIS do dono e dos participantes porque, numa call, a pergunta
+  // natural e' "quem e' quem" — e so' depois "quantos somos".
+  const blocoGrupo = montarBlocoDoGrupo(dadosDoGrupo || {});
+  if (blocoGrupo) linhas.push('', blocoGrupo);
 
   // O QUE A LIZZY CONSEGUE EXECUTAR: o dono pede por fala e ela roda o comando
   // do bot. A lista e' a FONTE UNICA (`iapComandos.js`) — se um comando novo
@@ -186,7 +194,8 @@ export function montarSistemaDoAgente({ nomeDono, participantes = [], falante, f
  * @returns {Promise<string>}
  */
 export async function pensarComIa(texto, historico = [], {
-  quemFalou, ehAutorizado, nomeDono, participantes = [], nomeDeQuemFalou, ehDono, executarComando
+  quemFalou, ehAutorizado, nomeDono, participantes = [], nomeDeQuemFalou, ehDono,
+  executarComando, dadosDoGrupo = null
 } = {}) {
   // ---- COMANDO POR VOZ (qualquer um na call) -----------------------------
   // O pedido falado ("toca Evidencias") e' reconhecido por PADROES e executado.
@@ -257,7 +266,7 @@ export async function pensarComIa(texto, historico = [], {
     }
   }
 
-  const sistema = montarSistemaDoAgente({ nomeDono, participantes, falante, falanteEhDono });
+  const sistema = montarSistemaDoAgente({ nomeDono, participantes, falante, falanteEhDono, dadosDoGrupo });
   const r = await groqChat({
     texto,
     sistema,
@@ -290,7 +299,7 @@ export async function pensarComIa(texto, historico = [], {
  *   Promise<boolean>` — executa o comando do bot em nome de QUEM FALOU.
  * @returns {Promise<{ ok: boolean, motivo?: string }>}
  */
-export async function ligarIap(grupo, { nomeDono, participantes, ehAutorizado, nomeDeQuemFalou, ehDono, executarComando } = {}) {
+export async function ligarIap(grupo, { nomeDono, participantes, ehAutorizado, nomeDeQuemFalou, ehDono, executarComando, dadosDoGrupo = null } = {}) {
   // O `!iap` inteiro roda no Groq (ouvir E pensar): sem a chave dele nao ha' o
   // que ligar.
   if (!chaveGroq()) return { ok: false, motivo: 'sem_chave_groq' };
@@ -320,7 +329,8 @@ export async function ligarIap(grupo, { nomeDono, participantes, ehAutorizado, n
   iap.ligar(grupo, {
     log: logIap,
     pensar: (texto, historico, opts = {}) => pensarComIa(texto, historico, {
-      quemFalou: opts.quemFalou, ehAutorizado, nomeDono, participantes, nomeDeQuemFalou, ehDono, executarComando
+      quemFalou: opts.quemFalou, ehAutorizado, nomeDono, participantes, nomeDeQuemFalou, ehDono,
+      executarComando, dadosDoGrupo
     }),
     transcrever: async (pcm) => {
       // VIES de vocabulario: os NOMES de quem esta' na call + as palavras dos

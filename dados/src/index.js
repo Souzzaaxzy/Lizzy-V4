@@ -39,7 +39,8 @@ import { parsePinDuration, buildPinKeyFromContext, isPinControlMessage } from '.
 import { antiCtt, isContactPayload } from './utils/antiCtt.js';
 import { parseImagePollArgs, collectPollImages, resolveAttachments, buildOptionName } from './utils/pollImages.js';
 import { toOggOpus } from './utils/oggOpus.js';
-import { resolverNomeContato, resolverNomesContatos, acharParticipantePorId, nomeInutil, baseId, numerosDoParticipante } from './utils/contactName.js';
+import { resolverNomeContato, acharParticipantePorId, nomeInutil, baseId, numerosDoParticipante } from './utils/contactName.js';
+import { coletarDadosDoGrupo } from './utils/contextoConversa.js';
 import { converterGifParaMp4 } from './utils/gifMedia.js';
 import { figurinhaParaStatus } from './utils/stickerStatus.js';
 import { normalizarIdGrupo, ehJidCanal, buildFollowChannelContent, fotoDoMetadataNewsletter, normalizarGrupos, adicionarGrupo, removerGrupo } from './utils/canalDivulgacao.js';
@@ -7563,10 +7564,49 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
         // tiver salvo, ele e' ignorado — nada quebra e o comportamento e' o
         // mesmo em todo grupo.
         const personality = 'lizzy';
+
+        // ------------------------------------------------------------------
+        // CONTEXTO da conversa: quem falou (JID -> contato), quem e' o dono, e
+        // os DADOS DO GRUPO (dono, admins, criacao, membros).
+        //
+        // O `ia.js` NAO tem socket: quem tem o `nazu` e o metadata e' o handler.
+        // Por isso a COLETA acontece aqui e o FORMATO do texto fica la' — assim
+        // a montagem e' testavel sem abrir conexao.
+        //
+        // Tudo best-effort: qualquer falha so' tira um campo do contexto, nunca
+        // impede a resposta.
+        // ------------------------------------------------------------------
+        let nomeDeQuemFalou = null;
+        try {
+          nomeDeQuemFalou = await resolverNomeContato(sender, {
+            nazu,
+            metadata: groupMetadata,
+            from,
+            fallback: pushname
+          });
+        } catch { /* segue sem o nome */ }
+
+        // A COLETA vive no `utils/contextoConversa.js` — o MESMO modulo que a
+        // call usa. Se cada canal coletasse por conta propria, os dois
+        // divergiriam na primeira mudanca (o repo ja pagou caro por isso).
+        const dadosDoGrupo = await coletarDadosDoGrupo({
+          nazu,
+          metadata: groupMetadata,
+          from,
+          groupName,
+          numerosDono: [numerodono, lidowner],
+          nomeDonoBot: nomedono,
+          sender,
+          matchId: idsMatch,
+          isGroup
+        });
+
         // Contexto adicional para passar à IA
         const extraContext = {
           groupName: groupName || '',
-          groupId: from || ''
+          groupId: from || '',
+          nomeDeQuemFalou,
+          dadosDoGrupo
         };
         ia.makeAssistentRequest({
           mensagens: [jSoNzIn],
@@ -36773,13 +36813,28 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
                 return false;
               }
             };
+            // OS DADOS DO GRUPO (dono, admins, criacao, membros): a MESMA
+            // coleta do chat (`!assistente`) — se cada canal coletasse por conta
+            // propria, os dois divergiriam na primeira mudanca.
+            const dadosDoGrupo = await coletarDadosDoGrupo({
+              nazu,
+              metadata: groupMetadata,
+              from,
+              groupName,
+              numerosDono: [numerodono, lidowner],
+              nomeDonoBot: nomedono,
+              sender,
+              matchId: idsMatch,
+              isGroup
+            });
             const r = await ligarIap(from, {
               nomeDono: nomedono || null,
               participantes: nomesNaCall,
               ehAutorizado,
               nomeDeQuemFalou,
               ehDono,
-              executarComando
+              executarComando,
+              dadosDoGrupo
             });
             if (!r.ok) {
               const motivos = {
