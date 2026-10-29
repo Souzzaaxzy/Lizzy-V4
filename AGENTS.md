@@ -14365,3 +14365,37 @@ provado: o `quemFalou` chega (o motor já emitia por participante), o JID vira n
 pelo resolvedor do bot, e o nome entra no prompt. Se o motor não emitir o
 `participantJid` em algum cenário, o prompt fica **sem nome** (a Lizzy pergunta) —
 nunca inventa.
+
+## 👑 `!iap` — o DONO agora e' identificado por JID (nao pelo nome) (out/2026) ✅
+O dono pediu *"coloca pra ela identificar o dono também"*. A checagem existente
+comparava o **NOME** de quem falava com o `nomedono` do config — **frágil**: se o
+dono trocar o nome do perfil no WhatsApp, ele **deixa** de ser reconhecido.
+
+Agora e' por **JID/número**, a MESMA checagem do resto do bot (`idsMatch` +
+`numerodono`/`lidowner`). O nome virou a **última reserva** (compatibilidade).
+
+- `pensarComIa` aceita `ehDono(jid)` e só cai no nome se a injeção faltar;
+- `ligarIap` aceita e repassa `ehDono`;
+- o `index.js` injeta a checagem por JID (número **e** LID do dono).
+
+Teste: iap **70/215** (+1). O teste usa um `nomeDono` **diferente** do nome de quem
+fala e exige que o dono seja reconhecido mesmo assim. **Verificado que mede**:
+voltando a checagem por nome, **1 asserção falha**.
+
+### 📋 COMANDOS POR VOZ — o que já existe (levantamento, NADA implementado)
+O dono perguntou quais comandos a Lizzy poderia executar por fala (tipo *"procura
+a música X"* → `!play X`). **Já existe** um interpretador de linguagem natural no
+bot: a personalidade **`pro`** (`!assistente pro`, `ia.js` → `isCommand`/`command`/
+`args`/`falta`), que já mapeia "baixa essa música Blinding Lights" → `play` com
+args, e o `index.js` já **simula o comando** reusando o `info` original.
+
+O que **falta** para o `!iap` usar isso é: (a) o agente chamar esse interpretador
+em vez do LLM de conversa quando o dono pedir um comando, e (b) uma **allowlist**
+de comandos seguros (a voz não deve disparar ban/kick).
+
+Classificação levantada do `index.js`:
+| categoria | comandos | por que |
+|---|---|---|
+| **seguros por voz** | `play`, `letra`, `clima`, `tradutor`, `google`, `ping`, `menu`, `spotify`, `toimg` | só precisam de TEXTO como argumento |
+| **precisam de mídia** | `toimg`, `togif`, `sticker`, `edits` | só funcionam com algo anexado/marcado |
+| **arriscados (pedem alvo)** | `ban`, `kick`, `promover`, `rebaixar`, `mute`, `adv`, `denunciar` | exigem @menção e têm consequência real |
