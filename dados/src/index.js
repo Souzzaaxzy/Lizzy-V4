@@ -36937,12 +36937,38 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
                 return false;
               } catch { return false; }
             };
+            // COMANDOS POR VOZ: o dono pede falando ("toca Evidencias") e a
+            // Lizzy executa o comando do bot. O caminho e' o MESMO que o
+            // interpretador `pro` usa: monta uma mensagem com o comando e a
+            // REEMITE em `messages.upsert` — o handler roda como se o dono
+            // tivesse digitado (permissao, fila, tudo igual). Nada paralelo.
+            const executarComando = async (comando, args = '') => {
+              try {
+                const cmd = String(comando || '').toLowerCase().trim();
+                if (!cmd) return false;
+                const corpo = `${groupPrefix}${cmd}${args ? ' ' + args : ''}`.trim();
+                // Clona a mensagem do dono (mantem autor/contexto) e troca o TEXTO
+                // pelo comando. `_fromPro` evita que o agente reaja a propria
+                // mensagem (loop) — o mesmo marcador do interpretador `pro`.
+                const fakeMessage = cloneMessageSafely(info);
+                fakeMessage.messageTimestamp = Math.floor(Date.now() / 1000);
+                fakeMessage._fromPro = true;
+                fakeMessage.message = { conversation: corpo };
+                await nazu.sendMessage(from, { text: `🤖 *Executando:* ${corpo}` }, { quoted: info }).catch(() => {});
+                nazu.ev.emit('messages.upsert', { messages: [fakeMessage], type: 'notify' });
+                return true;
+              } catch (e) {
+                console.error('[IAP] falha ao executar comando por voz:', e?.message || e);
+                return false;
+              }
+            };
             const r = await ligarIap(from, {
               nomeDono: nomedono || null,
               participantes: nomesNaCall,
               ehAutorizado,
               nomeDeQuemFalou,
-              ehDono
+              ehDono,
+              executarComando
             });
             if (!r.ok) {
               const motivos = {

@@ -19,6 +19,7 @@ import { transcreverPcm, chaveGroq } from './iapStt.js';
 import { sintetizarFala, sintetizarFalaStream, garantirVoz } from './iapTts.js';
 import { iap } from './iapVoice.js';
 import { iaIdentidade, ehPedidoDeAcao, permitePedidoDeAcao } from './iapGuarda.js';
+import { identificarComando, frasesDeAjuda, ehComandoPermitido } from './iapComandos.js';
 import {
   aoOuvirAudioDaCall as aoOuvirAudioDaCallReal,
   modoAudioExternoDaCall as modoAudioExternoDaCallReal,
@@ -45,6 +46,9 @@ export function setIapMediaForTest(m) {
     falarNaCallDoGrupo: falarNaCallDoGrupoReal
   };
 }
+
+/** Comandos por voz que funcionam SEM argumento. */
+const COMANDO_SEM_ARGS = ['figualeatoria'];
 
 /** Log do agente, com o prefixo do sistema de call (filtrável). */
 function logIap(msg, extra) {
@@ -116,6 +120,17 @@ export function montarSistemaDoAgente({ nomeDono, participantes = [], falante, f
     if (nomes) linhas.push(`Quem esta na chamada agora: ${nomes}.`);
   }
 
+  // O QUE A LIZZY CONSEGUE EXECUTAR: o dono pede por fala e ela roda o comando
+  // do bot. A lista e' a FONTE UNICA (`iapComandos.js`) — se um comando novo
+  // entrar la', ele aparece aqui sozinho.
+  linhas.push(
+    '',
+    'VOCE TAMBEM EXECUTA COMANDOS do bot quando o DONO pede por fala, por exemplo:',
+    frasesDeAjuda(),
+    'Quando o pedido casar um desses, diga que ja vai fazer — a execucao acontece sozinha.',
+    'Se o pedido for de comando e NAO for o dono quem falou, diga que so o dono pode.'
+  );
+
   // QUEM ESTA' FALANDO AGORA. O motor entrega o audio POR PARTICIPANTE, entao
   // sabemos o JID de quem falou; o nome vem do resolvedor de contatos. Com isso
   // a Lizzy chama a pessoa pelo nome ("Fala, Kannon!") em vez de tratar todo
@@ -163,11 +178,54 @@ export function montarSistemaDoAgente({ nomeDono, participantes = [], falante, f
  * @param {function} [opts.ehDono] `(jid) => boolean` — o falante e' o DONO do
  *   bot? A checagem e' por **JID/numero** (a MESMA do resto do bot), nao por
  *   nome: se o dono trocar o nome do perfil, ele continua sendo reconhecido.
+ * @param {function} [opts.executarComando] `(comando, args) => Promise<boolean>`
+ *   — dispara o comando do bot (o `index.js` reemite a mensagem como se o dono
+ *   tivesse digitado). Sem ela, o pedido de comando NAO executa.
  * @returns {Promise<string>}
  */
 export async function pensarComIa(texto, historico = [], {
-  quemFalou, ehAutorizado, nomeDono, participantes = [], nomeDeQuemFalou, ehDono
+  quemFalou, ehAutorizado, nomeDono, participantes = [], nomeDeQuemFalou, ehDono, executarComando
 } = {}) {
+  // ---- COMANDO POR VOZ (so' o dono) --------------------------------------
+  // O pedido falado ("toca Evidencias") e' reconhecido por PADROES e executado
+  // em NOME DELE. Como a acao tem consequencia (baixa midia, posta no grupo) e a
+  // mensagem e' reemitida como se ele tivesse digitado, SO' o dono dispara.
+  const pedido = identificarComando(texto);
+  if (pedido && typeof executarComando === 'function') {
+    // FALHA FECHADO: sem saber QUEM falou nao ha' como provar que e' o dono.
+    // Sem esta guarda, um `ehDono` que responda `true` para um jid nulo (ou o
+    // audio sem `participantJid`) executaria o comando para qualquer um.
+    let podeDono = false;
+    if (quemFalou && typeof ehDono === 'function') {
+      try { podeDono = Boolean(await ehDono(quemFalou)); } catch { podeDono = false; }
+    }
+    if (!podeDono) {
+      logIap('comando por voz RECUSADO (nao e o dono)', { pedido: pedido.comando, quem: quemFalou || 'desconhecido' });
+      return 'So o dono do bot pode me pedir comandos por voz.';
+    }
+    if (!ehComandoPermitido(pedido.comando)) {
+      return 'Esse comando nao esta liberado por voz.';
+    }
+    // Falta o argumento (ex.: "baixa um video do tiktok" sem dizer qual): em vez
+    // de executar as cegas, pergunta — e o dono responde na call.
+    if (!pedido.args && !COMANDO_SEM_ARGS.includes(pedido.comando)) {
+      logIap('comando por voz sem argumento', { pedido: pedido.comando });
+      return `Claro! O que voce quer que eu procure? Fala o nome que eu executo o ${pedido.comando}.`;
+    }
+    try {
+      const ok = await executarComando(pedido.comando, pedido.args);
+      logIap(ok ? 'comando por voz executado' : 'comando por voz NAO executou', {
+        comando: pedido.comando, args: pedido.args || undefined
+      });
+      return ok
+        ? `Prontinho, ja executei o ${pedido.comando}.`
+        : 'Nao consegui executar agora. Tenta de novo?';
+    } catch (e) {
+      logIap('falha ao executar comando por voz', { erro: e?.message || String(e) });
+      return 'Nao consegui executar agora. Tenta de novo?';
+    }
+  }
+
   // ---- GUARDA: o pedido é de AÇÃO? a pessoa PODE? ------------------------
   const guarda = await permitePedidoDeAcao(texto, quemFalou, { ehAutorizado });
   if (!guarda.ok) {
@@ -235,9 +293,11 @@ export async function pensarComIa(texto, historico = [], {
  *   `resolverNomeContato`). E' o que faz a Lizzy chamar a pessoa pelo nome.
  * @param {function} [opts.ehDono] `(jid) => boolean` — o falante e' o DONO?
  *   Checagem por JID/numero (a mesma do resto do bot).
+ * @param {function} [opts.executarComando] `(comando, args) => Promise<boolean>`
+ *   — executa o comando do bot em nome do dono (o `index.js` reemite a mensagem).
  * @returns {Promise<{ ok: boolean, motivo?: string }>}
  */
-export async function ligarIap(grupo, { nomeDono, participantes, ehAutorizado, nomeDeQuemFalou, ehDono } = {}) {
+export async function ligarIap(grupo, { nomeDono, participantes, ehAutorizado, nomeDeQuemFalou, ehDono, executarComando } = {}) {
   // O `!iap` inteiro roda no Groq (ouvir E pensar): sem a chave dele nao ha' o
   // que ligar.
   if (!chaveGroq()) return { ok: false, motivo: 'sem_chave_groq' };
@@ -267,7 +327,7 @@ export async function ligarIap(grupo, { nomeDono, participantes, ehAutorizado, n
   iap.ligar(grupo, {
     log: logIap,
     pensar: (texto, historico, opts = {}) => pensarComIa(texto, historico, {
-      quemFalou: opts.quemFalou, ehAutorizado, nomeDono, participantes, nomeDeQuemFalou, ehDono
+      quemFalou: opts.quemFalou, ehAutorizado, nomeDono, participantes, nomeDeQuemFalou, ehDono, executarComando
     }),
     transcrever: async (pcm) => {
       const r = await transcreverPcm(pcm, { apiKey: chaveGroq() });
