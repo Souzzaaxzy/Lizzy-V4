@@ -308,46 +308,32 @@ async function ffmpeg() {
 }
 
 // ---------------------------------------------------------------------------
-// edge-tts — a VOZ do `!iap`
+// VOZ do `!iap` — msedge-tts (Node puro, SEM pip/python)
 // ---------------------------------------------------------------------------
 /**
- * Instala o `edge-tts` (a voz local da IA na call).
+ * Confere a VOZ da IA na call.
  *
- * ## Por que instalar sozinho
+ * ## Por que NAO instala mais via pip
  *
- * Sem ele o TTS do `!iap` cai no **Gemini** — e o dono pediu para a IA da call
- * nao depender do Gemini (era ele que estourava o tempo). O `edge-tts` e' local,
- * nao tem chave nem limite, e da' a voz pt-BR.
+ * A voz era o pacote PYTHON `edge-tts`, instalado por `pip`. O host do dono
+ * (container de painel) **nao tem `pip`** — o log mostrava
+ * `entrypoint.sh: pip: command not found` — entao a instalacao nunca acontecia
+ * e a voz caia no Gemini (que estourou a cota). A voz agora e' o **`msedge-tts`**,
+ * um modulo **npm**: ele vem no `npm install` que o bot JA' roda, sem
+ * python/pip/ffmpeg para gerar o MP3.
  *
- * Mesmo padrao do yt-dlp: checa o binario, depois `python -m edge_tts`, depois
- * `~/.local/bin`; se faltar, instala via pip (sem root).
+ * Aqui so' se CONFERE (o install e' o das dependencias Node). Se o modulo faltar,
+ * o aviso manda reinstalar — nao ha mais o que instalar por pip.
  */
-async function edgeTts() {
-    if (process.env.EDGE_TTS_PATH) { log('edge-tts configurado via EDGE_TTS_PATH'); return; }
-    if (await isAvailable('edge-tts', ['--version'])) { log('edge-tts encontrado'); return; }
-    if (await isAvailable('python3', ['-m', 'edge_tts', '--version'])) { log('edge-tts encontrado (python3 -m edge_tts)'); return; }
-    const localBin = path.join(os.homedir(), '.local', 'bin', 'edge-tts');
-    if (await isAvailable(localBin, ['--version'])) { log('edge-tts encontrado (~/.local/bin)'); return; }
-
-    const variant = (await isAvailable('python3')) ? 'python3' : (await isAvailable('python')) ? 'python' : null;
-    if (!variant) {
-        log('Aviso: sem python3 — instale o edge-tts manualmente (pip install edge-tts) para a voz local');
-        return;
+async function vozIap() {
+    try {
+        const mod = await import('msedge-tts');
+        if (mod?.MsEdgeTTS) { log('voz do !iap: msedge-tts (Node) disponivel'); return; }
+        log('Aviso: o pacote msedge-tts nao expoe MsEdgeTTS — reinstale as dependencias');
+    } catch {
+        log('Aviso: msedge-tts ausente — rode o install das dependencias (npm install) para a voz da IA na call');
     }
-    log('Instalando edge-tts (a voz da IA na call)');
-    const pip = async (args) => { try { await execAsync(variant, args, { timeout: 300000 }); return true; } catch { return false; } };
-    // `--break-system-packages` cobre o PEP 668 ("externally-managed environment"),
-    // comum em VPS/Pterodactyl — sem ele o pip recusa instalar mesmo com --user.
-    const ok =
-        (await pip(['-m', 'pip', 'install', '--user', '-U', 'edge-tts'])) ||
-        (await pip(['-m', 'pip', 'install', '--user', '--break-system-packages', '-U', 'edge-tts'])) ||
-        (await pip(['-m', 'pip', 'install', '-U', 'edge-tts'])) ||
-        (await pip(['-m', 'pip', 'install', '--break-system-packages', '-U', 'edge-tts'])) ||
-        ((await pip(['-m', 'ensurepip', '--user'])) && (await pip(['-m', 'pip', 'install', '--user', '-U', 'edge-tts'])));
-    if (ok) { log('edge-tts instalado'); return; }
-    log('Aviso: nao consegui instalar o edge-tts — a VOZ da IA na call precisa dele (pip install --user edge-tts)');
 }
-
 // ---------------------------------------------------------------------------
 // Fluxo principal
 // ---------------------------------------------------------------------------
@@ -427,10 +413,10 @@ async function main() {
         falhar('BAILEYS', { detalhe: 'commit instalado difere do esperado pelo package-lock.json' });
     }
 
-    // ── FFmpeg / yt-dlp / edge-tts (não abortam: são avisos, como antes)
+    // ── FFmpeg / yt-dlp / voz do !iap (não abortam: são avisos, como antes)
     await ffmpeg();
     await ytDlp();
-    await edgeTts();
+    await vozIap();
 
     // ── Tudo confirmado → o backup pode ser descartado.
     descartarBackupDatabase(backup);

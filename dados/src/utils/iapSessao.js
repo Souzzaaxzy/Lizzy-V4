@@ -16,7 +16,7 @@
 
 import { groqChat } from './groqClient.js';
 import { transcreverPcm, chaveGroq } from './iapStt.js';
-import { sintetizarFala, garantirEdgeTts } from './iapTts.js';
+import { sintetizarFala, garantirVoz } from './iapTts.js';
 import { iap } from './iapVoice.js';
 import { iaIdentidade, ehPedidoDeAcao, permitePedidoDeAcao } from './iapGuarda.js';
 import {
@@ -173,16 +173,14 @@ export async function ligarIap(grupo, { nomeDono, participantes, ehAutorizado } 
   // que ligar.
   if (!chaveGroq()) return { ok: false, motivo: 'sem_chave_groq' };
 
-  // A VOZ e' o edge-tts (local, sem chave e sem cota — o Gemini saiu). Garante
-  // que ele esteja instalado ANTES de ligar: sem isso o dono so' descobriria no
-  // primeiro "sem audio" da call. Se nao der para instalar, o comando explica.
-  const voz = await garantirEdgeTts();
+  // A VOZ vem do `msedge-tts` (Node puro — sem python/pip/ffmpeg). Confere
+  // ANTES de ligar: sem isso o dono so' descobriria no primeiro "sem audio".
+  const voz = await garantirVoz();
   if (!voz.ok) {
-    logIap(`edge-tts indisponivel (${voz.motivo})`, {
-      detalhe: voz.detalhe ? String(voz.detalhe).slice(0, 160) : undefined
-    });
-    return { ok: false, motivo: `voz_${voz.motivo || 'indisponivel'}`, detalhe: voz.detalhe };
+    logIap(`voz indisponivel (${voz.motivo})`, { fonte: voz.fonte });
+    return { ok: false, motivo: `voz_${voz.motivo || 'indisponivel'}` };
   }
+  logIap(`voz pronta (${voz.fonte})`);
 
   // O modo de audio externo precisa estar ligado, senao o motor ignora o que
   // chega por `feedLiveAudio` e volta a tocar o arquivo pre-carregado.
@@ -253,11 +251,12 @@ export async function estadoIap(grupo) {
   const st = iap.estado(grupo);
   if (!st) return st;
   // O status mostra as TRES pecas do agente: ouvir e pensar (Groq) e falar
-  // (edge-tts local). A voz e' assincrona (testa o binario), por isso o await.
-  let voz = 'edge-tts';
+  // (msedge-tts / edge-tts). A voz e' assincrona, por isso o await.
+  let voz = 'nenhuma';
   try {
-    const { edgeDisponivel } = await import('./iapTts.js');
-    voz = (await edgeDisponivel()) ? 'edge-tts' : 'nenhuma (instale o edge-tts)';
+    const { garantirVoz } = await import('./iapTts.js');
+    const v = await garantirVoz();
+    voz = v.ok ? v.fonte : 'nenhuma';
   } catch { voz = 'nenhuma'; }
   return {
     ...st,

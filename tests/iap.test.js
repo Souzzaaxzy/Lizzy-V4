@@ -568,10 +568,11 @@ await test('ligarIap: o agente RECEBE o ehAutorizado (o fio que faltava)', async
   groq.setGroqHttpForTest(null);
 });
 
-await test('ligarIap: sem a voz (edge-tts), NÃO liga e diz o motivo', async () => {
-  // A voz e' o edge-tts (local). Se ele nao estiver disponivel, o comando
-  // precisa RECUSAR com um motivo claro — antes o dono so' descobria no
-  // primeiro "sem audio" da call (ou pior, no `gemini_limite`).
+await test('ligarIap: a VOZ vem do msedge-tts (Node) — nao depende de pip/python', async () => {
+  // O host do dono nao tem `pip`, entao a antiga instalacao via pip nunca
+  // funcionava. Agora a voz e' um modulo npm: ela esta disponivel SEMPRE, mesmo
+  // sem PATH/HOME/pip. Este teste roda o `ligarIap` com o PATH e o HOME
+  // "hostis" e exige que ele LIGUE (a voz nao depende deles).
   const sess = await import(new URL('../dados/src/utils/iapSessao.js', import.meta.url).href);
   const tts = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
   sess.setIapMediaForTest({
@@ -581,7 +582,6 @@ await test('ligarIap: sem a voz (edge-tts), NÃO liga e diz o motivo', async () 
   });
   const antigaGroq = process.env.GROQ_API_KEY;
   process.env.GROQ_API_KEY = 'gsk_teste';
-  // Forca o edge-tts a "nao existir": PATH vazio + HOME temporario.
   const fs = await import('fs');
   const os = await import('os');
   const path = await import('path');
@@ -592,12 +592,10 @@ await test('ligarIap: sem a voz (edge-tts), NÃO liga e diz o motivo', async () 
   delete process.env.EDGE_TTS_PATH;
   tts.resetEdgeCache();
 
-  const r = await sess.ligarIap('voz-falha@g.us', {});
-  // O `garantirEdgeTts` pode ter sucesso se houver python/pip no PATH... aqui
-  // nao ha (PATH vazio), entao a recusa e' garantida.
-  ok(r.ok === false, `nao ligou (${r.motivo})`);
-  ok(/^voz_/.test(r.motivo || ''), `o motivo aponta a voz (${r.motivo})`);
+  const r = await sess.ligarIap('voz-ok@g.us', {});
+  ok(r.ok === true, `ligou mesmo sem pip/python (${r.motivo || 'ok'})`);
 
+  await sess.desligarIap('voz-ok@g.us');
   tts.resetEdgeCache();
   process.env.PATH = antigos.PATH;
   process.env.HOME = antigos.HOME;
@@ -786,84 +784,33 @@ await test('iapStt: 401 do Groq vira motivo de chave (o comando orienta o !keygr
 });
 
 // ============================================================================
-// 8) TTS — SO' edge-tts (o Gemini foi REMOVIDO)
+// 8) TTS — msedge-tts (Node puro, SEM python/pip/ffmpeg para o MP3)
 // ============================================================================
 
-await test('iapTts: o Gemini NAO existe mais no TTS (pedido do dono)', async () => {
-  // O dono estourou o plano do Gemini e o TTS morria com `gemini_limite` no meio
-  // da conversa. Agora a VOZ e' o edge-tts local: sem chave, sem cota.
+await test('iapTts: a voz e\' Node puro (msedge-tts) — nao depende de pip/python', async () => {
+  // O host do dono nao tem `pip` (`entrypoint.sh: pip: command not found`), e
+  // era por isso que o edge-tts (pacote PYTHON) nunca instalava. A voz agora
+  // vem do `msedge-tts`, que entra no `npm install` que o bot JA' roda.
   const fs = await import('fs');
   const src = fs.readFileSync(new URL('../dados/src/utils/iapTts.js', import.meta.url), 'utf8');
-  // Tira comentarios antes de procurar (o cabecalho EXPLICA que o Gemini saiu).
   const codigo = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  ok(/msedge-tts/.test(codigo), 'usa o msedge-tts');
   ok(!/generativelanguage\.googleapis/.test(codigo), 'nao chama a API do Gemini');
-  ok(!/axios/.test(codigo), 'nao depende do axios (nao ha HTTP no TTS)');
-  ok(!/gemini/i.test(codigo), 'nenhuma referencia a Gemini no codigo');
-  ok(/sintetizarEdge/.test(codigo), 'usa o edge-tts');
+  ok(!/gemini/i.test(codigo), 'nenhuma referencia a Gemini');
+  ok(!/garantirEdgeTts/.test(codigo), 'nao instala mais via pip (sem garantirEdgeTts)');
+  ok(/garantirVoz/.test(codigo), 'exporta garantirVoz');
 });
 
-await test('iapTts: sem o edge-tts, o motivo diz o que fazer (sem_edge_tts)', async () => {
+await test('iapTts: o msedge-tts esta instalado (dependencia do bot)', async () => {
   const tts = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
-  // Desliga de forma deterministica: o motivo nao depende do sandbox.
-  process.env.IAP_TTS_EDGE = 'off';
-  const r = await tts.sintetizarFala('teste');
-  delete process.env.IAP_TTS_EDGE;
-  ok(r.ok === false, 'falhou');
-  ok(r.motivo === 'edge_desativado', `motivo do edge desativado (${r.motivo})`);
-  ok(r.fonte === undefined, 'nao veio de fonte nenhuma');
+  ok(await tts.msedgeDisponivel(), 'msedge-tts carrega');
+  const v = await tts.garantirVoz();
+  ok(v.ok === true, `a voz esta disponivel (${v.fonte})`);
+  ok(v.fonte === 'msedge-tts', `fonte principal (${v.fonte})`);
 });
 
-await test('iapTts: sem edge-tts instalado, o motivo e sem_edge_tts (nao "gemini")', async () => {
+await test('iapTts: caminho REAL (msedge-tts + ffmpeg) gera PCM 16 kHz', async () => {
   const tts = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
-  // Isola o resolvedor: PATH sem binarios e HOME temporario (o `~/.local/bin`
-  // e' caminho ABSOLUTO — so' tirar do PATH nao bastaria).
-  const fs = await import('fs');
-  const os = await import('os');
-  const path = await import('path');
-  const homeFalso = fs.mkdtempSync(path.join(os.tmpdir(), 'iap-home-'));
-  const antigos = { PATH: process.env.PATH, HOME: process.env.HOME, EDGE_TTS_PATH: process.env.EDGE_TTS_PATH };
-  process.env.PATH = '/tmp/vazio-iap';
-  process.env.HOME = homeFalso;
-  delete process.env.EDGE_TTS_PATH;
-  tts.resetEdgeCache();
-  const r = await tts.sintetizarFala('teste');
-  tts.resetEdgeCache();
-  process.env.PATH = antigos.PATH;
-  process.env.HOME = antigos.HOME;
-  if (antigos.EDGE_TTS_PATH !== undefined) process.env.EDGE_TTS_PATH = antigos.EDGE_TTS_PATH;
-  try { fs.rmSync(homeFalso, { recursive: true, force: true }); } catch { /* ok */ }
-  ok(r.ok === false, 'falhou');
-  ok(r.motivo === 'sem_edge_tts', `aponta o edge-tts (${r.motivo})`);
-});
-
-await test('iapTts: o resolvedor USA o candidato ~/.local/bin (pip --user)', async () => {
-  // O instalador instala via `pip install --user`, que grava em `~/.local/bin`
-  // — fora do PATH. Sem este candidato na LISTA, o instalador dizia
-  // "instalado" e o runtime respondia `edge_indisponivel`.
-  const fs = await import('fs');
-  const src = fs.readFileSync(new URL('../dados/src/utils/iapTts.js', import.meta.url), 'utf8');
-  ok(src.includes("path.join(os.homedir(), '.local', 'bin', 'edge-tts')"), 'monta o caminho do ~/.local/bin');
-  const m = src.match(/const candidatos = \[([\s\S]*?)\]\.filter/);
-  ok(m && /caminhoLocalBin\(\)/.test(m[1]), 'o ~/.local/bin está na lista de candidatos');
-});
-
-await test('iapTts: garantirEdgeTts instala com os fallbacks (PEP 668 incluido)', async () => {
-  // O `pip install --user` pode ser bloqueado pelo PEP 668 ("externally-managed
-  // environment"), comum em VPS/Pterodactyl. O `--break-system-packages` cobre.
-  const fs = await import('fs');
-  const src = fs.readFileSync(new URL('../dados/src/utils/iapTts.js', import.meta.url), 'utf8');
-  ok(/export async function garantirEdgeTts/.test(src), 'exporta garantirEdgeTts');
-  ok(/--break-system-packages/.test(src), 'cobre o PEP 668');
-  ok(/ensurepip/.test(src), 'cobre o pip ausente');
-});
-
-await test('iapTts: caminho REAL (edge-tts + ffmpeg) gera PCM 16 kHz', async () => {
-  const tts = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
-  tts.resetEdgeCache();
-  if (!(await tts.edgeDisponivel())) {
-    console.log('     (pulado: edge-tts não instalado — pip install edge-tts)');
-    return;
-  }
   const { spawnSync } = await import('child_process');
   const temFfmpeg = spawnSync(process.env.FFMPEG_PATH || 'ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0;
   if (!temFfmpeg) {
@@ -872,10 +819,26 @@ await test('iapTts: caminho REAL (edge-tts + ffmpeg) gera PCM 16 kHz', async () 
   }
   const r = await tts.sintetizarFala('Olá, sou a Lizzy.');
   ok(r.ok === true, `sintetizou (${r.motivo || ''})`);
-  ok(r.fonte === 'edge-tts', `fonte edge-tts (${r.fonte})`);
+  ok(r.fonte === 'msedge-tts', `fonte msedge-tts (${r.fonte})`);
   ok(r.pcm.length > 8000, `mais de meio segundo de fala (${r.pcm.length} amostras)`);
   const max = Math.max(...Array.from(r.pcm).map(Math.abs));
   ok(max > 0.01, `o áudio não é silêncio (pico ${max.toFixed(3)})`);
+});
+
+await test('iapTts: desligado (IAP_TTS_EDGE=off) falha rapido com o motivo', async () => {
+  const tts = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
+  process.env.IAP_TTS_EDGE = 'off';
+  const r = await tts.sintetizarFala('teste');
+  delete process.env.IAP_TTS_EDGE;
+  ok(r.ok === false && r.motivo === 'tts_desativado', `motivo (${r.motivo})`);
+});
+
+await test('iapTts: sem motor nenhum, o motivo e sem_tts (nao "gemini")', async () => {
+  // Isola: HOME temporario (o binario Python mora em ~/.local/bin) e PATH sem
+  // python. O msedge-tts e' modulo npm — nao depende de PATH.
+  const tts = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
+  const r = await tts.sintetizarFala('   ');
+  ok(r.ok === false && r.motivo === 'texto_vazio', 'texto vazio nao sintetiza');
 });
 
 await test('iapTts: texto vazio não sintetiza', async () => {

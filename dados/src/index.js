@@ -36923,10 +36923,9 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               const motivos = {
                 sem_chave_groq: '❌ A chave do Groq não está configurada.\n\nUse `' + prefix + 'keygroq gsk_...`.\n_Pegue grátis em https://console.groq.com/keys_',
                 sem_call: '❌ Não consegui conectar o agente à chamada. A call está de pé?',
-                // A VOZ e' o edge-tts (local). Se ele nao instalou, diz o que fazer.
-                voz_sem_python: '❌ Não encontrei o *Python* no servidor, e a voz precisa dele.\n\nInstale o Python 3 e tente de novo.',
-                voz_instalacao_falhou: '❌ Não consegui instalar o *edge-tts* (a voz local).\n\nInstale à mão no servidor:\n`pip install --user edge-tts`',
-                voz_indisponivel: '❌ A voz (edge-tts) não está disponível neste servidor.'
+                // A voz e' o `msedge-tts` (Node) — vem no `npm install`.
+                voz_sem_tts: '❌ A voz (`msedge-tts`) não está instalada.\n\nRode o install das dependências (o `!atualizar` faz isso).',
+                voz_indisponivel: '❌ A voz não está disponível neste servidor.'
               };
               return reply(motivos[r.motivo] || '❌ Não consegui ligar o agente de voz.');
             }
