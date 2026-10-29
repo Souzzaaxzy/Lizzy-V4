@@ -14544,3 +14544,37 @@ setada — **passava por acidente**. Agora ele zera o ambiente.
 
 Regressões verdes: `iap-comandos` 17/128, `ia` 20/50, `motor-chat-noise` 14/62,
 `cmd-suggest` 21/68, `get-message-inspector` 54/269, `contact-name` 16/37.
+
+## ➕ `!iap` — +3 comandos por voz: `letra`, `clima` e `google` (out/2026) ✅
+Pedido do dono: *"letra, clima e google, pode colocar os 3"*. São comandos de
+**MEMBRO** (qualquer um na call pode), recebem só **TEXTO** e não exigem admin nem
+mídia — encaixe natural na fala. A allowlist foi de **4 para 7**.
+
+### Como a Lizzy entende cada um
+| comando | gatilho | exemplo → argumento |
+|---|---|---|
+| **`letra`** | a palavra **"letra"** | *"qual a letra de Evidências"* → `Evidências` |
+| **`clima`** | **"clima/tempo/previsão/temperatura"** | *"como está o tempo em São Paulo"* → `São Paulo` |
+| **`google`** | pedido de **pesquisa explícito** (*"...no google"*, *"na internet"*) | *"pesquisa sobre gatos no google"* → `gatos` |
+
+### DESAMBIGUAÇÃO (o cuidado que evita roubar o play)
+- *"toca Evidências"* continua **`play`** — só vira `letra` com a palavra "letra";
+- *"pesquisa no pinterest gatos"* continua **`pin`** — o **pinterest é checado
+  ANTES** do google (senão "pesquisa" pegaria os dois).
+
+### LIMPEZA DO ARGUMENTO
+Cada um tira a **moldura** do pedido: *"qual a letra de X"* → `X`; *"como está o
+tempo em X"* → `X`; *"pesquisa sobre X no google"* → `X`. O **acento é preservado**
+(`Evidências`, `São Paulo`) — a busca é sensível a isso.
+
+### Testes — `tests/iap-comandos.test.js` (**19 testes / 153 asserções, 0 falhas**)
++2: **10 frases** dos 3 comandos com o **argumento exato**, e a **desambiguação**
+(letra/clima/google não roubam o play; pinterest vence o google).
+O corpus antigo segue **40/40 positivos + 17/17 negativos** (zero regressão).
+Regressões verdes: `iap` 72/220, `ia` 20/50, `motor-chat-noise` 14/62,
+`cmd-suggest` 21/68, `get-message-inspector` 54/269, `contact-name` 16/37.
+
+### LIMITE HONESTO
+Não validei numa call real. O **`!letra` responde com a LETRA INTEIRA** — numa call
+isso vira um texto longo lido em voz alta. Se ficar ruim no uso, dá para falar só o
+**refrão** e mandar o resto no chat (adaptação sugerida, ainda não feita).
