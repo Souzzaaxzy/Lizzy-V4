@@ -376,13 +376,13 @@ await test('22. o volei e a bissexualidade entram no prompt', () => {
 
 await test('23. o ar safado e a conversa +18 entram (permissao e limite SEPARADOS)', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
-  contem(b, 'safado', 'o ar safado');
-  contem(b, 'flertar', 'ela flerta');
-  contem(b, 'fala de sexo', 'fala de sexo sem drama');
+  contem(b, 'safado', 'o lado safado');
+  contem(b, 'flerta', 'ela flerta');
+  contem(b, 'DEBOCHANDO', 'o tom');
   // O CRITICO (contrato NOVO): a permissao e o limite NAO ficam no mesmo
   // paragrafo. Quando ficavam, o modelo lia "quando esquentar, recuse" — era o
   // bug da foto recusada.
-  const permissao = b.indexOf('A CONVERSA +18');
+  const permissao = b.indexOf('O SEU LADO +18');
   const limite = b.indexOf('O QUE NEM NO +18 VOCE FAZ');
   ok(permissao > 0, 'a secao de permissao existe');
   ok(limite > permissao, 'e o limite vem DEPOIS, em secao propria');
@@ -543,50 +543,58 @@ await test('34. NAO abreviar TUDO (senao fica robotico)', () => {
   contem(b, 'ninguem abrevia 100% do tempo', 'explica o porque');
 });
 
-await test('35. as RISADAS entram com a ESCALA (o tamanho = o quanto riu)', () => {
+await test('35. as RISADAS tem ESCALA e o TAMANHO e livre', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
-  contem(b, 'AS SUAS RISADAS — a ESCALA', 'a secao da escala');
-  contem(b, '"kkk": voce mal sorriu', 'kkk = sem graca');
-  contem(b, '"kkkkk" / "kkkkkkkk": foi levemente engracado', 'kkkkk = leve');
-  contem(b, 'foi engracado de verdade, voce riu alto', 'kkkkkkkkkk = de verdade');
-  contem(b, 'MUITO engracado, voce nao conseguiu segurar', 'KKKK = muito');
-  contem(b, 'voce ta MORRENDO de rir', 'a linha de K = morrendo');
-  contem(b, 'o tamanho e a caixa dizem o quanto foi engracado', 'a regra da escala');
+  contem(b, 'AS SUAS RISADAS (voce escolhe QUAL usar e QUANTAS letras)', 'a secao');
+  contem(b, 'POUCAS letras', 'poucas = fraca');
+  contem(b, 'MEDIA', 'media = engracado');
+  contem(b, 'MUITAS', 'muitas = riu alto');
+  contem(b, 'MORRENDO de rir', 'um monte = morrendo');
+  contem(b, 'Voce escolhe livremente quantas letras usar', 'tamanho livre');
+  contem(b, 'Nao tem', 'sem tamanho fixo');
 });
 
-await test('35b. as OUTRAS risadas entram, cada uma no seu MOMENTO', () => {
+await test('35b. ks/ka sao o MESMO nivel que kk (o pedido do dono)', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
-  contem(b, 'AS OUTRAS RISADAS', 'a secao');
-  // O ksks e' DEBOCHE (nao risada de coisa boa) — o nexo que o dono pediu.
-  contem(b, 'ksksksksksksksksks', 'o ksks');
-  contem(b, 'KSSKSKSKSKSK', 'a variacao em maiuscula');
-  contem(b, 'esta DEBOCHANDO', 'ksks = deboche');
-  contem(b, 'Nao e risada de coisa boa', 'explica que ksks nao e elogio');
-  // O kakaka e' espanto/incredulidade.
-  contem(b, 'kakaka', 'o kakaka');
-  contem(b, 'risada de espanto e incredulidade', 'kakaka = espanto');
-  contem(b, 'KAKAKAKAKAJAKAKA', 'a versao gritada');
-  // As de variacao.
+  // O dono: as ksks e kakaka "tem o mesmo nivel das kkkk". O que muda o nivel
+  // nao e a LETRA, e o TAMANHO.
+  contem(b, 'As risadas de K, KS e KA sao o MESMO recurso', 'mesmo recurso');
+  contem(b, 'no mesmo nivel', 'mesmo nivel');
+  contem(b, 'O que muda o TAMANHO nao e a letra: e QUANTAS letras', 'o tamanho e que muda');
+  contem(b, 'A ESCALA (vale para kk, ks e ka do mesmo jeito)', 'a escala vale para as tres');
+  // A escala mostra as tres letras em cada nivel.
+  contem(b, '"kkk", "ksks", "kaka"', 'poucas: as tres');
+  contem(b, '"kkkkkkk", "ksksksksks", "kakakakakaka"', 'media: as tres');
+});
+
+await test('35c. cada letra tem o seu GOSTO (quando usar)', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'QUANDO usar cada LETRA', 'a secao');
+  contem(b, '"kkk": a padrao', 'kkk = padrao');
+  contem(b, '"ksksks": voce usa quando esta DEBOCHANDO', 'ksks = deboche');
+  contem(b, 'rindo E julgando', 'kakaka = rindo e julgando');
   contem(b, 'hahaha', 'hahaha');
   contem(b, 'hehe', 'hehe');
   contem(b, 'rsrs', 'rsrs');
   contem(b, 'akjsdhaksjdh', 'a risada de "perdi"');
 });
 
-await test('35c. a regra contra o "so kkkk" (o pedido do dono)', () => {
+await test('35d. a regra contra o "so kkkk" e o tamanho errado', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
-  contem(b, 'REGRA GERAL DAS RISADAS', 'a regra');
+  contem(b, 'REGRA DE ESCOLHA', 'a regra');
   contem(b, 'NUNCA use so "kkkk" para tudo', 'proibe o kkk unico');
-  contem(b, 'Escolha a risada pelo MOMENTO', 'escolhe pelo momento');
-  // E o outro lado: nao rir de tudo.
+  // O que o dono pediu: o tamanho tem que bater com o momento.
+  contem(b, 'Coisa boba NAO ganha uma', 'nao exagera no tamanho');
+  contem(b, 'piada da vida NAO ganha "kkk" de tres letras', 'nao usa risada fraca no bom');
+  contem(b, 'VARIE', 'varia as letras');
   contem(b, 'se nao foi engracado, nao ria', 'nao forca risada');
 });
 
 await test('36. o +18 e PERMITIDO (nao recusa)', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
-  contem(b, 'A CONVERSA +18', 'a secao');
-  contem(b, 'PERMITIDO', 'diz que e permitido');
-  contem(b, 'Nao recuse, nao corte, nao mude de assunto', 'proibe recusar');
+  contem(b, 'O SEU LADO +18', 'a secao');
+  contem(b, 'voce acompanha', 'diz que acompanha');
+  contem(b, 'nao recusa e nao fica escandalizada', 'proibe recusar');
   // A proibicao do "nao posso" MUDOU de lugar: agora vive no bloco VOCE E
   // DIFICIL (onde ela enrola em vez de negar). O importante e' que continua.
   contem(b, 'voce nunca diz "nao posso"', 'proibe o "nao posso"');
@@ -630,7 +638,7 @@ await test('40. A REGRESSAO: a recusa NAO pode citar o "clima" (o bug do dono)',
   ok(!/NAO faz, nem no meio do clima/i.test(b), 'a frase antiga nao voltou');
   ok(!/nem no meio do clima/i.test(b), 'a expressao "nem no meio do clima" saiu');
   // E o bloco do +18 nao pode conter uma proibicao ligada ao clima.
-  const i = b.indexOf('A CONVERSA +18');
+  const i = b.indexOf('O SEU LADO +18');
   const j = b.indexOf('O QUE NEM NO +18 VOCE FAZ', i);
   const bloco18 = b.slice(i, j);
   ok(!/NAO faca|nao faca|proibido/i.test(bloco18), 'o bloco de permissao nao tem proibicao solta');
@@ -638,7 +646,7 @@ await test('40. A REGRESSAO: a recusa NAO pode citar o "clima" (o bug do dono)',
 
 await test('41. a permissao vem ANTES do limite (a ordem importa)', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
-  const permissao = b.indexOf('A CONVERSA +18');
+  const permissao = b.indexOf('O SEU LADO +18');
   const limite = b.indexOf('O QUE NEM NO +18 VOCE FAZ');
   ok(permissao > 0 && limite > permissao, 'permissao antes do limite');
   // E o limite duro e' a ULTIMA palavra (junto com as travas do config).
@@ -711,7 +719,7 @@ await test('48. ela PERGUNTA se a pessoa e homem ou mulher (e so uma vez)', () =
   contem(b, 'pergunta UMA VEZ na vida', 'so uma vez');
   contem(b, 'ajusta o jeito', 'muda o jeito depois de saber');
   // E vem ANTES do bloco +18 (e' o que ela faz primeiro).
-  ok(b.indexOf('VOCE QUER SABER COM QUEM') < b.indexOf('A CONVERSA +18'), 'a pergunta vem antes do +18');
+  ok(b.indexOf('VOCE QUER SABER COM QUEM') < b.indexOf('O SEU LADO +18'), 'a pergunta vem antes do +18');
 });
 
 await test('49. o nome da MAE (Cangica) entra no prompt da familia', () => {
@@ -760,7 +768,7 @@ await test('52. os campos novos sao respeitados quando DESLIGADOS', () => {
   naoContem(b, 'VOCE QUER SABER COM QUEM', 'sem bloco do sexo');
   naoContem(b, 'VOCE E DIFICIL', 'sem bloco dificil');
   // Mas o +18 continua (safadeza/conversaAdulto seguem ligados no ID_TESTE).
-  contem(b, 'A CONVERSA +18', 'o +18 segue');
+  contem(b, 'O SEU LADO +18', 'o +18 segue');
 });
 
 // ---------------------------------------------------------------------------
@@ -857,7 +865,7 @@ await test('60. ela NUNCA da em cima dos pais (o pedido do dono)', () => {
   contem(b, 'MESMO no meio do clima +18', 'vale no meio do +18');
   contem(b, 'se for um dos seus pais, para tudo', 'para tudo');
   // E a regra tem que vir DEPOIS do bloco +18 (e' a que sobrepoe).
-  ok(b.indexOf('NUNCA DA EM CIMA DOS SEUS PAIS') < b.indexOf('A CONVERSA +18') ||
+  ok(b.indexOf('NUNCA DA EM CIMA DOS SEUS PAIS') < b.indexOf('O SEU LADO +18') ||
      b.indexOf('NUNCA DA EM CIMA DOS SEUS PAIS') > b.indexOf('VOCE E DIFICIL'),
     'a regra esta no prompt');
 });
@@ -905,6 +913,48 @@ await test('65. o CONFIG REAL tem `inteligente` ligado', () => {
   const r = id.lerIdentidade(CONFIG_REAL);
   ok(r.inteligente === true, 'inteligente ligado');
   ok(r.perguntarSexo === true, 'perguntarSexo ligado');
+});
+
+// ---------------------------------------------------------------------------
+// 11) A PROPORCAO: 20% safada, 80% santa
+// ---------------------------------------------------------------------------
+console.log('\n=== 11) A PROPORCAO (20% / 80%) ===\n');
+
+await test('66. a REGRA DE PROPORCAO existe (20% e a minoria)', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'REGRA DE PROPORCAO', 'a regra');
+  contem(b, 'isto e a MINORIA do seu jeito', 'diz que e minoria');
+  contem(b, 'uns 20% de voce', 'o numero');
+  contem(b, 'menina NORMAL na grande maioria do tempo', 'o padrao e normal');
+  contem(b, 'SANTA', 'o padrao e santa');
+});
+
+await test('67. ela NAO puxa assunto +18 (o que o dono pediu)', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'NAO puxe assunto +18', 'proibe puxar');
+  contem(b, 'NAO provoque do nada', 'proibe provocar');
+  contem(b, 'NAO transforme conversa normal', 'nao transforma o clima');
+  contem(b, 'Em conversa normal voce NAO insinua', 'proibe insinuar no normal');
+  contem(b, 'Se voce esta em duvida se o clima esta quente, ele NAO esta', 'na duvida, nao esta');
+});
+
+await test('68. o AR do dia a dia e NORMAL (nao e "safada")', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'SEU AR NO DIA A DIA', 'a secao');
+  contem(b, 'menina normal e santa', 'normal e santa');
+  contem(b, 'Nao fica insinuando nem provocando', 'nao insinua');
+  contem(b, 'De vez em quando voce solta uma piadinha', 'a piadinha e rara');
+  contem(b, 'Isso e raro em voce', 'deixa claro que e raro');
+  // Nao pode voltar o texto de "100% safada".
+  naoContem(b, 'nao se faz de santinha', 'saiu o "nao se faz de santinha"');
+});
+
+await test('69. o lado +18 continua ACESSIVEL quando o clima esquenta', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'QUANDO (e so quando) O CLIMA ESQUENTA', 'a secao');
+  contem(b, 'SE a pessoa levar para esse lado, voce acompanha', 'acompanha se ela levar');
+  contem(b, 'ele e a EXCECAO, nao a regra', 'excecao, nao regra');
+  contem(b, 'flerta quando a pessoa flerta primeiro', 'flerta depois da pessoa');
 });
 
 // ---------------------------------------------------------------------------
