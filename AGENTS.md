@@ -14435,3 +14435,40 @@ aquilo do dono é só pra identificar o dono quando ele falar"*. Então:
 religando o streaming → **3 asserções falham**; o VAD volta a exigir 700 ms.
 Regressões verdes: `ia` 20/50, `motor-chat-noise` 14/62, `cmd-suggest` 21/68,
 `get-message-inspector` 54/269, `contact-name` 16/37.
+
+## 🔤 `!iap` — o STT erra o ACENTO e o comando nao era reconhecido (out/2026) ✅
+Log do dono: a Lizzy respondia *"Já vou tocar Evidências, Kannon."* mas **não
+executava nada**. A causa estava no texto que o STT entregou:
+
+```
+[IAP] ouviu | {"texto":"Tóca evidências."}
+```
+
+O acento caiu na palavra **ERRADA** (`Tóca`). O padrão de reconhecimento era
+`toca` (sem acento) e **não casava** — então `identificarComando` devolvia `null`,
+o pedido **não era reconhecido como comando**, e o **LLM respondia sozinho**
+("já vou tocar...") sem disparar nada. Daí o "fala que vai mandar mas não executa".
+
+### Correção
+- **`paraPadroes`** e **`extrairArgs`** agora trabalham **SEM ACENTO** (NFD +
+  remoção de diacríticos) — o mesmo que o `iapGuarda` já fazia, pelo mesmo motivo:
+  **o STT erra acento o tempo todo**.
+- O **acento do termo buscado é PRESERVADO**: a limpeza é feita sem acento (para
+  casar os verbos), mas o argumento vai para a **BUSCA**, e *"Evidencias"* ≠
+  *"Evidências"*. A forma original é recuperada palavra a palavra.
+
+### LIÇÃO DE MÉTODO
+O sintoma ("diz que vai fazer e não faz") parecia falha de execução. Não era: o
+**reconhecimento** falhava, e o LLM cobria o silêncio com uma resposta
+convincente. Quando o bot "promete e não cumpre", a primeira pergunta é **se ele
+reconheceu** — e para isso o **texto do STT no log** é a prova, não a resposta que
+ele deu.
+
+### Testes — `tests/iap-comandos.test.js` (**16 testes / 71 asserções, 0 falhas**)
+O teste novo usa os textos **REAIS** do log do dono (`"Tóca evidências."`,
+`"TÓCA EVIDÊNCIAS"`, `"Báixa a música..."`, `"Procúra no pinterest decoração"`) e
+exige o comando **com os argumentos certos** (acento incluso).
+**Verificado que mede**: tirando a normalização sem acento, **8 asserções falham**.
+
+`iap` 70/215. Regressões verdes: `ia` 20/50, `motor-chat-noise` 14/62,
+`cmd-suggest` 21/68, `get-message-inspector` 54/269, `contact-name` 16/37.
