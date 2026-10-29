@@ -55,7 +55,11 @@ function limpo(v) {
  */
 export async function coletarDadosDoGrupo({
   nazu, metadata, from, groupName, numerosDono = [], nomeDonoBot,
-  sender, matchId, isGroup = true
+  sender, matchId, isGroup = true,
+  // Mods e Alphas sao do BOT (por grupo), nao do WhatsApp: vem do `groupData`.
+  moderadores = [], alphas = [], nomeDe = null,
+  // A FOTO e' opcional e custa uma chamada; quem quer passa `comFoto: true`.
+  comFoto = false
 } = {}) {
   const dadosDoGrupo = {};
 
@@ -114,7 +118,40 @@ export async function coletarDadosDoGrupo({
       admins: nomesAdmins.slice(0, 20),
       totalAdmins: admins.length
     };
+
+    // MODERADORES e ALPHAS: sao do BOT (quem o dono promoveu), nao do WhatsApp.
+    // Nomes resolvidos pelo MESMO resolvedor — sem sistema paralelo.
+    try {
+      const nomesDe = async (lista) => {
+        if (!Array.isArray(lista) || !lista.length) return [];
+        try {
+          const mapa = await resolverNomesContatos(lista.filter(Boolean), { nazu, metadata, from });
+          return [...mapa.values()].filter(Boolean);
+        } catch { return []; }
+      };
+      const nomesMods = await nomesDe(moderadores);
+      const nomesAlphas = await nomesDe(alphas);
+      if (nomesMods.length) {
+        dadosDoGrupo.grupo.moderadores = nomesMods;
+        dadosDoGrupo.grupo.totalModeradores = moderadores.length;
+      }
+      if (nomesAlphas.length) {
+        dadosDoGrupo.grupo.alphas = nomesAlphas;
+        dadosDoGrupo.grupo.totalAlphas = alphas.length;
+      }
+    } catch { /* segue sem mods/alphas */ }
   } catch { /* segue sem os dados do grupo */ }
+
+  // A FOTO do grupo: `profilePictureUrl` LANCA quando o grupo nao tem foto (e
+  // pode demorar). Por isso e' opcional e best-effort — nunca derruba a coleta.
+  // Vai DENTRO de `grupo` para os dois formatadores (chat e voz) a lerem sem
+  // precisar de um campo paralelo.
+  if (dadosDoGrupo.grupo && comFoto && nazu && typeof nazu.profilePictureUrl === 'function') {
+    try {
+      const url = await nazu.profilePictureUrl(from, 'image');
+      if (url) dadosDoGrupo.grupo.foto = url;
+    } catch { /* grupo sem foto */ }
+  }
 
   return dadosDoGrupo;
 }
@@ -143,8 +180,17 @@ export function linhasDoGrupo(g) {
     const resto = faltando > 0 ? ` (+${faltando})` : '';
     linhas.push(`- Admins (${g.totalAdmins}): ${mostrados.join(', ')}${resto}`);
   }
+  // MODERADORES e ALPHAS: cargos do BOT (quem o dono promoveu), que nao
+  // aparecem no metadata do WhatsApp.
+  if (Array.isArray(g.moderadores) && g.moderadores.length) {
+    linhas.push(`- Moderadores (${g.totalModeradores ?? g.moderadores.length}): ${g.moderadores.slice(0, 20).join(', ')}`);
+  }
+  if (Array.isArray(g.alphas) && g.alphas.length) {
+    linhas.push(`- Alphas (${g.totalAlphas ?? g.alphas.length}): ${g.alphas.slice(0, 20).join(', ')}`);
+  }
   if (g.criadoEm) linhas.push(`- Criado em: ${g.criadoEm}`);
   if (Number.isFinite(g.totalMembros)) linhas.push(`- Total de membros: ${g.totalMembros}`);
+  if (limpo(g.foto)) linhas.push(`- Foto: ${g.foto}`);
   if (limpo(g.descricao)) {
     linhas.push(`- Descricao: ${String(g.descricao).replace(/\s+/g, ' ').trim().slice(0, 300)}`);
   }
@@ -212,6 +258,15 @@ export function montarBlocoDoGrupo(dadosDoGrupo = {}) {
   if (g.criadoEm) linhas.push(`O grupo foi criado em ${g.criadoEm}.`);
   if (Array.isArray(g.admins) && g.admins.length) {
     linhas.push(`Admins: ${g.admins.slice(0, 10).join(', ')}.`);
+  }
+  if (Array.isArray(g.moderadores) && g.moderadores.length) {
+    linhas.push(`Moderadores: ${g.moderadores.slice(0, 10).join(', ')}.`);
+  }
+  if (Array.isArray(g.alphas) && g.alphas.length) {
+    linhas.push(`Alphas: ${g.alphas.slice(0, 10).join(', ')}.`);
+  }
+  if (limpo(g.descricao)) {
+    linhas.push(`A descricao do grupo e': ${String(g.descricao).replace(/\s+/g, ' ').trim().slice(0, 300)}.`);
   }
   return linhas.join(' ');
 }

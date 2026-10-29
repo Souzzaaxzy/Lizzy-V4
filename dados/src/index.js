@@ -7598,7 +7598,13 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
           nomeDonoBot: nomedono,
           sender,
           matchId: idsMatch,
-          isGroup
+          isGroup,
+          // MODS e ALPHAS sao cargos do BOT (por grupo) — nao existem no
+          // metadata do WhatsApp, entao vem do `groupData`.
+          moderadores: groupData.moderators || [],
+          alphas: groupData.alphas || [],
+          // A foto do grupo (best-effort; o grupo pode nao ter).
+          comFoto: isGroup
         });
 
         // Contexto adicional para passar à IA
@@ -36825,7 +36831,10 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               nomeDonoBot: nomedono,
               sender,
               matchId: idsMatch,
-              isGroup
+              isGroup,
+              moderadores: groupData.moderators || [],
+              alphas: groupData.alphas || [],
+              comFoto: isGroup
             });
             const r = await ligarIap(from, {
               nomeDono: nomedono || null,

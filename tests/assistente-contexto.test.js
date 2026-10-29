@@ -280,12 +280,16 @@ const METADATA_FAKE = {
   desc: 'grupo de teste',
   owner: '5511915323638@s.whatsapp.net',
   participants: [
-    { id: '5511915323638@s.whatsapp.net', admin: 'superadmin', notify: 'Kannon' },
-    { id: '5511999999999@s.whatsapp.net', admin: 'admin', notify: 'Fulano' },
-    { id: '127642753843383@s.whatsapp.net', admin: 'admin', notify: 'Lizzy' }
+    { id: '5511915323638@s.whatsapp.net', lid: '23734744260711@lid', admin: 'superadmin', notify: 'Kannon' },
+    { id: '5511999999999@s.whatsapp.net', lid: '111000000000001@lid', admin: 'admin', notify: 'Fulano' },
+    { id: '5511966665555@s.whatsapp.net', lid: '111000000000003@lid', notify: 'Moderador Ze' },
+    { id: '5511955554444@s.whatsapp.net', lid: '111000000000004@lid', notify: 'Alpha Maria' }
   ]
 };
-const NAZU_FAKE = { contacts: { getName: async (j) => (j.includes('5511915323638') ? 'Kannon' : (j.includes('5511999999999') ? 'Fulano' : null)) } };
+const NAZU_FAKE = {
+  contacts: { getName: async (j) => (j.includes('5511915323638') ? 'Kannon' : (j.includes('5511999999999') ? 'Fulano' : null)) },
+  profilePictureUrl: async () => 'https://exemplo/foto-grupo.jpg'
+};
 const MATCH_FAKE = (a, b) => String(a).split('@')[0].split(':')[0] === String(b).split('@')[0].split(':')[0];
 
 await test('12. coletarDadosDoGrupo devolve dono do bot, grupo, admins e criacao', async () => {
@@ -297,11 +301,70 @@ await test('12. coletarDadosDoGrupo devolve dono do bot, grupo, admins e criacao
   ok(d.donoDoBot?.nome === 'Kannon', 'o nome do dono do bot');
   ok(d.donoDoBot?.falanteEhDono === true, 'reconhece o dono por numero (mesmo com :device)');
   ok(d.grupo?.nome === 'geralbot', 'o nome do grupo');
-  ok(d.grupo?.totalMembros === 3, 'o total de membros');
-  ok(d.grupo?.totalAdmins === 3, 'o total de admins');
+  ok(d.grupo?.totalMembros === 4, 'o total de membros');
+  ok(d.grupo?.totalAdmins === 2, 'o total de admins');
   ok(d.grupo?.criadoEm === '15/03/2025', 'a data de criacao (segundos -> pt-BR)');
   ok(d.grupo?.dono?.nome === 'Kannon', 'o dono do grupo com nome resolvido');
-  ok(Array.isArray(d.grupo?.admins) && d.grupo.admins.includes('Kannon'), 'os admins com nome');
+  // O ponto do pedido: os admins vem com NOME (do `notify`), nao com numero.
+  ok(JSON.stringify(d.grupo?.admins) === JSON.stringify(['Kannon', 'Fulano']),
+    `os admins com NOME — veio ${JSON.stringify(d.grupo?.admins)}`);
+  ok(!JSON.stringify(d.grupo?.admins || []).includes('@'), 'nenhum JID/LID na lista de admins');
+});
+
+await test('12b. admins sem `notify` caem no numero (nunca em branco)', async () => {
+  const d = await ctx.coletarDadosDoGrupo({
+    nazu: { contacts: { getName: async () => undefined } },
+    metadata: { subject: 'g', participants: [{ id: '5511900000000@s.whatsapp.net', admin: 'admin' }] },
+    from: 'x@g.us', numerosDono: [], matchId: MATCH_FAKE, isGroup: true
+  });
+  ok(Array.isArray(d.grupo?.admins) && d.grupo.admins.length === 1, 'o admin aparece');
+  ok(typeof d.grupo.admins[0] === 'string' && d.grupo.admins[0].length > 0, 'com algum nome/numero');
+});
+
+await test('12c. MODERADORES e ALPHAS entram (cargos do BOT, nao do WhatsApp)', async () => {
+  const d = await ctx.coletarDadosDoGrupo({
+    nazu: NAZU_FAKE, metadata: METADATA_FAKE, from: 'x@g.us', groupName: 'geralbot',
+    numerosDono: [], matchId: MATCH_FAKE, isGroup: true,
+    moderadores: ['5511966665555@s.whatsapp.net'],
+    alphas: ['5511955554444@s.whatsapp.net']
+  });
+  ok(JSON.stringify(d.grupo?.moderadores) === JSON.stringify(['Moderador Ze']),
+    `o mod com nome — veio ${JSON.stringify(d.grupo?.moderadores)}`);
+  ok(JSON.stringify(d.grupo?.alphas) === JSON.stringify(['Alpha Maria']),
+    `o alpha com nome — veio ${JSON.stringify(d.grupo?.alphas)}`);
+  ok(d.grupo?.totalModeradores === 1, 'a contagem de mods');
+  ok(d.grupo?.totalAlphas === 1, 'a contagem de alphas');
+});
+
+await test('12d. sem mods/alphas, os campos NAO aparecem (nao inventa cargo)', async () => {
+  const d = await ctx.coletarDadosDoGrupo({
+    nazu: NAZU_FAKE, metadata: METADATA_FAKE, from: 'x@g.us',
+    numerosDono: [], matchId: MATCH_FAKE, isGroup: true
+  });
+  ok(d.grupo?.moderadores === undefined, 'sem moderadores');
+  ok(d.grupo?.alphas === undefined, 'sem alphas');
+});
+
+await test('12e. a FOTO do grupo entra quando pedida (e some sem foto)', async () => {
+  const com = await ctx.coletarDadosDoGrupo({
+    nazu: NAZU_FAKE, metadata: METADATA_FAKE, from: 'x@g.us',
+    numerosDono: [], matchId: MATCH_FAKE, isGroup: true, comFoto: true
+  });
+  ok(com.grupo?.foto === 'https://exemplo/foto-grupo.jpg', 'a foto veio');
+
+  const sem = await ctx.coletarDadosDoGrupo({
+    nazu: NAZU_FAKE, metadata: METADATA_FAKE, from: 'x@g.us',
+    numerosDono: [], matchId: MATCH_FAKE, isGroup: true, comFoto: false
+  });
+  ok(sem.grupo?.foto === undefined, 'sem pedir, nao busca (economia)');
+
+  // Grupo sem foto: `profilePictureUrl` LANCA — a coleta nao pode quebrar.
+  const semFoto = await ctx.coletarDadosDoGrupo({
+    nazu: { contacts: {}, profilePictureUrl: async () => { throw new Error('no picture'); } },
+    metadata: METADATA_FAKE, from: 'x@g.us',
+    numerosDono: [], matchId: MATCH_FAKE, isGroup: true, comFoto: true
+  });
+  ok(semFoto.grupo && semFoto.grupo.foto === undefined, 'grupo sem foto nao derruba a coleta');
 });
 
 await test('13. quem NAO e o dono nao vira dono (e o matchId manda)', async () => {
@@ -333,15 +396,46 @@ await test('15. a coleta nunca lanca (metadata hostil)', async () => {
 
 await test('16. o BLOCO DA VOZ e enxuto e responde o que se pergunta numa call', () => {
   const bloco = ctx.montarBlocoDoGrupo({
-    grupo: { nome: 'geralbot', criadoEm: '15/03/2025', totalMembros: 3, totalAdmins: 2, admins: ['Kannon', 'Fulano'], dono: { nome: 'Kannon' } }
+    grupo: {
+      nome: 'geralbot', criadoEm: '15/03/2025', totalMembros: 5, totalAdmins: 2,
+      admins: ['Kannon', 'Fulano'], moderadores: ['Moderador Ze'], alphas: ['Alpha Maria'],
+      descricao: 'grupo de teste', dono: { nome: 'Kannon' }
+    }
   });
   contem(bloco, 'Voce esta no grupo "geralbot"', 'o nome');
   contem(bloco, "O dono do grupo e' Kannon", 'o dono');
-  contem(bloco, '3 membro(s)', 'quantos somos');
+  contem(bloco, '5 membro(s)', 'quantos somos');
   contem(bloco, '2 administrador(es)', 'quantos admins');
   contem(bloco, 'criado em 15/03/2025', 'a criacao');
   contem(bloco, 'Kannon, Fulano', 'os admins');
+  contem(bloco, 'Moderadores: Moderador Ze', 'os mods');
+  contem(bloco, 'Alphas: Alpha Maria', 'os alphas');
+  contem(bloco, 'grupo de teste', 'a descricao');
   ok(!bloco.includes('\n'), 'e uma frase so (lida em voz alta)');
+});
+
+await test('16b. o CHAT lista admins, mods e alphas com nome', () => {
+  const bloco = ctx.montarContextoDaConversa({
+    dadosDoGrupo: {
+      grupo: {
+        nome: 'geralbot', admins: ['Kannon', 'Fulano'], totalAdmins: 2,
+        moderadores: ['Moderador Ze'], totalModeradores: 1,
+        alphas: ['Alpha Maria'], totalAlphas: 1
+      }
+    }
+  });
+  contem(bloco, '- Admins (2): Kannon, Fulano', 'os admins com nome');
+  contem(bloco, '- Moderadores (1): Moderador Ze', 'os mods com nome');
+  contem(bloco, '- Alphas (1): Alpha Maria', 'os alphas com nome');
+  ok(!bloco.includes('@'), 'nenhum JID/LID no texto');
+});
+
+await test('16c. sem mods/alphas as linhas nao aparecem (nao inventa cargo)', () => {
+  const bloco = ctx.montarContextoDaConversa({
+    dadosDoGrupo: { grupo: { nome: 'g', admins: ['A'], totalAdmins: 1 } }
+  });
+  naoContem(bloco, 'Moderadores', 'sem linha de mods');
+  naoContem(bloco, 'Alphas', 'sem linha de alphas');
 });
 
 await test('17. o bloco da voz NAO inventa e nao vaza JID', () => {

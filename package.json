@@ -21,7 +21,7 @@
   "license": "ISC",
   "dependencies": {
     "@hapi/boom": "^10.0.1",
-    "@itsliaaa/baileys": "git+https://github.com/Souzzaaxzy/baileys.git#a9c3e8207f744945250c1926c144d4f1af7d3a27",
+    "@itsliaaa/baileys": "git+https://github.com/Souzzaaxzy/baileys.git#87c7247a89b28e1a219075f2e844ac9f7dbeea8b",
     "@zapo-js/voip": "git+https://github.com/Souzzaaxzy/zapo.git#9b955d9ac4a342b41c318a3743b88ad4505a7251",
     "@zapo-js/voip-media": "^0.3.0",
     "axios": "^1.13.2",
