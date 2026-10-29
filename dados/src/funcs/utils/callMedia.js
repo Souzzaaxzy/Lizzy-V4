@@ -211,3 +211,44 @@ export async function parearMidia(numero) {
   }
   return m.parear(numero);
 }
+
+// ───────────────────────────────────────────────────────────────────────────
+// AGENTE DE VOZ (`!iap`) — ouvir a call e falar nela.
+//
+// Estas três portas são o que o `!iap` precisa do motor: registrar quem recebe
+// o áudio de ENTRADA, ligar o modo de áudio externo (saída por `feedLiveAudio`)
+// e entregar a VOZ. Nenhuma delas existe no caminho de música: o `!musicap`
+// carrega ARQUIVO, o `!iap` fala ao vivo.
+// ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * Registra o receptor do áudio de entrada da call do grupo.
+ * @param {string} grupo
+ * @param {Function|null} cb `(grupo, pcm) => void` (null remove)
+ */
+export async function aoOuvirAudioDaCall(grupo, cb) {
+  if (duble || dubleEntrar) return false;
+  const m = await carregarMidia();
+  if (!m || typeof m.aoOuvirAudio !== 'function') return false;
+  m.aoOuvirAudio(grupo, cb);
+  return true;
+}
+
+/** Liga/desliga o modo de áudio externo (a saída passa a vir de `falarNaCall`). */
+export async function modoAudioExternoDaCall(grupo, ligado) {
+  if (duble || dubleEntrar) return false;
+  const m = await carregarMidia();
+  if (!m || typeof m.modoAudioExterno !== 'function') return false;
+  return m.modoAudioExterno(grupo, ligado);
+}
+
+/**
+ * Entrega a VOZ do agente ao uplink da call.
+ * @returns {Promise<number>} nível do buffer do motor em ms (0 se indisponível)
+ */
+export async function falarNaCallDoGrupo(grupo, pcm) {
+  if (duble || dubleEntrar) return 0;
+  const m = await carregarMidia();
+  if (!m || typeof m.falarNaCall !== 'function') return 0;
+  return m.falarNaCall(grupo, pcm);
+}

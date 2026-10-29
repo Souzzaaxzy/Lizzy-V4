@@ -66,6 +66,16 @@ const aoTerminarPorGrupo = new Map();
 /** Callbacks de "a call CAIU sozinha", por grupo (o bot limpa o estado). */
 const aoEncerrarPorGrupo = new Map();
 
+/**
+ * Callbacks de "chegou audio de ENTRADA na call", por grupo.
+ *
+ * O motor emite `voip_call_inbound_audio` com PCM 16 kHz mono -- o audio de
+ * quem fala, ja' decodificado. E' o que o `!iap` (agente de voz) consome para
+ * ouvir a call. Mesmo padrao dos outros callbacks: o `index.js` registra e este
+ * modulo so' repassa.
+ */
+const aoOuvirPorGrupo = new Map();
+
 /** Diretorio onde as credenciais do zapo sao gravadas. */
 const AUTH_DIR = path.join(DATABASE_DIR, 'zapo-auth');
 
@@ -478,6 +488,25 @@ export async function obterCliente() {
         // forma errada); `relay_lost` e' o caminho de midia que caiu.
         console.warn(`[CALLP] a call ${call.callId} encerrou | motivo: ${motivo}`);
         processarCallEncerrada(call.callId, motivo);
+      });
+
+      // O AUDIO DE ENTRADA: o motor entrega o PCM 16 kHz mono de quem fala, ja'
+      // decodificado. E' o que o agente de voz (`!iap`) consome para OUVIR a
+      // call. Fica subscrito SEMPRE (nao custa nada sem agente: o motor so'
+      // copia o PCM enquanto ha' listener, e o callback sai barato sem dono).
+      client.on('voip_call_inbound_audio', ({ call, pcm }) => {
+        const callId = call?.callId;
+        if (!callId || !pcm?.length) return;
+        for (const [grupo, id] of callsPorGrupo.entries()) {
+          if (id !== callId) continue;
+          const cb = aoOuvirPorGrupo.get(grupo);
+          if (typeof cb === 'function') {
+            try {
+              cb(grupo, pcm);
+            } catch { /* o agente nunca derruba a call */ }
+          }
+          break;
+        }
       });
 
       // O AUDIO TERMINOU: e' o que faz a FILA andar sozinha. O motor emite
@@ -907,6 +936,7 @@ export function resetarMidia() {
   estagios.clear();
   aoTerminarPorGrupo.clear();
   aoEncerrarPorGrupo.clear();
+  aoOuvirPorGrupo.clear();
   conectado = false;
   esperandoAbertura = null;
   if (timerReconexao) {
@@ -964,6 +994,70 @@ export function aoTerminarAudio(grupo, cb) {
 export function aoEncerrarAudio(grupo, cb) {
   if (cb === null) aoEncerrarPorGrupo.delete(grupo);
   else aoEncerrarPorGrupo.set(grupo, cb);
+}
+
+/**
+ * Registra o que fazer quando chega AUDIO DE ENTRADA na call do grupo.
+ *
+ * O motor entrega o PCM 16 kHz mono de quem fala (`voip_call_inbound_audio`).
+ * O `index.js` usa isto para alimentar o agente de voz (`!iap`). Sem callback
+ * registrado, o frame e' descartado -- nao ha' custo em deixar subscrito.
+ *
+ * Mesmo formato dos outros: callback (e nao import) para nao criar ciclo.
+ *
+ * @param {string} grupo
+ * @param {Function|null} cb `(grupo, pcm) => void` (null remove)
+ */
+export function aoOuvirAudio(grupo, cb) {
+  if (cb === null) aoOuvirPorGrupo.delete(grupo);
+  else aoOuvirPorGrupo.set(grupo, cb);
+}
+
+/**
+ * Liga o modo de audio EXTERNO na call do grupo.
+ *
+ * Enquanto ligado, o audio de saida vem de `feedLiveAudio` em vez do arquivo
+ * pre-carregado. E' o que permite o agente FALAR (o `!midiap` usa o mesmo
+ * caminho para o audio do video). Best-effort: sem call/sessao devolve `false`.
+ *
+ * @param {string} grupo
+ * @param {boolean} ligado
+ * @returns {Promise<boolean>}
+ */
+export async function modoAudioExterno(grupo, ligado) {
+  const cli = await obterCliente();
+  if (!cli?.voip) return false;
+  const callId = callsPorGrupo.get(grupo);
+  if (!callId) return false;
+  try {
+    cli.voip.setExternalAudioMode(callId, Boolean(ligado));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Entrega um bloco de PCM (float 16 kHz mono) ao uplink da call do grupo.
+ *
+ * E' a VOZ do agente. Retorna o nivel do buffer do motor em ms, para quem
+ * quiser fazer backpressure -- `0` quando nao ha' sessao.
+ *
+ * @param {string} grupo
+ * @param {Float32Array} pcm
+ * @returns {Promise<number>}
+ */
+export async function falarNaCall(grupo, pcm) {
+  const cli = await obterCliente();
+  if (!cli?.voip) return 0;
+  const callId = callsPorGrupo.get(grupo);
+  if (!callId) return 0;
+  try {
+    const ms = cli.voip.feedLiveAudio(callId, pcm);
+    return typeof ms === 'number' ? ms : 0;
+  } catch {
+    return 0;
+  }
 }
 
 /**

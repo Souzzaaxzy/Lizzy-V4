@@ -1285,6 +1285,14 @@ import {
   precisaPareamento,
   parearMidia
 } from './funcs/utils/callMedia.js';
+// O AGENTE DE VOZ (`!iap`) — ouve a call e responde em voz. Fica no escopo do
+// módulo (fora do handler) para o `reconciliarCallEncerrada` poder desligá-lo
+// quando a chamada cai.
+import {
+  ligarIap,
+  desligarIap,
+  estadoIap
+} from './utils/iapSessao.js';
 // O CHAT DE VOZ (`!vozp`) e' um sistema SEPARADO do `!callp`: ponte de midia,
 // motor e registro proprios. Nada de estado compartilhado entre os dois.
 import {
@@ -4307,6 +4315,10 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
       callPlayer.pararDeSeguir(grupo);
       aoTerminarAudio(grupo, null);
       aoEncerrarAudio(grupo, null);
+      // O agente de voz vive DENTRO da call: sem chamada ele nao tem onde ouvir
+      // nem falar. Desligar aqui evita o `!iap` responder "ligado" com a call
+      // ja' morta.
+      try { await desligarIap(grupo); } catch { /* best-effort */ }
       // O motivo vai para o AVISO quando ele muda a explicação. `setup_failed`
       // e' o servidor RECUSANDO o offer — sem dizer isso, "a chamada foi
       // encerrada" parece defeito do bot.
@@ -36172,6 +36184,8 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             // sobrevivendo ao comando que deveria limpá-la.
             aoTerminarAudio(from, null);
             aoEncerrarAudio(from, null);
+            // O agente de voz vive dentro da call: encerrou, ele sai junto.
+            try { await desligarIap(from); } catch { /* best-effort */ }
             return reply(
               `📴 Chamada encerrada.` +
               (resumoFila.removidas ? `\n\n🗑️ ${resumoFila.removidas} música(s) da fila foram apagadas.` : '')
@@ -36749,6 +36763,94 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
           return;
         } catch (e) {
           await reply('Ocorreu um erro 💔');
+        }
+        break;
+
+      // !iap — AGENTE DE VOZ na call: o bot OUVE o que falam e RESPONDE em voz.
+      //
+      // O `!callp` sobe a call e o `!musicap` toca ARQUIVO; o `!iap` e' o que
+      // conversa. O motor entrega o audio de entrada (`voip_call_inbound_audio`)
+      // e aceita a voz de volta (`feedLiveAudio`) -- o `iapVoice.js` faz o
+      // VAD, o barge-in e o pacing, e o `iapSessao.js` liga STT/LLM/TTS.
+      //
+      // NAO esta em menu nenhum de proposito (teste).
+      case 'iap':
+      case 'agentevoz':
+      case 'vozia':
+        try {
+          if (!isGroup) return reply('Isso só pode ser usado em grupo 💔');
+          // Só admin sobe/derruba o agente, igual ao `!callp`.
+          if (!isGroupAdmin) {
+            return reply('⛔ Apenas administradores podem controlar o agente de voz.');
+          }
+
+          const subIap = normalizar((args[0] || '')).trim();
+
+          // ----------------------------------------------------------- status
+          if (subIap === 'status' || subIap === 'info') {
+            const st = estadoIap(from);
+            if (!st?.ativo) {
+              return reply('🔇 O agente de voz está desligado neste grupo.');
+            }
+            return nazu.sendMessage(from, {
+              text:
+                `╭━━━꧁༺ 🎙️ 𝐀𝐆𝐄𝐍𝐓𝐄 𝐃𝐄 𝐕𝐎𝐙 🎙️ ༻꧂━━━╮\n` +
+                `┃ 🟢 Ligado\n` +
+                `┃ 🗣️ Falando: ${st.falando ? 'sim' : 'não'}\n` +
+                `┃ 🧠 Pensando: ${st.processando ? 'sim' : 'não'}\n` +
+                `┃ ↩️ Interrupções: ${st.bargeIns}\n` +
+                `┃ 💬 Na memória: ${st.historico} mensagem(ns)\n` +
+                `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`,
+              contextInfo: gerarContextNewsletter()
+            });
+          }
+
+          // ------------------------------------------------------------ desligar
+          if (subIap === 'off' || subIap === 'desligar' || subIap === 'parar') {
+            const havia = await desligarIap(from);
+            return reply(havia
+              ? '🔇 Agente de voz desligado.'
+              : '🔇 O agente de voz já estava desligado.');
+          }
+
+          // -------------------------------------------------------------- ligar
+          // `!iap` e `!iap on` ligam. Qualquer outra coisa cai aqui tambem.
+          if (!subIap || subIap === 'on' || subIap === 'ligar') {
+            // Precisa de call ativa: o agente vive DENTRO da chamada.
+            if (!obterCall(from)?.callId) {
+              return reply('❌ Não há chamada ativa neste grupo.\n\nUse `' + prefix + 'callp` primeiro.');
+            }
+            // O motor de midia precisa estar pareado (a call depende dele).
+            if (await precisaPareamento()) {
+              return reply('❌ O motor de mídia não está pareado.\n\nUse `' + prefix + 'callp parear <numero>` primeiro.');
+            }
+
+            await reply('🎙️ Ligando o agente de voz...');
+            const r = await ligarIap(from, { botName: nomebot });
+            if (!r.ok) {
+              const motivos = {
+                sem_chave: '❌ A chave da IA não está configurada. Use `' + prefix + 'key`.',
+                sem_call: '❌ Não consegui conectar o agente à chamada. A call está de pé?'
+              };
+              return reply(motivos[r.motivo] || '❌ Não consegui ligar o agente de voz.');
+            }
+            return nazu.sendMessage(from, {
+              text:
+                `╭━━━꧁༺ 🎙️ 𝐀𝐆𝐄𝐍𝐓𝐄 𝐃𝐄 𝐕𝐎𝐙 🎙️ ༻꧂━━━╮\n` +
+                `┃ 🟢 Ligado e ouvindo a chamada\n` +
+                `┃ 🗣️ Fale na call que eu respondo\n` +
+                `┃ ↩️ Pode me interromper falando\n` +
+                `┃\n` +
+                `┃ 🔇 Desligar: ${prefix}iap off\n` +
+                `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`,
+              contextInfo: gerarContextNewsletter()
+            });
+          }
+
+          return reply(`❌ Use: ${prefix}iap on | off | status`);
+        } catch (e) {
+          console.error('[IAP] erro no comando:', e?.message || e);
+          return reply('Ocorreu um erro 💔');
         }
         break;
 

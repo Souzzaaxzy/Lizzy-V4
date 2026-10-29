@@ -70,8 +70,16 @@ console.log('\n=== 1) O BLOCO DO COMANDO (contrato) ===\n');
 /** O bloco do `case 'musicap'` (ate o proximo case). */
 const blocoMusicap = () => {
   const i = SRC.indexOf("case 'musicap':");
-  const j = SRC.indexOf("case 'antifantasma':");
-  return SRC.slice(i, j);
+  // Fim = o proximo `case ` na mesma indentacao, DEPOIS do corpo. O bloco comeca
+  // com rotulos `case` colados (aliases `tocarnacall`/`musica`), entao o corte
+  // procura a partir do primeiro `break;` — senao o bloco sairia vazio.
+  //
+  // Antes o fim era o sentinel fixo `case 'antifantasma':`, e qualquer case novo
+  // entre os dois entrava no bloco fatiado (foi o que aconteceu com o `!iap`,
+  // cujo guard de admin derrubava a assercao deste teste).
+  const corpo = SRC.indexOf('break;', i);
+  const j = SRC.indexOf('\n      case ', corpo > 0 ? corpo : i + 1);
+  return j < 0 ? SRC.slice(i) : SRC.slice(i, j);
 };
 
 await test('!musicap NÃO exige dono nem admin (membro pode usar)', () => {

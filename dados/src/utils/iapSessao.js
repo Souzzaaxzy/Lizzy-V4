@@ -1,0 +1,131 @@
+/**
+ * Ligação do agente de voz (`!iap`) com as peças reais do bot.
+ *
+ * O `iapVoice.js` tem o MOTOR do agente (VAD, barge-in, fila) e nao conhece
+ * ninguem: recebe `falar`/`pensar`/`transcrever`/`sintetizar`. Este modulo faz a
+ * unica coisa que falta -- injetar as dependencias REAIS:
+ *
+ *   transcrever -> iapStt (Gemini, a chave do `!key` via `ia.js`)
+ *   pensar      -> ia.js (o MESMO modelo dos outros comandos de IA)
+ *   sintetizar  -> iapTts (edge-tts; Gemini TTS como reserva)
+ *   falar       -> callMedia.falarNaCallDoGrupo (o motor, `feedLiveAudio`)
+ *
+ * Fica separado do `index.js` para o fluxo poder ser testado sem importar o
+ * arquivo de 36k linhas (que abre conexao de verdade no import).
+ */
+
+import * as ia from '../funcs/private/ia.js';
+import { transcreverPcm } from './iapStt.js';
+import { sintetizarFala } from './iapTts.js';
+import { iap, promptDoSistema } from './iapVoice.js';
+import {
+  aoOuvirAudioDaCall,
+  modoAudioExternoDaCall,
+  falarNaCallDoGrupo
+} from '../funcs/utils/callMedia.js';
+
+/** Log do agente, com o prefixo do sistema de call (filtravel). */
+function logIap(msg, extra) {
+  const detalhe = extra ? ` | ${JSON.stringify(extra)}` : '';
+  console.log(`🎙️ [IAP] ${msg}${detalhe}`);
+}
+
+/** A chave do Gemini em uso (a mesma que o `!key` grava). */
+function chaveGemini() {
+  try {
+    if (typeof ia.getGeminiApiKey === 'function') return ia.getGeminiApiKey();
+  } catch { /* cai no env */ }
+  return process.env.GEMINI_API_KEY || '';
+}
+
+/**
+ * O LLM do agente: texto -> resposta.
+ *
+ * Usa o `ia.makeCognimaRequest`, que e' o caminho dos outros comandos de IA --
+ * ele ja' resolve a cadeia de modelos e o fallback. O historico entra como
+ * mensagens anteriores, para o agente lembrar do assunto.
+ *
+ * @param {string} texto
+ * @param {Array<{role:string, content:string}>} historico
+ * @param {object} [opts]
+ * @param {string} [opts.personalidade]
+ * @param {string} [opts.botName]
+ * @returns {Promise<string>}
+ */
+export async function pensarComIa(texto, historico = [], { personalidade, botName } = {}) {
+  const sistema = promptDoSistema({ botName, personalidade });
+  const r = await ia.makeCognimaRequest(
+    ia.GEMINI_DEFAULT_MODEL,
+    texto,
+    sistema,
+    historico.map((h) => ({ role: h.role, content: h.content }))
+  );
+  const resposta = r?.data?.choices?.[0]?.message?.content;
+  return typeof resposta === 'string' ? resposta.trim() : '';
+}
+
+/**
+ * Liga o agente de voz no grupo.
+ *
+ * @param {string} grupo
+ * @param {object} [opts]
+ * @param {string} [opts.botName]
+ * @param {string} [opts.personalidade]
+ * @returns {Promise<{ ok: boolean, motivo?: string }>}
+ */
+export async function ligarIap(grupo, { botName, personalidade } = {}) {
+  if (!chaveGemini()) return { ok: false, motivo: 'sem_chave' };
+
+  // O modo de audio externo precisa estar ligado, senao o motor ignora o que
+  // chega por `feedLiveAudio` e volta a tocar o arquivo pre-carregado.
+  const ligouExterno = await modoAudioExternoDaCall(grupo, true);
+  if (!ligouExterno) return { ok: false, motivo: 'sem_call' };
+
+  // O agente OUVE pelo callback do motor.
+  const registrou = await aoOuvirAudioDaCall(grupo, (g, pcm) => iap.receber(g, pcm));
+  if (!registrou) {
+    await modoAudioExternoDaCall(grupo, false);
+    return { ok: false, motivo: 'sem_call' };
+  }
+
+  iap.ligar(grupo, {
+    log: logIap,
+    pensar: (texto, historico) => pensarComIa(texto, historico, { botName, personalidade }),
+    transcrever: async (pcm) => {
+      const r = await transcreverPcm(pcm, { apiKey: chaveGemini() });
+      return r.ok ? r.texto : null;
+    },
+    sintetizar: async (texto) => {
+      const r = await sintetizarFala(texto, { apiKey: chaveGemini() });
+      return r.ok ? r.pcm : null;
+    },
+    falar: (pcm) => { void falarNaCallDoGrupo(grupo, pcm); }
+  });
+
+  logIap('ligado', { grupo });
+  return { ok: true };
+}
+
+/**
+ * Desliga o agente de voz do grupo e limpa o que ele registrou.
+ *
+ * @param {string} grupo
+ * @returns {Promise<boolean>} `true` se havia um agente ligado
+ */
+export async function desligarIap(grupo) {
+  const havia = iap.desligar(grupo);
+  try { await aoOuvirAudioDaCall(grupo, null); } catch { /* ok */ }
+  try { await modoAudioExternoDaCall(grupo, false); } catch { /* ok */ }
+  if (havia) logIap('desligado', { grupo });
+  return havia;
+}
+
+/** Estado do agente no grupo (para o comando mostrar). */
+export function estadoIap(grupo) {
+  return iap.estado(grupo);
+}
+
+/** Desliga todos os agentes (a call caiu: o `index.js` chama isto). */
+export function desligarTodosIap() {
+  iap.desligarTudo();
+}

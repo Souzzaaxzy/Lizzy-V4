@@ -13346,3 +13346,83 @@ chega e a **mídia fica pronta**; um roster vazio continua vazio (não inventa).
 Duas causas com o **mesmo sintoma** exigem **números diferentes** no log — foi o
 `devicesComPid` que separou "ninguém presente" de "presente sem pid". E, de novo,
 a resposta estava numa linha da referência: **a tag do roster não é uma só**.
+
+
+## 🎙️ `!iap` — AGENTE DE VOZ NA CALL: o bot OUVE e RESPONDE (out/2026) ✅
+Comando novo (fora de menu nenhum, por pedido): depois do `!callp`, o `!iap on`
+faz o bot **ouvir** o que falam na call e **responder em voz**. É o primeiro
+recurso do bot que consome o **áudio de ENTRADA** da chamada — até agora só se
+tocava arquivo (`!musicap`) ou vídeo (`!midiap`).
+
+### O que o motor JÁ dava (e ninguém usava)
+`@zapo-js/voip` (a versão que o bot usa) emite **`voip_call_inbound_audio`** com
+PCM **16 kHz mono `Float32Array`** — o áudio de quem fala, já decodificado — e
+aceita a voz de volta por **`feedLiveAudio`** (o mesmo caminho do `!midiap`).
+**Entrada e saída no MESMO formato**, como a doc do pacote diz literalmente
+(*"decodes inbound PCM … and lets you feed live outbound media"*). A peça que
+faltava era o agente que fecha o laço — e o hook no `zapoCall.js`.
+
+### O fluxo
+```
+fala na call → voip_call_inbound_audio (PCM 16k)
+   → VAD (energia RMS + histerese)  → frase fechada
+   → STT (Gemini, a chave do !key)  → texto
+   → LLM (o MESMO ia.js dos outros comandos) → resposta
+   → TTS (edge-tts local; Gemini TTS de reserva) → PCM 16k
+   → feedLiveAudio → o bot fala na call
+```
+
+### BARGE-IN (o que faz parecer conversa)
+Enquanto o agente fala, **cada frame que chega passa pelo VAD**: se detectar
+fala, a resposta em curso é **abortada** e a fila de saída é drenada. Sem isso a
+conversa vira dois monólogos sobrepostos. O contador de interrupções sai no
+`!iap status`.
+
+### Arquivos (nada de sistema paralelo)
+| Caminho | Papel |
+|---|---|
+| `dados/src/utils/iapAudio.js` | primitivas puras: PCM↔WAV, `resamplePcm` (ffmpeg/soxr), `DetectorDeFala` (VAD) |
+| `dados/src/utils/iapStt.js` | STT pelo Gemini (`inlineData` de WAV) — o mesmo caminho do `!transcrever` |
+| `dados/src/utils/iapTts.js` | TTS: **edge-tts** (local, sem chave) → **Gemini TTS** (reserva, PCM 24 kHz → reamostrado) |
+| `dados/src/utils/iapVoice.js` | MOTOR do agente: VAD, barge-in, pacing, histórico — tudo **injetado** |
+| `dados/src/utils/iapSessao.js` | liga o motor às peças reais (ia.js, STT, TTS, motor de call) |
+| `dados/src/funcs/utils/zapoCall.js` | **`aoOuvirAudio`** (receptor do inbound), **`modoAudioExterno`**, **`falarNaCall`** |
+| `dados/src/index.js` | `case 'iap'` (on/off/status) + desligar o agente quando a call cai |
+
+### Por que edge-tts como TTS principal
+O tier grátis do Gemini tem limite de requisições por minuto, e num agente de voz
+**cada resposta é uma requisição**. O edge-tts (vozes neurais do Edge) tira o
+custo e o limite do caminho da **voz** — sobra só o STT/LLM na API. Vozes pt-BR
+confirmadas: `pt-BR-AntonioNeural`, `pt-BR-FranciscaNeural`,
+`pt-BR-ThalitaMultilingualNeural`. Instalação: `pip install edge-tts`.
+
+### Armadilhas medidas
+1. **O cache NEGATIVO do edge-tts envenenava o processo.** O `resolverEdge`
+   guardava `null` para sempre — instalar o edge-tts (ou corrigir o PATH) depois
+   **nunca** era percebido. Agora o cache negativo **expira** (`IAP_EDGE_RETRY_MS`,
+   padrão 60 s) e há `resetEdgeCache()` para teste.
+2. **O `mp3` do edge-tts precisa do ffmpeg para virar PCM.** Sem ffmpeg, o
+   `sintetizarFala` cai no Gemini TTS; sem os dois, devolve
+   `{ok:false, motivo:'tts_indisponivel'}` — nunca áudio vazio.
+3. **Teste do `!musicap` quebrou por causa do `case` novo.** O extrator fatiava
+   de `case 'musicap':` até o sentinel `case 'antifantasma':`, então o `!iap`
+   (inserido no meio) entrava no bloco e o `if (!isGroupAdmin)` dele derrubava a
+   asserção. O extrator passou a cortar no **próximo `case` na mesma
+   indentação**, a partir do primeiro `break;` (o bloco tem aliases colados).
+
+### Testes — `tests/iap.test.js` (**27 testes / 68 asserções, 0 falhas**)
+Primitivas (round-trip PCM↔WAV, RMS); VAD (abre/fecha/estalo curto); agente
+(fala→STT→LLM→TTS→fala, silêncio não aciona, **barge-in**, desligado não
+processa, histórico limitado); gerenciador (liga/desliga por grupo, roteia);
+comando (só grupo, admin, sem call, off/status, uso, sem chave); **STT** com
+HTTP dublê (manda `audio/wav`, 401 → motivo de chave, sem chave não toca a
+rede); **TTS** (fallback do Gemini devolve PCM 24 kHz, texto vazio);
+**LLM** (`pensarComIa` passa o prompt do agente + histórico pelo `ia.js`); e o
+**caminho REAL** do edge-tts + ffmpeg (auto-pulado sem as ferramentas).
+
+### LIMITE HONESTO
+Não há sessão de WhatsApp neste ambiente, então **não** validei a conversa numa
+call real. O que está provado: o motor expõe entrada e saída PCM (tipos
+conferidos no pacote instalado), o fluxo completo funciona com dublês, o TTS
+real gera PCM 16 kHz (edge-tts + ffmpeg, medido), e o comando responde certo.
+Falta a prova de campo: subir a call, ligar o `!iap` e falar.
