@@ -18,7 +18,10 @@ import { groqChat } from './groqClient.js';
 import { transcreverPcm, chaveGroq } from './iapStt.js';
 import { sintetizarFala, garantirVoz } from './iapTts.js';
 import { iap } from './iapVoice.js';
-import { iaIdentidade, ehPedidoDeAcao, permitePedidoDeAcao } from './iapGuarda.js';
+import {
+  iaIdentidade, ehPedidoDeAcao, permitePedidoDeAcao,
+  promptDaLizzy, regrasDeCanal
+} from './iapGuarda.js';
 import { identificarComando, frasesDeAjuda, ehComandoPermitido } from './iapComandos.js';
 import {
   aoOuvirAudioDaCall as aoOuvirAudioDaCallReal,
@@ -92,22 +95,20 @@ export function montarSistemaDoAgente({ nomeDono, participantes = [], falante, f
     });
   } catch { /* segue sem a data */ }
 
+  // O CARATER e' o MESMO do chat (`promptDaLizzy`) — uma Lizzy so. O que este
+  // canal acrescenta sao as regras de VOZ (`regrasDeCanal('voz')`), porque aqui
+  // tudo e' lido em voz alta. Sem esta separacao os dois canais divergiriam de
+  // novo, que e' exatamente o que o dono pediu para acabar.
   const linhas = [
-    `Voce e' ${nome}, e esta numa CHAMADA DE VOZ de um grupo do WhatsApp.`,
+    promptDaLizzy({ nome, nomeDono }),
+    '',
+    `Voce esta numa CHAMADA DE VOZ de um grupo do WhatsApp.`,
     'Tudo o que voce diz e lido em VOZ ALTA por um sintetizador.',
     '',
     `Seu nome e' ${nome}. Se perguntarem, responda: "Oi! Eu sou a ${nome}."`,
     `Se alguem chamar "${nome}", e' com voce.`,
     '',
-    'COMO FALAR (importante — e voz, nao texto):',
-    '- Portugues do Brasil, natural e descontraido, como numa conversa de amigos.',
-    '- Frases CURTAS: 1 a 2, no maximo 3. Nada de paragrafo.',
-    '- NUNCA use emojis, asteriscos, markdown, listas ou numeracao.',
-    '- Escreva numeros e siglas por extenso quando soarem melhor ("dez reais", "vinte e tres").',
-    '- NAO repita a pergunta antes de responder. Va direto ao ponto.',
-    '- Se a pergunta for simples, responda curto; se pedirem detalhe, ai sim desenvolva.',
-    '- Se nao souber algo, diga que nao sabe — nunca invente.',
-    '- Se o audio vier cortado/inaudivel, diga que nao entendeu e peca para repetir.'
+    regrasDeCanal('voz')
   ];
 
   if (agora) linhas.push('', `Agora e' ${agora} (horario de Brasilia).`);
