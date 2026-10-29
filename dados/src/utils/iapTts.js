@@ -214,13 +214,23 @@ export async function sintetizarFala(texto, { apiKey } = {}) {
   const tentarEdge = motor === 'auto' || motor === 'edge';
   const tentarGemini = motor === 'auto' || motor === 'gemini';
 
+  // Motivo pelo qual o edge-tts nao foi usado (vai no erro, se o Gemini
+  // tambem falhar — sem isto, "caiu no Gemini" fica sem causa).
+  let falhaEdge = null;
+
   // 1) edge-tts -> MP3 -> ffmpeg reamostra para 16 kHz.
   if (tentarEdge) {
     const mp3 = await sintetizarEdge(limpo);
     if (mp3 && mp3.length) {
       const pcm = await converterPara16k(mp3);
       if (pcm && pcm.length) return { ok: true, pcm, fonte: 'edge-tts' };
+      // O edge-tts gerou o MP3 mas o ffmpeg nao converteu — pista importante.
+      falhaEdge = 'ffmpeg_faltando';
+    } else {
+      falhaEdge = 'edge_indisponivel';
     }
+    // `edge` sozinho: o chamador pediu so' ele, entao nao cai no Gemini.
+    if (motor === 'edge') return { ok: false, motivo: falhaEdge };
   }
 
   // 2) Gemini TTS -> PCM 24 kHz -> reamostra.
@@ -228,11 +238,15 @@ export async function sintetizarFala(texto, { apiKey } = {}) {
     const pcm24 = await sintetizarGemini(limpo, apiKey);
     if (pcm24 && pcm24.length) {
       const pcm = await resamplePcm(pcm24, 24000, TAXA_MOTOR);
-      if (pcm && pcm.length) return { ok: true, pcm, fonte: 'gemini-tts' };
+      if (pcm && pcm.length) {
+        // O Gemini salvou a fala, mas o motivo do edge importa: se for
+        // `edge_indisponivel`, instalar o edge-tts tira a dependencia.
+        return { ok: true, pcm, fonte: 'gemini-tts', motivoEdge: falhaEdge };
+      }
     }
   }
 
-  return { ok: false, motivo: 'tts_indisponivel' };
+  return { ok: false, motivo: falhaEdge || 'tts_indisponivel' };
 }
 
 /**

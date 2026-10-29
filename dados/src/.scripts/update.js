@@ -308,6 +308,43 @@ async function ffmpeg() {
 }
 
 // ---------------------------------------------------------------------------
+// edge-tts — a VOZ do `!iap`
+// ---------------------------------------------------------------------------
+/**
+ * Instala o `edge-tts` (a voz local da IA na call).
+ *
+ * ## Por que instalar sozinho
+ *
+ * Sem ele o TTS do `!iap` cai no **Gemini** — e o dono pediu para a IA da call
+ * nao depender do Gemini (era ele que estourava o tempo). O `edge-tts` e' local,
+ * nao tem chave nem limite, e da' a voz pt-BR.
+ *
+ * Mesmo padrao do yt-dlp: checa o binario, depois `python -m edge_tts`, depois
+ * `~/.local/bin`; se faltar, instala via pip (sem root).
+ */
+async function edgeTts() {
+    if (process.env.EDGE_TTS_PATH) { log('edge-tts configurado via EDGE_TTS_PATH'); return; }
+    if (await isAvailable('edge-tts', ['--version'])) { log('edge-tts encontrado'); return; }
+    if (await isAvailable('python3', ['-m', 'edge_tts', '--version'])) { log('edge-tts encontrado (python3 -m edge_tts)'); return; }
+    const localBin = path.join(os.homedir(), '.local', 'bin', 'edge-tts');
+    if (await isAvailable(localBin, ['--version'])) { log('edge-tts encontrado (~/.local/bin)'); return; }
+
+    const variant = (await isAvailable('python3')) ? 'python3' : (await isAvailable('python')) ? 'python' : null;
+    if (!variant) {
+        log('Aviso: sem python3 — instale o edge-tts manualmente (pip install edge-tts) para a voz local');
+        return;
+    }
+    log('Instalando edge-tts (a voz da IA na call)');
+    const pip = async (args) => { try { await execAsync(variant, args, { timeout: 300000 }); return true; } catch { return false; } };
+    const ok =
+        (await pip(['-m', 'pip', 'install', '-U', 'edge-tts'])) ||
+        (await pip(['-m', 'pip', 'install', '--user', '-U', 'edge-tts'])) ||
+        ((await pip(['-m', 'ensurepip', '--user'])) && (await pip(['-m', 'pip', 'install', '--user', '-U', 'edge-tts'])));
+    if (ok) { log('edge-tts instalado'); return; }
+    log('Aviso: nao consegui instalar o edge-tts — a voz da IA vai usar o Gemini');
+}
+
+// ---------------------------------------------------------------------------
 // Fluxo principal
 // ---------------------------------------------------------------------------
 async function main() {
@@ -386,9 +423,10 @@ async function main() {
         falhar('BAILEYS', { detalhe: 'commit instalado difere do esperado pelo package-lock.json' });
     }
 
-    // ── FFmpeg / yt-dlp (não abortam: são avisos, como antes)
+    // ── FFmpeg / yt-dlp / edge-tts (não abortam: são avisos, como antes)
     await ffmpeg();
     await ytDlp();
+    await edgeTts();
 
     // ── Tudo confirmado → o backup pode ser descartado.
     descartarBackupDatabase(backup);

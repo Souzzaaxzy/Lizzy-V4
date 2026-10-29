@@ -13890,3 +13890,62 @@ passou a logar a fonte. Regressões verdes: `ia` 20/50, `motor-chat-noise` 14/62
 O dono confirmou que funcionou. O que **não** foi medido: a **qualidade** da voz
 no aparelho (se sai natural, se o volume está bom) — isso é percepção, e o
 `TTS ok (<fonte>)` com `segundos` agora diz de onde veio e quanto tempo falou.
+
+
+## 🎙️ A VOZ vinha do GEMINI — o bot agora instala o edge-tts sozinho (out/2026) ✅
+O dono comemorou (*"FUNCIONOU!!!!! e muito perfeitamente"*) — mas o log mostrou
+um detalhe importante:
+
+```
+[IAP] TTS ok (gemini-tts) | {"segundos":2.9}
+```
+
+**A voz estava vindo do Gemini.** O `!iap` já tinha o STT e o LLM no Groq, mas o
+**TTS** caía no Gemini porque o **edge-tts não estava instalado** no servidor.
+
+### Por que não dá "só Groq" também na voz
+**O Groq não tem TTS.** Conferido na lista de modelos dele: só há transcrição
+(Whisper) e chat (LLM). Então a voz **tem** que vir de outro lugar — e o
+`edge-tts` é o melhor: **local, sem chave e sem limite**.
+
+### Correção: o bot instala o edge-tts sozinho
+Mesmo padrão do `yt-dlp`, que o bot já instalava:
+- **`config.js`** — entrou na lista `DEPENDENCIES_CONFIG` (o instalador já itera
+  a lista, então o boot passa a checar/instalar);
+- **`update.js`** — nova função **`edgeTts()`** (checa binário → `python -m
+  edge_tts` → `~/.local/bin` → instala via pip sem root) chamada ao lado do
+  `ytDlp()`.
+
+**Efeito:** o `!atualizar` (ou a primeira instalação) já traz o edge-tts, e a voz
+deixa de depender do Gemini.
+
+### O log agora diz POR QUE caiu no Gemini
+Antes, `TTS ok (gemini-tts)` não dizia **por que** o edge não foi usado. Agora:
+
+```
+[IAP] TTS ok (gemini-tts) | {"segundos":2.9,"motivoEdge":"edge_indisponivel"}
+```
+
+`edge_indisponivel` → falta `pip install edge-tts`;
+`ffmpeg_faltando` → o edge gerou o MP3 mas o ffmpeg não converteu.
+
+E o `IAP_TTS_ENGINE=edge` **força o local**: se o edge faltar, o TTS **falha**
+em vez de silenciosamente usar o Gemini — para quem quiser o `!iap` 100% sem
+Gemini.
+
+### Testes — `tests/iap.test.js` (**45 testes / 126 asserções, 0 falhas**)
++2: `IAP_TTS_ENGINE=edge` **não cai no Gemini** (falha com o motivo do edge); e
+quando cai no Gemini, o **motivo do edge vai junto** no log. Regressões verdes:
+`ia` 20/50, `motor-chat-noise` 14/62, `cmd-suggest` 21/68,
+`installer-git-drift` 10/21.
+
+### Onde o Gemini AINDA aparece (por desenho)
+| uso | provedor |
+|---|---|
+| `!iap` — ouvir (STT) | **Groq** |
+| `!iap` — pensar (LLM) | **Groq** |
+| `!iap` — falar (TTS) | **edge-tts** (local) → Gemini só como reserva |
+| `!transcrever` | **Groq** |
+| `!gemma`/`!phi`/`!qwen`/`!llama` | Gemini (a chave do `!key`) |
+
+Com o edge-tts instalado, o `!iap` **não usa o Gemini em nada**.

@@ -572,6 +572,49 @@ await test('iapTts: IAP_TTS_ENGINE=gemini não tenta o edge-tts', async () => {
   ok(r.ok === false && r.motivo === 'tts_indisponivel', `não caiu no edge (${r.motivo})`);
 });
 
+await test('iapTts: IAP_TTS_ENGINE=edge NÃO cai no Gemini (força o local)', async () => {
+  // O dono pediu para o `!iap` não depender do Gemini. Com `edge`, o TTS usa
+  // SÓ o edge-tts — se ele faltar, falha em vez de silenciosamente usar o Gemini.
+  const tts = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
+  process.env.IAP_TTS_ENGINE = 'edge';
+  process.env.GEMINI_API_KEY = 'chave-de-teste';
+  const r = await tts.sintetizarFala('teste', { apiKey: 'chave-de-teste' });
+  delete process.env.IAP_TTS_ENGINE;
+  delete process.env.GEMINI_API_KEY;
+  // Neste sandbox o edge-tts nao esta instalado -> falha com o motivo do edge.
+  ok(r.ok === false, `falhou (não usou o Gemini) — ${r.motivo}`);
+  ok(r.motivo === 'edge_indisponivel' || r.motivo === 'ffmpeg_faltando',
+    `motivo aponta o edge (${r.motivo})`);
+  ok(r.fonte === undefined, 'não veio do Gemini');
+});
+
+await test('iapTts: quando cai no Gemini, o motivo do edge vai junto (diagnóstico)', async () => {
+  // `TTS ok (gemini-tts) motivoEdge=edge_indisponivel` diz ao dono o que fazer:
+  // `pip install edge-tts`. Sem isso, "caiu no Gemini" fica sem causa.
+  const tts = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
+  const { spawnSync } = await import('child_process');
+  const temFfmpeg = spawnSync(process.env.FFMPEG_PATH || 'ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0;
+  if (!temFfmpeg) {
+    console.log('     (pulado: precisa do ffmpeg para o resample do Gemini)');
+    return;
+  }
+  // Gemini devolve PCM 24 kHz; o edge nao existe neste sandbox.
+  const bruto = Buffer.alloc(4800 * 2).fill(1);
+  tts.setIapTtsHttpForTest(async () => ({
+    data: { candidates: [{ content: { parts: [{ inlineData: { data: bruto.toString('base64') } }] } }] }
+  }));
+  tts.resetEdgeCache();
+  const r = await tts.sintetizarFala('teste', { apiKey: 'K' });
+  tts.setIapTtsHttpForTest(null);
+  if (r.ok && r.fonte === 'gemini-tts') {
+    ok(r.motivoEdge === 'edge_indisponivel' || r.motivoEdge === 'ffmpeg_faltando',
+      `trouxe o motivo do edge (${r.motivoEdge})`);
+  } else {
+    // Se o edge-tts estiver instalado, ele ganha — e nao ha' motivoEdge.
+    ok(r.fonte === 'edge-tts', `edge-tts ganhou (${r.fonte})`);
+  }
+});
+
 await test('iapTts: texto vazio não sintetiza', async () => {
   const tts = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
   const r = await tts.sintetizarFala('   ', {});

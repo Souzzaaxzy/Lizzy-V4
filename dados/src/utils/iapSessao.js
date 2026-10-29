@@ -129,10 +129,12 @@ export async function ligarIap(grupo, { botName, personalidade } = {}) {
         return null;
       }
       // A FONTE importa: `edge-tts` (local, principal) ou `gemini-tts`
-      // (reserva). Sem esta linha nao da' para saber qual voz o grupo ouviu.
+      // (reserva). Se caiu no Gemini, o motivo do edge vai junto — e' o que diz
+      // se falta instalar o edge-tts (`pip install edge-tts`) ou o ffmpeg.
       logIap(`TTS ok (${r.fonte})`, {
         grupo,
-        segundos: r.pcm ? +(r.pcm.length / 16000).toFixed(1) : 0
+        segundos: r.pcm ? +(r.pcm.length / 16000).toFixed(1) : 0,
+        ...(r.motivoEdge ? { motivoEdge: r.motivoEdge } : {})
       });
       return r.pcm;
     },
