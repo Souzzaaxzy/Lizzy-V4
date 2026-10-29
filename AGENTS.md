@@ -12727,6 +12727,70 @@ wacrg, que deixa o vocabulario aberto). O que fecha o caso e' o log novo:
 +100 membros, era isso; se a recusa aparecer num grupo **abaixo** do teto, a causa
 e' outra e o `N` no log separa as duas.
 
+## 🎙️ O `207` NAO ERA "grupo grande": o ack com erro **E COM RELAY** nao e' recusa (out/2026) ✅
+**ERRATA da secao acima.** O dono mandou o log que derrubou a hipotese do tamanho —
+e o grupo tinha **3 membros**:
+
+```
+[CALLP] grupo 120363411458443023@g.us: 3 membro(s) -> 2 convidado(s) (teto 31)
+[MOTOR] startCall: enviando (2 convidado(s), lightweight=true)
+[MOTOR] group offer sent | {"callId":"C7C4...","voiceChat":true,"rosterShipped":false,"rosterAccounts":0}
+[MOTOR] offer ack received | {"callId":"C7C4...","error":"207","hasRoster":true,"hasRelay":true}
+[MOTOR] offer refused by the server, call ended | {"callId":"C7C4...","error":"207"}
+[CALLP] a call C7C4... encerrou | motivo: setup_failed
+```
+
+### A leitura que fecha
+O ack trouxe **`hasRelay: true`** — e o **relay e' a ALOCACAO DE MIDIA**: o
+servidor **so' o entrega para uma call que EXISTE**. Ou seja: a call **foi criada**
+e o motor a **encerrava em seguida**, tratando **qualquer** `error` do ack como
+recusa fatal. Era exatamente o "sobe e cai na hora" — nos **dois** comandos
+(`!callp` e `!vozp`), e em grupo **pequeno**.
+
+Isso **refuta** a leitura anterior de que o `207` era o teto de participantes: um
+grupo de 3 nao tem como estourar teto nenhum.
+
+### Correcao (fork `zapo`, branch **`voip`**, commit `e39538e`)
+`packages/voip/src/call/WaCallMediaSession.ts` (branch `voip`) —
+`handleCallAck`: um `error` no ack **so' encerra a call quando o ack NAO traz
+`<relay>`**. Com relay, o erro e' logado (`warn`) e a call **SEGUE**: roster,
+settings e relay sao adotados normalmente.
+
+- `427` (stale roster) continua com o re-offer, como antes;
+- **sem** relay, a recusa e' real e a call encerra como sempre.
+
+O `dist/` (CJS **e** ESM) foi reconstruido e commitado junto — um git dep **nao
+tem build step**, entao o `dist` e' o que o bot instala.
+
+> **A branch certa e' a `voip`**, nao a `master`: o bot pina o pacote na **raiz** do
+> repo `zapo` (a `master` e' o monorepo, com o pacote em `packages/voip`). O fix foi
+> portado para a `voip` porque era **ela** que o bot instalava.
+
+### Testes
+- **Fork** (`voip`): `src/call/__tests__/ack-error-with-relay.test.ts` — ack com
+  `error` **E** `relay` -> a call **NAO** e' encerrada; ack com `error` e **SEM**
+  `relay` -> a call **E** encerrada (recusa de verdade). Suite: **568 testes, 0
+  falhas** (era 566). **Verificado que mede**: neutralizando a condicao do relay,
+  o 1o teste **falha**.
+- **Bot**: `callp` **50/118**, `callp-regressions` **38/115**, `musicap` 24/70,
+  `vozp-grupo-grande` 6/12, `vozp-log` 12/20, `vozp-terminate-target` 5/7,
+  `zapo-conexao` 17/38, `zapo-pareamento` 24/63, `motor-chat-noise` 14/62,
+  `call-motor-timeout` 7/28 — **0 falhas**.
+
+### Lockfiles
+`package.json` + `package-lock.json` + `yarn.lock` (Berry v8) pinados em
+**`e39538e088d12fc87fd6b18e1409025cc2de8755`** (hash **completo**). O `yarn.lock`
+foi validado com `corepack yarn install --check-cache` — **os dois** git deps
+(baileys e zapo) tiveram o **checksum** regerado (o commit novo muda o hash do
+arquivo que o GitHub serve).
+
+### LICAO DE METODO
+O `error` do ack **nao** significa "recusou": ele vem junto com o **relay**, que e'
+a prova de que a call **existe**. Tratar o campo `error` como booleano de recusa
+jogava fora uma call ja' criada — e o sintoma ("sobe e cai na hora") parecia de
+rede/servidor. O que separou os dois casos foi olhar **o que mais vinha no mesmo
+ack**, nao o codigo de erro sozinho.
+
 
 ## 🎙️ CHAT DE VOZ (`!vozp`) — VOLTOU, agora com suporte REAL do motor (out/2026) ✅
 Laboratório pedido pelo dono: *"nosso objetivo é fazer o bot subir um chat de voz,
