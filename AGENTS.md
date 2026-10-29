@@ -13713,3 +13713,61 @@ transcrições lado a lado com áudio real. A escolha se apoia em fatos medidos
 (Whisper é modelo dedicado; o Groq é ~200× tempo real; a cota do Gemini é
 dividida) — não em teste cego de qualidade. Se na prática o Groq transcrever
 pior no seu áudio, `IAP_STT_ENGINE=gemini` volta atrás numa linha.
+
+
+## 🎧 GROQ recusou o áudio: "file must be one of the following types" (out/2026) ✅
+Log do dono:
+
+```
+[TRANSCREVER] Gemini falhou | motivo=rede | timeout of 45000ms exceeded
+[TRANSCREVER] reserva (Groq) falhou | motivo=falha |
+  file must be one of the following types: [flac mp3 mp4 mpeg mpga m4a ogg opus wav webm]
+```
+
+### A causa (bug MEU, do commit anterior)
+O **Groq decide o formato pela EXTENSÃO do nome do arquivo** — não pelo
+mimetype. No `!transcrever` o arquivo ia como:
+
+```js
+form.append('file', new Blob([arquivo], { type: mimeType }), 'audio');
+//                                                             ^^^^^^^ SEM extensão
+```
+
+`'audio'` não tem extensão, então a API não reconheceu o formato e recusou.
+(No `!iap` o nome já era `audio.wav`, por isso lá não acontecia.)
+
+### As correções
+1. **Extensão pelo mimetype** (`extensaoDoAudio`): `audio/ogg; codecs=opus` →
+   `ogg`, `audio/mpeg` → `mp3`, `audio/mp4` → `m4a`, etc.
+2. **Extensão pelo CONTEÚDO** (`extensaoPorConteudo`, magic bytes) — porque o
+   mimetype do WhatsApp **pode divergir** do arquivo. `OggS` → ogg, `RIFF` →
+   wav, `ID3`/frame → mp3, `EBML` → webm, `ftyp` → m4a. O conteúdo **manda**
+   sobre o mimetype.
+3. **Conversão quando não reconhece** (`normalizarParaGroq`): se o formato não
+   está na lista do Groq (ex.: `amr`, `3gp`), converte para **OGG/Opus** com o
+   ffmpeg do sistema.
+
+### O bug que a correção revelou (e que o teste pegou)
+A 1ª versão do `normalizarParaGroq` caía no mimetype quando o conteúdo era
+desconhecido — e o mimetype virava `'ogg'` por padrão, que **está** na lista
+aceita. Ou seja: um AMR **passaria cru** e o Groq recusaria de novo. Agora
+**conteúdo desconhecido = converter** (o caminho seguro). Medido com um AMR
+gerado pelo ffmpeg: vira OGG de verdade (`4f676753` = `OggS`).
+
+### Testes — `tests/iap.test.js` (**44 testes / 117 asserções, 0 falhas**)
++5: `extensaoDoAudio` cobre os mimetypes do WhatsApp; `extensaoPorConteudo` lê
+os 6 magic bytes (e devolve `null` para AMR); o arquivo do Groq sai como
+`audio.ogg` (**antes ia sem extensão**); o **conteúdo manda** sobre o mimetype
+(MP3 rotulado `ogg` é detectado como mp3); e **conteúdo desconhecido é
+convertido** de verdade (AMR → OGG, com ffmpeg real). Regressões verdes: `ia`
+20/50, `motor-chat-noise` 14/62.
+
+### LIÇÃO DE MÉTODO
+Duas armadilhas no mesmo ponto:
+1. **A API classifica pelo NOME, não pelo mimetype.** Mandar `type: 'audio/ogg'`
+   num arquivo chamado `audio` (sem extensão) não resolve — o formato é lido do
+   nome;
+2. **o default silencioso esconde o problema.** `extensaoDoAudio` devolvendo
+   `'ogg'` para qualquer coisa desconhecida fez o AMR "passar" pelo filtro e
+   falhar na API. Um default que *parece* funcionar é pior que um erro claro —
+   por isso o caminho de conteúdo desconhecido agora **converte**.

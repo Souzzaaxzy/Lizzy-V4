@@ -716,6 +716,85 @@ await test('transcreverArquivoGroq: sem chave não chama a rede', async () => {
   ok(chamou === false, 'não tocou na rede');
 });
 
+// ============================================================================
+// 10) FORMATO do arquivo — o "file must be one of the following types"
+// ============================================================================
+
+await test('extensaoDoAudio: mapeia os mimetypes que o WhatsApp usa', async () => {
+  const stt = await import(new URL('../dados/src/utils/iapStt.js', import.meta.url).href);
+  const casos = [
+    ['audio/ogg; codecs=opus', 'ogg'],   // nota de voz (o caso comum)
+    ['audio/ogg', 'ogg'],
+    ['audio/mpeg', 'mp3'],
+    ['audio/mp4', 'm4a'],
+    ['audio/wav', 'wav'],
+    ['audio/webm', 'webm'],
+    ['audio/opus', 'opus']
+  ];
+  for (const [mime, esperado] of casos) {
+    ok(stt.extensaoDoAudio(mime) === esperado, `${mime} -> ${esperado} (${stt.extensaoDoAudio(mime)})`);
+  }
+});
+
+await test('extensaoPorConteudo: lê o magic byte (o mimetype pode mentir)', async () => {
+  const stt = await import(new URL('../dados/src/utils/iapStt.js', import.meta.url).href);
+  ok(stt.extensaoPorConteudo(Buffer.from([0x4f, 0x67, 0x67, 0x53, 0, 2, 0, 0])) === 'ogg', 'OggS -> ogg');
+  ok(stt.extensaoPorConteudo(Buffer.from('RIFF____WAVE', 'ascii')) === 'wav', 'RIFF -> wav');
+  ok(stt.extensaoPorConteudo(Buffer.from([0x49, 0x44, 0x33, 3, 0, 0, 0])) === 'mp3', 'ID3 -> mp3');
+  ok(stt.extensaoPorConteudo(Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0, 0, 0, 0])) === 'webm', 'EBML -> webm');
+  ok(stt.extensaoPorConteudo(Buffer.from([0, 0, 0, 0x20, 0x66, 0x74, 0x79, 0x70])) === 'm4a', 'ftyp -> m4a');
+  ok(stt.extensaoPorConteudo(Buffer.from([0x23, 0x21, 0x41, 0x4d, 0x52])) === null, 'AMR -> null (não conhece)');
+});
+
+await test('transcreverArquivoGroq: o arquivo vai com a EXTENSÃO certa (o bug)', async () => {
+  // O Groq decide o formato pela extensão. Antes daqui saía `audio` (sem
+  // extensão) e a API recusou: "file must be one of the following types: [...]".
+  const stt = await import(new URL('../dados/src/utils/iapStt.js', import.meta.url).href);
+  const ogg = Buffer.concat([Buffer.from([0x4f, 0x67, 0x67, 0x53, 0, 2, 0, 0]), Buffer.alloc(200, 1)]);
+  let visto = null;
+  stt.setIapHttpForTest(async (url, body) => { visto = body; return { data: 'ok' }; });
+  process.env.GROQ_API_KEY = 'gsk_teste';
+  await stt.transcreverArquivoGroq(ogg, 'audio/ogg; codecs=opus');
+  delete process.env.GROQ_API_KEY;
+  stt.setIapHttpForTest(null);
+  const nome = visto.get('file')?.name || '';
+  ok(nome === 'audio.ogg', `nome com extensão (${nome})`);
+  ok(/\.(ogg|opus|mp3|m4a|wav|webm|flac|mp4|mpeg|mpga)$/.test(nome), 'extensão aceita pelo Groq');
+});
+
+await test('normalizarParaGroq: o CONTEÚDO manda sobre o mimetype', async () => {
+  const stt = await import(new URL('../dados/src/utils/iapStt.js', import.meta.url).href);
+  // MP3 de verdade, mas o mimetype diz "ogg" (o WhatsApp às vezes diverge).
+  const mp3 = Buffer.concat([Buffer.from([0x49, 0x44, 0x33, 3, 0, 0, 0]), Buffer.alloc(200, 2)]);
+  const r = await stt.normalizarParaGroq(mp3, 'audio/ogg');
+  ok(r.extensao === 'mp3', `detectou mp3 pelo conteúdo (${r.extensao})`);
+  ok(r.convertido === false, 'não converteu (mp3 já é aceito)');
+});
+
+await test('normalizarParaGroq: conteúdo DESCONHECIDO é convertido (não passa cru)', async () => {
+  const stt = await import(new URL('../dados/src/utils/iapStt.js', import.meta.url).href);
+  const { spawnSync } = await import('child_process');
+  const temFfmpeg = spawnSync(process.env.FFMPEG_PATH || 'ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0;
+  if (!temFfmpeg) {
+    console.log('     (pulado: a conversão precisa do ffmpeg)');
+    return;
+  }
+  // AMR de verdade: não está na lista do Groq -> precisa virar OGG.
+  const fs = await import('fs');
+  const os = await import('os');
+  const path = await import('path');
+  const tmp = path.join(os.tmpdir(), `amr-${Date.now()}.amr`);
+  spawnSync(process.env.FFMPEG_PATH || 'ffmpeg',
+    ['-y', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1', '-ar', '8000', '-ac', '1', tmp],
+    { stdio: 'ignore' });
+  const amr = fs.readFileSync(tmp);
+  fs.unlinkSync(tmp);
+  const r = await stt.normalizarParaGroq(amr, 'audio/amr');
+  ok(r.convertido === true, 'converteu o AMR');
+  ok(r.extensao === 'ogg', `virou ogg (${r.extensao})`);
+  ok(r.bytes.toString('hex', 0, 4) === '4f676753', 'os bytes são OGG de verdade (OggS)');
+});
+
 await test('iapTts: caminho REAL (edge-tts + ffmpeg) gera PCM 16 kHz', async () => {
   const tts = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
   // O teste anterior (fallback) mexeu no PATH e envenenou o cache negativo.

@@ -33,6 +33,7 @@
  */
 
 import axios from 'axios';
+import { spawn } from 'child_process';
 import * as ia from '../funcs/private/ia.js';
 import { pcmParaWav, TAXA_MOTOR } from './iapAudio.js';
 
@@ -86,6 +87,129 @@ function textoDaResposta(data) {
  */
 export function chaveGroq() {
   return String(process.env.GROQ_API_KEY || '').trim();
+}
+
+/**
+ * Extensao de arquivo a partir do mimetype.
+ *
+ * ## O BUG que isto corrige (o Groq recusou a transcricao)
+ *
+ * O Groq decide o formato do audio pela **EXTENSAO do nome do arquivo**, nao
+ * pelo mimetype. O `!transcrever` mandava o arquivo chamado so' `'audio'` —
+ * sem extensao — e a API recusou:
+ *
+ *     file must be one of the following types: [flac mp3 mp4 mpeg mpga m4a
+ *     ogg opus wav webm]
+ *
+ * Uma nota de voz do WhatsApp e' OGG/Opus, entao o nome certo e' `audio.ogg`.
+ *
+ * @param {string} mimeType
+ * @returns {string} extensao SEM ponto (ex.: 'ogg')
+ */
+export function extensaoDoAudio(mimeType) {
+  const m = String(mimeType || '').toLowerCase().split(';')[0].trim();
+  const mapa = {
+    'audio/ogg': 'ogg',
+    'audio/opus': 'opus',
+    'audio/mpeg': 'mp3',
+    'audio/mp3': 'mp3',
+    'audio/mp4': 'm4a',
+    'audio/m4a': 'm4a',
+    'audio/x-m4a': 'm4a',
+    'audio/wav': 'wav',
+    'audio/wave': 'wav',
+    'audio/x-wav': 'wav',
+    'audio/webm': 'webm',
+    'audio/flac': 'flac',
+    'audio/x-flac': 'flac',
+    'video/mp4': 'mp4',
+    'video/mpeg': 'mpeg',
+    'video/webm': 'webm'
+  };
+  return mapa[m] || 'ogg';
+}
+
+/** Formatos que o Groq Whisper aceita (a extensao decide). */
+const EXTENSOES_GROQ = new Set(['flac', 'mp3', 'mp4', 'mpeg', 'mpga', 'm4a', 'ogg', 'opus', 'wav', 'webm']);
+
+/**
+ * Detecta o formato pelos BYTES INICIAIS (magic bytes).
+ *
+ * ## Por que NAO confiar no mimetype
+ *
+ * O Groq decide o formato pela **extensao**, e o mimetype que o WhatsApp manda
+ * pode nao bater com o conteudo (ex.: um container marcado como `audio/ogg`).
+ * Mandar a extensao errada faz a API recusar com *"file must be one of the
+ * following types"* — foi o erro do log. Ler o magic byte resolve na origem:
+ * a extensao passa a descrever o que o arquivo **e'**, nao o que ele **diz**.
+ *
+ * @param {Buffer} b
+ * @returns {string|null} extensao, ou null se nao reconhecer
+ */
+export function extensaoPorConteudo(b) {
+  if (!Buffer.isBuffer(b) || b.length < 4) return null;
+  const h = b.toString('hex', 0, 4).toLowerCase();
+  if (h.startsWith('4f676753')) return 'ogg';                 // "OggS"
+  if (h.startsWith('52494646')) return 'wav';                 // "RIFF" (WAVE)
+  if (h.startsWith('494433') || h.startsWith('fffb') || h.startsWith('fff3')) return 'mp3'; // ID3 / frame
+  if (h === '1a45dfa3') return 'webm';                        // EBML (webm/mkv)
+  if (h.startsWith('664c6143')) return 'flac';                // "fLaC"
+  // MP4/M4A: "....ftyp" (o tamanho vem antes do 'ftyp').
+  if (b.length >= 8 && b.toString('ascii', 4, 8) === 'ftyp') return 'm4a';
+  return null;
+}
+
+/**
+ * Garante um audio em formato aceito pelo Groq.
+ *
+ * Escolhe a extensao pelo CONTEUDO (magic bytes) e, so' se nao reconhecer,
+ * cai no mimetype. Se mesmo assim o formato nao for aceito (ex.: `amr`, `3gp`),
+ * converte para **OGG/Opus** com o ffmpeg do sistema — que o bot ja' exige.
+ *
+ * @param {Buffer} arquivo
+ * @param {string} extensaoDoMime
+ * @returns {Promise<{ bytes: Buffer, extensao: string, convertido: boolean }>}
+ */
+export function normalizarParaGroq(arquivo, extensaoDoMime) {
+  const porConteudo = extensaoPorConteudo(arquivo);
+  // Se o CONTEUDO foi reconhecido, ele manda (o mimetype pode mentir).
+  if (porConteudo && EXTENSOES_GROQ.has(porConteudo)) {
+    return Promise.resolve({ bytes: arquivo, extensao: porConteudo, convertido: false });
+  }
+  // Conteudo DESCONHECIDO: nao da' para confiar no mimetype (ele vira 'ogg' por
+  // padrao e "passaria", mas o arquivo pode ser amr/3gp e o Groq recusaria).
+  // Converter e' o caminho seguro.
+  const ext = porConteudo || extensaoDoMime || 'desconhecido';
+  return new Promise((resolve) => {
+    let proc;
+    try {
+      proc = spawn(process.env.FFMPEG_PATH || 'ffmpeg', [
+        '-hide_banner', '-loglevel', 'error',
+        '-i', 'pipe:0',
+        '-vn', '-c:a', 'libopus', '-b:a', '64k', '-ar', '48000', '-ac', '1',
+        '-f', 'ogg', 'pipe:1'
+      ], { stdio: ['pipe', 'pipe', 'ignore'] });
+    } catch {
+      resolve({ bytes: arquivo, extensao: ext, convertido: false });
+      return;
+    }
+    const pedacos = [];
+    let terminou = false;
+    const encerrar = (v) => { if (!terminou) { terminou = true; clearTimeout(t); resolve(v); } };
+    const t = setTimeout(() => { try { proc.kill('SIGKILL'); } catch { /* ok */ } encerrar({ bytes: arquivo, extensao: ext, convertido: false }); }, 60000);
+    proc.on('error', () => encerrar({ bytes: arquivo, extensao: ext, convertido: false }));
+    proc.stdout.on('data', (d) => pedacos.push(d));
+    proc.stdout.on('end', () => {
+      const b = Buffer.concat(pedacos);
+      // So' aceita a conversao se ela realmente produziu audio.
+      if (b.length > 100) encerrar({ bytes: b, extensao: 'ogg', convertido: true });
+      else encerrar({ bytes: arquivo, extensao: ext, convertido: false });
+    });
+    try {
+      proc.stdin.on('error', () => { /* EPIPE */ });
+      proc.stdin.end(arquivo);
+    } catch { encerrar({ bytes: arquivo, extensao: ext, convertido: false }); }
+  });
 }
 
 /**
@@ -149,9 +273,15 @@ export async function transcreverArquivoGroq(arquivo, mimeType = 'audio/ogg') {
   const apiKey = chaveGroq();
   if (!apiKey) return { ok: false, motivo: 'sem_chave_groq' };
 
+  // O nome do arquivo precisa ter a EXTENSAO certa: o Groq decide o formato por
+  // ela, nao pelo mimetype. Sem isso a API recusa ("file must be one of the
+  // following types: [...]").
+  const ext = extensaoDoAudio(mimeType);
+  const pronto = await normalizarParaGroq(arquivo, ext);
+
   try {
     const form = new FormData();
-    form.append('file', new Blob([arquivo], { type: mimeType }), 'audio');
+    form.append('file', new Blob([pronto.bytes], { type: mimeType }), `audio.${pronto.extensao}`);
     form.append('model', MODELO_GROQ);
     form.append('language', 'pt');
     form.append('response_format', 'text');
