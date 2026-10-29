@@ -92,6 +92,36 @@ await test('NAO confunde conversa com comando (falsos positivos)', (ok) => {
   }
 });
 
+await test('identifica: letra / clima / google (membro, so\' texto)', (ok) => {
+  const casos = [
+    ['letra', 'qual a letra de Evidências', 'Evidências'],
+    ['letra', 'me diz a letra de Back to Black', 'Back to Black'],
+    ['letra', 'letra de Evidências', 'Evidências'],
+    ['clima', 'como está o tempo em São Paulo', 'São Paulo'],
+    ['clima', 'clima em Tokyo', 'Tokyo'],
+    ['clima', 'previsão do tempo no Rio', 'Rio'],
+    ['clima', 'qual a temperatura em Curitiba', 'Curitiba'],
+    ['google', 'pesquisa sobre gatos no google', 'gatos'],
+    ['google', 'busca no google receita de bolo', 'receita de bolo'],
+    ['google', 'pesquisa na internet sobre IA', 'IA']
+  ];
+  for (const [cmd, fala, args] of casos) {
+    const r = identificarComando(fala);
+    ok(r && r.comando === cmd, `"${fala}" -> ${cmd} (${r ? r.comando : 'null'})`);
+    ok(r && r.args === args, `args "${r?.args}" (esperado "${args}")`);
+  }
+});
+
+await test('letra/clima/google NAO roubam o play (desambiguacao)', (ok) => {
+  // "toca X" continua play; so' com "letra"/"tempo"/"google" vira o outro.
+  ok(identificarComando('toca Evidências')?.comando === 'play', 'toca -> play');
+  ok(identificarComando('quero ouvir Djavan')?.comando === 'play', 'ouvir -> play');
+  ok(identificarComando('qual a letra de Evidências')?.comando === 'letra', 'letra -> letra');
+  ok(identificarComando('procura no pinterest gatos')?.comando === 'pin', 'pinterest -> pin');
+  // "pesquisa no pinterest" NAO pode virar google (o pinterest e' checado antes).
+  ok(identificarComando('pesquisa no pinterest gatinhos')?.comando === 'pin', 'pinterest vence google');
+});
+
 await test('CORPUS: 40 frases reais -> comando certo (e 17 conversas barradas)', (ok) => {
   // Medicao virada teste: cobre as formas como se PEDE de verdade — com
   // prefixos ("me toca"), erros do STT ("toga"/"toka"), acento na palavra errada
@@ -143,8 +173,8 @@ await test('desambigua: "procura a musica X" x "procura no pinterest X"', (ok) =
 });
 
 await test('a lista de comandos e a FONTE UNICA (allowlist)', (ok) => {
-  ok(Object.keys(COMANDOS_VOZ).sort().join(',') === 'figualeatoria,pin,play,tiktok',
-    `os 4 comandos (${Object.keys(COMANDOS_VOZ).join(',')})`);
+  ok(Object.keys(COMANDOS_VOZ).sort().join(',') === 'clima,figualeatoria,google,letra,pin,play,tiktok',
+    `os 7 comandos (${Object.keys(COMANDOS_VOZ).join(',')})`);
   ok(ehComandoPermitido('play') === true, 'play permitido');
   ok(ehComandoPermitido('ban') === false, 'ban NAO permitido por voz');
   ok(ehComandoPermitido('kick') === false, 'kick NAO permitido');

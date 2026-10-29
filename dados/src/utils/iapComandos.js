@@ -59,6 +59,21 @@ export const COMANDOS_VOZ = Object.freeze({
     descricao: 'manda uma figurinha aleatoria',
     exemplo: 'manda uma figurinha aleatoria',
     semArgs: true
+  },
+  letra: {
+    descricao: 'mostra a letra de uma musica',
+    exemplo: 'qual a letra de Evidencias',
+    semArgs: false
+  },
+  clima: {
+    descricao: 'mostra a previsao do tempo de uma cidade',
+    exemplo: 'como esta o tempo em Sao Paulo',
+    semArgs: false
+  },
+  google: {
+    descricao: 'pesquisa algo na web',
+    exemplo: 'pesquisa sobre gatos no google',
+    semArgs: false
   }
 });
 
@@ -85,6 +100,28 @@ const POR_PLATAFORMA = [
     /\bpinterest\b/i,
     /\bno\s+pin\b/i,
     /\bpin\s+(do|de)\b/i
+  ]],
+  // CLIMA: a palavra "tempo/clima/previsao" e' o que identifica (nao ha verbo).
+  ['clima', [
+    /\b(previsao\s+do\s+tempo|previsao\s+de\s+tempo)\b/i,
+    /\bclima\b/i,
+    /\btemperatura\b/i,
+    /\bcomo\s+(esta|ta|vai)\s+(o\s+)?(tempo|clima)\b/i,
+    /\b(esta|ta)\s+(chovendo|fazendo\s+(sol|frio|calor))\b/i,
+    /\bque\s+(horas?\s+)?(dia|tempo)\s+(esta|ta|faz)\b/i
+  ]],
+  // LETRA: precisa da palavra "letra" (senao "toca X" e' play).
+  ['letra', [
+    /\bletra\b/i,
+    /\bme\s+diz\s+a\s+letra\b/i
+  ]],
+  // GOOGLE: pedido de PESQUISA explicito (a palavra "pesquisa" sozinha nao basta
+  // -- "pesquisa no pinterest" ja' e' pin, checado antes).
+  ['google', [
+    /\b(pesquisa|pesquisar|busca|buscar)\b[^]*\b(no\s+)?google\b/i,
+    /\bno\s+google\b/i,
+    /\bpesquisa\s+(na\s+)?(web|internet)\b/i,
+    /\bprocura\s+(na\s+)?(web|internet)\b/i
   ]]
 ];
 
@@ -191,6 +228,26 @@ function extrairArgs(texto, comando) {
   }
   if (comando === 'pin') t = t.replace(/\b(no\s+)?pinterest\b/gi, ' ');
   if (comando === 'figualeatoria') return '';
+  // LETRA: tira a moldura do pedido — "qual a letra de X" -> "X".
+  if (comando === 'letra') {
+    t = t.replace(/\b(letra|letras)\b/gi, ' ');
+    t = t.replace(/\b(qual\s+(e\s+)?(a\s+)?|me\s+diz\s+(a\s+)?|quero\s+(saber\s+)?(a\s+)?|me\s+mostra\s+(a\s+)?)\b/gi, ' ');
+  }
+  // CLIMA: tira a moldura — "como esta o tempo em X" -> "X".
+  if (comando === 'clima') {
+    t = t.replace(/\b(previsao\s+do\s+tempo|previsao\s+de\s+tempo|previsao|clima|temperatura|tempo)\b/gi, ' ');
+    t = t.replace(/\b(como\s+(esta|ta|vai)|esta|ta|fazendo)\b/gi, ' ');
+    // "qual a temperatura em X" -> tira a moldura do pedido.
+    t = t.replace(/\b(qual\s+(e\s+)?(a\s+)?|me\s+diz\s+(a\s+)?|me\s+mostra\s+(a\s+)?)\b/gi, ' ');
+    t = t.replace(/^\s*(no|na|em|de|do|da)\s+/i, ' ');
+  }
+  // GOOGLE: tira a moldura — "pesquisa sobre X no google" -> "X".
+  if (comando === 'google') {
+    t = t.replace(/\b(no\s+)?google\b/gi, ' ');
+    t = t.replace(/\b(na\s+)?(web|internet)\b/gi, ' ');
+    t = t.replace(/\b(pesquisa|pesquisar|busca|buscar|procura|procurar)\b/gi, ' ');
+    t = t.replace(/\bsobre\b/gi, ' ');
+  }
 
   // Tira prefixo + verbo/pedido + artigo + a palavra do tipo, REPETIDAMENTE.
   const VERBO = new RegExp(`^\\s*(${VERBO_TOCAR}|${VERBO_PEDIDO}|pesquisa|pesquisar)\\b`, 'i');
@@ -201,7 +258,7 @@ function extrairArgs(texto, comando) {
     t = t.replace(/^\s*(a|o|as|os|uma|um|esse|essa|este|esta|meu|minha|aquela|aquele|em)\s+/i, ' ');
     t = t.replace(/^\s*(musica|musicas|som|sons|faixa|audio|video|clipe|playlist|album|do|da|de)\s+/i, ' ');
     // "toca essa musica" sem nome: sobra so' o tipo -> vazio (ela pergunta).
-    if (/^\s*(musica|musicas|som|sons|faixa|audio|video|clipe|playlist|album)\s*$/i.test(t)) { t = ''; break; }
+    if (/^\s*(musica|musicas|som|sons|faixa|audio|video|clipe|playlist|album|letra|tempo|clima|google|previsao)\s*$/i.test(t)) { t = ''; break; }
     if (t === antes) break;
   }
   t = t.replace(/\s{2,}/g, ' ').trim();
