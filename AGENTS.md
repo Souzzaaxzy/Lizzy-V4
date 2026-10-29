@@ -14319,3 +14319,49 @@ Regressões verdes: `ia` 20/50, `motor-chat-noise` 14/62, `cmd-suggest` 21/68,
 - **STT em fluxo**: o Whisper so' transcreve depois da frase fechada (e' o
   desenho do VAD). Um STT incremental reduziria a espera, mas nenhum provedor
   gratis expoe isso de forma estavel.
+
+## 🗣️ `!iap` — a Lizzy sabe QUEM falou e chama a pessoa pelo NOME (out/2026) ✅
+Pedido do dono: *"identificar os usuários na call e quem falou com ele, usando o
+jid, converte para número, olha o nome do contato e chama a pessoa pelo nome"*.
+
+### A peça já existia; faltava LIGAR
+O motor entrega o áudio **por participante** (`participantAudio: true`, ligado
+desde a guarda de permissão), então o **JID de quem falou** já chegava ao
+`pensarComIa` — só era usado para a guarda. Agora ele vira **nome**:
+
+```
+JID do audio por participante
+  -> resolverNomeContato (agenda > notify > verifiedName > metadata)
+  -> "Quem esta falando com voce AGORA e' <NOME>"
+```
+
+O `index.js` injeta `nomeDeQuemFalou` usando o **MESMO resolvedor do `!me`/`!cf`**
+(`utils/contactName.js`) — nenhum sistema paralelo.
+
+### O que o prompt passa a dizer
+- `Quem esta falando com voce AGORA e' Kannon.`
+- `ATENCAO: Kannon e' o DONO do bot — trate com deferencia.` (quando é o dono)
+- `Dirija-se a ele(a) pelo nome (Kannon) quando fizer sentido, sem exagerar.`
+- **Sem** nome resolvido: `Voce nao sabe quem falou esta frase — se precisar de um
+  nome, pergunte.` (não inventa)
+
+### A guarda que evita vergonha
+Um **JID/LID cru NUNCA** entra como nome: se o resolvedor cair no id (não devia),
+o prompt fica sem nome — melhor do que a Lizzy chamar a pessoa de
+`@23734744260711`.
+
+### Testes — `tests/iap.test.js` (**69 testes / 212 asserções, 0 falhas**)
++4: o prompt diz quem fala e marca o dono; o `pensarComIa` resolve o JID→nome;
+**não passa JID cru** como nome; e o **fio de ponta a ponta** (`ligarIap` → agente
+registrado → `pensar` com `quemFalou` → o prompt recebe o nome).
+**Verificado que medem**: tirando o `nomeDeQuemFalou` do fio, **1 asserção falha**.
+
+Regressões verdes: `ia` 20/50, `motor-chat-noise` 14/62, `cmd-suggest` 21/68,
+`get-message-inspector` 54/269, `contact-name` 16/37.
+
+### LIMITE HONESTO
+Não há sessão de WhatsApp aqui, então **não** validei numa call real. O que está
+provado: o `quemFalou` chega (o motor já emitia por participante), o JID vira nome
+pelo resolvedor do bot, e o nome entra no prompt. Se o motor não emitir o
+`participantJid` em algum cenário, o prompt fica **sem nome** (a Lizzy pergunta) —
+nunca inventa.
