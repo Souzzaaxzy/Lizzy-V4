@@ -417,12 +417,74 @@ await test('!iap: o agente é desligado quando a call cai (reconciliação)', as
 // 6) INTEGRAÇÃO LEVE (prompt e sessão)
 // ============================================================================
 
-await test('promptDoSistema: sem markdown e pedindo fala curta', () => {
-  const p = promptDoSistema({ botName: 'Lizzy' });
-  includes(p, 'Lizzy', 'usa o nome do bot');
-  includes(p, 'portugues', 'idioma');
-  ok(/curtas/i.test(p), 'pede frases curtas');
-  ok(!/\*\*/.test(p) === false || true, 'sem markdown (texto fala de não usar)');
+await test('montarSistemaDoAgente: usa a PERSONALIDADE do grupo (não o genérico)', async () => {
+  // Antes o `!iap` tinha um prompt genérico próprio ("Voce e' X, um assistente
+  // de voz...") e respondia sem graça, ignorando a personalidade configurada.
+  const sess = await import(new URL('../dados/src/utils/iapSessao.js', import.meta.url).href);
+  const abyss = sess.montarSistemaDoAgente({ personalidade: 'abyss', botName: 'Lizzy' });
+  ok(/Abyss/i.test(abyss), 'personalidade abyss usa o prompt da Abyss');
+  ok(/tsundere/i.test(abyss), 'traz os traços da personalidade');
+
+  const humana = sess.montarSistemaDoAgente({ personalidade: 'humana', botName: 'Lizzy' });
+  ok(humana !== abyss, 'personalidade diferente muda o prompt');
+  ok(!/tsundere/i.test(humana), 'a humana não tem o traço da Abyss');
+});
+
+await test('montarSistemaDoAgente: o agente SABE quem é o dono e quem está na call', async () => {
+  const sess = await import(new URL('../dados/src/utils/iapSessao.js', import.meta.url).href);
+  const s = sess.montarSistemaDoAgente({
+    personalidade: 'abyss', botName: 'Lizzy',
+    nomeDono: 'Kannon', participantes: ['Joao', 'Maria']
+  });
+  includes(s, 'Kannon', 'diz o nome do dono');
+  ok(/dono/i.test(s), 'deixa explícito que é o dono');
+  includes(s, 'Joao', 'lista quem está na call');
+  // O áudio chega MIXADO: o agente não deve inventar quem falou.
+  ok(/misturad/i.test(s), 'avisa que o áudio chega misturado');
+});
+
+await test('montarSistemaDoAgente: tem as regras de FALA (não de texto)', async () => {
+  const sess = await import(new URL('../dados/src/utils/iapSessao.js', import.meta.url).href);
+  const s = sess.montarSistemaDoAgente({ personalidade: 'abyss' });
+  ok(/frases CURTAS/i.test(s), 'pede frases curtas');
+  ok(/emojis|markdown/i.test(s), 'proíbe emoji/markdown (vai ser falado)');
+  ok(/CHAMADA DE VOZ/i.test(s), 'sabe que está numa call');
+});
+
+await test('montarSistemaDoAgente: sem personalidade cai no abyss (o padrão)', async () => {
+  const sess = await import(new URL('../dados/src/utils/iapSessao.js', import.meta.url).href);
+  const semNada = sess.montarSistemaDoAgente({});
+  const abyss = sess.montarSistemaDoAgente({ personalidade: 'abyss' });
+  ok(semNada === abyss, 'sem personalidade = abyss');
+});
+
+await test('VOZES_PTBR: as femininas são a Francisca e a Thalita', async () => {
+  // O dono pediu voz de MULHER. O padrão anterior (Antonio) era MASCULINO.
+  const tts = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
+  ok(tts.VOZES_PTBR.francisca === 'pt-BR-FranciscaNeural', 'francisca é feminina');
+  ok(tts.VOZES_PTBR.thalita === 'pt-BR-ThalitaMultilingualNeural', 'thalita é feminina');
+  ok(tts.VOZES_PTBR.antonio === 'pt-BR-AntonioNeural', 'antonio é a masculina');
+});
+
+await test('iapTts: a voz PADRÃO é feminina (Francisca)', async () => {
+  const tts = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
+  const anterior = process.env.IAP_TTS_VOICE;
+  delete process.env.IAP_TTS_VOICE;
+  const cfg = tts.configTts();
+  if (anterior !== undefined) process.env.IAP_TTS_VOICE = anterior;
+  ok(cfg.vozEdge === 'pt-BR-FranciscaNeural', `voz feminina por padrão (${cfg.vozEdge})`);
+  ok(/Francisca|Thalita/.test(cfg.vozEdge), 'é uma das femininas');
+});
+
+await test('iapTts: a voz é lida em TEMPO DE USO (troca sem reiniciar)', async () => {
+  const tts = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
+  const anterior = process.env.IAP_TTS_VOICE;
+  process.env.IAP_TTS_VOICE = 'pt-BR-ThalitaMultilingualNeural';
+  const cfg = tts.configTts();
+  if (anterior !== undefined) process.env.IAP_TTS_VOICE = anterior;
+  else delete process.env.IAP_TTS_VOICE;
+  ok(cfg.vozEdge === 'pt-BR-ThalitaMultilingualNeural',
+    `trocou em runtime (${cfg.vozEdge})`);
 });
 
 await test('iapSessao: pensaComIa e ligar/desligar existem', async () => {

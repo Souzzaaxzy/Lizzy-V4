@@ -26,8 +26,33 @@ import path from 'path';
 import axios from 'axios';
 import { resamplePcm, wavParaPcm, TAXA_MOTOR } from './iapAudio.js';
 
-/** Voz padrao do edge-tts (pt-BR). */
-const VOZ_EDGE = process.env.IAP_TTS_VOICE || 'pt-BR-AntonioNeural';
+
+/**
+ * Voz do edge-tts (a voz do agente).
+ *
+ * ## Feminina por padrão
+ *
+ * O padrão anterior (`pt-BR-AntonioNeural`) era **MASCULINO** — o dono pediu voz
+ * de mulher. As vozes **femininas** pt-BR do edge-tts são:
+ *
+ *  - **`pt-BR-FranciscaNeural`** (padrão) — feminina, natural;
+ *  - `pt-BR-ThalitaMultilingualNeural` — feminina, multilíngue.
+ *
+ * (O único masculino é o Antonio.)
+ *
+ * Lida em TEMPO DE USO (não no import): o comando `!iap voz` troca a voz em
+ * runtime, sem reiniciar o bot.
+ */
+function vozEdge() {
+  return process.env.IAP_TTS_VOICE || 'pt-BR-FranciscaNeural';
+}
+
+/** As vozes pt-BR conhecidas (para o comando `!iap voz`). */
+export const VOZES_PTBR = Object.freeze({
+  francisca: 'pt-BR-FranciscaNeural',
+  thalita: 'pt-BR-ThalitaMultilingualNeural',
+  antonio: 'pt-BR-AntonioNeural'
+});
 
 /** Modelo do Gemini TTS (fallback). */
 const MODELO_TTS = process.env.IAP_TTS_MODEL || 'gemini-2.5-flash-preview-tts';
@@ -128,7 +153,7 @@ async function sintetizarEdge(texto) {
       try {
         proc = spawn(bin.cmd, [
           ...bin.base,
-          '--voice', VOZ_EDGE,
+          '--voice', vozEdge(),
           '--text', texto,
           '--write-media', saida
         ], { stdio: ['ignore', 'ignore', 'ignore'] });
@@ -290,5 +315,5 @@ export function converterPara16k(arquivo) {
 
 /** Voz e modelo em uso (diagnostico/testes). */
 export function configTts() {
-  return { vozEdge: VOZ_EDGE, modeloGemini: MODELO_TTS, vozGemini: VOZ_GEMINI };
+  return { vozEdge: vozEdge(), modeloGemini: MODELO_TTS, vozGemini: VOZ_GEMINI };
 }

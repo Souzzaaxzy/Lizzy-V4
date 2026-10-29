@@ -18,7 +18,7 @@ import * as ia from '../funcs/private/ia.js';
 import { groqChat } from './groqClient.js';
 import { transcreverPcm, chaveGroq } from './iapStt.js';
 import { sintetizarFala } from './iapTts.js';
-import { iap, promptDoSistema } from './iapVoice.js';
+import { iap } from './iapVoice.js';
 import {
   aoOuvirAudioDaCall,
   modoAudioExternoDaCall,
@@ -45,23 +45,91 @@ function chaveGemini() {
 }
 
 /**
+ * Monta o prompt de sistema do agente de voz.
+ *
+ * Junta duas coisas:
+ *  1. o **prompt da personalidade** (`ia.promptDaPersonalidade`) — o mesmo do
+ *     chat, para o agente falar com o jeito configurado no grupo;
+ *  2. o **contexto da call** — quem está na chamada e quem é o dono.
+ *
+ * ## O ajuste para VOZ
+ *
+ * O prompt do chat foi escrito para TEXTO (pode ser longo). Na call a fala é
+ * lida em voz alta, então acrescentamos as regras de fala: frases curtas, sem
+ * emoji/markdown e sem listas.
+ *
+ * ## Sobre reconhecer o dono
+ *
+ * O áudio chega **mixado** (o motor não diz quem falou), então o agente não sabe
+ * QUAL pessoa disse a frase — mas sabe QUEM está na call. O contexto deixa o
+ * dono explícito, então "quem é o dono?" e "o que você faz?" têm resposta certa.
+ *
+ * @param {object} opts
+ * @param {string} [opts.personalidade]
+ * @param {string} [opts.botName]
+ * @param {string} [opts.nomeDono]
+ * @param {string[]} [opts.participantes]
+ * @returns {string}
+ */
+export function montarSistemaDoAgente({ personalidade, botName, nomeDono, participantes = [] } = {}) {
+  const base = (() => {
+    try {
+      const p = ia.promptDaPersonalidade?.(personalidade || 'abyss');
+      if (typeof p === 'string' && p.trim()) return p.trim();
+    } catch { /* cai no generico */ }
+    return `Voce e' ${botName || 'o bot'}, um assistente de voz numa chamada de grupo do WhatsApp.`;
+  })();
+
+  const contexto = [];
+  contexto.push('--- CONTEXTO DESTA CONVERSA ---');
+  contexto.push('Voce esta FALANDO numa CHAMADA DE VOZ de um grupo do WhatsApp. Sua resposta sera lida em voz alta.');
+  contexto.push('Responda em portugues do Brasil, em frases CURTAS e naturais de fala (2 a 3 no maximo).');
+  contexto.push('NUNCA use emojis, markdown, asteriscos ou listas — apenas o texto falado.');
+  contexto.push('Se nao entender ou o audio estiver inaudivel, diga apenas que nao entendeu.');
+  if (nomeDono) {
+    contexto.push(`O DONO do bot se chama ${nomeDono}. Trate-o com respeito e deferencia — ele e' quem manda.`);
+  }
+  if (Array.isArray(participantes) && participantes.length) {
+    const nomes = participantes.filter(Boolean).slice(0, 20).join(', ');
+    if (nomes) contexto.push(`Quem esta na chamada agora: ${nomes}.`);
+  }
+  contexto.push('Como o audio da chamada chega misturado, voce NAO sabe qual pessoa falou cada frase — nao invente de quem foi.');
+
+  return `${base}\n\n${contexto.join('\n')}`;
+}
+
+/**
  * O LLM do agente: texto -> resposta.
  *
- * **Groq** (`openai/gpt-oss-120b`), na mesma chave do `!keygroq`. O Gemini foi
- * removido daqui junto com o STT (pedido do dono): os dois lados do `!iap`
- * passam pelo mesmo provedor, sem dividir cota com os outros comandos.
+ * **Groq** (`openai/gpt-oss-120b`), na mesma chave do `!keygroq`.
  *
- * O historico entra como mensagens anteriores, para o agente lembrar do assunto.
+ * ## A personalidade é a MESMA do chat
+ *
+ * Usa `ia.promptDaPersonalidade(...)` — o prompt que a assistente do chat já usa
+ * (`abyss`/`humana`/`ia`/`pro`). Antes daqui saía um prompt genérico próprio, e o
+ * agente respondia sem graça ("Oi! Como posso ajudar?"), ignorando a
+ * personalidade configurada no grupo.
+ *
+ * ## O agente SABE com quem está falando
+ *
+ * O motor entrega o áudio **mixado** da call, sem dizer quem falou — então o
+ * agente não consegue atribuir a fala a uma pessoa. O que ele **sabe** é quem
+ * está na chamada: o `contexto` recebe os participantes e o dono, e o prompt
+ * deixa isso explícito. É o suficiente para tratar o dono como dono.
  *
  * @param {string} texto
  * @param {Array<{role:string, content:string}>} historico
  * @param {object} [opts]
- * @param {string} [opts.personalidade]
+ * @param {string} [opts.personalidade] `abyss` | `humana` | `ia` | `pro`
  * @param {string} [opts.botName]
+ * @param {string} [opts.nomeDono]
+ * @param {string[]} [opts.participantes] nomes de quem está na call
  * @returns {Promise<string>}
  */
-export async function pensarComIa(texto, historico = [], { personalidade, botName } = {}) {
-  const sistema = promptDoSistema({ botName, personalidade });
+export async function pensarComIa(texto, historico = [], {
+  personalidade, botName, nomeDono, participantes = []
+} = {}) {
+  const sistema = montarSistemaDoAgente({ personalidade, botName, nomeDono, participantes });
   const r = await groqChat({
     texto,
     sistema,
@@ -82,10 +150,12 @@ export async function pensarComIa(texto, historico = [], { personalidade, botNam
  * @param {string} grupo
  * @param {object} [opts]
  * @param {string} [opts.botName]
- * @param {string} [opts.personalidade]
+ * @param {string} [opts.personalidade] `abyss` | `humana` | `ia` | `pro`
+ * @param {string} [opts.nomeDono]
+ * @param {string[]} [opts.participantes]
  * @returns {Promise<{ ok: boolean, motivo?: string }>}
  */
-export async function ligarIap(grupo, { botName, personalidade } = {}) {
+export async function ligarIap(grupo, { botName, personalidade, nomeDono, participantes } = {}) {
   // O `!iap` inteiro roda no Groq (ouvir E pensar): sem a chave dele nao ha' o
   // que ligar. Antes esta checagem era da chave do Gemini.
   if (!chaveGroq()) return { ok: false, motivo: 'sem_chave_groq' };
@@ -104,7 +174,9 @@ export async function ligarIap(grupo, { botName, personalidade } = {}) {
 
   iap.ligar(grupo, {
     log: logIap,
-    pensar: (texto, historico) => pensarComIa(texto, historico, { botName, personalidade }),
+    pensar: (texto, historico) => pensarComIa(texto, historico, {
+      botName, personalidade, nomeDono, participantes
+    }),
     transcrever: async (pcm) => {
       const r = await transcreverPcm(pcm, { apiKey: chaveGroq() });
       if (!r.ok) {

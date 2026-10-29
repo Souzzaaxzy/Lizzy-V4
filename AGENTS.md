@@ -13949,3 +13949,72 @@ quando cai no Gemini, o **motivo do edge vai junto** no log. Regressões verdes:
 | `!gemma`/`!phi`/`!qwen`/`!llama` | Gemini (a chave do `!key`) |
 
 Com o edge-tts instalado, o `!iap` **não usa o Gemini em nada**.
+
+
+## 🎭 VOZ feminina + PERSONALIDADE no `!iap` (out/2026) ✅
+Pedido do dono: voz de mulher fixa, personalidade, reconhecer o dono e executar
+comandos.
+
+### 1. Voz FEMININA (o padrão era masculino!)
+O padrão era **`pt-BR-AntonioNeural` — masculino**. As vozes **femininas** pt-BR
+do edge-tts são duas (confirmado na lista de vozes):
+
+| apelido | voz | gênero |
+|---|---|---|
+| **`francisca`** (padrão) | `pt-BR-FranciscaNeural` | feminina |
+| `thalita` | `pt-BR-ThalitaMultilingualNeural` | feminina |
+| `antonio` | `pt-BR-AntonioNeural` | masculina |
+
+**Novo comando `!iap voz`** (sem argumento mostra a atual e as opções;
+`!iap voz francisca` troca e **grava no `.env`** — fica fixa para sempre).
+A voz passou a ser lida em **tempo de uso** (era uma `const` no import), então a
+troca vale na hora, sem reiniciar o bot.
+
+### 2. PERSONALIDADE — o bot JÁ TINHA, o `!iap` é que ignorava
+O bot já tem **4 personalidades** (`groupData.assistentePersonality`, comando
+`!assistente abyss|humana|ia|pro`):
+
+| personalidade | o que é |
+|---|---|
+| **`abyss`** (padrão) | vampira tsundere, PT-BR, gírias |
+| `humana` | age como pessoa real |
+| `ia` | direta e objetiva |
+| **`pro`** | **interpreta linguagem natural e executa comandos do bot** |
+
+O `!iap` usava um **prompt genérico próprio** ("Voce e' X, um assistente de
+voz...") — por isso respondia sem graça ("Oi! Como posso ajudar?"). Agora usa
+**`ia.promptDaPersonalidade()`** (fonte única, exportada), então o agente fala
+com o **mesmo jeito** configurado no grupo. O `!iap on` mostra qual está em uso.
+
+O prompt ganhou um bloco de **regras de FALA** por cima (frases curtas, sem
+emoji/markdown/listas) — o prompt do chat foi escrito para texto.
+
+### 3. RECONHECER O DONO — o que dá e o que não dá
+**O que NÃO dá:** o motor entrega o áudio **MIXADO** (`voip_call_inbound_audio`),
+sem dizer **quem falou**. Não há como atribuir uma frase a uma pessoa (existe
+`voip_call_participant_audio`, mas exigiria separar e casar cada fala).
+
+**O que dá (e foi feito):** o agente sabe **quem está na call** e **quem é o
+dono**. O `!iap on` passa o `nomedono` e os participantes do grupo, e o prompt
+diz: *"O DONO do bot se chama X. Trate-o com respeito e deferência"* + *"Quem
+está na chamada agora: ..."* + *"o áudio chega misturado, não invente de quem
+foi"*. Assim "quem é o dono?" tem resposta certa.
+
+### 4. EXECUTAR COMANDOS
+Já existe: a personalidade **`pro`** interpreta a fala e o `index.js` já tem o
+caminho que simula o comando (`respAssist.isCommand`). Trocar para ela com
+`!assistente pro` faz o agente **entender pedidos e rodar comandos do bot**.
+
+### Testes — `tests/iap.test.js` (**51 testes / 140 asserções, 0 falhas**)
++6: o prompt usa a **personalidade do grupo** (abyss ≠ humana, e a humana não
+tem o traço da Abyss); o agente **sabe o dono** e quem está na call, e avisa que
+o áudio é misturado; tem as **regras de fala**; sem personalidade cai no abyss;
+as vozes femininas são Francisca/Thalita; a **voz padrão é feminina**; e a voz é
+lida em **tempo de uso**. Regressões verdes: `ia` 20/50, `motor-chat-noise`
+14/62, `cmd-suggest` 21/68.
+
+### LIMITE HONESTO
+O dono confirmou que a voz atual funcionou. **Não** medi a naturalidade da voz
+Francisca no aparelho (é percepção) — o `!iap voz` existe justamente para trocar
+sem editar arquivo. E o agente **não** identifica quem falou (limite do motor,
+explicado acima).

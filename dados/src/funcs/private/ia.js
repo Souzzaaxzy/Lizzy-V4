@@ -2276,6 +2276,25 @@ function clearConversationData(maxAge = 7 * 24 * 60 * 60 * 1000) {
   });
 }
 
+/**
+ * O prompt de sistema de uma personalidade.
+ *
+ * **Fonte única**: usada pelo `processUserMessages` (a assistente do chat) E
+ * pelo agente de voz (`!iap`), para os dois falarem com o MESMO jeito. Antes o
+ * `!iap` tinha um prompt genérico próprio ("Voce e' X, um assistente de voz...")
+ * e por isso respondia sem graça ("Oi! Como posso ajudar?"), ignorando a
+ * personalidade configurada no grupo.
+ *
+ * @param {string} [personalidade] `abyss` (padrão) | `humana` | `ia` | `pro`
+ * @returns {string}
+ */
+function promptDaPersonalidade(personalidade) {
+  if (personalidade === 'humana') return ASSISTANT_PROMPT_HUMANA;
+  if (personalidade === 'ia') return ASSISTANT_PROMPT_IA;
+  if (personalidade === 'pro') return ASSISTANT_PROMPT_PRO;
+  return ASSISTANT_PROMPT_ABYSS;
+}
+
 async function processUserMessages(data, nazu = null, ownerNumber = null, personality = 'abyss') {
   try {
     const { mensagens, extraContext = {} } = data;
@@ -2324,16 +2343,7 @@ async function processUserMessages(data, nazu = null, ownerNumber = null, person
       updateHistorico(userId, 'user', msgValidada.texto, msgValidada.nome_enviou);
       
       // Selecionar o prompt baseado na personalidade
-      let selectedPrompt;
-      if (personality === 'humana') {
-        selectedPrompt = ASSISTANT_PROMPT_HUMANA;
-      } else if (personality === 'ia') {
-        selectedPrompt = ASSISTANT_PROMPT_IA;
-      } else if (personality === 'pro') {
-        selectedPrompt = ASSISTANT_PROMPT_PRO;
-      } else {
-        selectedPrompt = ASSISTANT_PROMPT_ABYSS;
-      }
+      let selectedPrompt = promptDaPersonalidade(personality);
       
       // Substituir variáveis dinâmicas no prompt
       selectedPrompt = replaceDynamicVariables(selectedPrompt, {
@@ -3693,4 +3703,5 @@ export {
   setGeminiHttpForTest,
   geminiRequestMultimodal,
   classificarErroGemini,
+  promptDaPersonalidade,
 };
