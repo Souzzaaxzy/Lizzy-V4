@@ -27,6 +27,10 @@
  * Modulo PURO: recebe o `env` por parametro e nao abre socket.
  */
 
+import fs from 'fs';
+import path from 'path';
+import { DONO_DIR } from './paths.js';
+
 /** Quantas chaves cabem (o dono pediu 10). */
 export const MAX_SLOTS = 10;
 
@@ -136,4 +140,142 @@ export function atualizarEnv(conteudo, slot, valor) {
   }
 
   return saida.join('\n');
+}
+
+
+// ───────────────────────────────────────────────────────────────────────────
+// O ESTADO DAS CHAVES (esgotadas hoje) — com RESET DIARIO
+// ───────────────────────────────────────────────────────────────────────────
+//
+// ## Por que um arquivo (e nao so' memoria)
+//
+// A cota do Groq e' DIARIA. Se o bot reiniciar no meio do dia, ele tem que
+// LEMBRAR quais chaves ja' estouraram — senao volta a tentar a primeira (que
+// esta morta) em cada mensagem, que era exatamente o conflito relatado.
+//
+// ## O reset e' por DIA (00:00)
+//
+// `resetarEsgotadas()` zera a lista, e o `carregarEstado()` chama isso sozinho
+// quando percebe que o dia mudou. Assim, virou o dia, tudo volta ao primeiro.
+
+/** O arquivo onde o estado vive (junto dos outros dados do dono). */
+function arquivoDeEstado() {
+  return process.env.GROQ_KEYS_STATE_FILE
+    || path.join(DONO_DIR, 'groqKeysState.json');
+}
+
+/** O dia de hoje, no fuso do Brasil (o mesmo do resto do bot). */
+function hoje() {
+  try {
+    return new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  } catch {
+    return new Date().toISOString().slice(0, 10);
+  }
+}
+
+/** O estado em memoria (evita ler o disco a cada chamada). */
+let _estado = null;
+
+/** Le' do disco, resetando se o dia virou. Nunca lanca. */
+function carregarEstado() {
+  const dia = hoje();
+  if (_estado && _estado.dia === dia) return _estado;
+  let lido = null;
+  try {
+    lido = JSON.parse(fs.readFileSync(arquivoDeEstado(), 'utf8'));
+  } catch { /* sem arquivo (ou corrompido): comeca limpo */ }
+  // Dia diferente = reset. E' o que faz a cota diaria voltar as 00:00.
+  const mesmoDia = lido && lido.dia === dia;
+  _estado = {
+    dia,
+    esgotadas: mesmoDia && Array.isArray(lido.esgotadas) ? lido.esgotadas.map(Number).filter(Number.isFinite) : []
+  };
+  if (!mesmoDia && lido) gravarEstado();   // grava o reset
+  return _estado;
+}
+
+/** Grava o estado (best-effort: nao pode derrubar uma chamada de IA). */
+function gravarEstado() {
+  try {
+    fs.mkdirSync(path.dirname(arquivoDeEstado()), { recursive: true });
+    fs.writeFileSync(arquivoDeEstado(), JSON.stringify(_estado, null, 2));
+  } catch { /* segue so' na memoria */ }
+}
+
+/** O slot ja' estourou a cota hoje? */
+export function estaEsgotada(slot) {
+  return carregarEstado().esgotadas.includes(Number(slot));
+}
+
+/** Marca o slot como esgotado (cota estourada ou chave invalida). */
+export function marcarEsgotada(slot) {
+  const n = Number(slot);
+  if (!Number.isFinite(n)) return;
+  const e = carregarEstado();
+  if (!e.esgotadas.includes(n)) {
+    e.esgotadas.push(n);
+    gravarEstado();
+  }
+}
+
+/**
+ * A PRIMEIRA chave que ainda nao estourou, a partir de um indice.
+ *
+ * E' o coracao da rotacao: a "chave atual" e' sempre esta — nao existe ponteiro
+ * separado que possa ficar apontando para uma chave morta.
+ *
+ * @param {Array<{slot:number, chave:string}>} [lista] padrao: `lerChaves()`
+ * @param {number} [de] indice inicial (padrao 0)
+ * @returns {{slot:number, chave:string}|null}
+ */
+export function primeiraDisponivel(lista = lerChaves(), de = 0) {
+  const esgotadas = carregarEstado().esgotadas;
+  for (let i = Math.max(0, de); i < lista.length; i++) {
+    if (!esgotadas.includes(Number(lista[i].slot))) return lista[i];
+  }
+  return null;
+}
+
+/**
+ * Reseta o estado. Chamado quando o dia vira e pelo comando do dono.
+ * @param {boolean} [apagarArquivo] `true` remove o arquivo (reset manual)
+ */
+export function resetarEsgotadas(apagarArquivo = false) {
+  _estado = { dia: hoje(), esgotadas: [] };
+  if (apagarArquivo) {
+    try { fs.unlinkSync(arquivoDeEstado()); } catch { /* ja' nao existia */ }
+  } else {
+    gravarEstado();
+  }
+}
+
+/**
+ * Um retrato do estado, para o painel do dono.
+ *
+ * @param {Array<{slot:number, chave:string}>} [lista]
+ * @returns {{dia: string, esgotadas: number[], chaves: Array<{slot:number, chave:string, esgotada:boolean, ativa:boolean}>}}
+ */
+export function estadoDasChaves(lista = lerChaves()) {
+  const e = carregarEstado();
+  const ativa = primeiraDisponivel(lista);
+  return {
+    dia: e.dia,
+    esgotadas: [...e.esgotadas].sort((a, b) => a - b),
+    chaves: lista.map((c) => ({
+      slot: c.slot,
+      chave: c.chave,
+      esgotada: e.esgotadas.includes(Number(c.slot)),
+      ativa: Boolean(ativa && ativa.slot === c.slot)
+    }))
+  };
+}
+
+/** Quando foi o ultimo reset (o dia atual). Diagnostico. */
+export function diaDoEstado() {
+  return carregarEstado().dia;
+}
+
+/** Limpa o cache em memoria (teste). */
+export function _limparCacheDeEstado() {
+  _estado = null;
 }

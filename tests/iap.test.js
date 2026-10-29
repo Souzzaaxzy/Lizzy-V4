@@ -20,6 +20,9 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 const TMP_DB = fs.mkdtempSync(path.join(os.tmpdir(), 'lizzy-iap-'));
 process.env.DATABASE_PATH = TMP_DB;
+// O estado das chaves (esgotadas) e' persistente: isola no tmp do teste, senao
+// um teste que simula 401/429 marca o slot 1 e contamina os seguintes.
+process.env.GROQ_KEYS_STATE_FILE = path.join(TMP_DB, 'groqKeysState.json');
 process.env.ZAPO_DISABLE_CONNECT = '1';
 const GRUPOS_DIR = path.join(TMP_DB, 'grupos');
 fs.mkdirSync(GRUPOS_DIR, { recursive: true });
@@ -1007,9 +1010,12 @@ await test('iapStt: 401 do Groq vira motivo de chave (o comando orienta o !keygr
   });
   const antiga = process.env.GROQ_API_KEY;
   process.env.GROQ_API_KEY = 'gsk_ruim';
+  // Este teste marca a chave como esgotada (comportamento CORRETO do codigo) —
+  // entao limpa o estado depois, para nao contaminar os testes seguintes.
   const r = await stt.transcreverPcm(new Float32Array(960));
   if (antiga !== undefined) process.env.GROQ_API_KEY = antiga;
   groq.setGroqHttpForTest(null);
+  groq.resetarEsgotadas(true);
   ok(r.ok === false && r.motivo === 'chave', `classifica como chave (${r.motivo})`);
 });
 

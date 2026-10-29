@@ -44,8 +44,8 @@ import { coletarDadosDoGrupo } from './utils/contextoConversa.js';
 import { lerIdentidade } from './utils/identidadeLizzy.js';
 import { resolverPaisAdotivos } from './utils/contextoConversa.js';
 // As chaves do Groq (ate' 10) e o failover automatico.
-import { lerChaves, mascarar, slotDoComando, atualizarEnv, nomeDaVar, MAX_SLOTS } from './utils/groqKeys.js';
-import { resetarChaveGroq } from './utils/groqClient.js';
+import { lerChaves, mascarar, slotDoComando, atualizarEnv, nomeDaVar, MAX_SLOTS,
+         estadoDasChaves, resetarEsgotadas } from './utils/groqKeys.js';
 // As ACOES do grupo pedidas por fala/texto (link e foto) — reconhecimento
 // DETERMINISTICO, como o `iapComandos` da call.
 import { identificarAcaoDoGrupo } from './utils/assistenteAcoes.js';
@@ -2792,6 +2792,22 @@ if (npcManager?.config?.jornalEnabled) {
     }
   }, 10000); // Espera 10s após iniciar
 }
+// ─────────────────────────────────────────────────────────────────────────
+// RESET DIARIO DAS CHAVES DO GROQ (00:00 de Brasilia)
+//
+// A cota do Groq e' DIARIA: quando uma chave estoura, ela fica marcada e a
+// proxima assume. Este cron zera as marcacoes a meia-noite, para a 1a chave
+// voltar a valer — sem depender de reiniciar o bot (o `carregarEstado` tambem
+// reseta sozinho se o dia virar, mas o cron deixa o reset no horario certo).
+cron.schedule('0 0 * * *', () => {
+  try {
+    resetarEsgotadas(true);
+    console.log('[GROQ] 00:00 — limite das chaves resetado; a 1a volta a ser usada.');
+  } catch (e) {
+    console.error('[GROQ] falha no reset diario:', e?.message || e);
+  }
+}, { timezone: 'America/Sao_Paulo' });
+
 cron.schedule('0 20 * * *', async () => {
   if (npcManager?.config?.jornalEnabled) {
     try {
@@ -26574,27 +26590,45 @@ ${groupPrefix}key sua_chave_gemini
 
           const chaves = lerChaves();
           const atual = chaves.find((c) => c.slot === slot);
+          const estado = estadoDasChaves(chaves);
 
           // --- sem argumento: mostra o painel ---
           if (!q) {
             const linhas = chaves.length
-              ? chaves.map((c) => {
-                  const marca = c.slot === slot ? '▶️' : '  ';
-                  return `${marca} *${c.slot}.* \`${mascarar(c.chave)}\` \`${c.var}\``;
+              ? estado.chaves.map((c) => {
+                  const marca = c.ativa ? '▶️' : (c.esgotada ? '⛔' : '  ');
+                  const obs = c.esgotada ? ' _limite atingido hoje_' : (c.ativa ? ' _em uso_' : '');
+                  return `${marca} *${c.slot}.* \`${mascarar(c.chave)}\` \`${c.var}\`${obs}`;
                 }).join('\n')
               : '   (nenhuma chave configurada)';
+
+            const resumo = estado.esgotadas.length
+              ? `⚠️ ${estado.esgotadas.length} chave(s) no limite hoje: *${estado.esgotadas.join(', ')}*`
+              : '✅ Nenhuma chave no limite hoje.';
+            const disponivel = estado.chaves.find((c) => c.ativa);
 
             return reply(`🎙️ *CHAVES DO GROQ* — ${chaves.length}/${MAX_SLOTS} configurada(s)
 
 ${linhas}
 
-*Como funciona:* quando a cota de uma acaba (ou a chave é inválida), a *próxima
-assume automaticamente* — sem você fazer nada.
+${resumo}
+${disponivel ? `🟢 Usando agora: *${disponivel.slot}*` : '🔴 TODAS no limite — só volta no reset (00:00)'}
+🗓️ Reseta todo dia à meia-noite (a cota do Groq é diária).
+
+*Como funciona:* quando a cota de uma acaba, ela fica marcada e a *próxima
+assume sozinha* — sem você fazer nada.
 
 📝 *Configurar:* \`${groupPrefix}keygroq${slot === 1 ? '' : slot} gsk_...\`
 🗑️ *Remover:* \`${groupPrefix}keygroq${slot === 1 ? '' : slot} off\`
+🔄 *Resetar o limite agora:* \`${groupPrefix}keygroq reset\`
 
 _Pegue grátis em https://console.groq.com/keys_`);
+          }
+
+          // --- "reset": limpa o limite de todas (mesmo efeito da virada do dia) ---
+          if (q.trim().toLowerCase() === 'reset') {
+            resetarEsgotadas(true);
+            return reply('🔄 Limite das chaves resetado. A *1ª chave* volta a ser usada.');
           }
 
           const valor = q.trim().split(/\s+/)[0];
@@ -26606,7 +26640,7 @@ _Pegue grátis em https://console.groq.com/keys_`);
             const conteudoOff = fs.existsSync(envPathOff) ? fs.readFileSync(envPathOff, 'utf-8') : '';
             fs.writeFileSync(envPathOff, atualizarEnv(conteudoOff, slot, null));
             delete process.env[nomeDaVar(slot)];
-            resetarChaveGroq();
+            resetarEsgotadas();
             return reply(`🗑️ Chave do slot *${slot}* removida.`);
           }
 
@@ -26619,7 +26653,7 @@ _Pegue grátis em https://console.groq.com/keys_`);
           const conteudo = fs.existsSync(envPathG) ? fs.readFileSync(envPathG, 'utf-8') : '';
           fs.writeFileSync(envPathG, atualizarEnv(conteudo, slot, valor));
           process.env[nomeDaVar(slot)] = valor;
-          resetarChaveGroq();
+          resetarEsgotadas();
 
           const total = lerChaves().length;
           await reply(`✅ *Chave do slot ${slot} configurada!*

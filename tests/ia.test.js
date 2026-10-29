@@ -23,6 +23,9 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 const TMP_DB = fs.mkdtempSync(path.join(os.tmpdir(), 'lizzy-ia-'));
 process.env.DATABASE_PATH = TMP_DB;
+// O estado das chaves do Groq (esgotadas) e' persistente: isola no tmp, senao
+// um teste que simula 401/429 marca a chave e os seguintes ficam sem chave.
+process.env.GROQ_KEYS_STATE_FILE = path.join(TMP_DB, 'groqKeysState.json');
 const GRUPOS_DIR = path.join(TMP_DB, 'grupos');
 const DONO_DIR = path.join(TMP_DB, 'dono');
 fs.mkdirSync(GRUPOS_DIR, { recursive: true });
@@ -160,6 +163,9 @@ await test('7. 401/403 no Groq falha rapido (nao insiste)', async () => {
   ok(erro !== null, 'lanca erro');
   contem(String(erro?.message), 'Groq', 'o erro vem do Groq');
   groq.setGroqHttpForTest(null);
+  // O codigo marca a chave como esgotada (comportamento CORRETO) — limpa para
+  // nao deixar os testes seguintes sem chave.
+  groq.resetarEsgotadas(true);
 });
 
 await test('8. 429 no Groq lanca erro classificado (limite)', async () => {
@@ -170,6 +176,7 @@ await test('8. 429 no Groq lanca erro classificado (limite)', async () => {
   ok(erro !== null, 'lanca erro');
   contem(String(erro?.message).toLowerCase(), 'groq', 'a mensagem e do Groq');
   groq.setGroqHttpForTest(null);
+  groq.resetarEsgotadas(true);   // idem: nao contamina os seguintes
 });
 
 // ============================================================================
@@ -245,11 +252,13 @@ await test('10. erro de key mostra a orientacao de configurar (!key)', async () 
 });
 
 await test('11. erro de limite no Groq avisa para aguardar', async () => {
+  groq.resetarEsgotadas(true);   // garante a chave viva antes (o estado e persistente)
   groq.setGroqHttpForTest(async () => { throw erroGroq(429, 'Rate limit reached for requests'); });
   process.env.GROQ_API_KEY = 'gsk-teste';
   const t = await runIA('!resumir um texto qualquer aqui', { waitMs: 2000 });
   contem(t, 'requisições', 'avisa do limite');
   groq.setGroqHttpForTest(null);
+  groq.resetarEsgotadas(true);   // limpa o estado que o 429 marcou
 });
 
 await test('12. TODOS os comandos de IA recebem o mesmo tratamento de erro', () => {
@@ -360,6 +369,7 @@ await test('19. classificarErroGemini: distingue modelo / limite / payload', () 
 await test('20. chave invalida do Groq para na 1a chamada (sem cadeia)', async () => {
   // O bug original: o 400 de chave era lido como "modelo indisponivel" e a cadeia
   // INTEIRA era tentada. No Groq nao ha cadeia: uma chamada e o erro sobe.
+  groq.resetarEsgotadas(true);
   let chamadas = 0;
   groq.setGroqHttpForTest(async () => {
     chamadas += 1;
@@ -373,6 +383,7 @@ await test('20. chave invalida do Groq para na 1a chamada (sem cadeia)', async (
   ok(chamadas === 1, `parou na 1a tentativa (${chamadas} chamadas)`);
   ok(erro !== null, 'lanca erro');
   groq.setGroqHttpForTest(null);
+  groq.resetarEsgotadas(true);   // nao contamina os seguintes
 });
 
 // ============================================================================

@@ -23,7 +23,7 @@
 
 import axios from 'axios';
 import { spawn } from 'child_process';
-import { lerChaves, proximoIndice } from './groqKeys.js';
+import { lerChaves, marcarEsgotada, primeiraDisponivel } from './groqKeys.js';
 
 /** Base da API (compativel com OpenAI). */
 const BASE = 'https://api.groq.com/openai/v1';
@@ -55,9 +55,6 @@ const MODELO_LLM = process.env.IAP_GROQ_LLM_MODEL || 'openai/gpt-oss-120b';
 const TIMEOUT_STT_MS = Number.parseInt(process.env.IAP_GROQ_TIMEOUT_MS || '45000', 10);
 const TIMEOUT_LLM_MS = Number.parseInt(process.env.IAP_GROQ_LLM_TIMEOUT_MS || '45000', 10);
 
-/** Qual chave esta' em uso agora (indice na lista de configuradas). */
-let _indiceChave = 0;
-
 /** Injetavel para os testes (sem rede). */
 let _httpPost = null;
 export function setGroqHttpForTest(fn) { _httpPost = typeof fn === 'function' ? fn : null; }
@@ -68,11 +65,12 @@ const post = (url, data, config) => (_httpPost ? _httpPost(url, data, config) : 
  * @returns {string}
  */
 export function chaveGroq() {
-  // A chave "de agora" — pode nao ser a do slot 1: quando a cota de uma acaba,
-  // a rotacao passa para a proxima e ela vira a atual.
+  // A chave "de agora" e' a PRIMEIRA que ainda nao estourou a cota. Uma chave
+  // esgotada nao e' mais tentada ate' o reset (a cota do Groq e' diaria).
   const lista = lerChaves();
   if (!lista.length) return '';
-  return lista[Math.min(_indiceChave, lista.length - 1)].chave;
+  const disp = primeiraDisponivel(lista);
+  return disp ? disp.chave : '';
 }
 
 /**
@@ -86,12 +84,15 @@ export function chaveGroq() {
  * (timeout, DNS) nao diz nada sobre a chave — rotacionar ali queimaria a cota
  * das outras a toa.
  *
- * ## A fila NAO perde a chave que funcionou
+ * ## A chave esgotada NAO volta a ser tentada
  *
- * O `_indiceChave` e' o PONTEIRO GLOBAL: quando a chave 3 responde, ela vira a
- * atual e a proxima chamada ja' comeca nela. Se a lista acabou e nada funcionou,
- * o ponteiro volta para 0 (para o proximo minuto tentar a primeira de novo, ja'
- * que a cota do Groq e' por minuto/dia).
+ * Ela e' MARCADA (no `groqKeys`, com estado em disco) e a proxima chamada ja'
+ * comeca na seguinte. A "chave atual" e' sempre a primeira que ainda nao
+ * estourou — nao existe ponteiro que possa ficar preso numa chave morta (era o
+ * conflito: cada mensagem batia na primeira de novo).
+ *
+ * O estado reseta quando o DIA vira (a cota do Groq e' diaria), entao a chave 1
+ * volta a valer as 00:00.
  *
  * @template T
  * @param {(chave: string) => Promise<T>} fn
@@ -102,29 +103,28 @@ export async function comFailoverDeChave(fn) {
   const lista = lerChaves();
   if (!lista.length) throw new Error('sem_chave_groq');
 
-  let tentativas = 0;
   let ultimoErro = null;
 
-  while (tentativas < lista.length) {
-    const indice = Math.min(_indiceChave, lista.length - 1);
-    const { chave } = lista[indice];
+  // Percorre da PRIMEIRA DISPONIVEL em diante. Cada chave que falha por cota ou
+  // por ser invalida e' MARCADA como esgotada e nao volta a ser tentada.
+  for (let i = 0; i < lista.length; i++) {
+    const atual = primeiraDisponivel(lista, i);
+    if (!atual) break;                       // todas as seguintes ja' estao esgotadas
+    const { chave, slot } = atual;
     try {
       const r = await fn(chave);
-      _indiceChave = indice;   // fixa a que funcionou
-      return r;
+      return r;                              // deu certo: essa e' a chave ativa
     } catch (e) {
       const tipo = classificarErroGroq(e).tipo;
-      if (tipo !== 'chave' && tipo !== 'limite') throw e;  // rede/payload: nao e' a chave
+      // So' cota (429) e chave invalida (401/403) marcam a chave. Rede/payload
+      // nao dizem nada sobre ela — trocar ali queimaria a cota das outras.
+      if (tipo !== 'chave' && tipo !== 'limite') throw e;
       ultimoErro = e;
-      tentativas += 1;
-      if (tentativas >= lista.length) break;
-      _indiceChave = proximoIndice(indice, lista.length);
+      marcarEsgotada(slot);
     }
   }
 
-  // Todas falharam: volta para a primeira, para a proxima tentativa (outro
-  // minuto) comecar de novo em vez de ficar presa na ultima.
-  _indiceChave = 0;
+  // Todas esgotadas: avisa que so' volta no reset (00:00).
   throw ultimoErro || new Error('sem_chave_groq');
 }
 
@@ -400,11 +400,16 @@ export async function groqTranscrever(arquivo, mimeType = 'audio/ogg', { prompt 
   }
 }
 
-/** Volta o ponteiro da chave para a primeira (teste/diagnostico). */
-export function resetarChaveGroq() { _indiceChave = 0; }
+/**
+ * Reseta o estado das chaves (volta tudo para a primeira).
+ *
+ * E' o mesmo reset do dia (00:00) — usado pelo comando do dono e pelos testes.
+ * @param {boolean} [apagarArquivo] `true` remove o arquivo do estado
+ */
+export { resetarEsgotadas, estaEsgotada, estadoDasChaves, diaDoEstado } from './groqKeys.js';
 
-/** Qual chave esta' em uso (indice). Diagnostico. */
-export function indiceChaveGroq() { return _indiceChave; }
+/** @deprecated Use `resetarEsgotadas`. Mantido para os testes antigos. */
+export { resetarEsgotadas as resetarChaveGroq } from './groqKeys.js';
 
 /** Modelos em uso (diagnostico/testes). */
 export function configGroq() {
