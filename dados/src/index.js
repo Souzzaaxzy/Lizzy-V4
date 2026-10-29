@@ -4171,12 +4171,23 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
      * Prepara a lista de convidados de um grupo (membros, menos o bot).
      *
      * Ponto comum aos DOIS comandos: tanto a chamada (`!callp`) quanto o chat de
-     * voz (`!vozp`) tocam o mesmo conjunto de pessoas, com o mesmo teto. O que
-     * NÃO é comum fica com cada um — o backend e o registro.
+     * voz (`!vozp`) tocam o mesmo conjunto de pessoas. O que NÃO é comum fica com
+     * cada um — o backend e o registro.
+     *
+     * ## SEM CORTE: o grupo vai INTEIRO, o motor referencia o conjunto pelo HASH
+     *
+     * O teto de 32 participantes e' da call CONECTADA, nao do OFFER. Nomear 32 de
+     * 400 e' o que o servidor recusa (`412`/`427`); o cliente oficial referencia o
+     * conjunto INTEIRO pelo HASH (`<group_info phash="2:...">`, sem filhos) e o
+     * servidor resolve contra o grupo — o teto deixa de valer para o offer.
+     *
+     * Por isso o bot NAO corta: ele entrega a lista completa ao motor, que decide
+     * entre nomear (grupo que cabe) e hashear (grupo que nao cabe). Um corte aqui
+     * transformaria um grupo grande no caso que o servidor recusa.
      *
      * @returns {Promise<{ok:boolean, motivo?:string, convidados?:string[], totalMembros?:number, botCallId?:string, meta?:object}>}
      */
-    const prepararConvidadosDoGrupo = async ({ semTeto = false } = {}) => {
+    const prepararConvidadosDoGrupo = async () => {
       const botCallId = getBotNumber(nazu);
       if (!botCallId) return { ok: false, motivo: 'sem_identidade' };
 
@@ -4223,35 +4234,13 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
         return { ok: false, motivo: 'grupo_pequeno' };
       }
 
-      // TETO DE PARTICIPANTES — a call de grupo tem um limite no SERVIDOR.
-      //
-      // Medido no log real do dono: em CERTOS grupos o servidor responde o ack do
-      // offer com erro e o motor encerra a call na hora —
-      //
-      //   WaCallMediaSession.handleCallAck: node.attrs.error -> terminate(SetupFailed)
-      //   `[CALLP] a call <id> encerrou | motivo: setup_failed`
-      //
-      // O motor documenta o limite (`call-state.js`: *"32 connected participants,
-      // five devices each"*) e o WhatsApp expõe a prop `group_call_max_participants`.
-      // O bot criava a call com o grupo INTEIRO de convidados; acima do teto o
-      // servidor recusa — e é por isso que só acontecia em alguns grupos.
-      //
-      // O CRIADOR conta como participante, então o teto de convidados é o teto
-      // menos um.
-      const tetoConvidados = Math.max(2, Math.min(31, Number(process.env.CALL_MAX_PARTICIPANTS) || 31));
       // O total do grupo INCLUI o bot (ele e' membro): membros = humanos + 1.
       const totalMembros = convidados.length + 1;
-      //
-      // O TETO VALE PARA OS DOIS comandos (medido): o servidor recusa o offer
-      // acima de 32 contas até num chat de voz — o offer de grupo PRECISA
-      // nomear quem ele toca. `semTeto` fica como escapatória (off por env).
-      if (!semTeto && convidados.length > tetoConvidados) {
-        convidados.length = tetoConvidados;
-      }
-      // Log com os números: sem ele, "a call caiu" não diz se foi tamanho.
+      // Log com os números: sem ele, "a call caiu" não diz o tamanho que o motor
+      // recebeu. O MOTOR e' quem decide nomear ou hashear; aqui so' se reporta.
       console.log(
         `[CALLP] grupo ${from}: ${totalMembros} membro(s) -> ${convidados.length} convidado(s)` +
-        (semTeto ? ' (chat de voz: sem teto)' : ` (teto ${tetoConvidados})`)
+        ' (sem corte: o motor nomeia ou hasheia)'
       );
 
       return { ok: true, convidados, totalMembros, botCallId, meta };
@@ -36288,19 +36277,11 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             ? '🎵 Áudio: pronto — use `!musicap` respondendo um áudio para tocar.'
             : `🎵 Áudio: conectando (${r.stage}). Assim que alguém entrar, use \`!musicap\`.`;
 
-          // Aviso de ALCANCE: sem ele, o grupo nao sabe que so' uma parte foi
-          // tocada. E' o teto de 32 participantes da chamada de grupo (limite do
-          // WhatsApp, nao do bot) — num grupo grande o bot toca nos primeiros 31.
-          // O bot TAMBEM e' um participante: o alcance e' (convidados + o bot)
-          // sobre o total do grupo. Sem somar o bot, um grupo pequeno apareceria
-          // como cortado.
-          const tocadosTotal = (r.tocados || 0) + 1;
-          const cortados = (r.totalMembros || 0) - tocadosTotal;
-          const linhaAlcance = cortados > 0
-            ? `\n\n⚠️ *Toquei em ${tocadosTotal} de ${r.totalMembros} membros.*\n` +
-              `_A chamada de grupo do WhatsApp aceita no máximo 32 participantes — ` +
-              `eu sou um deles. Quem ficou de fora entra pela própria chamada no app._`
-            : '';
+          // Sem aviso de CORTE: o grupo vai inteiro ao motor, que referencia o
+          // conjunto pelo HASH quando ele nao cabe. O limite de 32 e' da call
+          // CONECTADA (limite do WhatsApp, nao do bot) — e' quem ENTRA depois que
+          // esbarra nele, nao o offer.
+          const linhaAlcance = '';
 
           await nazu.sendMessage(from, {
             text: `📞 *Chamada de voz iniciada neste grupo.*\n\n• ID: \`${r.callId}\`\n${linhaMidia}${linhaAlcance}\n\n_Entre pelo WhatsApp para participar. Use \`!callp encerrar\` para derrubar._`,

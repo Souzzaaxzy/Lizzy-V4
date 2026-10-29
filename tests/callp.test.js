@@ -565,20 +565,21 @@ await test('a ponte do vozp e um modulo SEPARADO (isLightweight isolado)', () =>
 // 3b-bis) TETO DE PARTICIPANTES — o servidor recusa o offer (setup_failed)
 // ============================================================================
 
-await test('grupo GRANDE: limita os convidados ao teto do servidor', async () => {
-  // O motor documenta o limite ("32 connected participants") e o WhatsApp expoe
-  // a prop `group_call_max_participants`. Criar a call com o grupo inteiro faz o
-  // servidor recusar o offer -> handleCallAck ve `error` -> SetupFailed -> a
-  // mensagem de "chamada encerrada" logo depois de subir.
+await test('grupo GRANDE: entrega o grupo INTEIRO (o motor decide nomear ou hashear)', async () => {
+  // O teto de 32 e' da call CONECTADA, nao do OFFER. Nomear 32 de 400 e' o que o
+  // servidor recusa (`412`/`427`); o motor referencia o conjunto INTEIRO pelo
+  // HASH (`<group_info phash="2:...">`) quando ele nao cabe, e o servidor resolve
+  // contra o grupo. Por isso o bot NAO corta: um corte aqui transformaria um
+  // grupo grande exatamente no caso recusado.
   // 120 membros: o caso relatado pelo dono ("+100 membros").
   const { groupJid, admin, participants } = setupGrande(120);
   const chamadas = instalarDubleMidia();
   await run({ groupJid, sender: admin, text: '!callp', participants });
   const criou = chamadas.find((c) => c.tipo === 'entrar');
   ok(Boolean(criou), 'subiu a chamada');
-  ok(criou.participantes.length <= 31,
-    `no maximo 31 convidados (o criador conta; veio ${criou.participantes.length})`);
-  ok(criou.participantes.length === 31, `usou o teto inteiro (veio ${criou.participantes.length})`);
+  // `setupGrande(120)` monta o admin + 120 pessoas: 121 humanos, o bot fora.
+  ok(criou.participantes.length === 121,
+    `entregou os 121 convidados ao motor (veio ${criou.participantes.length})`);
   callState.limparCall(groupJid);
 });
 
@@ -591,16 +592,15 @@ await test('grupo pequeno: NAO corta ninguem', async () => {
   callState.limparCall(groupJid);
 });
 
-await test('grupo grande: o aviso no grupo diz o ALCANCE (tocados de total)', async () => {
-  // O dono precisa saber que o bot tocou so' uma parte — sem isso o silencio
-  // parece defeito.
+await test('grupo grande: SEM aviso de corte (o grupo vai inteiro pelo hash)', async () => {
+  // O aviso de "Toquei em X de Y" saiu: o offer agora referencia o conjunto
+  // inteiro pelo hash, entao nao ha corte a anunciar. O limite de 32 e' da call
+  // CONECTADA — quem entra depois e' que esbarra nele, nao o offer.
   const { groupJid, admin, participants } = setupGrande(120);
   instalarDubleMidia();
   const out = await run({ groupJid, sender: admin, text: '!callp', participants });
-  // 31 convidados + o bot = 32 tocados, num grupo de 122 membros.
-  includes(out.text, 'Toquei em 32 de 122 membros', 'diz quantos foram tocados de quantos');
-  includes(out.text, '32 participantes', 'explica o limite do WhatsApp');
-  includes(out.text, 'Chamada de voz iniciada', 'e ainda confirma que subiu');
+  ok(!out.text.includes('Toquei em'), 'sem aviso de corte');
+  includes(out.text, 'Chamada de voz iniciada', 'e confirma que subiu');
   callState.limparCall(groupJid);
 });
 
@@ -612,7 +612,10 @@ await test('grupo pequeno: o aviso NAO fala de alcance (toca em todos)', async (
   callState.limparCall(groupJid);
 });
 
-await test('o teto e configuravel por CALL_MAX_PARTICIPANTS', async () => {
+await test('CALL_MAX_PARTICIPANTS nao corta mais: o grupo vai inteiro ao motor', async () => {
+  // A env era o teto do CORTE do bot. Agora o corte nao existe: o motor escolhe
+  // nomear ou hashear, e o limite de 32 e' da call CONECTADA. Definir a env nao
+  // pode voltar a cortar a lista (isso reintroduziria o offer recusado).
   const salvo = process.env.CALL_MAX_PARTICIPANTS;
   try {
     process.env.CALL_MAX_PARTICIPANTS = '5';
@@ -620,7 +623,8 @@ await test('o teto e configuravel por CALL_MAX_PARTICIPANTS', async () => {
     const chamadas = instalarDubleMidia();
     await run({ groupJid, sender: admin, text: '!callp', participants });
     const criou = chamadas.find((c) => c.tipo === 'entrar');
-    ok(criou.participantes.length === 5, `respeitou o teto de 5 (veio ${criou.participantes.length})`);
+    ok(criou.participantes.length === 21,
+      `entregou os 21 mesmo com a env em 5 (veio ${criou.participantes.length})`);
     callState.limparCall(groupJid);
   } finally {
     if (salvo === undefined) delete process.env.CALL_MAX_PARTICIPANTS;
@@ -628,47 +632,38 @@ await test('o teto e configuravel por CALL_MAX_PARTICIPANTS', async () => {
   }
 });
 
-await test('CHAT DE VOZ em grupo GRANDE: sobe COM o corte de 32 (o roster enumerado)', async () => {
-  // CORRECAO (medida): a versao anterior deste teste travava a premissa ERRADA —
-  // que o chat de voz subia "sem nomear ninguem" em grupo de qualquer tamanho.
-  // Medido contra o motor: acima de `WA_GROUP_OFFER_MAX_ACCOUNTS` (32) o motor
-  // NAO corta — ele troca para o caminho `hashOnly` e manda
-  // `<group_info phash="2:...">` SEM roster, que resolve o grupo inteiro num
-  // UNICO usync e, se esse usync falha, calcula o phash sobre os jids CRUS —
-  // divergindo do servidor -> NACK -> `SetupFailed` -> a call CAI logo depois de
-  // subir. Era exatamente o "sobe e cai" do dono.
-  //
-  // O caminho certo e' o MESMO da referencia de producao (Cobalt): enumerar o
-  // roster e validar o teto ANTES de colocar a call. O grupo pode ter 400
-  // membros — a call sobe com 32 nomeados e o resto entra pelo cartao.
+await test('CHAT DE VOZ em grupo GRANDE: entrega o grupo INTEIRO ao motor', async () => {
+  // O caminho do hash no MOTOR vale para qualquer grupo que nao caiba, chat de
+  // voz inclusive. O bot entrega a lista completa (sem corte) e o motor monta o
+  // `<group_info phash="2:...">` — o limite de 32 e' da call CONECTADA.
   const { groupJid, admin, participants } = setupGrande(400);
   const doVoz = instalarDubleVozp();
   const out = await run({ groupJid, sender: admin, text: '!vozp', participants });
   const subiu = doVoz.find((c) => c.tipo === 'subir');
   ok(Boolean(subiu), 'subiu o chat de voz num grupo de 400');
-  ok(subiu.participantes.length === 31,
-    `cortou em 31 convidados (o teto de 32 menos o bot), veio ${subiu.participantes.length}`);
-  includes(out.text, 'maximo do WhatsApp', 'diz o teto de contas do WhatsApp');
+  ok(subiu.participantes.length === 401,
+    `entregou os 401 convidados ao motor (veio ${subiu.participantes.length})`);
   includes(out.text, 'Chat de voz iniciado', 'confirma que subiu');
   callState.limparCall(groupJid);
   desinstalarDubleVozp();
 });
 
-await test('CHAMADA (!callp) em grupo GRANDE: mantem o corte em 32 (essa CONECTA 32)', async () => {
+await test('CHAMADA (!callp) em grupo GRANDE: tambem entrega o grupo inteiro', async () => {
   const { groupJid, admin, participants } = setupGrande(120);
   const chamadas = instalarDubleMidia();
   await run({ groupJid, sender: admin, text: '!callp', participants });
   const criou = chamadas.find((c) => c.tipo === 'entrar');
-  ok(criou.participantes.length === 31, `respeitou o teto (veio ${criou.participantes.length})`);
+  ok(criou.participantes.length === 121,
+    `entregou os 121 ao motor (veio ${criou.participantes.length})`);
   callState.limparCall(groupJid);
 });
 
 await test('o log diz quantos membros e quantos convidados (diagnostico)', () => {
   const src = fs.readFileSync(path.join(HERE, '..', 'dados/src/index.js'), 'utf-8');
-  const bloco = src.slice(src.indexOf('const tetoConvidados'), src.indexOf('const tetoConvidados') + 1400);
+  const bloco = src.slice(src.indexOf('const totalMembros'), src.indexOf('const totalMembros') + 900);
   ok(bloco.includes('[CALLP] grupo'), 'registra a linha de diagnostico');
   ok(bloco.includes('membro(s)'), 'mostra o tamanho do grupo');
-  ok(bloco.includes('teto'), 'mostra o teto aplicado');
+  ok(bloco.includes('convidado(s)'), 'mostra quantos convidados foram ao motor');
 });
 
 await test('CHAT DE VOZ que cai sozinho: o registro NAO fica morto (reconciliacao)', () => {
