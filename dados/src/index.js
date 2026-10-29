@@ -45,7 +45,7 @@ import { lerIdentidade } from './utils/identidadeLizzy.js';
 import { resolverPaisAdotivos } from './utils/contextoConversa.js';
 // As chaves do Groq (ate' 10) e o failover automatico.
 import { lerChaves, mascarar, slotDoComando, atualizarEnv, nomeDaVar, MAX_SLOTS,
-         estadoDasChaves, resetarEsgotadas } from './utils/groqKeys.js';
+         estadoDasChaves, resetarEsgotadas, situacaoDasChaves } from './utils/groqKeys.js';
 // As ACOES do grupo pedidas por fala/texto (link e foto) — reconhecimento
 // DETERMINISTICO, como o `iapComandos` da call.
 import { identificarAcaoDoGrupo } from './utils/assistenteAcoes.js';
@@ -26585,7 +26585,7 @@ ${groupPrefix}key sua_chave_gemini
       case 'keygroq10':
         try {
           if (!podeDonoTotal()) return reply("Este comando é exclusivo para o dono do bot!");
-          const slot = slotDoComando(command);
+          const slot = slotDoComando(command, q);
           if (!slot) return reply("❌ Slot inválido. Use de `!keygroq` até `!keygroq10`.");
 
           const chaves = lerChaves();
@@ -26619,7 +26619,7 @@ ${disponivel ? `🟢 Usando agora: *${disponivel.slot}*` : '🔴 TODAS no limite
 assume sozinha* — sem você fazer nada.
 
 📝 *Configurar:* \`${groupPrefix}keygroq${slot === 1 ? '' : slot} gsk_...\`
-🗑️ *Remover:* \`${groupPrefix}keygroq${slot === 1 ? '' : slot} off\`
+🗑️ *Remover:* \`${groupPrefix}keygroq off <n>\` _(ou \`${groupPrefix}keygroq<n> off\`)_
 🔄 *Resetar o limite agora:* \`${groupPrefix}keygroq reset\`
 
 _Pegue grátis em https://console.groq.com/keys_`);
@@ -26631,7 +26631,10 @@ _Pegue grátis em https://console.groq.com/keys_`);
             return reply('🔄 Limite das chaves resetado. A *1ª chave* volta a ser usada.');
           }
 
-          const valor = q.trim().split(/\s+/)[0];
+          // O primeiro argumento que NAO e' o numero do slot (o numero pode vir
+          // antes ou depois do "off": `off 2` ou `2 off`).
+          const valor = q.trim().split(/\s+/)
+            .find((p) => !/^\d+$/.test(p)) || '';
 
           // --- "off": remove a linha do .env (e a chave em memoria) ---
           if (['off', 'remover', 'apagar', 'limpar', 'del'].includes(valor.toLowerCase())) {
@@ -36951,6 +36954,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             if (!r.ok) {
               const motivos = {
                 sem_chave_groq: '❌ A chave do Groq não está configurada.\n\nUse `' + prefix + 'keygroq gsk_...`.\n_Pegue grátis em https://console.groq.com/keys_',
+                chaves_no_limite: '⏳ As chaves do Groq atingiram o limite de HOJE.\n\nElas voltam à meia-noite — ou use `' + prefix + 'keygroq reset` para liberar agora.\n_As chaves estão configuradas, só estão no limite._',
                 sem_call: '❌ Não consegui conectar o agente à chamada. A call está de pé?',
                 // A voz e' o `msedge-tts` (Node) — vem no `npm install`.
                 voz_sem_tts: '❌ A voz (`msedge-tts`) não está instalada.\n\nRode o install das dependências (o `!atualizar` faz isso).',
@@ -41572,8 +41576,14 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
           }
           // Chave do GROQ — este comando roda SÓ nele agora (pedido do dono: o Gemini
           // estourava o tempo no áudio). Configure com `!keygroq`.
-          if (!chaveGroq()) {
+          // Distingue "nao configurada" de "no limite": as duas davam a MESMA
+          // mensagem, e o dono achava que a chave tinha sumido.
+          const situacaoGroq = situacaoDasChaves();
+          if (situacaoGroq === 'sem_chave') {
             return reply("❌ A chave da transcrição (Groq) não está configurada.\n\nUse `" + groupPrefix + "keygroq gsk_...`.\n_Pegue grátis em https://console.groq.com/keys_");
+          }
+          if (situacaoGroq === 'todas_esgotadas') {
+            return reply("⏳ As chaves do Groq atingiram o limite de HOJE.\n\nElas voltam à meia-noite — ou use `" + groupPrefix + "keygroq reset` para liberar agora.\n_As chaves estão configuradas, só estão no limite._");
           }
           const mimeType = quotedAudio.mimetype || 'audio/ogg';
           // O Groq Whisper decide o formato pela EXTENSÃO — o `transcreverArquivoGroq`

@@ -85,15 +85,44 @@ export function comandoDoSlot(slot) {
 }
 
 /**
- * Le' o slot a partir do NOME DO COMANDO.
+ * Le' o slot a partir do NOME DO COMANDO **ou dos ARGUMENTOS**.
  *
- * `keygroq` -> 1, `keygroq7` -> 7. Devolve `null` quando nao e' um comando de
- * chave (ou o numero esta fora da faixa).
+ * ## O bug que isto corrige
+ *
+ * O dono usava `!keygroq off 2` para apagar a SEGUNDA chave. Mas o comando era
+ * `keygroq` (slot 1) e o `2` ia nos argumentos — entao ele apagava o **slot 1**
+ * de novo, e o segundo comando respondia "o slot 1 ja esta vazio". O numero
+ * tem que ser lido de ONDE ELE ESTIVER:
+ *
+ *   `!keygroq2 off`   -> slot 2 (numero no comando)
+ *   `!keygroq off 2`  -> slot 2 (numero no argumento)  <- o que o dono usa
+ *   `!keygroq 2 off`  -> slot 2 (numero antes do off)
+ *
+ * Sem numero em lugar nenhum, vale o slot do comando (`keygroq` = 1).
  *
  * @param {string} comando
+ * @param {string} [args] o que veio depois do comando
  * @returns {number|null}
  */
-export function slotDoComando(comando) {
+export function slotDoComando(comando, args = '') {
+  // 1) O numero no NOME do comando tem prioridade (`keygroq7`).
+  const doComando = slotDoNome(comando);
+  const temNoNome = /^(?:keygroq|groqkey)\d{1,2}$/.test(String(comando || '').toLowerCase().trim());
+  if (temNoNome) return doComando;
+
+  // 2) O numero nos ARGUMENTOS (o caso `!keygroq off 2`).
+  const palavras = String(args || '').trim().split(/\s+/).filter(Boolean);
+  for (const p of palavras) {
+    const n = Number.parseInt(p, 10);
+    if (Number.isFinite(n) && String(n) === p && n >= 1 && n <= MAX_SLOTS) return n;
+  }
+
+  // 3) Sem numero: o slot do comando (`keygroq` = 1).
+  return doComando;
+}
+
+/** O slot APENAS pelo nome do comando (a regra antiga). */
+function slotDoNome(comando) {
   const c = String(comando || '').toLowerCase().trim();
   if (c === 'keygroq' || c === 'groqkey') return 1;
   const m = c.match(/^(?:keygroq|groqkey)(\d{1,2})$/);
@@ -268,6 +297,21 @@ export function estadoDasChaves(lista = lerChaves()) {
       ativa: Boolean(ativa && ativa.slot === c.slot)
     }))
   };
+}
+
+/**
+ * POR QUE nao ha chave disponivel agora.
+ *
+ * A distincao que faltava: `chaveGroq()` devolve `''` nos DOIS casos, e o
+ * codigo tratava os dois como "nao configurada" — dizendo ao dono que a chave
+ * nao estava definida **quando ela estava** (so' no limite).
+ *
+ * @param {Array<{slot:number, chave:string}>} [lista]
+ * @returns {'ok'|'sem_chave'|'todas_esgotadas'} `ok` = tem chave para usar
+ */
+export function situacaoDasChaves(lista = lerChaves()) {
+  if (!lista.length) return 'sem_chave';
+  return primeiraDisponivel(lista) ? 'ok' : 'todas_esgotadas';
 }
 
 /** Quando foi o ultimo reset (o dia atual). Diagnostico. */

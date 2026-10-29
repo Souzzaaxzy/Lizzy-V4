@@ -87,6 +87,19 @@ await test('2. `!keygroq` = slot 1 e `!keygroqN` = slot N (ate 10)', () => {
   ok(keys.slotDoComando('ping') === null, 'outro comando -> null');
 });
 
+await test('2b. o slot vem dos ARGS quando o numero nao esta no comando (o `off 2`)', () => {
+  // O bug relatado: `!keygroq off 2` apagava o slot 1 (o comando) e o dono via
+  // "o slot 1 ja esta vazio". O numero tem de ser lido de ONDE ELE ESTIVER.
+  ok(keys.slotDoComando('keygroq', 'off 2') === 2, '`off 2` -> slot 2');
+  ok(keys.slotDoComando('keygroq', '2 off') === 2, '`2 off` -> slot 2');
+  ok(keys.slotDoComando('keygroq', 'remover 3') === 3, '`remover 3` -> slot 3');
+  ok(keys.slotDoComando('keygroq', 'gsk_abc') === 1, 'sem numero -> o slot do comando (1)');
+  ok(keys.slotDoComando('keygroq', 'off') === 1, '`off` sem numero -> slot 1');
+  ok(keys.slotDoComando('keygroq2', 'off') === 2, 'o numero no COMANDO tem prioridade');
+  ok(keys.slotDoComando('keygroq2', 'off 5') === 2, 'o comando vence o arg');
+  ok(keys.slotDoComando('keygroq', 'off 11') === 1, 'numero fora da faixa -> cai no comando');
+});
+
 await test('3. le as chaves NA ORDEM dos slots (buraco e ignorado)', () => {
   limparEnv();
   process.env.GROQ_API_KEY = 'k1';
@@ -282,7 +295,7 @@ await test('15. os 10 comandos existem no handler', () => {
 await test('16. o comando usa os helpers (nada de logica duplicada)', () => {
   const i = INDEX.indexOf("case 'keygroq':");
   const bloco = INDEX.slice(i, i + 4200);
-  ok(bloco.includes('slotDoComando(command)'), 'descobre o slot pelo comando');
+  ok(bloco.includes('slotDoComando(command, q)'), 'descobre o slot pelo comando E pelos args (o `off 2`)');
   ok(bloco.includes('lerChaves()'), 'le as chaves configuradas');
   ok(bloco.includes('atualizarEnv('), 'grava no .env pelo helper (nao por regex solto)');
   ok(bloco.includes('mascarar('), 'mostra mascarada');
@@ -416,6 +429,49 @@ await test('26. a memoria do chat subiu (a causa do "nao lembra")', () => {
   const IA = fs.readFileSync(new URL('../dados/src/funcs/private/ia.js', import.meta.url), 'utf-8');
   ok(!/length > 12/.test(IA), 'nao tem mais o limite de 12');
   contem(IA, 'IA_HISTORICO', 'configuravel');
+});
+
+// ---------------------------------------------------------------------------
+// 5) A DISTINCAO "SEM CHAVE" x "NO LIMITE" (o dono via a mensagem errada)
+// ---------------------------------------------------------------------------
+console.log('\n=== 5) SEM CHAVE x NO LIMITE ===\n');
+
+await test('27. situacaoDasChaves distingue os TRES casos', () => {
+  limparEnv();
+  ok(keys.situacaoDasChaves() === 'sem_chave', 'sem chave nenhuma -> sem_chave');
+
+  process.env.GROQ_API_KEY = 'k1';
+  ok(keys.situacaoDasChaves() === 'ok', 'com chave disponivel -> ok');
+
+  keys.marcarEsgotada(1);
+  ok(keys.situacaoDasChaves() === 'todas_esgotadas', 'unica chave esgotada -> todas_esgotadas');
+
+  process.env.GROQ_API_KEY_2 = 'k2';
+  ok(keys.situacaoDasChaves() === 'ok', 'com uma viva -> ok de novo');
+});
+
+await test('28. o `!transcrever` e o `!iap` dizem QUAL dos dois e (nao "nao configurada")', () => {
+  // A queixa: "mostra que a chave nao esta definida mesmo estando definida".
+  const TR = INDEX.slice(INDEX.indexOf("case 'transcrever':"), INDEX.indexOf("case 'transcrever':") + 12000);
+  contem(TR, 'situacaoDasChaves()', 'o `!transcrever` consulta a situacao');
+  contem(TR, "'sem_chave'", 'ramo "nao configurada"');
+  contem(TR, "'todas_esgotadas'", 'ramo "no limite de hoje"');
+  contem(INDEX, 'chaves_no_limite:', 'o mapa do `!iap` tem o motivo novo');
+});
+
+await test('29. o `ia.js` (chat) tambem distingue, em vez de dizer sempre "nao configurada"', () => {
+  const IA = fs.readFileSync(new URL('../dados/src/funcs/private/ia.js', import.meta.url), 'utf-8');
+  contem(IA, 'situacaoDasChaves()', 'consulta a situacao antes de lancar');
+  contem(IA, "'sem_chave'", 'ramo "nao configurada"');
+  contem(IA, "'todas_esgotadas'", 'ramo "no limite"');
+  contem(IA, 'limite de hoje', 'a mensagem do limite fala do limite (nao da chave)');
+});
+
+await test('30. o `iapSessao` recusa com o motivo CERTO quando todas estao no limite', () => {
+  const SES = fs.readFileSync(new URL('../dados/src/utils/iapSessao.js', import.meta.url), 'utf-8');
+  contem(SES, 'situacaoDasChaves', 'consulta a situacao');
+  contem(SES, "motivo: 'sem_chave_groq'", 'sem chave -> sem_chave_groq');
+  contem(SES, "motivo: 'chaves_no_limite'", 'no limite -> chaves_no_limite');
 });
 
 // ---------------------------------------------------------------------------

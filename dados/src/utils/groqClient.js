@@ -406,7 +406,7 @@ export async function groqTranscrever(arquivo, mimeType = 'audio/ogg', { prompt 
  * E' o mesmo reset do dia (00:00) — usado pelo comando do dono e pelos testes.
  * @param {boolean} [apagarArquivo] `true` remove o arquivo do estado
  */
-export { resetarEsgotadas, estaEsgotada, estadoDasChaves, diaDoEstado } from './groqKeys.js';
+export { resetarEsgotadas, estaEsgotada, estadoDasChaves, diaDoEstado, situacaoDasChaves } from './groqKeys.js';
 
 /** @deprecated Use `resetarEsgotadas`. Mantido para os testes antigos. */
 export { resetarEsgotadas as resetarChaveGroq } from './groqKeys.js';

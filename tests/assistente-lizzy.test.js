@@ -194,7 +194,7 @@ await test('12. a conversa do chat usa o GROQ (a mesma API da call)', () => {
   const i = IA_SRC.indexOf('async function makeCognimaRequest');
   const bloco = IA_SRC.slice(i, i + 1400);
   contem(bloco, 'groqChat', 'usa o cliente do Groq');
-  contem(bloco, 'chaveGroq', 'usa a chave do Groq (!keygroq)');
+  contem(bloco, 'situacaoDasChaves', 'usa as chaves do Groq (!keygroq) — e distingue sem_chave de limite');
   naoContem(bloco, 'makeGeminiRequest', 'NAO chama mais o Gemini');
   naoContem(bloco, 'getGeminiApiKey', 'NAO le mais a chave do Gemini');
 });

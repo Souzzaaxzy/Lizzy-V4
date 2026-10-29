@@ -23,7 +23,7 @@ import { promptDaLizzy, regrasDeCanal, iaIdentidade, limparNomeDoBot } from '../
 // fonte: o mesmo modulo que a call usa. Aqui so' se monta o texto.
 import { montarContextoDaConversa } from '../../utils/contextoConversa.js';
 // A CONVERSA passou a usar o Groq (a mesma API da call). Ver `makeCognimaRequest`.
-import { groqChat, chaveGroq } from '../../utils/groqClient.js';
+import { groqChat, situacaoDasChaves } from '../../utils/groqClient.js';
 
 // Chave da API Google Gemini (carregada do .env ou definida em runtime via !key)
 let geminiApiKey = process.env.GEMINI_API_KEY || '';
@@ -690,8 +690,14 @@ async function makeCognimaRequest(_modelo, texto, systemPrompt = null, historico
   if (!texto) {
     throw new Error('Parâmetros obrigatórios ausentes: modelo e texto');
   }
-  if (!chaveGroq()) {
+  // A chave pode estar CONFIGURADA e no limite (cota diaria). Dizer "nao
+  // configurada" nesse caso faz o dono achar que o `!keygroq` falhou.
+  const situacao = situacaoDasChaves();
+  if (situacao === 'sem_chave') {
     throw new Error('Chave da IA não configurada. Use !keygroq para configurar.');
+  }
+  if (situacao === 'todas_esgotadas') {
+    throw new Error('Todas as chaves do Groq atingiram o limite de hoje. Elas voltam à meia-noite (ou use !keygroq reset).');
   }
 
   // O teto de 220 tokens do `groqChat` e' de VOZ (3 frases faladas). Aqui e'

@@ -14,7 +14,7 @@
  * arquivo de 36k linhas (que abre conexão de verdade no import).
  */
 
-import { groqChat } from './groqClient.js';
+import { groqChat, situacaoDasChaves } from './groqClient.js';
 import { transcreverPcm, chaveGroq } from './iapStt.js';
 import { sintetizarFala, garantirVoz } from './iapTts.js';
 import { iap } from './iapVoice.js';
@@ -302,7 +302,11 @@ export async function pensarComIa(texto, historico = [], {
 export async function ligarIap(grupo, { nomeDono, participantes, ehAutorizado, nomeDeQuemFalou, ehDono, executarComando, dadosDoGrupo = null, paisAdotivos = null } = {}) {
   // O `!iap` inteiro roda no Groq (ouvir E pensar): sem a chave dele nao ha' o
   // que ligar.
-  if (!chaveGroq()) return { ok: false, motivo: 'sem_chave_groq' };
+  // Sem chave NENHUMA e' diferente de todas no limite — o dono precisa saber
+  // qual dos dois e' para nao achar que o `!keygroq` falhou.
+  const situacaoGroq = situacaoDasChaves();
+  if (situacaoGroq === 'sem_chave') return { ok: false, motivo: 'sem_chave_groq' };
+  if (situacaoGroq === 'todas_esgotadas') return { ok: false, motivo: 'chaves_no_limite' };
 
   // A VOZ vem do `msedge-tts` (Node puro — sem python/pip/ffmpeg). Confere
   // ANTES de ligar: sem isso o dono so' descobriria no primeiro "sem audio".
