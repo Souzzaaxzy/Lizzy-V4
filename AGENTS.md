@@ -14472,3 +14472,32 @@ exige o comando **com os argumentos certos** (acento incluso).
 
 `iap` 70/215. Regressões verdes: `ia` 20/50, `motor-chat-noise` 14/62,
 `cmd-suggest` 21/68, `get-message-inspector` 54/269, `contact-name` 16/37.
+
+## 🎯 `!iap` — reconhecimento por voz: 31/40 -> **40/40** (corpus medido) (out/2026) ✅
+Pedido do dono: *"deixa mais responsivo, melhora o entendimento dela pra comandos"*.
+
+**Medi ANTES de mexer** (corpus de 40 frases reais + 17 conversas): **31/40**
+reconhecidas e **1 falso positivo** (`"toca o telefone"` virava `play telefone`).
+Depois: **40/40** e **0 falso positivo**.
+
+### O que foi corrigido (cada item veio de uma falha MEDIDA)
+| falha | correção |
+|---|---|
+| `"me toca X"`, `"pode tocar X"`, `"dá um play em X"` não casavam (o verbo tinha de ser a **1ª** palavra) | lista de **PREFIXOS** |
+| `"baixa a música X"`, `"procura a música Y"`, `"manda a música Z"` | **VERBO_PEDIDO + palavra de música** |
+| `"quero ouvir Djavan"`, `"queria escutar X"` | padrão de **ouvir/escutar** |
+| `"toga Evidências"`, `"toka X"` (o STT troca letras) | `toga`/`toka` entram no `VERBO_TOCAR` |
+| `"manda uma figurinha"` (sem "aleatória") | padrão com verbo de pedido |
+| **`"toca o telefone"` virava play** | `OBJETO_NAO_MUSICAL` (telefone, campainha, violão, piano...) |
+| **`"Toca Evidencias"` não casava** (só `"toca"`) | faltava a flag **`i`** no `new RegExp` — o NFD deixa o `T` maiúsculo |
+| `"toca essa música"` buscava `"música"` | devolve args **vazio** (ela pergunta o nome) |
+
+### LIÇÃO DE MÉTODO
+O bug da flag `i` só apareceu porque o corpus foi **medido**: `"toca Evidências"`
+funcionava e `"Toca Evidências"` não. Sem medir caso a caso, "funciona" e "quase
+funciona" parecem iguais. **O corpus virou teste** (40 positivos + 17 negativos) —
+qualquer regressão futura aparece na hora.
+
+### Testes — `tests/iap-comandos.test.js` (**17 testes / 128 asserções, 0 falhas**)
+Regressões verdes: `iap` 70/215, `ia` 20/50, `motor-chat-noise` 14/62,
+`cmd-suggest` 21/68, `get-message-inspector` 54/269, `contact-name` 16/37.
