@@ -135,7 +135,7 @@ const ID_TESTE = {
   humor: 'amigavel', sempreBemComDono: true, emojis: false, jeitoAdolescente: true,
   travas: ['NUNCA faca X.', 'NUNCA faca Y.'],
   esporte: 'vôlei', orientacao: 'bissexual', safadeza: true, conversaAdulto: true,
-  dificil: true, feminina: true, perguntarSexo: true,
+  dificil: true, feminina: true, perguntarSexo: true, inteligente: true,
   adotada: true,
   paisAdotivos: [
     { papel: 'pai', lid: '237@lid', nome: 'Kannon' },
@@ -543,19 +543,43 @@ await test('34. NAO abreviar TUDO (senao fica robotico)', () => {
   contem(b, 'ninguem abrevia 100% do tempo', 'explica o porque');
 });
 
-await test('35. as RISADAS por nivel entram', () => {
+await test('35. as RISADAS entram com a ESCALA (o tamanho = o quanto riu)', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
-  contem(b, 'AS SUAS RISADAS', 'a secao');
-  contem(b, '"kkk" curto', 'o kkk curto');
-  contem(b, 'kkkkk', 'o normal');
-  contem(b, 'KKKKKKKKKKKKKKKKKKKKKKKKKK', 'o comprido em maiuscula');
-  contem(b, 'ksksksksksksksksks', 'o ksks (deboche)');
+  contem(b, 'AS SUAS RISADAS — a ESCALA', 'a secao da escala');
+  contem(b, '"kkk": voce mal sorriu', 'kkk = sem graca');
+  contem(b, '"kkkkk" / "kkkkkkkk": foi levemente engracado', 'kkkkk = leve');
+  contem(b, 'foi engracado de verdade, voce riu alto', 'kkkkkkkkkk = de verdade');
+  contem(b, 'MUITO engracado, voce nao conseguiu segurar', 'KKKK = muito');
+  contem(b, 'voce ta MORRENDO de rir', 'a linha de K = morrendo');
+  contem(b, 'o tamanho e a caixa dizem o quanto foi engracado', 'a regra da escala');
+});
+
+await test('35b. as OUTRAS risadas entram, cada uma no seu MOMENTO', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'AS OUTRAS RISADAS', 'a secao');
+  // O ksks e' DEBOCHE (nao risada de coisa boa) — o nexo que o dono pediu.
+  contem(b, 'ksksksksksksksksks', 'o ksks');
   contem(b, 'KSSKSKSKSKSK', 'a variacao em maiuscula');
-  contem(b, 'rsrs', 'o rsrs sem graca');
-  contem(b, 'hahaha', 'o hahaha para variar');
-  // A REGRA: o tamanho diz o quanto foi engracado.
-  contem(b, 'o tamanho e a caixa da risada dizem', 'a regra do tamanho');
-  ok(/Nao use sempre\s+o mesmo tamanho/.test(b), 'proibe repetir o mesmo tamanho');
+  contem(b, 'esta DEBOCHANDO', 'ksks = deboche');
+  contem(b, 'Nao e risada de coisa boa', 'explica que ksks nao e elogio');
+  // O kakaka e' espanto/incredulidade.
+  contem(b, 'kakaka', 'o kakaka');
+  contem(b, 'risada de espanto e incredulidade', 'kakaka = espanto');
+  contem(b, 'KAKAKAKAKAJAKAKA', 'a versao gritada');
+  // As de variacao.
+  contem(b, 'hahaha', 'hahaha');
+  contem(b, 'hehe', 'hehe');
+  contem(b, 'rsrs', 'rsrs');
+  contem(b, 'akjsdhaksjdh', 'a risada de "perdi"');
+});
+
+await test('35c. a regra contra o "so kkkk" (o pedido do dono)', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'REGRA GERAL DAS RISADAS', 'a regra');
+  contem(b, 'NUNCA use so "kkkk" para tudo', 'proibe o kkk unico');
+  contem(b, 'Escolha a risada pelo MOMENTO', 'escolhe pelo momento');
+  // E o outro lado: nao rir de tudo.
+  contem(b, 'se nao foi engracado, nao ria', 'nao forca risada');
 });
 
 await test('36. o +18 e PERMITIDO (nao recusa)', () => {
@@ -679,13 +703,12 @@ await test('47. ela e FEMININA (repara, elogia, fala do dia)', () => {
   contem(b, 'NAO fala como homem', 'nao fala como brother');
 });
 
-await test('48. ela PERGUNTA se a pessoa e homem ou mulher', () => {
+await test('48. ela PERGUNTA se a pessoa e homem ou mulher (e so uma vez)', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
   contem(b, 'VOCE QUER SABER COM QUEM ESTA FALANDO', 'a secao');
   contem(b, 'homem ou mulher', 'a pergunta');
-  contem(b, 'voce PERGUNTA', 'ela pergunta');
   contem(b, 'vc e homem ou mulher?', 'um exemplo de como pergunta');
-  contem(b, 'UMA vez', 'nao fica perguntando');
+  contem(b, 'pergunta UMA VEZ na vida', 'so uma vez');
   contem(b, 'ajusta o jeito', 'muda o jeito depois de saber');
   // E vem ANTES do bloco +18 (e' o que ela faz primeiro).
   ok(b.indexOf('VOCE QUER SABER COM QUEM') < b.indexOf('A CONVERSA +18'), 'a pergunta vem antes do +18');
@@ -796,6 +819,92 @@ await test('57. `feminina: false` tira o bloco mimada', () => {
   const b = id.blocoDeIdentidade({ ...ID_TESTE, feminina: false });
   naoContem(b, 'VOCE E MIMADA', 'sem o bloco mimada');
   naoContem(b, 'VOCE E BEM FEMININA', 'nem o feminino');
+});
+
+// ---------------------------------------------------------------------------
+// 10) A PERGUNTA UMA VEZ, OS PAIS, INTELIGENTE/LIVRE E A MEMORIA
+// ---------------------------------------------------------------------------
+console.log('\n=== 10) PERGUNTA UMA VEZ, PAIS, INTELIGENTE E MEMORIA ===\n');
+
+await test('58. a pergunta do sexo e UMA VEZ e ela LEMBRA (o bug do dono)', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'pergunta UMA VEZ na vida', 'uma vez so');
+  contem(b, 'DEPOIS QUE A PESSOA RESPONDEU, VOCE JA SABE', 'ela lembra');
+  contem(b, 'Nunca mais pergunta', 'proibe repetir');
+  contem(b, 'nem no dia seguinte, nem daqui a uma semana', 'vale para sempre');
+  contem(b, 'Voce tem MEMORIA', 'explicita a memoria');
+  contem(b, 'Se voce estiver em duvida se ja perguntou, NAO PERGUNTE', 'na duvida, nao pergunta');
+  // E nao pergunta na primeira mensagem / por educacao.
+  contem(b, 'nunca na', 'nao pergunta na primeira');
+  contem(b, 'nunca por educacao', 'nao pergunta por educacao');
+});
+
+await test('59. ela RECONHECE os pais pelo JID', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'RECONHECE pelo numero/JID', 'reconhece pelo JID');
+  contem(b, 'trata como PAI/MAE', 'trata como pai/mae');
+  contem(b, 'nao como qualquer pessoa', 'nao e qualquer pessoa');
+});
+
+await test('60. ela NUNCA da em cima dos pais (o pedido do dono)', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'NUNCA DA EM CIMA DOS SEUS PAIS', 'a regra');
+  contem(b, 'Nem flerte, nem insinuacao, nem duplo sentido', 'o que nao faz');
+  contem(b, 'Isso NAO EXISTE para voce', 'sem excecao');
+  contem(b, 'o seu jeito muda NA HORA', 'muda o jeito na hora');
+  contem(b, 'nada de safadeza, nada de provocacao', 'sem safadeza');
+  // A trava dura: vale ATE' no meio do +18.
+  contem(b, 'MESMO no meio do clima +18', 'vale no meio do +18');
+  contem(b, 'se for um dos seus pais, para tudo', 'para tudo');
+  // E a regra tem que vir DEPOIS do bloco +18 (e' a que sobrepoe).
+  ok(b.indexOf('NUNCA DA EM CIMA DOS SEUS PAIS') < b.indexOf('A CONVERSA +18') ||
+     b.indexOf('NUNCA DA EM CIMA DOS SEUS PAIS') > b.indexOf('VOCE E DIFICIL'),
+    'a regra esta no prompt');
+});
+
+await test('61. ela e INTELIGENTE na conversa (nao e atendente)', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'VOCE E INTELIGENTE NA CONVERSA', 'a secao');
+  contem(b, 'PRESTA ATENCAO no que a pessoa disse antes', 'usa o contexto');
+  contem(b, 'tem opiniao propria', 'tem opiniao');
+  contem(b, 'DISCORDA quando discorda', 'discorda');
+  contem(b, 'entende indireta, ironia e piada', 'entende indireta');
+  contem(b, 'corrige (de boa, sem aula)', 'corrige');
+  contem(b, 'puxa assunto por conta propria', 'puxa assunto');
+  contem(b, 'nao e uma atendente', 'nao e atendente');
+  contem(b, 'adapta o tamanho da resposta', 'adapta o tamanho');
+});
+
+await test('62. ela e LIVRE', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'VOCE E LIVRE', 'a secao');
+  contem(b, 'Nao pede licenca', 'nao pede licenca');
+  contem(b, 'muda de assunto se quiser', 'muda de assunto');
+  contem(b, 'NAO tem medo de dizer', 'pode dizer nao sei');
+  contem(b, '"nao sei", "nao entendi"', 'e o "nao entendi"');
+  contem(b, 'nao um servico atendendo', 'nao e servico');
+});
+
+await test('63. `inteligente: false` tira os blocos', () => {
+  const b = id.blocoDeIdentidade({ ...ID_TESTE, inteligente: false });
+  naoContem(b, 'VOCE E INTELIGENTE NA CONVERSA', 'sem bloco inteligente');
+  naoContem(b, 'VOCE E LIVRE', 'sem bloco livre');
+  contem(b, 'SEU HUMOR', 'o resto continua');
+});
+
+await test('64. a MEMORIA da conversa subiu de 12 para 40 (o codigo)', () => {
+  // A causa do "nao e inteligente": ela esquecia o que foi dito. A memoria era
+  // de 12 mensagens; agora e' 40 e configuravel.
+  ok(!/length > 12/.test(IA), 'nao tem mais o limite de 12 fixo');
+  contem(IA, 'IA_HISTORICO', 'a env da memoria');
+  contem(IA, "'40'", 'o padrao 40');
+  ok(/slice\(-limiteHistorico\)/.test(IA), 'corta pelo limite configuravel');
+});
+
+await test('65. o CONFIG REAL tem `inteligente` ligado', () => {
+  const r = id.lerIdentidade(CONFIG_REAL);
+  ok(r.inteligente === true, 'inteligente ligado');
+  ok(r.perguntarSexo === true, 'perguntarSexo ligado');
 });
 
 // ---------------------------------------------------------------------------

@@ -849,9 +849,13 @@ function updateHistorico(grupoUserId, role, content, nome = null) {
   
   historico[grupoUserId].push(entry);
   
-  // Manter as últimas 12 interações para contexto mais fluido (6 do usuário + 6 da IA)
-  if (historico[grupoUserId].length > 12) {
-    historico[grupoUserId] = historico[grupoUserId].slice(-12);
+  // A MEMORIA da conversa. Era 12 mensagens (6 idas e voltas) — curto demais
+  // para ela "lembrar" do que foi dito: era a causa do "nao e inteligente" e da
+  // pergunta do sexo repetida (ela esquecia a resposta). Agora sao 40 (~20
+  // turnos), configuravel por `IA_HISTORICO`.
+  const limiteHistorico = Math.max(4, Number.parseInt(process.env.IA_HISTORICO || '40', 10) || 40);
+  if (historico[grupoUserId].length > limiteHistorico) {
+    historico[grupoUserId] = historico[grupoUserId].slice(-limiteHistorico);
   }
 }
 

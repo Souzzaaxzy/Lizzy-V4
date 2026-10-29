@@ -52,6 +52,7 @@
     "jeitoAdolescente": true,
     "dificil": true,
     "feminina": true,
-    "perguntarSexo": true
+    "perguntarSexo": true,
+    "inteligente": true
   }
 }
