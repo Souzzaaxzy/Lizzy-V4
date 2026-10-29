@@ -14722,3 +14722,58 @@ golden vectors da referencia, o grupo grande resolve o conjunto inteiro, e o
 caminho do grupo que **cabe** ficou **byte-identico**. Se ainda vier recusa, o log
 `[MOTOR] offer ack received` diz o codigo do erro e o `group_info phash` diz qual
 caminho rodou.
+
+### 🔍 ERRATA do log `rosterShipped: false` — ele MENTIA (out/2026) ✅
+O dono mandou o log de um grupo de **185 membros**:
+
+```
+[CALLP] grupo ...: 185 membro(s) -> 184 convidado(s) (sem corte: o motor nomeia ou hasheia)
+[MOTOR] startCall: enviando (184 convidado(s), lightweight=true)
+[MOTOR] group offer sent | {"voiceChat":true,"rosterShipped":false,"rosterAccounts":0}
+[MOTOR] startCall: OK
+```
+
+e concluiu (com razao) que o offer tinha saido **sem roster**. **Nao tinha** — o
+**log** e' que lia o `<group_info>` no **nivel errado**.
+
+O no' e' `<call>` -> `<offer>` -> `<group_info>`; o `findNodeChild` so' olha
+**filhos diretos**, entao procurar o grupo no envelope devolvia `undefined` e o log
+reportava `rosterShipped: false` / `rosterAccounts: 0` em **TODO** offer — hash e
+lista, grupo pequeno e grande. **Um log que sempre diz a mesma coisa esconde
+exatamente o que existe para mostrar** (e foi ele que fez parecer que o roster nao
+ia).
+
+**Medido no pacote instalado**: o offer de um grupo de 184 sai com
+`<group_info phash="2:4CtX/YwD">` e **zero filhos** — e o log dizia `false/0`.
+
+**Correcao** (fork `voip`, commit `d23f384`): `describeOfferRoster(node)` (puro, em
+`group-info.ts`) desce ate' o `<offer>` e devolve `{ shipped, accounts, form, phash }`
+com `form` em `none | hash | list`. O log passou a dizer a **forma**:
+
+```
+rosterShipped: true, rosterAccounts: 0, rosterForm: 'hash', phash: '2:...'
+```
+
+Assim "hash" (grupo grande) e "list" (grupo que cabe) deixam de parecer iguais.
+**Verificado que mede**: voltando a leitura para o filho direto, **2 testes falham**.
+
+### ⏱️ Um offer pelo HASH sem ack agora e' REPORTADO (fork `voip`, `9b955d9`)
+O sintoma real do dono e' *"subiu e nada apareceu"*, e o log **parava** no
+`group offer sent` — indistinguivel de "ainda esta subindo". Agora um offer que foi
+pelo HASH arma um **watchdog** (15 s, `unref`, **so' loga** — nao encerra a call):
+
+```
+group offer sent as a HASH got no ack | { callId, groupJid, phash, waitedMs, hint }
+```
+
+O `handleCallAck` marca o instante do ack por call (`lastAckAt`), limpo no
+`discard`. **E' essa linha que decide o proximo passo**: se ela aparecer, o servidor
+**nao respondeu** ao offer com hash; se **nao** aparecer, o servidor respondeu e a
+call parou adiante (relay/midia).
+
+### LIMITE HONESTO desta rodada
+Nao ha sessao de WhatsApp aqui, entao **nao** validei o cartao subindo num grupo
+real. O que esta provado: o offer **sai** com o `<group_info phash="2:...">` sem
+filhos (medido no pacote instalado) e o log agora **diz a forma**. Se o cartao
+ainda nao aparecer, o proximo log diz qual dos dois casos e' — e ai o passo seguinte
+e' medido, nao chutado.
