@@ -67,8 +67,15 @@ const INDEX = fs.readFileSync(new URL('../dados/src/index.js', import.meta.url),
 console.log('\n=== 1) A CORRECAO ESTA NO CODIGO ===\n');
 
 await test('o `connect()` e AGUARDADO quando ja esta pareado', () => {
-  includes(SRC, 'await client.connect()', 'espera o connect (nao e mais fire-and-forget)');
+  // A intencao: com pareamento, ESPERAMOS o connect (nao e fire-and-forget) —
+  // senao o offer sairia numa conexao fechada. Hoje a espera tem TETO
+  // (`comTeto(client.connect(), ...)`), o que tambem corrigiu o travamento.
+  ok(/comTeto\(client\.connect\(\), CONNECT_TIMEOUT_MS/.test(SRC),
+    'espera o connect COM teto (nao e mais fire-and-forget)');
   includes(SRC, 'const jaPareado = estaPareado()', 'decide pelo estado de pareamento');
+  // O `void client.connect()` so' pode existir no ramo SEM pareamento.
+  const semPareamento = SRC.includes('void client.connect().catch');
+  ok(semPareamento, 'sem pareamento nao espera (o comando responde na hora)');
 });
 
 await test('existe `aguardarConexao` (o sinal de que da para mandar stanza)', () => {

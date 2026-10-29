@@ -13426,3 +13426,92 @@ call real. O que está provado: o motor expõe entrada e saída PCM (tipos
 conferidos no pacote instalado), o fluxo completo funciona com dublês, o TTS
 real gera PCM 16 kHz (edge-tts + ffmpeg, medido), e o comando responde certo.
 Falta a prova de campo: subir a call, ligar o `!iap` e falar.
+
+
+## 🚨 MOTOR DA CALL: o flood de logs e o travamento do bot (out/2026) ✅
+Relato do dono: o `!vozp` enchia as logs de centenas de erros e **travava o bot
+todo**; o `!callp` voltou ao **"conectando..." infinito**. **É a MESMA causa.**
+
+### A causa raiz (MEDIDA — as strings vêm do pacote, não do Baileys)
+Nenhuma dessas linhas é do Baileys. Todas saem do **`zapo-js`** (o client
+separado que a call usa):
+
+| string | arquivo do pacote |
+|---|---|
+| `noise session not ready` | `transport/WaComms.js` |
+| `noise session is not established` | `transport/noise/WaNoiseSession.js` |
+| `failed to send retry receipt for decrypt failure` | `message/primitives/incoming.js` |
+| `offline batch request failed, giving up` | `client/coordinators/WaOfflineResumeCoordinator.js` |
+| `addon parent message secret not found` | addons |
+| `wa client error` | `client/WaClient.js` |
+
+O `zapo` é um client **COMPLETO** do WhatsApp. O bot o usa **só para a mídia da
+call**, mas por padrão ele processava **todo o tráfego da sessão**:
+
+1. **Histórico**: o log mostra `remainingStanzas: 12462` — ele baixava e
+   decifrava o histórico inteiro. O bot **não persiste mailbox**
+   (`messages: 'none'`), então isso só queimava banda e CPU.
+2. **Mensagens de chat**: sem chave Signal para elas (a sessão da call é
+   **outra**), cada uma virava `failed to send retry receipt`.
+3. **Addons** (reação/edição/voto): decifrados por padrão, falhavam em massa.
+4. **Offline resume**: com 12462 pendentes, re-tentava em lote.
+
+E o pior: **tudo isso roda na MESMA thread do bot**. O volume de trabalho
+bloqueava o event loop e o `!vozp`/`!callp` — que fazem `await obterCliente()` —
+prendiam o lote do `messageQueue`. O bot parava de responder. **Flood e
+travamento eram o mesmo problema.**
+
+### As correções
+| onde | o que |
+|---|---|
+| `zapoCall.js` | **`history: { enabled: false }`** — não baixa o histórico (a doc de produção do pacote recomenda exatamente isto quando não se persiste mailbox) |
+| `zapoCall.js` | **`addons: { autoDecrypt: false }`** — não decifra reação/edição/voto |
+| `zapoCall.js` | **filtro de stanzas** (`client.lowlevel.registerIncomingStanzaFilter`) que **descarta o chat** antes do processamento |
+| `zapoCall.js` | **logger filtrado** (`motorLogger.js`) no lugar do `ConsoleLogger` cru |
+| `zapoCall.js` | **teto na reconexão** (`comTeto`): era um `await client.connect()` sem teto |
+
+### O filtro — o que ele dropa e o que ele **PRESERVA** (o ponto crítico)
+A regra vive em **`dados/src/utils/motorLogger.js`** (`ehStanzaDeChat`, pura e
+testável). Ela **não** usa o atalho `ignoreKey({ only: [...] })`, porque o
+contexto daquele não expõe o `attrs.type` — e é pelo `type` que se separa
+**conteúdo** de **infra**. Dropar toda notificação quebraria o **pareamento**.
+
+| stanza | decisão |
+|---|---|
+| `message` | **DROPADA** (é chat; a call não usa) |
+| `notification` de **conteúdo** (`w:gp2`, `business`, `newsletter`, `picture`, `mediaretry`, `encrypt`) | **DROPADA** (é o flood) |
+| `notification` de **infra** (`passkey_prologue_request`, `companion_reg_refresh`, `registration`, `devices`, `server`, `account_sync`) | **PASSA** (pareamento e infra) |
+| `<call>` (offer/accept/enc_rekey/group_update) | **PASSA** |
+| `ack`, `iq`, `success`, `failure`, `ib` (offline), `receipt`, `presence`, `chatstate` | **PASSA** |
+
+O filtro roda **antes** do processamento e **devolve o ack**, então o servidor
+não reenvia. **Medido** com o filtro real do pacote: as 9 tags de infra/call
+passam, as de chat caem.
+
+### O logger — silencia o ruído, mantém o que importa
+`criarLoggerDoMotor` filtra as frases de consequência de chat, mas:
+- **`error` passa SEMPRE** (silenciar erro de verdade é pior que o ruído);
+- o que é da **call** continua saindo (`offer refused`, `raw udp leg rolled
+  back`), com o prefixo `[MOTOR]`.
+
+### Testes — `tests/motor-chat-noise.test.js` (**14 testes / 62 asserções, 0 falhas**)
+As frases **exatas** do log do dono são reconhecidas; o logger não imprime o
+ruído e mantém o da call; `error` passa sempre; o nível mínimo é respeitado; o
+motor **não** baixa histórico nem decifra addons; usa o logger filtrado (e
+**não** o `ConsoleLogger` cru); instala o filtro. E a regra do filtro, medida
+pura: dropa mensagem e notificação de conteúdo, **preserva** as 7 de
+pareamento/infra, a `<call>` e as 8 tags de protocolo.
+`tests/zapo-conexao.test.js` **17/38** — a asserção do `await client.connect()`
+virou `comTeto(client.connect(), CONNECT_TIMEOUT_MS)`, que é a intenção real
+(esperar **com teto**, não fire-and-forget).
+
+Regressões verdes: `callp` 50/118, `callp-regressions` 38/115, `musicap` 24/70,
+`iap` 27/68, `zapo-pareamento` 24/63, `vozp-grupo-grande` 6/12, `vozp-log`
+12/20, `vozp-terminate-target` 5/7, `call-motor-timeout` 7/28.
+
+### LIMITE HONESTO
+Não há sessão de WhatsApp aqui, então **não** validei contra o servidor real. O
+que está provado: as strings vêm do `zapo-js` (não do Baileys), as três opções
+são **lidas** pela versão instalada (1.10.0), o filtro preserva call+infra e
+dropa chat (medido com o matcher real do pacote), e a suíte de call segue verde.
+Se algo do motor ainda aparecer, o logger filtrado não esconde `error`.

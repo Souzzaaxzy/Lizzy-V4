@@ -41,6 +41,7 @@ import path from 'path';
 import { spawn } from 'child_process';
 import { criarStoreArquivoDoPacote } from './zapoStore.js';
 import { instalarBitrate } from '../../utils/mlowBitrate.js';
+import { criarLoggerDoMotor, ehStanzaDeChat } from '../../utils/motorLogger.js';
 import { DATABASE_DIR } from '../../utils/paths.js';
 
 let mod = null;
@@ -331,8 +332,13 @@ function agendarReconexao() {
     timerReconexao = null;
     if (conectado || !client) return;
     try {
-      await client.connect();
-      await aguardarConexao(30000);
+      // TETO na reconexao, pelo mesmo motivo do `obterCliente`: um
+      // `client.connect()` que nunca resolve deixa o timer pendurado e a
+      // proxima queda nao agenda outra tentativa. Antes isto era um `await`
+      // sem teto.
+      const r = await comTeto(client.connect(), CONNECT_TIMEOUT_MS, 'reconexao');
+      if (r.ok) await aguardarConexao(CONNECT_TIMEOUT_MS);
+      else agendarReconexao();
     } catch (e) {
       agendarReconexao();
     }
@@ -373,7 +379,7 @@ export async function obterCliente() {
       // Seam de teste: injeta SO o client (falso). A LOGICA abaixo — o teto do
       // `connect`, a espera da conexao, o tratamento de falha — e' a MESMA de
       // producao, que e' o que o teste precisa medir.
-      const { createStore, WaClient, ConsoleLogger, voipPlugin } = m;
+      const { createStore, WaClient, voipPlugin } = m;
 
       // Ajusta o encoder MLow (bitrate 30 kbps + complexidade 10 + FEC).
       // Instalado ANTES de criar o client: o media plane carrega o codec na
@@ -401,10 +407,45 @@ export async function obterCliente() {
         }
       });
 
+      // ---- Logger do motor: filtra o ruido de CHAT ----------------
+      //
+      // O motor fala por stanza (retry receipt, offline batch, noise session,
+      // addon). Nada disso e' da call e, em volume, alem de poluir o log,
+      // escondia o que importa. O filtro NAO desliga o motor: so' nao imprime o
+      // que e' consequencia de processar chat. `error` passa sempre.
+      const loggerDoMotor = criarLoggerDoMotor({
+        nivel: process.env.ZAPO_LOG_LEVEL || 'warn'
+      });
+
       client = __fabricaDeCliente ? await __fabricaDeCliente(m) : new WaClient(
         {
           store,
           sessionId: process.env.ZAPO_SESSION_ID || 'lizzy-call',
+
+          // ---- SO' A CALL: nada de CHAT -------------------------------
+          //
+          // O `zapo` e' um client COMPLETO do WhatsApp. O bot o usa SO' para a
+          // midia da call, mas por padrao ele processa TODO o trafego da sessao
+          // — e e' isso que enchia o log e TRAVAVA o bot:
+          //
+          //   failed to send retry receipt for decrypt failure { ... }
+          //   offline batch request failed, giving up { remainingStanzas: 12462 }
+          //   noise session is not established
+          //   addon parent message secret not found { ... }
+          //
+          // Nada disso e' da call: e' o motor tentando decifrar conversas que a
+          // sessao dele nao tem chave (a sessao do Baileys e' outra). O bot nao
+          // persiste mailbox (`messages: 'none'`), entao o download de historico
+          // so' queima banda.
+          //
+          // `history.enabled: false` para o download (a doc de producao do
+          // pacote recomenda exatamente isso quando nao se persiste mailbox).
+          history: { enabled: false },
+
+          // Addons (reacao/edicao/voto) sao decifrados por padrao e falham em
+          // massa aqui — o motor nao usa nada disso na call.
+          addons: { autoDecrypt: false },
+
           plugins: [
             voipPlugin({
               // NAO use `useRawUdpTransport: true`.
@@ -451,8 +492,47 @@ export async function obterCliente() {
             })
           ]
         },
-        new ConsoleLogger(process.env.ZAPO_LOG_LEVEL || 'warn')
+        // O logger FILTRADO (ver `criarLoggerDoMotor`): o `ConsoleLogger` cru
+        // imprimia todo o ruido de chat que o motor nao precisa processar.
+        loggerDoMotor
       );
+
+      // ---- Filtro de STANZAS: o motor so' precisa do que e' da CALL --------
+      //
+      // Desligar o historico (`history.enabled: false`) tira o download, mas as
+      // mensagens de chat CONTINUAM chegando pela fila. Sem chave Signal para
+      // elas (a sessao da call e' outra), cada uma vira
+      // `failed to send retry receipt for decrypt failure` — centenas por
+      // minuto, na MESMA thread do bot.
+      //
+      // O filtro roda ANTES do processamento e devolve o ack, entao o servidor
+      // nao reenvia.
+      //
+      // ## O que ele dropa (e o que PRESERVA)
+      //
+      // Usa `registerIncomingStanzaFilter` (recebe o NO cru) e nao o
+      // `ignoreKey`, porque o contexto daquele nao expoe o `attrs.type` da
+      // notificacao — e e' pelo `type` que se separa conteudo de infra.
+      //
+      //  - `message` -> DROPADA (e' chat; a call nao usa);
+      //  - `notification` -> DROPADA so' quando o `type` e' de CONTEUDO
+      //    (`w:gp2` grupo, business, newsletter, picture, mediaretry, encrypt):
+      //    e' o que gera o flood. Pareamento (`passkey_prologue_request`,
+      //    `companion_reg_refresh`), registro, device, server e account_sync
+      //    PASSAM — a infra do motor precisa deles;
+      //  - tudo o mais -> passa. `ack`, `iq`, `success`, `failure` e o
+      //    info-bulletin (por onde vem `offline_preview`/`offline`) nem entram
+      //    na conta, entao o protocolo segue intacto.
+      //
+      // A sinalizacao da call vem por `<call>` (tag propria) — `offer`,
+      // `accept`, `enc_rekey`, `group_update` seguem chegando.
+      if (client.lowlevel?.registerIncomingStanzaFilter) {
+        client.lowlevel.registerIncomingStanzaFilter(ehStanzaDeChat);
+      } else if (typeof client.ignoreKey === 'function') {
+        // Reserva: sem o lowlevel (versao antiga), cai no filtro do pacote —
+        // mais grosso (so' `message`), mas ainda tira o grosso do flood.
+        client.ignoreKey((ctx) => ctx.kind === 'message');
+      }
 
       // ---- Diagnostico da call -------------------------------------------
 
