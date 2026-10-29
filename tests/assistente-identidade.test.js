@@ -373,18 +373,19 @@ await test('22. o volei e a bissexualidade entram no prompt', () => {
   contem(b, 'gosta de homem e de mulher', 'explica o que e');
 });
 
-await test('23. o ar safado e a conversa +18 entram, MAS com o limite junto', () => {
+await test('23. o ar safado e a conversa +18 entram (permissao e limite SEPARADOS)', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
   contem(b, 'safado', 'o ar safado');
   contem(b, 'flertar', 'ela flerta');
-  contem(b, 'NAO se escandaliza', 'nao corta o +18');
   contem(b, 'fala de sexo', 'fala de sexo sem drama');
-  // O CRITICO: o limite aparece NO MESMO BLOCO, senao o modelo pode ponderar
-  // que "ser safada" vence a trava.
-  contem(b, 'o limite continua sendo o limite', 'o limite vem junto');
-  contem(b, 'LIMITES ABSOLUTOS', 'aponta para as travas');
-  // E o bloco da safadeza vem ANTES das travas (a trava e' a ultima palavra).
-  ok(b.indexOf('O AR DE VOCE') < b.indexOf('LIMITES ABSOLUTOS'), 'safadeza antes das travas');
+  // O CRITICO (contrato NOVO): a permissao e o limite NAO ficam no mesmo
+  // paragrafo. Quando ficavam, o modelo lia "quando esquentar, recuse" — era o
+  // bug da foto recusada.
+  const permissao = b.indexOf('A CONVERSA +18');
+  const limite = b.indexOf('O QUE NEM NO +18 VOCE FAZ');
+  ok(permissao > 0, 'a secao de permissao existe');
+  ok(limite > permissao, 'e o limite vem DEPOIS, em secao propria');
+  ok(b.indexOf('LIMITES ABSOLUTOS') > limite, 'as travas do config fecham o prompt');
 });
 
 await test('24. o flerte e bissexual (homem E mulher)', () => {
@@ -500,6 +501,123 @@ await test('32. o handler resolve os pais e passa nos DOIS canais', () => {
   contem(SESSAO, 'paisAdotivos', 'a voz encadeia os pais');
   const IA = fs.readFileSync(new URL('../dados/src/funcs/private/ia.js', import.meta.url), 'utf-8');
   contem(IA, 'paisAdotivos', 'o chat tambem');
+});
+
+// ---------------------------------------------------------------------------
+// 7) ABREVIACOES, RISADAS E O +18 DESTRAVADO
+// ---------------------------------------------------------------------------
+console.log('\n=== 7) ABREVIACOES, RISADAS E +18 ===\n');
+
+await test('33. as ABREVIACOES entram (com os significados)', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'AS ABREVIACOES QUE VOCE USA', 'a secao');
+  // As da fonte (Wikipedia "Internetes") + as que o dono citou.
+  contem(b, 'obg', 'obg (obrigado)');
+  contem(b, 'vc', 'vc (voce)');
+  contem(b, 'tbm', 'tbm (tambem)');
+  contem(b, 'pq', 'pq (porque)');
+  contem(b, 'vlw', 'vlw (valeu)');
+  contem(b, 'flw', 'flw (falou)');
+  contem(b, 'blz', 'blz (beleza)');
+  contem(b, 'mds', 'mds (meu deus)');
+  contem(b, 'slk', 'slk');
+  contem(b, 'sla', 'sla (sei la)');
+  contem(b, 'sdd', 'sdd (saudade)');
+  contem(b, 'tlgd', 'tlgd (ta ligado)');
+  contem(b, 'pprt', 'pprt (papo reto)');
+  // Cada uma com o SIGNIFICADO (sem isso o modelo chuta o que quer dizer).
+  contem(b, '(obrigado/obrigada)', 'explica obg');
+  contem(b, '(porque)', 'explica pq');
+});
+
+await test('34. NAO abreviar TUDO (senao fica robotico)', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'NAO abrevia TUDO', 'avisa para misturar');
+  contem(b, 'ninguem abrevia 100% do tempo', 'explica o porque');
+});
+
+await test('35. as RISADAS por nivel entram', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'AS SUAS RISADAS', 'a secao');
+  contem(b, '"kkk" curto', 'o kkk curto');
+  contem(b, 'kkkkk', 'o normal');
+  contem(b, 'KKKKKKKKKKKKKKKKKKKKKKKKKK', 'o comprido em maiuscula');
+  contem(b, 'ksksksksksksksksks', 'o ksks (deboche)');
+  contem(b, 'KSSKSKSKSKSK', 'a variacao em maiuscula');
+  contem(b, 'rsrs', 'o rsrs sem graca');
+  contem(b, 'hahaha', 'o hahaha para variar');
+  // A REGRA: o tamanho diz o quanto foi engracado.
+  contem(b, 'o tamanho e a caixa da risada dizem', 'a regra do tamanho');
+  ok(/Nao use sempre\s+o mesmo tamanho/.test(b), 'proibe repetir o mesmo tamanho');
+});
+
+await test('36. o +18 e PERMITIDO (nao recusa)', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'A CONVERSA +18', 'a secao');
+  contem(b, 'PERMITIDO', 'diz que e permitido');
+  contem(b, 'Nao recuse, nao corte, nao mude de assunto', 'proibe recusar');
+  contem(b, 'NUNCA diga que "nao pode"', 'proibe o "nao posso"');
+  contem(b, 'nao e apropriado', 'proibe o "nao e apropriado"');
+});
+
+await test('37. a ESCALADA esta descrita (vai se soltando)', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'vai se soltando conforme ela esquenta', 'descreve a escalada');
+  contem(b, 'voce insinua de volta', 'passo 1');
+  contem(b, 'voce fica tambem', 'passo 2');
+  contem(b, 'responde no mesmo nivel', 'passo 3');
+  contem(b, 'nao freia', 'passo 4');
+});
+
+await test('38. a FOTO: ela provoca/negocia, nao nega (o caso do dono)', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'Se pedirem uma FOTO', 'o caso do dono');
+  contem(b, 'provoca, brinca, negocia, faz suspense', 'como ela reage');
+  contem(b, 'NAO da aquele "nao, isso eu nao faco"', 'o que ela NAO faz');
+});
+
+await test('39. os LIMITES DUROS ficam SEPARADOS e so citam menor/abuso', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'O QUE NEM NO +18 VOCE FAZ', 'a secao separada');
+  contem(b, 'MENOR de idade', 'o limite de menor');
+  contem(b, 'ESTUPRO, abuso', 'o limite de abuso');
+  contem(b, 'a UNICA coisa que te faz recusar', 'deixa claro que e a unica');
+  // So' esses dois: nao pode virar uma lista de pudores.
+  contem(b, 'Fora desses dois, TODO o resto do +18 esta liberado', 'libera o resto');
+});
+
+await test('40. A REGRESSAO: a recusa NAO pode citar o "clima" (o bug do dono)', () => {
+  // O defeito real: o aviso dizia "...voce NAO faz, NEM NO MEIO DO CLIMA" — a
+  // palavra colada no "NAO faz" fazia o modelo recusar QUANDO esquentasse. Era
+  // por isso que ela negava a foto.
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  ok(!/NAO faz, nem no meio do clima/i.test(b), 'a frase antiga nao voltou');
+  ok(!/nem no meio do clima/i.test(b), 'a expressao "nem no meio do clima" saiu');
+  // E o bloco do +18 nao pode conter uma proibicao ligada ao clima.
+  const i = b.indexOf('A CONVERSA +18');
+  const j = b.indexOf('O QUE NEM NO +18 VOCE FAZ', i);
+  const bloco18 = b.slice(i, j);
+  ok(!/NAO faca|nao faca|proibido/i.test(bloco18), 'o bloco de permissao nao tem proibicao solta');
+});
+
+await test('41. a permissao vem ANTES do limite (a ordem importa)', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  const permissao = b.indexOf('A CONVERSA +18');
+  const limite = b.indexOf('O QUE NEM NO +18 VOCE FAZ');
+  ok(permissao > 0 && limite > permissao, 'permissao antes do limite');
+  // E o limite duro e' a ULTIMA palavra (junto com as travas do config).
+  const travas = b.indexOf('LIMITES ABSOLUTOS');
+  ok(travas > limite, 'as travas do config fecham o prompt');
+});
+
+await test('42. as travas do CONFIG nao citam o clima (nao reintroduzem o bug)', () => {
+  const r = id.lerIdentidade(CONFIG_REAL);
+  const texto = r.travas.join(' ');
+  ok(!/meio do clima/i.test(texto), 'nenhuma trava fala de clima');
+  ok(!/conversa quente/i.test(texto), 'nem de conversa quente');
+  // Mas os limites de verdade continuam.
+  ok(/menor/i.test(texto), 'o limite de menor segue');
+  ok(/estupro|abuso/i.test(texto), 'o de abuso segue');
 });
 
 // ---------------------------------------------------------------------------
