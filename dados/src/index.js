@@ -41,6 +41,9 @@ import { parseImagePollArgs, collectPollImages, resolveAttachments, buildOptionN
 import { toOggOpus } from './utils/oggOpus.js';
 import { resolverNomeContato, acharParticipantePorId, nomeInutil, baseId, numerosDoParticipante } from './utils/contactName.js';
 import { coletarDadosDoGrupo } from './utils/contextoConversa.js';
+// As ACOES do grupo pedidas por fala/texto (link e foto) — reconhecimento
+// DETERMINISTICO, como o `iapComandos` da call.
+import { identificarAcaoDoGrupo } from './utils/assistenteAcoes.js';
 import { converterGifParaMp4 } from './utils/gifMedia.js';
 import { figurinhaParaStatus } from './utils/stickerStatus.js';
 import { normalizarIdGrupo, ehJidCanal, buildFollowChannelContent, fotoDoMetadataNewsletter, normalizarGrupos, adicionarGrupo, removerGrupo } from './utils/canalDivulgacao.js';
@@ -7606,6 +7609,52 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
           // A foto do grupo (best-effort; o grupo pode nao ter).
           comFoto: isGroup
         });
+
+        // ------------------------------------------------------------------
+        // ACOES DO GRUPO pedidas por fala/texto: "manda o link do grupo" e
+        // "manda a foto do grupo".
+        //
+        // Roda ANTES do LLM de proposito: sao deterministicas (ou pediram, ou
+        // nao pediram) e o LLM NAO TEM o convite do grupo — ele inventaria um
+        // link errado. Alem disso, uma foto so' se MOSTRA enviando imagem; o
+        // bloco de contexto so' tem a URL como texto.
+        //
+        // Qualquer membro pode pedir (o `!linkgp` continua sendo o do admin,
+        // que serve para DIVULGAR).
+        // ------------------------------------------------------------------
+        const acaoDoGrupo = isGroup ? identificarAcaoDoGrupo(textoLimpo) : null;
+        if (acaoDoGrupo) {
+          try {
+            if (acaoDoGrupo.acao === 'link') {
+              const codigo = await nazu.groupInviteCode(from);
+              if (!codigo) throw new Error('sem codigo de convite');
+              await nazu.sendMessage(from, {
+                text: `🔗 *Link do grupo:*\nhttps://chat.whatsapp.com/${codigo}`,
+                contextInfo: gerarContextNewsletter()
+              });
+              return;
+            }
+            // FOTO: envia a imagem de verdade (nao a URL em texto).
+            let fotoUrl = dadosDoGrupo?.grupo?.foto || null;
+            if (!fotoUrl) {
+              try { fotoUrl = await nazu.profilePictureUrl(from, 'image'); } catch { fotoUrl = null; }
+            }
+            if (!fotoUrl) {
+              await reply('📷 Este grupo não tem foto no momento.');
+              return;
+            }
+            await nazu.sendMessage(from, {
+              image: { url: fotoUrl },
+              caption: `📷 *Foto do grupo*`,
+              contextInfo: gerarContextNewsletter()
+            });
+            return;
+          } catch (e) {
+            console.error('[ASSISTENTE] falha na acao do grupo:', e?.message || e);
+            await reply('❌ Não consegui buscar isso agora. Tente de novo em instantes.');
+            return;
+          }
+        }
 
         // Contexto adicional para passar à IA
         const extraContext = {
