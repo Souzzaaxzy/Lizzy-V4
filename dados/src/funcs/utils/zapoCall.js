@@ -80,6 +80,41 @@ const aoOuvirPorGrupo = new Map();
 /** Diretorio onde as credenciais do zapo sao gravadas. */
 const AUTH_DIR = path.join(DATABASE_DIR, 'zapo-auth');
 
+/** Valores de `ZAPO_RAW_UDP` que ligam o transporte por UDP cru. */
+const VALORES_LIGADOS = new Set(['all', '1', 'true', 'on', 'sim', 'yes']);
+
+/**
+ * Le `ZAPO_RAW_UDP` e diz se o transporte por UDP cru esta ligado.
+ *
+ * <p>O padrao e' DESLIGADO: o flag do pacote e' experimental e a leg UDP cru tem
+ * a sua propria policia de caminho de volta. Quem decide e' o dono, lendo o log
+ * do relay -- por isso a escolha e' registrada uma vez (ver {@link avisarTransporte}).
+ */
+function ligarUdpCru() {
+  return VALORES_LIGADOS.has(String(process.env.ZAPO_RAW_UDP ?? '').trim().toLowerCase());
+}
+
+/** Ja' avisamos a escolha do transporte? (uma linha por processo, nao por call.) */
+let avisouTransporte = false;
+
+/**
+ * Diz, no log, qual transporte de relay o motor vai usar.
+ *
+ * <p>Sem esta linha, "a env nao chegou" e "a env chegou e o caminho nao ajuda" dao
+ * o MESMO log (sctp/webrtc falhando). Foi exatamente o que aconteceu: o dono ligou
+ * a env e o log continuou identico, sem dizer se o valor tinha sido lido.
+ */
+function avisarTransporte() {
+  if (avisouTransporte) return;
+  avisouTransporte = true;
+  const bruto = process.env.ZAPO_RAW_UDP;
+  const ligado = ligarUdpCru();
+  console.log(
+    `[MOTOR] transporte do relay: ${ligado ? 'UDP CRU (ZAPO_RAW_UDP ligado)' : 'WebRTC (padrao)'}` +
+      ` | ZAPO_RAW_UDP=${bruto === undefined ? '(nao definida)' : JSON.stringify(bruto)}`
+  );
+}
+
 /** Teto da consulta de LID (best-effort; estourou, seguimos com o numero). */
 const LID_LOOKUP_TIMEOUT_MS = 8000;
 
@@ -386,6 +421,11 @@ export async function obterCliente() {
       // primeira call, entao o gancho precisa estar no lugar antes disso.
       await instalarBitrate().catch(() => false);
 
+      // Diz QUAL transporte de relay vai ser usado, uma vez por processo. Sem
+      // esta linha, "a env nao chegou" e "a env chegou e o caminho nao ajuda"
+      // dao o mesmo log -- foi o que aconteceu quando o dono ligou a env.
+      avisarTransporte();
+
       // Backend de ARQUIVO cobrindo os dominios de persistencia. As caixas de
       // mensagens ficam de fora ('none'): o zapo aqui so carrega a MIDIA.
       const backend = await criarStoreArquivoDoPacote(AUTH_DIR, () => {});
@@ -484,8 +524,11 @@ export async function obterCliente() {
               //
               //   rawUdpLegs: useRawUdpTransport ? 'all' : 'required'
               //
-              // `ZAPO_RAW_UDP=all` liga o caminho (mesma opcao do pacote).
-              useRawUdpTransport: String(process.env.ZAPO_RAW_UDP || '').toLowerCase() === 'all',
+              // `ZAPO_RAW_UDP=all` liga o caminho (mesma opcao do pacote). Aceita
+              // tambem 1/true/on/sim -- escrever `ZAPO_RAW_UDP=1` e' o que se
+              // espera de uma env booleana, e recusar isso por detalhe de forma
+              // faria o dono achar que o caminho nao funciona.
+              useRawUdpTransport: ligarUdpCru(),
 
               logLevel: process.env.ZAPO_LOG_LEVEL || 'warn',
 
@@ -810,6 +853,10 @@ export const __comTeto = comTeto;
  */
 let __fabricaDeCliente = null;
 export function __setFabricaDeCliente(fn) { __fabricaDeCliente = fn; }
+
+/** Seam de teste: o leitor de `ZAPO_RAW_UDP` e o aviso da escolha. */
+export const __ligarUdpCru = ligarUdpCru;
+export const __avisarTransporte = avisarTransporte;
 /** Teto efetivo do `startCall` (para o teste conferir que existe). */
 export const __tetoDoStartCall = () => START_CALL_TIMEOUT_MS;
 /** Teto efetivo do `connect` (para o teste conferir que existe). */

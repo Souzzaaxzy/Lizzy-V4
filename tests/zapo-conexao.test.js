@@ -201,8 +201,13 @@ await test('o transporte por UDP cru e CONTROLADO por env (ZAPO_RAW_UDP)', () =>
   // explicita, com o motivo registrado no codigo.
   includes(SRC, 'useRawUdpTransport:', 'o flag e passado (nao mais omitido)');
   includes(SRC, 'ZAPO_RAW_UDP', 'o controle e por env explicita');
-  includes(SRC, "=== 'all'", 'so a env ZAPO_RAW_UDP=all liga');
+  includes(SRC, 'ligarUdpCru()', 'a env passa por um leitor unico');
   includes(SRC, 'relay_port_unopened', 'o motivo medido fica registrado no codigo');
+  // A linha que separa "a env nao chegou" de "a env chegou e nao ajudou": sem
+  // ela, os dois casos dao o MESMO log (sctp falhando) -- foi o que aconteceu.
+  includes(SRC, 'avisarTransporte()', 'a escolha do transporte e registrada no log');
+  includes(SRC, 'transporte do relay:', 'a linha diz qual transporte vai ser usado');
+  includes(SRC, 'UDP CRU', 'e nomeia o caminho ligado');
 });
 
 await test('os listeners de diagnostico de midia existem', () => {
