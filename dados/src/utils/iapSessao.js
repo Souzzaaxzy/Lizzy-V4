@@ -160,10 +160,13 @@ export function montarSistemaDoAgente({ nomeDono, participantes = [], falante, f
  * @param {function} [opts.nomeDeQuemFalou] `(jid) => Promise<string|null>` —
  *   resolve o JID em NOME (agenda > notify > verifiedName). Vem do `index.js`,
  *   que tem o `nazu` e o metadata do grupo.
+ * @param {function} [opts.ehDono] `(jid) => boolean` — o falante e' o DONO do
+ *   bot? A checagem e' por **JID/numero** (a MESMA do resto do bot), nao por
+ *   nome: se o dono trocar o nome do perfil, ele continua sendo reconhecido.
  * @returns {Promise<string>}
  */
 export async function pensarComIa(texto, historico = [], {
-  quemFalou, ehAutorizado, nomeDono, participantes = [], nomeDeQuemFalou
+  quemFalou, ehAutorizado, nomeDono, participantes = [], nomeDeQuemFalou, ehDono
 } = {}) {
   // ---- GUARDA: o pedido é de AÇÃO? a pessoa PODE? ------------------------
   const guarda = await permitePedidoDeAcao(texto, quemFalou, { ehAutorizado });
@@ -190,9 +193,18 @@ export async function pensarComIa(texto, historico = [], {
       if (limpo && !limpo.includes('@')) falante = limpo;
     } catch { /* segue sem nome */ }
   }
-  const falanteEhDono = Boolean(
-    quemFalou && nomeDono && falante && falante.toLowerCase() === String(nomeDono).toLowerCase()
-  );
+  // O DONO e' identificado por JID/NUMERO (a checagem real do bot, injetada
+  // pelo `index.js`). O nome e' apenas a ULTIMA reserva: se o dono trocar o nome
+  // do perfil, a comparacao por nome falharia e ele deixaria de ser reconhecido.
+  let falanteEhDono = false;
+  if (quemFalou) {
+    if (typeof ehDono === 'function') {
+      try { falanteEhDono = Boolean(await ehDono(quemFalou)); } catch { falanteEhDono = false; }
+    }
+    if (!falanteEhDono && nomeDono && falante) {
+      falanteEhDono = falante.toLowerCase() === String(nomeDono).toLowerCase();
+    }
+  }
 
   const sistema = montarSistemaDoAgente({ nomeDono, participantes, falante, falanteEhDono });
   const r = await groqChat({
@@ -221,9 +233,11 @@ export async function pensarComIa(texto, historico = [], {
  * @param {function} [opts.nomeDeQuemFalou] `(jid) => Promise<string|null>` —
  *   resolve o JID do falante no NOME do contato (o `index.js` injeta o
  *   `resolverNomeContato`). E' o que faz a Lizzy chamar a pessoa pelo nome.
+ * @param {function} [opts.ehDono] `(jid) => boolean` — o falante e' o DONO?
+ *   Checagem por JID/numero (a mesma do resto do bot).
  * @returns {Promise<{ ok: boolean, motivo?: string }>}
  */
-export async function ligarIap(grupo, { nomeDono, participantes, ehAutorizado, nomeDeQuemFalou } = {}) {
+export async function ligarIap(grupo, { nomeDono, participantes, ehAutorizado, nomeDeQuemFalou, ehDono } = {}) {
   // O `!iap` inteiro roda no Groq (ouvir E pensar): sem a chave dele nao ha' o
   // que ligar.
   if (!chaveGroq()) return { ok: false, motivo: 'sem_chave_groq' };
@@ -253,7 +267,7 @@ export async function ligarIap(grupo, { nomeDono, participantes, ehAutorizado, n
   iap.ligar(grupo, {
     log: logIap,
     pensar: (texto, historico, opts = {}) => pensarComIa(texto, historico, {
-      quemFalou: opts.quemFalou, ehAutorizado, nomeDono, participantes, nomeDeQuemFalou
+      quemFalou: opts.quemFalou, ehAutorizado, nomeDono, participantes, nomeDeQuemFalou, ehDono
     }),
     transcrever: async (pcm) => {
       const r = await transcreverPcm(pcm, { apiKey: chaveGroq() });

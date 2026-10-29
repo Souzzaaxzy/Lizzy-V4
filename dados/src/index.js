@@ -36925,11 +36925,24 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
                 return await resolverNomeContato(jid, { nazu, metadata: meta, from });
               } catch { return null; }
             };
+            // O DONO e' identificado por JID/NUMERO (nao por nome): se o dono
+            // trocar o nome do perfil, ele continua sendo reconhecido. Usa o
+            // MESMO `idsMatch` do resto do bot e aceita as duas formas
+            // (numero e LID do dono).
+            const ehDono = (jid) => {
+              try {
+                if (!jid) return false;
+                if (idsMatch(jid, numerodono)) return true;
+                if (lidowner && idsMatch(jid, lidowner)) return true;
+                return false;
+              } catch { return false; }
+            };
             const r = await ligarIap(from, {
               nomeDono: nomedono || null,
               participantes: nomesNaCall,
               ehAutorizado,
-              nomeDeQuemFalou
+              nomeDeQuemFalou,
+              ehDono
             });
             if (!r.ok) {
               const motivos = {

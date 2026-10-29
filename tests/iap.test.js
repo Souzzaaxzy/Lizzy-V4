@@ -751,6 +751,51 @@ await test('ligarIap: o agente chama a pessoa pelo NOME (o fio do nomeDeQuemFalo
   groq.setGroqHttpForTest(null);
 });
 
+await test('ligarIap: o DONO é reconhecido por JID (não pelo nome)', async () => {
+  // O dono trocou o nome do perfil? Ele continua sendo reconhecido — a checagem
+  // e' por JID/numero (a mesma do resto do bot), nao pelo nome exibido.
+  const sess = await import(new URL('../dados/src/utils/iapSessao.js', import.meta.url).href);
+  const groq = await import(new URL('../dados/src/utils/groqClient.js', import.meta.url).href);
+  const { iap } = await import(new URL('../dados/src/utils/iapVoice.js', import.meta.url).href);
+  sess.setIapMediaForTest({
+    modoAudioExternoDaCall: async () => true,
+    aoOuvirAudioDaCall: async () => true,
+    falarNaCallDoGrupo: async () => 0
+  });
+  let sistemaVisto = null;
+  groq.setGroqHttpForTest(async (url, body) => {
+    sistemaVisto = body?.messages?.[0]?.content || '';
+    return { data: { choices: [{ message: { content: 'ok' } }] } };
+  });
+  const antigaGroq = process.env.GROQ_API_KEY;
+  process.env.GROQ_API_KEY = 'gsk_teste';
+
+  const grupo = 'dono-jid@g.us';
+  const DONO_JID = '5511978819676@s.whatsapp.net';
+  const r = await sess.ligarIap(grupo, {
+    // O nome exibido do dono e' OUTRO (ele trocou no perfil) — se a checagem
+    // fosse por nome, ele NAO seria reconhecido.
+    nomeDono: 'NomeAntigoQueEleTrocou',
+    nomeDeQuemFalou: async () => 'Kannon',
+    ehDono: (jid) => jid === DONO_JID
+  });
+  ok(r.ok === true, `ligou (${r.motivo || 'ok'})`);
+
+  const agente = iap.agentes.get(grupo);
+  await agente.pensar('oi', [], { quemFalou: DONO_JID });
+  ok(/e' o DONO/i.test(sistemaVisto || ''), 'reconheceu o dono pelo JID');
+
+  // Um membro comum NAO e' marcado como dono.
+  sistemaVisto = null;
+  await agente.pensar('oi', [], { quemFalou: '5511999999999@s.whatsapp.net' });
+  ok(!/e' o DONO/i.test(sistemaVisto || ''), 'membro comum nao vira dono');
+
+  await sess.desligarIap(grupo);
+  sess.setIapMediaForTest(null);
+  if (antigaGroq !== undefined) process.env.GROQ_API_KEY = antigaGroq;
+  groq.setGroqHttpForTest(null);
+});
+
 await test('pensarComIa: a guarda RECEBE o ehAutorizado (não recusa todo mundo)', async () => {
   // BUG: `pensarComIa` chamava a guarda SEM `ehAutorizado`, então TODO pedido de
   // ação era recusado — inclusive de admin. O `agente.ehAutorizado` era setado e
