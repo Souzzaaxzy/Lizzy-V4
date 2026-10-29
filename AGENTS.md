@@ -13830,3 +13830,63 @@ está provado: nenhum caminho do `!iap`/`!transcrever` toca no Gemini (teste que
 conta as chamadas), o payload do Groq (modelo, multipart, formato do arquivo) e
 a classificação de erro. Se o LLM do Groq não agradar na conversa, basta trocar
 `IAP_GROQ_LLM_MODEL` — sem mexer em código.
+
+
+## 🎉 `!iap` FALOU NA CALL — o laço fechou (out/2026) ✅
+Log do dono:
+
+```
+[IAP] ligado   | {"grupo":"120363425268923269@g.us"}
+[IAP] ouviu    | {"texto":"Ah, fui."}
+[IAP] respondeu| {"resposta":"Não entendi.", "ms":745}
+[IAP] barge-in: agente calou
+```
+
+### A prova de que o bot JÁ FALAVA
+A linha **`barge-in: agente calou`** só dispara com `this.falando === true` — e
+`falando` só é setado **dentro** do `emitirFala()`, que roda **depois** do TTS
+devolver áudio:
+
+```
+respondeu → sintetizar(resposta) → emitirFala() → [falando=true] → barge-in
+```
+
+Ou seja, o fluxo real foi: **ouviu → pensou (745 ms) → FALOU → o dono falou por
+cima → o bot calou.** O laço completo fechou: **Groq Whisper ouve, Groq LLM
+pensa, edge-tts fala, o motor entrega na call.**
+
+### O ponto cego que isso revelou (e foi fechado)
+O TTS era **mudo quando dava certo**: não havia linha de sucesso, então não dava
+para saber **de qual fonte** veio a voz (edge-tts local ou Gemini TTS reserva).
+Agora sai:
+
+```
+🎙️ [IAP] TTS ok (edge-tts) | {"grupo":"...","segundos":3.2}
+```
+
+E o TTS **falho** também deixou de ser silencioso (`TTS falhou: <motivo>`) —
+antes o agente simplesmente não falava e o log parava no "respondeu".
+
+### Bug corrigido: o barge-in cortava com UM frame
+O barge-in disparava com **um único frame** de energia (60 ms) — uma tosse, um
+clique na cadeira ou o **eco da própria voz do bot** calava a resposta no meio.
+
+Agora exige **fala sustentada**: conta os frames **seguidos com energia acima do
+limiar** e só cala ao passar de `bargeFrames` (**3 frames ≈ 180 ms**). Qualquer
+frame abaixo do limiar zera a contagem, então um estalo isolado não acumula.
+
+**Detalhe medido que quase passou:** a primeira versão contava pelo **evento** do
+VAD — mas o VAD devolve `'meio'` **também nos silêncios dentro da frase**, então
+o contador subia sem fala nenhuma e o teste reprovou. A contagem passou a usar a
+**energia (`rms`) do próprio frame**.
+
+### Testes — `tests/iap.test.js` (**43 testes / 122 asserções, 0 falhas**)
++1: **um estalo isolado NÃO corta a fala** (1 frame de fala + silêncio longo, 5×,
+não acumula 3 seguidos); o teste do barge-in agora exige os **3 frames**. E o TTS
+passou a logar a fonte. Regressões verdes: `ia` 20/50, `motor-chat-noise` 14/62,
+`cmd-suggest` 21/68.
+
+### LIMITE HONESTO
+O dono confirmou que funcionou. O que **não** foi medido: a **qualidade** da voz
+no aparelho (se sai natural, se o volume está bom) — isso é percepção, e o
+`TTS ok (<fonte>)` com `segundos` agora diz de onde veio e quanto tempo falou.

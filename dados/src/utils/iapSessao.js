@@ -122,7 +122,19 @@ export async function ligarIap(grupo, { botName, personalidade } = {}) {
     },
     sintetizar: async (texto) => {
       const r = await sintetizarFala(texto, { apiKey: chaveGemini() });
-      return r.ok ? r.pcm : null;
+      if (!r.ok) {
+        // Sem isto o TTS falho era MUDO: o agente simplesmente nao falava e o
+        // log parava no "respondeu", sem dizer por que.
+        logIap(`TTS falhou: ${r.motivo}`, { grupo });
+        return null;
+      }
+      // A FONTE importa: `edge-tts` (local, principal) ou `gemini-tts`
+      // (reserva). Sem esta linha nao da' para saber qual voz o grupo ouviu.
+      logIap(`TTS ok (${r.fonte})`, {
+        grupo,
+        segundos: r.pcm ? +(r.pcm.length / 16000).toFixed(1) : 0
+      });
+      return r.pcm;
     },
     falar: (pcm) => { void falarNaCallDoGrupo(grupo, pcm); }
   });

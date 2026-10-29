@@ -31,7 +31,7 @@
  * barge-in, fila) sem abrir call nenhuma.
  */
 
-import { DetectorDeFala, TAXA_MOTOR, resamplePcm } from './iapAudio.js';
+import { DetectorDeFala, TAXA_MOTOR, resamplePcm, rms } from './iapAudio.js';
 
 /** Frames que o motor entrega por tick (960 amostras = 60 ms a 16 kHz). */
 const AMOSTRAS_POR_FRAME = 960;
@@ -93,6 +93,15 @@ export class AgenteDeVoz {
     this.log = log;
 
     this.vad = new DetectorDeFala(vad);
+    /**
+     * Quantos frames de fala SEGUIDOS calar o agente (barge-in).
+     *
+     * 3 frames = ~180 ms: fala de verdade passa; um estalo isolado (60 ms) nao.
+     * Sem isso, uma tosse ou um clique cortava a fala do bot no meio.
+     */
+    this.bargeFrames = Number(vad?.bargeFrames) > 0 ? Number(vad.bargeFrames) : 3;
+    /** Contador de frames de fala durante a propria fala. */
+    this.framesBarge = 0;
     /** Frames da frase em andamento. */
     this.frase = [];
     /** Historico da conversa (para o LLM ter contexto). */
@@ -147,11 +156,28 @@ export class AgenteDeVoz {
 
     const evento = this.vad.processar(pcm);
 
-    if (this.falando && (evento === 'inicio' || evento === 'meio')) {
-      // BARGE-IN: alguem falou por cima. Para de falar e comeca a ouvir.
-      this.abortarFala();
-      this.bargeIns += 1;
-      this.log('barge-in: agente calou', { grupo: this.grupo });
+    // BARGE-IN: alguem falou por cima.
+    //
+    // ## Por que exige FALA SUSTENTADA (e nao um frame)
+    //
+    // Um unico frame de energia (60 ms) pode ser tosse, um clique, a cadeira —
+    // e cortaria a fala do bot no meio por nada. Contamos os frames SEGUIDOS com
+    // energia ACIMA do limiar e so' calamos ao passar de `bargeFrames` (~180 ms).
+    //
+    // Detalhe medido: o VAD devolve `'meio'` tambem nos silencios DENTRO da
+    // frase, entao nao da' para contar pelo evento — a contagem usa a energia
+    // (`rms`) do proprio frame. Qualquer frame abaixo do limiar zera.
+    const energia = rms(pcm);
+    if (this.falando && energia >= this.vad.limiarRms) {
+      this.framesBarge = (this.framesBarge || 0) + 1;
+      if (this.framesBarge >= this.bargeFrames) {
+        this.abortarFala();
+        this.bargeIns += 1;
+        this.framesBarge = 0;
+        this.log('barge-in: agente calou', { grupo: this.grupo });
+      }
+    } else {
+      this.framesBarge = 0;
     }
 
     if (evento === 'inicio') {
@@ -243,6 +269,7 @@ export class AgenteDeVoz {
     if (this.fila.length > FILA_MAX) this.fila = this.fila.slice(-FILA_MAX);
 
     this.falando = true;
+    this.framesBarge = 0;
     await new Promise((resolve) => {
       const entregar = () => {
         if (!this.ativo || !this.falando) {
@@ -275,6 +302,7 @@ export class AgenteDeVoz {
   /** Aborta a fala em curso (barge-in / desligar). */
   abortarFala() {
     this.falando = false;
+    this.framesBarge = 0;
     this.fila = [];
     if (this.timerFila) {
       clearInterval(this.timerFila);

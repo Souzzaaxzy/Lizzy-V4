@@ -251,18 +251,39 @@ await test('agente: silêncio puro não aciona o pipeline', async () => {
   agente.desligar();
 });
 
-await test('agente: BARGE-IN — falar por cima aborta a fala em curso', async () => {
+await test('agente: BARGE-IN — fala SUSTENTADA por cima aborta a fala em curso', async () => {
   const { agente, falado } = agenteDeTeste();
   agente.ligar();
   // Simula o agente falando.
   agente.falando = true;
   agente.fila = [new Float32Array(960), new Float32Array(960), new Float32Array(960)];
   const antes = agente.bargeIns;
-  // Alguém fala por cima.
-  agente.receberAudio(new Float32Array(960).fill(0.4));
+  // Alguém fala por cima (3 frames seguidos = ~180 ms).
+  for (let i = 0; i < 3; i++) agente.receberAudio(new Float32Array(960).fill(0.4));
   ok(agente.bargeIns === antes + 1, 'contou o barge-in');
   ok(agente.falando === false, 'parou de falar');
   ok(agente.fila.length === 0, 'drenou a fila de saída');
+  agente.desligar();
+});
+
+await test('agente: um ESTALO isolado NÃO corta a fala (o bug do barge-in de 1 frame)', async () => {
+  // Antes, UM frame de energia (60 ms) já calava o agente — uma tosse, um clique
+  // ou o eco da própria voz cortava a resposta no meio. Agora exige fala
+  // SUSTENTADA (3 frames), e um estalo isolado não acumula.
+  const { agente } = agenteDeTeste();
+  agente.ligar();
+  agente.falando = true;
+  agente.fila = [new Float32Array(960), new Float32Array(960)];
+  const antes = agente.bargeIns;
+  // 1 frame de fala seguido de silêncio LONGO (fecha a frase do VAD e zera o
+  // contador): nunca acumula 3 frames seguidos.
+  for (let i = 0; i < 5; i++) {
+    agente.receberAudio(new Float32Array(960).fill(0.4));
+    // Silêncio suficiente para o VAD fechar a frase (silencioMs=700 → 12 frames).
+    for (let j = 0; j < 14; j++) agente.receberAudio(new Float32Array(960));
+  }
+  ok(agente.bargeIns === antes, `estalos isolados NÃO cortaram (${agente.bargeIns - antes})`);
+  ok(agente.falando === true, 'continuou falando');
   agente.desligar();
 });
 
