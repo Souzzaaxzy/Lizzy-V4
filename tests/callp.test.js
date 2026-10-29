@@ -702,29 +702,36 @@ await test('quando o servidor RECUSA (setup_failed), o aviso explica', () => {
 // 3c) PORTA DO RELAY — a causa do "sobe e cai na hora"
 // ============================================================================
 
-await test('PORTA DO RELAY: a opcao e SEMPRE passada ao motor (nao deixamos o motor decidir)', () => {
-  // Sem a opcao, `WaCallManager.createMediaLink` faz
-  // `useOriginalRelayPort ?? !isMobilePrimary()` — o valor passa a depender da
-  // identidade da sessao. No modo `original` (3478) a leg nao fecha, o motor
-  // chama `onRelayLost -> endCall(RelayLost)` e a call cai logo depois de subir.
+await test('PORTA DO RELAY: sem env o MOTOR decide por sessao (nao forcamos a porta)', () => {
+  // O motor resolve `useOriginalRelayPort ?? !isMobilePrimary()`: um COMPANION (o
+  // bot) disca a porta ANUNCIADA, um primary a 3480. O README do pacote diz isso
+  // medido -- "a companion's legs open ONLY on the advertised port". Forcar
+  // `false` num companion empurrava a leg para a 3480, que fica MUDA: medido daqui
+  // com um binding request STUN cru contra os relays do proprio log do dono,
+  // :3478 respondeu 32B e :3480 deu timeout nos CINCO relays.
+  //
+  // Por isso `undefined` (motor decide) e' o padrao, e a opcao continua sendo
+  // PASSADA (nunca omitida por acidente).
   const src = fs.readFileSync(path.join(HERE, '..', 'dados/src/funcs/utils/zapoCall.js'), 'utf-8');
   ok(src.includes('useOriginalRelayPort: usarPortaOriginalDoRelay()'),
     'a opcao vai EXPLICITA na config do plugin');
 });
 
-await test('PORTA DO RELAY: o padrao e a porta do WhatsApp Web (3480)', () => {
+await test('PORTA DO RELAY: sem env = motor decide; env sobrepoe', () => {
   const salvo = process.env.CALL_RELAY_PORT_MODE;
   try {
     delete process.env.CALL_RELAY_PORT_MODE;
-    ok(zapo.__usarPortaOriginalDoRelay() === false, 'sem env -> modo web (3480)');
-    process.env.CALL_RELAY_PORT_MODE = 'web';
-    ok(zapo.__usarPortaOriginalDoRelay() === false, "'web' -> modo web");
-    process.env.CALL_RELAY_PORT_MODE = 'WEB';
-    ok(zapo.__usarPortaOriginalDoRelay() === false, 'aceita caixa alta');
-    process.env.CALL_RELAY_PORT_MODE = 'lixo';
-    ok(zapo.__usarPortaOriginalDoRelay() === false, 'valor desconhecido cai no padrao seguro');
+    ok(zapo.__usarPortaOriginalDoRelay() === undefined,
+      'sem env -> undefined (o motor decide por sessao: companion = anunciada)');
     process.env.CALL_RELAY_PORT_MODE = 'original';
-    ok(zapo.__usarPortaOriginalDoRelay() === true, "'original' -> modo antigo (opt-in)");
+    ok(zapo.__usarPortaOriginalDoRelay() === true, "'original' -> forca a anunciada");
+    process.env.CALL_RELAY_PORT_MODE = 'ANUNCIADA';
+    ok(zapo.__usarPortaOriginalDoRelay() === true, 'aceita caixa alta');
+    process.env.CALL_RELAY_PORT_MODE = 'web';
+    ok(zapo.__usarPortaOriginalDoRelay() === false, "'web' -> forca a 3480 (so' para primary)");
+    process.env.CALL_RELAY_PORT_MODE = 'lixo';
+    ok(zapo.__usarPortaOriginalDoRelay() === undefined,
+      'valor desconhecido -> deixa o motor decidir (nao adivinha)');
   } finally {
     if (salvo === undefined) delete process.env.CALL_RELAY_PORT_MODE;
     else process.env.CALL_RELAY_PORT_MODE = salvo;

@@ -113,8 +113,10 @@ function avisarTransporte() {
   avisouTransporte = true;
   const bruto = process.env.ZAPO_RAW_UDP;
   const ligado = ligarUdpCru();
+  const porta = usarPortaOriginalDoRelay();
   console.log(
     `[MOTOR] transporte do relay: ${ligado ? 'UDP CRU (ZAPO_RAW_UDP ligado)' : 'WebRTC (padrao)'}` +
+      ` | porta: ${porta === undefined ? 'por sessao (o motor decide)' : porta ? 'anunciada' : '3480 (web)'}` +
       ` | ZAPO_RAW_UDP=${bruto === undefined ? '(nao definida)' : JSON.stringify(bruto)}`
   );
 }
@@ -207,30 +209,42 @@ function maxCalls() {
  * O motor deve discar o relay na porta ANUNCIADA (`original`) em vez da porta do
  * cliente web (3480)?
  *
- * O padrao do motor NAO e' seguro: `WaCallManager.createMediaLink` usa
- * `useOriginalRelayPort ?? !isMobilePrimary()`, entao **nao** passar a opcao
- * deixa o valor depender da identidade com que a sessao subiu. Quando cai no modo
- * `original`, o relay e' discado na porta anunciada (tipicamente 3478) e a leg
- * NAO fecha: o motor entao encerra a call sozinho —
+ * ## `undefined` = deixar o MOTOR decidir (o padrao correto)
  *
- *   WaCallMediaSession.onRelayLost -> endCall(EndCallReason.RelayLost)
+ * O motor resolve por SESSAO: `useOriginalRelayPort ?? !isMobilePrimary()` — um
+ * **companion** (dispositivo pareado, que e' o caso do bot) disca a porta
+ * ANUNCIADA, um **primary** (celular) disca a 3480. O README do pacote diz isso
+ * medido, palavra por palavra:
  *
- * que chega ao bot como `voip_call_ended` e vira a mensagem de "A chamada foi
- * encerrada" logo depois de a call subir.
+ *   "A relay can be reached on the web client port (3480) or on the port its
+ *    `<te2>` endpoint advertises, and the wire does not say which one answers.
+ *    Measured: a companion's legs open ONLY on the advertised port, a mobile
+ *    primary's only on 3480."
  *
- * A doc do proprio pacote (`WaVoipCoordinatorOptions.useOriginalRelayPort`) diz
- * que `false` (3480) e' o que o WhatsApp Web faz e que o outro modo "e' a escolha
- * ERRADA" contra os relays da WhatsApp. Por isso aqui o padrao e' **web (3480)**
- * e a opcao e' SEMPRE passada — deixar o motor decidir e' o defeito.
+ * Forcar `false` (3480) num companion aponta para a porta MUDA. Medido daqui,
+ * contra os relays do proprio log do dono — um binding request STUN cru:
  *
- * `CALL_RELAY_PORT_MODE=original` volta ao modo antigo (documentado no
- * `.env.example` como o que NAO funciona).
+ *   157.240.241.133:3478 -> RESPONDEU 32B     157.240.241.133:3480 -> timeout
+ *   57.145.3.57:3478     -> RESPONDEU 32B     57.145.3.57:3480     -> timeout
+ *   (idem para 157.240.13.129, 57.144.233.57, 57.144.217.57)
  *
- * @returns {boolean} true = disca a porta anunciada (modo antigo)
+ * Ou seja: a 3480 fica muda nos cinco relays, e era exatamente para la' que o bot
+ * empurrava a leg — o `relay leg unanswered` / `sctp connection failed` do log.
+ *
+ * ## `CALL_RELAY_PORT_MODE` (override explicito)
+ *
+ * `web`      -> `false`  (3480; so' faz sentido num primary)
+ * `original` -> `true`   (porta anunciada; forca o modo do companion)
+ * ausente    -> `undefined` (o motor decide por sessao; o padrao)
+ *
+ * @returns {boolean|undefined} true = anunciada; false = 3480; undefined = motor decide
  */
 function usarPortaOriginalDoRelay() {
-  const modo = String(process.env.CALL_RELAY_PORT_MODE || 'web').trim().toLowerCase();
-  return modo === 'original' || modo === 'anunciada' || modo === 'advertised';
+  const modo = String(process.env.CALL_RELAY_PORT_MODE || '').trim().toLowerCase();
+  if (!modo) return undefined;
+  if (modo === 'original' || modo === 'anunciada' || modo === 'advertised') return true;
+  if (modo === 'web' || modo === '3480') return false;
+  return undefined;
 }
 
 /**
@@ -543,15 +557,15 @@ export async function obterCliente() {
               // "max concurrent calls reached (1)".
               maxConcurrentCalls: maxCalls(),
 
-              // PORTA DO RELAY -- sempre explicita.
+              // PORTA DO RELAY -- deixar o MOTOR decidir por sessao.
               //
-              // Sem esta opcao o motor decide por conta propria
-              // (`useOriginalRelayPort ?? !isMobilePrimary()`) e pode cair no
-              // modo `original` (porta anunciada, 3478), no qual a leg NAO
-              // fecha: o motor encerra a call sozinho (onRelayLost ->
-              // endCall(RelayLost)) e o grupo ve "a chamada foi encerrada"
-              // logo depois de ela subir. `false` = 3480, o que o WhatsApp Web
-              // usa e a doc do pacote chama de escolha CERTA.
+              // `undefined` deixa valer `useOriginalRelayPort ?? !isMobilePrimary()`:
+              // um companion (o bot) disca a porta ANUNCIADA; um primary, a 3480.
+              // O README do pacote diz isso MEDIDO -- "a companion's legs open ONLY
+              // on the advertised port" -- e a medicao daqui (STUN cru contra os
+              // relays do log) confirma: a 3480 fica MUDA nos cinco relays.
+              // Forcar `false` num companion empurrava a leg para a porta muda.
+              // `CALL_RELAY_PORT_MODE` sobrepoe (ver o docblock da funcao).
               useOriginalRelayPort: usarPortaOriginalDoRelay(),
 
               // ---- Qualidade de audio -------------------------------------
