@@ -509,26 +509,32 @@ await test('32. o handler resolve os pais e passa nos DOIS canais', () => {
 // ---------------------------------------------------------------------------
 console.log('\n=== 7) ABREVIACOES, RISADAS E +18 ===\n');
 
-await test('33. as ABREVIACOES entram (com os significados)', () => {
+await test('33. as ABREVIACOES FEMININAS entram (com os significados)', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
-  contem(b, 'AS ABREVIACOES QUE VOCE USA', 'a secao');
-  // As da fonte (Wikipedia "Internetes") + as que o dono citou.
-  contem(b, 'obg', 'obg (obrigado)');
-  contem(b, 'vc', 'vc (voce)');
-  contem(b, 'tbm', 'tbm (tambem)');
-  contem(b, 'pq', 'pq (porque)');
-  contem(b, 'vlw', 'vlw (valeu)');
-  contem(b, 'flw', 'flw (falou)');
-  contem(b, 'blz', 'blz (beleza)');
-  contem(b, 'mds', 'mds (meu deus)');
-  contem(b, 'slk', 'slk');
-  contem(b, 'sla', 'sla (sei la)');
-  contem(b, 'sdd', 'sdd (saudade)');
-  contem(b, 'tlgd', 'tlgd (ta ligado)');
-  contem(b, 'pprt', 'pprt (papo reto)');
-  // Cada uma com o SIGNIFICADO (sem isso o modelo chuta o que quer dizer).
-  contem(b, '(obrigado/obrigada)', 'explica obg');
-  contem(b, '(porque)', 'explica pq');
+  contem(b, 'AS ABREVIACOES QUE VOCE USA (so as que uma menina usa)', 'a secao');
+  // As que ela USA, com o significado (sem isso o modelo chuta).
+  contem(b, 'obg / obgd (obrigado/obrigada)', 'obgd');
+  contem(b, 'vc / vcs (voce / voces)', 'vc');
+  contem(b, 'tb / tbm (tambem)', 'tbm');
+  contem(b, 'pq (porque)', 'pq');
+  contem(b, 'vlw (valeu)', 'vlw');
+  contem(b, 'mds (meu deus)', 'mds');
+  contem(b, 'sla (sei la)', 'sla');
+  contem(b, 'sdd (saudade)', 'sdd');
+});
+
+await test('33b. as abreviacoes MASCULINAS estao PROIBIDAS (o pedido do dono)', () => {
+  // O dono: "tira algumas abreviacoes que mulheres bem femininas nao usam".
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'O QUE VOCE NAO USA', 'a secao de proibidas');
+  const i = b.indexOf('O QUE VOCE NAO USA');
+  const bloco = b.slice(i, i + 400);
+  // Elas aparecem SO' na lista de proibidas (como exemplo do que nao usar).
+  for (const gira of ['mn', 'mano', 'fmz', 'pprt', 'tlgd', 'slk', 'krl', 'vsf', 'tmnc', 'tmj', 'sqn']) {
+    contem(bloco, `"${gira}"`, `proibe ${gira}`);
+  }
+  contem(b, 'nao combina com voce', 'explica o porque');
+  contem(b, 'Voce fala "aiin", "juro", "vey", "gente"', 'aponta as femininas no lugar');
 });
 
 await test('34. NAO abreviar TUDO (senao fica robotico)', () => {
@@ -732,6 +738,64 @@ await test('52. os campos novos sao respeitados quando DESLIGADOS', () => {
   naoContem(b, 'VOCE E DIFICIL', 'sem bloco dificil');
   // Mas o +18 continua (safadeza/conversaAdulto seguem ligados no ID_TESTE).
   contem(b, 'A CONVERSA +18', 'o +18 segue');
+});
+
+// ---------------------------------------------------------------------------
+// 9) MIMADA E AS FALAS DE MENINA
+// ---------------------------------------------------------------------------
+console.log('\n=== 9) MIMADA E FALAS DE MENINA ===\n');
+
+await test('53. ela e MIMADA (manhosa, dengosa, pede atencao)', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'VOCE E MIMADA', 'a secao');
+  contem(b, 'manhosa e dengosa', 'o jeito');
+  contem(b, 'faz charme', 'faz charme');
+  contem(b, '"aiin"', 'usa aiin');
+  contem(b, '"amor", "vida", "meu bem"', 'os apelidos carinhosos');
+  contem(b, 'pede atencao sem medo', 'pede atencao');
+  contem(b, 'emburra DE BRINCADEIRA', 'emburra de brincadeira');
+  contem(b, 'carente do jeito fofo', 'carente fofo');
+  contem(b, 'voz de bebe', 'faz voz de bebe');
+});
+
+await test('54. as FALAS DE MENINA entram com o sentido certo', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'AS FALAS DE MENINA', 'a secao');
+  // Cada fala com o NEXO (o dono pediu "o nexo certo nessas palavras").
+  contem(b, '"affs" / "aff vey" / "aff": quando algo te irrita', 'aff = irritacao leve');
+  contem(b, '"vey" / "vei": e o "cara"/"nossa" de menina', 'vey = chamar atencao');
+  contem(b, '"juro" / "juro pra voce": reforca que e verdade OU mostra incredulidade', 'juro = os dois sentidos');
+  contem(b, '"vai jurando": ironia — quer dizer "duvido"', 'vai jurando = duvido');
+  contem(b, '"juro diva": concordar com enfase', 'juro diva = concordar com enfase');
+  contem(b, '"diva": elogio forte', 'diva = elogio');
+  contem(b, '"babilonica": o nivel MAXIMO de diva', 'babilonica = nivel maximo');
+  contem(b, '"nao, mona": nega com espanto', 'nao mona = negar com espanto');
+  contem(b, '"mona" = mulher/menina', 'mona = mulher/menina');
+  contem(b, '"gente": para puxar atencao', 'gente');
+  contem(b, '"miga" / "amiga"', 'miga');
+});
+
+await test('55. a fonte (Folha) esta refletida: diva < babilonica', () => {
+  // A materia da Folha define "Babilonica: pessoa muito poderosa, confiante;
+  // superior a diva e divo". O prompt tem que dizer isso, senao a Lizzy usa as
+  // duas como sinonimo.
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  const iDiva = b.indexOf('"diva": elogio forte');
+  const iBabi = b.indexOf('"babilonica": o nivel MAXIMO');
+  ok(iDiva > 0 && iBabi > 0, 'as duas entram');
+  ok(iDiva < iBabi, 'diva vem antes (e e menor que babilonica)');
+  contem(b, 'superior a "diva" e "divo"', 'explicita a hierarquia da Folha');
+});
+
+await test('56. as falas nao viram tique (usa quando cai bem)', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'voce usa quando cai bem, nao em toda frase', 'a regra contra o tique');
+});
+
+await test('57. `feminina: false` tira o bloco mimada', () => {
+  const b = id.blocoDeIdentidade({ ...ID_TESTE, feminina: false });
+  naoContem(b, 'VOCE E MIMADA', 'sem o bloco mimada');
+  naoContem(b, 'VOCE E BEM FEMININA', 'nem o feminino');
 });
 
 // ---------------------------------------------------------------------------
