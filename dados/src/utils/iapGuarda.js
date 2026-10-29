@@ -133,14 +133,18 @@ export const RECUSAS = Object.freeze({
 /**
  * Decide se o pedido pode ser atendido.
  *
+ * `ehAutorizado` pode ser sincrona OU assincrona (a permissao real consulta o
+ * metadata do grupo) — por isso esta funcao devolve uma Promise.
+ *
  * @param {string} texto o que foi falado
  * @param {string|null} quemFalou JID de quem falou (do audio por participante)
  * @param {object} [opts]
- * @param {function} [opts.ehAutorizado] `(jid) => boolean` — a permissão REAL
- *   (admin/dono/subdono/mod). Vem do `index.js`, que tem o metadata do grupo.
- * @returns {{ok: boolean, acao?: string|null, motivo?: string, recusa?: string}}
+ * @param {function} [opts.ehAutorizado] `(jid) => boolean|Promise<boolean>` — a
+ *   permissão REAL (admin/dono/subdono/mod). Vem do `index.js`, que tem o
+ *   metadata do grupo.
+ * @returns {Promise<{ok: boolean, acao?: string|null, motivo?: string, recusa?: string}>}
  */
-export function permitePedidoDeAcao(texto, quemFalou, { ehAutorizado } = {}) {
+export async function permitePedidoDeAcao(texto, quemFalou, { ehAutorizado } = {}) {
   const acao = ehPedidoDeAcao(texto);
 
   // Não é pedido de ação: conversa normal, o LLM responde.
@@ -168,7 +172,7 @@ export function permitePedidoDeAcao(texto, quemFalou, { ehAutorizado } = {}) {
   }
 
   let autorizado = false;
-  try { autorizado = Boolean(ehAutorizado(quemFalou)); } catch { autorizado = false; }
+  try { autorizado = Boolean(await ehAutorizado(quemFalou)); } catch { autorizado = false; }
 
   if (!autorizado) {
     return {

@@ -57,6 +57,21 @@ export const VOZES_PTBR = Object.freeze({
 /** Modelo do Gemini TTS (fallback). */
 const MODELO_TTS = process.env.IAP_TTS_MODEL || 'gemini-2.5-flash-preview-tts';
 
+/**
+ * Cadeia de modelos TTS, tentados em ordem.
+ *
+ * Um nome FIXO envelhece: foi exatamente o que derrubou o LLM e o STT antes
+ * (o Google aposenta previews e devolve 404 "no longer available"). Aqui o
+ * modelo pedido vai primeiro e, se ele responder 404, o proximo da lista e'
+ * tentado — assim uma aposentadoria do Google nao deixa a Lizzy muda.
+ */
+const MODELOS_TTS = [
+  MODELO_TTS,
+  'gemini-2.5-flash-preview-tts',
+  'gemini-2.5-pro-preview-tts',
+  'gemini-flash-latest'
+].filter((m, i, a) => m && a.indexOf(m) === i);
+
 /** Voz do Gemini TTS (fallback). */
 const VOZ_GEMINI = process.env.IAP_TTS_GEMINI_VOICE || 'Puck';
 
@@ -87,9 +102,15 @@ async function resolverEdge() {
       && Date.now() - _binarioEdgeFalhouEm > (EDGE_CACHE_NEGATIVO_MS || 60000);
     if (!expirou) return _binarioEdge;
   }
+  // O `pip install --user` (o caminho sem root que o instalador usa) grava o
+  // binario em `~/.local/bin`, que normalmente NAO esta no PATH. Sem este
+  // candidato, o instalador dizia "edge-tts instalado" e o runtime respondia
+  // `edge_indisponivel` — o dono via a voz parar sem causa aparente.
+  const localBin = path.join(os.homedir(), '.local', 'bin', 'edge-tts');
   const candidatos = [
     process.env.EDGE_TTS_PATH ? [process.env.EDGE_TTS_PATH, []] : null,
     ['edge-tts', []],
+    [localBin, []],
     ['python3', ['-m', 'edge_tts']],
     ['python', ['-m', 'edge_tts']]
   ].filter(Boolean);
@@ -179,14 +200,41 @@ async function sintetizarEdge(texto) {
 }
 
 /**
- * Sintetiza com o Gemini TTS. Devolve PCM 24 kHz mono ou null.
+ * Sintetiza com o Gemini TTS. Devolve `{ pcm, motivo }` — o `motivo` explica a
+ * falha (sem chave, modelo indisponivel, rede), em vez de um `null` mudo.
+ *
+ * Tenta a CADEIA de modelos: um 404 ("modelo aposentado") passa para o proximo,
+ * em vez de deixar a Lizzy muda por causa de um nome que envelheceu.
+ *
  * @param {string} texto
  * @param {string} apiKey
- * @returns {Promise<Float32Array|null>}
+ * @returns {Promise<{ pcm: Float32Array|null, motivo?: string }>}
  */
 async function sintetizarGemini(texto, apiKey) {
-  if (!apiKey) return null;
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(MODELO_TTS)}:generateContent`;
+  if (!apiKey) return { pcm: null, motivo: 'sem_chave_gemini' };
+  let ultimoMotivo = 'tts_indisponivel';
+  let ultimoDetalhe;
+  for (const modelo of MODELOS_TTS) {
+    const r = await tentarGeminiComModelo(texto, apiKey, modelo);
+    if (r.pcm && r.pcm.length) return r;
+    ultimoMotivo = r.motivo || ultimoMotivo;
+    ultimoDetalhe = r.detalhe;
+    // Só um 404 (modelo inexistente/aposentado) justifica tentar o proximo;
+    // chave/limite/rede nao melhoram com outro nome de modelo.
+    if (r.motivo !== 'gemini_modelo_indisponivel') break;
+  }
+  return { pcm: null, motivo: ultimoMotivo, detalhe: ultimoDetalhe };
+}
+
+/**
+ * Uma tentativa de TTS do Gemini com UM modelo.
+ * @param {string} texto
+ * @param {string} apiKey
+ * @param {string} modelo
+ * @returns {Promise<{ pcm: Float32Array|null, motivo?: string, detalhe?: string }>}
+ */
+async function tentarGeminiComModelo(texto, apiKey, modelo) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:generateContent`;
   try {
     const r = await post(url, {
       contents: [{ parts: [{ text: texto }] }],
@@ -202,20 +250,30 @@ async function sintetizarGemini(texto, apiKey) {
     const dado = Array.isArray(partes)
       ? partes.map((p) => p?.inlineData?.data).find(Boolean)
       : null;
-    if (!dado) return null;
+    if (!dado) return { pcm: null, motivo: 'gemini_sem_audio' };
     const bruto = Buffer.from(dado, 'base64');
     // O TTS do Gemini devolve WAV com cabecalho RIFF.
     if (bruto.toString('ascii', 0, 4) === 'RIFF') {
       const { pcm } = wavParaPcm(bruto);
-      return pcm;
+      return { pcm };
     }
     // Sem cabecalho: PCM 16-bit little-endian a 24 kHz (o formato documentado).
     const n = Math.floor(bruto.length / 2);
     const pcm = new Float32Array(n);
     for (let i = 0; i < n; i++) pcm[i] = bruto.readInt16LE(i * 2) / 32768;
-    return pcm;
-  } catch {
-    return null;
+    return { pcm };
+  } catch (e) {
+    // O motivo REAL importa: um 404 de modelo aposentado nao e' a mesma coisa
+    // que uma chave invalida (400) ou um limite (429).
+    const status = e?.response?.status;
+    const msg = String(e?.response?.data?.error?.message || e?.message || '');
+    let motivo = 'gemini_falhou';
+    if (status === 404 || /not found|no longer available/i.test(msg)) motivo = 'gemini_modelo_indisponivel';
+    else if (status === 400 || /API key not valid|API_KEY_INVALID/i.test(msg)) motivo = 'gemini_chave';
+    else if (status === 429) motivo = 'gemini_limite';
+    else if (status === 403) motivo = 'gemini_sem_permissao';
+    else if (/timeout|ECONNABORTED|ETIMEDOUT/i.test(msg)) motivo = 'gemini_timeout';
+    return { pcm: null, motivo, detalhe: msg.slice(0, 200) };
   }
 }
 
@@ -236,12 +294,17 @@ export async function sintetizarFala(texto, { apiKey } = {}) {
   if (!limpo) return { ok: false, motivo: 'texto_vazio' };
 
   const motor = String(process.env.IAP_TTS_ENGINE || 'auto').toLowerCase();
-  const tentarEdge = motor === 'auto' || motor === 'edge';
+  // `IAP_TTS_EDGE=off` desliga o edge-tts mesmo no `auto` — util para quem so'
+  // quer o Gemini e para testar o caminho de falha de forma deterministica.
+  const edgeDesativado = ['off', '0', 'false', 'nao', 'não'].includes(
+    String(process.env.IAP_TTS_EDGE || '').trim().toLowerCase()
+  );
+  const tentarEdge = (motor === 'auto' || motor === 'edge') && !edgeDesativado;
   const tentarGemini = motor === 'auto' || motor === 'gemini';
 
   // Motivo pelo qual o edge-tts nao foi usado (vai no erro, se o Gemini
   // tambem falhar — sem isto, "caiu no Gemini" fica sem causa).
-  let falhaEdge = null;
+  let falhaEdge = edgeDesativado ? 'edge_desativado' : null;
 
   // 1) edge-tts -> MP3 -> ffmpeg reamostra para 16 kHz.
   if (tentarEdge) {
@@ -260,7 +323,8 @@ export async function sintetizarFala(texto, { apiKey } = {}) {
 
   // 2) Gemini TTS -> PCM 24 kHz -> reamostra.
   if (tentarGemini) {
-    const pcm24 = await sintetizarGemini(limpo, apiKey);
+    const g = await sintetizarGemini(limpo, apiKey);
+    const pcm24 = g?.pcm;
     if (pcm24 && pcm24.length) {
       const pcm = await resamplePcm(pcm24, 24000, TAXA_MOTOR);
       if (pcm && pcm.length) {
@@ -268,7 +332,17 @@ export async function sintetizarFala(texto, { apiKey } = {}) {
         // `edge_indisponivel`, instalar o edge-tts tira a dependencia.
         return { ok: true, pcm, fonte: 'gemini-tts', motivoEdge: falhaEdge };
       }
+      return { ok: false, motivo: 'ffmpeg_faltando', ...(falhaEdge ? { motivoEdge: falhaEdge } : {}) };
     }
+    // O Gemini FALHOU: o motivo dele e' a informacao util (modelo aposentado,
+    // chave, limite...). Antes ele era mascarado pelo motivo do edge, e o dono
+    // via `edge_indisponivel` mesmo quando o edge nao tinha nada a ver.
+    return {
+      ok: false,
+      motivo: g?.motivo || 'tts_indisponivel',
+      ...(falhaEdge ? { motivoEdge: falhaEdge } : {}),
+      ...(g?.detalhe ? { detalhe: g.detalhe } : {})
+    };
   }
 
   return { ok: false, motivo: falhaEdge || 'tts_indisponivel' };

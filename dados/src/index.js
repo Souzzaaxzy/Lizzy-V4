@@ -26635,9 +26635,11 @@ ${groupPrefix}key sua_chave_gemini
           let envContent = '';
           if (fs.existsSync(envPath)) {
             envContent = fs.readFileSync(envPath, 'utf-8');
-            envContent = envContent.replace(/^GROQ_API_KEY=.*$/gm, "");
           }
-          // Substituir ou adicionar a linha GEMINI_API_KEY
+          // Substituir ou adicionar a linha GEMINI_API_KEY.
+          // NAO tocar em GROQ_API_KEY: o `!key` apagava essa linha, e como o
+          // `!iap`/`!transcrever` rodam SO' no Groq, configurar a chave do
+          // Gemini derrubava a IA da call sem relacao com o que se fez.
           const keyLine = `GEMINI_API_KEY=${keyValue}`;
           const keyRegex = /^GEMINI_API_KEY=.*$/gm;
           if (keyRegex.test(envContent)) {
@@ -36891,16 +36893,23 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               .filter(Boolean);
             // A permissao e' consultada a cada fala (o metadata muda durante a
             // call: alguem pode ser promovido). `ehAutorizado` cobre admin do
-            // grupo, dono, subdono e moderadores — o MESMO sistema do resto do
-            // bot (`isGroupAdmin`), nada paralelo.
+            // grupo, dono e subdono — o MESMO sistema do resto do bot, nada
+            // paralelo.
+            //
+            // O `jid` aqui e' QUEM FALOU (nao quem mandou o comando). Comparar
+            // com `sender`/`isGroupAdmin` seria uma FALHA ABERTA: o membro comum
+            // que ligou o agente passaria como autorizado em qualquer pedido.
             const ehAutorizado = async (jid) => {
               try {
+                if (!jid) return false;
+                if (idsMatch(jid, numerodono)) return true;       // dono do bot
+                if (isSubdono(jid)) return true;                  // subdono
                 const meta = await getCachedGroupMetadata(from);
                 const part = (meta?.participants || []).find((p) =>
                   idsMatch(p?.id, jid) || idsMatch(p?.lid, jid) ||
                   idsMatch(p?.phoneNumber, jid) || idsMatch(p?.pn, jid));
                 const ehAdmin = part?.admin === 'admin' || part?.admin === 'superadmin';
-                return Boolean(ehAdmin || idsMatch(jid, numerodono) || idsMatch(jid, sender) || isGroupAdmin);
+                return Boolean(ehAdmin);
               } catch { return false; }
             };
             const r = await ligarIap(from, {

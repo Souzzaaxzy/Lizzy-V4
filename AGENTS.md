@@ -14085,3 +14085,71 @@ numa call (sem sessão de WhatsApp aqui) — o que está provado é a lógica
 motor não emitir `voip_call_participant_audio` em algum cenário, o `quemFalou`
 fica nulo e a guarda **recusa** (falha fechado) — o log mostra
 `pedido de acao RECUSADO (sem permissao)` com `quem: desconhecido`.
+
+## 🎙️ `!iap` "PAROU DE FUNCIONAR" — o edge-tts em `~/.local/bin` e o motivo mascarado (out/2026) ✅
+O dono reportou: *"agora parou de funcionar"* com o log
+`[IAP] TTS falhou: edge_indisponivel` + `tts sem audio`. **Quatro defeitos**,
+todos medidos — e um deles era uma FALHA ABERTA na guarda.
+
+### 1. O instalador instalava o edge-tts; o runtime não o achava (CAUSA PRINCIPAL)
+O `pip install --user` (o caminho SEM ROOT que o `update.js`/`config.js` usam)
+grava o binário em **`~/.local/bin`**, que **não está no PATH**. O instalador
+procurava lá (`isAvailable(localBin)`), mas o **resolvedor do runtime**
+(`iapTts.js`) só tentava `edge-tts`, `python3 -m edge_tts` e `python -m edge_tts`
+— **nunca `~/.local/bin`**. Resultado: o instalador dizia *"edge-tts instalado"*
+e o TTS respondia `edge_indisponivel`. Reproduzido: `pip install edge-tts` →
+binário em `~/.local/bin/edge-tts`; `which edge-tts` → não encontrado.
+
+**Correção**: `[localBin, []]` entrou na lista de candidatos do `resolverEdge`
+(o caminho é montado com `path.join(os.homedir(), '.local', 'bin', 'edge-tts')`).
+
+### 2. O motivo do GEMINI era escondido pelo do edge
+`sintetizarFala` terminava com `return { motivo: falhaEdge || 'tts_indisponivel' }`
+— então, quando o **Gemini** falhava (modelo aposentado, chave, limite), o dono
+via **`edge_indisponivel`**, que não tinha nada a ver. Agora o `motivo` é o do
+Gemini e o do edge vai em **`motivoEdge`** (os dois aparecem no log).
+
+### 3. O modelo TTS era FIXO (nome envelhece)
+`gemini-2.5-flash-preview-tts` hardcoded. Foi exatamente o que derrubou o LLM e o
+STT antes ("no longer available"). Agora há **cadeia** (`MODELOS_TTS`): um 404 de
+modelo passa para o próximo; chave/limite/rede **não** percorrem a lista.
+
+### 4. A GUARDA de permissão tinha uma FALHA ABERTA (o mais grave)
+Dois furos, os dois deixando a guarda inútil:
+- **`pensarComIa` chamava a guarda SEM `ehAutorizado`** → `permitePedidoDeAcao`
+  caía no `sem_verificacao` e **recusava TODO pedido de ação, inclusive de
+  admin**. O `agente.ehAutorizado` era setado e **nunca usado**.
+- **`ehAutorizado` no `index.js` comparava com `sender` e `isGroupAdmin`** — que
+  são de **quem mandou o comando** (`!iap on`), não de **quem falou** na call. O
+  membro comum que ligou o agente passaria como autorizado em qualquer pedido.
+
+**Correções**: `permitePedidoDeAcao` virou **async** (o metadata é async —
+`Boolean(Promise)` seria sempre `true`, outra falha aberta) e o `pensar` recebe o
+`ehAutorizado`; o `ehAutorizado` do `index.js` checa **só o falante** (dono do
+bot, subdono, admin do grupo pelo metadata) — sem `sender` nem `isGroupAdmin`.
+
+### 5. Bônus: o `!key` APAGAVA o `GROQ_API_KEY`
+O `!key` (Gemini) tinha `envContent.replace(/^GROQ_API_KEY=.*$/gm, "")` — ou seja,
+**configurar a chave do Gemini apagava a do Groq**, e o `!iap`/`!transcrever`
+rodam **só no Groq**. Linha removida.
+
+### 6. `.env.example` ainda dizia voz MASCULINA
+`IAP_TTS_VOICE=pt-BR-AntonioNeural` (masculina) enquanto o código já tinha
+`Francisca` (feminina) como padrão. Alinhado para `pt-BR-FranciscaNeural`.
+
+### Seam de teste novo
+`setIapMediaForTest` no `iapSessao.js`: o dublê do `callMedia` **não implementa**
+o áudio do `!iap` (as funções devolvem `false`), então o caminho do `ligarIap`
+não era exercitável — e foi por isso que o fio do `ehAutorizado` passou batido.
+
+### Testes — `tests/iap.test.js` (**65 testes / 195 asserções, 0 falhas**)
++7: o motivo do Gemini não é escondido pelo edge; 404 de modelo TTS cai para o
+próximo; o resolvedor USA o candidato `~/.local/bin` (dentro da LISTA, não só
+declarado); guarda aceita checagem **assíncrona**; `ligarIap` **entrega** o
+`ehAutorizado` (o fio); `pensarComIa` também; e o guard estrutural do `index.js`
+contra o `sender`/`isGroupAdmin`. **Verificado que medem**: removendo o candidato
+`~/.local/bin` → 1 falha; reintroduzindo o mascaramento → 2; tirando o
+`ehAutorizado` do `pensar` → 2; voltando o `sender`/`isGroupAdmin` → 2.
+
+Regressões verdes: `ia` 20/50, `motor-chat-noise` 14/62, `cmd-suggest` 21/68,
+`get-message-inspector` 54/269.

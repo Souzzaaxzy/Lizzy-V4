@@ -20,10 +20,31 @@ import { sintetizarFala } from './iapTts.js';
 import { iap } from './iapVoice.js';
 import { iaIdentidade, ehPedidoDeAcao, permitePedidoDeAcao } from './iapGuarda.js';
 import {
-  aoOuvirAudioDaCall,
-  modoAudioExternoDaCall,
-  falarNaCallDoGrupo
+  aoOuvirAudioDaCall as aoOuvirAudioDaCallReal,
+  modoAudioExternoDaCall as modoAudioExternoDaCallReal,
+  falarNaCallDoGrupo as falarNaCallDoGrupoReal
 } from '../funcs/utils/callMedia.js';
+
+/**
+ * Seam do motor de mídia (testes).
+ *
+ * O dublê do `callMedia` NÃO implementa o áudio do `!iap` (as funções de
+ * entrada/saída devolvem `false`), então sem este seam o caminho do `ligarIap`
+ * não seria exercitável. Com ele o teste roda o fluxo REAL (`ligarIap` →
+ * `iap.ligar` → `pensar`) e mede o que importa: o `ehAutorizado` chega ao agente.
+ */
+let _media = {
+  aoOuvirAudioDaCall: aoOuvirAudioDaCallReal,
+  modoAudioExternoDaCall: modoAudioExternoDaCallReal,
+  falarNaCallDoGrupo: falarNaCallDoGrupoReal
+};
+export function setIapMediaForTest(m) {
+  _media = m || {
+    aoOuvirAudioDaCall: aoOuvirAudioDaCallReal,
+    modoAudioExternoDaCall: modoAudioExternoDaCallReal,
+    falarNaCallDoGrupo: falarNaCallDoGrupoReal
+  };
+}
 
 /** Log do agente, com o prefixo do sistema de call (filtrável). */
 function logIap(msg, extra) {
@@ -31,8 +52,22 @@ function logIap(msg, extra) {
   console.log(`🎙️ [IAP] ${msg}${detalhe}`);
 }
 
-/** A chave do Gemini em uso (só o TTS de reserva usa). */
-function chaveGemini() {
+/**
+ * A chave do Gemini em uso (só o TTS de reserva usa).
+ *
+ * Lê o `.env`/`process.env` **e** o valor em memória do `ia.js` (que o `!key`
+ * grava com `setGeminiApiKey`). A v3 lia só o env — se a chave tivesse sido
+ * configurada em runtime, a reserva de voz ficava sem chave sem ninguém notar.
+ * O import é preguiçoso para não acoplar os módulos no boot.
+ */
+async function chaveGemini() {
+  try {
+    const ia = await import('../funcs/private/ia.js');
+    if (typeof ia.getGeminiApiKey === 'function') {
+      const k = ia.getGeminiApiKey();
+      if (k) return k;
+    }
+  } catch { /* cai no env */ }
   return process.env.GEMINI_API_KEY || '';
 }
 
@@ -100,19 +135,23 @@ export function montarSistemaDoAgente({ nomeDono, participantes = [] } = {}) {
  * moderador). Se o pedido é de AÇÃO e a pessoa não pode, a resposta é uma
  * recusa — o LLM nem é chamado para "decidir" executar.
  *
+ * A função de permissão vem por `opts.ehAutorizado` — sem ela a guarda FECHA
+ * (recusa), então o caminho nunca fica permissivo por omissão.
+ *
  * @param {string} texto
  * @param {Array<{role:string, content:string}>} historico
  * @param {object} [opts]
  * @param {string} [opts.quemFalou] JID de quem falou
+ * @param {function} [opts.ehAutorizado] `(jid) => boolean|Promise<boolean>`
  * @param {string} [opts.nomeDono]
  * @param {string[]} [opts.participantes]
  * @returns {Promise<string>}
  */
 export async function pensarComIa(texto, historico = [], {
-  quemFalou, nomeDono, participantes = []
+  quemFalou, ehAutorizado, nomeDono, participantes = []
 } = {}) {
   // ---- GUARDA: o pedido é de AÇÃO? a pessoa PODE? ------------------------
-  const guarda = permitePedidoDeAcao(texto, quemFalou);
+  const guarda = await permitePedidoDeAcao(texto, quemFalou, { ehAutorizado });
   if (!guarda.ok) {
     logIap('pedido de acao RECUSADO (sem permissao)', {
       quem: quemFalou || 'desconhecido',
@@ -155,21 +194,21 @@ export async function ligarIap(grupo, { nomeDono, participantes, ehAutorizado } 
 
   // O modo de audio externo precisa estar ligado, senao o motor ignora o que
   // chega por `feedLiveAudio` e volta a tocar o arquivo pre-carregado.
-  const ligouExterno = await modoAudioExternoDaCall(grupo, true);
+  const ligouExterno = await _media.modoAudioExternoDaCall(grupo, true);
   if (!ligouExterno) return { ok: false, motivo: 'sem_call' };
 
   // O agente OUVE pelo callback do motor. O terceiro argumento e' QUEM FALOU
   // (audio por participante) — e' o que permite a guarda de permissao.
-  const registrou = await aoOuvirAudioDaCall(grupo, (g, pcm, quemFalou) => iap.receber(g, pcm, quemFalou));
+  const registrou = await _media.aoOuvirAudioDaCall(grupo, (g, pcm, quemFalou) => iap.receber(g, pcm, quemFalou));
   if (!registrou) {
-    await modoAudioExternoDaCall(grupo, false);
+    await _media.modoAudioExternoDaCall(grupo, false);
     return { ok: false, motivo: 'sem_call' };
   }
 
   iap.ligar(grupo, {
     log: logIap,
     pensar: (texto, historico, opts = {}) => pensarComIa(texto, historico, {
-      quemFalou: opts.quemFalou, nomeDono, participantes
+      quemFalou: opts.quemFalou, ehAutorizado, nomeDono, participantes
     }),
     transcrever: async (pcm) => {
       const r = await transcreverPcm(pcm, { apiKey: chaveGroq() });
@@ -184,9 +223,16 @@ export async function ligarIap(grupo, { nomeDono, participantes, ehAutorizado } 
       return r.texto;
     },
     sintetizar: async (texto) => {
-      const r = await sintetizarFala(texto, { apiKey: chaveGemini() });
+      const r = await sintetizarFala(texto, { apiKey: await chaveGemini() });
       if (!r.ok) {
-        logIap(`TTS falhou: ${r.motivo}`, { grupo });
+        // O motivo REAL vai para o log. `motivoEdge` mostra o que o edge-tts
+        // respondeu (falta instalar? falta ffmpeg?) — sem isso, uma falha do
+        // Gemini ficava escondida atras do motivo do edge.
+        logIap(`TTS falhou: ${r.motivo}`, {
+          grupo,
+          ...(r.motivoEdge ? { motivoEdge: r.motivoEdge } : {}),
+          ...(r.detalhe ? { detalhe: String(r.detalhe).slice(0, 160) } : {})
+        });
         return null;
       }
       logIap(`TTS ok (${r.fonte})`, {
@@ -196,15 +242,8 @@ export async function ligarIap(grupo, { nomeDono, participantes, ehAutorizado } 
       });
       return r.pcm;
     },
-    falar: (pcm) => { void falarNaCallDoGrupo(grupo, pcm); }
+    falar: (pcm) => { void _media.falarNaCallDoGrupo(grupo, pcm); }
   });
-
-  // A permissão é CONSULTADA por fala (o metadata pode mudar durante a call:
-  // alguém pode ser promovido). O `index.js` injeta a função real.
-  if (typeof ehAutorizado === 'function') {
-    const agente = iap.agentes.get(grupo);
-    if (agente) agente.ehAutorizado = ehAutorizado;
-  }
 
   logIap('ligado', { grupo });
   return { ok: true };
@@ -218,8 +257,8 @@ export async function ligarIap(grupo, { nomeDono, participantes, ehAutorizado } 
  */
 export async function desligarIap(grupo) {
   const havia = iap.desligar(grupo);
-  try { await aoOuvirAudioDaCall(grupo, null); } catch { /* ok */ }
-  try { await modoAudioExternoDaCall(grupo, false); } catch { /* ok */ }
+  try { await _media.aoOuvirAudioDaCall(grupo, null); } catch { /* ok */ }
+  try { await _media.modoAudioExternoDaCall(grupo, false); } catch { /* ok */ }
   if (havia) logIap('desligado', { grupo });
   return havia;
 }

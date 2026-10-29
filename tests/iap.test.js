@@ -491,7 +491,7 @@ await test('GUARDA: MEMBRO COMUM pedindo para banir é RECUSADO', async () => {
   // reconhece que ele não é adm/dono/mod e NÃO executa nada.
   const g = await import(new URL('../dados/src/utils/iapGuarda.js', import.meta.url).href);
   const soAdmin = (jid) => jid === 'admin@lid';
-  const r = g.permitePedidoDeAcao('lizzy, bane o joao', 'membro@lid', { ehAutorizado: soAdmin });
+  const r = await g.permitePedidoDeAcao('lizzy, bane o joao', 'membro@lid', { ehAutorizado: soAdmin });
   ok(r.ok === false, 'recusou');
   ok(r.acao === 'banir', `identificou a ação (${r.acao})`);
   ok(r.motivo === 'sem_permissao', `motivo correto (${r.motivo})`);
@@ -502,35 +502,125 @@ await test('GUARDA: MEMBRO COMUM pedindo para banir é RECUSADO', async () => {
 await test('GUARDA: ADMIN pode o mesmo pedido', async () => {
   const g = await import(new URL('../dados/src/utils/iapGuarda.js', import.meta.url).href);
   const soAdmin = (jid) => jid === 'admin@lid';
-  const r = g.permitePedidoDeAcao('lizzy, bane o joao', 'admin@lid', { ehAutorizado: soAdmin });
+  const r = await g.permitePedidoDeAcao('lizzy, bane o joao', 'admin@lid', { ehAutorizado: soAdmin });
   ok(r.ok === true, 'admin pode');
   ok(r.acao === 'banir', 'a ação foi identificada');
 });
 
+await test('GUARDA: aceita checagem de permissão ASSÍNCRONA (o metadata é async)', async () => {
+  // A permissão real vem do `getCachedGroupMetadata` (async). Se a guarda não
+  // aguardasse, `Boolean(Promise)` seria SEMPRE true — falha ABERTA.
+  const g = await import(new URL('../dados/src/utils/iapGuarda.js', import.meta.url).href);
+  const membro = await g.permitePedidoDeAcao('bane o joao', 'membro@lid', {
+    ehAutorizado: async () => false
+  });
+  ok(membro.ok === false, 'recusou o membro (Promise resolvida para false)');
+  const admin = await g.permitePedidoDeAcao('bane o joao', 'admin@lid', {
+    ehAutorizado: async () => true
+  });
+  ok(admin.ok === true, 'liberou o admin');
+});
+
+await test('ligarIap: o agente RECEBE o ehAutorizado (o fio que faltava)', async () => {
+  // BUG: `ligarIap` montava o `pensar` sem repassar `ehAutorizado`, então o
+  // agente recusava TODO pedido de ação — inclusive de admin. O teste roda o
+  // caminho REAL (`ligarIap` → `iap.ligar` → `pensar`) e exige que a permissão
+  // injetada seja consultada.
+  const groq = await import(new URL('../dados/src/utils/groqClient.js', import.meta.url).href);
+  const sess = await import(new URL('../dados/src/utils/iapSessao.js', import.meta.url).href);
+  const { iap } = await import(new URL('../dados/src/utils/iapVoice.js', import.meta.url).href);
+  // Seam do motor de mídia: o dublê do `callMedia` não implementa o áudio do
+  // `!iap`, então aqui injetamos um motor mínimo que ACEITA a escuta.
+  let externo = null;
+  sess.setIapMediaForTest({
+    modoAudioExternoDaCall: async (_g, on) => { externo = on; return true; },
+    aoOuvirAudioDaCall: async () => true,
+    falarNaCallDoGrupo: async () => 0
+  });
+  let chamouLLM = false;
+  groq.setGroqHttpForTest(async () => {
+    chamouLLM = true;
+    return { data: { choices: [{ message: { content: 'ok, vou tratar' } }] } };
+  });
+  const antiga = process.env.GROQ_API_KEY;
+  process.env.GROQ_API_KEY = 'gsk_teste';
+
+  const grupo = 'ligar-iap@g.us';
+  const r = await sess.ligarIap(grupo, { ehAutorizado: async (jid) => jid === 'admin@lid' });
+  ok(r.ok === true, `ligou (${r.motivo || 'ok'})`);
+  ok(externo === true, 'ligou o modo de áudio externo');
+
+  // Pega o `pensar` que o agente REALMENTE registrou e chama com um pedido.
+  const agente = iap.agentes.get(grupo);
+  ok(Boolean(agente), 'o agente foi registrado');
+  const respAdmin = await agente.pensar('bane o joao', [], { quemFalou: 'admin@lid' });
+  ok(chamouLLM === true, 'ADMIN passou pela guarda (chegou ao LLM)');
+  ok(/vou tratar/.test(respAdmin), `admin liberado (${respAdmin.slice(0, 40)})`);
+
+  chamouLLM = false;
+  const respMembro = await agente.pensar('bane o joao', [], { quemFalou: 'membro@lid' });
+  ok(chamouLLM === false, 'MEMBRO não chegou ao LLM');
+  ok(/nao posso|nao tem permissao/i.test(respMembro), 'membro recusado em voz');
+
+  await sess.desligarIap(grupo);
+  sess.setIapMediaForTest(null);
+  if (antiga !== undefined) process.env.GROQ_API_KEY = antiga;
+  groq.setGroqHttpForTest(null);
+});
+
+await test('pensarComIa: a guarda RECEBE o ehAutorizado (não recusa todo mundo)', async () => {
+  // BUG: `pensarComIa` chamava a guarda SEM `ehAutorizado`, então TODO pedido de
+  // ação era recusado — inclusive de admin. O `agente.ehAutorizado` era setado e
+  // nunca usado. Este teste amarra o fio.
+  const groq = await import(new URL('../dados/src/utils/groqClient.js', import.meta.url).href);
+  const sess = await import(new URL('../dados/src/utils/iapSessao.js', import.meta.url).href);
+  let chamouLLM = false;
+  groq.setGroqHttpForTest(async () => {
+    chamouLLM = true;
+    return { data: { choices: [{ message: { content: 'ok, vou tratar' } }] } };
+  });
+  const antiga = process.env.GROQ_API_KEY;
+  process.env.GROQ_API_KEY = 'gsk_teste';
+  // ADMIN: com o fio ligado, o pedido passa (chega ao LLM).
+  const respAdmin = await sess.pensarComIa('bane o joao', [], {
+    quemFalou: 'admin@lid', ehAutorizado: async () => true
+  });
+  // MEMBRO: segue recusado, sem tocar no LLM.
+  chamouLLM = false;
+  const respMembro = await sess.pensarComIa('bane o joao', [], {
+    quemFalou: 'membro@lid', ehAutorizado: async () => false
+  });
+  if (antiga !== undefined) process.env.GROQ_API_KEY = antiga;
+  groq.setGroqHttpForTest(null);
+  ok(/vou tratar/.test(respAdmin), `admin passou pela guarda (${respAdmin.slice(0, 40)})`);
+  ok(chamouLLM === false, 'membro NÃO chegou ao LLM');
+  ok(/nao posso|nao tem permissao/i.test(respMembro), 'membro recusado em voz');
+});
+
 await test('GUARDA: conversa normal passa (não é ação)', async () => {
   const g = await import(new URL('../dados/src/utils/iapGuarda.js', import.meta.url).href);
-  const r = g.permitePedidoDeAcao('oi lizzy, tudo bem?', 'membro@lid', { ehAutorizado: () => false });
+  const r = await g.permitePedidoDeAcao('oi lizzy, tudo bem?', 'membro@lid', { ehAutorizado: () => false });
   ok(r.ok === true, 'conversa passa mesmo sem permissão');
   ok(r.acao === null, 'nenhuma ação identificada');
 });
 
 await test('GUARDA: sem saber QUEM falou, recusa (não obedece desconhecido)', async () => {
   const g = await import(new URL('../dados/src/utils/iapGuarda.js', import.meta.url).href);
-  const r = g.permitePedidoDeAcao('bane o joao', null, { ehAutorizado: () => true });
+  const r = await g.permitePedidoDeAcao('bane o joao', null, { ehAutorizado: () => true });
   ok(r.ok === false, 'recusou');
   ok(r.motivo === 'sem_participante', `motivo (${r.motivo})`);
 });
 
 await test('GUARDA: sem a função de permissão, recusa (falha FECHADO)', async () => {
   const g = await import(new URL('../dados/src/utils/iapGuarda.js', import.meta.url).href);
-  const r = g.permitePedidoDeAcao('bane o joao', 'quem@lid', {});
+  const r = await g.permitePedidoDeAcao('bane o joao', 'quem@lid', {});
   ok(r.ok === false, 'recusou (não dá para afirmar que pode)');
   ok(r.motivo === 'sem_verificacao', `motivo (${r.motivo})`);
 });
 
 await test('GUARDA: se a checagem de permissão LANÇAR, recusa', async () => {
   const g = await import(new URL('../dados/src/utils/iapGuarda.js', import.meta.url).href);
-  const r = g.permitePedidoDeAcao('bane o joao', 'x@lid', {
+  const r = await g.permitePedidoDeAcao('bane o joao', 'x@lid', {
     ehAutorizado: () => { throw new Error('metadata fora'); }
   });
   ok(r.ok === false, 'recusou em vez de derrubar');
@@ -545,7 +635,7 @@ await test('GUARDA: cada ação tem a sua recusa específica', async () => {
     ['rebaixa o joao', /rebaixar/i],
     ['tranca o grupo', /abrir ou fechar|fechar/i]
   ]) {
-    const r = g.permitePedidoDeAcao(fala, 'm@lid', { ehAutorizado: semPermissao });
+    const r = await g.permitePedidoDeAcao(fala, 'm@lid', { ehAutorizado: semPermissao });
     ok(r.ok === false && esperado.test(r.recusa), `${fala} -> recusa específica`);
   }
 });
@@ -710,7 +800,65 @@ await test('iapTts: IAP_TTS_ENGINE=gemini não tenta o edge-tts', async () => {
   // Sem dublê e sem chave: o Gemini falha, mas o edge-tts NÃO deve ser chamado.
   const r = await tts.sintetizarFala('teste', {});
   delete process.env.IAP_TTS_ENGINE;
-  ok(r.ok === false && r.motivo === 'tts_indisponivel', `não caiu no edge (${r.motivo})`);
+  // O motivo agora e' o DO GEMINI (`sem_chave_gemini`), nao o generico — antes
+  // a falha do Gemini era mascarada pelo motivo do edge.
+  ok(r.ok === false && r.motivo === 'sem_chave_gemini', `motivo do Gemini (${r.motivo})`);
+  ok(r.motivoEdge === undefined, 'nao tocou no edge (engine=gemini)');
+});
+
+await test('iapTts: o motivo do GEMINI não é escondido pelo do edge (o bug do dono)', async () => {
+  // O dono viu `TTS falhou: edge_indisponivel` quando o que falhou foi o Gemini
+  // (o edge nao tinha nada a ver). Agora o motivo do Gemini e' o que sai.
+  const tts = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
+  // Desliga o edge de forma deterministica (nao depende do sandbox).
+  process.env.IAP_TTS_EDGE = 'off';
+  tts.setIapTtsHttpForTest(async () => {
+    const e = new Error('x');
+    e.response = { status: 404, data: { error: { message: 'models/tts is not found' } } };
+    throw e;
+  });
+  const r = await tts.sintetizarFala('teste', { apiKey: 'K' });
+  tts.setIapTtsHttpForTest(null);
+  delete process.env.IAP_TTS_EDGE;
+  ok(r.ok === false, 'falhou');
+  ok(r.motivo === 'gemini_modelo_indisponivel', `motivo REAL do Gemini (${r.motivo})`);
+  ok(r.motivoEdge === 'edge_desativado', `motivo do edge vai junto (${r.motivoEdge})`);
+});
+
+await test('iapTts: 404 de modelo TTS cai para o PRÓXIMO da cadeia', async () => {
+  // Nome fixo envelhece (o Google aposenta previews). Um 404 deve tentar o
+  // proximo modelo, em vez de deixar a Lizzy muda.
+  const tts = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
+  process.env.IAP_TTS_ENGINE = 'gemini';
+  let tentativas = 0;
+  tts.setIapTtsHttpForTest(async () => {
+    tentativas++;
+    if (tentativas === 1) {
+      const e = new Error('x');
+      e.response = { status: 404, data: { error: { message: 'models/antigo is not found' } } };
+      throw e;
+    }
+    const b = Buffer.alloc(24000 * 2);
+    return { data: { candidates: [{ content: { parts: [{ inlineData: { data: b.toString('base64') } }] } }] } };
+  });
+  const r = await tts.sintetizarFala('teste', { apiKey: 'K' });
+  tts.setIapTtsHttpForTest(null);
+  delete process.env.IAP_TTS_ENGINE;
+  ok(r.ok === true && r.fonte === 'gemini-tts', `salvou no 2o modelo (${r.fonte})`);
+  ok(tentativas >= 2, `tentou mais de um modelo (${tentativas})`);
+});
+
+await test('iapTts: o resolvedor USA o candidato ~/.local/bin (pip --user)', async () => {
+  // O instalador instala via `pip install --user`, que grava em `~/.local/bin`
+  // — fora do PATH. Sem este candidato na LISTA, o instalador dizia
+  // "instalado" e o runtime respondia `edge_indisponivel`.
+  const fs = await import('fs');
+  const src = fs.readFileSync(new URL('../dados/src/utils/iapTts.js', import.meta.url), 'utf8');
+  ok(src.includes("path.join(os.homedir(), '.local', 'bin', 'edge-tts')"), 'monta o caminho do ~/.local/bin');
+  // Tem de estar DENTRO da lista de candidatos (so' definir a variavel nao
+  // resolve — foi exatamente o descuido que o teste anterior deixou passar).
+  const m = src.match(/const candidatos = \[([\s\S]*?)\]\.filter/);
+  ok(m && /\blocalBin\b/.test(m[1]), 'o ~/.local/bin está na lista de candidatos');
 });
 
 await test('iapTts: IAP_TTS_ENGINE=edge NÃO cai no Gemini (força o local)', async () => {
@@ -995,6 +1143,22 @@ await test('iapTts: caminho REAL (edge-tts + ffmpeg) gera PCM 16 kHz', async () 
 // ============================================================================
 // FIM
 // ============================================================================
+
+await test('index.js: ehAutorizado NÃO cai no sender/isGroupAdmin (falha ABERTA)', async () => {
+  // O `ehAutorizado` recebe QUEM FALOU na call. Comparar com `sender` (quem
+  // mandou o `!iap on`) ou com o `isGroupAdmin` do comando seria uma falha
+  // ABERTA: o membro comum que ligou o agente passaria como autorizado.
+  const fs = await import('fs');
+  const src = fs.readFileSync(new URL('../dados/src/index.js', import.meta.url), 'utf8');
+  const i = src.indexOf('const ehAutorizado = async (jid) =>');
+  ok(i !== -1, 'o ehAutorizado existe no index.js');
+  const bloco = src.slice(i, i + 900);
+  ok(!/idsMatch\(jid,\s*sender\)/.test(bloco), 'não compara com o sender (falha aberta)');
+  ok(!/\|\|\s*isGroupAdmin/.test(bloco), 'não usa o isGroupAdmin do comando (falha aberta)');
+  ok(/numerodono/.test(bloco), 'aceita o dono do bot');
+  ok(/isSubdono\(jid\)/.test(bloco), 'aceita subdono (pelo jid de quem falou)');
+  ok(/admin === 'admin'|superadmin/.test(bloco), 'aceita admin do grupo pelo metadata');
+});
 
 callMedia.__setDuble(null);
 callMedia.__setDubleEntrar(null);
