@@ -41,6 +41,54 @@ logs diários (`YYYY-MM-DD.md`).
 - Nome do bot vem com MATHEMATICAL BOLD (`𝐋𝐢𝐳𝐳𝐲 𝐝𝐨 𝐩𝐫𝐢𝐯𝐲`) → usar
   `limparNomeDoBot` (NFKC → "Lizzy") para comparação e fala.
 
+## Fork `Souzzaaxzy/baileys` — como mexer e publicar
+
+- **Dois tokens, escopos diferentes** (medido):
+  - `$GITHUB_TOKEN` (integração) = **só leitura** no repo `baileys` (403 em
+    `git/blobs` e no `git push`);
+  - **`$GITHUB_PERSONAL_ACCESS_TOKEN`** = **tem escrita** (201 em `git/blobs`).
+  Use ele para publicar a fork.
+- **`git push` no repo da fork dá 403** mesmo com o PAT — publicar pelos
+  endpoints da API (`git/blobs` → `git/trees` → `git/commits` → `PATCH refs`).
+- **Payload grande vai por STDIN**: `lib/Socket/messages-recv.js` tem ~99 KB e
+  estoura `OSError: Argument list too long` se for na linha de comando do curl.
+  Use `--data-binary @-` + `subprocess.run(..., input=json)`.
+- **O clone da fork não tem `node_modules`**: para rodar a suíte dela, linke o do
+  bot (`ln -s <bot>/node_modules node_modules`) — as deps são as mesmas.
+  A única falha da suíte (`voip-audio-continuity`) é **ambiental** (exige ffmpeg).
+- **Ao trocar o commit da fork, TRÊS arquivos precisam acompanhar**:
+  `package.json`, `package-lock.json` e `yarn.lock` (Berry v8, com o **checksum**
+  regenerado). Ordem que funciona:
+  1. `git checkout -- yarn.lock` (garante o Berry, não o v1 rebaixado pelo npm);
+  2. trocar o pin nos três;
+  3. **apagar a linha `checksum`** do bloco do baileys no `yarn.lock`;
+  4. limpar `~/.yarn/berry/cache/@itsliaaa-baileys*.zip` e `corepack yarn install`
+     (regrava o checksum);
+  5. `corepack yarn install --check-cache` (valida);
+  6. **por último** `npm install --legacy-peer-deps --allow-git=all` e
+     **restaurar o `yarn.lock` Berry salvo** (o npm rebaixa para v1).
+  `corepack yarn install` **apaga o `node_modules`** e cria `.pnp.cjs` — remova
+  os `.pnp.*` e reinstale com npm.
+- O `npm install` rebaixa o `yarn.lock` para v1 **sempre**; salve o Berry em
+  `/tmp` e restaure no fim.
+
+## Nomes no metadata (o defeito que fazia admin sair como número)
+
+- A fork **descartava o `notify`** (o nome que o WhatsApp mostra) no parse do
+  metadata: mapeava `id`/`phoneNumber`/`lid`/`username`/`admin` e jogava o
+  `notify` fora — o campo vem em todo `<participant notify="...">`.
+- Eram **três cópias** do mesmo objeto (`groups.js`, `communities.js`,
+  `messages-recv.js`); agora há uma fonte única: `mapParticipantAttrs`
+  (`lib/Utils/group-participant.js`, commit `87c7247`).
+- **`getUserName()` (helpers.js) só tira o `@`** — devolve o NÚMERO. Num comando
+  de grupo funciona porque o WhatsApp **renderiza a menção**; para um LLM (que não
+  tem cliente) é número. Não confundir "o comando mostra o nome" com "existe nome".
+- **Mods e Alphas são do BOT** (`groupData.moderators` / `groupData.alphas`), não
+  do WhatsApp — não existem no metadata. Comandos: `!addmod`/`!delmod`/`!listmods`,
+  `!addalpha`/`!delalpha`/`!listalphas`.
+- `profilePictureUrl` **lança** quando o grupo não tem foto — sempre em
+  try/catch, e só busque quando pedido (custa uma chamada).
+
 ## Testes
 
 - Suíte de contexto: **`tests/assistente-contexto.test.js`** (19 testes / 90
