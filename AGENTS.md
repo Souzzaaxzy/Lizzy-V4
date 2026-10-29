@@ -14260,3 +14260,62 @@ Uma dependencia que precisa de **pip + python + ffmpeg** num host que so' garant
 **node/npm** e' fragil por construcao. O certo e' usar o que o bot **ja' instala**.
 Quando o sintoma e' "a correcao nao chega", o log do **entrypoint** do painel diz
 mais que o log do bot.
+
+## ⚡ `!iap` — FLUIDEZ e INTELIGENCIA: fala em FLUXO + VAD + memoria (out/2026) ✅
+Pedido do dono depois do "FUNCIONOU!!!!": *"tem como deixar mais inteligente? a
+conversa mais rapida/fluida?"*. Medi o pipeline e ataquei os tres pontos que
+aparecem na latencia PERCEBIDA (nada foi chutado).
+
+### 1. FALA EM FLUXO — o maior ganho (2,2x ate' a 1a palavra)
+O TTS esperava o **MP3 inteiro** antes de devolver o PCM: o bot ficava mudo e
+depois despejava a fala. Agora o MP3 (que ja' chega em blocos) entra no ffmpeg
+**em fluxo** (`-fflags nobuffer`), o PCM sai decodificado e cada bloco vai para o
+motor **na hora**.
+
+| | antes | agora |
+|---|---|---|
+| ate' a PRIMEIRA palavra | **699 ms** | **318 ms** |
+| sintese completa da frase | 699 ms | 393 ms |
+
+`iapTts.sintetizarFalaStream(texto, aoBloco)` + `AgenteDeVoz.emitirFalaStream`.
+O **barge-in continua** (a fila e' a mesma; `abortarFala()` zera e derruba o
+bombeamento). Sem `sintetizarStream`, o motor cai no caminho antigo (`sintetizar`).
+
+### 2. VAD — o silencio que fecha a frase entra DIRETO na latencia
+O padrao era **700 ms** de silencio antes de o bot comecar a responder. Caiu para
+**450 ms** (responde a fala normal e ainda tolera a pausa de respiracao).
+Configuravel por `IAP_VAD_SILENCIO_MS` (grupo barulhento sobe) e
+`IAP_VAD_LIMIAR` (energia que conta como fala).
+
+### 3. INTELIGENCIA
+- **Prompt reescrito para VOZ**: frases de 1-2 (max 3), numeros por extenso,
+  **nao repetir a pergunta**, responder curto no simples e desenvolver quando
+  pedirem, e pedir para repetir quando o audio vier cortado.
+- **Data/hora REAL** no contexto — "que horas sao?" passa a ter resposta certa
+  (antes o modelo chutava).
+- **Memoria 12 -> 20** mensagens (~10 turnos).
+- **LLM**: `max_tokens` 400 -> **220** (resposta curta = mais natural E mais
+  rapida de sintetizar) e `temperature` 0.8. Configuravel
+  (`IAP_LLM_MAX_TOKENS` / `IAP_LLM_TEMP`).
+
+### Envs novas
+`IAP_VAD_SILENCIO_MS` · `IAP_VAD_LIMIAR` · `IAP_HISTORICO_MAX` ·
+`IAP_LLM_MAX_TOKENS` · `IAP_LLM_TEMP`
+
+### Testes — `tests/iap.test.js` (**66 testes / 201 asserções, 0 falhas**)
++3: a fala em fluxo comeca **antes** do fim da sintese (o 1o frame entregue vem
+antes do ultimo bloco); o VAD padrao e' 450 e a env manda; o `sintetizarFalaStream`
+entrega em varios blocos e mais rapido que o tempo real.
+**Verificado que medem**: desligando o streaming → **3 asserções falham**;
+voltando o VAD a 700 → **1 falha**.
+
+Regressões verdes: `ia` 20/50, `motor-chat-noise` 14/62, `cmd-suggest` 21/68,
+`get-message-inspector` 54/269.
+
+### Onde ainda ha' espaco (honesto, nao medido)
+- **LLM em fluxo** (token a token) + falar por FRASE enquanto o modelo escreve:
+  cortaria mais latencia, mas exige sintetizar por sentenca (mais complexo e mais
+  risco de fala picada).
+- **STT em fluxo**: o Whisper so' transcreve depois da frase fechada (e' o
+  desenho do VAD). Um STT incremental reduziria a espera, mas nenhum provedor
+  gratis expoe isso de forma estavel.
