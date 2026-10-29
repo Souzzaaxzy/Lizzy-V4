@@ -30,6 +30,23 @@ const BASE = 'https://api.groq.com/openai/v1';
 /** Modelo de transcricao (dedicado, rapido). */
 const MODELO_STT = process.env.IAP_GROQ_STT_MODEL || 'whisper-large-v3-turbo';
 
+/**
+ * VIES de vocabulario para o Whisper (o campo `prompt`).
+ *
+ * ## Por que isto melhora o "entendimento"
+ *
+ * O Whisper trata o `prompt` como o TEXTO ANTERIOR da conversa, entao ele
+ * enviesa a decodificacao para esse vocabulario. Colocando aqui os nomes dos
+ * comandos e as palavras que ele costuma errar ("toca", "baixa", "figurinha",
+ * "pinterest"), o reconhecimento acerta o que INTERESSA — sem trocar de modelo e
+ * sem custo extra. Configuravel por `IAP_STT_PROMPT`.
+ */
+const PROMPT_STT = process.env.IAP_STT_PROMPT
+  || 'Comandos: toca, tocar, baixa, baixar, procura, procurar, pesquisa, manda, '
+   + 'figurinha, figurinha aleatoria, sticker, musica, video, tiktok, pinterest. '
+   + 'Exemplos: "toca Evidencias", "baixa a musica X", "procura no pinterest gatos", '
+   + '"manda uma figurinha aleatoria".';
+
 /** Modelo de conversa (o agente de voz). */
 const MODELO_LLM = process.env.IAP_GROQ_LLM_MODEL || 'openai/gpt-oss-120b';
 
@@ -268,7 +285,7 @@ export function normalizarParaGroq(arquivo, extensaoDoMime) {
  * @param {string} [mimeType]
  * @returns {Promise<{ ok: boolean, texto?: string, motivo?: string, detalhe?: string, modelo?: string }>}
  */
-export async function groqTranscrever(arquivo, mimeType = 'audio/ogg') {
+export async function groqTranscrever(arquivo, mimeType = 'audio/ogg', { prompt } = {}) {
   if (!arquivo || !arquivo.length) return { ok: false, motivo: 'audio_vazio' };
   const apiKey = chaveGroq();
   if (!apiKey) return { ok: false, motivo: 'sem_chave_groq' };
@@ -282,6 +299,15 @@ export async function groqTranscrever(arquivo, mimeType = 'audio/ogg') {
     form.append('model', MODELO_STT);
     form.append('language', 'pt');
     form.append('response_format', 'text');
+    // TEMPERATURA 0: transcricao e' tarefa deterministica — sem isso o Whisper
+    // "inventa" em audio ruim (alucinacao), e um comando vira frase aleatoria.
+    form.append('temperature', '0');
+    // PROMPT DE CONTEXTO: o Whisper usa o texto anterior como VIÉS do vocabulario.
+    // Com os nomes dos comandos e as palavras que ele costuma errar (toca, baixa,
+    // figurinha...), o reconhecimento acerta o que interessa. E' a melhoria de
+    // "entendimento" sem trocar de modelo.
+    const vies = prompt || PROMPT_STT;
+    if (vies) form.append('prompt', vies);
 
     const resp = await post(`${BASE}/audio/transcriptions`, form, {
       headers: { Authorization: `Bearer ${apiKey}` },

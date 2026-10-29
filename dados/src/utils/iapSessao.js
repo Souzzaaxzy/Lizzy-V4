@@ -322,7 +322,16 @@ export async function ligarIap(grupo, { nomeDono, participantes, ehAutorizado, n
       quemFalou: opts.quemFalou, ehAutorizado, nomeDono, participantes, nomeDeQuemFalou, ehDono, executarComando
     }),
     transcrever: async (pcm) => {
-      const r = await transcreverPcm(pcm, { apiKey: chaveGroq() });
+      // VIES de vocabulario: os NOMES de quem esta' na call + as palavras dos
+      // comandos. O Whisper usa isso como contexto e acerta mais o que importa
+      // (nome das pessoas e o comando pedido) sem trocar de modelo.
+      const vies = [
+        nomeDono ? `O dono se chama ${nomeDono}.` : '',
+        Array.isArray(participantes) && participantes.length
+          ? `Nomes na chamada: ${participantes.filter(Boolean).slice(0, 15).join(', ')}.`
+          : ''
+      ].filter(Boolean).join(' ');
+      const r = await transcreverPcm(pcm, { apiKey: chaveGroq(), prompt: vies || undefined });
       if (!r.ok) {
         logIap(`STT falhou: ${r.motivo}`, {
           grupo,

@@ -106,6 +106,16 @@ export class AgenteDeVoz {
     this.framesBarge = 0;
     /** Frames da frase em andamento. */
     this.frase = [];
+    /**
+     * PRE-ROLL: os ultimos frames ANTES de a fala ser detectada.
+     *
+     * O VAD dispara `inicio` no primeiro frame acima do limiar — mas uma palavra
+     * que comeca fraca ("Toca" com T suave) tem os primeiros ~100 ms abaixo dele.
+     * Sem o pre-roll, o STT recebe a palavra CORTADA no comeco e transcreve
+     * errado. Guardamos os ultimos frames e os colamos na frente da frase.
+     */
+    this.preRoll = [];
+    this.preRollMax = Number(vad?.preRollFrames) > 0 ? Number(vad.preRollFrames) : 4; // ~240 ms
     /** Historico da conversa (para o LLM ter contexto). */
     this.historico = [];
     /** Ligado? */
@@ -127,6 +137,7 @@ export class AgenteDeVoz {
     this.ativo = true;
     this.vad.reset();
     this.frase = [];
+    this.preRoll = [];
     this.log('agente ligado', { grupo: this.grupo });
   }
 
@@ -136,6 +147,7 @@ export class AgenteDeVoz {
     this.falando = false;
     this.processando = false;
     this.frase = [];
+    this.preRoll = [];
     this.fila = [];
     this.historico = [];
     if (this.timerFila) {
@@ -189,7 +201,18 @@ export class AgenteDeVoz {
     }
 
     if (evento === 'inicio') {
-      this.frase = [pcm.slice()];
+      // Cola o PRE-ROLL na frente: recupera o comeco da palavra que ficou abaixo
+      // do limiar (o STT deixa de receber a palavra cortada).
+      this.frase = [...this.preRoll, pcm.slice()];
+      this.preRoll = [];
+      return;
+    }
+    if (evento === 'nada') {
+      // Silencio ANTES da fala: guarda os ultimos frames como pre-roll do
+      // proximo `inicio`. (Usar o estado do AGENTE aqui seria errado: `falando`
+      // marca a fala do BOT, nao a do usuario — foi o bug que engolia tudo.)
+      this.preRoll.push(pcm.slice());
+      if (this.preRoll.length > this.preRollMax) this.preRoll.shift();
       return;
     }
     if (evento === 'meio') {

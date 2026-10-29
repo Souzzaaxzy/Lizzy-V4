@@ -45,9 +45,10 @@ export function setIapHttpForTest(fn) {
  * @param {Float32Array} pcm
  * @param {object} [opts]
  * @param {string} [opts.apiKey] chave do Groq (padrao: a configurada)
+ * @param {string} [opts.prompt] vies de vocabulario (nomes da call + comandos)
  * @returns {Promise<{ ok: boolean, texto?: string, motivo?: string, detalhe?: string, fonte?: string, modelo?: string }>}
  */
-export async function transcreverPcm(pcm, { apiKey } = {}) {
+export async function transcreverPcm(pcm, { apiKey, prompt } = {}) {
   if (!pcm || !pcm.length) return { ok: false, motivo: 'audio_vazio' };
 
   const chave = apiKey || chaveGroq();
@@ -56,7 +57,7 @@ export async function transcreverPcm(pcm, { apiKey } = {}) {
   // O WAV gerado tem cabecalho, entao o mimetype certo e' audio/wav — e o
   // cliente ainda confere o magic byte antes de enviar.
   const wav = pcmParaWav(pcm, TAXA_MOTOR);
-  const r = await groqTranscrever(wav, 'audio/wav');
+  const r = await groqTranscrever(wav, 'audio/wav', { prompt });
   return r.ok ? { ...r, fonte: 'groq' } : r;
 }
 

@@ -283,6 +283,53 @@ await test('VAD: o silencio que fecha a frase e 700 ms (nao corta a pessoa)', as
   ok(vad2.silencioMs === 900, `a env manda (${vad2.silencioMs})`);
 });
 
+await test('STT: o PRE-ROLL inclui o começo da palavra (não corta)', async () => {
+  // O VAD dispara `inicio` no primeiro frame acima do limiar — uma palavra que
+  // começa fraca ("Toca" com T suave) tem os primeiros ~100 ms abaixo dele. Sem
+  // o pre-roll, o STT recebe a palavra CORTADA e transcreve errado.
+  const { AgenteDeVoz } = await import(new URL('../dados/src/utils/iapVoice.js', import.meta.url).href);
+  let amostras = 0;
+  const agente = new AgenteDeVoz({
+    grupo: 'preroll@g.us',
+    falar: () => {},
+    pensar: async () => 'r',
+    transcrever: async (pcm) => { amostras = pcm.length; return 'oi'; },
+    sintetizar: async () => new Float32Array(1920)
+  });
+  agente.ligar();
+  // 3 frames de SILÊNCIO (viram pre-roll) + 6 de fala + silêncio para fechar.
+  for (let i = 0; i < 3; i++) agente.receberAudio(new Float32Array(960));
+  for (let i = 0; i < 6; i++) agente.receberAudio(new Float32Array(960).fill(0.3));
+  for (let i = 0; i < 14; i++) agente.receberAudio(new Float32Array(960));
+  await new Promise((r) => setTimeout(r, 300));
+  // 3 (pre-roll) + 6 (fala) + 12 (silencio que fecha) = 21 frames.
+  ok(amostras >= 20 * 960, `levou o pre-roll junto (${amostras} amostras)`);
+  agente.desligar();
+});
+
+await test('STT: o viés de vocabulário vai no campo `prompt`', async () => {
+  // O Whisper usa o `prompt` como contexto e ENVIESA a decodificação. Com os
+  // nomes da call + os comandos, ele acerta mais o que interessa.
+  const { setGroqHttpForTest } = await import(new URL('../dados/src/utils/groqClient.js', import.meta.url).href);
+  const stt = await import(new URL('../dados/src/utils/iapStt.js', import.meta.url).href);
+  let formVisto = null;
+  setGroqHttpForTest(async (url, body) => {
+    formVisto = body;
+    return { data: 'toca evidencias' };
+  });
+  const antiga = process.env.GROQ_API_KEY;
+  process.env.GROQ_API_KEY = 'gsk_teste';
+  const pcm = new Float32Array(16000).fill(0.2);
+  await stt.transcreverPcm(pcm, { prompt: 'Nomes na chamada: Kannon, Maria.' });
+  if (antiga !== undefined) process.env.GROQ_API_KEY = antiga;
+  setGroqHttpForTest(null);
+  ok(formVisto && typeof formVisto.get === 'function', 'mandou multipart');
+  const vies = formVisto.get('prompt');
+  ok(typeof vies === 'string' && /Kannon/.test(vies), `levou o viés (${vies})`);
+  ok(formVisto.get('temperature') === '0', 'temperatura 0 (não alucina)');
+  ok(formVisto.get('language') === 'pt', 'idioma pt');
+});
+
 await test('agente: silêncio puro não aciona o pipeline', async () => {
   const { agente, falado } = agenteDeTeste();
   agente.ligar();
@@ -419,15 +466,17 @@ await test('!iap: subcomando inválido mostra o uso', async () => {
   includes(out.text, 'iap on', 'mostra o uso');
 });
 
-await test('!iap on sem chave da IA: orienta o !key', async () => {
+await test('!iap on sem chave do Groq: orienta o !keygroq', async () => {
   const { groupJid, participants, admin } = setup(2);
   instalarDubleMidia();
   callState.registrarCall(groupJid, { callId: 'CALL-1', startedAt: Date.now() });
-  // Sem chave: o `ligarIap` recusa com `sem_chave`.
-  const antigo = process.env.GEMINI_API_KEY;
-  delete process.env.GEMINI_API_KEY;
+  // SEM CHAVE (do Groq): o `ligarIap` recusa com `sem_chave_groq`. O teste tem
+  // de garantir o ambiente VAZIO — antes ele dependia de um teste anterior ter
+  // deixado a chave setada (e por isso passava por acidente).
+  const antiga = process.env.GROQ_API_KEY;
+  delete process.env.GROQ_API_KEY;
   const out = await run({ groupJid, sender: admin, text: '!iap on', participants, fromMe: false });
-  if (antigo !== undefined) process.env.GEMINI_API_KEY = antigo;
+  if (antiga !== undefined) process.env.GROQ_API_KEY = antiga;
   includes(out.text, 'key', 'orienta a configurar a chave');
 });
 
