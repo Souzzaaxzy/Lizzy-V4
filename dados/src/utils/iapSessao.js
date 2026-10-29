@@ -15,7 +15,7 @@
  */
 
 import * as ia from '../funcs/private/ia.js';
-import { transcreverPcm } from './iapStt.js';
+import { transcreverPcm, motorSttAtivo, chaveGroq } from './iapStt.js';
 import { sintetizarFala } from './iapTts.js';
 import { iap, promptDoSistema } from './iapVoice.js';
 import {
@@ -136,7 +136,15 @@ export async function desligarIap(grupo) {
 
 /** Estado do agente no grupo (para o comando mostrar). */
 export function estadoIap(grupo) {
-  return iap.estado(grupo);
+  const st = iap.estado(grupo);
+  if (!st) return st;
+  // O motor de STT em uso (Groq ou Gemini) — o dono precisa saber qual esta'
+  // ouvindo, e a reserva so' existe se houver chave.
+  return {
+    ...st,
+    stt: motorSttAtivo(),
+    reservaGroq: Boolean(chaveGroq())
+  };
 }
 
 /** Desliga todos os agentes (a call caiu: o `index.js` chama isto). */

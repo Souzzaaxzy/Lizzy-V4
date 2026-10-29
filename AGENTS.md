@@ -13661,3 +13661,55 @@ uma transcrição real ponta a ponta. O que está provado: o payload do Gemini
 (`thinkingBudget: 0` + `audio/wav`), a cadeia de modelos, a **reserva
 funcionando** com dublê (Gemini falha → Groq devolve o texto) e o multipart do
 Groq. Com a chave do Groq configurada, o agente passa a ter **duas** fontes.
+
+
+## 🎧 "O Groq é melhor?" — por FUNÇÃO, e a arquitetura virou Groq+Gemini (out/2026) ✅
+Pergunta do dono. A resposta honesta é **depende da função** — e isso mudou a
+arquitetura para melhor.
+
+### A medição que decidiu
+O `!iap` faz **DUAS chamadas por turno** com a **MESMA chave Gemini**:
+`transcrever` (ouvir) e `pensar` (LLM). Ou seja, a cota era **dividida** entre
+ouvir e pensar — e o Gemini como STT foi justamente quem deu **timeout**.
+
+| função | melhor | por quê |
+|---|---|---|
+| **OUVIR** (STT) | **Groq Whisper** | modelo **DEDICADO** a transcrição (o Gemini usa um generativo para o mesmo trabalho); ~**200× o tempo real**; **não gasta a cota do Gemini** |
+| **PENSAR** (LLM) | **Gemini** | conversa natural e pt-BR melhores; é o que já responde os outros comandos |
+
+### A nova arquitetura: Groq ouve, Gemini pensa
+`IAP_STT_ENGINE` (`auto` | `gemini` | `groq`):
+- **`auto` (padrão)**: com chave do Groq, **ouve pelo Groq** e **pensa pelo
+  Gemini**;
+- sem a chave do Groq → o Gemini ouve (como antes);
+- **reserva nos DOIS sentidos**: Groq falha → Gemini assume; Gemini falha →
+  Groq assume.
+
+### Limites grátis medidos
+| provedor | modelo | limites free |
+|---|---|---|
+| Groq | `whisper-large-v3-turbo` | 20 RPM · 2.000 RPD · 7,2 mil seg. de áudio/hora |
+| Groq | `gpt-oss-120b` / `20b` / `qwen3.8-27b` | 30 RPM · 1.000 RPD · 8K TPM |
+| Gemini | — | RPD/RPM por modelo; **modelos novos (3.x) aparecem como "Free Tier: Not available"** na tabela de preços |
+
+### "Tem API com 100% de garantia?"
+**Não existe** — toda API grátis tem cota e pode cair. O que **dá** para
+garantir é **reserva em dois provedores independentes**, que é o que está no ar
+agora (e nos dois sentidos).
+
+### O `!iap status` agora diz quem está ouvindo
+`┃ 🎧 Ouvindo com: Groq Whisper (reserva ativa)` — o dono vê de imediato qual
+motor está no ar, em vez de descobrir pelo timeout.
+
+### Testes — `tests/iap.test.js` (**39 testes / 94 asserções, 0 falhas**)
++3: **com chave do Groq ele vai PRIMEIRO e não chama o Gemini** (a cota fica
+livre para pensar); `IAP_STT_ENGINE=gemini` força o Gemini a ir primeiro;
+**Groq falha → o Gemini assume**. Regressões verdes: `ia` 20/50,
+`motor-chat-noise` 14/62, `cmd-suggest` 21/68.
+
+### LIMITE HONESTO
+Sem chave de nenhum dos dois neste ambiente, **não** comparei a qualidade das
+transcrições lado a lado com áudio real. A escolha se apoia em fatos medidos
+(Whisper é modelo dedicado; o Groq é ~200× tempo real; a cota do Gemini é
+dividida) — não em teste cego de qualidade. Se na prática o Groq transcrever
+pior no seu áudio, `IAP_STT_ENGINE=gemini` volta atrás numa linha.

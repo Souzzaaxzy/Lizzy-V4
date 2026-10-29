@@ -184,13 +184,27 @@ export async function transcreverArquivoGroq(arquivo, mimeType = 'audio/ogg') {
 /**
  * Transcreve um bloco de PCM 16 kHz mono.
  *
- * Ordem: **Gemini** (a chave do `!key`) e, se ele falhar, **Groq Whisper**
- * (a chave do `!keygroq`). Assim um provedor fora do ar nao deixa o agente mudo.
+ * ## A ordem (e por que o Groq vem PRIMEIRO quando existe)
+ *
+ * `IAP_STT_ENGINE` decide: `auto` (padrao) | `gemini` | `groq`.
+ *
+ * No `auto`, **com chave do Groq**, a transcricao vai pelo **Groq Whisper** —
+ * por tres razoes medidas:
+ *
+ *  1. **e' um modelo DEDICADO a transcricao** (o Gemini usa um generativo para
+ *     o mesmo trabalho, e era ele que estourava o tempo);
+ *  2. **nao gasta a cota do Gemini**, que fica livre para o que ele faz melhor:
+ *     PENSAR (o agente faz DUAS chamadas por turno — ouvir e pensar — e as duas
+ *     saiam na mesma cota);
+ *  3. e' **~200x o tempo real**, entao a resposta sai antes.
+ *
+ * Se o Groq falhar, cai no **Gemini** — e vice-versa. Os dois lados tem reserva,
+ * entao nenhum provedor fora do ar deixa o agente mudo.
  *
  * @param {Float32Array} pcm
  * @param {object} [opts]
  * @param {string} [opts.apiKey] chave do Gemini
- * @param {string} [opts.groqKey] chave do Groq (reserva)
+ * @param {string} [opts.groqKey] chave do Groq
  * @param {string} [opts.modelo]
  * @returns {Promise<{ ok: boolean, texto?: string, motivo?: string, detalhe?: string, fonte?: string, modelo?: string }>}
  */
@@ -198,9 +212,14 @@ export async function transcreverPcm(pcm, { apiKey, groqKey, modelo = MODELO_STT
   if (!pcm || !pcm.length) return { ok: false, motivo: 'audio_vazio' };
 
   const wav = pcmParaWav(pcm, TAXA_MOTOR);
+  const chaveG = groqKey || chaveGroq();
+  const motor = String(process.env.IAP_STT_ENGINE || 'auto').toLowerCase();
 
-  // ---- 1) Gemini ----------------------------------------------------------
-  if (apiKey) {
+  // Quem vai PRIMEIRO.
+  const groqPrimeiro = motor === 'groq' || (motor === 'auto' && Boolean(chaveG));
+
+  const tentarGemini = async () => {
+    if (!apiKey) return { ok: false, motivo: 'sem_chave' };
     const r = await ia.geminiRequestMultimodal({
       apiKey,
       modelo,
@@ -217,43 +236,57 @@ export async function transcreverPcm(pcm, { apiKey, groqKey, modelo = MODELO_STT
         generationConfig: { thinkingConfig: { thinkingBudget: 0 } }
       }
     });
+    if (!r.ok) return { ok: false, motivo: r.motivo, detalhe: r.detalhe, fonte: 'gemini' };
+    const texto = textoDaResposta(r.data);
+    if (!texto) return { ok: false, motivo: 'sem_fala', fonte: 'gemini', modelo: r.modeloUsado };
+    return { ok: true, texto, fonte: 'gemini', modelo: r.modeloUsado };
+  };
 
-    if (r.ok) {
-      const texto = textoDaResposta(r.data);
-      if (texto) return { ok: true, texto, fonte: 'gemini', modelo: r.modeloUsado };
-      // Respondeu OK mas sem texto: o audio nao tinha fala. Nao e' falha de
-      // provedor — nao adianta tentar o Groq.
-      return { ok: false, motivo: 'sem_fala', fonte: 'gemini', modelo: r.modeloUsado };
-    }
+  const tentarGroq = async () => {
+    const r = await transcreverGroq(wav, chaveG);
+    return r.ok ? { ...r, fonte: 'groq' } : r;
+  };
 
-    // Falha do Gemini: tenta a reserva ANTES de desistir.
-    const reserva = await transcreverGroq(wav, groqKey || chaveGroq());
-    if (reserva.ok) return { ...reserva, fonte: 'groq' };
+  const primeiro = groqPrimeiro ? tentarGroq : tentarGemini;
+  const segundo = groqPrimeiro ? tentarGemini : tentarGroq;
 
-    // Nenhum dos dois: devolve o motivo do Gemini (o principal) + o da reserva.
-    return {
-      ok: false,
-      motivo: r.motivo,
-      detalhe: `${r.detalhe || ''}${reserva.motivo ? ` | groq: ${reserva.motivo}` : ''}`.trim(),
-      fonte: 'gemini'
-    };
-  }
+  const r1 = await primeiro();
+  // `sem_fala` = o audio nao tinha fala. Nao e' falha de provedor: tentar o
+  // outro so' gastaria cota.
+  if (r1.ok || r1.motivo === 'sem_fala') return r1;
 
-  // ---- 2) Sem chave do Gemini: so' a reserva -------------------------------
-  if (!apiKey && (groqKey || chaveGroq())) {
-    const reserva = await transcreverGroq(wav, groqKey || chaveGroq());
-    return reserva.ok ? { ...reserva, fonte: 'groq' } : reserva;
-  }
+  const r2 = await segundo();
+  if (r2.ok) return r2;
 
-  return { ok: false, motivo: 'sem_chave' };
+  // Nenhum dos dois: devolve o motivo do PRIMEIRO + o do segundo.
+  return {
+    ok: false,
+    motivo: r1.motivo,
+    detalhe: `${r1.detalhe || ''}${r2.motivo ? ` | reserva: ${r2.motivo}` : ''}`.trim(),
+    fonte: r1.fonte
+  };
 }
 
-/** O modelo preferido (diagnostico/testes). */
+/** O modelo preferido do Gemini (diagnostico/testes). */
 export function modeloStt() {
   return MODELO_STT;
 }
 
-/** O modelo da reserva (diagnostico/testes). */
+/** O modelo do Groq (diagnostico/testes). */
 export function modeloGroq() {
   return MODELO_GROQ;
+}
+
+/**
+ * Qual motor de STT esta' em uso agora (`auto` resolvido).
+ * @returns {'groq'|'gemini'|'nenhum'}
+ */
+export function motorSttAtivo() {
+  const motor = String(process.env.IAP_STT_ENGINE || 'auto').toLowerCase();
+  const temGroq = Boolean(chaveGroq());
+  const temGemini = Boolean(process.env.GEMINI_API_KEY);
+  if (motor === 'groq') return temGroq ? 'groq' : (temGemini ? 'gemini' : 'nenhum');
+  if (motor === 'gemini') return temGemini ? 'gemini' : (temGroq ? 'groq' : 'nenhum');
+  if (temGroq) return 'groq';
+  return temGemini ? 'gemini' : 'nenhum';
 }

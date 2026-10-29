@@ -36848,6 +36848,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             if (!st?.ativo) {
               return reply('🔇 O agente de voz está desligado neste grupo.');
             }
+            const rotuloStt = { groq: 'Groq Whisper (reserva ativa)', gemini: 'Gemini', nenhum: 'nenhum (configure !key)' };
             return nazu.sendMessage(from, {
               text:
                 `╭━━━꧁༺ 🎙️ 𝐀𝐆𝐄𝐍𝐓𝐄 𝐃𝐄 𝐕𝐎𝐙 🎙️ ༻꧂━━━╮\n` +
@@ -36856,6 +36857,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
                 `┃ 🧠 Pensando: ${st.processando ? 'sim' : 'não'}\n` +
                 `┃ ↩️ Interrupções: ${st.bargeIns}\n` +
                 `┃ 💬 Na memória: ${st.historico} mensagem(ns)\n` +
+                `┃ 🎧 Ouvindo com: ${rotuloStt[st.stt] || st.stt || '—'}\n` +
                 `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`,
               contextInfo: gerarContextNewsletter()
             });
