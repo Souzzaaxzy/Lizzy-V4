@@ -336,12 +336,16 @@ async function edgeTts() {
     }
     log('Instalando edge-tts (a voz da IA na call)');
     const pip = async (args) => { try { await execAsync(variant, args, { timeout: 300000 }); return true; } catch { return false; } };
+    // `--break-system-packages` cobre o PEP 668 ("externally-managed environment"),
+    // comum em VPS/Pterodactyl — sem ele o pip recusa instalar mesmo com --user.
     const ok =
-        (await pip(['-m', 'pip', 'install', '-U', 'edge-tts'])) ||
         (await pip(['-m', 'pip', 'install', '--user', '-U', 'edge-tts'])) ||
+        (await pip(['-m', 'pip', 'install', '--user', '--break-system-packages', '-U', 'edge-tts'])) ||
+        (await pip(['-m', 'pip', 'install', '-U', 'edge-tts'])) ||
+        (await pip(['-m', 'pip', 'install', '--break-system-packages', '-U', 'edge-tts'])) ||
         ((await pip(['-m', 'ensurepip', '--user'])) && (await pip(['-m', 'pip', 'install', '--user', '-U', 'edge-tts'])));
     if (ok) { log('edge-tts instalado'); return; }
-    log('Aviso: nao consegui instalar o edge-tts — a voz da IA vai usar o Gemini');
+    log('Aviso: nao consegui instalar o edge-tts — a VOZ da IA na call precisa dele (pip install --user edge-tts)');
 }
 
 // ---------------------------------------------------------------------------

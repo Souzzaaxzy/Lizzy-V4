@@ -14153,3 +14153,59 @@ contra o `sender`/`isGroupAdmin`. **Verificado que medem**: removendo o candidat
 
 Regressões verdes: `ia` 20/50, `motor-chat-noise` 14/62, `cmd-suggest` 21/68,
 `get-message-inspector` 54/269.
+
+## 🎙️ `!iap` — GEMINI REMOVIDO de vez: a VOZ e' SO' edge-tts (out/2026) ✅
+O dono: *"vamos ter que tirar o gemini mesmo, o plano ja acabou"* — o log mostrava
+`[IAP] TTS falhou: gemini_limite` (`You exceeded your current quota`) **no meio da
+conversa**, porque o edge-tts **nao estava instalado** no servidor e o TTS caia no
+Gemini como reserva.
+
+### O que mudou
+| peca | antes | agora |
+|---|---|---|
+| **ouvir** (STT) | Groq Whisper | **Groq Whisper** (igual) |
+| **pensar** (LLM) | Groq | **Groq** (igual) |
+| **falar** (TTS) | edge-tts → **Gemini** (reserva) | **SO' edge-tts** (local) |
+
+O Gemini **nao participa de nada** no `!iap` agora: sem chave, sem cota, sem
+billing. O `iapTts.js` deixou de importar `axios` (nao ha mais HTTP no TTS) e o
+`sintetizarGemini`/`chaveGemini`/`MODELO_TTS`/`IAP_TTS_ENGINE`/`IAP_TTS_MODEL`/
+`IAP_TTS_GEMINI_VOICE`/`IAP_STT_TIMEOUT_MS` **saíram**. O `motivoEdge` tambem (nao
+ha mais de onde cair).
+
+### A VOZ agora e' GARANTIDA no `!iap on`
+`garantirEdgeTts()` (novo, no `iapTts.js`) roda **ao ligar o agente**:
+1. ja' instalado → segue;
+2. senao instala com os fallbacks reais:
+   `pip install --user` → **`--user --break-system-packages`** (PEP 668,
+   "externally-managed environment", comum em VPS/Pterodactyl) → sem `--user` →
+   `ensurepip --user` + instala;
+3. se nao der, o `!iap on` **recusa com o motivo** (`voz_instalacao_falhou` →
+   manda rodar `pip install --user edge-tts`) — antes o dono so' descobria no
+   primeiro "sem audio" da call.
+
+O `!atualizar` (`update.js`) e o `config.js` ganharam os MESMOS fallbacks, e a
+checagem passou a olhar **`$HOME/.local/bin/edge-tts`** (onde o `--user` grava).
+
+### O status mostra as TRES pecas
+`!iap status` agora diz `🎧 Ouvindo com: Groq (Whisper)`, `🧠 Pensando com: Groq
+(<modelo>)` e `🎙️ Voz: edge-tts`. O `estadoIap` virou **async** (testa o binario).
+
+### Testes — `tests/iap.test.js` (**64 testes / 198 asserções, 0 falhas**)
+A secao de TTS foi **reescrita** para o caminho edge-tts:
+- o codigo do `iapTts.js` **nao tem** `generativelanguage.googleapis`, `axios`
+  nem a palavra `gemini` (checagem sobre o codigo, ignorando comentarios);
+- sem o edge-tts → `sem_edge_tts` (nao mais um motivo de Gemini);
+- o `~/.local/bin` esta na **lista** de candidatos;
+- `garantirEdgeTts` existe e cobre **PEP 668** e `ensurepip`;
+- o **caminho REAL** (edge-tts + ffmpeg) gera PCM 16 kHz com áudio de verdade;
+- `ligarIap` **recusa** sem a voz e o motivo comeca com `voz_`.
+**Verificado que medem**: removendo o `garantirEdgeTts` do `ligarIap`, **2
+asserções falham**.
+
+### Medido ao vivo
+`garantirEdgeTts()` com o edge-tts apagado → **`{ok:true, instalado:true}`** e
+`sintetizarFala('Oi, eu sou a Lizzy.')` → **`{ok:true, fonte:'edge-tts', 2.3s}`**.
+
+Regressões verdes: `ia` 20/50, `motor-chat-noise` 14/62, `cmd-suggest` 21/68,
+`get-message-inspector` 54/269.

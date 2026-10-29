@@ -67,10 +67,11 @@ const DEPENDENCIES_CONFIG = [
     { name: 'FFmpeg', check: 'ffmpeg -version', termux: 'pkg install ffmpeg -y', win: 'winget install --id Gyan.FFmpeg -e || choco install ffmpeg', linux: 'apt install -y ffmpeg || dnf install -y ffmpeg || pacman -S --noconfirm ffmpeg', mac: 'brew install ffmpeg' },
     // yt-dlp: download local de YouTube. Instalação via pip (sem root; cai em userspace se preciso).
     { name: 'yt-dlp', check: 'yt-dlp --version || python3 -m yt_dlp --version || python -m yt_dlp --version', termux: 'pip install -U yt-dlp', win: 'pip install -U yt-dlp', linux: 'python3 -m pip install -U yt-dlp || python -m pip install -U yt-dlp || python3 -m pip install --user -U yt-dlp', mac: 'python3 -m pip install -U yt-dlp' },
-    // edge-tts: a VOZ do `!iap` (IA na call). Sem ele, o TTS cai no Gemini --
-    // e o dono pediu para o `!iap` nao depender do Gemini. Instalacao via pip
-    // (sem root; cai em userspace se preciso).
-    { name: 'edge-tts', check: 'edge-tts --version || python3 -m edge_tts --version || python -m edge_tts --version', termux: 'pip install -U edge-tts', win: 'pip install -U edge-tts', linux: 'python3 -m pip install -U edge-tts || python -m pip install -U edge-tts || python3 -m pip install --user -U edge-tts', mac: 'python3 -m pip install -U edge-tts' }
+    // edge-tts: a VOZ do `!iap` (IA na call). Sem ele, a IA da call fica MUDA
+    // (o Gemini saiu — o plano estourava). Instalacao via pip (sem root; cai em
+    // userspace se preciso). O `--break-system-packages` cobre o PEP 668
+    // ("externally-managed environment"), comum em VPS/Pterodactyl.
+    { name: 'edge-tts', check: 'edge-tts --version || "$HOME/.local/bin/edge-tts" --version || python3 -m edge_tts --version || python -m edge_tts --version', termux: 'pip install -U edge-tts', win: 'pip install -U edge-tts', linux: 'python3 -m pip install --user -U edge-tts || python3 -m pip install --user --break-system-packages -U edge-tts || python3 -m pip install -U edge-tts || python -m pip install --user -U edge-tts', mac: 'python3 -m pip install --user -U edge-tts' }
 ];
 
 async function runCommandWithSpinner(command, message) {

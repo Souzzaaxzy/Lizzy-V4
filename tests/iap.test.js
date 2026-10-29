@@ -568,6 +568,45 @@ await test('ligarIap: o agente RECEBE o ehAutorizado (o fio que faltava)', async
   groq.setGroqHttpForTest(null);
 });
 
+await test('ligarIap: sem a voz (edge-tts), NÃO liga e diz o motivo', async () => {
+  // A voz e' o edge-tts (local). Se ele nao estiver disponivel, o comando
+  // precisa RECUSAR com um motivo claro — antes o dono so' descobria no
+  // primeiro "sem audio" da call (ou pior, no `gemini_limite`).
+  const sess = await import(new URL('../dados/src/utils/iapSessao.js', import.meta.url).href);
+  const tts = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
+  sess.setIapMediaForTest({
+    modoAudioExternoDaCall: async () => true,
+    aoOuvirAudioDaCall: async () => true,
+    falarNaCallDoGrupo: async () => 0
+  });
+  const antigaGroq = process.env.GROQ_API_KEY;
+  process.env.GROQ_API_KEY = 'gsk_teste';
+  // Forca o edge-tts a "nao existir": PATH vazio + HOME temporario.
+  const fs = await import('fs');
+  const os = await import('os');
+  const path = await import('path');
+  const homeFalso = fs.mkdtempSync(path.join(os.tmpdir(), 'iap-home2-'));
+  const antigos = { PATH: process.env.PATH, HOME: process.env.HOME, EDGE_TTS_PATH: process.env.EDGE_TTS_PATH };
+  process.env.PATH = '/tmp/vazio-iap2';
+  process.env.HOME = homeFalso;
+  delete process.env.EDGE_TTS_PATH;
+  tts.resetEdgeCache();
+
+  const r = await sess.ligarIap('voz-falha@g.us', {});
+  // O `garantirEdgeTts` pode ter sucesso se houver python/pip no PATH... aqui
+  // nao ha (PATH vazio), entao a recusa e' garantida.
+  ok(r.ok === false, `nao ligou (${r.motivo})`);
+  ok(/^voz_/.test(r.motivo || ''), `o motivo aponta a voz (${r.motivo})`);
+
+  tts.resetEdgeCache();
+  process.env.PATH = antigos.PATH;
+  process.env.HOME = antigos.HOME;
+  if (antigos.EDGE_TTS_PATH !== undefined) process.env.EDGE_TTS_PATH = antigos.EDGE_TTS_PATH;
+  if (antigaGroq !== undefined) process.env.GROQ_API_KEY = antigaGroq;
+  sess.setIapMediaForTest(null);
+  try { fs.rmSync(homeFalso, { recursive: true, force: true }); } catch { /* ok */ }
+});
+
 await test('pensarComIa: a guarda RECEBE o ehAutorizado (não recusa todo mundo)', async () => {
   // BUG: `pensarComIa` chamava a guarda SEM `ehAutorizado`, então TODO pedido de
   // ação era recusado — inclusive de admin. O `agente.ehAutorizado` era setado e
@@ -747,105 +786,54 @@ await test('iapStt: 401 do Groq vira motivo de chave (o comando orienta o !keygr
 });
 
 // ============================================================================
-// 8) TTS — fallback do Gemini (com HTTP dublê)
+// 8) TTS — SO' edge-tts (o Gemini foi REMOVIDO)
 // ============================================================================
 
-await test('iapTts: o fallback do Gemini devolve PCM 24 kHz', async () => {
-  const tts = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
-  const { spawnSync } = await import('child_process');
-  const temFfmpeg = spawnSync(process.env.FFMPEG_PATH || 'ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0;
-  if (!temFfmpeg) {
-    console.log('     (pulado: o resample 24k→16k precisa do ffmpeg)');
-    return;
-  }
-  // PCM 24 kHz cru, 16-bit LE, 4800 amostras (200 ms).
-  const bruto = Buffer.alloc(4800 * 2);
-  for (let i = 0; i < 4800; i++) bruto.writeInt16LE(Math.round(Math.sin(i / 20) * 16000), i * 2);
-  tts.setIapTtsHttpForTest(async () => ({
-    data: { candidates: [{ content: { parts: [{ inlineData: { data: bruto.toString('base64') } }] } }] }
-  }));
-  // Força o motor Gemini (não depende do PATH para escolher o motor).
-  process.env.IAP_TTS_ENGINE = 'gemini';
-  const r = await tts.sintetizarFala('teste', { apiKey: 'K' });
-  delete process.env.IAP_TTS_ENGINE;
-  ok(r.ok === true, `ok (${r.motivo || ''})`);
-  ok(r.fonte === 'gemini-tts', `fonte gemini-tts (${r.fonte})`);
-  ok(r.pcm.length > 0, 'devolveu amostras');
-  tts.setIapTtsHttpForTest(null);
+await test('iapTts: o Gemini NAO existe mais no TTS (pedido do dono)', async () => {
+  // O dono estourou o plano do Gemini e o TTS morria com `gemini_limite` no meio
+  // da conversa. Agora a VOZ e' o edge-tts local: sem chave, sem cota.
+  const fs = await import('fs');
+  const src = fs.readFileSync(new URL('../dados/src/utils/iapTts.js', import.meta.url), 'utf8');
+  // Tira comentarios antes de procurar (o cabecalho EXPLICA que o Gemini saiu).
+  const codigo = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  ok(!/generativelanguage\.googleapis/.test(codigo), 'nao chama a API do Gemini');
+  ok(!/axios/.test(codigo), 'nao depende do axios (nao ha HTTP no TTS)');
+  ok(!/gemini/i.test(codigo), 'nenhuma referencia a Gemini no codigo');
+  ok(/sintetizarEdge/.test(codigo), 'usa o edge-tts');
 });
 
-await test('iapTts: o motor Gemini é CHAMADO com o áudio inline esperado', async () => {
-  // Mede o CAMINHO até o Gemini mesmo sem ffmpeg (o resample é a última etapa).
+await test('iapTts: sem o edge-tts, o motivo diz o que fazer (sem_edge_tts)', async () => {
   const tts = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
-  const bruto = Buffer.alloc(4800 * 2).fill(1);
-  let visto = null;
-  tts.setIapTtsHttpForTest(async (url, body) => {
-    visto = { url, body };
-    return { data: { candidates: [{ content: { parts: [{ inlineData: { data: bruto.toString('base64') } }] } }] } };
-  });
-  process.env.IAP_TTS_ENGINE = 'gemini';
-  await tts.sintetizarFala('olá', { apiKey: 'K' });
-  delete process.env.IAP_TTS_ENGINE;
-  tts.setIapTtsHttpForTest(null);
-  ok(visto !== null, 'chamou o Gemini TTS');
-  ok(/tts/.test(visto.url), `usou um modelo TTS (${visto.url.split('/models/')[1]?.split(':')[0]})`);
-  ok(visto.body?.generationConfig?.responseModalities?.includes('AUDIO'), 'pediu AUDIO');
-  ok(visto.body?.generationConfig?.speechConfig?.voiceConfig?.prebuiltVoiceConfig?.voiceName, 'mandou a voz');
-  ok(visto.body?.contents?.[0]?.parts?.[0]?.text === 'olá', 'mandou o texto');
-});
-
-await test('iapTts: IAP_TTS_ENGINE=gemini não tenta o edge-tts', async () => {
-  const tts = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
-  process.env.IAP_TTS_ENGINE = 'gemini';
-  // Sem dublê e sem chave: o Gemini falha, mas o edge-tts NÃO deve ser chamado.
-  const r = await tts.sintetizarFala('teste', {});
-  delete process.env.IAP_TTS_ENGINE;
-  // O motivo agora e' o DO GEMINI (`sem_chave_gemini`), nao o generico — antes
-  // a falha do Gemini era mascarada pelo motivo do edge.
-  ok(r.ok === false && r.motivo === 'sem_chave_gemini', `motivo do Gemini (${r.motivo})`);
-  ok(r.motivoEdge === undefined, 'nao tocou no edge (engine=gemini)');
-});
-
-await test('iapTts: o motivo do GEMINI não é escondido pelo do edge (o bug do dono)', async () => {
-  // O dono viu `TTS falhou: edge_indisponivel` quando o que falhou foi o Gemini
-  // (o edge nao tinha nada a ver). Agora o motivo do Gemini e' o que sai.
-  const tts = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
-  // Desliga o edge de forma deterministica (nao depende do sandbox).
+  // Desliga de forma deterministica: o motivo nao depende do sandbox.
   process.env.IAP_TTS_EDGE = 'off';
-  tts.setIapTtsHttpForTest(async () => {
-    const e = new Error('x');
-    e.response = { status: 404, data: { error: { message: 'models/tts is not found' } } };
-    throw e;
-  });
-  const r = await tts.sintetizarFala('teste', { apiKey: 'K' });
-  tts.setIapTtsHttpForTest(null);
+  const r = await tts.sintetizarFala('teste');
   delete process.env.IAP_TTS_EDGE;
   ok(r.ok === false, 'falhou');
-  ok(r.motivo === 'gemini_modelo_indisponivel', `motivo REAL do Gemini (${r.motivo})`);
-  ok(r.motivoEdge === 'edge_desativado', `motivo do edge vai junto (${r.motivoEdge})`);
+  ok(r.motivo === 'edge_desativado', `motivo do edge desativado (${r.motivo})`);
+  ok(r.fonte === undefined, 'nao veio de fonte nenhuma');
 });
 
-await test('iapTts: 404 de modelo TTS cai para o PRÓXIMO da cadeia', async () => {
-  // Nome fixo envelhece (o Google aposenta previews). Um 404 deve tentar o
-  // proximo modelo, em vez de deixar a Lizzy muda.
+await test('iapTts: sem edge-tts instalado, o motivo e sem_edge_tts (nao "gemini")', async () => {
   const tts = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
-  process.env.IAP_TTS_ENGINE = 'gemini';
-  let tentativas = 0;
-  tts.setIapTtsHttpForTest(async () => {
-    tentativas++;
-    if (tentativas === 1) {
-      const e = new Error('x');
-      e.response = { status: 404, data: { error: { message: 'models/antigo is not found' } } };
-      throw e;
-    }
-    const b = Buffer.alloc(24000 * 2);
-    return { data: { candidates: [{ content: { parts: [{ inlineData: { data: b.toString('base64') } }] } }] } };
-  });
-  const r = await tts.sintetizarFala('teste', { apiKey: 'K' });
-  tts.setIapTtsHttpForTest(null);
-  delete process.env.IAP_TTS_ENGINE;
-  ok(r.ok === true && r.fonte === 'gemini-tts', `salvou no 2o modelo (${r.fonte})`);
-  ok(tentativas >= 2, `tentou mais de um modelo (${tentativas})`);
+  // Isola o resolvedor: PATH sem binarios e HOME temporario (o `~/.local/bin`
+  // e' caminho ABSOLUTO — so' tirar do PATH nao bastaria).
+  const fs = await import('fs');
+  const os = await import('os');
+  const path = await import('path');
+  const homeFalso = fs.mkdtempSync(path.join(os.tmpdir(), 'iap-home-'));
+  const antigos = { PATH: process.env.PATH, HOME: process.env.HOME, EDGE_TTS_PATH: process.env.EDGE_TTS_PATH };
+  process.env.PATH = '/tmp/vazio-iap';
+  process.env.HOME = homeFalso;
+  delete process.env.EDGE_TTS_PATH;
+  tts.resetEdgeCache();
+  const r = await tts.sintetizarFala('teste');
+  tts.resetEdgeCache();
+  process.env.PATH = antigos.PATH;
+  process.env.HOME = antigos.HOME;
+  if (antigos.EDGE_TTS_PATH !== undefined) process.env.EDGE_TTS_PATH = antigos.EDGE_TTS_PATH;
+  try { fs.rmSync(homeFalso, { recursive: true, force: true }); } catch { /* ok */ }
+  ok(r.ok === false, 'falhou');
+  ok(r.motivo === 'sem_edge_tts', `aponta o edge-tts (${r.motivo})`);
 });
 
 await test('iapTts: o resolvedor USA o candidato ~/.local/bin (pip --user)', async () => {
@@ -855,58 +843,44 @@ await test('iapTts: o resolvedor USA o candidato ~/.local/bin (pip --user)', asy
   const fs = await import('fs');
   const src = fs.readFileSync(new URL('../dados/src/utils/iapTts.js', import.meta.url), 'utf8');
   ok(src.includes("path.join(os.homedir(), '.local', 'bin', 'edge-tts')"), 'monta o caminho do ~/.local/bin');
-  // Tem de estar DENTRO da lista de candidatos (so' definir a variavel nao
-  // resolve — foi exatamente o descuido que o teste anterior deixou passar).
   const m = src.match(/const candidatos = \[([\s\S]*?)\]\.filter/);
-  ok(m && /\blocalBin\b/.test(m[1]), 'o ~/.local/bin está na lista de candidatos');
+  ok(m && /caminhoLocalBin\(\)/.test(m[1]), 'o ~/.local/bin está na lista de candidatos');
 });
 
-await test('iapTts: IAP_TTS_ENGINE=edge NÃO cai no Gemini (força o local)', async () => {
-  // O dono pediu para o `!iap` não depender do Gemini. Com `edge`, o TTS usa
-  // SÓ o edge-tts — se ele faltar, falha em vez de silenciosamente usar o Gemini.
-  const tts = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
-  process.env.IAP_TTS_ENGINE = 'edge';
-  process.env.GEMINI_API_KEY = 'chave-de-teste';
-  const r = await tts.sintetizarFala('teste', { apiKey: 'chave-de-teste' });
-  delete process.env.IAP_TTS_ENGINE;
-  delete process.env.GEMINI_API_KEY;
-  // Neste sandbox o edge-tts nao esta instalado -> falha com o motivo do edge.
-  ok(r.ok === false, `falhou (não usou o Gemini) — ${r.motivo}`);
-  ok(r.motivo === 'edge_indisponivel' || r.motivo === 'ffmpeg_faltando',
-    `motivo aponta o edge (${r.motivo})`);
-  ok(r.fonte === undefined, 'não veio do Gemini');
+await test('iapTts: garantirEdgeTts instala com os fallbacks (PEP 668 incluido)', async () => {
+  // O `pip install --user` pode ser bloqueado pelo PEP 668 ("externally-managed
+  // environment"), comum em VPS/Pterodactyl. O `--break-system-packages` cobre.
+  const fs = await import('fs');
+  const src = fs.readFileSync(new URL('../dados/src/utils/iapTts.js', import.meta.url), 'utf8');
+  ok(/export async function garantirEdgeTts/.test(src), 'exporta garantirEdgeTts');
+  ok(/--break-system-packages/.test(src), 'cobre o PEP 668');
+  ok(/ensurepip/.test(src), 'cobre o pip ausente');
 });
 
-await test('iapTts: quando cai no Gemini, o motivo do edge vai junto (diagnóstico)', async () => {
-  // `TTS ok (gemini-tts) motivoEdge=edge_indisponivel` diz ao dono o que fazer:
-  // `pip install edge-tts`. Sem isso, "caiu no Gemini" fica sem causa.
+await test('iapTts: caminho REAL (edge-tts + ffmpeg) gera PCM 16 kHz', async () => {
   const tts = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
+  tts.resetEdgeCache();
+  if (!(await tts.edgeDisponivel())) {
+    console.log('     (pulado: edge-tts não instalado — pip install edge-tts)');
+    return;
+  }
   const { spawnSync } = await import('child_process');
   const temFfmpeg = spawnSync(process.env.FFMPEG_PATH || 'ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0;
   if (!temFfmpeg) {
-    console.log('     (pulado: precisa do ffmpeg para o resample do Gemini)');
+    console.log('     (pulado: o ffmpeg converte o mp3 em PCM)');
     return;
   }
-  // Gemini devolve PCM 24 kHz; o edge nao existe neste sandbox.
-  const bruto = Buffer.alloc(4800 * 2).fill(1);
-  tts.setIapTtsHttpForTest(async () => ({
-    data: { candidates: [{ content: { parts: [{ inlineData: { data: bruto.toString('base64') } }] } }] }
-  }));
-  tts.resetEdgeCache();
-  const r = await tts.sintetizarFala('teste', { apiKey: 'K' });
-  tts.setIapTtsHttpForTest(null);
-  if (r.ok && r.fonte === 'gemini-tts') {
-    ok(r.motivoEdge === 'edge_indisponivel' || r.motivoEdge === 'ffmpeg_faltando',
-      `trouxe o motivo do edge (${r.motivoEdge})`);
-  } else {
-    // Se o edge-tts estiver instalado, ele ganha — e nao ha' motivoEdge.
-    ok(r.fonte === 'edge-tts', `edge-tts ganhou (${r.fonte})`);
-  }
+  const r = await tts.sintetizarFala('Olá, sou a Lizzy.');
+  ok(r.ok === true, `sintetizou (${r.motivo || ''})`);
+  ok(r.fonte === 'edge-tts', `fonte edge-tts (${r.fonte})`);
+  ok(r.pcm.length > 8000, `mais de meio segundo de fala (${r.pcm.length} amostras)`);
+  const max = Math.max(...Array.from(r.pcm).map(Math.abs));
+  ok(max > 0.01, `o áudio não é silêncio (pico ${max.toFixed(3)})`);
 });
 
 await test('iapTts: texto vazio não sintetiza', async () => {
   const tts = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
-  const r = await tts.sintetizarFala('   ', {});
+  const r = await tts.sintetizarFala('   ');
   ok(r.ok === false && r.motivo === 'texto_vazio', 'recusa texto vazio');
 });
 

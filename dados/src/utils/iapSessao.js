@@ -16,7 +16,7 @@
 
 import { groqChat } from './groqClient.js';
 import { transcreverPcm, chaveGroq } from './iapStt.js';
-import { sintetizarFala } from './iapTts.js';
+import { sintetizarFala, garantirEdgeTts } from './iapTts.js';
 import { iap } from './iapVoice.js';
 import { iaIdentidade, ehPedidoDeAcao, permitePedidoDeAcao } from './iapGuarda.js';
 import {
@@ -50,25 +50,6 @@ export function setIapMediaForTest(m) {
 function logIap(msg, extra) {
   const detalhe = extra ? ` | ${JSON.stringify(extra)}` : '';
   console.log(`🎙️ [IAP] ${msg}${detalhe}`);
-}
-
-/**
- * A chave do Gemini em uso (só o TTS de reserva usa).
- *
- * Lê o `.env`/`process.env` **e** o valor em memória do `ia.js` (que o `!key`
- * grava com `setGeminiApiKey`). A v3 lia só o env — se a chave tivesse sido
- * configurada em runtime, a reserva de voz ficava sem chave sem ninguém notar.
- * O import é preguiçoso para não acoplar os módulos no boot.
- */
-async function chaveGemini() {
-  try {
-    const ia = await import('../funcs/private/ia.js');
-    if (typeof ia.getGeminiApiKey === 'function') {
-      const k = ia.getGeminiApiKey();
-      if (k) return k;
-    }
-  } catch { /* cai no env */ }
-  return process.env.GEMINI_API_KEY || '';
 }
 
 /**
@@ -192,6 +173,17 @@ export async function ligarIap(grupo, { nomeDono, participantes, ehAutorizado } 
   // que ligar.
   if (!chaveGroq()) return { ok: false, motivo: 'sem_chave_groq' };
 
+  // A VOZ e' o edge-tts (local, sem chave e sem cota — o Gemini saiu). Garante
+  // que ele esteja instalado ANTES de ligar: sem isso o dono so' descobriria no
+  // primeiro "sem audio" da call. Se nao der para instalar, o comando explica.
+  const voz = await garantirEdgeTts();
+  if (!voz.ok) {
+    logIap(`edge-tts indisponivel (${voz.motivo})`, {
+      detalhe: voz.detalhe ? String(voz.detalhe).slice(0, 160) : undefined
+    });
+    return { ok: false, motivo: `voz_${voz.motivo || 'indisponivel'}`, detalhe: voz.detalhe };
+  }
+
   // O modo de audio externo precisa estar ligado, senao o motor ignora o que
   // chega por `feedLiveAudio` e volta a tocar o arquivo pre-carregado.
   const ligouExterno = await _media.modoAudioExternoDaCall(grupo, true);
@@ -223,22 +215,15 @@ export async function ligarIap(grupo, { nomeDono, participantes, ehAutorizado } 
       return r.texto;
     },
     sintetizar: async (texto) => {
-      const r = await sintetizarFala(texto, { apiKey: await chaveGemini() });
+      // TTS e' SO' edge-tts (local, sem chave e sem cota). O Gemini saiu.
+      const r = await sintetizarFala(texto);
       if (!r.ok) {
-        // O motivo REAL vai para o log. `motivoEdge` mostra o que o edge-tts
-        // respondeu (falta instalar? falta ffmpeg?) — sem isso, uma falha do
-        // Gemini ficava escondida atras do motivo do edge.
-        logIap(`TTS falhou: ${r.motivo}`, {
-          grupo,
-          ...(r.motivoEdge ? { motivoEdge: r.motivoEdge } : {}),
-          ...(r.detalhe ? { detalhe: String(r.detalhe).slice(0, 160) } : {})
-        });
+        logIap(`TTS falhou: ${r.motivo}`, { grupo });
         return null;
       }
       logIap(`TTS ok (${r.fonte})`, {
         grupo,
-        segundos: r.pcm ? +(r.pcm.length / 16000).toFixed(1) : 0,
-        ...(r.motivoEdge ? { motivoEdge: r.motivoEdge } : {})
+        segundos: r.pcm ? +(r.pcm.length / 16000).toFixed(1) : 0
       });
       return r.pcm;
     },
@@ -264,10 +249,22 @@ export async function desligarIap(grupo) {
 }
 
 /** Estado do agente no grupo (para o comando mostrar). */
-export function estadoIap(grupo) {
+export async function estadoIap(grupo) {
   const st = iap.estado(grupo);
   if (!st) return st;
-  return { ...st, nome: iaIdentidade(), stt: chaveGroq() ? 'groq' : 'nenhum' };
+  // O status mostra as TRES pecas do agente: ouvir e pensar (Groq) e falar
+  // (edge-tts local). A voz e' assincrona (testa o binario), por isso o await.
+  let voz = 'edge-tts';
+  try {
+    const { edgeDisponivel } = await import('./iapTts.js');
+    voz = (await edgeDisponivel()) ? 'edge-tts' : 'nenhuma (instale o edge-tts)';
+  } catch { voz = 'nenhuma'; }
+  return {
+    ...st,
+    nome: iaIdentidade(),
+    stt: chaveGroq() ? 'groq' : 'nenhum',
+    voz
+  };
 }
 
 /** Desliga todos os agentes (a call caiu: o `index.js` chama isto). */

@@ -36845,11 +36845,11 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
 
           // ----------------------------------------------------------- status
           if (subIap === 'status' || subIap === 'info') {
-            const st = estadoIap(from);
+            const st = await estadoIap(from);
             if (!st?.ativo) {
               return reply('🔇 O agente de voz está desligado neste grupo.');
             }
-            const rotuloStt = { groq: 'Groq (Whisper + LLM)', nenhum: 'nenhum (configure !keygroq)' };
+            const rotuloStt = { groq: 'Groq (Whisper)', nenhum: 'nenhum (configure !keygroq)' };
             return nazu.sendMessage(from, {
               text:
                 `╭━━━꧁༺ 🎙️ 𝐀𝐆𝐄𝐍𝐓𝐄 𝐃𝐄 𝐕𝐎𝐙 🎙️ ༻꧂━━━╮\n` +
@@ -36859,6 +36859,8 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
                 `┃ ↩️ Interrupções: ${st.bargeIns}\n` +
                 `┃ 💬 Na memória: ${st.historico} mensagem(ns)\n` +
                 `┃ 🎧 Ouvindo com: ${rotuloStt[st.stt] || st.stt || '—'}\n` +
+                `┃ 🧠 Pensando com: Groq (${process.env.IAP_GROQ_LLM_MODEL || 'openai/gpt-oss-120b'})\n` +
+                `┃ 🎙️ Voz: ${st.voz || '—'}\n` +
                 `╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯`,
               contextInfo: gerarContextNewsletter()
             });
@@ -36920,7 +36922,11 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             if (!r.ok) {
               const motivos = {
                 sem_chave_groq: '❌ A chave do Groq não está configurada.\n\nUse `' + prefix + 'keygroq gsk_...`.\n_Pegue grátis em https://console.groq.com/keys_',
-                sem_call: '❌ Não consegui conectar o agente à chamada. A call está de pé?'
+                sem_call: '❌ Não consegui conectar o agente à chamada. A call está de pé?',
+                // A VOZ e' o edge-tts (local). Se ele nao instalou, diz o que fazer.
+                voz_sem_python: '❌ Não encontrei o *Python* no servidor, e a voz precisa dele.\n\nInstale o Python 3 e tente de novo.',
+                voz_instalacao_falhou: '❌ Não consegui instalar o *edge-tts* (a voz local).\n\nInstale à mão no servidor:\n`pip install --user edge-tts`',
+                voz_indisponivel: '❌ A voz (edge-tts) não está disponível neste servidor.'
               };
               return reply(motivos[r.motivo] || '❌ Não consegui ligar o agente de voz.');
             }
