@@ -80,44 +80,24 @@ const aoOuvirPorGrupo = new Map();
 /** Diretorio onde as credenciais do zapo sao gravadas. */
 const AUTH_DIR = path.join(DATABASE_DIR, 'zapo-auth');
 
-/** Valores de `ZAPO_RAW_UDP` que ligam o transporte por UDP cru. */
-const VALORES_LIGADOS = new Set(['all', '1', 'true', 'on', 'sim', 'yes']);
-
-/**
- * Le `ZAPO_RAW_UDP` e diz se o transporte por UDP cru esta ligado.
- *
- * <p>O padrao e' DESLIGADO, e isso e' uma decisao MEDIDA: com o UDP cru a leg sobe
- * e nao recebe nada de volta (`raw_udp_no_return_path`) e, ao contrario da leg
- * WebRTC, ela **derruba a call** (`call lost its last relay leg` -> `relay_lost`).
- * Sem ela a call fica de pe' e so' a midia nao flui.
- *
- * <p>A env existe para experimento, nao para producao: quem liga assume que a call
- * pode cair. A escolha e' registrada uma vez (ver {@link avisarTransporte}).
- */
-function ligarUdpCru() {
-  return VALORES_LIGADOS.has(String(process.env.ZAPO_RAW_UDP ?? '').trim().toLowerCase());
-}
-
 /** Ja' avisamos a escolha do transporte? (uma linha por processo, nao por call.) */
 let avisouTransporte = false;
 
 /**
  * Diz, no log, qual transporte de relay o motor vai usar.
  *
- * <p>Sem esta linha, "a env nao chegou" e "a env chegou e o caminho nao ajuda" dao
- * o MESMO log (sctp/webrtc falhando). Foi exatamente o que aconteceu: o dono ligou
- * a env e o log continuou identico, sem dizer se o valor tinha sido lido.
+ * <p>Uma linha por processo. Sem ela, uma escolha errada de porta nao aparece em
+ * lugar nenhum: o sintoma vira so' `relay_port_unopened`, que nao diz QUAL porta
+ * foi tentada nem de onde veio a decisao.
  */
 function avisarTransporte() {
   if (avisouTransporte) return;
   avisouTransporte = true;
-  const bruto = process.env.ZAPO_RAW_UDP;
-  const ligado = ligarUdpCru();
   const porta = usarPortaOriginalDoRelay();
   console.log(
-    `[MOTOR] transporte do relay: ${ligado ? 'UDP CRU (ZAPO_RAW_UDP ligado)' : 'WebRTC (padrao)'}` +
+    '[MOTOR] transporte do relay: WebRTC' +
       ` | porta: ${porta === undefined ? 'por sessao (o motor decide)' : porta ? 'anunciada' : '3480 (web)'}` +
-      ` | ZAPO_RAW_UDP=${bruto === undefined ? '(nao definida)' : JSON.stringify(bruto)}`
+      ` | CALL_RELAY_PORT_MODE=${process.env.CALL_RELAY_PORT_MODE === undefined ? '(nao definida)' : JSON.stringify(process.env.CALL_RELAY_PORT_MODE)}`
   );
 }
 
@@ -528,27 +508,19 @@ export async function obterCliente() {
               //
               // Com o padrao ('required') o pacote usa UDP cru SO onde o relay
               // exige (sem credencial ICE) e WebRTC no resto.
-              // TRANSPORTE DO RELAY — o UDP cru NAO deve ser ligado.
+              // O transporte do relay fica no PADRAO do pacote: WebRTC, com UDP
+              // cru SO onde o relay exige (`rawUdpLegs: 'required'`).
               //
-              // O log do dono, com `ZAPO_RAW_UDP=all`, mostrou a leg UDP cru sendo
-              // criada e **nao recebendo nada de volta** -- e, diferente da leg
-              // WebRTC, ela DERRUBA a call:
+              // O flag `useRawUdpTransport` NAO e' exposto: medido, liga-lo faz a
+              // leg UDP cru subir e nao receber nada de volta -- e, diferente da
+              // leg WebRTC, ela DERRUBA a call:
               //
               //   raw udp leg rolled back, no media on the return path | {confirmed:false}
-              //   relay has no leg left, open or dialling | {reason:'raw_udp_no_return_path'}
               //   call lost its last relay leg | {reason:'raw_udp_no_return_path'}
               //   a call ... encerrou | motivo: relay_lost
               //
-              // Antes disso a call ficava DE PE (offer aceito, relay alocado) e so'
-              // a midia nao fluia; com o UDP cru ela passou a MORRER. A doc do
-              // proprio pacote diz o mesmo: "A leg that sends and hears nothing back
-              // within a few seconds closes itself."
-              //
-              // O caminho certo e' o padrao do pacote (`rawUdpLegs: 'required'`): UDP
-              // cru SO onde o relay exige (sem credencial ICE) e WebRTC no resto.
-              // `ZAPO_RAW_UDP=all` continua existindo para experimento, mas o padrao
-              // e' DESLIGADO e quem liga assume que a call pode cair.
-              useRawUdpTransport: ligarUdpCru(),
+              // Ou seja: troca "call de pe' sem midia" por "call que morre". Nao ha
+              // env para isso -- o caminho ruim nao fica a um descuido de distancia.
 
               logLevel: process.env.ZAPO_LOG_LEVEL || 'warn',
 
@@ -874,8 +846,7 @@ export const __comTeto = comTeto;
 let __fabricaDeCliente = null;
 export function __setFabricaDeCliente(fn) { __fabricaDeCliente = fn; }
 
-/** Seam de teste: o leitor de `ZAPO_RAW_UDP` e o aviso da escolha. */
-export const __ligarUdpCru = ligarUdpCru;
+/** Seam de teste: o aviso da escolha do transporte. */
 export const __avisarTransporte = avisarTransporte;
 /** Teto efetivo do `startCall` (para o teste conferir que existe). */
 export const __tetoDoStartCall = () => START_CALL_TIMEOUT_MS;

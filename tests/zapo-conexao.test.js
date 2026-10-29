@@ -188,31 +188,26 @@ await test('o codigo nao afirma mais que "nao se espera" o connect', () => {
 
 console.log('\n=== 4) O FLAG EXPERIMENTAL (o bug do raw udp) ===\n');
 
-await test('o transporte por UDP cru e CONTROLADO por env (ZAPO_RAW_UDP)', () => {
-  // MEDIDO no log real: as legs WebRTC falhavam em TODAS as portas do relay
-  //   relay leg unanswered, redialling on the other port | {port:3478}
-  //   sctp connection failed | {reason:'relay_port_unopened'}
-  //   relay downlink stalled, re-allocating | {stalledMs:5035, legs:6}
-  // O motor TEM o transporte por UDP cru (`WaRawUdpLeg`) e ele so' e' usado
-  // quando `rawUdpLegs` permite (`useRawUdpTransport ? 'all' : 'required'`).
-  // Com 'required' o relay COM credencial ICE (o caso medido) vai por WebRTC.
+await test('o transporte do relay fica no PADRAO: sem UDP cru exposto', () => {
+  // MEDIDO: ligar o UDP cru (`useRawUdpTransport`) faz a leg subir e nao receber
+  // nada de volta -- e, diferente da leg WebRTC, ela DERRUBA a call:
+  //   raw udp leg rolled back, no media on the return path | {confirmed:false}
+  //   call lost its last relay leg | {reason:'raw_udp_no_return_path'}
+  //   a call ... encerrou | motivo: relay_lost
+  // Ou seja: troca "call de pe' sem midia" por "call que morre".
   //
-  // O flag do pacote e' experimental, entao NAO vai fixo: fica atras de env
-  // explicita, com o motivo registrado no codigo.
-  includes(SRC, 'useRawUdpTransport:', 'o flag e passado (nao mais omitido)');
-  includes(SRC, 'ZAPO_RAW_UDP', 'o controle e por env explicita');
-  includes(SRC, 'ligarUdpCru()', 'a env passa por um leitor unico');
-  // O padrao tem de ser DESLIGADO: medido, o UDP cru derruba a call
-  // (`raw_udp_no_return_path` -> `call lost its last relay leg` -> `relay_lost`),
-  // enquanto sem ele a call fica de pe' e so' a midia nao flui.
+  // Por isso o flag NAO e' exposto: nao ha env para ligar o caminho ruim -- assim
+  // ele nao fica a um descuido de distancia. O motor usa o padrao do pacote
+  // (`rawUdpLegs: 'required'`: UDP cru so' onde o relay exige, WebRTC no resto).
+  ok(!/^\s*useRawUdpTransport\s*:/m.test(SRC),
+    'o flag NAO e passado (o pacote usa o padrao dele)');
+  ok(!SRC.includes('ZAPO_RAW_UDP'), 'nao ha env para ligar o caminho que derruba a call');
   includes(SRC, 'raw_udp_no_return_path', 'o motivo medido fica registrado no codigo');
   includes(SRC, 'call lost its last relay leg', 'registra que o UDP cru DERRUBA a call');
-  includes(SRC, 'NAO deve ser ligado', 'o padrao (desligado) esta explicito');
-  // A linha que separa "a env nao chegou" de "a env chegou e nao ajudou": sem
-  // ela, os dois casos dao o MESMO log (sctp falhando) -- foi o que aconteceu.
+  // O log da escolha continua: sem ele, a porta tentada nao aparece em lugar nenhum.
   includes(SRC, 'avisarTransporte()', 'a escolha do transporte e registrada no log');
-  includes(SRC, 'transporte do relay:', 'a linha diz qual transporte vai ser usado');
-  includes(SRC, 'UDP CRU', 'e nomeia o caminho ligado');
+  includes(SRC, 'transporte do relay:', 'a linha diz qual porta vai ser usada');
+  includes(SRC, 'por sessao', 'e mostra quando o motor decide por sessao');
 });
 
 await test('os listeners de diagnostico de midia existem', () => {
