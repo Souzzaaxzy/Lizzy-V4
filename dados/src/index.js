@@ -7475,7 +7475,11 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
       if (hasMentionByName && ia.checkBotNameMention) {
         textoLimpo = ia.checkBotNameMention(textoLimpo).cleanedText;
       }
-      if (textoLimpo.length > 2 || hasMentionByAt) {
+      // A guarda e' "tem ALGO alem do nome OU o nome veio sozinho". O
+      // `length > 2` puro bloqueava quem chama so' "Lizzy" (o texto limpo fica
+      // vazio) e quem manda so' uma mencao com @. Os dois sao pedidos legitimos
+      // de atencao — e eram justamente os casos que "nao respondia".
+      if (textoLimpo.length > 2 || hasMentionByAt || hasMentionByName) {
         // Detectar tipo de mídia da mensagem atual
         const tipoMidiaAtual = info.message?.imageMessage ? 'imagem' :
           info.message?.videoMessage ? 'video' :

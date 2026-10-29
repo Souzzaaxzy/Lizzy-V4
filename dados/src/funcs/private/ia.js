@@ -18,7 +18,7 @@ import userContextDB from '../../utils/userContextDB.js';
 // A PERSONALIDADE e' a MESMA da call (`!iap`): fonte unica em `iapGuarda.js`.
 // Antes o chat tinha quatro prompts proprios e a call um fixo — dois jeitos da
 // mesma bot falar. Agora ha um so, e cada canal acrescenta o seu FORMATO.
-import { promptDaLizzy, regrasDeCanal, iaIdentidade } from '../../utils/iapGuarda.js';
+import { promptDaLizzy, regrasDeCanal, iaIdentidade, limparNomeDoBot } from '../../utils/iapGuarda.js';
 // A CONVERSA passou a usar o Groq (a mesma API da call). Ver `makeCognimaRequest`.
 import { groqChat, chaveGroq } from '../../utils/groqClient.js';
 
@@ -165,21 +165,55 @@ function checkBotNameMention(messageText, context = {}) {
   if (!messageText || typeof messageText !== 'string') {
     return { mentioned: false, cleanedText: messageText || '' };
   }
-  
+
   const botInfo = getDynamicBotInfo();
-  const botName = botInfo.nomeBot;
-  
-  if (!botName) {
+
+  // ## O NOME VEM LIMPO, e nao cru do config
+  //
+  // O `nomebot` do config e' "Lizzy do privy" escrito em MATHEMATICAL BOLD (os
+  // glifos estilizados). Duas coisas davam errado com ele cru:
+  //
+  //   1. o regex procurava os GLIFOS, e "Lizzy" digitado nunca casa com eles;
+  //   2. o nome INTEIRO ("Lizzy do privy") nao casa com quem chama so' "Lizzy".
+  //
+  // `limparNomeDoBot` (o MESMO normalizador da call) resolve os dois: o NFKC
+  // desfaz o estilo e o nome fica so' a primeira palavra -- **Lizzy**.
+  const nomeLimpo = limparNomeDoBot(botInfo.nomeBot);
+  if (!nomeLimpo) {
     return { mentioned: false, cleanedText: messageText };
   }
-  
-  // Criar regex case-insensitive para o nome do bot
-  const escapedName = botName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const mentionRegex = new RegExp(`^${escapedName}[\\s,!.:;?]*|\\s+${escapedName}[\\s,!.:;?]*`, 'gi');
-  
-  const mentioned = mentionRegex.test(messageText);
-  const cleanedText = messageText.replace(mentionRegex, '').trim();
-  
+
+  // Compara SEM ACENTO e sem caixa: quem digita "lizzy" ou "Lizzy" esta falando
+  // com ela, e o teclado do celular erra acento o tempo todo.
+  const semAcento = (t) => {
+    try { return t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
+    catch { return t.toLowerCase(); }
+  };
+  const alvo = semAcento(nomeLimpo);
+
+  // O nome pode vir no INICIO ou depois de um espaco, e precisa TERMINAR ali
+  // (nao vale "Lizzyanne"). O regex antigo exigia `^nome` ou `\s+nome`, entao
+  // "Lizzy," no comeco so' casava pela ancora e "e ai, Lizzy" so' pelo espaco.
+  // `@` antes do nome tambem conta ("oi @Lizzy") e sai junto na limpeza.
+  const re = new RegExp(`(^|[\\s@])${alvo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=[\\s,!.:;?]|$)`, 'i');
+
+  const textoNormalizado = semAcento(messageText);
+  const mentioned = re.test(textoNormalizado);
+
+  // Limpa o nome do texto ORIGINAL (preservando os acentos do resto da frase):
+  // a posicao vem do texto normalizado, mas o corte e' feito no original.
+  let cleanedText = messageText;
+  if (mentioned) {
+    const m = textoNormalizado.match(re);
+    if (m) {
+      const inicio = textoNormalizado.indexOf(m[0]);
+      cleanedText = (messageText.slice(0, inicio) + messageText.slice(inicio + m[0].length))
+        .replace(/^[\s@,!.:;?]+/, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+    }
+  }
+
   return { mentioned, cleanedText };
 }
 
