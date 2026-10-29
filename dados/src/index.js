@@ -36942,17 +36942,21 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             // interpretador `pro` usa: monta uma mensagem com o comando e a
             // REEMITE em `messages.upsert` — o handler roda como se o dono
             // tivesse digitado (permissao, fila, tudo igual). Nada paralelo.
-            const executarComando = async (comando, args = '') => {
+            const executarComando = async (comando, args = '', quemFalou = null) => {
               try {
                 const cmd = String(comando || '').toLowerCase().trim();
                 if (!cmd) return false;
                 const corpo = `${groupPrefix}${cmd}${args ? ' ' + args : ''}`.trim();
-                // Clona a mensagem do dono (mantem autor/contexto) e troca o TEXTO
-                // pelo comando. `_fromPro` evita que o agente reaja a propria
-                // mensagem (loop) — o mesmo marcador do interpretador `pro`.
+                // O comando roda em NOME DE QUEM FALOU: a mensagem reemitida tem
+                // ele como `participant`, entao as permissoes do bot valem para
+                // ele normalmente (admin continua admin; membro comum, membro).
+                // Sem isso, o comando sairia como se o dono o tivesse digitado.
                 const fakeMessage = cloneMessageSafely(info);
                 fakeMessage.messageTimestamp = Math.floor(Date.now() / 1000);
                 fakeMessage._fromPro = true;
+                if (quemFalou) {
+                  fakeMessage.key = { ...fakeMessage.key, participant: quemFalou, participantAlt: quemFalou };
+                }
                 fakeMessage.message = { conversation: corpo };
                 await nazu.sendMessage(from, { text: `🤖 *Executando:* ${corpo}` }, { quoted: info }).catch(() => {});
                 nazu.ev.emit('messages.upsert', { messages: [fakeMessage], type: 'notify' });

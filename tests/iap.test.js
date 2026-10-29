@@ -241,50 +241,40 @@ await test('agente: fala detectada -> STT -> LLM -> TTS -> fala', async () => {
   agente.desligar();
 });
 
-await test('agente: FALA EM FLUXO — comeca a falar antes do TTS terminar', async () => {
-  // A fluidez: quando o TTS sabe entregar em blocos (`sintetizarStream`), o
-  // agente fala o 1o bloco NA HORA, sem esperar a sintese inteira. Aqui o
-  // `sintetizarStream` entrega em 3 blocos com atraso — e medimos que o 1o
-  // pedaco ja saiu para o motor antes do ultimo bloco chegar.
+await test('agente: usa o TTS de BATCH (o fluxo foi desligado)', async () => {
+  // O TTS em fluxo fazia a fala sair ACELERADA e CORTAR o comeco (a fila
+  // descarta os frames antigos quando estoura). O agente voltou a esperar o
+  // audio inteiro e entregar frame a frame — este teste trava a volta.
   const falado = [];
-  const ordem = [];
+  let usouBatch = false;
+  let usouStream = false;
   const agente = new AgenteDeVoz({
-    grupo: 'fluxo@g.us',
-    falar: (pcm) => { falado.push(pcm); ordem.push('falou'); },
+    grupo: 'batch@g.us',
+    falar: (pcm) => falado.push(pcm),
     pensar: async () => 'resposta',
     transcrever: async () => 'oi',
-    sintetizar: async () => { throw new Error('nao deveria usar o caminho batch'); },
-    sintetizarStream: async (texto, aoBloco) => {
-      for (let i = 0; i < 3; i++) {
-        await new Promise((r) => setTimeout(r, 30));
-        ordem.push(`bloco${i}`);
-        aoBloco(new Float32Array(1920).fill(0.2));
-      }
-      return { ok: true, fonte: 'fake', amostras: 3 * 1920 };
-    }
+    sintetizar: async () => { usouBatch = true; return new Float32Array(1920).fill(0.2); },
+    sintetizarStream: async () => { usouStream = true; return { ok: true, fonte: 'fake', amostras: 1920 }; }
   });
   agente.ligar();
   const fala = new Float32Array(960).fill(0.3);
   for (let i = 0; i < 6; i++) agente.receberAudio(fala);
-  for (let i = 0; i < 10; i++) agente.receberAudio(new Float32Array(960));
-  await new Promise((r) => setTimeout(r, 700));
+  // 14 frames de silencio (>700 ms): e' o que FECHA a frase com o VAD atual.
+  for (let i = 0; i < 14; i++) agente.receberAudio(new Float32Array(960));
+  await new Promise((r) => setTimeout(r, 400));
+  ok(usouBatch === true, 'usou o caminho de BATCH');
+  ok(usouStream === false, 'NAO usou o streaming');
   ok(falado.length > 0, `falou (${falado.length} frames)`);
-  // O 1o frame entregue ao motor tem de vir ANTES do ultimo bloco sintetizado.
-  const primeiroFalou = ordem.indexOf('falou');
-  const ultimoBloco = ordem.lastIndexOf('bloco2');
-  ok(primeiroFalou !== -1 && ultimoBloco !== -1, 'os dois eventos aconteceram');
-  ok(primeiroFalou < ultimoBloco,
-    `falou antes do fim da sintese (falou@${primeiroFalou}, bloco2@${ultimoBloco})`);
   agente.desligar();
 });
 
-await test('VAD: o silencio que fecha a frase e menor (resposta mais rapida)', async () => {
-  // 700 ms de silencio entravam DIRETO na latencia: o bot ficava mudo esse tempo
-  // todo antes de comecar a responder. O padrao caiu para 450 ms.
+await test('VAD: o silencio que fecha a frase e 700 ms (nao corta a pessoa)', async () => {
+  // 700 ms e' o valor que FUNCIONA: com menos, o bot comeca a responder antes de
+  // a pessoa terminar (a pausa de respiracao vira "acabou") e a fala sai cortada.
   const { DetectorDeFala } = await import(new URL('../dados/src/utils/iapAudio.js', import.meta.url).href);
   const vad = new DetectorDeFala();
-  ok(vad.silencioMs === 450, `silencio padrao de 450 ms (${vad.silencioMs})`);
-  // E continua configuravel por env (quem tem grupo barulhento aumenta).
+  ok(vad.silencioMs === 700, `silencio padrao de 700 ms (${vad.silencioMs})`);
+  // E continua configuravel por env (grupo barulhento sobe mais).
   const antes = process.env.IAP_VAD_SILENCIO_MS;
   process.env.IAP_VAD_SILENCIO_MS = '900';
   const vad2 = new DetectorDeFala();

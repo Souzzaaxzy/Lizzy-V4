@@ -99,7 +99,7 @@ await test('DONO pedindo "toca Evidencias" -> executa o play', async (ok) => {
   const r = await pensarComIa('toca Evidencias', [], {
     quemFalou: 'dono@s.whatsapp.net',
     ehDono: (jid) => jid === 'dono@s.whatsapp.net',
-    executarComando: async (cmd, args) => { chamadas.push([cmd, args]); return true; }
+    executarComando: async (cmd, args, quem) => { chamadas.push([cmd, args, quem]); return true; }
   });
   ok(chamadas.length === 1, `executou uma vez (${chamadas.length})`);
   ok(chamadas[0]?.[0] === 'play', `comando play (${chamadas[0]?.[0]})`);
@@ -107,25 +107,31 @@ await test('DONO pedindo "toca Evidencias" -> executa o play', async (ok) => {
   ok(/executei o play/i.test(r), `respondeu que executou (${r})`);
 });
 
-await test('NAO-dono pedindo comando -> RECUSA (a voz so obedece o dono)', async (ok) => {
+await test('QUALQUER pessoa pedindo comando -> EXECUTA (decisao do dono)', async (ok) => {
+  // O dono pediu: "qualquer pessoa pode usar". A mensagem e' reemitida com QUEM
+  // FALOU como autor, entao as permissoes do bot valem para ele normalmente.
   const chamadas = [];
   const r = await pensarComIa('toca Evidencias', [], {
     quemFalou: 'membro@s.whatsapp.net',
     ehDono: () => false,
-    executarComando: async (cmd, args) => { chamadas.push([cmd, args]); return true; }
+    executarComando: async (cmd, args, quem) => { chamadas.push([cmd, args, quem]); return true; }
   });
-  ok(chamadas.length === 0, 'NAO executou nada');
-  ok(/so o dono/i.test(r), `recusou (${r})`);
+  ok(chamadas.length === 1, `executou (${chamadas.length})`);
+  ok(chamadas[0]?.[0] === 'play', 'comando play');
+  ok(chamadas[0]?.[2] === 'membro@s.whatsapp.net', `em nome de quem falou (${chamadas[0]?.[2]})`);
+  ok(/executei o play/i.test(r), `confirmou (${r})`);
 });
 
-await test('sem saber quem falou -> nao executa', async (ok) => {
+await test('sem saber quem falou -> executa sem autor definido', async (ok) => {
+  // Qualquer um pode pedir; sem `participantJid` o comando roda com o autor
+  // original da mensagem (o bot). Nao ha' recusa por permissao aqui.
   const chamadas = [];
   await pensarComIa('toca Evidencias', [], {
     quemFalou: null,
-    ehDono: () => true,
-    executarComando: async (cmd, args) => { chamadas.push(cmd); return true; }
+    executarComando: async (cmd, args, quem) => { chamadas.push([cmd, quem]); return true; }
   });
-  ok(chamadas.length === 0, 'nao executou sem saber quem falou');
+  ok(chamadas.length === 1, 'executou');
+  ok(chamadas[0]?.[1] === null, 'sem autor (quemFalou nulo)');
 });
 
 await test('pedido de comando SEM argumento -> pergunta, nao executa as cegas', async (ok) => {

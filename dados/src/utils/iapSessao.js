@@ -16,7 +16,7 @@
 
 import { groqChat } from './groqClient.js';
 import { transcreverPcm, chaveGroq } from './iapStt.js';
-import { sintetizarFala, sintetizarFalaStream, garantirVoz } from './iapTts.js';
+import { sintetizarFala, garantirVoz } from './iapTts.js';
 import { iap } from './iapVoice.js';
 import { iaIdentidade, ehPedidoDeAcao, permitePedidoDeAcao } from './iapGuarda.js';
 import { identificarComando, frasesDeAjuda, ehComandoPermitido } from './iapComandos.js';
@@ -125,10 +125,10 @@ export function montarSistemaDoAgente({ nomeDono, participantes = [], falante, f
   // entrar la', ele aparece aqui sozinho.
   linhas.push(
     '',
-    'VOCE TAMBEM EXECUTA COMANDOS do bot quando o DONO pede por fala, por exemplo:',
+    'VOCE TAMBEM EXECUTA COMANDOS do bot quando alguem pede por fala, por exemplo:',
     frasesDeAjuda(),
-    'Quando o pedido casar um desses, diga que ja vai fazer — a execucao acontece sozinha.',
-    'Se o pedido for de comando e NAO for o dono quem falou, diga que so o dono pode.'
+    'QUALQUER pessoa na chamada pode pedir esses comandos — nao exija ser o dono.',
+    'Quando o pedido casar um desses, diga que ja vai fazer — a execucao acontece sozinha.'
   );
 
   // QUEM ESTA' FALANDO AGORA. O motor entrega o audio POR PARTICIPANTE, entao
@@ -178,31 +178,23 @@ export function montarSistemaDoAgente({ nomeDono, participantes = [], falante, f
  * @param {function} [opts.ehDono] `(jid) => boolean` — o falante e' o DONO do
  *   bot? A checagem e' por **JID/numero** (a MESMA do resto do bot), nao por
  *   nome: se o dono trocar o nome do perfil, ele continua sendo reconhecido.
- * @param {function} [opts.executarComando] `(comando, args) => Promise<boolean>`
- *   — dispara o comando do bot (o `index.js` reemite a mensagem como se o dono
- *   tivesse digitado). Sem ela, o pedido de comando NAO executa.
+ * @param {function} [opts.executarComando] `(comando, args, quemFalou) =>
+ *   Promise<boolean>` — dispara o comando do bot (o `index.js` reemite a
+ *   mensagem como se QUEM FALOU tivesse digitado, para as permissoes dele
+ *   valerem). Sem ela, o pedido de comando NAO executa.
  * @returns {Promise<string>}
  */
 export async function pensarComIa(texto, historico = [], {
   quemFalou, ehAutorizado, nomeDono, participantes = [], nomeDeQuemFalou, ehDono, executarComando
 } = {}) {
-  // ---- COMANDO POR VOZ (so' o dono) --------------------------------------
-  // O pedido falado ("toca Evidencias") e' reconhecido por PADROES e executado
-  // em NOME DELE. Como a acao tem consequencia (baixa midia, posta no grupo) e a
-  // mensagem e' reemitida como se ele tivesse digitado, SO' o dono dispara.
+  // ---- COMANDO POR VOZ (qualquer um na call) -----------------------------
+  // O pedido falado ("toca Evidencias") e' reconhecido por PADROES e executado.
+  // QUALQUER pessoa na call pode pedir (decisao do dono) — os 4 comandos da
+  // allowlist nao exigem admin, entao nao ha' risco. A mensagem e' reemitida
+  // como se QUEM FALOU tivesse digitado, entao as permissoes do bot valem para
+  // ele normalmente.
   const pedido = identificarComando(texto);
   if (pedido && typeof executarComando === 'function') {
-    // FALHA FECHADO: sem saber QUEM falou nao ha' como provar que e' o dono.
-    // Sem esta guarda, um `ehDono` que responda `true` para um jid nulo (ou o
-    // audio sem `participantJid`) executaria o comando para qualquer um.
-    let podeDono = false;
-    if (quemFalou && typeof ehDono === 'function') {
-      try { podeDono = Boolean(await ehDono(quemFalou)); } catch { podeDono = false; }
-    }
-    if (!podeDono) {
-      logIap('comando por voz RECUSADO (nao e o dono)', { pedido: pedido.comando, quem: quemFalou || 'desconhecido' });
-      return 'So o dono do bot pode me pedir comandos por voz.';
-    }
     if (!ehComandoPermitido(pedido.comando)) {
       return 'Esse comando nao esta liberado por voz.';
     }
@@ -213,7 +205,7 @@ export async function pensarComIa(texto, historico = [], {
       return `Claro! O que voce quer que eu procure? Fala o nome que eu executo o ${pedido.comando}.`;
     }
     try {
-      const ok = await executarComando(pedido.comando, pedido.args);
+      const ok = await executarComando(pedido.comando, pedido.args, quemFalou);
       logIap(ok ? 'comando por voz executado' : 'comando por voz NAO executou', {
         comando: pedido.comando, args: pedido.args || undefined
       });
@@ -293,8 +285,8 @@ export async function pensarComIa(texto, historico = [], {
  *   `resolverNomeContato`). E' o que faz a Lizzy chamar a pessoa pelo nome.
  * @param {function} [opts.ehDono] `(jid) => boolean` — o falante e' o DONO?
  *   Checagem por JID/numero (a mesma do resto do bot).
- * @param {function} [opts.executarComando] `(comando, args) => Promise<boolean>`
- *   — executa o comando do bot em nome do dono (o `index.js` reemite a mensagem).
+ * @param {function} [opts.executarComando] `(comando, args, quemFalou) =>
+ *   Promise<boolean>` — executa o comando do bot em nome de QUEM FALOU.
  * @returns {Promise<{ ok: boolean, motivo?: string }>}
  */
 export async function ligarIap(grupo, { nomeDono, participantes, ehAutorizado, nomeDeQuemFalou, ehDono, executarComando } = {}) {
@@ -354,25 +346,11 @@ export async function ligarIap(grupo, { nomeDono, participantes, ehAutorizado, n
       });
       return r.pcm;
     },
-    // FLUIDEZ: a fala comeca no 1o bloco de audio, sem esperar o MP3 inteiro.
-    sintetizarStream: async (texto, aoBloco) => {
-      const t0 = Date.now();
-      let primeiroMs = null;
-      const r = await sintetizarFalaStream(texto, (bloco) => {
-        if (primeiroMs === null) primeiroMs = Date.now() - t0;
-        aoBloco(bloco);
-      });
-      if (!r.ok) {
-        logIap(`TTS falhou: ${r.motivo}`, { grupo });
-        return r;
-      }
-      logIap(`TTS ok (${r.fonte}, fluxo)`, {
-        grupo,
-        primeiroMs,
-        segundos: r.amostras ? +(r.amostras / 16000).toFixed(1) : 0
-      });
-      return r;
-    },
+    // O TTS em FLUXO foi DESLIGADO (out/2026): a entrega por blocos fazia a fala
+    // sair acelerada e CORTAR o comeco (a fila descarta os frames mais antigos
+    // quando estoura). O caminho de BATCH — esperar o audio e entregar frame a
+    // frame no ritmo do motor — e' o que funcionava. Sem `sintetizarStream`, o
+    // agente usa o `sintetizar` acima automaticamente.
     falar: (pcm) => { void _media.falarNaCallDoGrupo(grupo, pcm); }
   });
 

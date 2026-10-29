@@ -252,20 +252,18 @@ export class AgenteDeVoz {
       }
       this.log('respondeu', { grupo: this.grupo, resposta, ms: Date.now() - t0 });
 
-      // FLUIDEZ: se o TTS sabe entregar em FLUXO (`sintetizarStream`), a fala
-      // comeca assim que o 1o bloco de audio sai — em vez de esperar o MP3
-      // inteiro. Sem esse caminho, cai no `sintetizar` (comportamento antigo).
-      if (typeof this.sintetizarStream === 'function') {
-        await this.emitirFalaStream(resposta);
-      } else {
-        const audio = await this.sintetizar(resposta);
-        if (!this.ativo) return;
-        if (!audio || !audio.length) {
-          this.log('tts sem audio', { grupo: this.grupo });
-          return;
-        }
-        await this.emitirFala(audio);
+      // SEMPRE o caminho de BATCH: espera o audio e entrega frame a frame no
+      // ritmo do motor. O TTS em FLUXO foi REMOVIDO (out/2026) porque a entrega
+      // por blocos fazia a fala sair ACELERADA e CORTAR o comeco (a fila
+      // descarta os frames mais antigos quando estoura). O `sintetizarStream`
+      // NAO e' mais usado, mesmo que alguem o injete.
+      const audio = await this.sintetizar(resposta);
+      if (!this.ativo) return;
+      if (!audio || !audio.length) {
+        this.log('tts sem audio', { grupo: this.grupo });
+        return;
       }
+      await this.emitirFala(audio);
     } catch (e) {
       this.log('erro no agente', { grupo: this.grupo, erro: e?.message || String(e) });
     } finally {
