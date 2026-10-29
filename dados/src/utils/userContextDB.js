@@ -1,12 +1,13 @@
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// O caminho vem do `paths.js` (o unico lugar que resolve `DATABASE_PATH`).
+// Antes era fixo aqui dentro: os testes gravavam no arquivo do REPOSITORIO
+// (versionado) e um sub-bot escreveria no banco do bot principal.
+import { USER_CONTEXT_FILE } from './paths.js';
 
 // Caminho do arquivo de banco de dados
-const DB_PATH = path.join(__dirname, '../../database/userContext.json');
+const DB_PATH = USER_CONTEXT_FILE;
 
 // Função para obter data/hora no fuso horário do Brasil (GMT-3)
 function getBrazilDateTime() {

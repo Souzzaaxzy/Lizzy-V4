@@ -22,6 +22,9 @@ import { promptDaLizzy, regrasDeCanal, iaIdentidade, limparNomeDoBot } from '../
 // O CONTEXTO da conversa (quem fala, o dono, os dados do grupo) tem UMA
 // fonte: o mesmo modulo que a call usa. Aqui so' se monta o texto.
 import { montarContextoDaConversa } from '../../utils/contextoConversa.js';
+// A CHAVE da memoria: por GRUPO, por pessoa, por personalidade (a personalidade
+// continua sendo uma so'). Modulo puro — o formato e' testavel sem conexao.
+import { chaveDaMemoria } from '../../utils/memoriaLizzy.js';
 // A CONVERSA passou a usar o Groq (a mesma API da call). Ver `makeCognimaRequest`.
 import { groqChat, situacaoDasChaves } from '../../utils/groqClient.js';
 
@@ -847,10 +850,14 @@ function updateHistorico(grupoUserId, role, content, nome = null) {
     historico[grupoUserId] = [];
   }
   
-  // Apenas role e content - sem timestamp/name para compatibilidade com o formato Gemini
+  // `role`/`content` sao o que o modelo consome (formato Gemini/OpenAI). O
+  // `timestamp` NAO vai para o modelo — ele existe para a LIMPEZA saber quando
+  // a conversa parou. Sem ele, `clearOldHistorico` lia `undefined` e o
+  // `!iaclear` respondia "limpo!" sem apagar NADA.
   const entry = {
     role,
-    content: cleanWhatsAppFormatting(content)
+    content: cleanWhatsAppFormatting(content),
+    timestamp: Date.now()
   };
   
   historico[grupoUserId].push(entry);
@@ -1119,8 +1126,16 @@ async function processUserMessages(data, nazu = null, ownerNumber = null, person
     const isNightTime = hour >= 18 || hour < 6;
     
     for (const msgValidada of mensagensValidadas) {
-      // Agora usa apenas o ID do usuário + personalidade para manter contexto entre grupos
-      const userId = `${msgValidada.id_enviou}_${personality}`;
+      // A MEMORIA e' POR GRUPO (pedido do dono): `grupo|usuario|personalidade`.
+      // O grupo vem do `extraContext` (o handler manda `from`) ou da propria
+      // mensagem. Em PV nao ha' grupo — cai no JID da conversa (isolado por
+      // pessoa, sem memoria compartilhada entre desconhecidos).
+      const idGrupo = extraContext.groupId || msgValidada.id_grupo || '';
+      const userId = chaveDaMemoria({
+        idGrupo,
+        idUsuario: msgValidada.id_enviou,
+        personalidade: personality
+      });
       
       // Registrar interação
       userContextDB.registerInteraction(userId, msgValidada.texto);

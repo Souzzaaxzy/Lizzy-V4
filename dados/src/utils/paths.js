@@ -65,6 +65,11 @@ const RAJA_MSG_FILE = path.join(DONO_DIR, 'rajaMsg.json');
 const MENU_MEDIA_GROUPS_FILE = path.join(DATABASE_DIR, 'menuMediaGroups.json');
 const MENU_GROUPS_MEDIA_DIR = path.join(ROOT_DIR, 'midias', 'menu', 'groups');
 const API_KEYS_FILE = path.join(DONO_DIR, 'apiKeys.json');
+// O contexto dos usuarios (a MEMORIA da Lizzy). Fica no DATABASE_DIR para
+// respeitar `DATABASE_PATH` — como os outros bancos. Antes era um caminho
+// fixo dentro do `userContextDB.js`, entao os testes escreviam no arquivo do
+// REPOSITORIO (que e' versionado) em vez do tmp.
+const USER_CONTEXT_FILE = path.join(DATABASE_DIR, 'userContext.json');
 
 // Detecta se é sub-bot e ajusta o caminho do config
 const CONFIG_FILE = process.env.CONFIG_PATH || path.join(SRC_DIR, 'config.json');
@@ -128,6 +133,7 @@ export {
   MENU_MEDIA_GROUPS_FILE,
   MENU_GROUPS_MEDIA_DIR,
   API_KEYS_FILE,
+  USER_CONTEXT_FILE,
   CONFIG_FILE,
   PACKAGE_JSON_PATH
 };
