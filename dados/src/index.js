@@ -1298,6 +1298,9 @@ import {
   desligarIap,
   estadoIap
 } from './utils/iapSessao.js';
+// A RESERVA de transcricao (Groq Whisper): o `!transcrever` a usa quando o
+// Gemini falha. Fica no mesmo modulo do STT do `!iap` — uma fonte so'.
+import { transcreverArquivoGroq } from './utils/iapStt.js';
 // O CHAT DE VOZ (`!vozp`) e' um sistema SEPARADO do `!callp`: ponte de midia,
 // motor e registro proprios. Nada de estado compartilhado entre os dois.
 import {
@@ -26659,7 +26662,55 @@ ${groupPrefix}key sua_chave_gemini
           await reply("🐝 Ops! Ocorreu um erro inesperado. Tente novamente!");
         }
         break;
-      case 'nomebot':
+      // !keygroq — chave da RESERVA de transcrição (Groq Whisper).
+      //
+      // O `!iap`/`!transcrever` tentam o Gemini primeiro e, se ele falhar
+      // (timeout/rede/limite), caem no Groq Whisper. Sem esta chave a reserva
+      // simplesmente não existe e o comportamento é o de antes.
+      case 'keygroq':
+      case 'groqkey':
+        try {
+          if (!podeDonoTotal()) return reply("Este comando é exclusivo para o dono do bot!");
+          if (!q) {
+            const atual = process.env.GROQ_API_KEY || '';
+            const mascarada = atual
+              ? `${atual.substring(0, 4)}...${atual.substring(atual.length - 4)}`
+              : 'Não configurada';
+            return reply(`🎙️ *Chave da RESERVA de transcrição (Groq)*
+Key atual: \`${mascarada}\`
+
+*Para que serve:* o \`!iap\` e o \`!transcrever\` usam o Gemini primeiro. Se o
+Gemini falhar (tempo esgotado, rede, limite), a transcrição tenta o *Groq
+Whisper* — assim o agente não fica mudo.
+
+📝 *Como obter (grátis):*
+1. Acesse: https://console.groq.com/keys
+2. Crie a conta e vá em *API Keys* > *Create API Key*
+3. Copie a chave (começa com \`gsk_\`)
+
+💡 *Uso:* \`${groupPrefix}keygroq gsk_...\``);
+          }
+          const valor = q.trim();
+          if (!valor || /\s/.test(valor)) {
+            return reply("❌ Chave inválida. Ela não pode conter espaços.");
+          }
+          const envPathG = pathz.join(__dirname, '../../.env');
+          let conteudo = fs.existsSync(envPathG) ? fs.readFileSync(envPathG, 'utf-8') : '';
+          const linha = `GROQ_API_KEY=${valor}`;
+          const re = /^GROQ_API_KEY=.*$/gm;
+          conteudo = re.test(conteudo)
+            ? conteudo.replace(re, linha)
+            : conteudo + (conteudo.endsWith('\n') ? linha : '\n' + linha);
+          fs.writeFileSync(envPathG, conteudo);
+          process.env.GROQ_API_KEY = valor;
+          await reply(`✅ *Reserva de transcrição configurada!*
+🎙️ Key: \`${valor.substring(0, 4)}...${valor.substring(valor.length - 4)}\`
+🤖 Se o Gemini falhar, a transcrição cai no *Groq Whisper*.`);
+        } catch (e) {
+          console.error('[KEYGROQ] erro:', e?.message || e);
+          await reply("🐝 Ops! Ocorreu um erro inesperado. Tente novamente!");
+        }
+        break;
       case 'botname':
       case 'nome-bot':
         try {
@@ -41485,15 +41536,15 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
             return reply("❌ Chave da IA não está configurada. Use !key para configurar.");
           }
           // Transcreve pelo MESMO caminho dos outros comandos de IA: a cadeia
-          // de modelos do `ia.js` (modelo preferido -> aliases -> descobertos ->
-          // fallback). Antes daqui saía um `axios.post` com o modelo FIXO
-          // (`GEMINI_DEFAULT_MODEL`) — se o Google aposenta o nome, a
-          // transcrição inteira vira 404 e o comando não diz por quê.
+          // de modelos do `ia.js` + o Groq Whisper como reserva. Antes daqui
+          // saía um `axios.post` com o modelo FIXO — se o Google aposenta o
+          // nome, a transcrição inteira vira 404.
           const b64Audio = audioBuffer.toString('base64');
           const mimeType = quotedAudio.mimetype || 'audio/mpeg';
           const transcribeRes = await ia.geminiRequestMultimodal({
-            modelo: process.env.IAP_STT_MODEL || 'gemini-2.5-flash',
-            timeoutMs: 90000,
+            // O alias rolante não envelhece (o nome fixo custava uma rodada 404).
+            modelo: process.env.IAP_STT_MODEL || 'gemini-flash-latest',
+            timeoutMs: Number(process.env.IAP_STT_TIMEOUT_MS || 45000),
             corpo: {
               contents: [
                 {
@@ -41502,26 +41553,46 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
                     { inlineData: { mimeType, data: b64Audio } }
                   ]
                 }
-              ]
+              ],
+              // Transcrever não precisa de raciocínio: desligar o thinking corta
+              // a latência (era o timeout de 90s no log do dono).
+              generationConfig: { thinkingConfig: { thinkingBudget: 0 } }
             }
           });
-          if (!transcribeRes.ok) {
-            // O motivo REAL vai para o usuário (chave / limite / modelo / rede).
-            console.warn(`[TRANSCREVER] falhou | motivo=${transcribeRes.motivo} | ${transcribeRes.detalhe || ''}`);
-            const avisos = {
-              chave: '❌ A chave da IA é inválida ou expirou. Use `!key` para configurar de novo.',
-              limite: '⏳ Limite de requisições da IA atingido. Tente novamente em instantes.',
-              sem_chave: '❌ Chave da IA não configurada. Use `!key`.',
-              modelo_indisponivel: '❌ Nenhum modelo de IA disponível na sua conta.'
-            };
-            return reply(avisos[transcribeRes.motivo] || '❌ Não consegui falar com a IA agora. Tente de novo em instantes.');
+
+          // RESERVA: se o Gemini falhou, tenta o Groq Whisper.
+          let textoTranscrito = '';
+          let fonteTranscricao = 'gemini';
+          if (transcribeRes.ok) {
+            const candidate = transcribeRes.data?.candidates?.[0];
+            textoTranscrito = candidate?.content?.parts?.map((p) => (p && typeof p.text === 'string') ? p.text : '').join('') || '';
+          } else {
+            console.warn(`[TRANSCREVER] Gemini falhou | motivo=${transcribeRes.motivo} | ${String(transcribeRes.detalhe || '').slice(0, 160)}`);
+            // RESERVA: o mesmo Groq Whisper que o `!iap` usa. Aqui já temos o
+            // ARQUIVO baixado (não o PCM), então vai direto.
+            const reserva = await transcreverArquivoGroq(audioBuffer, mimeType).catch(() => null);
+            if (reserva?.ok) {
+              textoTranscrito = reserva.texto;
+              fonteTranscricao = 'groq';
+              console.warn('[TRANSCREVER] transcrito pela RESERVA (Groq Whisper)');
+            } else if (reserva) {
+              console.warn(`[TRANSCREVER] reserva (Groq) falhou | motivo=${reserva.motivo} | ${String(reserva.detalhe || '').slice(0, 120)}`);
+            }
           }
-          const candidate = transcribeRes.data?.candidates?.[0];
-          const transcription = candidate?.content?.parts?.map((p) => (p && typeof p.text === 'string') ? p.text : '').join('') || '';
-          if (!transcription || transcription.trim() === '') {
+
+          if (!textoTranscrito || textoTranscrito.trim() === '') {
+            if (!transcribeRes.ok) {
+              const avisos = {
+                chave: '❌ A chave da IA é inválida ou expirou. Use `!key` para configurar de novo.',
+                limite: '⏳ Limite de requisições da IA atingido. Tente novamente em instantes.',
+                rede: '⌛ A IA demorou demais para responder. Tente um áudio mais curto, ou configure a reserva com `!keygroq`.',
+                modelo_indisponivel: '❌ Nenhum modelo de IA disponível na sua conta.'
+              };
+              return reply(avisos[transcribeRes.motivo] || '❌ Não consegui falar com a IA agora. Tente de novo em instantes.');
+            }
             return reply("❌ Não foi possível transcrever o áudio. Ele pode estar inaudível ou vazio.");
           }
-          await reply(`📝 Transcrição:\n\n${transcription}`);
+          await reply(`📝 Transcrição${fonteTranscricao === 'groq' ? ' _(via reserva)_' : ''}:\n\n${textoTranscrito}`);
         } catch (e) {
           // NUNCA `console.error(e)` aqui: o erro do axios carrega
           // `error.config.data`, que na transcrição é o ÁUDIO INTEIRO em base64

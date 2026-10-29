@@ -558,6 +558,105 @@ await test('iapTts: texto vazio não sintetiza', async () => {
   ok(r.ok === false && r.motivo === 'texto_vazio', 'recusa texto vazio');
 });
 
+// ============================================================================
+// 9) RESERVA de transcrição (Groq Whisper) — o agente não fica mudo
+// ============================================================================
+
+await test('iapStt: Gemini falha (timeout) -> a RESERVA (Groq) transcreve', async () => {
+  // O caso do dono: o Gemini deu `timeout of 90000ms exceeded`. Com a reserva,
+  // o agente NÃO fica mudo — a transcrição sai pelo Groq Whisper.
+  const stt = await import(new URL('../dados/src/utils/iapStt.js', import.meta.url).href);
+  let groqChamado = false;
+  stt.setIapHttpForTest(async (url) => {
+    if (String(url).includes('groq.com')) {
+      groqChamado = true;
+      return { data: 'transcrição vinda da reserva' };
+    }
+    const e = new Error('timeout of 45000ms exceeded');
+    e.code = 'ECONNABORTED';
+    throw e;
+  }, async () => ({ data: { models: [] } }));
+  process.env.GROQ_API_KEY = 'gsk_teste';
+  const r = await stt.transcreverPcm(new Float32Array(16000).fill(0.1), { apiKey: 'K' });
+  delete process.env.GROQ_API_KEY;
+  stt.setIapHttpForTest(null);
+  ok(groqChamado === true, 'chamou o Groq quando o Gemini falhou');
+  ok(r.ok === true, `transcreveu (${r.motivo || ''})`);
+  ok(r.fonte === 'groq', `fonte groq (${r.fonte})`);
+  ok(r.texto === 'transcrição vinda da reserva', 'devolveu o texto da reserva');
+});
+
+await test('iapStt: sem chave do Groq, a falha do Gemini sobe com o motivo', async () => {
+  const stt = await import(new URL('../dados/src/utils/iapStt.js', import.meta.url).href);
+  stt.setIapHttpForTest(async () => {
+    const e = new Error('timeout of 45000ms exceeded');
+    e.code = 'ECONNABORTED';
+    throw e;
+  }, async () => ({ data: { models: [] } }));
+  const anterior = process.env.GROQ_API_KEY;
+  delete process.env.GROQ_API_KEY;
+  const r = await stt.transcreverPcm(new Float32Array(16000).fill(0.1), { apiKey: 'K' });
+  if (anterior !== undefined) process.env.GROQ_API_KEY = anterior;
+  stt.setIapHttpForTest(null);
+  ok(r.ok === false, 'falhou (não inventou texto)');
+  ok(r.motivo === 'rede', `motivo real preservado (${r.motivo})`);
+  ok(/groq: sem_chave_groq/.test(String(r.detalhe)), `diz que a reserva não tinha chave (${r.detalhe})`);
+});
+
+await test('iapStt: o modelo preferido é o ALIAS ROLANTE (não envelhece)', async () => {
+  // `gemini-2.5-flash` fixo custava uma rodada 404 antes de achar um modelo bom
+  // (medido no log do dono). O alias rolante aponta para a release atual.
+  const stt = await import(new URL('../dados/src/utils/iapStt.js', import.meta.url).href);
+  ok(stt.modeloStt() === 'gemini-flash-latest', `alias rolante (${stt.modeloStt()})`);
+  ok(stt.modeloGroq() === 'whisper-large-v3-turbo', `reserva (${stt.modeloGroq()})`);
+});
+
+await test('iapStt: a transcrição DESLIGA o thinking (corta a latência)', async () => {
+  const stt = await import(new URL('../dados/src/utils/iapStt.js', import.meta.url).href);
+  let corpo = null;
+  stt.setIapHttpForTest(async (url, body) => {
+    if (String(url).includes('groq.com')) return { data: 'x' };
+    corpo = body;
+    return { data: { candidates: [{ content: { parts: [{ text: 'ok' }] } }] } };
+  }, async () => ({ data: { models: [] } }));
+  await stt.transcreverPcm(new Float32Array(1600).fill(0.1), { apiKey: 'K' });
+  stt.setIapHttpForTest(null);
+  ok(corpo?.generationConfig?.thinkingConfig?.thinkingBudget === 0,
+    `thinkingBudget 0 (${JSON.stringify(corpo?.generationConfig)})`);
+  ok(corpo?.contents?.[0]?.parts?.[1]?.inlineData?.mimeType === 'audio/wav', 'manda audio/wav');
+});
+
+await test('transcreverArquivoGroq: usa multipart com o modelo e o idioma', async () => {
+  const stt = await import(new URL('../dados/src/utils/iapStt.js', import.meta.url).href);
+  let visto = null;
+  stt.setIapHttpForTest(async (url, body) => {
+    visto = { url, body };
+    return { data: 'texto do arquivo' };
+  }, async () => ({ data: { models: [] } }));
+  process.env.GROQ_API_KEY = 'gsk_teste';
+  const r = await stt.transcreverArquivoGroq(Buffer.from([1, 2, 3, 4]), 'audio/ogg');
+  delete process.env.GROQ_API_KEY;
+  stt.setIapHttpForTest(null);
+  ok(r.ok === true && r.texto === 'texto do arquivo', 'transcreveu o arquivo');
+  ok(String(visto.url).includes('groq.com/openai/v1/audio/transcriptions'), 'endpoint do Groq');
+  ok(visto.body instanceof FormData, 'mandou multipart (FormData)');
+  ok(visto.body.get('model') === 'whisper-large-v3-turbo', 'modelo certo');
+  ok(visto.body.get('language') === 'pt', 'idioma pt');
+});
+
+await test('transcreverArquivoGroq: sem chave não chama a rede', async () => {
+  const stt = await import(new URL('../dados/src/utils/iapStt.js', import.meta.url).href);
+  let chamou = false;
+  stt.setIapHttpForTest(async () => { chamou = true; return { data: 'x' }; });
+  const anterior = process.env.GROQ_API_KEY;
+  delete process.env.GROQ_API_KEY;
+  const r = await stt.transcreverArquivoGroq(Buffer.from([1, 2]));
+  if (anterior !== undefined) process.env.GROQ_API_KEY = anterior;
+  stt.setIapHttpForTest(null);
+  ok(r.ok === false && r.motivo === 'sem_chave_groq', 'recusa sem chave');
+  ok(chamou === false, 'não tocou na rede');
+});
+
 await test('iapTts: caminho REAL (edge-tts + ffmpeg) gera PCM 16 kHz', async () => {
   const tts = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
   // O teste anterior (fallback) mexeu no PATH e envenenou o cache negativo.

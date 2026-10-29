@@ -104,6 +104,9 @@ export async function ligarIap(grupo, { botName, personalidade } = {}) {
         });
         return null;
       }
+      // A FONTE importa: se veio do Groq, o Gemini falhou antes — e' o sinal de
+      // que a reserva esta' salvando o agente.
+      if (r.fonte === 'groq') logIap('STT pela RESERVA (Groq Whisper)', { grupo });
       return r.texto;
     },
     sintetizar: async (texto) => {

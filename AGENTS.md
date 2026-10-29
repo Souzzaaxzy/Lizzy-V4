@@ -13601,3 +13601,63 @@ do Gemini com uma chave válida. O que está provado: as formas de erro foram
 chave inválida para na 1ª chamada, e o `.env` é lido do mesmo lugar onde o
 `!key` grava (medido rodando de outro CWD). Se a IA continuar falhando, a
 mensagem agora **diz o motivo** em vez de tentar 8 modelos.
+
+
+## 🎙️ STT: o TIMEOUT do Gemini e a RESERVA (Groq Whisper) (out/2026) ✅
+Log do dono (depois da correção do 400):
+
+```
+[Gemini API] modelo "gemini-2.5-flash" indisponível; tentando o próximo.
+[TRANSCREVER] falhou | motivo=rede | timeout of 90000ms exceeded
+```
+
+### O que esse log PROVA (progresso real)
+- **`motivo=rede`, não `chave`** → a **chave está OK**. A correção do 400
+  funcionou: antes o erro era mascarado como "modelo indisponível".
+- o **primeiro** modelo da cadeia (`gemini-2.5-flash`) deu 404 → gastou uma
+  rodada antes de achar um modelo bom;
+- o segundo **estourou o teto de 90 s**.
+
+### As 3 correções
+| # | o que | por quê |
+|---|---|---|
+| 1 | **`gemini-flash-latest`** como preferido (era `gemini-2.5-flash`) | o alias rolante não envelhece — o nome fixo custava uma rodada 404 |
+| 2 | **`thinkingConfig: { thinkingBudget: 0 }`** na transcrição | transcrever **não precisa de raciocínio**; a doc marca o thinking como o caminho da **latência** (era o timeout) |
+| 3 | **Groq Whisper como RESERVA** | se o Gemini falhar, o agente **não fica mudo** |
+
+### A reserva — Groq Whisper (`whisper-large-v3-turbo`)
+- **Grátis**, 25 MB por arquivo, ~200× o tempo real de transcrição;
+- plano grátis: **20 RPM / 2.000 RPD / 7,2 mil segundos de áudio por hora**;
+- pt-BR excelente (o Whisper large v3 é multilíngue);
+- chave pelo **`!keygroq gsk_...`** (novo comando, exclusivo do dono) ou
+  `GROQ_API_KEY` no `.env`;
+- a ordem é **Gemini → Groq**: um provedor fora do ar não deixa o agente mudo.
+
+### O que o dono perguntou: "tem API gratuita com 100% de garantia?"
+**Não existe** — toda API grátis tem cota e pode cair (foi exatamente o que
+aconteceu: o Gemini estourou o tempo). O que **dá** para garantir é **reserva**:
+duas fontes independentes. Se uma falhar, a outra assume — e é isso que foi
+implementado.
+
+### Arquivos
+| caminho | papel |
+|---|---|
+| `dados/src/utils/iapStt.js` | STT: Gemini (cadeia + thinking off) → **Groq**; `transcreverArquivoGroq` para o `!transcrever` |
+| `dados/src/index.js` | `!keygroq`; o `!transcrever` com a reserva e o motivo real |
+| `dados/src/utils/iapSessao.js` | loga o motivo E a fonte (`STT pela RESERVA (Groq Whisper)`) |
+| `.env.example` | `GROQ_API_KEY`, `IAP_GROQ_STT_MODEL`, `IAP_STT_MODEL`, os timeouts, `IAP_TTS_ENGINE` |
+
+### Testes — `tests/iap.test.js` (**36 testes / 86 asserções, 0 falhas**)
++6: Gemini com timeout → **o Groq transcreve** (`fonte: groq`); sem chave do Groq
+a falha sobe com o motivo (`groq: sem_chave_groq`); o modelo preferido é o
+**alias rolante**; a transcrição manda **`thinkingBudget: 0`** e `audio/wav`;
+`transcreverArquivoGroq` usa multipart com modelo + idioma `pt`; sem chave não
+toca a rede. Regressões verdes: `ia` 20/50, `motor-chat-noise` 14/62,
+`cmd-suggest` 21/68. `menu-layout` mantém a falha **pré-existente** do `menufig`.
+
+### LIMITE HONESTO
+Não há chave (nem do Gemini nem do Groq) neste ambiente, então **não** validei
+uma transcrição real ponta a ponta. O que está provado: o payload do Gemini
+(`thinkingBudget: 0` + `audio/wav`), a cadeia de modelos, a **reserva
+funcionando** com dublê (Gemini falha → Groq devolve o texto) e o multipart do
+Groq. Com a chave do Groq configurada, o agente passa a ter **duas** fontes.
