@@ -42,13 +42,16 @@
       {
         "papel": "mae",
         "lid": "18408649269356@lid",
-        "nome": ""
+        "nome": "Cangica"
       }
     ],
     "esporte": "vôlei",
     "orientacao": "bissexual",
     "safadeza": true,
     "conversaAdulto": true,
-    "jeitoAdolescente": true
+    "jeitoAdolescente": true,
+    "dificil": true,
+    "feminina": true,
+    "perguntarSexo": true
   }
 }

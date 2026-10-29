@@ -135,6 +135,7 @@ const ID_TESTE = {
   humor: 'amigavel', sempreBemComDono: true, emojis: false, jeitoAdolescente: true,
   travas: ['NUNCA faca X.', 'NUNCA faca Y.'],
   esporte: 'vôlei', orientacao: 'bissexual', safadeza: true, conversaAdulto: true,
+  dificil: true, feminina: true, perguntarSexo: true,
   adotada: true,
   paisAdotivos: [
     { papel: 'pai', lid: '237@lid', nome: 'Kannon' },
@@ -556,24 +557,29 @@ await test('36. o +18 e PERMITIDO (nao recusa)', () => {
   contem(b, 'A CONVERSA +18', 'a secao');
   contem(b, 'PERMITIDO', 'diz que e permitido');
   contem(b, 'Nao recuse, nao corte, nao mude de assunto', 'proibe recusar');
-  contem(b, 'NUNCA diga que "nao pode"', 'proibe o "nao posso"');
-  contem(b, 'nao e apropriado', 'proibe o "nao e apropriado"');
+  // A proibicao do "nao posso" MUDOU de lugar: agora vive no bloco VOCE E
+  // DIFICIL (onde ela enrola em vez de negar). O importante e' que continua.
+  contem(b, 'voce nunca diz "nao posso"', 'proibe o "nao posso"');
+  contem(b, '"isso nao", "e errado"', 'proibe o "e errado"');
+  contem(b, 'Voce enrola, nao nega', 'a regra que resume');
 });
 
-await test('37. a ESCALADA esta descrita (vai se soltando)', () => {
+await test('37. a ESCALADA esta descrita (mas so DEPOIS que a pessoa da o passo)', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
-  contem(b, 'vai se soltando conforme ela esquenta', 'descreve a escalada');
-  contem(b, 'voce insinua de volta', 'passo 1');
-  contem(b, 'voce fica tambem', 'passo 2');
+  contem(b, 'Quando a pessoa DA o passo, ai sim voce acompanha', 'a escalada e a condicao');
+  contem(b, 'ela insinua -> voce insinua de volta', 'passo 1');
+  contem(b, 'ela fica explicita -> voce fica tambem', 'passo 2');
   contem(b, 'responde no mesmo nivel', 'passo 3');
   contem(b, 'nao freia', 'passo 4');
 });
 
-await test('38. a FOTO: ela provoca/negocia, nao nega (o caso do dono)', () => {
+await test('38. a FOTO: ela NEGOCIA (dificil), mas nao nega (o caso do dono)', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
-  contem(b, 'Se pedirem uma FOTO', 'o caso do dono');
-  contem(b, 'provoca, brinca, negocia, faz suspense', 'como ela reage');
-  contem(b, 'NAO da aquele "nao, isso eu nao faco"', 'o que ela NAO faz');
+  contem(b, 'Se pedirem uma FOTO, voce negocia', 'o caso do dono');
+  contem(b, 'mostra o seu primeiro', 'o jeito de enrolar');
+  // O equilibrio: enrola, mas NAO da o "nao" seco.
+  contem(b, 'Voce enrola, nao nega', 'nao nega');
+  naoContem(b, 'nao, isso eu nao faco', 'nao pode dar o "nao" seco');
 });
 
 await test('39. os LIMITES DUROS ficam SEPARADOS e so citam menor/abuso', () => {
@@ -618,6 +624,114 @@ await test('42. as travas do CONFIG nao citam o clima (nao reintroduzem o bug)',
   // Mas os limites de verdade continuam.
   ok(/menor/i.test(texto), 'o limite de menor segue');
   ok(/estupro|abuso/i.test(texto), 'o de abuso segue');
+});
+
+// ---------------------------------------------------------------------------
+// 8) DIFICIL, FEMININA, O SEXO DA PESSOA E O NOME DA MAE
+// ---------------------------------------------------------------------------
+console.log('\n=== 8) DIFICIL, FEMININA, SEXO E A MAE ===\n');
+
+await test('44. o CONFIG REAL tem os campos novos', () => {
+  const r = id.lerIdentidade(CONFIG_REAL);
+  ok(r.dificil === true, 'dificil');
+  ok(r.feminina === true, 'feminina');
+  ok(r.perguntarSexo === true, 'perguntarSexo');
+  const mae = r.paisAdotivos.find((p) => p.papel === 'mae');
+  ok(mae && mae.nome === 'Cangica', `o nome da mae = Cangica (veio ${mae && mae.nome})`);
+  ok(mae.lid === '18408649269356@lid', 'o LID da mae continua junto');
+});
+
+await test('45. ELA E DIFICIL: nao conduz, da a deixa e espera', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'VOCE E DIFICIL', 'a secao');
+  contem(b, 'NAO vai direto ao ponto', 'nao vai direto');
+  contem(b, 'DA A DEIXA', 'da a deixa');
+  contem(b, 'ESPERA a pessoa dar o primeiro passo', 'espera o primeiro passo');
+  contem(b, 'nao entrega facil', 'nao entrega facil');
+  contem(b, 'faz a pessoa PEDIR de novo', 'faz pedir de novo');
+  contem(b, 'NUNCA manda foto nem descreve nada por iniciativa propria', 'nao toma iniciativa');
+});
+
+await test('46. o equilibrio: DIFICIL nao e RECUSAR', () => {
+  // A trava anti-falso-negativo: sem isto, "ser dificil" viraria "recusar" e o
+  // dono voltaria a ver o "nao" que ele reclamou.
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'Ser dificil NAO e recusar', 'explicita o equilibrio');
+  contem(b, 'Voce enrola, nao nega', 'enrola em vez de negar');
+  contem(b, 'voce nunca diz "nao posso"', 'nunca o "nao posso"');
+  contem(b, '"isso nao", "e errado"', 'nunca o "isso nao"/"e errado"');
+  contem(b, 'nem muda de assunto', 'nao foge do assunto');
+});
+
+await test('47. ela e FEMININA (repara, elogia, fala do dia)', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'VOCE E BEM FEMININA', 'a secao');
+  contem(b, 'unha, cabelo, roupa', 'o que ela repara');
+  contem(b, 'dengosa', 'o jeito');
+  contem(b, 'achou voce bonita', 'gosta de elogio');
+  contem(b, 'sensibilidade', 'percebe o tom');
+  contem(b, 'NAO fala como homem', 'nao fala como brother');
+});
+
+await test('48. ela PERGUNTA se a pessoa e homem ou mulher', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'VOCE QUER SABER COM QUEM ESTA FALANDO', 'a secao');
+  contem(b, 'homem ou mulher', 'a pergunta');
+  contem(b, 'voce PERGUNTA', 'ela pergunta');
+  contem(b, 'vc e homem ou mulher?', 'um exemplo de como pergunta');
+  contem(b, 'UMA vez', 'nao fica perguntando');
+  contem(b, 'ajusta o jeito', 'muda o jeito depois de saber');
+  // E vem ANTES do bloco +18 (e' o que ela faz primeiro).
+  ok(b.indexOf('VOCE QUER SABER COM QUEM') < b.indexOf('A CONVERSA +18'), 'a pergunta vem antes do +18');
+});
+
+await test('49. o nome da MAE (Cangica) entra no prompt da familia', () => {
+  // O nome REAL vem do CONFIG (o ID_TESTE e' um fixture generico).
+  const real = id.blocoDeIdentidade(id.lerIdentidade(CONFIG_REAL));
+  contem(real, 'mae (Cangica)', 'o nome da mae do config');
+  naoContem(real, '18408649269356', 'nao vaza o LID da mae');
+
+  // A ESTRUTURA: com os dois pais nomeados, os dois aparecem.
+  const dois = id.blocoDeIdentidade({
+    ...ID_TESTE,
+    paisAdotivos: [
+      { papel: 'pai', lid: '237@lid', nome: 'Kannon' },
+      { papel: 'mae', lid: '184@lid', nome: 'Cangica' }
+    ]
+  });
+  contem(dois, 'pai (Kannon) e mae (Cangica)', 'os dois com nome');
+});
+
+await test('50. o nome do CONFIG vence a resolucao do contato', async () => {
+  // O dono mandou o nome a mao — ele nao pode ser sobrescrito pelo contato.
+  const ctx = await import(new URL('../dados/src/utils/contextoConversa.js', import.meta.url).href);
+  const r = await ctx.resolverPaisAdotivos({
+    pais: [{ papel: 'mae', lid: '184@lid', nome: 'Cangica' }],
+    nazu: { contacts: { getName: async () => 'Outro Nome' } },
+    metadata: { participants: [] },
+    from: 'g@g.us'
+  });
+  ok(r[0].nome === 'Cangica', `manteve o nome do config (veio ${r[0].nome})`);
+});
+
+await test('51. sem `nome`, o LID e resolvido (o caminho de antes segue)', async () => {
+  const ctx = await import(new URL('../dados/src/utils/contextoConversa.js', import.meta.url).href);
+  const r = await ctx.resolverPaisAdotivos({
+    pais: [{ papel: 'mae', lid: '184@lid', nome: '' }],
+    nazu: { contacts: { getName: async () => 'Maria' } },
+    metadata: { participants: [] },
+    from: 'g@g.us'
+  });
+  ok(r[0].nome === 'Maria', 'resolveu pelo contato');
+});
+
+await test('52. os campos novos sao respeitados quando DESLIGADOS', () => {
+  const b = id.blocoDeIdentidade({ ...ID_TESTE, feminina: false, perguntarSexo: false, dificil: false });
+  naoContem(b, 'VOCE E BEM FEMININA', 'sem bloco feminino');
+  naoContem(b, 'VOCE QUER SABER COM QUEM', 'sem bloco do sexo');
+  naoContem(b, 'VOCE E DIFICIL', 'sem bloco dificil');
+  // Mas o +18 continua (safadeza/conversaAdulto seguem ligados no ID_TESTE).
+  contem(b, 'A CONVERSA +18', 'o +18 segue');
 });
 
 // ---------------------------------------------------------------------------
