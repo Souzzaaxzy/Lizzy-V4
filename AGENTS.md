@@ -14400,3 +14400,38 @@ Classificação levantada do `index.js`:
 | **seguros por voz** | `play`, `letra`, `clima`, `tradutor`, `google`, `ping`, `menu`, `spotify`, `toimg` | só precisam de TEXTO como argumento |
 | **precisam de mídia** | `toimg`, `togif`, `sticker`, `edits` | só funcionam com algo anexado/marcado |
 | **arriscados (pedem alvo)** | `ban`, `kick`, `promover`, `rebaixar`, `mute`, `adv`, `denunciar` | exigem @menção e têm consequência real |
+
+## ↩️ `!iap` — REVERTIDA a "fluidez": TTS de BATCH + VAD de 700 ms (out/2026) ✅
+O dono testou e relatou: *"a Lizzy cortava as primeiras palavras da frase, falava
+acelerado demais e não esperava eu terminar de falar"*. A rodada de "fluidez"
+causou **exatamente** isso. Duas causas, as duas revertidas:
+
+| o que | o que ficou | por que quebrava |
+|---|---|---|
+| **VAD (fim da frase)** | **700 ms** (era 450) | com 450 o bot começa a responder **antes** de a pessoa terminar — a pausa de respiração vira "acabou" |
+| **TTS** | **BATCH** (espera o áudio e entrega frame a frame) | o **fluxo** enviava em blocos e a fila descarta os frames **MAIS ANTIGOS** quando estoura → **cortava o começo** |
+
+**LIÇÃO DE MÉTODO**: "mais fluido" e "mais rápido" **não** são o mesmo que "melhor".
+Reduzir a espera de fim-de-fala e entregar áudio em fluxo introduziram dois
+defeitos piores que a latência que eu queria ganhar. **O que funcionava era a
+configuração anterior** — e ela voltou.
+
+O `sintetizarFalaStream` continua no `iapTts.js`, mas **não é mais chamado**: o
+motor usa **sempre** o `sintetizar` (batch). O teste trava isso: se o streaming
+voltar a ser usado, **3 asserções falham**.
+
+### Comandos por voz: QUALQUER pessoa pode usar
+O dono esclareceu: *"só quero que tenha esses 4, e qualquer pessoa pode usar.
+aquilo do dono é só pra identificar o dono quando ele falar"*. Então:
+
+- **sem exigir o dono** — qualquer um na call dispara os 4 comandos;
+- o comando roda **em nome de QUEM FALOU** (a mensagem reemitida tem ele como
+  `participant`), então as permissões do bot valem para ele normalmente;
+- a **identificação do dono** (por JID) continua — agora só para a Lizzy **saber**
+  quem é o dono (responder "quem é o dono?", tratar com deferência).
+
+### Testes
+`iap` **70/215** e `iap-comandos` **15/61** (0 falhas). Verificado que medem:
+religando o streaming → **3 asserções falham**; o VAD volta a exigir 700 ms.
+Regressões verdes: `ia` 20/50, `motor-chat-noise` 14/62, `cmd-suggest` 21/68,
+`get-message-inspector` 54/269, `contact-name` 16/37.
