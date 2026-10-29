@@ -470,6 +470,23 @@ export async function obterCliente() {
               //
               // Com o padrao ('required') o pacote usa UDP cru SO onde o relay
               // exige (sem credencial ICE) e WebRTC no resto.
+              // TRANSPORTE DO RELAY — o caminho que a referencia usa.
+              //
+              // O log real mostra as legs WebRTC falhando em TODAS as portas:
+              //
+              //   relay leg unanswered, redialling on the other port | {port:3478}
+              //   sctp connection failed | {reason:'relay_port_unopened'}
+              //   relay downlink stalled, re-allocating | {stalledMs:5035, legs:6}
+              //
+              // O relay nao aceita o handshake DTLS/SCTP nessa porta. O motor TEM o
+              // transporte por **UDP cru** (`WaRawUdpLeg`: o 5-tuple E' a leg, sem
+              // ICE/DTLS/SCTP) e ele so' e' usado quando `rawUdpLegs` permite:
+              //
+              //   rawUdpLegs: useRawUdpTransport ? 'all' : 'required'
+              //
+              // `ZAPO_RAW_UDP=all` liga o caminho (mesma opcao do pacote).
+              useRawUdpTransport: String(process.env.ZAPO_RAW_UDP || '').toLowerCase() === 'all',
+
               logLevel: process.env.ZAPO_LOG_LEVEL || 'warn',
 
               // Chamadas simultaneas (ringing/connecting/active). O padrao do

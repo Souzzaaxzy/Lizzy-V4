@@ -188,13 +188,21 @@ await test('o codigo nao afirma mais que "nao se espera" o connect', () => {
 
 console.log('\n=== 4) O FLAG EXPERIMENTAL (o bug do raw udp) ===\n');
 
-await test('o flag experimental NAO esta ativo', () => {
-  // A doc: "Experimental: ... Defaults to false." E o codigo do pacote:
-  //   rawUdpLegs: useRawUdpTransport ? 'all' : 'required'
-  // Com 'all' TODO relay vira UDP cru -> 'raw_udp_no_return_path'.
-  const ativo = /^\s*useRawUdpTransport\s*:/m.test(SRC);
-  ok(!ativo, 'useRawUdpTransport nao esta ligado');
-  includes(SRC, 'rawUdpLegs: useRawUdpTransport', 'o comentario explica a decisao do pacote');
+await test('o transporte por UDP cru e CONTROLADO por env (ZAPO_RAW_UDP)', () => {
+  // MEDIDO no log real: as legs WebRTC falhavam em TODAS as portas do relay
+  //   relay leg unanswered, redialling on the other port | {port:3478}
+  //   sctp connection failed | {reason:'relay_port_unopened'}
+  //   relay downlink stalled, re-allocating | {stalledMs:5035, legs:6}
+  // O motor TEM o transporte por UDP cru (`WaRawUdpLeg`) e ele so' e' usado
+  // quando `rawUdpLegs` permite (`useRawUdpTransport ? 'all' : 'required'`).
+  // Com 'required' o relay COM credencial ICE (o caso medido) vai por WebRTC.
+  //
+  // O flag do pacote e' experimental, entao NAO vai fixo: fica atras de env
+  // explicita, com o motivo registrado no codigo.
+  includes(SRC, 'useRawUdpTransport:', 'o flag e passado (nao mais omitido)');
+  includes(SRC, 'ZAPO_RAW_UDP', 'o controle e por env explicita');
+  includes(SRC, "=== 'all'", 'so a env ZAPO_RAW_UDP=all liga');
+  includes(SRC, 'relay_port_unopened', 'o motivo medido fica registrado no codigo');
 });
 
 await test('os listeners de diagnostico de midia existem', () => {
