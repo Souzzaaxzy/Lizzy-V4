@@ -43,6 +43,9 @@ import { resolverNomeContato, acharParticipantePorId, nomeInutil, baseId, numero
 import { coletarDadosDoGrupo } from './utils/contextoConversa.js';
 import { lerIdentidade } from './utils/identidadeLizzy.js';
 import { resolverPaisAdotivos } from './utils/contextoConversa.js';
+// As chaves do Groq (ate' 10) e o failover automatico.
+import { lerChaves, mascarar, slotDoComando, atualizarEnv, nomeDaVar, MAX_SLOTS } from './utils/groqKeys.js';
+import { resetarChaveGroq } from './utils/groqClient.js';
 // As ACOES do grupo pedidas por fala/texto (link e foto) — reconhecimento
 // DETERMINISTICO, como o `iapComandos` da call.
 import { identificarAcaoDoGrupo } from './utils/assistenteAcoes.js';
@@ -26544,50 +26547,86 @@ ${groupPrefix}key sua_chave_gemini
           await reply("🐝 Ops! Ocorreu um erro inesperado. Tente novamente!");
         }
         break;
-      // !keygroq — chave da RESERVA de transcrição (Groq Whisper).
+      // !keygroq ... !keygroq10 — as chaves do Groq, com TROCA AUTOMATICA.
       //
-      // O `!iap`/`!transcrever` tentam o Gemini primeiro e, se ele falhar
-      // (timeout/rede/limite), caem no Groq Whisper. Sem esta chave a reserva
-      // simplesmente não existe e o comportamento é o de antes.
+      // O dono pediu: o plano gratis acaba, entao quer varias chaves e que,
+      // quando uma estourar a cota, a proxima assuma NA HORA. Os 10 comandos
+      // existem porque o `switch` so' chega aqui por nome exato — a rotacao
+      // (o que de fato troca a chave) vive no `groqClient.comFailoverDeChave`.
+      //
+      // `!keygroq` = slot 1 (a chave de sempre), `!keygroq2` = slot 2, etc.
       case 'keygroq':
       case 'groqkey':
+      case 'keygroq1':
+      case 'keygroq2':
+      case 'keygroq3':
+      case 'keygroq4':
+      case 'keygroq5':
+      case 'keygroq6':
+      case 'keygroq7':
+      case 'keygroq8':
+      case 'keygroq9':
+      case 'keygroq10':
         try {
           if (!podeDonoTotal()) return reply("Este comando é exclusivo para o dono do bot!");
+          const slot = slotDoComando(command);
+          if (!slot) return reply("❌ Slot inválido. Use de `!keygroq` até `!keygroq10`.");
+
+          const chaves = lerChaves();
+          const atual = chaves.find((c) => c.slot === slot);
+
+          // --- sem argumento: mostra o painel ---
           if (!q) {
-            const atual = process.env.GROQ_API_KEY || '';
-            const mascarada = atual
-              ? `${atual.substring(0, 4)}...${atual.substring(atual.length - 4)}`
-              : 'Não configurada';
-            return reply(`🎙️ *Chave da RESERVA de transcrição (Groq)*
-Key atual: \`${mascarada}\`
+            const linhas = chaves.length
+              ? chaves.map((c) => {
+                  const marca = c.slot === slot ? '▶️' : '  ';
+                  return `${marca} *${c.slot}.* \`${mascarar(c.chave)}\` \`${c.var}\``;
+                }).join('\n')
+              : '   (nenhuma chave configurada)';
 
-*Para que serve:* o \`!iap\` e o \`!transcrever\` usam o Gemini primeiro. Se o
-Gemini falhar (tempo esgotado, rede, limite), a transcrição tenta o *Groq
-Whisper* — assim o agente não fica mudo.
+            return reply(`🎙️ *CHAVES DO GROQ* — ${chaves.length}/${MAX_SLOTS} configurada(s)
 
-📝 *Como obter (grátis):*
-1. Acesse: https://console.groq.com/keys
-2. Crie a conta e vá em *API Keys* > *Create API Key*
-3. Copie a chave (começa com \`gsk_\`)
+${linhas}
 
-💡 *Uso:* \`${groupPrefix}keygroq gsk_...\``);
+*Como funciona:* quando a cota de uma acaba (ou a chave é inválida), a *próxima
+assume automaticamente* — sem você fazer nada.
+
+📝 *Configurar:* \`${groupPrefix}keygroq${slot === 1 ? '' : slot} gsk_...\`
+🗑️ *Remover:* \`${groupPrefix}keygroq${slot === 1 ? '' : slot} off\`
+
+_Pegue grátis em https://console.groq.com/keys_`);
           }
-          const valor = q.trim();
+
+          const valor = q.trim().split(/\s+/)[0];
+
+          // --- "off": remove a linha do .env (e a chave em memoria) ---
+          if (['off', 'remover', 'apagar', 'limpar', 'del'].includes(valor.toLowerCase())) {
+            if (!atual) return reply(`❌ O slot *${slot}* já está vazio.`);
+            const envPathOff = pathz.join(__dirname, '../../.env');
+            const conteudoOff = fs.existsSync(envPathOff) ? fs.readFileSync(envPathOff, 'utf-8') : '';
+            fs.writeFileSync(envPathOff, atualizarEnv(conteudoOff, slot, null));
+            delete process.env[nomeDaVar(slot)];
+            resetarChaveGroq();
+            return reply(`🗑️ Chave do slot *${slot}* removida.`);
+          }
+
+          // --- validação básica ---
           if (!valor || /\s/.test(valor)) {
             return reply("❌ Chave inválida. Ela não pode conter espaços.");
           }
+
           const envPathG = pathz.join(__dirname, '../../.env');
-          let conteudo = fs.existsSync(envPathG) ? fs.readFileSync(envPathG, 'utf-8') : '';
-          const linha = `GROQ_API_KEY=${valor}`;
-          const re = /^GROQ_API_KEY=.*$/gm;
-          conteudo = re.test(conteudo)
-            ? conteudo.replace(re, linha)
-            : conteudo + (conteudo.endsWith('\n') ? linha : '\n' + linha);
-          fs.writeFileSync(envPathG, conteudo);
-          process.env.GROQ_API_KEY = valor;
-          await reply(`✅ *Reserva de transcrição configurada!*
-🎙️ Key: \`${valor.substring(0, 4)}...${valor.substring(valor.length - 4)}\`
-🤖 Se o Gemini falhar, a transcrição cai no *Groq Whisper*.`);
+          const conteudo = fs.existsSync(envPathG) ? fs.readFileSync(envPathG, 'utf-8') : '';
+          fs.writeFileSync(envPathG, atualizarEnv(conteudo, slot, valor));
+          process.env[nomeDaVar(slot)] = valor;
+          resetarChaveGroq();
+
+          const total = lerChaves().length;
+          await reply(`✅ *Chave do slot ${slot} configurada!*
+🎙️ Key: \`${mascarar(valor)}\`
+📦 Chaves ativas: *${total}/${MAX_SLOTS}*
+
+_Quando a cota de uma acabar, a próxima assume sozinha._`);
         } catch (e) {
           console.error('[KEYGROQ] erro:', e?.message || e);
           await reply("🐝 Ops! Ocorreu um erro inesperado. Tente novamente!");

@@ -23,6 +23,7 @@
 
 import axios from 'axios';
 import { spawn } from 'child_process';
+import { lerChaves, proximoIndice } from './groqKeys.js';
 
 /** Base da API (compativel com OpenAI). */
 const BASE = 'https://api.groq.com/openai/v1';
@@ -54,6 +55,9 @@ const MODELO_LLM = process.env.IAP_GROQ_LLM_MODEL || 'openai/gpt-oss-120b';
 const TIMEOUT_STT_MS = Number.parseInt(process.env.IAP_GROQ_TIMEOUT_MS || '45000', 10);
 const TIMEOUT_LLM_MS = Number.parseInt(process.env.IAP_GROQ_LLM_TIMEOUT_MS || '45000', 10);
 
+/** Qual chave esta' em uso agora (indice na lista de configuradas). */
+let _indiceChave = 0;
+
 /** Injetavel para os testes (sem rede). */
 let _httpPost = null;
 export function setGroqHttpForTest(fn) { _httpPost = typeof fn === 'function' ? fn : null; }
@@ -64,8 +68,67 @@ const post = (url, data, config) => (_httpPost ? _httpPost(url, data, config) : 
  * @returns {string}
  */
 export function chaveGroq() {
-  return String(process.env.GROQ_API_KEY || '').trim();
+  // A chave "de agora" — pode nao ser a do slot 1: quando a cota de uma acaba,
+  // a rotacao passa para a proxima e ela vira a atual.
+  const lista = lerChaves();
+  if (!lista.length) return '';
+  return lista[Math.min(_indiceChave, lista.length - 1)].chave;
 }
+
+/**
+ * Executa `fn(chave)` com a chave ATUAL e, se ela estourar cota ou for invalida,
+ * tenta a PROXIMA — ate' acabar as chaves.
+ *
+ * ## Por que so' nesses dois motivos
+ *
+ * O Groq responde **401/403** (chave invalida) e **429** (cota). Nos dois,
+ * tentar a mesma chave de novo nao adianta e a proxima resolve. Um erro de REDE
+ * (timeout, DNS) nao diz nada sobre a chave — rotacionar ali queimaria a cota
+ * das outras a toa.
+ *
+ * ## A fila NAO perde a chave que funcionou
+ *
+ * O `_indiceChave` e' o PONTEIRO GLOBAL: quando a chave 3 responde, ela vira a
+ * atual e a proxima chamada ja' comeca nela. Se a lista acabou e nada funcionou,
+ * o ponteiro volta para 0 (para o proximo minuto tentar a primeira de novo, ja'
+ * que a cota do Groq e' por minuto/dia).
+ *
+ * @template T
+ * @param {(chave: string) => Promise<T>} fn
+ * @returns {Promise<T>} o resultado do primeiro que der certo
+ * @throws o ultimo erro, quando todas falharem
+ */
+export async function comFailoverDeChave(fn) {
+  const lista = lerChaves();
+  if (!lista.length) throw new Error('sem_chave_groq');
+
+  let tentativas = 0;
+  let ultimoErro = null;
+
+  while (tentativas < lista.length) {
+    const indice = Math.min(_indiceChave, lista.length - 1);
+    const { chave } = lista[indice];
+    try {
+      const r = await fn(chave);
+      _indiceChave = indice;   // fixa a que funcionou
+      return r;
+    } catch (e) {
+      const tipo = classificarErroGroq(e).tipo;
+      if (tipo !== 'chave' && tipo !== 'limite') throw e;  // rede/payload: nao e' a chave
+      ultimoErro = e;
+      tentativas += 1;
+      if (tentativas >= lista.length) break;
+      _indiceChave = proximoIndice(indice, lista.length);
+    }
+  }
+
+  // Todas falharam: volta para a primeira, para a proxima tentativa (outro
+  // minuto) comecar de novo em vez de ficar presa na ultima.
+  _indiceChave = 0;
+  throw ultimoErro || new Error('sem_chave_groq');
+}
+
+
 
 /** Ha' chave configurada? */
 export function temGroq() {
@@ -137,8 +200,7 @@ export function classificarErroGroq(e) {
  * @returns {Promise<{ ok: boolean, texto?: string, motivo?: string, detalhe?: string, modelo?: string }>}
  */
 export async function groqChat({ texto, sistema, historico = [], modelo = MODELO_LLM, maxTokens, temperatura } = {}) {
-  const apiKey = chaveGroq();
-  if (!apiKey) return { ok: false, motivo: 'sem_chave_groq' };
+  if (!chaveGroq()) return { ok: false, motivo: 'sem_chave_groq' };
   if (!texto) return { ok: false, motivo: 'texto_vazio' };
 
   const mensagens = [];
@@ -150,7 +212,9 @@ export async function groqChat({ texto, sistema, historico = [], modelo = MODELO
   mensagens.push({ role: 'user', content: String(texto) });
 
   try {
-    const resp = await post(`${BASE}/chat/completions`, {
+    // O FAILOVER de chave: se esta estourou a cota (429) ou e' invalida
+    // (401/403), a proxima assume na hora — e' o que faz o plano gratis durar.
+    const resp = await comFailoverDeChave((apiKey) => post(`${BASE}/chat/completions`, {
       model: modelo,
       messages: mensagens,
       // Conversa de VOZ: resposta curta e' mais natural E mais rapida de
@@ -164,7 +228,7 @@ export async function groqChat({ texto, sistema, historico = [], modelo = MODELO
     }, {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       timeout: TIMEOUT_LLM_MS
-    });
+    }));
     const resposta = resp?.data?.choices?.[0]?.message?.content;
     const limpo = typeof resposta === 'string' ? resposta.trim() : '';
     if (!limpo) return { ok: false, motivo: 'resposta_vazia' };
@@ -300,8 +364,7 @@ export function normalizarParaGroq(arquivo, extensaoDoMime) {
  */
 export async function groqTranscrever(arquivo, mimeType = 'audio/ogg', { prompt } = {}) {
   if (!arquivo || !arquivo.length) return { ok: false, motivo: 'audio_vazio' };
-  const apiKey = chaveGroq();
-  if (!apiKey) return { ok: false, motivo: 'sem_chave_groq' };
+  if (!chaveGroq()) return { ok: false, motivo: 'sem_chave_groq' };
 
   const ext = extensaoDoAudio(mimeType);
   const pronto = await normalizarParaGroq(arquivo, ext);
@@ -322,10 +385,11 @@ export async function groqTranscrever(arquivo, mimeType = 'audio/ogg', { prompt 
     const vies = prompt || PROMPT_STT;
     if (vies) form.append('prompt', vies);
 
-    const resp = await post(`${BASE}/audio/transcriptions`, form, {
+    // Mesmo failover do chat: a chave que estourou sai, a proxima assume.
+    const resp = await comFailoverDeChave((apiKey) => post(`${BASE}/audio/transcriptions`, form, {
       headers: { Authorization: `Bearer ${apiKey}` },
       timeout: TIMEOUT_STT_MS
-    });
+    }));
     const bruto = typeof resp?.data === 'string' ? resp.data : (resp?.data?.text || '');
     const texto = String(bruto).trim();
     if (!texto) return { ok: false, motivo: 'sem_fala', modelo: MODELO_STT };
@@ -335,6 +399,12 @@ export async function groqTranscrever(arquivo, mimeType = 'audio/ogg', { prompt 
     return { ok: false, motivo: r.tipo, detalhe: r.detalhe, mensagem: r.mensagem };
   }
 }
+
+/** Volta o ponteiro da chave para a primeira (teste/diagnostico). */
+export function resetarChaveGroq() { _indiceChave = 0; }
+
+/** Qual chave esta' em uso (indice). Diagnostico. */
+export function indiceChaveGroq() { return _indiceChave; }
 
 /** Modelos em uso (diagnostico/testes). */
 export function configGroq() {
