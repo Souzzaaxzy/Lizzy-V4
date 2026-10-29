@@ -13771,3 +13771,62 @@ Duas armadilhas no mesmo ponto:
    `'ogg'` para qualquer coisa desconhecida fez o AMR "passar" pelo filtro e
    falhar na API. Um default que *parece* funcionar é pior que um erro claro —
    por isso o caminho de conteúdo desconhecido agora **converte**.
+
+
+## 🎧 `!iap` e `!transcrever` agora são SÓ GROQ (Gemini removido) (out/2026) ✅
+Pedido do dono: *"com o groq funcionou, tira o gemini do transcrever e do !iap,
+vamos testar apenas o groq nesses dois"*.
+
+### O que mudou
+O `!iap` fazia **duas** chamadas por turno (ouvir e pensar) e as duas passavam
+pelo **Gemini** — cota dividida, e era o STT que estourava o tempo. Agora os
+**dois lados** rodam no **Groq**, na **mesma chave** (`!keygroq`):
+
+| etapa | antes | agora |
+|---|---|---|
+| **ouvir** (STT) | Gemini → Groq (reserva) | **Groq** `whisper-large-v3-turbo` |
+| **pensar** (LLM) | Gemini (`ia.makeCognimaRequest`) | **Groq** `openai/gpt-oss-120b` |
+| `!transcrever` | Gemini → Groq (reserva) | **Groq** |
+
+O `!iap on` agora **exige a chave do Groq** (antes exigia a do Gemini). Sem ela,
+o comando orienta o `!keygroq` com o link.
+
+### O que **NÃO** mudou (de propósito)
+`!gemma`, `!phi`, `!qwen`, `!llama` e companhia **continuam no Gemini** (a chave
+do `!key`) — o pedido era só sobre os dois comandos de áudio. O **TTS** também
+segue com o **edge-tts** como principal (o Gemini TTS é reserva).
+
+### Módulo novo: `dados/src/utils/groqClient.js`
+Um cliente só para o Groq (API **OpenAI-compatível**, `api.groq.com/openai/v1`):
+- `groqChat` — LLM (`/chat/completions`), com system + histórico + `max_tokens`;
+- `groqTranscrever` — Whisper (`/audio/transcriptions`, multipart);
+- `classificarErroGroq` — erro pelo **corpo** (`chave|limite|rede|payload`), não
+  só pelo HTTP (mesma lição do Gemini, que devolvia 400 para chave inválida);
+- `extensaoDoAudio` / `extensaoPorConteudo` / `normalizarParaGroq` — o formato do
+  arquivo (a extensão decide no Groq; o **conteúdo manda** sobre o mimetype).
+
+O `iapStt.js` virou uma ponte fina (PCM → WAV → `groqTranscrever`), e o
+`iapSessao.js` deixou de importar o `ia.js` para o LLM.
+
+### Modelos (grátis no Groq, medidos)
+| uso | modelo | limites free |
+|---|---|---|
+| ouvir | `whisper-large-v3-turbo` | 20 RPM · 2.000 RPD · 7,2 mil seg. de áudio/h |
+| pensar | `openai/gpt-oss-120b` | 30 RPM · 1.000 RPD · 8K TPM |
+
+Alternativas de LLM grátis: `openai/gpt-oss-20b`, `qwen/qwen3.8-27b`.
+
+### Testes — `tests/iap.test.js` (**42 testes / 120 asserções, 0 falhas**)
+O teste central prova a separação: **com a chave do Groq, o Gemini NÃO é
+chamado** para ouvir (o dublê conta as chamadas dos dois lados). Mais:
+`groqChat` monta `system` + histórico + pergunta e limita `max_tokens`;
+`classificarErroGroq` acerta os 4 tipos; o modelo do LLM é o `gpt-oss-120b`; a
+falha do Groq sobe com o motivo (não há reserva Gemini). Regressões verdes:
+`ia` 20/50, `motor-chat-noise` 14/62, `cmd-suggest` 21/68.
+
+### LIMITE HONESTO
+Sem chave aqui, **não** exercitei uma conversa real de voz ponta a ponta. O que
+está provado: nenhum caminho do `!iap`/`!transcrever` toca no Gemini (teste que
+conta as chamadas), o payload do Groq (modelo, multipart, formato do arquivo) e
+a classificação de erro. Se o LLM do Groq não agradar na conversa, basta trocar
+`IAP_GROQ_LLM_MODEL` — sem mexer em código.

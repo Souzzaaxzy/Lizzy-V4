@@ -1298,9 +1298,8 @@ import {
   desligarIap,
   estadoIap
 } from './utils/iapSessao.js';
-// A RESERVA de transcricao (Groq Whisper): o `!transcrever` a usa quando o
-// Gemini falha. Fica no mesmo modulo do STT do `!iap` — uma fonte so'.
-import { transcreverArquivoGroq } from './utils/iapStt.js';
+// A RESERVA de transcricao (Groq Whisper): o `!transcrever` roda SO' nele.
+import { transcreverArquivoGroq, chaveGroq } from './utils/iapStt.js';
 // O CHAT DE VOZ (`!vozp`) e' um sistema SEPARADO do `!callp`: ponte de midia,
 // motor e registro proprios. Nada de estado compartilhado entre os dois.
 import {
@@ -36848,7 +36847,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             if (!st?.ativo) {
               return reply('🔇 O agente de voz está desligado neste grupo.');
             }
-            const rotuloStt = { groq: 'Groq Whisper (reserva ativa)', gemini: 'Gemini', nenhum: 'nenhum (configure !key)' };
+            const rotuloStt = { groq: 'Groq (Whisper + LLM)', nenhum: 'nenhum (configure !keygroq)' };
             return nazu.sendMessage(from, {
               text:
                 `╭━━━꧁༺ 🎙️ 𝐀𝐆𝐄𝐍𝐓𝐄 𝐃𝐄 𝐕𝐎𝐙 🎙️ ༻꧂━━━╮\n` +
@@ -36887,7 +36886,7 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
             const r = await ligarIap(from, { botName: nomebot });
             if (!r.ok) {
               const motivos = {
-                sem_chave: '❌ A chave da IA não está configurada. Use `' + prefix + 'key`.',
+                sem_chave_groq: '❌ A chave do Groq não está configurada.\n\nUse `' + prefix + 'keygroq gsk_...`.\n_Pegue grátis em https://console.groq.com/keys_',
                 sem_call: '❌ Não consegui conectar o agente à chamada. A call está de pé?'
               };
               return reply(motivos[r.motivo] || '❌ Não consegui ligar o agente de voz.');
@@ -41532,78 +41531,38 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
           if (audioSizeMB > 7) {
             return reply("❌ O áudio excede o limite de 7 minutos.");
           }
-          // Verificar se tem chave Gemini configurada
-          const transcribeKey = typeof ia.getGeminiApiKey === 'function' ? ia.getGeminiApiKey() : (process.env.GEMINI_API_KEY || '');
-          if (!transcribeKey) {
-            return reply("❌ Chave da IA não está configurada. Use !key para configurar.");
+          // Chave do GROQ — este comando roda SÓ nele agora (pedido do dono: o Gemini
+          // estourava o tempo no áudio). Configure com `!keygroq`.
+          if (!chaveGroq()) {
+            return reply("❌ A chave da transcrição (Groq) não está configurada.\n\nUse `" + groupPrefix + "keygroq gsk_...`.\n_Pegue grátis em https://console.groq.com/keys_");
           }
-          // Transcreve pelo MESMO caminho dos outros comandos de IA: a cadeia
-          // de modelos do `ia.js` + o Groq Whisper como reserva. Antes daqui
-          // saía um `axios.post` com o modelo FIXO — se o Google aposenta o
-          // nome, a transcrição inteira vira 404.
-          const b64Audio = audioBuffer.toString('base64');
-          const mimeType = quotedAudio.mimetype || 'audio/mpeg';
-          const transcribeRes = await ia.geminiRequestMultimodal({
-            // O alias rolante não envelhece (o nome fixo custava uma rodada 404).
-            modelo: process.env.IAP_STT_MODEL || 'gemini-flash-latest',
-            timeoutMs: Number(process.env.IAP_STT_TIMEOUT_MS || 45000),
-            corpo: {
-              contents: [
-                {
-                  parts: [
-                    { text: 'Transcreva o áudio fornecido. Retorne apenas a transcrição completa, sem comentários.' },
-                    { inlineData: { mimeType, data: b64Audio } }
-                  ]
-                }
-              ],
-              // Transcrever não precisa de raciocínio: desligar o thinking corta
-              // a latência (era o timeout de 90s no log do dono).
-              generationConfig: { thinkingConfig: { thinkingBudget: 0 } }
-            }
-          });
+          const mimeType = quotedAudio.mimetype || 'audio/ogg';
+          // O Groq Whisper decide o formato pela EXTENSÃO — o `transcreverArquivoGroq`
+          // cuida disso (e converte o que não for aceito).
+          const transcribeRes = await transcreverArquivoGroq(audioBuffer, mimeType).catch((e) => ({
+            ok: false, motivo: 'falha', detalhe: e?.message || String(e)
+          }));
 
-          // RESERVA: se o Gemini falhou, tenta o Groq Whisper.
-          let textoTranscrito = '';
-          let fonteTranscricao = 'gemini';
-          if (transcribeRes.ok) {
-            const candidate = transcribeRes.data?.candidates?.[0];
-            textoTranscrito = candidate?.content?.parts?.map((p) => (p && typeof p.text === 'string') ? p.text : '').join('') || '';
-          } else {
-            console.warn(`[TRANSCREVER] Gemini falhou | motivo=${transcribeRes.motivo} | ${String(transcribeRes.detalhe || '').slice(0, 160)}`);
-            // RESERVA: o mesmo Groq Whisper que o `!iap` usa. Aqui já temos o
-            // ARQUIVO baixado (não o PCM), então vai direto.
-            const reserva = await transcreverArquivoGroq(audioBuffer, mimeType).catch(() => null);
-            if (reserva?.ok) {
-              textoTranscrito = reserva.texto;
-              fonteTranscricao = 'groq';
-              console.warn('[TRANSCREVER] transcrito pela RESERVA (Groq Whisper)');
-            } else if (reserva) {
-              console.warn(`[TRANSCREVER] reserva (Groq) falhou | motivo=${reserva.motivo} | ${String(reserva.detalhe || '').slice(0, 120)}`);
-            }
+          if (!transcribeRes.ok) {
+            console.warn(`[TRANSCREVER] Groq falhou | motivo=${transcribeRes.motivo} | ${String(transcribeRes.detalhe || '').slice(0, 160)}`);
+            const avisos = {
+              chave: '❌ A chave do Groq é inválida ou expirou. Use `!keygroq` para configurar de novo.',
+              chave_groq: '❌ A chave do Groq é inválida ou expirou. Use `!keygroq` para configurar de novo.',
+              sem_chave_groq: '❌ Chave do Groq não configurada. Use `!keygroq`.',
+              limite: '⏳ Limite de requisições do Groq atingido. Tente novamente em instantes.',
+              rede: '⌛ O Groq demorou demais para responder. Tente um áudio mais curto.',
+              payload: '❌ O Groq não aceitou o formato deste áudio.',
+              sem_fala: '❌ Não foi possível transcrever o áudio. Ele pode estar inaudível ou vazio.'
+            };
+            return reply(avisos[transcribeRes.motivo] || '❌ Não consegui transcrever agora. Tente de novo em instantes.');
           }
-
-          if (!textoTranscrito || textoTranscrito.trim() === '') {
-            if (!transcribeRes.ok) {
-              const avisos = {
-                chave: '❌ A chave da IA é inválida ou expirou. Use `!key` para configurar de novo.',
-                limite: '⏳ Limite de requisições da IA atingido. Tente novamente em instantes.',
-                rede: '⌛ A IA demorou demais para responder. Tente um áudio mais curto, ou configure a reserva com `!keygroq`.',
-                modelo_indisponivel: '❌ Nenhum modelo de IA disponível na sua conta.'
-              };
-              return reply(avisos[transcribeRes.motivo] || '❌ Não consegui falar com a IA agora. Tente de novo em instantes.');
-            }
-            return reply("❌ Não foi possível transcrever o áudio. Ele pode estar inaudível ou vazio.");
-          }
-          await reply(`📝 Transcrição${fonteTranscricao === 'groq' ? ' _(via reserva)_' : ''}:\n\n${textoTranscrito}`);
+          await reply(`📝 Transcrição:\n\n${transcribeRes.texto}`);
         } catch (e) {
           // NUNCA `console.error(e)` aqui: o erro do axios carrega
           // `error.config.data`, que na transcrição é o ÁUDIO INTEIRO em base64
           // (centenas de KB). Era o "erro gigante que não dá para copiar".
-          const resumo = ia.classificarErroGemini
-            ? ia.classificarErroGemini(e)
-            : { mensagem: e?.message || String(e), detalhe: '' };
-          console.error(`[TRANSCREVER] erro: ${resumo.mensagem}${resumo.detalhe ? ` | ${String(resumo.detalhe).slice(0, 200)}` : ''}`);
-          reply(mensagemErroIA(e));
+          console.error(`[TRANSCREVER] erro: ${String(e?.message || e).slice(0, 200)}`);
+          reply('❌ Não consegui transcrever agora. Tente de novo em instantes.');
         }
         break;
       // ═══════════════════════════════════════════════════════════════

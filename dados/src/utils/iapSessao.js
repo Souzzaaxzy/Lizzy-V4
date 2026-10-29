@@ -5,8 +5,8 @@
  * ninguem: recebe `falar`/`pensar`/`transcrever`/`sintetizar`. Este modulo faz a
  * unica coisa que falta -- injetar as dependencias REAIS:
  *
- *   transcrever -> iapStt (Gemini, a chave do `!key` via `ia.js`)
- *   pensar      -> ia.js (o MESMO modelo dos outros comandos de IA)
+ *   transcrever -> iapStt  (Groq Whisper, a chave do `!keygroq`)
+ *   pensar      -> groqClient (Groq, o MESMO provedor e chave)
  *   sintetizar  -> iapTts (edge-tts; Gemini TTS como reserva)
  *   falar       -> callMedia.falarNaCallDoGrupo (o motor, `feedLiveAudio`)
  *
@@ -15,7 +15,8 @@
  */
 
 import * as ia from '../funcs/private/ia.js';
-import { transcreverPcm, motorSttAtivo, chaveGroq } from './iapStt.js';
+import { groqChat } from './groqClient.js';
+import { transcreverPcm, chaveGroq } from './iapStt.js';
 import { sintetizarFala } from './iapTts.js';
 import { iap, promptDoSistema } from './iapVoice.js';
 import {
@@ -30,7 +31,12 @@ function logIap(msg, extra) {
   console.log(`🎙️ [IAP] ${msg}${detalhe}`);
 }
 
-/** A chave do Gemini em uso (a mesma que o `!key` grava). */
+/**
+ * A chave do Gemini em uso (a mesma que o `!key` grava).
+ *
+ * Ainda existe para o TTS de RESERVA (o edge-tts e' o principal). O STT e o LLM
+ * do `!iap` NAO a usam mais — os dois vao pelo Groq.
+ */
 function chaveGemini() {
   try {
     if (typeof ia.getGeminiApiKey === 'function') return ia.getGeminiApiKey();
@@ -41,9 +47,11 @@ function chaveGemini() {
 /**
  * O LLM do agente: texto -> resposta.
  *
- * Usa o `ia.makeCognimaRequest`, que e' o caminho dos outros comandos de IA --
- * ele ja' resolve a cadeia de modelos e o fallback. O historico entra como
- * mensagens anteriores, para o agente lembrar do assunto.
+ * **Groq** (`openai/gpt-oss-120b`), na mesma chave do `!keygroq`. O Gemini foi
+ * removido daqui junto com o STT (pedido do dono): os dois lados do `!iap`
+ * passam pelo mesmo provedor, sem dividir cota com os outros comandos.
+ *
+ * O historico entra como mensagens anteriores, para o agente lembrar do assunto.
  *
  * @param {string} texto
  * @param {Array<{role:string, content:string}>} historico
@@ -54,14 +62,18 @@ function chaveGemini() {
  */
 export async function pensarComIa(texto, historico = [], { personalidade, botName } = {}) {
   const sistema = promptDoSistema({ botName, personalidade });
-  const r = await ia.makeCognimaRequest(
-    ia.GEMINI_DEFAULT_MODEL,
+  const r = await groqChat({
     texto,
     sistema,
-    historico.map((h) => ({ role: h.role, content: h.content }))
-  );
-  const resposta = r?.data?.choices?.[0]?.message?.content;
-  return typeof resposta === 'string' ? resposta.trim() : '';
+    historico: historico.map((h) => ({ role: h.role, content: h.content }))
+  });
+  if (!r.ok) {
+    logIap(`LLM falhou: ${r.motivo}`, {
+      detalhe: r.detalhe ? String(r.detalhe).slice(0, 200) : undefined
+    });
+    return '';
+  }
+  return r.texto || '';
 }
 
 /**
@@ -74,7 +86,9 @@ export async function pensarComIa(texto, historico = [], { personalidade, botNam
  * @returns {Promise<{ ok: boolean, motivo?: string }>}
  */
 export async function ligarIap(grupo, { botName, personalidade } = {}) {
-  if (!chaveGemini()) return { ok: false, motivo: 'sem_chave' };
+  // O `!iap` inteiro roda no Groq (ouvir E pensar): sem a chave dele nao ha' o
+  // que ligar. Antes esta checagem era da chave do Gemini.
+  if (!chaveGroq()) return { ok: false, motivo: 'sem_chave_groq' };
 
   // O modo de audio externo precisa estar ligado, senao o motor ignora o que
   // chega por `feedLiveAudio` e volta a tocar o arquivo pre-carregado.
@@ -92,11 +106,11 @@ export async function ligarIap(grupo, { botName, personalidade } = {}) {
     log: logIap,
     pensar: (texto, historico) => pensarComIa(texto, historico, { botName, personalidade }),
     transcrever: async (pcm) => {
-      const r = await transcreverPcm(pcm, { apiKey: chaveGemini() });
+      const r = await transcreverPcm(pcm, { apiKey: chaveGroq() });
       if (!r.ok) {
         // O MOTIVO tem de aparecer: antes daqui saia um `null` mudo e o log
         // dizia so' "sem fala reconhecida" para QUALQUER causa (chave, limite,
-        // modelo, audio vazio). Era impossivel diagnosticar.
+        // formato, audio vazio). Era impossivel diagnosticar.
         logIap(`STT falhou: ${r.motivo}`, {
           grupo,
           detalhe: r.detalhe ? String(r.detalhe).slice(0, 200) : undefined,
@@ -104,9 +118,6 @@ export async function ligarIap(grupo, { botName, personalidade } = {}) {
         });
         return null;
       }
-      // A FONTE importa: se veio do Groq, o Gemini falhou antes — e' o sinal de
-      // que a reserva esta' salvando o agente.
-      if (r.fonte === 'groq') logIap('STT pela RESERVA (Groq Whisper)', { grupo });
       return r.texto;
     },
     sintetizar: async (texto) => {
@@ -138,11 +149,12 @@ export async function desligarIap(grupo) {
 export function estadoIap(grupo) {
   const st = iap.estado(grupo);
   if (!st) return st;
-  // O motor de STT em uso (Groq ou Gemini) — o dono precisa saber qual esta'
-  // ouvindo, e a reserva so' existe se houver chave.
+  // O `!iap` roda INTEIRO no Groq (ouvir e pensar) — o dono precisa ver isso,
+  // e se a chave esta' presente.
   return {
     ...st,
-    stt: motorSttAtivo(),
+    stt: chaveGroq() ? 'groq' : 'nenhum',
+    llm: chaveGroq() ? 'groq' : 'nenhum',
     reservaGroq: Boolean(chaveGroq())
   };
 }
