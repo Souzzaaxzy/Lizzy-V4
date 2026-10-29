@@ -14209,3 +14209,54 @@ asserções falham**.
 
 Regressões verdes: `ia` 20/50, `motor-chat-noise` 14/62, `cmd-suggest` 21/68,
 `get-message-inspector` 54/269.
+
+## 🚨 `pip: command not found` — a VOZ do `!iap` virou **msedge-tts (Node)** (out/2026) ✅
+O log do painel do dono entregou a causa de fundo:
+
+```
+/entrypoint.sh: line 16: pip: command not found
+```
+
+O container do painel **nao tem `pip`** (nem necessariamente python). A voz era o
+pacote **PYTHON** `edge-tts`, instalado por `pip` — entao a instalacao **nunca**
+acontecia, o TTS caia no Gemini, e o Gemini estourou a cota (`gemini_limite` no
+meio da conversa). Foi por isso que a rodada anterior ("instalar o edge-tts
+sozinho") nao resolveu: **o instalador nao tinha como instalar**.
+
+### A correcao: motor Node, sem pip/python
+A voz agora e' o **`msedge-tts`**, que fala a MESMA API do Microsoft Edge direto
+do **Node**:
+
+| | antes | agora |
+|---|---|---|
+| motor | `edge-tts` (**Python**, via pip) | **`msedge-tts`** (modulo **npm**) |
+| instalacao | `pip install` (nao existia no host) | **`npm install`** (o bot ja' roda) |
+| MP3 | o binario Python gerava | o servico devolve pronto (**sem ffmpeg**) |
+| reserva | Gemini (cota estourada) | binario Python, **se ja' instalado** |
+
+O `ffmpeg` **continua** sendo usado — mas so' para converter o MP3 em **PCM
+16 kHz** (o formato do motor), e ele ja' e' exigencia do bot (YouTube/stickers).
+Ele **nao** gera mais o audio.
+
+### O que saiu
+- `garantirEdgeTts()` e toda a logica de `pip`/`ensurepip`/`--break-system-packages`
+  (nao ha o que instalar: o modulo vem no `npm install`);
+- o `edge-tts` saiu da lista de dependencias de **sistema** do `config.js`;
+- o `update.js` trocou `edgeTts()` (pip) por **`vozIap()`** (so' CONFERE o modulo);
+- as mensagens do `!iap on` perderam a mencao a `pip install`.
+
+### Verificacao
+- **`tests/iap.test.js`: 63 testes / 189 asserções, 0 falhas**, rodados com
+  **`PATH` e `HOME` "hostis"** (sem pip, sem python, sem `~/.local/bin`) — a voz
+  **liga de qualquer forma**. O teste do `ligarIap` passou de "recusa sem a voz"
+  para "**liga** mesmo sem pip/python".
+- Medido ao vivo: `garantirVoz()` → `{ok:true, fonte:'msedge-tts'}`;
+  `sintetizarFala('Oi, eu sou a Lizzy.')` → **`{ok:true, fonte:'msedge-tts', 2.3s}`**.
+- Regressões verdes: `ia` 20/50, `motor-chat-noise` 14/62, `cmd-suggest` 21/68,
+  `get-message-inspector` 54/269. `index.js` carrega OK.
+
+### Licao de metodo
+Uma dependencia que precisa de **pip + python + ffmpeg** num host que so' garante
+**node/npm** e' fragil por construcao. O certo e' usar o que o bot **ja' instala**.
+Quando o sintoma e' "a correcao nao chega", o log do **entrypoint** do painel diz
+mais que o log do bot.
