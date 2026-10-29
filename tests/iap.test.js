@@ -470,11 +470,28 @@ await test('iapStt: 401 vira motivo de chave (o comando orienta o !key)', async 
   const stt = await import(new URL('../dados/src/utils/iapStt.js', import.meta.url).href);
   stt.setIapHttpForTest(async () => {
     const e = new Error('unauthorized');
-    e.response = { status: 401, data: { error: { message: 'API key not valid' } } };
+    e.response = { status: 401, data: { error: { message: 'API key not valid', status: 'UNAUTHENTICATED' } } };
     throw e;
   });
   const r = await stt.transcreverPcm(new Float32Array(960), { apiKey: 'K' });
-  ok(r.ok === false && r.motivo === 'chave_invalida', 'classifica como chave_invalida');
+  ok(r.ok === false && r.motivo === 'chave', `classifica como chave (${r.motivo})`);
+  stt.setIapHttpForTest(null);
+});
+
+await test('iapStt: chave inválida em HTTP 400 também é "chave" (o caso real)', async () => {
+  // MEDIDO: a API devolve 400 + reason API_KEY_INVALID — não 401/403. Tratar
+  // 400 como "modelo inexistente" fazia o bot tentar 8 modelos e mentir o erro.
+  const stt = await import(new URL('../dados/src/utils/iapStt.js', import.meta.url).href);
+  stt.setIapHttpForTest(async () => {
+    const e = new Error('Request failed with status code 400');
+    e.response = {
+      status: 400,
+      data: { error: { code: 400, message: 'API key not valid. Please pass a valid API key.', status: 'INVALID_ARGUMENT', details: [{ reason: 'API_KEY_INVALID' }] } }
+    };
+    throw e;
+  });
+  const r = await stt.transcreverPcm(new Float32Array(960), { apiKey: 'K' });
+  ok(r.ok === false && r.motivo === 'chave', `400 de chave vira motivo chave (${r.motivo})`);
   stt.setIapHttpForTest(null);
 });
 
@@ -484,21 +501,55 @@ await test('iapStt: 401 vira motivo de chave (o comando orienta o !key)', async 
 
 await test('iapTts: o fallback do Gemini devolve PCM 24 kHz', async () => {
   const tts = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
+  const { spawnSync } = await import('child_process');
+  const temFfmpeg = spawnSync(process.env.FFMPEG_PATH || 'ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0;
+  if (!temFfmpeg) {
+    console.log('     (pulado: o resample 24k→16k precisa do ffmpeg)');
+    return;
+  }
   // PCM 24 kHz cru, 16-bit LE, 4800 amostras (200 ms).
   const bruto = Buffer.alloc(4800 * 2);
   for (let i = 0; i < 4800; i++) bruto.writeInt16LE(Math.round(Math.sin(i / 20) * 16000), i * 2);
   tts.setIapTtsHttpForTest(async () => ({
     data: { candidates: [{ content: { parts: [{ inlineData: { data: bruto.toString('base64') } }] } }] }
   }));
-  // Sem edge-tts no PATH de teste: cai no Gemini.
-  const antigoPath = process.env.PATH;
-  process.env.PATH = '/nonexistent';
+  // Força o motor Gemini (não depende do PATH para escolher o motor).
+  process.env.IAP_TTS_ENGINE = 'gemini';
   const r = await tts.sintetizarFala('teste', { apiKey: 'K' });
-  process.env.PATH = antigoPath;
+  delete process.env.IAP_TTS_ENGINE;
   ok(r.ok === true, `ok (${r.motivo || ''})`);
   ok(r.fonte === 'gemini-tts', `fonte gemini-tts (${r.fonte})`);
   ok(r.pcm.length > 0, 'devolveu amostras');
   tts.setIapTtsHttpForTest(null);
+});
+
+await test('iapTts: o motor Gemini é CHAMADO com o áudio inline esperado', async () => {
+  // Mede o CAMINHO até o Gemini mesmo sem ffmpeg (o resample é a última etapa).
+  const tts = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
+  const bruto = Buffer.alloc(4800 * 2).fill(1);
+  let visto = null;
+  tts.setIapTtsHttpForTest(async (url, body) => {
+    visto = { url, body };
+    return { data: { candidates: [{ content: { parts: [{ inlineData: { data: bruto.toString('base64') } }] } }] } };
+  });
+  process.env.IAP_TTS_ENGINE = 'gemini';
+  await tts.sintetizarFala('olá', { apiKey: 'K' });
+  delete process.env.IAP_TTS_ENGINE;
+  tts.setIapTtsHttpForTest(null);
+  ok(visto !== null, 'chamou o Gemini TTS');
+  ok(/tts/.test(visto.url), `usou um modelo TTS (${visto.url.split('/models/')[1]?.split(':')[0]})`);
+  ok(visto.body?.generationConfig?.responseModalities?.includes('AUDIO'), 'pediu AUDIO');
+  ok(visto.body?.generationConfig?.speechConfig?.voiceConfig?.prebuiltVoiceConfig?.voiceName, 'mandou a voz');
+  ok(visto.body?.contents?.[0]?.parts?.[0]?.text === 'olá', 'mandou o texto');
+});
+
+await test('iapTts: IAP_TTS_ENGINE=gemini não tenta o edge-tts', async () => {
+  const tts = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
+  process.env.IAP_TTS_ENGINE = 'gemini';
+  // Sem dublê e sem chave: o Gemini falha, mas o edge-tts NÃO deve ser chamado.
+  const r = await tts.sintetizarFala('teste', {});
+  delete process.env.IAP_TTS_ENGINE;
+  ok(r.ok === false && r.motivo === 'tts_indisponivel', `não caiu no edge (${r.motivo})`);
 });
 
 await test('iapTts: texto vazio não sintetiza', async () => {

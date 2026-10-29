@@ -1198,6 +1198,11 @@ export const handleGroupParticipantsUpdate = async (nazu, { id, participants, ac
         console.error(`\x1b[31m[ERRO PARTICIPANTS UPDATE]:\x1b[0m`, e);
     }
 };
+// O caminho e' o do PROJETO (relativo a este arquivo), NAO o CWD: o `!key`
+// grava a chave em `<raiz>/.env` por caminho absoluto, mas o painel pode
+// iniciar o bot de outro diretorio — com `dotenv.config()` cru, a chave era
+// gravada e depois NAO lida ("a IA parou de funcionar").
+dotenv.config({ path: fileURLToPath(new URL('../../.env', import.meta.url)), quiet: true });
 dotenv.config();
 import { exec, execSync, spawn } from 'child_process';
 import { promisify } from 'util';
@@ -41479,30 +41484,38 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
           if (!transcribeKey) {
             return reply("❌ Chave da IA não está configurada. Use !key para configurar.");
           }
-          // Enviar para transcrição via Google Gemini (áudio inline)
+          // Transcreve pelo MESMO caminho dos outros comandos de IA: a cadeia
+          // de modelos do `ia.js` (modelo preferido -> aliases -> descobertos ->
+          // fallback). Antes daqui saía um `axios.post` com o modelo FIXO
+          // (`GEMINI_DEFAULT_MODEL`) — se o Google aposenta o nome, a
+          // transcrição inteira vira 404 e o comando não diz por quê.
           const b64Audio = audioBuffer.toString('base64');
           const mimeType = quotedAudio.mimetype || 'audio/mpeg';
-          const transcribeModel = ia.GEMINI_DEFAULT_MODEL;
-          const transcribeRes = await axios.post(
-            `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(transcribeModel)}:generateContent`,
-            {
+          const transcribeRes = await ia.geminiRequestMultimodal({
+            modelo: process.env.IAP_STT_MODEL || 'gemini-2.5-flash',
+            timeoutMs: 90000,
+            corpo: {
               contents: [
                 {
                   parts: [
                     { text: 'Transcreva o áudio fornecido. Retorne apenas a transcrição completa, sem comentários.' },
-                    { inlineData: { mimeType: mimeType, data: b64Audio } }
+                    { inlineData: { mimeType, data: b64Audio } }
                   ]
                 }
               ]
-            },
-            {
-              headers: {
-                'Content-Type': 'application/json',
-                'x-goog-api-key': transcribeKey
-              },
-              timeout: 90000
             }
-          );
+          });
+          if (!transcribeRes.ok) {
+            // O motivo REAL vai para o usuário (chave / limite / modelo / rede).
+            console.warn(`[TRANSCREVER] falhou | motivo=${transcribeRes.motivo} | ${transcribeRes.detalhe || ''}`);
+            const avisos = {
+              chave: '❌ A chave da IA é inválida ou expirou. Use `!key` para configurar de novo.',
+              limite: '⏳ Limite de requisições da IA atingido. Tente novamente em instantes.',
+              sem_chave: '❌ Chave da IA não configurada. Use `!key`.',
+              modelo_indisponivel: '❌ Nenhum modelo de IA disponível na sua conta.'
+            };
+            return reply(avisos[transcribeRes.motivo] || '❌ Não consegui falar com a IA agora. Tente de novo em instantes.');
+          }
           const candidate = transcribeRes.data?.candidates?.[0];
           const transcription = candidate?.content?.parts?.map((p) => (p && typeof p.text === 'string') ? p.text : '').join('') || '';
           if (!transcription || transcription.trim() === '') {
@@ -41510,8 +41523,14 @@ ${nivelSorte >= 70 ? '🎉 Hoje é seu dia de sorte!' : nivelSorte >= 40 ? '🤔
           }
           await reply(`📝 Transcrição:\n\n${transcription}`);
         } catch (e) {
-          console.error(e);
-          reply("ocorreu um erro 💔");
+          // NUNCA `console.error(e)` aqui: o erro do axios carrega
+          // `error.config.data`, que na transcrição é o ÁUDIO INTEIRO em base64
+          // (centenas de KB). Era o "erro gigante que não dá para copiar".
+          const resumo = ia.classificarErroGemini
+            ? ia.classificarErroGemini(e)
+            : { mensagem: e?.message || String(e), detalhe: '' };
+          console.error(`[TRANSCREVER] erro: ${resumo.mensagem}${resumo.detalhe ? ` | ${String(resumo.detalhe).slice(0, 200)}` : ''}`);
+          reply(mensagemErroIA(e));
         }
         break;
       // ═══════════════════════════════════════════════════════════════

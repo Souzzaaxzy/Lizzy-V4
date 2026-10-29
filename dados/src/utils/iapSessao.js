@@ -93,7 +93,18 @@ export async function ligarIap(grupo, { botName, personalidade } = {}) {
     pensar: (texto, historico) => pensarComIa(texto, historico, { botName, personalidade }),
     transcrever: async (pcm) => {
       const r = await transcreverPcm(pcm, { apiKey: chaveGemini() });
-      return r.ok ? r.texto : null;
+      if (!r.ok) {
+        // O MOTIVO tem de aparecer: antes daqui saia um `null` mudo e o log
+        // dizia so' "sem fala reconhecida" para QUALQUER causa (chave, limite,
+        // modelo, audio vazio). Era impossivel diagnosticar.
+        logIap(`STT falhou: ${r.motivo}`, {
+          grupo,
+          detalhe: r.detalhe ? String(r.detalhe).slice(0, 200) : undefined,
+          modelo: r.modelo
+        });
+        return null;
+      }
+      return r.texto;
     },
     sintetizar: async (texto) => {
       const r = await sintetizarFala(texto, { apiKey: chaveGemini() });

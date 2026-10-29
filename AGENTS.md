@@ -13515,3 +13515,89 @@ que está provado: as strings vêm do `zapo-js` (não do Baileys), as três opç
 são **lidas** pela versão instalada (1.10.0), o filtro preserva call+infra e
 dropa chat (medido com o matcher real do pacote), e a suíte de call segue verde.
 Se algo do motor ainda aparecer, o logger filtrado não esconde `error`.
+
+
+## 🚨 "A IA NÃO FUNCIONA" — o 400 de CHAVE e o .env fora do CWD (out/2026) ✅
+Relato do dono: *"nem os comandos normais de IA não funcionam, o `!transcrever`
+mesmo dá um erro gigante nas logs, dá nem pra copiar"*. **Dois bugs** — e o
+segundo explica por que a chave "sumia".
+
+### BUG A — a chave inválida chega como HTTP **400**, e o código tratava 400 como "modelo não existe"
+Medido contra a API real (`curl`):
+
+| situação | HTTP | `reason` / mensagem |
+|---|---|---|
+| **chave inválida** | **400** | `API_KEY_INVALID`, "API key not valid" |
+| payload malformado | 400 | "Invalid JSON payload" |
+| modelo inexistente | 404 | "is not found for API version" |
+| modelo aposentado | 404 | "is no longer available to new users" |
+| limite | 429 | "Resource has been exhausted" |
+| sem permissão | 403 | "Permission denied" |
+
+O `ia.js` fazia `if (status === 404 || status === 400) continue` — então uma
+**chave inválida** (que é 400!) fazia o bot **tentar os 8 modelos**, gerar **8
+linhas de log** e terminar com `[AI_ERROR] Falha na requisição: API key not
+valid`, que **não dizia qual era o problema**. Reproduzido com dublê.
+
+**Correção**: `classificarErroGemini(erro)` olha o **corpo** (não só o HTTP):
+`reason` / `status` / mensagem → `chave | modelo | limite | payload | rede |
+outro`. Só `modelo` percorre a cadeia; `chave` e `limite` falham na hora.
+Medido depois: **1 chamada** e a mensagem *"API key inválida ou sem permissão…
+Use `!key`"*.
+
+### BUG B — a chave era GRAVADA num caminho e LIDA de outro (o CWD)
+- `!key` grava em `path.join(__dirname, '../../.env')` → **`<raiz>/.env`**
+  (absoluto, correto).
+- `ia.js` e `index.js` chamavam **`dotenv.config()` cru**, que procura no
+  **CWD**. O `start.js` passa o caminho certo, mas esses dois não.
+
+**Medido**: rodando de outro diretório, `getGeminiApiKey()` volta **VAZIA** com
+o `.env` na raiz do projeto. O painel (Pterodactyl/HostSquare) pode iniciar o
+bot de um CWD que não é a raiz → a chave configurada **não é lida** e a IA toda
+para, sem nada apontando para isso.
+
+**Correção**: os dois carregam por caminho do **projeto**
+(`fileURLToPath(new URL('../../.env', import.meta.url))` no `index.js`,
+`'../../../../.env'` no `ia.js`). Verificado que os **três** caminhos (o do
+`!key` e os dois de leitura) convergem para o mesmo arquivo.
+
+### BUG C — o "erro gigante que não dá para copiar" (`!transcrever`)
+Dois defeitos no mesmo comando:
+1. **modelo FIXO** (`ia.GEMINI_DEFAULT_MODEL`) sem cadeia — se o Google
+   aposenta o nome, a transcrição inteira vira 404;
+2. **`console.error(e)`** imprimia o erro do **axios** inteiro — e ele carrega
+   `error.config.data`, que na transcrição é o **áudio em base64** (centenas de
+   KB). Era o "erro gigante".
+
+**Correção**: usa `ia.geminiRequestMultimodal` (a mesma cadeia dos outros
+comandos) e o log agora sai como **uma linha curta**
+(`[TRANSCREVER] falhou | motivo=… | <mensagem>`), com o motivo real indo para o
+usuário (`chave` / `limite` / `modelo_indisponivel`).
+
+### O `!iap` também parou de mentir
+`iapSessao` engolia o motivo (`r.ok ? r.texto : null`), então o log dizia só
+**"sem fala reconhecida"** para QUALQUER causa (chave, limite, modelo, áudio
+vazio). Agora o STT falho loga `STT falhou: <motivo> | <detalhe>`. E o `iapStt`
+passou a usar a **cadeia de modelos** (`geminiRequestMultimodal`) em vez do nome
+fixo `gemini-2.5-flash`.
+O `iapTts` ganhou **`IAP_TTS_ENGINE`** (`auto` | `edge` | `gemini`) para forçar
+um motor — o teste do fallback do Gemini dependia do `PATH` para escolher.
+
+### Testes
+- `tests/ia.test.js` — **20 testes / 50 asserções, 0 falhas** (+3: chave em 400
+  vira `chave`; distingue modelo/limite/payload; e **a chave inválida para na 1ª
+  chamada** — antes eram 8).
+- `tests/iap.test.js` — **30 testes / 71 asserções, 0 falhas** (+3: 400 de chave
+  → motivo `chave`; o motor Gemini é chamado com `AUDIO` + voz + texto;
+  `IAP_TTS_ENGINE=gemini` não tenta o edge-tts).
+- Regressões verdes: `motor-chat-noise` 14/62, `cmd-suggest` 21/68,
+  `get-message-inspector` 54/269, `callp` 50/118, `callp-regressions` 38/115,
+  `musicap` 24/70.
+
+### LIMITE HONESTO
+Não tenho a chave do dono neste ambiente, então **não** validei a resposta real
+do Gemini com uma chave válida. O que está provado: as formas de erro foram
+**medidas** contra a API real (com curl), a classificação acerta os 6 casos, a
+chave inválida para na 1ª chamada, e o `.env` é lido do mesmo lugar onde o
+`!key` grava (medido rodando de outro CWD). Se a IA continuar falhando, a
+mensagem agora **diz o motivo** em vez de tentar 8 modelos.

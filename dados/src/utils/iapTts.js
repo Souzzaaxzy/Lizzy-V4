@@ -197,6 +197,10 @@ async function sintetizarGemini(texto, apiKey) {
 /**
  * Sintetiza a fala do agente e devolve PCM 16 kHz mono pronto para o motor.
  *
+ * `IAP_TTS_ENGINE` escolhe o motor: `auto` (padrao) tenta edge-tts e cai no
+ * Gemini; `edge`/`gemini` forcam um so' (util para testar e para quem tem
+ * preferencia).
+ *
  * @param {string} texto
  * @param {object} [opts]
  * @param {string} [opts.apiKey] chave do Gemini (fallback)
@@ -206,18 +210,26 @@ export async function sintetizarFala(texto, { apiKey } = {}) {
   const limpo = String(texto || '').trim();
   if (!limpo) return { ok: false, motivo: 'texto_vazio' };
 
+  const motor = String(process.env.IAP_TTS_ENGINE || 'auto').toLowerCase();
+  const tentarEdge = motor === 'auto' || motor === 'edge';
+  const tentarGemini = motor === 'auto' || motor === 'gemini';
+
   // 1) edge-tts -> MP3 -> ffmpeg reamostra para 16 kHz.
-  const mp3 = await sintetizarEdge(limpo);
-  if (mp3 && mp3.length) {
-    const pcm = await converterPara16k(mp3);
-    if (pcm && pcm.length) return { ok: true, pcm, fonte: 'edge-tts' };
+  if (tentarEdge) {
+    const mp3 = await sintetizarEdge(limpo);
+    if (mp3 && mp3.length) {
+      const pcm = await converterPara16k(mp3);
+      if (pcm && pcm.length) return { ok: true, pcm, fonte: 'edge-tts' };
+    }
   }
 
   // 2) Gemini TTS -> PCM 24 kHz -> reamostra.
-  const pcm24 = await sintetizarGemini(limpo, apiKey);
-  if (pcm24 && pcm24.length) {
-    const pcm = await resamplePcm(pcm24, 24000, TAXA_MOTOR);
-    if (pcm && pcm.length) return { ok: true, pcm, fonte: 'gemini-tts' };
+  if (tentarGemini) {
+    const pcm24 = await sintetizarGemini(limpo, apiKey);
+    if (pcm24 && pcm24.length) {
+      const pcm = await resamplePcm(pcm24, 24000, TAXA_MOTOR);
+      if (pcm && pcm.length) return { ok: true, pcm, fonte: 'gemini-tts' };
+    }
   }
 
   return { ok: false, motivo: 'tts_indisponivel' };

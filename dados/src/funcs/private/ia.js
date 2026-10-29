@@ -5,7 +5,13 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 
-// Carregar variáveis de ambiente
+// Carregar variáveis de ambiente.
+//
+// O caminho e' o do PROJETO (relativo a este arquivo), NAO o CWD: o `!key`
+// grava a chave em `<raiz>/.env` por caminho absoluto, e o painel pode iniciar
+// o bot de outro diretorio. Com `dotenv.config()` cru, a chave era gravada e
+// depois NAO lida — "a IA parou de funcionar" sem nada apontar para isso.
+dotenv.config({ path: fileURLToPath(new URL('../../../../.env', import.meta.url)), quiet: true });
 dotenv.config();
 
 import userContextDB from '../../utils/userContextDB.js';
@@ -1740,48 +1746,200 @@ async function makeGeminiRequest(modelo, texto, systemPrompt = null, historico =
         if (modelName !== model) console.warn(`[Gemini API] ⚠️ Modelo "${model}" indisponível; usando "${modelName}".`);
         return { success: true, data };
       } catch (error) {
-        const status = error.response?.status;
-        const apiMessage = error.response?.data?.error?.message || error.message;
+        const erro = classificarErroGemini(error);
+        const apiMessage = erro.detalhe;
         ultimoErro = error;
 
-        // 404/400 costumam significar "esse modelo não existe" — tenta o próximo
-        // modelo em vez de queimar as tentativas no mesmo nome.
-        if (status === 404 || status === 400) {
-          console.warn(`[Gemini API] Modelo "${modelName}" indisponível (${status}); tentando o próximo.`);
+        // SO' "modelo indisponivel" pula para o proximo nome. Chave/limite/rede
+        // NAO — insistir so' enche o log (a chave invalida e' HTTP 400 e era
+        // tratada como "modelo nao existe": o bot tentava os 8 modelos).
+        if (erro.tipo === 'modelo') {
+          console.warn(`[Gemini API] Modelo "${modelName}" indisponível; tentando o próximo.`);
           break;
         }
 
-        let friendlyMessage;
-        if (status === 401 || status === 403) {
-          friendlyMessage = 'API key inválida ou sem permissão de acesso à Google Gemini API.';
-        } else if (status === 429) {
-          friendlyMessage = 'Limite de requisições da Google Gemini API atingido. Tente novamente mais tarde.';
-        } else if (status === 408 || error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
-          friendlyMessage = 'Tempo esgotado ao chamar a Google Gemini API.';
-        } else if (!status || error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED' || error.code === 'EAI_AGAIN') {
-          friendlyMessage = 'Falha de rede ao chamar a Google Gemini API.';
-        } else {
-          friendlyMessage = apiMessage || 'Erro desconhecido na Google Gemini API.';
+        // Chave e limite sao definitivos: nao adianta repetir nem trocar de nome.
+        if (erro.tipo === 'chave' || erro.tipo === 'limite') {
+          throw new Error(`[AI_ERROR] Falha na requisição: ${erro.mensagem}`);
         }
 
-        // 401/403 = key: não adianta tentar de novo nem outro modelo.
-        if (status === 401 || status === 403) {
-          throw new Error(`[AI_ERROR] Falha na requisição: ${friendlyMessage}`);
-        }
-
-        console.warn(`[Gemini API] Tentativa ${attempt + 1}/${retries} falhou (${modelName}):`, { status, message: apiMessage });
+        console.warn(`[Gemini API] Tentativa ${attempt + 1}/${retries} falhou (${modelName}):`, { status: erro.http, message: apiMessage });
 
         if (attempt === retries - 1) {
-          throw new Error(`[AI_ERROR] Falha na requisição: ${friendlyMessage}`);
+          throw new Error(`[AI_ERROR] Falha na requisição: ${erro.mensagem}`);
         }
         await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
       }
     }
   }
 
-  const status = ultimoErro?.response?.status;
-  const apiMessage = ultimoErro?.response?.data?.error?.message || ultimoErro?.message;
-  throw new Error(`[AI_ERROR] Falha na requisição: ${status === 404 ? (apiMessage || 'Nenhum modelo de IA disponível.') : (apiMessage || 'Erro desconhecido na Google Gemini API.')}`);
+  const erroFinal = classificarErroGemini(ultimoErro);
+  throw new Error(`[AI_ERROR] Falha na requisição: ${
+    erroFinal.tipo === 'modelo' ? 'Nenhum modelo de IA disponível na conta.' : erroFinal.mensagem
+  }`);
+}
+
+/**
+ * Classifica um erro da API do Gemini.
+ *
+ * ## Por que NAO basta olhar o status HTTP (o bug que isto corrige)
+ *
+ * Medido contra a API real:
+ *
+ * | situacao | HTTP | `reason` / mensagem |
+ * |---|---|---|
+ * | chave invalida | **400** | `API_KEY_INVALID`, "API key not valid" |
+ * | payload malformado | **400** | "Invalid JSON payload" |
+ * | modelo inexistente | **404** | "is not found for API version" |
+ * | modelo aposentado | **404** | "is no longer available to new users" |
+ * | limite | **429** | "Resource has been exhausted" |
+ * | sem permissao | **403** | "Permission denied" |
+ *
+ * O codigo antigo tratava **todo 400** como "esse modelo nao existe" — entao
+ * uma CHAVE INVALIDA (que e' 400!) fazia o bot tentar os 8 modelos, encher o
+ * log e terminar com uma mensagem que nao dizia qual era o problema. Era o
+ * sintoma do dono: "nem os comandos normais de IA funcionam".
+ *
+ * @param {any} erro o erro do axios (ou qualquer coisa)
+ * @returns {{tipo: 'chave'|'modelo'|'limite'|'rede'|'payload'|'outro', http?: number, detalhe: string, mensagem: string}}
+ */
+function classificarErroGemini(erro) {
+  const http = erro?.response?.status;
+  const dados = erro?.response?.data?.error;
+  const reason = String(
+    (Array.isArray(dados?.details) ? dados.details.find((d) => d?.reason)?.reason : '') || ''
+  );
+  const statusGoogle = String(dados?.status || '');
+  const apiMessage = String(dados?.message || erro?.message || '').trim();
+  const baixo = apiMessage.toLowerCase();
+
+  const detalhe = apiMessage || `HTTP ${http ?? '?'}`;
+
+  // 1) CHAVE — vem como 400/401/403 e o motivo esta' no corpo.
+  if (
+    reason === 'API_KEY_INVALID' ||
+    /api key not valid|api key.*invalid|invalid.*api key|api key expired/i.test(apiMessage) ||
+    statusGoogle === 'PERMISSION_DENIED' ||
+    http === 401 ||
+    http === 403
+  ) {
+    return {
+      tipo: 'chave',
+      http,
+      detalhe,
+      mensagem: 'API key inválida ou sem permissão de acesso à Google Gemini API.'
+    };
+  }
+
+  // 2) LIMITE.
+  if (http === 429 || statusGoogle === 'RESOURCE_EXHAUSTED' || /quota|exhausted|rate limit/i.test(baixo)) {
+    return {
+      tipo: 'limite',
+      http,
+      detalhe,
+      mensagem: 'Limite de requisições da Google Gemini API atingido. Tente novamente mais tarde.'
+    };
+  }
+
+  // 3) MODELO — 404, ou 400 cujo TEXTO fala de modelo.
+  if (
+    http === 404 ||
+    /not found for api version|is not found|no longer available|unsupported model|not supported for|model.*not.*(exist|available)/i.test(baixo)
+  ) {
+    return { tipo: 'modelo', http, detalhe, mensagem: 'Modelo indisponível na conta.' };
+  }
+
+  // 4) PAYLOAD — 400 que nao e' chave nem modelo.
+  if (http === 400 || statusGoogle === 'INVALID_ARGUMENT') {
+    return { tipo: 'payload', http, detalhe, mensagem: `Requisição inválida para a IA: ${detalhe}` };
+  }
+
+  // 5) REDE / TEMPO.
+  if (
+    !http ||
+    erro?.code === 'ECONNABORTED' ||
+    erro?.code === 'ETIMEDOUT' ||
+    erro?.code === 'ENOTFOUND' ||
+    erro?.code === 'ECONNREFUSED' ||
+    erro?.code === 'EAI_AGAIN' ||
+    http === 408
+  ) {
+    return {
+      tipo: 'rede',
+      http,
+      detalhe,
+      mensagem: /tempo|timeout|ECONNABORTED|ETIMEDOUT/i.test(baixo)
+        ? 'Tempo esgotado ao chamar a Google Gemini API.'
+        : 'Falha de rede ao chamar a Google Gemini API.'
+    };
+  }
+
+  return { tipo: 'outro', http, detalhe, mensagem: detalhe || 'Erro desconhecido na Google Gemini API.' };
+}
+
+/**
+ * Requisicao MULTIMODAL (audio/imagem inline) pelo MESMO caminho de modelos do
+ * `makeGeminiRequest`: a cadeia [modelo pedido, aliases rolantes, descobertos,
+ * fallback estatico], com 404/400 pulando para o proximo e 401/403 falhando na
+ * hora.
+ *
+ * ## Por que existe (o bug que isto corrige)
+ *
+ * O STT do `!iap` chamava o endpoint DIRETO, com um nome de modelo FIXO
+ * (`gemini-2.5-flash`). Quando o Google aposenta o nome para contas novas
+ * (aconteceu: *"no longer available to new users"*), TODA transcricao vira 404 —
+ * e o agente fica mudo, sem dizer por que. Aqui a requisicao usa a mesma cadeia
+ * que os comandos de IA ja usam, entao um rename do Google nao derruba mais.
+ *
+ * Devolve `{ ok, data }` ou `{ ok: false, motivo, detalhe }` — NUNCA lanca, para
+ * o chamador poder reportar o motivo real (era o que faltava no `!iap`).
+ *
+ * @param {object} p
+ * @param {object} p.corpo corpo da requisicao (contents/generationConfig/...)
+ * @param {string} [p.modelo] modelo preferido
+ * @param {number} [p.timeoutMs]
+ * @param {string} [p.apiKey] chave (padrao: a configurada)
+ * @returns {Promise<{ok: boolean, data?: object, modeloUsado?: string, motivo?: string, detalhe?: string}>}
+ */
+async function geminiRequestMultimodal({ corpo, modelo, timeoutMs = 60000, apiKey: keyParam } = {}) {
+  const apiKey = keyParam || getGeminiApiKey();
+  if (!apiKey) return { ok: false, motivo: 'sem_chave' };
+
+  const pedido = normalizeModelId(modelo);
+  const descobertos = await descobrirModelos(apiKey);
+  const cadeia = [...new Set([pedido, ...GEMINI_ROLLING_ALIASES, ...descobertos, ...GEMINI_FALLBACK_MODELS])];
+
+  let ultimo = null;
+  for (const modelName of cadeia) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent`;
+    try {
+      const resp = await postGemini(url, corpo, {
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+        timeout: timeoutMs
+      });
+      return { ok: true, data: resp?.data, modeloUsado: modelName };
+    } catch (e) {
+      const erro = classificarErroGemini(e);
+      ultimo = { ...erro, modelo: modelName };
+
+      // SO' "modelo indisponivel" tenta o proximo da cadeia. Chave/limite/rede
+      // falham na hora: insistir nos 8 modelos so' enche o log (era o bug — a
+      // chave invalida e' HTTP 400 e era tratada como "modelo nao existe").
+      if (erro.tipo === 'modelo') {
+        console.warn(`[Gemini API] modelo "${modelName}" indisponível; tentando o próximo.`);
+        continue;
+      }
+      return { ok: false, motivo: erro.tipo, detalhe: erro.detalhe, mensagem: erro.mensagem };
+    }
+  }
+
+  // Esgotou a cadeia: nenhum modelo respondeu.
+  return {
+    ok: false,
+    motivo: 'modelo_indisponivel',
+    detalhe: ultimo?.detalhe || 'nenhum modelo da cadeia respondeu',
+    mensagem: 'Nenhum modelo de IA disponível na conta.'
+  };
 }
 
 // ========== FUNÇÃO PRINCIPAL (IA — provider Gemini) ==========
@@ -3533,4 +3691,6 @@ export {
   normalizeModelId,
   descobrirModelos,
   setGeminiHttpForTest,
+  geminiRequestMultimodal,
+  classificarErroGemini,
 };

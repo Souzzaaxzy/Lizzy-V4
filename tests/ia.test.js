@@ -298,6 +298,72 @@ await test('17. DESCOBERTA falha em silencio (ListModels fora do ar)', async () 
 });
 
 // ============================================================================
+// 18-20) CLASSIFICACAO DE ERRO — o 400 de CHAVE (o bug do "IA nao funciona")
+// ============================================================================
+
+await test('18. classificarErroGemini: chave inválida é HTTP 400 (o caso real)', () => {
+  // MEDIDO na API real: chave invalida NAO e' 401/403 — e' 400 com
+  // `reason: API_KEY_INVALID`. Tratar 400 como "modelo inexistente" fazia o bot
+  // tentar os 8 modelos e terminar com uma mensagem que nao dizia o problema.
+  const r = ia.classificarErroGemini({
+    response: {
+      status: 400,
+      data: {
+        error: {
+          code: 400,
+          message: 'API key not valid. Please pass a valid API key.',
+          status: 'INVALID_ARGUMENT',
+          details: [{ reason: 'API_KEY_INVALID', domain: 'googleapis.com' }]
+        }
+      }
+    }
+  });
+  ok(r.tipo === 'chave', `classifica como chave (${r.tipo})`);
+  ok(/chave|key/i.test(r.mensagem), 'a mensagem fala da chave');
+});
+
+await test('19. classificarErroGemini: distingue modelo / limite / payload', () => {
+  const modelo = ia.classificarErroGemini({
+    response: { status: 404, data: { error: { message: 'models/gemini-9 is not found for API version v1beta', status: 'NOT_FOUND' } } }
+  });
+  ok(modelo.tipo === 'modelo', `404 vira modelo (${modelo.tipo})`);
+
+  const aposentado = ia.classificarErroGemini({
+    response: { status: 404, data: { error: { message: 'This model models/gemini-2.5-pro is no longer available to new users.', status: 'NOT_FOUND' } } }
+  });
+  ok(aposentado.tipo === 'modelo', `"no longer available" vira modelo (${aposentado.tipo})`);
+
+  const limite = ia.classificarErroGemini({
+    response: { status: 429, data: { error: { message: 'Resource has been exhausted', status: 'RESOURCE_EXHAUSTED' } } }
+  });
+  ok(limite.tipo === 'limite', `429 vira limite (${limite.tipo})`);
+
+  const payload = ia.classificarErroGemini({
+    response: { status: 400, data: { error: { message: 'Invalid JSON payload received', status: 'INVALID_ARGUMENT' } } }
+  });
+  ok(payload.tipo === 'payload', `400 sem chave/modelo vira payload (${payload.tipo})`);
+});
+
+await test('20. chave inválida NAO percorre a cadeia de modelos (1 chamada só)', async () => {
+  // O bug: o 400 de chave era tratado como "modelo indisponivel", entao a
+  // cadeia INTEIRA era tentada (8 chamadas + 8 linhas de log). Agora para na 1a.
+  let chamadas = 0;
+  ia.setGeminiHttpForTest(async () => {
+    chamadas += 1;
+    const e = new Error('Request failed with status code 400');
+    e.response = { status: 400, data: { error: { code: 400, message: 'API key not valid. Please pass a valid API key.', status: 'INVALID_ARGUMENT', details: [{ reason: 'API_KEY_INVALID' }] } } };
+    throw e;
+  }, async () => ({ data: { models: [] } }));
+  ia.setGeminiApiKey('chave-ruim');
+  let erro = null;
+  try { await ia.makeCognimaRequest(ia.GEMINI_DEFAULT_MODEL, 'oi', null); }
+  catch (e) { erro = e; }
+  ok(chamadas === 1, `parou na 1ª tentativa (${chamadas} chamadas)`);
+  ok(erro && /chave|key/i.test(erro.message), `a mensagem fala da chave (${erro?.message?.slice(0, 60)})`);
+  ia.setGeminiHttpForTest(null);
+});
+
+// ============================================================================
 // RESUMO
 // ============================================================================
 
