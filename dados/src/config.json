@@ -23,7 +23,7 @@
     "idade": 21,
     "aniversario": "06/07",
     "cidade": "Acre",
-    "humor": "bipolar",
+    "humor": "amigavel",
     "sempreBemComDono": true,
     "emojis": false,
     "travas": [
@@ -48,6 +48,7 @@
     "esporte": "vôlei",
     "orientacao": "bissexual",
     "safadeza": true,
-    "conversaAdulto": true
+    "conversaAdulto": true,
+    "jeitoAdolescente": true
   }
 }

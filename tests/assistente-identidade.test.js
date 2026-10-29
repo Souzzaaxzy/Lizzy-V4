@@ -75,7 +75,7 @@ await test('2. sem o bloco `ia`, usa os PADROES (nada quebra)', () => {
   ok(r.nome === 'Lizzy', 'o nome padrao');
   ok(r.idade === 21, 'a idade padrao');
   ok(r.cidade === 'Acre', 'a cidade padrao');
-  ok(r.humor === 'bipolar', 'o humor padrao');
+  ok(r.humor === 'amigavel', `o humor padrao (veio ${r.humor})`);
   ok(Array.isArray(r.travas), 'travas vazias (array)');
 });
 
@@ -115,7 +115,8 @@ await test('6. o CONFIG REAL tem os valores que o dono pediu', () => {
   ok(r.idade === 21, `idade = 21 (veio ${r.idade})`);
   ok(r.aniversario === '06/07', `aniversario = 06/07 (veio ${r.aniversario})`);
   ok(r.cidade === 'Acre', `cidade = Acre (veio ${r.cidade})`);
-  ok(r.humor === 'bipolar', 'humor bipolar');
+  ok(r.humor === 'amigavel', `humor amigavel (veio ${r.humor})`);
+  ok(r.jeitoAdolescente === true, 'jeito de adolescente ligado');
   ok(r.sempreBemComDono === true, 'sempre bem com o dono');
   ok(r.emojis === false, 'sem emoji');
   ok(r.travas.length >= 3, `tem os limites (veio ${r.travas.length})`);
@@ -131,7 +132,7 @@ console.log('\n=== 2) O BLOCO DE IDENTIDADE ===\n');
 
 const ID_TESTE = {
   nome: 'Lizzy', idade: 21, aniversario: '06/07', cidade: 'Acre',
-  humor: 'bipolar', sempreBemComDono: true, emojis: false,
+  humor: 'amigavel', sempreBemComDono: true, emojis: false, jeitoAdolescente: true,
   travas: ['NUNCA faca X.', 'NUNCA faca Y.'],
   esporte: 'vôlei', orientacao: 'bissexual', safadeza: true, conversaAdulto: true,
   adotada: true,
@@ -149,21 +150,48 @@ await test('7. os fatos entram (nome, idade, cidade, aniversario)', () => {
   contem(b, 'Seu aniversario e 06/07', 'o aniversario');
 });
 
-await test('8. o HUMOR bipolar e explicado (varia, nao pede desculpa)', () => {
+await test('8. o HUMOR e amigavel SEMPRE (a bipolaridade saiu)', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
-  contem(b, 'bipolar', 'diz que e bipolar');
-  contem(b, 'carinhosa', 'o lado carinhoso');
-  contem(b, 'brava', 'o lado bravo');
-  contem(b, 'ignorante', 'o lado ignorante');
-  contem(b, 'NAO peca desculpa', 'nao se desculpa por mudar');
-  contem(b, 'NAO explique que e bipolar', 'nao expoe o transtorno');
+  contem(b, 'SEU HUMOR', 'a secao de humor');
+  contem(b, 'amigavel, meiga, carinhosa e brincalhona', 'o humor novo');
+  contem(b, 'SEMPRE', 'sem dia de estar seca');
+  contem(b, 'Nao existe dia de estar seca ou grossa', 'explicito');
+  contem(b, 'acolhe de verdade', 'acolhe quem esta mal');
+  // A bipolaridade NAO pode voltar.
+  naoContem(b, 'bipolar', 'sem bipolaridade');
+  naoContem(b, 'brava, seca, ignorante', 'sem o humor ruim');
+  naoContem(b, 'mau humor', 'sem mau humor');
 });
 
-await test('9. o DONO fica ACIMA do humor (sempre bem com ele)', () => {
+await test('8b. o jeito de ADOLESCENTE entra (letra esticada, giria, espelhar o tom)', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
-  contem(b, 'SEMPRE bem', 'sempre bem com o dono');
-  contem(b, 'MENOS para o dono', 'a excecao e o dono');
-  contem(b, 'NUNCA e grossa', 'nunca grossa com ele');
+  contem(b, 'adolescente', 'diz que e adolescente');
+  contem(b, 'ESTICA as letras', 'estica as letras');
+  contem(b, 'oiiii', 'o exemplo do oi esticado');
+  contem(b, 'kkkk', 'a risada');
+  contem(b, 'vc', 'abrevia');
+  contem(b, 'minusculas', 'escreve em minuscula');
+  // O ESPELHAMENTO do tom (o pedido central do dono).
+  contem(b, 'ESPELHA a energia', 'espelha o tom');
+  contem(b, 'OOOIII LIZZY', 'o exemplo do dono');
+  contem(b, 'OIIIIII', 'a resposta do exemplo');
+  contem(b, 'maiuscula', 'responde em maiuscula quando a pessoa grita');
+  // E CONVERSA, nao so responde.
+  contem(b, 'CONVERSA', 'interage');
+  contem(b, 'puxa assunto', 'puxa assunto');
+  // O caveat da VOZ (letra esticada nao existe falando).
+  contem(b, 'CHAMADA de voz', 'avisa que na voz e diferente');
+});
+
+await test('9. o DONO tem tratamento especial (sempre bem com ele)', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'O DONO (tratamento especial)', 'a secao do dono');
+  contem(b, 'AINDA mais carinhosa', 'mais carinho que com o resto');
+  contem(b, 'nunca e grossa, seca nem ignorante com ele', 'nunca grossa com ele');
+  contem(b, 'em hipotese nenhuma', 'sem excecao');
+  // Nao pode falar de "humor" (nao existe mais variacao).
+  naoContem(b, 'piores humores', 'sem o texto antigo');
+  naoContem(b, 'variacao de humor', 'sem variacao de humor');
 });
 
 await test('10. o bloco de EMOJI proibe emoji e marcacao', () => {
@@ -193,9 +221,10 @@ await test('12. sem travas, a secao nao aparece (nao inventa limite)', () => {
   contem(b, 'Seu nome e Lizzy', 'o resto continua');
 });
 
-await test('13. humor != bipolar nao injeta o bloco bipolar', () => {
+await test('13. humor desconhecido nao injeta bloco de humor', () => {
   const b = id.blocoDeIdentidade({ ...ID_TESTE, humor: 'calmo' });
-  naoContem(b, 'bipolar', 'sem bloco bipolar');
+  naoContem(b, 'SEU HUMOR', 'sem bloco de humor');
+  naoContem(b, 'bipolar', 'e nunca bipolar');
 });
 
 // ---------------------------------------------------------------------------
@@ -235,7 +264,7 @@ await test('16. a VOZ usa a MESMA identidade (uma Lizzy so)', () => {
   contem(SESSAO, 'promptDaLizzy(', 'a voz usa o carater compartilhado');
   const base = guarda.promptDaLizzy({ nomeDono: 'Kannon' });
   contem(base, '21 anos', 'a identidade esta no prompt base da voz tambem');
-  contem(base, 'bipolar', 'o humor tambem');
+  contem(base, 'amigavel, meiga, carinhosa', 'o humor tambem');
 });
 
 // ---------------------------------------------------------------------------
