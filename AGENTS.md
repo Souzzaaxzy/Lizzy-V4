@@ -14501,3 +14501,46 @@ qualquer regressão futura aparece na hora.
 ### Testes — `tests/iap-comandos.test.js` (**17 testes / 128 asserções, 0 falhas**)
 Regressões verdes: `iap` 70/215, `ia` 20/50, `motor-chat-noise` 14/62,
 `cmd-suggest` 21/68, `get-message-inspector` 54/269, `contact-name` 16/37.
+
+## 👂 `!iap` — melhorar o que ela OUVE: viés, temperatura 0 e pre-roll (out/2026) ✅
+Pedido do dono: *"tem como melhorar o entendimento dela? tipo, o que ela ouve"*.
+Sim — o **STT** era o próximo gargalo, e havia **três** ganhos não usados.
+
+### 1. VIÉS DE VOCABULÁRIO (o maior ganho)
+O Whisper aceita um campo **`prompt`** que ele trata como o **texto anterior** e usa
+para **enviesar a decodificação**. Agora vai:
+- um viés **FIXO** (`PROMPT_STT`, `iapTts`→`groqClient`) com os comandos e as
+  palavras que ele erra: *toca, baixa, procura, figurinha, sticker, tiktok,
+  pinterest...*;
+- um viés **DINÂMICO por fala**: os **nomes de quem está na call** + o nome do dono.
+
+Assim ele acerta o que **interessa** (o comando e o nome das pessoas) **sem trocar
+de modelo** e sem custo. Configurável por **`IAP_STT_PROMPT`**.
+
+### 2. TEMPERATURA 0
+Transcrição é tarefa **determinística**. Sem isso o Whisper "inventa" em áudio ruim
+(alucinação) e um comando vira frase aleatória.
+
+### 3. PRE-ROLL (não cortar o começo da palavra)
+O VAD dispara `inicio` no **primeiro frame acima do limiar** — uma palavra que
+começa fraca (*"Toca"* com T suave) tem os primeiros ~100 ms **abaixo** dele, e o
+STT recebia a palavra **cortada**. Agora guardamos os últimos ~240 ms de silêncio e
+os **colamos na frente** da frase.
+
+### BUG encontrado no caminho (registrado)
+A primeira versão do pre-roll usava `this.falando` — mas esse campo marca a fala
+do **BOT**, não a do usuário. Resultado: **engolia todos os frames** e o agente
+parava de responder. O gatilho certo é o **evento `'nada'`** do VAD (silêncio antes
+da fala). Pego pelos testes existentes (`agente: fala detectada -> ...`), que
+começaram a falhar.
+
+### Testes — `tests/iap.test.js` (**72 testes / 220 asserções, 0 falhas**)
++2: o **pre-roll entra na frase** (3 frames de silêncio antes da fala aparecem no
+PCM enviado ao STT); e o **viés vai no campo `prompt`** com `temperature: 0` e
+`language: pt`.
+**BUG de teste pré-existente corrigido**: o teste *"!iap on sem chave"* **não
+limpava** o `GROQ_API_KEY` e dependia de um teste ANTERIOR ter deixado a chave
+setada — **passava por acidente**. Agora ele zera o ambiente.
+
+Regressões verdes: `iap-comandos` 17/128, `ia` 20/50, `motor-chat-noise` 14/62,
+`cmd-suggest` 21/68, `get-message-inspector` 54/269, `contact-name` 16/37.
