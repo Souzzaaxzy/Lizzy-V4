@@ -85,7 +85,7 @@ function logIap(msg, extra) {
  * @param {boolean} [opts.falanteEhDono] o falante e' o dono do bot?
  * @returns {string}
  */
-export function montarSistemaDoAgente({ nomeDono, participantes = [], falante, falanteEhDono = false, dadosDoGrupo = null } = {}) {
+export function montarSistemaDoAgente({ nomeDono, participantes = [], falante, falanteEhDono = false, dadosDoGrupo = null, paisAdotivos = null } = {}) {
   const nome = iaIdentidade(); // "Lizzy"
 
   // A data/hora REAL: sem ela o modelo chuta ("hoje e' ..."). E' o tipo de
@@ -102,7 +102,7 @@ export function montarSistemaDoAgente({ nomeDono, participantes = [], falante, f
   // tudo e' lido em voz alta. Sem esta separacao os dois canais divergiriam de
   // novo, que e' exatamente o que o dono pediu para acabar.
   const linhas = [
-    promptDaLizzy({ nome, nomeDono }),
+    promptDaLizzy({ nome, nomeDono, paisAdotivos }),
     '',
     `Voce esta numa CHAMADA DE VOZ de um grupo do WhatsApp.`,
     'Tudo o que voce diz e lido em VOZ ALTA por um sintetizador.',
@@ -195,7 +195,7 @@ export function montarSistemaDoAgente({ nomeDono, participantes = [], falante, f
  */
 export async function pensarComIa(texto, historico = [], {
   quemFalou, ehAutorizado, nomeDono, participantes = [], nomeDeQuemFalou, ehDono,
-  executarComando, dadosDoGrupo = null
+  executarComando, dadosDoGrupo = null, paisAdotivos = null
 } = {}) {
   // ---- COMANDO POR VOZ (qualquer um na call) -----------------------------
   // O pedido falado ("toca Evidencias") e' reconhecido por PADROES e executado.
@@ -266,7 +266,7 @@ export async function pensarComIa(texto, historico = [], {
     }
   }
 
-  const sistema = montarSistemaDoAgente({ nomeDono, participantes, falante, falanteEhDono, dadosDoGrupo });
+  const sistema = montarSistemaDoAgente({ nomeDono, participantes, falante, falanteEhDono, dadosDoGrupo, paisAdotivos });
   const r = await groqChat({
     texto,
     sistema,
@@ -299,7 +299,7 @@ export async function pensarComIa(texto, historico = [], {
  *   Promise<boolean>` — executa o comando do bot em nome de QUEM FALOU.
  * @returns {Promise<{ ok: boolean, motivo?: string }>}
  */
-export async function ligarIap(grupo, { nomeDono, participantes, ehAutorizado, nomeDeQuemFalou, ehDono, executarComando, dadosDoGrupo = null } = {}) {
+export async function ligarIap(grupo, { nomeDono, participantes, ehAutorizado, nomeDeQuemFalou, ehDono, executarComando, dadosDoGrupo = null, paisAdotivos = null } = {}) {
   // O `!iap` inteiro roda no Groq (ouvir E pensar): sem a chave dele nao ha' o
   // que ligar.
   if (!chaveGroq()) return { ok: false, motivo: 'sem_chave_groq' };
@@ -330,7 +330,7 @@ export async function ligarIap(grupo, { nomeDono, participantes, ehAutorizado, n
     log: logIap,
     pensar: (texto, historico, opts = {}) => pensarComIa(texto, historico, {
       quemFalou: opts.quemFalou, ehAutorizado, nomeDono, participantes, nomeDeQuemFalou, ehDono,
-      executarComando, dadosDoGrupo
+      executarComando, dadosDoGrupo, paisAdotivos
     }),
     transcrever: async (pcm) => {
       // VIES de vocabulario: os NOMES de quem esta' na call + as palavras dos

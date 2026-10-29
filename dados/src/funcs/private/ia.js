@@ -1064,10 +1064,14 @@ function clearConversationData(maxAge = 7 * 24 * 60 * 60 * 1000) {
 function promptDaPersonalidade(extraContext = {}) {
   // Aceita string por compatibilidade (chamadas antigas passavam a
   // personalidade) — nesse caso nao ha contexto a montar.
-  const contexto = montarContextoDaConversa(
-    extraContext && typeof extraContext === 'object' ? extraContext : {}
-  );
-  return [promptDaLizzy(), '', regrasDeCanal('chat'), contexto ? '\n' + contexto : ''].join('\n');
+  const ctx = (extraContext && typeof extraContext === 'object') ? extraContext : {};
+  const contexto = montarContextoDaConversa(ctx);
+  // Os PAIS ADOTIVOS vem resolvidos do handler (o config so' tem o LID).
+  return [
+    promptDaLizzy({ paisAdotivos: ctx.paisAdotivos }),
+    '', regrasDeCanal('chat'),
+    contexto ? '\n' + contexto : ''
+  ].join('\n');
 }
 
 async function processUserMessages(data, nazu = null, ownerNumber = null, personality = 'abyss') {

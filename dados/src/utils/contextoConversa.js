@@ -157,6 +157,45 @@ export async function coletarDadosDoGrupo({
 }
 
 /**
+ * Resolve o NOME dos pais adotivos a partir do LID.
+ *
+ * O `config.json` guarda o **LID** (o config não tem socket); quem tem o socket
+ * e os contatos é o handler. Aqui o LID vira nome pelo MESMO resolvedor do
+ * `!me`/`!cf`.
+ *
+ * Se o nome não resolver (contato desconhecido), o campo fica **vazio** — melhor
+ * o prompt dizer "seus pais adotivos" do que a Lizzy chamar a mãe dela de
+ * "18408649269356".
+ *
+ * @param {object} p
+ * @param {Array<{papel:string, lid:string, nome:string}>} [p.pais]
+ * @returns {Promise<Array<{papel:string, lid:string, nome:string}>>}
+ */
+export async function resolverPaisAdotivos({ pais = [], nazu, metadata, from } = {}) {
+  if (!Array.isArray(pais) || !pais.length) return [];
+  const saida = [];
+  for (const p of pais) {
+    if (!p) continue;
+    const papel = String(p.papel || 'responsavel').trim() || 'responsavel';
+    // Se o nome ja' veio no config, respeita (o dono pode ter escrito).
+    let nome = String(p.nome || '').trim();
+    if (!nome && p.lid) {
+      try {
+        const resolvido = await resolverNomeContato(p.lid, { nazu, metadata, from });
+        const texto = String(resolvido || '').trim();
+        // O resolvedor CAI no numero/LID quando nao acha o contato — isso nao e'
+        // nome. So' aceita o que parece nome de gente.
+        const base = baseDe(p.lid);
+        const pareceId = !texto || texto === base || /^\+?\d+$/.test(texto);
+        if (!pareceId) nome = texto;
+      } catch { /* segue sem o nome */ }
+    }
+    saida.push({ papel, lid: String(p.lid || '').trim(), nome });
+  }
+  return saida;
+}
+
+/**
  * As linhas de DADOS DO GRUPO (sem o título da seção).
  *
  * Separado porque os dois canais usam o mesmo conteúdo em formatos diferentes:

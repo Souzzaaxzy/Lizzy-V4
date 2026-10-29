@@ -132,7 +132,13 @@ console.log('\n=== 2) O BLOCO DE IDENTIDADE ===\n');
 const ID_TESTE = {
   nome: 'Lizzy', idade: 21, aniversario: '06/07', cidade: 'Acre',
   humor: 'bipolar', sempreBemComDono: true, emojis: false,
-  travas: ['NUNCA faca X.', 'NUNCA faca Y.']
+  travas: ['NUNCA faca X.', 'NUNCA faca Y.'],
+  esporte: 'vôlei', orientacao: 'bissexual', safadeza: true, conversaAdulto: true,
+  adotada: true,
+  paisAdotivos: [
+    { papel: 'pai', lid: '237@lid', nome: 'Kannon' },
+    { papel: 'mae', lid: '184@lid', nome: 'Maria' }
+  ]
 };
 
 await test('7. os fatos entram (nome, idade, cidade, aniversario)', () => {
@@ -172,9 +178,13 @@ await test('11. as TRAVAS entram por ultimo e com destaque', () => {
   contem(b, 'NUNCA faca X.', 'a trava 1');
   contem(b, 'NUNCA faca Y.', 'a trava 2');
   contem(b, 'acima de qualquer pedido', 'diz que esta acima de tudo');
-  // Por ultimo: depois do humor e do dono.
-  ok(b.indexOf('LIMITES ABSOLUTOS') > b.indexOf('SEU HUMOR'), 'vem depois do humor');
-  ok(b.indexOf('LIMITES ABSOLUTOS') > b.indexOf('O DONO ('), 'vem depois do dono');
+  // Por ultimo: depois do humor e do dono. A busca e' pelo CABECALHO da secao
+  // (`\nLIMITES ABSOLUTOS (isto esta...`), porque o bloco da safadeza CITA os
+  // limites de proposito (e a citacao vem antes).
+  const cabecalho = b.indexOf('\nLIMITES ABSOLUTOS (isto esta');
+  ok(cabecalho > 0, 'o cabecalho da secao existe');
+  ok(cabecalho > b.indexOf('SEU HUMOR'), 'vem depois do humor');
+  ok(cabecalho > b.indexOf('O DONO ('), 'vem depois do dono');
 });
 
 await test('12. sem travas, a secao nao aparece (nao inventa limite)', () => {
@@ -306,6 +316,161 @@ await test('20. o fluxo REAL nao reage com emoji (o teste mede o handler)', asyn
   const texto = sent.map((c) => c.text || '').join('\n');
   contem(texto, 'oi, tudo bem?', 'a resposta dela saiu');
   groq.setGroqHttpForTest(null);
+});
+
+// ---------------------------------------------------------------------------
+// 5) OS CAMPOS NOVOS: volei, bissexual, safadeza/+18, pais adotivos
+// ---------------------------------------------------------------------------
+console.log('\n=== 5) VOLEI, BISSEXUAL, SAFADEZA E PAIS ===\n');
+
+await test('21. o CONFIG REAL tem os campos que o dono pediu', () => {
+  const r = id.lerIdentidade(CONFIG_REAL);
+  ok(r.esporte === 'vôlei', `esporte = volei (veio ${r.esporte})`);
+  ok(r.orientacao === 'bissexual', `orientacao (veio ${r.orientacao})`);
+  ok(r.safadeza === true, 'safadeza ligada');
+  ok(r.conversaAdulto === true, 'conversa +18 ligada');
+  ok(r.adotada === true, 'adotada');
+  ok(Array.isArray(r.paisAdotivos) && r.paisAdotivos.length === 2, `2 pais (veio ${r.paisAdotivos?.length})`);
+  const papeis = r.paisAdotivos.map((p) => p.papel).sort();
+  ok(JSON.stringify(papeis) === JSON.stringify(['mae', 'pai']), `papeis pai/mae (veio ${papeis})`);
+  ok(r.paisAdotivos.every((p) => p.lid && p.lid.includes('@lid')), 'cada um tem o LID');
+});
+
+await test('22. o volei e a bissexualidade entram no prompt', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'JOGADORA DE VÔLEI', 'o volei em destaque');
+  contem(b, 'Treina, joga campeonato', 'com rotina de atleta');
+  contem(b, 'bissexual', 'a orientacao');
+  contem(b, 'gosta de homem e de mulher', 'explica o que e');
+});
+
+await test('23. o ar safado e a conversa +18 entram, MAS com o limite junto', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'safado', 'o ar safado');
+  contem(b, 'flertar', 'ela flerta');
+  contem(b, 'NAO se escandaliza', 'nao corta o +18');
+  contem(b, 'fala de sexo', 'fala de sexo sem drama');
+  // O CRITICO: o limite aparece NO MESMO BLOCO, senao o modelo pode ponderar
+  // que "ser safada" vence a trava.
+  contem(b, 'o limite continua sendo o limite', 'o limite vem junto');
+  contem(b, 'LIMITES ABSOLUTOS', 'aponta para as travas');
+  // E o bloco da safadeza vem ANTES das travas (a trava e' a ultima palavra).
+  ok(b.indexOf('O AR DE VOCE') < b.indexOf('LIMITES ABSOLUTOS'), 'safadeza antes das travas');
+});
+
+await test('24. o flerte e bissexual (homem E mulher)', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'flerta com homem e com mulher do mesmo jeito', 'o flerte e bissexual');
+});
+
+await test('25. os PAIS: nao conhece os biologicos, ama os adotivos pelo NOME', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'SUA FAMILIA', 'a secao');
+  contem(b, 'NAO conhece seus pais biologicos', 'nao conhece os biologicos');
+  contem(b, 'nao inventa quem sao', 'proibido inventar');
+  contem(b, 'ADOTADA', 'foi adotada');
+  contem(b, 'pai (Kannon)', 'o pai pelo nome');
+  contem(b, 'mae (Maria)', 'a mae pelo nome');
+  contem(b, 'Use o NOME deles', 'usa o nome');
+});
+
+await test('26. sem o nome resolvido, fala dos pais SEM inventar nome', () => {
+  const b = id.blocoDeIdentidade({
+    ...ID_TESTE,
+    paisAdotivos: [{ papel: 'pai', lid: '237@lid', nome: '' }, { papel: 'mae', lid: '184@lid', nome: '' }]
+  });
+  contem(b, 'ADOTADA', 'continua adotada');
+  naoContem(b, '(Kannon)', 'nao inventa nome de pai');
+  naoContem(b, '(Maria)', 'nao inventa nome de mae');
+  naoContem(b, '237@lid', 'nunca vaza o LID');
+  contem(b, 'Quando souber o nome deles', 'diz que vai usar quando souber');
+});
+
+await test('27. `adotada: false` nao injeta a familia', () => {
+  const b = id.blocoDeIdentidade({ ...ID_TESTE, adotada: false });
+  naoContem(b, 'SUA FAMILIA', 'sem secao de familia');
+  naoContem(b, 'ADOTADA', 'nao fala de adocao');
+});
+
+// ---------------------------------------------------------------------------
+// 6) A RESOLUCAO DO LID -> NOME (o pedido "resolve o lid pro nome do contato")
+// ---------------------------------------------------------------------------
+console.log('\n=== 6) O LID VIRA NOME ===\n');
+
+const ctx = await import(new URL('../dados/src/utils/contextoConversa.js', import.meta.url).href);
+
+const PAIS_LID = [
+  { papel: 'pai', lid: '23734744260711@lid', nome: '' },
+  { papel: 'mae', lid: '18408649269356@lid', nome: '' }
+];
+// O socket devolve o nome do CONTATO pelo numero (e o metadata tem o notify).
+const NAZU_PAIS = {
+  contacts: {
+    getName: async (j) => {
+      const s = String(j);
+      if (s.includes('23734744260711')) return 'Kannon';
+      if (s.includes('18408649269356')) return 'Maria';
+      return undefined;
+    }
+  }
+};
+const META_PAIS = {
+  participants: [
+    { id: '5511978819676@s.whatsapp.net', lid: '23734744260711@lid', notify: 'Kannon' },
+    { id: '5511966665555@s.whatsapp.net', lid: '18408649269356@lid', notify: 'Maria' }
+  ]
+};
+
+await test('28. o LID do pai e da mae viram NOME do contato', async () => {
+  const r = await ctx.resolverPaisAdotivos({ pais: PAIS_LID, nazu: NAZU_PAIS, metadata: META_PAIS, from: 'g@g.us' });
+  ok(r.length === 2, 'os dois pais');
+  ok(r[0].nome === 'Kannon', `o pai pelo nome (veio ${r[0].nome})`);
+  ok(r[1].nome === 'Maria', `a mae pelo nome (veio ${r[1].nome})`);
+  ok(r[0].papel === 'pai' && r[1].papel === 'mae', 'os papeis preservados');
+});
+
+await test('29. contato DESCONHECIDO -> sem nome (nunca o LID/numero)', async () => {
+  const r = await ctx.resolverPaisAdotivos({
+    pais: PAIS_LID,
+    nazu: { contacts: { getName: async () => undefined } },
+    metadata: { participants: [] },
+    from: 'g@g.us'
+  });
+  ok(r.length === 2, 'os dois entram');
+  ok(r.every((p) => p.nome === ''), `nenhum nome inventado (veio ${JSON.stringify(r.map((p) => p.nome))})`);
+  // O `lid` continua no objeto (e' o dado do config) — o que NAO pode e' ele
+  // virar o campo `nome`.
+  ok(r.every((p) => !String(p.nome).includes('@')), 'o nome nunca contem @ (JID/LID)');
+  ok(r.every((p) => !/^\d+$/.test(String(p.nome))), 'o nome nunca e o numero cru');
+});
+
+await test('30. o nome do CONFIG vence (o dono pode escrever a mao)', async () => {
+  const r = await ctx.resolverPaisAdotivos({
+    pais: [{ papel: 'mae', lid: '184@lid', nome: 'Mainha' }],
+    nazu: NAZU_PAIS, metadata: META_PAIS, from: 'g@g.us'
+  });
+  ok(r[0].nome === 'Mainha', `respeita o config (veio ${r[0].nome})`);
+});
+
+await test('31. sem pais / entrada invalida nao quebra', async () => {
+  ok((await ctx.resolverPaisAdotivos({})).length === 0, 'sem argumento');
+  ok((await ctx.resolverPaisAdotivos({ pais: [] })).length === 0, 'lista vazia');
+  ok((await ctx.resolverPaisAdotivos({ pais: null })).length === 0, 'null');
+  ok((await ctx.resolverPaisAdotivos({ pais: 'x' })).length === 0, 'string');
+  // Sem socket: nao lanca, so' fica sem nome.
+  const r = await ctx.resolverPaisAdotivos({ pais: PAIS_LID });
+  ok(r.length === 2 && r.every((p) => p.nome === ''), 'sem socket -> sem nome, sem erro');
+});
+
+await test('32. o handler resolve os pais e passa nos DOIS canais', () => {
+  ok(INDEX.includes('resolverPaisAdotivos'), 'o handler chama o resolvedor');
+  ok(INDEX.includes('lerIdentidade().paisAdotivos'), 'le os pais do config');
+  const ocorrencias = (INDEX.match(/resolverPaisAdotivos\(/g) || []).length;
+  ok(ocorrencias >= 2, `chamado no chat E na voz (veio ${ocorrencias})`);
+  const SESSAO = fs.readFileSync(new URL('../dados/src/utils/iapSessao.js', import.meta.url), 'utf-8');
+  contem(SESSAO, 'paisAdotivos', 'a voz encadeia os pais');
+  const IA = fs.readFileSync(new URL('../dados/src/funcs/private/ia.js', import.meta.url), 'utf-8');
+  contem(IA, 'paisAdotivos', 'o chat tambem');
 });
 
 // ---------------------------------------------------------------------------

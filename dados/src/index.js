@@ -41,6 +41,8 @@ import { parseImagePollArgs, collectPollImages, resolveAttachments, buildOptionN
 import { toOggOpus } from './utils/oggOpus.js';
 import { resolverNomeContato, acharParticipantePorId, nomeInutil, baseId, numerosDoParticipante } from './utils/contactName.js';
 import { coletarDadosDoGrupo } from './utils/contextoConversa.js';
+import { lerIdentidade } from './utils/identidadeLizzy.js';
+import { resolverPaisAdotivos } from './utils/contextoConversa.js';
 // As ACOES do grupo pedidas por fala/texto (link e foto) — reconhecimento
 // DETERMINISTICO, como o `iapComandos` da call.
 import { identificarAcaoDoGrupo } from './utils/assistenteAcoes.js';
@@ -7658,12 +7660,23 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
           }
         }
 
+        // OS PAIS ADOTIVOS da Lizzy: o config guarda o LID, o NOME vem do
+        // contato (o config nao tem socket). Resolvido aqui, best-effort.
+        let paisAdotivos = null;
+        try {
+          paisAdotivos = await resolverPaisAdotivos({
+            pais: lerIdentidade().paisAdotivos,
+            nazu, metadata: groupMetadata, from
+          });
+        } catch { /* segue sem os nomes dos pais */ }
+
         // Contexto adicional para passar à IA
         const extraContext = {
           groupName: groupName || '',
           groupId: from || '',
           nomeDeQuemFalou,
-          dadosDoGrupo
+          dadosDoGrupo,
+          paisAdotivos
         };
         ia.makeAssistentRequest({
           mensagens: [jSoNzIn],
@@ -36843,6 +36856,15 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               alphas: groupData.alphas || [],
               comFoto: isGroup
             });
+            // Os pais adotivos (mesma resolucao do chat).
+            let paisAdotivos = null;
+            try {
+              paisAdotivos = await resolverPaisAdotivos({
+                pais: lerIdentidade().paisAdotivos,
+                nazu, metadata: groupMetadata, from
+              });
+            } catch { /* segue sem os nomes */ }
+
             const r = await ligarIap(from, {
               nomeDono: nomedono || null,
               participantes: nomesNaCall,
@@ -36850,7 +36872,8 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
               nomeDeQuemFalou,
               ehDono,
               executarComando,
-              dadosDoGrupo
+              dadosDoGrupo,
+              paisAdotivos
             });
             if (!r.ok) {
               const motivos = {

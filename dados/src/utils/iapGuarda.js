@@ -60,9 +60,15 @@ export { limparNomeDoBot } from './identidadeLizzy.js';
  * @param {string} [ctx.nomeGrupo]
  * @returns {string}
  */
-export function promptDaLizzy({ nome, nomeDono, nomeGrupo } = {}) {
+export function promptDaLizzy({ nome, nomeDono, nomeGrupo, paisAdotivos } = {}) {
   const id = lerIdentidade();
   const eu = nome || id.nome || iaIdentidade();
+  // Os pais adotivos vem do config por LID; o NOME e' resolvido no handler (o
+  // config nao tem socket). Quem chama passa o resultado; sem isso, o bloco
+  // fala dos pais sem nome em vez de inventar um.
+  if (Array.isArray(paisAdotivos) && paisAdotivos.length) {
+    id.paisAdotivos = paisAdotivos;
+  }
 
   const linhas = [
     `Voce e' ${eu}, uma PESSOA REAL conversando no WhatsApp.`,
