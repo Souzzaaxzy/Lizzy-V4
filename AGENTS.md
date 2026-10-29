@@ -14642,3 +14642,83 @@ Regressões verdes: `iap` 72/220, `ia` 20/50, `motor-chat-noise` 14/62,
 Não validei numa call real. O **`!letra` responde com a LETRA INTEIRA** — numa call
 isso vira um texto longo lido em voz alta. Se ficar ruim no uso, dá para falar só o
 **refrão** e mandar o resto no chat (adaptação sugerida, ainda não feita).
+
+## 🔎 PESQUISA GLOBAL: CALL em grupo GRANDE (+100 a 400) — o HASH e' a resposta (out/2026) ✅
+Pedido do dono: *"faça uma busca completa na INTERNET de como fazer o motor do zapo
+subir qualquer call em grupo grande (+100 - 400 membros)"*.
+
+### O mecanismo (medido nas referencias, nenhuma suposicao)
+O teto de **32** (`group_call_max_participants`, uma **AB prop**) e' da call
+**CONECTADA**, nao do OFFER. Nomear 32 de 400 e' o que o servidor **recusa**
+(`412`/`427`); o cliente oficial referencia o conjunto **INTEIRO** pelo **HASH**
+— `<group_info phash="2:...">` **sem filhos** — e o servidor resolve contra o
+grupo. **O teto deixa de valer para o offer.**
+
+| fonte | o que ela da' |
+|---|---|
+| **`oxidezap/whatsapp-rust`** | `build_group_phash_set` = conjunto resolvido **+ o device que envia** (`phashV2([].concat(A,[B]))`); **golden vectors** `2:rZoSAdIV` (sem self) e `2:sti8OtHX` (com). Tambem: `participant_list_hash` = SHA-256 sobre os jids `user.0:device@server` **ordenados por byte**, base64 **padrao** (nao URL-safe), 6 bytes → `2:` + 8 chars. |
+| **`7ucg/whatsapp-docs`** (RE do Android 2.26.41.6) | o `<group_info>` do offer carrega `phash`, `connected-limit`, `transaction-id`, `media`, `joinable`; `Voip.kMaxSupportedGroupCallParticipants` = **64**; o nack **412** e' *"group membership differs → refresh group info"*; o **427** e' *"stale device set"*. |
+| **`Auties00/Cobalt`** | `GroupInfoStanza(phash, connectedLimit, …)`; o `phash` e' o hash do **conjunto de participantes** (limite de **wire** 0x7f). |
+| **`WhiskeySockets/wacrg`** | o group call ainda e' **`draft`** — *"not yet fully specified"*; o vocabulario **nao esta fechado** em fonte publica. |
+
+**O nosso `computePhashV2` reproduz os dois golden vectors exatamente** — medido,
+nao suposto (ver `tests/phash.test.ts`).
+
+### O que estava errado (o bot desarmava o mecanismo)
+`prepararConvidadosDoGrupo` **cortava os convidados em 31**
+(`CALL_MAX_PARTICIPANTS`). Com isso o motor **nunca via** um grupo grande: recebia
+31 num grupo de 400 e nomeava uma lista que **nao descreve o grupo** — exatamente
+o caso que o servidor recusa. O caminho do hash existia no motor, mas **nunca era
+alcancado**.
+
+E, no motor, o caminho do hash estava preso a **`isLightweight`**: so' o **chat de
+voz** o tomava. Uma **CHAMADA** num grupo grande ficava nomeando 32 e era recusada.
+
+### A correcao
+**Fork `Souzzaaxzy/zapo`, branch `voip`, commit `831501c`**:
+- o caminho do hash passou a ser **`overflows`**, sem o `isLightweight` — **qualquer**
+  grupo que nao caiba, chamada que toca inclusive;
+- o offer expoe **`hashOnly`** e o `WaCallManager` usa **esse** campo (nao o
+  `isLightweight`) para decidir se ha peer a enderecar: um grupo que nao cabe nao
+  tem peer — o alvo e' a propria call (`<call-id>@call`), como um accept de grupo;
+- o hash passou a **incluir o NOSSO device** (`toDeviceJid(callCreator)`), que e' a
+  regra `[].concat(A, [B])` da referencia;
+- o grupo grande volta a **resolver TODOS os devices**: o hash so' vale se cobrir o
+  conjunto inteiro (nomear menos e' o que o servidor recusa).
+
+**Bot (`Lizzy-V4`, `main`)**: o **corte saiu** — a lista vai **inteira** ao motor,
+que decide entre nomear e hashear. O aviso *"Toquei em X de Y"* saiu junto (nao ha
+mais corte a anunciar) e o log diz `(sem corte: o motor nomeia ou hasheia)`.
+
+### Prova com o pacote INSTALADO (o que o bot roda)
+```
+--- CHAMADA (que toca) num grupo de 200 ---
+hashOnly            : true
+offer lightweight   : (ausente)
+group_info phash    : 2:wYxK8afo
+group_info filhos   : (nenhum)
+>>> OK: o offer saiu pelo HASH, sem lista e sem marcador
+```
+
+### Testes
+- **Fork** (`voip`): **571, 0 falhas** (era 568). Novos: o grupo que nao cabe vai
+  pelo HASH em QUALQUER caso (chamada inclusive); o grupo grande resolve o conjunto
+  inteiro; os **golden vectors** (`2:rZoSAdIV` / `2:sti8OtHX`) travam o hash; e uma
+  **CHAMADA** (que TOCA) num grupo de 120 e' colocada com o roster como HASH.
+  **Verificado que mede**: voltando o gate para `isLightweight && overflows`,
+  **3 testes falham**.
+- **Bot**: `callp` **50/116**, `callp-regressions` 38/115, `musicap` 24/70,
+  `vozp-grupo-grande` 6/12, `vozp-log` 12/20, `vozp-terminate-target` 5/7,
+  `zapo-conexao` 17/38, `zapo-pareamento` 24/63 — **0 falhas**.
+- **Locks**: `package.json` + `package-lock.json` + `yarn.lock` (Berry v8) em
+  `831501cb4bbc718417e38627f4c46d140e036f36`; checksum regerado e validado com
+  `corepack yarn install --check-cache`.
+
+### LIMITE HONESTO (o que NAO esta provado)
+Nao ha sessao de WhatsApp neste ambiente, entao **nao** validei o cartao subindo
+num grupo real de 400. O que esta provado: o offer **sai** com
+`<group_info phash="2:...">` sem filhos (pacote instalado), o hash **bate** com os
+golden vectors da referencia, o grupo grande resolve o conjunto inteiro, e o
+caminho do grupo que **cabe** ficou **byte-identico**. Se ainda vier recusa, o log
+`[MOTOR] offer ack received` diz o codigo do erro e o `group_info phash` diz qual
+caminho rodou.
