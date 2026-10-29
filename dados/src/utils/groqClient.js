@@ -127,8 +127,10 @@ export async function groqChat({ texto, sistema, historico = [], modelo = MODELO
     const resp = await post(`${BASE}/chat/completions`, {
       model: modelo,
       messages: mensagens,
-      temperature: 0.7,
-      max_tokens: 400
+      // Conversa de VOZ: resposta curta e' mais natural E mais rapida de
+      // sintetizar. 400 tokens davam paragrafos; 220 cabe 3 frases faladas.
+      temperature: Number.parseFloat(process.env.IAP_LLM_TEMP || '0.8'),
+      max_tokens: Number.parseInt(process.env.IAP_LLM_MAX_TOKENS || '220', 10)
     }, {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       timeout: TIMEOUT_LLM_MS

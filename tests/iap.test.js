@@ -241,6 +241,58 @@ await test('agente: fala detectada -> STT -> LLM -> TTS -> fala', async () => {
   agente.desligar();
 });
 
+await test('agente: FALA EM FLUXO — comeca a falar antes do TTS terminar', async () => {
+  // A fluidez: quando o TTS sabe entregar em blocos (`sintetizarStream`), o
+  // agente fala o 1o bloco NA HORA, sem esperar a sintese inteira. Aqui o
+  // `sintetizarStream` entrega em 3 blocos com atraso — e medimos que o 1o
+  // pedaco ja saiu para o motor antes do ultimo bloco chegar.
+  const falado = [];
+  const ordem = [];
+  const agente = new AgenteDeVoz({
+    grupo: 'fluxo@g.us',
+    falar: (pcm) => { falado.push(pcm); ordem.push('falou'); },
+    pensar: async () => 'resposta',
+    transcrever: async () => 'oi',
+    sintetizar: async () => { throw new Error('nao deveria usar o caminho batch'); },
+    sintetizarStream: async (texto, aoBloco) => {
+      for (let i = 0; i < 3; i++) {
+        await new Promise((r) => setTimeout(r, 30));
+        ordem.push(`bloco${i}`);
+        aoBloco(new Float32Array(1920).fill(0.2));
+      }
+      return { ok: true, fonte: 'fake', amostras: 3 * 1920 };
+    }
+  });
+  agente.ligar();
+  const fala = new Float32Array(960).fill(0.3);
+  for (let i = 0; i < 6; i++) agente.receberAudio(fala);
+  for (let i = 0; i < 10; i++) agente.receberAudio(new Float32Array(960));
+  await new Promise((r) => setTimeout(r, 700));
+  ok(falado.length > 0, `falou (${falado.length} frames)`);
+  // O 1o frame entregue ao motor tem de vir ANTES do ultimo bloco sintetizado.
+  const primeiroFalou = ordem.indexOf('falou');
+  const ultimoBloco = ordem.lastIndexOf('bloco2');
+  ok(primeiroFalou !== -1 && ultimoBloco !== -1, 'os dois eventos aconteceram');
+  ok(primeiroFalou < ultimoBloco,
+    `falou antes do fim da sintese (falou@${primeiroFalou}, bloco2@${ultimoBloco})`);
+  agente.desligar();
+});
+
+await test('VAD: o silencio que fecha a frase e menor (resposta mais rapida)', async () => {
+  // 700 ms de silencio entravam DIRETO na latencia: o bot ficava mudo esse tempo
+  // todo antes de comecar a responder. O padrao caiu para 450 ms.
+  const { DetectorDeFala } = await import(new URL('../dados/src/utils/iapAudio.js', import.meta.url).href);
+  const vad = new DetectorDeFala();
+  ok(vad.silencioMs === 450, `silencio padrao de 450 ms (${vad.silencioMs})`);
+  // E continua configuravel por env (quem tem grupo barulhento aumenta).
+  const antes = process.env.IAP_VAD_SILENCIO_MS;
+  process.env.IAP_VAD_SILENCIO_MS = '900';
+  const vad2 = new DetectorDeFala();
+  if (antes === undefined) delete process.env.IAP_VAD_SILENCIO_MS;
+  else process.env.IAP_VAD_SILENCIO_MS = antes;
+  ok(vad2.silencioMs === 900, `a env manda (${vad2.silencioMs})`);
+});
+
 await test('agente: silêncio puro não aciona o pipeline', async () => {
   const { agente, falado } = agenteDeTeste();
   agente.ligar();
@@ -250,7 +302,6 @@ await test('agente: silêncio puro não aciona o pipeline', async () => {
   ok(falado.length === 0, 'não falou nada');
   agente.desligar();
 });
-
 await test('agente: BARGE-IN — fala SUSTENTADA por cima aborta a fala em curso', async () => {
   const { agente, falado } = agenteDeTeste();
   agente.ligar();
@@ -841,6 +892,31 @@ await test('iapTts: sem motor nenhum, o motivo e sem_tts (nao "gemini")', async 
   ok(r.ok === false && r.motivo === 'texto_vazio', 'texto vazio nao sintetiza');
 });
 
+await test('iapTts: sintetizarFalaStream entrega o PCM EM FLUXO (mais fluido)', async () => {
+  // A fluidez: a fala comeca no 1o bloco de audio, sem esperar o MP3 inteiro.
+  const tts = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
+  const { spawnSync } = await import('child_process');
+  const temFfmpeg = spawnSync(process.env.FFMPEG_PATH || 'ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0;
+  if (!temFfmpeg || !(await tts.msedgeDisponivel())) {
+    console.log('     (pulado: precisa de msedge-tts + ffmpeg)');
+    return;
+  }
+  const frase = 'Claro! Posso te ajudar com isso agora mesmo, so me dizer o que voce precisa.';
+  let blocos = 0;
+  let amostras = 0;
+  const t0 = Date.now();
+  const r = await tts.sintetizarFalaStream(frase, (b) => { blocos += 1; amostras += b.length; });
+  const totalMs = Date.now() - t0;
+  ok(r.ok === true, `sintetizou (${r.motivo || ''})`);
+  ok(r.fonte === 'msedge-tts', `fonte (${r.fonte})`);
+  ok(blocos > 1, `entregou em varios blocos (${blocos})`);
+  ok(amostras > 16000, `mais de 1s de audio (${amostras} amostras)`);
+  ok(r.amostras === amostras, 'o total bate com o que foi entregue');
+  // O streaming tem de ser mais rapido que o tempo real do audio (senao nao
+  // adianta). Aqui o audio tem ~5 s e a sintese inteira sai bem abaixo disso.
+  ok(totalMs < (amostras / 16000) * 1000, `mais rapido que o tempo real (${totalMs}ms)`);
+});
+
 await test('iapTts: texto vazio não sintetiza', async () => {
   const tts = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
   const r = await tts.sintetizarFala('   ');
@@ -941,7 +1017,10 @@ await test('groqChat: monta system + histórico + pergunta, e limita os tokens',
   ok(m[0].role === 'system' && m[0].content === 'seja breve', 'system primeiro');
   ok(m.length === 4, `4 mensagens (${m.length})`);
   ok(visto.body.model === 'openai/gpt-oss-120b', 'modelo do LLM');
-  ok(visto.body.max_tokens === 400, `max_tokens limitado (${visto.body.max_tokens})`);
+  // Resposta de VOZ: curta o bastante para caber em 2-3 frases faladas.
+  ok(visto.body.max_tokens > 0 && visto.body.max_tokens <= 400,
+    `max_tokens limitado (${visto.body.max_tokens})`);
+  ok(typeof visto.body.temperature === 'number', `temperatura de conversa (${visto.body.temperature})`);
 });
 
 await test('transcreverArquivoGroq: usa multipart com o modelo e o idioma', async () => {

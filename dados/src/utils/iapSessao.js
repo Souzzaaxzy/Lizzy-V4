@@ -16,7 +16,7 @@
 
 import { groqChat } from './groqClient.js';
 import { transcreverPcm, chaveGroq } from './iapStt.js';
-import { sintetizarFala, garantirVoz } from './iapTts.js';
+import { sintetizarFala, sintetizarFalaStream, garantirVoz } from './iapTts.js';
 import { iap } from './iapVoice.js';
 import { iaIdentidade, ehPedidoDeAcao, permitePedidoDeAcao } from './iapGuarda.js';
 import {
@@ -75,20 +75,34 @@ function logIap(msg, extra) {
 export function montarSistemaDoAgente({ nomeDono, participantes = [] } = {}) {
   const nome = iaIdentidade(); // "Lizzy"
 
+  // A data/hora REAL: sem ela o modelo chuta ("hoje e' ..."). E' o tipo de
+  // pergunta que aparece numa call ("que horas sao?").
+  let agora = '';
+  try {
+    agora = new Date().toLocaleString('pt-BR', {
+      timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short'
+    });
+  } catch { /* segue sem a data */ }
+
   const linhas = [
-    `Voce e' ${nome}, uma assistente de voz que participa de uma CHAMADA DE VOZ de um grupo do WhatsApp.`,
-    'Sua resposta sera lida em voz alta: fale como numa conversa.',
+    `Voce e' ${nome}, e esta numa CHAMADA DE VOZ de um grupo do WhatsApp.`,
+    'Tudo o que voce diz e lido em VOZ ALTA por um sintetizador.',
     '',
-    `Seu nome e' ${nome}. E' assim que voce se chama, sempre.`,
-    `Se perguntarem seu nome, responda exatamente: "Oi! Eu sou a ${nome}."`,
+    `Seu nome e' ${nome}. Se perguntarem, responda: "Oi! Eu sou a ${nome}."`,
     `Se alguem chamar "${nome}", e' com voce.`,
     '',
-    'COMO FALAR:',
-    '- Portugues do Brasil, natural, em frases CURTAS (2 a 3 no maximo).',
-    '- NUNCA use emojis, markdown, asteriscos ou listas — apenas o texto falado.',
-    '- Nao invente fatos sobre a conversa; se nao souber, diga que nao sabe.',
-    '- Se o audio estiver inaudivel, diga apenas que nao entendeu.'
+    'COMO FALAR (importante — e voz, nao texto):',
+    '- Portugues do Brasil, natural e descontraido, como numa conversa de amigos.',
+    '- Frases CURTAS: 1 a 2, no maximo 3. Nada de paragrafo.',
+    '- NUNCA use emojis, asteriscos, markdown, listas ou numeracao.',
+    '- Escreva numeros e siglas por extenso quando soarem melhor ("dez reais", "vinte e tres").',
+    '- NAO repita a pergunta antes de responder. Va direto ao ponto.',
+    '- Se a pergunta for simples, responda curto; se pedirem detalhe, ai sim desenvolva.',
+    '- Se nao souber algo, diga que nao sabe — nunca invente.',
+    '- Se o audio vier cortado/inaudivel, diga que nao entendeu e peca para repetir.'
   ];
+
+  if (agora) linhas.push('', `Agora e' ${agora} (horario de Brasilia).`);
 
   if (nomeDono) {
     linhas.push('', `O DONO do bot se chama ${nomeDono}. Trate-o com respeito e deferencia.`);
@@ -97,7 +111,7 @@ export function montarSistemaDoAgente({ nomeDono, participantes = [] } = {}) {
     const nomes = participantes.filter(Boolean).slice(0, 20).join(', ');
     if (nomes) linhas.push(`Quem esta na chamada agora: ${nomes}.`);
   }
-  linhas.push('Como o audio chega misturado, voce NAO sabe qual pessoa falou cada frase — nao invente de quem foi.');
+  linhas.push('O audio chega misturado, entao voce NAO sabe qual pessoa falou cada frase — nao invente de quem foi.');
 
   return linhas.join('\n');
 }
@@ -224,6 +238,25 @@ export async function ligarIap(grupo, { nomeDono, participantes, ehAutorizado } 
         segundos: r.pcm ? +(r.pcm.length / 16000).toFixed(1) : 0
       });
       return r.pcm;
+    },
+    // FLUIDEZ: a fala comeca no 1o bloco de audio, sem esperar o MP3 inteiro.
+    sintetizarStream: async (texto, aoBloco) => {
+      const t0 = Date.now();
+      let primeiroMs = null;
+      const r = await sintetizarFalaStream(texto, (bloco) => {
+        if (primeiroMs === null) primeiroMs = Date.now() - t0;
+        aoBloco(bloco);
+      });
+      if (!r.ok) {
+        logIap(`TTS falhou: ${r.motivo}`, { grupo });
+        return r;
+      }
+      logIap(`TTS ok (${r.fonte}, fluxo)`, {
+        grupo,
+        primeiroMs,
+        segundos: r.amostras ? +(r.amostras / 16000).toFixed(1) : 0
+      });
+      return r;
     },
     falar: (pcm) => { void _media.falarNaCallDoGrupo(grupo, pcm); }
   });

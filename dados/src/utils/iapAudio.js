@@ -199,7 +199,16 @@ export function rms(pcm) {
  * `falaMinimaMs` descarta estalos curtos (tosse, porta batendo).
  */
 export class DetectorDeFala {
-  constructor({ limiarRms = 0.012, silencioMs = 700, falaMinimaMs = 250, falaMaximaMs = 20000 } = {}) {
+  constructor({
+    limiarRms = Number.parseFloat(process.env.IAP_VAD_LIMIAR || '0.012'),
+    // 700 ms e' a espera padrao de "acabou de falar", mas num agente de voz ela
+    // entra DIRETO na latencia percebida: o bot fica mudo esse tempo todo antes
+    // de comecar a responder. 450 ms responde a fala normal e ainda tolera a
+    // pausa de respiracao no meio da frase (configuravel por IAP_VAD_SILENCIO_MS).
+    silencioMs = Number.parseInt(process.env.IAP_VAD_SILENCIO_MS || '450', 10),
+    falaMinimaMs = 250,
+    falaMaximaMs = 20000
+  } = {}) {
     this.limiarRms = limiarRms;
     this.silencioMs = silencioMs;
     this.falaMinimaMs = falaMinimaMs;

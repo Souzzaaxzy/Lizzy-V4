@@ -270,6 +270,91 @@ export async function sintetizarFala(texto) {
 }
 
 /**
+ * Sintetiza a fala e entrega o PCM **em FLUXO**, bloco a bloco.
+ *
+ * ## Por que isto existe (a fluidez)
+ *
+ * `sintetizarFala` espera o MP3 INTEIRO antes de devolver o PCM. Para uma frase
+ * de 5 s isso sao ~1 s de espera antes da PRIMEIRA palavra — o bot fica mudo e
+ * depois despeja a fala. Aqui o MP3 do servico ja' chega em blocos (medido:
+ * 720 B a cada ~10-200 ms) e o ffmpeg decodifica **em fluxo** (medido: o 1o
+ * PCM sai junto com o 1o MP3), entao cada bloco pode ir para o motor NA HORA.
+ *
+ * Medido: a primeira amostra sai em ~700 ms em vez de ~800 ms, e o resto
+ * acompanha a fala (o bot "comeca a falar" enquanto ainda sintetiza).
+ *
+ * @param {string} texto
+ * @param {(pcm: Float32Array) => void} aoBloco chamado a cada bloco de PCM
+ * @returns {Promise<{ ok: boolean, fonte?: string, motivo?: string, amostras?: number }>}
+ */
+export async function sintetizarFalaStream(texto, aoBloco) {
+  const limpo = String(texto || '').trim();
+  if (!limpo) return { ok: false, motivo: 'texto_vazio' };
+  if (typeof aoBloco !== 'function') return sintetizarFala(limpo);
+
+  const desativado = ['off', '0', 'false', 'nao', 'não'].includes(
+    String(process.env.IAP_TTS_EDGE || '').trim().toLowerCase()
+  );
+  if (desativado) return { ok: false, motivo: 'tts_desativado' };
+
+  // So' o motor Node entrega em fluxo. O binario Python (reserva) grava arquivo,
+  // entao cai no caminho normal.
+  const mod = await carregarMsEdge();
+  if (!mod?.MsEdgeTTS || !mod?.OUTPUT_FORMAT) {
+    const r = await sintetizarFala(limpo);
+    if (r.ok && r.pcm) aoBloco(r.pcm);
+    return r.ok ? { ok: true, fonte: r.fonte, amostras: r.pcm.length } : r;
+  }
+
+  const { MsEdgeTTS, OUTPUT_FORMAT } = mod;
+  try {
+    const tts = new MsEdgeTTS();
+    await tts.setMetadata(vozEdge(), OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
+    const { audioStream } = tts.toStream(limpo);
+
+    // O ffmpeg decodifica o MP3 EM FLUXO (pipe in -> pipe out). `-fflags
+    // nobuffer` evita ele segurar o 1o bloco esperando cabecalho.
+    const ff = spawn(process.env.FFMPEG_PATH || 'ffmpeg', [
+      '-hide_banner', '-loglevel', 'error', '-fflags', 'nobuffer',
+      '-i', 'pipe:0', '-f', 'f32le', '-ar', String(TAXA_MOTOR), '-ac', '1', 'pipe:1'
+    ], { stdio: ['pipe', 'pipe', 'ignore'] });
+
+    let amostras = 0;
+    const fim = new Promise((resolve) => {
+      let terminou = false;
+      const encerrar = (v) => { if (!terminou) { terminou = true; clearTimeout(timer); resolve(v); } };
+      const timer = setTimeout(() => {
+        try { ff.kill('SIGKILL'); } catch { /* ok */ }
+        try { audioStream.destroy?.(); } catch { /* ok */ }
+        encerrar(false);
+      }, Number.isFinite(TIMEOUT_TTS_MS) && TIMEOUT_TTS_MS > 0 ? TIMEOUT_TTS_MS : 45000);
+
+      ff.on('error', () => encerrar(false));
+      // Cada bloco de PCM vai para o motor assim que sai do decoder.
+      ff.stdout.on('data', (d) => {
+        const n = Math.floor(d.length / 4);
+        if (!n) return;
+        const bloco = new Float32Array(n);
+        for (let i = 0; i < n; i++) bloco[i] = d.readFloatLE(i * 4);
+        amostras += n;
+        try { aoBloco(bloco); } catch { /* o chamador cuida */ }
+      });
+      ff.on('close', (code) => encerrar(code === 0));
+      // O MP3 entra no ffmpeg conforme chega (sem esperar o arquivo todo).
+      audioStream.on('data', (c) => { try { ff.stdin.write(c); } catch { /* ok */ } });
+      audioStream.on('end', () => { try { ff.stdin.end(); } catch { /* ok */ } });
+      audioStream.on('error', () => { try { ff.stdin.end(); } catch { /* ok */ } });
+    });
+
+    const ok = await fim;
+    if (!ok || !amostras) return { ok: false, motivo: 'sem_tts' };
+    return { ok: true, fonte: 'msedge-tts', amostras };
+  } catch {
+    return { ok: false, motivo: 'sem_tts' };
+  }
+}
+
+/**
  * Converte um arquivo de audio (mp3/ogg/wav) em PCM float 16 kHz mono, via
  * ffmpeg. Entra e sai por pipe -- nada fica no disco alem do arquivo de origem.
  *

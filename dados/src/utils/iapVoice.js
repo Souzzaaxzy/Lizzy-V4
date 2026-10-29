@@ -39,8 +39,8 @@ const AMOSTRAS_POR_FRAME = 960;
 /** Teto da fila de fala: acima disso, a resposta e' descartada. */
 const FILA_MAX = 200;
 
-/** Quantas mensagens de historico o agente lembra. */
-const HISTORICO_MAX = 12;
+/** Quantas mensagens de historico o agente lembra (12 trocas ~= 6 turnos). */
+const HISTORICO_MAX = Number.parseInt(process.env.IAP_HISTORICO_MAX || '20', 10);
 
 /** Teto de tempo esperando a fala terminar (evita travar o agente). */
 const TTS_TIMEOUT_MS = Number.parseInt(process.env.IAP_TTS_TIMEOUT_MS || '45000', 10);
@@ -82,6 +82,7 @@ export class AgenteDeVoz {
     pensar,
     transcrever,
     sintetizar,
+    sintetizarStream,
     log = () => {},
     vad = {}
   }) {
@@ -90,6 +91,7 @@ export class AgenteDeVoz {
     this.pensar = pensar;
     this.transcrever = transcrever;
     this.sintetizar = sintetizar;
+    this.sintetizarStream = sintetizarStream;
     this.log = log;
 
     this.vad = new DetectorDeFala(vad);
@@ -250,13 +252,20 @@ export class AgenteDeVoz {
       }
       this.log('respondeu', { grupo: this.grupo, resposta, ms: Date.now() - t0 });
 
-      const audio = await this.sintetizar(resposta);
-      if (!this.ativo) return;
-      if (!audio || !audio.length) {
-        this.log('tts sem audio', { grupo: this.grupo });
-        return;
+      // FLUIDEZ: se o TTS sabe entregar em FLUXO (`sintetizarStream`), a fala
+      // comeca assim que o 1o bloco de audio sai — em vez de esperar o MP3
+      // inteiro. Sem esse caminho, cai no `sintetizar` (comportamento antigo).
+      if (typeof this.sintetizarStream === 'function') {
+        await this.emitirFalaStream(resposta);
+      } else {
+        const audio = await this.sintetizar(resposta);
+        if (!this.ativo) return;
+        if (!audio || !audio.length) {
+          this.log('tts sem audio', { grupo: this.grupo });
+          return;
+        }
+        await this.emitirFala(audio);
       }
-      await this.emitirFala(audio);
     } catch (e) {
       this.log('erro no agente', { grupo: this.grupo, erro: e?.message || String(e) });
     } finally {
@@ -307,6 +316,86 @@ export class AgenteDeVoz {
       this.timerFila.unref?.();
       entregar();
     });
+  }
+
+  /**
+   * Fala em FLUXO: entrega o audio ao motor conforme ele e' sintetizado.
+   *
+   * ## A diferenca para o `emitirFala`
+   *
+   * O `emitirFala` recebe o PCM **inteiro** e o entrega em frames de 60 ms. Aqui
+   * o TTS chama de volta a cada bloco decodificado, e o bloco entra na MESMA
+   * fila — entao a fala comeca no 1o bloco (medido: ~700 ms) em vez de esperar
+   * a sintese inteira. O bombeamento continua a 60 ms por frame, para o motor
+   * nao receber rajada (ele descarta o mais antigo se o buffer estourar).
+   *
+   * O BARGE-IN continua valendo: enquanto a fila esvazia, `receberAudio` pode
+   * chamar `abortarFala()`, que zera a fila e derruba o bombeamento.
+   *
+   * @param {string} texto
+   */
+  async emitirFalaStream(texto) {
+    this.fila = [];
+    this.falando = true;
+    this.framesBarge = 0;
+
+    // Bombeamento continuo: enquanto houver frame na fila, entrega um a cada
+    // 60 ms (o ritmo do motor). Ele NAO termina quando a fila esvazia — a
+    // sintese pode ainda estar produzindo; termina quando o `sintetizarStream`
+    // resolve E a fila drena.
+    let sinteseTerminou = false;
+    const bombeamento = new Promise((resolve) => {
+      const entregar = () => {
+        if (!this.ativo || !this.falando) {
+          clearInterval(this.timerFila);
+          this.timerFila = null;
+          resolve();
+          return;
+        }
+        const frame = this.fila.shift();
+        if (frame) {
+          try { this.falar(frame); } catch (e) {
+            this.log('falha ao falar', { grupo: this.grupo, erro: e?.message || String(e) });
+          }
+          return;
+        }
+        // Fila vazia: se a sintese acabou, encerra; senao, espera o proximo bloco.
+        if (sinteseTerminou) {
+          clearInterval(this.timerFila);
+          this.timerFila = null;
+          this.falando = false;
+          resolve();
+        }
+      };
+      this.timerFila = setInterval(entregar, 60);
+      this.timerFila.unref?.();
+      entregar();
+    });
+
+    // Cada bloco de PCM do TTS entra na fila (reagrupado no tamanho do motor).
+    const aoBloco = (pcm) => {
+      if (!this.ativo || !this.falando) return;
+      for (let i = 0; i < pcm.length; i += AMOSTRAS_POR_FRAME) {
+        const fatia = pcm.subarray(i, Math.min(i + AMOSTRAS_POR_FRAME, pcm.length));
+        if (fatia.length) this.fila.push(Float32Array.from(fatia));
+      }
+      if (this.fila.length > FILA_MAX) this.fila = this.fila.slice(-FILA_MAX);
+    };
+
+    try {
+      const r = await this.sintetizarStream(texto, aoBloco);
+      if (!r?.ok) this.log('tts sem audio', { grupo: this.grupo, motivo: r?.motivo });
+    } catch (e) {
+      this.log('falha no tts em fluxo', { grupo: this.grupo, erro: e?.message || String(e) });
+    }
+    sinteseTerminou = true;
+    // Garante que o bombeamento veja o fim (o intervalo pode estar num tick).
+    if (!this.fila.length && this.falando) {
+      clearInterval(this.timerFila);
+      this.timerFila = null;
+      this.falando = false;
+    }
+    await bombeamento;
   }
 
   /** Aborta a fala em curso (barge-in / desligar). */
