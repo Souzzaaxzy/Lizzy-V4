@@ -92,6 +92,49 @@ await test('NAO confunde conversa com comando (falsos positivos)', (ok) => {
   }
 });
 
+await test('CORPUS: 40 frases reais -> comando certo (e 17 conversas barradas)', (ok) => {
+  // Medicao virada teste: cobre as formas como se PEDE de verdade — com
+  // prefixos ("me toca"), erros do STT ("toga"/"toka"), acento na palavra errada
+  // e objetos que NAO sao musica ("toca o telefone").
+  const POSITIVOS = [
+    ['play', 'toca Evidências'], ['play', 'Tóca evidências.'], ['play', 'TOCA EVIDENCIAS'],
+    ['play', 'toca a música Evidências pra mim'], ['play', 'coloca Back to Black'],
+    ['play', 'bota um som do Tim Maia'], ['play', 'quero ouvir Djavan'],
+    ['play', 'baixa a música Blinding Lights'], ['play', 'procura a música Evidências'],
+    ['play', 'manda a música Evidências'], ['play', 'play Evidências'],
+    ['play', 'toca aí Evidências'], ['play', 'toca pra mim Evidências'],
+    ['play', 'Lizzy, toca Evidências'], ['play', 'pode tocar Evidências'],
+    ['play', 'toca essa música'], ['play', 'queria ouvir Legião Urbana'],
+    ['play', 'coloca uma música do Djavan'], ['play', 'bota Evidências'],
+    ['play', 'toga Evidências'], ['play', 'toque Evidências'],
+    ['play', 'quero escutar Evidências'], ['play', 'me toca Evidências'],
+    ['play', 'dá um play em Evidências'], ['play', 'põe Evidências'],
+    ['tiktok', 'baixa o vídeo do tiktok do gato'], ['tiktok', 'tiktok gato'],
+    ['tiktok', 'manda o vídeo do tiktok do gato'], ['tiktok', 'baixa esse vídeo do tiktok'],
+    ['pin', 'procura no pinterest gatinhos'], ['pin', 'pesquisa no pinterest decoração'],
+    ['pin', 'pinterest gatinhos fofos'], ['pin', 'manda uma imagem do pinterest de gatos'],
+    ['pin', 'busca no pinterest decoração de quarto'],
+    ['figualeatoria', 'manda uma figurinha aleatória'], ['figualeatoria', 'manda um sticker aleatório'],
+    ['figualeatoria', 'figurinha aleatoria'], ['figualeatoria', 'manda uma figura random'],
+    ['figualeatoria', 'manda uma figurinha'], ['figualeatoria', 'manda um sticker']
+  ];
+  for (const [esp, fala] of POSITIVOS) {
+    const r = identificarComando(fala);
+    ok(r && r.comando === esp, `"${fala}" -> ${esp} (${r ? r.comando : 'null'})`);
+  }
+  const NEGATIVOS = [
+    'oi Lizzy tudo bem?', 'que música boa essa', 'eu amo essa música', 'como toca violão?',
+    'toca piano', 'não toca nada agora', 'me conta uma piada', 'qual seu nome?',
+    'obrigado Lizzy', '', 'quem é o dono?', 'bom dia', 'que horas são?',
+    'você é muito legal', 'toca o telefone', 'muskaka unda dada jaja pra mim.',
+    'Você baixar a mão da minha mão.'
+  ];
+  for (const fala of NEGATIVOS) {
+    const r = identificarComando(fala);
+    ok(r === null, `"${fala}" NAO virou comando (${r ? r.comando : 'ok'})`);
+  }
+});
+
 await test('desambigua: "procura a musica X" x "procura no pinterest X"', (ok) => {
   // A plataforma vence a acao generica — senao o pinterest viraria play.
   ok(identificarComando('procura no pinterest gatinhos')?.comando === 'pin', 'pinterest -> pin');
