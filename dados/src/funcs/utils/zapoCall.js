@@ -86,9 +86,13 @@ const VALORES_LIGADOS = new Set(['all', '1', 'true', 'on', 'sim', 'yes']);
 /**
  * Le `ZAPO_RAW_UDP` e diz se o transporte por UDP cru esta ligado.
  *
- * <p>O padrao e' DESLIGADO: o flag do pacote e' experimental e a leg UDP cru tem
- * a sua propria policia de caminho de volta. Quem decide e' o dono, lendo o log
- * do relay -- por isso a escolha e' registrada uma vez (ver {@link avisarTransporte}).
+ * <p>O padrao e' DESLIGADO, e isso e' uma decisao MEDIDA: com o UDP cru a leg sobe
+ * e nao recebe nada de volta (`raw_udp_no_return_path`) e, ao contrario da leg
+ * WebRTC, ela **derruba a call** (`call lost its last relay leg` -> `relay_lost`).
+ * Sem ela a call fica de pe' e so' a midia nao flui.
+ *
+ * <p>A env existe para experimento, nao para producao: quem liga assume que a call
+ * pode cair. A escolha e' registrada uma vez (ver {@link avisarTransporte}).
  */
 function ligarUdpCru() {
   return VALORES_LIGADOS.has(String(process.env.ZAPO_RAW_UDP ?? '').trim().toLowerCase());
@@ -510,24 +514,26 @@ export async function obterCliente() {
               //
               // Com o padrao ('required') o pacote usa UDP cru SO onde o relay
               // exige (sem credencial ICE) e WebRTC no resto.
-              // TRANSPORTE DO RELAY — o caminho que a referencia usa.
+              // TRANSPORTE DO RELAY — o UDP cru NAO deve ser ligado.
               //
-              // O log real mostra as legs WebRTC falhando em TODAS as portas:
+              // O log do dono, com `ZAPO_RAW_UDP=all`, mostrou a leg UDP cru sendo
+              // criada e **nao recebendo nada de volta** -- e, diferente da leg
+              // WebRTC, ela DERRUBA a call:
               //
-              //   relay leg unanswered, redialling on the other port | {port:3478}
-              //   sctp connection failed | {reason:'relay_port_unopened'}
-              //   relay downlink stalled, re-allocating | {stalledMs:5035, legs:6}
+              //   raw udp leg rolled back, no media on the return path | {confirmed:false}
+              //   relay has no leg left, open or dialling | {reason:'raw_udp_no_return_path'}
+              //   call lost its last relay leg | {reason:'raw_udp_no_return_path'}
+              //   a call ... encerrou | motivo: relay_lost
               //
-              // O relay nao aceita o handshake DTLS/SCTP nessa porta. O motor TEM o
-              // transporte por **UDP cru** (`WaRawUdpLeg`: o 5-tuple E' a leg, sem
-              // ICE/DTLS/SCTP) e ele so' e' usado quando `rawUdpLegs` permite:
+              // Antes disso a call ficava DE PE (offer aceito, relay alocado) e so'
+              // a midia nao fluia; com o UDP cru ela passou a MORRER. A doc do
+              // proprio pacote diz o mesmo: "A leg that sends and hears nothing back
+              // within a few seconds closes itself."
               //
-              //   rawUdpLegs: useRawUdpTransport ? 'all' : 'required'
-              //
-              // `ZAPO_RAW_UDP=all` liga o caminho (mesma opcao do pacote). Aceita
-              // tambem 1/true/on/sim -- escrever `ZAPO_RAW_UDP=1` e' o que se
-              // espera de uma env booleana, e recusar isso por detalhe de forma
-              // faria o dono achar que o caminho nao funciona.
+              // O caminho certo e' o padrao do pacote (`rawUdpLegs: 'required'`): UDP
+              // cru SO onde o relay exige (sem credencial ICE) e WebRTC no resto.
+              // `ZAPO_RAW_UDP=all` continua existindo para experimento, mas o padrao
+              // e' DESLIGADO e quem liga assume que a call pode cair.
               useRawUdpTransport: ligarUdpCru(),
 
               logLevel: process.env.ZAPO_LOG_LEVEL || 'warn',

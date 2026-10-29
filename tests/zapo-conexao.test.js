@@ -202,7 +202,12 @@ await test('o transporte por UDP cru e CONTROLADO por env (ZAPO_RAW_UDP)', () =>
   includes(SRC, 'useRawUdpTransport:', 'o flag e passado (nao mais omitido)');
   includes(SRC, 'ZAPO_RAW_UDP', 'o controle e por env explicita');
   includes(SRC, 'ligarUdpCru()', 'a env passa por um leitor unico');
-  includes(SRC, 'relay_port_unopened', 'o motivo medido fica registrado no codigo');
+  // O padrao tem de ser DESLIGADO: medido, o UDP cru derruba a call
+  // (`raw_udp_no_return_path` -> `call lost its last relay leg` -> `relay_lost`),
+  // enquanto sem ele a call fica de pe' e so' a midia nao flui.
+  includes(SRC, 'raw_udp_no_return_path', 'o motivo medido fica registrado no codigo');
+  includes(SRC, 'call lost its last relay leg', 'registra que o UDP cru DERRUBA a call');
+  includes(SRC, 'NAO deve ser ligado', 'o padrao (desligado) esta explicito');
   // A linha que separa "a env nao chegou" de "a env chegou e nao ajudou": sem
   // ela, os dois casos dao o MESMO log (sctp falhando) -- foi o que aconteceu.
   includes(SRC, 'avisarTransporte()', 'a escolha do transporte e registrada no log');
