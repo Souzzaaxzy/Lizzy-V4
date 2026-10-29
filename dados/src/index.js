@@ -4334,7 +4334,9 @@ async function NazuninhaBotExec(nazu, info, store, messagesCache, rentalExpirati
           '_A chamada de grupo do WhatsApp aceita no máximo *32 participantes* — ' +
           'é limite da plataforma, não do bot (não existe ilimitado). Eu entro ' +
           'como um deles, então convido até 31. Num grupo maior, quem quiser ' +
-          'entrar depois abre a chamada pelo WhatsApp normalmente._'
+          'entrar depois abre a chamada pelo WhatsApp normalmente._\n' +
+          '_Se o grupo é pequeno e ainda assim recusou, foi o próprio servidor ' +
+          'recusando o offer — o log do bot mostra o código do erro._'
         : '';
       try {
         await nazu.sendMessage(grupo, {

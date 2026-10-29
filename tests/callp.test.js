@@ -697,6 +697,10 @@ await test('quando o servidor RECUSA (setup_failed), o aviso explica', () => {
   ok(bloco.includes('32 participantes'), 'diz o numero exato do limite do WhatsApp');
   ok(bloco.includes('não do bot'), 'deixa claro que e limite da plataforma');
   ok(bloco.includes('não existe ilimitado'), 'nao promete o que a plataforma nao permite');
+  ok(
+    bloco.includes('Se o grupo é pequeno'),
+    'tambem cobre o caso do grupo PEQUENO (o 207 com relay nao e teto de participantes)'
+  );
 });
 
 // ============================================================================
