@@ -36914,10 +36914,22 @@ _Não há distinção de quem ligou: todas são reportadas igual._`
                 return Boolean(ehAdmin);
               } catch { return false; }
             };
+            // O NOME de quem fala: o motor manda o JID (audio por participante);
+            // aqui ele vira o NOME DO CONTATO (agenda > notify > verifiedName >
+            // metadata) — o mesmo resolvedor do `!me`/`!cf`. E' o que faz a
+            // Lizzy chamar a pessoa pelo nome em vez de tratar todo mundo igual.
+            const nomeDeQuemFalou = async (jid) => {
+              try {
+                if (!jid) return null;
+                const meta = await getCachedGroupMetadata(from);
+                return await resolverNomeContato(jid, { nazu, metadata: meta, from });
+              } catch { return null; }
+            };
             const r = await ligarIap(from, {
               nomeDono: nomedono || null,
               participantes: nomesNaCall,
-              ehAutorizado
+              ehAutorizado,
+              nomeDeQuemFalou
             });
             if (!r.ok) {
               const motivos = {

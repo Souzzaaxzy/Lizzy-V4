@@ -498,7 +498,58 @@ await test('montarSistemaDoAgente: o agente SABE quem é o dono e quem está na 
   includes(s, 'Kannon', 'diz o nome do dono');
   ok(/dono/i.test(s), 'deixa explícito que é o dono');
   includes(s, 'Joao', 'lista quem está na call');
-  ok(/misturad/i.test(s), 'avisa que o áudio chega misturado');
+  // Sem falante identificado, o prompt avisa que ele NÃO sabe quem falou (e
+  // manda perguntar em vez de inventar).
+  ok(/nao sabe quem falou|não sabe quem falou/i.test(s), 'avisa que não sabe quem falou');
+});
+
+await test('montarSistemaDoAgente: com o FALANTE, chama a pessoa pelo nome', async () => {
+  // O motor entrega o audio POR PARTICIPANTE (o JID de quem falou); o nome vem
+  // do resolvedor de contatos. E' o que faz a Lizzy chamar a pessoa pelo nome.
+  const sess = await import(new URL('../dados/src/utils/iapSessao.js', import.meta.url).href);
+  const s = sess.montarSistemaDoAgente({ falante: 'Kannon', nomeDono: 'Outro' });
+  includes(s, 'Kannon', 'diz quem está falando');
+  ok(/falando com voce AGORA/i.test(s), 'aponta o falante atual');
+  ok(/Dirija-se a ele\(a\) pelo nome \(Kannon\)/i.test(s), 'manda chamar pelo nome');
+  // E quando o falante E' o dono, o prompt marca isso.
+  const dono = sess.montarSistemaDoAgente({ falante: 'Kannon', nomeDono: 'Kannon', falanteEhDono: true });
+  ok(/ATENCAO: Kannon e' o DONO/i.test(dono), 'marca quando quem fala é o dono');
+});
+
+await test('pensarComIa: resolve o JID do falante no NOME (e não passa JID cru)', async () => {
+  const sess = await import(new URL('../dados/src/utils/iapSessao.js', import.meta.url).href);
+  const groq = await import(new URL('../dados/src/utils/groqClient.js', import.meta.url).href);
+  let sistemaVisto = null;
+  groq.setGroqHttpForTest(async (url, body) => {
+    sistemaVisto = body?.messages?.[0]?.content || '';
+    return { data: { choices: [{ message: { content: 'ok' } }] } };
+  });
+  const antiga = process.env.GROQ_API_KEY;
+  process.env.GROQ_API_KEY = 'gsk_teste';
+
+  // 1) Resolvedor devolve o NOME: ele entra no prompt.
+  await sess.pensarComIa('oi', [], {
+    quemFalou: '23734744260711@lid',
+    nomeDeQuemFalou: async () => 'Kannon'
+  });
+  ok(/falando com voce AGORA e' Kannon/i.test(sistemaVisto || ''), 'usou o nome resolvido');
+
+  // 2) Resolvedor devolve um JID (nao deveria): o prompt NAO usa isso como nome.
+  await sess.pensarComIa('oi', [], {
+    quemFalou: '23734744260711@lid',
+    nomeDeQuemFalou: async () => '23734744260711@lid'
+  });
+  ok(!/@lid/.test(sistemaVisto || ''), 'não passa JID cru como nome');
+
+  // 3) Resolvedor falha: segue sem nome, sem quebrar.
+  const r = await sess.pensarComIa('oi', [], {
+    quemFalou: 'x@lid',
+    nomeDeQuemFalou: async () => { throw new Error('sem metadata'); }
+  });
+  ok(r === 'ok', 'não quebrou quando o resolvedor falhou');
+
+  if (antiga !== undefined) process.env.GROQ_API_KEY = antiga;
+  groq.setGroqHttpForTest(null);
 });
 
 await test('montarSistemaDoAgente: tem as regras de FALA (não de texto)', async () => {
@@ -654,6 +705,50 @@ await test('ligarIap: a VOZ vem do msedge-tts (Node) — nao depende de pip/pyth
   if (antigaGroq !== undefined) process.env.GROQ_API_KEY = antigaGroq;
   sess.setIapMediaForTest(null);
   try { fs.rmSync(homeFalso, { recursive: true, force: true }); } catch { /* ok */ }
+});
+
+await test('ligarIap: o agente chama a pessoa pelo NOME (o fio do nomeDeQuemFalou)', async () => {
+  // Fecha a cadeia do pedido do dono: o JID de quem falou (audio por
+  // participante) -> NOME do contato -> o agente usa o nome na resposta.
+  const sess = await import(new URL('../dados/src/utils/iapSessao.js', import.meta.url).href);
+  const groq = await import(new URL('../dados/src/utils/groqClient.js', import.meta.url).href);
+  const { iap } = await import(new URL('../dados/src/utils/iapVoice.js', import.meta.url).href);
+  sess.setIapMediaForTest({
+    modoAudioExternoDaCall: async () => true,
+    aoOuvirAudioDaCall: async () => true,
+    falarNaCallDoGrupo: async () => 0
+  });
+  let sistemaVisto = null;
+  groq.setGroqHttpForTest(async (url, body) => {
+    sistemaVisto = body?.messages?.[0]?.content || '';
+    return { data: { choices: [{ message: { content: 'ok' } }] } };
+  });
+  const antigaGroq = process.env.GROQ_API_KEY;
+  process.env.GROQ_API_KEY = 'gsk_teste';
+
+  const grupo = 'nome-falante@g.us';
+  const r = await sess.ligarIap(grupo, {
+    nomeDono: 'Kannon',
+    // O `index.js` injeta exatamente isto: JID -> resolverNomeContato.
+    nomeDeQuemFalou: async (jid) => (jid === '23734744260711@lid' ? 'Kannon' : null)
+  });
+  ok(r.ok === true, `ligou (${r.motivo || 'ok'})`);
+
+  const agente = iap.agentes.get(grupo);
+  ok(Boolean(agente), 'o agente foi registrado');
+  await agente.pensar('oi', [], { quemFalou: '23734744260711@lid' });
+  ok(/falando com voce AGORA e' Kannon/i.test(sistemaVisto || ''),
+    'o prompt recebeu o NOME de quem falou');
+
+  // Um JID sem nome resolvido: o agente NAO inventa e nao usa o JID cru.
+  sistemaVisto = null;
+  await agente.pensar('oi', [], { quemFalou: '99999999999999@lid' });
+  ok(!/99999999999999/.test(sistemaVisto || ''), 'nao usou o JID cru como nome');
+
+  await sess.desligarIap(grupo);
+  sess.setIapMediaForTest(null);
+  if (antigaGroq !== undefined) process.env.GROQ_API_KEY = antigaGroq;
+  groq.setGroqHttpForTest(null);
 });
 
 await test('pensarComIa: a guarda RECEBE o ehAutorizado (não recusa todo mundo)', async () => {

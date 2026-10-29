@@ -70,9 +70,13 @@ function logIap(msg, extra) {
  * @param {object} opts
  * @param {string} [opts.nomeDono]
  * @param {string[]} [opts.participantes]
+ * @param {string} [opts.falante] NOME de quem esta' falando agora (resolvido do
+ *   JID do audio por participante). E' o que faz a Lizzy chamar a pessoa pelo
+ *   nome em vez de tratar todo mundo igual.
+ * @param {boolean} [opts.falanteEhDono] o falante e' o dono do bot?
  * @returns {string}
  */
-export function montarSistemaDoAgente({ nomeDono, participantes = [] } = {}) {
+export function montarSistemaDoAgente({ nomeDono, participantes = [], falante, falanteEhDono = false } = {}) {
   const nome = iaIdentidade(); // "Lizzy"
 
   // A data/hora REAL: sem ela o modelo chuta ("hoje e' ..."). E' o tipo de
@@ -111,7 +115,20 @@ export function montarSistemaDoAgente({ nomeDono, participantes = [] } = {}) {
     const nomes = participantes.filter(Boolean).slice(0, 20).join(', ');
     if (nomes) linhas.push(`Quem esta na chamada agora: ${nomes}.`);
   }
-  linhas.push('O audio chega misturado, entao voce NAO sabe qual pessoa falou cada frase — nao invente de quem foi.');
+
+  // QUEM ESTA' FALANDO AGORA. O motor entrega o audio POR PARTICIPANTE, entao
+  // sabemos o JID de quem falou; o nome vem do resolvedor de contatos. Com isso
+  // a Lizzy chama a pessoa pelo nome ("Fala, Kannon!") em vez de tratar todo
+  // mundo igual — e sabe diferenciar o dono.
+  if (falante) {
+    linhas.push('', `Quem esta falando com voce AGORA e' ${falante}.`);
+    if (falanteEhDono) {
+      linhas.push(`ATENCAO: ${falante} e' o DONO do bot — trate com deferencia.`);
+    }
+    linhas.push(`Dirija-se a ele(a) pelo nome (${falante}) quando fizer sentido, sem exagerar.`);
+  } else {
+    linhas.push('', 'Voce nao sabe quem falou esta frase — se precisar de um nome, pergunte.');
+  }
 
   return linhas.join('\n');
 }
@@ -140,10 +157,13 @@ export function montarSistemaDoAgente({ nomeDono, participantes = [] } = {}) {
  * @param {function} [opts.ehAutorizado] `(jid) => boolean|Promise<boolean>`
  * @param {string} [opts.nomeDono]
  * @param {string[]} [opts.participantes]
+ * @param {function} [opts.nomeDeQuemFalou] `(jid) => Promise<string|null>` —
+ *   resolve o JID em NOME (agenda > notify > verifiedName). Vem do `index.js`,
+ *   que tem o `nazu` e o metadata do grupo.
  * @returns {Promise<string>}
  */
 export async function pensarComIa(texto, historico = [], {
-  quemFalou, ehAutorizado, nomeDono, participantes = []
+  quemFalou, ehAutorizado, nomeDono, participantes = [], nomeDeQuemFalou
 } = {}) {
   // ---- GUARDA: o pedido é de AÇÃO? a pessoa PODE? ------------------------
   const guarda = await permitePedidoDeAcao(texto, quemFalou, { ehAutorizado });
@@ -156,7 +176,25 @@ export async function pensarComIa(texto, historico = [], {
     return guarda.recusa;
   }
 
-  const sistema = montarSistemaDoAgente({ nomeDono, participantes });
+  // O NOME de quem falou: resolve o JID do audio por participante. Best-effort
+  // — se nao resolver, o prompt segue sem nome (e a Lizzy pergunta, em vez de
+  // inventar).
+  let falante = null;
+  if (quemFalou && typeof nomeDeQuemFalou === 'function') {
+    try {
+      const n = await nomeDeQuemFalou(quemFalou);
+      const limpo = n ? String(n).trim() : '';
+      // Guarda: um JID/LID cru NAO e' nome. Se o resolvedor cair nisso (nao
+      // devia), e' melhor o prompt nao ter nome do que a Lizzy chamar a pessoa
+      // de "@23734744260711".
+      if (limpo && !limpo.includes('@')) falante = limpo;
+    } catch { /* segue sem nome */ }
+  }
+  const falanteEhDono = Boolean(
+    quemFalou && nomeDono && falante && falante.toLowerCase() === String(nomeDono).toLowerCase()
+  );
+
+  const sistema = montarSistemaDoAgente({ nomeDono, participantes, falante, falanteEhDono });
   const r = await groqChat({
     texto,
     sistema,
@@ -180,9 +218,12 @@ export async function pensarComIa(texto, historico = [], {
  * @param {string[]} [opts.participantes]
  * @param {function} [opts.ehAutorizado] `(jid) => boolean` — a permissão REAL
  *   da pessoa (admin/dono/subdono/mod). Vem do `index.js`, que tem o metadata.
+ * @param {function} [opts.nomeDeQuemFalou] `(jid) => Promise<string|null>` —
+ *   resolve o JID do falante no NOME do contato (o `index.js` injeta o
+ *   `resolverNomeContato`). E' o que faz a Lizzy chamar a pessoa pelo nome.
  * @returns {Promise<{ ok: boolean, motivo?: string }>}
  */
-export async function ligarIap(grupo, { nomeDono, participantes, ehAutorizado } = {}) {
+export async function ligarIap(grupo, { nomeDono, participantes, ehAutorizado, nomeDeQuemFalou } = {}) {
   // O `!iap` inteiro roda no Groq (ouvir E pensar): sem a chave dele nao ha' o
   // que ligar.
   if (!chaveGroq()) return { ok: false, motivo: 'sem_chave_groq' };
@@ -212,7 +253,7 @@ export async function ligarIap(grupo, { nomeDono, participantes, ehAutorizado } 
   iap.ligar(grupo, {
     log: logIap,
     pensar: (texto, historico, opts = {}) => pensarComIa(texto, historico, {
-      quemFalou: opts.quemFalou, ehAutorizado, nomeDono, participantes
+      quemFalou: opts.quemFalou, ehAutorizado, nomeDono, participantes, nomeDeQuemFalou
     }),
     transcrever: async (pcm) => {
       const r = await transcreverPcm(pcm, { apiKey: chaveGroq() });
