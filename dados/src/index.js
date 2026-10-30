@@ -1890,6 +1890,14 @@ const react = async (emoji, sock, messageKey, fromJid) => {
  * usuário via a mensagem genérica em vez da orientação de configurar a key.
  * Aqui a classificação é feita pelo TEXTO REAL do erro.
  */
+/** Uma duracao curta e legivel ("45s", "3min", "2h"). */
+const formatarDuracaoCurta = (segundos) => {
+  const s = Math.max(0, Math.round(Number(segundos) || 0));
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.round(s / 60)}min`;
+  return `${(s / 3600).toFixed(1)}h`;
+};
+
 const mensagemErroIA = (e) => {
   const msg = String(e?.message || '');
   if (/API key|401|403|inválida|não configurada|permiss/i.test(msg)) {
@@ -26606,8 +26614,13 @@ ${groupPrefix}key sua_chave_gemini
                   // "esgotada" (cota do DIA, volta no reset) e' diferente de
                   // "em castigo" (limite por MINUTO: a chave esta' viva e volta
                   // sozinha). Antes os dois viravam "limite atingido hoje".
+                  // O prazo vem do proprio Groq (`x-ratelimit-reset-requests`),
+                  // nao do nosso relogio: a cota e' contada por organizacao.
+                  const faltaReset = c.resetEmSegundos > 0
+                    ? ` (volta em ${formatarDuracaoCurta(c.resetEmSegundos)})`
+                    : '';
                   const obs = c.esgotada
-                    ? ' _cota do dia esgotada (volta à meia-noite)_'
+                    ? ` _cota do dia esgotada${faltaReset}_`
                     : (c.emCooldown
                       ? ` _limite por minuto — volta em ${c.cooldownRestante}s_`
                       : (c.ativa ? ' _em uso_' : ''));

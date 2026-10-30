@@ -320,7 +320,17 @@ await test('15. os 10 comandos existem no handler', () => {
 
 await test('16. o comando usa os helpers (nada de logica duplicada)', () => {
   const i = INDEX.indexOf("case 'keygroq':");
-  const bloco = INDEX.slice(i, i + 4200);
+  // O bloco vai do `case 'keygroq'` ate' o proximo comando de VERDADE — pulando
+  // os irmaos do mesmo grupo (`keygroq1`..`keygroq10`). Fatiar por um numero
+  // fixo de chars ja' quebrou este teste quando o painel cresceu.
+  let fim = i + 7000;
+  const re = /\n\s*case '([a-z0-9_]+)':/gi;
+  let m;
+  while ((m = re.exec(INDEX)) !== null) {
+    if (m.index < i) continue;
+    if (!/^(?:keygroq|groqkey)\d*$/.test(m[1])) { fim = m.index; break; }
+  }
+  const bloco = INDEX.slice(i, fim);
   ok(bloco.includes('slotDoComando(command, q)'), 'descobre o slot pelo comando E pelos args (o `off 2`)');
   ok(bloco.includes('lerChaves()'), 'le as chaves configuradas');
   ok(bloco.includes('atualizarEnv('), 'grava no .env pelo helper (nao por regex solto)');
@@ -640,6 +650,191 @@ await test('38. o reset limpa TAMBEM os castigos (o `!keygroq reset` do dono)', 
   keys.resetarEsgotadas();
   ok(!keys.emCooldown(1), 'o reset limpou o castigo');
   ok(groq.chaveGroq() === 'k1', 'e a 1a voltou a ser usada');
+});
+
+// ---------------------------------------------------------------------------
+// 7) OS HEADERS DO GROQ: a cota do DIA, o RESET certo e a ESPERA
+// ---------------------------------------------------------------------------
+console.log('\n=== 7) HEADERS, RESET E ESPERA ===\n');
+
+/** O 429 da cota do DIA com os HEADERS (como o Groq manda de verdade). */
+const erroDiaComHeaders = ({ restantes = 0, resetSegundos = 3600, retryAfter = 2 } = {}) => {
+  const e = new Error('HTTP 429');
+  e.response = {
+    status: 429,
+    headers: {
+      'x-ratelimit-remaining-requests': String(restantes),
+      'x-ratelimit-reset-requests': `${resetSegundos}s`,
+      'retry-after': String(retryAfter)
+    },
+    data: { error: { message: 'Rate limit reached for model `x` on requests per day (RPD).' } }
+  };
+  return e;
+};
+
+/** O 429 do limite por MINUTO com os headers (a chave continua VIVA). */
+const erroMinutoComHeaders = ({ restantes = 5000, retryAfter = 30 } = {}) => {
+  const e = new Error('HTTP 429');
+  e.response = {
+    status: 429,
+    headers: {
+      'x-ratelimit-remaining-requests': String(restantes),
+      'retry-after': String(retryAfter)
+    },
+    data: { error: { message: 'Rate limit reached for model `x` on requests per minute (RPM).' } }
+  };
+  return e;
+};
+
+await test('39. o HEADER `remaining-requests` MANDA sobre o texto do erro', () => {
+  // A doc do Groq: `x-ratelimit-remaining-requests` refere-se SEMPRE a RPD.
+  // O texto pode dizer uma coisa e o header outra — o header e' a verdade.
+  const contradiz = groq.classificarErroGroq(erroDiaComHeaders({ restantes: 5000 }));
+  ok(contradiz.escopo === 'minuto',
+    `remaining=5000 -> minuto, mesmo com o texto dizendo "per day" (veio ${contradiz.escopo})`);
+
+  const zero = groq.classificarErroGroq(erroDiaComHeaders({ restantes: 0 }));
+  ok(zero.escopo === 'dia', `remaining=0 -> dia (veio ${zero.escopo})`);
+
+  // E o instante do reset vem do proprio Groq.
+  ok(zero.resetEm > Date.now(), 'o resetEm veio do header');
+  const faltam = Math.round((zero.resetEm - Date.now()) / 1000);
+  ok(faltam > 3500 && faltam <= 3600, `~1h de reset (veio ${faltam}s)`);
+});
+
+await test('40. a chave VOLTA no RESET do Groq — nao na nossa meia-noite', async () => {
+  limparEnv();
+  process.env.GROQ_API_KEY = 'k1';
+  process.env.GROQ_API_KEY_2 = 'k2';
+  // O Groq diz que a cota volta em 1s (nao em 24h).
+  const usadas = dublar((chave) => {
+    if (chave === 'k1') throw erroDiaComHeaders({ restantes: 0, resetSegundos: 1 });
+    return { data: { choices: [{ message: { content: 'ok' } }] } };
+  });
+  await groq.groqChat({ texto: 'a', sistema: 's' });
+  ok(keys.estaEsgotada(1), 'a k1 esgotou a cota do dia');
+  ok(keys.segundosParaReset(1) <= 1, `o reset e' em ~1s (veio ${keys.segundosParaReset(1)}s)`);
+  ok(groq.chaveGroq() === 'k2', 'e a k2 assume');
+
+  // Passou o prazo que o GROQ informou (nao a meia-noite do bot).
+  await new Promise((r) => setTimeout(r, 1200));
+  ok(!keys.estaEsgotada(1), 'a k1 VOLTOU (o reset do Groq chegou)');
+  ok(groq.chaveGroq() === 'k1', `e volta a ser a 1a (veio ${groq.chaveGroq()})`);
+  groq.setGroqHttpForTest(null);
+});
+
+await test('41. sem o header de reset, a chave so volta na virada do dia', () => {
+  limparEnv();
+  process.env.GROQ_API_KEY = 'k1';
+  keys.marcarEsgotada(1);   // sem `resetEm`
+  ok(keys.estaEsgotada(1), 'esgotada');
+  ok(keys.segundosParaReset(1) > 3600, `o reset fica longe (veio ${keys.segundosParaReset(1)}s)`);
+  // O teto: nada de header maluco prender a chave para sempre.
+  ok(keys.segundosParaReset(1) <= (2 * 24 * 60 * 60) + 5, 'no maximo 2 dias');
+});
+
+await test('42. o estado no disco e NORMALIZADO (uma fonte: `esgotadasAte`)', () => {
+  limparEnv();
+  process.env.GROQ_API_KEY = 'k1';
+  keys.marcarEsgotada(1, Date.now() + 60000);
+  const bruto = JSON.parse(fs.readFileSync(process.env.GROQ_KEYS_STATE_FILE, 'utf-8'));
+  ok(bruto.esgotadasAte && typeof bruto.esgotadasAte === 'object', 'grava `esgotadasAte`');
+  // `esgotadas` e' DERIVADA em memoria — nao vai para o disco (uma fonte so').
+  ok(bruto.esgotadas === undefined, 'nao grava a lista derivada (evita desencontrar)');
+  ok(JSON.stringify(keys.estadoDasChaves().esgotadas) === JSON.stringify([1]),
+    'e a lista derivada aparece no painel');
+});
+
+await test('43. a chave com limite por MINUTO nao sai do rodizio (volta sozinha)', async () => {
+  limparEnv();
+  process.env.GROQ_API_KEY = 'k1';
+  process.env.GROQ_API_KEY_2 = 'k2';
+  const usadas = dublar((chave) => {
+    if (chave === 'k1') throw erroMinutoComHeaders({ retryAfter: 1 });
+    return { data: { choices: [{ message: { content: 'ok' } }] } };
+  });
+  await groq.groqChat({ texto: 'a', sistema: 's' });
+  ok(!keys.estaEsgotada(1), 'a k1 NAO ficou esgotada (o limite era de minuto)');
+  ok(keys.emCooldown(1), 'ela esta de castigo por 1s');
+
+  await new Promise((r) => setTimeout(r, 1200));
+  ok(!keys.emCooldown(1), 'o castigo venceu');
+  ok(groq.chaveGroq() === 'k1', 'e a k1 VOLTA ao rodizio (sem reset do dono)');
+  groq.setGroqHttpForTest(null);
+});
+
+await test('44. TODAS de castigo -> espera o menor prazo e TENTA DE NOVO', async () => {
+  limparEnv();
+  process.env.GROQ_API_KEY = 'k1';
+  process.env.GROQ_API_KEY_2 = 'k2';
+  const usadas = [];
+  const esperas = [];
+  // A espera e' injetada (nao quero 2s de suite). Ela faz o que o tempo faria:
+  // limpa o castigo — e registra quanto foi pedido.
+  groq._setEsperaForTest(async (ms) => {
+    esperas.push(ms);
+    keys.limparCooldowns();
+  });
+  groq.setGroqHttpForTest(async (url, data, cfg) => {
+    const chave = String(cfg?.headers?.Authorization || '').replace('Bearer ', '');
+    usadas.push(chave);
+    if (usadas.length <= 2) throw erroMinutoComHeaders({ retryAfter: 2 });
+    return { data: { choices: [{ message: { content: 'ok' } }] } };
+  });
+
+  const r = await groq.groqChat({ texto: 'a', sistema: 's' });
+  ok(r.ok && r.texto === 'ok', 'a resposta veio depois da espera (nao falhou na hora)');
+  ok(esperas.length === 1, `esperou UMA vez (veio ${esperas.length})`);
+  ok(esperas[0] >= 2000 && esperas[0] <= 2300, `o prazo do castigo + uma folga (veio ${esperas[0]}ms)`);
+  ok(JSON.stringify(usadas) === JSON.stringify(['k1', 'k2', 'k1']),
+    `tentou as duas, esperou e voltou na 1a (veio ${JSON.stringify(usadas)})`);
+  ok(keys.estadoDasChaves().esgotadas.length === 0, 'e NENHUMA chave morreu');
+  groq._setEsperaForTest(null);
+  groq.setGroqHttpForTest(null);
+});
+
+await test('45. castigo LONGO demais nao vira espera (nao trava a mensagem)', async () => {
+  limparEnv();
+  process.env.GROQ_API_KEY = 'k1';
+  const esperas = [];
+  groq._setEsperaForTest(async (ms) => { esperas.push(ms); });
+  dublar(() => { throw erroMinutoComHeaders({ retryAfter: 600 }); });   // 10 min
+
+  const r = await groq.groqChat({ texto: 'a', sistema: 's' });
+  ok(!r.ok && r.motivo === 'limite', `devolve o limite na hora (veio ${r.motivo})`);
+  ok(esperas.length === 0, 'NAO esperou 10 minutos');
+  ok(/~600s/.test(r.mensagem || ''), `diz quanto falta (veio "${r.mensagem}")`);
+  groq._setEsperaForTest(null);
+  groq.setGroqHttpForTest(null);
+});
+
+await test('46. quando a cota do DIA bate, a chave sai do rodizio de verdade', async () => {
+  limparEnv();
+  process.env.GROQ_API_KEY = 'k1';
+  process.env.GROQ_API_KEY_2 = 'k2';
+  const usadas = dublar((chave) => {
+    if (chave === 'k1') throw erroDiaComHeaders({ restantes: 0, resetSegundos: 3600 });
+    return { data: { choices: [{ message: { content: 'ok' } }] } };
+  });
+  await groq.groqChat({ texto: 'a', sistema: 's' });
+  ok(keys.estaEsgotada(1), 'a k1 saiu (cota do dia)');
+  ok(!keys.emCooldown(1), 'e nao e um castigo');
+
+  usadas.length = 0;
+  await groq.groqChat({ texto: 'b', sistema: 's' });
+  ok(JSON.stringify(usadas) === JSON.stringify(['k2']), 'a proxima chamada nem tenta a k1');
+  groq.setGroqHttpForTest(null);
+});
+
+await test('47. o painel diz QUANDO a cota do dia volta', () => {
+  limparEnv();
+  process.env.GROQ_API_KEY = 'k1';
+  keys.marcarEsgotada(1, Date.now() + 90 * 1000);
+  const c1 = keys.estadoDasChaves().chaves.find((c) => c.slot === 1);
+  ok(c1.esgotada === true, 'esgotada');
+  ok(c1.resetEmSegundos > 85 && c1.resetEmSegundos <= 90, `o painel tem o prazo (veio ${c1.resetEmSegundos})`);
+  // E o handler mostra isso.
+  contem(INDEX, 'resetEmSegundos', 'o painel usa o prazo do reset');
 });
 
 // ---------------------------------------------------------------------------

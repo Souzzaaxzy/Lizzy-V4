@@ -182,7 +182,16 @@ function arquivoDeEstado() {
     || path.join(DONO_DIR, 'groqKeysState.json');
 }
 
-/** O dia de hoje, no fuso do Brasil (o mesmo do resto do bot). */
+/** Quantos dias no futuro, no maximo, aceitamos como "reset da cota". */
+const MAX_DIAS_DE_RESET = 2;
+
+/**
+ * O dia de hoje, no fuso do Brasil (o mesmo do resto do bot).
+ *
+ * Ele NAO decide mais quando uma chave volta: quem decide e' `esgotadasAte`
+ * (o instante que o Groq informou). O dia serve para o estado nao crescer
+ * indefinidamente e para o reset automatico de um dia para o outro.
+ */
 function hoje() {
   try {
     return new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
@@ -196,9 +205,14 @@ function hoje() {
  *
  * ## Duas marcas DIFERENTES (era o bug da rotacao)
  *
- *   - `esgotadas`: a cota do DIA acabou. A chave so' volta no reset (00:00).
- *   - `cooldowns`: limite por MINUTO/HORA. A chave esta' VIVA e volta sozinha
- *     em segundos — por isso a marca e' um instante de expiracao, nao "hoje".
+ *   - `esgotadasAte`: a cota do DIA acabou. A chave volta no instante que o
+ *     Groq informou (`x-ratelimit-reset-requests`), nao na meia-noite local —
+ *     a cota e' contada por ORGANIZACAO.
+ *   - `cooldowns`: limite por MINUTO/HORA (`retry-after`). A chave esta' VIVA
+ *     e volta sozinha em segundos.
+ *
+ * Os dois sao um INSTANTE de expiracao (`slot -> epoch ms`). `esgotadas` (a
+ * lista, para o painel) e' DERIVADA: nunca ha' dois lugares para desencontrar.
  *
  * Antes so' existia `esgotadas`, e TODO 429 caia nela: um limite de minuto
  * queimava a chave ate' a meia-noite (e o dono precisava do `!keygroq reset`).
@@ -221,49 +235,125 @@ function podarCooldowns(e) {
   return e;
 }
 
+/**
+ * Tira do estado as chaves cuja COTA DO DIA ja' voltou.
+ *
+ * O estado e' por DIA (string), mas a cota do Groq e' contada por organizacao —
+ * entao o reset pode nao cair na meia-noite do relogio local. Com
+ * `esgotadasAte` (o instante que o Groq informou), a chave volta NA HORA CERTA:
+ * nem antes (tomar outro 429) nem so' na virada do dia do bot.
+ *
+ * A lista `esgotadas` e as duas visoes do mesmo fato: uma pro painel ("X chaves
+ * esgotadas hoje"), outra pro relogio.
+ */
+function podarEsgotadas(e) {
+  const agora = agoraMs();
+  const saida = {};
+  for (const [slot, fim] of Object.entries(e.esgotadasAte || {})) {
+    if (Number(fim) > agora) saida[slot] = Number(fim);
+  }
+  e.esgotadasAte = saida;
+  // `esgotadas` e' DERIVADA de `esgotadasAte`: uma fonte so', impossivel
+  // desencontrar as duas no disco.
+  e.esgotadas = Object.keys(saida).map(Number).filter(Number.isFinite).sort((a, b) => a - b);
+  return e;
+}
+
 /** Le' do disco, resetando se o dia virou. Nunca lanca. */
 function carregarEstado() {
   const dia = hoje();
-  if (_estado && _estado.dia === dia) return podarCooldowns(_estado);
+  if (_estado && _estado.dia === dia) return podarEsgotadas(podarCooldowns(_estado));
   let lido = null;
   try {
     lido = JSON.parse(fs.readFileSync(arquivoDeEstado(), 'utf8'));
   } catch { /* sem arquivo (ou corrompido): comeca limpo */ }
-  // Dia diferente = reset. E' o que faz a cota diaria voltar as 00:00.
+  // Dia diferente = reset. O `esgotadasAte` de HOJE ainda manda (a cota e' por
+  // organizacao e pode voltar depois da nossa meia-noite), mas a lista de um
+  // dia anterior nao vale mais.
   const mesmoDia = lido && lido.dia === dia;
+  const eu = (lido && typeof lido === 'object') ? lido : {};
   _estado = {
     dia,
-    esgotadas: mesmoDia && Array.isArray(lido.esgotadas) ? lido.esgotadas.map(Number).filter(Number.isFinite) : [],
+    esgotadasAte: mesmoDia && eu.esgotadasAte && typeof eu.esgotadasAte === 'object'
+      ? { ...eu.esgotadasAte }
+      : {},
     // O castigo de minuto vale mesmo entre reinicios: sao SEGUNDOS, nao o dia.
-    cooldowns: mesmoDia && lido.cooldowns && typeof lido.cooldowns === 'object' ? { ...lido.cooldowns } : {}
+    cooldowns: mesmoDia && eu.cooldowns && typeof eu.cooldowns === 'object' ? { ...eu.cooldowns } : {}
   };
+  podarEsgotadas(_estado);
   podarCooldowns(_estado);
-  if (!mesmoDia && lido) gravarEstado();   // grava o reset
+  if (!mesmoDia && eu.esgotadas) gravarEstadoNormalizado();   // grava o reset
   return _estado;
+}
+
+/**
+ * Grava o estado (best-effort: nao pode derrubar uma chamada de IA).
+ *
+ * Normaliza ANTES de escrever: o disco carrega os formatos antigos (sem
+ * `esgotadasAte`), e um estado mesclado seria pior que um so'.
+ */
+function gravarEstadoNormalizado() {
+  const e = _estado || { dia: hoje() };
+  const normalizado = {
+    dia: e.dia || hoje(),
+    esgotadasAte: { ...(e.esgotadasAte || {}) },
+    cooldowns: { ...(e.cooldowns || {}) }
+  };
+  podarEsgotadas(normalizado);
+  podarCooldowns(normalizado);
+  _estado = normalizado;
+  gravarEstado();
 }
 
 /** Grava o estado (best-effort: nao pode derrubar uma chamada de IA). */
 function gravarEstado() {
   try {
     fs.mkdirSync(path.dirname(arquivoDeEstado()), { recursive: true });
-    fs.writeFileSync(arquivoDeEstado(), JSON.stringify(_estado, null, 2));
+    // SO' a forma canonica vai para o disco. `esgotadas` e' DERIVADA de
+    // `esgotadasAte` — gravar as duas abriria a porta para elas se
+    // desencontrarem num restart.
+    const e = _estado || {};
+    fs.writeFileSync(arquivoDeEstado(), JSON.stringify({
+      dia: e.dia || hoje(),
+      esgotadasAte: e.esgotadasAte || {},
+      cooldowns: e.cooldowns || {}
+    }, null, 2));
   } catch { /* segue so' na memoria */ }
 }
 
-/** O slot ja' estourou a cota hoje? */
+/** O slot ja' estourou a cota do DIA? */
 export function estaEsgotada(slot) {
   return carregarEstado().esgotadas.includes(Number(slot));
 }
 
-/** Marca o slot como esgotado (cota estourada ou chave invalida). */
-export function marcarEsgotada(slot) {
+/**
+ * Quantos segundos faltam para a cota do DIA voltar (0 = nao esta esgotada).
+ * @param {number} slot
+ * @returns {number}
+ */
+export function segundosParaReset(slot) {
+  const e = carregarEstado();
+  const fim = Number(e.esgotadasAte?.[Number(slot)] || 0);
+  return Math.max(0, Math.ceil((fim - agoraMs()) / 1000));
+}
+
+/**
+ * Marca o slot como COM A COTA DO DIA ESGOTADA.
+ *
+ * @param {number} slot
+ * @param {number} [resetEm] instante (epoch ms) em que a cota volta, se o Groq
+ *   informou (`x-ratelimit-reset-requests`). Sem isso, vale a virada do dia.
+ */
+export function marcarEsgotada(slot, resetEm = null) {
   const n = Number(slot);
   if (!Number.isFinite(n)) return;
   const e = carregarEstado();
-  if (!e.esgotadas.includes(n)) {
-    e.esgotadas.push(n);
-    gravarEstado();
-  }
+  // O teto evita um header maluco (ou um relogio errado) prender a chave para
+  // sempre. Sem o instante informado, vale a virada do dia.
+  const limite = agoraMs() + (MAX_DIAS_DE_RESET * 24 * 60 * 60 * 1000);
+  const fim = Number(resetEm);
+  e.esgotadasAte[n] = Number.isFinite(fim) && fim > agoraMs() ? Math.min(fim, limite) : limite;
+  gravarEstadoNormalizado();   // deriva a lista e normaliza o disco
 }
 
 /**
@@ -299,14 +389,14 @@ export function marcarCooldown(slot, segundos = 60) {
   const seg = Math.max(1, Math.ceil(Number(segundos) || 0));
   const e = carregarEstado();
   e.cooldowns[n] = agoraMs() + (seg * 1000);
-  gravarEstado();
+  gravarEstadoNormalizado();
 }
 
 /** Limpa os castigos (o `!keygroq reset` e os testes usam). */
 export function limparCooldowns() {
   const e = carregarEstado();
   e.cooldowns = {};
-  gravarEstado();
+  gravarEstadoNormalizado();
 }
 
 /**
@@ -370,11 +460,11 @@ export function primeiraNaoEsgotada(lista = lerChaves()) {
 export function resetarEsgotadas(apagarArquivo = false) {
   // O reset limpa TUDO: a cota do dia E os castigos de minuto. Era o que o dono
   // fazia na mao com o `!keygroq reset` para destravar a rotacao.
-  _estado = { dia: hoje(), esgotadas: [], cooldowns: {} };
+  _estado = { dia: hoje(), esgotadas: [], cooldowns: {}, esgotadasAte: {} };
   if (apagarArquivo) {
     try { fs.unlinkSync(arquivoDeEstado()); } catch { /* ja' nao existia */ }
   } else {
-    gravarEstado();
+    gravarEstadoNormalizado();
   }
 }
 
@@ -397,6 +487,7 @@ export function estadoDasChaves(lista = lerChaves()) {
       esgotada: e.esgotadas.includes(Number(c.slot)),
       emCooldown: emCooldown(c.slot),
       cooldownRestante: segundosDeCooldown(c.slot),
+      resetEmSegundos: segundosParaReset(c.slot),
       ativa: Boolean(ativa && ativa.slot === c.slot)
     }))
   };

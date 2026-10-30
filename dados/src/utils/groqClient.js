@@ -25,7 +25,7 @@ import axios from 'axios';
 import { spawn } from 'child_process';
 import {
   lerChaves, marcarEsgotada, marcarCooldown, primeiraDisponivel, indiceDisponivel,
-  emCooldown
+  emCooldown, segundosDeCooldown
 } from './groqKeys.js';
 
 /** Base da API (compativel com OpenAI). */
@@ -57,11 +57,19 @@ const MODELO_LLM = process.env.IAP_GROQ_LLM_MODEL || 'openai/gpt-oss-120b';
 /**
  * A partir de quantos segundos um 429 SEM pista de escopo conta como cota do DIA.
  *
- * Os limites por minuto/hora do Groq pedem esperas curtas (segundos). Quando a
- * resposta pede para esperar MUITO e nao diz "por dia", e' mais provavel que a
- * cota do dia tenha acabado.
+ * E' so' o ULTIMO recurso: a decisao boa vem dos headers do Groq. A doc oficial
+ * e' explicita — `x-ratelimit-remaining-requests` refere-se SEMPRE a Requests
+ * Per Day (RPD). Quando `remaining-requests` chega a 0, a cota do DIA acabou;
+ * nos demais casos e' o limite por minuto/tokens.
  */
 const LIMITE_DIARIO_SEGUNDOS = 300;
+
+/** Quanto tempo (ms) esperamos, no maximo, por um castigo de minuto. */
+const ESPERA_MAX_MS = 12000;
+
+/** A espera em ms. Injetavel nos testes (nao quero 11s de suite). */
+let _esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+export function _setEsperaForTest(fn) { _esperar = typeof fn === 'function' ? fn : ((ms) => new Promise((r) => setTimeout(r, ms))); }
 
 /** Tetos de tempo. */
 const TIMEOUT_STT_MS = Number.parseInt(process.env.IAP_GROQ_TIMEOUT_MS || '45000', 10);
@@ -123,42 +131,68 @@ export async function comFailoverDeChave(fn) {
   if (!lista.length) throw new Error('sem_chave_groq');
 
   let ultimoErro = null;
-  let houveCastigo = false;   // alguma chave so' esta' de castigo (volta sozinha)?
+  let jaEsperou = false;   // so' esperamos UMA vez (nunca fica preso num loop)
 
-  let i = indiceDisponivel(lista, 0);
-  // Nenhuma usavel: pode ser castigo de MINUTO (temporario) ou cota do DIA.
-  if (i < 0) {
-    throw motivoDaIndisponibilidade(lista) === 'castigo'
-      ? erroDeLimiteTemporario()
-      : new Error('sem_chave_groq');
-  }
-  while (i >= 0 && i < lista.length) {
-    const { chave, slot } = lista[i];
-    try {
-      return await fn(chave);                // deu certo: essa e' a chave ativa
-    } catch (e) {
-      const info = classificarErroGroq(e);
-      // So' CHAVE e COTA mexem no estado. Rede/payload nao dizem nada sobre a
-      // chave — trocar ali queimaria a cota das outras.
-      if (info.tipo !== 'chave' && info.tipo !== 'limite') throw e;
+  // ## As duas passadas
+  //
+  // A 1a tenta todas as chaves. Se no fim o UNICO impedimento for um castigo de
+  // MINUTO (a chave volta em segundos), espera o menor prazo e tenta de novo —
+  // uma vez. Sem isso, TODAS as chaves estarem de castigo por 5s derrubava a
+  // mensagem, mesmo com cota de sobra.
+  for (;;) {
+    let i = indiceDisponivel(lista, 0);
 
-      if (info.tipo === 'chave' || info.escopo === 'dia') {
-        // Morreu: chave invalida, ou a cota do DIA acabou (volta no reset).
-        marcarEsgotada(slot);
-      } else {
-        // Limite por MINUTO/HORA: a chave esta' viva. Castigo curto, sem marcar.
-        marcarCooldown(slot, info.retryAfter || 60);
-        houveCastigo = true;
+    // Nenhuma usavel ja' de cara: castigo (temporario) ou cota do dia (definitivo).
+    if (i < 0) {
+      const motivo = motivoDaIndisponibilidade(lista);
+      const falta = menorCooldownSegundos(lista);
+      if (motivo === 'castigo' && !jaEsperou && falta > 0 && falta * 1000 <= ESPERA_MAX_MS) {
+        jaEsperou = true;
+        await _esperar((falta * 1000) + 250);   // passa um tiquinho do prazo
+        continue;
       }
-      ultimoErro = e;
+      if (motivo === 'castigo') throw erroDeLimiteTemporario(falta);
+      throw (motivo === 'esgotadas' && ultimoErro) ? ultimoErro : new Error('sem_chave_groq');
     }
-    // AVANCA: nunca repete a chave que acabou de falhar nesta mesma chamada.
-    i = indiceDisponivel(lista, i + 1);
+
+    while (i >= 0 && i < lista.length) {
+      const { chave, slot } = lista[i];
+      try {
+        return await fn(chave);              // deu certo: essa e' a chave ativa
+      } catch (e) {
+        const info = classificarErroGroq(e);
+        // So' CHAVE e COTA mexem no estado. Rede/payload nao dizem nada sobre a
+        // chave — trocar ali queimaria a cota das outras.
+        if (info.tipo !== 'chave' && info.tipo !== 'limite') throw e;
+
+        if (info.tipo === 'chave' || info.escopo === 'dia') {
+          // Morreu: chave invalida, ou a cota do DIA acabou. O instante do
+          // reset vem do proprio Groq, quando ele informa.
+          marcarEsgotada(slot, info.resetEm);
+        } else {
+          // Limite por MINUTO/HORA: a chave esta' VIVA. Castigo, sem marcar.
+          marcarCooldown(slot, info.retryAfter || 60);
+        }
+        ultimoErro = e;
+      }
+      // AVANCA: nunca repete a chave que acabou de falhar nesta mesma passada.
+      i = indiceDisponivel(lista, i + 1);
+    }
+
+    // Chegou aqui: TODAS falharam nesta passada. Se alguma ficou so' de castigo
+    // e ainda nao esperamos, vale esperar — ela volta em segundos.
+    const falta = menorCooldownSegundos(lista);
+    if (!jaEsperou && falta > 0 && falta * 1000 <= ESPERA_MAX_MS) {
+      jaEsperou = true;
+      await _esperar((falta * 1000) + 250);
+      continue;
+    }
+    break;
   }
 
-  // Se alguma chave esta' apenas de castigo, a falha e' TEMPORARIA (ela volta
-  // em segundos) — nao "a cota do dia acabou".
-  if (houveCastigo) throw erroDeLimiteTemporario(0);
+  // A falha e' TEMPORARIA (castigo), nao "a cota do dia acabou".
+  const faltaFinal = menorCooldownSegundos(lista);
+  if (faltaFinal > 0) throw erroDeLimiteTemporario(faltaFinal);
   throw ultimoErro || new Error('sem_chave_groq');
 }
 
@@ -182,20 +216,40 @@ function motivoDaIndisponibilidade(lista = lerChaves()) {
 }
 
 /**
- * Le' o `retry-after` da resposta (o Groq manda "2s", "25m", ou segundos puros).
+ * Os headers de limite do Groq.
+ *
+ * A doc e' explicita sobre o SIGNIFICADO (e e' o que resolve o bug):
+ *
+ *   - `x-ratelimit-remaining-requests` -> SEMPRE a cota do DIA (RPD);
+ *   - `x-ratelimit-reset-requests`     -> quando a cota do DIA volta;
+ *   - `retry-after`                    -> quantos segundos esperar.
  *
  * @param {any} e
- * @returns {number} segundos (0 = nao veio)
+ * @returns {{restantes: number|null, resetSegundos: number, retryAfter: number}}
  */
-function lerRetryAfter(e) {
+function lerHeadersDeLimite(e) {
   const h = e?.response?.headers || {};
-  const bruto = h['retry-after'] ?? h['Retry-After']
-    ?? h['x-ratelimit-reset-requests'] ?? h['x-ratelimit-reset-tokens'];
-  if (bruto == null) return 0;
+  const pega = (nome) => h[nome] ?? h[nome.toLowerCase()] ?? h[nome.toUpperCase()];
+  const restantes = pega('x-ratelimit-remaining-requests');
+  return {
+    restantes: restantes == null || restantes === '' ? null : Number.parseInt(restantes, 10),
+    resetSegundos: duracaoEmSegundos(pega('x-ratelimit-reset-requests')),
+    retryAfter: duracaoEmSegundos(pega('retry-after'))
+  };
+}
+
+/**
+ * Converte uma duracao do header em SEGUNDOS.
+ *
+ * O Groq manda em varios formatos: `2` (segundos puros), `7.66s`, `2m59.56s`.
+ *
+ * @param {any} bruto
+ * @returns {number} segundos (0 = nao veio/nao entendi)
+ */
+function duracaoEmSegundos(bruto) {
+  if (bruto == null || bruto === '') return 0;
   const texto = String(bruto).trim();
-  // Segundos puros ("30").
-  if (/^\d+(?:\.\d+)?$/.test(texto)) return Math.min(3600, Number.parseFloat(texto));
-  // Duracao ("2s", "1m30s", "150ms").
+  if (/^\d+(?:\.\d+)?$/.test(texto)) return Number.parseFloat(texto);
   const re = /(\d+(?:\.\d+)?)\s*(ms|s|m|h|d)/gi;
   let total = 0; let achou = false; let m;
   while ((m = re.exec(texto)) !== null) {
@@ -204,7 +258,16 @@ function lerRetryAfter(e) {
     const u = m[2].toLowerCase();
     total += n * (u === 'ms' ? 0.001 : u === 's' ? 1 : u === 'm' ? 60 : u === 'h' ? 3600 : 86400);
   }
-  return achou ? Math.min(3600, total) : 0;
+  return achou ? total : 0;
+}
+
+/**
+ * Le' o `retry-after` da resposta (compatibilidade: usa o parser novo).
+ * @param {any} e
+ * @returns {number} segundos (0 = nao veio)
+ */
+function lerRetryAfter(e) {
+  return Math.min(3600, lerHeadersDeLimite(e).retryAfter);
 }
 
 /**
@@ -214,13 +277,28 @@ function lerRetryAfter(e) {
  * `classificarErroGroq` respeitar em vez de chutar 'rede'.
  */
 function erroDeLimiteTemporario(segundos = 0) {
+  const espera = Number(segundos) > 0 ? ` em ~${Math.ceil(Number(segundos))}s` : '';
   const e = new Error(
-    'Limite de requisições do Groq: as chaves estão em espera por alguns segundos (temporário — tente de novo em instantes).'
+    `Limite de requisições do Groq: as chaves estão em espera${espera} (temporário — tente de novo em instantes).`
   );
   e.groqTipo = 'limite';
   e.groqEscopo = 'minuto';
   e.groqRetryAfter = Number(segundos) || 0;
   return e;
+}
+
+/**
+ * Quantos segundos ate' a chave MAIS PROXIMA sair do castigo (0 = nenhuma).
+ * @param {Array<{slot:number}>} [lista]
+ * @returns {number}
+ */
+function menorCooldownSegundos(lista = lerChaves()) {
+  let menor = Infinity;
+  for (const c of lista) {
+    const seg = segundosDeCooldown(c.slot);
+    if (seg > 0 && seg < menor) menor = seg;
+  }
+  return Number.isFinite(menor) ? menor : 0;
 }
 
 /** Ha' chave configurada? */
@@ -272,24 +350,41 @@ export function classificarErroGroq(e) {
     // segundos; o primeiro, so' no reset. Marcar a chave como esgotada nos dois
     // casos queimava uma chave VIVA — e o dono precisava do `!keygroq reset`
     // (que so' limpava a marcacao errada) para ela voltar.
-    const retryAfter = lerRetryAfter(e);
-    const diario = /per\s*day|\(rpd\)|\(tpd\)|daily|requests per day|tokens per day|por\s*dia/i.test(msg);
-    const porMinuto = /per\s*minute|\(rpm\)|\(tpm\)|per\s*hour|\(tph\)|por\s*minuto|por\s*hora/i.test(msg);
-    // Sem pista NENHUMA de escopo: uma espera LONGA (ou desconhecida) e' mais
-    // provavel de ser a cota do dia. Uma espera curta e' limite passageiro.
-    const escopo = (diario || (!porMinuto && (retryAfter === 0 || retryAfter >= LIMITE_DIARIO_SEGUNDOS)))
-      ? 'dia'
-      : 'minuto';
+    // 1) O HEADER MANDA. A doc do Groq e' explicita:
+    //    `x-ratelimit-remaining-requests` refere-se SEMPRE a cota do DIA (RPD).
+    //    Zero = o dia acabou; qualquer outro valor = o limite e' de minuto/tokens
+    //    (a chave esta' VIVA). E' a fonte autoritativa — melhor que adivinhar
+    //    pelo texto, que muda sem aviso.
+    const h = lerHeadersDeLimite(e);
+    let escopo;
+    if (h.restantes !== null && Number.isFinite(h.restantes)) {
+      escopo = h.restantes <= 0 ? 'dia' : 'minuto';
+    } else {
+      // 2) Sem o header: o TEXTO do erro (o Groq diz "per day (RPD)" ou
+      //    "per minute (RPM)").
+      const diario = /per\s*day|\(rpd\)|\(tpd\)|daily|requests per day|tokens per day|por\s*dia/i.test(msg);
+      const porMinuto = /per\s*minute|\(rpm\)|\(tpm\)|per\s*hour|\(tph\)|por\s*minuto|por\s*hora/i.test(msg);
+      // 3) Sem nem isso: uma espera LONGA (ou desconhecida) inclina para o dia.
+      escopo = (diario || (!porMinuto && (h.retryAfter === 0 || h.retryAfter >= LIMITE_DIARIO_SEGUNDOS)))
+        ? 'dia'
+        : 'minuto';
+    }
+    // QUANDO a cota do dia volta, segundo o proprio Groq. E' melhor que a nossa
+    // meia-noite: a cota e' contada por ORGANIZACAO.
+    const resetEm = (escopo === 'dia' && h.resetSegundos > 0)
+      ? Date.now() + (h.resetSegundos * 1000)
+      : null;
     return {
       tipo: 'limite',
       escopo,
-      retryAfter: retryAfter || (escopo === 'dia' ? 0 : 60),
+      retryAfter: h.retryAfter || (escopo === 'dia' ? 0 : 60),
+      resetEm,
       http,
       detalhe,
       // As duas mensagens carregam "Limite de requisições" de proposito: o
       // `mensagemErroIA` (index.js) classifica o erro pelo TEXTO da mensagem.
       mensagem: escopo === 'dia'
-        ? 'Limite de requisições do Groq: a cota DIÁRIA desta chave acabou (ela volta à meia-noite).'
+        ? 'Limite de requisições do Groq: a cota DIÁRIA desta chave acabou (ela volta no reset do dia).'
         : 'Limite de requisições do Groq atingido por agora (temporário — volta em instantes).'
     };
   }
