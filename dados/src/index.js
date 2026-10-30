@@ -26611,14 +26611,19 @@ ${groupPrefix}key sua_chave_gemini
                   // sozinha). Antes os dois viravam "limite atingido hoje".
                   // O prazo vem do proprio Groq (`x-ratelimit-reset-requests`),
                   // nao do nosso relogio: a cota e' contada por organizacao.
+                  // O prazo: quando o Groq INFORMA o reset ele e' real; quando
+                  // nao informa, o bot ESTIMA (e o rotulo diz isso — antes saia
+                  // "volta em 47.9h" sem dizer que era chute).
                   const faltaReset = c.resetEmSegundos > 0
-                    ? ` (volta em ${formatarDuracaoCurta(c.resetEmSegundos)})`
+                    ? ` (volta em ${formatarDuracaoCurta(c.resetEmSegundos)}${c.motivo === 'desconhecido' ? ', estimado' : ''})`
                     : '';
-                  // O rotulo do castigo era FIXO em "por minuto" — mas um
-                  // limite DIARIO de TOKENS (TPD) tambem cai aqui, com uma
-                  // espera longa. Usar o formatador evita o "volta em 4000s".
+                  // O ROTULO depende do MOTIVO: chave INVALIDA nao e' "cota do
+                  // dia". Antes tudo virava "cota do dia esgotada" — inclusive
+                  // um 401, e o dono esperava 2 dias por uma chave morta.
                   const obs = c.esgotada
-                    ? ` _cota do dia esgotada${faltaReset}_`
+                    ? (c.motivo === 'invalida'
+                      ? ' _chave INVÁLIDA (revogue/refaça no Groq)_'
+                      : ` _cota do dia esgotada${faltaReset}_`)
                     : (c.emCooldown
                       ? ` _limite de requisições — volta em ${formatarDuracaoCurta(c.cooldownRestante)}_`
                       : (c.ativa ? ' _em uso_' : ''));
@@ -26626,8 +26631,15 @@ ${groupPrefix}key sua_chave_gemini
                 }).join('\n')
               : '   (nenhuma chave configurada)';
 
-            const resumo = estado.esgotadas.length
-              ? `⚠️ ${estado.esgotadas.length} chave(s) com a COTA DO DIA esgotada: *${estado.esgotadas.join(', ')}*`
+            // Separa por MOTIVO: cota do dia (volta sozinha) x chave invalida
+            // (nao volta — precisa de acao). Antes os dois viravam o mesmo aviso.
+            const invalidas = estado.chaves.filter((c) => c.esgotada && c.motivo === 'invalida').map((c) => c.slot);
+            const porCota = estado.chaves.filter((c) => c.esgotada && c.motivo !== 'invalida').map((c) => c.slot);
+            const resumo = (porCota.length || invalidas.length)
+              ? [
+                porCota.length ? `⚠️ ${porCota.length} chave(s) com a COTA DO DIA esgotada: *${porCota.join(', ')}*` : '',
+                invalidas.length ? `🚫 ${invalidas.length} chave(s) INVÁLIDA(s) (não voltam sozinhas): *${invalidas.join(', ')}*` : ''
+              ].filter(Boolean).join('\n')
               : '✅ Nenhuma chave com a cota do dia esgotada.';
             // O castigo de MINUTO e' outra coisa: a chave esta' viva, so' esperando.
             const resumoCastigo = estado.emCooldown.length
@@ -26641,8 +26653,8 @@ ${groupPrefix}key sua_chave_gemini
 ${linhas}
 
 ${resumo}${resumoCastigo}
-${disponivel ? `🟢 Usando agora: *${disponivel.slot}*` : (estado.emCooldown.length ? '⏳ Todas em limite por minuto — voltam sozinhas em instantes' : '🔴 TODAS com a cota do dia esgotada — só volta no reset (00:00)')}
-🗓️ Reseta todo dia à meia-noite (a cota do Groq é diária).
+${disponivel ? `🟢 Usando agora: *${disponivel.slot}*` : (estado.emCooldown.length ? '⏳ Todas em limite por minuto — voltam sozinhas em instantes' : '🔴 TODAS fora do rodízio — veja o motivo em cada uma acima')}
+🗓️ A cota volta sozinha (é JANELA MÓVEL — o prazo vem do Groq, não da meia-noite).
 
 *Como funciona:* quando a COTA DO DIA de uma acaba, ela fica marcada e a
 *próxima assume sozinha*. Um *limite por minuto* não queima a chave — ela

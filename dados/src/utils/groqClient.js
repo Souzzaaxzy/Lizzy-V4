@@ -187,7 +187,16 @@ export async function comFailoverDeChave(fn) {
           // Morreu: chave invalida, ou a cota do DIA acabou. AQUI rotacionar
           // faz sentido: uma chave de OUTRA conta tem cota propria. O instante
           // do reset vem do proprio Groq, quando ele informa.
-          marcarEsgotada(slot, info.resetEm);
+          //
+          // O MOTIVO vai junto: uma chave INVALIDA (401/403) nao pode ser
+          // reportada como "cota do dia esgotada" — o dono esperaria 2 dias por
+          // uma chave que nunca volta, e o diagnostico ficaria impossivel.
+          // Quando o Groq nao informa o reset, o motivo vira 'desconhecido'
+          // (o painel diz que o prazo e' estimado, nao do Groq).
+          const motivo = info.tipo === 'chave'
+            ? 'invalida'
+            : (info.resetEm ? 'dia' : 'desconhecido');
+          marcarEsgotada(slot, info.resetEm, motivo);
         } else {
           // Limite por MINUTO/HORA: a chave esta' VIVA, mas a ORGANIZACAO
           // inteira esta' estrangulada (o Groq conta por organizacao). Esfria

@@ -962,6 +962,79 @@ await test('54. a mensagem explica que o reset e JANELA MOVEL (nao meia-noite)',
   ok(rpd.resetSegundos === 4000, `traz os segundos do reset (veio ${rpd.resetSegundos})`);
 });
 
+// ───────────────────────────────────────────────────────────────────────────
+// O PAINEL DO DONO: `undefined`, "meia-noite" e "cota do dia" para TUDO
+// (as 3 coisas que ele viu no print)
+// ───────────────────────────────────────────────────────────────────────────
+
+await test('55. estadoDasChaves devolve `var` (o painel mostrava `undefined`)', () => {
+  limparEnv();
+  process.env.GROQ_API_KEY = 'k1';
+  process.env.GROQ_API_KEY_2 = 'k2';
+  const est = keys.estadoDasChaves();
+  ok(est.chaves[0].var === 'GROQ_API_KEY', `slot 1 (veio ${est.chaves[0].var})`);
+  ok(est.chaves[1].var === 'GROQ_API_KEY_2', `slot 2 (veio ${est.chaves[1].var})`);
+  ok(est.chaves.every((c) => typeof c.var === 'string' && c.var), 'nenhuma sem var');
+  // E o painel USA o campo.
+  contem(INDEX, '${c.var}', 'o painel imprime o nome da variavel');
+});
+
+await test('56. o CHUTE de reset e CURTO (2h), nao 48h (o dono viu 47.9h)', async () => {
+  limparEnv();
+  process.env.GROQ_API_KEY = 'k1';
+  // Sem NENHUM header de reset: e' o chute.
+  groq.setGroqHttpForTest(async () => {
+    const e = new Error('429');
+    e.response = { status: 429, headers: {}, data: { error: { message: 'rate limit per day (RPD)' } } };
+    throw e;
+  });
+  await groq.groqChat({ texto: 'oi' });
+  groq.setGroqHttpForTest(null);
+  const c = keys.estadoDasChaves().chaves[0];
+  const horas = c.resetEmSegundos / 3600;
+  ok(horas <= 2.1, `o chute e' de no maximo 2h (veio ${horas.toFixed(1)}h)`);
+  ok(horas > 1.5, `e de fato usa as 2h (veio ${horas.toFixed(1)}h)`);
+  ok(c.motivo === 'desconhecido', `marcado como estimado (veio ${c.motivo})`);
+});
+
+await test('57. o reset INFORMADO pelo Groq e respeitado (nao vira chute)', async () => {
+  limparEnv();
+  process.env.GROQ_API_KEY = 'k1';
+  groq.setGroqHttpForTest(async () => {
+    const e = new Error('429');
+    e.response = { status: 429, headers: { 'x-ratelimit-remaining-requests': '0', 'x-ratelimit-reset-requests': '3400s', 'retry-after': '3400' }, data: { error: { message: 'per day (RPD)' } } };
+    throw e;
+  });
+  await groq.groqChat({ texto: 'oi' });
+  groq.setGroqHttpForTest(null);
+  const c = keys.estadoDasChaves().chaves[0];
+  ok(c.resetEmSegundos > 3300 && c.resetEmSegundos <= 3400, `usa o prazo do Groq (veio ${c.resetEmSegundos}s)`);
+  ok(c.motivo === 'dia', `marcado como cota do dia (veio ${c.motivo})`);
+});
+
+await test('58. chave INVALIDA nao e reportada como "cota do dia" (o bug)', async () => {
+  limparEnv();
+  process.env.GROQ_API_KEY = 'k1';
+  groq.setGroqHttpForTest(async () => {
+    const e = new Error('401');
+    e.response = { status: 401, headers: {}, data: { error: { message: 'Invalid API Key' } } };
+    throw e;
+  });
+  await groq.groqChat({ texto: 'oi' });
+  groq.setGroqHttpForTest(null);
+  const c = keys.estadoDasChaves().chaves[0];
+  ok(c.esgotada === true, 'fica fora do rodizio');
+  ok(c.motivo === 'invalida', `e o motivo diz INVALIDA (veio ${c.motivo})`);
+  // E o painel tem um rotulo proprio (nao "cota do dia").
+  contem(INDEX, 'chave INVÁLIDA', 'o painel avisa que e invalida');
+  contem(INDEX, 'INVÁLIDA(s) (não voltam sozinhas)', 'e separa no resumo');
+});
+
+await test('59. o painel NAO diz mais "meia-noite" (e janela movel, medido)', () => {
+  ok(!INDEX.includes('Reseta todo dia à meia-noite'), 'saiu o texto errado (meia-noite)');
+  contem(INDEX, 'JANELA MÓVEL', 'e diz o que e de verdade');
+});
+
 const tot = RESULTS.reduce((a, r) => a + r.passed, 0);
 const fal = RESULTS.reduce((a, r) => a + r.failed, 0);
 console.log(`RESULTADO: ${RESULTS.length} testes | ${tot} asserções ok | ${fal} falhas`);

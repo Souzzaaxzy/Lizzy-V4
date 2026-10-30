@@ -184,6 +184,17 @@ function arquivoDeEstado() {
 
 /** Quantos dias no futuro, no maximo, aceitamos como "reset da cota". */
 const MAX_DIAS_DE_RESET = 2;
+/**
+ * O TETO do chute, quando o Groq NAO informa o reset.
+ *
+ * Era `MAX_DIAS_DE_RESET` (48h). O dono viu "volta em 47.9h" em duas chaves e
+ * perguntou se era normal: NAO era — era o chute. A cota do Groq e' janela
+ * MOVEL (a doc mostra `2m59.56s` para o reset do RPD), entao 48h e' absurdo:
+ * prendia uma chave VIVA por dois dias.
+ *
+ * Com 2h, um chute ruim custa 2h em vez de 48h — e a chave volta sozinha.
+ */
+const MAX_HORAS_DE_RESET_CHUTE = 2;
 
 /**
  * O dia de hoje, no fuso do Brasil (o mesmo do resto do bot).
@@ -256,6 +267,12 @@ function podarEsgotadas(e) {
   // `esgotadas` e' DERIVADA de `esgotadasAte`: uma fonte so', impossivel
   // desencontrar as duas no disco.
   e.esgotadas = Object.keys(saida).map(Number).filter(Number.isFinite).sort((a, b) => a - b);
+  // O motivo so' vale enquanto a chave esta' fora do rodizio.
+  if (e.motivos && typeof e.motivos === 'object') {
+    const vivos = {};
+    for (const s of e.esgotadas) if (e.motivos[s]) vivos[s] = e.motivos[s];
+    e.motivos = vivos;
+  }
   return e;
 }
 
@@ -278,7 +295,8 @@ function carregarEstado() {
       ? { ...eu.esgotadasAte }
       : {},
     // O castigo de minuto vale mesmo entre reinicios: sao SEGUNDOS, nao o dia.
-    cooldowns: mesmoDia && eu.cooldowns && typeof eu.cooldowns === 'object' ? { ...eu.cooldowns } : {}
+    cooldowns: mesmoDia && eu.cooldowns && typeof eu.cooldowns === 'object' ? { ...eu.cooldowns } : {},
+    motivos: mesmoDia && eu.motivos && typeof eu.motivos === 'object' ? { ...eu.motivos } : {}
   };
   podarEsgotadas(_estado);
   podarCooldowns(_estado);
@@ -297,7 +315,8 @@ function gravarEstadoNormalizado() {
   const normalizado = {
     dia: e.dia || hoje(),
     esgotadasAte: { ...(e.esgotadasAte || {}) },
-    cooldowns: { ...(e.cooldowns || {}) }
+    cooldowns: { ...(e.cooldowns || {}) },
+    motivos: { ...(e.motivos || {}) }
   };
   podarEsgotadas(normalizado);
   podarCooldowns(normalizado);
@@ -316,7 +335,8 @@ function gravarEstado() {
     fs.writeFileSync(arquivoDeEstado(), JSON.stringify({
       dia: e.dia || hoje(),
       esgotadasAte: e.esgotadasAte || {},
-      cooldowns: e.cooldowns || {}
+      cooldowns: e.cooldowns || {},
+      motivos: e.motivos || {}
     }, null, 2));
   } catch { /* segue so' na memoria */ }
 }
@@ -344,15 +364,24 @@ export function segundosParaReset(slot) {
  * @param {number} [resetEm] instante (epoch ms) em que a cota volta, se o Groq
  *   informou (`x-ratelimit-reset-requests`). Sem isso, vale a virada do dia.
  */
-export function marcarEsgotada(slot, resetEm = null) {
+export function marcarEsgotada(slot, resetEm = null, motivo = 'dia') {
   const n = Number(slot);
   if (!Number.isFinite(n)) return;
   const e = carregarEstado();
   // O teto evita um header maluco (ou um relogio errado) prender a chave para
-  // sempre. Sem o instante informado, vale a virada do dia.
-  const limite = agoraMs() + (MAX_DIAS_DE_RESET * 24 * 60 * 60 * 1000);
-  const fim = Number(resetEm);
-  e.esgotadasAte[n] = Number.isFinite(fim) && fim > agoraMs() ? Math.min(fim, limite) : limite;
+  // sempre. Quando o Groq INFORMA o instante, respeitamos ele (com o teto
+  // generoso de 2 dias). Sem o instante, o chute e' CURTO (2h): a cota e'
+  // janela movel, entao 48h prendia uma chave viva.
+  const informado = Number(resetEm);
+  const temInformado = Number.isFinite(informado) && informado > agoraMs();
+  const limite = agoraMs() + (temInformado
+    ? MAX_DIAS_DE_RESET * 24 * 60 * 60 * 1000
+    : MAX_HORAS_DE_RESET_CHUTE * 60 * 60 * 1000);
+  e.esgotadasAte[n] = temInformado ? Math.min(informado, limite) : limite;
+  // COMO ela saiu: 'dia' (cota), 'invalida' (401/403) ou 'desconhecido'.
+  // O painel usava "cota do dia" para TUDO — inclusive chave invalida.
+  e.motivos = e.motivos || {};
+  e.motivos[n] = motivo;
   gravarEstadoNormalizado();   // deriva a lista e normaliza o disco
 }
 
@@ -505,7 +534,7 @@ export function primeiraNaoEsgotada(lista = lerChaves()) {
 export function resetarEsgotadas(apagarArquivo = false) {
   // O reset limpa TUDO: a cota do dia E os castigos de minuto. Era o que o dono
   // fazia na mao com o `!keygroq reset` para destravar a rotacao.
-  _estado = { dia: hoje(), esgotadas: [], cooldowns: {}, esgotadasAte: {} };
+  _estado = { dia: hoje(), esgotadas: [], cooldowns: {}, esgotadasAte: {}, motivos: {} };
   if (apagarArquivo) {
     try { fs.unlinkSync(arquivoDeEstado()); } catch { /* ja' nao existia */ }
   } else {
@@ -529,6 +558,12 @@ export function estadoDasChaves(lista = lerChaves()) {
     chaves: lista.map((c) => ({
       slot: c.slot,
       chave: c.chave,
+      // O painel mostra o NOME da variavel (`GROQ_API_KEY_2`). Sem isto ele
+      // lia `c.var` inexistente e imprimia `undefined` em TODA linha.
+      var: c.var,
+      // COMO a chave saiu do rodizio: 'dia' (cota), 'invalida' (401/403) ou
+      // 'desconhecido' (o Groq nao disse). Antes tudo virava "cota do dia".
+      motivo: e.motivos?.[Number(c.slot)] || null,
       esgotada: e.esgotadas.includes(Number(c.slot)),
       emCooldown: emCooldown(c.slot),
       cooldownRestante: segundosDeCooldown(c.slot),
