@@ -23,8 +23,29 @@
  * **qualquer membro** pode pedir — é a mesma informação que o WhatsApp já mostra
  * na tela do grupo. O que muda é só quem pede.
  *
+ * ## Os comandos (pedido do dono, out/2026)
+ *
+ * *"você adiciona os comandos: play, pin, figurinha aleatória, e o `!s` em modo
+ * busca, exemplo 'lizzy me manda uma figurinha do <busca>', aí ela manda,
+ * funciona igual ao `!s <busca>`"*.
+ *
+ * | ação | o que faz | comando equivalente |
+ * |---|---|---|
+ * | `link` | envia o convite do grupo | `!linkgp` (mas sem exigir admin) |
+ * | `foto` | envia a foto do grupo | — |
+ * | `play` | toca/baixa uma música | `!play <termo>` |
+ * | `pin` | pesquisa imagens no Pinterest | `!pin <termo>` |
+ * | `figurinha` | manda uma figurinha aleatória | `!figualeatoria` |
+ * | `stickerBusca` | monta um pack de figurinhas do termo | `!s <termo>` |
+ * | `mencao` | menciona alguém do grupo pelo nome | — |
+ *
+ * A ORDEM da checagem importa: `stickerBusca` (o `!s` por busca) tem de vir
+ * antes de `figurinha`, senão "manda uma figurinha de gato" cairia na aleatória.
+ *
  * Módulo PURO: não conhece socket, LLM nem arquivo — só texto → intenção.
  */
+
+import { identificarComando } from './iapComandos.js';
 
 /**
  * Verbos/pedidos que transformam a menção em um PEDIDO.
@@ -39,7 +60,13 @@ const PEDIDO = [
   'quero', 'queria', 'preciso', 'precisava', 'gostaria',
   'passa', 'passar', 'me passa', 'passa o', 'passa a',
   'mostra', 'mostrar', 'me mostra', 'mostra o', 'mostra a',
-  'consegue', 'pode', 'poderia', 'da', 'me da', 'vê', 've', 'ver'
+  'consegue', 'pode', 'poderia', 'da', 'me da', 'vê', 've', 'ver',
+  // Os verbos dos comandos do bot (play/pin/figurinha). Sem eles, "toca a
+  // musica X" nao casaria como PEDIDO e cairia como conversa.
+  'toca', 'tocar', 'toque', 'toka', 'toga', 'bota', 'botar', 'coloca', 'colocar',
+  'poe', 'poem', 'play', 'escuta', 'escutar', 'ouve', 'ouvir',
+  'procura', 'procurar', 'busca', 'buscar', 'acha', 'achar',
+  'baixa', 'baixar', 'traz', 'trazer', 'mande', 'envie'
 ];
 
 /** O alvo LINK (o convite do grupo). */
@@ -122,10 +149,99 @@ export function identificarAcaoDoGrupo(texto) {
   return null;
 }
 
+/**
+ * O alvo FIGURINHA POR BUSCA ("me manda uma figurinha de gato").
+ *
+ * É o `!s <busca>`: o termo vai para a pesquisa de imagens e volta como PACK.
+ * Precisa vir ANTES do alvo de figurinha aleatória.
+ */
+const ALVO_STICKER_BUSCA = /\b(figurinha|figura|sticker)s?\s+(do|da|de|sobre|com)\s+(.+)/i;
+
+/** O alvo FIGURINHA ALEATÓRIA (sem termo). */
+const ALVO_FIGURINHA = /\b(figurinha|figura|sticker)s?\b/i;
+
+/**
+ * Identifica a ação pedida — incluindo os comandos do bot.
+ *
+ * A ORDEM é a regra: plataforma específica antes da genérica, e a figurinha POR
+ * BUSCA antes da aleatória.
+ *
+ * @param {string} texto a mensagem (já sem o nome do agente, se veio)
+ * @returns {{ acao: string, termo?: string }|null}
+ */
+export function identificarAcaoDoBot(texto) {
+  const bruto = String(texto || '').trim();
+  if (!bruto) return null;
+  const t = paraPadroes(bruto);
+  if (!t) return null;
+  const palavras = t.split(/\s+/).filter(Boolean);
+  const pedido = temPedido(t);
+
+  // 1) FIGURINHA POR BUSCA — "manda uma figurinha de gato" (= `!s gato`).
+  //    Exige PEDIDO (senão "essa figurinha de gato é boa" viraria comando).
+  const mSticker = ALVO_STICKER_BUSCA.exec(t);
+  if (mSticker && pedido) {
+    // O termo é o que sobra depois do alvo; tira as caudas do pedido.
+    let termo = String(mSticker[3] || '')
+      .replace(/\b(para|pra|pro|por|aqui|agora|pfv|pf|por\s+favor)\b.*$/i, '')
+      .replace(/\s{2,}/g, ' ').trim();
+    if (termo) return { acao: 'stickerBusca', termo };
+    return null;
+  }
+
+  // 2) FIGURINHA ALEATÓRIA — "manda uma figurinha" (= `!figualeatoria`).
+  //    Sem termo: o alvo já é o pedido inteiro.
+  if (ALVO_FIGURINHA.test(t) && pedido && !OUTRO_OBJETO_STICKER.test(t)) {
+    return { acao: 'figurinha' };
+  }
+
+  // 3) PLAY e PIN — REUSA o reconhecedor do `iapComandos`.
+  //
+  // Ele ja' cobre "toca X", "me toca X", "baixa a musica X", "quero ouvir X",
+  // "procura no pinterest X" e a DESAMBIGUACAO entre eles (o pinterest vem
+  // antes do play), com um corpus medido de 40 frases. Escrever um segundo
+  // reconhecedor aqui seria a mesma duplicacao que ja' custou caro neste repo.
+  // PEDIDO DE ÁUDIO/VOZ não é `play`. "manda um áudio" tem "audio" na lista de
+  // palavras de música, então o `identificarComando` o pegaria — e ela
+  // perguntaria "qual música?" em vez de mandar a voz. O bloco do áudio no
+  // handler vem antes, mas o RECONHECEDOR também não pode classificar assim.
+  if (/\b(manda|mandar|me\s+manda|envia|envie|me\s+envia|grava|quero\s+ouvir|manda\s+sua)\b[^]*\b(audio|audios|voz|nota\s+de\s+voz)\b/i.test(t)) {
+    return null;
+  }
+
+  const doIap = identificarComando(bruto);
+  if (doIap && (doIap.comando === 'play' || doIap.comando === 'pin')) {
+    // Tira a sobra da moldura do pedido: "manda um pin de flores" -> "flores".
+    let termo = String(doIap.args || '').trim();
+    if (doIap.comando === 'pin') {
+      termo = termo.replace(/^\s*(pin|pinterest)\s+(de|do|da|sobre)?\s*/i, '').trim();
+    }
+    return { acao: doIap.comando, termo };
+  }
+
+  // 5) As ações que já existiam (link/foto do grupo).
+  return identificarAcaoDoGrupo(texto);
+}
+
+/**
+ * Objetos que NÃO são figurinha: com eles, "manda uma figurinha de pizza" é
+ * sobre o DESENHO da pizza (o pack), não sobre a figurinha aleatória — a
+ * checagem de busca (1) já tratou. Aqui só bloqueia o caminho aleatório.
+ */
+const OUTRO_OBJETO_STICKER = /\b(de|do|da|sobre|com)\s+\S/i;
+
+/** Os verbos de pedido, para reusar na limpeza do termo. */
+const VERBO_PEDIDO_RE = 'manda|mandar|mandas|envia|enviar|envie|me\s+manda|me\s+envia|quero|queria|gostaria|preciso|passa|passar|mostra|mostrar|procura|procurar|busca|buscar|acha|achar|baixa|baixar|toca|tocar|toka|toga|bota|coloca|poe';
+
 /** As frases que descrevem a ação, para o prompt (a Lizzy usa para se oferecer). */
 export function frasesDeAjudaDoGrupo() {
   return [
     '- "manda o link do grupo" -> envia o convite do grupo',
-    '- "manda a foto do grupo" -> envia a foto do grupo'
+    '- "manda a foto do grupo" -> envia a foto do grupo',
+    '- "toca a musica X" -> toca a musica X',
+    '- "procura no pinterest X" -> pesquisa imagens de X',
+    '- "manda uma figurinha" -> manda uma figurinha aleatoria',
+    '- "manda uma figurinha de X" -> monta um pack de figurinhas de X',
+    '- "chama o X pra mim" -> menciona a pessoa X do grupo'
   ].join('\n');
 }

@@ -52,7 +52,9 @@ import { lerChaves, mascarar, slotDoComando, atualizarEnv, nomeDaVar, MAX_SLOTS,
          estadoDasChaves, resetarEsgotadas, situacaoDasChaves } from './utils/groqKeys.js';
 // As ACOES do grupo pedidas por fala/texto (link e foto) — reconhecimento
 // DETERMINISTICO, como o `iapComandos` da call.
-import { identificarAcaoDoGrupo } from './utils/assistenteAcoes.js';
+import { identificarAcaoDoBot } from './utils/assistenteAcoes.js';
+import { identificarPedidoDeMencao, acharUsuarioPorNome } from './utils/mencaoUsuario.js';
+import { falaDoEvento } from './utils/falasLizzy.js';
 import { converterGifParaMp4 } from './utils/gifMedia.js';
 import { figurinhaParaStatus } from './utils/stickerStatus.js';
 import { normalizarIdGrupo, ehJidCanal, buildFollowChannelContent, fotoDoMetadataNewsletter, normalizarGrupos, adicionarGrupo, removerGrupo } from './utils/canalDivulgacao.js';
@@ -664,6 +666,47 @@ async function responderPrefixo(nazu, from, info, sender, currentPrefix) {
   }
   await enviarTexto(montar(`📌 Prefixo atual deste grupo: ${currentPrefix}`));
   return true;
+}
+
+/**
+ * Acha o ALVO de uma menção pedida por nome ("chama o Fulano pra mim").
+ *
+ * Monta a lista de candidatos com o NOME já resolvido pelo resolvedor único
+ * (`utils/contactName.js` — agenda > notify > verifiedName > metadata) e usa o
+ * **apelido do contador** (`groupData.contador[].pushname`) como reserva: é a
+ * "memória" que o dono citou, e é o que salva quando o contato não tem nome na
+ * agenda.
+ *
+ * A busca em si é pura (`acharUsuarioPorNome`); aqui só se monta a lista.
+ *
+ * @returns {Promise<{achou: boolean, ambiguo?: boolean, usuario?: object, candidatos?: object[]}>}
+ */
+async function acharAlvoDaMencao({ dito, nazu, metadata, from, groupData, sender }) {
+  const participantes = Array.isArray(metadata?.participants) ? metadata.participants : [];
+  // O BOT não é um alvo de menção (ninguém "chama a Lizzy" por esse caminho).
+  const botIds = [nazu?.user?.id, nazu?.user?.lid].filter(Boolean).map((v) => String(v).split(':')[0].split('@')[0]);
+  const lista = [];
+  for (const p of participantes) {
+    const id = p?.id || p?.lid;
+    if (!id) continue;
+    if (botIds.includes(String(id).split(':')[0].split('@')[0])) continue;
+    lista.push(id);
+  }
+  const usuarios = [];
+  for (const id of lista) {
+    let nome = '';
+    try {
+      nome = await resolverNomeContato(id, { nazu, metadata, from });
+    } catch { nome = ''; }
+    // A reserva: o apelido do CONTADOR (a memoria do bot sobre a pessoa).
+    let apelido = '';
+    try {
+      const doContador = (groupData?.contador || []).find((u) => idsMatch(u.id, id));
+      apelido = doContador?.pushname || '';
+    } catch { apelido = ''; }
+    usuarios.push({ id, nome: nome || apelido || String(id).split('@')[0], apelido });
+  }
+  return acharUsuarioPorNome(dito, usuarios, {});
 }
 
 /**
@@ -7705,42 +7748,12 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
         // Qualquer membro pode pedir (o `!linkgp` continua sendo o do admin,
         // que serve para DIVULGAR).
         // ------------------------------------------------------------------
-        const acaoDoGrupo = isGroup ? identificarAcaoDoGrupo(textoLimpo) : null;
-        if (acaoDoGrupo) {
-          try {
-            if (acaoDoGrupo.acao === 'link') {
-              const codigo = await nazu.groupInviteCode(from);
-              if (!codigo) throw new Error('sem codigo de convite');
-              await nazu.sendMessage(from, {
-                text: `🔗 *Link do grupo:*\nhttps://chat.whatsapp.com/${codigo}`,
-                contextInfo: gerarContextNewsletter()
-              });
-              return;
-            }
-            // FOTO: envia a imagem de verdade (nao a URL em texto).
-            let fotoUrl = dadosDoGrupo?.grupo?.foto || null;
-            if (!fotoUrl) {
-              try { fotoUrl = await nazu.profilePictureUrl(from, 'image'); } catch { fotoUrl = null; }
-            }
-            if (!fotoUrl) {
-              await reply('📷 Este grupo não tem foto no momento.');
-              return;
-            }
-            await nazu.sendMessage(from, {
-              image: { url: fotoUrl },
-              caption: `📷 *Foto do grupo*`,
-              contextInfo: gerarContextNewsletter()
-            });
-            return;
-          } catch (e) {
-            console.error('[ASSISTENTE] falha na acao do grupo:', e?.message || e);
-            await reply('❌ Não consegui buscar isso agora. Tente de novo em instantes.');
-            return;
-          }
-        }
-
         // ------------------------------------------------------------------
         // ÁUDIO: "Lizzy, manda um áudio aí"
+        //
+        // ESTE BLOCO VEM ANTES das ações do bot de propósito: "manda um áudio"
+        // tem "audio" na lista de música, então o reconhecedor de `play` o
+        // pegaria e ela perguntaria "qual música?" em vez de mandar a voz.
         //
         // DOIS CAMINHOS (pedido do dono):
         //
@@ -7806,6 +7819,138 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
           }
           await reply(t);
         };
+
+        // A AÇÃO do bot pedida (link/foto/play/pin/figurinha/sticker/mencao).
+        // `identificarAcaoDoBot` reusa o reconhecedor do `iapComandos` para
+        // play/pin, entao nao ha um segundo reconhecedor para divergir.
+        const acaoDoBot = isGroup ? identificarAcaoDoBot(textoLimpo) : null;
+        const pedidoDeMencao = isGroup ? identificarPedidoDeMencao(textoLimpo) : null;
+
+        // O NOME de quem pediu (o `pushname` como reserva).
+        let nomeDeQuemPediu = pushname || '';
+        try {
+          nomeDeQuemPediu = await resolverNomeContato(sender, { nazu, metadata: groupMetadata, from, fallback: pushname }) || pushname || '';
+        } catch { /* segue com o pushname */ }
+
+        // ------------------------------------------------------------------
+        // MENÇÃO de um usuário do grupo: "Lizzy, chama o Fulano pra mim".
+        //
+        // A busca roda sobre os PARTICIPANTES, com o nome ja' resolvido pelo
+        // resolvedor unico (agenda > notify > verifiedName > metadata) e o
+        // apelido do CONTADOR como reserva. Nada de um resolvedor paralelo.
+        // ------------------------------------------------------------------
+        if (pedidoDeMencao) {
+          try {
+            const alvo = await acharAlvoDaMencao({
+              dito: pedidoDeMencao.nome,
+              nazu, metadata: groupMetadata, from, groupData, sender
+            });
+            if (!alvo.achou) {
+              const fala = alvo.ambiguo
+                ? falaDoEvento('mencaoAmbiguo', {})
+                : falaDoEvento('mencaoNaoAchou', { nome: nomeDeQuemPediu });
+              await nazu.sendMessage(from, {
+                text: alvo.ambiguo
+                  ? `${fala}\n\n${alvo.candidatos.map((c) => `• ${c.nome}`).join('\n')}`
+                  : fala,
+                contextInfo: gerarContextNewsletter()
+              });
+              return;
+            }
+            const u = alvo.usuario;
+            // DUAS formas, e confundir as duas quebra a mencao:
+            //   - o `mentions` precisa do JID COMPLETO (`numero@s.whatsapp.net`),
+            //     senao o cliente nao resolve e mostra o numero cru;
+            //   - o `@` do TEXTO e' so' o numero (com o dominio o WhatsApp nao
+            //     casa com o `mentions`).
+            // O `:device` sai dos dois — `split(':')[0]` cortaria o dominio
+            // junto, entao a remocao e' cirurgica.
+            const jidCompleto = String(u.id).replace(/:(\d+)@/, '@');
+            const base = jidCompleto.split('@')[0];
+            const fala = pedidoDeMencao.querFalar
+              ? falaDoEvento('mencao', { nome: nomeDeQuemPediu, alvo: `@${base}` })
+              : falaDoEvento('mencaoSemNome', { alvo: `@${base}` });
+            await nazu.sendMessage(from, {
+              text: fala,
+              mentions: [jidCompleto],
+              contextInfo: gerarContextNewsletter()
+            });
+            return;
+          } catch (e) {
+            console.error('[ASSISTENTE] falha na mencao:', e?.message || e);
+            await reply('❌ Não consegui chamar essa pessoa agora.');
+            return;
+          }
+        }
+
+        if (acaoDoBot) {
+          try {
+            // A FALA natural do evento vai ANTES da mídia: ela "anuncia" o que
+            // vem. Uma frase por evento, sorteada (repetir sempre soa robo).
+            const falar = async (evento, dados = {}, extra = {}) => {
+              const texto = falaDoEvento(evento, dados);
+              if (!texto) return;
+              await nazu.sendMessage(from, { text: texto, contextInfo: gerarContextNewsletter(), ...extra })
+                .catch((e) => console.error('[ASSISTENTE] falha na fala:', e?.message || e));
+            };
+
+            if (acaoDoBot.acao === 'link') {
+              const codigo = await nazu.groupInviteCode(from);
+              if (!codigo) throw new Error('sem codigo de convite');
+              await falar('link', { nome: nomeDeQuemPediu });
+              await nazu.sendMessage(from, {
+                text: `🔗 *Link do grupo:*\nhttps://chat.whatsapp.com/${codigo}`,
+                contextInfo: gerarContextNewsletter()
+              });
+              return;
+            }
+
+            if (acaoDoBot.acao === 'foto') {
+              let fotoUrl = dadosDoGrupo?.grupo?.foto || null;
+              if (!fotoUrl) {
+                try { fotoUrl = await nazu.profilePictureUrl(from, 'image'); } catch { fotoUrl = null; }
+              }
+              if (!fotoUrl) {
+                await reply('📷 Este grupo não tem foto no momento.');
+                return;
+              }
+              await falar('foto', { nome: nomeDeQuemPediu });
+              await nazu.sendMessage(from, {
+                image: { url: fotoUrl },
+                caption: `📷 *Foto do grupo*`,
+                contextInfo: gerarContextNewsletter()
+              });
+              return;
+            }
+
+            // PLAY / PIN / FIGURINHA / STICKER POR BUSCA: reemite o COMANDO do
+            // bot (o mesmo caminho do `!iap`) — a fila, as permissoes e o envio
+            // sao os do comando, sem pipeline paralelo.
+            const evento = acaoDoBot.acao === 'stickerBusca' ? 'stickerBusca' : acaoDoBot.acao;
+            const dadosFala = { nome: nomeDeQuemPediu, termo: acaoDoBot.termo || '' };
+            if (evento === 'stickerBusca' && !acaoDoBot.termo) {
+              await reply('🎨 De que tema você quer as figurinhas?');
+              return;
+            }
+            if ((acaoDoBot.acao === 'play' || acaoDoBot.acao === 'pin') && !acaoDoBot.termo) {
+              await reply(acaoDoBot.acao === 'play' ? '🎵 Qual música?' : '🔎 O que eu procuro no Pinterest?');
+              return;
+            }
+            const comando = acaoDoBot.acao === 'stickerBusca' ? 's' : acaoDoBot.acao;
+            const corpo = `${groupPrefix}${comando}${acaoDoBot.termo ? ' ' + acaoDoBot.termo : ''}`.trim();
+            await falar(evento, dadosFala);
+            const fakeMessage = cloneMessageSafely(info);
+            fakeMessage.messageTimestamp = Math.floor(Date.now() / 1000);
+            fakeMessage._fromPro = true;
+            fakeMessage.message = { conversation: corpo };
+            nazu.ev.emit('messages.upsert', { messages: [fakeMessage], type: 'notify' });
+            return;
+          } catch (e) {
+            console.error('[ASSISTENTE] falha na acao:', e?.message || e);
+            await reply('❌ Não consegui fazer isso agora. Tente de novo em instantes.');
+            return;
+          }
+        }
 
         // OS PAIS ADOTIVOS da Lizzy: o config guarda o LID, o NOME vem do
         // contato (o config nao tem socket). Resolvido aqui, best-effort.

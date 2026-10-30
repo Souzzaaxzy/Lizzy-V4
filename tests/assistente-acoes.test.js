@@ -239,7 +239,7 @@ await test('8. "manda a foto do grupo" -> envia a FOTO como IMAGEM', async () =>
 await test('9. QUALQUER membro pode pedir (nao exige admin)', async () => {
   // O `MEMBRO` e `superadmin` no metadata do teste — o ponto aqui e' que o
   // caminho NAO tem checagem de admin (diferente do `!linkgp`).
-  const i = INDEX.indexOf('const acaoDoGrupo =');
+  const i = INDEX.indexOf('const acaoDoBot = isGroup');
   ok(i > 0, 'o bloco da acao existe');
   const bloco = INDEX.slice(i, i + 1600);
   ok(!/isGroupAdmin|isBotAdmin|isOwner/.test(bloco), 'nao exige admin/dono');
@@ -285,9 +285,9 @@ await test('13. conversa normal continua indo para o LLM', async () => {
 
 await test('14. o handler usa o reconhecedor compartilhado', () => {
   ok(INDEX.includes("from './utils/assistenteAcoes.js'"), 'importa o modulo');
-  ok(INDEX.includes('identificarAcaoDoGrupo('), 'chama o reconhecedor');
+  ok(INDEX.includes('identificarAcaoDoBot('), 'chama o reconhecedor (o novo, que inclui os comandos)');
   // E roda ANTES de montar o pedido ao LLM (nao gasta cota a toa).
-  const iAcao = INDEX.indexOf('const acaoDoGrupo =');
+  const iAcao = INDEX.indexOf('const acaoDoBot = isGroup');
   const iLlm = INDEX.indexOf('ia.makeAssistentRequest({');
   ok(iAcao > 0 && iLlm > iAcao, 'a acao e resolvida ANTES do LLM');
 });
