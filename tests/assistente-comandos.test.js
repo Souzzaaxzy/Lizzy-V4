@@ -184,6 +184,50 @@ await test('8. reconhece o pedido de mencao (e nao a conversa)', () => {
   for (const p of naoPedidos) ok(mencao.identificarPedidoDeMencao(p) === null, `nao-pedido: "${p}"`);
 });
 
+await test('8b. reconhece a mencao por PAPEL (dono do grupo, admin, mod...)', () => {
+  const casos = [
+    ['lizzy chama o dono do grupo', 'dono_grupo'],
+    ['chama o dono do grupo pra mim', 'dono_grupo'],
+    ['lizzy chama o dono do bot', 'dono_bot'],
+    ['chama o dono dela', 'dono_bot'],
+    ['lizzy chama um admin', 'admin'],
+    ['chama o adm', 'admin'],
+    ['marca um moderador', 'mod'],
+    ['chama um mod', 'mod'],
+    ['lizzy chama um alpha', 'alpha']
+  ];
+  for (const [texto, papel] of casos) {
+    const r = mencao.identificarPedidoDeMencao(texto);
+    ok(r?.papel === papel, `"${texto}" -> papel ${papel} (veio ${r?.papel || 'null'})`);
+  }
+  // O "dono do GRUPO" nao pode virar "dono do BOT" (a ordem dos padroes importa).
+  ok(mencao.identificarPedidoDeMencao('chama o dono do grupo')?.papel === 'dono_grupo', 'grupo antes de bot');
+  // Conversa continua nao sendo pedido.
+  ok(mencao.identificarPedidoDeMencao('o dono do grupo falou comigo') === null, 'comentario nao e pedido');
+});
+
+await test('8c. acha o alvo pelo PAPEL (uma pessoa ou "qualquer um")', () => {
+  const usuarios = [
+    { id: '1@lid', nome: 'Kannon', ehDonoGrupo: true, ehDonoBot: true, ehAdmin: true },
+    { id: '2@lid', nome: 'Fulano', ehAdmin: true },
+    { id: '3@lid', nome: 'Beltrano', ehAdmin: true },
+    { id: '4@lid', nome: 'Ze', ehMod: true },
+    { id: '5@lid', nome: 'Maria' }
+  ];
+  // Papel de UMA pessoa: vai direto nela.
+  ok(mencao.acharUsuarioPorPapel('dono_grupo', usuarios).usuario?.id === '1@lid', 'dono do grupo');
+  ok(mencao.acharUsuarioPorPapel('dono_bot', usuarios).usuario?.id === '1@lid', 'dono do bot');
+  ok(mencao.acharUsuarioPorPapel('mod', usuarios).usuario?.id === '4@lid', 'mod');
+  // Papel de VARIAS: escolhe UMA (rng deterministico).
+  const todos = [0, 0.5, 0.99].map((r) => mencao.acharUsuarioPorPapel('admin', usuarios, () => r).usuario?.id);
+  ok(new Set(todos).size >= 2, 'um admin -> varia entre os admins');
+  ok(todos.every((id) => ['1@lid', '2@lid', '3@lid'].includes(id)), 'sempre um admin de verdade');
+  // Papel sem ninguem: nao inventa alvo.
+  const vazio = mencao.acharUsuarioPorPapel('alpha', usuarios);
+  ok(vazio.achou === false && vazio.vazio === true, 'sem alpha -> nao achou (nao inventa)');
+  ok(mencao.acharUsuarioPorPapel('papel_invalido', usuarios).achou === false, 'papel desconhecido -> nao achou');
+});
+
 await test('9. acha por nome, pedaco do nome e apelido', () => {
   const usuarios = [
     { id: '1@lid', nome: 'Kannon' },
@@ -351,6 +395,29 @@ await test('18. a mencao acha pela MEMORIA (apelido do contador)', async () => {
   const comMencao = sent.find((c) => Array.isArray(c.mentions) && c.mentions.length);
   ok(comMencao, 'achou pelo apelido "Mariazinha"');
   ok(comMencao.mentions[0] === MARIA.jid, 'mencionou a pessoa certa');
+});
+
+await test('18b. a MENCAO POR PAPEL menciona a pessoa certa (fluxo real)', async () => {
+  // O dono do grupo e' o Kannon (o `owner` do metadata).
+  const sent = await run('lizzy chama o dono do grupo');
+  const comMencao = sent.find((c) => Array.isArray(c.mentions) && c.mentions.length);
+  ok(comMencao, 'mencionou alguem');
+  ok(comMencao.mentions[0] === KANNON.jid, `mencionou o dono do grupo (veio ${comMencao.mentions[0]})`);
+  ok(!comMencao.contextInfo, 'sem contextInfo');
+
+  // "um admin" menciona UM dos admins (Kannon ou Joao).
+  const s2 = await run('lizzy chama um admin');
+  const m2 = s2.find((c) => Array.isArray(c.mentions) && c.mentions.length);
+  ok(m2, 'mencionou um admin');
+  ok([KANNON.jid, JOAO.jid].includes(m2.mentions[0]), `mencionou um admin de verdade (veio ${m2.mentions[0]})`);
+});
+
+await test('18c. papel SEM ninguem avisa citando o CARGO (nao inventa)', async () => {
+  // O grupo de teste nao tem mod nem alpha.
+  const sent = await run('lizzy chama um mod');
+  ok(!sent.some((c) => Array.isArray(c.mentions) && c.mentions.length), 'NAO mencionou ninguem');
+  const t = textos(sent).join(' ');
+  ok(/moderador/i.test(t), `a fala cita o cargo ("${t.slice(0, 60)}")`);
 });
 
 await test('19. nome inexistente avisa sem mencionar ninguem', async () => {

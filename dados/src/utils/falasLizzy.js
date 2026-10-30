@@ -69,21 +69,49 @@ export const FALAS = Object.freeze({
     'ei {alvo}, {nome} quer falar com você',
     '{alvo}, o {nome} tá te chamando',
     '{alvo}, te chamaram aqui',
-    'ó {alvo}, {nome} quer falar contigo'
+    'ó {alvo}, {nome} quer falar contigo',
+    '{alvo}, {nome} tá querendo falar com você',
+    'chamando o {alvo}: {nome} quer um dedo de prosa',
+    '{alvo}, aparece aí que {nome} quer falar com você',
+    'e aí {alvo}, {nome} tá atrás de você',
+    '{alvo}, dá um oi pro {nome}',
+    'ó, {nome} tá te procurando, {alvo}'
   ],
   mencaoSemNome: [
     'ei {alvo}, te chamaram aqui',
     '{alvo}, tem alguém querendo falar com você',
-    'ó {alvo}, te procuraram'
+    'ó {alvo}, te procuraram',
+    '{alvo}, tão te chamando aqui',
+    'ei {alvo}, dá uma olhada aqui',
+    '{alvo}, apareceu gente te procurando'
+  ],
+  // A mencao POR PAPEL (dono do grupo, admin, mod...): a fala cita o cargo, que
+  // e' o que a pessoa pediu — "chama o dono do grupo" tem de soar como tal.
+  mencaoPapel: [
+    'ei {alvo}, {nome} quer falar com você',
+    '{alvo}, o {nome} tá te chamando',
+    'ó {alvo}, {nome} precisa falar com você',
+    '{alvo}, te chamaram aqui',
+    'chamando o {papel}: {nome} quer falar com você',
+    'ei {alvo}, {nome} tá atrás do {papel}'
   ],
   mencaoNaoAchou: [
     'não achei ninguém com esse nome aqui',
     'não conheço ninguém com esse nome no grupo',
-    'não achei esse nome, {nome}'
+    'não achei esse nome, {nome}',
+    'esse nome não me soa familiar aqui no grupo',
+    'procurei e não achei ninguém com esse nome'
+  ],
+  mencaoPapelVazio: [
+    'não achei nenhum {papel} aqui no grupo',
+    'não tem {papel} aqui, pelo que eu sei',
+    'não encontrei nenhum {papel} aqui'
   ],
   mencaoAmbiguo: [
     'tem mais de um com esse nome, qual deles?',
-    'achei mais de um, me diz qual'
+    'achei mais de um, me diz qual',
+    'tem gente demais com esse nome, qual é?',
+    'achei uns quantos, qual deles você quer?'
   ]
 });
 
@@ -104,7 +132,8 @@ export function falaDoEvento(evento, dados = {}, rng = Math.random) {
   const trocas = {
     '{nome}': String(dados.nome || '').trim(),
     '{alvo}': String(dados.alvo || '').trim(),
-    '{termo}': String(dados.termo || '').trim()
+    '{termo}': String(dados.termo || '').trim(),
+    '{papel}': String(dados.papel || '').trim()
   };
   for (const [marca, valor] of Object.entries(trocas)) {
     // Marcador sem valor: tira a marca e limpa a pontuação/espaço que sobra.
@@ -118,6 +147,21 @@ export function falaDoEvento(evento, dados = {}, rng = Math.random) {
     .replace(/\s{2,}/g, ' ')
     .replace(/\s+([,.!?])/g, '$1')
     .trim();
+}
+
+/**
+ * O nome AMIGAVEL de um papel, para a fala ("o dono do grupo", "um admin").
+ * @param {string} papel
+ * @returns {string}
+ */
+export function nomeDoPapel(papel) {
+  return {
+    dono_grupo: 'dono do grupo',
+    dono_bot: 'dono do bot',
+    admin: 'admin',
+    mod: 'moderador',
+    alpha: 'alpha'
+  }[String(papel || '')] || '';
 }
 
 /** Os eventos conhecidos (para o teste e para quem quiser listar). */

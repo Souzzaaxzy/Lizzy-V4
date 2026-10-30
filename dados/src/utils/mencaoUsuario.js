@@ -26,6 +26,23 @@
  * "chama o João" num grupo com dois Joões **não** escolhe um no chute: devolve
  * `{ ambiguo: true, candidatos }` e o chamador pergunta qual. Escolher errado
  * aqui significaria mencionar a pessoa errada em público.
+ *
+ * ## MENÇÃO por PAPEL (pedido do dono, out/2026)
+ *
+ * *"ela tem que saber diversificar a menção a tal usuário também, tipo o dono do
+ * grupo e tal"*. Então o alvo pode ser um CARGO, não só um nome:
+ *
+ * | o que se pede | papel |
+ * |---|---|
+ * | "chama o dono do grupo" | `dono_grupo` |
+ * | "chama o dono do bot" / "o dono dela" | `dono_bot` |
+ * | "chama um admin" / "chama o adm" | `admin` |
+ * | "chama um mod" / "um moderador" | `mod` |
+ * | "chama um alpha" | `alpha` |
+ *
+ * Papel de UMA pessoa (dono do grupo/bot) vai direto nela. Papel de VÁRIAS
+ * ("um admin") escolhe **uma** — é o que a palavra "um" quer dizer. Papel sem
+ * ninguém avisa (não inventa alvo).
  */
 
 /** Palavras que não são nome de ninguém (cargos, artigos, o próprio bot). */
@@ -38,6 +55,37 @@ const PALAVRAS_VAZIAS = new Set([
   'dono', 'dona', 'chefe', 'criador', 'mod', 'mods', 'moderador', 'moderadores',
   'alpha', 'alphas', 'sub', 'subdono', 'subdonos', 'vip', 'vips', 'membro'
 ]);
+
+/**
+ * Os PAPÉIS que podem ser pedidos no lugar de um nome.
+ *
+ * A ordem importa: "dono do grupo" tem de ser testado antes de "dono" solto, e
+ * "dono do bot" antes de "dono" — senão o mais genérico venceria.
+ */
+const PAPEIS = [
+  // O DONO DO GRUPO (quem criou). "dono do grupo", "dono daqui", "criador".
+  ['dono_grupo', /\b(dono|dona|criador|criadora)\s+(do|da|deste|desse|do\s+mesmo)?\s*(grupo|gp|group|aqui|daqui|chat)\b/i],
+  ['dono_grupo', /\b(dono|dona)\s+(do|da)\s+(grupo|gp|group)\b/i],
+  // O DONO DO BOT (o dono dela). "dono do bot", "dono dela", "meu dono".
+  ['dono_bot', /\b(dono|dona|criador|criadora)\s+(do|da|de)?\s*(bot|robo|robô|lizzy|abyss|assistente)\b/i],
+  ['dono_bot', /\b(meu|teu|seu)\s+dono\b/i],
+  ['dono_bot', /\bdono\s+dela\b/i],
+  // ADMIN. "admin", "adm", "administrador", "admins".
+  ['admin', /\b(admin|adms|admins|administrador|administradores|adm)\b/i],
+  // MOD / ALPHA (cargos do BOT, nao do WhatsApp).
+  ['mod', /\b(mod|mods|moderador|moderadora|moderadores)\b/i],
+  ['alpha', /\b(alpha|alphas)\b/i]
+];
+
+/**
+ * O papel pedido, se houver um.
+ * @param {string} t texto ja' normalizado
+ * @returns {string|null}
+ */
+function papelPedido(t) {
+  for (const [papel, re] of PAPEIS) if (re.test(t)) return papel;
+  return null;
+}
 
 /** Verbos que transformam a menção em um PEDIDO. */
 const VERBO_PEDIDO = 'chama|chamar|chame|menciona|mencionar|mencione|marca|marcar|marque|avisa|avisar|avise|cutuca|cutucar|cutuque|acorda|acordar|acorde|puxa|puxar|puxe|traz|trazer|toca\\s+em|fala\\s+com|falar\\s+com';
@@ -76,6 +124,16 @@ export function identificarPedidoDeMencao(texto) {
   const re = new RegExp(`\\b(${VERBO_PEDIDO})\\b\\s*(o\\s+|a\\s+|os\\s+|as\\s+|um\\s+|uma\\s+)?(.+)$`, 'i');
   const m = re.exec(t);
   if (!m) return null;
+
+  // PAPEL antes de nome: "chama o dono do grupo" não tem nome nenhum — o alvo
+  // é o CARGO.
+  const papel = papelPedido(t);
+  if (papel) {
+    const querFalar0 = QUER_FALAR.test(t)
+      || /\b(quer\w*|precisa\w*|gostaria)\b[^]*\b(falar|conversar)\b/i.test(t)
+      || /\b(pra|para)\s+mim\b/i.test(t);
+    return { nome: '', papel, querFalar: querFalar0 };
+  }
 
   // O que sobra depois do verbo é o nome (o artigo já saiu no grupo acima).
   let nome = String(m[3] || '').trim();
@@ -185,4 +243,38 @@ export function acharUsuarioPorNome(dito, usuarios = [], opts = {}) {
  */
 export function resolverMencao(dito, usuarios, opts = {}) {
   return acharUsuarioPorNome(dito, usuarios, opts);
+}
+
+/**
+ * Acha o alvo de um PAPEL ("dono do grupo", "um admin", "um mod").
+ *
+ * Cada candidato carrega as marcas do papel (`ehDonoGrupo`, `ehDonoBot`,
+ * `ehAdmin`, `ehMod`, `ehAlpha`) — quem monta a lista é o handler, que tem o
+ * metadata. Aqui só se escolhe.
+ *
+ * Papel de UMA pessoa (dono do grupo/bot) devolve ela. Papel de VÁRIAS escolhe
+ * **uma** (é o que "um admin" quer dizer). Papel vazio devolve `{achou:false}` —
+ * nunca inventa alvo.
+ *
+ * @param {string} papel
+ * @param {Array<object>} usuarios
+ * @param {() => number} [rng] fonte de aleatoriedade (o teste injeta)
+ * @returns {{ achou: boolean, usuario?: object, papel: string, vazio?: boolean }}
+ */
+export function acharUsuarioPorPapel(papel, usuarios = [], rng = Math.random) {
+  const marca = {
+    dono_grupo: 'ehDonoGrupo',
+    dono_bot: 'ehDonoBot',
+    admin: 'ehAdmin',
+    mod: 'ehMod',
+    alpha: 'ehAlpha'
+  }[String(papel || '')];
+  const lista = Array.isArray(usuarios) ? usuarios.filter((u) => u && u.id) : [];
+  if (!marca) return { achou: false, papel, vazio: true };
+  const candidatos = lista.filter((u) => u[marca]);
+  if (!candidatos.length) return { achou: false, papel, vazio: true };
+  // Papel de varias pessoas: escolhe UMA ("um admin" = qualquer admin).
+  const r = typeof rng === 'function' ? Number(rng()) : Math.random();
+  const i = Math.min(Math.max(Math.floor(r * candidatos.length), 0), candidatos.length - 1);
+  return { achou: true, usuario: candidatos[i], papel };
 }

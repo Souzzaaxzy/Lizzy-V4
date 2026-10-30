@@ -53,8 +53,8 @@ import { lerChaves, mascarar, slotDoComando, atualizarEnv, nomeDaVar, MAX_SLOTS,
 // As ACOES do grupo pedidas por fala/texto (link e foto) — reconhecimento
 // DETERMINISTICO, como o `iapComandos` da call.
 import { identificarAcaoDoBot } from './utils/assistenteAcoes.js';
-import { identificarPedidoDeMencao, acharUsuarioPorNome } from './utils/mencaoUsuario.js';
-import { falaDoEvento } from './utils/falasLizzy.js';
+import { identificarPedidoDeMencao, acharUsuarioPorNome, acharUsuarioPorPapel } from './utils/mencaoUsuario.js';
+import { falaDoEvento, nomeDoPapel } from './utils/falasLizzy.js';
 import { converterGifParaMp4 } from './utils/gifMedia.js';
 import { figurinhaParaStatus } from './utils/stickerStatus.js';
 import { normalizarIdGrupo, ehJidCanal, buildFollowChannelContent, fotoDoMetadataNewsletter, normalizarGrupos, adicionarGrupo, removerGrupo } from './utils/canalDivulgacao.js';
@@ -681,19 +681,22 @@ async function responderPrefixo(nazu, from, info, sender, currentPrefix) {
  *
  * @returns {Promise<{achou: boolean, ambiguo?: boolean, usuario?: object, candidatos?: object[]}>}
  */
-async function acharAlvoDaMencao({ dito, nazu, metadata, from, groupData, sender }) {
+async function acharAlvoDaMencao({ dito, papel, nazu, metadata, from, groupData, sender, numerosDono }) {
   const participantes = Array.isArray(metadata?.participants) ? metadata.participants : [];
   // O BOT não é um alvo de menção (ninguém "chama a Lizzy" por esse caminho).
   const botIds = [nazu?.user?.id, nazu?.user?.lid].filter(Boolean).map((v) => String(v).split(':')[0].split('@')[0]);
-  const lista = [];
+  const ehBot = (id) => botIds.includes(String(id).split(':')[0].split('@')[0]);
+  // O dono do GRUPO e' o `owner` do metadata (ou quem e' superadmin).
+  const ownerGrupo = metadata?.owner || null;
+  const superadmins = new Set(participantes.filter((p) => p?.admin === 'superadmin').map((p) => p?.id || p?.lid));
+  const mods = new Set((groupData?.moderators || []).map((v) => String(v).split(':')[0].split('@')[0]));
+  const alphas = new Set((groupData?.alphas || []).map((v) => String(v).split(':')[0].split('@')[0]));
+  const donosBot = (numerosDono || []).filter(Boolean).map((v) => String(v).split(':')[0].split('@')[0]);
+
+  const usuarios = [];
   for (const p of participantes) {
     const id = p?.id || p?.lid;
-    if (!id) continue;
-    if (botIds.includes(String(id).split(':')[0].split('@')[0])) continue;
-    lista.push(id);
-  }
-  const usuarios = [];
-  for (const id of lista) {
+    if (!id || ehBot(id)) continue;
     let nome = '';
     try {
       nome = await resolverNomeContato(id, { nazu, metadata, from });
@@ -704,8 +707,22 @@ async function acharAlvoDaMencao({ dito, nazu, metadata, from, groupData, sender
       const doContador = (groupData?.contador || []).find((u) => idsMatch(u.id, id));
       apelido = doContador?.pushname || '';
     } catch { apelido = ''; }
-    usuarios.push({ id, nome: nome || apelido || String(id).split('@')[0], apelido });
+    const base = String(id).split(':')[0].split('@')[0];
+    usuarios.push({
+      id,
+      nome: nome || apelido || base,
+      apelido,
+      // As MARCAS do papel: quem tem o metadata e' este helper, entao a busca
+      // por papel (`acharUsuarioPorPapel`) so' escolhe — nao descobre.
+      ehDonoGrupo: Boolean(ownerGrupo && idsMatch(ownerGrupo, id)) || superadmins.has(id),
+      ehDonoBot: donosBot.includes(base),
+      ehAdmin: p?.admin === 'admin' || p?.admin === 'superadmin',
+      ehMod: mods.has(base),
+      ehAlpha: alphas.has(base)
+    });
   }
+  // PAPEL ("chama o dono do grupo") ou NOME ("chama o joao").
+  if (papel) return acharUsuarioPorPapel(papel, usuarios);
   return acharUsuarioPorNome(dito, usuarios, {});
 }
 
@@ -7843,14 +7860,20 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
           try {
             const alvo = await acharAlvoDaMencao({
               dito: pedidoDeMencao.nome,
-              nazu, metadata: groupMetadata, from, groupData, sender
+              papel: pedidoDeMencao.papel,
+              nazu, metadata: groupMetadata, from, groupData, sender,
+              numerosDono: [numerodono, lidowner]
             });
+            const nomePapel = nomeDoPapel(pedidoDeMencao.papel);
             if (!alvo.achou) {
-              const fala = alvo.ambiguo
-                ? falaDoEvento('mencaoAmbiguo', {})
-                : falaDoEvento('mencaoNaoAchou', { nome: nomeDeQuemPediu });
+              // Papel sem ninguem: avisa citando o CARGO. Nome: avisa que nao achou.
+              const fala = pedidoDeMencao.papel
+                ? falaDoEvento('mencaoPapelVazio', { papel: nomePapel })
+                : (alvo.ambiguo
+                  ? falaDoEvento('mencaoAmbiguo', {})
+                  : falaDoEvento('mencaoNaoAchou', { nome: nomeDeQuemPediu }));
               await nazu.sendMessage(from, {
-                text: alvo.ambiguo
+                text: alvo.ambiguo && !pedidoDeMencao.papel
                   ? `${fala}\n\n${alvo.candidatos.map((c) => `• ${c.nome}`).join('\n')}`
                   : fala
               });
@@ -7866,9 +7889,13 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
             // junto, entao a remocao e' cirurgica.
             const jidCompleto = String(u.id).replace(/:(\d+)@/, '@');
             const base = jidCompleto.split('@')[0];
-            const fala = pedidoDeMencao.querFalar
-              ? falaDoEvento('mencao', { nome: nomeDeQuemPediu, alvo: `@${base}` })
-              : falaDoEvento('mencaoSemNome', { alvo: `@${base}` });
+            const dadosFala = { nome: nomeDeQuemPediu, alvo: `@${base}`, papel: nomePapel };
+            // A fala muda por TIPO de pedido: papel ("chama o dono do grupo"),
+            // "quer falar com X" ou so' "chama o X".
+            const evento = pedidoDeMencao.papel
+              ? 'mencaoPapel'
+              : (pedidoDeMencao.querFalar ? 'mencao' : 'mencaoSemNome');
+            const fala = falaDoEvento(evento, dadosFala);
             await nazu.sendMessage(from, {
               text: fala,
               mentions: [jidCompleto]
