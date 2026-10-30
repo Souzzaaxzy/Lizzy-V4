@@ -166,13 +166,20 @@ await test('9. grupo com personalidade salva (formato antigo) nao quebra', () =>
 // ============================================================================
 
 await test('10. a ativacao por NOME continua (e o que faz "Oi Lizzy" funcionar)', () => {
-  const i = INDEX.indexOf('shouldActivateAssistant');
+  // A ativacao ganhou a CONVERSA EM ANDAMENTO (`foiChamada || continua`), entao
+  // a ancora e' o `foiChamada` — a chamada explicita (nome/@/citacao) continua
+  // sendo o que abre a janela.
+  // O `checkBotNameMention`/`hasMentionByAt` ficam ANTES do `foiChamada` (que
+  // combina os tres numa variavel so'). A janela tem de pegar os dois lados.
+  const i = INDEX.indexOf('const foiChamada =');
   ok(i > 0, 'a condicao de ativacao existe');
-  const bloco = INDEX.slice(i - 500, i + 400);
+  const bloco = INDEX.slice(Math.max(0, i - 500), i + 600);
   contem(bloco, 'checkBotNameMention', 'ativa por NOME');
   contem(bloco, 'hasMentionByAt', 'ativa por @');
+  contem(bloco, 'menc_os2', 'ativa por CITACAO');
   // A condicao que USA o resultado vem logo depois.
-  contem(INDEX.slice(i, i + 400), 'isAssistente', 'e so com o !assistente ligado');
+  const iAtiva = INDEX.indexOf('shouldActivateAssistant');
+  contem(INDEX.slice(iAtiva, iAtiva + 400), 'isAssistente', 'e so com o !assistente ligado');
 });
 
 await test('11. o prompt do chat continua pedindo resposta em JSON (o parser depende)', () => {

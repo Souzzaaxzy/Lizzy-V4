@@ -67,6 +67,13 @@ function getFormattedBrazilDateTime() {
 
 let historico = {};
 
+/**
+ * Os IDs das mensagens do cache JA absorvidas no historico (por memoria).
+ * E' o que impede a mesma mensagem entrar duas vezes quando a Lizzy e' chamada
+ * varias vezes.
+ */
+const _vistosHistorico = new Map();
+
 // Sistema de estado da conversa e preferências do usuário
 let conversationStates = {};
 let userPreferences = {};
@@ -848,6 +855,63 @@ function validateMessage(msg) {
   throw new Error('Formato de mensagem não suportado');
 }
 
+/**
+ * Injeta no historico as mensagens que o GRUPO trocou e que NAO passaram pela
+ * IA (as sem mencao) — o "olhar tudo" sem custo de token.
+ *
+ * ## Por que isto e' de graca
+ *
+ * O bot JA guarda toda mensagem no `messagesCache` (connect.js), antes do
+ * handler. O historico, porem, so recebia o que passou pela IA (`updateHistorico`)
+ * — entao quando a Lizzy era chamada, ela NAO via o que o grupo falou antes.
+ * Era a causa do "ela nao tem contexto".
+ *
+ * Aqui as mensagens do cache entram no historico **uma unica vez cada** (o
+ * `_vistosHistorico` evita duplicar): nenhuma chamada de IA acontece por isso.
+ * O custo e' o de sempre — 1 requisicao quando ela RESPONDE.
+ *
+ * @param {object} p
+ * @param {string} p.grupoUserId a chave da memoria
+ * @param {Array<{id:string, texto:string, nome:string, fromMe:boolean}>} p.mensagens
+ * @returns {number} quantas entraram
+ */
+function absorverContextoDoGrupo({ grupoUserId, mensagens = [] } = {}) {
+  if (!grupoUserId || !Array.isArray(mensagens) || !mensagens.length) return 0;
+  if (!historico[grupoUserId]) historico[grupoUserId] = [];
+  if (!_vistosHistorico.has(grupoUserId)) _vistosHistorico.set(grupoUserId, new Set());
+  const vistos = _vistosHistorico.get(grupoUserId);
+  let entraram = 0;
+  for (const m of mensagens) {
+    const id = String(m?.id || '').trim();
+    const texto = String(m?.texto || '').trim();
+    if (!id || !texto || vistos.has(id)) continue;
+    vistos.add(id);
+    // O nome de quem falou vai junto: sem ele, ela ve' um texto solto e nao
+    // sabe quem disse (o mesmo problema do nome resolvido).
+    const quem = String(m?.nome || '').trim();
+    const conteudo = m?.fromMe ? `[voce] ${texto}` : (quem ? `[${quem}] ${texto}` : texto);
+    historico[grupoUserId].push({
+      role: m?.fromMe ? 'assistant' : 'user',
+      content: cleanWhatsAppFormatting(conteudo),
+      timestamp: Number(m?.ts) || Date.now()
+    });
+    entraram += 1;
+  }
+  if (entraram) {
+    // O mesmo teto do historico normal.
+    const limite = Math.max(4, Number.parseInt(process.env.IA_HISTORICO || '16', 10) || 16);
+    if (historico[grupoUserId].length > limite) {
+      historico[grupoUserId] = historico[grupoUserId].slice(-limite);
+    }
+    // O `vistos` nao pode crescer sem teto.
+    if (vistos.size > 400) {
+      const sobrando = [...vistos].slice(-200);
+      _vistosHistorico.set(grupoUserId, new Set(sobrando));
+    }
+  }
+  return entraram;
+}
+
 function updateHistorico(grupoUserId, role, content, nome = null) {
   if (!historico[grupoUserId]) {
     historico[grupoUserId] = [];
@@ -1204,6 +1268,15 @@ async function processUserMessages(data, nazu = null, ownerNumber = null, person
       // Obter contexto do usuário
       const userContext = userContextDB.getUserContextSummary(userId);
       
+      // O "OLHAR TUDO" (custo 0 token): as mensagens que o grupo trocou e que
+      // NAO passaram pela IA entram no historico antes da resposta. E' o que faz
+      // ela saber o que rolou — sem pagar requisicao por mensagem lida.
+      try {
+        if (Array.isArray(extraContext.contextoDoGrupo) && extraContext.contextoDoGrupo.length) {
+          absorverContextoDoGrupo({ grupoUserId: userId, mensagens: extraContext.contextoDoGrupo });
+        }
+      } catch { /* sem contexto: segue com o historico normal */ }
+
       updateHistorico(userId, 'user', msgValidada.texto, msgValidada.nome_enviou);
       
       // Selecionar o prompt baseado na personalidade
@@ -2092,6 +2165,8 @@ async function generateImage(prompt, retries = 3) {
 
 export {
   processUserMessages as makeAssistentRequest,
+  // O "olhar tudo" do grupo (custo 0 token) — exportado para o teste.
+  absorverContextoDoGrupo,
   makeCognimaRequest,
   respostaNatural,
   getHistoricoStats,

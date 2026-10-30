@@ -56,6 +56,7 @@ import { lerChaves, mascarar, slotDoComando, atualizarEnv, nomeDaVar, MAX_SLOTS,
 import { identificarAcaoDoBot } from './utils/assistenteAcoes.js';
 import { identificarPedidoDeMencao, acharUsuarioPorNome, acharUsuarioPorPapel } from './utils/mencaoUsuario.js';
 import { falaDoEvento, nomeDoPapel } from './utils/falasLizzy.js';
+import { ConversasEmAndamento, ehPedidoDeParada, temConteudoDeConversa } from './utils/conversaEmAndamento.js';
 import { converterGifParaMp4 } from './utils/gifMedia.js';
 import { figurinhaParaStatus } from './utils/stickerStatus.js';
 import { normalizarIdGrupo, ehJidCanal, buildFollowChannelContent, fotoDoMetadataNewsletter, normalizarGrupos, adicionarGrupo, removerGrupo } from './utils/canalDivulgacao.js';
@@ -667,6 +668,61 @@ async function responderPrefixo(nazu, from, info, sender, currentPrefix) {
   }
   await enviarTexto(montar(`📌 Prefixo atual deste grupo: ${currentPrefix}`));
   return true;
+}
+
+/**
+ * A conversa EM ANDAMENTO (por grupo+pessoa): depois de chamar a Lizzy, o dono
+ * pode seguir respondendo SEM marcar, e ela continua — por poucas trocas e por
+ * poucos minutos (as travas estao no modulo).
+ */
+const conversas = new ConversasEmAndamento();
+
+/**
+ * Monta o "contexto do grupo" a partir do CACHE de mensagens (custo 0 token).
+ *
+ * O `messagesCache` guarda TODA mensagem do grupo (connect.js), antes do
+ * handler. Aqui as ultimas sao convertidas em `{ id, texto, nome, fromMe, ts }`
+ * para o `ia.js` absorver no historico — e' o "olhar tudo" sem pagar requisicao
+ * por mensagem.
+ *
+ * @param {Map} cache o `messagesCache` do handler
+ * @param {string} grupo
+ * @param {object} metadata
+ * @param {object} nazu
+ * @returns {Promise<Array>}
+ */
+async function contextoDoGrupoDoCache(cache, grupo, metadata, nazu, from) {
+  try {
+    if (!cache || typeof cache.values !== 'function') return [];
+    const todas = [...cache.values()].filter((m) => m?.key?.remoteJid === grupo);
+    // As ultimas (o cache nao tem ordem garantida por si; o Map preserva a
+    // INSERCAO, entao a ordem ja e' cronologica).
+    const ultimas = todas.slice(-(Number(process.env.LIZZY_CONTEXTO_MSGS) || 20));
+    const saida = [];
+    for (const m of ultimas) {
+      const conteudo = m?.message || {};
+      const texto = conteudo.conversation
+        || conteudo.extendedTextMessage?.text
+        || conteudo.imageMessage?.caption
+        || conteudo.videoMessage?.caption
+        || '';
+      if (!String(texto).trim()) continue;
+      const deMim = Boolean(m?.key?.fromMe);
+      const autor = m?.key?.participant || m?.participant || m?.key?.remoteJid;
+      let nome = '';
+      if (!deMim && autor) {
+        try { nome = await resolverNomeContato(autor, { nazu, metadata, from }); } catch { nome = ''; }
+      }
+      saida.push({
+        id: String(m?.key?.id || ''),
+        texto: String(texto),
+        nome: deMim ? 'Lizzy' : (nome || ''),
+        fromMe: deMim,
+        ts: Number(m?.messageTimestamp) ? Number(m.messageTimestamp) * 1000 : Date.now()
+      });
+    }
+    return saida;
+  } catch { return []; }
 }
 
 /**
@@ -7625,9 +7681,26 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
     const mencoesNaMensagem = info.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
     const hasMentionByAt = _botShort && budy2.includes(_botShort);
     const hasMentionByName = ia.checkBotNameMention ? ia.checkBotNameMention(budy2).mentioned : false;
-    const shouldActivateAssistant = hasMentionByAt || hasMentionByName || (menc_os2 && menc_os2 == botNumber);
+    const foiChamada = Boolean(hasMentionByAt || hasMentionByName || (menc_os2 && menc_os2 == botNumber));
+    // CONVERSA EM ANDAMENTO: se a pessoa chamou a Lizzy e continua falando SEM
+    // marcar, ela responde — mas por poucas trocas e poucos minutos, e só se a
+    // mensagem tiver conteudo (um "kkkk" nao puxa resposta). As travas estao no
+    // modulo; aqui só se pergunta.
+    const continua = !foiChamada && isAssistente && isGroup
+      ? conversas.deveContinuar({ grupo: from, pessoa: sender, texto: budy2 })
+      : { responder: false, motivo: 'nao_avaliado' };
+    const shouldActivateAssistant = foiChamada || continua.responder;
     // Não processar pela assistente se a mensagem veio do PRO (evita loop infinito)
     if (!info.key.fromMe && isAssistente && !isCmd && !info._fromPro && shouldActivateAssistant) {
+      // A JANELA da conversa: chamada explicita ABRE (e zera as trocas); um
+      // pedido de parada FECHA na hora.
+      try {
+        if (foiChamada) conversas.abrir(from, sender);
+        else if (continua.responder && ehPedidoDeParada(budy2)) {
+          conversas.fechar(from, sender);
+        }
+      } catch { /* sem janela: segue o fluxo normal */ }
+
       // Limpar o texto da mensagem (remover menção do bot)
       let textoLimpo = budy2.replaceAll('@' + _botShort, '').trim();
       if (hasMentionByName && ia.checkBotNameMention) {
@@ -8016,10 +8089,18 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
         } catch { /* segue sem os nomes dos pais */ }
 
         // Contexto adicional para passar à IA
+        // O "OLHAR TUDO" (custo 0 token): as ultimas mensagens do grupo vem do
+        // CACHE (que ja guarda todas) e entram no historico da IA.
+        let contextoDoGrupo = [];
+        try {
+          contextoDoGrupo = await contextoDoGrupoDoCache(messagesCache, from, groupMetadata, nazu, from);
+        } catch { contextoDoGrupo = []; }
+
         const extraContext = {
           groupName: groupName || '',
           groupId: from || '',
           nomeDeQuemFalou,
+          contextoDoGrupo,
           // O ID de quem fala: e' o que deixa o contexto casar a pessoa com os
           // PAIS ADOTIVOS do config (reconhecer pai/mae sozinha).
           quemFalouId: sender,
@@ -8067,6 +8148,10 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
               }
             };
             processResponses(0);
+            // Conta a TROCA: e' o que limita a conversa continua. Só as
+            // CONTINUAÇÕES contam — a chamada explícita é um pedido novo, e
+            // contá-la comeria uma troca do orçamento da conversa.
+            try { if (!foiChamada) conversas.registrouResposta(from, sender); } catch { /* ok */ }
           } else {
             // Fallback: sempre gerar uma resposta se a IA não retornou nada válido
             // SEM frase pronta (pedido do dono: "IA pura"). A reacao vem do
