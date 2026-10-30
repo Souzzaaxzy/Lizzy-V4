@@ -14856,3 +14856,45 @@ provava o que SAI, e o aparelho provou como APARECE.
 **Metadado do proto (`ptt`, `contextInfo`) diz o que SAI; a forma que o cliente
 DESENHA depende do CONTEÚDO (o container).** Quando o sintoma é "a bolha sai com
 a cara errada", conferir o **formato do byte** antes de mexer em flags.
+
+### 🔊 VOZ ESPONTÂNEA — ela manda áudio sozinha em 25% (out/2026) ✅
+Pedido do dono: *"vamos deixar ela usando o áudio naturalmente agora, deixa uma
+porcentagem de 25% de aleatoriedade com as respostas em áudio, mas quando alguém
+pede o áudio ela manda normalmente"*.
+
+#### Os dois caminhos
+| caminho | quando | chance |
+|---|---|---|
+| **PEDIDO EXPLÍCITO** | "Lizzy, manda um áudio aí" | **100%** (não passa pelo sorteio) |
+| **ESPONTÂNEO** | qualquer resposta de conversa | **25%** (`LIZZY_VOZ_ESPONTANEA`) |
+
+O sorteio é **UMA vez por resposta** (não por mensagem do array) e fica **fora do
+fluxo da IA** — nenhuma chamada extra de modelo só para decidir.
+
+#### Decisões
+- **Falha da voz → TEXTO.** Se o ffmpeg/TTS cair, o `responder` cai no `reply`.
+  A resposta **nunca** se perde (era o risco do caminho novo).
+- **Teto de 400 caracteres SÓ no espontâneo** (`LIZZY_VOZ_MAX_CARACTERES`): uma
+  resposta longa viraria uma nota de voz enorme, pouco natural. O pedido
+  explícito não tem teto (a fala dele é curta por construção, `maxTokens: 90`).
+- **`limparFala`**: o TTS não lê `*negrito*`, `@menção`, emoji, URL nem código.
+- **Helper ÚNICO** `enviarNotaDeVoz` — o explícito e o espontâneo passam por ele
+  (nada de pipeline paralelo; é o mesmo erro que o repo já pagou caro).
+
+#### Bug pego pelos testes
+`Number('')` é **0**, não `NaN` — sem a env, a chance virava **0%** (nunca voz).
+A checagem do texto vazio passou a vir **antes** do `Number`.
+
+#### Efeito nos testes de TEXTO (importante)
+Três suítes que medem o **texto** (`assistente-contexto`, `-identidade`,
+`-acoes`) ficaram **flaky**: 25% das vezes a resposta sai em áudio (sem `text`).
+Medido: **1 em ~6 rodadas** falhava. Correção: `LIZZY_VOZ_ESPONTANEA=0` **antes do
+import** (a constante é lida no load do módulo — setar depois não tem efeito).
+Confirmado 3×3 rodadas estáveis.
+
+#### Testes
+`tests/voz-espontanea.test.js` (novo) — **16 testes / 50 asserções**: o sorteio
+(pedido = 100%, espontâneo = 25%, clamp, proporção real em 10.000 sorteios), a
+limpeza da fala, o teto, e o **fluxo real** (handler de verdade, Groq dublado,
+ffmpeg): o pedido explícito sai **5/5** em áudio e, em 40 respostas espontâneas,
+saem **áudio E texto** (com OGG de verdade, `ptt: true`, sem `contextInfo`).

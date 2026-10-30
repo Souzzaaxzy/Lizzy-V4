@@ -60,6 +60,14 @@ logs diários (`YYYY-MM-DD.md`).
   `index.js` (~7705). Teste: `tests/voz-conversa.test.js` (10/59).
 - **✅ CONFIRMADO no aparelho (out/2026)**: o dono testou e saiu a nota de voz
   com a onda. Era o único ponto fora do alcance dos testes.
+- **VOZ ESPONTÂNEA (25%)**: ela também manda voz por conta própria
+  (`LIZZY_VOZ_ESPONTANEA`, padrão 0.25). O **pedido explícito é 100% áudio** e
+  não passa pelo sorteio. Se a voz falhar, o **texto vai** (nunca silêncio).
+  Teto de 400 chars **só no espontâneo** (`LIZZY_VOZ_MAX_CARACTERES`).
+- **Armadilha**: a constante é lida no **load** do módulo — setar
+  `LIZZY_VOZ_ESPONTANEA` **depois** do import não tem efeito. Os testes de TEXTO
+  (`assistente-contexto`/`-identidade`/`-acoes`) setam a env **antes do import**,
+  senão ficam flaky (1 em ~6 rodadas).
 
 ## Testes
 
