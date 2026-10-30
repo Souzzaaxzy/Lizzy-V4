@@ -39,11 +39,12 @@ import { parsePinDuration, buildPinKeyFromContext, isPinControlMessage } from '.
 import { antiCtt, isContactPayload } from './utils/antiCtt.js';
 import { parseImagePollArgs, collectPollImages, resolveAttachments, buildOptionName } from './utils/pollImages.js';
 import { toOggOpus } from './utils/oggOpus.js';
-import { sintetizarMp3 } from './utils/iapTts.js';
+import { sintetizarFala } from './utils/iapTts.js';
+import { pcmParaWav } from './utils/iapAudio.js';
 import { resolverNomeContato, acharParticipantePorId, nomeInutil, baseId, numerosDoParticipante } from './utils/contactName.js';
 import { coletarDadosDoGrupo } from './utils/contextoConversa.js';
 // A VOZ da conversa: "Lizzy, manda um áudio aí" -> nota de voz de verdade.
-import { ehPedidoDeAudio, temaDoAudio, falaDoAudio, gerarAudio, erroDaVoz } from './utils/vozDaConversa.js';
+import { ehPedidoDeAudio, temaDoAudio, falaDoAudio, gerarNotaDeVoz, erroDaVoz } from './utils/vozDaConversa.js';
 import { lerIdentidade } from './utils/identidadeLizzy.js';
 import { resolverPaisAdotivos } from './utils/contextoConversa.js';
 // As chaves do Groq (ate' 10) e o failover automatico.
@@ -7703,9 +7704,11 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
         // o 'lizzy, manda um audio ai' só pra testar, depois automatizamos").
         // Ou seja: ela NÃO manda voz por iniciativa própria nesta rodada.
         //
-        // É ÁUDIO COMUM (`ptt: false`, MP3) — o dono pediu "áudio normal mesmo,
-        // sem nota de voz". A fala (o TEXTO que vira voz) vem da IA, com a
-        // personalidade dela; este bloco só converte em áudio.
+        // É NOTA DE VOZ (`ptt: true` + OGG/Opus) — a bolha com o desenho da
+        // ONDA, que é o que o dono escolheu (Opção A). O que decide a forma é o
+        // CONTAINER: MP3 vira a bolha de música (a "laranja", igual ao `!play`);
+        // OGG/Opus vira nota de voz. A fala (o TEXTO que vira voz) vem da IA,
+        // com a personalidade dela; este bloco só converte em áudio.
         // ------------------------------------------------------------------
         if (ehPedidoDeAudio(textoLimpo)) {
           try {
@@ -7721,33 +7724,28 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
             } catch { /* segue com o texto padrao */ }
             if (!fala) fala = falaDoAudio(tema);
 
-            const voz = await gerarAudio({ texto: fala, sintetizarMp3 });
+            const voz = await gerarNotaDeVoz({ texto: fala, sintetizar: sintetizarFala, pcmParaWav, toOggOpus });
             if (!voz.ok) {
               console.error('[VOZ] falhou:', voz.motivo);
               await reply(`❌ ih, ${erroDaVoz(voz.motivo)}`);
               return;
             }
-            // AUDIO NORMAL — com `ptt: false`, SEM `contextInfo`.
+            // NOTA DE VOZ (Opcao A) — `ptt: true` + OGG/Opus, SEM `contextInfo`.
             //
-            // O QUE FOI MEDIDO (na ordem em que o dono testou):
+            // O QUE DECIDE A FORMA (pesquisado em 3 projetos que usam Baileys):
             //
-            //   ptt:false + contextInfo  -> NOTA DE VOZ
-            //   sem ptt   + contextInfo  -> NOTA DE VOZ   <- o `ptt` NAO era a causa
-            //   sem ptt   + sem ctx      -> audio normal, mas o cliente desenha
-            //                               como ENCAMINHAMENTO
+            //   MP3      -> bolha de MUSICA (a "laranja", com a notinha) = o `!play`
+            //   OGG/Opus -> NOTA DE VOZ (o desenho da ONDA) = o que o dono quer
             //
-            // Ou seja: quem empurrava para "nota de voz" era o `contextInfo` (o
-            // cabecalho do canal). E sem o `ptt` o cliente perde a marca de
-            // "audio do proprio bot" e desenha como encaminhado.
+            // Ou seja: so' o `ptt: true` nao bastava — com MP3 o cliente ainda
+            // desenhava como musica. O container OGG/Opus e' quem faz a nota de voz.
             //
-            // Agora: `ptt: false` VOLTA (da' a marca de audio) e o `contextInfo`
-            // continua FORA (era ele que virava nota de voz).
-            //
-            // Custo: este audio NAO leva o cabecalho "Ver canal".
+            // E o `contextInfo` (newsletter) fica FORA: era ele que atrapalhava a
+            // renderizacao. Custo: este audio nao leva o cabecalho "Ver canal".
             await nazu.sendMessage(from, {
-              audio: voz.mp3,
-              mimetype: 'audio/mpeg',
-              ptt: false
+              audio: voz.ogg,
+              mimetype: 'audio/ogg; codecs=opus',
+              ptt: true
             });
             return;
           } catch (e) {

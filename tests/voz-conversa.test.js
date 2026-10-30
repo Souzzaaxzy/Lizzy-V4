@@ -1,10 +1,13 @@
 /**
- * A VOZ da conversa — "Lizzy, manda um áudio aí" manda ÁUDIO COMUM.
+ * A VOZ da conversa — "Lizzy, manda um áudio aí" manda NOTA DE VOZ.
  *
  * Pedido do dono: *"vamos pelo áudio, primeiro vamos configurar apenas o
- * 'lizzy, manda um audio ai' só pra testar, depois automatizamos"* — e depois:
- * *"eu quero áudio normal mesmo, sem nota de voz, aquele áudio que o usuário
- * grava e manda seco no grupo"*.
+ * 'lizzy, manda um audio ai' só pra testar, depois automatizamos"*.
+ *
+ * A forma ficou clara depois de 3 rodadas: ele quer a **NOTA DE VOZ** — a bolha
+ * com o **desenho da ONDA** (*"aquele áudio que o usuário grava e manda seco no
+ * grupo"*). O que decide isso e' o **CONTAINER**: OGG/Opus. MP3 vira a bolha de
+ * musica (a "laranja", igual ao `!play`).
  *
  * Uso: node tests/voz-conversa.test.js
  */
@@ -25,7 +28,9 @@ fs.writeFileSync(process.env.CONFIG_PATH, JSON.stringify({
 }, null, 2));
 
 const voz = await import(new URL('../dados/src/utils/vozDaConversa.js', import.meta.url).href);
-const { sintetizarMp3 } = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
+const { sintetizarFala } = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
+const { pcmParaWav } = await import(new URL('../dados/src/utils/iapAudio.js', import.meta.url).href);
+const { toOggOpus } = await import(new URL('../dados/src/utils/oggOpus.js', import.meta.url).href);
 
 /** Ha' ffmpeg no PATH? (so' para CONFERIR o MP3 gerado de verdade) */
 function temFfmpeg() {
@@ -110,38 +115,45 @@ await test('4. a FALA e montada a partir do tema', () => {
 // 2) GERAR A NOTA DE VOZ (PCM -> WAV -> OGG/Opus)
 // ───────────────────────────────────────────────────────────────────────────
 
-/** Dublê de TTS: MP3 de mentira (so' para medir o contrato). */
-const sintetizarFake = async () => ({ ok: true, mp3: Buffer.from('ID3' + 'x'.repeat(200)), fonte: 'fake' });
+/** Dublê de TTS: 1s de senoide (PCM 16 kHz). Nao depende de rede. */
+const sintetizarFake = async () => {
+  const pcm = new Float32Array(16000);
+  for (let i = 0; i < pcm.length; i++) pcm[i] = Math.sin(2 * Math.PI * 440 * i / 16000) * 0.3;
+  return { ok: true, pcm, fonte: 'fake' };
+};
 
-await test('5. gera o AUDIO (MP3) — sem ffmpeg, sem rede', async () => {
-  const r = await voz.gerarAudio({ texto: 'oi', sintetizarMp3: sintetizarFake });
+await test('5. a cadeia gera OGG/Opus de verdade (o container da NOTA DE VOZ)', async () => {
+  if (!FFMPEG) { console.log('     (pulado: sem ffmpeg)'); return; }
+  const r = await voz.gerarNotaDeVoz({ texto: 'oi', sintetizar: sintetizarFake, pcmParaWav, toOggOpus });
   ok(r.ok === true, `gerou (motivo ${r.motivo || '-'})`);
-  ok(Buffer.isBuffer(r.mp3) && r.mp3.length > 0, 'tem bytes');
-  ok(r.mp3.slice(0, 3).toString('ascii') === 'ID3', 'e um MP3 (o dublê comeca com ID3)');
+  ok(Buffer.isBuffer(r.ogg) && r.ogg.length > 0, 'tem bytes');
+  // O container e' o que faz a diferenca: MP3 -> bolha de musica (a "laranja");
+  // OGG -> nota de voz (a onda). O magic `OggS` prova o container.
+  ok(r.ogg.slice(0, 4).toString('ascii') === 'OggS', 'e OGG (nao MP3) — e isso que da a onda');
   ok(r.fonte === 'fake', 'reporta a fonte do TTS');
 });
 
-await test('5b. o TTS REAL gera MP3 de verdade (msedge-tts)', async () => {
-  const r = await voz.gerarAudio({ texto: 'Oi! Aqui é a Lizzy.', sintetizarMp3 });
+await test('5b. o TTS REAL + ffmpeg geram a nota de voz (ponta a ponta)', async () => {
+  if (!FFMPEG) { console.log('     (pulado: sem ffmpeg)'); return; }
+  const r = await voz.gerarNotaDeVoz({ texto: 'Oi! Aqui é a Lizzy.', sintetizar: sintetizarFala, pcmParaWav, toOggOpus });
   if (!r.ok) { console.log(`     (pulado: ${r.motivo} — sem msedge-tts neste ambiente)`); return; }
-  ok(Buffer.isBuffer(r.mp3) && r.mp3.length > 1000, `gerou ${r.mp3?.length} bytes`);
-  // MP3: ID3 ou frame (0xFF 0xEx/0xFx).
-  const h = r.mp3;
-  const ehMp3 = h.slice(0, 3).toString('ascii') === 'ID3' || (h[0] === 0xFF && (h[1] & 0xE0) === 0xE0);
-  ok(ehMp3, 'tem cabecalho de MP3');
+  ok(Buffer.isBuffer(r.ogg) && r.ogg.length > 1000, `gerou ${r.ogg?.length} bytes`);
+  ok(r.ogg.slice(0, 4).toString('ascii') === 'OggS', 'e OGG de verdade');
   ok(r.fonte === 'msedge-tts', `fonte msedge-tts (veio ${r.fonte})`);
 });
 
 await test('6. a cadeia e FALHA FECHADA (erros controlados, sem lixo)', async () => {
-  ok((await voz.gerarAudio({ texto: 'oi' })).motivo === 'sem_dependencias', 'sem deps');
-  ok((await voz.gerarAudio({ texto: '', sintetizarMp3: sintetizarFake })).motivo === 'texto_vazio', 'texto vazio');
-  ok((await voz.gerarAudio({ texto: 'oi', sintetizarMp3: async () => ({ ok: false, motivo: 'sem_tts' }) })).motivo === 'sem_tts', 'TTS falhou -> propaga');
-  ok((await voz.gerarAudio({ texto: 'oi', sintetizarMp3: async () => { throw new Error('x'); } })).motivo === 'tts_falhou', 'TTS lancou -> controlado');
-  ok((await voz.gerarAudio({ texto: 'oi', sintetizarMp3: async () => ({ ok: true, mp3: 'nao-e-buffer' }) })).motivo === 'audio_invalido', 'nao-buffer -> controlado');
+  ok((await voz.gerarNotaDeVoz({ texto: 'oi' })).motivo === 'sem_dependencias', 'sem deps');
+  ok((await voz.gerarNotaDeVoz({ texto: '', sintetizar: sintetizarFake, pcmParaWav, toOggOpus })).motivo === 'texto_vazio', 'texto vazio');
+  ok((await voz.gerarNotaDeVoz({ texto: 'oi', sintetizar: async () => ({ ok: false, motivo: 'sem_tts' }), pcmParaWav, toOggOpus })).motivo === 'sem_tts', 'TTS falhou -> propaga');
+  ok((await voz.gerarNotaDeVoz({ texto: 'oi', sintetizar: async () => { throw new Error('x'); }, pcmParaWav, toOggOpus })).motivo === 'tts_falhou', 'TTS lancou -> controlado');
+  ok((await voz.gerarNotaDeVoz({ texto: 'oi', sintetizar: sintetizarFake, pcmParaWav, toOggOpus: async () => { throw new Error('FFmpeg não encontrado'); } })).motivo === 'sem_ffmpeg', 'ffmpeg ausente -> sem_ffmpeg');
 });
 
 await test('7. a mensagem de erro diz o que fazer', () => {
-  for (const m of ['tts_falhou', 'sem_dependencias', 'texto_vazio', 'audio_invalido', 'tts_desativado', 'x']) {
+  ok(/FFmpeg/i.test(voz.erroDaVoz('sem_ffmpeg')), 'sem_ffmpeg manda instalar o FFmpeg');
+  ok(/FFmpeg/i.test(voz.erroDaVoz('ffmpeg_faltando')), 'ffmpeg_faltando tambem (vem do TTS)');
+  for (const m of ['tts_falhou', 'sem_dependencias', 'texto_vazio', 'wav_falhou', 'opus_falhou', 'x']) {
     const t = voz.erroDaVoz(m);
     ok(typeof t === 'string' && t.length > 5 && !/undefined|null/.test(t), `motivo ${m} tem texto`);
   }
@@ -151,43 +163,26 @@ await test('7. a mensagem de erro diz o que fazer', () => {
 // 3) A INTEGRACAO NO HANDLER
 // ───────────────────────────────────────────────────────────────────────────
 
-await test('8. o handler manda AUDIO COMUM (ptt: false), nao nota de voz', () => {
+await test('8. o handler manda NOTA DE VOZ (OGG/Opus + ptt: true), SEM contextInfo', () => {
   ok(INDEX.includes("from './utils/vozDaConversa.js'"), 'importa o modulo');
   ok(INDEX.includes('ehPedidoDeAudio(textoLimpo)'), 'usa o gatilho explicito');
-  ok(INDEX.includes('gerarAudio('), 'chama a geracao');
-  const i = INDEX.indexOf('gerarAudio(');
-  // Sem os comentarios: o comentario do bloco CITA "ptt: true" para explicar
-  // por que NAO se usa — comparar com o texto cru daria falso positivo.
-  const bloco = INDEX.slice(i, i + 1400)
+  ok(INDEX.includes('gerarNotaDeVoz('), 'chama a geracao da NOTA DE VOZ');
+  const i = INDEX.indexOf('gerarNotaDeVoz(');
+  // Sem os comentarios (o bloco CITA os termos para explicar).
+  const bloco = INDEX.slice(i, i + 2000)
     .split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
-  ok(/audio:\s*voz\.mp3/.test(bloco), 'manda o MP3 como audio');
-  ok(/audio\/mpeg/.test(bloco), 'com o mimetype audio/mpeg');
-  // O `ptt` NAO pode aparecer — nem `true` nem `false`.
-  //
-  // MEDIDO: no proto o `ptt` e' `optional`, entao `ptt: false` NAO e' omitido:
-  // ele ESCREVE o campo no fio (tag 0x30, valor 0). E o WhatsApp trata **campo
-  // presente** como nota de voz, mesmo valendo `false` — era o bug. O `!play`
-  // (que sai como audio normal) NAO manda o campo.
-  // `ptt: false` VOLTA (da' a marca de audio) e o `contextInfo` fica FORA.
-  //
-  // O que o dono MEDIU no aparelho (a tabela que fecha o caso):
-  //   ptt:false + contextInfo  -> NOTA DE VOZ
-  //   sem ptt   + contextInfo  -> NOTA DE VOZ   <- o `ptt` NAO era a causa
-  //   sem ptt   + sem ctx      -> audio normal, mas o cliente desenha como
-  //                               ENCAMINHAMENTO
-  //
-  // Entao: quem virava nota de voz era o `contextInfo`; e sem o `ptt` o audio
-  // perde a marca de "do proprio bot" e sai como encaminhado.
-  ok(/ptt:\s*false/.test(bloco), 'manda `ptt: false` (marca de audio)');
-  ok(!/ptt:\s*true/.test(bloco), 'e NAO como nota de voz');
-  ok(!/contextInfo\s*:/.test(bloco), 'NAO manda contextInfo (era o que virava nota de voz)');
+  // O CONTAINER e' o que decide: MP3 -> bolha de musica (a "laranja", igual ao
+  // `!play`); OGG/Opus -> NOTA DE VOZ (o desenho da ONDA). O dono quer a onda.
+  ok(/audio:\s*voz\.ogg/.test(bloco), 'manda o OGG (nao MP3) — e o container que da a onda');
+  ok(/audio\/ogg; codecs=opus/.test(bloco), 'com o mimetype OGG/Opus');
+  ok(/ptt:\s*true/.test(bloco), 'com `ptt: true` (marca de nota de voz)');
+  ok(!/audio\/mpeg/.test(bloco), 'e NAO audio/mpeg (MP3 vira a bolha de musica)');
+  // O `contextInfo` (newsletter) fica FORA — foi o que atrapalhou a renderizacao
+  // nas rodadas em que o dono testou.
+  ok(!/contextInfo\s*:/.test(bloco), 'NAO manda contextInfo (newsletter)');
   ok(!/gerarContextNewsletter/.test(bloco), 'nem o cabecalho de canal');
-  // E nao depende de ffmpeg neste caminho.
-  ok(!/toOggOpus/.test(bloco), 'nao passa por OGG/Opus (sem ffmpeg)');
-  // E o gatilho roda ANTES do LLM de texto (senao ela responderia texto).
-  const iPedido = INDEX.indexOf('ehPedidoDeAudio(textoLimpo)');
-  const iIA = INDEX.indexOf('ia.makeAssistentRequest(', iPedido);
-  ok(iPedido > 0 && iIA > iPedido, 'o pedido de audio e tratado antes do LLM de texto');
+  // A cadeia OGG usa o ffmpeg (PCM -> WAV -> Opus) — isso e' esperado.
+  ok(/pcmParaWav/.test(bloco) && /toOggOpus/.test(bloco), 'usa a cadeia PCM -> WAV -> OGG/Opus');
 });
 
 await test('9. o pedido de audio NAO e tratado como conversa normal (early return)', () => {
