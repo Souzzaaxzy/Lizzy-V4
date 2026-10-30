@@ -105,6 +105,20 @@ logs diários (`YYYY-MM-DD.md`).
   ⚠️ "dono do **grupo**" tem de ser testado antes de "dono do **bot**".
 - Teste: `tests/assistente-comandos.test.js` (28/193).
 
+## `!pin` / `!s` — imagens ACESSÍVEIS e quantidade pedida (out/2026)
+
+- **`utils/imagensAcessiveis.js`** — `urlEhImagem` (HEAD→GET; o **content-type**
+  é a prova: `image/*` passa, `text/html` é a página de bloqueio) e
+  `filtrarImagensAcessiveis` (paralelo, corta no limite).
+- **🚨 A causa do "Invalid media type for carousel card"**: a busca devolve URLs
+  da web aberta e muitas bloqueiam **hotlink** (medido: **403 text/html**). O
+  `prepare` falhava, o `catch` engolia e o card saía **sem header** — derrubando o
+  carrossel INTEIRO. TikTok funcionava porque as URLs dele vêm de **CDN**; o
+  `!s` funcionava porque **baixa os bytes** (não monta card).
+- **Quantidade**: `quantidadePedida` (stickerPack) — "uma" = 1; número = o pedido
+  com teto **2** (`MAX_PEDIDO`); sem nada = padrão do comando (pin 5 / pack 10-15).
+- Teste: `tests/pin-quantidade.test.js` (10/38).
+
 ## Testes
 
 - Suíte de contexto: **`tests/assistente-contexto.test.js`** (19 testes / 90

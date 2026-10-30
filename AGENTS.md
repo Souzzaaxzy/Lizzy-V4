@@ -15048,3 +15048,68 @@ marcadores), menção (match/ambiguidade/número/cargo) e o **fluxo real** no ha
 (a fala sai junto **sem `contextInfo`**, a menção sai na BASE, o apelido do
 contador acha, nome inexistente avisa sem mencionar, "foto de algo" vira `pin`, e
 o ÁUDIO vem antes das ações).
+
+## 🚨 `!pin` — "Invalid media type for carousel card": a URL com hotlink bloqueado (out/2026) ✅
+Relato do dono: *"o comando Pinterest está dando esse problema... mas **não** é
+erro no carrossel porque o tiktok usa carrossel e funciona, também **não** é
+problema na busca do Pinterest porque o `!s <busca>` funciona"*. As duas
+hipóteses estavam certas em ser descartadas — e apontaram para a causa real.
+
+### A causa (MEDIDA)
+O `!pinterest` montava os cards com as URLs **cruas** da busca. A busca (Bing)
+devolve URLs da **web aberta**, e muitas bloqueiam **hotlink**:
+
+| URL | resposta |
+|---|---|
+| `png.pngtree.com/...png` | **403 text/html** |
+| `meugamer.com/...webp` | **403 text/html** |
+| `i.ytimg.com/...jpg` | 200 image/jpeg ✅ |
+
+O `prepareWAMessageMedia` da fork falhava, o **`catch` engolia**, o card saía
+**sem header** — e o carrossel **inteiro** era recusado com *"Invalid media type
+for carousel card"*.
+
+**É por isso que o TikTok funcionava** (URLs de **CDN confiável**) **e o
+`!s <busca>` também** (ele **baixa os bytes**, não monta card).
+
+### A correção — `utils/imagensAcessiveis.js` (novo)
+- **`urlEhImagem`**: HEAD, com fallback para um **GET de 1 byte** (alguns hosts
+  só respondem GET). O **`content-type` é a prova**: `image/*` passa;
+  `text/html` é a página de bloqueio, mesmo com status 200.
+- **`filtrarImagensAcessiveis`**: roda em **paralelo** (teto de concorrência) e
+  **corta no limite**.
+- Ligado no **`!pinterest`** (antes de montar os cards) e no **`!s`** (o pack
+  saía menor por causa das URLs mortas).
+
+⚠️ **Bug pego pelo próprio teste**: checar o tamanho **antes** de pegar o índice
+deixava até `concorrência` URLs a mais passarem (medido: limite 3 devolvia **8**).
+O contrato agora é *"no máximo `limite`"* — o resultado é cortado no fim.
+
+### QUANTIDADE pedida (`quantidadePedida`, no `stickerPack`)
+Pedido do dono: *"eu peço UMA foto ou UM item de figurinha, ela deve mandar
+apenas uma, sem carrossel ou o pack, apenas 1, ou se o usuário pedir mais de uma
+manda a quantidade que ele quer, mas no máximo 2"*.
+
+| pedido | resultado |
+|---|---|
+| `!pin uma foto de gatinhos` | **1 imagem** (sem carrossel) |
+| `!pin 2 fotos de gatinhos` | carrossel de **2** |
+| `!pin gatinhos` | **5** (padrão do comando) |
+| `!s uma figurinha de gato` | **1** figurinha |
+| `!s 2 figurinhas de gato` | **2** |
+
+Teto **2** (`MAX_PEDIDO`). Aceita dígito ("2") e palavra ("duas"). Sem número e
+sem singular, vale o padrão do pack.
+
+### Medido no fluxo real
+```
+!pin gatinhos fofos        -> CARROSSEL com 5 cards, TODOS com imagem
+!pin uma foto de gatinhos  -> IMAGEM unica
+!pin 2 fotos de gatinhos   -> CARROSSEL com 2 cards
+```
+
+### Testes
+`tests/pin-quantidade.test.js` (novo) — **10 testes / 38 asserções**: o filtro
+(`image/*` passa, `text/html` não, HEAD→GET, extensão ruim sem gastar rede,
+paralelo com limite, ordem preservada) e a quantidade, mais o guard estrutural do
+handler. `pin-tiktok-carousel` **40/0** (o dublê ganhou a rota do `i.pinimg.com`).
