@@ -703,10 +703,9 @@ async function makeCognimaRequest(_modelo, texto, systemPrompt = null, historico
     throw new Error('Todas as chaves do Groq atingiram o limite de hoje. Elas voltam à meia-noite (ou use !keygroq reset).');
   }
 
-  // O teto de 220 tokens do `groqChat` e' de VOZ (3 frases faladas). Aqui e'
-  // TEXTO: `!resumir`, `!gerarhistoria` e `!ideia` precisam de mais espaco, e
-  // truncar no meio da frase seria pior que demorar. Configuravel.
-  const maxTokens = Number.parseInt(process.env.IA_MAX_TOKENS || '900', 10);
+  // O teto do `groqChat` (220) e' de VOZ. Aqui e' TEXTO: 400 cabe uma resposta
+  // normal no zap. (Era 900 — resposta de ensaio, e o OUTPUT gasta a mesma cota.)
+  const maxTokens = Number.parseInt(process.env.IA_MAX_TOKENS || '400', 10);
   const r = await groqChat({ texto, sistema: systemPrompt || undefined, historico, maxTokens });
   if (!r.ok) {
     // O erro sobe como excecao: os 32 call sites ja' tratam com `.catch` e
@@ -870,7 +869,10 @@ function updateHistorico(grupoUserId, role, content, nome = null) {
   // para ela "lembrar" do que foi dito: era a causa do "nao e inteligente" e da
   // pergunta do sexo repetida (ela esquecia a resposta). Agora sao 40 (~20
   // turnos), configuravel por `IA_HISTORICO`.
-  const limiteHistorico = Math.max(4, Number.parseInt(process.env.IA_HISTORICO || '40', 10) || 40);
+  // Era 40 mensagens. O historico ia inteiro em toda chamada e so' crescia;
+  // 16 (~8 turnos) e' o suficiente para "lembrar do que foi dito" sem pagar
+  // 40 mensagens de input por resposta. Configuravel.
+  const limiteHistorico = Math.max(4, Number.parseInt(process.env.IA_HISTORICO || '16', 10) || 16);
   if (historico[grupoUserId].length > limiteHistorico) {
     historico[grupoUserId] = historico[grupoUserId].slice(-limiteHistorico);
   }

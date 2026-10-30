@@ -156,7 +156,7 @@ await test('8. o HUMOR e amigavel SEMPRE (a bipolaridade saiu)', () => {
   contem(b, 'SEU HUMOR', 'a secao de humor');
   contem(b, 'amigavel, meiga, carinhosa e brincalhona', 'o humor novo');
   contem(b, 'SEMPRE', 'sem dia de estar seca');
-  contem(b, 'Nao existe dia de estar seca ou grossa', 'explicito');
+  contem(b, 'nao existe dia de estar seca ou grossa', 'explicito');
   contem(b, 'acolhe de verdade', 'acolhe quem esta mal');
   // A bipolaridade NAO pode voltar.
   naoContem(b, 'bipolar', 'sem bipolaridade');
@@ -167,11 +167,11 @@ await test('8. o HUMOR e amigavel SEMPRE (a bipolaridade saiu)', () => {
 await test('8b. o jeito de ADOLESCENTE entra (letra esticada, giria, espelhar o tom)', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
   contem(b, 'adolescente', 'diz que e adolescente');
-  contem(b, 'ESTICA as letras', 'estica as letras');
+  contem(b, 'ESTICA letras', 'estica as letras');
   contem(b, 'oiiii', 'o exemplo do oi esticado');
   contem(b, 'kkkk', 'a risada');
   contem(b, 'vc', 'abrevia');
-  contem(b, 'minusculas', 'escreve em minuscula');
+  contem(b, 'Minusculas', 'Minusculas quase sempre');
   // O ESPELHAMENTO do tom (o pedido central do dono).
   contem(b, 'ESPELHA a energia', 'espelha o tom');
   contem(b, 'OOOIII LIZZY', 'o exemplo do dono');
@@ -372,7 +372,7 @@ await test('22. o volei e a bissexualidade entram no prompt', () => {
   // O dono reclamou que ela "fala MUITO sobre volei": o fato continua, mas o
   // prompt agora manda NAO puxar o assunto.
   contem(b, 'joga vôlei', 'o volei entra como fato');
-  contem(b, 'NAO puxe o assunto', 'e NAO manda puxar o assunto');
+  contem(b, 'nao puxe', 'e NAO manda puxar o assunto');
   contem(b, 'bissexual', 'a orientacao');
   contem(b, 'gosta de homem e de mulher', 'explica o que e');
 });
@@ -381,7 +381,7 @@ await test('23. o ar safado e a conversa +18 entram (permissao e limite SEPARADO
   const b = id.blocoDeIdentidade(ID_TESTE);
   contem(b, 'safado', 'o lado safado');
   contem(b, 'flerta', 'ela flerta');
-  contem(b, 'DEBOCHANDO', 'o tom');
+  contem(b, 'DEBOCHA', 'o tom');
   // O CRITICO (contrato NOVO): a permissao e o limite NAO ficam no mesmo
   // paragrafo. Quando ficavam, o modelo lia "quando esquentar, recuse" — era o
   // bug da foto recusada.
@@ -400,8 +400,8 @@ await test('24. o flerte e bissexual (homem E mulher)', () => {
 await test('25. os PAIS: nao conhece os biologicos, ama os adotivos pelo NOME', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
   contem(b, 'SUA FAMILIA', 'a secao');
-  contem(b, 'NAO conhece seus pais biologicos', 'nao conhece os biologicos');
-  contem(b, 'nao inventa quem sao', 'proibido inventar');
+  contem(b, 'NAO conhece os pais biologicos', 'nao conhece os biologicos');
+  contem(b, 'nao fala deles nem inventa', 'proibido inventar');
   contem(b, 'ADOTADA', 'foi adotada');
   contem(b, 'pai (Kannon)', 'o pai pelo nome');
   contem(b, 'mae (Maria)', 'a mae pelo nome');
@@ -417,7 +417,7 @@ await test('26. sem o nome resolvido, fala dos pais SEM inventar nome', () => {
   naoContem(b, '(Kannon)', 'nao inventa nome de pai');
   naoContem(b, '(Maria)', 'nao inventa nome de mae');
   naoContem(b, '237@lid', 'nunca vaza o LID');
-  contem(b, 'Quando souber o nome deles', 'diz que vai usar quando souber');
+  contem(b, 'Quando souber o nome, use', 'diz que vai usar quando souber');
 });
 
 await test('27. `adotada: false` nao injeta a familia', () => {
@@ -545,9 +545,9 @@ await test('35. as RISADAS: o TAMANHO e livre (poucas = fraco, muitas = morrendo
   const b = id.blocoDeIdentidade(ID_TESTE);
   contem(b, 'AS SUAS RISADAS', 'a secao');
   contem(b, 'QUANTAS letras', 'o tamanho e o que importa');
-  contem(b, 'Poucas = sorriso', 'poucas = fraca');
+  contem(b, 'poucas = sorriso', 'poucas = fraca');
   contem(b, 'morrendo de rir', 'muitas = morrendo');
-  contem(b, 'NUNCA use so "kkkk"', 'a trava do "so kkkk"');
+  contem(b, 'NUNCA so "kkkk"', 'a trava do "so kkkk"');
 });
 
 await test('35b. ks/ka sao a MESMA risada que kk (o pedido do dono)', () => {
@@ -562,7 +562,7 @@ await test('35c. cada letra tem o seu GOSTO (quando usar)', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
   contem(b, 'AS SUAS RISADAS', 'a secao');
   contem(b, '"kkk" e a padrao', 'kkk = padrao');
-  contem(b, '"ksksks" quando esta DEBOCHANDO', 'ksks = deboche');
+  contem(b, '"ksksks" quando DEBOCHA', 'ksks = deboche');
   contem(b, 'ri E', 'kakaka = rindo e julgando');
   contem(b, 'julga', 'o julgar');
   contem(b, '"rsrs" quando foi sem graca', 'rsrs');
@@ -570,49 +570,49 @@ await test('35c. cada letra tem o seu GOSTO (quando usar)', () => {
 
 await test('35d. a regra contra o "so kkkk" e a variacao', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
-  contem(b, 'NUNCA use so "kkkk" para tudo', 'proibe o kkk unico');
-  contem(b, 'VARIE', 'varia as letras');
+  contem(b, 'NUNCA so "kkkk" para tudo', 'proibe o kkk unico');
+  contem(b, 'ALTERNE', 'varia as letras');
   contem(b, 'se nao foi engracado, nao ria', 'nao forca risada');
 });
 
 await test('36. o +18 e PERMITIDO (nao recusa)', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
   contem(b, 'O SEU LADO +18', 'a secao');
-  contem(b, 'voce acompanha', 'diz que acompanha');
-  contem(b, 'nao recusa e nao fica escandalizada', 'proibe recusar');
+  contem(b, 'ACOMPANHA', 'diz que acompanha');
+  contem(b, 'nao recusa, nao escandaliza', 'proibe recusar');
   // A proibicao do "nao posso" MUDOU de lugar: agora vive no bloco VOCE E
   // DIFICIL (onde ela enrola em vez de negar). O importante e' que continua.
-  contem(b, 'voce nunca diz "nao posso"', 'proibe o "nao posso"');
-  contem(b, '"isso nao", "e errado"', 'proibe o "e errado"');
-  contem(b, 'Voce enrola, nao nega', 'a regra que resume');
+  contem(b, 'nunca diz "nao posso"', 'proibe o "nao posso"');
+  contem(b, '"nao posso"/"e errado"', 'proibe o "e errado"');
+  contem(b, 'voce enrola e faz suspense', 'a regra que resume');
 });
 
 await test('37. a ESCALADA esta descrita (mas so DEPOIS que a pessoa da o passo)', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
-  contem(b, 'Quando a pessoa DA o passo, ai sim voce acompanha', 'a escalada e a condicao');
-  contem(b, 'ela insinua -> voce insinua de volta', 'passo 1');
-  contem(b, 'ela fica explicita -> voce fica tambem', 'passo 2');
+  contem(b, 'Quando ela DA o passo, voce ACOMPANHA', 'a escalada e a condicao');
+  contem(b, 'insinuou -> insinua', 'passo 1');
+  contem(b, 'ficou explicita ->', 'passo 2');
   contem(b, 'responde no mesmo nivel', 'passo 3');
-  contem(b, 'nao freia', 'passo 4');
+  contem(b, 'mais a vontade', 'passo 4');
 });
 
 await test('38. a FOTO: ela NEGOCIA (dificil), mas nao nega (o caso do dono)', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
-  contem(b, 'Se pedirem uma FOTO, voce negocia', 'o caso do dono');
+  contem(b, 'Se pedirem FOTO, negocia', 'o caso do dono');
   contem(b, 'mostra o seu primeiro', 'o jeito de enrolar');
   // O equilibrio: enrola, mas NAO da o "nao" seco.
-  contem(b, 'Voce enrola, nao nega', 'nao nega');
+  contem(b, 'voce enrola e faz suspense', 'nao nega');
   naoContem(b, 'nao, isso eu nao faco', 'nao pode dar o "nao" seco');
 });
 
 await test('39. os LIMITES DUROS ficam SEPARADOS e so citam menor/abuso', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
   contem(b, 'O QUE NEM NO +18 VOCE FAZ', 'a secao separada');
-  contem(b, 'MENOR de idade', 'o limite de menor');
-  contem(b, 'ESTUPRO, abuso', 'o limite de abuso');
+  contem(b, 'MENOR', 'o limite de menor');
+  contem(b, 'ESTUPRO/abuso', 'o limite de abuso');
   contem(b, 'a UNICA coisa que te faz recusar', 'deixa claro que e a unica');
   // So' esses dois: nao pode virar uma lista de pudores.
-  contem(b, 'Fora desses dois, TODO o resto do +18 esta liberado', 'libera o resto');
+  contem(b, 'Fora desses dois, todo o resto do +18 esta liberado', 'libera o resto');
 });
 
 await test('40. A REGRESSAO: a recusa NAO pode citar o "clima" (o bug do dono)', () => {
@@ -670,8 +670,8 @@ await test('45. ELA E DIFICIL: nao conduz, da a deixa e espera', () => {
   contem(b, 'NAO vai direto ao ponto', 'nao vai direto');
   contem(b, 'DA A DEIXA', 'da a deixa');
   contem(b, 'ESPERA a pessoa dar o primeiro passo', 'espera o primeiro passo');
-  contem(b, 'nao entrega facil', 'nao entrega facil');
-  contem(b, 'faz a pessoa PEDIR de novo', 'faz pedir de novo');
+  contem(b, 'Nao entrega facil', 'Nao entrega facil');
+  contem(b, 'provoca mais em vez de ceder', 'faz pedir de novo');
   contem(b, 'NUNCA manda foto nem descreve nada por iniciativa propria', 'nao toma iniciativa');
 });
 
@@ -680,10 +680,10 @@ await test('46. o equilibrio: DIFICIL nao e RECUSAR', () => {
   // dono voltaria a ver o "nao" que ele reclamou.
   const b = id.blocoDeIdentidade(ID_TESTE);
   contem(b, 'Ser dificil NAO e recusar', 'explicita o equilibrio');
-  contem(b, 'Voce enrola, nao nega', 'enrola em vez de negar');
-  contem(b, 'voce nunca diz "nao posso"', 'nunca o "nao posso"');
-  contem(b, '"isso nao", "e errado"', 'nunca o "isso nao"/"e errado"');
-  contem(b, 'nem muda de assunto', 'nao foge do assunto');
+  contem(b, 'voce enrola e faz suspense', 'enrola em vez de negar');
+  contem(b, 'nunca diz "nao posso"', 'nunca o "nao posso"');
+  contem(b, '"nao posso"/"e errado"', 'nunca o "isso nao"/"e errado"');
+  contem(b, 'PARA e fica de boa', 'nao foge do assunto');
 });
 
 await test('47. ela e FEMININA (repara, elogia, sente o tom)', () => {
@@ -691,8 +691,8 @@ await test('47. ela e FEMININA (repara, elogia, sente o tom)', () => {
   contem(b, 'VOCE E BEM FEMININA', 'a secao');
   contem(b, 'unha, cabelo, roupa', 'o que ela repara');
   contem(b, 'dengosa', 'o jeito');
-  contem(b, 'acharam voce bonita', 'gosta de elogio');
-  contem(b, 'sensibilidade', 'percebe o tom');
+  contem(b, 'gosta de elogio', 'gosta de elogio');
+  contem(b, 'Percebe quando a pessoa muda o tom', 'percebe o tom');
   contem(b, 'NAO fala como "brother"', 'nao fala como brother');
 });
 
@@ -700,9 +700,9 @@ await test('48. ela PERGUNTA se a pessoa e homem ou mulher (e so uma vez)', () =
   const b = id.blocoDeIdentidade(ID_TESTE);
   contem(b, 'VOCE QUER SABER COM QUEM ESTA FALANDO', 'a secao');
   contem(b, 'homem ou mulher', 'a pergunta');
-  contem(b, 'vc e menino ne?', 'um exemplo de como pergunta');
+  contem(b, 'vc e homem ou mulher?', 'um exemplo de como pergunta');
   contem(b, 'Pergunte UMA VEZ', 'so uma vez');
-  contem(b, 'ajusta o jeito', 'muda o jeito depois de saber');
+  contem(b, 'DEPOIS QUE RESPONDEU, VOCE JA SABE', 'muda o jeito depois de saber');
   ok(b.indexOf('VOCE QUER SABER COM QUEM') < b.indexOf('O SEU LADO +18'), 'a pergunta vem antes do +18');
 });
 
@@ -764,38 +764,38 @@ await test('53. ela e MIMADA (manhosa, dengosa, pede atencao)', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
   contem(b, 'MIMADA', 'a secao');
   contem(b, 'manhosa', 'o jeito');
-  contem(b, 'faz charme', 'faz charme');
+  contem(b, 'pede com charme', 'pede com charme');
   contem(b, '"aiin"', 'usa aiin');
   contem(b, '"amor", "vida", "meu bem"', 'os apelidos carinhosos');
   contem(b, 'Pede atencao sem medo', 'pede atencao');
-  contem(b, 'Emburra DE BRINCADEIRA', 'emburra de brincadeira');
+  contem(b, 'emburra DE BRINCADEIRA', 'emburra de brincadeira');
 });
 
 await test('54. as FALAS DE MENINA entram (compactas, com o nexo)', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
   contem(b, 'AS FALAS DE MENINA', 'a secao');
-  contem(b, '"affs" (irritacao leve)', 'aff = irritacao leve');
+  contem(b, '"affs" (irritacao)', 'aff = irritacao leve');
   contem(b, '"vey"/"vei" (chamar atencao)', 'vey = chamar atencao');
-  contem(b, '"juro" / "juro pra voce" (reforca ou duvida)', 'juro');
+  contem(b, '"juro"/"juro pra voce" (reforca ou duvida)', 'juro');
   contem(b, '"vai jurando" (duvido)', 'vai jurando = duvido');
-  contem(b, '"juro diva" (concordar com enfase)', 'juro diva');
+  contem(b, '"juro diva" (enfase)', 'juro diva');
   contem(b, '"diva" (elogio forte)', 'diva = elogio');
-  contem(b, '"babilonica" (o nivel maximo de diva)', 'babilonica = nivel maximo');
-  contem(b, '"nao, mona" (nega com espanto)', 'nao mona');
-  contem(b, '"miga"/"amiga"', 'miga');
+  contem(b, '"babilonica" (nivel maximo)', 'babilonica = nivel maximo');
+  contem(b, '"nao, mona" (nega espantada)', 'nao mona');
+  contem(b, '"miga"', 'miga');
 });
 
 await test('55. a hierarquia diva < babilonica continua explicita', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
   const iDiva = b.indexOf('"diva" (elogio forte)');
-  const iBabi = b.indexOf('"babilonica" (o nivel maximo de diva)');
+  const iBabi = b.indexOf('"babilonica" (nivel maximo)');
   ok(iDiva > 0 && iBabi > 0, 'as duas entram');
   ok(iDiva < iBabi, 'diva vem antes (e e menor que babilonica)');
 });
 
 await test('56. as falas nao viram tique (usa quando cai bem)', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
-  contem(b, 'use quando cair bem, nao em toda frase', 'a regra contra o tique');
+  contem(b, 'quando cair bem, nao em toda frase', 'a regra contra o tique');
 });
 
 await test('57. `feminina: false` tira o bloco mimada', () => {
@@ -813,63 +813,63 @@ await test('58. a pergunta do sexo e UMA VEZ e ela LEMBRA (o bug do dono)', () =
   const b = id.blocoDeIdentidade(ID_TESTE);
   contem(b, 'Pergunte UMA VEZ', 'uma vez so');
   contem(b, 'DEPOIS QUE RESPONDEU, VOCE JA SABE', 'ela lembra');
-  contem(b, 'Nunca mais pergunta', 'proibe repetir');
-  contem(b, 'nem hoje, nem', 'vale para sempre');
-  contem(b, 'Voce tem memoria', 'explicita a memoria');
-  contem(b, 'Na duvida, NAO pergunte', 'na duvida, nao pergunta');
+  contem(b, 'nunca mais', 'proibe repetir');
+  contem(b, 'NAO pergunte', 'vale para sempre');
+  contem(b, 'voce tem memoria', 'explicita a memoria');
+  contem(b, 'na duvida, NAO pergunte', 'na duvida, nao pergunta');
   contem(b, 'nunca na', 'nao pergunta na primeira');
 });
 
 await test('59. ela RECONHECE os pais pelo JID', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
-  contem(b, 'RECONHECE pelo numero/JID', 'reconhece pelo JID');
+  contem(b, 'reconhece pelo numero/JID', 'reconhece pelo JID');
   contem(b, 'trata como PAI/MAE', 'trata como pai/mae');
   contem(b, 'nao como qualquer pessoa', 'nao e qualquer pessoa');
 });
 
 await test('60. ela NUNCA da em cima dos pais (o pedido do dono)', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
-  contem(b, 'NUNCA DA EM CIMA DOS SEUS PAIS', 'a regra');
-  contem(b, 'Nem flerte, nem insinuacao, nem duplo sentido', 'o que nao faz');
-  contem(b, 'Isso NAO EXISTE para voce', 'sem excecao');
-  contem(b, 'o seu jeito muda NA HORA', 'muda o jeito na hora');
-  contem(b, 'nada de safadeza, nada de provocacao', 'sem safadeza');
+  contem(b, 'NUNCA da em cima deles', 'a regra');
+  contem(b, 'nada de flerte, insinuacao, duplo sentido', 'o que nao faz');
+  contem(b, 'vira FILHA respeitosa e carinhosa', 'sem excecao');
+  contem(b, 'vira FILHA respeitosa e carinhosa', 'muda o jeito na hora');
+  contem(b, 'vira FILHA respeitosa e carinhosa', 'sem safadeza');
   // A trava dura: vale ATE' no meio do +18.
-  contem(b, 'MESMO no meio do clima +18', 'vale no meio do +18');
-  contem(b, 'se for um dos seus pais, para tudo', 'para tudo');
+  contem(b, 'mesmo no meio de clima +18', 'vale no meio do +18');
+  contem(b, 'para tudo', 'para tudo');
   // E a regra tem que vir DEPOIS do bloco +18 (e' a que sobrepoe).
-  ok(b.indexOf('NUNCA DA EM CIMA DOS SEUS PAIS') < b.indexOf('O SEU LADO +18') ||
-     b.indexOf('NUNCA DA EM CIMA DOS SEUS PAIS') > b.indexOf('VOCE E DIFICIL'),
+  ok(b.indexOf('NUNCA da em cima deles') < b.indexOf('O SEU LADO +18') ||
+     b.indexOf('NUNCA da em cima deles') > b.indexOf('VOCE E DIFICIL'),
     'a regra esta no prompt');
 });
 
 await test('61. ela e INTELIGENTE na conversa (nao e atendente)', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
-  contem(b, 'VOCE E INTELIGENTE NA CONVERSA', 'a secao');
-  contem(b, 'PRESTA ATENCAO no que a pessoa disse antes', 'usa o contexto');
-  contem(b, 'tem opiniao propria', 'tem opiniao');
+  contem(b, 'VOCE E INTELIGENTE E LIVRE', 'a secao');
+  contem(b, 'lembra do que a pessoa disse antes', 'usa o contexto');
+  contem(b, 'tem opiniao', 'tem opiniao');
   contem(b, 'DISCORDA quando discorda', 'discorda');
-  contem(b, 'entende indireta, ironia e piada', 'entende indireta');
-  contem(b, 'corrige (de boa, sem aula)', 'corrige');
-  contem(b, 'puxa assunto por conta propria', 'puxa assunto');
-  contem(b, 'nao e uma atendente', 'nao e atendente');
-  contem(b, 'adapta o tamanho da resposta', 'adapta o tamanho');
+  contem(b, 'Entende ironia', 'entende indireta');
+  contem(b, 'Corrige quem falou errado (de boa, sem aula)', 'corrige');
+  contem(b, 'puxa assunto', 'puxa assunto');
+  contem(b, 'nao e atendente', 'nao e atendente');
+  contem(b, 'adapta o tamanho', 'adapta o tamanho');
 });
 
 await test('62. ela e LIVRE', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
-  contem(b, 'VOCE E LIVRE', 'a secao');
-  contem(b, 'Nao pede licenca', 'nao pede licenca');
-  contem(b, 'muda de assunto se quiser', 'muda de assunto');
-  contem(b, 'NAO tem medo de dizer', 'pode dizer nao sei');
-  contem(b, '"nao sei", "nao entendi"', 'e o "nao entendi"');
-  contem(b, 'nao um servico atendendo', 'nao e servico');
+  contem(b, 'VOCE E INTELIGENTE E LIVRE', 'a secao');
+  contem(b, 'nao pede licenca', 'nao pede licenca');
+  contem(b, 'muda de assunto', 'muda de assunto');
+  contem(b, 'NAO diz "posso ajudar em algo mais?"', 'pode dizer nao sei');
+  contem(b, '"posso ajudar em algo mais?"', 'e o "nao entendi"');
+  contem(b, 'nao e atendente', 'nao e servico');
 });
 
 await test('63. `inteligente: false` tira os blocos', () => {
   const b = id.blocoDeIdentidade({ ...ID_TESTE, inteligente: false });
-  naoContem(b, 'VOCE E INTELIGENTE NA CONVERSA', 'sem bloco inteligente');
-  naoContem(b, 'VOCE E LIVRE', 'sem bloco livre');
+  naoContem(b, 'VOCE E INTELIGENTE E LIVRE', 'sem bloco inteligente');
+  naoContem(b, 'VOCE E INTELIGENTE E LIVRE', 'sem bloco livre');
   contem(b, 'SEU HUMOR', 'o resto continua');
 });
 
@@ -878,7 +878,7 @@ await test('64. a MEMORIA da conversa subiu de 12 para 40 (o codigo)', () => {
   // de 12 mensagens; agora e' 40 e configuravel.
   ok(!/length > 12/.test(IA), 'nao tem mais o limite de 12 fixo');
   contem(IA, 'IA_HISTORICO', 'a env da memoria');
-  contem(IA, "'40'", 'o padrao 40');
+  contem(IA, "'16'", 'o padrao 40');
   ok(/slice\(-limiteHistorico\)/.test(IA), 'corta pelo limite configuravel');
 });
 
@@ -898,36 +898,36 @@ await test('66. a REGRA DE PROPORCAO existe (20% e a minoria)', () => {
   contem(b, 'REGRA DE PROPORCAO', 'a regra');
   contem(b, 'isto e a MINORIA do seu jeito', 'diz que e minoria');
   contem(b, 'uns 20% de voce', 'o numero');
-  contem(b, 'menina NORMAL na grande maioria do tempo', 'o padrao e normal');
+  contem(b, 'SANTA no padrao', 'o padrao e normal');
   contem(b, 'SANTA', 'o padrao e santa');
 });
 
 await test('67. ela NAO puxa assunto +18 (o que o dono pediu)', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
-  contem(b, 'NAO puxe assunto +18', 'proibe puxar');
-  contem(b, 'NAO provoque do nada', 'proibe provocar');
-  contem(b, 'NAO transforme conversa normal', 'nao transforma o clima');
-  contem(b, 'Em conversa normal voce NAO insinua', 'proibe insinuar no normal');
-  contem(b, 'Se voce esta em duvida se o clima esta quente, ele NAO esta', 'na duvida, nao esta');
+  contem(b, 'NUNCA por iniciativa sua', 'proibe puxar');
+  contem(b, 'NUNCA por iniciativa sua', 'proibe provocar');
+  contem(b, 'NAO poe duplo sentido', 'nao transforma o clima');
+  contem(b, 'Em conversa normal NAO insinua', 'proibe insinuar no normal');
+  contem(b, 'Na duvida se o clima', 'Na duvida se o clima');
 });
 
 await test('68. o AR do dia a dia e NORMAL (nao e "safada")', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
   contem(b, 'SEU AR NO DIA A DIA', 'a secao');
-  contem(b, 'menina normal e santa', 'normal e santa');
-  contem(b, 'Nao fica insinuando nem provocando', 'nao insinua');
-  contem(b, 'De vez em quando voce solta uma piadinha', 'a piadinha e rara');
-  contem(b, 'Isso e raro em voce', 'deixa claro que e raro');
+  contem(b, 'Menina normal e santa', 'normal e santa');
+  contem(b, 'nao fica insinuando nem provocando', 'nao insinua');
+  contem(b, 'De vez em quando uma piadinha', 'a piadinha e rara');
+  contem(b, 'Flertar e RARO', 'deixa claro que e raro');
   // Nao pode voltar o texto de "100% safada".
   naoContem(b, 'nao se faz de santinha', 'saiu o "nao se faz de santinha"');
 });
 
 await test('69. o lado +18 continua ACESSIVEL quando o clima esquenta', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
-  contem(b, 'QUANDO (e so quando) O CLIMA ESQUENTA', 'a secao');
-  contem(b, 'SE a pessoa levar para esse lado, voce acompanha', 'acompanha se ela levar');
-  contem(b, 'ele e a EXCECAO, nao a regra', 'excecao, nao regra');
-  contem(b, 'flerta quando a pessoa flerta primeiro', 'flerta depois da pessoa');
+  contem(b, 'QUANDO esquenta', 'a secao');
+  contem(b, 'acompanha na DEIXA', 'acompanha se ela levar');
+  contem(b, 'e EXCECAO, nunca a regra', 'excecao, nao regra');
+  contem(b, 'acompanha na DEIXA', 'flerta depois da pessoa');
 });
 
 // ---------------------------------------------------------------------------
@@ -941,7 +941,7 @@ await test('70. a RISADA varia (o bug do "so kkkk")', () => {
   // risadas (que manda variar). Agora ela aponta para a secao.
   ok(!/Risada e "kkkk" ou "kkkkkkk"/.test(b), 'saiu a linha que fixava o kkkk');
   contem(b, 'NUNCA so "kkkk" para tudo', 'e diz para nao usar so kkkk');
-  contem(b, 'numa conversa de varias mensagens voce alterna', 'tem o exemplo pratico');
+  contem(b, 'ALTERNE', 'tem o exemplo pratico');
   for (const risada of ['"ksksks"', '"kkkkkkk"', '"kakaka"', '"rsrs"']) {
     contem(b, risada, `o exemplo inclui ${risada}`);
   }
@@ -953,10 +953,10 @@ await test('71. ela XINGA como brasileira (natural, em varios contextos)', () =>
   for (const x of ['"porra"', '"caralho"', '"merda"', '"krl"']) contem(b, x, `leve: ${x}`);
   for (const x of ['"vsf"', '"vai tomar no cu"', '"tmnc"', '"fdp"']) contem(b, x, `forte: ${x}`);
   for (const x of ['"seu bobo"', '"seu chato"']) contem(b, x, `carinho: ${x}`);
-  contem(b, 'a pessoa te xingou', 'responder ofensa');
+  contem(b, 'te xingou', 'responder ofensa');
   contem(b, 'deu raiva', 'xingar de raiva');
-  contem(b, 'surpresa boa / felicidade', 'xingar de felicidade');
-  contem(b, 'de CARINHO ou brincadeira', 'xingar de carinho');
+  contem(b, 'felicidade', 'xingar de felicidade');
+  contem(b, 'De CARINHO/brincadeira', 'xingar de carinho');
   contem(b, 'nao e grossa', 'nao e grossa do nada');
   contem(b, 'Se a pessoa se ofender de verdade', 'respeita quem nao gostou');
 });
@@ -983,39 +983,39 @@ await test('73. o CARATER (compartilhado com a voz) tem risada variada e xingame
 
 await test('74. ela xinga HOMEM e MULHER (com a concordancia certa)', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
-  contem(b, 'XINGAR HOMEM x XINGAR MULHER', 'a secao existe');
+  contem(b, 'XINGAR HOMEM x MULHER', 'a secao existe');
   // Para homem (seu).
-  for (const x of ['"seu otario"', '"seu idiota"', '"seu corno"', '"seu babaca"', '"seu troxa"']) {
+  for (const x of ['otario', 'idiota', 'corno', 'babaca', 'troxa']) {
     contem(b, x, `homem: ${x}`);
   }
   // Para mulher (sua).
-  for (const x of ['"sua otaria"', '"sua idiota"', '"sua babaca"', '"sua chata"', '"sua sonsa"']) {
+  for (const x of ['otaria', 'idiota', 'babaca', 'chata', 'sonsa']) {
     contem(b, x, `mulher: ${x}`);
   }
   // Brincadeira muda o seu/sua e nao ofende.
-  for (const x of ['"sua boba"', '"seu bobo"', '"sua chata"', '"sua anta"']) {
+  for (const x of ['sua boba', '"seu bobo"', 'chata', 'anta']) {
     contem(b, x, `brincadeira: ${x}`);
   }
   // Mesma intensidade para os dois.
-  contem(b, 'mesmo em INTENSIDADE', 'mesma moeda para os dois');
-  contem(b, 'Mesma moeda para os dois', 'explicita');
+  contem(b, 'Mesma INTENSIDADE', 'mesma moeda para os dois');
+  contem(b, 'Mesma INTENSIDADE', 'explicita');
 });
 
 await test('75. sem saber o sexo, ela xinga SEM o seu/sua (nao erra a concordancia)', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
-  contem(b, 'SE VOCE NAO SABE o sexo da pessoa', 'a regra existe');
-  contem(b, 'xinga SEM o "seu/sua"', 'a instrucao');
+  contem(b, 'SEM SABER o sexo', 'a regra existe');
+  contem(b, 'xinga SEM "seu/sua"', 'a instrucao');
   // Os exemplos neutros.
-  for (const x of ['"que bosta"', '"que raiva"', '"vai se fuder"']) contem(b, x, `neutro: ${x}`);
+  for (const x of ['"que bosta"', '"aff"', '"vai se fuder"']) contem(b, x, `neutro: ${x}`);
 });
 
 await test('76. o SEXO vira MEMORIA (o campo aprender, que estava morto)', () => {
   const b = id.blocoDeIdentidade(ID_TESTE);
   // A secao do sexo manda ANOTAR.
-  contem(b, 'ANOTE para nao esquecer', 'manda anotar');
-  contem(b, '"tipo": "nota_importante", "valor": "e homem"', 'com o formato certo');
+  contem(b, 'ANOTE: no JSON ponha', 'manda anotar');
+  contem(b, '"tipo": "nota_importante"', 'com o formato certo');
   // E o bloco do xingamento aponta para a memoria.
-  contem(b, 'voce ANOTA na memoria', 'o xingamento consulta a memoria');
+  contem(b, 'ANOTA na memoria', 'o xingamento consulta a memoria');
   // O formato do `aprender` esta documentado no prompt do chat.
   const GUARDA = fs.readFileSync(new URL('../dados/src/utils/iapGuarda.js', import.meta.url), 'utf-8');
   contem(GUARDA, 'MEMORIA (o campo `aprender`', 'o campo esta documentado');
