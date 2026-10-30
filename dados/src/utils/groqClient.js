@@ -264,19 +264,35 @@ function motivoDaIndisponibilidade(lista = lerChaves()) {
  * A doc e' explicita sobre o SIGNIFICADO (e e' o que resolve o bug):
  *
  *   - `x-ratelimit-remaining-requests` -> SEMPRE a cota do DIA (RPD);
- *   - `x-ratelimit-reset-requests`     -> quando a cota do DIA volta;
+ *   - `x-ratelimit-remaining-tokens`   -> SEMPRE o limite por MINUTO (TPM);
+ *   - `x-ratelimit-reset-requests`     -> quando a cota do DIA (RPD) volta;
+ *   - `x-ratelimit-reset-tokens`       -> quando o limite de tokens (TPM) volta;
  *   - `retry-after`                    -> quantos segundos esperar.
  *
+ * ## Por que o header de TOKENS entrou
+ *
+ * O `remaining-requests` responde sobre REQUISICOES por dia. Quando o que
+ * estourou foram os TOKENS do dia (TPD), esse header continua ALTO — e olhar so'
+ * ele fazia o TPD parecer "limite por minuto". Era o rotulo errado
+ * ("limite por minuto — volta em 4000s"). O `remaining-tokens` e' o par que
+ * faltava.
+ *
  * @param {any} e
- * @returns {{restantes: number|null, resetSegundos: number, retryAfter: number}}
+ * @returns {{restantes: number|null, tokensRestantes: number|null, resetSegundos: number, resetTokensSegundos: number, retryAfter: number}}
  */
 function lerHeadersDeLimite(e) {
   const h = e?.response?.headers || {};
   const pega = (nome) => h[nome] ?? h[nome.toLowerCase()] ?? h[nome.toUpperCase()];
-  const restantes = pega('x-ratelimit-remaining-requests');
+  const num = (v) => {
+    if (v == null || v === '') return null;
+    const n = Number.parseInt(v, 10);
+    return Number.isFinite(n) ? n : null;
+  };
   return {
-    restantes: restantes == null || restantes === '' ? null : Number.parseInt(restantes, 10),
+    restantes: num(pega('x-ratelimit-remaining-requests')),
+    tokensRestantes: num(pega('x-ratelimit-remaining-tokens')),
     resetSegundos: duracaoEmSegundos(pega('x-ratelimit-reset-requests')),
+    resetTokensSegundos: duracaoEmSegundos(pega('x-ratelimit-reset-tokens')),
     retryAfter: duracaoEmSegundos(pega('retry-after'))
   };
 }
@@ -399,36 +415,79 @@ export function classificarErroGroq(e) {
     //    (a chave esta' VIVA). E' a fonte autoritativa — melhor que adivinhar
     //    pelo texto, que muda sem aviso.
     const h = lerHeadersDeLimite(e);
+
+    // ## QUAL dimensao estourou (e' o que decide dia x minuto)
+    //
+    // O `remaining-requests` so' fala de REQUISICOES/DIA. Quando o que estoura
+    // sao os TOKENS do dia (TPD), ele continua ALTO — e olhar so' ele fazia o
+    // TPD parecer "limite por minuto" (o rotulo errado, "volta em 4000s").
+    //
+    // Entao primeiro perguntamos: o erro fala de TOKENS ou de REQUISICOES?
+    //   - TOKENS: quem manda e' o `remaining-tokens` (TPM). Zero = o minuto de
+    //     tokens acabou; > 0 = os TOKENS DO DIA acabaram (TPD) -> 'dia'.
+    //   - REQUISICOES: quem manda e' o `remaining-requests` (RPD). Zero = o dia
+    //     acabou; > 0 = o minuto (RPM) -> 'minuto'.
+    const falaDeTokens = /token/i.test(msg);
     let escopo;
-    if (h.restantes !== null && Number.isFinite(h.restantes)) {
+    if (falaDeTokens) {
+      // O `remaining-tokens` e' do TPM. Com ele em 0 e a espera curta, e' o
+      // MINUTO; com ele > 0 (ou sem o header), o que acabou foi o DIA.
+      if (h.tokensRestantes !== null && h.tokensRestantes <= 0 && h.retryAfter > 0 && h.retryAfter < LIMITE_DIARIO_SEGUNDOS) {
+        escopo = 'minuto';
+      } else if (h.tokensRestantes !== null && h.tokensRestantes > 0) {
+        escopo = 'dia';
+      } else {
+        escopo = h.retryAfter === 0 || h.retryAfter >= LIMITE_DIARIO_SEGUNDOS ? 'dia' : 'minuto';
+      }
+    } else if (h.restantes !== null && Number.isFinite(h.restantes)) {
       escopo = h.restantes <= 0 ? 'dia' : 'minuto';
     } else {
-      // 2) Sem o header: o TEXTO do erro (o Groq diz "per day (RPD)" ou
-      //    "per minute (RPM)").
+      // Sem o header: o TEXTO do erro (o Groq diz "per day (RPD)" ou
+      // "per minute (RPM)").
       const diario = /per\s*day|\(rpd\)|\(tpd\)|daily|requests per day|tokens per day|por\s*dia/i.test(msg);
       const porMinuto = /per\s*minute|\(rpm\)|\(tpm\)|per\s*hour|\(tph\)|por\s*minuto|por\s*hora/i.test(msg);
-      // 3) Sem nem isso: uma espera LONGA (ou desconhecida) inclina para o dia.
+      // Sem nem isso: uma espera LONGA (ou desconhecida) inclina para o dia.
       escopo = (diario || (!porMinuto && (h.retryAfter === 0 || h.retryAfter >= LIMITE_DIARIO_SEGUNDOS)))
         ? 'dia'
         : 'minuto';
     }
-    // QUANDO a cota do dia volta, segundo o proprio Groq. E' melhor que a nossa
-    // meia-noite: a cota e' contada por ORGANIZACAO.
-    const resetEm = (escopo === 'dia' && h.resetSegundos > 0)
-      ? Date.now() + (h.resetSegundos * 1000)
+
+    // O QUE estourou, para o rotulo ser honesto (era sempre "por minuto").
+    // `dia` + tokens = TPD; `dia` + requisicoes = RPD; o resto e' minuto/hora.
+    const limite = escopo === 'dia'
+      ? (falaDeTokens ? 'tpd' : 'rpd')
+      : (falaDeTokens ? 'tpm' : 'rpm');
+
+    // QUANDO a cota do dia volta, segundo o proprio Groq. E' uma JANELA MOVEL:
+    // o valor vem em SEGUNDOS a partir de agora (a doc mostra `2m59.56s` para o
+    // reset do RPD) — NAO e' "meia-noite". Por isso a espera pode ser 4000s.
+    const resetSeg = escopo === 'dia'
+      ? (falaDeTokens ? (h.resetTokensSegundos || h.resetSegundos) : h.resetSegundos)
+      : 0;
+    const resetEm = (escopo === 'dia' && resetSeg > 0)
+      ? Date.now() + (resetSeg * 1000)
       : null;
+
+    const ROTULOS = {
+      rpd: 'a cota DIÁRIA de REQUISIÇÕES desta chave acabou',
+      tpd: 'a cota DIÁRIA de TOKENS desta chave acabou',
+      rpm: 'o limite por MINUTO de requisições foi atingido',
+      tpm: 'o limite por MINUTO de tokens foi atingido'
+    };
     return {
       tipo: 'limite',
       escopo,
+      limite,
       retryAfter: h.retryAfter || (escopo === 'dia' ? 0 : 60),
       resetEm,
+      resetSegundos: resetSeg,
       http,
       detalhe,
-      // As duas mensagens carregam "Limite de requisições" de proposito: o
+      // As mensagens carregam "Limite de requisições" de proposito: o
       // `mensagemErroIA` (index.js) classifica o erro pelo TEXTO da mensagem.
       mensagem: escopo === 'dia'
-        ? 'Limite de requisições do Groq: a cota DIÁRIA desta chave acabou (ela volta no reset do dia).'
-        : 'Limite de requisições do Groq atingido por agora (temporário — volta em instantes).'
+        ? `Limite de requisições do Groq: ${ROTULOS[limite]} (ela volta sozinha — e' uma janela movel, nao a meia-noite).`
+        : `Limite de requisições do Groq: ${ROTULOS[limite]} (temporário — volta em instantes).`
     };
   }
   if (

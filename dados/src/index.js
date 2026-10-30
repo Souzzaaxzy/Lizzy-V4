@@ -26614,10 +26614,13 @@ ${groupPrefix}key sua_chave_gemini
                   const faltaReset = c.resetEmSegundos > 0
                     ? ` (volta em ${formatarDuracaoCurta(c.resetEmSegundos)})`
                     : '';
+                  // O rotulo do castigo era FIXO em "por minuto" — mas um
+                  // limite DIARIO de TOKENS (TPD) tambem cai aqui, com uma
+                  // espera longa. Usar o formatador evita o "volta em 4000s".
                   const obs = c.esgotada
                     ? ` _cota do dia esgotada${faltaReset}_`
                     : (c.emCooldown
-                      ? ` _limite por minuto — volta em ${c.cooldownRestante}s_`
+                      ? ` _limite de requisições — volta em ${formatarDuracaoCurta(c.cooldownRestante)}_`
                       : (c.ativa ? ' _em uso_' : ''));
                   return `${marca} *${c.slot}.* \`${mascarar(c.chave)}\` \`${c.var}\`${obs}`;
                 }).join('\n')
@@ -26629,7 +26632,7 @@ ${groupPrefix}key sua_chave_gemini
             // O castigo de MINUTO e' outra coisa: a chave esta' viva, so' esperando.
             const resumoCastigo = estado.emCooldown.length
               ? `
-⏳ ${estado.emCooldown.length} chave(s) em limite por minuto (voltam sozinhas): *${estado.emCooldown.join(', ')}*`
+⏳ ${estado.emCooldown.length} chave(s) em espera de limite (voltam sozinhas): *${estado.emCooldown.join(', ')}*`
               : '';
             const disponivel = estado.chaves.find((c) => c.ativa);
 

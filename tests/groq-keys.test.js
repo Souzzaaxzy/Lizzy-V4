@@ -849,9 +849,6 @@ await test('47. o painel diz QUANDO a cota do dia volta', () => {
 });
 
 // ---------------------------------------------------------------------------
-console.log('\n' + '='.repeat(60));
-const tot = RESULTS.reduce((a, r) => a + r.passed, 0);
-const fal = RESULTS.reduce((a, r) => a + r.failed, 0);
 // ───────────────────────────────────────────────────────────────────────────
 // O BUG DO DONO: "com varias chaves esgota em 10 minutos; com uma dura horas"
 //
@@ -915,6 +912,58 @@ await test('51. GROQ_KEYS_MULTI_ORG=1 volta a rotacionar (chaves de CONTAS difer
   groq.setGroqHttpForTest(null);
 });
 
+// ───────────────────────────────────────────────────────────────────────────
+// OS 4 LIMITES DO GROQ (o dono viu "limite por minuto — volta em 4000s")
+//
+// O rotulo era FIXO em "por minuto", mas o TPD (TOKENS do dia) tambem caia
+// ali: o `remaining-requests` continua ALTO quando o que estourou sao os
+// tokens, e o bot concluia "nao e o dia, logo e' o minuto".
+// ───────────────────────────────────────────────────────────────────────────
+const erro429 = (msg, headers) => {
+  const e = new Error('429');
+  e.response = { status: 429, headers, data: { error: { message: msg } } };
+  return e;
+};
+
+await test('52. os 4 limites do Groq sao classificados pelo nome certo', () => {
+  const rpm = groq.classificarErroGroq(erro429(
+    'Rate limit reached on requests per minute (RPM): Limit 30',
+    { 'x-ratelimit-remaining-requests': '950', 'x-ratelimit-reset-requests': '2m59s', 'retry-after': '20' }));
+  ok(rpm.escopo === 'minuto' && rpm.limite === 'rpm', `RPM (veio ${rpm.escopo}/${rpm.limite})`);
+
+  const rpd = groq.classificarErroGroq(erro429(
+    'Rate limit reached on requests per day (RPD): Limit 1000',
+    { 'x-ratelimit-remaining-requests': '0', 'x-ratelimit-reset-requests': '3600s', 'retry-after': '3600' }));
+  ok(rpd.escopo === 'dia' && rpd.limite === 'rpd', `RPD (veio ${rpd.escopo}/${rpd.limite})`);
+
+  const tpm = groq.classificarErroGroq(erro429(
+    'Rate limit reached on tokens per minute (TPM): Limit 8000',
+    { 'x-ratelimit-remaining-requests': '900', 'x-ratelimit-remaining-tokens': '0', 'x-ratelimit-reset-tokens': '30s', 'retry-after': '30' }));
+  ok(tpm.escopo === 'minuto' && tpm.limite === 'tpm', `TPM (veio ${tpm.escopo}/${tpm.limite})`);
+});
+
+await test('53. TPD (TOKENS do dia) NAO e tratado como "por minuto" (o bug)', () => {
+  // O caso do dono: retry de 4000s com o `remaining-requests` AINDA alto.
+  const tpd = groq.classificarErroGroq(erro429(
+    'Rate limit reached on tokens per day (TPD): Limit 200000',
+    { 'x-ratelimit-remaining-requests': '900', 'x-ratelimit-remaining-tokens': '4000', 'x-ratelimit-reset-tokens': '4000s', 'retry-after': '4000' }));
+  ok(tpd.escopo === 'dia', `o TPD e' do DIA (veio ${tpd.escopo})`);
+  ok(tpd.limite === 'tpd', `e o rotulo diz TOKENS (veio ${tpd.limite})`);
+  ok(tpd.resetEm > 0, 'tem um reset (o dia volta)');
+  ok(/TOKENS/.test(tpd.mensagem), `a mensagem fala de tokens (${tpd.mensagem.slice(0, 60)})`);
+  ok(!/por agora|instantes/.test(tpd.mensagem), 'e NAO diz "temporario/instantes"');
+});
+
+await test('54. a mensagem explica que o reset e JANELA MOVEL (nao meia-noite)', () => {
+  const rpd = groq.classificarErroGroq(erro429(
+    'Rate limit reached on requests per day (RPD): Limit 1000',
+    { 'x-ratelimit-remaining-requests': '0', 'x-ratelimit-reset-requests': '4000s', 'retry-after': '4000' }));
+  ok(/janela movel|janela móvel/i.test(rpd.mensagem), `explica a janela (${rpd.mensagem.slice(0, 80)})`);
+  ok(rpd.resetSegundos === 4000, `traz os segundos do reset (veio ${rpd.resetSegundos})`);
+});
+
+const tot = RESULTS.reduce((a, r) => a + r.passed, 0);
+const fal = RESULTS.reduce((a, r) => a + r.failed, 0);
 console.log(`RESULTADO: ${RESULTS.length} testes | ${tot} asserções ok | ${fal} falhas`);
 console.log('='.repeat(60));
 process.exit(fal ? 1 : 0);
