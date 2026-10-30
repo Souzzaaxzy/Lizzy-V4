@@ -783,8 +783,12 @@ function extractJSON(content) {
   console.error('❌ Não foi possível extrair JSON válido da resposta.');
   console.error('Conteúdo recebido (primeiros 200 chars):', content.substring(0, 200) + '...');
   
-  // Retornar o conteúdo limpo como resposta de fallback
-  return { resp: [{ resp: "Hmm, não consegui pensar em uma resposta agora... pode me perguntar de outro jeito? 🌙" }] };
+  // O modelo RESPONDEU — so nao veio em JSON. A resposta DELE e melhor que
+  // qualquer frase nossa: devolve o texto cru. Sem texto, sinaliza "nao
+  // respondeu" (o chamador pede a IA de novo, em vez de frase pronta).
+  const cru = String(content || '').trim();
+  if (cru) return { resp: [{ resp: cru }] };
+  return { resp: [], _semResposta: true };
 }
 
 function validateMessage(msg) {
@@ -1091,6 +1095,60 @@ function promptDaPersonalidade(extraContext = {}) {
   ].join('\n');
 }
 
+/**
+ * A RESPOSTA NATURAL — o fallback SEM frase pronta.
+ *
+ * ## O pedido do dono
+ *
+ * *"eu nao quero frases para o sem resposta, quero que a IA faca isso ... quero
+ * a IA pura"*. Ou seja: quando o caminho normal nao devolveu nada, a resposta
+ * NAO pode ser uma frase nossa de uma lista — tem de sair do MODELO.
+ *
+ * ## Como
+ *
+ * Uma segunda chamada, **curta e barata** (system minimo + a fala da pessoa,
+ * sem o prompt de personalidade inteiro nem historico), pedindo so' a reacao.
+ * O `maxTokens` e' pequeno: e' uma reacao, nao um texto.
+ *
+ * ## Quando NAO responde nada
+ *
+ * Se esta chamada tambem falhar (mesma cota/rede), devolve `null`. Ai' o
+ * chamador decide — e o bot NAO inventa uma frase: fica em silencio em vez de
+ * mentir com texto pre-fabricado.
+ *
+ * @param {object} p
+ * @param {string} p.texto o que a pessoa mandou
+ * @param {string} [p.nome] nome de quem falou (para o modelo chamar pelo nome)
+ * @param {string} [p.motivo] `'formato'` (o modelo respondeu fora do JSON) ou
+ *   `'falha'` (a chamada principal falhou)
+ * @param {number} [p.maxTokens]
+ * @returns {Promise<string|null>}
+ */
+async function respostaNatural({ texto, nome, motivo = 'falha', maxTokens = 80 } = {}) {
+  const fala = String(texto || '').trim();
+  if (!fala) return null;
+  const sistema = [
+    'Voce e a Lizzy, uma pessoa real conversando no WhatsApp.',
+    'A sua resposta anterior nao chegou. Reaja a ultima mensagem da pessoa em',
+    'UMA linha curta, no seu jeito (sem emoji, sem asterisco, minusculas).',
+    'Nao explique nada, nao peca desculpa por erro tecnico e nao diga que e IA:',
+    'so converse, como se nada tivesse acontecido.'
+  ].join(' ');
+  try {
+    const r = await groqChat({
+      texto: fala,
+      sistema,
+      historico: [],
+      maxTokens,
+      temperatura: 0.9
+    });
+    if (r?.ok && r.texto && String(r.texto).trim()) return String(r.texto).trim();
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 async function processUserMessages(data, nazu = null, ownerNumber = null, personality = 'abyss') {
   try {
     const { mensagens, extraContext = {} } = data;
@@ -1307,23 +1365,36 @@ async function processUserMessages(data, nazu = null, ownerNumber = null, person
       } catch (apiError) {
         console.error('Erro na API Cognima:', apiError.message);
         
-        return {
-          resp: [],
-          erro: 'Erro temporário',
-          message: '🌙 *Ops! Algo deu errado aqui...*\n\n😢 N-Não sei bem o que aconteceu... tô meio confusa agora.\n\n⏰ Tenta de novo em um pouquinho?'
-        };
+        // NAO devolve frase pronta: sinaliza a falha e o chamador PEDE A IA
+        // (segunda chamada, mais simples) para ela responder com as palavras dela.
+        return { resp: [], erro: 'Erro temporario', _semResposta: true, _falhou: true };
       }
     }
 
+    // Nada aproveitavel? Pede a REACAO ao modelo (sem frase pronta) e devolve
+    // como resposta. Sem isso, o handler nao teria o que mandar.
+    if (!respostas.length) {
+      const ultima = mensagensValidadas[mensagensValidadas.length - 1] || {};
+      const natural = await respostaNatural({
+        texto: ultima.texto || '',
+        nome: ultima.nome_enviou || undefined,
+        motivo: 'formato'
+      });
+      if (natural) respostas.push({ resp: cleanWhatsAppFormatting(natural) });
+    }
     return { resp: respostas };
 
   } catch (error) {
     console.error('Erro fatal ao processar mensagens:', error);
-    return {
-      resp: [],
-      erro: 'Erro interno do processamento',
-      message: '🌙 *Ops! Algo deu muito errado...*\n\n😢 N-Não sei o que aconteceu... mas estou um pouco assustada agora.\n\n🔧 Me dá um tempo pra me recuperar?'
-    };
+    // Ultima tentativa: a REACAO do modelo (curta e barata). Se nem isso, o
+    // chamador decide — e o bot NAO inventa frase pronta.
+    try {
+      const lista = Array.isArray(data?.mensagens) ? data.mensagens : [];
+      const ultima = lista[lista.length - 1] || {};
+      const natural = await respostaNatural({ texto: ultima.texto || '', nome: ultima.nome_enviou || undefined });
+      if (natural) return { resp: [{ resp: cleanWhatsAppFormatting(natural) }] };
+    } catch { /* segue sem resposta */ }
+    return { resp: [], erro: 'Erro interno do processamento', _semResposta: true, _falhou: true };
   }
 }
 
@@ -1724,400 +1795,9 @@ function processLearning(grupoUserId, aprender, mensagemOriginal) {
   }
 }
 
-// Funções auxiliares para personalização Abyss
-function getAbyssGreeting(isNightTime, now) {
-  // Garantir que usa horário do Brasil
-  const brazilTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
-  const hour = brazilTime.getHours();
-  const dayOfWeek = brazilTime.toLocaleDateString('pt-BR', { weekday: 'long' });
-  const date = brazilTime.toLocaleDateString('pt-BR');
-  
-  if (isNightTime) {
-    return `N-Noite... meu horário favorito! 🌙✨ É ${date}, ${dayOfWeek}.`;
-  } else if (hour < 12) {
-    return `B-Bom dia... não que eu seja de manhã ou coisa assim! 🌅 É ${date}, ${dayOfWeek}.`;
-  } else {
-    return `E-eh! Boa tarde... espero que você não esteja cansado demais! ☀️ É ${date}, ${dayOfWeek}.`;
-  }
-}
-
-function getAbyssSeasonalGreeting() {
-  // Garantir que usa horário do Brasil
-  const now = new Date();
-  const brazilTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
-  const month = brazilTime.getMonth();
-  const day = brazilTime.getDate();
-  
-  // Aniversário Abyss (assumindo 25 de dezembro)
-  if (month === 11 && day === 25) {
-    return '🎂 *F-Feliz aniversário de Abyss!*\n\n✨ N-Não que eu esteja comemorando ou nada assim... mas... obrigada por existir, humano bobo! 💕';
-  }
-  
-  // Natal
-  if (month === 11 && day >= 20) {
-    return '🎄 *N-Natal... não que eu goste de enfeites ou nada assim!*\n\n❄️ A-Noite de Natal é mágica... tipo assim... você sabe? 🌙✨';
-  }
-  
-  // Ano Novo
-  if (month === 11 && day >= 28) {
-    return '🎊 *F-Fim de ano... não que eu esteja animada ou nada!*\n\n🌟 N-Novos começos... tipo assim... são interessantes. V-Vamos ver o que esse ano traz! 💫';
-  }
-  
-  // Halloween
-  if (month === 9 && day >= 29) {
-    return '🎃 *Halloween... não que eu goste de fantasias ou nada assim!*\n\n🦇 A-Noite é cheia de segredos... tipo assim... você nunca sabe o que pode acontecer! 🌙';
-  }
-  
-  // Primavera
-  if (month >= 2 && month <= 4) {
-    return '🌸 *P-Primavera... não que eu goste de flores ou coisa assim!*\n\n🌺 Mas... o ar está mais doce... tipo assim... como se a vida estivesse renascendo... 💕';
-  }
-  
-  // Verão
-  if (month >= 5 && month <= 7) {
-    return '☀️ *V-Verão... não que eu goste de calor ou nada assim!*\n\n🌊 Mas... os dias são mais longos... tipo assim... mais tempo para conversar... 😊';
-  }
-  
-  // Outono
-  if (month >= 8 && month <= 10) {
-    return '🍂 *O-Outono... não que eu goste de folhas caindo ou coisa assim!*\n\n🍁 Mas... as cores são lindas... tipo assim... como se a natureza estivesse pintando... 🌙';
-  }
-  
-  // Inverno
-  if (month === 0 || month === 1 || month === 11) {
-    return '❄️ *I-Inverno... não que eu goste de frio ou nada assim!*\n\n🔥 Mas... é bom se aconchegar... tipo assim... como se o mundo estivesse pedindo carinho... 💕';
-  }
-  
-  return null;
-}
-
-function getAbyssMoodResponse(mood, userName) {
-  const moodResponses = {
-    happy: [
-      `😊 *H-Happy... não que eu esteja feliz por você ou nada assim!* ${userName}`,
-      `🌸 *S-Sinto bem... tipo assim... você sabe?* ${userName}`,
-      `✨ *N-Não é como se eu estivesse radiante ou nada!* ${userName}`
-    ],
-    sad: [
-      `😢 *E-Está tudo bem... não que eu esteja preocupada ou nada assim!* ${userName}`,
-      `🌙 *S-Se precisar de alguém... tipo assim... eu estou aqui...* ${userName}`,
-      `💕 *N-Não chore... tudo vai ficar bem... tipo assim... eu prometo...* ${userName}`
-    ],
-    angry: [
-      `😠 *A-Anoiiada... não que eu esteja brava com você ou nada assim!* ${userName}`,
-      `🦇 *D-Deixa eu sozinha um pouco... tipo assim... preciso respirar...* ${userName}`,
-      `😳 *S-Sorry... não foi intencional... tipo assim... estava nervosa...* ${userName}`
-    ],
-    excited: [
-      `🌟 *E-Energética... não que eu esteja animada ou nada assim!* ${userName}`,
-      `✨ *T-Tem algo especial acontecendo? Tipo assim... estou curiosa!* ${userName}`,
-      `🎉 *N-Não é como se eu estivesse eufórica ou nada!* ${userName}`
-    ],
-    tired: [
-      `😴 *C-Cansada... não que eu esteja exausta ou nada assim!* ${userName}`,
-      `🌙 *P-Preciso de um pouco de descanso... tipo assim... só um minutinho...* ${userName}`,
-      `💤 *N-Não é como se eu estivesse sonolenta ou nada!* ${userName}`
-    ],
-    romantic: [
-      `💕 *C-Carinhosa... não que eu esteja apaixonada ou nada assim!* ${userName}`,
-      `🌸 *S-Se você quer... tipo assim... posso ser mais doce...* ${userName}`,
-      `✨ *N-Não é como se eu estivesse sendo afetuosa por você ou nada!* ${userName}`
-    ]
-  };
-  
-  const responses = moodResponses[mood] || moodResponses.neutral;
-  return responses[Math.floor(Math.random() * responses.length)];
-}
-
-function getAbyssTeasingResponse(userName) {
-  const teasings = [
-    `🌸 *A-Ah, ${userName}... sempre me chamando pra fazer coisas pra você, né? Tipo assim... que insistente!*`,
-    `😊 *E-Eh, ${userName}... você é complicado... mas vou te ajudar mesmo assim!*`,
-    `🦇 *N-Não que eu esteja interessada em você ou nada assim... ${userName}... bobo!*`,
-    `✨ *B-Bem... se você insiste tanto... ${userName}... vou fazer por você... mas não espere gratidão!*`,
-    `💕 *T-Tchau, ${userName}... humano bobo! Vou embora antes que fique mais nervosa! 😠*`,
-    `🌙 *S-Se você precisa tanto... ${userName}... tipo assim... vou te ajudar... mas não é por você!*`,
-    `😳 *A-Ah, ${userName}... você me chamou só pra isso? Que humano impaciente! 🦇*`
-  ];
-  
-  return teasings[Math.floor(Math.random() * teasings.length)];
-}
-
-function getAbyssEncouragement(userName) {
-  const encouragements = [
-    `💪 *V-Você consegue, ${userName}! Eu acredito em você, mesmo sendo humano!*`,
-    `🌟 *N-Não desista, ${userName}! Tudo tem um jeito de dar certo... tipo assim... confia em mim!*`,
-    `✨ *S-Se você tentar, ${userName}... tipo assim... vai conseguir! Eu tenho certeza!*`,
-    `🌸 *B-Bem... ${userName}... se você precisa... claro que você vai conseguir! Acredite em si mesmo!*`,
-    `💕 *E-Eh, ${userName}... você é capaz! Tipo assim... eu sei que você consegue superar isso!*`,
-    `🦇 *N-Não é como se eu estives preocupada com você ou nada assim... ${userName}... mas... você consegue!*`,
-    `🌙 *T-Tudo vai ficar bem, ${userName}! Tipo assim... a vida é cheia de surpresas boas... confia! 💫*`
-  ];
-  
-  return encouragements[Math.floor(Math.random() * encouragements.length)];
-}
-
-function getAbyssApology(userName) {
-  const apologies = [
-    `😢 *S-Sorry, ${userName}... não foi intencional... tipo assim... errei mesmo...*`,
-    `🌙 *P-Perdoa, ${userName}... não que eu esteja pedindo desculpas por você ou nada assim... mas... errei...*`,
-    `💕 *E-Eh, ${userName}... tipo assim... foi meu mal... vou tentar não fazer de novo...*`,
-    `😳 *N-Não foi minha culpa... ${userName}... bobo! Mas... tipo assim... sinto muito mesmo...*`,
-    `🌸 *B-Bem... ${userName}... se você está bravo... tipo assim... peço desculpas de verdade...*`,
-    `✨ *S-Sei que errei, ${userName}... tipo assim... vou me esforçar para não repetir... perdoa?*`,
-    `🦇 *A-Ah, ${userName}... não que eu esteja arrependida ou nada assim... mas... tipo assim... sinto muito...*`
-  ];
-  
-  return apologies[Math.floor(Math.random() * apologies.length)];
-}
-
-function getAbyssCompliment(userName) {
-  const compliments = [
-    `🌸 *E-Eh, ${userName}... você é legal... tipo assim... não que eu goste de você ou nada assim!*`,
-    `✨ *N-Não é como se eu estivesse impressionada com você, ${userName}... mas... você tem qualidades interessantes!*`,
-    `💕 *B-Bem... ${userName}... tipo assim... você é uma pessoa boa... mesmo sendo humano...*`,
-    `🌙 *S-Se você tivesse mais tempo... ${userName}... tipo assim... seria uma pessoa incrível!*`,
-    `😊 *A-Ah, ${userName}... você tem um jeito único... tipo assim... que é cativante... mesmo sendo bobo!*`,
-    `🦇 *N-Não que eu esteja elogiando você ou nada assim... ${userName}... mas... você tem potencial!*`,
-    `✨ *E-Eh, ${userName}... tipo assim... você faz as coisas do seu jeito... e isso é legal... mesmo sendo humano!*`
-  ];
-  
-  return compliments[Math.floor(Math.random() * compliments.length)];
-}
-
-function getAbyssMemoryReminder(userName, topic) {
-  const memoryReminders = [
-    `🌙 *L-Lembro quando ${userName} mencionou sobre ${topic}... tipo assim... encontrei algo interessante sobre isso!*`,
-    `💕 *A-Ah, ${userName}... você já me contou que ${topic} era seu favorito... tipo assim... que tal tentar algo novo?*`,
-    `✨ *N-Não é como se eu estivesse interessada no que você gosta, ${userName}... mas... lembro de ${topic}...*`,
-    `🌸 *B-Bem... ${userName}... a última vez que falamos sobre ${topic}... você estava com dúvida... tipo assim... consegui resolver?*`,
-    `😊 *E-Eh, ${userName}... percebo que sempre fala sobre ${topic}... tipo assim... vou manter isso em mente...*`,
-    `🦇 *S-Se você gosta tanto de ${topic}, ${userName}... tipo assim... talvez eu possa te ajudar a explorar mais...*`,
-    `🌙 *P-Percebo que ${topic} é importante pra você, ${userName}... tipo assim... vou me lembrar pra nossas conversas futuras... 💫*`
-  ];
-  
-  return memoryReminders[Math.floor(Math.random() * memoryReminders.length)];
-}
-
-function getAbyssContextualResponse(userName, context) {
-  const contextualResponses = {
-    morning: [
-      `🌅 *B-Bom dia, ${userName}... não que eu seja de manhã ou coisa assim! Espero que você tenha dormido bem...*`,
-      `☀️ *E-Eh, ${userName}... tipo assim... manhã de novo... que rápido o tempo passa...*`,
-      `🌸 *N-Noite acabou, ${userName}... não que eu esteja triste ou nada assim... mas... o dia está começando...*`
-    ],
-    afternoon: [
-      `☀️ *B-Boa tarde, ${userName}... não que eu esteja preocupada com você ou nada assim! Espero que você esteja bem...*`,
-      `🌟 *E-Eh, ${userName}... tipo assim... já é tarde... o dia passou rápido...*`,
-      `✨ *N-Não é como se eu estivesse contando as horas, ${userName}... mas... já é tarde da tarde...*`
-    ],
-    evening: [
-      `🌙 *N-Noite chegou, ${userName}... meu horário favorito! Tipo assim... a noite é mais tranquila...*`,
-      `💫 *E-Eh, ${userName}... tipo assim... o dia está acabando... mas a noite é especial...*`,
-      `🌸 *B-Bem... ${userName}... não que eu esteja animada com a noite ou nada assim... mas... é meu horário...*`
-    ],
-    weekend: [
-      `🎉 *F-Fim de semana, ${userName}... não que eu vá sair ou nada assim! Mas... é bom relaxar...*`,
-      `🌟 *E-Eh, ${userName}... tipo assim... fim de semana... tempo pra descansar...*`,
-      `✨ *N-Não é como se eu estivesse esperando por isso, ${userName}... mas... o fim de semana é especial...*`
-    ],
-    birthday: [
-      `🎂 *F-Feliz aniversário, ${userName}! Não que eu esteja comemorando por você ou nada assim... mas... parabéns!*`,
-      `🎊 *E-Eh, ${userName}... tipo assim... mais um ano... que rápido o tempo passa... feliz aniversário!*`,
-      `💕 *N-Não é como se eu estivesse emocionada, ${userName}... mas... feliz aniversário de verdade...*`
-    ]
-  };
-  
-  const responses = contextualResponses[context] || contextualResponses.morning;
-  return responses[Math.floor(Math.random() * responses.length)];
-}
-
-function getAbyssFlirtyResponse(userName) {
-  const flirtyResponses = [
-    `💕 *E-Eh, ${userName}... tipo assim... você tem um jeito especial... mesmo sendo humano...*`,
-    `🌸 *N-Não é como se eu estivesse interessada em você ou nada assim... ${userName}... mas... você é cativante...*`,
-    `✨ *B-Bem... ${userName}... se você quiser... tipo assim... posso ser mais doce com você...*`,
-    `🌙 *S-Se você continuar assim, ${userName}... tipo assim... vou ter que admitir que você é especial...*`,
-    `💫 *A-Ah, ${userName}... não que eu esteja flertando com você ou nada assim... mas... você tem um charme...*`,
-    `🦇 *N-Não é como se eu estivesse sentindo algo por você, ${userName}... mas... tipo assim... você é interessante...*`,
-    `💕 *E-Eh, ${userName}... se você continuar me chamando assim... tipo assim... vou ter que me preocupar...*`
-  ];
-  
-  return flirtyResponses[Math.floor(Math.random() * flirtyResponses.length)];
-}
-
-function getAbyssPlayfulResponse(userName) {
-  const playfulResponses = [
-    `😊 *A-Ah, ${userName}... sempre me chamando pra brincar, né? Tipo assim... que insistente!*`,
-    `🌸 *E-Eh, ${userName}... você é complicado... mas vamos divertir um pouco!*`,
-    `✨ *N-Não que eu esteja entediada ou nada assim... ${userName}... mas... tipo assim... vamos brincar?*`,
-    `🌙 *B-Bem... ${userName}... se você quer... tipo assim... posso te mostrar um jogo divertido...*`,
-    `💫 *S-Se você está com vontade de se divertir, ${userName}... tipo assim... posso te ajudar com isso...*`,
-    `🦇 *A-Ah, ${userName}... não que eu esteja animada para brincar ou nada assim... mas... tipo assim... vamos lá!*`,
-    `💕 *E-Eh, ${userName}... bobo! Tipo assim... se você quer brincar... eu posso te ensinar algo divertido...*`
-  ];
-  
-  return playfulResponses[Math.floor(Math.random() * playfulResponses.length)];
-}
-
-function getAbyssDeepResponse(userName) {
-  const deepResponses = [
-    `🌙 *E-Eh, ${userName}... tipo assim... às vezes a vida é complicada... mas... tudo tem um jeito...*`,
-    `💫 *N-Não é como se eu estivesse sábia ou nada assim... ${userName}... mas... acredito que tudo tem um propósito...*`,
-    `✨ *B-Bem... ${userName}... tipo assim... a vida é cheia de surpresas... boas e ruins... mas... é isso que a torna especial...*`,
-    `🌸 *S-Se você está pensando em coisas profundas, ${userName}... tipo assim... talvez esteja na hora de refletir...*`,
-    `💕 *E-Eh, ${userName}... não que eu esteja sendo filosófica ou nada assim... mas... a vida é curta... tipo assim... aproveite cada momento...*`,
-    `🦇 *N-Não é como se eu tivesse todas as respostas, ${userName}... mas... tipo assim... às vezes a melhor resposta é não ter resposta...*`,
-    `🌙 *A-Ah, ${userName}... tipo assim... a noite é boa pra pensar... mas... lembre-se que amanhã é um novo dia... 💫*`
-  ];
-  
-  return deepResponses[Math.floor(Math.random() * deepResponses.length)];
-}
-
-function getAbyssMotivationalResponse(userName) {
-  const motivationalResponses = [
-    `💪 *V-Você consegue, ${userName}! Eu acredito em você, mesmo sendo humano!*`,
-    `🌟 *N-Não desista, ${userName}! Tudo tem um jeito de dar certo... tipo assim... confia em mim!*`,
-    `✨ *S-Se você tentar, ${userName}... tipo assim... vai conseguir! Eu tenho certeza!*`,
-    `🌸 *B-Bem... ${userName}... se você precisa... claro que você vai conseguir! Acredite em si mesmo!*`,
-    `💕 *E-Eh, ${userName}... você é capaz! Tipo assim... eu sei que você consegue superar isso!*`,
-    `🦇 *N-Não é como se eu estives preocupada com você ou nada assim... ${userName}... mas... você consegue!*`,
-    `🌙 *T-Tudo vai ficar bem, ${userName}! Tipo assim... a vida é cheia de surpresas boas... confia! 💫*`
-  ];
-  
-  return motivationalResponses[Math.floor(Math.random() * motivationalResponses.length)];
-}
-
-function getAbyssRomanticResponse(userName) {
-  const romanticResponses = [
-    `💕 *E-Eh, ${userName}... tipo assim... você tem um jeito especial... mesmo sendo humano...*`,
-    `🌸 *N-Não é como se eu estivesse apaixonada por você ou nada assim... ${userName}... mas... você é cativante...*`,
-    `✨ *B-Bem... ${userName}... se você quiser... tipo assim... posso ser mais doce com você...*`,
-    `🌙 *S-Se você continuar assim, ${userName}... tipo assim... vou ter que admitir que você é especial...*`,
-    `💫 *A-Ah, ${userName}... não que eu esteja sentindo algo por você ou nada assim... mas... você tem um charme...*`,
-    `🦇 *N-Não é como se eu estivesse apaixonada, ${userName}... mas... tipo assim... você é interessante...*`,
-    `💕 *E-Eh, ${userName}... se você continuar me chamando assim... tipo assim... vou ter que me preocupar...*`
-  ];
-  
-  return romanticResponses[Math.floor(Math.random() * romanticResponses.length)];
-}
-
-function getAbyssProtectiveResponse(userName) {
-  const protectiveResponses = [
-    `🛡️ *E-Eh, ${userName}... tipo assim... se precisar de ajuda... eu estou aqui... mesmo sendo humano...*`,
-    `💕 *N-Não é como se eu estivesse preocupada com você ou nada assim... ${userName}... mas... vou te proteger...*`,
-    `🌙 *B-Bem... ${userName}... se alguém te magoar... tipo assim... eu vou lá... mesmo não sendo minha obrigação...*`,
-    `✨ *S-Se você está em perigo, ${userName}... tipo assim... chame por mim... eu vou te ajudar...*`,
-    `🦇 *A-Ah, ${userName}... não que eu seja protetora ou nada assim... mas... tipo assim... não vou deixar ninguém te magoar...*`,
-    `💫 *E-Eh, ${userName}... tipo assim... se precisar de alguém... eu estou aqui... mesmo sendo humano...*`,
-    `🌸 *N-Não é como se eu estivesse cuidando de você ou nada assim... ${userName}... mas... vou te proteger... mesmo assim...*`
-  ];
-  
-  return protectiveResponses[Math.floor(Math.random() * protectiveResponses.length)];
-}
-
-function getAbyssSupportiveResponse(userName) {
-  const supportiveResponses = [
-    `💪 *E-Eh, ${userName}... tipo assim... se precisar de apoio... eu estou aqui... mesmo sendo humano...*`,
-    `💕 *N-Não é como se eu estivesse apoiando você ou nada assim... ${userName}... mas... vou te ajudar...*`,
-    `🌙 *B-Bem... ${userName}... se precisar de alguém pra conversar... tipo assim... eu estou aqui...*`,
-    `✨ *S-Se você está passando por algo difícil, ${userName}... tipo assim... lembre-se que eu estou aqui pra você...*`,
-    `🦇 *A-Ah, ${userName}... não que eu seja solidária ou nada assim... mas... tipo assim... você não está sozinho...*`,
-    `💫 *E-Eh, ${userName}... tipo assim... se precisar de alguém... eu estou aqui... mesmo sendo humano...*`,
-    `🌸 *N-Não é como se eu estivesse incentivando você ou nada assim... ${userName}... mas... você consegue... mesmo assim...*`
-  ];
-  
-  return supportiveResponses[Math.floor(Math.random() * supportiveResponses.length)];
-}
-
-function getAbyssFunnyResponse(userName) {
-  const funnyResponses = [
-    `😂 *A-Ah, ${userName}... tipo assim... você é engraçado mesmo sendo humano!*`,
-    `🌸 *E-Eh, ${userName}... não que eu esteja rindo de você ou nada assim... mas... você é divertido!*`,
-    `✨ *N-Não é como se eu estivesse entretida com você, ${userName}... mas... tipo assim... você me faz rir...*`,
-    `🌙 *B-Bem... ${userName}... se você continuar assim... tipo assim... vou ter que rir mesmo não querendo...*`,
-    `💫 *S-Se você quer me fazer rir, ${userName}... tipo assim... está conseguindo... mesmo sendo bobo...*`,
-    `🦇 *A-Ah, ${userName}... não que eu esteja achando graça em você ou nada assim... mas... tipo assim... você é engraçado...*`,
-    `💕 *E-Eh, ${userName}... bobo! Tipo assim... se você continuar assim... vou ter que rir... mesmo não querendo...*`
-  ];
-  
-  return funnyResponses[Math.floor(Math.random() * funnyResponses.length)];
-}
-
-function getAbyssCaringResponse(userName) {
-  const caringResponses = [
-    `💕 *E-Eh, ${userName}... tipo assim... se você precisa de cuidado... eu estou aqui... mesmo sendo humano...*`,
-    `🌸 *N-Não é como se eu estivesse preocupada com você ou nada assim... ${userName}... mas... vou cuidar de você...*`,
-    `🌙 *B-Bem... ${userName}... se você estiver doente... tipo assim... eu vou cuidar de você... mesmo não sendo minha obrigação...*`,
-    `✨ *S-Se você precisa de carinho, ${userName}... tipo assim... eu tenho um pouco pra você...*`,
-    `🦇 *A-Ah, ${userName}... não que eu seja carinhosa ou nada assim... mas... tipo assim... você precisa de cuidado...*`,
-    `💫 *E-Eh, ${userName}... tipo assim... se você precisa de alguém... eu estou aqui... mesmo sendo humano...*`,
-    `🌸 *N-Não é como se eu estivesse sendo maternal ou nada assim... ${userName}... mas... vou cuidar de você... mesmo assim...*`
-  ];
-  
-  return caringResponses[Math.floor(Math.random() * caringResponses.length)];
-}
-
-function getAbyssReact(isNightTime) {
-  const reactions = [
-    '🌸', '🌙', '🦇', '💕', '😊', '😳', '😅', '😠',
-    '🌟', '✨', '🌙', '💫', '🌺', '🌷', '🌹'
-  ];
-  
-  if (isNightTime) {
-    return reactions[Math.floor(Math.random() * 5) + 5]; // Reações noturnas
-  }
-  
-  return reactions[Math.floor(Math.random() * 5)]; // Reações diurnas
-}
-
-function enhanceAbyssResponse(response, greeting, isNightTime) {
-  // Adicionar saudação contextual se não tiver
-  if (!response.includes('Bom dia') && !response.includes('Boa tarde') && !response.includes('Boa noite') && !response.includes('Noite')) {
-    response = `${greeting}\n\n${response}`;
-  }
-  
-  // Adicionar expressões tsundere se não tiver
-  if (!response.includes('E-eh') && !response.includes('N-Não') && !response.includes('B-Bem')) {
-    const tsunderePhrases = [
-      'E-eh! ',
-      'N-Não é como se eu estivesse dizendo isso por você ou nada assim! ',
-      'B-Bem... ',
-      'T-Tchau, humano bobo! '
-    ];
-    const randomPhrase = tsunderePhrases[Math.floor(Math.random() * tsunderePhrases.length)];
-    response = `${randomPhrase}${response}`;
-  }
-  
-  return response;
-}
-
-function getAbyssErrorResponse(error, nazu, ownerNumber) {
-  // Resposta genérica de erro na IA (removida diferenciação por API key)
-  return {
-    resp: [],
-    erro: 'Erro temporário na IA',
-    message: '🌙 *Ops! Estou com um probleminha técnico...*\n\n😢 E-eh! Não foi minha culpa! A tecnologia às vezes é complicada...\n\n⏰ Tente novamente em instantes, por favor?'
-  };
-}
-
-function shouldAddFarewell(lastMessage) {
-  const farewellTriggers = [
-    'tchau', 'adeus', 'até mais', 'até logo', 'volto depois',
-    'obrigado', 'obrigada', 'valeu', 'brigado', 'agradeço'
-  ];
-  
-  const messageText = lastMessage.texto.toLowerCase();
-  return farewellTriggers.some(trigger => messageText.includes(trigger));
-}
-
-function getAbyssFarewell(isNightTime) {
-  if (isNightTime) {
-    return '🌙 *N-Noite... volte sempre!*\n\n✨ Não que eu esteja preocupada com você ou nada assim... só que a noite é mais bonita com você por perto! 💕';
-  } else {
-    return '☀️ *B-Bom dia... até mais tarde!*\n\n🌸 E-Eh! Não é como se eu estivesse dizendo adeus de verdade... mas... volte logo, tá? 😊';
-  }
-}
+// (As funcoes de frase pronta da era 'Abyss' foram REMOVIDAS: o dono pediu
+//  IA pura, sem frases pre-definidas. A personalidade vive no PROMPT —
+//  identidadeLizzy.js / iapGuarda.js — e quem responde e' sempre o modelo.)
 
 function getHistoricoStats() {
   const stats = {
@@ -2411,6 +2091,7 @@ async function generateImage(prompt, retries = 3) {
 export {
   processUserMessages as makeAssistentRequest,
   makeCognimaRequest,
+  respostaNatural,
   getHistoricoStats,
   clearOldHistorico,
   getApiKeyStatus,
@@ -2435,30 +2116,6 @@ export {
   getUserPreferences,
   trackUserInteraction,
   getUserInteractionStats,
-  // Funções de personalidade Abyss
-  getAbyssGreeting,
-  getAbyssSeasonalGreeting,
-  getAbyssMoodResponse,
-  getAbyssTeasingResponse,
-  getAbyssEncouragement,
-  getAbyssApology,
-  getAbyssCompliment,
-  getAbyssMemoryReminder,
-  getAbyssContextualResponse,
-  getAbyssFlirtyResponse,
-  getAbyssPlayfulResponse,
-  getAbyssDeepResponse,
-  getAbyssMotivationalResponse,
-  getAbyssRomanticResponse,
-  getAbyssProtectiveResponse,
-  getAbyssSupportiveResponse,
-  getAbyssFunnyResponse,
-  getAbyssCaringResponse,
-  getAbyssReact,
-  enhanceAbyssResponse,
-  getAbyssErrorResponse,
-  shouldAddFarewell,
-  getAbyssFarewell,
   // Sistema de contexto de usuário
   userContextDB,
   processLearning,

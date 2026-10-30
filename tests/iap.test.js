@@ -681,8 +681,14 @@ await test('ligarIap: o agente RECEBE o ehAutorizado (o fio que faltava)', async
     aoOuvirAudioDaCall: async () => true,
     falarNaCallDoGrupo: async () => 0
   });
+  // O mock distingue a chamada PRINCIPAL (a Lizzy pensando) da chamada de
+  // RECUSA (so' para as palavras). A recusa agora e' gerada pela IA — pedido do
+  // dono ("quero a IA pura"), mas a ACAO continua barrada pela guarda.
   let chamouLLM = false;
-  groq.setGroqHttpForTest(async () => {
+  let recusou = false;
+  groq.setGroqHttpForTest(async (url, body) => {
+    const sys = String(body?.messages?.[0]?.content || '');
+    if (/NAO pode atender/.test(sys)) { recusou = true; return { data: { choices: [{ message: { content: 'nao posso fazer isso' } }] } }; }
     chamouLLM = true;
     return { data: { choices: [{ message: { content: 'ok, vou tratar' } }] } };
   });
@@ -701,10 +707,11 @@ await test('ligarIap: o agente RECEBE o ehAutorizado (o fio que faltava)', async
   ok(chamouLLM === true, 'ADMIN passou pela guarda (chegou ao LLM)');
   ok(/vou tratar/.test(respAdmin), `admin liberado (${respAdmin.slice(0, 40)})`);
 
-  chamouLLM = false;
+  chamouLLM = false; recusou = false;
   const respMembro = await agente.pensar('bane o joao', [], { quemFalou: 'membro@lid' });
-  ok(chamouLLM === false, 'MEMBRO não chegou ao LLM');
-  ok(/nao posso|nao tem permissao/i.test(respMembro), 'membro recusado em voz');
+  ok(chamouLLM === false, 'MEMBRO NAO executou (a acao nao chegou ao LLM principal)');
+  ok(recusou === true, 'e a RECUSA foi pedida a IA (as palavras sao dela)');
+  ok(/nao posso/i.test(respMembro), `membro recusado em voz (${respMembro.slice(0, 40)})`);
 
   await sess.desligarIap(grupo);
   sess.setIapMediaForTest(null);
@@ -845,26 +852,30 @@ await test('pensarComIa: a guarda RECEBE o ehAutorizado (não recusa todo mundo)
   const groq = await import(new URL('../dados/src/utils/groqClient.js', import.meta.url).href);
   const sess = await import(new URL('../dados/src/utils/iapSessao.js', import.meta.url).href);
   let chamouLLM = false;
-  groq.setGroqHttpForTest(async () => {
+  let recusou = false;
+  groq.setGroqHttpForTest(async (url, body) => {
+    const sys = String(body?.messages?.[0]?.content || '');
+    if (/NAO pode atender/.test(sys)) { recusou = true; return { data: { choices: [{ message: { content: 'nao posso fazer isso' } }] } }; }
     chamouLLM = true;
     return { data: { choices: [{ message: { content: 'ok, vou tratar' } }] } };
   });
   const antiga = process.env.GROQ_API_KEY;
   process.env.GROQ_API_KEY = 'gsk_teste';
-  // ADMIN: com o fio ligado, o pedido passa (chega ao LLM).
+  // ADMIN: com o fio ligado, o pedido passa (chega ao LLM principal).
   const respAdmin = await sess.pensarComIa('bane o joao', [], {
     quemFalou: 'admin@lid', ehAutorizado: async () => true
   });
-  // MEMBRO: segue recusado, sem tocar no LLM.
-  chamouLLM = false;
+  // MEMBRO: a ACAO nao chega ao LLM principal; so' a recusa (as palavras).
+  chamouLLM = false; recusou = false;
   const respMembro = await sess.pensarComIa('bane o joao', [], {
     quemFalou: 'membro@lid', ehAutorizado: async () => false
   });
   if (antiga !== undefined) process.env.GROQ_API_KEY = antiga;
   groq.setGroqHttpForTest(null);
   ok(/vou tratar/.test(respAdmin), `admin passou pela guarda (${respAdmin.slice(0, 40)})`);
-  ok(chamouLLM === false, 'membro NÃO chegou ao LLM');
-  ok(/nao posso|nao tem permissao/i.test(respMembro), 'membro recusado em voz');
+  ok(chamouLLM === false, 'membro NAO executou (acao nao chegou ao LLM principal)');
+  ok(recusou === true, 'e a recusa foi pedida a IA');
+  ok(/nao posso/i.test(respMembro), 'membro recusado em voz');
 });
 
 await test('GUARDA: conversa normal passa (não é ação)', async () => {
@@ -915,15 +926,21 @@ await test('pensarComIa: RECUSA antes de chamar o LLM (não gasta cota)', async 
   const groq = await import(new URL('../dados/src/utils/groqClient.js', import.meta.url).href);
   const sess = await import(new URL('../dados/src/utils/iapSessao.js', import.meta.url).href);
   let chamou = false;
-  groq.setGroqHttpForTest(async () => { chamou = true; return { data: { choices: [{ message: { content: 'x' } }] } }; });
+  let recusou = false;
+  groq.setGroqHttpForTest(async (url, body) => {
+    const sys = String(body?.messages?.[0]?.content || '');
+    if (/NAO pode atender/.test(sys)) { recusou = true; return { data: { choices: [{ message: { content: 'nao posso fazer isso' } }] } }; }
+    chamou = true; return { data: { choices: [{ message: { content: 'x' } }] } };
+  });
   const antiga = process.env.GROQ_API_KEY;
   process.env.GROQ_API_KEY = 'gsk_teste';
-  // Sem `ehAutorizado` ligado ao agente, a guarda fecha.
+  // Sem `ehAutorizado` ligado ao agente, a guarda fecha: a ACAO nao vai ao LLM.
   const resp = await sess.pensarComIa('bane o joao', [], { quemFalou: 'membro@lid' });
   if (antiga !== undefined) process.env.GROQ_API_KEY = antiga;
   groq.setGroqHttpForTest(null);
-  ok(chamou === false, 'NÃO chamou o LLM');
-  ok(/nao posso|nao tem permissao/i.test(resp), `recusou em voz (${resp.slice(0, 45)})`);
+  ok(chamou === false, 'NAO chamou o LLM principal (a acao nao rodou)');
+  ok(recusou === true, 'so a RECUSA foi pedida a IA');
+  ok(/nao posso/i.test(resp), `recusou em voz (${resp.slice(0, 45)})`);
 });
 
 await test('iapSessao: pensaComIa e ligar/desligar existem', async () => {

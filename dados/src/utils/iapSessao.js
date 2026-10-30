@@ -85,6 +85,62 @@ function logIap(msg, extra) {
  * @param {boolean} [opts.falanteEhDono] o falante e' o dono do bot?
  * @returns {string}
  */
+/**
+ * A RECUSA falada — as palavras vêm da IA, a DECISÃO vem da guarda.
+ *
+ * ## O pedido do dono
+ *
+ * *"quero a IA pura"*: a guarda decide se pode ou não (isso é segurança e fica
+ * no código), mas a FRASE de recusa não deve ser uma lista fixa — ela sai do
+ * modelo, no jeito da Lizzy.
+ *
+ * ## Falha fechado
+ *
+ * Se a IA não responder (mesma cota/rede), devolve `null` e o chamador usa a
+ * frase da guarda — a call NUNCA fica muda numa recusa de permissão.
+ *
+ * @param {string} motivo `sem_participante` | `sem_permissao` | ...
+ * @param {string} texto o que a pessoa falou
+ * @returns {Promise<string|null>}
+ */
+async function falaComIa(instrucao, texto, maxTokens = 60) {
+  const sistema = [
+    'Voce e a Lizzy, numa chamada de voz de um grupo do WhatsApp.',
+    instrucao,
+    'Responda em UMA frase curta, falada, no seu jeito. Nao diga que e IA.'
+  ].join(' ');
+  try {
+    const r = await groqChat({ texto: String(texto || '').trim() || 'oi', sistema, historico: [], maxTokens, temperatura: 0.8 });
+    if (r?.ok && r.texto && String(r.texto).trim()) return String(r.texto).trim();
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function recusaFalada(motivo, texto) {
+  const porque = {
+    sem_participante: 'nao da para saber quem falou (o audio veio sem identificar a pessoa)',
+    sem_verificacao: 'nao deu para confirmar a permissao de quem falou',
+    sem_permissao: 'quem falou NAO e administrador nem dono deste grupo',
+    sem_permissao_banir: 'quem falou NAO e administrador nem dono e pediu para BANIR alguem',
+    sem_permissao_mutar: 'quem falou NAO e administrador nem dono e pediu para MUTAR alguem',
+    sem_permissao_promover: 'quem falou NAO e administrador nem dono e pediu para PROMOVER alguem',
+    sem_permissao_rebaixar: 'quem falou NAO e administrador nem dono e pediu para REBAIXAR alguem',
+    sem_permissao_trancar: 'quem falou NAO e administrador nem dono e pediu para ABRIR ou FECHAR o grupo',
+    sem_permissao_limpar: 'quem falou NAO e administrador nem dono e pediu para LIMPAR o grupo',
+    sem_permissao_configurar: 'quem falou NAO e administrador nem dono e pediu para MUDAR as configuracoes do grupo',
+    sem_permissao_geral: 'quem falou NAO tem permissao para isso neste grupo'
+  }[motivo] || 'quem falou NAO tem permissao para isso neste grupo';
+
+  return falaComIa(
+    `Alguem pediu uma acao de grupo, mas voce NAO pode atender: ${porque}. `
+    + 'Recuse firme mas sem grosseria, sem explicar regras nem falar de "permissao de sistema", '
+    + 'e sem prometer fazer depois.',
+    texto || 'faz isso pra mim'
+  );
+}
+
 export function montarSistemaDoAgente({ nomeDono, participantes = [], falante, falanteEhDono = false, dadosDoGrupo = null, paisAdotivos = null } = {}) {
   const nome = iaIdentidade(); // "Lizzy"
 
@@ -206,13 +262,16 @@ export async function pensarComIa(texto, historico = [], {
   const pedido = identificarComando(texto);
   if (pedido && typeof executarComando === 'function') {
     if (!ehComandoPermitido(pedido.comando)) {
-      return 'Esse comando nao esta liberado por voz.';
+      return await falaComIa(`Alguem pediu um comando que NAO esta liberado por voz (${pedido.comando}). Recuse curto.`, texto)
+        || 'Esse comando nao esta liberado por voz.';
     }
     // Falta o argumento (ex.: "baixa um video do tiktok" sem dizer qual): em vez
     // de executar as cegas, pergunta — e o dono responde na call.
     if (!pedido.args && !COMANDO_SEM_ARGS.includes(pedido.comando)) {
       logIap('comando por voz sem argumento', { pedido: pedido.comando });
-      return `Claro! O que voce quer que eu procure? Fala o nome que eu executo o ${pedido.comando}.`;
+      // Pergunta o que procurar — as palavras sao da IA.
+      return await falaComIa(`A pessoa pediu "${pedido.comando}" mas nao disse o que procurar. Pergunte, curto, o que ela quer.`, texto)
+        || `Claro! O que voce quer que eu procure?`;
     }
     try {
       const ok = await executarComando(pedido.comando, pedido.args, quemFalou);
@@ -220,11 +279,12 @@ export async function pensarComIa(texto, historico = [], {
         comando: pedido.comando, args: pedido.args || undefined
       });
       return ok
-        ? `Prontinho, ja executei o ${pedido.comando}.`
-        : 'Nao consegui executar agora. Tenta de novo?';
+        ? (await falaComIa(`O comando "${pedido.comando}" foi executado com sucesso. Confirme em uma frase curta.`, texto) || `Prontinho, ja executei.`)
+        : (await falaComIa(`Nao deu para executar "${pedido.comando}" agora. Avise curto que nao rolou.`, texto) || 'Nao consegui executar agora. Tenta de novo?');
     } catch (e) {
       logIap('falha ao executar comando por voz', { erro: e?.message || String(e) });
-      return 'Nao consegui executar agora. Tenta de novo?';
+      return await falaComIa(`Nao deu para executar "${pedido.comando}" agora. Avise curto que nao rolou.`, texto)
+        || 'Nao consegui executar agora. Tenta de novo?';
     }
   }
 
@@ -236,7 +296,10 @@ export async function pensarComIa(texto, historico = [], {
       pedido: guarda.acao || undefined,
       motivo: guarda.motivo
     });
-    return guarda.recusa;
+    // A DECISAO e' da guarda (recusar); as PALAVRAS sao da IA (pedido do dono:
+    // "quero a IA pura", sem frases prontas). A recusa fixa fica so' como
+    // ultimo recurso, para a call nunca ficar muda.
+    return await recusaFalada(guarda.motivo, texto) || guarda.recusa;
   }
 
   // O NOME de quem falou: resolve o JID do audio por participante. Best-effort

@@ -41,9 +41,6 @@ import { parseImagePollArgs, collectPollImages, resolveAttachments, buildOptionN
 import { toOggOpus } from './utils/oggOpus.js';
 import { resolverNomeContato, acharParticipantePorId, nomeInutil, baseId, numerosDoParticipante } from './utils/contactName.js';
 import { coletarDadosDoGrupo } from './utils/contextoConversa.js';
-// A resposta LOCAL: garante que a Lizzy responda MESMO quando a API falhou
-// (cota/rede) — sem gastar token e sem repetir a mesma frase.
-import { respostaLocal } from './utils/respostaLocal.js';
 import { lerIdentidade } from './utils/identidadeLizzy.js';
 import { resolverPaisAdotivos } from './utils/contextoConversa.js';
 // As chaves do Groq (ate' 10) e o failover automatico.
@@ -1900,15 +1897,6 @@ const formatarDuracaoCurta = (segundos) => {
   if (s < 3600) return `${Math.round(s / 60)}min`;
   return `${(s / 3600).toFixed(1)}h`;
 };
-
-/**
- * A ultima frase de RESERVA usada em cada chat.
- *
- * Existe para a Lizzy nao repetir a mesma frase de reserva em mensagens
- * seguidas (o dono reclamou de "repete resposta"). E' so' do caminho de
- * fallback — quando a IA nao devolveu nada valido.
- */
-const fallbackUltimoPorChat = new Map();
 
 const mensagemErroIA = (e) => {
   const msg = String(e?.message || '');
@@ -7769,26 +7757,22 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
             processResponses(0);
           } else {
             // Fallback: sempre gerar uma resposta se a IA não retornou nada válido
-            // A resposta LOCAL (sem API, sem token): escolhe pela mensagem da
-            // pessoa (saudacao/pergunta/xingamento/sem texto) e NAO repete a
-            // ultima. E' o que garante "nunca sem resposta" com variedade.
-            const escolhida = respostaLocal({
-              texto: body,
-              ultima: fallbackUltimoPorChat.get(from)
-            });
-            fallbackUltimoPorChat.set(from, escolhida);
-            reply(escolhida);
+            // SEM frase pronta (pedido do dono: "IA pura"). A reacao vem do
+            // MODELO, numa chamada curta e barata. Se ela tambem nao vier, o
+            // bot fica em silencio — melhor que responder texto pre-fabricado.
+            ia.respostaNatural({ texto: body, nome: pushname })
+              .then((natural) => { if (natural) reply(natural); })
+              .catch(() => { /* sem resposta: silencio, nunca frase pronta */ });
           }
         }).catch((assistentError) => {
           console.error('Erro no assistente virtual:', assistentError.message);
-          // ERRO nao pode virar silencio (o dono: "NUNCA fique sem resposta").
-          // A resposta local responde na hora, de graca, e sem repetir.
-          const escolhida = respostaLocal({
-            texto: body,
-            ultima: fallbackUltimoPorChat.get(from)
-          });
-          fallbackUltimoPorChat.set(from, escolhida);
-          reply(escolhida);
+          // Erro nao vira frase pronta: a ultima tentativa e' a IA, numa
+          // chamada curta. Sem ela, silencio (nunca texto pre-fabricado).
+          if (ia && typeof ia.respostaNatural === 'function') {
+            ia.respostaNatural({ texto: body, nome: pushname })
+              .then((natural) => { if (natural) reply(natural); })
+              .catch(() => { /* sem resposta */ });
+          }
         });
       }
     }
