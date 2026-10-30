@@ -161,8 +161,14 @@ await test('8. o handler manda AUDIO COMUM (ptt: false), nao nota de voz', () =>
   const bloco = INDEX.slice(i, i + 1400)
     .split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
   ok(/audio:\s*voz\.mp3/.test(bloco), 'manda o MP3 como audio');
-  ok(/ptt:\s*false/.test(bloco), 'com ptt: false (AUDIO COMUM — o pedido do dono)');
   ok(/audio\/mpeg/.test(bloco), 'com o mimetype audio/mpeg');
+  // O `ptt` NAO pode aparecer — nem `true` nem `false`.
+  //
+  // MEDIDO: no proto o `ptt` e' `optional`, entao `ptt: false` NAO e' omitido:
+  // ele ESCREVE o campo no fio (tag 0x30, valor 0). E o WhatsApp trata **campo
+  // presente** como nota de voz, mesmo valendo `false` — era o bug. O `!play`
+  // (que sai como audio normal) NAO manda o campo.
+  ok(!/ptt\s*:/.test(bloco), 'NAO manda `ptt` (nem true nem false)');
   ok(!/ptt:\s*true/.test(bloco), 'e NAO como nota de voz');
   // E nao depende de ffmpeg neste caminho.
   ok(!/toOggOpus/.test(bloco), 'nao passa por OGG/Opus (sem ffmpeg)');

@@ -7730,10 +7730,18 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
             await nazu.sendMessage(from, {
               audio: voz.mp3,
               mimetype: 'audio/mpeg',
-              // AUDIO NORMAL (nao nota de voz): o dono pediu "aquele audio que
-              // o usuario grava e manda seco no grupo". Sem `ptt` ele sai como
-              // audio comum; com `ptt: true` viraria nota de voz (waveform).
-              ptt: false,
+              // AUDIO NORMAL — e o `ptt` NAO vai.
+              //
+              // MEDIDO: no proto, `ptt` e' `optional`, entao `ptt: false` NAO e'
+              // omitido — ele ESCREVE o campo no fio (tag 0x30, valor 0). E o
+              // WhatsApp trata **campo presente** como nota de voz, mesmo valendo
+              // `false`. Era por isso que o audio continuava saindo como nota de
+              // voz mesmo com `ptt: false`.
+              //
+              // O `!play` (que o dono confirma que sai como audio normal) NAO
+              // manda o campo. Provado: com `ptt: false` o payload tem os bytes
+              // `30 00`; sem o campo, nao tem — e o payload fica igual ao do
+              // `!play`.
               contextInfo: gerarContextNewsletter()
             });
             return;
