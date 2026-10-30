@@ -14992,9 +14992,30 @@ medido de 40 frases, com a desambiguação pinterest-antes-do-play). A ação
 **reemite o COMANDO** do bot por `messages.upsert` — o **mesmo caminho do `!iap`**:
 a fila, as permissões e o envio são os do comando.
 
+#### ⚠️ AJUSTES (out/2026) — sem cabeçalho de canal + "foto de X" = `!pin`
+Dois pedidos do dono:
+
+1. **`tira o contextInfo newsletter nas falas dela`** — saiu o
+   `gerarContextNewsletter()` de TODAS as respostas do `!assistente` (a fala do
+   evento, o link, a foto do grupo, a menção e o aviso de nome
+   inexistente/ambíguo). O cabeçalho de canal faz a mensagem parecer um **card de
+   canal** — e a fala tem de soar como conversa. O resto do bot segue com ele.
+2. **`o !pin é foto, quando eu pedir foto ela busca lá`** — "me manda uma foto de
+   gato" agora é **`!pin gato`** (busca no Pinterest), não a foto do grupo.
+
+| pedido | antes | agora |
+|---|---|---|
+| "me manda uma foto de gato" | nada / foto do grupo | **`!pin gato`** |
+| "manda uma imagem de cachorro" | nada | **`!pin cachorro`** |
+| "manda a foto do grupo" | foto do grupo | foto do grupo (igual) |
+
+A distinção é o **TERMO**: `grupo/gp/aqui` não é tema de busca. E o
+`OUTRO_OBJETO` deixou de barrar "foto da X" (era ele que impedia a busca).
+
 #### Testes
-`tests/assistente-comandos.test.js` (novo) — **22 testes / 126 asserções**:
-reconhecimento (12 positivos + 7 negativos), termo limpo, falas (variedade e
+`tests/assistente-comandos.test.js` — **24 testes / 145 asserções**:
+reconhecimento (17 positivos + 7 negativos), termo limpo, falas (variedade e
 marcadores), menção (match/ambiguidade/número/cargo) e o **fluxo real** no handler
-(a fala sai junto, a menção sai na BASE, o apelido do contador acha, nome
-inexistente avisa sem mencionar, e o ÁUDIO vem antes das ações).
+(a fala sai junto **sem `contextInfo`**, a menção sai na BASE, o apelido do
+contador acha, nome inexistente avisa sem mencionar, "foto de algo" vira `pin`, e
+o ÁUDIO vem antes das ações).

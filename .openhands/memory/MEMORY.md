@@ -93,7 +93,12 @@ logs diários (`YYYY-MM-DD.md`).
   `:device` com `replace(/:(\d+)@/, '@')` — `split(':')[0]` **corta o domínio**.
 - **🚨 ORDEM no handler**: o bloco do **ÁUDIO vem ANTES** das ações, senão "manda
   um áudio" cai no `play` ("audio" está na lista de música).
-- Teste: `tests/assistente-comandos.test.js` (22/126).
+- **As respostas do `!assistente` NÃO levam o `contextInfo` (newsletter)** — o
+  dono pediu para tirar: o cabeçalho de canal faz a mensagem parecer card de
+  canal, e a fala tem de soar como conversa. O resto do bot mantém.
+- **"foto de X" = `!pin`** (o dono: *"o `!pin` é foto"*). Só "foto **do grupo**"
+  continua sendo a foto do grupo; a distinção é o termo (`grupo/gp/aqui`).
+- Teste: `tests/assistente-comandos.test.js` (24/145).
 
 ## Testes
 
