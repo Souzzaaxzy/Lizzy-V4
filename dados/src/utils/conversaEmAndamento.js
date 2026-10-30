@@ -43,9 +43,18 @@ export function janelaMs(env = process.env) {
   return num(env.LIZZY_CONVERSA_JANELA_MS, 3 * 60 * 1000);
 }
 
-/** Quantas TROCAS seguidas sem menção ela aceita antes de parar. Padrão: 4. */
+/**
+ * Quantas TROCAS seguidas sem menção ela aceita antes de parar. Padrão: 20.
+ *
+ * ## Por que 20, e nao 4 (o bug do "so' continuou 1 vez")
+ *
+ * O teto era 4 — e numa conversa real a pessoa manda 4 mensagens em menos de um
+ * minuto. O teto existe para ela nao responder uma RAJADA infinita, nao para
+ * limitar a conversa. A janela de TEMPO e a PAUSA ja cuidam do caso normal;
+ * este numero e' a rede de seguranca.
+ */
 export function maxTrocas(env = process.env) {
-  return num(env.LIZZY_CONVERSA_MAX_TROCAS, 4);
+  return num(env.LIZZY_CONVERSA_MAX_TROCAS, 20);
 }
 
 /** A pausa mínima (ms) entre duas respostas dela. Padrão: 2s. */
@@ -162,6 +171,24 @@ export class ConversasEmAndamento {
     c.desde = agora;
   }
 
+  /**
+   * A PESSOA mandou uma mensagem com conteudo: a janela se RENOVA.
+   *
+   * ## O "deixa no ciclo, para funcionar de verdade" (pedido do dono)
+   *
+   * Sem isto, a janela contava a partir da ULTIMA RESPOSTA dela: se a pessoa
+   * demorasse 3 minutos para escrever de novo (normal numa conversa), a janela
+   * expirava e ela parava no meio. Renovando a cada mensagem da pessoa, o que
+   * conta e' o tempo desde a ultima vez que ALGUEM falou — que e' como uma
+   * conversa de verdade funciona.
+   */
+  renovarJanela(grupo, pessoa, agora = Date.now()) {
+    const k = ConversasEmAndamento._chave(grupo, pessoa);
+    const c = this.mapa.get(k);
+    if (!c) return;
+    c.desde = agora;
+  }
+
   /** Quantas trocas estão abertas (para o teste e para o painel). */
   trocas(grupo, pessoa) {
     return this.mapa.get(ConversasEmAndamento._chave(grupo, pessoa))?.trocas ?? 0;
@@ -186,6 +213,38 @@ const PEDIDO_DE_PARADA = /\b(chega|para|pare|parar|cala\s*(a\s*)?boca|fica\s+qui
 const PARADA_NO_INICIO = /^\s*(chega|para|pare|parar|cala\s*(a\s*)?boca|fica\s+quieta|silencio|silêncio)\b/i;
 
 /**
+ * O que pode vir DEPOIS do verbo para ele continuar sendo ORDEM.
+ *
+ * ## O bug medido (a conversa parava na 1a repeticao)
+ *
+ * O `PARADA_NO_INICIO` casava "para" no comeco de QUALQUER frase — e
+ * *"para mim tambem foi assim"* fechava a conversa. Era exatamente o "funcionou
+ * so' 1 vez" relatado pelo dono.
+ *
+ * `para`/`pare` so' sao ORDEM quando a frase ACABA neles ("para") ou quando vem
+ * um complemento de ordem ("para com isso", "para de falar"). Em "para mim...",
+ * "para voce..." e "para todos...", `para` e' PREPOSICAO — conversa normal.
+ */
+const COMPLEMENTO_DE_ORDEM = /^\s*[.!?,]*\s*$|^\s+(com\s+isso|de\s+(falar|me\s+chamar|encher)|ai|aí|ja|já|agora|logo|por\s+favor|pfv)\b/i;
+
+/**
+ * `para`/`pare` no comeco: e' ordem mesmo?
+ * @param {string} t
+ * @returns {boolean}
+ */
+function ordemDeParaNoInicio(t) {
+  const m = /^\s*(para|pare|parar)\b(.*)$/i.exec(t);
+  if (!m) return false;
+  const resto = String(m[2] || '');
+  // Sem nada depois: e' ordem ("para").
+  if (!resto.trim()) return true;
+  // Com complemento de ordem: e' ordem.
+  if (COMPLEMENTO_DE_ORDEM.test(resto)) return true;
+  // Qualquer outra coisa depois ("para mim tambem...") e' PREPOSICAO.
+  return false;
+}
+
+/**
  * A mensagem é um PEDIDO DE PARADA?
  * @param {string} texto
  * @returns {boolean}
@@ -197,11 +256,27 @@ export function ehPedidoDeParada(texto) {
   // Frase longa costuma ser conversa ("para de ser boba comigo ta bom"), nao ordem.
   if (palavras > 5) return false;
   // "chega"/"cala a boca"/"silencio" sao inequivocos em qualquer posicao curta.
-  if (/\b(chega|cala\s*(a\s*)?boca|fica\s+quieta|silencio|silêncio|nao\s+fala\s+mais|não\s+fala\s+mais)\b/i.test(t)) return true;
+  // ATENCAO: o `chega` NAO entra nesta lista — ele tem uso de conversa
+  // ("chega pra mim", "chega de historia") e e' tratado logo abaixo, com a
+  // mesma logica do `para`. Sem esta separacao, a lista acima casava "chega"
+  // em QUALQUER frase e a conversa morria (o bug medido).
+  if (/\b(cala\s*(a\s*)?boca|fica\s+quieta|silencio|silêncio|nao\s+fala\s+mais|não\s+fala\s+mais)\b/i.test(t)) return true;
   // "para"/"pare" SO' como ordem no INICIO ("para", "para com isso") — em
   // "voce para e pensa" a palavra e' um verbo comum.
-  if (PARADA_NO_INICIO.test(t)) return true;
+  // "para"/"pare" SO' como ordem de verdade (nao como preposicao).
+  if (ordemDeParaNoInicio(t)) return true;
   // As frases INEQUIVOCAS ("deixa ela em paz") valem em qualquer posicao curta.
   if (/\b(deixa\s+(ele|ela|a\s+gente)\s+em\s+paz|nao\s+fala\s+mais|não\s+fala\s+mais)\b/i.test(t)) return true;
-  return PEDIDO_DE_PARADA.test(t) && palavras <= 3;
+  // "cala a boca"/"silencio"/"fica quieta" sao inequivocos.
+  if (/\b(cala\s*(a\s*)?boca|fica\s+quieta|silencio|silêncio)\b/i.test(t)) return true;
+  // "chega" tambem tem uso de CONVERSA ("chega pra mim", "chega de historia") —
+  // entao so' e' ordem sozinho ("chega", "chega!") ou com complemento de ordem.
+  if (/^\s*chega\b(.*)$/i.test(t)) {
+    const resto = /^\s*chega\b(.*)$/i.exec(t)[1];
+    if (!resto.trim()) return true;
+    if (/^\s*[.!?,]*\s*$/.test(resto)) return true;
+    if (/^\s+(com\s+isso|de\s+(falar|me\s+chamar|encher)|ai|aí|ja|já|agora|logo|por\s+favor|pfv)\b/i.test(resto)) return true;
+    return false;
+  }
+  return false;
 }

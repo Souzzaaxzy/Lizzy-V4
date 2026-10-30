@@ -141,9 +141,30 @@ await test('9. o PEDIDO DE PARADA e reconhecido', () => {
   for (const t of ['chega', 'para', 'cala a boca', 'fica quieta', 'silencio', 'deixa ela em paz']) {
     ok(conv.ehPedidoDeParada(t) === true, `"${t}" e pedido de parada`);
   }
-  for (const t of ['para de ser boba comigo ta bom', 'voce para e pensa', 'oi tudo bem']) {
+  for (const t of [
+    'para de ser boba comigo ta bom', 'voce para e pensa', 'oi tudo bem',
+    // O bug medido: "para" e "chega" como PREPOSICAO/uso de conversa.
+    'para mim tambem foi assim', 'para voce eu conto tudo', 'parece que vai chover',
+    'chega pra mim ta bom', 'chega de historia', 'para todos nos foi dificil'
+  ]) {
     ok(conv.ehPedidoDeParada(t) === false, `"${t}" NAO e pedido de parada`);
   }
+});
+
+await test('9b. a JANELA se RENOVA a cada mensagem (o "deixa no ciclo")', () => {
+  const env = { LIZZY_CONVERSA_JANELA_MS: '60000' };   // 1 min
+  const c = new conv.ConversasEmAndamento(env);
+  c.abrir('g', 'p', 1000);
+  // Conversa por 5 minutos, com mensagens a cada 40s: SEM a renovacao a janela
+  // expiraria no primeiro minuto e ela pararia no meio.
+  let t = 1000;
+  let respondeu = 0;
+  for (let i = 0; i < 8; i++) {
+    t += 40000;   // 40s entre mensagens
+    const r = c.deveContinuar({ grupo: 'g', pessoa: 'p', texto: `mensagem numero ${i}`, agora: t });
+    if (r.responder) { respondeu += 1; c.registrouResposta('g', 'p', t); c.renovarJanela('g', 'p', t); }
+  }
+  ok(respondeu === 8, `a conversa seguiu por 5+ min (veio ${respondeu} de 8)`);
 });
 
 await test('10. fechar encerra a conversa na hora', () => {
@@ -265,8 +286,8 @@ await test('16. ela PARA no limite de trocas (nao conversa "para sempre")', asyn
     respostas.push(r.length > 0);
   }
   const quantas = respostas.filter(Boolean).length;
-  // O teto padrao e' 4 trocas.
-  ok(quantas === 4, `respondeu exatamente 4 trocas (veio ${quantas})`);
+  // O teto padrao e' 20 trocas (era 4 — curto demais para conversa real).
+  ok(quantas === 8, `respondeu as 8 (teto 20, veio ${quantas})`);
   groq.setGroqHttpForTest(null);
 });
 

@@ -7695,9 +7695,15 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
       // A JANELA da conversa: chamada explicita ABRE (e zera as trocas); um
       // pedido de parada FECHA na hora.
       try {
-        if (foiChamada) conversas.abrir(from, sender);
-        else if (continua.responder && ehPedidoDeParada(budy2)) {
-          conversas.fechar(from, sender);
+        if (foiChamada) {
+          conversas.abrir(from, sender);
+        } else if (continua.responder) {
+          // Pedido de parada FECHA na hora; mensagem normal RENOVA a janela —
+          // e' o "deixa no ciclo": enquanto a pessoa falar, a conversa segue
+          // (o que conta e' o tempo desde a ULTIMA mensagem, nao desde a
+          // primeira).
+          if (ehPedidoDeParada(budy2)) conversas.fechar(from, sender);
+          else conversas.renovarJanela(from, sender);
         }
       } catch { /* sem janela: segue o fluxo normal */ }
 
