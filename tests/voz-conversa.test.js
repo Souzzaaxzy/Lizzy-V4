@@ -168,12 +168,19 @@ await test('8. o handler manda AUDIO COMUM (ptt: false), nao nota de voz', () =>
   // ele ESCREVE o campo no fio (tag 0x30, valor 0). E o WhatsApp trata **campo
   // presente** como nota de voz, mesmo valendo `false` — era o bug. O `!play`
   // (que sai como audio normal) NAO manda o campo.
-  ok(!/ptt\s*:/.test(bloco), 'NAO manda `ptt` (nem true nem false)');
+  // `ptt: false` VOLTA (da' a marca de audio) e o `contextInfo` fica FORA.
+  //
+  // O que o dono MEDIU no aparelho (a tabela que fecha o caso):
+  //   ptt:false + contextInfo  -> NOTA DE VOZ
+  //   sem ptt   + contextInfo  -> NOTA DE VOZ   <- o `ptt` NAO era a causa
+  //   sem ptt   + sem ctx      -> audio normal, mas o cliente desenha como
+  //                               ENCAMINHAMENTO
+  //
+  // Entao: quem virava nota de voz era o `contextInfo`; e sem o `ptt` o audio
+  // perde a marca de "do proprio bot" e sai como encaminhado.
+  ok(/ptt:\s*false/.test(bloco), 'manda `ptt: false` (marca de audio)');
   ok(!/ptt:\s*true/.test(bloco), 'e NAO como nota de voz');
-  // O `contextInfo` (newsletter) tambem sai: MEDIDO campo a campo contra o
-  // `!play`, era a UNICA diferenca que sobrava — e o audio continuava saindo
-  // como nota de voz. Sem ele o payload fica igual ao do `!play`.
-  ok(!/contextInfo\s*:/.test(bloco), 'NAO manda contextInfo (newsletter)');
+  ok(!/contextInfo\s*:/.test(bloco), 'NAO manda contextInfo (era o que virava nota de voz)');
   ok(!/gerarContextNewsletter/.test(bloco), 'nem o cabecalho de canal');
   // E nao depende de ffmpeg neste caminho.
   ok(!/toOggOpus/.test(bloco), 'nao passa por OGG/Opus (sem ffmpeg)');

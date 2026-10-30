@@ -7727,24 +7727,27 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
               await reply(`❌ ih, ${erroDaVoz(voz.motivo)}`);
               return;
             }
-            // AUDIO NORMAL — sem `ptt` e SEM `contextInfo`.
+            // AUDIO NORMAL — com `ptt: false`, SEM `contextInfo`.
             //
-            // Duas coisas tiravam o audio do "normal":
+            // O QUE FOI MEDIDO (na ordem em que o dono testou):
             //
-            // 1) `ptt: false` NAO e' omitido pelo protobuf (o campo e' `optional`):
-            //    ele ESCREVE `30 00` no fio, e o WhatsApp trata campo PRESENTE
-            //    como nota de voz, ignorando o valor.
-            // 2) o `contextInfo` do canal (newsletter) tambem muda a renderizacao.
+            //   ptt:false + contextInfo  -> NOTA DE VOZ
+            //   sem ptt   + contextInfo  -> NOTA DE VOZ   <- o `ptt` NAO era a causa
+            //   sem ptt   + sem ctx      -> audio normal, mas o cliente desenha
+            //                               como ENCAMINHAMENTO
             //
-            // MEDIDO campo a campo contra o `!play` (que o dono confirma que sai
-            // como audio normal): a UNICA diferenca era o `contextInfo`. Sem ele,
-            // o payload fica igual ao do `!play`.
+            // Ou seja: quem empurrava para "nota de voz" era o `contextInfo` (o
+            // cabecalho do canal). E sem o `ptt` o cliente perde a marca de
+            // "audio do proprio bot" e desenha como encaminhado.
             //
-            // Custo: este audio NAO leva o cabecalho "Ver canal". O dono aceitou
-            // — a nota de voz era o problema.
+            // Agora: `ptt: false` VOLTA (da' a marca de audio) e o `contextInfo`
+            // continua FORA (era ele que virava nota de voz).
+            //
+            // Custo: este audio NAO leva o cabecalho "Ver canal".
             await nazu.sendMessage(from, {
               audio: voz.mp3,
-              mimetype: 'audio/mpeg'
+              mimetype: 'audio/mpeg',
+              ptt: false
             });
             return;
           } catch (e) {
