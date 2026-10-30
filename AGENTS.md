@@ -15171,3 +15171,65 @@ mencionado no grupo** (memória em **RAM**, não em disco). Sem alvo anterior, e
 estilizado (com os **code points reais** do nome do dono: MATHEMATICAL BOLD é
 `U+1D400+`, **não** o SANS-SERIF BOLD, que dá outro NFKC), o STT C/K na mãe, o
 pronome, e o número que nunca vira nome no contexto.
+
+## 💬 CONVERSA EM ANDAMENTO + o "olhar tudo" de graça (out/2026) ✅
+Dois pedidos do dono: *"eu seu marquei/citei/falei o nome dela chamando ela,
+comecei a conversar e respondi ela sem marcar ela ou responder, ela entende que
+ainda estou conversando com ela e me responde, mas isso tem que ser MUITO bem
+calibrado"* — e o "olhar tudo" do grupo **sem gastar token por mensagem**.
+
+### 1) A CONVERSA EM ANDAMENTO (`utils/conversaEmAndamento.js`)
+Depois de **CHAMAR** a Lizzy, a pessoa pode seguir falando **sem marcar** e ela
+continua. A janela é **por GRUPO + PESSOA**: se fosse por grupo, qualquer membro
+faria ela responder e o grupo viraria um monólogo dela.
+
+**As três travas** (todas por env, padrão conservador):
+
+| trava | env | padrão | por quê |
+|---|---|---|---|
+| janela de TEMPO | `LIZZY_CONVERSA_JANELA_MS` | 3 min | conversa parada morre |
+| máximo de TROCAS | `LIZZY_CONVERSA_MAX_TROCAS` | 4 | sem isto ela conversa "para sempre" |
+| pausa entre respostas | `LIZZY_CONVERSA_PAUSA_MS` | 2 s | evita responder 2 mensagens seguidas |
+
+**A trava do CONTEÚDO** (a mais importante para não virar robô): `kkkkk`, `sim`,
+`ok`, `vlw`, `boa`, `😂` **não** puxam resposta — são **reação**, não conversa.
+
+- **chamar de novo reabre** e zera as trocas (pedido novo ≠ continuação);
+- `chega`/`para`/`cala a boca`/`silencio` **fecham** na hora — e o `para` só vale
+  como ordem **no início** (em *"você PARA e pensa"* é verbo comum, há teste);
+- **a decisão é LOCAL (0 token)**: a IA só entra quando ela responde.
+
+### 2) O "OLHAR TUDO" (0 token) — `absorverContextoDoGrupo`
+O bot **JÁ** guardava toda mensagem no `messagesCache` (connect.js), antes do
+handler. O histórico, porém, só recebia o que passou pela IA — então ela **não
+via o que o grupo falou antes**. Era a causa do "ela não tem contexto".
+
+Agora as últimas mensagens do cache entram no histórico — **uma vez cada**
+(`_vistosHistorico` evita duplicar) e com o **nome de quem falou** (`[Joao] …`).
+**Nenhuma requisição por mensagem lida**: o custo continua **1 chamada quando ela
+responde**. Teto por `LIZZY_CONTEXTO_MSGS` (padrão 20).
+
+> **A conta que fecha**: ler o grupo todo por IA custaria **1 requisição por
+> mensagem** (o prompt inteiro ia junto) — num grupo de 2.000 msgs/dia isso
+> estoura o teto do Groq (1.000/dia). Lendo do **cache**, o custo por mensagem é
+> **zero** e a IA só é chamada quando ela responde.
+
+### Bug pego pelo próprio teste
+A **chamada explícita** consumia uma troca do orçamento (respondia 3 em vez de
+4). Agora só as **continuações** contam.
+
+### Medido no fluxo real
+```
+"lizzy, oi tudo bem?"     RESPONDEU   <- chamada explicita (abre a janela)
+"e voce, como ta?"        RESPONDEU   <- sem marcar
+"ta fazendo o que?"       RESPONDEU   <- sem marcar
+"kkkkk"                   quieta      <- sem conteudo, 0 chamada de IA
+... para na 4a troca, como o limite manda
+```
+
+### Testes
+`tests/conversa-andamento.test.js` (novo) — **20 testes / 57 asserções**: as
+travas (janela, limite, pausa, sem-conteúdo, por-pessoa, reabrir, fechar) e o
+fluxo real (continua sem marcar; **não responde "kkkkk" e não gasta chamada**;
+para no limite; outra pessoa não herda; o "chega" fecha; e **1 mensagem = no
+máximo 1 chamada de IA**).

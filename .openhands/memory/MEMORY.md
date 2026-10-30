@@ -114,6 +114,21 @@ logs diários (`YYYY-MM-DD.md`).
   - **Pronome** ("menciona ele"): resolvido pelo último alvo do grupo (RAM).
 - Teste: `tests/assistente-comandos.test.js` (32/218).
 
+## Conversa em andamento + "olhar tudo" de graça (out/2026)
+
+- **`utils/conversaEmAndamento.js`** — depois de CHAMAR a Lizzy, a pessoa segue
+  falando sem marcar e ela continua. Janela **por GRUPO+PESSOA** (por grupo
+  viraria monólogo dela). Travas: `LIZZY_CONVERSA_JANELA_MS` (3 min),
+  `LIZZY_CONVERSA_MAX_TROCAS` (4), `LIZZY_CONVERSA_PAUSA_MS` (2 s) e **conteúdo**
+  (`kkkkk`/`sim`/`ok` não puxam resposta). Chamar de novo reabre; `chega`/`para`
+  fecham (o `para` só vale no início). **A decisão é LOCAL: 0 token.**
+- **"Olhar tudo" = 0 token**: o bot já guarda tudo no `messagesCache`
+  (connect.js). `absorverContextoDoGrupo` (ia.js) injeta as últimas no histórico
+  (uma vez cada, com o nome de quem falou). **Nunca 1 requisição por mensagem.**
+- ⚠️ **A conta**: ler o grupo por IA = 1 req por mensagem → 2.000 msgs/dia
+  estoura o teto de 1.000/dia do Groq. Do cache, o custo por mensagem é zero.
+- Teste: `tests/conversa-andamento.test.js` (20/57).
+
 ## `!pin` / `!s` — imagens ACESSÍVEIS e quantidade pedida (out/2026)
 
 - **`utils/imagensAcessiveis.js`** — `urlEhImagem` (HEAD→GET; o **content-type**
