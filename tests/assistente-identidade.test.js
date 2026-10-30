@@ -313,7 +313,13 @@ await test('20. o fluxo REAL nao reage com emoji (o teste mede o handler)', asyn
   }));
   process.env.GROQ_API_KEY = 'gsk-teste';
 
-  const indexModule = await import(new URL('../dados/src/index.js', import.meta.url).href);
+  // A VOZ ESPONTANEA (25%) tornaria estes testes FLAKY: as vezes a resposta sai
+// em audio (sem `text`) e as assercoes de TEXTO falham. Aqui o foco e' o texto,
+// entao a voz e' desligada pela env — e PRECISA vir ANTES do import: a
+// constante e' lida no LOAD do modulo (`vozDaConversa.js`).
+process.env.LIZZY_VOZ_ESPONTANEA = '0';
+
+const indexModule = await import(new URL('../dados/src/index.js', import.meta.url).href);
   const handleMessage = indexModule.default ?? indexModule;
 
   const GRUPO = '120363425268923269@g.us';

@@ -27,6 +27,12 @@ fs.writeFileSync(process.env.CONFIG_PATH, JSON.stringify({
   numerodono: '5511915323638', debug: false
 }, null, 2));
 
+// A VOZ ESPONTANEA (25%) tornaria estes testes FLAKY: as vezes a resposta sai
+// em audio (sem `text`) e as assercoes de TEXTO falham. Aqui o foco e' o texto,
+// entao a voz e' desligada pela env — e PRECISA vir ANTES do import: a
+// constante e' lida no LOAD do modulo (`vozDaConversa.js`).
+process.env.LIZZY_VOZ_ESPONTANEA = '0';
+
 const acoes = await import(new URL('../dados/src/utils/assistenteAcoes.js', import.meta.url).href);
 const groq = await import(new URL('../dados/src/utils/groqClient.js', import.meta.url).href);
 const indexModule = await import(new URL('../dados/src/index.js', import.meta.url).href);

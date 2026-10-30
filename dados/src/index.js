@@ -44,7 +44,7 @@ import { pcmParaWav } from './utils/iapAudio.js';
 import { resolverNomeContato, acharParticipantePorId, nomeInutil, baseId, numerosDoParticipante } from './utils/contactName.js';
 import { coletarDadosDoGrupo } from './utils/contextoConversa.js';
 // A VOZ da conversa: "Lizzy, manda um áudio aí" -> nota de voz de verdade.
-import { ehPedidoDeAudio, temaDoAudio, falaDoAudio, gerarNotaDeVoz, erroDaVoz } from './utils/vozDaConversa.js';
+import { ehPedidoDeAudio, temaDoAudio, falaDoAudio, gerarNotaDeVoz, erroDaVoz, limparFala, sortearModoDeResposta, FALA_MAX_CARACTERES } from './utils/vozDaConversa.js';
 import { lerIdentidade } from './utils/identidadeLizzy.js';
 import { resolverPaisAdotivos } from './utils/contextoConversa.js';
 // As chaves do Groq (ate' 10) e o failover automatico.
@@ -663,6 +663,38 @@ async function responderPrefixo(nazu, from, info, sender, currentPrefix) {
     return true;
   }
   await enviarTexto(montar(`📌 Prefixo atual deste grupo: ${currentPrefix}`));
+  return true;
+}
+
+/**
+ * Manda a NOTA DE VOZ (OGG/Opus + `ptt: true`) — o caminho ÚNICO do áudio da
+ * conversa, usado pelo pedido explícito E pelo sorteio espontâneo.
+ *
+ * A cadeia é PCM -> WAV -> OGG/Opus (o container é o que faz a bolha da ONDA;
+ * MP3 viraria a bolha de música, a "laranja" do `!play`).
+ *
+ * O `contextInfo` (newsletter) fica FORA: nas medições do dono, era ele que
+ * atrapalhava a renderização.
+ *
+ * `limite` (opcional) é o teto de caracteres da fala ESPONTÂNEA: acima dele a
+ * voz não sai e o chamador manda texto (uma nota de voz enorme não é natural).
+ * O pedido explícito não passa teto — quem pediu, recebe áudio.
+ *
+ * @returns {Promise<boolean>} `true` quando a voz saiu de fato.
+ */
+async function enviarNotaDeVoz(nazu, from, texto, limite = 0) {
+  const fala = limparFala(texto);
+  if (!fala) return false;
+  const voz = await gerarNotaDeVoz({ texto: fala, sintetizar: sintetizarFala, pcmParaWav, toOggOpus, limite });
+  if (!voz.ok) {
+    console.error('[VOZ] falhou:', voz.motivo);
+    return false;
+  }
+  await nazu.sendMessage(from, {
+    audio: voz.ogg,
+    mimetype: 'audio/ogg; codecs=opus',
+    ptt: true
+  });
   return true;
 }
 
@@ -7700,15 +7732,16 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
         // ------------------------------------------------------------------
         // ÁUDIO: "Lizzy, manda um áudio aí"
         //
-        // GATILHO EXPLÍCITO (decisão do dono: "primeiro vamos configurar apenas
-        // o 'lizzy, manda um audio ai' só pra testar, depois automatizamos").
-        // Ou seja: ela NÃO manda voz por iniciativa própria nesta rodada.
+        // DOIS CAMINHOS (pedido do dono):
+        //
+        //   1. PEDIDO EXPLÍCITO -> responde em áudio SEMPRE (100%);
+        //   2. ESPONTÂNEO       -> ela manda voz por conta própria com 25%
+        //      de chance (o sorteio fica no fim do bloco do assistente).
         //
         // É NOTA DE VOZ (`ptt: true` + OGG/Opus) — a bolha com o desenho da
-        // ONDA, que é o que o dono escolheu (Opção A). O que decide a forma é o
-        // CONTAINER: MP3 vira a bolha de música (a "laranja", igual ao `!play`);
-        // OGG/Opus vira nota de voz. A fala (o TEXTO que vira voz) vem da IA,
-        // com a personalidade dela; este bloco só converte em áudio.
+        // ONDA. O que decide a forma é o CONTAINER: MP3 vira a bolha de música
+        // (a "laranja", igual ao `!play`); OGG/Opus vira nota de voz. A fala (o
+        // TEXTO que vira voz) vem da IA, com a personalidade dela.
         // ------------------------------------------------------------------
         if (ehPedidoDeAudio(textoLimpo)) {
           try {
@@ -7724,29 +7757,10 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
             } catch { /* segue com o texto padrao */ }
             if (!fala) fala = falaDoAudio(tema);
 
-            const voz = await gerarNotaDeVoz({ texto: fala, sintetizar: sintetizarFala, pcmParaWav, toOggOpus });
-            if (!voz.ok) {
-              console.error('[VOZ] falhou:', voz.motivo);
-              await reply(`❌ ih, ${erroDaVoz(voz.motivo)}`);
-              return;
+            const saiu = await enviarNotaDeVoz(nazu, from, fala);
+            if (!saiu) {
+              await reply('❌ ih, não consegui mandar o áudio agora.');
             }
-            // NOTA DE VOZ (Opcao A) — `ptt: true` + OGG/Opus, SEM `contextInfo`.
-            //
-            // O QUE DECIDE A FORMA (pesquisado em 3 projetos que usam Baileys):
-            //
-            //   MP3      -> bolha de MUSICA (a "laranja", com a notinha) = o `!play`
-            //   OGG/Opus -> NOTA DE VOZ (o desenho da ONDA) = o que o dono quer
-            //
-            // Ou seja: so' o `ptt: true` nao bastava — com MP3 o cliente ainda
-            // desenhava como musica. O container OGG/Opus e' quem faz a nota de voz.
-            //
-            // E o `contextInfo` (newsletter) fica FORA: era ele que atrapalhava a
-            // renderizacao. Custo: este audio nao leva o cabecalho "Ver canal".
-            await nazu.sendMessage(from, {
-              audio: voz.ogg,
-              mimetype: 'audio/ogg; codecs=opus',
-              ptt: true
-            });
             return;
           } catch (e) {
             console.error('[VOZ] erro:', e?.message || e);
@@ -7754,6 +7768,34 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
             return;
           }
         }
+
+        // ------------------------------------------------------------------
+        // VOZ ESPONTÂNEA (o pedido do dono)
+        //
+        // *"vamos deixar ela usando o áudio naturalmente agora, deixa uma
+        // porcentagem de 25% de aleatoriedade com as respostas em áudio, mas
+        // quando alguém pede o áudio ela manda normalmente"*.
+        //
+        // O sorteio é UMA vez por resposta (não por mensagem do array), e fica
+        // FORA do fluxo da IA: nenhuma chamada extra de modelo só para decidir.
+        //
+        // `responder` é o caminho único da resposta de conversa: quando o
+        // sorteio dá voz, ela tenta a nota de voz; se a voz falhar (sem ffmpeg,
+        // TTS fora, etc.), o TEXTO vai — **nunca** silêncio.
+        // ------------------------------------------------------------------
+        const modoVoz = sortearModoDeResposta({ pedidoExplicito: false });
+        const responder = async (texto) => {
+          const t = texto == null ? '' : String(texto);
+          if (!t.trim()) return;
+          if (modoVoz.audio) {
+            try {
+              if (await enviarNotaDeVoz(nazu, from, t, FALA_MAX_CARACTERES)) return;
+            } catch (e) {
+              console.error('[VOZ] espontânea falhou:', e?.message || e);
+            }
+          }
+          await reply(t);
+        };
 
         // OS PAIS ADOTIVOS da Lizzy: o config guarda o LID, o NOME vem do
         // contato (o config nao tem socket). Resolvido aqui, best-effort.
@@ -7797,20 +7839,20 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
                   key: info.key
                 }).then(() => {
                   if (msgza.resp && typeof msgza.resp === 'string' && msgza.resp.length > 0) {
-                    reply(msgza.resp).then(processNext);
+                    responder(msgza.resp).then(processNext);
                   } else {
                     processNext();
                   }
                 }).catch(err => {
                   console.error('Erro ao reagir:', err);
                   if (msgza.resp && typeof msgza.resp === 'string' && msgza.resp.length > 0) {
-                    reply(msgza.resp).then(processNext);
+                    responder(msgza.resp).then(processNext);
                   } else {
                     processNext();
                   }
                 });
               } else if (msgza && msgza.resp && typeof msgza.resp === 'string' && msgza.resp.length > 0) {
-                reply(msgza.resp).then(processNext);
+                responder(msgza.resp).then(processNext);
               } else {
                 console.warn(`⚠️ [${personality}] Resposta inválida no índice ${index}:`, JSON.stringify(msgza));
                 processNext();
@@ -7823,7 +7865,7 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
             // MODELO, numa chamada curta e barata. Se ela tambem nao vier, o
             // bot fica em silencio — melhor que responder texto pre-fabricado.
             ia.respostaNatural({ texto: body, nome: pushname })
-              .then((natural) => { if (natural) reply(natural); })
+              .then((natural) => { if (natural) responder(natural); })
               .catch(() => { /* sem resposta: silencio, nunca frase pronta */ });
           }
         }).catch((assistentError) => {
@@ -7832,7 +7874,7 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
           // chamada curta. Sem ela, silencio (nunca texto pre-fabricado).
           if (ia && typeof ia.respostaNatural === 'function') {
             ia.respostaNatural({ texto: body, nome: pushname })
-              .then((natural) => { if (natural) reply(natural); })
+              .then((natural) => { if (natural) responder(natural); })
               .catch(() => { /* sem resposta */ });
           }
         });

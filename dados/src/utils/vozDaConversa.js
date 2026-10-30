@@ -7,9 +7,9 @@
  * ai' só pra testar, depois automatizamos"* — e depois, descrevendo o que
  * queria: *"aquele áudio que o usuário grava e manda seco no grupo"*.
  *
- * Ou seja: nesta rodada o gatilho é **explícito** — alguém PEDE o áudio. Não é
- * automático (ela não decide sozinha mandar voz), e isso é de propósito: é o
- * teste antes de automatizar.
+ * Ou seja: o gatilho EXPLÍCITO é alguém PEDIR o áudio. Depois do teste, o dono
+ * liberou o modo automático — ela também manda voz por conta própria, com uma
+ * chance baixa (ver "Dois caminhos" abaixo).
  *
  * ## O que este módulo faz (e o que NÃO faz)
  *
@@ -18,7 +18,21 @@
  *   1. reconhece que a mensagem é um PEDIDO DE ÁUDIO;
  *   2. tira a "moldura" do pedido para virar o tema da fala
  *      ("manda um áudio sobre o jogo" -> "o jogo");
- *   3. converte a fala em nota de voz (PCM -> WAV -> OGG/Opus).
+ *   3. sorteia se a resposta sai em áudio (`sortearModoDeResposta`);
+ *   4. limpa a fala do que não se fala (`limparFala`);
+ *   5. converte a fala em nota de voz (PCM -> WAV -> OGG/Opus).
+ *
+ * ## Dois caminhos (pedido do dono)
+ *
+ * 1. **PEDIDO EXPLÍCITO** ("Lizzy, manda um áudio aí") — responde em áudio
+ *    **sempre** (100%). É o gatilho de teste.
+ * 2. **ESPONTÂNEO** — ela manda voz por conta própria com **25%** de chance
+ *    (`CHANCE_ESPONTANEA`). Pedido: *"vamos deixar ela usando o áudio
+ *    naturalmente agora, deixa uma porcentagem de 25% de aleatoriedade com as
+ *    respostas em áudio, mas quando alguém pede o áudio ela manda normalmente"*.
+ *
+ * O sorteio é **uma vez por resposta**, fora do fluxo da IA — não gasta chamada
+ * extra de modelo.
  *
  * ## NOTA DE VOZ (é o que o dono quer — a "Opção A")
  *
@@ -126,6 +140,101 @@ export function falaDoAudio(tema) {
 }
 
 /**
+ * A chance (0..1) de a Lizzy responder em ÁUDIO por conta própria.
+ *
+ * O dono pediu **25%**. Configurável por `LIZZY_VOZ_ESPONTANEA` (aceita `0.25`
+ * ou `25`); um valor fora da faixa cai no padrão.
+ */
+export const CHANCE_ESPONTANEA = (() => {
+  const texto = String(process.env.LIZZY_VOZ_ESPONTANEA ?? '').trim();
+  // Sem a env (string vazia) vale o padrao. `Number('')` e' 0, nao NaN — por
+  // isso a checagem do texto vem ANTES, senao a ausencia viraria "0%".
+  if (!texto) return 0.25;
+  const bruto = Number(texto);
+  if (!Number.isFinite(bruto) || bruto < 0) return 0.25;
+  return bruto > 1 ? Math.min(bruto / 100, 1) : bruto;
+})();
+
+/**
+ * O teto de caracteres da fala ESPONTÂNEA.
+ *
+ * Uma nota de voz natural é curta. Se a resposta da IA for longa (o texto do
+ * chat não tem o teto de 3 frases da voz), falar tudo viraria uma nota enorme —
+ * pouco natural e demorada de sintetizar. Acima deste teto, o caminho
+ * espontâneo manda **texto**.
+ *
+ * **O pedido EXPLÍCITO não passa por aqui** — quem pediu, recebe áudio (e a
+ * fala do pedido é curta por construção: `maxTokens: 90`).
+ *
+ * Configurável por `LIZZY_VOZ_MAX_CARACTERES`.
+ */
+export const FALA_MAX_CARACTERES = (() => {
+  const texto = String(process.env.LIZZY_VOZ_MAX_CARACTERES ?? '').trim();
+  if (!texto) return 400;
+  const n = Number(texto);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 400;
+})();
+
+/**
+ * A fala que vai para o TTS, a partir de um TEXTO que a IA já escreveu.
+ *
+ * O texto do chat tem coisas que **não se falam** — e algumas quebram a voz:
+ * `*negrito*`, `~riscado~`, `_itálico_`, emoji, `@menção` (o `@` fica órfão),
+ * código, links e quebras de linha. Aqui elas viram fala.
+ *
+ * Não é um formatador de mensagem: é o mínimo para o TTS não ler asterisco nem
+ * "arroba".
+ *
+ * @param {string} texto
+ * @returns {string}
+ */
+export function limparFala(texto) {
+  let t = String(texto || '');
+  // Blocos de código saem inteiros (o TTS soletraria os marcadores).
+  t = t.replace(/```[\s\S]*?```/g, ' ');
+  t = t.replace(/`([^`]*)`/g, '$1');
+  // Markdown: negrito/itálico/riscado ficam com o TEXTO, sem os marcadores.
+  t = t.replace(/\*{1,3}([^*\n]+)\*{1,3}/g, '$1');
+  t = t.replace(/_{1,3}([^_\n]+)_{1,3}/g, '$1');
+  t = t.replace(/~{1,2}([^~\n]+)~{1,2}/g, '$1');
+  // Títulos (`#`, `##`...) e citações (`>`) no início da linha.
+  t = t.replace(/^\s{0,3}#{1,6}\s+/gm, '');
+  t = t.replace(/^\s{0,3}>\s?/gm, '');
+  // Links: `[texto](url)` -> `texto`; URL crua -> fora (o TTS soletraria).
+  t = t.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1');
+  t = t.replace(/https?:\/\/\S+/gi, ' ');
+  // Menções e `@` órfãos.
+  t = t.replace(/@\d{5,}/g, ' ');
+  t = t.replace(/(^|\s)@(?=\s|$)/g, ' ');
+  // Emoji e pictogramas (o TTS lê o nome do emoji, o que soa robótico).
+  t = t.replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}]/gu, ' ');
+  // Quebras de linha e espaços repetidos viram um espaço.
+  t = t.replace(/\s+/g, ' ').trim();
+  return t;
+}
+
+/**
+ * Sorteia o MODO da resposta: áudio ou texto.
+ *
+ * O caminho explícito (`pedidoExplicito`) é **sempre** áudio — quem pediu,
+ * manda. O espontâneo usa `CHANCE_ESPONTANEA`.
+ *
+ * `rng` entra por parâmetro para o teste ser determinístico.
+ *
+ * @param {object} p
+ * @param {boolean} [p.pedidoExplicito] a mensagem é um pedido de áudio?
+ * @param {number} [p.chance] 0..1 (padrão `CHANCE_ESPONTANEA`)
+ * @param {() => number} [p.rng] fonte de aleatoriedade (padrão `Math.random`)
+ * @returns {{ audio: boolean, motivo: 'pedido'|'sorteio'|'texto' }}
+ */
+export function sortearModoDeResposta({ pedidoExplicito = false, chance = CHANCE_ESPONTANEA, rng = Math.random } = {}) {
+  if (pedidoExplicito) return { audio: true, motivo: 'pedido' };
+  const c = Number.isFinite(chance) ? Math.min(Math.max(chance, 0), 1) : CHANCE_ESPONTANEA;
+  const r = typeof rng === 'function' ? Number(rng()) : Math.random();
+  return r < c ? { audio: true, motivo: 'sorteio' } : { audio: false, motivo: 'texto' };
+}
+
+/**
  * Gera a NOTA DE VOZ (OGG/Opus mono) que a Lizzy manda no chat.
  *
  * A cadeia é **PCM -> WAV -> OGG/Opus**, a mesma do `!statusgrupo`:
@@ -154,9 +263,13 @@ export function falaDoAudio(tema) {
  * @param {function} p.toOggOpus `(buffer) => Promise<Buffer>`
  * @returns {Promise<{ ok: boolean, ogg?: Buffer, fonte?: string, motivo?: string }>}
  */
-export async function gerarNotaDeVoz({ texto, sintetizar, pcmParaWav, toOggOpus } = {}) {
+export async function gerarNotaDeVoz({ texto, sintetizar, pcmParaWav, toOggOpus, limite = 0 } = {}) {
   const limpo = String(texto || '').trim();
   if (!limpo) return { ok: false, motivo: 'texto_vazio' };
+  // Teto opcional da fala ESPONTANEA: acima dele o chamador manda texto.
+  if (Number.isFinite(limite) && limite > 0 && limpo.length > limite) {
+    return { ok: false, motivo: 'fala_longa' };
+  }
   if (typeof sintetizar !== 'function' || typeof pcmParaWav !== 'function' || typeof toOggOpus !== 'function') {
     return { ok: false, motivo: 'sem_dependencias' };
   }
@@ -196,7 +309,8 @@ export function erroDaVoz(motivo) {
     texto_vazio: 'não tenho o que falar',
     wav_falhou: 'não consegui preparar o áudio',
     opus_falhou: 'não consegui converter o áudio',
-    tts_desativado: 'a voz está desativada no servidor'
+    tts_desativado: 'a voz está desativada no servidor',
+    fala_longa: 'a resposta é longa demais para falar'
   };
   return mapa[motivo] || 'não consegui gerar o áudio agora';
 }

@@ -167,9 +167,13 @@ await test('8. o handler manda NOTA DE VOZ (OGG/Opus + ptt: true), SEM contextIn
   ok(INDEX.includes("from './utils/vozDaConversa.js'"), 'importa o modulo');
   ok(INDEX.includes('ehPedidoDeAudio(textoLimpo)'), 'usa o gatilho explicito');
   ok(INDEX.includes('gerarNotaDeVoz('), 'chama a geracao da NOTA DE VOZ');
-  const i = INDEX.indexOf('gerarNotaDeVoz(');
+  // A ancora e' o HELPER do envio (o unico ponto que monta a nota de voz): o
+  // pedido explicito e o espontaneo passam por ele. Ancorar no `gerarNotaDeVoz`
+  // pegaria tambem o bloco da VOZ ESPONTANEA (que tem `contextInfo` no texto de
+  // outro helper) — falso positivo.
+  const i = INDEX.indexOf('async function enviarNotaDeVoz(');
   // Sem os comentarios (o bloco CITA os termos para explicar).
-  const bloco = INDEX.slice(i, i + 2000)
+  const bloco = INDEX.slice(i, i + 1200)
     .split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
   // O CONTAINER e' o que decide: MP3 -> bolha de musica (a "laranja", igual ao
   // `!play`); OGG/Opus -> NOTA DE VOZ (o desenho da ONDA). O dono quer a onda.
