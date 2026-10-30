@@ -181,7 +181,17 @@ export function regrasDeCanal(canal) {
     '- Use 1 item quase sempre. Use 2 ou 3 so quando fizer sentido mandar',
     '  mensagens separadas.',
     '- `react` e OPCIONAL e quase sempre vazio. So use se fizer MUITO sentido reagir; no dia a dia, deixe de fora.',
-    '- Nunca escreva nada fora do JSON.'
+    '- Nunca escreva nada fora do JSON.',
+    '',
+    'MEMORIA (o campo `aprender` — use com parcimonia):',
+    'Quando a pessoa revelar algo que voce PRECISA lembrar depois, acrescente',
+    '`"aprender": { "tipo": "nota_importante", "valor": "o que anotar" }` no JSON.',
+    'Use para POUCAS coisas que importam: o SEXO dela, o nome, um gosto forte,',
+    'um fato que ela pediu para lembrar. NAO anote conversa fiada nem tudo.',
+    'Exemplo (ela disse que e mulher):',
+    '```json',
+    '{ "resp": [{ "resp": "ata" }], "aprender": { "tipo": "nota_importante", "valor": "e mulher" } }',
+    '```'
   ].join('\n');
 }
 

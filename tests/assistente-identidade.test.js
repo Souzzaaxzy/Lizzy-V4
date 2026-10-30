@@ -981,6 +981,48 @@ await test('73. o CARATER (compartilhado com a voz) tem risada variada e xingame
   contem(GUARDA, 'nao fica "educada demais"', 'e explica por que (entrega robo)');
 });
 
+await test('74. ela xinga HOMEM e MULHER (com a concordancia certa)', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'XINGAR HOMEM x XINGAR MULHER', 'a secao existe');
+  // Para homem (seu).
+  for (const x of ['"seu otario"', '"seu idiota"', '"seu corno"', '"seu babaca"', '"seu troxa"']) {
+    contem(b, x, `homem: ${x}`);
+  }
+  // Para mulher (sua).
+  for (const x of ['"sua otaria"', '"sua idiota"', '"sua babaca"', '"sua chata"', '"sua sonsa"']) {
+    contem(b, x, `mulher: ${x}`);
+  }
+  // Brincadeira muda o seu/sua e nao ofende.
+  for (const x of ['"sua boba"', '"seu bobo"', '"sua chata"', '"sua anta"']) {
+    contem(b, x, `brincadeira: ${x}`);
+  }
+  // Mesma intensidade para os dois.
+  contem(b, 'mesmo em INTENSIDADE', 'mesma moeda para os dois');
+  contem(b, 'Mesma moeda para os dois', 'explicita');
+});
+
+await test('75. sem saber o sexo, ela xinga SEM o seu/sua (nao erra a concordancia)', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'SE VOCE NAO SABE o sexo da pessoa', 'a regra existe');
+  contem(b, 'xinga SEM o "seu/sua"', 'a instrucao');
+  // Os exemplos neutros.
+  for (const x of ['"que bosta"', '"que raiva"', '"vai se fuder"']) contem(b, x, `neutro: ${x}`);
+});
+
+await test('76. o SEXO vira MEMORIA (o campo aprender, que estava morto)', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  // A secao do sexo manda ANOTAR.
+  contem(b, 'ANOTE para nao esquecer', 'manda anotar');
+  contem(b, '"tipo": "nota_importante", "valor": "e homem"', 'com o formato certo');
+  // E o bloco do xingamento aponta para a memoria.
+  contem(b, 'voce ANOTA na memoria', 'o xingamento consulta a memoria');
+  // O formato do `aprender` esta documentado no prompt do chat.
+  const GUARDA = fs.readFileSync(new URL('../dados/src/utils/iapGuarda.js', import.meta.url), 'utf-8');
+  contem(GUARDA, 'MEMORIA (o campo `aprender`', 'o campo esta documentado');
+  contem(GUARDA, '"tipo": "nota_importante"', 'com o tipo certo');
+  contem(GUARDA, 'o SEXO dela', 'cita o sexo como uso legitimo');
+});
+
 console.log('\n' + '='.repeat(60));
 const tot = RESULTS.reduce((a, r) => a + r.passed, 0);
 const fal = RESULTS.reduce((a, r) => a + r.failed, 0);
