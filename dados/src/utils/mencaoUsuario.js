@@ -45,6 +45,103 @@
  * ninguém avisa (não inventa alvo).
  */
 
+/**
+ * Os separadores/ENFEITES que saem do nome antes de comparar.
+ *
+ * O nome do dono e' `𝐊𝐚𝐧𝐧𝐨𝐧ᰔ𝐠𝐢 𖤐 𝐬𝐞ɪ𝐭𝐚 𝐦𝐭𝐱` — depois do NFKC fica
+ * `Kannonᰔgi ...`. Ninguem fala "kannon-simbolo-gi": o dono fala **"kannongi"**.
+ * Entao os simbolos/enfeites viram NADA (juntam as partes) e so' o que sobra e'
+ * comparado. E' o que faz "kannongi" casar o nome real.
+ */
+const ENFEITE_RE = new RegExp([
+  '[\\u2000-\\u206F]', // espacos/pontuacao de largura zero e afins
+  '[\\u2190-\\u2BFF]', // setas, formas, dingbats (o ✦ 𖤐)
+  '[\\u2E00-\\u2E7F]',
+  '[\\u3000-\\u303F]', // CJK (inclui o ㅤ U+3164 do filler)
+  '[\\u3164]',
+  '[\\uA700-\\uA71F]', // modificadores de tom
+  '[\\u1C00-\\u1C4F]', // o ᰔ (LEPCHA) que o dono usa no nome
+  '[\\uFE00-\\uFE0F]',
+  '[\\uFE30-\\uFE4F]',
+  '[\\uFF00-\\uFF0F\\uFF1A-\\uFF20\\uFF3B-\\uFF40\\uFF5B-\\uFF65]', // pontuacao de largura total
+  '[\\u{1F000}-\\u{1FAFF}]', // emoji
+  '[\\u{1D400}-\\u{1D7FF}]' // MATHEMATICAL (o nome "bonito", caso o NFKC falhe)
+].join('|'), 'gu');
+
+/**
+ * As letras que SÃO parecidas com uma letra latina mas não são (IPA/fonética).
+ *
+ * O nome do dono tem `ɪ` (U+026A, LETRA PEQUENA LATINA IOTA) em "s**ɪ**ta" — o
+ * NFKC **não** troca isso por "i", porque é uma letra de verdade em outro
+ * alfabeto. Sem este mapa, "seita" nunca casaria "sɪta".
+ */
+const LETRAS_PARECIDAS = {
+  '\u026A': 'i', '\u0269': 'i', '\u0268': 'i', '\u0131': 'i', '\u1D62': 'i',
+  '\u0261': 'g', '\u0262': 'g',
+  '\u1D00': 'a', '\u0251': 'a', '\u0250': 'a',
+  '\u03B1': 'a', '\u03B5': 'e', '\u03B9': 'i', '\u03BF': 'o', '\u03C5': 'u',
+  '\u03C1': 'p', '\u03BA': 'k', '\u03C4': 't', '\u03BD': 'v',
+  '\u0274': 'n', '\u0271': 'm', '\u0280': 'r', '\u0281': 'r',
+  '\u029F': 'l', '\u0299': 'b', '\u1D04': 'c', '\u1D05': 'd'
+};
+
+/**
+ * Reduz o nome a letras+digitos, para comparar: NFKC (o nome bonito), tira
+ * acento, remove enfeites/simbolos/emoji e colapsa espaco.
+ *
+ * @param {string} texto
+ * @returns {string}
+ */
+function chaveNome(texto) {
+  let t = String(texto || '');
+  try { t = t.normalize('NFKC'); } catch { /* ok */ }
+  try { t = t.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); } catch { /* ok */ }
+  t = t.replace(ENFEITE_RE, '');
+  // Tira o que nao e' letra/numero/espaco (pontuacao solta, underline...).
+  t = t.replace(/[^\p{L}\p{N}\s]/gu, ' ');
+  t = t.toLowerCase();
+  // Letras parecidas (IPA) viram a latina equivalente.
+  t = t.replace(/[\u026A\u0269\u0268\u0131\u1D62\u0261\u0262\u1D00\u0251\u0250\u03B1\u03B5\u03B9\u03BF\u03C5\u03C1\u03BA\u03C4\u03BD\u0274\u0271\u0280\u0281\u029F\u0299\u1D04\u1D05]/g,
+    (c) => LETRAS_PARECIDAS[c] || c);
+  return t.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Reduz o nome a uma forma TOLERANTE às trocas do STT.
+ *
+ * O STT erra as letras de som parecido: **C↔K**, **G↔K**, **S↔C**, **PH↔F**,
+ * **Y↔I**, **W↔V**. O dono pediu *"marca a cangica"* e o nome real é
+ * **"Cangica"** — com `kangica` não casaria.
+ *
+ * O que NÃO entra aqui: vogal→vogal (transformaria "maria" em "meria" e
+ * qualquer nome casaria qualquer um). Só as consoantes de som ambíguo.
+ *
+ * @param {string} chave o resultado de `chaveNome`
+ * @returns {string}
+ */
+function chaveSonora(chave) {
+  return String(chave || '')
+    .replace(/c(?=[ei])/g, 's')  // ce/ci = "se"/"si"
+    .replace(/c/g, 'k')          // ca/co/cu = "ka/ko/ku"
+    .replace(/q/g, 'k')
+    .replace(/g(?=[ei])/g, 'j')  // ge/gi = "je/ji"
+    .replace(/ph/g, 'f')
+    .replace(/y/g, 'i')
+    .replace(/w/g, 'v')
+    .replace(/z/g, 's')
+    .replace(/ll/g, 'l')
+    .replace(/(.)\1+/g, '$1');   // letra dobrada vale uma ("kann" -> "kan")
+}
+
+/**
+ * Os PRONOMES que podem substituir o nome ("menciona ele", "chama ela").
+ *
+ * E' o caso real do dono: ela disse o nome do dono do grupo, ele respondeu
+ * *"menciona ele ai"* — e sem isto o pronome virava um "nome" que nao existe.
+ * Quem chama resolve o pronome pelo ULTIMO alvo da conversa (o handler guarda).
+ */
+const PRONOMES = new Set(['ele', 'ela', 'eles', 'elas', 'esse', 'essa', 'este', 'esta', 'aquele', 'aquela']);
+
 /** Palavras que não são nome de ninguém (cargos, artigos, o próprio bot). */
 const PALAVRAS_VAZIAS = new Set([
   'lizzy', 'abyss', 'bot', 'eu', 'mim', 'me', 'ele', 'ela', 'eles', 'elas',
@@ -103,6 +200,13 @@ function normalizar(texto) {
     .replace(/\b(lizzy|abyss)\b/gi, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim();
+  try {
+    // NFKC PRIMEIRO: e' o que desfaz o "nome bonito" do WhatsApp. O
+    // `𝐊𝐚𝐧𝐧𝐨𝐧` (MATHEMATICAL BOLD) NAO tem decomposicao NFD — sem o NFKC ele
+    // continuava sendo os code points de matematica, e "kannongi" nunca casava
+    // com o nome real (o erro relatado pelo dono).
+    t = t.normalize('NFKC');
+  } catch { /* ok */ }
   try { t = t.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); } catch { /* ok */ }
   return t;
 }
@@ -146,6 +250,16 @@ export function identificarPedidoDeMencao(texto) {
   if (!nome) return null;
   // Um nome de uma letra só não é nome.
   if (nome.replace(/\s/g, '').length < 2) return null;
+  // PRONOME ("menciona ele"): o alvo e' o ULTIMO da conversa — quem chama
+  // resolve (o handler guarda o ultimo alvo por grupo).
+  // O pronome pode vir com particula ("ele ai", "ele aqui", "ela mesmo").
+  const chaveNome0 = chaveNome(nome).replace(/\s+(ai|aqui|mesmo|la|agora)$/i, '').trim();
+  if (PRONOMES.has(chaveNome0)) {
+    const querFalarP = QUER_FALAR.test(t)
+      || /\b(quer\w*|precisa\w*|gostaria)\b[^]*\b(falar|conversar)\b/i.test(t)
+      || /\b(pra|para)\s+mim\b/i.test(t);
+    return { nome: '', pronome: chaveNome0, querFalar: querFalarP };
+  }
   // "chama o usuario" (sem nome) é pedido, mas sem alvo: o chamador pergunta.
   // `quer\w*` cobre "quer/quero/queriam/precisa" — o `\bquer\b` nao casaria
   // "quero falar com ele". E "chama X PRA MIM" tambem e' "eu quero falar com X"
@@ -172,21 +286,43 @@ export function identificarPedidoDeMencao(texto) {
  * @returns {number} 0 = não casa; maior = casamento melhor
  */
 export function pontuarNome(dito, real) {
-  const a = normalizar(dito).toLowerCase();
-  const b = normalizar(real).toLowerCase();
+  const a = chaveNome(dito);
+  const b = chaveNome(real);
   if (!a || !b) return 0;
   if (a === b) return 100;
   // O nome real é só o número (não casou nome nenhum): vale pouco.
   if (/^\d+$/.test(b)) return 0;
+  // O nome sem os ESPACOS: "kannongi" == "kannon gi". E' o caso do dono.
+  const bJunto = b.replace(/\s/g, '');
+  const aJunto = a.replace(/\s/g, '');
+  if (aJunto && aJunto === bJunto) return 98;
   const palavras = b.split(/\s+/).filter(Boolean);
   // Nome real começa com o dito (palavra inteira): "jo" NÃO casa "joão" por
-  // aqui (é prefixo de palavra, não de token) — cai no caso 4.
+  // aqui (é prefixo de palavra, não de token) — cai no caso do prefixo.
   if (palavras[0] === a) return 90;
   if (palavras.includes(a)) return 80;
   // Prefixo de alguma palavra do nome real ("sil" -> "silva").
   if (palavras.some((p) => p.startsWith(a) && a.length >= 3)) return 60;
+  // Prefixo do nome JUNTO ("kannong" -> "kannongi").
+  if (aJunto.length >= 4 && bJunto.startsWith(aJunto)) return 55;
+  // O CONTRARIO: o dito COMECA com o nome real ("kannongi" comeca com "kannon").
+  // E' o caso do dono: o nome e' "Kannon ..." e ele fala o apelido composto
+  // "kannongi". Exige 5+ letras para nao casar "ana" dentro de "anabella".
+  if (bJunto.length >= 5 && aJunto.startsWith(bJunto)) return 52;
+  // O dito comeca com a PRIMEIRA PALAVRA do nome (com o resto colado): o mesmo
+  // caso, quando o nome tem mais partes ("kannongi" x "kannon gi").
+  if (palavras[0] && palavras[0].length >= 5 && aJunto.startsWith(palavras[0])) return 51;
   // O nome real INTEIRO contém o dito como pedaço (nome composto falado junto).
-  if (b.includes(a) && a.length >= 3) return 50;
+  if (bJunto.includes(aJunto) && aJunto.length >= 3) return 50;
+  // SONORA (o STT troca C/K, G/J, S/Z...): "kangica" casa "cangica". Exige
+  // tamanho minimo para nao casar qualquer coisa.
+  const aSom = chaveSonora(aJunto);
+  const bSom = chaveSonora(bJunto);
+  if (aSom.length >= 4 && bSom.length >= 4) {
+    if (aSom === bSom) return 88;
+    if (bSom.startsWith(aSom)) return 54;
+    if (bSom.includes(aSom)) return 48;
+  }
   return 0;
 }
 
@@ -213,7 +349,7 @@ export function acharUsuarioPorNome(dito, usuarios = [], opts = {}) {
   }
 
   // A palavra dita não pode ser um cargo/palavra vazia.
-  const chave = normalizar(dito).toLowerCase();
+  const chave = chaveNome(dito);
   if (!chave || PALAVRAS_VAZIAS.has(chave)) return { achou: false };
 
   // Pontua contra o NOME e o APELIDO (o apelido do contador é a reserva).

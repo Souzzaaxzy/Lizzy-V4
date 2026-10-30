@@ -253,7 +253,13 @@ export function linhasDoGrupo(g) {
   const linhas = [];
   if (limpo(g.nome)) linhas.push(`- Nome: ${g.nome}`);
   if (g.dono && (g.dono.nome || g.dono.numero)) {
-    linhas.push(`- Dono do grupo: ${limpo(g.dono.nome) || g.dono.numero}`);
+    // O NUMERO nao e' nome: quando o nome nao resolve, o numero vai ROTULADO
+    // (e nao no lugar do nome) — senao a Lizzy escreve "o dono do grupo e'
+    // 5511915323638", que foi o erro relatado pelo dono.
+    const nomeDono = limpo(g.dono.nome);
+    linhas.push(nomeDono
+      ? `- Dono do grupo: ${nomeDono}`
+      : `- Dono do grupo: (nome nao disponivel; o numero e' ${g.dono.numero} — NAO use o numero como se fosse o nome dele)`);
   }
   if (Array.isArray(g.admins) && g.admins.length) {
     const mostrados = g.admins.slice(0, 20);
@@ -261,7 +267,10 @@ export function linhasDoGrupo(g) {
     // resolvidos (nem todo admin tem nome na agenda).
     const faltando = Math.max(Number(g.totalAdmins) || 0, g.admins.length) - mostrados.length;
     const resto = faltando > 0 ? ` (+${faltando})` : '';
-    linhas.push(`- Admins (${g.totalAdmins}): ${mostrados.join(', ')}${resto}`);
+    // Nome nao resolvido entra como "sem nome" — nunca como numero solto na
+    // lista (o numero nao identifica a pessoa para quem le).
+    const nomes = mostrados.map((n) => (limpo(n) ? n : 'sem nome'));
+    linhas.push(`- Admins (${g.totalAdmins}): ${nomes.join(', ')}${resto}`);
   }
   // MODERADORES e ALPHAS: cargos do BOT (quem o dono promoveu), que nao
   // aparecem no metadata do WhatsApp.
@@ -295,7 +304,12 @@ export function montarContextoDaConversa(ctx = {}) {
 
   const dono = dadosDoGrupo?.donoDoBot;
   if (dono && (dono.nome || (dono.numeros && dono.numeros.length))) {
-    linhas.push(`O DONO do bot e' ${limpo(dono.nome) || dono.numeros?.[0] || 'o dono'}.`);
+    // Mesma regra: o numero nao vira nome. Sem nome resolvido, ela NAO inventa
+    // um nome — trata como "o dono" e o numero vai so' como referencia.
+    const nomeDono = limpo(dono.nome);
+    linhas.push(nomeDono
+      ? `O DONO do bot e' ${nomeDono}.`
+      : `O DONO do bot e' o seu dono (o nome dele nao esta disponivel; NAO use o numero ${dono.numeros?.[0] || ''} como se fosse o nome dele).`);
   }
 
   const nome = limpo(nomeDeQuemFalou);

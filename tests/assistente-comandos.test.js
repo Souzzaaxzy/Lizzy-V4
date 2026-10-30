@@ -228,6 +228,46 @@ await test('8c. acha o alvo pelo PAPEL (uma pessoa ou "qualquer um")', () => {
   ok(mencao.acharUsuarioPorPapel('papel_invalido', usuarios).achou === false, 'papel desconhecido -> nao achou');
 });
 
+await test('8d. NOME ESTILIZADO (MATHEMATICAL BOLD) casa — o erro do dono', () => {
+  // O nome real e' `𝐊𝐚𝐧𝐧𝐨𝐧 𖤐 ˢᵉᶦᵗᵃ ᵐᵗˣ`: MATHEMATICAL BOLD + o `ɪ` (IPA) +
+  // enfeites. Sem o NFKC, "kannongi" NUNCA casava.
+  // Os code points REAIS do nome do dono (MATHEMATICAL BOLD, U+1D400+ — nao o
+  // SANS-SERIF BOLD, que e' outro bloco e da' outro NFKC).
+  const nome = String.fromCodePoint(
+    0x1D40A, 0x1D41A, 0x1D427, 0x1D427, 0x1D428, 0x1D427, // Kannon
+    0x20, 0x16910, 0x20,                                    // o enfeite 𖤐
+    0x2E2, 0x1D49, 0x1DA6, 0x1D57, 0x1D43,                  // ˢᵉᶦᵗᵃ
+    0x20, 0x1D50, 0x1D57, 0x2E3                               // ᵐᵗˣ
+  );
+  const us = [{ id: '9@lid', nome }];
+  ok(mencao.pontuarNome('kannon', nome) > 0, 'o nome SEM enfeite casa');
+  ok(mencao.pontuarNome('kannongi', nome) > 0, '"kannongi" (o apelido do dono) casa');
+  ok(mencao.pontuarNome('seita', nome) > 0, 'a parte "sɪta" casa "seita" (o IPA vira i)');
+  ok(mencao.acharUsuarioPorNome('kannongi', us).usuario?.id === '9@lid', 'acha pelo nome estilizado');
+  // E o que NAO e' o nome continua nao casando.
+  ok(mencao.pontuarNome('maria', nome) === 0, 'nome diferente nao casa');
+  ok(mencao.pontuarNome('zezinho', nome) === 0, 'outro nome nao casa');
+});
+
+await test('8e. o STT troca letras: "kangica" casa "Cangica" (a mae)', () => {
+  const us = [{ id: '1@lid', nome: 'Cangica' }];
+  // O dono pediu "marca a cangica" E "marca a kangica" — o STT troca C<->K.
+  for (const q of ['cangica', 'kangica', 'kangika', 'cangika']) {
+    ok(mencao.pontuarNome(q, 'Cangica') > 0, `"${q}" casa "Cangica"`);
+    ok(mencao.acharUsuarioPorNome(q, us).usuario?.id === '1@lid', `acha a mae por "${q}"`);
+  }
+  // Sem falso positivo.
+  ok(mencao.pontuarNome('maria', 'Cangica') === 0, 'outro nome nao casa');
+  ok(mencao.pontuarNome('zezinho', 'Cangica') === 0, 'outro nome nao casa (2)');
+});
+
+await test('8f. o PRONOME e reconhecido ("menciona ele ai")', () => {
+  for (const t of ['menciona ele ai', 'menciona ele', 'chama ela pra mim', 'chama ela aqui', 'marca ele']) {
+    const r = mencao.identificarPedidoDeMencao(t);
+    ok(r?.pronome === 'ele' || r?.pronome === 'ela', `"${t}" -> pronome (veio ${JSON.stringify(r)})`);
+  }
+});
+
 await test('9. acha por nome, pedaco do nome e apelido', () => {
   const usuarios = [
     { id: '1@lid', nome: 'Kannon' },
@@ -424,6 +464,22 @@ await test('19. nome inexistente avisa sem mencionar ninguem', async () => {
   const sent = await run('lizzy chama o zezinho');
   ok(!sent.some((c) => Array.isArray(c.mentions) && c.mentions.length), 'NAO mencionou ninguem');
   ok(textos(sent).some((x) => /nao|não/i.test(x) && /nome/i.test(x)), 'avisou que nao achou');
+});
+
+await test('19b. o NUMERO nunca aparece no lugar do NOME (o erro do dono)', async () => {
+  // O dono reclamou: "tratou o dono do grupo com numero e nao nome". O contexto
+  // nao pode apresentar o numero COMO SE fosse o nome.
+  const ctx = await import(new URL('../dados/src/utils/contextoConversa.js', import.meta.url).href);
+  const semNome = ctx.montarContextoDaConversa({
+    dadosDoGrupo: { grupo: { nome: 'g', dono: { nome: null, numero: '5511915323638' } } }
+  });
+  ok(!/- Dono do grupo: 5511915323638/.test(semNome), 'nao escreve "Dono do grupo: <numero>"');
+  ok(/nome nao disponivel/i.test(semNome), 'diz que o nome nao esta disponivel');
+  // Com o nome, sai o nome (o caminho normal).
+  const comNome = ctx.montarContextoDaConversa({
+    dadosDoGrupo: { grupo: { nome: 'g', dono: { nome: 'Kannon', numero: '5511915323638' } } }
+  });
+  ok(/- Dono do grupo: Kannon/.test(comNome), 'com nome, sai o nome');
 });
 
 await test('20. a acao NAO cai no LLM (early return)', () => {

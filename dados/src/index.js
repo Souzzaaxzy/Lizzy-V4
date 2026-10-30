@@ -670,6 +670,15 @@ async function responderPrefixo(nazu, from, info, sender, currentPrefix) {
 }
 
 /**
+ * O ULTIMO alvo de menção por grupo — para resolver o PRONOME ("menciona ele").
+ *
+ * Caso real do dono: a Lizzy disse o nome do dono do grupo, ele respondeu
+ * *"menciona ele aí"*. Sem memoria, o pronome virava um "nome" inexistente.
+ * E' em memoria (nao em disco): e' o fio da conversa, nao um cadastro.
+ */
+const ultimoAlvoDeMencao = new Map();
+
+/**
  * Acha o ALVO de uma menção pedida por nome ("chama o Fulano pra mim").
  *
  * Monta a lista de candidatos com o NOME já resolvido pelo resolvedor único
@@ -7860,20 +7869,33 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
         // ------------------------------------------------------------------
         if (pedidoDeMencao) {
           try {
-            const alvo = await acharAlvoDaMencao({
-              dito: pedidoDeMencao.nome,
-              papel: pedidoDeMencao.papel,
-              nazu, metadata: groupMetadata, from, groupData, sender,
-              numerosDono: [numerodono, lidowner]
-            });
+            // PRONOME ("menciona ele"): usa o ULTIMO alvo mencionado no grupo.
+            let alvo;
+            if (pedidoDeMencao.pronome) {
+              const anterior = ultimoAlvoDeMencao.get(from);
+              if (anterior) {
+                alvo = { achou: true, usuario: anterior };
+              } else {
+                alvo = { achou: false, semAnterior: true };
+              }
+            } else {
+              alvo = await acharAlvoDaMencao({
+                dito: pedidoDeMencao.nome,
+                papel: pedidoDeMencao.papel,
+                nazu, metadata: groupMetadata, from, groupData, sender,
+                numerosDono: [numerodono, lidowner]
+              });
+            }
             const nomePapel = nomeDoPapel(pedidoDeMencao.papel);
             if (!alvo.achou) {
               // Papel sem ninguem: avisa citando o CARGO. Nome: avisa que nao achou.
-              const fala = pedidoDeMencao.papel
-                ? falaDoEvento('mencaoPapelVazio', { papel: nomePapel })
-                : (alvo.ambiguo
-                  ? falaDoEvento('mencaoAmbiguo', {})
-                  : falaDoEvento('mencaoNaoAchou', { nome: nomeDeQuemPediu }));
+              const fala = alvo.semAnterior
+                ? 'nao sei de quem voce esta falando, me diz o nome'
+                : (pedidoDeMencao.papel
+                  ? falaDoEvento('mencaoPapelVazio', { papel: nomePapel })
+                  : (alvo.ambiguo
+                    ? falaDoEvento('mencaoAmbiguo', {})
+                    : falaDoEvento('mencaoNaoAchou', { nome: nomeDeQuemPediu })));
               await nazu.sendMessage(from, {
                 text: alvo.ambiguo && !pedidoDeMencao.papel
                   ? `${fala}\n\n${alvo.candidatos.map((c) => `• ${c.nome}`).join('\n')}`
@@ -7902,6 +7924,8 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
               text: fala,
               mentions: [jidCompleto]
             });
+            // Guarda o alvo: o proximo "menciona ele" usa este.
+            ultimoAlvoDeMencao.set(from, u);
             return;
           } catch (e) {
             console.error('[ASSISTENTE] falha na mencao:', e?.message || e);
