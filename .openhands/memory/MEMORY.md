@@ -103,7 +103,16 @@ logs diários (`YYYY-MM-DD.md`).
   ("um admin") escolhe UMA; papel vazio avisa citando o cargo (não inventa). As
   marcas vêm do metadata (`owner`/`admin`) e do `groupData` (mods/alphas).
   ⚠️ "dono do **grupo**" tem de ser testado antes de "dono do **bot**".
-- Teste: `tests/assistente-comandos.test.js` (28/193).
+- **3 armadilhas medidas** (out/2026, da conversa real do dono):
+  - **NFKC** é obrigatório no match de nome: o MATHEMATICAL BOLD (`𝐊𝐚𝐧𝐧𝐨𝐧`,
+    **U+1D400+**) **não tem decomposição NFD** — só o NFKC o desfaz. E o `ɪ` (IPA)
+    não vira `i` sozinho: há um mapa de letras parecidas.
+  - **STT troca letras** (C↔K, G↔J, S↔Z…): `chaveSonora` faz "kangica" casar
+    "Cangica". **Só consoantes ambíguas** — vogal por vogal casaria tudo.
+  - **Número NUNCA vira nome** no contexto: sem nome resolvido, o número vai
+    **rotulado** ("nome não disponível…"), senão a Lizzy escreve o número.
+  - **Pronome** ("menciona ele"): resolvido pelo último alvo do grupo (RAM).
+- Teste: `tests/assistente-comandos.test.js` (32/218).
 
 ## `!pin` / `!s` — imagens ACESSÍVEIS e quantidade pedida (out/2026)
 

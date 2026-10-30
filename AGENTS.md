@@ -15113,3 +15113,61 @@ sem singular, vale o padrão do pack.
 (`image/*` passa, `text/html` não, HEAD→GET, extensão ruim sem gastar rede,
 paralelo com limite, ordem preservada) e a quantidade, mais o guard estrutural do
 handler. `pin-tiktok-carousel` **40/0** (o dublê ganhou a rota do `i.pinimg.com`).
+
+### 🐛 MENÇÃO — 3 erros da conversa real (out/2026) ✅
+O dono mandou a conversa e apontou três. Os três foram reproduzidos e
+corrigidos, cada um com teste.
+
+#### ERRO 1 — "não consegue marcar a mãe dela" (`Cangica`)
+A mãe está no config (`paisAdotivos`, papel `mae`, nome `Cangica`). O dono pediu
+*"marca a cangica"* e depois *"marca a kangica"* — o **STT troca letras** de som
+parecido e o nome não casava.
+
+**Correção**: `chaveSonora` (nova) — o STT troca **C↔K**, **G↔J**, **S↔Z**,
+**PH↔F**, **Y↔I**, **W↔V**, e letra dobrada vale uma. `kangica`/`kangika`/
+`cangika` agora casam `Cangica`.
+⚠️ **Só consoantes de som ambíguo entram**: vogal por vogal transformaria "maria"
+em "meria" e qualquer nome casaria qualquer um (há teste barrando).
+
+#### ERRO 2 — "tratou o dono do grupo com número e não nome"
+O contexto montava `- Dono do grupo: 5511915323638` — o **número no lugar do
+nome**. A Lizzy só escrevia o que recebia.
+
+**Correção**: quando o nome não resolve, o número vai **ROTULADO** (*"nome não
+disponível; o número é X — NÃO use o número como se fosse o nome dele"*), e a
+lista de admins usa `sem nome` em vez do número solto. Com o nome resolvido, sai
+o nome (caminho normal intacto).
+
+#### ERRO 3 — "não acha quando o nome tem caracteres especiais"
+O nome do dono é `𝐊𝐚𝐧𝐧𝐨𝐧 𖤐 ˢᵉᶦᵗᵃ ᵐᵗˣ` (MATHEMATICAL BOLD, **U+1D400+**). Ele
+falou *"kannongi"* e não achou.
+
+**Causa**: o normalizador só fazia **NFD** — e o MATHEMATICAL BOLD **não tem
+decomposição NFD**. Os code points de matemática continuavam lá.
+
+**Correção**: `chaveNome` (nova) faz **NFKC** (desfaz o "nome bonito"), tira
+acento, remove **enfeites/símbolos/emoji** (o `𖤐`, o `ᰔ` do LEPCHA, os
+modificadores `ˢᵉᶦᵗᵃ`) e converte **letras parecidas do IPA** (`ɪ`→`i`, `ᵍ`→`g`…)
+— sem isso "sɪta" nunca casaria "seita". O NFKC também desfaz o "nome bonito" do
+**nome do bot** (`𝐋𝐢𝐳𝐳𝐲`).
+
+#### BÔNUS — o pronome ("menciona ele aí")
+Na conversa o dono respondeu *"menciona ele aí"* e ela disse que não conhecia esse
+nome. Agora o **pronome** é reconhecido e resolvido pelo **último alvo
+mencionado no grupo** (memória em **RAM**, não em disco). Sem alvo anterior, ela
+**pergunta** de quem se trata — não inventa.
+
+#### Medido na conversa real (handler de verdade)
+```
+"marca a cangica"       -> @18408649269356 (a MAE) ✅
+"marca a kangica"       -> @18408649269356 (a MAE) ✅  <- o STT trocou o C
+"chama o kannongi"      -> @23734744260711 (o dono) ✅
+"menciona ele ai"       -> @23734744260711 (o ultimo alvo) ✅
+"chama o dono do grupo" -> @23734744260711 ✅
+```
+
+#### Testes
+`tests/assistente-comandos.test.js` — **32 testes / 218 asserções**: +4 — o nome
+estilizado (com os **code points reais** do nome do dono: MATHEMATICAL BOLD é
+`U+1D400+`, **não** o SANS-SERIF BOLD, que dá outro NFKC), o STT C/K na mãe, o
+pronome, e o número que nunca vira nome no contexto.
