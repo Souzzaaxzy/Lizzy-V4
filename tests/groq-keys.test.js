@@ -545,15 +545,18 @@ await test('32. 429 por MINUTO NAO queima a chave (era o bug)', async () => {
   });
 
   const r = await groq.groqChat({ texto: 'oi', sistema: 's' });
-  ok(r.ok, 'a resposta veio (a k2 assumiu na hora)');
 
-  // O CORACAO DO BUG: a k1 NAO pode estar "esgotada".
+  // O CORACAO DO BUG (inalterado): a k1 NAO pode estar "esgotada" — ela volta.
   ok(!keys.estaEsgotada(1), 'a k1 NAO ficou marcada como esgotada');
   ok(keys.estadoDasChaves().esgotadas.length === 0, 'nenhuma chave morreu');
   // Mas fica de castigo por um tempo (nao bater nela de novo agora).
   ok(keys.emCooldown(1), 'a k1 ficou em castigo');
   ok(keys.segundosDeCooldown(1) > 0, 'com tempo restante');
   ok(keys.situacaoDasChaves() === 'ok', 'e a situacao continua ok (ela esta viva)');
+  // A cota e' por ORGANIZACAO: a k2 (mesma conta) esta' tao estrangulada quanto
+  // a k1, entao a conta inteira esfria — a mensagem nao sai na hora, mas
+  // NENHUMA chave morreu e a cota compartilhada nao foi queimada duas vezes.
+  ok(!r.ok && r.motivo === 'limite', `a conta esfriou (veio ${r.motivo})`);
   groq.setGroqHttpForTest(null);
 });
 
@@ -567,7 +570,11 @@ await test('33. depois do castigo, a chave VOLTA sozinha (sem reset)', async () 
   });
   await groq.groqChat({ texto: 'a', sistema: 's' });
   ok(keys.emCooldown(1), 'a k1 esta de castigo agora');
-  ok(groq.chaveGroq() === 'k2', 'a atual e a k2');
+  // A cota e' por ORGANIZACAO: a k2 esta' tao estrangulada quanto a k1, entao
+  // ela TAMBEM entra em castigo (senao a proxima mensagem queimaria a mesma
+  // cota compartilhada na k2).
+  ok(keys.emCooldown(2), 'a k2 tambem (mesma conta)');
+  ok(groq.chaveGroq() === '', 'nenhuma disponivel agora');
 
   // O castigo vence (1 segundo). Nao ha' reset nenhum — so' o tempo passar.
   await new Promise((r) => setTimeout(r, 1100));
@@ -576,17 +583,21 @@ await test('33. depois do castigo, a chave VOLTA sozinha (sem reset)', async () 
   groq.setGroqHttpForTest(null);
 });
 
-await test('34. a MESMA chave nao e tentada 2x na mesma chamada (o laco avancava errado)', async () => {
+await test('34. um limite de MINUTO nao queima a cota das outras chaves (cota por ORGANIZACAO)', async () => {
   limparEnv();
   process.env.GROQ_API_KEY = 'k1';
   process.env.GROQ_API_KEY_2 = 'k2';
-  // As duas falham por minuto: sem o fix, a k1 seria tentada duas vezes.
+  // As duas estao' na MESMA conta: o Groq conta por ORGANIZACAO, entao a
+  // segunda chave esta' tao estrangulada quanto a primeira.
+  //
+  // O comportamento ANTIGO tentava as duas (2 requisicoes da cota
+  // COMPARTILHADA) e, com 5 chaves, gastava 5 — era o "com varias chaves
+  // esgota em minutos o que uma aguentava por horas".
   const usadas = dublar(() => { throw erroLimiteDoMinuto(30); });
 
   const r = await groq.groqChat({ texto: 'oi', sistema: 's' });
-  ok(usadas.length === 2, `tentou 2 vezes no total (veio ${usadas.length})`);
-  ok(new Set(usadas).size === usadas.length, `cada chave UMA vez (veio ${JSON.stringify(usadas)})`);
-  ok(usadas[0] === 'k1' && usadas[1] === 'k2', 'e na ordem (k1, k2)');
+  ok(usadas.length === 1, `UMA requisicao so' (nao N) — veio ${usadas.length}`);
+  ok(usadas[0] === 'k1', `parou na primeira (veio ${JSON.stringify(usadas)})`);
   ok(!r.ok && r.motivo === 'limite', `o motivo e limite (veio ${r.motivo})`);
   ok(keys.estadoDasChaves().esgotadas.length === 0, 'nenhuma chave morreu (as duas voltam)');
   groq.setGroqHttpForTest(null);
@@ -763,7 +774,7 @@ await test('43. a chave com limite por MINUTO nao sai do rodizio (volta sozinha)
   groq.setGroqHttpForTest(null);
 });
 
-await test('44. TODAS de castigo -> espera o menor prazo e TENTA DE NOVO', async () => {
+await test('44. limite de MINUTO: esfria a CONTA e, apos a espera, retoma na mesma chave', async () => {
   limparEnv();
   process.env.GROQ_API_KEY = 'k1';
   process.env.GROQ_API_KEY_2 = 'k2';
@@ -778,7 +789,7 @@ await test('44. TODAS de castigo -> espera o menor prazo e TENTA DE NOVO', async
   groq.setGroqHttpForTest(async (url, data, cfg) => {
     const chave = String(cfg?.headers?.Authorization || '').replace('Bearer ', '');
     usadas.push(chave);
-    if (usadas.length <= 2) throw erroMinutoComHeaders({ retryAfter: 2 });
+    if (usadas.length === 1) throw erroMinutoComHeaders({ retryAfter: 2 });
     return { data: { choices: [{ message: { content: 'ok' } }] } };
   });
 
@@ -786,8 +797,8 @@ await test('44. TODAS de castigo -> espera o menor prazo e TENTA DE NOVO', async
   ok(r.ok && r.texto === 'ok', 'a resposta veio depois da espera (nao falhou na hora)');
   ok(esperas.length === 1, `esperou UMA vez (veio ${esperas.length})`);
   ok(esperas[0] >= 2000 && esperas[0] <= 2300, `o prazo do castigo + uma folga (veio ${esperas[0]}ms)`);
-  ok(JSON.stringify(usadas) === JSON.stringify(['k1', 'k2', 'k1']),
-    `tentou as duas, esperou e voltou na 1a (veio ${JSON.stringify(usadas)})`);
+  ok(JSON.stringify(usadas) === JSON.stringify(['k1', 'k1']),
+    `retomou na MESMA chave (a conta e' uma so') — veio ${JSON.stringify(usadas)}`);
   ok(keys.estadoDasChaves().esgotadas.length === 0, 'e NENHUMA chave morreu');
   groq._setEsperaForTest(null);
   groq.setGroqHttpForTest(null);
@@ -841,6 +852,69 @@ await test('47. o painel diz QUANDO a cota do dia volta', () => {
 console.log('\n' + '='.repeat(60));
 const tot = RESULTS.reduce((a, r) => a + r.passed, 0);
 const fal = RESULTS.reduce((a, r) => a + r.failed, 0);
+// ───────────────────────────────────────────────────────────────────────────
+// O BUG DO DONO: "com varias chaves esgota em 10 minutos; com uma dura horas"
+//
+// A doc do Groq: *"Rate limits apply at the ORGANIZATION level, not individual
+// users"*. Chaves da MESMA conta dividem a MESMA cota — entao rotacionar num
+// limite TEMPORARIO nao da' cota nova, so' queima a compartilhada N vezes mais
+// rapido. Medido antes do fix: 5 chaves = 5 requisicoes para UMA mensagem.
+// ───────────────────────────────────────────────────────────────────────────
+await test('49. N chaves NAO multiplicam o consumo da cota (o bug do dono)', async () => {
+  const consumidas = async (nChaves) => {
+    limparEnv();
+    for (let i = 1; i <= nChaves; i++) process.env[keys.nomeDaVar(i)] = `gsk_${i}`;
+    let reqs = 0;
+    groq._setEsperaForTest(async () => { keys.limparCooldowns(); });
+    groq.setGroqHttpForTest(async () => {
+      reqs += 1;
+      throw erroLimiteDoMinuto(60);   // limite por MINUTO (cota por ORGANIZACAO)
+    });
+    await groq.groqChat({ texto: 'oi' });
+    groq._setEsperaForTest(null);
+    groq.setGroqHttpForTest(null);
+    return reqs;
+  };
+  const com1 = await consumidas(1);
+  const com3 = await consumidas(3);
+  const com5 = await consumidas(5);
+  // Sem o fix: com1=2, com3=4, com5=6 (uma requisicao por chave).
+  ok(com3 <= com1 + 1, `3 chaves consomem ~o mesmo que 1 (1ch=${com1}, 3ch=${com3})`);
+  ok(com5 <= com1 + 1, `5 chaves consomem ~o mesmo que 1 (1ch=${com1}, 5ch=${com5})`);
+  ok(com5 < 5, `5 chaves NAO consomem 5 requisicoes (veio ${com5})`);
+});
+
+await test('50. cota do DIA continua rotacionando (chave de outra conta ajuda)', async () => {
+  limparEnv();
+  process.env.GROQ_API_KEY = 'k1';
+  process.env.GROQ_API_KEY_2 = 'k2';
+  const usadas = [];
+  groq.setGroqHttpForTest(async (url, data, cfg) => {
+    const chave = String(cfg?.headers?.Authorization || '').replace('Bearer ', '');
+    usadas.push(chave);
+    if (chave === 'k1') throw erroCotaDoDia(0);   // a k1 morreu de verdade
+    return { data: { choices: [{ message: { content: 'ok' } }] } };
+  });
+  const r = await groq.groqChat({ texto: 'oi' });
+  ok(r.ok && r.texto === 'ok', 'a segunda chave respondeu');
+  ok(JSON.stringify(usadas) === JSON.stringify(['k1', 'k2']),
+    `rotacionou na cota do DIA (veio ${JSON.stringify(usadas)})`);
+  ok(keys.estaEsgotada(1), 'a k1 ficou marcada como esgotada (o dia dela acabou)');
+  groq.setGroqHttpForTest(null);
+});
+
+await test('51. GROQ_KEYS_MULTI_ORG=1 volta a rotacionar (chaves de CONTAS diferentes)', async () => {
+  limparEnv();
+  process.env.GROQ_KEYS_MULTI_ORG = '1';
+  process.env.GROQ_API_KEY = 'k1';
+  process.env.GROQ_API_KEY_2 = 'k2';
+  const usadas = dublar(() => { throw erroLimiteDoMinuto(60); });
+  await groq.groqChat({ texto: 'oi' });
+  ok(usadas.length === 2, `com o opt-in, tenta as duas (veio ${usadas.length})`);
+  delete process.env.GROQ_KEYS_MULTI_ORG;
+  groq.setGroqHttpForTest(null);
+});
+
 console.log(`RESULTADO: ${RESULTS.length} testes | ${tot} asserções ok | ${fal} falhas`);
 console.log('='.repeat(60));
 process.exit(fal ? 1 : 0);

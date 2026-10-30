@@ -24,8 +24,8 @@
 import axios from 'axios';
 import { spawn } from 'child_process';
 import {
-  lerChaves, marcarEsgotada, marcarCooldown, primeiraDisponivel, indiceDisponivel,
-  emCooldown, segundosDeCooldown
+  lerChaves, marcarEsgotada, marcarCooldownTodas, chavesSaoDeContasDiferentes,
+  primeiraDisponivel, indiceDisponivel, emCooldown, segundosDeCooldown
 } from './groqKeys.js';
 
 /** Base da API (compativel com OpenAI). */
@@ -111,6 +111,23 @@ export function chaveGroq() {
  *   - **minuto/hora**: `marcarCooldown` — a chave esta' VIVA; fica de castigo
  *     por alguns segundos e nao e' tentada nesse meio-tempo.
  *
+ * ## NAO AMPLIFICAR o limite TEMPORARIO (o bug do "varias chaves pioram")
+ *
+ * A doc do Groq diz, literalmente: *"Rate limits apply at the ORGANIZATION
+ * level, not individual users"*. Ou seja: as chaves da MESMA conta dividem a
+ * MESMA cota. Quando o limite e' por MINUTO/TOKENS, a organizacao inteira esta'
+ * estrangulada — **trocar de chave nao da' cota nova e ainda queima a cota
+ * compartilhada UMA VEZ POR CHAVE**.
+ *
+ * Medido: com 5 chaves, UMA mensagem consumia 5 requisicoes antes de desistir.
+ * Era isso que fazia o dono, com varias chaves, esgotar em minutos o que UMA
+ * chave aguentava por horas.
+ *
+ * Por isso: num limite TEMPORARIO, a rotacao PARA. A espera curta (abaixo)
+ * continua valendo; o que sai e' a rotacao cega. A rotacao segue valendo para
+ * a cota do DIA e para chave invalida — ai' uma chave de OUTRA conta tem cota
+ * propria e ajuda de verdade.
+ *
  * ## O laco AVANCA sempre (o outro bug)
  *
  * A versao antiga chamava `primeiraDisponivel(lista, i)`: se a chave que falhou
@@ -135,7 +152,7 @@ export async function comFailoverDeChave(fn) {
 
   // ## As duas passadas
   //
-  // A 1a tenta todas as chaves. Se no fim o UNICO impedimento for um castigo de
+  // A 1a tenta as chaves. Se no fim o UNICO impedimento for um castigo de
   // MINUTO (a chave volta em segundos), espera o menor prazo e tenta de novo —
   // uma vez. Sem isso, TODAS as chaves estarem de castigo por 5s derrubava a
   // mensagem, mesmo com cota de sobra.
@@ -155,6 +172,7 @@ export async function comFailoverDeChave(fn) {
       throw (motivo === 'esgotadas' && ultimoErro) ? ultimoErro : new Error('sem_chave_groq');
     }
 
+    let parouPorTemporario = false;
     while (i >= 0 && i < lista.length) {
       const { chave, slot } = lista[i];
       try {
@@ -166,12 +184,25 @@ export async function comFailoverDeChave(fn) {
         if (info.tipo !== 'chave' && info.tipo !== 'limite') throw e;
 
         if (info.tipo === 'chave' || info.escopo === 'dia') {
-          // Morreu: chave invalida, ou a cota do DIA acabou. O instante do
-          // reset vem do proprio Groq, quando ele informa.
+          // Morreu: chave invalida, ou a cota do DIA acabou. AQUI rotacionar
+          // faz sentido: uma chave de OUTRA conta tem cota propria. O instante
+          // do reset vem do proprio Groq, quando ele informa.
           marcarEsgotada(slot, info.resetEm);
         } else {
-          // Limite por MINUTO/HORA: a chave esta' VIVA. Castigo, sem marcar.
-          marcarCooldown(slot, info.retryAfter || 60);
+          // Limite por MINUTO/HORA: a chave esta' VIVA, mas a ORGANIZACAO
+          // inteira esta' estrangulada (o Groq conta por organizacao). Esfria
+          // TODAS as chaves e PARA — nao tenta as outras, que gastariam a
+          // MESMA cota compartilhada N vezes mais rapido.
+          marcarCooldownTodas(info.retryAfter || 60);
+          ultimoErro = e;
+          // So' PARA quando as chaves sao da MESMA conta (o caso comum): ai' a
+          // cota e' compartilhada e tentar a proxima so' queima mais rapido.
+          // Com `GROQ_KEYS_MULTI_ORG=1` (contas DIFERENTES), segue rotacionando
+          // — cada conta tem cota propria e a proxima pode responder.
+          if (!chavesSaoDeContasDiferentes()) {
+            parouPorTemporario = true;
+            break;
+          }
         }
         ultimoErro = e;
       }
@@ -179,8 +210,21 @@ export async function comFailoverDeChave(fn) {
       i = indiceDisponivel(lista, i + 1);
     }
 
-    // Chegou aqui: TODAS falharam nesta passada. Se alguma ficou so' de castigo
-    // e ainda nao esperamos, vale esperar — ela volta em segundos.
+    if (parouPorTemporario) {
+      // A chave volta em segundos? Vale esperar UMA vez — assim a mensagem nao
+      // fica sem resposta por um castigo curto.
+      const falta = menorCooldownSegundos(lista);
+      if (!jaEsperou && falta > 0 && falta * 1000 <= ESPERA_MAX_MS) {
+        jaEsperou = true;
+        await _esperar((falta * 1000) + 250);
+        continue;
+      }
+      throw erroDeLimiteTemporario(falta);
+    }
+
+    // Chegou aqui: TODAS falharam por COTA DO DIA / chave invalida nesta
+    // passada. Se alguma ficou so' de castigo e ainda nao esperamos, vale
+    // esperar — ela volta em segundos.
     const falta = menorCooldownSegundos(lista);
     if (!jaEsperou && falta > 0 && falta * 1000 <= ESPERA_MAX_MS) {
       jaEsperou = true;
@@ -195,7 +239,6 @@ export async function comFailoverDeChave(fn) {
   if (faltaFinal > 0) throw erroDeLimiteTemporario(faltaFinal);
   throw ultimoErro || new Error('sem_chave_groq');
 }
-
 
 
 /**
@@ -661,7 +704,10 @@ export {
   resetarEsgotadas, estaEsgotada, estadoDasChaves, diaDoEstado, situacaoDasChaves,
   // O castigo de MINUTO (a chave esta' viva, so' esperando) — separado do
   // `esgotada` (cota do dia). O painel do dono usa os dois.
-  emCooldown, marcarCooldown, limparCooldowns, segundosDeCooldown
+  emCooldown, marcarCooldown, limparCooldowns, segundosDeCooldown,
+  // O congelamento da CONTA inteira (cota por organizacao) e o opt-in de
+  // varias contas — o painel do dono e o `!keygroq` usam os dois.
+  marcarCooldownTodas, chavesSaoDeContasDiferentes
 } from './groqKeys.js';
 
 /** @deprecated Use `resetarEsgotadas`. Mantido para os testes antigos. */

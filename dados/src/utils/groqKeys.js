@@ -392,6 +392,51 @@ export function marcarCooldown(slot, segundos = 60) {
   gravarEstadoNormalizado();
 }
 
+/**
+ * Poe TODAS as chaves de castigo por `segundos`.
+ *
+ * ## Por que TODAS (e nao so' a que falhou)
+ *
+ * A doc do Groq diz: *"Rate limits apply at the ORGANIZATION level, not
+ * individual users"*. As chaves da MESMA conta dividem a MESMA cota — entao,
+ * quando o limite e' por MINUTO/TOKENS, a conta inteira esta' estrangulada e
+ * **nenhuma** chave dela vai passar.
+ *
+ * Sem isto, a proxima mensagem pulava para a chave 2 (ainda estrangulada),
+ * depois a 3, e assim por diante: uma mensagem gastava N requisicoes da cota
+ * COMPARTILHADA para, no fim, nao responder nada. Medido: com 5 chaves, uma
+ * mensagem consumia 5 requisicoes. Era isso que fazia o dono esgotar em minutos
+ * o que UMA chave aguentava por horas.
+ *
+ * E' opt-out: `GROQ_KEYS_MULTI_ORG=1` volta ao comportamento por chave, para
+ * quem tem chaves de CONTAS DIFERENTES (ai' cada uma tem cota propria).
+ *
+ * @param {number} [segundos]
+ */
+export function marcarCooldownTodas(segundos = 60) {
+  if (chavesSaoDeContasDiferentes()) return;
+  const seg = Math.max(1, Math.ceil(Number(segundos) || 0));
+  const e = carregarEstado();
+  const fim = agoraMs() + (seg * 1000);
+  for (const c of lerChaves()) e.cooldowns[Number(c.slot)] = fim;
+  gravarEstadoNormalizado();
+}
+
+/**
+ * As chaves sao de CONTAS DIFERENTES? (opt-in explicito)
+ *
+ * So' nesse caso rotacionar ajuda num limite de minuto: cada conta tem cota
+ * propria. Por padrao `false` — o caso comum (varias chaves da mesma conta) e'
+ * cota COMPARTILHADA, e ai' rotacionar so' queima mais rapido.
+ *
+ * @param {object} [env]
+ * @returns {boolean}
+ */
+export function chavesSaoDeContasDiferentes(env = process.env) {
+  const v = String((env || {}).GROQ_KEYS_MULTI_ORG || '').trim().toLowerCase();
+  return ['1', 'true', 'sim', 'yes', 'on'].includes(v);
+}
+
 /** Limpa os castigos (o `!keygroq reset` e os testes usam). */
 export function limparCooldowns() {
   const e = carregarEstado();
