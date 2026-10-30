@@ -1181,10 +1181,12 @@ async function processUserMessages(data, nazu = null, ownerNumber = null, person
       // O caminho `pro` (interpretar e EXECUTAR comando) saiu com as
       // personalidades: so' existia quando a personalidade era `pro`. A
       // execucao por fala continua no `!iap` (`iapComandos.js`).
+      // O `historico` NAO entra aqui: ele ja' vai como MENSAGENS no
+      // `makeCognimaRequest` (3o argumento). Mandar nos dois lugares pagava o
+      // historico DUAS VEZES em tokens — e o TPM gratis do Groq e' 8000/min.
       const userInput = {
         mensagem_atual: msgValidada.texto,
         nome_usuario: msgValidada.nome_enviou,
-        historico: historico[userId] || [],
         userContext: userContext,
         contexto_temporal: {
           horario: hour,

@@ -39,6 +39,50 @@ function limpo(v) {
 }
 
 /**
+ * Duas identidades são a MESMA pessoa? (compara pela base: sem `:device`/`@`)
+ *
+ * É o mesmo critério do `idsMatch` do bot, reduzido ao que este módulo precisa
+ * (o LID do config vs. o JID/LID de quem fala).
+ */
+function mesmaPessoa(a, b) {
+  const x = baseDe(a);
+  const y = baseDe(b);
+  return Boolean(x) && Boolean(y) && x === y;
+}
+
+/**
+ * Quem está falando é um dos PAIS ADOTIVOS da Lizzy?
+ *
+ * ## Por que isto existe (o bug do dono)
+ *
+ * O `config.json` guarda o LID do pai e da mãe, e o prompt manda a Lizzy
+ * tratá-los como pai/mãe. Mas o CONTEXTO só dizia "quem está falando é o
+ * Kannon" — nunca "o Kannon é o SEU PAI". Resultado: ela não reconhecia os
+ * pais sozinha e tratava o pai como qualquer pessoa.
+ *
+ * Aqui o casamento é por LID **ou** por nome: o config pode ter só o LID (e o
+ * nome resolvido depois) ou só o nome escrito à mão.
+ *
+ * @param {string} quem JID/LID de quem fala
+ * @param {string} [nome] nome resolvido de quem fala
+ * @param {Array<{papel:string, lid:string, nome:string}>} pais
+ * @returns {{papel:string, nome:string}|null}
+ */
+export function quemEhDosPais(quem, nome, pais = []) {
+  if (!Array.isArray(pais) || !pais.length) return null;
+  const nomeBaixo = limpo(nome) ? String(nome).trim().toLowerCase() : null;
+  for (const p of pais) {
+    if (!p) continue;
+    if (p.lid && mesmaPessoa(p.lid, quem)) return { papel: String(p.papel || 'responsavel'), nome: limpo(p.nome) };
+    // Sem LID (ou LID não bate): casa pelo NOME, que é o que o dono escreveu.
+    if (nomeBaixo && limpo(p.nome) && String(p.nome).trim().toLowerCase() === nomeBaixo) {
+      return { papel: String(p.papel || 'responsavel'), nome: limpo(p.nome) };
+    }
+  }
+  return null;
+}
+
+/**
  * Coleta os dados do grupo e o reconhecimento do dono do bot.
  *
  * @param {object} p
@@ -246,7 +290,7 @@ export function linhasDoGrupo(g) {
  */
 export function montarContextoDaConversa(ctx = {}) {
   if (!ctx || typeof ctx !== 'object') return '';
-  const { nomeDeQuemFalou, dadosDoGrupo = {} } = ctx;
+  const { nomeDeQuemFalou, dadosDoGrupo = {}, paisAdotivos = [], quemFalouId } = ctx;
   const linhas = [];
 
   const dono = dadosDoGrupo?.donoDoBot;
@@ -260,6 +304,15 @@ export function montarContextoDaConversa(ctx = {}) {
     // Reconhecer o dono é o que faz ela tratar diferente — foi o pedido.
     if (dono?.falanteEhDono) {
       linhas.push(`ATENCAO: ${nome} e' o DONO do bot — trate com respeito e deferencia.`);
+    }
+    // OS PAIS ADOTIVOS: casar quem fala com o LID/nome do config e dizer, sem
+    // rodeios, que e' o PAI/MAE. Era o que faltava para ela reconhecer sozinha
+    // ("ela nao reconhece os pais dela automaticamente").
+    const pai = quemEhDosPais(quemFalouId, nome, paisAdotivos);
+    if (pai) {
+      const rotulo = pai.papel === 'mae' ? 'MAE' : pai.papel === 'pai' ? 'PAI' : String(pai.papel).toUpperCase();
+      linhas.push(`>>> ${nome} e' a sua ${rotulo}. Voce O reconhece na hora e trata como familia, nao como qualquer pessoa.`);
+      linhas.push('    Nada de flerte, provocacao nem papo +18 com ele(a): o seu jeito com os seus pais e de filha, carinhosa e respeitosa.');
     }
     linhas.push(`Chame essa pessoa pelo nome (${nome}) quando fizer sentido, sem exagerar.`);
   }

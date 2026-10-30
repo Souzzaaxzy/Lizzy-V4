@@ -41,6 +41,9 @@ import { parseImagePollArgs, collectPollImages, resolveAttachments, buildOptionN
 import { toOggOpus } from './utils/oggOpus.js';
 import { resolverNomeContato, acharParticipantePorId, nomeInutil, baseId, numerosDoParticipante } from './utils/contactName.js';
 import { coletarDadosDoGrupo } from './utils/contextoConversa.js';
+// A resposta LOCAL: garante que a Lizzy responda MESMO quando a API falhou
+// (cota/rede) — sem gastar token e sem repetir a mesma frase.
+import { respostaLocal } from './utils/respostaLocal.js';
 import { lerIdentidade } from './utils/identidadeLizzy.js';
 import { resolverPaisAdotivos } from './utils/contextoConversa.js';
 // As chaves do Groq (ate' 10) e o failover automatico.
@@ -1897,6 +1900,15 @@ const formatarDuracaoCurta = (segundos) => {
   if (s < 3600) return `${Math.round(s / 60)}min`;
   return `${(s / 3600).toFixed(1)}h`;
 };
+
+/**
+ * A ultima frase de RESERVA usada em cada chat.
+ *
+ * Existe para a Lizzy nao repetir a mesma frase de reserva em mensagens
+ * seguidas (o dono reclamou de "repete resposta"). E' so' do caminho de
+ * fallback — quando a IA nao devolveu nada valido.
+ */
+const fallbackUltimoPorChat = new Map();
 
 const mensagemErroIA = (e) => {
   const msg = String(e?.message || '');
@@ -7708,6 +7720,9 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
           groupName: groupName || '',
           groupId: from || '',
           nomeDeQuemFalou,
+          // O ID de quem fala: e' o que deixa o contexto casar a pessoa com os
+          // PAIS ADOTIVOS do config (reconhecer pai/mae sozinha).
+          quemFalouId: sender,
           dadosDoGrupo,
           paisAdotivos
         };
@@ -7754,30 +7769,26 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
             processResponses(0);
           } else {
             // Fallback: sempre gerar uma resposta se a IA não retornou nada válido
-            const fallbackRespostas = [
-              // O fallback e' so' quando a IA nao devolveu NADA valido — ele nao
-              // deve ter "cara de bot". Frases curtas, secas e SEM EMOJI: uma
-              // pessoa responderia assim. (Antes eram ~60 frases com tema de
-              // caverna e emoji em toda linha — o oposto do pedido.)
-              'kkkk',
-              'oxi',
-              'que isso',
-              'serio?',
-              'ih, agora buguei',
-              'pera, nao entendi',
-              'como assim?',
-              'fala mais',
-              'ata',
-              'nossa',
-              'affs',
-              'manda de novo que eu nao peguei'
-            ];
-            const fallback = fallbackRespostas[Math.floor(Math.random() * fallbackRespostas.length)];
-            reply(fallback);
+            // A resposta LOCAL (sem API, sem token): escolhe pela mensagem da
+            // pessoa (saudacao/pergunta/xingamento/sem texto) e NAO repete a
+            // ultima. E' o que garante "nunca sem resposta" com variedade.
+            const escolhida = respostaLocal({
+              texto: body,
+              ultima: fallbackUltimoPorChat.get(from)
+            });
+            fallbackUltimoPorChat.set(from, escolhida);
+            reply(escolhida);
           }
         }).catch((assistentError) => {
           console.error('Erro no assistente virtual:', assistentError.message);
-          reply('ih, deu ruim aqui. tenta de novo');
+          // ERRO nao pode virar silencio (o dono: "NUNCA fique sem resposta").
+          // A resposta local responde na hora, de graca, e sem repetir.
+          const escolhida = respostaLocal({
+            texto: body,
+            ultima: fallbackUltimoPorChat.get(from)
+          });
+          fallbackUltimoPorChat.set(from, escolhida);
+          reply(escolhida);
         });
       }
     }
