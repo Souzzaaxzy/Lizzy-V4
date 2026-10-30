@@ -528,7 +528,8 @@ await test('33b. as abreviacoes MASCULINAS estao PROIBIDAS (o pedido do dono)', 
   contem(b, 'O QUE VOCE NAO USA', 'a secao de proibidas');
   const i = b.indexOf('O QUE VOCE NAO USA');
   const bloco = b.slice(i, i + 400);
-  for (const gira of ['mn', 'mano', 'fmz', 'pprt', 'tlgd', 'slk', 'krl', 'vsf', 'tmnc', 'tmj']) {
+  // `krl`/`vsf`/`tmnc` SAIRAM da lista: ela agora XINGA (ver o teste 71/72).
+  for (const gira of ['mn', 'mano', 'fmz', 'pprt', 'tlgd', 'tmj']) {
     contem(bloco, `"${gira}"`, `proibe ${gira}`);
   }
   contem(b, 'Voce e feminina', 'explica o porque');
@@ -930,6 +931,56 @@ await test('69. o lado +18 continua ACESSIVEL quando o clima esquenta', () => {
 });
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// HUMOR: variar a risada + xingar como brasileira
+// ---------------------------------------------------------------------------
+
+await test('70. a RISADA varia (o bug do "so kkkk")', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  // O bug: a linha do COMO VOCE DIGITA fixava "kkkk" e ANULAVA a secao de
+  // risadas (que manda variar). Agora ela aponta para a secao.
+  ok(!/Risada e "kkkk" ou "kkkkkkk"/.test(b), 'saiu a linha que fixava o kkkk');
+  contem(b, 'NUNCA so "kkkk" para tudo', 'e diz para nao usar so kkkk');
+  contem(b, 'numa conversa de varias mensagens voce alterna', 'tem o exemplo pratico');
+  for (const risada of ['"ksksks"', '"kkkkkkk"', '"kakaka"', '"rsrs"']) {
+    contem(b, risada, `o exemplo inclui ${risada}`);
+  }
+});
+
+await test('71. ela XINGA como brasileira (natural, em varios contextos)', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  contem(b, 'VOCE XINGA', 'a secao existe');
+  for (const x of ['"porra"', '"caralho"', '"merda"', '"krl"']) contem(b, x, `leve: ${x}`);
+  for (const x of ['"vsf"', '"vai tomar no cu"', '"tmnc"', '"fdp"']) contem(b, x, `forte: ${x}`);
+  for (const x of ['"seu bobo"', '"seu chato"']) contem(b, x, `carinho: ${x}`);
+  contem(b, 'a pessoa te xingou', 'responder ofensa');
+  contem(b, 'deu raiva', 'xingar de raiva');
+  contem(b, 'surpresa boa / felicidade', 'xingar de felicidade');
+  contem(b, 'de CARINHO ou brincadeira', 'xingar de carinho');
+  contem(b, 'nao e grossa', 'nao e grossa do nada');
+  contem(b, 'Se a pessoa se ofender de verdade', 'respeita quem nao gostou');
+});
+
+await test('72. os xingamentos SAIRAM da lista de proibidas', () => {
+  const b = id.blocoDeIdentidade(ID_TESTE);
+  const i = b.indexOf('O QUE VOCE NAO USA');
+  const bloco = b.slice(i, i + 220);
+  for (const gira of ['krl', 'vsf', 'tmnc']) {
+    ok(!bloco.includes(`"${gira}"`), `"${gira}" NAO esta mais proibido`);
+  }
+  for (const gira of ['mn', 'fmz', 'pprt', 'tlgd', 'tmj']) {
+    contem(bloco, `"${gira}"`, `segue proibido: ${gira}`);
+  }
+});
+
+await test('73. o CARATER (compartilhado com a voz) tem risada variada e xingamento', () => {
+  const GUARDA = fs.readFileSync(new URL('../dados/src/utils/iapGuarda.js', import.meta.url), 'utf-8');
+  contem(GUARDA, 'VARIE a risada', 'a regra de variar a risada');
+  contem(GUARDA, '"ksks"', 'cita as outras risadas');
+  contem(GUARDA, 'Voce XINGA como brasileira', 'o xingamento entra no carater');
+  contem(GUARDA, 'nao fica "educada demais"', 'e explica por que (entrega robo)');
+});
+
 console.log('\n' + '='.repeat(60));
 const tot = RESULTS.reduce((a, r) => a + r.passed, 0);
 const fal = RESULTS.reduce((a, r) => a + r.failed, 0);
