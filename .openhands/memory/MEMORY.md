@@ -58,6 +58,8 @@ logs diários (`YYYY-MM-DD.md`).
   lista de dependências do `config.js`/`update.js`.
 - Módulo `dados/src/utils/vozDaConversa.js` (`gerarNotaDeVoz`); handler em
   `index.js` (~7705). Teste: `tests/voz-conversa.test.js` (10/59).
+- **✅ CONFIRMADO no aparelho (out/2026)**: o dono testou e saiu a nota de voz
+  com a onda. Era o único ponto fora do alcance dos testes.
 
 ## Testes
 

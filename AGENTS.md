@@ -14847,6 +14847,11 @@ get-message-inspector 54/269, me-profile 44/0, dono-perfil 47/0, contact-name
 gifsbn-media 16/61, statusgrupo 49/143. `menu-layout` mantém a falha
 **pré-existente** (`menufig` 18 vs 17).
 
+### ✅ CONFIRMADO NO APARELHO (out/2026)
+O dono testou depois do `!atualizar` e confirmou: **saiu a nota de voz** (a bolha
+com o desenho da ONDA). Era o único ponto que os testes não cobriam — o payload
+provava o que SAI, e o aparelho provou como APARECE.
+
 ### LIÇÃO DE MÉTODO
 **Metadado do proto (`ptt`, `contextInfo`) diz o que SAI; a forma que o cliente
 DESENHA depende do CONTEÚDO (o container).** Quando o sintoma é "a bolha sai com
