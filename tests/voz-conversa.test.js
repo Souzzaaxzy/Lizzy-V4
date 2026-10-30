@@ -170,6 +170,11 @@ await test('8. o handler manda AUDIO COMUM (ptt: false), nao nota de voz', () =>
   // (que sai como audio normal) NAO manda o campo.
   ok(!/ptt\s*:/.test(bloco), 'NAO manda `ptt` (nem true nem false)');
   ok(!/ptt:\s*true/.test(bloco), 'e NAO como nota de voz');
+  // O `contextInfo` (newsletter) tambem sai: MEDIDO campo a campo contra o
+  // `!play`, era a UNICA diferenca que sobrava — e o audio continuava saindo
+  // como nota de voz. Sem ele o payload fica igual ao do `!play`.
+  ok(!/contextInfo\s*:/.test(bloco), 'NAO manda contextInfo (newsletter)');
+  ok(!/gerarContextNewsletter/.test(bloco), 'nem o cabecalho de canal');
   // E nao depende de ffmpeg neste caminho.
   ok(!/toOggOpus/.test(bloco), 'nao passa por OGG/Opus (sem ffmpeg)');
   // E o gatilho roda ANTES do LLM de texto (senao ela responderia texto).

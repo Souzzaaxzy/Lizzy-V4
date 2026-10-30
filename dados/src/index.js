@@ -7727,22 +7727,24 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
               await reply(`❌ ih, ${erroDaVoz(voz.motivo)}`);
               return;
             }
+            // AUDIO NORMAL — sem `ptt` e SEM `contextInfo`.
+            //
+            // Duas coisas tiravam o audio do "normal":
+            //
+            // 1) `ptt: false` NAO e' omitido pelo protobuf (o campo e' `optional`):
+            //    ele ESCREVE `30 00` no fio, e o WhatsApp trata campo PRESENTE
+            //    como nota de voz, ignorando o valor.
+            // 2) o `contextInfo` do canal (newsletter) tambem muda a renderizacao.
+            //
+            // MEDIDO campo a campo contra o `!play` (que o dono confirma que sai
+            // como audio normal): a UNICA diferenca era o `contextInfo`. Sem ele,
+            // o payload fica igual ao do `!play`.
+            //
+            // Custo: este audio NAO leva o cabecalho "Ver canal". O dono aceitou
+            // — a nota de voz era o problema.
             await nazu.sendMessage(from, {
               audio: voz.mp3,
-              mimetype: 'audio/mpeg',
-              // AUDIO NORMAL — e o `ptt` NAO vai.
-              //
-              // MEDIDO: no proto, `ptt` e' `optional`, entao `ptt: false` NAO e'
-              // omitido — ele ESCREVE o campo no fio (tag 0x30, valor 0). E o
-              // WhatsApp trata **campo presente** como nota de voz, mesmo valendo
-              // `false`. Era por isso que o audio continuava saindo como nota de
-              // voz mesmo com `ptt: false`.
-              //
-              // O `!play` (que o dono confirma que sai como audio normal) NAO
-              // manda o campo. Provado: com `ptt: false` o payload tem os bytes
-              // `30 00`; sem o campo, nao tem — e o payload fica igual ao do
-              // `!play`.
-              contextInfo: gerarContextNewsletter()
+              mimetype: 'audio/mpeg'
             });
             return;
           } catch (e) {
