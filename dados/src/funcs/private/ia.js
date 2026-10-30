@@ -738,6 +738,45 @@ function cleanWhatsAppFormatting(texto) {
     .trim();
 }
 
+/**
+ * SALVA o que der de um JSON que veio CORTADO (o `max_tokens` estoura no meio).
+ *
+ * ## O bug que isto corrige
+ *
+ * O modelo responde no formato `{ "resp": [ { "resp": "..." } ] }`. Quando a
+ * resposta e' longa, o `max_tokens` CORTA o JSON no meio — e o `JSON.parse`
+ * falha. O fallback antigo devolvia o **texto cru** (`{`, `"resp": [`, ...) e o
+ * cliente recebia o JSON na tela. Foi o bug relatado pelo dono:
+ *
+ *   lizzy: {
+ *    "resp": [
+ *    {
+ *    "resp": "sou a Lizzy, 21, moro no Acre, jogo volei, sou bissex
+ *
+ * Aqui a gente **aproveita as mensagens inteiras** e descarta so' a ultima
+ * (cortada). Se nem uma mensagem inteira sobrou, devolve `null` — o chamador
+ * pede a IA de novo em vez de vazar o JSON.
+ *
+ * @param {string} texto o conteudo (ja' sem os cercos de markdown)
+ * @returns {{resp: Array<{resp: string, react?: string}>}|null}
+ */
+function salvarJSONTruncado(texto) {
+  const t = String(texto || '');
+  if (!t) return null;
+  if (!/"?resp"?\s*:/.test(t)) return null;
+  const itens = [];
+  const re = /"resp"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
+  let m;
+  while ((m = re.exec(t)) !== null) {
+    let valor = m[1];
+    try { valor = JSON.parse(`"${valor}"`); } catch { /* usa o cru */ }
+    const limpo = String(valor || '').replace(/\s+/g, ' ').trim();
+    if (limpo && !/^[{}\[\],:]+$/.test(limpo)) itens.push({ resp: limpo });
+  }
+  if (!itens.length) return null;
+  return { resp: itens, _truncado: true };
+}
+
 function extractJSON(content) {
   if (!content || typeof content !== 'string') {
     console.warn('Conteúdo inválido para extração de JSON, retornando objeto vazio.');
@@ -788,12 +827,25 @@ function extractJSON(content) {
 
   console.error('❌ Não foi possível extrair JSON válido da resposta.');
   console.error('Conteúdo recebido (primeiros 200 chars):', content.substring(0, 200) + '...');
-  
+
+  // O JSON veio CORTADO (max_tokens)? Aproveita as mensagens INTEIRAS — e o
+  // que evita o cliente receber `{ "resp": [ ...` na tela.
+  const salvo = salvarJSONTruncado(cleanContent);
+  if (salvo) {
+    console.warn(`⚠️ JSON truncado: aproveitei ${salvo.resp.length} mensagem(ns) inteira(s).`);
+    return salvo;
+  }
+
   // O modelo RESPONDEU — so nao veio em JSON. A resposta DELE e melhor que
   // qualquer frase nossa: devolve o texto cru. Sem texto, sinaliza "nao
   // respondeu" (o chamador pede a IA de novo, em vez de frase pronta).
   const cru = String(content || '').trim();
-  if (cru) return { resp: [{ resp: cru }] };
+  // NUNCA vaza um JSON quebrado: se o cru PARECE o nosso formato (`{`/`resp`),
+  // e' truncamento — melhor pedir de novo do que mostrar `{ "resp": [` ao
+  // usuario (o bug relatado pelo dono).
+  if (cru && !/^\s*[\[{]/.test(cru) && !/"resp"\s*:/.test(cru)) {
+    return { resp: [{ resp: cru }] };
+  }
   return { resp: [], _semResposta: true };
 }
 

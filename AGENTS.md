@@ -15266,3 +15266,66 @@ tempo desde a **última** mensagem.
 **renovação da janela** (5+ min com mensagens de 40 em 40s) e o fluxo real
 (continua sem marcar; **não responde "kkkkk" e não gasta chamada**; outra pessoa
 não herda; o "chega" fecha; e **1 mensagem = no máximo 1 chamada de IA**).
+
+
+## 🔧 3 BUGS da conversa real + PROMPT reescrito (out/2026) ✅
+O dono testou por horas e reportou: mencao que nao acha a mae ("marca a
+cangica"), o JSON vazando na tela, e pediu para *"arrumar o prompt inteiro dela,
+100% melhor, gastando poucos tokens e lembrando da humanidade completa"*.
+
+### BUG A — "nao achei esse nome" na MAE (o config nao entrava na lista)
+`acharAlvoDaMencao` montava os candidatos **so' do `metadata.participants`** — e a
+mae (`Cangica`) vive no **`config.json` (`ia.paisAdotivos`)**, com o **LID**. Dois
+defeitos somados:
+1. ela **nem entrava** na lista (nao e' membro do grupo / o contato nao tem nome);
+2. quando entrava, o nome caia no **LID** (o contato nao resolve), e "cangica"
+   nunca casaria "18408649269356".
+E o **vocativo final** ("cangica **ai**") ia junto na busca, o que tambem impedia
+o match.
+
+**Correcao**: `acharAlvoDaMencao` recebe `paisAdotivos`, usa o **nome do config**
+(que vence o numero cru) e **adiciona os pais que nao estao no grupo** como
+candidatos; `mencaoUsuario.js` ganhou os **PAPEIS `mae`/`pai`** (com o possessivo
+obrigatorio — "sua mae", "seu pai", "a mae dela") e o **vocativo final** e'
+removido do nome. A resolucao dos pais **subiu para ANTES** do bloco de mencao (o
+`!iap` e o contexto continuam usando a mesma variavel).
+
+Medido no handler real: `cangica ai`, `kangica`, `sua mae`, `seu pai` e
+`dono do grupo` todos mencionam a pessoa certa.
+
+### BUG B — o JSON vazava na tela (`{ "resp": [ ...`)
+O dono viu: `lizzy: {
+ "resp": [
+ {
+ "resp": "sou a Lizzy, 21, ...`. Causa: o
+`max_tokens` **corta o JSON no meio**, o `JSON.parse` falha e o fallback devolvia
+o **texto cru** (o proprio JSON quebrado).
+
+**Correcao** (`ia.js` → `salvarJSONTruncado`): aproveita as **mensagens
+INTEIRAS** do JSON cortado e descarta so' a ultima (incompleta). Se nem uma
+sobrou, o fallback **recusa** o que parece JSON (`{`/`"resp":`) e pede a IA de
+novo — **nunca** vaza o `{`.
+
+### PROMPT reescrito (menos tokens, mesma humanidade)
+Consolidadas as **duplicacoes** (o "nao repetir" e o "xingar" apareciam **2x** — no
+CARATER e na IDENTIDADE; o emoji/risada tambem). O teste
+`assistente-identidade` trava **~200 frases** do prompt (a especificacao), entao o
+corte foi **cirurgico**: remover o que **duplicava**, mantendo **todas** as
+ancoras. `blocoDeIdentidade` foi de **15005 → ~8.8k chars**; o prompt total caiu
+~800 chars sem perder nenhuma regra nem as travas de seguranca.
+
+**Licao**: o teste de identidade **e' a especificacao** (trava a redacao). Antes
+de reescrever o prompt, medir quais frases sao ancoradas — cortar "no escuro"
+quebra 110 assercoes.
+
+### Testes
+`assistente-comandos` **34/226** (+2: acha a mae pelo nome do config e por
+`sua mae`/`seu pai`); `ia` **23/61** (+3: JSON cortado nao vaza, aproveita as
+inteiras, texto puro passa). **Verificado que medem**: neutralizando o
+`paisAdotivos`, **8 assercoes falham**; neutralizando o `salvarJSONTruncado`, **5
+falham**. Regressoes verdes: `assistente-identidade` 80/407,
+`assistente-contexto` 25/111, `assistente-lizzy` 14/53, `iap` 72/210,
+`voz-conversa` 11/55, `voz-espontanea` 16/39, `conversa-andamento` 21/64,
+`get-message-inspector` 54/269, `cmd-suggest` 21/68, `me-profile`, `dono-perfil`,
+`contact-name` 16/37, `midiaprefix` 26/83.
+**Pre-existente** (identico no baseline): `iap-comandos` 5 falhas.

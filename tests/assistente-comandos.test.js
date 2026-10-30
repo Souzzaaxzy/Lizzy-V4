@@ -34,7 +34,12 @@ fs.mkdirSync(path.join(TMP_DB, 'grupos'), { recursive: true });
 fs.mkdirSync(path.join(TMP_DB, 'dono'), { recursive: true });
 fs.writeFileSync(process.env.CONFIG_PATH, JSON.stringify({
   prefixo: '!', nomebot: 'Lizzy do privy', nomedono: 'Kannon',
-  numerodono: '5511915323638', debug: false
+  numerodono: '5511915323638', debug: false,
+  // Os PAIS ADOTIVOS (o bug do dono: "marca a cangica" nao achava a mae).
+  ia: { paisAdotivos: [
+    { papel: 'pai', lid: '23734744260711@lid', nome: '' },
+    { papel: 'mae', lid: '18408649269356@lid', nome: 'Cangica' }
+  ] }
 }, null, 2));
 
 const acoes = await import(new URL('../dados/src/utils/assistenteAcoes.js', import.meta.url).href);
@@ -458,6 +463,30 @@ await test('18c. papel SEM ninguem avisa citando o CARGO (nao inventa)', async (
   ok(!sent.some((c) => Array.isArray(c.mentions) && c.mentions.length), 'NAO mencionou ninguem');
   const t = textos(sent).join(' ');
   ok(/moderador/i.test(t), `a fala cita o cargo ("${t.slice(0, 60)}")`);
+});
+
+await test('18d. a MENCAO acha a MAE pelo nome do config (o bug do dono)', async () => {
+  // A mae esta no config (`ia.paisAdotivos`), com o NOME "Cangica" — e ela nem
+  // entrava na lista de candidatos (que vinha so' do metadata do grupo). O dono
+  // pediu "marca a cangica ai" e ouviu "nao achei esse nome".
+  const MAE_LID = '18408649269356@lid';
+  for (const t of ['lizzy marca a cangica ai', 'lizzy marca a kangica', 'lizzy marca a cangica']) {
+    const sent = await run(t);
+    const m = sent.find((c) => Array.isArray(c.mentions) && c.mentions.length);
+    ok(m, `"${t}": mencionou alguem`);
+    ok(m && m.mentions[0] === MAE_LID, `"${t}": mencionou a MAE (veio ${m && m.mentions[0]})`);
+  }
+});
+
+await test('18e. "marca a sua mae"/"seu pai" acha pelo PAPEL (familia)', async () => {
+  const MAE_LID = '18408649269356@lid';
+  const PAI_LID = '23734744260711@lid';
+  const sMae = await run('lizzy marca a sua mae');
+  const mMae = sMae.find((c) => Array.isArray(c.mentions) && c.mentions.length);
+  ok(mMae && mMae.mentions[0] === MAE_LID, `"sua mae" menciona a mae (veio ${mMae && mMae.mentions[0]})`);
+  const sPai = await run('lizzy chama o seu pai');
+  const mPai = sPai.find((c) => Array.isArray(c.mentions) && c.mentions.length);
+  ok(mPai && mPai.mentions[0] === PAI_LID, `"seu pai" menciona o pai (veio ${mPai && mPai.mentions[0]})`);
 });
 
 await test('19. nome inexistente avisa sem mencionar ninguem', async () => {

@@ -747,7 +747,7 @@ const ultimoAlvoDeMencao = new Map();
  *
  * @returns {Promise<{achou: boolean, ambiguo?: boolean, usuario?: object, candidatos?: object[]}>}
  */
-async function acharAlvoDaMencao({ dito, papel, nazu, metadata, from, groupData, sender, numerosDono }) {
+async function acharAlvoDaMencao({ dito, papel, nazu, metadata, from, groupData, sender, numerosDono, paisAdotivos = [] }) {
   const participantes = Array.isArray(metadata?.participants) ? metadata.participants : [];
   // O BOT não é um alvo de menção (ninguém "chama a Lizzy" por esse caminho).
   const botIds = [nazu?.user?.id, nazu?.user?.lid].filter(Boolean).map((v) => String(v).split(':')[0].split('@')[0]);
@@ -774,9 +774,14 @@ async function acharAlvoDaMencao({ dito, papel, nazu, metadata, from, groupData,
       apelido = doContador?.pushname || '';
     } catch { apelido = ''; }
     const base = String(id).split(':')[0].split('@')[0];
+    // E' um dos PAIS ADOTIVOS da Lizzy? (o config guarda o LID; o NOME pode
+    // estar so' no config, porque o contato pode nao estar na agenda).
+    const paiMae = paisAdotivos.find((pp) => pp && pp.lid && idsMatch(pp.lid, id));
     usuarios.push({
       id,
-      nome: nome || apelido || base,
+      // O nome do CONFIG vence o numero cru: era o erro relatado ("marca a
+      // cangica" nao achava, porque o participante caia no LID sem nome).
+      nome: nome || paiMae?.nome || apelido || base,
       apelido,
       // As MARCAS do papel: quem tem o metadata e' este helper, entao a busca
       // por papel (`acharUsuarioPorPapel`) so' escolhe — nao descobre.
@@ -784,10 +789,26 @@ async function acharAlvoDaMencao({ dito, papel, nazu, metadata, from, groupData,
       ehDonoBot: donosBot.includes(base),
       ehAdmin: p?.admin === 'admin' || p?.admin === 'superadmin',
       ehMod: mods.has(base),
-      ehAlpha: alphas.has(base)
+      ehAlpha: alphas.has(base),
+      // A FAMILIA: "marca sua mae"/"seu pai" acha por AQUI.
+      ehMae: paiMae?.papel === 'mae',
+      ehPai: paiMae?.papel === 'pai'
     });
   }
-  // PAPEL ("chama o dono do grupo") ou NOME ("chama o joao").
+  // Um PAI/MAE que NAO esta na lista de participantes (o config tem, o grupo
+  // nao): entra como candidato mesmo assim — senao "marca sua mae" nao acha.
+  for (const pp of paisAdotivos) {
+    if (!pp || !pp.lid || ehBot(pp.lid)) continue;
+    if (usuarios.some((u) => idsMatch(u.id, pp.lid))) continue;
+    usuarios.push({
+      id: pp.lid,
+      nome: pp.nome || String(pp.lid).split(':')[0].split('@')[0],
+      apelido: '',
+      ehMae: pp.papel === 'mae',
+      ehPai: pp.papel === 'pai'
+    });
+  }
+  // PAPEL ("chama o dono do grupo", "marca sua mae") ou NOME ("chama o joao").
   if (papel) return acharUsuarioPorPapel(papel, usuarios);
   return acharUsuarioPorNome(dito, usuarios, {});
 }
@@ -7939,6 +7960,18 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
           nomeDeQuemPediu = await resolverNomeContato(sender, { nazu, metadata: groupMetadata, from, fallback: pushname }) || pushname || '';
         } catch { /* segue com o pushname */ }
 
+        // OS PAIS ADOTIVOS da Lizzy: o config guarda o LID, o NOME vem do
+        // contato (o config nao tem socket). Resolvido AQUI, ANTES da mencao,
+        // porque "marca sua mae" tambem usa esta lista (e o nome do config e' o
+        // que faz a mae ser encontrada). Best-effort.
+        let paisAdotivos = null;
+        try {
+          paisAdotivos = await resolverPaisAdotivos({
+            pais: lerIdentidade().paisAdotivos,
+            nazu, metadata: groupMetadata, from
+          });
+        } catch { /* segue sem os nomes dos pais */ }
+
         // ------------------------------------------------------------------
         // MENÇÃO de um usuário do grupo: "Lizzy, chama o Fulano pra mim".
         //
@@ -7962,7 +7995,8 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
                 dito: pedidoDeMencao.nome,
                 papel: pedidoDeMencao.papel,
                 nazu, metadata: groupMetadata, from, groupData, sender,
-                numerosDono: [numerodono, lidowner]
+                numerosDono: [numerodono, lidowner],
+                paisAdotivos: paisAdotivos || []
               });
             }
             const nomePapel = nomeDoPapel(pedidoDeMencao.papel);
@@ -8083,16 +8117,6 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
             return;
           }
         }
-
-        // OS PAIS ADOTIVOS da Lizzy: o config guarda o LID, o NOME vem do
-        // contato (o config nao tem socket). Resolvido aqui, best-effort.
-        let paisAdotivos = null;
-        try {
-          paisAdotivos = await resolverPaisAdotivos({
-            pais: lerIdentidade().paisAdotivos,
-            nazu, metadata: groupMetadata, from
-          });
-        } catch { /* segue sem os nomes dos pais */ }
 
         // Contexto adicional para passar à IA
         // O "OLHAR TUDO" (custo 0 token): as ultimas mensagens do grupo vem do

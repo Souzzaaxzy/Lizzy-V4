@@ -160,6 +160,13 @@ const PALAVRAS_VAZIAS = new Set([
  * "dono do bot" antes de "dono" — senão o mais genérico venceria.
  */
 const PAPEIS = [
+  // A FAMILIA (os pais adotivos da Lizzy). "sua mae", "seu pai", "a mae dela".
+  // Exige POSSESSIVO (sua/minha/tua...) ou o "dela/dele" — "a mae" solto e'
+  // ambiguo demais e casaria conversa ("minha mae me ligou").
+  ['mae', /\b(sua|minha|tua)\s+mae\b/i],
+  ['mae', /\b(a|essa|aquela)\s+mae\s+(dela|dele|do\s+bot)\b/i],
+  ['pai', /\b(seu|meu|teu)\s+pai\b/i],
+  ['pai', /\b(o|esse|aquele)\s+pai\s+(dela|dele|do\s+bot)\b/i],
   // O DONO DO GRUPO (quem criou). "dono do grupo", "dono daqui", "criador".
   ['dono_grupo', /\b(dono|dona|criador|criadora)\s+(do|da|deste|desse|do\s+mesmo)?\s*(grupo|gp|group|aqui|daqui|chat)\b/i],
   ['dono_grupo', /\b(dono|dona)\s+(do|da)\s+(grupo|gp|group)\b/i],
@@ -247,6 +254,9 @@ export function identificarPedidoDeMencao(texto) {
     .replace(/\b(que|quem)\b.*$/i, '')
     .replace(/\s{2,}/g, ' ')
     .trim();
+  // O VOCATIVO final ("marca a cangica AI") nao faz parte do nome. Sem isto o
+  // handler procurava "cangica ai" e o nome real e' "Cangica".
+  nome = nome.replace(/\s+(ai|aí|aqui|agora|mesmo|la|lá)$/i, '').trim();
   if (!nome) return null;
   // Um nome de uma letra só não é nome.
   if (nome.replace(/\s/g, '').length < 2) return null;
@@ -403,7 +413,11 @@ export function acharUsuarioPorPapel(papel, usuarios = [], rng = Math.random) {
     dono_bot: 'ehDonoBot',
     admin: 'ehAdmin',
     mod: 'ehMod',
-    alpha: 'ehAlpha'
+    alpha: 'ehAlpha',
+    // A FAMILIA: o alvo vem do CONFIG (pais adotivos), nao do metadata. Quem
+    // monta a lista marca `ehPai`/`ehMae`.
+    pai: 'ehPai',
+    mae: 'ehMae'
   }[String(papel || '')];
   const lista = Array.isArray(usuarios) ? usuarios.filter((u) => u && u.id) : [];
   if (!marca) return { achou: false, papel, vazio: true };

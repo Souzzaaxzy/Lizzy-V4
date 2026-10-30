@@ -387,6 +387,74 @@ await test('20. chave invalida do Groq para na 1a chamada (sem cadeia)', async (
 });
 
 // ============================================================================
+// O JSON TRUNCADO NAO VAZA (o bug do dono)
+// ============================================================================
+console.log('\n=== O JSON TRUNCADO NAO VAZA ===\n');
+
+await test('21. um JSON CORTADO (max_tokens) nao vaza o `{` para o usuario', async () => {
+  // O dono viu na tela:
+  //   lizzy: {
+  //    "resp": [
+  //    {
+  //    "resp": "sou a Lizzy, 21, moro no Acre, jogo volei, sou bissex
+  // A causa: o `max_tokens` corta o JSON no meio, o parse falha e o fallback
+  // devolvia o TEXTO CRU (o proprio JSON quebrado).
+  process.env.GROQ_API_KEY = 'gsk-teste';
+  groq.resetarEsgotadas(true);
+  const casos = [
+    // So' o comeco: nenhuma mensagem inteira -> NAO pode vazar o `{`.
+    '{\n "resp": [\n {\n "resp": "sou a Lizzy, 21, moro no Acre, jogo volei, sou bissex',
+    '{ "resp": ['
+  ];
+  for (const conteudo of casos) {
+    let n = 0;
+    // 1a chamada: o JSON cortado. 2a (respostaNatural): a reacao da IA.
+    groq.setGroqHttpForTest(async () => { n += 1; return respostaGroq(n === 1 ? conteudo : 'nossa, que isso'); });
+    const r = await ia.makeAssistentRequest({
+      mensagens: [{ texto: 'quem e vc', nome_enviou: 'Kannon', id_enviou: '1', id_grupo: 'g@g.us', nome_grupo: 'g' }],
+      extraContext: {}
+    }, { user: { id: '1@s.whatsapp.net' }, sendMessage: async () => ({}), ev: { on() {}, emit() {} } }, '5511915323638', 'lizzy');
+    const texto = (r.resp || []).map((x) => x.resp).join(' ');
+    ok(!texto.includes('"resp"'), `nao vaza o JSON (veio "${texto.slice(0, 60)}")`);
+    ok(!/^\s*\{/.test(texto), `nao comeca com "{" (veio "${texto.slice(0, 30)}")`);
+  }
+  groq.setGroqHttpForTest(null);
+  groq.resetarEsgotadas(true);
+});
+
+await test('22. um JSON cortado APROVEITA as mensagens inteiras', async () => {
+  process.env.GROQ_API_KEY = 'gsk-teste';
+  groq.resetarEsgotadas(true);
+  // Uma mensagem inteira ("oii") + a ultima cortada.
+  const conteudo = '{ "resp": [ { "resp": "oii" }, { "resp": "sou a Lizzy, 21, moro no Acr';
+  let n = 0;
+  groq.setGroqHttpForTest(async () => { n += 1; return respostaGroq(conteudo); });
+  const r = await ia.makeAssistentRequest({
+    mensagens: [{ texto: 'oi', nome_enviou: 'Kannon', id_enviou: '1', id_grupo: 'g@g.us', nome_grupo: 'g' }],
+    extraContext: {}
+  }, { user: { id: '1@s.whatsapp.net' }, sendMessage: async () => ({}), ev: { on() {}, emit() {} } }, '5511915323638', 'lizzy');
+  const texto = (r.resp || []).map((x) => x.resp).join(' | ');
+  ok(texto.includes('oii'), `aproveitou a mensagem INTEIRA (veio "${texto}")`);
+  ok(!texto.includes('sou a Lizzy'), 'e descartou a ultima (cortada)');
+  groq.setGroqHttpForTest(null);
+  groq.resetarEsgotadas(true);
+});
+
+await test('23. um TEXTO PURO (nao-JSON) continua passando', async () => {
+  process.env.GROQ_API_KEY = 'gsk-teste';
+  groq.resetarEsgotadas(true);
+  groq.setGroqHttpForTest(async () => respostaGroq('oi tudo bem?'));
+  const r = await ia.makeAssistentRequest({
+    mensagens: [{ texto: 'oi', nome_enviou: 'Kannon', id_enviou: '1', id_grupo: 'g@g.us', nome_grupo: 'g' }],
+    extraContext: {}
+  }, { user: { id: '1@s.whatsapp.net' }, sendMessage: async () => ({}), ev: { on() {}, emit() {} } }, '5511915323638', 'lizzy');
+  const texto = (r.resp || []).map((x) => x.resp).join(' ');
+  contem(texto, 'tudo bem', 'o texto puro (que NAO e JSON) passa intacto');
+  groq.setGroqHttpForTest(null);
+  groq.resetarEsgotadas(true);
+});
+
+// ============================================================================
 // RESUMO
 // ============================================================================
 
