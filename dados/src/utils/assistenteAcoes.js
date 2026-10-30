@@ -39,6 +39,10 @@
  * | `stickerBusca` | monta um pack de figurinhas do termo | `!s <termo>` |
  * | `mencao` | menciona alguém do grupo pelo nome | — |
  *
+ * **FOTO de alguma coisa = `pin`** (pedido do dono, out/2026): *"o `!pin` é foto,
+ * quando eu pedir foto ela busca lá"*. Então "me manda uma foto de gato" pesquisa
+ * no Pinterest — só "foto **do grupo**" continua sendo a foto do grupo.
+ *
  * A ORDEM da checagem importa: `stickerBusca` (o `!s` por busca) tem de vir
  * antes de `figurinha`, senão "manda uma figurinha de gato" cairia na aleatória.
  *
@@ -82,7 +86,7 @@ const DO_GRUPO = /\b(grupo|gp|group|aqui|daqui|desse|deste|nosso)\b/i;
  * Objetos que NÃO são o grupo: com eles, "manda o link X" é outra coisa.
  * (O `!play`/`!tiktok` já tratam esses pedidos.)
  */
-const OUTRO_OBJETO = /\b(musica|musicas|som|faixa|audio|video|clipe|playlist|album|tiktok|pinterest|figurinha|figura|sticker|pdf|documento|arquivo|imagem da|foto da|foto do meu)\b/i;
+const OUTRO_OBJETO = /\b(musica|musicas|som|faixa|audio|video|clipe|playlist|album|tiktok|pinterest|figurinha|figura|sticker|pdf|documento|arquivo)\b/i;
 
 /** Normaliza para os testes: sem acento, sem pontuação, sem o nome do agente. */
 function paraPadroes(texto) {
@@ -219,7 +223,21 @@ export function identificarAcaoDoBot(texto) {
     return { acao: doIap.comando, termo };
   }
 
-  // 5) As ações que já existiam (link/foto do grupo).
+  // 5) FOTO DE ALGUMA COISA -> é o `!pin` (o Pinterest busca imagens).
+  //
+  // Pedido do dono: *"o `!pin` é foto, quando eu pedir foto ela busca lá"*.
+  // "foto do GRUPO" fica de fora (é a foto do grupo, tratada no passo 6) — a
+  // diferença é o termo: "grupo/gp/aqui" não é um tema de busca.
+  const mFoto = /\b(foto|fotografia|imagem|img|pic)s?\s+(de|do|da|dos|das|sobre)\s+(.+)/i.exec(t);
+  if (mFoto && pedido) {
+    const termo = String(mFoto[3] || '')
+      .replace(/\b(para|pra|pro|por|aqui|agora|pfv|pf|por\s+favor)\b.*$/i, '')
+      .replace(/\s{2,}/g, ' ').trim();
+    const ehDoGrupo = /^(o\s+|a\s+)?(grupo|gp|group|aqui|daqui|desse|deste|nosso)\b/i.test(termo);
+    if (termo && !ehDoGrupo) return { acao: 'pin', termo };
+  }
+
+  // 6) As ações que já existiam (link/foto do grupo).
   return identificarAcaoDoGrupo(texto);
 }
 
@@ -242,6 +260,7 @@ export function frasesDeAjudaDoGrupo() {
     '- "procura no pinterest X" -> pesquisa imagens de X',
     '- "manda uma figurinha" -> manda uma figurinha aleatoria',
     '- "manda uma figurinha de X" -> monta um pack de figurinhas de X',
-    '- "chama o X pra mim" -> menciona a pessoa X do grupo'
+    '- "chama o X pra mim" -> menciona a pessoa X do grupo',
+    '- "me manda uma foto de X" -> pesquisa imagens de X'
   ].join('\n');
 }

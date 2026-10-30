@@ -7852,8 +7852,7 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
               await nazu.sendMessage(from, {
                 text: alvo.ambiguo
                   ? `${fala}\n\n${alvo.candidatos.map((c) => `• ${c.nome}`).join('\n')}`
-                  : fala,
-                contextInfo: gerarContextNewsletter()
+                  : fala
               });
               return;
             }
@@ -7872,8 +7871,7 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
               : falaDoEvento('mencaoSemNome', { alvo: `@${base}` });
             await nazu.sendMessage(from, {
               text: fala,
-              mentions: [jidCompleto],
-              contextInfo: gerarContextNewsletter()
+              mentions: [jidCompleto]
             });
             return;
           } catch (e) {
@@ -7887,10 +7885,14 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
           try {
             // A FALA natural do evento vai ANTES da mídia: ela "anuncia" o que
             // vem. Uma frase por evento, sorteada (repetir sempre soa robo).
+            //
+            // SEM `contextInfo` (newsletter): o dono pediu *"tira o contextInfo
+            // newsletter nas falas dela"* — o cabeçalho de canal faz a mensagem
+            // parecer um card de canal, e a fala tem de soar como conversa.
             const falar = async (evento, dados = {}, extra = {}) => {
               const texto = falaDoEvento(evento, dados);
               if (!texto) return;
-              await nazu.sendMessage(from, { text: texto, contextInfo: gerarContextNewsletter(), ...extra })
+              await nazu.sendMessage(from, { text: texto, ...extra })
                 .catch((e) => console.error('[ASSISTENTE] falha na fala:', e?.message || e));
             };
 
@@ -7899,8 +7901,7 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
               if (!codigo) throw new Error('sem codigo de convite');
               await falar('link', { nome: nomeDeQuemPediu });
               await nazu.sendMessage(from, {
-                text: `🔗 *Link do grupo:*\nhttps://chat.whatsapp.com/${codigo}`,
-                contextInfo: gerarContextNewsletter()
+                text: `🔗 *Link do grupo:*\nhttps://chat.whatsapp.com/${codigo}`
               });
               return;
             }
@@ -7917,8 +7918,7 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
               await falar('foto', { nome: nomeDeQuemPediu });
               await nazu.sendMessage(from, {
                 image: { url: fotoUrl },
-                caption: `📷 *Foto do grupo*`,
-                contextInfo: gerarContextNewsletter()
+                caption: `📷 *Foto do grupo*`
               });
               return;
             }

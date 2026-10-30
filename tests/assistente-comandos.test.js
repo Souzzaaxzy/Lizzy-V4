@@ -82,7 +82,14 @@ await test('1. reconhece os pedidos dos comandos (o corpus do dono)', () => {
     ['me manda uma figurinha aleatoria', 'figurinha'],
     ['lizzy me manda uma figurinha de gato', 'stickerBusca'],
     ['manda um sticker de pizza', 'stickerBusca'],
-    ['lizzy manda uma figurinha do naruto', 'stickerBusca']
+    ['lizzy manda uma figurinha do naruto', 'stickerBusca'],
+    // FOTO de algo = `!pin` (pedido do dono): "o `!pin` e' foto".
+    ['me manda uma foto de gato', 'pin'],
+    ['lizzy me manda uma foto do naruto', 'pin'],
+    ['manda uma imagem de cachorro', 'pin'],
+    // ...mas a foto DO GRUPO continua sendo a foto do grupo.
+    ['manda a foto do grupo', 'foto'],
+    ['lizzy me manda a foto do grupo', 'foto']
   ];
   for (const [texto, esperado] of casos) {
     const r = acoes.identificarAcaoDoBot(texto);
@@ -96,7 +103,9 @@ await test('2. o TERMO sai limpo (sem a moldura do pedido)', () => {
     ['lizzy me manda uma figurinha de gato', 'gato'],
     ['manda um sticker de pizza', 'pizza'],
     ['procura no pinterest gatinhos', 'gatinhos'],
-    ['manda um pin de flores', 'flores']
+    ['manda um pin de flores', 'flores'],
+    ['me manda uma foto de gato', 'gato'],
+    ['lizzy me manda uma foto do naruto', 'naruto']
   ];
   for (const [texto, termo] of casos) {
     const r = acoes.identificarAcaoDoBot(texto);
@@ -302,6 +311,29 @@ await test('16. PLAY e PIN reemitem o COMANDO do bot', async () => {
   // O corpo reemitido e' o comando real (o `!play Evidencias`).
   ok(INDEX.includes('const corpo = `${groupPrefix}${comando}${acaoDoBot.termo ?'), 'monta o comando com o termo');
   ok(INDEX.includes('nazu.ev.emit(\'messages.upsert\''), 'reemite por messages.upsert (o caminho do `!iap`)');
+});
+
+await test('16b. as respostas dela saem SEM o contextInfo (newsletter)', async () => {
+  // O dono pediu: *"tira o contextInfo newsletter nas falas dela"*.
+  for (const pedido of ['lizzy me manda o link do grupo', 'lizzy me manda a foto do grupo', 'lizzy manda uma figurinha']) {
+    const sent = await run(pedido);
+    ok(sent.length > 0, `"${pedido}" respondeu`);
+    for (const c of sent) {
+      ok(!c.contextInfo, `"${pedido}": sem contextInfo (veio ${c.contextInfo ? 'SIM' : 'nao'})`);
+    }
+  }
+  // E na mencao tambem.
+  const sent = await run('lizzy chama o joao pra mim');
+  for (const c of sent) ok(!c.contextInfo, 'mencao sem contextInfo');
+});
+
+await test('16c. "me manda uma foto de X" busca no Pinterest (o `!pin` e foto)', async () => {
+  const sent = await run('lizzy me manda uma foto de gato');
+  ok(textos(sent).length > 0, 'mandou a fala');
+  // O comando reemitido e' o `!pin` (nao a foto do grupo).
+  ok(INDEX.includes("acaoDoBot.acao === 'stickerBusca' ? 's' : acaoDoBot.acao"), 'reemite o comando da acao');
+  const r = acoes.identificarAcaoDoBot('lizzy me manda uma foto de gato');
+  ok(r?.acao === 'pin' && r?.termo === 'gato', 'foto de algo -> pin com o termo');
 });
 
 await test('17. a MENCAO sai com o @ na BASE e o `mentions` casando', async () => {
