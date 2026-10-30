@@ -15227,9 +15227,42 @@ A **chamada explícita** consumia uma troca do orçamento (respondia 3 em vez de
 ... para na 4a troca, como o limite manda
 ```
 
+### 🚨 ERRATA — "funcionou, mas só 1 vez": TRÊS causas somadas (out/2026)
+O dono: *"funcionou, mas apenas com 1 repetição, não tem como manter a conversa
+com ela sem responder a mensagem dela ou marcar ela, deixa isso no ciclo, para
+funcionar real"*. Reproduzi com frases de conversa **REAL** e eram três:
+
+**1) `para` e `chega` como PREPOSIÇÃO fechavam a conversa (a principal).** O
+`PARADA_NO_INICIO` casava `para` no começo de **qualquer** frase — e *"para mim
+também foi assim"* fechava. O mesmo com `chega` (*"chega de história"*). Eram
+frases de conversa comuns tratadas como ORDEM.
+
+> **Correção**: `para`/`chega` só são ordem quando a frase **acaba** neles
+> (`para`, `chega!`) ou quando vem um **complemento de ordem** (`para com isso`,
+> `para de falar`, `chega com isso`). `para mim…`, `para você…`, `chega pra mim`
+> são conversa.
+
+**2) O teto de 4 trocas era curto demais.** Numa conversa real a pessoa manda 4
+mensagens em menos de um minuto. O teto é a rede de segurança contra **rajada**,
+não um limite de conversa. Padrão agora **20**.
+
+**3) A janela NÃO se renovava.** Ela contava a partir da **última resposta
+dela**: quem demorasse 3 min para escrever (normal) tinha a janela expirada no
+meio. Novo **`renovarJanela`** — cada mensagem da pessoa renova; o que conta é o
+tempo desde a **última** mensagem.
+
+| | antes | agora |
+|---|---|---|
+| conversa real (12 frases) | parava na 4ª (e na **1ª** com "para") | **12/12 continuam** |
+| fluxo real no handler | 4 continuações | **6/6** |
+
+⚠️ **Lição**: "funcionou só 1 vez" **não** era o teto — era uma palavra comum
+("para") sendo lida como ordem. Medir com frases **de gente** (não com
+"continuação numero 1") foi o que revelou.
+
 ### Testes
-`tests/conversa-andamento.test.js` (novo) — **20 testes / 57 asserções**: as
-travas (janela, limite, pausa, sem-conteúdo, por-pessoa, reabrir, fechar) e o
-fluxo real (continua sem marcar; **não responde "kkkkk" e não gasta chamada**;
-para no limite; outra pessoa não herda; o "chega" fecha; e **1 mensagem = no
-máximo 1 chamada de IA**).
+`tests/conversa-andamento.test.js` — **21 testes / 64 asserções**: as travas
+(janela, limite, pausa, sem-conteúdo, por-pessoa, reabrir, fechar), a
+**renovação da janela** (5+ min com mensagens de 40 em 40s) e o fluxo real
+(continua sem marcar; **não responde "kkkkk" e não gasta chamada**; outra pessoa
+não herda; o "chega" fecha; e **1 mensagem = no máximo 1 chamada de IA**).

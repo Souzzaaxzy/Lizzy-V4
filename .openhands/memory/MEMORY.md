@@ -127,7 +127,13 @@ logs diários (`YYYY-MM-DD.md`).
   (uma vez cada, com o nome de quem falou). **Nunca 1 requisição por mensagem.**
 - ⚠️ **A conta**: ler o grupo por IA = 1 req por mensagem → 2.000 msgs/dia
   estoura o teto de 1.000/dia do Groq. Do cache, o custo por mensagem é zero.
-- Teste: `tests/conversa-andamento.test.js` (20/57).
+- **🚨 3 armadilhas medidas** ("funcionou só 1 vez"): (1) `para`/`chega` como
+  **preposição** fechavam a conversa (*"para mim também foi assim"*) — só são
+  ordem quando a frase acaba neles ou vem complemento (`para com isso`); (2) o
+  teto era **4** (curto para conversa real) → agora **20**; (3) a janela **não
+  renovava** → `renovarJanela` a cada mensagem (conta o tempo desde a ÚLTIMA).
+  **Medir com frases de gente**, não com "continuação número 1".
+- Teste: `tests/conversa-andamento.test.js` (21/64).
 
 ## `!pin` / `!s` — imagens ACESSÍVEIS e quantidade pedida (out/2026)
 
