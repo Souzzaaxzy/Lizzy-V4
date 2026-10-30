@@ -92,6 +92,36 @@ export async function montarPack({ urls, converter, nome = 'Pack', publisher = '
 }
 
 /**
+ * Quantas imagens pedir: 1, 2 ou o padrao do pack.
+ *
+ * ## Pedido do dono (out/2026)
+ *
+ * *"eu peco UMA foto ou UM item de figurinha, ela deve mandar apenas uma, sem
+ * carrossel ou o pack, apenas 1, ou se o usuario pedir mais de uma manda a
+ * quantidade que ele quer, mas no maximo 2"*.
+ *
+ * A conta sai do TEXTO: "uma foto", "me manda 2", "duas imagens". Sem numero, o
+ * padrao e' o do pack (`null` = deixa o `montarPack` sortear 10..15).
+ *
+ * @param {string} texto
+ * @returns {number|null} 1, 2, ou `null` (padrao do pack)
+ */
+export function quantidadePedida(texto) {
+  const t = String(texto || '').toLowerCase();
+  // O NUMERO MANDA: "2", "duas", "dois", "3" (acima do teto vira 2).
+  const porDigito = /\b(\d{1,3})\b/.exec(t);
+  const porPalavra = /\b(uma?|duas?|dois|tres|três|quatro|cinco)\b/.exec(t);
+  const numero = porDigito ? Number(porDigito[1]) : (porPalavra ? ({ uma: 1, um: 1, duas: 2, dois: 2, tres: 3, 'três': 3, quatro: 4, cinco: 5 })[porPalavra[1]] : null);
+  if (Number.isFinite(numero) && numero > 0) return Math.min(numero, MAX_PEDIDO);
+  // Sem numero: "uma foto"/"uma imagem" (singular) = 1; "umas fotos" = padrao.
+  if (/\b(uma?)\s+(foto|imagem|figurinha|figura|sticker)\b/i.test(t)) return 1;
+  return null;
+}
+
+/** O teto do pedido explicito (o dono pediu: "no maximo 2"). */
+export const MAX_PEDIDO = 2;
+
+/**
  * Monta o conteúdo do `sendMessage` para o pacote (formato da fork).
  */
 export function conteudoPack({ stickers, cover, nome, publisher, descricao = '' }) {

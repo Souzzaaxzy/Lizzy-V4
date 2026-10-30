@@ -63,6 +63,13 @@ function installFetch() {
     if (u.startsWith('https://www.bing.com/videos/search')) {
       return new Response(bingVideoHtml, { status: 200 });
     }
+    // As imagens do Pinterest (i.pinimg.com) e do filtro de acessibilidade:
+    // o `!pin` agora VALIDA cada URL antes de montar o card (a causa do
+    // "Invalid media type for carousel card" era uma url que nao baixava). Sem
+    // esta rota, a validacao cairia no fetch real e o card sairia vazio.
+    if (u.startsWith('https://i.pinimg.com/')) {
+      return new Response('', { status: 200, headers: { 'content-type': 'image/jpeg' } });
+    }
     if (u.startsWith('https://www.tikwm.com/api/')) {
       const target = decodeURIComponent(new URL(u).searchParams.get('url') || '');
       tikwmCalls.push(target);

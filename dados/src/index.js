@@ -39,6 +39,7 @@ import { parsePinDuration, buildPinKeyFromContext, isPinControlMessage } from '.
 import { antiCtt, isContactPayload } from './utils/antiCtt.js';
 import { parseImagePollArgs, collectPollImages, resolveAttachments, buildOptionName } from './utils/pollImages.js';
 import { toOggOpus } from './utils/oggOpus.js';
+import { filtrarImagensAcessiveis } from './utils/imagensAcessiveis.js';
 import { sintetizarFala, sintetizarMp3 } from './utils/iapTts.js';
 import { pcmParaWav } from './utils/iapAudio.js';
 import { resolverNomeContato, acharParticipantePorId, nomeInutil, baseId, numerosDoParticipante } from './utils/contactName.js';
@@ -1367,7 +1368,8 @@ import {
   montarTermoBusca,
   montarPack,
   conteudoPack,
-  resolverNomesFigurinha
+  resolverNomesFigurinha,
+  quantidadePedida
 } from './funcs/utils/stickerPack.js';
 import { respostaCorreta as respostaCorretaJogo } from './funcs/utils/answerMatch.js';
 import {
@@ -22339,8 +22341,20 @@ case 'pin':
         : 'Nenhuma imagem encontrada para o termo pesquisado. 😕'
       );
     }
-    // Pegar até 5 imagens
-    const itemsToSend = datinha.urls.slice(0, 5);
+    // QUANTAS imagens? O dono pediu: "uma" = 1; mais de uma = o que pediu (teto
+    // 2). Sem pedido explicito, o padrao do comando (ate' 5).
+    const pedidas = quantidadePedida(searchTerm);
+    const alvo = pedidas || 5;
+
+    // SÓ IMAGENS ACESSÍVEIS (a causa do "Invalid media type for carousel card"):
+    // a busca devolve URLs da web aberta e muitas bloqueiam hotlink (403), o que
+    // deixava o card SEM header e derrubava o carrossel inteiro. O TikTok
+    // funcionava porque as URLs dele vem de um CDN confiavel.
+    const acessiveis = await filtrarImagensAcessiveis(datinha.urls, { limite: alvo });
+    const itemsToSend = acessiveis.slice(0, alvo);
+    if (!itemsToSend.length) {
+      return reply('😕 As imagens dessa busca não estão acessíveis agora. Tente outro termo.');
+    }
 
     // Enviar imagens usando carousel (cards) do Baileys com nativeFlow
     if (itemsToSend.length > 1) {
@@ -31398,7 +31412,17 @@ packname: `${nomebot}`,
               fallback: pushname || nomebot
             });
 
-            const pack = await montarPack({ urls: busca.urls, converter: baixarImagem, nome: nomesFig.pack, publisher: nomesFig.author });
+            // QUANTAS? "uma" = 1; "2" = 2 (teto 2). Sem pedido, o padrao do pack.
+            const pedidasS = quantidadePedida(prompt);
+            // SÓ IMAGENS ACESSÍVEIS: as URLs da busca incluem sites com hotlink
+            // bloqueado (403) — baixar uma delas falha e o pack sai menor.
+            const urlsOk = await filtrarImagensAcessiveis(busca.urls, {
+              limite: pedidasS ? pedidasS : 15
+            });
+            const pack = await montarPack({
+              urls: urlsOk, converter: baixarImagem, nome: nomesFig.pack, publisher: nomesFig.author,
+              quantidade: pedidasS || undefined
+            });
             if (!pack.ok) {
               await react('❌', nazu, info.key, from);
               return reply('❌ Não consegui montar o pack agora. Tente de novo em instantes.');
