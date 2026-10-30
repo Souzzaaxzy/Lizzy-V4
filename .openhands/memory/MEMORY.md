@@ -98,7 +98,12 @@ logs diários (`YYYY-MM-DD.md`).
   canal, e a fala tem de soar como conversa. O resto do bot mantém.
 - **"foto de X" = `!pin`** (o dono: *"o `!pin` é foto"*). Só "foto **do grupo**"
   continua sendo a foto do grupo; a distinção é o termo (`grupo/gp/aqui`).
-- Teste: `tests/assistente-comandos.test.js` (24/145).
+- **Menção por PAPEL** (`acharUsuarioPorPapel`): `dono_grupo`, `dono_bot`,
+  `admin`, `mod`, `alpha`. Papel de uma pessoa vai direto; papel de várias
+  ("um admin") escolhe UMA; papel vazio avisa citando o cargo (não inventa). As
+  marcas vêm do metadata (`owner`/`admin`) e do `groupData` (mods/alphas).
+  ⚠️ "dono do **grupo**" tem de ser testado antes de "dono do **bot**".
+- Teste: `tests/assistente-comandos.test.js` (28/193).
 
 ## Testes
 

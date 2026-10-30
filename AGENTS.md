@@ -15012,8 +15012,37 @@ Dois pedidos do dono:
 A distinção é o **TERMO**: `grupo/gp/aqui` não é tema de busca. E o
 `OUTRO_OBJETO` deixou de barrar "foto da X" (era ele que impedia a busca).
 
+#### 🎭 MENÇÃO POR PAPEL (out/2026) — "tipo o dono do grupo e tal"
+Pedido do dono: *"ela tem que saber diversificar a menção a tal usuário também,
+tipo o dono do grupo e tal"*. Então o alvo pode ser um **CARGO**, não só um nome:
+
+| o que se pede | papel |
+|---|---|
+| "chama o dono do grupo" / "criador" | `dono_grupo` |
+| "chama o dono do bot" / "o dono dela" | `dono_bot` |
+| "chama um admin" / "o adm" | `admin` |
+| "chama um mod" / "um moderador" | `mod` |
+| "chama um alpha" | `alpha` |
+
+- Papel de **UMA** pessoa (dono do grupo/bot) vai direto nela;
+- Papel de **VÁRIAS** ("um admin") escolhe **uma** — é o que "um" quer dizer;
+- Papel **sem ninguém** avisa citando o CARGO (*"não encontrei nenhum moderador
+  aqui"*) — **não inventa alvo**.
+
+**De onde vem cada papel** (nada de heurística): dono do grupo = `metadata.owner`
+(ou `admin === 'superadmin'`); dono do bot = `numerodono` + `lidowner` (o mesmo
+`idsMatch`); admin = `participant.admin`; mod/alpha = `groupData.moderators` /
+`groupData.alphas` (cargos do **BOT**). As **marcas** são montadas no handler (que
+tem o metadata); a **escolha** é do módulo puro (`acharUsuarioPorPapel`).
+
+⚠️ **A ORDEM dos padrões importa**: "dono do **grupo**" é testado antes de "dono
+do **bot**", senão o genérico venceria. Há teste travando isso.
+
+As falas da menção foram de **4 → 10** frases (e "sem nome" de 3 → 6), com 2
+eventos novos: `mencaoPapel` (cita o cargo) e `mencaoPapelVazio`.
+
 #### Testes
-`tests/assistente-comandos.test.js` — **24 testes / 145 asserções**:
+`tests/assistente-comandos.test.js` — **28 testes / 193 asserções**:
 reconhecimento (17 positivos + 7 negativos), termo limpo, falas (variedade e
 marcadores), menção (match/ambiguidade/número/cargo) e o **fluxo real** no handler
 (a fala sai junto **sem `contextInfo`**, a menção sai na BASE, o apelido do
