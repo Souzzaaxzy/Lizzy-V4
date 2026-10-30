@@ -112,6 +112,42 @@ async function sintetizarMsEdge(texto) {
   }
 }
 
+/**
+ * Sintetiza e devolve **MP3** (audio comum, nao nota de voz).
+ *
+ * ## Por que MP3 direto (e nao PCM -> OGG)
+ *
+ * O `sintetizarFala` devolve PCM porque e' o formato do MOTOR da call. Mas para
+ * mandar um **audio comum** no chat o WhatsApp aceita MP3 — e o `msedge-tts` JA'
+ * entrega MP3 codificado pelo proprio servico.
+ *
+ * Ou seja: por aqui **nao passa ffmpeg**. O caminho da nota de voz
+ * (PCM -> WAV -> OGG/Opus) continua existindo, mas este e' mais simples e nao
+ * depende de binario nenhum.
+ *
+ * @param {string} texto
+ * @returns {Promise<{ ok: boolean, mp3?: Buffer, fonte?: string, motivo?: string }>}
+ */
+export async function sintetizarMp3(texto) {
+  const limpo = String(texto || '').trim();
+  if (!limpo) return { ok: false, motivo: 'texto_vazio' };
+
+  const desativado = ['off', '0', 'false', 'nao', 'não'].includes(
+    String(process.env.IAP_TTS_EDGE || '').trim().toLowerCase()
+  );
+  if (desativado) return { ok: false, motivo: 'tts_desativado' };
+
+  // 1) Motor Node (msedge-tts) -- entrega MP3 pronto, sem ffmpeg.
+  const mp3Node = await sintetizarMsEdge(limpo);
+  if (mp3Node && mp3Node.length) return { ok: true, mp3: mp3Node, fonte: 'msedge-tts' };
+
+  // 2) Reserva: o binario Python, se ja' estiver instalado.
+  const mp3Py = await sintetizarEdgeBinario(limpo);
+  if (mp3Py && mp3Py.length) return { ok: true, mp3: mp3Py, fonte: 'edge-tts' };
+
+  return { ok: false, motivo: 'sem_tts' };
+}
+
 /** Disponibilidade do motor Node (msedge-tts instalado?). */
 export async function msedgeDisponivel() {
   const mod = await carregarMsEdge();

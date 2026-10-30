@@ -39,12 +39,11 @@ import { parsePinDuration, buildPinKeyFromContext, isPinControlMessage } from '.
 import { antiCtt, isContactPayload } from './utils/antiCtt.js';
 import { parseImagePollArgs, collectPollImages, resolveAttachments, buildOptionName } from './utils/pollImages.js';
 import { toOggOpus } from './utils/oggOpus.js';
-import { sintetizarFala } from './utils/iapTts.js';
-import { pcmParaWav } from './utils/iapAudio.js';
+import { sintetizarMp3 } from './utils/iapTts.js';
 import { resolverNomeContato, acharParticipantePorId, nomeInutil, baseId, numerosDoParticipante } from './utils/contactName.js';
 import { coletarDadosDoGrupo } from './utils/contextoConversa.js';
 // A VOZ da conversa: "Lizzy, manda um áudio aí" -> nota de voz de verdade.
-import { ehPedidoDeAudio, temaDoAudio, falaDoAudio, gerarNotaDeVoz, erroDaVoz } from './utils/vozDaConversa.js';
+import { ehPedidoDeAudio, temaDoAudio, falaDoAudio, gerarAudio, erroDaVoz } from './utils/vozDaConversa.js';
 import { lerIdentidade } from './utils/identidadeLizzy.js';
 import { resolverPaisAdotivos } from './utils/contextoConversa.js';
 // As chaves do Groq (ate' 10) e o failover automatico.
@@ -7698,15 +7697,15 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
         }
 
         // ------------------------------------------------------------------
-        // NOTA DE VOZ: "Lizzy, manda um áudio aí"
+        // ÁUDIO: "Lizzy, manda um áudio aí"
         //
         // GATILHO EXPLÍCITO (decisão do dono: "primeiro vamos configurar apenas
         // o 'lizzy, manda um audio ai' só pra testar, depois automatizamos").
         // Ou seja: ela NÃO manda voz por iniciativa própria nesta rodada.
         //
-        // Roda ANTES do LLM de texto de propósito: aqui a resposta não é texto,
-        // é uma nota de voz. A fala (o TEXTO que vira voz) vem da IA, com a
-        // personalidade dela; o que este bloco faz é converter em áudio.
+        // É ÁUDIO COMUM (`ptt: false`, MP3) — o dono pediu "áudio normal mesmo,
+        // sem nota de voz". A fala (o TEXTO que vira voz) vem da IA, com a
+        // personalidade dela; este bloco só converte em áudio.
         // ------------------------------------------------------------------
         if (ehPedidoDeAudio(textoLimpo)) {
           try {
@@ -7722,23 +7721,19 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
             } catch { /* segue com o texto padrao */ }
             if (!fala) fala = falaDoAudio(tema);
 
-            const voz = await gerarNotaDeVoz({
-              texto: fala,
-              sintetizar: sintetizarFala,
-              pcmParaWav,
-              toOggOpus
-            });
+            const voz = await gerarAudio({ texto: fala, sintetizarMp3 });
             if (!voz.ok) {
               console.error('[VOZ] falhou:', voz.motivo);
               await reply(`❌ ih, ${erroDaVoz(voz.motivo)}`);
               return;
             }
             await nazu.sendMessage(from, {
-              audio: voz.ogg,
-              mimetype: 'audio/ogg; codecs=opus',
-              // `ptt: true` = nota de voz (waveform + botao de play). Sem isso
-              // vira arquivo de audio comum.
-              ptt: true,
+              audio: voz.mp3,
+              mimetype: 'audio/mpeg',
+              // AUDIO NORMAL (nao nota de voz): o dono pediu "aquele audio que
+              // o usuario grava e manda seco no grupo". Sem `ptt` ele sai como
+              // audio comum; com `ptt: true` viraria nota de voz (waveform).
+              ptt: false,
               contextInfo: gerarContextNewsletter()
             });
             return;

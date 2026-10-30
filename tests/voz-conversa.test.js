@@ -1,8 +1,10 @@
 /**
- * A VOZ da conversa — "Lizzy, manda um áudio aí" vira NOTA DE VOZ.
+ * A VOZ da conversa — "Lizzy, manda um áudio aí" manda ÁUDIO COMUM.
  *
  * Pedido do dono: *"vamos pelo áudio, primeiro vamos configurar apenas o
- * 'lizzy, manda um audio ai' só pra testar, depois automatizamos"*.
+ * 'lizzy, manda um audio ai' só pra testar, depois automatizamos"* — e depois:
+ * *"eu quero áudio normal mesmo, sem nota de voz, aquele áudio que o usuário
+ * grava e manda seco no grupo"*.
  *
  * Uso: node tests/voz-conversa.test.js
  */
@@ -23,10 +25,9 @@ fs.writeFileSync(process.env.CONFIG_PATH, JSON.stringify({
 }, null, 2));
 
 const voz = await import(new URL('../dados/src/utils/vozDaConversa.js', import.meta.url).href);
-const { pcmParaWav } = await import(new URL('../dados/src/utils/iapAudio.js', import.meta.url).href);
-const { toOggOpus } = await import(new URL('../dados/src/utils/oggOpus.js', import.meta.url).href);
+const { sintetizarMp3 } = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
 
-/** Ha' ffmpeg no PATH (ou em FFMPEG_PATH)? Sem ele a conversao nao roda. */
+/** Ha' ffmpeg no PATH? (so' para CONFERIR o MP3 gerado de verdade) */
 function temFfmpeg() {
   const bin = process.env.FFMPEG_PATH || 'ffmpeg';
   try { return spawnSync(bin, ['-version'], { stdio: 'ignore' }).status === 0; } catch { return false; }
@@ -109,33 +110,38 @@ await test('4. a FALA e montada a partir do tema', () => {
 // 2) GERAR A NOTA DE VOZ (PCM -> WAV -> OGG/Opus)
 // ───────────────────────────────────────────────────────────────────────────
 
-/** Dublê de TTS: 1s de senoide. Nao depende de rede nem do msedge. */
-const sintetizarFake = async () => {
-  const pcm = new Float32Array(16000);
-  for (let i = 0; i < pcm.length; i++) pcm[i] = Math.sin(2 * Math.PI * 440 * i / 16000) * 0.3;
-  return { ok: true, pcm, fonte: 'fake' };
-};
+/** Dublê de TTS: MP3 de mentira (so' para medir o contrato). */
+const sintetizarFake = async () => ({ ok: true, mp3: Buffer.from('ID3' + 'x'.repeat(200)), fonte: 'fake' });
 
-await test('5. a cadeia gera OGG de verdade (magic `OggS`)', async () => {
-  if (!FFMPEG) { console.log('     (pulado: sem ffmpeg)'); return; }
-  const r = await voz.gerarNotaDeVoz({ texto: 'oi', sintetizar: sintetizarFake, pcmParaWav, toOggOpus });
+await test('5. gera o AUDIO (MP3) — sem ffmpeg, sem rede', async () => {
+  const r = await voz.gerarAudio({ texto: 'oi', sintetizarMp3: sintetizarFake });
   ok(r.ok === true, `gerou (motivo ${r.motivo || '-'})`);
-  ok(Buffer.isBuffer(r.ogg) && r.ogg.length > 0, 'tem bytes');
-  ok(r.ogg.slice(0, 4).toString('ascii') === 'OggS', 'e o magic e OggS (nota de voz)');
+  ok(Buffer.isBuffer(r.mp3) && r.mp3.length > 0, 'tem bytes');
+  ok(r.mp3.slice(0, 3).toString('ascii') === 'ID3', 'e um MP3 (o dublê comeca com ID3)');
   ok(r.fonte === 'fake', 'reporta a fonte do TTS');
 });
 
+await test('5b. o TTS REAL gera MP3 de verdade (msedge-tts)', async () => {
+  const r = await voz.gerarAudio({ texto: 'Oi! Aqui é a Lizzy.', sintetizarMp3 });
+  if (!r.ok) { console.log(`     (pulado: ${r.motivo} — sem msedge-tts neste ambiente)`); return; }
+  ok(Buffer.isBuffer(r.mp3) && r.mp3.length > 1000, `gerou ${r.mp3?.length} bytes`);
+  // MP3: ID3 ou frame (0xFF 0xEx/0xFx).
+  const h = r.mp3;
+  const ehMp3 = h.slice(0, 3).toString('ascii') === 'ID3' || (h[0] === 0xFF && (h[1] & 0xE0) === 0xE0);
+  ok(ehMp3, 'tem cabecalho de MP3');
+  ok(r.fonte === 'msedge-tts', `fonte msedge-tts (veio ${r.fonte})`);
+});
+
 await test('6. a cadeia e FALHA FECHADA (erros controlados, sem lixo)', async () => {
-  ok((await voz.gerarNotaDeVoz({ texto: 'oi' })).motivo === 'sem_dependencias', 'sem deps');
-  ok((await voz.gerarNotaDeVoz({ texto: '', sintetizar: sintetizarFake, pcmParaWav, toOggOpus })).motivo === 'texto_vazio', 'texto vazio');
-  ok((await voz.gerarNotaDeVoz({ texto: 'oi', sintetizar: async () => ({ ok: false, motivo: 'sem_tts' }), pcmParaWav, toOggOpus })).motivo === 'sem_tts', 'TTS falhou -> propaga');
-  ok((await voz.gerarNotaDeVoz({ texto: 'oi', sintetizar: async () => { throw new Error('x'); }, pcmParaWav, toOggOpus })).motivo === 'tts_falhou', 'TTS lancou -> controlado');
-  ok((await voz.gerarNotaDeVoz({ texto: 'oi', sintetizar: sintetizarFake, pcmParaWav, toOggOpus: async () => { throw new Error('FFmpeg não encontrado'); } })).motivo === 'sem_ffmpeg', 'ffmpeg ausente -> sem_ffmpeg');
+  ok((await voz.gerarAudio({ texto: 'oi' })).motivo === 'sem_dependencias', 'sem deps');
+  ok((await voz.gerarAudio({ texto: '', sintetizarMp3: sintetizarFake })).motivo === 'texto_vazio', 'texto vazio');
+  ok((await voz.gerarAudio({ texto: 'oi', sintetizarMp3: async () => ({ ok: false, motivo: 'sem_tts' }) })).motivo === 'sem_tts', 'TTS falhou -> propaga');
+  ok((await voz.gerarAudio({ texto: 'oi', sintetizarMp3: async () => { throw new Error('x'); } })).motivo === 'tts_falhou', 'TTS lancou -> controlado');
+  ok((await voz.gerarAudio({ texto: 'oi', sintetizarMp3: async () => ({ ok: true, mp3: 'nao-e-buffer' }) })).motivo === 'audio_invalido', 'nao-buffer -> controlado');
 });
 
 await test('7. a mensagem de erro diz o que fazer', () => {
-  ok(/FFmpeg/i.test(voz.erroDaVoz('sem_ffmpeg')), 'sem_ffmpeg manda instalar o FFmpeg');
-  for (const m of ['tts_falhou', 'sem_dependencias', 'texto_vazio', 'wav_falhou', 'opus_falhou', 'x']) {
+  for (const m of ['tts_falhou', 'sem_dependencias', 'texto_vazio', 'audio_invalido', 'tts_desativado', 'x']) {
     const t = voz.erroDaVoz(m);
     ok(typeof t === 'string' && t.length > 5 && !/undefined|null/.test(t), `motivo ${m} tem texto`);
   }
@@ -145,16 +151,21 @@ await test('7. a mensagem de erro diz o que fazer', () => {
 // 3) A INTEGRACAO NO HANDLER
 // ───────────────────────────────────────────────────────────────────────────
 
-await test('8. o handler usa o gatilho e manda como NOTA DE VOZ (ptt)', () => {
+await test('8. o handler manda AUDIO COMUM (ptt: false), nao nota de voz', () => {
   ok(INDEX.includes("from './utils/vozDaConversa.js'"), 'importa o modulo');
   ok(INDEX.includes('ehPedidoDeAudio(textoLimpo)'), 'usa o gatilho explicito');
-  ok(INDEX.includes('gerarNotaDeVoz('), 'chama a geracao');
-  // O envio tem de ser `ptt: true` + OGG/Opus (senao vira arquivo comum).
-  const i = INDEX.indexOf('gerarNotaDeVoz(');
-  const bloco = INDEX.slice(i, i + 1400);
-  ok(/audio:\s*voz\.ogg/.test(bloco), 'manda o buffer como audio');
-  ok(/ptt:\s*true/.test(bloco), 'com ptt: true (nota de voz)');
-  ok(/audio\/ogg; codecs=opus/.test(bloco), 'com o mimetype OGG/Opus');
+  ok(INDEX.includes('gerarAudio('), 'chama a geracao');
+  const i = INDEX.indexOf('gerarAudio(');
+  // Sem os comentarios: o comentario do bloco CITA "ptt: true" para explicar
+  // por que NAO se usa — comparar com o texto cru daria falso positivo.
+  const bloco = INDEX.slice(i, i + 1400)
+    .split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
+  ok(/audio:\s*voz\.mp3/.test(bloco), 'manda o MP3 como audio');
+  ok(/ptt:\s*false/.test(bloco), 'com ptt: false (AUDIO COMUM — o pedido do dono)');
+  ok(/audio\/mpeg/.test(bloco), 'com o mimetype audio/mpeg');
+  ok(!/ptt:\s*true/.test(bloco), 'e NAO como nota de voz');
+  // E nao depende de ffmpeg neste caminho.
+  ok(!/toOggOpus/.test(bloco), 'nao passa por OGG/Opus (sem ffmpeg)');
   // E o gatilho roda ANTES do LLM de texto (senao ela responderia texto).
   const iPedido = INDEX.indexOf('ehPedidoDeAudio(textoLimpo)');
   const iIA = INDEX.indexOf('ia.makeAssistentRequest(', iPedido);

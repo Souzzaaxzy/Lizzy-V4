@@ -1,10 +1,12 @@
 /**
- * A VOZ da conversa — a Lizzy responde por NOTA DE VOZ no chat.
+ * A VOZ da conversa — a Lizzy manda ÁUDIO no chat.
  *
  * ## O pedido do dono
  *
  * *"vamos pelo áudio, primeiro vamos configurar apenas o 'lizzy, manda um áudio
- * ai' só pra testar, depois automatizamos"*.
+ * ai' só pra testar, depois automatizamos"* — e depois: *"eu quero áudio normal
+ * mesmo, sem nota de voz, aquele áudio que o usuário grava e manda seco no
+ * grupo"*.
  *
  * Ou seja: nesta rodada o gatilho é **explícito** — alguém PEDE o áudio. Não é
  * automático (ela não decide sozinha mandar voz), e isso é de propósito: é o
@@ -19,14 +21,21 @@
  *      ("manda um áudio sobre o jogo" -> "o jogo");
  *   3. converte a fala em nota de voz (PCM -> WAV -> OGG/Opus).
  *
- * ## Por que OGG/Opus e `ptt: true`
+ * ## ÁUDIO NORMAL (não nota de voz)
  *
- * O WhatsApp só renderiza como **nota de voz** (waveform, botão de play) o
- * áudio em **OGG/Opus mono**. MP3 vira um arquivo comum. É o mesmo caminho que
- * o `!statusgrupo` já usa (`toOggOpus`).
+ * O dono pediu o áudio comum — *"aquele áudio que o usuário grava e manda seco
+ * no grupo"*. Isso é `ptt: false` + `audio/mpeg` (a mesma forma do `!play`).
+ *
+ * **A nota de voz** seria `ptt: true` + OGG/Opus — o que sai com waveform e
+ * botão de play. Não é o que ele quer.
+ *
+ * ## Sem ffmpeg neste caminho
+ *
+ * O `msedge-tts` já entrega **MP3 codificado** pelo próprio serviço, então aqui
+ * não passa ffmpeg: o áudio sai mesmo num servidor sem o binário.
  *
  * Módulo PURO quanto ao reconhecimento (não abre socket nem arquivo); a
- * conversão recebe o TTS por parâmetro, então dá para testar sem ffmpeg.
+ * síntese recebe o TTS por parâmetro, então dá para testar sem rede.
  */
 
 /** Radicais que caracterizam um pedido de áudio (sem acento, minúsculas). */
@@ -110,61 +119,41 @@ export function falaDoAudio(tema) {
 }
 
 /**
- * Converte o PCM do TTS em nota de voz (OGG/Opus mono).
+ * Gera o ÁUDIO (MP3) que a Lizzy manda no chat.
  *
- * A cadeia é a mesma do `!statusgrupo`: **PCM float -> WAV -> OGG/Opus**. O
- * WhatsApp só renderiza como nota de voz o OGG/Opus; MP3 vira arquivo comum.
+ * O `msedge-tts` entrega MP3 pronto — então aqui **não passa ffmpeg** e o
+ * resultado é **áudio comum** (`ptt: false`), como o dono pediu.
  *
- * As dependências entram por parâmetro (`sintetizar`, `pcmParaWav`,
- * `toOggOpus`) — assim o teste roda sem ffmpeg e sem rede.
+ * A dependência entra por parâmetro (`sintetizarMp3`) — assim o teste roda sem
+ * rede.
  *
  * @param {object} p
  * @param {string} p.texto o que falar
- * @param {function} p.sintetizar `(texto) => Promise<{ok, pcm, fonte?, motivo?}>`
- * @param {function} p.pcmParaWav `(pcm, taxa) => Buffer`
- * @param {function} p.toOggOpus `(buffer) => Promise<Buffer>`
- * @returns {Promise<{ ok: boolean, ogg?: Buffer, fonte?: string, motivo?: string }>}
+ * @param {function} p.sintetizarMp3 `(texto) => Promise<{ok, mp3, fonte?, motivo?}>`
+ * @returns {Promise<{ ok: boolean, mp3?: Buffer, fonte?: string, motivo?: string }>}
  */
-export async function gerarNotaDeVoz({ texto, sintetizar, pcmParaWav, toOggOpus } = {}) {
+export async function gerarAudio({ texto, sintetizarMp3 } = {}) {
   const limpo = String(texto || '').trim();
   if (!limpo) return { ok: false, motivo: 'texto_vazio' };
-  if (typeof sintetizar !== 'function' || typeof pcmParaWav !== 'function' || typeof toOggOpus !== 'function') {
-    return { ok: false, motivo: 'sem_dependencias' };
-  }
+  if (typeof sintetizarMp3 !== 'function') return { ok: false, motivo: 'sem_dependencias' };
 
-  // 1) TTS: PCM 16 kHz (o formato do motor).
   let tts;
-  try { tts = await sintetizar(limpo); } catch { return { ok: false, motivo: 'tts_falhou' }; }
-  if (!tts || !tts.ok || !tts.pcm || !tts.pcm.length) {
+  try { tts = await sintetizarMp3(limpo); } catch { return { ok: false, motivo: 'tts_falhou' }; }
+  if (!tts || !tts.ok || !tts.mp3 || !tts.mp3.length) {
     return { ok: false, motivo: tts?.motivo || 'tts_falhou' };
   }
-
-  // 2) PCM -> WAV (o ffmpeg nao le PCM cru por arquivo; o WAV tem cabecalho).
-  let wav;
-  try { wav = pcmParaWav(tts.pcm); } catch { return { ok: false, motivo: 'wav_falhou' }; }
-  if (!Buffer.isBuffer(wav) || !wav.length) return { ok: false, motivo: 'wav_falhou' };
-
-  // 3) WAV -> OGG/Opus (o formato que o WhatsApp renderiza como nota de voz).
-  try {
-    const ogg = await toOggOpus(wav);
-    if (!Buffer.isBuffer(ogg) || !ogg.length) return { ok: false, motivo: 'opus_falhou' };
-    return { ok: true, ogg, fonte: tts.fonte || 'tts' };
-  } catch (e) {
-    // O ffmpeg e' quem falta na maioria dos casos — o motivo fica explicito.
-    const msg = String(e?.message || '');
-    return { ok: false, motivo: /ffmpeg|FFmpeg/i.test(msg) ? 'sem_ffmpeg' : 'opus_falhou' };
-  }
+  if (!Buffer.isBuffer(tts.mp3)) return { ok: false, motivo: 'audio_invalido' };
+  return { ok: true, mp3: tts.mp3, fonte: tts.fonte || 'tts' };
 }
 
 /** A mensagem de erro, por motivo (o dono ve o que fazer). */
 export function erroDaVoz(motivo) {
   const mapa = {
-    sem_ffmpeg: 'preciso do FFmpeg instalado no servidor para gerar a nota de voz',
     tts_falhou: 'não consegui gerar a voz agora',
     sem_dependencias: 'a voz não está disponível neste servidor',
     texto_vazio: 'não tenho o que falar',
-    wav_falhou: 'não consegui preparar o áudio',
-    opus_falhou: 'não consegui converter o áudio'
+    audio_invalido: 'não consegui preparar o áudio',
+    tts_desativado: 'a voz está desativada no servidor'
   };
   return mapa[motivo] || 'não consegui gerar o áudio agora';
 }
