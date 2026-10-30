@@ -14898,3 +14898,49 @@ Confirmado 3×3 rodadas estáveis.
 limpeza da fala, o teto, e o **fluxo real** (handler de verdade, Groq dublado,
 ffmpeg): o pedido explícito sai **5/5** em áudio e, em 40 respostas espontâneas,
 saem **áudio E texto** (com OGG de verdade, `ptt: true`, sem `contextInfo`).
+
+### 🔊 FLUIDEZ DA VOZ — o 16 kHz no meio cortava os agudos (out/2026) ✅
+Pergunta do dono: *"tem como deixar a fala dela mais fluida em audio?"*.
+
+#### A CAUSA (medida): reamostragem dupla
+A cadeia da voz reusava a do **MOTOR da call**:
+`PCM 16 kHz → WAV → OGG 48 kHz`. Mas o TTS entrega **MP3 a 24 kHz**, e o Opus
+codifica em **48 kHz de qualquer forma**. Reamostrar para 16 kHz no meio
+**cortava a metade superior da banda** — o som "de telefone".
+
+Medido na banda de 10-12 kHz, onde vive o brilho da voz:
+
+| | energia 10-12 kHz |
+|---|---|
+| TTS do serviço (24 kHz) | −41,0 dB |
+| **caminho ANTIGO** (16 kHz no meio) | **−51,0 dB** ← 10 dB perdidos |
+| **caminho NOVO** (direto do MP3) | **−40,6 dB** ✅ |
+
+#### A correção
+- `gerarNotaDeVoz` aceita **MP3** (preferido) e mantém o `pcm` como
+  compatibilidade — quem já chamava com PCM continua funcionando;
+- `enviarNotaDeVoz` (index) passa o `sintetizarMp3` (24 kHz);
+- `toOggOpus` ganhou `{ bitrate, taxa, canais }` (validados), padrão `64k`.
+
+#### A PROSÓDIA (o `rate`) — o ganho de naturalidade
+O serviço sintetiza no ritmo padrão, que soa lento numa conversa. O
+`msedge-tts` aceita `{ rate, pitch, volume }` no `toStream` e os põe no SSML
+(`<prosody rate="...">`).
+
+**Medido na MESMA frase**: `0% → 6,72s` | **`+10%` (novo padrão) → 6,09s** |
+`+20% → 5,59s`.
+
+Env: `LIZZY_TTS_RATE` (`+10%`), `LIZZY_TTS_PITCH`, `LIZZY_TTS_VOLUME`,
+`LIZZY_TTS_BITRATE` (`64k`). Vazio = o natural da voz.
+
+#### Descartado COM MEDIÇÃO (para não repetir a busca)
+- **Bitrate da fonte MP3 (48k → 96k)**: a banda de 10-12 kHz fica em −41,1 vs
+  −41,5 dB — dentro do ruído. Não vale dobrar o tamanho.
+- **Pausas**: o `silencedetect` mostra 3 pausas naturais (0,25-0,75 s); não há o
+  que encurtar.
+- **Sample rate maior na saída**: o Opus **sempre** codifica em 48 kHz; subir a
+  entrada não muda nada. O que importa é o que chega **antes** dele.
+
+#### Teste que MEDE a qualidade
+`voz-conversa` teste **5c**: gera os dois caminhos no mesmo texto e exige o novo
+com **≥ 4 dB mais agudos** (se o 16 kHz voltar, falha).

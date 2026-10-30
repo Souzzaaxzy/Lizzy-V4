@@ -68,6 +68,14 @@ logs diários (`YYYY-MM-DD.md`).
   `LIZZY_VOZ_ESPONTANEA` **depois** do import não tem efeito. Os testes de TEXTO
   (`assistente-contexto`/`-identidade`/`-acoes`) setam a env **antes do import**,
   senão ficam flaky (1 em ~6 rodadas).
+- **QUALIDADE**: a voz vai pelo **MP3 do TTS (24 kHz) direto ao Opus**. O
+  caminho antigo (PCM 16 kHz no meio, herdado do motor da call) perdia **10 dB**
+  na banda de 10-12 kHz — o som "de telefone". Nunca reamostrar para 16 kHz no
+  caminho do CHAT (16 kHz é o formato do motor da CALL, não da voz do chat).
+- **Prosódia**: `LIZZY_TTS_RATE` (padrão `+10%`; medido 6,72s → 6,09s na mesma
+  frase), `LIZZY_TTS_PITCH`/`_VOLUME` (vazio = natural), `LIZZY_TTS_BITRATE`
+  (`64k`). O Opus sempre codifica em 48 kHz — subir a taxa de entrada não muda
+  nada; o bitrate da fonte (48k vs 96k) também não (medido).
 
 ## Testes
 
