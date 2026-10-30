@@ -14944,3 +14944,57 @@ Env: `LIZZY_TTS_RATE` (`+10%`), `LIZZY_TTS_PITCH`, `LIZZY_TTS_VOLUME`,
 #### Teste que MEDE a qualidade
 `voz-conversa` teste **5c**: gera os dois caminhos no mesmo texto e exige o novo
 com **≥ 4 dB mais agudos** (se o 16 kHz voltar, falha).
+
+### 🗣️ COMANDOS por texto + FALA natural + MENÇÃO de usuário (out/2026) ✅
+Pedido do dono: *"vamos dar comandos a ela, e resposta aos comandos também... eu
+quero que ela tenha uma fala de resposta junto desses comandos. aí você adiciona
+os comandos: play, pin, figurinha aleatória, e o `!s` em modo busca... e eu quero
+uma fala natural para cada evento desse!!!! eu também quero que ela seja capaz de
+mencionar usuários do grupo... 'lizzy, chama o usuário para mim'"*.
+
+#### O que ela entende (texto, no `!assistente`)
+| pedido | o que ela faz | comando por baixo |
+|---|---|---|
+| "manda o link do grupo" | convite + fala | (já existia) |
+| "manda a foto do grupo" | imagem + fala | (já existia) |
+| "toca Evidencias" / "baixa a musica X" | toca + fala | `!play <termo>` |
+| "procura no pinterest gatinhos" | pesquisa + fala | `!pin <termo>` |
+| "manda uma figurinha" | figurinha + fala | `!figualeatoria` |
+| "manda uma figurinha de gato" | pack + fala | **`!s <termo>`** |
+| "chama o joao pra mim" | **menciona** + fala | — |
+
+#### As falas naturais (`utils/falasLizzy.js`)
+Várias frases por evento, **sorteadas** — repetir sempre é o que faz parecer robô.
+Ficam **fora da IA** de propósito: é **confirmação de ação** (acompanha uma mídia
+que já vai sair) e precisa ser rápida e certa; uma chamada de LLM por evento
+custaria cota e poderia dizer algo que não corresponde ao enviado.
+
+#### A menção (`utils/mencaoUsuario.js`)
+`acharUsuarioPorNome` casa por: nome exato > pedaço do nome > **apelido do
+contador** (a "memória" que o dono citou) > prefixo. Cargo/palavra vazia não é
+alvo; número digitado casa direto.
+**Nome ambíguo NÃO escolhe no chute**: dois "João" devolvem `{ambiguo:true}` e ela
+pergunta qual — mencionar a pessoa errada em público é pior que perguntar.
+
+#### 🚨 DUAS descobertas (medidas, não supostas)
+1. **`mentions` e `@` do texto são formas DIFERENTES.** O `mentions` precisa do
+   **JID completo** (`numero@s.whatsapp.net`); o `@` do **texto** é só o
+   **número**. Meu primeiro corte (`split(':')[0]`) removia o **domínio** junto e
+   a menção não renderizava. A remoção do `:device` tem de ser cirúrgica:
+   `replace(/:(\d+)@/, '@')`.
+2. **"manda um áudio" caía no `play`** — "audio" está na lista de palavras de
+   música. Dois consertos: o bloco do **ÁUDIO vem ANTES** das ações, e o
+   reconhecedor **recusa** pedido de áudio/voz explicitamente.
+
+#### Reuso (nada de segundo reconhecedor)
+O play/pin vem do **`identificarComando`** do `iapComandos.js` (o corpus já
+medido de 40 frases, com a desambiguação pinterest-antes-do-play). A ação
+**reemite o COMANDO** do bot por `messages.upsert` — o **mesmo caminho do `!iap`**:
+a fila, as permissões e o envio são os do comando.
+
+#### Testes
+`tests/assistente-comandos.test.js` (novo) — **22 testes / 126 asserções**:
+reconhecimento (12 positivos + 7 negativos), termo limpo, falas (variedade e
+marcadores), menção (match/ambiguidade/número/cargo) e o **fluxo real** no handler
+(a fala sai junto, a menção sai na BASE, o apelido do contador acha, nome
+inexistente avisa sem mencionar, e o ÁUDIO vem antes das ações).

@@ -77,6 +77,24 @@ logs diários (`YYYY-MM-DD.md`).
   (`64k`). O Opus sempre codifica em 48 kHz — subir a taxa de entrada não muda
   nada; o bitrate da fonte (48k vs 96k) também não (medido).
 
+## Assistente — comandos por texto, falas e menção (out/2026)
+
+- **`utils/falasLizzy.js`** — frases **sorteadas** por evento (link, foto, play,
+  pin, figurinha, stickerBusca, mencao, mencaoNaoAchou, mencaoAmbiguo). Ficam
+  **fora da IA**: é confirmação de ação, precisa ser rápida e certa.
+- **`utils/mencaoUsuario.js`** — `identificarPedidoDeMencao` + `acharUsuarioPorNome`
+  (nome exato > pedaço > **apelido do contador** > prefixo). Nome **ambíguo não
+  escolhe no chute** (`{ambiguo:true}` + candidatos).
+- **`utils/assistenteAcoes.js`** — `identificarAcaoDoBot` (link/foto/play/pin/
+  figurinha/stickerBusca). O play/pin **reusa** o `identificarComando` do
+  `iapComandos.js` — não criar um segundo reconhecedor.
+- **🚨 `mentions` ≠ `@` do texto**: o `mentions` quer o **JID completo**
+  (`numero@s.whatsapp.com`), o `@` do texto quer **só o número**. Remover o
+  `:device` com `replace(/:(\d+)@/, '@')` — `split(':')[0]` **corta o domínio**.
+- **🚨 ORDEM no handler**: o bloco do **ÁUDIO vem ANTES** das ações, senão "manda
+  um áudio" cai no `play` ("audio" está na lista de música).
+- Teste: `tests/assistente-comandos.test.js` (22/126).
+
 ## Testes
 
 - Suíte de contexto: **`tests/assistente-contexto.test.js`** (19 testes / 90
