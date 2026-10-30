@@ -39,7 +39,7 @@ import { parsePinDuration, buildPinKeyFromContext, isPinControlMessage } from '.
 import { antiCtt, isContactPayload } from './utils/antiCtt.js';
 import { parseImagePollArgs, collectPollImages, resolveAttachments, buildOptionName } from './utils/pollImages.js';
 import { toOggOpus } from './utils/oggOpus.js';
-import { sintetizarFala } from './utils/iapTts.js';
+import { sintetizarFala, sintetizarMp3 } from './utils/iapTts.js';
 import { pcmParaWav } from './utils/iapAudio.js';
 import { resolverNomeContato, acharParticipantePorId, nomeInutil, baseId, numerosDoParticipante } from './utils/contactName.js';
 import { coletarDadosDoGrupo } from './utils/contextoConversa.js';
@@ -680,12 +680,22 @@ async function responderPrefixo(nazu, from, info, sender, currentPrefix) {
  * voz não sai e o chamador manda texto (uma nota de voz enorme não é natural).
  * O pedido explícito não passa teto — quem pediu, recebe áudio.
  *
+ * A fala vai pelo `sintetizarMp3` (24 kHz), **não** pelo PCM do motor: o PCM
+ * reamostra para 16 kHz e corta os agudos (medido: −10 dB na banda de 10-12 kHz,
+ * o som "de telefone"). O bitrate do Opus é `LIZZY_TTS_BITRATE` (padrão `64k`).
+ *
  * @returns {Promise<boolean>} `true` quando a voz saiu de fato.
  */
 async function enviarNotaDeVoz(nazu, from, texto, limite = 0) {
   const fala = limparFala(texto);
   if (!fala) return false;
-  const voz = await gerarNotaDeVoz({ texto: fala, sintetizar: sintetizarFala, pcmParaWav, toOggOpus, limite });
+  // `sintetizarMp3` (24 kHz) e' o caminho PREFERIDO: o PCM do motor reamostra
+  // para 16 kHz no meio e corta os agudos da voz (medido: 10 dB na banda de
+  // 10-12 kHz). O `sintetizar` fica como compatibilidade.
+  const voz = await gerarNotaDeVoz({
+    texto: fala, sintetizarMp3, sintetizar: sintetizarFala, pcmParaWav, toOggOpus, limite,
+    bitrate: process.env.LIZZY_TTS_BITRATE || '64k'
+  });
   if (!voz.ok) {
     console.error('[VOZ] falhou:', voz.motivo);
     return false;

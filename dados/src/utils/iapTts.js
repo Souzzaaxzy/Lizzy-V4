@@ -75,6 +75,40 @@ async function carregarMsEdge() {
 }
 
 /**
+ * A PROSÓDIA da voz (rate/pitch/volume) — o que faz a fala soar natural.
+ *
+ * ## Por que existe
+ *
+ * O serviço sintetiza no ritmo padrão, que soa **lento e monótono** numa
+ * conversa. Ajustar o `rate` é o ganho mais direto de naturalidade — e não custa
+ * nada (é um atributo do SSML).
+ *
+ * ## O que é medido, e o que é gosto
+ *
+ * Medido: o `msedge-tts` aceita `{ rate, pitch, volume }` no `toStream` e os
+ * coloca no SSML (`<prosody rate="...">`). O VALOR, porém, é preferência — por
+ * isso tudo vem do ambiente com padrão conservador:
+ *
+ *   `LIZZY_TTS_RATE`   — `+10%` (o padrão). `0%` volta ao ritmo do serviço.
+ *   `LIZZY_TTS_PITCH`  — vazio (o timbre natural da voz).
+ *   `LIZZY_TTS_VOLUME` — vazio (o volume natural).
+ *
+ * Só o que estiver preenchido entra no SSML — atributo vazio o serviço recusa.
+ *
+ * @returns {{ rate?: string, pitch?: string, volume?: string }}
+ */
+function prosodia() {
+  const o = {};
+  const rate = String(process.env.LIZZY_TTS_RATE ?? '+10%').trim();
+  const pitch = String(process.env.LIZZY_TTS_PITCH ?? '').trim();
+  const volume = String(process.env.LIZZY_TTS_VOLUME ?? '').trim();
+  if (rate) o.rate = rate;
+  if (pitch) o.pitch = pitch;
+  if (volume) o.volume = volume;
+  return o;
+}
+
+/**
  * Sintetiza com o `msedge-tts` e devolve o MP3 (Buffer) ou null.
  * @param {string} texto
  * @returns {Promise<Buffer|null>}
@@ -88,7 +122,7 @@ async function sintetizarMsEdge(texto) {
     // O formato MP3 ja' vem codificado pelo servico -- nao precisa de ffmpeg
     // para gerar o arquivo (o ffmpeg so' entra depois, para virar PCM 16 kHz).
     await tts.setMetadata(vozEdge(), OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
-    const { audioStream } = tts.toStream(texto);
+    const { audioStream } = tts.toStream(texto, prosodia());
     const pedacos = await new Promise((resolve) => {
       const partes = [];
       let terminou = false;
@@ -346,7 +380,7 @@ export async function sintetizarFalaStream(texto, aoBloco) {
   try {
     const tts = new MsEdgeTTS();
     await tts.setMetadata(vozEdge(), OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
-    const { audioStream } = tts.toStream(limpo);
+    const { audioStream } = tts.toStream(limpo, prosodia());
 
     // O ffmpeg decodifica o MP3 EM FLUXO (pipe in -> pipe out). `-fflags
     // nobuffer` evita ele segurar o 1o bloco esperando cabecalho.

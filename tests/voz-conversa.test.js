@@ -142,12 +142,46 @@ await test('5b. o TTS REAL + ffmpeg geram a nota de voz (ponta a ponta)', async 
   ok(r.fonte === 'msedge-tts', `fonte msedge-tts (veio ${r.fonte})`);
 });
 
+await test('5c. o caminho da QUALIDADE: MP3 24 kHz direto (sem 16 kHz no meio)', async () => {
+  if (!FFMPEG) { console.log('     (pulado: sem ffmpeg)'); return; }
+  const { sintetizarMp3 } = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
+  const r = await voz.gerarNotaDeVoz({ texto: 'Oi! Aqui é a Lizzy.', sintetizarMp3, toOggOpus });
+  ok(r.ok === true, `gerou pelo caminho do MP3 (motivo ${r.motivo || '-'})`);
+  ok(r.ogg.slice(0, 4).toString('ascii') === 'OggS', 'o container continua OGG/Opus');
+
+  // A MEDICAO que fechou o caso: a banda de 10-12 kHz (o brilho da voz) tem de
+  // chegar. O caminho antigo (PCM 16 kHz no meio) perdia ~10 dB ali.
+  const { spawnSync } = await import('child_process');
+  const ff = process.env.FFMPEG_PATH || 'ffmpeg';
+  const medir = (buf) => {
+    const w = spawnSync(ff, ['-hide_banner', '-i', 'pipe:0', '-af', 'highpass=f=10000,volumedetect', '-f', 'null', '-'],
+      { input: buf, encoding: 'utf8' });
+    const m = /mean_volume:\s*(-?[\d.]+) dB/.exec(w.stderr || '');
+    return m ? Number(m[1]) : null;
+  };
+  const novo = medir(r.ogg);
+
+  // O caminho antigo, para comparar no MESMO texto.
+  const { sintetizarFala } = await import(new URL('../dados/src/utils/iapTts.js', import.meta.url).href);
+  const { pcmParaWav } = await import(new URL('../dados/src/utils/iapAudio.js', import.meta.url).href);
+  const antigo = await voz.gerarNotaDeVoz({ texto: 'Oi! Aqui é a Lizzy.', sintetizar: sintetizarFala, pcmParaWav, toOggOpus });
+  ok(antigo.ok === true, 'o caminho de compatibilidade tambem gera');
+  const velho = medir(antigo.ogg);
+
+  if (novo === null || velho === null) { console.log('     (pulado: nao consegui medir a banda)'); return; }
+  ok(novo > velho + 4, `o caminho novo tem MAIS agudos (novo ${novo} dB vs antigo ${velho} dB)`);
+});
+
 await test('6. a cadeia e FALHA FECHADA (erros controlados, sem lixo)', async () => {
   ok((await voz.gerarNotaDeVoz({ texto: 'oi' })).motivo === 'sem_dependencias', 'sem deps');
   ok((await voz.gerarNotaDeVoz({ texto: '', sintetizar: sintetizarFake, pcmParaWav, toOggOpus })).motivo === 'texto_vazio', 'texto vazio');
   ok((await voz.gerarNotaDeVoz({ texto: 'oi', sintetizar: async () => ({ ok: false, motivo: 'sem_tts' }), pcmParaWav, toOggOpus })).motivo === 'sem_tts', 'TTS falhou -> propaga');
   ok((await voz.gerarNotaDeVoz({ texto: 'oi', sintetizar: async () => { throw new Error('x'); }, pcmParaWav, toOggOpus })).motivo === 'tts_falhou', 'TTS lancou -> controlado');
   ok((await voz.gerarNotaDeVoz({ texto: 'oi', sintetizar: sintetizarFake, pcmParaWav, toOggOpus: async () => { throw new Error('FFmpeg não encontrado'); } })).motivo === 'sem_ffmpeg', 'ffmpeg ausente -> sem_ffmpeg');
+  // O caminho do MP3 tambem e' falha fechada.
+  ok((await voz.gerarNotaDeVoz({ texto: 'oi', sintetizarMp3: async () => ({ ok: false, motivo: 'sem_tts' }), toOggOpus })).motivo === 'sem_tts', 'MP3: TTS falhou -> propaga');
+  ok((await voz.gerarNotaDeVoz({ texto: 'oi', sintetizarMp3: async () => { throw new Error('x'); }, toOggOpus })).motivo === 'tts_falhou', 'MP3: TTS lancou -> controlado');
+  ok((await voz.gerarNotaDeVoz({ texto: 'oi', sintetizarMp3: async () => ({ ok: true, mp3: Buffer.from('x') }), toOggOpus: async () => { throw new Error('ffmpeg'); } })).motivo === 'sem_ffmpeg', 'MP3: ffmpeg ausente -> sem_ffmpeg');
 });
 
 await test('7. a mensagem de erro diz o que fazer', () => {

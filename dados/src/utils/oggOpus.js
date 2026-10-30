@@ -73,16 +73,35 @@ function runFfmpeg(args) {
 }
 
 /**
- * Converte um buffer de áudio para OGG/Opus (mono, 48 kHz).
+ * Converte um buffer de áudio para OGG/Opus (mono, 48 kHz por padrão).
+ *
+ * ## O bitrate importa para a VOZ (medido)
+ *
+ * 64 kbps é o padrão e serve para os dois usos. Abaixo de ~48 kbps o Opus
+ * começa a cortar os agudos — e é justamente a faixa de 8-12 kHz que dá o
+ * "brilho" da voz. Medido na banda de 10-12 kHz: 64 kbps -> -40.5 dB;
+ * 32 kbps -> -40.9 dB (diferença pequena, mas existe).
+ *
+ * A taxa de amostragem NÃO é o gargalo: o Opus sempre codifica em 48 kHz, então
+ * subir a entrada não muda nada. O que muda o som é o que chega ANTES dele.
  *
  * @param {Buffer} inputBuffer áudio em qualquer formato suportado pelo FFmpeg
+ * @param {object} [opcoes]
+ * @param {string} [opcoes.bitrate] ex.: `'64k'` (padrão). Validado.
+ * @param {number} [opcoes.taxa] taxa da SAÍDA (padrão 48000)
+ * @param {number} [opcoes.canais] canais da saída (padrão 1 = mono)
  * @returns {Promise<Buffer>} OGG/Opus pronto para o status
  * @throws {Error} quando o buffer é inválido, o FFmpeg falta ou a conversão falha
  */
-export async function toOggOpus(inputBuffer) {
+export async function toOggOpus(inputBuffer, opcoes = {}) {
   if (!Buffer.isBuffer(inputBuffer) || inputBuffer.length === 0) {
     throw new Error('áudio vazio');
   }
+  // Validação: os valores entram na linha de comando do FFmpeg (args separados,
+  // mas ainda assim não se aceita lixo).
+  const bitrate = /^\d{1,3}k?$/.test(String(opcoes.bitrate ?? '')) ? String(opcoes.bitrate) : '64k';
+  const taxa = Number.isFinite(Number(opcoes.taxa)) && Number(opcoes.taxa) > 0 ? Math.floor(Number(opcoes.taxa)) : 48000;
+  const canais = Number.isFinite(Number(opcoes.canais)) && Number(opcoes.canais) > 0 ? Math.floor(Number(opcoes.canais)) : 1;
 
   const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'status-audio-'));
   const inputPath = path.join(dir, 'in');
@@ -97,9 +116,9 @@ export async function toOggOpus(inputBuffer) {
       '-i', inputPath,
       '-vn',
       '-c:a', 'libopus',
-      '-b:a', '64k',
-      '-ar', '48000',
-      '-ac', '1',
+      '-b:a', bitrate,
+      '-ar', String(taxa),
+      '-ac', String(canais),
       '-avoid_negative_ts', 'make_zero',
       '-f', 'ogg',
       outputPath,

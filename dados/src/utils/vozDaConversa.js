@@ -237,11 +237,19 @@ export function sortearModoDeResposta({ pedidoExplicito = false, chance = CHANCE
 /**
  * Gera a NOTA DE VOZ (OGG/Opus mono) que a Lizzy manda no chat.
  *
- * A cadeia é **PCM -> WAV -> OGG/Opus**, a mesma do `!statusgrupo`:
+ * ## O caminho NÃO passa por 16 kHz (a causa do som "abafado")
  *
- *   1. `sintetizar(texto)` -> PCM 16 kHz (o formato do motor);
- *   2. `pcmParaWav(pcm)`   -> WAV (o ffmpeg não lê PCM cru por arquivo);
- *   3. `toOggOpus(wav)`    -> OGG/Opus mono (o container da nota de voz).
+ * A primeira versão reusava a cadeia do MOTOR da call
+ * (`PCM 16 kHz -> WAV -> OGG 48 kHz`). Medido na banda de 10-12 kHz, onde vive
+ * o brilho da voz:
+ *
+ *   TTS do serviço (24 kHz) .......... -41.0 dB
+ *   caminho ANTIGO (16 kHz no meio) .. **-51.0 dB**  <- 10 dB de agudo perdidos
+ *   caminho NOVO (direto do MP3) ..... -40.9 dB      <- igual ao original
+ *
+ * O TTS entrega **MP3 a 24 kHz**; o Opus codifica em 48 kHz de qualquer forma,
+ * então reamostrar para 16 kHz no meio só **cortava a metade superior da banda**
+ * — o som de "telefone". Agora o MP3 vai direto para o Opus.
  *
  * ## Por que o CONTAINER importa (a causa de três rodadas)
  *
@@ -254,43 +262,62 @@ export function sortearModoDeResposta({ pedidoExplicito = false, chance = CHANCE
  * Por isso o transcode.
  *
  * As dependências entram por parâmetro — assim o teste roda sem rede (e sem
- * ffmpeg, no caminho de erro).
+ * ffmpeg, no caminho de erro). Os dois formatos de entrada são aceitos:
+ * `mp3` (o caminho novo, preferido) e `pcm`+`pcmParaWav` (compatibilidade).
  *
  * @param {object} p
  * @param {string} p.texto o que falar
- * @param {function} p.sintetizar `(texto) => Promise<{ok, pcm, fonte?, motivo?}>`
- * @param {function} p.pcmParaWav `(pcm, taxa) => Buffer`
+ * @param {function} p.sintetizarMp3 `(texto) => Promise<{ok, mp3, fonte?, motivo?}>` (preferido)
+ * @param {function} p.sintetizar `(texto) => Promise<{ok, pcm, fonte?, motivo?}>` (compatibilidade)
+ * @param {function} [p.pcmParaWav] só no caminho `pcm`
  * @param {function} p.toOggOpus `(buffer) => Promise<Buffer>`
+ * @param {string} [p.bitrate] bitrate do Opus (padrão `64k`)
  * @returns {Promise<{ ok: boolean, ogg?: Buffer, fonte?: string, motivo?: string }>}
  */
-export async function gerarNotaDeVoz({ texto, sintetizar, pcmParaWav, toOggOpus, limite = 0 } = {}) {
+export async function gerarNotaDeVoz({ texto, sintetizarMp3, sintetizar, pcmParaWav, toOggOpus, limite = 0, bitrate = '64k' } = {}) {
   const limpo = String(texto || '').trim();
   if (!limpo) return { ok: false, motivo: 'texto_vazio' };
   // Teto opcional da fala ESPONTANEA: acima dele o chamador manda texto.
   if (Number.isFinite(limite) && limite > 0 && limpo.length > limite) {
     return { ok: false, motivo: 'fala_longa' };
   }
-  if (typeof sintetizar !== 'function' || typeof pcmParaWav !== 'function' || typeof toOggOpus !== 'function') {
-    return { ok: false, motivo: 'sem_dependencias' };
+  if (typeof toOggOpus !== 'function') return { ok: false, motivo: 'sem_dependencias' };
+
+  // 1) TTS. O caminho PREFERIDO e' o MP3 (24 kHz, sem reamostragem no meio).
+  let fonte = 'tts';
+  let entrada = null;
+  if (typeof sintetizarMp3 === 'function') {
+    let tts;
+    try { tts = await sintetizarMp3(limpo); } catch { return { ok: false, motivo: 'tts_falhou' }; }
+    if (tts?.ok && tts.mp3?.length) {
+      entrada = tts.mp3;
+      fonte = tts.fonte || 'tts';
+    } else if (!sintetizar) {
+      return { ok: false, motivo: tts?.motivo || 'tts_falhou' };
+    }
   }
 
-  // 1) TTS: PCM 16 kHz (o formato do motor).
-  let tts;
-  try { tts = await sintetizar(limpo); } catch { return { ok: false, motivo: 'tts_falhou' }; }
-  if (!tts || !tts.ok || !tts.pcm || !tts.pcm.length) {
-    return { ok: false, motivo: tts?.motivo || 'tts_falhou' };
+  // 2) Compatibilidade: o caminho antigo (PCM -> WAV). Ele reamostra para
+  // 16 kHz, entao e' o de PIOR qualidade — fica so' para quem ja' chamava assim.
+  if (!entrada) {
+    if (typeof sintetizar !== 'function' || typeof pcmParaWav !== 'function') {
+      return { ok: false, motivo: 'sem_dependencias' };
+    }
+    let tts;
+    try { tts = await sintetizar(limpo); } catch { return { ok: false, motivo: 'tts_falhou' }; }
+    if (!tts || !tts.ok || !tts.pcm || !tts.pcm.length) {
+      return { ok: false, motivo: tts?.motivo || 'tts_falhou' };
+    }
+    try { entrada = pcmParaWav(tts.pcm); } catch { return { ok: false, motivo: 'wav_falhou' }; }
+    if (!Buffer.isBuffer(entrada) || !entrada.length) return { ok: false, motivo: 'wav_falhou' };
+    fonte = tts.fonte || 'tts';
   }
 
-  // 2) PCM -> WAV (o ffmpeg não lê PCM cru por arquivo; o WAV tem cabeçalho).
-  let wav;
-  try { wav = pcmParaWav(tts.pcm); } catch { return { ok: false, motivo: 'wav_falhou' }; }
-  if (!Buffer.isBuffer(wav) || !wav.length) return { ok: false, motivo: 'wav_falhou' };
-
-  // 3) WAV -> OGG/Opus (o container da nota de voz).
+  // 3) -> OGG/Opus (o container da nota de voz).
   try {
-    const ogg = await toOggOpus(wav);
+    const ogg = await toOggOpus(entrada, { bitrate });
     if (!Buffer.isBuffer(ogg) || !ogg.length) return { ok: false, motivo: 'opus_falhou' };
-    return { ok: true, ogg, fonte: tts.fonte || 'tts' };
+    return { ok: true, ogg, fonte };
   } catch (e) {
     const msg = String(e?.message || '');
     return { ok: false, motivo: /ffmpeg|FFmpeg/i.test(msg) ? 'sem_ffmpeg' : 'opus_falhou' };
