@@ -14777,3 +14777,77 @@ real. O que esta provado: o offer **sai** com o `<group_info phash="2:...">` sem
 filhos (medido no pacote instalado) e o log agora **diz a forma**. Se o cartao
 ainda nao aparecer, o proximo log diz qual dos dois casos e' — e ai o passo seguinte
 e' medido, nao chutado.
+
+
+## 🎙️ A VOZ da conversa — "Lizzy, manda um áudio aí" manda NOTA DE VOZ (out/2026) ✅
+A Lizzy manda **áudio no chat** quando alguém PEDE (`!assistente` + gatilho
+explícito). O que ela manda é a **NOTA DE VOZ** — a bolha com o **desenho da
+ONDA** (waveform), a mesma que uma pessoa manda segurando o microfone.
+
+### 🚨 A CAUSA de três rodadas: quem decide a forma é o CONTAINER, não o `ptt`
+
+Medido em 3 projetos que usam Baileys, todos com o mesmo texto:
+
+| formato do áudio | como o cliente desenha |
+|---|---|
+| **MP3** | bolha de **MÚSICA** (a "laranja", com a notinha) — é o `!play` |
+| **OGG/Opus** | **NOTA DE VOZ** (o desenho da ONDA) |
+
+> *"Transcode TTS audio (typically MP3) into OGG/Opus mono so Baileys can
+> deliver it as a WhatsApp voice note... Without this conversion WhatsApp
+> accepts the file but renders it as a music-player audio bubble."*
+
+Ou seja: **só o `ptt: true` não basta** — com MP3 o cliente ainda desenha como
+música. Eu gastei três rodadas mexendo em `ptt`/`contextInfo` (metadados do
+proto) sem tocar no **formato**, que é o que decide.
+
+### O que ficou
+
+Cadeia: `sintetizarFala` (PCM 16 kHz) → `pcmParaWav` → `toOggOpus` → envio
+
+```js
+await nazu.sendMessage(from, {
+  audio: voz.ogg,
+  mimetype: 'audio/ogg; codecs=opus',
+  ptt: true
+});
+```
+
+- **O `contextInfo` (newsletter) fica FORA** deste envio — nas rodadas em que o
+  dono testou, era ele que atrapalhava a renderização. Custo aceito: este áudio
+  **não** leva o cabeçalho "Ver canal" (os outros comandos continuam com ele).
+- **Exige ffmpeg** no servidor (a cadeia OGG passa por ele) — já está na lista de
+  dependências do `config.js`/`update.js`.
+
+### Medido (não suposto)
+
+```
+cadeia real : OGG gerado (17141 bytes, magic "OggS", fonte msedge-tts)
+no fio      : ptt=true | audio/ogg; codecs=opus | seconds=2 | contextInfo=nao
+handler real: AUDIO: mimetype=audio/ogg; codecs=opus | ptt=true |
+              contextInfo=nao | bytes=15592 | magic="OggS"
+```
+
+### Arquivos
+
+| Caminho | Papel |
+|---|---|
+| `dados/src/utils/vozDaConversa.js` | reconhece o pedido, tira a moldura do tema e gera a **nota de voz** (`gerarNotaDeVoz`) |
+| `dados/src/index.js` (~7705) | o bloco do handler (gatilho explícito + envio) |
+| `tests/voz-conversa.test.js` | 10 testes / 59 asserções |
+
+### Testes
+
+`voz-conversa` **10/59** — exige OGG/Opus + `ptt: true`, **proíbe** `audio/mpeg`
+e o `contextInfo`, e roda a cadeia de verdade (com ffmpeg). Regressões verdes:
+assistente-identidade 80/407, assistente-lizzy 14/52, assistente-contexto
+25/111, assistente-acoes 14/35, iap 72/210, groq-keys 59/226, cmd-suggest 21/68,
+get-message-inspector 54/269, me-profile 44/0, dono-perfil 47/0, contact-name
+16/37, midiaprefix 26/83, viewonce-v2 18/77, antictt 15/38, antimidia 14/29,
+gifsbn-media 16/61, statusgrupo 49/143. `menu-layout` mantém a falha
+**pré-existente** (`menufig` 18 vs 17).
+
+### LIÇÃO DE MÉTODO
+**Metadado do proto (`ptt`, `contextInfo`) diz o que SAI; a forma que o cliente
+DESENHA depende do CONTEÚDO (o container).** Quando o sintoma é "a bolha sai com
+a cara errada", conferir o **formato do byte** antes de mexer em flags.

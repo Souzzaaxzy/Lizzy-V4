@@ -41,53 +41,23 @@ logs diários (`YYYY-MM-DD.md`).
 - Nome do bot vem com MATHEMATICAL BOLD (`𝐋𝐢𝐳𝐳𝐲 𝐝𝐨 𝐩𝐫𝐢𝐯𝐲`) → usar
   `limparNomeDoBot` (NFKC → "Lizzy") para comparação e fala.
 
-## Fork `Souzzaaxzy/baileys` — como mexer e publicar
+## A VOZ da conversa (`!assistente` / "Lizzy, manda um áudio aí")
 
-- **Dois tokens, escopos diferentes** (medido):
-  - `$GITHUB_TOKEN` (integração) = **só leitura** no repo `baileys` (403 em
-    `git/blobs` e no `git push`);
-  - **`$GITHUB_PERSONAL_ACCESS_TOKEN`** = **tem escrita** (201 em `git/blobs`).
-  Use ele para publicar a fork.
-- **`git push` no repo da fork dá 403** mesmo com o PAT — publicar pelos
-  endpoints da API (`git/blobs` → `git/trees` → `git/commits` → `PATCH refs`).
-- **Payload grande vai por STDIN**: `lib/Socket/messages-recv.js` tem ~99 KB e
-  estoura `OSError: Argument list too long` se for na linha de comando do curl.
-  Use `--data-binary @-` + `subprocess.run(..., input=json)`.
-- **O clone da fork não tem `node_modules`**: para rodar a suíte dela, linke o do
-  bot (`ln -s <bot>/node_modules node_modules`) — as deps são as mesmas.
-  A única falha da suíte (`voip-audio-continuity`) é **ambiental** (exige ffmpeg).
-- **Ao trocar o commit da fork, TRÊS arquivos precisam acompanhar**:
-  `package.json`, `package-lock.json` e `yarn.lock` (Berry v8, com o **checksum**
-  regenerado). Ordem que funciona:
-  1. `git checkout -- yarn.lock` (garante o Berry, não o v1 rebaixado pelo npm);
-  2. trocar o pin nos três;
-  3. **apagar a linha `checksum`** do bloco do baileys no `yarn.lock`;
-  4. limpar `~/.yarn/berry/cache/@itsliaaa-baileys*.zip` e `corepack yarn install`
-     (regrava o checksum);
-  5. `corepack yarn install --check-cache` (valida);
-  6. **por último** `npm install --legacy-peer-deps --allow-git=all` e
-     **restaurar o `yarn.lock` Berry salvo** (o npm rebaixa para v1).
-  `corepack yarn install` **apaga o `node_modules`** e cria `.pnp.cjs` — remova
-  os `.pnp.*` e reinstale com npm.
-- O `npm install` rebaixa o `yarn.lock` para v1 **sempre**; salve o Berry em
-  `/tmp` e restaure no fim.
-
-## Nomes no metadata (o defeito que fazia admin sair como número)
-
-- A fork **descartava o `notify`** (o nome que o WhatsApp mostra) no parse do
-  metadata: mapeava `id`/`phoneNumber`/`lid`/`username`/`admin` e jogava o
-  `notify` fora — o campo vem em todo `<participant notify="...">`.
-- Eram **três cópias** do mesmo objeto (`groups.js`, `communities.js`,
-  `messages-recv.js`); agora há uma fonte única: `mapParticipantAttrs`
-  (`lib/Utils/group-participant.js`, commit `87c7247`).
-- **`getUserName()` (helpers.js) só tira o `@`** — devolve o NÚMERO. Num comando
-  de grupo funciona porque o WhatsApp **renderiza a menção**; para um LLM (que não
-  tem cliente) é número. Não confundir "o comando mostra o nome" com "existe nome".
-- **Mods e Alphas são do BOT** (`groupData.moderators` / `groupData.alphas`), não
-  do WhatsApp — não existem no metadata. Comandos: `!addmod`/`!delmod`/`!listmods`,
-  `!addalpha`/`!delalpha`/`!listalphas`.
-- `profilePictureUrl` **lança** quando o grupo não tem foto — sempre em
-  try/catch, e só busque quando pedido (custa uma chamada).
+- **A forma da bolha é decidida pelo CONTAINER do áudio, não pelo `ptt`**
+  (medido em 3 projetos que usam Baileys):
+  - **MP3** → bolha de **música** (a "laranja", com a notinha) — é o `!play`;
+  - **OGG/Opus** → **nota de voz** (o desenho da ONDA).
+  - Só `ptt: true` **não** basta: com MP3 o cliente ainda desenha como música.
+- O dono escolheu a **nota de voz** (a "Opção A"). Cadeia:
+  `sintetizarFala` (PCM 16 kHz) → `pcmParaWav` → `toOggOpus` → envio
+  `{ audio: voz.ogg, mimetype: 'audio/ogg; codecs=opus', ptt: true }`.
+- **O `contextInfo` (newsletter) fica FORA** deste envio — nas rodadas em que o
+  dono testou, era ele que atrapalhava a renderização. Custo aceito: este áudio
+  não leva o cabeçalho "Ver canal".
+- Exige **ffmpeg** no servidor (a cadeia OGG passa por ele). O ffmpeg já está na
+  lista de dependências do `config.js`/`update.js`.
+- Módulo `dados/src/utils/vozDaConversa.js` (`gerarNotaDeVoz`); handler em
+  `index.js` (~7705). Teste: `tests/voz-conversa.test.js` (10/59).
 
 ## Testes
 
@@ -98,8 +68,13 @@ logs diários (`YYYY-MM-DD.md`).
 - **`groqClient.setGroqHttpForTest`** e `ia.setGeminiHttpForTest` são os seams
   para testar sem rede.
 - Falhas **pré-existentes** (confirmadas com `git stash`): `menu-layout`
-  (`menufig` 18 vs 17) e `statusgrupo`/`togif`/`midiaprefix` (GIF) por **falta de
-  ffmpeg** no sandbox. `testcall` é flaky (corrida com `persistGroupData`).
+  (`menufig` 18 vs 17). `testcall` é flaky (corrida com `persistGroupData`).
+- **O sandbox não tem ffmpeg.** Para rodar os testes que dependem dele
+  (`statusgrupo`, `togif`, `midiaprefix`, `voz-conversa`), baixe o estático:
+  `curl -sL https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz`
+  → `FFMPEG_PATH=/tmp/ffmpeg-7.0.2-amd64-static/ffmpeg node tests/<x>.test.js`.
+- **Publicar**: `git push` com `$GITHUB_TOKEN` dá **403** (só leitura). Use
+  **`$GITHUB_PERSONAL_ACCESS_TOKEN`** — ele tem escrita no `Lizzy-V4` e nos forks.
 
 ## Canais de IA (estado atual)
 
