@@ -39,8 +39,12 @@ import { parsePinDuration, buildPinKeyFromContext, isPinControlMessage } from '.
 import { antiCtt, isContactPayload } from './utils/antiCtt.js';
 import { parseImagePollArgs, collectPollImages, resolveAttachments, buildOptionName } from './utils/pollImages.js';
 import { toOggOpus } from './utils/oggOpus.js';
+import { sintetizarFala } from './utils/iapTts.js';
+import { pcmParaWav } from './utils/iapAudio.js';
 import { resolverNomeContato, acharParticipantePorId, nomeInutil, baseId, numerosDoParticipante } from './utils/contactName.js';
 import { coletarDadosDoGrupo } from './utils/contextoConversa.js';
+// A VOZ da conversa: "Lizzy, manda um áudio aí" -> nota de voz de verdade.
+import { ehPedidoDeAudio, temaDoAudio, falaDoAudio, gerarNotaDeVoz, erroDaVoz } from './utils/vozDaConversa.js';
 import { lerIdentidade } from './utils/identidadeLizzy.js';
 import { resolverPaisAdotivos } from './utils/contextoConversa.js';
 // As chaves do Groq (ate' 10) e o failover automatico.
@@ -7689,6 +7693,58 @@ if (isGroup && groupData.antistickerplus && !isGroupAdmin && !isOwner && !isParc
           } catch (e) {
             console.error('[ASSISTENTE] falha na acao do grupo:', e?.message || e);
             await reply('❌ Não consegui buscar isso agora. Tente de novo em instantes.');
+            return;
+          }
+        }
+
+        // ------------------------------------------------------------------
+        // NOTA DE VOZ: "Lizzy, manda um áudio aí"
+        //
+        // GATILHO EXPLÍCITO (decisão do dono: "primeiro vamos configurar apenas
+        // o 'lizzy, manda um audio ai' só pra testar, depois automatizamos").
+        // Ou seja: ela NÃO manda voz por iniciativa própria nesta rodada.
+        //
+        // Roda ANTES do LLM de texto de propósito: aqui a resposta não é texto,
+        // é uma nota de voz. A fala (o TEXTO que vira voz) vem da IA, com a
+        // personalidade dela; o que este bloco faz é converter em áudio.
+        // ------------------------------------------------------------------
+        if (ehPedidoDeAudio(textoLimpo)) {
+          try {
+            const tema = temaDoAudio(textoLimpo);
+            // A fala vem da IA (personalidade da Lizzy). Sem IA, cai num texto
+            // simples para o áudio ainda sair.
+            let fala = null;
+            try {
+              const pedido = tema
+                ? `Reaja em UMA frase curta, falada, sobre: ${tema}`
+                : 'Diga uma frase curta e carinhosa pra quem pediu (é uma nota de voz).';
+              fala = await ia.respostaNatural({ texto: pedido, nome: pushname, maxTokens: 90 });
+            } catch { /* segue com o texto padrao */ }
+            if (!fala) fala = falaDoAudio(tema);
+
+            const voz = await gerarNotaDeVoz({
+              texto: fala,
+              sintetizar: sintetizarFala,
+              pcmParaWav,
+              toOggOpus
+            });
+            if (!voz.ok) {
+              console.error('[VOZ] falhou:', voz.motivo);
+              await reply(`❌ ih, ${erroDaVoz(voz.motivo)}`);
+              return;
+            }
+            await nazu.sendMessage(from, {
+              audio: voz.ogg,
+              mimetype: 'audio/ogg; codecs=opus',
+              // `ptt: true` = nota de voz (waveform + botao de play). Sem isso
+              // vira arquivo de audio comum.
+              ptt: true,
+              contextInfo: gerarContextNewsletter()
+            });
+            return;
+          } catch (e) {
+            console.error('[VOZ] erro:', e?.message || e);
+            await reply('❌ ih, não consegui mandar o áudio agora.');
             return;
           }
         }
