@@ -264,14 +264,15 @@ await test('11. erro de limite no Groq avisa para aguardar', async () => {
 await test('12. TODOS os comandos de IA recebem o mesmo tratamento de erro', () => {
   // cada bloco de IA deve usar o helper unico
   const usos = (idxSource.match(/mensagemErroIA\(/g) || []).length;
-  ok(usos >= 20, `helper usado em varios comandos (achou ${usos})`);
-  // Mede a REGIAO dos comandos de IA (de `case 'gemma'` ate `case 'historico'`).
-  const ini = idxSource.indexOf("case 'gemma':");
+  ok(usos >= 10, `helper usado em varios comandos (achou ${usos})`);
+  // Mede a REGIAO dos comandos de IA (de `case 'resumir'` ate `case 'historico'`).
+  // Era `case 'gemma'`, mas os 17 comandos de "modelo" foram removidos.
+  const ini = idxSource.indexOf("case 'resumir':");
   const fim = idxSource.indexOf("case 'historico':");
   ok(ini > 0 && fim > ini, 'regiao de IA localizada');
   const regiaoIA = idxSource.slice(ini, fim);
   naoContem(regiaoIA, "includes('API key inválida')", 'sem checagem obsoleta nos comandos de IA');
-  ok((regiaoIA.match(/mensagemErroIA\(/g) || []).length >= 20, 'helper unico nos comandos de IA');
+  ok((regiaoIA.match(/mensagemErroIA\(/g) || []).length >= 8, 'helper unico nos comandos de IA');
 });
 
 // ============================================================================
