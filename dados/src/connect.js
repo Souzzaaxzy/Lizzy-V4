@@ -21,6 +21,7 @@ import { loadMsgBotOn } from './utils/database.js';
 import { buildUserId, getJidLidCacheSize } from './utils/helpers.js';
 import { safeJsonStringify } from './utils/messageInspector.js';
 import * as callNotifier from './utils/callNotifier.js';
+import { attachGroupStatusListener } from './utils/groupStatusListener.js';
 import * as paths from './utils/paths.js';
 import msgCounter from './utils/msgCounter.js';
 import { getWhatsAppLibrary } from './utils/baileysInfo.js';
@@ -2004,6 +2005,11 @@ async function createBotSocket(authDir) {
 
                     attachMessagesListener();
                     attachCallListener(); // Notificações de chamada (!testcall)
+                    // Respostas de pergunta no Group Status (!statusp/!statusview)
+                    attachGroupStatusListener({
+                        ev: AbyssSock.ev,
+                        log: (m) => console.log(m)
+                    });
                     startCacheCleanup(); // Inicia o sistema de limpeza de cache
 
                     // Aquece o catálogo do `!apk` em segundo plano: o índice do
