@@ -45500,6 +45500,100 @@ ${groupPrefix}wl.add @usuario | antilink,antistatus`);
         }
         break;
 
+      // ─────────────────────────────────────────────────────────────
+      // !canalapr <jid> — o canal pode publicar STATUS?
+      //
+      // Consulta a capability `CHANNEL_STATUS_PRODUCER` (valor 19 na
+      // `NewsletterCapability`) pelo mesmo IQ `w:mex` que o WhatsApp Web usa:
+      // query_id `9801384413216421`, data path `xwa2_newsletter_admin`.
+      //
+      // Por que existe: postar STATUS de canal exige essa capability, e sem ela
+      // o servidor **aceita a stanza e descarta em silencio** (sem erro) — o
+      // pior tipo de falha. Nao ha como PEDIR a capability: ela e' concedida
+      // pela Meta por rollout, e a verificacao de canal ainda nao esta
+      // publicamente disponivel. O que da' para fazer e' checar.
+      case 'canalapr':
+        try {
+          const jidAlvo = (args[0] || q || '').trim();
+          if (!jidAlvo) {
+            return reply(
+              `🔎 *Verificar canal*\n\n` +
+              `💡 Use: ${groupPrefix}canalapr <jid do canal>\n` +
+              `📌 Ex: ${groupPrefix}canalapr 120363410980452460@newsletter\n\n` +
+              `_Diz se o canal tem a capability de publicar status._`
+            );
+          }
+          if (!jidAlvo.endsWith('@newsletter')) {
+            return reply('❌ Isso não parece um canal. O JID termina em `@newsletter`.');
+          }
+
+          await reply('🔎 Consultando as permissões do canal... aguarde ◈');
+
+          const resposta = await nazu.query({
+            tag: 'iq',
+            attrs: {
+              id: nazu.generateMessageTag ? nazu.generateMessageTag() : undefined,
+              type: 'get',
+              to: 's.whatsapp.net',
+              xmlns: 'w:mex'
+            },
+            content: [{
+              tag: 'query',
+              attrs: { query_id: '9801384413216421' },
+              content: Buffer.from(JSON.stringify({ variables: { newsletter_id: jidAlvo } }), 'utf-8')
+            }]
+          });
+
+          // Desembrulha: <iq><result>{json}</result></iq>
+          const resultNode = (resposta?.content || []).find((n) => n?.tag === 'result');
+          if (!resultNode?.content) {
+            return reply('⚠️ O servidor respondeu, mas sem dados de permissões. Tente novamente.');
+          }
+          const dados = JSON.parse(resultNode.content.toString());
+          if (Array.isArray(dados?.errors) && dados.errors.length) {
+            const msg = dados.errors.map((e) => e?.message || 'erro').join(', ');
+            return reply(`❌ O servidor recusou a consulta: ${msg}`);
+          }
+
+          const info = dados?.data?.xwa2_newsletter_admin;
+          const caps = info?.capabilities || [];
+          console.log(`[CANALAPR] ${jidAlvo} | capabilities=${JSON.stringify(caps)}`);
+
+          const podeStatus = caps.includes('CHANNEL_STATUS_PRODUCER');
+          const podeMusica = caps.includes('CHANNEL_STATUS_MUSIC');
+
+          const linhas = [
+            `╭━━━꧁༺ 📡 𝐂𝐀𝐍𝐀𝐋 • 𝐏𝐄𝐑𝐌𝐈𝐒𝐒𝐎𝐄𝐒 ༻꧂━━━╮`,
+            `┃`,
+            `┃ 📻 Canal: ${jidAlvo}`,
+            `┃`,
+            `┃ 🚀 Publicar status: ${podeStatus ? '✅ AUTORIZADO' : '❌ NÃO autorizado'}`,
+            `┃ 🎵 Status com música: ${podeMusica ? '✅ sim' : '❌ não'}`,
+            `┃`,
+            `┃ 🧩 Permissões do canal (${caps.length}):`,
+          ];
+          if (caps.length) {
+            for (const c of caps) linhas.push(`┃   • ${c}`);
+          } else {
+            linhas.push('┃   (nenhuma)');
+          }
+          linhas.push(`┃`);
+          if (!podeStatus) {
+            linhas.push(
+              `┃ ⚠️ Sem a permissão de status, o servidor`,
+              `┃ _aceita e descarta em silêncio_ — não adianta`,
+              `┃ postar. Não há como pedir: é rollout da Meta.`,
+              `┃`
+            );
+          }
+          linhas.push(`╰━━━꧁༺ ✦ ${nomebot} ✦ ༻꧂━━━╯`);
+          return reply(linhas.join('\n'));
+        } catch (e) {
+          console.error('[CANALAPR] Erro:', e?.message || e);
+          return reply(`❌ Não consegui consultar o canal: ${e?.message || 'erro desconhecido'}`);
+        }
+        break;
+
       default:
         if (isCmd) {
           const cmdNotFoundConfig = loadCmdNotFoundConfig();
