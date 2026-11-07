@@ -21,7 +21,6 @@ import { loadMsgBotOn } from './utils/database.js';
 import { buildUserId, getJidLidCacheSize } from './utils/helpers.js';
 import { safeJsonStringify } from './utils/messageInspector.js';
 import * as callNotifier from './utils/callNotifier.js';
-import { attachGroupStatusListener } from './utils/groupStatusListener.js';
 import * as paths from './utils/paths.js';
 import msgCounter from './utils/msgCounter.js';
 import { getWhatsAppLibrary } from './utils/baileysInfo.js';
@@ -1202,6 +1201,13 @@ async function performMigration(AbyssSock) {
 let reconnectAttempts = 0;
 let isReconnecting = false; // Flag para evitar múltiplas reconexões simultâneas
 let reconnectTimer = null; // Timer de reconexão para poder cancelar
+/**
+ * Referência ao socket VIVO. Existe para poder FECHAR o socket anterior antes
+ * de criar outro — sem isso, cada reconexão deixa um WebSocket aberto com o
+ * keepalive de 30s rodando. O WhatsApp vê duas conexões do mesmo device,
+ * derruba uma, e o bot entra em ciclo de queda (o "desconecta toda hora").
+ */
+let socketAtual = null;
 let forbidden403Attempts = 0; // Contador específico para erro 403
 // Boot visual da sessão já pareada (null quando não está nesse fluxo).
 let _boot = null;
@@ -1966,6 +1972,16 @@ async function createBotSocket(authDir) {
                  */
                 reconnectAttempts = 0;
                 forbidden403Attempts = 0;
+                /*
+                 CORREÇÃO: cancela um timer de reconexão que ainda esteja
+                 pendente. Se a conexão abriu, o timer perdeu a razão de ser —
+                 e, disparando depois, criaria um SEGUNDO socket (o caminho
+                 para o loop de quedas).
+                 */
+                if (reconnectTimer) {
+                    clearTimeout(reconnectTimer);
+                    reconnectTimer = null;
+                }
                 if (boot) {
                     boot.step('abyss', 'online');
                     boot.step('wa', 'connected');
@@ -2005,11 +2021,6 @@ async function createBotSocket(authDir) {
 
                     attachMessagesListener();
                     attachCallListener(); // Notificações de chamada (!testcall)
-                    // Respostas de pergunta no Group Status (!statusp/!statusview)
-                    attachGroupStatusListener({
-                        ev: AbyssSock.ev,
-                        log: (m) => console.log(m)
-                    });
                     startCacheCleanup(); // Inicia o sistema de limpeza de cache
 
                     // Aquece o catálogo do `!apk` em segundo plano: o índice do
@@ -2181,6 +2192,7 @@ async function createBotSocket(authDir) {
                 }, reconnectDelay);
             }
         });
+        socketAtual = AbyssSock;
         return AbyssSock;
     } catch (err) {
         console.error(`❌ Erro ao criar socket do bot: ${err.message}`);
@@ -2196,6 +2208,30 @@ async function startNazu() {
     }
 
     isReconnecting = true;
+
+    /*
+     CORREÇÃO (a causa do "desconecta toda hora"):
+
+     Antes de criar um socket novo, FECHA o anterior. Sem isto, cada reconexão
+     deixava um WebSocket aberto com o keepalive de 30s rodando: o WhatsApp via
+     DUAS conexões do mesmo device, derrubava uma, o `connection.update: close`
+     disparava de novo e agendava OUTRA reconexão — o ciclo sem fim.
+
+     O `end()` da lib já limpa o que importa (keepAlive, qrTimer, listeners do
+     ws, signalRepository) e emite `connection.update: close` antes de destruir
+     o emitter — por isso o `socketAtual = null` vem ANTES, para o handler de
+     'close' não tratar o fechamento deliberado como queda e reagendar nada.
+     */
+    if (socketAtual) {
+        const antigo = socketAtual;
+        socketAtual = null;
+        try {
+            await antigo.end(undefined);
+            console.log('🔌 Socket anterior fechado antes de reconectar.');
+        } catch (e) {
+            console.log(`⚠️ Não consegui fechar o socket anterior: ${e?.message || e}`);
+        }
+    }
 
      /*
      CORREÇÃO: try/finally garante que isReconnecting SEMPRE volta para false,

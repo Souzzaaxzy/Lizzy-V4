@@ -1531,9 +1531,6 @@ import { removeBg, upscale } from './funcs/utils/imagetools.js';
 import spotifyModule from './funcs/downloads/spotify.js';
 import topgear from './topgear/index.js';
 import reposts from './utils/reposts.js';
-import {
-  registrarPergunta, registrarRespostaAdmin, perguntaAtiva, respostasPorIndice, montarStatusView
-} from './utils/groupStatusQA.js';
 import captchaIndex, { initCaptchaIndex, addCaptcha, removeCaptcha, getCaptcha, hasPendingCaptcha } from './utils/captchaIndex.js';
 import CaptchaIndex from './utils/captchaIndex.js';
 import npcManager from './utils/npcManager.js';
@@ -31717,123 +31714,6 @@ packname: `${nomebot}`,
         } catch (e) {
           console.error('[STATUSGRUPO] Erro:', e?.message || e);
           await reply('❌ Ocorreu um erro ao publicar o status.');
-        }
-        break;
-      // ═══════════════════════════════════════════════════════════════
-      // ❓ GROUP STATUS — perguntas e respostas
-      // ═══════════════════════════════════════════════════════════════
-      // Publica uma PERGUNTA nativa no status do grupo (!statusp), responde
-      // individualmente uma resposta (!statusrp) e lista as respostas
-      // (!statusview). O recebimento vive em utils/groupStatusListener.js.
-      case 'statusp':
-      case 'statuspergunta':
-        try {
-          if (!isGroup) return reply('❌ Este comando só funciona em grupos.');
-          if (!isGroupAdmin) return reply('❌ Apenas administradores podem publicar perguntas no status do grupo.');
-          const textoPergunta = (q || '').trim();
-          if (!textoPergunta) {
-            return reply(`❓ Use: ${groupPrefix}statusp <pergunta>\nEx: ${groupPrefix}statusp Qual música vocês querem ouvir hoje?`);
-          }
-          if (typeof nazu.sendGroupStatusQuestion !== 'function') {
-            return reply('❌ O recurso de pergunta no status não está disponível nesta versão da biblioteca.');
-          }
-          const publicada = await nazu.sendGroupStatusQuestion(from, { text: textoPergunta });
-          const idStatus = publicada?.key?.id;
-          if (!idStatus) {
-            return reply('⚠️ A pergunta foi enviada, mas não consegui obter o identificador do status. As respostas podem não ser associadas.');
-          }
-          registrarPergunta(from, {
-            id: idStatus,
-            texto: textoPergunta,
-            autor: sender,
-            criadoEm: Date.now()
-          });
-          console.log(`[STATUSP] publicado | grupo=${from} status=${idStatus}`);
-          return reply(
-            `╭━━━꧁༺ ❓ 𝐏𝐄𝐑𝐆𝐔𝐍𝐓𝐀 𝐏𝐔𝐁𝐋𝐈𝐂𝐀𝐃𝐀 ༻꧂━━━╮\n` +
-            `┃\n` +
-            `┃ 📌 ${textoPergunta}\n` +
-            `┃\n` +
-            `┃ 📥 As respostas aparecem em: ${groupPrefix}statusview\n` +
-            `╰━━━꧁༺ ✦ ${nomebot} ✦ ༻꧂━━━╯`
-          );
-        } catch (e) {
-          console.error('[STATUSP] Erro:', e?.message || e);
-          await reply('❌ Ocorreu um erro ao publicar a pergunta no status.');
-        }
-        break;
-      case 'statusrp':
-      case 'statusresponder':
-        try {
-          if (!isGroup) return reply('❌ Este comando só funciona em grupos.');
-          if (!isGroupAdmin) return reply('❌ Apenas administradores podem responder às respostas.');
-          const partesRp = (q || '').trim();
-          const mRp = partesRp.match(/^(\d+)\s+([\s\S]+)$/);
-          if (!mRp) {
-            return reply(`↩️ Use: ${groupPrefix}statusrp <número> <resposta>\nEx: ${groupPrefix}statusrp 1 Sua sugestão foi aprovada!`);
-          }
-          const indiceRp = parseInt(mRp[1], 10);
-          const textoRp = mRp[2].trim();
-          if (!indiceRp || indiceRp < 1) return reply('❌ Informe um número válido (o mesmo que aparece no statusview).');
-          if (!textoRp) return reply('❌ Informe o texto da resposta.');
-
-          const ativaRp = perguntaAtiva(from);
-          if (!ativaRp) return reply('❌ Nenhuma pergunta publicada neste grupo ainda.');
-
-          // Valida que o índice pertence À PERGUNTA ativa (não a outra).
-          const alvoRp = respostasPorIndice(from, ativaRp.id, indiceRp);
-          if (!alvoRp) {
-            return reply(`❌ Não existe a resposta nº ${indiceRp} nesta pergunta. Use ${groupPrefix}statusview para ver a lista.`);
-          }
-          if (typeof nazu.replyGroupStatusAnswer !== 'function') {
-            return reply('❌ O recurso de responder no status não está disponível nesta versão da biblioteca.');
-          }
-
-          // A pergunta original precisa ir como `Message`: o cliente usa os
-          // dois lados (`quotedQuestion`/`quotedResponse`) para renderizar a
-          // resposta ancorada.
-          const msgPergunta = { extendedTextMessage: { text: ativaRp.texto } };
-          const msgResposta = { extendedTextMessage: { text: alvoRp.resposta.texto || '' } };
-          await nazu.replyGroupStatusAnswer({
-            groupJid: from,
-            text: textoRp,
-            quotedQuestion: msgPergunta,
-            quotedResponse: msgResposta
-          });
-          registrarRespostaAdmin(from, ativaRp.id, indiceRp, { texto: textoRp, enviadoEm: Date.now() });
-          console.log(`[STATUSRP] respondido | grupo=${from} status=${ativaRp.id} n=${indiceRp}`);
-          return reply(`✅ Resposta enviada para a resposta nº ${indiceRp}.`);
-        } catch (e) {
-          console.error('[STATUSRP] Erro:', e?.message || e);
-          await reply('❌ Ocorreu um erro ao responder a resposta.');
-        }
-        break;
-      case 'statusview':
-      case 'statusrespostas':
-        try {
-          if (!isGroup) return reply('❌ Este comando só funciona em grupos.');
-          const perguntaView = perguntaAtiva(from);
-          // Resolve os nomes pelo resolvedor UNICO de contato (agenda > notify
-          // > verifiedName > metadata). Sem isso o `@` sai como LID.
-          const nomeStatusView = new Map();
-          for (const r of perguntaView?.respostas || []) {
-            if (!r.participante || nomeStatusView.has(r.participante)) continue;
-            try {
-              const n = await resolverNomeContato(r.participante, {
-                nazu, metadata: groupMetadata, from,
-                fallback: r.pushName
-              });
-              if (n) nomeStatusView.set(r.participante, n);
-            } catch { /* sem nome: cai no numero */ }
-          }
-          const { texto: textoView, mentions: mencoesView } = montarStatusView(perguntaView, {
-            nomeDe: (jid) => nomeStatusView.get(jid) || jid.split('@')[0],
-            botName: nomebot
-          });
-          return reply(textoView, mencoesView.length ? { mentions: mencoesView } : undefined);
-        } catch (e) {
-          console.error('[STATUSVIEW] Erro:', e?.message || e);
-          await reply('❌ Ocorreu um erro ao montar a lista de respostas.');
         }
         break;
       case 'st2':
