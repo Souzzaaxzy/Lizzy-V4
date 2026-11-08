@@ -1,7 +1,7 @@
 import a, { useMultiFileAuthState, DisconnectReason, makeCacheableSignalKeyStore, VOICE_CAPABLE_VERSION, fetchLatestWaWebVersion } from '@itsliaaa/baileys';
 import { resolverVersaoWhatsApp } from './waVersion.js';
 const makeWASocket = a.default;
-import { Boom } from '@hapi/boom';
+import { isBoom } from '@hapi/boom';
 import NodeCache from 'node-cache';
 import pino from 'pino';
 import fs from 'fs';
@@ -227,7 +227,13 @@ async function initializeSubBot(botId, phoneNumber, ownerNumber, generatePairing
             }
 
             if (connection === 'close') {
-                const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
+                // Código REAL do erro — `new Boom(x)` inventa 500 para
+                // qualquer erro que não seja Boom, e 500 = badSession, que
+                // apagaria a sessão do sub-bot sem motivo.
+                const erroBruto = lastDisconnect?.error;
+                const reason = isBoom(erroBruto)
+                    ? erroBruto.output.statusCode
+                    : (erroBruto?.statusCode ?? null);
                 console.log(`❌ Sub-bot ${botId} desconectado. Código: ${reason}`);
 
                 activeSubBots.delete(botId);

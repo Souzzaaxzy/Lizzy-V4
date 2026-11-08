@@ -1,6 +1,6 @@
 import { useMultiFileAuthState, DisconnectReason, makeCacheableSignalKeyStore, makeWASocket, fetchLatestWaWebVersion, isJidBroadcast, isJidNewsletter, isJidStatusBroadcast, VOICE_CAPABLE_VERSION, isVoiceCapableConfig } from '@itsliaaa/baileys';
 import { resolverVersaoWhatsApp } from './utils/waVersion.js';
-import { Boom } from '@hapi/boom';
+import { isBoom } from '@hapi/boom';
 import NodeCache from 'node-cache';
 import readline from 'readline';
 import { pedirCodigoDePareamento } from './utils/pairingCode.js';
@@ -2104,7 +2104,26 @@ async function createBotSocket(authDir) {
                 }
             }
             if (connection === 'close') {
-                const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
+                /*
+                 O CÓDIGO VEM DO ERRO REAL — nunca inventado.
+
+                 `new Boom(qualquerCoisaQueNaoSejaBoom)` NÃO propaga nada: o
+                 @hapi/boom cria um Boom NOVO, e sem `statusCode` o valor
+                 padrão dele é **500**. Como `badSession` também é 500, um
+                 fechamento COMUM (rede, "Connection Terminated", stream:error)
+                 era lido como "sessão inválida" — e o handler apagava o
+                 `qr-code/`, forçando reconectar o número. Era isso que o dono
+                 via: o log dizia "Código: 500 | Motivo: Sessão inválida" e a
+                 pasta de autenticação era excluída.
+
+                 Agora só um Boom de verdade informa o código; qualquer outro
+                 erro cai em `null` (motivo desconhecido) e o bot APENAS
+                 reconecta, sem tocar na sessão.
+                 */
+                const erroBruto = lastDisconnect?.error;
+                const reason = isBoom(erroBruto)
+                    ? erroBruto.output.statusCode
+                    : (erroBruto?.statusCode ?? null);
                 const reasonMessage = {
                     [DisconnectReason.loggedOut]: 'Deslogado do WhatsApp',
                     401: 'Sessão expirada',
