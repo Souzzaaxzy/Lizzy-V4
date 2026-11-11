@@ -26895,7 +26895,7 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
           // `!keyig testar [usuario]` -> bate em cada rota e mostra o que o IG
           // responde. E' o que separa "sessao expirada" de "IP bloqueado" de
           // "rota mudou" — sem isso a mensagem fica generica.
-          if (/^(testar|test|diag|diagnostico|check)$/i.test(arg.split(/\s+/)[0])) {
+          if (/^(testar|teste|testa|test|diag|diagnostico|check|verificar)$/i.test(arg.split(/\s+/)[0])) {
             const alvo = arg.split(/\s+/)[1] || 'instagram';
             const diag = await diagnosticarInstagram(alvo);
             const linhas = diag.linhas.map((l) => `• ${l}`).join('\n');
@@ -26921,6 +26921,9 @@ ${configurado ? `Sessão: \`${mascararIg(sid)}\`` : ''}
 3. Copie o valor do cookie *sessionid*
 4. Mande aqui: ${groupPrefix}keyig <sessionid>
 
+🔬 *Testar / diagnosticar:* ${groupPrefix}keyig testar [usuario]
+🗑️ *Remover:* ${groupPrefix}keyig limpar
+
 💡 *Alternativa (igual ao YouTube):* exporte os cookies do navegador no formato
 Netscape e salve em \`data/instagram/cookies.txt\`.
 
@@ -26933,10 +26936,13 @@ Ele expira com o tempo; quando o \`!pinsta\` disser "sessão recusada", renove.`
           if (!r.ok) {
             const motivos = {
               vazio: 'valor vazio',
-              espaco: 'o sessionid não pode conter espaços',
-              curto: 'o sessionid parece curto demais para ser válido'
+              espaco: 'o sessionid não pode conter espaços (copie só o VALOR do cookie, sem quebra de linha)',
+              curto: 'o sessionid parece curto demais para ser válido (pegue o campo "Value", não o "Name")'
             };
-            return reply(`❌ Não consegui salvar: ${motivos[r.motivo] || r.motivo}.`);
+            const extra = r.motivo === 'espaco'
+              ? `\n\n💡 Se você quis *testar*, o comando é \`${groupPrefix}keyig testar [usuario]\`.`
+              : '';
+            return reply(`❌ Não consegui salvar: ${motivos[r.motivo] || r.motivo}.${extra}`);
           }
           return reply(`✅ *Sessão do Instagram configurada!*
 🍪 Sessão: \`${mascararIg(arg)}\`

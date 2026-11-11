@@ -261,6 +261,11 @@ ok(!igc.temCookies(), 'o arquivo foi removido de verdade');
 const invalido = await rodar({ sender: novoLid(), text: '!keyig curto' });
 contem(invalido.texto, 'Não consegui salvar', 'recusa sessionid invalido');
 
+// `!keyig teste` (grafia comum) roda o DIAGNOSTICO, nao tenta salvar.
+const diag = await rodar({ sender: novoLid(), text: '!keyig teste l.szzy' });
+ok(/Diagn.stico do Instagram/.test(diag.texto), '`teste` roda o diagnostico (nao tenta salvar)');
+ok(!/N.o consegui salvar/.test(diag.texto), '`teste` NAO tenta salvar como cookie');
+
 // Membro comum nao usa.
 const comum = await rodar({ sender: novoLid(), text: '!keyig ' + SID, fromMe: false });
 contem(comum.texto, 'exclusivo para o dono', 'membro comum recusado');
