@@ -89,13 +89,16 @@ const PERFIL_PRIVADO = {
 };
 
 let recebeuCookie = null;
+let ultimaRota = '';
 const srv = http.createServer((req, res) => {
   recebeuCookie = req.headers.cookie || null;
+  ultimaRota = req.url;
   res.writeHead(200, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify(PERFIL_PRIVADO));
+  // O `usernameinfo` devolve o usuario direto; o `web_profile_info`, sob `data.user`.
+  res.end(JSON.stringify(ultimaRota.includes('usernameinfo') ? PERFIL_PRIVADO.data.user : PERFIL_PRIVADO));
 });
 await new Promise((r) => srv.listen(0, '127.0.0.1', r));
-process.env.IG_API_BASE = `http://127.0.0.1:${srv.address().port}/api/v1/users/web_profile_info/?username=`;
+process.env.IG_API_BASE = `http://127.0.0.1:${srv.address().port}`;
 
 // Reimporta o socialProfile JÁ com o seam setado.
 const sp = await import(new URL('../dados/src/funcs/utils/socialProfile.js', import.meta.url).href);
@@ -109,6 +112,10 @@ const semCookie = await sp.getInstagramProfile('fulano_privado');
 ok(semCookie.ok === false, 'sem cookie -> falha (anonimo morto)');
 ok(semCookie.code === 'IG_PRECISA_LOGIN', `sem cookie -> IG_PRECISA_LOGIN (veio "${semCookie.code}")`);
 
+// O servidor devolve o formato do `usernameinfo` (objeto do usuario direto)
+// quando a URL nao tem `web_profile_info`. Testamos os DOIS formatos de resposta.
+let formatoAtual = 'web_profile_info';
+
 // Com cookie: caminho autenticado -> devolve o CABEÇALHO do perfil privado.
 igc.salvarSessionId('1234567890%3A' + 'a'.repeat(30));
 const comCookie = await sp.getInstagramProfile('fulano_privado');
@@ -120,7 +127,36 @@ ok(comCookie.profile?.private === true, 'perfil PRIVADO marcado');
 ok(comCookie.profile?.autenticado === true, 'marca que veio autenticado');
 ok(comCookie.profile?.displayName === 'Fulano Privado', 'nome de exibicao');
 ok(/sessionid=/.test(recebeuCookie || ''), 'mandou o cookie sessionid no header');
+ok(ultimaRota.includes('usernameinfo'), 'usou a rota do app (usernameinfo) por padrao');
 srv.close();
+
+// ── 2b) A CADEIA de rotas: se a 1a cair (404), a proxima assume ──────────────
+// Servidor que responde 404 na 1a chamada e 200 na 2a (simula a rota morta).
+let chamadas = 0;
+const srv2 = http.createServer((req, res) => {
+  chamadas += 1;
+  if (chamadas === 1) { res.writeHead(404, { 'Content-Type': 'text/html' }); res.end('<html>404</html>'); return; }
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(PERFIL_PRIVADO.data.user));
+});
+await new Promise((r) => srv2.listen(0, '127.0.0.1', r));
+process.env.IG_API_BASE = `http://127.0.0.1:${srv2.address().port}`;
+// Reimporta para pegar o novo base (o modulo le a env a cada chamada, mas o
+// getInstagramProfile e' o mesmo; basta chamar).
+const r2 = await sp.getInstagramProfile('qualquer');
+ok(r2.ok === true, 'a 2a rota assumiu quando a 1a deu 404');
+ok(chamadas === 2, `tentou a 2a rota (chamadas=${chamadas})`);
+srv2.close();
+
+// ── 2c) TODAS as rotas falham -> "Perfil nao encontrado" (nao mais erro generico) ─
+const srv3 = http.createServer((req, res) => { res.writeHead(404, { 'Content-Type': 'text/html' }); res.end('404'); });
+await new Promise((r) => srv3.listen(0, '127.0.0.1', r));
+process.env.IG_API_BASE = `http://127.0.0.1:${srv3.address().port}`;
+const r3 = await sp.getInstagramProfile('nao_existe_mesmo');
+ok(r3.ok === false, 'todas as rotas 404 -> falha');
+ok(r3.msg.includes('não encontrado'), `404 em tudo -> "perfil nao encontrado" (veio "${r3.msg}")`);
+srv3.close();
+delete process.env.IG_API_BASE;
 
 // ── 3) O comando !keyig (handler real) ───────────────────────────────────────
 const mod = await import(new URL('../dados/src/index.js', import.meta.url).href);

@@ -168,145 +168,116 @@ async function getTikTokProfile(username) {
 }
 
 // ── Instagram ──────────────────────────────────────────────────────
-// O caminho ANÔNIMO morreu: o Instagram desligou o `web_profile_info` (404) e
-// passou a exigir login. Medido: `web_profile_info` -> 404 (HTML de erro),
-// `users/<u>/info/` -> 400 sem sessão.
+// O caminho ANÔNIMO morreu: o Instagram passou a exigir login. Medido:
+// `web_profile_info` -> 404 "Page Not Found" (mesmo com os headers completos do
+// navegador), `users/<u>/info/` -> 400/403 sem sessão. O yt-dlp desativou o
+// extractor de perfil (`InstagramUserIE._WORKING = False`), o que confirma que
+// não há caminho público.
 //
-// Com o `sessionid` de uma conta (o mesmo esquema de arquivo do YouTube), o bot
-// usa a API privada autenticada — que entrega o CABEÇALHO de qualquer perfil,
-// INCLUSIVE PRIVADO: foto, nome, nº de seguidores e quantos segue. Sem sessão,
-// tenta o anônimo (pode funcionar em alguns IPs) e, falhando, explica o cookie.
+// Com o `sessionid` (o mesmo esquema de arquivo do YouTube), o bot usa a API
+// PRIVADA de app — `users/<u>/usernameinfo/` (a que o app/instagrapi usam) e,
+// se essa não servir, tenta as variantes. Ela entrega o CABEÇALHO de qualquer
+// perfil, INCLUSIVE PRIVADO: foto, nome, nº de seguidores e quantos segue.
+//
+// ⚠️ Sem sessão NÃO dá para medir de verdade — o Instagram responde 400/403/404
+// para qualquer usuário. Por isso, sem cookie, o bot orienta em vez de mentir
+// "não encontrado" (era o defeito: o 404 era tratado como "perfil inexistente").
 const IG_APP_UA = 'Instagram 275.0.0.26.109 Android (30/11; 420dpi; 1080x2340; samsung; SM-G991B; exynos2100; en_US; 441578297)';
-const IG_ENDPOINTS = [
-  'https://www.instagram.com/api/v1/users/web_profile_info/?username=',
-  'https://i.instagram.com/api/v1/users/web_profile_info/?username='
+const IG_APP_ID = '567067343352427';
+
+// Ordem das tentativas (a 1ª é a do app — a mais estável para o `sessionid`).
+// Cada rota é só o PATH: o host sai de `IG_API_BASE` (teste) ou do padrão.
+const IG_HOST_PADRAO = 'https://i.instagram.com';
+const IG_ROTAS = [
+  { nome: 'usernameinfo', path: (u) => `/api/v1/users/${u}/usernameinfo/` },
+  { nome: 'web_profile_info', path: (u) => `/api/v1/users/web_profile_info/?username=${u}` },
+  { nome: 'info', path: (u) => `/api/v1/users/${u}/info/` },
 ];
+
+/** Cabeçalhos de app que o endpoint privado espera. */
+function igHeaders(sid) {
+  const h = {
+    'User-Agent': IG_APP_UA,
+    'X-IG-App-ID': IG_APP_ID,
+    'Accept': '*/*',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'X-IG-Capabilities': '3brTvw==',
+    'X-IG-Connection-Type': 'WIFI',
+    'X-FB-HTTP-Engine': 'Liger',
+  };
+  if (sid) h.Cookie = `sessionid=${sid}`;
+  return h;
+}
+
+/** Normaliza o usuário para o formato do `getInstagramProfile` (a partir de qualquer rota). */
+function igUserParaPerfil(d) {
+  if (!d || typeof d !== 'object') return null;
+  const u = d.user || d.data?.user;
+  if (u && u.username) return u;
+  // `usernameinfo` pode devolver o objeto do usuário direto.
+  if (d.username) return d;
+  return null;
+}
 
 /** Busca AUTENTICADA (com o sessionid) — é o que vê o cabeçalho de perfil privado. */
 async function fetchInstagramAutenticado(username, sid) {
-  // `IG_API_BASE` permite apontar para um servidor de teste (nunca em producao).
-  const base = process.env.IG_API_BASE || IG_ENDPOINTS[1];
-  const res = await axios.get(base + encodeURIComponent(username), {
-    timeout: HTTP_TIMEOUT,
-    headers: {
-      'User-Agent': IG_APP_UA,
-      'X-IG-App-ID': '936619743392459',
-      'Accept': 'application/json',
-      'Accept-Language': 'en-US,en;q=0.9',
-      'Cookie': `sessionid=${sid}`
-    },
-    validateStatus: () => true
-  });
-  if (res.status === 404) {
-    const err = new Error('instagram: not found');
-    err.response = { status: 404 };
-    throw err;
-  }
-  if (res.status === 401 || res.status === 403 || res.status === 429) {
-    const err = new Error(`instagram: sessão recusada (${res.status})`);
-    err.response = { status: res.status };
-    throw err;
-  }
-  const u = res.data?.data?.user;
-  if (!u || !u.username) {
-    const err = new Error(`instagram: resposta sem user (status ${res.status})`);
-    err.response = { status: res.status };
-    throw err;
-  }
-  return u;
-}
-
-/** Busca anônima via curl (o fingerprint do curl às vezes passa onde o axios não passa). */
-async function fetchInstagramViaCurl(username) {
-  const args = [
-    '-sS', '-m', String(Math.floor(HTTP_TIMEOUT / 1000)),
-    '-A', IG_APP_UA,
-    '-H', 'X-IG-App-ID: 936619743392459',
-    '-H', 'Accept: application/json',
-    '-H', 'Accept-Language: en-US,en;q=0.9',
-    // Escreve o HTTP status numa linha própria no fim: 404 = usuário inexistente.
-    '-w', '\n__HTTP_%{http_code}__',
-    'https://www.instagram.com/api/v1/users/web_profile_info/?username=' + encodeURIComponent(username),
-  ];
-  const { stdout } = await execFileP('curl', args, { timeout: HTTP_TIMEOUT + 5000, maxBuffer: 20 * 1024 * 1024 });
-  const statusMatch = /__HTTP_(\d{3})__\s*$/.exec(stdout);
-  const status = statusMatch ? Number(statusMatch[1]) : 0;
-  if (status === 404) {
-    const err = new Error('instagram: not found');
-    err.response = { status: 404 };
-    throw err;
-  }
-  if (status === 401 || status === 403 || status === 429) {
-    const err = new Error(`instagram: rate limited via curl (${status})`);
-    err.response = { status };
-    throw err;
-  }
-  const jsonStart = stdout.indexOf('{');
-  if (jsonStart === -1) {
-    const err = new Error(`instagram: resposta inesperada (status ${status})`);
-    err.response = { status: status || 0 };
-    throw err;
-  }
-  const data = JSON.parse(stdout.slice(jsonStart, statusMatch ? statusMatch.index : undefined));
-  return data?.data?.user || null;
-}
-
-async function fetchInstagramAnonimo(username) {
-  try {
-    return await fetchInstagramViaCurl(username);
-  } catch (curlErr) {
-    if (curlErr?.response?.status === 404) {
-      const err = new Error('instagram: not found');
+  // `IG_API_BASE` troca SO' o host (para os testes) — a cadeia de rotas continua.
+  const host = (process.env.IG_API_BASE || IG_HOST_PADRAO).replace(/\/$/, '');
+  let ultimoErro = null;
+  for (const rota of IG_ROTAS) {
+    const url = host + rota.path(encodeURIComponent(username));
+    let res;
+    try {
+      res = await axios.get(url, {
+        timeout: HTTP_TIMEOUT,
+        headers: igHeaders(sid),
+        validateStatus: () => true
+      });
+    } catch (e) {
+      ultimoErro = e; continue;
+    }
+    // 404 pode ser "endpoint morto" OU "perfil não existe" — só decidimos
+    // depois de tentar as outras rotas (o `web_profile_info`, por exemplo,
+    // devolve 404 para TUDO hoje).
+    if (res.status === 404) {
+      const err = new Error('instagram: 404');
       err.response = { status: 404 };
-      throw err;
+      err._rotaMorta = true;
+      ultimoErro = err; continue;
     }
-    let lastErr = curlErr;
-    for (const base of IG_ENDPOINTS) {
-      for (let attempt = 0; attempt < 2; attempt++) {
-        try {
-          const res = await axios.get(base + encodeURIComponent(username), {
-            timeout: HTTP_TIMEOUT,
-            headers: {
-              'User-Agent': IG_APP_UA,
-              Accept: 'application/json',
-              'X-IG-App-ID': '936619743392459',
-              'Accept-Language': 'en-US,en;q=0.9'
-            }
-          });
-          return res.data?.data?.user || null;
-        } catch (e) {
-          lastErr = e;
-          if (e?.response?.status === 404) return null;
-          if (e?.response?.status === 401 || e?.response?.status === 403 || e?.response?.status === 429) {
-            if (attempt === 0) await new Promise(r => setTimeout(r, 600));
-            continue;
-          }
-          break;
-        }
-      }
+    if (res.status === 401 || res.status === 403 || res.status === 429) {
+      const err = new Error(`instagram: sessão recusada (${res.status})`);
+      err.response = { status: res.status };
+      throw err; // a sessão é o problema — não adianta tentar outra rota
     }
-    throw lastErr;
+    if (res.status >= 400) {
+      const err = new Error(`instagram: rota ${rota.nome} respondeu ${res.status}`);
+      err.response = { status: res.status };
+      ultimoErro = err; continue;
+    }
+    const u = igUserParaPerfil(res.data);
+    if (u && u.username) return u;
+    ultimoErro = new Error(`instagram: rota ${rota.nome} sem user`);
   }
+  throw ultimoErro || new Error('instagram: nenhuma rota respondeu');
 }
 
 async function getInstagramProfile(username) {
   const sid = lerSessionId();
   const autenticado = Boolean(sid);
-  try {
-    let u;
-    if (autenticado) {
-      try {
-        u = await fetchInstagramAutenticado(username, sid);
-      } catch (e) {
-        // 404 é definitivo (não existe) — não tenta o anônimo.
-        if (e?.response?.status === 404) throw e;
-        console.error('socialProfile/instagram (autenticado falhou, tentando anônimo):', e.message || e);
-        u = await fetchInstagramAnonimo(username);
-      }
-    } else {
-      u = await fetchInstagramAnonimo(username);
-    }
 
+  // SEM sessão, o Instagram responde 400/403/404 para QUALQUER usuário — não dá
+  // para distinguir "não existe" de "bloqueado". Então nem tentamos: orientamos.
+  if (!autenticado) {
+    return {
+      ok: false,
+      msg: '❌ O Instagram passou a exigir login para consultar perfis.\nConfigure uma conta com `!keyig <sessionid>` ou coloque o arquivo em `data/instagram/cookies.txt`.',
+      code: 'IG_PRECISA_LOGIN'
+    };
+  }
+
+  try {
+    const u = await fetchInstagramAutenticado(username, sid);
     if (!u || !u.username) return { ok: false, msg: '❌ Perfil não encontrado.' };
 
     const profile = {
@@ -321,23 +292,10 @@ async function getInstagramProfile(username) {
       private: !!u.is_private,
       verified: !!u.is_verified,
       profileUrl: `https://www.instagram.com/${u.username}`,
-      autenticado
+      autenticado: true
     };
     return { ok: true, profile };
   } catch (e) {
-    // SEM sessão, o caminho anônimo está morto: não dá para distinguir "não
-    // existe" de "bloqueado" — então orienta em vez de mentir "não encontrado".
-    if (!autenticado) {
-      if (!(e?.response?.status === 404)) {
-        console.error('socialProfile/instagram (anônimo):', e.message || e);
-      }
-      return {
-        ok: false,
-        msg: '❌ O Instagram passou a exigir login para consultar perfis.\nConfigure uma conta com `!keyig <sessionid>` ou coloque o arquivo em `data/instagram/cookies.txt`.',
-        code: 'IG_PRECISA_LOGIN'
-      };
-    }
-    if (e?.response?.status === 404) return { ok: false, msg: '❌ Perfil não encontrado.' };
     if (e?.response?.status === 401 || e?.response?.status === 403 || e?.response?.status === 429) {
       return {
         ok: false,
@@ -345,6 +303,9 @@ async function getInstagramProfile(username) {
         code: 'IG_SESSAO_RECUSADA'
       };
     }
+    // TODAS as rotas deram 404 -> o usuário não existe (a 1ª rota é a do app,
+    // onde 404 significa "não encontrado"). Antes isso virava erro genérico.
+    if (e?.response?.status === 404) return { ok: false, msg: '❌ Perfil não encontrado.' };
     console.error('socialProfile/instagram:', e.message || e);
     return { ok: false, msg: '❌ Não foi possível consultar este perfil agora.', code: 'API_ERROR' };
   }
