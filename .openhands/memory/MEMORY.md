@@ -270,3 +270,19 @@ logs diários (`YYYY-MM-DD.md`).
   (Python/pip) e virou **`msedge-tts`** porque o painel **não tem `pip`**.
 - O `.env` é lido por **caminho do projeto** (não CWD) — o painel pode iniciar de
   outro diretório e a chave "sumia".
+
+## 📸 Ponte do Instagram (DM) — os comandos do bot respondem na DM
+
+- **A lib `insta`** (`Souzzaaxzy/Insta`, a "Baileys do Instagram") está
+  instalada no bot (188 KB, **zero deps**, pinada por SHA completo).
+- **`dados/src/utils/instaBridge.js`** — a PONTE: `dm.received` → monta um
+  `info` no formato do handler → chama o **MESMO `indexModule`** → responde com
+  `insta.sendMessage`. Então `!ping`, `!menu` e os ~1900 comandos valem na DM.
+- **A sessão é o cookie do `!keyig`** (não há pareamento novo): a lib lê
+  `data/instagram/cookies.txt` (`sessionIdFromCookiesFile`).
+- **OPT-IN**: só sobe com **`INSTA_DM=1`**. Sem a env, nada acontece.
+- **MEDIDO AO VIVO** (com a conta do dono): `[insta] open as liz.zybot` +
+  `realtime connected` (MQTT). E o **`!ping` REAL** respondeu — testado com o
+  handler de verdade (o texto sai em bold: usar `desbold` no teste).
+- ⚠️ `connect.js` usa **`indexModule`** (o handler) — não existe `handleMessage`
+  nesse escopo.

@@ -65,3 +65,6 @@ dados/database/tmp/
 data/instagram/
 instagram-cookies.txt
 *.instagram-cookies.txt
+
+# Yarn Plug'n'Play (o bot usa npm; o yarn so gera o lock)
+.pnp.*

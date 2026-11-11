@@ -550,14 +550,32 @@ async function getInstagramProfile(username) {
 }
 
 // ── X (fxtwitter API pública) ──────────────────────────────────────
+// MEDIDO: a API do fxtwitter é INTERMITENTE — o MESMO pedido devolveu
+// 200/404/404/404/200 (5 de 15 falharam, ~33%), com corpo
+// `{"code":404,"message":"User not found"}` MESMO para usuário que existe.
+// Por isso: (1) `validateStatus` (não deixa o axios lançar), (2) RETRY com
+// espera, e (3) só é "não encontrado" se TODAS as tentativas disserem isso.
 async function getXProfile(username) {
   try {
     const url = `https://api.fxtwitter.com/${encodeURIComponent(username)}`;
-    const res = await axios.get(url, {
-      timeout: HTTP_TIMEOUT,
-      headers: { 'User-Agent': UA_DESKTOP, Accept: 'application/json' }
-    });
-    const u = res.data?.user;
+    let res = null;
+    const MAX = 4;
+    for (let tentativa = 1; tentativa <= MAX; tentativa++) {
+      try {
+        res = await axios.get(url, {
+          timeout: HTTP_TIMEOUT,
+          headers: { 'User-Agent': UA_DESKTOP, Accept: 'application/json' },
+          validateStatus: () => true
+        });
+      } catch (e) { res = { status: e?.response?.status || 0, data: e?.response?.data }; }
+      // 200 COM user = sucesso (o corpo é a fonte da verdade, não o status).
+      if (res?.status === 200 && res.data?.user?.screen_name) break;
+      // Última tentativa: sai com o que veio.
+      if (tentativa === MAX) break;
+      // Espera crescente antes de repetir (a falha é intermitente).
+      await new Promise((r) => setTimeout(r, 700 * tentativa));
+    }
+    const u = res?.data?.user;
     // fxtwitter responde com HTML/404 para usuário inexistente
     if (!u || typeof u?.screen_name !== 'string') return { ok: false, msg: '❌ Perfil não encontrado.' };
     const ver = u.verification || {};
