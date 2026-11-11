@@ -185,13 +185,15 @@ async function getTikTokProfile(username) {
 const IG_APP_UA = 'Instagram 275.0.0.26.109 Android (30/11; 420dpi; 1080x2340; samsung; SM-G991B; exynos2100; en_US; 441578297)';
 const IG_APP_ID = '567067343352427';
 
-// Ordem das tentativas (a 1ª é a do app — a mais estável para o `sessionid`).
-// Cada rota é só o PATH: o host sai de `IG_API_BASE` (teste) ou do padrão.
+// Ordem das tentativas. Cada rota é só o PATH: o host sai de `IG_API_BASE`
+// (teste) ou do padrão. Medido: o `web_profile_info` (www) devolve 404 para
+// TUDO; o `usernameinfo` (i.) responde JSON. A cadeia cobre as duas casas.
 const IG_HOST_PADRAO = 'https://i.instagram.com';
+const IG_HOST_WEB = 'https://www.instagram.com';
 const IG_ROTAS = [
-  { nome: 'usernameinfo', path: (u) => `/api/v1/users/${u}/usernameinfo/` },
-  { nome: 'web_profile_info', path: (u) => `/api/v1/users/web_profile_info/?username=${u}` },
-  { nome: 'info', path: (u) => `/api/v1/users/${u}/info/` },
+  { nome: 'usernameinfo', host: 'app', path: (u) => `/api/v1/users/${u}/usernameinfo/` },
+  { nome: 'web_profile_info', host: 'web', path: (u) => `/api/v1/users/web_profile_info/?username=${u}` },
+  { nome: 'info', host: 'app', path: (u) => `/api/v1/users/${u}/info/` },
 ];
 
 /** Cabeçalhos de app que o endpoint privado espera. */
@@ -220,12 +222,39 @@ function igUserParaPerfil(d) {
 }
 
 /** Busca AUTENTICADA (com o sessionid) — é o que vê o cabeçalho de perfil privado. */
+/**
+ * Diagnóstico: bate em cada rota e devolve status + trecho do corpo.
+ * Serve para o dono (via `!keyig testar`) mostrar O QUE o Instagram responde —
+ * sem isso não há como saber se é a sessão, o IP ou a rota.
+ */
+export async function diagnosticarInstagram(username = 'instagram') {
+  const sid = lerSessionId();
+  const host = (process.env.IG_API_BASE || '').replace(/\/$/, '');
+  const linhas = [];
+  for (const rota of IG_ROTAS) {
+    const base = host || (rota.host === 'web' ? IG_HOST_WEB : IG_HOST_PADRAO);
+    const url = base + rota.path(encodeURIComponent(username));
+    try {
+      const res = await axios.get(url, {
+        timeout: HTTP_TIMEOUT, headers: igHeaders(sid), validateStatus: () => true
+      });
+      const corpo = typeof res.data === 'string' ? res.data : JSON.stringify(res.data || {});
+      linhas.push(`${rota.nome} (${rota.host}): HTTP ${res.status} — ${corpo.slice(0, 120)}`);
+    } catch (e) {
+      linhas.push(`${rota.nome} (${rota.host}): ERRO ${e?.message || e}`);
+    }
+  }
+  return { sid: Boolean(sid), linhas };
+}
+
 async function fetchInstagramAutenticado(username, sid) {
   // `IG_API_BASE` troca SO' o host (para os testes) — a cadeia de rotas continua.
-  const host = (process.env.IG_API_BASE || IG_HOST_PADRAO).replace(/\/$/, '');
+  const hostTeste = (process.env.IG_API_BASE || '').replace(/\/$/, '');
   let ultimoErro = null;
+  const vistos = [];
   for (const rota of IG_ROTAS) {
-    const url = host + rota.path(encodeURIComponent(username));
+    const base = hostTeste || (rota.host === 'web' ? IG_HOST_WEB : IG_HOST_PADRAO);
+    const url = base + rota.path(encodeURIComponent(username));
     let res;
     try {
       res = await axios.get(url, {
@@ -234,11 +263,12 @@ async function fetchInstagramAutenticado(username, sid) {
         validateStatus: () => true
       });
     } catch (e) {
+      vistos.push(`${rota.nome}:${e?.response?.status || 'net'}`);
       ultimoErro = e; continue;
     }
+    vistos.push(`${rota.nome}:${res.status}`);
     // 404 pode ser "endpoint morto" OU "perfil não existe" — só decidimos
-    // depois de tentar as outras rotas (o `web_profile_info`, por exemplo,
-    // devolve 404 para TUDO hoje).
+    // depois de tentar as outras rotas.
     if (res.status === 404) {
       const err = new Error('instagram: 404');
       err.response = { status: 404 };
@@ -248,7 +278,9 @@ async function fetchInstagramAutenticado(username, sid) {
     if (res.status === 401 || res.status === 403 || res.status === 429) {
       const err = new Error(`instagram: sessão recusada (${res.status})`);
       err.response = { status: res.status };
-      throw err; // a sessão é o problema — não adianta tentar outra rota
+      // NÃO para na hora: outra rota pode aceitar a mesma sessão (medido que o
+      // comportamento varia por rota). Guarda o erro e segue tentando.
+      ultimoErro = err; continue;
     }
     if (res.status >= 400) {
       const err = new Error(`instagram: rota ${rota.nome} respondeu ${res.status}`);
@@ -259,6 +291,8 @@ async function fetchInstagramAutenticado(username, sid) {
     if (u && u.username) return u;
     ultimoErro = new Error(`instagram: rota ${rota.nome} sem user`);
   }
+  // Nenhuma rota entregou. Se QUALQUER uma indicou problema de sessão, é isso.
+  if (ultimoErro) ultimoErro._vistos = vistos;
   throw ultimoErro || new Error('instagram: nenhuma rota respondeu');
 }
 
@@ -296,17 +330,23 @@ async function getInstagramProfile(username) {
     };
     return { ok: true, profile };
   } catch (e) {
-    if (e?.response?.status === 401 || e?.response?.status === 403 || e?.response?.status === 429) {
+    const st = e?.response?.status;
+    // A classificação segue o que foi VISTO nas rotas (`_vistos`), não a
+    // primeira exceção — as rotas respondem coisas diferentes.
+    const vistos = e?._vistos || [];
+    const todos404 = vistos.length > 0 && vistos.every((v) => v.endsWith(':404'));
+    const temSessaoRecusada = vistos.some((v) => /:(401|403|429)$/.test(v));
+
+    if (temSessaoRecusada) {
       return {
         ok: false,
-        msg: '❌ A sessão do Instagram foi recusada (o cookie pode ter expirado).\nConfigure de novo com `!keyig` ou troque o `data/instagram/cookies.txt`.',
+        msg: `❌ A sessão do Instagram foi recusada (${vistos.join(', ')}).\nO cookie pode ter expirado ou a conta foi desafiada. Renove com \`!keyig\`.`,
         code: 'IG_SESSAO_RECUSADA'
       };
     }
-    // TODAS as rotas deram 404 -> o usuário não existe (a 1ª rota é a do app,
-    // onde 404 significa "não encontrado"). Antes isso virava erro genérico.
-    if (e?.response?.status === 404) return { ok: false, msg: '❌ Perfil não encontrado.' };
-    console.error('socialProfile/instagram:', e.message || e);
+    if (todos404) return { ok: false, msg: '❌ Perfil não encontrado.' };
+    if (st === 404) return { ok: false, msg: '❌ Perfil não encontrado.' };
+    console.error('socialProfile/instagram:', e.message || e, vistos.length ? `| rotas: ${vistos.join(', ')}` : '');
     return { ok: false, msg: '❌ Não foi possível consultar este perfil agora.', code: 'API_ERROR' };
   }
 }

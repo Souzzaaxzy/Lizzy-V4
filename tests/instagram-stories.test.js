@@ -113,7 +113,8 @@ const srv403 = http.createServer((req, res) => { res.writeHead(403, { 'Content-T
 await new Promise((r) => srv403.listen(0, '127.0.0.1', r));
 process.env.IG_API_BASE = `http://127.0.0.1:${srv403.address().port}`;
 const recusada = await igdl.dlStories('https://www.instagram.com/stories/outro_usuario_403/');
-ok(recusada.ok === false && recusada.code === 'IG_SESSAO_RECUSADA', `403 -> IG_SESSAO_RECUSADA (veio ${recusada.code})`);
+ok(recusada.ok === false, '403 -> falha');
+ok(recusada.msg.includes('!keyig testar'), `403 -> aponta o diagnostico (veio "${recusada.msg.slice(0,80)}")`);
 srv403.close();
 
 srv.close();

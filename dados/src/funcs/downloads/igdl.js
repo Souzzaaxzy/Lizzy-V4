@@ -320,26 +320,41 @@ async function dlStories(url) {
 
     const headers = igHeadersComSessao(sid);
     // `IG_API_BASE` troca SO' o host (para os testes) — a cadeia continua.
-    const host = (process.env.IG_API_BASE || 'https://i.instagram.com').replace(/\/$/, '');
+    const hostTeste = (process.env.IG_API_BASE || '').replace(/\/$/, '');
+    const hosts = hostTeste ? [hostTeste] : ['https://i.instagram.com', 'https://www.instagram.com'];
 
-    // 1) username -> pk
-    const infoRes = await fetchWithTimeout(
-      `${host}/api/v1/users/${encodeURIComponent(alvo.username)}/usernameinfo/`,
-      { headers }
-    );
-    if (infoRes.status === 404) return { ok: false, msg: 'Usuário não encontrado.' };
-    if (infoRes.status === 401 || infoRes.status === 403 || infoRes.status === 429) {
-      return { ok: false, code: 'IG_SESSAO_RECUSADA', msg: '❌ A sessão do Instagram foi recusada (o cookie pode ter expirado).\nRenove com `!keyig`.' };
+    // 1) username -> pk. Tenta as DUAS casas: medido que elas respondem
+    // diferente para a mesma sessão.
+    let user = null;
+    const vistos = [];
+    for (const host of hosts) {
+      const infoRes = await fetchWithTimeout(
+        `${host}/api/v1/users/${encodeURIComponent(alvo.username)}/usernameinfo/`,
+        { headers }
+      );
+      vistos.push(`${host.includes('www') ? 'web' : 'app'}:${infoRes.status}`);
+      if (infoRes.status === 401 || infoRes.status === 403 || infoRes.status === 429) continue;
+      if (!infoRes.ok) continue;
+      const info = await infoRes.json().catch(() => null);
+      const u = info?.user || info;
+      if (u?.pk || u?.id) { user = u; break; }
     }
-    if (!infoRes.ok) return { ok: false, msg: `Instagram respondeu com erro (HTTP ${infoRes.status}).` };
-    const info = await infoRes.json();
-    const user = info?.user || info;
-    const pk = user?.pk || user?.id;
-    if (!pk) return { ok: false, msg: 'Usuário não encontrado.' };
+    if (!user) {
+      // Todas as casas falharam. Um 404 com sessão costuma ser SESSÃO INVÁLIDA
+      // (o IG responde 404, não 403, quando o cookie está ruim) — então não
+      // afirmamos "não encontrado" sozinhos.
+      return {
+        ok: false,
+        code: 'IG_INDISPONIVEL',
+        msg: `❌ Não consegui consultar o story (${vistos.join(', ')}).\nO usuário pode não existir OU a sessão estar inválida — rode \`!keyig testar\` para ver o que o Instagram responde.`
+      };
+    }
+    const pk = user.pk || user.id;
 
     // 2) reel_ids -> stories
+    const hostReel = hostTeste || 'https://i.instagram.com';
     const reelRes = await fetchWithTimeout(
-      `${host}/api/v1/feed/reels_media/?reel_ids=${pk}`,
+      `${hostReel}/api/v1/feed/reels_media/?reel_ids=${pk}`,
       { headers }
     );
     if (reelRes.status === 401 || reelRes.status === 403 || reelRes.status === 429) {

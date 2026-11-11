@@ -159,7 +159,7 @@ import {
 } from './apis/pubg.js';
 // Social Profile (perfis de redes sociais por username)
 import {
-  getSocialProfile
+  getSocialProfile, diagnosticarInstagram
 } from './funcs/utils/socialProfile.js';
 // APK (F-Droid) - helpers puros usados no comando `!apk`.
 import { formatBytes, buildApkFileName, buildApkCaption, apkUsage } from './funcs/apk/apkFormat.js';
@@ -26890,6 +26890,21 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
             return reply(removidos.length
               ? `🗑️ *Cookies do Instagram removidos.*\nArquivo(s): ${removidos.length}\n\nO \`!pinsta\` volta a depender do caminho anônimo (que o Instagram desligou).`
               : 'ℹ️ Não havia cookie do Instagram configurado.');
+          }
+
+          // `!keyig testar [usuario]` -> bate em cada rota e mostra o que o IG
+          // responde. E' o que separa "sessao expirada" de "IP bloqueado" de
+          // "rota mudou" — sem isso a mensagem fica generica.
+          if (/^(testar|test|diag|diagnostico|check)$/i.test(arg.split(/\s+/)[0])) {
+            const alvo = arg.split(/\s+/)[1] || 'instagram';
+            const diag = await diagnosticarInstagram(alvo);
+            const linhas = diag.linhas.map((l) => `• ${l}`).join('\n');
+            return reply(`🔬 *Diagnóstico do Instagram* (@${alvo})
+Sessão: ${diag.sid ? '✅ presente' : '❌ ausente'}
+
+${linhas}
+
+_HTTP 200 = ok; 404 = rota morta/usuário inexistente; 403/429 = bloqueio/sessão._`);
           }
 
           // Sem argumento -> painel com o estado.
