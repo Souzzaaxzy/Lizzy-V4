@@ -158,6 +158,45 @@ ok(r3.msg.includes('não encontrado'), `404 em tudo -> "perfil nao encontrado" (
 srv3.close();
 delete process.env.IG_API_BASE;
 
+// ── 2d) HTTP 200 com corpo `status:"fail"` NAO e' sucesso ────────────────────
+// O Instagram responde 200+fail quando a requisicao nao e' confiavel (headers
+// de app faltando / sessao invalida). Era o furo: eu lia so o HTTP.
+const srvFail = http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ message: "We're sorry", status_code: '200', status: 'fail' }));
+});
+await new Promise((r) => srvFail.listen(0, '127.0.0.1', r));
+process.env.IG_API_BASE = `http://127.0.0.1:${srvFail.address().port}`;
+igc.salvarSessionId('1234567890%3A' + 'a'.repeat(30));
+const rFail = await sp.getInstagramProfile('l.szzy');
+ok(rFail.ok === false, '200+fail -> NAO e ok');
+ok(rFail.code === 'IG_REQUISICAO_RECUSADA', `200+fail -> IG_REQUISICAO_RECUSADA (veio ${rFail.code})`);
+srvFail.close();
+delete process.env.IG_API_BASE;
+
+// ── 2e) Os headers do app vao completos (o que faz o IG aceitar) ─────────────
+const { userIdDoSessionId } = sp;
+ok(userIdDoSessionId('66612345678%3AAbCdEf%3A28') === '66612345678', 'extrai o user id do sessionid');
+ok(userIdDoSessionId('abc') === null, 'sessionid sem id -> null');
+
+// Captura os headers que o modulo manda numa requisicao real.
+let headersVistos = null;
+const srvH = http.createServer((req, res) => {
+  headersVistos = req.headers;
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ user: { pk: '1', username: 'x', full_name: 'X', edge_followed_by: { count: 1 } } }));
+});
+await new Promise((r) => srvH.listen(0, '127.0.0.1', r));
+process.env.IG_API_BASE = `http://127.0.0.1:${srvH.address().port}`;
+await sp.getInstagramProfile('x');
+ok(headersVistos && headersVistos['x-ig-app-id'], 'manda X-IG-App-ID');
+ok(headersVistos && headersVistos['x-ig-device-id'], 'manda X-IG-Device-ID (faltava)');
+ok(headersVistos && headersVistos['x-ig-www-claim'] === '0', 'manda X-IG-WWW-Claim');
+ok(headersVistos && headersVistos['ig-intended-user-id'] === '1234567890', 'manda IG-INTENDED-USER-ID com o id do sessionid');
+ok(headersVistos && /sessionid=/.test(headersVistos['cookie'] || ''), 'manda o cookie');
+srvH.close();
+delete process.env.IG_API_BASE;
+
 // ── 3) O comando !keyig (handler real) ───────────────────────────────────────
 const mod = await import(new URL('../dados/src/index.js', import.meta.url).href);
 const handle = mod.default ?? mod;

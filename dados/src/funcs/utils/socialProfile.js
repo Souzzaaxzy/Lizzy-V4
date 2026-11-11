@@ -196,17 +196,72 @@ const IG_ROTAS = [
   { nome: 'info', host: 'app', path: (u) => `/api/v1/users/${u}/info/` },
 ];
 
-/** Cabeçalhos de app que o endpoint privado espera. */
+/** Extrai o USER ID de dentro do sessionid (o formato e' `<userid>%3A...`). */
+export function userIdDoSessionId(sid) {
+  if (!sid) return null;
+  try {
+    const dec = decodeURIComponent(String(sid));
+    const id = dec.split(':')[0];
+    return /^\d{3,}$/.test(id) ? id : null;
+  } catch { return null; }
+}
+
+/** Gera um UUID v4 (o `X-IG-Device-ID`). */
+function uuidV4() {
+  const h = '0123456789abcdef';
+  let out = '';
+  for (let i = 0; i < 32; i++) out += h[Math.floor(Math.random() * 16)];
+  return `${out.slice(0, 8)}-${out.slice(8, 12)}-4${out.slice(13, 16)}-a${out.slice(17, 20)}-${out.slice(20, 32)}`;
+}
+
+/**
+ * Cabeçalhos do app — o conjunto que a referência mantida (instagrapi) envia.
+ *
+ * MEDIDO: sem o conjunto completo o Instagram responde **HTTP 200 com corpo
+ * `{"status":"fail"}`** (requisição "não confiável"), não 401/403. Era isso que
+ * fazia o `!pinsta` falhar mesmo com o cookie presente — o `status_code: 200`
+ * no corpo, que eu lia como sucesso.
+ *
+ * O `user id` sai do PRÓPRIO sessionid (`<userid>%3A...`) — é o que preenche o
+ * `IG-INTENDED-USER-ID`/`IG-U-*`, que é o que mais pesa.
+ */
 function igHeaders(sid) {
+  const locale = 'en_US';
+  const uid = userIdDoSessionId(sid);
+  const dev = uuidV4();
   const h = {
     'User-Agent': IG_APP_UA,
     'X-IG-App-ID': IG_APP_ID,
     'Accept': '*/*',
-    'Accept-Language': 'en-US,en;q=0.9',
-    'X-IG-Capabilities': '3brTvw==',
+    'Accept-Language': 'en-US, en;q=0.9',
+    'Accept-Encoding': 'gzip, deflate',
+    'X-IG-App-Locale': locale,
+    'X-IG-Device-Locale': locale,
+    'X-IG-Mapped-Locale': locale,
     'X-IG-Connection-Type': 'WIFI',
-    'X-FB-HTTP-Engine': 'Liger',
+    'X-IG-Capabilities': '3brTv10=',
+    'X-IG-Device-ID': dev,
+    'X-IG-Android-ID': `android-${dev.replace(/-/g, '').slice(0, 16)}`,
+    'X-IG-Family-Device-ID': uuidV4(),
+    'X-IG-Timezone-Offset': '0',
+    'X-IG-App-Startup-Country': 'US',
+    'X-IG-Bandwidth-Speed-KBPS': '-1.000',
+    'X-IG-Bandwidth-TotalBytes-B': '0',
+    'X-IG-Bandwidth-TotalTime-MS': '0',
+    'X-IG-WWW-Claim': '0',
+    'X-MID': `X--${uuidV4().replace(/-/g, '').slice(0, 20)}`,
+    'X-Pigeon-Session-Id': uuidV4(),
+    'X-Pigeon-Rawclienttime': (Date.now() / 1000).toFixed(3),
+    'X-FB-HTTP-Engine': 'Tigon/MNS/TCP',
+    'X-Tigon-Is-Retry': 'False',
+    'X-FB-Client-IP': 'True',
+    'X-FB-Server-Cluster': 'True',
+    'Priority': 'u=3',
+    'Connection': 'keep-alive',
+    'IG-INTENDED-USER-ID': uid || '0',
+    'X-IG-Nav-Chain': '9MV:self_profile:2,ProfileMediaTabFragment:self_profile:3,9Xf:self_following:4',
   };
+  if (uid) h['IG-U-DS-USER-ID'] = uid;
   if (sid) h.Cookie = `sessionid=${sid}`;
   return h;
 }
@@ -239,7 +294,8 @@ export async function diagnosticarInstagram(username = 'instagram') {
         timeout: HTTP_TIMEOUT, headers: igHeaders(sid), validateStatus: () => true
       });
       const corpo = typeof res.data === 'string' ? res.data : JSON.stringify(res.data || {});
-      linhas.push(`${rota.nome} (${rota.host}): HTTP ${res.status} — ${corpo.slice(0, 120)}`);
+      const fail = res.data && typeof res.data === 'object' && (res.data.status === 'fail' || res.data.status_code === 'fail');
+      linhas.push(`${rota.nome} (${rota.host}): HTTP ${res.status}${fail ? ' ⚠️ status:fail (requisição recusada — cookie/headers)' : ''} — ${corpo.slice(0, 110)}`);
     } catch (e) {
       linhas.push(`${rota.nome} (${rota.host}): ERRO ${e?.message || e}`);
     }
@@ -266,7 +322,18 @@ async function fetchInstagramAutenticado(username, sid) {
       vistos.push(`${rota.nome}:${e?.response?.status || 'net'}`);
       ultimoErro = e; continue;
     }
-    vistos.push(`${rota.nome}:${res.status}`);
+    // O Instagram responde HTTP 200 com corpo `{"status":"fail"}` quando a
+    // requisição NÃO é confiável (headers de app faltando / sessão inválida).
+    // Isso NÃO é sucesso — era o furo: eu lia só o HTTP.
+    const corpo = res.data;
+    const corpoFail = corpo && typeof corpo === 'object' && (corpo.status === 'fail' || corpo.status_code === 'fail');
+    vistos.push(`${rota.nome}:${res.status}${corpoFail ? '(fail)' : ''}`);
+    if (corpoFail) {
+      const err = new Error('instagram: requisição recusada (200 com status fail)');
+      err.response = { status: res.status };
+      err._corpoFail = true;
+      ultimoErro = err; continue;
+    }
     // 404 pode ser "endpoint morto" OU "perfil não existe" — só decidimos
     // depois de tentar as outras rotas.
     if (res.status === 404) {
@@ -336,6 +403,14 @@ async function getInstagramProfile(username) {
     const vistos = e?._vistos || [];
     const todos404 = vistos.length > 0 && vistos.every((v) => v.endsWith(':404'));
     const temSessaoRecusada = vistos.some((v) => /:(401|403|429)$/.test(v));
+    const temCorpoFail = vistos.some((v) => v.includes('(fail)'));
+    if (temCorpoFail) {
+      return {
+        ok: false,
+        code: 'IG_REQUISICAO_RECUSADA',
+        msg: `❌ O Instagram recusou a requisição (${vistos.join(', ')}).\nO cookie pode estar expirado OU a conta foi desafiada. Renove com \`!keyig\` e teste com \`!keyig testar\`.`
+      };
+    }
 
     if (temSessaoRecusada) {
       return {

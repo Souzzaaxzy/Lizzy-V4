@@ -336,6 +336,12 @@ async function dlStories(url) {
       if (infoRes.status === 401 || infoRes.status === 403 || infoRes.status === 429) continue;
       if (!infoRes.ok) continue;
       const info = await infoRes.json().catch(() => null);
+      // O Instagram responde HTTP 200 com `{"status":"fail"}` quando a
+      // requisição não é confiável (headers/sessão). Isso NÃO é "tem user".
+      if (info && typeof info === 'object' && (info.status === 'fail' || info.status_code === 'fail')) {
+        vistos.push('corpo:fail');
+        continue;
+      }
       const u = info?.user || info;
       if (u?.pk || u?.id) { user = u; break; }
     }

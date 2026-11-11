@@ -212,6 +212,17 @@ logs diários (`YYYY-MM-DD.md`).
 - **Stories** (`igdl.dlStories`): `/stories/<user>[/<id>]` → `usernameinfo` (pk) →
   `feed/reels_media/?reel_ids=<pk>`. Foto E vídeo. **Exige o cookie** (mesma regra
   do perfil). O `!instagram` detecta `/stories/` e chama o `dlStories`.
+- **🚨 HTTP 200 com corpo `{"status":"fail"}` NÃO é sucesso** — é a assinatura
+  de requisição "não confiável" (headers de app faltando). Era o furo: eu lia só o
+  HTTP e tratava como OK. O `getInstagramProfile`/`dlStories` agora detectam o
+  corpo e devolvem `IG_REQUISICAO_RECUSADA`.
+- **Os headers têm de ser o conjunto COMPLETO do app** (o que o **instagrapi**,
+  referência mantida, envia: ~25 headers — `X-IG-Device-ID`, `X-IG-WWW-Claim`,
+  `X-MID`, `IG-INTENDED-USER-ID`, `X-IG-Nav-Chain`, ...). Mandar só 6 faz o IG
+  responder 200+fail. O **user id sai do PRÓPRIO sessionid**
+  (`<userid>%3A...` → `IG-INTENDED-USER-ID`) — `userIdDoSessionId`.
+- **`!keyig testar [usuario]`** roda o diagnóstico (status + trecho do corpo por
+  rota) e marca `status:fail`. É o instrumento para não adivinhar.
 - `tests/keyig-instagram.test.js` **47/0** e `tests/instagram-stories.test.js`
   **22/0**. Mutation: sem sessão no perfil → 8 falhas; no stories → 1; sem a
   guarda de dono → 1. Baseline `menudono` 175 → **177**.
