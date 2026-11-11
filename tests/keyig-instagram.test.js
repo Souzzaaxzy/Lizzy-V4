@@ -197,6 +197,35 @@ ok(headersVistos && /sessionid=/.test(headersVistos['cookie'] || ''), 'manda o c
 srvH.close();
 delete process.env.IG_API_BASE;
 
+// ── 2f) O diagnostico inclui o teste de SESSAO (current_user) ────────────────
+// E' o que separa "sessao invalida" de "IP bloqueado": se o current_user
+// devolver a conta, a sessao presta.
+const srvCu = http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  if (req.url.includes('current_user')) {
+    res.end(JSON.stringify({ user: { pk: '999', username: 'minhaconta' }, status: 'ok' }));
+  } else {
+    res.end(JSON.stringify({ status: 'fail', message: 'no' }));
+  }
+});
+await new Promise((r) => srvCu.listen(0, '127.0.0.1', r));
+process.env.IG_API_BASE = `http://127.0.0.1:${srvCu.address().port}`;
+const diagOk = await sp.diagnosticarInstagram('l.szzy');
+ok(diagOk.linhas.some((l) => /SESS.O V.LIDA/.test(l)), `diag mostra sessao valida (${diagOk.linhas[0]})`);
+ok(diagOk.linhas.some((l) => /status:fail/.test(l)), 'diag marca o status:fail nas rotas');
+srvCu.close();
+
+const srvCuBad = http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ status: 'fail', message: 'login required' }));
+});
+await new Promise((r) => srvCuBad.listen(0, '127.0.0.1', r));
+process.env.IG_API_BASE = `http://127.0.0.1:${srvCuBad.address().port}`;
+const diagBad = await sp.diagnosticarInstagram('l.szzy');
+ok(diagBad.linhas.some((l) => /SESS.O INV.LIDA/.test(l)), `diag mostra sessao invalida (${diagBad.linhas[0]})`);
+srvCuBad.close();
+delete process.env.IG_API_BASE;
+
 // ── 3) O comando !keyig (handler real) ───────────────────────────────────────
 const mod = await import(new URL('../dados/src/index.js', import.meta.url).href);
 const handle = mod.default ?? mod;

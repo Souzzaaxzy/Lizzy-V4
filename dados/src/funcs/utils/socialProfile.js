@@ -286,6 +286,30 @@ export async function diagnosticarInstagram(username = 'instagram') {
   const sid = lerSessionId();
   const host = (process.env.IG_API_BASE || '').replace(/\/$/, '');
   const linhas = [];
+
+  // PRIMEIRO: a sessão é válida? O `/accounts/current_user/` devolve a conta
+  // logada quando o sessionid presta — é o teste DEFINITIVO. Se ele falhar, o
+  // problema é o cookie (não a rota, não o IP).
+  try {
+    const base = host || IG_HOST_PADRAO;
+    const r = await axios.get(`${base}/api/v1/accounts/current_user/?edit=true`, {
+      timeout: HTTP_TIMEOUT, headers: igHeaders(sid), validateStatus: () => true
+    });
+    const d = r.data;
+    const okUser = d && typeof d === 'object' && (d.user || d.logged_in_user);
+    const fail = d && typeof d === 'object' && (d.status === 'fail' || d.status_code === 'fail');
+    if (okUser) {
+      const u = d.user || d.logged_in_user;
+      linhas.push(`current_user: HTTP ${r.status} ✅ SESSÃO VÁLIDA (@${u.username || u.pk})`);
+    } else if (fail) {
+      linhas.push(`current_user: HTTP ${r.status} ❌ SESSÃO INVÁLIDA (${(d.message || '').slice(0, 70)})`);
+    } else {
+      linhas.push(`current_user: HTTP ${r.status} ❌ sem user (${JSON.stringify(d || {}).slice(0, 70)})`);
+    }
+  } catch (e) {
+    linhas.push(`current_user: ERRO ${e?.message || e}`);
+  }
+
   for (const rota of IG_ROTAS) {
     const base = host || (rota.host === 'web' ? IG_HOST_WEB : IG_HOST_PADRAO);
     const url = base + rota.path(encodeURIComponent(username));
