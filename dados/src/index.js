@@ -23064,9 +23064,12 @@ case 'pin':
       case 'instavideo':
       case 'igstory':
         try {
-          if (!q) return reply(`Digite um link do Instagram.\n> Ex: ${groupPrefix}${command} https://www.instagram.com/reel/DFaq_X7uoiT/?igsh=M3Q3N2ZyMWU1M3Bo`);
+          if (!q) return reply(`Digite um link do Instagram.\n> Ex: ${groupPrefix}${command} https://www.instagram.com/reel/DFaq_X7uoiT/?igsh=M3Q3N2ZyMWU1M3Bo\n> Story (precisa do \`!keyig\`): ${groupPrefix}${command} https://www.instagram.com/stories/usuario/`);
           await nazu.sendMessage(from, { react: { text: '🔍', key: info.key } });
-          igdl.dl(q)
+          // Story (/stories/<user>) exige login e tem fluxo próprio (dlStories).
+          const ehStory = /instagram\.com|instagr\.am/.test(q) && /\/stories\//i.test(q);
+          const buscar = ehStory ? igdl.dlStories : igdl.dl;
+          buscar(q)
             .then(async (datinha) => {
               if (!datinha.ok) return reply(datinha.msg);
               for (const item of datinha.data) {

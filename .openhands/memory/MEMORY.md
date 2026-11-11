@@ -204,8 +204,16 @@ logs diários (`YYYY-MM-DD.md`).
   (posts/stories) — só "seguir e ser aceito". O cookie expira e a conta pode ser
   bloqueada por automação.
 - `.gitignore`: `data/instagram/` + `*.instagram-cookies.txt` (o cookie = a conta).
-- `tests/keyig-instagram.test.js` **42/0** (módulo puro + servidor HTTP local para
-  o caminho autenticado + handler real). Mutation: sem sessão → 8 falhas; sem a
+- **A ROTA certa é `users/<u>/usernameinfo/`** (a do app) — o `web_profile_info`
+  devolve **404 "Page Not Found" para TUDO** (mesmo com os headers do navegador);
+  era isso que fazia o usuário real virar "não encontrado". Cadeia:
+  `usernameinfo → web_profile_info → info`; 404 numa tenta a próxima; todas 404 →
+  "não encontrado". O yt-dlp desativou o extractor de perfil (`_WORKING = False`).
+- **Stories** (`igdl.dlStories`): `/stories/<user>[/<id>]` → `usernameinfo` (pk) →
+  `feed/reels_media/?reel_ids=<pk>`. Foto E vídeo. **Exige o cookie** (mesma regra
+  do perfil). O `!instagram` detecta `/stories/` e chama o `dlStories`.
+- `tests/keyig-instagram.test.js` **47/0** e `tests/instagram-stories.test.js`
+  **22/0**. Mutation: sem sessão no perfil → 8 falhas; no stories → 1; sem a
   guarda de dono → 1. Baseline `menudono` 175 → **177**.
 
 ## Canais de IA (estado atual)

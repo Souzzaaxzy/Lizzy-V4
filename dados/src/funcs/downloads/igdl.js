@@ -1,3 +1,5 @@
+import { lerSessionId } from '../../utils/instagramCookies.js';
+
 /**
  * Instagram - Implementação própria (sem VexAPI)
  *
@@ -29,6 +31,9 @@ const graphql = {
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 const IG_DOMAIN_RE = /(?:instagram\.com|instagr\.am)\/(?:p|reel|reels|tv)\/([A-Za-z0-9_-]+)/i;
+// Story: /stories/<usuario>/<id>/ (o id é opcional — sem ele, pegamos TODOS os
+// stories ativos daquele usuário).
+const IG_STORY_RE = /(?:instagram\.com|instagr\.am)\/stories\/([A-Za-z0-9_.]+)(?:\/(\d+))?/i;
 
 const cache = new Map();
 const CACHE_TTL = 60 * 60 * 1000;
@@ -243,4 +248,127 @@ async function dl(url) {
   }
 }
 
-export { dl };
+
+// ── STORIES ────────────────────────────────────────────────────────────────
+// O story NÃO é conteúdo público: exige login. Só com o `sessionid` (o mesmo
+// `!keyig`/`data/instagram/cookies.txt` do perfil) o bot consegue puxar.
+//
+// Fluxo: `username` -> `usernameinfo` (pega o `pk`) -> `/feed/reels_media/?reel_ids=<pk>`
+// (o mesmo endpoint que o yt-dlp usa para highlights/stories). Devolve as mídias
+// do usuário (foto e vídeo), na ordem, com o formato `{ type, url, mime }` que o
+// `!instagram` já sabe enviar.
+//
+// Aceita `/stories/<user>/<id>` (filtra o item) e `/stories/<user>` (todos).
+const IG_APP_ID = '567067343352427';
+const IG_APP_UA = 'Instagram 275.0.0.26.109 Android (30/11; 420dpi; 1080x2340; samsung; SM-G991B; exynos2100; en_US; 441578297)';
+
+function igHeadersComSessao(sid) {
+  return {
+    'User-Agent': IG_APP_UA,
+    'X-IG-App-ID': IG_APP_ID,
+    Accept: '*/*',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'X-IG-Capabilities': '3brTvw==',
+    'X-IG-Connection-Type': 'WIFI',
+    'X-FB-HTTP-Engine': 'Liger',
+    Cookie: `sessionid=${sid}`
+  };
+}
+
+// Extrai o username e (opcional) o id do story de uma URL /stories/.
+function extrairStory(url) {
+  const m = String(url || '').match(IG_STORY_RE);
+  if (!m) return null;
+  return { username: m[1], storyId: m[2] || null };
+}
+
+// Converte um item de story no formato de mídia do módulo.
+function storyItemParaMidia(item) {
+  if (!item) return null;
+  if (item.video_versions?.length) {
+    return { type: 'video', url: item.video_versions[0].url, mime: 'video/mp4' };
+  }
+  const c = item.image_versions2?.candidates;
+  if (c?.length) {
+    return { type: 'image', url: c[0].url, mime: 'image/jpeg' };
+  }
+  return null;
+}
+
+/**
+ * Baixa os stories de um usuário (foto e vídeo). EXIGE sessão do Instagram.
+ * @param {string} url `/stories/<user>` ou `/stories/<user>/<id>`
+ * @returns {Promise<{ok:true, criador:string, data:Array, count:number, user?:object}
+ *                   | {ok:false, msg:string, code?:string}>}
+ */
+async function dlStories(url) {
+  try {
+    const alvo = extrairStory(url);
+    if (!alvo) return { ok: false, msg: 'URL de story inválida. Use /stories/<usuario>/...' };
+
+    const sid = lerSessionId();
+    if (!sid) {
+      return {
+        ok: false,
+        code: 'IG_PRECISA_LOGIN',
+        msg: '❌ Story exige login no Instagram.\nConfigure uma conta com `!keyig <sessionid>` ou coloque o arquivo em `data/instagram/cookies.txt`.'
+      };
+    }
+
+    const cached = getCached(`story:${url}`);
+    if (cached) return { ok: true, ...cached, cached: true };
+
+    const headers = igHeadersComSessao(sid);
+    // `IG_API_BASE` troca SO' o host (para os testes) — a cadeia continua.
+    const host = (process.env.IG_API_BASE || 'https://i.instagram.com').replace(/\/$/, '');
+
+    // 1) username -> pk
+    const infoRes = await fetchWithTimeout(
+      `${host}/api/v1/users/${encodeURIComponent(alvo.username)}/usernameinfo/`,
+      { headers }
+    );
+    if (infoRes.status === 404) return { ok: false, msg: 'Usuário não encontrado.' };
+    if (infoRes.status === 401 || infoRes.status === 403 || infoRes.status === 429) {
+      return { ok: false, code: 'IG_SESSAO_RECUSADA', msg: '❌ A sessão do Instagram foi recusada (o cookie pode ter expirado).\nRenove com `!keyig`.' };
+    }
+    if (!infoRes.ok) return { ok: false, msg: `Instagram respondeu com erro (HTTP ${infoRes.status}).` };
+    const info = await infoRes.json();
+    const user = info?.user || info;
+    const pk = user?.pk || user?.id;
+    if (!pk) return { ok: false, msg: 'Usuário não encontrado.' };
+
+    // 2) reel_ids -> stories
+    const reelRes = await fetchWithTimeout(
+      `${host}/api/v1/feed/reels_media/?reel_ids=${pk}`,
+      { headers }
+    );
+    if (reelRes.status === 401 || reelRes.status === 403 || reelRes.status === 429) {
+      return { ok: false, code: 'IG_SESSAO_RECUSADA', msg: '❌ A sessão do Instagram foi recusada (o cookie pode ter expirado).\nRenove com `!keyig`.' };
+    }
+    if (!reelRes.ok) return { ok: false, msg: `Instagram respondeu com erro (HTTP ${reelRes.status}).` };
+    const reel = await reelRes.json();
+
+    const reels = reel?.reels || {};
+    const bucket = reels[String(pk)] || reels[pk] || Object.values(reels)[0];
+    let itens = bucket?.items || [];
+    if (alvo.storyId) itens = itens.filter((i) => String(i.id || i.pk) === String(alvo.storyId));
+
+    const medias = itens.map(storyItemParaMidia).filter(Boolean);
+    if (!medias.length) {
+      return { ok: false, msg: 'Nenhum story ativo encontrado para este usuário.' };
+    }
+
+    const resultado = {
+      criador: 'Hiudy',
+      data: medias,
+      count: medias.length,
+      user: { username: user?.username || alvo.username }
+    };
+    setCache(`story:${url}`, resultado);
+    return { ok: true, ...resultado };
+  } catch (err) {
+    return { ok: false, msg: 'Erro ao baixar story: ' + (err?.message || err) };
+  }
+}
+
+export { dl, dlStories, extrairStory };
