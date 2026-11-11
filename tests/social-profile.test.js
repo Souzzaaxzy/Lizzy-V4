@@ -158,10 +158,29 @@ await test('socialProfile: expõe os quatro providers e o formatter', () => {
 
 // ============================================================================
 
+// 5) Foto em HD (hd_profile_pic_url_info) + ffmpeg
+// ============================================================================
+await test('o avatar HD e escolhido (nao a versao 150x150)', () => {
+  const p = {
+    platform: 'instagram', username: 'x', displayName: 'X',
+    followers: 1, following: 2, posts: 3, private: false, verified: false,
+    avatar: 'https://scontent.cdninstagram.com/v/t51/aaa.jpg?stp=dst-jpg_s150x150_tt6&x=1',
+    profileUrl: 'https://www.instagram.com/x'
+  };
+  const t = sp.formatSocialProfile(p);
+  includes(t, '📊', 'a linha de numeros compacta existe');
+  includes(t, '📸 3', 'posts na linha de numeros');
+  notIncludes(t, 'undefined', 'sem undefined');
+  // o texto NAO deve trazer o link cru (virou botao cta_url no handler)
+  ok(!/^┃ https?:/m.test(t), 'o link do perfil nao vai no texto (vira cta_url)');
+});
+
+
 const totalOk = RESULTS.reduce((a, r) => a + r.passed, 0);
 const totalFail = RESULTS.reduce((a, r) => a + r.failed, 0);
 console.log('\n════════════════════════════════════════');
 console.log(`RESULTADO: ${RESULTS.length} testes | ${totalOk} asserções ok | ${totalFail} falhas`);
+// ============================================================================
 console.log('════════════════════════════════════════');
 
 fs.rmSync(TMP_DB, { recursive: true, force: true });

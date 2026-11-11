@@ -12,6 +12,9 @@
  */
 
 import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { spawn } from 'node:child_process';
 import axios from 'axios';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -480,8 +483,11 @@ async function getInstagramProfile(username) {
       platform: 'instagram',
       username: u.username,
       displayName: u.full_name || u.username,
-      // SEMPRE a versao HD (o `profile_pic_url` e' 150x150 — a foto pixelada).
-      avatar: u.profile_pic_url_hd || u.profile_pic_url || null,
+      // SEMPRE a versao HD. Medido: `profile_pic_url` e' 150x150 (pixelada) e o
+      // `profile_pic_url_hd` do campo antigo nem existe mais. O HD real (1080x1080)
+      // esta em `hd_profile_pic_url_info.url`; ha tambem `hd_profile_pic_versions[]`
+      // (320..1080) — escolhemos o de MAIOR resolucao.
+      avatar: escolherAvatarHd(u),
       bio: u.biography || undefined,
       followers: toNumber(u.edge_followed_by?.count) ?? toNumber(u.follower_count),
       following: toNumber(u.edge_follow?.count) ?? toNumber(u.following_count),
@@ -753,80 +759,69 @@ function formatSocialProfile(profile) {
     linhas.push(`┃ ${rotulo}: ${str}`);
   };
 
-  linhas.push(TOPO(profile.username ? `@${profile.username}` : plt.nome));
-  linhas.push(`┃ 〆 ${plt.emoji} ${boldItalic(plt.nome)}`);
+  // Cabeçalho compacto (uma linha de título).
+  linhas.push(TOPO(`${plt.emoji} ${profile.username ? `@${profile.username}` : plt.nome}`));
+  linhas.push(`┃ 〆 ${boldItalic(plt.nome)}`);
   linhas.push('╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━━━╯');
-  linhas.push('');
-  linhas.push(abrirCategoria('PERFIL', '👤'));
-  add('👤 Usuário', profile.username ? `@${profile.username}` : null);
-  add('📛 Nome', profile.displayName);
-  if (profile.verified) linhas.push('┃ ✓ Verificado: Sim');
-  if (profile.private !== undefined) linhas.push(`┃ 🔒 Conta privada: ${profile.private ? 'Sim' : 'Não'}`);
-  if (profile.business !== undefined) linhas.push(`┃ 🏢 Conta comercial: ${profile.business ? 'Sim' : 'Não'}`);
-  add('📂 Categoria', profile.category);
-  if (profile.bio) {
-    linhas.push('┃ 📝 Bio:');
-    for (const b of String(profile.bio).split(/\n+/).slice(0, 6)) {
-      if (b.trim()) linhas.push(`┃    ${b.trim()}`);
-    }
-  }
-  add('🔗 Link', profile.externalUrl);
-  linhas.push(fecharCategoria());
 
-  // Números (por plataforma).
-  const nums = [];
-  const addNum = (r, v) => { if (v !== undefined && v !== null) nums.push(`┃ ${r}: ${fmt(v)}`); };
-  if (profile.platform === 'tiktok') {
-    addNum('👥 Seguidores', profile.followers);
-    addNum('👤 Seguindo', profile.following);
-    addNum('❤️ Curtidas', profile.likes);
-    addNum('🎬 Vídeos', profile.posts);
-  } else if (profile.platform === 'instagram') {
-    addNum('📸 Publicações', profile.posts);
-    addNum('👥 Seguidores', profile.followers);
-    addNum('👤 Seguindo', profile.following);
-    addNum('🤝 Seguindo de volta?', profile.followedByViewer === undefined ? null : (profile.followedByViewer ? 'Sim' : 'Não'));
-  } else if (profile.platform === 'x') {
-    addNum('👥 Seguidores', profile.followers);
-    addNum('👤 Seguindo', profile.following);
-    addNum('📝 Posts', profile.posts);
-    addNum('❤️ Curtidas', profile.likes);
-  } else if (profile.platform === 'spotify') {
-    addNum('👥 Seguidores', profile.followers);
-    addNum('🎵 Playlists públicas', profile.posts);
-  }
-  if (nums.length) {
-    linhas.push('');
-    linhas.push(abrirCategoria('NÚMEROS', '📊'));
-    linhas.push(...nums);
-    linhas.push(fecharCategoria());
-  }
-
-  // Informações extras (Instagram).
-  const extras = [];
-  const addEx = (r, v) => {
+  // TUDO numa caixa só: identidade + números + extras.
+  const corpo = [];
+  const addC = (r, v) => {
     if (v === undefined || v === null || v === '') return;
     const str = String(v).trim();
-    if (!str || /^(undefined|null|NaN)$/.test(str)) return;
-    extras.push(`┃ ${r}: ${str}`);
+    if (!str || /^(undefined|null|NaN|\[object Object\])$/.test(str) || str.includes('[object')) return;
+    corpo.push(`┃ ${r}: ${str}`);
   };
+  addC('📛 Nome', profile.displayName);
+  if (profile.verified) corpo.push('┃ ☑️ Verificado: Sim');
+  if (profile.private !== undefined) corpo.push(`┃ 🔒 Privada: ${profile.private ? 'Sim' : 'Não'}`);
+  if (profile.business) corpo.push(`┃ 🏢 Comercial: Sim`);
+  addC('📂 Categoria', profile.category);
+  addC('📝 Bio', profile.bio ? profile.bio.replace(/\n+/g, ' · ') : null);
+  addC('🔗 Link', profile.externalUrl);
+
+  // Números (por plataforma), numa linha só quando possível.
+  const nums = [];
+  const addN = (e, v) => { if (v !== undefined && v !== null) nums.push(`${e} ${fmt(v)}`); };
   if (profile.platform === 'instagram') {
-    addEx('🆔 ID', profile.id);
-    addEx('📅 Conta criada em', profile.createdAt);
-    addEx('🏷️ Tipo', profile.accountType);
-    addEx('📞 Contato', profile.publicEmail || profile.publicPhone);
-    addEx('🌎 Endereço', profile.address);
+    addN('📸', profile.posts);
+    addN('👥', profile.followers);
+    addN('👤', profile.following);
+  } else if (profile.platform === 'tiktok') {
+    addN('👥', profile.followers);
+    addN('👤', profile.following);
+    addN('❤️', profile.likes);
+    addN('🎬', profile.posts);
+  } else if (profile.platform === 'x') {
+    addN('👥', profile.followers);
+    addN('👤', profile.following);
+    addN('📝', profile.posts);
+  } else if (profile.platform === 'spotify') {
+    addN('👥', profile.followers);
+    addN('🎵', profile.posts);
+  }
+  if (nums.length) corpo.push(`┃ 📊 ${nums.join('   ')}`);
+
+  // Extras (Instagram), só o que existe.
+  if (profile.platform === 'instagram') {
+    addC('🆔 ID', profile.id);
+    addC('🏷️ Tipo', profile.accountType);
+    addC('📞 Contato', profile.publicEmail || profile.publicPhone);
+    addC('🌎 Endereço', profile.address);
     if (Array.isArray(profile.bioLinks) && profile.bioLinks.length) {
-      profile.bioLinks.slice(0, 5).forEach((l, n) => addEx(`🔗 Link ${n + 1}`, l));
+      profile.bioLinks.slice(0, 3).forEach((l, n) => addC(`🔗 Link ${n + 1}`, l));
     }
   }
-  if (extras.length) {
+  addC('📅 Criada em', profile.createdAt);
+  addC('📍 Local', profile.location);
+  addC('🔗 Site', profile.website);
+
+  if (corpo.length) {
     linhas.push('');
-    linhas.push(abrirCategoria('INFORMAÇÕES', 'ℹ️'));
-    linhas.push(...extras);
+    linhas.push(abrirCategoria('PERFIL', plt.emoji));
+    linhas.push(...corpo);
     linhas.push(fecharCategoria());
   }
-
   linhas.push('');
   linhas.push(FECHO(nomeDoBot()));
   return linhas.join('\n');
@@ -838,6 +833,30 @@ const formatErrorProfile = (reason, pltName, username) => {
 };
 
 /** Baixa foto de perfil com timeout pequeño e teto decompressão;só é chamado após o perfil ok. */
+/**
+ * Escolhe a MELHOR foto de perfil disponivel.
+ *
+ * MEDIDO no `usernameinfo` real:
+ *   - `profile_pic_url`            -> **150x150** (a que eu usava — pixelada);
+ *   - `hd_profile_pic_versions[]`  -> 320..1080 (varias);
+ *   - `hd_profile_pic_url_info`    -> **1080x1080** (a maior).
+ * O `profile_pic_url_hd` do campo antigo nao vem mais.
+ */
+function escolherAvatarHd(u) {
+  const candidatos = [];
+  if (u.hd_profile_pic_url_info?.url) {
+    candidatos.push({ url: u.hd_profile_pic_url_info.url, area: (u.hd_profile_pic_url_info.width || 1080) * (u.hd_profile_pic_url_info.height || 1080) });
+  }
+  for (const v of u.hd_profile_pic_versions || []) {
+    if (v?.url) candidatos.push({ url: v.url, area: (v.width || v.height || 320) * (v.height || v.width || 320) });
+  }
+  if (u.profile_pic_url_hd) candidatos.push({ url: u.profile_pic_url_hd, area: 640 * 640 });
+  if (u.profile_pic_url) candidatos.push({ url: u.profile_pic_url, area: 150 * 150 });
+  if (!candidatos.length) return null;
+  candidatos.sort((a, b) => b.area - a.area);
+  return candidatos[0].url;
+}
+
 /** O CDN entrega 320x320 por padrao; o sufixo `s1080x1080` puxa em alta. */
 function avatarEmAlta(url) {
   if (!url || typeof url !== 'string') return url;
@@ -847,19 +866,61 @@ function avatarEmAlta(url) {
     .replace(/\/s\d+x\d+\//, '/s1080x1080/');
 }
 
+/**
+ * Normaliza a foto com o FFmpeg: recorta em QUADRADO, redimensiona para 1080
+ * e reencoda em JPEG de alta qualidade (`-q:v 2`).
+ *
+ * Por que passar pelo FFmpeg: o CDN as vezes entrega a foto com tamanhos
+ * variados (640, 1080) e o WhatsApp RECOMPRIME a imagem antes de mostrar. Uma
+ * foto ja quadrada, em 1080 e com qualidade alta chega bem melhor no aparelho.
+ * Se o FFmpeg nao estiver disponivel, devolve os bytes ORIGINAIS (nunca falha
+ * por causa disso).
+ */
+function normalizarAvatarComFfmpeg(buf) {
+  return new Promise((resolve) => {
+    const ffmpegBin = process.env.FFMPEG_PATH || 'ffmpeg';
+    const tmpIn = path.join(os.tmpdir(), `igav-in-${process.pid}-${Date.now()}.jpg`);
+    const tmpOut = path.join(os.tmpdir(), `igav-out-${process.pid}-${Date.now()}.jpg`);
+    try { fs.writeFileSync(tmpIn, buf); } catch { return resolve(buf); }
+    const limpar = () => { try { fs.unlinkSync(tmpIn); } catch {} try { fs.unlinkSync(tmpOut); } catch {} };
+    let proc;
+    try {
+      proc = spawn(ffmpegBin, [
+        '-y', '-i', tmpIn,
+        '-vf', "crop='min(iw,ih)':'min(iw,ih)',scale=1080:1080:flags=lanczos",
+        '-q:v', '2', '-frames:v', '1', tmpOut
+      ], { stdio: 'ignore' });
+    } catch { limpar(); return resolve(buf); }
+    const teto = setTimeout(() => { try { proc.kill('SIGKILL'); } catch {} }, 20000);
+    proc.on('error', () => { clearTimeout(teto); limpar(); resolve(buf); });
+    proc.on('close', (code) => {
+      clearTimeout(teto);
+      try {
+        if (code === 0 && fs.existsSync(tmpOut)) {
+          const out = fs.readFileSync(tmpOut);
+          if (out.length > 1000) { limpar(); return resolve(out); }
+        }
+      } catch {}
+      limpar();
+      resolve(buf);
+    });
+  });
+}
+
 async function downloadAvatar(url) {
   if (!url || typeof url !== 'string' || !/^https:\/\//.test(url)) return null;
   url = avatarEmAlta(url);
   try {
     const res = await axios.get(url, {
-      timeout: 8000,
+      timeout: 15000,
       responseType: 'arraybuffer',
-      maxContentLength: 8 * 1024 * 1024,
+      maxContentLength: 16 * 1024 * 1024,
       headers: { 'User-Agent': UA_DESKTOP }
     });
     const buf = Buffer.from(res.data);
-    if (!buf.length || buf.length > 8 * 1024 * 1024) return null;
-    return buf;
+    if (!buf.length || buf.length > 16 * 1024 * 1024) return null;
+    // Passa pelo FFmpeg (quadrado 1080, qualidade alta); sem FFmpeg, devolve cru.
+    return await normalizarAvatarComFfmpeg(buf);
   } catch (e) {
     return null;
   }

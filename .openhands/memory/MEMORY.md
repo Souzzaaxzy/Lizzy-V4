@@ -229,6 +229,13 @@ logs diários (`YYYY-MM-DD.md`).
   Instagram com a conta e passar pela verificação, depois renovar o cookie.
   `ehChallengeRequired` detecta em qualquer resposta; o `getInstagramProfile`
   devolve `IG_CONTA_DESAFIADA`.
+- **📸 A FOTO HD**: o `usernameinfo` traz `hd_profile_pic_url_info.url`
+  (**1080x1080**) e `hd_profile_pic_versions[]` (320..1080). O `profile_pic_url`
+  é **150x150** (a pixelada) e o `profile_pic_url_hd` antigo **nem vem mais**.
+  `escolherAvatarHd()` pega o de maior área; `normalizarAvatarComFfmpeg` recorta
+  em quadrado 1080 (`-q:v 2`) — sem FFmpeg devolve os bytes crus.
+  ⚠️ No filtro do ffmpeg, use `crop='min(iw,ih)':'min(iw,ih)'` (com aspas
+  SIMPLES): o `\,` escapado vira `,` no JS e o filtro quebra (`close code 8`).
 - **🍪 O COOKIE JAR COMPLETO**: o navegador manda `csrftoken`, `datr`, `ig_did`,
   `mid`, `ds_user_id`, `sessionid`, `rur` — o bot mandava **só o sessionid** e o
   IG recusava (`200`+`fail`). `cookieHeader()` monta o jar inteiro do Netscape
