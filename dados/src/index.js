@@ -48,6 +48,8 @@ import { coletarDadosDoGrupo } from './utils/contextoConversa.js';
 import { ehPedidoDeAudio, temaDoAudio, falaDoAudio, gerarNotaDeVoz, erroDaVoz, limparFala, sortearModoDeResposta, FALA_MAX_CARACTERES } from './utils/vozDaConversa.js';
 import { lerIdentidade } from './utils/identidadeLizzy.js';
 import { resolverPaisAdotivos } from './utils/contextoConversa.js';
+// Cookies do Instagram (o arquivo que libera o perfil, inclusive privado).
+import { lerSessionId, salvarSessionId, limparCookies, mascarar as mascararIg } from './utils/instagramCookies.js';
 // As chaves do Groq (ate' 10) e o failover automatico.
 import { lerChaves, mascarar, slotDoComando, atualizarEnv, nomeDaVar, MAX_SLOTS,
          estadoDasChaves, resetarEsgotadas, situacaoDasChaves } from './utils/groqKeys.js';
@@ -26862,6 +26864,73 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
         } catch (e) {
           console.error(e);
           reply("🐝 Ops! Ocorreu um erro inesperado!");
+        }
+        break;
+      // ═══════════════════════════════════════════════════════════════
+      // 🍪 !keyig — cookie/sessão do Instagram (só o dono)
+      // ═══════════════════════════════════════════════════════════════
+      // O Instagram passou a exigir login para consultar perfil (o endpoint
+      // anônimo morreu). O `sessionid` de uma conta libera o CABEÇALHO de
+      // qualquer perfil — inclusive PRIVADO (foto, nome, seguidores, seguindo).
+      // Igual ao YouTube: também dá para só jogar o arquivo em
+      // `data/instagram/cookies.txt` (formato Netscape).
+      case 'keyig':
+      case 'keyinstagram':
+      case 'igkey':
+        try {
+          if (!podeDonoTotal()) return reply("Este comando é exclusivo para o dono do bot!");
+
+          // `!keyig limpar` / `off` / `reset` -> apaga os arquivos.
+          const arg = (q || '').trim();
+          if (/^(limpar|off|reset|remover|apagar)$/i.test(arg)) {
+            const removidos = limparCookies();
+            return reply(removidos.length
+              ? `🗑️ *Cookies do Instagram removidos.*\nArquivo(s): ${removidos.length}\n\nO \`!pinsta\` volta a depender do caminho anônimo (que o Instagram desligou).`
+              : 'ℹ️ Não havia cookie do Instagram configurado.');
+          }
+
+          // Sem argumento -> painel com o estado.
+          if (!arg) {
+            const sid = lerSessionId();
+            const configurado = Boolean(sid);
+            return reply(`🍪 *Cookie do Instagram*
+Status: ${configurado ? '✅ configurado' : '❌ não configurado'}
+${configurado ? `Sessão: \`${mascararIg(sid)}\`` : ''}
+
+📝 *Como obter o sessionid:*
+1. Abra o Instagram logado no *navegador* (Chrome/Firefox)
+2. F12 → Application → Cookies → \`instagram.com\`
+3. Copie o valor do cookie *sessionid*
+4. Mande aqui: ${groupPrefix}keyig <sessionid>
+
+💡 *Alternativa (igual ao YouTube):* exporte os cookies do navegador no formato
+Netscape e salve em \`data/instagram/cookies.txt\`.
+
+⚠️ O cookie dá acesso à conta — quem tem ele *tem a conta*. Não compartilhe.
+Ele expira com o tempo; quando o \`!pinsta\` disser "sessão recusada", renove.`);
+          }
+
+          // Salvar o sessionid.
+          const r = salvarSessionId(arg);
+          if (!r.ok) {
+            const motivos = {
+              vazio: 'valor vazio',
+              espaco: 'o sessionid não pode conter espaços',
+              curto: 'o sessionid parece curto demais para ser válido'
+            };
+            return reply(`❌ Não consegui salvar: ${motivos[r.motivo] || r.motivo}.`);
+          }
+          return reply(`✅ *Sessão do Instagram configurada!*
+🍪 Sessão: \`${mascararIg(arg)}\`
+📁 Arquivo: \`data/instagram/sessionid.txt\`
+
+O \`!pinsta\` agora consulta perfis autenticado — inclusive o cabeçalho de
+perfis *privados* (foto, nome, seguidores e seguindo).
+
+⚠️ Se o cookie expirar, o comando avisa — renove com \`${groupPrefix}keyig\`.`);
+        } catch (e) {
+          console.error('Erro no comando keyig:', e);
+          await reply('❌ Ocorreu um erro ao configurar o cookie do Instagram.');
         }
         break;
       case 'key':

@@ -60,3 +60,8 @@ dados/database/tmp/
 
 # Artefatos do yarn (install-state): nao versionar
 .yarn/
+
+# Cookies do Instagram (sessão — NUNCA commitar)
+data/instagram/
+instagram-cookies.txt
+*.instagram-cookies.txt

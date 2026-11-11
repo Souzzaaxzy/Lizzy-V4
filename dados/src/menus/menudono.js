@@ -25,6 +25,13 @@ export default async function menuDono(prefix, botName = "MeuBot", userName = "U
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
 
 
+╭━━━꧁༺ ㅤ🍪 ${boldItalic('COOKIES / REDES SOCIAIS')} 🍪ㅤ ༻꧂━━━╮
+│ 🍪 ${prefix}keyig
+│    > Sessão do Instagram (sessionid) — libera perfil, inclusive privado.
+│ 🗑️ ${prefix}keyig limpar
+╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯
+
+
 ╭━━━꧁༺ ㅤ🔑 ${boldItalic('PAREAR O MOTOR DE MÍDIA')} 🔑ㅤ ༻꧂━━━╯
 │ 🔑 ${prefix}callp parear <numero>
 ╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━╯

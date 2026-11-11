@@ -299,7 +299,8 @@ const COMANDOS_POR_MENU = {
   //   menudono 185 -> 175 (so' ficou `callp parear`);
   //   menumemb 62 (inalterado: ja' listava a musica na call).
   // menuadm: 181 -> 182 (o !modotake entrou em MODOS & ATIVACOES).
-  menuadm: 182, menudono: 175,
+  // menudono: 175 -> 177 (o !keyig entrou em COOKIES / REDES SOCIAIS, com a linha de limpar).
+  menuadm: 182, menudono: 177,
 
   // menubn: 349 -> 350 (`!ppp` entrou na 1a categoria)
   // -> 358 (`!hetero`, `!hetera`, `!aura`, `!sigma`, `!ceu`, `!inferno`,

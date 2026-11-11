@@ -16,6 +16,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 const execFileP = promisify(execFile);
 import dotenv from 'dotenv';
+import { lerSessionId } from '../../utils/instagramCookies.js';
 
 dotenv.config();
 
@@ -166,17 +167,59 @@ async function getTikTokProfile(username) {
   }
 }
 
-// ── Instagram (API anônima pública) ────────────────────────────────
+// ── Instagram ──────────────────────────────────────────────────────
+// O caminho ANÔNIMO morreu: o Instagram desligou o `web_profile_info` (404) e
+// passou a exigir login. Medido: `web_profile_info` -> 404 (HTML de erro),
+// `users/<u>/info/` -> 400 sem sessão.
+//
+// Com o `sessionid` de uma conta (o mesmo esquema de arquivo do YouTube), o bot
+// usa a API privada autenticada — que entrega o CABEÇALHO de qualquer perfil,
+// INCLUSIVE PRIVADO: foto, nome, nº de seguidores e quantos segue. Sem sessão,
+// tenta o anônimo (pode funcionar em alguns IPs) e, falhando, explica o cookie.
 const IG_APP_UA = 'Instagram 275.0.0.26.109 Android (30/11; 420dpi; 1080x2340; samsung; SM-G991B; exynos2100; en_US; 441578297)';
 const IG_ENDPOINTS = [
   'https://www.instagram.com/api/v1/users/web_profile_info/?username=',
   'https://i.instagram.com/api/v1/users/web_profile_info/?username='
 ];
 
-/** Busca via curl do sistema (evita bloqueio de TLS fingerprint do axios/undici contra o IG). */
+/** Busca AUTENTICADA (com o sessionid) — é o que vê o cabeçalho de perfil privado. */
+async function fetchInstagramAutenticado(username, sid) {
+  // `IG_API_BASE` permite apontar para um servidor de teste (nunca em producao).
+  const base = process.env.IG_API_BASE || IG_ENDPOINTS[1];
+  const res = await axios.get(base + encodeURIComponent(username), {
+    timeout: HTTP_TIMEOUT,
+    headers: {
+      'User-Agent': IG_APP_UA,
+      'X-IG-App-ID': '936619743392459',
+      'Accept': 'application/json',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Cookie': `sessionid=${sid}`
+    },
+    validateStatus: () => true
+  });
+  if (res.status === 404) {
+    const err = new Error('instagram: not found');
+    err.response = { status: 404 };
+    throw err;
+  }
+  if (res.status === 401 || res.status === 403 || res.status === 429) {
+    const err = new Error(`instagram: sessão recusada (${res.status})`);
+    err.response = { status: res.status };
+    throw err;
+  }
+  const u = res.data?.data?.user;
+  if (!u || !u.username) {
+    const err = new Error(`instagram: resposta sem user (status ${res.status})`);
+    err.response = { status: res.status };
+    throw err;
+  }
+  return u;
+}
+
+/** Busca anônima via curl (o fingerprint do curl às vezes passa onde o axios não passa). */
 async function fetchInstagramViaCurl(username) {
   const args = [
-    '-sS', '-m', String(HTTP_TIMEOUT),
+    '-sS', '-m', String(Math.floor(HTTP_TIMEOUT / 1000)),
     '-A', IG_APP_UA,
     '-H', 'X-IG-App-ID: 936619743392459',
     '-H', 'Accept: application/json',
@@ -188,19 +231,16 @@ async function fetchInstagramViaCurl(username) {
   const { stdout } = await execFileP('curl', args, { timeout: HTTP_TIMEOUT + 5000, maxBuffer: 20 * 1024 * 1024 });
   const statusMatch = /__HTTP_(\d{3})__\s*$/.exec(stdout);
   const status = statusMatch ? Number(statusMatch[1]) : 0;
-  // 404 -> perfil não existe (o IG devolve uma página HTML, não JSON).
   if (status === 404) {
     const err = new Error('instagram: not found');
     err.response = { status: 404 };
     throw err;
   }
-  // 401/403/429 -> rate limit / bloqueio (não é "não encontrado").
   if (status === 401 || status === 403 || status === 429) {
     const err = new Error(`instagram: rate limited via curl (${status})`);
     err.response = { status };
     throw err;
   }
-  // Sem status claro e sem JSON -> trata como erro de API.
   const jsonStart = stdout.indexOf('{');
   if (jsonStart === -1) {
     const err = new Error(`instagram: resposta inesperada (status ${status})`);
@@ -211,12 +251,10 @@ async function fetchInstagramViaCurl(username) {
   return data?.data?.user || null;
 }
 
-async function fetchInstagramUser(username) {
-  // curl passa no fingerprint do IG; axios é o fallback para ambientes sem curl.
+async function fetchInstagramAnonimo(username) {
   try {
     return await fetchInstagramViaCurl(username);
   } catch (curlErr) {
-    // 404 do curl = perfil não existe: não adianta tentar o axios.
     if (curlErr?.response?.status === 404) {
       const err = new Error('instagram: not found');
       err.response = { status: 404 };
@@ -252,8 +290,23 @@ async function fetchInstagramUser(username) {
 }
 
 async function getInstagramProfile(username) {
+  const sid = lerSessionId();
+  const autenticado = Boolean(sid);
   try {
-    const u = await fetchInstagramUser(username);
+    let u;
+    if (autenticado) {
+      try {
+        u = await fetchInstagramAutenticado(username, sid);
+      } catch (e) {
+        // 404 é definitivo (não existe) — não tenta o anônimo.
+        if (e?.response?.status === 404) throw e;
+        console.error('socialProfile/instagram (autenticado falhou, tentando anônimo):', e.message || e);
+        u = await fetchInstagramAnonimo(username);
+      }
+    } else {
+      u = await fetchInstagramAnonimo(username);
+    }
+
     if (!u || !u.username) return { ok: false, msg: '❌ Perfil não encontrado.' };
 
     const profile = {
@@ -267,13 +320,30 @@ async function getInstagramProfile(username) {
       posts: toNumber(u.edge_owner_to_timeline_media?.count) ?? toNumber(u.media_count),
       private: !!u.is_private,
       verified: !!u.is_verified,
-      profileUrl: `https://www.instagram.com/${u.username}`
+      profileUrl: `https://www.instagram.com/${u.username}`,
+      autenticado
     };
     return { ok: true, profile };
   } catch (e) {
+    // SEM sessão, o caminho anônimo está morto: não dá para distinguir "não
+    // existe" de "bloqueado" — então orienta em vez de mentir "não encontrado".
+    if (!autenticado) {
+      if (!(e?.response?.status === 404)) {
+        console.error('socialProfile/instagram (anônimo):', e.message || e);
+      }
+      return {
+        ok: false,
+        msg: '❌ O Instagram passou a exigir login para consultar perfis.\nConfigure uma conta com `!keyig <sessionid>` ou coloque o arquivo em `data/instagram/cookies.txt`.',
+        code: 'IG_PRECISA_LOGIN'
+      };
+    }
     if (e?.response?.status === 404) return { ok: false, msg: '❌ Perfil não encontrado.' };
     if (e?.response?.status === 401 || e?.response?.status === 403 || e?.response?.status === 429) {
-      return { ok: false, msg: '❌ Não foi possível consultar este perfil agora.', code: 'RATE_LIMITED' };
+      return {
+        ok: false,
+        msg: '❌ A sessão do Instagram foi recusada (o cookie pode ter expirado).\nConfigure de novo com `!keyig` ou troque o `data/instagram/cookies.txt`.',
+        code: 'IG_SESSAO_RECUSADA'
+      };
     }
     console.error('socialProfile/instagram:', e.message || e);
     return { ok: false, msg: '❌ Não foi possível consultar este perfil agora.', code: 'API_ERROR' };

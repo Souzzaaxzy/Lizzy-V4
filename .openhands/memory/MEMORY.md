@@ -187,6 +187,27 @@ logs diários (`YYYY-MM-DD.md`).
 - Menu: `menuadm` MODOS & ATIVAÇÕES (baseline 181→182) + `blockPv`.
   `tests/modotake.test.js` 10/23; mutando o guard, 8 asserções falham.
 
+## `!pinsta` / `!keyig` — cookie do Instagram (out/2026)
+
+- **O caminho ANÔNIMO do Instagram MORREU** (não é bug do bot): medido —
+  `web_profile_info` → **404**, `users/<u>/info/` → **400**, `?__a=1` → 201 vazio,
+  e o reel anônimo → "Postagem não encontrada". O Instagram passou a exigir login.
+- **`dados/src/utils/instagramCookies.js`** (puro): lê o `sessionid` de
+  `data/instagram/cookies.txt` (**Netscape**, igual ao YouTube) ou de
+  `sessionid.txt` (gravado pelo `!keyig`); env `IG_COOKIES_FILE`/`IG_COOKIES_DIR`.
+- **`!keyig`** (`keyinstagram`/`igkey`, só dono): painel+tutorial / grava /
+  `limpar`. Nunca mostra o valor inteiro (mascarado).
+- Com sessão, o `socialProfile` usa a API privada e devolve o **CABEÇALHO** de
+  qualquer perfil, **inclusive PRIVADO** (foto, nome, seguidores, seguindo).
+  Sem sessão, orienta o `!keyig`. Seam de teste: `IG_API_BASE`.
+- **LIMITE honesto**: a conta **não** desbloqueia o CONTEÚDO de privado
+  (posts/stories) — só "seguir e ser aceito". O cookie expira e a conta pode ser
+  bloqueada por automação.
+- `.gitignore`: `data/instagram/` + `*.instagram-cookies.txt` (o cookie = a conta).
+- `tests/keyig-instagram.test.js` **42/0** (módulo puro + servidor HTTP local para
+  o caminho autenticado + handler real). Mutation: sem sessão → 8 falhas; sem a
+  guarda de dono → 1. Baseline `menudono` 175 → **177**.
+
 ## Canais de IA (estado atual)
 
 | canal | ouvir | pensar | falar |
