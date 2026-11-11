@@ -226,6 +226,25 @@ ok(diagBad.linhas.some((l) => /recusada/.test(l)), `diag mostra sessao recusada 
 srvCuBad.close();
 delete process.env.IG_API_BASE;
 
+// ── 2g) challenge_required (conta DESAFIADA) tem mensagem propria ────────────
+const { ehChallengeRequired } = sp;
+ok(ehChallengeRequired({ message: 'challenge_required' }) === true, 'reconhece challenge_required');
+ok(ehChallengeRequired({ error_type: 'checkpoint_required' }) === true, 'reconhece checkpoint_required');
+ok(ehChallengeRequired({ user: { pk: '1' } }) === false, 'nao confunde com sucesso');
+
+const srvCh = http.createServer((req, res) => {
+  res.writeHead(400, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ message: 'challenge_required', error_type: 'challenge_required' }));
+});
+await new Promise((r) => srvCh.listen(0, '127.0.0.1', r));
+process.env.IG_API_BASE = `http://127.0.0.1:${srvCh.address().port}`;
+const rCh = await sp.getInstagramProfile('l.szzy');
+ok(rCh.ok === false, 'challenge -> falha');
+ok(rCh.code === 'IG_CONTA_DESAFIADA', `challenge -> IG_CONTA_DESAFIADA (veio ${rCh.code})`);
+ok(/challenge_required|VERIFICA/i.test(rCh.msg), 'a mensagem fala do challenge');
+srvCh.close();
+delete process.env.IG_API_BASE;
+
 // ── 3) O comando !keyig (handler real) ───────────────────────────────────────
 const mod = await import(new URL('../dados/src/index.js', import.meta.url).href);
 const handle = mod.default ?? mod;

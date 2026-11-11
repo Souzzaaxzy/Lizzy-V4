@@ -196,6 +196,19 @@ const IG_ROTAS = [
   { nome: 'info', host: 'app', path: (u) => `/api/v1/users/${u}/info/` },
 ];
 
+/**
+ * Reconhece o `challenge_required` — o Instagram pediu VERIFICAÇÃO da conta.
+ * Medido no diagnóstico do dono: `current_user (web): 400 challenge_required`.
+ * É a resposta DEFINITIVA: a conta está travada atrás de um desafio (confirmar
+ * identidade / CAPTCHA / verificar e-mail). Nenhum ajuste de código resolve —
+ * quem resolve é abrir o Instagram com a conta e passar pela verificação.
+ */
+export function ehChallengeRequired(data) {
+  if (!data) return false;
+  const txt = typeof data === 'string' ? data : JSON.stringify(data);
+  return /challenge_required|checkpoint_required|challenge/i.test(txt);
+}
+
 /** Extrai o USER ID de dentro do sessionid (o formato e' `<userid>%3A...`). */
 export function userIdDoSessionId(sid) {
   if (!sid) return null;
@@ -318,6 +331,8 @@ export async function diagnosticarInstagram(username = 'instagram') {
       if (okUser) {
         const u = d.user || d.logged_in_user;
         linhas.push(`current_user (${rotulo}): HTTP ${r.status} ✅ SESSÃO VÁLIDA (@${u.username || u.pk})`);
+      } else if (ehChallengeRequired(d)) {
+        linhas.push(`current_user (${rotulo}): HTTP ${r.status} 🚫 CONTA DESAFIADA (challenge_required) — abra o Instagram com essa conta e passe pela verificação`);
       } else if (fail) {
         linhas.push(`current_user (${rotulo}): HTTP ${r.status} ❌ recusada (${(d.message || '').slice(0, 60)})`);
       } else {
@@ -372,7 +387,7 @@ async function fetchInstagramAutenticado(username, sid) {
     vistos.push(`${rota.nome}:${res.status}${corpoFail ? '(fail)' : ''}`);
     if (corpoFail) {
       const err = new Error('instagram: requisição recusada (200 com status fail)');
-      err.response = { status: res.status };
+      err.response = { status: res.status, data: corpo };
       err._corpoFail = true;
       ultimoErro = err; continue;
     }
@@ -386,14 +401,14 @@ async function fetchInstagramAutenticado(username, sid) {
     }
     if (res.status === 401 || res.status === 403 || res.status === 429) {
       const err = new Error(`instagram: sessão recusada (${res.status})`);
-      err.response = { status: res.status };
+      err.response = { status: res.status, data: res.data };
       // NÃO para na hora: outra rota pode aceitar a mesma sessão (medido que o
       // comportamento varia por rota). Guarda o erro e segue tentando.
       ultimoErro = err; continue;
     }
     if (res.status >= 400) {
       const err = new Error(`instagram: rota ${rota.nome} respondeu ${res.status}`);
-      err.response = { status: res.status };
+      err.response = { status: res.status, data: res.data };
       ultimoErro = err; continue;
     }
     const u = igUserParaPerfil(res.data);
@@ -446,6 +461,13 @@ async function getInstagramProfile(username) {
     const todos404 = vistos.length > 0 && vistos.every((v) => v.endsWith(':404'));
     const temSessaoRecusada = vistos.some((v) => /:(401|403|429)$/.test(v));
     const temCorpoFail = vistos.some((v) => v.includes('(fail)'));
+    if (ehChallengeRequired(e?.response?.data) || /challenge/i.test(e?.message || '')) {
+      return {
+        ok: false,
+        code: 'IG_CONTA_DESAFIADA',
+        msg: '🚫 O Instagram pediu VERIFICAÇÃO desta conta (challenge_required).\nAbra o Instagram no celular/navegador com essa conta e conclua a verificação — depois renove o cookie com `!keyig`.'
+      };
+    }
     if (temCorpoFail) {
       return {
         ok: false,

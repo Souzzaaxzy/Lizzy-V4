@@ -221,8 +221,18 @@ logs diários (`YYYY-MM-DD.md`).
   `X-MID`, `IG-INTENDED-USER-ID`, `X-IG-Nav-Chain`, ...). Mandar só 6 faz o IG
   responder 200+fail. O **user id sai do PRÓPRIO sessionid**
   (`<userid>%3A...` → `IG-INTENDED-USER-ID`) — `userIdDoSessionId`.
-- **`!keyig testar [usuario]`** roda o diagnóstico (status + trecho do corpo por
-  rota) e marca `status:fail`. É o instrumento para não adivinhar.
+- **`!keyig testar [usuario]`** roda o diagnóstico (IP do servidor + sessão nas
+  DUAS casas + status/trecho do corpo por rota) e marca `status:fail`.
+- **🚫 `challenge_required` = a CAUSA FINAL medida no servidor do dono**: o
+  `current_user (web): HTTP 400 challenge_required`. O Instagram **desafiou a
+  conta** (pede verificação). Nenhum código resolve — é preciso abrir o
+  Instagram com a conta e passar pela verificação, depois renovar o cookie.
+  `ehChallengeRequired` detecta em qualquer resposta; o `getInstagramProfile`
+  devolve `IG_CONTA_DESAFIADA`.
+- **Não vale "engenharia reversa"**: o protocolo privado já está documentado
+  (instagrapi/aichemy) e **eu já apliquei** os headers dele — mesmo assim o
+  servidor recusa. O que resta NÃO é protocolo: é a decisão do servidor
+  (challenge/IP). RE não muda isso.
 - `tests/keyig-instagram.test.js` **47/0** e `tests/instagram-stories.test.js`
   **22/0**. Mutation: sem sessão no perfil → 8 falhas; no stories → 1; sem a
   guarda de dono → 1. Baseline `menudono` 175 → **177**.
