@@ -1,4 +1,5 @@
 import { lerSessionId, cookieHeader } from '../../utils/instagramCookies.js';
+import { igHeaders } from '../utils/socialProfile.js';
 
 /**
  * Instagram - Implementação própria (sem VexAPI)
@@ -260,20 +261,13 @@ async function dl(url) {
 //
 // Aceita `/stories/<user>/<id>` (filtra o item) e `/stories/<user>` (todos).
 const IG_APP_ID = '567067343352427';
-const IG_APP_UA = 'Instagram 275.0.0.26.109 Android (30/11; 420dpi; 1080x2340; samsung; SM-G991B; exynos2100; en_US; 441578297)';
+// Versao >= 350: medido que 269/275 dao HTTP 467 "Unsupported".
+const IG_APP_UA = 'Instagram 449.0.0.52.84 Android (34/14; 480dpi; 1344x2992; Google/google; Pixel 8 Pro; husky; husky; en_US; 1079242191)';
 
 function igHeadersComSessao(sid) {
-  return {
-    'User-Agent': IG_APP_UA,
-    'X-IG-App-ID': IG_APP_ID,
-    Accept: '*/*',
-    'Accept-Language': 'en-US,en;q=0.9',
-    'X-IG-Capabilities': '3brTvw==',
-    'X-IG-Connection-Type': 'WIFI',
-    'X-FB-HTTP-Engine': 'Liger',
-    // Cookie jar COMPLETO (o que o navegador manda) — só o sessionid e' recusado.
-    Cookie: cookieHeader() || `sessionid=${sid}`
-  };
+  // FONTE UNICA: o MESMO conjunto que o `socialProfile` usa (capturado de um
+  // cliente real). Duplicar aqui faria os dois divergirem na proxima correcao.
+  return igHeaders(sid);
 }
 
 // Extrai o username e (opcional) o id do story de uma URL /stories/.

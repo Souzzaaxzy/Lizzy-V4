@@ -233,10 +233,19 @@ logs diários (`YYYY-MM-DD.md`).
   `mid`, `ds_user_id`, `sessionid`, `rur` — o bot mandava **só o sessionid** e o
   IG recusava (`200`+`fail`). `cookieHeader()` monta o jar inteiro do Netscape
   (só domínio `instagram.com`). O `!keyig` agora aceita o **arquivo colado**.
-- **Não vale "engenharia reversa"**: o protocolo privado já está documentado
-  (instagrapi/aichemy) e **eu já apliquei** os headers dele — mesmo assim o
-  servidor recusa. O que resta NÃO é protocolo: é a decisão do servidor
-  (challenge/IP). RE não muda isso.
+- **✅ RESOLVIDO — a receita CERTA foi CAPTURADA de um cliente real (instagrapi)**,
+  rodando a sessão do dono: `login_by_sessionid` funcionou e o `user_info` do
+  `l.szzy` (PRIVADO) veio completo. As duas peças que faltavam:
+  1. **A VERSÃO do app importa**: UA `269/275` → **HTTP 467 "Unsupported"**;
+     `350+` → **200**. Agora usamos `449.0.0.52.84 ... Pixel 8 Pro`.
+  2. **O header `Authorization: Bearer IGT:2:<base64>`** com
+     `{ds_user_id, sessionid, should_use_header_over_cookies:true}` — sem ele,
+     **403**. Novo `igAuthorization(sid)`.
+  Também os `IG-U-DS-USER-ID`/`IG-U-*` (region hints) do cliente real.
+  Medido: `usernameinfo l.szzy` → **HTTP 200** com seguidores/seguindo.
+- **Método que fechou o caso**: instalar o cliente real (`pip install instagrapi`)
+  e **espionar a requisição** (`requests.Session.send`) para capturar headers/UA
+  exatos. Isso é a "engenharia reversa" que funciona — não inventar, **capturar**.
 - `tests/keyig-instagram.test.js` **47/0** e `tests/instagram-stories.test.js`
   **22/0**. Mutation: sem sessão no perfil → 8 falhas; no stories → 1; sem a
   guarda de dono → 1. Baseline `menudono` 175 → **177**.

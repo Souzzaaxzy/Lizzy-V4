@@ -256,6 +256,27 @@ ok(/challenge_required|VERIFICA/i.test(rCh.msg), 'a mensagem fala do challenge')
 srvCh.close();
 delete process.env.IG_API_BASE;
 
+// ── 2h) A RECEITA CAPTURADA do cliente real (instagrapi) ─────────────────────
+// Medido com a sessao REAL: a versao do app importa (269/275 -> HTTP 467
+// "Unsupported"; 350+ -> 200) e o header Authorization Bearer IGT:2 e' exigido.
+const { igAuthorization, userIdDoSessionId: uidFn, igHeaders } = sp;
+const SID_REAL = '66619508210%3ABwftjRJU8KV2gV%3A22%3AAYkqsMpCBvzzcvBFlKxMWRjv40VD8Pgxvi5u3azJOg';
+const auth = igAuthorization(SID_REAL);
+ok(typeof auth === 'string' && auth.startsWith('Bearer IGT:2:'), 'monta o Authorization Bearer IGT:2');
+const decoded = JSON.parse(Buffer.from(auth.split('IGT:2:')[1], 'base64').toString('utf-8'));
+ok(decoded.ds_user_id === '66619508210', 'o Authorization carrega o ds_user_id');
+ok(decoded.sessionid === SID_REAL, 'o Authorization carrega o sessionid');
+ok(decoded.should_use_header_over_cookies === true, 'o Authorization carrega should_use_header_over_cookies');
+ok(igAuthorization(null) === null, 'sem sessao -> sem Authorization');
+
+const h = igHeaders(SID_REAL);
+ok(h.Authorization && h.Authorization.startsWith('Bearer IGT:2:'), 'igHeaders inclui o Authorization');
+ok(/Instagram 4\d\d\./.test(h['User-Agent']), `a versao do app e' >= 400 (veio "${h['User-Agent'].slice(0,30)}")`);
+ok(h['IG-U-DS-USER-ID'] === '66619508210', 'manda IG-U-DS-USER-ID');
+ok(h['IG-INTENDED-USER-ID'] === '66619508210', 'manda IG-INTENDED-USER-ID');
+
+console.log('═══');
+
 // ── 3) O comando !keyig (handler real) ───────────────────────────────────────
 const mod = await import(new URL('../dados/src/index.js', import.meta.url).href);
 const handle = mod.default ?? mod;

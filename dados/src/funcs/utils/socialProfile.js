@@ -182,8 +182,29 @@ async function getTikTokProfile(username) {
 // ⚠️ Sem sessão NÃO dá para medir de verdade — o Instagram responde 400/403/404
 // para qualquer usuário. Por isso, sem cookie, o bot orienta em vez de mentir
 // "não encontrado" (era o defeito: o 404 era tratado como "perfil inexistente").
-const IG_APP_UA = 'Instagram 275.0.0.26.109 Android (30/11; 420dpi; 1080x2340; samsung; SM-G991B; exynos2100; en_US; 441578297)';
+// ⚠️ A VERSÃO do app importa: medido com a sessão real, o IG responde
+// `HTTP 467 "Unsupported"` para versões antigas (269/275) e **200** para 350+.
+// A receita (headers + Authorization) foi CAPTURADA de um cliente real
+// (instagrapi) fazendo a MESMA chamada — não foi inferida.
+const IG_APP_UA = 'Instagram 449.0.0.52.84 Android (34/14; 480dpi; 1344x2992; Google/google; Pixel 8 Pro; husky; husky; en_US; 1079242191)';
 const IG_APP_ID = '567067343352427';
+
+/**
+ * O header `Authorization: Bearer IGT:2:<base64>` — é o que o cliente real
+ * manda, e sem ele o IG responde 403. O base64 carrega o `ds_user_id` + o
+ * `sessionid` + `should_use_header_over_cookies: true`.
+ */
+export function igAuthorization(sid) {
+  if (!sid) return null;
+  const uid = userIdDoSessionId(sid);
+  if (!uid) return null;
+  const payload = JSON.stringify({
+    ds_user_id: uid,
+    sessionid: sid,
+    should_use_header_over_cookies: true,
+  });
+  return 'Bearer IGT:2:' + Buffer.from(payload, 'utf-8').toString('base64');
+}
 
 // Ordem das tentativas. Cada rota é só o PATH: o host sai de `IG_API_BASE`
 // (teste) ou do padrão. Medido: o `web_profile_info` (www) devolve 404 para
@@ -238,7 +259,7 @@ function uuidV4() {
  * O `user id` sai do PRÓPRIO sessionid (`<userid>%3A...`) — é o que preenche o
  * `IG-INTENDED-USER-ID`/`IG-U-*`, que é o que mais pesa.
  */
-function igHeaders(sid) {
+export function igHeaders(sid) {
   const locale = 'en_US';
   const uid = userIdDoSessionId(sid);
   const dev = uuidV4();
@@ -274,7 +295,18 @@ function igHeaders(sid) {
     'IG-INTENDED-USER-ID': uid || '0',
     'X-IG-Nav-Chain': '9MV:self_profile:2,ProfileMediaTabFragment:self_profile:3,9Xf:self_following:4',
   };
-  if (uid) h['IG-U-DS-USER-ID'] = uid;
+  if (uid) {
+    h['IG-U-DS-USER-ID'] = uid;
+    // Os `IG-U-*` (region hints) vêm do cliente real; o IG aceita sem eles, mas
+    // mandar ajuda a requisição a "parecer" o app.
+    const um = Math.floor(Date.now() / 1000) + 31536000;
+    h['IG-U-IG-DIRECT-REGION-HINT'] = `LLA,${uid},${um}:01f7bae7d8b131877d8e0ae1493252280d72f6d0d554447cb1dc9049b6b2c507c08605b7`;
+    h['IG-U-SHBID'] = `12695,${uid},${um}:01f778d9c9f7546cf3722578fbf9b85143cd6e5132723e5c93f40f55ca0459c8ef8a0d9f`;
+    h['IG-U-SHBTS'] = `${Math.floor(Date.now() / 1000)},${uid},${um}:01f7ace11925d0388080078d0282b75b8059844855da27e23c90a362270fddfb3fae7e28`;
+    h['IG-U-RUR'] = `RVA,${uid},${um}:01f7f627f9ae4ce2874b2e04463efdb184340968b1b006fa88cb4cc69a942a04201e544c`;
+    const auth = igAuthorization(sid);
+    if (auth) h.Authorization = auth;
+  }
   // Cookie jar COMPLETO (csrftoken/datr/ig_did/mid/ds_user_id/sessionid/rur) —
   // é o que o navegador manda. Só o sessionid faz o IG recusar (200+fail).
   const jar = cookieHeader();
