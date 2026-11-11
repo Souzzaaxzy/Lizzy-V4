@@ -6983,6 +6983,58 @@ Código: *${roleCode}*`,
         console.error("Erro ao converter mídia em figurinha automática:", e);
       }
     }
+
+    /*
+     MODO TAKE — assinatura automática nas figurinhas.
+
+     Ativado no grupo, toda FIGURINHA enviada é reenviada com a assinatura do
+     `!take` de quem mandou. Mesmo sistema do `!take` e do `!s`: author/pack do
+     `take.json`, e quando a pessoa não configurou nada cai no nick do contato
+     (`resolverNomesFigurinha`, a fonte única). A automação vale para TODOS os
+     membros; quem liga/desliga é só adm (o toggle é o `!modotake`).
+
+     O envio é uma figurinha NOVA (com os metadados), não uma edição da
+     original — é o mesmo caminho do `!take`, via `sendSticker`.
+     */
+    if (isGroup && !info.key.fromMe && groupData.modotake && type === 'stickerMessage' && !isCmd) {
+      try {
+        const stickerEnviada = info.message?.stickerMessage;
+        if (stickerEnviada) {
+          // Assinatura de QUEM ENVIOU (não de quem ligou o modo).
+          let takeDataModo = {};
+          try {
+            const takePathModo = pathz.join(USERS_DIR, 'take.json');
+            if (fs.existsSync(takePathModo)) takeDataModo = JSON.parse(fs.readFileSync(takePathModo, 'utf-8'));
+          } catch { takeDataModo = {}; }
+          const nomesModo = await resolverNomesFigurinha({
+            sender,
+            takeData: takeDataModo,
+            resolverNick: () => resolverNomeContato(sender, { nazu, metadata: groupMetadata, from, fallback: pushname }),
+            fallback: pushname || nomebot
+          });
+          // Só age se houver assinatura (do take.json ou o nick). Sem nada, a
+          // figurinha original segue normalmente — não reenvia à toa.
+          if (nomesModo.author || nomesModo.pack) {
+            const bufferSticker = await getFileBuffer(stickerEnviada, 'sticker');
+            // `type: 'image'` SEMPRE: a figurinha JÁ é webp (o `sendSticker`
+            // reconhece o RIFF/WEBP e devolve direto, sem ffmpeg). O caminho
+            // `'video'` roda o ffmpeg — e o decoder de WebP dele IGNORA os
+            // chunks ANIM/ANMF (0 frames), então uma figurinha ANIMADA falharia.
+            // É o mesmo caminho do `!take` (que sempre trata como imagem).
+            await sendSticker(nazu, from, {
+              sticker: bufferSticker,
+              author: nomesModo.author,
+              packname: nomesModo.pack,
+              type: 'image'
+            }, {
+              quoted: info
+            });
+          }
+        }
+      } catch (e) {
+        console.error('Erro no Modo Take:', e?.message || e);
+      }
+    }
     let quotedMessageContent = null;
     if (type === 'extendedTextMessage' && info.message?.extendedTextMessage?.contextInfo?.quotedMessage) {
       quotedMessageContent = info.message.extendedTextMessage.contextInfo.quotedMessage;
@@ -35827,6 +35879,39 @@ break;
         } catch (e) {
           console.error(e);
           await reply("Ocorreu um erro 💔");
+        }
+        break;
+      // ═══════════════════════════════════════════════════════════════
+      // 🏷️ !modotake — assinatura automática nas figurinhas
+      // ═══════════════════════════════════════════════════════════════
+      // Toggle por grupo. Ativado, TODA figurinha enviada no grupo é reenviada
+      // com a assinatura do `!take` de quem enviou (mesmo sistema do `!take`:
+      // author/pack do `take.json`). Só adm liga/desliga; a automação vale para
+      // todos. A entrega fica logo abaixo do `autoConvertMediaToSticker`, junto
+      // das outras automações.
+      case 'modotake':
+        try {
+          if (!isGroup) return reply('Isso só pode ser usado em grupo 💔');
+          if (!isGroupAdmin) return reply('Você precisa ser adm 💔');
+          groupData.modotake = !groupData.modotake;
+          fs.writeFileSync(groupFile, JSON.stringify(groupData, null, 2));
+          const newsletterCtxTake = {
+            forwardingScore: 999,
+            isForwarded: true,
+            forwardedNewsletterMessageInfo: {
+              newsletterJid: "120363410980452460@newsletter",
+              newsletterName: "Lizzy"
+            }
+          };
+          await nazu.sendMessage(from, {
+            text: groupData.modotake
+              ? `✅ *Modo Take ativado!*\n\n🏷️ Toda figurinha enviada no grupo vai receber a assinatura de quem mandou (a do *!take*).\n\n_Para desativar: ${groupPrefix}modotake_`
+              : '❌ *Modo Take desativado!*\n\nAs figurinhas voltam a ser enviadas como estão.',
+            contextInfo: newsletterCtxTake
+          }, { quoted: info });
+        } catch (e) {
+          console.error('Erro no comando modotake:', e);
+          await reply('❌ Ocorreu um erro ao alternar o Modo Take.');
         }
         break;
       case 'antimidia':

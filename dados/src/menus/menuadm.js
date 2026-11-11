@@ -230,6 +230,8 @@ export default async function menuadm(prefix, botName = "MeuBot", userName = "Us
 │ 👋 ${prefix}bemvindo2
 │ 🚪 ${prefix}saida
 │ 🏷 ${prefix}autosticker
+│ 🏷️ ${prefix}modotake
+│    > Assina automaticamente toda figurinha enviada com o take de quem mandou.
 │ 👑 ${prefix}soadm
 │ 📊 ${prefix}cmdlimit
 │ 🖼 ${prefix}fotomenugrupo

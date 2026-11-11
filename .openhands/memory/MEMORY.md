@@ -166,6 +166,27 @@ logs diários (`YYYY-MM-DD.md`).
 - **Publicar**: `git push` com `$GITHUB_TOKEN` dá **403** (só leitura). Use
   **`$GITHUB_PERSONAL_ACCESS_TOKEN`** — ele tem escrita no `Lizzy-V4` e nos forks.
 
+## `!modotake` — assinatura automática nas figurinhas (out/2026)
+
+- **Toggle por grupo** (`groupData.modotake`, adm liga/desliga) que reenvia TODA
+  figurinha enviada com a assinatura do `!take` de **QUEM ENVIOU** (não de quem
+  ligou). Mesmo sistema do `!take`/`!s`: `resolverNomesFigurinha` (author/pack do
+  `take.json`; sem nada → nick do contato). Automação em `index.js` logo abaixo do
+  `autoConvertMediaToSticker`; `case 'modotake'` antes do `case 'antimidia'`.
+- **BUG (o teste pegou)**: mandar figurinha ANIMADA como `type: 'video'` no
+  `sendSticker` quebra — o decoder de WebP do **ffmpeg IGNORA os chunks ANIM/ANMF**
+  (0 frames). Usar **`type: 'image'` SEMPRE** (como o `!take`): a figurinha JÁ é
+  webp, o `sendSticker` devolve o buffer direto, **sem ffmpeg**.
+- **A assinatura vai no EXIF do webp**, não no content da mensagem
+  (`sticker-pack-name` / `sticker-pack-publisher`). Para conferir num teste: ler o
+  webp (`node-webpmux` → `img.exif`).
+- **Cifrar mídia de teste como a fork faz**: IV+chave saem do `hkdf(mediaKey, 112,
+  { info: 'WhatsApp Image Keys' })` (sticker → `MEDIA_HKDF_KEY_MAPPING.sticker` =
+  "Image"). MediaKey crua + IV aleatório = `bad decrypt`. Copiar o `cifrar()` do
+  `tests/midiaprefix.test.js`.
+- Menu: `menuadm` MODOS & ATIVAÇÕES (baseline 181→182) + `blockPv`.
+  `tests/modotake.test.js` 10/23; mutando o guard, 8 asserções falham.
+
 ## Canais de IA (estado atual)
 
 | canal | ouvir | pensar | falar |
