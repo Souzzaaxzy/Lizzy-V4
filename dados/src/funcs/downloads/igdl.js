@@ -1,4 +1,4 @@
-import { lerSessionId } from '../../utils/instagramCookies.js';
+import { lerSessionId, cookieHeader } from '../../utils/instagramCookies.js';
 
 /**
  * Instagram - Implementação própria (sem VexAPI)
@@ -271,7 +271,8 @@ function igHeadersComSessao(sid) {
     'X-IG-Capabilities': '3brTvw==',
     'X-IG-Connection-Type': 'WIFI',
     'X-FB-HTTP-Engine': 'Liger',
-    Cookie: `sessionid=${sid}`
+    // Cookie jar COMPLETO (o que o navegador manda) — só o sessionid e' recusado.
+    Cookie: cookieHeader() || `sessionid=${sid}`
   };
 }
 

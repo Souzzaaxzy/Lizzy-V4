@@ -49,7 +49,7 @@ import { ehPedidoDeAudio, temaDoAudio, falaDoAudio, gerarNotaDeVoz, erroDaVoz, l
 import { lerIdentidade } from './utils/identidadeLizzy.js';
 import { resolverPaisAdotivos } from './utils/contextoConversa.js';
 // Cookies do Instagram (o arquivo que libera o perfil, inclusive privado).
-import { lerSessionId, salvarSessionId, limparCookies, mascarar as mascararIg } from './utils/instagramCookies.js';
+import { lerSessionId, salvarSessionId, salvarCookies, limparCookies, mascarar as mascararIg } from './utils/instagramCookies.js';
 // As chaves do Groq (ate' 10) e o failover automatico.
 import { lerChaves, mascarar, slotDoComando, atualizarEnv, nomeDaVar, MAX_SLOTS,
          estadoDasChaves, resetarEsgotadas, situacaoDasChaves } from './utils/groqKeys.js';
@@ -26931,8 +26931,15 @@ Netscape e salve em \`data/instagram/cookies.txt\`.
 Ele expira com o tempo; quando o \`!pinsta\` disser "sessão recusada", renove.`);
           }
 
-          // Salvar o sessionid.
-          const r = salvarSessionId(arg);
+          // Salvar o cookie: aceita o ARQUIVO Netscape inteiro (multilinha, o
+          // que o navegador exporta) OU um sessionid solto. O `q` junta os
+          // argumentos por espaco, entao reconstruimos o texto a partir do
+          // `body` (que preserva tabs/quebras de linha).
+          const corpoBruto = (() => {
+            const idx = body.toLowerCase().indexOf(command.toLowerCase());
+            return idx >= 0 ? body.slice(idx + command.length).trim() : arg;
+          })();
+          const r = salvarCookies(corpoBruto);
           if (!r.ok) {
             const motivos = {
               vazio: 'valor vazio',
@@ -26944,9 +26951,12 @@ Ele expira com o tempo; quando o \`!pinsta\` disser "sessão recusada", renove.`
               : '';
             return reply(`❌ Não consegui salvar: ${motivos[r.motivo] || r.motivo}.${extra}`);
           }
-          return reply(`✅ *Sessão do Instagram configurada!*
-🍪 Sessão: \`${mascararIg(arg)}\`
-📁 Arquivo: \`data/instagram/sessionid.txt\`
+          const sidSalvo = lerSessionId();
+          const tipoTxt = r.tipo === 'netscape' ? 'arquivo de cookies (Netscape)' : 'sessionid';
+          return reply(`✅ *Cookie do Instagram configurado!*
+🍪 Tipo: ${tipoTxt}
+🔑 Sessão: \`${mascararIg(sidSalvo || '')}\`
+📁 Arquivo: \`data/instagram/${r.tipo === 'netscape' ? 'cookies.txt' : 'sessionid.txt'}\`
 
 O \`!pinsta\` agora consulta perfis autenticado — inclusive o cabeçalho de
 perfis *privados* (foto, nome, seguidores e seguindo).

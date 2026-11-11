@@ -99,6 +99,43 @@ export function extrairSessionId(conteudo) {
 }
 
 /**
+ * Monta o header `Cookie` COMPLETO a partir do arquivo Netscape.
+ *
+ * MEDIDO (arquivo real do dono): o navegador manda o jar inteiro —
+ * `csrftoken`, `datr`, `ig_did`, `mid`, `ds_user_id`, `sessionid`, `rur`. O bot
+ * mandava **só o sessionid**, e o Instagram recusava (`200` com `status:fail`).
+ * O `csrftoken`/`mid`/`ig_did` são parte do que ele espera para aceitar.
+ *
+ * @returns {string|null} `"csrftoken=...; mid=...; sessionid=..."`
+ */
+export function cookieHeader() {
+  const arquivo = caminhoCookies();
+  if (!arquivo) return null;
+  let conteudo;
+  try { conteudo = fs.readFileSync(arquivo, 'utf-8'); } catch { return null; }
+
+  const pares = [];
+  for (const linha of conteudo.split(/\r?\n/)) {
+    const l = linha.trim();
+    if (!l || l.startsWith('#')) continue;
+    const campos = l.split('\t');
+    if (campos.length >= 7) {
+      const dominio = campos[0];
+      // Só os cookies do Instagram (ignora google/facebook/etc. do arquivo).
+      if (!/(^|\.)instagram\.com$/.test(dominio)) continue;
+      const nome = campos[campos.length - 2];
+      const valor = campos[campos.length - 1];
+      if (nome && valor) pares.push(`${nome}=${valor}`);
+    }
+  }
+  if (pares.length) return pares.join('; ');
+
+  // Arquivo com o sessionid cru (gravado pelo `!keyig`) — só ele.
+  const sid = lerSessionId();
+  return sid ? `sessionid=${sid}` : null;
+}
+
+/**
  * Lê o sessionid configurado.
  * @returns {string|null}
  */
@@ -132,6 +169,40 @@ export function salvarSessionId(valor) {
   } catch (e) {
     return { ok: false, motivo: e?.message || 'erro' };
   }
+}
+
+/**
+ * Salva o que o dono mandou, detectando o formato.
+ *
+ * - **Arquivo Netscape** (o que o navegador exporta: várias linhas com tab e o
+ *   `sessionid` no meio) -> grava o arquivo INTEIRO em `cookies.txt`, para o
+ *   bot mandar o jar completo.
+ * - **Um token só** (o valor do sessionid) -> grava em `sessionid.txt`.
+ *
+ * @param {string} entrada
+ * @returns {{ok:boolean, tipo?:string, motivo?:string, caminho?:string}}
+ */
+export function salvarCookies(entrada) {
+  const bruto = String(entrada || '');
+  if (!bruto.trim()) return { ok: false, motivo: 'vazio' };
+
+  // Netscape? (tem a linha do sessionid separada por tab, ou o cabecalho)
+  const pareceNetscape = /#\s*Netscape HTTP Cookie File/i.test(bruto)
+    || /\tsessionid\t/.test(bruto)
+    || bruto.split(/\r?\n/).some((l) => l.split('\t').length >= 7 && /sessionid/.test(l));
+  if (pareceNetscape) {
+    const sid = extrairSessionId(bruto);
+    if (!sid) return { ok: false, motivo: 'sem_sessionid' };
+    try {
+      fs.mkdirSync(IG_DIR, { recursive: true });
+      fs.writeFileSync(ARQUIVO_NETSCAPE, bruto.trim() + '\n', { mode: 0o600 });
+      return { ok: true, tipo: 'netscape', caminho: ARQUIVO_NETSCAPE };
+    } catch (e) { return { ok: false, motivo: e?.message || 'erro' }; }
+  }
+
+  // Token unico.
+  const r = salvarSessionId(bruto.trim());
+  return r.ok ? { ok: true, tipo: 'sessionid', caminho: r.caminho } : r;
 }
 
 /** Remove os arquivos de cookies do Instagram. */

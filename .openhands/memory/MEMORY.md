@@ -229,6 +229,10 @@ logs diários (`YYYY-MM-DD.md`).
   Instagram com a conta e passar pela verificação, depois renovar o cookie.
   `ehChallengeRequired` detecta em qualquer resposta; o `getInstagramProfile`
   devolve `IG_CONTA_DESAFIADA`.
+- **🍪 O COOKIE JAR COMPLETO**: o navegador manda `csrftoken`, `datr`, `ig_did`,
+  `mid`, `ds_user_id`, `sessionid`, `rur` — o bot mandava **só o sessionid** e o
+  IG recusava (`200`+`fail`). `cookieHeader()` monta o jar inteiro do Netscape
+  (só domínio `instagram.com`). O `!keyig` agora aceita o **arquivo colado**.
 - **Não vale "engenharia reversa"**: o protocolo privado já está documentado
   (instagrapi/aichemy) e **eu já apliquei** os headers dele — mesmo assim o
   servidor recusa. O que resta NÃO é protocolo: é a decisão do servidor

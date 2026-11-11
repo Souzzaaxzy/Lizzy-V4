@@ -43,6 +43,7 @@ const NETSCAPE = [
   '.instagram.com\tTRUE\t/\tTRUE\t1800000000\tcsrftoken\tABC123',
   '.instagram.com\tTRUE\t/\tTRUE\t1800000000\tsessionid\t99999%3AAAbbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQq',
   '.instagram.com\tTRUE\t/\tTRUE\t1800000000\tmid\tZZZ',
+  '.instagram.com\tTRUE\t/\tTRUE\t1800000000\tds_user_id\t1234567',
 ].join('\n');
 
 ok(igc.extrairSessionId(NETSCAPE) === '99999%3AAAbbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQq', 'extrai o sessionid do Netscape');
@@ -71,6 +72,16 @@ ok(!igc.temCookies(), 'depois de limpar, sem cookies');
 fs.mkdirSync(process.env.IG_COOKIES_DIR, { recursive: true });
 fs.writeFileSync(igc.ARQUIVO_NETSCAPE, NETSCAPE);
 ok(igc.lerSessionId() === '99999%3AAAbbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQq', 'le o sessionid do cookies.txt (Netscape) colocado a mao');
+
+// ── O COOKIE JAR COMPLETO ────────────────────────────────────────────────────
+// O navegador manda csrftoken/datr/ig_did/mid/ds_user_id/sessionid/rur. Mandar
+// SO' o sessionid faz o IG recusar (200+fail) — medido no arquivo real do dono.
+const jar = igc.cookieHeader();
+ok(jar && jar.includes('sessionid='), 'cookieHeader inclui o sessionid');
+ok(jar && jar.includes('csrftoken='), 'cookieHeader inclui o csrftoken (faltava)');
+ok(jar && jar.includes('mid='), 'cookieHeader inclui o mid');
+ok(jar && jar.includes('ds_user_id='), 'cookieHeader inclui o ds_user_id');
+ok(jar && !jar.includes('google'), 'cookieHeader NAO inclui cookies de outros dominios');
 
 // ── 2) O caminho autenticado do getInstagramProfile (servidor local) ─────────
 // O `socialProfile` aponta para o IG real; o seam `IG_API_BASE` permite apontar
@@ -292,7 +303,7 @@ contem(painel.texto, 'data/instagram/cookies.txt', 'painel: aponta o arquivo (ig
 // Salvar um sessionid valido.
 const SID = '1234567890%3A' + 'a'.repeat(30);
 const salvou = await rodar({ sender: novoLid(), text: `!keyig ${SID}` });
-contem(salvou.texto, 'configurada', 'avisa que configurou');
+contem(salvou.texto, 'configurado', 'avisa que configurou');
 ok(igc.lerSessionId() === SID, 'o sessionid foi gravado de verdade');
 
 // Mascarado no painel (nao expoe o valor inteiro).
@@ -308,6 +319,18 @@ ok(!igc.temCookies(), 'o arquivo foi removido de verdade');
 // Valor invalido.
 const invalido = await rodar({ sender: novoLid(), text: '!keyig curto' });
 contem(invalido.texto, 'Não consegui salvar', 'recusa sessionid invalido');
+
+// Salvar o ARQUIVO Netscape inteiro (multilinha) via `!keyig <arquivo>`.
+igc.limparCookies();
+const arquivoColado = ['# Netscape HTTP Cookie File',
+  '.instagram.com\tTRUE\t/\tTRUE\t1828991811\tcsrftoken\tABC',
+  '.instagram.com\tTRUE\t/\tTRUE\t1828991811\tmid\tMMM',
+  '.instagram.com\tTRUE\t/\tTRUE\t1828991811\tsessionid\t6661%3AAbcDef'].join('\n');
+const salvouArq = await rodar({ sender: novoLid(), text: '!keyig ' + arquivoColado });
+ok(/configurado/i.test(salvouArq.texto), `salva o arquivo colado (${salvouArq.texto.slice(0,60)})`);
+ok(igc.temCookies() === true, 'ficou com cookies');
+ok(igc.cookieHeader().includes('csrftoken=ABC'), 'guardou o csrftoken do arquivo');
+ok(igc.cookieHeader().includes('mid=MMM'), 'guardou o mid do arquivo');
 
 // `!keyig teste` (grafia comum) roda o DIAGNOSTICO, nao tenta salvar.
 const diag = await rodar({ sender: novoLid(), text: '!keyig teste l.szzy' });

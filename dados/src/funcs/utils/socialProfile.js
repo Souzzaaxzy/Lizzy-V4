@@ -16,7 +16,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 const execFileP = promisify(execFile);
 import dotenv from 'dotenv';
-import { lerSessionId } from '../../utils/instagramCookies.js';
+import { lerSessionId, cookieHeader } from '../../utils/instagramCookies.js';
 
 dotenv.config();
 
@@ -275,7 +275,11 @@ function igHeaders(sid) {
     'X-IG-Nav-Chain': '9MV:self_profile:2,ProfileMediaTabFragment:self_profile:3,9Xf:self_following:4',
   };
   if (uid) h['IG-U-DS-USER-ID'] = uid;
-  if (sid) h.Cookie = `sessionid=${sid}`;
+  // Cookie jar COMPLETO (csrftoken/datr/ig_did/mid/ds_user_id/sessionid/rur) —
+  // é o que o navegador manda. Só o sessionid faz o IG recusar (200+fail).
+  const jar = cookieHeader();
+  if (jar) h.Cookie = jar;
+  else if (sid) h.Cookie = `sessionid=${sid}`;
   return h;
 }
 
