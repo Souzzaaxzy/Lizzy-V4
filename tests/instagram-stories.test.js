@@ -3,7 +3,7 @@
  *
  * O story NÃO é conteúdo público: exige login. Só com o `sessionid` (o mesmo
  * `!keyig`) o bot puxa — fluxo `username` -> `usernameinfo` (pk) ->
- * `feed/reels_media`. O teste roda o módulo REAL contra um servidor local (seam
+ * `feed/user/<pk>/story/`. O teste roda o módulo REAL contra um servidor local (seam
  * `IG_API_BASE`), cobrindo foto E vídeo, o filtro por id, e as recusas.
  *
  * Uso: node tests/instagram-stories.test.js
@@ -53,14 +53,12 @@ ok(invalida.ok === false && /inválida/i.test(invalida.msg), 'URL sem /stories/ 
 // ── 3) O fluxo REAL (servidor local) — foto E vídeo ──────────────────────────
 const PK = '1234567890';
 const REELS = {
-  reels: {
-    [PK]: {
-      items: [
-        { id: '111', image_versions2: { candidates: [{ url: 'https://cdn.ex/foto1.jpg' }] } },
-        { id: '222', video_versions: [{ url: 'https://cdn.ex/video1.mp4' }] },
-        { id: '333', image_versions2: { candidates: [{ url: 'https://cdn.ex/foto2.jpg' }] } },
-      ]
-    }
+  reel: {
+    items: [
+      { id: '111_9', image_versions2: { candidates: [{ url: 'https://cdn.ex/foto1-small.jpg', width: 150, height: 150 }, { url: 'https://cdn.ex/foto1.jpg', width: 1080, height: 1920 }] } },
+      { id: '222_9', video_versions: [{ url: 'https://cdn.ex/video1-small.mp4', width: 320, height: 568 }, { url: 'https://cdn.ex/video1.mp4', width: 720, height: 1280 }] },
+      { id: '333_9', image_versions2: { candidates: [{ url: 'https://cdn.ex/foto2.jpg', width: 1080, height: 1920 }] } },
+    ]
   }
 };
 let cookieVisto = null;
@@ -69,7 +67,7 @@ const srv = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'application/json' });
   if (req.url.includes('usernameinfo')) {
     res.end(JSON.stringify({ user: { pk: PK, username: 'l.szzy' } }));
-  } else if (req.url.includes('reels_media')) {
+  } else if (req.url.includes('/story/')) {
     res.end(JSON.stringify(REELS));
   } else {
     res.end('{}');
@@ -84,7 +82,7 @@ ok(todos.ok === true, `com sessão -> ok (msg: ${todos.msg || ''})`);
 ok(todos.count === 3, `3 stories (veio ${todos.count})`);
 ok(todos.data.filter((m) => m.type === 'image').length === 2, '2 fotos');
 ok(todos.data.filter((m) => m.type === 'video').length === 1, '1 vídeo');
-ok(todos.data[0].url === 'https://cdn.ex/foto1.jpg', 'ordem preservada');
+ok(todos.data[0].url === 'https://cdn.ex/foto1.jpg', 'pega a MAIOR resolucao (nao a pequena)');
 ok(todos.data[1].mime === 'video/mp4', 'vídeo com mime correto');
 ok(/sessionid=/.test(cookieVisto || ''), 'mandou o sessionid no header');
 
@@ -100,7 +98,7 @@ const srvVazio = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'application/json' });
   res.end(req.url.includes('usernameinfo')
     ? JSON.stringify({ user: { pk: '999', username: 'x' } })
-    : JSON.stringify({ reels: { '999': { items: [] } } }));
+    : JSON.stringify({ reel: { items: [] } }));
 });
 await new Promise((r) => srvVazio.listen(0, '127.0.0.1', r));
 process.env.IG_API_BASE = `http://127.0.0.1:${srvVazio.address().port}`;

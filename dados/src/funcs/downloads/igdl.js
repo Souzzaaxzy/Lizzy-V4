@@ -277,15 +277,26 @@ function extrairStory(url) {
   return { username: m[1], storyId: m[2] || null };
 }
 
+// Escolhe o candidato de MAIOR resolução (largura x altura). O `candidates[0]`
+// é o MENOR — usar ele dava a imagem pixelada.
+function maiorCandidato(cands) {
+  if (!Array.isArray(cands) || !cands.length) return null;
+  return cands.slice().sort((a, b) => ((b.width || 0) * (b.height || 0)) - ((a.width || 0) * (a.height || 0)))[0];
+}
+
 // Converte um item de story no formato de mídia do módulo.
 function storyItemParaMidia(item) {
   if (!item) return null;
-  if (item.video_versions?.length) {
-    return { type: 'video', url: item.video_versions[0].url, mime: 'video/mp4' };
+  // `media_type` 2 = video; senao imagem (1).
+  const vids = item.video_versions || [];
+  if (vids.length) {
+    const melhor = maiorCandidato(vids) || vids[0];
+    return { type: 'video', url: melhor.url, mime: 'video/mp4' };
   }
   const c = item.image_versions2?.candidates;
-  if (c?.length) {
-    return { type: 'image', url: c[0].url, mime: 'image/jpeg' };
+  const melhor = maiorCandidato(c);
+  if (melhor) {
+    return { type: 'image', url: melhor.url, mime: 'image/jpeg' };
   }
   return null;
 }
@@ -352,10 +363,12 @@ async function dlStories(url) {
     }
     const pk = user.pk || user.id;
 
-    // 2) reel_ids -> stories
+    // 2) stories do usuario. MEDIDO: o `feed/reels_media` (que eu usava) responde
+    // `{"reels":{}}` — VAZIO, para todo mundo. O endpoint que FUNCIONA (o mesmo
+    // que o cliente real usa) e' `feed/user/<pk>/story/`.
     const hostReel = hostTeste || 'https://i.instagram.com';
     const reelRes = await fetchWithTimeout(
-      `${hostReel}/api/v1/feed/reels_media/?reel_ids=${pk}`,
+      `${hostReel}/api/v1/feed/user/${pk}/story/`,
       { headers }
     );
     if (reelRes.status === 401 || reelRes.status === 403 || reelRes.status === 429) {
@@ -364,10 +377,12 @@ async function dlStories(url) {
     if (!reelRes.ok) return { ok: false, msg: `Instagram respondeu com erro (HTTP ${reelRes.status}).` };
     const reel = await reelRes.json();
 
-    const reels = reel?.reels || {};
-    const bucket = reels[String(pk)] || reels[pk] || Object.values(reels)[0];
+    const bucket = reel?.reel || Object.values(reel?.reels || {})[0];
     let itens = bucket?.items || [];
-    if (alvo.storyId) itens = itens.filter((i) => String(i.id || i.pk) === String(alvo.storyId));
+    // O `id` do item vem como `<pk>_<userid>`; o link traz so o `<pk>`.
+    if (alvo.storyId) {
+      itens = itens.filter((i) => String(i.id || '').split('_')[0] === String(alvo.storyId) || String(i.pk) === String(alvo.storyId));
+    }
 
     const medias = itens.map(storyItemParaMidia).filter(Boolean);
     if (!medias.length) {

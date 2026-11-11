@@ -26494,18 +26494,38 @@ ${groupPrefix}reacao toggle - Ativar/Desativar
           }
           console.log(`[socialProfile] ${socialPlatform} @${result.profile.username} ok em ${result.elapsedMs}ms`);
           const newsletterCtx = gerarContextNewsletter();
-          if (result.buffer && result.buffer.length > 0) {
-            try {
+          // O link do perfil sai como BOTAO `cta_url` (nao como texto).
+          const botoes = result.profile?.profileUrl
+            ? [{
+                name: 'cta_url',
+                buttonParamsJson: JSON.stringify({
+                  display_text: `🔗 Ver @${result.profile.username}`,
+                  url: result.profile.profileUrl
+                })
+              }]
+            : [];
+          try {
+            // UM envio so: a foto como CABECALHO do card (a fork monta o header
+            // quando vem `image` + `caption`), o texto como corpo e o LINK do
+            // perfil como botao `cta_url`.
+            if (result.buffer && result.buffer.length > 0) {
               await nazu.sendMessage(from, {
                 image: result.buffer,
-                caption: result.text
-              }, { quoted: info, contextInfo: newsletterCtx });
-            } catch (sendErr) {
-              // Foto falhou -> envia só texto (não é falha total)
-              console.error(`[socialProfile] falha ao enviar foto de ${socialPlatform}:`, sendErr.message);
+                caption: result.text,
+                contextInfo: newsletterCtx,
+                ...(botoes.length ? { nativeFlow: botoes } : {})
+              }, { quoted: info });
+            } else if (botoes.length) {
+              await sendInteractiveMessage(nazu, from, {
+                text: result.text,
+                footer: `© ${nomebot}`,
+                interactiveButtons: botoes
+              }, { quoted: info });
+            } else {
               await nazu.sendMessage(from, { text: result.text }, { quoted: info, contextInfo: newsletterCtx });
             }
-          } else {
+          } catch (sendErr) {
+            console.error(`[socialProfile] falha ao enviar perfil de ${socialPlatform}:`, sendErr.message);
             await nazu.sendMessage(from, { text: result.text }, { quoted: info, contextInfo: newsletterCtx });
           }
           await react('✅', nazu, info.key, from);

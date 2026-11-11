@@ -50,7 +50,18 @@ function finish(name) {
   for (const e of CURRENT.errors) console.log(`     ${e.split('\n')[0]}`);
 }
 function ok(c, m) { if (c) CURRENT.passed += 1; else { CURRENT.failed += 1; CURRENT.errors.push(`ASSERT FALHOU: ${m}`); } }
-function includes(h, n, l) { ok(typeof h === 'string' && h.includes(n), `${l || n} — esperado conter "${n}"`); }
+// O layout novo usa MATHEMATICAL BOLD nos titulos — desbold antes de comparar.
+function desbold(t) {
+  return String(t || '').replace(/[\u{1D400}-\u{1D7FF}]/gu, (c) => {
+    const n = c.codePointAt(0);
+    if (n >= 0x1D400 && n <= 0x1D419) return String.fromCharCode(65 + n - 0x1D400);
+    if (n >= 0x1D41A && n <= 0x1D433) return String.fromCharCode(97 + n - 0x1D41A);
+    if (n >= 0x1D468 && n <= 0x1D481) return String.fromCharCode(65 + n - 0x1D468);
+    if (n >= 0x1D482 && n <= 0x1D49B) return String.fromCharCode(97 + n - 0x1D482);
+    return c;
+  });
+}
+function includes(h, n, l) { ok(typeof h === 'string' && desbold(h).includes(n), `${l || n} — esperado conter "${n}"`); }
 function notIncludes(h, n, l) { ok(typeof h === 'string' && !h.includes(n), `${l || n} — não deveria conter "${n}"`); }
 
 const sp = await import(new URL('../dados/src/funcs/utils/socialProfile.js', import.meta.url).href);

@@ -11,12 +11,14 @@
  *            location?, website?, createdAt?, playlists?, profileUrl? }
  */
 
+import fs from 'fs';
 import axios from 'axios';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 const execFileP = promisify(execFile);
 import dotenv from 'dotenv';
 import { lerSessionId, cookieHeader } from '../../utils/instagramCookies.js';
+import { TOPO, FECHO, boldItalic, abrirCategoria, fecharCategoria } from '../../menus/layout.js';
 
 dotenv.config();
 
@@ -478,6 +480,7 @@ async function getInstagramProfile(username) {
       platform: 'instagram',
       username: u.username,
       displayName: u.full_name || u.username,
+      // SEMPRE a versao HD (o `profile_pic_url` e' 150x150 — a foto pixelada).
       avatar: u.profile_pic_url_hd || u.profile_pic_url || null,
       bio: u.biography || undefined,
       followers: toNumber(u.edge_followed_by?.count) ?? toNumber(u.follower_count),
@@ -485,6 +488,20 @@ async function getInstagramProfile(username) {
       posts: toNumber(u.edge_owner_to_timeline_media?.count) ?? toNumber(u.media_count),
       private: !!u.is_private,
       verified: !!u.is_verified,
+      // ---- TUDO o que e' publico no `usernameinfo` ----
+      id: u.pk || u.id || undefined,
+      business: u.is_business_account ?? u.is_professional_account ?? undefined,
+      category: u.category_name || u.category || undefined,
+      externalUrl: u.external_url || undefined,
+      bioLinks: (u.bio_links || []).map((l) => l.url || l.link?.url).filter(Boolean),
+      publicEmail: u.public_email || undefined,
+      publicPhone: u.public_phone_number || u.contact_phone_number || undefined,
+      address: u.address_street || undefined,
+      accountType: u.account_type !== undefined
+        ? ({ 1: 'Pessoal', 2: 'Criador', 3: 'Comercial' }[u.account_type] || `Tipo ${u.account_type}`)
+        : (u.is_business_account ? 'Comercial' : undefined),
+      followedByViewer: u.followed_by_viewer ?? u.following_viewer ?? undefined,
+      createdAt: undefined,
       profileUrl: `https://www.instagram.com/${u.username}`,
       autenticado: true
     };
@@ -711,6 +728,14 @@ async function getSpotifyProfile(username) {
 }
 
 // ── Formatter centralizado (WhatsApp-friendly) ───────────────────────
+/** Nome do bot (do config) — para o rodape do layout. */
+function nomeDoBot() {
+  try {
+    const cfg = JSON.parse(fs.readFileSync(process.env.CONFIG_PATH || 'dados/src/config.json', 'utf-8'));
+    return cfg.nomebot || 'Bot';
+  } catch { return 'Bot'; }
+}
+
 function formatSocialProfile(profile) {
   if (!profile) return '';
   const plt = {
@@ -720,64 +745,91 @@ function formatSocialProfile(profile) {
     spotify: { emoji: '🎧', nome: 'SPOTIFY' }
   }[profile.platform] || { emoji: '🌐', nome: String(profile.platform || '').toUpperCase() };
 
-  const lines = [];
-  const add = (label, value) => {
-    if (value === undefined || value === null || value === '') return;
-    const str = String(value);
-    if (!str || str === 'undefined' || str === 'null' || str === 'NaN' || str === '[object Object]') return;
-    if (str.includes('[object')) return;
-    lines.push(`┃ ${label}: ${str}`);
+  const linhas = [];
+  const add = (rotulo, valor) => {
+    if (valor === undefined || valor === null || valor === '') return;
+    const str = String(valor).trim();
+    if (!str || /^(undefined|null|NaN|\[object Object\])$/.test(str) || str.includes('[object')) return;
+    linhas.push(`┃ ${rotulo}: ${str}`);
   };
 
-  lines.push(`╭━━〔 ${plt.emoji} ${plt.nome} 〕━━╮`);
-  lines.push('┃');
-  lines.push(`┃ 👤 @${profile.username || '-'}`);
+  linhas.push(TOPO(profile.username ? `@${profile.username}` : plt.nome));
+  linhas.push(`┃ 〆 ${plt.emoji} ${boldItalic(plt.nome)}`);
+  linhas.push('╰━━━꧁༺ ✦ ༻꧂━━━━━━━━━━━━━━╯');
+  linhas.push('');
+  linhas.push(abrirCategoria('PERFIL', '👤'));
+  add('👤 Usuário', profile.username ? `@${profile.username}` : null);
   add('📛 Nome', profile.displayName);
-  lines.push('┃');
-
-  if (profile.platform === 'tiktok') {
-
-    add('👥 Seguidores', fmt(profile.followers));
-    add('👤 Seguindo', fmt(profile.following));
-    add('❤️ Curtidas', fmt(profile.likes));
-    add('🎬 Vídeos', fmt(profile.posts));
-  } else if (profile.platform === 'instagram') {
-    add('👥 Seguidores', fmt(profile.followers));
-    add('👤 Seguindo', fmt(profile.following));
-    add('📸 Publicações', fmt(profile.posts));
-  } else if (profile.platform === 'x') {
-    add('👥 Seguidores', fmt(profile.followers));
-    add('👤 Seguindo', fmt(profile.following));
-    add('📝 Posts', fmt(profile.posts));
-    add('❤️ Curtidas', fmt(profile.likes));
-  } else if (profile.platform === 'spotify') {
-    add('👥 Seguidores', fmt(profile.followers));
-    add('🎵 Playlists públicas', fmt(profile.posts));
-  }
-
-  if (profile.private !== undefined) {
-    lines.push(`┃ 🔒 Privado: ${profile.private ? 'Sim' : 'Não'}`);
-  }
-  if (profile.verified !== undefined) {
-    lines.push(`┃ ✓ Verificado: ${profile.verified ? 'Sim' : 'Não'}`);
-  }
-  if (profile.createdAt) {
-    add('📅 Criado em', profile.createdAt);
-  }
-  if (profile.location) {
-    add('📍 Localização', profile.location);
-  }
-  if (profile.website) {
-    add('🔗 Website', profile.website);
-  }
+  if (profile.verified) linhas.push('┃ ✓ Verificado: Sim');
+  if (profile.private !== undefined) linhas.push(`┃ 🔒 Conta privada: ${profile.private ? 'Sim' : 'Não'}`);
+  if (profile.business !== undefined) linhas.push(`┃ 🏢 Conta comercial: ${profile.business ? 'Sim' : 'Não'}`);
+  add('📂 Categoria', profile.category);
   if (profile.bio) {
-    lines.push('┃');
-    lines.push('┃ 📝 Bio:');
-    lines.push(`┃ ${profile.bio.replace(/\n+/g, ' — ').trim()}`);
+    linhas.push('┃ 📝 Bio:');
+    for (const b of String(profile.bio).split(/\n+/).slice(0, 6)) {
+      if (b.trim()) linhas.push(`┃    ${b.trim()}`);
+    }
   }
-  lines.push(`┃ ${profile.profileUrl || ''}`);
-  lines.push('╰━━━━━━━━━━━━━━━━━━╯');
-  return lines.join('\n');
+  add('🔗 Link', profile.externalUrl);
+  linhas.push(fecharCategoria());
+
+  // Números (por plataforma).
+  const nums = [];
+  const addNum = (r, v) => { if (v !== undefined && v !== null) nums.push(`┃ ${r}: ${fmt(v)}`); };
+  if (profile.platform === 'tiktok') {
+    addNum('👥 Seguidores', profile.followers);
+    addNum('👤 Seguindo', profile.following);
+    addNum('❤️ Curtidas', profile.likes);
+    addNum('🎬 Vídeos', profile.posts);
+  } else if (profile.platform === 'instagram') {
+    addNum('📸 Publicações', profile.posts);
+    addNum('👥 Seguidores', profile.followers);
+    addNum('👤 Seguindo', profile.following);
+    addNum('🤝 Seguindo de volta?', profile.followedByViewer === undefined ? null : (profile.followedByViewer ? 'Sim' : 'Não'));
+  } else if (profile.platform === 'x') {
+    addNum('👥 Seguidores', profile.followers);
+    addNum('👤 Seguindo', profile.following);
+    addNum('📝 Posts', profile.posts);
+    addNum('❤️ Curtidas', profile.likes);
+  } else if (profile.platform === 'spotify') {
+    addNum('👥 Seguidores', profile.followers);
+    addNum('🎵 Playlists públicas', profile.posts);
+  }
+  if (nums.length) {
+    linhas.push('');
+    linhas.push(abrirCategoria('NÚMEROS', '📊'));
+    linhas.push(...nums);
+    linhas.push(fecharCategoria());
+  }
+
+  // Informações extras (Instagram).
+  const extras = [];
+  const addEx = (r, v) => {
+    if (v === undefined || v === null || v === '') return;
+    const str = String(v).trim();
+    if (!str || /^(undefined|null|NaN)$/.test(str)) return;
+    extras.push(`┃ ${r}: ${str}`);
+  };
+  if (profile.platform === 'instagram') {
+    addEx('🆔 ID', profile.id);
+    addEx('📅 Conta criada em', profile.createdAt);
+    addEx('🏷️ Tipo', profile.accountType);
+    addEx('📞 Contato', profile.publicEmail || profile.publicPhone);
+    addEx('🌎 Endereço', profile.address);
+    if (Array.isArray(profile.bioLinks) && profile.bioLinks.length) {
+      profile.bioLinks.slice(0, 5).forEach((l, n) => addEx(`🔗 Link ${n + 1}`, l));
+    }
+  }
+  if (extras.length) {
+    linhas.push('');
+    linhas.push(abrirCategoria('INFORMAÇÕES', 'ℹ️'));
+    linhas.push(...extras);
+    linhas.push(fecharCategoria());
+  }
+
+  linhas.push('');
+  linhas.push(FECHO(nomeDoBot()));
+  return linhas.join('\n');
 }
 
 const formatErrorProfile = (reason, pltName, username) => {
@@ -786,8 +838,18 @@ const formatErrorProfile = (reason, pltName, username) => {
 };
 
 /** Baixa foto de perfil com timeout pequeño e teto decompressão;só é chamado após o perfil ok. */
+/** O CDN entrega 320x320 por padrao; o sufixo `s1080x1080` puxa em alta. */
+function avatarEmAlta(url) {
+  if (!url || typeof url !== 'string') return url;
+  return url
+    .replace(/stp=dst-jpg_s\d+x\d+/, 'stp=dst-jpg_s1080x1080')
+    .replace(/stp=dst-jpg_s\d+_tt6/, 'stp=dst-jpg_s1080x1080_tt6')
+    .replace(/\/s\d+x\d+\//, '/s1080x1080/');
+}
+
 async function downloadAvatar(url) {
   if (!url || typeof url !== 'string' || !/^https:\/\//.test(url)) return null;
+  url = avatarEmAlta(url);
   try {
     const res = await axios.get(url, {
       timeout: 8000,
