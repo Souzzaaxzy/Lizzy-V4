@@ -290,24 +290,42 @@ export async function diagnosticarInstagram(username = 'instagram') {
   // PRIMEIRO: a sessão é válida? O `/accounts/current_user/` devolve a conta
   // logada quando o sessionid presta — é o teste DEFINITIVO. Se ele falhar, o
   // problema é o cookie (não a rota, não o IP).
+  // O IP público: o Instagram bloqueia datacenter/VPS agressivamente. Mostrar
+  // o IP separa "cookie morto" de "IP bloqueado" — são causas com correções
+  // OPOSTAS (renovar cookie × mudar de rede).
   try {
-    const base = host || IG_HOST_PADRAO;
-    const r = await axios.get(`${base}/api/v1/accounts/current_user/?edit=true`, {
-      timeout: HTTP_TIMEOUT, headers: igHeaders(sid), validateStatus: () => true
+    const ipRes = await axios.get('https://api.ipify.org', {
+      timeout: 8000, headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Lizzy-Bot)' }
     });
-    const d = r.data;
-    const okUser = d && typeof d === 'object' && (d.user || d.logged_in_user);
-    const fail = d && typeof d === 'object' && (d.status === 'fail' || d.status_code === 'fail');
-    if (okUser) {
-      const u = d.user || d.logged_in_user;
-      linhas.push(`current_user: HTTP ${r.status} ✅ SESSÃO VÁLIDA (@${u.username || u.pk})`);
-    } else if (fail) {
-      linhas.push(`current_user: HTTP ${r.status} ❌ SESSÃO INVÁLIDA (${(d.message || '').slice(0, 70)})`);
-    } else {
-      linhas.push(`current_user: HTTP ${r.status} ❌ sem user (${JSON.stringify(d || {}).slice(0, 70)})`);
+    const ip = String(ipRes.data || '').trim();
+    if (/^[\d.:a-fA-F]+$/.test(ip)) linhas.push(`IP do servidor: ${ip}`);
+  } catch { /* sem IP, segue */ }
+
+  // Testa a sessão nas DUAS casas: a do APP (i.) e a do WEB (www.). Uma sessão
+  // criada no navegador pode valer só no web — e é isso que separa "cookie
+  // morto" de "sessão web num endpoint de app".
+  for (const [rotulo, base] of [
+    ['app', host || IG_HOST_PADRAO],
+    ['web', host || IG_HOST_WEB],
+  ]) {
+    try {
+      const r = await axios.get(`${base}/api/v1/accounts/current_user/?edit=true`, {
+        timeout: HTTP_TIMEOUT, headers: igHeaders(sid), validateStatus: () => true
+      });
+      const d = r.data;
+      const okUser = d && typeof d === 'object' && (d.user || d.logged_in_user);
+      const fail = d && typeof d === 'object' && (d.status === 'fail' || d.status_code === 'fail');
+      if (okUser) {
+        const u = d.user || d.logged_in_user;
+        linhas.push(`current_user (${rotulo}): HTTP ${r.status} ✅ SESSÃO VÁLIDA (@${u.username || u.pk})`);
+      } else if (fail) {
+        linhas.push(`current_user (${rotulo}): HTTP ${r.status} ❌ recusada (${(d.message || '').slice(0, 60)})`);
+      } else {
+        linhas.push(`current_user (${rotulo}): HTTP ${r.status} ❌ sem user (${JSON.stringify(d || {}).slice(0, 60)})`);
+      }
+    } catch (e) {
+      linhas.push(`current_user (${rotulo}): ERRO ${e?.message || e}`);
     }
-  } catch (e) {
-    linhas.push(`current_user: ERRO ${e?.message || e}`);
   }
 
   for (const rota of IG_ROTAS) {

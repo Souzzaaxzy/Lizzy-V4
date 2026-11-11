@@ -222,7 +222,7 @@ const srvCuBad = http.createServer((req, res) => {
 await new Promise((r) => srvCuBad.listen(0, '127.0.0.1', r));
 process.env.IG_API_BASE = `http://127.0.0.1:${srvCuBad.address().port}`;
 const diagBad = await sp.diagnosticarInstagram('l.szzy');
-ok(diagBad.linhas.some((l) => /SESS.O INV.LIDA/.test(l)), `diag mostra sessao invalida (${diagBad.linhas[0]})`);
+ok(diagBad.linhas.some((l) => /recusada/.test(l)), `diag mostra sessao recusada (${diagBad.linhas[0]})`);
 srvCuBad.close();
 delete process.env.IG_API_BASE;
 
