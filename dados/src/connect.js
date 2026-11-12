@@ -41,7 +41,6 @@ import {
     cleanupX9System
 } from './utils/x9System.js';
 import { handleJoinRequestEvent, resolveJoinActor } from './utils/x9JoinRequest.js';
-import { ligarPonteInstagram } from './utils/instaBridge.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const modules = await import('./funcs/exports.js');
@@ -2023,12 +2022,6 @@ async function createBotSocket(authDir) {
                     attachMessagesListener();
                     attachCallListener(); // Notificações de chamada (!testcall)
 
-                    // Ponte do Instagram (DM). DESLIGADA por padrão: só sobe com
-                    // `INSTA_DM=1`. Usa o MESMO handler, então os comandos
-                    // (`!ping`, `!menu`, ...) valem também na DM do Instagram.
-                    void ligarPonteInstagram({ executar: indexModule })
-                        .then((p) => { if (p) console.log('📸 Ponte do Instagram ativa (DM).'); })
-                        .catch((e) => console.error('[INSTA-DM] falhou:', e?.message || e));
                     startCacheCleanup(); // Inicia o sistema de limpeza de cache
 
                     // Aquece o catálogo do `!apk` em segundo plano: o índice do
