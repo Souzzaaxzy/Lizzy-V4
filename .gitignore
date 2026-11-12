@@ -68,3 +68,6 @@ instagram-cookies.txt
 
 # Yarn Plug'n'Play (o bot usa npm; o yarn so gera o lock)
 .pnp.*
+
+# Auth state da ponte do Instagram (sessao — NUNCA commitar)
+insta-auth/
