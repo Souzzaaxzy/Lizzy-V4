@@ -1025,7 +1025,7 @@ __metadata:
     dotenv: "npm:^16.4.5"
     fluent-ffmpeg: "npm:^2.1.3"
     form-data: "npm:^4.0.5"
-    insta: "git+https://github.com/Souzzaaxzy/Insta.git#2eadcd915e30e69ea671e5d13ab37155317dc217"
+    insta: "git+https://github.com/Souzzaaxzy/Insta.git#0965161dfbdd2edeb6ff0e935c4752924647421a"
     jimp: "npm:^1.6.1"
     libmlow-wasm-fork: "npm:^0.2.0"
     libphonenumber-js: "npm:^1.13.9"
@@ -2009,10 +2009,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"insta@git+https://github.com/Souzzaaxzy/Insta.git#2eadcd915e30e69ea671e5d13ab37155317dc217":
+"insta@git+https://github.com/Souzzaaxzy/Insta.git#0965161dfbdd2edeb6ff0e935c4752924647421a":
   version: 0.1.0
-  resolution: "insta@https://github.com/Souzzaaxzy/Insta.git#commit=2eadcd915e30e69ea671e5d13ab37155317dc217"
-  checksum: 10c0/c14f391056a00f98b98874419cd229134a56229feebe49051818e1e432577b1c21afd58701c61ee2160d0033dde27c0b37b6d944a78cf22b8469649de79f7f2e
+  resolution: "insta@https://github.com/Souzzaaxzy/Insta.git#commit=0965161dfbdd2edeb6ff0e935c4752924647421a"
+  checksum: 10c0/1fc9cfcf418517c8c6274c48acabb33a007a1ca073f77779533006c61f0c3ce753592b07e994f8522fd1d27224c0f992b407d171e7eba351279fef2eb7ec601c
   languageName: node
   linkType: hard
 
