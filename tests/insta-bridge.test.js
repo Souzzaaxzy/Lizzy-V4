@@ -40,7 +40,7 @@ function desbold(t) {
 const contem = (h, n, m) => ok(typeof h === 'string' && desbold(h).includes(n), `${m || n} — esperado "${n}"`);
 
 const bridge = await import(new URL('../dados/src/utils/instaBridge.js', import.meta.url).href);
-const { infoDoDm, instaDmLigado, ligarPonteInstagram, enviarParaInsta, criarNazuInsta } = bridge;
+const { infoDoDm, instaDmLigado, ligarPonteInstagram, enviarParaInsta, criarNazuInsta, imagemPequena, pedacosDeTexto } = bridge;
 
 // ── 1) OPT-IN ────────────────────────────────────────────────────────────────
 delete process.env.INSTA_DM;
@@ -84,22 +84,47 @@ function fakeInsta() {
 }
 const silencio = { log: () => {}, error: () => {} };
 
+// pedacosDeTexto — o texto grande (o menu) e' dividido em blocos de ~1000 chars.
+const grande = Array.from({ length: 400 }, (_, k) => `linha ${k} do menu`).join('\n');
+const pedacos = pedacosDeTexto(grande, 1000);
+ok(pedacos.length > 1, 'texto grande vira varios pedacos');
+ok(pedacos.every((p) => p.length <= 1000), 'nenhum pedaco passa do limite');
+ok(pedacos.join('\n') === grande, 'os pedacos juntos reconstroem o texto (nada se perde)');
+ok(pedacosDeTexto('curto').length === 1, 'texto curto vira 1 pedaco');
+ok(pedacosDeTexto('').length === 0, 'texto vazio vira 0 pedacos');
+
+// imagemPequena — reduz de verdade (sharp) e mantem o formato JPEG.
+const sharp = (await import('sharp')).default;
+const imgGrande = await sharp({ create: { width: 1200, height: 1200, channels: 3, background: '#334455' } }).jpeg().toBuffer();
+const reduzida = await imagemPequena(imgGrande, silencio);
+ok(Buffer.isBuffer(reduzida), 'imagemPequena devolve um Buffer');
+const meta = await sharp(reduzida).metadata();
+ok(Math.max(meta.width, meta.height) <= 480, `a imagem foi reduzida (${meta.width}x${meta.height} <= 480)`);
+ok(meta.format === 'jpeg', 'a saida e JPEG');
+ok((await imagemPequena(Buffer.from('nao e imagem'), silencio)) === null, 'buffer invalido -> null (best-effort)');
+
 let insta = fakeInsta();
 await enviarParaInsta(insta, 'T', { text: 'oi' }, silencio);
-ok(insta.enviados.at(-1).content.text === 'oi', 'texto -> { text }');
+ok(insta.enviados.length === 1 && insta.enviados[0].content.text === 'oi', 'texto -> 1 mensagem { text }');
+
+// O CASO DO BUG: imagem + legenda -> imagem (reduzida) E o texto ABAIXO.
+insta = fakeInsta();
+await enviarParaInsta(insta, 'T', { image: imgGrande, caption: 'MENU COMPLETO\ncomandos aqui' }, silencio);
+ok(insta.enviados.length === 2, 'imagem+legenda -> 2 mensagens (midia + texto)');
+ok(Buffer.isBuffer(insta.enviados[0].content.image), 'a 1a mensagem e a IMAGEM');
+ok(insta.enviados[1].content.text === 'MENU COMPLETO\ncomandos aqui', 'a 2a mensagem e o TEXTO (abaixo da midia)');
+const imgMeta = await sharp(insta.enviados[0].content.image).metadata();
+ok(Math.max(imgMeta.width, imgMeta.height) <= 480, 'a imagem do menu saiu PEQUENA');
 
 insta = fakeInsta();
-await enviarParaInsta(insta, 'T', { image: Buffer.from([1, 2, 3]), caption: 'legenda' }, silencio);
-ok(Buffer.isBuffer(insta.enviados.at(-1).content.image), 'imagem -> { image }');
-ok(insta.enviados.at(-1).content.caption === 'legenda', 'imagem leva a legenda');
-
-insta = fakeInsta();
-await enviarParaInsta(insta, 'T', { video: Buffer.from([1]) }, silencio);
-ok(Buffer.isBuffer(insta.enviados.at(-1).content.video), 'video -> { video }');
+await enviarParaInsta(insta, 'T', { video: Buffer.from([1]), caption: 'legenda do video' }, silencio);
+ok(insta.enviados.length === 2, 'video+legenda -> 2 mensagens');
+ok(Buffer.isBuffer(insta.enviados[0].content.video), 'a 1a e o VIDEO');
+ok(insta.enviados[1].content.text === 'legenda do video', 'a 2a e o texto abaixo');
 
 insta = fakeInsta();
 await enviarParaInsta(insta, 'T', { audio: Buffer.from([1]) }, silencio);
-ok(Buffer.isBuffer(insta.enviados.at(-1).content.audio), 'audio -> { audio }');
+ok(insta.enviados.length === 1 && Buffer.isBuffer(insta.enviados[0].content.audio), 'audio -> 1 mensagem { audio }');
 
 insta = fakeInsta();
 await enviarParaInsta(insta, 'T', { gif: '3o7aCTfyhYawdOXcFW' }, silencio);
@@ -112,6 +137,12 @@ ok(/figurinha/.test(insta.enviados.at(-1).content.text || ''), 'figurinha -> avi
 insta = fakeInsta();
 await enviarParaInsta(insta, 'T', { document: Buffer.from([1]), fileName: 'a.pdf' }, silencio);
 ok(/documento/.test(insta.enviados.at(-1).content.text || ''), 'documento -> avisa em texto');
+
+// texto GRANDE (o menu real) e' enviado inteiro, em varios pedacos.
+insta = fakeInsta();
+await enviarParaInsta(insta, 'T', { text: grande }, silencio);
+ok(insta.enviados.length === pedacos.length, `texto grande -> ${pedacos.length} mensagens`);
+ok(insta.enviados.map((e) => e.content.text).join('\n') === grande, 'o texto grande chega inteiro');
 
 // ── 4) criarNazuInsta — a superficie que o handler usa ───────────────────────
 insta = fakeInsta();
@@ -209,6 +240,31 @@ ok(fakeLib.enviados.length === antes, 'id repetido nao responde de novo (dedup)'
 const antes2 = fakeLib.enviados.length;
 await handler({ thread_id: 'T-E2E', user_id: 'BOT', text: '!ping', id: 'E2', item_type: 'text', is_sent_by_viewer: true, timestamp: Date.now() });
 ok(fakeLib.enviados.length === antes2, 'eco do bot nao vira comando');
+
+// ── 6b) O CASO DO BUG: `!menu` REAL com midia -> foto pequena + menu abaixo ──
+// Configura a midia do menu (o handler le `dono/menuMedia.json`) e roda o
+// `!menu` pelo handler real com o `nazu` da ponte.
+{
+  const donoDir = path.join(TMP, 'dono');
+  fs.mkdirSync(donoDir, { recursive: true });
+  const imgPath = path.join(TMP, 'menu.jpg');
+  fs.writeFileSync(imgPath, await sharp({ create: { width: 1000, height: 1000, channels: 3, background: '#224466' } }).jpeg().toBuffer());
+  fs.writeFileSync(path.join(donoDir, 'menuMedia.json'), JSON.stringify({ mediaPath: imgPath, mediaType: 'image', isGif: false }));
+
+  const instaFake = fakeInsta();
+  const infoMenu = infoDoDm({ thread_id: 'T-MENU', user_id: 'U', text: '!menu', id: 'MM', item_type: 'text', timestamp: Date.now() });
+  const nz = criarNazuInsta(instaFake, infoMenu, silencio);
+  await indexModule(nz, infoMenu, null, new Map(), null);
+
+  ok(instaFake.enviados.length >= 2, `!menu com midia -> midia + texto (${instaFake.enviados.length} envios)`);
+  const primeiro = instaFake.enviados[0].content;
+  ok(Buffer.isBuffer(primeiro.image), 'o 1o envio do menu e a IMAGEM (nao so texto)');
+  const m = await sharp(primeiro.image).metadata();
+  ok(Math.max(m.width, m.height) <= 480, `a imagem do menu saiu PEQUENA (${m.width}x${m.height})`);
+  const restoTxt = instaFake.enviados.slice(1).map((e) => e.content?.text || '').join('\n');
+  ok(/Lizzy/i.test(desbold(restoTxt)), 'o TEXTO do menu veio ABAIXO da midia (o bug era so a foto)');
+  ok(/!ping|!menu|!play/i.test(desbold(restoTxt)), 'o texto abaixo traz os comandos do menu');
+}
 
 // ── 7) guard estrutural: a ponte usa o MESMO handler e a lib ─────────────────
 const src = fs.readFileSync(new URL('../dados/src/utils/instaBridge.js', import.meta.url), 'utf8');

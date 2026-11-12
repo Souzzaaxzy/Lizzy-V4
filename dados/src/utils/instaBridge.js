@@ -89,38 +89,127 @@ export function infoDoDm(msg) {
   };
 }
 
+/** Tamanho maximo (lado maior) da imagem enviada numa DM. "gif pequena". */
+const MAX_LADO_IMG = () => {
+  const n = Number(process.env.INSTA_DM_MAX_IMG);
+  return Number.isFinite(n) && n >= 64 ? Math.floor(n) : 480;
+};
+/** Limite de caracteres por mensagem de texto no Instagram. */
+const MAX_TEXTO = 1000;
+
+/**
+ * Reduz a imagem para um cartao pequeno (JPEG). O Instagram nao aceita um
+ * arquivo GIF por upload (o `sendGif` da lib exige um id do Giphy), entao o
+ * "gif pequena" vira uma imagem pequena; se a midia for ANIMADA, o handler ja
+ * manda `{ video }` e o caminho de video cuida (o IG reproduz).
+ * Best-effort: se o sharp faltar, devolve `null` e o original e' enviado.
+ */
+export async function imagemPequena(bytes, log = console) {
+  try {
+    const sharp = (await import('sharp')).default;
+    const meta = await sharp(bytes).metadata();
+    const w = meta.width || MAX_LADO_IMG();
+    const h = meta.height || MAX_LADO_IMG();
+    const max = MAX_LADO_IMG();
+    const escala = Math.min(1, max / Math.max(w, h));
+    let img = sharp(bytes).rotate();
+    if (escala < 1) {
+      img = img.resize({
+        width: Math.max(1, Math.round(w * escala)),
+        height: Math.max(1, Math.round(h * escala)),
+      });
+    }
+    return await img.jpeg({ quality: 82 }).toBuffer();
+  } catch (e) {
+    log?.error?.('[INSTA-DM] nao consegui reduzir a imagem:', e?.message || e);
+    return null;
+  }
+}
+
+/**
+ * Divide um texto em pedacos de no maximo `max` caracteres, cortando SEMPRE em
+ * quebra de linha quando possivel (o Instagram limita ~1000 chars por mensagem;
+ * o menu e' maior que isso).
+ */
+export function pedacosDeTexto(texto, max = MAX_TEXTO) {
+  const t = String(texto ?? '');
+  if (!t) return [];
+  if (t.length <= max) return [t];
+  const partes = [];
+  let atual = '';
+  for (const linha of t.split('\n')) {
+    if (atual && atual.length + 1 + linha.length > max) {
+      partes.push(atual);
+      atual = '';
+    }
+    let l = linha;
+    while (l.length > max) {
+      partes.push(l.slice(0, max));
+      l = l.slice(max);
+    }
+    atual = atual ? `${atual}\n${l}` : l;
+  }
+  if (atual) partes.push(atual);
+  return partes;
+}
+
+/** Envia o texto em um ou mais pedacos. */
+async function enviarTexto(insta, alvo, texto, log = console) {
+  for (const pedaco of pedacosDeTexto(texto)) {
+    await insta.sendMessage(alvo, { text: pedaco });
+  }
+}
+
 /**
  * Traduz o `content` que o bot manda (`nazu.sendMessage(chatId, content)`) para
  * o formato da lib do Instagram e envia.
  *
- * O bot manda `{ text }`, `{ image: buffer, caption }`, `{ video: buffer }`,
- * `{ audio: buffer }`, `{ sticker }`, `{ document }`. O Instagram tem rota para
- * texto, foto, vídeo, voz e GIF; figurinha e documento NÃO têm — nesses casos a
- * ponte avisa em texto em vez de sumir.
+ * IMPORTANTE: a lib do Instagram **nao usa `caption`** — o `sendPhoto`/`sendVideo`
+ * descartam o texto. Por isso, quando ha MIDIA **e** texto, a ponte manda a
+ * midia (a imagem reduzida) e o **texto ABAIXO**, como uma mensagem separada.
+ * Sem isso, comandos como o `!menu` entregavam so a foto e perdiam o menu.
  *
- * @returns {Promise<object|null>}
+ * O bot manda `{ text }`, `{ image, caption }`, `{ video, caption }`,
+ * `{ audio }`, `{ gif }`, `{ sticker }`, `{ document }`. O Instagram tem rota
+ * para texto, foto, video, voz e GIF; figurinha e documento NAO tem — nesses
+ * casos a ponte avisa em texto em vez de sumir.
+ *
+ * @returns {Promise<void>}
  */
 export async function enviarParaInsta(insta, threadId, content = {}, log = console) {
   const alvo = String(threadId);
-  const caption = typeof content?.caption === 'string' ? content.caption : undefined;
-  const texto = typeof content?.text === 'string' ? content.text : undefined;
+  const caption = typeof content?.caption === 'string' ? content.caption : '';
+  const texto = typeof content?.text === 'string' ? content.text : '';
 
   try {
-    if (content?.image) return await insta.sendMessage(alvo, { image: content.image, caption });
-    if (content?.video) return await insta.sendMessage(alvo, { video: content.video, caption });
-    if (content?.audio) return await insta.sendMessage(alvo, { audio: content.audio });
+    if (content?.image) {
+      const pequena = await imagemPequena(content.image, log);
+      await insta.sendMessage(alvo, { image: pequena || content.image });
+      await enviarTexto(insta, alvo, caption, log); // texto ABAIXO da midia
+      return;
+    }
+    if (content?.video) {
+      await insta.sendMessage(alvo, { video: content.video });
+      await enviarTexto(insta, alvo, caption, log); // texto ABAIXO da midia
+      return;
+    }
+    if (content?.audio) {
+      await insta.sendMessage(alvo, { audio: content.audio });
+      return;
+    }
     if (content?.gif && typeof insta.direct?.sendGif === 'function') {
-      return await insta.direct.sendGif(alvo, content.gif);
+      await insta.direct.sendGif(alvo, content.gif);
+      return;
     }
-    const fallback = texto ?? caption;
-    if (fallback) return await insta.sendMessage(alvo, { text: String(fallback) });
+    if (texto) {
+      await enviarTexto(insta, alvo, texto, log);
+      return;
+    }
     if (content?.sticker || content?.document) {
-      return await insta.sendMessage(alvo, { text: '(o Instagram não aceita figurinha/documento por aqui)' });
+      await insta.sendMessage(alvo, { text: '(o Instagram não aceita figurinha/documento por aqui)' });
     }
-    return null;
   } catch (e) {
     log.error?.('[INSTA-DM] falha ao enviar:', e?.message || e);
-    return null;
   }
 }
 
